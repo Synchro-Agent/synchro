@@ -42,6 +42,15 @@ function looksRead(t: ToolInfo) {
   if (schema?.properties && typeof schema.properties === "object" && Object.keys(schema.properties).some((k) => RISKY_PARAM.test(k))) return false;
   return !/\bsql\b/i.test(JSON.stringify(schema ?? {}));
 }
+/** Tên thao tác dạng TOOLKIT_ĐỘNG_TỪ_… (Composio: GMAIL_FETCH_EMAILS, SLACK_SEND_MESSAGE) có vẻ chỉ đọc không: bỏ tên ứng dụng ở đầu (tối đa ba từ) rồi đoán như tên công cụ.
+ *  Tham số có dấu hiệu chạy lệnh (sql, command…) thì không coi là đọc. Không chắc thì không đoán là đọc. */
+export function slugRead(slug: string, args?: unknown) {
+  const w = toolWords(slug);
+  const i = w.findIndex((x, k) => k > 0 && (READ_VERB.has(x) || WRITE_VERB.has(x) || WRITE_NOUN.has(x)));
+  if (i < 1 || i > 3) return false;
+  if (args && typeof args === "object" && Object.keys(args as object).some((k) => RISKY_PARAM.test(k))) return false;
+  return looksRead({ name: w.slice(i).join("_") });
+}
 export const guessedRead = (t: ToolInfo) => t.annotations?.readOnlyHint === undefined && !t.annotations?.destructiveHint && looksRead(t);
 export const readLike = (t: ToolInfo) => t.annotations?.readOnlyHint === true || guessedRead(t);
 // Công cụ có thể xóa dữ liệu. Đặc tả MCP: không khai báo destructiveHint thì mặc định là có; riêng công cụ không khai báo gì mà động từ rõ là không ghi (ask_question, resolve_library_id)

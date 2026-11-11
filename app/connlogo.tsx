@@ -22,7 +22,6 @@ function tileColor(img: HTMLImageElement): string | null {
 }
 
 // Logo connector: logo có sẵn của danh mục, logo Synchro tự tìm (data URI, chỉ hiện trong <img>), hoặc chữ cái đầu.
-export const CONNECTORS_BROWSE = "synchro:connectors-browse";
 export function ConnLogo({ logo, color, icon, name, size = 36 }: { logo?: string; color?: string; icon?: string; name: string; size?: number }) {
   // undefined: chưa đo (ẩn ảnh một nhịp cho khỏi nhảy cỡ); string: ảnh là một ô, màu nền của nó; null: logo nét.
   const [tile, setTile] = useState<string | null | undefined>(() => (icon ? tiles.get(icon) : undefined));

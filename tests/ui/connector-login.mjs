@@ -57,7 +57,7 @@ try {
     return { P, ev, until, click, type, targetId };
   };
   // Giao diện mặc định tiếng Việt nên tìm nút theo vị trí, không theo chữ.
-  const ADD = `document.querySelector(".cn-bar .btn:not(.dark)")`, BROWSE = `document.querySelector(".cn-bar .btn.dark")`;
+  const ADD = `document.querySelector(".cn-bar .btn:not(.dark)")`;
   const byText = (sel, t) => `[...document.querySelectorAll(${JSON.stringify(sel)})].find((b) => b.textContent.includes(${JSON.stringify(t)}) && b.getBoundingClientRect().width)`;
   // Cửa sổ đăng nhập vừa mở (đích không phải trang chính).
   const waitPopup = async (known, ms = 15000) => {
@@ -128,48 +128,15 @@ try {
   say(await page2.until(`${byText(".cn-card", "Mock Notes")}?.textContent.match(/3 (tools|công cụ)/)`, 15000), "trang chính vẫn tự cập nhật nhờ hỏi lại máy chủ");
   await wipe();
 
-  console.log("━━ hãng chưa duyệt Synchro: không mở cửa sổ");
+  // Danh mục connector gợi ý đã bỏ: phần chính là Composio ở đầu trang, bên dưới là mục connector tự thêm.
+  console.log("━━ bố cục: Composio ở đầu, không còn danh mục gợi ý, mục connector tự thêm vẫn có");
   await page.P("Page.navigate", { url: `${B}/?settings=Connectors` });
-  await page.until(`!!${BROWSE}`, 30000);
-  const before = new Set(popups.keys());
-  await page.click(BROWSE);
-  await page.until(`!!document.querySelector(".cn-browse")`);
-  const figma = byText(".cn-item", "Figma");
-  say(await page.until(`${figma}?.textContent.includes("Needs vendor approval") || ${figma}?.textContent.includes("Cần nhà cung cấp duyệt")`), "Figma hiện cần nhà cung cấp duyệt, không phải nút Kết nối");
-  await page.click(`${figma}.querySelector(".cn-vendor-tag")`);
-  say(await page.until(`${figma}?.querySelector(".cn-vendor")?.textContent.length > 40`), "bấm vào: thấy lý do và cách có thể thử");
-  await sleep(500);
-  say([...popups.keys()].every((id) => before.has(id)), "không có cửa sổ nào mở ra");
-  await page.click(`${figma}.querySelector(".cn-vendor .cn-link")`);
-  say(await page.until(`!!document.querySelector("#cn-token")`), "Dùng token thay thế: mở ô nhập token");
+  await page.until(`!!${ADD}`, 30000);
+  say(await page.until(`!!document.querySelector(".cpo-card")`, 15000), "thẻ Composio hiện ở đầu trang");
+  say(await page.ev(`!document.querySelector(".cn-bar .btn.dark") && !document.querySelector(".cn-browse") && !/Browse connectors|Duyệt connector/.test(document.body.innerText)`), "không còn nút / hộp duyệt danh mục connector");
+  say(await page.ev(`(() => { const c = document.querySelector(".cpo-card"), a = ${ADD}; return !!c && !!a && (c.compareDocumentPosition(a) & Node.DOCUMENT_POSITION_FOLLOWING) > 0; })()`), "nút thêm connector tự kết nối nằm dưới Composio");
   const leftover = (await api("GET", "/api/connectors")).connectors ?? [];
-  say(leftover.length === 0, "xem lý do không tạo hàng connector nào");
-
-  // ---- các ca dưới đều đi theo đúng đường người dùng, nhưng tránh mọi hãng thật: danh mục giả qua fetch, còn lại dùng máy chủ MCP giả lập ----
-  console.log("━━ trình duyệt chặn cửa sổ khi đang mở danh mục: lời nhắc nằm ngay trong danh mục, bấm là mở lại đúng địa chỉ");
-  const LOGIN = `${MCP}/authorize?state=thu`;
-  const FAKE = { id: "conn-gia", name: "Notion", url: "https://mcp.notion.com/mcp", host: "mcp.notion.com", dir: "notion", enabled: true, status: "needs_auth", error: null, serverName: null, auth: "none", tools: [], checkedAt: null, settings: { chat: true, projects: true, newTools: "auto", destructive: true, maxCalls: 0 }, adminBlocked: false };
-  const pageB = await open(`${B}/?settings=Connectors`, `window.__opens = []; window.__posts = 0; window.open = (u) => { window.__opens.push(String(u)); return window.__opens.length > 1 ? { closed: false } : null; };
-    { const f = window.fetch, json = (x) => new Response(JSON.stringify(x), { status: 200, headers: { "content-type": "application/json" } }); let made = false;
-      window.fetch = async (u, i) => { const p = String(u);
-        if (p.endsWith("/api/connectors") && i?.method === "POST") { window.__posts++; made = true; return json({ connector: ${JSON.stringify(FAKE)}, connectors: [${JSON.stringify(FAKE)}], authorizeUrl: ${JSON.stringify(LOGIN)} }); }
-        if (p.endsWith("/api/connectors") && made) { const j = await (await f(u, i)).json(); j.connectors.push(${JSON.stringify(FAKE)}); return json(j); }
-        return f(u, i); }; }`);
-  await pageB.until(`!!${BROWSE}`, 30000);
-  await pageB.click(BROWSE);
-  await pageB.until(`!!document.querySelector(".cn-browse")`);
-  // Theo đúng tên hãng: mô tả của mục khác cũng có thể nhắc tới Notion.
-  const notion = `[...document.querySelectorAll(".cn-browse .cn-item")].find((i) => i.querySelector(".cn-item-m b")?.textContent.trim() === "Notion")`;
-  await pageB.until(`!!${notion}?.querySelector(".cn-item-btn")`);
-  await pageB.click(`${notion}.querySelector(".cn-item-btn")`);
-  say(await pageB.until(`!!${notion}?.querySelector(".cn-pop button")`), "bị chặn: lời nhắc hiện ngay trên mục trong danh mục");
-  const inView = await pageB.ev(`(() => { const b = ${notion}.querySelector(".cn-pop button").getBoundingClientRect(); return document.elementFromPoint(b.x + b.width / 2, b.y + b.height / 2)?.closest(".cn-browse") != null; })()`);
-  say(inView, "nút mở lại nằm trên cùng, không bị che");
-  await pageB.click(`${notion}.querySelector(".cn-pop button")`);
-  say(await pageB.until(`window.__opens.length === 2`, 3000), "bấm: mở cửa sổ ngay trong lúc bấm");
-  say(await pageB.ev(`window.__opens[1] === window.__opens[0] && window.__posts === 1`), "dùng lại đúng địa chỉ, không gọi máy chủ lần nữa");
-  say(await pageB.until(`!${notion}?.querySelector(".cn-pop")`, 3000), "mở được rồi thì lời nhắc biến mất");
-  await pageB.P("Page.navigate", { url: "about:blank" });
+  say(leftover.length === 0, "xem trang không tạo hàng connector nào");
 
   // Mọi trang Synchro khác rời đi để không ai xác nhận hộ cửa sổ đăng nhập.
   await page2.P("Page.navigate", { url: "about:blank" });

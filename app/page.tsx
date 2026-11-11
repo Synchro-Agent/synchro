@@ -77,11 +77,10 @@ import type { OutFile } from "./llm";
 import { UsageRing } from "./usageui";
 import { cachedJson, fmtCount, HUB_DISCOVER, HUB_SEARCH, useStudios } from "./studios";
 import type { CzTab } from "./pluginsui";
-import { CONNECTORS_BROWSE, ConnLogo } from "./connlogo";
-import type { Conn } from "./connectorsui";
-import type { DirEntry } from "./connectordir";
-// Dữ liệu connector cho menu + ở ô chat (connector đã nối, danh mục để thêm).
-type CxData = { connectors: Conn[]; directory: DirEntry[] };
+import { ConnLogo } from "./connlogo";
+import type { ComposioInfo, Conn } from "./connectorsui";
+// Dữ liệu connector cho menu + ở ô chat: Composio (connector chính) và connector người dùng tự thêm.
+type CxData = { connectors: Conn[]; composio?: ComposioInfo };
 import { wantsIntro } from "./introflag";
 import { rowHeight } from "./rowsize";
 import { startWarmPing, warmChoice } from "./warmping";
@@ -435,7 +434,7 @@ function Composer(p: {
   const recRef = useRef<Rec | null>(null);
   const ref = useClickAway(() => { setMenu(false); setSub(null); });
   // Menu + → Kho kỹ năng / Connectors: menu con bên phải (điện thoại: thay chỗ menu chính, có nút quay lại).
-  const [sub, setSub] = useState<null | "skills" | "conn" | "add" | "access">(null);
+  const [sub, setSub] = useState<null | "skills" | "conn" | "access">(null);
   const [picks, setPicks] = useState<{ id: string; label: string }[]>([]);
   const [skl, setSkl] = useState<{ id: string; label: string; lib?: boolean; cat?: boolean }[] | null>(null);
   const [skq, setSkq] = useState("");
@@ -457,8 +456,10 @@ function Composer(p: {
     cachedJson<{ skills?: { name: string; enabled: boolean }[] }>("/api/skills").then((j) => j.skills ?? []),
     cachedJson<{ plugins?: { slug: string; name: string; enabled: boolean; mine: { enabled: boolean }; catalogId: string | null }[] }>("/api/plugins?view=lite").then((j) => j.plugins ?? []),
   ]).then(([s, l]) => { setSkq(""); setSkl([...l.filter((x) => x.enabled && x.mine?.enabled !== false).map((x) => ({ id: `lib-${x.slug}`, label: x.name, lib: true, cat: !!x.catalogId?.startsWith("cd:") })), ...s.filter((x) => x.enabled).map((x) => ({ id: x.name, label: x.name }))]); });
-  const loadCx = () => fetch("/api/connectors").then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status))))).then((j) => setCx(j)).catch(() => setCx({ connectors: [], directory: [] }));
-  const openSub = (k: NonNullable<typeof sub>) => { setSub(sub === k ? null : k); if (k === "skills") void loadSkl(); if (k === "conn" || k === "add" || k === "access") void loadCx(); };
+  const loadCx = () => fetch("/api/connectors").then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status))))).then((j) => setCx(j)).catch(() => setCx({ connectors: [] }));
+  const openSub = (k: NonNullable<typeof sub>) => { setSub(sub === k ? null : k); if (k === "skills") void loadSkl(); if (k === "conn" || k === "access") void loadCx(); };
+  // Composio đang chạy của tài khoản (có trong lượt chat): thêm vào các thao tác chung như quyền dùng công cụ.
+  const cxMain = cx?.composio?.state === "active" ? cx.composio.connector ?? null : null;
   const cxPatch = async (id: string, body: Record<string, unknown>) => {
     const r = await fetch(`/api/connectors/${id}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
     const j = await r.json().catch(() => ({}));
@@ -593,13 +594,13 @@ function Composer(p: {
           ) : <button className="menu-item" onClick={() => { setMenu(false); p.onProject!(undefined); }}><I.Layers />Tạo dự án để thêm vào</button>)}
           <hr />
           {perms?.features.skills !== false && <button className={`menu-item${sub === "skills" ? " on" : ""}`} aria-haspopup="menu" aria-expanded={sub === "skills"} onClick={() => openSub("skills")}><I.Plugins />Kho kỹ năng<span className="sc"><I.ChevronR size={16} /></span></button>}
-          {perms?.features.connectors !== false && <button className={`menu-item${sub === "conn" || sub === "add" || sub === "access" ? " on" : ""}`} aria-haspopup="menu" aria-expanded={sub === "conn"} onClick={() => openSub("conn")}><I.Connectors />Connectors<span className="sc"><I.ChevronR size={16} /></span></button>}
+          {perms?.features.connectors !== false && <button className={`menu-item${sub === "conn" || sub === "access" ? " on" : ""}`} aria-haspopup="menu" aria-expanded={sub === "conn"} onClick={() => openSub("conn")}><I.Connectors />Connectors<span className="sc"><I.ChevronR size={16} /></span></button>}
           <hr />
           {perms?.features.web !== false && <button className="menu-item" onClick={() => { setWeb(!web); say(web ? "Đã tắt tìm kiếm web" : "Đã bật tìm kiếm web"); }}><I.Globe />Tìm kiếm trên web{web && <span className="ck"><I.Check /></span>}</button>}
           <button className="menu-item" onClick={() => { setMem(!mem); say(mem ? "Đã tắt bộ nhớ" : "Đã bật bộ nhớ"); }}><I.History />Bộ nhớ{mem && <span className="ck"><I.Check /></span>}</button>
           {sub && (
             <div className="menu cm-fly" role="menu">
-              <button className="menu-item cm-back" onClick={() => setSub(sub === "add" || sub === "access" ? "conn" : null)}><I.ChevronL size={16} />{sub === "skills" ? "Kho kỹ năng" : sub === "add" ? "Thêm connector" : sub === "access" ? "Quyền dùng công cụ" : "Connectors"}</button>
+              <button className="menu-item cm-back" onClick={() => setSub(sub === "access" ? "conn" : null)}><I.ChevronL size={16} />{sub === "skills" ? "Kho kỹ năng" : sub === "access" ? "Quyền dùng công cụ" : "Connectors"}</button>
               {sub === "skills" && (<>
                 {/* Như Claude: ô tìm ở đầu danh sách. Chưa gõ: skill và thư viện bạn tự cài; gõ: tìm cả thư viện của danh mục skill (vài nghìn). */}
                 {skl && skl.length > 8 && <div className="cm-find"><I.Search size={14} /><input autoFocus value={skq} onChange={(e) => setSkq(e.target.value)} placeholder="Tìm skill hoặc thư viện" aria-label="Tìm skill hoặc thư viện" /></div>}
@@ -615,35 +616,35 @@ function Composer(p: {
                 <button className="menu-item" onClick={() => { setMenu(false); setSub(null); try { sessionStorage.setItem("hub-tab", "discover"); } catch {} p.goCustom(); window.dispatchEvent(new Event(HUB_DISCOVER)); }}><I.Plus />Duyệt skill</button>
               </>)}
               {sub === "conn" && (<>
-                <button className="menu-item" aria-haspopup="menu" onClick={() => openSub("add")}><I.Plus />Thêm connector<span className="sc"><I.ChevronR size={16} /></span></button>
-                <button className="menu-item" onClick={() => { setMenu(false); setSub(null); (p.goConnectors ?? p.goCustom)(); }}><I.Brief />Quản lý connectors</button>
-                <hr />
                 <div className="cm-list">
-                  {cx === null ? <div className="cm-empty"><span className="art-spin sm" /></div> : !cx.connectors.length ? <div className="cm-empty">Chưa kết nối connector nào</div>
-                    : cx.connectors.map((c) => { const on = c.enabled && !c.adminBlocked && c.status === "ok"; return (
+                  {cx === null ? <div className="cm-empty"><span className="art-spin sm" /></div> : <>
+                    {cx.composio && (() => {
+                      const k = cx.composio, c = k.connector, on = k.state === "active" && !!c?.enabled;
+                      const note = k.state === "active" ? (k.apps === null ? "Đang bật" : `${k.apps} ứng dụng`) : k.state === "no_key" ? "Chưa bật" : k.state === "blocked" ? "Không được phép" : "Có lỗi";
+                      return (
+                        <div className="menu-item cm-conn cm-cx">
+                          <ConnLogo color="#5B4BDB" name="Composio" size={20} /><span className="cv-ell" data-notr>Composio</span><span className="cm-cnt">{note}</span>
+                          {k.state === "active" && c
+                            ? <button className={`toggle ${on ? "on" : ""}`} role="switch" aria-checked={on} aria-label={`${on ? "Tắt" : "Bật"} Composio`} onClick={() => cxPatch(c.id, { enabled: !c.enabled })} />
+                            : <button className="cn-link cm-rec" onClick={() => { setMenu(false); setSub(null); (p.goConnectors ?? p.goCustom)(); }}>Xem</button>}
+                        </div>);
+                    })()}
+                    {cx.connectors.map((c) => { const on = c.enabled && !c.adminBlocked && c.status === "ok"; return (
                       <div key={c.id} className="menu-item cm-conn">
                         <ConnLogo logo={c.logo} color={c.color} icon={c.icon} name={c.name} size={20} /><span className="cv-ell" data-notr>{c.name}</span>
                         {c.status !== "ok" && !c.adminBlocked
                           ? <ReconnectLink c={c} say={say} onDone={loadCx} onManage={() => { setMenu(false); setSub(null); (p.goConnectors ?? p.goCustom)(); }} />
                           : <button className={`toggle ${on ? "on" : ""}`} role="switch" aria-checked={on} aria-label={`${on ? "Tắt" : "Bật"} ${c.name}`} disabled={c.adminBlocked} onClick={() => cxPatch(c.id, { enabled: !c.enabled })} />}
                       </div>); })}
+                    {!cx.composio && !cx.connectors.length && <div className="cm-empty">Chưa kết nối connector nào</div>}
+                  </>}
                 </div>
                 <hr />
-                <button className="menu-item" aria-haspopup="menu" onClick={() => openSub("access")} disabled={!cx?.connectors.length}><I.Search />Quyền dùng công cụ<span className="sc"><I.ChevronR size={16} /></span></button>
-              </>)}
-              {sub === "add" && (<>
-                <div className="cm-list">
-                  {cx === null ? <div className="cm-empty"><span className="art-spin sm" /></div>
-                    : cx.directory.filter((d) => !cx.connectors.some((c) => c.dir === d.id)).slice(0, 8).map((d) => (
-                      <button key={d.id} className="menu-item" onClick={() => { setMenu(false); setSub(null); try { sessionStorage.setItem("cn-browse", "1"); } catch {} (p.goConnectors ?? p.goCustom)(); window.dispatchEvent(new Event(CONNECTORS_BROWSE)); }}>
-                        <ConnLogo logo={d.logo} color={d.color} name={d.name} size={20} /><span className="cv-ell" data-notr>{d.name}</span>
-                      </button>))}
-                </div>
-                <hr />
-                <button className="menu-item" onClick={() => { setMenu(false); setSub(null); try { sessionStorage.setItem("cn-browse", "1"); } catch {} (p.goConnectors ?? p.goCustom)(); window.dispatchEvent(new Event(CONNECTORS_BROWSE)); }}><I.Search />Duyệt mọi connector</button>
+                <button className="menu-item" onClick={() => { setMenu(false); setSub(null); (p.goConnectors ?? p.goCustom)(); }}><I.Brief />Quản lý connectors</button>
+                <button className="menu-item" aria-haspopup="menu" onClick={() => openSub("access")} disabled={!cx?.connectors.length && !cxMain}><I.Search />Quyền dùng công cụ<span className="sc"><I.ChevronR size={16} /></span></button>
               </>)}
               {sub === "access" && cx && (() => {
-                const live = cx.connectors.filter((c) => c.status === "ok" && !c.adminBlocked);
+                const live = [...(cxMain ? [cxMain] : []), ...cx.connectors].filter((c) => c.status === "ok" && !c.adminBlocked);
                 const cur = (ro: boolean) => { const ps = new Set(live.flatMap((c) => c.tools.filter((t) => t.readOnly === ro).map((t) => t.perm))); return ps.size === 1 ? [...ps][0] : null; };
                 const set = async (kind: "read" | "write", perm: string) => { for (const c of live) await cxPatch(c.id, { group: { kind, perm } }); say("Đã đổi quyền dùng công cụ cho mọi connector"); };
                 const opt = (kind: "read" | "write", perm: string, label: string) => <button key={kind + perm} className="menu-item" role="menuitemradio" aria-checked={cur(kind === "read") === perm} onClick={() => set(kind, perm)}>{label}{cur(kind === "read") === perm && <span className="ck"><I.Check /></span>}</button>;

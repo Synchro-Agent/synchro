@@ -1,19 +1,19 @@
 import { limit, sameOrigin } from "../../authstore";
 import { addConnector, listConnectors } from "../../connectors";
-import { DIRECTORY } from "../../connectordir";
-import { connectorUser, policyOf, route } from "./shared";
+import { composioSummary, connectorUser, policyOf, route } from "./shared";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-// Danh sách connector của tài khoản và danh mục connector có sẵn.
+// Composio (connector chính, tạo tự động khi quản trị viên đã thêm khóa) và connector người dùng tự thêm.
 export const GET = route(async (req) => {
   const user = connectorUser(req);
   const policy = policyOf(user);
-  return Response.json({ connectors: listConnectors(user.id, policy), directory: DIRECTORY, policy });
+  const composio = await composioSummary(user, policy);
+  return Response.json({ composio, connectors: listConnectors(user.id, policy), policy });
 });
 
-// Thêm connector: { dir } từ danh mục, hoặc { name, url, clientId?, clientSecret?, token?, header? } tùy chỉnh. Trả về authorizeUrl nếu cần đăng nhập.
+// Thêm connector tự kết nối: { name, url, … } (giao diện không còn danh mục gợi ý; { dir } vẫn nhận cho connector danh mục cũ), hoặc { name, url, clientId?, clientSecret?, token?, header? } tùy chỉnh. Trả về authorizeUrl nếu cần đăng nhập.
 export const POST = route(async (req) => {
   sameOrigin(req);
   const user = connectorUser(req);

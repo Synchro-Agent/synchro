@@ -12,7 +12,7 @@ import { UsageAdmin, UsageIcon } from "./usageui";
 import type { AuthUser, Providers } from "./auth";
 import { ALL, allowsModel, effortsFor, FEATURES, FULL_CONN, type ConnPolicy, type Effort, type Perms, type ProviderInfo } from "./catalog";
 import { DIRECTORY } from "./connectordir";
-import { ConnLogo } from "./connectorsui";
+const COMPOSIO = "composio";
 import { BrandLogo } from "./brands";
 import type { ApiState } from "./apiui";
 import { refreshModels } from "./models";
@@ -145,33 +145,25 @@ function EffortLimits({ catalog, models, value, onChange }: { catalog: ProviderI
   );
 }
 
-// Quyền connector: thêm connector tùy chỉnh, connector nào trong danh mục, công cụ xóa dữ liệu.
+// Quyền connector: Composio (connector chính), thêm connector tùy chỉnh, công cụ xóa dữ liệu.
+// allowed giữ cả mã connector danh mục cũ người dùng đã thêm trước đây: tắt Composio khi đang "tất cả" thì vẫn cho các connector cũ đó như trước.
 function ConnPolicyEditor({ value, onChange, Toggle }: { value: ConnPolicy; onChange: (v: ConnPolicy) => void; Toggle: ToggleT }) {
   const all = value.allowed.includes(ALL);
-  const ids = DIRECTORY.map((d) => d.id);
-  const flip = (id: string) => {
-    const cur = all ? ids : value.allowed;
-    onChange({ ...value, allowed: cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id] });
-  };
+  const cx = all || value.allowed.includes(COMPOSIO);
+  const setCx = (v: boolean) => onChange({ ...value, allowed: v ? [...value.allowed.filter((x) => x !== COMPOSIO), COMPOSIO] : all ? DIRECTORY.map((d) => d.id) : value.allowed.filter((x) => x !== COMPOSIO) });
   return (
     <>
       <div className="adm-perm-row" style={{ borderTop: 0, paddingTop: 0 }}>
+        <div><div className="t">Composio</div><div className="d">Connect Gmail, Slack, GitHub, Notion and 1000+ other apps from chat. Needs a Composio key in Providers.</div></div>
+        <Toggle on={cx} label="Composio" set={setCx} />
+      </div>
+      <div className="adm-perm-row">
         <div><div className="t">Custom connectors</div><div className="d">Add any remote MCP server by URL.</div></div>
         <Toggle on={value.custom} label="Custom connectors" set={(v) => onChange({ ...value, custom: v })} />
       </div>
       <div className="adm-perm-row">
         <div><div className="t">Tools that delete data</div><div className="d">Use tools the server marks as able to delete data. When off, those tools are blocked everywhere.</div></div>
         <Toggle on={value.destructive} label="Tools that delete data" set={(v) => onChange({ ...value, destructive: v })} />
-      </div>
-      <div className="adm-perm-row">
-        <div><div className="t">All directory connectors</div><div className="d">Includes connectors added to the directory later.</div></div>
-        <Toggle on={all} label="All directory connectors" set={(v) => onChange({ ...value, allowed: v ? [ALL] : [...ids] })} />
-      </div>
-      <div className="adm-conn-chips">
-        {DIRECTORY.map((d) => {
-          const on = all || value.allowed.includes(d.id);
-          return <button key={d.id} type="button" className={`adm-pchip adm-cchip ${on ? "on" : ""}`} aria-pressed={on} onClick={() => flip(d.id)}><ConnLogo logo={d.logo} color={d.color} name={d.name} size={18} /><span data-notr>{d.name}</span>{on && <I.Check size={12} />}</button>;
-        })}
       </div>
     </>
   );

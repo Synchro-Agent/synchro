@@ -4,7 +4,8 @@ import { healScript } from "./skillheal";
 import { can, canModel, limit, permsOf, type UserRow } from "./authstore";
 import { clampEffort, connPolicy, effortCap, isEffort, legacyModel, type Effort } from "./catalog";
 import { catalog, mainModels, pickDefault, resolveModel, type Target } from "./providers";
-import { ConnectorSession, connectorsPrompt, listConnectors, RECONNECT_TOOL, type ChatTool, type OfflineConn } from "./connectors";
+import { ConnectorSession, connectorsPrompt, ensureComposio, listConnectors, RECONNECT_TOOL, type ChatTool, type OfflineConn } from "./connectors";
+import { connectLinks } from "./composio";
 import { randomToken } from "./mcpauth";
 import { browserDefault, capsState, skillsOn } from "./caps";
 import { overLimit, usageScope } from "./usage";
@@ -431,6 +432,15 @@ function showReconnect(x: Exec, c: OfflineConn) {
   seen.add(c.id);
   progress("conn", JSON.stringify({ id: c.id, name: c.name, logo: c.logo, color: c.color, auth: c.auth, ...(c.refused ? { refused: true } : {}) }));
 }
+// Connect Link Composio vừa trả về: nút "Kết nối <ứng dụng>" ngay trong khung chat (mỗi đường link một lần trong lượt).
+function showLinks(x: Exec, content: string) {
+  const seen = (x.connCards ??= new Set());
+  for (const l of connectLinks(content)) {
+    if (seen.has(l.url)) continue;
+    seen.add(l.url);
+    progress("link", JSON.stringify(l));
+  }
+}
 // Ảnh do connector trả về: lưu thành tệp cho người dùng tải; model nhận kèm kết quả nếu là loại ảnh các hãng đọc được và không quá lớn.
 const MODEL_IMG = new Set(["image/png", "image/jpeg", "image/gif", "image/webp"]);
 const IMG_ONE = 6_500_000, IMG_TOTAL = 16_000_000;
@@ -679,16 +689,19 @@ async function runCall(x: Exec, c: Call, d?: Decision): Promise<Run> {
   const ct = x.sess?.get(c.name);
   if (!ct) return runSkillTool(x.list, c.name, c.input, x.scripts, { uid: x.uid, net: x.net, libs: x.libs, heal: x.heal ? (input) => healScript(x.heal!, input) : undefined });
   const used = { kind: "tool" as const, name: `${ct.cname}: ${ct.tool.title || ct.tool.annotations?.title || ct.tool.name}` };
-  if (x.task && x.sess!.perm(c.name) === "ask") return { content: queueTool(x.uid, x.task, c, { connector: ct.cname, title: ct.tool.title || ct.tool.annotations?.title || ct.tool.name }), is_error: true, used };
+  if (x.task && x.sess!.perm(c.name, c.input) === "ask") return { content: queueTool(x.uid, x.task, c, { connector: ct.cname, title: ct.tool.title || ct.tool.annotations?.title || ct.tool.name }), is_error: true, used };
   if (d === "deny") return { content: x.denied?.get(c.id) ?? REFUSED, is_error: true, used };
   const meta = x.calls?.get(c.id), run = runSignal();
   const stops = [run, meta?.cancel].filter((v): v is AbortSignal => !!v);
   // Qua cầu nối: công cụ chỉ được chạy trong phần còn lại của hạn CLI (đã trừ lúc chờ duyệt).
   const r = await x.sess!.call(c.name, c.input, stops.length > 1 ? AbortSignal.any(stops) : stops[0], meta ? Math.min(TOOL_BUDGET, Math.max(TOOL_MIN, BRIDGE_CALL_MAX - (Date.now() - meta.at))) : undefined);
   if (r.reconnect) showReconnect(x, r.reconnect);
+  if (ct.composio) showLinks(x, r.content);
   return { is_error: r.is_error, ...connectorImage(x, ct, c, r), used };
 }
-const needsAsk = (x: Exec, c: Call) => !!x.sess?.get(c.name) && x.sess.perm(c.name) === "ask";
+// Composio của tài khoản sẵn sàng trước khi mở phiên connector (lần đầu: tạo phiên Tool Router và lấy công cụ). Chờ tối đa 8 giây, lâu hơn thì lượt này đi tiếp không có Composio.
+const composioReady = (uid: string, pol: Parameters<typeof ensureComposio>[1]) => Promise.race([ensureComposio(uid, pol).catch(() => "error"), new Promise((ok) => setTimeout(ok, 8000))]);
+const needsAsk = (x: Exec, c: Call) => !!x.sess?.get(c.name) && x.sess.perm(c.name, c.input) === "ask";
 
 // Câu mô tả bước đang làm, hiện dưới "Đang suy nghĩ…" khi lượt chạy ở nền.
 function describe(x: Exec, c: Call) {
@@ -1497,7 +1510,7 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
         const ss = await skillSet(c.user, body, messages, studio, st);
         console.log(`[timing] chat skillset=${Date.now() - t1}ms (${ss.list.length} skill)`);
         route = ss.route;
-        if (can(c.user, "connectors")) { sess = new ConnectorSession(c.user.id, { conv: convId, project: !!project, pol: connPolicy(permsOf(c.user)) }); if (!sess.tools.length && !sess.offline.length) sess = null; }
+        if (can(c.user, "connectors")) { await composioReady(c.user.id, connPolicy(permsOf(c.user))); sess = new ConnectorSession(c.user.id, { conv: convId, project: !!project, pol: connPolicy(permsOf(c.user)) }); if (!sess.tools.length && !sess.offline.length) sess = null; }
         const code = pc.code;
         const refs = !!sess || code || /\bref_[\w-]{6,}/.test(JSON.stringify(messages));
         // Công cụ và hướng dẫn trình duyệt luôn có khi tính năng bật (phần đầu prompt ổn định, đọc lại từ bộ đệm).
@@ -1667,7 +1680,7 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
     // (cuối prompt), không ở phần đầu: phần đầu (hướng dẫn, danh mục skill, tài liệu ghim) giữ nguyên để đọc từ bộ đệm.
     const prep = prepareHistory(messages, [route, cs ? designOf(body, { art: !!cs.caps.art, code: !!cs.caps.code }, studio, convId) : "", recallOf(body, c.user, convId), nowBlock(body), crisisBlock(body)], mix);
     // Connector chỉ dùng trong lượt chat chính (skills = true), không dùng cho các lệnh nội bộ như tóm tắt bộ nhớ.
-    if (skills && t.kind !== "mock" && can(c.user, "connectors")) { sess = new ConnectorSession(c.user.id, { conv: convId, project: !!project, pol: connPolicy(permsOf(c.user)) }); if (!sess.tools.length && !sess.offline.length) sess = null; }
+    if (skills && t.kind !== "mock" && can(c.user, "connectors")) { await composioReady(c.user.id, connPolicy(permsOf(c.user))); sess = new ConnectorSession(c.user.id, { conv: convId, project: !!project, pol: connPolicy(permsOf(c.user)) }); if (!sess.tools.length && !sess.offline.length) sess = null; }
     const code = !!cs?.caps.code && t.kind !== "mock";
     // read_ref: đọc dữ liệu lớn đã lưu theo tham chiếu (ở lượt này hoặc các lượt trước, kể cả khi đổi model).
     const refs = !!skills && t.kind !== "mock" && (!!sess || code || /\bref_[\w-]{6,}/.test(JSON.stringify(prep.messages)));

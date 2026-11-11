@@ -17,7 +17,9 @@ export type ApiProvider = {
 export type Credit = { provider: string; amount: number; since: number; spent: number; remaining: number; pct: number };
 export type ApiState = { providers: ApiProvider[]; catalog: ProviderInfo[]; main: string[]; default: string | null; effectiveDefault: string | null; credits?: Credit[] };
 
-const ROLE: Record<string, string> = { anthropic: "Chat, Code and Projects", openai: "Chat, Code and Projects", google: "Chat, Code and Projects", elevenlabs: "Speech and voice conversation" };
+const ROLE: Record<string, string> = { anthropic: "Chat, Code and Projects", openai: "Chat, Code and Projects", google: "Chat, Code and Projects", elevenlabs: "Speech and voice conversation", composio: "Connectors for everyone: Gmail, Slack, GitHub, Notion and 1000+ apps" };
+// Khóa dịch vụ (không có model chat): không hiện số model, không theo dõi số dư.
+const SERVICE = new Set(["elevenlabs", "composio"]);
 
 // Logo của hãng trên ô nền trung tính; nhà cung cấp không có logo thì hiện chữ cái đầu.
 function Mark({ p }: { p: ApiProvider }) {
@@ -46,6 +48,7 @@ function KeyForm({ p, busy, err, ws, onCancel, onSave }: { p: ApiProvider; busy:
       </div>
       {p.keyUrl && <a className="api-get" href={p.keyUrl} target="_blank" rel="noreferrer">{`Get a key from ${p.vendor}`}<I.External size={12} /></a>}
       {p.kind === "elevenlabs" && <p className="api-note">Restricted keys work too. Turn on the features you use; User access is optional and only shows your plan here.</p>}
+      {p.kind === "composio" && <p className="api-note">Use a project API key from Composio settings. Everyone on this Synchro gets Composio in Connectors and connects their own apps from chat; their sign-ins stay separate.</p>}
       <button type="button" className="api-adv" aria-expanded={adv} onClick={() => setAdv(!adv)}><I.ChevronR size={13} />Advanced</button>
       {adv && (
         <>
@@ -130,7 +133,7 @@ export function ProviderCard({ p, onChange, credit, bare = false }: { p: ApiProv
       const s = await call<ApiState>("POST", "/api/admin/apikeys", { id: p.id, key: v.key, baseUrl: v.baseUrl, name: p.name, ...(v.workspaceId !== undefined ? { workspaceId: v.workspaceId } : {}) });
       onChange(s); setEdit(false); setWs({ need: false, list: [] }); refreshModels();
       const n = s.providers.find((x) => x.id === p.id)?.models.length ?? 0;
-      app.say(p.id === "elevenlabs" ? `Connected ${p.name}` : `Connected ${p.name} · ${n} models`);
+      app.say(SERVICE.has(p.id) ? `Connected ${p.name}` : `Connected ${p.name} · ${n} models`);
     } catch (e) {
       setErr((e as Error).message);
       const d = (e as Error & { data?: { needWorkspace?: boolean; workspaces?: WS["list"] } }).data;
@@ -142,12 +145,12 @@ export function ProviderCard({ p, onChange, credit, bare = false }: { p: ApiProv
     try { onChange(await call<ApiState>("POST", "/api/admin/apikeys", { action: "refresh", id: p.id })); refreshModels(); app.say("Model list updated"); }
     catch (e) { app.say((e as Error).message); } finally { setBusy(false); }
   };
-  const remove = () => app.confirm(`Remove the ${p.name} key?`, p.id === "elevenlabs" ? "Speech and voice conversation will stop working until you add a key again." : "Models from this provider will disappear from the model picker until you add a key again.", "Remove", async () => {
+  const remove = () => app.confirm(`Remove the ${p.name} key?`, p.id === "elevenlabs" ? "Speech and voice conversation will stop working until you add a key again." : p.id === "composio" ? "Composio will stop working in Connectors and chats until you add a key again. Apps people connected stay linked in Composio." : "Models from this provider will disappear from the model picker until you add a key again.", "Remove", async () => {
     try { onChange(await call<ApiState>("DELETE", `/api/admin/apikeys?id=${encodeURIComponent(p.id)}`)); refreshModels(); app.say("Key removed"); } catch (e) { app.say((e as Error).message); }
   });
   const status = !p.configured ? { cls: "", text: "Not connected" }
     : p.status === "error" ? { cls: "bad", text: "Needs attention" }
-    : { cls: "ok", text: p.id === "elevenlabs" ? (p.info ? `Connected · ${p.info[0].toUpperCase()}${p.info.slice(1)} plan` : "Connected") : `Connected · ${p.models.length} models` };
+    : { cls: "ok", text: p.id === "elevenlabs" ? (p.info ? `Connected · ${p.info[0].toUpperCase()}${p.info.slice(1)} plan` : "Connected") : SERVICE.has(p.id) ? "Connected" : `Connected · ${p.models.length} models` };
   return (
     <div className={`api-card ${edit ? "open" : ""} ${bare ? "bare" : ""}`}>
       <div className="api-card-h">
@@ -161,7 +164,7 @@ export function ProviderCard({ p, onChange, credit, bare = false }: { p: ApiProv
           {!p.configured && !edit && <button className="btn dark" onClick={() => { setEdit(true); setErr(""); }}>Add key</button>}
           {p.configured && !edit && (
             <>
-              <button className="icon-btn" aria-label="Refresh model list" title="Check key and refresh models" onClick={refresh} disabled={busy}>{busy ? <span className="api-spin" /> : <I.Retry size={16} />}</button>
+              <button className="icon-btn" aria-label={SERVICE.has(p.id) ? "Check key" : "Refresh model list"} title={SERVICE.has(p.id) ? "Check key" : "Check key and refresh models"} onClick={refresh} disabled={busy}>{busy ? <span className="api-spin" /> : <I.Retry size={16} />}</button>
               <button className="btn" onClick={() => { setEdit(true); setErr(""); }}>{p.source === "env" ? "Add key" : "Change key"}</button>
               {p.source === "db" && <button className="icon-btn" aria-label="Remove key" title="Remove key" onClick={remove}><I.Trash size={16} /></button>}
             </>
@@ -170,7 +173,7 @@ export function ProviderCard({ p, onChange, credit, bare = false }: { p: ApiProv
       </div>
       {p.status === "error" && p.error && !edit && <div className="api-err in"><I.Alert size={14} /><span>{p.error}</span></div>}
       {edit && <KeyForm p={p} busy={busy} err={err} ws={ws} onCancel={() => setEdit(false)} onSave={save} />}
-      {!edit && p.configured && p.id !== "elevenlabs" && credit !== undefined && <CreditRow p={p} credit={credit} onChange={onChange} />}
+      {!edit && p.configured && !SERVICE.has(p.id) && credit !== undefined && <CreditRow p={p} credit={credit} onChange={onChange} />}
       {!edit && p.models.length > 0 && (
         <div className="api-models">
           <button className="api-adv" aria-expanded={showModels} onClick={() => setShowModels(!showModels)}><I.ChevronR size={13} /><span>{showModels ? "Hide models" : `View ${p.models.length} models`}{p.checkedAt && <span className="d">{` · checked ${ago(p.checkedAt)}`}</span>}</span></button>
@@ -218,8 +221,9 @@ export function ApiPanel({ embedded = false }: { embedded?: boolean }) {
   useEffect(() => { load(); }, []);
   if (err) return <div className="empty" style={{ marginTop: 80 }}><I.Alert size={28} /><span>{err}</span><button className="btn" onClick={load}>Try again</button></div>;
   if (!s) return <div className="empty" style={{ marginTop: 80 }}><span className="muted">Loading…</span></div>;
-  const chat = s.providers.filter((p) => p.id !== "elevenlabs");
+  const chat = s.providers.filter((p) => !SERVICE.has(p.id));
   const voice = s.providers.filter((p) => p.id === "elevenlabs");
+  const conn = s.providers.filter((p) => p.id === "composio");
   const nModels = s.catalog.reduce((n, p) => n + p.models.length, 0);
   const nConn = s.providers.filter((p) => p.configured).length;
   return (
@@ -242,6 +246,9 @@ export function ApiPanel({ embedded = false }: { embedded?: boolean }) {
 
       <h3 className="sec">Voice</h3>
       <div className="api-list">{voice.map((p) => <ProviderCard key={p.id} p={p} onChange={setS} />)}</div>
+
+      <h3 className="sec">Connectors</h3>
+      <div className="api-list">{conn.map((p) => <ProviderCard key={p.id} p={p} onChange={setS} />)}</div>
 
       <h3 className="sec">Test a model</h3>
       <TestBox catalog={s.catalog} />

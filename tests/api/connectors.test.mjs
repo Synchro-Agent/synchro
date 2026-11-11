@@ -32,11 +32,12 @@ async function oauth(c, authorizeUrl, decision = "allow", tamper) {
 const chat = (c, model, text, extra = {}) => c("POST", "/api/llm", { system: "", messages: [{ role: "user", content: text }], model, skills: true, ...extra });
 const resume = (c, id, decisions) => c("POST", "/api/llm", { resume: id, decisions });
 
-console.log("1. Danh sách và danh mục");
+console.log("1. Danh sách và Composio");
 let r = await admin("GET", "/api/connectors");
 for (const x of r.j.connectors ?? []) await admin("DELETE", `/api/connectors/${x.id}`);
 r = await admin("GET", "/api/connectors");
-ok(r.s === 200 && r.j.connectors.length === 0 && r.j.directory.length === 23, "trống, danh mục 23 connector", JSON.stringify(r.j).slice(0, 200));
+// Danh mục connector gợi ý không còn gửi cho trình duyệt; Composio (connector chính) có trạng thái riêng.
+ok(r.s === 200 && r.j.connectors.length === 0 && r.j.directory === undefined && ["active", "no_key", "blocked", "error"].includes(r.j.composio?.state), "trống, không còn danh mục gợi ý, có trạng thái Composio", JSON.stringify(r.j).slice(0, 200));
 
 console.log("2. Kiểm tra đầu vào");
 r = await admin("POST", "/api/connectors", { name: "", url: "https://x.com/mcp" }); ok(r.s === 400 && /tên/.test(r.j.error), "thiếu tên bị chặn", JSON.stringify(r.j));

@@ -1,0 +1,166 @@
+// Composio: connector chính của mọi tài khoản (chỉ chạy ở máy chủ). Quản trị viên dán một khóa dự án Composio ở Cài đặt → Providers
+// (hoặc biến môi trường COMPOSIO_API_KEY); mỗi người dùng Synchro có một phiên Tool Router riêng (user_id = mã tài khoản Synchro),
+// tạo một lần rồi dùng lại. Máy chủ MCP của phiên có các công cụ tìm công cụ trong hơn 1000 ứng dụng, tạo Connect Link để người dùng
+// đăng nhập ứng dụng (OAuth do Composio quản lý, không cần Client ID) và chạy công cụ. Khóa chỉ gắn vào từng lời gọi ở máy chủ này:
+// không lưu vào hàng connector của ai, không gửi về trình duyệt, không vào sandbox chạy code.
+// API (docs.composio.dev, tháng 11/2026): POST /tool_router/session, GET /connected_accounts?user_ids=…, DELETE /connected_accounts/{id}.
+import crypto from "node:crypto";
+import fs from "node:fs";
+import path from "node:path";
+import { serviceKey } from "./providers";
+import { slugRead, type McpTool } from "./mcp";
+
+export const COMPOSIO = "composio";
+export const COMPOSIO_NAME = "Composio";
+export const COMPOSIO_COLOR = "#5B4BDB";
+export const NO_KEY = "Quản trị viên chưa thêm khóa Composio nên Composio chưa dùng được.";
+export const KEY_REJECTED = "Composio từ chối khóa API của Synchro. Hãy báo quản trị viên kiểm tra khóa Composio ở Cài đặt → Providers.";
+
+export class ComposioError extends Error { constructor(m: string, public status = 502) { super(m); } }
+
+export const composioKey = () => serviceKey("composio");
+/** Dấu vân tay của khóa (không đảo ngược được): đổi sang khóa của dự án khác thì phiên cũ không còn thuộc về dự án mới, phải tạo lại. */
+export const keyPrint = (k: string) => crypto.createHash("sha256").update(`composio:${k}`).digest("hex").slice(0, 16);
+
+async function call<T>(p: string, o: { method?: string; body?: unknown; timeout?: number } = {}): Promise<T> {
+  const k = composioKey();
+  if (!k) throw new ComposioError(NO_KEY, 503);
+  let r: Response;
+  try {
+    r = await fetch(`${k.base}${p}`, {
+      method: o.method ?? "GET",
+      headers: { "x-api-key": k.key, accept: "application/json", ...(o.body === undefined ? {} : { "content-type": "application/json" }) },
+      body: o.body === undefined ? undefined : JSON.stringify(o.body), signal: AbortSignal.timeout(o.timeout ?? 15_000),
+    });
+  } catch (e) { throw new ComposioError(`Không kết nối được tới Composio: ${(e as Error).name === "TimeoutError" ? "quá thời gian chờ" : (e as Error).message}`.slice(0, 300), 503); }
+  const text = await r.text();
+  let j: unknown = null;
+  try { j = text ? JSON.parse(text) : null; } catch {}
+  if (!r.ok) {
+    if (r.status === 401 || r.status === 403) throw new ComposioError(KEY_REJECTED, 502);
+    const e = (j as { error?: { message?: string } | string; message?: string } | null);
+    const m = typeof e?.error === "string" ? e.error : e?.error?.message ?? e?.message ?? text.slice(0, 200);
+    throw new ComposioError(`Composio báo lỗi ${r.status}${m ? `: ${String(m).slice(0, 200)}` : ""}`, r.status === 404 ? 404 : r.status >= 500 || r.status === 429 ? 503 : 502);
+  }
+  return j as T;
+}
+
+// Máy chủ MCP của phiên: Composio trả về https; API giả lập chạy ở http cục bộ thì cho http khi chính địa chỉ API cũng là http.
+function okMcpUrl(u: string) {
+  try {
+    const x = new URL(u), base = new URL(composioKey()?.base ?? "https://x");
+    return x.protocol === "https:" || (x.protocol === "http:" && base.protocol === "http:");
+  } catch { return false; }
+}
+
+/** Tạo phiên Tool Router cho một tài khoản Synchro, bật trình quản lý kết nối (Connect Link) của Composio. */
+export async function createSession(uid: string): Promise<{ session: string; url: string; fp: string }> {
+  const k = composioKey();
+  if (!k) throw new ComposioError(NO_KEY, 503);
+  const j = await call<{ session_id?: string; mcp?: { type?: string; url?: string } }>("/tool_router/session", { method: "POST", body: { user_id: uid, manage_connections: { enable: true } } });
+  const url = j?.mcp?.url ?? "";
+  if (!j?.session_id || !okMcpUrl(url)) throw new ComposioError("Composio không trả về địa chỉ máy chủ MCP hợp lệ cho phiên.", 502);
+  return { session: String(j.session_id), url, fp: keyPrint(k.key) };
+}
+
+// ---- ứng dụng người dùng đã kết nối qua Composio ----
+export type ComposioApp = { id: string; app: string; name: string; logo?: string; status: string; alias?: string; createdAt: string | null };
+type Item = { id?: string; user_id?: string; status?: string; alias?: string; created_at?: string; toolkit?: { slug?: string } };
+const NAMES: Record<string, string> = {
+  github: "GitHub", gitlab: "GitLab", googledrive: "Google Drive", googlesheets: "Google Sheets", googledocs: "Google Docs", googlecalendar: "Google Calendar",
+  googleslides: "Google Slides", googlemeet: "Google Meet", googlemaps: "Google Maps", hubspot: "HubSpot", linkedin: "LinkedIn", youtube: "YouTube", clickup: "ClickUp",
+  onedrive: "OneDrive", outlook: "Outlook", sharepoint: "SharePoint", whatsapp: "WhatsApp", paypal: "PayPal", quickbooks: "QuickBooks", zoho: "Zoho", posthog: "PostHog",
+};
+export const appName = (slug: string) => NAMES[slug] ?? slug.split(/[_-]+/).filter(Boolean).map((w) => w[0].toUpperCase() + w.slice(1)).join(" ");
+// Logo có sẵn trong public/connectors (simple-icons, CC0); không có thì giao diện hiện chữ cái đầu.
+const logoOf = (slug: string) => (/^[a-z0-9]+$/.test(slug) && fs.existsSync(path.join(process.cwd(), "public", "connectors", `${slug}.svg`)) ? slug : undefined);
+// Đang chờ người dùng bấm Connect Link: chưa phải ứng dụng đã kết nối.
+const PENDING = new Set(["INITIALIZING", "INITIATED"]);
+const APPS_TTL = 60_000;
+const apps = new Map<string, { at: number; list: ComposioApp[] }>();
+
+export async function listApps(uid: string, fresh = false): Promise<ComposioApp[]> {
+  const hit = apps.get(uid);
+  if (!fresh && hit && Date.now() - hit.at < APPS_TTL) return hit.list;
+  const j = await call<{ items?: Item[] }>(`/connected_accounts?user_ids=${encodeURIComponent(uid)}&limit=100&order_by=created_at&order_direction=desc`);
+  // user_id trong kết quả đã bị Composio đánh dấu bỏ dần: còn thì phải khớp (phòng khi bộ lọc không được áp, không bao giờ hiện tài khoản của người khác).
+  const list = (Array.isArray(j?.items) ? j!.items : [])
+    .filter((x) => x && typeof x.id === "string" && (!x.user_id || x.user_id === uid) && !PENDING.has(String(x.status ?? "")))
+    .map((x): ComposioApp => {
+      const slug = String(x.toolkit?.slug ?? "").toLowerCase().slice(0, 60);
+      return { id: x.id!, app: slug, name: appName(slug) || "?", logo: logoOf(slug), status: String(x.status ?? ""), ...(x.alias ? { alias: String(x.alias).slice(0, 60) } : {}), createdAt: x.created_at ?? null };
+    });
+  apps.set(uid, { at: Date.now(), list });
+  return list;
+}
+/** Số ứng dụng đang kết nối (từ bộ đệm nếu còn mới), lỗi thì null: trang không chờ Composio quá lâu. */
+export async function appCount(uid: string): Promise<number | null> {
+  try { return (await listApps(uid)).filter((a) => a.status === "ACTIVE").length; } catch { return null; }
+}
+export const forgetApps = (uid: string) => { apps.delete(uid); };
+
+/** Ngắt một ứng dụng: chỉ khi nó đúng là của tài khoản này (có trong danh sách lọc theo user_id). */
+export async function disconnectApp(uid: string, id: string) {
+  if (!/^[\w-]{1,100}$/.test(id)) throw new ComposioError("Mã ứng dụng không hợp lệ.", 400);
+  const mine = (await listApps(uid, true)).find((a) => a.id === id);
+  if (!mine) throw new ComposioError("Không tìm thấy ứng dụng này trong tài khoản của bạn.", 404);
+  await call(`/connected_accounts/${encodeURIComponent(id)}`, { method: "DELETE" });
+  forgetApps(uid);
+  return mine;
+}
+
+// ---- công cụ của phiên ----
+// Công cụ meta không thay đổi gì trong ứng dụng của người dùng: tìm công cụ, xem tham số, tạo Connect Link / xem trạng thái kết nối.
+// Khi máy chủ không tự khai báo, Synchro coi chúng là công cụ đọc (chạy không cần hỏi). Chạy thao tác (MULTI_EXECUTE), bash / workbench từ xa,
+// gọi API thẳng (PROXY_EXECUTE) vẫn hỏi trước như công cụ ghi; riêng MULTI_EXECUTE với toàn thao tác chỉ đọc thì chạy luôn (execRead).
+const META_READ = new Set(["COMPOSIO_SEARCH_TOOLS", "COMPOSIO_GET_TOOL_SCHEMAS", "COMPOSIO_MANAGE_CONNECTIONS"]);
+export const EXEC_TOOL = "COMPOSIO_MULTI_EXECUTE_TOOL";
+export const LINK_TOOL = "COMPOSIO_MANAGE_CONNECTIONS";
+export function annotate<T extends McpTool>(tools: T[]): T[] {
+  return tools.map((t) => (META_READ.has(t.name) && t.annotations?.readOnlyHint === undefined ? { ...t, annotations: { ...t.annotations, readOnlyHint: true, destructiveHint: false } } : t));
+}
+/** Lời gọi MULTI_EXECUTE chỉ gồm thao tác đọc (GMAIL_FETCH_EMAILS, GITHUB_LIST_…): theo quy tắc "công cụ đọc chạy luôn". Không chắc thì không. */
+export function execRead(input: unknown): boolean {
+  const list = (input as { tools?: unknown } | null)?.tools;
+  if (!Array.isArray(list) || !list.length || list.length > 20) return false;
+  return list.every((x) => x && typeof x === "object" && typeof (x as { tool_slug?: unknown }).tool_slug === "string" && slugRead((x as { tool_slug: string }).tool_slug, (x as { arguments?: unknown }).arguments));
+}
+
+// ---- Connect Link trong kết quả công cụ → nút trong khung chat ----
+const LINK_KEYS = ["redirect_url", "redirectUrl", "connect_url", "connectUrl", "connect_link", "redirect_uri"];
+function linkHost(u: string) {
+  try {
+    const x = new URL(u), base = composioKey()?.base;
+    const b = base ? new URL(base) : null;
+    if (x.username || x.password) return false;
+    if (b && x.host === b.host && x.protocol === b.protocol) return true;
+    return x.protocol === "https:" && (x.hostname === "composio.dev" || x.hostname.endsWith(".composio.dev"));
+  } catch { return false; }
+}
+/** Connect Link Composio trả về (chỉ địa chỉ của Composio): mỗi ứng dụng một nút. Kết quả đến từ ngoài, nên không nhận địa chỉ nơi khác. */
+export function connectLinks(content: string): { app: string; name: string; url: string }[] {
+  let j: unknown;
+  try { j = JSON.parse(content); } catch {
+    const m = /\{[\s\S]*\}/.exec(content);
+    try { j = m ? JSON.parse(m[0]) : null; } catch { j = null; }
+  }
+  const out = new Map<string, { app: string; name: string; url: string }>();
+  const walk = (v: unknown, key: string, depth: number) => {
+    if (!v || typeof v !== "object" || depth > 8 || out.size >= 6) return;
+    if (Array.isArray(v)) { for (const x of v) walk(x, key, depth + 1); return; }
+    const o = v as Record<string, unknown>;
+    for (const k of LINK_KEYS) {
+      const u = o[k];
+      if (typeof u === "string" && u.length < 2000 && linkHost(u)) {
+        const slug = String(o.toolkit ?? o.toolkit_slug ?? o.app ?? key ?? "").toLowerCase().replace(/[^a-z0-9_-]/g, "").slice(0, 40);
+        if (!out.has(u)) out.set(u, { app: slug, name: slug ? appName(slug) : COMPOSIO_NAME, url: u });
+      }
+    }
+    for (const [k, x] of Object.entries(o)) walk(x, /^(data|results|result|response|items|session)$/.test(k) ? key : k, depth + 1);
+  };
+  walk(j, "", 0);
+  return [...out.values()];
+}
+
+/** Lời dặn thêm cho model khi có Composio. */
+export const COMPOSIO_PROMPT = `Composio nối Synchro với hơn 1000 ứng dụng của người dùng (Gmail, Slack, GitHub, Notion, Google Drive…). Cách dùng: tìm công cụ phù hợp bằng COMPOSIO_SEARCH_TOOLS, rồi chạy bằng COMPOSIO_MULTI_EXECUTE_TOOL đúng tên và tham số vừa tìm được. Ứng dụng chưa kết nối thì gọi COMPOSIO_MANAGE_CONNECTIONS: Synchro tự hiện nút "Kết nối" cho đường link Composio trả về, hãy nói người dùng bấm nút đó, đăng nhập xong thì nhắc lại yêu cầu. Đừng tự chép hay bịa đường link kết nối.`;

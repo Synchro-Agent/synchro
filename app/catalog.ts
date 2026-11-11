@@ -11,7 +11,7 @@ export const IMAGE_PLANS = new Set<string>(["agy", "grok", "codex"]);
 export type PlanInfo = { cli: "claude" | "codex" | "agy" | "grok"; models: ModelInfo[]; blockedUntil: number | null; usingApiUntil: number | null; relogin: boolean; hasApi?: boolean };
 /** source: nhóm đang hiện model của gói ("plan") hay của khóa API dùng chung ("api"). */
 export type ProviderInfo = { id: string; name: string; kind: ProviderKind; models: ModelInfo[]; source?: "plan" | "api"; plan?: PlanInfo };
-export type ProviderKind = "anthropic" | "openai" | "google" | "xai" | "deepseek" | "compatible" | "elevenlabs" | "mock";
+export type ProviderKind = "anthropic" | "openai" | "google" | "xai" | "deepseek" | "compatible" | "elevenlabs" | "composio" | "mock";
 
 // Quyền "*" = mọi model, kể cả model hãng mới ra sau này.
 export const ALL = "*";

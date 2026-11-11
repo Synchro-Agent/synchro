@@ -1761,3 +1761,23 @@ Object.assign(VI2EN, { "Tài khoản của bạn đang chạy nhiều lượt c�
 Object.assign(VI2EN, { "Máy chủ sắp hết dung lượng nên tạm thời chưa lưu được dữ liệu mới. Hãy thử lại sau.": "The server is almost out of disk space, so new data can't be saved for now. Please try again later.", "Artifact của bạn đã dùng hết dung lượng. Hãy xóa bớt ở trang Artifacts rồi thử lại.": "Your artifacts have used up their storage. Delete some on the Artifacts page and try again." });
 Object.assign(VI2EN, { "Xác minh hai bước đang bật.": "Two-step verification is already on.", "Hãy bắt đầu lại từ đầu.": "Please start over.", "Mã không đúng. Hãy nhập mã đang hiện trong ứng dụng.": "That code isn't right. Enter the code your app shows now." });
 Object.assign(VI2EN, { "Xác minh hai bước:": "Two-step verification:", "khóa của ứng dụng tạo mã (được mã hóa) và mã băm của các mã dự phòng, nếu bạn bật. Xóa khi bạn tắt hoặc xóa tài khoản.": "the authenticator key (encrypted) and hashes of your recovery codes, if you turn it on. Deleted when you turn it off or delete your account." });
+// Composio: connector chính (Cài đặt → Connectors, menu +, nút Connect Link trong khung chat, lỗi máy chủ).
+SAME_WORDS.add("Composio");
+for (const [k, v] of Object.entries({
+  "Composio không trả về địa chỉ máy chủ MCP hợp lệ cho phiên.": "Composio didn't return a valid MCP server address for the session.",
+  "Mã ứng dụng không hợp lệ.": "Invalid app ID.",
+  "Không tìm thấy ứng dụng này trong tài khoản của bạn.": "This app wasn't found in your account.",
+  "Composio do Synchro quản lý nên không gỡ được. Bạn có thể tắt nó, hoặc ngắt từng ứng dụng đã kết nối.": "Composio is managed by Synchro, so it can't be removed. You can turn it off, or disconnect individual apps.",
+  "Quản trị viên chưa thêm khóa Composio nên Composio chưa dùng được.": "Your administrator hasn't added a Composio key, so Composio isn't available yet.",
+  "Composio từ chối khóa API của Synchro. Hãy báo quản trị viên kiểm tra khóa Composio ở Cài đặt → Providers.": "Composio rejected Synchro's API key. Ask your administrator to check the Composio key in Settings → Providers.",
+  "Đang bật": "On", "Chưa bật": "Not set up", "Có lỗi": "Error",
+  "Đăng nhập xong thì nhắn lại yêu cầu để Synchro làm tiếp.": "Once you've signed in, send your request again so Synchro can continue.",
+  "Mở lại trang kết nối": "Open the connect page again",
+})) if (!Object.prototype.hasOwnProperty.call(VI2EN, k)) VI2EN[k] = v;
+RULES_EN.push(
+  [/^Composio báo lỗi (\d+)(?:: ([\s\S]*))?$/, (m) => `Composio returned error ${m[1]}${m[2] ? `: ${m[2]}` : ""}`],
+  [/^Không kết nối được tới Composio: ([\s\S]*)$/, (m) => `Couldn't reach Composio: ${m[1] === "quá thời gian chờ" ? "timed out" : m[1]}`],
+  [/^(\d+) ứng dụng$/, (m) => `${m[1]} ${m[1] === "1" ? "app" : "apps"}`],
+  [/^Kết nối (.+) qua Composio để Synchro dùng được ứng dụng này\.$/, (m) => `Connect ${m[1]} through Composio so Synchro can use this app.`],
+  [/^Kết nối ([A-Za-z0-9][A-Za-z0-9 .+&-]*)$/, (m) => `Connect ${m[1]}`],
+);

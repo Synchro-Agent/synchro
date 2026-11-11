@@ -1,4 +1,5 @@
-// Danh mục connector có sẵn: máy chủ MCP từ xa chính thức của từng hãng (đã kiểm tra địa chỉ tháng 10/2026).
+// Danh mục connector cũ: máy chủ MCP từ xa chính thức của từng hãng (đã kiểm tra địa chỉ tháng 10/2026). Giao diện không còn gợi ý danh mục này
+// (connector chính giờ là Composio); dữ liệu còn giữ cho connector người dùng đã thêm từ danh mục trước đây: logo, địa chỉ mới, lý do hãng chưa duyệt.
 // Phần lớn đăng nhập tự động được (Client ID Metadata Document hoặc đăng ký động) hoặc không cần đăng nhập; hãng chưa mở cho Synchro thì có cờ access (xem dưới).
 // Logo ở public/connectors (simple-icons, CC0); hãng không có logo thì hiện chữ cái đầu trên màu thương hiệu.
 export type DirCat = "productivity" | "design" | "dev" | "knowledge" | "payments" | "support";
@@ -6,8 +7,6 @@ export type DirCat = "productivity" | "design" | "dev" | "knowledge" | "payments
 // còn cách nào thử được (token tự nhập chưa kiểm chứng với từng hãng; OAuth Client ID riêng ở Cài đặt nâng cao). Hãng mở rồi thì chỉ cần bỏ cờ này, không phải sửa dữ liệu.
 export type DirAccess = { why: string; whyVi: string };
 export type DirEntry = { id: string; name: string; url: string; cat: DirCat; desc: string; descVi: string; logo?: string; color?: string; noAuth?: boolean; access?: DirAccess };
-
-export const DIR_CATS: [DirCat | "all", string][] = [["all", "All"], ["productivity", "Productivity"], ["design", "Design"], ["dev", "Development"], ["knowledge", "Knowledge"], ["payments", "Payments"], ["support", "Customer support"]];
 
 export const DIRECTORY: DirEntry[] = [
   { id: "notion", name: "Notion", url: "https://mcp.notion.com/mcp", cat: "productivity", logo: "notion", desc: "Search, read and update pages and databases in your Notion workspace.", descVi: "Tìm, đọc và cập nhật trang, cơ sở dữ liệu trong không gian Notion." },

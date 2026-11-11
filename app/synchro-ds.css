@@ -1001,6 +1001,9 @@ html body .menu-item.cm-conn{cursor:default}
 html body .menu-item.cm-conn:hover{background:transparent}
 .cm-conn .toggle{margin-left:auto;flex:none}
 .cm-conn .cn-logo{flex:none}
+/* Composio trong menu +: số ứng dụng đã kết nối đứng trước nút bật / tắt. */
+.cm-cnt{margin-left:auto;padding-left:8px;flex:none;font-size:12px;color:var(--ds-muted);white-space:nowrap}
+.cm-cx .toggle,.cm-cx .cm-rec{margin-left:10px}
 @media (max-width:640px){
   html body .menu.cm-fly{left:0;right:0;bottom:0;width:auto}
   .cm-back{display:flex!important;font-weight:560}

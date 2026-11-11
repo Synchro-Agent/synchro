@@ -18,7 +18,9 @@ export type ToolItem = { seq: number; label: string; ok?: boolean; sum?: string;
 export type ConnPart = { k: "conn"; id: string; name: string; logo?: string; color?: string; auth?: string; refused?: boolean };
 // plans: chưa tạo được ảnh vì gói (chưa đăng nhập, hết hạn mức): nút mở Providers ngay trong khung chat. why: lý do, tried: gói đã thử.
 export type PlansPart = { k: "plans"; why: string; tried: string[] };
-export type Part = { k: "say"; text: string } | { k: "tools"; items: ToolItem[] } | AskStep | ConnPart | PlansPart;
+// link: Connect Link Composio vừa tạo (chỉ địa chỉ của Composio, máy chủ đã lọc): nút đăng nhập ứng dụng ngay trong khung chat.
+export type LinkPart = { k: "link"; app: string; name: string; url: string };
+export type Part = { k: "say"; text: string } | { k: "tools"; items: ToolItem[] } | AskStep | ConnPart | PlansPart | LinkPart;
 export type PlanItem = { content: string; status: "pending" | "in_progress" | "completed" };
 export type Work = { parts?: Part[]; plan?: PlanItem[]; seq?: number };
 export type RunEv = { seq: number; at: number; kind: string; text: string };
@@ -54,6 +56,8 @@ export function applyEvent(w: Work, ev: RunEv): Work {
     } catch {}
   } else if (ev.kind === "plans") {
     try { const a = JSON.parse(ev.text) as { why?: string; tried?: string[] }; if (!parts.some((p) => p.k === "plans")) parts.push({ k: "plans", why: String(a.why ?? "noplan"), tried: a.tried ?? [] }); } catch {}
+  } else if (ev.kind === "link") {
+    try { const l = JSON.parse(ev.text) as Omit<LinkPart, "k">; if (typeof l.url === "string" && /^https?:\/\//.test(l.url) && !parts.some((p) => p.k === "link" && p.url === l.url)) parts.push({ k: "link", app: String(l.app ?? ""), name: String(l.name ?? "Composio"), url: l.url }); } catch {}
   } else if (ev.kind === "conn") {
     try { const c = JSON.parse(ev.text) as Omit<ConnPart, "k">; if (!parts.some((p) => p.k === "conn" && p.id === c.id)) parts.push({ ...c, k: "conn" }); } catch {}
   } else return { ...w, seq: ev.seq };
@@ -120,18 +124,30 @@ function PlansCard({ why, tried }: { why: string; tried: string[] }) {
     </div>
   );
 }
+/** Nút đăng nhập một ứng dụng qua Composio: mở Connect Link trong tab mới; đăng nhập xong thì người dùng nhắn lại yêu cầu. */
+function LinkCard({ l }: { l: LinkPart }) {
+  const [opened, setOpened] = useState(false);
+  return (
+    <div className="wl-plans wl-link" role="group" aria-label={l.name}>
+      <I.SetPlug size={14} /><span>{tr(opened ? "Đăng nhập xong thì nhắn lại yêu cầu để Synchro làm tiếp." : `Kết nối ${l.name} qua Composio để Synchro dùng được ứng dụng này.`)}</span>
+      <a className="btn dark" href={l.url} target="_blank" rel="noopener noreferrer" onClick={() => setOpened(true)}>{tr(opened ? "Mở lại trang kết nối" : `Kết nối ${l.name}`)}<I.External size={12} /></a>
+    </div>
+  );
+}
 /** Lời dẫn và công cụ của các bước đã qua; render: cách hiện chữ (Markdown) của trang. */
 export function WorkParts({ parts, live, render, onAnswer }: { parts: Part[]; live: boolean; render: (text: string) => React.ReactNode; onAnswer?: OnAnswer }) {
   return <>{parts.map((p, i) => (p.k === "say" ? <div key={i} className="wl-say">{render(p.text)}</div>
     : p.k === "ask" ? <AskCard key={p.id} a={!live && p.state === "wait" ? { ...p, state: "gone" } : p} onAnswer={live ? onAnswer : undefined} />
     : p.k === "conn" ? (live ? <ReconnectCard key={p.id} c={p} /> : null)
     : p.k === "plans" ? (live ? <PlansCard key={i} why={p.why} tried={p.tried} /> : null)
+    : p.k === "link" ? (live ? <LinkCard key={p.url} l={p} /> : null)
     : <ToolGroup key={i} items={p.items} live={live} />))}</>;
 }
 /** Câu trả lời đã xong: nút kết nối lại vẫn hiện ngoài phần tổng kết thu gọn (người dùng vừa được bảo bấm nó). */
 export function ConnCards({ parts }: { parts?: Part[] }) {
   const list = (parts ?? []).filter((p): p is ConnPart => p.k === "conn");
   const plans = (parts ?? []).find((p): p is PlansPart => p.k === "plans");
+  const links = (parts ?? []).filter((p): p is LinkPart => p.k === "link");
   // Mở lại đoạn chat khi connector đã nối xong từ trước (bằng thẻ này hay trong Cài đặt) thì không nhắc nữa. Hỏi máy chủ không được thì vẫn hiện thẻ.
   // Chỉ hỏi một lần lúc thẻ gắn: vừa kết nối lại xong ngay trên thẻ thì thẻ vẫn ở đó để báo "Đã kết nối lại".
   const [fine, setFine] = useState<string[]>([]);
@@ -145,7 +161,7 @@ export function ConnCards({ parts }: { parts?: Part[] }) {
     return () => { on = false; };
   }, [sig]);
   const show = list.filter((c) => !fine.includes(c.id));
-  return show.length || plans ? <>{show.map((c) => <ReconnectCard key={c.id} c={c} done />)}{plans && <PlansCard why={plans.why} tried={plans.tried} />}</> : null;
+  return show.length || plans || links.length ? <>{show.map((c) => <ReconnectCard key={c.id} c={c} done />)}{links.map((l) => <LinkCard key={l.url} l={l} />)}{plans && <PlansCard why={plans.why} tried={plans.tried} />}</> : null;
 }
 
 /**

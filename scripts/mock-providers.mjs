@@ -8,10 +8,11 @@ import { createRequire } from "node:module";
 import { WebSocketServer } from "ws";
 import { capsReply, codeDone, revReply, studioStep } from "./mock-caps.mjs";
 import { EL, elevenHandler, scribeConnect } from "./mock-eleven.mjs";
+import { COMPOSIO_KEY, composioHandler } from "./mock-composio.mjs";
 const CLI = createRequire(import.meta.url)("./mock-cli/mock-cli-common.cjs");
 
 // Khóa mà npm run dev:mock tự nhập vào Cài đặt → Providers.
-export const MOCK_KEYS = { anthropic: "sk-ant-mock-local-0001", openai: "sk-mock-openai-0001", google: "AIza-mock-gemini-0001", xai: "xai-mock-grok-local-0001", deepseek: "sk-mock-deepseek-0001", elevenlabs: "sk_mock_eleven_0001" };
+export const MOCK_KEYS = { anthropic: "sk-ant-mock-local-0001", openai: "sk-mock-openai-0001", google: "AIza-mock-gemini-0001", xai: "xai-mock-grok-local-0001", deepseek: "sk-mock-deepseek-0001", elevenlabs: "sk_mock_eleven_0001", composio: COMPOSIO_KEY };
 
 // Danh sách model như API thật của từng hãng trả về (theo tài liệu tháng 10/2026), gồm cả model không dùng để nhắn tin mà Synchro phải tự lọc bỏ.
 const ANTHROPIC = [["claude-fable-5-1", "Claude Fable 5.1"], ["claude-opus-5-5", "Claude Opus 5.5"], ["claude-sonnet-5-5", "Claude Sonnet 5.5"], ["claude-haiku-5-5", "Claude Haiku 5.5"],
@@ -627,6 +628,8 @@ async function handler(req, res) {
   res.__body = b;
   res.__prov = req.method !== "POST" ? null : p.startsWith("/anthropic/") ? "anthropic" : p.startsWith("/openai/") ? "openai" : p.startsWith("/google/") ? "google" : p.startsWith("/xai/") ? "xai" : p.startsWith("/deepseek/") ? "deepseek" : null;
 
+  // Composio (connector chính): /composio/… nằm ở mock-composio.mjs.
+  if (await composioHandler(req, res, p, b)) return;
   // ElevenLabs (Speech): mọi đường dẫn trừ Realtime nằm ở mock-eleven.mjs.
   if (await elevenHandler(req, res, p, b, req.__raw ?? Buffer.alloc(0), valid, elevenNo)) return;
   // Chép lời OpenAI Whisper (văn bản).

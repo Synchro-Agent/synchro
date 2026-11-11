@@ -1,14 +1,14 @@
 "use client";
 // Cài đặt → Connectors: kết nối Synchro với ứng dụng khác qua MCP (giống Connectors của Claude).
-// Danh mục connector có sẵn, thêm connector tùy chỉnh bằng địa chỉ máy chủ MCP, đăng nhập OAuth trong cửa sổ bật lên,
+// Phần chính là Composio (một connector cho hơn 1000 ứng dụng, quản trị viên thêm khóa một lần, mỗi người kết nối ứng dụng của mình ngay trong chat);
+// phần riêng cho người tự thêm connector bằng địa chỉ máy chủ MCP, đăng nhập OAuth trong cửa sổ bật lên,
 // bật/tắt từng connector và đặt quyền từng công cụ (luôn cho phép / hỏi trước / chặn). Kèm thẻ duyệt công cụ dùng trong chat.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { apiFetch, NO_SERVER } from "./apierr";
 import * as I from "./icons";
 import { useApp } from "./store";
-import { CONNECTORS_BROWSE, ConnLogo } from "./connlogo";
-export { CONNECTORS_BROWSE, ConnLogo };
-import { DIR_CATS, type DirCat, type DirEntry } from "./connectordir";
+import { ConnLogo } from "./connlogo";
+export { ConnLogo };
 import type { ApprovalCall, Decision } from "./llm";
 import { BulkBar, BulkButton, BulkCheck, bulkRow, each, useBulk, type Bulk, type BulkAct } from "./bulk";
 import { PageBar, usePage } from "./pager";
@@ -20,12 +20,14 @@ type Tool = { name: string; title: string; description: string; readOnly: boolea
 type Settings = { chat: boolean; projects: boolean; newTools: "auto" | "ask" | "block"; destructive: boolean; maxCalls: number };
 export type Conn = {
   id: string; name: string; url: string; host: string; dir: string | null; logo?: string; color?: string; icon?: string; enabled: boolean;
-  status: "ok" | "needs_auth" | "forbidden" | "error"; error: string | null; serverName: string | null; auth: "none" | "oauth" | "token"; tools: Tool[]; checkedAt: number | null;
+  status: "ok" | "needs_auth" | "forbidden" | "error"; error: string | null; serverName: string | null; auth: "none" | "oauth" | "token" | "composio"; tools: Tool[]; checkedAt: number | null;
   settings: Settings; adminBlocked: boolean; lastError?: string | null; vendorBlocked?: { why: string; whyVi: string } | null; needsScope?: boolean; toolsTotal?: number | null; tokenHeader?: string; ownClient?: boolean;
 };
 type Policy = { custom: boolean; allowed: string[]; destructive: boolean };
-type Data = { connectors: Conn[]; directory: DirEntry[]; policy: Policy };
-const allowed = (p: Policy, dir: string) => p.allowed.includes("*") || p.allowed.includes(dir);
+// Composio của tài khoản: active (đang chạy), no_key (quản trị viên chưa thêm khóa), blocked (quản trị viên không cho tài khoản này), error.
+export type ComposioInfo = { state: "active" | "no_key" | "blocked" | "error"; admin: boolean; connector: Conn | null; apps: number | null };
+export type ComposioApp = { id: string; app: string; name: string; logo?: string; status: string; alias?: string; createdAt: string | null };
+type Data = { connectors: Conn[]; composio?: ComposioInfo; policy: Policy };
 type Res = { connectors: Conn[]; connector?: Conn; authorizeUrl?: string; error?: string };
 
 async function api<T = Res>(method: string, url: string, body?: unknown): Promise<T> {
@@ -345,60 +347,6 @@ function ConnectorCard({ c, policy, open, busy, waiting, stale, onDismissScope, 
   );
 }
 
-function Browse({ data, busy, errs, login, onClose, onConnect, onDismiss, onCreds, onCustom }: { data: Data; busy: ReadonlySet<string>; errs: Record<string, string>; login: Pick<ReturnType<typeof useLoginFlow>, "pending" | "blocked" | "reopen" | "stale">; onClose: () => void; onConnect: (e: DirEntry, tryAnyway?: boolean) => void; onDismiss: (id: string) => void; onCreds: (e: DirEntry, mode: CredMode) => void; onCustom: () => void }) {
-  const pol = data.policy;
-  const [q, setQ] = useState("");
-  const [cat, setCat] = useState<DirCat | "all">("all");
-  const ql = q.trim().toLowerCase();
-  const list = data.directory.filter((e) => (cat === "all" || e.cat === cat) && (!ql || e.name.toLowerCase().includes(ql) || e.desc.toLowerCase().includes(ql) || e.descVi.toLowerCase().includes(ql)));
-  const have = (e: DirEntry) => data.connectors.find((c) => c.dir === e.id);
-  const [why, setWhy] = useState<string | null>(null);
-  return (
-    <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="modal cn-browse" role="dialog" aria-label="Browse connectors">
-        <div className="cn-browse-h">
-          <div><h2>Browse connectors</h2><p className="d">Connect the apps you use so Synchro can find information and take actions for you.</p></div>
-          <button className="icon-btn" onClick={onClose} aria-label="Close"><I.X /></button>
-        </div>
-        <div className="s-search cn-bsearch"><I.Search size={15} /><input autoFocus placeholder="Search connectors" value={q} onChange={(e) => setQ(e.target.value)} /></div>
-        <div className="cn-cats">{DIR_CATS.map(([k, l]) => <button key={k} className={cat === k ? "on" : ""} onClick={() => setCat(k)}>{l}</button>)}</div>
-        <div className="cn-grid">
-          {list.map((e) => {
-            const c = have(e);
-            const state = !allowed(pol, e.id) ? "blocked" : busy.has(e.id) ? "busy" : c?.status === "ok" ? "ok" : e.access && (!c || c.vendorBlocked) ? "vendor" : c ? "pending" : "none";
-            const err = errs[e.id];
-            // Đang chờ đăng nhập connector này: mở lại đúng địa chỉ đã có (mở ngay trong lúc bấm nên trình duyệt cho phép), không gọi máy chủ lần nữa.
-            const waiting = !!c && login.pending === c.id, shut = waiting && login.blocked?.id === c.id;
-            return (
-              <div key={e.id} className={`cn-item${err || shut || why === e.id ? " wide" : ""}`}>
-                <ConnLogo logo={e.logo} color={e.color} name={e.name} size={40} />
-                <div className="cn-item-m"><b data-notr>{e.name}</b><span>{e.desc}</span></div>
-                {state === "blocked" ? <span className="cn-done off" title="Your administrator hasn't allowed this connector for your account."><I.Lock size={13} />Not allowed</span>
-                  : state === "ok" ? <span className="cn-done"><I.Check size={14} />Connected</span>
-                  : state === "vendor" ? <button className="cn-vendor-tag" aria-expanded={why === e.id} onClick={() => setWhy(why === e.id ? null : e.id)}><I.Lock size={13} />Needs vendor approval</button>
-                  : waiting ? <button className="btn cn-item-btn" onClick={login.reopen}>{login.stale ? "Connect again" : "Open sign-in window"}</button>
-                  : <button className="btn cn-item-btn" disabled={state === "busy"} onClick={() => onConnect(e)}>{state === "busy" ? <span className="api-spin" /> : err ? "Try again" : state === "pending" ? "Finish" : "Connect"}</button>}
-                {shut && <div className="cn-pop in cn-item-err"><I.External size={14} /><span>Your browser blocked the sign-in window.</span><button className="btn" onClick={login.reopen}>Open sign-in window</button></div>}
-                {waiting && !shut && login.stale && <p className="d cn-item-err">Didn&apos;t finish? Connect again</p>}
-                {state === "vendor" && why === e.id && e.access && (
-                  <div className="cn-vendor">
-                    <p>{e.access.why}</p>
-                    <p className="d">You can try your own token or API key, though this vendor may not accept one. Synchro tests it first and saves it only if it works. If the vendor gave you an OAuth client, you can use that instead.</p>
-                    <div className="cn-vendor-a"><button className="cn-link" onClick={() => onCreds(e, "token")}>Use a token instead</button><button className="cn-link" onClick={() => onCreds(e, "client")}>Use my OAuth client</button><button className="cn-link" disabled={busy.has(e.id)} onClick={() => onConnect(e, true)}>Try sign-in anyway</button></div>
-                  </div>
-                )}
-                {err && <div className="api-err in cn-item-err" role="alert"><I.Alert size={14} /><span>{err}</span><button className="icon-btn" aria-label="Dismiss" onClick={() => onDismiss(e.id)}><I.X size={13} /></button></div>}
-              </div>
-            );
-          })}
-          {!list.length && <p className="d cn-none">No connectors match your search.</p>}
-        </div>
-        {pol.custom && <div className="cn-browse-f"><span className="d">Don&apos;t see the app you need?</span><button className="cn-link" onClick={onCustom}>Add a custom connector</button></div>}
-      </div>
-    </div>
-  );
-}
-
 // Cách đăng nhập khi thêm connector: tự động (không cần đăng nhập, hoặc OAuth), token / API key tự nhập, hay OAuth client riêng.
 type CredMode = "auto" | "token" | "client";
 type CustomInit = { name?: string; url?: string; mode?: CredMode; id?: string; locked?: boolean; header?: string };
@@ -463,6 +411,83 @@ function Custom({ init, onClose, onAdd }: { init: CustomInit; onClose: () => voi
   );
 }
 
+// Thẻ Composio: là gì, trạng thái, ứng dụng đã kết nối (ngắt từng cái), quyền công cụ. Ứng dụng được kết nối ngay trong chat khi người dùng nhờ.
+function ComposioSection({ info, onInfo }: { info: ComposioInfo; onInfo: (i: ComposioInfo) => void }) {
+  const app = useApp();
+  const [list, setList] = useState<ComposioApp[] | null>(null);
+  const [listErr, setListErr] = useState("");
+  const [busy, setBusy] = useState("");
+  const [open, setOpen] = useState(false);
+  type Full = ComposioInfo & { list: ComposioApp[]; appsError?: string; removed?: string };
+  const take = (j: Full) => { onInfo({ state: j.state, admin: j.admin, connector: j.connector, apps: j.apps }); setList(j.list); setListErr(j.appsError ?? ""); };
+  const loadApps = useCallback(() => api<Full>("GET", "/api/connectors/composio").then(take).catch((e) => setListErr((e as Error).message)), []);
+  useEffect(() => { if (info.state === "active") void loadApps(); }, [info.state, loadApps]);
+  const retry = async () => {
+    setBusy("retry");
+    try { take(await api<Full>("GET", "/api/connectors/composio?retry=1")); } catch (e) { app.say((e as Error).message); } finally { setBusy(""); }
+  };
+  const drop = (a: ComposioApp) => app.confirm(`Disconnect ${a.name}?`, "Synchro will stop using this app through Composio. You can connect it again from chat any time.", "Disconnect", async () => {
+    setBusy(a.id);
+    try { const j = await api<Full>("DELETE", `/api/connectors/composio?id=${encodeURIComponent(a.id)}`); take(j); app.say(`Disconnected ${a.name}`); }
+    catch (e) { app.say((e as Error).message); } finally { setBusy(""); }
+  });
+  const c = info.connector;
+  const patch = async (body: Record<string, unknown>) => {
+    if (!c) return;
+    try { const r = await api<Res>("PATCH", `/api/connectors/${c.id}`, body); if (r.connector) onInfo({ ...info, connector: r.connector }); }
+    catch (e) { app.say((e as Error).message); }
+  };
+  const on = info.state === "active" && !!c?.enabled;
+  const status = info.state === "no_key" ? "Not set up yet" : info.state === "blocked" ? "Turned off by your administrator" : info.state === "error" ? "Connection problem" : !c?.enabled ? "Turned off" : !info.apps ? "Active" : info.apps === 1 ? "Active · 1 app connected" : `Active · ${info.apps} apps connected`;
+  const live = (list ?? []).filter((a) => a.status === "ACTIVE" || !a.status);
+  const other = (list ?? []).filter((a) => !(a.status === "ACTIVE" || !a.status));
+  return (
+    <div className={`cn-card cpo-card ${open ? "open" : ""} ${info.state === "error" ? "attn" : ""}`}>
+      <div className="cn-card-h">
+        <div className="cn-card-main cpo-main">
+          <ConnLogo color="#5B4BDB" name="Composio" />
+          <span className="cn-meta">
+            <span className="cn-name"><b data-notr>Composio</b><span className="cn-tag">1000+ apps</span></span>
+            <span className={`cn-sub ${info.state === "active" ? (c?.enabled ? "ok" : "needs_auth") : info.state === "error" ? "error" : "needs_auth"}`}><i />{status}</span>
+          </span>
+        </div>
+        <div className="cn-actions">
+          {info.state === "active" && c && <button className={`cn-switch ${on ? "on" : ""}`} role="switch" aria-checked={on} aria-label={on ? "Turn off Composio" : "Turn on Composio"} onClick={() => { onInfo({ ...info, connector: { ...c, enabled: !c.enabled } }); void patch({ enabled: !c.enabled }); }}><i /></button>}
+          {info.state === "error" && <button className="btn dark cn-connect" disabled={busy === "retry"} onClick={retry}>{busy === "retry" ? <span className="api-spin" /> : null}Try again</button>}
+          {info.state === "no_key" && info.admin && <button className="btn dark cn-connect" onClick={() => window.dispatchEvent(new Event("synchro:providers"))}>Add Composio key</button>}
+        </div>
+      </div>
+      <p className="cpo-what">One connector for Gmail, Slack, GitHub, Notion, Google Drive and more than 1000 other apps. Synchro finds the right tool, asks you to sign in to an app the first time it needs it, then works in it during your chats. Sign-ins are handled by Composio, so you never paste keys or client IDs.</p>
+      {info.state === "no_key" && <p className="cpo-note">{info.admin ? "Add a Composio project API key in Settings → Providers. Everyone on this Synchro then gets Composio here, and each person connects their own apps." : "Your administrator hasn't added a Composio key yet, so Composio isn't available."}</p>}
+      {info.state === "blocked" && <p className="cpo-note">Your administrator hasn&apos;t allowed Composio for your account.</p>}
+      {info.state === "error" && c?.error && <div className="api-err in" role="alert"><I.Alert size={14} /><span>{c.error}</span></div>}
+      {info.state === "active" && (
+        <div className="cpo-apps">
+          <div className="cpo-apps-h">Connected apps</div>
+          {list === null && !listErr ? <div className="cpo-row d"><span className="api-spin" /><span>Loading…</span></div>
+            : listErr ? <div className="api-err in" role="alert"><I.Alert size={14} /><span>{listErr}</span><button className="btn" onClick={() => void loadApps()}>Try again</button></div>
+            : !live.length && !other.length ? <div className="cpo-row d">No apps connected yet.</div>
+            : [...live, ...other].map((a) => (
+              <div key={a.id} className="cpo-row">
+                <ConnLogo logo={a.logo} name={a.name} size={28} />
+                <span className="cpo-app"><b data-notr>{a.name}</b>{a.alias && <span className="d" data-notr>{a.alias}</span>}{a.status && a.status !== "ACTIVE" && <span className="cn-tag">{a.status === "EXPIRED" ? "Expired" : a.status === "FAILED" ? "Failed" : "Inactive"}</span>}</span>
+                <button className="btn cpo-drop" disabled={busy === a.id} onClick={() => drop(a)}>{busy === a.id ? <span className="api-spin" /> : null}Disconnect</button>
+              </div>
+            ))}
+          <p className="cpo-tip"><I.Sparkle size={13} /><span>To connect an app, just ask in chat, for example “Summarize my latest emails in Gmail”. Synchro shows a Connect button when an app needs your sign-in.</span></p>
+        </div>
+      )}
+      {info.state === "active" && c && c.status === "ok" && <>
+        <button className="api-adv cpo-perm" aria-expanded={open} onClick={() => setOpen(!open)}><I.ChevronR size={13} />Tool permissions</button>
+        {open && <div className="cn-body">
+          <ToolGroup title="Read-only tools" hint="Find tools, check connections and run app actions that only read." kind="read" tools={c.tools.filter((t) => t.readOnly)} onPerm={(t, p) => { onInfo({ ...info, connector: { ...c, tools: c.tools.map((y) => (y.name === t.name ? { ...y, perm: p } : y)) } }); void patch({ perms: { [t.name]: p } }); }} onGroup={(k, p) => void patch({ group: { kind: k, perm: p } })} />
+          <ToolGroup title="Tools that can make changes" hint="Run actions in your apps, such as sending an email. Actions that only read run without asking." kind="write" tools={c.tools.filter((t) => !t.readOnly)} onPerm={(t, p) => { onInfo({ ...info, connector: { ...c, tools: c.tools.map((y) => (y.name === t.name ? { ...y, perm: p } : y)) } }); void patch({ perms: { [t.name]: p } }); }} onGroup={(k, p) => void patch({ group: { kind: k, perm: p } })} />
+        </div>}
+      </>}
+    </div>
+  );
+}
+
 export function ConnectorsPanel() {
   const app = useApp();
   const [data, setData] = useState<Data | null>(null);
@@ -471,38 +496,23 @@ export function ConnectorsPanel() {
   // Nhiều mục có thể đang kết nối cùng lúc: hãng đang treo không được khóa nút của các mục khác.
   const [busy, setBusySet] = useState<ReadonlySet<string>>(() => new Set());
   const mark = (id: string, on: boolean) => setBusySet((b) => { const n = new Set(b); if (on) n.add(id); else n.delete(id); return n; });
-  const [browse, setBrowse] = useState(false);
   const [custom, setCustom] = useState<CustomInit | null>(null);
-  // Lỗi kết nối từ danh mục: nằm ngay trên mục đó tới khi người dùng đóng hay thử lại (thông báo nhanh biến mất sau vài giây, không kịp đọc lời giải thích).
-  const [errs, setErrs] = useState<Record<string, string>>({});
-  // Menu + ở ô chat → "Thêm connector": mở thẳng danh mục connector.
-  useEffect(() => {
-    const go = () => { try { sessionStorage.removeItem("cn-browse"); } catch {} setBrowse(true); };
-    try { if (sessionStorage.getItem("cn-browse")) go(); } catch {}
-    window.addEventListener(CONNECTORS_BROWSE, go); return () => window.removeEventListener(CONNECTORS_BROWSE, go);
-  }, []);
 
   const load = useCallback(() => api<Data>("GET", "/api/connectors").then((d) => { setData(d); setErr(""); }).catch((e) => setErr(e.message)), []);
   useEffect(() => { load(); }, [load]);
   const apply = (r: Res) => setData((d) => (d ? { ...d, connectors: r.connectors } : d));
+  const setCx = (composio: ComposioInfo) => setData((d) => (d ? { ...d, composio } : d));
 
   // Kết quả đăng nhập: báo từ cửa sổ đăng nhập, hoặc tự thấy khi hỏi lại máy chủ (xem useLoginFlow).
   const login = useLoginFlow((m) => {
     app.say(m.message);
-    load().then(() => { if (m.ok && m.id) { setOpen(m.id); setBrowse(false); } });
+    load().then(() => { if (m.ok && m.id) setOpen(m.id); });
   }, { any: true, onList: (d) => setData(d) });
   const finished = (r: Res) => { apply(r); if (r.connector?.status === "ok") { app.say(`Connected ${r.connector.name}`); setOpen(r.connector.id); } };
 
-  const connectEntry = async (e: DirEntry, tryAnyway = false) => {
-    mark(e.id, true);
-    setErrs(({ [e.id]: _, ...rest }) => rest);
-    try { const r = await api("POST", "/api/connectors", { dir: e.id, ...(tryAnyway ? { tryAnyway } : {}) }); apply(r); if (!login.follow(r)) { finished(r); setBrowse(false); } }
-    catch (x) { setErrs((m) => ({ ...m, [e.id]: (x as Error).message })); load(); }
-    finally { mark(e.id, false); }
-  };
   const addCustom = async (init: CustomInit, v: CustomValues, done: (err?: string) => void) => {
     // Connector đã có (thẻ Canva chờ kết nối…): dùng thông tin mới cho chính nó, giữ quyền đã đặt.
-    try { const r = init.id ? await api("POST", `/api/connectors/${init.id}/connect`, { token: v.token, header: v.header, clientId: v.clientId, clientSecret: v.clientSecret }) : await api("POST", "/api/connectors", v); done(); setCustom(null); setBrowse(false); apply(r); if (!login.follow(r)) finished(r); }
+    try { const r = init.id ? await api("POST", `/api/connectors/${init.id}/connect`, { token: v.token, header: v.header, clientId: v.clientId, clientSecret: v.clientSecret }) : await api("POST", "/api/connectors", v); done(); setCustom(null); apply(r); if (!login.follow(r)) finished(r); }
     catch (x) { done((x as Error).message); load(); }
   };
   const reconnect = async (c: Conn, force = false) => {
@@ -555,17 +565,18 @@ export function ConnectorsPanel() {
   return (
     <>
       {head}
+      {data.composio && <ComposioSection info={data.composio} onInfo={setCx} />}
+      <h3 className="sec cpo-sec">Your own connectors</h3>
+      <p className="d cpo-sec-d">For people who run their own MCP server or want to connect a service themselves, with its URL and OAuth sign-in, a token or their own OAuth client.</p>
       <div className="cn-bar">
-        <button className="btn dark" onClick={() => setBrowse(true)}><I.Search size={14} />Browse connectors</button>
         {data.policy.custom && <button className="btn" onClick={() => setCustom({})}><I.Plus size={14} />Add custom connector</button>}
         {conns.length > 0 && <><span style={{ flex: 1 }} /><BulkButton b={bk} /></>}
       </div>
-      {login.blocked && !browse && <LoginBlocked onOpen={login.reopen} />}
+      {login.blocked && <LoginBlocked onOpen={login.reopen} />}
       {conns.length === 0 ? (
         <div className="cn-empty">
-          <div className="cn-empty-art" aria-hidden>{["notion", "linear", "supabase", "stripe"].map((l) => <ConnLogo key={l} logo={l} name={l} size={40} />)}</div>
-          <b>No connectors yet</b>
-          <span className="d">Connect Notion, Linear, Supabase and more, or any remote MCP server, so Synchro can search and work in them during your chats.</span>
+          <b>No connectors of your own</b>
+          <span className="d">{data.policy.custom ? "Add any remote MCP server by its URL. Most people don't need this: Composio above already covers popular apps." : "Your administrator hasn't allowed custom connectors for your account."}</span>
         </div>
       ) : (
         <div className="cn-list">
@@ -582,8 +593,6 @@ export function ConnectorsPanel() {
         </div>
       )}
       <p className="cn-note"><I.Lock size={12} />Sign-ins are encrypted on the server. Tools that change data ask before running unless you allow them.</p>
-      {browse && <Browse data={data} busy={busy} errs={errs} login={login} onClose={() => setBrowse(false)} onConnect={connectEntry} onDismiss={(id) => setErrs(({ [id]: _, ...rest }) => rest)}
-        onCreds={(e, mode) => { const c = conns.find((x) => x.dir === e.id); setCustom({ name: e.name, url: e.url, mode, id: c?.id, locked: true }); }} onCustom={() => { setBrowse(false); setCustom({}); }} />}
       {custom && <Custom init={custom} onClose={() => setCustom(null)} onAdd={(v, done) => addCustom(custom, v, done)} />}
     </>
   );

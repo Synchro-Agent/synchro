@@ -162,9 +162,8 @@ try {
   await api("DELETE", `/api/connectors/${keyId}`);
 
   console.log("Hãng chưa duyệt Synchro");
-  const dir = (await api("GET", "/api/connectors")).j.directory;
-  ok(["figma", "canva", "square", "intercom"].every((id) => dir.find((e) => e.id === id)?.access?.why), "danh mục đánh dấu đủ 4 hãng", dir.filter((e) => e.access).map((e) => e.id).join(","));
-  ok(dir.filter((e) => e.access).length === 4, "các hãng khác không bị đánh dấu");
+  // Danh mục gợi ý không còn trên giao diện; connector danh mục cũ (thêm bằng { dir }) vẫn nhận và vẫn nói rõ lý do của hãng.
+  ok((await api("GET", "/api/connectors")).j.directory === undefined, "không còn gửi danh mục gợi ý cho trình duyệt");
   r = await api("POST", "/api/connectors", { dir: "figma" });
   ok(r.s === 400 && /Figma/.test(r.j?.error ?? "") && !r.j?.authorizeUrl, "Figma: không thử đăng nhập, báo rõ lý do", JSON.stringify(r.j));
 } finally {
