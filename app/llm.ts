@@ -111,10 +111,17 @@ export class LLMError extends Error { constructor(m: string, public status: numb
 // trang bị treo. Trong một thẻ chỉ giữ tối đa 3 luồng; đoạn chat chạy thêm thì hỏi trạng thái định kỳ (vẫn đủ bước và chữ, chậm hơn chút), có chỗ thì chuyển lại luồng.
 const MAX_SSE = 3;
 let sseOpen = 0;
+// Mất mạng / máy chủ đang khởi động lại (deploy) lâu hơn chừng này thì mới báo lỗi; lượt vẫn chạy ở máy chủ, tải lại trang là nhận tiếp.
+const OFFLINE_GIVE_UP_MS = 10 * 60_000;
 async function pollRun(id: string, onProgress?: (text: string) => void, onDelta?: (text: string) => void, onEvent?: (e: RunEv) => void): Promise<{ http: number; result: Record<string, unknown> }> {
-  let seen = 0;
+  let seen = 0, downSince = 0;
   for (;;) {
     const r = await fetch(`/api/runs/${encodeURIComponent(id)}?json=1`).catch(() => null);
+    // Không có trả lời dùng được (mất mạng, 5xx, trang lỗi của nginx): đếm thời gian, chờ rồi hỏi lại.
+    if (!r || r.status >= 500) {
+      downSince ||= Date.now();
+      if (Date.now() - downSince > OFFLINE_GIVE_UP_MS) throw new LLMError("Mất kết nối tới Synchro quá lâu. Câu trả lời vẫn chạy ở máy chủ: tải lại trang để xem tiếp.", 503, { offline: true });
+    } else downSince = 0;
     if (r) {
       const j = await r.json().catch(() => null);
       if (!r.ok && r.status < 500) throw new LLMError(j?.error || `Run ${r.status}`, r.status, j ?? {});
@@ -124,7 +131,8 @@ async function pollRun(id: string, onProgress?: (text: string) => void, onDelta?
         if (j.run.status !== "running") return { http: j.run.http ?? 502, result: j.run.result ?? {} };
       }
     }
-    if (sseOpen < MAX_SSE) return waitRun(id, onProgress, onDelta, onEvent);
+    // Có lại kết nối và còn chỗ cho luồng: chuyển về luồng thời gian thực. Đang mất kết nối thì chờ rồi hỏi lại (không mở luồng liên tục).
+    if (sseOpen < MAX_SSE && !downSince) return waitRun(id, onProgress, onDelta, onEvent);
     await new Promise((ok) => setTimeout(ok, 2000));
   }
 }
@@ -151,14 +159,12 @@ export function waitRun(id: string, onProgress?: (text: string) => void, onDelta
     es.addEventListener("snapshot", (e) => { try { const d = JSON.parse((e as MessageEvent).data); step = -1; take(d); } catch {} });
     es.addEventListener("delta", (e) => { try { take(JSON.parse((e as MessageEvent).data)); } catch {} });
     es.addEventListener("done", (e) => { try { const d = JSON.parse((e as MessageEvent).data); end(() => ok({ http: d.http ?? 502, result: d.result ?? {} })); } catch (x) { end(() => no(x)); } });
-    // Rớt kết nối: EventSource tự nối lại (gửi Last-Event-ID). Chỉ khi máy chủ từ chối hẳn mới hỏi trạng thái một lần.
+    // Rớt kết nối: EventSource tự nối lại (gửi Last-Event-ID). Khi luồng đóng hẳn (máy chủ trả 502 lúc deploy, mạng rớt rồi trình duyệt bỏ):
+    // hỏi trạng thái định kỳ tới khi có lại mạng thay vì báo lỗi ngay — câu trả lời vẫn chạy ở máy chủ, không được mất trên màn hình.
+    // Máy chủ từ chối thật (4xx: hết phiên đăng nhập, lượt không còn) thì pollRun báo lỗi đó.
     es.onerror = () => {
       if (es.readyState !== EventSource.CLOSED) return;
-      fetch(`/api/runs/${encodeURIComponent(id)}?json=1`).then((r) => r.json().then((j) => ({ r, j }))).then(({ r, j }) => {
-        if (!r.ok) return end(() => no(new LLMError(j.error || `Run ${r.status}`, r.status, j)));
-        if (j.run.status === "running") return end(() => ok(waitRun(id, onProgress, onDelta, onEvent) as never));
-        end(() => ok({ http: j.run.http ?? 502, result: j.run.result ?? {} }));
-      }, (x) => end(() => no(x)));
+      end(() => ok(pollRun(id, onProgress, onDelta, onEvent) as never));
     };
   });
 }
