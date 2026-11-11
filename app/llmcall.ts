@@ -103,15 +103,31 @@ async function anthropicStream(r: Response, onDelta: OnDelta, signal?: AbortSign
     } else if (d.type === "message_delta") { Object.assign(msg, d.delta ?? {}); if (d.usage) msg.usage = { ...msg.usage, ...d.usage }; }
     else if (d.type === "error") throw midErr(d.error);
   }
+  // Luồng dừng giữa chừng (mất kết nối, hết max_tokens khi đang viết tham số công cụ): khối công cụ chưa có content_block_stop vẫn mang
+  // trường tạm _json. Không chốt lại ở đây thì nó đi vào lịch sử, và mọi lượt sau bị Anthropic từ chối (400 "tool_use._json: Extra inputs").
   msg.content = msg.content.filter(Boolean);
+  for (const b of msg.content) if (b._json !== undefined) { b.input = b._json ? parse(b._json) ?? {} : {}; delete b._json; }
   return msg;
+}
+/** Bỏ các trường tạm (tên bắt đầu bằng "_") khỏi khối nội dung trước khi gửi: lịch sử cũ đã lỡ lưu _json vẫn gửi được. */
+function cleanMessages(body: Record<string, unknown>) {
+  const ms = body.messages;
+  if (!Array.isArray(ms)) return body;
+  let dirty = false;
+  const next = ms.map((m) => {
+    if (!m || !Array.isArray(m.content)) return m;
+    if (!m.content.some((b: unknown) => b && typeof b === "object" && Object.keys(b).some((k) => k.startsWith("_")))) return m;
+    dirty = true;
+    return { ...m, content: m.content.map((b: unknown) => (b && typeof b === "object" ? Object.fromEntries(Object.entries(b).filter(([k]) => !k.startsWith("_"))) : b)) };
+  });
+  return dirty ? { ...body, messages: next } : body;
 }
 
 export async function anthropicCall(t: Target, body: Record<string, unknown>, signal?: AbortSignal, onDelta?: OnDelta, onBlock?: (b: ABlock) => void) {
   const r = await fetch(`${t.base}/v1/messages`, {
     method: "POST", signal,
     headers: { "x-api-key": t.key, "anthropic-version": "2023-06-01", "content-type": "application/json", ...(t.workspace ? { "anthropic-workspace-id": t.workspace } : {}) },
-    body: JSON.stringify({ model: t.model, ...body, ...(onDelta ? { stream: true } : {}) }),
+    body: JSON.stringify({ model: t.model, ...cleanMessages(body), ...(onDelta ? { stream: true } : {}) }),
   });
   if (!r.ok) await fail(r);
   const j = onDelta ? await anthropicStream(r, onDelta, signal, onBlock) : await r.json();
