@@ -468,6 +468,29 @@ function Composer(p: {
     if (!r.ok) { say(j.error || "Không đổi được connector"); return; }
     void loadCx();
   };
+  // Gõ @ trong ô nhập (đầu dòng hoặc sau khoảng trắng, không phải giữa địa chỉ email): danh sách connector đang dùng được để chỉ định
+  // connector cho tin này. Chọn là chèn "@Tên " vào tin; hướng dẫn hệ thống dặn model ưu tiên công cụ của connector được nhắc (connectors.ts).
+  const [at, setAt] = useState<{ start: number; end: number; q: string } | null>(null);
+  const [atSel, setAtSel] = useState(0);
+  const foldAt = (x: string) => x.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/gi, "d").toLowerCase();
+  const atList = at && cx ? [...(cxMain && cxMain.enabled ? [{ id: cxMain.id, name: "Composio", logo: undefined as string | undefined, color: "#5B4BDB", icon: undefined as string | undefined }] : []),
+    ...cx.connectors.filter((c) => c.enabled && !c.adminBlocked && c.status === "ok").map((c) => ({ id: c.id, name: c.name, logo: c.logo, color: c.color, icon: c.icon }))]
+    .filter((c) => !at.q || foldAt(c.name).includes(foldAt(at.q))).slice(0, 8) : [];
+  const typed = (val: string, caret: number) => {
+    setV(val);
+    const m = val.slice(0, caret).match(/(^|\s)@([^\s@]{0,30})$/);
+    if (!m || perms?.features.connectors === false) { if (at) setAt(null); return; }
+    if (!cx) void loadCx();
+    setAt({ start: caret - m[2].length - 1, end: caret, q: m[2] });
+    setAtSel(0);
+  };
+  const pickAt = (name: string) => {
+    if (!at) return;
+    const ins = `@${name.replace(/\s+/g, "")} `, next = v.slice(0, at.start) + ins + v.slice(at.end);
+    setV(next); setAt(null);
+    const pos = at.start + ins.length;
+    requestAnimationFrame(() => { const el = ta.current; if (el) { el.focus(); el.setSelectionRange(pos, pos); } });
+  };
 
   useEffect(() => {
     if (p.prefill.n) { setV(p.prefill.t); ta.current?.focus(); }
@@ -507,11 +530,27 @@ function Composer(p: {
     // Chưa có model nào: đưa tới chỗ kết nối, tin đang gõ vẫn nằm nguyên trong ô (không gửi đi để nhận về một câu lỗi).
     if (mdl.loaded && !mdl.providers.length) { say("Hãy kết nối một gói AI để gửi tin này"); app.openSettings?.("Providers"); return; }
     onSend(v.trim() || "Xem tệp đính kèm", files, picks.length ? picks : undefined);
-    setV(""); setPicks([]);
+    setV(""); setPicks([]); setAt(null);
   };
   const keys = (e: React.KeyboardEvent) => {
+    if (at && !e.nativeEvent.isComposing) {
+      if (e.key === "Escape") { e.preventDefault(); setAt(null); return; }
+      if (atList.length && (e.key === "ArrowDown" || e.key === "ArrowUp")) { e.preventDefault(); setAtSel((i) => (i + (e.key === "ArrowDown" ? 1 : atList.length - 1)) % atList.length); return; }
+      if (atList.length && (e.key === "Enter" || e.key === "Tab") && !e.shiftKey) { e.preventDefault(); pickAt(atList[Math.min(atSel, atList.length - 1)].name); return; }
+    }
     if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); submit(e.metaKey || e.ctrlKey); }
   };
+  const atMenu = at && (
+    <div className="at-menu" role="listbox" aria-label={tr("Chọn connector")} onMouseDown={(e) => e.preventDefault()}>
+      <div className="at-h">{tr("Dùng connector cho tin này")}</div>
+      {cx === null ? <div className="cm-empty"><span className="art-spin sm" /></div>
+        : atList.length ? atList.map((c, i) => (
+          <button key={c.id} type="button" role="option" aria-selected={i === atSel} className={`menu-item${i === atSel ? " on" : ""}`} onMouseEnter={() => setAtSel(i)} onClick={() => pickAt(c.name)}>
+            <ConnLogo logo={c.logo} color={c.color} icon={c.icon} name={c.name} size={18} /><span className="cv-ell" data-notr>{c.name}</span>
+          </button>))
+        : <button type="button" className="menu-item" onClick={() => { setAt(null); (p.goConnectors ?? p.goCustom)(); }}><I.Connectors />{tr(at.q ? "Không có connector nào khớp · Quản lý connectors" : "Chưa kết nối connector nào · Quản lý connectors")}</button>}
+    </div>
+  );
   const [vlang] = usePref("vlang", "Vietnamese");
   usePref("uilang", "vi");
   // Nhập bằng giọng nói: ElevenLabs Scribe Realtime (chữ hiện ngay khi nói); chưa có ElevenLabs thì dùng nhận dạng của trình duyệt.
@@ -681,8 +720,9 @@ function Composer(p: {
     return (
       <div className="composer" style={{ flexWrap: "wrap" }} onMouseDown={boxDown}>
         {chips && <div style={{ width: "100%" }}>{chips}</div>}
+        {atMenu}
         {plus}
-        <textarea ref={ta} rows={1} aria-label="Tin nhắn cho Synchro" value={v} onChange={(e) => setV(e.target.value)} onKeyDown={keys} onPaste={paste} placeholder={busy && p.onSteer ? steerPh : p.placeholder ?? "Viết tin nhắn..."} style={{ flex: 1 }} />
+        <textarea ref={ta} rows={1} aria-label="Tin nhắn cho Synchro" value={v} onChange={(e) => typed(e.target.value, e.target.selectionStart ?? e.target.value.length)} onKeyDown={keys} onPaste={paste} onBlur={() => setAt(null)} placeholder={busy && p.onSteer ? steerPh : p.placeholder ?? "Viết tin nhắn..."} style={{ flex: 1 }} />
         {p.extra}
         {micBtn}
         {!canSend && !busy && p.onVoice ? <button className="icon-btn vm-open" data-tip="Trò chuyện bằng giọng nói" onClick={p.onVoice} aria-label="Trò chuyện bằng giọng nói"><I.Wave /></button> : sendBtn}
@@ -692,7 +732,8 @@ function Composer(p: {
   return (
     <div className="composer" onMouseDown={boxDown}>
       {chips}
-      <textarea ref={ta} rows={1} aria-label="Tin nhắn cho Synchro" value={v} onChange={(e) => setV(e.target.value)} onKeyDown={keys} onPaste={paste} placeholder={busy && p.onSteer ? steerPh : foc && p.focusPlaceholder ? p.focusPlaceholder : p.placeholder ?? "Hôm nay tôi có thể giúp gì cho bạn?"} onFocus={() => setFoc(true)} onBlur={() => setFoc(false)} autoFocus={!p.focusPlaceholder} />
+      {atMenu}
+      <textarea ref={ta} rows={1} aria-label="Tin nhắn cho Synchro" value={v} onChange={(e) => typed(e.target.value, e.target.selectionStart ?? e.target.value.length)} onKeyDown={keys} onPaste={paste} placeholder={busy && p.onSteer ? steerPh : foc && p.focusPlaceholder ? p.focusPlaceholder : p.placeholder ?? "Hôm nay tôi có thể giúp gì cho bạn?"} onFocus={() => setFoc(true)} onBlur={() => { setFoc(false); setAt(null); }} autoFocus={!p.focusPlaceholder} />
       <div className="comp-row">
         {plus}
         <div className="model">
