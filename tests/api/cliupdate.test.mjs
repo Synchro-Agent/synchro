@@ -71,13 +71,16 @@ const resetBin = () => {
   fs.rmSync(SRC, { recursive: true, force: true });
 };
 
+const made = [];
 try {
   resetBin();
-  // Chủ sở hữu đăng nhập gói Claude và Codex (tệp đăng nhập của CLI giả lập), để bước kiểm tra dùng đăng nhập sẵn có.
+  // Chủ sở hữu đăng nhập gói Claude và Codex (tệp đăng nhập của CLI giả lập), để bước kiểm tra dùng đăng nhập sẵn có. Tệp nào bài này tạo thì xóa
+  // khi xong: để lại đăng nhập Codex thì chế độ Tự động của các bộ kiểm thử giao diện chọn gói Codex thay vì Claude.
   for (const [cli, f] of [["claude", ".mock-login"], ["codex", "auth.json"]]) {
-    const d = path.join(HOME, "logins", cli, ownerId);
-    fs.mkdirSync(d, { recursive: true, mode: 0o700 }); fs.writeFileSync(path.join(d, f), cli === "codex" ? "{}" : "1");
-    fs.mkdirSync(path.join(DATA, "engine-tokens"), { recursive: true }); fs.writeFileSync(path.join(DATA, "engine-tokens", `${cli}-${ownerId}.login`), "1");
+    const d = path.join(HOME, "logins", cli, ownerId), file = path.join(d, f), mark = path.join(DATA, "engine-tokens", `${cli}-${ownerId}.login`);
+    for (const p of [file, mark]) if (!fs.existsSync(p)) made.push(p);
+    fs.mkdirSync(d, { recursive: true, mode: 0o700 }); fs.writeFileSync(file, cli === "codex" ? "{}" : "1");
+    fs.mkdirSync(path.dirname(mark), { recursive: true }); fs.writeFileSync(mark, "1");
     await owner("GET", `/api/engines/${cli}/status?fresh=1`);
   }
 
@@ -180,6 +183,7 @@ try {
 } finally {
   // Trả CLI giả lập về như lúc đầu cho các bộ kiểm thử khác.
   resetBin();
+  for (const p of made) fs.rmSync(p, { force: true });
   for (const cli of ["claude", "codex"]) await owner("GET", `/api/engines/${cli}/status?fresh=1`);
   for (const id of [adminId, memberId]) await owner("DELETE", `/api/admin/users/${id}`, { confirm: id === adminId ? `cu-adm-${tag}@synchro.test` : `cu-mem-${tag}@synchro.test` });
 }
