@@ -273,7 +273,7 @@ async function updateOne(cli: Cli): Promise<CliResult> {
   const toNum = versionNum(sm.version);
   if (sm.ok && toNum && from && toNum === from) { await drop(); return { cli, outcome: "same", from: fromLine, to: sm.version, detail: "Đã là bản mới nhất.", at }; }
   if (sm.ok && toNum && s.bad.includes(toNum)) { await drop(); return { cli, outcome: "skipped", from: fromLine, to: sm.version, detail: "Bản này đã bị trả lại trước đây vì lỗi; chờ bản sau.", at }; }
-  if (!sm.ok) { await drop(); return { cli, outcome: "smoke_failed", from: fromLine, to: sm.version ?? want, detail: `${sm.detail} Vẫn dùng bản đang chạy.`, at }; }
+  if (!sm.ok) { await drop(); return { cli, outcome: "smoke_failed", from: fromLine, to: sm.version ?? want, detail: `${sm.detail.replace(/[\s.]*$/, ".")} Vẫn dùng bản đang chạy.`, at }; }
   const p = await point(cli, ins.bin);
   if (!p.ok) { await drop(); return { cli, outcome: "failed", from: fromLine, to: sm.version, detail: `Không đổi được sang bản mới: ${p.out.slice(0, 200)}`, at }; }
   const st = cliState(cli);
@@ -364,7 +364,8 @@ export async function cliUpdateView(): Promise<{ on: boolean; envOff: boolean; r
     const c = s.clis[cli], cur = currentTarget(cli);
     return {
       cli, name: CLI_NAME[cli], installed: !!cur, version: cur ? await liveVersion(cli) : null, managed: !!cur && cur.kind === "link" && !!versionRoot(cli, cur.target),
-      prev: c?.prev?.version ?? null, canRollback: !!c?.prev && fs.existsSync(resolveTarget(c.prev.target)) && !isBad(c, c.prev.version), probation: c?.probation ? { ok: c.probation.ok, fail: c.probation.fail } : null, last: c?.last ?? null, bad: c?.bad ?? [],
+      // Bản trước là bản vừa bị trả lại vì lỗi: không hiện như một bản để quay về.
+      prev: c?.prev && !isBad(c, c.prev.version) ? c.prev.version : null, canRollback: !!c?.prev && fs.existsSync(resolveTarget(c.prev.target)) && !isBad(c, c.prev.version), probation: c?.probation ? { ok: c.probation.ok, fail: c.probation.fail } : null, last: c?.last ?? null, bad: c?.bad ?? [],
     };
   }));
   return { on: s.on, envOff: envOff(), running: !!mem.job, lastRun: s.lastRun, nextAt: s.on && !envOff() ? s.nextAt : null, clis };

@@ -730,6 +730,8 @@ html body .sy-settings .sel:hover{background:var(--ds-hover)!important}
 html body .sy-settings .field,html body .sy-settings .textarea{border:1px solid var(--ds-line-2)!important;border-radius:var(--r-pill)!important;background:var(--ds-plate)!important}
 html body .sy-settings .textarea{border-radius:var(--r-plate)!important}
 html body .sy-settings .field:focus,html body .sy-settings .textarea:focus{border-color:var(--ds-ink)!important;box-shadow:0 0 0 3px color-mix(in srgb,var(--ds-ink) 10%,transparent)!important}
+/* Ô bị khóa (việc chỉ chủ sở hữu làm): viền nét đứt, nền trong, chữ nhạt — nhìn là biết không sửa được. */
+html body .field:disabled:not(.auth-root *),html body .sy-settings .field:disabled{background:transparent!important;border-style:dashed!important;color:var(--ds-faint)!important;cursor:not-allowed}
 /* Thẻ trong các mục (Providers, Mức dùng, Quản trị, Connectors…): tấm phẳng, viền mảnh. Thẻ "bare" nằm trong thẻ khác: không viền, không đệm. */
 html body .sy-settings :is(.api-card:not(.bare),.us-card,.inset,.promo,.dcard,.adm-stat,.adm-card,.cn-row,.cn-card,.us-vc,.pl-hero){
   border:0!important;border-radius:var(--r-card)!important;background:var(--ds-plate)!important;box-shadow:inset 0 0 0 1px var(--ds-line)!important}
