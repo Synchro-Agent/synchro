@@ -17,7 +17,16 @@ export const PW_MIN = 8;
 const PW_MAX = 200;
 const MAX_SESSIONS = 20;
 // Quản trị viên: email nằm trong danh sách này VÀ đã được xác minh (OAuth hoặc tạo bằng scripts/create-admin.mjs).
-export const ADMIN_EMAILS = new Set((process.env.ADMIN_EMAILS ?? "nguyenhuulamtung@gmail.com").split(",").map((s) => s.trim().toLowerCase()).filter(Boolean));
+const emailList = (v: string) => v.split(",").map((s) => s.trim().toLowerCase()).filter(Boolean);
+const ADMIN_LIST = emailList(process.env.ADMIN_EMAILS ?? "nguyenhuulamtung@gmail.com");
+export const ADMIN_EMAILS = new Set(ADMIN_LIST);
+// Ba vai trò: Chủ sở hữu (Owner) · Quản trị viên (Admin) · Thành viên. Chủ sở hữu = email trong OWNER_EMAILS; chưa đặt thì là email đầu tiên
+// của ADMIN_EMAILS (máy chủ đang chạy giữ nguyên người đứng đầu mà không cần cấu hình thêm). Chỉ chủ sở hữu đổi được khóa API / dịch vụ có
+// bí mật, giá và hạn mức áp cho quản trị viên, thêm / bỏ quản trị viên và xóa vĩnh viễn dữ liệu; quản trị viên làm mọi việc quản trị còn lại.
+// Quản trị viên thêm từ giao diện lưu ở cột users.role = 'admin'; quản trị viên trong ADMIN_EMAILS và chủ sở hữu đặt ở cấu hình máy chủ.
+export const OWNER_EMAILS = new Set(process.env.OWNER_EMAILS?.trim() ? emailList(process.env.OWNER_EMAILS) : ADMIN_LIST.slice(0, 1));
+/** Email dành cho tài khoản chủ sở hữu / quản trị viên trong cấu hình máy chủ (không đăng ký mới, không đổi sang được). */
+export const reservedEmail = (email: string) => ADMIN_EMAILS.has(email.toLowerCase()) || OWNER_EMAILS.has(email.toLowerCase());
 
 export class AuthError extends Error {
   constructor(msg: string, public status = 400) { super(msg); }
@@ -29,6 +38,8 @@ export type UserRow = {
   full_name: string | null; nickname: string | null; birth_date: string | null; occupation: string | null; perms: string | null;
   /** Hướng dẫn cho Synchro (Cài đặt → Tài khoản): áp dụng cho mọi lượt chat và Synchro Code của người này. */
   instructions: string | null;
+  /** 'admin': quản trị viên do chủ sở hữu thêm từ giao diện; null: theo cấu hình máy chủ (ADMIN_EMAILS / OWNER_EMAILS) hoặc thành viên. */
+  role?: string | null;
 };
 export type SessionRow = { id: string; user_id: string; method: string; created_at: number; last_seen_at: number; expires_at: number; ip: string | null; user_agent: string | null };
 
@@ -43,7 +54,7 @@ export function db() {
   d.exec(fs.readFileSync(path.join(process.cwd(), "db", "schema.sql"), "utf8"));
   // Bảng tạo từ bản cũ chưa có các cột hồ sơ: thêm vào (CREATE IF NOT EXISTS không tự làm việc này).
   const cols = new Set((d.prepare("PRAGMA table_info(users)").all() as { name: string }[]).map((c) => c.name));
-  for (const c of ["full_name", "nickname", "birth_date", "occupation", "perms", "instructions"]) if (!cols.has(c)) d.exec(`ALTER TABLE users ADD COLUMN ${c} TEXT`);
+  for (const c of ["full_name", "nickname", "birth_date", "occupation", "perms", "instructions", "role"]) if (!cols.has(c)) d.exec(`ALTER TABLE users ADD COLUMN ${c} TEXT`);
   const sk = new Set((d.prepare("PRAGMA table_info(skills)").all() as { name: string }[]).map((c) => c.name));
   if (!sk.has("use_count")) d.exec("ALTER TABLE skills ADD COLUMN use_count INTEGER NOT NULL DEFAULT 0");
   if (!sk.has("last_used_at")) d.exec("ALTER TABLE skills ADD COLUMN last_used_at INTEGER");
@@ -151,7 +162,16 @@ export function audit(action: string, o: { actor?: UserRow | null; target?: User
 export const getUser = (id: string) => db().prepare("SELECT * FROM users WHERE id = ?").get(id) as UserRow | undefined;
 export const findByEmail = (email: string) => db().prepare("SELECT * FROM users WHERE email = ?").get(email) as UserRow | undefined;
 const methodsOf = (u: UserRow) => [...(u.password_hash ? ["password"] : []), ...(db().prepare("SELECT provider FROM identities WHERE user_id = ? ORDER BY created_at").all(u.id) as { provider: string }[]).map((r) => r.provider)];
-export const isAdmin = (u: UserRow) => ADMIN_EMAILS.has(u.email.toLowerCase()) && u.email_verified === 1 && u.status === "active";
+const inGoodStanding = (u: UserRow) => u.email_verified === 1 && u.status === "active";
+export type Role = "owner" | "admin" | "member";
+export const isOwner = (u: UserRow) => OWNER_EMAILS.has(u.email.toLowerCase()) && inGoodStanding(u);
+export const isAdmin = (u: UserRow) => (reservedEmail(u.email) || u.role === "admin") && inGoodStanding(u);
+export const roleOf = (u: UserRow): Role => (isOwner(u) ? "owner" : isAdmin(u) ? "admin" : "member");
+/** Vai trò ghi trên tài khoản (danh sách người dùng của quản trị viên), kể cả khi tài khoản đang bị khóa hoặc chưa xác minh. */
+const roleLabel = (u: UserRow): Role => (OWNER_EMAILS.has(u.email.toLowerCase()) ? "owner" : reservedEmail(u.email) || u.role === "admin" ? "admin" : "member");
+export const OWNER_ONLY = "Chỉ chủ sở hữu (Owner) mới có quyền này.";
+/** Việc chỉ chủ sở hữu được làm: quản trị viên nhận 403. */
+export function ownerOnly(u: UserRow) { if (!isOwner(u)) throw new AuthError(OWNER_ONLY, 403); }
 
 export function createUser(o: { email: string; name: string; passwordHash?: string | null; verified: boolean; avatar?: string | null }) {
   const id = crypto.randomUUID();
@@ -164,7 +184,7 @@ export function createUser(o: { email: string; name: string; passwordHash?: stri
 const avatarUrl = (u: UserRow) => (u.avatar?.startsWith("data:") ? `/api/auth/avatar?u=${encodeURIComponent(u.id)}&v=${crypto.createHash("sha1").update(u.avatar).digest("base64url").slice(0, 12)}` : u.avatar || null);
 export function publicUser(u: UserRow) {
   return {
-    id: u.id, email: u.email, name: u.name, avatar: avatarUrl(u), isAdmin: isAdmin(u), hasPassword: !!u.password_hash, methods: methodsOf(u), createdAt: u.created_at,
+    id: u.id, email: u.email, name: u.name, avatar: avatarUrl(u), isAdmin: isAdmin(u), role: roleOf(u), hasPassword: !!u.password_hash, methods: methodsOf(u), createdAt: u.created_at,
     verifyPending: needsVerify(u), verifyLocked: verifyLocked(u),
     profile: { fullName: u.full_name, nickname: u.nickname, birthDate: u.birth_date, occupation: u.occupation, instructions: u.instructions ?? "" },
     needsProfile: !u.full_name || !u.birth_date,
@@ -351,6 +371,11 @@ export function requireAdmin(req: Request) {
   if (!isAdmin(c.user)) throw new AuthError("Chỉ quản trị viên mới có quyền này.", 403);
   return c;
 }
+export function requireOwner(req: Request) {
+  const c = requireAdmin(req);
+  ownerOnly(c.user);
+  return c;
+}
 
 export function device(ua: string | null) {
   const s = ua ?? "";
@@ -404,7 +429,7 @@ export async function signup(req: Request, email0: unknown, pw0: unknown, profil
     try { limit("signup-taken-mail:" + email, 3, 60 * MIN); sendMail(email, signupTakenMail({ base: appUrl(req), url: `${appUrl(req)}/reset`, lang: mailLang(req, lang) }), "signup_taken"); } catch { /* đủ thư rồi */ }
     return { pending: true as const };
   };
-  if (ADMIN_EMAILS.has(email) || findByEmail(email)) return taken();
+  if (reservedEmail(email) || findByEmail(email)) return taken();
   // Tạo tài khoản và hồ sơ trong cùng một transaction: lỗi giữa chừng không để lại tài khoản dở.
   let id: string;
   try {
@@ -499,7 +524,7 @@ export function oauthLogin(req: Request, p: OAuthProfile) {
       }
       audit("oauth_link", { actor: u, ip, detail: p.provider });
     } else {
-      if (!signupOpen() && !ADMIN_EMAILS.has(email)) throw new AuthError("Synchro hiện tạm ngừng nhận đăng ký mới.", 403);
+      if (!signupOpen() && !reservedEmail(email)) throw new AuthError("Synchro hiện tạm ngừng nhận đăng ký mới.", 403);
       u = createUser({ email, name: p.name || email.split("@")[0], verified: true, avatar: p.avatar });
       audit("signup", { actor: u, ip, detail: p.provider });
     }
@@ -584,14 +609,14 @@ function dropSquatter(uid: string) {
 export async function requestEmailChange(req: Request, u: UserRow, password: unknown, email0: unknown, lang?: unknown) {
   limit("email-change:" + u.id, 5, 60 * MIN);
   // Quản trị viên được nhận diện bằng email: đổi là mất quyền, phải đổi ở cấu hình máy chủ.
-  if (ADMIN_EMAILS.has(u.email.toLowerCase())) throw new AuthError("Email của quản trị viên được đặt trong cấu hình máy chủ.", 403);
+  if (reservedEmail(u.email)) throw new AuthError("Email của quản trị viên được đặt trong cấu hình máy chủ.", 403);
   // Email chưa xác minh có thể là của người khác: người đăng ký trước không được giữ sẵn đường chuyển tài khoản sang hộp thư của họ.
   if (needsVerify(u)) throw new AuthError("Hãy xác minh email hiện tại trước khi đổi. Nếu gõ nhầm địa chỉ lúc đăng ký, hãy đăng ký lại bằng địa chỉ đúng.", 403);
   if (!u.password_hash) throw new AuthError("Tài khoản này chưa có mật khẩu. Hãy đặt mật khẩu trước rồi đổi email.", 400);
   if (!(typeof password === "string" && (await verifyPassword(password, u.password_hash)))) throw new AuthError("Mật khẩu hiện tại không đúng.", 401);
   const email = normEmail(email0);
   if (email === u.email.toLowerCase()) throw new AuthError("Đây đã là email của tài khoản.", 400);
-  if (ADMIN_EMAILS.has(email) || findByEmail(email)) return;
+  if (reservedEmail(email) || findByEmail(email)) return;
   const token = crypto.randomBytes(32).toString("base64url"), base = appUrl(req), l = mailLang(req, lang);
   const d = emailChanges();
   d.prepare("DELETE FROM email_changes WHERE user_id = ?").run(u.id);
@@ -693,10 +718,14 @@ export function adminStats() {
   };
 }
 
-export function adminUsers() {
+/** viewer: người đang xem. protected: người xem không thao tác được trên tài khoản này (chủ sở hữu, quản trị viên trong cấu hình máy chủ;
+ * quản trị viên thêm từ giao diện thì chỉ chủ sở hữu thao tác được). roleFixed: vai trò đặt ở cấu hình máy chủ, không đổi từ giao diện. */
+export function adminUsers(viewer?: UserRow) {
   const rows = db().prepare("SELECT * FROM users ORDER BY created_at DESC LIMIT 2000").all() as UserRow[];
   const sess = new Map((db().prepare("SELECT user_id, COUNT(*) n FROM sessions WHERE expires_at > ? GROUP BY user_id").all(Date.now()) as { user_id: string; n: number }[]).map((r) => [r.user_id, r.n]));
-  return rows.map((u) => ({ ...publicUser(u), perms: basePerms(u), status: u.status, verified: !!u.email_verified, lastLogin: u.last_login_at, lastSeen: u.last_seen_at, sessions: sess.get(u.id) ?? 0, protected: ADMIN_EMAILS.has(u.email.toLowerCase()), customPerms: !!u.perms }));
+  const owner = !!viewer && isOwner(viewer);
+  return rows.map((u) => ({ ...publicUser(u), perms: basePerms(u), status: u.status, verified: !!u.email_verified, lastLogin: u.last_login_at, lastSeen: u.last_seen_at, sessions: sess.get(u.id) ?? 0,
+    role: roleLabel(u), roleFixed: reservedEmail(u.email), protected: reservedEmail(u.email) || (u.role === "admin" && !owner), customPerms: !!u.perms }));
 }
 
 export function adminAudit(lim = 100, before?: number) {
@@ -706,7 +735,9 @@ export function adminAudit(lim = 100, before?: number) {
 function target(admin: UserRow, id: string) {
   const t = getUser(id);
   if (!t) throw new AuthError("Không tìm thấy người dùng.", 404);
-  if (t.id === admin.id || ADMIN_EMAILS.has(t.email.toLowerCase())) throw new AuthError("Không thể thao tác trên tài khoản quản trị viên.", 403);
+  if (t.id === admin.id || reservedEmail(t.email)) throw new AuthError("Không thể thao tác trên tài khoản quản trị viên.", 403);
+  // Quản trị viên do chủ sở hữu thêm: chỉ chủ sở hữu thao tác được (quản trị viên không khóa, đổi mật khẩu hay xóa được nhau).
+  if (t.role === "admin" && !isOwner(admin)) throw new AuthError(OWNER_ONLY, 403);
   return t;
 }
 
@@ -714,11 +745,23 @@ export async function adminAct(req: Request, admin: UserRow, id: string, action:
   const t = target(admin, id);
   const ip = clientIp(req);
   if (action === "reset_link") return { resetUrl: createResetLink(req, admin, t) };
+  // Thêm / bỏ quản trị viên: chỉ chủ sở hữu. { role: "admin" | "member" }. Ghi nhật ký kèm vai trò cũ → mới.
+  if (action === "set_role") {
+    ownerOnly(admin);
+    const want = body.role === "admin" ? "admin" : body.role === "member" ? null : undefined;
+    if (want === undefined) throw new AuthError("Vai trò không hợp lệ.");
+    if (want === "admin" && !inGoodStanding(t)) throw new AuthError("Chỉ cấp quyền quản trị cho tài khoản đã xác minh email và đang hoạt động.", 400);
+    const before = roleLabel(t);
+    db().prepare("UPDATE users SET role = ? WHERE id = ?").run(want, t.id);
+    const after = roleLabel(getUser(t.id)!);
+    if (before !== after) audit(after === "admin" ? "admin_role_granted" : "admin_role_revoked", { actor: admin, target: t, ip, detail: `${before} → ${after}` });
+    return;
+  }
   // Người dùng mất hộp thư cũ: quản trị viên đổi hộ sau khi đã xác minh danh tính ngoài hệ thống, nên email mới coi như đã xác minh.
   // Đánh dấu chưa xác minh thì lần đặt lại mật khẩu hay đăng nhập Google kế tiếp bị coi là chủ email giành lại tài khoản: mất bộ não, ký ức, và "Không phải tôi" xóa luôn cả tài khoản. Phiên cũ vẫn bị đăng xuất.
   if (action === "set_email") {
     const email = normEmail(body.email);
-    if (ADMIN_EMAILS.has(email) || findByEmail(email)) throw new AuthError("Email này đã có tài khoản.", 409);
+    if (reservedEmail(email) || findByEmail(email)) throw new AuthError("Email này đã có tài khoản.", 409);
     db().prepare("UPDATE users SET email = ?, email_verified = 1 WHERE id = ?").run(email, t.id);
     db().prepare("DELETE FROM sessions WHERE user_id = ?").run(t.id);
     db().prepare("DELETE FROM password_resets WHERE user_id = ?").run(t.id);
@@ -766,6 +809,8 @@ export async function adminAct(req: Request, admin: UserRow, id: string, action:
 }
 
 export function adminDelete(req: Request, admin: UserRow, id: string, confirmEmail: unknown) {
+  // Xóa vĩnh viễn tài khoản và toàn bộ dữ liệu: chỉ chủ sở hữu (quản trị viên tạm khóa được).
+  ownerOnly(admin);
   const t = target(admin, id);
   if (typeof confirmEmail !== "string" || confirmEmail.trim().toLowerCase() !== t.email.toLowerCase()) throw new AuthError("Email xác nhận không khớp.");
   db().prepare("DELETE FROM users WHERE id = ?").run(t.id);

@@ -15,7 +15,7 @@ export type ApiProvider = {
   status: "ok" | "error" | null; error: string | null; info: string | null; checkedAt: number | null; models: { key: string; name: string }[];
 };
 export type Credit = { provider: string; amount: number; since: number; spent: number; remaining: number; pct: number };
-export type ApiState = { providers: ApiProvider[]; catalog: ProviderInfo[]; main: string[]; default: string | null; effectiveDefault: string | null; credits?: Credit[] };
+export type ApiState = { providers: ApiProvider[]; catalog: ProviderInfo[]; main: string[]; default: string | null; effectiveDefault: string | null; credits?: Credit[]; owner?: boolean };
 
 const ROLE: Record<string, string> = { anthropic: "Chat, Code and Projects", openai: "Chat, Code and Projects", google: "Chat, Code and Projects", elevenlabs: "Speech and voice conversation" };
 
@@ -77,7 +77,7 @@ function KeyForm({ p, busy, err, ws, onCancel, onSave }: { p: ApiProvider; busy:
 
 const usd = (v: number) => `$${v.toFixed(2)}`;
 // Số dư API đã nạp: hãng không báo số dư cho khóa, nên quản trị viên nhập số tiền đã nạp; Synchro trừ dần theo chi phí thật.
-function CreditRow({ p, credit, onChange }: { p: ApiProvider; credit: Credit | null; onChange: (s: ApiState) => void }) {
+function CreditRow({ p, credit, onChange, owner }: { p: ApiProvider; credit: Credit | null; onChange: (s: ApiState) => void; owner: boolean }) {
   const app = useApp();
   const [mode, setMode] = useState<"" | "set" | "add">("");
   const [v, setV] = useState("");
@@ -99,7 +99,7 @@ function CreditRow({ p, credit, onChange }: { p: ApiProvider; credit: Credit | n
           <div className={`us-bar ${left <= 5 ? "hot" : left <= 20 ? "warn" : ""}`}><i style={{ width: `${Math.max(credit.pct, credit.pct > 0 ? 1.5 : 0)}%` }} /></div>
         </>
       ) : <div className="api-credit-t"><b>Prepaid balance</b><span>Not tracked. Enter what you loaded into this key to get a warning before it runs out.</span></div>}
-      {mode ? (
+      {!owner ? null : mode ? (
         <form className="api-credit-f" onSubmit={(e) => { e.preventDefault(); save(); }}>
           <span className="us-money"><i>$</i><input inputMode="decimal" autoFocus value={v} onChange={(e) => setV(e.target.value)} placeholder={mode === "add" ? "Amount added" : "Current balance"} aria-label={mode === "add" ? "Amount added" : "Current balance"} /></span>
           <button type="submit" className="btn dark" disabled={!v.trim()}>Save</button>
@@ -119,6 +119,8 @@ function CreditRow({ p, credit, onChange }: { p: ApiProvider; credit: Credit | n
 /** bare: nằm trong mục của hãng ở Cài đặt → Providers (bỏ khung và logo, mục cha đã có). */
 export function ProviderCard({ p, onChange, credit, bare = false }: { p: ApiProvider; onChange: (s: ApiState) => void; credit?: Credit | null; bare?: boolean }) {
   const app = useApp();
+  // Khóa API và số dư đã nạp: chỉ chủ sở hữu (Owner) đổi được; quản trị viên vẫn làm mới danh sách model và gửi thử (máy chủ cũng tự chặn).
+  const owner = app.me?.role === "owner";
   const [edit, setEdit] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
@@ -158,19 +160,20 @@ export function ProviderCard({ p, onChange, credit, bare = false }: { p: ApiProv
         </div>
         <span className={`api-badge ${status.cls}`}><i />{status.text}</span>
         <div className="api-btns">
-          {!p.configured && !edit && <button className="btn dark" onClick={() => { setEdit(true); setErr(""); }}>Add key</button>}
+          {owner && !p.configured && !edit && <button className="btn dark" onClick={() => { setEdit(true); setErr(""); }}>Add key</button>}
           {p.configured && !edit && (
             <>
               <button className="icon-btn" aria-label="Refresh model list" title="Check key and refresh models" onClick={refresh} disabled={busy}>{busy ? <span className="api-spin" /> : <I.Retry size={16} />}</button>
-              <button className="btn" onClick={() => { setEdit(true); setErr(""); }}>{p.source === "env" ? "Add key" : "Change key"}</button>
-              {p.source === "db" && <button className="icon-btn" aria-label="Remove key" title="Remove key" onClick={remove}><I.Trash size={16} /></button>}
+              {owner && <button className="btn" onClick={() => { setEdit(true); setErr(""); }}>{p.source === "env" ? "Add key" : "Change key"}</button>}
+              {owner && p.source === "db" && <button className="icon-btn" aria-label="Remove key" title="Remove key" onClick={remove}><I.Trash size={16} /></button>}
             </>
           )}
         </div>
       </div>
       {p.status === "error" && p.error && !edit && <div className="api-err in"><I.Alert size={14} /><span>{p.error}</span></div>}
+      {!owner && !p.configured && !bare && <p className="api-own"><I.Lock size={12} /><span>Only the Owner can add, change or remove API keys.</span></p>}
       {edit && <KeyForm p={p} busy={busy} err={err} ws={ws} onCancel={() => setEdit(false)} onSave={save} />}
-      {!edit && p.configured && p.id !== "elevenlabs" && credit !== undefined && <CreditRow p={p} credit={credit} onChange={onChange} />}
+      {!edit && p.configured && p.id !== "elevenlabs" && credit !== undefined && <CreditRow p={p} credit={credit} onChange={onChange} owner={owner} />}
       {!edit && p.models.length > 0 && (
         <div className="api-models">
           <button className="api-adv" aria-expanded={showModels} onClick={() => setShowModels(!showModels)}><I.ChevronR size={13} /><span>{showModels ? "Hide models" : `View ${p.models.length} models`}{p.checkedAt && <span className="d">{` · checked ${ago(p.checkedAt)}`}</span>}</span></button>
@@ -236,6 +239,7 @@ export function ApiPanel({ embedded = false }: { embedded?: boolean }) {
         <div><b data-notr>{nModels}</b><span>Chat models available</span></div>
         <p><I.Lock size={13} />Keys are encrypted on the server and never sent back to the browser.</p>
       </div>
+      {!s.owner && <p className="api-own top"><I.Lock size={13} /><span>Only the Owner can add, change or remove shared API keys and prepaid balances. As an administrator you can refresh model lists and send test messages.</span></p>}
 
       <h3 className="sec">Chat models</h3>
       <div className="api-list">{chat.map((p) => <ProviderCard key={p.id} p={p} onChange={setS} credit={s.credits?.find((c) => c.provider === p.id) ?? null} />)}</div>

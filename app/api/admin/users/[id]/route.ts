@@ -1,4 +1,4 @@
-import { adminAct, adminDelete, AuthError, db, getUser, handle, publicSession, requireAdmin, sameOrigin, sessionsOf } from "../../../../authstore";
+import { adminAct, adminDelete, AuthError, db, getUser, handle, publicSession, requireAdmin, requireOwner, sameOrigin, sessionsOf } from "../../../../authstore";
 import { purgeUser } from "../../../../purge";
 
 export const runtime = "nodejs";
@@ -14,7 +14,8 @@ export const GET = handle(async (req, { params }: Ctx) => {
   return Response.json({ sessions: sessionsOf(u.id).map((s) => publicSession(s)), identities });
 });
 
-// { action: "suspend" | "restore" | "signout" | "set_password" (password, signOut) | "set_perms" (perms | null) | "reset_link" (→ resetUrl) }
+// { action: "suspend" | "restore" | "signout" | "set_password" (password, signOut) | "set_perms" (perms | null) | "reset_link" (→ resetUrl)
+//   | "set_role" (role: "admin" | "member", chỉ chủ sở hữu) }
 export const PATCH = handle(async (req, { params }: Ctx) => {
   sameOrigin(req);
   const { user } = requireAdmin(req);
@@ -23,10 +24,10 @@ export const PATCH = handle(async (req, { params }: Ctx) => {
   return Response.json({ ok: true, ...(r ?? {}) });
 });
 
-// { confirm: "<email người dùng>" } để tránh xóa nhầm
+// { confirm: "<email người dùng>" } để tránh xóa nhầm. Xóa vĩnh viễn tài khoản và dữ liệu: chỉ chủ sở hữu.
 export const DELETE = handle(async (req, { params }: Ctx) => {
   sameOrigin(req);
-  const { user } = requireAdmin(req);
+  const { user } = requireOwner(req);
   const { confirm } = await req.json();
   const id = (await params).id;
   adminDelete(req, user, id, confirm);
