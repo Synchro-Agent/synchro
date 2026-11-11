@@ -133,7 +133,8 @@ const buildDeck = async () => {
   const slides = [];
   for (let i = 1; zip.file(`ppt/slides/slide${i}.xml`); i++) slides.push(await zip.file(`ppt/slides/slide${i}.xml`).async("string"));
   const charts = await Promise.all(Object.keys(zip.files).filter((f) => /^ppt\/charts\/chart\d+\.xml$/.test(f)).sort().map((f) => zip.file(f).async("string")));
-  return { m, slides, charts, buf: Buffer.from(b64, "base64") };
+  const theme = await zip.file("ppt/theme/theme1.xml")?.async("string") ?? "";
+  return { m, slides, charts, theme, buf: Buffer.from(b64, "base64") };
 };
 await view(1280, 720); await open(MORPH_DECK, { deck: true });
 await shot("morph-slide1.png");
@@ -147,6 +148,18 @@ if (!md.error) {
   check("ảnh vật thể là ảnh riêng (p:pic), không dàn phẳng vào nền", (md.slides[0].match(/<p:pic>/g) ?? []).length >= 2, `${(md.slides[0].match(/<p:pic>/g) ?? []).length} ảnh`);
   check("slide 2 có chuyển cảnh Morph (p159:morph, dự phòng Fade), slide 1 và 3 không", md.slides[1].includes(`<p159:morph option="byObject"/>`) && md.slides[1].includes("<mc:Fallback><p:transition spd=\"slow\"><p:fade/>") && !md.slides[0].includes("p159") && !md.slides[2].includes("p159"));
   check("chuyển cảnh nằm ngay sau p:clrMapOvr (đúng thứ tự phần tử của p:sld)", /<\/p:clrMapOvr><mc:AlternateContent/.test(md.slides[1]));
+  // Phông (chủ dự án chốt): tên phông thiết kế của phong cách (midnight-tech: Plus Jakarta Sans / Inter) kèm PANOSE + họ phông của Arial, chữ Đông Á / phức hợp trỏ Arial;
+  // theme của tệp đặt phông tiêu đề / nội dung là phông thiết kế. Máy không có phông thì PowerPoint thay bằng phông không chân, không ra Times.
+  const pre = designpresets.PRESETS.find((p) => p.id === "midnight-tech");
+  const triples = md.slides.flatMap((x) => [...x.matchAll(/<a:latin typeface="([^"]+)"([^>]*)\/><a:ea typeface="([^"]+)"[^>]*\/><a:cs typeface="([^"]+)"/g)].map((m) => ({ f: m[1], a: m[2], ea: m[3], cs: m[4] })));
+  const faces = new Set(triples.map((t) => t.f));
+  check("hộp chữ ghi đúng tên phông thiết kế (tiêu đề, nội dung)", faces.has(pre.head) && faces.has(pre.body), [...faces].join(", "));
+  // Dáng theo chồng phông CSS: phông chữ đều (JetBrains Mono) dự phòng Consolas, phông không chân dự phòng Arial.
+  const want = (f) => (f === pre.mono ? ['020B0609020204030204" pitchFamily="49', "Consolas"] : ['020B0604020202020204" pitchFamily="34', "Arial"]);
+  const bad = triples.filter((t) => !["Arial", "Consolas"].includes(t.f) && !(t.a.includes(`panose="${want(t.f)[0]}"`) && t.ea === want(t.f)[1] && t.cs === want(t.f)[1]));
+  check("phông thiết kế kèm PANOSE + họ phông của phông dự phòng cùng dáng (không chân → Arial, chữ đều → Consolas), chữ Đông Á / phức hợp dùng phông đó", triples.length > 0 && !bad.length, JSON.stringify(bad.slice(0, 2)));
+  const tf = (k) => new RegExp(`<a:${k}><a:latin typeface="([^"]+)" panose="([0-9A-F]{20})"`).exec(md.theme)?.slice(1) ?? [];
+  check("theme của tệp: phông tiêu đề là phông tiêu đề của phong cách, phông nội dung là phông thiết kế nhiều chữ nhất, kèm PANOSE", tf("majorFont")[0] === pre.head && [pre.head, pre.body].includes(tf("minorFont")[0]) && tf("minorFont")[1] === "020B0604020202020204", `${tf("majorFont").join(" ")} · ${tf("minorFont").join(" ")}`);
   if (SHOTS) writeFileSync(path.join(SHOTS, "morph.pptx"), md.buf);
 }
 // Bản trình bày không có tên: tệp như cũ, không thêm chuyển cảnh hay ảnh lạ.

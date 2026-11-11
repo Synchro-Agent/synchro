@@ -4,12 +4,16 @@
 // Chữ phải nằm DƯỚI một vật thể (chữ khổng lồ sau ảnh tách nền, data-pptx-flat) cũng ở lại trong ảnh nền, không thì hộp chữ nổi đè lên vật thể.
 // Mỗi slide: (1) đo từng khối chữ đang hiện (vị trí, phông, cỡ, đậm / nghiêng, màu, giãn chữ, canh lề, khoảng cách dòng) → hộp chữ PowerPoint
 // sửa được; (2) ẩn riêng phần chữ rồi chụp phần còn lại (nền, hình minh họa SVG, biểu đồ, đường kẻ, ảnh) thành ảnh nền nét cao đặt dưới hộp chữ.
-// Chuyển động CSS dừng ở trạng thái cuối khi chụp (PowerPoint không đọc được CSS / JS). Tệp không nhúng được phông: phông web (Google Fonts, bộ thiết kế) đổi sang phông
-// máy người nhận chắc có cùng dáng (Arial, Cambria đủ dấu tiếng Việt, Consolas), không thì PowerPoint tự thay bằng phông bất kỳ; phông máy khác (Georgia, Helvetica…) giữ đúng tên.
-import { FONT_SPEC } from "./designpresets";
+// Chuyển động CSS dừng ở trạng thái cuối khi chụp (PowerPoint không đọc được CSS / JS). Phông (chủ dự án chốt): hộp chữ ghi đúng tên phông thiết kế (Plus Jakarta Sans, Inter,
+// Playfair Display…) để máy có phông hiện đúng thiết kế, kèm phông dự phòng cùng dáng cho máy không có: PowerPoint không có chồng phông như CSS và pptxgenjs 4 không nhúng được
+// phông, nên ghi mã PANOSE + họ phông (pitchFamily) của phông an toàn cùng dáng vào <a:latin> (PowerPoint chọn phông thay theo đó: Arial cho chữ không chân, Georgia cho chữ
+// có chân, Consolas cho chữ đều), <a:ea> / <a:cs> trỏ thẳng phông an toàn đó; theme của tệp đặt phông tiêu đề / nội dung là phông thiết kế (hộp chữ thêm mới trong PowerPoint
+// cũng dùng đúng phông). Trước đây tên phông không kèm PANOSE nên máy thiếu phông thay bằng Times.
 
 /** Một đoạn chữ cùng kiểu trong khối. br: xuống dòng sau đoạn này. */
-export type DeckRun = { t: string; br?: boolean; f: string; s: number; b: boolean; i: boolean; u: boolean; c: string; a: number; ls: number };
+/** g: dáng phông theo chồng phông CSS (chữ không chân / có chân / chữ đều), để chọn phông dự phòng cùng dáng. */
+export type DeckRun = { t: string; br?: boolean; f: string; g?: FontClass; s: number; b: boolean; i: boolean; u: boolean; c: string; a: number; ls: number };
+export type FontClass = "sans" | "serif" | "mono";
 /** Khối chữ (tọa độ px trong slide). one: chữ nằm trên một dòng trong trình duyệt (PowerPoint không tự xuống dòng). */
 // name: tên đối tượng khi khối nằm trong phần tử data-pptx-object-name / data-sx-morph (morphId "!!ten" của mẫu điền sẵn): PowerPoint Morph ghép các đối tượng cùng tên "!!…" ở hai slide liền nhau.
 export type DeckBox = { x: number; y: number; w: number; h: number; al: "left" | "center" | "right" | "justify"; lh: number; one: boolean; runs: DeckRun[]; name?: string }; // lh: bước dòng, px
@@ -35,7 +39,6 @@ export type ChartSpec = {
  * Viết bằng JS thuần, không dấu ` và không chuỗi đóng thẻ script (nằm trong một thẻ script).
  */
 export const PPTX_FRAME_JS = String.raw`
-var sxKitFonts=${JSON.stringify(Object.keys(FONT_SPEC))};
 // Dừng chuyển động ở trạng thái cuối để chụp: phần tử chưa tới lượt trong stagger (opacity 0) không mất khỏi ảnh. window.__sxStatic: biểu đồ, nền 3D vẽ trong lúc chụp
 // (slide chưa xem lần nào) không chạy hoạt ảnh, ảnh không bắt được cột đang mọc dở. Trả về hàm gỡ.
 function sxFreeze(){var fz=document.createElement("style");fz.setAttribute("data-sx-noprint","");
@@ -83,10 +86,10 @@ function col(c){if(c&&/^(color|oklch|oklab|lab|lch|hwb|color-mix)\(/.test(c))c=n
 function h(v){v=Math.max(0,Math.min(255,Math.round(v)));return(v<16?"0":"")+v.toString(16)}return{hex:(h(p[0])+h(p[1])+h(p[2])).toUpperCase(),a:a}}
 function firstStop(bg){var m=/rgba?\([^)]+\)/.exec(bg||"");return m?col(m[0]):null}
 function blockOf(n,root){for(var e=n.parentElement;e&&e!==root;e=e.parentElement){var d=getComputedStyle(e).display;if(d!=="inline"&&d!=="contents")return e}return root}
-var web=null;function isWeb(x){if(!web){web=sxKitFonts.slice();try{document.fonts.forEach(function(f){web.push(f.family.replace(/["']/g,""))})}catch(e){}}return web.indexOf(x)>=0}
 function fam(f){var x=(f||"").split(",")[0].replace(/["']/g,"").trim();
 if(!x||/^(system-ui|-apple-system|blinkmacsystemfont|sans-serif|ui-sans-serif)$/i.test(x))return"Arial";if(/^(serif|ui-serif)$/i.test(x))return"Georgia";if(/^(monospace|ui-monospace)$/i.test(x))return"Consolas";
-if(isWeb(x))return/\bmonospace\b|ui-monospace/.test(f)?"Consolas":/(?:^|[,\s])(?:ui-)?serif\b/.test(f)?"Cambria":"Arial";return x}
+return x}
+function gen(f){return/\bmonospace\b|ui-monospace/.test(f||"")?"mono":/(?:^|[,\s])(?:ui-)?serif\b/.test(f||"")?"serif":"sans"}
 function tf(x,cs){return cs.textTransform==="uppercase"?x.toUpperCase():cs.textTransform==="lowercase"?x.toLowerCase():x}
 function hasBr(a,b){var r=document.createRange();r.setStart(a,a.nodeValue.length);r.setEnd(b,0);var f=r.cloneContents();return !!(f.querySelector&&f.querySelector("br"))}
 function fail(x,restore){if(restore)restore();thaw();try{window.__sxGo(back)}catch(e){}post({t:"pptx",id:id,error:String(x&&x.message||x)})}
@@ -126,7 +129,7 @@ for(var e=t.parentElement;e&&e!==g.b.parentElement;e=e.parentElement){var ec=get
 if(clip&&(!fill||fill.a<0.05)){c=firstStop(getComputedStyle(clip).backgroundImage)||c;if(clears.indexOf(clip)<0)clears.push(clip)}
 if(!c||c.a<0.05||!txt)return;
 if(k>0&&runs.length&&hasBr(g.nodes[k-1],t)){runs[runs.length-1].br=true;lineTop=null}
-var st={f:fam(cs.fontFamily),s:parseFloat(cs.fontSize)||16,b:(parseInt(cs.fontWeight,10)||400)>=600,i:cs.fontStyle==="italic",u:/underline/.test(cs.textDecorationLine||""),c:c.hex,a:c.a,ls:parseFloat(cs.letterSpacing)||0};
+var st={f:fam(cs.fontFamily),g:gen(cs.fontFamily),s:parseFloat(cs.fontSize)||16,b:(parseInt(cs.fontWeight,10)||400)>=600,i:cs.fontStyle==="italic",u:/underline/.test(cs.textDecorationLine||""),c:c.hex,a:c.a,ls:parseFloat(cs.letterSpacing)||0};
 // Giữ đúng chỗ xuống dòng của trình duyệt: đo dòng của từng từ, sang dòng mới thì ngắt dòng ở đó (PowerPoint không tự xuống dòng nữa,
 // phông thay thế rộng hơn cũng không làm vỡ thêm dòng hay đè lên khối bên dưới).
 var src=t.nodeValue,re=/\S+\s*/g,m,seg=k>0&&/^\s/.test(t.nodeValue)?" ":"",lh0=parseFloat(cs.lineHeight)||st.s*1.2,wr=document.createRange();
@@ -174,7 +177,7 @@ type PptxSlide = {
   addImage: (opts: Record<string, unknown>) => void;
   addChart: (type: string, data: { name: string; labels: string[]; values: number[] }[], opts: Record<string, unknown>) => void;
 };
-type Pptx = { layout: string; title: string; company: string; addSlide: () => PptxSlide; write: (o: { outputType: "blob" }) => Promise<unknown> };
+type Pptx = { layout: string; title: string; company: string; theme?: { headFontFace?: string; bodyFontFace?: string }; addSlide: () => PptxSlide; write: (o: { outputType: "blob" }) => Promise<unknown> };
 type Ctor = new () => Pptx;
 let lib: Promise<Ctor> | null = null;
 function loadLib(): Promise<Ctor> {
@@ -267,12 +270,58 @@ export function morphSlides(slides: DeckSlide[]): number[] {
   const names = slides.map((s) => new Set([...s.boxes.map((b) => b.name), ...(s.pics ?? []).map((p) => p.name)].filter((n): n is string => !!n && n.startsWith("!!"))));
   return names.flatMap((set, i) => (i > 0 && [...set].some((n) => names[i - 1].has(n)) ? [i] : []));
 }
+// ---------------------------------------------------------------- phông thiết kế + phông dự phòng
+/** Phông dự phòng cùng dáng, máy Windows / Mac nào cũng có và đủ dấu tiếng Việt, kèm PANOSE (Panose-1 của chính phông đó) và họ phông:
+ *  pitchFamily = họ (0x20 FF_SWISS, 0x10 FF_ROMAN, 0x30 FF_MODERN) | độ rộng (0x02 thay đổi, 0x01 đều). */
+export const FONT_FALLBACK: Record<FontClass, { face: string; panose: string; pitch: number }> = {
+  sans: { face: "Arial", panose: "020B0604020202020204", pitch: 34 },
+  serif: { face: "Georgia", panose: "02040502050405020303", pitch: 18 },
+  mono: { face: "Consolas", panose: "020B0609020204030204", pitch: 49 },
+};
+/** Phông có sẵn trên máy người nhận (Office cài kèm hoặc của hệ điều hành): giữ nguyên, chỉ sửa họ phông cho đúng dáng. */
+const SAFE_FONTS = new Set(["Arial", "Calibri", "Calibri Light", "Cambria", "Georgia", "Consolas", "Times New Roman", "Courier New", "Verdana", "Tahoma", "Trebuchet MS", "Segoe UI"]);
+const reEsc = (x: string) => x.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const xmlEsc = (x: string) => x.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
+/**
+ * Ghi phông dự phòng vào XML của pptxgenjs (slide và theme): <a:latin typeface="Phông thiết kế"> thêm PANOSE và họ phông của phông dự phòng cùng dáng,
+ * <a:ea> / <a:cs> (chữ Đông Á, chữ viết phức hợp, phông thiết kế không có) trỏ thẳng phông dự phòng. Phông an toàn giữ tên, chỉ sửa họ phông
+ * (pptxgenjs ghi họ chữ không chân cho mọi phông, kể cả Georgia).
+ */
+export function withFontFallback(xml: string, fonts: Record<string, FontClass>): string {
+  let out = xml;
+  for (const [name, cls] of Object.entries(fonts)) {
+    const fb = FONT_FALLBACK[cls] ?? FONT_FALLBACK.sans, safe = SAFE_FONTS.has(name), n = reEsc(xmlEsc(name)), nx = xmlEsc(name);
+    out = out.replace(new RegExp(`<a:latin typeface="${n}"[^>]*/>`, "g"), safe ? `<a:latin typeface="${nx}" pitchFamily="${fb.pitch}" charset="0"/>` : `<a:latin typeface="${nx}" panose="${fb.panose}" pitchFamily="${fb.pitch}" charset="0"/>`);
+    if (!safe) out = out.replace(new RegExp(`<a:(ea|cs) typeface="${n}"[^>]*/>`, "g"), (_m, k: string) => `<a:${k} typeface="${fb.face}" panose="${fb.panose}" pitchFamily="${fb.pitch}" charset="0"/>`);
+  }
+  return out;
+}
+/** Phông của bản trình bày: tên → dáng; phông tiêu đề (chữ lớn nhất) và phông nội dung (nhiều chữ nhất) cho theme. */
+export function deckFonts(slides: DeckSlide[]): { fonts: Record<string, FontClass>; head: string | null; body: string | null } {
+  const fonts: Record<string, FontClass> = {}, chars = new Map<string, number>();
+  let head: string | null = null, top = 0;
+  for (const s of slides) for (const b of s.boxes) for (const r of b.runs) {
+    if (!r.f) continue;
+    fonts[r.f] ??= r.g ?? "sans";
+    chars.set(r.f, (chars.get(r.f) ?? 0) + r.t.length);
+    if (r.s > top) { top = r.s; head = r.f; }
+  }
+  const body = [...chars].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
+  return { fonts, head, body };
+}
 type Zip = { file: { (name: string): { async: (t: "string") => Promise<string> } | null; (name: string, data: string): unknown }; generateAsync: (o: Record<string, unknown>) => Promise<Blob> };
 type ZipCtor = { loadAsync: (b: Blob | ArrayBuffer | Uint8Array) => Promise<Zip & { files: Record<string, unknown> }> };
 /** Hậu kỳ tệp pptxgenjs: chèn Morph vào các slide cần, bỏ màu chuỗi nền của waterfall. JSZip: bản kèm trong pptxgen.bundle.js (window.JSZip). */
-export async function finishPptx(blob: Blob, JSZip: ZipCtor, morph: number[]): Promise<Blob> {
+export async function finishPptx(blob: Blob, JSZip: ZipCtor, morph: number[], fonts: Record<string, FontClass> = {}): Promise<Blob> {
   const zip = await JSZip.loadAsync(blob);
   let touched = false;
+  if (Object.keys(fonts).length) {
+    for (const f of Object.keys(zip.files).filter((n) => /^ppt\/(slides\/slide\d+|theme\/theme\d+)\.xml$/.test(n))) {
+      const x = await zip.file(f)?.async("string");
+      const y = x && withFontFallback(x, fonts);
+      if (x && y !== x) { zip.file(f, y!); touched = true; }
+    }
+  }
   for (const i of morph) {
     const f = `ppt/slides/slide${i + 1}.xml`, x = await zip.file(f)?.async("string");
     if (x) { zip.file(f, withMorphXml(x)); touched = true; }
@@ -291,6 +340,9 @@ export async function buildPptx(slides: DeckSlide[], w: number, h: number, title
   pptx.layout = "LAYOUT_WIDE";
   pptx.title = title;
   pptx.company = "Synchro";
+  // Theme của tệp dùng phông thiết kế (tiêu đề / nội dung): hộp chữ người nhận thêm trong PowerPoint cũng đúng phông, kèm dự phòng như chữ đã xuất.
+  const df = deckFonts(slides);
+  if (df.head || df.body) pptx.theme = { headFontFace: df.head ?? df.body ?? undefined, bodyFontFace: df.body ?? df.head ?? undefined };
   const pt = (px: number) => Math.round(px * (SLIDE_W * 72) / w * 10) / 10, inch = pxIn(w);
   for (const s of slides) {
     const slide = pptx.addSlide();
@@ -310,6 +362,6 @@ export async function buildPptx(slides: DeckSlide[], w: number, h: number, title
   const blob = (await pptx.write({ outputType: "blob" })) as Blob;
   const JSZip = (window as unknown as { JSZip?: ZipCtor }).JSZip;
   const morph = morphSlides(slides);
-  if (!JSZip || (!morph.length && !slides.some((s) => s.charts?.some((c) => c.spec.type === "waterfall")))) return blob;
-  return finishPptx(blob, JSZip, morph);
+  if (!JSZip || (!morph.length && !Object.keys(df.fonts).length && !slides.some((s) => s.charts?.some((c) => c.spec.type === "waterfall")))) return blob;
+  return finishPptx(blob, JSZip, morph, df.fonts);
 }

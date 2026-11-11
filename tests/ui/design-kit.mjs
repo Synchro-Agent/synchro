@@ -245,14 +245,16 @@ const DECK = (SAMPLES && existsSync(path.join(SAMPLES, "1-slide-tai-chinh.html")
   await P("Page.navigate", { url }); await done; await ev(`document.fonts.ready.then(() => 1)`); await sleep(400);
   await ev(`sxPptx("x", "")`);
   let last = null;
-  for (let i = 0; i < 240 && !last; i++) { await sleep(250); last = await ev(`(() => { const m = window.__posts.find((p) => p.t === "pptx"); return m ? { error: m.error, n: m.slides?.length, w: m.w, h: m.h, boxes: m.slides?.map((s) => s.boxes.flatMap((b) => b.runs.map((x) => [x.t, x.f, x.c, x.a]))), bg: m.slides?.map((s) => s.bg.length) } : null; })()`); }
+  for (let i = 0; i < 240 && !last; i++) { await sleep(250); last = await ev(`(() => { const m = window.__posts.find((p) => p.t === "pptx"); return m ? { error: m.error, n: m.slides?.length, w: m.w, h: m.h, boxes: m.slides?.map((s) => s.boxes.flatMap((b) => b.runs.map((x) => [x.t, x.f, x.c, x.a]))), g: m.slides?.flatMap((s) => s.boxes.flatMap((b) => b.runs.map((x) => x.g))), bg: m.slides?.map((s) => s.bg.length) } : null; })()`); }
   check("chụp xong không lỗi", !!last && !last.error, last?.error ?? "");
   const runs = (last?.boxes ?? []).flat();
   check("mỗi slide có chữ sửa được", (last?.boxes ?? []).every((b) => b.length > 0), `${last?.n} slide, ${runs.length} đoạn chữ`);
   check("giữ dấu tiếng Việt", runs.some((x) => /[ăãơợớậưệ]/i.test(x[0])), runs[0]?.[0]);
   const fonts = new Set(runs.map((x) => x[1]));
-  // Tệp không nhúng được phông web: để tên Plus Jakarta Sans thì máy người nhận tự thay (đo thấy ra Times), trái với FILE_RULES.
-  check("phông web đổi sang phông máy người nhận chắc có, đúng dáng", [...fonts].length > 0 && [...fonts].every((f) => ["Arial", "Cambria", "Consolas"].includes(f)), [...fonts].join(", "));
+  const preset0 = () => PRESETS.find((p) => DECK.includes(`data-sx-preset="${p.id}"`)) ?? PRESETS[0];
+  // Chủ dự án chốt: giữ đúng tên phông thiết kế của bộ CSS (máy có phông thì hiện đúng), phông dự phòng ghi lúc dựng tệp (deckpptx.withFontFallback, kiểm ở tests/ui/pptx.mjs).
+  const kit = new Set([preset0().head, preset0().body, preset0().mono]);
+  check("hộp chữ giữ đúng tên phông thiết kế của bộ CSS, kèm dáng để chọn phông dự phòng", [...fonts].length > 0 && [...fonts].every((f) => kit.has(f)) && (last?.g ?? []).every((g) => ["sans", "serif", "mono"].includes(g)), `${[...fonts].join(", ")} · bộ: ${[...kit].join(", ")}`);
   const colors = new Set(runs.map((x) => x[2]));
   const preset = PRESETS.find((p) => DECK.includes(`data-sx-preset="${p.id}"`));
   check("màu chữ đọc được từ biến của bộ CSS", colors.has(preset.ink.slice(1)) || colors.has(preset.accent.slice(1)), [...colors].join(", "));

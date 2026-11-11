@@ -86,9 +86,10 @@ if (file) {
   check("đủ số slide", slides.length === n, `${slides.length}/${n}`);
   const media = list.filter((f) => /^ppt\/media\/.+\.png$/i.test(f));
   check("mỗi slide một ảnh nền", media.length >= n, `${media.length} ảnh`);
-  let texts = [], fonts = new Set(), noText = 0, noBg = 0;
+  let texts = [], fonts = new Set(), noText = 0, noBg = 0, runFonts = [];
   for (const sl of slides) {
     const xml = spawnSync("unzip", ["-p", path, sl], { encoding: "utf8", maxBuffer: 1 << 26 }).stdout;
+    for (const m of xml.matchAll(/<a:rPr\b[^>]*>([\s\S]*?)<\/a:rPr>/g)) { const l = /<a:latin ([^>]*)\/>/.exec(m[1]); if (l) runFonts.push({ latin: l[1], ea: /<a:ea typeface="([^"]*)"/.exec(m[1])?.[1], cs: /<a:cs typeface="([^"]*)"/.exec(m[1])?.[1] }); }
     const t = [...xml.matchAll(/<a:t>([^<]*)<\/a:t>/g)].map((m) => m[1]);
     for (const m of xml.matchAll(/<a:latin typeface="([^"]+)"/g)) fonts.add(m[1]);
     if (!t.join("").trim()) noText++;
@@ -105,6 +106,19 @@ if (file) {
   const want = new Set([...src.matchAll(/font-family\s*:\s*([^;}]+)/g)].map((m) => map(m[1])));
   if (!want.size) want.add("Arial");
   check("đúng phông của bản trình bày", fonts.size > 0 && [...fonts].every((f) => want.has(f)), `tệp: ${[...fonts].join(", ")} · mã: ${[...want].join(", ")}`);
+  // Phông thiết kế kèm phông dự phòng (chủ dự án chốt): hộp chữ ghi đúng tên phông thiết kế, PANOSE + họ phông của phông an toàn cùng dáng để máy thiếu phông
+  // thay đúng dáng (không ra Times), chữ Đông Á / phức hợp trỏ thẳng phông an toàn; theme của tệp dùng phông thiết kế.
+  const SAFE = new Set(["Arial", "Calibri", "Calibri Light", "Cambria", "Georgia", "Consolas", "Times New Roman", "Courier New", "Verdana", "Tahoma", "Trebuchet MS", "Segoe UI"]);
+  const FB = { "020B0604020202020204": ["Arial", "34"], "02040502050405020303": ["Georgia", "18"], "020B0609020204030204": ["Consolas", "49"] };
+  const design = runFonts.filter((r) => !SAFE.has(/typeface="([^"]+)"/.exec(r.latin)?.[1]));
+  const okRun = (r) => { const p = /panose="([0-9A-F]{20})"/.exec(r.latin)?.[1], fb = FB[p]; return !!fb && r.latin.includes(`pitchFamily="${fb[1]}"`) && r.ea === fb[0] && r.cs === fb[0]; };
+  // Bản trình bày giả lập dùng phông hệ thống (Arial): phần phông thiết kế kiểm ở tests/ui/media-kit.mjs (phong cách midnight-tech); có phông thiết kế thì kiểm cả ở đây.
+  check("phông lạ (nếu có) giữ đúng tên trong hộp chữ", [...fonts].every((f) => SAFE.has(f)) || design.length > 0, `${runFonts.length} đoạn chữ · phông: ${[...fonts].join(", ")}`);
+  check("mỗi đoạn chữ phông thiết kế có PANOSE + họ phông của phông dự phòng cùng dáng, chữ Đông Á / phức hợp trỏ phông dự phòng", design.every(okRun), JSON.stringify(design.filter((r) => !okRun(r)).slice(0, 2)));
+  const theme = spawnSync("unzip", ["-p", path, "ppt/theme/theme1.xml"], { encoding: "utf8", maxBuffer: 1 << 26 }).stdout;
+  const themeFace = (k) => /<a:latin typeface="([^"]+)"(?: panose="([0-9A-F]{20})")?/.exec(new RegExp(`<a:${k}>([\\s\\S]*?)</a:${k}>`).exec(theme)?.[1] ?? "");
+  const mj = themeFace("majorFont"), mn = themeFace("minorFont");
+  check("theme của tệp: phông tiêu đề / nội dung là phông của bản trình bày, phông lạ kèm PANOSE", !!mj && !!mn && fonts.has(mj[1]) && fonts.has(mn[1]) && (SAFE.has(mj[1]) || !!mj[2]) && (SAFE.has(mn[1]) || !!mn[2]), `${mj?.[1]} ${mj?.[2]} · ${mn?.[1]} ${mn?.[2]}`);
   writeFileSync(SCR + "texts.txt", texts.map((t, i) => `--- slide ${i + 1}\n${t}`).join("\n"));
   // Ảnh xem trước của macOS (Quick Look) cho slide đầu: xem bằng mắt chữ nằm đúng chỗ trên nền.
   if (process.platform === "darwin") { spawnSync("qlmanage", ["-t", "-s", "1600", "-o", SCR, path], { stdio: "ignore" }); console.log("  ảnh xem trước:", readdirSync(SCR).filter((f) => f.endsWith(".png")).map((f) => SCR + f).join(", ")); }
