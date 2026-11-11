@@ -1001,6 +1001,8 @@ html body .menu-item.cm-conn{cursor:default}
 html body .menu-item.cm-conn:hover{background:transparent}
 .cm-conn .toggle{margin-left:auto;flex:none}
 .cm-conn .cn-logo{flex:none}
+/* Logo connector 20px trong menu nơi biểu tượng là 16px: kéo chữ về đúng cột với các mục khác. */
+html body .menu .cm-conn>.cn-logo:first-child{margin-right:-4px}
 /* Composio trong menu +: số ứng dụng đã kết nối đứng trước nút bật / tắt. */
 .cm-cnt{margin-left:auto;padding-left:8px;flex:none;font-size:12px;color:var(--ds-muted);white-space:nowrap}
 .cm-cx .toggle,.cm-cx .cm-rec{margin-left:10px}

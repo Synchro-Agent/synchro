@@ -61,9 +61,9 @@ const SPACING = `(() => {
       const r = it.getBoundingClientRect(), t = textBox(it); if (!t) continue;
       if (t.bottom - t.top > 22) { const pad = Math.min(t.top - r.top, r.bottom - t.bottom); if (pad < 5) { out.push("mục nhiều dòng sát mép trên/dưới (" + Math.round(pad) + "px): “" + it.textContent.trim().slice(0, 24) + "” trong " + name(m)); break; } }
     }
-    // Đầu dòng: icon đầu tiên nếu có, không thì chữ. Tiêu đề khung (không phải mục) cũng tính.
+    // Đầu dòng: icon đầu tiên nếu có (cả ô logo connector: chữ cái trong ô màu nằm giữa ô, không phải đầu dòng), không thì chữ. Tiêu đề khung (không phải mục) cũng tính.
     const rows = [...items, ...[...m.children].filter((e) => !e.matches(".menu-item,hr,.menu,.model-sub") && e.textContent.trim() && !e.querySelector(".menu-item") && e.getBoundingClientRect().height)];
-    const starts = rows.map((e) => { const ic = e.querySelector(":scope > svg, :scope > img, :scope > .avatar, :scope > .bk-check, :scope > span > svg"); const t = textBox(e); const a = ic ? ic.getBoundingClientRect().left : 1e9; return { e, x: Math.min(a, t ? t.left : 1e9) }; }).filter((v) => v.x < 1e8 && !v.e.matches(".sub"));
+    const starts = rows.map((e) => { const ic = e.querySelector(":scope > svg, :scope > img, :scope > .avatar, :scope > .bk-check, :scope > .cn-logo, :scope > span > svg"); const t = textBox(e); const a = ic ? ic.getBoundingClientRect().left : 1e9; return { e, x: Math.min(a, t ? t.left : 1e9) }; }).filter((v) => v.x < 1e8 && !v.e.matches(".sub"));
     for (let i = 0; i < starts.length; i++) for (let j = i + 1; j < starts.length; j++) {
       const d = Math.abs(starts[i].x - starts[j].x);
       if (d > 1 && d < 6.5) { out.push("lệch cột " + d.toFixed(1) + "px: “" + starts[i].e.textContent.trim().slice(0, 18) + "” / “" + starts[j].e.textContent.trim().slice(0, 18) + "” trong " + name(m)); i = starts.length; break; }

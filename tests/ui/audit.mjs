@@ -47,7 +47,8 @@ const LAG = 250;
 // Kiểm tra trong trang: tràn ngang, chữ bị cắt cụt, ảnh hỏng, phông chữ, chữ tiếng Anh sót (giao diện tiếng Việt).
 const CHECK = `(() => {
   const out = [], W = innerWidth, H = innerHeight;
-  const vis = (el) => { const cs = getComputedStyle(el); return cs.display !== "none" && cs.visibility !== "hidden" && +cs.opacity > 0.05; };
+  // checkVisibility: chữ trong <details> đang đóng vẫn có khung (Chrome chỉ ẩn bằng content-visibility), không được tính là đang hiện.
+  const vis = (el) => { const cs = getComputedStyle(el); return cs.display !== "none" && cs.visibility !== "hidden" && +cs.opacity > 0.05 && (!el.checkVisibility || el.checkVisibility()); };
   const clipped = (el) => { for (let p = el.parentElement; p && p !== document.body; p = p.parentElement) { const cs = getComputedStyle(p); if (/(hidden|auto|scroll|clip)/.test(cs.overflowX)) { const r = p.getBoundingClientRect(); if (r.right <= W + 1) return true; } if (cs.position === "fixed") break; } return false; };
   const name = (el) => el.tagName.toLowerCase() + (el.id ? "#" + el.id : "") + (typeof el.className === "string" && el.className ? "." + el.className.trim().split(/\\s+/).slice(0, 2).join(".") : "");
   if (document.scrollingElement.scrollWidth > W + 1) out.push("trang tràn ngang " + (document.scrollingElement.scrollWidth - W) + "px");
