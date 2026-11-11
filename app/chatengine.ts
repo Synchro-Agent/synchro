@@ -190,12 +190,21 @@ type Exec = { project?: unknown; image?: boolean; msgs?: unknown; effects?: stri
 type Decision = "allow" | "chat" | "always" | "deny";
 type Out = { text: string; used: ToolRun["used"][]; cancelled?: boolean } | { approval: { id: string; calls: unknown[] } };
 // Lượt chat đang chờ người dùng duyệt công cụ: giữ trong bộ nhớ máy chủ tối đa 30 phút.
-type Pending = { uid: string; model: string; ad: Adapter; m: unknown[]; calls: Call[]; used: ToolRun["used"][]; step: number; x: Exec; at: number };
-const PENDING_TTL = 30 * 60_000;
+// Mỗi lượt chờ giữ cả lịch sử và phiên connector: hết hạn thì tự bỏ bằng hẹn giờ riêng (unref), không đợi tới lần có người khác cần duyệt.
+type Pending = { uid: string; model: string; ad: Adapter; m: unknown[]; calls: Call[]; used: ToolRun["used"][]; step: number; x: Exec; at: number; timer?: ReturnType<typeof setTimeout> };
+const PENDING_TTL = Number(process.env.SYNCHRO_APPROVAL_TTL_MS) || 30 * 60_000;
 const pending = new Map<string, Pending>();
 function sweep() {
-  for (const [k, p] of pending) if (Date.now() - p.at > PENDING_TTL) { pending.delete(k); p.x.sess?.close(); }
+  for (const [k, p] of pending) if (Date.now() - p.at > PENDING_TTL) { pending.delete(k); if (p.timer) clearTimeout(p.timer); p.x.sess?.close(); }
 }
+function parkApproval(id: string, p: Pending) {
+  p.timer = setTimeout(() => { if (pending.get(id) === p) { pending.delete(id); p.x.sess?.close(); } }, PENDING_TTL + 1000);
+  p.timer.unref?.();
+  pending.set(id, p);
+}
+const unparkApproval = (id: string) => { const p = pending.get(id); if (p?.timer) clearTimeout(p.timer); pending.delete(id); };
+/** Số lượt chat đang chờ duyệt công cụ (theo dõi bộ nhớ). */
+export const pendingApprovals = () => pending.size;
 
 const fmtSize = (n: number) => (n < 1024 ? `${n} B` : n < 1048576 ? `${(n / 1024).toFixed(1)} KB` : `${(n / 1048576).toFixed(1)} MB`);
 // Ảnh trong outputs/ được gửi lại cho model xem (khung hình video, trang PDF, biểu đồ…; runpreview.ts): không xem được thì model từng tự đưa ảnh lên host
@@ -833,7 +842,7 @@ async function loop(ad: Adapter, m: unknown[], x: Exec, used: ToolRun["used"][],
     if (ask.length) {
       sweep();
       const id = randomToken(18);
-      pending.set(id, { uid, model, ad, m, calls: r.calls, used, step: i, x, at: Date.now() });
+      parkApproval(id, { uid, model, ad, m, calls: r.calls, used, step: i, x, at: Date.now() });
       return {
         approval: {
           id, calls: ask.map((c) => {
@@ -1442,7 +1451,7 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
     sweep();
     const p = pending.get(body.resume);
     if (!p || p.uid !== c.user.id) return Response.json({ error: "Yêu cầu chờ duyệt đã hết hạn. Hãy gửi lại tin nhắn." }, { status: 410 });
-    pending.delete(body.resume);
+    unparkApproval(body.resume);
     const raw = (body.decisions && typeof body.decisions === "object" ? body.decisions : {}) as Record<string, unknown>;
     const d: Record<string, Decision> = {};
     for (const call of p.calls) if (needsAsk(p.x, call)) {
