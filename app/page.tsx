@@ -353,7 +353,7 @@ function ModelPicker({ model, setModel }: { model: string; setModel: (m: string)
             <MsubBody on={sub === pv.id} count={pv.models.length} place={placeSub}>
             {pv.models.map((m) => (
               <button key={m.key} className={`menu-item mline ${ok(m.key) ? "" : "locked"}`} onClick={() => pick(m.key)} title={ok(m.key) ? m.id : "Quản trị viên chưa cho phép tài khoản của bạn dùng model này"}>
-                <span className="mname-t">{m.name}</span>{m.blockedUntil ? <span className="mtag" title={new Date(m.blockedUntil).toLocaleString(getLang() === "en" ? "en-US" : "vi-VN", { weekday: "short", hour: "2-digit", minute: "2-digit" })}>{getLang() === "en" ? "Limit reached" : "Hết hạn mức"}</span> : null}{m.key === model ? <span className="ck"><I.Check /></span> : !ok(m.key) && <span className="sc"><I.Lock size={14} /></span>}
+                <span className="mname-t">{m.name}</span>{m.isNew && !m.blockedUntil ? <span className="mtag mnew" title="Hãng vừa ra mắt, Synchro đã thử và cho dùng">Mới</span> : null}{m.blockedUntil ? <span className="mtag" title={new Date(m.blockedUntil).toLocaleString(getLang() === "en" ? "en-US" : "vi-VN", { weekday: "short", hour: "2-digit", minute: "2-digit" })}>{getLang() === "en" ? "Limit reached" : "Hết hạn mức"}</span> : null}{m.key === model ? <span className="ck"><I.Check /></span> : !ok(m.key) && <span className="sc"><I.Lock size={14} /></span>}
               </button>
             ))}
             </MsubBody>
@@ -1247,7 +1247,15 @@ export default function Home() {
   // Danh sách model đổi (quản trị viên thêm khóa, đổi quyền) → chọn lại model hợp lệ.
   useEffect(() => { if (me) refreshModels(); }, [me]);
   useEffect(() => { if (me) loadCaps(); }, [me?.id]); // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => { if (!models.loaded) return; const f = fitModel(model, models); if (f !== model) setModel(f); }, [models, model]);
+  useEffect(() => {
+    if (!models.loaded) return;
+    const f = fitModel(model, models);
+    if (f === model) return;
+    // Model đã chọn tay bị hãng gỡ: báo một lần đã chuyển sang bản mới nhất cùng dòng (lựa chọn mới được lưu nên không báo lại).
+    const rep = models.replaced?.[model];
+    if (rep && rep.to === f) say(`${rep.name} không còn dùng được nên Synchro đã chuyển sang ${modelName(f)}`);
+    setModel(f);
+  }, [models, model]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (me && view === "code" && !me.perms.features.code) setView("new");
     if (me && view === "speech" && (!me.perms.features.speech || (!speechReady && !me.isAdmin))) setView("new");

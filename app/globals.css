@@ -440,6 +440,8 @@ html[data-ui-font="Serif"] body{font-family:Georgia,serif}
 .model-menu{width:420px;padding:8px;overflow:visible}
 .mtag{display:inline-flex;align-items:center;gap:4px;font-size:12px;line-height:18px;padding:0 6px;border-radius:var(--r-pill);background:var(--hover);color:var(--text-2)}
 .mtag.warn{background:rgba(217,160,40,.14);color:#e0a43a}
+.mtag.mnew{background:rgba(52,140,90,.14);color:#2f7d4f;font-weight:600}
+[data-theme="dark"] .mtag.mnew{background:rgba(72,180,120,.18);color:#7fd3a2}
 .mline{height:38px;gap:10px;font-size:15px}
 .mline.is-sel,.mline:hover{background:var(--hover)}
 .mline .sc{display:flex;align-items:center;gap:6px;font-size:14px}
@@ -2045,6 +2047,50 @@ b,strong{font-weight:560}
 .api-reply-h .d{font-size:12px;color:var(--text-3)}
 .api-reply p{margin:0;font-size:13.5px;line-height:1.55;white-space:pre-wrap;word-break:break-word}
 .api-empty{display:flex;align-items:center;gap:10px;border:1px dashed var(--border-strong);border-radius:var(--r-card);padding:14px;font-size:13px;color:var(--text-3)}
+/* Cài đặt → Providers → New models: sổ model tự cập nhật (modelregui.tsx). */
+.mr{display:flex;flex-direction:column;gap:10px}
+.mr-head{display:flex;flex-direction:column;gap:12px}
+.mr-auto{display:flex;align-items:flex-start;gap:14px}
+.mr-auto-t{display:flex;flex-direction:column;gap:3px;flex:1;min-width:0}
+.mr-auto-t b{font-size:14px;font-weight:600}
+.mr-auto-t .d,.mr-check .d{font-size:12.5px;line-height:1.45;color:var(--text-2)}
+.mr-provs{display:flex;flex-wrap:wrap;gap:6px}
+.mr-prov{display:inline-flex;align-items:center;gap:5px;font-size:12px;padding:4px 10px;border-radius:var(--r-pill);border:.5px solid var(--border);background:var(--card);color:var(--text-2)}
+.mr-prov.on{background:rgba(34,163,90,.1);border-color:rgba(34,163,90,.35);color:#1b7a45}
+.mr-prov:disabled{opacity:.55}
+[data-theme="dark"] .mr-prov.on{color:#5cc48b}
+.mr-check{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;border-top:.5px solid var(--border);padding-top:10px}
+.mr-check .btn{display:inline-flex;align-items:center;gap:6px}
+.mr-tabs{display:flex;gap:4px;padding:3px;border-radius:var(--r-pill);background:var(--hover);align-self:flex-start}
+.mr-tabs button{font-size:12.5px;padding:5px 12px;border-radius:var(--r-pill);color:var(--text-2)}
+.mr-tabs button.on{background:var(--card);color:var(--text);box-shadow:0 1px 2px rgba(0,0,0,.08)}
+.mr-list{display:flex;flex-direction:column;border:.5px solid var(--border);border-radius:var(--r-card);background:var(--card);overflow:hidden}
+.mr-row{display:flex;gap:12px;align-items:flex-start;padding:12px 14px;border-top:.5px solid var(--border)}
+.mr-row:first-child{border-top:0}
+.mr-row.off .mr-name b{color:var(--text-2)}
+.mr-main{flex:1;min-width:0;display:flex;flex-direction:column;gap:4px}
+.mr-name{display:flex;align-items:center;flex-wrap:wrap;gap:6px}
+.mr-name b{font-size:13.5px;font-weight:600}
+.mr-name .api-badge{margin-left:0;order:0}
+.mr-key .mono-s{overflow-wrap:anywhere}
+.mr-meta{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:12px;color:var(--text-3)}
+.mr-test{display:flex;flex-wrap:wrap;align-items:center;gap:6px;font-size:12px}
+.mr-test .d{color:var(--text-3)}
+.mr-step{display:inline-flex;align-items:center;gap:3px;padding:1px 7px;border-radius:var(--r-pill);font-size:11.5px}
+.mr-step.ok{background:rgba(34,163,90,.12);color:#1b7a45}
+.mr-step.bad{background:rgba(198,66,47,.12);color:#b23a29}
+[data-theme="dark"] .mr-step.ok{color:#5cc48b}[data-theme="dark"] .mr-step.bad{color:#ef8a7a}
+.mr-err{margin:2px 0 0}
+.mr-acts{display:flex;flex-wrap:nowrap;gap:6px;justify-content:flex-end;flex:none}
+.mr-acts .btn{font-size:12px;padding:4px 10px}
+.api-badge.wait{background:rgba(217,160,40,.14);color:#a6731b}.api-badge.wait i{background:#d9a028}
+.api-badge.old i{background:var(--text-3)}
+[data-theme="dark"] .api-badge.wait{color:#e0a43a}
+@media (max-width:640px){
+  .mr-row{flex-direction:column}
+  .mr-acts{flex-wrap:wrap;justify-content:flex-start}
+  .mr-auto{gap:10px}
+}
 .api-steps{margin:0;padding:0;list-style:none;counter-reset:st;display:flex;flex-direction:column;gap:10px}
 .api-steps li{display:flex;flex-direction:column;gap:2px;padding-left:34px;position:relative;counter-increment:st}
 .api-steps li::before{content:counter(st);position:absolute;left:0;top:0;width:22px;height:22px;border-radius:50%;display:grid;place-items:center;font-size:12px;font-weight:560;background:var(--hover);color:var(--text-2)}
