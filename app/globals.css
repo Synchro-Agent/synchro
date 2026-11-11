@@ -801,7 +801,7 @@ html[data-theme="dark"] body .code-view .sidebar{--gl-fill:rgba(20,21,18,.9)}
 .cv-pill button:not(.n):hover{background:var(--hover);color:var(--text)}
 .cv-pill.pin>svg:first-child{color:var(--accent)}
 .cv-modebtn{display:flex;align-items:center;gap:6px;height:32px;padding:0 10px 0 9px;border-radius:var(--r-pill);font-size:13px;font-weight:460;color:var(--text-2);transition:background .15s,color .15s}
-.cv-drop{position:absolute;inset:0;border-radius:inherit;display:grid;place-items:center;font-size:14px;font-weight:460;color:var(--accent-deep);background:color-mix(in srgb,var(--accent) 10%,transparent);pointer-events:none;z-index:3}
+.cv-drop{position:absolute;inset:0;border-radius:inherit;display:grid;place-items:center;font-size:14px;font-weight:460;color:var(--accent-deep);background:color-mix(in srgb,var(--accent) 10%,var(--card));pointer-events:none;z-index:3}
 
 /* menus */
 .cv-mode-item{display:flex;align-items:center;gap:12px;width:100%;padding:11px 12px;border-radius:var(--r-plate);text-align:left;transition:background .15s}
@@ -853,6 +853,8 @@ html[data-theme="dark"] body .code-view .sidebar{--gl-fill:rgba(20,21,18,.9)}
 .cv-ed textarea{flex:1;min-width:0;border:0;outline:0;background:transparent;resize:none;padding:14px 14px 14px 4px;font:inherit;white-space:pre;overflow:visible;color:var(--text)}
 .cv-frame{flex:1;border:0;background:#fff;margin:10px;border-radius:var(--r-card);box-shadow:0 0 0 .5px var(--gl-hair)}
 @media(max-width:1000px){.cv-panel{position:absolute;inset:0 0 0 auto;width:min(92%,560px);margin:8px}}
+/* Màn hẹp: khung bên của Synchro Code nằm đè lên đoạn chat nên nền đặc (kính 78% để lộ chữ phía dưới). */
+@media(max-width:1000px){html body .cv-panel,html[data-theme="dark"] body .cv-panel{background:var(--gl-fill-thick,var(--card));-webkit-backdrop-filter:none;backdrop-filter:none}}
 .cv-tools{width:100%}
 .cv-mode-item{line-height:1.3}
 .cv-thread{-webkit-mask-image:linear-gradient(to bottom,transparent 0,#000 28px);mask-image:linear-gradient(to bottom,transparent 0,#000 28px)}
@@ -2825,7 +2827,7 @@ html body .modal.pl-modal::before{background:var(--card);-webkit-backdrop-filter
 .art-dl-t{display:flex;flex-direction:column;align-items:flex-start;gap:1px;min-width:0;text-align:left}
 .art-dl-t b{font-weight:500;font-size:13.5px;color:var(--text);max-width:230px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .art-dl-t em{font-style:normal;font-size:12px;color:var(--text-3)}
-html body .art-dl-menu,html body .prod-menu{--gl-fill:color-mix(in srgb,var(--card) 94%,transparent)}
+html body .art-dl-menu,html body .prod-menu{--gl-fill:var(--card)}
 /* Đổi phong cách của artifact: ô màu (nền, bề mặt, nhấn) cạnh tên; menu nền đặc, không nhìn xuyên xuống khung bên dưới. */
 html body .menu.art-style-menu{--gl-fill:var(--card);background:var(--card);min-width:236px}
 .art-style-sw{display:inline-flex;gap:3px;align-items:center;padding:3px;border:1px solid;border-radius:6px;flex:none}
@@ -2843,7 +2845,7 @@ html body .menu.art-style-menu{--gl-fill:var(--card);background:var(--card);min-
 .deck-frame{width:100%;height:100%;border:0;display:block;background:#fff}
 .deck-stage:fullscreen{border-radius:0;aspect-ratio:auto;width:100vw;height:100vh;display:grid;place-items:center;box-shadow:none}
 .deck-stage:fullscreen .deck-frame{width:min(100vw,177.78vh);height:min(56.25vw,100vh)}
-.deck-hud{position:absolute;right:18px;bottom:14px;padding:4px 10px;border-radius:999px;background:rgba(0,0,0,.55);color:#fff;font-size:13px;font-variant-numeric:tabular-nums;pointer-events:none}
+.deck-hud{position:absolute;right:18px;bottom:14px;padding:4px 10px;border-radius:999px;background:#161714;color:#fff;font-size:13px;font-variant-numeric:tabular-nums;pointer-events:none}
 .deck-bar{display:flex;align-items:center;gap:4px;flex:none}
 .art-panel.full .deck-bar,.art-panel.full .deck-thumbs{width:min(100%,calc((100vh - 270px) * 16 / 9));margin:0 auto}
 .deck-count{font-size:13px;color:var(--text-2);font-variant-numeric:tabular-nums;min-width:86px;text-align:center}
@@ -2895,7 +2897,7 @@ html body .menu.art-style-menu{--gl-fill:var(--card);background:var(--card);min-
 .pl-sec-d{font-size:12px;font-weight:400;color:var(--text-3)}
 .hub-empty{display:flex;gap:10px;align-items:flex-start;padding:14px 16px;border:1px dashed var(--border-strong);border-radius:var(--r-card);font-size:13px;line-height:1.5;color:var(--text-3)}
 .hub-empty svg{flex:none;margin-top:1px}
-.hub-drop{position:absolute;inset:-6px;z-index:5;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;border:2px dashed var(--accent);border-radius:var(--r-card);background:color-mix(in srgb,var(--card) 88%,transparent);color:var(--text-2);pointer-events:none;backdrop-filter:blur(2px)}
+.hub-drop{position:absolute;inset:-6px;z-index:5;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;border:2px dashed var(--accent);border-radius:var(--r-card);background:var(--card);color:var(--text-2);pointer-events:none;backdrop-filter:blur(2px)}
 .hub-drop b{font-weight:560;color:var(--text)}
 .hub-drop span{font-size:12.5px;color:var(--text-3)}
 .hub-yours .pl-row2 .toggle{flex:none}
@@ -2907,7 +2909,7 @@ html body .menu.art-style-menu{--gl-fill:var(--card);background:var(--card);min-
    thẻ nhích lên khi rê chuột (transform) tạo lớp riêng, nên nâng cả hàng mẫu và thẻ đang rê lên trên. */
 .tpl:hover,.tpl:focus-visible{z-index:2}
 /* Menu Thêm của Kho kỹ năng nằm đè lên chữ: nền đặc để không lộ chữ phía sau */
-html body .menu.pl-menu{--gl-fill:color-mix(in srgb,var(--card) 96%,transparent)}
+html body .menu.pl-menu{--gl-fill:var(--card)}
 html body .menu.pl-menu::before{background:var(--card)!important}
 
 /* ===================== Rõ nét: menu và icon (cỡ chữ, độ đậm, màu mực: xem biến thiết kế ở đầu tệp) ===================== */
@@ -3776,7 +3778,7 @@ button.bn-box:disabled{cursor:default}
 /* Tệp trong tin nhắn đã gửi: xuống dòng, căn phải (không cuộn ngang: phần tràn bên trái từng bị cắt mất khi gửi nhiều ảnh). */
 .attach.sent{flex-wrap:wrap;justify-content:flex-end;overflow:visible;margin:0;padding:0 0 8px}
 /* Trình duyệt của Synchro: dải "đang điều khiển", chấm sáng chỗ vừa bấm, hộp thoại của trang */
-.bp-agent{position:absolute;left:50%;bottom:12px;transform:translateX(-50%);z-index:6;display:flex;align-items:center;gap:10px;max-width:calc(100% - 24px);padding:6px 6px 6px 12px;border-radius:var(--r-card);background:color-mix(in srgb,var(--card) 94%,transparent);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);box-shadow:0 0 0 .5px var(--border-strong),0 8px 24px rgba(0,0,0,.14);animation:bnPeek .16s ease-out;cursor:default}
+.bp-agent{position:absolute;left:50%;bottom:12px;transform:translateX(-50%);z-index:6;display:flex;align-items:center;gap:10px;max-width:calc(100% - 24px);padding:6px 6px 6px 12px;border-radius:var(--r-card);background:var(--card);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);box-shadow:0 0 0 .5px var(--border-strong),0 8px 24px rgba(0,0,0,.14);animation:bnPeek .16s ease-out;cursor:default}
 /* Chấm "đang điều khiển" màu mực (bộ nhận diện v4: không màu nhấn), toả nhịp nhẹ. */
 @keyframes bpPulse{0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--accent) 45%,transparent)}100%{box-shadow:0 0 0 7px color-mix(in srgb,var(--accent) 0%,transparent)}}
 .bp-agent-t b{font-weight:600;color:var(--text);white-space:nowrap}
@@ -4139,7 +4141,7 @@ main#main:focus{outline:0}
 .ob-row{display:flex;flex-wrap:wrap;gap:8px}
 .ob-row .btn{display:inline-flex;align-items:center;gap:6px}
 /* Đổi ngôn ngữ ở màn hình đăng nhập */
-.auth-lang{position:fixed;top:14px;right:16px;z-index:30;display:flex;gap:2px;padding:2px;border-radius:999px;background:color-mix(in srgb,var(--card) 70%,transparent);font-size:12.5px}
+.auth-lang{position:fixed;top:14px;right:16px;z-index:30;display:flex;gap:2px;padding:2px;border-radius:999px;background:var(--card);font-size:12.5px}
 .auth-lang button{height:26px;padding:0 10px;border-radius:999px;color:var(--text-2);cursor:pointer}
 .auth-lang button.on{background:var(--text);color:var(--bg)}
 .auth-notice{max-width:380px;margin:0 0 4px;padding:10px 14px;border-radius:14px;background:color-mix(in srgb,#d64545 9%,var(--card));font-size:13.5px;line-height:1.45;text-align:center;color:var(--text)}
@@ -4205,7 +4207,8 @@ main#main:focus{outline:0}
 .tag-chip em{font-style:normal;margin-left:5px;font-size:11px;opacity:.65;font-variant-numeric:tabular-nums}
 .tag-chip.more{cursor:default}
 .tb-tags{display:flex;align-items:center;gap:4px;min-width:0;overflow:hidden;margin-left:2px}
-.tag-filter{display:flex;gap:5px;padding:10px 12px 2px 14px;overflow-x:auto;scrollbar-width:none;flex:none}
+/* contain: hàng thẻ dài không được nới rộng thanh bên (ngăn kéo điện thoại từng rộng ra quá màn hình theo tổng bề ngang các chip). */
+.tag-filter{display:flex;gap:5px;padding:10px 12px 2px 14px;overflow-x:auto;scrollbar-width:none;flex:none;contain:inline-size;max-width:100%}
 .tag-filter::-webkit-scrollbar{display:none}
 .tag-sec{gap:6px}
 .tag-sec>span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-2)}

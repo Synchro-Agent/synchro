@@ -7,8 +7,8 @@
 import { spawn } from "node:child_process";
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 
-const B = "http://localhost:3200";
-const SCR = (await import("node:os")).tmpdir() + "/synchro-ui/popovers/";
+const B = process.env.BASE ?? "http://localhost:3200";
+const SCR = (await import("node:os")).tmpdir() + `/synchro-ui/popovers${process.env.THEME === "dark" ? "-dark" : ""}/`;
 mkdirSync(SCR, { recursive: true });
 const PROF = (await import("node:os")).tmpdir() + "/synchro-ui/chrome-prof-popovers";
 
@@ -43,6 +43,22 @@ const COVERED = `(() => {
   return out;
 })()`;
 
+// Nền đặc: mọi khung nổi đang mở (menu, bảng, gợi ý, thẻ nguồn…) phải che kín chữ phía dưới. Nền là nền của chính khung hoặc lớp ::before
+// (kính của glass.css); độ đục < 0.95 là lỗi (chủ dự án: "các tab hiện lên không trong suốt nữa").
+const OPAQUE = `(() => {
+  const a = (c) => { if (!c || c === "transparent") return 0; const m = /rgba?\\(([^)]+)\\)/.exec(c); if (!m) return 1; const p = m[1].split(/[ ,/]+/).filter(Boolean).map(Number); return p.length >= 4 ? p[3] : 1; };
+  const name = (el) => el.tagName.toLowerCase() + (typeof el.className === "string" && el.className.trim() ? "." + el.className.trim().split(/\\s+/).slice(0, 2).join(".") : "");
+  const out = [];
+  for (const m of document.querySelectorAll(".menu:not(.out),.model-menu,.model-sub,.usermenu,.cx-pop,.modal,.cite-pop,.tip-float.on,.cv-mention,.cv-sel,.toast:not(.out)")) {
+    const cs = getComputedStyle(m); if (cs.display === "none" || cs.visibility === "hidden") continue;
+    const q = m.getBoundingClientRect(); if (q.width < 20 || q.height < 14) continue;
+    const own = a(cs.backgroundColor), pre = getComputedStyle(m, "::before").content !== "none" ? a(getComputedStyle(m, "::before").backgroundColor) : 0;
+    const v = Math.max(own, pre);
+    if (v < 0.95) out.push(name(m) + " độ đục " + v.toFixed(2));
+  }
+  return out;
+})()`;
+
 // Khoảng cách trong khung đang mở: mục nhiều dòng phải có đệm trên dưới (chữ cách mép mục >= 5px); chữ / icon đầu dòng các mục và tiêu đề
 // trong cùng khung không lệch nhau 1–6px (lệch hẳn từ 7px trở lên là thụt lề có chủ ý, như mục con).
 const SPACING = `(() => {
@@ -63,7 +79,7 @@ const SPACING = `(() => {
     }
     // Đầu dòng: icon đầu tiên nếu có, không thì chữ. Tiêu đề khung (không phải mục) cũng tính.
     const rows = [...items, ...[...m.children].filter((e) => !e.matches(".menu-item,hr,.menu,.model-sub") && e.textContent.trim() && !e.querySelector(".menu-item") && e.getBoundingClientRect().height)];
-    const starts = rows.map((e) => { const ic = e.querySelector(":scope > svg, :scope > img, :scope > .avatar, :scope > .bk-check, :scope > span > svg"); const t = textBox(e); const a = ic ? ic.getBoundingClientRect().left : 1e9; return { e, x: Math.min(a, t ? t.left : 1e9) }; }).filter((v) => v.x < 1e8 && !v.e.matches(".sub"));
+    const starts = rows.map((e) => { const ic = e.querySelector(":scope > svg, :scope > img, :scope > .avatar, :scope > .bk-check, :scope > .cn-logo, :scope > span > svg"); const t = textBox(e); const a = ic ? ic.getBoundingClientRect().left : 1e9; return { e, x: Math.min(a, t ? t.left : 1e9) }; }).filter((v) => v.x < 1e8 && !v.e.matches(".sub"));
     for (let i = 0; i < starts.length; i++) for (let j = i + 1; j < starts.length; j++) {
       const d = Math.abs(starts[i].x - starts[j].x);
       if (d > 1 && d < 6.5) { out.push("lệch cột " + d.toFixed(1) + "px: “" + starts[i].e.textContent.trim().slice(0, 18) + "” / “" + starts[j].e.textContent.trim().slice(0, 18) + "” trong " + name(m)); i = starts.length; break; }
@@ -92,6 +108,8 @@ const runSize = async (size) => {
   await P("Emulation.setDeviceMetricsOverride", mobile ? { width: 390, height: 844, deviceScaleFactor: 2, mobile: true } : { width: 1280, height: 720, deviceScaleFactor: 1, mobile: false });
   if (mobile) await P("Emulation.setTouchEmulationEnabled", { enabled: true, maxTouchPoints: 5 });
   await P("Network.setCookie", { name: "synchro_session", value: cookie.split("=")[1], url: B });
+  // THEME=dark: chạy toàn bộ ở giao diện tối (nền đặc phải đúng ở cả hai giao diện).
+  if (process.env.THEME === "dark") { await P("Page.addScriptToEvaluateOnNewDocument", { source: `try { localStorage.setItem("theme", "dark"); } catch {}` }); await P("Emulation.setEmulatedMedia", { features: [{ name: "prefers-color-scheme", value: "dark" }] }); }
   // OLD=1: tạm đưa về cách cũ (thanh bên z 5, khối soạn tin z 6, gợi ý luôn nằm trên, mục menu Tải về không có đệm trên dưới) để chứng minh
   // phép thử bắt được các lỗi đã sửa.
   if (process.env.OLD) await P("Page.addScriptToEvaluateOnNewDocument", { source: `addEventListener("DOMContentLoaded", () => { const s = document.createElement("style"); s.textContent = ".shell-side:has(.menu,[data-tip]:hover){z-index:5} html body .main>.dock:has(.menu,.cx-pop){z-index:6} .tip-float{display:none!important} html[data-tips=js] body [data-tip]:hover::after{content:attr(data-tip)!important;display:block!important} html body .art-dl-menu .menu-item{padding:0 12px!important} .warn{background:rgba(198,66,47,.15);color:#e0604f;border-radius:12px;padding:8px 10px;font-size:13px}"; document.head.append(s); });` });
@@ -117,6 +135,10 @@ const runSize = async (size) => {
       console.log(`  ${ok ? "✓" : "✗"} ${label} · ${b.box}${ok ? "" : ` — ${b.covered}/${b.pts} điểm bị ${b.by} che`}`);
     }
     for (const sp of await ev(SPACING)) { fails++; console.log(`  ✗ ${label} · ${sp}`); }
+    const thin = await ev(OPAQUE);
+    checked++;
+    if (thin.length) fails++;
+    console.log(`  ${thin.length ? "✗" : "✓"} ${label} · nền đặc${thin.length ? ` — ${thin.join(", ")}` : ""}`);
     const { data } = await P("Page.captureScreenshot", { format: "png" });
     writeFileSync(`${SCR}${size}-${label.replace(/[^\p{L}\p{N}]+/gu, "-")}.png`, Buffer.from(data, "base64"));
   };
@@ -205,6 +227,8 @@ const runSize = async (size) => {
       if (collapsed === (await sideOpen())) { await click(`document.querySelector(".rail-mark")`, "toggle side"); await sleep(700); }
       await tryOpen(`${tag} menu tài khoản`, () => click(`document.querySelector(".rail .user")`, "user"));
       if (!collapsed) await tryOpen(`${tag} ⋮ đoạn chat`, async () => { await hover(`document.querySelector(".chat-wrap")`); await click(`document.querySelector(".chat-wrap .dots")`, "dots"); });
+      // Khung Gắn thẻ (thay nội dung menu ⋮): cùng khung nổi, cũng phải nền đặc và nằm trên các hàng sau.
+      if (!collapsed) await tryOpen(`${tag} ⋮ đoạn chat › Gắn thẻ`, async () => { await hover(`[...document.querySelectorAll(".chat-wrap")].find((w) => w.querySelector(":scope > .chat-item:not(.code-item)") && w.getBoundingClientRect().height > 0 && !w.closest(".pj-kids") && !w.querySelector(".pj-tg, .pj-ic"))`); await click(`[...document.querySelectorAll(".chat-wrap")].find((w) => w.querySelector(":scope > .chat-item:not(.code-item)") && w.getBoundingClientRect().height > 0 && !w.closest(".pj-kids") && !w.querySelector(".pj-tg, .pj-ic"))?.querySelector(".dots")`, "dots"); await sleep(350); await click(`[...document.querySelectorAll(".chat-wrap .menu:not(.out) .menu-item")].find((e) => e.textContent.includes("Gắn thẻ"))`, "tags"); });
       await chatBoxes(tag);
       await ringLevels(tag);
       await tips(`${tag} gợi ý thanh trên`, ".topbar [data-tip]");
@@ -278,6 +302,7 @@ const runSize = async (size) => {
     await drawer("điện thoại · ngăn kéo thanh bên");
     await tryOpen("điện thoại · menu tài khoản", async () => { if (!(await ev(`!!document.querySelector(".side-scrim")`))) { await click(`document.querySelector("[aria-label='Mở thanh bên']")`, "burger"); await sleep(700); } await click(`document.querySelector(".rail .user")`, "user"); await sleep(300); await drawer("điện thoại · ngăn kéo khi menu tài khoản mở"); });
     await tryOpen("điện thoại · ⋮ đoạn chat", async () => { if (!(await ev(`!!document.querySelector(".side-scrim")`))) { await click(`document.querySelector("[aria-label='Mở thanh bên']")`, "burger"); await sleep(700); } await click(`document.querySelector(".chat-wrap .dots")`, "dots"); await sleep(300); await drawer("điện thoại · ngăn kéo khi ⋮ mở"); });
+    await tryOpen("điện thoại · ⋮ đoạn chat › Gắn thẻ", async () => { if (!(await ev(`!!document.querySelector(".side-scrim")`))) { await click(`document.querySelector("[aria-label='Mở thanh bên']")`, "burger"); await sleep(700); } await click(`[...document.querySelectorAll(".chat-wrap")].find((w) => w.querySelector(":scope > .chat-item:not(.code-item)") && w.getBoundingClientRect().height > 0 && !w.closest(".pj-kids") && !w.querySelector(".pj-tg, .pj-ic"))?.querySelector(".dots")`, "dots"); await sleep(350); await click(`[...document.querySelectorAll(".chat-wrap .menu:not(.out) .menu-item")].find((e) => e.textContent.includes("Gắn thẻ"))`, "tags"); await sleep(300); });
   }
   ws.close(); chrome.kill(); await sleep(400);
 };
