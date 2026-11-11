@@ -144,6 +144,12 @@ const pinned0 = !!regO.models.find((m) => m.key === someKey)?.pinned;
 r = await admin("POST", "/api/admin/models", { action: "pin", key: someKey, on: !pinned0 });
 ok(r.s === 200, "ghim model: quản trị viên vẫn làm được", JSON.stringify(r.j).slice(0, 200));
 await admin("POST", "/api/admin/models", { action: "pin", key: someKey, on: pinned0 });
+// Cập nhật CLI của các gói (cài phần mềm lên máy chủ cho mọi người): quản trị viên chỉ xem.
+ok((await admin("GET", "/api/admin/cliupdate")).j?.owner === false, "cập nhật CLI: quản trị viên xem được, biết mình không phải chủ sở hữu");
+for (const [n, body] of [["Cập nhật ngay", { action: "run" }], ["bật / tắt hằng tuần", { action: "auto", on: false }], ["trả về bản trước", { action: "rollback", cli: "claude" }]])
+  ok((await admin("POST", "/api/admin/cliupdate", body)).s === 403, `cập nhật CLI, ${n}: quản trị viên 403`);
+r = await owner("POST", "/api/admin/cliupdate", { action: "auto", on: (await owner("GET", "/api/admin/cliupdate")).j.on });
+ok(r.s === 200 && r.j.owner === true, "cập nhật CLI: chủ sở hữu bật / tắt được");
 
 console.log("3. Quản trị viên vẫn làm các việc quản trị khác");
 const main = keysA.main;

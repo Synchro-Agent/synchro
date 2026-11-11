@@ -2098,6 +2098,7 @@ b,strong{font-weight:560}
 .mr-step.bad{background:rgba(198,66,47,.12);color:#b23a29}
 [data-theme="dark"] .mr-step.ok{color:#5cc48b}[data-theme="dark"] .mr-step.bad{color:#ef8a7a}
 .mr-err{margin:2px 0 0}
+.cu-detail{font-size:12px;line-height:1.45;color:var(--text-2);overflow-wrap:anywhere}
 .mr-acts{display:flex;flex-wrap:nowrap;gap:6px;justify-content:flex-end;flex:none}
 .mr-acts .btn{font-size:12px;padding:4px 10px}
 .api-badge.wait{background:rgba(217,160,40,.14);color:#a6731b}.api-badge.wait i{background:#d9a028}

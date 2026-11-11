@@ -12,6 +12,7 @@ import { ALL, equivalentModel, splitKey, vendorOf, type ProviderInfo } from "../
 import { canModel } from "../authstore";
 import { catalog, mainModels } from "../providers";
 import { engineFor } from "./selector";
+import { classifyTurn, noteCliOutcome } from "./cliupdate";
 import { clearRelogin, engineEnv, everLoggedIn, loginTime, markRelogin, needsRelogin, safeScope, scopeDir, status } from "./cli_auth";
 import { prettyGrok } from "../providers";
 import { CLIS, type Cli, engineHome, find, listEngineDir, makeDir, removeDir, removeSessionFiles, spawnCli, stripAnsi, watchSessions, writeEngineFile } from "./cli_runtime";
@@ -243,6 +244,8 @@ export async function ownsSub(u: UserRow, key: string) {
   return !!cli && !!find(cli) && !!(await status(cli, u.id, { stale: true }).catch(() => null))?.loggedIn;
 }
 export const forgetSubModels = (cli: Cli, uid: string) => g.models.delete(`${cli}:${uid}`);
+/** CLI vừa đổi bản: danh sách model của gói đọc lại bằng bản mới cho mọi tài khoản. */
+export const forgetAllSubModels = (cli: Cli) => { for (const k of [...g.models.keys()]) if (k.startsWith(`${cli}:`)) g.models.delete(k); };
 
 // ---------------------------------------------------------------- hạn mức của gói
 // Cách các hãng đặt lại hạn mức (theo tài liệu của hãng và dữ liệu chính CLI báo về):
@@ -717,9 +720,14 @@ async function subTurnWatched(o: SubTurn): Promise<SubResult> {
   // Antigravity, Grok chỉ báo mã phiên khi xong lượt: bấm Dừng, quá giờ hay CLI chết thì câu lệnh nằm lại trong thư mục đăng nhập mà xóa đoạn chat cũng không tìm thấy.
   // Mã mới xuất hiện mà không lượt nào báo về thì không ai nối tiếp được: dọn ở nền sau lượt. Lượt xong bình thường đã báo mã (sessionSeen) nên được giữ.
   const c0 = subCli(o.model);
-  if (c0 !== "agy" && c0 !== "grok") return subTurnInner(o);
-  const watch = await watchSessions(scopeDir(c0, o.user.id));
-  try { return await subTurnInner(o); } finally { void watch.sweep(); }
+  const r = await (async () => {
+    if (c0 !== "agy" && c0 !== "grok") return subTurnInner(o);
+    const watch = await watchSessions(scopeDir(c0, o.user.id));
+    try { return await subTurnInner(o); } finally { void watch.sweep(); }
+  })();
+  // Vừa đổi sang bản CLI mới (cập nhật hằng tuần): các lượt thật đầu tiên lỗi thì tự trả về bản trước (app/ai/cliupdate.ts).
+  if (c0) { const ok = classifyTurn(r); if (ok !== null) noteCliOutcome(c0, ok, ok ? "" : String(r.json.detail ?? r.json.error ?? "")); }
+  return r;
 }
 async function subTurnInner(o: SubTurn): Promise<SubResult> {
   // Lượt không thuộc đoạn chat nào (đặt tên, chưng cất…) cũng không có gì nối tiếp: để lại lịch sử phiên thì không có đường nào xóa được khi người dùng xóa đoạn chat.

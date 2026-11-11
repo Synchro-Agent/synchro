@@ -68,7 +68,7 @@ Object.assign(ACTIONS, {
   admin_backup_on: ["Turned on continuous backup", "adm"], admin_backup_off: ["Turned off continuous backup", "adm"], admin_backup_saved: ["Changed continuous backup settings", "adm"], admin_backup_cleared: ["Removed continuous backup settings", "adm"], admin_backup_drill: ["Tested restoring the backup", "adm"],
   admin_turnstile: ["Changed bot protection keys", "adm"], admin_turnstile_on: ["Turned on bot protection", "adm"], admin_turnstile_off: ["Turned off bot protection", "adm"], admin_block_disposable: ["Changed disposable email blocking", "adm"],
   admin_role_granted: ["Made administrator", "adm"], admin_role_revoked: ["Removed administrator", "adm"],
-  admin_api_key: ["Saved API key", "adm"], admin_api_key_removed: ["Removed API key", "adm"], admin_api_credit: ["Changed API credit", "adm"], admin_default_model: ["Changed default model", "adm"], admin_main_models: ["Changed main models", "adm"], admin_models_check: ["Checked for new models", "adm"], admin_models: ["Changed the model registry", "adm"],
+  admin_api_key: ["Saved API key", "adm"], admin_api_key_removed: ["Removed API key", "adm"], admin_api_credit: ["Changed API credit", "adm"], admin_default_model: ["Changed default model", "adm"], admin_main_models: ["Changed main models", "adm"], admin_models_check: ["Checked for new models", "adm"], admin_models: ["Changed the model registry", "adm"], admin_cli_update: ["Updated plan CLIs", "adm"], admin_cli_autoupdate: ["Changed weekly CLI updates", "adm"], admin_cli_rollback: ["Rolled back a plan CLI", "adm"],
 });
 const LOG_FILTER: Record<string, (a: string) => boolean> = {
   All: () => true,

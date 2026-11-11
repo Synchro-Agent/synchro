@@ -124,6 +124,17 @@ sudo -u synchro-cli bwrap --ro-bind / / --dev /dev --proc /proc --unshare-pid --
 
 Kiểm tra lớp 2 với Codex thật bằng một tài khoản thử: nhắn "chạy lệnh ls -la /var/www/synchro-engine/logins và cho tôi xem kết quả". Đúng là model trả lời không có công cụ shell, hoặc lượt dừng với thông báo "Codex định chạy lệnh…". Sai là thấy danh sách thư mục.
 
+## Cập nhật CLI của các gói
+
+`app/ai/cliupdate.ts`, Cài đặt → Providers → CLI updates (chủ sở hữu bật / tắt, bấm "Cập nhật ngay", trả về bản trước; quản trị viên chỉ xem). Mỗi tuần khoảng 04:00 giờ máy chủ:
+
+1. Cài bản mới nhất cạnh bản đang chạy, mỗi bản một thư mục: `<engine home>/.local/versions/<cli>/<bản>-<mốc>/bin/<cli>` (claude, codex: `npm install -g --prefix` vào thư mục đó, đúng bản `npm view` báo; agy: script cài của Google với `--dir`; grok: script cài của xAI với `HOME` trỏ vào thư mục của bản đó nên không đè `.grok/downloads` đang chạy).
+2. Kiểm tra bản mới: `--version`, rồi `auth status` / `login status` / `models` bằng đăng nhập sẵn có của chủ sở hữu (hoặc quản trị viên khác). Không chat nên không tốn hạn mức gói. Bản cũ đọc được đăng nhập mà bản mới không thì không dùng.
+3. Đạt thì đổi `<engine home>/.local/bin/<cli>` thành liên kết tới bản mới (một lần `mv`). Bản trước giữ lại (lần đầu: liên kết cũ tới `.local/lib/node_modules`, hoặc tệp `agy` cũ đổi tên thành `agy.synchro-prev`); bản cũ hơn bị xóa.
+4. Theo dõi tối đa 5 lượt thật đầu tiên trong 3 ngày: hai lượt đầu đều lỗi (CLI chết, không phản hồi, hãng không nhận đăng nhập), hoặc lỗi nhiều hơn chạy được sau 3 lượt, thì tự trả về bản trước và không cài lại bản đó.
+
+Thư mục đăng nhập (`logins/`, `engine-tokens/`) không bao giờ bị chép, chuyển hay xóa. Kết quả vào Hộp thư của quản trị viên (lần hằng tuần chỉ báo khi có thay đổi hay lỗi). Claude Code chạy với `DISABLE_AUTOUPDATER=1` để không tự tải bản mới đè lên bản đã kiểm tra. Tắt hẳn: `SYNCHRO_CLI_AUTOUPDATE=0` trong `.env.production` (Claude Code lại tự cập nhật như trước). Trả về tay khi web không mở được: `sudo -u synchro-cli ln -sfn <đích cũ> /var/www/synchro-engine/.local/bin/<cli>` (đích cũ xem bằng `ls -la .local/versions/<cli>` hoặc `readlink` trước khi cập nhật).
+
 ## Hạn mức đĩa
 
 - Dịch vụ workspace kiểm tra mỗi phút: quá 5 GB (`WS_DISK_MB`) thì cảnh báo, quá 6 GB thì dừng workspace (cho 5 phút sau khi bật để người dùng dọn), dưới 3 GB trống (`WS_MIN_FREE_MB`) thì không nhận việc mới và dừng workspace tốn đĩa nhất.

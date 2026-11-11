@@ -16,6 +16,7 @@
 const C = require(require("path").join(__dirname, "mock-cli-common.cjs"));
 const { fs, path } = C;
 const a = process.argv.slice(2);
+C.gate(a);
 const home = process.env.HOME || "/tmp", gem = path.join(home, ".gemini"), cli = path.join(gem, "antigravity-cli");
 const loginFile = path.join(cli, "antigravity-oauth-token"), onboardFile = path.join(cli, "cache", "onboarding.json"), keysLog = path.join(cli, "onboarding-input.log");
 const usage0 = { input_tokens: 0, output_tokens: 0, thinking_tokens: 0, cache_read_tokens: 0, total_tokens: 0 };
@@ -68,7 +69,7 @@ async function agyImage(prompt, conv) {
 }
 
 (async () => {
-  if (a[0] === "--version") return console.log("1.4.11 [mock]");
+  if (a[0] === "--version") return console.log(C.version("1.4.11 [mock]"));
   const li = fs.existsSync(loginFile);
   if (a[0] === "models") {
     console.log("Fetching available models...");

@@ -6,6 +6,7 @@
 const C = require(require("path").join(__dirname, "mock-cli-common.cjs"));
 const { fs, path } = C;
 const a = process.argv.slice(2);
+C.gate(a);
 // Hướng dẫn hệ thống: --system-prompt <chữ> hoặc --system-prompt-file <tệp> (Synchro dùng tệp khi hướng dẫn dài; bản cũ dùng --append-…).
 const sysFlag = (n) => C.flag(a, n) ?? (C.flag(a, n + "-file") ? fs.readFileSync(C.flag(a, n + "-file"), "utf8") : undefined);
 const SYS = sysFlag("--system-prompt") ?? sysFlag("--append-system-prompt");
@@ -13,7 +14,7 @@ const dir = process.env.CLAUDE_CONFIG_DIR || path.join(process.env.HOME || "/tmp
 const loginFile = path.join(dir, ".mock-login");
 
 (async () => {
-  if (a[0] === "--version") return console.log("2.1.310 (Claude Code) [mock]");
+  if (a[0] === "--version") return console.log(C.version("2.1.310 (Claude Code) [mock]"));
   if (a[0] === "auth" && a[1] === "status") {
     const li = fs.existsSync(loginFile);
     console.log(JSON.stringify({ loggedIn: li, authMethod: li ? "claude.ai" : "none", apiProvider: "firstParty", configDirectory: dir, ...(li ? { email: "owner@example.com", subscriptionType: "max" } : {}) }));

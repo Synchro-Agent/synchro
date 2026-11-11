@@ -168,12 +168,14 @@ export function find(cli: Cli): string | null {
 // MCP_TOOL_TIMEOUT: thời gian chờ một lời gọi công cụ qua cầu nối MCP của Claude Code (lệnh trong workspace chạy tới 10 phút).
 // GROK_HOME: thư mục cấu hình / đăng nhập của Grok CLI; GROK_DISABLE_AUTOUPDATER: Grok CLI không tự tải bản mới vào thư mục của từng tài khoản;
 // GROK_BIN_DIR: nơi script cài của xAI đặt lệnh grok (chỉ dùng khi cài).
-export const ENV_ALLOW = ["SYNCHRO_CLI_OWNER", "LANG", "TZ", "HOME", "PATH", "CLAUDE_CONFIG_DIR", "CLAUDE_CODE_OAUTH_TOKEN", "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC", "CODEX_HOME", "MCP_TOOL_TIMEOUT", "GROK_HOME", "GROK_DISABLE_AUTOUPDATER", "GROK_BIN_DIR"] as const;
-const basePath = () => [noBrowserDir(), binDir(), path.dirname(process.execPath), "/usr/local/bin", "/usr/bin", "/bin"].join(":");
+// DISABLE_AUTOUPDATER: Claude Code không tự tải bản mới đè lên bản Synchro đã kiểm tra (app/ai/cliupdate.ts cập nhật hằng tuần, có kiểm tra
+// và trả lại); SYNCHRO_CLI_AUTOUPDATE=0 tắt bộ cập nhật của Synchro thì để Claude Code tự cập nhật như trước.
+export const ENV_ALLOW = ["SYNCHRO_CLI_OWNER", "LANG", "TZ", "HOME", "PATH", "CLAUDE_CONFIG_DIR", "CLAUDE_CODE_OAUTH_TOKEN", "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC", "CODEX_HOME", "MCP_TOOL_TIMEOUT", "GROK_HOME", "GROK_DISABLE_AUTOUPDATER", "GROK_BIN_DIR", "DISABLE_AUTOUPDATER"] as const;
+export const basePath = () => [noBrowserDir(), binDir(), path.dirname(process.execPath), "/usr/local/bin", "/usr/bin", "/bin"].join(":");
 
 /** Môi trường cho tiến trình CLI: chỉ các biến trong ENV_ALLOW; biến khác (kể cả truyền vào) bị bỏ. */
 export function cleanEnv(extra: Record<string, string | undefined> = {}): Record<string, string> {
-  const base: Record<string, string | undefined> = { LANG: process.env.LANG || "C.UTF-8", TZ: process.env.TZ, HOME: engineHome(), PATH: basePath() };
+  const base: Record<string, string | undefined> = { LANG: process.env.LANG || "C.UTF-8", TZ: process.env.TZ, HOME: engineHome(), PATH: basePath(), DISABLE_AUTOUPDATER: process.env.SYNCHRO_CLI_AUTOUPDATE === "0" ? undefined : "1" };
   const out: Record<string, string> = {};
   for (const k of ENV_ALLOW) {
     const v = Object.prototype.hasOwnProperty.call(extra, k) ? extra[k] : base[k];
@@ -357,7 +359,7 @@ export async function runCli(bin: string, args: string[], o: RunOpts = {}) {
 }
 
 // ---------------------------------------------------------------- cài đặt
-const NPM_PKG: Partial<Record<Cli, string>> = { claude: "@anthropic-ai/claude-code", codex: "@openai/codex" };
+export const NPM_PKG: Partial<Record<Cli, string>> = { claude: "@anthropic-ai/claude-code", codex: "@openai/codex" };
 export const AGY_INSTALLER = "https://antigravity.google/cli/install.sh";
 export const GROK_INSTALLER = "https://x.ai/cli/install.sh";
 

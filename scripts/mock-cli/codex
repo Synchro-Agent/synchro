@@ -4,11 +4,12 @@
 const C = require(require("path").join(__dirname, "mock-cli-common.cjs"));
 const { fs, path } = C;
 const a = process.argv.slice(2);
+C.gate(a);
 const dir = process.env.CODEX_HOME || path.join(process.env.HOME || "/tmp", ".codex");
 const authFile = path.join(dir, "auth.json");
 
 (async () => {
-  if (a[0] === "--version") return console.log("codex-cli 0.164.0 [mock]");
+  if (a[0] === "--version") return console.log(C.version("codex-cli 0.164.0 [mock]"));
   if (a[0] === "login" && a[1] === "status") {
     if (fs.existsSync(authFile)) { console.error("Logged in using ChatGPT"); process.exit(0); }
     console.error("Not logged in"); process.exit(1);

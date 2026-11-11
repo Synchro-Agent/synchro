@@ -42,6 +42,8 @@ export async function register() {
       onTick("connectors", (now) => { void recheckConnectors(now).catch((e) => console.error("[connectors]", e)); });
       // Model mới của các hãng: dò lúc khởi động (sau 1-3 phút) và mỗi 6 giờ, thử tự động rồi mới cho dùng (app/modelreg.ts).
       (await import("./app/modelreg")).scheduleDiscovery(onTick);
+      // CLI của các gói: cập nhật hằng tuần lúc 04:00, kiểm tra trước khi dùng, tự trả về bản trước nếu lượt thật đầu tiên lỗi (app/ai/cliupdate.ts).
+      (await import("./app/ai/cliupdate")).startCliUpdates();
       // Giữ kết nối GitHub luôn dùng được: làm mới token có hạn, dùng token định kỳ (mỗi 30 phút xem một lượt).
       const { keepLinksAlive } = await import("./app/github");
       const keep = () => keepLinksAlive().catch((e) => console.error("[github]", e));

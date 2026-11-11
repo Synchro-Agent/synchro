@@ -12,6 +12,7 @@ import { refreshModels, useModels } from "./models";
 import { BrandLogo } from "./brands";
 import { ProviderCard, TestBox, type ApiProvider, type ApiState } from "./apiui";
 import { ModelRegistry } from "./modelregui";
+import { CliUpdates } from "./cliupdateui";
 import { locale } from "./i18n";
 
 type Cli = "claude" | "codex" | "agy" | "grok";
@@ -277,6 +278,12 @@ export function ProvidersPanel() {
         <>
           <h3 className="sec">New models</h3>
           <ModelRegistry />
+        </>
+      )}
+      {admin && api && (
+        <>
+          <h3 className="sec">CLI updates</h3>
+          <CliUpdates />
         </>
       )}
       {admin && api && (

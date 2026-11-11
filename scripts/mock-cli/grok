@@ -12,6 +12,7 @@
 const C = require(require("path").join(__dirname, "mock-cli-common.cjs"));
 const { fs, path } = C;
 const a = process.argv.slice(2);
+C.gate(a);
 const home = process.env.GROK_HOME || path.join(process.env.HOME || "/tmp", ".grok");
 const authFile = path.join(home, "auth.json"), cfgFile = path.join(home, "config.toml");
 const MODELS = ["grok-4.7", "grok-4.6", "grok-build-0.1"];
@@ -54,7 +55,7 @@ async function grokImage(prompt) {
 }
 
 (async () => {
-  if (a[0] === "--version" || a[0] === "version") return console.log("grok 0.1.42 [mock]");
+  if (a[0] === "--version" || a[0] === "version") return console.log(C.version("grok 0.1.42 [mock]"));
   if (a[0] === "models") {
     console.log(li() ? "You are logged in with SuperGrok (owner@example.com)." : "You are not authenticated.");
     console.log("");

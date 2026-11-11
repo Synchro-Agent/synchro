@@ -168,7 +168,36 @@ const ALERT_EN: Record<string, string> = {
   "Bản sao lưu mới nhất không qua kiểm tra toàn vẹn.": "The newest backup failed its integrity check.",
   "Từ 3 người trở lên bị hãng từ chối đăng nhập trong 24 giờ qua. Có thể CLI hoặc hãng vừa đổi gì đó.": "Three or more people were refused sign-in by a vendor in the last 24 hours. A CLI or vendor may have changed something.",
 };
+// Cập nhật CLI của các gói (app/ai/cliupdate.ts): kết quả từng CLI ở Cài đặt → Providers. Phần sau dấu hai chấm là đầu ra của CLI, giữ nguyên.
+const CLIU_EN: Record<string, string> = {
+  "Nguồn thử nghiệm không có bản phát hành.": "The test source has no release.",
+  "Nguồn thử nghiệm không có bản này.": "The test source doesn't have this version.",
+  "Chưa quản trị viên nào đăng nhập gói này: chỉ kiểm tra được --version.": "No administrator is signed in to this plan, so only --version could be checked.",
+  "Đăng nhập sẵn có của quản trị viên vẫn dùng được.": "The administrator's existing sign-in still works.",
+  "Tài khoản kiểm tra chưa đăng nhập: đã kiểm tra lệnh chạy được.": "The check account isn't signed in, so Synchro checked that the commands run.",
+  "Không có bản trước để trả lại.": "There's no previous version to roll back to.",
+  "Bản trước không còn trên máy.": "The previous version is no longer on the server.",
+  "Bản trước đã bị trả lại vì lỗi.": "The previous version was rolled back earlier because of errors.",
+  "CLI chưa được cài trên máy chủ (cài ở Providers trước).": "The CLI isn't installed on the server (install it in Providers first).",
+  "Đã là bản mới nhất.": "Already the newest version.",
+  "Bản này đã bị trả lại trước đây vì lỗi; chờ bản sau.": "This version was rolled back earlier because of errors. Waiting for the next one.",
+  "Chủ sở hữu trả về bản trước.": "The Owner rolled back to the previous version.",
+  "Máy chủ đã tắt cập nhật CLI (SYNCHRO_CLI_AUTOUPDATE=0).": "CLI updates are turned off on this server (SYNCHRO_CLI_AUTOUPDATE=0).",
+};
+const CLIU_RULES: Rule[] = [
+  [/^--version lỗi: ([\s\S]*)$/, (m) => `--version failed: ${m[1]}`],
+  [/^Bản mới không trả lời được lệnh xem đăng nhập: ([\s\S]*)$/, (m) => `The new version didn't answer the sign-in check: ${m[1]}`],
+  [/^Bản mới không đọc được đăng nhập sẵn có của quản trị viên: ([\s\S]*)$/, (m) => `The new version couldn't read the administrator's existing sign-in: ${m[1]}`],
+  [/^Không trả lại được: ([\s\S]*)$/, (m) => `Couldn't roll back: ${m[1]}`],
+  [/^Không cài được: ([\s\S]*)$/, (m) => `Couldn't install: ${m[1]}`],
+  [/^Không đổi được sang bản mới: ([\s\S]*)$/, (m) => `Couldn't switch to the new version: ${m[1]}`],
+  [/^Các lượt chat đầu tiên với bản mới bị lỗi \((\d+) lỗi, (\d+) chạy được\)(?:: ([\s\S]*))?\.$/, (m) => `The first chats on the new version failed (${m[1]} failed, ${m[2]} worked)${m[3] ? `: ${m[3]}` : ""}.`],
+];
+const cliuEn = (s: string): string => { if (CLIU_EN[s]) return CLIU_EN[s]; for (const [re, f] of CLIU_RULES) { const m = s.match(re); if (m) return f(m); } return s; };
 export const OPS_RULES_EN: Rule[] = [
+  [/^([\s\S]+) Vẫn dùng bản đang chạy\.$/, (m) => `${cliuEn(m[1])} Still using the current version.`],
+  ...Object.entries(CLIU_EN).map(([vi, en]): Rule => [new RegExp(`^${vi.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`), () => en]),
+  ...CLIU_RULES,
   // Thông báo trong Hộp thư: cảnh báo vận hành (app/ops.ts) và chủ email giành lại tài khoản (app/claim.ts).
   [/^(.+) Xem chi tiết ở Cài đặt → Sức khỏe hệ thống\.$/, (m) => `${ALERT_EN[m[1]] ?? m[1]} See Settings → System health.`],
   [/^(Mật khẩu cũ đã được gỡ vì email chưa từng được xác minh, nên có thể do người khác đặt\. Nếu vẫn muốn đăng nhập bằng email, hãy đặt mật khẩu mới trong Cài đặt → Tài khoản\. )?Các thiết bị khác đã được đăng xuất, tiện ích Chrome đã ghép nối được gỡ(, connector đã được tắt \(bật lại trong Cài đặt nếu đúng là của bạn\))?\. (Hướng dẫn tùy chỉnh và ký ức trong tài khoản đã được xóa vì chúng có thể do người khác đặt\.|Hãy kiểm tra hướng dẫn tùy chỉnh trong Cài đặt\.)$/, (m) => `${m[1] ? "The old password was removed because this email was never verified, so someone else may have set it. To sign in with email, set a new password in Settings → Account. " : ""}Other devices were signed out and the paired Chrome extension was removed${m[2] ? ", and connectors were turned off (turn them back on in Settings if they're yours)" : ""}. ${m[3].startsWith("Hướng") ? "Custom instructions and memories in this account were deleted because someone else may have set them." : "Check your custom instructions in Settings."}`],

@@ -272,4 +272,15 @@ const imageMode = (dir, cli) => { const j = readJson(path.join(dir, "mock-image.
 function imageLog(dir, rec) { const f = path.join(dir, "mock-image-log.json"); writeJson(f, [...readJson(f, []), { at: Date.now(), ...rec }]); }
 function saveImage(file, kind = "jpg") { fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, kind === "png" ? tinyPng() : kind === "bad" ? "<html>không phải ảnh</html>" : kind === "big" ? Buffer.concat([TINY_JPEG, Buffer.alloc(3 * 1048576, 7)]) : TINY_JPEG); }
 
-module.exports = { sxKit, TINY_JPEG, tinyPng, isImageTurn, imageCount, imageMode, imageLog, saveImage, stallTurn, STALL_TEXT, mediaDesc, mediaReply, mcp, isTitleAsk, mockTitle, mockBrain, prefsEcho, ruleEcho, toolAsk, cfg, sleep, out, uuid, readStdin, readLine, flag, bumpSession, bumpUsage, totalTurns, reply, chunks, fs, path, crypto };
+// Bản phát hành giả cho bộ cập nhật CLI (app/ai/cliupdate.ts, nguồn SYNCHRO_CLI_UPDATE_SOURCE): tệp mock-version cạnh lệnh đổi dòng --version;
+// tệp mock-break làm hỏng bản đó: "smoke" mọi lệnh trừ --version đều lỗi (không qua kiểm tra trước khi dùng), "turn" lệnh xem đăng nhập vẫn chạy
+// nhưng lượt chat thật lỗi (qua kiểm tra, rồi tự trả về bản trước).
+const local = (f) => { try { return fs.readFileSync(path.join(__dirname, f), "utf8").trim(); } catch { return ""; } };
+const version = (line) => local("mock-version") || line;
+function gate(a) {
+  const m = local("mock-break");
+  if (!m || a[0] === "--version" || a[0] === "version") return;
+  const status = (a[0] === "auth" && a[1] === "status") || (a[0] === "login" && a[1] === "status") || a[0] === "models";
+  if (m === "smoke" || (m === "turn" && !status)) { console.error("mock: broken build (segmentation fault)"); process.exit(3); }
+}
+module.exports = { version, gate, sxKit, TINY_JPEG, tinyPng, isImageTurn, imageCount, imageMode, imageLog, saveImage, stallTurn, STALL_TEXT, mediaDesc, mediaReply, mcp, isTitleAsk, mockTitle, mockBrain, prefsEcho, ruleEcho, toolAsk, cfg, sleep, out, uuid, readStdin, readLine, flag, bumpSession, bumpUsage, totalTurns, reply, chunks, fs, path, crypto };

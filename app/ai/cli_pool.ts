@@ -183,4 +183,6 @@ export function dropAccount(account: string) {
   for (const e of [...g.entries]) if (e.spec.account === account) { if (e.busy) e.stale = true; else drop(e); }
 }
 export const poolSize = () => g.entries.size;
+/** CLI vừa đổi bản (app/ai/cliupdate.ts): tiến trình dựng sẵn đang chạy bản cũ; cái đang rảnh tắt ngay, cái đang dùng tắt khi xong lượt. */
+export function retireAll() { for (const e of [...g.entries]) { if (e.busy) e.stale = true; else drop(e); } }
 export function dropAll() { for (const e of [...g.entries]) drop(e); g.strikes = []; g.pausedUntil = 0; }
