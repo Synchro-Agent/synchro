@@ -209,14 +209,20 @@ const MSG = {
     minItems: (n: number) => `needs at least ${n} items`, maxItems: (n: number) => `at most ${n} items`, required: "missing (required)", extra: "this tool doesn't take this input", top: "Inputs must be a JSON object ({ … }).", root: "inputs" },
 };
 type Msg = typeof MSG.vi;
-function check(v: unknown, s: unknown, path: string, out: string[], depth: number, M: Msg) {
+type Opts = { pattern?: boolean };
+// "pattern" là biểu thức chính quy do máy chủ MCP (người nối connector tự khai) đặt: mẫu như ^(a+)+$ gặp chuỗi dài chạy hàng giờ và khóa cả tiến trình.
+// Máy chủ Synchro không bao giờ chạy nó (máy chủ MCP tự kiểm tham số của mình); khung sửa tham số trong trình duyệt chạy với chuỗi ngắn để báo sớm.
+const PATTERN_MAX_LEN = 200;
+// Mẫu có nhóm lặp chứa lượng từ ((a+)+, (\w*)*…) hay tham chiếu ngược: dạng gây chạy hàm mũ thường gặp, trình duyệt cũng không chạy.
+const risky = (p: string) => /\((?:[^()\\]|\\.)*[+*}](?:[^()\\]|\\.)*\)\s*[+*{]/.test(p) || /\\[1-9]|\\k</.test(p);
+function check(v: unknown, s: unknown, path: string, out: string[], depth: number, M: Msg, o: Opts) {
   if (!isObj(s) || depth > 30 || out.length >= 20) return;
   const at = path || M.root;
   for (const k of ["anyOf", "oneOf"] as const) if (Array.isArray(s[k]) && (s[k] as unknown[]).length) {
-    const ok = (s[k] as unknown[]).some((b) => { const e: string[] = []; check(v, b, path, e, depth + 1, M); return !e.length; });
+    const ok = (s[k] as unknown[]).some((b) => { const e: string[] = []; check(v, b, path, e, depth + 1, M, o); return !e.length; });
     if (!ok) { out.push(`${at}: ${M.any}`); return; }
   }
-  if (Array.isArray(s.allOf)) for (const b of s.allOf) check(v, b, path, out, depth + 1, M);
+  if (Array.isArray(s.allOf)) for (const b of s.allOf) check(v, b, path, out, depth + 1, M, o);
   const types = Array.isArray(s.type) ? (s.type as unknown[]).filter((x): x is string => typeof x === "string") : typeof s.type === "string" ? [s.type] : [];
   if (types.length && !types.some((t) => fits(t, v))) { out.push(`${at}: ${M.type(types)}`); return; }
   if (Array.isArray(s.enum) && !s.enum.some((x) => JSON.stringify(x) === JSON.stringify(v))) out.push(`${at}: ${M.enum(s.enum.slice(0, 8).map((x) => JSON.stringify(x)).join(", "))}`);
@@ -224,7 +230,7 @@ function check(v: unknown, s: unknown, path: string, out: string[], depth: numbe
   if (typeof v === "string") {
     if (typeof s.minLength === "number" && v.length < s.minLength) out.push(`${at}: ${M.minLen(s.minLength)}`);
     if (typeof s.maxLength === "number" && v.length > s.maxLength) out.push(`${at}: ${M.maxLen(s.maxLength)}`);
-    if (typeof s.pattern === "string") { try { if (!new RegExp(s.pattern, "u").test(v)) out.push(`${at}: ${M.pattern}`); } catch {} }
+    if (o.pattern && typeof s.pattern === "string" && v.length <= PATTERN_MAX_LEN && !risky(s.pattern)) { try { if (!new RegExp(s.pattern, "u").test(v)) out.push(`${at}: ${M.pattern}`); } catch {} }
   }
   if (typeof v === "number") {
     if (typeof s.minimum === "number" && v < s.minimum) out.push(`${at}: ${M.min(s.minimum)}`);
@@ -233,24 +239,27 @@ function check(v: unknown, s: unknown, path: string, out: string[], depth: numbe
   if (Array.isArray(v)) {
     if (typeof s.minItems === "number" && v.length < s.minItems) out.push(`${at}: ${M.minItems(s.minItems)}`);
     if (typeof s.maxItems === "number" && v.length > s.maxItems) out.push(`${at}: ${M.maxItems(s.maxItems)}`);
-    if (isObj(s.items)) v.forEach((x, i) => check(x, s.items, `${path}[${i}]`, out, depth + 1, M));
+    if (isObj(s.items)) v.forEach((x, i) => check(x, s.items, `${path}[${i}]`, out, depth + 1, M, o));
   }
   if (isObj(v)) {
     const props = isObj(s.properties) ? s.properties : {};
     if (Array.isArray(s.required)) for (const r of s.required) if (typeof r === "string" && !(r in v)) out.push(`${path ? `${path}.` : ""}${r}: ${M.required}`);
     for (const [k, x] of Object.entries(v)) {
       const p = `${path ? `${path}.` : ""}${k}`;
-      if (k in props) check(x, props[k], p, out, depth + 1, M);
+      if (k in props) check(x, props[k], p, out, depth + 1, M, o);
       else if (s.additionalProperties === false) out.push(`${p}: ${M.extra}`);
-      else if (isObj(s.additionalProperties)) check(x, s.additionalProperties, p, out, depth + 1, M);
+      else if (isObj(s.additionalProperties)) check(x, s.additionalProperties, p, out, depth + 1, M, o);
     }
   }
 }
-/** Lỗi của tham số theo schema công cụ; [] là hợp lệ. Tham số cấp cao nhất luôn phải là đối tượng. lang: ngôn ngữ câu lỗi. */
-export function validateArgs(schema: unknown, args: unknown, lang: "vi" | "en" = "vi"): string[] {
+/**
+ * Lỗi của tham số theo schema công cụ; [] là hợp lệ. Tham số cấp cao nhất luôn phải là đối tượng. lang: ngôn ngữ câu lỗi.
+ * opts.pattern: kiểm cả "pattern" (chỉ khung sửa trong trình duyệt bật, với chuỗi tới PATTERN_MAX_LEN ký tự; máy chủ không bao giờ bật).
+ */
+export function validateArgs(schema: unknown, args: unknown, lang: "vi" | "en" = "vi", opts: Opts = {}): string[] {
   const M = MSG[lang];
   if (!isObj(args)) return [M.top];
   const out: string[] = [];
-  check(args, resolveRefs(schema ?? {}), "", out, 0, M);
+  check(args, resolveRefs(schema ?? {}), "", out, 0, M, opts);
   return out;
 }

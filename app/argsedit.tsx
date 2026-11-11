@@ -13,7 +13,7 @@ export function readArgs(text: string, orig: string, schema?: unknown): ArgsStat
   if (!v || typeof v !== "object" || Array.isArray(v)) return { value: null, errors: [tr("Tham số phải là một đối tượng JSON ({ … }).")], changed: true };
   let o: unknown = {};
   try { o = JSON.parse(orig || "{}"); } catch {}
-  const errors = schema === undefined ? [] : validateArgs(schema, v, locale() === "en-US" ? "en" : "vi");
+  const errors = schema === undefined ? [] : validateArgs(schema, v, locale() === "en-US" ? "en" : "vi", { pattern: true });
   return { value: v as Record<string, unknown>, errors, changed: JSON.stringify(v) !== JSON.stringify(o) };
 }
 

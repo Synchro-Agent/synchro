@@ -83,5 +83,21 @@ a = S.coerceArgs(sc, { meta: "không phải JSON", ids: '{"sai":"loại"}' });
 ok(a.meta === "không phải JSON" && a.ids === '{"sai":"loại"}', "chuỗi hỏng hay sai loại: giữ nguyên để máy chủ báo", J(a));
 ok(J(S.coerceArgs(undefined, { a: 1 })) === '{"a":1}', "công cụ không có schema: giữ nguyên");
 
+console.log("9. pattern của máy chủ MCP không khóa được máy chủ Synchro (ReDoS)");
+{
+  const evil = { type: "object", properties: { q: { type: "string", pattern: "^(a+)+$" } } };
+  const t0 = Date.now();
+  const e1 = S.validateArgs(evil, { q: "a".repeat(40) + "!" });
+  ok(!e1.length && Date.now() - t0 < 200, "máy chủ: không chạy pattern (mẫu lồng lượng từ với 41 ký tự xong ngay)", { e1, ms: Date.now() - t0 });
+  const t1 = Date.now();
+  const e2 = S.validateArgs(evil, { q: "a".repeat(5000) + "!" }, "vi", { pattern: true });
+  ok(!e2.length && Date.now() - t1 < 200, "trình duyệt: chuỗi dài quá 200 ký tự thì bỏ qua pattern", { ms: Date.now() - t1 });
+  const t2 = Date.now();
+  const e3 = ["^(a+)+$", "^(\\w*)*x$", "^([a-z]+\\d?)+$", "^(a|a)\\1$"].map((pt) => S.validateArgs({ type: "object", properties: { q: { type: "string", pattern: pt } } }, { q: "a".repeat(40) + "!" }, "vi", { pattern: true }));
+  ok(e3.every((e) => !e.length) && Date.now() - t2 < 200, "trình duyệt: mẫu có nhóm lặp chứa lượng từ hay tham chiếu ngược thì bỏ qua", { ms: Date.now() - t2 });
+  const fmt = { type: "object", properties: { d: { type: "string", pattern: "^\\d{4}-\\d{2}$" } } };
+  ok(S.validateArgs(fmt, { d: "x" }, "en", { pattern: true }).some((m) => /wrong format/.test(m)) && S.validateArgs(fmt, { d: "2026-11" }, "en", { pattern: true }).length === 0, "trình duyệt: chuỗi ngắn vẫn báo sai định dạng");
+}
+
 console.log(`\n${pass} đạt, ${fail} lỗi`);
 if (fail) process.exit(1);
