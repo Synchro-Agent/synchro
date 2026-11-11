@@ -422,7 +422,7 @@ export const IMAGE_TOOL = {
       count: { type: "integer", minimum: 1, maximum: 4, description: "Số ảnh 1–4, mặc định 1." },
       template: { type: "string", enum: ["poster-master-og"], description: "Chỉ cho poster / ảnh chia sẻ dạng thẻ số liệu cần chữ chính xác: PNG 3600×1890 từ mẫu cố định, không cần gói tạo ảnh. Điền poster (độ dài tối đa: tag 32 in hoa, title 90 câu kết luận, metricValue 12 vd \"+14,2%\", metricLabel 40, author 40), bỏ aspect_ratio, count, reference." },
       poster: { type: "object", properties: Object.fromEntries(["tag", "title", "metricValue", "metricLabel", "author"].map((k) => [k, { type: "string" }])), required: ["tag", "title", "metricValue", "metricLabel", "author"] },
-      product_shot: { type: "boolean", description: "true: ảnh sản phẩm để bán / quảng cáo (bao bì, mỹ phẩm, đồ ăn); không cho logo, tranh, minh họa, ảnh người." },
+      product_shot: { type: "boolean", description: "true: ảnh sản phẩm để bán / quảng cáo (bao bì, mỹ phẩm, đồ ăn). Không dùng cho logo, tranh, minh họa, ảnh người." },
       product_relight: { type: "boolean", description: "true: đưa ảnh sản phẩm người dùng gửi (reference) vào ánh sáng studio, giữ nguyên sản phẩm." },
       reference: { type: "string", description: "Chỉ khi sửa / dựa trên ảnh có sẵn: \"last\" (ảnh gần nhất của đoạn chat), số n (ảnh thứ n của tin gần nhất người dùng gửi ảnh) hoặc tên tệp ảnh trong đoạn chat." },
     },
