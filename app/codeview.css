@@ -110,7 +110,7 @@
 }
 .cv-sw.on i {transform:translateX(12px)
 }
-.cv-sel {position:fixed;z-index:80;transform:translate(-50%,calc(-100% - 10px));display:flex;gap:2px;padding:4px;border-radius:var(--r-pill);animation:pop .15s var(--ease) both;background:color-mix(in srgb,var(--card) 74%,transparent);-webkit-backdrop-filter:blur(20px) saturate(1.8);backdrop-filter:blur(20px) saturate(1.8);box-shadow:0 0 0 .5px var(--gl-hair),var(--gl-shadow),inset 1px 1.5px 2px -1px rgba(255,255,255,.6)
+.cv-sel {position:fixed;z-index:80;transform:translate(-50%,calc(-100% - 10px));display:flex;gap:2px;padding:4px;border-radius:var(--r-pill);animation:pop .15s var(--ease) both;background:var(--card);-webkit-backdrop-filter:blur(20px) saturate(1.8);backdrop-filter:blur(20px) saturate(1.8);box-shadow:0 0 0 .5px var(--gl-hair),var(--gl-shadow),inset 1px 1.5px 2px -1px rgba(255,255,255,.6)
 }
 [data-theme="dark"] .cv-sel {background:rgba(34,34,40,.78)
 }
