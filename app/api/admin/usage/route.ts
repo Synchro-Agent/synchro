@@ -1,4 +1,4 @@
-import { db, getUser, handle, isAdmin, isOwner, ownerOnly, requireAdmin, sameOrigin, type UserRow } from "../../../authstore";
+import { adminRole, db, getUser, handle, isOwner, ownerOnly, requireAdmin, sameOrigin, type UserRow } from "../../../authstore";
 import { adminList, catalog } from "../../../providers";
 import { adminUsage, getConfig, priceTable, setConfig, setOverride } from "../../../usage";
 
@@ -17,15 +17,16 @@ async function state(viewer: UserRow) {
 export const GET = handle(async (req: Request) => { const { user } = requireAdmin(req); return Response.json(await state(user)); });
 
 // { config: { session, weekly, admins, prices } } hoặc { user, override: { session?, weekly? } | null }
-// Bảng giá (tiền), "áp hạn mức cho quản trị viên" và hạn mức riêng của tài khoản quản trị viên: chỉ chủ sở hữu.
+// Bảng giá (tiền), "áp hạn mức cho quản trị viên" và hạn mức riêng của tài khoản quản trị viên: chỉ chủ sở hữu. Khi hạn mức đang áp cho quản trị viên,
+// hạn mức mặc định (session, weekly) cũng ràng buộc chủ sở hữu: chỉ chủ sở hữu đổi được, nếu không quản trị viên khác đặt 0 là chặn được chủ sở hữu.
 export const PATCH = handle(async (req: Request) => {
   sameOrigin(req);
   const { user } = requireAdmin(req);
   const b = await req.json().catch(() => ({}));
-  if (b.config && typeof b.config === "object" && ("prices" in b.config || "admins" in b.config)) ownerOnly(user);
+  if (b.config && typeof b.config === "object" && ("prices" in b.config || "admins" in b.config || (getConfig().admins && ("session" in b.config || "weekly" in b.config)))) ownerOnly(user);
   const t = typeof b.user === "string" ? getUser(b.user) : undefined;
   if (typeof b.user === "string" && !t) return Response.json({ error: "Không tìm thấy tài khoản." }, { status: 404 });
-  if (t && isAdmin(t)) ownerOnly(user);
+  if (t && adminRole(t)) ownerOnly(user);
   if (b.config && typeof b.config === "object") setConfig(b.config);
   if (t) setOverride(t.id, b.override && typeof b.override === "object" ? b.override : null);
   return Response.json(await state(user));

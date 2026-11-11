@@ -245,6 +245,7 @@ export const EN2VI: Record<string, string> = {
   "Only the Owner can add, change or remove API keys.": "Chỉ chủ sở hữu mới thêm, đổi hoặc gỡ được khóa API.",
   "Only the Owner can add, change or remove shared API keys and prepaid balances. As an administrator you can refresh model lists and send test messages.": "Chỉ chủ sở hữu mới thêm, đổi hoặc gỡ được khóa API dùng chung và số dư đã nạp. Quản trị viên vẫn làm mới được danh sách model và gửi thử.",
   "Only the Owner can change model prices, whether limits apply to administrators, and limits on administrator accounts.": "Chỉ chủ sở hữu mới đổi được bảng giá model, việc áp hạn mức cho quản trị viên và hạn mức của tài khoản quản trị viên.",
+  "Limits apply to administrators, including the Owner, so only the Owner can change the default limits. Only the Owner can also change model prices, whether limits apply to administrators, and limits on administrator accounts.": "Hạn mức đang áp cho cả quản trị viên, gồm chủ sở hữu, nên chỉ chủ sở hữu đổi được hạn mức mặc định. Chủ sở hữu cũng là người duy nhất đổi được bảng giá model, việc áp hạn mức cho quản trị viên và hạn mức của tài khoản quản trị viên.",
   "Sign out everywhere": "Đăng xuất mọi nơi",
   "Suspend": "Khóa",
   "Restore": "Mở khóa",

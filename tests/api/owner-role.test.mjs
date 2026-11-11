@@ -83,6 +83,10 @@ r = await owner("PATCH", "/api/admin/usage", { user: idA, override: { session: 1
 ok(r.s === 200 && r.j.users.find((u) => u.id === idA)?.override.session === 1, "hạn mức riêng của quản trị viên: chủ sở hữu thành công");
 ok((await admin("PATCH", `/api/admin/users/${idB}`, { action: "set_role", role: "admin" })).s === 403, "thêm quản trị viên: quản trị viên 403");
 ok((await owner("PATCH", `/api/admin/users/${idB}`, { action: "set_role", role: "admin" })).s === 200, "thêm quản trị viên: chủ sở hữu thành công");
+// Tài khoản quản trị đang bị khóa vẫn là tài khoản quản trị: quản trị viên khác không đặt sẵn hạn mức riêng lên đó.
+ok((await owner("PATCH", `/api/admin/users/${idB}`, { action: "suspend" })).s === 200, "chủ sở hữu khóa một quản trị viên");
+ok((await admin("PATCH", "/api/admin/usage", { user: idB, override: { weekly: 0 } })).s === 403, "hạn mức riêng của quản trị viên đang bị khóa: quản trị viên 403");
+ok((await owner("PATCH", `/api/admin/users/${idB}`, { action: "restore" })).s === 200, "chủ sở hữu mở khóa lại");
 ok((await admin("PATCH", `/api/admin/users/${idB}`, { action: "suspend" })).s === 403, "khóa tài khoản của quản trị viên khác: quản trị viên 403");
 ok((await admin("PATCH", `/api/admin/users/${idB}`, { action: "set_role", role: "member" })).s === 403, "bỏ quản trị viên: quản trị viên 403");
 ok((await owner("PATCH", `/api/admin/users/${idB}`, { action: "set_role", role: "member" })).s === 200, "bỏ quản trị viên: chủ sở hữu thành công");
@@ -95,7 +99,15 @@ console.log("3. Quản trị viên vẫn làm các việc quản trị khác");
 const main = keysA.main;
 ok((await admin("POST", "/api/admin/apikeys", { action: "main", main })).s === 200, "chọn model hiển thị");
 ok((await admin("POST", "/api/admin/apikeys", { action: "refresh", id: "openai" })).s === 200, "làm mới danh sách model của khóa đã có");
-ok((await admin("PATCH", "/api/admin/usage", { config: { session: cfg.session } })).s === 200, "hạn mức mặc định cho mọi người");
+await owner("PATCH", "/api/admin/usage", { config: { admins: false } });
+ok((await admin("PATCH", "/api/admin/usage", { config: { session: cfg.session } })).s === 200, "hạn mức mặc định cho mọi người (khi không áp cho quản trị viên)");
+// Hạn mức đang áp cho quản trị viên (gồm chủ sở hữu): hạn mức mặc định cũng chỉ chủ sở hữu đổi, nếu không đặt 0 là chặn được chủ sở hữu.
+await owner("PATCH", "/api/admin/usage", { config: { admins: true } });
+ok((await admin("PATCH", "/api/admin/usage", { config: { weekly: 0 } })).s === 403, "áp cho quản trị viên: đặt hạn mức tuần = 0 thì quản trị viên 403");
+ok((await admin("PATCH", "/api/admin/usage", { config: { session: null, weekly: null } })).s === 403, "áp cho quản trị viên: bỏ hạn mức mặc định thì quản trị viên 403");
+r = await owner("PATCH", "/api/admin/usage", { config: { weekly: cfg.weekly } });
+ok(r.s === 200, "áp cho quản trị viên: chủ sở hữu vẫn đổi được hạn mức mặc định");
+await owner("PATCH", "/api/admin/usage", { config: { admins: cfg.admins, session: cfg.session, weekly: cfg.weekly } });
 ok((await admin("PATCH", "/api/admin/usage", { user: idB, override: null })).s === 200, "hạn mức riêng của thành viên");
 ok((await admin("PATCH", `/api/admin/users/${idB}`, { action: "suspend" })).s === 200 && (await admin("PATCH", `/api/admin/users/${idB}`, { action: "restore" })).s === 200, "khóa / mở khóa thành viên");
 ok((await admin("PATCH", `/api/admin/users/${idB}`, { action: "set_perms", perms: null })).s === 200, "đổi quyền của thành viên");

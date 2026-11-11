@@ -27,6 +27,8 @@ export const ADMIN_EMAILS = new Set(ADMIN_LIST);
 export const OWNER_EMAILS = new Set(process.env.OWNER_EMAILS?.trim() ? emailList(process.env.OWNER_EMAILS) : ADMIN_LIST.slice(0, 1));
 /** Email dành cho tài khoản chủ sở hữu / quản trị viên trong cấu hình máy chủ (không đăng ký mới, không đổi sang được). */
 export const reservedEmail = (email: string) => ADMIN_EMAILS.has(email.toLowerCase()) || OWNER_EMAILS.has(email.toLowerCase());
+/** Ai nhận cảnh báo vận hành và báo cáo lạm dụng: chủ sở hữu và quản trị viên đặt ở cấu hình máy chủ (OWNER_EMAILS có thể không nằm trong ADMIN_EMAILS). */
+export const ALERT_EMAILS = [...new Set([...OWNER_EMAILS, ...ADMIN_LIST])];
 
 export class AuthError extends Error {
   constructor(msg: string, public status = 400) { super(msg); }
@@ -167,6 +169,9 @@ export type Role = "owner" | "admin" | "member";
 export const isOwner = (u: UserRow) => OWNER_EMAILS.has(u.email.toLowerCase()) && inGoodStanding(u);
 export const isAdmin = (u: UserRow) => (reservedEmail(u.email) || u.role === "admin") && inGoodStanding(u);
 export const roleOf = (u: UserRow): Role => (isOwner(u) ? "owner" : isAdmin(u) ? "admin" : "member");
+/** Tài khoản mang vai trò quản trị (gồm chủ sở hữu), kể cả khi đang bị khóa hoặc chưa xác minh: quyền chỉ chủ sở hữu xét theo cái này,
+ *  để quản trị viên khác không đặt sẵn điều gì lên tài khoản quản trị đang bị khóa chờ chủ sở hữu mở lại. */
+export const adminRole = (u: UserRow) => reservedEmail(u.email) || u.role === "admin";
 /** Vai trò ghi trên tài khoản (danh sách người dùng của quản trị viên), kể cả khi tài khoản đang bị khóa hoặc chưa xác minh. */
 const roleLabel = (u: UserRow): Role => (OWNER_EMAILS.has(u.email.toLowerCase()) ? "owner" : reservedEmail(u.email) || u.role === "admin" ? "admin" : "member");
 export const OWNER_ONLY = "Chỉ chủ sở hữu (Owner) mới có quyền này.";

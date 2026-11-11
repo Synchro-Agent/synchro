@@ -4,7 +4,7 @@
 // Quản trị viên đặt hạn mức (USD) cho mọi người, từng người, và sửa bảng giá nếu nhà cung cấp đổi giá.
 // Ngoài ra ghi lại hạn mức gọi API mà nhà cung cấp báo trong header (Anthropic, OpenAI) để biết API còn bao nhiêu.
 import { AsyncLocalStorage } from "node:async_hooks";
-import { db, getSetting, isAdmin, setSetting, type UserRow } from "./authstore";
+import { adminRole, db, getSetting, isAdmin, setSetting, type UserRow } from "./authstore";
 import { vendorOf } from "./router";
 
 export const SESSION_MS = 5 * 3600_000;
@@ -267,7 +267,7 @@ export function adminUsage(users: UserRow[]) {
     const w = windows(u.id, now);
     const st = usageState(u);
     const tot = init().prepare("SELECT COALESCE(SUM(cost),0) AS c, COALESCE(SUM(input+cache_read+cache_write),0) AS i, COALESCE(SUM(output),0) AS o FROM usage_events WHERE user_id = ? AND at >= ?").get(u.id, now - 30 * 86_400_000) as { c: number; i: number; o: number };
-    return { id: u.id, email: u.email, name: u.name, admin: isAdmin(u), override: w.override, limits: st.limits, month: { cost: tot.c, input: tot.i, output: tot.o }, effective: limitsFor(u, cfg, w.override) };
+    return { id: u.id, email: u.email, name: u.name, admin: adminRole(u), override: w.override, limits: st.limits, month: { cost: tot.c, input: tot.i, output: tot.o }, effective: limitsFor(u, cfg, w.override) };
   });
 }
 export function removeUserUsage(uid: string) {

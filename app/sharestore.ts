@@ -1,7 +1,7 @@
 // Liên kết chia sẻ đoạn chat (chỉ chạy ở máy chủ): mỗi liên kết là một bản chụp riêng (sharesnap.ts) gắn với chủ sở hữu, không trỏ vào dữ liệu sống.
 // Mã trong đường dẫn là ngẫu nhiên 192 bit (không đoán được, không suy ra từ đoạn chat). Dừng chia sẻ là xóa hẳn bản chụp, nên liên kết cũ hết hiệu lực ngay.
 import crypto from "node:crypto";
-import { ADMIN_EMAILS, AuthError, db } from "./authstore";
+import { ALERT_EMAILS, AuthError, db } from "./authstore";
 import { shareImageData } from "./artimg";
 import { sendMail } from "./mailer";
 import { inlineSnapImages, SHARE_LIMITS, snapshotOf, type ShareSnap } from "./sharesnap";
@@ -94,7 +94,7 @@ export function reportShare(token: string, reason: string, ip: string): boolean 
   const link = `${process.env.APP_URL || "https://synchro.net.nz"}/share/${token}`;
   const text = `Liên kết: ${link}\nTiêu đề: ${r.title}\nLý do: ${why}\n\nGỡ bản chia sẻ: Cài đặt → Quản trị viên → Reported shared links.`;
   const safe = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-  for (const to of ADMIN_EMAILS) sendMail(to, { subject: "Synchro: có báo cáo về một bản chia sẻ", text, html: `<pre style="white-space:pre-wrap;font:14px sans-serif">${safe}</pre>` });
+  for (const to of ALERT_EMAILS) sendMail(to, { subject: "Synchro: có báo cáo về một bản chia sẻ", text, html: `<pre style="white-space:pre-wrap;font:14px sans-serif">${safe}</pre>` });
   return true;
 }
 // live: bản chia sẻ còn đó không (đã gỡ hay chủ đã dừng). email: chủ bản chia sẻ, người báo cáo không lộ.
