@@ -5,7 +5,7 @@ import { can, canModel, limit, permsOf, type UserRow } from "./authstore";
 import { clampEffort, connPolicy, effortCap, isEffort, legacyModel, type Effort } from "./catalog";
 import { catalog, mainModels, pickDefault, resolveModel, type Target } from "./providers";
 import { ConnectorSession, connectorsPrompt, ensureComposio, listConnectors, RECONNECT_TOOL, type ChatTool, type OfflineConn } from "./connectors";
-import { connectLinks } from "./composio";
+import { appsMayChange, connectLinks } from "./composio";
 import { randomToken } from "./mcpauth";
 import { browserDefault, capsState, skillsOn } from "./caps";
 import { overLimit, usageScope } from "./usage";
@@ -442,6 +442,7 @@ function showLinks(x: Exec, content: string) {
   for (const l of connectLinks(content)) {
     if (seen.has(l.url)) continue;
     seen.add(l.url);
+    appsMayChange(x.uid);
     progress("link", JSON.stringify(l));
   }
 }

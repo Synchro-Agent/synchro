@@ -63,6 +63,18 @@ try {
   const gmail = r.j?.list?.find((a) => a.app === "gmail");
   ok(gmail?.status === "ACTIVE" && gmail.name === "Gmail" && !r.text.includes("never-shown") && !r.text.includes(KEY), "đăng nhập xong: Gmail có trong danh sách, không kèm dữ liệu đăng nhập", r.text.slice(0, 400));
 
+  // Khóa Composio là khóa chung của cả máy chủ: một tài khoản tải trang liên tục không được biến thành một lời gọi Composio mỗi lần.
+  const lists = () => debug().then((d) => d.listed);
+  const n0 = await lists();
+  const tb = Date.now();
+  const many = await Promise.all(Array.from({ length: 20 }, () => raw("GET", "/api/connectors/composio")));
+  for (let i = 0; i < 10; i++) await raw("GET", "/api/connectors/composio");
+  const n1 = await lists(), cap = 1 + Math.ceil((Date.now() - tb) / 1000);
+  ok(many.every((x) => x.s === 200 && x.j.list.some((a) => a.app === "gmail")) && n1 - n0 <= cap, `30 lần tải trang liền nhau trong ${Date.now() - tb} ms: ${n1 - n0} lời gọi Composio (tối đa ${cap}, trước đây 30), danh sách vẫn đủ`, `${n1 - n0}`);
+  await sleep(1100);
+  await raw("GET", "/api/connectors/composio");
+  ok((await lists()) - n1 === 1, "hơn 1 giây sau: tải lại danh sách mới từ Composio");
+
   console.log("5. Quyền: đọc chạy luôn, ghi hỏi trước");
   fin = await run(`#tool=COMPOSIO_MULTI_EXECUTE_TOOL #args={"tools":[{"tool_slug":"GMAIL_FETCH_EMAILS","arguments":{}}]}`);
   ok(!fin?.events?.some((e) => e.kind === "ask") && /Mock email from Composio/.test(JSON.stringify(fin)), "đọc email: chạy không cần hỏi", JSON.stringify(fin?.events ?? fin).slice(0, 400));

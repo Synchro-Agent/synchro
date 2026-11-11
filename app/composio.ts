@@ -77,11 +77,45 @@ const logoOf = (slug: string) => (/^[a-z0-9]+$/.test(slug) && fs.existsSync(path
 // Đang chờ người dùng bấm Connect Link: chưa phải ứng dụng đã kết nối.
 const PENDING = new Set(["INITIALIZING", "INITIATED"]);
 const APPS_TTL = 60_000;
-const apps = new Map<string, { at: number; list: ComposioApp[] }>();
+// Bộ nhớ và hạn mức dùng chung cho mọi route trong tiến trình (Next dựng mỗi route một bản mô-đun riêng): trang Connectors, trang chat (/api/llm) cùng thấy một bản.
+type AppsState = { apps: Map<string, { at: number; list: ComposioApp[]; fp: string }>; loading: Map<string, Promise<ComposioApp[]>>; soft: Map<string, { n: number; t: number; last: number }>; all: { n: number; t: number } };
+const gx = globalThis as unknown as { __synchroComposioApps?: AppsState };
+const AX = (gx.__synchroComposioApps ??= { apps: new Map(), loading: new Map(), soft: new Map(), all: { n: 0, t: 0 } });
+const apps = AX.apps, loading = AX.loading;
+// Trang Connectors muốn danh sách mới (vừa đăng nhập ứng dụng ở Connect Link), nhưng mọi tài khoản dùng chung một khóa dự án Composio của quản trị viên:
+// một tài khoản tải trang liên tục không được làm Composio giới hạn tốc độ (429) khóa đó cho mọi người. Mỗi tài khoản tối đa một lần tải mới mỗi giây và
+// 30 lần mỗi 10 phút, cả máy chủ 600 lần mỗi 10 phút; quá thì dùng bản đã nhớ (60 giây). Lời gọi cùng lúc của một tài khoản dùng chung một yêu cầu.
+// Máy giả lập (SYNCHRO_RELAX_LIMITS, như limit() ở authstore.ts) nới hạn mức để chạy lại bộ kiểm thử nhiều lần liền không bị danh sách cũ.
+const RELAX = process.env.SYNCHRO_RELAX_LIMITS === "1" ? 50 : 1;
+const SOFT = { gap: 1000, perUser: 30 * RELAX, all: 600 * RELAX, win: 10 * 60_000 };
+// last: lần tải mới gần nhất do trang yêu cầu (không tính lần đọc bộ nhớ của appCount: vừa đăng nhập ứng dụng xong thì trang vẫn phải lấy được bản mới).
+const soft = AX.soft;
+function freshAllowed(uid: string): boolean {
+  const now = Date.now();
+  if (soft.size > 20_000) for (const [k, v] of soft) if (v.t < now) soft.delete(k);
+  const u = soft.get(uid);
+  if (u && now - u.last < SOFT.gap) return false;
+  if (u && u.t >= now && u.n >= SOFT.perUser) return false;
+  const softAll = AX.all;
+  if (softAll.t >= now && softAll.n >= SOFT.all) return false;
+  if (!u || u.t < now) soft.set(uid, { n: 1, t: now + SOFT.win, last: now }); else { u.n++; u.last = now; }
+  if (softAll.t < now) { softAll.n = 1; softAll.t = now + SOFT.win; } else softAll.n++;
+  return true;
+}
 
-export async function listApps(uid: string, fresh = false): Promise<ComposioApp[]> {
-  const hit = apps.get(uid);
-  if (!fresh && hit && Date.now() - hit.at < APPS_TTL) return hit.list;
+/** fresh: true bỏ qua bộ nhớ (ngắt ứng dụng: phải đúng danh sách thật); "page": trang muốn bản mới, có hạn mức (freshAllowed); false: nhớ 60 giây. */
+export async function listApps(uid: string, fresh: boolean | "page" = false): Promise<ComposioApp[]> {
+  // Bản nhớ của khóa Composio cũ (quản trị viên vừa đổi / gỡ khóa) không dùng lại.
+  const k = composioKey(), hit = apps.get(uid);
+  const want = fresh === "page" ? freshAllowed(uid) : fresh;
+  if (!want && hit && hit.fp === (k ? keyPrint(k.key) : "") && Date.now() - hit.at < APPS_TTL) return hit.list;
+  const going = loading.get(uid);
+  if (going) return going;
+  const p = fetchApps(uid).finally(() => loading.delete(uid));
+  loading.set(uid, p);
+  return p;
+}
+async function fetchApps(uid: string): Promise<ComposioApp[]> {
   const j = await call<{ items?: Item[] }>(`/connected_accounts?user_ids=${encodeURIComponent(uid)}&limit=100&order_by=created_at&order_direction=desc`);
   // user_id trong kết quả đã bị Composio đánh dấu bỏ dần: còn thì phải khớp (phòng khi bộ lọc không được áp, không bao giờ hiện tài khoản của người khác).
   const list = (Array.isArray(j?.items) ? j!.items : [])
@@ -90,7 +124,8 @@ export async function listApps(uid: string, fresh = false): Promise<ComposioApp[
       const slug = String(x.toolkit?.slug ?? "").toLowerCase().slice(0, 60);
       return { id: x.id!, app: slug, name: appName(slug) || "?", logo: logoOf(slug), status: String(x.status ?? ""), ...(x.alias ? { alias: String(x.alias).slice(0, 60) } : {}), createdAt: x.created_at ?? null };
     });
-  apps.set(uid, { at: Date.now(), list });
+  const k = composioKey();
+  apps.set(uid, { at: Date.now(), list, fp: k ? keyPrint(k.key) : "" });
   return list;
 }
 /** Số ứng dụng đang kết nối (từ bộ đệm nếu còn mới), lỗi thì null: trang không chờ Composio quá lâu. */
@@ -98,6 +133,8 @@ export async function appCount(uid: string): Promise<number | null> {
   try { return (await listApps(uid)).filter((a) => a.status === "ACTIVE").length; } catch { return null; }
 }
 export const forgetApps = (uid: string) => { apps.delete(uid); };
+/** Vừa tạo Connect Link: người dùng sắp đăng nhập một ứng dụng, lần tải trang tới phải lấy danh sách mới (bỏ bộ nhớ và khoảng chờ 1 giây, vẫn trong hạn mức). */
+export const appsMayChange = (uid: string) => { apps.delete(uid); const u = soft.get(uid); if (u) u.last = 0; };
 
 /** Ngắt một ứng dụng: chỉ khi nó đúng là của tài khoản này (có trong danh sách lọc theo user_id). */
 export async function disconnectApp(uid: string, id: string) {

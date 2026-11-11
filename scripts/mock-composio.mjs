@@ -8,7 +8,8 @@
 // Mọi đường dẫn (trừ Connect Link và _debug) đòi header x-api-key đúng; khóa không bao giờ được ghi lại.
 export const COMPOSIO_KEY = "ak_mock_composio_0001";
 
-export const CX = { sessions: new Map(), accounts: [], calls: [], seq: 0 };
+// listed: tổng số lần đọc danh sách ứng dụng (không bị cắt như calls), để kiểm thử đếm lời gọi Composio khi tải trang liên tục.
+export const CX = { sessions: new Map(), accounts: [], calls: [], seq: 0, listed: 0 };
 const send = (res, code, obj, headers = {}) => { res.writeHead(code, { "content-type": "application/json", ...headers }); res.end(JSON.stringify(obj)); return true; };
 const fail = (res, code, message) => send(res, code, { error: { message, code, slug: "error", status: code } });
 const rpcOk = (id, result) => ({ jsonrpc: "2.0", id, result });
@@ -30,7 +31,7 @@ export async function composioHandler(req, res, p, b) {
       if (b?.dropSessions) CX.sessions.clear();
       if (b?.account) CX.accounts.push({ id: `ca_${++CX.seq}`, user_id: String(b.account.user_id), toolkit: { slug: String(b.account.slug) }, status: b.account.status ?? "ACTIVE", created_at: new Date().toISOString() });
     }
-    return send(res, 200, { sessions: [...CX.sessions.entries()].map(([id, s]) => ({ id, user_id: s.user_id })), accounts: CX.accounts, calls: CX.calls.slice(-60) });
+    return send(res, 200, { sessions: [...CX.sessions.entries()].map(([id, s]) => ({ id, user_id: s.user_id })), accounts: CX.accounts, calls: CX.calls.slice(-60), listed: CX.listed });
   }
   // Connect Link: người dùng bấm, "đăng nhập" xong ở trang của Composio.
   const link = /^\/composio\/link\/([\w-]+)$/.exec(p);
@@ -53,6 +54,7 @@ export async function composioHandler(req, res, p, b) {
     return send(res, 201, { session_id: id, mcp: { type: "http", url: `${origin}/composio/mcp/${id}` }, tool_router_tools: TOOLS.map((t) => t.name), config: { user_id: String(b.user_id) }, config_version: 1 });
   }
   if (api === "/connected_accounts" && req.method === "GET") {
+    CX.listed++;
     const q = new URL(req.url, origin).searchParams;
     const users = q.getAll("user_ids").flatMap((x) => x.split(",")).filter(Boolean);
     const items = CX.accounts.filter((a) => !users.length || users.includes(a.user_id)).slice(0, Number(q.get("limit")) || 100);

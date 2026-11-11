@@ -6,6 +6,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 // Composio của tài khoản: trạng thái và các ứng dụng đã kết nối (Gmail, Slack…). ?retry=1: thử tạo lại phiên ngay (nút Thử lại).
+// Danh sách ứng dụng tải mới có hạn mức theo tài khoản và cả máy chủ (listApps "page"): khóa Composio là khóa chung, không để một tài khoản gọi liên tục làm hỏng cho mọi người.
 export const GET = route(async (req) => {
   const user = connectorUser(req);
   const policy = policyOf(user);
@@ -13,7 +14,7 @@ export const GET = route(async (req) => {
   if (retry) limit("cx:" + user.id, 20, 10 * 60_000);
   const s = await composioSummary(user, policy, retry);
   if (s.state !== "active") return Response.json({ ...s, list: [] });
-  try { return Response.json({ ...s, list: await listApps(user.id, true) }); }
+  try { return Response.json({ ...s, list: await listApps(user.id, retry || "page") }); }
   catch (e) { return Response.json({ ...s, list: [], appsError: (e as Error).message }); }
 });
 
