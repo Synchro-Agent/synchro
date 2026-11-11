@@ -36,6 +36,8 @@ export async function register() {
       let voicePurgeAt = 0;
       onTick("voice-purge", (now) => { if (now - voicePurgeAt < 3_600_000) return; voicePurgeAt = now; void import("./app/speechapi").then((m) => m.retryVoicePurges()).catch((e) => console.error("[speech]", e)); });
       onTick("connectors", (now) => { void recheckConnectors(now).catch((e) => console.error("[connectors]", e)); });
+      // Model mới của các hãng: dò lúc khởi động (sau 1-3 phút) và mỗi 6 giờ, thử tự động rồi mới cho dùng (app/modelreg.ts).
+      (await import("./app/modelreg")).scheduleDiscovery(onTick);
       // Giữ kết nối GitHub luôn dùng được: làm mới token có hạn, dùng token định kỳ (mỗi 30 phút xem một lượt).
       const { keepLinksAlive } = await import("./app/github");
       const keep = () => keepLinksAlive().catch((e) => console.error("[github]", e));

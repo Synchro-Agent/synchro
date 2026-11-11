@@ -6,6 +6,8 @@ import fs from "node:fs";
 import path from "node:path";
 import { DATA_DIR, db, getSetting, setSetting } from "./authstore";
 import { ALL, modelKey, splitKey, type ModelInfo, type ProviderInfo, type ProviderKind } from "./catalog";
+import { datedDuplicate, nonChat, providerPrice } from "./modelrules";
+import { isNewModel, regPinned, regShows, syncListed, type Listed, type ModelCaps } from "./modelreg";
 
 type Builtin = { kind: ProviderKind; name: string; vendor: string; base: string; keyUrl: string; prefix: string };
 export const BUILTIN: Record<string, Builtin> = {
@@ -99,14 +101,16 @@ async function getJson(url: string, headers: Record<string, string>) {
   try { return JSON.parse(text); } catch { throw new Error("Máy chủ trả về dữ liệu không đọc được (có đúng địa chỉ API không?)"); }
 }
 
-// Chỉ hiện dòng model hiện tại mà các hãng đang đưa lên web chính thức (claude.ai, ChatGPT, Gemini — tháng 10/2026); đời cũ bị ẩn.
-// Model ra mắt sau này không khớp mẫu nào nên tự hiện. Khi hãng đưa một dòng về "legacy", thêm nó vào đây.
+// Đời cũ đã biết tới tháng 10/2026 (bảng đóng băng, không cần sửa nữa): các dòng mà hãng đã đưa về "legacy" trên web chính thức lúc đó.
+// Model ra mắt sau này không khớp mẫu nào nên tự hiện; đời cũ về sau được sổ model tự ẩn (app/modelreg.ts: một dòng có bản mới thì chỉ giữ
+// hai bản mới nhất, hãng gỡ model thì chuyển người đang dùng sang bản thay thế). Mẫu chỉ khớp đúng các đời đã biết: "o5", "grok-5-fast",
+// "claude-6-opus" (nếu hãng đổi cách đặt tên) vẫn hiện.
 const LEGACY: Partial<Record<ProviderKind, RegExp>> = {
-  anthropic: /^claude-(instant|\d|(opus|sonnet|haiku)-[1-4]\b|(fable|opus|sonnet|haiku)-5($|-\d{8}$))/,
-  openai: /^(gpt-[1-5]|o\d|chatgpt|chat-latest|gpt-6-sol$)/,
+  anthropic: /^claude-(instant|[1-3](-|\.|$)|(opus|sonnet|haiku)-[1-4]\b|(fable|opus|sonnet|haiku)-5($|-\d{8}$))/,
+  openai: /^(gpt-[1-5]|o[1-4](-|$)|chatgpt|chat-latest|gpt-6-sol$)/,
   google: /^gemini-([12][.-]|3-|3\.6-|3\.1-flash|3\.5-flash$)/,
   // Grok 4.5 trở lên và Grok Build là dòng hiện tại; 2 / 3 / 4.0–4.3 / 4.1x / 4.20, "fast", "code-fast" là đời cũ.
-  xai: /^grok-([1-3]\b|[1-3]-|4($|-)|4\.[0-4](\D|$)|4\.[12]\d|code|beta|vision)|fast/,
+  xai: /^grok-([1-3]\b|[1-3]-|4($|-)|4\.[0-4](\D|$)|4\.[12]\d|code|beta|vision)/,
   // deepseek-chat / deepseek-reasoner (V3) và tên cũ của V4 Flash (đã gộp vào deepseek-flash).
   deepseek: /^deepseek-(chat|reasoner|coder|v[23]|v4-flash)/,
 };
@@ -128,21 +132,39 @@ async function anthropicWorkspaces(base: string, key: string): Promise<{ id: str
 }
 const workspaceFailure = (e: unknown, ws: string) => /^Lỗi 404/.test((e as Error).message) && /workspace/i.test((e as Error).message) ? new Error(`Không tìm thấy workspace ${ws}, hoặc khóa này không có quyền vào workspace đó.`) : e;
 
-export async function listModels(kind: ProviderKind, base: string, key: string, workspace?: string | null): Promise<{ models: { id: string; name: string }[]; info?: string }> {
+/** Danh sách model chat hiện tại (bỏ đời cũ) — dùng khi lưu khóa. all: mọi model chat hãng trả về, kèm thông tin hãng tự báo (ghi vào sổ model). */
+export async function listModels(kind: ProviderKind, base: string, key: string, workspace?: string | null): Promise<{ models: { id: string; name: string }[]; all: Listed[]; info?: string }> {
   const r = await listAll(kind, base, key, workspace);
-  return { ...r, models: r.models.filter((m) => isCurrent(kind, m.id)) };
+  // Luật chung (app/modelrules.ts) loại thêm model không dùng để nhắn tin và bản chụp có ngày trùng tên chung, kể cả loại hãng mới đặt ra sau này.
+  const ids = new Set(r.models.map((m) => m.id.toLowerCase()));
+  const all = r.models.filter((m) => !nonChat(m.id) && !datedDuplicate(m.id, ids));
+  return { info: r.info, all, models: all.filter((m) => isCurrent(kind, m.id)).map((m) => ({ id: m.id, name: m.name })) };
 }
-async function listAll(kind: ProviderKind, base: string, key: string, workspace?: string | null): Promise<{ models: { id: string; name: string }[]; info?: string }> {
+const ms = (v: unknown) => { const t = typeof v === "number" ? (v < 1e11 ? v * 1000 : v) : typeof v === "string" ? Date.parse(v) : NaN; return isFinite(t) && t > 0 ? t : null; };
+const posInt = (v: unknown) => (typeof v === "number" && isFinite(v) && v > 0 ? Math.round(v) : null);
+const sup = (x: unknown) => !!(x && typeof x === "object" && (x as { supported?: unknown }).supported === true);
+/** Khả năng Anthropic báo trong /v1/models (capabilities: image_input, thinking.types.adaptive, effort.low…max). */
+function anthropicCaps(c: unknown): ModelCaps {
+  if (!c || typeof c !== "object") return {};
+  const x = c as Record<string, Record<string, unknown> & { types?: Record<string, unknown> }>, out: ModelCaps = {};
+  if (x.image_input) out.vision = sup(x.image_input);
+  if (x.thinking) out.thinking = sup(x.thinking.types?.adaptive) ? "adaptive" : sup(x.thinking.types?.enabled) ? "budget" : "none";
+  if (x.effort) out.effort = sup(x.effort) ? ["low", "medium", "high", "xhigh", "max"].filter((l) => sup(x.effort[l])) : [];
+  return out;
+}
+async function listAll(kind: ProviderKind, base: string, key: string, workspace?: string | null): Promise<{ models: Listed[]; info?: string }> {
   const b = base.replace(/\/+$/, "");
   if (kind === "anthropic") {
     const j = await getJson(`${b}/v1/models?limit=1000`, { "x-api-key": key, "anthropic-version": "2023-06-01", ...(workspace ? { [WORKSPACE_HEADER]: workspace } : {}) });
-    return { models: (j.data ?? []).map((m: { id: string; display_name?: string }) => ({ id: m.id, name: m.display_name || m.id })) };
+    return { models: (j.data ?? []).map((m: { id: string; display_name?: string; created_at?: string; max_input_tokens?: number; max_tokens?: number; capabilities?: unknown }) =>
+      ({ id: m.id, name: m.display_name || m.id, created: ms(m.created_at), ctx: posInt(m.max_input_tokens), maxOut: posInt(m.max_tokens), caps: anthropicCaps(m.capabilities) })) };
   }
   if (kind === "google") {
     const root = b.replace(/\/openai$/, "");
     const j = await getJson(`${root}/models?pageSize=1000&key=${encodeURIComponent(key)}`, {});
-    const list = (j.models ?? []) as { name: string; displayName?: string; supportedGenerationMethods?: string[] }[];
-    return { models: list.filter((m) => m.name.includes("gemini") && (m.supportedGenerationMethods ?? []).includes("generateContent") && !GOOGLE_SKIP.test(m.name)).map((m) => ({ id: m.name.replace(/^models\//, ""), name: m.displayName || m.name })) };
+    const list = (j.models ?? []) as { name: string; displayName?: string; supportedGenerationMethods?: string[]; inputTokenLimit?: number; outputTokenLimit?: number; thinking?: boolean }[];
+    return { models: list.filter((m) => m.name.includes("gemini") && (m.supportedGenerationMethods ?? []).includes("generateContent") && !GOOGLE_SKIP.test(m.name)).map((m) => ({ id: m.name.replace(/^models\//, ""), name: m.displayName || m.name,
+      ctx: posInt(m.inputTokenLimit), maxOut: posInt(m.outputTokenLimit), caps: m.thinking === false ? { effort: [] } : {} })) };
   }
   if (kind === "elevenlabs") {
     // /v1/user chỉ để hiện tên gói. Khóa giới hạn quyền (không bật User) bị báo "missing the permission user_read" nhưng vẫn là khóa đúng
@@ -157,22 +179,24 @@ async function listAll(kind: ProviderKind, base: string, key: string, workspace?
     return { models: [] };
   }
   const j = await getJson(`${b}/models`, { Authorization: `Bearer ${key}` });
-  const list = ((j.data ?? j.models ?? []) as { id: string; created?: number; name?: string }[]).filter((m) => typeof m.id === "string");
+  type Raw = { id: string; created?: number; name?: string; context_length?: number; pricing?: unknown };
+  const meta = (m: Raw) => ({ created: ms(m.created), ...(posInt(m.context_length) ? { ctx: posInt(m.context_length) } : {}), price: providerPrice(m) });
+  const list = ((j.data ?? j.models ?? []) as Raw[]).filter((m) => typeof m.id === "string");
   if (kind === "openai") {
-    return { models: list.filter((m) => /^(gpt|o\d|chatgpt|chat-latest)/i.test(m.id) && !OPENAI_SKIP.test(m.id)).sort((x, y) => (y.created ?? 0) - (x.created ?? 0)).map((m) => ({ id: m.id, name: prettyOpenAI(m.id) })) };
+    return { models: list.filter((m) => /^(gpt|o\d|chatgpt|chat-latest)/i.test(m.id) && !OPENAI_SKIP.test(m.id)).sort((x, y) => (y.created ?? 0) - (x.created ?? 0)).map((m) => ({ id: m.id, name: prettyOpenAI(m.id), ...meta(m) })) };
   }
   if (kind === "xai") {
     // Mới nhất trước (grok-4.7 rồi 4.6…); xAI không trả tên hiển thị nên tự đặt.
     const ver = (id: string) => Number(/^grok-(\d+(?:\.\d+)?)/.exec(id)?.[1] ?? 0);
-    return { models: list.filter((m) => /^grok/i.test(m.id) && !XAI_SKIP.test(m.id)).sort((x, y) => ver(y.id) - ver(x.id) || (y.created ?? 0) - (x.created ?? 0)).map((m) => ({ id: m.id, name: prettyGrok(m.id) })) };
+    return { models: list.filter((m) => /^grok/i.test(m.id) && !XAI_SKIP.test(m.id)).sort((x, y) => ver(y.id) - ver(x.id) || (y.created ?? 0) - (x.created ?? 0)).map((m) => ({ id: m.id, name: prettyGrok(m.id), ...meta(m) })) };
   }
   if (kind === "deepseek") {
     // Số dư thật của khóa (GET /user/balance) hiện cạnh tên gói, như gói của ElevenLabs.
     const bal = await getJson(`${b}/user/balance`, { Authorization: `Bearer ${key}` }).catch(() => null) as { is_available?: boolean; balance_infos?: { currency: string; total_balance: string }[] } | null;
     const info = bal?.balance_infos?.length ? `${bal.balance_infos.map((x) => `${x.total_balance} ${x.currency}`).join(" + ")}${bal.is_available === false ? " (top up needed)" : ""}` : undefined;
-    return { models: list.filter((m) => /^deepseek/i.test(m.id) && !COMPAT_SKIP.test(m.id)).map((m) => ({ id: m.id, name: prettyDeepSeek(m.id) })), info };
+    return { models: list.filter((m) => /^deepseek/i.test(m.id) && !COMPAT_SKIP.test(m.id)).map((m) => ({ id: m.id, name: prettyDeepSeek(m.id), ...meta(m) })), info };
   }
-  return { models: list.filter((m) => !COMPAT_SKIP.test(m.id)).map((m) => ({ id: m.id, name: m.name || m.id })) };
+  return { models: list.filter((m) => !COMPAT_SKIP.test(m.id)).map((m) => ({ id: m.id, name: m.name || m.id, ...meta(m) })) };
 }
 
 // ---- nhà cung cấp lấy từ biến môi trường (cấu hình cũ), dùng khi chưa nhập khóa đó trong Cài đặt ----
@@ -184,19 +208,25 @@ function envProvider(): Virtual | null {
   if (p === "anthropic") return { id: "anthropic", kind: "anthropic", name: "Claude", base: BUILTIN.anthropic.base, key, workspace: process.env.ANTHROPIC_WORKSPACE_ID || undefined };
   return { id: "env", kind: "compatible", name: "Máy chủ (biến môi trường)", base: process.env.LLM_BASE_URL ?? BUILTIN.openai.base, key };
 }
-const envCache: { at: number; models: { id: string; name: string }[] } = { at: 0, models: [] };
+const envCache: { at: number; models: { id: string; name: string }[]; sync?: { added: string[]; gone: string[] }; error?: string } = { at: 0, models: [] };
 async function envModels(v: Virtual) {
   if (v.kind === "mock") return [{ id: "synchro-mock", name: "Synchro Mock" }];
   if (Date.now() - envCache.at < 6 * 3600_000 && envCache.models.length) return envCache.models;
-  try { envCache.models = (await listModels(v.kind, v.base, v.key, v.workspace)).models; envCache.at = Date.now(); } catch { envCache.at = Date.now(); }
-  return envCache.models;
+  try {
+    const r = await listModels(v.kind, v.base, v.key, v.workspace);
+    envCache.models = r.models; envCache.at = Date.now();
+    envCache.sync = syncListed(v.id, v.kind, r.all);
+  } catch (e) { envCache.at = Date.now(); envCache.error = (e as Error).message; }
+  return envCache.models.filter((m) => regShows(modelKey(v.id, m.id)));
 }
 
 const rows = () => table().prepare("SELECT * FROM api_providers ORDER BY created_at").all() as Row[];
 const rowById = (id: string) => table().prepare("SELECT * FROM api_providers WHERE id = ?").get(id) as Row | undefined;
 const parse = (s: string) => { try { return JSON.parse(s) as { id: string; name: string }[]; } catch { return []; } };
-// Danh sách đã lưu cũng lọc lại, để model vừa thành đời cũ biến mất mà không cần làm mới khóa.
-const stored = (r: Row) => parse(r.models).filter((m) => isCurrent(r.kind, m.id));
+// Danh sách đã lưu cũng lọc lại, để model vừa thành đời cũ biến mất mà không cần làm mới khóa. Sổ model quyết định thêm: model mới chưa thử đạt,
+// model quản trị viên ẩn, model đã cũ thì không hiện; model quản trị viên ghim thì hiện cả khi là đời cũ.
+const stored = (r: Row) => parse(r.models).filter((m) => { const k = modelKey(r.id, m.id); return (isCurrent(r.kind, m.id) || regPinned(k)) && regShows(k); });
+const info = (key: string, id: string, name: string): ModelInfo => ({ key, id, name, ...(isNewModel(key) ? { isNew: true } : {}) });
 
 // Mọi nhà cung cấp chat đang dùng được, kèm danh sách model (không gồm ElevenLabs vì chỉ dùng cho giọng nói).
 export async function catalog(): Promise<ProviderInfo[]> {
@@ -205,10 +235,10 @@ export async function catalog(): Promise<ProviderInfo[]> {
   for (const r of rows()) {
     have.add(r.id);
     if (isService(r.kind)) continue;
-    out.push({ id: r.id, name: r.name, kind: r.kind, models: stored(r).map((m) => ({ key: modelKey(r.id, m.id), id: m.id, name: m.name })) });
+    out.push({ id: r.id, name: r.name, kind: r.kind, models: stored(r).map((m) => info(modelKey(r.id, m.id), m.id, m.name)) });
   }
   const v = envProvider();
-  if (v && !have.has(v.id)) out.unshift({ id: v.id, name: v.name, kind: v.kind, models: (await envModels(v)).map((m) => ({ key: modelKey(v.id, m.id), id: m.id, name: m.name })) });
+  if (v && !have.has(v.id)) out.unshift({ id: v.id, name: v.name, kind: v.kind, models: (await envModels(v)).map((m) => info(modelKey(v.id, m.id), m.id, m.name)) });
   return out.filter((p) => p.models.length);
 }
 
@@ -298,7 +328,7 @@ export async function saveProvider(o: { id?: string; kind?: string; name?: strin
     workspace = list[0].id;
     return listModels(kind, root, key, workspace);
   });
-  const { models, info } = found;
+  const { models, all, info: plan } = found;
   if (!isService(kind) && !models.length) throw new Error("Khóa hợp lệ nhưng không thấy model chat nào được phép dùng.");
   const now = Date.now();
   const newId = () => { let s = "c-" + slug(name), i = 2; while (rowById(s) || BUILTIN[s]) s = `c-${slug(name)}-${i++}`; return s; };
@@ -307,7 +337,9 @@ export async function saveProvider(o: { id?: string; kind?: string; name?: strin
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'ok', NULL, ?, ?, ?, ?)
     ON CONFLICT(id) DO UPDATE SET name = excluded.name, base_url = excluded.base_url, workspace_id = excluded.workspace_id, enc_key = excluded.enc_key, key_hint = excluded.key_hint, models = excluded.models,
       status = 'ok', error = NULL, info = excluded.info, checked_at = excluded.checked_at, updated_at = excluded.updated_at`)
-    .run(id, kind, name, baseUrl || null, workspace || null, seal(key), hint(key), JSON.stringify(models), info ?? null, now, old?.created_at ?? now, now);
+    .run(id, kind, name, baseUrl || null, workspace || null, seal(key), hint(key), JSON.stringify(all.map((m) => ({ id: m.id, name: m.name }))), plan ?? null, now, old?.created_at ?? now, now);
+  // Sổ model: khóa mới của một hãng thì cả danh sách là nền (dùng ngay); hãng đã có trong sổ thì model chưa thấy bao giờ sẽ được thử trước.
+  if (!isService(kind)) { syncListed(id, kind, all); void import("./modelreg").then((m) => m.discoverModels("admin")).catch(() => {}); }
   return { id, models: models.length };
 }
 
@@ -316,13 +348,31 @@ export async function refreshProvider(id: string) {
   const r = rowById(id);
   if (!r) { if (envProvider()?.id === id) { envCache.at = 0; return { ok: true }; } throw new Error("Chưa có khóa cho nhà cung cấp này."); }
   try {
-    const { models, info } = await listModels(r.kind, r.base_url || BUILTIN[r.kind]?.base || "", open(r.enc_key), r.workspace_id).catch((e) => { throw workspaceFailure(e, r.workspace_id ?? ""); });
-    table().prepare("UPDATE api_providers SET models = ?, info = ?, status = 'ok', error = NULL, checked_at = ? WHERE id = ?").run(JSON.stringify(models), info ?? null, Date.now(), id);
-    return { ok: true };
+    const { all, info } = await listModels(r.kind, r.base_url || BUILTIN[r.kind]?.base || "", open(r.enc_key), r.workspace_id).catch((e) => { throw workspaceFailure(e, r.workspace_id ?? ""); });
+    table().prepare("UPDATE api_providers SET models = ?, info = ?, status = 'ok', error = NULL, checked_at = ? WHERE id = ?").run(JSON.stringify(all.map((m) => ({ id: m.id, name: m.name }))), info ?? null, Date.now(), id);
+    const s = isService(r.kind) ? { added: [], gone: [] } : syncListed(id, r.kind, all);
+    return { ok: true, added: s.added, gone: s.gone };
   } catch (e) {
     table().prepare("UPDATE api_providers SET status = 'error', error = ?, checked_at = ? WHERE id = ?").run((e as Error).message.slice(0, 400), Date.now(), id);
-    return { ok: false, error: (e as Error).message };
+    return { ok: false, error: (e as Error).message, added: [] as string[], gone: [] as string[] };
   }
+}
+/** Đọc lại danh sách model của mọi khóa chat (đã lưu và ở biến môi trường), cho lượt dò model mới. Lỗi của một hãng không chặn hãng khác. */
+export async function refreshAll(): Promise<{ id: string; ok: boolean; error?: string; added: string[]; gone: string[] }[]> {
+  const out: { id: string; ok: boolean; error?: string; added: string[]; gone: string[] }[] = [];
+  for (const r of rows()) {
+    if (isService(r.kind)) continue;
+    const x = await refreshProvider(r.id);
+    out.push({ id: r.id, ok: x.ok, ...(x.ok ? {} : { error: (x as { error?: string }).error }), added: x.added ?? [], gone: (x as { gone?: string[] }).gone ?? [] });
+  }
+  const v = envProvider();
+  if (v && v.kind !== "mock" && !rows().some((r) => r.id === v.id)) {
+    envCache.at = 0; envCache.sync = undefined; envCache.error = undefined;
+    await envModels(v);
+    const c = envCache as typeof envCache;
+    out.push({ id: v.id, ok: !c.error, ...(c.error ? { error: c.error } : {}), added: c.sync?.added ?? [], gone: c.sync?.gone ?? [] });
+  }
+  return out;
 }
 export const removeProvider = (id: string) => table().prepare("DELETE FROM api_providers WHERE id = ?").run(id).changes > 0;
 

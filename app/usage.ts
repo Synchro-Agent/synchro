@@ -6,6 +6,8 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { db, getSetting, isAdmin, setSetting, type UserRow } from "./authstore";
 import { vendorOf } from "./router";
+import { familyKey, parseId, versionCmp } from "./modelrules";
+import { providerPriceOf } from "./modelreg";
 
 export const SESSION_MS = 5 * 3600_000;
 export const WEEK_MS = 7 * 86_400_000;
@@ -13,31 +15,32 @@ export const WEEK_MS = 7 * 86_400_000;
 // ---------------------------------------------------------------- bảng giá (USD / 1 triệu token)
 // official: theo trang giá của hãng; estimate: chưa có giá chính thức, quản trị viên nên kiểm tra và sửa.
 export type Price = { in: number; out: number; cache: number; src: "official" | "estimate" | "custom" };
-const DEFAULT_PRICES: [RegExp, Omit<Price, "src">, Price["src"]][] = [
-  [/^anthropic\/claude-fable-5-1/, { in: 10, out: 50, cache: 0.25 }, "official"],
-  [/^anthropic\/claude-opus-5-5/, { in: 4, out: 20, cache: 0.2 }, "official"],
-  [/^anthropic\/claude-sonnet-5-5/, { in: 2, out: 10, cache: 0.2 }, "official"],
-  [/^anthropic\/claude-haiku-5-5/, { in: 0.1, out: 0.5, cache: 0.01 }, "official"],
+// Mã mẫu (cột cuối): một model cụ thể của dòng, để model mới cùng dòng mà chưa có giá chính thức kế thừa giá của bản gần nhất (ước tính).
+const DEFAULT_PRICES: [RegExp, Omit<Price, "src">, Price["src"], string?][] = [
+  [/^anthropic\/claude-fable-5-1/, { in: 10, out: 50, cache: 0.25 }, "official", "anthropic/claude-fable-5-1"],
+  [/^anthropic\/claude-opus-5-5/, { in: 4, out: 20, cache: 0.2 }, "official", "anthropic/claude-opus-5-5"],
+  [/^anthropic\/claude-sonnet-5-5/, { in: 2, out: 10, cache: 0.2 }, "official", "anthropic/claude-sonnet-5-5"],
+  [/^anthropic\/claude-haiku-5-5/, { in: 0.1, out: 0.5, cache: 0.01 }, "official", "anthropic/claude-haiku-5-5"],
   [/^anthropic\/claude-fable/, { in: 10, out: 50, cache: 1 }, "estimate"],
   [/^anthropic\/claude-opus/, { in: 5, out: 25, cache: 0.5 }, "estimate"],
   [/^anthropic\/claude-sonnet/, { in: 3, out: 15, cache: 0.3 }, "estimate"],
   [/^anthropic\/claude-haiku/, { in: 1, out: 5, cache: 0.1 }, "estimate"],
-  [/^openai\/gpt-6-astra/, { in: 10, out: 50, cache: 1 }, "estimate"],
-  [/^openai\/gpt-6(\.\d)?-sol/, { in: 2, out: 10, cache: 0.2 }, "estimate"],
-  [/^openai\/gpt-6(\.\d)?-luna/, { in: 0.1, out: 0.5, cache: 0.01 }, "estimate"],
-  [/^google\/gemini-4/, { in: 2.5, out: 15, cache: 0.25 }, "estimate"],
-  [/^google\/gemini-[\d.]+-pro/, { in: 2, out: 12, cache: 0.2 }, "estimate"],
-  [/^google\/gemini-[\d.]+-flash-lite/, { in: 0.25, out: 1.5, cache: 0.025 }, "estimate"],
-  [/^google\/gemini-[\d.]+-flash/, { in: 1.5, out: 9, cache: 0.15 }, "estimate"],
+  [/^openai\/gpt-6-astra/, { in: 10, out: 50, cache: 1 }, "estimate", "openai/gpt-6-astra"],
+  [/^openai\/gpt-6(\.\d)?-sol/, { in: 2, out: 10, cache: 0.2 }, "estimate", "openai/gpt-6.1-sol"],
+  [/^openai\/gpt-6(\.\d)?-luna/, { in: 0.1, out: 0.5, cache: 0.01 }, "estimate", "openai/gpt-6-luna"],
+  [/^google\/gemini-4/, { in: 2.5, out: 15, cache: 0.25 }, "estimate", "google/gemini-4-argon"],
+  [/^google\/gemini-[\d.]+-pro/, { in: 2, out: 12, cache: 0.2 }, "estimate", "google/gemini-3.1-pro-preview"],
+  [/^google\/gemini-[\d.]+-flash-lite/, { in: 0.25, out: 1.5, cache: 0.025 }, "estimate", "google/gemini-3.5-flash-lite"],
+  [/^google\/gemini-[\d.]+-flash/, { in: 1.5, out: 9, cache: 0.15 }, "estimate", "google/gemini-3.8-flash"],
   // xAI (docs.x.ai, giá cho prompt dưới 200 nghìn token; từ 200 nghìn token cả yêu cầu tính gấp đôi).
-  [/^xai\/grok-4\.[67]\b/, { in: 2, out: 6, cache: 0.5 }, "official"],
-  [/^xai\/grok-4\.5\b/, { in: 2, out: 6, cache: 0.3 }, "official"],
+  [/^xai\/grok-4\.[67]\b/, { in: 2, out: 6, cache: 0.5 }, "official", "xai/grok-4.7"],
+  [/^xai\/grok-4\.5\b/, { in: 2, out: 6, cache: 0.3 }, "official", "xai/grok-4.5"],
   [/^xai\/grok-4\.(3|20)\b/, { in: 1.25, out: 2.5, cache: 0.2 }, "official"],
-  [/^xai\/grok-build/, { in: 1, out: 2, cache: 0.2 }, "official"],
+  [/^xai\/grok-build/, { in: 1, out: 2, cache: 0.2 }, "official", "xai/grok-build-0.1"],
   [/^xai\//, { in: 2, out: 6, cache: 0.5 }, "estimate"],
   // DeepSeek (api-docs.deepseek.com): giá giờ cao điểm; ngoài giờ cao điểm và cuối tuần hãng tính một nửa, nên đây là mức trần.
-  [/^deepseek\/deepseek-(v[\d.]+-)?flash/, { in: 0.3, out: 1.2, cache: 0.006 }, "official"],
-  [/^deepseek\/deepseek-v[\d.]+-pro/, { in: 1.32, out: 3.96, cache: 0.044 }, "official"],
+  [/^deepseek\/deepseek-(v[\d.]+-)?flash/, { in: 0.3, out: 1.2, cache: 0.006 }, "official", "deepseek/deepseek-flash"],
+  [/^deepseek\/deepseek-v[\d.]+-pro/, { in: 1.32, out: 3.96, cache: 0.044 }, "official", "deepseek/deepseek-v4-pro"],
   [/^deepseek\//, { in: 1.32, out: 3.96, cache: 0.044 }, "estimate"],
   [/./, { in: 3, out: 15, cache: 0.3 }, "estimate"],
 ];
@@ -88,11 +91,23 @@ export function setConfig(patch: Partial<UsageConfig>): UsageConfig {
   return c;
 }
 
+/**
+ * Giá của một model: giá quản trị viên sửa → giá chính thức trong bảng → giá hãng tự báo trong danh sách model (sổ model) →
+ * giá của bản gần nhất cùng dòng (model hãng vừa ra: "claude-opus-6" lấy giá Opus 5.5, đánh dấu ước tính) → giá ước tính theo mẫu. Không bao giờ là 0.
+ */
 export function priceOf(model: string, cfg = getConfig()): Price {
   const o = cfg.prices[model];
   if (o) return { ...o, src: "custom" };
-  const [, p, src] = DEFAULT_PRICES.find(([re]) => re.test(model))!;
-  return { ...p, src };
+  const row = DEFAULT_PRICES.find(([re]) => re.test(model))!;
+  if (row[2] === "official") return { ...row[1], src: "official" };
+  const own = (() => { try { return providerPriceOf(model); } catch { return null; } })();
+  if (own && own.in > 0 && own.out > 0) return { ...own, src: "official" };
+  const fam = familyKey(model), ver = parseId(model).version;
+  const known: [string, Omit<Price, "src">][] = [...DEFAULT_PRICES.filter((r) => r[3]).map((r) => [r[3]!, r[1]] as [string, Omit<Price, "src">]), ...Object.entries(cfg.prices)];
+  const near = known.filter(([k]) => k !== model && familyKey(k) === fam && versionCmp(parseId(k).version, ver) <= 0)
+    .sort(([a], [b]) => versionCmp(parseId(b).version, parseId(a).version))[0];
+  if (near && near[1].in > 0) return { ...near[1], src: "estimate" };
+  return { ...row[1], src: row[2] };
 }
 
 // ---------------------------------------------------------------- ghi nhận mỗi lần gọi model

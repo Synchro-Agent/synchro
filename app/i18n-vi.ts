@@ -2,6 +2,7 @@
 import { DIRECTORY } from "./connectordir";
 import { UX_EN2VI, UX_RULES_VI } from "./i18n-ux";
 import { OPS_EN2VI, OPS_RULES_VI } from "./i18n-ops";
+import { MODELS_EN2VI } from "./i18n-models";
 import { AUTH_EN2VI } from "./i18n-auth";
 import { FX_EN2VI } from "./i18n-features";
 
@@ -832,6 +833,7 @@ addNew(EN2VI, UX_EN2VI);
 RULES_VI.push(...UX_RULES_VI);
 addNew(EN2VI, OPS_EN2VI);
 RULES_VI.push(...OPS_RULES_VI);
+addNew(EN2VI, MODELS_EN2VI);
 addNew(EN2VI, FX_EN2VI);
 addNew(EN2VI, AUTH_EN2VI);
 addNew(EN2VI, {
@@ -885,7 +887,7 @@ Object.assign(EN2VI, {
   "Replies started (24h)": "Lượt trả lời (24 giờ)", "Replies failed (24h)": "Lượt trả lời lỗi (24 giờ)",
   "Sign-in failing": "Đăng nhập đang lỗi", "Last sign-in failed": "Lần đăng nhập gần nhất lỗi",
   "Connected GitHub": "Đã kết nối GitHub", "Failed provider sign-in": "Đăng nhập qua nhà cung cấp lỗi", "Requested a password reset email": "Yêu cầu email đặt lại mật khẩu", "Forgot your password?": "Quên mật khẩu?", "Reset password with a link": "Đặt lại mật khẩu bằng đường dẫn", "Created password reset link": "Đã tạo đường dẫn đặt lại mật khẩu",
-  "Saved API key": "Đã lưu khóa API", "Removed API key": "Đã gỡ khóa API", "Changed API credit": "Đã đổi hạn mức API", "Changed default model": "Đã đổi model mặc định", "Changed main models": "Đã đổi các model chính",
+  "Saved API key": "Đã lưu khóa API", "Removed API key": "Đã gỡ khóa API", "Changed API credit": "Đã đổi hạn mức API", "Changed default model": "Đã đổi model mặc định", "Changed main models": "Đã đổi các model chính", "Checked for new models": "Đã kiểm tra model mới", "Changed the model registry": "Đã đổi sổ model",
 });
 
 // Giao diện "Instrument": đầu trang, tab, nút mới.

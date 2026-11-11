@@ -4,6 +4,10 @@
 import type { Target } from "./providers";
 import type { Effort } from "./catalog";
 import { noteResponse } from "./usage";
+import { learnFromRetry, modelParams } from "./modelreg";
+
+/** Tham số riêng của model theo sổ model (khả năng hãng báo, điều học được khi thử, kế thừa trong dòng). Không có thì gọi như trước giờ. */
+const paramsOf = (t: { provider?: string; model?: string }) => { try { return modelParams(t.provider, t.model); } catch { return undefined; } };
 
 export class HttpErr extends Error { constructor(public status: number, m: string) { super(m); } }
 
@@ -22,7 +26,12 @@ export const toResponses = (c: unknown) => !Array.isArray(c) ? c : (c as Blk[]).
 export const withPages = (c: unknown) => !Array.isArray(c) ? c : (c as Blk[]).flatMap((b) => b.type === "document" && b.fallbackImages ? [b, ...b.fallbackImages.map((d) => ({ type: "image", media_type: "image/jpeg", data: d }))] : [b]);
 
 // Model có suy luận (Claude, GPT, Gemini, Grok, DeepSeek) tính cả token suy nghĩ vào giới hạn đầu ra: để rộng tay để câu trả lời không bị cụt hoặc rỗng.
-export const outCap = (t: Target, n: number) => (t.kind === "openai" || t.kind === "google" || t.kind === "anthropic" || t.kind === "xai" || t.kind === "deepseek" ? Math.max(n, 16000) : n);
+// Hãng báo trần token đầu ra của model (Anthropic max_tokens, Gemini outputTokenLimit): không vượt trần đó.
+export const outCap = (t: Target, n: number) => {
+  const v = t.kind === "openai" || t.kind === "google" || t.kind === "anthropic" || t.kind === "xai" || t.kind === "deepseek" ? Math.max(n, 16000) : n;
+  const max = paramsOf(t)?.maxOut;
+  return max && max > 0 ? Math.min(v, max) : v;
+};
 
 // Đọc lỗi của nhà cung cấp thành một câu ngắn dễ hiểu.
 async function fail(r: Response): Promise<never> {
@@ -136,10 +145,17 @@ export async function anthropicCall(t: Target, body: Record<string, unknown>, si
 }
 // Mức nỗ lực → tham số của từng hãng ("extra" là xhigh). Gemini chỉ tới high (đã hạ sẵn ở clampEffort). Không chọn thì để model dùng mặc định.
 // Grok: reasoning_effort low / medium / high / xhigh, chỉ từ Grok 4.5 trở lên (và bản nhiều agent); DeepSeek: low / high / max.
-export function effortParams(t: Pick<Target, "kind"> & { model?: string }, e?: Effort): Record<string, unknown> {
+// Sổ model (app/modelreg.ts): model hãng báo không có mức nỗ lực thì không gửi; chỉ có một số mức thì hạ xuống mức gần nhất nó nhận;
+// model dùng chế độ suy nghĩ thích ứng (Claude đời mới) thì gửi thinking: { type: "adaptive" } cùng mức nỗ lực.
+const LEVELS = ["low", "medium", "high", "xhigh", "max"];
+const fitLevel = (v: string, ok?: string[] | null) => (!ok?.length || ok.includes(v) ? v : [...ok].sort((a, b) => LEVELS.indexOf(a) - LEVELS.indexOf(b)).filter((x) => LEVELS.indexOf(x) <= LEVELS.indexOf(v)).pop() ?? ok[0]);
+export function effortParams(t: Pick<Target, "kind"> & { model?: string; provider?: string }, e?: Effort): Record<string, unknown> {
   if (!e) return {};
-  const v = e === "extra" ? "xhigh" : e;
-  if (t.kind === "anthropic") return { output_config: { effort: v } };
+  const v0 = e === "extra" ? "xhigh" : e;
+  const p = paramsOf(t);
+  if (p?.effort && !p.effort.length) return t.kind === "anthropic" && p.thinking === "adaptive" ? { thinking: { type: "adaptive" } } : {};
+  const v = t.kind === "anthropic" ? fitLevel(v0, p?.effort) : v0;
+  if (t.kind === "anthropic") return { ...(p?.thinking === "adaptive" ? { thinking: { type: "adaptive" } } : {}), output_config: { effort: v } };
   if (t.kind === "openai") return { reasoning: { effort: v } };
   if (t.kind === "google") return { reasoning_effort: v === "xhigh" || v === "max" ? "high" : v };
   if (t.kind === "xai") return t.model && !grokEffort(t.model) ? {} : { reasoning_effort: v === "max" ? "xhigh" : v };
@@ -167,11 +183,14 @@ export function textOnly(msgs: unknown[]): unknown[] {
  *   trong lượt này đã giữ nguyên reasoning_content; lượt cũ trong lịch sử của Synchro chỉ còn chữ nên điền chuỗi rỗng.
  * - DeepSeek V4 Pro không đọc ảnh: thay ảnh bằng ghi chú. Grok: bỏ reasoning_content khi gửi lại (suy luận của Grok đã mã hóa ở máy chủ).
  */
-export function compatBody(t: Pick<Target, "kind" | "model">, body: Record<string, unknown>): Record<string, unknown> {
+export function compatBody(t: Pick<Target, "kind" | "model"> & { provider?: string }, body: Record<string, unknown>): Record<string, unknown> {
+  // Model hãng báo (hoặc lần thử cho thấy) chỉ đọc chữ: thay ảnh bằng ghi chú thay vì để cả lượt lỗi 400.
+  if (paramsOf(t)?.vision === false && Array.isArray(body.messages)) body = { ...body, messages: textOnly(body.messages as unknown[]) };
   if (t.kind !== "deepseek" && t.kind !== "xai") return body;
   let msgs = Array.isArray(body.messages) ? (body.messages as unknown[]) : [];
   if (t.kind === "deepseek") {
-    if (!deepseekVision(t.model)) msgs = textOnly(msgs);
+    // Sổ model biết model DeepSeek mới đọc được ảnh (thử đạt) thì giữ ảnh; không biết thì theo tên (Flash / vision).
+    if (paramsOf(t)?.vision !== true && !deepseekVision(t.model)) msgs = textOnly(msgs);
     if (Array.isArray(body.tools) && body.tools.length) msgs = msgs.map((m) => { const x = m as { role?: string; reasoning_content?: unknown }; return x.role === "assistant" && typeof x.reasoning_content !== "string" ? { ...x, reasoning_content: "" } : m; });
   } else msgs = msgs.map((m) => { const x = m as { role?: string; reasoning_content?: unknown }; if (x.role !== "assistant" || x.reasoning_content === undefined) return m; const { reasoning_content: _r, ...rest } = x; return rest; });
   return { ...body, messages: msgs };
@@ -193,10 +212,15 @@ export async function compatImages(t: Pick<Target, "kind">, body: Record<string,
 }
 /** Hãng từ chối một tham số Synchro gửi (400): bản yêu cầu bỏ tham số đó để thử lại một lần, hoặc null. */
 export function compatRetry(t: Pick<Target, "kind">, body: Record<string, unknown>, msg: string): Record<string, unknown> | null {
-  if (t.kind !== "deepseek" && t.kind !== "xai") return null;
   const msgs = Array.isArray(body.messages) ? (body.messages as unknown[]) : [];
   // Model không nhận ảnh (bản mới của hãng đổi khả năng): gửi lại chỉ có chữ.
   if (/image|vision|multimodal|modalit/i.test(msg) && JSON.stringify(msgs).includes('"image_url"')) return { ...body, messages: textOnly(msgs) };
+  // Gemini và nhà cung cấp tương thích OpenAI: model mới không nhận mức nỗ lực hay tool_choice thì gửi lại không kèm tham số đó.
+  if (t.kind !== "deepseek" && t.kind !== "xai") {
+    if (body.reasoning_effort !== undefined && /reasoning|effort/i.test(msg)) { const { reasoning_effort: _e, ...rest } = body; return rest; }
+    if (body.tool_choice !== undefined && /tool_choice/i.test(msg)) { const { tool_choice: _c, ...rest } = body; return rest; }
+    return null;
+  }
   // DeepSeek vẫn báo thiếu suy luận của lượt cũ: tắt chế độ suy nghĩ cho lần gọi này (lịch sử không còn suy luận gốc để gửi lại).
   if (t.kind === "deepseek" && /reasoning/i.test(msg) && (body.thinking as { type?: string } | undefined)?.type !== "disabled") {
     const { reasoning_effort: _e, ...rest } = body;
@@ -320,7 +344,14 @@ export async function openaiCall(t: Target, body: Record<string, unknown>, signa
     // Lỗi 400 trả về trước khi có chữ nào: thử lại một lần không kèm tham số hãng không nhận.
     const again = e instanceof HttpErr && e.status === 400 ? compatRetry(t, b, e.message) : null;
     if (!again) throw e;
-    return await send(again);
+    const j = await send(again);
+    // Chạy được khi bỏ tham số: ghi vào sổ model để các lượt sau không phải bị từ chối trước.
+    try {
+      if (b.reasoning_effort !== undefined && again.reasoning_effort === undefined && again.thinking === undefined) learnFromRetry(t.provider, t.model, { effort: [] });
+      // Ảnh sai định dạng (Grok chỉ nhận JPG / PNG) không có nghĩa là model không đọc ảnh.
+      if (!/format/i.test((e as Error).message) && JSON.stringify(b.messages ?? "").includes('"image_url"') && !JSON.stringify(again.messages ?? "").includes('"image_url"')) learnFromRetry(t.provider, t.model, { vision: false });
+    } catch {}
+    return j;
   }
 }
 
