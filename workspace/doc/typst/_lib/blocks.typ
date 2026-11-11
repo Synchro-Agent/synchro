@@ -27,12 +27,33 @@
   body
 }
 
+// Từ mà main.typ của mẫu dịch bằng luật show chuỗi (nhãn ghi cứng trong gói: "Abstract", "TABLE", "Inhalt"…). Trong chữ của người dùng, mỗi từ
+// này được tách bằng h(0pt) sau ký tự đầu: luật show không khớp nữa (không thành "Tóm tắtion"), chữ in ra và chữ chép từ PDF vẫn nguyên.
+#let guard-words = data.at("guard", default: ())
+#let guarded(p) = {
+  if guard-words.len() == 0 { return p }
+  let out = (p,)
+  for w in guard-words {
+    let head = w.clusters().first()
+    let tail = w.slice(head.len())
+    out = out.map(x => if type(x) == str {
+      let res = ()
+      for (i, seg) in x.split(w).enumerate() {
+        if i > 0 { res += (head, h(0pt), tail) }
+        res.push(seg)
+      }
+      res
+    } else { (x,) }).flatten()
+  }
+  out.join()
+}
+
 // Chữ: một dòng xuống hàng ("\n") trong đoạn thành ngắt dòng.
 #let plain-text(t) = {
   let parts = t.split("\n")
   for (i, p) in parts.enumerate() {
     if i > 0 { linebreak() }
-    p
+    guarded(p)
   }
 }
 
@@ -57,7 +78,10 @@
   let n = b.columns.len()
   let al = b.align.map(a => if a == "right" { right } else if a == "center" { center } else { left })
   let ws = get(b, "widths")
-  let cols = if ws != none { ws.map(w => w * 1fr) } else if n == 1 { (1fr,) } else { (1fr,) + (auto,) * (n - 1) }
+  let cols = if ws == "auto" { (auto,) * n } else if ws != none { ws.map(w => w * 1fr) } else if n == 1 { (1fr,) } else { (1fr,) + (auto,) * (n - 1) }
+  // Bảng nhiều cột: chữ nhỏ dần và lề ô hẹp lại để mỗi cột còn đủ chỗ cho từ dài nhất.
+  let size = if n >= 10 { 0.72em } else if n >= 7 { 0.82em } else if n >= 5 { 0.92em } else { 1em }
+  let pad = if n >= 7 { 3.5pt } else if n >= 5 { 4.5pt } else { 6pt }
   let rows = b.rows
   let total = get(b, "total", default: false) and rows.len() > 1
   let main = if total { rows.slice(0, rows.len() - 1) } else { rows }
@@ -67,18 +91,18 @@
   figure(
     kind: table,
     caption: if get(b, "caption") != none { inline(b.caption) },
-    table(
+    text(size: size, table(
       columns: cols,
       align: (x, y) => al.at(x) + horizon,
       stroke: (x, y) => if y > 0 { (bottom: 0.3pt + luma(205)) },
-      inset: (x: 6pt, y: 5pt),
+      inset: (x: pad, y: 5pt),
       table.hline(stroke: 0.8pt + luma(40)),
       table.header(..b.columns.map(c => strong(inline(c)))),
       table.hline(stroke: rule),
       ..cells,
       ..tail,
       table.hline(stroke: 0.8pt + luma(40)),
-    ),
+    )),
   )
 }
 
@@ -130,5 +154,7 @@
   show table: set text(number-type: "lining", number-width: "tabular")
   // Không cắt đôi một dòng bảng sang hai trang.
   set table.cell(breakable: false)
+  // Ô bảng không căn đều hai bên (gói đặt justify: true cho thân bài): tiêu đề cột ngắn xuống dòng thành "Cùng      kỳ".
+  show table: set par(justify: false)
   body
 }

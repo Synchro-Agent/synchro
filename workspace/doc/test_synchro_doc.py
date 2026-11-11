@@ -188,6 +188,46 @@ INVOICE = {"number": "HĐ-1", "date": "2026-11-11", "due_date": "2026-12-11", "c
            "tax_rate": 0.08}
 
 
+class Hardening(unittest.TestCase):
+    def test_date_format(self):
+        for f in ("Ngày [day] tháng [month] năm [year]", "[month repr:long] [day padding:none], [year]", "[weekday], [day]/[month]/[year repr:last_two]"):
+            self.assertIsNone(sd.check_date_format(f), f)
+        for f, why in (("DD/MM/YYYY", "không có thành phần"), ("Ngày [ngay] tháng", "không có"), ("[day", "ngoặc"), ("[day]]", "]]"),
+                       ("[hour]:[minute]", "không có"), ("[day pading:none]", "sai dạng")):
+            self.assertIn(why, sd.check_date_format(f) or "", f)
+        with tempfile.TemporaryDirectory() as w:
+            with open(os.path.join(w, "p.json"), "w", encoding="utf-8") as fh:
+                json.dump({"title": "x", "date": "2026-11-12", "date_format": "DD/MM/YYYY", "sections": [{"text": "a"}]}, fh)
+            r = run_cli(["check", "ilm", "p.json"], w)
+            self.assertEqual(r.returncode, 2, r.stderr)
+            self.assertIn("payload.date_format", r.stderr)
+            self.assertIn("[day]", r.stderr)
+
+    def test_guard_words(self):
+        ctx = sd.Ctx("/tmp", "/tmp", "vi", "typst", "charged-ieee")
+        base = {"title": "t", "sections": [{"text": "a"}]}
+        self.assertEqual(sd.normalize("charged-ieee", {**base, "lang": "vi"}, ctx)["guard"], ["Index Terms", "Abstract", "TABLE", "Fig."])
+        self.assertEqual(sd.normalize("charged-ieee", {**base, "lang": "en"}, ctx)["guard"], [])
+        self.assertEqual(sd.normalize("basic-report", {**base, "lang": "en"}, ctx)["guard"], ["Inhalt"])
+        self.assertEqual(sd.normalize("ilm", {**base, "lang": "vi"}, ctx)["guard"], [])
+        lib = open(os.path.join(HERE, "typst", "_lib", "blocks.typ"), encoding="utf-8").read()
+        self.assertIn("guarded(p)", lib)
+        self.assertIn("show table: set par(justify: false)", lib)
+
+    def test_table_columns(self):
+        cols = [sd.runs(c) for c in ["Khu vực bán hàng", "Tháng 7", "Tháng 8", "Tháng 9", "Cộng quý III", "Cùng kỳ năm trước", "Tăng trưởng"]]
+        rows = [[sd.runs(c) for c in ["Miền Bắc (Hà Nội, Hải Phòng)", "2.100.000", "2.250.000", "2.400.000", "6.750.000", "6.100.000", "+10,7%"]]]
+        for tpl in ("basic-report", "ilm", "charged-ieee"):
+            self.assertEqual(sd.table_widths(cols, rows, tpl), "auto", tpl)
+        small = ([sd.runs("Hạng mục"), sd.runs("Giá trị")], [[sd.runs("Doanh thu"), sd.runs("1.000")]])
+        self.assertIsNone(sd.table_widths(*small, "charged-ieee"))
+        ctx = sd.Ctx("/tmp", "/tmp", "vi", "typst", "ilm")
+        b = sd.norm_block(ctx, {"type": "table", "columns": ["a", "b"], "rows": [["x", 1]], "widths": [2, 1]}, "t")
+        self.assertEqual(b["widths"], [2, 1])  # widths của payload giữ nguyên
+        b = sd.norm_block(sd.Ctx("/tmp", "/tmp", "vi", "docx", "ilm"), {"type": "table", "columns": [c[0]["text"] for c in cols], "rows": [[r[0]["text"] for r in rows[0]]]}, "t")
+        self.assertIsNone(b["widths"])  # Word tự co cột
+
+
 class Invoice(unittest.TestCase):
     def test_totals(self):
         t = sd.totals(INVOICE)
@@ -201,17 +241,47 @@ class Invoice(unittest.TestCase):
     def test_rounding(self):
         d = {**INVOICE, "items": [{"description": "x", "quantity": 3, "unit_price": 333.335}], "tax_rate": 0.1}
         t = sd.totals(d)
-        self.assertEqual(t["lines"], [Decimal("1000")])  # VND: làm tròn đồng
+        # Đơn giá làm tròn tới đơn vị tiền trước khi nhân: in 333 ₫ × 3 thì thành tiền phải là 999 ₫.
+        self.assertEqual((t["prices"], t["lines"]), ([Decimal("333")], [Decimal("999")]))
         t = sd.totals({**d, "currency": "USD"})
-        self.assertEqual(t["lines"], [Decimal("1000.01")])
+        self.assertEqual((t["prices"], t["lines"]), ([Decimal("333.34")], [Decimal("1000.02")]))
         self.assertEqual(t["tax"], Decimal("100.00"))
         with self.assertRaises(sd.Bad):
             sd.totals({**INVOICE, "discount": 10 ** 9})
 
+    def test_printed_price_times_qty(self):
+        # Hai ca người kiểm tra tìm ra: EUR 2,5 × 1999,995 và USD 1,5 × 1234,567.
+        cases = [("EUR", "en", 2.5, 1999.995), ("USD", "vi", 1.5, 1234.567), ("VND", "vi", 7, 1234.6), ("USD", "en", 3, 0.005)]
+        for cur, lang, qty, price in cases:
+            d = {**INVOICE, "currency": cur, "lang": lang, "items": [{"description": "x", "quantity": qty, "unit_price": price}]}
+            t = sd.totals(d)
+            self.assertEqual((Decimal(str(qty)) * t["prices"][0]).quantize(sd.CUR_Q[cur], sd.ROUND_HALF_UP), t["lines"][0], (cur, qty, price))
+            h = sd.invoice_html(d)
+            self.assertIn(f"<td>{sd.money(t['prices'][0], cur, lang)}</td>", h)
+            self.assertIn(f"<td>{sd.money(t['lines'][0], cur, lang)}</td>", h)
+        h = sd.invoice_html({**INVOICE, "currency": "EUR", "lang": "en", "items": [{"description": "x", "quantity": 2.5, "unit_price": 1999.995}]})
+        self.assertIn("<td>€2,000.00</td>", h)
+        self.assertIn("<td>€5,000.00</td>", h)
+
+    def test_bad_numbers_exit_2(self):
+        with tempfile.TemporaryDirectory() as w:
+            for name, body in (("nan", '"quantity": NaN'), ("inf", '"quantity": Infinity'), ("big", '"quantity": 1000, "unit_price": 1e25')):
+                with open(os.path.join(w, name + ".json"), "w", encoding="utf-8") as f:
+                    f.write('{"number": "1", "date": "2026-11-12", "from": {"name": "A"}, "to": {"name": "B"}, "items": [{"description": "x", ' + body + (', "unit_price": 1' if name != "big" else "") + '}]}')
+                r = run_cli(["check", "invoice", name + ".json"], w)
+                self.assertEqual(r.returncode, 2, (name, r.stderr))
+                self.assertNotIn("Traceback", r.stderr, name)
+            with self.assertRaises(sd.Bad):
+                sd.totals({**INVOICE, "items": [{"description": "x", "quantity": float("nan"), "unit_price": 1}]})
+            self.assertTrue(any("không hữu hạn" in e or "phải là số" in e for e in errors("invoice", {**INVOICE, "items": [{"description": "x", "quantity": float("inf"), "unit_price": 1}]})))
+
     def test_money(self):
         self.assertEqual(sd.money(38340000, "VND"), "38.340.000 ₫")
         self.assertEqual(sd.money(-500000, "VND"), "−500.000 ₫")
-        self.assertEqual(sd.money(1234.5, "USD"), "$1,234.50")
+        self.assertEqual(sd.money(1234.5, "USD", "en"), "$1,234.50")
+        # Hóa đơn tiếng Việt bằng USD: số kiểu Việt như số lượng (1,5) và % thuế cùng trang.
+        self.assertEqual(sd.money(1234.567, "USD", "vi"), "1.234,57\u00a0US$")
+        self.assertEqual(sd.money(1234.5, "USD"), "1.234,50\u00a0US$")
         self.assertEqual(sd.money(1234.5, "EUR", "vi"), "1.234,50 €")
         self.assertEqual(sd.money(1234.5, "EUR", "en"), "€1,234.50")
         self.assertEqual(sd.qty_text(1.5, "vi"), "1,5")

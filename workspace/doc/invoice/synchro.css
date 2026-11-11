@@ -23,5 +23,8 @@ table#totals td { padding: 1mm 0; color: var(--black); font-weight: 400; white-s
 #total small { font-size: 9pt; color: var(--grey); }
 table#total td { white-space: nowrap; }
 
+/* Bố cục short: bảng tổng ghim đáy trang 1 cao ~7,8 cm (viền 2 cm trên dưới, hàng tiêu đề, số tiền 20pt, dòng ngân hàng) mà chỗ giữ của mẫu gốc chỉ 6 cm:
+   giữ đủ chỗ để nội dung dài sang trang 2 (rồi chuyển bố cục long) thay vì nằm khuất dưới bảng tổng. synchro-doc còn đo lại sau khi dựng. */
+body.short footer { height: 8.2cm; }
 body.long footer { height: auto; }
 body.long table#total { position: static; margin: 1cm 0 0; width: 100%; border-width: 6mm 8mm; break-inside: avoid; }

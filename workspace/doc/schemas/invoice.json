@@ -34,9 +34,9 @@
             "type": "object", "required": ["description", "quantity", "unit_price"], "additionalProperties": false,
             "properties": {
               "description": { "type": "string", "minLength": 1, "maxLength": 400 },
-              "quantity": { "type": "number", "minimum": 0 },
+              "quantity": { "type": "number", "minimum": 0, "maximum": 1000000000 },
               "unit": { "type": "string", "maxLength": 20, "description": "Đơn vị tính (giờ, cái, tháng…)." },
-              "unit_price": { "type": "number", "minimum": 0 }
+              "unit_price": { "type": "number", "minimum": 0, "maximum": 1000000000000000 }
             }
           }
         },
