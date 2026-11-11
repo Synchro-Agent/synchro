@@ -1,0 +1,21 @@
+{
+  "title": "Nhận dạng chữ viết tay tiếng Việt bằng mô hình nhỏ chạy trên thiết bị",
+  "authors": [
+    { "name": "Nguyễn Văn Ánh", "department": "Khoa Khoa học máy tính", "organization": "Đại học Bách khoa", "location": "TP. Hồ Chí Minh", "email": "anh@example.vn" },
+    { "name": "Trần Thị Bích", "organization": "Viện Trí tuệ nhân tạo", "location": "Hà Nội" }
+  ],
+  "abstract": "Bài báo đề xuất một mô hình 8 triệu tham số nhận dạng chữ viết tay tiếng Việt có dấu, đạt tỉ lệ lỗi ký tự 3,1% trên tập thử và chạy 40 ms mỗi dòng trên điện thoại tầm trung.",
+  "keywords": ["nhận dạng chữ viết tay", "tiếng Việt", "mô hình nhỏ"],
+  "sections": [
+    { "heading": "Giới thiệu", "text": "Chữ viết tay tiếng Việt có tới 67 ký tự mang dấu như ư, ơ, ệ, ẫ, khiến mô hình nhận dạng dễ nhầm dấu thanh.\n\nChúng tôi đóng góp: (1) tập dữ liệu 120.000 dòng; (2) mô hình nhỏ; (3) đánh giá trên thiết bị." },
+    {
+      "heading": "Phương pháp",
+      "blocks": [
+        { "type": "paragraph", "text": "Mô hình gồm bộ mã hóa tích chập và bộ giải mã CTC, tách riêng nhánh dự đoán dấu thanh." },
+        { "type": "table", "caption": "Kết quả trên tập thử", "columns": ["Mô hình", "Tham số", "CER"], "rows": [["CRNN", "8,3 tr", "5,4%"], ["Đề xuất", "8,0 tr", "3,1%"]] }
+      ]
+    },
+    { "heading": "Kết luận", "text": "Tách nhánh dấu thanh giảm 43% lỗi dấu mà không tăng kích thước mô hình." }
+  ],
+  "references": ["A. Graves et al., \"Connectionist temporal classification,\" in Proc. ICML, 2006.", "B. Shi, X. Bai, C. Yao, \"An end-to-end trainable neural network for image-based sequence recognition,\" IEEE TPAMI, 2017."]
+}

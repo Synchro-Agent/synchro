@@ -1,0 +1,70 @@
+{
+  "$comment": "Hợp đồng JSON của mẫu hóa đơn / báo giá A4 (WeasyPrint). Thành tiền, cộng, chiết khấu, thuế, tổng do synchro-doc tính, không phải model.",
+  "$defs": {
+    "party": {
+      "type": "object",
+      "required": ["name"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "address": { "type": "array", "maxItems": 6, "items": { "type": "string", "maxLength": 200 } },
+        "tax_id": { "type": "string", "maxLength": 40, "description": "Mã số thuế." },
+        "email": { "type": "string", "maxLength": 120 },
+        "phone": { "type": "string", "maxLength": 40 }
+      }
+    },
+    "date": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" }
+  },
+  "templates": {
+    "invoice": {
+      "title": "Hóa đơn / báo giá A4 (mẫu invoice của WeasyPrint samples, viết lại có tham số)",
+      "required": ["number", "date", "from", "to", "items"],
+      "properties": {
+        "lang": { "enum": ["vi", "en"], "description": "Nhãn mặc định tiếng Việt hay tiếng Anh." },
+        "title": { "type": "string", "maxLength": 40, "description": "Mặc định \"Hóa đơn\"; báo giá thì \"Báo giá\"." },
+        "number": { "type": "string", "minLength": 1, "maxLength": 60 },
+        "date": { "$ref": "#/$defs/date" },
+        "due_date": { "$ref": "#/$defs/date", "description": "Hạn thanh toán (báo giá: hiệu lực đến)." },
+        "currency": { "enum": ["VND", "USD", "EUR"], "description": "Mặc định VND (1.234.567 ₫)." },
+        "from": { "$ref": "#/$defs/party" },
+        "to": { "$ref": "#/$defs/party" },
+        "items": {
+          "type": "array", "minItems": 1, "maxItems": 300,
+          "items": {
+            "type": "object", "required": ["description", "quantity", "unit_price"], "additionalProperties": false,
+            "properties": {
+              "description": { "type": "string", "minLength": 1, "maxLength": 400 },
+              "quantity": { "type": "number", "minimum": 0 },
+              "unit": { "type": "string", "maxLength": 20, "description": "Đơn vị tính (giờ, cái, tháng…)." },
+              "unit_price": { "type": "number", "minimum": 0 }
+            }
+          }
+        },
+        "discount": { "type": "number", "minimum": 0, "description": "Chiết khấu bằng tiền, trừ trước thuế." },
+        "tax_rate": { "type": "number", "minimum": 0, "maximum": 1, "description": "Thuế GTGT dạng tỉ lệ: 0.08 là 8%." },
+        "notes": { "type": "string", "maxLength": 2000 },
+        "payment": {
+          "type": "object", "additionalProperties": false,
+          "properties": {
+            "bank": { "type": "string", "maxLength": 120 },
+            "account": { "type": "string", "maxLength": 60 },
+            "holder": { "type": "string", "maxLength": 120 }
+          }
+        },
+        "thanks": { "type": "string", "maxLength": 80, "description": "Chân trang trái, mặc định \"Cảm ơn quý khách!\"." },
+        "footer": { "type": "string", "maxLength": 160, "description": "Chân trang phải: liên hệ, website." },
+        "labels": {
+          "type": "object", "additionalProperties": false,
+          "description": "Đổi nhãn có sẵn.",
+          "properties": {
+            "number": { "type": "string", "maxLength": 40 }, "date": { "type": "string", "maxLength": 40 }, "description": { "type": "string", "maxLength": 40 },
+            "price": { "type": "string", "maxLength": 40 }, "quantity": { "type": "string", "maxLength": 40 }, "line_total": { "type": "string", "maxLength": 40 },
+            "subtotal": { "type": "string", "maxLength": 40 }, "discount": { "type": "string", "maxLength": 40 }, "tax": { "type": "string", "maxLength": 40 },
+            "due": { "type": "string", "maxLength": 40 }, "account": { "type": "string", "maxLength": 40 }, "total": { "type": "string", "maxLength": 40 },
+            "tax_id": { "type": "string", "maxLength": 40 }
+          }
+        }
+      }
+    }
+  }
+}

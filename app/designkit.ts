@@ -161,7 +161,7 @@ Biến: --sx-bg --sx-surface --sx-raised --sx-ink --sx-muted --sx-accent --sx-ac
 
 const FILE_RULES: Partial<Record<DesignFormat, string>> = {
   slide: `Tệp .pptx qua run_code (chỉ khi cần shape gốc, còn lại Tải về › PowerPoint từ artifact): python-pptx 13.333×7.5in, tiêu đề ở placeholder, phông Arial hoặc Calibri vì máy người nhận chắc có.`,
-  doc: `Tệp qua run_code: Word bằng python-docx, dùng style Heading và Table thay vì tô tay, Calibri hoặc Arial 11pt, keep_with_next cho tiêu đề, chân trang có số trang (phông lạ sẽ bị thay trên máy người nhận). PDF: HTML in bằng Chromium (page.pdf, preferCSSPageSize) với luật in ở trên.`,
+  doc: `Tệp qua run_code: Word bằng python-docx, dùng style Heading và Table thay vì tô tay, Calibri hoặc Arial 11pt, keep_with_next cho tiêu đề, chân trang có số trang (phông lạ sẽ bị thay trên máy người nhận). PDF: báo cáo có bìa / mục lục, đề xuất, bài 2 cột, hóa đơn mà lượt này có khối <doc_kit> thì làm theo khối đó (mẫu synchro-doc, bản Word cùng payload qua synchro-doc docx); còn lại HTML in bằng Chromium (page.pdf, preferCSSPageSize) với luật in ở trên.`,
   graphic: `Ảnh qua run_code: HTML + Chromium ở deviceScaleFactor 2, đúng kích thước yêu cầu.`,
 };
 // Phông trong image workspace (workspace/Dockerfile): PDF và ảnh nhúng sẵn nên dùng được; Office thì không (xem trên).

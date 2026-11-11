@@ -1,0 +1,37 @@
+{
+  "title": "Báo cáo kết quả kinh doanh quý III/2026",
+  "category": "Báo cáo nội bộ",
+  "author": "Nguyễn Văn Ánh",
+  "affiliation": "Công ty TNHH Đồng Hành, TP. Hồ Chí Minh",
+  "date": "2026-11-11",
+  "sections": [
+    {
+      "heading": "Tóm tắt",
+      "text": "Doanh thu quý III đạt **14,8 tỷ đồng**, tăng 42% so với cùng kỳ; biên lợi nhuận gộp lên 38% nhờ tối ưu chuỗi cung ứng.\n\nBa việc ưu tiên của quý IV: mở chi nhánh Đà Nẵng, tuyển 20 nhân sự kinh doanh và chuẩn hóa quy trình chăm sóc khách hàng."
+    },
+    {
+      "heading": "Số liệu chính",
+      "blocks": [
+        { "type": "paragraph", "text": "Miền Trung tăng nhanh nhất; miền Nam vẫn đóng góp nhiều doanh thu nhất." },
+        {
+          "type": "table",
+          "caption": "Doanh thu theo khu vực (tỷ đồng)",
+          "columns": ["Khu vực", "Quý II", "Quý III", "Tăng"],
+          "rows": [["Miền Bắc", "3,1", "6,2", "100%"], ["Miền Trung", "1,0", "2,9", "190%"], ["Miền Nam", "4,0", "5,7", "43%"], ["Tổng", "8,1", "14,8", "83%"]],
+          "total": true
+        },
+        { "type": "bullets", "items": ["Khách hàng mới: 1.240", "Tỷ lệ giữ chân: 92%", "Giá trị đơn trung bình: 3,2 triệu ₫"] },
+        { "type": "callout", "title": "Lưu ý", "text": "Số liệu quý III chưa kiểm toán." }
+      ]
+    },
+    {
+      "heading": "Kế hoạch quý IV",
+      "blocks": [
+        { "type": "numbered", "items": ["Mở chi nhánh Đà Nẵng trong tháng 12", "Tuyển thêm 20 nhân sự kinh doanh", "Chuẩn hóa quy trình chăm sóc khách hàng"] },
+        { "type": "heading", "level": 2, "text": "Rủi ro" },
+        { "type": "paragraph", "text": "Tỷ giá biến động và chi phí vận chuyển tăng có thể làm biên lợi nhuận giảm 2–3 điểm." },
+        { "type": "quote", "text": "Tăng trưởng bền vững quan trọng hơn tăng trưởng nóng.", "by": "Ban giám đốc" }
+      ]
+    }
+  ]
+}

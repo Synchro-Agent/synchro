@@ -1,0 +1,25 @@
+{
+  "title": "Đề xuất dự án Chuyển đổi số kho vận",
+  "author": "Phòng Vận hành — Công ty TNHH Đồng Hành",
+  "date": "2026-11-11",
+  "abstract": "Dự án tự động hóa kho Bình Dương trong 6 tháng, ngân sách 4,2 tỷ đồng, dự kiến giảm 30% thời gian xử lý đơn và hoàn vốn sau 18 tháng.",
+  "preface": "Tài liệu này trình bày bối cảnh, mục tiêu, phương án và ngân sách của dự án để Ban giám đốc phê duyệt.\n\nMọi số liệu lấy từ hệ thống quản lý kho tháng 10/2026.",
+  "sections": [
+    { "heading": "Bối cảnh", "text": "Kho Bình Dương xử lý 3.500 đơn mỗi ngày bằng quy trình giấy; tỷ lệ sai sót 1,8%, cao gấp ba mức trung bình ngành.\n\n- Thời gian soạn hàng trung bình 14 phút\n- 22% đơn giao trễ trong mùa cao điểm" },
+    {
+      "heading": "Phương án",
+      "blocks": [
+        { "type": "paragraph", "text": [{ "text": "Triển khai " }, { "text": "hệ thống WMS", "bold": true }, { "text": " kết nối máy quét mã vạch và băng chuyền phân loại." }] },
+        { "type": "heading", "level": 2, "text": "Lộ trình" },
+        { "type": "table", "caption": "Lộ trình triển khai", "columns": ["Giai đoạn", "Thời gian", "Kết quả"], "rows": [["Khảo sát", "Tháng 1", "Quy trình hiện trạng"], ["Lắp đặt", "Tháng 2–4", "WMS và thiết bị"], ["Vận hành thử", "Tháng 5–6", "Giảm 30% thời gian xử lý"]] }
+      ]
+    },
+    {
+      "heading": "Ngân sách",
+      "blocks": [
+        { "type": "table", "caption": "Ngân sách dự kiến (triệu đồng)", "columns": ["Hạng mục", "Chi phí"], "rows": [["Phần mềm WMS", "1.800"], ["Thiết bị", "1.900"], ["Đào tạo", "500"], ["Tổng", "4.200"]], "total": true, "widths": [3, 1] }
+      ]
+    }
+  ],
+  "references": ["Báo cáo vận hành kho tháng 10/2026, Phòng Vận hành."]
+}

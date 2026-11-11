@@ -3,3 +3,5 @@ remotion/bundle
 remotion/public/fonts
 remotion/out
 remotion/.synchro-video
+doc/docx/node_modules
+doc/**/__pycache__

@@ -1,0 +1,19 @@
+{
+  "title": "Hóa đơn",
+  "number": "HĐ-2026-0012",
+  "date": "2026-11-11",
+  "due_date": "2026-12-11",
+  "currency": "VND",
+  "from": { "name": "Công ty TNHH Đồng Hành", "address": ["12 Nguyễn Huệ, Quận 1", "TP. Hồ Chí Minh"], "tax_id": "0312345678" },
+  "to": { "name": "Công ty CP Ánh Dương", "address": ["45 Trần Phú", "Đà Nẵng"], "email": "ketoan@anhduong.vn" },
+  "items": [
+    { "description": "Thiết kế giao diện website", "quantity": 1, "unit_price": 15000000 },
+    { "description": "Lập trình và tích hợp", "quantity": 40, "unit": "giờ", "unit_price": 450000 },
+    { "description": "Bảo trì tháng đầu", "quantity": 1, "unit_price": 2500000 }
+  ],
+  "tax_rate": 0.08,
+  "notes": "Thanh toán bằng chuyển khoản, ghi rõ số hóa đơn trong nội dung.",
+  "payment": { "bank": "Vietcombank – CN Sài Gòn", "account": "0071 0000 12345", "holder": "CONG TY TNHH DONG HANH" },
+  "thanks": "Cảm ơn quý khách!",
+  "footer": "lienhe@donghanh.vn · donghanh.vn"
+}

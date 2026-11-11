@@ -1,0 +1,10 @@
+{
+  "name": "synchro-doc-docx",
+  "private": true,
+  "description": "Bản Word (.docx) của các mẫu tài liệu Synchro, dựng bằng thư viện docx (MIT) từ cùng payload JSON với bản PDF Typst.",
+  "type": "module",
+  "license": "UNLICENSED",
+  "dependencies": {
+    "docx": "9.15.3"
+  }
+}

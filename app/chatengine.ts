@@ -33,6 +33,7 @@ import { mergeOuts, previewNote, previewOf } from "./runpreview";
 import { ARTIFACT_RULES, ASK_RULES, VIZ_RULES } from "./artifacts";
 import { designTurn, historyTexts } from "./designkit";
 import { videoTurn } from "./videokit";
+import { docTurn } from "./dockit";
 import { type ABlock, anthropicCall, blocksText, chatOnce, effortParams, HttpErr, openaiCall, outCap, respInput, respParse, respTools, responsesCall, toAnthropic, toOpenAI, toResponses, withPages } from "./llmcall";
 import { mergedProviders, prewarmClaude, sessionPlain, subCli, subTurn } from "./ai/subs";
 import { PROJECT_DOC_RULES, PROJECT_DOC_TOOL, projectDocsLong, readProjectFile } from "./projectdocs";
@@ -1258,7 +1259,10 @@ function designOf(body: Record<string, any>, caps: { art: boolean; code: boolean
   // Nhờ dựng video: thêm khối synchro-video (4 mẫu Remotion trong sandbox), chỉ khi run_code chạy trên image workspace.
   const v = videoTurn({ typed, code: caps.code, workspace: runner() === "workspace" });
   if (v) console.log(`[video] synchro-video ${Buffer.byteLength(v)}B`);
-  return [d?.block ?? "", v].filter(Boolean).join("\n\n");
+  // Nhờ làm tệp tài liệu (báo cáo PDF, đề xuất, bài 2 cột, hóa đơn / báo giá): thêm khối synchro-doc (4 mẫu Typst / WeasyPrint), chỉ image workspace.
+  const k = docTurn({ typed, code: caps.code, workspace: runner() === "workspace", format: d?.format });
+  if (k) console.log(`[doc] synchro-doc ${Buffer.byteLength(k)}B`);
+  return [d?.block ?? "", v, k].filter(Boolean).join("\n\n");
 }
 // Bộ nhớ chỉ dùng cho lượt chat chính (không cho Code, artifact, lệnh nội bộ), khi nút "Bộ nhớ" bật và không ở chế độ ẩn danh.
 // Những gì Synchro biết về người dùng (tên, phần tự giới thiệu / hướng dẫn ở Cài đặt → Tài khoản, bộ nhớ khi bật): mọi lượt người dùng
