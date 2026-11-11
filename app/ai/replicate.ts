@@ -107,10 +107,36 @@ function bdb() {
 const ALL = "*";
 /** Ảnh Replicate đã tạo hôm nay (UTC) của một tài khoản, hoặc cả máy chủ. */
 export const repToday = (uid = ALL) => (bdb().prepare("SELECT images, usd FROM replicate_budget WHERE day = ? AND user_id = ?").get(day(), uid) as { images: number; usd: number } | undefined) ?? { images: 0, usd: 0 };
+function bump(d: string, uid: string, images: number, usd: number) {
+  const st = bdb().prepare("INSERT INTO replicate_budget (day, user_id, images, usd) VALUES (?, ?, ?, ?) ON CONFLICT(day, user_id) DO UPDATE SET images = images + excluded.images, usd = usd + excluded.usd");
+  st.run(d, uid, images, usd); st.run(d, ALL, images, usd);
+}
 export function addRepSpend(uid: string, images: number, usd: number) {
   if (!(images > 0)) return;
-  const st = bdb().prepare("INSERT INTO replicate_budget (day, user_id, images, usd) VALUES (?, ?, ?, ?) ON CONFLICT(day, user_id) DO UPDATE SET images = images + excluded.images, usd = usd + excluded.usd");
-  st.run(day(), uid, images, usd); st.run(day(), ALL, images, usd);
+  bump(day(), uid, images, usd);
+}
+/**
+ * Giữ chỗ trước khi gọi Replicate (tiền thật): trong một giao dịch, lấy tối đa want ảnh trong phần còn lại hôm nay của tài khoản và của máy chủ rồi
+ * cộng ngay vào hạn mức, nên nhiều lượt chạy cùng lúc (nhiều đoạn chat, nhiều người) không cùng thấy hạn mức còn nguyên rồi cùng vượt.
+ * settle(made, usd) sau khi xong: trả lại phần ảnh không tạo được, ghi số tiền; gọi nhiều lần chỉ tính lần đầu.
+ */
+export function reserveRep(uid: string, want: number): { n: number; settle: (made: number, usd: number) => void } {
+  const d = bdb(), at = day();
+  const n = d.transaction(() => {
+    const k = Math.max(0, Math.min(Math.floor(want), repRoom(uid)));
+    if (k > 0) bump(at, uid, k, 0);
+    return k;
+  })();
+  let done = !n;
+  return {
+    n,
+    settle: (made, usd) => {
+      if (done) return;
+      done = true;
+      const back = n - Math.max(0, Math.min(n, made));
+      if (back > 0 || usd > 0) d.transaction(() => bump(at, uid, -back, usd > 0 ? usd : 0))();
+    },
+  };
 }
 /** Số ảnh Replicate tài khoản này còn được tạo hôm nay (Infinity: quản trị viên, chỉ còn giới hạn chung). 0 khi chưa có khóa. */
 export function repRoom(uid: string): number {
@@ -234,7 +260,9 @@ export async function replicateImages(q: RepReq): Promise<RepOut> {
   }
   const model = MASTER_IMAGE_GEN_CONFIG.textToImageModel;
   const s = await loadSchema(base, key, model).catch(() => undefined);
-  const ref = q.reference && s?.props.includes("image_prompt") ? await uploadRef(base, key, q.reference, q.signal) : null;
+  // Có ảnh gốc mà không gửi được (lược đồ chưa tải, model không có image_prompt): không âm thầm tạo ảnh chỉ từ chữ rồi báo là xong.
+  if (q.reference && !s?.props.includes("image_prompt")) throw new RepError("other", "FLUX trên Replicate không nhận được ảnh gốc lúc này.");
+  const ref = q.reference ? await uploadRef(base, key, q.reference, q.signal) : null;
   try {
     const files: RepOut["files"] = []; let seconds = 0;
     for (let i = 0; i < q.count; i++) {

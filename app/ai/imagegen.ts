@@ -17,7 +17,7 @@ import { type Cli, cliRunning, engineHome, type Exit, find, makeDir, removeDir, 
 import { classify, redact } from "./errors";
 import { agyBrainDir, gatherImages, IMAGE_MAX_MB, imageKind, type ImgFile, listImageFiles, namedPaths, removeNewFiles, scrubServerPaths, type FileCtx } from "./imagefiles";
 import { serviceKey } from "../providers";
-import { addRepSpend, replicateImages, RepError, repRoom } from "./replicate";
+import { replicateImages, RepError, repRoom, reserveRep } from "./replicate";
 import { codexRpc } from "./subs";
 
 export const ASPECTS = ["1:1", "16:9", "9:16", "4:3", "3:4"] as const;
@@ -28,6 +28,9 @@ export const IMG_ORDER: ImgCli[] = ["agy", "grok", "codex"];
 export const IMG_NAME: Record<ImgCli, string> = { agy: "Antigravity", grok: "Grok", codex: "ChatGPT", replicate: "Replicate" };
 // Gói nhận được ảnh gốc: Antigravity đọc tệp trong thư mục làm việc, Codex có --image (chưa kiểm chứng cùng image_gen). image_gen của Grok chỉ có prompt, aspect_ratio.
 const TAKES_REF: Record<ImgCli, boolean> = { agy: true, grok: false, codex: true, replicate: true };
+// Replicate chỉ nhận ảnh gốc khi đặt ảnh sản phẩm vào studio (IC-Light). FLUX 1.1 Pro Ultra là model tạo ảnh mới từ chữ: ảnh gốc chỉ gợi bố cục, nên
+// "sửa ảnh này" qua FLUX ra một ảnh khác hẳn mà vẫn báo là xong. Sửa ảnh có sẵn đi qua Antigravity / Codex như trước.
+const takesRef = (cli: ImgCli, q: { relight?: boolean }) => (cli === "replicate" ? !!q.relight : TAKES_REF[cli]);
 
 export type ImgKind = "quota" | "auth" | "notool" | "nofile" | "bad" | "big" | "timeout" | "aborted" | "busy" | "noref" | "free" | "refused" | "other";
 export type ImgReq = {
@@ -261,19 +264,23 @@ async function viaCodex(r: Run): Promise<Tried> {
 
 /** Replicate: không có thư mục tạm hay CLI, chỉ gọi API; ảnh tạo được tính vào hạn mức trong ngày của tài khoản. */
 async function viaReplicate(q: ImgReq): Promise<Tried> {
-  const count = Math.min(4, Math.max(1, q.count ?? 1), repRoom(q.uid));
+  // Giữ chỗ trong hạn mức trước khi gọi (tiền thật), trả lại phần không tạo được khi xong.
+  const want = Math.min(4, Math.max(1, q.count ?? 1));
+  const hold = reserveRep(q.uid, want), count = hold.n;
   if (!count) return { fail: { kind: "quota", detail: "hạn mức ảnh Replicate hôm nay" } };
+  let made = 0, usd = 0;
   try {
-    const r = await replicateImages({ prompt: q.prompt, aspect: q.aspect, count, reference: q.reference, relight: !!(q.relight && q.reference), product: !!(q.product || (q.relight && q.reference)), signal: q.signal, onBegin: q.onBegin });
-    addRepSpend(q.uid, r.files.length, r.usd);
+    const relight = !!(q.relight && q.reference);
+    const r = await replicateImages({ prompt: q.prompt, aspect: q.aspect, count, reference: relight ? q.reference : undefined, relight, product: !!(q.product || relight), signal: q.signal, onBegin: q.onBegin });
+    made = r.files.length; usd = r.usd;
     console.log(`[timing] replicate model=${r.model} images=${r.files.length} predict=${r.seconds.toFixed(1)}s`);
     const notes = [r.model === "zsxkib/ic-light" ? "Đặt sản phẩm vào ánh sáng studio bằng IC-Light trên Replicate." : `Tạo bằng FLUX 1.1 Pro Ultra trên Replicate${q.product ? ", phong cách ảnh sản phẩm thương mại" : ""}.`];
-    if (count < Math.min(4, Math.max(1, q.count ?? 1))) notes.push(`Hạn mức ảnh Replicate hôm nay chỉ còn ${count} ảnh.`);
+    if (count < want) notes.push(`Hạn mức ảnh Replicate hôm nay chỉ còn ${count} ảnh.`);
     return { files: r.files.map((f, i) => ({ name: imageName(q.prompt, i, r.files.length, f.ext), mime: f.mime, data: f.data })), notes };
   } catch (e) {
     const k = e instanceof RepError ? e.kind : "other";
     return { fail: { kind: k === "busy" ? "quota" : k === "bad" ? "other" : k, detail: clip((e as Error).message) } };
-  }
+  } finally { hold.settle(made, usd); }
 }
 
 /** Một lượt tạo ảnh trên một gói của đúng tài khoản q.uid, trong thư mục tạm riêng; luôn dọn thư mục tạm khi xong. */
@@ -366,7 +373,7 @@ export async function generateImages(q: ImgReq): Promise<ImgOk | ImgErr> {
     if (q.signal?.aborted) return { ok: false, kind: "aborted", text: "Đã dừng tạo ảnh.", tried, providers: false };
     const cli = plans[i], name = IMG_NAME[cli];
     const skip = (kind: ImgKind) => { tried.push({ cli, kind }); };
-    if (q.reference && !TAKES_REF[cli]) { skip("noref"); continue; }
+    if (q.reference && !takesRef(cli, q)) { skip("noref"); continue; }
     if (cli === "codex" && (await codexPlan(q.uid)) === "free") { skip("free"); continue; }
     // Lần đầu nói rõ sẽ chờ bao lâu; sau đó đếm giây để người dùng biết vẫn đang chạy. Tính từ lúc CLI chạy thật, không tính lúc xếp hàng chờ lượt khác của tài khoản.
     let tick: ReturnType<typeof setInterval> | undefined;
@@ -386,7 +393,7 @@ export async function generateImages(q: ImgReq): Promise<ImgOk | ImgErr> {
     // Như lượt chat: bộ chọn model và thẻ Providers biết gói này cần đăng nhập lại, lần sau không chạy CLI vô ích.
     if (f.kind === "auth" && cli !== "replicate") markRelogin(cli as Cli, q.uid);
     if (f.kind === "aborted") return { ok: false, kind: "aborted", text: "Đã dừng tạo ảnh.", tried, providers: false };
-    const next = plans.slice(i + 1).find((c) => !q.reference || TAKES_REF[c]);
+    const next = plans.slice(i + 1).find((c) => !q.reference || takesRef(c, q));
     if (next) q.onNote?.(`${reason(f)}. Đang thử ${IMG_NAME[next]}`);
   }
   const kinds = new Set(tried.map((f) => f.kind));

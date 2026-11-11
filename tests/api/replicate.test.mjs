@@ -81,7 +81,7 @@ try {
   {
     const st = await admin.api("GET", "/api/admin/apikeys");
     const p = st.j?.providers?.find((x) => x.id === "replicate");
-    ok(p && p.configured === false && p.kind === "replicate" && p.prefix === "r8_" && p.keyUrl === "https://replicate.com/account/api-tokens", "Providers có thẻ Replicate chưa nối", p);
+    ok(p && p.configured === false && p.source !== "env" && p.kind === "replicate" && p.prefix === "r8_" && p.keyUrl === "https://replicate.com/account/api-tokens", "Providers có thẻ Replicate chưa nối (không lấy REPLICATE_API_TOKEN thật từ shell: dev:mock xóa biến này)", p);
     ok(!st.j.catalog.some((c) => c.id === "replicate"), "Replicate không xuất hiện trong bộ chọn model chat");
     const ad = (await admin.api("GET", "/api/admin")).j?.settings;
     ok(ad?.replicateKey === false && ad?.replicateBudget?.user === 10 && ad?.replicateBudget?.global === 100, "Quản trị viên: hạn mức mặc định, cờ chờ khóa", ad);
@@ -154,6 +154,16 @@ try {
     await admin.api("POST", "/api/admin/apikeys", { action: "refresh", id: "replicate" });
   }
 
+  {
+    // Sửa ảnh có sẵn (có ảnh gốc, không phải đặt sản phẩm vào studio): FLUX chỉ tạo ảnh mới nên không đi qua Replicate, về Antigravity như trước.
+    await clearLog();
+    const n0 = agyLog(A).length;
+    const r = await run(A, { model: "sub-claude/haiku", messages: imgMsg(`Đổi nền ảnh này thành màu xanh ${tool({ prompt: "đổi nền thành màu xanh, giữ nguyên sản phẩm", reference: "last" })}`, SMALL) });
+    const log = await repLog();
+    ok(isImg(r.j.files?.[0]) && agyLog(A).length === n0 + 1 && /Antigravity/.test(res0(r)), "sửa ảnh: Antigravity làm, kết quả nói đúng gói", res0(r));
+    ok(!posts(log).length && !log.some((e) => /flux-1\.1-pro-ultra\/predictions/.test(e.path)), "sửa ảnh không gọi FLUX trên Replicate", log.map((e) => `${e.method} ${e.path}`));
+  }
+
   console.log("5. Chạy lâu, lỗi, Dừng");
   {
     await clearLog();
@@ -171,7 +181,7 @@ try {
   {
     await clearLog();
     const r = await run(A, { model: "sub-claude/haiku", messages: ask(`Tạo ảnh ${tool({ prompt: "hết tiền #402rep" })}`) });
-    ok(isImg(r.j.files?.[0]) && /Antigravity/.test(res0(r)) && r.events.some((e) => e.kind === "note" && /khóa Replicate của máy chủ chưa dùng được/.test(e.text)), "402 hết số dư: về gói của người dùng, nói rõ", r.events.filter((e) => e.kind === "note").map((e) => e.text));
+    ok(isImg(r.j.files?.[0]) && /Antigravity/.test(res0(r)) && r.events.some((e) => e.kind === "note" && /khóa Replicate của máy chủ chưa dùng được/.test(e.text)), "402 hết số dư: về gói của người dùng, nói rõ", { files: r.j.files?.length, res: res0(r), st: r.status, notes: r.events.filter((e) => e.kind === "note").map((e) => e.text) });
   }
   {
     await clearLog();
@@ -202,6 +212,15 @@ try {
     const ad = (await admin.api("GET", "/api/admin")).j?.settings;
     ok(ad?.replicateToday?.images >= 5 && ad.replicateToday.usd > 0, "Quản trị viên thấy số ảnh và tiền ước tính hôm nay", ad?.replicateToday);
     ok((await admin.api("GET", "/api/admin")).j?.audit?.some((e) => e.action === "admin_replicate_budget"), "đổi hạn mức có trong nhật ký quản trị");
+    // Nhiều lượt cùng lúc của cùng tài khoản: hạn mức giữ chỗ trước khi gọi, không lượt nào thấy hạn mức còn nguyên rồi cùng vượt.
+    await admin.api("PATCH", "/api/admin/settings", { replicateBudget: { user: 2 } });
+    const Z = await account("race");
+    await signIn(Z, ["claude", "agy"]);
+    await clearLog();
+    const rs = await Promise.all([1, 2, 3].map((i) => run(Z, { model: "sub-claude/haiku", messages: ask(`Tạo ảnh ${tool({ prompt: `song song ${i} #slowrep`, count: 2 })}`) })));
+    const rp = posts(await repLog()).length, viaRep = rs.filter((r) => /Replicate/.test(res0(r))).reduce((n, r) => n + (r.j.files?.length ?? 0), 0);
+    const zt = dbq((d) => d.prepare("SELECT images FROM replicate_budget WHERE user_id = ? ORDER BY day DESC").get(Z.uid))?.images;
+    ok(rp <= 2 && viaRep <= 2 && zt === rp && rs.every((r) => r.j.files?.length), "3 lượt song song xin 2 ảnh mỗi lượt, hạn mức 2: Replicate tạo tối đa 2, phần còn lại về gói của người đó, sổ hạn mức khớp", { posts: rp, viaRep, zt, res: rs.map(res0) });
     const W = await account("none");
     await signIn(W, ["claude"]);
     await admin.api("PATCH", "/api/admin/settings", { replicateBudget: { user: 0 } });
