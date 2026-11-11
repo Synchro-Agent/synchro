@@ -128,6 +128,24 @@ for (const style of ["linear-dark", "editorial-serif"]) {
   const low = (await probe(`document.querySelector("section")`, true)).filter((x) => x.kind === "tương phản thấp");
   check("ô nhiệt: chữ tự sáng / tối theo nền, đạt 4.5:1", !low.length, JSON.stringify(low));
 }
+{
+  // Thử phong cách khác (khung xem đổi data-sx-preset rồi vá lại): màu và cỡ chữ đã vá cho phong cách cũ phải bỏ đi, kết quả giống trang dựng mới bằng phong cách mới.
+  const page = (preset) => `<html data-sx-preset="${preset}"><body><section class="slide sx-slide" data-sx-preset="${preset}" style="background:var(--sx-bg)"><h2 class="sx-title" data-node-id="x.t" style="color:#475569">Chữ xám đậm</h2><div class="sx-card" data-sx-fit style="height:calc(60*var(--sx-u));overflow:hidden;font-size:calc(30*var(--sx-u))">${"Đoạn chữ dài trong thẻ thấp. ".repeat(12)}</div></section></body></html>`;
+  const state = `(() => { const h = document.querySelector("h2"), c = document.querySelector(".sx-card"); return { color: getComputedStyle(h).color, inline: h.style.color, inked: h.hasAttribute("data-sx-inked"), fs: c.style.fontSize, fitted: c.getAttribute("data-sx-fitted") }; })()`;
+  await open(page("midnight-tech"), false); await sleep(300);
+  const dark = await ev(state);
+  check("phong cách tối: chữ xám tự sáng, thẻ chật tự co chữ", dark.color === "rgb(248, 250, 252)" && dark.inked && !!dark.fitted, JSON.stringify(dark));
+  await ev(`(() => { for (const e of document.querySelectorAll("[data-sx-preset]")) e.setAttribute("data-sx-preset", "swiss-grid"); window.__sxReset(); window.__sxFit(); })()`); await sleep(300);
+  const switched = await ev(state);
+  await open(page("swiss-grid"), false); await sleep(300);
+  const fresh = await ev(state);
+  check("đổi sang phong cách sáng: màu chữ về như trang dựng mới (không giữ màu vá cho nền tối)", switched.color === fresh.color && switched.inline === fresh.inline && switched.inked === fresh.inked, JSON.stringify({ switched, fresh }));
+  check("đổi phong cách: cỡ chữ vá lại từ cỡ gốc, giống trang dựng mới", switched.fs === fresh.fs && switched.fitted === fresh.fitted, JSON.stringify({ switched, fresh }));
+  await ev(`window.__sxReset()`);
+  const reset = await ev(state);
+  check("__sxReset: trả màu và cỡ chữ nội dòng gốc, bỏ dấu đã vá", reset.inline === "rgb(71, 85, 105)" && !reset.inked && reset.fs.replace(/\s/g, "") === "calc(30*var(--sx-u))" && reset.fitted === null, JSON.stringify(reset));
+}
+
 console.log("1b. Slide biểu đồ: sáu loại, hai phong cách");
 const CH = [
   { kind: "bar", title: "Quý 3 có doanh thu cao nhất năm", labels: ["Quý 1", "Quý 2", "Quý 3", "Quý 4"], values: [8.2, 9.6, 14.8, 12.1], unit: " tỷ", highlight: "Quý 3", source: "Số liệu ví dụ" },

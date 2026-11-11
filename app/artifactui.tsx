@@ -54,7 +54,7 @@ else if(d.t==="changed"){var ev={key:d.key,shared:true};subs.slice().forEach(fun
 else if(d.t==="present")window.__sxPresent=!!d.on;
 else if(d.t==="preset"){var ps=document.querySelectorAll("[data-sx-preset]");for(var q=0;q<ps.length;q++)ps[q].setAttribute("data-sx-preset",d.id);
 if(d.font&&!document.querySelector('link[data-sx-font-p="'+d.id+'"]')){var fl=document.createElement("link");fl.rel="stylesheet";fl.href=d.font;fl.setAttribute("data-sx-font-p",d.id);document.head.appendChild(fl)}
-if(window.__sxFit)setTimeout(function(){window.__sxFit()},80)}});
+if(window.__sxFit)setTimeout(function(){if(window.__sxReset)window.__sxReset();window.__sxFit()},80)}});
 // Chỉ và sửa: Synchro bật chế độ chọn, rê chuột thì viền phần tử, bấm thì gửi vị trí + mã của đúng phần tử đó (Esc để thoát).
 var pk=false,hl=null;
 function box(){if(hl)return hl;hl=document.createElement("div");hl.setAttribute("data-sx-noprint","");hl.style.cssText="position:fixed;pointer-events:none;z-index:2147483647;border:2px solid #2f7bf6;border-radius:4px;background:rgba(47,123,246,.08);display:none";document.documentElement.appendChild(hl);return hl}

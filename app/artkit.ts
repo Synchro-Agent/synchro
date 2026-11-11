@@ -127,7 +127,9 @@ function bgOf(el){var st=[];for(var e=el;e;e=e.parentElement){var c=rgb(getCompu
 var o={r:255,g:255,b:255};for(var i=st.length-1;i>=0;i--){var k=st[i];o={r:k.r*k.a+o.r*(1-k.a),g:k.g*k.a+o.g*(1-k.a),b:k.b*k.a+o.b*(1-k.a)}}return o}
 var L={r:248,g:250,b:252},D={r:15,g:23,b:42};
 function ink(el){var cs=getComputedStyle(el);if(cs.webkitBackgroundClip==="text"||cs.backgroundClip==="text")return;var c=rgb(cs.color);if(!c||c.a<.05)return;var b=bgOf(el);
-if(ratio(c,b)>=4.5)return;var l=ratio(L,b),d=ratio(D,b);if(Math.max(l,d)<=ratio(c,b))return;el.style.color=l>d?"#F8FAFC":"#0F172A";el.setAttribute("data-sx-inked","")}
+if(ratio(c,b)>=4.5)return;var l=ratio(L,b),d=ratio(D,b);if(Math.max(l,d)<=ratio(c,b))return;keep(el,"data-sx-ink0",el.style.color);el.style.color=l>d?"#F8FAFC":"#0F172A";el.setAttribute("data-sx-inked","")}
+// Giá trị nội dòng trước lần vá đầu tiên (data-sx-ink0, data-sx-fs0): reset() trả về đúng như vậy khi đổi phong cách, rồi vá lại theo phong cách mới.
+function keep(el,k,v){if(!el.hasAttribute(k))el.setAttribute(k,v||"")}
 function unit(el){var p=document.createElement("i");p.style.cssText="position:absolute;visibility:hidden;width:calc(1000*var(--sx-u));height:0";(el.parentElement||el).appendChild(p);var w=p.getBoundingClientRect().width/1000;p.remove();return w||1}
 function over(e){return!!e&&(e.scrollHeight>e.clientHeight+1||e.scrollWidth>e.clientWidth+1)}
 var BOX="[data-sx-box],.sx-card,.sx-slide,section.slide,[data-slide],.sx-poster,.sx-tpl-box";
@@ -137,14 +139,17 @@ function bad(f){if(over(f))return true;var bs=f.querySelectorAll(BOX);for(var i=
 // Co theo tỉ lệ giữ thứ bậc tiêu đề / số / thân; co riêng ô lớn nhất từng làm số KPI teo lại trong khi thủ phạm là đoạn văn dài.
 function fitFrame(f){if(!vis(f)||!bad(f))return;var ns=[].slice.call(f.querySelectorAll("[data-node-id],[data-sx-fit]")).filter(vis);if(!ns.length)return;
 var uu=unit(f),o=ns.map(function(e){return parseFloat(getComputedStyle(e).fontSize)/uu});
-for(var sc=.97;sc>.25&&bad(f);sc-=.03){var moved=false;for(var i=0;i<ns.length;i++){var n=Math.max(11,Math.round(o[i]*sc*2)/2);if(n<o[i]){ns[i].style.fontSize="calc("+n+"*var(--sx-u))";ns[i].setAttribute("data-sx-fitted",String(n));moved=true}}if(!moved)break}}
+for(var sc=.97;sc>.25&&bad(f);sc-=.03){var moved=false;for(var i=0;i<ns.length;i++){var n=Math.max(11,Math.round(o[i]*sc*2)/2);if(n<o[i]){keep(ns[i],"data-sx-fs0",ns[i].style.fontSize);ns[i].style.fontSize="calc("+n+"*var(--sx-u))";ns[i].setAttribute("data-sx-fitted",String(n));moved=true}}if(!moved)break}}
 // Ô tự có khung cố định (overflow khác visible) đứng ngoài khung lớn: co chính nó.
-function fitSelf(el){var cs=getComputedStyle(el);if(!vis(el)||cs.overflow==="visible"||!over(el))return;var uu=unit(el),n=Math.round(parseFloat(cs.fontSize)/uu),k=0;while(n>11&&k++<120&&over(el)){n-=1;el.style.fontSize="calc("+n+"*var(--sx-u))"}el.setAttribute("data-sx-fitted",String(n))}
+function fitSelf(el){var cs=getComputedStyle(el);if(!vis(el)||cs.overflow==="visible"||!over(el))return;var uu=unit(el),n=Math.round(parseFloat(cs.fontSize)/uu),k=0;while(n>11&&k++<120&&over(el)){n-=1;keep(el,"data-sx-fs0",el.style.fontSize);el.style.fontSize="calc("+n+"*var(--sx-u))"}el.setAttribute("data-sx-fitted",String(n))}
 function top(e){var t=null;for(var b=e.closest(BOX);b;b=b.parentElement&&b.parentElement.closest(BOX))t=b;return t}
 function run(root){root=root||document;var a=root.querySelectorAll("[data-node-id],[data-sx-fit]"),fr=[];for(var i=0;i<a.length;i++){try{fitSelf(a[i])}catch(e){}var t=top(a[i]);if(t&&fr.indexOf(t)<0)fr.push(t)}
 fr.forEach(function(f){try{fitFrame(f)}catch(e){}});
 var c=root.querySelectorAll("[data-node-id],.sx-heat,[data-sx-autoink]");for(var j=0;j<c.length;j++)try{if(vis(c[j]))ink(c[j])}catch(e){}}
-window.__sxFit=run;
+// Bỏ mọi chỗ đã vá (màu chữ, cỡ chữ) về như trang gốc: đổi phong cách thử (data-sx-preset) thì vá lại từ đầu, không giữ màu / cỡ hợp với phong cách cũ.
+function reset(root){root=root||document;var a=root.querySelectorAll("[data-sx-inked]");for(var i=0;i<a.length;i++){if(a[i].hasAttribute("data-sx-ink0"))a[i].style.color=a[i].getAttribute("data-sx-ink0");a[i].removeAttribute("data-sx-ink0");a[i].removeAttribute("data-sx-inked")}
+var f=root.querySelectorAll("[data-sx-fitted]");for(var j=0;j<f.length;j++){if(f[j].hasAttribute("data-sx-fs0"))f[j].style.fontSize=f[j].getAttribute("data-sx-fs0");f[j].removeAttribute("data-sx-fs0");f[j].removeAttribute("data-sx-fitted")}}
+window.__sxFit=run;window.__sxReset=reset;
 function go(){requestAnimationFrame(function(){run()});try{document.fonts.ready.then(function(){run()});document.fonts.addEventListener("loadingdone",function(){run()})}catch(e){}
 try{new MutationObserver(function(ms){ms.forEach(function(m){if(m.target.hasAttribute&&m.target.hasAttribute("data-sx-on"))requestAnimationFrame(function(){run(m.target)})})}).observe(document.body,{subtree:true,attributes:true,attributeFilter:["data-sx-on"]})}catch(e){}}
 if(document.readyState==="loading")addEventListener("DOMContentLoaded",go);else go()})();`;
