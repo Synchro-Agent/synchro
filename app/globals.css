@@ -4182,3 +4182,35 @@ main#main:focus{outline:0}
 .auth-socials{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;width:300px}
 .auth-socials .glass-button-wrap,.auth-socials .glass-button{width:100%}
 .auth-socials svg{flex:none;width:18px;height:18px}
+
+/* Thẻ (tag) của đoạn chat: khung Gắn thẻ trong menu, chip ở đầu trang chat, hàng lọc ở thanh bên (app/tagsui.tsx). */
+.tag-pick{display:flex;flex-direction:column;gap:6px;min-width:0}
+.tag-pick-h{display:flex;align-items:center;gap:6px;padding:2px 2px 0;font-size:13px}
+.tag-pick-h .icon-btn{width:28px;height:28px}
+.tag-pick .cm-find{margin:0 2px 2px}
+.tag-list{display:flex;flex-direction:column;padding:2px;max-height:min(280px,50vh);overflow-y:auto;overscroll-behavior:contain}
+.tag-list .menu-item{min-width:0}
+.tag-list .menu-item:disabled{opacity:.45;cursor:not-allowed}
+.tag-nm{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tag-cnt{margin-left:auto;font-size:11.5px;color:var(--text-3);font-variant-numeric:tabular-nums}
+.tag-list .menu-item .ck{margin-left:0;width:16px;flex:none;display:inline-flex}
+.tag-empty{margin:4px 10px 6px;font-size:12.5px;line-height:1.4;color:var(--text-3);white-space:normal}
+.menu-item .sc.tag-n{min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:var(--pill);color:var(--text-2);font-size:11px;line-height:18px;text-align:center}
+.tag-chip{display:inline-flex;align-items:center;gap:1px;flex:none;max-width:160px;height:24px;padding:0 9px;border-radius:var(--r-pill);border:.5px solid var(--border-strong);background:var(--card);color:var(--text-2);font-size:12px;font-weight:500;white-space:nowrap;cursor:pointer}
+.tag-chip>span:last-of-type{min-width:0;overflow:hidden;text-overflow:ellipsis}
+.tag-chip>[aria-hidden]{color:var(--text-3)}
+.tag-chip:hover{background:var(--hover);color:var(--text)}
+.tag-chip.on{background:var(--btn-dark);border-color:transparent;color:var(--btn-dark-text)}
+.tag-chip.on>[aria-hidden]{color:inherit;opacity:.7}
+.tag-chip em{font-style:normal;margin-left:5px;font-size:11px;opacity:.65;font-variant-numeric:tabular-nums}
+.tag-chip.more{cursor:default}
+.tb-tags{display:flex;align-items:center;gap:4px;min-width:0;overflow:hidden;margin-left:2px}
+.tag-filter{display:flex;gap:5px;padding:10px 12px 2px 14px;overflow-x:auto;scrollbar-width:none;flex:none}
+.tag-filter::-webkit-scrollbar{display:none}
+.tag-sec{gap:6px}
+.tag-sec>span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-2)}
+.tag-sec .icon-btn{width:24px;height:24px;flex:none}
+.tag-chip.compact{display:none;gap:4px;padding:0 8px}
+@media (max-width:640px){.tb-tags .tag-chip.full{display:none}.tb-tags .tag-chip.compact{display:inline-flex}}
+/* Hàng có menu đang mở nằm trên các hàng sau: hàng mới hiện (gRowIn có transform) tạo lớp xếp chồng riêng và từng vẽ đè lên menu. */
+.chat-wrap:has(.menu:not(.out)){z-index:30}

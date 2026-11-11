@@ -30,6 +30,8 @@ import { startScribe, type Scribe } from "./scribe";
 import type { AuthUser, Providers } from "./auth";
 import { VerifyBanner } from "./verifybanner";
 import { CiteCtx, SourceChips } from "./cites";
+import { allTags, cleanTags, hasTag, tagKey } from "./chattags";
+import { TagChips, TagFilter, TagPicker } from "./tagsui";
 import { Markdown } from "./md";
 import type { PaletteCmd, PaletteGo } from "./palette";
 import { ASK_EVENT } from "./askcard";
@@ -1062,6 +1064,9 @@ export default function Home() {
   const [codeRen, setCodeRen] = useState<number | null>(null);
   const [codeMenu, setCodeMenu] = useState<number | null>(null);
   const [pickProj, setPickProj] = useState(false);
+  // Thẻ: khung "Gắn thẻ" đang mở trong menu ⋮ / menu tiêu đề; thẻ đang lọc ở thanh bên (null: tất cả).
+  const [pickTag, setPickTag] = useState(false);
+  const [tagFilter, setTagFilter] = useState<string | null>(null);
   const [pjClosed, setPjClosed] = usePref<Record<number, boolean>>("pjClosed", {});
   const [titleMenu, setTitleMenu] = useState(false);
   const [renaming, setRenaming] = useState<number | null>(null);
@@ -1990,12 +1995,14 @@ export default function Home() {
   // Đoạn chat đang mở vừa bị xóa ở thiết bị khác.
   useEffect(() => { if (loaded && view === "chat" && cur !== null && !chats.some((c) => c.id === cur)) { setCur(null); setView("new"); } }, [chats]); // eslint-disable-line react-hooks/exhaustive-deps
   const togglePin = (id: number) => setChats((cs) => cs.map((x) => (x.id === id ? { ...x, pinned: !x.pinned } : x)));
+  const setChatTags = (id: number, tags: string[]) => setChats((cs) => cs.map((x) => (x.id === id ? { ...x, tags: tags.length ? tags : undefined } : x)));
+  const filterTag = (t: string | null) => { setTagFilter(t); if (t) setOpen(true); };
 
   useEffect(() => {
     const h = (e: MouseEvent) => {
       const t = e.target as HTMLElement;
       if (userRef.current && !userRef.current.contains(t)) setUserMenu(false);
-      if (!t.closest(".chat-wrap")) { setChatMenu(null); setCodeMenu(null); setPickProj(false); }
+      if (!t.closest(".chat-wrap")) { setChatMenu(null); setCodeMenu(null); setPickProj(false); if (!t.closest(".title-wrap")) setPickTag(false); }
       if (!t.closest(".title-wrap")) setTitleMenu(false);
     };
     document.addEventListener("mousedown", h);
@@ -2085,6 +2092,7 @@ export default function Home() {
     code: (id) => { setCodeCur(id); setView("code"); if (codeList.find((c) => c.id === id)?.archived) codePatch(id, { archived: false }); },
     brain: (title) => window.dispatchEvent(new CustomEvent("synchro:brain", { detail: { title } })),
     inbox: () => setView("inbox"),
+    tag: (t) => filterTag(t),
   };
   // Mở kết quả tác vụ nền thành đoạn chat để hỏi tiếp.
   const openAsChat = (title: string, text: string) => {
@@ -2126,6 +2134,9 @@ export default function Home() {
     else { setChats((cs) => [{ id: now, title: (u || a).slice(0, 40), msgs }, ...cs]); setCur(now); setView("chat"); }
   };
   const visible = chats.filter((c) => !c.inc);
+  const tagsAll = allTags(visible);
+  // Thẻ đang lọc không còn đoạn chat nào (vừa gỡ thẻ cuối): thôi lọc.
+  const tagOn = tagFilter && tagsAll.some((x) => tagKey(x.tag) === tagKey(tagFilter)) ? tagFilter : null;
   // Chọn hàng loạt ở thanh bên: đoạn chat và phiên code (ghim, đưa vào dự án, lưu trữ, xóa nhiều mục cùng lúc).
   type SideItem = { k: "chat"; c: Chat } | { k: "code"; c: CodeItem };
   const sideItems: SideItem[] = [...codeList.map((c) => ({ k: "code" as const, c })), ...visible.map((c) => ({ k: "chat" as const, c }))];
@@ -2310,12 +2321,15 @@ export default function Home() {
               ) : (
                 <button className={`chat-item ${view === "chat" && cur === c.id ? "active" : ""}`} aria-current={view === "chat" && cur === c.id ? "page" : undefined} onClick={() => { setCur(c.id); setView("chat"); }}>{sb.on && <BulkCheck on={sb.has({ k: "chat", c })} />}<span key={c.title} className="ct-t" data-notr>{c.title}</span>{needYou.has(c.id) ? <span className="ct-need" data-tip={tr("Đang chờ bạn duyệt")}>{tr("Cần bạn")}</span> : running.has(c.id) && <span className="ct-run" role="img" aria-label={tr("Đang trả lời")} data-tip={tr("Đang trả lời")} />}</button>
               )}
-              {!sb.on && <button className="dots" aria-label="Tùy chọn" aria-haspopup="menu" aria-expanded={chatMenu === c.id} onClick={() => { setChatMenu(chatMenu === c.id ? null : c.id); setPickProj(false); }}>⋮</button>}
-                <Menu open={!!(chatMenu === c.id)} className="down" style={{ top: 34, right: 0, width: 220 }}>
-                  {!pickProj ? (
+              {!sb.on && <button className="dots" aria-label="Tùy chọn" aria-haspopup="menu" aria-expanded={chatMenu === c.id} onClick={() => { setChatMenu(chatMenu === c.id ? null : c.id); setPickProj(false); setPickTag(false); setTitleMenu(false); }}>⋮</button>}
+                <Menu open={!!(chatMenu === c.id)} className="down" style={{ top: 34, right: 0, width: pickTag ? 240 : 220 }}>
+                  {pickTag ? (
+                    <TagPicker tags={cleanTags(c.tags)} all={tagsAll} onChange={(t) => setChatTags(c.id, t)} onBack={() => setPickTag(false)} />
+                  ) : !pickProj ? (
                     <>
                       <button className="menu-item" onClick={() => { togglePin(c.id); setChatMenu(null); }}>{c.pinned ? <I.M icon="PinOff" /> : <I.M icon="Pin" />}{c.pinned ? "Bỏ ghim" : "Ghim"}</button>
                       <button className="menu-item" onClick={() => { setRenaming(c.id); setChatMenu(null); }}><I.Pencil />Đổi tên</button>
+                      <button className="menu-item" onClick={() => setPickTag(true)}><I.Icon name="Tag" />Gắn thẻ{c.tags?.length ? <span className="sc tag-n">{c.tags.length}</span> : <span className="sc"><I.ChevronR size={16} /></span>}</button>
                       <button className="menu-item" onClick={() => (projects.length ? setPickProj(true) : (say("Hãy tạo dự án trước ở mục Dự án"), setChatMenu(null)))}><I.Layers />Thêm vào dự án<span className="sc"><I.ChevronR size={16} /></span></button>
                       {c.project !== undefined && <button className="menu-item" onClick={() => { setChats((cs) => cs.map((x) => (x.id === c.id ? { ...x, project: undefined } : x))); setChatMenu(null); say("Đã gỡ khỏi dự án"); }}><I.Layers />Gỡ khỏi dự án</button>}
                       <hr />
@@ -2381,8 +2395,19 @@ export default function Home() {
           const codePinned = codeList.filter((c) => c.pinned && !c.archived);
           const codeRest = codeList.filter((c) => !c.pinned && !c.archived);
           const codeArch = codeList.filter((c) => c.archived);
+          if (tagOn) {
+            const hit = visible.filter((c) => hasTag(c.tags, tagOn));
+            return (
+              <div className="chat-scroll">
+                <TagFilter all={tagsAll} cur={tagOn} onPick={setTagFilter} />
+                <div className="section-label tag-sec"><span><span aria-hidden>#</span><span data-notr>{tagOn}</span> · {hit.length}</span><button className="icon-btn" onClick={() => setTagFilter(null)} aria-label="Bỏ lọc theo thẻ" data-tip="Bỏ lọc theo thẻ"><I.X size={14} /></button></div>
+                <div className="chat-list">{hit.map(row)}</div>
+              </div>
+            );
+          }
           return (
             <div className="chat-scroll">
+              <TagFilter all={tagsAll} cur={null} onPick={setTagFilter} />
               {(pinned.length > 0 || pinProjs.length > 0 || codePinned.length > 0) && (
                 <>
                   <div className="section-label sec-toggle"><button className="sec-btn" onClick={() => setPinOpen(!pinOpen)}><span>Đã ghim</span><span className={`sec-chev ${pinOpen ? "open" : ""}`}><I.Chevron size={14} /></span></button></div>
@@ -2426,16 +2451,20 @@ export default function Home() {
             {!open && <SideToggle onClick={() => setOpen(true)} />}
             {view === "chat" && chat && (
               <div className="title-wrap" style={{ position: "relative" }}>
-                <button className="sel" style={{ fontSize: 14 }} aria-haspopup="menu" aria-expanded={titleMenu} onClick={() => setTitleMenu(!titleMenu)}><span className="sel-t" data-notr>{chat.title}</span><I.Chevron size={14} /></button>
-                  <Menu open={!!(titleMenu)} className="down" style={{ top: 36, left: 0, width: 200 }}>
+                <button className="sel" style={{ fontSize: 14 }} aria-haspopup="menu" aria-expanded={titleMenu} onClick={() => { setTitleMenu(!titleMenu); setPickTag(false); setChatMenu(null); }}><span className="sel-t" data-notr>{chat.title}</span><I.Chevron size={14} /></button>
+                  <Menu open={!!(titleMenu)} className="down" style={{ top: 36, left: 0, width: pickTag ? 240 : 200 }}>
+                    {pickTag && titleMenu ? <TagPicker tags={cleanTags(chat.tags)} all={tagsAll} onChange={(t) => setChatTags(chat.id, t)} onBack={() => setPickTag(false)} /> : <>
                     <button className="menu-item" onClick={() => { togglePin(chat.id); setTitleMenu(false); }}>{chat.pinned ? <I.M icon="PinOff" /> : <I.M icon="Pin" />}{chat.pinned ? "Bỏ ghim" : "Ghim"}</button>
                     <button className="menu-item" onClick={() => { setRenaming(chat.id); setOpen(true); setTitleMenu(false); }}><I.Pencil />Đổi tên</button>
+                    <button className="menu-item" onClick={() => setPickTag(true)}><I.Icon name="Tag" />Gắn thẻ{chat.tags?.length ? <span className="sc tag-n">{chat.tags.length}</span> : <span className="sc"><I.ChevronR size={16} /></span>}</button>
                     <button className="menu-item" onClick={() => { setTitleMenu(false); autoTitle(chat.id, true); }}><I.Sparkle />Đặt tên tự động</button>
                     <hr />
                     <button className="menu-item del" onClick={() => { setDelId(chat.id); setTitleMenu(false); }}><I.Trash />Xóa</button>
+                    </>}
                   </Menu>
               </div>
             )}
+            {view === "chat" && chat ? <TagChips tags={cleanTags(chat.tags)} onPick={filterTag} onOpen={() => { setChatMenu(null); setTitleMenu(true); setPickTag(true); }} /> : null}
           </div>
           {(view === "new" || view === "chat") && pill}
           <div className="right">

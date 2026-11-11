@@ -37,6 +37,17 @@ export const UX_VI2EN: Record<string, string> = {
   "Tên miền không hợp lệ.": "Invalid domain.",
   "Ứng dụng không hợp lệ.": "Invalid app.",
   "Thiếu tham số.": "Missing parameter.",
+  // Thẻ (tag) của đoạn chat
+  "Gắn thẻ": "Add tags",
+  "Bỏ lọc theo thẻ": "Clear tag filter",
+  "Thẻ": "Tags",
+  "Tìm hoặc tạo thẻ…": "Find or create a tag…",
+  "Tìm hoặc tạo thẻ": "Find or create a tag",
+  "Tạo thẻ": "Create tag",
+  "Chưa có thẻ nào. Gõ tên rồi nhấn Enter để tạo.": "No tags yet. Type a name and press Enter to create one.",
+  "Mỗi đoạn chat có tối đa 8 thẻ.": "Each chat can have up to 8 tags.",
+  "Lọc đoạn chat có thẻ": "Show chats tagged",
+  "Lọc theo thẻ": "Filter by tag",
 };
 export const UX_RULES_EN: [RegExp, (m: RegExpMatchArray) => string][] = [
   [/^Câu trả lời trong “(.+)” gặp lỗi$/, (m) => `The reply in “${m[1]}” hit an error`],
