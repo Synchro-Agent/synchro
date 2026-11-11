@@ -26,11 +26,11 @@ var sxKitFonts=${JSON.stringify(Object.keys(FONT_SPEC))};
 function sxFreeze(){var fz=document.createElement("style");fz.setAttribute("data-sx-noprint","");
 fz.textContent="*,*::before,*::after{animation-duration:0s!important;animation-delay:0s!important;animation-iteration-count:1!important;transition:none!important}";
 document.head.appendChild(fz);return function(){fz.remove()}}
-// Chụp PNG: slide đang xem, poster (đúng khung 3:4, không kèm phần nền hai bên), hoặc cả trang. translate:none vì khung tự canh giữa bằng translate, bản sao trong ảnh không được lệch theo.
+// Chụp PNG (poster, slide: ít nhất 3 lần độ phân giải đang hiện): slide đang xem, poster (đúng khung 3:4, không kèm phần nền hai bên), hoặc cả trang. translate:none vì khung tự canh giữa bằng translate, bản sao trong ảnh không được lệch theo.
 function sxCapture(id,fontCss){var thaw=sxFreeze();requestAnimationFrame(function(){requestAnimationFrame(function(){
 var P=document.querySelectorAll(".sx-poster"),fx=(window.__sxCur&&window.__sxCur())||(P.length===1?P[0]:null),el=fx||document.body;
 var bg=getComputedStyle(el).backgroundColor;if(!bg||bg==="rgba(0, 0, 0, 0)")bg=getComputedStyle(document.body).backgroundColor;if(!bg||bg==="rgba(0, 0, 0, 0)")bg="#ffffff";
-var w=el.scrollWidth||innerWidth,pr=fx?Math.max(2,1920/w):2;
+var w=el.scrollWidth||innerWidth,pr=fx?Math.max(3,1920/w):2;
 htmlToImage.toPng(el,{pixelRatio:pr,skipFonts:true,fontEmbedCSS:fontCss||undefined,backgroundColor:bg,style:fx?{translate:"none"}:undefined,width:w,height:el===document.body?Math.max(document.documentElement.scrollHeight,innerHeight):el.scrollHeight||innerHeight}).then(function(u){thaw();post({t:"png",id:id,data:u})},function(x){thaw();post({t:"png",id:id,error:String(x&&x.message||x)})})})})}
 function sxPptx(id,fontCss){
 var all=window.__sxAll?window.__sxAll():[];

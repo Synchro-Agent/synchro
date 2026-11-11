@@ -179,6 +179,16 @@ for (const style of [null, "midnight-tech"]) for (const [id, props] of DOCS) {
   check(`${tag}: in ra PDF ${pages} trang A4`, pages >= 1 && (id === "doc-invoice" || id === "doc-paper" || pages >= 2), String(pages));
 }
 
+console.log("4. Poster theo mẫu: các khổ mạng xã hội, hai phong cách");
+for (const style of ["linear-dark", "neo-brutalist"]) for (const [size, vw, vh] of [["og", 1200, 630], ["square", 1080, 1080], ["story", 1080, 1920]]) {
+  await view(vw, vh);
+  await open(T.expandTemplates(block({ styleArchetype: style, pages: [{ templateId: "poster-og", props: { size, tag: "Ra mắt 2026", title: "Trợ lý AI viết báo cáo tài chính trong hai phút", metricValue: "+142%", metricLabel: "năng suất đội kế toán", author: "Synchro · Hà Nội" } }] })), false);
+  const found = (await probe(`document.querySelector(".sx-poster")`, true)).filter((x) => !/ảnh hỏng/.test(x.kind));
+  const box = await ev(`(() => { const r = document.querySelector(".sx-poster").getBoundingClientRect(); return [Math.round(r.width), Math.round(r.height)]; })()`);
+  check(`poster ${size} ${style}: đúng khung ${box.join("×")}, không đo thấy lỗi`, Math.abs(box[0] / box[1] - vw / vh) < 0.01 && !found.length, JSON.stringify(found));
+  await shot(`poster-${size}-${style}.png`);
+}
+
 ws.close(); chrome.kill();
 console.log(`\nẢnh: ${OUT}`);
 console.log(fails ? `${fails} lỗi` : "Tất cả đạt");

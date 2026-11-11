@@ -111,5 +111,12 @@ ok(/data-sx-preset="editorial-serif"/.test(prop) && /5\.000\.000 ₫/.test(prop)
 ok(K.designTurn({ typed: "viết báo cáo thị trường", art: true, code: true, seed: "a" }).block.includes("doc-invoice") && A.KIT_CSS.includes("@page sx-cover"), "khối tài liệu có thực đơn mẫu, bộ CSS có trang bìa không số trang");
 ok(K.priorDesign([`<artifact identifier="r" type="text/html">${block({ pages: [{ templateId: "doc-report", props: {} }] })}</artifact>`])?.format === "doc", "lượt sau nhận ra tài liệu viết bằng mẫu");
 
+console.log("8. Poster / ảnh mạng xã hội");
+const po = T.expandTemplates(block([{ templateId: "poster-master-og", props: { tag: "Ra mắt", title: "AI viết báo cáo trong 2 phút", metricValue: "+142%", metricLabel: "năng suất", author: "Synchro" } }]));
+ok(/data-sx-preset="midnight-tech"/.test(po) && /class="sx-poster sx-tpl-poster sx-aurora" data-sx-size="og"/.test(po) && /sx-up/.test(po), "poster-master-og: 1200×630, nền tối mặc định, số tăng màu tăng");
+ok(/data-sx-size="story"/.test(T.expandTemplates(block([{ templateId: "poster-og", props: { size: "story", title: "x" } }]))) && /data-sx-size="og"/.test(T.expandTemplates(block([{ templateId: "poster-og", props: { size: "khổng lồ", title: "x" } }]))), "kích thước lạ lùi về og");
+for (const [k, [w, h]] of Object.entries(T.POSTER_SIZES).filter(([k]) => k !== "poster")) ok(A.KIT_CSS.includes(`.sx-poster[data-sx-size=${k}]{--sx-u:min(calc(100vw/${w}),calc(100vh/${h}))`), `bộ CSS: khung ${k} ${w}×${h}`);
+ok(K.designTurn({ typed: "Thiết kế poster sự kiện ra mắt", art: true, code: true, seed: "a" }).block.includes("poster-og"), "khối đồ họa có mẫu poster");
+
 console.log(`\n${pass} đạt, ${fail} lỗi`);
 process.exit(fail ? 1 : 0);

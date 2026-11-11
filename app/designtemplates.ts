@@ -59,10 +59,22 @@ ${side(t, "sideCardTop")}${side(b, "sideCardBottom")}</div>${str(p.source) ? `<p
   },
 };
 
+// Poster / ảnh mạng xã hội (dựng lại theo ý MasterPosterTemplate của chủ dự án): nền tối có quầng cực quang và lưới mờ, nhãn viên thuốc, tiêu đề lớn, thẻ KPI.
+// Kích thước: og 1200×630 (mặc định), square 1080×1080, portrait 1080×1350, story 1080×1920, poster 1080×1440. Tải về › PNG chụp đúng khung poster.
+export const POSTER_SIZES: Record<string, [number, number]> = { og: [1200, 630], square: [1080, 1080], portrait: [1080, 1350], story: [1080, 1920], poster: [1080, 1440] };
+const POSTERS: Record<string, Tpl["render"]> = {
+  "poster-og": (p, c, pg) => {
+    const size = str(p.size, 12) in POSTER_SIZES ? str(p.size, 12) : "og", bg = safeUrl(p.image), v = str(p.metricValue, 24);
+    return `<div class="sx-poster sx-tpl-poster sx-aurora" data-sx-size="${size}" data-sx-template="poster-og">${img(bg, "sx-tpl-poster-img", p.title)}<i class="sx-tpl-poster-grid" aria-hidden="true"></i>
+<header class="sx-tpl-poster-top">${str(p.tag) ? `<span class="sx-tpl-tag" ${nid(c, "tag")}>${esc(str(p.tag, 40))}</span>` : "<span></span>"}${str(p.author) ? `<span class="sx-tpl-poster-by" ${nid(c, "author")}>${rich(p.author, 80)}</span>` : ""}</header>
+<div class="sx-tpl-poster-main"><h1 class="sx-tpl-poster-title" ${nid(c, "title")}>${rich(p.title, 160)}</h1>${v ? `<div class="sx-tpl-poster-kpi"${morph(pg, p)}><span class="sx-tpl-poster-v sx-num${/^[+▲↑]/.test(v) ? " sx-up" : ""}" ${nid(c, "metricValue")}>${esc(v)}</span>${str(p.metricLabel) ? `<span class="sx-tpl-poster-l" ${nid(c, "metricLabel")}>${rich(p.metricLabel, 80)}</span>` : ""}</div>` : ""}</div></div>`;
+  },
+};
+
 // Tên khác của cùng mẫu: mã trong bảng của chủ dự án và vài cách gọi hay gặp.
 export const TEMPLATE_ALIASES: Record<string, string> = {
   "slide-apple-intro": "slide-cover", "slide-intro": "slide-cover", "slide-apple-fact": "slide-fact", "slide-apple-quote": "slide-quote", "slide-apple-section": "slide-section",
-  "slide-seriph-two-cols": "slide-two-cols", "slide-two-columns": "slide-two-cols", "slide-seriph-image-right": "slide-image-right", "slide-depth": "slide-depth-hero", "slide-bento": "slide-bento-3",
+  "slide-seriph-two-cols": "slide-two-cols", "slide-two-columns": "slide-two-cols", "slide-seriph-image-right": "slide-image-right", "slide-depth": "slide-depth-hero", "slide-bento": "slide-bento-3", "poster-master-og": "poster-og", "poster": "poster-og", "poster-social": "poster-og", "banner": "poster-og",
 };
 const REGISTRY: Record<string, Tpl> = Object.fromEntries(Object.entries(SLIDES).map(([k, render]) => [k, { kind: "slide" as Kind, render }]));
 /** Cho các mô-đun mẫu khác (thư, tài liệu, poster, biểu đồ) gắn vào cùng sổ đăng ký. */
@@ -70,6 +82,7 @@ export function registerTemplates(kind: Kind, list: Record<string, Tpl["render"]
   for (const [k, render] of Object.entries(list)) REGISTRY[k] = { kind, render };
   Object.assign(TEMPLATE_ALIASES, aliases);
 }
+registerTemplates("poster", POSTERS);
 registerTemplates("email", EMAIL_TEMPLATES, EMAIL_ALIASES);
 registerTemplates("doc", DOC_TEMPLATES, DOC_ALIASES);
 export const templateId = (id: string) => TEMPLATE_ALIASES[id] ?? id;
@@ -211,9 +224,25 @@ export const SLIDE_TPL_CSS = `.sx-tpl-list{margin:0;padding-left:1.2em;display:f
 .sx-tpl-depth .sx-eyebrow{color:#F8FAFC;opacity:.86}.sx-tpl-depth-sub{margin:0;font-size:${u(26)};line-height:1.4;color:#E2E8F0;text-wrap:pretty}
 .sx-tpl-herocard{background:var(--sx-surface);background:color-mix(in oklab,var(--sx-vivid) 9%,var(--sx-surface));justify-content:space-between;gap:${u(12)}}
 .sx-tpl-hero-num{font-size:${u(112)};line-height:1.1}.sx-tpl-side{justify-content:center;gap:${u(10)}}
+${Object.entries(POSTER_SIZES).filter(([k]) => k !== "poster").map(([k, [w, h]]) => `.sx-poster[data-sx-size=${k}]{--sx-u:min(calc(100vw/${w}),calc(100vh/${h}));width:min(100%,${u(w)});aspect-ratio:${w}/${h}}`).join("")}
+.sx-tpl-poster{justify-content:space-between;padding:${u(64)};isolation:isolate;color:var(--sx-ink)}
+.sx-tpl-poster-img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:.32;z-index:-2}
+.sx-tpl-poster-grid{position:absolute;inset:0;z-index:-1;background-image:linear-gradient(color-mix(in oklab,var(--sx-ink) 7%,transparent) ${u(1)},transparent ${u(1)}),linear-gradient(90deg,color-mix(in oklab,var(--sx-ink) 7%,transparent) ${u(1)},transparent ${u(1)});background-size:${u(56)} ${u(56)};-webkit-mask-image:radial-gradient(ellipse at 60% 35%,#000 20%,transparent 72%);mask-image:radial-gradient(ellipse at 60% 35%,#000 20%,transparent 72%)}
+.sx-tpl-poster-top{display:flex;align-items:center;justify-content:space-between;gap:${u(24)}}
+.sx-tpl-tag{padding:${u(8)} ${u(18)};border-radius:999px;font-size:${u(18)};font-weight:700;letter-spacing:.08em;text-transform:uppercase;line-height:1.3;color:var(--sx-accent);background:var(--sx-raised);background:color-mix(in oklab,var(--sx-vivid) 15%,transparent);border:${u(1)} solid color-mix(in oklab,var(--sx-vivid) 40%,transparent)}
+.sx-tpl-poster-by{font-size:${u(20)};color:var(--sx-muted)}
+.sx-tpl-poster-main{display:flex;justify-content:space-between;align-items:flex-end;gap:${u(40)}}
+.sx-tpl-poster-title{margin:0;max-width:${u(700)};font-family:var(--sx-head);font-size:${u(60)};font-weight:800;line-height:var(--sx-lh,1.15);letter-spacing:-.03em;text-wrap:balance}
+.sx-tpl-poster-kpi{display:flex;flex-direction:column;gap:${u(4)};flex:none;padding:${u(28)} ${u(36)};border-radius:${u(24)};background:color-mix(in oklab,var(--sx-surface) 70%,transparent);border:${u(1)} solid var(--sx-line)}
+.sx-tpl-poster-v{font-family:var(--sx-head);font-size:${u(56)};font-weight:800;line-height:1.1;letter-spacing:-.04em;color:var(--sx-accent)}.sx-tpl-poster-v.sx-up{color:var(--sx-pos)}
+.sx-tpl-poster-l{font-size:${u(18)};color:var(--sx-muted)}
+.sx-poster:not([data-sx-size=og]) .sx-tpl-poster-main{flex-direction:column;align-items:flex-start;gap:${u(48)}}.sx-poster:not([data-sx-size=og]) .sx-tpl-poster-title{font-size:${u(88)};max-width:none}
+.sx-poster:not([data-sx-size=og]) .sx-tpl-tag{font-size:${u(24)}}.sx-poster:not([data-sx-size=og]) .sx-tpl-poster-by{font-size:${u(26)}}.sx-poster:not([data-sx-size=og]) .sx-tpl-poster-v{font-size:${u(96)}}.sx-poster:not([data-sx-size=og]) .sx-tpl-poster-l{font-size:${u(26)}}
+.sx-poster[data-sx-size=story] .sx-tpl-poster-title{font-size:${u(104)}}
 .sx-tpl-side-num{margin:0;font-family:var(--sx-head);font-size:${u(44)};font-weight:800;line-height:1.15;letter-spacing:-.02em}`;
 
 // ---------------------------------------------------------------- hợp đồng mẫu gửi model (chỉ của định dạng lượt này)
+export const POSTER_TPL_GUIDE = `Poster, ảnh mạng xã hội, banner có chữ: dùng mẫu, trang text/html chỉ gồm <script type="application/json" data-sx-template>{"styleArchetype":"<phong cách>","pages":[{"templateId":"poster-og","props":{…}}]}</script>. poster-og {size:"og" (1200×630, mặc định)|"square" 1080²|"portrait" 1080×1350|"story" 1080×1920|"poster" 1080×1440,tag (≤3 từ),title (≤12 từ),metricValue,metricLabel,author,image?}; người dùng tải PNG bằng Tải về › PNG. Không có mẫu hợp thì tự dựng .sx-poster.`;
 export const SLIDE_TPL_GUIDE = `Mẫu điền sẵn (nên dùng: nhanh, không vỡ khung, xuất PowerPoint giữ chữ sửa được): trong trang text/html chỉ cần <script type="application/json" data-sx-template>{"styleArchetype":"<phong cách>","pages":[{"templateId":"…","props":{…}},…]}</script>, Synchro tự dựng slide; trộn được với <section class="slide sx-slide"> tự viết cho trang không có mẫu. Chữ thường, **chữ** để nhấn, \\n xuống dòng; không viết HTML trong props.
 slide-cover {badge,title,subtitle,author,date,image?} · slide-fact {eyebrow,bigMetric,description,source?} · slide-quote {quote,author,role} · slide-section {number,title,subtitle} · slide-two-cols {eyebrow,title,kicker,left:{heading,body|bullets[]},right:{…},source?} · slide-image-right {eyebrow,title,kicker,body|bullets[],image,caption?} · slide-depth-hero {eyebrow,giantBehindText (≤2 từ),subtitle,image,cutout? (PNG nền trong suốt; không có thì bỏ),imageQuery} · slide-bento-3 {eyebrow,actionTitle,kicker,heroCard:{title,metric,detail},sideCardTop:{title,metric?,bullet},sideCardBottom:{…},source?}.
 Nhịp: không hai trang liền cùng mẫu; tiêu đề kết luận dưới 10 từ, chữ trong thẻ dưới 15 từ; cùng "morphId":"!!ten" ở hai trang liền cho vật thể bay sang trang sau (PowerPoint Morph).`;
