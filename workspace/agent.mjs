@@ -14,6 +14,7 @@ import { WebSocketServer, WebSocket } from "ws";
 import { BrowserError, createBrowser, devJson } from "./browser-core.mjs";
 import { createRelay } from "./ext-relay.mjs";
 import { clipSink, collectOutputs, createRunQueue, isMediaRun, QueueFull, safeWrite } from "./safefs.mjs";
+import { createWarmPool } from "./warmpool.mjs";
 
 const env = (k, d) => process.env[k] ?? d;
 const PORT = Number(env("WS_AGENT_PORT", 3555));
@@ -351,6 +352,44 @@ const keepBusy = new Map();
 // IP cố định cho container có mạng (trong RUN_SUBNET), và các IP đang được ra mọi trang web công khai (chỉ trong lúc chạy).
 const usedIps = new Set(), webIps = new Set();
 const pickIp = () => { const pre = RUN_GW.replace(/\.\d+$/, "."); for (let i = 10; i < 250; i++) { const ip = pre + i; if (!usedIps.has(ip)) { usedIps.add(ip); return ip; } } return null; };
+// Môi trường chung của container chạy code; lần chạy có mạng thêm biến proxy (runEnv).
+const BASE_ENV = { HOME: HOME, LANG: "C.UTF-8", LC_ALL: "C.UTF-8", MPLBACKEND: "Agg", PYTHONUNBUFFERED: "1", PYTHONDONTWRITEBYTECODE: "1",
+  PIP_BREAK_SYSTEM_PACKAGES: "1", PIP_DISABLE_PIP_VERSION_CHECK: "1", NPM_CONFIG_PREFIX: `${HOME}/.npm-global`, npm_config_update_notifier: "false",
+  PATH: `${HOME}/.local/bin:${HOME}/.npm-global/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin` };
+const proxyEnv = () => {
+  const proxy = `http://${RUN_GW}:${RUN_PROXY_PORT}`;
+  // SYNCHRO_CHROME_PROXY: Chromium không đọc HTTPS_PROXY; /etc/chromium.d/synchro trong image thêm --proxy-server khi có biến này.
+  return { HTTPS_PROXY: proxy, HTTP_PROXY: proxy, https_proxy: proxy, http_proxy: proxy, NO_PROXY: "localhost,127.0.0.1", no_proxy: "localhost,127.0.0.1", SYNCHRO_CHROME_PROXY: proxy };
+};
+const envFlags = (e) => Object.entries(e).flatMap(([k, v]) => ["-e", `${k}=${v}`]);
+// Dùng mọi CPU của máy nhưng ưu tiên thấp (cpu-shares 256): khi tranh CPU, máy chủ web chạy trước. Chromium mở nhiều tiến trình,
+// ffmpeg nhiều luồng: pids 1024, /dev/shm 512 MB.
+const boxLimits = () => ["--hostname", "sandbox", "--init", "--memory", RUN_MEMORY, "--memory-swap", RUN_MEMORY, "--cpus", CPUS, "--cpu-shares", "256", "--pids-limit", "1024",
+  "--cap-drop", "ALL", "--security-opt", "no-new-privileges", "--shm-size", "512m", "-u", UID, "-w", `${HOME}/run`];
+// Kho container khởi động sẵn (workspace/warmpool.mjs): lần chạy không phải chờ container khởi động (~1 giây). Container trong kho nằm
+// trên mạng chạy code với IP riêng (lần chạy có mạng dùng luôn IP đó; lần chạy không mạng thì ngắt mạng trước khi chạy), gắn thư mục rỗng
+// riêng; mỗi cái dùng một lần rồi xóa. SYNCHRO_WARM_POOL (hoặc WS_WARM_POOL) = số container giữ sẵn, mặc định 2, 0 = tắt.
+const WARM = Number(env("SYNCHRO_WARM_POOL", env("WS_WARM_POOL", "2")));
+const warmDir = (id) => `${ROOT}/_runs/warm-${id}`;
+const warm = createWarmPool({
+  size: Number.isFinite(WARM) ? WARM : 2, image: IMAGE, uid: UID, log, minMemMB: Number(env("WS_WARM_MIN_MB", 1536)),
+  docker: (a, o) => run("docker", a, o), pickIp, releaseIp: (ip) => { usedIps.delete(ip); webIps.delete(ip); }, dirOf: warmDir,
+  createArgs: (name, ip, dir) => ["run", "-d", "--rm", "--name", name, ...boxLimits(), "--network", RUN_NET, "--ip", ip, "--label", "synchro.run=_warm",
+    "-v", `${dir}:${HOME}/run`, ...envFlags(BASE_ENV), IMAGE, "sleep", "infinity"],
+});
+// Chuyển nội dung thư mục làm việc sang thư mục gắn vào container trong kho và ngược lại (đổi tên trong cùng ổ đĩa, không chép).
+// Ghi lại nơi gốc ra tệp .origin ngoài thư mục gắn: dịch vụ chết giữa chừng thì lần khởi động sau trả tệp về (restoreWarm).
+const moveAll = (from, to) => { for (const n of fs.readdirSync(from)) fs.renameSync(`${from}/${n}`, `${to}/${n}`); };
+function restoreWarm() {
+  const runs = `${ROOT}/_runs`;
+  for (const f of fs.existsSync(runs) ? fs.readdirSync(runs) : []) {
+    if (!f.endsWith(".origin")) continue;
+    try {
+      const to = fs.readFileSync(`${runs}/${f}`, "utf8").trim(), from = `${runs}/${f.slice(0, -7)}`;
+      if (to.startsWith(`${ROOT}/_keep/`) && !to.includes("..") && fs.existsSync(from)) { fs.mkdirSync(to, { recursive: true }); moveAll(from, to); log("trả thư mục giữ lại về chỗ cũ", to); }
+    } catch (e) { log("không trả được thư mục giữ lại", f, e.message); }
+  }
+}
 function sweepKeep(u) {
   const root = keepRoot(u);
   if (!fs.existsSync(root)) return;
@@ -387,7 +426,7 @@ async function runOnce(u, { files = [], argv, stdin = null, net: wantNet = false
   diskGuard();
   const sec = Math.max(5, Math.min(Number(timeout) || 120, 900));
   const id = crypto.randomBytes(8).toString("hex");
-  const dir = keep ? `${keepRoot(u)}/${keep}` : runDir(id), name = "srun-" + id;
+  const dir = keep ? `${keepRoot(u)}/${keep}` : runDir(id);
   // Chờ lần chạy trước trong cùng thư mục giữ lại xong; người dùng bấm Dừng lúc đang chờ thì thôi, không chạy nữa.
   const stopped = new Promise((ok) => signal?.addEventListener("abort", ok, { once: true }));
   while (keep && keepBusy.has(dir) && !signal?.aborted) await Promise.race([keepBusy.get(dir).catch(() => {}), stopped]);
@@ -405,9 +444,23 @@ async function runOnce(u, { files = [], argv, stdin = null, net: wantNet = false
   catch (e) { freeMedia(); release(); throw e instanceof QueueFull ? new E(503, e.message) : e; }
   const waited = Math.round((Date.now() - queuedAt) / 1000);
   if (waited >= 2) log("lần chạy chờ", u, `${waited} giây`, `đang chạy ${runQ.running}, đang chờ ${runQ.queued}`);
-  const ip = wantNet ? pickIp() : null;
+  // Container khởi động sẵn: lần chạy không mạng thì ngắt mạng của nó trước (ngắt lỗi thì bỏ, không chạy code không mạng trên container còn mạng).
+  let pooled = warm.take();
+  if (pooled && !wantNet) {
+    const d = await run("docker", ["network", "disconnect", "-f", RUN_NET, pooled.name], { timeout: 20_000 });
+    usedIps.delete(pooled.ip);
+    if (d.code) { log("kho container: không ngắt được mạng", d.err.trim().slice(0, 200)); run("docker", ["rm", "-f", pooled.name], { timeout: 20_000 }); fs.rmSync(pooled.dir, { recursive: true, force: true }); pooled = null; }
+  }
+  const ip = pooled && wantNet ? pooled.ip : wantNet ? pickIp() : null;
   if (wantNet && !ip) { freeSlot(); freeMedia(); release(); throw new E(503, "Máy chủ đang chạy nhiều code cùng lúc. Hãy thử lại sau ít giây."); }
   if (ip && web) webIps.add(ip);
+  let name = pooled ? pooled.name : "srun-" + id, movedIn = false;
+  const home = () => {
+    if (!movedIn) return;
+    movedIn = false;
+    try { moveAll(pooled.dir, dir); fs.rmSync(`${pooled.dir}.origin`, { force: true }); fs.rmSync(pooled.dir, { recursive: true, force: true }); }
+    catch (e) { log("không trả được tệp về thư mục làm việc", e.message); }
+  };
   let watcher = null, overDisk = "";
   try {
     if (keep) {
@@ -425,18 +478,9 @@ async function runOnce(u, { files = [], argv, stdin = null, net: wantNet = false
     for (const f of files) safeWrite(dir, f.path, Buffer.from(f.b64, "base64"));
     await run("chown", ["-hR", `${UID}:${UID}`, dir]);
     fs.utimesSync(dir, new Date(), new Date());
-    const proxy = `http://${RUN_GW}:${RUN_PROXY_PORT}`;
-    const envs = { HOME: HOME, LANG: "C.UTF-8", LC_ALL: "C.UTF-8", MPLBACKEND: "Agg", PYTHONUNBUFFERED: "1", PYTHONDONTWRITEBYTECODE: "1",
-      PIP_BREAK_SYSTEM_PACKAGES: "1", PIP_DISABLE_PIP_VERSION_CHECK: "1", NPM_CONFIG_PREFIX: `${HOME}/.npm-global`, npm_config_update_notifier: "false",
-      PATH: `${HOME}/.local/bin:${HOME}/.npm-global/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin`,
-      // SYNCHRO_CHROME_PROXY: Chromium không đọc HTTPS_PROXY; /etc/chromium.d/synchro trong image thêm --proxy-server khi có biến này.
-      ...(wantNet ? { HTTPS_PROXY: proxy, HTTP_PROXY: proxy, https_proxy: proxy, http_proxy: proxy, NO_PROXY: "localhost,127.0.0.1", no_proxy: "localhost,127.0.0.1", SYNCHRO_CHROME_PROXY: proxy } : {}) };
-    // Dùng mọi CPU của máy nhưng ưu tiên thấp (cpu-shares 256): khi tranh CPU, máy chủ web chạy trước. Chromium mở nhiều tiến trình,
-    // ffmpeg nhiều luồng: pids 1024, /dev/shm 512 MB.
-    const boxArgs = (nm, netArgs, cmdSec, cmd) => ["run", "--rm", "-i", "--name", nm, "--hostname", "sandbox", "--init", ...netArgs,
-      "--memory", RUN_MEMORY, "--memory-swap", RUN_MEMORY, "--cpus", CPUS, "--cpu-shares", "256", "--pids-limit", "1024", "--cap-drop", "ALL", "--security-opt", "no-new-privileges",
-      "--shm-size", "512m", "--label", `synchro.run=${u}`, "-u", UID, "-w", `${HOME}/run`, "-v", `${dir}:${HOME}/run`,
-      ...Object.entries(envs).flatMap(([k, v]) => ["-e", `${k}=${v}`]), IMAGE, "timeout", "-k", "5", String(cmdSec), ...cmd];
+    const runEnv = wantNet ? proxyEnv() : {};
+    const boxArgs = (nm, netArgs, cmdSec, cmd) => ["run", "--rm", "-i", "--name", nm, ...netArgs, ...boxLimits(), "--label", `synchro.run=${u}`, "-v", `${dir}:${HOME}/run`,
+      ...envFlags({ ...BASE_ENV, ...runEnv }), IMAGE, "timeout", "-k", "5", String(cmdSec), ...cmd];
     // Người dùng bấm Dừng (Next ngắt kết nối): xóa container ngay để nhường chỗ và nhả thư mục giữ lại. Lặp tới khi lệnh docker run kết thúc:
     // lúc container đang khởi động, docker rm chưa tìm thấy tên.
     const inBox = async (nm, a, o) => {
@@ -447,13 +491,28 @@ async function runOnce(u, { files = [], argv, stdin = null, net: wantNet = false
     };
     // Canh đĩa trong lúc chạy: dd trong container không bị giới hạn bởi --memory.
     watcher = setInterval(async () => {
-      const mb = (await duMB(dir)) + (await layerMB(name)), free = freeMB();
+      const mb = (await duMB(movedIn ? pooled.dir : dir)) + (await layerMB(name)), free = freeMB();
       if (mb <= RUN_DISK_MB && free >= MIN_FREE_MB) return;
       overDisk = `\n[Đã dừng: lần chạy này dùng ${mb} MB đĩa, vượt giới hạn ${RUN_DISK_MB} MB hoặc máy chủ sắp hết đĩa]`;
       log("dừng lần chạy tốn đĩa", u, `${mb} MB`, `còn trống ${free} MB`);
       run("docker", ["rm", "-f", name], { timeout: 20_000 });
     }, 20_000);
-    const r = await inBox(name, boxArgs(name, ["--network", wantNet ? RUN_NET : "none", ...(ip ? ["--ip", ip] : [])], sec, argv), { input: stdin ?? "", timeout: (sec + 30) * 1000, clip: true });
+    const t0 = Date.now();
+    let r = null;
+    if (pooled) {
+      fs.writeFileSync(`${pooled.dir}.origin`, dir);
+      moveAll(dir, pooled.dir);
+      movedIn = true;
+      r = await inBox(name, ["exec", "-i", "-u", UID, "-w", `${HOME}/run`, ...envFlags(runEnv), name, "timeout", "-k", "5", String(sec), ...argv], { input: stdin ?? "", timeout: (sec + 30) * 1000, clip: true });
+      // Container trong kho đã mất (Docker khởi động lại…): trả tệp về rồi chạy theo cách thường.
+      if (r.code !== 0 && !r.out && /No such container|is not running/i.test(r.err) && !signal?.aborted) {
+        log("kho container: container đã mất, chạy theo cách thường", name);
+        home(); run("docker", ["rm", "-f", name], { timeout: 20_000 }); pooled = null; name = "srun-" + id; r = null;
+        void warm.fill();
+      }
+    }
+    r ??= await inBox(name, boxArgs(name, ["--network", wantNet ? RUN_NET : "none", ...(ip ? ["--ip", ip] : [])], sec, argv), { input: stdin ?? "", timeout: (sec + 30) * 1000, clip: true });
+    log("lần chạy", u, pooled ? "kho" : "lạnh", `${Date.now() - t0} ms`, `mã ${r.code}`);
     clearInterval(watcher); watcher = null;
     // Đã dừng: không ai chờ kết quả; tệp dở nằm lại ở .last_outputs/ (khối finally).
     if (signal?.aborted) return { code: 130, out: r.out, err: r.err, timedOut: false, files: [] };
@@ -461,6 +520,8 @@ async function runOnce(u, { files = [], argv, stdin = null, net: wantNet = false
     // nếu còn, nó đổi được đường dẫn giữa lúc kiểm tra và lúc đọc.
     const gone = await run("docker", ["rm", "-f", name], { timeout: 20_000 });
     let clean = gone.code === 0 || /No such container/i.test(gone.err);
+    // Container đã bị xóa: trả tệp về thư mục làm việc trước khi tính lại công thức / đọc outputs/.
+    if (clean) home();
     // Sổ tính: openpyxl không ghi sẵn giá trị công thức, xlsxwriter ghi 0, nên bản xem trước và Excel ở Protected View thấy ô trống / số 0. Tính lại bằng
     // LibreOffice rồi ghi giá trị vào chính tệp, trong container mới (không mạng, 120 giây); lỗi thì giữ nguyên tệp và báo cho model.
     let book = null;
@@ -482,6 +543,7 @@ async function runOnce(u, { files = [], argv, stdin = null, net: wantNet = false
     freeMedia();
     if (ip) { usedIps.delete(ip); webIps.delete(ip); }
     await run("docker", ["rm", "-f", name], { timeout: 20_000 });
+    home();
     if (keep) { rotateOutputs(dir); release(); }
     else fs.rmSync(dir, { recursive: true, force: true });
   }
@@ -535,6 +597,7 @@ function startProxy() {
 async function cleanRuns() {
   const r = await run("docker", ["ps", "-aq", "--filter", "label=synchro.run"], { timeout: 20_000 });
   for (const id of r.out.split("\n").filter(Boolean)) await run("docker", ["rm", "-f", id], { timeout: 20_000 });
+  restoreWarm();
   fs.rmSync(`${ROOT}/_runs`, { recursive: true, force: true });
 }
 
@@ -640,8 +703,10 @@ const reply = (res, status, o) => { res.writeHead(status, { "Content-Type": "app
 
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, "http://x");
-  if (url.pathname === "/health") return reply(res, 200, { ok: true, draining, runs: runQ.running, queued: runQ.queued, diskLow: freeMB() < MIN_FREE_MB });
+  if (url.pathname === "/health") return reply(res, 200, { ok: true, draining, runs: runQ.running, queued: runQ.queued, diskLow: freeMB() < MIN_FREE_MB, warm: warm.stats() });
   if (!authed(req)) return reply(res, 401, { error: "unauthorized" });
+  // Image vừa build lại (workspace/setup.sh): bỏ kho container cũ, dựng lại bằng image mới.
+  if (url.pathname === "/warm/refresh" && req.method === "POST") { await warm.refresh(); return reply(res, 200, { ok: true, warm: warm.stats() }); }
   try {
     // /run: chạy script của skill gửi kèm mọi tệp của skill (tới 100 MB, base64) — nhận lớn hơn các lệnh khác.
     const b = req.method === "POST" ? await body(req, url.pathname === "/run" ? 160_000_000 : 30_000_000) : Object.fromEntries(url.searchParams);
@@ -694,6 +759,8 @@ let draining = false, replying = 0;
 process.on("SIGTERM", async () => {
   if (draining) return;
   draining = true;
+  // Container rảnh trong kho: xóa ngay (tối đa 20 giây), không để lại container mồ côi.
+  await Promise.race([warm.drain(), new Promise((r) => setTimeout(r, 20_000))]);
   runQ.close("Máy chủ đang cập nhật workspace. Hãy thử lại sau ít phút.");
   mediaQ.close("Máy chủ đang cập nhật workspace. Hãy thử lại sau ít phút.");
   log(`đang tắt: chờ ${runQ.running} lần chạy`);
@@ -705,4 +772,5 @@ process.on("SIGTERM", async () => {
 setupHost().catch((e) => log("setup", e)).then(() => cleanRuns()).catch((e) => log("dọn lần chạy cũ", e)).finally(() => {
   server.listen(PORT, HOST, () => log(`workspace agent nghe tại ${HOST}:${PORT}`));
   startProxy();
+  warm.start();
 });

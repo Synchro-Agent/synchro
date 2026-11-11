@@ -27,6 +27,7 @@ if [ "$HASH" != "$CUR" ]; then
   echo "Đang build image $IMAGE…"
   docker build -q -t "$IMAGE" --label "synchro.hash=$HASH" "$APP/workspace"
   docker image prune -f >/dev/null
+  IMG_CHANGED=1
 fi
 
 # 3. Dịch vụ systemd. Chỉ khởi động lại khi code của dịch vụ hoặc tệp dịch vụ đổi: deploy nào cũng chạy tệp này, khởi động lại vô cớ làm rớt
@@ -82,6 +83,12 @@ if [ -n "$CHANGED" ]; then
   echo "$AGENT" > "$STAMP"
 elif ! systemctl is-active -q synchro-ws; then
   systemctl start synchro-ws
+fi
+# Image vừa build lại mà dịch vụ không khởi động lại: bỏ kho container khởi động sẵn (image cũ), dựng lại bằng image mới.
+if [ -n "${IMG_CHANGED:-}" ] && [ -z "$CHANGED" ]; then
+  SEC=$(sed -n 's/^WS_AGENT_SECRET=//p' "$ENVF" | head -1)
+  # Khóa đưa qua stdin (curl -K -), không nằm trên dòng lệnh để tiến trình khác không đọc được.
+  printf 'header = "Authorization: Bearer %s"\n' "$SEC" | curl -fsS -m 60 -X POST -K - http://127.0.0.1:3555/warm/refresh >/dev/null 2>&1 || true
 fi
 
 # 4. nginx: chỉ mở ba đường WebSocket (terminal, màn hình trình duyệt, tiện ích Synchro trong Chrome của người dùng); API còn lại chỉ nghe ở 127.0.0.1.
