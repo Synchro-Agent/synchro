@@ -25,8 +25,8 @@ export function MfaRow({ Row, say }: { Row: (p: { t: React.ReactNode; d?: React.
       {on === null ? null : <button className="btn" disabled={busy} onClick={on ? () => { setCode(""); setSt({ step: "off" }); } : start}>{on ? "Turn off" : "Turn on"}</button>}
     </Row>
     {/* Hàng này nằm trong thẻ có overflow của Cài đặt: khung phải ra ngoài mới phủ đúng màn hình. */}
-    {typeof document !== "undefined" && createPortal(<Fade show={!!st}>{st ? <div className="overlay" style={{ zIndex: 60 }} onMouseDown={(e) => e.target === e.currentTarget && st.step !== "codes" && setSt(null)}>
-      <div className="modal sm" style={{ width: 420 }}>
+    {typeof document !== "undefined" && createPortal(<Fade show={!!st}>{st ? <div className="overlay" style={{ zIndex: 70 }} onMouseDown={(e) => e.target === e.currentTarget && st.step !== "codes" && setSt(null)}>
+      <div className="modal sm" style={{ width: "min(420px, 92vw)" }}>
         {st.step === "scan" && <>
           <h2 style={{ fontSize: 16 }}>Turn on two-step verification</h2>
           <p className="d">Add this key to your authenticator app (Google Authenticator, Authy, 1Password…), then enter the code it shows.</p>

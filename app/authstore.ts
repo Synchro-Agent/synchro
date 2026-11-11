@@ -150,7 +150,9 @@ export function audit(action: string, o: { actor?: UserRow | null; target?: User
 // ---- người dùng ----
 export const getUser = (id: string) => db().prepare("SELECT * FROM users WHERE id = ?").get(id) as UserRow | undefined;
 export const findByEmail = (email: string) => db().prepare("SELECT * FROM users WHERE email = ?").get(email) as UserRow | undefined;
-const methodsOf = (u: UserRow) => [...(u.password_hash ? ["password"] : []), ...(db().prepare("SELECT provider FROM identities WHERE user_id = ? ORDER BY created_at").all(u.id) as { provider: string }[]).map((r) => r.provider)];
+// Khóa truy cập (passkeys.ts) cũng là một cách đăng nhập: gỡ Google khi chỉ còn khóa vẫn vào lại được. Bảng tạo khi dùng lần đầu.
+const hasPasskeys = (uid: string) => { try { return !!db().prepare("SELECT 1 FROM user_passkeys WHERE user_id = ? LIMIT 1").get(uid); } catch { return false; } };
+const methodsOf = (u: UserRow) => [...(u.password_hash ? ["password"] : []), ...(db().prepare("SELECT provider FROM identities WHERE user_id = ? ORDER BY created_at").all(u.id) as { provider: string }[]).map((r) => r.provider), ...(hasPasskeys(u.id) ? ["passkey"] : [])];
 export const isAdmin = (u: UserRow) => ADMIN_EMAILS.has(u.email.toLowerCase()) && u.email_verified === 1 && u.status === "active";
 
 export function createUser(o: { email: string; name: string; passwordHash?: string | null; verified: boolean; avatar?: string | null }) {
@@ -298,6 +300,13 @@ function signIn(u: UserRow, req: Request, method: string): { cookie: string; mfa
   return { cookie: cookie(req, MFA_COOKIE, token, 600), mfa: true };
 }
 /** Vé bước hai của yêu cầu này còn hiệu lực, cùng tài khoản còn hoạt động. */
+/** Đăng nhập bằng khóa truy cập (passkeys.ts). Có xác minh người dùng (vân tay, khuôn mặt, mã PIN của thiết bị) thì khóa đã đủ hai yếu tố, không hỏi mã nữa;
+ *  không có thì tài khoản bật xác minh hai bước vẫn phải nhập mã như sau mật khẩu. */
+export function passkeySignIn(u: UserRow, req: Request, userVerified: boolean) {
+  const s = userVerified ? { cookie: createSession(u, req, "passkey"), mfa: false } : signIn(u, req, "passkey");
+  if (!s.mfa) audit("login", { actor: u, ip: clientIp(req), detail: userVerified ? "passkey" : "passkey (no UV)" });
+  return s;
+}
 export function mfaTicketUser(req: Request): { user: UserRow; method: string } | null {
   const raw = readCookie(req, MFA_COOKIE);
   const t = raw ? mfaTickets.get(sha256(raw)) : undefined;
@@ -578,7 +587,10 @@ function dropSquatter(uid: string) {
   dropEmailChange(uid);
   const had = mfaOn(uid), n = db().prepare("DELETE FROM identities WHERE user_id = ?").run(uid).changes;
   try { db().prepare("DELETE FROM user_mfa WHERE user_id = ?").run(uid); } catch { /* chưa có bảng */ }
-  return had || n > 0;
+  // Khóa truy cập người đăng ký trước có thể đã thêm (trước khi có cổng xác minh email ở passkeys.ts).
+  let keys = 0;
+  try { keys = db().prepare("DELETE FROM user_passkeys WHERE user_id = ?").run(uid).changes; } catch { /* chưa có bảng */ }
+  return had || n > 0 || keys > 0;
 }
 /** Xin đổi email: cần mật khẩu, gửi đường dẫn xác nhận tới địa chỉ mới và báo cho địa chỉ cũ. Email đã có người dùng thì trả lời như thường, chỉ không gửi gì (không lộ email nào đã đăng ký). */
 export async function requestEmailChange(req: Request, u: UserRow, password: unknown, email0: unknown, lang?: unknown) {

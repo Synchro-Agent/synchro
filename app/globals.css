@@ -4178,3 +4178,18 @@ main#main:focus{outline:0}
 .auth-socials{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;width:300px}
 .auth-socials .glass-button-wrap,.auth-socials .glass-button{width:100%}
 .auth-socials svg{flex:none;width:18px;height:18px}
+
+/* Cài đặt → Tài khoản → Bảo mật: danh sách khóa truy cập (passkeyui.tsx). Nền đặc theo thẻ, không trong suốt. */
+.pk-list{display:flex;flex-direction:column;gap:6px;margin:0 0 10px}
+.pk-item{display:flex;align-items:center;gap:10px;padding:9px 11px;border-radius:var(--r-plate);background:var(--card);box-shadow:0 0 0 .5px var(--border-strong);min-width:0}
+.pk-ic{flex:none;display:grid;place-items:center;width:30px;height:30px;border-radius:50%;background:var(--hover);color:var(--text-2)}
+.pk-main{flex:1;min-width:0}
+.pk-name{display:flex;align-items:center;gap:6px;font-size:13.5px;font-weight:500;min-width:0}
+.pk-name>span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.pk-meta{font-size:12px;color:var(--text-3);margin-top:1px}
+.pk-act{flex:none;display:flex;gap:6px}
+@media (max-width:520px){.pk-item{flex-wrap:wrap}.pk-act{width:100%;justify-content:flex-end}}
+/* Đăng nhập: nút khóa truy cập dưới ba nút hãng, cùng bề ngang. */
+.auth-passkey{width:300px;margin-top:8px}
+.auth-passkey .glass-button-wrap,.auth-passkey .glass-button{width:100%}
+.auth-passkey svg{flex:none;width:18px;height:18px}

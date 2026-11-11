@@ -2,6 +2,7 @@ import { SPEECH_RULES_EN, SPEECH_VI2EN } from "./speech/i18n";
 import { DIRECTORY } from "./connectordir";
 import { UX_RULES_EN, UX_VI2EN } from "./i18n-ux";
 import { OPS_RULES_EN, OPS_VI2EN } from "./i18n-ops";
+import { AUTH_VI2EN } from "./i18n-auth";
 import { FX_VI2EN } from "./i18n-features";
 // Từ điển tiếng Anh: chuỗi gốc tiếng Việt → tiếng Anh. Chiều ngược lại (chuỗi gốc tiếng Anh → tiếng Việt) nằm ở i18n-vi.ts: trình duyệt chỉ tải từ điển của ngôn ngữ đang dùng (i18n.tsx).
 export const VI2EN: Record<string, string> = {
@@ -1324,6 +1325,7 @@ RULES_EN.push(
 const addNew = (d: Record<string, string>, o: Record<string, string>) => { for (const [k, v] of Object.entries(o)) if (!Object.prototype.hasOwnProperty.call(d, k)) d[k] = v; };
 addNew(VI2EN, UX_VI2EN);
 addNew(VI2EN, FX_VI2EN);
+addNew(VI2EN, AUTH_VI2EN);
 // Artifact, chia sẻ, xuất tệp.
 addNew(VI2EN, {
   "Mọi phiên bản của artifact này sẽ bị xóa, không hoàn tác được.": "Every version of this artifact will be deleted. This can't be undone.",

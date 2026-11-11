@@ -44,7 +44,7 @@ export function ago(t: number | null) {
   for (const [u, n] of [["year", 31536000], ["month", 2592000], ["day", 86400], ["hour", 3600], ["minute", 60]] as const) if (Math.abs(s) >= n) return rtf.format(Math.round(s / n), u);
   return rtf.format(0, "second");
 }
-export const METHOD: Record<string, string> = { password: "Password", google: "Google", github: "GitHub", apple: "Apple", cli: "Server script", custom: "Custom access", default: "Default access" };
+export const METHOD: Record<string, string> = { password: "Password", google: "Google", github: "GitHub", apple: "Apple", passkey: "Passkey", cli: "Server script", custom: "Custom access", default: "Default access" };
 
 const ACTIONS: Record<string, [string, "ok" | "bad" | "adm" | ""]> = {
   signup: ["Signed up", "ok"], login: ["Signed in", ""], browser_ext_pair: ["Paired a browser (Synchro extension)", ""], login_failed: ["Failed sign-in", "bad"], login_blocked: ["Blocked sign-in", "bad"],
@@ -60,11 +60,12 @@ Object.assign(ACTIONS, {
   speech_budget_alert: ["AI voice credit is close to today's limit", "bad"], admin_speech_budget: ["Changed AI voice credit limits", "adm"],
   github_link: ["Connected GitHub", ""], oauth_failed: ["Failed provider sign-in", "bad"], password_reset: ["Reset password with a link", ""], password_reset_request: ["Requested a password reset email", ""], admin_reset_link: ["Created password reset link", "adm"],
   mail_failed: ["Email could not be delivered", "bad"], admin_mail_test: ["Sent a test email", "adm"], signup_email_taken: ["Sign-up attempt with an existing email", "bad"], email_verify_sent: ["Sent a verification email", ""], email_verified: ["Verified email", "ok"], email_denied: ["Email owner removed an unverified account", "bad"], account_claimed: ["Email owner took back an unverified account", "bad"], admin_verify_gate: ["Changed email verification rule", "adm"], admin_mark_verified: ["Marked email as verified", "adm"],
+  passkey_added: ["Added a passkey", ""], passkey_renamed: ["Renamed a passkey", ""], passkey_removed: ["Removed a passkey", ""], passkey_add_failed: ["Couldn't add a passkey", "bad"],
   admin_api_key: ["Saved API key", "adm"], admin_api_key_removed: ["Removed API key", "adm"], admin_api_credit: ["Changed API credit", "adm"], admin_default_model: ["Changed default model", "adm"], admin_main_models: ["Changed main models", "adm"],
 });
 const LOG_FILTER: Record<string, (a: string) => boolean> = {
   All: () => true,
-  "Sign-ins": (a) => ["signup", "login", "login_failed", "login_blocked", "logout", "oauth_link", "oauth_failed", "password_reset", "email_verified", "email_verify_sent", "signup_email_taken", "email_denied", "account_claimed"].includes(a),
+  "Sign-ins": (a) => a.startsWith("passkey_") || ["signup", "login", "login_failed", "login_blocked", "logout", "oauth_link", "oauth_failed", "password_reset", "email_verified", "email_verify_sent", "signup_email_taken", "email_denied", "account_claimed"].includes(a),
   Email: (a) => a.startsWith("mail_") || a === "admin_mail_test" || a === "password_reset_request" || a.startsWith("email_"),
   "Admin actions": (a) => a.startsWith("admin_"),
 };

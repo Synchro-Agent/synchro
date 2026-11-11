@@ -15,6 +15,7 @@ import { ProvidersPanel } from "./providersui";
 import { lazyView } from "./lazy";
 import { AdminPanel, call as api, fmtDate, METHOD } from "./adminui";
 import { MfaRow } from "./mfaui";
+import { PasskeyRows } from "./passkeyui";
 import type { AuthUser } from "./auth";
 import { OCCUPATIONS } from "./names";
 import { ls } from "./userscope";
@@ -298,11 +299,13 @@ function Account() {
         const on = !!me?.methods.includes(p);
         return <button key={p} className="btn" disabled={on && (me?.methods.length ?? 0) <= 1} title={on && (me?.methods.length ?? 0) <= 1 ? tr("Đây là cách đăng nhập duy nhất của tài khoản. Hãy đặt mật khẩu hoặc thêm cách khác trước.") : undefined} onClick={() => void (on ? disconnect(p) : connect(p))}>{`${on ? tr("Disconnect") : tr("Connect")} ${METHOD[p] ?? p}`}</button>;
       })}</span></Row>}
-      <Row t="Password" d={me?.hasPassword ? "Change the password you use to sign in with your email." : "Add a password so you can also sign in with your email."}><button className="btn" onClick={() => setPw({ cur: "", next: "", again: "" })}>{me?.hasPassword ? "Change password" : "Set password"}</button></Row>
-      <MfaRow Row={Row} say={app.say} />
       <Row t="Log out of all devices"><button className="btn" onClick={() => app.confirm("Log out of all devices?", "Every other session will be signed out. You will stay signed in on this device.", "Log out", () => endSessions({ others: true }, "Signed out of other devices"))}>Log out</button></Row>
       <Row t="Delete your account" d={me?.isAdmin ? "The administrator account can't be deleted." : undefined}><button className="btn" disabled={me?.isAdmin} style={me?.isAdmin ? { opacity: 0.4 } : undefined} onClick={() => setDel("")}>Delete account</button></Row>
       <Row t="Account ID"><span className="mono" data-notr>{me?.id}</span></Row>
+      <H>Security</H>
+      <Row t="Password" d={me?.hasPassword ? "Change the password you use to sign in with your email." : "Add a password so you can also sign in with your email."} top><button className="btn" onClick={() => setPw({ cur: "", next: "", again: "" })}>{me?.hasPassword ? "Change password" : "Set password"}</button></Row>
+      <MfaRow Row={Row} say={app.say} />
+      <PasskeyRows Row={Row} onChange={() => void api<{ user: AuthUser }>("GET", "/api/auth/me").then((r) => r.user && app.setMe(r.user)).catch(() => {})} />
       <H>Active sessions</H>
       <table className="tbl">
         <thead><tr><th>Device</th><th>Location</th><th>Created</th><th>Updated</th><th /></tr></thead>

@@ -5,7 +5,7 @@ import React, { useState, useRef, useEffect, useLayoutEffect } from "react";
 // Importing class-variance-authority for the built-in button component
 import { cva, type VariantProps } from "class-variance-authority";
 // Importing icons from lucide-react
-import { ArrowRight, Mail, Gem, Lock, Eye, EyeOff, ArrowLeft, User, Smile, CalendarDays } from "lucide-react";
+import { ArrowRight, Mail, Gem, Lock, Eye, EyeOff, ArrowLeft, User, Smile, CalendarDays, KeyRound } from "lucide-react";
 // Importing animation components from framer-motion
 import { AnimatePresence, motion, Variants } from "framer-motion";
 import type { Perms } from "./catalog";
@@ -17,6 +17,7 @@ import { getLang } from "./i18n";
 import { LangSwitch } from "./langswitch";
 import { assemble, boxOf, center, fly, markTarget, onScreen, openHole, reducedMotion, settleApp } from "./handoff";
 import { preloadIntro, wantsIntro } from "./introfilm";
+import { passkeyAbort, passkeyAssert, passkeyAutofill, passkeyCancelled, passkeySupported } from "./passkeyclient";
 
 // --- NHỊP ANIMATION CHUNG ---
 // Mọi lớp trong một bước dùng cùng easing và thời lượng, chỉ lệch nhau STEP giây, và đều bắt đầu
@@ -359,6 +360,38 @@ export const AuthComponent = ({ logo = <DefaultLogo />, brandName = "EaseMize", 
     }
   };
 
+  // Khóa truy cập (app/passkeys.ts): nút riêng, và gợi ý ngay trong ô email khi trình duyệt hỗ trợ (conditional UI). Khóa có xác minh người dùng
+  // vào thẳng; tài khoản bật xác minh hai bước mà khóa không xác minh người dùng thì máy chủ trả mfa như sau mật khẩu (run lo phần đó).
+  const [pkOk, setPkOk] = useState(false);
+  useEffect(() => { setPkOk(passkeySupported()); }, []);
+  const passkey = async (conditional = false) => {
+    if (busy.current) return;
+    try {
+      const response = await passkeyAssert(conditional);
+      await run("login", "/api/auth/passkey", { op: "login", response }, 600);
+    } catch (e) {
+      // Tự đóng hộp thoại, hoặc lần gợi ý trong ô email bị thay bằng lần bấm nút: không phải lỗi.
+      if (passkeyCancelled(e)) { if (!conditional) armAutofill(); return; }
+      if (!conditional) fail((e as Error).message || "Couldn't sign in with a passkey. Try another way.");
+    }
+  };
+  // Gợi ý trong ô email: mỗi lần chờ dùng một thử thách (hết hạn sau 5 phút), nên mở lại sau 4 phút.
+  const autofillT = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const armAutofill = () => {
+    clearTimeout(autofillT.current);
+    void passkeyAutofill().then((yes) => {
+      if (!yes) return;
+      void passkey(true);
+      autofillT.current = setTimeout(() => { void passkeyAbort().then(armAutofill); }, 4 * 60_000);
+    });
+  };
+  useEffect(() => {
+    if (mode !== "auth" || authStep !== "email" || stage !== "form") return;
+    armAutofill();
+    return () => { clearTimeout(autofillT.current); void passkeyAbort(); };
+  }, [mode, authStep, stage]); // eslint-disable-line react-hooks/exhaustive-deps
+  const passkeyButton = () => { if (stage === "form") { clearTimeout(autofillT.current); void passkey(false); } };
+
   const social = (p: keyof Providers) => {
     if (stage !== "form") return;
     if (!providers?.[p]) { fail(`${PROVIDER_NAMES[p]} sign-in isn't set up on the server yet.`); return; }
@@ -485,7 +518,8 @@ export const AuthComponent = ({ logo = <DefaultLogo />, brandName = "EaseMize", 
                             <GlassButton type="button" onClick={() => social("google")} contentClassName="flex items-center justify-center gap-1.5" size="sm"><GoogleIcon /><span className="font-semibold text-foreground">Google</span></GlassButton>
                             <GlassButton type="button" onClick={() => social("github")} contentClassName="flex items-center justify-center gap-1.5" size="sm"><GitHubIcon /><span className="font-semibold text-foreground">GitHub</span></GlassButton>
                             <GlassButton type="button" onClick={() => social("apple")} contentClassName="flex items-center justify-center gap-1.5" size="sm"><AppleIcon /><span className="font-semibold text-foreground">Apple</span></GlassButton>
-                        </div></BlurFade>
+                        </div>
+                        {pkOk && <div className="auth-passkey"><GlassButton type="button" onClick={passkeyButton} contentClassName="flex items-center justify-center gap-1.5" size="sm"><KeyRound aria-hidden /><span className="font-semibold text-foreground">Sign in with a passkey</span></GlassButton></div>}</BlurFade>
                         <BlurFade delay={BASE + STEP * 3} className="w-[300px]"><div className="flex items-center w-full gap-2 py-2"><hr className="w-full border-border"/><span className="text-xs font-semibold text-muted-foreground">OR</span><hr className="w-full border-border"/></div></BlurFade>
                     </motion.div>}
                     {authStep !== "email" && <motion.div key={`${authStep}-title`} exit={stepExit} className="w-full flex flex-col items-center text-center gap-4">
@@ -506,7 +540,7 @@ export const AuthComponent = ({ logo = <DefaultLogo />, brandName = "EaseMize", 
                                     <div className="glass-input-wrap w-full"><div className="glass-input">
                                         <span className="glass-input-text-area"></span>
                                         <div className={cn( "relative z-10 flex-shrink-0 flex items-center justify-center overflow-hidden transition-all duration-300 ease-in-out", email.length > 20 && authStep === "email" ? "w-0 px-0" : "w-10 pl-2" )}><Mail className="h-5 w-5 text-foreground/80 flex-shrink-0" /></div>
-                                        <input type="email" autoComplete="email" autoFocus={!!again} readOnly={authStep !== "email"} aria-label="Email" placeholder="Email" value={email} aria-invalid={!!emailErr || undefined} aria-describedby={emailErr ? "auth-email-err" : undefined} onChange={(e) => { setEmail(e.target.value); if (emailErr) setEmailErr(""); }} onKeyDown={handleKeyDown} className={cn("relative z-10 h-full w-0 flex-grow bg-transparent text-foreground placeholder:text-foreground/60 focus:outline-none transition-[padding-right] duration-300 ease-in-out delay-300", isEmailValid && authStep === "email" ? "pr-2" : "pr-0")} />
+                                        <input type="email" autoComplete="username webauthn" autoFocus={!!again} readOnly={authStep !== "email"} aria-label="Email" placeholder="Email" value={email} aria-invalid={!!emailErr || undefined} aria-describedby={emailErr ? "auth-email-err" : undefined} onChange={(e) => { setEmail(e.target.value); if (emailErr) setEmailErr(""); }} onKeyDown={handleKeyDown} className={cn("relative z-10 h-full w-0 flex-grow bg-transparent text-foreground placeholder:text-foreground/60 focus:outline-none transition-[padding-right] duration-300 ease-in-out delay-300", isEmailValid && authStep === "email" ? "pr-2" : "pr-0")} />
                                         <div className={cn( "relative z-10 flex-shrink-0 overflow-hidden transition-all duration-300 ease-in-out", isEmailValid && authStep === "email" ? "w-10 pr-1" : "w-0" )}><GlassButton type="button" onClick={handleProgressStep} size="icon" aria-label="Continue with email" tabIndex={isEmailValid && authStep === "email" ? undefined : -1} contentClassName="text-foreground/80 hover:text-foreground"><ArrowRight className="w-5 h-5" /></GlassButton></div>
                                     </div></div>
                                     {emailErr && authStep === "email" && <p id="auth-email-err" className="auth-field-err" role="alert">{emailErr}</p>}

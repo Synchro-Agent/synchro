@@ -2,6 +2,7 @@
 import { DIRECTORY } from "./connectordir";
 import { UX_EN2VI, UX_RULES_VI } from "./i18n-ux";
 import { OPS_EN2VI, OPS_RULES_VI } from "./i18n-ops";
+import { AUTH_EN2VI } from "./i18n-auth";
 import { FX_EN2VI } from "./i18n-features";
 
 
@@ -832,6 +833,7 @@ RULES_VI.push(...UX_RULES_VI);
 addNew(EN2VI, OPS_EN2VI);
 RULES_VI.push(...OPS_RULES_VI);
 addNew(EN2VI, FX_EN2VI);
+addNew(EN2VI, AUTH_EN2VI);
 addNew(EN2VI, {
   "Transcript width": "Độ rộng khung hội thoại", "Narrow": "Hẹp", "Wide": "Rộng",
   "Maximum width of the conversation and the message box, in chat and in Synchro Code.": "Độ rộng tối đa của đoạn hội thoại và ô soạn tin, ở khung chat và Synchro Code.",
