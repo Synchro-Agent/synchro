@@ -858,31 +858,55 @@ export function brainCore(uid: string): string {
 }
 // Chỉ mục gọi lại theo từng người, giữ trong bộ nhớ. Mỗi tin nhắn từng đọc, giải mã và tách từ lại toàn bộ ghi chú (đo: 171 ms với 3.000 ghi chú, 530 ms với 5.000), đồng bộ trên luồng chính nên luồng chữ của
 // mọi người dừng theo. Giờ chỉ tách từ ghi chú đã đổi; so khớp vài từ của câu hỏi trên bảng tần suất có sẵn không đáng kể. Nhiều ghi chú mà chưa có chỉ mục thì dựng ở nền từng ít một.
-type RecallDoc = { at: number; tf: Map<string, number>; len: number; conv: string | null; ok: boolean };
-type RecallIx = { stamp: string; docs: Map<string, RecallDoc>; used: number; building?: boolean };
-const RECALL_USERS = 40, RECALL_SYNC_MAX = 400, RECALL_CHUNK = 200;
+// Bộ nhớ: mỗi ghi chú giữ số hiệu từ (mảng số đã sắp, tra nhị phân) và số lần xuất hiện, từ nằm một lần trong bảng từ chung của người đó, không giữ một Map
+// từ → số lần cho từng ghi chú. Từ dài cắt ra từ chuỗi gốc được chép lại: V8 giữ cả chuỗi gốc (cả ghi chú) chừng nào còn giữ chuỗi cắt ra từ nó.
+// Chỉ mục không ai dùng 30 phút thì bỏ (dựng lại khi cần); mỗi người tối đa RECALL_NOTES ghi chú mới sửa gần nhất.
+type RecallDoc = { at: number; ids: Uint32Array; cnt: Uint16Array; len: number; conv: string | null; ok: boolean };
+type RecallIx = { stamp: string; docs: Map<string, RecallDoc>; vocab: Map<string, number>; used: number; building?: boolean };
+const RECALL_USERS = 40, RECALL_SYNC_MAX = 400, RECALL_CHUNK = 200, RECALL_NOTES = 8000, RECALL_IDLE_MS = 30 * 60_000, RECALL_VOCAB = 400_000;
 const rg = globalThis as unknown as { __brainRecall?: Map<string, RecallIx> };
 const recallIxs = (rg.__brainRecall ??= new Map());
+/** Bỏ chỉ mục của người không dùng tới quá lâu (gọi theo nhịp của bộ hẹn giờ). Trả số chỉ mục đã bỏ. */
+export function evictRecall(now = Date.now(), idleMs = RECALL_IDLE_MS): number {
+  let n = 0;
+  for (const [k, v] of recallIxs) if (!v.building && now - v.used > idleMs) { recallIxs.delete(k); n++; }
+  return n;
+}
+onTick("brain-recall", (now) => { evictRecall(now); });
+/** Cỡ chỉ mục gọi lại trong bộ nhớ (kiểm thử, theo dõi bộ nhớ). */
+export const recallStats = () => { let docs = 0, vocab = 0; for (const v of recallIxs.values()) { docs += v.docs.size; vocab += v.vocab.size; } return { users: recallIxs.size, docs, vocab }; };
 const recallStamp = (uid: string) => { const r = t().prepare("SELECT COUNT(*) AS n, MAX(updated_at) AS m FROM brain_notes WHERE user_id = ?").get(uid) as { n: number; m: number | null }; return `${r.n}:${r.m ?? 0}`; };
-const recallDoc = (r: Row): RecallDoc => {
-  const n = parse(r), tf = new Map<string, number>();
+// Chuỗi riêng, không trỏ vào chuỗi gốc (chuỗi ngắn V8 đã tự chép).
+const own = (s: string) => (s.length >= 13 ? Buffer.from(s, "utf8").toString("utf8") : s);
+const wordId = (ix: RecallIx, w: string) => { let id = ix.vocab.get(w); if (id === undefined) ix.vocab.set(own(w), (id = ix.vocab.size)); return id; };
+const recallDoc = (ix: RecallIx, r: Row): RecallDoc => {
+  const n = parse(r), tf = new Map<number, number>();
   const ws = [...words(n.title), ...words(n.title), ...words(n.body), ...(n.props.aliases ?? []).flatMap(words)];
-  for (const w of ws) tf.set(w, (tf.get(w) ?? 0) + 1);
-  return { at: n.updatedAt, tf, len: ws.length, conv: n.conv, ok: (n.kind === "chat" || n.kind === "code" || WIKI.includes(n.kind) || n.kind === "note") && (n.kind !== "chat" && n.kind !== "code" || !!n.props.gist) };
+  for (const w of ws) { const id = wordId(ix, w); tf.set(id, (tf.get(id) ?? 0) + 1); }
+  const ids = Uint32Array.from(tf.keys()).sort(), cnt = new Uint16Array(ids.length);
+  ids.forEach((id, i) => { cnt[i] = Math.min(65535, tf.get(id)!); });
+  return { at: n.updatedAt, ids, cnt, len: ws.length, conv: n.conv == null ? null : own(n.conv), ok: (n.kind === "chat" || n.kind === "code" || WIKI.includes(n.kind) || n.kind === "note") && (n.kind !== "chat" && n.kind !== "code" || !!n.props.gist) };
+};
+const tfOf = (d: RecallDoc, id: number) => {
+  let lo = 0, hi = d.ids.length - 1;
+  while (lo <= hi) { const m = (lo + hi) >> 1, v = d.ids[m]; if (v === id) return d.cnt[m]; if (v < id) lo = m + 1; else hi = m - 1; }
+  return 0;
 };
 /** Đưa chỉ mục về đúng dữ liệu hiện tại. Trả false khi còn quá nhiều ghi chú phải tách từ: việc đó tiếp tục ở nền, lượt này không gọi lại. */
 function refreshRecall(uid: string, ix: RecallIx): boolean {
   const stamp = recallStamp(uid);
   if (ix.stamp === stamp) return true;
   if (ix.building) return false;
-  const rows = t().prepare("SELECT id, updated_at AS at FROM brain_notes WHERE user_id = ?").all(uid) as { id: string; at: number }[];
+  // Bảng từ chỉ thêm, không bớt: sửa / xóa ghi chú nhiều quá thì dựng lại chỉ mục từ đầu cho gọn.
+  if (ix.vocab.size > RECALL_VOCAB) { ix.docs.clear(); ix.vocab.clear(); }
+  const rows = t().prepare("SELECT id, updated_at AS at FROM brain_notes WHERE user_id = ? ORDER BY updated_at DESC LIMIT ?").all(uid, RECALL_NOTES) as { id: string; at: number }[];
   const seen = new Set(rows.map((r) => r.id));
   for (const id of ix.docs.keys()) if (!seen.has(id)) ix.docs.delete(id);
   const stale = rows.filter((r) => ix.docs.get(r.id)?.at !== r.at).map((r) => r.id);
   const load = (ids: string[]) => {
     if (!ids.length) return;
     const list = t().prepare(`SELECT * FROM brain_notes WHERE user_id = ? AND id IN (${ids.map(() => "?").join(",")})`).all(uid, ...ids) as Row[];
-    for (const r of list) ix.docs.set(r.id, recallDoc(r));
+    for (const r of list) ix.docs.set(own(r.id), recallDoc(ix, r));
   };
   if (stale.length <= RECALL_SYNC_MAX) { load(stale); ix.stamp = stamp; return true; }
   ix.building = true;
@@ -897,7 +921,7 @@ function refreshRecall(uid: string, ix: RecallIx): boolean {
 function recallIx(uid: string): RecallIx {
   let ix = recallIxs.get(uid);
   if (!ix) {
-    ix = { stamp: "", docs: new Map(), used: 0 };
+    ix = { stamp: "", docs: new Map(), vocab: new Map(), used: 0 };
     recallIxs.set(uid, ix);
     if (recallIxs.size > RECALL_USERS) { const old = [...recallIxs].filter(([, v]) => !v.building).sort((a, b) => a[1].used - b[1].used)[0]; if (old) recallIxs.delete(old[0]); }
   }
@@ -909,14 +933,15 @@ export function warmRecall(uid: string) { if (learning(uid)) refreshRecall(uid, 
 function recallHits(uid: string, query: string, k: number, min: number, conv?: string): Note[] {
   const ix = recallIx(uid);
   if (!refreshRecall(uid, ix)) return [];
-  const q = [...new Set(words(query))];
+  // Từ chưa có trong bảng từ thì không ghi chú nào có: bỏ luôn, không thêm vào bảng.
+  const q = [...new Set(words(query))].map((w) => ix.vocab.get(w)).filter((x): x is number => x !== undefined);
   const docs = [...ix.docs].filter(([, d]) => d.ok && d.conv !== conv);
   if (!q.length || !docs.length) return [];
   const avg = docs.reduce((a, [, d]) => a + d.len, 0) / docs.length || 1;
-  const df = q.map((w) => docs.reduce((n, [, d]) => n + (d.tf.has(w) ? 1 : 0), 0));
+  const df = q.map((w) => docs.reduce((n, [, d]) => n + (tfOf(d, w) ? 1 : 0), 0));
   const top = docs.map(([id, d]) => {
     let s = 0;
-    q.forEach((w, i) => { const f = d.tf.get(w); if (f) s += Math.log(1 + (docs.length - df[i] + 0.5) / (df[i] + 0.5)) * (f * 2.2) / (f + 1.2 * (0.25 + 0.75 * d.len / avg)); });
+    q.forEach((w, i) => { const f = tfOf(d, w); if (f) s += Math.log(1 + (docs.length - df[i] + 0.5) / (df[i] + 0.5)) * (f * 2.2) / (f + 1.2 * (0.25 + 0.75 * d.len / avg)); });
     return { id, s };
   }).filter((x) => x.s >= min).sort((a, b) => b.s - a.s).slice(0, k);
   const get = t().prepare("SELECT * FROM brain_notes WHERE id = ? AND user_id = ?");

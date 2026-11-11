@@ -41,6 +41,20 @@ const t0 = performance.now();
 for (let i = 0; i < 20; i++) B.brainRecall(big.id, "kỳ lân xanh");
 const each = (performance.now() - t0) / 20;
 ok(each < 30, `không tách từ lại mỗi lượt: ${each.toFixed(1)} ms mỗi lần với 700 ghi chú`, each);
+// Bộ nhớ: bảng từ dùng chung trong chỉ mục, không giữ Map cho từng ghi chú; chỉ mục không ai dùng 30 phút thì bỏ.
+{
+  const st = B.recallStats();
+  ok(st.users >= 3 && st.docs >= 700, "thống kê chỉ mục có số người và ghi chú", JSON.stringify(st));
+  ok(st.vocab < 2000, `700 ghi chú cùng chủ đề chỉ cần một bảng từ nhỏ (${st.vocab} từ)`, JSON.stringify(st));
+  ok(B.evictRecall(Date.now()) === 0, "vừa dùng: không bỏ chỉ mục nào");
+  const gone = B.evictRecall(Date.now() + 31 * 60_000);
+  ok(gone >= 3 && B.recallStats().users === 0, `không dùng quá 30 phút: bỏ hết (${gone})`, JSON.stringify(B.recallStats()));
+  ok(/Bí mật/.test(B.brainRecall(other.id, "rồng lửa")), "bỏ rồi vẫn gọi lại đúng (dựng lại khi cần)");
+  const long = mk(4);
+  B.saveNote(long, "Siêuđặcbiệtdàilắmlắmluôn", { body: "Chuyện kỳ quặc." });
+  for (let i = 0; i < 12; i++) B.saveNote(long, `Ghi ${i}`, { body: `Chuyện ${i}.` });
+  ok(/Siêuđặcbiệt/.test(B.brainRecall(long.id, "siêuđặcbiệtdàilắmlắmluôn")), "từ dài (chép riêng khỏi chuỗi gốc) vẫn tìm được");
+}
 fs.rmSync(tmp, { recursive: true, force: true });
 console.log(`\nKết quả: ${pass} đạt, ${fail} lỗi`);
 process.exit(fail ? 1 : 0);
