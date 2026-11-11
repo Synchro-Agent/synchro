@@ -6,7 +6,7 @@ import { fmtDate } from "./adminui";
 import { getLang, locale } from "./i18n";
 
 type Row = { stage: string; provider: string; n: number; p50: number | null; p95: number | null };
-export type Latency = { stages: string[]; turns: number; recent: Row[]; daily: Row[]; week: Row[]; last: { at: number; provider: string | null; model: string | null; status: number | null; totalMs: number; slowest: [string, number] | null }[] };
+export type Latency = { stages: string[]; turns: number; recent: Row[]; daily: Row[]; week: Row[]; last: { at: number; provider: string | null; model: string | null; status: number | null; totalMs: number; slowest: [string, number] | null; stages?: Record<string, number> }[] };
 const STAGE: Record<string, string> = {
   auth: "Sign-in check", queue: "Waiting for a slot", history: "History and files", retrieval: "Skills and brain", routing: "Auto model choice",
   prompt: "Building the prompt", provider_ttfb: "Provider first byte", first_token: "First words on screen", tool: "Each tool run", total: "Whole reply",

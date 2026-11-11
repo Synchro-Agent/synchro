@@ -32,11 +32,13 @@ try {
   ok(h.turns >= Math.min(500, (before.turns ?? 0) + 1), "lượt mới vào vòng nhớ", { before: before.turns, after: h.turns });
   const last = h.last.find((t) => t.model === run.result.model && t.at >= t0);
   ok(last && last.provider === "anthropic" && last.status === 200 && last.totalMs > 0, "lượt vừa chạy: hãng, model, mã, tổng thời gian", h.last);
-  const rec = new Set(h.recent.filter((r) => r.provider === "anthropic").map((r) => r.stage));
+  // Các chặng của chính lượt vừa chạy (số tổng hợp lẫn cả lượt của bài kiểm thử khác, ví dụ lượt lỗi 502 rất ngắn của failover.test).
+  const st = last?.stages ?? {};
   const want = ["auth", "queue", "history", "retrieval", "routing", "prompt", "provider_ttfb", "first_token", "tool", "total"];
-  ok(want.every((s) => rec.has(s)), `đủ các chặng: ${want.filter((s) => !rec.has(s)).join(", ") || "đủ"}`, [...rec]);
-  const get = (s) => h.recent.find((r) => r.stage === s && r.provider === "anthropic");
-  ok(get("total").p50 >= get("first_token").p50 && get("first_token").p50 >= get("auth").p50, "thứ tự hợp lý: tổng ≥ chữ đầu ≥ kiểm tra phiên", { total: get("total"), first: get("first_token"), auth: get("auth") });
+  ok(want.every((s) => s in st), `đủ các chặng: ${want.filter((s) => !(s in st)).join(", ") || "đủ"}`, st);
+  ok(st.total >= st.first_token && st.first_token >= st.provider_ttfb && st.first_token >= st.auth && st.total === last.totalMs, "thứ tự hợp lý: tổng ≥ chữ đầu ≥ TTFB của hãng, kiểm tra phiên", st);
+  const rec = new Set(h.recent.filter((r) => r.provider === "anthropic").map((r) => r.stage));
+  ok(want.every((s) => rec.has(s)), "bảng 500 lượt gần nhất có đủ các chặng của Claude", [...rec]);
   ok(h.daily.some((r) => r.stage === "total" && r.provider === "anthropic" && r.n >= 1) && h.week.some((r) => r.stage === "total" && r.provider === "all"), "đã cộng vào tổng hợp hôm nay và 7 ngày (SQLite)", h.daily.filter((r) => r.stage === "total"));
 } finally {
   await call("POST", "/api/admin/apikeys", { action: "main", main: shownBefore });

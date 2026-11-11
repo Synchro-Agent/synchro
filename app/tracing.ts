@@ -164,7 +164,9 @@ export function latencySummary(days = 1) {
     const rows = tbl().prepare("SELECT stage, provider, n, samples FROM trace_daily WHERE day >= ?").all(day(Date.now() - (days - 1) * 86_400_000)) as { stage: string; provider: string; n: number; samples: string }[];
     for (const r of rows) put(daily, r.stage, r.provider, JSON.parse(r.samples) as number[], r.n);
   } catch { /* chưa có bảng */ }
-  const last = [...ring].slice(-8).reverse().map((t) => ({ at: t.start, provider: t.provider ?? null, model: t.model ?? null, status: t.status ?? null, totalMs: (t.end ?? t.start) - t.start, slowest: stageDurations(t).filter(([s]) => s !== "total" && s !== "first_token").sort((a, b) => b[1] - a[1])[0] ?? null }));
+  // stages: tổng thời gian từng chặng của chính lượt đó (công cụ, tra cứu lặp lại thì cộng dồn).
+  const last = [...ring].slice(-8).reverse().map((t) => { const d = stageDurations(t), stages: Partial<Record<Stage, number>> = {}; for (const [s, ms] of d) stages[s] = (stages[s] ?? 0) + ms;
+    return { at: t.start, provider: t.provider ?? null, model: t.model ?? null, status: t.status ?? null, totalMs: (t.end ?? t.start) - t.start, slowest: d.filter(([s]) => s !== "total" && s !== "first_token").sort((a, b) => b[1] - a[1])[0] ?? null, stages }; });
   return { stages: STAGES, turns: ring.length, recent: summarize(rec), daily: summarize(daily), days, last };
 }
 /** Cho kiểm thử: xóa vòng nhớ. */
