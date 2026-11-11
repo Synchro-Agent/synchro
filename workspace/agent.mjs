@@ -254,11 +254,15 @@ async function stop(u) {
 }
 
 async function destroy(u) {
+  // Đánh dấu trước mọi bước chờ: lần chạy đang dở của người này thấy ngay và không trả tệp về / không chạy lại (runOnce: wiped()).
+  destroyGen.set(u, (destroyGen.get(u) ?? 0) + 1);
   await stop(u).catch(() => {});
   await run("docker", ["rm", "-f", cname(u)], { timeout: 30_000 });
   // Lần chạy code đang dở của người này và thư mục giữ lại giữa các lần chạy (xóa tài khoản phải xóa cả chúng).
   const runs = await run("docker", ["ps", "-aq", "--filter", `label=synchro.run=${u}`], { timeout: 15_000 });
   for (const id of runs.out.split("\n").filter(Boolean)) await run("docker", ["rm", "-f", id], { timeout: 20_000 });
+  // Container lấy từ kho mang nhãn _warm (không đổi nhãn được khi container đang chạy): xóa theo danh sách lần chạy của người này.
+  for (const nm of [...(poolRuns.get(u) ?? [])]) await run("docker", ["rm", "-f", nm], { timeout: 20_000 });
   fs.rmSync(`${ROOT}/${u}`, { recursive: true, force: true });
   fs.rmSync(keepRoot(u), { recursive: true, force: true });
   live.delete(u);
@@ -346,6 +350,8 @@ const mediaQ = createRunQueue({ max: MEDIA_MAX, queue: RUN_QUEUE, perUser: RUN_Q
 const safeRel = (p) => typeof p === "string" && p.length > 0 && p.length < 300 && !p.startsWith("/") && !p.split(/[\\/]/).some((x) => x === ".." || x === "");
 
 const keepRoot = (u) => `${ROOT}/_keep/${u}`;
+// Container trong kho đang chạy code của từng người, và số lần tài khoản bị xóa (lần chạy so với lúc bắt đầu để biết người dùng đã bị xóa giữa chừng).
+const poolRuns = new Map(), destroyGen = new Map();
 const okKeep = (k) => typeof k === "string" && /^[A-Za-z0-9_-]{1,80}$/.test(k);
 // Lần chạy đang dùng thư mục giữ lại: chạy lần lượt trong cùng một đoạn chat để hai lần chạy không ghi đè tệp của nhau.
 const keepBusy = new Map();
@@ -386,7 +392,10 @@ function restoreWarm() {
     if (!f.endsWith(".origin")) continue;
     try {
       const to = fs.readFileSync(`${runs}/${f}`, "utf8").trim(), from = `${runs}/${f.slice(0, -7)}`;
-      if (to.startsWith(`${ROOT}/_keep/`) && !to.includes("..") && fs.existsSync(from)) { fs.mkdirSync(to, { recursive: true }); moveAll(from, to); log("trả thư mục giữ lại về chỗ cũ", to); }
+      if (!to.startsWith(`${ROOT}/_keep/`) || to.includes("..") || !fs.existsSync(from)) continue;
+      // Thư mục giữ lại của người đó đã bị xóa hẳn (tài khoản bị xóa trong lúc chạy): không dựng lại, bỏ luôn tệp.
+      if (!fs.existsSync(path.dirname(to))) { fs.rmSync(from, { recursive: true, force: true }); fs.rmSync(`${runs}/${f}`, { force: true }); log("bỏ tệp của lần chạy dở: thư mục giữ lại không còn", to); continue; }
+      fs.mkdirSync(to, { recursive: true }); moveAll(from, to); log("trả thư mục giữ lại về chỗ cũ", to);
     } catch (e) { log("không trả được thư mục giữ lại", f, e.message); }
   }
 }
@@ -427,6 +436,7 @@ async function runOnce(u, { files = [], argv, stdin = null, net: wantNet = false
   const sec = Math.max(5, Math.min(Number(timeout) || 120, 900));
   const id = crypto.randomBytes(8).toString("hex");
   const dir = keep ? `${keepRoot(u)}/${keep}` : runDir(id);
+  const gen0 = destroyGen.get(u) ?? 0, wiped = () => (destroyGen.get(u) ?? 0) !== gen0;
   // Chờ lần chạy trước trong cùng thư mục giữ lại xong; người dùng bấm Dừng lúc đang chờ thì thôi, không chạy nữa.
   const stopped = new Promise((ok) => signal?.addEventListener("abort", ok, { once: true }));
   while (keep && keepBusy.has(dir) && !signal?.aborted) await Promise.race([keepBusy.get(dir).catch(() => {}), stopped]);
@@ -446,6 +456,8 @@ async function runOnce(u, { files = [], argv, stdin = null, net: wantNet = false
   if (waited >= 2) log("lần chạy chờ", u, `${waited} giây`, `đang chạy ${runQ.running}, đang chờ ${runQ.queued}`);
   // Container khởi động sẵn: lần chạy không mạng thì ngắt mạng của nó trước (ngắt lỗi thì bỏ, không chạy code không mạng trên container còn mạng).
   let pooled = warm.take();
+  const pooledName = pooled?.name;
+  if (pooledName) { if (!poolRuns.has(u)) poolRuns.set(u, new Set()); poolRuns.get(u).add(pooledName); }
   if (pooled && !wantNet) {
     const d = await run("docker", ["network", "disconnect", "-f", RUN_NET, pooled.name], { timeout: 20_000 });
     usedIps.delete(pooled.ip);
@@ -458,6 +470,8 @@ async function runOnce(u, { files = [], argv, stdin = null, net: wantNet = false
   const home = () => {
     if (!movedIn) return;
     movedIn = false;
+    // Tài khoản bị xóa giữa lúc chạy: không trả tệp về (thư mục giữ lại đã bị xóa), bỏ luôn.
+    if (wiped()) { fs.rmSync(pooled.dir, { recursive: true, force: true }); fs.rmSync(`${pooled.dir}.origin`, { force: true }); return; }
     try { moveAll(pooled.dir, dir); fs.rmSync(`${pooled.dir}.origin`, { force: true }); fs.rmSync(pooled.dir, { recursive: true, force: true }); }
     catch (e) { log("không trả được tệp về thư mục làm việc", e.message); }
   };
@@ -504,11 +518,20 @@ async function runOnce(u, { files = [], argv, stdin = null, net: wantNet = false
       moveAll(dir, pooled.dir);
       movedIn = true;
       r = await inBox(name, ["exec", "-i", "-u", UID, "-w", `${HOME}/run`, ...envFlags(runEnv), name, "timeout", "-k", "5", String(sec), ...argv], { input: stdin ?? "", timeout: (sec + 30) * 1000, clip: true });
-      // Container trong kho đã mất (Docker khởi động lại…): trả tệp về rồi chạy theo cách thường.
-      if (r.code !== 0 && !r.out && /No such container|is not running/i.test(r.err) && !signal?.aborted) {
-        log("kho container: container đã mất, chạy theo cách thường", name);
-        home(); run("docker", ["rm", "-f", name], { timeout: 20_000 }); pooled = null; name = "srun-" + id; r = null;
-        void warm.fill();
+      // Container trong kho đã mất (Docker khởi động lại…) nên lệnh chưa hề chạy: trả tệp về rồi chạy theo cách thường. Không đoán bằng
+      // stderr (đó là đầu ra của chính code người dùng, "... is not running" rất thường gặp): dòng lỗi phải là của Docker CLI và hỏi lại
+      // Docker thấy container không còn chạy. Lần chạy bị dừng, bị cắt vì tốn đĩa, tài khoản bị xóa: không chạy lại.
+      const daemonErr = /^Error response from daemon: .*(No such container|is not running)/i.test(r.err.trimStart());
+      if (r.code !== 0 && !r.out && daemonErr && !signal?.aborted && !overDisk && !wiped()) {
+        const st = await run("docker", ["inspect", "-f", "{{.State.Running}}", name], { timeout: 15_000 });
+        if (st.code !== 0 || st.out.trim() !== "true") {
+          log("kho container: container đã mất, chạy theo cách thường", name);
+          home();
+          // Chờ xóa hẳn rồi mới chạy lại: lần chạy có mạng dùng lại đúng IP của container này.
+          await run("docker", ["rm", "-f", name], { timeout: 20_000 });
+          pooled = null; name = "srun-" + id; r = null;
+          void warm.fill();
+        }
       }
     }
     r ??= await inBox(name, boxArgs(name, ["--network", wantNet ? RUN_NET : "none", ...(ip ? ["--ip", ip] : [])], sec, argv), { input: stdin ?? "", timeout: (sec + 30) * 1000, clip: true });
@@ -543,8 +566,9 @@ async function runOnce(u, { files = [], argv, stdin = null, net: wantNet = false
     freeMedia();
     if (ip) { usedIps.delete(ip); webIps.delete(ip); }
     await run("docker", ["rm", "-f", name], { timeout: 20_000 });
+    if (pooledName) { poolRuns.get(u)?.delete(pooledName); if (!poolRuns.get(u)?.size) poolRuns.delete(u); }
     home();
-    if (keep) { rotateOutputs(dir); release(); }
+    if (keep) { if (wiped()) fs.rmSync(dir, { recursive: true, force: true }); else rotateOutputs(dir); release(); }
     else fs.rmSync(dir, { recursive: true, force: true });
   }
 }
@@ -759,10 +783,10 @@ let draining = false, replying = 0;
 process.on("SIGTERM", async () => {
   if (draining) return;
   draining = true;
-  // Container rảnh trong kho: xóa ngay (tối đa 20 giây), không để lại container mồ côi.
-  await Promise.race([warm.drain(), new Promise((r) => setTimeout(r, 20_000))]);
+  // Ngừng nhận lần chạy mới trước, rồi mới xóa container rảnh trong kho (tối đa 20 giây), không để lại container mồ côi.
   runQ.close("Máy chủ đang cập nhật workspace. Hãy thử lại sau ít phút.");
   mediaQ.close("Máy chủ đang cập nhật workspace. Hãy thử lại sau ít phút.");
+  await Promise.race([warm.drain(), new Promise((r) => setTimeout(r, 20_000))]);
   log(`đang tắt: chờ ${runQ.running} lần chạy`);
   const end = Date.now() + DRAIN_SEC * 1000;
   while ((runQ.running > 0 || replying > 0) && Date.now() < end) await new Promise((r) => setTimeout(r, 500));

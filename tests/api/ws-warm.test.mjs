@@ -28,8 +28,15 @@ const log = (f, o) => fs.appendFileSync(st + "/" + f, JSON.stringify(o) + "\\n")
 const cfile = (n) => st + "/c-" + n + ".json";
 const killPid = (f) => { if (fs.existsSync(f)) { try { process.kill(-Number(fs.readFileSync(f, "utf8")), "SIGKILL"); } catch {} try { fs.rmSync(f); } catch {} } };
 const wait = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+if (a[0] === "inspect") { const nm = a[a.length - 1]; if (fs.existsSync(cfile(nm))) { process.stdout.write("true\\n"); process.exit(0); } process.stderr.write("Error: No such object: " + nm + "\\n"); process.exit(1); }
 if (a[0] === "image") { process.stdout.write(fs.readFileSync(st + "/image", "utf8") + "\\n"); process.exit(0); }
-if (a[0] === "ps") { process.stdout.write(fs.readdirSync(st).filter((f) => f.startsWith("c-")).map((f) => f.slice(2, -5)).join("\\n")); process.exit(0); }
+if (a[0] === "ps") {
+  // --filter label=k hoặc label=k=v như Docker thật (container trong kho mang nhãn synchro.run=_warm).
+  const f = a.includes("--filter") ? a[a.indexOf("--filter") + 1].replace(/^label=/, "") : null;
+  const lab = (n) => { try { return JSON.parse(fs.readFileSync(st + "/" + n, "utf8")).label ?? ""; } catch { return ""; } };
+  const want = (l) => !f || (f.includes("=") ? l === f : l.split("=")[0] === f);
+  process.stdout.write(fs.readdirSync(st).filter((n) => n.startsWith("c-") && want(lab(n))).map((n) => n.slice(2, -5)).join("\\n")); process.exit(0);
+}
 if (a[0] === "network" && a[1] === "disconnect") { const nm = a[a.length - 1]; log("disconnects", nm); if (!fs.existsSync(cfile(nm))) process.exit(1); const c = JSON.parse(fs.readFileSync(cfile(nm), "utf8")); c.net = false; fs.writeFileSync(cfile(nm), JSON.stringify(c)); process.exit(0); }
 if (a[0] === "rm") {
   const nm = a[a.length - 1];
@@ -56,7 +63,7 @@ if (a[0] === "exec") {
   if (a.includes("-d")) {
     const p = spawn("sleep", ["100000"], { detached: true, stdio: "ignore" }); p.unref();
     fs.writeFileSync(st + "/" + name, String(p.pid));
-    fs.writeFileSync(cfile(name), JSON.stringify({ dir: v, net: a.includes("--network"), image: fs.readFileSync(st + "/image", "utf8") }));
+    fs.writeFileSync(cfile(name), JSON.stringify({ dir: v, net: a.includes("--network"), image: fs.readFileSync(st + "/image", "utf8"), label: a.includes("--label") ? a[a.indexOf("--label") + 1] : "" }));
     log("created", name);
     process.stdout.write("id-" + name + "\\n"); process.exit(0);
   }
@@ -165,6 +172,35 @@ ok(hl.warm.idle === 0 && hl.warm.lowMem >= 1, "bộ nhớ khả dụng dưới n
 r = await req(L, "/run", bash("echo ok"));
 ok(r.j.code === 0 && /ok/.test(r.j.out), "thiếu bộ nhớ: vẫn chạy theo cách thường");
 
+console.log("4b. Lỗi của chính code người dùng, xóa tài khoản giữa lúc chạy");
+await waitIdle(A, 2);
+// Code in ra stderr giống lỗi Docker ("... is not running") rồi thoát lỗi: không được coi là container mất mà chạy lần hai.
+let n0 = lines("runs").length;
+r = await req(A, "/run", bash("echo 'Error response from daemon: container abc is not running' >&2; echo 'RuntimeError: Xvfb is not running' >&2; exit 1"));
+ok(r.j.code === 1 && lines("runs").length === n0 + 1 && lines("runs").at(-1).mode === "exec" && /Xvfb is not running/.test(r.j.err), "stderr của code giống lỗi Docker: không chạy lại lần hai", JSON.stringify({ r: r.j, runs: lines("runs").slice(n0) }));
+// Xóa tài khoản trong lúc lần chạy dùng container của kho: container bị xóa, tệp không trở lại, khởi động lại cũng không dựng lại.
+await waitIdle(A, 2);
+const U2 = "user-87654321", dir2 = path.join(tmp, "root", "_keep", U2, "convx");
+n0 = lines("runs").length;
+const pd = req(A, "/run", { ...bash("echo bi-mat > bi-mat.txt; sleep 60"), u: U2, keep: "convx" }).catch((e) => e);
+for (let i = 0; i < 50 && lines("runs").length === n0; i++) await sleep(100);
+await sleep(400);
+const r2 = lines("runs").at(-1);
+ok(r2?.mode === "exec", "lần chạy của người sắp bị xóa dùng container trong kho", JSON.stringify(r2));
+const td = Date.now();
+await req(A, "/destroy", { u: U2 });
+const pr2 = await pd;
+for (let i = 0; i < 50 && fs.existsSync(path.join(state, "x-" + r2.name)); i++) await sleep(100);
+ok(lines("killed").includes(r2.name) && !fs.existsSync(path.join(state, "x-" + r2.name)) && Date.now() - td < 8000, "xóa tài khoản: container của kho đang chạy code người đó bị xóa ngay", JSON.stringify(lines("killed").slice(-4)));
+ok(lines("runs").length === n0 + 1, "không chạy lại theo cách thường sau khi bị xóa", JSON.stringify(lines("runs").slice(n0)));
+await sleep(300);
+const runsDir = path.join(tmp, "root", "_runs");
+const leftover = fs.readdirSync(runsDir).filter((f) => f.startsWith("warm-") && !fs.existsSync(path.join(state, "c-s" + f)) && (f.endsWith(".origin") || fs.existsSync(path.join(runsDir, f, "bi-mat.txt"))));
+ok(!fs.existsSync(path.join(tmp, "root", "_keep", U2)) && !leftover.length, "tệp của người bị xóa không còn ở thư mục giữ lại hay thư mục tạm của kho", JSON.stringify({ leftover, keep: fs.existsSync(path.join(tmp, "root", "_keep", U2)), pr2: pr2?.j ?? String(pr2) }));
+// Dịch vụ chết giữa lúc đó (.origin còn lại trỏ vào thư mục của người đã bị xóa): lần khởi động sau không dựng lại.
+const ghost = path.join(runsDir, "warm-ghost1");
+fs.mkdirSync(ghost, { recursive: true }); fs.writeFileSync(path.join(ghost, "bi-mat.txt"), "x"); fs.writeFileSync(ghost + ".origin", dir2);
+
 console.log("5. Tắt dịch vụ và khởi động lại");
 await waitIdle(A, 2);
 const idleNow = fs.readdirSync(state).filter((f) => f.startsWith("c-swarm-")).map((f) => f.slice(2, -5));
@@ -183,6 +219,7 @@ fs.mkdirSync(path.join(tmp, "root", "_runs", "warm-evil"), { recursive: true });
 const B = await startAgent();
 ok(!!B && fs.readFileSync(path.join(keep2, "du-an.txt"), "utf8") === "quan-trong", "khởi động lại: tệp của lần chạy dở trở về thư mục giữ lại", B?.log.slice(-300));
 ok(!fs.existsSync(path.join(tmp, "root", "_runs", "warm-dead1")), "thư mục tạm của kho được dọn");
+ok(!fs.existsSync(path.join(tmp, "root", "_keep", U2)) && !fs.existsSync(ghost), "khởi động lại: tệp của người đã bị xóa không được dựng lại", JSON.stringify({ keep: fs.existsSync(path.join(tmp, "root", "_keep", U2)), ghost: fs.existsSync(ghost) }));
 ok(B && /trả thư mục giữ lại về chỗ cũ/.test(B.log) && !/\/etc/.test(B.log.split("\n").filter((l) => /trả thư mục/.test(l)).join("")), "chỉ trả về trong _keep (không ghi ra chỗ khác)");
 
 console.log(`\nKết quả: ${pass} đạt, ${fail} lỗi`);
