@@ -72,4 +72,11 @@ export const AUTH_EN2VI: Record<string, string> = {
   "Restores the newest copy from R2 into a temporary file, checks it with PRAGMA integrity_check, counts rows in the main tables, then deletes it. The live database isn't touched.": "Khôi phục bản mới nhất từ R2 vào một tệp tạm, kiểm tra bằng PRAGMA integrity_check, đếm dòng các bảng chính rồi xóa tệp. Dữ liệu đang chạy không bị động tới.",
   "Restore works": "Khôi phục được", "Restore failed": "Khôi phục thất bại", "Table": "Bảng", "Restored": "Bản khôi phục", "Live now": "Đang chạy",
   "Live counts can be a little higher: they include changes from the last few seconds.": "Số của dữ liệu đang chạy có thể cao hơn một chút: gồm cả thay đổi trong vài giây cuối.",
+  // Độ trễ từng chặng (latencyui.tsx)
+  "Reply latency by stage": "Độ trễ từng chặng của câu trả lời",
+  "How long each part of a chat reply takes on this server, from the sign-in check to the last word. Measured on every reply; no chat content is kept. Each reply is also written to the server log as an OpenTelemetry span, ready to export later.": "Mỗi phần của một câu trả lời trên máy chủ này mất bao lâu, từ lúc kiểm tra phiên tới chữ cuối cùng. Đo ở mọi câu trả lời, không giữ nội dung chat. Mỗi câu trả lời cũng được ghi vào log máy chủ dạng span OpenTelemetry để sau này xuất sang hệ thống khác.",
+  "Sign-in check": "Kiểm tra phiên", "Waiting for a slot": "Chờ chỗ chạy", "History and files": "Lịch sử và tệp", "Skills and brain": "Skill và bộ não", "Auto model choice": "Tự động chọn model",
+  "Building the prompt": "Dựng lời nhắc", "Provider first byte": "Hãng trả byte đầu tiên", "First words on screen": "Chữ đầu tiên hiện ra", "Each tool run": "Mỗi lần chạy công cụ", "Whole reply": "Cả câu trả lời",
+  "Last 500 replies": "500 lượt gần nhất", "Today": "Hôm nay", "7 days": "7 ngày", "Period": "Khoảng thời gian", "Provider": "Hãng",
+  "No replies measured in this period yet.": "Chưa đo câu trả lời nào trong khoảng này.", "Stage": "Chặng", "Count": "Số lượt", "p50": "p50", "p95": "p95", "Latest replies": "Câu trả lời gần nhất",
 };

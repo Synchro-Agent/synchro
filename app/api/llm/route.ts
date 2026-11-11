@@ -11,7 +11,10 @@ import { afterTurn } from "../../brain";
 // async: true (lượt chat chính) → tạo lượt chạy bền ở nền và trả ngay { run }; trình duyệt theo dõi qua /api/runs/<id>.
 const TOO_MANY = "Bạn đang có quá nhiều lượt chạy và chờ cùng lúc. Hãy chờ một lượt xong hoặc bấm Dừng rồi gửi lại.";
 export async function POST(req: Request) {
+  // Độ trễ từng chặng của lượt chat (tracing.ts): mốc yêu cầu tới và thời gian kiểm tra phiên.
+  const at = Date.now();
   const c = current(req);
+  const authMs = Date.now() - at;
   if (!c) return Response.json({ error: "Bạn cần đăng nhập." }, { status: 401 });
   // Mỗi lượt là một CLI chạy trên máy chủ: chặn gửi dồn trước khi đọc nội dung.
   try { limit("llm:" + c.user.id, verifyLocked(c.user) ? 60 : 240, 10 * 60_000); } catch { return Response.json({ error: "Bạn gửi quá nhiều yêu cầu. Hãy thử lại sau ít phút." }, { status: 429 }); }
@@ -30,7 +33,7 @@ export async function POST(req: Request) {
     const { async: _, ...rest } = body;
     // Lượt tiếp sau khi duyệt công cụ thuộc lượt đã nhận: từ chối ở đây là mất lượt giữa chừng, nên chỉ xếp hàng.
     if (!body.resume && queueFull(c.user.id)) return Response.json({ error: TOO_MANY, turnQueue: true }, { status: 429 });
-    return Response.json({ run: startRun(c.user, "chat", rest, typeof body.conv === "string" ? body.conv.slice(0, 64) : null) });
+    return Response.json({ run: startRun(c.user, "chat", rest, typeof body.conv === "string" ? body.conv.slice(0, 64) : null, { at, authMs }) });
   }
   // Lời gọi chờ kết quả là việc phụ ngắn (đặt tên, gợi ý…).
   const quick = quickLimit(c.user);

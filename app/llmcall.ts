@@ -4,6 +4,14 @@
 import type { Target } from "./providers";
 import type { Effort } from "./catalog";
 import { noteResponse } from "./usage";
+import { noteProviderResponse } from "./tracing";
+
+// Đo thời gian tới byte đầu tiên của hãng cho từng lượt chat (tracing.ts): từ lúc gửi tới lúc có header phản hồi.
+async function timed(kind: string, f: () => Promise<Response>): Promise<Response> {
+  const t0 = Date.now(), r = await f();
+  noteProviderResponse(kind, t0, r.status);
+  return r;
+}
 
 export class HttpErr extends Error { constructor(public status: number, m: string) { super(m); } }
 
@@ -124,11 +132,11 @@ function cleanMessages(body: Record<string, unknown>) {
 }
 
 export async function anthropicCall(t: Target, body: Record<string, unknown>, signal?: AbortSignal, onDelta?: OnDelta, onBlock?: (b: ABlock) => void) {
-  const r = await fetch(`${t.base}/v1/messages`, {
+  const r = await timed("anthropic", () => fetch(`${t.base}/v1/messages`, {
     method: "POST", signal,
     headers: { "x-api-key": t.key, "anthropic-version": "2023-06-01", "content-type": "application/json", ...(t.workspace ? { "anthropic-workspace-id": t.workspace } : {}) },
     body: JSON.stringify({ model: t.model, ...cleanMessages(body), ...(onDelta ? { stream: true } : {}) }),
-  });
+  }));
   if (!r.ok) await fail(r);
   const j = onDelta ? await anthropicStream(r, onDelta, signal, onBlock) : await r.json();
   noteResponse(t.provider ?? "unknown", t.model, j, r.headers);
@@ -252,11 +260,11 @@ async function responsesStream(r: Response, onDelta: OnDelta, signal?: AbortSign
   return done;
 }
 export async function responsesCall(t: { base: string; key: string; model: string; provider?: string }, body: Record<string, unknown>, signal?: AbortSignal, onDelta?: OnDelta, onItem?: (it: Item) => void) {
-  const r = await fetch(`${t.base}/responses`, {
+  const r = await timed(t.provider ?? "openai", () => fetch(`${t.base}/responses`, {
     method: "POST", signal,
     headers: { Authorization: `Bearer ${t.key}`, "content-type": "application/json" },
     body: JSON.stringify({ model: t.model, ...body, ...(onDelta ? { stream: true } : {}) }),
-  });
+  }));
   if (!r.ok) await fail(r);
   const j = onDelta ? await responsesStream(r, onDelta, signal, onItem) : await r.json();
   noteResponse(t.provider ?? "unknown", t.model, j, r.headers);
@@ -304,12 +312,12 @@ async function chatStream(r: Response, onDelta: OnDelta, signal?: AbortSignal) {
 }
 export async function openaiCall(t: Target, body: Record<string, unknown>, signal?: AbortSignal, onDelta?: OnDelta) {
   const send = async (b: Record<string, unknown>) => {
-    const r = await fetch(`${t.base}/chat/completions`, {
+    const r = await timed(t.kind, () => fetch(`${t.base}/chat/completions`, {
       method: "POST", signal,
       headers: { Authorization: `Bearer ${t.key}`, "content-type": "application/json" },
       // Gemini không nhận stream_options; các hãng khác trả số token ở đoạn cuối khi bật include_usage.
       body: JSON.stringify({ model: t.model, ...b, ...(onDelta ? { stream: true, ...(t.kind === "google" ? {} : { stream_options: { include_usage: true } }) } : {}) }),
-    });
+    }));
     if (!r.ok) await fail(r);
     const j = onDelta ? await chatStream(r, onDelta, signal) : await r.json();
     noteResponse(t.provider ?? "unknown", t.model, j, r.headers);

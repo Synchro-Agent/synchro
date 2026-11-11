@@ -6,6 +6,7 @@ import crypto from "node:crypto";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { db, getSetting, getUser, isAdmin, verifyLocked, type UserRow } from "./authstore";
 import { noteRun, recordOps } from "./ops";
+import { addSpan, beginTrace, endTrace, noteFirstToken, withTrace } from "./tracing";
 import { accountLimit, accountTotal, acquire, noteRefused, queuedOf, queueLimit, withSlot, type WaitWhy } from "./turngate";
 
 // say: lời dẫn của model trước khi dùng công cụ (giữ lại, không bị câu trả lời cuối thay mất); tool / res: công cụ đang chạy và kết quả;
@@ -116,6 +117,7 @@ export function delta(t: string) {
   const s = scope.getStore(), l = s && live.get(s.id);
   if (!l || !t) return;
   l.text += t;
+  noteFirstToken();
   notify(s!.id, { delta: { s: l.s, t } });
 }
 // Claude Code: chữ model viết đi qua luồng đầu ra của CLI, còn lời gọi công cụ đi qua cầu nối MCP (HTTP) — hai đường riêng. Đoạn chữ ngắn
@@ -278,12 +280,17 @@ export function queueFull(uid: string) {
   return true;
 }
 
-function launch(id: string, kind: string, body: Record<string, unknown>, user: UserRow, conv: string | null) {
+function launch(id: string, kind: string, body: Record<string, unknown>, user: UserRow, conv: string | null, seed?: { at: number; authMs: number }) {
   const ctl = new AbortController();
   live.set(id, { at: Date.now(), s: 0, text: "", ctl, conv, uid: user.id, inbox: [] });
-  scope.run({ id }, () => {
+  // Lượt chat: đo từng chặng (tracing.ts). Lượt chạy lại sau khi máy chủ khởi động không có seed (không đo được phần kiểm tra phiên).
+  const tr = kind === "chat" ? beginTrace("chat", seed) : null;
+  const go = (f: () => void) => (tr ? withTrace(tr, f) : f());
+  scope.run({ id }, () => go(() => {
     (async () => {
+      const q0 = Date.now();
       const slot = await acquire({ uid: user.id, lane: "run", limit: turnsLimit(user), total: turnsTotal(user), signal: ctl.signal, maxWaitMs: QUEUE_WAIT_MS, onWait: (w) => progress("note", WAIT_NOTE[w]) });
+      addSpan("queue", "queue", q0);
       if (slot === "cancelled") return { http: 200, json: { text: "", cancelled: true } };
       if (slot === "timeout") return { http: 503, json: { error: "Lượt này đã xếp hàng quá lâu nên Synchro dừng lại. Hãy dừng bớt lượt đang chạy rồi gửi lại." } };
       return await withSlot(slot, async () => {
@@ -295,19 +302,20 @@ function launch(id: string, kind: string, body: Record<string, unknown>, user: U
       if (!f) return { http: 500, json: { error: `Không có bộ chạy cho loại "${kind}".` } };
       return await f(body, user);
       });
-    })().then((r) => { noteRun(kind, body.model, r.http, r.json); finish(id, r.http, r.json); }, (e) => { recordOps("server", `run ${kind}: ${String((e as Error)?.message ?? e)}`); finish(id, 502, { error: String((e as Error)?.message ?? e) }); });
-  });
+    })().then((r) => { if (tr) endTrace(tr, r.http); noteRun(kind, body.model, r.http, r.json); finish(id, r.http, r.json); }, (e) => { if (tr) endTrace(tr, 502); recordOps("server", `run ${kind}: ${String((e as Error)?.message ?? e)}`); finish(id, 502, { error: String((e as Error)?.message ?? e) }); });
+  }));
 }
 
 /** Tạo lượt mới và chạy ngay ở nền; trả về id để trình duyệt theo dõi. */
-export function startRun(user: UserRow, kind: string, body: Record<string, unknown>, conv?: string | null): string {
+/** seed: lúc yêu cầu tới và thời gian kiểm tra phiên (route /api/llm), để đo độ trễ từ đầu. */
+export function startRun(user: UserRow, kind: string, body: Record<string, unknown>, conv?: string | null, seed?: { at: number; authMs: number }): string {
   const id = "run_" + crypto.randomBytes(12).toString("base64url");
   const raw = JSON.stringify(body);
   const now = Date.now();
   const eph = body.incognito === true;
   init().prepare("INSERT INTO runs (id, user_id, conv, kind, status, req, events, created_at, updated_at, ephemeral) VALUES (?, ?, ?, ?, 'running', ?, '[]', ?, ?, ?)")
     .run(id, user.id, conv ?? null, kind, !eph && raw.length <= REQ_MAX ? raw : null, now, now, eph ? 1 : null);
-  launch(id, kind, body, user, conv ?? null);
+  launch(id, kind, body, user, conv ?? null, seed);
   return id;
 }
 

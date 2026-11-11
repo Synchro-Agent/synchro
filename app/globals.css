@@ -4216,3 +4216,16 @@ main#main:focus{outline:0}
 .bk-drill p{margin:0 0 6px;font-size:13px}
 .bk-tbl{margin:6px 0}
 @media (max-width:560px){.bk-grid{grid-template-columns:minmax(0,1fr)}.bk-foot{flex-wrap:wrap}}
+/* Sức khỏe hệ thống → Độ trễ từng chặng (latencyui.tsx) */
+.lat-bar{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin:4px 0 8px}
+.lat-sel select{min-width:140px}
+.lat-wrap{max-width:100%;overflow-x:auto}
+.lat-tbl{width:100%}
+.lat-tbl .num{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+.lat-tbl tr.lat-total td{font-weight:600}
+.lat-tbl td.lat-slow{color:#c6422f}
+.lat-last{margin-top:8px;font-size:12.5px}
+.lat-last summary{cursor:pointer;color:var(--text-2);padding:4px 0}
+/* Ba nút khoảng thời gian: cột theo độ dài chữ (không chia đều theo nhãn dài nhất), vừa 375px. */
+html body .lat-bar .group{grid-auto-columns:auto;max-width:100%;min-width:0}
+@media (max-width:560px){html body .lat-bar .group{display:flex;flex:1 1 100%}html body .lat-bar .group>button{flex:1 1 auto;justify-content:center;padding:0 8px!important}.lat-bar .lat-sel,.lat-bar .lat-sel select{width:100%}}

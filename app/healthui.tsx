@@ -8,6 +8,7 @@ import { getLang, locale } from "./i18n";
 import * as I from "./icons";
 import type { BackupStatus, Problem, WatchdogState } from "./ops";
 import { ContinuousBackup } from "./backupui";
+import { LatencyTable, type Latency } from "./latencyui";
 
 type Disk = { key: string; path: string; freeMB: number; totalMB: number };
 type Health = {
@@ -21,6 +22,7 @@ type Health = {
   cli: { source: string; users24: number; users7: number; n24: number; n7: number; last: number }[]; cliRecent: { at: number; source: string; n: number; email: string | null }[];
   csp: { at: number; source: string; detail: string; n: number }[];
   backup: BackupStatus | null; watchdog: WatchdogState | null; wdEvents: { at: number; event: string; detail?: string }[];
+  latency?: Latency;
 };
 const CLI: Record<string, string> = { claude: "Claude", codex: "ChatGPT", agy: "Gemini", grok: "Grok" };
 const L = (vi: string, en: string) => (getLang() === "vi" ? vi : en);
@@ -105,6 +107,12 @@ export function HealthPanel({ Toggle }: { Toggle: (p: { on: boolean; set: (v: bo
       <div className="adm-stats" style={{ marginTop: 12 }}>
         {stats.map(([l, n, warn]) => <div key={l} className={`adm-stat ${warn ? "warn" : ""}`}><b data-notr>{n}</b><span>{l}</span></div>)}
       </div>
+
+      {h.latency && <>
+        <h3 className="sec">Reply latency by stage</h3>
+        <p className="d adm-privacy"><I.Retry size={14} />How long each part of a chat reply takes on this server, from the sign-in check to the last word. Measured on every reply; no chat content is kept. Each reply is also written to the server log as an OpenTelemetry span, ready to export later.</p>
+        <LatencyTable data={h.latency} />
+      </>}
 
       <h3 className="sec">Disk</h3>
       {h.disks.map((d) => (

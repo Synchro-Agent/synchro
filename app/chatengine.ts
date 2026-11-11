@@ -9,6 +9,7 @@ import { connectLinks } from "./composio";
 import { randomToken } from "./mcpauth";
 import { browserDefault, capsState, skillsOn } from "./caps";
 import { overLimit, usageScope } from "./usage";
+import { addSpan, currentTrace, markPrompt, markProviderCall, noteModel, span, spanOn, spanSync } from "./tracing";
 import { awaitToolUse, currentRun, delta, deltaStep, inboxWaiting, liveNow, markEffect, onInbox, progress, registerExec, runSignal, steered, stepSignal, takeInbox, toolUseSeen, turnSignal } from "./runs";
 import { prepareHistory, type TraceItem } from "./transpile";
 import { expandFileRefs } from "./fileproc";
@@ -763,7 +764,7 @@ async function execute(ad: Adapter, m: unknown[], x: Exec, calls: Call[], used: 
   const seqs = calls.map((c) => (c.name === "update_plan" ? 0 : progress("tool", describe(x, c))));
   let res: Run[];
   try {
-    res = await abortable(Promise.all(calls.map((c) => runCall(x, c, d[c.id]))), runSignal());
+    res = await abortable(Promise.all(calls.map((c) => span(`tool ${c.name}`, "tool", () => runCall(x, c, d[c.id]), { "tool.name": c.name }))), runSignal());
   } catch (e) {
     // Người dùng dừng khi công cụ đang chạy: ghi rõ trong dấu vết để lượt sau model biết việc này chưa xong.
     if (isAbort(e)) for (const c of calls) if (isData(x, c)) x.trace.push({ id: c.id, name: c.name, label: label(x, c), input: JSON.stringify(c.input ?? {}).slice(0, 300), status: "cancelled_by_user", summary: "Người dùng đã dừng khi công cụ đang chạy; chưa có kết quả." });
@@ -1272,9 +1273,7 @@ const contextOf = (body: Record<string, any>, u: UserRow) => (useProfile(body) ?
 // Câu chào, cảm ơn không có gì để nhớ lại. Đo riêng để biết phần chuẩn bị của lượt nằm ở đâu.
 const recallOf = (body: Record<string, any>, u: UserRow, conv?: string) => { // eslint-disable-line @typescript-eslint/no-explicit-any
   if (!useProfile(body) || body.memory === false || body.incognito || routeTask(routeInput(body)) === "chat") return "";
-  const t0 = Date.now(), out = brainRecall(u.id, lastUserText(body.messages), conv);
-  if (Date.now() - t0 > 20) console.log(`[timing] chat recall=${Date.now() - t0}ms`);
-  return out;
+  return spanSync("brain recall", "retrieval", () => brainRecall(u.id, lastUserText(body.messages), conv));
 };
 /** Model tự tra, đọc theo liên kết và ghi vào bộ não (công cụ brain_*), cùng điều kiện với phần ghi chú liên quan. */
 const brainOn = (body: Record<string, any>, u: UserRow) => useProfile(body) && body.memory !== false && !body.incognito && brainReady(u.id); // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -1370,11 +1369,12 @@ const useMemory = (body: Record<string, any>, _u: UserRow) => !!body.skills && b
  *  model = "auto": Synchro chọn model theo độ khó của yêu cầu (router.ts) trong các model tài khoản được dùng, rồi chạy như bình thường. */
 export async function chatPost(body: Record<string, any>, c: Who, scope: { feature: string }): Promise<Response> { // eslint-disable-line @typescript-eslint/no-explicit-any
   // Tệp của các lượt trước đi cùng lịch sử: model nào trả lời lượt này (kể cả model vừa đổi) cũng thấy đúng tài liệu đang bàn.
-  if (Array.isArray(body.messages)) body = { ...body, messages: await expandFileRefs(body.messages, lastUserText(body.messages), c.user.id) };
+  if (Array.isArray(body.messages)) { const msgs = body.messages; body = { ...body, messages: await span("file refs", "history", () => expandFileRefs(msgs, lastUserText(msgs), c.user.id)) }; }
   if (typeof body.resume === "string") return chatTurn(body, c, scope);
   if (body.model !== AUTO) return withSwitch(await chatTurn(body, c, scope), body, c.user, [String(body.model)]);
   // Chọn trong đúng các model bộ chọn model đang hiện: nhóm của hãng đang dùng gói subscription thì chọn model của gói,
   // không tự chuyển sang khóa API (tierOf xếp hạng được cả "sub-claude/opus", "sub-claude/haiku"…). Gói hết hạn mức thì không chọn.
+  const r0 = Date.now();
   const all = await usableModels(c.user);
   const { groups } = all;
   // plansOnly: hết hạn mức chi phí API (usage.ts overLimit) mà đang để Tự động: hạ xuống gói subscription đã kết nối thay vì khóa chat.
@@ -1389,6 +1389,7 @@ export async function chatPost(body: Record<string, any>, c: Who, scope: { featu
   const pool = usable.length ? usable : allowed;
   const skip = typeof body.avoidModel === "string" && pool.includes(body.avoidModel) ? [body.avoidModel] : [];
   const r = routeModel(q, pool, { avoid: [...skip, ...stalledModels(c.user.id, pool)] });
+  addSpan("routing", "routing", r0, Date.now(), r ? { "synchro.route.model": r.model, "synchro.route.task": r.task } : undefined);
   if (!r) return Response.json({ error: "Tài khoản của bạn chưa được dùng model nào. Hãy liên hệ quản trị viên." }, { status: 403 });
   // Nỗ lực: người dùng để "Tự động" (hoặc chưa chọn) thì theo độ khó của việc; chọn tay thì giữ lựa chọn đó.
   const effort = body.effort === "auto" || !isEffort(body.effort) ? r.effort : body.effort;
@@ -1472,7 +1473,6 @@ function routeInput(body: Record<string, any>): RouteInput { // eslint-disable-l
 
 /** o.auto: chế độ Tự động còn model khác để chuyển: không chờ lâu khi tài khoản đang bận lượt khác. */
 async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: string }, o: { auto?: boolean } = {}): Promise<Response> { // eslint-disable-line @typescript-eslint/no-explicit-any
-  const T0 = Date.now();
   // feature: "chat" | "code"; picked: khóa model đang chọn ("openai/gpt-5.1"); project: id dự án (để bật skill theo dự án)
   // Tiếp tục lượt chat đang chờ duyệt công cụ: { resume, decisions: { id lượt gọi: "allow" | "always" | "deny" } }.
   if (typeof body.resume === "string") {
@@ -1504,6 +1504,7 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
   scope.feature = feature === "artifact" ? "artifact" : feature === "code" ? "code" : skills ? "chat" : "internal";
   if (feature === "code" && !can(c.user, "code")) return Response.json({ error: "Quản trị viên chưa cho phép tài khoản của bạn dùng Synchro Code." }, { status: 403 });
   const model = (typeof picked === "string" && picked ? legacyModel(picked) : null) || pickDefault(await catalog(), mainModels());
+  if (model && skills) noteModel(model);
   // Model của gói subscription (Cài đặt → Providers): chạy CLI chính chủ bằng gói của chính người dùng, không qua khóa API.
   if (model && subCli(model)) {
     if (feature === "artifact" && !capsState(c.user).caps.ai) return Response.json({ error: "Artifact dùng AI đang tắt. Bật trong Cài đặt → Khả năng." }, { status: 403 });
@@ -1530,10 +1531,9 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
       if (pc && !am && !fast && BRIDGE_CLIS.has(cli)) {
         const studio = can(c.user, "skills") ? studioOf(body.studio) : null;
         const st = studio ? studioSkills(c.user.id, studio) : null;
-        const t1 = Date.now();
-        const ss = await skillSet(c.user, body, messages, studio, st);
-        console.log(`[timing] chat skillset=${Date.now() - t1}ms (${ss.list.length} skill)`);
+        const ss = await span("skills", "retrieval", () => skillSet(c.user, body, messages, studio, st));
         route = ss.route;
+        markPrompt();
         if (can(c.user, "connectors")) { await composioReady(c.user.id, connPolicy(permsOf(c.user))); sess = new ConnectorSession(c.user.id, { conv: convId, project: !!project, pol: connPolicy(permsOf(c.user)) }); if (!sess.tools.length && !sess.offline.length) sess = null; }
         const code = pc.code;
         const refs = !!sess || code || /\bref_[\w-]{6,}/.test(JSON.stringify(messages));
@@ -1550,13 +1550,15 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
         const xx: Exec = { project: pdocs ? project : undefined, image, msgs: messages, toolSync: subCli(model) === "claude", list: [...ss.visible, ...ss.list.filter((k) => !ss.visible.includes(k))], scripts: code, sess, uid: c.user.id, code, net: pc.net, web: !!pc.web, art: arts ? { messages, base: body.artBase } : undefined, outs: [], libs: ss.libs, studio: studio ? ss.libs[`studio-${studio}`][0] : undefined, prefer: ss.prefer, trace: [], conv: convId, browse, task, bctx: browse ? { def: task ? taskBrowser(task) : browserDefault(bst), synchro: !bst.locks.browse, user: bst.locks.mine !== "admin", scope: convId ? `chat:${convId}` : undefined, cookies: codePrefs(c.user.id).cookies, files: chatFiles(messages, c.user.id, () => xx.outs) } : undefined };
         x = xx;
         announceOffline(xx, messages);
-        bridge = openBridge({ uid: c.user.id, tools: tools as { name: string; description: string; input_schema: unknown }[], ...(cli === "agy" ? { hold: BRIDGE_HOLD.agy } : {}), call: (name, input, cancel) => { bridged++; return bridgeCall(xx, name, input, usedAll, cancel); }, route: sess && connProxy(sess) ? (name, input) => { const ct = resolveTool(sess!.tools, name); return ct ? { name: CONN_CALL, input: { tool: ct.fq, input } } : null; } : undefined });
+        const trc = currentTrace();
+        bridge = openBridge({ uid: c.user.id, tools: tools as { name: string; description: string; input_schema: unknown }[], ...(cli === "agy" ? { hold: BRIDGE_HOLD.agy } : {}), call: (name, input, cancel) => { bridged++; return spanOn(trc, `tool ${name}`, "tool", () => bridgeCall(xx, name, input, usedAll, cancel), { "tool.name": name }); }, route: sess && connProxy(sess) ? (name, input) => { const ct = resolveTool(sess!.tools, name); return ct ? { name: CONN_CALL, input: { tool: ct.fq, input } } : null; } : undefined });
         xx.park = bridge.park;
         toolSys = [studio ? STUDIO_RULES(studio, st!.plugins, st!.skills.length) : "", code ? CODE_RULES(pc.net, !!pc.web) : "", image ? IMAGE_RULES : "", pdocs ? PROJECT_DOC_RULES : "", arts ? ARTCHECK_RULES(check) : "", skillsPrompt(ss.visible, code), sess ? connectorsPrompt(sess, connProxy(sess)) : "", CLI_TOOLS_NOTE(cli, body.web === true, image), NARRATE_RULES, brainOn(body, c.user) ? BRAIN_RULES : "", browse ? BROWSER_RULES : "", task ? taskRules(task, browse) : ""].filter(Boolean).join("\n\n");
       }
       // Gợi ý định tuyến skill đổi theo từng tin nhắn: đặt cạnh tin nhắn mới nhất, không trong hướng dẫn hệ thống. Hướng dẫn hệ thống giữ
       // nguyên từng chữ giữa các lượt và các đoạn chat thì model đọc lại từ bộ nhớ đệm (~15.000 token): câu đầu của đoạn chat mới từng
       // chờ hơn 10 giây chỉ để đọc lại phần này.
+      markPrompt();
       const say0 = am ? undefined : fast ? holdNeedTools(live()) : live();
       // Antigravity trả cả câu trả lời một lần nên làm sạch được ngay; CLI khác làm sạch ở câu trả lời cuối (đường dẫn có thể bị cắt giữa hai đoạn chữ).
       const say = say0 && cli === "agy" ? (t: string) => say0(scrubServerPaths(t)) : say0;
@@ -1575,7 +1577,7 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
       // Bấm Dừng: CLI trả về mọi chữ đã viết trong lượt, kể cả các câu dẫn đã nằm trong nhật ký làm việc (ghép lại thành một đoạn dài
       // không dấu cách, trông như câu trả lời cụt rồi dừng). Câu trả lời chỉ giữ phần của bước đang viết dở, như lượt chạy bằng khóa API.
       const once = async (msgs: unknown, fresh = false) => {
-        console.log(`[timing] chat prep=${Date.now() - T0}ms (skill, ngữ cảnh, bộ nhớ trước khi gọi model)`);
+        markProviderCall();
         const r = await turn(msgs, fresh);
         return r.status === 200 && (r.json as { cancelled?: boolean }).cancelled ? { ...r, json: { ...(r.json as Record<string, unknown>), text: liveNow() } } : r;
       };
@@ -1699,10 +1701,12 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
   const convId = typeof conv === "string" && conv.length <= 64 ? conv : undefined;
   let sess: ConnectorSession | null = null;
   try {
-    const { list, visible, libs, prefer, route } = await skillSet(c.user, body, messages, studio, st);
+    const { list, visible, libs, prefer, route } = await span("skills", "retrieval", () => skillSet(c.user, body, messages, studio, st));
     // Lịch sử theo chuẩn Synchro → tin nhắn sẵn sàng cho mọi hãng. Gợi ý skill theo câu hỏi mới nhất đổi mỗi lượt nên ở tầng động
     // (cuối prompt), không ở phần đầu: phần đầu (hướng dẫn, danh mục skill, tài liệu ghim) giữ nguyên để đọc từ bộ đệm.
-    const prep = prepareHistory(messages, [route, cs ? designOf(body, { art: !!cs.caps.art, code: !!cs.caps.code }, studio, convId) : "", recallOf(body, c.user, convId), nowBlock(body), crisisBlock(body)], mix);
+    const dyn = [route, cs ? designOf(body, { art: !!cs.caps.art, code: !!cs.caps.code }, studio, convId) : "", recallOf(body, c.user, convId), nowBlock(body), crisisBlock(body)];
+    const prep = spanSync("history", "history", () => prepareHistory(messages, dyn, mix));
+    markPrompt();
     // Connector chỉ dùng trong lượt chat chính (skills = true), không dùng cho các lệnh nội bộ như tóm tắt bộ nhớ.
     if (skills && t.kind !== "mock" && can(c.user, "connectors")) { await composioReady(c.user.id, connPolicy(permsOf(c.user))); sess = new ConnectorSession(c.user.id, { conv: convId, project: !!project, pol: connPolicy(permsOf(c.user)) }); if (!sess.tools.length && !sess.offline.length) sess = null; }
     const code = !!cs?.caps.code && t.kind !== "mock";
