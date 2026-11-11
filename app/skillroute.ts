@@ -1,6 +1,7 @@
 // Định tuyến skill: chấm điểm mọi skill đã cài (cả skill nằm trong thư viện studio / plugin) theo yêu cầu mới nhất,
 // để gợi ý cho model những skill nên đọc. Model vẫn toàn quyền quyết định; đây chỉ là gợi ý đưa vào prompt.
 // Người dùng thường viết tiếng Việt còn mô tả skill phần lớn bằng tiếng Anh, nên có bảng khái niệm nối hai bên.
+import { registerMemStat } from "./memstat";
 import type { Skill } from "./skillstore";
 
 export const fold = (s: string) => s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/đ/g, "d");
@@ -228,6 +229,7 @@ const G = globalThis as unknown as { __skillIx?: Ix; __skillNext?: Ix | null; __
 const rawWords = (s: string) => s.split(/[^a-z0-9]+/).filter(Boolean);
 const freshIx = (): Ix => ({ post: new Map(), first: new Map(), seen: new WeakSet(), n: 0, peak: 0 });
 const ixOf = () => (G.__skillIx ??= freshIx());
+registerMemStat("skillIndex", () => ({ skills: G.__skillIx?.n ?? 0, words: G.__skillIx?.post.size ?? 0, building: G.__skillNext ? 1 : 0 }));
 function addToIx(ix: Ix, k: Skill) {
   if (ix.seen.has(k)) return;
   ix.seen.add(k); ix.n++;

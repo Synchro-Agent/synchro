@@ -12,6 +12,7 @@ import { measureZip, SKILL_ZIP_MAX } from "../scripts/zipguard.mjs";
 import { db } from "./authstore";
 import { download, enabledSkillsByIds, isAllowed, isText, lenientSkillMd, parseEntries, parseSkillMd, ROOT, type Entry, type Skill } from "./skillstore";
 import { GH_API } from "./github";
+import { registerMemStat } from "./memstat";
 import { fold, warmSkillIndex } from "./skillroute";
 import { bumpTags, classify, classifyCatalog, dropAutoTags, dropPluginTags, dropTag, holdTags, keepPluginTags, pluginDetected, pluginKey, pluginTagRows, refine, tagRev, userStudioIds } from "./skillstudio";
 
@@ -156,6 +157,7 @@ function trimZips(now = Date.now(), keep?: string) {
 }
 /** Gói đang giữ trong bộ nhớ (theo dõi bộ nhớ, kiểm thử). */
 export const zipCacheStats = () => { let bytes = 0; for (const v of zipCache.values()) bytes += v.buf.length; return { n: zipCache.size, bytes }; };
+registerMemStat("pluginZips", () => { const s = zipCacheStats(); return { n: s.n, MB: Math.round(s.bytes / 1048576) }; });
 async function repoZip(repo: string, commit: string) {
   const key = `${repo}@${commit}`;
   const c = zipCache.get(key);

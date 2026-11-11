@@ -5,6 +5,7 @@ import type { AgentEvent } from "./agentcore";
 import { closeFolded, foldAgentEvent } from "./agentfold";
 import { getUser } from "./authstore";
 import { getPrefs, patchSession, saveTurn, type TurnNode } from "./codestore";
+import { registerMemStat } from "./memstat";
 
 type Line = { s: number; e: AgentEvent };
 type Listener = { line: (l: Line) => void; end: () => void };
@@ -29,6 +30,7 @@ function sweep() {
 }
 /** Số lượt đang giữ trong bộ nhớ và tổng byte bộ đệm (theo dõi bộ nhớ). */
 export const runStats = () => { let n = 0, bytes = 0; for (const r of runs.values()) { n++; bytes += r.bytes; } return { runs: n, bytes }; };
+registerMemStat("codeRuns", () => { const s = runStats(); return { runs: s.runs, MB: Math.round(s.bytes / 1048576) }; });
 export const latestRun = (uid: string, sid: string) => { sweep(); return runs.get(keyOf(uid, sid)) ?? null; };
 // Lượt vừa bấm Dừng coi như đã hết dù CLI còn đang thoát: người dùng gửi tiếp ngay được, không phải đợi.
 export const activeRun = (uid: string, sid: string) => { const r = runs.get(keyOf(uid, sid)); return r && !r.ended && !r.ac.signal.aborted ? r : null; };

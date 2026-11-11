@@ -20,6 +20,7 @@ import { clearMemory, listMemory, memCfg } from "./memory";
 import { splitArtifacts } from "./artifacts";
 import { chatGone } from "./chatstore";
 import { vendorOf } from "./router";
+import { registerMemStat } from "./memstat";
 import { onTick } from "./tasks";
 
 export type NoteKind = "hub" | "about" | "model" | "chat" | "code" | "topic" | "entity" | "map" | "index" | "log" | "skill" | "connector" | "note" | "daily" | "rule";
@@ -873,6 +874,7 @@ export function evictRecall(now = Date.now(), idleMs = RECALL_IDLE_MS): number {
   return n;
 }
 onTick("brain-recall", (now) => { evictRecall(now); });
+registerMemStat("brainRecall", () => recallStats());
 /** Cỡ chỉ mục gọi lại trong bộ nhớ (kiểm thử, theo dõi bộ nhớ). */
 export const recallStats = () => { let docs = 0, vocab = 0; for (const v of recallIxs.values()) { docs += v.docs.size; vocab += v.vocab.size; } return { users: recallIxs.size, docs, vocab }; };
 const recallStamp = (uid: string) => { const r = t().prepare("SELECT COUNT(*) AS n, MAX(updated_at) AS m FROM brain_notes WHERE user_id = ?").get(uid) as { n: number; m: number | null }; return `${r.n}:${r.m ?? 0}`; };

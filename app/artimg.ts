@@ -2,6 +2,7 @@
 // tệp ảnh tới 6 MB, nhớ tạm tối đa 100 ảnh, 64 MB và 30 phút. Dùng cho /api/artimg (khung xem trước) và máy kiểm tra hiển thị (artcheck.ts).
 import { externalImageUrls, genImageId, swapUrls } from "./artdoc";
 import { readOutput } from "./outputs";
+import { registerMemStat } from "./memstat";
 import { safeFetch } from "./safefetch";
 
 export type Img = { mime: string; data: Buffer };
@@ -30,6 +31,7 @@ function trim(now = Date.now()) {
 }
 /** Ảnh đang nhớ tạm (theo dõi bộ nhớ, kiểm thử). */
 export const artImgStats = () => { let bytes = 0; for (const e of cache.values()) bytes += e.size; return { n: cache.size, bytes }; };
+registerMemStat("artImages", () => { const s = artImgStats(); return { n: s.n, MB: Math.round(s.bytes / 1048576) }; });
 /** Nhớ tạm kết quả tải theo URL; loader thay được trong kiểm thử. */
 export function cachedImage(url: string, loader: (url: string) => Promise<Img | null> = load): Promise<Img | null> {
   const now = Date.now();

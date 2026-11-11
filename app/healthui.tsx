@@ -6,6 +6,7 @@ import { call, ago, fmtDate } from "./adminui";
 import { useApp } from "./store";
 import { getLang, locale } from "./i18n";
 import * as I from "./icons";
+import type { MemSample } from "./memstat";
 import type { BackupStatus, Problem, WatchdogState } from "./ops";
 
 type Disk = { key: string; path: string; freeMB: number; totalMB: number };
@@ -20,7 +21,10 @@ type Health = {
   cli: { source: string; users24: number; users7: number; n24: number; n7: number; last: number }[]; cliRecent: { at: number; source: string; n: number; email: string | null }[];
   csp: { at: number; source: string; detail: string; n: number }[];
   backup: BackupStatus | null; watchdog: WatchdogState | null; wdEvents: { at: number; event: string; detail?: string }[];
+  mem?: { now: MemSample; history: MemSample[]; caches: Record<string, Record<string, number>>; heapLimit: number };
 };
+// Bộ đệm lớn trong bộ nhớ máy chủ (app/memstat.ts): tên dễ hiểu cho quản trị viên.
+const CACHE: Record<string, string> = { skillIndex: "Skill index", brainRecall: "Brain recall index", codeRuns: "Synchro Code runs kept", pluginZips: "Downloaded plugin packages", artImages: "Artifact images", approvals: "Replies waiting for approval" };
 const CLI: Record<string, string> = { claude: "Claude", codex: "ChatGPT", agy: "Gemini", grok: "Grok" };
 const L = (vi: string, en: string) => (getLang() === "vi" ? vi : en);
 const gb = (mb: number) => (mb >= 1024 ? `${(mb / 1024).toLocaleString(locale(), { maximumFractionDigits: 1 })} GB` : `${mb.toLocaleString(locale())} MB`);
@@ -76,6 +80,7 @@ export function HealthPanel() {
     ["Server errors (24h)", h.errors24.toLocaleString(locale()), h.errors24 >= 200], ["Replies failed (24h)", `${h.runsFailed24.toLocaleString(locale())} / ${h.runs24.toLocaleString(locale())}`, h.runsFailed24 * 5 > h.runs24 && h.runsFailed24 > 2],
     ["Emails failed (24h)", h.mail.failed24.toLocaleString(locale()), h.mail.failed24 > 0], ["Web restarts (24h)", Math.max(0, h.boots24).toLocaleString(locale()), h.boots24 > 3],
     ["Browser errors (24h)", h.client24.toLocaleString(locale())],
+    ...(h.mem ? [["Server memory (heap)", `${gb(h.mem.now.heapUsed)} / ${gb(h.mem.heapLimit)}`, h.mem.now.heapUsed > h.mem.heapLimit * 0.75] as [string, string, boolean]] : []),
     // Lượt model cùng lúc so với trần cả máy; có lượt phải chờ nghĩa là trần đang chạm thật.
     ["Replies running now", `${h.turns.running} / ${h.turns.limit}`, h.turns.running >= h.turns.limit], ["Replies waiting now", h.turns.waiting.toLocaleString(locale()), h.turns.waiting > 0], ["Refused, queue full (since restart)", h.turns.refused.toLocaleString(locale()), h.turns.refused > 0],
     ["CLI isolation", h.isolation.engineUser && h.isolation.bwrap ? L("User riêng, sandbox bật", "Separate user, sandbox on") : h.isolation.engineUser ? L("User riêng, sandbox tắt", "Separate user, sandbox off") : L("Tắt", "Off"), !(h.isolation.engineUser && h.isolation.bwrap)],
@@ -113,6 +118,21 @@ export function HealthPanel() {
         </div>
       ))}
       {h.agent !== null && <div className="row"><div><div className="t">Workspace service</div><div className="d">Runs code and Synchro Code workspaces.</div></div><span className={`s-badge ${h.agent ? "ok" : ""}`}>{h.agent ? "Running" : "Not answering"}</span></div>}
+
+      {h.mem && (() => {
+        const m = h.mem, first = m.history[0], hours = first ? (m.now.at - first.at) / 3_600_000 : 0, grew = first ? m.now.heapUsed - first.heapUsed : 0;
+        return <>
+          <h3 className="sec">Server memory</h3>
+          <p className="d adm-privacy"><I.Alert size={14} />Measured every 30 minutes and written to the server log as a [timing] mem line, so slow growth shows up before the server runs out.</p>
+          <div className="adm-card">
+            <Kv k="Heap used / limit" v={`${gb(m.now.heapUsed)} / ${gb(m.heapLimit)}`} bad={m.now.heapUsed > m.heapLimit * 0.75} />
+            <Kv k="Process memory (RSS)" v={gb(m.now.rss)} />
+            <Kv k="Outside the heap (external / buffers)" v={`${gb(m.now.external)} / ${gb(m.now.arrayBuffers)}`} />
+            {hours >= 1 && <Kv k="Heap change" v={`${grew >= 0 ? "+" : ""}${gb(grew)} ${L(`trong ${Math.round(hours)} giờ`, `in ${Math.round(hours)} h`)}`} bad={grew > 300} />}
+            {Object.entries(m.caches).map(([k, v]) => <Kv key={k} k={CACHE[k] ?? k} v={Object.entries(v).map(([a, b]) => `${a} ${b.toLocaleString(locale())}`).join(" · ")} />)}
+          </div>
+        </>;
+      })()}
 
       {h.engines?.length > 0 && <>
         <h3 className="sec">Background replies, last 24 hours</h3>

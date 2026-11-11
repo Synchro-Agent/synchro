@@ -3,6 +3,7 @@ import path from "node:path";
 import { audit, clientIp, handle, limit, requireAdmin, sameOrigin, appUrl } from "../../../authstore";
 import { mailDnsStatus, sendMailNow } from "../../../mailer";
 import { testMail } from "../../../mailtpl";
+import { memReport } from "../../../memstat";
 import { opsProblems, opsSnapshot } from "../../../ops";
 import { agentAlive, wsConfigured } from "../../../workspace";
 
@@ -16,7 +17,7 @@ export const GET = handle(async (req) => {
   requireAdmin(req);
   const snap = opsSnapshot();
   const [agent, dns] = await Promise.all([wsConfigured() ? agentAlive() : Promise.resolve(null), mailDnsStatus()]);
-  return Response.json({ ...snap, problems: opsProblems(snap), agent, dns, build, uptimeSec: Math.round(process.uptime()) });
+  return Response.json({ ...snap, problems: opsProblems(snap), agent, dns, build, uptimeSec: Math.round(process.uptime()), mem: memReport() });
 });
 
 // { action: "mail_test", lang }: gửi thử tới chính email của quản trị viên và chờ kết quả (không cho nhập địa chỉ khác: nút này không phải công cụ gửi thư).

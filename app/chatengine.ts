@@ -51,6 +51,7 @@ import { answer as answerAsk, newAskId, waitAnswer, type Ask } from "./approvals
 import { callArgs, compactSchema, rankTools, resolveTool } from "./connproxy";
 import { getPrefs as codePrefs } from "./codestore";
 import { INPUTS_MAX, runInputs } from "./runinputs";
+import { registerMemStat } from "./memstat";
 import { BROWSER_RULES, BROWSER_TOOLS, browserTargetOf, chatFiles, describeBrowser, isBrowserTool, releaseBrowser, runBrowserTool, type BrowserCtx } from "./browsertools";
 
 // Bộ xử lý chat (chỉ chạy ở máy chủ), dùng chung cho /api/llm (chờ kết quả) và lượt chạy nền (runs.ts).
@@ -205,6 +206,7 @@ function parkApproval(id: string, p: Pending) {
 const unparkApproval = (id: string) => { const p = pending.get(id); if (p?.timer) clearTimeout(p.timer); pending.delete(id); };
 /** Số lượt chat đang chờ duyệt công cụ (theo dõi bộ nhớ). */
 export const pendingApprovals = () => pending.size;
+registerMemStat("approvals", () => ({ pending: pending.size }));
 
 const fmtSize = (n: number) => (n < 1024 ? `${n} B` : n < 1048576 ? `${(n / 1024).toFixed(1)} KB` : `${(n / 1048576).toFixed(1)} MB`);
 // Ảnh trong outputs/ được gửi lại cho model xem (khung hình video, trang PDF, biểu đồ…; runpreview.ts): không xem được thì model từng tự đưa ảnh lên host
