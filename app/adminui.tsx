@@ -18,6 +18,7 @@ import type { ApiState } from "./apiui";
 import { refreshModels } from "./models";
 import { BulkBar, BulkButton, BulkCheck, bulkRow, each, useBulk, type BulkAct } from "./bulk";
 import { Pager } from "./pager";
+import { SettingsSkeleton } from "./skeleton";
 
 type U = AuthUser & { status: "active" | "suspended"; verified: boolean; lastLogin: number | null; lastSeen: number | null; sessions: number; protected: boolean; customPerms: boolean };
 type Log = { id: number; at: number; action: string; actor_email: string | null; target_email: string | null; ip: string | null; detail: string | null };
@@ -300,7 +301,7 @@ export function AdminPanel({ Toggle }: { Toggle: ToggleT }) {
   ];
 
   if (err) return <div className="empty" style={{ marginTop: 80 }}><I.Alert size={28} /><span>{err}</span><button className="btn" onClick={load}>Try again</button></div>;
-  if (!d) return <div className="empty" style={{ marginTop: 80 }}><span className="muted">Loading…</span></div>;
+  if (!d) return <SettingsSkeleton />;
 
   const s = d.stats;
   const ql = q.trim().toLowerCase();

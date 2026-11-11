@@ -24,12 +24,13 @@ export async function openChrome({ base, port = 9360, name = "r9", shots }) {
   if (!ver) { chrome.kill(); throw new Error("Chrome không mở được"); }
   const ws = new WebSocket(ver.webSocketDebuggerUrl);
   await new Promise((r) => ws.addEventListener("open", r));
-  let seq = 0; const waits = new Map(), reqs = [], logs = [];
+  let seq = 0; const waits = new Map(), reqs = [], logs = [], hooks = new Map();
   ws.addEventListener("message", (e) => {
     const m = JSON.parse(e.data);
     if (m.id && waits.has(m.id)) { const [y, n] = waits.get(m.id); waits.delete(m.id); m.error ? n(new Error(JSON.stringify(m.error))) : y(m.result); return; }
     if (m.method === "Network.requestWillBeSent") reqs.push(m.params.request.url);
     if (m.method === "Runtime.exceptionThrown") logs.push(m.params.exceptionDetails?.exception?.description ?? "exception");
+    for (const f of hooks.get(m.method) ?? []) f(m.params);
   });
   const send = (method, params = {}, sessionId) => new Promise((y, n) => { const id = ++seq; waits.set(id, [y, n]); ws.send(JSON.stringify({ id, method, params, sessionId })); });
   const { targetId } = await send("Target.createTarget", { url: "about:blank" });
@@ -50,5 +51,7 @@ export async function openChrome({ base, port = 9360, name = "r9", shots }) {
   const key = async (k, code = k, kc = 0, mods = 0) => { await P("Input.dispatchKeyEvent", { type: "keyDown", key: k, code, windowsVirtualKeyCode: kc, modifiers: mods }); await P("Input.dispatchKeyEvent", { type: "keyUp", key: k, code, windowsVirtualKeyCode: kc, modifiers: mods }); };
   const type = (text) => P("Input.insertText", { text });
   const close = () => { try { ws.close(); } catch {} chrome.kill(); };
-  return { P, ev, until, size, theme, shot, click, hover, key, type, close, reqs, logs };
+  // Sự kiện CDP của tab (Fetch.requestPaused…): on("Fetch.requestPaused", (p) => …).
+  const on = (method, f) => { if (!hooks.has(method)) hooks.set(method, []); hooks.get(method).push(f); };
+  return { P, ev, until, size, theme, shot, click, hover, key, type, close, on, reqs, logs };
 }

@@ -15,6 +15,7 @@ import { BulkBar, BulkButton, BulkCheck, bulkRow, each, useBulk, type Bulk, type
 import { PageBar, usePage } from "./pager";
 import { tr } from "./i18n";
 import { CONN_CHANGED, loginClaims } from "./connwatch";
+import { SettingsSkeleton } from "./skeleton";
 
 type Perm = "allow" | "chat" | "ask" | "block";
 type Tool = { name: string; title: string; description: string; readOnly: boolean; guessed?: boolean; destructive: boolean; perm: Perm; locked?: "setting" | "admin" };
@@ -562,7 +563,7 @@ export function ConnectorsPanel() {
     </div>
   );
   if (err) return <>{head}<div className="empty" style={{ marginTop: 40 }}><I.Alert size={28} /><span>{err}</span><button className="btn" onClick={load}>Try again</button></div></>;
-  if (!data) return <>{head}<div className="empty" style={{ marginTop: 40 }}><span className="muted">Loading…</span></div></>;
+  if (!data) return <>{head}<SettingsSkeleton /></>;
   return (
     <>
       {head}

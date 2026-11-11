@@ -13,6 +13,7 @@ import { Mark } from "./brand";
 import { MODES, PRESETS } from "./codeconst";
 import { ProvidersPanel } from "./providersui";
 import { lazyView } from "./lazy";
+import { SettingsSkeleton } from "./skeleton";
 import { AdminPanel, call as api, fmtDate, METHOD } from "./adminui";
 import { MfaRow } from "./mfaui";
 import type { AuthUser } from "./auth";
@@ -21,11 +22,11 @@ import { ls } from "./userscope";
 import { setCaps, useCaps } from "./capsclient";
 import { UsageSettings } from "./usageui";
 // Tab nặng trong Cài đặt: mở tab nào tải tab đó.
-const HealthPanel = lazyView(() => import("./healthui").then((m) => m.HealthPanel));
-const ConnectorsPanel = lazyView(() => import("./connectorsui").then((m) => m.ConnectorsPanel));
+const HealthPanel = lazyView(() => import("./healthui").then((m) => m.HealthPanel), <SettingsSkeleton />);
+const ConnectorsPanel = lazyView(() => import("./connectorsui").then((m) => m.ConnectorsPanel), <SettingsSkeleton />);
 const ExtSettings = lazyView(() => import("./browserhub").then((m) => m.ExtSettings), null);
-const BrainSettings = lazyView(() => import("./brainui").then((m) => m.BrainSettings));
-const SkillHub = lazyView(() => import("./pluginsui").then((m) => m.SkillHub));
+const BrainSettings = lazyView(() => import("./brainui").then((m) => m.BrainSettings), <SettingsSkeleton />);
+const SkillHub = lazyView(() => import("./pluginsui").then((m) => m.SkillHub), <SettingsSkeleton />);
 import { PKG_DOMAINS, type Caps } from "./catalog";
 import { usePlan as useSpeechPlan, useMyVoices, type Voice } from "./speech/client";
 import { getLang, locale, tr } from "./i18n";
@@ -517,7 +518,7 @@ function Memory() {
       <Row t="Generate memory from chats" d={<>Allow Synchro to remember lasting details from your chats (name, work, preferences) and use them in later chats.</>} top><Toggle on={cfg.gen} set={(v) => void call("POST", { cfg: { gen: v } })} /></Row>
       <Row t="Include sensitive topics in memory" d={<>Allow Synchro to save details about sensitive topics like health conditions or religious beliefs to memory.</>}><Toggle on={cfg.sens} set={(v) => void call("POST", { cfg: { sens: v } })} /></Row>
       <Row t="Import memory from other AI providers" d={<>Bring relevant context and data from another AI provider to Synchro. We&apos;ll provide a prompt you can use to fetch the memory from your other account.</>}><button className="btn" onClick={() => setImp(true)}>Start import</button></Row>
-      {st === null ? <div className="empty" style={{ marginTop: 100 }}>Loading…</div> : mems.length === 0 ? <div className="empty" style={{ marginTop: 100 }}>No memories yet</div> : (
+      {st === null ? <SettingsSkeleton groups={1} rows={5} /> : mems.length === 0 ? <div className="empty" style={{ marginTop: 100 }}>No memories yet</div> : (
         <>
           <H>Stored memories <span className="muted" style={{ fontWeight: 360 }}>({mems.length})</span></H>
           {mems.map((m) => <div key={m.id} className="item-row"><span style={{ flex: 1 }} data-notr>{m.content}</span><button className="icon-btn" style={{ width: 24, height: 24 }} aria-label="Delete memory" onClick={() => void call("DELETE", undefined, `?id=${encodeURIComponent(m.id)}`)}><I.Trash size={14} /></button></div>)}

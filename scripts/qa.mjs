@@ -34,6 +34,7 @@ const SUITES = [
   ["Câu trả lời Markdown trên trang thật: danh sách, công thức, khối code, bảng", "tests/ui/markdown.mjs"],
   ["Bảng trong câu trả lời đo bằng CSS thật: không vỡ chữ, cuộn ngang", "tests/ui/mdtable.mjs"],
   ["Lượt Code mất mạng, gửi khi phiên đang chạy, lỗi lượt theo ngôn ngữ", "tests/ui/codereconnect.mjs"],
+  ["Khung chờ đúng kích thước: mở app, danh sách đoạn chat, tin nhắn, khung artifact, cài đặt (đo vị trí và CLS)", "tests/ui/skeletons.mjs"],
 ];
 const only = process.argv.slice(2);
 

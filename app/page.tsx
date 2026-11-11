@@ -69,7 +69,8 @@ import { adoptLegacyData, ls, setUserScope, userScope } from "./userscope";
 import { useChatSync, useSyncStatus } from "./chatsync";
 import { shortName } from "./names";
 import { loadCaps, useCaps } from "./capsclient";
-import { artifactsAsCode, hasArtifacts, PUBLISHABLE, splitArtifacts, type ArtBlock } from "./artifacts";
+import { ART_LABEL, artifactsAsCode, hasArtifacts, PUBLISHABLE, splitArtifacts, type ArtBlock } from "./artifacts";
+import { ArtPanelSkeleton, BootSkeleton, ChatListSkeleton, ThreadSkeleton } from "./skeleton";
 import { restylePatch } from "./artkit";
 import { presetOf } from "./designpresets";
 import { resolveArt, type ArtVersion } from "./vfs";
@@ -105,8 +106,9 @@ const AppsGallery = lazyView(() => import("./appsui").then((m) => m.AppsGallery)
 const ProjMenu = lazyView(() => import("./projects").then((m) => m.ProjMenu), null);
 const PublishButton = lazyView(() => import("./appsui").then((m) => m.PublishButton), null);
 const BrowserHub = lazyView(() => import("./browserhub").then((m) => m.BrowserHub));
-const FilePanel = lazyView(() => import("./filepreview").then((m) => m.FilePanel));
-const ArtifactPanel = lazyView(() => import("./artifactui").then((m) => m.ArtifactPanel));
+// Khung xem tệp / artifact đang tải phần mã: khung chờ cùng chỗ, cùng bề rộng, có sẵn tên (cột chat không co giãn hai lần).
+const FilePanel = lazyView(() => import("./filepreview").then((m) => m.FilePanel), (p) => <ArtPanelSkeleton title={p.file.name} expanded={p.expanded} acts={3} />);
+const ArtifactPanel = lazyView(() => import("./artifactui").then((m) => m.ArtifactPanel), (p) => { const a = p.versions[p.index] ?? p.versions.at(-1); return <ArtPanelSkeleton title={a?.title} sub={a ? tr(ART_LABEL[a.type]) : undefined} tabs={!!a && a.type !== "code"} expanded={p.expanded} acts={6} />; });
 const ArtifactsGallery = lazyView(() => import("./artifactui").then((m) => m.ArtifactsGallery));
 const ProductSwitcher = lazyView(() => import("./filepreview").then((m) => m.ProductSwitcher), null);
 const ApprovalCard = lazyView(() => import("./connectorsui").then((m) => m.ApprovalCard), null);
@@ -1090,6 +1092,9 @@ export default function Home() {
   const [speaking, setSpeaking] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [me, setMe] = useState<AuthUser | null | undefined>(undefined);
+  // Màn chờ lúc mở app: mở thẳng một đoạn chat (#c=…) thì vùng chính chờ dạng tin nhắn thay vì lời chào (đặt sau khi gắn để khớp bản dựng ở máy chủ).
+  const [bootChat, setBootChat] = useState(false);
+  useEffect(() => { if (/^#c=/.test(location.hash)) setBootChat(true); }, []);
   // Đồng bộ danh sách phiên Code với máy chủ (Cài đặt → Synchro Code → Đồng bộ phiên): phiên mở ở thiết bị khác, trạng thái mới,
   // phiên đã xóa / lưu trữ ở nơi khác. Lần đầu đẩy các phiên chỉ có ở thiết bị này lên.
   useEffect(() => {
@@ -2230,7 +2235,7 @@ export default function Home() {
   const artSig = (i: number) => arts.at[i]?.map((x) => `${x.ident}:${x.v}:${arts.map.get(x.ident)?.length}:${artOpen && artSel?.ident === x.ident && artIndex === x.v ? 1 : 0}`).join("|") ?? "";
 
   // Chưa biết đã đăng nhập chưa: người đã đăng nhập lần trước thấy ngay khung app (html[data-sess], layout.tsx), người mới thấy nền trống rồi tới màn hình đăng nhập.
-  if (me === undefined || !langReady) return <div className="boot" aria-busy={!bootErr}><div className="boot-rail" /><div className="boot-side" /><div className="boot-main"><div className="boot-greet" /><div className="boot-box" /></div>
+  if (me === undefined || !langReady) return <div className="boot" aria-busy={!bootErr}><BootSkeleton chat={bootChat} />
     {bootErr && <div className="boot-err" role="alert"><Mark size={26} /><b>{tr("Chưa kết nối được tới Synchro")}</b><p>{tr("Đoạn chat và phần bạn đang gõ vẫn còn. Synchro đang tự thử lại.")}</p><button className="btn dark" onClick={() => bootRetry.current()}>{tr("Thử lại")}</button></div>}</div>;
   // Màn hình đăng nhập phủ lên app: khi xong, app hiện ngay bên dưới và màn hình này tan dần (authLeaving).
   const needProfile = !!me?.needsProfile;
@@ -2429,7 +2434,8 @@ export default function Home() {
               <div className="section-label sec-toggle"><button className="sec-btn" onClick={() => setRecentOpen(!recentOpen)}><span>Đoạn chat và tác vụ</span><span className={`sec-chev ${recentOpen ? "open" : ""}`}><I.Chevron size={14} /></span></button>{sideItems.length > 0 && <button className={`icon-btn bk-side${sb.on ? " on" : ""}`} style={{ width: 24, height: 24 }} aria-pressed={sb.on} aria-label={sb.on ? "Xong" : "Chọn hàng loạt"} data-tip={sb.on ? "Xong" : "Chọn hàng loạt"} onClick={() => (sb.on ? sb.exit() : sb.start())}>{sb.on ? <I.X size={14} /> : <I.ListChecks size={16} />}</button>}<button className="icon-btn" style={{ width: 24, height: 24 }} aria-label="Tìm kiếm đoạn chat" data-tip="Tìm kiếm đoạn chat" onClick={() => setModal("search")}><I.Search size={15} /></button></div>
               <div className={`fold ${recentOpen ? "open" : ""}`}>
                 <div className="chat-list">
-                  {visible.length === 0 && <div className="muted" style={{ padding: "6px 10px", fontSize: 13 }}>Chưa có đoạn chat nào</div>}
+                  {/* Thiết bị mới: danh sách đang về từ máy chủ thì hiện dòng chờ đúng cỡ, chưa nói "chưa có" khi chưa biết. */}
+                  {visible.length === 0 && (!chats.length && !syncSt.at && !syncSt.offline ? <ChatListSkeleton /> : <div className="muted" style={{ padding: "6px 10px", fontSize: 13 }}>Chưa có đoạn chat nào</div>)}
                   {pgRest.items.map(row)}
                 </div>
                 {sidePager(pgRest)}
@@ -2523,7 +2529,7 @@ export default function Home() {
               onTouchStart={(e) => { touchY.current = e.touches[0]?.clientY ?? 0; }} onTouchMove={(e) => { if ((e.touches[0]?.clientY ?? 0) - touchY.current > 5) userUp(); }}
               onKeyDown={(e) => { if (["PageUp", "ArrowUp", "Home"].includes(e.key)) userUp(); }}>
               <div className="thread-in">
-                {chat.stub && <div className="muted sync-stub" role="status"><span className="art-spin sm" />{tr("Đang tải đoạn chat từ máy chủ…")}</div>}
+                {chat.stub && <><span className="sr-only" role="status">{tr("Đang tải đoạn chat từ máy chủ…")}</span><ThreadSkeleton /></>}
                 {chat.msgs.map((m, i) => <Boundary key={`${chat.id}-${i}`} compact resetKey={m.text}><MsgRow m={m} i={i} last={i === chat.msgs.length - 1} lang={getLang()} busy={busy} mark={chat.compact?.upto === i} art={caps.art} inl={caps.inl} artSig={artSig(i)}
                   fileActive={m.outs?.length && fileOpen ? fileSel?.file.id : undefined} copied={copied === `${chat.id}-${i}`} speaking={speaking === `${chat.id}-${i}`} chatId={chat.id} cx={rowCx} /></Boundary>)}
                 {undoTurn?.chat === chat.id && <div className="msg-notice turn-undo" role="status"><p>{tr("Câu trả lời cũ đã được thay bằng lượt mới.")}</p><div className="msg-notice-act"><button className="lnk" onClick={undoLost}>{tr("Khôi phục bản cũ")}</button></div></div>}

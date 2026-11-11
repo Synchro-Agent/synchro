@@ -7,6 +7,7 @@ import { useApp } from "./store";
 import { getLang, locale } from "./i18n";
 import * as I from "./icons";
 import type { BackupStatus, Problem, WatchdogState } from "./ops";
+import { SettingsSkeleton } from "./skeleton";
 
 type Disk = { key: string; path: string; freeMB: number; totalMB: number };
 type Health = {
@@ -67,7 +68,7 @@ export function HealthPanel() {
   };
 
   if (err) return <div className="empty" style={{ marginTop: 80 }}><I.Alert size={28} /><span>{err}</span><button className="btn" onClick={load}>Try again</button></div>;
-  if (!h) return <div className="empty" style={{ marginTop: 80 }}><span className="muted">Loading…</span></div>;
+  if (!h) return <SettingsSkeleton />;
 
   const low = Math.min(...h.disks.map((d) => d.freeMB), Infinity);
   const b = h.backup, w = h.watchdog;

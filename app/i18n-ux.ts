@@ -39,6 +39,7 @@ export const UX_VI2EN: Record<string, string> = {
   "Thiếu tham số.": "Missing parameter.",
   // Thẻ (tag) của đoạn chat
   "Gắn thẻ": "Add tags",
+  "Đang tải danh sách đoạn chat": "Loading your chats",
   "Bỏ lọc theo thẻ": "Clear tag filter",
   "Thẻ": "Tags",
   "Tìm hoặc tạo thẻ…": "Find or create a tag…",
