@@ -1404,6 +1404,8 @@ export async function chatPost(body: Record<string, any>, c: Who, scope: { featu
   // làm gì. Gói subscription chỉ chuyển sang gói khác, không tự sang khóa API (luôn hỏi người dùng trước khi dùng khóa API).
   // Không bao giờ chạy lại khi lượt đã làm việc không đọc được kết quả (gửi thư, chạy code…): trả phần đã có để người dùng quyết.
   const out = new Set<string>();
+  // Lý do đã chuyển model (để báo lại cho người dùng sau khi lượt xong, không chỉ trong dòng tiến trình lúc chạy).
+  let switchedWhy = "";
   while ([409, 429, 500, 502, 503, 504, 529].includes(res.status) && !turnSignal()?.aborted && tried.length < 5) {
     const j0 = (await res.clone().json().catch(() => ({}))) as { usageLimit?: boolean; partialWork?: boolean; quota?: string; planLimit?: string; rate?: boolean; stalled?: boolean; busy?: boolean };
     // Treo, lỗi phía hãng: nhớ vài phút. Mỗi tin nhắn tiếp theo từng chọn lại đúng model đang treo, chờ thêm 60-90 giây rồi mới chuyển.
@@ -1416,6 +1418,7 @@ export async function chatPost(body: Record<string, any>, c: Who, scope: { featu
     if (!next) break;
     const why = j0.quota || j0.planLimit ? "đã hết hạn mức" : j0.rate ? "đang giới hạn tốc độ" : res.status === 409 ? "cần đăng nhập lại" : j0.busy ? "đang chạy lượt khác" : j0.stalled || res.status === 504 ? "không phản hồi" : "đang gặp lỗi";
     progress("note", `${shown(used)} ${why}, chuyển sang ${shown(next)}`);
+    if (!switchedWhy) switchedWhy = `${shown(used)} ${why}`;
     deltaStep();
     used = next; tried.push(next);
     res = await chatTurn({ ...body, model: next, effort }, c, scope, { auto: true });
@@ -1427,17 +1430,24 @@ export async function chatPost(body: Record<string, any>, c: Who, scope: { featu
     const now = await usableModels(c.user).catch(() => null);
     if (now && !now.usable.length && now.plansOut.count > 1) { j.error = "Các gói đã kết nối đều đã hết hạn mức."; if (now.plansOut.resets) j.resetsAt = now.plansOut.resets; delete j.switchTo; }
   }
-  return Response.json({ ...j, model: j.model ?? used, ...(plansOnly && res.status === 200 && !j.notice ? { notice: PLANS_ONLY_NOTE } : {}), ...(res.status !== 200 && tried.length > 1 ? { tried: tried.map(shown) } : {}), auto: { tier: r.tier, vendor: r.vendor, task: r.task, effort, why: r.why, ...(used !== r.model ? { fallback: used } : {}) } }, { status: res.status });
+  // Tự động đã chuyển model trong lượt này: nói rõ ở câu trả lời (switched) và một lần trên thanh thông báo (notice).
+  const switched = res.status === 200 && used !== r.model && switchedWhy ? `${switchedWhy}, nên Synchro đã trả lời bằng ${shown(used)}.` : "";
+  return Response.json({ ...j, model: j.model ?? used, ...(switched ? { switched, ...(j.notice ? {} : { notice: switched }) } : {}), ...(plansOnly && res.status === 200 && !j.notice && !switched ? { notice: PLANS_ONLY_NOTE } : {}), ...(res.status !== 200 && tried.length > 1 ? { tried: tried.map(shown) } : {}), auto: { tier: r.tier, vendor: r.vendor, task: r.task, effort, why: r.why, ...(used !== r.model ? { fallback: used } : {}) } }, { status: res.status });
 }
 const PLANS_ONLY_NOTE = "Đã hết hạn mức API của bạn trên Synchro, nên Tự động đang dùng gói đã kết nối (Claude, ChatGPT, Gemini, Grok) thay vì khóa chat.";
 // Lỗi của gói mà còn model của gói khác dùng được: gợi ý sẵn để người dùng đổi bằng một lần bấm (máy chủ thật không có khóa API để đề nghị thay).
 async function withSwitch(res: Response, body: Record<string, any>, user: UserRow, tried: string[]): Promise<Response> { // eslint-disable-line @typescript-eslint/no-explicit-any
-  if (![409, 429, 500, 502, 503, 504, 529].includes(res.status) || !body.skills || body.feature === "artifact" || !subCli(tried[0])) return res;
-  const j = (await res.clone().json().catch(() => null)) as { usageLimit?: boolean; quota?: string } | null;
+  if (![409, 429, 500, 502, 503, 504, 529].includes(res.status) || !body.skills || body.feature === "artifact") return res;
+  const j = (await res.clone().json().catch(() => null)) as { usageLimit?: boolean; quota?: string; partialWork?: boolean } | null;
   if (!j || j.usageLimit) return res;
   const { usable, groups } = await usableModels(user).catch(() => ({ usable: [] as string[], groups: [] as { models: { key: string; name: string }[] }[] }));
   const cli = subCli(tried[tried.length - 1]);
-  const list = usable.filter((k) => !tried.includes(k) && !!subCli(k) && (j.quota === "model" || subCli(k) !== cli));
+  // Gói subscription: chỉ gợi ý gói khác (không tự đưa sang khóa API). Model chạy bằng khóa API mà người dùng chọn tay: gợi ý model của hãng khác
+  // đang dùng được, để thẻ lỗi có nút "Dùng model khác" thay vì tự đổi sau lưng người dùng.
+  const vendor = (k: string) => k.split("/")[0];
+  const list = cli
+    ? usable.filter((k) => !tried.includes(k) && !!subCli(k) && (j.quota === "model" || subCli(k) !== cli))
+    : usable.filter((k) => !tried.includes(k) && !subCli(k) && vendor(k) !== vendor(tried[tried.length - 1]));
   const next = routeModel(routeInput(body), list);
   if (!next) return res;
   return Response.json({ ...j, switchTo: { model: next.model, name: groups.flatMap((g) => g.models).find((m) => m.key === next.model)?.name ?? next.model.split("/").pop() } }, { status: res.status });

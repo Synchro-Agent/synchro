@@ -920,7 +920,7 @@ const MsgRow = memo(function MsgRow({ m, i, last, busy, mark, art, inl, fileActi
             {m.notice.tried?.length ? <p data-notr>{`${getLang() === "en" ? "Tried" : "Đã thử"}: ${m.notice.tried.join(", ")}`}</p> : null}
             {m.notice.switchTo && last && !busy ? (
               <div className="msg-notice-act">
-                <button className="btn dark" onClick={() => cx.current!.switchModel(m, m.notice!.switchTo!.model)} data-notr>{`${getLang() === "en" ? (c.model === AUTO ? "Try again with Auto" : `Switch to ${m.notice.switchTo.name}`) : c.model === AUTO ? "Thử lại bằng Tự động" : `Chuyển sang ${m.notice.switchTo.name}`}`}</button>
+                <button className="btn dark" onClick={() => cx.current!.switchModel(m, m.notice!.switchTo!.model)} data-notr>{`${getLang() === "en" ? (c.model === AUTO ? "Try again with Auto" : `Use another model: ${m.notice.switchTo.name}`) : c.model === AUTO ? "Thử lại bằng Tự động" : `Dùng model khác: ${m.notice.switchTo.name}`}`}</button>
                 {c.model !== AUTO && <button className="lnk" onClick={() => cx.current!.switchModel(m, AUTO)}>{tr("Dùng Tự động")}</button>}
               </div>
             ) : null}
@@ -1621,6 +1621,8 @@ export default function Home() {
           // histTotal: số tin thật trước khi cắt còn HISTORY_LIMIT (để nối tiếp phiên CLI); tz: múi giờ của người dùng cho dòng giờ hiện tại.
           histTotal: hist?.length ?? 1, ...(hist && hist.length > HISTORY_LIMIT ? { olderDigest: olderDigest(hist.slice(0, -HISTORY_LIMIT)) } : {}), tz: Intl.DateTimeFormat().resolvedOptions().timeZone, ...(avoid ? { avoidModel: avoid } : {}) } });
       webs = meta.webs ?? [];
+      // Tự động đã chuyển sang model khác vì model đầu lỗi / quá tải: giữ lời báo dưới câu trả lời (thanh thông báo chỉ hiện một lúc).
+      if (meta.switched) notice = { text: meta.switched };
       const used = meta.skills ?? [];
       libs = meta.libs ?? [];
       // Skill nằm trong thư viện đã hiện ở chip thư viện; mục "studio-…" / "lib-…" chỉ là mục lục, không hiện riêng.
@@ -1676,7 +1678,7 @@ export default function Home() {
     const note = usedPj ? `\n\n_${getLang() === "en" ? "Project context applied" : "Đã áp dụng ngữ cảnh dự án"}: ${[pr.ins?.trim() && (getLang() === "en" ? "instructions" : "hướng dẫn"), pr.mem?.length && (getLang() === "en" ? "memory" : "bộ nhớ"), getRelevantContext(pr, text).length && (getLang() === "en" ? "documents" : "tài liệu")].filter(Boolean).join(", ")}_` : "";
     // Câu trả lời đã đầy đủ thì hiện ngay (trước đây câu không truyền theo thời gian thực phải chờ 1,6 giây rồi mới gõ dần từng chữ).
     const full = streamed || cancelled ? reply : reply + note + (ins.trim() ? `\n\n_${getLang() === "en" ? "Applied your instructions" : "Đã áp dụng hướng dẫn của bạn"}: “${ins.trim().slice(0, 90)}”_` : "");
-    patch(id, (m) => [...m.slice(0, -1), { ...workOf(m[m.length - 1]), role: "ai", text: full, done: true, time: Date.now(), dur: Date.now() - t0, skills: usedSk.length ? usedSk : undefined, libs: libs.length ? libs : undefined, tools: usedTl.length ? usedTl : undefined, outs: outs?.length ? outs : undefined, via: via ?? undefined, viaTask: via ? viaTask : undefined, webs: webs?.length ? webs : undefined, trace: trace?.length ? trace : undefined, stopped: cancelled || undefined }]);
+    patch(id, (m) => [...m.slice(0, -1), { ...workOf(m[m.length - 1]), role: "ai", text: full, done: true, time: Date.now(), dur: Date.now() - t0, skills: usedSk.length ? usedSk : undefined, libs: libs.length ? libs : undefined, tools: usedTl.length ? usedTl : undefined, outs: outs?.length ? outs : undefined, ...(notice ? { notice } : {}), via: via ?? undefined, viaTask: via ? viaTask : undefined, webs: webs?.length ? webs : undefined, trace: trace?.length ? trace : undefined, stopped: cancelled || undefined }]);
     finishReply(id, reply, pr, history, via);
   };
   // Hỏi Có / Không trước khi dùng khóa API dùng chung thay cho gói đã hết hạn mức. Đồng ý: nhóm model của hãng đó chuyển sang model API

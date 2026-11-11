@@ -169,7 +169,7 @@ const readBody = (req) => new Promise((ok) => {
   req.on("end", () => { req.__raw = Buffer.concat(parts); if (/multipart/.test(String(req.headers["content-type"] ?? ""))) return ok({}); try { ok(JSON.parse(req.__raw.toString("utf8") || "{}")); } catch { ok({}); } });
 });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const TS_LOG = [], TS_USED = new Set();
+const TS_LOG = [], TS_USED = new Set(), OUTAGE = {};
 const valid = (k) => typeof k === "string" && k.includes("mock");
 // Khóa ElevenLabs giới hạn quyền như thật: "sk_mock_eleven_nouser" thiếu quyền User, "…_noagents" thiếu quyền ElevenLabs Agents.
 const elevenNo = (req, perm) => String(req.headers["xi-api-key"] ?? "").includes(`no${perm}`);
@@ -656,6 +656,10 @@ async function handler(req, res) {
     return send(res, 200, { success: true, challenge_ts: new Date().toISOString(), hostname, action, cdata: "", "error-codes": [] });
   }
   if (p === "/_debug/turnstile") return send(res, 200, TS_LOG);
+  if (p === "/_debug/outage") {
+    if (req.method === "POST" && typeof b.provider === "string") OUTAGE[b.provider] = { codes: Array.isArray(b.codes) ? b.codes.map(Number).filter((n) => n >= 400) : [], i: 0, served: {} };
+    return send(res, 200, OUTAGE);
+  }
 
   // Trang đăng nhập giả lập của CLI (scripts/mock-cli): claude và agy hiện mã để dán vào Synchro; codex là trang nhập mã thiết bị.
   if (p.startsWith("/mock-login/")) return mockLogin(p.slice(12), u, res);
@@ -678,6 +682,14 @@ async function handler(req, res) {
     (HIST[res.__prov] ??= []).push(b); HIST[res.__prov].splice(0, HIST[res.__prov].length - 200);
   }
   res.__slow = res.__prov && JSON.stringify(b.messages ?? b.input ?? "").includes("#streamslow");
+  // Một hãng đang sập (kiểm thử chuyển model): POST /_debug/outage { provider, codes: [529, 503] } → mọi lời gọi tới hãng đó lần lượt trả các mã này
+  // (529 overloaded_error của Anthropic, 503 của các hãng còn lại); codes rỗng thì hết sập. GET /_debug/outage: số lần đã trả từng mã.
+  if (res.__prov && OUTAGE[res.__prov]?.codes.length) {
+    const o = OUTAGE[res.__prov], code = o.codes[o.i++ % o.codes.length];
+    o.served[code] = (o.served[code] ?? 0) + 1;
+    const msg = code === 529 ? "Overloaded" : "Service temporarily unavailable";
+    return send(res, code, res.__prov === "anthropic" ? { type: "error", error: { type: code === 529 ? "overloaded_error" : "api_error", message: msg } } : { error: { message: msg, type: "server_error", code: String(code) } });
+  }
 
   // ---- Anthropic (/v1/models, /v1/messages) ----
   if (p.startsWith("/anthropic/")) {
