@@ -220,13 +220,15 @@ function docOf(k: Skill): Doc {
   return d;
 }
 // Chỉ mục ngược: từ → các skill có từ đó. Chấm hết 18.000 skill mỗi lượt từng chặn Node gần 200 ms (luồng chữ của mọi người dừng theo). Giờ chỉ chấm skill có từ của câu hỏi.
-// Một đối tượng skill vào chỉ mục đúng một lần; bản dựng lại của bộ đệm plugin tạo đối tượng mới nên chỉ mục chứa nhiều bản cũ quá thì dựng lại từ đầu.
-const G = globalThis as unknown as { __skillIx?: { post: Map<string, Skill[]>; first: Map<string, Skill[]>; seen: WeakSet<Skill>; n: number; peak: number } };
+// Một đối tượng skill vào chỉ mục đúng một lần. Bộ đệm plugin dựng lại thì tạo ~18.000 đối tượng skill mới: bản dựng sẵn (warmSkillIndex) dựng một chỉ mục
+// mới hoàn toàn rồi thay chỗ chỉ mục cũ, không chồng thêm vào chỉ mục cũ (từng giữ hai ba bản cũ của cả kho trong bộ nhớ tới khi rank() tự xóa).
+type Ix = { post: Map<string, Skill[]>; first: Map<string, Skill[]>; seen: WeakSet<Skill>; n: number; peak: number };
+// __skillNext: chỉ mục đang dựng ở nền; __skillGen: lần dựng mới nhất (lần dựng cũ hơn thấy số khác thì bỏ dở, không ghi đè bản mới).
+const G = globalThis as unknown as { __skillIx?: Ix; __skillNext?: Ix | null; __skillGen?: number };
 const rawWords = (s: string) => s.split(/[^a-z0-9]+/).filter(Boolean);
-const freshIx = () => ({ post: new Map<string, Skill[]>(), first: new Map<string, Skill[]>(), seen: new WeakSet<Skill>(), n: 0, peak: 0 });
+const freshIx = (): Ix => ({ post: new Map(), first: new Map(), seen: new WeakSet(), n: 0, peak: 0 });
 const ixOf = () => (G.__skillIx ??= freshIx());
-function addToIx(k: Skill) {
-  const ix = ixOf();
+function addToIx(ix: Ix, k: Skill) {
   if (ix.seen.has(k)) return;
   ix.seen.add(k); ix.n++;
   const d = docOf(k);
@@ -235,15 +237,21 @@ function addToIx(k: Skill) {
   const head = rawWords(d.folded)[0];
   if (head) { const l = ix.first.get(head); if (l) l.push(k); else ix.first.set(head, [k]); }
 }
-/** Dựng sẵn chỉ mục ở nền, từng ít một, để lượt chat đầu tiên sau khi bộ đệm plugin dựng lại không phải chờ. */
+/** Dựng sẵn chỉ mục ở nền, từng ít một, để lượt chat đầu tiên sau khi bộ đệm plugin dựng lại không phải chờ. Xong thì thay chỗ chỉ mục cũ. */
 export async function warmSkillIndex(skills: Skill[]) {
+  const gen = (G.__skillGen = (G.__skillGen ?? 0) + 1);
   // Ghi nhận cả kho, không chỉ lần chấm: chấm riêng một thư viện nhỏ ngay sau khi khởi động mà còn so với 0 thì xóa chỉ mục vừa dựng.
-  const ix = ixOf();
-  ix.peak = Math.max(ix.peak, skills.length);
+  const ix = freshIx();
+  ix.peak = skills.length;
+  G.__skillNext = ix;
   for (let i = 0; i < skills.length; i += 300) {
-    for (const k of skills.slice(i, i + 300)) addToIx(k);
+    if (G.__skillGen !== gen) return;
+    for (const k of skills.slice(i, i + 300)) addToIx(ix, k);
     await new Promise((ok) => setImmediate(ok));
   }
+  if (G.__skillGen !== gen) return;
+  G.__skillIx = ix;
+  G.__skillNext = null;
 }
 const LITERAL = 3, NAMED = 3;
 export function rank(q: string, cands: Candidate[], limit = 10): Hit[] {
@@ -251,11 +259,13 @@ export function rank(q: string, cands: Candidate[], limit = 10): Hit[] {
   const { terms, weak, literal, groups, named } = expand(q);
   const t = fold(q);
   // So với lần chấm lớn nhất, không so với lần này: chấm riêng một thư viện nhỏ (vài trăm skill) mà xóa chỉ mục thì lượt sau phải dựng lại cả 18.000 skill, ~200 ms.
-  const ix0 = ixOf();
-  ix0.peak = Math.max(ix0.peak, cands.length);
-  if (ix0.n > ix0.peak * 3 + 2000) { G.__skillIx = freshIx(); ixOf().peak = cands.length; }
-  for (const c of cands) addToIx(c.skill);
-  const ix = ixOf(), cand = new Map(cands.map((c) => [c.skill, c]));
+  // Đang dựng chỉ mục mới ở nền: chấm trên chính bản đang dựng (phần chưa dựng tới thì thêm ngay, như trước), không đổ cả kho mới vào chỉ mục cũ sắp bỏ.
+  let ix = G.__skillNext ?? ixOf();
+  ix.peak = Math.max(ix.peak, cands.length);
+  // Skill ngoài bộ đệm plugin (skill người dùng tự viết) được đọc mới mỗi lượt nên vẫn có thể tích lại: quá nhiều so với cỡ kho thì dựng lại từ đầu.
+  if (!G.__skillNext && ix.n > ix.peak * 3 + 2000) { const peak = cands.length; ix = G.__skillIx = freshIx(); ix.peak = peak; }
+  for (const c of cands) addToIx(ix, c.skill);
+  const cand = new Map(cands.map((c) => [c.skill, c]));
   const df = new Map<string, number>(), hit = new Set<Skill>();
   for (const w of terms) {
     let n = 0;

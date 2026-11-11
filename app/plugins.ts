@@ -648,10 +648,12 @@ const CG = globalThis as unknown as { __plRev?: number; __plCache?: Cache | null
 // nào cũng phải chờ dựng lại cả kho. Khi đó giữ bộ đệm cũ tối đa 60 giây (thư viện mới vào chat chậm tối đa một phút), chat vẫn mượt.
 const touch = () => { CG.__plRev = (CG.__plRev ?? 0) + 1; if (!CG.__plBulk) CG.__plCache = null; };
 export const setBulk = (on: boolean) => { CG.__plBulk = on; if (!on) CG.__plCache = null; };
+// Hàm đọc nội dung chỉ giữ id của skill, không giữ cả hàng cơ sở dữ liệu (hàng có report JSON của bản kiểm tra): ~18.000 closure giữ cả hàng là vài chục MB chết.
 function lazySkill(r: Pick<CRow, "id" | "plugin_id" | "description" | "storage_path" | "use_count">, name: string): Skill {
+  const id = r.id;
   let full: { body: string; files: Skill["files"] } | null = null;
   const load = () => {
-    if (!full) { const x = init().prepare("SELECT body, files FROM plugin_skills WHERE id = ?").get(r.id) as { body: string; files: string } | undefined; full = { body: x?.body ?? "", files: x ? JSON.parse(x.files) : [] }; }
+    if (!full) { const x = init().prepare("SELECT body, files FROM plugin_skills WHERE id = ?").get(id) as { body: string; files: string } | undefined; full = { body: x?.body ?? "", files: x ? JSON.parse(x.files) : [] }; }
     return full;
   };
   return {
