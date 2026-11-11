@@ -65,6 +65,12 @@ console.log("2. /api/poster");
   const da = await sharp(a).raw().toBuffer(), db = await sharp(b2).raw().toBuffer();
   let diff = 0; for (let i = 0; i < da.length; i += 4) if (Math.abs(da[i] - db[i]) > 60) diff++;
   ok(diff > 400, "tiêu đề tiếng Việt có dấu vẽ đúng dấu (khác hẳn bản không dấu)", diff);
+  // Máy chủ dựng lần lượt từng poster (Satori chặn luồng chính): nhiều yêu cầu cùng lúc vẫn xong hết, không cái nào kẹt trong hàng chờ.
+  {
+    const t0 = Date.now();
+    const many = await Promise.all([1, 2, 3].map((i) => api("POST", "/api/poster", { props: { ...props, metricValue: `+${i}%` }, scale: 1 }).then(async (r) => ({ s: r.status, n: (await r.arrayBuffer()).byteLength }))));
+    ok(many.every((x) => x.s === 200 && x.n > 10_000), "3 poster cùng lúc: xếp hàng dựng lần lượt, đều ra PNG", { many, ms: Date.now() - t0 });
+  }
   const bad = await api("POST", "/api/poster", { props: { ...props, title: "x".repeat(200) } });
   ok(bad.status === 400 && /tối đa 90/.test((await bad.json()).error), "tiêu đề quá dài: báo lỗi rõ, không vẽ chữ tràn khung", bad.status);
   const miss = await api("POST", "/api/poster", { props: { tag: "a" } });

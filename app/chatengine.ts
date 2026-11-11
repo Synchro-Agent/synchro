@@ -43,7 +43,7 @@ import { type ABlock, type Citer, anthropicCall, blocksText, searchResults, chat
 import { mergedProviders, prewarmClaude, sessionPlain, subCli, subTurn } from "./ai/subs";
 import { PROJECT_DOC_RULES, PROJECT_DOC_TOOL, projectDocsLong, readProjectFile } from "./projectdocs";
 import { ASPECTS, generateImages, IMAGE_RULES, IMAGE_TOOL, imageBudget, imageName, IMG_NAME, requestSlug, type ImgErr, type ImgOk } from "./ai/imagegen";
-import { POSTER_TEMPLATES, posterProps, renderPoster, type PosterTemplate } from "./design-engine/posters/render";
+import { POSTER_TEMPLATES, posterProps, type PosterTemplate } from "./design-engine/posters/props";
 import { genImageUrl } from "./artdoc";
 import { IMAGE_MAX_MB, imageKind, type ImgFile, scrubServerPaths } from "./ai/imagefiles";
 import { AGY_WAIT_NOTE, BRIDGE_HOLD, openBridge } from "./mcpbridge";
@@ -596,6 +596,8 @@ async function runImage(x: Exec, c: Call): Promise<Run> {
     if (wait) return fail(`Tài khoản đã tạo nhiều ảnh trong một giờ qua. Hãy thử lại sau khoảng ${Math.ceil(wait / 60_000)} phút.`);
     progress("step", "Đang dựng poster 3600×1890");
     try {
+      // Satori (next/og) chỉ nạp khi thật sự dựng poster.
+      const { renderPoster } = await import("./design-engine/posters/render");
       const png = await renderPoster(template as PosterTemplate, props, 3);
       r = { ok: true, files: [{ name: imageName(props.title, 0, 1, "png"), mime: "image/png", data: png }], cli: "agy", notes: ["Poster 3600×1890 (gấp 3 lần 1200×630), chữ dựng dạng vector nên nét khi in và đăng mạng xã hội."], tried: [] };
     } catch (e) { return fail(`Chưa dựng được poster: ${String((e as Error).message).slice(0, 200)}`); }
