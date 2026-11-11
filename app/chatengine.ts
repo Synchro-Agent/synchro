@@ -699,6 +699,7 @@ async function runCall(x: Exec, c: Call, d?: Decision): Promise<Run> {
   // Qua cầu nối: công cụ chỉ được chạy trong phần còn lại của hạn CLI (đã trừ lúc chờ duyệt).
   const r = await x.sess!.call(c.name, c.input, stops.length > 1 ? AbortSignal.any(stops) : stops[0], meta ? Math.min(TOOL_BUDGET, Math.max(TOOL_MIN, BRIDGE_CALL_MAX - (Date.now() - meta.at))) : undefined);
   if (r.reconnect) showReconnect(x, r.reconnect);
+  if (r.rateUntil) progress("rate", JSON.stringify({ name: ct.cname, until: r.rateUntil }));
   if (ct.composio) showLinks(x, r.content);
   return { is_error: r.is_error, ...connectorImage(x, ct, c, r), used };
 }
@@ -778,8 +779,8 @@ async function execute(ad: Adapter, m: unknown[], x: Exec, calls: Call[], used: 
   });
   used.push(...res.filter((r) => (!r.is_error || r.used.kind === "code") && r.used.kind !== "search").map((r) => r.used));
   // Kết quả từng công cụ (thành công / lỗi, tóm tắt ngắn) để dòng công cụ trong khung chat hiện đúng.
-  // Công cụ ghi của connector: kèm tham số đã gửi (che khóa bí mật) để người dùng biết model vừa làm gì. Tóm tắt bỏ thẻ <ref> nội bộ.
-  res.forEach((r, i) => { if (seqs[i]) progress("res", JSON.stringify({ ref: seqs[i], ok: !r.is_error, sum: plainSummary(String(r.content ?? "")).slice(0, 140), ...(x.sess?.get(calls[i].name) && !x.sess.isRead(calls[i].name) && d[calls[i].id] !== "deny" ? { args: argLine(calls[i].input) } : {}) })); });
+  // Công cụ của connector (đọc lẫn ghi): kèm tham số đã gửi (che khóa bí mật) để người dùng biết model vừa làm gì. Tóm tắt bỏ thẻ <ref> nội bộ.
+  res.forEach((r, i) => { if (seqs[i]) progress("res", JSON.stringify({ ref: seqs[i], ok: !r.is_error, sum: plainSummary(String(r.content ?? "")).slice(0, 140), ...(x.sess?.get(calls[i].name) && d[calls[i].id] !== "deny" ? { args: argLine(calls[i].input) } : {}) })); });
   m.push(...ad.results(calls, res));
   // Người dùng nhắn thêm trong lúc công cụ chạy: ghép vào ngay bước kế tiếp, không ngắt việc.
   const more = takeInbox();

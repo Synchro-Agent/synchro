@@ -1222,6 +1222,12 @@ export default function Home() {
     window.addEventListener("synchro:providers", open);
     return () => window.removeEventListener("synchro:providers", open);
   }, []);
+  // Thẻ đếm ngược của connector bị giới hạn tốc độ: hết giờ, nút "Thử lại ngay" gửi lại tin vừa rồi của đoạn chat đang mở.
+  useEffect(() => {
+    const again = () => rowCx.current?.retry();
+    window.addEventListener("synchro:retry", again);
+    return () => window.removeEventListener("synchro:retry", again);
+  }, []);
   // Đoạn chat và dự án theo tài khoản: đồng bộ với máy chủ, chuyển dần từ trình duyệt (chatsync.ts).
   const chatSync = useChatSync({ uid: me?.id ?? null, loaded, chats, projects, running, setChats, setProjects });
   const chatSyncRef = useRef(chatSync);

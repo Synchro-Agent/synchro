@@ -1055,6 +1055,31 @@ try {
     wipe();
   }
 
+  console.log("47. Công cụ đọc quá giờ / bị giới hạn tốc độ: lỗi có cấu trúc cho model, đồng hồ thử lại cho khung chat");
+  {
+    S.reset();
+    const r = await add();
+    AS.db().prepare("UPDATE connectors SET perms = ? WHERE id = ?").run(JSON.stringify({ search_docs: "allow" }), r.connector.id);
+    const s = session("rate-timeout");
+    const fq = (n) => s.tools.find((t) => t.tool.name === n).fq;
+    let out = await s.call(fq("search_docs"), {});
+    ok(!out.is_error, "gọi bình thường trước", out.content);
+    S.down = 99; S.downOnly = "tools/call"; S.downStatus = 429; S.retryAfter = "0"; S.calls = {};
+    const t0 = Date.now();
+    out = await s.call(fq("search_docs"), {});
+    ok(out.is_error && /^\[rate_limited\]/.test(out.content) && out.rateUntil >= t0 + 4000 && out.rateUntil <= Date.now() + 3_600_000, "429 sau khi đã tự thử lại: lỗi [rate_limited] và giờ thử lại cho đồng hồ đếm ngược", `${out.content} ${out.rateUntil - t0}`);
+    S.down = 0; S.downStatus = 503; S.retryAfter = undefined;
+    out = await s.call(fq("search_docs"), {});
+    ok(!out.is_error, "hết giới hạn tốc độ: gọi lại được", out.content);
+    S.hangPost = true; S.calls = {};
+    const t1 = Date.now();
+    out = await s.call(fq("search_docs"), {}, undefined, 400);
+    ok(out.is_error && /^\[timeout\]/.test(out.content) && /phân trang/.test(out.content) && Date.now() - t1 < 5000, "công cụ đọc quá hạn: lỗi [timeout] gợi ý cách gọi nhẹ hơn, không treo lượt", `${Date.now() - t1}ms ${out.content}`);
+    S.hangPost = false;
+    await s.close();
+    wipe();
+  }
+
 } finally {
   server.closeAllConnections?.(); server.close(); other.close();
   fs.rmSync(tmp, { recursive: true, force: true });

@@ -793,7 +793,7 @@ export class ConnectorSession {
   /** Công cụ chỉ đọc (khai báo hoặc đoán theo tên). */
   isRead(name: string) { const ct = this.by.get(name); return !!ct && readLike(ct.tool); }
   // image, mime: ảnh công cụ trả về; more: các ảnh sau ảnh đầu (tối đa MAX_IMAGES cả thảy); imagesAll: tổng số ảnh máy chủ gửi. reconnect: connector vừa mất đăng nhập, khung chat hiện nút kết nối lại. timeout: hạn riêng của lời gọi.
-  async call(name: string, args: Record<string, unknown>, signal?: AbortSignal, timeout?: number): Promise<{ content: string; is_error: boolean; image?: string; mime?: string; more?: { data: string; mime: string }[]; imagesAll?: number; reconnect?: OfflineConn }> {
+  async call(name: string, args: Record<string, unknown>, signal?: AbortSignal, timeout?: number): Promise<{ content: string; is_error: boolean; image?: string; mime?: string; more?: { data: string; mime: string }[]; imagesAll?: number; reconnect?: OfflineConn; rateUntil?: number }> {
     const ct = this.by.get(name);
     if (!ct) return { content: `Không có công cụ ${name}.`, is_error: true };
     const r = rowById(ct.cid);
@@ -825,6 +825,11 @@ export class ConnectorSession {
       if (e instanceof McpError && e.kind === "rpc" && (e.code === -32602 || e.code === -32601) && /unknown tool|tool not found|no such tool|not found/i.test(e.message)) syncTools(ct.cid).catch(() => {});
       // Lỗi tạm thời (mạng, quá giờ, hãng đang lỗi): connector không bị tắt. Công cụ ghi có thể đã chạy xong dù không nhận được trả lời.
       const transient = e instanceof TempFail || (e instanceof McpError && e.kind === "protocol" && e.status < 400);
+      // Công cụ đọc chạy quá hạn: lỗi có cấu trúc để model đổi sang cách nhẹ hơn thay vì gọi lại y hệt rồi treo cả lượt.
+      if (e instanceof TempFail && e.timedOut && readLike(ct.tool)) return { content: toolTimeout(ct.cname, ct.tool.name), is_error: true };
+      // Bị giới hạn tốc độ (429) sau khi đã tự chờ và thử lại: khung chat hiện đồng hồ đếm ngược tới lúc thử lại được.
+      const rateUntil = e instanceof TempFail && e.status === 429 ? Date.now() + Math.min(Math.max(e.retryAfter ?? 60_000, 5_000), 3_600_000) : undefined;
+      if (rateUntil && !(sent && !readLike(ct.tool))) return { content: `[rate_limited] ${ct.cname} đang giới hạn tốc độ (lỗi 429); thử lại được sau khoảng ${Math.ceil((rateUntil - Date.now()) / 1000)} giây. Đừng gọi lại ngay: trả lời bằng thông tin đang có và nói người dùng khung chat đang đếm ngược tới lúc thử lại.`, is_error: true, rateUntil };
       if (transient && sent && !readLike(ct.tool)) return { content: `Không rõ kết quả khi gọi ${ct.cname}: ${errText(e).replace(/; hãy thử lại sau ít phút\.$/, ".")} Công cụ này có thể đã chạy xong ở phía ${ct.cname}. Hãy kiểm tra trước khi thử lại, đừng tự gọi lại ngay.`, is_error: true };
       if (transient) return { content: `Tạm thời chưa gọi được ${ct.cname}: ${errText(e)} Có thể thử lại một lần sau ít phút.`, is_error: true };
       return { content: `Không gọi được ${ct.cname}: ${errText(e)}`, is_error: true };
@@ -832,6 +837,10 @@ export class ConnectorSession {
   }
   async close() { await Promise.all([...this.cache.values()].map((c) => c.close())); this.cache.clear(); }
 }
+
+/** Lời báo khi công cụ đọc của connector chạy quá hạn: có mã lỗi và gợi ý cách gọi nhẹ hơn để model tự xoay xở. */
+export const toolTimeout = (conn: string, tool: string) =>
+  `[timeout] ${conn}: công cụ ${tool} chạy quá thời gian chờ nên Synchro đã ngắt (không có kết quả). Đừng gọi lại y hệt: thu hẹp yêu cầu (lọc theo thời gian, từ khóa cụ thể, một thư mục / dự án), lấy ít kết quả hơn (limit nhỏ) hoặc phân trang, rồi gọi lại một lần; vẫn không được thì trả lời bằng thông tin đang có và nói rõ phần còn thiếu.`;
 
 // Lời dặn cho model khi có công cụ connector.
 /** proxy: công cụ connector quá nhiều để gửi hết định nghĩa (xem connector_tools / connector_call ở chatengine): kèm danh mục tên gọn. */

@@ -13,14 +13,17 @@ import { refreshModels, useModels } from "./models";
 const ReconnectCard = lazyView(() => import("./connectorsui").then((m) => m.ReconnectCard), null);
 
 // args: tham số đã gửi cho công cụ ghi của connector (đã che khóa bí mật).
-export type ToolItem = { seq: number; label: string; ok?: boolean; sum?: string; args?: string };
+// at / end: lúc bắt đầu, lúc có kết quả (giờ máy chủ) — đồng hồ giây của công cụ đang chạy và thời gian đã chạy khi xong.
+export type ToolItem = { seq: number; label: string; ok?: boolean; sum?: string; args?: string; at?: number; end?: number };
 // ask: lượt đang chờ bạn duyệt (dùng trình duyệt trên trang chưa được phép, công cụ connector). conn: connector cần kết nối lại (nút ngay trong khung chat).
 export type ConnPart = { k: "conn"; id: string; name: string; logo?: string; color?: string; auth?: string; refused?: boolean };
 // plans: chưa tạo được ảnh vì gói (chưa đăng nhập, hết hạn mức): nút mở Providers ngay trong khung chat. why: lý do, tried: gói đã thử.
 export type PlansPart = { k: "plans"; why: string; tried: string[] };
 // link: Connect Link Composio vừa tạo (chỉ địa chỉ của Composio, máy chủ đã lọc): nút đăng nhập ứng dụng ngay trong khung chat.
 export type LinkPart = { k: "link"; app: string; name: string; url: string };
-export type Part = { k: "say"; text: string } | { k: "tools"; items: ToolItem[] } | AskStep | ConnPart | PlansPart | LinkPart;
+// rate: connector đang giới hạn tốc độ (429): đồng hồ đếm ngược tới lúc thử lại được (until: giờ máy chủ, ms).
+export type RatePart = { k: "rate"; name: string; until: number };
+export type Part = { k: "say"; text: string } | { k: "tools"; items: ToolItem[] } | AskStep | ConnPart | PlansPart | LinkPart | RatePart;
 export type PlanItem = { content: string; status: "pending" | "in_progress" | "completed" };
 export type Work = { parts?: Part[]; plan?: PlanItem[]; seq?: number };
 export type RunEv = { seq: number; at: number; kind: string; text: string };
@@ -33,7 +36,7 @@ export function applyEvent(w: Work, ev: RunEv): Work {
   if (ev.kind === "say") parts.push({ k: "say", text: ev.text });
   else if (ev.kind === "tool") {
     const last = parts[parts.length - 1];
-    const item = { seq: ev.seq, label: ev.text.replace(/^Đang /, "") };
+    const item: ToolItem = { seq: ev.seq, label: ev.text.replace(/^Đang /, ""), ...(ev.at ? { at: ev.at } : {}) };
     if (last?.k === "tools") parts[parts.length - 1] = { k: "tools", items: [...last.items, item] };
     else parts.push({ k: "tools", items: [item] });
   } else if (ev.kind === "res") {
@@ -41,7 +44,7 @@ export function applyEvent(w: Work, ev: RunEv): Work {
       const r = JSON.parse(ev.text) as { ref: number; ok: boolean; sum?: string; args?: string };
       for (let i = parts.length - 1; i >= 0; i--) {
         const p = parts[i];
-        if (p.k === "tools" && p.items.some((x) => x.seq === r.ref)) { parts[i] = { k: "tools", items: p.items.map((x) => (x.seq === r.ref ? { ...x, ok: r.ok, sum: r.sum, args: r.args } : x)) }; break; }
+        if (p.k === "tools" && p.items.some((x) => x.seq === r.ref)) { parts[i] = { k: "tools", items: p.items.map((x) => (x.seq === r.ref ? { ...x, ok: r.ok, sum: r.sum, args: r.args, ...(ev.at ? { end: ev.at } : {}) } : x)) }; break; }
       }
     } catch {}
   } else if (ev.kind === "plan") {
@@ -58,6 +61,8 @@ export function applyEvent(w: Work, ev: RunEv): Work {
     try { const a = JSON.parse(ev.text) as { why?: string; tried?: string[] }; if (!parts.some((p) => p.k === "plans")) parts.push({ k: "plans", why: String(a.why ?? "noplan"), tried: a.tried ?? [] }); } catch {}
   } else if (ev.kind === "link") {
     try { const l = JSON.parse(ev.text) as Omit<LinkPart, "k">; if (typeof l.url === "string" && /^https?:\/\//.test(l.url) && !parts.some((p) => p.k === "link" && p.url === l.url)) parts.push({ k: "link", app: String(l.app ?? ""), name: String(l.name ?? "Composio"), url: l.url }); } catch {}
+  } else if (ev.kind === "rate") {
+    try { const a = JSON.parse(ev.text) as { name?: string; until?: number }; if (typeof a.until === "number") { const name = String(a.name ?? ""), k = parts.findIndex((p) => p.k === "rate" && p.name === name); const r: RatePart = { k: "rate", name, until: a.until }; if (k >= 0) parts[k] = r; else parts.push(r); } } catch {}
   } else if (ev.kind === "conn") {
     try { const c = JSON.parse(ev.text) as Omit<ConnPart, "k">; if (!parts.some((p) => p.k === "conn" && p.id === c.id)) parts.push({ ...c, k: "conn" }); } catch {}
   } else return { ...w, seq: ev.seq };
@@ -67,9 +72,22 @@ export function applyEvent(w: Work, ev: RunEv): Work {
 // Nhãn công cụ máy chủ ghi bằng tiếng Việt, đã bỏ chữ "Đang" (nhật ký lưu trong đoạn chat cũ cũng vậy): dịch khi hiện theo ngôn ngữ giao diện, chữ đầu viết hoa.
 const DOING = "Đang";
 const toolLabel = (l: string) => { const v = [DOING, l].join(" "), t = tr(v); return t !== v ? t : l.charAt(0).toUpperCase() + l.slice(1); };
+// Công cụ chạy quá 8 giây: nói rõ là vẫn đang làm (dữ liệu lớn), không để người dùng tưởng treo.
+const SLOW_MS = 8000;
+const secs = (ms: number) => { const s = Math.max(0, Math.round(ms / 1000)); return s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${String(s % 60).padStart(2, "0")}s`; };
+/** Đồng hồ cập nhật mỗi giây khi on (công cụ đang chạy); tắt thì đứng yên, không tốn lượt vẽ. */
+function useNow(on: boolean) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => { if (!on) return; setNow(Date.now()); const t = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(t); }, [on]);
+  return now;
+}
 function ToolGroup({ items, live }: { items: ToolItem[]; live: boolean }) {
   const [open, setOpen] = useState(false);
   const running = live && items.some((x) => x.ok === undefined);
+  const now = useNow(running);
+  // Công cụ chạy lâu nhất trong nhóm đang chạy: đồng hồ giây ở dòng tiêu đề, kèm lời nhắn khi quá 8 giây.
+  const cur = running ? items.filter((x) => x.ok === undefined && x.at).sort((a, b) => a.at! - b.at!)[0] : undefined;
+  const runMs = cur?.at ? now - cur.at : 0;
   const bad = items.filter((x) => x.ok === false).length;
   const label = items.length === 1 ? toolLabel(items[0].label) : `${tr("Đã dùng")} ${items.length} ${tr("công cụ")}`;
   return (
@@ -79,14 +97,16 @@ function ToolGroup({ items, live }: { items: ToolItem[]; live: boolean }) {
         <span data-notr={items.length === 1 ? true : undefined}>{label}</span>
         {bad > 0 && <em>{bad} {tr("lỗi")}</em>}
         {bad === 1 && items.length === 1 && items[0].sum ? <small className="wl-fail" data-notr title={tr(items[0].sum)}>{tr(items[0].sum)}</small> : null}
+        {cur ? <span className="wl-tsec" aria-hidden="true">{secs(runMs)}</span> : null}
         <I.ChevronR size={13} />
       </button>
+      {cur && runMs >= SLOW_MS ? <div className="wl-slow" role="status">{tr("Công cụ đang xử lý lượng dữ liệu lớn, vui lòng đợi thêm…")}</div> : null}
       {open && (
         <div className="wl-tools-b">
           {items.map((x) => (
             <div key={x.seq} className={`wl-tool ${x.ok === false ? "bad" : ""}`}>
               <span className="wl-ic">{x.ok === undefined ? <span className="wl-spin" /> : x.ok ? <I.Check size={12} /> : <I.X size={12} />}</span>
-              <div><b data-notr>{toolLabel(x.label)}</b>{x.args && <small data-notr>{tr("Đã gửi")}: {x.args}</small>}{x.sum && <small data-notr>{tr(x.sum)}</small>}</div>
+              <div><b data-notr>{toolLabel(x.label)}</b>{x.at && (x.end || (live && x.ok === undefined)) ? <span className="wl-tsec" data-notr>{secs((x.end ?? now) - x.at)}</span> : null}{x.args && <small data-notr>{tr("Đã gửi")}: {x.args}</small>}{x.sum && <small data-notr>{tr(x.sum)}</small>}</div>
             </div>
           ))}
         </div>
@@ -134,6 +154,17 @@ function LinkCard({ l }: { l: LinkPart }) {
     </div>
   );
 }
+/** Connector đang giới hạn tốc độ (429): đếm ngược tới lúc thử lại được, hết giờ thì có nút Thử lại (gửi lại tin vừa rồi). */
+function RateCard({ r }: { r: RatePart }) {
+  const now = useNow(true), left = r.until - now, en = getLang() === "en";
+  return (
+    <div className="wl-plans wl-rate" role="status">
+      <I.Clock size={14} />
+      <span data-notr>{left > 0 ? (en ? `${r.name} is rate-limiting requests. You can try again in ${secs(left)}.` : `${r.name} đang giới hạn tốc độ. Thử lại được sau ${secs(left)}.`) : en ? `${r.name} is ready again.` : `${r.name} đã dùng lại được.`}</span>
+      {left <= 0 && <button className="btn" onClick={() => window.dispatchEvent(new Event("synchro:retry"))}>{tr("Thử lại ngay")}</button>}
+    </div>
+  );
+}
 /** Lời dẫn và công cụ của các bước đã qua; render: cách hiện chữ (Markdown) của trang. */
 export function WorkParts({ parts, live, render, onAnswer }: { parts: Part[]; live: boolean; render: (text: string) => React.ReactNode; onAnswer?: OnAnswer }) {
   return <>{parts.map((p, i) => (p.k === "say" ? <div key={i} className="wl-say">{render(p.text)}</div>
@@ -141,6 +172,7 @@ export function WorkParts({ parts, live, render, onAnswer }: { parts: Part[]; li
     : p.k === "conn" ? (live ? <ReconnectCard key={p.id} c={p} /> : null)
     : p.k === "plans" ? (live ? <PlansCard key={i} why={p.why} tried={p.tried} /> : null)
     : p.k === "link" ? (live ? <LinkCard key={p.url} l={p} /> : null)
+    : p.k === "rate" ? (live ? <RateCard key={`rate-${p.name}`} r={p} /> : null)
     : <ToolGroup key={i} items={p.items} live={live} />))}</>;
 }
 /** Câu trả lời đã xong: nút kết nối lại vẫn hiện ngoài phần tổng kết thu gọn (người dùng vừa được bảo bấm nó). */
@@ -148,6 +180,8 @@ export function ConnCards({ parts }: { parts?: Part[] }) {
   const list = (parts ?? []).filter((p): p is ConnPart => p.k === "conn");
   const plans = (parts ?? []).find((p): p is PlansPart => p.k === "plans");
   const links = (parts ?? []).filter((p): p is LinkPart => p.k === "link");
+  // Đồng hồ thử lại của connector bị giới hạn tốc độ: chỉ hiện khi câu trả lời xong chưa quá 1 giờ kể từ lúc thử lại được.
+  const rates = (parts ?? []).filter((p): p is RatePart => p.k === "rate" && p.until > Date.now() - 3_600_000);
   // Mở lại đoạn chat khi connector đã nối xong từ trước (bằng thẻ này hay trong Cài đặt) thì không nhắc nữa. Hỏi máy chủ không được thì vẫn hiện thẻ.
   // Chỉ hỏi một lần lúc thẻ gắn: vừa kết nối lại xong ngay trên thẻ thì thẻ vẫn ở đó để báo "Đã kết nối lại".
   const [fine, setFine] = useState<string[]>([]);
@@ -161,7 +195,7 @@ export function ConnCards({ parts }: { parts?: Part[] }) {
     return () => { on = false; };
   }, [sig]);
   const show = list.filter((c) => !fine.includes(c.id));
-  return show.length || plans || links.length ? <>{show.map((c) => <ReconnectCard key={c.id} c={c} done />)}{links.map((l) => <LinkCard key={l.url} l={l} />)}{plans && <PlansCard why={plans.why} tried={plans.tried} />}</> : null;
+  return show.length || plans || links.length || rates.length ? <>{show.map((c) => <ReconnectCard key={c.id} c={c} done />)}{links.map((l) => <LinkCard key={l.url} l={l} />)}{rates.map((r) => <RateCard key={`rate-${r.name}`} r={r} />)}{plans && <PlansCard why={plans.why} tried={plans.tried} />}</> : null;
 }
 
 /**
