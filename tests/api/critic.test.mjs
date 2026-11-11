@@ -1,23 +1,14 @@
 // Hội đồng phản biện (Giai đoạn 3): đọc JSON lỗi theo dòng, gộp ý kiến của nhiều model, bản sửa SEARCH/REPLACE áp đúng chỗ;
 // API chọn model của hãng khác với model vừa viết, chạy song song, trả kết quả có cấu trúc.
 // Chạy trên npm run dev:mock (web 3200, LLM giả 4010).
-import { createRequire } from "node:module";
-import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import path from "node:path";
-const B = "http://localhost:3200", LLM = "http://127.0.0.1:4010";
+import { loadTs } from "../lib/ts.mjs";
+const B = process.env.SYNCHRO_URL ?? "http://localhost:3200", LLM = process.env.MOCK_URL ?? "http://127.0.0.1:4010";
 let pass = 0, fail = 0;
 const ok = (c, n, x = "") => { c ? pass++ : fail++; console.log(c ? "  ✓" : "  ✗", n, c ? "" : String(x).slice(0, 400)); };
-const ts = createRequire(path.join(process.cwd(), "package.json"))("typescript");
-const dir = mkdtempSync(path.join(tmpdir(), "critic-"));
-const load = async (f) => {
-  const out = ts.transpileModule(readFileSync(`app/${f}.ts`, "utf8"), { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText.replace(/from "\.\/(\w+)"/g, 'from "./$1.mjs"');
-  writeFileSync(path.join(dir, `${f}.mjs`), out);
-  return import(path.join(dir, `${f}.mjs`));
-};
-await load("artifacts");
-const { applyPatches, parsePatches } = await load("vfs");
-const { parseFindings, mergeFindings, fixPatch, important, numbered } = await load("critic");
+// loadTs theo cả các import của artifacts.ts (designtemplates…), không chỉ một tệp.
+const { vfs, critic } = await loadTs(["artifacts", "vfs", "critic"]);
+const { applyPatches, parsePatches } = vfs;
+const { parseFindings, mergeFindings, fixPatch, important, numbered } = critic;
 
 console.log("1. Đọc kết quả của model");
 let f = parseFindings('Đây là kết quả:\n```json\n{"findings":[{"line_start":3,"line_end":99,"severity":"low","title":"Gợi ý","detail":"d","suggested_fix":"x"},{"line_start":1,"line_end":1,"severity":"high","title":"Lỗi nặng","detail":"d","suggested_fix":"y"},{"line_start":50,"title":"ngoài tệp"},{"line_start":2,"severity":"bad"}]}\n```', 10);
