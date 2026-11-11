@@ -5,7 +5,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import * as L from "../../workspace/remotion/cli/lib.mjs";
-import { createRunQueue, isMediaRun } from "../../workspace/safefs.mjs";
+import { createRunQueue, isMediaRun, safeReadIn } from "../../workspace/safefs.mjs";
 
 let pass = 0, fail = 0;
 const ok = (c, n, x = "") => { c ? pass++ : fail++; console.log(c ? "  ✓" : "  ✗", n, c ? "" : String(x).slice(0, 400)); };
@@ -24,6 +24,10 @@ console.log("1. Tham số dòng lệnh");
   ok(throws(() => L.parseArgs(["render", "tiktok", "p.json", "--fps", "25"]), /30 hoặc 60/), "fps chỉ 30 hoặc 60");
   ok(throws(() => L.parseArgs(["render", "tiktok", "p.json", "--size", "1081x1920"]), /số chẵn/), "kích thước lẻ bị từ chối");
   ok(throws(() => L.parseArgs(["render", "tiktok", "p.json", "--size", "8k"]), /RỘNGxCAO/), "kích thước sai dạng");
+  ok(throws(() => L.parseArgs(["render", "tiktok", "p.json", "--size", "3840x3840"]), /3840x2160/), "khung quá lớn cho 2 GB bộ nhớ bị từ chối (3840x3840 bị giết vì hết bộ nhớ)");
+  ok(L.parseArgs(["render", "tiktok", "p.json", "--size", "3840x2160"]).opts.size === "3840x2160" && L.parseArgs(["render", "tiktok", "p.json", "--size", "2160x3840"]).opts.size === "2160x3840", "4K ngang và dọc vẫn được");
+  // schemas.mjs cần zod (chỉ có trong image): kiểm bằng nội dung tệp.
+  ok(/if \(w \* h > 3840 \* 2160\) throw/.test(fs.readFileSync(new URL("../../workspace/remotion/src/schemas.mjs", import.meta.url), "utf8")), "schema (props.size) cũng chặn khung quá 3840x2160");
   ok(throws(() => L.parseArgs(["render", "tiktok", "p.json", "out.mov"]), /\.mp4/), "tệp ra phải là .mp4");
   ok(throws(() => L.parseArgs(["render", "tiktok", "p.json", "--budget", "5"]), /20–3600/), "ngân sách quá nhỏ");
   ok(throws(() => L.parseArgs(["render", "tiktok", "p.json", "--crf", "50"]), /12–35/), "crf ngoài khoảng");
@@ -63,6 +67,14 @@ console.log("3. Số tab theo cgroup");
   ok(L.pickConcurrency({ cpus: 4, cpuQuota: 1 }) === 1, "--cpus 1: 1 tab");
   ok(L.pickConcurrency({ cpus: 2, cpuQuota: 2, memMax: 2 * 1024 ** 3, memCurrent: 900 * 1024 ** 2 }) === 1, "còn dưới 1,5 GB bộ nhớ: 1 tab");
   ok(L.readCgroup((p) => (p.endsWith("cpu.max") ? "max 100000" : "max")).cpuQuota === null, "không giới hạn (max)");
+  ok(L.pickConcurrency({ cpus: 2, ...cg, width: 3840, height: 2160 }) === 1, "khung 4K: 1 tab dù còn bộ nhớ");
+  ok(L.pickConcurrency({ cpus: 2, ...cg, width: 1920, height: 1080 }) === 2, "Full HD: vẫn 2 tab");
+  const oom = "Error: FFmpeg quit with code 1 (signal SIGKILL) while piping frame 24. Stderr: ffmpeg version n7.1 Copyright (c) 2000-2024 the FFmpeg developers\n  configuration: --prefix=remotion --enable-gpl " + "--enable-x ".repeat(300) + "\n  libavutil 59.";
+  ok(L.isOomError(oom) && L.isOomError("whisper-cli lỗi (mã SIGKILL): ") && !L.isOomError("Error: Composition not found"), "nhận ra lỗi hết bộ nhớ (SIGKILL) của Remotion / ffmpeg");
+  const t = L.trimError(oom);
+  ok(t.length < 800 && t.startsWith("Error: FFmpeg quit") && !t.includes("--enable-x --enable-x"), "lỗi in gọn, bỏ bản cấu hình ffmpeg", t.length);
+  ok(L.pickBudget(undefined, undefined) === 170 && L.pickBudget(undefined, "120") === 95 && L.pickBudget(undefined, "600") === 170 && L.pickBudget(300, "600") === 300 && L.pickBudget(3600, "30") === 10,
+    "ngân sách luôn dưới thời gian lần chạy (120 giây → 95 giây, thoát 75 trước khi bị ngắt)");
 }
 
 console.log("4. Đường dẫn tệp an toàn");
@@ -81,6 +93,22 @@ console.log("4. Đường dẫn tệp an toàn");
   ok(throws(() => L.safeResolve(root, "thumuc/secret.txt"), /ra ngoài/), "chặn thư mục liên kết ra ngoài");
   ok(throws(() => L.safeResolve(root, "https://x.com/a.mp4"), /Tải tệp về trước/), "không nhận URL: tải về trước");
   ok(throws(() => L.safeResolve(root, "inputs/khong-co.mp3"), /Không thấy tệp/), "tệp không có");
+  const rr = fs.realpathSync(root);
+  ok(L.safeOut(root, "outputs/video.mp4", "outputs") === path.join(rr, "outputs", "video.mp4"), "tệp ra trong outputs/ (thư mục chưa có vẫn được)");
+  ok(L.safeOut(root, "outputs/_preview", "outputs") === path.join(rr, "outputs", "_preview"), "thư mục ảnh xem trước trong outputs/");
+  ok(throws(() => L.safeOut(root, "video.mp4", "outputs"), /outputs\/.*tới tay người dùng/), "render ra ngoài outputs/ bị từ chối (người dùng không nhận được)");
+  ok(throws(() => L.safeOut(root, "../../../tmp/esc", "outputs"), /"\.\."/), "--out có .. bị từ chối");
+  ok(throws(() => L.safeOut(root, "/tmp/abs.json"), /tương đối/), "tệp phụ đề ra đường dẫn tuyệt đối bị từ chối");
+  ok(L.safeOut(root, "phu-de.json") === path.join(rr, "phu-de.json"), "tệp phụ đề ra trong thư mục làm việc");
+  fs.symlinkSync(T, path.join(root, "outputs"));
+  ok(throws(() => L.safeOut(root, "outputs/video.mp4", "outputs"), /liên kết/), "outputs/ là liên kết ra ngoài: từ chối");
+  ok(throws(() => L.safeOut(root, "thumuc/a.json"), /liên kết/), "thư mục liên kết ra ngoài: từ chối");
+  fs.unlinkSync(path.join(root, "outputs")); fs.mkdirSync(path.join(root, "outputs"));
+  fs.symlinkSync(outside, path.join(root, "outputs", "x.mp4"));
+  ok(throws(() => L.safeOut(root, "outputs/x.mp4", "outputs"), /liên kết/), "tệp ra là liên kết có sẵn: từ chối");
+  fs.writeFileSync(path.join(root, "render.sh"), "synchro-video render tiktok p.json");
+  ok(safeReadIn(root, "render.sh")?.toString() === "synchro-video render tiktok p.json" && safeReadIn(root, "thumuc/secret.txt") === null && safeReadIn(root, "outputs/x.mp4") === null && safeReadIn(root, "../secret.txt") === null,
+    "đọc script trong thư mục giữ lại, không đi theo liên kết");
   fs.rmSync(T, { recursive: true, force: true });
   const seen = [];
   const m = L.mapFiles({ video: "a.mp4", images: ["b.jpg", "c.jpg"], music: { src: "n.mp3" }, brand: { logo: "l.png", name: "logo.png" }, scenes: [{ type: "screenshot", image: "s.png", title: "image" }], captions: "phu-de.json" }, (v, at) => { seen.push(at); return `U(${v})`; });
@@ -131,6 +159,15 @@ console.log("7. Lần chạy dựng video xếp hàng riêng (mỗi máy một l
   ok(!isMediaRun({ files: [{ path: "main.sh", b64: b64("synchro-video schema tiktok; synchro-video check tiktok p.json") }] }), "schema / check nhẹ: không cần chỗ dựng");
   ok(!isMediaRun({ files: [{ path: "inputs/ghi-chu.txt", b64: b64("synchro-video render tiktok") }] }), "tệp dữ liệu (không phải script) không tính");
   ok(isMediaRun({ argv: ["bash", "-lc", "synchro-video render next-tailwind p.json"] }), "lệnh trong argv");
+  ok(isMediaRun({ argv: ["node", "/opt/remotion/cli/synchro-video.mjs", "render", "tiktok", "p.json"] }), "gọi thẳng synchro-video.mjs bằng node");
+  ok(isMediaRun({ argv: ["bash", "-lc", "node /opt/remotion/cli/synchro-video.mjs render tiktok p.json"] }), "node …/synchro-video.mjs render trong bash");
+  ok(isMediaRun({ files: [{ path: "main.py", b64: b64('SV = "synchro-video"\nsubprocess.run([SV, "render", "tiktok", "p.json"])') }] }), "Python: tên lệnh trong biến");
+  ok(isMediaRun({ argv: ["bash", "-lc", "CMD=render; synchro-video $CMD tiktok p.json"] }), "bash: lệnh con trong biến");
+  ok(isMediaRun({ argv: ["bash", "-c", "bash render.sh"], readScript: (r) => (r === "render.sh" ? "synchro-video render tiktok p.json" : null) }), "script có sẵn trong thư mục giữ lại (lần trước ghi)");
+  ok(!isMediaRun({ argv: ["bash", "-c", "bash render.sh"], readScript: () => null }), "script không có: không đoán bừa");
+  ok(isMediaRun({ files: [{ path: "run.sh", b64: b64("python3 tools/make.py") }, { path: "tools/make.py", b64: b64("os.system('synchro-video still tiktok p.json')") }] , argv: ["bash", "run.sh"] }), "script gọi script khác gửi kèm");
+  ok(!isMediaRun({ argv: ["bash", "-lc", "ls -la .synchro-video/ && du -sh .synchro-video"] }), "xem thư mục trạng thái .synchro-video/ không phải dựng");
+  ok(!isMediaRun({ argv: ["bash", "-lc", "synchro-video words a.srt c.json && synchro-video example tiktok"] }), "words / example nhẹ: không cần chỗ dựng");
   const mq = createRunQueue({ max: 1, queue: 5, perUser: 5, waitMs: 2000, shortSec: 0 });
   const a = await mq.acquire("u1", 600);
   let got = false;

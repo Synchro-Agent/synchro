@@ -13,7 +13,7 @@ import { spawn } from "node:child_process";
 import { WebSocketServer, WebSocket } from "ws";
 import { BrowserError, createBrowser, devJson } from "./browser-core.mjs";
 import { createRelay } from "./ext-relay.mjs";
-import { clipSink, collectOutputs, createRunQueue, isMediaRun, QueueFull, safeWrite } from "./safefs.mjs";
+import { clipSink, collectOutputs, createRunQueue, isMediaRun, QueueFull, safeReadIn, safeWrite } from "./safefs.mjs";
 
 const env = (k, d) => process.env[k] ?? d;
 const PORT = Number(env("WS_AGENT_PORT", 3555));
@@ -397,7 +397,9 @@ async function runOnce(u, { files = [], argv, stdin = null, net: wantNet = false
   const queuedAt = Date.now();
   // Lần dựng video lấy chỗ dựng trước (không giữ chỗ chạy chung trong lúc chờ), rồi mới tới chỗ chạy chung.
   let freeSlot, freeMedia = () => {};
-  if (isMediaRun({ files, argv, stdin })) {
+  // Script có sẵn trong thư mục giữ lại (vd. "bash render.sh" ghi ở lần trước) cũng được đọc: không container nào đang gắn thư mục này (keepBusy).
+  const readScript = keep ? (rel) => safeReadIn(dir, rel, 1_000_000)?.toString("utf8") ?? null : null;
+  if (isMediaRun({ files, argv, stdin, readScript })) {
     try { freeMedia = await mediaQ.acquire(u, sec, signal); }
     catch (e) { release(); throw e instanceof QueueFull ? new E(503, !e.message.startsWith("Máy chủ đang chạy nhiều code") ? e.message : "Máy chủ đang dựng một video khác (mỗi lần một video). Hãy chạy lại sau ít phút; các đoạn đã dựng xong vẫn được giữ.") : e; }
   }
@@ -429,6 +431,8 @@ async function runOnce(u, { files = [], argv, stdin = null, net: wantNet = false
     const envs = { HOME: HOME, LANG: "C.UTF-8", LC_ALL: "C.UTF-8", MPLBACKEND: "Agg", PYTHONUNBUFFERED: "1", PYTHONDONTWRITEBYTECODE: "1",
       PIP_BREAK_SYSTEM_PACKAGES: "1", PIP_DISABLE_PIP_VERSION_CHECK: "1", NPM_CONFIG_PREFIX: `${HOME}/.npm-global`, npm_config_update_notifier: "false",
       PATH: `${HOME}/.local/bin:${HOME}/.npm-global/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin`,
+      // Số giây lần chạy được phép: synchro-video dừng đúng hẹn (mã 75, chạy lại để dựng tiếp) trước khi timeout ngắt giữa đoạn.
+      SYNCHRO_RUN_TIMEOUT: String(sec),
       // SYNCHRO_CHROME_PROXY: Chromium không đọc HTTPS_PROXY; /etc/chromium.d/synchro trong image thêm --proxy-server khi có biến này.
       ...(wantNet ? { HTTPS_PROXY: proxy, HTTP_PROXY: proxy, https_proxy: proxy, http_proxy: proxy, NO_PROXY: "localhost,127.0.0.1", no_proxy: "localhost,127.0.0.1", SYNCHRO_CHROME_PROXY: proxy } : {}) };
     // Dùng mọi CPU của máy nhưng ưu tiên thấp (cpu-shares 256): khi tranh CPU, máy chủ web chạy trước. Chromium mở nhiều tiến trình,

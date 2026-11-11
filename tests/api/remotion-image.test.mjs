@@ -85,6 +85,7 @@ console.log("6. Hướng dẫn cho model");
 {
   const rules = read("app/coderun.ts");
   ok(/synchro-video/.test(rules) && ["tiktok", "next-tailwind", "audiogram", "github-unwrapped"].every((id) => rules.includes(id)), "WS_TOOLS nêu synchro-video và 4 mẫu");
+  ok(/synchro-video có chuẩn riêng \(60 khung\/giây, phông theo schema/.test(rules) && /Video tự dựng bằng ffmpeg đạt chuẩn: [^\n]*30 khung\/giây/.test(rules), "chuẩn 30 khung/giây, Noto Sans chỉ cho video tự dựng bằng ffmpeg, không mâu thuẫn với synchro-video 60 khung/giây");
   ok(/VIDEO_ROUTE[\s\S]*ffmpeg/.test(rules) && /runner\(\) === "workspace" \? VIDEO_ROUTE/.test(rules), "chỉ image workspace mới có hướng dẫn synchro-video; slideshow đơn giản vẫn ffmpeg");
   ok(/không dựng dự án Remotion người dùng tải lên/.test(rules), "nhắc điều khoản giấy phép");
   const { videokit: V } = await loadTs(["videokit"]);
@@ -105,7 +106,7 @@ console.log("6. Hướng dẫn cho model");
 console.log("7. Hàng đợi dựng video ở dịch vụ workspace");
 {
   const a = read("workspace/agent.mjs");
-  ok(/WS_MEDIA_MAX", 1\)/.test(a) && /isMediaRun\(\{ files, argv, stdin \}\)/.test(a) && /mediaQ\.close/.test(a) && /freeMedia\(\);/.test(a), "mỗi máy một lần dựng, nhả chỗ ở mọi đường thoát, đóng khi tắt dịch vụ");
+  ok(/WS_MEDIA_MAX", 1\)/.test(a) && /isMediaRun\(\{ files, argv, stdin, readScript \}\)/.test(a) && /SYNCHRO_RUN_TIMEOUT: String\(sec\)/.test(a) && /mediaQ\.close/.test(a) && /freeMedia\(\);/.test(a), "mỗi máy một lần dựng, nhả chỗ ở mọi đường thoát, đóng khi tắt dịch vụ");
 }
 
 console.log(`\n${pass} đạt, ${fail} lỗi`);
