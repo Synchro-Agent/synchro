@@ -843,6 +843,8 @@ Object.assign(VI2EN, {
   "Các tin phía trên đã được nén thành bản tóm tắt; model nhận bản tóm tắt thay cho chúng.": "The messages above were compacted into a summary; the model gets the summary instead.",
   "Chế độ Tự động đã chọn model này": "Auto mode picked this model",
   "Chạy lại bằng model khác": "Run again with another model",
+  "Đang tạo tiếp…": "Still writing…",
+  "Cuộn xuống phần đang tạo": "Scroll down to the reply being written",
   "Vẫn để Tự động, chỉ không dùng model vừa trả lời": "Stays on Auto, just skips the model that answered",
   "Đăng nhập gói Claude, ChatGPT, Gemini hoặc Grok của bạn, hoặc nhập khóa API dùng chung.": "Sign in with your Claude, ChatGPT, Gemini or Grok plan, or add a shared API key.",
   "Đăng nhập gói Claude, ChatGPT, Gemini hoặc Grok của bạn để bắt đầu.": "Sign in with your Claude, ChatGPT, Gemini or Grok plan to get started.",

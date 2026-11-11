@@ -1422,13 +1422,19 @@ export default function Home() {
     return () => { ro.disconnect(); host.style.removeProperty("--dock-h"); };
   }, [dockEl]);
   const stick = useRef(true);
+  const lastTop = useRef(0);
   const [showDown, setShowDown] = useState(false);
+  // Tự cuộn theo chữ đang viết chỉ khi người dùng đang đứng ở cuối. Kéo lên dù chỉ hơn 5px (lăn chuột, vuốt, kéo thanh cuộn, phím) là dừng
+  // tự cuộn ngay, hiện nút nổi để quay xuống; trước đây phải lên quá 120px mới dừng nên đọc phần trên vẫn bị kéo tuột xuống.
+  // Nội dung co lại (thu gọn khối, ảnh nở xong) làm trình duyệt hạ scrollTop nhưng vẫn sát đáy: xét khoảng cách tới đáy trước.
   const onScroll = () => {
     const el = threadRef.current;
     if (!el) return;
-    const far = el.scrollHeight - el.scrollTop - el.clientHeight > 120;
-    stick.current = !far;
-    setShowDown(far);
+    const top = el.scrollTop, gap = el.scrollHeight - top - el.clientHeight;
+    if (gap <= 6) stick.current = true;
+    else if (top < lastTop.current - 5) stick.current = false;
+    lastTop.current = top;
+    setShowDown(!stick.current && gap > 6);
   };
   // Xa hơn vài màn hình thì nhảy tới gần cuối rồi mới trượt nốt: trượt suốt đoạn chat dài từng mất gần 1,5 giây, hàng ẩn dựng lại khi lướt qua.
   const toBottom = () => {
@@ -1445,6 +1451,7 @@ export default function Home() {
     stick.current = true;
     setShowDown(false);
     el.scrollTop = el.scrollHeight;
+    lastTop.current = el.scrollTop;
   }, [chat?.id, view]);
   useEffect(() => {
     const el = threadRef.current;
@@ -2422,7 +2429,9 @@ export default function Home() {
                 <div ref={endRef} />
               </div>
             </div>
-            {showDown && <button className="scroll-down" onClick={toBottom} aria-label="Cuộn xuống cuối"><I.Chevron size={16} /></button>}
+            {showDown && (busy
+              ? <button className="scroll-down gen" onClick={() => { stick.current = true; toBottom(); }} aria-label={tr("Cuộn xuống phần đang tạo")}><I.Chevron size={15} /><span>{tr("Đang tạo tiếp…")}</span></button>
+              : <button className="scroll-down" onClick={() => { stick.current = true; toBottom(); }} aria-label="Cuộn xuống cuối"><I.Chevron size={16} /></button>)}
             <Boundary resetKey={`${artSel?.ident}-${fileSel?.file.id}-${brwFor}`}>
             {artOpen && artVersions && (
               <ArtifactPanel versions={artVersions} index={artIndex} setIndex={(v) => setArtSel({ chat: chat.id, ident: artSel!.ident, v, follow: false })} ai={caps.ai} onClose={closeArt}

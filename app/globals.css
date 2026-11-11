@@ -2432,6 +2432,9 @@ html body :is(.menu,.model-menu,.usermenu,.model-sub).fl-flat{background:var(--c
 .main.has-art>.thread,.main.has-art>.topbar,.main.has-art>.verify-banner{margin-right:var(--art-w)}
 .main.has-art .dock{right:var(--art-w)}
 html body .main.has-art .scroll-down{left:calc((100% - var(--art-w)) / 2 - 17px)}
+/* Đang tạo câu trả lời mà người dùng đã kéo lên đọc: nút nổi thành viên thuốc "↓ Đang tạo tiếp…", bấm là về cuối và tự cuộn lại. */
+html body .scroll-down.gen{left:50%;translate:-50% 0;width:auto;padding:0 14px 0 10px;gap:6px;border-radius:999px;font-size:13px;color:var(--text-2);white-space:nowrap}
+html body .main.has-art .scroll-down.gen{left:calc((100% - var(--art-w)) / 2)}
 .art-panel{position:absolute;top:0;right:0;bottom:0;width:var(--art-w);display:flex;flex-direction:column;background:var(--bg);border-left:.5px solid var(--border-strong);z-index:25;animation:artIn .28s var(--ease)}
 .main.art-full .art-panel{width:100%;border-left:0}
 @keyframes artIn{from{opacity:0;transform:translateX(24px)}to{opacity:1;transform:none}}
