@@ -51,7 +51,7 @@ for (const typed of ["làm slide", "viết báo cáo", "tạo file excel", "làm
 ok(biggest > 0 && biggest <= 8192 && DESIGN_BUDGET === 8192, `khối lớn nhất ${biggest} byte, trần ${DESIGN_BUDGET}`);
 const slide = turn("Làm bộ slide doanh thu");
 ok(/Bộ CSS sẵn/.test(slide.block) && /Chữ: chỉ dùng thang/.test(slide.block) && /Mỗi slide 3 tầng/.test(slide.block) && /Phong cách gợi ý/.test(slide.block), "khối đầy đủ không phần nào bị cắt vì trần", slide.bytes);
-ok(!turn("tạo file excel", full).block.includes("Bộ CSS sẵn") && turn("tạo file excel", full).bytes < 2000, "Excel: chỉ quy tắc bảng tính", turn("tạo file excel", full).bytes);
+ok(!turn("tạo file excel", full).block.includes("Bộ CSS sẵn") && turn("tạo file excel", full).bytes < 2600, "Excel: chỉ quy tắc bảng tính", turn("tạo file excel", full).bytes);
 ok(!turn("làm poster", { art: false }).block.includes("Bộ CSS sẵn"), "không có artifact: không nhắc bộ CSS");
 
 console.log("3. Đều số đo, không tính từ");
@@ -62,9 +62,9 @@ const doc = turn("viết báo cáo thị trường").block;
 ok(/break-inside:avoid/.test(doc) && /orphans:3/.test(doc) && /A4/.test(doc), "tài liệu có luật in");
 ok(/không đặt cho mọi p, li/.test(doc), "không ép 65ch cho mọi p, li như cẩm nang");
 const sheet = turn("tạo file excel ngân sách").block;
-for (const s of ["=SUM(", "0000FF", 'style="double"', 'style="thin"', "DataBarRule", "ColorScaleRule", "0.0%"]) ok(sheet.includes(s), `bảng tính: ${s}`);
+for (const s of ["=SUM(", "0052CC", "0F172A", "0A192F", "showGridLines = False", "freeze_panes", '$#,##0;($#,##0);"-"', '#,##0 "₫";(#,##0 "₫");"-"', 'style="double"', 'style="thin"', "DataBarRule", "ColorScaleRule", "0.0%", "excel_totals"]) ok(sheet.includes(s), `bảng tính chuẩn tài chính: ${s}`);
 const coderun = readFileSync("app/coderun.ts", "utf8");
-for (const s of ["0000FF", "viền dưới double", "DataBarRule", "ColorScaleRule", "conditional_format"]) ok(coderun.includes(s), `CODE_RULES: ${s}`);
+for (const s of ["0052CC", "0A192F", "showGridLines = False", "viền dưới double", "excel_totals", "DataBarRule", "ColorScaleRule", "conditional_format"]) ok(coderun.includes(s), `CODE_RULES: ${s}`);
 const g = turn("làm poster").block;
 ok(/không chữ chuyển màu/.test(g), "không chữ chuyển màu ở nội dung phải đọc");
 ok(/SVG tự viết thoải mái/.test(g), "không cấm model viết SVG");

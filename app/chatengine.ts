@@ -31,6 +31,7 @@ import { CODE_RULES, execRun, LANGS, runCodeTool, runner, RUN_LIMITS, type Lang,
 import { plainSummary, runBlocks } from "./runtext";
 import { OUTPUT_QUOTA_MB, outputByName, outputRoom, outputsFull, readOutput, removeOutput, saveOutputs, type OutFile } from "./outputs";
 import { mergeOuts, previewNote, previewOf } from "./runpreview";
+import { totalsNote } from "./xlsxcheck";
 import { ARTIFACT_RULES, ASK_RULES, VIZ_RULES } from "./artifacts";
 import { designTurn, historyTexts } from "./designkit";
 import { type ABlock, anthropicCall, blocksText, chatOnce, effortParams, HttpErr, openaiCall, outCap, respInput, respParse, respTools, responsesCall, toAnthropic, toOpenAI, toResponses, withPages } from "./llmcall";
@@ -249,6 +250,8 @@ async function runCode(x: Exec, input: Record<string, unknown>): Promise<Run> {
     const r = await execRun({ uid: x.uid, files: [{ path: LANGS[lang].file, data: Buffer.from(code) }, ...inp.files], argv: [...LANGS[lang].argv], net: x.net, web: x.web, keep, timeout, signal: runSignal(), recalc: true });
     const { saved, held, full } = deliver(x, r);
     const pv = await previewOf(r.files);
+    // Chốt ô tổng: tổng / tổng phụ / chênh lệch ghi cứng thành số trong tệp Excel vừa tạo thì báo để model sửa thành công thức.
+    const totals = r.exit === 0 ? await totalsNote(r.files).catch(() => "") : "";
     const files = saved.length ? `\n<files>\n${saved.map((f) => `outputs/${f.name} (${fmtSize(f.size)}) — đã gửi cho người dùng`).join("\n")}\n</files>` : "";
     const hold = held.length ? (r.exit === 0 && !r.timedOut ? `\n<not_delivered>\nMáy chủ sắp hết dung lượng đĩa nên các tệp này CHƯA tới người dùng: ${held.join(", ")}. Hãy nói rõ điều này với người dùng và đề nghị thử lại sau; đừng nói là đã gửi tệp.\n</not_delivered>` : `\n<not_delivered>\n${r.timedOut ? "Lần chạy quá giờ" : "Lần chạy lỗi"} nên các tệp này CHƯA tới người dùng, có thể dở dang: ${held.join(", ")}. Chúng nằm ở .last_outputs/. Sửa rồi chạy lại; tệp nào dùng được thì chép sang outputs/ ở lần chạy sau.\n</not_delivered>`) : "";
     // Tệp vượt giới hạn dung lượng: chỉ thẻ này báo được, người dùng không có thẻ tệp nào để biết là thiếu. Tệp _preview/ chỉ để model xem, không cần báo.
@@ -256,7 +259,7 @@ async function runCode(x: Exec, input: Record<string, unknown>): Promise<Run> {
     if (r.exit === 0 && !r.timedOut) noteSkipped(x, over);
     const skip = over.length ? `\n<not_delivered>\nCác tệp này KHÔNG tới người dùng và không có thẻ tải về: ${over.join("; ")}. Giới hạn ${RUN_LIMITS.fileSize / 1048576} MB mỗi tệp, ${RUN_LIMITS.total / 1048576} MB mỗi lần chạy. Nén lại (video: -crf cao hơn, hạ bitrate âm thanh) hoặc chia nhỏ rồi chạy lại; không làm được thì phải nói rõ với người dùng là tệp chưa giao được (thẻ tệp hiện "chưa giao được").\n</not_delivered>` : "";
     // Thẻ trạng thái đứng trước log: log dài cỡ nào model vẫn thấy đã giao tệp gì, ô Excel nào lỗi, đã xem ảnh nào.
-    return { ...runBlocks({ open: `<run_result language="${lang}" exit_code="${r.exit}">`, close: "</run_result>", tags: `${inputsNote(inp)}${files}${hold}${skip}${recalcNote(r.recalc)}${previewNote(pv)}`, stdout: r.stdout, stderr: r.stderr }), is_error: r.exit !== 0, used, ...(pv ? { image: pv.image } : {}) };
+    return { ...runBlocks({ open: `<run_result language="${lang}" exit_code="${r.exit}">`, close: "</run_result>", tags: `${inputsNote(inp)}${files}${hold}${skip}${recalcNote(r.recalc)}${totals}${previewNote(pv)}`, stdout: r.stdout, stderr: r.stderr }), is_error: r.exit !== 0, used, ...(pv ? { image: pv.image } : {}) };
   } catch (e) {
     return { content: `Không chạy được code: ${(e as Error).message}`, is_error: true, used };
   }

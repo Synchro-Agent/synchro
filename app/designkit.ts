@@ -146,10 +146,10 @@ Một slide một ý, tối đa 40 từ ngoài bảng. Chữ dài thì chia slid
   doc: `Tài liệu: thang 12·14·16·21·28·38; thân 16px màn hình, 11pt in; tiêu đề 28/21/16; mở đầu bằng tóm tắt kết luận 2-3 câu trước phần diễn giải; mục lớn có tiêu đề nêu điều rút ra, không chỉ tên mục. Bảng: chỉ kẻ ngang mảnh, không kẻ dọc, số căn phải, hàng tổng đậm.
 In: khổ A4 lề 20mm; break-after:avoid cho tiêu đề; break-inside:avoid cho thẻ, hình, bảng ngắn; bảng dài dài hơn một trang thì cho ngắt và lặp thead; orphans:3; widows:3; bỏ bóng, kính mờ, nền trang tối khi in.
 Dạng: mặc định artifact Markdown (đề mục, bảng, danh sách là đủ); cần bố cục, biểu đồ, một trang A4 thì text/html. Văn bản hành chính của cơ quan dùng kiểu vbhc, không áp dụng khối này.`,
-  sheet: `Excel: mọi tổng, tỉ lệ, chênh lệch là công thức sống (=SUM(D4:D11), =(D11-C11)/C11), không ghi số Python tính sẵn; giả định ở ô riêng, công thức trỏ tới ô đó.
-Màu chữ theo vai trò: ô nhập tay xanh dương Font(color="0000FF"), công thức đen "000000", liên kết sang sheet khác xanh lục "006100". Nền trắng, chỉ tô nhẹ giả định chính.
-Hàng tổng: đậm, Border(top=Side(style="thin"), bottom=Side(style="double")). Tiêu đề cột đậm có nền, freeze_panes dưới tiêu đề, số căn phải.
-Định dạng số: #,##0 · tiền #,##0 "₫" · âm trong ngoặc #,##0;(#,##0);"-" · tỉ lệ 0.0% · ngày dd/mm/yyyy · bội 0.0"x".
+  sheet: `Excel chuẩn mô hình tài chính: mọi tổng, tổng phụ, chênh lệch, tăng trưởng, tỉ lệ là công thức sống (=SUM(C5:C11), =(D11-C11)/C11), không ghi số Python tính sẵn: Synchro đọc tệp và báo ô tổng ghi cứng trong <excel_totals>. Giả định ở ô riêng, công thức trỏ tới ô đó.
+Màu chữ theo vai trò: ô nhập tay xanh Font(color="0052CC"), công thức đen "0F172A", liên kết sang sheet khác xanh lục "006100". Tiêu đề cột: PatternFill("solid", fgColor="0A192F") + Font(bold=True, color="FFFFFF"), cao 26, nhãn trái, số phải. Tiêu đề báo cáo ở B2 (đậm 14, 0A192F), dòng kỳ và đơn vị ở B3 (nghiêng 9, 64748B).
+Hàng tổng: đậm, chữ 0A192F, nền F8FAFC, Border(top=Side(style="thin", color="0A192F"), bottom=Side(style="double", color="0A192F")). Hàng dữ liệu: viền dưới mảnh E2E8F0. ws.sheet_view.showGridLines = False; freeze_panes dưới tiêu đề và sau cột nhãn ("C5"); cột lề A rộng 3, cột nhãn 34, cột số 15, cột tổng 18; phông Arial hoặc Calibri (máy nào cũng có).
+Định dạng số: USD $#,##0;($#,##0);"-" · VND #,##0 "₫";(#,##0 "₫");"-" · số thường #,##0;(#,##0);"-" · tỉ lệ 0.0% · ngày dd/mm/yyyy · bội 0.0"x".
 Thanh trong ô bằng định dạng có điều kiện thật (Excel tự cập nhật theo số), không vẽ bằng ký tự hay ảnh:
 from openpyxl.formatting.rule import DataBarRule, ColorScaleRule
 ws.conditional_formatting.add("E4:E11", DataBarRule(start_type="num", start_value=0, end_type="max", color="FF5B9BD5", showValue=True))
