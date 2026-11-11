@@ -409,11 +409,12 @@ async function main() {
 main().then(() => process.exit(0)).catch((e) => {
   if (e instanceof UsageError) { log(`Lỗi: ${e.message}`); process.exit(2); }
   const msg = String(e?.message ?? e);
-  // Hết 2 GB bộ nhớ: Chromium / ffmpeg bị giết giữa chừng, Remotion báo "signal SIGKILL" kèm cả bản cấu hình ffmpeg. Báo gọn và thoát 137
+  // Hết bộ nhớ (2 GB ở máy dựng): Chromium / ffmpeg bị giết giữa chừng, Remotion báo "signal SIGKILL" kèm cả bản cấu hình ffmpeg. Báo gọn và thoát 137
   // như máy chạy code vẫn báo hết bộ nhớ, để model đổi kích thước chứ không chạy lại đúng lệnh cũ.
   if (isOomError(msg)) {
     const at = curSize ? ` khi dựng ở ${curSize.width}x${curSize.height}` : "";
-    log(`Lỗi: hết bộ nhớ 2 GB${at}. Giảm --size (vd. landscape, vertical hoặc square) hoặc dùng --fps 30 rồi chạy lại; các đoạn đã dựng xong vẫn được giữ.\nChi tiết: ${trimError(msg, 200, 0)}`);
+    const mem = readCgroup(readMaybe).memMax, gb = mem ? `${+(mem / 1024 ** 3).toFixed(1)} GB` : "bộ nhớ";
+    log(`Lỗi: hết ${gb}${at}. Giảm --size (vd. landscape, vertical hoặc square) hoặc dùng --fps 30 rồi chạy lại; các đoạn đã dựng xong vẫn được giữ.\nChi tiết: ${trimError(msg, 200, 0)}`);
     process.exit(137);
   }
   log(`Lỗi: ${trimError(msg)}`);

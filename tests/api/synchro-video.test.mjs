@@ -73,6 +73,8 @@ console.log("3. Số tab theo cgroup");
   ok(L.isOomError(oom) && L.isOomError("whisper-cli lỗi (mã SIGKILL): ") && !L.isOomError("Error: Composition not found"), "nhận ra lỗi hết bộ nhớ (SIGKILL) của Remotion / ffmpeg");
   const t = L.trimError(oom);
   ok(t.length < 800 && t.startsWith("Error: FFmpeg quit") && !t.includes("--enable-x --enable-x"), "lỗi in gọn, bỏ bản cấu hình ffmpeg", t.length);
+  const t2 = L.trimError(oom + "\nframe=    0 fps=0.0 q=0.0 size=       0KiB ".repeat(60), 200, 0);
+  ok(t2.length <= 205 && t2.startsWith("Error: FFmpeg quit") && !/frame=/.test(t2), "chỉ giữ phần đầu (tail 0): không in tiến trình ffmpeg", t2.length);
   ok(L.pickBudget(undefined, undefined) === 170 && L.pickBudget(undefined, "120") === 95 && L.pickBudget(undefined, "600") === 170 && L.pickBudget(300, "600") === 300 && L.pickBudget(3600, "30") === 10,
     "ngân sách luôn dưới thời gian lần chạy (120 giây → 95 giây, thoát 75 trước khi bị ngắt)");
 }

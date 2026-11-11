@@ -146,8 +146,9 @@ export function pickConcurrency({ cpus, cpuQuota = null, memMax = null, memCurre
 export const isOomError = (msg) => /\bSIGKILL\b|signal 9\b|\bcode 137\b|out of memory|ENOMEM/i.test(String(msg ?? ""));
 /** Thông báo lỗi gọn: lỗi của Remotion kèm cả bản in cấu hình build của ffmpeg (~3 KB), chỉ giữ đầu (nguyên nhân) và đuôi. */
 export function trimError(msg, head = 400, tail = 300) {
-  const s = String(msg ?? "").replace(/\s*configuration: --[^\n]*/g, " …");
-  return s.length <= head + tail + 20 ? s : `${s.slice(0, head)} … ${s.slice(-tail)}`;
+  // Bỏ bản cấu hình build và các dòng tiến trình "frame= … fps= …" của ffmpeg: không giúp gì cho việc sửa lệnh.
+  const s = String(msg ?? "").replace(/\s*configuration: --[^\n]*/g, " …").replace(/[\r\n]+\s*frame=[^\r\n]*/g, "");
+  return s.length <= head + tail + 20 ? s : `${s.slice(0, head)} …${tail > 0 ? " " + s.slice(-tail) : ""}`;
 }
 
 /**
