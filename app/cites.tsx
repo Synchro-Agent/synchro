@@ -81,14 +81,17 @@ export function CiteText({ s, plain }: { s: string; plain: (t: string) => React.
   const cx = useContext(CiteCtx);
   if (!cx || !cx.webs.length) return <>{plain(s)}</>;
   const out: React.ReactNode[] = [];
-  let last = 0, k = 0;
+  // Các số liền nhau ([2][3]) gom một cụm không ngắt dòng giữa chừng.
+  let last = 0, k = 0, run: React.ReactNode[] = [];
+  const flush = () => { if (run.length) { out.push(<span key={k++} className="cite-g">{run}</span>); run = []; } };
   for (const m of s.matchAll(CITE_RE)) {
     const n = Number(m[1]), w = cx.webs[n - 1];
     if (!w || !okUrl(w.url)) continue;
-    if (m.index! > last) out.push(<Fragment key={k++}>{plain(s.slice(last, m.index))}</Fragment>);
-    out.push(<Cite key={k++} n={n} w={w} id={cx.id} />);
+    if (m.index! > last) { flush(); out.push(<Fragment key={k++}>{plain(s.slice(last, m.index))}</Fragment>); }
+    run.push(<Cite key={k++} n={n} w={w} id={cx.id} />);
     last = m.index! + m[0].length;
   }
+  flush();
   if (!out.length) return <>{plain(s)}</>;
   if (last < s.length) out.push(<Fragment key={k++}>{plain(s.slice(last))}</Fragment>);
   return <>{out}</>;
