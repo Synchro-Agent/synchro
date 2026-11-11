@@ -76,5 +76,20 @@ ok(pr?.in === 2 && pr.out === 10 && pr.cache === 0.2, "giá hãng tự báo theo
 ok(R.providerPrice({ pricing: { prompt: "0", completion: "0" } }) === null && R.providerPrice({}) === null, "giá 0 hoặc không có giá: không dùng (không bao giờ tính 0)");
 ok(C.equivalentModel("sub-claude/opus", [{ key: "anthropic/claude-opus-6", id: "claude-opus-6" }, { key: "anthropic/claude-sonnet-5-5", id: "claude-sonnet-5-5" }]) === "anthropic/claude-opus-6", "gói ↔ API: Opus của gói tương đương Opus 6 của khóa API");
 
+console.log("7. Sửa sau kiểm tra nhánh r9-models");
+ok(R.compareModels("xai/grok-4.20", "xai/grok-4.5") < 0 && R.compareModels("xai/grok-4.7", "xai/grok-4.20-0309-reasoning") > 0, "grok-4.20 là 4.2: cũ hơn grok-4.5 (khớp versionNum)");
+ok(!R.supersededSet(["xai/grok-4.20", "xai/grok-4.5", "xai/grok-4.7"]).has("xai/grok-4.7"), "grok-4.20 không đẩy 4.5–4.7 xuống thành bản cũ");
+ok(R.compareModels("x/a-6.1", "x/a-6") > 0 && R.compareModels("x/a-6", "x/a-5.5") > 0 && R.compareModels("x/a-10", "x/a-9.5") > 0, "6.1 > 6 > 5.5, 10 > 9.5 vẫn đúng");
+for (const [k, want] of [["xai/grok-4.5-reasoning", "strong"], ["xai/grok-5-reasoning", "strong"], ["xai/grok-4.20-0309-reasoning", "balanced"], ["xai/grok-5-fast", "fast"], ["xai/grok-code-fast-1", "fast"]])
+  ok(RT.tierOf(k) === want, `${k} → ${want}`, RT.tierOf(k));
+ok(R.familyKey("or/deepseek/deepseek-v4-pro") !== R.familyKey("or/randomuser/deepseek-v9-pro") && R.familyKey("or/x/claude-opus-99") === "or/x/claude-opus", "nhà cung cấp nhiều hãng: dòng model kèm tên hãng gốc");
+ok(!R.supersededSet(["or/deepseek/deepseek-v4-pro", "or/randomuser/deepseek-v9-pro"]).size, "model trùng tên của người khác không làm model chính chủ thành bản cũ");
+ok(R.familyKey("anthropic/claude-opus-6") === "anthropic/claude-opus", "mã không có tên hãng gốc: như trước");
+const tg = R.providerPrice({ id: "meta-llama/x", pricing: { input: 0.88, output: 0.88, hourly: 0, base: 0 } });
+ok(tg?.in === 0.88 && tg.out === 0.88, "giá kiểu Together (đã theo 1 triệu token) không bị nhân thêm 1 triệu", JSON.stringify(tg));
+ok(R.providerPrice({ pricing: { input: 880000, output: 880000 } }) === null, "giá vô lý (quá 1000 USD / 1 triệu token): không dùng");
+const OR = ["perplexity/sonar-deep-research", "openai/gpt-4o-search-preview", "qwen/qwen2.5-omni-7b", "openai/text-embedding-3-large", "openai/tts-1", "openai/omni-moderation-latest"];
+ok(OR.filter((id) => !R.nonChat(id, { loose: true })).join() === "perplexity/sonar-deep-research,openai/gpt-4o-search-preview,qwen/qwen2.5-omni-7b", "nhà cung cấp tương thích: model chat có chữ search / research / omni vẫn hiện, embedding / tts / kiểm duyệt bị loại", OR.filter((id) => !R.nonChat(id, { loose: true })).join());
+
 console.log(`\n${pass} đạt, ${fail} lỗi`);
 process.exit(fail ? 1 : 0);

@@ -7,7 +7,7 @@ import path from "node:path";
 import { DATA_DIR, db, getSetting, setSetting } from "./authstore";
 import { ALL, modelKey, splitKey, type ModelInfo, type ProviderInfo, type ProviderKind } from "./catalog";
 import { datedDuplicate, nonChat, providerPrice } from "./modelrules";
-import { isNewModel, regPinned, regShows, syncListed, type Listed, type ModelCaps } from "./modelreg";
+import { isNewModel, regPinned, regShows, syncListed, untested, type Listed, type ModelCaps } from "./modelreg";
 
 type Builtin = { kind: ProviderKind; name: string; vendor: string; base: string; keyUrl: string; prefix: string };
 export const BUILTIN: Record<string, Builtin> = {
@@ -137,7 +137,8 @@ export async function listModels(kind: ProviderKind, base: string, key: string, 
   const r = await listAll(kind, base, key, workspace);
   // Luật chung (app/modelrules.ts) loại thêm model không dùng để nhắn tin và bản chụp có ngày trùng tên chung, kể cả loại hãng mới đặt ra sau này.
   const ids = new Set(r.models.map((m) => m.id.toLowerCase()));
-  const all = r.models.filter((m) => !nonChat(m.id) && !datedDuplicate(m.id, ids));
+  // Nhà cung cấp tương thích chứa model của nhiều hãng (OpenRouter…): chỉ loại loại chắc chắn không nhắn tin, như trước khi có sổ model.
+  const all = r.models.filter((m) => !nonChat(m.id, { loose: kind === "compatible" }) && !datedDuplicate(m.id, ids));
   return { info: r.info, all, models: all.filter((m) => isCurrent(kind, m.id)).map((m) => ({ id: m.id, name: m.name })) };
 }
 const ms = (v: unknown) => { const t = typeof v === "number" ? (v < 1e11 ? v * 1000 : v) : typeof v === "string" ? Date.parse(v) : NaN; return isFinite(t) && t > 0 ? t : null; };
@@ -208,16 +209,19 @@ function envProvider(): Virtual | null {
   if (p === "anthropic") return { id: "anthropic", kind: "anthropic", name: "Claude", base: BUILTIN.anthropic.base, key, workspace: process.env.ANTHROPIC_WORKSPACE_ID || undefined };
   return { id: "env", kind: "compatible", name: "Máy chủ (biến môi trường)", base: process.env.LLM_BASE_URL ?? BUILTIN.openai.base, key };
 }
+// Bộ nhớ đệm giữ mọi model chat hãng trả về; lọc (đời cũ, sổ model) mỗi lần đọc như khóa đã lưu (stored), để model chưa thử đạt hay quản trị viên
+// vừa ẩn không hiện suốt 6 giờ bộ nhớ đệm, và model đời cũ quản trị viên ghim vẫn hiện.
 const envCache: { at: number; models: { id: string; name: string }[]; sync?: { added: string[]; gone: string[] }; error?: string } = { at: 0, models: [] };
 async function envModels(v: Virtual) {
   if (v.kind === "mock") return [{ id: "synchro-mock", name: "Synchro Mock" }];
-  if (Date.now() - envCache.at < 6 * 3600_000 && envCache.models.length) return envCache.models;
-  try {
-    const r = await listModels(v.kind, v.base, v.key, v.workspace);
-    envCache.models = r.models; envCache.at = Date.now();
-    envCache.sync = syncListed(v.id, v.kind, r.all);
-  } catch (e) { envCache.at = Date.now(); envCache.error = (e as Error).message; }
-  return envCache.models.filter((m) => regShows(modelKey(v.id, m.id)));
+  if (!(Date.now() - envCache.at < 6 * 3600_000 && envCache.models.length)) {
+    try {
+      const r = await listModels(v.kind, v.base, v.key, v.workspace);
+      envCache.models = r.all.map((m) => ({ id: m.id, name: m.name })); envCache.at = Date.now();
+      envCache.sync = syncListed(v.id, v.kind, r.all);
+    } catch (e) { envCache.at = Date.now(); envCache.error = (e as Error).message; }
+  }
+  return envCache.models.filter((m) => { const k = modelKey(v.id, m.id); return (isCurrent(v.kind, m.id) || regPinned(k)) && regShows(k); });
 }
 
 const rows = () => table().prepare("SELECT * FROM api_providers ORDER BY created_at").all() as Row[];
@@ -246,10 +250,12 @@ export async function catalog(): Promise<ProviderInfo[]> {
 export const hasSharedChat = () => !!envProvider() || rows().some((r) => !isService(r.kind) && stored(r).length > 0);
 
 export type Target = { provider: string; kind: ProviderKind; base: string; key: string; model: string; workspace?: string };
-// Từ khóa model ("openai/gpt-5.1") → địa chỉ, khóa và mã model để gọi.
-export async function resolveModel(key: string): Promise<Target | null> {
+// Từ khóa model ("openai/gpt-5.1") → địa chỉ, khóa và mã model để gọi. Model sổ model chưa thử đạt: null (chat không chạy trên nó, kể cả khi
+// ai đó gửi thẳng mã model mà bộ chọn không hiện), trừ lần thử của chính sổ model và nút "Gửi thử" của quản trị viên (untested: true).
+export async function resolveModel(key: string, o: { untested?: boolean } = {}): Promise<Target | null> {
   const { provider, id } = splitKey(key);
   if (!provider || !id) return null;
+  if (!o.untested && untested(key)) return null;
   const r = rowById(provider);
   if (r && !isService(r.kind)) {
     try { return { provider, kind: r.kind, base: (r.base_url || BUILTIN[r.kind]?.base || "").replace(/\/+$/, ""), key: open(r.enc_key), model: id, ...(r.workspace_id ? { workspace: r.workspace_id } : {}) }; } catch { return null; }
@@ -339,7 +345,8 @@ export async function saveProvider(o: { id?: string; kind?: string; name?: strin
       status = 'ok', error = NULL, info = excluded.info, checked_at = excluded.checked_at, updated_at = excluded.updated_at`)
     .run(id, kind, name, baseUrl || null, workspace || null, seal(key), hint(key), JSON.stringify(all.map((m) => ({ id: m.id, name: m.name }))), plan ?? null, now, old?.created_at ?? now, now);
   // Sổ model: khóa mới của một hãng thì cả danh sách là nền (dùng ngay); hãng đã có trong sổ thì model chưa thấy bao giờ sẽ được thử trước.
-  if (!isService(kind)) { syncListed(id, kind, all); void import("./modelreg").then((m) => m.discoverModels("admin")).catch(() => {}); }
+  // Lượt dò sau khi lưu khóa áp trần thử mỗi ngày như lượt tự động, và không chạy khi máy chủ tắt dò tự động (SYNCHRO_MODEL_CHECK=0).
+  if (!isService(kind)) { syncListed(id, kind, all); if (process.env.SYNCHRO_MODEL_CHECK !== "0") void import("./modelreg").then((m) => m.discoverModels("key")).catch(() => {}); }
   return { id, models: models.length };
 }
 

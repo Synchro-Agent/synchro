@@ -52,7 +52,7 @@ function Row({ m, busy, act }: { m: RegModel; busy: boolean; act: (action: strin
             <span className="d">Tested <span data-notr>{ago(m.test.at)}</span></span>
           </div>
         )}
-        {m.test && !m.test.ok && m.test.error && <div className="api-err in mr-err"><I.Alert size={14} /><span data-notr>{m.test.error}</span></div>}
+        {m.test && !m.test.ok && m.test.error && <div className="api-err in mr-err"><I.Alert size={14} /><span>{m.test.error}</span></div>}
       </div>
       {!m.plan && m.status === "retired" && <div className="mr-acts"><button className="btn" disabled={busy} onClick={() => act("forget", m.key)}>Remove from list</button></div>}
       {!m.plan && m.status !== "retired" && (
@@ -115,7 +115,7 @@ export function ModelRegistry() {
           <span className="d">{s.lastCheck ? <>Last check <span data-notr>{ago(s.lastCheck)}</span>. Synchro checks every 6 hours.</> : "Synchro checks every 6 hours."}</span>
           <button className="btn dark" disabled={busy} onClick={check}>{busy ? <><span className="api-spin" />Checking…</> : <><I.Retry size={14} />Check now</>}</button>
         </div>
-        {s.lastError && <div className="api-err in"><I.Alert size={14} /><span data-notr>{s.lastError}</span></div>}
+        {s.lastError && <div className="api-err in"><I.Alert size={14} /><span>{s.lastError}</span></div>}
       </div>
       <div className="mr-tabs" role="tablist">
         <button role="tab" aria-selected={!all} className={!all ? "on" : ""} onClick={() => setAll(false)}>Recent changes</button>

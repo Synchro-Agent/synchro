@@ -6,7 +6,8 @@ import { userScope } from "./userscope";
 
 // effort: mức nỗ lực cao nhất quản trị viên cho phép theo từng model ("*" là mọi model).
 // replaced: model hãng đã gỡ hoặc đã cũ → bản mới nhất cùng dòng (sổ model, app/modelreg.ts), kèm tên model cũ để báo người dùng.
-export type Replaced = Record<string, { to: string; name: string }>;
+// why: "gone" hãng đã gỡ, "old" dòng đã có bản mới hơn (vẫn chạy được nhưng không còn ở bộ chọn).
+export type Replaced = Record<string, { to: string; name: string; why?: "gone" | "old" }>;
 type State = { providers: ProviderInfo[]; sharedApi: boolean; default: string | null; allowed: string[]; effort: Record<string, Effort>; replaced: Replaced; loaded: boolean };
 let state: State = { providers: [], sharedApi: false, default: null, allowed: [], effort: {}, replaced: {}, loaded: false };
 const subs = new Set<() => void>();
@@ -20,8 +21,9 @@ let tries = 0, again: ReturnType<typeof setTimeout> | null = null;
 /** Đã hỏi hết các lần mà vẫn chưa có hãng nào: danh sách trống là thật, không phải máy chủ vừa khởi động lại. */
 export const modelsSettled = () => tries >= RETRY_S.length;
 
-export function refreshModels() {
-  inflight ??= fetch("/api/models", { cache: "no-store" })
+/** bg: lần hỏi lại nền của tab để mở lâu (máy chủ không khởi động sẵn tiến trình chat cho lần này). */
+export function refreshModels(o: { bg?: boolean } = {}) {
+  inflight ??= fetch(o.bg ? "/api/models?bg=1" : "/api/models", { cache: "no-store" })
     .then((r) => (r.ok ? r.json() : null))
     .then((j) => { if (j) { fetchedAt = Date.now(); state = { providers: j.providers ?? [], sharedApi: !!j.sharedApi, default: j.default ?? null, allowed: j.allowed ?? [], effort: j.effort ?? {}, replaced: j.replaced ?? {}, loaded: true }; subs.forEach((f) => f()); } return !!j?.providers?.length; })
     .catch(() => false)
@@ -40,7 +42,7 @@ function watchFresh() {
   if (watching || typeof window === "undefined") return;
   watching = true;
   const stale = (ms: number) => state.loaded && userScope() !== "anon" && document.visibilityState === "visible" && Date.now() - fetchedAt > ms;
-  setInterval(() => { if (stale(REFRESH_MS - 5000)) refreshModels(); }, REFRESH_MS);
+  setInterval(() => { if (stale(REFRESH_MS - 5000)) refreshModels({ bg: true }); }, REFRESH_MS);
   document.addEventListener("visibilitychange", () => { if (stale(5 * 60_000)) refreshModels(); });
 }
 

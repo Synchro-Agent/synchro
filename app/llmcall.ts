@@ -5,6 +5,7 @@ import type { Target } from "./providers";
 import type { Effort } from "./catalog";
 import { noteResponse } from "./usage";
 import { learnFromRetry, modelParams } from "./modelreg";
+import { visionUnsupported } from "./modelrules";
 
 /** Tham số riêng của model theo sổ model (khả năng hãng báo, điều học được khi thử, kế thừa trong dòng). Không có thì gọi như trước giờ. */
 const paramsOf = (t: { provider?: string; model?: string }) => { try { return modelParams(t.provider, t.model); } catch { return undefined; } };
@@ -213,8 +214,10 @@ export async function compatImages(t: Pick<Target, "kind">, body: Record<string,
 /** Hãng từ chối một tham số Synchro gửi (400): bản yêu cầu bỏ tham số đó để thử lại một lần, hoặc null. */
 export function compatRetry(t: Pick<Target, "kind">, body: Record<string, unknown>, msg: string): Record<string, unknown> | null {
   const msgs = Array.isArray(body.messages) ? (body.messages as unknown[]) : [];
-  // Model không nhận ảnh (bản mới của hãng đổi khả năng): gửi lại chỉ có chữ.
-  if (/image|vision|multimodal|modalit/i.test(msg) && JSON.stringify(msgs).includes('"image_url"')) return { ...body, messages: textOnly(msgs) };
+  // Model không nhận ảnh (bản mới của hãng đổi khả năng): gửi lại chỉ có chữ. DeepSeek, Grok: mọi lỗi về ảnh như trước giờ; hãng khác chỉ khi
+  // hãng nói rõ model không nhận ảnh (ảnh hỏng hay quá lớn thì báo lỗi cho người dùng, không lặng lẽ bỏ ảnh).
+  const imageErr = t.kind === "deepseek" || t.kind === "xai" ? /image|vision|multimodal|modalit/i.test(msg) : visionUnsupported(msg);
+  if (imageErr && JSON.stringify(msgs).includes('"image_url"')) return { ...body, messages: textOnly(msgs) };
   // Gemini và nhà cung cấp tương thích OpenAI: model mới không nhận mức nỗ lực hay tool_choice thì gửi lại không kèm tham số đó.
   if (t.kind !== "deepseek" && t.kind !== "xai") {
     if (body.reasoning_effort !== undefined && /reasoning|effort/i.test(msg)) { const { reasoning_effort: _e, ...rest } = body; return rest; }
@@ -345,11 +348,13 @@ export async function openaiCall(t: Target, body: Record<string, unknown>, signa
     const again = e instanceof HttpErr && e.status === 400 ? compatRetry(t, b, e.message) : null;
     if (!again) throw e;
     const j = await send(again);
-    // Chạy được khi bỏ tham số: ghi vào sổ model để các lượt sau không phải bị từ chối trước.
+    // Chạy được khi bỏ tham số: ghi vào sổ model để các lượt sau không phải bị từ chối trước. Chỉ ghi khi lỗi của hãng nói rõ là tham số
+    // không được hỗ trợ: một ảnh hỏng hay quá lớn của một người không được tắt đọc ảnh của model cho mọi người. Quản trị viên bấm
+    // "Thử lại" thì điều đã học được xóa và học lại.
     try {
-      if (b.reasoning_effort !== undefined && again.reasoning_effort === undefined && again.thinking === undefined) learnFromRetry(t.provider, t.model, { effort: [] });
-      // Ảnh sai định dạng (Grok chỉ nhận JPG / PNG) không có nghĩa là model không đọc ảnh.
-      if (!/format/i.test((e as Error).message) && JSON.stringify(b.messages ?? "").includes('"image_url"') && !JSON.stringify(again.messages ?? "").includes('"image_url"')) learnFromRetry(t.provider, t.model, { vision: false });
+      const m = (e as Error).message;
+      if (b.reasoning_effort !== undefined && again.reasoning_effort === undefined && again.thinking === undefined && /\b(unsupported|not support|does not support|unknown|unrecognized|extra inputs|not allowed|not permitted)/i.test(m)) learnFromRetry(t.provider, t.model, { effort: [] });
+      if (visionUnsupported(m) && JSON.stringify(b.messages ?? "").includes('"image_url"') && !JSON.stringify(again.messages ?? "").includes('"image_url"')) learnFromRetry(t.provider, t.model, { vision: false });
     } catch {}
     return j;
   }

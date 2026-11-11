@@ -79,6 +79,8 @@ try {
   ok(!keys(await modelsOf()).includes("openai/gpt-7-sol"), "bộ chọn model không có GPT-7 Sol");
   const chatBad = await member("POST", "/api/llm", { system: "", model: "auto", skills: true, messages: [{ role: "user", content: "Chứng minh rằng căn bậc hai của 2 là số vô tỉ" }] });
   ok(chatBad.s === 200 && chatBad.j?.model !== "openai/gpt-7-sol", `chat không chạy trên model chưa đạt (${chatBad.j?.model})`);
+  const direct = await member("POST", "/api/llm", { system: "", model: "openai/gpt-7-sol", skills: true, messages: [{ role: "user", content: "Xin chào" }] });
+  ok(direct.s === 400 && /chưa thử xong/.test(direct.j?.error ?? ""), "gửi thẳng mã model chưa đạt (không qua bộ chọn): máy chủ từ chối", JSON.stringify(direct.j).slice(0, 300));
   await mock("/_debug/add-model", { provider: "openai", id: "gpt-7-sol", name: "GPT-7 Sol" });
   r = await admin("POST", "/api/admin/models", { action: "retest", key: "openai/gpt-7-sol" });
   g7 = row(r.j, "openai/gpt-7-sol");
@@ -103,6 +105,7 @@ try {
   const md2 = await modelsOf();
   ok(!keys(md2).includes("anthropic/claude-sonnet-5-5") && md2.replaced?.["anthropic/claude-sonnet-5-5"]?.to === "anthropic/claude-sonnet-6" && md2.replaced["anthropic/claude-sonnet-5-5"].name === "Claude Sonnet 5.5",
     "danh sách model báo bản thay thế để trình duyệt chuyển người đã chọn tay và báo một lần", JSON.stringify(md2.replaced));
+  ok(md2.replaced["anthropic/claude-sonnet-5-5"].why === "gone", "lý do: hãng đã gỡ");
 
   console.log("7. Quản trị viên: ẩn, ghim, tắt tự nhận theo hãng, dùng ngay");
   await admin("POST", "/api/admin/models", { action: "hide", key: "anthropic/claude-opus-6", on: true });
@@ -122,7 +125,12 @@ try {
   const md3 = await modelsOf();
   ok(keys(md3).includes("xai/grok-4.7") && !keys(md3).includes("xai/grok-4.6") && !keys(md3).includes("xai/grok-4.5") && row(r.j, "xai/grok-4.5")?.status === "deprecated",
     "dòng Grok có bản mới: giữ hai bản mới nhất (Grok 5, 4.7), bản cũ hơn chuyển sang đã cũ", keys(md3).filter((k) => k.startsWith("xai/")).join());
-  ok(md3.replaced?.["xai/grok-4.5"]?.to === "xai/grok-5", "người đang chọn Grok 4.5 được chuyển sang Grok 5", JSON.stringify(md3.replaced));
+  ok(md3.replaced?.["xai/grok-4.5"]?.to === "xai/grok-5" && md3.replaced["xai/grok-4.5"].why === "old", "người đang chọn Grok 4.5 được chuyển sang Grok 5 (lý do: đã có bản mới hơn, không phải hãng gỡ)", JSON.stringify(md3.replaced));
+  // Màn hình chính quản trị viên chọn tay chỉ có Grok 4.5 (nay đã cũ): Grok 5 giữ chỗ, bộ chọn không mất Grok.
+  await admin("POST", "/api/admin/apikeys", { action: "main", main: ["xai/grok-4.5", "anthropic/claude-opus-6"] });
+  const md4 = await modelsOf();
+  ok(keys(md4).includes("xai/grok-5") && keys(md4).includes("anthropic/claude-opus-6") && !keys(md4).includes("xai/grok-4.5"), "màn hình chính chọn tay Grok 4.5 → Grok 5 giữ chỗ", keys(md4).join());
+  await admin("POST", "/api/admin/apikeys", { action: "main", main: ["*"] });
   await admin("POST", "/api/admin/models", { action: "provider", id: "xai", on: true });
   r = await admin("POST", "/api/admin/models", { action: "auto", on: false });
   ok(r.j?.settings?.auto === false, "tắt tự nhận model mới cho cả máy chủ");

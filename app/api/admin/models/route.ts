@@ -31,6 +31,7 @@ export const POST = handle(async (req) => {
     else if (b.action === "forget") forget(key);
     else if (b.action === "retest") {
       queueRetest(key);
+      audit("admin_models", { actor: user, ip: clientIp(req), detail: `retest ${key}` });
       const report = await discoverModels("admin", { force: [key] });
       return Response.json({ ...state(), report });
     } else return Response.json({ error: "Thao tác không hợp lệ." }, { status: 400 });

@@ -12,7 +12,7 @@
 //  5) Báo quản trị viên vào Hộp thư: "Synchro đã thêm model mới: …" kèm kết quả thử.
 import { ADMIN_EMAILS, db, getSetting, setSetting } from "./authstore";
 import type { ProviderKind } from "./catalog";
-import { compareModels, familyKey, isFrontier, parseId, tierOf, versionText } from "./modelrules";
+import { compareModels, isFrontier, modelFamily, parseId, tierOf, versionText, visionUnsupported } from "./modelrules";
 
 export type ModelCaps = { vision?: boolean; tools?: boolean; thinking?: "adaptive" | "budget" | "none"; effort?: string[] | null };
 export type Price = { in: number; out: number; cache: number };
@@ -83,10 +83,15 @@ const autoFor = (provider: string, s = autoSettings()) => s.auto && !s.off.inclu
  * Ghi danh sách model một nhà cung cấp vừa trả về. plan: danh sách của gói (CLI chính chủ chạy model nên không cần thử).
  * Trả về các model mới thấy và các model vừa bị hãng gỡ.
  */
+// Nhà cung cấp đã từng ghi sổ: nhớ riêng (không suy từ số dòng trong sổ), để quản trị viên xóa hết model đã gỡ của một hãng rồi hãng ra model mới
+// thì model đó vẫn được thử trước, không bị coi là nền.
+const knownProviders = () => new Set(json<string[]>(getSetting("models_known", "[]"), []).filter((x) => typeof x === "string"));
 export function syncListed(provider: string, kind: string, list: Listed[], o: { plan?: boolean } = {}) {
   const d = table(), now = Date.now(), all = rows();
   const have = [...all.values()].filter((r) => r.provider === provider);
-  const baseline = have.length === 0;
+  const known = knownProviders();
+  const baseline = have.length === 0 && !known.has(provider);
+  if (!known.has(provider)) setSetting("models_known", JSON.stringify([...known, provider]));
   const added: string[] = [], gone: string[] = [];
   const seen = new Set<string>();
   const tx = d.transaction(() => {
@@ -94,23 +99,23 @@ export function syncListed(provider: string, kind: string, list: Listed[], o: { 
       const key = `${provider}/${m.id}`;
       if (seen.has(key)) continue;
       seen.add(key);
-      const p = parseId(m.id), old = all.get(key);
+      const p = parseId(m.id), fam = modelFamily(m.id), old = all.get(key);
       const caps = m.caps ?? {};
       const src: Record<string, Src> = { name: m.name && m.name !== m.id ? "provider" : "rule", family: "rule", tier: "rule", ...(m.created ? { created: "provider" } : {}),
         ...(Object.keys(caps).length ? { caps: "provider" } : {}), ...(m.ctx ? { ctx: "provider" } : {}), ...(m.maxOut ? { maxOut: "provider" } : {}), ...(m.price ? { price: "provider" } : {}) };
       if (!old) {
         const status: RegStatus = baseline || o.plan ? "active" : "new";
         d.prepare(`INSERT INTO model_registry (key, provider, kind, model_id, name, family, version, tier, created, first_seen, last_seen, status, baseline, caps, ctx, max_out, price, sources)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(key, provider, kind, m.id, m.name || m.id, p.family, versionText(p.version), isFrontier(key) ? "frontier" : tierOf(key),
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(key, provider, kind, m.id, m.name || m.id, fam, versionText(p.version), isFrontier(key) ? "frontier" : tierOf(key),
           m.created ?? null, now, now, status, baseline ? 1 : 0, JSON.stringify(caps), m.ctx ?? null, m.maxOut ?? null, m.price ? JSON.stringify(m.price) : null, JSON.stringify(src));
         if (!baseline) added.push(key);
         continue;
       }
       // Model từng bị gỡ nay hãng đưa lại: dùng lại như trước (đã đạt thử hoặc là nền), không thì thử lại từ đầu.
       const back = old.status === "retired" ? (old.baseline || json<TestResult | null>(old.test, null)?.ok || o.plan ? "active" : "new") : old.status;
-      d.prepare(`UPDATE model_registry SET name = ?, kind = ?, created = COALESCE(?, created), caps = ?, ctx = COALESCE(?, ctx), max_out = COALESCE(?, max_out), price = COALESCE(?, price),
+      d.prepare(`UPDATE model_registry SET name = ?, kind = ?, family = ?, created = COALESCE(?, created), caps = ?, ctx = COALESCE(?, ctx), max_out = COALESCE(?, max_out), price = COALESCE(?, price),
         sources = ?, last_seen = ?, status = ?, gone_at = NULL, replaced_by = CASE WHEN ? = 'retired' THEN NULL ELSE replaced_by END WHERE key = ?`)
-        .run(m.name || old.name, kind, m.created ?? null, Object.keys(caps).length ? JSON.stringify(caps) : old.caps, m.ctx ?? null, m.maxOut ?? null, m.price ? JSON.stringify(m.price) : null,
+        .run(m.name || old.name, kind, fam, m.created ?? null, Object.keys(caps).length ? JSON.stringify(caps) : old.caps, m.ctx ?? null, m.maxOut ?? null, m.price ? JSON.stringify(m.price) : null,
           JSON.stringify({ ...json<Record<string, Src>>(old.sources, {}), ...src }), now, back, old.status, key);
     }
     // Hãng gỡ model: đã ngừng (vẫn giữ trong sổ để chuyển người đang chọn nó sang bản thay thế).
@@ -170,11 +175,36 @@ export function isNewModel(key: string, now = Date.now()): boolean {
   const r = rows().get(key);
   return !!r && !r.baseline && r.status === "active" && !r.hidden && now - r.first_seen < NEW_DAYS * DAY;
 }
-/** Model đã ngừng hoặc đã cũ → bản thay thế cùng dòng, để chuyển người đã chọn tay nó (kèm tên cũ để báo). */
-export function replacements(): Record<string, { to: string; name: string }> {
-  const out: Record<string, { to: string; name: string }> = {};
-  for (const r of rows().values()) if ((r.status === "retired" || r.status === "deprecated") && r.replaced_by && !r.pinned) out[r.key] = { to: r.replaced_by, name: r.name };
+/**
+ * Model đã ngừng hoặc đã cũ → bản thay thế cùng dòng, để chuyển người đã chọn tay nó (kèm tên cũ để báo).
+ * why: "gone" hãng đã gỡ (không còn chạy được), "old" dòng đã có hai bản mới hơn (vẫn chạy được nhưng không còn ở bộ chọn).
+ */
+export type Replacement = { to: string; name: string; why: "gone" | "old" };
+export function replacements(): Record<string, Replacement> {
+  const out: Record<string, Replacement> = {};
+  for (const r of rows().values()) if ((r.status === "retired" || r.status === "deprecated") && r.replaced_by && !r.pinned) out[r.key] = { to: r.replaced_by, name: r.name, why: r.status === "retired" ? "gone" : "old" };
   return out;
+}
+/** Bản thay thế cuối cùng của một model (đi theo chuỗi: bản thay thế cũng có thể đã cũ), không có thì null. */
+export function replacementOf(key: string, rep = replacements()): string | null {
+  let k = key, n = 0;
+  while (rep[k] && n++ < 8) k = rep[k].to;
+  return k === key ? null : k;
+}
+/**
+ * Danh sách model quản trị viên chọn (model ở màn hình chính, model một tài khoản được dùng) kèm bản thay thế của từng model: model đã cũ
+ * hoặc bị hãng gỡ nhường chỗ cho bản mới nhất cùng dòng, để bộ chọn model không trống dần và người chỉ được dùng một model vẫn chat được.
+ */
+export function withReplacements(keys: string[]): string[] {
+  const rep = replacements(), out = new Set(keys);
+  for (const k of keys) { const to = replacementOf(k, rep); if (to) out.add(to); }
+  return [...out];
+}
+(globalThis as { __synchroModelAllow?: (a: string[], k: string) => boolean }).__synchroModelAllow = (allowed, key) => !allowed.includes("*") && !allowed.includes(key) && withReplacements(allowed).includes(key);
+/** Model chưa thử đạt (đang chờ thử hoặc thử chưa đạt) và quản trị viên chưa ghim: máy chủ không chạy chat trên nó. */
+export function untested(key: string): boolean {
+  const r = rows().get(key);
+  return !!r && (r.status === "new" || r.status === "testing") && !r.pinned;
 }
 /** Thời điểm ra mắt hãng báo (để so hai model cùng dòng không có số phiên bản). */
 export const createdOf = (key: string) => rows().get(key)?.created ?? null;
@@ -241,9 +271,9 @@ export function forget(key: string) {
   bump();
   retirePolicy(key.slice(0, key.indexOf("/")));
 }
-/** Thử lại ngay ở lượt dò kế tiếp (hoặc lượt quản trị viên bấm). */
+/** Thử lại ngay ở lượt dò kế tiếp (hoặc lượt quản trị viên bấm). Điều đã học (tham số hãng từ chối) được xóa để lần thử học lại từ đầu. */
 export function queueRetest(key: string) {
-  const n = table().prepare("UPDATE model_registry SET status = CASE WHEN status IN ('new', 'testing') THEN 'testing' ELSE status END, next_test = 0 WHERE key = ?").run(key).changes;
+  const n = table().prepare("UPDATE model_registry SET status = CASE WHEN status IN ('new', 'testing') THEN 'testing' ELSE status END, next_test = 0, learned = '{}' WHERE key = ?").run(key).changes;
   if (!n) throw new Error("Không tìm thấy model này trong sổ.");
   bump();
 }
@@ -265,8 +295,11 @@ export async function smokeTest(key: string): Promise<{ result: TestResult; lear
   const t0 = Date.now(), steps: TestStep[] = [], learned: ModelCaps = {};
   const { resolveModel } = await import("./providers");
   const L = await import("./llmcall");
-  const t = await resolveModel(key);
+  const t = await resolveModel(key, { untested: true });
   if (!t) return { result: { at: t0, ok: false, ms: 0, steps, error: "Không có khóa API cho nhà cung cấp này." }, learned };
+  // Mỗi lần thử học lại từ đầu: điều học được ở lần trước (ví dụ "chỉ đọc chữ" làm ảnh thử bị thay bằng ghi chú) không che kết quả lần này.
+  table().prepare("UPDATE model_registry SET learned = '{}' WHERE key = ?").run(key);
+  bump();
   const r = rows().get(key);
   const claims = { ...json<ModelCaps>(r?.caps, {}) };
   const sig = () => AbortSignal.timeout(90_000);
@@ -291,11 +324,14 @@ export async function smokeTest(key: string): Promise<{ result: TestResult; lear
     saveLearned(key, learned);
     steps.push({ name: "text", ok: !!answer.trim(), ...(answer.trim() ? {} : { note: "Model trả lời rỗng." }) });
     if (claims.tools !== false) {
+      // Nhà cung cấp tương thích (OpenRouter, Ollama…) có nhiều model chỉ nhắn tin, không gọi công cụ: vẫn cho dùng như trước giờ,
+      // kết quả bước công cụ chỉ để quản trị viên biết.
+      const optional = t.kind === "compatible";
       try {
         calls++;
         const ok = await toolProbe(t, L, sig(), effort());
-        steps.push({ name: "tool", ok, ...(ok ? {} : { note: "Model không gọi công cụ khi được yêu cầu." }) });
-      } catch (e) { steps.push({ name: "tool", ok: false, note: (e as Error).message.slice(0, 300) }); }
+        steps.push({ name: "tool", ok: ok || optional, ...(ok ? {} : { note: "Model không gọi công cụ khi được yêu cầu." }) });
+      } catch (e) { steps.push({ name: "tool", ok: optional, note: (e as Error).message.slice(0, 300) }); }
     }
     if (claims.vision !== false && t.kind !== "deepseek") {
       try {
@@ -304,8 +340,9 @@ export async function smokeTest(key: string): Promise<{ result: TestResult; lear
         steps.push({ name: "image", ok: !!a.trim() });
       } catch (e) {
         const m = (e as Error).message;
-        // Model chỉ đọc chữ: không phải lỗi, chỉ ghi nhớ để lượt chat thật thay ảnh bằng ghi chú.
-        if (/image|vision|multimodal|modalit/i.test(m)) { learned.vision = false; steps.push({ name: "image", ok: true, note: "Model chỉ đọc chữ, ảnh sẽ được thay bằng ghi chú." }); }
+        // Model chỉ đọc chữ (hãng nói rõ không nhận ảnh): không phải lỗi, chỉ ghi nhớ để lượt chat thật thay ảnh bằng ghi chú.
+        // Lỗi ảnh khác (tạm thời, quá lớn…) là thử chưa đạt và sẽ thử lại, không ghi nhớ gì.
+        if (visionUnsupported(m)) { learned.vision = false; steps.push({ name: "image", ok: true, note: "Model chỉ đọc chữ, ảnh sẽ được thay bằng ghi chú." }); }
         else steps.push({ name: "image", ok: false, note: m.slice(0, 300) });
       }
     }
@@ -357,12 +394,15 @@ async function adoptPending(o: { force?: string[]; byAdmin?: boolean } = {}) {
   for (const r of due.slice(0, PER_RUN)) {
     if (testsToday() + 3 > PER_DAY && !o.byAdmin && !o.force?.includes(r.key)) break;
     const { result } = admin ? await withUsage(admin, "test", () => smokeTest(r.key)) : await smokeTest(r.key);
-    const attempts = r.attempts + 1;
-    table().prepare("UPDATE model_registry SET test = ?, attempts = ?, status = ?, next_test = ?, notified = CASE WHEN ? THEN 0 ELSE notified END WHERE key = ?")
-      .run(JSON.stringify(result), attempts, result.ok ? "active" : "testing", result.ok ? 0 : now + BACKOFF[Math.min(attempts - 1, BACKOFF.length - 1)], result.ok ? 1 : 0, r.key);
+    const attempts = r.attempts + 1, done = Date.now();
+    // Lần thử có thể kéo dài vài phút: trong lúc đó quản trị viên có thể đã bấm "Dùng ngay", hoặc hãng đã gỡ model. Chỉ đổi trạng thái khi model
+    // vẫn đang chờ thử; kết quả thử vẫn được ghi để quản trị viên xem.
+    table().prepare(`UPDATE model_registry SET test = ?, attempts = ?, status = CASE WHEN status IN ('new', 'testing') THEN ? ELSE status END,
+      next_test = ?, notified = CASE WHEN ? AND status IN ('new', 'testing') THEN 0 ELSE notified END WHERE key = ?`)
+      .run(JSON.stringify(result), attempts, result.ok ? "active" : "testing", result.ok ? 0 : done + BACKOFF[Math.min(attempts - 1, BACKOFF.length - 1)], result.ok ? 1 : 0, r.key);
     bump();
     (result.ok ? passed : failed).push(r.key);
-    if (result.ok) retirePolicy(r.provider);
+    retirePolicy(r.provider);
   }
   return { passed, failed };
 }
@@ -387,9 +427,16 @@ async function notifyAdmins() {
 
 // ---------------------------------------------------------------- dò
 export type CheckReport = { at: number; providers: { id: string; ok: boolean; error?: string; added: string[]; gone: string[] }[]; passed: string[]; failed: string[] };
-/** Dò model mới của mọi hãng rồi thử các model đang chờ. Hai lời gọi cùng lúc dùng chung một lượt. */
-export function discoverModels(reason: "boot" | "timer" | "admin" = "timer", o: { force?: string[] } = {}): Promise<CheckReport> {
-  if (g.__synchroModelJob) return g.__synchroModelJob;
+/**
+ * Dò model mới của mọi hãng rồi thử các model đang chờ. Lời gọi tự động (khởi động, hẹn giờ, lưu khóa) gặp một lượt đang chạy thì dùng chung lượt đó;
+ * quản trị viên bấm "Kiểm tra ngay" / "Thử lại" lúc đang có lượt chạy thì chạy lượt riêng ngay sau đó, để giữ đúng model được thử ngay và
+ * không áp trần mỗi ngày như họ đã yêu cầu. key: lưu khóa API (áp trần mỗi ngày như lượt tự động).
+ */
+export function discoverModels(reason: "boot" | "timer" | "admin" | "key" = "timer", o: { force?: string[] } = {}): Promise<CheckReport> {
+  if (g.__synchroModelJob) {
+    if (reason !== "admin") return g.__synchroModelJob;
+    return g.__synchroModelJob.catch(() => null).then(() => discoverModels(reason, o));
+  }
   const job = (async (): Promise<CheckReport> => {
     const at = Date.now(), report: CheckReport = { at, providers: [], passed: [], failed: [] };
     try {
@@ -399,16 +446,18 @@ export function discoverModels(reason: "boot" | "timer" | "admin" = "timer", o: 
       try {
         const subs = await import("./ai/subs");
         const { getUser } = await import("./authstore");
-        for (const uid of adminIds()) {
-          const u = getUser(uid);
-          if (!u) continue;
-          for (const cli of ["claude", "codex", "agy", "grok"] as const) {
-            const ms = await subs.planModelsFor(cli, u).catch(() => null);
-            if (!ms?.length) continue;
+        // Mỗi gói đọc bằng quản trị viên đầu tiên đã đăng nhập gói đó. Danh sách dự phòng ("default" khi CLI chưa đọc được danh sách thật)
+        // không ghi sổ: nó từng thành nền rồi mọi model thật của gói bị báo là model mới.
+        for (const cli of ["claude", "codex", "agy", "grok"] as const) {
+          for (const uid of adminIds()) {
+            const u = getUser(uid);
+            if (!u) continue;
+            const ms = ((await subs.planModelsFor(cli, u).catch(() => null)) ?? []).filter((m) => m.id !== "default");
+            if (!ms.length) continue;
             const r = syncPlan(`sub-${cli}`, ms.map((m) => ({ id: m.id, name: m.name })));
             report.providers.push({ id: `sub-${cli}`, ok: true, added: r.added, gone: [] });
+            break;
           }
-          break;
         }
       } catch (e) { console.error("[models] gói:", (e as Error).message); }
       const a = await adoptPending({ ...o, byAdmin: reason === "admin" });

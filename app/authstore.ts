@@ -196,7 +196,10 @@ export function permsOf(u: UserRow): Perms {
   return { ...p, features };
 }
 export const can = (u: UserRow, f: Feature) => permsOf(u).features[f];
-export const canModel = (u: UserRow, model: string) => allowsModel(permsOf(u).models, model);
+// Quyền dùng một model đi theo bản thay thế của nó (sổ model, app/modelreg.ts: model đã cũ hoặc bị hãng gỡ nhường chỗ cho bản mới nhất cùng dòng),
+// để người chỉ được dùng một model vẫn chat được khi hãng ra bản mới. Sổ model tự đăng ký hàm này khi nạp (không nhập vòng hai module).
+const viaReplacement = (allowed: string[], model: string) => ((globalThis as { __synchroModelAllow?: (a: string[], k: string) => boolean }).__synchroModelAllow?.(allowed, model) ?? false);
+export const canModel = (u: UserRow, model: string) => { const m = permsOf(u).models; return allowsModel(m, model) || viaReplacement(m, model); };
 
 // Cổng cho API nội bộ: phải đăng nhập và được quản trị cho phép dùng tính năng này.
 export function featureGate(req: Request, f: Feature) {

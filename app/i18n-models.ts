@@ -22,6 +22,7 @@ export const MODELS_VI2EN: Record<string, string> = {
   "Model trả lời rỗng.": "The model replied with nothing.", "Model không gọi công cụ khi được yêu cầu.": "The model didn't call the tool when asked.",
   "Model chỉ đọc chữ, ảnh sẽ được thay bằng ghi chú.": "The model reads text only; images will be replaced with a note.", "Không đạt.": "Didn't pass.",
   "Thao tác không hợp lệ.": "Invalid action.", "Chỉ xóa được model hãng đã gỡ.": "Only models the provider removed can be deleted.",
+  "Model này mới ra và Synchro chưa thử xong nên chưa dùng được. Hãy chọn model khác.": "This model was just released and Synchro hasn't finished testing it, so it can't be used yet. Choose another model.",
 };
 const STEP_EN: Record<string, string> = { "chữ": "text", "công cụ": "tools", "ảnh": "images" };
 const stepsEn = (s: string) => s.replace(/(chữ|công cụ|ảnh) (✓|✗)/g, (_, w, k) => `${STEP_EN[w]} ${k}`).replace(/model của gói, CLI chính chủ chạy/g, "plan model, run by the provider's own CLI");
@@ -31,4 +32,5 @@ export const MODELS_RULES_EN: [RegExp, (m: RegExpMatchArray) => string][] = [
   [/^([\s\S]+)\nModel mới đã hiện ở bộ chọn model với nhãn Mới, chế độ Tự động ưu tiên bản mới nhất của mỗi dòng\.$/, (m) => `${stepsEn(m[1])}\nThe new models now show in the model picker with a New label, and Auto prefers the newest model of each line.`],
   [/^([\s\S]+)\nSynchro sẽ tự thử lại sau; chat không dùng các model này cho tới khi đạt\.$/, (m) => `${stepsEn(m[1])}\nSynchro will try again later; chats won't use these models until they pass.`],
   [/^(.+) không còn dùng được nên Synchro đã chuyển sang (.+)$/, (m) => `${m[1]} is no longer available, so Synchro switched to ${m[2]}`],
+  [/^(.+) đã có bản mới hơn nên Synchro đã chuyển sang (.+)$/, (m) => `${m[1]} has a newer version, so Synchro switched to ${m[2]}`],
 ];

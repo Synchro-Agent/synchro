@@ -1251,9 +1251,10 @@ export default function Home() {
     if (!models.loaded) return;
     const f = fitModel(model, models);
     if (f === model) return;
-    // Model đã chọn tay bị hãng gỡ: báo một lần đã chuyển sang bản mới nhất cùng dòng (lựa chọn mới được lưu nên không báo lại).
+    // Model đã chọn tay bị hãng gỡ, hoặc dòng của nó đã có bản mới hơn (không còn ở bộ chọn): báo một lần đã chuyển sang bản mới nhất cùng dòng
+    // (lựa chọn mới được lưu nên không báo lại).
     const rep = models.replaced?.[model];
-    if (rep && rep.to === f) say(`${rep.name} không còn dùng được nên Synchro đã chuyển sang ${modelName(f)}`);
+    if (rep && rep.to === f) say(rep.why === "old" ? `${rep.name} đã có bản mới hơn nên Synchro đã chuyển sang ${modelName(f)}` : `${rep.name} không còn dùng được nên Synchro đã chuyển sang ${modelName(f)}`);
     setModel(f);
   }, [models, model]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
