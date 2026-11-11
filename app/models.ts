@@ -50,6 +50,15 @@ export function modelName(key: string) {
   return id.replace(/^claude-/, "Claude ").replace(/^gpt/i, "GPT").replace(/^grok-/, "Grok ").replace(/^deepseek-/, "DeepSeek ").replace(/-/g, " ");
 }
 
+// Loại việc chế độ Tự động nhận ra (router.ts Task), để hiện "Tự động chọn … cho việc …" dưới câu trả lời.
+const TASK_NAME: Record<string, [string, string]> = {
+  chat: ["trò chuyện", "chat"], qa: ["hỏi đáp", "questions"], language: ["học ngôn ngữ", "language learning"], translate: ["dịch", "translation"],
+  summarize: ["tóm tắt", "summarizing"], write: ["viết", "writing"], code: ["viết code", "coding"], debug: ["gỡ lỗi", "debugging"], reason: ["suy luận", "reasoning"],
+  analyze: ["phân tích", "analysis"], build: ["tạo sản phẩm", "building"], act: ["thao tác nhiều bước", "multi-step actions"], vision: ["đọc ảnh", "reading images"],
+  longdoc: ["tài liệu dài", "long documents"], data: ["số liệu", "data"],
+};
+export const autoTaskName = (task: string, en: boolean) => TASK_NAME[task]?.[en ? 1 : 0] ?? "";
+
 // Model nên dùng: giữ lựa chọn hiện tại nếu còn hiện và được phép, không thì model mặc định của quản trị viên, không có thì Tự động.
 export function fitModel(cur: string, s: State = state) {
   const shown = s.providers.flatMap((p) => p.models.map((m) => m.key));

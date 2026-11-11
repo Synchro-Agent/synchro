@@ -1379,7 +1379,10 @@ export async function chatPost(body: Record<string, any>, c: Who, scope: { featu
   // Tên model như ở bộ chọn model ("Claude Sonnet 4.5"), không phải mã thô ("claude-sonnet-4-5-20250929").
   const shown = (k: string) => groups.flatMap((g) => g.models).find((m) => m.key === k)?.name ?? k.split("/").pop();
   const q = routeInput(body);
-  const r = routeModel(q, usable.length ? usable : allowed, { avoid: stalledModels(c.user.id, usable.length ? usable : allowed) });
+  // avoidModel: người dùng bấm "Chạy lại bằng model khác" dưới câu trả lời của chế độ Tự động: vẫn Tự động, chỉ tránh model vừa trả lời.
+  const pool = usable.length ? usable : allowed;
+  const skip = typeof body.avoidModel === "string" && pool.includes(body.avoidModel) ? [body.avoidModel] : [];
+  const r = routeModel(q, pool, { avoid: [...skip, ...stalledModels(c.user.id, pool)] });
   if (!r) return Response.json({ error: "Tài khoản của bạn chưa được dùng model nào. Hãy liên hệ quản trị viên." }, { status: 403 });
   // Nỗ lực: người dùng để "Tự động" (hoặc chưa chọn) thì theo độ khó của việc; chọn tay thì giữ lựa chọn đó.
   const effort = body.effort === "auto" || !isEffort(body.effort) ? r.effort : body.effort;

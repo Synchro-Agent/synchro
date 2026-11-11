@@ -82,7 +82,7 @@ export const cancelRun = (id: string) => fetch(`/api/runs/${encodeURIComponent(i
 export type RunEv = { seq: number; at: number; kind: string; text: string };
 // Kết quả phụ của một lượt (skill, tệp, dấu vết…) ghi thẳng vào meta của lượt đó: nhiều đoạn chat chạy cùng lúc không lẫn kết quả của nhau
 // (các hàm take…() đọc biến dùng chung, chỉ an toàn khi mỗi lúc một lượt).
-export type RunMeta = { skills: SkillUse[]; libs: LibUse[]; files: OutFile[]; trace: TraceItem[]; steer: string[]; cancelled: boolean; route: string | null; sources: KbSource[]; webs: { title: string; url: string }[] };
+export type RunMeta = { skills: SkillUse[]; libs: LibUse[]; files: OutFile[]; trace: TraceItem[]; steer: string[]; cancelled: boolean; route: string | null; routeTask?: string; sources: KbSource[]; webs: { title: string; url: string }[] };
 type RunCb = { onProgress?: (text: string) => void; onDelta?: (text: string) => void; onRun?: (id: string) => void; onEvent?: (e: RunEv) => void; conv?: number | string; meta?: Partial<RunMeta> };
 // Tin nhắn thêm tới lúc model đã ở bước trả lời cuối (chưa ghép được): trả về để gửi thành lượt tiếp theo (đọc một lần).
 let lastSteer: string[] = [];
@@ -188,7 +188,7 @@ async function absorb(j: Record<string, any>, cb: RunCb = {}): Promise<string> {
   lastFiles = Array.isArray(j.files) ? j.files : [];
   lastRoute = j.auto && typeof j.model === "string" ? j.model : null;
   lastSources = Array.isArray(j.sources) ? j.sources : [];
-  if (cb.meta) Object.assign(cb.meta, { skills: lastSkills, libs: lastLibs, files: lastFiles, trace: lastTrace, steer: lastSteer, cancelled: lastCancelled, route: lastRoute, sources: lastSources, webs: Array.isArray(j.webSources) ? j.webSources : [] });
+  if (cb.meta) Object.assign(cb.meta, { skills: lastSkills, libs: lastLibs, files: lastFiles, trace: lastTrace, steer: lastSteer, cancelled: lastCancelled, route: lastRoute, routeTask: lastRoute && typeof j.auto?.task === "string" ? j.auto.task : undefined, sources: lastSources, webs: Array.isArray(j.webSources) ? j.webSources : [] });
   // Vòng tròn mức dùng cập nhật ngay sau mỗi lượt gọi model; lời nhắn của máy chủ (notice) hiện thành thông báo.
   if (typeof window !== "undefined") {
     window.dispatchEvent(new Event("synchro:usage"));

@@ -57,7 +57,7 @@ const vagueMsg = (t: string) => t.trim().split(/\s+/).length <= 3 || /^(xin )?ch
 type View = "new" | "chat" | "projects" | "project" | "artifacts" | "customize" | "code" | "speech" | "inbox" | "brain";
 import { AppCtx, useApp, VOICE_LANG, VOICE_RATE, initials, readPref, reloadPrefs, resetPrefs, usePref, type Chat, type Msg, type Project } from "./store";
 import { IMAGE_PLANS, allowsModel, clampEffort, effortCap, effortsFor, isEffort, legacyModel, type Effort } from "./catalog";
-import { AUTO, fitModel, modelName, modelsSettled, refreshModels, useModels } from "./models";
+import { AUTO, autoTaskName, fitModel, modelName, modelsSettled, refreshModels, useModels } from "./models";
 import { loadMe, watchSession } from "./session";
 import { useFitPlaceholder } from "./phfit";
 import type { ProviderInfo } from "./catalog";
@@ -807,7 +807,9 @@ function scanArts(msgs: Msg[], from: number, base: ArtScan): ArtScan {
 type RowCx = {
   chat: Chat; chats: Chat[]; say: Say; fm: ReturnType<typeof useFileMenu>; arts: ArtScan; artOpen: boolean; artIdent?: string; artIndex: number;
   openPlugins: () => void; openArt: (s: { chat: number; ident: string; v: number; follow: boolean }) => void; openFile: (f: OutFile) => void; send: (t: string) => void;
-  copy: (key: string, text: string) => void; speak: (key: string, text: string) => void; like: (i: number, v: 1 | -1) => void; retry: () => void; openProviders: () => void; edit: (i: number, text: string) => void; model: string; switchModel: (m: Msg, key: string) => void;
+  copy: (key: string, text: string) => void; speak: (key: string, text: string) => void; like: (i: number, v: 1 | -1) => void; retry: (avoid?: string) => void; openProviders: () => void; edit: (i: number, text: string) => void; model: string; switchModel: (m: Msg, key: string) => void;
+  // Tài khoản có hơn một model dùng được: mới hiện nút "Chạy lại bằng model khác" dưới câu trả lời của chế độ Tự động.
+  altModels: boolean;
 };
 // Thẻ lỗi của một lượt chat: khác hẳn câu trả lời thường, nói việc nên làm tiếp, lỗi thô để trong phần chi tiết.
 function ErrCard({ raw, onRetry, onProviders }: { raw?: string; onRetry?: () => void; onProviders: () => void }) {
@@ -888,7 +890,8 @@ const MsgRow = memo(function MsgRow({ m, i, last, busy, mark, art, inl, fileActi
             <button className={`icon-btn ${m.like === 1 ? "like-on" : ""}`} onClick={() => cx.current!.like(i, 1)} aria-label="Hữu ích" aria-pressed={m.like === 1}><I.ThumbUp size={16} /></button>
             <button className={`icon-btn ${m.like === -1 ? "like-on" : ""}`} onClick={() => cx.current!.like(i, -1)} aria-label="Không hữu ích" aria-pressed={m.like === -1}><I.ThumbDown size={16} /></button>
             {last && <button className="icon-btn" onClick={() => cx.current!.retry()} aria-label="Thử lại"><I.Retry size={16} /></button>}
-            {m.via && <span className="via" title="Chế độ Tự động đã chọn model này">{modelName(m.via)}</span>}
+            {m.via && <span className="via" title={tr("Chế độ Tự động đã chọn model này")} data-notr>{(() => { const en = getLang() === "en", task = m.viaTask ? autoTaskName(m.viaTask, en) : ""; return task ? (en ? `Auto picked ${modelName(m.via)} for ${task}` : `Tự động chọn ${modelName(m.via)} cho việc ${task}`) : modelName(m.via); })()}</span>}
+            {m.via && last && !busy && c.altModels && <button className="via via-alt" onClick={() => cx.current!.retry(m.via)} title={tr("Vẫn để Tự động, chỉ không dùng model vừa trả lời")}><I.Retry size={12} />{tr("Chạy lại bằng model khác")}</button>}
             <When t={m.time} />
           </div>
         )}
@@ -1461,6 +1464,8 @@ export default function Home() {
   const runs = useRef(new Map<number, string>());
   const gens = useRef(new Map<number, number>());
   const genSeq = useRef(0);
+  // "Chạy lại bằng model khác" dưới câu trả lời của chế độ Tự động: lượt kế tiếp vẫn Tự động nhưng tránh model này (một lần).
+  const avoidNext = useRef<string | null>(null);
   // Tin nhắn gửi trong lúc đang chạy: "steer" đang chờ ghép vào lượt, "later" gửi thành lượt mới khi xong.
   const [queued, setQueued] = useState<Queued[]>([]);
   const onSteer = async (text: string, later: boolean) => {
@@ -1510,7 +1515,9 @@ export default function Home() {
     const history = (hist ?? [{ role: "user" as const, content: text }]).slice(-HISTORY_LIMIT);
     const system = pr ? buildSystemPrompt(pr, text) : "Bạn là một trợ lý AI hữu ích.";
     let reply: string;
-    let usedSk: string[] = [], usedTl: string[] = [], libs: LibUse[] = [], via: string | null = null;
+    let usedSk: string[] = [], usedTl: string[] = [], libs: LibUse[] = [], via: string | null = null, viaTask: string | undefined;
+    const avoid = avoidNext.current;
+    avoidNext.current = null;
     let outs: Msg["outs"] = [], trace: Msg["trace"] = [], cancelled = false, failed = false, said = "", notice: Msg["notice"], webs: Msg["webs"] = [];
     // Chữ đến theo thời gian thực: cập nhật tin nhắn tối đa mỗi khung hình.
     // Vẽ tối đa khoảng 20 lần mỗi giây: mắt không thấy khác, cả trang (thanh bên, ô soạn) không phải dựng lại 60 lần mỗi giây.
@@ -1545,7 +1552,7 @@ export default function Home() {
         // Model của câu trả lời trước: người dùng chê ("làm lại", "sai rồi") thì chế độ Tự động đổi sang model khác.
         extra: { ...mixExtra(chatsRef.current.find((c) => c.id === id)), web: readPref("webSearch", true), memory: readPref("chatMemory", true), incognito: !!chatsRef.current.find((c) => c.id === id)?.inc, prevModel: [...(chatsRef.current.find((c) => c.id === id)?.msgs ?? [])].reverse().find((m) => m.role === "ai" && m.done && m.via)?.via,
           // histTotal: số tin thật trước khi cắt còn HISTORY_LIMIT (để nối tiếp phiên CLI); tz: múi giờ của người dùng cho dòng giờ hiện tại.
-          histTotal: hist?.length ?? 1, ...(hist && hist.length > HISTORY_LIMIT ? { olderDigest: olderDigest(hist.slice(0, -HISTORY_LIMIT)) } : {}), tz: Intl.DateTimeFormat().resolvedOptions().timeZone } });
+          histTotal: hist?.length ?? 1, ...(hist && hist.length > HISTORY_LIMIT ? { olderDigest: olderDigest(hist.slice(0, -HISTORY_LIMIT)) } : {}), tz: Intl.DateTimeFormat().resolvedOptions().timeZone, ...(avoid ? { avoidModel: avoid } : {}) } });
       webs = meta.webs ?? [];
       const used = meta.skills ?? [];
       libs = meta.libs ?? [];
@@ -1555,6 +1562,7 @@ export default function Home() {
       usedTl = [...new Set(used.filter((u) => u.kind === "tool").map((u) => u.name))];
       outs = meta.files ?? [];
       via = meta.route ?? null;
+      viaTask = meta.routeTask;
       trace = meta.trace ?? [];
       cancelled = !!meta.cancelled;
       // Tin nhắn thêm tới khi model đã ở bước trả lời cuối: gửi thành lượt tiếp theo ngay khi xong (không mất tin).
@@ -1601,7 +1609,7 @@ export default function Home() {
     const note = usedPj ? `\n\n_${getLang() === "en" ? "Project context applied" : "Đã áp dụng ngữ cảnh dự án"}: ${[pr.ins?.trim() && (getLang() === "en" ? "instructions" : "hướng dẫn"), pr.mem?.length && (getLang() === "en" ? "memory" : "bộ nhớ"), getRelevantContext(pr, text).length && (getLang() === "en" ? "documents" : "tài liệu")].filter(Boolean).join(", ")}_` : "";
     // Câu trả lời đã đầy đủ thì hiện ngay (trước đây câu không truyền theo thời gian thực phải chờ 1,6 giây rồi mới gõ dần từng chữ).
     const full = streamed || cancelled ? reply : reply + note + (ins.trim() ? `\n\n_${getLang() === "en" ? "Applied your instructions" : "Đã áp dụng hướng dẫn của bạn"}: “${ins.trim().slice(0, 90)}”_` : "");
-    patch(id, (m) => [...m.slice(0, -1), { ...workOf(m[m.length - 1]), role: "ai", text: full, done: true, time: Date.now(), dur: Date.now() - t0, skills: usedSk.length ? usedSk : undefined, libs: libs.length ? libs : undefined, tools: usedTl.length ? usedTl : undefined, outs: outs?.length ? outs : undefined, via: via ?? undefined, webs: webs?.length ? webs : undefined, trace: trace?.length ? trace : undefined, stopped: cancelled || undefined }]);
+    patch(id, (m) => [...m.slice(0, -1), { ...workOf(m[m.length - 1]), role: "ai", text: full, done: true, time: Date.now(), dur: Date.now() - t0, skills: usedSk.length ? usedSk : undefined, libs: libs.length ? libs : undefined, tools: usedTl.length ? usedTl : undefined, outs: outs?.length ? outs : undefined, via: via ?? undefined, viaTask: via ? viaTask : undefined, webs: webs?.length ? webs : undefined, trace: trace?.length ? trace : undefined, stopped: cancelled || undefined }]);
     finishReply(id, reply, pr, history, via);
   };
   // Hỏi Có / Không trước khi dùng khóa API dùng chung thay cho gói đã hết hạn mức. Đồng ý: nhóm model của hãng đó chuyển sang model API
@@ -1748,7 +1756,7 @@ export default function Home() {
         const sk = [...new Set(used.filter((u) => u.kind === "skill" && !inLib.has(u.name)).map((u) => u.name))];
         const tl = [...new Set(used.filter((u) => u.kind === "tool").map((u) => u.name))];
         const via = meta.route ?? null;
-        set((m) => ({ ...m, text, done: true, prog: undefined, run: undefined, time: Date.now(), dur: Date.now() - (last.time ?? Date.now()), skills: sk.length ? sk : undefined, libs: libs.length ? libs : undefined, tools: tl.length ? tl : undefined, outs: outs.length ? outs : undefined, via: via ?? undefined, trace: trace.length ? trace : undefined, stopped: stopped || undefined, webs: meta.webs?.length ? meta.webs : undefined }));
+        set((m) => ({ ...m, text, done: true, prog: undefined, run: undefined, time: Date.now(), dur: Date.now() - (last.time ?? Date.now()), skills: sk.length ? sk : undefined, libs: libs.length ? libs : undefined, tools: tl.length ? tl : undefined, outs: outs.length ? outs : undefined, via: via ?? undefined, viaTask: via ? meta.routeTask : undefined, trace: trace.length ? trace : undefined, stopped: stopped || undefined, webs: meta.webs?.length ? meta.webs : undefined }));
         stop(false, c.id);
         doneAway(c.id);
         setTimeout(() => autoTitle(c.id), 300);
@@ -1823,8 +1831,9 @@ export default function Home() {
     if (running.has(u.chat)) stop(true, u.chat);
     setChats((cs) => cs.map((x) => (x.id === u.chat ? { ...x, msgs: u.msgs, compact: u.compact } : x)));
   };
-  const retry = () => {
+  const retry = (avoid?: string) => {
     if (!chat || busy) return;
+    avoidNext.current = avoid ?? null;
     const k = chat.msgs.map((m) => m.role).lastIndexOf("user");
     if (k >= 0) resend(chat, k, chat.msgs[k]);
   };
@@ -2120,7 +2129,7 @@ export default function Home() {
   };
 
   const rowCx = useRef<RowCx | null>(null);
-  if (chat) rowCx.current = { model, switchModel, chat, chats, say, fm, arts, artOpen, artIdent: artSel?.ident, artIndex, openPlugins, openArt, openFile, send: (t) => send(t), copy, speak, like, retry, openProviders: () => { setSettingsTab("Providers"); setModal("settings"); }, edit: (i, text) => { const u = chat.msgs[i]; if (!busy && u?.role === "user") resend(chat, i, { ...u, text, time: Date.now() }); } };
+  if (chat) rowCx.current = { model, switchModel, altModels: models.providers.flatMap((p) => p.models).filter((x) => allowsModel(models.allowed, x.key)).length > 1, chat, chats, say, fm, arts, artOpen, artIdent: artSel?.ident, artIndex, openPlugins, openArt, openFile, send: (t) => send(t), copy, speak, like, retry, openProviders: () => { setSettingsTab("Providers"); setModal("settings"); }, edit: (i, text) => { const u = chat.msgs[i]; if (!busy && u?.role === "user") resend(chat, i, { ...u, text, time: Date.now() }); } };
   // Dấu của phần artifact trong một tin: có phiên bản mới, đổi bản đang xem thì dòng tin đó vẽ lại.
   const artSig = (i: number) => arts.at[i]?.map((x) => `${x.ident}:${x.v}:${arts.map.get(x.ident)?.length}:${artOpen && artSel?.ident === x.ident && artIndex === x.v ? 1 : 0}`).join("|") ?? "";
 

@@ -49,6 +49,12 @@ const first = r.j.model;
 r = await ask(member, "Sai rồi, làm lại đi", { messages: [{ role: "user", content: "Viết code Python đọc file CSV và in tổng từng cột" }, { role: "assistant", content: "..." }, { role: "user", content: "Sai rồi, làm lại đi" }], prevModel: first });
 ok(r.s === 200 && r.j.model !== first && r.j.auto?.why?.some((w) => /chưa hài lòng/.test(w)), `chê câu trả lời → nâng độ khó, đổi model: ${first} → ${r.j?.model}`, JSON.stringify(r.j?.auto));
 
+// "Chạy lại bằng model khác" dưới câu trả lời của chế độ Tự động: vẫn Tự động (có auto), cùng loại việc, không dùng lại model vừa trả lời.
+r = await ask(member, "Viết code Python đọc file CSV và in tổng từng cột", { avoidModel: first });
+ok(r.s === 200 && r.j.auto?.task === "code" && r.j.model !== first, `chạy lại bằng model khác → vẫn Tự động, đổi model: ${first} → ${r.j?.model}`, JSON.stringify(r.j?.auto));
+r = await ask(member, "Viết code Python đọc file CSV và in tổng từng cột", { avoidModel: "khong-co/model-nay" });
+ok(r.s === 200 && r.j.model === first, `avoidModel không có trong danh sách thì bỏ qua: ${r.j?.model}`, JSON.stringify(r.j?.auto));
+
 console.log("2. Chỉ chọn trong model được phép");
 // Danh sách được phép chỉ có model nhanh và model cân bằng: việc khó dùng model mạnh nhất có trong danh sách.
 await setPerms(["anthropic/claude-haiku-5-5", "openai/gpt-6.1-sol"]);
