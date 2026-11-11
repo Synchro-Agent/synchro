@@ -1,0 +1,149 @@
+{
+  "$comment": "Hợp đồng JSON chung của 3 mẫu Typst (basic-report 0.1.0, ilm 1.4.0, charged-ieee 0.1.3) và bản Word cùng nội dung. synchro-doc schema <mẫu> ghép phần chung ($defs) với phần riêng của mẫu (templates.<mẫu>). Bộ kiểm trong synchro-doc.py chỉ hiểu các từ khóa có ở đây: type, properties, required, additionalProperties, items, enum, const, minimum, maximum, minLength, maxLength, minItems, maxItems, pattern, anyOf, $ref.",
+  "$defs": {
+    "run": {
+      "type": "object",
+      "description": "Một đoạn chữ có định dạng.",
+      "required": ["text"],
+      "additionalProperties": false,
+      "properties": {
+        "text": { "type": "string" },
+        "bold": { "type": "boolean" },
+        "italic": { "type": "boolean" },
+        "code": { "type": "boolean" },
+        "link": { "type": "string", "pattern": "^(https?://|mailto:)", "description": "Liên kết ngoài (http, https, mailto)." }
+      }
+    },
+    "inline": {
+      "description": "Chữ: một chuỗi (được hiểu **đậm**, *nghiêng*, `mã`, [chữ](https://…)) hoặc mảng các đoạn chuỗi / {text, bold, italic, code, link}.",
+      "anyOf": [
+        { "type": "string", "maxLength": 20000 },
+        { "type": "array", "maxItems": 400, "items": { "anyOf": [{ "type": "string" }, { "$ref": "#/$defs/run" }] } }
+      ]
+    },
+    "cell": {
+      "description": "Ô bảng: chữ hoặc số (số giữ nguyên như đã viết; nên tự định dạng 1.234,5 trước).",
+      "anyOf": [{ "type": "string", "maxLength": 2000 }, { "type": "number" }, { "type": "null" }, { "$ref": "#/$defs/inline" }]
+    },
+    "block": {
+      "description": "Một khối nội dung, phân biệt bằng type.",
+      "anyOf": [
+        { "type": "object", "required": ["type", "text"], "additionalProperties": false, "properties": { "type": { "const": "paragraph" }, "text": { "$ref": "#/$defs/inline" } } },
+        { "type": "object", "required": ["type", "text"], "additionalProperties": false, "properties": { "type": { "const": "heading" }, "level": { "type": "integer", "minimum": 1, "maximum": 3 }, "text": { "$ref": "#/$defs/inline" } } },
+        { "type": "object", "required": ["type", "items"], "additionalProperties": false, "properties": { "type": { "const": "bullets" }, "items": { "type": "array", "minItems": 1, "maxItems": 200, "items": { "$ref": "#/$defs/inline" } } } },
+        { "type": "object", "required": ["type", "items"], "additionalProperties": false, "properties": { "type": { "const": "numbered" }, "items": { "type": "array", "minItems": 1, "maxItems": 200, "items": { "$ref": "#/$defs/inline" } } } },
+        {
+          "type": "object", "required": ["type", "columns", "rows"], "additionalProperties": false,
+          "properties": {
+            "type": { "const": "table" },
+            "columns": { "type": "array", "minItems": 1, "maxItems": 12, "items": { "$ref": "#/$defs/inline" }, "description": "Tiêu đề cột (lặp lại ở đầu mỗi trang khi bảng dài)." },
+            "rows": { "type": "array", "minItems": 1, "maxItems": 2000, "items": { "type": "array", "maxItems": 12, "items": { "$ref": "#/$defs/cell" } } },
+            "caption": { "$ref": "#/$defs/inline" },
+            "align": { "type": "array", "maxItems": 12, "items": { "enum": ["left", "center", "right"] }, "description": "Căn lề từng cột; bỏ trống thì cột toàn số căn phải, còn lại căn trái." },
+            "widths": { "type": "array", "maxItems": 12, "items": { "type": "number", "minimum": 1, "maximum": 100 }, "description": "Tỉ lệ độ rộng các cột (ví dụ [3, 1, 1])." },
+            "total": { "type": "boolean", "description": "true: dòng cuối là dòng tổng (in đậm, có kẻ trên)." }
+          }
+        },
+        {
+          "type": "object", "required": ["type", "path"], "additionalProperties": false,
+          "properties": {
+            "type": { "const": "image" },
+            "path": { "type": "string", "minLength": 1, "maxLength": 300, "description": "Đường dẫn tương đối trong thư mục làm việc (inputs/…, outputs/…). PNG, JPEG, GIF, SVG; WebP, BMP, TIFF tự chuyển sang PNG." },
+            "width": { "type": "number", "minimum": 10, "maximum": 100, "description": "Phần trăm bề rộng vùng chữ (mặc định 100)." },
+            "caption": { "$ref": "#/$defs/inline" }
+          }
+        },
+        { "type": "object", "required": ["type", "text"], "additionalProperties": false, "properties": { "type": { "const": "quote" }, "text": { "$ref": "#/$defs/inline" }, "by": { "type": "string", "maxLength": 300 } } },
+        { "type": "object", "required": ["type", "text"], "additionalProperties": false, "properties": { "type": { "const": "callout" }, "title": { "type": "string", "maxLength": 200 }, "text": { "$ref": "#/$defs/inline" } } },
+        { "type": "object", "required": ["type", "text"], "additionalProperties": false, "properties": { "type": { "const": "code" }, "text": { "type": "string", "maxLength": 20000 }, "lang": { "type": "string", "maxLength": 30 } } },
+        { "type": "object", "required": ["type"], "additionalProperties": false, "properties": { "type": { "const": "pagebreak" } } }
+      ]
+    },
+    "section": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "heading": { "$ref": "#/$defs/inline", "description": "Tiêu đề mục (được đánh số và vào mục lục)." },
+        "level": { "type": "integer", "minimum": 1, "maximum": 3, "description": "Cấp tiêu đề, mặc định 1." },
+        "text": { "type": "string", "maxLength": 50000, "description": "Văn bản thuần: đoạn cách nhau bằng một dòng trống; dòng bắt đầu bằng \"- \" thành gạch đầu dòng, \"1. \" thành danh sách số." },
+        "blocks": { "type": "array", "maxItems": 500, "items": { "$ref": "#/$defs/block" } }
+      }
+    },
+    "sections": { "type": "array", "minItems": 1, "maxItems": 300, "items": { "$ref": "#/$defs/section" } },
+    "references": { "type": "array", "maxItems": 300, "items": { "$ref": "#/$defs/inline" }, "description": "Tài liệu tham khảo, in thành danh sách [1], [2]… ở cuối." },
+    "date": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$", "description": "YYYY-MM-DD; in theo kiểu Việt Nam (11/11/2026)." },
+    "lang": { "enum": ["vi", "en"], "description": "Ngôn ngữ của nhãn mẫu (Mục lục, Bảng, Hình…), mặc định vi." },
+    "author": {
+      "anyOf": [
+        { "type": "string", "minLength": 1, "maxLength": 200 },
+        {
+          "type": "object", "required": ["name"], "additionalProperties": false,
+          "properties": {
+            "name": { "type": "string", "minLength": 1, "maxLength": 200 },
+            "department": { "type": "string", "maxLength": 200 },
+            "organization": { "type": "string", "maxLength": 200 },
+            "location": { "type": "string", "maxLength": 200 },
+            "email": { "type": "string", "maxLength": 200 }
+          }
+        }
+      ]
+    }
+  },
+  "templates": {
+    "basic-report": {
+      "title": "Báo cáo doanh nghiệp (basic-report 0.1.0): bìa, mục lục số trang La Mã, đầu trang có tên chương và số trang",
+      "required": ["title", "sections"],
+      "properties": {
+        "lang": { "$ref": "#/$defs/lang" },
+        "title": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "category": { "type": "string", "maxLength": 120, "description": "Dòng nhỏ trên tiêu đề bìa (loại tài liệu, ví dụ \"Báo cáo nội bộ\")." },
+        "author": { "type": "string", "maxLength": 200 },
+        "affiliation": { "type": "string", "maxLength": 300, "description": "Đơn vị, công ty." },
+        "logo": { "type": "string", "maxLength": 300, "description": "Ảnh logo góc phải bìa (đường dẫn tương đối)." },
+        "date": { "$ref": "#/$defs/date" },
+        "toc_title": { "type": "string", "maxLength": 60, "description": "Tên mục lục, mặc định \"Mục lục\"." },
+        "sections": { "$ref": "#/$defs/sections" },
+        "references": { "$ref": "#/$defs/references" }
+      }
+    },
+    "ilm": {
+      "title": "Đề xuất dự án / sách mỏng (ilm 1.4.0): bìa có tóm tắt, lời nói đầu, mục lục, mỗi chương sang trang mới, chân trang có tên chương",
+      "required": ["title", "sections"],
+      "properties": {
+        "lang": { "$ref": "#/$defs/lang" },
+        "title": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "author": { "type": "string", "maxLength": 200 },
+        "date": { "$ref": "#/$defs/date" },
+        "date_format": { "type": "string", "maxLength": 80, "description": "Mặc định \"Ngày [day] tháng [month] năm [year]\"." },
+        "abstract": { "$ref": "#/$defs/inline", "description": "Tóm tắt in trên bìa (2–4 câu)." },
+        "preface": { "type": "string", "maxLength": 20000, "description": "Lời nói đầu, trang riêng sau bìa (đoạn cách nhau bằng dòng trống)." },
+        "toc": { "type": "boolean", "description": "Mục lục, mặc định true." },
+        "chapter_pagebreak": { "type": "boolean", "description": "Mỗi mục cấp 1 sang trang mới, mặc định true." },
+        "figure_index": { "type": "boolean", "description": "Danh mục hình ở cuối." },
+        "table_index": { "type": "boolean", "description": "Danh mục bảng ở cuối." },
+        "sections": { "$ref": "#/$defs/sections" },
+        "appendix": {
+          "type": "object", "required": ["sections"], "additionalProperties": false,
+          "properties": { "title": { "type": "string", "maxLength": 80 }, "sections": { "$ref": "#/$defs/sections" } },
+          "description": "Phụ lục (đánh số A.1, A.2…)."
+        },
+        "references": { "$ref": "#/$defs/references" }
+      }
+    },
+    "charged-ieee": {
+      "title": "Bài nghiên cứu / báo cáo kỹ thuật 2 cột kiểu IEEE (charged-ieee 0.1.3)",
+      "required": ["title", "sections"],
+      "properties": {
+        "lang": { "$ref": "#/$defs/lang" },
+        "title": { "type": "string", "minLength": 1, "maxLength": 300 },
+        "authors": { "type": "array", "maxItems": 12, "items": { "$ref": "#/$defs/author" } },
+        "abstract": { "$ref": "#/$defs/inline" },
+        "keywords": { "type": "array", "maxItems": 12, "items": { "type": "string", "maxLength": 80 } },
+        "paper": { "enum": ["a4", "us-letter"], "description": "Khổ giấy, mặc định a4." },
+        "date": { "$ref": "#/$defs/date" },
+        "sections": { "$ref": "#/$defs/sections" },
+        "references": { "$ref": "#/$defs/references" }
+      }
+    }
+  }
+}

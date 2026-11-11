@@ -3,7 +3,7 @@
 // Sao lưu và watchdog chạy bằng root ngoài tiến trình web nên ghi kết quả ở OPS_DIR (web chỉ đọc): scripts/backup.sh, scripts/watchdog.sh.
 import fs from "node:fs";
 import path from "node:path";
-import { db, DATA_DIR, ADMIN_EMAILS, getSetting, setSetting } from "./authstore";
+import { db, DATA_DIR, ALERT_EMAILS, getSetting, setSetting } from "./authstore";
 import { formatArgs, redactLine } from "./opsredact";
 import { gateStats } from "./turngate";
 
@@ -157,7 +157,7 @@ export async function opsWatch() {
   const { sendMail } = await import("./mailer");
   const { opsAlertMail } = await import("./mailtpl");
   const base = (process.env.APP_URL ?? "https://synchro.net.nz").replace(/\/$/, "");
-  const admins = db().prepare(`SELECT id, email, name FROM users WHERE email_verified = 1 AND status = 'active' AND email IN (${[...ADMIN_EMAILS].map(() => "?").join(",") || "''"})`).all(...ADMIN_EMAILS) as { id: string; email: string; name: string }[];
+  const admins = db().prepare(`SELECT id, email, name FROM users WHERE email_verified = 1 AND status = 'active' AND email IN (${ALERT_EMAILS.map(() => "?").join(",") || "''"})`).all(...ALERT_EMAILS) as { id: string; email: string; name: string }[];
   for (const p of fresh) {
     const [title, text, titleEn, textEn] = ALERT_TEXT[p.code];
     setSetting(`ops:alert:${p.code}`, String(Date.now()));

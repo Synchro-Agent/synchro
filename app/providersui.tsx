@@ -263,6 +263,7 @@ export function ProvidersPanel() {
         </div>
       </div>
       {apiErr && <div className="api-err" role="alert"><I.Alert size={14} /><span>{apiErr}</span></div>}
+      {admin && api && !api.owner && <p className="api-own top"><I.Lock size={13} /><span>Only the Owner can add, change or remove shared API keys and prepaid balances. As an administrator you can refresh model lists and send test messages.</span></p>}
       {/* Hãng chỉ có khóa API (DeepSeek): chỉ quản trị viên nối được nên chỉ hiện cho quản trị viên. */}
       <div className="api-list">{VENDORS.filter((v) => admin || v.cli).map((v) => <VendorItem key={v.id} v={v} admin={admin} api={api?.providers.find((p) => p.id === v.id)} apiState={api} setApi={update} />)}</div>
       {admin && api && others.length > 0 && (

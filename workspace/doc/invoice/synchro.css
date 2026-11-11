@@ -1,0 +1,27 @@
+/* Synchro: bổ sung cho mẫu hóa đơn invoice.css (giữ nguyên bản gốc của WeasyPrint samples — trước ở Kozea/WeasyPrint-Samples,
+   nay ở CourtBouillon/weasyprint-samples commit 6dc675b, phạm vi công cộng). HTML do synchro-doc dựng từ JSON.
+   Thêm: khổ A4, bảng cộng tiền (cộng, chiết khấu, thuế), ghi chú, tiêu đề cột lặp lại khi sang trang, không cắt đôi một dòng,
+   và bố cục "long" (bảng tổng đi theo sau bảng hàng thay vì ghim đáy trang 1, để không đè lên bảng khi tràn trang). */
+@page { size: A4; }
+
+dl dd { margin-left: .3em; }
+h1 { line-height: 1.3; }
+address { overflow-wrap: anywhere; }
+
+table#items { margin-top: 0; }
+table#items thead { display: table-header-group; }
+table#items tr { break-inside: avoid; }
+table#items td { padding-top: 4mm; vertical-align: top; }
+table#items td:first-of-type { padding-right: 4mm; }
+table#items td:not(:first-of-type), table#items th:not(:first-of-type) { white-space: nowrap; }
+
+table#totals { width: 55%; margin: 5mm 0 0 auto; break-inside: avoid; }
+table#totals th { border: 0; text-align: left; text-transform: none; padding: 1mm 0; font-size: 10pt; }
+table#totals td { padding: 1mm 0; color: var(--black); font-weight: 400; white-space: nowrap; }
+
+#notes { color: var(--grey); font-size: 9pt; margin-top: 5mm; white-space: pre-line; }
+#total small { font-size: 9pt; color: var(--grey); }
+table#total td { white-space: nowrap; }
+
+body.long footer { height: auto; }
+body.long table#total { position: static; margin: 1cm 0 0; width: 100%; border-width: 6mm 8mm; break-inside: avoid; }

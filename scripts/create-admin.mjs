@@ -8,7 +8,8 @@ import path from "node:path";
 import readline from "node:readline";
 
 const DIR = process.env.DATA_DIR ?? path.join(process.cwd(), "data");
-const admins = (process.env.ADMIN_EMAILS ?? "nguyenhuulamtung@gmail.com").split(",").map((s) => s.trim().toLowerCase()).filter(Boolean);
+// Chủ sở hữu (OWNER_EMAILS) cũng là quản trị viên.
+const admins = `${process.env.ADMIN_EMAILS ?? "nguyenhuulamtung@gmail.com"},${process.env.OWNER_EMAILS ?? ""}`.split(",").map((s) => s.trim().toLowerCase()).filter(Boolean);
 const email = (process.argv[2] ?? admins[0]).trim().toLowerCase();
 if (!admins.includes(email)) { console.error(`${email} không nằm trong ADMIN_EMAILS (${admins.join(", ")}).`); process.exit(1); }
 

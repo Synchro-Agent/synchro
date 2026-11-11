@@ -4,7 +4,7 @@
 // Quản trị viên đặt hạn mức (USD) cho mọi người, từng người, và sửa bảng giá nếu nhà cung cấp đổi giá.
 // Ngoài ra ghi lại hạn mức gọi API mà nhà cung cấp báo trong header (Anthropic, OpenAI) để biết API còn bao nhiêu.
 import { AsyncLocalStorage } from "node:async_hooks";
-import { db, getSetting, isAdmin, setSetting, type UserRow } from "./authstore";
+import { adminRole, db, getSetting, isAdmin, setSetting, type UserRow } from "./authstore";
 import { vendorOf } from "./router";
 import { familyKey, parseId, versionCmp } from "./modelrules";
 import { providerPriceOf } from "./modelreg";
@@ -42,6 +42,11 @@ const DEFAULT_PRICES: [RegExp, Omit<Price, "src">, Price["src"], string?][] = [
   [/^deepseek\/deepseek-(v[\d.]+-)?flash/, { in: 0.3, out: 1.2, cache: 0.006 }, "official", "deepseek/deepseek-flash"],
   [/^deepseek\/deepseek-v[\d.]+-pro/, { in: 1.32, out: 3.96, cache: 0.044 }, "official", "deepseek/deepseek-v4-pro"],
   [/^deepseek\//, { in: 1.32, out: 3.96, cache: 0.044 }, "estimate"],
+  // Embedding (tìm kiếm ngữ nghĩa của bộ não và tài liệu dự án): chỉ tính token đầu vào.
+  [/\/text-embedding-3-small$/, { in: 0.02, out: 0, cache: 0 }, "official"],
+  [/\/text-embedding-3-large$/, { in: 0.13, out: 0, cache: 0 }, "official"],
+  [/\/gemini-embedding-001$/, { in: 0.15, out: 0, cache: 0 }, "official"],
+  [/\/[\w.-]*embedding[\w.-]*$/, { in: 0.15, out: 0, cache: 0 }, "estimate"],
   [/./, { in: 3, out: 15, cache: 0.3 }, "estimate"],
 ];
 
@@ -165,6 +170,10 @@ export function recordUsage(model: string, usage: unknown) {
     .run(s.uid, now, model, s.feature, t.input, t.output, t.cacheRead, t.cacheWrite, costOf(t, priceOf(model)));
 }
 
+/** Tổng chi phí (USD) một tính năng đã dùng của một người từ mốc since (hạn mức riêng cho việc nền như embedding). */
+export const featureCost = (uid: string, feature: string, since: number) =>
+  (init().prepare("SELECT COALESCE(SUM(cost), 0) AS c FROM usage_events WHERE user_id = ? AND feature = ? AND at >= ?").get(uid, feature, since) as { c: number }).c;
+
 // ---------------------------------------------------------------- hạn mức gọi API của nhà cung cấp (từ header)
 export type RateInfo = { provider: string; limit: number; remaining: number; resetAt: number; at: number };
 const g = globalThis as { __synchroRate?: Map<string, RateInfo> };
@@ -273,7 +282,7 @@ export function adminUsage(users: UserRow[]) {
     const w = windows(u.id, now);
     const st = usageState(u);
     const tot = init().prepare("SELECT COALESCE(SUM(cost),0) AS c, COALESCE(SUM(input+cache_read+cache_write),0) AS i, COALESCE(SUM(output),0) AS o FROM usage_events WHERE user_id = ? AND at >= ?").get(u.id, now - 30 * 86_400_000) as { c: number; i: number; o: number };
-    return { id: u.id, email: u.email, name: u.name, admin: isAdmin(u), override: w.override, limits: st.limits, month: { cost: tot.c, input: tot.i, output: tot.o }, effective: limitsFor(u, cfg, w.override) };
+    return { id: u.id, email: u.email, name: u.name, admin: adminRole(u), override: w.override, limits: st.limits, month: { cost: tot.c, input: tot.i, output: tot.o }, effective: limitsFor(u, cfg, w.override) };
   });
 }
 export function removeUserUsage(uid: string) {

@@ -274,6 +274,21 @@ export function serviceKey(id: "elevenlabs" | "composio"): { key: string; base: 
   return k ? { key: k, base: BUILTIN[id].base.replace(/\/+$/, "") } : null;
 }
 
+// Model embedding cho tìm kiếm ngữ nghĩa (bộ não, tài liệu dự án): dùng lại khóa OpenAI / Gemini quản trị viên đã nhập, không thêm khóa mới.
+// SYNCHRO_EMBED_MODEL="openai/text-embedding-3-large" chọn model khác; không có khóa nào thì trả null và tìm kiếm chỉ dùng từ khóa.
+const EMBED_DEFAULT: Partial<Record<ProviderKind, string>> = { openai: "text-embedding-3-small", google: "gemini-embedding-001" };
+export type EmbedTarget = { provider: string; kind: ProviderKind; base: string; key: string; model: string; modelKey: string };
+export function embedTarget(): EmbedTarget | null {
+  const want = (process.env.SYNCHRO_EMBED_MODEL ?? "").trim();
+  if (want === "off") return null;
+  const [wp, ...rest] = want.split("/"), wm = rest.join("/");
+  const list = rows().filter((r) => (r.kind === "openai" || r.kind === "google") && r.status !== "error");
+  const r = want ? list.find((x) => x.id === wp) : list.find((x) => x.kind === "openai") ?? list.find((x) => x.kind === "google");
+  if (!r) return null;
+  const model = (want && wm) || EMBED_DEFAULT[r.kind]!;
+  try { return { provider: r.id, kind: r.kind, base: (r.base_url || BUILTIN[r.kind]?.base || "").replace(/\/+$/, ""), key: open(r.enc_key), model, modelKey: modelKey(r.id, model) }; } catch { return null; }
+}
+
 // ---- danh sách cho trang quản lý API (khóa chỉ hiện dạng che) ----
 export type AdminProvider = { id: string; kind: ProviderKind; name: string; vendor: string; builtin: boolean; configured: boolean; source: "db" | "env" | null;
   baseUrl: string; workspaceId: string; defaultBase: string; keyHint: string | null; keyUrl: string | null; prefix: string | null; status: "ok" | "error" | null; error: string | null; info: string | null;

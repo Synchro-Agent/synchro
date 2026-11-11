@@ -5,25 +5,32 @@ import type { AgentEvent } from "./agentcore";
 import { closeFolded, foldAgentEvent } from "./agentfold";
 import { getUser } from "./authstore";
 import { getPrefs, patchSession, saveTurn, type TurnNode } from "./codestore";
+import { registerMemStat } from "./memstat";
 
 type Line = { s: number; e: AgentEvent };
 type Listener = { line: (l: Line) => void; end: () => void };
-export type AgentRun = { uid: string; sid: string; node: TurnNode | null; ac: AbortController; lines: Line[]; bytes: number; listeners: Set<Listener>; started: number; ended: number; purged?: boolean };
+export type AgentRun = { uid: string; sid: string; node: TurnNode | null; ac: AbortController; lines: Line[]; bytes: number; listeners: Set<Listener>; started: number; ended: number; purged?: boolean; saved?: boolean };
 
 const g = globalThis as unknown as { __synchroAgentRuns?: Map<string, AgentRun> };
 const runs = (g.__synchroAgentRuns ??= new Map());
 const keyOf = (uid: string, sid: string) => `${uid}:${sid}`;
 // Giữ lượt đã xong một giờ để trình duyệt quay lại còn thấy. Lượt quá dài và lượt chờ duyệt không ai trả lời thì tự dừng, không chiếm máy chủ mãi.
-const KEEP_MS = 3_600_000, MAX_RUN_MS = 2 * 3_600_000, ASK_WAIT_MS = Number(process.env.SYNCHRO_ASK_WAIT_MS) || 30 * 60_000, SAVE_MS = 10_000;
+// Lượt đã lưu trọn vào phiên (bật đồng bộ) chỉ giữ thêm SAVED_KEEP_MS cho trình duyệt đang nối lại giữa chừng: sau đó trình duyệt mở phiên thấy máy chủ
+// không còn lượt (gone) thì lấy kết quả đã lưu, không cần cả bộ đệm sự kiện (tới 16 MB mỗi lượt) nằm trong bộ nhớ thêm một giờ.
+const KEEP_MS = Number(process.env.SYNCHRO_AGENT_KEEP_MS) || 3_600_000, SAVED_KEEP_MS = Number(process.env.SYNCHRO_AGENT_SAVED_KEEP_MS) || 5 * 60_000, MAX_RUN_MS = 2 * 3_600_000, ASK_WAIT_MS = Number(process.env.SYNCHRO_ASK_WAIT_MS) || 30 * 60_000, SAVE_MS = 10_000;
 /** Lần lưu tiếp cách lần trước bao lâu. Mỗi lần lưu đọc và ghi cả phiên, chặn tiến trình duy nhất của mọi người: giữ dưới khoảng 1% thời gian, phiên lớn thì lưu thưa đi (kết quả cuối lượt vẫn luôn được lưu). */
 export const saveGap = (costMs: number) => Math.min(300_000, costMs * 100);
-// Bộ đệm nhiều tối đa ~16 MB mỗi lượt: quá thì bỏ phần output chi tiết của công cụ, vẫn giữ tóm tắt.
+// Bộ đệm nhiều tối đa ~16 MB mỗi lượt (đếm đúng số byte đã giữ): quá thì bỏ phần output chi tiết của công cụ, vẫn giữ tóm tắt.
 const MAX_BUF = 16_000_000, MAX_LIVE = 5;
+const keepOf = (r: AgentRun) => (r.saved ? SAVED_KEEP_MS : KEEP_MS);
 
 function sweep() {
   const now = Date.now();
-  for (const [k, r] of runs) if (r.ended && now - r.ended > KEEP_MS) runs.delete(k);
+  for (const [k, r] of runs) if (r.ended && now - r.ended > keepOf(r)) runs.delete(k);
 }
+/** Số lượt đang giữ trong bộ nhớ và tổng byte bộ đệm (theo dõi bộ nhớ). */
+export const runStats = () => { let n = 0, bytes = 0; for (const r of runs.values()) { n++; bytes += r.bytes; } return { runs: n, bytes }; };
+registerMemStat("codeRuns", () => { const s = runStats(); return { runs: s.runs, MB: Math.round(s.bytes / 1048576) }; });
 export const latestRun = (uid: string, sid: string) => { sweep(); return runs.get(keyOf(uid, sid)) ?? null; };
 // Lượt vừa bấm Dừng coi như đã hết dù CLI còn đang thoát: người dùng gửi tiếp ngay được, không phải đợi.
 export const activeRun = (uid: string, sid: string) => { const r = runs.get(keyOf(uid, sid)); return r && !r.ended && !r.ac.signal.aborted ? r : null; };
@@ -52,7 +59,7 @@ export function startAgentRun(o: { uid: string; sid: string; node?: TurnNode | n
     const t0 = Date.now();
     if (!force && t0 < nextSave) return;
     dirty = false;
-    try { saveTurn(o.uid, numSid, run.node, o.title); } catch (e) { console.warn("[agent] lưu lượt", (e as Error).message); }
+    try { saveTurn(o.uid, numSid, run.node, o.title); if (force && run.ended) run.saved = true; } catch (e) { console.warn("[agent] lưu lượt", (e as Error).message); }
     nextSave = Date.now() + saveGap(Date.now() - t0);
   };
   const saver = setInterval(() => save(), SAVE_MS);
@@ -67,9 +74,9 @@ export function startAgentRun(o: { uid: string; sid: string; node?: TurnNode | n
     if (run.node) { const img = e.t === "result" ? { ...e, image: undefined, ...(run.bytes > MAX_BUF ? { output: undefined } : {}) } : e; run.node = foldAgentEvent(run.node, img); dirty = true; }
     // Ảnh chụp màn hình chỉ tới người đang xem, không giữ trong bộ đệm (cũng không lưu ở phiên).
     let kept: AgentEvent = e.t === "result" && e.image ? { ...e, image: undefined } : e;
-    const size = JSON.stringify(kept).length;
-    if (run.bytes + size > MAX_BUF && kept.t === "result") kept = { ...kept, output: undefined };
-    run.bytes += Math.min(size, 200_000);
+    let size = JSON.stringify(kept).length;
+    if (run.bytes + size > MAX_BUF && kept.t === "result" && kept.output) { kept = { ...kept, output: undefined }; size = JSON.stringify(kept).length; }
+    run.bytes += size;
     const s = run.lines.length + 1;
     run.lines.push({ s, e: kept });
     for (const l of run.listeners) l.line({ s, e });
@@ -96,6 +103,9 @@ export function startAgentRun(o: { uid: string; sid: string; node?: TurnNode | n
     if (sync() && runs.get(keyOf(o.uid, o.sid)) === run) try { patchSession(o.uid, numSid, { running: false }); } catch {}
     for (const l of run.listeners) l.end();
     run.listeners.clear();
+    // Không đợi tới lần sweep sau (chỉ chạy khi có lượt mới hay có người hỏi): tự bỏ lượt khỏi bộ nhớ khi hết hạn giữ.
+    const key = keyOf(o.uid, o.sid);
+    setTimeout(() => { if (runs.get(key) === run) runs.delete(key); }, keepOf(run)).unref?.();
   });
   return run;
 }
@@ -107,15 +117,18 @@ export function runStream(run: AgentRun, after: number, signal: AbortSignal): Re
   let stop = () => {};
   const stream = new ReadableStream({
     start(ctl) {
-      let closed = false;
-      const send = (o: unknown) => { if (!closed) try { ctl.enqueue(enc.encode(JSON.stringify(o) + "\n")); } catch { closed = true; } };
-      const ping = setInterval(() => { if (!closed) try { ctl.enqueue(enc.encode("\n")); } catch { closed = true; } }, 15_000);
-      const finish = () => { if (closed) return; closed = true; clearInterval(ping); run.listeners.delete(me); try { ctl.close(); } catch {} };
+      // ended tách khỏi closed: ghi lỗi (người xem đã đi) từng chỉ đặt closed, finish() thấy closed thì bỏ qua nên hẹn giờ ping giữ cả lượt (và bộ đệm) mãi.
+      let closed = false, ended = false;
+      const finish = () => { if (ended) return; ended = closed = true; clearInterval(ping); run.listeners.delete(me); try { ctl.close(); } catch {} };
+      const write = (s: string) => { if (!closed) try { ctl.enqueue(enc.encode(s)); } catch { finish(); } };
+      const send = (o: unknown) => write(JSON.stringify(o) + "\n");
+      const ping = setInterval(() => write("\n"), 15_000);
       const me: Listener = { line: ({ s, e }) => { if (s > after) send({ ...e, s }); }, end: () => { send({ t: "end", s: run.lines.length, stopped: run.ac.signal.aborted }); finish(); } };
-      stop = () => { closed = true; clearInterval(ping); run.listeners.delete(me); };
+      stop = finish;
       send({ t: "run", node: run.node ? { ...run.node, steps: undefined, ai: "" } : null, running: !run.ended, count: run.lines.length });
       for (const l of run.lines) if (l.s > after) send({ ...l.e, s: l.s });
       if (run.ended) { me.end(); return; }
+      if (ended) return;
       run.listeners.add(me);
       signal.addEventListener("abort", () => stop());
     },

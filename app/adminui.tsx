@@ -21,12 +21,12 @@ import { Pager } from "./pager";
 import { BotProtection, type TurnstileState } from "./botadmin";
 import { SettingsSkeleton } from "./skeleton";
 
-type U = AuthUser & { status: "active" | "suspended"; verified: boolean; lastLogin: number | null; lastSeen: number | null; sessions: number; protected: boolean; customPerms: boolean };
+type U = AuthUser & { status: "active" | "suspended"; verified: boolean; lastLogin: number | null; lastSeen: number | null; sessions: number; protected: boolean; customPerms: boolean; role: "owner" | "admin" | "member"; roleFixed?: boolean };
 type Log = { id: number; at: number; action: string; actor_email: string | null; target_email: string | null; ip: string | null; detail: string | null };
 type Data = {
   providerFailures?: Partial<Record<keyof Providers, { at: number; detail: string }>>;
   stats: { users: number; active7: number; new7: number; suspended: number; sessions: number; failed24: number; runs24?: number; runsFailed24?: number };
-  users: U[]; audit: Log[]; settings: { signupOpen: boolean; defaultPerms: Perms; verifyGate?: boolean; speechBudget?: { user: number; unverified: number; global: number | null }; speechToday?: number; turnstile?: TurnstileState }; providers: Providers; admins: string[];
+  users: U[]; audit: Log[]; settings: { signupOpen: boolean; defaultPerms: Perms; verifyGate?: boolean; speechBudget?: { user: number; unverified: number; global: number | null }; speechToday?: number; turnstile?: TurnstileState }; providers: Providers; admins: string[]; role?: "owner" | "admin" | "member"; owners?: string[];
 };
 type Sess = { id: string; device: string; ip: string | null; method: string; createdAt: number; lastSeen: number };
 type Detail = { sessions: Sess[]; identities: { provider: string; email: string | null; createdAt: number }[] };
@@ -66,6 +66,7 @@ Object.assign(ACTIONS, {
   passkey_added: ["Added a passkey", ""], passkey_renamed: ["Renamed a passkey", ""], passkey_removed: ["Removed a passkey", ""], passkey_add_failed: ["Couldn't add a passkey", "bad"],
   admin_backup_on: ["Turned on continuous backup", "adm"], admin_backup_off: ["Turned off continuous backup", "adm"], admin_backup_saved: ["Changed continuous backup settings", "adm"], admin_backup_cleared: ["Removed continuous backup settings", "adm"], admin_backup_drill: ["Tested restoring the backup", "adm"],
   admin_turnstile: ["Changed bot protection keys", "adm"], admin_turnstile_on: ["Turned on bot protection", "adm"], admin_turnstile_off: ["Turned off bot protection", "adm"], admin_block_disposable: ["Changed disposable email blocking", "adm"],
+  admin_role_granted: ["Made administrator", "adm"], admin_role_revoked: ["Removed administrator", "adm"],
   admin_api_key: ["Saved API key", "adm"], admin_api_key_removed: ["Removed API key", "adm"], admin_api_credit: ["Changed API credit", "adm"], admin_default_model: ["Changed default model", "adm"], admin_main_models: ["Changed main models", "adm"], admin_models_check: ["Checked for new models", "adm"], admin_models: ["Changed the model registry", "adm"],
 });
 const LOG_FILTER: Record<string, (a: string) => boolean> = {
@@ -290,6 +291,8 @@ export function AdminPanel({ Toggle }: { Toggle: ToggleT }) {
   const listed = (d?.users ?? []).filter((u) => (filter === "All" || (filter === "Active") === (u.status === "active")) && (!qq || u.email.toLowerCase().includes(qq) || u.name.toLowerCase().includes(qq)));
   const bk = useBulk(listed, (u) => u.id);
   const free = (u: U) => !u.protected && u.id !== app.me?.id;
+  // Chủ sở hữu (Owner): thêm / bỏ quản trị viên, xóa vĩnh viễn tài khoản. Quản trị viên thấy nút bị khóa kèm lời giải thích (máy chủ cũng tự chặn).
+  const owner = (d?.role ?? app.me?.role) === "owner";
   const userActs: BulkAct<U>[] = [
     { id: "suspend", label: "Tạm khóa", icon: <I.Lock size={14} />, when: (l) => l.some((u) => free(u) && u.status === "active"),
       confirm: (l) => ({ title: `Tạm khóa ${l.filter((u) => free(u) && u.status === "active").length} tài khoản?`, text: "Họ bị đăng xuất mọi nơi và không đăng nhập được cho tới khi bạn mở khóa.", ok: "Tạm khóa" }),
@@ -299,7 +302,7 @@ export function AdminPanel({ Toggle }: { Toggle: ToggleT }) {
     { id: "signout", label: "Đăng xuất mọi nơi", icon: <I.Out size={14} />, when: (l) => l.some((u) => free(u) && u.sessions > 0),
       confirm: (l) => ({ title: `Đăng xuất ${l.filter((u) => free(u) && u.sessions > 0).length} người dùng mọi nơi?`, text: "Mọi phiên đăng nhập của các tài khoản này kết thúc ngay.", ok: "Đăng xuất" }),
       run: (l) => act(() => each(l.filter((u) => free(u) && u.sessions > 0), (u) => call("PATCH", `/api/admin/users/${u.id}`, { action: "signout" })), "Đã đăng xuất các người dùng đã chọn") },
-    { id: "del", label: "Xóa tài khoản", icon: <I.Trash size={14} />, danger: true, when: (l) => l.some(free),
+    { id: "del", label: "Xóa tài khoản", icon: <I.Trash size={14} />, danger: true, when: (l) => owner && l.some(free),
       confirm: (l) => { const m = l.filter(free); return { title: `Xóa vĩnh viễn ${m.length} tài khoản?`, text: `Tài khoản và toàn bộ dữ liệu của họ bị xóa, không hoàn tác được.${m.length < l.length ? ` ${l.length - m.length} tài khoản chủ / của bạn được giữ nguyên.` : ""}`, ok: "Xóa vĩnh viễn" }; },
       run: (l) => { setOpen(null); return act(() => each(l.filter(free), (u) => call("DELETE", `/api/admin/users/${u.id}`, { confirm: u.email })), "Đã xóa các tài khoản đã chọn"); } },
   ];
@@ -415,7 +418,7 @@ export function AdminPanel({ Toggle }: { Toggle: ToggleT }) {
                 <tr className={`adm-row ${open === u.id && !bk.on ? "on" : ""}`} onClick={() => toggle(u.id)} {...bulkRow(bk, u)}>
                   <td>
                     <div className="adm-user">{bk.on && <BulkCheck on={bk.has(u)} />}<Avatar name={u.name || u.email} size={28} font={10} src={u.avatar} /><div style={{ minWidth: 0 }}>
-                      <div className="nm"><span data-notr>{u.name || u.email.split("@")[0]}</span>{u.id === app.me?.id ? <span className="new-tag" style={{ marginLeft: 6 }}>You</span> : u.protected ? <span className="new-tag" style={{ marginLeft: 6 }}>Admin</span> : null}</div>
+                      <div className="nm"><span data-notr>{u.name || u.email.split("@")[0]}</span>{u.id === app.me?.id && <span className="new-tag" style={{ marginLeft: 6 }}>You</span>}{u.role !== "member" && <span className={`adm-role ${u.role}`}>{u.role === "owner" ? "Owner" : "Admin"}</span>}</div>
                       <div className="em" data-notr>{u.email}</div>
                       <div style={{ marginTop: 3 }}>{u.methods.map((m) => <span key={m} className="adm-chip">{METHOD[m] ?? m}</span>)}{u.customPerms && <span className="adm-chip adm-chip-acc">Custom access</span>}</div>
                     </div></div>
@@ -456,7 +459,16 @@ export function AdminPanel({ Toggle }: { Toggle: ToggleT }) {
                           : <p className="d" style={{ margin: 0 }}>Follows the default access above. Switch to Custom to choose models and features just for this person.</p>}
                       </div>
                     )}
-                    {u.protected ? <p className="d" style={{ margin: "12px 0 0" }}>Owner accounts can&apos;t be suspended or deleted from here.</p> : (
+                    <div className="adm-card adm-card-in adm-role-card">
+                      <div className="adm-card-h"><b>Role</b><span className="d">{u.role === "owner" ? "Owner: everything an administrator can do, plus API keys and other secrets, billing and limits for administrators, adding or removing administrators, and permanently deleting data." : u.role === "admin" ? "Administrator: manages people, access, models and settings. API keys, billing, administrators and permanent deletion stay with the Owner." : "Member: uses Synchro with the access set above."}</span></div>
+                      {u.roleFixed ? <p className="d" style={{ margin: 0 }}>Set in the server configuration (OWNER_EMAILS / ADMIN_EMAILS), so it can&apos;t be changed here.</p>
+                        : u.id === app.me?.id ? null
+                        : owner ? (u.role === "admin"
+                          ? <button className="btn" disabled={busy} onClick={() => app.confirm("Remove administrator?", "They keep their account and data, and lose access to Administrator.", "Remove", () => act(() => call("PATCH", `/api/admin/users/${u.id}`, { action: "set_role", role: "member" }), "Administrator removed"))}>Remove administrator</button>
+                          : <button className="btn" disabled={busy || !u.verified || u.status !== "active"} onClick={() => app.confirm("Make this person an administrator?", "They will be able to manage people, access, models and settings. API keys, billing and permanent deletion stay with you.", "Make administrator", () => act(() => call("PATCH", `/api/admin/users/${u.id}`, { action: "set_role", role: "admin" }), "Administrator added"))}>Make administrator</button>)
+                        : <p className="d" style={{ margin: 0 }}>Only the Owner can add or remove administrators.</p>}
+                    </div>
+                    {u.protected ? <p className="d" style={{ margin: "12px 0 0" }}>{u.role === "admin" && !u.roleFixed ? "Only the Owner can change another administrator's account." : "Owner accounts can't be suspended or deleted from here."}</p> : (
                       <div className="adm-actions">
                         <button className="btn" disabled={busy} onClick={() => { setMail(u); setMailTxt(u.email); }}>Change email</button>
                         {!u.verified && <button className="btn" disabled={busy} onClick={() => act(() => call("PATCH", `/api/admin/users/${u.id}`, { action: "mark_verified" }), "Email marked as verified")}>Mark email as verified</button>}
@@ -466,7 +478,10 @@ export function AdminPanel({ Toggle }: { Toggle: ToggleT }) {
                         {u.status === "active"
                           ? <button className="btn" disabled={busy} onClick={() => app.confirm("Suspend this account?", "They will be signed out everywhere and can't sign in until you restore the account.", "Suspend", () => act(() => call("PATCH", `/api/admin/users/${u.id}`, { action: "suspend" }), "Account suspended"))}>Suspend</button>
                           : <button className="btn" disabled={busy} onClick={() => act(() => call("PATCH", `/api/admin/users/${u.id}`, { action: "restore" }), "Account restored")}>Restore</button>}
-                        <button className="btn danger" disabled={busy} onClick={() => { setDel(u); setDelTxt(""); }}>Delete account</button>
+                        {owner
+                          ? <button className="btn danger" disabled={busy} onClick={() => { setDel(u); setDelTxt(""); }}>Delete account</button>
+                          : <button className="btn danger" disabled aria-describedby={`own-del-${u.id}`}>Delete account</button>}
+                        {!owner && <p className="d adm-own-note" id={`own-del-${u.id}`}>Only the Owner can permanently delete accounts and their data. You can suspend the account instead.</p>}
                       </div>
                     )}
                   </td></tr>

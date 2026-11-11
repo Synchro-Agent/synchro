@@ -3,6 +3,7 @@ import path from "node:path";
 import { audit, clientIp, handle, limit, requireAdmin, sameOrigin, appUrl } from "../../../authstore";
 import { mailDnsStatus, sendMailNow } from "../../../mailer";
 import { testMail } from "../../../mailtpl";
+import { memReport } from "../../../memstat";
 import { opsProblems, opsSnapshot } from "../../../ops";
 import { agentAlive, wsConfigured } from "../../../workspace";
 import { latencySummary } from "../../../tracing";
@@ -19,7 +20,7 @@ export const GET = handle(async (req) => {
   const [agent, dns] = await Promise.all([wsConfigured() ? agentAlive() : Promise.resolve(null), mailDnsStatus()]);
   // Độ trễ từng chặng của lượt chat: 500 lượt gần nhất, hôm nay và 7 ngày (p50 / p95 theo hãng).
   const today = latencySummary(1), latency = { ...today, week: latencySummary(7).daily };
-  return Response.json({ ...snap, problems: opsProblems(snap), agent, dns, build, uptimeSec: Math.round(process.uptime()), latency });
+  return Response.json({ ...snap, problems: opsProblems(snap), agent, dns, build, uptimeSec: Math.round(process.uptime()), latency, mem: memReport() });
 });
 
 // { action: "mail_test", lang }: gửi thử tới chính email của quản trị viên và chờ kết quả (không cho nhập địa chỉ khác: nút này không phải công cụ gửi thư).

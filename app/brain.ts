@@ -12,15 +12,18 @@
 import crypto from "node:crypto";
 import { db, forgetProfile, getUser, setInstructions, type UserRow } from "./authstore";
 import { forgetCliMemory } from "./ai/cli_auth";
-import { NO_CHEAP, quickCall } from "./ai/anymodel";
+import { NO_CHEAP, oneShot, quickCall, usableModels } from "./ai/anymodel";
 // Vòng học là một vòng tuần tự chung cho mọi người (g.__brainBusy): chờ 5 phút chỗ của một tài khoản đang bận là bắt tất cả cùng chờ. Chờ ngắn thôi, hết hạn thì chuyển người khác, nhịp sau làm lại, không tính là lỗi.
 const BRAIN_WAIT_MS = Number(process.env.SYNCHRO_BRAIN_WAIT_MS) || 20_000;
 const bgOpts = (maxTokens: number) => ({ maxTokens, job: "brain", bg: true, maxWaitMs: BRAIN_WAIT_MS });
 import { clearMemory, listMemory, memCfg } from "./memory";
 import { splitArtifacts } from "./artifacts";
 import { chatGone } from "./chatstore";
-import { vendorOf } from "./router";
+import { sideModel, tierOf, vendorOf } from "./router";
+import { registerMemStat } from "./memstat";
 import { onTick } from "./tasks";
+import { dropVecs, minCos, queueEmbed, registerVecSource, rrf, sweepVecs, vecQuery } from "./vecstore";
+import { subCli } from "./ai/subs";
 
 export type NoteKind = "hub" | "about" | "model" | "chat" | "code" | "topic" | "entity" | "map" | "index" | "log" | "skill" | "connector" | "note" | "daily" | "rule";
 type Row = { id: string; user_id: string; kind: NoteKind; title: string; tkey: string; conv: string | null; body: string; props: string; created_at: number; updated_at: number };
@@ -120,12 +123,14 @@ function put(uid: string, n: { kind: NoteKind; title: string; body: string; prop
     d.prepare("UPDATE brain_notes SET kind = ?, title = ?, tkey = ?, conv = ?, body = ?, props = ?, updated_at = ? WHERE id = ?")
       .run(n.kind, n.title, fold(n.title), n.conv ?? cur.conv, n.body, props, now, cur.id);
     if (cur.body !== n.body) index(uid, cur.id, n.body);
+    queueEmbed("brain", uid);
     return parse(d.prepare("SELECT * FROM brain_notes WHERE id = ?").get(cur.id) as Row);
   }
   const id = "bn_" + crypto.randomBytes(8).toString("base64url");
   d.prepare("INSERT INTO brain_notes (id, user_id, kind, title, tkey, conv, body, props, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
     .run(id, uid, n.kind, n.title, fold(n.title), n.conv ?? null, n.body, props, now, now);
   index(uid, id, n.body);
+  queueEmbed("brain", uid);
   return parse(d.prepare("SELECT * FROM brain_notes WHERE id = ?").get(id) as Row);
 }
 /** Tiêu đề chưa ai dùng (đoạn chat trùng tên chủ đề hay đoạn chat khác thì thêm ngày). */
@@ -520,6 +525,7 @@ function absorb(user: UserRow, from: Note, into: Note) {
   };
   t().prepare("DELETE FROM brain_links WHERE src = ?").run(from.id);
   t().prepare("DELETE FROM brain_notes WHERE id = ?").run(from.id);
+  dropVecs("brain", { items: [from.id] });
   rebuild(uid, into, p);
   relink(user, from.title, into.title);
   logEvent(uid, `Gộp “${from.title}” vào ${L(into.title)} (cùng một thứ; tên cũ thành tên khác)`);
@@ -858,31 +864,56 @@ export function brainCore(uid: string): string {
 }
 // Chỉ mục gọi lại theo từng người, giữ trong bộ nhớ. Mỗi tin nhắn từng đọc, giải mã và tách từ lại toàn bộ ghi chú (đo: 171 ms với 3.000 ghi chú, 530 ms với 5.000), đồng bộ trên luồng chính nên luồng chữ của
 // mọi người dừng theo. Giờ chỉ tách từ ghi chú đã đổi; so khớp vài từ của câu hỏi trên bảng tần suất có sẵn không đáng kể. Nhiều ghi chú mà chưa có chỉ mục thì dựng ở nền từng ít một.
-type RecallDoc = { at: number; tf: Map<string, number>; len: number; conv: string | null; ok: boolean };
-type RecallIx = { stamp: string; docs: Map<string, RecallDoc>; used: number; building?: boolean };
-const RECALL_USERS = 40, RECALL_SYNC_MAX = 400, RECALL_CHUNK = 200;
+// Bộ nhớ: mỗi ghi chú giữ số hiệu từ (mảng số đã sắp, tra nhị phân) và số lần xuất hiện, từ nằm một lần trong bảng từ chung của người đó, không giữ một Map
+// từ → số lần cho từng ghi chú. Từ dài cắt ra từ chuỗi gốc được chép lại: V8 giữ cả chuỗi gốc (cả ghi chú) chừng nào còn giữ chuỗi cắt ra từ nó.
+// Chỉ mục không ai dùng 30 phút thì bỏ (dựng lại khi cần); mỗi người tối đa RECALL_NOTES ghi chú mới sửa gần nhất.
+type RecallDoc = { at: number; ids: Uint32Array; cnt: Uint16Array; len: number; conv: string | null; ok: boolean };
+type RecallIx = { stamp: string; docs: Map<string, RecallDoc>; vocab: Map<string, number>; used: number; building?: boolean };
+const RECALL_USERS = 40, RECALL_SYNC_MAX = 400, RECALL_CHUNK = 200, RECALL_NOTES = 8000, RECALL_IDLE_MS = 30 * 60_000, RECALL_VOCAB = 400_000;
 const rg = globalThis as unknown as { __brainRecall?: Map<string, RecallIx> };
 const recallIxs = (rg.__brainRecall ??= new Map());
+/** Bỏ chỉ mục của người không dùng tới quá lâu (gọi theo nhịp của bộ hẹn giờ). Trả số chỉ mục đã bỏ. */
+export function evictRecall(now = Date.now(), idleMs = RECALL_IDLE_MS): number {
+  let n = 0;
+  for (const [k, v] of recallIxs) if (!v.building && now - v.used > idleMs) { recallIxs.delete(k); n++; }
+  return n;
+}
+onTick("brain-recall", (now) => { evictRecall(now); });
+registerMemStat("brainRecall", () => recallStats());
+/** Cỡ chỉ mục gọi lại trong bộ nhớ (kiểm thử, theo dõi bộ nhớ). */
+export const recallStats = () => { let docs = 0, vocab = 0; for (const v of recallIxs.values()) { docs += v.docs.size; vocab += v.vocab.size; } return { users: recallIxs.size, docs, vocab }; };
 const recallStamp = (uid: string) => { const r = t().prepare("SELECT COUNT(*) AS n, MAX(updated_at) AS m FROM brain_notes WHERE user_id = ?").get(uid) as { n: number; m: number | null }; return `${r.n}:${r.m ?? 0}`; };
-const recallDoc = (r: Row): RecallDoc => {
-  const n = parse(r), tf = new Map<string, number>();
+// Chuỗi riêng, không trỏ vào chuỗi gốc (chuỗi ngắn V8 đã tự chép).
+const own = (s: string) => (s.length >= 13 ? Buffer.from(s, "utf8").toString("utf8") : s);
+const wordId = (ix: RecallIx, w: string) => { let id = ix.vocab.get(w); if (id === undefined) ix.vocab.set(own(w), (id = ix.vocab.size)); return id; };
+const recallDoc = (ix: RecallIx, r: Row): RecallDoc => {
+  const n = parse(r), tf = new Map<number, number>();
   const ws = [...words(n.title), ...words(n.title), ...words(n.body), ...(n.props.aliases ?? []).flatMap(words)];
-  for (const w of ws) tf.set(w, (tf.get(w) ?? 0) + 1);
-  return { at: n.updatedAt, tf, len: ws.length, conv: n.conv, ok: (n.kind === "chat" || n.kind === "code" || WIKI.includes(n.kind) || n.kind === "note") && (n.kind !== "chat" && n.kind !== "code" || !!n.props.gist) };
+  for (const w of ws) { const id = wordId(ix, w); tf.set(id, (tf.get(id) ?? 0) + 1); }
+  const ids = Uint32Array.from(tf.keys()).sort(), cnt = new Uint16Array(ids.length);
+  ids.forEach((id, i) => { cnt[i] = Math.min(65535, tf.get(id)!); });
+  return { at: n.updatedAt, ids, cnt, len: ws.length, conv: n.conv == null ? null : own(n.conv), ok: (n.kind === "chat" || n.kind === "code" || WIKI.includes(n.kind) || n.kind === "note") && (n.kind !== "chat" && n.kind !== "code" || !!n.props.gist) };
+};
+const tfOf = (d: RecallDoc, id: number) => {
+  let lo = 0, hi = d.ids.length - 1;
+  while (lo <= hi) { const m = (lo + hi) >> 1, v = d.ids[m]; if (v === id) return d.cnt[m]; if (v < id) lo = m + 1; else hi = m - 1; }
+  return 0;
 };
 /** Đưa chỉ mục về đúng dữ liệu hiện tại. Trả false khi còn quá nhiều ghi chú phải tách từ: việc đó tiếp tục ở nền, lượt này không gọi lại. */
 function refreshRecall(uid: string, ix: RecallIx): boolean {
   const stamp = recallStamp(uid);
   if (ix.stamp === stamp) return true;
   if (ix.building) return false;
-  const rows = t().prepare("SELECT id, updated_at AS at FROM brain_notes WHERE user_id = ?").all(uid) as { id: string; at: number }[];
+  // Bảng từ chỉ thêm, không bớt: sửa / xóa ghi chú nhiều quá thì dựng lại chỉ mục từ đầu cho gọn.
+  if (ix.vocab.size > RECALL_VOCAB) { ix.docs.clear(); ix.vocab.clear(); }
+  const rows = t().prepare("SELECT id, updated_at AS at FROM brain_notes WHERE user_id = ? ORDER BY updated_at DESC LIMIT ?").all(uid, RECALL_NOTES) as { id: string; at: number }[];
   const seen = new Set(rows.map((r) => r.id));
   for (const id of ix.docs.keys()) if (!seen.has(id)) ix.docs.delete(id);
   const stale = rows.filter((r) => ix.docs.get(r.id)?.at !== r.at).map((r) => r.id);
   const load = (ids: string[]) => {
     if (!ids.length) return;
     const list = t().prepare(`SELECT * FROM brain_notes WHERE user_id = ? AND id IN (${ids.map(() => "?").join(",")})`).all(uid, ...ids) as Row[];
-    for (const r of list) ix.docs.set(r.id, recallDoc(r));
+    for (const r of list) ix.docs.set(own(r.id), recallDoc(ix, r));
   };
   if (stale.length <= RECALL_SYNC_MAX) { load(stale); ix.stamp = stamp; return true; }
   ix.building = true;
@@ -897,7 +928,7 @@ function refreshRecall(uid: string, ix: RecallIx): boolean {
 function recallIx(uid: string): RecallIx {
   let ix = recallIxs.get(uid);
   if (!ix) {
-    ix = { stamp: "", docs: new Map(), used: 0 };
+    ix = { stamp: "", docs: new Map(), vocab: new Map(), used: 0 };
     recallIxs.set(uid, ix);
     if (recallIxs.size > RECALL_USERS) { const old = [...recallIxs].filter(([, v]) => !v.building).sort((a, b) => a[1].used - b[1].used)[0]; if (old) recallIxs.delete(old[0]); }
   }
@@ -905,36 +936,160 @@ function recallIx(uid: string): RecallIx {
   return ix;
 }
 /** Mở trang: dựng sẵn chỉ mục ở nền để câu đầu không phải chờ. */
-export function warmRecall(uid: string) { if (learning(uid)) refreshRecall(uid, recallIx(uid)); }
-function recallHits(uid: string, query: string, k: number, min: number, conv?: string): Note[] {
+export function warmRecall(uid: string) { if (learning(uid)) { refreshRecall(uid, recallIx(uid)); queueEmbed("brain", uid); } }
+/** BM25 trên chỉ mục gọi lại: [id, điểm] xếp giảm dần (chỉ ghi chú dùng để gọi lại, bỏ đoạn chat đang mở). null: chỉ mục đang dựng ở nền. */
+function recallScored(uid: string, query: string, k: number, min: number, conv?: string): { id: string; s: number }[] | null {
   const ix = recallIx(uid);
-  if (!refreshRecall(uid, ix)) return [];
-  const q = [...new Set(words(query))];
+  if (!refreshRecall(uid, ix)) return null;
+  // Từ chưa có trong bảng từ thì không ghi chú nào có: bỏ luôn, không thêm vào bảng.
+  const q = [...new Set(words(query))].map((w) => ix.vocab.get(w)).filter((x): x is number => x !== undefined);
   const docs = [...ix.docs].filter(([, d]) => d.ok && d.conv !== conv);
   if (!q.length || !docs.length) return [];
   const avg = docs.reduce((a, [, d]) => a + d.len, 0) / docs.length || 1;
-  const df = q.map((w) => docs.reduce((n, [, d]) => n + (d.tf.has(w) ? 1 : 0), 0));
-  const top = docs.map(([id, d]) => {
+  const df = q.map((w) => docs.reduce((n, [, d]) => n + (tfOf(d, w) ? 1 : 0), 0));
+  return docs.map(([id, d]) => {
     let s = 0;
-    q.forEach((w, i) => { const f = d.tf.get(w); if (f) s += Math.log(1 + (docs.length - df[i] + 0.5) / (df[i] + 0.5)) * (f * 2.2) / (f + 1.2 * (0.25 + 0.75 * d.len / avg)); });
+    q.forEach((w, i) => { const f = tfOf(d, w); if (f) s += Math.log(1 + (docs.length - df[i] + 0.5) / (df[i] + 0.5)) * (f * 2.2) / (f + 1.2 * (0.25 + 0.75 * d.len / avg)); });
     return { id, s };
   }).filter((x) => x.s >= min).sort((a, b) => b.s - a.s).slice(0, k);
-  const get = t().prepare("SELECT * FROM brain_notes WHERE id = ? AND user_id = ?");
-  return top.map((x) => get.get(x.id, uid) as Row | undefined).filter((r): r is Row => !!r).map(parse);
 }
-/** Vài trang trong bộ não liên quan nhất tới câu hỏi (tầng động, cuối prompt). */
+const notesById = (uid: string, ids: string[]) => {
+  const get = t().prepare("SELECT * FROM brain_notes WHERE id = ? AND user_id = ?");
+  return ids.map((id) => get.get(id, uid) as Row | undefined).filter((r): r is Row => !!r).map(parse);
+};
+function recallHits(uid: string, query: string, k: number, min: number, conv?: string): Note[] {
+  return notesById(uid, (recallScored(uid, query, k, min, conv) ?? []).map((x) => x.id));
+}
+const recallLine = (n: Note) => WIKI.includes(n.kind)
+  ? `- [[${n.title}]] (${n.kind === "topic" ? "chủ đề" : "tên riêng"}): ${(n.props.summary || n.props.desc || "").slice(0, 300)}${n.props.facts?.length ? ` Đã biết: ${n.props.facts.slice(-4).map((f) => f.t).join("; ").slice(0, 400)}.` : ""}`
+  : n.kind === "note" ? `- [[${n.title}]] (ghi chú của họ): ${n.body.replace(/\n+/g, " ").replace(/\[\[|\]\]/g, "").slice(0, 300)}`
+  : `- [[${n.title}]] (${day(n.props.date ?? n.createdAt)}): ${n.props.gist}${n.props.points?.length ? ` Điểm chính: ${n.props.points.slice(0, 3).join("; ")}.` : ""}${n.props.tasks?.length ? ` Còn dang dở: ${n.props.tasks.slice(0, 2).join("; ")}.` : ""}`;
+const recallBlock = (hits: Note[]) => (hits.length ? `<brain_recall>
+Từ bộ não chung của Synchro, những ghi chú liên quan tới câu hỏi này (bạn nhớ chúng như chuyện đã cùng người dùng trải qua; dùng khi hữu ích, không cần nói là đang nhớ lại):
+${hits.map(recallLine).join("\n")}
+</brain_recall>` : "");
+/** Vài trang trong bộ não liên quan nhất tới câu hỏi, chỉ theo từ khóa (BM25). Lượt chat dùng brainRecallHybrid. */
 export function brainRecall(uid: string, query: string, conv?: string): string {
   if (!query.trim() || !learning(uid)) return "";
-  const hits = recallHits(uid, query, 4, 1.6, conv);
-  if (!hits.length) return "";
-  const line = (n: Note) => WIKI.includes(n.kind)
-    ? `- [[${n.title}]] (${n.kind === "topic" ? "chủ đề" : "tên riêng"}): ${(n.props.summary || n.props.desc || "").slice(0, 300)}${n.props.facts?.length ? ` Đã biết: ${n.props.facts.slice(-4).map((f) => f.t).join("; ").slice(0, 400)}.` : ""}`
-    : n.kind === "note" ? `- [[${n.title}]] (ghi chú của họ): ${n.body.replace(/\n+/g, " ").replace(/\[\[|\]\]/g, "").slice(0, 300)}`
-    : `- [[${n.title}]] (${day(n.props.date ?? n.createdAt)}): ${n.props.gist}${n.props.points?.length ? ` Điểm chính: ${n.props.points.slice(0, 3).join("; ")}.` : ""}${n.props.tasks?.length ? ` Còn dang dở: ${n.props.tasks.slice(0, 2).join("; ")}.` : ""}`;
-  return `<brain_recall>
-Từ bộ não chung của Synchro, những ghi chú liên quan tới câu hỏi này (bạn nhớ chúng như chuyện đã cùng người dùng trải qua; dùng khi hữu ích, không cần nói là đang nhớ lại):
-${hits.map(line).join("\n")}
-</brain_recall>`;
+  return recallBlock(recallHits(uid, query, 4, 1.6, conv));
+}
+
+// ---------------------------------------------------------------- gọi lại kết hợp: từ khóa + nghĩa (embedding) + xếp lại
+// Ghi chú được embed ở nền (vecstore) bằng khóa OpenAI / Gemini sẵn có. Lúc hỏi: BM25 top 20 và cosine top 20 hợp nhất bằng RRF, rồi xếp
+// lại bằng các dấu hiệu rẻ (tên trang khớp câu hỏi, cả hai cách cùng tìm thấy, độ gần nghĩa, trang kiến thức, mới sửa). Câu hỏi mơ hồ
+// (rất ngắn, hoặc hai ứng viên đầu sát điểm) thì nhờ model rẻ nhất qua khóa API xếp lại danh sách, trong ngân sách thời gian còn lại; quá
+// hạn hay lỗi thì giữ thứ tự đã có. Không có khóa embedding / chưa có vector / embed câu hỏi quá chậm: như cũ, chỉ BM25.
+const RECALL_KINDS = "'chat','code','topic','entity','note'";
+/** Nội dung đem embed của một ghi chú (rỗng: chưa có gì để gọi lại, ví dụ đoạn chat chưa chưng cất). */
+export function embedText(n: Note): string {
+  const p = n.props, al = p.aliases?.length ? ` (${p.aliases.join(", ")})` : "";
+  if (n.kind === "chat" || n.kind === "code") return p.gist ? [`${n.title}.`, p.gist, ...(p.points ?? []), ...(p.decisions ?? []), ...(p.tasks ?? [])].join(" ") : "";
+  if (WIKI.includes(n.kind)) return [`${n.title}${al}.`, p.summary || p.desc || "", ...(p.facts ?? []).slice(-20).map((f) => f.t)].join(" ");
+  if (n.kind === "note") return `${n.title}${al}. ${n.body.replace(/\[\[|\]\]/g, "")}`;
+  return "";
+}
+registerVecSource("brain", {
+  userOf: (uid) => (learning(uid) ? uid : null),
+  pending: (uid, model, limit) => (t().prepare(`SELECT n.* FROM brain_notes n LEFT JOIN vec_items v ON v.scope = 'brain' AND v.item = n.id
+      WHERE n.user_id = ? AND n.kind IN (${RECALL_KINDS}) AND (v.item IS NULL OR v.model != ? OR v.src_at != n.updated_at) ORDER BY n.updated_at DESC LIMIT ?`).all(uid, model, limit) as Row[])
+    .map((r) => { const n = parse(r); return { item: n.id, text: embedText(n), srcAt: n.updatedAt }; }),
+  // Ghi chú bị xóa (xóa một ghi chú, xóa sạch bộ não, xóa tài khoản) trong lúc chờ API embed: không ghi vector của nó trở lại.
+  alive: (uid, items) => new Set((t().prepare(`SELECT id FROM brain_notes WHERE user_id = ? AND id IN (${items.map(() => "?").join(",") || "''"})`).all(uid, ...items) as { id: string }[]).map((r) => r.id)),
+});
+let vecSweptAt = 0;
+onTick("brain-vec-sweep", (now) => { if (now - vecSweptAt < 3_600_000) return; vecSweptAt = now; try { sweepVecs("brain", "SELECT id FROM brain_notes"); } catch (e) { console.warn("[brain] dọn vector:", (e as Error).message); } });
+
+const envMs = (k: string, d: number) => { const v = Number(process.env[k]); return Number.isFinite(v) && v > 0 ? v : d; };
+const okRecall = (n: Note, conv?: string) => (conv === undefined || n.conv !== conv) && (n.kind === "chat" || n.kind === "code" ? !!n.props.gist : WIKI.includes(n.kind) || n.kind === "note");
+type Cand = { n: Note; bm: number; cos: number; score: number };
+/** Xếp lại không cần model: RRF cộng các dấu hiệu rẻ. */
+function heuristicRank(cands: Cand[], fused: Map<string, number>, query: string, min: number, now = Date.now()) {
+  const q = [...new Set(words(query))];
+  for (const c of cands) {
+    const names = words([c.n.title, ...(c.n.props.aliases ?? [])].join(" "));
+    const title = q.length ? q.filter((w) => names.includes(w)).length / q.length : 0;
+    const age = (now - c.n.updatedAt) / 86_400_000;
+    c.score = (fused.get(c.n.id) ?? 0) + 0.012 * title + (c.bm > 0 && c.cos > 0 ? 0.006 : 0) + 0.01 * Math.max(0, c.cos - min)
+      + (WIKI.includes(c.n.kind) ? 0.003 : c.n.kind === "note" ? 0.002 : 0) + 0.004 * Math.exp(-age / 60);
+  }
+  return cands.sort((a, b) => b.score - a.score);
+}
+const RERANK = `<brain_rerank>
+Bạn xếp các ghi chú theo mức liên quan tới câu hỏi. Trả về DUY NHẤT JSON {"order":[số thứ tự]}: các ghi chú liên quan, liên quan nhất trước; bỏ ghi chú không liên quan.
+</brain_rerank>`;
+/** Model rẻ nhất qua khóa API (không dùng gói CLI: mở CLI mất vài giây, quá ngân sách của lượt chat). */
+async function rerankModel(user: UserRow) {
+  const { usable } = await usableModels(user);
+  const api = usable.filter((k) => !subCli(k));
+  const fast = api.filter((k) => tierOf(k) === "fast");
+  return fast.length ? sideModel(fast) : null;
+}
+const RERANK_MAX_MS = 20_000;
+// Thời gian trả lời gần đây của model xếp lại (trung bình trượt): model thường chậm hơn ngân sách thì bỏ bước này (không bắt lượt chat chờ hết
+// ngân sách rồi vẫn giữ thứ tự cũ, không trả tiền cho câu trả lời không ai dùng), chỉ thử lại một lần mỗi 5 phút xem model đã nhanh lên chưa.
+const rerankLat: Map<string, { ms: number; n: number; probeAt: number }> = ((globalThis as { __rerankLat?: Map<string, { ms: number; n: number; probeAt: number }> }).__rerankLat ??= new Map());
+export const rerankLatency = (model: string) => rerankLat.get(model);
+async function llmRerank(user: UserRow, query: string, cands: Cand[], ms: number): Promise<Cand[] | null> {
+  if (process.env.SYNCHRO_LLM_RERANK === "0" || ms < 250) return null;
+  const t0 = Date.now();
+  const model = await rerankModel(user).catch(() => null);
+  if (!model || Date.now() - t0 > ms - 150) return null;
+  const lat = rerankLat.get(model) ?? { ms: 0, n: 0, probeAt: 0 };
+  if (lat.n >= 2 && lat.ms > ms) { if (Date.now() - lat.probeAt < 5 * 60_000) return null; lat.probeAt = Date.now(); }
+  const t1 = Date.now();
+  const list = cands.map((c, i) => `[${i + 1}] ${c.n.title}: ${embedText(c.n).slice(0, 240)}`).join("\n");
+  // Không hủy lệnh gọi khi hết ngân sách: hãng vẫn tính tiền phần câu hỏi đã gửi, nên để nó chạy xong ở nền (oneShot ghi chi phí vào Mức dùng),
+  // lượt chat chỉ chờ trong ngân sách rồi giữ thứ tự cũ.
+  const call = oneShot(user, model, RERANK, [{ role: "user", content: `Câu hỏi: ${query.slice(0, 500)}\n\n${list}` }], { maxTokens: 80, feature: "brain-rerank", signal: AbortSignal.timeout(RERANK_MAX_MS) });
+  call.then(() => { const d = Date.now() - t1; lat.ms = lat.n ? lat.ms * 0.6 + d * 0.4 : d; lat.n++; rerankLat.set(model, lat); }, () => {});
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    const text = await Promise.race([call, new Promise<null>((ok) => { timer = setTimeout(() => ok(null), Math.max(100, ms - (Date.now() - t0))); })]);
+    if (text === null) return null;
+    const order = (jsonOf(text) as { order?: unknown }).order;
+    if (!Array.isArray(order)) return null;
+    const picked = [...new Set(order.map(Number).filter((i) => Number.isInteger(i) && i >= 1 && i <= cands.length))].map((i) => cands[i - 1]);
+    return picked.length ? picked : null;
+  } catch { return null; } finally { clearTimeout(timer); }
+}
+export type RecallTrace = { mode: "bm25" | "hybrid"; ms: number; vecMs?: number; reranked?: "heuristic" | "llm"; ids: string[] };
+/**
+ * Gọi lại cho lượt chat: kết hợp từ khóa và nghĩa. budgetMs là tổng thời gian cho phép (mặc định 600 ms, SYNCHRO_RECALL_BUDGET_MS):
+ * embed câu hỏi dùng tối đa 2/3, phần còn lại cho bước xếp lại bằng model khi câu hỏi mơ hồ.
+ */
+export async function brainRecallHybrid(user: UserRow, query: string, conv?: string, o: { budgetMs?: number; trace?: (t: RecallTrace) => void } = {}): Promise<string> {
+  const uid = user.id;
+  if (!query.trim() || !learning(uid)) return "";
+  queueEmbed("brain", uid);
+  const t0 = Date.now(), budget = o.budgetMs ?? envMs("SYNCHRO_RECALL_BUDGET_MS", 600);
+  const bm = recallScored(uid, query, 20, 0.8, conv);
+  if (bm === null) return "";
+  const vq = await vecQuery("brain", uid, uid, query, 20, Math.round(budget * 2 / 3)).catch(() => null);
+  const strong = bm.filter((x) => x.s >= 1.6);
+  if (!vq) {
+    const hits = notesById(uid, strong.slice(0, 4).map((x) => x.id));
+    o.trace?.({ mode: "bm25", ms: Date.now() - t0, ids: hits.map((n) => n.id) });
+    return recallBlock(hits);
+  }
+  const min = minCos(vq.model);
+  const vh = vq.hits.filter((h) => h.cos >= min);
+  const cosOf = new Map(vh.map((h) => [h.item, h.cos])), bmOf = new Map(bm.map((x) => [x.id, x.s]));
+  // Từ khóa yếu (0,8–1,6) chỉ được tính khi nghĩa cũng thấy liên quan.
+  const bmList = bm.filter((x) => x.s >= 1.6 || cosOf.has(x.id)).map((x) => x.id);
+  const fused = rrf([bmList, vh.map((h) => h.item)]);
+  const cands: Cand[] = notesById(uid, [...fused.keys()]).filter((n) => okRecall(n, conv)).map((n) => ({ n, bm: bmOf.get(n.id) ?? 0, cos: cosOf.get(n.id) ?? 0, score: 0 }));
+  if (!cands.length) { o.trace?.({ mode: "hybrid", ms: Date.now() - t0, vecMs: vq.ms, reranked: "heuristic", ids: [] }); return ""; }
+  let ranked = heuristicRank(cands, fused, query, min);
+  let how: "heuristic" | "llm" = "heuristic";
+  const ambiguous = ranked.length > 4 && (words(query).length <= 2 || (ranked[1].score >= ranked[0].score * 0.97));
+  if (ambiguous) {
+    const top = ranked.slice(0, 20);
+    const re = await llmRerank(user, query, top, budget - (Date.now() - t0));
+    if (re) { ranked = re; how = "llm"; }
+  }
+  const hits = ranked.slice(0, 4).map((c) => c.n);
+  o.trace?.({ mode: "hybrid", ms: Date.now() - t0, vecMs: vq.ms, reranked: how, ids: hits.map((n) => n.id) });
+  return recallBlock(hits);
 }
 
 // ---------------------------------------------------------------- tên và tên khác
@@ -1035,7 +1190,7 @@ export function setTask(user: UserRow, title: string, task: string, done: boolea
 }
 
 // ---------------------------------------------------------------- ghi chú hằng ngày
-const dropNote = (id: string) => { t().prepare("DELETE FROM brain_links WHERE src = ?").run(id); t().prepare("DELETE FROM brain_notes WHERE id = ?").run(id); };
+const dropNote = (id: string) => { t().prepare("DELETE FROM brain_links WHERE src = ?").run(id); t().prepare("DELETE FROM brain_notes WHERE id = ?").run(id); dropVecs("brain", { items: [id] }); };
 /** Nhật ký còn nhắc đoạn chat không còn nữa (xóa từ bản trước khi nhật ký chưa tự dọn): viết lại, hoặc xóa khi cả ngày không còn gì. */
 function sweepDaily(uid: string) {
   const notes = allNotes(uid), live = new Set(notes.filter((n) => n.kind === "chat" || n.kind === "code").map((n) => fold(n.title)));
@@ -1249,6 +1404,7 @@ export function wipeBrain(uid: string) {
   const d = t();
   d.prepare("DELETE FROM brain_links WHERE user_id = ? AND src NOT IN (SELECT id FROM brain_notes WHERE user_id = ? AND kind = 'rule')").run(uid, uid);
   d.prepare("DELETE FROM brain_notes WHERE user_id = ? AND kind != 'rule'").run(uid);
+  dropVecs("brain", { owner: uid });
   for (const tb of ["brain_queue", "brain_state", "brain_log", "instructions_history"]) d.prepare(`DELETE FROM ${tb} WHERE user_id = ?`).run(uid);
   clearMemory(uid);
   forgetProfile(uid);

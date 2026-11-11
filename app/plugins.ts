@@ -12,6 +12,7 @@ import { measureZip, SKILL_ZIP_MAX } from "../scripts/zipguard.mjs";
 import { db } from "./authstore";
 import { download, enabledSkillsByIds, isAllowed, isText, lenientSkillMd, parseEntries, parseSkillMd, ROOT, type Entry, type Skill } from "./skillstore";
 import { GH_API } from "./github";
+import { registerMemStat } from "./memstat";
 import { fold, warmSkillIndex } from "./skillroute";
 import { bumpTags, classify, classifyCatalog, dropAutoTags, dropPluginTags, dropTag, holdTags, keepPluginTags, pluginDetected, pluginKey, pluginTagRows, refine, tagRev, userStudioIds } from "./skillstudio";
 
@@ -143,11 +144,25 @@ async function resolveCommit(repo: string, ref = "HEAD"): Promise<string> {
 }
 /** Lỗi mạng tạm thời (thử lại được), khác lỗi của chính gói (giấy phép, không có SKILL.md…). */
 export const isNetErr = (m: string) => /fetch failed|timeout|aborted|ECONN|ETIMEDOUT|EAI_AGAIN|socket|other side closed|GitHub trả lỗi (429|403|5\d\d)|^Mạng tới GitHub/i.test(m);
+// Gói vừa tải (xem trước rồi cài ngay sau đó không phải tải lại): giữ tối đa 10 phút và 50 MB. Hết hạn thì bỏ cả khi không ai đọc lại (hẹn giờ unref),
+// xong cài hàng loạt thì bỏ hết: giới hạn cũ chỉ xét lúc thêm gói mới nên tới 300 MB gói của lần cài hàng loạt cuối nằm lại mãi.
+const ZIP_TTL = Number(process.env.SYNCHRO_ZIP_TTL_MS) || 10 * 60_000, ZIP_CAP = 50 * 1048576;
 const zipCache = new Map<string, { at: number; buf: Buffer }>();
+let zipTimer: ReturnType<typeof setTimeout> | null = null;
+function trimZips(now = Date.now(), keep?: string) {
+  let total = 0;
+  for (const [k, v] of [...zipCache].reverse()) { total += v.buf.length; if (now - v.at >= ZIP_TTL || (total > ZIP_CAP && k !== keep)) zipCache.delete(k); }
+  if (zipTimer) { clearTimeout(zipTimer); zipTimer = null; }
+  if (zipCache.size) { const oldest = Math.min(...[...zipCache.values()].map((v) => v.at)); zipTimer = setTimeout(() => trimZips(), Math.max(1000, oldest + ZIP_TTL - now)); zipTimer.unref?.(); }
+}
+/** Gói đang giữ trong bộ nhớ (theo dõi bộ nhớ, kiểm thử). */
+export const zipCacheStats = () => { let bytes = 0; for (const v of zipCache.values()) bytes += v.buf.length; return { n: zipCache.size, bytes }; };
+registerMemStat("pluginZips", () => { const s = zipCacheStats(); return { n: s.n, MB: Math.round(s.bytes / 1048576) }; });
 async function repoZip(repo: string, commit: string) {
   const key = `${repo}@${commit}`;
   const c = zipCache.get(key);
-  if (c && Date.now() - c.at < 10 * 60_000) return c.buf;
+  if (c && Date.now() - c.at < ZIP_TTL) return c.buf;
+  if (c) zipCache.delete(key);
   const [o, r] = repo.split("/");
   let buf: Buffer | null = null;
   // Lỗi mạng / GitHub quá tải (cài hàng loạt hàng nghìn repo): thử lại sau 3, 10, 30 giây rồi mới báo lỗi mạng (plugjob.ts thử lại sau).
@@ -164,9 +179,7 @@ async function repoZip(repo: string, commit: string) {
     await new Promise((ok) => setTimeout(ok, [3000, 10_000, 30_000][t]));
   }
   zipCache.set(key, { at: Date.now(), buf });
-  // Giữ tối đa 10 phút và 300MB (cài hàng loạt đi qua hàng nghìn repo: không giữ hết trong bộ nhớ).
-  let total = 0;
-  for (const [k, v] of [...zipCache].reverse()) { total += v.buf.length; if (Date.now() - v.at > 10 * 60_000 || (total > 300 * 1048576 && k !== key)) zipCache.delete(k); }
+  trimZips(Date.now(), key);
   return buf;
 }
 
@@ -647,11 +660,13 @@ const CG = globalThis as unknown as { __plRev?: number; __plCache?: Cache | null
 // Cài hàng loạt (plugjob.ts) đặt __plBulk: hàng nghìn thư viện được thêm liên tục trong vài giờ, dựng lại bộ đệm sau mỗi thư viện thì lượt chat
 // nào cũng phải chờ dựng lại cả kho. Khi đó giữ bộ đệm cũ tối đa 60 giây (thư viện mới vào chat chậm tối đa một phút), chat vẫn mượt.
 const touch = () => { CG.__plRev = (CG.__plRev ?? 0) + 1; if (!CG.__plBulk) CG.__plCache = null; };
-export const setBulk = (on: boolean) => { CG.__plBulk = on; if (!on) CG.__plCache = null; };
+export const setBulk = (on: boolean) => { CG.__plBulk = on; if (!on) { CG.__plCache = null; zipCache.clear(); trimZips(); } };
+// Hàm đọc nội dung chỉ giữ id của skill, không giữ cả hàng cơ sở dữ liệu (hàng có report JSON của bản kiểm tra): ~18.000 closure giữ cả hàng là vài chục MB chết.
 function lazySkill(r: Pick<CRow, "id" | "plugin_id" | "description" | "storage_path" | "use_count">, name: string): Skill {
+  const id = r.id;
   let full: { body: string; files: Skill["files"] } | null = null;
   const load = () => {
-    if (!full) { const x = init().prepare("SELECT body, files FROM plugin_skills WHERE id = ?").get(r.id) as { body: string; files: string } | undefined; full = { body: x?.body ?? "", files: x ? JSON.parse(x.files) : [] }; }
+    if (!full) { const x = init().prepare("SELECT body, files FROM plugin_skills WHERE id = ?").get(id) as { body: string; files: string } | undefined; full = { body: x?.body ?? "", files: x ? JSON.parse(x.files) : [] }; }
     return full;
   };
   return {

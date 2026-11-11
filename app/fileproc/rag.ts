@@ -1,6 +1,5 @@
 // File lớn: cắt đoạn ~1000 token và chọn các đoạn liên quan nhất tới câu hỏi.
-// Dùng BM25 cục bộ (không cần embedding API / vector DB). Muốn dùng embedding thật,
-// chỉ cần thay hàm `rank` bên dưới.
+// BM25 cục bộ; khi máy chủ có khóa OpenAI / Gemini, fileproc/index.ts kết hợp thêm tìm theo nghĩa (vecstore) bằng RRF.
 const CHUNK_CHARS = 4000;
 
 export function chunkForRag(text: string): string[] {
@@ -19,7 +18,8 @@ export function chunkForRag(text: string): string[] {
 
 const tok = (s: string) => s.toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? [];
 
-export function rank(chunks: string[], query: string, k: number): number[] {
+/** Điểm BM25 của từng đoạn, xếp giảm dần (chỉ đoạn có điểm). */
+export function scored(chunks: string[], query: string): { i: number; s: number }[] {
   const q = [...new Set(tok(query))];
   const docs = chunks.map(tok);
   const avg = docs.reduce((a, d) => a + d.length, 0) / (docs.length || 1) || 1;
@@ -36,5 +36,11 @@ export function rank(chunks: string[], query: string, k: number): number[] {
     }
     return s;
   });
-  return score.map((s, i) => [s, i] as const).sort((a, b) => b[0] - a[0]).slice(0, k).map((x) => x[1]).sort((a, b) => a - b);
+  return score.map((s, i) => ({ i, s })).filter((x) => x.s > 0).sort((a, b) => b.s - a.s);
+}
+export function rank(chunks: string[], query: string, k: number): number[] {
+  const top = scored(chunks, query).slice(0, k).map((x) => x.i);
+  // Không đoạn nào khớp chữ nào: giữ các đoạn đầu như trước.
+  for (let i = 0; top.length < Math.min(k, chunks.length) && i < chunks.length; i++) if (!top.includes(i)) top.push(i);
+  return top.sort((a, b) => a - b);
 }

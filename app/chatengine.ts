@@ -35,19 +35,22 @@ import { mergeOuts, previewNote, previewOf } from "./runpreview";
 import { totalsNote } from "./xlsxcheck";
 import { ARTIFACT_RULES, ASK_RULES, VIZ_RULES } from "./artifacts";
 import { designTurn, historyTexts } from "./designkit";
+import { videoTurn } from "./videokit";
+import { docTurn } from "./dockit";
 import { anthropicWebSearch } from "./modelrules";
 import { untested } from "./modelreg";
 import { type ABlock, type Citer, anthropicCall, blocksText, searchResults, chatOnce, effortParams, HttpErr, openaiCall, outCap, respInput, respParse, respTools, responsesCall, toAnthropic, toOpenAI, toResponses, withPages } from "./llmcall";
 import { mergedProviders, prewarmClaude, sessionPlain, subCli, subTurn } from "./ai/subs";
 import { PROJECT_DOC_RULES, PROJECT_DOC_TOOL, projectDocsLong, readProjectFile } from "./projectdocs";
-import { ASPECTS, generateImages, IMAGE_RULES, IMAGE_TOOL, imageBudget, IMG_NAME, requestSlug } from "./ai/imagegen";
+import { ASPECTS, generateImages, IMAGE_RULES, IMAGE_TOOL, imageBudget, imageName, IMG_NAME, requestSlug, type ImgErr, type ImgOk } from "./ai/imagegen";
+import { POSTER_TEMPLATES, posterProps, renderPoster, type PosterTemplate } from "./design-engine/posters/render";
 import { genImageUrl } from "./artdoc";
 import { IMAGE_MAX_MB, imageKind, type ImgFile, scrubServerPaths } from "./ai/imagefiles";
 import { AGY_WAIT_NOTE, BRIDGE_HOLD, openBridge } from "./mcpbridge";
 import { clearStall, noteStall, stalledModels, usableModels } from "./ai/anymodel";
 import { learnFromTurn, userContext } from "./memory";
 import { crisisHelp } from "./crisishelp";
-import { afterTurn, BRAIN_RULES, BRAIN_TOOLS, brainRecall, brainReady, runBrainTool, topRule, warmRecall } from "./brain";
+import { afterTurn, BRAIN_RULES, BRAIN_TOOLS, brainRecallHybrid, brainReady, runBrainTool, topRule, warmRecall } from "./brain";
 import { DENIED_NUDGE, MAX_NUDGE, NUDGE, stalled } from "./stall";
 import { makeGate, NO_UI, QUEUED, type Gate } from "./agentgate";
 import { queueSite, queueTool, runPropose, TASK_TOOL, taskBrowser, taskOf, taskRules } from "./tasktools";
@@ -56,6 +59,7 @@ import { answer as answerAsk, newAskId, waitAnswer, type Ask } from "./approvals
 import { callArgs, compactSchema, rankTools, resolveTool } from "./connproxy";
 import { getPrefs as codePrefs } from "./codestore";
 import { INPUTS_MAX, runInputs } from "./runinputs";
+import { registerMemStat } from "./memstat";
 import { BROWSER_RULES, BROWSER_TOOLS, browserTargetOf, chatFiles, describeBrowser, isBrowserTool, releaseBrowser, runBrowserTool, type BrowserCtx } from "./browsertools";
 
 // Bộ xử lý chat (chỉ chạy ở máy chủ), dùng chung cho /api/llm (chờ kết quả) và lượt chạy nền (runs.ts).
@@ -206,12 +210,22 @@ const citeOf = (x: Exec): Citer => (url, title = "") => {
 type Decision = "allow" | "chat" | "always" | "deny";
 type Out = { text: string; used: ToolRun["used"][]; cancelled?: boolean } | { approval: { id: string; calls: unknown[] } };
 // Lượt chat đang chờ người dùng duyệt công cụ: giữ trong bộ nhớ máy chủ tối đa 30 phút.
-type Pending = { uid: string; model: string; ad: Adapter; m: unknown[]; calls: Call[]; used: ToolRun["used"][]; step: number; x: Exec; at: number };
-const PENDING_TTL = 30 * 60_000;
+// Mỗi lượt chờ giữ cả lịch sử và phiên connector: hết hạn thì tự bỏ bằng hẹn giờ riêng (unref), không đợi tới lần có người khác cần duyệt.
+type Pending = { uid: string; model: string; ad: Adapter; m: unknown[]; calls: Call[]; used: ToolRun["used"][]; step: number; x: Exec; at: number; timer?: ReturnType<typeof setTimeout> };
+const PENDING_TTL = Number(process.env.SYNCHRO_APPROVAL_TTL_MS) || 30 * 60_000;
 const pending = new Map<string, Pending>();
 function sweep() {
-  for (const [k, p] of pending) if (Date.now() - p.at > PENDING_TTL) { pending.delete(k); p.x.sess?.close(); }
+  for (const [k, p] of pending) if (Date.now() - p.at > PENDING_TTL) { pending.delete(k); if (p.timer) clearTimeout(p.timer); p.x.sess?.close(); }
 }
+function parkApproval(id: string, p: Pending) {
+  p.timer = setTimeout(() => { if (pending.get(id) === p) { pending.delete(id); p.x.sess?.close(); } }, PENDING_TTL + 1000);
+  p.timer.unref?.();
+  pending.set(id, p);
+}
+const unparkApproval = (id: string) => { const p = pending.get(id); if (p?.timer) clearTimeout(p.timer); pending.delete(id); };
+/** Số lượt chat đang chờ duyệt công cụ (theo dõi bộ nhớ). */
+export const pendingApprovals = () => pending.size;
+registerMemStat("approvals", () => ({ pending: pending.size }));
 
 const fmtSize = (n: number) => (n < 1024 ? `${n} B` : n < 1048576 ? `${(n / 1024).toFixed(1)} KB` : `${(n / 1048576).toFixed(1)} MB`);
 // Ảnh trong outputs/ được gửi lại cho model xem (khung hình video, trang PDF, biểu đồ…; runpreview.ts): không xem được thì model từng tự đưa ảnh lên host
@@ -565,30 +579,48 @@ async function runImage(x: Exec, c: Call): Promise<Run> {
   const used = { kind: "search" as const, name: IMAGE_TOOL.name };
   const fail = (content: string): Run => ({ content, is_error: true, used });
   const prompt = typeof c.input?.prompt === "string" ? c.input.prompt.trim() : "";
-  if (!prompt) return fail("Thiếu mô tả ảnh (prompt).");
+  const template = String(c.input?.template ?? "").trim();
+  if (!prompt && !template) return fail("Thiếu mô tả ảnh (prompt).");
   if (prompt.length > 4000) return fail("Mô tả ảnh quá dài (tối đa 4.000 ký tự).");
   const aspect = (ASPECTS as readonly string[]).includes(String(c.input?.aspect_ratio)) ? String(c.input.aspect_ratio) : undefined;
   const count = Math.min(4, Math.max(1, Math.floor(Number(c.input?.count)) || 1));
   if (outputsFull()) return fail("Máy chủ sắp hết dung lượng đĩa nên chưa tạo ảnh được. Hãy nói rõ với người dùng và đề nghị thử lại sau.");
   if (outputRoom(x.uid) < 2 * 1048576) return fail(`Tài khoản đã dùng hết ${OUTPUT_QUOTA_MB()} MB dung lượng tệp đã tạo nên chưa lưu thêm được ảnh (tệp cũ tự xóa sau 30 ngày).`);
-  let reference: ImgFile | undefined;
-  // Model hay điền "" vào tham số không bắt buộc: đó là không có ảnh gốc, không phải "ảnh gần nhất".
-  const refIn = String(c.input?.reference ?? "").trim();
-  if (refIn) {
-    const r = await refImage(x, refIn);
-    if (typeof r === "string") return fail(r);
-    reference = r;
-  }
-  const wait = imageBudget(x.uid, count);
-  if (wait) return fail(`Tài khoản đã tạo nhiều ảnh trong một giờ qua. Hãy thử lại sau khoảng ${Math.ceil(wait / 60_000)} phút.`);
-  // Lượt Antigravity gọi công cụ này đang giữ khóa của tài khoản, mà lượt tạo ảnh cũng cần khóa đó: CLI đã đọc xong cấu hình nên nhả được, như lúc chờ người dùng duyệt.
-  x.park?.();
-  const stops = [runSignal(), x.calls?.get(c.id)?.cancel].filter((v): v is AbortSignal => !!v);
-  const r = await generateImages({ uid: x.uid, prompt, aspect, count, reference, signal: stops.length > 1 ? AbortSignal.any(stops) : stops[0],
-    onStatus: (t) => { progress("step", t); }, onNote: (t) => { progress("note", t); } });
-  if (!r.ok) {
-    if (r.providers) progress("plans", JSON.stringify({ why: r.kind, tried: r.tried.filter((f) => f.kind !== "auth").map((f) => f.cli) }));
-    return fail(r.text);
+  // Mẫu poster dựng ở máy chủ (Satori): không cần gói tạo ảnh nào, model chỉ điền trường, chữ tiếng Việt chính xác tuyệt đối.
+  let r: ImgOk | ImgErr, by: string;
+  if (template) {
+    if (!(POSTER_TEMPLATES as readonly string[]).includes(template)) return fail(`Không có mẫu "${template}". Mẫu có sẵn: ${POSTER_TEMPLATES.join(", ")}.`);
+    const props = posterProps(c.input?.poster);
+    if (typeof props === "string") return fail(props);
+    const wait = imageBudget(x.uid, 1);
+    if (wait) return fail(`Tài khoản đã tạo nhiều ảnh trong một giờ qua. Hãy thử lại sau khoảng ${Math.ceil(wait / 60_000)} phút.`);
+    progress("step", "Đang dựng poster 3600×1890");
+    try {
+      const png = await renderPoster(template as PosterTemplate, props, 3);
+      r = { ok: true, files: [{ name: imageName(props.title, 0, 1, "png"), mime: "image/png", data: png }], cli: "agy", notes: ["Poster 3600×1890 (gấp 3 lần 1200×630), chữ dựng dạng vector nên nét khi in và đăng mạng xã hội."], tried: [] };
+    } catch (e) { return fail(`Chưa dựng được poster: ${String((e as Error).message).slice(0, 200)}`); }
+    by = "mẫu poster của Synchro";
+  } else {
+    let reference: ImgFile | undefined;
+    // Model hay điền "" vào tham số không bắt buộc: đó là không có ảnh gốc, không phải "ảnh gần nhất".
+    const refIn = String(c.input?.reference ?? "").trim();
+    if (refIn) {
+      const r = await refImage(x, refIn);
+      if (typeof r === "string") return fail(r);
+      reference = r;
+    }
+    const wait = imageBudget(x.uid, count);
+    if (wait) return fail(`Tài khoản đã tạo nhiều ảnh trong một giờ qua. Hãy thử lại sau khoảng ${Math.ceil(wait / 60_000)} phút.`);
+    // Lượt Antigravity gọi công cụ này đang giữ khóa của tài khoản, mà lượt tạo ảnh cũng cần khóa đó: CLI đã đọc xong cấu hình nên nhả được, như lúc chờ người dùng duyệt.
+    x.park?.();
+    const stops = [runSignal(), x.calls?.get(c.id)?.cancel].filter((v): v is AbortSignal => !!v);
+    r = await generateImages({ uid: x.uid, prompt, aspect, count, reference, signal: stops.length > 1 ? AbortSignal.any(stops) : stops[0],
+      onStatus: (t) => { progress("step", t); }, onNote: (t) => { progress("note", t); } });
+    if (!r.ok) {
+      if (r.providers) progress("plans", JSON.stringify({ why: r.kind, tried: r.tried.filter((f) => f.kind !== "auth").map((f) => f.cli) }));
+      return fail(r.text);
+    }
+    by = IMG_NAME[r.cli];
   }
   // Tên theo lời người dùng; nhiều ảnh trong một lượt (thiết kế nhiều ảnh) không được trùng tên: inputs/ và tham chiếu đều đi theo tên.
   const asked = requestSlug(typedText((Array.isArray(x.msgs) ? (x.msgs as { role?: string; content?: unknown }[]) : []).filter((m) => m?.role === "user").at(-1)));
@@ -602,14 +634,14 @@ async function runImage(x: Exec, c: Call): Promise<Run> {
   });
   const { saved, left } = keepImages(x.uid, named, x.outs);
   (x.madeImgs ??= []).push(...saved.map((f) => f.id));
-  if (!saved.length) return fail(`${IMG_NAME[r.cli]} đã tạo ${r.files.length} ảnh nhưng chưa lưu được vì tài khoản đã dùng hết ${OUTPUT_QUOTA_MB()} MB dung lượng tệp đã tạo hoặc máy chủ sắp hết đĩa. Người dùng chưa nhận được ảnh nào: hãy nói rõ điều đó.`);
+  if (!saved.length) return fail(`${by} đã tạo ${r.files.length} ảnh nhưng chưa lưu được vì tài khoản đã dùng hết ${OUTPUT_QUOTA_MB()} MB dung lượng tệp đã tạo hoặc máy chủ sắp hết đĩa. Người dùng chưa nhận được ảnh nào: hãy nói rõ điều đó.`);
   const lines = saved.map((f) => `${f.name} (${fmtSize(f.size)}) — đã gửi cho người dùng`);
   const send = imagesForModel(named.filter((f) => saved.some((s) => s.name === f.name)).map((f) => ({ data: f.data.toString("base64"), mime: f.mime })));
   // CLI không phải lúc nào cũng theo đúng tỉ lệ xin: nói cho model biết để không báo sai với người dùng, nhất là ảnh sẽ đặt vào khung có sẵn của thiết kế.
   const [aw, ah] = (aspect ?? "").split(":").map(Number);
   const offRatio = aw && ah ? saved.filter((f) => f.w && f.h && Math.abs(f.w / f.h - aw / ah) / (aw / ah) > 0.08) : [];
   const notes = [...r.notes, ...(offRatio.length ? [`Xin tỉ lệ ${aspect} nhưng nhận được: ${offRatio.map((f) => `${f.name} ${f.w}×${f.h}`).join(", ")}. Nói rõ với người dùng nếu tỉ lệ quan trọng; đưa vào thiết kế thì cắt bằng object-fit, đừng kéo méo.`] : []), ...(left.length ? [`${left.length} ảnh không lưu được vì hết dung lượng: ${left.map((f) => f.name).join(", ")}.`] : []), ...(send.length < saved.length ? [`${saved.length - send.length} ảnh quá lớn nên không kèm ở đây để bạn xem (tối đa ${IMAGE_MAX_MB()} MB mỗi ảnh vẫn giao được cho người dùng); đừng mô tả các ảnh đó như đã xem.`] : [])];
-  const content = `Đã tạo ${saved.length} ảnh bằng ${IMG_NAME[r.cli]}.\n<files>\n${lines.join("\n")}\n</files>${notes.length ? `\n${notes.join("\n")}` : ""}\nẢnh đã hiện thành thẻ trong khung chat (xem, phóng to, tải về): trong câu trả lời đừng chèn đường dẫn hay liên kết.\nĐưa ảnh vào sản phẩm khi người dùng cần: artifact HTML, React, SVG, slide dùng đúng địa chỉ ${saved.map((f) => genImageUrl(f.id)).join(", ")} trong src hay url(...), Synchro tự nhúng ảnh; run_code (Word, PowerPoint, PDF, video, ghép ảnh) đọc inputs/${saved.map((f) => f.name).join(", inputs/")}.`;
+  const content = `Đã tạo ${saved.length} ảnh bằng ${by}.\n<files>\n${lines.join("\n")}\n</files>${notes.length ? `\n${notes.join("\n")}` : ""}\nẢnh đã hiện thành thẻ trong khung chat (xem, phóng to, tải về): trong câu trả lời đừng chèn đường dẫn hay liên kết.\nĐưa ảnh vào sản phẩm khi người dùng cần: artifact HTML, React, SVG, slide dùng đúng địa chỉ ${saved.map((f) => genImageUrl(f.id)).join(", ")} trong src hay url(...), Synchro tự nhúng ảnh; run_code (Word, PowerPoint, PDF, video, ghép ảnh) đọc inputs/${saved.map((f) => f.name).join(", inputs/")}.`;
   if (!send.length) return { content, is_error: false, used };
   (x.heavy ??= []).push(c.id);
   const [first, ...more] = send;
@@ -892,7 +924,7 @@ async function loop(ad: Adapter, m: unknown[], x: Exec, used: ToolRun["used"][],
     if (ask.length) {
       sweep();
       const id = randomToken(18);
-      pending.set(id, { uid, model, ad, m, calls: r.calls, used, step: i, x, at: Date.now() });
+      parkApproval(id, { uid, model, ad, m, calls: r.calls, used, step: i, x, at: Date.now() });
       return {
         approval: {
           id, calls: ask.map((c) => {
@@ -1304,7 +1336,13 @@ function designOf(body: Record<string, any>, caps: { art: boolean; code: boolean
   const typed = typedText((Array.isArray(body.messages) ? (body.messages as { role?: string; content?: unknown }[]) : []).filter((m) => m?.role === "user").pop());
   const d = designTurn({ typed, studio, art: caps.art, code: caps.code, ack: isAck(typed), seed: conv, prior: historyTexts(body.messages, body.artBase) });
   if (d) console.log(`[design] ${d.format} ${d.domain} ${d.own ? "own-brand" : d.preset}${d.compact ? " follow-up" : ""} ${d.bytes}B`);
-  return d?.block ?? "";
+  // Nhờ dựng video: thêm khối synchro-video (4 mẫu Remotion trong sandbox), chỉ khi run_code chạy trên image workspace.
+  const v = videoTurn({ typed, code: caps.code, workspace: runner() === "workspace" });
+  if (v) console.log(`[video] synchro-video ${Buffer.byteLength(v)}B`);
+  // Nhờ làm tệp tài liệu (báo cáo PDF, đề xuất, bài 2 cột, hóa đơn / báo giá): thêm khối synchro-doc (4 mẫu Typst / WeasyPrint), chỉ image workspace.
+  const k = docTurn({ typed, code: caps.code, workspace: runner() === "workspace", format: d?.format });
+  if (k) console.log(`[doc] synchro-doc ${Buffer.byteLength(k)}B`);
+  return [d?.block ?? "", v, k].filter(Boolean).join("\n\n");
 }
 // Bộ nhớ chỉ dùng cho lượt chat chính (không cho Code, artifact, lệnh nội bộ), khi nút "Bộ nhớ" bật và không ở chế độ ẩn danh.
 // Những gì Synchro biết về người dùng (tên, phần tự giới thiệu / hướng dẫn ở Cài đặt → Tài khoản, bộ nhớ khi bật): mọi lượt người dùng
@@ -1314,9 +1352,13 @@ const useProfile = (body: Record<string, any>) => !!body.skills && body.feature 
 const contextOf = (body: Record<string, any>, u: UserRow) => (useProfile(body) ? userContext(u, { memory: useMemory(body, u) }) : ""); // eslint-disable-line @typescript-eslint/no-explicit-any
 // Bộ não tổng hợp: kéo vài ghi chú liên quan nhất tới câu hỏi vào tầng động (chat lẫn Synchro Code; không trong đoạn chat ẩn danh / khi tắt Bộ nhớ).
 // Câu chào, cảm ơn không có gì để nhớ lại. Đo riêng để biết phần chuẩn bị của lượt nằm ở đâu.
-const recallOf = (body: Record<string, any>, u: UserRow, conv?: string) => { // eslint-disable-line @typescript-eslint/no-explicit-any
+// Kết hợp từ khóa và nghĩa (embedding bằng khóa OpenAI / Gemini sẵn có), có ngân sách thời gian; không có khóa thì như trước, chỉ từ khóa.
+const recallOf = async (body: Record<string, any>, u: UserRow, conv?: string) => { // eslint-disable-line @typescript-eslint/no-explicit-any
   if (!useProfile(body) || body.memory === false || body.incognito || routeTask(routeInput(body)) === "chat") return "";
-  return spanSync("brain recall", "retrieval", () => brainRecall(u.id, lastUserText(body.messages), conv));
+  const t0 = Date.now();
+  const out = await span("brain recall", "retrieval", () => brainRecallHybrid(u, lastUserText(body.messages), conv, { trace: (tr) => { if (tr.ms > 20 || tr.mode === "hybrid") console.log(`[timing] chat recall=${tr.ms}ms mode=${tr.mode}${tr.vecMs !== undefined ? ` vec=${tr.vecMs}ms` : ""}${tr.reranked ? ` rerank=${tr.reranked}` : ""} hits=${tr.ids.length}`); } })).catch(() => "");
+  if (Date.now() - t0 > 20) console.log(`[timing] chat recall total=${Date.now() - t0}ms`);
+  return out;
 };
 /** Model tự tra, đọc theo liên kết và ghi vào bộ não (công cụ brain_*), cùng điều kiện với phần ghi chú liên quan. */
 const brainOn = (body: Record<string, any>, u: UserRow) => useProfile(body) && body.memory !== false && !body.incognito && brainReady(u.id); // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -1522,7 +1564,7 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
     sweep();
     const p = pending.get(body.resume);
     if (!p || p.uid !== c.user.id) return Response.json({ error: "Yêu cầu chờ duyệt đã hết hạn. Hãy gửi lại tin nhắn." }, { status: 410 });
-    pending.delete(body.resume);
+    unparkApproval(body.resume);
     const raw = (body.decisions && typeof body.decisions === "object" ? body.decisions : {}) as Record<string, unknown>;
     // inputs: tham số người dùng sửa trên thẻ duyệt, theo id lời gọi; kiểm tra lại theo schema, sai thì lời gọi đó không chạy.
     const edits = (body.inputs && typeof body.inputs === "object" && !Array.isArray(body.inputs) ? body.inputs : {}) as Record<string, unknown>;
@@ -1614,7 +1656,7 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
       const say0 = am ? undefined : fast ? holdNeedTools(live()) : live();
       // Antigravity trả cả câu trả lời một lần nên làm sạch được ngay; CLI khác làm sạch ở câu trả lời cuối (đường dẫn có thể bị cắt giữa hai đoạn chữ).
       const say = say0 && cli === "agy" ? (t: string) => say0(scrubServerPaths(t)) : say0;
-      const turnMsgs = am ?? withRecall(withRecall(messages, recallOf(body, c.user, convId)), [route, fast || !pc ? "" : designOf(body, { art: !!pc.art, code: !!pc.code }, can(c.user, "skills") ? studioOf(body.studio) : null, convId), nowBlock(body), crisisBlock(body)].filter(Boolean).join("\n\n"));
+      const turnMsgs = am ?? withRecall(withRecall(messages, await recallOf(body, c.user, convId)), [route, fast || !pc ? "" : designOf(body, { art: !!pc.art, code: !!pc.code }, can(c.user, "skills") ? studioOf(body.studio) : null, convId), nowBlock(body), crisisBlock(body)].filter(Boolean).join("\n\n"));
       const turn = (msgs: unknown, fresh = false) => subTurn({
         user: c.user, model, system: am ? ARTIFACT_SYSTEM : [system || (planSys || toolSys ? "Bạn là một trợ lý AI hữu ích." : ""), planSys, toolSys, contextOf(body, c.user), pinnedBlock(body.pinned)].filter(Boolean).join("\n\n"),
         ephemeral: body.incognito === true, messages: msgs, conv: am ? undefined : convId, effort: isEffort(wanted) ? wanted : wanted === "auto" ? autoEffort(routeInput(body)) : undefined, signal: turnSignal(), onDelta: say, onToolUse: am ? undefined : toolUseSeen,
@@ -1757,7 +1799,7 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
     const { list, visible, libs, prefer, route } = await span("skills", "retrieval", () => skillSet(c.user, body, messages, studio, st));
     // Lịch sử theo chuẩn Synchro → tin nhắn sẵn sàng cho mọi hãng. Gợi ý skill theo câu hỏi mới nhất đổi mỗi lượt nên ở tầng động
     // (cuối prompt), không ở phần đầu: phần đầu (hướng dẫn, danh mục skill, tài liệu ghim) giữ nguyên để đọc từ bộ đệm.
-    const dyn = [route, cs ? designOf(body, { art: !!cs.caps.art, code: !!cs.caps.code }, studio, convId) : "", recallOf(body, c.user, convId), nowBlock(body), crisisBlock(body)];
+    const dyn = [route, cs ? designOf(body, { art: !!cs.caps.art, code: !!cs.caps.code }, studio, convId) : "", await recallOf(body, c.user, convId), nowBlock(body), crisisBlock(body)];
     const prep = spanSync("history", "history", () => prepareHistory(messages, dyn, mix));
     markPrompt();
     // Connector chỉ dùng trong lượt chat chính (skills = true), không dùng cho các lệnh nội bộ như tóm tắt bộ nhớ.

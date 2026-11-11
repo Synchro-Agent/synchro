@@ -35,6 +35,10 @@ export async function register() {
       // Giọng của tài khoản đã xóa mà lần xóa trên ElevenLabs bị lỗi: thử lại mỗi giờ.
       let voicePurgeAt = 0;
       onTick("voice-purge", (now) => { if (now - voicePurgeAt < 3_600_000) return; voicePurgeAt = now; void import("./app/speechapi").then((m) => m.retryVoicePurges()).catch((e) => console.error("[speech]", e)); });
+      // Bộ nhớ của máy chủ: một dòng [timing] mem mỗi 30 phút (cả lần đầu ngay khi khởi động) để thấy nó có lớn dần không.
+      const { sampleMem } = await import("./app/memstat");
+      let memAt = 0;
+      onTick("mem", (now) => { if (now - memAt < 30 * 60_000) return; memAt = now; sampleMem(); });
       onTick("connectors", (now) => { void recheckConnectors(now).catch((e) => console.error("[connectors]", e)); });
       // Model mới của các hãng: dò lúc khởi động (sau 1-3 phút) và mỗi 6 giờ, thử tự động rồi mới cho dùng (app/modelreg.ts).
       (await import("./app/modelreg")).scheduleDiscovery(onTick);

@@ -3,6 +3,8 @@
 # Công cụ đa phương tiện / tài liệu để model tự làm trọn việc mà không cần mạng: dựng video (ffmpeg), xử lý ảnh, chuyển Word /
 # PowerPoint sang PDF (LibreOffice), đọc PDF, nhận dạng chữ (Tesseract, có tiếng Việt), sơ đồ (Graphviz), âm thanh (SoX).
 # Giữ khớp danh sách WS_TOOLS trong app/coderun.ts (mô tả công cụ run_code cho model).
+# Video đồ họa chuyển động: Remotion 4.0.539 dựng sẵn ở /opt/remotion (4 mẫu, lệnh synchro-video), whisper.cpp + mô hình small cho phụ đề không cần mạng.
+# Tài liệu PDF / Word: Typst 0.15.1 (+ 0.12.0 cho basic-report), WeasyPrint 70.0, thư viện docx 9.15.3; lệnh synchro-doc, mẫu ở /opt/synchro/doc.
 FROM node:22-bookworm
 
 ENV DEBIAN_FRONTEND=noninteractive LANG=C.UTF-8 LC_ALL=C.UTF-8
@@ -73,6 +75,114 @@ RUN chmod 755 /opt/synchro/browser.sh \
      > /etc/profile.d/synchro.sh \
   && printf '%s\n' "PS1='\\[\\e[32m\\]\\u\\[\\e[0m\\]:\\[\\e[34m\\]\\w\\[\\e[0m\\]\\$ '" >> /home/user/.bashrc
 
+# ------------------------------------------------------------------ video Remotion (synchro-video)
+# Đặt sau các lớp cũ để lớp đã dựng giữ nguyên trong bộ đệm. Mọi tệp tải về đều ghim phiên bản và mã băm như phông ở trên: đổi hay hỏng là build báo lỗi.
+# Giấy phép: Remotion Free License (cá nhân và công ty tối đa 3 người, dùng thương mại không giới hạn): chủ dịch vụ là công ty 1 người — xem docs/remotion-license.md.
+# cmake để dựng whisper.cpp; thư viện Chrome Headless Shell cần (danh sách Debian trong tài liệu Remotion).
+RUN apt-get update && apt-get install -y --no-install-recommends cmake \
+      libnss3 libdbus-1-3 libatk1.0-0 libgbm-dev libasound2 libxrandr2 libxkbcommon-dev libxfixes3 libxcomposite1 libxdamage1 libpango-1.0-0 libcairo2 libcups2 libatk-bridge2.0-0 \
+  && rm -rf /var/lib/apt/lists/*
+# Hai độ đậm Be Vietnam Pro cho phụ đề kiểu TikTok (cùng commit google/fonts với phông ở trên).
+RUN set -e; cd /usr/share/fonts/truetype/synchro; \
+    printf '%s\n' \
+      '44dbfa01553d227bec76ba6446c5618870a76a4a3297f41630dde859d0650d02 ofl/bevietnampro/BeVietnamPro-ExtraBold.ttf BeVietnamPro-ExtraBold.ttf' \
+      'dd0ec461782da7f4a58698b431a67c455ced7c09deb9c40d7b47e61975d3ffdb ofl/bevietnampro/BeVietnamPro-Black.ttf BeVietnamPro-Black.ttf' \
+    | while read -r sum src out; do \
+        curl -fsSLg --retry 5 --retry-all-errors --connect-timeout 20 -o "$out" "https://raw.githubusercontent.com/google/fonts/bbda7253fc363238b05d97515ca71f8ae49c4fa9/$src"; \
+        echo "$sum  $out" | sha256sum -c --quiet -; \
+      done; \
+    fc-cache -f
+# whisper.cpp v1.9.5 (nhận dạng giọng nói tiếng Việt cho phụ đề "auto"): cờ CPU cố định (không -march=native) để chạy được trên máy khác máy build.
+RUN set -e; cd /tmp; \
+    curl -fsSL --retry 5 --retry-all-errors --connect-timeout 20 -o whisper.tgz https://github.com/ggml-org/whisper.cpp/archive/refs/tags/v1.9.5.tar.gz; \
+    echo "ff1a9053feb509ff9d7729703355541ae9690073a6b1c40eb692c962e0dc1720  whisper.tgz" | sha256sum -c --quiet -; \
+    tar xzf whisper.tgz; cd whisper.cpp-1.9.5; \
+    cmake -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=OFF -DGGML_NATIVE=OFF -DGGML_AVX=ON -DGGML_AVX2=ON -DGGML_FMA=ON -DGGML_F16C=ON \
+      -DWHISPER_BUILD_TESTS=OFF -DWHISPER_BUILD_SERVER=OFF >/dev/null; \
+    cmake --build build --target whisper-cli -j2 >/dev/null; \
+    install -D -m 755 build/bin/whisper-cli /opt/whisper/build/bin/whisper-cli; \
+    cd /; rm -rf /tmp/whisper.tgz /tmp/whisper.cpp-1.9.5; \
+    /opt/whisper/build/bin/whisper-cli --help >/dev/null 2>&1
+# Mô hình đa ngôn ngữ ggml-small (488 MB, ~1 GB bộ nhớ khi chạy), ghim revision trên Hugging Face.
+RUN set -e; \
+    curl -fsSL --retry 5 --retry-all-errors --connect-timeout 20 -o /opt/whisper/ggml-small.bin \
+      https://huggingface.co/ggerganov/whisper.cpp/resolve/5359861c739e955e79d9a303bcbc70fb988958b1/ggml-small.bin; \
+    echo "1be3a9b2063867b937e64e2ec7483364a79917e157fa98c5d94b5c1fffea987b  /opt/whisper/ggml-small.bin" | sha256sum -c --quiet -; \
+    chmod 644 /opt/whisper/ggml-small.bin
+# Chrome Headless Shell đúng bản Remotion 4.0.539 đã thử (TESTED_VERSION 157.0.8080.0): Chromium của Debian đổi bản theo apt nên không dùng để dựng.
+RUN set -e; mkdir -p /opt/remotion; cd /opt/remotion; \
+    curl -fsSL --retry 5 --retry-all-errors --connect-timeout 20 -o chs.zip "https://remotion.media/chromium-headless-shell-linux-x64-157.0.8080.0.zip?clear"; \
+    echo "7c4a2751b361aeb3cff3ed788fa18b7a0849371b983d478bb9205b6cc25a8c52  chs.zip" | sha256sum -c --quiet -; \
+    unzip -q chs.zip; rm chs.zip; test -x chrome-headless-shell-linux64/chrome-headless-shell
+# Thư viện của dự án Remotion: phiên bản chính xác trong package.json, mã băm sha512 trong package-lock.json.
+COPY remotion/package.json remotion/package-lock.json /opt/remotion/
+RUN cd /opt/remotion && npm ci --omit=dev --no-fund --no-audit && npm cache clean --force
+# Mã nguồn 4 mẫu, đóng gói một lần (bundle) để lúc dựng không cần mạng. Phông lấy từ thư mục phông của image (không tải lần hai).
+COPY remotion/ /opt/remotion/
+RUN set -e; cd /opt/remotion; mkdir -p public/fonts; cp /usr/share/fonts/truetype/synchro/*.ttf public/fonts/; \
+    npx remotion bundle src/index.ts --out-dir bundle --log=error; test -f bundle/index.html; \
+    chmod 755 cli/synchro-video.mjs; ln -sf /opt/remotion/cli/synchro-video.mjs /usr/local/bin/synchro-video; \
+    chown -R root:root /opt/remotion /opt/whisper; chmod -R a+rX,go-w /opt/remotion /opt/whisper
+
+# ------------------------------------------------------------------ tài liệu PDF / Word (synchro-doc)
+# Đặt sau lớp Remotion để đổi mẫu tài liệu không phải dựng lại video. Mọi tệp tải về ghim phiên bản và mã băm như trên; chạy không cần mạng.
+# Typst 0.15.1 (bản ổn định mới nhất) cho ilm 1.4.0, charged-ieee 0.1.3 và Typst model tự viết; Typst 0.12.0 đặt riêng chỉ cho basic-report 0.1.0
+# (gói này và gói phụ thuộc hydra 0.5.1 → oxifmt 0.2.0 lỗi biên dịch từ Typst 0.13; workspace/doc/selftest.sh giữ điều này).
+# Gói @preview đúng phiên bản chủ dự án chọn nằm sẵn ở TYPST_PACKAGE_PATH, nên typst init / compile không tải gì.
+# fonts-texgyre: TeX Gyre Termes / Cursor mà charged-ieee dùng (đủ dấu tiếng Việt). Pango / HarfBuzz cho WeasyPrint.
+RUN apt-get update && apt-get install -y --no-install-recommends fonts-texgyre libpango-1.0-0 libpangoft2-1.0-0 libharfbuzz-subset0 \
+  && rm -rf /var/lib/apt/lists/*
+RUN set -e; cd /tmp; \
+    fetch() { curl -fsSLg --retry 5 --retry-all-errors --connect-timeout 20 -o "$3" "$2"; echo "$1  $3" | sha256sum -c --quiet -; }; \
+    fetch a6d077d0a95eed5a2eba715b2dae06be954f624ccbf85758a03f389ded33118c https://github.com/typst/typst/releases/download/v0.15.1/typst-x86_64-unknown-linux-musl.tar.xz t.tar.xz; \
+    tar xJf t.tar.xz; install -m 755 typst-x86_64-unknown-linux-musl/typst /usr/local/bin/typst; rm -r t.tar.xz typst-x86_64-unknown-linux-musl; \
+    fetch 605130a770ebd59a4a579673079cb913a13e75985231657a71d6239a57539ec3 https://github.com/typst/typst/releases/download/v0.12.0/typst-x86_64-unknown-linux-musl.tar.xz t.tar.xz; \
+    tar xJf t.tar.xz; install -D -m 755 typst-x86_64-unknown-linux-musl/typst /usr/local/lib/synchro-doc/typst-0.12.0; rm -r t.tar.xz typst-x86_64-unknown-linux-musl; \
+    printf '%s\n' \
+      '6ed00d8a7fbcd882abdd21a0e1ab27807019d1aef447d14a87ecd8daefd32293 basic-report 0.1.0' \
+      '40723a565b981b0cb8b9cdfe193c8dbf31944cf6c42c55d8ae60d25eee27f1ac hydra 0.5.1' \
+      '260d4db5173286a79e26f88e885b3cecb89d85807d92110d839511d82152e862 oxifmt 0.2.0' \
+      '2448904f8bbff54c68ddd700e3b01788053f3b48417aac4553a4a17008a60219 ilm 1.4.0' \
+      'f665c7de234a86be9b59b2df920df023f742b7f094fd71f8159a52808bb51d42 charged-ieee 0.1.3' \
+    | while read -r sum n v; do \
+        fetch "$sum" "https://packages.typst.org/preview/$n-$v.tar.gz" p.tgz; \
+        mkdir -p "/opt/synchro/typst-packages/preview/$n/$v"; tar xzf p.tgz -C "/opt/synchro/typst-packages/preview/$n/$v"; rm p.tgz; \
+      done; \
+    mkdir -p /opt/synchro/doc/invoice; \
+    printf '%s\n' \
+      'e31e2437f6c4ebd67d6bbbfa730ba077dbeb10deda42784fbac02559bcbfee45 https://raw.githubusercontent.com/FAlthausen/Vollkorn-Typeface/38ab7a896bd6b163ac7f834ec696d6c68e5dedd6/fonts/ttf/Vollkorn-Regular.ttf /usr/share/fonts/truetype/synchro/Vollkorn-Regular.ttf' \
+      '0c81f214910a95a995958da221efc50bfaa4d07aa2be6429de1b7accc6764536 https://raw.githubusercontent.com/FAlthausen/Vollkorn-Typeface/38ab7a896bd6b163ac7f834ec696d6c68e5dedd6/fonts/ttf/Vollkorn-Bold.ttf /usr/share/fonts/truetype/synchro/Vollkorn-Bold.ttf' \
+      '6b6befba6011682be28b200331c37babb944f0aa510e8181cf26eab3d4828004 https://raw.githubusercontent.com/FAlthausen/Vollkorn-Typeface/38ab7a896bd6b163ac7f834ec696d6c68e5dedd6/fonts/ttf/Vollkorn-Italic.ttf /usr/share/fonts/truetype/synchro/Vollkorn-Italic.ttf' \
+      'a808799b2add65edca00c568ca319db70e73e20e4294887c2a51ac91ed256bee https://raw.githubusercontent.com/FAlthausen/Vollkorn-Typeface/38ab7a896bd6b163ac7f834ec696d6c68e5dedd6/fonts/ttf/Vollkorn-BoldItalic.ttf /usr/share/fonts/truetype/synchro/Vollkorn-BoldItalic.ttf' \
+      '156424e672f26cdd52da0674d0dd3ef85728f9a63e3f224528d87627eda87505 https://raw.githubusercontent.com/CourtBouillon/weasyprint-samples/6dc675b05a5cba59576dfaa8881ea6ccdccb13cc/invoice/invoice.css /opt/synchro/doc/invoice/invoice.css' \
+      'b6f34ba6edb868acf6f6d8a37e6345970a0ad70eb57d96cd5ec07f7138d28cd7 https://raw.githubusercontent.com/CourtBouillon/weasyprint-samples/6dc675b05a5cba59576dfaa8881ea6ccdccb13cc/invoice/invoice.html /opt/synchro/doc/invoice/invoice.original.html' \
+      '393fb5b878ceed04aebc34b097e853ae5138c51d0c34b496ce8e2b47e0d0b94a https://raw.githubusercontent.com/CourtBouillon/weasyprint-samples/6dc675b05a5cba59576dfaa8881ea6ccdccb13cc/invoice/SourceSans3-Regular.ttf /opt/synchro/doc/invoice/SourceSans3-Regular.ttf' \
+      '7109021766e915ecd9721e28d11dfc732d57affda49e4ca15bb6d1529add7fdd https://raw.githubusercontent.com/CourtBouillon/weasyprint-samples/6dc675b05a5cba59576dfaa8881ea6ccdccb13cc/invoice/SourceSans3-Bold.ttf /opt/synchro/doc/invoice/SourceSans3-Bold.ttf' \
+      '5b6c0d5334a7bf77dea52b975c5a0c408878c0f7115ed5b6fb151f634b7bf701 https://raw.githubusercontent.com/google/fonts/bbda7253fc363238b05d97515ca71f8ae49c4fa9/ofl/pacifico/Pacifico-Regular.ttf /opt/synchro/doc/invoice/pacifico.ttf' \
+    | while read -r sum url out; do fetch "$sum" "$url" "$out"; done; \
+    fc-cache -f; fc-list : family | grep -qF Vollkorn
+# WeasyPrint từ pip, ghim bản 70.0 (Debian chỉ có 57.2, chưa hiểu CSS lồng nhau mà invoice.css dùng; 70.0 có bản vá CVE-2025-68616, CVE-2026-49452,
+# CVE-2026-55073). Các gói phụ thuộc mới cũng ghim; tinycss2, cssselect2, fonttools, Pillow, cffi dùng bản đã có ở lớp pip phía trên.
+RUN pip install --break-system-packages --no-cache-dir "weasyprint==70.0" "pydyf==0.13.0" "tinyhtml5==2.1.0" "pyphen==0.18.1" "brotli==1.2.1" "zopfli==0.4.3" \
+  && python3 -c "import weasyprint; assert weasyprint.__version__ == '70.0', weasyprint.__version__"
+# Bản Word: thư viện docx 9.15.3 của npm (tài liệu của chủ dự án chọn cho đầu ra Word), mã băm sha512 trong package-lock.json.
+COPY doc/docx/package.json doc/docx/package-lock.json /opt/synchro/doc/docx/
+RUN cd /opt/synchro/doc/docx && npm ci --omit=dev --no-fund --no-audit && npm cache clean --force
+# Mẫu (main.typ đọc payload JSON), hợp đồng JSON, synchro-doc, CSS hóa đơn, bộ dựng Word, tự kiểm tra.
+COPY doc/ /opt/synchro/doc/
+RUN set -e; install -m 755 /opt/synchro/doc/synchro-doc.py /usr/local/bin/synchro-doc; \
+    chown -R root:root /opt/synchro/doc /opt/synchro/typst-packages /usr/local/lib/synchro-doc; chmod -R a+rX,go-w /opt/synchro/doc /opt/synchro/typst-packages; \
+    printf '%s\n' \
+      'export TYPST_PACKAGE_PATH=/opt/synchro/typst-packages' \
+      'export TYPST_FONT_PATHS=/usr/share/texmf/fonts/opentype/public/tex-gyre' \
+      >> /etc/profile.d/synchro.sh
+ENV TYPST_PACKAGE_PATH=/opt/synchro/typst-packages TYPST_FONT_PATHS=/usr/share/texmf/fonts/opentype/public/tex-gyre
+
 USER user
+# Tự kiểm tra lúc build bằng đúng người dùng của sandbox: mỗi mẫu dựng 1 giây 60 khung/giây (chữ tiếng Việt), âm thanh 48 kHz, whisper nhận ra giọng tiếng Việt.
+# Lỗi ở đây làm build hỏng thay vì giao image có bộ dựng video hỏng.
+RUN cd /tmp && synchro-video selftest
+# Tài liệu: 3 mẫu Typst + hóa đơn WeasyPrint + bản Word, chữ tiếng Việt, phông đúng, không mạng, payload sai bị từ chối.
+RUN bash /opt/synchro/doc/selftest.sh
 WORKDIR /home/user/work
 CMD ["sleep", "infinity"]

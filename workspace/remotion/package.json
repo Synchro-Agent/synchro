@@ -1,0 +1,35 @@
+{
+  "name": "synchro-video",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Synchro: 4 mẫu video Remotion (tiktok, next-tailwind, audiogram, github-unwrapped) dựng sẵn cho run_code, chạy không cần mạng.",
+  "license": "SEE ATTRIBUTION.md",
+  "scripts": {
+    "bundle": "remotion bundle src/index.ts --out-dir bundle",
+    "studio": "remotion studio src/index.ts"
+  },
+  "dependencies": {
+    "@remotion/animation-utils": "4.0.539",
+    "@remotion/bundler": "4.0.539",
+    "@remotion/captions": "4.0.539",
+    "@remotion/cli": "4.0.539",
+    "@remotion/layout-utils": "4.0.539",
+    "@remotion/media": "4.0.539",
+    "@remotion/media-utils": "4.0.539",
+    "@remotion/noise": "4.0.539",
+    "@remotion/renderer": "4.0.539",
+    "@remotion/tailwind-v4": "4.0.539",
+    "@remotion/transitions": "4.0.539",
+    "@remotion/zod-types": "4.0.539",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "remotion": "4.0.539",
+    "tailwindcss": "4.2.0",
+    "zod": "4.5.4"
+  },
+  "devDependencies": {
+    "@types/react": "19.3.0",
+    "typescript": "5.9.3"
+  }
+}

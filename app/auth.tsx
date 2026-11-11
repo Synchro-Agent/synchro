@@ -88,7 +88,7 @@ const DefaultLogo = () => ( <div className="bg-primary text-primary-foreground r
 
 // --- TYPES + API ---
 export type AuthProfile = { fullName: string | null; nickname: string | null; birthDate: string | null; occupation: string | null; instructions?: string };
-export type AuthUser = { id: string; email: string; name: string; avatar: string | null; isAdmin: boolean; hasPassword: boolean; methods: string[]; createdAt: number; profile: AuthProfile; needsProfile: boolean; perms: Perms; verifyPending?: boolean; verifyLocked?: boolean };
+export type AuthUser = { id: string; email: string; name: string; avatar: string | null; isAdmin: boolean; role?: "owner" | "admin" | "member"; hasPassword: boolean; methods: string[]; createdAt: number; profile: AuthProfile; needsProfile: boolean; perms: Perms; verifyPending?: boolean; verifyLocked?: boolean };
 export type Providers = Record<"google" | "github" | "apple", boolean>;
 const PROVIDER_NAMES = { google: "Google", github: "GitHub", apple: "Apple" } as const;
 // Cùng danh sách với Cài đặt → Tài khoản để hai nơi hiển thị khớp nhau.
