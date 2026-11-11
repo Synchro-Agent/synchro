@@ -1,13 +1,14 @@
 // Sơ đồ D2 (d2lang.com, MPL-2.0) dựng thành SVG trong sandbox run_code: tệp chạy d2 v0.9.0 ghim mã băm trong workspace/Dockerfile, không cài gì lên máy chủ Synchro.
 // Chạy không mạng, tối đa 20 giây, bố cục elk (dagre, elk đi kèm D2 và mở; TALA là phần mềm thương mại nên không dùng). Kết quả nhớ theo mã băm của nguồn: vẽ lại cùng sơ đồ
 // (tải lại trang, chia sẻ) không chạy lại sandbox. SVG hiện bằng <img> nên không chạy được mã nào trong đó.
-// Bộ nhớ đệm có hai lớp: 200 sơ đồ gần nhất trong bộ nhớ, và mọi sơ đồ đã vẽ trên đĩa (DATA_DIR/d2-cache, theo mã băm), nên trang chia sẻ công khai
+// Bộ nhớ đệm có hai lớp: 200 sơ đồ gần nhất trong bộ nhớ (tối đa khoảng 48 MB: mỗi SVG tới 3 MB nên chỉ đếm số mục thì có thể giữ cả 600 MB), và mọi sơ đồ đã vẽ trên đĩa (DATA_DIR/d2-cache, theo mã băm), nên trang chia sẻ công khai
 // vẫn hiện sơ đồ sau khi máy chủ khởi động lại hay sau khi người khác vẽ thêm nhiều sơ đồ.
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { DATA_DIR } from "./authstore";
 import { execRun, RunError, runner } from "./coderun";
+import { registerMemStat } from "./memstat";
 
 export const D2_MAX = 20_000;
 const SVG_MAX = 3 * 1048576, DISK_MAX = Number(process.env.SYNCHRO_D2_DISK_MAX) || 5000;
@@ -15,9 +16,15 @@ const cache: Map<string, string> = ((globalThis as { __synchroD2?: Map<string, s
 const keyOf = (code: string, dark: boolean) => crypto.createHash("sha256").update(`${dark ? 1 : 0}\n${code}`).digest("hex");
 const diskDir = () => path.join(DATA_DIR, "d2-cache");
 const isSvg = (s: string) => /^\s*(?:<\?xml[^>]*>\s*)?<svg\b/i.test(s);
+// Cỡ trong bộ nhớ ước tính 2 byte / ký tự (chuỗi có chữ tiếng Việt là UTF-16).
+const MEM_BYTES = () => Number(process.env.SYNCHRO_D2_MEM_MB || 48) * 1048576;
+export const d2CacheStats = () => { let bytes = 0; for (const v of cache.values()) bytes += v.length * 2; return { n: cache.size, bytes }; };
+registerMemStat("d2Svgs", () => { const s = d2CacheStats(); return { n: s.n, MB: Math.round(s.bytes / 1048576) }; });
 function remember(key: string, svg: string) {
   cache.delete(key); cache.set(key, svg);
-  while (cache.size > 200) cache.delete(cache.keys().next().value!);
+  let bytes = d2CacheStats().bytes;
+  // Bỏ mục cũ nhất tới khi đủ cả hai trần; luôn giữ mục vừa vẽ (nằm cuối) dù riêng nó đã lớn.
+  while (cache.size > 1 && (cache.size > 200 || bytes > MEM_BYTES())) { const k = cache.keys().next().value!; bytes -= (cache.get(k)?.length ?? 0) * 2; cache.delete(k); }
 }
 function fromDisk(key: string): string | null {
   try {

@@ -201,7 +201,9 @@ export function MermaidSvg({ code, onError }: { code: string; onError?: (m: stri
 }
 
 // Sơ đồ D2: máy chủ dựng SVG trong sandbox (d2render.ts), hiện bằng <img> nên SVG không chạy được mã nào. svg(): SVG đã vẽ (tải về, chuyển PNG).
+// Tối đa 40 sơ đồ trong thẻ trình duyệt (mỗi SVG tới 3 MB); vẽ lại sơ đồ đã bị bỏ thì máy chủ trả ngay từ bộ đệm của nó.
 const d2Cache = new Map<string, string>();
+const d2Keep = (key: string, svg: string) => { d2Cache.delete(key); d2Cache.set(key, svg); while (d2Cache.size > 40) d2Cache.delete(d2Cache.keys().next().value!); };
 // Trang chia sẻ đặt mã liên kết: người xem chưa đăng nhập vẫn vẽ được sơ đồ có trong liên kết đó (api/d2 kiểm đoạn mã thuộc liên kết).
 let d2Share = "";
 export const setD2Share = (token: string) => { d2Share = token; };
@@ -217,7 +219,7 @@ export function D2Svg({ code, onError, onSvg }: { code: string; onError?: (m: st
     fetch("/api/d2", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ code, dark, ...(d2Share ? { share: d2Share } : {}) }) })
       .then((r) => r.json()).then((j: { svg?: string; error?: string }) => {
         if (!on) return;
-        if (j.svg) { d2Cache.set(key, j.svg); setSvg(j.svg); onSvg?.(j.svg); } else { const m = j.error ? tr(j.error) : tr("Không vẽ được sơ đồ"); setErr(m); onError?.(m); }
+        if (j.svg) { d2Keep(key, j.svg); setSvg(j.svg); onSvg?.(j.svg); } else { const m = j.error ? tr(j.error) : tr("Không vẽ được sơ đồ"); setErr(m); onError?.(m); }
       }).catch(() => { if (on) { const m = tr("Mất kết nối khi vẽ sơ đồ"); setErr(m); onError?.(m); } });
     return () => { on = false; };
   }, [key]); // eslint-disable-line react-hooks/exhaustive-deps
