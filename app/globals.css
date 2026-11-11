@@ -369,6 +369,10 @@ html[data-motion="reduced"] :is(.mk,.lk) *{animation:none!important;transition:n
 .codeblock pre{margin:0;padding:12px 14px;overflow:auto;font-family:ui-monospace,Menlo,monospace;font-size:13px;line-height:1.55;white-space:pre}
 /* Khối chữ thuần (log, kết quả chạy): xuống dòng để đọc hết, không có thanh cuộn thì chữ bị cắt ngang mép. */
 .codeblock pre.cb-wrap{white-space:pre-wrap;overflow-wrap:anywhere}
+/* Tô màu cú pháp (Shiki, app/highlight.tsx): mỗi chữ mang hai màu, chọn theo giao diện sáng / tối. */
+.codeblock pre.shiki span,.art-tl span{color:var(--shiki-light,inherit)}
+[data-theme="dark"] .codeblock pre.shiki span,[data-theme="dark"] .art-tl span{color:var(--shiki-dark,inherit)}
+.art-tl{font:inherit;background:none;padding:0;color:inherit}
 .ic{font-family:ui-monospace,Menlo,monospace;font-size:.85em;background:var(--hover);padding:1px 5px;border-radius:25%}
 .ai-msg p{margin:0 0 .8em}.ai-msg ul,.ai-msg ol{margin:0 0 .8em;padding-left:1.4em}.ai-msg h3{font-size:1.05em;margin:1em 0 .4em}
 .attach{display:flex;gap:8px;flex-wrap:wrap;padding:0 0 8px}
