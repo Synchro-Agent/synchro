@@ -7,6 +7,7 @@
 // Tên mẫu trung tính; mã theo bảng của chủ dự án (slide-apple-fact…) nhận như tên khác của cùng mẫu, không hiện ra giao diện.
 // Tệp thuần, dùng chung cho trình duyệt và máy chủ; kiểm thử: tests/api/designtemplates.test.mjs.
 import { DEFAULT_PRESET, presetId, presetOf } from "./designpresets";
+import { EMAIL_ALIASES, EMAIL_TEMPLATES } from "./designemails";
 import { bullets, esc, nid, obj, paras, rich, safeUrl, str, u, type Ctx, type Props } from "./tplkit";
 
 export type TplPage = { templateId: string; props: Props; morphId?: string; pageId?: string };
@@ -68,6 +69,7 @@ export function registerTemplates(kind: Kind, list: Record<string, Tpl["render"]
   for (const [k, render] of Object.entries(list)) REGISTRY[k] = { kind, render };
   Object.assign(TEMPLATE_ALIASES, aliases);
 }
+registerTemplates("email", EMAIL_TEMPLATES, EMAIL_ALIASES);
 export const templateId = (id: string) => TEMPLATE_ALIASES[id] ?? id;
 export const templateOf = (id: string) => REGISTRY[templateId(id)];
 export const templateIds = (kind?: Kind) => Object.keys(REGISTRY).filter((k) => !kind || REGISTRY[k].kind === kind);

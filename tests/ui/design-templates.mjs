@@ -129,6 +129,24 @@ for (const style of ["linear-dark", "editorial-serif"]) {
   check("ô nhiệt: chữ tự sáng / tối theo nền, đạt 4.5:1", !low.length, JSON.stringify(low));
 }
 
+console.log("2. Thư HTML theo mẫu: hai phong cách, máy tính và điện thoại");
+const MAILS = [
+  ["email-receipt", { brand: "Cửa hàng Mộc", heading: "Biên lai thanh toán", orderId: "DH-20931", date: "11/11/2026", customer: "Trần Bảo Ngọc", paymentMethod: "Thẻ Visa ••4242", currency: "VND", items: [{ name: "Gói Pro 12 tháng", detail: "Gia hạn tự động mỗi năm", price: 1990000 }, { name: "Thêm thành viên", qty: 2, price: 250000 }], tax: 249000, taxLabel: "Thuế GTGT 10%", supportUrl: "https://example.com/ho-tro", address: "12 Lý Thường Kiệt, Hoàn Kiếm, Hà Nội" }],
+  ["email-welcome", { brand: "Synchro", preview: "Ba bước để bắt đầu", heading: "Chào mừng Lan tới Synchro", intro: "Tài khoản của bạn đã sẵn sàng. Ba bước dưới đây giúp bạn có kết quả đầu tiên trong mười phút.", steps: [{ title: "Tạo dự án đầu tiên", text: "Gom tệp, chỉ dẫn và kết nối vào một chỗ." }, { title: "Mời đồng đội", text: "Cùng làm trên một đoạn chat, thấy ngay thay đổi của nhau." }, { title: "Bật kết nối", text: "Nối Gmail, Lịch, Drive để Synchro làm việc thay bạn." }], ctaLabel: "Bắt đầu ngay", ctaUrl: "https://example.com/start", signoff: "Thân mến,\nĐội ngũ Synchro" }],
+  ["email-login-code", { brand: "Synchro", heading: "Mã đăng nhập của bạn", code: "482913", expires: "Mã hết hạn sau 10 phút.", details: [{ label: "Thiết bị", value: "Chrome trên macOS" }, { label: "Vị trí", value: "Hà Nội, Việt Nam" }] }],
+  ["email-invite", { brand: "Synchro", inviter: "Phạm Minh Đức", inviterEmail: "duc@example.com", team: "Nhóm Tăng trưởng", role: "Thành viên", ctaLabel: "Tham gia nhóm", ctaUrl: "https://example.com/join?token=abc123" }],
+];
+for (const style of ["exec-navy", "neo-brutalist"]) for (const [id, props] of MAILS) for (const [w, tag] of [[680, "may-tinh"], [375, "dien-thoai"]]) {
+  await view(w, 900);
+  await open(T.expandTemplates(block({ styleArchetype: style, pages: [{ templateId: id, props }] })), false);
+  const found = (await probe()).filter((x) => !/ảnh hỏng/.test(x.kind));
+  const sx = await ev(`document.documentElement.scrollWidth <= innerWidth + 1`);
+  check(`${id} ${style} ${w}px: không đo thấy lỗi, không cuộn ngang`, !found.length && sx, JSON.stringify(found));
+  const h = await ev(`Math.min(document.documentElement.scrollHeight, 1400)`);
+  await view(w, h);
+  await shot(`email-${id}-${style}-${tag}.png`);
+}
+
 ws.close(); chrome.kill();
 console.log(`\nẢnh: ${OUT}`);
 console.log(fails ? `${fails} lỗi` : "Tất cả đạt");

@@ -74,5 +74,26 @@ ok(prior?.format === "slide" && prior.preset === "midnight-tech", "lượt sau n
 console.log("5. Bộ CSS và xuất PowerPoint");
 ok(A.usesKit(html) && A.KIT_CSS.includes(".sx-tpl-depth-giant{") && A.KIT_CSS.includes(".sx-tpl-fact-num{"), "trang dựng ra dùng bộ CSS, có CSS của mẫu");
 ok(X.PPTX_FRAME_JS.includes("[data-pptx-flat]") && X.PPTX_FRAME_JS.includes("data-pptx-object-name"), "bộ đo PowerPoint: bỏ chữ data-pptx-flat, đọc tên đối tượng");
+console.log("6. Thư HTML: chỉ bảng, style nội dòng");
+const mail = (id, props, style = "exec-navy") => T.expandTemplates(`<html><body>${block({ styleArchetype: style, pages: [{ templateId: id, props }] })}</body></html>`);
+const mails = {
+  receipt: mail("email-apple-receipt", { brand: "Cửa hàng Mộc", orderId: "DH-20931", date: "11/11/2026", customer: "Trần Bảo Ngọc", paymentMethod: "Thẻ Visa ••4242", currency: "VND", items: [{ name: "Gói Pro 12 tháng", detail: "Gia hạn tự động", price: 1990000 }, { name: "Thêm 2 thành viên", qty: 2, price: 250000 }], tax: 249000, supportUrl: "https://example.com/ho-tro" }),
+  welcome: mail("email-welcome", { brand: "Synchro", heading: "Chào mừng Lan tới Synchro", intro: "Tài khoản của bạn đã sẵn sàng.", steps: [{ title: "Tạo dự án đầu tiên", text: "Gom tệp và chỉ dẫn vào một chỗ." }, { title: "Mời đồng đội", text: "Cùng làm trên một đoạn chat." }], ctaLabel: "Bắt đầu", ctaUrl: "https://example.com/start", signoff: "Đội ngũ Synchro" }, "soft-bento"),
+  code: mail("email-login-code", { brand: "Synchro", code: "482 913", expires: "Mã hết hạn sau 10 phút." }, "midnight-tech"),
+  invite: mail("email-vercel-invite", { brand: "Synchro", inviter: "Phạm Minh Đức", inviterEmail: "duc@example.com", team: "Nhóm Tăng trưởng", role: "Thành viên", ctaUrl: "https://example.com/join?t=1" }, "neo-brutalist"),
+};
+for (const [k, h] of Object.entries(mails)) {
+  const body = h.replace(/<head>[\s\S]*?<\/head>/, "");
+  ok(h.startsWith("<!doctype html>") && !/<style|<link|class=|<div|<script|data-sx-|var\(--/i.test(h) && /<table role="presentation"/.test(h) && /max-width:600px/.test(h), `${k}: thư độc lập, không CSS ngoài, không class, không <div>, chỉ bố cục bảng`, h.slice(0, 300));
+  ok(!/<(?!\/?(?:table|tr|td|a|span|strong|p|h1|br|html|body|head|meta|title)\b)[a-z]/i.test(body.replace(/<!doctype html>/i, "")), `${k}: chỉ các thẻ thư an toàn`, (/<(?!\/?(?:table|tr|td|a|span|strong|p|h1|br|html|body|head|meta|title)\b)[a-z][^>]*>/i.exec(body) ?? [""])[0]);
+}
+ok(/1\.990\.000 ₫/.test(mails.receipt) && /2 × 250\.000 ₫/.test(mails.receipt) && /2\.739\.000 ₫/.test(mails.receipt), "biên lai: tiền Việt viết 1.990.000 ₫, tổng tự cộng khi thiếu");
+ok(/482 913/.test(mails.code) && /background:#F4F5F7/.test(mails.code) && !/#08090E/.test(mails.code) && /#4338CA/.test(mail("email-welcome", { ctaLabel: "Mở", ctaUrl: "https://example.com" }, "midnight-tech")), "phong cách tối: thư dùng nền sáng và màu nhấn của bảng in");
+ok(/href="https:\/\/example\.com\/join\?t=1"/.test(mails.invite) && /PĐ|MĐ/.test(mails.invite), "lời mời: nút và liên kết dự phòng, chữ cái đầu của người mời");
+ok(!/javascript:/.test(mail("email-welcome", { ctaLabel: "x", ctaUrl: "javascript:alert(1)" })), "liên kết chỉ https / mailto");
+const mt = K.designTurn({ typed: "Thiết kế email chào mừng khách hàng mới", art: true, code: true, seed: "a" });
+ok(mt?.format === "graphic" && mt.block.includes("email-receipt") && mt.block.includes("email-invite"), "yêu cầu thiết kế thư HTML: khối có thực đơn mẫu thư", mt?.format);
+for (const q of ["Viết email xin nghỉ phép", "Viết email gửi sếp nói báo cáo sẽ trễ", "viết email mời họp thứ hai"]) ok(K.designTurn({ typed: q, art: true, code: true, seed: "a" }) === null, `viết một lá thư thường: không có khối ("${q}")`);
+
 console.log(`\n${pass} đạt, ${fail} lỗi`);
 process.exit(fail ? 1 : 0);

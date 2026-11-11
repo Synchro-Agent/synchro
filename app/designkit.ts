@@ -3,6 +3,7 @@
 // Trò chuyện thường, câu hỏi kiến thức, đường nhanh: không thêm gì. Lượt tiếp theo trên cùng sản phẩm: bản rút gọn, vì mỗi dòng ở đây còn lại trong lịch sử đoạn chat.
 // Tệp thuần (không DB, không mạng), kiểm thử bằng tests/api/designkit.test.mjs. #nodesign trong tin nhắn hoặc SYNCHRO_DESIGNKIT=0 thì tắt, để so sánh trước / sau với model thật.
 import { PRESET_ALIASES, presetId, presetOf, PRESETS } from "./designpresets";
+import { EMAIL_TPL_GUIDE } from "./designemails";
 import { SLIDE_TPL_GUIDE, templateKinds } from "./designtemplates";
 
 export type DesignFormat = "slide" | "doc" | "sheet" | "graphic";
@@ -24,7 +25,8 @@ const clean = (s: string) => s.normalize("NFC").toLowerCase(); // NFC: chuỗi d
 // Danh từ chỉ sản phẩm. Từ nhiều nghĩa (đề xuất, báo cáo, hồ sơ, tài liệu) chỉ tính khi là tân ngữ của động từ làm ra (xem OBJ): "giúp mình đề xuất món ăn", "lời khuyên về hồ sơ du học" là trò chuyện.
 const N_SLIDE = "slide ?decks?|slides?|pitch ?decks?|decks?|thuyết trình|trình chiếu|bản trình bày|bài trình bày|powerpoint|pptx|keynote|presentation";
 const N_SHEET = "excel|xlsx|bảng tính|spreadsheet|google sheets?|financial model|mô hình tài chính";
-const N_GRAPHIC = "poster|banner|infographic|flyer|tờ rơi|tờ gấp|brochure|thẻ mạng xã hội|ảnh bìa|thumbnail|landing page|trang đích|thiệp|dashboard|trang web|website|giao diện";
+// Thư HTML có thiết kế (biên lai, chào mừng, bản tin…), không phải viết một lá thư: "viết email xin nghỉ phép" vẫn là trò chuyện.
+const N_GRAPHIC = "poster|banner|infographic|flyer|tờ rơi|tờ gấp|brochure|thẻ mạng xã hội|ảnh bìa|thumbnail|landing page|trang đích|thiệp|dashboard|trang web|website|giao diện|mẫu email|email template|html email|thư html|newsletter|bản tin email|email marketing|email (?:chào mừng|chào đón|giao dịch|biên lai|hóa đơn|xác nhận đơn hàng|mã đăng nhập|mã xác thực|mời (?:tham gia|vào nhóm)|khuyến mãi)|(?:welcome|receipt|transactional|invite|login code) emails?";
 const N_DOC = "báo cáo|đề xuất|kế hoạch (?:kinh doanh|marketing|dự án|triển khai|chiến lược|tài chính|sản xuất|truyền thông|nhân sự)|business plan|tài liệu|đề án|hồ sơ|word(?: document| doc| file)?(?! [a-z])|docx|pdf|proposal|reports?|white ?paper|memo|one.?pager|một trang|sổ tay|handbook";
 // Văn bản hành chính có kiểu artifact riêng (vbhc), Synchro tự dàn trang đúng thể thức: quy tắc này không áp dụng. "ra quyết định" trong câu thường không tính: phải là tân ngữ hoặc đứng đầu câu.
 const N_VBHC = "công văn|quyết định|tờ trình|biên bản|giấy mời|chỉ thị";
@@ -161,7 +163,7 @@ const KIT = (preset: string) => `Bộ CSS sẵn trong khung artifact: không c�
 Khung: <section class="slide sx-slide"> (luôn 16:9, tự co vừa cửa sổ) .sx-page (A4, tự có luật in) .sx-poster (3:4, tự co vừa cửa sổ). Chữ: .sx-eyebrow .sx-title .sx-display .sx-kicker .sx-h2 .sx-h3 .sx-text .sx-small .sx-source .sx-kpi .sx-num .sx-muted .sx-accent .sx-up .sx-down. Bố cục: .sx-stack .sx-row .sx-between .sx-grow .sx-end .sx-gap-{8,16,24,32,48,64} .sx-p-{…}. Lưới: .sx-grid-hero (1 lớn trái, 2 nhỏ phải) .sx-grid-4060 .sx-grid-6040 .sx-grid-bento4 (7:5 rồi 5:7) .sx-grid-dash (4 KPI, phần tử thứ 5 tràn hàng) .sx-grid-3. Bề mặt: .sx-card .sx-inner (ảnh, hộp trong thẻ, bo đồng tâm) .sx-tint .sx-solid .sx-badge .sx-callout .sx-rule. Bảng: .sx-table, ô số .n, hàng tổng .sx-total, thanh trong ô <td class="sx-bar n" style="--sx-v:72%">, ô nhiệt <td class="sx-heat n" style="--sx-v:72%"> (chữ tự đổi sáng / tối theo độ chói nền). Hiệu ứng: .sx-shadow (nền sáng) .sx-rim (nền tối) .sx-glass .sx-aurora .sx-noise; .sx-gradient-text chỉ cho số KPI hay chữ cực lớn, không cho chữ đọc. Ô chữ ngắn trong khung cố định (tiêu đề slide, KPI, thẻ) thêm data-sx-fit: tràn thì Synchro tự co 1px một lần tới 11px, tương phản dưới 4.5:1 thì tự đổi màu chữ; vẫn phải viết vừa khung. Chuyển động: .sx-rise .sx-fade .sx-pop (style="--sx-i:0,1,2…" để lệch nhịp 70ms), .sx-draw cho path có pathLength="1"; đã tôn trọng prefers-reduced-motion, hỏng hay khi in vẫn hiện đủ: đừng tự đặt opacity:0 chờ JS.
 Biến: --sx-bg --sx-surface --sx-raised --sx-ink --sx-muted --sx-accent --sx-accent2 --sx-line --sx-neutral --sx-pos --sx-neg --sx-vivid (màu nhấn gốc cho hình, cột được nhấn, không cho chữ) --sx-head --sx-body --sx-mono; cỡ tự tính: calc(N*var(--sx-u)). CSS của bạn viết sau sẽ thắng nếu cần chỉnh.`;
 
-const TPL_GUIDE: Partial<Record<DesignFormat, string>> = { slide: SLIDE_TPL_GUIDE };
+const TPL_GUIDE: Partial<Record<DesignFormat, string>> = { slide: SLIDE_TPL_GUIDE, graphic: EMAIL_TPL_GUIDE };
 const DEFAULT_TPL_STYLE = "swiss-grid";
 const FILE_RULES: Partial<Record<DesignFormat, string>> = {
   slide: `Tệp .pptx qua run_code (chỉ khi cần shape gốc, còn lại Tải về › PowerPoint từ artifact): python-pptx 13.333×7.5in, tiêu đề ở placeholder, phông Arial hoặc Calibri vì máy người nhận chắc có.`,
