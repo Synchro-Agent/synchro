@@ -8,6 +8,7 @@ import { codeWraps, imageKind, inlineText, parseInline, parseMarkdown, streamSaf
 import { ChartView, parseChart } from "./charts";
 import { lazyView } from "./lazy";
 import { AskCard } from "./askcard";
+import { CiteText, hasCite } from "./cites";
 
 // Khung artifact và sơ đồ chỉ cần khi câu trả lời có hình minh họa: không nằm trong phần tải đầu của trang chat.
 const ArtifactFrame = lazyView(() => import("./artifactui").then((m) => m.ArtifactFrame), null);
@@ -24,6 +25,8 @@ function MdImage({ src, alt }: { src: string; alt: string }) {
 }
 function inl(ns: Inl[], w?: boolean): React.ReactNode[] {
   return ns.map((n, i) => {
+    // Số trích dẫn [n] của câu trả lời có tìm web: thành nút trỏ tới nguồn (chỉ khi câu trả lời có danh sách nguồn, xem cites.tsx).
+    if (typeof n === "string" && hasCite(n)) return <CiteText key={i} s={n} plain={(t) => words(t, w)} />;
     if (typeof n === "string") return w ? <Fragment key={i}>{words(n, w)}</Fragment> : n;
     switch (n.t) {
       case "br": return <br key={i} />;

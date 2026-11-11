@@ -29,6 +29,7 @@ import { applyEvent, ConnCards, PlanCard, QueueChips, stepsOf, WorkParts, WorkSt
 import { startScribe, type Scribe } from "./scribe";
 import type { AuthUser, Providers } from "./auth";
 import { VerifyBanner } from "./verifybanner";
+import { CiteCtx, SourceChips } from "./cites";
 import { Markdown } from "./md";
 import type { PaletteCmd, PaletteGo } from "./palette";
 import { ASK_EVENT } from "./askcard";
@@ -877,6 +878,9 @@ const MsgRow = memo(function MsgRow({ m, i, last, busy, mark, art, inl, fileActi
   const c = cx.current!;
   const { say, fm, arts } = c;
   const key = `${chatId}-${i}`;
+  // Nguồn tìm web: số [n] trong câu trả lời trỏ tới chip thứ n (cites.tsx). Chỉ khi câu trả lời đã xong và có nguồn.
+  const citeId = key;
+  const cites = useMemo(() => (m.done && m.webs?.length ? { webs: m.webs, id: citeId } : null), [m.done, m.webs, citeId]);
   const est = useMemo<React.CSSProperties>(() => ({ containIntrinsicSize: `auto ${rowHeight(m)}px` }), [m.text, m.files?.length, m.outs?.length]); // eslint-disable-line react-hooks/exhaustive-deps
   return (<>
     {mark && <div className="cx-mark" role="note"><I.Sparkle size={13} /><span>{tr("Các tin phía trên đã được nén thành bản tóm tắt; model nhận bản tóm tắt thay cho chúng.")}</span></div>}
@@ -902,16 +906,16 @@ const MsgRow = memo(function MsgRow({ m, i, last, busy, mark, art, inl, fileActi
       </div>
     ) : (
       <div style={est}>
-        <div className={`ai-msg${m.done ? "" : " ai-streaming"}`}>{m.tools?.length ? <div className="skill-used">{m.tools.map((n) => <span key={n} className="skill-chip tool-chip"><I.SetPlug size={13} /><span>{tr("Đã dùng")}</span><span data-notr>{n}</span></span>)}</div> : null}{m.libs?.length ? <LibChips libs={m.libs} onOpen={() => cx.current!.openPlugins()} /> : null}{m.skills?.length ? <div className="skill-used">{m.skills.map((n) => <span key={n} className="skill-chip"><I.Scroll size={13} />{tr("Đang dùng skill")}: {n}</span>)}</div> : null}{m.done ? <WorkSummary parts={m.parts} plan={m.plan} ms={m.dur} stopped={m.stopped} render={(t) => <Markdown text={t} say={say} />} /> : m.parts?.length ? <WorkParts parts={m.parts} live onAnswer={answerAsk} render={(t) => <Markdown text={t} say={say} />} /> : null}{m.text ? (art && hasArtifacts(m.text) ? splitArtifacts(m.text).map((sg, k) => sg.kind === "text" ? <Markdown key={k} text={sg.text} say={say} viz={inl} live={m.done && last && !busy} streaming={!m.done} /> : (() => {
+        <CiteCtx.Provider value={cites}><div className={`ai-msg${m.done ? "" : " ai-streaming"}`}>{m.tools?.length ? <div className="skill-used">{m.tools.map((n) => <span key={n} className="skill-chip tool-chip"><I.SetPlug size={13} /><span>{tr("Đã dùng")}</span><span data-notr>{n}</span></span>)}</div> : null}{m.libs?.length ? <LibChips libs={m.libs} onOpen={() => cx.current!.openPlugins()} /> : null}{m.skills?.length ? <div className="skill-used">{m.skills.map((n) => <span key={n} className="skill-chip"><I.Scroll size={13} />{tr("Đang dùng skill")}: {n}</span>)}</div> : null}{m.done ? <WorkSummary parts={m.parts} plan={m.plan} ms={m.dur} stopped={m.stopped} render={(t) => <Markdown text={t} say={say} />} /> : m.parts?.length ? <WorkParts parts={m.parts} live onAnswer={answerAsk} render={(t) => <Markdown text={t} say={say} />} /> : null}{m.text ? (art && hasArtifacts(m.text) ? splitArtifacts(m.text).map((sg, k) => sg.kind === "text" ? <Markdown key={k} text={sg.text} say={say} viz={inl} live={m.done && last && !busy} streaming={!m.done} /> : (() => {
           const pos = arts.at[i]?.find((x) => x.ident === sg.art.ident && arts.map.get(x.ident)?.[x.v]?.msg === i);
           const total = arts.map.get(sg.art.ident)?.length ?? 1;
           const v = pos?.v ?? 0;
           const active = c.artOpen && c.artIdent === sg.art.ident && c.artIndex === v;
           const full = arts.map.get(sg.art.ident)?.[v];
           return <ArtifactCard key={k} art={full ?? sg.art} version={v + 1} total={total} active={active} fix={full?.fix} onRedo={last && !busy ? () => cx.current!.send(`${tr("Bản sửa")} “${full?.title ?? sg.art.ident}” ${tr("không áp được. Hãy viết lại toàn bộ artifact này (không dùng mode=\"patch\"), giữ các thay đổi tôi vừa yêu cầu.")}`) : undefined} onOpen={() => cx.current!.openArt({ chat: chatId, ident: sg.art.ident, v, follow: false })} />;
-        })()) : <Markdown text={hasArtifacts(m.text) ? artifactsAsCode(m.text) : m.text} say={say} viz={inl} live={m.done && last && !busy} streaming={!m.done} />) : null}{m.failed ? <ErrCard raw={m.err} onRetry={last && !busy ? () => cx.current!.retry() : undefined} onProviders={() => cx.current!.openProviders()} /> : null}{m.done && last ? <ConnCards parts={m.parts} /> : null}{!m.done && m.plan?.length ? <PlanCard plan={m.plan} live /> : null}{!m.done ? <WorkStatus label={m.parts?.some((p) => p.k === "ask" && p.state === "wait") ? tr("Đang chờ bạn duyệt") : m.prog} since={m.time} steps={stepsOf(m.parts)} /> : null}{m.outs?.length ? <OutputFiles files={m.outs} onOpen={(f) => cx.current!.openFile(f)} active={fileActive} /> : null}</div>
+        })()) : <Markdown text={hasArtifacts(m.text) ? artifactsAsCode(m.text) : m.text} say={say} viz={inl} live={m.done && last && !busy} streaming={!m.done} />) : null}{m.failed ? <ErrCard raw={m.err} onRetry={last && !busy ? () => cx.current!.retry() : undefined} onProviders={() => cx.current!.openProviders()} /> : null}{m.done && last ? <ConnCards parts={m.parts} /> : null}{!m.done && m.plan?.length ? <PlanCard plan={m.plan} live /> : null}{!m.done ? <WorkStatus label={m.parts?.some((p) => p.k === "ask" && p.state === "wait") ? tr("Đang chờ bạn duyệt") : m.prog} since={m.time} steps={stepsOf(m.parts)} /> : null}{m.outs?.length ? <OutputFiles files={m.outs} onOpen={(f) => cx.current!.openFile(f)} active={fileActive} /> : null}</div></CiteCtx.Provider>
         {m.done && m.stopped && <div className="msg-stopped"><I.Stop size={11} />{tr("Đã dừng · giữ lại phần đã viết")}</div>}
-        {m.done && m.webs?.length ? <div className="msg-sources"><span>{tr("Nguồn")}</span>{m.webs.filter((w) => /^https?:\/\//.test(w.url)).map((w) => <a key={w.url} href={w.url} target="_blank" rel="noopener noreferrer" title={w.url} data-notr>{w.title || w.url.replace(/^https?:\/\/(?:www\.)?/, "").split("/")[0]}</a>)}</div> : null}
+        {m.done && m.webs?.length ? <SourceChips webs={m.webs} id={citeId} /> : null}
         {m.done && m.notice && ((m.notice.text && !m.failed) || m.notice.work || m.notice.at || m.notice.tried?.length || m.notice.switchTo) ? (
           <div className="msg-notice" role="status">
             {m.notice.text && !m.failed && <p>{tr(m.notice.text)}</p>}

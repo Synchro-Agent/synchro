@@ -34,7 +34,7 @@ import { mergeOuts, previewNote, previewOf } from "./runpreview";
 import { totalsNote } from "./xlsxcheck";
 import { ARTIFACT_RULES, ASK_RULES, VIZ_RULES } from "./artifacts";
 import { designTurn, historyTexts } from "./designkit";
-import { type ABlock, anthropicCall, blocksText, chatOnce, effortParams, HttpErr, openaiCall, outCap, respInput, respParse, respTools, responsesCall, toAnthropic, toOpenAI, toResponses, withPages } from "./llmcall";
+import { type ABlock, type Citer, anthropicCall, blocksText, searchResults, chatOnce, effortParams, HttpErr, openaiCall, outCap, respInput, respParse, respTools, responsesCall, toAnthropic, toOpenAI, toResponses, withPages } from "./llmcall";
 import { mergedProviders, prewarmClaude, sessionPlain, subCli, subTurn } from "./ai/subs";
 import { PROJECT_DOC_RULES, PROJECT_DOC_TOOL, projectDocsLong, readProjectFile } from "./projectdocs";
 import { ASPECTS, generateImages, IMAGE_RULES, IMAGE_TOOL, imageBudget, IMG_NAME, requestSlug } from "./ai/imagegen";
@@ -90,7 +90,8 @@ export function withCacheMark(msgs: unknown[], hist = -1): unknown[] {
 // Truyền chữ chỉ khi đang ở lượt chạy nền (có người theo dõi qua SSE).
 const live = () => (runSignal() ? delta : undefined);
 
-const anthropicAdapter = (t: Target, system: string, skillSys: string, max_tokens: number, tools: unknown[], effort?: Effort, hist = -1): Adapter => ({
+// cite: nguồn web của lượt (tìm web phía máy chủ của hãng) để hiện chip nguồn và số trích dẫn [n] trong câu trả lời.
+const anthropicAdapter = (t: Target, system: string, skillSys: string, max_tokens: number, tools: unknown[], effort?: Effort, hist = -1, cite?: Citer): Adapter => ({
   step: async (msgs, noTools) => {
     // Tìm web (công cụ phía máy chủ của Anthropic): ghi vào nhật ký làm việc như công cụ thường, ngay khi model bắt đầu tìm.
     const seen = new Set<string>();
@@ -106,8 +107,9 @@ const anthropicAdapter = (t: Target, system: string, skillSys: string, max_token
     }, stepSignal(), live(), (b) => searched(b));
     const blocks: (ABlock & { input?: Record<string, unknown> })[] = j.content ?? [];
     for (const b of blocks) searched(b);
+    if (cite) searchResults(blocks, cite);
     return {
-      text: blocksText(blocks),
+      text: blocksText(blocks, cite),
       calls: blocks.filter((b) => b.type === "tool_use").map((b) => ({ id: b.id!, name: b.name!, input: b.input ?? {} })),
       assistant: { role: "assistant", content: blocks },
       pause: j.stop_reason === "pause_turn",
@@ -136,7 +138,7 @@ const openaiAdapter = (t: Target, system: string, max_tokens: number, tools: { n
 });
 
 // OpenAI qua API Responses: lượt trả lời của model giữ nguyên dạng mục (items) để gửi lại ở bước sau.
-const responsesAdapter = (t: Target, system: string, max_tokens: number, tools: { name: string; description: string; input_schema: unknown }[], effort?: Effort, web = false): Adapter => ({
+const responsesAdapter = (t: Target, system: string, max_tokens: number, tools: { name: string; description: string; input_schema: unknown }[], effort?: Effort, web = false, cite?: Citer): Adapter => ({
   step: async (msgs, noTools) => {
     // Tìm web của OpenAI (mục web_search_call): ghi vào nhật ký làm việc ngay khi mục xong.
     const seen = new Set<string>();
@@ -146,7 +148,7 @@ const responsesAdapter = (t: Target, system: string, max_tokens: number, tools: 
       const a = it.action as { query?: string; url?: string } | undefined;
       progress("tool", a?.url && !a.query ? `Đang đọc trang web: ${a.url.slice(0, 120)}` : `Đang tìm trên web: ${String(a?.query ?? "").slice(0, 120)}`);
     };
-    const r = respParse(await responsesCall(t, { instructions: system, max_output_tokens: outCap(t, max_tokens), ...effortParams(t, effort), input: respInput(msgs), tools: [...respTools(tools), ...(web ? [{ type: "web_search" }] : [])], ...(noTools ? { tool_choice: "none" } : {}) }, stepSignal(), live(), searched));
+    const r = respParse(await responsesCall(t, { instructions: system, max_output_tokens: outCap(t, max_tokens), ...effortParams(t, effort), input: respInput(msgs), tools: [...respTools(tools), ...(web ? [{ type: "web_search" }] : [])], ...(noTools ? { tool_choice: "none" } : {}) }, stepSignal(), live(), searched), cite);
     for (const it of r.items) searched(it);
     return { text: r.text, calls: r.calls, assistant: { items: r.items } };
   },
@@ -188,7 +190,16 @@ type Lib = { key: string; label: string };
 // art: lịch sử để read_artifact / check_artifact dựng lại bản hiện tại của artifact (cùng phần đã nén ở artBase).
 // turnArts: artifact model viết giữa lượt (trong lời dẫn trước công cụ), xem sayOut.
 // image: công cụ generate_image đang bật; msgs: lịch sử của lượt, để tìm ảnh gốc người dùng nhờ sửa.
-type Exec = { project?: unknown; image?: boolean; msgs?: unknown; effects?: string[]; toolSync?: boolean; list: Skl; scripts: boolean; sess: ConnectorSession | null; uid: string; code: boolean; net: boolean; web?: boolean; art?: { messages: { role: string; content: unknown }[]; base: unknown }; turnArts?: string[]; outs: OutFile[]; outPaths?: Map<string, string>; libs?: Record<string, Lib[]>; studio?: Lib; prefer?: Record<string, string>; trace: TraceItem[]; conv?: string; heal?: Target; search?: Target; browse?: boolean; bctx?: BrowserCtx; shown?: string; heavy?: string[]; gate?: Gate; task?: TaskCtx | null; asking?: Promise<void>; awaiting?: number; denied?: Map<string, string>; connCards?: Set<string>; calls?: Map<string, { at: number; cancel?: AbortSignal }>; park?: () => void; inputsSent?: Set<string>; madeImgs?: string[] };
+type Exec = { project?: unknown; image?: boolean; msgs?: unknown; effects?: string[]; toolSync?: boolean; list: Skl; scripts: boolean; sess: ConnectorSession | null; uid: string; code: boolean; net: boolean; web?: boolean; art?: { messages: { role: string; content: unknown }[]; base: unknown }; turnArts?: string[]; outs: OutFile[]; outPaths?: Map<string, string>; libs?: Record<string, Lib[]>; studio?: Lib; prefer?: Record<string, string>; trace: TraceItem[]; conv?: string; heal?: Target; search?: Target; browse?: boolean; bctx?: BrowserCtx; shown?: string; heavy?: string[]; gate?: Gate; task?: TaskCtx | null; asking?: Promise<void>; awaiting?: number; denied?: Map<string, string>; connCards?: Set<string>; calls?: Map<string, { at: number; cancel?: AbortSignal }>; park?: () => void; inputsSent?: Set<string>; madeImgs?: string[]; webs?: Map<string, { title: string; url: string }> };
+// Nguồn web của lượt, đánh số theo thứ tự gặp (số [n] trong câu trả lời trỏ đúng chip thứ n). Tối đa 20 nguồn.
+const WEB_MAX = 20;
+const citeOf = (x: Exec): Citer => (url, title = "") => {
+  const w = (x.webs ??= new Map());
+  const u = url.slice(0, 2000);
+  if (!w.has(u)) { if (w.size >= WEB_MAX) return 0; w.set(u, { title: title.slice(0, 200), url: u }); }
+  else if (title && !w.get(u)!.title) w.get(u)!.title = title.slice(0, 200);
+  return [...w.keys()].indexOf(u) + 1;
+};
 type Decision = "allow" | "chat" | "always" | "deny";
 type Out = { text: string; used: ToolRun["used"][]; cancelled?: boolean } | { approval: { id: string; calls: unknown[] } };
 // Lượt chat đang chờ người dùng duyệt công cụ: giữ trong bộ nhớ máy chủ tối đa 30 phút.
@@ -605,7 +616,7 @@ const GEMINI_WEB_TOOL = {
   input_schema: { type: "object", properties: { query: { type: "string", description: "Câu tìm kiếm ngắn, cùng ngôn ngữ người dùng" } }, required: ["query"] },
 };
 const WEB_DESC = "Tìm thông tin mới trên web. Dùng khi câu hỏi cần dữ kiện mới (tin tức, giá, lịch, phiên bản phần mềm…) hoặc điều bạn không chắc. Trả về tóm tắt kèm nguồn.";
-async function geminiSearch(t: Target, query: string): Promise<ToolRun> {
+async function geminiSearch(t: Target, query: string, cite: Citer): Promise<ToolRun> {
   const used = { kind: "search" as const, name: "web_search" };
   if (!query.trim()) return { content: "Thiếu câu tìm kiếm.", is_error: true, used };
   const base = t.base.replace(/\/openai\/?$/, "");
@@ -617,12 +628,12 @@ async function geminiSearch(t: Target, query: string): Promise<ToolRun> {
   const j = (await r.json().catch(() => ({}))) as { candidates?: { content?: { parts?: { text?: string }[] }; groundingMetadata?: { groundingChunks?: { web?: { uri?: string; title?: string } }[] } }[] };
   const c = j.candidates?.[0];
   const text = (c?.content?.parts ?? []).map((p) => p.text ?? "").join("").trim();
-  const src = (c?.groundingMetadata?.groundingChunks ?? []).map((g) => g.web).filter((w): w is { uri?: string; title?: string } => !!w?.uri).slice(0, 8).map((w, i) => `[${i + 1}] ${w.title ?? ""} — ${w.uri}`).join("\n");
-  return { content: `${text || "(không có kết quả)"}\n\nNguồn:\n${src || "(không có)"}`, is_error: false, used };
+  const src = srcList((c?.groundingMetadata?.groundingChunks ?? []).map((g) => g.web).filter((w): w is { uri: string; title?: string } => !!w?.uri && /^https?:\/\//.test(w.uri)).map((w) => ({ url: w.uri, title: w.title ?? "" })), cite);
+  return { content: `${text || "(không có kết quả)"}\n\nNguồn:\n${src}`, is_error: false, used };
 }
 // Tìm web cho Grok / DeepSeek qua khóa API: /chat/completions của hai hãng không có công cụ tìm web phía máy chủ, nên Synchro gọi
 // API Responses của chính hãng đó (cùng khóa, cùng model) với công cụ web_search và trả câu trả lời kèm nguồn như một công cụ thường.
-async function responsesSearch(t: Target, query: string): Promise<ToolRun> {
+async function responsesSearch(t: Target, query: string, cite: Citer): Promise<ToolRun> {
   const used = { kind: "search" as const, name: "web_search" };
   if (!query.trim()) return { content: "Thiếu câu tìm kiếm.", is_error: true, used };
   try {
@@ -630,14 +641,19 @@ async function responsesSearch(t: Target, query: string): Promise<ToolRun> {
     const parts = (j.output ?? []).filter((o) => o.type === "message").flatMap((o) => o.content ?? []).filter((c) => c.type === "output_text");
     const text = parts.map((c) => c.text ?? "").join("").trim();
     const urls = [...parts.flatMap((c) => (c.annotations ?? []).filter((a) => a.url).map((a) => ({ url: a.url!, title: a.title ?? "" }))), ...(Array.isArray(j.citations) ? j.citations : []).filter((u): u is string => typeof u === "string").map((url) => ({ url, title: "" }))];
-    const src = [...new Map(urls.map((u) => [u.url, u])).values()].slice(0, 8).map((u, i) => `[${i + 1}] ${u.title} — ${u.url}`).join("\n");
-    return { content: `${text || "(không có kết quả)"}\n\nNguồn:\n${src || "(không có)"}`, is_error: false, used };
+    const src = srcList([...new Map(urls.filter((u) => /^https?:\/\//.test(u.url)).map((u) => [u.url, u])).values()], cite);
+    return { content: `${text || "(không có kết quả)"}\n\nNguồn:\n${src}`, is_error: false, used };
   } catch (e) {
     if (isAbort(e)) throw e;
     return { content: `Chưa tìm được trên web (${e instanceof HttpErr ? e.status : "mất kết nối"}): ${String((e as Error).message).slice(0, 200)}`, is_error: true, used };
   }
 }
-const searchWeb = (t: Target, query: string) => (t.kind === "google" ? geminiSearch(t, query) : responsesSearch(t, query));
+const searchWeb = (t: Target, query: string, cite: Citer) => (t.kind === "google" ? geminiSearch(t, query, cite) : responsesSearch(t, query, cite));
+// Danh sách nguồn trong kết quả công cụ: số [n] là số của nguồn trong cả lượt (khớp chip nguồn dưới câu trả lời), kèm lời dặn trích dẫn.
+const srcList = (list: { url: string; title: string }[], cite: Citer) => {
+  const rows = list.slice(0, 8).map((u) => ({ ...u, n: cite(u.url, u.title) })).filter((u) => u.n > 0);
+  return rows.length ? `${rows.map((u) => `[${u.n}] ${u.title} — ${u.url}`).join("\n")}\n\nKhi dùng thông tin từ nguồn nào, ghi số của nguồn đó dạng [n] ngay sau câu (ví dụ: … tăng 5%[2].), đúng số ở trên.` : "(không có)";
+};
 async function runCall(x: Exec, c: Call, d?: Decision): Promise<Run> {
   if (c.name === "update_plan") {
     const items = (Array.isArray(c.input?.items) ? c.input.items : []).map((i: { content?: unknown; status?: unknown }) => ({ content: String(i.content ?? "").slice(0, 120), status: ["pending", "in_progress", "completed"].includes(String(i.status)) ? String(i.status) : "pending" })).slice(0, 12);
@@ -647,7 +663,7 @@ async function runCall(x: Exec, c: Call, d?: Decision): Promise<Run> {
   if (c.name === TASK_TOOL.name && x.task && !x.sess?.get(c.name)) return { ...(await runPropose(x.uid, x.task, c.input ?? {})), used: { kind: "search", name: c.name } };
   if (c.name === "read_ref" && !x.sess?.get(c.name)) return { ...readRef(x.uid, c.input), used: { kind: "search", name: "read_ref" } };
   if (c.name.startsWith("brain_") && !x.sess?.get(c.name)) return { ...runBrainTool(x.uid, c.name, c.input ?? {}), used: { kind: "search", name: c.name } };
-  if (c.name === "web_search" && x.search && !x.sess?.get(c.name)) return searchWeb(x.search, String(c.input?.query ?? ""));
+  if (c.name === "web_search" && x.search && !x.sess?.get(c.name)) return searchWeb(x.search, String(c.input?.query ?? ""), citeOf(x));
   if (c.name === "run_code" && !x.sess?.get(c.name)) { const r = await runCode(x, c.input); if (r.image) (x.heavy ??= []).push(c.id); return r; }
   if (c.name === IMAGE_TOOL.name && x.image && !x.sess?.get(c.name)) return runImage(x, c);
   if (c.name === PROJECT_DOC_TOOL.name && x.project !== undefined && !x.sess?.get(c.name)) return { ...readProjectFile(x.uid, x.project, c.input ?? {}), used: { kind: "search", name: c.name } };
@@ -983,7 +999,7 @@ function reply(c: { user: { id: string } }, model: string, out: Out, x: Exec) {
   const usedNames = out.used.filter((u) => u.kind === "skill").map((u) => u.name);
   recordUse(c.user.id, usedNames);
   recordPluginUse(x.list.filter((k) => k.user_id.startsWith("pl_") && usedNames.includes(k.name)).map((k) => k.id));
-  return Response.json({ model, text: withTurnArts(x, out.text), skills: out.used, files: x.outs, libs: usedLibs(x, usedNames), ...(x.trace.length ? { trace: x.trace } : {}), ...(out.cancelled ? { cancelled: true } : {}) });
+  return Response.json({ model, text: withTurnArts(x, out.text), skills: out.used, files: x.outs, libs: usedLibs(x, usedNames), ...(x.trace.length ? { trace: x.trace } : {}), ...(out.cancelled ? { cancelled: true } : {}), ...(x.webs?.size ? { webSources: [...x.webs.values()] } : {}) });
 }
 
 // Bản sửa artifact (mode="patch") phải áp được vào bản hiện tại. Không khớp thì nhắc model sửa lại đúng một lần (tự vá),
@@ -1722,8 +1738,8 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
       if (sess) announceOffline(x, messages);
       const msgs = prep.messages;
       const ad = t.kind === "mock" ? mockAdapter(list)
-        : t.kind === "anthropic" ? anthropicAdapter(t, system, sk, max_tokens, web ? [...tools, webTool] : tools, effort, prep.historyEnd)
-        : t.kind === "openai" ? responsesAdapter(t, `${system}\n\n${sk}`, max_tokens, tools, effort, web)
+        : t.kind === "anthropic" ? anthropicAdapter(t, system, sk, max_tokens, web ? [...tools, webTool] : tools, effort, prep.historyEnd, web ? citeOf(x) : undefined)
+        : t.kind === "openai" ? responsesAdapter(t, `${system}\n\n${sk}`, max_tokens, tools, effort, web, web ? citeOf(x) : undefined)
         : openaiAdapter(t, `${system}\n\n${sk}`, max_tokens, tools, effort);
       const m0: unknown[] = t.kind === "mock" ? [...msgs] : t.kind === "anthropic" ? msgs.map((m) => ({ ...m, content: toAnthropic(m.content) }))
         : t.kind === "openai" ? msgs.map((m) => ({ ...m, content: toResponses(m.content) })) : msgs.map((m) => ({ ...m, content: toOpenAI(withPages(m.content)) }));

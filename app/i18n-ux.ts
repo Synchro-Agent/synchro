@@ -33,6 +33,10 @@ export const UX_VI2EN: Record<string, string> = {
   "Sửa tin nhắn": "Edit message", "Gửi lại": "Send again", "Sao chép": "Copy", "Hủy": "Cancel",
   "Các tin phía sau sẽ được thay bằng câu trả lời mới.": "Later messages will be replaced by the new reply.",
   "Tin nhắn cho Synchro": "Message to Synchro",
+  // Nguồn trích dẫn có favicon, logo ứng dụng Composio
+  "Tên miền không hợp lệ.": "Invalid domain.",
+  "Ứng dụng không hợp lệ.": "Invalid app.",
+  "Thiếu tham số.": "Missing parameter.",
 };
 export const UX_RULES_EN: [RegExp, (m: RegExpMatchArray) => string][] = [
   [/^Câu trả lời trong “(.+)” gặp lỗi$/, (m) => `The reply in “${m[1]}” hit an error`],
