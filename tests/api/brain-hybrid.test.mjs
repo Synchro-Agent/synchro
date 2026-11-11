@@ -184,6 +184,14 @@ ok(tg?.model === "text-embedding-3-small" && tg.provider === "openai", "có khó
   // Lệnh xếp lại quá ngân sách không bị hủy: chạy xong ở nền nên chi phí vẫn vào Mức dùng của người hỏi.
   for (let i = 0; i < 40 && !(US.featureCost(ux.id, "brain-rerank", 0) > 0); i++) await new Promise((x) => setTimeout(x, 100));
   ok(US.featureCost(ux.id, "brain-rerank", 0) > 0, "lệnh xếp lại (kể cả quá ngân sách) được tính vào Mức dùng", US.featureCost(ux.id, "brain-rerank", 0));
+  // Model xếp lại thường chậm hơn ngân sách: bỏ bước này thay vì bắt lượt chat chờ hết ngân sách (thử lại mỗi 5 phút).
+  process.env.SYNCHRO_LLM_RERANK = "1";
+  for (let i = 0; i < 2; i++) { await recall(ux, "ô tô", { budgetMs: 320 }); await new Promise((x) => setTimeout(x, 1500)); }
+  const t1 = Date.now();
+  const fast = await recall(ux, "ô tô", { budgetMs: 320 });
+  const ms2 = Date.now() - t1;
+  process.env.SYNCHRO_LLM_RERANK = "0";
+  ok(fast.tr.ids.length === 4 && ms2 < 150, `model xếp lại chậm hơn ngân sách: bỏ qua, không chờ (${ms2} ms)`, JSON.stringify(fast.tr));
 }
 
 // ---- 5. Bộ nhớ: vector nạp theo người khi cần, trần dung lượng, bỏ khi rảnh, báo cho memstat.

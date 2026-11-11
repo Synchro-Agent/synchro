@@ -1025,16 +1025,23 @@ async function rerankModel(user: UserRow) {
   return fast.length ? sideModel(fast) : null;
 }
 const RERANK_MAX_MS = 20_000;
+// Thời gian trả lời gần đây của model xếp lại (trung bình trượt): model thường chậm hơn ngân sách thì bỏ bước này (không bắt lượt chat chờ hết
+// ngân sách rồi vẫn giữ thứ tự cũ, không trả tiền cho câu trả lời không ai dùng), chỉ thử lại một lần mỗi 5 phút xem model đã nhanh lên chưa.
+const rerankLat: Map<string, { ms: number; n: number; probeAt: number }> = ((globalThis as { __rerankLat?: Map<string, { ms: number; n: number; probeAt: number }> }).__rerankLat ??= new Map());
+export const rerankLatency = (model: string) => rerankLat.get(model);
 async function llmRerank(user: UserRow, query: string, cands: Cand[], ms: number): Promise<Cand[] | null> {
   if (process.env.SYNCHRO_LLM_RERANK === "0" || ms < 250) return null;
   const t0 = Date.now();
   const model = await rerankModel(user).catch(() => null);
   if (!model || Date.now() - t0 > ms - 150) return null;
+  const lat = rerankLat.get(model) ?? { ms: 0, n: 0, probeAt: 0 };
+  if (lat.n >= 2 && lat.ms > ms) { if (Date.now() - lat.probeAt < 5 * 60_000) return null; lat.probeAt = Date.now(); }
+  const t1 = Date.now();
   const list = cands.map((c, i) => `[${i + 1}] ${c.n.title}: ${embedText(c.n).slice(0, 240)}`).join("\n");
   // Không hủy lệnh gọi khi hết ngân sách: hãng vẫn tính tiền phần câu hỏi đã gửi, nên để nó chạy xong ở nền (oneShot ghi chi phí vào Mức dùng),
   // lượt chat chỉ chờ trong ngân sách rồi giữ thứ tự cũ.
   const call = oneShot(user, model, RERANK, [{ role: "user", content: `Câu hỏi: ${query.slice(0, 500)}\n\n${list}` }], { maxTokens: 80, feature: "brain-rerank", signal: AbortSignal.timeout(RERANK_MAX_MS) });
-  call.catch(() => {});
+  call.then(() => { const d = Date.now() - t1; lat.ms = lat.n ? lat.ms * 0.6 + d * 0.4 : d; lat.n++; rerankLat.set(model, lat); }, () => {});
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
     const text = await Promise.race([call, new Promise<null>((ok) => { timer = setTimeout(() => ok(null), Math.max(100, ms - (Date.now() - t0))); })]);
