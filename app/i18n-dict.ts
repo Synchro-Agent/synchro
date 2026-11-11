@@ -844,6 +844,8 @@ Object.assign(VI2EN, {
   "Chế độ Tự động đã chọn model này": "Auto mode picked this model",
   "Chạy lại bằng model khác": "Run again with another model",
   "Đang tạo tiếp…": "Still writing…",
+  "Rẽ nhánh từ đây": "Branch from here",
+  "Đã rẽ nhánh thành đoạn chat mới, đoạn chat gốc giữ nguyên": "Branched into a new chat. The original chat is unchanged",
   "Mất kết nối tới Synchro quá lâu. Câu trả lời vẫn chạy ở máy chủ: tải lại trang để xem tiếp.": "Lost the connection to Synchro for too long. The reply is still running on the server: reload the page to keep reading.",
   "Chọn connector": "Choose a connector",
   "Dùng connector cho tin này": "Use a connector for this message",

@@ -851,6 +851,8 @@ type RowCx = {
   copy: (key: string, text: string) => void; speak: (key: string, text: string) => void; like: (i: number, v: 1 | -1) => void; retry: (avoid?: string) => void; openProviders: () => void; edit: (i: number, text: string) => void; model: string; switchModel: (m: Msg, key: string) => void;
   // Tài khoản có hơn một model dùng được: mới hiện nút "Chạy lại bằng model khác" dưới câu trả lời của chế độ Tự động.
   altModels: boolean;
+  // Rẽ nhánh: đoạn chat mới gồm các tin tới hết câu trả lời thứ i (đoạn chat gốc giữ nguyên).
+  fork: (i: number) => void;
 };
 // Thẻ lỗi của một lượt chat: khác hẳn câu trả lời thường, nói việc nên làm tiếp, lỗi thô để trong phần chi tiết.
 function ErrCard({ raw, onRetry, onProviders }: { raw?: string; onRetry?: () => void; onProviders: () => void }) {
@@ -931,6 +933,7 @@ const MsgRow = memo(function MsgRow({ m, i, last, busy, mark, art, inl, fileActi
             <button className={`icon-btn ${m.like === 1 ? "like-on" : ""}`} onClick={() => cx.current!.like(i, 1)} aria-label="Hữu ích" aria-pressed={m.like === 1}><I.ThumbUp size={16} /></button>
             <button className={`icon-btn ${m.like === -1 ? "like-on" : ""}`} onClick={() => cx.current!.like(i, -1)} aria-label="Không hữu ích" aria-pressed={m.like === -1}><I.ThumbDown size={16} /></button>
             {last && <button className="icon-btn" onClick={() => cx.current!.retry()} aria-label="Thử lại"><I.Retry size={16} /></button>}
+            {!c.chat.inc && <button className="icon-btn" onClick={() => cx.current!.fork(i)} aria-label={tr("Rẽ nhánh từ đây")} data-tip={tr("Rẽ nhánh từ đây")}><I.Branch size={15} /></button>}
             {m.via && <span className="via" title={tr("Chế độ Tự động đã chọn model này")} data-notr>{(() => { const en = getLang() === "en", task = m.viaTask ? autoTaskName(m.viaTask, en) : ""; return task ? (en ? `Auto picked ${modelName(m.via)} for ${task}` : `Tự động chọn ${modelName(m.via)} cho việc ${task}`) : modelName(m.via); })()}</span>}
             {m.via && last && !busy && c.altModels && <button className="via via-alt" onClick={() => cx.current!.retry(m.via)} title={tr("Vẫn để Tự động, chỉ không dùng model vừa trả lời")}><I.Retry size={12} />{tr("Chạy lại bằng model khác")}</button>}
             <When t={m.time} />
@@ -1483,6 +1486,16 @@ export default function Home() {
     lastTop.current = top;
     setShowDown(!stick.current && gap > 6);
   };
+  // Lăn chuột / vuốt lên, phím lên trang: dừng tự cuộn ngay lúc đó (sự kiện scroll tới sau một khung hình, chữ mới có thể kịp kéo xuống trước).
+  const userUp = () => { const el = threadRef.current; if (el && el.scrollTop > 0) stick.current = false; };
+  const touchY = useRef(0);
+  // Kéo về cuối khi đang bám đáy. Người dùng vừa kéo lên mà sự kiện scroll chưa kịp tới (chữ đang chảy): coi là đã rời đáy, không kéo lại.
+  const follow = (el: HTMLElement) => {
+    if (!stick.current) return;
+    if (el.scrollTop < lastTop.current - 5 && el.scrollHeight - el.scrollTop - el.clientHeight > 6) { stick.current = false; setShowDown(true); return; }
+    el.scrollTop = el.scrollHeight;
+    lastTop.current = el.scrollTop;
+  };
   // Xa hơn vài màn hình thì nhảy tới gần cuối rồi mới trượt nốt: trượt suốt đoạn chat dài từng mất gần 1,5 giây, hàng ẩn dựng lại khi lướt qua.
   const toBottom = () => {
     const el = threadRef.current;
@@ -1502,13 +1515,13 @@ export default function Home() {
   }, [chat?.id, view]);
   useEffect(() => {
     const el = threadRef.current;
-    if (el && stick.current) el.scrollTop = el.scrollHeight;
+    if (el) follow(el);
   }, [chat?.msgs, busy]);
   // Tin ngoài màn hình chỉ có chiều cao ước tính (content-visibility), vẽ thật mới đủ cao; ảnh, biểu đồ cũng nở sau. Đang đứng ở cuối thì giữ ở cuối.
   useEffect(() => {
     const el = threadRef.current, inner = el?.firstElementChild;
     if (!el || !inner) return;
-    const ro = new ResizeObserver(() => { if (stick.current) el.scrollTop = el.scrollHeight; });
+    const ro = new ResizeObserver(() => follow(el));
     ro.observe(inner);
     return () => ro.disconnect();
   }, [chat?.id, view]);
@@ -1878,6 +1891,20 @@ export default function Home() {
     setChats((cs) => cs.map((x) => (x.id === c.id ? { ...x, compact, msgs: [...upto, { role: "ai", text: "", time: Date.now() }] } : x)));
     runTurn(c.id, u.text, (u.files ?? []).filter((n) => !u.fids?.[n]), chatHistory(upto, compact), c.project, c.studio, u.pick?.map((x) => x.id));
   };
+  // Rẽ nhánh đoạn chat từ một câu trả lời: chép các tin tới đó sang đoạn chat mới (cùng dự án, chế độ), mở đoạn chat mới để hỏi tiếp theo hướng khác.
+  // Không chép mã lượt đang chạy, kết quả hội đồng phản biện hay bản nén ngữ cảnh: nhánh mới gửi lại đủ lịch sử ở lượt đầu.
+  const fork = (i: number) => {
+    const c = chat;
+    if (!c || c.inc || c.stub) return;
+    const id = Date.now();
+    const msgs = c.msgs.slice(0, i + 1).map((m) => ({ ...m, run: undefined, prog: undefined, done: true }));
+    const title = `${c.title} · ${getLang() === "en" ? "branch" : "nhánh"}`;
+    setChats((cs) => [{ id, title, named: true, msgs, project: c.project, studio: c.studio, mixer: c.mixer, pins: c.pins }, ...cs]);
+    setUndoTurn(null);
+    setCur(id);
+    setView("chat");
+    say("Đã rẽ nhánh thành đoạn chat mới, đoạn chat gốc giữ nguyên");
+  };
   const undoLost = () => {
     const u = undoTurn;
     if (!u) return;
@@ -2183,7 +2210,7 @@ export default function Home() {
   };
 
   const rowCx = useRef<RowCx | null>(null);
-  if (chat) rowCx.current = { model, switchModel, altModels: models.providers.flatMap((p) => p.models).filter((x) => allowsModel(models.allowed, x.key)).length > 1, chat, chats, say, fm, arts, artOpen, artIdent: artSel?.ident, artIndex, openPlugins, openArt, openFile, send: (t) => send(t), copy, speak, like, retry, openProviders: () => { setSettingsTab("Providers"); setModal("settings"); }, edit: (i, text) => { const u = chat.msgs[i]; if (!busy && u?.role === "user") resend(chat, i, { ...u, text, time: Date.now() }); } };
+  if (chat) rowCx.current = { model, switchModel, fork, altModels: models.providers.flatMap((p) => p.models).filter((x) => allowsModel(models.allowed, x.key)).length > 1, chat, chats, say, fm, arts, artOpen, artIdent: artSel?.ident, artIndex, openPlugins, openArt, openFile, send: (t) => send(t), copy, speak, like, retry, openProviders: () => { setSettingsTab("Providers"); setModal("settings"); }, edit: (i, text) => { const u = chat.msgs[i]; if (!busy && u?.role === "user") resend(chat, i, { ...u, text, time: Date.now() }); } };
   // Dấu của phần artifact trong một tin: có phiên bản mới, đổi bản đang xem thì dòng tin đó vẽ lại.
   const artSig = (i: number) => arts.at[i]?.map((x) => `${x.ident}:${x.v}:${arts.map.get(x.ident)?.length}:${artOpen && artSel?.ident === x.ident && artIndex === x.v ? 1 : 0}`).join("|") ?? "";
 
@@ -2459,7 +2486,9 @@ export default function Home() {
         {view === "chat" && chat && (
           <>
             <h1 className="sr-only" data-notr>{chat.title}</h1>
-            <div className="thread" ref={threadRef} onScroll={onScroll}>
+            <div className="thread" ref={threadRef} onScroll={onScroll} onWheel={(e) => { if (e.deltaY < 0) userUp(); }}
+              onTouchStart={(e) => { touchY.current = e.touches[0]?.clientY ?? 0; }} onTouchMove={(e) => { if ((e.touches[0]?.clientY ?? 0) - touchY.current > 5) userUp(); }}
+              onKeyDown={(e) => { if (["PageUp", "ArrowUp", "Home"].includes(e.key)) userUp(); }}>
               <div className="thread-in">
                 {chat.stub && <div className="muted sync-stub" role="status"><span className="art-spin sm" />{tr("Đang tải đoạn chat từ máy chủ…")}</div>}
                 {chat.msgs.map((m, i) => <Boundary key={`${chat.id}-${i}`} compact resetKey={m.text}><MsgRow m={m} i={i} last={i === chat.msgs.length - 1} lang={getLang()} busy={busy} mark={chat.compact?.upto === i} art={caps.art} inl={caps.inl} artSig={artSig(i)}
