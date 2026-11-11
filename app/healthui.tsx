@@ -7,6 +7,7 @@ import { useApp } from "./store";
 import { getLang, locale } from "./i18n";
 import * as I from "./icons";
 import type { BackupStatus, Problem, WatchdogState } from "./ops";
+import { ContinuousBackup } from "./backupui";
 
 type Disk = { key: string; path: string; freeMB: number; totalMB: number };
 type Health = {
@@ -53,7 +54,7 @@ function Kv({ k, v, bad }: { k: string; v: React.ReactNode; bad?: boolean }) {
   return <div className="adm-kv"><span>{k}</span><b data-notr style={bad ? { color: "#c6422f" } : undefined}>{v}</b></div>;
 }
 
-export function HealthPanel() {
+export function HealthPanel({ Toggle }: { Toggle: (p: { on: boolean; set: (v: boolean) => void; label?: string }) => React.ReactElement }) {
   const app = useApp();
   const [h, setH] = useState<Health | null>(null);
   const [err, setErr] = useState("");
@@ -167,6 +168,9 @@ export function HealthPanel() {
           {b.offsite && <Kv k="Off-site copy" v={b.offsiteOk ? "✓" : "✗"} bad={!b.offsiteOk} />}
         </div>
       )}
+
+      <h3 className="sec">Continuous backup</h3>
+      <ContinuousBackup Toggle={Toggle} />
 
       <h3 className="sec">Watchdog</h3>
       <p className="d adm-privacy"><I.Retry size={14} />Checks the web app every minute and restarts it after three failed checks in a row. It can&apos;t tell you if the whole server is down: that takes a monitor outside this server.</p>

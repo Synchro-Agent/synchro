@@ -722,7 +722,7 @@ export function SettingsBody({ tab, theme, setTheme, go }: { tab: string; theme:
   switch (tab) {
     case "General": return <General theme={theme} setTheme={setTheme} />;
     case "Administrator": return <AdminPanel Toggle={Toggle} />;
-    case "Health": return <HealthPanel />;
+    case "Health": return <HealthPanel Toggle={Toggle} />;
     case "Providers": case "API": return <ProvidersPanel />;
     case "Connectors": return <ConnectorsPanel />;
     case "Skill Hub": case "Skills": case "Plugins": return <SkillHub />;

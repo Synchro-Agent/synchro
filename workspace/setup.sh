@@ -139,4 +139,25 @@ install_ops() {
   fi
 }
 install_ops || echo "CẢNH BÁO: chưa cài được watchdog hoặc lịch sao lưu (trang Sức khỏe hệ thống sẽ báo)." >&2
+
+# 6. Litestream (sao lưu liên tục lên Cloudflare R2, app/litestream.ts; quản trị viên bật ở Cài đặt → Sức khỏe hệ thống, xem docs/backup-r2.md).
+# Bản cố định, kiểm sha256 trước khi cài (checksums.txt của bản phát hành v0.5.17). Đã đúng bản thì không tải lại. Lỗi ở đây không làm hỏng deploy:
+# web vẫn chạy, chỉ là chưa sao lưu liên tục được (trang Sức khỏe hệ thống báo "Máy chủ chưa cài litestream").
+install_litestream() {
+  local V=0.5.17 BIN=/usr/local/bin/litestream ARCH SUM T
+  if [ -x "$BIN" ] && [ "$("$BIN" version 2>/dev/null)" = "$V" ]; then return 0; fi
+  case "$(uname -m)" in
+    x86_64|amd64) ARCH=linux-x86_64; SUM=cfb371176d164437ae869f8351cfde49bd1804ae71c61923f75c9cba9c9c006d ;;
+    aarch64|arm64) ARCH=linux-arm64; SUM=f8ca4a050095c1efbda2c4365172e61bf9d955ea0d9ac42f448b52e51819baa5 ;;
+    *) echo "Litestream: chưa hỗ trợ kiến trúc $(uname -m)." >&2; return 1 ;;
+  esac
+  T=$(mktemp -d)
+  if ! curl -fsSL --max-time 120 -o "$T/ls.tgz" "https://github.com/benbjohnson/litestream/releases/download/v$V/litestream-$V-$ARCH.tar.gz"; then rm -rf "$T"; return 1; fi
+  if ! echo "$SUM  $T/ls.tgz" | sha256sum -c --status; then echo "Litestream: sha256 không khớp, không cài." >&2; rm -rf "$T"; return 1; fi
+  tar -xzf "$T/ls.tgz" -C "$T" litestream
+  install -o root -g root -m 755 "$T/litestream" "$BIN"
+  rm -rf "$T"
+  echo "Đã cài litestream $V."
+}
+install_litestream || echo "CẢNH BÁO: chưa cài được litestream (sao lưu liên tục lên R2 chưa dùng được)." >&2
 echo "Workspace sẵn sàng."
