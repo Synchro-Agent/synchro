@@ -21,15 +21,16 @@ export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }
   let stop = () => {};
   const stream = new ReadableStream({
     start(ctl) {
-      let closed = false;
-      const send = (s: string) => { if (!closed) try { ctl.enqueue(enc.encode(s)); } catch { closed = true; } };
+      // ended tách khỏi closed: ghi lỗi (người xem đã đi) từng chỉ đặt closed, end() thấy closed thì bỏ qua nên hẹn giờ ping và người theo dõi ở lại mãi.
+      let closed = false, ended = false, unwatch = () => {};
+      const end = () => { if (ended) return; ended = closed = true; clearInterval(ping); unwatch(); try { ctl.close(); } catch {} };
+      const send = (s: string) => { if (!closed) try { ctl.enqueue(enc.encode(s)); } catch { end(); } };
       const ev = (e: RunEvent) => send(`id: ${e.seq}\nevent: step\ndata: ${JSON.stringify(e)}\n\n`);
       const dl = (d: Delta) => send(`event: delta\ndata: ${JSON.stringify(d)}\n\n`);
       const done = (r: PublicRun) => { send(`event: done\ndata: ${JSON.stringify({ status: r.status, http: r.http, result: r.result })}\n\n`); end(); };
       const ping = setInterval(() => send(": ping\n\n"), 15_000);
-      const end = () => { if (closed) return; closed = true; clearInterval(ping); unwatch(); try { ctl.close(); } catch {} };
       // Đăng ký trước rồi mới đọc lại trạng thái, để không lỡ bước nào xảy ra ở giữa.
-      const unwatch = watch(id, (m) => { if (m.event && m.event.seq > after) ev(m.event); if (m.delta) dl(m.delta); if (m.done) done(m.done); });
+      unwatch = watch(id, (m) => { if (m.event && m.event.seq > after) ev(m.event); if (m.delta) dl(m.delta); if (m.done) done(m.done); });
       stop = end;
       send("retry: 2000\n\n");
       const now = getRun(id)!;
@@ -37,6 +38,7 @@ export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }
       const lt = liveText(id);
       if (lt?.text) send(`event: snapshot\ndata: ${JSON.stringify(lt)}\n\n`);
       if (now.status !== "running") done(now);
+      if (ended) return;
       req.signal.addEventListener("abort", end);
     },
     cancel() { stop(); },

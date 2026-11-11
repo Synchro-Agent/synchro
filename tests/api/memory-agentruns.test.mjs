@@ -48,6 +48,27 @@ try {
     ok(kept < 16_500_000, `phần giữ không vượt trần ~16 MB (${(kept / 1e6).toFixed(1)} MB)`, kept);
     ok(run.lines.length === 8 && run.lines.every((l) => l.e.summary === "s"), "vẫn giữ tóm tắt của mọi kết quả");
   }
+  console.log("4. Người xem đi mất (ghi vào luồng lỗi): thôi nghe và tắt hẹn giờ ping");
+  {
+    const live = new Set(), realSI = globalThis.setInterval, realCI = globalThis.clearInterval;
+    globalThis.setInterval = (f, ms, ...a) => { const t = realSI(f, ms, ...a); live.add(t); return t; };
+    globalThis.clearInterval = (t) => { live.delete(t); realCI(t); };
+    let release;
+    const run = A.startAgentRun({ uid: u.id, sid: "2400", node: null }, (emit) => new Promise((ok) => { release = () => { emit({ t: "text", text: "sau khi người xem đi" }); ok(); }; }));
+    const res = A.runStream(run, 0, new AbortController().signal);
+    const reader = res.body.getReader();
+    await reader.read();
+    const ping = [...live];
+    ok(run.listeners.size === 1, "đang có một người nghe");
+    const C = globalThis.ReadableStreamDefaultController.prototype, real = C.enqueue;
+    C.enqueue = function () { throw new TypeError("Invalid state: Controller is already closed"); };
+    release();
+    await sleep(20);
+    C.enqueue = real;
+    ok(run.listeners.size === 0, "ghi lỗi: thôi nghe ngay, không giữ lượt", run.listeners.size);
+    ok(ping.length > 0 && ping.every((t) => !live.has(t)), "hẹn giờ ping đã tắt", { ping: ping.length, live: live.size });
+    globalThis.setInterval = realSI; globalThis.clearInterval = realCI;
+  }
 } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
 console.log(`\n${pass} đạt, ${fail} lỗi`);
 process.exit(fail ? 1 : 0);

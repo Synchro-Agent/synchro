@@ -17,13 +17,17 @@ export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }
   try { checkApp(c.user, id); } catch (e) { if (e instanceof AppError) return Response.json({ error: e.message }, { status: e.status }); throw e; }
   const stream = new ReadableStream({
     start(ctl) {
-      let closed = false;
-      const send = (s: string) => { if (!closed) try { ctl.enqueue(enc.encode(s)); } catch { closed = true; } };
+      // ended tách khỏi closed: ghi lỗi (người xem đã đi) từng chỉ đặt closed, end() thấy closed thì bỏ qua nên hẹn giờ ping và chỗ trong phòng ở lại mãi.
+      let closed = false, ended = false;
+      const end = () => { if (ended) return; ended = closed = true; clearInterval(ping); leave?.(); try { ctl.close(); } catch {} };
+      const send = (s: string) => { if (!closed) try { ctl.enqueue(enc.encode(s)); } catch { end(); } };
       const ping = setInterval(() => send(": ping\n\n"), 20_000);
-      const end = () => { if (closed) return; closed = true; clearInterval(ping); leave?.(); try { ctl.close(); } catch {} };
       stop = end;
       send("retry: 3000\n\n");
+      if (ended) return;
       leave = join(c.user, id, (e: LiveEvent) => send(`event: ${e.type}\ndata: ${JSON.stringify(e)}\n\n`));
+      // join gửi ngay danh sách người đang mở: ghi lỗi ở đó thì end() đã chạy trước khi có leave.
+      if (ended) { leave(); return; }
       req.signal.addEventListener("abort", end);
     },
     cancel() { stop(); },

@@ -115,15 +115,18 @@ export function runStream(run: AgentRun, after: number, signal: AbortSignal): Re
   let stop = () => {};
   const stream = new ReadableStream({
     start(ctl) {
-      let closed = false;
-      const send = (o: unknown) => { if (!closed) try { ctl.enqueue(enc.encode(JSON.stringify(o) + "\n")); } catch { closed = true; } };
-      const ping = setInterval(() => { if (!closed) try { ctl.enqueue(enc.encode("\n")); } catch { closed = true; } }, 15_000);
-      const finish = () => { if (closed) return; closed = true; clearInterval(ping); run.listeners.delete(me); try { ctl.close(); } catch {} };
+      // ended tách khỏi closed: ghi lỗi (người xem đã đi) từng chỉ đặt closed, finish() thấy closed thì bỏ qua nên hẹn giờ ping giữ cả lượt (và bộ đệm) mãi.
+      let closed = false, ended = false;
+      const finish = () => { if (ended) return; ended = closed = true; clearInterval(ping); run.listeners.delete(me); try { ctl.close(); } catch {} };
+      const write = (s: string) => { if (!closed) try { ctl.enqueue(enc.encode(s)); } catch { finish(); } };
+      const send = (o: unknown) => write(JSON.stringify(o) + "\n");
+      const ping = setInterval(() => write("\n"), 15_000);
       const me: Listener = { line: ({ s, e }) => { if (s > after) send({ ...e, s }); }, end: () => { send({ t: "end", s: run.lines.length, stopped: run.ac.signal.aborted }); finish(); } };
-      stop = () => { closed = true; clearInterval(ping); run.listeners.delete(me); };
+      stop = finish;
       send({ t: "run", node: run.node ? { ...run.node, steps: undefined, ai: "" } : null, running: !run.ended, count: run.lines.length });
       for (const l of run.lines) if (l.s > after) send({ ...l.e, s: l.s });
       if (run.ended) { me.end(); return; }
+      if (ended) return;
       run.listeners.add(me);
       signal.addEventListener("abort", () => stop());
     },
