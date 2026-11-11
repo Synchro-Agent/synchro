@@ -6,7 +6,7 @@ import { detectKind } from "./detect";
 import { pickExtractor } from "./extractors";
 import { chunkForRag, rank, scored } from "./rag";
 import { checkQuota, claimFile, mayUse } from "./owners";
-import { minCos, queueEmbed, registerVecSource, rrf, sweepVecs, vecQuery } from "../vecstore";
+import { minCos, queueEmbed, registerVecSource, rrf, sweepVecs, vecHash, vecQuery } from "../vecstore";
 import { onTick } from "../tasks";
 import { db } from "../authstore";
 
@@ -83,18 +83,29 @@ export async function storedFile(id: string, uid: string): Promise<{ rec: Stored
 }
 
 // Tài liệu lớn: các đoạn được embed ở nền (lần đầu tệp được hỏi tới), các lần sau chọn đoạn bằng BM25 + nghĩa (RRF). Tệp lưu theo nội dung
-// (id = sha1) nên vector dùng chung cho mọi người có tệp; người hỏi đầu tiên chịu chi phí embed (trong hạn mức embed mỗi ngày của họ).
+// (id = sha1) nên vector dùng chung cho mọi người có tệp (không gắn với người trả tiền: xóa tài khoản một người không mất vector của người khác).
+// Người hỏi gần nhất (còn giữ tệp) chịu chi phí phần embed tiếp theo, trong hạn mức embed mỗi ngày của họ: người hỏi trước hết hạn mức, đã bỏ tệp
+// hay bị xóa tài khoản thì tệp vẫn được embed khi người khác hỏi, và không ai trả tiền thay cho các lượt hỏi của người khác.
+const FILE_CHARS = 4000;
+const owns = (uid: string, id: string) => !!db().prepare("SELECT 1 FROM file_owners WHERE file_id = ? AND user_id = ?").get(id, uid);
 const fileUser: Map<string, string> = ((globalThis as { __vecFileUser?: Map<string, string> }).__vecFileUser ??= new Map());
 const textOf = (rec: Stored) => rec.blocks.map((b) => (b.type === "text" ? b.text : b.type === "document" ? b.fallbackText ?? "" : "")).join("\n\n");
 registerVecSource("file", {
-  maxChars: 4000,
-  userOf: (id) => fileUser.get(id) ?? null,
+  maxChars: FILE_CHARS,
+  shared: true,
+  userOf: (id) => { const u = fileUser.get(id); return u && owns(u, id) ? u : null; },
+  alive: (id, items) => (db().prepare("SELECT 1 FROM file_owners WHERE file_id = ? LIMIT 1").get(id) ? new Set(items) : new Set()),
   pending: async (id, model, limit) => {
     if (!safeId(id)) return [];
     let rec: Stored;
     try { rec = JSON.parse(await readFile(path.join(DIR, id + ".json"), "utf8")); } catch { return []; }
-    const have = new Set((db().prepare("SELECT item FROM vec_items WHERE scope = 'file' AND owner = ? AND model = ?").all(id, model) as { item: string }[]).map((r) => r.item));
-    return chunkForRag(textOf(rec)).map((text, i) => ({ item: `${id}#${i}`, text, srcAt: 0 })).filter((x) => !have.has(x.item)).slice(0, limit);
+    // So mã băm từng đoạn chứ không chỉ vị trí: tệp được đọc lại (bộ đọc mới, cách chia đoạn mới) thì đoạn đổi chữ được embed lại,
+    // đoạn thừa (tệp ngắn đi) bị xóa, để kết quả tìm theo nghĩa không trỏ nhầm đoạn.
+    const d = db(), have = new Map((d.prepare("SELECT item, hash FROM vec_items WHERE scope = 'file' AND owner = ? AND model = ?").all(id, model) as { item: string; hash: string }[]).map((r) => [r.item, r.hash]));
+    const chunks = chunkForRag(textOf(rec));
+    const extra = [...have.keys()].filter((k) => Number(k.slice(k.lastIndexOf("#") + 1)) >= chunks.length);
+    for (const k of extra) d.prepare("DELETE FROM vec_items WHERE scope = 'file' AND item = ?").run(k);
+    return chunks.map((text, i) => ({ item: `${id}#${i}`, text, srcAt: 0 })).filter((x) => have.get(x.item) !== vecHash(x.text, FILE_CHARS)).slice(0, limit);
   },
 });
 let fileSweptAt = 0;
@@ -102,8 +113,8 @@ onTick("file-vec-sweep", (now) => { if (now - fileSweptAt < 6 * 3_600_000) retur
 /** Chọn k đoạn liên quan nhất (theo thứ tự trong tệp): BM25, cộng tìm theo nghĩa khi tệp đã có vector. */
 export async function pickChunks(id: string, uid: string, chunks: string[], query: string, k: number, budgetMs = 500): Promise<number[]> {
   if (!query.trim() || chunks.length <= k) return rank(chunks, query, k);
-  if (fileUser.size > 2000) fileUser.clear();
-  if (!fileUser.has(id)) fileUser.set(id, uid);
+  if (fileUser.size > 2000 && !fileUser.has(id)) fileUser.delete(fileUser.keys().next().value!);
+  fileUser.delete(id); fileUser.set(id, uid);
   const vq = await vecQuery("file", id, uid, query, 30, budgetMs).catch(() => null);
   queueEmbed("file", id);
   if (!vq) return rank(chunks, query, k);

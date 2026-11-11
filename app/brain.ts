@@ -993,6 +993,8 @@ registerVecSource("brain", {
   pending: (uid, model, limit) => (t().prepare(`SELECT n.* FROM brain_notes n LEFT JOIN vec_items v ON v.scope = 'brain' AND v.item = n.id
       WHERE n.user_id = ? AND n.kind IN (${RECALL_KINDS}) AND (v.item IS NULL OR v.model != ? OR v.src_at != n.updated_at) ORDER BY n.updated_at DESC LIMIT ?`).all(uid, model, limit) as Row[])
     .map((r) => { const n = parse(r); return { item: n.id, text: embedText(n), srcAt: n.updatedAt }; }),
+  // Ghi chú bị xóa (xóa một ghi chú, xóa sạch bộ não, xóa tài khoản) trong lúc chờ API embed: không ghi vector của nó trở lại.
+  alive: (uid, items) => new Set((t().prepare(`SELECT id FROM brain_notes WHERE user_id = ? AND id IN (${items.map(() => "?").join(",") || "''"})`).all(uid, ...items) as { id: string }[]).map((r) => r.id)),
 });
 let vecSweptAt = 0;
 onTick("brain-vec-sweep", (now) => { if (now - vecSweptAt < 3_600_000) return; vecSweptAt = now; try { sweepVecs("brain", "SELECT id FROM brain_notes"); } catch (e) { console.warn("[brain] dọn vector:", (e as Error).message); } });
@@ -1022,19 +1024,26 @@ async function rerankModel(user: UserRow) {
   const fast = api.filter((k) => tierOf(k) === "fast");
   return fast.length ? sideModel(fast) : null;
 }
+const RERANK_MAX_MS = 20_000;
 async function llmRerank(user: UserRow, query: string, cands: Cand[], ms: number): Promise<Cand[] | null> {
   if (process.env.SYNCHRO_LLM_RERANK === "0" || ms < 250) return null;
   const t0 = Date.now();
   const model = await rerankModel(user).catch(() => null);
   if (!model || Date.now() - t0 > ms - 150) return null;
   const list = cands.map((c, i) => `[${i + 1}] ${c.n.title}: ${embedText(c.n).slice(0, 240)}`).join("\n");
+  // Không hủy lệnh gọi khi hết ngân sách: hãng vẫn tính tiền phần câu hỏi đã gửi, nên để nó chạy xong ở nền (oneShot ghi chi phí vào Mức dùng),
+  // lượt chat chỉ chờ trong ngân sách rồi giữ thứ tự cũ.
+  const call = oneShot(user, model, RERANK, [{ role: "user", content: `Câu hỏi: ${query.slice(0, 500)}\n\n${list}` }], { maxTokens: 80, feature: "brain-rerank", signal: AbortSignal.timeout(RERANK_MAX_MS) });
+  call.catch(() => {});
+  let timer: ReturnType<typeof setTimeout> | undefined;
   try {
-    const text = await oneShot(user, model, RERANK, [{ role: "user", content: `Câu hỏi: ${query.slice(0, 500)}\n\n${list}` }], { maxTokens: 80, feature: "brain-rerank", signal: AbortSignal.timeout(Math.max(100, ms - (Date.now() - t0))) });
+    const text = await Promise.race([call, new Promise<null>((ok) => { timer = setTimeout(() => ok(null), Math.max(100, ms - (Date.now() - t0))); })]);
+    if (text === null) return null;
     const order = (jsonOf(text) as { order?: unknown }).order;
     if (!Array.isArray(order)) return null;
     const picked = [...new Set(order.map(Number).filter((i) => Number.isInteger(i) && i >= 1 && i <= cands.length))].map((i) => cands[i - 1]);
     return picked.length ? picked : null;
-  } catch { return null; }
+  } catch { return null; } finally { clearTimeout(timer); }
 }
 export type RecallTrace = { mode: "bm25" | "hybrid"; ms: number; vecMs?: number; reranked?: "heuristic" | "llm"; ids: string[] };
 /**

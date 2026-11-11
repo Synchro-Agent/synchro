@@ -83,6 +83,15 @@ ok(tg?.model === "text-embedding-3-small" && tg.provider === "openai", "có khó
   const slow = await recall(u, "#embedslow automobile", { budgetMs: 300 });
   ok(Date.now() - t0 < 1500 && slow.tr.mode === "bm25", `embed câu hỏi quá hạn: trả BM25 sau ${Date.now() - t0} ms`, JSON.stringify(slow.tr));
   ok(V.vecStats().queryTimeouts >= 1, "quá hạn được đếm trong số liệu", JSON.stringify(V.vecStats()));
+  // Hãng vẫn tính tiền lệnh gọi quá hạn: nó chạy xong ở nền, chi phí vào Mức dùng, vector vào bộ đệm; lượt sau không gửi lại.
+  const cost0 = US.featureCost(u.id, "embed", 0), calls0 = EMBED_LOG.calls;
+  const again = await recall(u, "#embedslow automobile", { budgetMs: 300 });
+  ok(again.tr.mode === "bm25" && EMBED_LOG.calls === calls0, "hỏi lại khi lệnh trước còn chạy: không gửi lần nữa", `${EMBED_LOG.calls} ${calls0}`);
+  await new Promise((r) => setTimeout(r, 3300));
+  ok(US.featureCost(u.id, "embed", 0) > cost0, "lệnh quá hạn chạy xong ở nền: chi phí vẫn ghi vào Mức dùng", `${US.featureCost(u.id, "embed", 0)} ${cost0}`);
+  const calls1 = EMBED_LOG.calls;
+  const warm = await recall(u, "#embedslow automobile", { budgetMs: 300 });
+  ok(warm.tr.mode === "hybrid" && EMBED_LOG.calls === calls1, "lượt sau dùng vector đã có, không gửi lại", JSON.stringify(warm.tr));
   // Xóa ghi chú: vector đi theo.
   B.deleteNote(u, "Wedding plan");
   ok(!(await recall(u, "đám cưới")).s.includes("Wedding"), "xóa ghi chú: không gọi lại nữa");
@@ -102,6 +111,39 @@ ok(tg?.model === "text-embedding-3-small" && tg.provider === "openai", "có khó
   ok(r.tr.mode === "bm25", "hết hạn mức: gọi lại vẫn chạy bằng BM25", JSON.stringify(r.tr));
   delete process.env.SYNCHRO_EMBED_DAY_USD;
   ok(await V.embedPending("brain", u2.id) === 20, "trong hạn mức: embed bình thường");
+}
+
+// ---- 3b. Hãng từ chối một mục (400): chia lô tìm đúng mục đó, các mục khác vẫn được embed; mục bị xóa trong lúc chờ API không quay lại.
+{
+  const u4 = mk(4);
+  for (let i = 0; i < 6; i++) B.saveNote(u4, `Việc ${i}`, { body: i === 3 ? "Đoạn quá dài #embed400 về ô tô." : `Chuyện số ${i} về du lịch.` });
+  const n = await V.embedPending("brain", u4.id);
+  const bad = B.getNote(u4.id, "Việc 3").id;
+  ok(n === 5 && V.vecCount("brain", u4.id) === 5 && V.vecInfo("brain", bad)?.dim === 0, `lô bị từ chối 400: ${n}/6 mục embed được, mục lỗi ghi dim = 0`, `${n} ${JSON.stringify(V.vecInfo("brain", bad))}`);
+  const c0 = EMBED_LOG.calls;
+  ok(await V.embedPending("brain", u4.id) === 0 && EMBED_LOG.calls === c0, "lần sau không thử lại mãi mục lỗi, không chặn mục khác");
+  B.saveNote(u4, "Việc 3", { body: "Đã sửa: chuyện về ô tô." });
+  ok(await V.embedPending("brain", u4.id) === 1 && V.vecInfo("brain", bad)?.dim > 0, "sửa nội dung mục lỗi: embed lại được");
+
+  const u6 = mk(6);
+  B.saveNote(u6, "Chậm", { body: "Ghi chú #embedslow về ô tô." });
+  B.saveNote(u6, "Khác", { body: "Ghi chú về du lịch." });
+  const ids = ["Chậm", "Khác"].map((t) => B.getNote(u6.id, t).id);
+  const p = V.embedPending("brain", u6.id);
+  await new Promise((r) => setTimeout(r, 300));
+  B.deleteNote(u6, "Chậm");
+  await p;
+  ok(!V.vecInfo("brain", ids[0]) && V.vecInfo("brain", ids[1])?.dim > 0, "ghi chú bị xóa trong lúc chờ API: vector của nó không được ghi lại", JSON.stringify([V.vecInfo("brain", ids[0]), V.vecInfo("brain", ids[1])]));
+
+  const u7 = mk(7);
+  B.saveNote(u7, "Chậm", { body: "Ghi chú #embedslow về chó." });
+  const p7 = V.embedPending("brain", u7.id);
+  await new Promise((r) => setTimeout(r, 300));
+  AU.db().prepare("DELETE FROM users WHERE id = ?").run(u7.id);
+  AU.db().prepare("DELETE FROM brain_notes WHERE user_id = ?").run(u7.id);
+  await p7;
+  const left = AU.db().prepare("SELECT (SELECT COUNT(*) FROM vec_items WHERE owner = ?) + (SELECT COUNT(*) FROM usage_events WHERE user_id = ?) AS n").get(u7.id, u7.id).n;
+  ok(left === 0, "tài khoản bị xóa trong lúc chờ API: không ghi lại vector hay dòng Mức dùng", left);
 }
 
 // ---- 4. Đổi model: embed lại toàn bộ, số chiều mới được ghi lại.
@@ -139,6 +181,9 @@ ok(tg?.model === "text-embedding-3-small" && tg.provider === "openai", "có khó
   const asked = Object.values(hist).flat().some((b) => JSON.stringify(b).includes("brain_rerank"));
   ok(asked, "câu hỏi mơ hồ (2 từ, nhiều ứng viên): hỏi model rẻ xếp lại", Object.keys(hist).join(","));
   ok(r.tr.ids.length === 4 && ms < 1300, `xếp lại trong ngân sách (${ms} ms, ${r.tr.reranked})`, JSON.stringify(r.tr));
+  // Lệnh xếp lại quá ngân sách không bị hủy: chạy xong ở nền nên chi phí vẫn vào Mức dùng của người hỏi.
+  for (let i = 0; i < 40 && !(US.featureCost(ux.id, "brain-rerank", 0) > 0); i++) await new Promise((x) => setTimeout(x, 100));
+  ok(US.featureCost(ux.id, "brain-rerank", 0) > 0, "lệnh xếp lại (kể cả quá ngân sách) được tính vào Mức dùng", US.featureCost(ux.id, "brain-rerank", 0));
 }
 
 // ---- 5. Bộ nhớ: vector nạp theo người khi cần, trần dung lượng, bỏ khi rảnh, báo cho memstat.
@@ -174,8 +219,45 @@ ok(tg?.model === "text-embedding-3-small" && tg.provider === "openai", "có khó
   ok(V.vecCount("file", rec.id) === parts.length, `embed các đoạn của tài liệu (${parts.length} đoạn)`, V.vecCount("file", rec.id));
   const k1 = await FP.pickChunks(rec.id, u.id, parts, "automobile fleet", 3);
   ok(k1.includes(hit), "đã embed: chọn đúng đoạn nói về ô tô dù câu hỏi tiếng Anh", JSON.stringify(k1));
+  // Vector của tài liệu dùng chung không gắn với người trả tiền: xóa tài khoản người đó không xóa vector người khác đang dùng.
+  const tagged = AU.db().prepare("SELECT COUNT(*) AS n FROM vec_items WHERE scope = 'file' AND owner = ? AND user_id != ''").get(rec.id).n;
+  ok(tagged === 0, "vector đoạn tài liệu không ghi người trả tiền (xóa tài khoản không xóa theo)", tagged);
+  // Tệp được đọc lại (bộ đọc mới): đoạn đổi chữ được embed lại, đoạn thừa bị xóa.
+  const jp = path.join(process.cwd(), ".cache", "files", rec.id + ".json");
+  const stored = JSON.parse(fs.readFileSync(jp, "utf8"));
+  const parts2 = parts.slice(0, -1).map((p, i) => (i === 2 ? p.replace("báo cáo quý", "chuyến du lịch") : p));
+  stored.blocks = [{ type: "text", text: parts2.join("\n\n") }];
+  fs.writeFileSync(jp, JSON.stringify(stored));
+  const real2 = (await loadTs(["fileproc/rag"]))["fileproc/rag"].chunkForRag(parts2.join("\n\n"));
+  const h2 = V.vecInfo("file", `${rec.id}#2`)?.hash;
+  const c2 = EMBED_LOG.inputs;
+  await V.embedPending("file", rec.id);
+  ok(V.vecInfo("file", `${rec.id}#2`)?.hash !== h2 && V.vecCount("file", rec.id) === real2.length, `tệp đọc lại: đoạn đổi chữ embed lại, còn ${real2.length} đoạn`, `${EMBED_LOG.inputs - c2} ${V.vecCount("file", rec.id)} ${real2.length}`);
+
+  // Người hỏi gần nhất (còn giữ tệp) trả phần embed tiếp theo, không phải người hỏi đầu tiên.
+  const text3 = paras.map((p) => p.replace("báo cáo", "biên bản")).join("\n\n") + `\n\n(${Date.now()}b)`;
+  const ua = mk(8), ub = mk(9);
+  const r3 = await FP.processFile(Buffer.from(text3), "chung.txt", ua.id);
+  await FP.processFile(Buffer.from(text3), "chung.txt", ub.id);
+  const parts3 = chunkForRag(text3);
+  await FP.pickChunks(r3.id, ua.id, parts3, "automobile", 3);
+  await FP.pickChunks(r3.id, ub.id, parts3, "automobile", 3);
+  const a0 = US.featureCost(ua.id, "embed", 0), b0 = US.featureCost(ub.id, "embed", 0);
+  await V.drainEmbedQueue({ maxOwners: 50 });
+  ok(V.vecCount("file", r3.id) === parts3.length && US.featureCost(ub.id, "embed", 0) > b0 && US.featureCost(ua.id, "embed", 0) === a0, "tài liệu chung: người hỏi gần nhất trả chi phí embed", `${US.featureCost(ua.id, "embed", 0)} ${a0} ${US.featureCost(ub.id, "embed", 0)} ${b0}`);
+  for (const ext of [".json", ".bin"]) fs.rmSync(path.join(process.cwd(), ".cache", "files", r3.id + ext), { force: true });
   fs.rmSync(path.join(process.cwd(), ".cache", "files", rec.id + ".json"), { force: true });
   fs.rmSync(path.join(process.cwd(), ".cache", "files", rec.id + ".bin"), { force: true });
+}
+
+// ---- 7. Truy vấn đếm vector chỉ đọc chỉ mục (không nạp từng vector ~3 KB); Sức khỏe hệ thống có tên cho mọi số liệu vector.
+{
+  const plan = AU.db().prepare("EXPLAIN QUERY PLAN SELECT COUNT(*) AS n, MAX(at) AS m FROM vec_items WHERE scope = ? AND owner = ? AND model = ? AND dim > 0").all("brain", "x", "m").map((r) => r.detail).join(" | ");
+  ok(/COVERING INDEX/.test(plan), "đếm vector dùng chỉ mục phủ", plan);
+  const src = fs.readFileSync(path.join(process.cwd(), "app", "healthui.tsx"), "utf8");
+  const unit = src.slice(src.indexOf("const UNIT"), src.indexOf("const cacheText"));
+  const miss = Object.keys(V.vecStats()).filter((k) => !new RegExp(`\\b${k}:`).test(unit));
+  ok(!miss.length, "mọi số liệu vector có tên dễ hiểu ở Sức khỏe hệ thống", miss.join(","));
 }
 
 srv.close();

@@ -27,12 +27,16 @@ function t() {
   if (!ready) {
     d.exec(`CREATE TABLE IF NOT EXISTS vec_items (scope TEXT NOT NULL, owner TEXT NOT NULL, item TEXT NOT NULL, user_id TEXT NOT NULL, model TEXT NOT NULL,
         dim INTEGER NOT NULL, hash TEXT NOT NULL, src_at INTEGER NOT NULL, vec BLOB, at INTEGER NOT NULL, PRIMARY KEY (scope, item));
-      CREATE INDEX IF NOT EXISTS vec_items_owner ON vec_items(scope, owner, model, at)`);
+      DROP INDEX IF EXISTS vec_items_owner;
+      CREATE INDEX IF NOT EXISTS vec_items_own ON vec_items(scope, owner, model, dim, at)`);
     ready = true;
   }
   return d;
 }
 const hashOf = (s: string) => crypto.createHash("sha1").update(s).digest("base64url").slice(0, 22);
+const clean = (s: string, max: number) => s.replace(/\s+/g, " ").trim().slice(0, max);
+/** Mã băm của đúng phần chữ sẽ được embed (nguồn so với vec_items.hash để biết mục đã đổi nội dung). */
+export const vecHash = (text: string, maxChars = TEXT_MAX) => hashOf(clean(text, maxChars));
 
 // ---------------------------------------------------------------- gọi API embedding
 export class EmbedErr extends Error { constructor(m: string, public status: number, public retryAfter = 0) { super(m); } }
@@ -72,8 +76,9 @@ async function embedRetry(tg: EmbedTarget, inputs: string[]) {
     }
   }
 }
-const g = globalThis as unknown as { __vecCache?: Map<string, Mat>; __vecQueue?: Map<string, number>; __vecSources?: Map<string, VecSource>; __vecBusy?: boolean; __vecQ?: Map<string, { v: Float32Array; at: number }>; __vecStats?: { embedded: number; calls: number; skippedCap: number; errors: number; queryTimeouts: number } };
-const stats = (g.__vecStats ??= { embedded: 0, calls: 0, skippedCap: 0, errors: 0, queryTimeouts: 0 });
+const g = globalThis as unknown as { __vecCache?: Map<string, Mat>; __vecQueue?: Map<string, number>; __vecSources?: Map<string, VecSource>; __vecBusy?: boolean; __vecQ?: Map<string, { v: Float32Array; at: number }>; __vecStats?: { embedded: number; calls: number; skippedCap: number; errors: number; rejected: number; queryTimeouts: number }; __vecQFly?: Map<string, Promise<Float32Array | null>> };
+const stats = (g.__vecStats ??= { embedded: 0, calls: 0, skippedCap: 0, errors: 0, rejected: 0, queryTimeouts: 0 });
+stats.rejected ??= 0;
 
 /** Còn được embed bao nhiêu USD hôm nay (null: không giới hạn được vì không biết người dùng). */
 function budgetLeft(uid: string) {
@@ -82,7 +87,11 @@ function budgetLeft(uid: string) {
   return dayCap() - featureCost(uid, FEATURE, Date.now() - 86_400_000);
 }
 const estCost = (tg: EmbedTarget, chars: number) => (Math.ceil(chars / 4) * priceOf(tg.modelKey).in) / 1e6;
-const charge = (uid: string, tg: EmbedTarget, tokens: number) => withUsage(uid, FEATURE, () => recordUsage(tg.modelKey, { prompt_tokens: tokens, completion_tokens: 0 }));
+// Tài khoản đã bị xóa trong lúc chờ API: không ghi dòng Mức dùng mới cho nó (bước xóa đã dọn sạch), chỉ để lại dấu ở nhật ký máy chủ.
+const charge = (uid: string, tg: EmbedTarget, tokens: number) => {
+  if (!getUser(uid)) { console.warn(`[vec] bỏ ghi ${tokens} token embed: tài khoản không còn`); return; }
+  withUsage(uid, FEATURE, () => recordUsage(tg.modelKey, { prompt_tokens: tokens, completion_tokens: 0 }));
+};
 
 // ---------------------------------------------------------------- nguồn mục cần embed
 export type VecItem = { item: string; text: string; srcAt: number };
@@ -93,6 +102,10 @@ export type VecSource = {
   userOf: (owner: string) => string | null;
   /** Số ký tự tối đa của một mục (mặc định 2000). */
   maxChars?: number;
+  /** Mục dùng chung cho nhiều người (đoạn tài liệu theo mã băm): không gắn vector với người trả tiền, xóa tài khoản người đó không xóa vector. */
+  shared?: boolean;
+  /** Các mục trong danh sách còn tồn tại (gọi sau khi API trả về: ghi chú, tài liệu có thể bị xóa trong lúc chờ). Không khai báo: coi như còn. */
+  alive?: (owner: string, items: string[]) => Set<string>;
 };
 const sources: Map<string, VecSource> = (g.__vecSources ??= new Map());
 export const registerVecSource = (scope: string, s: VecSource) => { sources.set(scope, s); };
@@ -111,6 +124,45 @@ export async function embedPending(scope: string, owner: string, max = 256): Pro
   const upsert = d.prepare(`INSERT INTO vec_items (scope, owner, item, user_id, model, dim, hash, src_at, vec, at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(scope, item) DO UPDATE SET owner = excluded.owner, user_id = excluded.user_id, model = excluded.model, dim = excluded.dim, hash = excluded.hash, src_at = excluded.src_at, vec = excluded.vec, at = excluded.at`);
   const touch = d.prepare("UPDATE vec_items SET src_at = ? WHERE scope = ? AND item = ?");
+  const payer = src.shared ? "" : uid, max0 = src.maxChars ?? TEXT_MAX;
+  // Lưu kết quả một lô, bỏ các mục đã bị xóa (hay tài khoản đã bị xóa) trong lúc chờ API.
+  const save = (part: { item: string; h: string; srcAt: number }[], vecs: (Float32Array | null)[]) => {
+    if (!getUser(uid) && !src.shared) return 0;
+    const live = src.alive ? src.alive(owner, part.map((x) => x.item)) : null;
+    const at = Date.now();
+    let n = 0;
+    d.transaction(() => {
+      part.forEach((x, k) => {
+        if (live && !live.has(x.item)) return;
+        const v = vecs[k];
+        upsert.run(scope, owner, x.item, payer, tg.model, v ? v.length : 0, x.h, x.srcAt, v ? Buffer.from(v.buffer, v.byteOffset, v.byteLength) : null, at);
+        n++;
+      });
+    })();
+    return n;
+  };
+  // Một lô; hãng từ chối vì nội dung (400 / 413 / 422, ví dụ một đoạn vượt giới hạn token) thì chia đôi để tìm đúng mục lỗi, mục đó ghi dim = 0
+  // (bỏ qua cho tới khi nội dung đổi) để các mục sau không bị chặn mãi. Lỗi khóa, hết hạn mức, mạng: dừng, lần sau thử lại cả lô.
+  const run = async (part: { item: string; h: string; srcAt: number; text: string }[]): Promise<number | null> => {
+    if (budgetLeft(uid) < estCost(tg, part.reduce((a, x) => a + x.text.length, 0))) { stats.skippedCap++; return null; }
+    let r: { vecs: Float32Array[]; tokens: number };
+    try { r = await embedRetry(tg, part.map((x) => x.text)); } catch (e) {
+      const er = e as EmbedErr;
+      stats.errors++;
+      console.warn(`[vec] embed ${scope} lỗi: ${er.message}`);
+      if (![400, 413, 422].includes(er.status)) return null;
+      if (part.length === 1) { stats.rejected++; save(part, [null]); return 0; }
+      const h = Math.ceil(part.length / 2), a = await run(part.slice(0, h));
+      if (a === null) return null;
+      const b = await run(part.slice(h));
+      return b === null ? a : a + b;
+    }
+    stats.calls++;
+    charge(uid, tg, r.tokens);
+    const n = save(part, r.vecs);
+    stats.embedded += n;
+    return n;
+  };
   let done = 0;
   const seen = new Set<string>();
   for (let round = 0; round < 40 && done < max; round++) {
@@ -120,27 +172,17 @@ export async function embedPending(scope: string, owner: string, max = 256): Pro
     for (const x of list) seen.add(x.item);
     const now = Date.now(), need: (VecItem & { h: string; text: string })[] = [];
     for (const it of list) {
-      const text = it.text.replace(/\s+/g, " ").trim().slice(0, src.maxChars ?? TEXT_MAX), h = hashOf(text);
+      const text = clean(it.text, max0), h = hashOf(text);
       const o = old.get(scope, it.item) as { hash: string; model: string; dim: number } | undefined;
       // Nội dung embed không đổi (chỉ sửa thuộc tính khác) và cùng model: chỉ ghi lại mốc, không gọi API.
       if (o && o.hash === h && o.model === tg.model) { touch.run(it.srcAt, scope, it.item); continue; }
-      if (!text) { upsert.run(scope, owner, it.item, uid, tg.model, 0, h, it.srcAt, null, now); continue; }
+      if (!text) { upsert.run(scope, owner, it.item, payer, tg.model, 0, h, it.srcAt, null, now); continue; }
       need.push({ ...it, text, h });
     }
     for (let i = 0; i < need.length; i += BATCH) {
-      const part = need.slice(i, i + BATCH);
-      if (budgetLeft(uid) < estCost(tg, part.reduce((a, x) => a + x.text.length, 0))) { stats.skippedCap++; return done; }
-      let r: { vecs: Float32Array[]; tokens: number };
-      try { r = await embedRetry(tg, part.map((x) => x.text)); } catch (e) {
-        stats.errors++;
-        console.warn(`[vec] embed ${scope} lỗi: ${(e as Error).message}`);
-        return done;
-      }
-      stats.calls++;
-      charge(uid, tg, r.tokens);
-      const at = Date.now();
-      d.transaction(() => { part.forEach((x, k) => upsert.run(scope, owner, x.item, uid, tg.model, r.vecs[k].length, x.h, x.srcAt, Buffer.from(r.vecs[k].buffer, r.vecs[k].byteOffset, r.vecs[k].byteLength), at)); })();
-      done += part.length; stats.embedded += part.length;
+      const n = await run(need.slice(i, i + BATCH));
+      if (n === null) return done;
+      done += n;
     }
     if (list.length < limit) break;
   }
@@ -185,7 +227,7 @@ const cache: Map<string, Mat> = (g.__vecCache ??= new Map());
 export function vecStats() {
   let vectors = 0, bytes = 0;
   for (const m of cache.values()) { vectors += m.vecs.size; bytes += m.bytes; }
-  return { sets: cache.size, vectors, kb: Math.round(bytes / 1024), embedded: stats.embedded, calls: stats.calls, skippedCap: stats.skippedCap, errors: stats.errors, queryTimeouts: stats.queryTimeouts, queued: queue.size };
+  return { sets: cache.size, vectors, kb: Math.round(bytes / 1024), embedded: stats.embedded, calls: stats.calls, skippedCap: stats.skippedCap, errors: stats.errors, rejected: stats.rejected, queryTimeouts: stats.queryTimeouts, queued: queue.size };
 }
 registerMemStat("vectors", () => vecStats());
 export function evictVecs(now = Date.now(), idleMs = IDLE_MS) {
@@ -228,6 +270,10 @@ function matOf(scope: string, owner: string, model: string): Mat | null {
 
 // ---------------------------------------------------------------- truy vấn
 const qcache: Map<string, { v: Float32Array; at: number }> = (g.__vecQ ??= new Map());
+/** Câu hỏi đang được embed: lượt chat chỉ chờ trong ngân sách, còn lệnh gọi chạy tiếp tới khi xong (hãng vẫn tính tiền phần đã gửi),
+ *  nên chi phí được ghi vào Mức dùng và vector vào bộ đệm cho lượt sau; câu hỏi lặp lại trong lúc đó không gửi lần nữa. */
+const qfly: Map<string, Promise<Float32Array | null>> = (g.__vecQFly ??= new Map());
+const QUERY_MAX_MS = 15_000;
 /** Ngưỡng cosine tối thiểu để coi là liên quan: mỗi họ model phân bố điểm khác nhau (Gemini cao hơn hẳn OpenAI). */
 export const minCos = (model: string) => env("SYNCHRO_VEC_MIN_COS", /gemini/i.test(model) ? 0.6 : 0.3);
 export type VecHit = { item: string; cos: number };
@@ -244,17 +290,24 @@ export async function vecQuery(scope: string, owner: string, uid: string, query:
   const t0 = Date.now(), ck = `${tg.model}\u0000${q}`;
   let qv = qcache.get(ck)?.v;
   if (!qv) {
-    if (budgetLeft(uid) <= 0) return null;
-    try {
-      const r = await callEmbed(tg, [q], AbortSignal.timeout(Math.max(50, budgetMs)));
-      qv = r.vecs[0];
-      charge(uid, tg, r.tokens);
-      if (qcache.size >= 300) qcache.delete(qcache.keys().next().value!);
-      qcache.set(ck, { v: qv, at: Date.now() });
-    } catch (e) {
-      if ((e as EmbedErr).message === "timeout") stats.queryTimeouts++;
-      return null;
+    let p = qfly.get(ck);
+    if (!p) {
+      if (budgetLeft(uid) <= 0) return null;
+      p = callEmbed(tg, [q], AbortSignal.timeout(QUERY_MAX_MS)).then((r) => {
+        charge(uid, tg, r.tokens);
+        if (qcache.size >= 300) qcache.delete(qcache.keys().next().value!);
+        qcache.set(ck, { v: r.vecs[0], at: Date.now() });
+        return r.vecs[0];
+      }, () => null).finally(() => { qfly.delete(ck); });
+      qfly.set(ck, p);
     }
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const late = Symbol();
+    const got = await Promise.race([p, new Promise<typeof late>((ok) => { timer = setTimeout(() => ok(late), Math.max(50, budgetMs)); })]);
+    clearTimeout(timer);
+    if (got === late) { stats.queryTimeouts++; return null; }
+    if (!got) return null;
+    qv = got;
   }
   const m = matOf(scope, owner, tg.model);
   if (!m) return null;
