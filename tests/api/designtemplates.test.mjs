@@ -4,7 +4,7 @@ import { loadTs } from "../lib/ts.mjs";
 
 let pass = 0, fail = 0;
 const ok = (c, n, x = "") => { c ? pass++ : fail++; console.log(c ? "  ✓" : "  ✗", n, c ? "" : String(x).slice(0, 600)); };
-const { designtemplates: T, artifacts: AR, vfs: V, artdoc: D, designkit: K, artkit: A, deckpptx: X } = await loadTs(["designtemplates", "artifacts", "vfs", "artdoc", "designkit", "artkit", "deckpptx"]);
+const { designtemplates: T, artifacts: AR, vfs: V, artdoc: D, designkit: K, artkit: A, deckpptx: X, designcharts: CH } = await loadTs(["designtemplates", "artifacts", "vfs", "artdoc", "designkit", "artkit", "deckpptx", "designcharts"]);
 const block = (spec) => `<script type="application/json" data-sx-template>${JSON.stringify(spec)}</script>`;
 
 console.log("1. Slide theo mẫu");
@@ -117,6 +117,31 @@ ok(/data-sx-preset="midnight-tech"/.test(po) && /class="sx-poster sx-tpl-poster 
 ok(/data-sx-size="story"/.test(T.expandTemplates(block([{ templateId: "poster-og", props: { size: "story", title: "x" } }]))) && /data-sx-size="og"/.test(T.expandTemplates(block([{ templateId: "poster-og", props: { size: "khổng lồ", title: "x" } }]))), "kích thước lạ lùi về og");
 for (const [k, [w, h]] of Object.entries(T.POSTER_SIZES).filter(([k]) => k !== "poster")) ok(A.KIT_CSS.includes(`.sx-poster[data-sx-size=${k}]{--sx-u:min(calc(100vw/${w}),calc(100vh/${h}))`), `bộ CSS: khung ${k} ${w}×${h}`);
 ok(K.designTurn({ typed: "Thiết kế poster sự kiện ra mắt", art: true, code: true, seed: "a" }).block.includes("poster-og"), "khối đồ họa có mẫu poster");
+
+console.log("9. Biểu đồ điền sẵn: sáu loại, tỉ lệ dữ liệu / mực");
+const C0 = { id: "p1" };
+const charts = {
+  bar: { kind: "bar", title: "Q3 cao nhất", labels: ["Q1", "Q2", "Q3", "Q4"], values: [12, 15, 21, 18], unit: "%", highlight: "Q3" },
+  line: { kind: "line", labels: ["T1", "T2", "T3", "T4", "T5"], series: [{ name: "Năm nay", data: [3, 4, 6, 7, 9] }, { name: "Năm trước", data: [2, 3, 3, 4, 5] }] },
+  doughnut: { kind: "doughnut", labels: ["Trực tiếp", "Đại lý", "Online"], values: [61, 24, 15] },
+  waterfall: { kind: "waterfall", start: { label: "Đầu năm", value: 100 }, labels: ["Bán hàng", "Giá vốn", "Chi phí"], values: [80, -45, -12], endLabel: "Cuối năm" },
+  sankey: { kind: "sankey", links: [{ from: "Quảng cáo", to: "Dùng thử", value: 50 }, { from: "Giới thiệu", to: "Dùng thử", value: 30 }, { from: "Dùng thử", to: "Trả phí", value: 24 }, { from: "Dùng thử", to: "Rời đi", value: 56 }], highlight: "Trả phí" },
+  radar: { kind: "radar", labels: ["Tốc độ", "Giá", "Hỗ trợ", "Tính năng", "Bảo mật"], series: [{ name: "Synchro", data: [9, 7, 8, 8, 9] }, { name: "Đối thủ", data: [6, 8, 6, 7, 7] }], max: 10 },
+};
+for (const [k, spec] of Object.entries(charts)) {
+  const h = CH.renderChart(spec, C0);
+  ok(h.startsWith('<figure class="sx-chart') && /<svg viewBox="0 0 640 360" role="img"/.test(h) && /var\(--sx-vivid\)/.test(h) && !/#[0-9a-f]{6}/i.test(h), `${k}: SVG dùng biến phong cách, có một phần nhấn`, h.slice(0, 200));
+}
+const barH = CH.renderChart(charts.bar, C0);
+ok((barH.match(/fill:var\(--sx-vivid\)/g) ?? []).length === 1 && (barH.match(/fill:var\(--sx-neutral\)/g) ?? []).length === 3 && !/stroke-dasharray:2 4/.test(barH) && />21%</.test(barH), "cột: một cột nhấn, ba cột xám, ghi số thẳng trên cột, không lưới");
+ok(/Cuối năm/.test(CH.renderChart(charts.waterfall, C0)) && />123</.test(CH.renderChart(charts.waterfall, C0)) && /−45/.test(CH.renderChart(charts.waterfall, C0)), "thác nước: tự cộng dồn tới cuối kỳ (100 + 80 − 45 − 12 = 123)");
+ok(/Trả phí 24/.test(CH.renderChart(charts.sankey, C0)) && /Dùng thử 80/.test(CH.renderChart(charts.sankey, C0)), "sankey: giá trị nút là tổng dòng vào / ra");
+ok(CH.renderChart({ kind: "pie3d", values: [1] }, C0) === "" && CH.renderChart({ kind: "bar" }, C0) === "" && CH.renderChart({ kind: "sankey", links: [{ from: "a", to: "a", value: 1 }] }, C0) === "", "loại lạ, thiếu số liệu: không vẽ, không vỡ trang");
+ok(!/<script|<img/.test(CH.renderChart({ kind: "bar", title: "<script>x</script>", labels: ["<img onload=1>"], values: [1] }, C0)), "nhãn được thoát HTML");
+const sc = T.expandTemplates(block([{ templateId: "slide-chart", props: { eyebrow: "Doanh thu", title: "Q3 cao nhất năm", chart: charts.bar, insight: "Quý 3 tăng nhờ kênh trực tiếp." } }]));
+ok(/data-sx-template="slide-chart"/.test(sc) && /sx-grid-6040/.test(sc) && /data-sx-chart="bar"/.test(sc), "slide-chart: biểu đồ và thẻ ghi chú 60/40");
+ok(/data-sx-chart="doughnut"/.test(T.expandTemplates(block([{ templateId: "doc-report", props: { title: "x", sections: [{ heading: "a", chart: charts.doughnut }] } }]))), "tài liệu: mỗi phần có thể có biểu đồ");
+ok(K.designTurn({ typed: "Làm bộ slide doanh thu", art: true, code: true, seed: "a" }).block.includes("FT Visual Vocabulary") && K.designTurn({ typed: "viết báo cáo thị trường", art: true, code: true, seed: "a" }).block.includes("sankey"), "luật chọn biểu đồ có trong khối slide và tài liệu");
 
 console.log(`\n${pass} đạt, ${fail} lỗi`);
 process.exit(fail ? 1 : 0);

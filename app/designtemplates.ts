@@ -7,9 +7,10 @@
 // Tên mẫu trung tính; mã theo bảng của chủ dự án (slide-apple-fact…) nhận như tên khác của cùng mẫu, không hiện ra giao diện.
 // Tệp thuần, dùng chung cho trình duyệt và máy chủ; kiểm thử: tests/api/designtemplates.test.mjs.
 import { DEFAULT_PRESET, presetId, presetOf } from "./designpresets";
-import { DOC_ALIASES, DOC_TEMPLATES } from "./designdocs";
+import { renderChart } from "./designcharts";
+import { DOC_ALIASES, DOC_TEMPLATES, setDocChart } from "./designdocs";
 import { EMAIL_ALIASES, EMAIL_TEMPLATES } from "./designemails";
-import { bullets, esc, nid, obj, paras, rich, safeUrl, str, u, type Ctx, type Props } from "./tplkit";
+import { arr, bullets, esc, nid, obj, paras, rich, safeUrl, str, u, type Ctx, type Props } from "./tplkit";
 
 export type TplPage = { templateId: string; props: Props; morphId?: string; pageId?: string };
 type Kind = "slide" | "poster" | "doc" | "email";
@@ -59,6 +60,13 @@ ${side(t, "sideCardTop")}${side(b, "sideCardBottom")}</div>${str(p.source) ? `<p
   },
 };
 
+// Slide biểu đồ: tiêu đề kết luận, biểu đồ điền sẵn (designcharts.ts) chiếm phần còn lại; có insight thì thẻ ghi chú bên phải (60/40).
+SLIDES["slide-chart"] = (p, c) => {
+  const ins = str(p.insight) || arr(p.bullets, 5).length, chart = renderChart(p.chart, c, "chart");
+  return sec("sx-tpl-chart", "slide-chart", `${head(p, c)}${ins ? `<div class="sx-grid-6040 sx-grow"><div class="sx-stack">${chart}</div><div class="sx-card sx-tint sx-tpl-insight">${paras(p.insight, c, "insight")}${bullets(p.bullets, c, "bullets")}</div></div>` : `<div class="sx-stack sx-grow">${chart}</div>`}${str(p.source) ? `<p class="sx-source" ${nid(c, "source")}>${rich(p.source, 160)}</p>` : ""}`);
+};
+setDocChart((v, c, field) => renderChart(v, c, field));
+
 // Poster / ảnh mạng xã hội (dựng lại theo ý MasterPosterTemplate của chủ dự án): nền tối có quầng cực quang và lưới mờ, nhãn viên thuốc, tiêu đề lớn, thẻ KPI.
 // Kích thước: og 1200×630 (mặc định), square 1080×1080, portrait 1080×1350, story 1080×1920, poster 1080×1440. Tải về › PNG chụp đúng khung poster.
 export const POSTER_SIZES: Record<string, [number, number]> = { og: [1200, 630], square: [1080, 1080], portrait: [1080, 1350], story: [1080, 1920], poster: [1080, 1440] };
@@ -74,7 +82,7 @@ const POSTERS: Record<string, Tpl["render"]> = {
 // Tên khác của cùng mẫu: mã trong bảng của chủ dự án và vài cách gọi hay gặp.
 export const TEMPLATE_ALIASES: Record<string, string> = {
   "slide-apple-intro": "slide-cover", "slide-intro": "slide-cover", "slide-apple-fact": "slide-fact", "slide-apple-quote": "slide-quote", "slide-apple-section": "slide-section",
-  "slide-seriph-two-cols": "slide-two-cols", "slide-two-columns": "slide-two-cols", "slide-seriph-image-right": "slide-image-right", "slide-depth": "slide-depth-hero", "slide-bento": "slide-bento-3", "poster-master-og": "poster-og", "poster": "poster-og", "poster-social": "poster-og", "banner": "poster-og",
+  "slide-seriph-two-cols": "slide-two-cols", "slide-two-columns": "slide-two-cols", "slide-seriph-image-right": "slide-image-right", "slide-depth": "slide-depth-hero", "slide-bento": "slide-bento-3", "slide-graph": "slide-chart", "poster-master-og": "poster-og", "poster": "poster-og", "poster-social": "poster-og", "banner": "poster-og",
 };
 const REGISTRY: Record<string, Tpl> = Object.fromEntries(Object.entries(SLIDES).map(([k, render]) => [k, { kind: "slide" as Kind, render }]));
 /** Cho các mô-đun mẫu khác (thư, tài liệu, poster, biểu đồ) gắn vào cùng sổ đăng ký. */
@@ -239,12 +247,13 @@ ${Object.entries(POSTER_SIZES).filter(([k]) => k !== "poster").map(([k, [w, h]])
 .sx-poster:not([data-sx-size=og]) .sx-tpl-poster-main{flex-direction:column;align-items:flex-start;gap:${u(48)}}.sx-poster:not([data-sx-size=og]) .sx-tpl-poster-title{font-size:${u(88)};max-width:none}
 .sx-poster:not([data-sx-size=og]) .sx-tpl-tag{font-size:${u(24)}}.sx-poster:not([data-sx-size=og]) .sx-tpl-poster-by{font-size:${u(26)}}.sx-poster:not([data-sx-size=og]) .sx-tpl-poster-v{font-size:${u(96)}}.sx-poster:not([data-sx-size=og]) .sx-tpl-poster-l{font-size:${u(26)}}
 .sx-poster[data-sx-size=story] .sx-tpl-poster-title{font-size:${u(104)}}
+.sx-tpl-insight{justify-content:center;gap:${u(12)}}
 .sx-tpl-side-num{margin:0;font-family:var(--sx-head);font-size:${u(44)};font-weight:800;line-height:1.15;letter-spacing:-.02em}`;
 
 // ---------------------------------------------------------------- hợp đồng mẫu gửi model (chỉ của định dạng lượt này)
 export const POSTER_TPL_GUIDE = `Poster, ảnh mạng xã hội, banner có chữ: dùng mẫu, trang text/html chỉ gồm <script type="application/json" data-sx-template>{"styleArchetype":"<phong cách>","pages":[{"templateId":"poster-og","props":{…}}]}</script>. poster-og {size:"og" (1200×630, mặc định)|"square" 1080²|"portrait" 1080×1350|"story" 1080×1920|"poster" 1080×1440,tag (≤3 từ),title (≤12 từ),metricValue,metricLabel,author,image?}; người dùng tải PNG bằng Tải về › PNG. Không có mẫu hợp thì tự dựng .sx-poster.`;
 export const SLIDE_TPL_GUIDE = `Mẫu điền sẵn (nên dùng: nhanh, không vỡ khung, xuất PowerPoint giữ chữ sửa được): trong trang text/html chỉ cần <script type="application/json" data-sx-template>{"styleArchetype":"<phong cách>","pages":[{"templateId":"…","props":{…}},…]}</script>, Synchro tự dựng slide; trộn được với <section class="slide sx-slide"> tự viết cho trang không có mẫu. Chữ thường, **chữ** để nhấn, \\n xuống dòng; không viết HTML trong props.
-slide-cover {badge,title,subtitle,author,date,image?} · slide-fact {eyebrow,bigMetric,description,source?} · slide-quote {quote,author,role} · slide-section {number,title,subtitle} · slide-two-cols {eyebrow,title,kicker,left:{heading,body|bullets[]},right:{…},source?} · slide-image-right {eyebrow,title,kicker,body|bullets[],image,caption?} · slide-depth-hero {eyebrow,giantBehindText (≤2 từ),subtitle,image,cutout? (PNG nền trong suốt; không có thì bỏ),imageQuery} · slide-bento-3 {eyebrow,actionTitle,kicker,heroCard:{title,metric,detail},sideCardTop:{title,metric?,bullet},sideCardBottom:{…},source?}.
+slide-cover {badge,title,subtitle,author,date,image?} · slide-fact {eyebrow,bigMetric,description,source?} · slide-quote {quote,author,role} · slide-section {number,title,subtitle} · slide-two-cols {eyebrow,title,kicker,left:{heading,body|bullets[]},right:{…},source?} · slide-image-right {eyebrow,title,kicker,body|bullets[],image,caption?} · slide-depth-hero {eyebrow,giantBehindText (≤2 từ),subtitle,image,cutout? (PNG nền trong suốt; không có thì bỏ),imageQuery} · slide-bento-3 {eyebrow,actionTitle,kicker,heroCard:{title,metric,detail},sideCardTop:{title,metric?,bullet},sideCardBottom:{…},source?} · slide-chart {eyebrow,title,kicker,chart,insight?|bullets?[],source}.
 Nhịp: không hai trang liền cùng mẫu; tiêu đề kết luận dưới 10 từ, chữ trong thẻ dưới 15 từ; cùng "morphId":"!!ten" ở hai trang liền cho vật thể bay sang trang sau (PowerPoint Morph).`;
 
 /** Số trang theo mẫu đã đọc được (để nhận ra lượt trước đã làm loại gì). */

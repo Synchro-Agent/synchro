@@ -129,6 +129,28 @@ for (const style of ["linear-dark", "editorial-serif"]) {
   check("ô nhiệt: chữ tự sáng / tối theo nền, đạt 4.5:1", !low.length, JSON.stringify(low));
 }
 
+console.log("1b. Slide biểu đồ: sáu loại, hai phong cách");
+const CH = [
+  { kind: "bar", title: "Quý 3 có doanh thu cao nhất năm", labels: ["Quý 1", "Quý 2", "Quý 3", "Quý 4"], values: [8.2, 9.6, 14.8, 12.1], unit: " tỷ", highlight: "Quý 3", source: "Số liệu ví dụ" },
+  { kind: "line", title: "Người dùng năm nay tăng nhanh gấp đôi", labels: ["T1", "T2", "T3", "T4", "T5", "T6", "T7", "T8"], series: [{ name: "2026", data: [12, 15, 19, 24, 30, 37, 45, 52] }, { name: "2025", data: [10, 11, 13, 14, 16, 18, 19, 21] }], unit: "k" },
+  { kind: "doughnut", title: "Kênh trực tiếp chiếm 61% doanh thu", labels: ["Trực tiếp", "Đại lý", "Thương mại điện tử", "Khác"], values: [61, 21, 13, 5] },
+  { kind: "waterfall", title: "Lợi nhuận tăng 23 tỷ trong năm", start: { label: "Đầu năm", value: 100 }, labels: ["Bán hàng", "Dịch vụ", "Giá vốn", "Chi phí"], values: [62, 18, -45, -12], endLabel: "Cuối năm" },
+  { kind: "sankey", title: "3 trên 10 người dùng thử chuyển sang trả phí", links: [{ from: "Quảng cáo", to: "Dùng thử", value: 50 }, { from: "Giới thiệu", to: "Dùng thử", value: 30 }, { from: "Tự tìm", to: "Dùng thử", value: 20 }, { from: "Dùng thử", to: "Trả phí", value: 30 }, { from: "Dùng thử", to: "Rời đi", value: 70 }], highlight: "Trả phí" },
+  { kind: "radar", title: "Vượt đối thủ ở bốn trên năm tiêu chí", labels: ["Tốc độ", "Giá", "Hỗ trợ", "Tính năng", "Bảo mật"], series: [{ name: "Synchro", data: [9, 7, 8, 8, 9] }, { name: "Đối thủ A", data: [6, 8, 6, 7, 7] }], max: 10 },
+];
+for (const style of ["swiss-grid", "linear-dark"]) {
+  const pages = CH.map((chart, i) => ({ templateId: "slide-chart", props: { eyebrow: "Biểu đồ " + (i + 1), title: chart.title, chart: { ...chart, title: "" }, ...(i % 2 ? { insight: "Kênh trực tiếp tăng nhờ đội bán mới ở hai thành phố lớn.", bullets: ["Chi phí mỗi khách giảm 18%"] } : {}), source: "Nguồn: số liệu ví dụ" } }));
+  await view(1280, 720);
+  await open(T.expandTemplates(block({ styleArchetype: style, pages })), true);
+  for (let i = 0; i < pages.length; i++) {
+    await ev(`window.__sxGo(${i})`); await sleep(1400);
+    const found = (await probe(`window.__sxCur()`, true)).filter((x) => !/ảnh hỏng/.test(x.kind));
+    const r = await ev(`(() => { const s = window.__sxCur(), v = s.querySelector("svg").getBoundingClientRect(), b = s.getBoundingClientRect(); return v.height > 150 && v.bottom <= b.bottom + 1; })()`);
+    check(`biểu đồ ${CH[i].kind} ${style}: không đo thấy lỗi, biểu đồ đủ lớn và nằm trong slide`, !found.length && r, JSON.stringify(found));
+    await shot(`chart-${CH[i].kind}-${style}.png`);
+  }
+}
+
 console.log("2. Thư HTML theo mẫu: hai phong cách, máy tính và điện thoại");
 const MAILS = [
   ["email-receipt", { brand: "Cửa hàng Mộc", heading: "Biên lai thanh toán", orderId: "DH-20931", date: "11/11/2026", customer: "Trần Bảo Ngọc", paymentMethod: "Thẻ Visa ••4242", currency: "VND", items: [{ name: "Gói Pro 12 tháng", detail: "Gia hạn tự động mỗi năm", price: 1990000 }, { name: "Thêm thành viên", qty: 2, price: 250000 }], tax: 249000, taxLabel: "Thuế GTGT 10%", supportUrl: "https://example.com/ho-tro", address: "12 Lý Thường Kiệt, Hoàn Kiếm, Hà Nội" }],

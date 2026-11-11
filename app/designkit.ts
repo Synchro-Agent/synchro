@@ -3,15 +3,16 @@
 // Trò chuyện thường, câu hỏi kiến thức, đường nhanh: không thêm gì. Lượt tiếp theo trên cùng sản phẩm: bản rút gọn, vì mỗi dòng ở đây còn lại trong lịch sử đoạn chat.
 // Tệp thuần (không DB, không mạng), kiểm thử bằng tests/api/designkit.test.mjs. #nodesign trong tin nhắn hoặc SYNCHRO_DESIGNKIT=0 thì tắt, để so sánh trước / sau với model thật.
 import { PRESET_ALIASES, presetId, presetOf, PRESETS } from "./designpresets";
+import { CHART_RULE } from "./designcharts";
 import { DOC_TPL_GUIDE } from "./designdocs";
 import { EMAIL_TPL_GUIDE } from "./designemails";
 import { POSTER_TPL_GUIDE, SLIDE_TPL_GUIDE, templateKinds } from "./designtemplates";
 
 export type DesignFormat = "slide" | "doc" | "sheet" | "graphic";
 export type DesignDomain = "finance" | "data" | "tech" | "editorial" | "marketing" | "event" | "product" | "general";
-/** Trần mỗi lượt, tính theo byte UTF-8 (tiếng Việt nặng hơn số ký tự). 8 KB từ khi có hợp đồng mẫu điền sẵn (designtemplates.ts): model chỉ viết vài trăm byte JSON
+/** Trần mỗi lượt, tính theo byte UTF-8 (tiếng Việt nặng hơn số ký tự). 9 KB từ khi có hợp đồng mẫu điền sẵn (designtemplates.ts): model chỉ viết vài trăm byte JSON
  *  thay cho hàng chục KB HTML, phần đổi lại là thực đơn mẫu của đúng một định dạng (slide, tài liệu hay đồ họa), không nạp thực đơn của định dạng khác. */
-export const DESIGN_BUDGET = 8192;
+export const DESIGN_BUDGET = 9216;
 export const STUDIO_FORMAT: Record<string, DesignFormat> = { slides: "slide", docs: "doc", design: "graphic" };
 
 const fold = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/gi, "d").toLowerCase();
@@ -191,6 +192,7 @@ export function designBlock(p: DesignPick, caps: { art: boolean; code: boolean }
     sheetOnly ? "" : CORE,
     // Thực đơn mẫu điền sẵn của đúng định dạng này (không nạp thực đơn của định dạng khác), đứng trước bộ CSS vì là cách nên dùng.
     caps.art && !sheetOnly && TPL_GUIDE[p.format] ? TPL_GUIDE[p.format]!.replace("<phong cách>", p.own ? DEFAULT_TPL_STYLE : p.preset) : "",
+    caps.art && !sheetOnly && p.format !== "sheet" ? CHART_RULE : "",
     caps.art && !sheetOnly ? KIT(p.own ? "" : p.preset) : "",
     caps.code && FILE_RULES[p.format] ? FILE_RULES[p.format]! : "",
     caps.code && (p.format === "doc" || p.format === "graphic" || p.format === "slide") ? WS_FONTS : "",

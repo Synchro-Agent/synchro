@@ -40,7 +40,7 @@ ok(turn("Soạn quyết định bổ nhiệm", { studio: "docs" }) === null && t
 ok(turn("Sếp gấp nên tôi cần làm báo cáo tài chính").preset !== "midnight-tech" && turn("Khách hỏi nên tôi muốn làm slide doanh thu").preset !== "midnight-tech" && turn("Làm báo cáo tài chính nền tối").preset === "midnight-tech" && turn("lam slide nen toi").preset === "midnight-tech", "\"nên tôi\" không phải \"nền tối\"; gõ không dấu vẫn nhận");
 for (const s of ["c1", "c2", "c3", "c4"]) ok(turn("Sếp gấp nên tôi cần làm báo cáo tài chính", { seed: s }).preset !== "midnight-tech", `báo cáo tài chính không ra nền đen (đoạn chat ${s})`);
 
-console.log("2. Trần 8 KB, đo bằng byte");
+console.log("2. Trần 9 KB, đo bằng byte");
 let biggest = 0;
 for (const typed of ["làm slide", "viết báo cáo", "tạo file excel", "làm poster"]) for (const dom of ["", " tài chính", " sự kiện", " tạp chí", " công nghệ", " marketing", " sản phẩm", " giao dịch"]) for (const caps of [{ art: true, code: true }, { art: true, code: false }, { art: false, code: true }]) for (const s of ["a", "b", "c", "d", "e", "f"]) {
   const d = designTurn({ typed: typed + dom, ...caps, seed: s });
@@ -48,7 +48,7 @@ for (const typed of ["làm slide", "viết báo cáo", "tạo file excel", "làm
   biggest = Math.max(biggest, d.bytes);
   if (d.bytes > DESIGN_BUDGET || designBytes(d.block) !== d.bytes) ok(false, "vượt trần", `${typed}${dom} ${d.bytes}`);
 }
-ok(biggest > 0 && biggest <= 8192 && DESIGN_BUDGET === 8192, `khối lớn nhất ${biggest} byte, trần ${DESIGN_BUDGET}`);
+ok(biggest > 0 && biggest <= 9216 && DESIGN_BUDGET === 9216, `khối lớn nhất ${biggest} byte, trần ${DESIGN_BUDGET}`);
 const slide = turn("Làm bộ slide doanh thu");
 ok(/Bộ CSS sẵn/.test(slide.block) && /Chữ: chỉ dùng thang/.test(slide.block) && /Mỗi slide 3 tầng/.test(slide.block) && /Phong cách gợi ý/.test(slide.block), "khối đầy đủ không phần nào bị cắt vì trần", slide.bytes);
 ok(!turn("tạo file excel", full).block.includes("Bộ CSS sẵn") && turn("tạo file excel", full).bytes < 2600, "Excel: chỉ quy tắc bảng tính", turn("tạo file excel", full).bytes);
