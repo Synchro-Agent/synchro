@@ -184,6 +184,16 @@ ok(tg?.model === "text-embedding-3-small" && tg.provider === "openai", "có khó
   B.saveNote(u4, "Việc 3", { body: "Đã sửa: chuyện về ô tô." });
   ok(await V.embedPending("brain", u4.id) === 1 && V.vecInfo("brain", bad)?.dim > 0, "sửa nội dung mục lỗi: embed lại được");
 
+  // Hãng trả thiếu vector (200 nhưng ít hơn số đầu vào): không lưu mục nào thành "bị từ chối" (dim = 0, không bao giờ embed lại), lần sau embed đủ.
+  const u5 = mk(5);
+  for (let i = 0; i < 3; i++) B.saveNote(u5, `Thiếu ${i}`, { body: i === 2 ? "Ghi chú #embedshort về ô tô." : `Chuyện số ${i} về sách.` });
+  await V.embedPending("brain", u5.id).catch(() => 0);
+  const rows5 = [0, 1, 2].map((i) => V.vecInfo("brain", B.getNote(u5.id, `Thiếu ${i}`).id));
+  ok(rows5.every((r) => !r || r.dim > 0), "hãng trả thiếu vector: không mục nào bị ghi là từ chối (dim = 0)", JSON.stringify(rows5));
+  B.saveNote(u5, "Thiếu 2", { body: "Ghi chú về ô tô." });
+  await V.embedPending("brain", u5.id);
+  ok(V.vecCount("brain", u5.id) === 3, "lần sau hãng trả đủ: cả 3 mục được embed", V.vecCount("brain", u5.id));
+
   const u6 = mk(6);
   B.saveNote(u6, "Chậm", { body: "Ghi chú #embedslow về ô tô." });
   B.saveNote(u6, "Khác", { body: "Ghi chú về du lịch." });

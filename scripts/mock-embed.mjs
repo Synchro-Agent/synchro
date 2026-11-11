@@ -1,7 +1,7 @@
 // API embedding giả lập (OpenAI /v1/embeddings và lối tương thích OpenAI của Gemini /v1beta/openai/embeddings) cho kiểm thử tìm kiếm theo nghĩa.
 // Không phải model thật: mỗi "khái niệm" (ô tô / xe hơi / automobile…) có một chiều riêng, nên câu hỏi và ghi chú cùng nghĩa mà khác chữ
 // (khác ngôn ngữ, từ đồng nghĩa) vẫn gần nhau, điều BM25 không làm được. Các từ khác băm vào các chiều còn lại (trùng chữ cũng gần nhau).
-// Số chiều theo model (đổi model thì đổi số chiều) và theo tham số dimensions. Chữ "#embedslow" làm chậm 3 giây, "#embed500" trả lỗi 500, "#embed400" trả lỗi 400 (nội dung bị từ chối).
+// Số chiều theo model (đổi model thì đổi số chiều) và theo tham số dimensions. Chữ "#embedslow" làm chậm 3 giây, "#embed500" trả lỗi 500, "#embed400" trả lỗi 400 (nội dung bị từ chối), "#embedshort" trả thiếu một vector.
 const CONCEPTS = [
   ["car", "cars", "automobile", "automobiles", "vehicle", "sedan", "ô tô", "xe hơi", "oto"],
   ["dog", "dogs", "puppy", "puppies", "chó", "cún", "chó con"],
@@ -45,6 +45,8 @@ export async function embedHandler(p, b, auth, valid, send) {
   if (all.includes("#embedslow")) await new Promise((ok) => setTimeout(ok, 3000));
   const dim = Math.min(DIMS(model), Number(b.dimensions) || Infinity);
   EMBED_LOG.calls++; EMBED_LOG.inputs += inputs.length; EMBED_LOG.models[model] = (EMBED_LOG.models[model] ?? 0) + inputs.length;
-  send(200, { object: "list", model, data: inputs.map((s, i) => ({ object: "embedding", index: i, embedding: fakeEmbed(s, dim) })), usage: { prompt_tokens: Math.ceil(all.length / 4), total_tokens: Math.ceil(all.length / 4) } });
+  // "#embedshort": hãng trả thiếu vector (ít hơn số đầu vào), vẫn 200.
+  const out = all.includes("#embedshort") ? inputs.slice(0, -1) : inputs;
+  send(200, { object: "list", model, data: out.map((s, i) => ({ object: "embedding", index: i, embedding: fakeEmbed(s, dim) })), usage: { prompt_tokens: Math.ceil(all.length / 4), total_tokens: Math.ceil(all.length / 4) } });
   return true;
 }

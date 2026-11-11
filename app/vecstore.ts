@@ -60,7 +60,9 @@ async function callEmbed(tg: EmbedTarget, inputs: string[], signal?: AbortSignal
   if (!r.ok || !Array.isArray(j?.data)) throw new EmbedErr(String(j?.error?.message ?? `HTTP ${r.status}`).slice(0, 200), r.status, Number(r.headers.get("retry-after")) || 0);
   const out: Float32Array[] = new Array(inputs.length);
   j!.data!.forEach((d, i) => { if (Array.isArray(d.embedding)) out[d.index ?? i] = norm(d.embedding, EMBED_DIM); });
-  if (out.some((v) => !v) || out.length !== inputs.length) throw new EmbedErr("bad_response", 502);
+  // Đếm theo chỉ số, không dùng some(): mảng tạo bằng new Array(n) có ô trống mà some() bỏ qua, nên hãng trả thiếu vector vẫn lọt qua.
+  if (out.length !== inputs.length) throw new EmbedErr("bad_response", 502);
+  for (let i = 0; i < inputs.length; i++) if (!out[i]) throw new EmbedErr("bad_response", 502);
   const tokens = typeof j!.usage?.prompt_tokens === "number" ? j!.usage.prompt_tokens : Math.ceil(inputs.reduce((a, s) => a + s.length, 0) / 4);
   return { vecs: out, tokens };
 }
