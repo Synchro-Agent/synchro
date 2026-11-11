@@ -1,5 +1,10 @@
 import type { NextConfig } from "next";
 
+// script-src của CSP thử (Report-Only). Cloudflare Turnstile (app/turnstilebox.tsx) chỉ chạy ở màn đăng nhập, đăng ký và quên mật khẩu, tức khi
+// chưa có cookie phiên: chỉ những trang đó mới cho thêm challenges.cloudflare.com (luật sau đè luật trước cùng tên header).
+const SCRIPT_SRC = "script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' blob: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://unpkg.com";
+const cspTrial = (extra = "") => `${SCRIPT_SRC}${extra}; object-src 'none'; base-uri 'self'; report-uri /api/csp-report`;
+
 const nextConfig: NextConfig = {
   devIndicators: false,
   // npm run dev:mock dùng thư mục build riêng để chạy song song với npm run dev.
@@ -24,8 +29,15 @@ const nextConfig: NextConfig = {
       // Report-Only: chỉ báo về Cài đặt → Sức khỏe hệ thống (/api/csp-report), không chặn gì. 'unsafe-inline' vì Next chưa dùng nonce, nên việc bắt được là script nạp từ nguồn lạ. Báo cáo sạch một thời gian mới nên chuyển thành chặn thật.
       source: "/((?!api/).*)", headers: [
         { key: "Content-Security-Policy", value: "frame-ancestors 'self'" },
-        { key: "Content-Security-Policy-Report-Only", value: "script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' blob: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://unpkg.com; object-src 'none'; base-uri 'self'; report-uri /api/csp-report" },
+        { key: "Content-Security-Policy-Report-Only", value: cspTrial() },
       ],
+    }, {
+      source: "/((?!api/).*)", missing: [{ type: "cookie", key: "synchro_session" }],
+      headers: [{ key: "Content-Security-Policy-Report-Only", value: cspTrial(" https://challenges.cloudflare.com") }],
+    }, {
+      // /reset mở được cả khi đang đăng nhập (quên mật khẩu từ trang khác).
+      source: "/reset",
+      headers: [{ key: "Content-Security-Policy-Report-Only", value: cspTrial(" https://challenges.cloudflare.com") }],
     }, { source: "/:path*", headers: [
       { key: "Cross-Origin-Opener-Policy", value: "same-origin" },
       { key: "Cross-Origin-Embedder-Policy", value: "credentialless" },

@@ -1,12 +1,13 @@
 "use client";
 // Quên mật khẩu: /reset là biểu mẫu nhận email, /reset#<mã> (đường dẫn trong email hoặc do quản trị viên tạo) là biểu mẫu đặt mật khẩu mới.
 // Mã nằm sau dấu # nên không tới nhật ký của máy chủ hay nginx.
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Lockup } from "../brand";
 import { getLang, tr } from "../i18n";
 import { LangSwitch } from "../langswitch";
 import { AlertCircle, Check, Eye, EyeOff, Mail } from "lucide-react";
+import { TurnstileBox, useTurnstileKey } from "../turnstilebox";
 
 // Chỉ 400 mới nghĩa là đường dẫn hỏng. Mất mạng, 5xx, quá giới hạn thì đường dẫn vẫn tốt: không được báo hết hạn, không được bỏ mã khỏi địa chỉ.
 class PostError extends Error { constructor(m: string, public status: number) { super(m); } }
@@ -28,6 +29,10 @@ export default function ResetPassword() {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const [support, setSupport] = useState("");
+  // Turnstile (khi quản trị viên đã bật): chạy ngầm từ lúc hiện ô email; mỗi mã dùng một lần nên gửi xong thì lấy mã mới.
+  const tsKey = useTurnstileKey();
+  const tsTok = useRef("");
+  const [tsNonce, setTsNonce] = useState(0);
   useEffect(() => {
     const t = location.hash.slice(1);
     try { const e = sessionStorage.getItem("forgot-email"); if (e) { setEmail(e); sessionStorage.removeItem("forgot-email"); } } catch {}
@@ -47,8 +52,12 @@ export default function ResetPassword() {
   const ask = async () => {
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) return setErr("Email chưa đúng định dạng.");
     setBusy(true); setErr("");
-    try { await post("/api/auth/forgot", { email: email.trim(), lang: getLang() }); setStage("sent"); }
-    catch (e) { setErr((e as Error).message); } finally { setBusy(false); }
+    // Mã thường đã có từ lúc mở trang; chưa có thì chờ tối đa 20 giây (Cloudflare có thể đang hỏi thêm).
+    if (tsKey) for (let i = 0; i < 80 && !tsTok.current; i++) await new Promise((r) => setTimeout(r, 250));
+    const turnstile = tsTok.current || undefined;
+    tsTok.current = "";
+    try { await post("/api/auth/forgot", { email: email.trim(), lang: getLang(), turnstile }); setStage("sent"); }
+    catch (e) { setErr((e as Error).message); } finally { setBusy(false); if (tsKey) setTsNonce((n) => n + 1); }
   };
   const save = async () => {
     if (pw.length < 8) return setErr("Mật khẩu cần ít nhất 8 ký tự.");
@@ -71,6 +80,7 @@ export default function ResetPassword() {
           <form onSubmit={(ev) => { ev.preventDefault(); void ask(); }}>
             <label className="rp-l" htmlFor="rp-email">Email</label>
             <input id="rp-email" className="field" type="email" autoComplete="email" autoFocus value={email} onChange={(ev) => { setEmail(ev.target.value); setErr(""); }} />
+            {tsKey && <TurnstileBox siteKey={tsKey} action="reset" nonce={tsNonce} onToken={(t) => { tsTok.current = t; }} />}
             {e}
             <button className="btn dark rp-go" disabled={busy || !email.trim()}>{busy ? <span className="api-spin" /> : "Gửi đường dẫn"}</button>
           </form>

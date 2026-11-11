@@ -18,13 +18,14 @@ import type { ApiState } from "./apiui";
 import { refreshModels } from "./models";
 import { BulkBar, BulkButton, BulkCheck, bulkRow, each, useBulk, type BulkAct } from "./bulk";
 import { Pager } from "./pager";
+import { BotProtection, type TurnstileState } from "./botadmin";
 
 type U = AuthUser & { status: "active" | "suspended"; verified: boolean; lastLogin: number | null; lastSeen: number | null; sessions: number; protected: boolean; customPerms: boolean };
 type Log = { id: number; at: number; action: string; actor_email: string | null; target_email: string | null; ip: string | null; detail: string | null };
 type Data = {
   providerFailures?: Partial<Record<keyof Providers, { at: number; detail: string }>>;
   stats: { users: number; active7: number; new7: number; suspended: number; sessions: number; failed24: number; runs24?: number; runsFailed24?: number };
-  users: U[]; audit: Log[]; settings: { signupOpen: boolean; defaultPerms: Perms; verifyGate?: boolean; speechBudget?: { user: number; unverified: number; global: number | null }; speechToday?: number }; providers: Providers; admins: string[];
+  users: U[]; audit: Log[]; settings: { signupOpen: boolean; defaultPerms: Perms; verifyGate?: boolean; speechBudget?: { user: number; unverified: number; global: number | null }; speechToday?: number; turnstile?: TurnstileState }; providers: Providers; admins: string[];
 };
 type Sess = { id: string; device: string; ip: string | null; method: string; createdAt: number; lastSeen: number };
 type Detail = { sessions: Sess[]; identities: { provider: string; email: string | null; createdAt: number }[] };
@@ -61,6 +62,7 @@ Object.assign(ACTIONS, {
   github_link: ["Connected GitHub", ""], oauth_failed: ["Failed provider sign-in", "bad"], password_reset: ["Reset password with a link", ""], password_reset_request: ["Requested a password reset email", ""], admin_reset_link: ["Created password reset link", "adm"],
   mail_failed: ["Email could not be delivered", "bad"], admin_mail_test: ["Sent a test email", "adm"], signup_email_taken: ["Sign-up attempt with an existing email", "bad"], email_verify_sent: ["Sent a verification email", ""], email_verified: ["Verified email", "ok"], email_denied: ["Email owner removed an unverified account", "bad"], account_claimed: ["Email owner took back an unverified account", "bad"], admin_verify_gate: ["Changed email verification rule", "adm"], admin_mark_verified: ["Marked email as verified", "adm"],
   passkey_added: ["Added a passkey", ""], passkey_renamed: ["Renamed a passkey", ""], passkey_removed: ["Removed a passkey", ""], passkey_add_failed: ["Couldn't add a passkey", "bad"],
+  admin_turnstile: ["Changed bot protection keys", "adm"], admin_turnstile_on: ["Turned on bot protection", "adm"], admin_turnstile_off: ["Turned off bot protection", "adm"], admin_block_disposable: ["Changed disposable email blocking", "adm"],
   admin_api_key: ["Saved API key", "adm"], admin_api_key_removed: ["Removed API key", "adm"], admin_api_credit: ["Changed API credit", "adm"], admin_default_model: ["Changed default model", "adm"], admin_main_models: ["Changed main models", "adm"],
 });
 const LOG_FILTER: Record<string, (a: string) => boolean> = {
@@ -338,6 +340,7 @@ export function AdminPanel({ Toggle }: { Toggle: ToggleT }) {
         <div><div className="t">Require a verified email</div><div className="d">New accounts that sign up with a password must confirm their email before using uploads, connectors, scheduled tasks, voice and Synchro Code. Chat always works. Turn this off if email is failing. Accounts from before this setting aren&apos;t affected.</div></div>
         <Toggle on={d.settings.verifyGate !== false} label="Require a verified email" set={(v) => act(() => call("PATCH", "/api/admin/settings", { verifyGate: v }), "Saved")} />
       </div>
+      {d.settings.turnstile && <BotProtection s={d.settings.turnstile} act={act} call={call} Toggle={Toggle} />}
       <div className="row"><div><div className="t">Email and password</div><div className="d">Passwords are hashed with scrypt. Accounts lock for 15 minutes after repeated failed attempts.</div></div><span className="s-badge ok">On</span></div>
       {(["google", "github", "apple"] as const).map((p) => (
         <div key={p} className="row">

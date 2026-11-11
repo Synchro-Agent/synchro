@@ -20,7 +20,8 @@ const MAX_SESSIONS = 20;
 export const ADMIN_EMAILS = new Set((process.env.ADMIN_EMAILS ?? "nguyenhuulamtung@gmail.com").split(",").map((s) => s.trim().toLowerCase()).filter(Boolean));
 
 export class AuthError extends Error {
-  constructor(msg: string, public status = 400) { super(msg); }
+  /** extra: thêm vào JSON lỗi cho trang (vd. { captcha: true }: hiện ô kiểm tra Turnstile rồi gửi lại). */
+  constructor(msg: string, public status = 400, public extra?: Record<string, unknown>) { super(msg); }
 }
 
 export type UserRow = {
@@ -796,7 +797,7 @@ export function adminRevokeSession(req: Request, admin: UserRow, sid: string) {
 export function handle<A extends unknown[]>(fn: (req: Request, ...a: A) => Promise<Response> | Response) {
   return async (req: Request, ...a: A) => {
     try { return await fn(req, ...a); } catch (e) {
-      if (e instanceof AuthError) return Response.json({ error: e.message }, { status: e.status });
+      if (e instanceof AuthError) return Response.json({ error: e.message, ...e.extra }, { status: e.status });
       console.error("[auth]", e);
       return Response.json({ error: "Lỗi máy chủ. Vui lòng thử lại." }, { status: 500 });
     }

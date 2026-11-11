@@ -17,6 +17,7 @@ import { getLang } from "./i18n";
 import { LangSwitch } from "./langswitch";
 import { assemble, boxOf, center, fly, markTarget, onScreen, openHole, reducedMotion, settleApp } from "./handoff";
 import { preloadIntro, wantsIntro } from "./introfilm";
+import { TurnstileBox, useTurnstileKey } from "./turnstilebox";
 import { passkeyAbort, passkeyAssert, passkeyAutofill, passkeyCancelled, passkeySupported } from "./passkeyclient";
 
 // --- NHỊP ANIMATION CHUNG ---
@@ -103,7 +104,7 @@ const STATUS: Record<Kind, string[]> = {
 async function post<T>(url: string, body: unknown): Promise<T> {
   const r = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
   const j = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(j.error || "Something went wrong. Please try again.");
+  if (!r.ok) throw Object.assign(new Error(j.error || "Something went wrong. Please try again."), { data: j });
   return j as T;
 }
 const wait = (ms: number) => new Promise((r) => setTimeout(r, Math.max(0, ms)));
@@ -292,6 +293,19 @@ export const AuthComponent = ({ logo = <DefaultLogo />, brandName = "EaseMize", 
   const fullNameRef = useRef<HTMLInputElement>(null);
 
   const fail = (msg: string) => { setErrorMsg(msg); setStage("error"); };
+  // Turnstile (app/turnstile.ts): chỉ khi quản trị viên đã bật. Đăng ký luôn cần; đăng nhập chỉ sau khi máy chủ báo đã sai nhiều lần (captcha).
+  const tsKey = useTurnstileKey();
+  const [needCaptcha, setNeedCaptcha] = useState(false);
+  const tsTok = useRef("");
+  const [tsWait, setTsWait] = useState(false);
+  const captchaFor = (step: string) => !!tsKey && mode === "auth" && (step === "profile" || (step === "password" && isLogin && needCaptcha));
+  /** Mã Turnstile cho lần gửi này: ô kiểm tra chạy ngầm từ lúc hiện bước, thường đã có mã; chưa có thì chờ tối đa 20 giây (Cloudflare có thể đang hỏi thêm). */
+  const captchaToken = async () => {
+    if (!captchaFor(authStep)) return undefined;
+    if (!tsTok.current) { setTsWait(true); for (let i = 0; i < 80 && !tsTok.current; i++) await wait(250); setTsWait(false); }
+    const t = tsTok.current; tsTok.current = "";
+    return t || undefined;
+  };
   const busy = useRef(false); // chặn gửi trùng khi state chưa kịp cập nhật
 
   // Gọi API; giữ trạng thái đang xử lý ít nhất minMs cho mượt, rồi chúc mừng và vào app.
@@ -315,7 +329,7 @@ export const AuthComponent = ({ logo = <DefaultLogo />, brandName = "EaseMize", 
       // Tài khoản mới: tải trước phim giới thiệu trong lúc hiện lời chào.
       if (wantsIntro(u, k)) preloadIntro();
       setTimeout(() => onDone?.(u, k), SUCCESS_HOLD);
-    } catch (e) { busy.current = false; setMfaCode(""); fail((e as Error).message); }
+    } catch (e) { busy.current = false; setMfaCode(""); if ((e as { data?: { captcha?: boolean } }).data?.captcha) setNeedCaptcha(true); fail((e as Error).message); }
   };
 
   const submitProfile = async () => {
@@ -326,7 +340,7 @@ export const AuthComponent = ({ logo = <DefaultLogo />, brandName = "EaseMize", 
     setProfileErr("");
     const profile = { fullName: name, nickname: nickname.trim() || lastWord(name), birthDate: iso, occupation };
     if (mode === "profile") await run("profile", "/api/auth/profile", profile, 900);
-    else await run("signup", "/api/auth/signup", { email, password, profile, lang: getLang() }, STATUS.signup.length * 1150);
+    else await run("signup", "/api/auth/signup", { email, password, profile, lang: getLang(), turnstile: await captchaToken() }, STATUS.signup.length * 1150);
   };
 
   const handleFinalSubmit = async (e: React.FormEvent) => {
@@ -337,7 +351,7 @@ export const AuthComponent = ({ logo = <DefaultLogo />, brandName = "EaseMize", 
       return;
     }
     if (authStep === "password" && isLogin) {
-      if (isPasswordValid) await run("login", "/api/auth/login", { email, password }, 900);
+      if (isPasswordValid) await run("login", "/api/auth/login", { email, password, turnstile: await captchaToken() }, 900);
       return;
     }
     if (authStep === "confirmPassword") {
@@ -633,6 +647,8 @@ export const AuthComponent = ({ logo = <DefaultLogo />, brandName = "EaseMize", 
                             </BlurFade>
                         </motion.div>}
                     </AnimatePresence>
+                    {tsKey && captchaFor(authStep) && <TurnstileBox siteKey={tsKey} action={authStep === "profile" ? "signup" : "login"} onToken={(t) => { tsTok.current = t; }} />}
+                    {tsWait && <p className="auth-note" role="status">Checking that you&apos;re human…</p>}
                     {authStep === "email" && mode === "auth" && <PlanNote />}
                     {authStep === "email" && mode === "auth" && <p className="auth-note auth-legal"><span>By continuing, you agree to the</span> <a href="/terms" target="_blank" rel="noopener noreferrer">Terms of Service</a> <span>and</span> <a href="/privacy" target="_blank" rel="noopener noreferrer">Privacy Policy</a>.</p>}
                 </motion.form>

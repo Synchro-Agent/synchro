@@ -169,6 +169,7 @@ const readBody = (req) => new Promise((ok) => {
   req.on("end", () => { req.__raw = Buffer.concat(parts); if (/multipart/.test(String(req.headers["content-type"] ?? ""))) return ok({}); try { ok(JSON.parse(req.__raw.toString("utf8") || "{}")); } catch { ok({}); } });
 });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const TS_LOG = [], TS_USED = new Set();
 const valid = (k) => typeof k === "string" && k.includes("mock");
 // Khóa ElevenLabs giới hạn quyền như thật: "sk_mock_eleven_nouser" thiếu quyền User, "…_noagents" thiếu quyền ElevenLabs Agents.
 const elevenNo = (req, perm) => String(req.headers["xi-api-key"] ?? "").includes(`no${perm}`);
@@ -638,6 +639,23 @@ async function handler(req, res) {
     await sleep(600);
     return send(res, 200, { text: MEETING_TEXT });
   }
+
+  // Cloudflare Turnstile siteverify (TURNSTILE_VERIFY_URL): như khóa thử của Cloudflare. Khóa bí mật 1x…AA luôn đạt, 2x…AB luôn trượt, 3x…AA báo mã đã dùng.
+  // Mã "XXXX.DUMMY.TOKEN.XXXX" là mã giả mà khóa site thử của Cloudflare trả cho trình duyệt; "bad" luôn trượt. Mỗi mã chỉ đạt một lần (như thật).
+  if (p === "/turnstile/v0/siteverify" && req.method === "POST") {
+    const f = new URLSearchParams((req.__raw ?? Buffer.alloc(0)).toString("utf8"));
+    const secret = f.get("secret") ?? "", token = f.get("response") ?? "";
+    TS_LOG.push({ secret: secret.slice(0, 4), token, remoteip: f.get("remoteip") }); TS_LOG.splice(0, TS_LOG.length - 50);
+    if (!secret) return send(res, 200, { success: false, "error-codes": ["missing-input-secret"] });
+    if (secret.startsWith("2x")) return send(res, 200, { success: false, "error-codes": ["invalid-input-response"] });
+    if (!token || token === "bad") return send(res, 200, { success: false, "error-codes": ["invalid-input-response"] });
+    if (secret.startsWith("3x") || TS_USED.has(token) && token !== "XXXX.DUMMY.TOKEN.XXXX") return send(res, 200, { success: false, "error-codes": ["timeout-or-duplicate"] });
+    TS_USED.add(token);
+    // Mã dạng "<hành động>:<tên miền>:<ngẫu nhiên>" cho kiểm thử: trả đúng action / hostname như Cloudflare.
+    const [action, hostname] = token.includes(":") ? token.split(":") : ["", "example.com"];
+    return send(res, 200, { success: true, challenge_ts: new Date().toISOString(), hostname, action, cdata: "", "error-codes": [] });
+  }
+  if (p === "/_debug/turnstile") return send(res, 200, TS_LOG);
 
   // Trang đăng nhập giả lập của CLI (scripts/mock-cli): claude và agy hiện mã để dán vào Synchro; codex là trang nhập mã thiết bị.
   if (p.startsWith("/mock-login/")) return mockLogin(p.slice(12), u, res);
