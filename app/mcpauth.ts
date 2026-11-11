@@ -11,7 +11,8 @@ export type AsMeta = {
   authorization_response_iss_parameter_supported?: boolean; token_endpoint_auth_methods_supported?: string[];
 };
 export type OAuthClient = { client_id: string; client_secret?: string; auth_method: "none" | "client_secret_post" | "client_secret_basic" };
-export type Tokens = { access_token: string; refresh_token?: string; expires_at?: number; scope?: string };
+// issued_at: lúc nhận token (ms), để biết vòng đời thật của token (expires_at - issued_at) khi quyết định làm mới sớm bao lâu (connectors.ts).
+export type Tokens = { access_token: string; refresh_token?: string; expires_at?: number; issued_at?: number; scope?: string };
 
 const b64url = (b: Buffer) => b.toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 export const randomToken = (n = 32) => b64url(crypto.randomBytes(n));
@@ -203,8 +204,8 @@ async function tokenRequest(as: Pick<AsMeta, "token_endpoint">, client: OAuthCli
     if (retryableStatus(r.status) || !code || code === "temporarily_unavailable" || code === "server_error" || code === "slow_down") throw new TempFail(downText(host, r.status), r.status, retryAfterMs(r.headers.get("retry-after")));
     throw new TokenRejected(String(j?.error_description || code), code);
   }
-  const exp = Number(j.expires_in);
-  return { access_token: String(j.access_token), refresh_token: j.refresh_token ? String(j.refresh_token) : undefined, expires_at: exp > 0 ? Date.now() + exp * 1000 : undefined, scope: j.scope ? String(j.scope) : undefined };
+  const exp = Number(j.expires_in), now = Date.now();
+  return { access_token: String(j.access_token), refresh_token: j.refresh_token ? String(j.refresh_token) : undefined, expires_at: exp > 0 ? now + exp * 1000 : undefined, issued_at: now, scope: j.scope ? String(j.scope) : undefined };
 }
 
 export const exchangeCode = (as: Pick<AsMeta, "token_endpoint">, client: OAuthClient, o: { code: string; verifier: string; redirectUri: string; resource: string }) =>

@@ -1088,13 +1088,40 @@ try {
     const id = r.connector.id;
     AS.db().prepare("UPDATE connectors SET perms = ? WHERE id = ?").run(JSON.stringify({ search_docs: "allow" }), id);
     const seal = (tokens) => PR.sealSecret(JSON.stringify({ mode: "oauth", client: { client_id: "c1", auth_method: "none" }, redirect: "http://localhost:3200/api/connectors/oauth/callback", resource: url, as: { issuer: BASE, token_endpoint: `${BASE}/token` }, tokens }));
-    AS.db().prepare("UPDATE connectors SET enc_auth = ? WHERE id = ?").run(seal({ access_token: "cu", refresh_token: "rt_cu", expires_at: Date.now() + 3 * 60_000 }), id);
+    // Token sống 1 giờ, còn 3 phút.
+    AS.db().prepare("UPDATE connectors SET enc_auth = ? WHERE id = ?").run(seal({ access_token: "cu", refresh_token: "rt_cu", issued_at: Date.now() - 57 * 60_000, expires_at: Date.now() + 3 * 60_000 }), id);
     S.oauth = { need: true, valid: "Bearer at_1" }; S.calls = {};
     const s = session("refresh-ahead");
     const fq = s.tools.find((t) => t.tool.name === "search_docs").fq;
     const outs = await Promise.all([s.call(fq, {}), s.call(fq, {}), s.call(fq, {})]);
     ok(outs.every((o) => !o.is_error) && S.count("token") === 1 && !S.count("unauth"), "làm mới trước, một lần, không lời gọi nào bị 401", `${JSON.stringify(S.calls)} ${outs.map((o) => o.content).join(" | ").slice(0, 300)}`);
     await s.close();
+    wipe();
+  }
+
+  console.log("49. Token chỉ sống 5 phút: vừa nhận thì không làm mới ở mỗi lời gọi (làm mới sớm tối đa 1/4 vòng đời)");
+  {
+    S.reset();
+    const r = await add();
+    const id = r.connector.id;
+    AS.db().prepare("UPDATE connectors SET perms = ? WHERE id = ?").run(JSON.stringify({ search_docs: "allow" }), id);
+    const seal = (tokens) => PR.sealSecret(JSON.stringify({ mode: "oauth", client: { client_id: "c1", auth_method: "none" }, redirect: "http://localhost:3200/api/connectors/oauth/callback", resource: url, as: { issuer: BASE, token_endpoint: `${BASE}/token` }, tokens }));
+    const now = Date.now();
+    AS.db().prepare("UPDATE connectors SET enc_auth = ? WHERE id = ?").run(seal({ access_token: "short", refresh_token: "rt_short", issued_at: now - 10_000, expires_at: now + 290_000 }), id);
+    S.oauth = { need: true, valid: "Bearer short" }; S.calls = {};
+    const s = session("short-token");
+    const fq = s.tools.find((t) => t.tool.name === "search_docs").fq;
+    for (let i = 0; i < 3; i++) await s.call(fq, {});
+    ok(!S.count("token") && !S.count("unauth"), "ba lời gọi liên tiếp: không đổi refresh token lần nào", JSON.stringify(S.calls));
+    ok(C.refreshLead({ issued_at: now, expires_at: now + 300_000 }) === 75_000 && C.refreshLead({ issued_at: now, expires_at: now + 3600_000 }) === 300_000 && C.refreshLead({ expires_at: now + 3600_000 }) === 60_000,
+      "khoảng làm mới sớm: 1/4 của 5 phút, trần 5 phút với token 1 giờ, 1 phút với token cũ không rõ vòng đời");
+    // Còn dưới 1/4 vòng đời: vẫn làm mới trước khi gọi.
+    AS.db().prepare("UPDATE connectors SET enc_auth = ? WHERE id = ?").run(seal({ access_token: "short", refresh_token: "rt_short", issued_at: now - 250_000, expires_at: now + 50_000 }), id);
+    S.oauth = { need: true, valid: "Bearer at_1" }; S.calls = {};
+    const s2 = session("short-token-2");
+    const out = await s2.call(s2.tools.find((t) => t.tool.name === "search_docs").fq, {});
+    ok(!out.is_error && S.count("token") === 1 && !S.count("unauth"), "còn 50 giây của token 5 phút: làm mới trước, không 401", JSON.stringify(S.calls));
+    await s.close(); await s2.close();
     wipe();
   }
 
