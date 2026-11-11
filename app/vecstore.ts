@@ -276,6 +276,9 @@ const qfly: Map<string, Promise<Float32Array | null>> = (g.__vecQFly ??= new Map
 const QUERY_MAX_MS = 15_000;
 /** Ngưỡng cosine tối thiểu để coi là liên quan: mỗi họ model phân bố điểm khác nhau (Gemini cao hơn hẳn OpenAI). */
 export const minCos = (model: string) => env("SYNCHRO_VEC_MIN_COS", /gemini/i.test(model) ? 0.6 : 0.3);
+/** Ngưỡng cao hơn cho mục chỉ khớp theo nghĩa khi câu hỏi ngắn / mơ hồ ("tóm tắt giúp tôi"): vector của câu như vậy gần với rất nhiều thứ ở mức
+ *  vừa phải, nên chỉ nhận mục thật sự gần (hoặc có cả từ khóa). Gemini cao hơn hẳn OpenAI như minCos. */
+export const vagueCos = (model: string) => env("SYNCHRO_VEC_VAGUE_COS", /gemini/i.test(model) ? 0.75 : 0.45);
 export type VecHit = { item: string; cos: number };
 /**
  * Top-k mục gần câu hỏi nhất theo cosine. budgetMs: thời gian tối đa cho bước embed câu hỏi (quá hạn thì trả null, lượt chat dùng BM25).

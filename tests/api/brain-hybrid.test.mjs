@@ -6,7 +6,7 @@ import os from "node:os";
 import path from "node:path";
 import { loadTs } from "../lib/ts.mjs";
 import { startMock } from "../../scripts/mock-providers.mjs";
-import { EMBED_LOG } from "../../scripts/mock-embed.mjs";
+import { EMBED_LOG, fakeEmbed } from "../../scripts/mock-embed.mjs";
 let pass = 0, fail = 0;
 const ok = (c, n, x = "") => { c ? pass++ : fail++; console.log(c ? "  ✓" : "  ✗", n, c ? "" : String(x).slice(0, 600)); };
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "synchro-hybrid-"));
@@ -62,6 +62,65 @@ ok(tg?.model === "text-embedding-3-small" && tg.provider === "openai", "có khó
     const bm = B.brainRecall(u.id, q);
     const r = await recall(u, q);
     ok(!re.test(bm) && re.test(r.s) && r.tr.mode === "hybrid", `${name}: BM25 bỏ sót, kết hợp tìm thấy`, `bm=${bm.slice(0, 120)} | hy=${r.s.slice(0, 300)} ${JSON.stringify(r.tr)}`);
+  }
+  // Câu hỏi ngắn / mơ hồ ("tóm tắt giúp tôi"): ghi chú chỉ gần vừa phải theo nghĩa (trên ngưỡng chung, không chung từ khóa nào) không lọt vào
+  // lượt chat. Trước đây đoạn chat "#prefs" lọt vào câu "tóm tắt giúp tôi" của bài providers (CLI giả thấy "#prefs" và trả lời sai lượt).
+  {
+    const uv = mk(10), dim = 64, VQ = "tóm tắt giúp tôi";
+    const cos = (a, b) => { const x = fakeEmbed(a, dim), y = fakeEmbed(b, dim); return x.reduce((s, v, i) => s + v * y[i], 0); };
+    const qw = new Set(B.fold(VQ).split(/[^\p{L}\p{N}]+/u));
+    const shares = (t) => B.fold(t).split(/[^\p{L}\p{N}]+/u).some((w) => w.length > 1 && qw.has(w));
+    // Ghi chú mồi giống đoạn chat "#prefs" đã chưng cất: không chung chữ nào với câu hỏi, cosine nằm giữa ngưỡng chung (0,3) và ngưỡng câu mơ hồ (0,45).
+    let decoy = null;
+    for (let i = 0; i < 4000 && !decoy; i++) {
+      const body = `Người dùng hỏi prefs số ${i}. Trợ lý đã trả lời và gợi ý cách làm.`;
+      const c = cos(VQ, `Prefs. ${body}`);
+      if (c >= 0.32 && c <= 0.42 && !shares(body)) decoy = { body, c };
+    }
+    ok(!!decoy, `tìm được ghi chú mồi (cosine ${decoy?.c.toFixed(3)})`);
+    B.saveNote(uv, "Prefs", { body: decoy.body });
+    for (let i = 0; i < 6; i++) B.saveNote(uv, `Việc ${i}`, { body: `Chuyến đi số ${i} tới Đà Lạt cùng gia đình.` });
+    await V.embedPending("brain", uv.id);
+    const id = B.getNote(uv.id, "Prefs").id;
+    ok(B.vagueQuery(VQ) && B.vagueQuery("ô tô điện") && !B.vagueQuery("so sánh chi phí bảo dưỡng ô tô điện với xe xăng"), "nhận ra câu hỏi ngắn / chỉ có lời nhờ chung chung");
+    const v = await recall(uv, VQ);
+    ok(v.tr.mode === "hybrid" && !v.tr.ids.includes(id) && !/Prefs/.test(v.s) && v.tr.vague && v.tr.dropped >= 1, "câu mơ hồ: ghi chú chỉ gần vừa phải theo nghĩa bị bỏ", JSON.stringify(v.tr));
+    process.env.SYNCHRO_VEC_VAGUE_COS = "0.3";
+    const loose = await recall(uv, VQ);
+    delete process.env.SYNCHRO_VEC_VAGUE_COS;
+    ok(loose.tr.ids.includes(id), "đối chứng: hạ ngưỡng câu mơ hồ về ngưỡng chung thì ghi chú đó lọt vào (chính bộ lọc mới chặn nó)", JSON.stringify(loose.tr));
+    // Câu hỏi cụ thể, dài: vẫn nhận mục chỉ khớp theo nghĩa ở ngưỡng chung như trước.
+    const pool = ["lịch", "trình", "phòng", "họp", "khách", "hàng", "dự", "án", "tuần", "sau", "nhóm", "thiết", "kế", "giao", "diện", "kiểm", "thử", "phần", "mềm", "trợ", "người", "dùng", "gợi", "trả", "lời", "cách", "làm", "hỏi"];
+    let longQ = null;
+    for (let a = 0; a < pool.length && !longQ; a++) for (let b = a + 1; b < pool.length && !longQ; b++) for (let c = b + 1; c < pool.length && !longQ; c++) {
+      const q = `chuẩn bị ${pool[a]} ${pool[b]} ${pool[c]} đầy đủ`;
+      const k = cos(q, `Prefs. ${decoy.body}`), noBm = !B.fold(q).split(" ").some((w) => B.fold(`Prefs ${decoy.body}`).split(/[^\p{L}\p{N}]+/u).includes(w));
+      if (k >= 0.33 && k <= 0.44 && noBm && !B.vagueQuery(q)) longQ = q;
+    }
+    if (longQ) {
+      const l = await recall(uv, longQ);
+      ok(l.tr.ids.includes(id) && !l.tr.vague, `câu hỏi cụ thể (“${longQ}”): mục chỉ khớp nghĩa vẫn dùng ngưỡng chung`, JSON.stringify(l.tr));
+    } else ok(true, "câu hỏi cụ thể: không dựng được câu đối chứng với bộ embed giả (bỏ qua)");
+  }
+  // Đúng ca của bài providers: đoạn chat "#prefs" đã chưng cất (trang có nhãn "**Tóm tắt:**", "## Điểm chính"…). Nhãn khung trùng chữ "tóm tắt" của câu
+  // hỏi nên trước đây BM25 chấm điểm yếu cho mọi đoạn chat, cộng cosine 0,32 là lọt vào lượt chat.
+  {
+    const uc = mk(11), now = Date.now();
+    const chat = (id, title, gist, points) => {
+      B.importChats(uc, [{ id, title, msgs: [{ role: "user", text: `${points[0]} — câu mở đầu đủ dài` }] }]);
+      const body = `**Tóm tắt:** ${gist}\n\n## Điểm chính\n${points.map((p) => `- ${p}`).join("\n")}\n\n## Liên kết\n- Chủ đề: [[Chung]]\n- Thuộc: [[Bộ não]]\n`;
+      AU.db().prepare("UPDATE brain_notes SET body = ?, props = ?, updated_at = ? WHERE user_id = ? AND conv = ?").run(body, JSON.stringify({ date: now, tags: ["chat"], gist, points, topics: ["Chung"], distilledAt: now }), now, uc.id, id);
+    };
+    chat("c-prefs", "Prefs", "Người dùng hỏi: prefs. Trợ lý đã trả lời và gợi ý cách làm.", ["#prefs"]);
+    chat("c-hello", "Chào bạn", "Người dùng hỏi: chào bạn. Trợ lý đã trả lời và gợi ý cách làm.", ["chào bạn"]);
+    chat("c-trip", "Chuyến đi Đà Lạt", "Người dùng hỏi về lịch trình du lịch Đà Lạt ba ngày.", ["đặt phòng gần hồ Xuân Hương"]);
+    await V.embedPending("brain", uc.id);
+    const prefs = AU.db().prepare("SELECT id FROM brain_notes WHERE user_id = ? AND conv = 'c-prefs'").get(uc.id).id;
+    ok(B.brainRecall(uc.id, "tóm tắt giúp tôi") === "", "BM25 không còn khớp nhãn khung “Tóm tắt:” của mọi đoạn chat", B.brainRecall(uc.id, "tóm tắt giúp tôi"));
+    const r = await recall(uc, "tóm tắt giúp tôi");
+    ok(r.tr.mode === "hybrid" && !r.tr.ids.includes(prefs) && !/#prefs/.test(r.s), "“tóm tắt giúp tôi” không kéo đoạn chat “#prefs” vào lượt chat", JSON.stringify(r.tr) + r.s.slice(0, 200));
+    ok(/Prefs/.test((await recall(uc, "prefs")).s), "hỏi đúng nội dung (“prefs”) vẫn gọi lại được đoạn chat đó");
+    ok(/Đà Lạt/.test((await recall(uc, "kỳ nghỉ")).s), "câu ngắn mà gần nghĩa thật (kỳ nghỉ ↔ du lịch): vẫn gọi lại");
   }
   const both = await recall(u, "ô tô điện");
   ok(/Mua xe/.test(both.s) && /Mua xe/.test(both.s.split("\n")[2] ?? ""), "khớp cả chữ lẫn nghĩa: đứng đầu", both.s);

@@ -22,7 +22,7 @@ import { chatGone } from "./chatstore";
 import { sideModel, tierOf, vendorOf } from "./router";
 import { registerMemStat } from "./memstat";
 import { onTick } from "./tasks";
-import { dropVecs, minCos, queueEmbed, registerVecSource, rrf, sweepVecs, vecQuery } from "./vecstore";
+import { dropVecs, minCos, queueEmbed, registerVecSource, rrf, sweepVecs, vagueCos, vecQuery } from "./vecstore";
 import { subCli } from "./ai/subs";
 
 export type NoteKind = "hub" | "about" | "model" | "chat" | "code" | "topic" | "entity" | "map" | "index" | "log" | "skill" | "connector" | "note" | "daily" | "rule";
@@ -886,9 +886,13 @@ const recallStamp = (uid: string) => { const r = t().prepare("SELECT COUNT(*) AS
 // Chuỗi riêng, không trỏ vào chuỗi gốc (chuỗi ngắn V8 đã tự chép).
 const own = (s: string) => (s.length >= 13 ? Buffer.from(s, "utf8").toString("utf8") : s);
 const wordId = (ix: RecallIx, w: string) => { let id = ix.vocab.get(w); if (id === undefined) ix.vocab.set(own(w), (id = ix.vocab.size)); return id; };
+// Nhãn khung do Synchro tự viết vào mọi trang đoạn chat / chủ đề ("**Tóm tắt:**", "## Điểm chính", "- Liên quan:"…) không phải nội dung: để trong chỉ mục
+// thì câu "tóm tắt giúp tôi" khớp từ khóa với mọi đoạn chat. Ghi chú người dùng tự viết (note) giữ nguyên.
+const FRAME = /\*\*Tóm tắt:\*\*|^## .*$|^- (?:Chủ đề|Nhắc tới|Liên quan|Bán cầu|Thuộc|Skill đã dùng|Connector đã dùng|Ngày):|^_Synchro đang chưng cất đoạn chat này…_$|^Thuộc (?=\[\[)/gmu;
+const indexBody = (n: Note) => (n.kind === "note" ? n.body : n.body.replace(FRAME, " "));
 const recallDoc = (ix: RecallIx, r: Row): RecallDoc => {
   const n = parse(r), tf = new Map<number, number>();
-  const ws = [...words(n.title), ...words(n.title), ...words(n.body), ...(n.props.aliases ?? []).flatMap(words)];
+  const ws = [...words(n.title), ...words(n.title), ...words(indexBody(n)), ...(n.props.aliases ?? []).flatMap(words)];
   for (const w of ws) { const id = wordId(ix, w); tf.set(id, (tf.get(id) ?? 0) + 1); }
   const ids = Uint32Array.from(tf.keys()).sort(), cnt = new Uint16Array(ids.length);
   ids.forEach((id, i) => { cnt[i] = Math.min(65535, tf.get(id)!); });
@@ -1052,7 +1056,15 @@ async function llmRerank(user: UserRow, query: string, cands: Cand[], ms: number
     return picked.length ? picked : null;
   } catch { return null; } finally { clearTimeout(timer); }
 }
-export type RecallTrace = { mode: "bm25" | "hybrid"; ms: number; vecMs?: number; reranked?: "heuristic" | "llm"; ids: string[] };
+export type RecallTrace = { mode: "bm25" | "hybrid"; ms: number; vecMs?: number; reranked?: "heuristic" | "llm"; ids: string[]; vague?: boolean; dropped?: number };
+// Câu hỏi mơ hồ: chỉ có lời nhờ chung chung ("tóm tắt giúp tôi", "giải thích cái này", "help me with this"), không nói tới điều gì cụ thể.
+// Vector của câu như vậy gần vừa phải với rất nhiều ghi chú, nên trước đây một đoạn chat chẳng liên quan (chỉ trùng vài từ chung) lọt vào lượt chat.
+// Từ đã bỏ dấu (fold); không có "cho" (trùng "chó") hay từ mang nội dung.
+const FILLER = new Set(("tom tat giup toi minh em anh ban hay lam viet nay kia do di nhe voi nao gi the sao duoc khong co cai ve mot nhung cac la thi ma "
+  + "giai thich noi lai tiep xem doc dich sua kiem tra hoi tra loi nua dum ho vay "
+  + "summarize summary help me my please this that it its explain write do can you could would what how the and of for with about again more continue tell show give").split(" "));
+/** Câu hỏi ngắn hoặc chỉ gồm lời nhờ chung chung: tối đa 3 từ mang nội dung. */
+export const vagueQuery = (q: string) => words(q).filter((w) => !FILLER.has(w)).length <= 3;
 /**
  * Gọi lại cho lượt chat: kết hợp từ khóa và nghĩa. budgetMs là tổng thời gian cho phép (mặc định 600 ms, SYNCHRO_RECALL_BUDGET_MS):
  * embed câu hỏi dùng tối đa 2/3, phần còn lại cho bước xếp lại bằng model khi câu hỏi mơ hồ.
@@ -1072,13 +1084,20 @@ export async function brainRecallHybrid(user: UserRow, query: string, conv?: str
     return recallBlock(hits);
   }
   const min = minCos(vq.model);
-  const vh = vq.hits.filter((h) => h.cos >= min);
-  const cosOf = new Map(vh.map((h) => [h.item, h.cos])), bmOf = new Map(bm.map((x) => [x.id, x.s]));
+  // Câu hỏi ngắn / mơ hồ: mục chỉ khớp theo nghĩa phải vượt ngưỡng cao hơn, trừ khi BM25 cũng thấy nó qua một từ mang nội dung
+  // (chung lời nhờ "tóm tắt", "giúp tôi" không tính là có chung từ khóa).
+  const vague = vagueQuery(query), strict = Math.max(min, vagueCos(vq.model)), bmOf = new Map(bm.map((x) => [x.id, x.s]));
+  const content = vague ? words(query).filter((w) => !FILLER.has(w)).join(" ") : "";
+  const lexical = new Set(vague ? (content ? recallScored(uid, content, 40, 0.8, conv) ?? [] : []).map((x) => x.id) : bm.map((x) => x.id));
+  const near = vq.hits.filter((h) => h.cos >= min);
+  const vh = vague ? near.filter((h) => lexical.has(h.item) || h.cos >= strict) : near;
+  const cosOf = new Map(vh.map((h) => [h.item, h.cos]));
+  const dropped = near.length - vh.length;
   // Từ khóa yếu (0,8–1,6) chỉ được tính khi nghĩa cũng thấy liên quan.
   const bmList = bm.filter((x) => x.s >= 1.6 || cosOf.has(x.id)).map((x) => x.id);
   const fused = rrf([bmList, vh.map((h) => h.item)]);
   const cands: Cand[] = notesById(uid, [...fused.keys()]).filter((n) => okRecall(n, conv)).map((n) => ({ n, bm: bmOf.get(n.id) ?? 0, cos: cosOf.get(n.id) ?? 0, score: 0 }));
-  if (!cands.length) { o.trace?.({ mode: "hybrid", ms: Date.now() - t0, vecMs: vq.ms, reranked: "heuristic", ids: [] }); return ""; }
+  if (!cands.length) { o.trace?.({ mode: "hybrid", ms: Date.now() - t0, vecMs: vq.ms, reranked: "heuristic", ids: [], vague, dropped }); return ""; }
   let ranked = heuristicRank(cands, fused, query, min);
   let how: "heuristic" | "llm" = "heuristic";
   const ambiguous = ranked.length > 4 && (words(query).length <= 2 || (ranked[1].score >= ranked[0].score * 0.97));
@@ -1088,7 +1107,7 @@ export async function brainRecallHybrid(user: UserRow, query: string, conv?: str
     if (re) { ranked = re; how = "llm"; }
   }
   const hits = ranked.slice(0, 4).map((c) => c.n);
-  o.trace?.({ mode: "hybrid", ms: Date.now() - t0, vecMs: vq.ms, reranked: how, ids: hits.map((n) => n.id) });
+  o.trace?.({ mode: "hybrid", ms: Date.now() - t0, vecMs: vq.ms, reranked: how, ids: hits.map((n) => n.id), vague, dropped });
   return recallBlock(hits);
 }
 
