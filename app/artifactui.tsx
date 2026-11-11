@@ -197,6 +197,9 @@ export function MermaidSvg({ code, onError }: { code: string; onError?: (m: stri
 
 // Sơ đồ D2: máy chủ dựng SVG trong sandbox (d2render.ts), hiện bằng <img> nên SVG không chạy được mã nào. svg(): SVG đã vẽ (tải về, chuyển PNG).
 const d2Cache = new Map<string, string>();
+// Trang chia sẻ đặt mã liên kết: người xem chưa đăng nhập vẫn vẽ được sơ đồ có trong liên kết đó (api/d2 kiểm đoạn mã thuộc liên kết).
+let d2Share = "";
+export const setD2Share = (token: string) => { d2Share = token; };
 export function D2Svg({ code, onError, onSvg }: { code: string; onError?: (m: string) => void; onSvg?: (svg: string) => void }) {
   const dark = isDark(), key = `${dark ? 1 : 0}:${code}`;
   const [svg, setSvg] = useState(d2Cache.get(key) ?? "");
@@ -206,7 +209,7 @@ export function D2Svg({ code, onError, onSvg }: { code: string; onError?: (m: st
     const hit = d2Cache.get(key);
     if (hit) { setSvg(hit); onSvg?.(hit); return; }
     setSvg(""); setErr("");
-    fetch("/api/d2", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ code, dark }) })
+    fetch("/api/d2", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ code, dark, ...(d2Share ? { share: d2Share } : {}) }) })
       .then((r) => r.json()).then((j: { svg?: string; error?: string }) => {
         if (!on) return;
         if (j.svg) { d2Cache.set(key, j.svg); setSvg(j.svg); onSvg?.(j.svg); } else { const m = j.error ? tr(j.error) : tr("Không vẽ được sơ đồ"); setErr(m); onError?.(m); }

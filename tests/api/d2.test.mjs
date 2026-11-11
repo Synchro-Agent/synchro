@@ -22,6 +22,9 @@ printf '<?xml version="1.0" encoding="utf-8"?><svg xmlns="http://www.w3.org/2000
 `, { mode: 0o755 });
 process.env.CODE_RUN = "local";
 process.env.SYNCHRO_D2_BIN = REAL || FAKE;
+// Sơ đồ đã vẽ còn lưu trên đĩa (DATA_DIR/d2-cache): thư mục tạm riêng, không đụng dữ liệu thật.
+const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "synchro-d2-data-"));
+process.env.DATA_DIR = dataDir;
 const { d2render: D } = await loadTs(["d2render"]);
 const SRC = "khach: Khách hàng\nmay: Máy chủ dữ liệu {shape: cylinder}\nkhach -> may: Truy vấn\n";
 
@@ -42,6 +45,14 @@ if (MAC) {
   const again = await D.renderD2("u-khac", SRC, false);
   ok("svg" in again && "svg" in r && again.svg === r.svg, "vẽ lại cùng sơ đồ: lấy bản đã nhớ, không chạy sandbox", again);
   ok(D.cachedD2(SRC, false) === r.svg && D.cachedD2(SRC + " ", false) === null, "cachedD2 (trang chia sẻ) chỉ trả sơ đồ đã vẽ đúng từng ký tự");
+  // Khởi động lại máy chủ (bộ nhớ trống) hay đã vẽ thêm hơn 200 sơ đồ khác: vẫn còn trên đĩa.
+  globalThis.__synchroD2.clear();
+  ok(D.cachedD2(SRC, false) === r.svg && "svg" in dark && D.cachedD2(SRC, true) === dark.svg, "bộ nhớ trống (khởi động lại): sơ đồ vẫn đọc được từ đĩa, đủ hai chủ đề");
+  ok(fs.readdirSync(path.join(dataDir, "d2-cache")).filter((f) => f.endsWith(".svg")).length === 2, "đĩa có đúng 2 bản (sáng, tối), tên theo mã băm");
+  process.env.SYNCHRO_D2_BIN = REAL || FAKE;
+  const lightOnly = "chi -> sang\n", lo = await D.renderD2("u-d2", lightOnly, false);
+  ok("svg" in lo && D.cachedD2(lightOnly, true) === null && D.cachedD2(lightOnly, true, true) === lo.svg, "người xem nền tối, chủ chỉ vẽ nền sáng: có bản nền sáng thay vì báo lỗi");
+  process.env.SYNCHRO_D2_BIN = "/khong-co/d2";
   const miss = await D.renderD2("u-d2", "x -> y", false);
   ok("error" in miss && /Sandbox chưa có D2/.test(miss.error), "sandbox chưa có D2: báo rõ cần image mới", miss);
   process.env.SYNCHRO_D2_BIN = REAL || FAKE;
@@ -99,10 +110,27 @@ else {
     ok(anon.status === 200 && aj.svg === j.svg, "trang chia sẻ: người lạ xem được sơ đồ chủ artifact đã vẽ", anon.status);
     const bad = await api("/api/d2", { code: "a -> {" });
     ok(bad.status === 422 && typeof (await bad.json()).error === "string", "lỗi cú pháp: 422 kèm lời báo");
+    // Liên kết chia sẻ có sơ đồ chủ chưa từng vẽ (hoặc đã rời bộ nhớ): người xem chưa đăng nhập vẫn thấy sơ đồ, chỉ với đúng mã nằm trong liên kết.
+    const { createRequire } = await import("node:module");
+    const Db = createRequire(path.join(process.cwd(), "package.json"))("better-sqlite3");
+    const d = new Db(path.resolve(process.env.DATA_DIR_MOCK ?? "data-mock", "synchro.db")); d.pragma("busy_timeout = 5000");
+    d.prepare("UPDATE users SET email_verified = 1 WHERE email = ?").run(email); d.close();
+    const inShare = `kho: Kho hàng ${Date.now()}\nxe: Xe giao\nkho -> xe\n`, art = `may: Máy ${Date.now()}\nđĩa: Đĩa\nmay -> đĩa\n`;
+    const sh = await api("/api/share", { conv: `d2-${Date.now()}`, title: "Sơ đồ", msgs: [{ role: "user", text: "Vẽ giúp" }, { role: "ai", text: "Đây:\n\n```d2\n" + inShare + "```\n" }] });
+    const token = (await sh.json()).share?.token;
+    ok(sh.status === 200 && !!token, "tạo được liên kết chia sẻ", sh.status);
+    const viaShare = await api("/api/d2", { code: inShare, share: token, dark: true }, false);
+    const vj = await viaShare.json();
+    ok(viaShare.status === 200 && /<svg\b/.test(vj.svg ?? "") && /Kho hàng/.test(vj.svg ?? ""), "người xem liên kết: vẽ được sơ đồ nằm trong liên kết (chủ đề của người xem)", vj.error ?? viaShare.status);
+    const notIn = await api("/api/d2", { code: art, share: token }, false);
+    ok(notIn.status === 401, "mã không nằm trong liên kết: không chạy sandbox cho người lạ", notIn.status);
+    const noTok = await api("/api/d2", { code: inShare + "x", share: "khong-phai-ma-lien-ket-that-0000" }, false);
+    ok(noTok.status === 401, "mã liên kết sai: 401", noTok.status);
   }
   const cross = await fetch(B + "/api/d2", { method: "POST", headers: { "content-type": "application/json", origin: "https://evil.example", cookie }, body: JSON.stringify({ code }) });
   ok(cross.status === 403, "khác nguồn gốc bị chặn", cross.status);
 }
 fs.rmSync(fakeDir, { recursive: true, force: true });
+fs.rmSync(dataDir, { recursive: true, force: true });
 console.log(`\n${pass} đạt, ${fail} lỗi`);
 process.exit(fail ? 1 : 0);

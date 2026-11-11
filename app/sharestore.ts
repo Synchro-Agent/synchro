@@ -79,6 +79,19 @@ export function publicShare(token: string): { snap: ShareSnap; at: number } | nu
   try { return { snap: JSON.parse(r.snap) as ShareSnap, at: r.updated_at }; } catch { return null; }
 }
 
+/** Chủ của liên kết khi bản chụp thật sự chứa đoạn mã sơ đồ này (artifact D2 hoặc khối ```d2 trong câu trả lời), không thì null.
+ *  Trang chia sẻ dùng để vẽ sơ đồ chưa có trong bộ nhớ đệm cho người xem chưa đăng nhập, chỉ với nội dung chủ liên kết đã chia sẻ. */
+export function shareOwnerWithCode(token: string, code: string): string | null {
+  if (!/^[\w-]{20,64}$/.test(token) || !code.trim()) return null;
+  const r = t().prepare("SELECT user_id, snap FROM shares WHERE token = ?").get(token) as { user_id: string; snap: string } | undefined;
+  if (!r) return null;
+  try {
+    const snap = JSON.parse(r.snap) as ShareSnap;
+    const has = snap.msgs.some((m) => m.segs.some((g) => (g.k === "art" && g.type === "d2" && g.content === code) || (g.k === "art" && g.type === "markdown" && g.content.includes(code)) || (g.k === "text" && g.t.includes(code))));
+    return has ? r.user_id : null;
+  } catch { return null; }
+}
+
 /** Chỉ chủ sở hữu mới dừng được liên kết của mình. */
 export const revokeShare = (uid: string, token: string) => t().prepare("DELETE FROM shares WHERE user_id = ? AND token = ?").run(uid, token).changes > 0;
 export const revokeConvShare = (uid: string, conv: string) => t().prepare("DELETE FROM shares WHERE user_id = ? AND conv = ?").run(uid, conv).changes > 0;

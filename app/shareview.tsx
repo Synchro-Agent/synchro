@@ -2,7 +2,7 @@
 // Trang xem một đoạn chat được chia sẻ. Người xem chưa đăng nhập, nên trang không gọi API nào của tài khoản: artifact chạy trong đúng khung cô lập
 // như trong chat (sandbox không cùng nguồn gốc, CSP chặn mạng), không có AI, không có kho dữ liệu; chữ của người dùng là văn bản thuần.
 import { useEffect, useState } from "react";
-import { ArtifactFrame, D2Svg, MermaidSvg, PublicFrames, VbhcView } from "./artifactui";
+import { ArtifactFrame, D2Svg, MermaidSvg, PublicFrames, setD2Share, VbhcView } from "./artifactui";
 import { Lockup } from "./brand";
 import { locale, tr, useLangReady } from "./i18n";
 import { LangSwitch } from "./langswitch";
@@ -45,6 +45,8 @@ function ReportLink({ token }: { token: string }) {
 }
 
 export function ShareView({ snap, at, token }: { snap: ShareSnap; at: number; token: string }) {
+  // Trước khi các sơ đồ D2 bên dưới gọi api/d2 (hiệu ứng của con chạy trước của cha).
+  setD2Share(token);
   // Khung artifact, ngày giờ và ngôn ngữ phụ thuộc trình duyệt: dựng sau khi gắn để không lệch với bản dựng ở máy chủ.
   const [ready, setReady] = useState(false);
   useEffect(() => setReady(true), []);
