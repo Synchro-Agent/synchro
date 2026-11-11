@@ -413,24 +413,18 @@ export async function generateImages(q: ImgReq): Promise<ImgOk | ImgErr> {
 // ---------------------------------------------------------------- công cụ và hướng dẫn cho model
 export const IMAGE_TOOL = {
   name: "generate_image",
-  description: "Tạo ảnh bằng AI: ảnh chụp như thật, tranh, minh họa, logo, poster, ảnh sản phẩm, ảnh đại diện. Ảnh tự hiện thành thẻ trong khung chat và tải về được. Mất khoảng 40 giây mỗi lần. Không dùng cho biểu đồ, sơ đồ, slide hay thứ cần chữ chính xác: những thứ đó dựng bằng code.",
+  description: "Tạo ảnh bằng AI (ảnh chụp như thật, tranh, minh họa, logo, poster, ảnh sản phẩm, ảnh đại diện), khoảng 40 giây; ảnh tự hiện thành thẻ trong chat. Không dùng cho biểu đồ, sơ đồ, slide hay thứ cần chữ chính xác (dựng bằng code).",
   input_schema: {
     type: "object",
     properties: {
       prompt: { type: "string", description: "Mô tả chi tiết bức ảnh: chủ thể, bối cảnh, phong cách, ánh sáng, bố cục. Chữ cần xuất hiện trong ảnh thì viết nguyên văn trong ngoặc kép." },
-      aspect_ratio: { type: "string", enum: [...ASPECTS], description: "Tỉ lệ khung hình, mặc định 1:1." },
-      count: { type: "integer", minimum: 1, maximum: 4, description: "Số ảnh, từ 1 đến 4, mặc định 1." },
-      template: { type: "string", enum: ["poster-master-og"], description: "Chỉ khi cần poster / ảnh chia sẻ có chữ chính xác dạng thẻ số liệu (tiêu đề, một con số KPI, nhãn, tác giả trên nền tối cực quang): Synchro dựng PNG 3600×1890 từ mẫu cố định, không cần gói tạo ảnh, chữ tiếng Việt đúng tuyệt đối. Điền poster, bỏ qua aspect_ratio, count, reference." },
-      poster: { type: "object", description: "Trường của mẫu poster-master-og (giữ ngắn để chữ không tràn khung).", properties: {
-        tag: { type: "string", description: "Nhãn nhỏ in hoa, tối đa 32 ký tự, vd \"Báo cáo quý 3\"" },
-        title: { type: "string", description: "Tiêu đề kết luận, tối đa 90 ký tự" },
-        metricValue: { type: "string", description: "Con số KPI, tối đa 12 ký tự, vd \"+14,2%\"" },
-        metricLabel: { type: "string", description: "Nhãn của con số, tối đa 40 ký tự" },
-        author: { type: "string", description: "Tác giả / thương hiệu, tối đa 40 ký tự" },
-      }, required: ["tag", "title", "metricValue", "metricLabel", "author"] },
-      product_shot: { type: "boolean", description: "true khi là ảnh sản phẩm thương mại để bán / quảng cáo (sản phẩm, bao bì, mỹ phẩm, đồ ăn trên bục studio). Không dùng cho logo, tranh, minh họa, ảnh người." },
-      product_relight: { type: "boolean", description: "true khi người dùng gửi ảnh sản phẩm và muốn đặt nó vào bối cảnh / ánh sáng studio sang trọng mà giữ nguyên sản phẩm; cần reference trỏ tới ảnh đó." },
-      reference: { type: "string", description: "Chỉ khi cần sửa hoặc dựa trên một ảnh có sẵn, ảnh mới hoàn toàn thì bỏ tham số này: \"last\" là ảnh gần nhất của đoạn chat (ảnh vừa tạo hoặc ảnh người dùng vừa gửi), số n là ảnh thứ n của tin gần nhất người dùng gửi ảnh, hoặc tên tệp ảnh trong đoạn chat (kể cả ảnh Synchro đã tạo)." },
+      aspect_ratio: { type: "string", enum: [...ASPECTS], description: "Tỉ lệ, mặc định 1:1." },
+      count: { type: "integer", minimum: 1, maximum: 4, description: "Số ảnh 1–4, mặc định 1." },
+      template: { type: "string", enum: ["poster-master-og"], description: "Chỉ cho poster / ảnh chia sẻ dạng thẻ số liệu cần chữ chính xác: PNG 3600×1890 từ mẫu cố định, không cần gói tạo ảnh. Điền poster (độ dài tối đa: tag 32 in hoa, title 90 câu kết luận, metricValue 12 vd \"+14,2%\", metricLabel 40, author 40), bỏ aspect_ratio, count, reference." },
+      poster: { type: "object", properties: Object.fromEntries(["tag", "title", "metricValue", "metricLabel", "author"].map((k) => [k, { type: "string" }])), required: ["tag", "title", "metricValue", "metricLabel", "author"] },
+      product_shot: { type: "boolean", description: "true: ảnh sản phẩm để bán / quảng cáo (bao bì, mỹ phẩm, đồ ăn); không cho logo, tranh, minh họa, ảnh người." },
+      product_relight: { type: "boolean", description: "true: đưa ảnh sản phẩm người dùng gửi (reference) vào ánh sáng studio, giữ nguyên sản phẩm." },
+      reference: { type: "string", description: "Chỉ khi sửa / dựa trên ảnh có sẵn: \"last\" (ảnh gần nhất của đoạn chat), số n (ảnh thứ n của tin gần nhất người dùng gửi ảnh) hoặc tên tệp ảnh trong đoạn chat." },
     },
     required: ["prompt"],
   },
@@ -439,7 +433,7 @@ export const IMAGE_RULES = `<image_generation>
 Công cụ generate_image tạo ảnh thật bằng AI qua gói người dùng đã đăng nhập. Người dùng xin ảnh chụp, tranh, hình minh họa, logo, poster, ảnh sản phẩm, ảnh đại diện hay nhờ sửa một tấm ảnh: gọi generate_image, không dựng thay bằng code.
 Biểu đồ, sơ đồ, slide, infographic số liệu và thứ cần chữ chính xác tuyệt đối: dựng bằng code hoặc artifact như thường lệ. Chữ trong ảnh AI có thể sai chính tả, nhất là tiếng Việt: logo hay poster nhiều chữ thì nói trước điều đó.
 Viết prompt chi tiết, đủ chủ thể, bối cảnh, phong cách, ánh sáng, bố cục. Sửa ảnh có sẵn thì truyền reference. Ảnh sản phẩm để bán: product_shot true (Synchro tự thêm phong cách nhiếp ảnh studio, prompt chỉ cần tả sản phẩm và bối cảnh); người dùng gửi ảnh sản phẩm và muốn đưa vào studio: reference + product_relight true.
-Poster / banner / ảnh chia sẻ 1200×630 nhiều chữ kiểu thẻ số liệu (tiêu đề + một con số KPI): gọi generate_image với template "poster-master-og" và poster {tag, title, metricValue, metricLabel, author}, prompt một câu ngắn; ra PNG 3600×1890 chữ chính xác, không cần gói tạo ảnh. Bố cục khác thì dựng artifact HTML khung .sx-og (người dùng tải PNG 3x).
+Poster / ảnh chia sẻ 1200×630 kiểu thẻ số liệu (tiêu đề + một con số KPI): generate_image với template "poster-master-og" và poster, prompt một câu ngắn. Bố cục khác thì dựng artifact HTML khung .sx-og (tải PNG 3x).
 Không nói đã tạo ảnh trước khi công cụ trả kết quả; mỗi lần mất khoảng 40 giây nên báo trước một câu ngắn. Xong rồi ảnh tự hiện thành thẻ trong khung chat: trong câu trả lời đừng chèn liên kết, đường dẫn hay cú pháp ảnh markdown, chỉ nói ngắn gọn đã tạo gì.
 Ảnh dùng được trong sản phẩm: kết quả công cụ ghi địa chỉ để đặt vào artifact (src, url(...)) và đường dẫn inputs/ để run_code đọc (Word, PowerPoint, PDF, video). Thiết kế, slide hay video cần ảnh thì tạo ảnh trước rồi đưa đúng ảnh đó vào, không dùng ảnh giữ chỗ.
 Công cụ báo lỗi thì không có ảnh nào: nói đúng lý do và việc người dùng nên làm, đừng gọi sản phẩm thay thế là ảnh AI. Có thể đề nghị dựng đồ họa bằng code hoặc viết sẵn câu lệnh để họ dùng ở công cụ khác.
