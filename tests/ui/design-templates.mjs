@@ -128,7 +128,6 @@ for (const style of ["linear-dark", "editorial-serif"]) {
   const low = (await probe(`document.querySelector("section")`, true)).filter((x) => x.kind === "tương phản thấp");
   check("ô nhiệt: chữ tự sáng / tối theo nền, đạt 4.5:1", !low.length, JSON.stringify(low));
 }
-
 console.log("1b. Slide biểu đồ: sáu loại, hai phong cách");
 const CH = [
   { kind: "bar", title: "Quý 3 có doanh thu cao nhất năm", labels: ["Quý 1", "Quý 2", "Quý 3", "Quý 4"], values: [8.2, 9.6, 14.8, 12.1], unit: " tỷ", highlight: "Quý 3", source: "Số liệu ví dụ" },
@@ -137,6 +136,9 @@ const CH = [
   { kind: "waterfall", title: "Lợi nhuận tăng 23 tỷ trong năm", start: { label: "Đầu năm", value: 100 }, labels: ["Bán hàng", "Dịch vụ", "Giá vốn", "Chi phí"], values: [62, 18, -45, -12], endLabel: "Cuối năm" },
   { kind: "sankey", title: "3 trên 10 người dùng thử chuyển sang trả phí", links: [{ from: "Quảng cáo", to: "Dùng thử", value: 50 }, { from: "Giới thiệu", to: "Dùng thử", value: 30 }, { from: "Tự tìm", to: "Dùng thử", value: 20 }, { from: "Dùng thử", to: "Trả phí", value: 30 }, { from: "Dùng thử", to: "Rời đi", value: 70 }], highlight: "Trả phí" },
   { kind: "radar", title: "Vượt đối thủ ở bốn trên năm tiêu chí", labels: ["Tốc độ", "Giá", "Hỗ trợ", "Tính năng", "Bảo mật"], series: [{ name: "Synchro", data: [9, 7, 8, 8, 9] }, { name: "Đối thủ A", data: [6, 8, 6, 7, 7] }], max: 10 },
+  // Thanh ngang (hơn 8 mục): model quên nhãn, và nhiều chuỗi — trước đây biểu đồ biến mất / mất chuỗi thứ hai.
+  { kind: "bar", title: "Mười tuần liền doanh số đều tăng", values: [5, 8, 3, 9, 4, 7, 6, 2, 1, 10], unit: "%" },
+  { kind: "bar", title: "Chi nhánh nào cũng tăng so với năm trước", labels: ["Hà Nội", "TP.HCM", "Đà Nẵng", "Hải Phòng", "Cần Thơ", "Huế", "Nha Trang", "Vũng Tàu", "Quy Nhơn"], series: [{ name: "2026", data: [42, 55, 21, 18, 15, 12, 11, 9, 7] }, { name: "2025", data: [36, 49, 17, 16, 12, 10, 9, 8, 6] }], unit: " tỷ" },
 ];
 for (const style of ["swiss-grid", "linear-dark"]) {
   const pages = CH.map((chart, i) => ({ templateId: "slide-chart", props: { eyebrow: "Biểu đồ " + (i + 1), title: chart.title, chart: { ...chart, title: "" }, ...(i % 2 ? { insight: "Kênh trực tiếp tăng nhờ đội bán mới ở hai thành phố lớn.", bullets: ["Chi phí mỗi khách giảm 18%"] } : {}), source: "Nguồn: số liệu ví dụ" } }));
@@ -147,7 +149,7 @@ for (const style of ["swiss-grid", "linear-dark"]) {
     const found = (await probe(`window.__sxCur()`, true)).filter((x) => !/ảnh hỏng/.test(x.kind));
     const r = await ev(`(() => { const s = window.__sxCur(), v = s.querySelector("svg").getBoundingClientRect(), b = s.getBoundingClientRect(); return v.height > 150 && v.bottom <= b.bottom + 1; })()`);
     check(`biểu đồ ${CH[i].kind} ${style}: không đo thấy lỗi, biểu đồ đủ lớn và nằm trong slide`, !found.length && r, JSON.stringify(found));
-    await shot(`chart-${CH[i].kind}-${style}.png`);
+    await shot(`chart-${i + 1}-${CH[i].kind}-${style}.png`);
   }
 }
 

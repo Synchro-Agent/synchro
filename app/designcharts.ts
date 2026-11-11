@@ -27,10 +27,21 @@ function bar(p: Props, unit: string) {
   if (!n || !series.length) return "";
   const all = series.flatMap((s) => s.data), max = Math.max(0, ...all), min = Math.min(0, ...all), hl = hlIndex(p, labels, series[0].data.indexOf(Math.max(...series[0].data)));
   const horiz = p.horizontal === true || n > 8 || labels.some((l) => l.length > 14);
+  const legend = () => (series.length > 1 ? series.map((s, j) => `<rect x="${8 + j * 130}" y="2" width="10" height="10" rx="2" style="fill:${j === 0 ? VIVID : NEU(j)}"/>${T(22 + j * 130, 11, s.name, { anchor: "start", size: 14 })}`).join("") : "");
   if (horiz) {
-    const lw = 170, top = 8, rowH = Math.min(40, (H - top * 2) / n), span = max - min || 1, x0 = lw + ((0 - min) / span) * (W - lw - 70);
-    return labels.map((l, i) => { const v = series[0].data[i] ?? 0, y = top + i * rowH, w = (Math.abs(v) / span) * (W - lw - 70), x = v >= 0 ? x0 : x0 - w, c = i === hl ? VIVID : NEU(0);
-      return `${T(lw - 10, y + rowH * 0.62, l, { anchor: "end", fill: "var(--sx-ink)" })}<rect x="${x.toFixed(1)}" y="${(y + rowH * 0.18).toFixed(1)}" width="${Math.max(1, w).toFixed(1)}" height="${(rowH * 0.64).toFixed(1)}" rx="3" style="fill:${c}"/>${T(v >= 0 ? x + w + 6 : x - 6, y + rowH * 0.62, fmt(v, unit), { anchor: v >= 0 ? "start" : "end", fill: "var(--sx-ink)", weight: i === hl ? 700 : 500 })}`; }).join("");
+    // Một hàng mỗi mục (theo n, kể cả khi model không gửi nhãn), nhiều chuỗi thì mỗi hàng một nhóm thanh mỏng xếp chồng theo chiều dọc, chú giải ở trên như bản đứng.
+    const k = series.length, lw = labels.length ? 170 : 12, top = k > 1 ? 24 : 8, rowH = Math.min(40, (H - top - 8) / n), span = max - min || 1, sc = (W - lw - 70) / span, x0 = lw + (0 - min) * sc, fr = k > 1 ? 0.8 : 0.64, bh = (rowH * fr) / k;
+    let out = "";
+    for (let i = 0; i < n; i++) {
+      const y = top + i * rowH;
+      if (labels[i]) out += T(lw - 10, y + rowH * 0.62, labels[i], { anchor: "end", fill: "var(--sx-ink)" });
+      series.forEach((s, j) => {
+        const v = s.data[i] ?? 0, w = Math.abs(v) * sc, x = v >= 0 ? x0 : x0 - w, by = y + (rowH * (1 - fr)) / 2 + j * bh, c = k > 1 ? (j === 0 ? VIVID : NEU(j)) : i === hl ? VIVID : NEU(0);
+        out += `<rect x="${x.toFixed(1)}" y="${by.toFixed(1)}" width="${Math.max(1, w).toFixed(1)}" height="${Math.max(1, bh - (k > 1 ? 1 : 0)).toFixed(1)}" rx="${k > 1 ? 2 : 3}" style="fill:${c}"/>`;
+        if (k === 1 || bh >= 13) out += T(v >= 0 ? x + w + 6 : x - 6, k === 1 ? y + rowH * 0.62 : by + bh / 2 + 4.5, fmt(v, unit), { anchor: v >= 0 ? "start" : "end", size: k > 1 ? 12.5 : 15, fill: "var(--sx-ink)", weight: k === 1 && i === hl ? 700 : 500 });
+      });
+    }
+    return out + legend();
   }
   const top = 28, bot = H - 34, span = max - min || 1, y = (v: number) => top + ((max - v) / span) * (bot - top), band = (W - 16) / n, k = series.length, bw = (band * 0.66) / k;
   let out = `<line x1="8" x2="${W - 8}" y1="${y(0).toFixed(1)}" y2="${y(0).toFixed(1)}" style="stroke:var(--sx-line);stroke-width:1"/>`;
@@ -41,7 +52,7 @@ function bar(p: Props, unit: string) {
       if (k === 1 || n * k <= 12) out += T(x + bw / 2 - 1, v >= 0 ? y(v) - 7 : y(v) + 16, fmt(v, unit), { size: k > 1 ? 14 : 15, fill: "var(--sx-ink)", weight: i === hl && k === 1 ? 700 : 500 }); });
     out += T(8 + i * band + band / 2, H - 12, labels[i] ?? "", { size: 14 });
   }
-  return out + (k > 1 ? series.map((s, j) => `<rect x="${8 + j * 130}" y="2" width="10" height="10" rx="2" style="fill:${j === 0 ? VIVID : NEU(j)}"/>${T(22 + j * 130, 11, s.name, { anchor: "start", size: 14 })}`).join("") : "");
+  return out + legend();
 }
 function line(p: Props, unit: string) {
   const { labels, series } = seriesOf(p), n = Math.max(labels.length, ...series.map((s) => s.data.length));

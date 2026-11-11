@@ -137,6 +137,15 @@ ok((barH.match(/fill:var\(--sx-vivid\)/g) ?? []).length === 1 && (barH.match(/fi
 ok(/Cuối năm/.test(CH.renderChart(charts.waterfall, C0)) && />123</.test(CH.renderChart(charts.waterfall, C0)) && /−45/.test(CH.renderChart(charts.waterfall, C0)), "thác nước: tự cộng dồn tới cuối kỳ (100 + 80 − 45 − 12 = 123)");
 ok(/Trả phí 24/.test(CH.renderChart(charts.sankey, C0)) && /Dùng thử 80/.test(CH.renderChart(charts.sankey, C0)), "sankey: giá trị nút là tổng dòng vào / ra");
 ok(CH.renderChart({ kind: "pie3d", values: [1] }, C0) === "" && CH.renderChart({ kind: "bar" }, C0) === "" && CH.renderChart({ kind: "sankey", links: [{ from: "a", to: "a", value: 1 }] }, C0) === "", "loại lạ, thiếu số liệu: không vẽ, không vỡ trang");
+{
+  // Thanh nằm ngang (hơn 8 mục): model không gửi nhãn thì vẫn vẽ đủ 10 thanh; nhiều chuỗi thì vẽ cả các chuỗi, kèm chú giải.
+  const noLab = CH.renderChart({ kind: "bar", values: [5, 8, 3, 9, 4, 7, 6, 2, 1, 10] }, C0);
+  ok((noLab.match(/<rect /g) ?? []).length === 10 && />10</.test(noLab), "bar 10 số không nhãn: đủ 10 thanh ngang, có số trên thanh", noLab.slice(0, 300));
+  const multi = CH.renderChart({ kind: "bar", labels: ["A", "B", "C", "D", "E", "F", "G", "H", "I"], series: [{ name: "2025", data: [1, 2, 3, 4, 5, 6, 7, 8, 9] }, { name: "2026", data: [2, 3, 4, 5, 6, 7, 8, 9, 10] }] }, C0);
+  ok((multi.match(/<rect /g) ?? []).length === 9 * 2 + 2 && />2026</.test(multi) && />I</.test(multi), "bar ngang 2 chuỗi × 9 mục: 18 thanh + chú giải 2 chuỗi", multi.slice(0, 300));
+  const ys = [...multi.matchAll(/<rect x="[\d.]+" y="([\d.]+)"[^>]*height="([\d.]+)"/g)].map((m) => Number(m[1]) + Number(m[2]));
+  ok(Math.max(...ys) <= 360, "thanh cuối vẫn nằm trong khung 360", String(Math.max(...ys)));
+}
 ok(!/<script|<img/.test(CH.renderChart({ kind: "bar", title: "<script>x</script>", labels: ["<img onload=1>"], values: [1] }, C0)), "nhãn được thoát HTML");
 const sc = T.expandTemplates(block([{ templateId: "slide-chart", props: { eyebrow: "Doanh thu", title: "Q3 cao nhất năm", chart: charts.bar, insight: "Quý 3 tăng nhờ kênh trực tiếp." } }]));
 ok(/data-sx-template="slide-chart"/.test(sc) && /sx-grid-6040/.test(sc) && /data-sx-chart="bar"/.test(sc), "slide-chart: biểu đồ và thẻ ghi chú 60/40");
