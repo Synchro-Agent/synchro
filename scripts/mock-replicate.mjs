@@ -1,7 +1,7 @@
 // Replicate giả lập cho npm run dev:mock và kiểm thử (tests/api/replicate.test.mjs): cùng đường dẫn, tiêu đề, trạng thái như API thật (replicate.com/docs/reference/http),
 // không bao giờ gọi Replicate thật, không tốn tiền. Khóa hợp lệ: có chữ "mock" (vd r8_mock_0001).
 // Mô phỏng: lược đồ OpenAPI của FLUX 1.1 Pro Ultra (model chính thức) và zsxkib/ic-light (model cộng đồng, gọi theo version, tên tham số subject_image / light_source),
-// Prefer: wait (xong ngay), chạy lâu phải hỏi lại (#slowrep trong prompt), lỗi (#failrep), từ chối an toàn (#nsfwrep), treo tới khi bị hủy (#hangrep), 402 hết số dư (#402rep),
+// Prefer: wait (xong ngay), chạy lâu phải hỏi lại (#slowrep trong prompt), lỗi (#failrep), từ chối an toàn (#nsfwrep), treo tới khi bị hủy (#hangrep), giữ yêu cầu tạo 8 giây (#waitrep), 402 hết số dư (#402rep),
 // Files API cho ảnh gốc lớn. Ảnh kết quả ở /replicate/delivery/… cần tiêu đề Authorization như replicate.delivery.
 // Bài thử đọc nhật ký ở GET /replicate/_log (không có khóa), xóa bằng DELETE /replicate/_log. Đổi tên tham số ic-light sang bản cũ: POST /replicate/_cfg { icLight: "v2" } (input_fg, bg_source).
 import zlib from "node:zlib";
@@ -80,6 +80,8 @@ export async function replicateHandler(req, res, p, b, raw, valid) {
     st.preds.set(pred.id, pred);
     // Prefer: wait → chờ trong cùng lời gọi (lượt nhanh thì xong luôn).
     if (/wait/.test(String(req.headers.prefer ?? ""))) advance(req, pred);
+    // #waitrep: Replicate giữ yêu cầu tạo trong lúc chờ (Prefer: wait) rồi mới trả lời; Synchro bấm Dừng giữa lúc đó thì không bao giờ thấy mã lượt chạy.
+    if (/#waitrep/.test(text)) { setTimeout(() => { if (!res.writableEnded && !res.destroyed) json(res, 201, view(req, pred)); }, 8000); return true; }
     return json(res, 201, view(req, pred)), true;
   };
   const om = /^v1\/models\/([\w.-]+)\/([\w.-]+)\/predictions$/.exec(m);

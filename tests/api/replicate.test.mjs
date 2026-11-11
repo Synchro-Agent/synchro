@@ -195,6 +195,29 @@ try {
     ok(c.s === 200 && r.status !== "running" && !r.j.files?.length, "bấm Dừng: lượt dừng, không có ảnh", { c: c.s, st: r.status });
     ok(log.some((e) => e.method === "POST" && /\/predictions\/mock\w+\/cancel$/.test(e.path)), "lượt trên Replicate bị hủy (không tính tiền tiếp)", log.map((e) => `${e.method} ${e.path}`));
   }
+  // Bấm Dừng không phải cách tạo ảnh Replicate miễn phí: lượt đã gửi sang Replicate (kể cả khi Synchro chưa nhận được mã lượt chạy, Replicate vẫn chạy và tính tiền)
+  // vẫn tính vào hạn mức ảnh trong ngày; lượt Replicate báo lỗi thì không tính.
+  {
+    const U = await account("stop");
+    await signIn(U, ["claude", "agy"]);
+    const imgs = () => dbq((d) => d.prepare("SELECT COALESCE(SUM(images), 0) AS n FROM replicate_budget WHERE user_id = ?").get(U.uid))?.n ?? 0;
+    const stopAt = async (prompt) => {
+      await clearLog();
+      const r0 = await start(U, { model: "sub-claude/haiku", messages: ask(`Tạo ảnh ${tool({ prompt })}`) });
+      for (let i = 0; i < 100 && !posts(await repLog()).length; i++) await sleep(100);
+      await sleep(600);
+      await U.api("DELETE", `/api/runs/${r0.j.run}`);
+      return finish(U, r0.j.run, 30_000);
+    };
+    const n0 = imgs();
+    const r1 = await stopAt("chờ lâu #waitrep");
+    ok(r1.status !== "running" && !r1.j.files?.length && imgs() === n0 + 1, "Dừng khi Replicate còn giữ yêu cầu tạo: ảnh vẫn tính vào hạn mức", { st: r1.status, before: n0, after: imgs() });
+    const r2 = await stopAt("treo #hangrep");
+    ok(r2.status !== "running" && imgs() === n0 + 2, "Dừng khi đang chạy trên Replicate: ảnh vẫn tính vào hạn mức", { before: n0, after: imgs() });
+    await clearLog();
+    await run(U, { model: "sub-claude/haiku", messages: ask(`Tạo ảnh ${tool({ prompt: "lỗi #failrep" })}`) });
+    ok(imgs() === n0 + 2, "Replicate báo lỗi (failed): không tính vào hạn mức", { before: n0, after: imgs() });
+  }
 
   console.log("6. Hạn mức ảnh mỗi ngày");
   {

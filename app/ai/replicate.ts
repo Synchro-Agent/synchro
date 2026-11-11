@@ -27,7 +27,11 @@ export const REPLICATE_MODELS = [MASTER_IMAGE_GEN_CONFIG.textToImageModel, MASTE
 export const FLUX_USD = 0.06;
 
 export type RepKind = "auth" | "quota" | "busy" | "bad" | "refused" | "timeout" | "aborted" | "big" | "nofile" | "other";
-export class RepError extends Error { constructor(public kind: RepKind, msg: string) { super(msg); } }
+/** status: mã HTTP Replicate trả lời (Replicate đã từ chối, không chạy gì). spent: số ảnh / tiền đã có thể bị tính trước khi lỗi (để không trả lại hạn mức). */
+export class RepError extends Error {
+  status = 0; spent?: { used: number; usd: number };
+  constructor(public kind: RepKind, msg: string, status = 0) { super(msg); this.status = status; }
+}
 
 // ---------------------------------------------------------------- lược đồ tham số của model
 type Schema = { version: string; props: string[]; enums: Record<string, string[]>; at: number };
@@ -56,7 +60,7 @@ async function apiJson(url: string, key: string, init: RequestInit = {}, ms = 20
   if (!r.ok) {
     const detail = redact(String(j.detail ?? j.title ?? text).replace(/\s+/g, " ")).slice(0, 240);
     const kind: RepKind = r.status === 401 || r.status === 403 ? "auth" : r.status === 402 ? "quota" : r.status === 429 ? "busy" : r.status === 422 || r.status === 400 ? "bad" : "other";
-    throw new RepError(kind, kind === "auth" ? `Khóa Replicate không hợp lệ hoặc không có quyền (${r.status}).` : kind === "quota" ? `Tài khoản Replicate đã hết số dư (402): ${detail}` : kind === "busy" ? `Replicate đang giới hạn lượt gọi (429): ${detail}` : `Replicate báo lỗi ${r.status}: ${detail}`);
+    throw new RepError(kind, kind === "auth" ? `Khóa Replicate không hợp lệ hoặc không có quyền (${r.status}).` : kind === "quota" ? `Tài khoản Replicate đã hết số dư (402): ${detail}` : kind === "busy" ? `Replicate đang giới hạn lượt gọi (429): ${detail}` : `Replicate báo lỗi ${r.status}: ${detail}`, r.status);
   }
   return j;
 }
@@ -150,7 +154,13 @@ export function repRoom(uid: string): number {
 
 // ---------------------------------------------------------------- một lần chạy model
 type Pred = { id?: string; status?: string; output?: unknown; error?: unknown; urls?: { get?: string; cancel?: string }; metrics?: { predict_time?: number } };
-const sleep = (ms: number, signal?: AbortSignal) => new Promise<void>((ok) => { const t = setTimeout(ok, ms); signal?.addEventListener("abort", () => { clearTimeout(t); ok(); }, { once: true }); });
+// Gỡ trình nghe abort khi hết giờ chờ: hỏi lại mỗi 2 giây suốt 5 phút không chồng hàng trăm trình nghe lên tín hiệu của lượt chat.
+const sleep = (ms: number, signal?: AbortSignal) => new Promise<void>((ok) => {
+  if (signal?.aborted) return ok();
+  const done = () => { clearTimeout(t); signal?.removeEventListener("abort", done); ok(); };
+  const t = setTimeout(done, ms);
+  signal?.addEventListener("abort", done, { once: true });
+});
 const POLL_MS = () => Number(process.env.SYNCHRO_REPLICATE_POLL_MS) || 2000;
 const DEADLINE_MS = () => (Number(process.env.SYNCHRO_REPLICATE_TIMEOUT_SEC) || 300) * 1000;
 /** Chỉ tải ảnh từ máy chủ của Replicate (hoặc đúng máy chủ API đang cấu hình, khi đi qua proxy / bản giả lập): không để kết quả trỏ Synchro tới địa chỉ nội bộ. */
@@ -161,30 +171,40 @@ export function deliveryOk(u: string, base: string) {
     return x.host === b.host || x.hostname === "replicate.delivery" || x.hostname.endsWith(".replicate.delivery") || x.hostname === "api.replicate.com";
   } catch { return false; }
 }
-export async function predict(base: string, key: string, target: { model: string } | { version: string }, input: Record<string, unknown>, signal?: AbortSignal): Promise<{ urls: string[]; seconds: number }> {
+/**
+ * Một lượt chạy model. onSent: gọi đúng một lần khi lượt này có thể đã bị Replicate tính tiền: yêu cầu tạo đã gửi đi và Replicate không trả lời bằng mã lỗi HTTP,
+ * kể cả khi người dùng bấm Dừng hay hết giờ chờ giữa chừng (Replicate vẫn chạy tiếp và tính tiền dù Synchro không nhận kết quả). Lượt Replicate báo "failed" thì không tính.
+ */
+export async function predict(base: string, key: string, target: { model: string } | { version: string }, input: Record<string, unknown>, signal?: AbortSignal, onSent?: () => void): Promise<{ urls: string[]; seconds: number }> {
   const url = "model" in target ? `${base}/models/${target.model}/predictions` : `${base}/predictions`;
   const body = "model" in target ? { input } : { version: target.version, input };
-  let p = await apiJson(url, key, { method: "POST", body: JSON.stringify(body), headers: { Prefer: "wait=60", "Cancel-After": "5m" }, signal }, 75_000) as Pred;
-  const t0 = Date.now();
-  const cancel = () => { const c = p.urls?.cancel ?? (p.id ? `${base}/predictions/${p.id}/cancel` : ""); if (c && deliveryOk(c, base)) apiJson(c, key, { method: "POST" }, 10_000).catch(() => {}); };
+  let charged = true;
   try {
-    while (p.status === "starting" || p.status === "processing") {
-      if (signal?.aborted) { cancel(); throw new RepError("aborted", "Đã dừng."); }
-      if (Date.now() - t0 > DEADLINE_MS()) { cancel(); throw new RepError("timeout", "quá thời gian chờ mà Replicate chưa xong"); }
-      await sleep(POLL_MS(), signal);
-      if (signal?.aborted) continue;
-      const g = p.urls?.get && deliveryOk(p.urls.get, base) ? p.urls.get : `${base}/predictions/${p.id}`;
-      p = { ...p, ...(await apiJson(g, key, {}, 20_000) as Pred) };
+    let p: Pred;
+    try { p = await apiJson(url, key, { method: "POST", body: JSON.stringify(body), headers: { Prefer: "wait=60", "Cancel-After": "5m" }, signal }, 75_000) as Pred; }
+    catch (e) { if (e instanceof RepError && e.status) charged = false; throw e; }
+    const t0 = Date.now();
+    const cancel = () => { const c = p.urls?.cancel ?? (p.id ? `${base}/predictions/${p.id}/cancel` : ""); if (c && deliveryOk(c, base)) apiJson(c, key, { method: "POST" }, 10_000).catch(() => {}); };
+    try {
+      while (p.status === "starting" || p.status === "processing") {
+        if (signal?.aborted) { cancel(); throw new RepError("aborted", "Đã dừng."); }
+        if (Date.now() - t0 > DEADLINE_MS()) { cancel(); throw new RepError("timeout", "quá thời gian chờ mà Replicate chưa xong"); }
+        await sleep(POLL_MS(), signal);
+        if (signal?.aborted) continue;
+        const g = p.urls?.get && deliveryOk(p.urls.get, base) ? p.urls.get : `${base}/predictions/${p.id}`;
+        p = { ...p, ...(await apiJson(g, key, {}, 20_000) as Pred) };
+      }
+    } catch (e) { if (signal?.aborted) cancel(); throw e; }
+    if (p.status === "canceled") throw new RepError(signal?.aborted ? "aborted" : "other", "Replicate đã hủy lượt chạy.");
+    if (p.status !== "succeeded") {
+      if (p.status === "failed") charged = false;
+      const msg = redact(String(p.error ?? "không rõ lý do").replace(/\s+/g, " ")).slice(0, 240);
+      throw new RepError(/nsfw|safety|flagged|sensitive/i.test(msg) ? "refused" : "other", msg);
     }
-  } catch (e) { if (signal?.aborted) cancel(); throw e; }
-  if (p.status === "canceled") throw new RepError(signal?.aborted ? "aborted" : "other", "Replicate đã hủy lượt chạy.");
-  if (p.status !== "succeeded") {
-    const msg = redact(String(p.error ?? "không rõ lý do").replace(/\s+/g, " ")).slice(0, 240);
-    throw new RepError(/nsfw|safety|flagged|sensitive/i.test(msg) ? "refused" : "other", msg);
-  }
-  const out = p.output, urls = (Array.isArray(out) ? out : [out]).filter((x): x is string => typeof x === "string" && /^https?:\/\//.test(x));
-  if (!urls.length) throw new RepError("nofile", "Replicate báo xong nhưng không có ảnh nào.");
-  return { urls, seconds: Number(p.metrics?.predict_time) || 0 };
+    const out = p.output, urls = (Array.isArray(out) ? out : [out]).filter((x): x is string => typeof x === "string" && /^https?:\/\//.test(x));
+    if (!urls.length) throw new RepError("nofile", "Replicate báo xong nhưng không có ảnh nào.");
+    return { urls, seconds: Number(p.metrics?.predict_time) || 0 };
+  } finally { if (charged) onSent?.(); }
 }
 async function download(u: string, base: string, key: string, signal?: AbortSignal): Promise<{ data: Buffer; mime: string; ext: string }> {
   if (!deliveryOk(u, base)) throw new RepError("bad", "Replicate trả về địa chỉ ảnh lạ, Synchro không tải.");
@@ -245,23 +265,29 @@ export function relightInput(s: Schema | undefined, q: { prompt: string; aspect?
 }
 
 export type RepReq = { prompt: string; aspect?: string; count: number; reference?: ImgFile; relight: boolean; product: boolean; signal?: AbortSignal; onBegin?: () => void };
-export type RepOut = { files: { data: Buffer; mime: string; ext: string }[]; model: string; usd: number; seconds: number };
+/** used: số ảnh tính vào hạn mức (gồm ảnh Replicate đã chạy mà Synchro không tải được); usd: tiền ước tính của các ảnh đó. */
+export type RepOut = { files: { data: Buffer; mime: string; ext: string }[]; model: string; usd: number; seconds: number; used: number };
 /** Tạo ảnh: có ảnh gốc và cần đặt sản phẩm vào studio thì IC-Light (một lượt, nhiều ảnh), còn lại FLUX Ultra (mỗi ảnh một lượt). */
 export async function replicateImages(q: RepReq): Promise<RepOut> {
   const k = serviceKey("replicate");
   if (!k) throw new RepError("auth", "Chưa có khóa Replicate.");
   const { key, base } = k;
   q.onBegin?.();
+  // Ảnh tính vào hạn mức từ lúc yêu cầu tạo đã gửi đi (xem predict): bấm Dừng hay tải ảnh lỗi sau đó không trả lại hạn mức của ảnh Replicate đã tính tiền.
+  let used = 0, usd = 0;
+  const tag = (e: unknown) => { if (e instanceof RepError) e.spent = { used, usd }; return e; };
   if (q.relight && q.reference) {
     const model = MASTER_IMAGE_GEN_CONFIG.productRelightModel;
-    const s = await loadSchema(base, key, model);
-    const ref = await uploadRef(base, key, q.reference, q.signal);
     try {
-      const r = await predict(base, key, { version: s.version }, relightInput(s, { prompt: q.prompt, aspect: q.aspect, count: q.count, ref: ref.value }), q.signal);
-      const files = [];
-      for (const u of r.urls.slice(0, q.count)) files.push(await download(u, base, key, q.signal));
-      return { files, model, usd: 0, seconds: r.seconds };
-    } finally { ref.drop(); }
+      const s = await loadSchema(base, key, model);
+      const ref = await uploadRef(base, key, q.reference, q.signal);
+      try {
+        const r = await predict(base, key, { version: s.version }, relightInput(s, { prompt: q.prompt, aspect: q.aspect, count: q.count, ref: ref.value }), q.signal, () => { used = q.count; });
+        const files = [];
+        for (const u of r.urls.slice(0, q.count)) files.push(await download(u, base, key, q.signal));
+        return { files, model, usd: 0, seconds: r.seconds, used };
+      } finally { ref.drop(); }
+    } catch (e) { throw tag(e); }
   }
   const model = MASTER_IMAGE_GEN_CONFIG.textToImageModel;
   const s = await loadSchema(base, key, model).catch(() => undefined);
@@ -272,11 +298,11 @@ export async function replicateImages(q: RepReq): Promise<RepOut> {
     const files: RepOut["files"] = []; let seconds = 0;
     for (let i = 0; i < q.count; i++) {
       try {
-        const r = await predict(base, key, { model }, fluxInput(s, { prompt: q.prompt, aspect: q.aspect, product: q.product, ref: ref?.value }), q.signal);
+        const r = await predict(base, key, { model }, fluxInput(s, { prompt: q.prompt, aspect: q.aspect, product: q.product, ref: ref?.value }), q.signal, () => { used++; usd += FLUX_USD; });
         seconds += r.seconds;
         files.push(await download(r.urls[0], base, key, q.signal));
-      } catch (e) { if (!files.length || (e as RepError).kind === "aborted") throw e; break; }
+      } catch (e) { if (!files.length || (e as RepError).kind === "aborted") throw tag(e); break; }
     }
-    return { files, model, usd: files.length * FLUX_USD, seconds };
+    return { files, model, usd, seconds, used };
   } finally { ref?.drop(); }
 }

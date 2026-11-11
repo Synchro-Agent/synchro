@@ -272,12 +272,13 @@ async function viaReplicate(q: ImgReq): Promise<Tried> {
   try {
     const relight = !!(q.relight && q.reference);
     const r = await replicateImages({ prompt: q.prompt, aspect: q.aspect, count, reference: relight ? q.reference : undefined, relight, product: !!(q.product || relight), signal: q.signal, onBegin: q.onBegin });
-    made = r.files.length; usd = r.usd;
+    made = r.used; usd = r.usd;
     console.log(`[timing] replicate model=${r.model} images=${r.files.length} predict=${r.seconds.toFixed(1)}s`);
     const notes = [r.model === "zsxkib/ic-light" ? "Đặt sản phẩm vào ánh sáng studio bằng IC-Light trên Replicate." : `Tạo bằng FLUX 1.1 Pro Ultra trên Replicate${q.product ? ", phong cách ảnh sản phẩm thương mại" : ""}.`];
     if (count < want) notes.push(`Hạn mức ảnh Replicate hôm nay chỉ còn ${count} ảnh.`);
     return { files: r.files.map((f, i) => ({ name: imageName(q.prompt, i, r.files.length, f.ext), mime: f.mime, data: f.data })), notes };
   } catch (e) {
+    if (e instanceof RepError && e.spent) { made = e.spent.used; usd = e.spent.usd; }
     const k = e instanceof RepError ? e.kind : "other";
     return { fail: { kind: k === "busy" ? "quota" : k === "bad" ? "other" : k, detail: clip((e as Error).message) } };
   } finally { hold.settle(made, usd); }
