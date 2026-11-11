@@ -84,7 +84,7 @@ html body :is(.sidebar,.dock .composer,.hero .composer,.tk .tk-comp,.send,.scrol
 html body :is(.chip,.btn,.seg,.topbar .icon-btn,.send,.scroll-down){--gl-fill:var(--gl-fill-small);--gl-blur:2px}
 html body :is(.menu,.model-menu,.usermenu,.model-sub,.modal,.toast){--gl-fill:var(--gl-fill-thick);--gl-blur:22px;--gl-sat:1.9}
 /* Nút nổi "cuộn xuống" / "↓ Đang tạo tiếp…" nằm đè lên chữ đang chảy: nền đặc như menu, kính mỏng từng gần như tan vào chữ phía dưới. */
-html body .scroll-down{--gl-fill:var(--gl-fill-thick)}
+html body button.scroll-down.scroll-down{--gl-fill:var(--gl-fill-thick)}
 html body .sidebar{--gl-blur:16px;--gl-fill:color-mix(in srgb,var(--gl-fill) 80%,transparent)}
 html body :is(.hero .composer,.tk .tk-comp){--gl-blur:14px}
 /* Ô nhập nổi trên chat đang cuộn: kính dày như ô nhập ở trang chủ (mờ 14px, phủ đậm hơn, bớt tăng bão hoà) để chữ chạy bên dưới chỉ còn
