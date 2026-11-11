@@ -1531,8 +1531,6 @@ export default function Home() {
   const runs = useRef(new Map<number, string>());
   const gens = useRef(new Map<number, number>());
   const genSeq = useRef(0);
-  // "Chạy lại bằng model khác" dưới câu trả lời của chế độ Tự động: lượt kế tiếp vẫn Tự động nhưng tránh model này (một lần).
-  const avoidNext = useRef<string | null>(null);
   // Tin nhắn gửi trong lúc đang chạy: "steer" đang chờ ghép vào lượt, "later" gửi thành lượt mới khi xong.
   const [queued, setQueued] = useState<Queued[]>([]);
   const onSteer = async (text: string, later: boolean) => {
@@ -1570,7 +1568,9 @@ export default function Home() {
   const projsRef = useRef<Project[]>([]);
   projsRef.current = projects;
   const workOf = (x?: Msg) => (x?.role === "ai" ? { parts: x.parts, plan: x.plan, seq: x.seq } : {});
-  const streamReply = async (id: number, text: string, hist?: LLMMsg[], pid?: number, studio?: Chat["studio"], picked?: string[]) => {
+  // avoid: "Chạy lại bằng model khác" dưới câu trả lời của chế độ Tự động — lượt này vẫn Tự động nhưng tránh model đó. Truyền theo lượt, không qua biến dùng chung:
+  // lượt dừng sớm (tệp đính kèm không đọc được) không được để lại model cần tránh cho tin nhắn sau, ở đoạn chat khác.
+  const streamReply = async (id: number, text: string, hist?: LLMMsg[], pid?: number, studio?: Chat["studio"], picked?: string[], avoid?: string) => {
     const gen = ++genSeq.current;
     gens.current.set(id, gen);
     setBusyOf(id, true);
@@ -1583,8 +1583,6 @@ export default function Home() {
     const system = pr ? buildSystemPrompt(pr, text) : "Bạn là một trợ lý AI hữu ích.";
     let reply: string;
     let usedSk: string[] = [], usedTl: string[] = [], libs: LibUse[] = [], via: string | null = null, viaTask: string | undefined;
-    const avoid = avoidNext.current;
-    avoidNext.current = null;
     let outs: Msg["outs"] = [], trace: Msg["trace"] = [], cancelled = false, failed = false, said = "", notice: Msg["notice"], webs: Msg["webs"] = [];
     // Chữ đến theo thời gian thực: cập nhật tin nhắn tối đa mỗi khung hình.
     // Vẽ tối đa khoảng 20 lần mỗi giây: mắt không thấy khác, cả trang (thanh bên, ô soạn) không phải dựng lại 60 lần mỗi giây.
@@ -1656,7 +1654,7 @@ export default function Home() {
       if (Array.isArray(d.webSources)) webs = d.webSources as Msg["webs"];
       // Gói subscription hết hạn mức hoặc phiên đăng nhập hỏng: hỏi người dùng có chuyển sang khóa API của cùng hãng không (không tự chuyển).
       if (e instanceof LLMError && (e.data.planLimit || e.data.relogin) && typeof e.data.apiModel === "string") {
-        const retry = () => { patch(id, (m) => [...m.slice(0, -1), { role: "ai", text: "", time: Date.now() }]); streamReply(id, text, hist, pid, studio); };
+        const retry = () => { patch(id, (m) => [...m.slice(0, -1), { role: "ai", text: "", time: Date.now() }]); streamReply(id, text, hist, pid, studio, picked, avoid); };
         setTimeout(() => askPlanSwitch(e.data, retry), 300);
       }
     }
@@ -1869,7 +1867,7 @@ export default function Home() {
     runTurn(id, t, f, hist, pid, tp ? STUDIO_OF[tp.k] : undefined, pick?.map((x) => x.id));
   };
   // Chạy một lượt: đọc các tệp đính kèm chưa có trên máy chủ rồi gọi model (gửi mới, thử lại, sửa tin đã gửi).
-  const runTurn = (id: number, t: string, f: string[], hist: LLMMsg[], pid?: number, studio?: Chat["studio"], picked?: string[]) => {
+  const runTurn = (id: number, t: string, f: string[], hist: LLMMsg[], pid?: number, studio?: Chat["studio"], picked?: string[], avoid?: string) => {
     fileContext(f, t).then(({ blocks, errors, failed }) => {
       errors.forEach((m) => say(m));
       // Nhớ mã tệp trên máy chủ: các lượt sau (kể cả khi chế độ Tự động đổi model) gửi lại tệp này cùng lịch sử.
@@ -1878,12 +1876,12 @@ export default function Home() {
       // Không gửi được tệp: báo ngay trong khung trả lời, không hỏi model như thể tin nhắn không có tệp.
       if (failed) { patch(id, (m) => [...m.slice(0, -1), { role: "ai", text: "", failed: true, err: errors[errors.length - 1] ?? "Không lấy được nội dung tệp đính kèm. Hãy gửi lại.", time: Date.now(), done: true }]); return; }
       if (blocks.length) { const c = hist[hist.length - 1].content; hist[hist.length - 1] = { role: "user", content: [...(Array.isArray(c) ? c : [{ type: "text" as const, text: t || "Hãy xem các tệp đính kèm." }]), ...blocks] }; }
-      streamReply(id, t, hist, pid, studio, picked);
+      streamReply(id, t, hist, pid, studio, picked, avoid);
     });
   };
   // Gửi lại tin thứ k của đoạn chat (u: nội dung tin đó, đã sửa hoặc không): bỏ mọi tin sau nó, lượt mới giữ nguyên tệp và skill đã chọn.
   // Số tin đổi nên máy chủ tự mở phiên CLI mới kèm lịch sử (subs.ts, so số lượt) thay vì nối vào phiên cũ.
-  const resend = (c: Chat, k: number, u: Msg) => {
+  const resend = (c: Chat, k: number, u: Msg, avoid?: string) => {
     stick.current = true;
     const upto = [...c.msgs.slice(0, k), u];
     const compact = c.compact && c.compact.upto <= k ? c.compact : undefined;
@@ -1891,7 +1889,7 @@ export default function Home() {
     const lost = c.msgs.slice(k + 1).filter((m) => !m.failed && m.text.trim());
     setUndoTurn(lost.length ? { chat: c.id, msgs: c.msgs, compact: c.compact, n: lost.length } : null);
     setChats((cs) => cs.map((x) => (x.id === c.id ? { ...x, compact, msgs: [...upto, { role: "ai", text: "", time: Date.now() }] } : x)));
-    runTurn(c.id, u.text, (u.files ?? []).filter((n) => !u.fids?.[n]), chatHistory(upto, compact), c.project, c.studio, u.pick?.map((x) => x.id));
+    runTurn(c.id, u.text, (u.files ?? []).filter((n) => !u.fids?.[n]), chatHistory(upto, compact), c.project, c.studio, u.pick?.map((x) => x.id), avoid);
   };
   // Rẽ nhánh đoạn chat từ một câu trả lời: chép các tin tới đó sang đoạn chat mới (cùng dự án, chế độ), mở đoạn chat mới để hỏi tiếp theo hướng khác.
   // Không chép mã lượt đang chạy, kết quả hội đồng phản biện hay bản nén ngữ cảnh: nhánh mới gửi lại đủ lịch sử ở lượt đầu.
@@ -1916,9 +1914,8 @@ export default function Home() {
   };
   const retry = (avoid?: string) => {
     if (!chat || busy) return;
-    avoidNext.current = avoid ?? null;
     const k = chat.msgs.map((m) => m.role).lastIndexOf("user");
-    if (k >= 0) resend(chat, k, chat.msgs[k]);
+    if (k >= 0) resend(chat, k, chat.msgs[k], avoid);
   };
   // Đổi model bằng một lần bấm sau khi lượt lỗi. Đã có phần làm dở thì làm tiếp (dấu vết công cụ nằm trong lịch sử, model mới biết việc nào đã xong),
   // chưa có gì thì gửi lại đúng tin vừa rồi. Đang để Tự động thì giữ Tự động: máy chủ đã biết model nào đang nghỉ.
