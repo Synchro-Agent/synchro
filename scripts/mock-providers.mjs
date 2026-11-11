@@ -1,4 +1,4 @@
-// Máy chủ giả lập API của các hãng AI (Anthropic, OpenAI, Gemini, xAI, DeepSeek, ElevenLabs) để thử Synchro ở máy cục bộ mà không cần khóa thật.
+// Máy chủ giả lập API của các hãng AI (Anthropic, OpenAI, Gemini, xAI, DeepSeek, ElevenLabs, Replicate) để thử Synchro ở máy cục bộ mà không cần khóa thật.
 // Kiểm tra khóa và tham số giống API thật, trả lời bằng nội dung mẫu kèm tên model để thấy rõ đang dùng model nào.
 // Dùng: npm run dev:mock (tự chạy cùng web), hoặc riêng: node scripts/mock-providers.mjs [cổng, mặc định 4010]
 // Khóa hợp lệ: bất kỳ khóa nào có chữ "mock". Gõ #401, #404, #429, #500 hoặc #slow trong tin nhắn để thử các lỗi; #waittool làm chậm bước gọi công cụ.
@@ -8,10 +8,11 @@ import { createRequire } from "node:module";
 import { WebSocketServer } from "ws";
 import { capsReply, codeDone, revReply, studioStep } from "./mock-caps.mjs";
 import { EL, elevenHandler, scribeConnect } from "./mock-eleven.mjs";
+import { replicateHandler } from "./mock-replicate.mjs";
 const CLI = createRequire(import.meta.url)("./mock-cli/mock-cli-common.cjs");
 
 // Khóa mà npm run dev:mock tự nhập vào Cài đặt → Providers.
-export const MOCK_KEYS = { anthropic: "sk-ant-mock-local-0001", openai: "sk-mock-openai-0001", google: "AIza-mock-gemini-0001", xai: "xai-mock-grok-local-0001", deepseek: "sk-mock-deepseek-0001", elevenlabs: "sk_mock_eleven_0001" };
+export const MOCK_KEYS = { anthropic: "sk-ant-mock-local-0001", openai: "sk-mock-openai-0001", google: "AIza-mock-gemini-0001", xai: "xai-mock-grok-local-0001", deepseek: "sk-mock-deepseek-0001", elevenlabs: "sk_mock_eleven_0001", replicate: "r8_mock_replicate_0001" };
 
 // Danh sách model như API thật của từng hãng trả về (theo tài liệu tháng 10/2026), gồm cả model không dùng để nhắn tin mà Synchro phải tự lọc bỏ.
 const ANTHROPIC = [["claude-fable-5-1", "Claude Fable 5.1"], ["claude-opus-5-5", "Claude Opus 5.5"], ["claude-sonnet-5-5", "Claude Sonnet 5.5"], ["claude-haiku-5-5", "Claude Haiku 5.5"],
@@ -442,6 +443,8 @@ function reply(provider, id, msgs, maxTokens, effort, sys = "") {
   }
   // "#artgen=<id>": artifact dùng ảnh Synchro đã tạo (địa chỉ generate_image trả về) — khung xem trước phải nhúng được ảnh của đúng tài khoản.
   { const g = /#artgen=([\w-]+)/.exec(q); if (g) return { text: `Trang có ảnh đã tạo.\n<artifact identifier="anh-tao" type="text/html" title="Ảnh đã tạo">\n<!doctype html><html><body style="margin:0"><img id="tao" src="https://image.synchro.invalid/${g[1]}.png" style="width:96px;height:96px"></body></html>\n</artifact>`, q }; }
+  // "#sxkit": sơ đồ ```d2 và bản trình bày nền shader 3D + biểu đồ ECharts (mock-cli-common.cjs sxKit) — xem tận mắt trên trang thật.
+  if (q.includes("#sxkit")) return { text: CLI.sxKit(), q };
   // "#prefs": nhắc lại khối <user_preferences> (Hướng dẫn cho Synchro) có trong system prompt — kiểm thử hướng dẫn tới được model.
   if (q.includes("#prefs")) { const m = /<user_preferences>([\s\S]*?)<\/user_preferences>/.exec(`${sys}\n${JSON.stringify(msgs ?? [])}`); return { text: m ? `PREFS: ${m[1].replace(/\\n/g, "\n").trim().replace(/\s+/g, " ")}` : "PREFS: none", q }; }
   const vi = /[ăâđêôơưàáạảãèéẹẻẽìíịỉĩòóọỏõùúụủũỳýỵỷỹ]/i.test(q) || !q;
@@ -629,6 +632,8 @@ async function handler(req, res) {
 
   // ElevenLabs (Speech): mọi đường dẫn trừ Realtime nằm ở mock-eleven.mjs.
   if (await elevenHandler(req, res, p, b, req.__raw ?? Buffer.alloc(0), valid, elevenNo)) return;
+  // Replicate (tạo ảnh bằng khóa của chủ máy chủ): mock-replicate.mjs.
+  if (await replicateHandler(req, res, p, b, req.__raw ?? Buffer.alloc(0), valid)) return;
   // Chép lời OpenAI Whisper (văn bản).
   if (p === "/openai/v1/audio/transcriptions" && req.method === "POST") {
     if (!valid(auth)) return send(res, 401, { error: { message: "Incorrect API key provided.", type: "invalid_api_key" } });

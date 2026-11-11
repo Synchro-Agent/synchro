@@ -193,7 +193,18 @@ function ruleEcho(sys) {
   const m = /<top_rule>([\s\S]*?)<\/top_rule>/.exec(sys);
   return m ? `TOPRULE: ${sys.trimStart().startsWith("<top_rule>") ? "first" : "inside"} ${m[1].trim().replace(/\s+/g, " ").slice(0, 600)}` : "TOPRULE: none";
 }
+// "#sxkit": câu trả lời có sơ đồ ```d2 và bản trình bày dùng bộ CSS: nền shader 3D (data-sx-shader), biểu đồ ECharts (data-sx-chart), khối kính khúc xạ.
+// Dùng chung cho CLI giả lập và khóa API giả lập (mock-providers.mjs) để xem các tính năng đồ họa trên trang thật.
+function sxKit() {
+  const ch = (s) => `<div class="sx-chart" style="height:calc(300*var(--sx-u))" data-sx-chart='${JSON.stringify(s)}'></div>`;
+  return `Sơ đồ hệ thống:\n\n\`\`\`d2\nweb: Trình duyệt\napi: Máy chủ Synchro\ndb: Cơ sở dữ liệu {shape: cylinder}\nsb: Sandbox chạy code\nweb -> api: HTTPS\napi -> db: Truy vấn\napi -> sb: Dựng SVG, video\n\`\`\`\n\nBản trình bày:\n<artifact identifier="media-kit" type="text/html" title="Ra mắt quý 4">\n<!doctype html><html data-sx-preset="midnight-tech"><body>
+<section class="slide sx-slide"><div class="sx-shader" data-sx-shader="silk"></div><p class="sx-eyebrow">Ra mắt 2026</p><h1 class="sx-display">Synchro quý 4</h1><p class="sx-kicker">Nền sóng lụa ba chiều, chữ vẫn sửa được trong PowerPoint</p></section>
+<section class="slide sx-slide"><p class="sx-eyebrow">Kết quả</p><h2 class="sx-title">Doanh thu 2026 vượt 2025 ở mọi quý</h2><div class="sx-grid-3 sx-grow">${ch({ type: "bar", labels: ["Q1", "Q2", "Q3", "Q4"], series: [{ name: "2025", data: [120, 132, 101, 134] }, { name: "2026", data: [140, 152, 171, 190] }], highlight: "2026", unit: " tỷ" })}${ch({ type: "waterfall", labels: ["Đầu kỳ", "Doanh thu", "Giá vốn", "Chi phí", "Cuối kỳ"], series: [{ name: "Dòng tiền", data: [500, 320, -180, -90, 0] }], total: true })}${ch({ type: "doughnut", labels: ["Bắc", "Trung", "Nam"], series: [{ name: "Tỷ trọng", data: [42, 18, 40] }] })}</div></section>
+<section class="slide sx-slide"><h2 class="sx-title">Kính khúc xạ</h2><div data-sx-shader="glass" style="height:calc(440*var(--sx-u))"></div></section>
+</body></html>\n</artifact>`;
+}
 function reply(name, prompt, turn) {
+  if (prompt.includes("#sxkit")) return sxKit();
   if (isTitleAsk(prompt)) return mockTitle(prompt);
   if (prompt.includes("#nowcheck")) return `NOW: ${/<current_time>([^<]*)<\/current_time>/.exec(prompt)?.[1] ?? "-"}`;
   // Dòng giờ hiện tại Synchro ghép vào cuối tin nhắn: không phải câu người dùng gõ.
@@ -261,4 +272,4 @@ const imageMode = (dir, cli) => { const j = readJson(path.join(dir, "mock-image.
 function imageLog(dir, rec) { const f = path.join(dir, "mock-image-log.json"); writeJson(f, [...readJson(f, []), { at: Date.now(), ...rec }]); }
 function saveImage(file, kind = "jpg") { fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, kind === "png" ? tinyPng() : kind === "bad" ? "<html>không phải ảnh</html>" : kind === "big" ? Buffer.concat([TINY_JPEG, Buffer.alloc(3 * 1048576, 7)]) : TINY_JPEG); }
 
-module.exports = { TINY_JPEG, tinyPng, isImageTurn, imageCount, imageMode, imageLog, saveImage, stallTurn, STALL_TEXT, mediaDesc, mediaReply, mcp, isTitleAsk, mockTitle, mockBrain, prefsEcho, ruleEcho, toolAsk, cfg, sleep, out, uuid, readStdin, readLine, flag, bumpSession, bumpUsage, totalTurns, reply, chunks, fs, path, crypto };
+module.exports = { sxKit, TINY_JPEG, tinyPng, isImageTurn, imageCount, imageMode, imageLog, saveImage, stallTurn, STALL_TEXT, mediaDesc, mediaReply, mcp, isTitleAsk, mockTitle, mockBrain, prefsEcho, ruleEcho, toolAsk, cfg, sleep, out, uuid, readStdin, readLine, flag, bumpSession, bumpUsage, totalTurns, reply, chunks, fs, path, crypto };

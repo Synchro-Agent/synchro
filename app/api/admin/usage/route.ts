@@ -1,5 +1,5 @@
 import { db, getUser, handle, requireAdmin, sameOrigin, type UserRow } from "../../../authstore";
-import { adminList, catalog } from "../../../providers";
+import { adminList, catalog, SERVICE_KINDS } from "../../../providers";
 import { adminUsage, getConfig, priceTable, setConfig, setOverride } from "../../../usage";
 
 export const runtime = "nodejs";
@@ -9,7 +9,7 @@ async function state() {
   const users = db().prepare("SELECT * FROM users ORDER BY created_at DESC LIMIT 2000").all() as UserRow[];
   const models = (await catalog()).flatMap((p) => p.models.map((m) => m.key));
   // Hạn mức đô la chỉ áp cho lượt chạy bằng khóa API chung (lượt chạy bằng gói của từng người không tính vào, xem /api/llm): không có khóa nào thì giao diện không hứa điều đó.
-  const apiKeys = (await adminList()).some((p) => p.configured && p.id !== "elevenlabs");
+  const apiKeys = (await adminList()).some((p) => p.configured && !SERVICE_KINDS.has(p.kind));
   return { config: getConfig(), users: adminUsage(users), prices: priceTable(models), apiKeys };
 }
 

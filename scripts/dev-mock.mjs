@@ -89,6 +89,8 @@ const add = [
   // Speech, đọc to và trò chuyện bằng giọng nói dùng ElevenLabs giả lập (gói Free như tài khoản thật; đổi gói ở /_debug/el).
   ["elevenlabs", { id: "elevenlabs", kind: "elevenlabs", key: MOCK_KEYS.elevenlabs, baseUrl: `${M}/elevenlabs` }],
 ];
+// Replicate (tạo ảnh bằng khóa của chủ máy chủ) cố ý không nối sẵn: chưa có khóa thì tạo ảnh đi qua gói như máy chủ thật hiện nay.
+// Bài thử tests/api/replicate.test.mjs tự nối khóa giả (MOCK_KEYS.replicate, ${M}/replicate/v1) rồi gỡ ra.
 for (const [id, body] of add) {
   if (has(id)) continue;
   const r = await call("POST", "/api/admin/apikeys", body);

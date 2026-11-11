@@ -39,8 +39,21 @@ export const UX_VI2EN: Record<string, string> = {
   "Máy chủ chưa có nơi chạy code nên chưa vẽ được sơ đồ D2.": "The server has nowhere to run code yet, so it can't draw D2 diagrams.",
   "Vẽ sơ đồ quá 20 giây.": "Drawing the diagram took longer than 20 seconds.", "Sandbox chưa có D2 (cần image workspace mới).": "The sandbox doesn't have D2 yet (it needs the new workspace image).",
   "Không vẽ được sơ đồ D2.": "Couldn't draw the D2 diagram.", "Sơ đồ quá lớn.": "The diagram is too large.", "Kết quả không phải SVG.": "The result isn't an SVG.",
+  // Tạo ảnh bằng khóa Replicate của máy chủ
+  "hạn mức ảnh Replicate hôm nay": "today's Replicate image limit", "Replicate trả về dữ liệu không đọc được.": "Replicate returned data Synchro couldn't read.",
+  "quá thời gian chờ mà Replicate chưa xong": "Replicate didn't finish in time", "Replicate đã hủy lượt chạy.": "Replicate canceled the run.",
+  "Replicate báo xong nhưng không có ảnh nào.": "Replicate finished but returned no image.", "Replicate trả về địa chỉ ảnh lạ, Synchro không tải.": "Replicate returned an unexpected image address, so Synchro didn't download it.",
+  "Không tải được ảnh từ Replicate (ảnh chỉ giữ 1 giờ).": "Couldn't download the image from Replicate (images are kept for 1 hour).",
+  "tệp Replicate trả về không phải ảnh PNG, JPEG hay WebP": "the file Replicate returned isn't a PNG, JPEG or WebP image", "Replicate không nhận ảnh gốc.": "Replicate didn't accept the source image.",
+  "Chưa có khóa Replicate.": "There's no Replicate key yet.",
 };
 export const UX_RULES_EN: [RegExp, (m: RegExpMatchArray) => string][] = [
+  [/^Khóa Replicate không hợp lệ hoặc không có quyền \((\d+)\)\.$/, (m) => `The Replicate key is invalid or lacks permission (${m[1]}).`],
+  [/^Tài khoản Replicate đã hết số dư \(402\): (.*)$/, (m) => `The Replicate account is out of credit (402): ${m[1]}`],
+  [/^Replicate đang giới hạn lượt gọi \(429\): (.*)$/, (m) => `Replicate is rate limiting calls (429): ${m[1]}`],
+  [/^Replicate báo lỗi (\d+): (.*)$/, (m) => `Replicate reported error ${m[1]}: ${m[2]}`],
+  [/^Replicate không trả về phiên bản của (.+)\.$/, (m) => `Replicate returned no version for ${m[1]}.`],
+  [/^ảnh vượt quá (\d+) MB$/, (m) => `the image is larger than ${m[1]} MB`],
   [/^Sơ đồ quá dài \(tối đa (\d+) ký tự\)\.$/, (m) => `The diagram is too long (at most ${m[1]} characters).`],
   [/^Không có mẫu (.+)$/, (m) => `No template named ${m[1]}`],
   [/^Thiếu trường (\w+) của poster\.$/, (m) => `The poster is missing the ${m[1]} field.`],
@@ -54,6 +67,17 @@ export const UX_RULES_EN: [RegExp, (m: RegExpMatchArray) => string][] = [
 ];
 // Chữ tiếng Anh của Cài đặt (phần gốc viết bằng tiếng Anh, giao diện tiếng Việt dịch sang).
 export const UX_EN2VI: Record<string, string> = {
+  "Changed Replicate image limits": "Đã đổi hạn mức ảnh Replicate", "Replicate images per day": "Ảnh Replicate mỗi ngày",
+  "Waiting for a Replicate key in Providers. Until then images use each person's own plan and these caps have no effect.": "Đang chờ khóa Replicate ở Providers. Tới lúc đó ảnh vẫn tạo bằng gói của từng người và các hạn mức này chưa có tác dụng.",
+  "Images made with the shared Replicate key are billed to its account, about $0.06 each. Past a cap, people make images with their own plan until the next day (UTC). Made today:": "Ảnh tạo bằng khóa Replicate dùng chung được tính tiền vào tài khoản đó, khoảng 0,06 USD mỗi ảnh. Quá hạn mức thì mọi người tạo ảnh bằng gói của mình tới hết ngày (UTC). Đã tạo hôm nay:",
+  "Images each account with a verified email can make per day.": "Số ảnh mỗi ngày của mỗi tài khoản đã xác minh email.", "Images each account without a verified email can make per day.": "Số ảnh mỗi ngày của mỗi tài khoản chưa xác minh email.",
+  "Images all accounts together can make per day. Administrators count toward this cap only.": "Số ảnh mỗi ngày của mọi tài khoản cộng lại. Quản trị viên chỉ bị tính vào mức này.",
+  "Image limits saved": "Đã lưu hạn mức ảnh", "Image generation: FLUX 1.1 Pro Ultra and IC-Light product relighting": "Tạo ảnh: FLUX 1.1 Pro Ultra và IC-Light đánh sáng lại ảnh sản phẩm",
+  "Each image is billed to this Replicate account (about $0.06 per FLUX 1.1 Pro Ultra image). Daily image limits per account are in Administrator.": "Mỗi ảnh được tính tiền vào tài khoản Replicate này (khoảng 0,06 USD mỗi ảnh FLUX 1.1 Pro Ultra). Hạn mức ảnh mỗi ngày của từng tài khoản đặt ở Quản trị viên.",
+  "Images will be made with each person's own plan again, as before the key was added.": "Ảnh sẽ lại được tạo bằng gói của từng người, như trước khi thêm khóa.",
+  "Waiting for a key. Until one is added, images are made with each person's own plan (Antigravity, ChatGPT, Grok), exactly as now.": "Đang chờ khóa. Tới khi có khóa, ảnh vẫn tạo bằng gói của từng người (Antigravity, ChatGPT, Grok), y như hiện nay.",
+  "Account": "Tài khoản", ". FLUX 1.1 Pro Ultra makes new images; IC-Light puts a product photo into a studio scene. Accounts past their daily image limit go back to their own plan.": ". FLUX 1.1 Pro Ultra tạo ảnh mới; IC-Light đưa ảnh sản phẩm vào bối cảnh studio. Tài khoản quá hạn mức ảnh trong ngày quay về gói của mình.",
+  "Images": "Ảnh", "API key only. Voice (ElevenLabs) and paid image generation (Replicate) work with an API key only.": "Chỉ dùng khóa API. Giọng nói (ElevenLabs) và tạo ảnh tính phí (Replicate) chỉ chạy bằng khóa API.",
   "Choose": "Chọn", "Default": "Mặc định", "Server runtime": "Máy chủ chạy code",
   "Code runs on the Synchro server.": "Code chạy trên máy chủ Synchro.",
   "Attached files and conversation history count toward the limit of the model you pick. Large files are trimmed to the most relevant parts.": "Tệp đính kèm và lịch sử hội thoại tính vào giới hạn của model bạn chọn. Tệp lớn được rút gọn còn phần liên quan nhất.",

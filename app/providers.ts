@@ -15,7 +15,12 @@ export const BUILTIN: Record<string, Builtin> = {
   xai: { kind: "xai", name: "Grok", vendor: "xAI", base: "https://api.x.ai/v1", keyUrl: "https://console.x.ai", prefix: "xai-" },
   deepseek: { kind: "deepseek", name: "DeepSeek", vendor: "DeepSeek", base: "https://api.deepseek.com", keyUrl: "https://platform.deepseek.com/api_keys", prefix: "sk-" },
   elevenlabs: { kind: "elevenlabs", name: "ElevenLabs", vendor: "ElevenLabs", base: "https://api.elevenlabs.io", keyUrl: "https://elevenlabs.io/app/settings/api-keys", prefix: "sk_" },
+  // Tạo ảnh (FLUX 1.1 Pro Ultra, IC-Light) bằng khóa của chủ máy chủ: app/ai/replicate.ts. Chưa có khóa thì ảnh vẫn đi qua gói của từng người.
+  replicate: { kind: "replicate", name: "Replicate", vendor: "Replicate", base: "https://api.replicate.com/v1", keyUrl: "https://replicate.com/account/api-tokens", prefix: "r8_" },
 };
+/** Dịch vụ không phải chat (giọng nói, tạo ảnh): không có model trong bộ chọn model, không tính là khóa chat dùng chung. */
+export const SERVICE_KINDS: ReadonlySet<ProviderKind> = new Set<ProviderKind>(["elevenlabs", "replicate"]);
+const SERVICE_ENV: Record<string, string> = { elevenlabs: "ELEVENLABS_API_KEY", replicate: "REPLICATE_API_TOKEN" };
 
 type Row = { id: string; kind: ProviderKind; name: string; base_url: string | null; workspace_id?: string | null; enc_key: string; key_hint: string; models: string; status: string; error: string | null; info: string | null; checked_at: number | null; created_at: number; updated_at: number };
 
@@ -146,6 +151,11 @@ async function listAll(kind: ProviderKind, base: string, key: string, workspace?
     const tier = j?.subscription?.tier as string | undefined;
     return { models: [], info: tier || undefined };
   }
+  if (kind === "replicate") {
+    // GET /v1/account kiểm tra khóa (tên tài khoản hiện ở thẻ), rồi đọc sẵn lược đồ tham số của hai model.
+    const { checkKey } = await import("./ai/replicate");
+    return { models: [], ...(await checkKey(b, key)) };
+  }
   const j = await getJson(`${b}/models`, { Authorization: `Bearer ${key}` });
   const list = ((j.data ?? j.models ?? []) as { id: string; created?: number; name?: string }[]).filter((m) => typeof m.id === "string");
   if (kind === "openai") {
@@ -194,7 +204,7 @@ export async function catalog(): Promise<ProviderInfo[]> {
   const have = new Set<string>();
   for (const r of rows()) {
     have.add(r.id);
-    if (r.kind === "elevenlabs") continue;
+    if (SERVICE_KINDS.has(r.kind)) continue;
     out.push({ id: r.id, name: r.name, kind: r.kind, models: stored(r).map((m) => ({ key: modelKey(r.id, m.id), id: m.id, name: m.name })) });
   }
   const v = envProvider();
@@ -203,7 +213,7 @@ export async function catalog(): Promise<ProviderInfo[]> {
 }
 
 /** Máy chủ có model chat qua khóa API dùng chung không. Không gọi mạng: trang đăng nhập hỏi mỗi lần tải. */
-export const hasSharedChat = () => !!envProvider() || rows().some((r) => r.kind !== "elevenlabs" && stored(r).length > 0);
+export const hasSharedChat = () => !!envProvider() || rows().some((r) => !SERVICE_KINDS.has(r.kind) && stored(r).length > 0);
 
 export type Target = { provider: string; kind: ProviderKind; base: string; key: string; model: string; workspace?: string };
 // Từ khóa model ("openai/gpt-5.1") → địa chỉ, khóa và mã model để gọi.
@@ -211,18 +221,18 @@ export async function resolveModel(key: string): Promise<Target | null> {
   const { provider, id } = splitKey(key);
   if (!provider || !id) return null;
   const r = rowById(provider);
-  if (r && r.kind !== "elevenlabs") {
+  if (r && !SERVICE_KINDS.has(r.kind)) {
     try { return { provider, kind: r.kind, base: (r.base_url || BUILTIN[r.kind]?.base || "").replace(/\/+$/, ""), key: open(r.enc_key), model: id, ...(r.workspace_id ? { workspace: r.workspace_id } : {}) }; } catch { return null; }
   }
   const v = envProvider();
   if (v && v.id === provider) return { provider, kind: v.kind, base: v.base.replace(/\/+$/, ""), key: v.key, model: id, ...(v.workspace ? { workspace: v.workspace } : {}) };
   return null;
 }
-// Khóa cho dịch vụ không phải chat (ElevenLabs).
-export function serviceKey(id: "elevenlabs"): { key: string; base: string } | null {
+// Khóa cho dịch vụ không phải chat (ElevenLabs, Replicate). Chưa nhập trong Cài đặt thì lấy ở biến môi trường ELEVENLABS_API_KEY / REPLICATE_API_TOKEN.
+export function serviceKey(id: "elevenlabs" | "replicate"): { key: string; base: string } | null {
   const r = rowById(id);
   if (r) { try { return { key: open(r.enc_key), base: (r.base_url || BUILTIN[id].base).replace(/\/+$/, "") }; } catch { return null; } }
-  const k = id === "elevenlabs" ? process.env.ELEVENLABS_API_KEY : "";
+  const k = process.env[SERVICE_ENV[id]] ?? "";
   return k ? { key: k, base: BUILTIN[id].base } : null;
 }
 
@@ -235,8 +245,8 @@ export async function adminList(): Promise<AdminProvider[]> {
   const v = envProvider();
   const out: AdminProvider[] = Object.entries(BUILTIN).map(([id, b]) => {
     const r = list.find((x) => x.id === id);
-    // Khóa ở biến môi trường: LLM_API_KEY (Claude) hoặc ELEVENLABS_API_KEY.
-    const envKey = r ? "" : v && v.id === id ? v.key : id === "elevenlabs" ? process.env.ELEVENLABS_API_KEY ?? "" : "";
+    // Khóa ở biến môi trường: LLM_API_KEY (Claude), ELEVENLABS_API_KEY hoặc REPLICATE_API_TOKEN.
+    const envKey = r ? "" : v && v.id === id ? v.key : SERVICE_ENV[id] ? process.env[SERVICE_ENV[id]] ?? "" : "";
     return { id, kind: b.kind, name: b.name, vendor: b.vendor, builtin: true, configured: !!r || !!envKey, source: r ? "db" : envKey ? "env" : null,
       baseUrl: r?.base_url ?? "", workspaceId: r?.workspace_id ?? "", defaultBase: b.base, keyHint: r ? r.key_hint : envKey ? hint(envKey) : null, keyUrl: b.keyUrl, prefix: b.prefix,
       status: r ? (r.status as "ok" | "error") : envKey ? "ok" : null, error: r?.error ?? null, info: r?.info ?? null, checkedAt: r?.checked_at ?? null,
@@ -287,7 +297,7 @@ export async function saveProvider(o: { id?: string; kind?: string; name?: strin
     return listModels(kind, root, key, workspace);
   });
   const { models, info } = found;
-  if (kind !== "elevenlabs" && !models.length) throw new Error("Khóa hợp lệ nhưng không thấy model chat nào được phép dùng.");
+  if (!SERVICE_KINDS.has(kind) && !models.length) throw new Error("Khóa hợp lệ nhưng không thấy model chat nào được phép dùng.");
   const now = Date.now();
   const newId = () => { let s = "c-" + slug(name), i = 2; while (rowById(s) || BUILTIN[s]) s = `c-${slug(name)}-${i++}`; return s; };
   const id = old?.id ?? (builtin && o.id ? o.id : newId());
