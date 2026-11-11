@@ -3,6 +3,7 @@
 // Trò chuyện thường, câu hỏi kiến thức, đường nhanh: không thêm gì. Lượt tiếp theo trên cùng sản phẩm: bản rút gọn, vì mỗi dòng ở đây còn lại trong lịch sử đoạn chat.
 // Tệp thuần (không DB, không mạng), kiểm thử bằng tests/api/designkit.test.mjs. #nodesign trong tin nhắn hoặc SYNCHRO_DESIGNKIT=0 thì tắt, để so sánh trước / sau với model thật.
 import { PRESET_ALIASES, presetId, presetOf, PRESETS } from "./designpresets";
+import { DOC_TPL_GUIDE } from "./designdocs";
 import { EMAIL_TPL_GUIDE } from "./designemails";
 import { SLIDE_TPL_GUIDE, templateKinds } from "./designtemplates";
 
@@ -163,11 +164,11 @@ const KIT = (preset: string) => `Bộ CSS sẵn trong khung artifact: không c�
 Khung: <section class="slide sx-slide"> (luôn 16:9, tự co vừa cửa sổ) .sx-page (A4, tự có luật in) .sx-poster (3:4, tự co vừa cửa sổ). Chữ: .sx-eyebrow .sx-title .sx-display .sx-kicker .sx-h2 .sx-h3 .sx-text .sx-small .sx-source .sx-kpi .sx-num .sx-muted .sx-accent .sx-up .sx-down. Bố cục: .sx-stack .sx-row .sx-between .sx-grow .sx-end .sx-gap-{8,16,24,32,48,64} .sx-p-{…}. Lưới: .sx-grid-hero (1 lớn trái, 2 nhỏ phải) .sx-grid-4060 .sx-grid-6040 .sx-grid-bento4 (7:5 rồi 5:7) .sx-grid-dash (4 KPI, phần tử thứ 5 tràn hàng) .sx-grid-3. Bề mặt: .sx-card .sx-inner (ảnh, hộp trong thẻ, bo đồng tâm) .sx-tint .sx-solid .sx-badge .sx-callout .sx-rule. Bảng: .sx-table, ô số .n, hàng tổng .sx-total, thanh trong ô <td class="sx-bar n" style="--sx-v:72%">, ô nhiệt <td class="sx-heat n" style="--sx-v:72%"> (chữ tự đổi sáng / tối theo độ chói nền). Hiệu ứng: .sx-shadow (nền sáng) .sx-rim (nền tối) .sx-glass .sx-aurora .sx-noise; .sx-gradient-text chỉ cho số KPI hay chữ cực lớn, không cho chữ đọc. Ô chữ ngắn trong khung cố định (tiêu đề slide, KPI, thẻ) thêm data-sx-fit: tràn thì Synchro tự co 1px một lần tới 11px, tương phản dưới 4.5:1 thì tự đổi màu chữ; vẫn phải viết vừa khung. Chuyển động: .sx-rise .sx-fade .sx-pop (style="--sx-i:0,1,2…" để lệch nhịp 70ms), .sx-draw cho path có pathLength="1"; đã tôn trọng prefers-reduced-motion, hỏng hay khi in vẫn hiện đủ: đừng tự đặt opacity:0 chờ JS.
 Biến: --sx-bg --sx-surface --sx-raised --sx-ink --sx-muted --sx-accent --sx-accent2 --sx-line --sx-neutral --sx-pos --sx-neg --sx-vivid (màu nhấn gốc cho hình, cột được nhấn, không cho chữ) --sx-head --sx-body --sx-mono; cỡ tự tính: calc(N*var(--sx-u)). CSS của bạn viết sau sẽ thắng nếu cần chỉnh.`;
 
-const TPL_GUIDE: Partial<Record<DesignFormat, string>> = { slide: SLIDE_TPL_GUIDE, graphic: EMAIL_TPL_GUIDE };
+const TPL_GUIDE: Partial<Record<DesignFormat, string>> = { slide: SLIDE_TPL_GUIDE, doc: DOC_TPL_GUIDE, graphic: EMAIL_TPL_GUIDE };
 const DEFAULT_TPL_STYLE = "swiss-grid";
 const FILE_RULES: Partial<Record<DesignFormat, string>> = {
   slide: `Tệp .pptx qua run_code (chỉ khi cần shape gốc, còn lại Tải về › PowerPoint từ artifact): python-pptx 13.333×7.5in, tiêu đề ở placeholder, phông Arial hoặc Calibri vì máy người nhận chắc có.`,
-  doc: `Tệp qua run_code: Word bằng python-docx, dùng style Heading và Table thay vì tô tay, Calibri hoặc Arial 11pt, keep_with_next cho tiêu đề, chân trang có số trang (phông lạ sẽ bị thay trên máy người nhận). PDF: HTML in bằng Chromium (page.pdf, preferCSSPageSize) với luật in ở trên.`,
+  doc: `Tệp qua run_code: Word bằng python-docx theo cùng cấu trúc JSON của mẫu (bìa là section riêng, mục lục bằng trường TOC \\o "1-3", Heading 1/2, bảng style có sẵn thay vì tô tay, Calibri hoặc Arial 11pt, keep_with_next cho tiêu đề, chân trang có trường PAGE; phông lạ sẽ bị thay trên máy người nhận). PDF: dựng trang theo mẫu ở trên rồi in bằng Chromium (page.pdf, preferCSSPageSize), không tự vẽ bằng reportlab.`,
   graphic: `Ảnh qua run_code: HTML + Chromium ở deviceScaleFactor 2, đúng kích thước yêu cầu.`,
 };
 // Phông trong image workspace (workspace/Dockerfile): PDF và ảnh nhúng sẵn nên dùng được; Office thì không (xem trên).

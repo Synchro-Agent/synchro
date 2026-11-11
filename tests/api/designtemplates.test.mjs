@@ -95,5 +95,21 @@ const mt = K.designTurn({ typed: "Thiết kế email chào mừng khách hàng m
 ok(mt?.format === "graphic" && mt.block.includes("email-receipt") && mt.block.includes("email-invite"), "yêu cầu thiết kế thư HTML: khối có thực đơn mẫu thư", mt?.format);
 for (const q of ["Viết email xin nghỉ phép", "Viết email gửi sếp nói báo cáo sẽ trễ", "viết email mời họp thứ hai"]) ok(K.designTurn({ typed: q, art: true, code: true, seed: "a" }) === null, `viết một lá thư thường: không có khối ("${q}")`);
 
+console.log("7. Tài liệu A4 theo mẫu");
+const doc = (id, props, style) => T.expandTemplates(block({ ...(style ? { styleArchetype: style } : {}), pages: [{ templateId: id, props }] }));
+const rep = doc("doc-report", { org: "Công ty Mộc", title: 'Báo cáo "Q3" </style><script>x</script>', summary: "Doanh thu tăng.", sections: [{ heading: "Kết quả", body: "Đoạn một.\n\nĐoạn hai.", table: { columns: ["Chỉ tiêu", "Q2", "Q3"], rows: [["Doanh thu", 100, "120"], ["Chi phí", 60, 70]], total: ["Tổng", 160, 190] } }, { heading: "Kế hoạch", bullets: ["A", "B"], kpis: [{ label: "Biên", value: "32%", delta: "+6 đ.p." }] }], sources: ["Số liệu nội bộ"] });
+ok(/data-sx-preset="exec-navy"/.test(rep) && /sx-doc-cover/.test(rep) && /aria-label="Mục lục"/.test(rep) && /href="#p1-s2"/.test(rep) && /id="p1-s2"/.test(rep), "báo cáo: bìa, mục lục trỏ đúng phần, phong cách mặc định exec-navy");
+ok(/@top-left\{content:"Báo cáo \\"Q3\\" \\3C \/style>\\3C script>x\\3C \/script>"/.test(rep) && !/<script>x/.test(rep), "tên báo cáo ở đầu trang in: chuỗi CSS được thoát, không đóng được thẻ style", (/@top-left\{[^}]*\}/.exec(rep) ?? [""])[0]);
+ok(/<th class="n">Q3<\/th>/.test(rep) && /<tr class="sx-total">/.test(rep) && /<td class="n">120<\/td>/.test(rep), "bảng: cột số căn phải, có hàng tổng");
+const inv = doc("doc-invoice", { number: "HD-0042", date: "11/11/2026", due: "25/11/2026", from: { name: "Công ty Mộc", taxId: "0101234567" }, to: { name: "Khách A" }, currency: "VND", items: [{ description: "Thiết kế", qty: 2, price: 1500000 }, { description: "Lập trình", qty: 1, price: 4000000 }], discount: 500000, taxRate: 10, payment: { bank: "VCB", account: "0123456789", name: "CONG TY MOC" } });
+ok(/7\.000\.000 ₫/.test(inv) && /500\.000 ₫/.test(inv) && /650\.000 ₫/.test(inv) && /7\.150\.000 ₫/.test(inv) && /data-sx-preset="swiss-grid"/.test(inv), "hóa đơn: tạm tính, giảm giá, thuế 10%, tổng tự tính đúng");
+ok(/Báo giá/.test(doc("doc-invoice", { kind: "quote", items: [] })) && /Hiệu lực đến/.test(doc("doc-invoice", { kind: "quote", due: "1/1", items: [] })), "báo giá dùng cùng mẫu");
+const pap = doc("doc-paper", { title: "Tối ưu kho", authors: [{ name: "Lê An", affiliation: "ĐH Bách khoa" }, "Trần B"], abstract: "Tóm tắt.", keywords: ["kho", "AI"], sections: [{ heading: "Giới thiệu", body: "x", subsections: [{ heading: "Bối cảnh", body: "y" }] }, { heading: "Phương pháp", body: "z" }], references: ["Tài liệu 1"] });
+ok(/sx-doc-cols/.test(pap) && /II\. Phương pháp/.test(pap) && /A\. Bối cảnh/.test(pap) && /Tài liệu tham khảo/.test(pap), "bài nghiên cứu: hai cột, đề mục La Mã, mục con A, tham khảo");
+const prop = doc("doc-proposal", { client: "Khách A", title: "Đề xuất", chapters: [{ heading: "Bối cảnh", body: "x", pullQuote: "Câu trích" }], pricing: { items: [{ name: "Gói 1", price: 1000000 }, { name: "Gói 2", price: 2000000, qty: 2 }] }, closing: "Cảm ơn" });
+ok(/data-sx-preset="editorial-serif"/.test(prop) && /5\.000\.000 ₫/.test(prop) && /sx-doc-pull/.test(prop) && />02</.test(prop), "đề xuất: phong cách tạp chí, bảng giá tự cộng, chương đánh số");
+ok(K.designTurn({ typed: "viết báo cáo thị trường", art: true, code: true, seed: "a" }).block.includes("doc-invoice") && A.KIT_CSS.includes("@page sx-cover"), "khối tài liệu có thực đơn mẫu, bộ CSS có trang bìa không số trang");
+ok(K.priorDesign([`<artifact identifier="r" type="text/html">${block({ pages: [{ templateId: "doc-report", props: {} }] })}</artifact>`])?.format === "doc", "lượt sau nhận ra tài liệu viết bằng mẫu");
+
 console.log(`\n${pass} đạt, ${fail} lỗi`);
 process.exit(fail ? 1 : 0);

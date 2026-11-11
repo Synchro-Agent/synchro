@@ -147,6 +147,38 @@ for (const style of ["exec-navy", "neo-brutalist"]) for (const [id, props] of MA
   await shot(`email-${id}-${style}-${tag}.png`);
 }
 
+console.log("3. Tài liệu A4 theo mẫu: hai phong cách, màn hình và bản in PDF");
+const SEC = [
+  { heading: "Doanh thu vượt kế hoạch 18% nhờ kênh trực tiếp", kicker: "Quý 3/2026, đơn vị: tỷ đồng (số liệu ví dụ)", body: "Doanh thu thuần đạt 14,8 tỷ, tăng 142% so với cùng kỳ. Kênh trực tiếp đóng góp 61% doanh thu và có biên lợi nhuận gộp cao gấp đôi kênh đại lý.\n\nChi phí bán hàng tăng chậm hơn doanh thu, đưa biên lợi nhuận hoạt động lên 21%.", kpis: [{ label: "Doanh thu", value: "14,8 tỷ", delta: "+142%" }, { label: "Biên gộp", value: "32%", delta: "+6 đ.p." }, { label: "Khách mới", value: "3.200", delta: "+18%" }], table: { columns: ["Chỉ tiêu", "Q2", "Q3", "Thay đổi"], rows: [["Doanh thu", "6,1", "14,8", "+142%"], ["Giá vốn", "4,3", "10,1", "+135%"], ["Lợi nhuận gộp", "1,8", "4,7", "+161%"]], caption: "Nguồn: báo cáo quản trị nội bộ" } },
+  { heading: "Ba ưu tiên quý 4 giữ đà tăng trưởng", body: "Tập trung nguồn lực vào ba việc có tác động lớn nhất tới kết quả cả năm.", bullets: ["Mở rộng đội bán trực tiếp ở Đà Nẵng và Cần Thơ", "Tự động hóa chăm sóc khách hàng sau bán", "Giảm 10% giá vốn nhờ đàm phán lại nhà cung cấp"], callout: "Rủi ro chính: nhu cầu cuối năm giảm nếu lãi suất tăng; kế hoạch dự phòng ở phụ lục." },
+];
+const DOCS = [
+  ["doc-report", { org: "Công ty Cổ phần Mộc", title: "Báo cáo kết quả kinh doanh quý 3/2026", subtitle: "Tổng kết doanh thu, chi phí và ưu tiên quý 4 cho Hội đồng quản trị", author: "Phòng Tài chính – Kế hoạch", date: "Tháng 11/2026", summary: "Quý 3 doanh thu vượt kế hoạch 18%, biên lợi nhuận gộp tăng 6 điểm. Quý 4 ưu tiên mở rộng kênh trực tiếp và giảm giá vốn.", sections: SEC, sources: ["Báo cáo quản trị nội bộ quý 3/2026", "Tổng cục Thống kê, chỉ số giá tiêu dùng tháng 9/2026"] }],
+  ["doc-proposal", { client: "Tập đoàn Hưng Thịnh", title: "Chuyển đổi số chuỗi bán lẻ", subtitle: "Đề xuất triển khai trong 6 tháng", author: "Đội Tư vấn Synchro", date: "11/2026", chapters: [{ heading: "Bối cảnh và mục tiêu", body: "Chuỗi 120 cửa hàng đang vận hành trên ba hệ thống rời nhau.", pullQuote: "Mỗi cửa hàng mất trung bình 6 giờ mỗi tuần để đối soát tồn kho." }, { heading: "Giải pháp", bullets: ["Một nền tảng bán hàng chung", "Bảng điều khiển tồn kho theo thời gian thực", "Đào tạo 300 nhân viên"] }], pricing: { items: [{ name: "Khảo sát và thiết kế", detail: "4 tuần", price: 180000000 }, { name: "Triển khai", detail: "16 tuần, 120 cửa hàng", price: 920000000 }, { name: "Đào tạo", price: 1500000, qty: 60 }], note: "Giá chưa gồm thuế GTGT 10%." }, closing: "Chúng tôi sẵn sàng bắt đầu từ tháng 12.", contact: "Nguyễn Thu Trang · trang@example.com · 0901 234 567" }],
+  ["doc-paper", { title: "Dự báo nhu cầu tồn kho bằng mô hình học sâu cho chuỗi bán lẻ Việt Nam", authors: [{ name: "Lê Minh Anh", affiliation: "Đại học Bách khoa Hà Nội", email: "anh.lm@example.edu" }, { name: "Trần Quốc Bảo", affiliation: "Viện Khoa học Dữ liệu" }], abstract: "Bài báo đề xuất mô hình dự báo nhu cầu kết hợp chuỗi thời gian và đặc trưng lễ hội Việt Nam, giảm sai số dự báo 23% so với phương pháp cơ sở trên dữ liệu 120 cửa hàng.", keywords: ["dự báo nhu cầu", "học sâu", "bán lẻ"], sections: [{ heading: "Giới thiệu", body: "Dự báo nhu cầu chính xác giúp giảm tồn kho và hết hàng. Các mùa lễ như Tết Nguyên đán làm phân phối nhu cầu lệch mạnh.\n\nNghiên cứu này đóng góp ba điểm chính.", bullets: ["Bộ dữ liệu 120 cửa hàng trong 3 năm", "Mô hình có đặc trưng âm lịch", "Đánh giá trên 4 ngành hàng"] }, { heading: "Phương pháp", body: "Chúng tôi dùng mô hình mã hóa thời gian với cơ chế chú ý.", subsections: [{ heading: "Dữ liệu", body: "Dữ liệu bán hàng theo ngày, đã làm sạch ngoại lai." }, { heading: "Mô hình", body: "Hai tầng mã hóa và một tầng dự báo." }], table: { columns: ["Mô hình", "MAPE", "RMSE"], rows: [["Cơ sở", "18,4%", "212"], ["Đề xuất", "14,1%", "163"]], caption: "Bảng I. Sai số trên tập kiểm tra" } }, { heading: "Kết luận", body: "Mô hình đề xuất giảm sai số đáng kể, đặc biệt trong mùa lễ." }], references: ["A. Nguyễn, “Dự báo bán lẻ,” Tạp chí Tin học, tập 12, 2024.", "B. Trần và C. Lê, “Học sâu cho chuỗi thời gian,” Hội nghị FAIR, 2025."] }],
+  ["doc-invoice", { kind: "invoice", number: "HD-2026-0042", date: "11/11/2026", due: "25/11/2026", from: { name: "Công ty TNHH Thiết kế Mộc", address: "12 Lý Thường Kiệt, Hoàn Kiếm, Hà Nội", email: "ketoan@moc.vn", taxId: "0101234567" }, to: { name: "Công ty Cổ phần Hưng Thịnh", address: "45 Nguyễn Huệ, Quận 1, TP. Hồ Chí Minh", taxId: "0309876543" }, currency: "VND", items: [{ description: "Thiết kế nhận diện thương hiệu", detail: "Logo, bảng màu, phông chữ", qty: 1, price: 25000000 }, { description: "Thiết kế bao bì", qty: 4, unit: "mẫu", price: 6500000 }, { description: "Chụp ảnh sản phẩm", qty: 30, unit: "ảnh", price: 350000 }], discount: 2000000, taxRate: 10, payment: { bank: "Vietcombank – CN Hà Nội", account: "0011 0045 6789", name: "CONG TY TNHH THIET KE MOC" }, notes: "Vui lòng ghi số hóa đơn trong nội dung chuyển khoản.", thanks: "Cảm ơn quý khách đã tin tưởng!" }],
+];
+for (const style of [null, "midnight-tech"]) for (const [id, props] of DOCS) {
+  const html = T.expandTemplates(block({ ...(style ? { styleArchetype: style } : {}), pages: [{ templateId: id, props }] }));
+  const tag = `${id}-${style ?? "mac-dinh"}`;
+  for (const [w, dev] of [[1000, "may-tinh"], [390, "dien-thoai"]]) {
+    await view(w, 900);
+    await open(html, false);
+    const found = (await probe()).filter((x) => !/ảnh hỏng/.test(x.kind));
+    const sx = await ev(`document.documentElement.scrollWidth <= innerWidth + 1`);
+    check(`${tag} ${w}px: không đo thấy lỗi, không cuộn ngang`, !found.length && sx, JSON.stringify(found).slice(0, 600));
+    const h = await ev(`Math.min(document.documentElement.scrollHeight, ${w > 500 ? 3200 : 2400})`);
+    await view(w, h); await sleep(150);
+    await shot(`doc-${tag}-${dev}.png`);
+  }
+  await P("Emulation.setEmulatedMedia", { media: "print" });
+  const pdf = await P("Page.printToPDF", { preferCSSPageSize: true, printBackground: true });
+  await P("Emulation.setEmulatedMedia", { media: "" });
+  const buf = Buffer.from(pdf.data, "base64"), pages = (buf.toString("latin1").match(/\/Type\s*\/Page[^s]/g) ?? []).length;
+  writeFileSync(path.join(OUT, `doc-${tag}.pdf`), buf);
+  check(`${tag}: in ra PDF ${pages} trang A4`, pages >= 1 && (id === "doc-invoice" || id === "doc-paper" || pages >= 2), String(pages));
+}
+
 ws.close(); chrome.kill();
 console.log(`\nẢnh: ${OUT}`);
 console.log(fails ? `${fails} lỗi` : "Tất cả đạt");

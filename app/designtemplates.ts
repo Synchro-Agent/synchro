@@ -7,6 +7,7 @@
 // Tên mẫu trung tính; mã theo bảng của chủ dự án (slide-apple-fact…) nhận như tên khác của cùng mẫu, không hiện ra giao diện.
 // Tệp thuần, dùng chung cho trình duyệt và máy chủ; kiểm thử: tests/api/designtemplates.test.mjs.
 import { DEFAULT_PRESET, presetId, presetOf } from "./designpresets";
+import { DOC_ALIASES, DOC_TEMPLATES } from "./designdocs";
 import { EMAIL_ALIASES, EMAIL_TEMPLATES } from "./designemails";
 import { bullets, esc, nid, obj, paras, rich, safeUrl, str, u, type Ctx, type Props } from "./tplkit";
 
@@ -70,6 +71,7 @@ export function registerTemplates(kind: Kind, list: Record<string, Tpl["render"]
   Object.assign(TEMPLATE_ALIASES, aliases);
 }
 registerTemplates("email", EMAIL_TEMPLATES, EMAIL_ALIASES);
+registerTemplates("doc", DOC_TEMPLATES, DOC_ALIASES);
 export const templateId = (id: string) => TEMPLATE_ALIASES[id] ?? id;
 export const templateOf = (id: string) => REGISTRY[templateId(id)];
 export const templateIds = (kind?: Kind) => Object.keys(REGISTRY).filter((k) => !kind || REGISTRY[k].kind === kind);
@@ -142,8 +144,12 @@ export function renderPage(page: TplPage, i: number): string {
   if (!t) return missing(page.templateId);
   try { return t.render(page.props, { id: page.pageId ? page.pageId.replace(/[^\w-]/g, "") || `p${i + 1}` : `p${i + 1}` }, page); } catch { return missing(page.templateId); }
 }
-// Phong cách mặc định khi model không nêu: poster và chữ lồng sau vật thể vốn là nền tối.
-const defaultStyle = (pages: TplPage[]) => (pages.some((p) => /^(?:poster-|slide-depth)/.test(templateId(p.templateId))) ? "midnight-tech" : DEFAULT_PRESET);
+// Phong cách mặc định khi model không nêu: poster và chữ lồng sau vật thể vốn là nền tối; mỗi mẫu tài liệu có phong cách hợp với nó.
+const DOC_STYLE: Record<string, string> = { "doc-report": "exec-navy", "doc-proposal": "editorial-serif", "doc-paper": "swiss-grid", "doc-invoice": "swiss-grid" };
+const defaultStyle = (pages: TplPage[]) => {
+  const ids = pages.map((p) => templateId(p.templateId));
+  return ids.some((id) => /^(?:poster-|slide-depth)/.test(id)) ? "midnight-tech" : ids.map((id) => DOC_STYLE[id]).find(Boolean) ?? DEFAULT_PRESET;
+};
 
 /**
  * Thay mọi khối <script data-sx-template> bằng HTML đã dựng. Trang không có khối nào giữ nguyên từng byte.

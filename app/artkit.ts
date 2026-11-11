@@ -5,6 +5,7 @@
 // Mọi cỡ tính theo --sx-u: 1px ở trang thường; trong slide, poster là phần nhỏ hơn của chiều rộng và chiều cao, vì khung xem trước, trình chiếu, ảnh thu nhỏ, tệp tải về mở ở cửa sổ bất kỳ có cỡ khác nhau: khung giữ đúng tỉ lệ, không bị cắt đáy, không sinh thanh cuộn. Canh giữa bằng translate (phần trăm theo chính khung), không bằng margin: model tự đặt lại width:100vw thì khung vẫn đúng chỗ.
 // Màu chữ luôn là mã màu thuần, chỉ nền và viền dùng color-mix: bộ xuất PowerPoint đọc màu chữ từ getComputedStyle.
 import { DEFAULT_PRESET, FONT_SPEC, PRESETS, presetIds, presetOf, type Preset, type PresetColors } from "./designpresets";
+import { DOC_TPL_CSS } from "./designdocs";
 import { SLIDE_TPL_CSS } from "./designtemplates";
 
 // Không đụng data-sx-loc, data-sx-on… của Synchro (đứng sau dấu "-"), chỉ nhận lớp thật, biến thật, và thuộc tính preset.
@@ -82,6 +83,7 @@ ${GAPS.map((g) => `.sx-gap-${g}{gap:${u(g)}}.sx-p-${g}{padding:${u(g)}}`).join("
 .sx-bar{background-image:linear-gradient(90deg,var(--sx-raised) var(--sx-v,0%),transparent 0);background-image:linear-gradient(90deg,color-mix(in oklab,var(--sx-accent) 18%,var(--sx-surface)) var(--sx-v,0%),transparent 0)}
 .sx-heat{background:var(--sx-raised);background:color-mix(in oklab,var(--sx-vivid) calc(var(--sx-v,0%)*.9),var(--sx-surface))}
 ${SLIDE_TPL_CSS}
+${DOC_TPL_CSS}
 .sx-gradient-text,.fx-gradient-text{color:var(--sx-ink);background:linear-gradient(135deg,var(--sx-ink) 20%,var(--sx-accent) 100%);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
 .sx-shadow,.fx-ambient-shadow{box-shadow:0 1px 2px -1px rgba(15,23,42,.04),0 8px 16px -4px rgba(15,23,42,.06),0 24px 48px -12px rgba(15,23,42,.08)}
 .sx-rim,.fx-specular-rim{border:${u(1)} solid rgba(255,255,255,.07);box-shadow:inset 0 1px 0 rgba(255,255,255,.16),0 16px 32px -8px rgba(0,0,0,.5)}
