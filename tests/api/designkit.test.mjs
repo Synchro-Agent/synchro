@@ -68,6 +68,8 @@ for (const s of ["0052CC", "0A192F", "showGridLines = False", "viền dưới do
 const g = turn("làm poster").block;
 ok(/không chữ chuyển màu/.test(g), "không chữ chuyển màu ở nội dung phải đọc");
 ok(/SVG tự viết thoải mái/.test(g), "không cấm model viết SVG");
+ok(/không tự vẽ minh họa người, vật, cảnh/.test(g) && /icon Lucide/.test(g), "chốt icon và ảnh: icon từ bộ có sẵn, không tự vẽ minh họa");
+ok(/backdrop-filter, radial-gradient/.test(turn("Làm bộ slide doanh thu").block) && /PNG 2x/.test(turn("Làm bộ slide doanh thu").block), "chốt Office: hiệu ứng CSS thành ảnh nền, chữ là đối tượng gốc");
 ok(!/Sonnet|Haiku|Gemini|GPT/i.test([slide.block, doc, sheet, g].join("")), "không nêu tên model để định tuyến");
 
 // Mỗi định dạng một thang, đúng các cỡ của bộ CSS: trước đây slide nhận cả "chỉ dùng 12·14·16…" lẫn "thân 18-22" cùng lúc.

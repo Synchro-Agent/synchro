@@ -157,7 +157,7 @@ from openpyxl.formatting.rule import DataBarRule, ColorScaleRule
 ws.conditional_formatting.add("E4:E11", DataBarRule(start_type="num", start_value=0, end_type="max", color="FF5B9BD5", showValue=True))
 Bản đồ nhiệt: ColorScaleRule(start_type="min", start_color="FFFFFFFF", end_type="max", end_color="FF5B9BD5"). Biểu đồ: một chuỗi nhấn, các chuỗi khác xám.`,
   graphic: `Đồ họa (poster, banner, infographic, trang đích): dựng theo 4 lớp: nền → hình và đường lưới → ảnh → chữ. Thang: trang web 12·14·16·21·28·38·56; poster (rộng 1080) 20·24·30·40·64·96·152·200. Một ý chính; tiêu đề lớn gấp 3-4 lần chữ thường, đọc được trong 3 giây; tối đa 3 cỡ chữ, không tính nhãn và nguồn; lề từ 5% cạnh ngắn; chữ không đè vùng ảnh nhiều chi tiết, cần thì phủ một lớp nền.
-Cần chữ chính xác thì dựng bằng text/html hoặc SVG; xin ảnh chụp, tranh thì dùng generate_image. Icon trong React dùng lucide-react; SVG tự viết thoải mái cho biểu đồ, hình học, sơ đồ khi có viewBox rõ và màu lấy từ biến.
+Cần chữ chính xác thì dựng bằng text/html hoặc SVG; xin ảnh chụp, tranh thì dùng generate_image hoặc ảnh https thật. Icon: lucide-react trong React, trong HTML chép đúng path của icon Lucide; không tự vẽ minh họa người, vật, cảnh bằng <svg>. SVG tự viết thoải mái cho biểu đồ, hình học, sơ đồ khi có viewBox rõ và màu lấy từ biến.
 Hiệu ứng có chủ đích, tối đa 2 loại mỗi trang: kính mờ chỉ khi có nền sâu phía sau; không chữ chuyển màu ở nội dung phải đọc (không đo được tương phản, xuất PowerPoint mất màu).`,
 };
 
@@ -168,7 +168,7 @@ Biến: --sx-bg --sx-surface --sx-raised --sx-ink --sx-muted --sx-accent --sx-ac
 const TPL_GUIDE: Partial<Record<DesignFormat, string>> = { slide: SLIDE_TPL_GUIDE, doc: DOC_TPL_GUIDE, graphic: `${POSTER_TPL_GUIDE}\n${EMAIL_TPL_GUIDE}` };
 const DEFAULT_TPL_STYLE = "swiss-grid";
 const FILE_RULES: Partial<Record<DesignFormat, string>> = {
-  slide: `Tệp .pptx qua run_code (chỉ khi cần shape gốc, còn lại Tải về › PowerPoint từ artifact): python-pptx 13.333×7.5in, tiêu đề ở placeholder, phông Arial hoặc Calibri vì máy người nhận chắc có.`,
+  slide: `Tệp .pptx qua run_code (chỉ khi cần shape gốc, còn lại Tải về › PowerPoint từ artifact): python-pptx 13.333×7.5in, tiêu đề ở placeholder, phông Arial hoặc Calibri vì máy người nhận chắc có. Office không có backdrop-filter, radial-gradient, ảnh tách nền: chụp lớp nền hiệu ứng thành PNG 2x đặt dưới cùng, chữ và biểu đồ là đối tượng gốc ở trên (đặt name "!!ten" giống nhau ở hai slide liền để Morph), không giả hiệu ứng bằng shape.`,
   doc: `Tệp qua run_code: Word bằng python-docx theo cùng cấu trúc JSON của mẫu (bìa là section riêng, mục lục bằng trường TOC \\o "1-3", Heading 1/2, bảng style có sẵn thay vì tô tay, Calibri hoặc Arial 11pt, keep_with_next cho tiêu đề, chân trang có trường PAGE; phông lạ sẽ bị thay trên máy người nhận). PDF: dựng trang theo mẫu ở trên rồi in bằng Chromium (page.pdf, preferCSSPageSize), không tự vẽ bằng reportlab.`,
   graphic: `Ảnh qua run_code: HTML + Chromium ở deviceScaleFactor 2, đúng kích thước yêu cầu.`,
 };
