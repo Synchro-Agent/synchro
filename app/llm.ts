@@ -7,6 +7,7 @@ import type { Project } from "./store";
 import type { ContentBlock } from "./fileproc/types";
 import type { Effort } from "./catalog";
 import type { TraceItem } from "./transpile";
+import { noteServerNow } from "./clock";
 
 export const CHUNK_SIZE = 1500;
 export const SMALL_DOC_LIMIT = 12000;
@@ -125,6 +126,7 @@ async function pollRun(id: string, onProgress?: (text: string) => void, onDelta?
     if (r) {
       const j = await r.json().catch(() => null);
       if (!r.ok && r.status < 500) throw new LLMError(j?.error || `Run ${r.status}`, r.status, j ?? {});
+      noteServerNow(j?.now);
       if (j?.run) {
         for (const ev of j.run.events as RunEv[]) if (ev.seq > seen) { seen = ev.seq; onEvent?.(ev); if (ev.kind === "step" || ev.kind === "tool" || ev.kind === "note") onProgress?.(ev.text); }
         if (j.live?.text) onDelta?.(j.live.text);
@@ -156,6 +158,7 @@ export function waitRun(id: string, onProgress?: (text: string) => void, onDelta
       text += d.text ?? d.t ?? "";
       onDelta?.(text);
     };
+    es.addEventListener("clock", (e) => { try { noteServerNow(JSON.parse((e as MessageEvent).data).now); } catch {} });
     es.addEventListener("snapshot", (e) => { try { const d = JSON.parse((e as MessageEvent).data); step = -1; take(d); } catch {} });
     es.addEventListener("delta", (e) => { try { take(JSON.parse((e as MessageEvent).data)); } catch {} });
     es.addEventListener("done", (e) => { try { const d = JSON.parse((e as MessageEvent).data); end(() => ok({ http: d.http ?? 502, result: d.result ?? {} })); } catch (x) { end(() => no(x)); } });

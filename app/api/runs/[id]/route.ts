@@ -15,7 +15,8 @@ export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }
   if (!run) return Response.json({ error: "Không tìm thấy lượt trả lời này." }, { status: 404 });
   const url = new URL(req.url);
   // live: chữ đang viết, cho đoạn chat theo dõi bằng cách hỏi định kỳ (quá nhiều kết nối SSE cùng lúc, xem llm.ts).
-  if (url.searchParams.get("json")) return Response.json({ run, live: liveText(id) });
+  // now: giờ máy chủ, để trình duyệt tính đồng hồ công cụ / đếm ngược theo giờ máy chủ dù đồng hồ máy người dùng lệch (app/clock.ts).
+  if (url.searchParams.get("json")) return Response.json({ run, live: liveText(id), now: Date.now() });
   const after = Number(req.headers.get("last-event-id") ?? url.searchParams.get("after") ?? 0) || 0;
   const enc = new TextEncoder();
   let stop = () => {};
@@ -26,12 +27,15 @@ export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }
       const ev = (e: RunEvent) => send(`id: ${e.seq}\nevent: step\ndata: ${JSON.stringify(e)}\n\n`);
       const dl = (d: Delta) => send(`event: delta\ndata: ${JSON.stringify(d)}\n\n`);
       const done = (r: PublicRun) => { send(`event: done\ndata: ${JSON.stringify({ status: r.status, http: r.http, result: r.result })}\n\n`); end(); };
-      const ping = setInterval(() => send(": ping\n\n"), 15_000);
+      // Giờ máy chủ lúc mở luồng và mỗi 15 giây (thay cho dòng ping trống): đồng hồ trong khung chat theo giờ máy chủ (app/clock.ts).
+      const clock = () => send(`event: clock\ndata: {"now":${Date.now()}}\n\n`);
+      const ping = setInterval(clock, 15_000);
       const end = () => { if (closed) return; closed = true; clearInterval(ping); unwatch(); try { ctl.close(); } catch {} };
       // Đăng ký trước rồi mới đọc lại trạng thái, để không lỡ bước nào xảy ra ở giữa.
       const unwatch = watch(id, (m) => { if (m.event && m.event.seq > after) ev(m.event); if (m.delta) dl(m.delta); if (m.done) done(m.done); });
       stop = end;
       send("retry: 2000\n\n");
+      clock();
       const now = getRun(id)!;
       for (const e of now.events) if (e.seq > after) ev(e);
       const lt = liveText(id);

@@ -9,6 +9,7 @@ import { AskCard, type AskStep, type OnAnswer } from "./agentui";
 import { lazyView } from "./lazy";
 import { IMAGE_PLANS } from "./catalog";
 import { refreshModels, useModels } from "./models";
+import { serverNow } from "./clock";
 // Thẻ kết nối lại chỉ cần khi connector mất đăng nhập: không kéo cả màn hình Connectors vào phần tải đầu của trang chat.
 const ReconnectCard = lazyView(() => import("./connectorsui").then((m) => m.ReconnectCard), null);
 
@@ -75,10 +76,10 @@ const toolLabel = (l: string) => { const v = [DOING, l].join(" "), t = tr(v); re
 // Công cụ chạy quá 8 giây: nói rõ là vẫn đang làm (dữ liệu lớn), không để người dùng tưởng treo.
 const SLOW_MS = 8000;
 const secs = (ms: number) => { const s = Math.max(0, Math.round(ms / 1000)); return s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${String(s % 60).padStart(2, "0")}s`; };
-/** Đồng hồ cập nhật mỗi giây khi on (công cụ đang chạy); tắt thì đứng yên, không tốn lượt vẽ. */
+/** Đồng hồ cập nhật mỗi giây khi on (công cụ đang chạy); tắt thì đứng yên, không tốn lượt vẽ. Theo giờ máy chủ (at, until là giờ máy chủ), không theo đồng hồ máy người dùng. */
 function useNow(on: boolean) {
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => { if (!on) return; setNow(Date.now()); const t = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(t); }, [on]);
+  const [now, setNow] = useState(() => serverNow());
+  useEffect(() => { if (!on) return; setNow(serverNow()); const t = setInterval(() => setNow(serverNow()), 1000); return () => clearInterval(t); }, [on]);
   return now;
 }
 function ToolGroup({ items, live }: { items: ToolItem[]; live: boolean }) {

@@ -1,6 +1,6 @@
 // Lượt chạy bền: tạo lượt nền, theo dõi SSE, nối lại từ giữa, kết quả giữ nguyên sau khi tải lại.
 // MODE=start: chỉ tạo một lượt chậm (#slow) rồi in id (để tắt máy chủ giữa chừng). MODE=check RUN=<id>: chờ lượt đó xong.
-const B = "http://localhost:3200";
+const B = process.env.SYNCHRO_URL ?? "http://localhost:3200";
 let pass = 0, fail = 0;
 const ok = (c, n, x = "") => { c ? pass++ : fail++; console.log(c ? "  ✓" : "  ✗", n, c ? "" : String(x).slice(0, 400)); };
 let cookie = "";
@@ -13,7 +13,7 @@ const ask = (text) => call("POST", "/api/llm", { async: true, skills: true, syst
 async function sse(id, after = 0, ms = 60000) {
   const r = await fetch(`${B}/api/runs/${id}${after ? `?after=${after}` : ""}`, { headers: { cookie } });
   const rd = r.body.getReader(); const dec = new TextDecoder();
-  let buf = "", steps = [], done = null, timedOut = false;
+  let buf = "", steps = [], done = null, timedOut = false, clocks = [];
   const t = setTimeout(() => { timedOut = true; rd.cancel().catch(() => {}); }, ms);
   while (!done && !timedOut) {
     const { value, done: end } = await rd.read().catch(() => ({ done: true }));
@@ -22,11 +22,11 @@ async function sse(id, after = 0, ms = 60000) {
     let i; while ((i = buf.indexOf("\n\n")) >= 0) {
       const blk = buf.slice(0, i); buf = buf.slice(i + 2);
       const ev = /^event: (\w+)/m.exec(blk)?.[1], data = /^data: (.*)$/m.exec(blk)?.[1];
-      if (ev === "step") steps.push(JSON.parse(data)); if (ev === "done") done = JSON.parse(data);
+      if (ev === "step") steps.push(JSON.parse(data)); if (ev === "done") done = JSON.parse(data); if (ev === "clock") clocks.push(JSON.parse(data).now);
     }
   }
   clearTimeout(t); rd.cancel().catch(() => {});
-  return { steps, done, ctype: r.headers.get("content-type") };
+  return { steps, done, clocks, ctype: r.headers.get("content-type") };
 }
 const MODE = process.env.MODE ?? "all";
 if (MODE === "start") { const r = await ask("Kể ngắn về lịch sử cà phê #slow"); console.log(r.j.run); process.exit(0); }
@@ -51,6 +51,8 @@ ok(b.steps.every((s) => s.seq > 1) && b.steps.length === a.steps.length - 1, `n�
 ok(b.done?.result?.text === a.done.result.text, "mở lại lượt đã xong vẫn nhận nguyên kết quả");
 const j = await call("GET", `/api/runs/${id}?json=1`);
 ok(j.j?.run?.status === "done", "trạng thái dạng JSON (dự phòng khi không mở được SSE)");
+// Giờ máy chủ cho đồng hồ công cụ / đếm ngược ở trình duyệt (app/clock.ts): đồng hồ máy người dùng lệch không làm sai số giây.
+ok(typeof b.clocks[0] === "number" && Math.abs(b.clocks[0] - Date.now()) < 10_000 && typeof j.j?.now === "number" && Math.abs(j.j.now - Date.now()) < 10_000, "luồng SSE và trạng thái JSON kèm giờ máy chủ", JSON.stringify({ clocks: b.clocks, now: j.j?.now }));
 console.log("3. Bảo mật và danh sách");
 const other = await fetch(`${B}/api/runs/${id}?json=1`);
 ok(other.status === 401, "không đăng nhập thì không xem được lượt");
