@@ -1,4 +1,4 @@
-import { audit, clientIp, defaultPerms, handle, requireAdmin, sameOrigin, setSetting, setVerifyGate, signupOpen, verifyGateOn } from "../../../authstore";
+import { audit, clientIp, defaultPerms, handle, ownerOnly, requireAdmin, sameOrigin, setSetting, setVerifyGate, signupOpen, verifyGateOn } from "../../../authstore";
 import { normPerms } from "../../../catalog";
 import { setSpeechBudget, speechBudget, spentToday } from "../../../speechapi";
 import { saveTurnstile, setBlockDisposable, turnstileAdmin } from "../../../turnstile";
@@ -15,6 +15,9 @@ export const PATCH = handle(async (req) => {
   sameOrigin(req);
   const { user } = requireAdmin(req);
   const { signupOpen: open, defaultPerms: dp, verifyGate, speechBudget: sb, turnstile: ts, blockDisposable, replicateBudget: rb } = await req.json();
+  // Khóa Turnstile, chặn email dùng một lần và hạn mức tiền thật (giọng ElevenLabs, ảnh Replicate): chỉ chủ sở hữu. Xét trước mọi thay đổi
+  // để yêu cầu gộp nhiều mục của quản trị viên không lưu nửa chừng.
+  if ((ts && typeof ts === "object") || typeof blockDisposable === "boolean" || (rb && typeof rb === "object") || (sb && typeof sb === "object")) ownerOnly(user);
   // Turnstile: khóa bí mật mã hóa trước khi lưu, không trả lại trình duyệt; nhật ký chỉ ghi bật / tắt.
   if (ts && typeof ts === "object") {
     const was = turnstileAdmin().on;

@@ -66,7 +66,7 @@ function Kv({ k, v, bad, wrap }: { k: string; v: React.ReactNode; bad?: boolean;
   return <div className={`adm-kv${wrap ? " wrap" : ""}`}><span>{k}</span><b data-notr style={bad ? { color: "#c6422f" } : undefined}>{v}</b></div>;
 }
 
-export function HealthPanel({ Toggle }: { Toggle: (p: { on: boolean; set: (v: boolean) => void; label?: string }) => React.ReactElement }) {
+export function HealthPanel({ Toggle }: { Toggle: (p: { on: boolean; set: (v: boolean) => void; label?: string; disabled?: boolean }) => React.ReactElement }) {
   const app = useApp();
   const [h, setH] = useState<Health | null>(null);
   const [err, setErr] = useState("");

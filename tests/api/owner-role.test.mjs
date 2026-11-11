@@ -1,6 +1,7 @@
 // Ba vai trò Owner / Admin / Member: chủ sở hữu (OWNER_EMAILS, mặc định email đầu tiên của ADMIN_EMAILS) thêm / bỏ quản trị viên; quản trị viên
 // nhận 403 ở mọi việc chỉ chủ sở hữu được làm (khóa API, số dư đã nạp, bảng giá, hạn mức của quản trị viên, thêm / bỏ quản trị viên, xóa
-// vĩnh viễn tài khoản, xem phần che của khóa) còn chủ sở hữu làm được; quản trị viên vẫn làm được các việc quản trị khác; nhật ký ghi đổi vai trò.
+// vĩnh viễn tài khoản, xem phần che của khóa, cấu hình sao lưu R2, khóa Turnstile, chặn email dùng một lần, hạn mức giọng / ảnh trả tiền thật,
+// khóa dịch vụ ElevenLabs / Composio / Replicate, việc tốn khóa API của sổ model, cập nhật CLI của gói) còn chủ sở hữu làm được; quản trị viên vẫn làm được các việc quản trị khác; nhật ký ghi đổi vai trò.
 const B = process.env.SYNCHRO_URL ?? "http://localhost:3200";
 let pass = 0, fail = 0;
 const ok = (c, n, x = "") => { c ? pass++ : fail++; console.log(c ? "  ✓" : "  ✗", n, c ? "" : String(x).slice(0, 500)); };
@@ -94,6 +95,55 @@ ok((await admin("PATCH", `/api/admin/users/${meO.id}`, { action: "suspend" })).s
 ok((await admin("DELETE", `/api/admin/users/${idM}`, { confirm: emM })).s === 403, "xóa vĩnh viễn tài khoản: quản trị viên 403");
 r = await owner("DELETE", `/api/admin/users/${idM}`, { confirm: emM });
 ok(r.s === 200 && !(await cM("GET", "/api/auth/me")).j?.user, "xóa vĩnh viễn tài khoản: chủ sở hữu thành công", JSON.stringify(r.j));
+
+console.log("2b. Phần gộp từ r9: sao lưu R2, Turnstile, email dùng một lần, hạn mức tiền thật, khóa dịch vụ, sổ model");
+// Sao lưu liên tục: quản trị viên xem trạng thái (không thấy Account ID / Access Key ID), không lưu / gỡ / bật được.
+const bkO = (await owner("GET", "/api/admin/backup")).j, bkA = await admin("GET", "/api/admin/backup");
+ok(bkO?.owner === true && bkA.s === 200 && bkA.j.owner === false, "sao lưu: quản trị viên xem được trạng thái, biết mình không phải chủ sở hữu", JSON.stringify(bkA.j).slice(0, 200));
+ok(!bkA.j.accountId || bkA.j.accountId === "••••", "sao lưu: quản trị viên không thấy Account ID", bkA.j.accountId);
+ok((await admin("POST", "/api/admin/backup", { action: "save", accountId: "x", bucket: `b-${tag}`, accessKeyId: "y", secret: "z", prefix: "synchro" })).s === 403, "sao lưu: lưu cấu hình R2 quản trị viên 403");
+ok((await admin("POST", "/api/admin/backup", { action: "save", enabled: !bkO.enabled })).s === 403, "sao lưu: bật / tắt quản trị viên 403");
+ok((await admin("POST", "/api/admin/backup", { action: "clear" })).s === 403, "sao lưu: gỡ cấu hình quản trị viên 403");
+ok((await owner("GET", "/api/admin/backup")).j?.bucket === bkO.bucket, "sao lưu: cấu hình không đổi sau các lần bị chặn");
+r = await owner("POST", "/api/admin/backup", { action: "save", prefix: bkO.prefix || "synchro" });
+ok(r.s === 200 && r.j.owner === true, "sao lưu: chủ sở hữu lưu được", JSON.stringify(r.j).slice(0, 200));
+// Cài đặt quản trị: mỗi mục chỉ chủ sở hữu bị chặn riêng, kể cả khi gộp chung với mục quản trị viên được đổi.
+const setO = (await owner("GET", "/api/admin")).j.settings;
+const gated = [
+  ["khóa Turnstile", { turnstile: { siteKey: "1x00000000000000000000AA", secret: "1x0000000000000000000000000000000AA", loginAfter: 3 } }],
+  ["tắt Turnstile", { turnstile: { clear: true } }],
+  ["chặn email dùng một lần", { blockDisposable: !setO.turnstile?.blockDisposable }],
+  ["hạn mức giọng ElevenLabs", { speechBudget: { user: 1 } }],
+  ["hạn mức ảnh Replicate", { replicateBudget: { user: 1 } }],
+];
+for (const [n, body] of gated) ok((await admin("PATCH", "/api/admin/settings", body)).s === 403, `${n}: quản trị viên 403`);
+r = await admin("PATCH", "/api/admin/settings", { signupOpen: setO.signupOpen, speechBudget: { user: 1 } });
+ok(r.s === 403, "gộp mục được phép với hạn mức: cả yêu cầu bị chặn, không lưu nửa chừng");
+const setA = (await owner("GET", "/api/admin")).j.settings;
+ok(JSON.stringify(setA.turnstile) === JSON.stringify(setO.turnstile) && JSON.stringify(setA.speechBudget) === JSON.stringify(setO.speechBudget) && JSON.stringify(setA.replicateBudget) === JSON.stringify(setO.replicateBudget), "cài đặt không đổi sau các lần bị chặn", JSON.stringify([setA.turnstile, setO.turnstile]));
+r = await owner("PATCH", "/api/admin/settings", { blockDisposable: !!setO.turnstile?.blockDisposable, speechBudget: { user: setO.speechBudget?.user ?? 0 }, replicateBudget: { user: setO.replicateBudget?.user ?? 0 } });
+ok(r.s === 200 && r.j.settings.speechBudget.user === setO.speechBudget?.user && r.j.settings.replicateBudget.user === setO.replicateBudget?.user, "hạn mức tiền thật và chặn email: chủ sở hữu lưu được", JSON.stringify(r.j).slice(0, 300));
+r = await owner("PATCH", "/api/admin/settings", { turnstile: { loginAfter: setO.turnstile?.loginAfter ?? 5 } });
+ok(r.s === 200 && r.j.settings.turnstile.on === !!setO.turnstile?.on && r.j.settings.turnstile.loginAfter === (setO.turnstile?.loginAfter ?? 5), "Turnstile: chủ sở hữu lưu được", JSON.stringify(r.j?.settings?.turnstile));
+ok((await admin("PATCH", "/api/admin/settings", { verifyGate: setO.verifyGate !== false })).s === 200, "luật xác minh email: quản trị viên vẫn đổi được");
+// Khóa dịch vụ ElevenLabs / Composio / Replicate: thêm, đổi, gỡ chỉ chủ sở hữu.
+for (const [id, k] of [["elevenlabs", "sk_mock_eleven_0001"], ["composio", "ak_mock_composio_0001"], ["replicate", "r8_mock_replicate_0001"]]) {
+  ok((await admin("POST", "/api/admin/apikeys", { id, kind: id, key: k })).s === 403, `khóa ${id}: quản trị viên 403 khi thêm / đổi`);
+  ok((await admin("DELETE", `/api/admin/apikeys?id=${id}`)).s === 403, `khóa ${id}: quản trị viên 403 khi gỡ`);
+}
+// Sổ model: việc tốn khóa API của chủ máy chủ chỉ chủ sở hữu; ghim / ẩn vẫn là việc của quản trị viên.
+const regO = (await owner("GET", "/api/admin/models")).j, regA = (await admin("GET", "/api/admin/models")).j;
+ok(regO?.owner === true && regA?.owner === false, "sổ model biết ai là chủ sở hữu", JSON.stringify([regO?.owner, regA?.owner]));
+const auto0 = regO.settings.auto, someKey = regO.models.find((m) => !m.plan)?.key ?? "openai/gpt-x";
+for (const [n, body] of [["bật / tắt tự nhận model mới", { action: "auto", on: !auto0 }], ["tự nhận model mới theo hãng", { action: "provider", id: "openai", on: false }], ["Kiểm tra ngay", { action: "check" }], ["Thử lại một model", { action: "retest", key: someKey }]])
+  ok((await admin("POST", "/api/admin/models", body)).s === 403, `${n}: quản trị viên 403`);
+ok((await owner("GET", "/api/admin/models")).j.settings.auto === auto0, "tự nhận model mới không đổi sau lần bị chặn");
+r = await owner("POST", "/api/admin/models", { action: "auto", on: auto0 });
+ok(r.s === 200 && r.j.settings.auto === auto0, "bật / tắt tự nhận model mới: chủ sở hữu được", JSON.stringify(r.j).slice(0, 200));
+const pinned0 = !!regO.models.find((m) => m.key === someKey)?.pinned;
+r = await admin("POST", "/api/admin/models", { action: "pin", key: someKey, on: !pinned0 });
+ok(r.s === 200, "ghim model: quản trị viên vẫn làm được", JSON.stringify(r.j).slice(0, 200));
+await admin("POST", "/api/admin/models", { action: "pin", key: someKey, on: pinned0 });
 
 console.log("3. Quản trị viên vẫn làm các việc quản trị khác");
 const main = keysA.main;

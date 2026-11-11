@@ -78,7 +78,7 @@ const LOG_FILTER: Record<string, (a: string) => boolean> = {
 };
 const ENV: Record<keyof Providers, string> = { google: "GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET", github: "GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET", apple: "APPLE_CLIENT_ID, APPLE_TEAM_ID, APPLE_KEY_ID, APPLE_PRIVATE_KEY" };
 
-type ToggleT = (p: { on: boolean; set: (v: boolean) => void; label?: string }) => React.ReactElement;
+type ToggleT = (p: { on: boolean; set: (v: boolean) => void; label?: string; disabled?: boolean }) => React.ReactElement;
 
 // Chọn nhiều model theo từng nhà cung cấp; "*" = mọi model (kể cả model hãng ra sau này).
 function ModelChips({ catalog, value, onChange, allLabel, allHint, Toggle }: { catalog: ProviderInfo[]; value: string[]; onChange: (v: string[]) => void; allLabel: string; allHint: string; Toggle: ToggleT }) {
@@ -347,7 +347,7 @@ export function AdminPanel({ Toggle }: { Toggle: ToggleT }) {
         <div><div className="t">Require a verified email</div><div className="d">New accounts that sign up with a password must confirm their email before using uploads, connectors, scheduled tasks, voice and Synchro Code. Chat always works. Turn this off if email is failing. Accounts from before this setting aren&apos;t affected.</div></div>
         <Toggle on={d.settings.verifyGate !== false} label="Require a verified email" set={(v) => act(() => call("PATCH", "/api/admin/settings", { verifyGate: v }), "Saved")} />
       </div>
-      {d.settings.turnstile && <BotProtection s={d.settings.turnstile} act={act} call={call} Toggle={Toggle} />}
+      {d.settings.turnstile && <BotProtection s={d.settings.turnstile} act={act} call={call} Toggle={Toggle} owner={owner} />}
       <div className="row"><div><div className="t">Email and password</div><div className="d">Passwords are hashed with scrypt. Accounts lock for 15 minutes after repeated failed attempts.</div></div><span className="s-badge ok">On</span></div>
       {(["google", "github", "apple"] as const).map((p) => (
         <div key={p} className="row">
@@ -388,9 +388,10 @@ export function AdminPanel({ Toggle }: { Toggle: ToggleT }) {
       {d.settings.speechBudget && (
         <div className="adm-card">
           <div className="adm-card-h"><b>AI voice credit per day</b><span className="d">The ElevenLabs key is shared, so these caps stop one account from using all of it. Past a cap, people get the browser&apos;s voice until the next day (UTC). Used today: <span data-notr>{(d.settings.speechToday ?? 0).toLocaleString(locale())}</span>.</span></div>
+          {!owner && <p className="api-own top"><I.Lock size={13} /><span>Only the Owner can change these caps, since the credit is paid by the Owner.</span></p>}
           {([["user", "Verified account", "Credit each account with a verified email can use."], ["unverified", "Unverified account", "Credit each account without a verified email can use."], ["global", "Whole server", "Leave empty to use one fifth of the plan's credit."]] as const).map(([k, t, hint]) => {
             const cur = d.settings.speechBudget![k];
-            return <div key={k} className="adm-perm-row"><div><div className="t">{t}</div><div className="d">{hint}</div></div><input key={String(cur)} className="field adm-num" inputMode="numeric" aria-label={t} defaultValue={cur ?? ""} onBlur={(e) => { const raw = e.target.value.trim(), n = raw === "" ? null : Number(raw); if ((n === null && k === "global") || (n !== null && Number.isFinite(n) && n >= 0)) { if (n !== cur) act(() => call("PATCH", "/api/admin/settings", { speechBudget: { [k]: n } }), "AI voice credit saved"); } else e.target.value = String(cur ?? ""); }} /></div>;
+            return <div key={k} className="adm-perm-row"><div><div className="t">{t}</div><div className="d">{hint}</div></div><input key={String(cur)} className="field adm-num" inputMode="numeric" aria-label={t} disabled={!owner} defaultValue={cur ?? ""} onBlur={(e) => { const raw = e.target.value.trim(), n = raw === "" ? null : Number(raw); if ((n === null && k === "global") || (n !== null && Number.isFinite(n) && n >= 0)) { if (n !== cur) act(() => call("PATCH", "/api/admin/settings", { speechBudget: { [k]: n } }), "AI voice credit saved"); } else e.target.value = String(cur ?? ""); }} /></div>;
           })}
         </div>
       )}
@@ -400,9 +401,10 @@ export function AdminPanel({ Toggle }: { Toggle: ToggleT }) {
           <div className="adm-card-h"><b>Replicate images per day</b><span className="d">{d.settings.replicateKey
             ? <>Images made with the shared Replicate key are billed to its account, about $0.06 each. Past a cap, people make images with their own plan until the next day (UTC). Made today: <span data-notr>{`${(d.settings.replicateToday?.images ?? 0).toLocaleString(locale())} (≈ $${(d.settings.replicateToday?.usd ?? 0).toFixed(2)})`}</span>.</>
             : <>Waiting for a Replicate key in Providers. Until then images use each person&apos;s own plan and these caps have no effect.</>}</span></div>
+          {!owner && <p className="api-own top"><I.Lock size={13} /><span>Only the Owner can change these caps, since the images are paid by the Owner.</span></p>}
           {([["user", "Verified account", "Images each account with a verified email can make per day."], ["unverified", "Unverified account", "Images each account without a verified email can make per day."], ["global", "Whole server", "Images all accounts together can make per day. Administrators count toward this cap only."]] as const).map(([k, t, hint]) => {
             const cur = d.settings.replicateBudget![k];
-            return <div key={k} className="adm-perm-row"><div><div className="t">{t}</div><div className="d">{hint}</div></div><input key={String(cur)} className="field adm-num" inputMode="numeric" aria-label={`${t} · Replicate`} defaultValue={cur} onBlur={(e) => { const n = Number(e.target.value.trim()); if (e.target.value.trim() !== "" && Number.isFinite(n) && n >= 0) { if (n !== cur) act(() => call("PATCH", "/api/admin/settings", { replicateBudget: { [k]: Math.floor(n) } }), "Image limits saved"); } else e.target.value = String(cur); }} /></div>;
+            return <div key={k} className="adm-perm-row"><div><div className="t">{t}</div><div className="d">{hint}</div></div><input key={String(cur)} className="field adm-num" inputMode="numeric" aria-label={`${t} · Replicate`} disabled={!owner} defaultValue={cur} onBlur={(e) => { const n = Number(e.target.value.trim()); if (e.target.value.trim() !== "" && Number.isFinite(n) && n >= 0) { if (n !== cur) act(() => call("PATCH", "/api/admin/settings", { replicateBudget: { [k]: Math.floor(n) } }), "Image limits saved"); } else e.target.value = String(cur); }} /></div>;
           })}
         </div>
       )}

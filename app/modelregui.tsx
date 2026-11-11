@@ -14,7 +14,7 @@ type RegModel = {
   status: "new" | "testing" | "active" | "deprecated" | "retired"; baseline: boolean; isNew: boolean; shown: boolean; pinned: boolean; hidden: boolean; plan: boolean;
   test: Test | null; attempts: number; nextTest: number | null; goneAt: number | null; replacedBy: string | null; ctx: number | null; maxOut: number | null;
 };
-type Reg = { settings: { auto: boolean; off: string[]; lastCheck: number | null; lastError: string | null }; models: RegModel[]; report?: { passed: string[]; failed: string[]; providers: { id: string; added: string[] }[] } };
+type Reg = { settings: { auto: boolean; off: string[]; lastCheck: number | null; lastError: string | null }; models: RegModel[]; owner?: boolean; report?: { passed: string[]; failed: string[]; providers: { id: string; added: string[] }[] } };
 
 const PROVIDER: Record<string, string> = { anthropic: "Claude API", openai: "ChatGPT API", google: "Gemini API", xai: "Grok API", deepseek: "DeepSeek API", "sub-claude": "Claude plan", "sub-codex": "ChatGPT plan", "sub-agy": "Gemini plan", "sub-grok": "Grok plan" };
 const STATUS: Record<RegModel["status"], [string, string]> = {
@@ -26,7 +26,7 @@ function Switch({ on, set, label, disabled }: { on: boolean; set: (v: boolean) =
   return <button className={`toggle ${on ? "on" : ""}`} role="switch" aria-checked={on} aria-label={label} disabled={disabled} onClick={() => set(!on)} />;
 }
 
-function Row({ m, busy, act }: { m: RegModel; busy: boolean; act: (action: string, key: string, on?: boolean) => void }) {
+function Row({ m, busy, act, owner }: { m: RegModel; busy: boolean; act: (action: string, key: string, on?: boolean) => void; owner: boolean }) {
   const [st, cls] = m.hidden ? ["Hidden", "old"] : STATUS[m.status];
   const waiting = m.status === "new" || m.status === "testing";
   return (
@@ -57,7 +57,7 @@ function Row({ m, busy, act }: { m: RegModel; busy: boolean; act: (action: strin
       {!m.plan && m.status === "retired" && <div className="mr-acts"><button className="btn" disabled={busy} onClick={() => act("forget", m.key)}>Remove from list</button></div>}
       {!m.plan && m.status !== "retired" && (
         <div className="mr-acts">
-          {waiting && <button className="btn" disabled={busy} onClick={() => act("retest", m.key)}>Test again</button>}
+          {waiting && owner && <button className="btn" disabled={busy} onClick={() => act("retest", m.key)}>Test again</button>}
           {(waiting || m.status === "deprecated") && <button className="btn" disabled={busy} onClick={() => act("activate", m.key)}>Use now</button>}
           <button className="btn" disabled={busy} onClick={() => act("pin", m.key, !m.pinned)}>{m.pinned ? "Unpin" : "Pin"}</button>
           <button className="btn" disabled={busy} onClick={() => act("hide", m.key, !m.hidden)}>{m.hidden ? "Show" : "Hide"}</button>
@@ -93,6 +93,8 @@ export function ModelRegistry() {
   const recent = r.models.filter((m) => !m.baseline || m.status === "new" || m.status === "testing" || m.pinned || m.hidden || m.status === "retired");
   const list = all ? r.models : recent;
   const s = r.settings;
+  // Bật / tắt tự nhận model mới, "Check now" và "Test again" gọi API bằng khóa của chủ máy chủ: chỉ chủ sở hữu (máy chủ cũng chặn).
+  const owner = r.owner !== false;
   return (
     <div className="mr">
       <div className="api-card mr-head">
@@ -101,27 +103,28 @@ export function ModelRegistry() {
             <b>Add new models automatically</b>
             <span className="d">When a provider releases a model, Synchro tests it with one short message, one tool call and one image, then shows it with a New label. Auto picks the newest model of each line; the previous one stays as a fallback.</span>
           </div>
-          <Switch on={s.auto} set={(v) => void post({ action: "auto", on: v })} label="Add new models automatically" disabled={busy} />
+          <Switch on={s.auto} set={(v) => void post({ action: "auto", on: v })} label="Add new models automatically" disabled={busy || !owner} />
         </div>
         {providers.length > 0 && (
           <div className="mr-provs" aria-label="Providers">
             {providers.map((p) => {
               const on = s.auto && !s.off.includes(p);
-              return <button key={p} className={`mr-prov ${on ? "on" : ""}`} aria-pressed={on} disabled={busy || !s.auto} onClick={() => void post({ action: "provider", id: p, on: !on })}>{on ? <I.Check size={12} /> : <I.X size={12} />}{PROVIDER[p] ?? p}</button>;
+              return <button key={p} className={`mr-prov ${on ? "on" : ""}`} aria-pressed={on} disabled={busy || !s.auto || !owner} onClick={() => void post({ action: "provider", id: p, on: !on })}>{on ? <I.Check size={12} /> : <I.X size={12} />}{PROVIDER[p] ?? p}</button>;
             })}
           </div>
         )}
         <div className="mr-check">
           <span className="d">{s.lastCheck ? <>Last check <span data-notr>{ago(s.lastCheck)}</span>. Synchro checks every 6 hours.</> : "Synchro checks every 6 hours."}</span>
-          <button className="btn dark" disabled={busy} onClick={check}>{busy ? <><span className="api-spin" />Checking…</> : <><I.Retry size={14} />Check now</>}</button>
+          <button className="btn dark" disabled={busy || !owner} onClick={check}>{busy ? <><span className="api-spin" />Checking…</> : <><I.Retry size={14} />Check now</>}</button>
         </div>
+        {!owner && <p className="api-own"><I.Lock size={12} /><span>Only the Owner can turn automatic model updates on or off, check now or test a model again, since these use the Owner&apos;s API keys. You can still pin, hide or switch to a model.</span></p>}
         {s.lastError && <div className="api-err in"><I.Alert size={14} /><span>{s.lastError}</span></div>}
       </div>
       <div className="mr-tabs" role="tablist">
         <button role="tab" aria-selected={!all} className={!all ? "on" : ""} onClick={() => setAll(false)}>Recent changes</button>
         <button role="tab" aria-selected={all} className={all ? "on" : ""} onClick={() => setAll(true)}>All models</button>
       </div>
-      {list.length ? <div className="mr-list">{list.map((m) => <Row key={m.key} m={m} busy={busy} act={act} />)}</div>
+      {list.length ? <div className="mr-list">{list.map((m) => <Row key={m.key} m={m} busy={busy} act={act} owner={owner} />)}</div>
         : <div className="api-empty"><I.Sparkle size={18} /><span>No new models yet. Models found here are tested before anyone can use them.</span></div>}
     </div>
   );

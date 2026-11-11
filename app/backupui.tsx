@@ -12,9 +12,10 @@ type St = {
   enabled: boolean; accountId: string; bucket: string; accessKeyId: string; hasSecret: boolean; prefix: string; testReplica: boolean; binary: string | null;
   running: boolean; pid: number | null; startedAt: number | null; restarts: number; errors: { at: number; level: string; msg: string }[];
   localTxid: string | null; replicaTxid: string | null; lastSyncAt: number | null; walSize: string | null; statusError: string | null; lagTx: number | null; lagSec: number | null;
+  owner?: boolean;
 };
 type Drill = { ok: boolean; ms: number; integrity: string; sizeMB: number; txid: string | null; tables: { name: string; restored: number | null; live: number | null }[]; error?: string };
-type ToggleT = (p: { on: boolean; set: (v: boolean) => void; label?: string }) => React.ReactElement;
+type ToggleT = (p: { on: boolean; set: (v: boolean) => void; label?: string; disabled?: boolean }) => React.ReactElement;
 
 function Kv({ k, v, bad }: { k: string; v: React.ReactNode; bad?: boolean }) {
   return <div className="adm-kv"><span>{k}</span><b data-notr style={bad ? { color: "#c6422f" } : undefined}>{v}</b></div>;
@@ -46,6 +47,8 @@ export function ContinuousBackup({ Toggle }: { Toggle: ToggleT }) {
   const ready = !!(s.accountId && s.bucket && s.accessKeyId && s.hasSecret) || s.testReplica;
   const dirty = f.accountId !== s.accountId || f.bucket !== s.bucket || f.accessKeyId !== s.accessKeyId || !!f.secret || f.prefix !== s.prefix;
   const stale = s.enabled && s.lagSec !== null && s.lagTx !== null && s.lagTx > 0 && s.lagSec > 300;
+  // Lưu / gỡ cấu hình R2 và bật / tắt chỉ chủ sở hữu (máy chủ cũng chặn); quản trị viên vẫn xem trạng thái và chạy thử khôi phục.
+  const own = s.owner !== false;
   const state = !s.enabled ? "Off" : !s.binary ? "Not installed" : s.running ? (s.errors.length && s.errors[0].at > Date.now() - 10 * 60_000 ? "Running with errors" : "Running") : "Stopped";
   return <>
     <p className="d adm-privacy"><I.Retry size={14} />Streams every change to the database to your Cloudflare R2 bucket within seconds, so a lost server loses at most a few seconds of data. Nightly backups keep running as before. Setup steps are in docs/backup-r2.md.</p>
@@ -53,20 +56,21 @@ export function ContinuousBackup({ Toggle }: { Toggle: ToggleT }) {
       <div className="adm-card-h"><b>Continuous backup to Cloudflare R2</b><span className={`s-badge ${state === "Running" ? "ok" : ""}`}>{state}</span></div>
       {!s.binary && <p className="d bk-warn" role="status">This server doesn&apos;t have litestream yet. Run workspace/setup.sh on the server (every deploy runs it) and it installs a pinned, checksum-verified copy.</p>}
       {s.testReplica && <p className="d bk-warn">Test mode: replicating to a local folder instead of R2.</p>}
+      {!own && <p className="api-own top"><I.Lock size={13} /><span>Only the Owner can change the R2 settings or turn continuous backup on or off. You can still check its status and test a restore.</span></p>}
       <div className="bk-grid">
-        <label><span>Account ID</span><input className="field" spellCheck={false} autoComplete="off" value={f.accountId} onChange={(e) => setF({ ...f, accountId: e.target.value.trim() })} data-notr /></label>
-        <label><span>Bucket</span><input className="field" spellCheck={false} autoComplete="off" placeholder="synchro-backup" value={f.bucket} onChange={(e) => setF({ ...f, bucket: e.target.value.trim() })} data-notr /></label>
-        <label><span>Access Key ID</span><input className="field" spellCheck={false} autoComplete="off" value={f.accessKeyId} onChange={(e) => setF({ ...f, accessKeyId: e.target.value.trim() })} data-notr /></label>
-        <label><span>Secret Access Key</span><input className="field" type="password" spellCheck={false} autoComplete="new-password" placeholder={s.hasSecret ? "Saved. Paste a new key to replace it." : ""} value={f.secret} onChange={(e) => setF({ ...f, secret: e.target.value })} /></label>
-        <label><span>Folder in the bucket</span><input className="field" spellCheck={false} autoComplete="off" value={f.prefix} onChange={(e) => setF({ ...f, prefix: e.target.value.trim() })} data-notr /></label>
+        <label><span>Account ID</span><input className="field" spellCheck={false} autoComplete="off" disabled={!own} value={f.accountId} onChange={(e) => setF({ ...f, accountId: e.target.value.trim() })} data-notr /></label>
+        <label><span>Bucket</span><input className="field" spellCheck={false} autoComplete="off" placeholder="synchro-backup" disabled={!own} value={f.bucket} onChange={(e) => setF({ ...f, bucket: e.target.value.trim() })} data-notr /></label>
+        <label><span>Access Key ID</span><input className="field" spellCheck={false} autoComplete="off" disabled={!own} value={f.accessKeyId} onChange={(e) => setF({ ...f, accessKeyId: e.target.value.trim() })} data-notr /></label>
+        <label><span>Secret Access Key</span><input className="field" type="password" spellCheck={false} autoComplete="new-password" placeholder={s.hasSecret ? "Saved. Paste a new key to replace it." : ""} disabled={!own} value={f.secret} onChange={(e) => setF({ ...f, secret: e.target.value })} /></label>
+        <label><span>Folder in the bucket</span><input className="field" spellCheck={false} autoComplete="off" disabled={!own} value={f.prefix} onChange={(e) => setF({ ...f, prefix: e.target.value.trim() })} data-notr /></label>
       </div>
       <div className="modal-foot bk-foot">
-        {(s.accountId || s.hasSecret) && <button className="btn" disabled={!!busy} onClick={() => app.confirm("Remove the R2 settings?", "Continuous backup stops and the keys are deleted from this server. Copies already in your bucket stay there.", "Remove", () => void act("clear", { action: "clear" }, "R2 settings removed"))}>Remove</button>}
-        <button className="btn dark" disabled={!dirty || !!busy} onClick={() => void act("save", { action: "save", ...f }, "Backup settings saved")}>{busy === "save" ? <span className="api-spin" /> : "Save"}</button>
+        {own && (s.accountId || s.hasSecret) && <button className="btn" disabled={!!busy} onClick={() => app.confirm("Remove the R2 settings?", "Continuous backup stops and the keys are deleted from this server. Copies already in your bucket stay there.", "Remove", () => void act("clear", { action: "clear" }, "R2 settings removed"))}>Remove</button>}
+        <button className="btn dark" disabled={!own || !dirty || !!busy} onClick={() => void act("save", { action: "save", ...f }, "Backup settings saved")}>{busy === "save" ? <span className="api-spin" /> : "Save"}</button>
       </div>
       <div className="adm-perm-row">
         <div><div className="t">Back up continuously</div><div className="d">Runs litestream next to Synchro. It restarts on its own if it stops.</div></div>
-        <Toggle on={s.enabled} label="Back up continuously" set={(v) => { if (v && !ready) { app.say("Fill in Account ID, bucket, Access Key ID and Secret Access Key first"); return; } void act("toggle", { action: "save", enabled: v }, v ? "Continuous backup on" : "Continuous backup off"); }} />
+        <Toggle on={s.enabled} label="Back up continuously" disabled={!own} set={(v) => { if (v && !ready) { app.say("Fill in Account ID, bucket, Access Key ID and Secret Access Key first"); return; } void act("toggle", { action: "save", enabled: v }, v ? "Continuous backup on" : "Continuous backup off"); }} />
       </div>
       {(s.enabled || s.replicaTxid) && <>
         <Kv k="Last sync to R2" v={s.lastSyncAt ? `${ago(s.lastSyncAt)} (${fmtDate(s.lastSyncAt)})` : "—"} bad={stale} />
