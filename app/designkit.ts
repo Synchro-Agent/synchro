@@ -6,8 +6,9 @@ import { PRESET_ALIASES, presetId, presetOf, PRESETS } from "./designpresets";
 
 export type DesignFormat = "slide" | "doc" | "sheet" | "graphic";
 export type DesignDomain = "finance" | "data" | "tech" | "editorial" | "marketing" | "event" | "product" | "general";
-/** Trần mỗi lượt, tính theo byte UTF-8 (tiếng Việt nặng hơn số ký tự). */
-export const DESIGN_BUDGET = 6144;
+/** Trần mỗi lượt, tính theo byte UTF-8 (tiếng Việt nặng hơn số ký tự). 8 KB từ khi có hợp đồng mẫu điền sẵn (designtemplates.ts): model chỉ viết vài trăm byte JSON
+ *  thay cho hàng chục KB HTML, phần đổi lại là thực đơn mẫu của đúng một định dạng (slide, tài liệu hay đồ họa), không nạp thực đơn của định dạng khác. */
+export const DESIGN_BUDGET = 8192;
 export const STUDIO_FORMAT: Record<string, DesignFormat> = { slides: "slide", docs: "doc", design: "graphic" };
 
 const fold = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/gi, "d").toLowerCase();
@@ -132,7 +133,7 @@ Màu 60-30-10: 60% nền, 30% bề mặt và chữ, 10% nhấn; một màu nhấ
 Bo góc đồng tâm: R ngoài = R trong + padding; thẻ lồng thẻ không cùng một bán kính.
 Số: font-variant-numeric:tabular-nums trong bảng và KPI, cột số căn phải, cùng số chữ số thập phân; số tiếng Việt viết 14,2% và 1.250 tỉ; KPI hẹp thì đơn vị nhỏ hơn số, không để đơn vị rớt dòng.
 Xuống dòng: tiêu đề text-wrap:balance, không để một chữ rớt một mình ở dòng cuối; đoạn văn text-wrap:pretty; khối văn đọc dài rộng 60-75 ký tự (đặt cho khối văn, không đặt cho mọi p, li, nhất là trong thẻ và bảng).
-Biểu đồ: mỗi hình một ý. Bỏ lưới dọc, khung, 3D, chú giải khi ghi nhãn thẳng được; các cột hoặc đường thường dùng màu trung tính, chỉ chuỗi mà tiêu đề nhắc tới dùng màu nhấn; ghi số ngay trên cột thay cho trục y; tròn tối đa 5 phần; luôn ghi nguồn. Không cầu vồng.
+Biểu đồ: mỗi hình một ý. Bỏ lưới dọc, khung, 3D, chú giải khi ghi nhãn thẳng được; các cột hoặc đường thường dùng màu trung tính (xám), chỉ chuỗi mà tiêu đề nhắc tới dùng màu nhấn; ghi số ngay trên cột thay cho trục y; tròn tối đa 5 phần; luôn ghi nguồn. Không cầu vồng.
 Nội dung: số liệu không có trong yêu cầu thì ghi rõ là ví dụ, không viết như thật.`;
 
 const FORMAT_RULES: Record<DesignFormat, string> = {
@@ -156,8 +157,8 @@ Hiệu ứng có chủ đích, tối đa 2 loại mỗi trang: kính mờ chỉ 
 };
 
 const KIT = (preset: string) => `Bộ CSS sẵn trong khung artifact: không cần nạp, phông đủ dấu tiếng Việt tự tải, tải về vẫn kèm. Đặt <html data-sx-preset="${preset || "swiss-grid"}"> (React: trên div ngoài cùng; SVG: trên thẻ svg); thêm data-sx-theme="auto" nếu trang đọc nên theo chế độ tối của máy (slide, poster giữ cố định). Trong run_code không có bộ này: dùng các số ở trên.
-Khung: <section class="slide sx-slide"> (luôn 16:9, tự co vừa cửa sổ) .sx-page (A4, tự có luật in) .sx-poster (3:4, tự co vừa cửa sổ). Chữ: .sx-eyebrow .sx-title .sx-display .sx-kicker .sx-h2 .sx-h3 .sx-text .sx-small .sx-source .sx-kpi .sx-num .sx-muted .sx-accent .sx-up .sx-down. Bố cục: .sx-stack .sx-row .sx-between .sx-grow .sx-end .sx-gap-{8,16,24,32,48,64} .sx-p-{…}. Lưới: .sx-grid-hero (1 lớn trái, 2 nhỏ phải) .sx-grid-4060 .sx-grid-6040 .sx-grid-bento4 (7:5 rồi 5:7) .sx-grid-dash (4 KPI, phần tử thứ 5 tràn hàng) .sx-grid-3. Bề mặt: .sx-card .sx-inner (ảnh, hộp trong thẻ, bo đồng tâm) .sx-tint .sx-solid .sx-badge .sx-callout .sx-rule. Bảng: .sx-table, ô số .n, hàng tổng .sx-total, thanh trong ô <td class="sx-bar n" style="--sx-v:72%">. Hiệu ứng: .sx-shadow .sx-rim .sx-glass .sx-aurora .sx-noise. Chuyển động: .sx-rise .sx-fade .sx-pop (style="--sx-i:0,1,2…" để lệch nhịp 70ms), .sx-draw cho path có pathLength="1"; đã tôn trọng prefers-reduced-motion, hỏng hay khi in vẫn hiện đủ: đừng tự đặt opacity:0 chờ JS.
-Biến: --sx-bg --sx-surface --sx-raised --sx-ink --sx-muted --sx-accent --sx-accent2 --sx-line --sx-neutral --sx-pos --sx-neg --sx-head --sx-body --sx-mono; cỡ tự tính: calc(N*var(--sx-u)). CSS của bạn viết sau sẽ thắng nếu cần chỉnh.`;
+Khung: <section class="slide sx-slide"> (luôn 16:9, tự co vừa cửa sổ) .sx-page (A4, tự có luật in) .sx-poster (3:4, tự co vừa cửa sổ). Chữ: .sx-eyebrow .sx-title .sx-display .sx-kicker .sx-h2 .sx-h3 .sx-text .sx-small .sx-source .sx-kpi .sx-num .sx-muted .sx-accent .sx-up .sx-down. Bố cục: .sx-stack .sx-row .sx-between .sx-grow .sx-end .sx-gap-{8,16,24,32,48,64} .sx-p-{…}. Lưới: .sx-grid-hero (1 lớn trái, 2 nhỏ phải) .sx-grid-4060 .sx-grid-6040 .sx-grid-bento4 (7:5 rồi 5:7) .sx-grid-dash (4 KPI, phần tử thứ 5 tràn hàng) .sx-grid-3. Bề mặt: .sx-card .sx-inner (ảnh, hộp trong thẻ, bo đồng tâm) .sx-tint .sx-solid .sx-badge .sx-callout .sx-rule. Bảng: .sx-table, ô số .n, hàng tổng .sx-total, thanh trong ô <td class="sx-bar n" style="--sx-v:72%">, ô nhiệt <td class="sx-heat n" style="--sx-v:72%"> (chữ tự đổi sáng / tối theo độ chói nền). Hiệu ứng: .sx-shadow (nền sáng) .sx-rim (nền tối) .sx-glass .sx-aurora .sx-noise; .sx-gradient-text chỉ cho số KPI hay chữ cực lớn, không cho chữ đọc. Ô chữ ngắn trong khung cố định (tiêu đề slide, KPI, thẻ) thêm data-sx-fit: tràn thì Synchro tự co 1px một lần tới 11px, tương phản dưới 4.5:1 thì tự đổi màu chữ; vẫn phải viết vừa khung. Chuyển động: .sx-rise .sx-fade .sx-pop (style="--sx-i:0,1,2…" để lệch nhịp 70ms), .sx-draw cho path có pathLength="1"; đã tôn trọng prefers-reduced-motion, hỏng hay khi in vẫn hiện đủ: đừng tự đặt opacity:0 chờ JS.
+Biến: --sx-bg --sx-surface --sx-raised --sx-ink --sx-muted --sx-accent --sx-accent2 --sx-line --sx-neutral --sx-pos --sx-neg --sx-vivid (màu nhấn gốc cho hình, cột được nhấn, không cho chữ) --sx-head --sx-body --sx-mono; cỡ tự tính: calc(N*var(--sx-u)). CSS của bạn viết sau sẽ thắng nếu cần chỉnh.`;
 
 const FILE_RULES: Partial<Record<DesignFormat, string>> = {
   slide: `Tệp .pptx qua run_code (chỉ khi cần shape gốc, còn lại Tải về › PowerPoint từ artifact): python-pptx 13.333×7.5in, tiêu đề ở placeholder, phông Arial hoặc Calibri vì máy người nhận chắc có.`,

@@ -340,7 +340,7 @@ const nav = async (html) => { const url = `${ORIGIN}/doc/${++docN}`; pages.set(u
     if (attr === "html") check(`in ${id}: nền trắng`, bg === "rgb(255, 255, 255)", bg);
   }
   await open(`<html data-sx-preset="data-terminal"><body><section class="slide sx-slide"><p class="sx-accent">Slide giữ màu</p></section></body></html>`);
-  check("in slide nền tối: giữ nguyên màu của slide", (await ev(`getComputedStyle(document.querySelector(".sx-accent")).color`)) === "rgb(52, 211, 153)");
+  check("in slide nền tối: giữ nguyên màu của slide", (await ev(`getComputedStyle(document.querySelector(".sx-accent")).color`)) === "rgb(16, 185, 129)"); // #10B981 của bảng phong cách
   await media();
 
   // Mạng treo: yêu cầu phông không có trả lời, trang vẫn phải vẽ ngay.

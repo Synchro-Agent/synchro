@@ -40,7 +40,7 @@ ok(turn("Soạn quyết định bổ nhiệm", { studio: "docs" }) === null && t
 ok(turn("Sếp gấp nên tôi cần làm báo cáo tài chính").preset !== "midnight-tech" && turn("Khách hỏi nên tôi muốn làm slide doanh thu").preset !== "midnight-tech" && turn("Làm báo cáo tài chính nền tối").preset === "midnight-tech" && turn("lam slide nen toi").preset === "midnight-tech", "\"nên tôi\" không phải \"nền tối\"; gõ không dấu vẫn nhận");
 for (const s of ["c1", "c2", "c3", "c4"]) ok(turn("Sếp gấp nên tôi cần làm báo cáo tài chính", { seed: s }).preset !== "midnight-tech", `báo cáo tài chính không ra nền đen (đoạn chat ${s})`);
 
-console.log("2. Trần 6 KB, đo bằng byte");
+console.log("2. Trần 8 KB, đo bằng byte");
 let biggest = 0;
 for (const typed of ["làm slide", "viết báo cáo", "tạo file excel", "làm poster"]) for (const dom of ["", " tài chính", " sự kiện", " tạp chí", " công nghệ", " marketing", " sản phẩm", " giao dịch"]) for (const caps of [{ art: true, code: true }, { art: true, code: false }, { art: false, code: true }]) for (const s of ["a", "b", "c", "d", "e", "f"]) {
   const d = designTurn({ typed: typed + dom, ...caps, seed: s });
@@ -48,7 +48,7 @@ for (const typed of ["làm slide", "viết báo cáo", "tạo file excel", "làm
   biggest = Math.max(biggest, d.bytes);
   if (d.bytes > DESIGN_BUDGET || designBytes(d.block) !== d.bytes) ok(false, "vượt trần", `${typed}${dom} ${d.bytes}`);
 }
-ok(biggest > 0 && biggest <= 6144, `khối lớn nhất ${biggest} byte, trần ${DESIGN_BUDGET}`);
+ok(biggest > 0 && biggest <= 8192 && DESIGN_BUDGET === 8192, `khối lớn nhất ${biggest} byte, trần ${DESIGN_BUDGET}`);
 const slide = turn("Làm bộ slide doanh thu");
 ok(/Bộ CSS sẵn/.test(slide.block) && /Chữ: chỉ dùng thang/.test(slide.block) && /Mỗi slide 3 tầng/.test(slide.block) && /Phong cách gợi ý/.test(slide.block), "khối đầy đủ không phần nào bị cắt vì trần", slide.bytes);
 ok(!turn("tạo file excel", full).block.includes("Bộ CSS sẵn") && turn("tạo file excel", full).bytes < 2000, "Excel: chỉ quy tắc bảng tính", turn("tạo file excel", full).bytes);
@@ -79,7 +79,7 @@ for (const [name, block, sel] of [["slide", slide.block, "\\.sx-slide,:where\\(s
 ok(!/chỉ dùng thang 12/.test(slide.block) && !/18-22/.test(slide.block) && !/dưới 18/.test(slide.block), "slide không còn hai bộ số trái nhau");
 ok(/thang 12·14·16·21·28·38/.test(doc), "tài liệu: thang của trang đọc");
 ok(/Thang: trang web 12·14·16·21·28·38·56; poster/.test(g), "đồ họa: thang riêng cho trang web và poster");
-const lhOf = (c) => /var\(--sx-lh,([\d.]+)\)|line-height:([\d.]+)/.exec(new RegExp(`\\.${c}\\{[^}]*\\}`).exec(A.KIT_CSS)?.[0] ?? "");
+const lhOf = (c) => /var\(--sx-lh,([\d.]+)\)|line-height:([\d.]+)/.exec(new RegExp(`\\.${c}(?:,\\.[\\w-]+)*\\{[^}]*\\}`).exec(A.KIT_CSS)?.[0] ?? "");
 for (const c of ["sx-display", "sx-title", "sx-kpi"]) { const m = lhOf(c); ok(+(m?.[1] ?? m?.[2] ?? 0) >= 1.15, `${c}: bước dòng đúng quy tắc, không dưới 1.15`, m?.[0]); }
 
 console.log("4. Phong cách có sẵn");
@@ -159,12 +159,20 @@ const named = new Set([...slide.block.matchAll(/\.sx-[a-z0-9-]+/g)].map((m) => m
 const missing = [...named].filter((c) => !css.includes(c));
 ok(named.size > 30 && !missing.length, `mọi lớp nhắc trong khối (${named.size}) đều có trong bộ CSS`, missing.join(" "));
 for (const n of [8, 16, 24, 32, 48, 64]) ok(css.includes(`.sx-gap-${n}{`) && css.includes(`.sx-p-${n}{`), `lưới 8pt: gap / padding ${n}`);
-for (const n of ["hero", "4060", "6040", "bento4", "dash", "3"]) ok(css.includes(`.sx-grid-${n}{`), `lưới .sx-grid-${n}`);
+for (const n of ["hero", "4060", "6040", "bento4", "dash", "3"]) ok(new RegExp(`\\.sx-grid-${n}(?:,\\.[\\w-]+)*\\{grid-template`).test(css), `lưới .sx-grid-${n}`);
 const reduced = /@media \(prefers-reduced-motion:reduce\)\{([^}]*\})\}/.exec(css)?.[1] ?? "";
 const moving = [...new Set([...css.matchAll(/\.(sx-[a-z]+)\{animation/g)].map((m) => m[1]))];
 ok(moving.length >= 2 && ["sx-rise", "sx-fade", "sx-pop", "sx-draw"].every((c) => reduced.includes(`.${c}`)) && /animation:none/.test(reduced), "mọi lớp chuyển động tắt khi prefers-reduced-motion", reduced);
 ok(!/\.sx-[\w-]+\{[^}]*\bopacity:0/.test(css) && /backwards/.test(css), "chữ không bao giờ phụ thuộc animation để hiện (backwards, không forwards + opacity:0)");
-ok(!/background-clip:text/.test(css), "không có lớp chữ chuyển màu");
+// Chữ chuyển màu chỉ có ở một lớp dành cho số KPI (bảng visual-fx của chủ dự án), có màu chữ dự phòng và tắt khi in; không lớp nào khác.
+ok([...css.matchAll(/([^{}]*)\{[^}]*background-clip:text/g)].every((m) => /^\.sx-gradient-text,\.fx-gradient-text$/.test(m[1].trim())) && /\.sx-gradient-text,\.fx-gradient-text\{color:var\(--sx-ink\)/.test(css) && /\.sx-gradient-text,\.fx-gradient-text\{background:none;-webkit-text-fill-color:currentColor\}/.test(css), "chữ chuyển màu chỉ ở .sx-gradient-text, có màu dự phòng, tắt khi in");
+// master-microcraft.css và visual-fx.css của chủ dự án: tên lớp và tên biến của bảng đó chạy được, trỏ về biến của bộ thiết kế.
+for (const c of ["typo-hero-kpi", "typo-action-title", "typo-eyebrow", "concentric-outer", "concentric-inner", "surface-tinted-badge", "bento-grid-hero-left", "fx-ambient-shadow", "fx-specular-rim", "fx-frosted-glass", "fx-aurora-bg", "fx-film-grain", "fx-gradient-text", "anim-stagger-card"]) ok(css.includes(`.${c}`) && A.usesKit(`<div class="${c}">`), `lớp ${c} của bảng vi mô có trong bộ CSS và kích hoạt bộ CSS`);
+for (const v of ["--text-kpi", "--bg-canvas", "--bg-surface", "--text-primary", "--text-secondary", "--accent-primary", "--accent-secondary", "--border-color", "--font-heading", "--radius-inner", "--ease-out-expo", "--ease-spring"]) ok(css.includes(`${v}:`), `biến ${v}`);
+ok(/--sx-fs-kpi:60/.test(css) && /letter-spacing:\.1em/.test(css), "thang 1.333 của trang đọc tới KPI 60px, nhãn in hoa giãn 0.1em");
+ok(/\.sx-heat\{/.test(css) && /\.anim-stagger-card\{animation|anim-stagger-card\{animation/.test(css.replace(/\.sx-rise,\.sx-fade,\.sx-pop,/, "")) && /var\(--stagger-index,0\)/.test(css), "ô nhiệt, thẻ xuất hiện lệch nhịp theo --stagger-index");
+ok(/\.sx-draw,\.anim-stagger-card\{animation:none!important\}/.test(reduced + "}") || /anim-stagger-card\{animation:none/.test(css), "thẻ lệch nhịp cũng tắt khi prefers-reduced-motion");
+ok(A.kitHead(`<div class="sx-card" data-sx-fit>x</div>`).includes("__sxFit") && /n>11/.test(A.FIT_JS) && /4\.5/.test(A.FIT_JS) && /F8FAFC/.test(A.FIT_JS) && /0F172A/.test(A.FIT_JS) && !/`|<\/script/i.test(A.FIT_JS), "tự vá sau khi vẽ: co chữ tới 11px, đổi màu chữ dưới 4.5:1, chạy được trong thẻ script");
 ok(!/stroke-dasharray:1000/.test(css) && /pathLength|stroke-dasharray:1/.test(css), "vẽ nét theo pathLength, không dùng số 1000 cố định");
 ok(/@media print/.test(css) && /break-after:avoid-page/.test(css) && /orphans:3/.test(css) && /thead\{display:table-header-group\}/.test(css), "có luật in");
 ok(!/\bli\b[^{}]*\{[^}]*max-width/.test(css) && !/\bp\b[^{}]*\{[^}]*max-width/.test(css), "không đặt max-width cho mọi p, li");
