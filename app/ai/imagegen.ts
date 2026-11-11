@@ -16,21 +16,31 @@ import { engineEnv, everLoggedIn, markRelogin, safeScope, scopeDir, status } fro
 import { type Cli, cliRunning, engineHome, type Exit, find, makeDir, removeDir, removeSessionFiles, spawnCli, stripAnsi, watchSessions, writeEngineFile } from "./cli_runtime";
 import { classify, redact } from "./errors";
 import { agyBrainDir, gatherImages, IMAGE_MAX_MB, imageKind, type ImgFile, listImageFiles, namedPaths, removeNewFiles, scrubServerPaths, type FileCtx } from "./imagefiles";
+import { serviceKey } from "../providers";
+import { replicateImages, RepError, repRoom, reserveRep } from "./replicate";
 import { codexRpc } from "./subs";
 
 export const ASPECTS = ["1:1", "16:9", "9:16", "4:3", "3:4"] as const;
-export type ImgCli = "agy" | "grok" | "codex";
-/** Thứ tự thử: gói đã kiểm chứng trước. */
+// replicate: khóa API Replicate của chủ máy chủ (app/ai/replicate.ts), không phải CLI. Có khóa và tài khoản còn hạn mức ảnh hôm nay thì thử trước, lỗi hay hết thì về gói của người đó.
+export type ImgCli = "agy" | "grok" | "codex" | "replicate";
+/** Thứ tự thử các gói: gói đã kiểm chứng trước. */
 export const IMG_ORDER: ImgCli[] = ["agy", "grok", "codex"];
-export const IMG_NAME: Record<ImgCli, string> = { agy: "Antigravity", grok: "Grok", codex: "ChatGPT" };
+export const IMG_NAME: Record<ImgCli, string> = { agy: "Antigravity", grok: "Grok", codex: "ChatGPT", replicate: "Replicate" };
 // Gói nhận được ảnh gốc: Antigravity đọc tệp trong thư mục làm việc, Codex có --image (chưa kiểm chứng cùng image_gen). image_gen của Grok chỉ có prompt, aspect_ratio.
-const TAKES_REF: Record<ImgCli, boolean> = { agy: true, grok: false, codex: true };
+const TAKES_REF: Record<ImgCli, boolean> = { agy: true, grok: false, codex: true, replicate: true };
+// Replicate chỉ nhận ảnh gốc khi đặt ảnh sản phẩm vào studio (IC-Light). FLUX 1.1 Pro Ultra là model tạo ảnh mới từ chữ: ảnh gốc chỉ gợi bố cục, nên
+// "sửa ảnh này" qua FLUX ra một ảnh khác hẳn mà vẫn báo là xong. Sửa ảnh có sẵn đi qua Antigravity / Codex như trước.
+const takesRef = (cli: ImgCli, q: { relight?: boolean }) => (cli === "replicate" ? !!q.relight : TAKES_REF[cli]);
 
 export type ImgKind = "quota" | "auth" | "notool" | "nofile" | "bad" | "big" | "timeout" | "aborted" | "busy" | "noref" | "free" | "refused" | "other";
 export type ImgReq = {
   uid: string; prompt: string; aspect?: string; count?: number;
   /** Ảnh người dùng muốn sửa hoặc lấy làm mẫu. */
   reference?: ImgFile;
+  /** Ảnh sản phẩm thương mại: Replicate nối hậu tố nhiếp ảnh của chủ dự án vào prompt. */
+  product?: boolean;
+  /** Đặt sản phẩm trong ảnh gốc vào bối cảnh studio (IC-Light), cần reference. */
+  relight?: boolean;
   signal?: AbortSignal;
   /** CLI sắp chạy thật (đã qua hàng chờ của tài khoản). */
   onBegin?: () => void;
@@ -252,8 +262,30 @@ async function viaCodex(r: Run): Promise<Tried> {
   }
 }
 
+/** Replicate: không có thư mục tạm hay CLI, chỉ gọi API; ảnh tạo được tính vào hạn mức trong ngày của tài khoản. */
+async function viaReplicate(q: ImgReq): Promise<Tried> {
+  // Giữ chỗ trong hạn mức trước khi gọi (tiền thật), trả lại phần không tạo được khi xong.
+  const want = Math.min(4, Math.max(1, q.count ?? 1));
+  const hold = reserveRep(q.uid, want), count = hold.n;
+  if (!count) return { fail: { kind: "quota", detail: "hạn mức ảnh Replicate hôm nay" } };
+  let made = 0, usd = 0;
+  try {
+    const relight = !!(q.relight && q.reference);
+    const r = await replicateImages({ prompt: q.prompt, aspect: q.aspect, count, reference: relight ? q.reference : undefined, relight, product: !!(q.product || relight), signal: q.signal, onBegin: q.onBegin });
+    made = r.files.length; usd = r.usd;
+    console.log(`[timing] replicate model=${r.model} images=${r.files.length} predict=${r.seconds.toFixed(1)}s`);
+    const notes = [r.model === "zsxkib/ic-light" ? "Đặt sản phẩm vào ánh sáng studio bằng IC-Light trên Replicate." : `Tạo bằng FLUX 1.1 Pro Ultra trên Replicate${q.product ? ", phong cách ảnh sản phẩm thương mại" : ""}.`];
+    if (count < want) notes.push(`Hạn mức ảnh Replicate hôm nay chỉ còn ${count} ảnh.`);
+    return { files: r.files.map((f, i) => ({ name: imageName(q.prompt, i, r.files.length, f.ext), mime: f.mime, data: f.data })), notes };
+  } catch (e) {
+    const k = e instanceof RepError ? e.kind : "other";
+    return { fail: { kind: k === "busy" ? "quota" : k === "bad" ? "other" : k, detail: clip((e as Error).message) } };
+  } finally { hold.settle(made, usd); }
+}
+
 /** Một lượt tạo ảnh trên một gói của đúng tài khoản q.uid, trong thư mục tạm riêng; luôn dọn thư mục tạm khi xong. */
 export async function runBackend(cli: ImgCli, q: ImgReq): Promise<Tried> {
+  if (cli === "replicate") return viaReplicate(q);
   const count = Math.min(4, Math.max(1, q.count ?? 1));
   const login = scopeDir(cli, q.uid), env = engineEnv(cli, q.uid);
   const parent = path.join(engineHome(), "work", safeScope(q.uid)), work = path.join(parent, `.synchro-img-${crypto.randomBytes(6).toString("hex")}`);
@@ -302,9 +334,9 @@ async function codexPlan(uid: string): Promise<string> {
   const t = (r as { account?: { planType?: unknown } } | null)?.account?.planType;
   return typeof t === "string" ? t.toLowerCase() : "";
 }
-/** Gói có khả năng tạo ảnh mà tài khoản này đã đăng nhập (chỉ tài khoản này). */
+/** Đường tạo ảnh của tài khoản này: Replicate trước khi có khóa và còn hạn mức hôm nay, rồi các gói đã đăng nhập (chỉ tài khoản này). */
 export async function imagePlans(uid: string): Promise<ImgCli[]> {
-  const out: ImgCli[] = [];
+  const out: ImgCli[] = repRoom(uid) > 0 ? ["replicate"] : [];
   for (const cli of IMG_ORDER) {
     if (!find(cli as Cli) || !everLoggedIn(cli as Cli, uid)) continue;
     const s = await status(cli as Cli, uid, { stale: true }).catch(() => null);
@@ -315,8 +347,8 @@ export async function imagePlans(uid: string): Promise<ImgCli[]> {
 const reason = (f: ImgFail) => {
   const n = IMG_NAME[f.cli];
   switch (f.kind) {
-    case "quota": return f.cli === "grok" && /spending|personal-team/i.test(f.detail ?? "") ? `${n}: tài khoản xAI đã chạm giới hạn chi tiêu nên chưa tạo được ảnh` : `${n}: gói đã hết hạn mức tạo ảnh`;
-    case "auth": return `${n}: phiên đăng nhập không còn hợp lệ, cần đăng nhập lại`;
+    case "quota": return f.cli === "replicate" ? `${n}: ${/hạn mức ảnh/.test(f.detail ?? "") ? "tài khoản đã dùng hết số ảnh Replicate của hôm nay" : `khóa Replicate của máy chủ chưa dùng được lúc này (${f.detail ?? "hết số dư hoặc bị giới hạn"})`}` : f.cli === "grok" && /spending|personal-team/i.test(f.detail ?? "") ? `${n}: tài khoản xAI đã chạm giới hạn chi tiêu nên chưa tạo được ảnh` : `${n}: gói đã hết hạn mức tạo ảnh`;
+    case "auth": return f.cli === "replicate" ? `${n}: khóa Replicate của máy chủ không còn hợp lệ, cần quản trị viên kiểm tra` : `${n}: phiên đăng nhập không còn hợp lệ, cần đăng nhập lại`;
     case "free": return `${n}: gói Free không có công cụ tạo ảnh`;
     case "notool": return `${n}: gói này không có công cụ tạo ảnh`;
     case "nofile": return `${n}: CLI báo xong nhưng không có tệp ảnh nào${f.detail ? `, câu trả lời của nó: "${f.detail}"` : ""}`;
@@ -335,13 +367,13 @@ export const NO_PLAN_TEXT = "Chưa tạo được ảnh vì tài khoản chưa �
 export async function generateImages(q: ImgReq): Promise<ImgOk | ImgErr> {
   const plans = await imagePlans(q.uid);
   const tried: ImgFail[] = [];
-  if (!plans.length) return { ok: false, kind: "noplan", text: NO_PLAN_TEXT, tried, providers: true };
+  if (!plans.length) return { ok: false, kind: "noplan", text: serviceKey("replicate") ? `${NO_PLAN_TEXT.replace(/^Chưa tạo được ảnh vì/, "Chưa tạo được ảnh: tài khoản đã dùng hết số ảnh Replicate của máy chủ hôm nay (ngày mai có lại), và")}` : NO_PLAN_TEXT, tried, providers: true };
   const count = Math.min(4, Math.max(1, q.count ?? 1));
   for (let i = 0; i < plans.length; i++) {
     if (q.signal?.aborted) return { ok: false, kind: "aborted", text: "Đã dừng tạo ảnh.", tried, providers: false };
     const cli = plans[i], name = IMG_NAME[cli];
     const skip = (kind: ImgKind) => { tried.push({ cli, kind }); };
-    if (q.reference && !TAKES_REF[cli]) { skip("noref"); continue; }
+    if (q.reference && !takesRef(cli, q)) { skip("noref"); continue; }
     if (cli === "codex" && (await codexPlan(q.uid)) === "free") { skip("free"); continue; }
     // Lần đầu nói rõ sẽ chờ bao lâu; sau đó đếm giây để người dùng biết vẫn đang chạy. Tính từ lúc CLI chạy thật, không tính lúc xếp hàng chờ lượt khác của tài khoản.
     let tick: ReturnType<typeof setInterval> | undefined;
@@ -359,9 +391,9 @@ export async function generateImages(q: ImgReq): Promise<ImgOk | ImgErr> {
     const f: ImgFail = { cli, kind: r.fail?.kind ?? "nofile", detail: r.fail?.detail };
     tried.push(f);
     // Như lượt chat: bộ chọn model và thẻ Providers biết gói này cần đăng nhập lại, lần sau không chạy CLI vô ích.
-    if (f.kind === "auth") markRelogin(cli as Cli, q.uid);
+    if (f.kind === "auth" && cli !== "replicate") markRelogin(cli as Cli, q.uid);
     if (f.kind === "aborted") return { ok: false, kind: "aborted", text: "Đã dừng tạo ảnh.", tried, providers: false };
-    const next = plans.slice(i + 1).find((c) => !q.reference || TAKES_REF[c]);
+    const next = plans.slice(i + 1).find((c) => !q.reference || takesRef(c, q));
     if (next) q.onNote?.(`${reason(f)}. Đang thử ${IMG_NAME[next]}`);
   }
   const kinds = new Set(tried.map((f) => f.kind));
@@ -395,6 +427,8 @@ export const IMAGE_TOOL = {
         metricLabel: { type: "string", description: "Nhãn của con số, tối đa 40 ký tự" },
         author: { type: "string", description: "Tác giả / thương hiệu, tối đa 40 ký tự" },
       }, required: ["tag", "title", "metricValue", "metricLabel", "author"] },
+      product_shot: { type: "boolean", description: "true khi là ảnh sản phẩm thương mại để bán / quảng cáo (sản phẩm, bao bì, mỹ phẩm, đồ ăn trên bục studio). Không dùng cho logo, tranh, minh họa, ảnh người." },
+      product_relight: { type: "boolean", description: "true khi người dùng gửi ảnh sản phẩm và muốn đặt nó vào bối cảnh / ánh sáng studio sang trọng mà giữ nguyên sản phẩm; cần reference trỏ tới ảnh đó." },
       reference: { type: "string", description: "Chỉ khi cần sửa hoặc dựa trên một ảnh có sẵn, ảnh mới hoàn toàn thì bỏ tham số này: \"last\" là ảnh gần nhất của đoạn chat (ảnh vừa tạo hoặc ảnh người dùng vừa gửi), số n là ảnh thứ n của tin gần nhất người dùng gửi ảnh, hoặc tên tệp ảnh trong đoạn chat (kể cả ảnh Synchro đã tạo)." },
     },
     required: ["prompt"],
@@ -403,7 +437,7 @@ export const IMAGE_TOOL = {
 export const IMAGE_RULES = `<image_generation>
 Công cụ generate_image tạo ảnh thật bằng AI qua gói người dùng đã đăng nhập. Người dùng xin ảnh chụp, tranh, hình minh họa, logo, poster, ảnh sản phẩm, ảnh đại diện hay nhờ sửa một tấm ảnh: gọi generate_image, không dựng thay bằng code.
 Biểu đồ, sơ đồ, slide, infographic số liệu và thứ cần chữ chính xác tuyệt đối: dựng bằng code hoặc artifact như thường lệ. Chữ trong ảnh AI có thể sai chính tả, nhất là tiếng Việt: logo hay poster nhiều chữ thì nói trước điều đó.
-Viết prompt chi tiết, đủ chủ thể, bối cảnh, phong cách, ánh sáng, bố cục. Sửa ảnh có sẵn thì truyền reference.
+Viết prompt chi tiết, đủ chủ thể, bối cảnh, phong cách, ánh sáng, bố cục. Sửa ảnh có sẵn thì truyền reference. Ảnh sản phẩm để bán: product_shot true (Synchro tự thêm phong cách nhiếp ảnh studio, prompt chỉ cần tả sản phẩm và bối cảnh); người dùng gửi ảnh sản phẩm và muốn đưa vào studio: reference + product_relight true.
 Poster / banner / ảnh chia sẻ 1200×630 nhiều chữ kiểu thẻ số liệu (tiêu đề + một con số KPI): gọi generate_image với template "poster-master-og" và poster {tag, title, metricValue, metricLabel, author}, prompt một câu ngắn; ra PNG 3600×1890 chữ chính xác, không cần gói tạo ảnh. Bố cục khác thì dựng artifact HTML khung .sx-og (người dùng tải PNG 3x).
 Không nói đã tạo ảnh trước khi công cụ trả kết quả; mỗi lần mất khoảng 40 giây nên báo trước một câu ngắn. Xong rồi ảnh tự hiện thành thẻ trong khung chat: trong câu trả lời đừng chèn liên kết, đường dẫn hay cú pháp ảnh markdown, chỉ nói ngắn gọn đã tạo gì.
 Ảnh dùng được trong sản phẩm: kết quả công cụ ghi địa chỉ để đặt vào artifact (src, url(...)) và đường dẫn inputs/ để run_code đọc (Word, PowerPoint, PDF, video). Thiết kế, slide hay video cần ảnh thì tạo ảnh trước rồi đưa đúng ảnh đó vào, không dùng ảnh giữ chỗ.

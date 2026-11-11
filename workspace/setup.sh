@@ -20,8 +20,10 @@ mkdir -p /srv/synchro-ws && chmod 711 /srv/synchro-ws
 REMOTION_FILES=$(cd "$APP/workspace" && find remotion -type f -not -path 'remotion/node_modules/*' -not -path 'remotion/bundle/*' -not -path 'remotion/public/fonts/*' -not -path 'remotion/out/*' -not -path 'remotion/.synchro-video/*' | LC_ALL=C sort)
 # Mẫu tài liệu (workspace/doc, chép vào image ở /opt/synchro/doc: mẫu Typst, hợp đồng JSON, synchro-doc, bộ dựng Word): mọi tệp trừ node_modules.
 DOC_FILES=$(cd "$APP/workspace" && find doc -type f -not -path 'doc/docx/node_modules/*' -not -path '*/__pycache__/*' | LC_ALL=C sort)
+# Biểu đồ (workspace/charts, chép vào image ở /opt/synchro/charts: synchro-chart, cấu hình biểu đồ, package-lock của ECharts): mọi tệp trừ node_modules.
+CHART_FILES=$(cd "$APP/workspace" && find charts -type f -not -path 'charts/node_modules/*' | LC_ALL=C sort)
 HASH=$( { cat "$APP/workspace/Dockerfile" "$APP/workspace/.dockerignore" "$APP/workspace/fsop.js" "$APP/workspace/browser.sh" "$APP/workspace/subfit.py" "$APP/workspace/xlsx_recalc.py"; \
-  for f in $REMOTION_FILES $DOC_FILES; do printf '%s\n' "$f"; cat "$APP/workspace/$f"; done; } | sha256sum | cut -c1-16)
+  for f in $REMOTION_FILES $DOC_FILES $CHART_FILES; do printf '%s\n' "$f"; cat "$APP/workspace/$f"; done; } | sha256sum | cut -c1-16)
 CUR=$(docker image inspect -f '{{index .Config.Labels "synchro.hash"}}' "$IMAGE" 2>/dev/null || true)
 if [ "$HASH" != "$CUR" ]; then
   echo "Đang build image $IMAGE…"

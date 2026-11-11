@@ -136,7 +136,9 @@ const PROBE = ${PROBE};
 (async () => {
   const px = process.env.HTTPS_PROXY ? new URL(process.env.HTTPS_PROXY) : null;
   const browser = await puppeteer.launch({ executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || "/usr/bin/chromium", headless: true,
-    args: ["--no-sandbox", "--disable-dev-shm-usage", "--font-render-hinting=none", "--hide-scrollbars", ...(px ? ["--proxy-server=" + px.protocol + "//" + px.host] : [])] });
+    // Trang có nền shader / cảnh 3D: Chromium không còn tự rơi về WebGL phần mềm (từ khoảng bản 137), phải bật SwiftShader thì mới đo, chụp được canvas WebGL.
+    // Chỉ cho trang của chính người dùng, chạy trong container sandbox.
+    args: ["--no-sandbox", "--disable-dev-shm-usage", "--font-render-hinting=none", "--hide-scrollbars", ...(/synchro-3d|data-sx-shader/.test(html) ? ["--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--ignore-gpu-blocklist"] : []), ...(px ? ["--proxy-server=" + px.protocol + "//" + px.host] : [])] });
   const report = { slides: 0, views: [], issues: [], errors: [] };
   const shots = [];
   const open = async (w, h, mobile) => {

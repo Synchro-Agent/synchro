@@ -18,9 +18,9 @@ export type ApiProvider = {
 export type Credit = { provider: string; amount: number; since: number; spent: number; remaining: number; pct: number };
 export type ApiState = { providers: ApiProvider[]; catalog: ProviderInfo[]; main: string[]; default: string | null; effectiveDefault: string | null; credits?: Credit[]; owner?: boolean };
 
-const ROLE: Record<string, string> = { anthropic: "Chat, Code and Projects", openai: "Chat, Code and Projects", google: "Chat, Code and Projects", elevenlabs: "Speech and voice conversation", composio: "Connectors for everyone: Gmail, Slack, GitHub, Notion and 1000+ apps" };
+const ROLE: Record<string, string> = { anthropic: "Chat, Code and Projects", openai: "Chat, Code and Projects", google: "Chat, Code and Projects", elevenlabs: "Speech and voice conversation", composio: "Connectors for everyone: Gmail, Slack, GitHub, Notion and 1000+ apps", replicate: "Image generation: FLUX 1.1 Pro Ultra and IC-Light product relighting" };
 // Khóa dịch vụ (không có model chat): không hiện số model, không theo dõi số dư.
-const SERVICE = new Set(["elevenlabs", "composio"]);
+const SERVICE = new Set(["elevenlabs", "composio", "replicate"]);
 
 // Logo của hãng trên ô nền trung tính; nhà cung cấp không có logo thì hiện chữ cái đầu.
 function Mark({ p }: { p: ApiProvider }) {
@@ -50,6 +50,7 @@ function KeyForm({ p, busy, err, ws, onCancel, onSave }: { p: ApiProvider; busy:
       {p.keyUrl && <a className="api-get" href={p.keyUrl} target="_blank" rel="noreferrer">{`Get a key from ${p.vendor}`}<I.External size={12} /></a>}
       {p.kind === "elevenlabs" && <p className="api-note">Restricted keys work too. Turn on the features you use; User access is optional and only shows your plan here.</p>}
       {p.kind === "composio" && <p className="api-note">Use a project API key from Composio settings. Everyone on this Synchro gets Composio in Connectors and connects their own apps from chat; their sign-ins stay separate.</p>}
+      {p.kind === "replicate" && <p className="api-note">Each image is billed to this Replicate account (about $0.06 per FLUX 1.1 Pro Ultra image). Daily image limits per account are in Administrator.</p>}
       <button type="button" className="api-adv" aria-expanded={adv} onClick={() => setAdv(!adv)}><I.ChevronR size={13} />Advanced</button>
       {adv && (
         <>
@@ -148,7 +149,7 @@ export function ProviderCard({ p, onChange, credit, bare = false }: { p: ApiProv
     try { onChange(await call<ApiState>("POST", "/api/admin/apikeys", { action: "refresh", id: p.id })); refreshModels(); app.say("Model list updated"); }
     catch (e) { app.say((e as Error).message); } finally { setBusy(false); }
   };
-  const remove = () => app.confirm(`Remove the ${p.name} key?`, p.id === "elevenlabs" ? "Speech and voice conversation will stop working until you add a key again." : p.id === "composio" ? "Composio will stop working in Connectors and chats until you add a key again. Apps people connected stay linked in Composio." : "Models from this provider will disappear from the model picker until you add a key again.", "Remove", async () => {
+  const remove = () => app.confirm(`Remove the ${p.name} key?`, p.id === "elevenlabs" ? "Speech and voice conversation will stop working until you add a key again." : p.id === "composio" ? "Composio will stop working in Connectors and chats until you add a key again. Apps people connected stay linked in Composio." : p.id === "replicate" ? "Images will be made with each person's own plan again, as before the key was added." : "Models from this provider will disappear from the model picker until you add a key again.", "Remove", async () => {
     try { onChange(await call<ApiState>("DELETE", `/api/admin/apikeys?id=${encodeURIComponent(p.id)}`)); refreshModels(); app.say("Key removed"); } catch (e) { app.say((e as Error).message); }
   });
   const status = !p.configured ? { cls: "", text: "Not connected" }
@@ -178,6 +179,9 @@ export function ProviderCard({ p, onChange, credit, bare = false }: { p: ApiProv
       {!owner && !p.configured && !bare && <p className="api-own"><I.Lock size={12} /><span>Only the Owner can add, change or remove API keys.</span></p>}
       {edit && <KeyForm p={p} busy={busy} err={err} ws={ws} onCancel={() => setEdit(false)} onSave={save} />}
       {!edit && p.configured && !SERVICE.has(p.id) && credit !== undefined && <CreditRow p={p} credit={credit} onChange={onChange} owner={owner} />}
+      {/* Chưa có khóa Replicate: nói rõ hiện giờ ảnh đi đường nào, để quản trị viên biết chưa có gì thay đổi. */}
+      {!edit && p.id === "replicate" && !p.configured && <p className="api-note api-wait">Waiting for a key. Until one is added, images are made with each person&apos;s own plan (Antigravity, ChatGPT, Grok), exactly as now.</p>}
+      {!edit && p.id === "replicate" && p.configured && p.info && <p className="api-note">Account <span data-notr>{p.info}</span>. FLUX 1.1 Pro Ultra makes new images; IC-Light puts a product photo into a studio scene. Accounts past their daily image limit go back to their own plan.</p>}
       {!edit && p.models.length > 0 && (
         <div className="api-models">
           <button className="api-adv" aria-expanded={showModels} onClick={() => setShowModels(!showModels)}><I.ChevronR size={13} /><span>{showModels ? "Hide models" : `View ${p.models.length} models`}{p.checkedAt && <span className="d">{` · checked ${ago(p.checkedAt)}`}</span>}</span></button>
@@ -228,6 +232,7 @@ export function ApiPanel({ embedded = false }: { embedded?: boolean }) {
   const chat = s.providers.filter((p) => !SERVICE.has(p.id));
   const voice = s.providers.filter((p) => p.id === "elevenlabs");
   const conn = s.providers.filter((p) => p.id === "composio");
+  const images = s.providers.filter((p) => p.id === "replicate");
   const nModels = s.catalog.reduce((n, p) => n + p.models.length, 0);
   const nConn = s.providers.filter((p) => p.configured).length;
   return (
@@ -254,6 +259,8 @@ export function ApiPanel({ embedded = false }: { embedded?: boolean }) {
 
       <h3 className="sec">Connectors</h3>
       <div className="api-list">{conn.map((p) => <ProviderCard key={p.id} p={p} onChange={setS} />)}</div>
+      <h3 className="sec">Images</h3>
+      <div className="api-list">{images.map((p) => <ProviderCard key={p.id} p={p} onChange={setS} />)}</div>
 
       <h3 className="sec">Test a model</h3>
       <TestBox catalog={s.catalog} />

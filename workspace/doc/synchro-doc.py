@@ -18,6 +18,7 @@ import datetime as dt
 import difflib
 import html
 import json
+import math
 import os
 import re
 import shutil
@@ -25,7 +26,7 @@ import subprocess
 import sys
 import tempfile
 import time
-from decimal import ROUND_HALF_UP, Decimal
+from decimal import ROUND_HALF_UP, Decimal, InvalidOperation, localcontext
 
 KIT = os.environ.get("SYNCHRO_DOC_KIT") or os.path.dirname(os.path.realpath(__file__))
 if not os.path.isdir(os.path.join(KIT, "schemas")):
@@ -79,9 +80,9 @@ def _is(t, v):
     if t == "string":
         return isinstance(v, str)
     if t == "number":
-        return isinstance(v, (int, float)) and not isinstance(v, bool)
+        return isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v)
     if t == "integer":
-        return isinstance(v, int) and not isinstance(v, bool) or isinstance(v, float) and v.is_integer()
+        return isinstance(v, int) and not isinstance(v, bool) or isinstance(v, float) and math.isfinite(v) and v.is_integer()
     if t == "boolean":
         return isinstance(v, bool)
     if t == "object":
@@ -97,7 +98,7 @@ def _kind(v):
     for t in ("null", "boolean", "string", "array", "object"):
         if _is(t, v):
             return t
-    return "number"
+    return "number" if _is("number", v) else "số không hữu hạn (NaN / Infinity)"
 
 
 def _ref(root, s):
@@ -217,10 +218,41 @@ def aliases(tpl, d):
     return d, notes
 
 
+def _no_nan(c):
+    raise Bad(f"payload có {c}: không phải số hợp lệ, ghi số thật (vd. 0)")
+
+
+# Ngày trên bìa ilm (datetime.display của Typst): chỉ thành phần của ngày, mỗi thành phần [tên tham số:giá trị …].
+DATE_PARTS = {"day", "month", "year", "weekday", "week_number", "ordinal"}
+DATE_MODS = {"padding", "repr", "case_sensitive", "one_indexed", "sign", "base"}
+DATE_FMT_EG = "Ngày [day] tháng [month] năm [year]"
+
+
+def check_date_format(f):
+    """Lỗi (chuỗi) nếu date_format không dùng được với Typst, None nếu được."""
+    if re.search(r"\[\[|\]\]", f):
+        return 'không dùng "[[" hay "]]"'
+    opened = re.sub(r"\[[^\[\]]*\]", "", f)
+    if "[" in opened or "]" in opened:
+        return "ngoặc vuông chưa đóng / mở đúng cặp"
+    parts = re.findall(r"\[([^\[\]]*)\]", f)
+    if not parts:
+        return "không có thành phần ngày nào ([day], [month], [year]…), nên bìa sẽ in nguyên chữ"
+    for p in parts:
+        name, *mods = p.split()
+        if name not in DATE_PARTS:
+            return f'thành phần "[{p}]" không có; dùng {", ".join("[" + x + "]" for x in sorted(DATE_PARTS))}'
+        for m in mods:
+            k, _, v = m.partition(":")
+            if k not in DATE_MODS or not re.fullmatch(r"[a-z_]+", v):
+                return f'"{m}" trong "[{p}]" sai dạng (vd. [month repr:long], [day padding:none])'
+    return None
+
+
 def load_payload(tpl, p):
     try:
         with open(p, encoding="utf-8") as f:
-            d = json.load(f)
+            d = json.load(f, parse_constant=_no_nan)
     except FileNotFoundError:
         raise Bad(f"không thấy tệp {p}")
     except ValueError as e:
@@ -236,6 +268,10 @@ def load_payload(tpl, p):
                 dt.date.fromisoformat(d[k])
             except ValueError:
                 errs.append(f'payload.{k}: "{d[k]}" không phải ngày có thật')
+    if tpl == "ilm" and isinstance(d.get("date_format"), str):
+        why = check_date_format(d["date_format"])
+        if why:
+            errs.append(f'payload.date_format: {why}. Ví dụ: "{DATE_FMT_EG}"')
     if errs:
         more = f"\n  … và {len(errs) - 15} lỗi nữa" if len(errs) > 15 else ""
         raise Bad("payload sai (sửa rồi chạy lại; xem synchro-doc schema " + tpl + "):\n  " + "\n  ".join(errs[:15]) + more)
@@ -311,9 +347,30 @@ def text_blocks(text):
 
 
 class Ctx:
-    def __init__(self, root, tmp, lang, target):
-        self.root, self.tmp, self.lang, self.target = root, tmp, lang, target
+    def __init__(self, root, tmp, lang, target, tpl=None):
+        self.root, self.tmp, self.lang, self.target, self.tpl = root, tmp, lang, target, tpl
         self.n = 0
+
+
+# Số ký tự (cỡ chữ của bảng) vừa một dòng của khổ chữ mỗi mẫu Typst: bài 2 cột IEEE hẹp hơn nhiều.
+LINE_CHARS = {"charged-ieee": 48, "basic-report": 85, "ilm": 80}
+
+
+def table_widths(columns, rows, tpl):
+    """Cột của bảng Typst không ghi widths: None = cột đầu 1fr, các cột khác vừa nội dung (bảng ít cột, vừa khổ chữ);
+    "auto" = mọi cột vừa nội dung. Cột 1fr chỉ lấy phần còn lại sau các cột auto, nên khi các cột nội dung đã chiếm hết khổ chữ (bảng 6–12 cột),
+    cột đầu co còn hẹp hơn một từ và chữ đè sang cột bên cạnh. Khi đó để Typst đo thật mọi cột rồi chia khổ chữ công bằng: cột chữ dài
+    (nhãn, tiêu đề cột dài) xuống dòng, cột số giữ đủ bề rộng."""
+    n = len(columns)
+    if n < 2:
+        return None
+    cols = [[plain(columns[j])] + [plain(r[j]) for r in rows] for j in range(n)]
+    longest = [max((len(w) for t in c for w in t.split()), default=1) for c in cols]
+    natural = [max((max((len(l) for l in t.split("\n")), default=0) for t in c), default=0) for c in cols]
+    # 2 ký tự mỗi cột cho lề ô; chừa 20% vì tiêu đề cột in đậm / chữ hoa nhỏ rộng hơn chữ thường.
+    if sum(natural[1:]) + 2 * (n - 1) + max(longest[0], 12) <= 0.8 * LINE_CHARS.get(tpl, 80):
+        return None
+    return "auto"
 
 
 def inside(root, p):
@@ -389,6 +446,8 @@ def norm_block(ctx, b, where):
         widths = b.get("widths")
         if widths and len(widths) != n:
             raise Bad(f"{where}.widths: cần đúng {n} số (một cho mỗi cột)")
+        if not widths and ctx.target == "typst":
+            widths = table_widths([runs(c) for c in b["columns"]], cells, ctx.tpl)
         return {"type": t, "columns": [runs(c) for c in b["columns"]], "rows": cells, "align": align, "widths": widths,
                 "caption": runs(b.get("caption")) or None, "total": bool(b.get("total"))}
     if t == "image":
@@ -416,6 +475,11 @@ def norm_sections(ctx, secs, where="sections"):
     return out
 
 
+# Nhãn ghi cứng trong gói được dịch bằng luật show chuỗi (main.typ của mẫu). Luật đó khớp cả chữ của người dùng ("Abstraction", "TABLE_NAME",
+# "Inhalt của gói"): các từ này trong chữ người dùng được blocks.typ tách bằng h(0pt) sau ký tự đầu nên luật không khớp, chữ in và chữ chép ra vẫn nguyên.
+GUARD = {("charged-ieee", "vi"): ["Index Terms", "Abstract", "TABLE", "Fig."], ("basic-report", None): ["Inhalt"]}
+
+
 def vi_date(s):
     return dt.date.fromisoformat(s).strftime("%d/%m/%Y") if s else None
 
@@ -423,7 +487,8 @@ def vi_date(s):
 def normalize(tpl, d, ctx):
     lang = d.get("lang", "vi")
     m = {"template": tpl, "lang": lang, "title": d["title"], "date": d.get("date"), "date_text": vi_date(d.get("date")) if lang == "vi" else d.get("date"),
-         "sections": norm_sections(ctx, d["sections"]), "references": [runs(r) for r in d.get("references", [])]}
+         "sections": norm_sections(ctx, d["sections"]), "references": [runs(r) for r in d.get("references", [])],
+         "guard": GUARD.get((tpl, lang), GUARD.get((tpl, None), []))}
     if tpl == "basic-report":
         m.update(category=d.get("category", ""), author=d.get("author", ""), affiliation=d.get("affiliation", ""),
                  toc_title=d.get("toc_title", "Mục lục" if lang == "vi" else "Contents"),
@@ -511,7 +576,7 @@ def run_typst(tpl, payload, outp, png=None, keep=False):
     tmp = tempfile.mkdtemp(prefix=".synchro-doc-", dir=root)
     t0 = time.time()
     try:
-        model = normalize(tpl, d, Ctx(root, tmp, d.get("lang", "vi"), "typst"))
+        model = normalize(tpl, d, Ctx(root, tmp, d.get("lang", "vi"), "typst", tpl))
         for sub in ("_lib", tpl):
             shutil.copytree(os.path.join(KIT, "typst", sub), os.path.join(tmp, sub))
         with open(os.path.join(tmp, "payload.json"), "w", encoding="utf-8") as f:
@@ -591,14 +656,17 @@ def dec(v):
 
 def money(v, cur, lang="vi"):
     q = CUR_Q[cur]
-    v = dec(v).quantize(q, ROUND_HALF_UP)
+    with localcontext() as c:
+        c.prec = 60
+        v = dec(v).quantize(q, ROUND_HALF_UP)
     neg = v < 0
     s = f"{abs(v):,.0f}" if q == 1 else f"{abs(v):,.2f}"
     vi = s.replace(",", "\x00").replace(".", ",").replace("\x00", ".")
     if cur == "VND":
         s = vi + "\u00a0₫"
     elif cur == "USD":
-        s = "$" + s
+        # Hóa đơn tiếng Việt: số theo kiểu Việt (dấu phẩy thập phân) như số lượng và % thuế cùng trang, không trộn hai kiểu.
+        s = vi + "\u00a0US$" if lang == "vi" else "$" + s
     else:
         s = vi + "\u00a0€" if lang == "vi" else "€" + s
     return ("−" if neg else "") + s
@@ -612,14 +680,23 @@ def qty_text(q, lang):
 def totals(d):
     cur = d.get("currency", "VND")
     q = CUR_Q[cur]
-    lines = [(dec(it["quantity"]) * dec(it["unit_price"])).quantize(q, ROUND_HALF_UP) for it in d["items"]]
-    sub = sum(lines, Decimal(0))
-    disc = dec(d.get("discount", 0)).quantize(q, ROUND_HALF_UP)
-    if disc > sub:
+    try:
+        with localcontext() as c:
+            c.prec = 60
+            # Đơn giá làm tròn tới đơn vị tiền một lần, rồi mới nhân: đơn giá in × số lượng luôn bằng thành tiền in.
+            prices = [dec(it["unit_price"]).quantize(q, ROUND_HALF_UP) for it in d["items"]]
+            lines = [(dec(it["quantity"]) * p).quantize(q, ROUND_HALF_UP) for it, p in zip(d["items"], prices)]
+            sub = sum(lines, Decimal(0))
+            disc = dec(d.get("discount", 0)).quantize(q, ROUND_HALF_UP)
+            rate = dec(d.get("tax_rate", 0))
+            tax = ((sub - disc) * rate).quantize(q, ROUND_HALF_UP)
+            total = sub - disc + tax
+            over = disc > sub
+    except (InvalidOperation, ValueError, ArithmeticError):
+        raise Bad("số tiền / số lượng không tính được (quá lớn hoặc không phải số): kiểm lại items[].quantity, items[].unit_price, discount, tax_rate")
+    if over:
         raise Bad(f"discount ({disc}) lớn hơn cộng tiền hàng ({sub})")
-    rate = dec(d.get("tax_rate", 0))
-    tax = ((sub - disc) * rate).quantize(q, ROUND_HALF_UP)
-    return {"lines": lines, "subtotal": sub, "discount": disc, "rate": rate, "tax": tax, "total": sub - disc + tax}
+    return {"prices": prices, "lines": lines, "subtotal": sub, "discount": disc, "rate": rate, "tax": tax, "total": total}
 
 
 def css_str(s):
@@ -641,9 +718,9 @@ def invoice_html(d, long_=None):
     tt = totals(d)
     long_ = len(d["items"]) > LONG_ITEMS if long_ is None else long_
     rows = "".join(
-        f"<tr><td>{e(it['description'])}</td><td>{money(it['unit_price'], cur, lang)}</td>"
+        f"<tr><td>{e(it['description'])}</td><td>{money(price, cur, lang)}</td>"
         f"<td>{e(qty_text(it['quantity'], lang))}{(' ' + e(it['unit'])) if it.get('unit') else ''}</td><td>{money(line, cur, lang)}</td></tr>"
-        for it, line in zip(d["items"], tt["lines"]))
+        for it, price, line in zip(d["items"], tt["prices"], tt["lines"]))
     sums = [(L["subtotal"], money(tt["subtotal"], cur, lang))]
     if tt["discount"]:
         sums.append((L["discount"], money(-tt["discount"], cur, lang)))
@@ -688,6 +765,32 @@ def invoice_html(d, long_=None):
 """
 
 
+def hidden_under_total(page):
+    """Bố cục short: dòng chữ nào của trang (ngoài chân trang) xuống tới vùng bảng tổng ghim ở đáy không. Không đo được thì None."""
+    try:
+        top, bottom = None, 0.0
+
+        def walk(box, in_footer):
+            nonlocal top, bottom
+            kind = type(box).__name__
+            if kind == "MarginBox":  # lời cảm ơn, chân trang ở lề dưới: nằm dưới bảng tổng là đúng
+                return
+            tag = getattr(box, "element_tag", None)
+            el = getattr(box, "element", None)
+            in_footer = in_footer or tag == "footer"
+            if tag == "table" and el is not None and el.get("id") == "total":
+                top = box.position_y if top is None else min(top, box.position_y)
+            if not in_footer and kind == "LineBox":
+                bottom = max(bottom, box.position_y + box.height)
+            for c in getattr(box, "children", None) or []:
+                walk(c, in_footer)
+
+        walk(page._page_box, False)
+        return None if top is None else bottom > top - 1
+    except Exception:
+        return None
+
+
 def run_invoice(payload, outp, png=None, keep=False):
     root = os.path.realpath(os.getcwd())
     d, _ = load_payload("invoice", payload)
@@ -728,8 +831,9 @@ def run_invoice(payload, outp, png=None, keep=False):
 
         long_ = len(d["items"]) > LONG_ITEMS
         doc = render(long_)
-        if not long_ and len(doc.pages) > 1:
-            # Bảng tổng của mẫu gốc ghim ở đáy trang 1: nội dung tràn sang trang 2 thì dựng lại kiểu nhiều trang (bảng tổng đi sau bảng hàng).
+        if not long_ and (len(doc.pages) > 1 or hidden_under_total(doc.pages[0])):
+            # Bảng tổng của mẫu gốc ghim ở đáy trang 1: nội dung tràn sang trang 2, hay có dòng chữ nằm khuất dưới bảng tổng, thì dựng lại
+            # kiểu nhiều trang (bảng tổng đi sau bảng hàng).
             long_ = True
             doc = render(True)
         doc.write_pdf(out)
@@ -780,7 +884,9 @@ def main(argv):
         with open(os.path.join(KIT, "examples", rest[0] + ".json"), encoding="utf-8") as f:
             print(f.read().strip())
     elif cmd == "check" and len(rest) == 2:
-        _, notes = load_payload(rest[0], rest[1]) if rest[0] in TEMPLATES else (schema_of(rest[0]), [])
+        d, notes = load_payload(rest[0], rest[1]) if rest[0] in TEMPLATES else (schema_of(rest[0]), [])
+        if rest[0] == "invoice":
+            totals(d)
         report({"ok": True, "template": rest[0], **({"renamed": notes} if notes else {})})
     elif cmd == "typst" and len(rest) == 3:
         run_typst(rest[0], rest[1], rest[2], opts["png"], opts["keep"])

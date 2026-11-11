@@ -23,6 +23,13 @@ export const saveGap = (costMs: number) => Math.min(300_000, costMs * 100);
 // Bộ đệm nhiều tối đa ~16 MB mỗi lượt (đếm đúng số byte đã giữ): quá thì bỏ phần output chi tiết của công cụ, vẫn giữ tóm tắt.
 const MAX_BUF = 16_000_000, MAX_LIVE = 5;
 const keepOf = (r: AgentRun) => (r.saved ? SAVED_KEEP_MS : KEEP_MS);
+// Số thứ tự của lượt: hẹn giờ bỏ lượt chỉ nhớ khóa và số này (không giữ chính lượt), nên lượt đã bị thay hay đã xóa vì xóa tài khoản rời bộ nhớ ngay.
+let seqN = 0;
+const seqOf = new WeakMap<AgentRun, number>();
+/** Hẹn bỏ lượt khỏi bộ nhớ khi hết hạn giữ. Hàm ở cấp ngoài cùng và chỉ nhận số với chuỗi: hẹn giờ không được giữ lượt (bộ đệm tới 16 MB) sống thêm. */
+function scheduleDrop(key: string, seq: number, ms: number) {
+  setTimeout(() => { const r = runs.get(key); if (r && seqOf.get(r) === seq) runs.delete(key); }, ms).unref?.();
+}
 
 function sweep() {
   const now = Date.now();
@@ -48,6 +55,8 @@ export function stopUserAgentRuns(uid: string) {
 export function startAgentRun(o: { uid: string; sid: string; node?: TurnNode | null; title?: string }, work: (emit: (e: AgentEvent) => void, signal: AbortSignal) => Promise<void>): AgentRun {
   sweep();
   const run: AgentRun = { uid: o.uid, sid: o.sid, node: o.node ?? null, ac: new AbortController(), lines: [], bytes: 0, listeners: new Set(), started: Date.now(), ended: 0 };
+  const seq = ++seqN;
+  seqOf.set(run, seq);
   runs.set(keyOf(o.uid, o.sid), run);
   const numSid = Number(o.sid);
   // Tài khoản đã xóa: getPrefs trả mặc định (đồng bộ bật) và bảng phiên không có khóa ngoại tới users, nên nếu không chặn thì lượt ghi lại prompt và kết quả sau khi đã xóa.
@@ -104,8 +113,7 @@ export function startAgentRun(o: { uid: string; sid: string; node?: TurnNode | n
     for (const l of run.listeners) l.end();
     run.listeners.clear();
     // Không đợi tới lần sweep sau (chỉ chạy khi có lượt mới hay có người hỏi): tự bỏ lượt khỏi bộ nhớ khi hết hạn giữ.
-    const key = keyOf(o.uid, o.sid);
-    setTimeout(() => { if (runs.get(key) === run) runs.delete(key); }, keepOf(run)).unref?.();
+    scheduleDrop(keyOf(o.uid, o.sid), seq, keepOf(run));
   });
   return run;
 }

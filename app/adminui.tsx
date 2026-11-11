@@ -26,7 +26,8 @@ type Log = { id: number; at: number; action: string; actor_email: string | null;
 type Data = {
   providerFailures?: Partial<Record<keyof Providers, { at: number; detail: string }>>;
   stats: { users: number; active7: number; new7: number; suspended: number; sessions: number; failed24: number; runs24?: number; runsFailed24?: number };
-  users: U[]; audit: Log[]; settings: { signupOpen: boolean; defaultPerms: Perms; verifyGate?: boolean; speechBudget?: { user: number; unverified: number; global: number | null }; speechToday?: number; turnstile?: TurnstileState }; providers: Providers; admins: string[]; role?: "owner" | "admin" | "member"; owners?: string[];
+  users: U[]; audit: Log[]; settings: { signupOpen: boolean; defaultPerms: Perms; verifyGate?: boolean; speechBudget?: { user: number; unverified: number; global: number | null }; speechToday?: number; turnstile?: TurnstileState;
+    replicateBudget?: { user: number; unverified: number; global: number }; replicateToday?: { images: number; usd: number }; replicateKey?: boolean }; providers: Providers; admins: string[]; role?: "owner" | "admin" | "member"; owners?: string[];
 };
 type Sess = { id: string; device: string; ip: string | null; method: string; createdAt: number; lastSeen: number };
 type Detail = { sessions: Sess[]; identities: { provider: string; email: string | null; createdAt: number }[] };
@@ -60,7 +61,7 @@ Object.assign(ACTIONS, {
   tool_args_edited: ["Edited tool inputs before approving", ""],
   oauth_unlink: ["Removed sign-in method", ""], email_change_request: ["Requested email change", ""], email_changed: ["Changed email", ""], admin_set_email: ["Changed user email", "adm"],
   mfa_on: ["Turned on two-step verification", ""], mfa_off: ["Turned off two-step verification", ""], speech_voice_owner: ["Assigned voice owner", "adm"],
-  speech_budget_alert: ["AI voice credit is close to today's limit", "bad"], admin_speech_budget: ["Changed AI voice credit limits", "adm"],
+  speech_budget_alert: ["AI voice credit is close to today's limit", "bad"], admin_speech_budget: ["Changed AI voice credit limits", "adm"], admin_replicate_budget: ["Changed Replicate image limits", "adm"],
   github_link: ["Connected GitHub", ""], oauth_failed: ["Failed provider sign-in", "bad"], password_reset: ["Reset password with a link", ""], password_reset_request: ["Requested a password reset email", ""], admin_reset_link: ["Created password reset link", "adm"],
   mail_failed: ["Email could not be delivered", "bad"], admin_mail_test: ["Sent a test email", "adm"], signup_email_taken: ["Sign-up attempt with an existing email", "bad"], email_verify_sent: ["Sent a verification email", ""], email_verified: ["Verified email", "ok"], email_denied: ["Email owner removed an unverified account", "bad"], account_claimed: ["Email owner took back an unverified account", "bad"], admin_verify_gate: ["Changed email verification rule", "adm"], admin_mark_verified: ["Marked email as verified", "adm"],
   passkey_added: ["Added a passkey", ""], passkey_renamed: ["Renamed a passkey", ""], passkey_removed: ["Removed a passkey", ""], passkey_add_failed: ["Couldn't add a passkey", "bad"],
@@ -390,6 +391,18 @@ export function AdminPanel({ Toggle }: { Toggle: ToggleT }) {
           {([["user", "Verified account", "Credit each account with a verified email can use."], ["unverified", "Unverified account", "Credit each account without a verified email can use."], ["global", "Whole server", "Leave empty to use one fifth of the plan's credit."]] as const).map(([k, t, hint]) => {
             const cur = d.settings.speechBudget![k];
             return <div key={k} className="adm-perm-row"><div><div className="t">{t}</div><div className="d">{hint}</div></div><input key={String(cur)} className="field adm-num" inputMode="numeric" aria-label={t} defaultValue={cur ?? ""} onBlur={(e) => { const raw = e.target.value.trim(), n = raw === "" ? null : Number(raw); if ((n === null && k === "global") || (n !== null && Number.isFinite(n) && n >= 0)) { if (n !== cur) act(() => call("PATCH", "/api/admin/settings", { speechBudget: { [k]: n } }), "AI voice credit saved"); } else e.target.value = String(cur ?? ""); }} /></div>;
+          })}
+        </div>
+      )}
+
+      {d.settings.replicateBudget && (
+        <div className="adm-card" style={{ marginTop: 12 }}>
+          <div className="adm-card-h"><b>Replicate images per day</b><span className="d">{d.settings.replicateKey
+            ? <>Images made with the shared Replicate key are billed to its account, about $0.06 each. Past a cap, people make images with their own plan until the next day (UTC). Made today: <span data-notr>{`${(d.settings.replicateToday?.images ?? 0).toLocaleString(locale())} (≈ $${(d.settings.replicateToday?.usd ?? 0).toFixed(2)})`}</span>.</>
+            : <>Waiting for a Replicate key in Providers. Until then images use each person&apos;s own plan and these caps have no effect.</>}</span></div>
+          {([["user", "Verified account", "Images each account with a verified email can make per day."], ["unverified", "Unverified account", "Images each account without a verified email can make per day."], ["global", "Whole server", "Images all accounts together can make per day. Administrators count toward this cap only."]] as const).map(([k, t, hint]) => {
+            const cur = d.settings.replicateBudget![k];
+            return <div key={k} className="adm-perm-row"><div><div className="t">{t}</div><div className="d">{hint}</div></div><input key={String(cur)} className="field adm-num" inputMode="numeric" aria-label={`${t} · Replicate`} defaultValue={cur} onBlur={(e) => { const n = Number(e.target.value.trim()); if (e.target.value.trim() !== "" && Number.isFinite(n) && n >= 0) { if (n !== cur) act(() => call("PATCH", "/api/admin/settings", { replicateBudget: { [k]: Math.floor(n) } }), "Image limits saved"); } else e.target.value = String(cur); }} /></div>;
           })}
         </div>
       )}

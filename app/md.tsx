@@ -14,6 +14,7 @@ import { TokLine, useHighlight } from "./highlight";
 // Khung artifact và sơ đồ chỉ cần khi câu trả lời có hình minh họa: không nằm trong phần tải đầu của trang chat.
 const ArtifactFrame = lazyView(() => import("./artifactui").then((m) => m.ArtifactFrame), null);
 const MermaidSvg = lazyView(() => import("./artifactui").then((m) => m.MermaidSvg), null);
+const D2Svg = lazyView(() => import("./artifactui").then((m) => m.D2Svg), null);
 // Bọc từng chữ để hiện dần: chỉ ở các dòng cuối của câu trả lời đang viết. Tin đã xong là chữ thường: đoạn chat 120 tin từng giữ gần 20.000 thẻ <span> chỉ để phục vụ hiệu ứng đã chạy xong.
 const words = (p: string, w?: boolean) => (w ? p.split(/(\s+)/).map((x, k) => (/^\s*$/.test(x) ? x : <span key={k} className="w">{x}</span>)) : p);
 const MathView = lazyView(() => import("./mathview").then((m) => m.MathView), null);
@@ -187,16 +188,17 @@ function Widgets({ lang, code }: { lang: string; code: string }) {
   );
 }
 
-// Hình minh họa ngay trong chat (Cài đặt → Khả năng): ```chart, ```mermaid, ```widget. Khối chưa viết xong thì hiện chỗ chờ.
+// Hình minh họa ngay trong chat (Cài đặt → Khả năng): ```chart, ```mermaid, ```d2 (vẽ trong sandbox), ```widget. Khối chưa viết xong thì hiện chỗ chờ.
 function Visual({ lang, code, closed, say }: { lang: string; code: string; closed: boolean; say: (m: string) => void }) {
   const [h, setH] = useState(120);
   const [err, setErr] = useState("");
-  if (!closed) return <div className="viz-wait"><span className="art-spin sm" />{tr(lang === "chart" ? "Đang vẽ biểu đồ…" : lang === "mermaid" ? "Đang vẽ sơ đồ…" : "Đang tạo hình minh họa…")}</div>;
+  if (!closed) return <div className="viz-wait"><span className="art-spin sm" />{tr(lang === "chart" ? "Đang vẽ biểu đồ…" : lang === "mermaid" || lang === "d2" ? "Đang vẽ sơ đồ…" : "Đang tạo hình minh họa…")}</div>;
   if (lang === "chart") {
     const spec = parseChart(code);
     return typeof spec === "string" ? <><div className="viz-note">{tr("Không vẽ được biểu đồ")}: {spec}</div><Code lang="json" code={code} say={say} idx={0} /></> : <ChartView spec={spec} />;
   }
   if (lang === "mermaid") return <div className="viz-card"><MermaidSvg code={code} /></div>;
+  if (lang === "d2") return <div className="viz-card"><D2Svg code={code} /></div>;
   return (
     <div className="viz-card viz-widget">
       {err && <div className="viz-note">{tr("Hình minh họa gặp lỗi")}: {err}</div>}
@@ -282,7 +284,7 @@ function BlockView({ b, x }: { b: Block; x: Ctx }): React.ReactNode {
     case "code": {
       const l = b.lang.toLowerCase();
       if (l === "ask" && !x.dev) return <AskCard code={b.code} closed={b.closed} live={!!x.live} />;
-      if (x.viz && (l === "chart" || l === "mermaid" || l === "widget")) return <Visual lang={l} code={b.code} closed={b.closed} say={x.say} />;
+      if (x.viz && (l === "chart" || l === "mermaid" || l === "d2" || l === "widget")) return <Visual lang={l} code={b.code} closed={b.closed} say={x.say} />;
       // Câu trả lời đã xong mà còn dấu mở trơ trọi: không vẽ khung code rỗng.
       if (!b.closed && !b.code && x.tail === Infinity) return null;
       return <Code lang={b.lang} code={b.code} say={x.say} dev={x.dev} idx={b.idx} closed={b.closed} />;

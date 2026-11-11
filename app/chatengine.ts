@@ -614,7 +614,7 @@ async function runImage(x: Exec, c: Call): Promise<Run> {
     // Lượt Antigravity gọi công cụ này đang giữ khóa của tài khoản, mà lượt tạo ảnh cũng cần khóa đó: CLI đã đọc xong cấu hình nên nhả được, như lúc chờ người dùng duyệt.
     x.park?.();
     const stops = [runSignal(), x.calls?.get(c.id)?.cancel].filter((v): v is AbortSignal => !!v);
-    r = await generateImages({ uid: x.uid, prompt, aspect, count, reference, signal: stops.length > 1 ? AbortSignal.any(stops) : stops[0],
+    r = await generateImages({ uid: x.uid, prompt, aspect, count, reference, product: c.input?.product_shot === true, relight: c.input?.product_relight === true, signal: stops.length > 1 ? AbortSignal.any(stops) : stops[0],
       onStatus: (t) => { progress("step", t); }, onNote: (t) => { progress("note", t); } });
     if (!r.ok) {
       if (r.providers) progress("plans", JSON.stringify({ why: r.kind, tried: r.tried.filter((f) => f.kind !== "auth").map((f) => f.cli) }));

@@ -48,6 +48,14 @@ export function safeRead(p, maxBytes = Infinity) {
   } catch { return null; } finally { fs.closeSync(fd); }
 }
 
+/** Đọc root/rel khi mọi thư mục trên đường đi là thư mục thật (không liên kết) và tệp là tệp thường; ngược lại null. */
+export function safeReadIn(root, rel, maxBytes = Infinity) {
+  if (bad(rel) || !parts(rel).length || path.isAbsolute(String(rel))) return null;
+  let cur = root;
+  for (const x of parts(rel).slice(0, -1)) { cur = path.join(cur, x); const st = lstat(cur); if (!st?.isDirectory()) return null; }
+  return safeRead(path.join(cur, parts(rel).at(-1)), maxBytes);
+}
+
 /**
  * Gom tệp code ghi vào outputs/. outputs/ hoặc thư mục con là liên kết thì bỏ qua, không đọc gì ngoài cây thư mục thật.
  * Tệp thật được chọn trước; khung hình xem thử (_preview/) có hạn mức số tệp riêng, để không đẩy tệp thật ra khỏi danh sách gửi về.
@@ -157,15 +165,42 @@ export class QueueFull extends Error {}
 
 // ---------------------------------------------------------------- lần chạy dựng video (Remotion)
 // Lệnh tốn CPU / bộ nhớ của synchro-video: dựng hình (Chromium + x264), ảnh xem trước, nhận dạng giọng nói (whisper ~1 GB).
-// Gọi bằng shell ("synchro-video render …") hoặc danh sách tham số của Python / Node (["synchro-video", "render", …]).
-const MEDIA_CMD = /\bsynchro-video["']?(?:\s*,\s*|\s+)["']?(?:render|still|captions|selftest|bench)\b/;
+// Gọi bằng shell ("synchro-video render …", "node /opt/remotion/cli/synchro-video.mjs render …", "synchro-video $LENH …"), danh sách tham số của
+// Python / Node (["synchro-video", "render", …]) hoặc tên lệnh trong biến (SV = "synchro-video"). Nhận ngược: mọi lần nhắc tới synchro-video đều là
+// dựng, trừ khi ngay sau đó là một lệnh nhẹ (templates, schema, example, check, words, help). Xếp hàng nhầm một lần chạy nhẹ chỉ chậm hơn chút;
+// để lọt một lần dựng thì hai lần dựng chạy song song trên máy 2 vCPU.
+// Không tính thư mục trạng thái .synchro-video/ (ls, rm của nó không phải dựng).
+const VIDEO_CMD = /(?<![.\w-])synchro-video(?:\.mjs)?\b(?!\/)/g;
+const LIGHT_AFTER = /^["']?(?:\s*,\s*|\s+)["']?(?:templates|schema|example|check|words|help|--help|-h)\b/;
 const SCRIPT_EXT = /\.(?:py|sh|bash|js|mjs|cjs|ts)$/i;
-/** Lần chạy có gọi synchro-video để dựng không (đọc lệnh, stdin và tệp script nhỏ của lần chạy). Dùng để xếp hàng riêng: mỗi máy một lần dựng. */
-export function isMediaRun({ files = [], argv = [], stdin = null } = {}) {
-  if (argv.some((a) => MEDIA_CMD.test(String(a))) || (typeof stdin === "string" && MEDIA_CMD.test(stdin))) return true;
+const SCRIPT_REF = /(?:^|[\s"'`=(,\[])((?:\.\/)?[\w.-]+(?:\/[\w.-]+)*\.(?:py|sh|bash|js|mjs|cjs|ts))\b/g;
+const callsMedia = (text) => {
+  for (const m of String(text).matchAll(VIDEO_CMD)) if (!LIGHT_AFTER.test(text.slice(m.index + m[0].length, m.index + m[0].length + 60))) return true;
+  return false;
+};
+const normRel = (p) => String(p).replace(/^\.\//, "");
+/**
+ * Lần chạy có gọi synchro-video để dựng không (đọc lệnh, stdin, tệp script của lần chạy, và script mà chúng gọi tới). Dùng để xếp hàng riêng:
+ * mỗi máy một lần dựng. readScript(rel) đọc script đã có sẵn trong thư mục giữ lại từ lần chạy trước (vd. "bash render.sh"); trả chuỗi hoặc null.
+ */
+export function isMediaRun({ files = [], argv = [], stdin = null, readScript = null } = {}) {
+  const own = new Map();
   for (const f of files) {
     if (!SCRIPT_EXT.test(String(f?.path ?? "")) || typeof f.b64 !== "string" || f.b64.length > 1_400_000) continue;
-    if (MEDIA_CMD.test(Buffer.from(f.b64, "base64").toString("utf8"))) return true;
+    own.set(normRel(f.path), Buffer.from(f.b64, "base64").toString("utf8"));
+  }
+  const seen = new Set(), queue = [...argv.map(String), ...(typeof stdin === "string" ? [stdin] : []), ...own.values()];
+  for (let i = 0; i < queue.length && i < 40; i++) {
+    const text = queue[i];
+    if (callsMedia(text)) return true;
+    // Script được nhắc tới mà không gửi kèm lần này: đọc bản trong thư mục giữ lại (tối đa 40 tệp, mỗi tệp một lần).
+    for (const m of text.matchAll(SCRIPT_REF)) {
+      const rel = normRel(m[1]);
+      if (seen.has(rel) || rel.split("/").includes("..")) continue;
+      seen.add(rel);
+      const body = own.get(rel) ?? (readScript ? readScript(rel) : null);
+      if (typeof body === "string" && !own.has(rel)) queue.push(body);
+    }
   }
   return false;
 }

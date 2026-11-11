@@ -13,7 +13,7 @@ import { spawn } from "node:child_process";
 import { WebSocketServer, WebSocket } from "ws";
 import { BrowserError, createBrowser, devJson } from "./browser-core.mjs";
 import { createRelay } from "./ext-relay.mjs";
-import { clipSink, collectOutputs, createRunQueue, isMediaRun, QueueFull, safeWrite } from "./safefs.mjs";
+import { clipSink, collectOutputs, createRunQueue, isMediaRun, QueueFull, safeReadIn, safeWrite } from "./safefs.mjs";
 import { createWarmPool } from "./warmpool.mjs";
 
 const env = (k, d) => process.env[k] ?? d;
@@ -446,7 +446,9 @@ async function runOnce(u, { files = [], argv, stdin = null, net: wantNet = false
   const queuedAt = Date.now();
   // Lần dựng video lấy chỗ dựng trước (không giữ chỗ chạy chung trong lúc chờ), rồi mới tới chỗ chạy chung.
   let freeSlot, freeMedia = () => {};
-  if (isMediaRun({ files, argv, stdin })) {
+  // Script có sẵn trong thư mục giữ lại (vd. "bash render.sh" ghi ở lần trước) cũng được đọc: không container nào đang gắn thư mục này (keepBusy).
+  const readScript = keep ? (rel) => safeReadIn(dir, rel, 1_000_000)?.toString("utf8") ?? null : null;
+  if (isMediaRun({ files, argv, stdin, readScript })) {
     try { freeMedia = await mediaQ.acquire(u, sec, signal); }
     catch (e) { release(); throw e instanceof QueueFull ? new E(503, !e.message.startsWith("Máy chủ đang chạy nhiều code") ? e.message : "Máy chủ đang dựng một video khác (mỗi lần một video). Hãy chạy lại sau ít phút; các đoạn đã dựng xong vẫn được giữ.") : e; }
   }
@@ -492,7 +494,9 @@ async function runOnce(u, { files = [], argv, stdin = null, net: wantNet = false
     for (const f of files) safeWrite(dir, f.path, Buffer.from(f.b64, "base64"));
     await run("chown", ["-hR", `${UID}:${UID}`, dir]);
     fs.utimesSync(dir, new Date(), new Date());
-    const runEnv = wantNet ? proxyEnv() : {};
+    // Số giây lần chạy được phép: synchro-video dừng đúng hẹn (mã 75, chạy lại để dựng tiếp) trước khi timeout ngắt giữa đoạn.
+    // Theo từng lần chạy nên đi cùng biến proxy (runEnv), cả khi chạy trong container lấy từ kho (docker exec).
+    const runEnv = { SYNCHRO_RUN_TIMEOUT: String(sec), ...(wantNet ? proxyEnv() : {}) };
     const boxArgs = (nm, netArgs, cmdSec, cmd) => ["run", "--rm", "-i", "--name", nm, ...netArgs, ...boxLimits(), "--label", `synchro.run=${u}`, "-v", `${dir}:${HOME}/run`,
       ...envFlags({ ...BASE_ENV, ...runEnv }), IMAGE, "timeout", "-k", "5", String(cmdSec), ...cmd];
     // Người dùng bấm Dừng (Next ngắt kết nối): xóa container ngay để nhường chỗ và nhả thư mục giữ lại. Lặp tới khi lệnh docker run kết thúc:

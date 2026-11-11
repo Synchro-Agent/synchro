@@ -80,6 +80,8 @@ export function parseArgs(argv) {
 }
 
 export const SIZE_PRESETS = { vertical: [1080, 1920], square: [1080, 1080], landscape: [1920, 1080] };
+/** Khung lớn nhất dựng được trong 2 GB bộ nhớ của máy dựng: 3840x2160 (4K) dựng xong, 3840x3840 bị hệ điều hành giết vì hết bộ nhớ (đo 2026-11-12). */
+export const MAX_AREA = 3840 * 2160;
 /** "vertical" | "square" | "landscape" | "1080x1920" → chuỗi kích thước props nhận (giữ nguyên tên mẫu sẵn). */
 export function parseSize(s) {
   const v = String(s).trim().toLowerCase();
@@ -88,6 +90,7 @@ export function parseSize(s) {
   if (!m) throw new UsageError(`--size không hợp lệ: ${s}. Dùng vertical, square, landscape hoặc RỘNGxCAO (vd. 1080x1920).`);
   const w = Number(m[1]), h = Number(m[2]);
   if (w % 2 || h % 2 || w < 240 || h < 240 || w > 3840 || h > 3840) throw new UsageError(`--size ${s}: mỗi cạnh là số chẵn 240–3840.`);
+  if (w * h > MAX_AREA) throw new UsageError(`--size ${s}: khung tối đa 3840x2160 (hoặc 2160x3840, tức 8,3 triệu điểm ảnh) vì máy dựng chỉ có 2 GB bộ nhớ.`);
   return `${w}x${h}`;
 }
 
@@ -130,11 +133,31 @@ export function readCgroup(read) {
  * Số tab Chromium dựng song song: tối đa 2 (máy 2 vCPU, còn ffmpeg nén hình), không quá số CPU được cấp,
  * và 1 khi bộ nhớ còn dưới 1,5 GB (mỗi tab headless + bộ đệm khung ~400–600 MB; vượt 2 GB là mã 137).
  */
-export function pickConcurrency({ cpus, cpuQuota = null, memMax = null, memCurrent = null }) {
+export function pickConcurrency({ cpus, cpuQuota = null, memMax = null, memCurrent = null, width = 0, height = 0 }) {
   const cpu = Math.max(1, Math.floor(Math.min(cpus || 1, cpuQuota ?? Infinity)));
   let n = Math.min(2, cpu);
   if (memMax != null && memMax - (memCurrent ?? 0) < 1.5 * 1024 ** 3) n = 1;
+  // Khung lớn hơn hai lần Full HD: mỗi tab và bộ đệm khung của ffmpeg lớn theo số điểm ảnh, hai tab là vượt 2 GB giữa chừng.
+  if (width * height > 2 * 1920 * 1080) n = 1;
   return n;
+}
+
+/** Lỗi do hệ điều hành giết tiến trình vì hết bộ nhớ (Chromium / ffmpeg nhận SIGKILL, Remotion báo "signal SIGKILL" chứ không ra mã 137). */
+export const isOomError = (msg) => /\bSIGKILL\b|signal 9\b|\bcode 137\b|out of memory|ENOMEM/i.test(String(msg ?? ""));
+/** Thông báo lỗi gọn: lỗi của Remotion kèm cả bản in cấu hình build của ffmpeg (~3 KB), chỉ giữ đầu (nguyên nhân) và đuôi. */
+export function trimError(msg, head = 400, tail = 300) {
+  // Bỏ bản cấu hình build và các dòng tiến trình "frame= … fps= …" của ffmpeg: không giúp gì cho việc sửa lệnh.
+  const s = String(msg ?? "").replace(/\s*configuration: --[^\n]*/g, " …").replace(/[\r\n]+\s*frame=[^\r\n]*/g, "");
+  return s.length <= head + tail + 20 ? s : `${s.slice(0, head)} …${tail > 0 ? " " + s.slice(-tail) : ""}`;
+}
+
+/**
+ * Ngân sách thời gian của lần dựng (giây): không quá --budget (mặc định DEFAULT_BUDGET) và luôn thoát (mã 75) trước khi máy chạy code
+ * ngắt lệnh (SYNCHRO_RUN_TIMEOUT = số giây của lần chạy, máy chạy code truyền vào), chừa 25 giây cho ghép tệp và đóng trình duyệt.
+ */
+export function pickBudget(optBudget, runTimeout) {
+  const b = optBudget ?? DEFAULT_BUDGET, t = Number(runTimeout);
+  return t > 0 ? Math.max(10, Math.min(b, t - 25)) : b;
 }
 
 // ---------------------------------------------------------------- đường dẫn
@@ -148,6 +171,31 @@ export function safeResolve(root, rel, real = fs.realpathSync) {
   let target;
   try { target = real(path.resolve(base, rel)); } catch { throw new UsageError(`Không thấy tệp "${rel}" trong thư mục làm việc (ls inputs/ để xem tên đúng).`); }
   if (target !== base && !target.startsWith(base + path.sep)) throw new UsageError(`"${rel}" trỏ ra ngoài thư mục làm việc (liên kết tượng trưng).`);
+  return target;
+}
+
+/**
+ * Đường dẫn tệp ra (có thể chưa có) trong thư mục làm việc, và trong thư mục con under nếu có (vd. "outputs": chỉ tệp trong outputs/ tới tay người dùng).
+ * Không nhận đường dẫn tuyệt đối, "..", hay thư mục liên kết tượng trưng trỏ ra ngoài. Trả đường dẫn tuyệt đối.
+ */
+export function safeOut(root, rel, under = "", real = fs.realpathSync) {
+  const where = under ? `${under}/` : "thư mục làm việc";
+  const eg = under ? `${under}/${under === "outputs" ? "video.mp4" : "ten"}` : "outputs/phu-de.json";
+  if (typeof rel !== "string" || !rel.trim()) throw new UsageError("Đường dẫn tệp ra trống.");
+  if (path.isAbsolute(rel) || /^[a-z][a-z0-9+.-]*:/i.test(rel)) throw new UsageError(`"${rel}": tệp ra phải là đường dẫn tương đối trong ${where} (vd. ${eg}).`);
+  if (rel.split(/[\\/]/).includes("..")) throw new UsageError(`"${rel}": không được dùng ".." để ra ngoài ${where}.`);
+  const base = real(root), top = under ? path.join(base, under) : base;
+  const target = path.resolve(base, rel);
+  if (target !== top && !target.startsWith(top + path.sep)) throw new UsageError(`"${rel}": tệp ra phải nằm trong ${where} (vd. ${eg})${under === "outputs" ? ": chỉ tệp trong outputs/ tới tay người dùng" : ""}.`);
+  // Thư mục cha đã có thì đường dẫn thật cũng phải ở trong (không đi vòng qua liên kết tượng trưng).
+  let p = path.dirname(target);
+  while (!fs.existsSync(p) && p.startsWith(base + path.sep)) p = path.dirname(p);
+  const rp = real(p);
+  const inside = rp === top || rp.startsWith(top + path.sep), above = rp === p && (p === base || top.startsWith(p + path.sep));
+  if (!inside && !above) throw new UsageError(`"${rel}" trỏ ra ngoài ${where} (liên kết tượng trưng).`);
+  let link = false;
+  try { link = fs.lstatSync(target).isSymbolicLink(); } catch {}
+  if (link) throw new UsageError(`"${rel}" là liên kết tượng trưng: ghi vào tên tệp khác.`);
   return target;
 }
 

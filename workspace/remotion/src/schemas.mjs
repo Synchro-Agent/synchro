@@ -151,6 +151,8 @@ export function sizeOf(id, size) {
   if (!m) throw new Error(`Kích thước không hợp lệ: ${s}`);
   const w = Number(m[1]), h = Number(m[2]);
   if (w % 2 || h % 2 || w < 240 || h < 240 || w > 3840 || h > 3840) throw new Error(`Kích thước ${s}: cạnh phải là số chẵn từ 240 đến 3840`);
+  // Máy dựng có 2 GB bộ nhớ: 3840x2160 dựng xong, 3840x3840 bị giết vì hết bộ nhớ.
+  if (w * h > 3840 * 2160) throw new Error(`Kích thước ${s}: khung tối đa 3840x2160 (hoặc 2160x3840) điểm ảnh vì máy dựng chỉ có 2 GB bộ nhớ`);
   return { width: w, height: h };
 }
 

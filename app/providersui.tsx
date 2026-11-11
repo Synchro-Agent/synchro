@@ -269,8 +269,8 @@ export function ProvidersPanel() {
       {admin && api && others.length > 0 && (
         <>
           <h3 className="sec">Other providers</h3>
-          <p className="d pv-shared-d">API key only. Voice (ElevenLabs) and Connectors (Composio) work with an API key only.</p>
-          <div className="api-list">{others.map((p) => <ProviderCard key={p.id} p={p} onChange={update} credit={p.id === "elevenlabs" || p.id === "composio" ? undefined : api.credits?.find((c) => c.provider === p.id) ?? null} />)}</div>
+          <p className="d pv-shared-d">API key only. Voice (ElevenLabs), Connectors (Composio) and paid image generation (Replicate) work with an API key only.</p>
+          <div className="api-list">{others.map((p) => <ProviderCard key={p.id} p={p} onChange={update} credit={p.id === "elevenlabs" || p.id === "composio" || p.id === "replicate" ? undefined : api.credits?.find((c) => c.provider === p.id) ?? null} />)}</div>
         </>
       )}
       {admin && api && (

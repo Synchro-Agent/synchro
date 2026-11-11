@@ -25,7 +25,7 @@ const B = `http://localhost:${PORT}`, M = `http://127.0.0.1:${MOCK_PORT}`;
 const GH = `http://127.0.0.1:${GH_PORT}`;
 // GITHUB_CODELOAD_URL / GIT_ALLOW_PRIVATE: Kho kỹ năng tải repo công khai từ GitHub giả lập (zip, git clone ở 127.0.0.1).
 const ghEnv = { GITHUB_CLIENT_ID: "mock-github-client", GITHUB_CLIENT_SECRET: "mock-github-secret", GITHUB_WEB_URL: GH, GITHUB_API_URL: `${GH}/api`, GITHUB_GIT_URL: `${GH}/git`, SYNCHRO_PR_TICK_MS: "3000", GITHUB_CODELOAD_URL: `${GH}/codeload`, GIT_ALLOW_PRIVATE: "1" };
-const env = { ...process.env, ...ghEnv, SYNCHRO_VERIFY_GATE_DEFAULT: "0", SYNCHRO_MIN_FREE_MB: "1", SYNCHRO_OPS_DIR: path.join(DATA, "ops"), MAIL_CAPTURE_DIR: path.join(DATA, "mail"), WS_AGENT_URL: `http://127.0.0.1:${WS_PORT}`, WS_AGENT_SECRET: WS_SECRET, WS_PUBLIC_URL: `ws://localhost:${WS_PORT}/ws-agent`, SYNCHRO_INTERNAL_URL: `http://127.0.0.1:${PORT}`, DATA_DIR: DATA, NEXT_DIST_DIR: ".next-mock", ADMIN_EMAILS: ADMIN.email, APP_URL: B, MCP_ALLOW_PRIVATE: "1", CODE_RUN: "local", SYNCHRO_DEFAULT_PLUGINS: "0", SYNCHRO_TASK_TICK_MS: "3000", SYNCHRO_TASK_RETRY_MS: "4000", SYNCHRO_CHROME_WAIT_MS: "30000", SYNCHRO_RELAX_LIMITS: "1", LLM_PROVIDER: "anthropic", LLM_API_KEY: "", ELEVENLABS_API_KEY: "", DATA_KEY: "", SYNCHRO_ENGINE_HOME: path.join(DATA, "engine"), SYNCHRO_ENGINE_USER: "", SYNCHRO_FIXED_LANG: "vi", COMPOSIO_BASE_URL: `${M}/composio/api/v3.1`, COMPOSIO_API_KEY: "", TURNSTILE_VERIFY_URL: `${M}/turnstile/v0/siteverify`, FAVICON_BASE: M };
+const env = { ...process.env, ...ghEnv, SYNCHRO_VERIFY_GATE_DEFAULT: "0", SYNCHRO_MIN_FREE_MB: "1", SYNCHRO_OPS_DIR: path.join(DATA, "ops"), MAIL_CAPTURE_DIR: path.join(DATA, "mail"), WS_AGENT_URL: `http://127.0.0.1:${WS_PORT}`, WS_AGENT_SECRET: WS_SECRET, WS_PUBLIC_URL: `ws://localhost:${WS_PORT}/ws-agent`, SYNCHRO_INTERNAL_URL: `http://127.0.0.1:${PORT}`, DATA_DIR: DATA, NEXT_DIST_DIR: ".next-mock", ADMIN_EMAILS: ADMIN.email, APP_URL: B, MCP_ALLOW_PRIVATE: "1", CODE_RUN: "local", SYNCHRO_DEFAULT_PLUGINS: "0", SYNCHRO_TASK_TICK_MS: "3000", SYNCHRO_TASK_RETRY_MS: "4000", SYNCHRO_CHROME_WAIT_MS: "30000", SYNCHRO_RELAX_LIMITS: "1", LLM_PROVIDER: "anthropic", LLM_API_KEY: "", ELEVENLABS_API_KEY: "", REPLICATE_API_TOKEN: "", DATA_KEY: "", SYNCHRO_ENGINE_HOME: path.join(DATA, "engine"), SYNCHRO_ENGINE_USER: "", SYNCHRO_FIXED_LANG: "vi", COMPOSIO_BASE_URL: `${M}/composio/api/v3.1`, COMPOSIO_API_KEY: "", TURNSTILE_VERIFY_URL: `${M}/turnstile/v0/siteverify`, FAVICON_BASE: M };
 
 // CLI giả lập (claude, codex, agy, grok) cho Cài đặt → Providers: chép vào <engine home>/.local/bin như CLI thật đã cài,
 // kèm địa chỉ máy chủ giả lập (trang đăng nhập /mock-login/…).
@@ -91,6 +91,8 @@ const add = [
   // Speech, đọc to và trò chuyện bằng giọng nói dùng ElevenLabs giả lập (gói Free như tài khoản thật; đổi gói ở /_debug/el).
   ["elevenlabs", { id: "elevenlabs", kind: "elevenlabs", key: MOCK_KEYS.elevenlabs, baseUrl: `${M}/elevenlabs` }],
 ];
+// Replicate (tạo ảnh bằng khóa của chủ máy chủ) cố ý không nối sẵn: chưa có khóa thì tạo ảnh đi qua gói như máy chủ thật hiện nay.
+// Bài thử tests/api/replicate.test.mjs tự nối khóa giả (MOCK_KEYS.replicate, ${M}/replicate/v1) rồi gỡ ra.
 for (const [id, body] of add) {
   if (has(id)) continue;
   const r = await call("POST", "/api/admin/apikeys", body);

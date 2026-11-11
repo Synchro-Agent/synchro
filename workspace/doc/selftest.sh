@@ -97,6 +97,76 @@ else
   bad "LibreOffice không mở được bản .docx"
 fi
 
+echo "== bố cục khó: ghi chú khuất dưới bảng tổng, bảng nhiều cột, chữ trùng nhãn của gói, tiền làm tròn, payload số / ngày sai"
+python3 - <<'EOF'
+import json
+inv = json.load(open("invoice.json"))
+items = (inv["items"] * 2)[:4]
+json.dump({**inv, "number": "HĐ-GHICHU", "items": items, "notes": "\n".join(f"Ghi chú dòng {i}" for i in range(5))}, open("inv-notes.json", "w"), ensure_ascii=False)
+json.dump({**inv, "number": "R-1", "lang": "en", "currency": "EUR", "items": [{"description": "Rounding", "quantity": 2.5, "unit_price": 1999.995}], "tax_rate": 0}, open("inv-eur.json", "w"), ensure_ascii=False)
+json.dump({**inv, "number": "R-2", "lang": "vi", "currency": "USD", "items": [{"description": "Làm tròn", "quantity": 1.5, "unit_price": 1234.567}], "tax_rate": 0.1}, open("inv-usd.json", "w"), ensure_ascii=False)
+rows7 = [["Miền Bắc (Hà Nội, Hải Phòng)", "2.100.000", "2.250.000", "2.400.000", "6.750.000", "6.100.000", "+10,7%"],
+         ["Miền Trung (Đà Nẵng, Huế, Quảng Nam)", "1.250.000", "1.300.000", "1.420.000", "3.970.000", "3.500.000", "+13,4%"],
+         ["Miền Nam (TP. Hồ Chí Minh, Cần Thơ)", "3.400.000", "3.650.000", "3.900.000", "10.950.000", "9.800.000", "+11,7%"]]
+t7 = {"type": "table", "caption": "Doanh thu quý III theo khu vực", "columns": ["Khu vực bán hàng", "Tháng 7", "Tháng 8", "Tháng 9", "Cộng quý III", "Cùng kỳ năm trước", "Tăng trưởng"], "rows": rows7}
+t6 = {"type": "table", "caption": "Kết quả nhận dạng", "columns": ["Mô hình", "Tham số", "WER tập kiểm tra", "CER tập kiểm tra", "Tốc độ", "Ghi chú"],
+      "rows": [["Transformer", "9,1 triệu", "12,4%", "4,1%", "1,2×", "cơ sở"], ["Conformer-Large", "118 triệu", "8,7%", "2,9%", "0,8×", "tốt nhất"]]}
+t12 = {"type": "table", "columns": [f"Cột {i}" for i in range(12)], "rows": [[f"Giá trị {i}" for i in range(12)]]}
+trap = "Abstraction layer và TABLE_NAME trong SQL; Fig.ure xem Fig. 2. Inhalt của gói."
+for t in ("basic-report", "ilm", "charged-ieee"):
+    d = json.load(open(f"{t}.json"))
+    d["sections"] = [{"heading": "Bảng nhiều cột", "blocks": [{"type": "paragraph", "text": trap}, t7, t6, t12]}]
+    d["lang"] = "vi"
+    json.dump(d, open(f"{t}-hard.json", "w"), ensure_ascii=False)
+EOF
+synchro-doc invoice inv-notes.json outputs/inv-notes.pdf >"$W/inv-notes.out" 2>&1 || bad "inv-notes thoát mã $?"
+python3 - "$W/inv-notes.out" <<'EOF' && ok "hóa đơn 4 dòng + ghi chú 5 dòng: không dòng nào khuất dưới bảng tổng" || bad "ghi chú nằm khuất dưới bảng tổng"
+import json, re, subprocess, sys
+res = json.load(open(sys.argv[1]))
+if res["layout"] == "long":
+    sys.exit(0)
+xml = subprocess.run(["pdftotext", "-f", "1", "-l", "1", "-bbox", "outputs/inv-notes.pdf", "-"], capture_output=True, text=True).stdout
+words = [(float(a), float(b), float(c), float(d), w) for a, b, c, d, w in re.findall(r'<word xMin="([\d.]+)" yMin="([\d.]+)" xMax="([\d.]+)" yMax="([\d.]+)">([^<]*)</word>', xml)]
+# Đỉnh vùng xám của bảng tổng: tiêu đề "HẠN THANH TOÁN" trừ viền trên 2 cm (56,7 pt).
+head = min(y0 for x0, y0, x1, y1, w in words if w.upper() == "HẠN")
+notes = [y1 for x0, y0, x1, y1, w in words if w == "dòng"]
+sys.exit(0 if len(notes) == 5 and max(notes) < head - 56 else 1)
+EOF
+for f in inv-eur inv-usd; do synchro-doc invoice $f.json outputs/$f.pdf >/dev/null 2>&1 || bad "$f thoát mã $?"; done
+check outputs/inv-eur.pdf Source-Sans "€2,000.00" "€5,000.00"
+check outputs/inv-usd.pdf Source-Sans "1.234,57 US$" "1.851,86 US$" "1,5"
+for t in basic-report ilm charged-ieee; do
+  synchro-doc typst $t $t-hard.json outputs/$t-hard.pdf >"$W/$t-hard.out" 2>"$W/$t-hard.err" || bad "$t-hard thoát mã $? $(head -c 400 "$W/$t-hard.err")"
+  # Không có hai chữ nào đè lên nhau (chữ của ô tràn sang ô bên cạnh).
+  python3 - outputs/$t-hard.pdf <<'EOF' && ok "$t: bảng 6, 7, 12 cột không có chữ đè nhau" || bad "$t: bảng nhiều cột có chữ đè nhau"
+import re, subprocess, sys
+xml = subprocess.run(["pdftotext", "-bbox", sys.argv[1], "-"], capture_output=True, text=True).stdout
+hits = []
+for page in xml.split("<page ")[1:]:
+    ws = [(float(a), float(b), float(c), float(d), w) for a, b, c, d, w in re.findall(r'<word xMin="([\d.]+)" yMin="([\d.]+)" xMax="([\d.]+)" yMax="([\d.]+)">([^<]*)</word>', page)]
+    for i, p in enumerate(ws):
+        for q in ws[i + 1:]:
+            # Cùng một dòng (đỉnh chữ lệch dưới 2 pt) mà chồng nhau theo chiều ngang: dấu tiếng Việt làm khung chữ của hai dòng sát nhau chồng
+            # theo chiều dọc, đó không phải lỗi.
+            if abs(p[1] - q[1]) < 2 and min(p[2], q[2]) - max(p[0], q[0]) > 0.8:
+                hits.append((p[4], q[4]))
+if hits:
+    print("    chữ đè nhau:", hits[:6], file=sys.stderr)
+sys.exit(1 if hits else 0)
+EOF
+done
+check outputs/charged-ieee-hard.pdf TeXGyreTermes "Abstraction layer" "TABLE_NAME" "Fig.ure" "Tóm tắt" "BẢNG"
+check outputs/basic-report-hard.pdf Vollkorn "Inhalt của gói" "Mục lục"
+for s in "Tóm tắtion" "BẢNG_NAME" "Hìnhure" "Mục lục của gói"; do
+  { pdftotext outputs/charged-ieee-hard.pdf -; pdftotext outputs/basic-report-hard.pdf -; } 2>/dev/null | grep -qF "$s" && bad "chữ của người dùng bị luật dịch nhãn đổi thành \"$s\"" || ok "chữ của người dùng không bị đổi thành \"$s\""
+done
+echo '{"title":"x","date":"2026-11-12","date_format":"DD/MM/YYYY","sections":[{"text":"a"}]}' > bad-date1.json
+echo '{"title":"x","date":"2026-11-12","date_format":"Ngày [ngay] tháng","sections":[{"text":"a"}]}' > bad-date2.json
+echo '{"title":"x","date":"2026-11-12","date_format":"[day","sections":[{"text":"a"}]}' > bad-date3.json
+echo '{"number":"1","date":"2026-11-12","from":{"name":"A"},"to":{"name":"B"},"items":[{"description":"x","quantity":NaN,"unit_price":1}]}' > bad-nan.json
+for f in bad-date1 bad-date2 bad-date3; do synchro-doc typst ilm $f.json outputs/$f.pdf >/dev/null 2>&1; c=$?; [ $c = 2 ] && ok "$f.json bị từ chối (mã 2)" || bad "$f.json thoát mã $c"; done
+synchro-doc invoice bad-nan.json outputs/bad-nan.pdf >/dev/null 2>"$W/nan.err"; c=$?; { [ $c = 2 ] && ! grep -q Traceback "$W/nan.err"; } && ok "số NaN bị từ chối (mã 2)" || bad "NaN thoát mã $c"
+
 echo "== payload sai: mã thoát 2, không chạm tệp ngoài thư mục làm việc"
 echo '{"title":"x","sections":[{"blocks":[{"type":"image","path":"/etc/passwd"}]}]}' > bad1.json
 echo '{"title":"x","sections":[{"blocks":[{"type":"image","path":"../../etc/hostname"}]}]}' > bad2.json

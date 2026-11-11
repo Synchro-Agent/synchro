@@ -19,7 +19,7 @@ let fonts: Font[] | null = null;
 function loadFonts(): Font[] {
   if (fonts) return fonts;
   const dir = path.join(process.cwd(), "app", "design-engine", "fonts");
-  fonts = ([[400, "PlusJakartaSans-Regular.ttf"], [700, "PlusJakartaSans-Bold.ttf"], [800, "PlusJakartaSans-ExtraBold.ttf"]] as const).map(([weight, file]) => ({ name: "Plus Jakarta Sans", data: fs.readFileSync(path.join(dir, file)), weight, style: "normal" as const }));
+  fonts = ([[400, "PlusJakartaSans-Regular.ttf"], [700, "PlusJakartaSans-Bold.ttf"], [800, "PlusJakartaSans-ExtraBold.ttf"]] as const).map(([weight, f]) => ({ name: "Plus Jakarta Sans", data: fs.readFileSync(path.join(dir, f)), weight, style: "normal" as const }));
   return fonts;
 }
 

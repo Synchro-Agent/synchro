@@ -200,6 +200,34 @@ export function MermaidSvg({ code, onError }: { code: string; onError?: (m: stri
   return svg ? <div className="art-mermaid" dangerouslySetInnerHTML={{ __html: svg }} /> : <div className="art-loading"><span className="art-spin" /></div>;
 }
 
+// Sơ đồ D2: máy chủ dựng SVG trong sandbox (d2render.ts), hiện bằng <img> nên SVG không chạy được mã nào. svg(): SVG đã vẽ (tải về, chuyển PNG).
+const d2Cache = new Map<string, string>();
+// Trang chia sẻ đặt mã liên kết: người xem chưa đăng nhập vẫn vẽ được sơ đồ có trong liên kết đó (api/d2 kiểm đoạn mã thuộc liên kết).
+let d2Share = "";
+export const setD2Share = (token: string) => { d2Share = token; };
+export function D2Svg({ code, onError, onSvg }: { code: string; onError?: (m: string) => void; onSvg?: (svg: string) => void }) {
+  const dark = isDark(), key = `${dark ? 1 : 0}:${code}`;
+  const [svg, setSvg] = useState(d2Cache.get(key) ?? "");
+  const [err, setErr] = useState("");
+  useEffect(() => {
+    let on = true;
+    const hit = d2Cache.get(key);
+    if (hit) { setSvg(hit); onSvg?.(hit); return; }
+    setSvg(""); setErr("");
+    fetch("/api/d2", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ code, dark, ...(d2Share ? { share: d2Share } : {}) }) })
+      .then((r) => r.json()).then((j: { svg?: string; error?: string }) => {
+        if (!on) return;
+        if (j.svg) { d2Cache.set(key, j.svg); setSvg(j.svg); onSvg?.(j.svg); } else { const m = j.error ? tr(j.error) : tr("Không vẽ được sơ đồ"); setErr(m); onError?.(m); }
+      }).catch(() => { if (on) { const m = tr("Mất kết nối khi vẽ sơ đồ"); setErr(m); onError?.(m); } });
+    return () => { on = false; };
+  }, [key]); // eslint-disable-line react-hooks/exhaustive-deps
+  if (err) return <div className="art-err-inline">{tr("Không vẽ được sơ đồ")}: {err}</div>;
+  // SVG của D2 chỉ có viewBox: không đặt cỡ thì ảnh giãn hết bề ngang, sơ đồ bốn khối thành chữ 30px. Hiện đúng cỡ thật, chỉ co lại khi khung hẹp hơn.
+  const vb = /viewBox="[-\d.]+[ ,]+[-\d.]+[ ,]+([\d.]+)[ ,]+([\d.]+)"/.exec(svg);
+  return svg ? <div className="art-d2"><img alt={tr("Sơ đồ D2")} width={vb ? Math.round(Number(vb[1])) : undefined} height={vb ? Math.round(Number(vb[2])) : undefined} src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`} /></div> : <div className="art-loading"><span className="art-spin" /></div>;
+}
+export const d2Drawn = (code: string) => d2Cache.get(`${isDark() ? 1 : 0}:${code}`) ?? "";
+
 // ---------------------------------------------------------------- tải về nhiều định dạng
 export function saveBlob(data: Blob, name: string) {
   const url = URL.createObjectURL(data);
@@ -433,7 +461,7 @@ export function lineDiff(a: string, b: string): DiffLine[] {
 }
 
 function CompareView({ a, b, ai, na, nb }: { a: ArtVersion; b: ArtVersion; ai: boolean; na: number; nb: number }) {
-  const live = a.type !== "code" && a.type !== "markdown" && a.type !== "mermaid" && a.type !== "vbhc";
+  const live = a.type !== "code" && a.type !== "markdown" && a.type !== "mermaid" && a.type !== "d2" && a.type !== "vbhc";
   const [mode, setMode] = useState<"side" | "diff">(live ? "side" : "diff");
   const d = useMemo(() => (mode === "diff" ? lineDiff(a.content, b.content) : []), [mode, a.content, b.content]);
   const add = d.filter((x) => x.k === "+").length, del = d.filter((x) => x.k === "-").length;
@@ -511,7 +539,7 @@ export function ArtifactPanel({ versions, index, setIndex, ai, onClose, onFix, o
   const done = (n: string) => say(`${tr("Đã tải")} ${n}`);
   const source = async () => {
     const n = artFileName(art), content = await embedGenerated(art.content);
-    saveBlob(new Blob([art.type === "html" ? htmlExport(content) : art.type === "svg" ? svgExport(content) : content], { type: art.type === "html" ? "text/html" : art.type === "svg" ? "image/svg+xml" : "text/plain" }), n); done(n);
+    saveBlob(new Blob([art.type === "html" ? htmlExport(content, location.origin) : art.type === "svg" ? svgExport(content) : content], { type: art.type === "html" ? "text/html" : art.type === "svg" ? "image/svg+xml" : "text/plain" }), n); done(n);
   };
   // Xuất cần phần xem trước đang hiện (tài liệu đã dựng, khung đã chạy): chuyển sang Xem trước rồi chờ một chút.
   const withPreview = (fn: () => void | Promise<void>, wait = 400) => new Promise<void>((ok, no) => {
@@ -576,7 +604,7 @@ Yêu cầu: ${req.trim()}`);
   if (deck) {
     items.push({ label: "PDF", sub: "Mỗi slide một trang (chọn Lưu thành PDF)", run: pdfFrame });
     items.push({ label: "PowerPoint (.pptx)", sub: "Chữ sửa được, hình giữ nguyên", run: pptxFrame });
-    items.push({ label: "HTML", sub: "Trình chiếu bằng trình duyệt", run: async () => { const n = artFileName(art); saveBlob(new Blob([deckExport(await embedGenerated(art.content))], { type: "text/html" }), n); done(n); } }, { label: "PNG", sub: "Ảnh slide đang xem", run: () => pngFrame() });
+    items.push({ label: "HTML", sub: "Trình chiếu bằng trình duyệt", run: async () => { const n = artFileName(art); saveBlob(new Blob([deckExport(await embedGenerated(art.content), location.origin)], { type: "text/html" }), n); done(n); } }, { label: "PNG", sub: "Ảnh slide đang xem", run: () => pngFrame() });
   } else if (art.type === "html") items.push({ label: "HTML", sub: "Trang web chạy được", run: source }, { label: "PDF", sub: "Chọn Lưu thành PDF khi in", run: pdfFrame }, { label: "PNG", sub: frame ? "Ảnh đúng khung" : "Ảnh toàn trang", run: () => pngFrame() }, ...png3x);
   else if (art.type === "react") items.push({ label: "HTML", sub: "Mở bằng trình duyệt, không cần cài gì", run: async () => { const n = `${name}.html`; saveBlob(new Blob([buildDoc("react", await embedGenerated(art.content), location.origin, "export", false, undefined, art.title)], { type: "text/html" }), n); done(n); } },
     { label: "JSX", sub: "Mã nguồn React", run: source }, { label: "PNG", sub: "Ảnh giao diện", run: () => pngFrame() }, ...png3x, { label: "PDF", sub: "Chọn Lưu thành PDF khi in", run: pdfFrame });
@@ -590,7 +618,11 @@ Yêu cầu: ${req.trim()}`);
     saveBlob(await r.blob(), n); done(n);
   } }, { label: "PDF", sub: "Chọn Lưu thành PDF khi in", run: () => { const p = parseVbhc(art.content); if (!p.spec) throw new Error(p.error); printDoc(vbhcHtml(p.spec, art.title)); } },
     { label: "JSON", sub: "Nội dung có cấu trúc", run: source });
-  else if (art.type === "mermaid") items.push({ label: "SVG", sub: "Sơ đồ dạng vector", run: () => withPreview(() => { const n = `${name}.svg`; saveBlob(new Blob([shown(".art-mermaid svg").outerHTML], { type: "image/svg+xml" }), n); done(n); }, 1200) },
+  else if (art.type === "d2") {
+    const drawn = () => { const s = d2Drawn(art.content); if (!s) throw new Error(tr("Chưa hiện xong nội dung")); return s; };
+    items.push({ label: "SVG", sub: "Sơ đồ dạng vector", run: () => withPreview(() => { const n = `${name}.svg`; saveBlob(new Blob([drawn()], { type: "image/svg+xml" }), n); done(n); }, 4000) },
+      { label: "PNG", sub: "Ảnh sơ đồ", run: () => withPreview(async () => { saveBlob(await svgToPng(drawn()), `${name}.png`); done(`${name}.png`); }, 4000) }, { label: "D2", sub: "Mã nguồn sơ đồ", run: source });
+  } else if (art.type === "mermaid") items.push({ label: "SVG", sub: "Sơ đồ dạng vector", run: () => withPreview(() => { const n = `${name}.svg`; saveBlob(new Blob([shown(".art-mermaid svg").outerHTML], { type: "image/svg+xml" }), n); done(n); }, 1200) },
     { label: "PNG", sub: "Ảnh sơ đồ", run: () => withPreview(async () => { saveBlob(await svgToPng(shown(".art-mermaid svg").outerHTML), `${name}.png`); done(`${name}.png`); }, 1200) }, { label: "Mermaid", sub: "Mã nguồn sơ đồ", run: source });
   else items.push({ label: tr("Tệp mã nguồn"), sub: artFileName(art), run: source });
   const lines = art.content.split("\n");
@@ -616,7 +648,7 @@ Yêu cầu: ${req.trim()}`);
             onRun={() => onCritic?.(art)} onShow={() => { setTab("code"); setTimeout(() => body.current?.querySelector(".cr-note")?.scrollIntoView({ block: "center", behavior: "smooth" }), 60); }} />}
           {stylable && <StyleSwitch key={`${art.ident}-${ver}-${reload}`} current={stylable} send={() => send.current} onKeep={onRestyle && index === versions.length - 1 ? (id) => onRestyle(art, id) : undefined} say={say} />}
           {canPick && <button className={`icon-btn ${picking ? "on" : ""}`} onClick={togglePick} aria-label="Chỉ và sửa" data-tip="Chỉ vào phần muốn sửa (hoặc giữ Alt rồi bấm)" aria-pressed={picking}><I.Pointer size={15} /></button>}
-          {runnable && art.type !== "markdown" && art.type !== "mermaid" && !showCode && <button className="icon-btn" onClick={() => setReload((x) => x + 1)} aria-label="Chạy lại" data-tip="Chạy lại"><I.Retry size={15} /></button>}
+          {runnable && art.type !== "markdown" && art.type !== "mermaid" && art.type !== "d2" && !showCode && <button className="icon-btn" onClick={() => setReload((x) => x + 1)} aria-label="Chạy lại" data-tip="Chạy lại"><I.Retry size={15} /></button>}
           <button className="icon-btn" onClick={copy} aria-label="Sao chép" data-tip="Sao chép">{copied ? <I.M icon="Check" size={15} /> : <I.M icon="Copy" size={15} />}</button>
           {art.complete && extra?.(art)}
           {art.complete && <DownloadMenu items={items} say={say} note={pptxStep ? `PowerPoint ${pptxStep}` : ""} />}
@@ -645,6 +677,8 @@ Yêu cầu: ${req.trim()}`);
           <div className={`art-md mdx${art.complete ? "" : " ai-streaming"}`}><Markdown text={art.content} say={say} streaming={!art.complete} /></div>
         ) : art.type === "mermaid" ? (
           <div className="art-md"><MermaidSvg code={art.content} onError={setErr} /></div>
+        ) : art.type === "d2" ? (
+          <div className="art-md"><D2Svg code={art.content} onError={setErr} /></div>
         ) : art.type === "vbhc" ? (
           <VbhcView content={art.content} title={art.title} onError={setErr} />
         ) : (

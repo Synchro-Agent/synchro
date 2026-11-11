@@ -11,7 +11,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
-  captionsEndSec, DEFAULT_BUDGET, DEFAULT_CHUNK_SEC, DEFAULT_FPS, estimateRenderSec, EXIT_RESUME, formatIssues, mapFiles, MAX_SECONDS, parseArgs,
+  captionsEndSec, DEFAULT_BUDGET, isOomError, pickBudget, safeOut, trimError, DEFAULT_CHUNK_SEC, DEFAULT_FPS, estimateRenderSec, EXIT_RESUME, formatIssues, mapFiles, MAX_SECONDS, parseArgs,
   pendingChunks, pickConcurrency, planChunks, readCgroup, safeResolve, shiftCaptions, shouldContinue, srtToCaptions, stateKey, UsageError, USAGE,
   whisperToCaptions, wordBoundaryToCaptions,
 } from "./lib.mjs";
@@ -30,7 +30,7 @@ const out = (o) => process.stdout.write(JSON.stringify(o, null, 1) + "\n");
 const readMaybe = (p) => { try { return fs.readFileSync(p, "utf8"); } catch { return null; } };
 const sh = (cmd, args, o = {}) => {
   const r = spawnSync(cmd, args, { encoding: "utf8", maxBuffer: 64 * 1024 * 1024, ...o });
-  if (r.status !== 0) throw new Error(`${cmd} lỗi (mã ${r.status}): ${(r.stderr || r.stdout || "").trim().slice(-600)}`);
+  if (r.status !== 0) throw new Error(`${cmd} lỗi (mã ${r.status ?? r.signal}): ${(r.stderr || r.stdout || "").trim().slice(-600)}`);
   return r.stdout;
 };
 
@@ -48,10 +48,12 @@ function browserOpts() {
 }
 const chromiumOptions = { enableMultiProcessOnLinux: true };
 
-function concurrency() {
+function concurrency(size) {
   const cg = readCgroup(readMaybe);
-  return pickConcurrency({ cpus: os.availableParallelism?.() ?? os.cpus().length, ...cg });
+  return pickConcurrency({ cpus: os.availableParallelism?.() ?? os.cpus().length, ...cg, ...size });
 }
+// Khung đang dựng, để báo lỗi hết bộ nhớ nói đúng kích thước.
+let curSize = null;
 
 // ---------------------------------------------------------------- máy chủ tệp của người dùng (chỉ đọc, chỉ 127.0.0.1)
 // staticFile() của Remotion chỉ thấy public/ của bundle, nên tệp trong thư mục làm việc được phục vụ qua địa chỉ nội bộ. Chỉ GET / HEAD,
@@ -145,7 +147,7 @@ async function prepare(id, propsPath, opts, mode) {
     files.add(abs); sigs.push(fileSig(abs));
     return abs;
   });
-  sizeOf(id, p.size ?? DEFAULT_SIZE[id]);
+  try { sizeOf(id, p.size ?? DEFAULT_SIZE[id]); } catch (e) { throw new UsageError(`props.size: ${e.message}.`); }
   const work = path.join(CWD, ".synchro-video", "asr");
   // Phụ đề.
   if (typeof p.captions === "string" && p.captions !== "auto" && p.captions !== "none") {
@@ -202,13 +204,15 @@ async function openSession(prep) {
 const stillName = (id, t) => `${id}-${String(t).replace(".", "_")}s.jpg`;
 
 async function cmdStill(id, propsPath, opts) {
+  if (opts.out != null) safeOut(CWD, opts.out, "outputs");
   const prep = await prepare(id, propsPath, opts, "still");
+  curSize = prep.size;
   const { renderStill } = await import("@remotion/renderer");
   const s = await openSession(prep);
   try {
     const dur = s.comp.durationInFrames / s.comp.fps;
     const at = opts.at ?? [0.2, dur * 0.35, dur * 0.7, Math.max(0, dur - 0.3)].map((x) => Math.round(x * 10) / 10);
-    const dir = path.join(CWD, opts.out ?? "outputs/_preview");
+    const dir = safeOut(CWD, opts.out ?? "outputs/_preview", "outputs");
     fs.mkdirSync(dir, { recursive: true });
     const made = [];
     for (const t of at) {
@@ -227,15 +231,16 @@ async function cmdCheck(id, propsPath, opts) {
   const frames = Math.round(prep.props.durationSec * prep.props.fps);
   const est = estimateRenderSec(id, frames, { video: !!prep.props.video });
   out({ ok: true, id, ...prep.size, fps: prep.props.fps, durationSec: +prep.props.durationSec.toFixed(2), frames, chunks: planChunks(frames, prep.props.fps, DEFAULT_CHUNK_SEC).length,
-    estimateSec: est, runs: Math.max(1, Math.ceil(est / DEFAULT_BUDGET)), files: [...prep.files].map((f) => path.relative(CWD, f)), notes: prep.notes });
+    estimateSec: est, runs: Math.max(1, Math.ceil(est / pickBudget(undefined, process.env.SYNCHRO_RUN_TIMEOUT))), files: [...prep.files].map((f) => path.relative(CWD, f)), notes: prep.notes });
 }
 
 async function cmdRender(id, propsPath, target, opts) {
   const t0 = Date.now();
-  const budget = opts.budget ?? DEFAULT_BUDGET, crf = opts.crf ?? 20;
-  const outFile = path.resolve(CWD, target ?? `outputs/${id}.mp4`);
-  if (!outFile.startsWith(CWD + path.sep)) throw new UsageError("Tệp ra phải nằm trong thư mục làm việc (vd. outputs/video.mp4).");
+  const budget = pickBudget(opts.budget, process.env.SYNCHRO_RUN_TIMEOUT), crf = opts.crf ?? 20;
+  // Chỉ tệp trong outputs/ tới tay người dùng: tệp ra ở chỗ khác thì dựng xong mà người dùng không nhận được gì.
+  const outFile = safeOut(CWD, target ?? `outputs/${id}.mp4`, "outputs");
   const prep = await prepare(id, propsPath, opts, "render");
+  curSize = prep.size;
   const fps = prep.props.fps, frames = Math.round(prep.props.durationSec * fps);
   const key = stateKey([VERSION, id, prep.props, prep.sig, crf, opts.chunk ?? DEFAULT_CHUNK_SEC]);
   const dir = path.join(CWD, ".synchro-video", key);
@@ -243,7 +248,7 @@ async function cmdRender(id, propsPath, target, opts) {
   const plan = planChunks(frames, fps, opts.chunk ?? DEFAULT_CHUNK_SEC);
   const done = new Set(fs.readdirSync(dir).filter((f) => /^chunk-\d+\.ts$/.test(f)));
   const todo = pendingChunks(plan, done);
-  const conc = concurrency();
+  const conc = concurrency(prep.size);
   log(`[synchro-video] ${id} ${prep.size.width}x${prep.size.height} ${fps} fps, ${prep.props.durationSec.toFixed(1)} giây = ${frames} khung, ${plan.length} đoạn (đã xong ${plan.length - todo.length}), ${conc} tab`);
   const { renderMedia, makeCancelSignal } = await import("@remotion/renderer");
   const { cancelSignal, cancel } = makeCancelSignal();
@@ -311,17 +316,17 @@ async function cmdRender(id, propsPath, target, opts) {
 }
 
 async function cmdCaptions(media, outJson, opts) {
+  const o = safeOut(CWD, outJson);
   const abs = safeResolve(CWD, media);
   const caps = transcribe(abs, { lang: opts.lang ?? "vi", model: opts.model ? safeResolve(CWD, opts.model) : MODEL, work: path.join(CWD, ".synchro-video", "asr") });
-  const o = path.resolve(CWD, outJson);
   fs.mkdirSync(path.dirname(o), { recursive: true });
   fs.writeFileSync(o, JSON.stringify(caps, null, 1));
   out({ ok: true, words: caps.length, durationSec: +captionsEndSec(caps).toFixed(2), file: path.relative(CWD, o), sample: caps.slice(0, 12).map((c) => c.text).join("") });
 }
 
 function cmdWords(input, outJson) {
+  const o = safeOut(CWD, outJson);
   const caps = captionsFromFile(safeResolve(CWD, input));
-  const o = path.resolve(CWD, outJson);
   fs.mkdirSync(path.dirname(o), { recursive: true });
   fs.writeFileSync(o, JSON.stringify(caps, null, 1));
   out({ ok: true, words: caps.length, durationSec: +captionsEndSec(caps).toFixed(2), file: path.relative(CWD, o) });
@@ -403,6 +408,16 @@ async function main() {
 
 main().then(() => process.exit(0)).catch((e) => {
   if (e instanceof UsageError) { log(`Lỗi: ${e.message}`); process.exit(2); }
-  log(`Lỗi: ${e?.stack ?? e}`);
+  const msg = String(e?.message ?? e);
+  // Hết bộ nhớ (2 GB ở máy dựng): Chromium / ffmpeg bị giết giữa chừng, Remotion báo "signal SIGKILL" kèm cả bản cấu hình ffmpeg. Báo gọn và thoát 137
+  // như máy chạy code vẫn báo hết bộ nhớ, để model đổi kích thước chứ không chạy lại đúng lệnh cũ.
+  if (isOomError(msg)) {
+    const at = curSize ? ` khi dựng ở ${curSize.width}x${curSize.height}` : "";
+    const mem = readCgroup(readMaybe).memMax, gb = mem ? `${+(mem / 1024 ** 3).toFixed(1)} GB` : "bộ nhớ";
+    log(`Lỗi: hết ${gb}${at}. Giảm --size (vd. landscape, vertical hoặc square) hoặc dùng --fps 30 rồi chạy lại; các đoạn đã dựng xong vẫn được giữ.\nChi tiết: ${trimError(msg, 200, 0)}`);
+    process.exit(137);
+  }
+  log(`Lỗi: ${trimError(msg)}`);
+  if (process.env.SYNCHRO_VIDEO_DEBUG && e?.stack) log(e.stack);
   process.exit(1);
 });

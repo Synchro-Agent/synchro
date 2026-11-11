@@ -42,6 +42,6 @@
     "data",
     "data-mock",
     "public",
-    "workspace/remotion"
+    "workspace/remotion", "scripts/vendor-3d"
   ]
 }

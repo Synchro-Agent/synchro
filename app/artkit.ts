@@ -5,13 +5,47 @@
 // Mọi cỡ tính theo --sx-u: 1px ở trang thường; trong slide, poster là phần nhỏ hơn của chiều rộng và chiều cao, vì khung xem trước, trình chiếu, ảnh thu nhỏ, tệp tải về mở ở cửa sổ bất kỳ có cỡ khác nhau: khung giữ đúng tỉ lệ, không bị cắt đáy, không sinh thanh cuộn. Canh giữa bằng translate (phần trăm theo chính khung), không bằng margin: model tự đặt lại width:100vw thì khung vẫn đúng chỗ.
 // Màu chữ luôn là mã màu thuần, chỉ nền và viền dùng color-mix: bộ xuất PowerPoint đọc màu chữ từ getComputedStyle.
 import { DEFAULT_PRESET, FONT_SPEC, PRESETS, presetIds, presetOf, type Preset, type PresetColors } from "./designpresets";
+import { chartKitJs } from "./design-engine/charts/echarts-presets";
 import { CHART_CSS } from "./designcharts";
 import { DOC_TPL_CSS } from "./designdocs";
 import { SLIDE_TPL_CSS } from "./designtemplates";
 
 // Không đụng data-sx-loc, data-sx-on… của Synchro (đứng sau dấu "-"), chỉ nhận lớp thật, biến thật, và thuộc tính preset.
 // Tên lớp trong master-microcraft.css / visual-fx.css của chủ dự án (typo-…, fx-…, anim-stagger-card) cũng nhận: đều là tên riêng, trang cũ không tình cờ dùng.
-export const usesKit = (content: string) => /["'`\s.]sx-[a-z]|var\(--sx-|data-sx-preset=|["'`\s.](?:typo-(?:hero-kpi|action-title|eyebrow)|fx-(?:ambient-shadow|specular-rim|frosted-glass|aurora-bg|film-grain|gradient-text)|anim-stagger-card|surface-tinted-badge|bento-grid-hero-left|concentric-(?:outer|inner))\b/.test(content);
+export const usesKit = (content: string) => /["'`\s.]sx-[a-z]|var\(--sx-|data-sx-preset=|["'`\s.](?:typo-(?:hero-kpi|action-title|eyebrow)|fx-(?:ambient-shadow|specular-rim|frosted-glass|aurora-bg|film-grain|gradient-text)|anim-stagger-card|surface-tinted-badge|bento-grid-hero-left|concentric-(?:outer|inner))\b|data-sx-(?:chart|shader)\b/.test(content);
+const VENDOR = "/vendor/";
+/** Apache ECharts 6.1.0 (Apache-2.0), bản dist nguyên vẹn từ npm: [tệp trong public/vendor, đường dẫn jsDelivr, SRI]. Chỉ nạp khi trang có biểu đồ (data-sx-chart) hoặc import "echarts". */
+export const ECHARTS: [string, string, string] = ["echarts-6.1.0.min.js", "echarts@6.1.0/dist/echarts.min.js", "sha384-C2iskrW/uPW46KzOjrvJIQo4YkV8lkD+QS0CrDN18IIPIpT/g2USu8bTP3nvmIAD"];
+// Trang có biểu đồ ECharts (data-sx-chart chứa cấu hình JSON). Biểu đồ SVG điền sẵn của designcharts.ts cũng mang data-sx-chart="bar" (tên loại, đã vẽ xong) nên không nạp ECharts.
+const ECHARTS_ON = /data-sx-chart(?!=["'](?:bar|column|line|area|doughnut|donut|pie|waterfall|sankey|radar)["'])/;
+/** Gói 3D tự dựng (scripts/build-vendor-3d.mjs: three 0.169.0, @react-three/fiber 8.18.0, drei 9.122.0, @shadergradient/react 2.4.20): chỉ có ở /vendor của Synchro, không có bản CDN. */
+export const SYNCHRO_3D: [string, string, string] = ["synchro-3d-1.0.0.js", "", "sha384-HmyfO5IR9ZCEqYGNwKGFjko0PIXroYlObNS9VE8cyS8cMOUXQ25uiSvJHEzMeVmJ"];
+const REACT_UMD: [string, string, string][] = [
+  ["react-18.3.1.min.js", "react@18.3.1/umd/react.production.min.js", "sha384-DGyLxAyjq0f9SPpVevD6IgztCFlnMF6oW/XQGmfe+IsZ8TqEiDrcHkMLKI6fiB/Z"],
+  ["react-dom-18.3.1.min.js", "react-dom@18.3.1/umd/react-dom.production.min.js", "sha384-gTGxhz21lVGYNMcdJOyq01Edg0jhn/c22nsx0kyqP0TxaV5WVdsSH1fSDUf5YJj1"],
+];
+// Màu cực quang dự phòng của nền shader (cùng bộ thông số sóng lụa của chủ dự án): hiện ngay khi trang mở, khi không có WebGL, và trong ảnh xuất nếu canvas chưa kịp vẽ.
+const SHADER_FALLBACK = "radial-gradient(ellipse 70% 60% at 22% 30%,#4F46E5cc 0%,transparent 62%),radial-gradient(ellipse 60% 55% at 78% 26%,#0EA5E999 0%,transparent 60%),radial-gradient(ellipse 75% 65% at 62% 88%,#10B98188 0%,transparent 64%),linear-gradient(160deg,#08090E 0%,#0F172A 100%)";
+/**
+ * Nền shader 3D trong trang HTML: <div class="sx-shader" data-sx-shader="silk"></div> (đầu khối, nội dung phía sau tự nằm trên) hoặc data-sx-shader="glass" (khối kính khúc xạ).
+ * Nạp React, ReactDOM (nếu trang chưa có) rồi gói 3D từ /vendor với SRI, chỉ khi trang có phần tử đó. Ảnh thu nhỏ của bản trình bày (window.__sxStatic lúc mở trang) không nạp:
+ * chỉ hiện lớp CSS dự phòng, không tốn ngữ cảnh WebGL. In (PDF): canvas WebGL đổi tạm thành ảnh của chính nó.
+ */
+const shaderKitJs = (origin: string) => String.raw`(function(){var R=${JSON.stringify(REACT_UMD.map((l) => libAt(origin, l)))},G=${JSON.stringify([origin ? `${origin}${VENDOR}${SYNCHRO_3D[0]}` : "", SYNCHRO_3D[2]])},busy=0,q=[];
+function one(u,sri,cb){if(!u)return cb(false);var s=document.createElement("script");s.src=u;s.crossOrigin="anonymous";s.integrity=sri;s.onload=function(){cb(true)};s.onerror=function(){s.remove();cb(false)};document.head.appendChild(s)}
+function lib(l,cb){one(l[0],l[2],function(ok){if(ok)return cb(true);one(l[1],l[2],cb)})}
+function load(cb){if(window.Synchro3D)return cb();q.push(cb);if(busy)return;busy=1;
+if(window.__sxReact){var n=0,t=setInterval(function(){if(window.Synchro3D||++n>300){clearInterval(t);var f=q;q=[];if(window.Synchro3D)f.forEach(function(x){x()})}},200);return}
+var steps=[];if(!window.React)steps.push(function(n){lib(R[0],n)});if(!window.ReactDOM)steps.push(function(n){lib(R[1],n)});steps.push(function(n){one(G[0],G[1],n)});
+(function next(i){if(i>=steps.length){var f=q;q=[];if(window.Synchro3D)f.forEach(function(x){x()});return}steps[i](function(ok){if(!ok){document.documentElement.setAttribute("data-sx-3d-error","");return}next(i+1)})})(0)}
+function scan(){var els=[].slice.call(document.querySelectorAll("[data-sx-shader]")).filter(function(e){return !e.__sx3d});if(!els.length)return;
+if(window.__sxThumb)return;
+load(function(){els.forEach(function(e){e.__sx3d=1;var k=e.getAttribute("data-sx-shader");var o={};try{o=JSON.parse(e.getAttribute("data-sx-shader-props")||"{}")}catch(x){}window.Synchro3D.mount(e,k==="glass"?"glass":"silk",o)})})}
+var swapped=[];addEventListener("beforeprint",function(){[].forEach.call(document.querySelectorAll("canvas[data-sx-gl]"),function(c){try{var u=c.toDataURL("image/png"),i=new Image();i.src=u;i.setAttribute("data-sx-gl-print","");i.style.cssText="position:absolute;inset:0;width:100%;height:100%";c.parentNode.insertBefore(i,c);c.style.visibility="hidden";swapped.push([c,i])}catch(x){}})});
+addEventListener("afterprint",function(){swapped.forEach(function(p){p[0].style.visibility="";p[1].remove()});swapped=[]});
+function start(){scan();if(window.MutationObserver)new MutationObserver(scan).observe(document.body,{subtree:true,childList:true})}
+if(document.readyState==="loading")addEventListener("DOMContentLoaded",start);else start()})();`;
+const libAt = (origin: string, l: [string, string, string]): [string, string, string] => [origin ? `${origin}${VENDOR}${l[0]}` : `https://cdn.jsdelivr.net/npm/${l[1]}`, `https://cdn.jsdelivr.net/npm/${l[1]}`, l[2]];
 
 // --sx-vivid / --sx-vivid2: màu nhấn gốc của bảng phong cách cho phần không phải chữ (cột được nhấn, quầng cực quang); bảng tối dùng luôn màu nhấn của nó.
 const colorVars = (c: PresetColors, p?: Preset) => `--sx-bg:${c.bg};--sx-surface:${c.surface};--sx-raised:${c.raised};--sx-ink:${c.ink};--sx-muted:${c.muted};--sx-accent:${c.accent};--sx-accent2:${c.accent2};--sx-line:${c.line};--sx-neutral:${c.neutral};--sx-pos:${c.pos};--sx-neg:${c.neg};--sx-vivid:${p?.vivid ?? c.accent};--sx-vivid2:${p?.vivid2 ?? c.accent2};`;
@@ -93,6 +127,12 @@ ${CHART_CSS}
 .sx-glass,.fx-frosted-glass{background:rgba(255,255,255,.6);background:color-mix(in oklab,var(--sx-surface) 62%,transparent);backdrop-filter:blur(var(--sx-blur,16px)) saturate(160%);-webkit-backdrop-filter:blur(var(--sx-blur,16px)) saturate(160%)}
 .sx-aurora,.fx-aurora-bg{background-color:var(--sx-bg);background-image:radial-gradient(at 15% 15%,color-mix(in oklab,var(--sx-vivid) 24%,transparent) 0,transparent 55%),radial-gradient(at 85% 20%,color-mix(in oklab,var(--sx-vivid2) 18%,transparent) 0,transparent 50%),radial-gradient(at 50% 85%,color-mix(in oklab,var(--sx-vivid) 12%,transparent) 0,transparent 60%)}
 .sx-noise,.fx-film-grain{position:relative}:is(.sx-noise,.fx-film-grain)::after{content:"";position:absolute;inset:0;pointer-events:none;opacity:.03;background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}
+.sx-shader,[data-sx-shader]:not([data-sx-shader=glass]){position:absolute;inset:0;z-index:0;pointer-events:none;overflow:hidden;background:${SHADER_FALLBACK};border-radius:inherit}
+:where(.sx-slide,section.slide,[data-slide],.sx-poster,.sx-og,.sx-page,.sx-card,header,section,div):has(>.sx-shader,>[data-sx-shader]:not([data-sx-shader=glass])){position:relative;isolation:isolate}
+:is(.sx-shader,[data-sx-shader]:not([data-sx-shader=glass]))~*{position:relative;z-index:1}
+[data-sx-shader=glass]{position:relative;display:block;width:100%;height:${u(320)};min-height:0;pointer-events:none}
+/* Khung biểu đồ ECharts (data-sx-chart='{…}'): không áp cho biểu đồ SVG điền sẵn <figure class="sx-chart"> của designcharts.ts. */
+.sx-chart:not(figure){position:relative;display:block;width:100%;height:${u(320)};min-height:0;min-width:0}.sx-chart text{font-variant-numeric:tabular-nums lining-nums}
 @keyframes sx-rise{from{opacity:0;transform:translateY(calc(14*var(--sx-u)))}}
 @keyframes sx-fade{from{opacity:0}}
 @keyframes sx-pop{from{opacity:0;transform:scale(.96)}}
@@ -167,10 +207,13 @@ export function kitFontUrl(content: string): string {
 /** Phần chèn vào <head> của trang có dùng bộ CSS; trang không dùng thì rỗng. */
 // Nạp phông sau sự kiện load, không dùng <link> trong <head>: thẻ đó chặn lần vẽ đầu, mạng treo (tường lửa, gói tin bị bỏ) thì trang trắng tới khi yêu cầu hết giờ. Kể cả media="print" cũng giữ
 // sự kiện load, khung không báo được chiều cao. Phông là phần thêm, chữ phải hiện trước; font-display:swap đổi phông khi tải xong.
-export const kitHead = (content: string) => {
+// origin: địa chỉ Synchro để nạp thư viện từ /vendor (khung xem, tệp tải về); rỗng thì nạp từ jsDelivr (cùng SRI).
+export const kitHead = (content: string, origin = "") => {
   if (!usesKit(content)) return "";
   const url = kitFontUrl(content);
-  return `<script>addEventListener("load",function(){var l=document.createElement("link");l.rel="stylesheet";l.href=${JSON.stringify(url)};l.setAttribute("data-sx-font","");document.head.appendChild(l)});${FIT_JS}</script><noscript><link rel="stylesheet" href="${url.replace(/&/g, "&amp;")}"></noscript><style data-sx-kit>${CSS}</style>`;
+  const charts = ECHARTS_ON.test(content) ? `<script data-sx-charts>${chartKitJs(libAt(origin, ECHARTS))}</script>` : "";
+  const shader = /data-sx-shader/.test(content) ? `<script data-sx-3d>${shaderKitJs(origin)}</script>` : "";
+  return `<script>addEventListener("load",function(){var l=document.createElement("link");l.rel="stylesheet";l.href=${JSON.stringify(url)};l.setAttribute("data-sx-font","");document.head.appendChild(l)});${FIT_JS}</script><noscript><link rel="stylesheet" href="${url.replace(/&/g, "&amp;")}"></noscript><style data-sx-kit>${CSS}</style>${charts}${shader}`;
 };
 export const KIT_CSS = CSS;
 /** Phong cách đang dùng của trang (mã chính), hoặc "" nếu trang không đặt data-sx-preset hợp lệ. */

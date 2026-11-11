@@ -5,6 +5,7 @@
 # Giữ khớp danh sách WS_TOOLS trong app/coderun.ts (mô tả công cụ run_code cho model).
 # Video đồ họa chuyển động: Remotion 4.0.539 dựng sẵn ở /opt/remotion (4 mẫu, lệnh synchro-video), whisper.cpp + mô hình small cho phụ đề không cần mạng.
 # Tài liệu PDF / Word: Typst 0.15.1 (+ 0.12.0 cho basic-report), WeasyPrint 70.0, thư viện docx 9.15.3; lệnh synchro-doc, mẫu ở /opt/synchro/doc.
+# Biểu đồ / sơ đồ: ECharts 6.1.0 (require("echarts"), lệnh synchro-chart) và D2 v0.9.0 (lệnh d2).
 FROM node:22-bookworm
 
 ENV DEBIAN_FRONTEND=noninteractive LANG=C.UTF-8 LC_ALL=C.UTF-8
@@ -178,7 +179,33 @@ RUN set -e; install -m 755 /opt/synchro/doc/synchro-doc.py /usr/local/bin/synchr
       >> /etc/profile.d/synchro.sh
 ENV TYPST_PACKAGE_PATH=/opt/synchro/typst-packages TYPST_FONT_PATHS=/usr/share/texmf/fonts/opentype/public/tex-gyre
 
+# ------------------------------------------------------------------ biểu đồ ECharts (synchro-chart) và sơ đồ D2
+# Đặt sau các lớp nặng (Remotion, tài liệu) để đổi mẫu biểu đồ không phải dựng lại chúng. Chạy không cần mạng.
+# ECharts 6.1.0 (Apache-2.0) cài theo package-lock.json (mã băm sha512): require("echarts") ở đâu cũng được (NODE_PATH), SSR ra SVG không cần trình duyệt.
+# synchro-chart dùng đúng cấu hình biểu đồ của khung artifact (workspace/charts/synchro-charts.js sinh từ app/design-engine/charts/echarts-presets.ts).
+COPY charts/package.json charts/package-lock.json /opt/synchro/charts/
+RUN cd /opt/synchro/charts && npm ci --omit=dev --no-fund --no-audit && npm cache clean --force
+COPY charts/ /opt/synchro/charts/
+# D2 v0.9.0 (MPL-2.0), bản Linux x86_64 phát hành chính thức, ghim mã băm theo SHA256SUMS của bản phát hành. Chỉ dùng bố cục dagre / elk đi kèm (mở);
+# TALA là phần mềm thương mại nên không dùng.
+RUN set -e; chmod 755 /opt/synchro/charts/synchro-chart.mjs; ln -sf /opt/synchro/charts/synchro-chart.mjs /usr/local/bin/synchro-chart; \
+    cd /tmp; curl -fsSL --retry 5 --retry-all-errors --connect-timeout 20 -o d2.tgz https://github.com/d2lang/d2/releases/download/v0.9.0/d2-v0.9.0-linux-amd64.tar.gz; \
+    echo "5669ddc46b99e942cc96078f4a4e36d5e62103348f4c05179ede27802fdd87a9  d2.tgz" | sha256sum -c --quiet -; \
+    tar xzf d2.tgz; install -m 755 d2-v0.9.0/bin/d2 /usr/local/bin/d2; install -D -m 644 d2-v0.9.0/LICENSE.txt /usr/share/doc/d2/LICENSE.txt; rm -rf d2.tgz d2-v0.9.0; \
+    d2 --version | grep -qx v0.9.0; \
+    chown -R root:root /opt/synchro/charts; chmod -R a+rX,go-w /opt/synchro/charts; \
+    printf '%s\n' 'export NODE_PATH="$NODE_PATH:/opt/synchro/charts/node_modules"' >> /etc/profile.d/synchro.sh
+ENV NODE_PATH=/usr/local/lib/node_modules:/home/user/.npm-global/lib/node_modules:/opt/synchro/charts/node_modules
+
 USER user
+# Biểu đồ và sơ đồ: 8 loại ra SVG hợp lệ và PNG, require("echarts") từ thư mục bất kỳ, D2 có chữ tiếng Việt, tất cả không mạng.
+RUN set -e; cd /tmp; synchro-chart example > ex.json; \
+    node -e 'const ex=require("/tmp/ex.json");for(const [k,v] of Object.entries(ex))require("fs").writeFileSync("/tmp/c-"+k+".json",JSON.stringify(v))'; \
+    for t in bar line area doughnut pie waterfall sankey radar; do synchro-chart c-$t.json c-$t.svg --preset midnight-tech >/dev/null; grep -q '<svg' c-$t.svg; done; \
+    synchro-chart c-waterfall.json c-w.png --scale 2 >/dev/null; file c-w.png | grep -q 'PNG image data, 1920 x 1080'; \
+    node -e 'const e=require("echarts");const c=e.init(null,null,{renderer:"svg",ssr:true,width:300,height:200});c.setOption({animation:false,xAxis:{data:["a"]},yAxis:{},series:[{type:"bar",data:[1]}]});if(!c.renderToSVGString().includes("<svg"))process.exit(1);c.dispose()'; \
+    printf 'a: Khách hàng\nb: Máy chủ dữ liệu\na -> b: Truy vấn\n' > s.d2; d2 --layout=elk s.d2 s.svg >/dev/null 2>&1; grep -q '<svg' s.svg; \
+    rm -f /tmp/ex.json /tmp/c-* /tmp/s.d2 /tmp/s.svg
 # Tự kiểm tra lúc build bằng đúng người dùng của sandbox: mỗi mẫu dựng 1 giây 60 khung/giây (chữ tiếng Việt), âm thanh 48 kHz, whisper nhận ra giọng tiếng Việt.
 # Lỗi ở đây làm build hỏng thay vì giao image có bộ dựng video hỏng.
 RUN cd /tmp && synchro-video selftest

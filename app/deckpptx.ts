@@ -36,15 +36,21 @@ export type ChartSpec = {
  */
 export const PPTX_FRAME_JS = String.raw`
 var sxKitFonts=${JSON.stringify(Object.keys(FONT_SPEC))};
-// Dừng chuyển động ở trạng thái cuối để chụp: phần tử chưa tới lượt trong stagger (opacity 0) không mất khỏi ảnh. Trả về hàm gỡ.
+// Dừng chuyển động ở trạng thái cuối để chụp: phần tử chưa tới lượt trong stagger (opacity 0) không mất khỏi ảnh. window.__sxStatic: biểu đồ, nền 3D vẽ trong lúc chụp
+// (slide chưa xem lần nào) không chạy hoạt ảnh, ảnh không bắt được cột đang mọc dở. Trả về hàm gỡ.
 function sxFreeze(){var fz=document.createElement("style");fz.setAttribute("data-sx-noprint","");
 fz.textContent="*,*::before,*::after{animation-duration:0s!important;animation-delay:0s!important;animation-iteration-count:1!important;transition:none!important}";
-document.head.appendChild(fz);return function(){fz.remove()}}
+document.head.appendChild(fz);window.__sxStatic=(window.__sxStatic||0)+1;return function(){fz.remove();window.__sxStatic=Math.max(0,window.__sxStatic-1)}}
 // Canvas WebGL (nền shader 3D, cảnh three.js): html-to-image chép canvas bằng toDataURL, canvas WebGL không giữ bộ đệm vẽ thì ra ô trống trong PNG / PowerPoint.
-// Bộ 3D của Synchro bật preserveDrawingBuffer nên đọc được; canvas nào đọc ra trống thì ẩn tạm để lớp nền CSS dự phòng ngay dưới nó hiện ra thay vì một mảng đen.
+// Bộ 3D của Synchro bật preserveDrawingBuffer nên đọc được; canvas WebGL nào đọc ra trống thì ẩn tạm để lớp nền CSS dự phòng ngay dưới nó hiện ra thay vì một mảng đen.
+// Chỉ xét canvas WebGL: canvas 2D (Chart.js, chữ ký, trò chơi) không bao giờ mất bộ đệm vẽ, mà thu nhỏ một biểu đồ nét mảnh trên màn Retina xuống vài điểm ảnh
+// thì đọc ra như trống và bị ẩn mất khỏi PNG / PowerPoint. Canvas không đọc được (ảnh khác nguồn) cũng giữ nguyên.
 // window.__sxStatic: bộ 3D vẽ khung hình tĩnh trong lúc chụp. Trả về hàm trả lại như cũ.
-function sxGlFreeze(){var back=[],t=document.createElement("canvas");t.width=t.height=12;var x=t.getContext("2d",{willReadFrequently:true});window.__sxStatic=(window.__sxStatic||0)+1;
-[].forEach.call(document.querySelectorAll("canvas"),function(c){if(!c.width||!c.height)return;var blank=true;try{x.clearRect(0,0,12,12);x.drawImage(c,0,0,12,12);var d=x.getImageData(0,0,12,12).data;for(var i=3;i<d.length;i+=4)if(d[i]>8){blank=false;break}}catch(e){blank=true}
+function sxGlFreeze(){var back=[],N=64,t=document.createElement("canvas");t.width=t.height=N;var x=t.getContext("2d",{willReadFrequently:true});x.imageSmoothingEnabled=true;x.imageSmoothingQuality="high";window.__sxStatic=(window.__sxStatic||0)+1;
+[].forEach.call(document.querySelectorAll("canvas"),function(c){if(!c.width||!c.height)return;
+// Canvas đã có ngữ cảnh WebGL thì getContext("2d") trả null; canvas của bộ 3D (data-sx-gl) và three.js (data-engine) khỏi thử để không tạo ngữ cảnh 2D lên canvas chưa vẽ.
+if(!c.hasAttribute("data-sx-gl")&&!c.hasAttribute("data-engine")){var g=null;try{g=c.getContext("2d")}catch(e){}if(g)return}
+var blank=true;try{x.clearRect(0,0,N,N);x.drawImage(c,0,0,N,N);var d=x.getImageData(0,0,N,N).data;for(var i=3;i<d.length;i+=4)if(d[i]>2){blank=false;break}}catch(e){blank=false}
 if(blank){back.push([c,c.style.getPropertyValue("visibility"),c.style.getPropertyPriority("visibility")]);c.style.setProperty("visibility","hidden","important")}});
 return function(){window.__sxStatic=Math.max(0,(window.__sxStatic||1)-1);back.forEach(function(b){b[0].style.removeProperty("visibility");if(b[1])b[0].style.setProperty("visibility",b[1],b[2])})}}
 // Loại biểu đồ PowerPoint dựng lại được thành biểu đồ gốc (waterfall: cột chồng có chuỗi nền trong suốt).
@@ -143,7 +149,10 @@ function hide(e){hid.push([e,e.style.getPropertyValue("visibility"),e.style.getP
 function unhide(){hid.forEach(function(x){x[0].style.removeProperty("visibility");if(x[1])x[0].style.setProperty("visibility",x[1],x[2])});hid=[]}
 var restore0=restore;restore=function(){unhide();restore0()};
 var todo=objs.filter(function(o){return o.pic});
-(function pic(k){if(k>=todo.length){todo.forEach(function(o){hide(o.el)});chartEls.forEach(hide);
+// Biểu đồ dựng lại thành biểu đồ gốc thì ẩn trước khi chụp cả ảnh vật thể có tên (thẻ KPI chứa biểu đồ): không thì ảnh của thẻ mang sẵn biểu đồ
+// ECharts nằm dưới biểu đồ gốc, thành hai lớp.
+chartEls.forEach(hide);
+(function pic(k){if(k>=todo.length){todo.forEach(function(o){hide(o.el)});
 return htmlToImage.toPng(el,{pixelRatio:pr,skipFonts:true,fontEmbedCSS:fontCss||undefined,backgroundColor:bg,style:{translate:"none"},width:W,height:H}).then(function(u){
 restore();out.push({bg:u,boxes:boxes,pics:pics,charts:charts});post({t:"pptx-step",id:id,i:i+1,n:all.length});step(i+1)},function(x){fail(x,restore)})}
 var o=todo[k],r=o.el.getBoundingClientRect();
