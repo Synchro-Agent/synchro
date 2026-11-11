@@ -5,8 +5,11 @@ import { allowsModel, equivalentModel, splitKey, vendorOf, type Effort, type Pro
 import { userScope } from "./userscope";
 
 // effort: mức nỗ lực cao nhất quản trị viên cho phép theo từng model ("*" là mọi model).
-type State = { providers: ProviderInfo[]; sharedApi: boolean; default: string | null; allowed: string[]; effort: Record<string, Effort>; loaded: boolean };
-let state: State = { providers: [], sharedApi: false, default: null, allowed: [], effort: {}, loaded: false };
+// replaced: model hãng đã gỡ hoặc đã cũ → bản mới nhất cùng dòng (sổ model, app/modelreg.ts), kèm tên model cũ để báo người dùng.
+// why: "gone" hãng đã gỡ, "old" dòng đã có bản mới hơn (vẫn chạy được nhưng không còn ở bộ chọn).
+export type Replaced = Record<string, { to: string; name: string; why?: "gone" | "old" }>;
+type State = { providers: ProviderInfo[]; sharedApi: boolean; default: string | null; allowed: string[]; effort: Record<string, Effort>; replaced: Replaced; loaded: boolean };
+let state: State = { providers: [], sharedApi: false, default: null, allowed: [], effort: {}, replaced: {}, loaded: false };
 const subs = new Set<() => void>();
 let inflight: Promise<void> | null = null;
 // Lần hỏi đầu có thể lỗi hoặc chưa có hãng nào (máy chủ vừa khởi động lại sau deploy, nginx nạp lại cấu hình, mạng chập chờn): bộ chọn
@@ -18,10 +21,11 @@ let tries = 0, again: ReturnType<typeof setTimeout> | null = null;
 /** Đã hỏi hết các lần mà vẫn chưa có hãng nào: danh sách trống là thật, không phải máy chủ vừa khởi động lại. */
 export const modelsSettled = () => tries >= RETRY_S.length;
 
-export function refreshModels() {
-  inflight ??= fetch("/api/models", { cache: "no-store" })
+/** bg: lần hỏi lại nền của tab để mở lâu (máy chủ không khởi động sẵn tiến trình chat cho lần này). */
+export function refreshModels(o: { bg?: boolean } = {}) {
+  inflight ??= fetch(o.bg ? "/api/models?bg=1" : "/api/models", { cache: "no-store" })
     .then((r) => (r.ok ? r.json() : null))
-    .then((j) => { if (j) { state = { providers: j.providers ?? [], sharedApi: !!j.sharedApi, default: j.default ?? null, allowed: j.allowed ?? [], effort: j.effort ?? {}, loaded: true }; subs.forEach((f) => f()); } return !!j?.providers?.length; })
+    .then((j) => { if (j) { fetchedAt = Date.now(); state = { providers: j.providers ?? [], sharedApi: !!j.sharedApi, default: j.default ?? null, allowed: j.allowed ?? [], effort: j.effort ?? {}, replaced: j.replaced ?? {}, loaded: true }; subs.forEach((f) => f()); } return !!j?.providers?.length; })
     .catch(() => false)
     .then((ok) => {
       if (ok) tries = 0;
@@ -31,10 +35,21 @@ export function refreshModels() {
   return inflight;
 }
 
+// Tab để mở lâu vẫn thấy model hãng vừa ra (Synchro tự dò mỗi 6 giờ): hỏi lại mỗi 15 phút khi tab đang hiện, và khi quay lại tab sau hơn 5 phút.
+let fetchedAt = 0, watching = false;
+const REFRESH_MS = 15 * 60_000;
+function watchFresh() {
+  if (watching || typeof window === "undefined") return;
+  watching = true;
+  const stale = (ms: number) => state.loaded && userScope() !== "anon" && document.visibilityState === "visible" && Date.now() - fetchedAt > ms;
+  setInterval(() => { if (stale(REFRESH_MS - 5000)) refreshModels({ bg: true }); }, REFRESH_MS);
+  document.addEventListener("visibilitychange", () => { if (stale(5 * 60_000)) refreshModels(); });
+}
+
 export function useModels() {
   return useSyncExternalStore(
     // Chưa biết tài khoản (trang vừa mở): chờ, page.tsx hỏi ngay khi đăng nhập xong. Hỏi sớm vừa trùng vừa nhận 401 ở màn hình đăng nhập.
-    (f) => { subs.add(f); if (!state.loaded && userScope() !== "anon") refreshModels(); return () => subs.delete(f); },
+    (f) => { subs.add(f); watchFresh(); if (!state.loaded && userScope() !== "anon") refreshModels(); return () => subs.delete(f); },
     () => state,
     () => state,
   );
@@ -64,6 +79,9 @@ export function fitModel(cur: string, s: State = state) {
   const shown = s.providers.flatMap((p) => p.models.map((m) => m.key));
   const ok = (k: string | null): k is string => !!k && shown.includes(k) && allowsModel(s.allowed, k);
   if (ok(cur) || (cur === AUTO && shown.some((k) => allowsModel(s.allowed, k)))) return cur;
+  // Hãng gỡ model người dùng đã chọn tay (hoặc model đã cũ): bản mới nhất cùng dòng. "Tự động" không bao giờ bị đổi.
+  const rep = s.replaced?.[cur];
+  if (rep && ok(rep.to)) return rep.to;
   // Nhóm của hãng vừa đổi giữa gói subscription và khóa API (người dùng đồng ý dùng API, hoặc gói đã hồi lại): chọn model tương đương.
   if (cur && cur !== AUTO) {
     const v = vendorOf(cur);

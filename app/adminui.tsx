@@ -66,7 +66,7 @@ Object.assign(ACTIONS, {
   passkey_added: ["Added a passkey", ""], passkey_renamed: ["Renamed a passkey", ""], passkey_removed: ["Removed a passkey", ""], passkey_add_failed: ["Couldn't add a passkey", "bad"],
   admin_backup_on: ["Turned on continuous backup", "adm"], admin_backup_off: ["Turned off continuous backup", "adm"], admin_backup_saved: ["Changed continuous backup settings", "adm"], admin_backup_cleared: ["Removed continuous backup settings", "adm"], admin_backup_drill: ["Tested restoring the backup", "adm"],
   admin_turnstile: ["Changed bot protection keys", "adm"], admin_turnstile_on: ["Turned on bot protection", "adm"], admin_turnstile_off: ["Turned off bot protection", "adm"], admin_block_disposable: ["Changed disposable email blocking", "adm"],
-  admin_api_key: ["Saved API key", "adm"], admin_api_key_removed: ["Removed API key", "adm"], admin_api_credit: ["Changed API credit", "adm"], admin_default_model: ["Changed default model", "adm"], admin_main_models: ["Changed main models", "adm"],
+  admin_api_key: ["Saved API key", "adm"], admin_api_key_removed: ["Removed API key", "adm"], admin_api_credit: ["Changed API credit", "adm"], admin_default_model: ["Changed default model", "adm"], admin_main_models: ["Changed main models", "adm"], admin_models_check: ["Checked for new models", "adm"], admin_models: ["Changed the model registry", "adm"],
 });
 const LOG_FILTER: Record<string, (a: string) => boolean> = {
   All: () => true,

@@ -11,7 +11,8 @@ export const POST = handle(async (req) => {
   sameOrigin(req);
   const { user } = requireAdmin(req);
   const { model, prompt } = await req.json();
-  const t = typeof model === "string" ? await resolveModel(model) : null;
+  // Quản trị viên gửi thử được cả model sổ model chưa thử đạt.
+  const t = typeof model === "string" ? await resolveModel(model, { untested: true }) : null;
   if (!t) return Response.json({ error: "Không tìm thấy model này. Hãy làm mới danh sách model." }, { status: 400 });
   const q = String(prompt || "Chào bạn! Hãy giới thiệu ngắn gọn bạn là model nào trong một câu.").slice(0, 2000);
   const t0 = Date.now();

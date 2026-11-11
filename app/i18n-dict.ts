@@ -2,6 +2,7 @@ import { SPEECH_RULES_EN, SPEECH_VI2EN } from "./speech/i18n";
 import { DIRECTORY } from "./connectordir";
 import { UX_RULES_EN, UX_VI2EN } from "./i18n-ux";
 import { OPS_RULES_EN, OPS_VI2EN } from "./i18n-ops";
+import { MODELS_RULES_EN, MODELS_VI2EN } from "./i18n-models";
 import { AUTH_VI2EN } from "./i18n-auth";
 import { FX_VI2EN } from "./i18n-features";
 // Từ điển tiếng Anh: chuỗi gốc tiếng Việt → tiếng Anh. Chiều ngược lại (chuỗi gốc tiếng Anh → tiếng Việt) nằm ở i18n-vi.ts: trình duyệt chỉ tải từ điển của ngôn ngữ đang dùng (i18n.tsx).
@@ -1342,6 +1343,8 @@ RULES_EN.push(...UX_RULES_EN);
 RULES_EN.push([/^(\d+) ảnh không đưa được vào bản chia sẻ nên người xem sẽ không thấy$/, (m) => `${m[1]} image(s) couldn't be included in the shared copy, so viewers won't see them`]);
 addNew(VI2EN, OPS_VI2EN);
 RULES_EN.push(...OPS_RULES_EN);
+addNew(VI2EN, MODELS_VI2EN);
+RULES_EN.push(...MODELS_RULES_EN);
 // Dịch một mảnh chèn trong chuỗi ghép (qua từ điển rồi luật dịch).
 const enDeep = (s: string): string => { if (Object.prototype.hasOwnProperty.call(VI2EN, s)) return VI2EN[s]; for (const [re, f] of RULES_EN) { const m = s.match(re); if (m) return f(m); } return s; };
 addNew(VI2EN, {

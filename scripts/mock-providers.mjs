@@ -171,6 +171,43 @@ const readBody = (req) => new Promise((ok) => {
 });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const TS_LOG = [], TS_USED = new Set(), OUTAGE = {};
+// Hãng ra mắt / gỡ model (kiểm thử sổ model tự cập nhật): POST /_debug/add-model { provider, id, name?, created?, caps?, maxOut?, fail? } thêm model vào
+// đầu danh sách của hãng (mới nhất trước, như API thật); fail: "all" (mọi lời gọi lỗi 400), "tools" (không gọi công cụ), "effort" (từ chối mức nỗ lực).
+// POST /_debug/remove-model { provider, id } gỡ khỏi danh sách; POST /_debug/reset-models trả mọi danh sách về như lúc khởi động.
+const MODEL_META = {};
+const ORIGINAL = () => ({ anthropic: ANTHROPIC.map((x) => [...x]), openai: [...OPENAI], openaiChat: [...OPENAI_CHAT], google: GOOGLE.map((x) => [...x]), xai: [...XAI], deepseek: [...DEEPSEEK] });
+let ORIG = null;
+const listsOf = (prov) => (prov === "anthropic" ? [ANTHROPIC] : prov === "openai" ? [OPENAI, OPENAI_CHAT] : prov === "google" ? [GOOGLE] : prov === "xai" ? [XAI] : prov === "deepseek" ? [DEEPSEEK] : null);
+const idOf = (x) => (Array.isArray(x) ? x[0] : x);
+function addModel(b) {
+  ORIG ??= ORIGINAL();
+  const lists = listsOf(b.provider);
+  if (!lists || typeof b.id !== "string" || !/^[\w.-]{2,80}$/.test(b.id)) return { error: "provider / id không hợp lệ" };
+  const name = typeof b.name === "string" ? b.name : b.id;
+  for (const l of lists) if (!l.some((x) => idOf(x) === b.id)) l.unshift(b.provider === "anthropic" ? [b.id, name] : b.provider === "google" ? [b.id, name, "generateContent"] : b.id);
+  MODEL_META[`${b.provider}:${b.id}`] = { created: b.created ?? new Date().toISOString(), caps: b.caps ?? null, maxOut: b.maxOut ?? null, fail: b.fail ?? null };
+  return { ok: true };
+}
+function removeModel(b) {
+  ORIG ??= ORIGINAL();
+  for (const l of listsOf(b.provider) ?? []) { const i = l.findIndex((x) => idOf(x) === b.id); if (i >= 0) l.splice(i, 1); }
+  return { ok: true };
+}
+function resetModels() {
+  if (!ORIG) return { ok: true };
+  const put = (dst, src) => { dst.splice(0, dst.length, ...src); };
+  put(ANTHROPIC, ORIG.anthropic); put(OPENAI, ORIG.openai); put(OPENAI_CHAT, ORIG.openaiChat); put(GOOGLE, ORIG.google); put(XAI, ORIG.xai); put(DEEPSEEK, ORIG.deepseek);
+  for (const k of Object.keys(MODEL_META)) delete MODEL_META[k];
+  return { ok: true };
+}
+/** Model giả lập "chưa sẵn sàng": lỗi cho mọi lời gọi, hoặc từ chối mức nỗ lực (giống hãng đổi tham số ở model mới). */
+const failOf = (prov, model) => MODEL_META[`${prov}:${model}`]?.fail ?? null;
+function mockFail(prov, b) {
+  const f = failOf(prov, b.model);
+  if (f === "all") return `mock: model ${b.model} is not available yet (invalid_request_error 400)`;
+  if (f === "effort" && (b.output_config?.effort !== undefined || b.reasoning?.effort !== undefined || b.reasoning_effort !== undefined)) return `mock: this model does not support the effort parameter (400 invalid_request_error)`;
+  return null;
+}
 const valid = (k) => typeof k === "string" && k.includes("mock");
 // Khóa ElevenLabs giới hạn quyền như thật: "sk_mock_eleven_nouser" thiếu quyền User, "…_noagents" thiếu quyền ElevenLabs Agents.
 const elevenNo = (req, perm) => String(req.headers["xi-api-key"] ?? "").includes(`no${perm}`);
@@ -332,9 +369,11 @@ function seqStep(q, msgs) {
     : `[mock] Đã chạy ${steps.length} bước. ${denied.length ? `Bị từ chối ${denied.length} bước: ${denied.map((d) => d.split(".")[0]).join("; ")}.` : "Mọi bước đều được làm."} Kết quả: ${outs.map((o) => o.split("\n")[0].slice(0, 80)).join(" | ")}`;
   return { text, think };
 }
-function wantTool(q, list) {
+function wantTool(q, list, model) {
   const tools = normTools(list);
   if (!tools.length) return null;
+  // Lần thử tự động của sổ model: được nhờ gọi công cụ synchro_probe thì gọi (trừ model giả lập "không gọi công cụ").
+  if (q.includes("synchro_probe") && tools.some((t) => t.name === "synchro_probe")) return Object.values(MODEL_META).length && model && Object.entries(MODEL_META).some(([k, v]) => k.endsWith(`:${model}`) && v.fail === "tools") ? null : { name: "synchro_probe", args: { ok: true } };
   if (q.includes("#tool")) {
     const names = tools.map((t) => t.name);
     const m = /#tool=([\w.-]+)/.exec(q);
@@ -575,6 +614,7 @@ async function compatVendor(prov, rest, req, res, b, auth) {
   }
   if (rest !== "/chat/completions" || req.method !== "POST") return send(res, 404, err(`Không có đường dẫn ${rest} trên máy chủ giả lập ${VENDOR[prov]}`));
   if (!list.includes(b.model)) return send(res, 404, err(`The model ${b.model} does not exist or your team does not have access to it.`));
+  if (mockFail(prov, b)) return send(res, 400, err(mockFail(prov, b)));
   const ms = b.messages ?? [];
   const shape = chatShape(b, false);
   if (shape) return send(res, 400, err(shape));
@@ -615,7 +655,7 @@ async function compatVendor(prov, rest, req, res, b, auth) {
   if (cr?.text) { await sleep(latency(b.model)); return send(res, 200, msg({ content: cr.text })); }
   // "#web" và có công cụ web_search của Synchro: model gọi tìm web.
   const webAsk = q.includes("#web") && normTools(b.tools).some((t) => t.name === "web_search") && b.tool_choice !== "none" ? { name: "web_search", args: { query: q.replace("#web", "").trim().slice(0, 80) } } : null;
-  const want = cr?.tool ?? webAsk ?? (b.tool_choice === "none" ? null : wantTool(q, b.tools));
+  const want = cr?.tool ?? webAsk ?? (b.tool_choice === "none" ? null : wantTool(q, b.tools, b.model));
   if (want) return send(res, 200, call(want.name, want.args));
   if (await trap(res, q, (m) => err(m, "server_error"))) return;
   await sleep(latency(b.model));
@@ -668,6 +708,10 @@ async function handler(req, res) {
     return send(res, 200, { success: true, challenge_ts: new Date().toISOString(), hostname, action, cdata: "", "error-codes": [] });
   }
   if (p === "/_debug/turnstile") return send(res, 200, TS_LOG);
+  if (p === "/_debug/add-model" && req.method === "POST") return send(res, 200, addModel(b));
+  if (p === "/_debug/remove-model" && req.method === "POST") return send(res, 200, removeModel(b));
+  if (p === "/_debug/reset-models" && req.method === "POST") return send(res, 200, resetModels());
+  if (p === "/_debug/models") return send(res, 200, { anthropic: ANTHROPIC.map(idOf), openai: OPENAI_CHAT, google: GOOGLE.map(idOf), xai: XAI, deepseek: DEEPSEEK, meta: MODEL_META });
   if (p === "/_debug/outage") {
     if (req.method === "POST" && typeof b.provider === "string") OUTAGE[b.provider] = { codes: Array.isArray(b.codes) ? b.codes.map(Number).filter((n) => n >= 400) : [], i: 0, served: {} };
     return send(res, 200, OUTAGE);
@@ -722,10 +766,18 @@ async function handler(req, res) {
       if (!/^wrkspc_/.test(w)) return send(res, 400, err("invalid_request_error", "anthropic-workspace-id header must be a valid workspace ID."));
       if (!/^wrkspc_01(Default|Team)/.test(w)) return send(res, 404, err("not_found_error", `Workspace \`${w}\` not found.`));
     }
-    if (p === "/anthropic/v1/models") return send(res, 200, { data: ANTHROPIC.map(([id, display_name]) => ({ type: "model", id, display_name })), has_more: false });
+    // Như API thật: created_at (mới nhất trước); model thêm qua /_debug/add-model kèm khả năng (capabilities) và giới hạn token hãng báo.
+    if (p === "/anthropic/v1/models") return send(res, 200, { data: ANTHROPIC.map(([id, display_name], i) => {
+      const meta = MODEL_META[`anthropic:${id}`];
+      return { type: "model", id, display_name, created_at: meta?.created ?? new Date(Date.UTC(2026, 9, 1) - i * 86_400_000).toISOString(),
+        ...(meta?.caps ? { capabilities: meta.caps, max_input_tokens: 1_000_000, max_tokens: meta.maxOut ?? 128_000 } : {}) };
+    }), has_more: false });
     if (p === "/anthropic/v1/messages") {
       if (!b.max_tokens) return send(res, 400, err("invalid_request_error", "max_tokens: Field required"));
       if (!ANTHROPIC.some(([id]) => id === b.model)) return send(res, 404, err("not_found_error", `model: ${b.model}`));
+      if (mockFail("anthropic", b)) return send(res, 400, err("invalid_request_error", mockFail("anthropic", b)));
+      // Model đời mới chỉ nhận chế độ suy nghĩ thích ứng: { type: "enabled", budget_tokens } bị từ chối như API thật.
+      if (b.thinking && b.thinking.type !== "adaptive" && MODEL_META[`anthropic:${b.model}`]?.caps?.thinking?.types?.adaptive?.supported) return send(res, 400, err("invalid_request_error", "thinking.type: only 'adaptive' is supported for this model"));
       const ef = b.output_config?.effort;
       if (ef !== undefined && !EFF.includes(ef)) return send(res, 400, err("invalid_request_error", `output_config.effort: Input should be 'low', 'medium', 'high', 'xhigh' or 'max'`));
       const shape = anthropicShape(b);
@@ -762,7 +814,7 @@ async function handler(req, res) {
       }
       const cr = capsFor(sysText(b.system), q, b.messages, b.tools, b.tool_choice?.type === "none");
       if (cr?.text) { await sleep(latency(b.model)); return send(res, 200, { id: `msg_mock_${Date.now()}`, type: "message", role: "assistant", model: b.model, content: [{ type: "text", text: cr.text }], stop_reason: "end_turn", usage: { input_tokens: 40, output_tokens: Math.ceil(cr.text.length / 4) } }); }
-      const want = cr?.tool ?? (b.tool_choice?.type === "none" ? null : wantTool(q, b.tools));
+      const want = cr?.tool ?? (b.tool_choice?.type === "none" ? null : wantTool(q, b.tools, b.model));
       // #waittool: bước gọi công cụ mất 2,5 giây (thử nhắn thêm khi lượt đang chạy, không cần code chạy chậm).
       if (want && q.includes("#waittool")) await sleep(2500);
       // "#artmid": viết artifact ngay trong câu dẫn trước khi gọi công cụ (model hay làm vậy khi tự kiểm tra sản phẩm) — Synchro phải đưa
@@ -783,6 +835,7 @@ async function handler(req, res) {
     if (p === "/openai/v1/responses") {
       if (b.max_tokens !== undefined || b.max_completion_tokens !== undefined) return send(res, 400, err("Unsupported parameter: use 'max_output_tokens' with the Responses API."));
       if (!OPENAI_CHAT.includes(b.model)) return send(res, 404, err(`The model \`${b.model}\` does not exist or you do not have access to it.`));
+      if (mockFail("openai", b)) return send(res, 400, err(mockFail("openai", b)));
       const input = typeof b.input === "string" ? [{ role: "user", content: b.input }] : b.input ?? [];
       // Như API thật: kết quả công cụ phải đi kèm đúng lượt gọi công cụ trước đó.
       const outs = input.filter((x) => x.type === "function_call_output");
@@ -815,7 +868,7 @@ async function handler(req, res) {
       const prior = input.filter((x) => x.role === "user" || x.role === "assistant").map((x) => ({ role: x.role, content: typeof x.content === "string" ? x.content : (x.content ?? []).map((c) => c.text ?? "").join("") }));
       const cr = capsFor(b.instructions, q, prior, b.tools, b.tool_choice === "none");
       if (cr?.text) { await sleep(latency(b.model)); return send(res, 200, { id: `resp_mock${Date.now()}`, object: "response", status: "completed", model: b.model, output: [{ type: "message", id: `msg_mock${Date.now()}`, role: "assistant", status: "completed", content: [{ type: "output_text", text: cr.text, annotations: [] }] }] }); }
-      const want = cr?.tool ?? (b.tool_choice === "none" ? null : wantTool(q, b.tools));
+      const want = cr?.tool ?? (b.tool_choice === "none" ? null : wantTool(q, b.tools, b.model));
       if (want) return send(res, 200, { id: `resp_mock${Date.now()}`, object: "response", status: "completed", model: b.model,
         output: [{ type: "reasoning", id: "rs_mock", summary: [] }, { type: "function_call", id: "fc_mock", call_id: `call_${Date.now()}`, name: want.name, arguments: JSON.stringify(want.args), status: "completed" }] });
       if (await trap(res, q, (m) => err(m, "server_error"))) return;
@@ -828,6 +881,7 @@ async function handler(req, res) {
       if (b.max_tokens !== undefined) return send(res, 400, err("Unsupported parameter: 'max_tokens' is not supported with this model. Use 'max_completion_tokens' instead."));
       if (pro(b.model)) return send(res, 404, err("This model is only supported in v1/responses and not in v1/chat/completions."));
       if (!OPENAI_CHAT.includes(b.model)) return send(res, 404, err(`The model \`${b.model}\` does not exist or you do not have access to it.`));
+      if (mockFail("openai", b)) return send(res, 400, err(mockFail("openai", b)));
       const shape = chatShape(b, false);
       if (shape) return send(res, 400, err(shape));
       const { text: text0, q } = reply("openai", b.model, b.messages, b.max_completion_tokens);
@@ -857,6 +911,7 @@ async function handler(req, res) {
   if (p === "/google/v1beta/openai/chat/completions") {
     if (!valid(auth)) return send(res, 400, [{ error: { code: 400, message: "API key not valid. Please pass a valid API key.", status: "INVALID_ARGUMENT" } }]);
     if (!GOOGLE.some(([id, , method]) => id === b.model && method === "generateContent")) return send(res, 404, [{ error: { code: 404, message: `models/${b.model} is not found`, status: "NOT_FOUND" } }]);
+    if (mockFail("google", b)) return send(res, 400, [{ error: { code: 400, message: mockFail("google", b), status: "INVALID_ARGUMENT" } }]);
     if (b.reasoning_effort !== undefined && !["minimal", "low", "medium", "high"].includes(b.reasoning_effort)) return send(res, 400, [{ error: { code: 400, message: `Invalid reasoning_effort: ${b.reasoning_effort}`, status: "INVALID_ARGUMENT" } }]);
     const shape = chatShape(b, true);
     if (shape) return send(res, 400, [{ error: { code: 400, message: shape, status: "INVALID_ARGUMENT" } }]);
@@ -877,7 +932,7 @@ async function handler(req, res) {
     if (cr?.text) { await sleep(latency(b.model)); return send(res, 200, { id: `mock-${Date.now()}`, object: "chat.completion", model: b.model, choices: [{ index: 0, message: { role: "assistant", content: cr.text }, finish_reason: "stop" }] }); }
     // "#web" và có công cụ web_search của Synchro: model gọi tìm web.
     const webAsk = q.includes("#web") && normTools(b.tools).some((t) => t.name === "web_search") && b.tool_choice !== "none" ? { name: "web_search", args: { query: q.replace("#web", "").trim().slice(0, 80) } } : null;
-    const want = cr?.tool ?? webAsk ?? (b.tool_choice === "none" ? null : wantTool(q, b.tools));
+    const want = cr?.tool ?? webAsk ?? (b.tool_choice === "none" ? null : wantTool(q, b.tools, b.model));
     if (want) return send(res, 200, { id: `mock-${Date.now()}`, object: "chat.completion", model: b.model, choices: [{ index: 0, message: { role: "assistant", content: null, tool_calls: [sig({ id: `call_${Date.now()}`, type: "function", function: { name: want.name, arguments: JSON.stringify(want.args) } })] }, finish_reason: "tool_calls" }] });
     if (await trap(res, q, (m) => [{ error: { message: m } }])) return;
     await sleep(latency(b.model));

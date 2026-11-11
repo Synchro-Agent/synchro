@@ -198,6 +198,9 @@ async function planModels(cli: Cli, u: UserRow) {
   return list(models);
 }
 
+/** Model của gói theo đăng nhập của một người (sổ model đọc bằng đăng nhập của quản trị viên để biết gói có model mới). */
+export const planModelsFor = (cli: Cli, u: UserRow) => planModels(cli, u);
+
 /**
  * Nhóm model theo hãng cho bộ chọn model. api: các nhóm khóa API (đã lọc theo model quản trị viên cho hiện).
  * Nhóm của hãng có gói đã đăng nhập hiện model của gói, trừ khi người dùng đã đồng ý dùng khóa API thay gói (tới khi gói hồi lại).

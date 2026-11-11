@@ -11,6 +11,7 @@ import { call } from "./adminui";
 import { refreshModels, useModels } from "./models";
 import { BrandLogo } from "./brands";
 import { ProviderCard, TestBox, type ApiProvider, type ApiState } from "./apiui";
+import { ModelRegistry } from "./modelregui";
 import { locale } from "./i18n";
 
 type Cli = "claude" | "codex" | "agy" | "grok";
@@ -269,6 +270,12 @@ export function ProvidersPanel() {
           <h3 className="sec">Other providers</h3>
           <p className="d pv-shared-d">API key only. Voice (ElevenLabs) and Connectors (Composio) work with an API key only.</p>
           <div className="api-list">{others.map((p) => <ProviderCard key={p.id} p={p} onChange={update} credit={p.id === "elevenlabs" || p.id === "composio" ? undefined : api.credits?.find((c) => c.provider === p.id) ?? null} />)}</div>
+        </>
+      )}
+      {admin && api && (
+        <>
+          <h3 className="sec">New models</h3>
+          <ModelRegistry />
         </>
       )}
       {admin && api && (

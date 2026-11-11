@@ -16,21 +16,19 @@
 //  6) gõ không dấu ("lam trang web") được so khớp lượt hai trên từ điển các cụm không thể nhầm; tạo media, thao tác trên web, connector là việc
 //     nhiều bước ("act"); câu hỏi sức khỏe, pháp lý, tài chính không dùng mức thấp nhất; việc nhẹ ưu tiên model hiện chữ dần.
 
+import { isFrontier, OPEN_WEIGHT, supersededSet, tierOf as ruleTier, type Tier } from "./modelrules";
+
 export const AUTO = "auto";
-export type Tier = "fast" | "balanced" | "strong";
+export type { Tier };
 export type Vendor = "anthropic" | "openai" | "google" | "xai" | "deepseek" | "other";
 export type Task = "chat" | "qa" | "language" | "translate" | "summarize" | "write" | "code" | "debug" | "reason" | "analyze" | "build" | "act" | "vision" | "longdoc" | "data";
 export type AutoEffort = "low" | "medium" | "high" | "extra" | "max";
 
-// Hạng theo tên model của các hãng (không khớp thì coi là "balanced"); "mạnh nhất" là dòng đầu bảng của từng hãng.
+// Hạng theo chữ chỉ hạng trong mã model của mọi hãng (luật chung ở app/modelrules.ts, so theo từng chữ và theo số phiên bản: model hãng ra sau này
+// tự có hạng, "gemini-5" không còn bị coi là "mini", Grok 10 vẫn là hạng mạnh). Không khớp thì coi là "balanced"; "mạnh nhất" là dòng đầu bảng.
 // Model mã nguồn mở chạy qua gói (GPT-OSS, Llama, Qwen, Mistral…): hạng nhanh, không mang thế mạnh của hãng lớn — "gpt-oss" từng bị coi là
 // GPT của OpenAI, được cộng điểm việc số liệu và được chọn làm bảng tính (rồi treo).
-const OPEN_WEIGHT = /(gpt-oss|llama|qwen|mistral|mixtral|gemma|phi-\d)/i;
-const FAST = /(haiku|flash|lite|mini|nano|luna|small|gpt-oss|llama|qwen|mistral|mixtral|gemma|phi-\d)/i;
-// Grok 4.5 trở lên là dòng mạnh nhất của xAI; DeepSeek V4 Pro khớp "-pro".
-const STRONG = /(opus|fable|astra|argon|ultra|-pro\b|\bpro\b|grok-4\.[5-9]|grok-[5-9])/i;
-const FRONTIER = /(fable|astra|argon|ultra)/i;
-export const tierOf = (key: string): Tier => (STRONG.test(key) ? "strong" : FAST.test(key) ? "fast" : "balanced");
+export const tierOf = (key: string): Tier => ruleTier(key);
 export function vendorOf(key: string): Vendor {
   const k = key.toLowerCase();
   if (OPEN_WEIGHT.test(k)) return "other";
@@ -55,7 +53,7 @@ const EDGE: Record<Vendor, Partial<Record<Task, number>>> = {
 };
 export type Profile = { key: string; vendor: Vendor; tier: Tier; frontier: boolean; sub: boolean; cost: number };
 export function profileOf(key: string): Profile {
-  const tier = tierOf(key), frontier = tier === "strong" && FRONTIER.test(key), sub = /^sub-/.test(key);
+  const tier = tierOf(key), frontier = isFrontier(key), sub = /^sub-/.test(key);
   // Gói subscription đã trả theo tháng: mỗi lượt gần như không tốn thêm, nên rẻ hơn khóa API cùng hạng.
   return { key, vendor: vendorOf(key), tier, frontier, sub, cost: COST[frontier ? "frontier" : tier] * (sub ? 0.25 : 1) };
 }
@@ -567,7 +565,9 @@ export function routeModel(q: RouteInput, allowed: string[], o: { avoid?: string
   const wait = task === "vision" || task === "longdoc" || long ? 0 : LAG_COST;
   const price = (p: Profile) => p.cost + lag(p.key) * wait;
   const avoid = new Set([...(o.avoid ?? []), ...(retry && q.prev ? [q.prev] : [])]);
-  const scored = allowed.map((k, i) => ({ p: profileOf(k), i })).map((x) => ({ ...x, q: quality(x.p, task) }));
+  // Model mới nhất của mỗi dòng giữ chỗ của dòng đó (cùng chi phí, cùng chất lượng thì bản mới thắng); bản cũ hơn vẫn là dự phòng trong alt.
+  const older = supersededSet(allowed);
+  const scored = allowed.map((k, i) => ({ p: profileOf(k), i: i + (older.has(k) ? allowed.length : 0) })).map((x) => ({ ...x, q: quality(x.p, task) }));
   const fits = scored.filter((x) => !CREDIT.test(x.p.key) && (!CODE_ONLY.test(x.p.key) || CODE_TASKS.has(task)));
   const all = fits.length ? fits : scored;
   const clean = all.filter((x) => !avoid.has(x.p.key));
@@ -602,7 +602,8 @@ export function sideModel(allowed: string[], o: { avoid?: string[] } = {}): stri
   const fits = allowed.filter((k) => !CREDIT.test(k) && !CODE_ONLY.test(k));
   const clean = fits.filter((k) => !o.avoid?.includes(k));
   const pool = clean.length ? clean : fits.length ? fits : allowed;
-  return pool.map((k, i) => ({ k, i, c: profileOf(k).cost })).sort((a, b) => a.c - b.c || lag(a.k) - lag(b.k) || a.i - b.i)[0]?.k ?? null;
+  const older = supersededSet(pool);
+  return pool.map((k, i) => ({ k, i: i + (older.has(k) ? pool.length : 0), c: profileOf(k).cost })).sort((a, b) => a.c - b.c || lag(a.k) - lag(b.k) || a.i - b.i)[0]?.k ?? null;
 }
 /**
  * Model cho hội đồng phản biện: mỗi hãng một model, khác hãng với model vừa viết. Người dùng bấm "Phản biện": tối đa hai model, ưu tiên hạng cân bằng (đủ giỏi, rẻ hơn hạng mạnh nhất).
