@@ -8,8 +8,14 @@ export type Ctx = { id: string };
 
 const ESC: Record<string, string> = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
 export const esc = (v: unknown) => String(v ?? "").replace(/[&<>"']/g, (c) => ESC[c]);
-/** Chuỗi của props: số đổi thành chuỗi, kiểu khác thành rỗng; cắt ở max ký tự để một trường quá dài không làm treo bố cục. */
-export const str = (v: unknown, max = 600) => (typeof v === "string" ? v.slice(0, max) : typeof v === "number" && Number.isFinite(v) ? String(v) : "");
+/** Chuỗi của props: số đổi thành chuỗi, kiểu khác thành rỗng. Quá max ký tự thì cắt ở ranh giới từ và thêm "…" (trường dài bất thường không làm treo bố cục;
+ *  độ dài vừa phải mà vẫn tràn khung thì tầng tự vá co chữ). */
+export const str = (v: unknown, max = 600) => {
+  const s = typeof v === "string" ? v : typeof v === "number" && Number.isFinite(v) ? String(v) : "";
+  if (s.length <= max) return s;
+  const cut = s.slice(0, max), sp = cut.lastIndexOf(" ");
+  return `${(sp > max * 0.6 ? cut.slice(0, sp) : cut).replace(/[\s,.;:–-]+$/, "")}…`;
+};
 export const num = (v: unknown) => { const n = typeof v === "number" ? v : typeof v === "string" ? Number(v.replace(/[^\d.-]/g, "")) : NaN; return Number.isFinite(n) ? n : 0; };
 export const obj = (v: unknown): Props => (v && typeof v === "object" && !Array.isArray(v) ? (v as Props) : {});
 export const arr = (v: unknown, max = 40): unknown[] => (Array.isArray(v) ? v.slice(0, max) : []);

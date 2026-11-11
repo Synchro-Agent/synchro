@@ -109,8 +109,8 @@ h1,h2,h3,h4,.sx-title,.sx-h2,.sx-h3,.sx-eyebrow{break-after:avoid-page}p,li{orph
 .sx-card,.sx-callout,figure,tr,.sx-keep{break-inside:avoid}.sx-table:not(.sx-long){break-inside:avoid}thead{display:table-header-group}}`;
 
 // Tự vá sau khi vẽ (tầng 1 của bộ tự kiểm, chạy trong khung, không gọi model):
-// (1) khối chữ có data-node-id (mẫu điền sẵn đánh dấu mọi ô chữ) hay data-sx-fit tràn khỏi chính nó, thẻ hay khung slide / poster chứa nó: giảm cỡ chữ 1 đơn vị (px ở thang 1280 của slide)
-//     mỗi lần, thấp nhất 11, ghi bằng calc(N*var(--sx-u)) nên vẫn co giãn theo khung và bộ xuất PowerPoint đọc đúng cỡ;
+// (1) khung (slide, poster, thẻ) có ô chữ data-node-id (mẫu điền sẵn đánh dấu mọi ô chữ) hay data-sx-fit mà khung đó hoặc thẻ bên trong tràn: co mọi ô chữ của khung
+//     cùng tỉ lệ, mỗi bước ~3% (1px ở chữ 32px), thấp nhất 11 (px ở thang 1280 của slide), ghi bằng calc(N*var(--sx-u)) nên vẫn co giãn theo khung và bộ xuất PowerPoint đọc đúng cỡ;
 // (2) chữ của các khối đó, ô nhiệt .sx-heat và phần tử data-sx-autoink có tương phản dưới 4.5:1 với nền thật phía sau (cộng dồn các lớp nền trong suốt): đổi sang
 //     #F8FAFC hoặc #0F172A, chọn màu cho tỉ lệ cao hơn. Chữ chuyển màu (background-clip:text) bỏ qua. Slide đang ẩn được vá khi hiện ra (data-sx-on).
 // Viết bằng JS thuần, không dấu ` và không chuỗi đóng thẻ script.
@@ -127,17 +127,19 @@ if(ratio(c,b)>=4.5)return;var l=ratio(L,b),d=ratio(D,b);if(Math.max(l,d)<=ratio(
 function unit(el){var p=document.createElement("i");p.style.cssText="position:absolute;visibility:hidden;width:calc(1000*var(--sx-u));height:0";(el.parentElement||el).appendChild(p);var w=p.getBoundingClientRect().width/1000;p.remove();return w||1}
 function over(e){return!!e&&(e.scrollHeight>e.clientHeight+1||e.scrollWidth>e.clientWidth+1)}
 var BOX="[data-sx-box],.sx-card,.sx-slide,section.slide,[data-slide],.sx-poster,.sx-tpl-box";
-function size(el,u){if(el.__n==null)el.__n=Math.round(parseFloat(getComputedStyle(el).fontSize)/u);return el.__n}
-// Khung tràn: giảm 1 đơn vị cho ô chữ đang lớn nhất trong khung (thường là tiêu đề dài), lặp tới khi vừa hoặc mọi ô đã 11.
-function fitBox(box){if(!box.getClientRects().length||!over(box))return;var ns=[].slice.call(box.querySelectorAll("[data-node-id],[data-sx-fit]")).filter(function(e){return e.getClientRects().length});if(!ns.length)return;
-var uu=unit(box),k=0;while(over(box)&&k++<300){var m=null;for(var i=0;i<ns.length;i++){var n=size(ns[i],uu);if(n>11&&(!m||n>m.__n))m=ns[i]}if(!m)break;m.__n-=1;m.style.fontSize="calc("+m.__n+"*var(--sx-u))";m.setAttribute("data-sx-fitted",String(m.__n))}}
-// Ô tự có khung cố định (overflow khác visible): co chính nó.
-function fitSelf(el){var cs=getComputedStyle(el);if(!el.getClientRects().length||cs.overflow==="visible"||!over(el))return;var uu=unit(el),k=0;size(el,uu);while(el.__n>11&&k++<120&&over(el)){el.__n-=1;el.style.fontSize="calc("+el.__n+"*var(--sx-u))"}el.setAttribute("data-sx-fitted",String(el.__n))}
-function depth(e){var d=0;while(e){d++;e=e.parentElement}return d}
-function run(root){root=root||document;var a=root.querySelectorAll("[data-node-id],[data-sx-fit]"),boxes=[];for(var i=0;i<a.length;i++){try{fitSelf(a[i])}catch(e){}
-for(var b=a[i].parentElement&&a[i].parentElement.closest(BOX);b;b=b.parentElement&&b.parentElement.closest(BOX))if(boxes.indexOf(b)<0)boxes.push(b)}
-boxes.sort(function(x,y){return depth(y)-depth(x)});boxes.forEach(function(b){try{fitBox(b)}catch(e){}});
-var c=root.querySelectorAll("[data-node-id],.sx-heat,[data-sx-autoink]");for(var j=0;j<c.length;j++)try{if(c[j].getClientRects().length)ink(c[j])}catch(e){}}
+function vis(e){return e.getClientRects().length>0}
+function bad(f){if(over(f))return true;var bs=f.querySelectorAll(BOX);for(var i=0;i<bs.length;i++)if(vis(bs[i])&&over(bs[i]))return true;return false}
+// Cả khung (slide, poster, thẻ đứng riêng) co cùng tỉ lệ: mỗi bước mọi ô chữ nhỏ đi khoảng 3% (1px với chữ 32px), ô nào chạm 11 thì dừng ở 11.
+// Co theo tỉ lệ giữ thứ bậc tiêu đề / số / thân; co riêng ô lớn nhất từng làm số KPI teo lại trong khi thủ phạm là đoạn văn dài.
+function fitFrame(f){if(!vis(f)||!bad(f))return;var ns=[].slice.call(f.querySelectorAll("[data-node-id],[data-sx-fit]")).filter(vis);if(!ns.length)return;
+var uu=unit(f),o=ns.map(function(e){return parseFloat(getComputedStyle(e).fontSize)/uu});
+for(var sc=.97;sc>.25&&bad(f);sc-=.03){var moved=false;for(var i=0;i<ns.length;i++){var n=Math.max(11,Math.round(o[i]*sc*2)/2);if(n<o[i]){ns[i].style.fontSize="calc("+n+"*var(--sx-u))";ns[i].setAttribute("data-sx-fitted",String(n));moved=true}}if(!moved)break}}
+// Ô tự có khung cố định (overflow khác visible) đứng ngoài khung lớn: co chính nó.
+function fitSelf(el){var cs=getComputedStyle(el);if(!vis(el)||cs.overflow==="visible"||!over(el))return;var uu=unit(el),n=Math.round(parseFloat(cs.fontSize)/uu),k=0;while(n>11&&k++<120&&over(el)){n-=1;el.style.fontSize="calc("+n+"*var(--sx-u))"}el.setAttribute("data-sx-fitted",String(n))}
+function top(e){var t=null;for(var b=e.closest(BOX);b;b=b.parentElement&&b.parentElement.closest(BOX))t=b;return t}
+function run(root){root=root||document;var a=root.querySelectorAll("[data-node-id],[data-sx-fit]"),fr=[];for(var i=0;i<a.length;i++){try{fitSelf(a[i])}catch(e){}var t=top(a[i]);if(t&&fr.indexOf(t)<0)fr.push(t)}
+fr.forEach(function(f){try{fitFrame(f)}catch(e){}});
+var c=root.querySelectorAll("[data-node-id],.sx-heat,[data-sx-autoink]");for(var j=0;j<c.length;j++)try{if(vis(c[j]))ink(c[j])}catch(e){}}
 window.__sxFit=run;
 function go(){requestAnimationFrame(function(){run()});try{document.fonts.ready.then(function(){run()});document.fonts.addEventListener("loadingdone",function(){run()})}catch(e){}
 try{new MutationObserver(function(ms){ms.forEach(function(m){if(m.target.hasAttribute&&m.target.hasAttribute("data-sx-on"))requestAnimationFrame(function(){run(m.target)})})}).observe(document.body,{subtree:true,attributes:true,attributeFilter:["data-sx-on"]})}catch(e){}}

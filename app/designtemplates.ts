@@ -16,18 +16,18 @@ type Tpl = { kind: Kind; render: (p: Props, c: Ctx, page: TplPage) => string };
 const morph = (page: TplPage, p: Props) => { const m = str(page.morphId ?? p.morphId, 60).trim(); return m ? ` data-pptx-object-name="${esc(m.startsWith("!!") ? m : `!!${m}`)}"` : ""; };
 const sec = (cls: string, id: string, inner: string, extra = "") => `<section class="slide sx-slide sx-tpl ${cls}" data-sx-template="${id}"${extra}>${inner}</section>`;
 // Tầng tiêu đề 3 bậc: nhãn → tiêu đề kết luận → kicker.
-const head = (p: Props, c: Ctx, titleKey = "title") => `<header class="sx-stack sx-gap-8">${str(p.eyebrow) ? `<p class="sx-eyebrow" ${nid(c, "eyebrow")}>${rich(p.eyebrow, 80)}</p>` : ""}<h2 class="sx-title" ${nid(c, titleKey)}>${rich(p[titleKey], 160)}</h2>${str(p.kicker) ? `<p class="sx-kicker" ${nid(c, "kicker")}>${rich(p.kicker, 240)}</p>` : ""}</header>`;
+const head = (p: Props, c: Ctx, titleKey = "title") => `<header class="sx-stack sx-gap-8">${str(p.eyebrow) ? `<p class="sx-eyebrow" ${nid(c, "eyebrow")}>${rich(p.eyebrow, 80)}</p>` : ""}<h2 class="sx-title" ${nid(c, titleKey)}>${rich(p[titleKey], 320)}</h2>${str(p.kicker) ? `<p class="sx-kicker" ${nid(c, "kicker")}>${rich(p.kicker, 400)}</p>` : ""}</header>`;
 const img = (src: string, cls: string, alt: unknown) => (src ? `<img class="${cls}" src="${esc(src)}" alt="${esc(str(alt, 160))}">` : "");
 const body = (p: Props, c: Ctx, key = "body") => `${paras(p[key], c, key)}${bullets(p.bullets, c, "bullets")}`;
 
 const SLIDES: Record<string, Tpl["render"]> = {
   "slide-cover": (p, c, pg) => sec("sx-tpl-cover sx-aurora", "slide-cover", `${img(safeUrl(p.image), "sx-tpl-cover-img", p.title)}
-<div class="sx-stack sx-gap-24 sx-tpl-cover-copy"${morph(pg, p)}>${str(p.badge) ? `<span class="sx-badge" ${nid(c, "badge")}>${rich(p.badge, 60)}</span>` : ""}<h1 class="sx-display" ${nid(c, "title")}>${rich(p.title, 160)}</h1>${str(p.subtitle) ? `<p class="sx-kicker sx-tpl-lead" ${nid(c, "subtitle")}>${rich(p.subtitle, 240)}</p>` : ""}</div>
+<div class="sx-stack sx-gap-24 sx-tpl-cover-copy"${morph(pg, p)}>${str(p.badge) ? `<span class="sx-badge" ${nid(c, "badge")}>${rich(p.badge, 60)}</span>` : ""}<h1 class="sx-display" ${nid(c, "title")}>${rich(p.title, 320)}</h1>${str(p.subtitle) ? `<p class="sx-kicker sx-tpl-lead" ${nid(c, "subtitle")}>${rich(p.subtitle, 400)}</p>` : ""}</div>
 <footer class="sx-tpl-foot">${str(p.author) ? `<span ${nid(c, "author")}>${rich(p.author, 120)}</span>` : ""}${str(p.date) ? `<span ${nid(c, "date")}>${rich(p.date, 60)}</span>` : ""}</footer>`),
   "slide-fact": (p, c, pg) => sec("sx-tpl-fact", "slide-fact", `${str(p.eyebrow) ? `<p class="sx-eyebrow" ${nid(c, "eyebrow")}>${rich(p.eyebrow, 80)}</p>` : ""}
 <p class="sx-kpi sx-tpl-fact-num${p.gradient === false ? "" : " sx-gradient-text"}" ${nid(c, "bigMetric")}${morph(pg, p)}>${esc(str(p.bigMetric, 40))}</p>
-${str(p.description) ? `<p class="sx-kicker sx-tpl-lead" ${nid(c, "description")}>${rich(p.description, 220)}</p>` : ""}${str(p.source) ? `<p class="sx-source sx-tpl-src" ${nid(c, "source")}>${rich(p.source, 160)}</p>` : ""}`),
-  "slide-quote": (p, c) => sec("sx-tpl-quote", "slide-quote", `<span class="sx-tpl-qmark" aria-hidden="true">“</span><blockquote class="sx-tpl-qtext" ${nid(c, "quote")}>${rich(p.quote, 360)}</blockquote>
+${str(p.description) ? `<p class="sx-kicker sx-tpl-lead" ${nid(c, "description")}>${rich(p.description, 400)}</p>` : ""}${str(p.source) ? `<p class="sx-source sx-tpl-src" ${nid(c, "source")}>${rich(p.source, 160)}</p>` : ""}`),
+  "slide-quote": (p, c) => sec("sx-tpl-quote", "slide-quote", `<span class="sx-tpl-qmark" aria-hidden="true">“</span><blockquote class="sx-tpl-qtext" ${nid(c, "quote")}>${rich(p.quote, 600)}</blockquote>
 <footer class="sx-stack sx-gap-8">${str(p.author) ? `<p class="sx-h3" ${nid(c, "author")}>${rich(p.author, 100)}</p>` : ""}${str(p.role) ? `<p class="sx-small" ${nid(c, "role")}>${rich(p.role, 140)}</p>` : ""}</footer>`),
   "slide-section": (p, c) => sec("sx-tpl-section", "slide-section", `${str(p.number) ? `<p class="sx-tpl-secnum" ${nid(c, "number")}>${esc(str(p.number, 12))}</p>` : ""}<h2 class="sx-display" ${nid(c, "title")}>${rich(p.title, 120)}</h2>${str(p.subtitle) ? `<p class="sx-kicker sx-tpl-lead" ${nid(c, "subtitle")}>${rich(p.subtitle, 200)}</p>` : ""}`),
   "slide-two-cols": (p, c) => {
@@ -50,9 +50,9 @@ ${str(p.description) ? `<p class="sx-kicker sx-tpl-lead" ${nid(c, "description")
   },
   "slide-bento-3": (p, c, pg) => {
     const h = obj(p.heroCard), t = obj(p.sideCardTop), b = obj(p.sideCardBottom), hc = { id: `${c.id}.heroCard` };
-    const side = (o: Props, k: string) => { const cc = { id: `${c.id}.${k}` }; return `<div class="sx-card sx-tpl-side">${str(o.title) ? `<h3 class="sx-h3" ${nid(cc, "title")}>${rich(o.title, 100)}</h3>` : ""}${str(o.metric) ? `<p class="sx-tpl-side-num sx-num" ${nid(cc, "metric")}>${esc(str(o.metric, 24))}</p>` : ""}${str(o.bullet) ? `<p class="sx-text sx-muted" ${nid(cc, "bullet")}>${rich(o.bullet, 200)}</p>` : ""}</div>`; };
+    const side = (o: Props, k: string) => { const cc = { id: `${c.id}.${k}` }; return `<div class="sx-card sx-tpl-side">${str(o.title) ? `<h3 class="sx-h3" ${nid(cc, "title")}>${rich(o.title, 100)}</h3>` : ""}${str(o.metric) ? `<p class="sx-tpl-side-num sx-num" ${nid(cc, "metric")}>${esc(str(o.metric, 24))}</p>` : ""}${str(o.bullet) ? `<p class="sx-text sx-muted" ${nid(cc, "bullet")}>${rich(o.bullet, 400)}</p>` : ""}</div>`; };
     return sec("sx-tpl-bento", "slide-bento-3", `${head(p, c, str(p.actionTitle) ? "actionTitle" : "title")}<div class="sx-grid-hero sx-grow">
-<div class="sx-card sx-tpl-herocard"${morph(pg, p)}>${str(h.title) ? `<h3 class="sx-h3" ${nid(hc, "title")}>${rich(h.title, 100)}</h3>` : ""}<p class="sx-kpi sx-tpl-hero-num" ${nid(hc, "metric")}>${esc(str(h.metric, 24))}</p>${str(h.detail) ? `<p class="sx-text" ${nid(hc, "detail")}>${rich(h.detail, 220)}</p>` : ""}</div>
+<div class="sx-card sx-tpl-herocard"${morph(pg, p)}>${str(h.title) ? `<h3 class="sx-h3" ${nid(hc, "title")}>${rich(h.title, 100)}</h3>` : ""}<p class="sx-kpi sx-tpl-hero-num" ${nid(hc, "metric")}>${esc(str(h.metric, 24))}</p>${str(h.detail) ? `<p class="sx-text" ${nid(hc, "detail")}>${rich(h.detail, 500)}</p>` : ""}</div>
 ${side(t, "sideCardTop")}${side(b, "sideCardBottom")}</div>${str(p.source) ? `<p class="sx-source" ${nid(c, "source")}>${rich(p.source, 160)}</p>` : ""}`);
   },
 };
@@ -199,6 +199,7 @@ export const SLIDE_TPL_CSS = `.sx-tpl-list{margin:0;padding-left:1.2em;display:f
 .sx-tpl-depth-veil{position:absolute;left:0;right:0;bottom:0;height:46%;background:linear-gradient(rgba(0,0,0,0),rgba(0,0,0,.62));z-index:3}
 .sx-tpl-depth-cut{position:absolute;left:50%;bottom:0;transform:translateX(-50%);height:90%;width:auto;max-width:72%;object-fit:contain;z-index:4;filter:drop-shadow(0 ${u(25)} ${u(35)} rgba(0,0,0,.65))}
 .sx-tpl-depth-copy{position:relative;z-index:5;padding:0 ${u(64)} ${u(56)};max-width:${u(820)}}
+.sx-tpl-depth.has-cut{justify-content:flex-start}.sx-tpl-depth.has-cut .sx-tpl-depth-copy{padding:${u(56)} ${u(64)} 0;max-width:${u(560)}}.sx-tpl-depth.has-cut .sx-tpl-depth-veil{top:0;bottom:auto;height:40%;background:linear-gradient(rgba(0,0,0,.55),rgba(0,0,0,0))}
 .sx-tpl-depth .sx-eyebrow{color:#F8FAFC;opacity:.86}.sx-tpl-depth-sub{margin:0;font-size:${u(26)};line-height:1.4;color:#E2E8F0;text-wrap:pretty}
 .sx-tpl-herocard{background:var(--sx-surface);background:color-mix(in oklab,var(--sx-vivid) 9%,var(--sx-surface));justify-content:space-between;gap:${u(12)}}
 .sx-tpl-hero-num{font-size:${u(112)};line-height:1.1}.sx-tpl-side{justify-content:center;gap:${u(10)}}
