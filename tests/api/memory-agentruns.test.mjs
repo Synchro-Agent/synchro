@@ -3,7 +3,11 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import v8 from "node:v8";
+import vm from "node:vm";
 import { loadTs } from "../lib/ts.mjs";
+v8.setFlagsFromString("--expose-gc");
+const gc = vm.runInNewContext("gc");
 
 let pass = 0, fail = 0;
 const ok = (c, n, x = "") => { c ? pass++ : fail++; console.log(c ? "  ✓" : "  ✗", n, c ? "" : String(typeof x === "string" ? x : JSON.stringify(x)).slice(0, 400)); };
@@ -68,6 +72,23 @@ try {
     ok(run.listeners.size === 0, "ghi lỗi: thôi nghe ngay, không giữ lượt", run.listeners.size);
     ok(ping.length > 0 && ping.every((t) => !live.has(t)), "hẹn giờ ping đã tắt", { ping: ping.length, live: live.size });
     globalThis.setInterval = realSI; globalThis.clearInterval = realCI;
+  }
+  console.log("5. Hẹn giờ bỏ lượt không giữ lượt sống: lượt của tài khoản đã xóa và lượt bị lượt mới thay đều rời bộ nhớ ngay");
+  {
+    const big = () => "x".repeat(3_000_000) + Math.random();
+    let w1, w2, release;
+    (() => { const r1 = A.startAgentRun({ uid: u.id, sid: "2500", node: null }, (emit) => new Promise((done) => { for (let i = 0; i < 4; i++) emit({ t: "result", id: "r" + i, ok: true, summary: "s", output: big() }); release = done; })); w1 = new WeakRef(r1.lines); })();
+    A.stopUserAgentRuns(u.id); release(); release = null;
+    (() => { const r2 = A.startAgentRun({ uid: u.id, sid: "2600", node: null }, async (emit) => { for (let i = 0; i < 4; i++) emit({ t: "result", id: "r" + i, ok: true, summary: "s", output: big() }); }); w2 = new WeakRef(r2.lines); })();
+    await sleep(30);
+    const r3 = A.startAgentRun({ uid: u.id, sid: "2600", node: null }, async (emit) => { emit({ t: "done", text: "x" }); });
+    await sleep(30);
+    for (let i = 0; i < 5; i++) { gc(); await sleep(10); }
+    ok(!w1.deref(), "lượt của tài khoản đã xóa: bộ đệm đã được giải phóng");
+    ok(!w2.deref(), "lượt bị lượt mới cùng phiên thay: bộ đệm đã được giải phóng");
+    ok(A.latestRun(u.id, "2600") === r3, "lượt mới vẫn nằm trong bộ nhớ");
+    await sleep(500);
+    ok(A.latestRun(u.id, "2600") === null, "lượt mới cũng tự rời bộ nhớ khi hết hạn giữ", A.runStats());
   }
 } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
 console.log(`\n${pass} đạt, ${fail} lỗi`);
