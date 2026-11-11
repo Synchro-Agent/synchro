@@ -96,7 +96,7 @@ export function cleanBase(raw: unknown): ArtVersion[] {
 /** Bản hiện tại của mọi artifact trong các câu trả lời (trình duyệt dùng để gửi nền cho phần lịch sử đã nén). */
 export const artBase = (texts: string[]) => [...artState(texts).values()].filter((a) => a.complete).map(({ ident, type, title, lang, content, v }) => ({ ident, type, title, lang, content, v }));
 
-const MIME_OUT: Record<string, string> = { html: "text/html", react: "application/vnd.react", svg: "image/svg+xml", markdown: "text/markdown", code: "application/vnd.code", mermaid: "application/vnd.mermaid", vbhc: "application/vnd.synchro.vbhc+json" };
+const MIME_OUT: Record<string, string> = { html: "text/html", react: "application/vnd.react", svg: "image/svg+xml", markdown: "text/markdown", code: "application/vnd.code", mermaid: "application/vnd.mermaid", d2: "application/vnd.d2", vbhc: "application/vnd.synchro.vbhc+json" };
 /** Khối <current_artifacts>: bản hiện tại của các artifact liên quan nhất (mới sửa gần đây hoặc được nhắc tới), có giới hạn kích thước. */
 export function currentArtifactsBlock(st: ArtState, mention: string, max = 3, cap = 60_000): string {
   if (!st.size) return "";

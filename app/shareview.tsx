@@ -2,7 +2,7 @@
 // Trang xem một đoạn chat được chia sẻ. Người xem chưa đăng nhập, nên trang không gọi API nào của tài khoản: artifact chạy trong đúng khung cô lập
 // như trong chat (sandbox không cùng nguồn gốc, CSP chặn mạng), không có AI, không có kho dữ liệu; chữ của người dùng là văn bản thuần.
 import { useEffect, useState } from "react";
-import { ArtifactFrame, MermaidSvg, PublicFrames, VbhcView } from "./artifactui";
+import { ArtifactFrame, D2Svg, MermaidSvg, PublicFrames, VbhcView } from "./artifactui";
 import { Lockup } from "./brand";
 import { locale, tr, useLangReady } from "./i18n";
 import { LangSwitch } from "./langswitch";
@@ -17,6 +17,7 @@ function ArtSeg({ s }: { s: Extract<ShareSeg, { k: "art" }> }) {
     ? <ArtifactFrame type={s.type} content={s.content} ai={false} title={s.title} onHeight={(v) => setH(Math.min(1400, Math.max(160, v)))} style={{ height: h }} className="sh-frame" />
     : s.type === "markdown" ? <div className="sh-doc"><Markdown text={s.content} say={noop} /></div>
     : s.type === "mermaid" ? <div className="sh-doc"><MermaidSvg code={s.content} /></div>
+    : s.type === "d2" ? <div className="sh-doc"><D2Svg code={s.content} /></div>
     : s.type === "vbhc" ? <VbhcView content={s.content} title={s.title} />
     : <div className="sh-doc"><Markdown text={"```" + (s.lang ?? "") + "\n" + s.content + "\n```"} say={noop} /></div>;
   const live = s.type === "html" || s.type === "react" || s.type === "svg";

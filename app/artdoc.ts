@@ -1,7 +1,7 @@
 // Dựng trang chạy artifact (html / react / svg, bản trình bày): dùng chung cho khung xem trước trong trình duyệt và cho máy chủ
 // (kiểm tra hiển thị artifact bằng Chromium trong workspace, artcheck.ts). Không phụ thuộc giao diện: cầu nối với khung cha truyền vào.
 import type { ArtType } from "./artifacts";
-import { KIT_CSS, kitHead, usesKit } from "./artkit";
+import { ECHARTS, KIT_CSS, kitHead, SYNCHRO_3D, usesKit } from "./artkit";
 import { instrumentHtml, LOC_ATTR } from "./srcloc";
 
 export const V = "/vendor/";
@@ -20,6 +20,9 @@ export const LIBS: [string, string, string][] = [
 export const H2I: [string, string, string] = ["html-to-image-1.11.11.js", "html-to-image@1.11.11/dist/html-to-image.js", "sha384-UbfRVKN3/elS1r7JcK2FhmPP+KlJ4CvYwbyYD7tH+uTkbT9bNJr9eJeQ0FoFbAgz"];
 export const libUrls = (origin: string, l: [string, string, string]) => [`${origin}${V}${l[0]}`, `https://cdn.jsdelivr.net/npm/${l[1]}`, l[2]];
 export const CDNS = "https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://unpkg.com";
+export const THREE_MODS = ["three", "@react-three/fiber", "@react-three/drei", "shadergradient", "@shadergradient/react", "synchro-3d"];
+/** Mã React có import thư viện này (import … from "x", import "x", require("x")). */
+export const IMPORTS = (content: string, ...names: string[]) => names.some((n) => new RegExp(`(?:from\\s*|import\\s*|require\\(\\s*)["']${n.replace(/[/.]/g, "\\$&")}["']`).test(content));
 export const esc = (s: string) => s.replace(/</g, "\\u003c").replace(/\u2028/g, "\\u2028").replace(/\u2029/g, "\\u2029");
 
 // Bản trình bày HTML: mỗi slide là <section class="slide"> (hoặc các <section> nối nhau của bản trình chiếu tự viết).
@@ -30,7 +33,7 @@ export const isDeck = (a: { type: ArtType; content: string }) => a.type === "htm
 export const deckRuntime = (fixed: number | null) => `<style>[data-sx-hide]{display:none!important}[data-sx-on]{opacity:1!important;visibility:visible!important;transform:none!important}
 ${fixed !== null ? "html{pointer-events:none}html,body{overflow:hidden!important}" : ""}
 @media print{@page{size:13.333in 7.5in;margin:0}html,body{height:auto!important;overflow:visible!important}[data-sx-slide]{position:relative!important;inset:auto!important;left:auto!important;top:auto!important;opacity:1!important;visibility:visible!important;transform:none!important;width:100vw!important;height:100vh!important;break-after:page;page-break-after:always;box-sizing:border-box}[data-sx-noprint]{display:none!important}}</style>
-<script>(function(){var fixed=${fixed === null ? "null" : fixed},cur=0,S=[],CL=["on","active","current","is-active","visible","present"];
+<script>${fixed !== null ? "window.__sxStatic=1;window.__sxThumb=1;" : ""}(function(){var fixed=${fixed === null ? "null" : fixed},cur=0,S=[],CL=["on","active","current","is-active","visible","present"];
 function post(m){m.__synchro=window.__sxCh;try{parent.postMessage(m,"*")}catch(e){}}
 function find(){var s=[].slice.call(document.querySelectorAll("section.slide,[data-slide]"));if(s.length<2)s=[].slice.call(document.querySelectorAll("body>section,body>main>section,body>div>section,.slides>section"));return s.length>1?s:[]}
 function show(i){S=find();if(!S.length){post({t:"slides",n:0,cur:0});return}cur=Math.max(0,Math.min(i,S.length-1));
@@ -62,9 +65,9 @@ export function withHead(content: string, head: string, kit = "") {
   return `<!doctype html><html><head>${head}${BASE_CSS}${kit}</head><body>${content}</body></html>`;
 }
 // Tệp HTML tải về của bản trình bày: mở bằng trình duyệt là trình chiếu được (phím mũi tên, bấm chuột), in ra mỗi slide một trang.
-export const deckExport = (content: string) => withHead(content, `<meta charset="utf-8"><script>window.__sxPresent=true</script>${deckRuntime(null)}`, kitHead(content));
+export const deckExport = (content: string, origin = "") => withHead(content, `<meta charset="utf-8"><script>window.__sxPresent=true</script>${deckRuntime(null)}`, kitHead(content, origin));
 /** Tệp HTML tải về của trang thường: trang dùng bộ CSS phải kèm bộ CSS, không thì mở ra vỡ hết; trang khác giữ nguyên từng byte. */
-export const htmlExport = (content: string) => (usesKit(content) ? withHead(content, `<meta charset="utf-8">`, kitHead(content)) : content);
+export const htmlExport = (content: string, origin = "") => (usesKit(content) ? withHead(content, `<meta charset="utf-8">`, kitHead(content, origin)) : content);
 /** Tệp SVG tải về đứng một mình: hình dùng biến --sx-… phải mang theo bộ CSS trong chính tệp (CDATA vì tệp là XML); hình khác giữ nguyên từng byte. */
 export const svgExport = (content: string) => (usesKit(content) ? content.replace(/<svg\b[^>]*>/i, (m) => `${m}<style><![CDATA[${KIT_CSS}]]></style>`) : content);
 
@@ -74,15 +77,19 @@ export function buildDocCore(type: ArtType, content: string, origin: string, ch:
   if (loc && (type === "html" || type === "svg")) content = instrumentHtml(content);
   const head = `<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">${csp(origin)}${bridge}${deck && type === "html" ? `<script>window.__sxCh=${JSON.stringify(ch)}</script>${deckRuntime(deck.fixed)}` : ""}`;
   // Chèn CSP + cầu nối; trang HTML giữ tiêu đề của chính nó, React / SVG lấy tên artifact (tên mặc định khi lưu PDF).
-  const kit = kitHead(content);
+  const kit = kitHead(content, origin);
   if (type === "html") return withHead(content, head, kit);
-  const titled = title ? `${head}<title>${htmlEsc(title)}</title>` : head;
+  const titled = (title ? `${head}<title>${htmlEsc(title)}</title>` : head) + (type === "react" ? "<script>window.__sxReact=1</script>" : "");
   if (type === "svg") {
     // kit đứng trước để nền của khung SVG vẫn thắng nền của bộ CSS; hình không dùng thì kit rỗng.
     return `<!doctype html><html><head>${titled}${kit}<style>html,body{margin:0;height:100%}body{display:grid;place-items:center;background:${dark ? "#1b1b1b" : "#fff"}}svg{max-width:100%;max-height:100vh;height:auto}</style></head><body>${content}</body></html>`;
   }
   // React: tải thư viện theo thứ tự, dịch JSX/TSX bằng Babel trong khung, import được react, recharts, lucide-react; có Tailwind.
-  const libs = LIBS.map(([f, cdn, sri]) => [`${origin}${V}${f}`, `https://cdn.jsdelivr.net/npm/${cdn}`, sri]);
+  // Thư viện nặng chỉ nạp khi mã thật sự import: ECharts (~1,1 MB).
+  // Gói 3D (~1,1 MB, 283 KB nén): import three / @react-three/* / shadergradient / synchro-3d, hoặc nền data-sx-shader của bộ CSS. Chỉ có ở /vendor của Synchro.
+  const three = IMPORTS(content, ...THREE_MODS) || /data-sx-shader/.test(content);
+  const extra: [string, string, string][] = [...(IMPORTS(content, "echarts") ? [ECHARTS] : []), ...(three ? [SYNCHRO_3D] : [])];
+  const libs = [...LIBS, ...extra].map(([f, cdn, sri]) => [`${origin}${V}${f}`, cdn ? `https://cdn.jsdelivr.net/npm/${cdn}` : `${origin}${V}${f}`, sri]);
   const loading = `<style>.__ld{position:fixed;inset:0;display:grid;place-items:center}.__ld i{width:22px;height:22px;border-radius:50%;border:2px solid #d6d6d0;border-top-color:#545452;animation:__s .8s linear infinite}@keyframes __s{to{transform:rotate(360deg)}}</style><div class="__ld"><i></i></div>`;
   return `<!doctype html><html><head>${titled}${BASE_CSS}${kit}</head><body><div id="root">${loading}</div>
 <script>(function(){var src=${esc(JSON.stringify(content))},libs=${JSON.stringify(libs)},i=0;
@@ -90,7 +97,9 @@ function load(u,sri,cb){var s=document.createElement("script");s.src=u;s.crossOr
 function next(){if(i>=libs.length)return run();var l=libs[i++];load(l[0],l[2],function(ok){if(ok)return step();load(l[1],l[2],function(ok2){if(!ok2)throw new Error("Không tải được thư viện cho artifact. Kiểm tra kết nối mạng rồi bấm Chạy lại.");step()})})}
 function step(){if(window.React&&!window.react)window.react=window.React;next()}
 function run(){var mods={"react":React,"react-dom":ReactDOM,"react-dom/client":ReactDOM,"recharts":Recharts,"lucide-react":LucideReact,"prop-types":PropTypes};
-function req(n){if(mods[n])return mods[n];throw new Error('Thư viện "'+n+'" không có sẵn trong artifact (chỉ có react, recharts, lucide-react).')}
+if(window.echarts)mods.echarts=window.echarts;
+var S3=window.Synchro3D;if(S3){var sg={ShaderGradient:S3.ShaderGradient,ShaderGradientCanvas:S3.ShaderGradientCanvas};mods.three=S3.THREE;mods["@react-three/fiber"]=S3.Fiber;mods["@react-three/drei"]=S3.drei;mods.shadergradient=sg;mods["@shadergradient/react"]=sg;mods["synchro-3d"]=S3}
+function req(n){if(mods[n])return mods[n];throw new Error('Thư viện "'+n+'" không có sẵn trong artifact (có react, recharts, lucide-react, echarts, three, @react-three/fiber, @react-three/drei (Environment, Float, Lightformer, MeshTransmissionMaterial), shadergradient, synchro-3d).')}
 ${loc ? `function sxLoc(b){var t=b.types;return{visitor:{JSXOpeningElement:function(p){var n=p.node,el=p.parent;if(!n.loc||n.name.type!=="JSXIdentifier"||!/^[a-z]/.test(n.name.name))return;if(n.attributes.some(function(a){return a.type==="JSXAttribute"&&a.name&&a.name.name==="${LOC_ATTR}"}))return;n.attributes.push(t.jsxAttribute(t.jsxIdentifier("${LOC_ATTR}"),t.stringLiteral(n.loc.start.line+"-"+(el&&el.loc?el.loc.end.line:n.loc.end.line))))}}}}
 ` : ""}var out=Babel.transform(src,{filename:"App.tsx",presets:[["typescript",{isTSX:true,allExtensions:true}],["react",{runtime:"classic"}]],plugins:[${loc ? "sxLoc," : ""}"transform-modules-commonjs"]}).code;
 var module={exports:{}};new Function("module","exports","require","React",out)(module,module.exports,req,React);

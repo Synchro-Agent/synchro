@@ -15,7 +15,7 @@ export function ArtIcon({ type, size = 18 }: { type: ArtType; size?: number }) {
   if (type === "html") return <I.Globe size={size} />;
   if (type === "svg") return <I.Image size={size} />;
   if (type === "markdown") return <I.FileText size={size} />;
-  if (type === "mermaid") return <I.Flow size={size} />;
+  if (type === "mermaid" || type === "d2") return <I.Flow size={size} />;
   if (type === "vbhc") return <I.FileDoc size={size} />;
   return <I.Code size={size} />;
 }

@@ -33,8 +33,19 @@ export const UX_VI2EN: Record<string, string> = {
   "Sửa tin nhắn": "Edit message", "Gửi lại": "Send again", "Sao chép": "Copy", "Hủy": "Cancel",
   "Các tin phía sau sẽ được thay bằng câu trả lời mới.": "Later messages will be replaced by the new reply.",
   "Tin nhắn cho Synchro": "Message to Synchro",
+  // Sơ đồ D2 (vẽ trong sandbox), poster dựng ở máy chủ
+  "Đăng nhập để vẽ sơ đồ này.": "Sign in to draw this diagram.", "Sơ đồ trống.": "The diagram is empty.",
+  "Bố cục TALA là phần mềm thương mại, Synchro dùng elk hoặc dagre.": "The TALA layout is commercial software. Synchro uses elk or dagre.",
+  "Máy chủ chưa có nơi chạy code nên chưa vẽ được sơ đồ D2.": "The server has nowhere to run code yet, so it can't draw D2 diagrams.",
+  "Vẽ sơ đồ quá 20 giây.": "Drawing the diagram took longer than 20 seconds.", "Sandbox chưa có D2 (cần image workspace mới).": "The sandbox doesn't have D2 yet (it needs the new workspace image).",
+  "Không vẽ được sơ đồ D2.": "Couldn't draw the D2 diagram.", "Sơ đồ quá lớn.": "The diagram is too large.", "Kết quả không phải SVG.": "The result isn't an SVG.",
 };
 export const UX_RULES_EN: [RegExp, (m: RegExpMatchArray) => string][] = [
+  [/^Sơ đồ quá dài \(tối đa (\d+) ký tự\)\.$/, (m) => `The diagram is too long (at most ${m[1]} characters).`],
+  [/^Không có mẫu (.+)$/, (m) => `No template named ${m[1]}`],
+  [/^Thiếu trường (\w+) của poster\.$/, (m) => `The poster is missing the ${m[1]} field.`],
+  [/^Trường (\w+) dài (\d+) ký tự, tối đa (\d+) để chữ không tràn khung 1200×630\.$/, (m) => `The ${m[1]} field is ${m[2]} characters long. The limit is ${m[3]} so the text fits the 1200×630 frame.`],
+  [/^dòng \d+:\d+: [\s\S]*$/, (m) => m[0].replace(/(^|; )dòng (\d+):(\d+):/g, "$1line $2:$3:")],
   [/^Câu trả lời trong “(.+)” gặp lỗi$/, (m) => `The reply in “${m[1]}” hit an error`],
   [/^Khóa API bị từ chối \((\d+)\): (.*)$/, (m) => `The API key was rejected (${m[1]}): ${m[2]}`],
   [/^Khóa API đã hết số dư, cần nạp thêm ở trang của nhà cung cấp \(402\): (.*)$/, (m) => `The API key is out of credit. Top up on the provider's site (402): ${m[1]}`],

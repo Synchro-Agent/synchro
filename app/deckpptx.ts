@@ -33,10 +33,11 @@ export type ChartSpec = {
  */
 export const PPTX_FRAME_JS = String.raw`
 var sxKitFonts=${JSON.stringify(Object.keys(FONT_SPEC))};
-// Dừng chuyển động ở trạng thái cuối để chụp: phần tử chưa tới lượt trong stagger (opacity 0) không mất khỏi ảnh. Trả về hàm gỡ.
+// Dừng chuyển động ở trạng thái cuối để chụp: phần tử chưa tới lượt trong stagger (opacity 0) không mất khỏi ảnh. window.__sxStatic: biểu đồ, nền 3D vẽ trong lúc chụp
+// (slide chưa xem lần nào) không chạy hoạt ảnh, ảnh không bắt được cột đang mọc dở. Trả về hàm gỡ.
 function sxFreeze(){var fz=document.createElement("style");fz.setAttribute("data-sx-noprint","");
 fz.textContent="*,*::before,*::after{animation-duration:0s!important;animation-delay:0s!important;animation-iteration-count:1!important;transition:none!important}";
-document.head.appendChild(fz);return function(){fz.remove()}}
+document.head.appendChild(fz);window.__sxStatic=(window.__sxStatic||0)+1;return function(){fz.remove();window.__sxStatic=Math.max(0,window.__sxStatic-1)}}
 // Canvas WebGL (nền shader 3D, cảnh three.js): html-to-image chép canvas bằng toDataURL, canvas WebGL không giữ bộ đệm vẽ thì ra ô trống trong PNG / PowerPoint.
 // Bộ 3D của Synchro bật preserveDrawingBuffer nên đọc được; canvas nào đọc ra trống thì ẩn tạm để lớp nền CSS dự phòng ngay dưới nó hiện ra thay vì một mảng đen.
 // window.__sxStatic: bộ 3D vẽ khung hình tĩnh trong lúc chụp. Trả về hàm trả lại như cũ.

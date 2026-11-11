@@ -1,0 +1,8 @@
+{
+  "name": "synchro-charts",
+  "private": true,
+  "description": "ECharts SSR trong sandbox: synchro-chart dựng biểu đồ của bộ thiết kế thành SVG / PNG không cần mạng",
+  "dependencies": {
+    "echarts": "6.1.0"
+  }
+}

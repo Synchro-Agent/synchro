@@ -5,3 +5,4 @@ remotion/out
 remotion/.synchro-video
 doc/docx/node_modules
 doc/**/__pycache__
+charts/node_modules
