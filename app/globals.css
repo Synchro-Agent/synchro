@@ -2813,6 +2813,14 @@ html body .modal.pl-modal::before{background:var(--card);-webkit-backdrop-filter
 .art-dl-t b{font-weight:500;font-size:13.5px;color:var(--text);max-width:230px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .art-dl-t em{font-style:normal;font-size:12px;color:var(--text-3)}
 html body .art-dl-menu,html body .prod-menu{--gl-fill:color-mix(in srgb,var(--card) 94%,transparent)}
+/* Đổi phong cách của artifact: ô màu (nền, bề mặt, nhấn) cạnh tên; menu nền đặc, không nhìn xuyên xuống khung bên dưới. */
+html body .menu.art-style-menu{--gl-fill:var(--card);background:var(--card);min-width:236px}
+.art-style-sw{display:inline-flex;gap:3px;align-items:center;padding:3px;border:1px solid;border-radius:6px;flex:none}
+.art-style-sw i{width:10px;height:14px;border-radius:3px;display:block}
+.art-style-menu .menu-item.on{background:var(--hover)}
+.art-style-now{font-style:normal;font-size:11.5px;color:var(--text-3);margin-left:auto;white-space:nowrap}
+.art-style-acts{display:flex;gap:6px;padding:8px 6px 4px;border-top:1px solid var(--border);margin-top:4px}
+.art-style-acts .btn{flex:1;justify-content:center;font-size:13px;padding:6px 10px}
 
 /* Bản trình bày: khung 16:9, thanh điều khiển, ảnh thu nhỏ, trình chiếu toàn màn hình. */
 .art-body.is-deck{background:var(--bg-2,var(--hover))}

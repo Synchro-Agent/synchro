@@ -67,6 +67,8 @@ import { useChatSync, useSyncStatus } from "./chatsync";
 import { shortName } from "./names";
 import { loadCaps, useCaps } from "./capsclient";
 import { artifactsAsCode, hasArtifacts, PUBLISHABLE, splitArtifacts, type ArtBlock } from "./artifacts";
+import { restylePatch } from "./artkit";
+import { presetOf } from "./designpresets";
 import { resolveArt, type ArtVersion } from "./vfs";
 import { criticKey, fixPatch, important, type CriticEntry, type Finding } from "./critic";
 import { chatHistory, mixExtra } from "./history";
@@ -1662,6 +1664,16 @@ export default function Home() {
     say(tr("Đã áp dụng bản sửa, tạo phiên bản mới"));
     setTimeout(() => afterArtifacts(id, ai), 0);
   };
+  // Đổi phong cách artifact không gọi model: một cặp tin (yêu cầu + bản sửa data-sx-preset) thành phiên bản mới, lượt sau model thấy phong cách mới trong lịch sử.
+  const restyle = (id: number, a: { ident: string; title: string; content: string }, preset: string) => {
+    const p = restylePatch(a.content, preset);
+    if (!p) return;
+    const now = Date.now(), label = tr(presetOf(preset)?.name ?? preset);
+    const ai = `${tr("Đã đổi phong cách sang")} ${label}.\n\n<artifact identifier="${a.ident}" mode="patch">\n${p}\n</artifact>`;
+    patch(id, (m) => [...m, { role: "user", text: `${tr("Đổi phong cách")} “${a.title}” → ${label}`, time: now }, { role: "ai", text: ai, done: true, time: now }]);
+    setArtSel({ chat: id, ident: a.ident, v: 0, follow: true });
+    setTimeout(() => afterArtifacts(id, ai), 0);
+  };
   // Tự đặt tên đoạn chat theo nội dung (như Claude): sau câu trả lời đầu tiên; tin đầu chỉ là lời chào thì đặt lại sau tin thứ ba.
   // Người dùng đã tự đổi tên thì giữ nguyên; force: người dùng bấm "Đặt tên tự động".
   const titling = useRef(new Set<number>());
@@ -2410,6 +2422,7 @@ export default function Home() {
                 onAsk={busy ? undefined : (text) => send(text)}
                 criticOf={(a) => chat.critic?.[criticKey(a.ident, a.content)]} onCritic={chat.inc ? undefined : (a) => runCritic(chat.id, a)}
                 onApplyFix={busy || chat.inc ? undefined : (a, f) => applyFix(chat.id, a, f)}
+                onRestyle={busy || chat.inc ? undefined : (a, preset) => restyle(chat.id, a, preset)}
                 onFix={busy ? undefined : (a, err) => send(`${tr("Artifact")} “${a.title}” ${tr("gặp lỗi")}: ${err}\n${tr("Hãy sửa lỗi này.")}`)} />
             )}
             {brwShow && (

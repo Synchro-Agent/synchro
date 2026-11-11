@@ -24,7 +24,8 @@ export type ArtVersion = ArtBlock & { at?: number };
 
 // ---------------------------------------------------------------- khung chạy cô lập
 import { buildDocCore, deckExport, externalImageUrls, genImageId, H2I, htmlExport, isDeck, libUrls, svgExport, swapUrls } from "./artdoc";
-import { withKitFontLink } from "./artkit";
+import { kitFontUrl, presetIn, withKitFontLink } from "./artkit";
+import { PRESETS, presetOf } from "./designpresets";
 export { deckExport, H2I, isDeck, libUrls };
 
 // Cầu nối trong artifact: window.synchro.complete (và window.claude.complete cho artifact viết theo Claude),
@@ -50,7 +51,10 @@ else if(d.t==="capture")lib(0,function(ok){if(!ok)return post({t:"png",id:d.id,e
 else if(d.t==="pick"){pk=!!d.on;document.documentElement.style.cursor=pk?"crosshair":"";if(!pk&&hl)hl.style.display="none"}
 else if(d.t==="go"&&window.__sxGo)window.__sxGo(d.i);
 else if(d.t==="changed"){var ev={key:d.key,shared:true};subs.slice().forEach(function(f){try{f(ev)}catch(x){}});try{dispatchEvent(new CustomEvent("synchro:storage",{detail:ev}))}catch(x){}}
-else if(d.t==="present")window.__sxPresent=!!d.on});
+else if(d.t==="present")window.__sxPresent=!!d.on;
+else if(d.t==="preset"){var ps=document.querySelectorAll("[data-sx-preset]");for(var q=0;q<ps.length;q++)ps[q].setAttribute("data-sx-preset",d.id);
+if(d.font&&!document.querySelector('link[data-sx-font-p="'+d.id+'"]')){var fl=document.createElement("link");fl.rel="stylesheet";fl.href=d.font;fl.setAttribute("data-sx-font-p",d.id);document.head.appendChild(fl)}
+if(window.__sxFit)setTimeout(function(){window.__sxFit()},80)}});
 // Chỉ và sửa: Synchro bật chế độ chọn, rê chuột thì viền phần tử, bấm thì gửi vị trí + mã của đúng phần tử đó (Esc để thoát).
 var pk=false,hl=null;
 function box(){if(hl)return hl;hl=document.createElement("div");hl.setAttribute("data-sx-noprint","");hl.style.cssText="position:fixed;pointer-events:none;z-index:2147483647;border:2px solid #2f7bf6;border-radius:4px;background:rgba(47,123,246,.08);display:none";document.documentElement.appendChild(hl);return hl}
@@ -289,6 +293,43 @@ function DownloadMenu({ items, say, note }: { items: DlItem[]; say: (m: string) 
   );
 }
 
+// Đổi phong cách không tốn lượt model: bấm một phong cách thì khung đổi ngay (chỉ thay data-sx-preset, bộ CSS có sẵn 8 bộ biến);
+// "Giữ" thành phiên bản mới của artifact (onKeep, cùng đường với áp dụng bản sửa của hội đồng phản biện), "Bỏ" về phong cách cũ.
+function StyleSwitch({ current, send, onKeep, say }: { current: string; send: () => FrameSend | null; onKeep?: (id: string) => void; say: (m: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const [trial, setTrial] = useState("");
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => { setTrial(""); }, [current]);
+  useEffect(() => {
+    if (!open) return;
+    const h = (e: MouseEvent) => { if (!ref.current?.contains(e.target as Node)) setOpen(false); };
+    document.addEventListener("mousedown", h); return () => document.removeEventListener("mousedown", h);
+  }, [open]);
+  const apply = (id: string) => { send()?.({ t: "preset", id, font: kitFontUrl(`data-sx-preset="${id}"`) }); setTrial(id === current ? "" : id); };
+  const name = (id: string) => tr(presetOf(id)?.name ?? id);
+  return (
+    <div className="art-dl art-style" ref={ref}>
+      <button className={`icon-btn ${trial ? "on" : ""}`} onClick={() => setOpen(!open)} aria-label="Đổi phong cách" data-tip="Đổi phong cách" aria-expanded={open}><I.Palette size={16} /></button>
+      <Menu open={open} className="art-dl-menu art-style-menu">
+        <div className="art-dl-h">{tr("Phong cách")}</div>
+        {PRESETS.map((p) => (
+          <button key={p.id} className={`menu-item${(trial || current) === p.id ? " on" : ""}`} aria-current={(trial || current) === p.id ? "true" : undefined} onClick={() => apply(p.id)}>
+            <span className="art-style-sw" aria-hidden="true" style={{ background: p.bg, borderColor: p.line }}><i style={{ background: p.surface }} /><i style={{ background: p.vivid ?? p.accent }} /></span>
+            <span className="art-dl-t"><b>{name(p.id)}</b></span>
+            {current === p.id && <em className="art-style-now">{tr("Đang dùng")}</em>}
+          </button>
+        ))}
+        {trial && (
+          <div className="art-style-acts">
+            {onKeep && <button className="btn dark" onClick={() => { onKeep(trial); setOpen(false); say(`${tr("Đã đổi phong cách sang")} ${name(trial)}`); }}>{tr("Giữ phong cách này")}</button>}
+            <button className="btn" onClick={() => apply(current)}>{tr("Bỏ")}</button>
+          </div>
+        )}
+      </Menu>
+    </div>
+  );
+}
+
 // Bản trình bày: khung 16:9, chuyển slide, ảnh thu nhỏ từng slide, trình chiếu toàn màn hình.
 function DeckView({ art, ai, onError, onMsg, ctl, store, loc }: { art: ArtVersion; ai: boolean; onError: (m: string) => void; onMsg: (d: FrameMsg) => void; ctl: (s: FrameSend) => void; store?: StoreRef; loc?: boolean }) {
   const [st, setSt] = useState({ n: 0, cur: 0 });
@@ -424,10 +465,11 @@ function CompareView({ a, b, ai, na, nb }: { a: ArtVersion; b: ArtVersion; ai: b
 // ---------------------------------------------------------------- khung xem bên cạnh
 // conv: đoạn chat chứa artifact (để artifact lưu được dữ liệu thử bằng window.storage); extra: nút thêm trên đầu khung theo phiên bản đang xem.
 // criticOf / onCritic / onApplyFix: hội đồng phản biện (kết quả theo phiên bản, chạy lại, áp dụng bản sửa thành phiên bản mới).
-export function ArtifactPanel({ versions, index, setIndex, ai, onClose, onFix, onAsk, expanded, setExpanded, say, footer, switcher, conv, extra, criticOf, onCritic, onApplyFix }: {
+// onRestyle: giữ phong cách vừa xem thử thành phiên bản mới (không gọi model); không có thì chỉ xem thử được.
+export function ArtifactPanel({ versions, index, setIndex, ai, onClose, onFix, onAsk, expanded, setExpanded, say, footer, switcher, conv, extra, criticOf, onCritic, onApplyFix, onRestyle }: {
   versions: ArtVersion[]; index: number; setIndex: (i: number) => void; ai: boolean; onClose: () => void; onFix?: (a: ArtVersion, err: string) => void; onAsk?: (text: string) => void;
   expanded: boolean; setExpanded: (v: boolean) => void; say: (m: string) => void; footer?: React.ReactNode; switcher?: React.ReactNode; conv?: string; extra?: (a: ArtVersion) => React.ReactNode;
-  criticOf?: (a: ArtVersion) => CriticEntry | undefined; onCritic?: (a: ArtVersion) => void; onApplyFix?: (a: ArtVersion, f: Finding) => void;
+  criticOf?: (a: ArtVersion) => CriticEntry | undefined; onCritic?: (a: ArtVersion) => void; onApplyFix?: (a: ArtVersion, f: Finding) => void; onRestyle?: (a: ArtVersion, preset: string) => void;
 }) {
   const art = versions[Math.min(index, versions.length - 1)];
   const [tab, setTab] = useState<"preview" | "code">("preview");
@@ -492,6 +534,8 @@ export function ArtifactPanel({ versions, index, setIndex, ai, onClose, onFix, o
     const f = pending.current.get(d.id as number); if (f) { pending.current.delete(d.id as number); f(d); }
   };
   const canPick = !!onAsk && art.complete && !showCode && !compare && ["html", "react", "svg"].includes(art.type);
+  // Trang dùng một trong 8 phong cách của bộ thiết kế: đổi phong cách ngay trong khung.
+  const stylable = art.complete && !showCode && !compare && ["html", "react", "svg"].includes(art.type) ? presetIn(art.content) : "";
   // Phần tử đã chọn có dòng mã: ở chế độ xem Mã thì tô các dòng đó và cuộn tới.
   const hlLoc = showCode && picked?.loc ? picked.loc : null;
   useEffect(() => { if (hlLoc) body.current?.querySelector(".art-code .hl")?.scrollIntoView({ block: "center" }); }, [hlLoc?.start, hlLoc?.end, showCode]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -564,6 +608,7 @@ Yêu cầu: ${req.trim()}`);
               (trước đây nút Chỉ và sửa nhảy ngang 61px ngay dưới con trỏ). */}
           {criticOf && art.complete && !compare && <CriticPill entry={crit} findings={findings} can={important(art) && !!onCritic}
             onRun={() => onCritic?.(art)} onShow={() => { setTab("code"); setTimeout(() => body.current?.querySelector(".cr-note")?.scrollIntoView({ block: "center", behavior: "smooth" }), 60); }} />}
+          {stylable && <StyleSwitch key={`${art.ident}-${ver}-${reload}`} current={stylable} send={() => send.current} onKeep={onRestyle && index === versions.length - 1 ? (id) => onRestyle(art, id) : undefined} say={say} />}
           {canPick && <button className={`icon-btn ${picking ? "on" : ""}`} onClick={togglePick} aria-label="Chỉ và sửa" data-tip="Chỉ vào phần muốn sửa (hoặc giữ Alt rồi bấm)" aria-pressed={picking}><I.Pointer size={15} /></button>}
           {runnable && art.type !== "markdown" && art.type !== "mermaid" && !showCode && <button className="icon-btn" onClick={() => setReload((x) => x + 1)} aria-label="Chạy lại" data-tip="Chạy lại"><I.Retry size={15} /></button>}
           <button className="icon-btn" onClick={copy} aria-label="Sao chép" data-tip="Sao chép">{copied ? <I.M icon="Check" size={15} /> : <I.M icon="Copy" size={15} />}</button>

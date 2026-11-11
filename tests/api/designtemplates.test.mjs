@@ -143,5 +143,16 @@ ok(/data-sx-template="slide-chart"/.test(sc) && /sx-grid-6040/.test(sc) && /data
 ok(/data-sx-chart="doughnut"/.test(T.expandTemplates(block([{ templateId: "doc-report", props: { title: "x", sections: [{ heading: "a", chart: charts.doughnut }] } }]))), "tài liệu: mỗi phần có thể có biểu đồ");
 ok(K.designTurn({ typed: "Làm bộ slide doanh thu", art: true, code: true, seed: "a" }).block.includes("FT Visual Vocabulary") && K.designTurn({ typed: "viết báo cáo thị trường", art: true, code: true, seed: "a" }).block.includes("sankey"), "luật chọn biểu đồ có trong khối slide và tài liệu");
 
+console.log("10. Đổi phong cách không tốn lượt model");
+const page2 = `<html data-sx-preset="linear-dark"><body><div data-sx-preset='exec-navy'>a</div><section class="slide sx-slide">x</section></body></html>`;
+ok(A.presetIn(page2) === "midnight-tech" && A.presetIn("<p>x</p>") === "" && A.presetIn(`<html data-sx-preset="la">`) === "", "nhận phong cách đang dùng (mã cũ quy về mã chính), trang không dùng bộ thiết kế thì không");
+const rp = A.restylePatch(page2, "editorial-serif");
+const after = V.applyPatches(page2, V.parsePatches(rp));
+ok(after.ok && after.applied === 2 && (after.content.match(/data-sx-preset=["']?editorial-serif/g) ?? []).length === 2 && after.content.includes("data-sx-preset='editorial-serif'"), "bản sửa thay mọi data-sx-preset, giữ kiểu dấu nháy", after.content);
+ok(A.restylePatch(page2.replace(/linear-dark|exec-navy/g, "editorial-serif"), "editorial-serif") === null && A.restylePatch(page2, "khong-co") === null, "đã đúng phong cách hoặc mã lạ: không có bản sửa");
+const tplMsg = `<artifact identifier="d2" type="text/html" title="D">${block({ styleArchetype: "swiss-grid", pages: [{ templateId: "slide-fact", props: { bigMetric: "1" } }, { templateId: "slide-quote", props: { quote: "q" } }] })}</artifact>`;
+const fix = `<artifact identifier="d2" mode="patch">\n${A.restylePatch(V.artState([tplMsg]).get("d2").content, "aurora-glass")}\n</artifact>`;
+ok(V.artState([tplMsg, fix]).get("d2").content.includes('data-sx-preset="aurora-glass"') && K.priorDesign([tplMsg, fix])?.preset === "aurora-glass", "trang theo mẫu đổi phong cách thành phiên bản mới; lượt sau model thấy phong cách mới");
+
 console.log(`\n${pass} đạt, ${fail} lỗi`);
 process.exit(fail ? 1 : 0);

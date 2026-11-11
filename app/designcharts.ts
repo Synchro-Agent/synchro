@@ -71,14 +71,16 @@ function doughnut(p: Props, unit: string) {
   out += T(cx, cy + 4, `${Math.round((vals[hl] / total) * 100)}%`, { size: 40, fill: "var(--sx-ink)", weight: 800 }) + T(cx, cy + 30, labels[hl] ?? "", { size: 15 });
   return out + vals.map((v, i) => { const yy = 70 + i * 40; return `<rect x="350" y="${yy - 11}" width="14" height="14" rx="4" style="fill:${i === hl ? VIVID : NEU(i)}"/>${T(374, yy + 1, labels[i] ?? "", { anchor: "start", fill: "var(--sx-ink)", weight: i === hl ? 700 : 500 })}${T(W - 12, yy + 1, `${Math.round((v / total) * 100)}% · ${fmt(v, unit)}`, { anchor: "end", size: 14 })}`; }).join("");
 }
+// Nhãn mặc định nằm trong biểu đồ của artifact (nội dung model làm ra, cùng ngôn ngữ với các nhãn khác), không phải chữ giao diện.
+const START_LABEL = "Đầu kỳ", END_LABEL = "Cuối kỳ";
 function waterfall(p: Props, unit: string) {
   const labels = arr(p.labels, 14).map((x) => str(x, 30)), deltas = arr(p.values, 14).map(num), start = obj(p.start), s0 = num(start.value);
   if (!deltas.length) return "";
   const steps: { label: string; from: number; to: number; kind: "total" | "up" | "down" }[] = [];
   let run = s0;
-  if (str(start.label) || s0) steps.push({ label: str(start.label, 30) || "Đầu kỳ", from: 0, to: s0, kind: "total" });
+  if (str(start.label) || s0) steps.push({ label: str(start.label, 30) || START_LABEL, from: 0, to: s0, kind: "total" });
   deltas.forEach((d, i) => { steps.push({ label: labels[i] ?? "", from: run, to: run + d, kind: d >= 0 ? "up" : "down" }); run += d; });
-  steps.push({ label: str(p.endLabel, 30) || "Cuối kỳ", from: 0, to: run, kind: "total" });
+  steps.push({ label: str(p.endLabel, 30) || END_LABEL, from: 0, to: run, kind: "total" });
   const hi = Math.max(0, ...steps.map((s) => Math.max(s.from, s.to))), lo = Math.min(0, ...steps.map((s) => Math.min(s.from, s.to)));
   const top = 26, bot = H - 34, y = (v: number) => top + ((hi - v) / (hi - lo || 1)) * (bot - top), band = (W - 16) / steps.length, bw = band * 0.64;
   return `<line x1="8" x2="${W - 8}" y1="${y(0)}" y2="${y(0)}" style="stroke:var(--sx-line)"/>` + steps.map((s, i) => {

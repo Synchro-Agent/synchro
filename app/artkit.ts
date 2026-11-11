@@ -165,5 +165,18 @@ export const kitHead = (content: string) => {
   return `<script>addEventListener("load",function(){var l=document.createElement("link");l.rel="stylesheet";l.href=${JSON.stringify(url)};l.setAttribute("data-sx-font","");document.head.appendChild(l)});${FIT_JS}</script><noscript><link rel="stylesheet" href="${url.replace(/&/g, "&amp;")}"></noscript><style data-sx-kit>${CSS}</style>`;
 };
 export const KIT_CSS = CSS;
+/** Phong cách đang dùng của trang (mã chính), hoặc "" nếu trang không đặt data-sx-preset hợp lệ. */
+export const presetIn = (content: string) => { const m = /data-sx-preset=["']?([\w-]+)/.exec(content); return m && presetOf(m[1]) ? presetOf(m[1])!.id : ""; };
+/**
+ * Đổi phong cách không gọi model: các khối SEARCH/REPLACE thay mọi data-sx-preset="…" bằng phong cách mới (áp lần lượt từ đầu tệp nên mỗi khối trúng một chỗ).
+ * Trang không có data-sx-preset, hay đã đúng phong cách đó: null.
+ */
+export function restylePatch(content: string, id: string): string | null {
+  const to = presetOf(id)?.id;
+  if (!to) return null;
+  const hits = [...content.matchAll(/data-sx-preset=(["']?)([\w-]+)\1/g)].filter((m) => presetOf(m[2]) && presetOf(m[2])!.id !== to);
+  if (!hits.length) return null;
+  return hits.map((m) => `<<<<<<< SEARCH\n${m[0]}\n=======\ndata-sx-preset=${m[1]}${to}${m[1]}\n>>>>>>> REPLACE`).join("\n");
+}
 /** Để lấy phông nhúng khi chụp ảnh / xuất PowerPoint (artfonts.ts tìm đường dẫn Google Fonts trong chữ của trang). */
 export const withKitFontLink = (content: string) => (usesKit(content) ? `${content}\n<!-- ${kitFontUrl(content)} -->` : content);
