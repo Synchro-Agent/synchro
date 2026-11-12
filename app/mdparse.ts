@@ -42,12 +42,9 @@ const lastChar = (s: string, i: number) => { if (i <= 0) return " "; const c = s
 const nextChar = (s: string, i: number) => (i >= s.length ? " " : String.fromCodePoint(s.codePointAt(i)!));
 const delimText = (t: Delim) => t.ch.repeat(t.n);
 
-// Còn dấu * mở chưa có dấu đóng ở phía trước không ("**abc**1" thì ** sau là dấu đóng, "*x* 2*3" thì không).
-function starOpen(ts: Tok[]): boolean {
-  let c = 0;
-  for (const t of ts) if (isDelim(t) && t.ch === "*") { if (t.close && c > 0) c = Math.max(0, c - t.n); else if (t.open) c += t.n; }
-  return c > 0;
-}
+// Số dấu * mở chưa có dấu đóng ở phía trước ("**abc**1" thì ** sau là dấu đóng, "*x* 2*3" thì không): cộng dồn mỗi khi thêm một dấu *,
+// không đếm lại cả dãy ở từng dấu sao (đếm lại làm câu dài nhiều dấu * chạy theo bình phương: 60 KB mất hơn 1,5 giây).
+const starDepth = (c: number, t: Delim) => (t.close && c > 0 ? Math.max(0, c - t.n) : t.open ? c + t.n : c);
 
 function flat(ts: Tok[]): Inl[] {
   const out: Inl[] = [];
@@ -60,31 +57,41 @@ function flat(ts: Tok[]): Inl[] {
 }
 
 // Ghép dấu nhấn theo thuật toán chồng dấu của CommonMark: xử lý đúng ***x***, **đậm *nghiêng* đậm**, snake_case.
+// Chạy trên danh sách liên kết: gom một cặp dấu thành một nút không phải dời cả phần đuôi mảng như splice (câu dài "*a* *b* …" từng mất gần 0,6 giây).
+type Ln = { v: Tok; p: Ln | null; x: Ln | null };
 function emphasis(ts: Tok[]) {
+  if (!ts.some(isDelim)) return;
+  const head: Ln = { v: "", p: null, x: null };
+  let last = head;
+  for (const v of ts) { const l: Ln = { v, p: last, x: null }; last.x = l; last = l; }
   const bottom: Record<string, number> = {};
-  for (let cl = 0; cl < ts.length; cl++) {
-    const c = ts[cl];
-    if (!isDelim(c) || !c.close || !c.n) continue;
+  for (let cur = head.x; cur;) {
+    const c = cur.v;
+    if (!isDelim(c) || !c.close || !c.n) { cur = cur.x; continue; }
     const key = c.ch + (c.open ? 1 : 0) + c.orig % 3;
-    let op = -1;
-    for (let k = cl - 1; k >= 0; k--) {
-      const o = ts[k];
+    let op: Ln | null = null;
+    for (let k = cur.p; k && k !== head; k = k.p) {
+      const o = k.v;
       if (!isDelim(o)) continue;
       if (o.seq <= (bottom[key] ?? -1)) break;
       if (o.ch !== c.ch || !o.open || !o.n) continue;
       if (c.ch !== "~" && (o.close || c.open) && (o.orig + c.orig) % 3 === 0 && !(o.orig % 3 === 0 && c.orig % 3 === 0)) continue;
       op = k; break;
     }
-    if (op < 0) { bottom[key] = c.seq - 1; continue; }
-    const o = ts[op] as Delim;
+    if (!op) { bottom[key] = c.seq - 1; cur = cur.x; continue; }
+    const o = op.v as Delim;
     const use = c.ch === "~" ? 2 : c.n >= 2 && o.n >= 2 ? 2 : 1;
-    const node: Inl = { t: c.ch === "~" ? "del" : use === 2 ? "strong" : "em", c: flat(ts.slice(op + 1, cl)) };
-    ts.splice(op + 1, cl - op - 1, node);
+    const inner: Tok[] = [];
+    for (let k = op.x; k && k !== cur; k = k.x) inner.push(k.v);
+    const nd: Ln = { v: { t: c.ch === "~" ? "del" : use === 2 ? "strong" : "em", c: flat(inner) }, p: op, x: cur };
+    op.x = nd; cur.p = nd;
     o.n -= use; c.n -= use;
-    cl = op + 2; // closer đang ở ngay sau node
-    if (!o.n) { ts.splice(op, 1); cl--; }
-    if (!c.n) { ts.splice(cl, 1); cl--; } else cl--;
+    if (!o.n) { nd.p = op.p; op.p!.x = nd; }
+    // Dấu đóng còn thừa (***x** …) thì xét lại chính nó; hết thì bỏ, đi tiếp.
+    if (!c.n) { nd.x = cur.x; if (cur.x) cur.x.p = nd; cur = cur.x; }
   }
+  ts.length = 0;
+  for (let k = head.x; k; k = k.x) ts.push(k.v);
 }
 
 // Câu đang viết dở: dấu mở chưa có dấu đóng thì coi như đóng ở cuối, chữ không hiện "**" rồi mới đậm; dấu trần ở cuối chưa rõ nghĩa thì giấu.
@@ -159,17 +166,27 @@ function codeSpanEnd(s: string, i: number, n: number): number {
 }
 
 type Ref = { label: [number, number]; dest: string; end: number } | { label: [number, number]; partial: true };
-function linkAt(s: string, i: number, open: boolean): Ref | null {
-  let depth = 0, j = i;
+// Dấu ] khớp với dấu [ ở vị trí i (-1: không có trong đoạn). Một lần quét ghi luôn kết quả cho mọi dấu [ nó đi qua (cùng cách đọc từ đó trở đi),
+// nên dãy dài "[a[a[a…" không đóng không bị quét lại tới cuối ở từng dấu [ (60 KB từng mất hơn 7 giây).
+function bracketEnd(s: string, i: number, memo: Map<number, number>): number {
+  const hit = memo.get(i);
+  if (hit !== undefined) return hit;
+  const stack: number[] = [];
+  let j = i;
   for (; j < s.length; j++) {
     const c = s[j];
     if (c === "\\") { j++; continue; }
-    if (c === "\n" && s[j + 1] === "\n") return null;
+    if (c === "\n" && s[j + 1] === "\n") break;
     if (c === "`") { let n = 0; while (s[j + n] === "`") n++; const e = codeSpanEnd(s, j, n); j = e < 0 ? j + n - 1 : e + n - 1; continue; }
-    if (c === "[") depth++;
-    if (c === "]" && --depth === 0) break;
+    if (c === "[") stack.push(j);
+    if (c === "]") { memo.set(stack.pop()!, j); if (!stack.length) return j; }
   }
-  if (j >= s.length) return null;
+  for (const k of stack) memo.set(k, -1);
+  return -1;
+}
+function linkAt(s: string, i: number, open: boolean, memo: Map<number, number> = new Map()): Ref | null {
+  const j = bracketEnd(s, i, memo);
+  if (j < 0) return null;
   const label: [number, number] = [i + 1, j];
   if (s[j + 1] !== "(") return null;
   let k = j + 2;
@@ -192,7 +209,8 @@ export const safeHref = (u: string) => (/^https?:\/\//i.test(u) || /^mailto:/i.t
 
 export function parseInline(s: string, opts: { open?: boolean; noLink?: boolean } = {}): Inl[] {
   const ts: Tok[] = [];
-  let buf = "", seq = 0;
+  let buf = "", seq = 0, stars = 0;
+  const brackets = new Map<number, number>();
   const flush = () => { if (buf) { ts.push(buf); buf = ""; } };
   const push = (n: Inl) => { flush(); ts.push(n); };
   for (let i = 0; i < s.length;) {
@@ -216,7 +234,7 @@ export function parseInline(s: string, opts: { open?: boolean; noLink?: boolean 
     }
     if (c === "$") { const m = mathAt(s, i); if (m) { push({ t: "math", v: m.v, display: m.display }); i = m.end; continue; } buf += c; i++; continue; }
     if (c === "!" && s[i + 1] === "[") {
-      const r = linkAt(s, i + 1, !!opts.open);
+      const r = linkAt(s, i + 1, !!opts.open, brackets);
       if (r) {
         if ("partial" in r) { i = s.length; continue; }
         push({ t: "img", src: r.dest, alt: inlineText(parseInline(s.slice(r.label[0], r.label[1]))) }); i = r.end; continue;
@@ -226,7 +244,7 @@ export function parseInline(s: string, opts: { open?: boolean; noLink?: boolean 
     if (c === "[") {
       const fn = /^\[\^(\d{1,4})\]/.exec(s.slice(i, i + 8)); // chỉ số: [^a-z] trong chữ thường là biểu thức chính quy
       if (fn) { push({ t: "fn", id: fn[1] }); i += fn[0].length; continue; }
-      const r = opts.noLink ? null : linkAt(s, i, !!opts.open);
+      const r = opts.noLink ? null : linkAt(s, i, !!opts.open, brackets);
       if (r) {
         const label = parseInline(s.slice(r.label[0], r.label[1]), { noLink: true });
         if ("partial" in r) { push({ t: "span", c: label }); i = s.length; continue; }
@@ -262,11 +280,13 @@ export function parseInline(s: string, opts: { open?: boolean; noLink?: boolean 
       // "**Lưu ý:**tiếp" và "**"trích"**x": CommonMark không đóng được, model viết thế khá nhiều, bản cũ vẫn in đậm đúng.
       if (c === "*" && n >= 2) { left = !wsA; right = !wsB; }
       // Phép nhân, lũy thừa viết thẳng ("2*3*4", "a**2 + b**2", "2*x + 3*y", "(a+b)*c*d") không phải dấu nhấn. Một sao kẹp giữa hai ký tự chỉ là nhấn khi đã có dấu mở ở đầu từ trước đó ("*x*y").
-      const arith = c === "*" && !starOpen(ts) && ((WORD.test(before) && DIGIT.test(after)) || (n === 1 && (WORD.test(before) || before === ")" || before === "]") && WORD.test(after)));
+      const arith = c === "*" && !stars && ((WORD.test(before) && DIGIT.test(after)) || (n === 1 && (WORD.test(before) || before === ")" || before === "]") && WORD.test(after)));
       if (arith || (c === "~" && n !== 2)) { buf += s.slice(i, i + n); i += n; continue; }
       const open = c === "_" ? left && (!right || pB) : left, close = c === "_" ? right && (!left || pA) : right;
       flush();
-      ts.push({ d: true, ch: c, n, orig: n, open, close, seq: seq++ });
+      const dl: Delim = { d: true, ch: c, n, orig: n, open, close, seq: seq++ };
+      ts.push(dl);
+      if (c === "*") stars = starDepth(stars, dl);
       i += n; continue;
     }
     if ((c === "h" || c === "H" || c === "w" || c === "W") && !opts.noLink && !WORD.test(lastChar(s, i))) {
