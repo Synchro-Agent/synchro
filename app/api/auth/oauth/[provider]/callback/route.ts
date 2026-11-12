@@ -3,6 +3,7 @@ import { connectIdentity, appUrl, audit, AuthError, clientIp, current, limit, oa
 import { afterClaim, noticeDropped } from "../../../../../claim";
 import { saveLink } from "../../../../../github";
 import { clearState, connectUser, finish, isProvider, purposeOf } from "../../../../../oauth";
+import { timed } from "../../../../../servertiming";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -55,11 +56,11 @@ async function done(req: Request, provider: string, params: URLSearchParams) {
   return new Response(null, { status: 303, headers: h });
 }
 
-export async function GET(req: Request, { params }: Ctx) {
+export const GET = timed(async (req: Request, { params }: Ctx) => {
   return done(req, (await params).provider, new URL(req.url).searchParams);
-}
+});
 
 // Apple trả kết quả bằng form POST (response_mode=form_post).
-export async function POST(req: Request, { params }: Ctx) {
+export const POST = timed(async (req: Request, { params }: Ctx) => {
   return done(req, (await params).provider, new URLSearchParams(await req.text()));
-}
+});

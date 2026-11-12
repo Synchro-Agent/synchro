@@ -1,13 +1,14 @@
 import { storedFile } from "../../../fileproc";
 import { current, featureGate } from "../../../authstore";
+import { timed } from "../../../servertiming";
 
 export const runtime = "nodejs";
 
 // GET ?id=<mã tệp> → ảnh (đã thu nhỏ khi tải lên) để thẻ tệp trong tin nhắn cũ vẫn hiện ảnh sau khi tải lại trang, như Claude.
-export async function GET(req: Request) {
+export const GET = timed(async (req: Request) => {
   const denied = featureGate(req, "files"); if (denied) return denied;
   const s = await storedFile(new URL(req.url).searchParams.get("id") ?? "", current(req)!.user.id);
   const img = s?.rec.blocks.find((b) => b.type === "image");
   if (!img || img.type !== "image") return new Response(null, { status: 404 });
   return new Response(Buffer.from(img.data, "base64"), { headers: { "Content-Type": img.media_type, "Cache-Control": "private, max-age=604800, immutable" } });
-}
+});

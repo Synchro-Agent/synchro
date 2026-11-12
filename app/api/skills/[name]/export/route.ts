@@ -1,12 +1,13 @@
 import { exportSkill, ExportError, zipResponse } from "../../../../skillexport";
 import { current, featureGate } from "../../../../authstore";
+import { timed } from "../../../../servertiming";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
 
 // Tải về skill thành tệp .zip: thư mục skill, mọi phiên bản cũ và toàn bộ thông tin (app/skillexport.ts). ?lang=en cho README tiếng Anh.
-export async function GET(req: Request, { params }: { params: Promise<{ name: string }> }) {
+export const GET = timed(async (req: Request, { params }: { params: Promise<{ name: string }> }) => {
   const denied = featureGate(req, "skills"); if (denied) return denied;
   const lang = new URL(req.url).searchParams.get("lang") === "en" ? "en" : "vi";
   try {
@@ -17,5 +18,5 @@ export async function GET(req: Request, { params }: { params: Promise<{ name: st
     console.error("[skills/export]", e);
     return Response.json({ error: lang === "en" ? "Could not export this skill." : "Không xuất được skill này." }, { status: 500 });
   }
-}
+});
 

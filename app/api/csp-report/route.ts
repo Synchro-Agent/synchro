@@ -1,5 +1,6 @@
 import { clientIp, limit } from "../../authstore";
 import { opsEvent } from "../../ops";
+import { timed } from "../../servertiming";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -14,7 +15,7 @@ const pathOf = (u: unknown) => { try { return new URL(String(u)).pathname.slice(
 
 // Báo cáo của CSP chạy thử (next.config.ts): cho biết chặn thật thì có gì hỏng, và có script lạ nào đang chạy không. Ai cũng gửi được nên chỉ giữ nguồn và đường dẫn,
 // không giữ truy vấn; giới hạn theo IP; không bao giờ báo lỗi về cho trình duyệt.
-export async function POST(req: Request) {
+export const POST = timed(async (req: Request) => {
   try {
     limit("csp:" + clientIp(req), 30, 10 * 60_000);
     if (Number(req.headers.get("content-length") ?? 0) > 16_384) return new Response(null, { status: 204 });
@@ -24,4 +25,4 @@ export async function POST(req: Request) {
     if (r) opsEvent("csp", String(r["effective-directive"] ?? r["violated-directive"] ?? "?").split(" ")[0].slice(0, 40), `${host(r["blocked-uri"])} @ ${pathOf(r["document-uri"])}`);
   } catch { /* quá giới hạn hoặc nội dung lạ: bỏ qua */ }
   return new Response(null, { status: 204 });
-}
+});

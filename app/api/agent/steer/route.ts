@@ -1,12 +1,13 @@
 import { current, sameOrigin } from "../../../authstore";
 import { agentInbox } from "../../../agentcore";
+import { timed } from "../../../servertiming";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 // Nhắn thêm khi agent của Synchro Code đang làm: không ngắt, agent nhận tin ở bước kế tiếp.
 // queued = false: lượt đã xong, trình duyệt gửi tin thành lượt mới.
-export async function POST(req: Request) {
+export const POST = timed(async (req: Request) => {
   const c = current(req);
   if (!c) return Response.json({ error: "Bạn cần đăng nhập." }, { status: 401 });
   try { sameOrigin(req); } catch { return Response.json({ error: "Yêu cầu không hợp lệ." }, { status: 403 }); }
@@ -17,4 +18,4 @@ export async function POST(req: Request) {
   if (!box) return Response.json({ queued: false });
   box.push(text);
   return Response.json({ queued: true });
-}
+});

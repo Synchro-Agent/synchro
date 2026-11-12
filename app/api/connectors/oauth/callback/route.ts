@@ -1,6 +1,7 @@
 import { finishAuth } from "../../../../connectors";
 import { randomToken } from "../../../../mcpauth";
 import { RULES_EN, VI2EN } from "../../../../i18n-dict";
+import { timed } from "../../../../servertiming";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -13,7 +14,7 @@ const en = (s: string) => { if (Object.prototype.hasOwnProperty.call(VI2EN, s)) 
 // bị tách khỏi trang đã mở nó: không còn window.opener. Vì vậy báo kết quả qua BroadcastChannel (cùng nguồn, không cần opener), chờ trang chính xác nhận rồi tự đóng.
 // Không trang nào xác nhận: thử tự đóng trước (cửa sổ bật lên, trang chính đã đóng hay đã chuyển đi: nạp cả ứng dụng vào cửa sổ nhỏ này là vô ích; kết nối vẫn đã xong).
 // Vẫn còn mở sau đó tức là đây là tab thường (đăng nhập ngay trong tab vì trình duyệt chặn cửa sổ bật lên) thì quay về Cài đặt → Connectors.
-export async function GET(req: Request) {
+export const GET = timed(async (req: Request) => {
   const r = await finishAuth(req, new URL(req.url).searchParams).catch((e) => ({ ok: false, id: undefined, message: `Lỗi không mong muốn: ${(e as Error).message}` }));
   const data = { type: "synchro-connector", ok: r.ok, id: r.id ?? null, message: r.message, nonce: randomToken(12) };
   const back = `/?settings=Connectors&connector=${r.ok ? "ok" : "error"}&msg=${encodeURIComponent(r.message)}`;
@@ -29,4 +30,4 @@ try{ch=new BroadcastChannel("synchro-connector");ch.onmessage=function(e){if(e.d
 try{if(window.opener&&!window.opener.closed){window.opener.postMessage(d,location.origin);done()}}catch(e){}
 setTimeout(function(){if(acked)return;window.close();setTimeout(function(){if(!acked)location.replace(${js(back)})},300)},${700})})()</script></body></html>`;
   return new Response(html, { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store", "referrer-policy": "no-referrer" } });
-}
+});

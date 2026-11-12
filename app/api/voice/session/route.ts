@@ -3,6 +3,7 @@ import { serviceKey } from "../../../providers";
 import { SpeechErr, addSpend, checkBudget, mintRealtime, plan } from "../../../speechapi";
 import { userContext } from "../../../memory";
 import { topRule } from "../../../brain";
+import { timed } from "../../../servertiming";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -30,7 +31,7 @@ const TOOLS = [{
 // Cấp một khoá tạm (client secret) cho trình duyệt nối thẳng tới ElevenLabs Realtime. Khoá API thật không rời máy chủ.
 // Không mở được Realtime (thiếu quyền, hết phút của gói…) nhưng vẫn có khóa: trình duyệt chuyển sang chế độ nối tiếp
 // (Scribe nghe → model chat trả lời → giọng ElevenLabs đọc), vẫn là giọng AI thật chứ không phải giọng của trình duyệt.
-export async function POST(req: Request) {
+export const POST = timed(async (req: Request) => {
   const c = current(req);
   if (!c) return Response.json({ error: "Bạn cần đăng nhập." }, { status: 401 });
   try { sameOrigin(req); } catch { return Response.json({ error: "Yêu cầu không hợp lệ." }, { status: 403 }); }
@@ -55,4 +56,4 @@ export async function POST(req: Request) {
     const cascade = err.code !== "key" && err.code !== "net" && err.code !== "no_key";
     return Response.json({ fallback: true, cascade, ...(cascade ? {} : { error: "Không kết nối được tới ElevenLabs. Tạm thời dùng giọng của trình duyệt." }) });
   }
-}
+});

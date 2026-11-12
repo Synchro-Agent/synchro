@@ -6,11 +6,12 @@ import { acquire, noteRefused, runningOf, withSlot } from "../../turngate";
 import { subCli } from "../../ai/subs";
 import { AUTO } from "../../router";
 import { afterTurn } from "../../brain";
+import { timed } from "../../servertiming";
 
 // Cổng duy nhất tới model của chat. Phần xử lý nằm ở chatengine.ts.
 // async: true (lượt chat chính) → tạo lượt chạy bền ở nền và trả ngay { run }; trình duyệt theo dõi qua /api/runs/<id>.
 const TOO_MANY = "Bạn đang có quá nhiều lượt chạy và chờ cùng lúc. Hãy chờ một lượt xong hoặc bấm Dừng rồi gửi lại.";
-export async function POST(req: Request) {
+export const POST = timed(async (req: Request) => {
   // Độ trễ từng chặng của lượt chat (tracing.ts): mốc yêu cầu tới và thời gian kiểm tra phiên.
   const at = Date.now();
   const c = current(req);
@@ -46,4 +47,4 @@ export async function POST(req: Request) {
   // Bộ não tổng hợp: lượt chat chạy thẳng (không nền) cũng được ghi nhận để chưng cất.
   if (res.status === 200 && body?.skills) void res.clone().json().then((j) => afterTurn(c.user, body, j)).catch(() => {});
   return res;
-}
+});

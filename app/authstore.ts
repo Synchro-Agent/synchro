@@ -8,6 +8,7 @@ import { allowsModel, FULL_PERMS, normPerms, type Feature, type Perms } from "./
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
+import { timeAuth, timed } from "./servertiming";
 
 export const DATA_DIR = process.env.DATA_DIR ?? path.join(process.cwd(), "data");
 export const COOKIE = "synchro_session";
@@ -357,7 +358,9 @@ export function createSession(u: UserRow, req: Request, method: string) {
 }
 export const clearSessionCookie = (req: Request) => cookie(req, COOKIE, "", 0);
 
-export function current(req: Request): { user: UserRow; session: SessionRow } | null {
+// Thời gian kiểm tra đăng nhập được tính vào phần auth của header Server-Timing (app/servertiming.ts).
+export function current(req: Request): { user: UserRow; session: SessionRow } | null { return timeAuth(() => sessionOf(req)); }
+function sessionOf(req: Request): { user: UserRow; session: SessionRow } | null {
   const t = readCookie(req, COOKIE);
   if (!t || t.length > 100) return null;
   const s = db().prepare("SELECT * FROM sessions WHERE id = ?").get(sha256(t)) as SessionRow | undefined;
@@ -846,15 +849,15 @@ export function adminRevokeSession(req: Request, admin: UserRow, sid: string) {
   audit("admin_revoke_session", { actor: admin, target: t, ip: clientIp(req) });
 }
 
-// Bọc route handler: AuthError → JSON lỗi; lỗi khác → 500 và ghi log.
+// Bọc route handler: AuthError → JSON lỗi; lỗi khác → 500 và ghi log. Mọi phản hồi mang header Server-Timing (auth / work / total).
 export function handle<A extends unknown[]>(fn: (req: Request, ...a: A) => Promise<Response> | Response) {
-  return async (req: Request, ...a: A) => {
+  return timed(async (req: Request, ...a: A) => {
     try { return await fn(req, ...a); } catch (e) {
       if (e instanceof AuthError) return Response.json({ error: e.message, ...e.extra }, { status: e.status });
       console.error("[auth]", e);
       return Response.json({ error: "Lỗi máy chủ. Vui lòng thử lại." }, { status: 500 });
     }
-  };
+  });
 }
 export const withCookies = (res: Response, ...cookies: string[]) => { cookies.forEach((c) => res.headers.append("Set-Cookie", c)); return res; };
 
