@@ -25,6 +25,38 @@ export function Confirm({ title, text, ok, onCancel, onOk, children }: { title: 
   );
 }
 
+/**
+ * Hộp xác nhận đăng xuất. "Xóa dữ liệu trên thiết bị này" (mặc định bật) xóa đoạn chat, dự án, phiên Code, bản nháp… của tài khoản khỏi
+ * trình duyệt; đăng nhập lại thì tải về từ máy chủ. Trước khi xóa, đẩy hết phần chưa lên máy chủ (flush); còn phần chưa lên được (mất mạng)
+ * thì báo và chờ bấm lần nữa, hoặc bỏ chọn để giữ lại. localOnly: số phiên Code chỉ lưu ở thiết bị này (chưa bật đồng bộ phiên).
+ */
+export function LogoutConfirm({ localOnly, flush, onCancel, onOk }: { localOnly: number; flush: () => Promise<number>; onCancel: () => void; onOk: (clear: boolean) => void }) {
+  const [clear, setClear] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [left, setLeft] = useState(0);
+  const go = async () => {
+    if (busy) return;
+    if (!clear || left > 0) { onOk(clear); return; }
+    setBusy(true);
+    const n = await flush().catch(() => 1);
+    setBusy(false);
+    if (n > 0) { setLeft(n); return; }
+    onOk(true);
+  };
+  const note: React.CSSProperties = { margin: "-8px 0 14px 26px", fontSize: 13, lineHeight: "19px" };
+  return (
+    <Confirm title="Đăng xuất?" text="Bạn có chắc chắn muốn đăng xuất không? Dữ liệu của bạn vẫn được giữ cho lần đăng nhập sau." ok={busy ? "Đang lưu lên máy chủ…" : clear && left > 0 ? "Vẫn xóa và đăng xuất" : "Đăng xuất"} onCancel={onCancel} onOk={() => void go()}>
+      <label style={{ display: "flex", gap: 8, alignItems: "flex-start", margin: "0 0 14px", fontSize: 14 }}>
+        <input type="checkbox" style={{ marginTop: 3, flex: "none" }} checked={clear} disabled={busy} onChange={(e) => { setClear(e.target.checked); setLeft(0); }} />
+        <span>Xóa dữ liệu trên thiết bị này</span>
+      </label>
+      {clear && <p style={note}>Đoạn chat, dự án và bản nháp của tài khoản này được xóa khỏi trình duyệt. Đăng nhập lại thì tải về từ máy chủ.</p>}
+      {clear && localOnly > 0 && <p style={note}>Phiên Code chỉ lưu trên thiết bị này (chưa bật Đồng bộ phiên ở Cài đặt → Synchro Code) cũng sẽ bị xóa.</p>}
+      {clear && left > 0 && <p role="alert" style={{ ...note, color: "var(--danger,#c4453c)" }}>Một số đoạn chat hoặc phiên Code chưa lên được máy chủ (mất mạng hoặc máy chủ lỗi). Xóa bây giờ sẽ mất phần đó. Bỏ chọn ô trên để giữ lại trên thiết bị này.</p>}
+    </Confirm>
+  );
+}
+
 // Hỏi một dòng chữ, thay cho hộp hỏi có sẵn của trình duyệt: hộp đó không theo giao diện, không dịch được nút và chặn cả trang. Gắn vào <body> vì nơi gọi có thể nằm trong khung cuộn.
 export function AskText({ title, init = "", ok, need, onCancel, onOk }: { title: string; init?: string; ok: string; need?: boolean; onCancel: () => void; onOk: (v: string) => void }) {
   const [v, setV] = useState(init);

@@ -71,20 +71,28 @@ export function pushSession(id: number, title: string, data: Record<string, unkn
   next.timer = setTimeout(() => flushSession(id), 1200);
   pending.set(id, next);
 }
-export async function flushSession(id: number) {
+/** true: đã gửi xong (hoặc không có gì chờ); false: chưa gửi được (bản trên thiết bị này vẫn còn). */
+export async function flushSession(id: number): Promise<boolean> {
   const p = pending.get(id);
-  if (!p) return;
+  if (!p) return true;
   pending.delete(id);
   if (p.timer) clearTimeout(p.timer);
   const r = await fetch("/api/code/sessions", { method: "PUT", headers: { "content-type": "application/json" }, keepalive: JSON.stringify(p.data).length < 60_000,
     body: JSON.stringify({ id, title: p.title, data: p.data, base: bases.get(id) ?? 0, ...(p.pinned !== undefined ? { pinned: p.pinned } : {}) }) }).catch(() => null);
-  if (!r?.ok) return;
-  const j = (await r.json()) as { updated: number; merged: boolean; data?: Record<string, unknown> };
+  if (!r?.ok) return false;
+  const j = (await r.json().catch(() => null)) as { updated: number; merged: boolean; data?: Record<string, unknown> } | null;
+  if (!j) return false;
   bases.set(id, j.updated);
   if (j.merged && j.data) p.onMerged?.(j.data, j.updated);
+  return true;
 }
 /** Gửi ngay mọi phiên đang chờ (đóng tab, đổi phiên). */
-export function flushAll() { for (const id of [...pending.keys()]) flushSession(id); }
+export function flushAll() { for (const id of [...pending.keys()]) void flushSession(id); }
+/** Đăng xuất kèm xóa dữ liệu trên thiết bị: gửi ngay mọi phiên đang chờ và chờ kết quả. Trả về số phiên chưa gửi được. */
+export async function flushAllNow(): Promise<number> {
+  const r = await Promise.all([...pending.keys()].map((id) => flushSession(id)));
+  return r.filter((x) => !x).length;
+}
 if (typeof window !== "undefined") window.addEventListener("pagehide", flushAll);
 
 /** Gộp bản trên máy chủ vào bản trên thiết bị này. */

@@ -19,6 +19,27 @@ export const ls = {
   clear() { for (const k of this.keys()) this.remove(k); },
 };
 
+/**
+ * Đăng xuất kèm "Xóa dữ liệu trên thiết bị này": xóa mọi khóa u:<uid>:* của tài khoản đó (đoạn chat, dự án, phiên Code, hướng dẫn, cài đặt)
+ * trong localStorage và sessionStorage, cùng bản nháp ô soạn tin (sessionStorage draft:<uid>). Cài đặt của cả trình duyệt (giao diện, ngôn ngữ)
+ * và dữ liệu của tài khoản khác giữ nguyên. App chưa dùng IndexedDB; khi có kho IndexedDB theo tài khoản thì xóa thêm ở đây.
+ * Trả về số khóa đã xóa.
+ */
+export function clearAccountData(uid: string): number {
+  if (!uid || uid === "anon") return 0;
+  const p = `u:${uid}:`;
+  let n = 0;
+  for (const get of [() => localStorage, () => sessionStorage]) {
+    try {
+      const st = get();
+      const keys: string[] = [];
+      for (let i = 0; i < st.length; i++) { const k = st.key(i); if (k !== null && (k.startsWith(p) || k === `draft:${uid}`)) keys.push(k); }
+      for (const k of keys) { st.removeItem(k); n++; }
+    } catch { /* bộ nhớ trình duyệt bị chặn: không có gì để xóa */ }
+  }
+  return n;
+}
+
 // Dữ liệu từ trước khi có tài khoản (không có tiền tố) là của chủ web: chuyển một lần vào vùng của tài khoản quản trị.
 const LEGACY = (k: string) => !k.startsWith("u:") && !GLOBAL.has(k) && (k.startsWith("p:") || k.startsWith("codeS:") || ["chats", "projects", "model", "banner"].includes(k));
 export function adoptLegacyData(id: string) {
