@@ -1,30 +1,30 @@
 import { limit, sameOrigin } from "../../../authstore";
-import { disconnectApp, listApps } from "../../../composio";
-import { composioSummary, connectorUser, policyOf, route } from "../shared";
+import { composioInfo, linkComposio, unlinkComposio } from "../../../connectors";
+import { connectorUser, policyOf, route } from "../shared";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-// Composio của tài khoản: trạng thái và các ứng dụng đã kết nối (Gmail, Slack…). ?retry=1: thử tạo lại phiên ngay (nút Thử lại).
-// Danh sách ứng dụng tải mới có hạn mức theo tài khoản và cả máy chủ (listApps "page"): khóa Composio là khóa chung, không để một tài khoản gọi liên tục làm hỏng cho mọi người.
+// Composio của bạn: trạng thái liên kết (không liệt kê ứng dụng: ứng dụng được liên kết trên trang của Composio).
 export const GET = route(async (req) => {
   const user = connectorUser(req);
-  const policy = policyOf(user);
-  const retry = new URL(req.url).searchParams.get("retry") === "1";
-  if (retry) limit("cx:" + user.id, 20, 10 * 60_000);
-  const s = await composioSummary(user, policy, retry);
-  if (s.state !== "active") return Response.json({ ...s, list: [] });
-  try { return Response.json({ ...s, list: await listApps(user.id, retry || "page") }); }
-  catch (e) { return Response.json({ ...s, list: [], appsError: (e as Error).message }); }
+  return Response.json({ composio: composioInfo(user.id, policyOf(user)) });
 });
 
-// Ngắt một ứng dụng khỏi Composio (chỉ ứng dụng của chính tài khoản này): ?id=<mã tài khoản đã kết nối>.
+// "Liên kết Composio": {} → đăng nhập Composio trong cửa sổ bật lên (trả authorizeUrl); { key: "ck_…" } (Nâng cao) → thử khóa với Composio rồi lưu (mã hóa).
+export const POST = route(async (req) => {
+  sameOrigin(req);
+  const user = connectorUser(req);
+  limit("cx:" + user.id, 30, 10 * 60_000);
+  const body = await req.json().catch(() => ({}));
+  const policy = policyOf(user);
+  const r = await linkComposio(req, user.id, policy, { key: (body as { key?: unknown })?.key });
+  return Response.json({ authorizeUrl: r.authorizeUrl, connector: r.connector, composio: composioInfo(user.id, policy) });
+});
+
+// "Ngắt liên kết": Synchro quên token / khóa Composio của tài khoản này.
 export const DELETE = route(async (req) => {
   sameOrigin(req);
   const user = connectorUser(req);
-  const policy = policyOf(user);
-  limit("cx:" + user.id, 20, 10 * 60_000);
-  const app = await disconnectApp(user.id, new URL(req.url).searchParams.get("id") ?? "");
-  const s = await composioSummary(user, policy);
-  return Response.json({ ...s, removed: app.name, list: await listApps(user.id, true).catch(() => []) });
+  return Response.json({ composio: unlinkComposio(user.id, policyOf(user)) });
 });

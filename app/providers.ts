@@ -17,13 +17,11 @@ export const BUILTIN: Record<string, Builtin> = {
   xai: { kind: "xai", name: "Grok", vendor: "xAI", base: "https://api.x.ai/v1", keyUrl: "https://console.x.ai", prefix: "xai-" },
   deepseek: { kind: "deepseek", name: "DeepSeek", vendor: "DeepSeek", base: "https://api.deepseek.com", keyUrl: "https://platform.deepseek.com/api_keys", prefix: "sk-" },
   elevenlabs: { kind: "elevenlabs", name: "ElevenLabs", vendor: "ElevenLabs", base: "https://api.elevenlabs.io", keyUrl: "https://elevenlabs.io/app/settings/api-keys", prefix: "sk_" },
-  // Connector chính của mọi người (app/composio.ts): một khóa dự án Composio cho cả Synchro. COMPOSIO_BASE_URL: API giả lập khi chạy thử.
-  composio: { kind: "composio", name: "Composio", vendor: "Composio", base: process.env.COMPOSIO_BASE_URL || "https://backend.composio.dev/api/v3.1", keyUrl: "https://platform.composio.dev", prefix: "" },
   // Tạo ảnh (FLUX 1.1 Pro Ultra, IC-Light) bằng khóa của chủ máy chủ: app/ai/replicate.ts. Chưa có khóa thì ảnh vẫn đi qua gói của từng người.
   replicate: { kind: "replicate", name: "Replicate", vendor: "Replicate", base: "https://api.replicate.com/v1", keyUrl: "https://replicate.com/account/api-tokens", prefix: "r8_" },
 };
 /** Dịch vụ không phải model chat (giọng nói, connector, tạo ảnh): không có model trong bộ chọn model, không tính là khóa chat dùng chung. */
-export const SERVICE_KINDS: ReadonlySet<ProviderKind> = new Set<ProviderKind>(["elevenlabs", "composio", "replicate"]);
+export const SERVICE_KINDS: ReadonlySet<ProviderKind> = new Set<ProviderKind>(["elevenlabs", "replicate"]);
 export const isService = (kind: string) => SERVICE_KINDS.has(kind as ProviderKind);
 
 type Row = { id: string; kind: ProviderKind; name: string; base_url: string | null; workspace_id?: string | null; enc_key: string; key_hint: string; models: string; status: string; error: string | null; info: string | null; checked_at: number | null; created_at: number; updated_at: number };
@@ -37,6 +35,8 @@ function table() {
       models TEXT NOT NULL DEFAULT '[]', status TEXT NOT NULL DEFAULT 'ok', error TEXT, info TEXT, checked_at INTEGER, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL)`);
     // Khóa Anthropic không gắn với workspace: mỗi lời gọi phải nêu workspace, nên lưu kèm khóa (không phải bí mật).
     if (!(d.prepare("PRAGMA table_info(api_providers)").all() as { name: string }[]).some((c) => c.name === "workspace_id")) d.exec("ALTER TABLE api_providers ADD COLUMN workspace_id TEXT");
+    // Khóa dự án Composio dùng chung đã bỏ (mỗi người tự liên kết Composio của mình): không giữ khóa cũ của quản trị viên trong cơ sở dữ liệu.
+    d.prepare("DELETE FROM api_providers WHERE id = 'composio' OR kind = 'composio'").run();
     ready = true;
   }
   return d;
@@ -176,11 +176,6 @@ async function listAll(kind: ProviderKind, base: string, key: string, workspace?
     const tier = j?.subscription?.tier as string | undefined;
     return { models: [], info: tier || undefined };
   }
-  if (kind === "composio") {
-    // Kiểm tra khóa bằng danh sách tài khoản đã kết nối (chỉ đọc, một mục): khóa sai thì Composio trả 401.
-    await getJson(`${b}/connected_accounts?limit=1`, { "x-api-key": key });
-    return { models: [] };
-  }
   if (kind === "replicate") {
     // GET /v1/account kiểm tra khóa (tên tài khoản hiện ở thẻ), rồi đọc sẵn lược đồ tham số của hai model.
     const { checkKey } = await import("./ai/replicate");
@@ -271,10 +266,11 @@ export async function resolveModel(key: string, o: { untested?: boolean } = {}):
   if (v && v.id === provider) return { provider, kind: v.kind, base: v.base.replace(/\/+$/, ""), key: v.key, model: id, ...(v.workspace ? { workspace: v.workspace } : {}) };
   return null;
 }
-// Khóa cho dịch vụ không phải chat (ElevenLabs, Composio, Replicate): khóa quản trị viên nhập ở Providers, không có thì lấy ở biến môi trường.
-const ENV_KEY: Record<"elevenlabs" | "composio" | "replicate", string> = { elevenlabs: "ELEVENLABS_API_KEY", composio: "COMPOSIO_API_KEY", replicate: "REPLICATE_API_TOKEN" };
+// Khóa cho dịch vụ không phải chat (ElevenLabs, Replicate): khóa quản trị viên nhập ở Providers, không có thì lấy ở biến môi trường.
+// Composio không còn khóa dự án chung: mỗi tài khoản tự liên kết Composio Connect của mình (app/composio.ts).
+const ENV_KEY: Record<"elevenlabs" | "replicate", string> = { elevenlabs: "ELEVENLABS_API_KEY", replicate: "REPLICATE_API_TOKEN" };
 const envKeyOf = (id: string) => (id in ENV_KEY ? process.env[ENV_KEY[id as keyof typeof ENV_KEY]] ?? "" : "");
-export function serviceKey(id: "elevenlabs" | "composio" | "replicate"): { key: string; base: string } | null {
+export function serviceKey(id: "elevenlabs" | "replicate"): { key: string; base: string } | null {
   const r = rowById(id);
   if (r) { try { return { key: open(r.enc_key), base: (r.base_url || BUILTIN[id].base).replace(/\/+$/, "") }; } catch { return null; } }
   const k = envKeyOf(id);

@@ -10,6 +10,9 @@ import { lazyView } from "./lazy";
 import { AskCard } from "./askcard";
 import { CiteText, hasCite } from "./cites";
 import { TokLine, useHighlight } from "./highlight";
+import { connectName, isConnectUrl, tidyConnectLinks } from "./cxlink";
+// Trang đang chạy bản giả lập ở máy cục bộ: nhận cả Connect Link của Composio giả lập.
+const cxLocal = () => typeof location !== "undefined" && /^(localhost|127\.0\.0\.1)$/.test(location.hostname);
 
 // Khung artifact và sơ đồ chỉ cần khi câu trả lời có hình minh họa: không nằm trong phần tải đầu của trang chat.
 const ArtifactFrame = lazyView(() => import("./artifactui").then((m) => m.ArtifactFrame), null);
@@ -36,7 +39,9 @@ function inl(ns: Inl[], w?: boolean): React.ReactNode[] {
       case "math": return <MathView key={i} v={n.v} display={n.display} />;
       case "img": return <MdImage key={i} src={n.src} alt={n.alt} />;
       case "fn": return <sup key={i} className="md-fnref">{n.id}</sup>;
-      case "a": return <a key={i} href={n.href} {...(/^mailto:/i.test(n.href) ? {} : { target: "_blank", rel: "noopener noreferrer" })}>{inl(n.c, w)}</a>;
+      // Connect Link của Composio model lỡ chép vào câu trả lời: hiện thành nút "Kết nối <Ứng dụng>" như thẻ trong khung chat, không phải link trần.
+      case "a": if (isConnectUrl(n.href, cxLocal())) { const name = connectName(inlineText(n.c)); return <a key={i} className="btn dark md-cxlink" href={n.href} target="_blank" rel="noopener noreferrer" data-notr><I.SetPlug size={13} />{name ? tr(`Kết nối ${name}`) : tr("Mở trang kết nối")}<I.External size={12} /></a>; }
+        return <a key={i} href={n.href} {...(/^mailto:/i.test(n.href) ? {} : { target: "_blank", rel: "noopener noreferrer" })}>{inl(n.c, w)}</a>;
       case "span": return <Fragment key={i}>{inl(n.c, w)}</Fragment>;
       default: { const T = n.t; return <T key={i}>{inl(n.c, w)}</T>; }
     }
@@ -299,7 +304,8 @@ const TopView = memo(function TopView({ top, x }: { top: Top; x: Ctx }) { return
 // live: thẻ hỏi lại còn bấm được. streaming: câu trả lời đang viết (chữ hiện dần ở đoạn cuối).
 export const Markdown = memo(function Markdown({ text: text0, say, dev, viz, live, streaming }: { text: string; say: (m: string) => void; dev?: DevCtx; viz?: boolean; live?: boolean; streaming?: boolean }) {
   // Đang viết: ẩn tạm khối công thức / bảng còn dở (streamSafe) để không nháy chữ thô.
-  const { text, meta } = useMemo(() => { const t = streaming ? streamSafe(text0) : text0; return dev ? splitMeta(t) : { text: t, meta: null }; }, [text0, !!dev, !!streaming]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Connect Link của Composio: bỏ bản lặp và mục "Sources:" chỉ chứa link đó (cxlink.ts), lần đầu còn lại hiện thành nút.
+  const { text, meta } = useMemo(() => { const t = tidyConnectLinks(streaming ? streamSafe(text0) : text0, cxLocal()); return dev ? splitMeta(t) : { text: t, meta: null }; }, [text0, !!dev, !!streaming]); // eslint-disable-line react-hooks/exhaustive-deps
   const { tops, lines } = useMemo(() => parseMarkdown(text), [text]);
   const x: Ctx = { say, dev, viz, live, tail: streaming ? lines - 3 : Infinity, last: streaming ? lines - 1 : Infinity };
   return (

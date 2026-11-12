@@ -17,7 +17,8 @@ const ReconnectCard = lazyView(() => import("./connectorsui").then((m) => m.Reco
 // at / end: lúc bắt đầu, lúc có kết quả (giờ máy chủ) — đồng hồ giây của công cụ đang chạy và thời gian đã chạy khi xong.
 export type ToolItem = { seq: number; label: string; ok?: boolean; sum?: string; args?: string; at?: number; end?: number };
 // ask: lượt đang chờ bạn duyệt (dùng trình duyệt trên trang chưa được phép, công cụ connector). conn: connector cần kết nối lại (nút ngay trong khung chat).
-export type ConnPart = { k: "conn"; id: string; name: string; logo?: string; color?: string; auth?: string; refused?: boolean };
+// link: Composio chưa liên kết (thẻ có nút "Liên kết Composio").
+export type ConnPart = { k: "conn"; id: string; name: string; logo?: string; color?: string; auth?: string; refused?: boolean; link?: boolean };
 // plans: chưa tạo được ảnh vì gói (chưa đăng nhập, hết hạn mức): nút mở Providers ngay trong khung chat. why: lý do, tried: gói đã thử.
 export type PlansPart = { k: "plans"; why: string; tried: string[] };
 // link: Connect Link Composio vừa tạo (chỉ địa chỉ của Composio, máy chủ đã lọc): nút đăng nhập ứng dụng ngay trong khung chat.
@@ -178,10 +179,11 @@ export function WorkParts({ parts, live, render, onAnswer }: { parts: Part[]; li
     : <ToolGroup key={i} items={p.items} live={live} />))}</>;
 }
 /** Câu trả lời đã xong: nút kết nối lại vẫn hiện ngoài phần tổng kết thu gọn (người dùng vừa được bảo bấm nó). */
-export function ConnCards({ parts }: { parts?: Part[] }) {
+// text: câu trả lời; link Connect Link đã có trong câu trả lời thì đã hiện thành nút ở đó (md.tsx), không lặp lại thẻ bên dưới.
+export function ConnCards({ parts, text }: { parts?: Part[]; text?: string }) {
   const list = (parts ?? []).filter((p): p is ConnPart => p.k === "conn");
   const plans = (parts ?? []).find((p): p is PlansPart => p.k === "plans");
-  const links = (parts ?? []).filter((p): p is LinkPart => p.k === "link");
+  const links = (parts ?? []).filter((p): p is LinkPart => p.k === "link" && !(text ?? "").includes(p.url));
   // Đồng hồ thử lại của connector bị giới hạn tốc độ: chỉ hiện khi câu trả lời xong chưa quá 1 giờ kể từ lúc thử lại được.
   const rates = (parts ?? []).filter((p): p is RatePart => p.k === "rate" && p.until > Date.now() - 3_600_000);
   // Mở lại đoạn chat khi connector đã nối xong từ trước (bằng thẻ này hay trong Cài đặt) thì không nhắc nữa. Hỏi máy chủ không được thì vẫn hiện thẻ.
@@ -191,8 +193,9 @@ export function ConnCards({ parts }: { parts?: Part[] }) {
   useEffect(() => {
     if (!sig) return;
     let on = true;
-    fetch("/api/connectors").then((r) => (r.ok ? r.json() : null)).then((j: { connectors?: { id: string; status: string }[] } | null) => {
-      if (on && j?.connectors) setFine(sig.split(",").filter((id) => { const c = j.connectors!.find((x) => x.id === id); return !c || c.status === "ok"; }));
+    fetch("/api/connectors").then((r) => (r.ok ? r.json() : null)).then((j: { connectors?: { id: string; status: string }[]; composio?: { connector?: { id: string; status: string } | null } } | null) => {
+      const all = j?.connectors ? [...j.connectors, ...(j.composio?.connector ? [j.composio.connector] : [])] : null;
+      if (on && all) setFine(sig.split(",").filter((id) => { const c = all.find((x) => x.id === id); return !c || c.status === "ok"; }));
     }).catch(() => {});
     return () => { on = false; };
   }, [sig]);

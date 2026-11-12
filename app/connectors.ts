@@ -13,7 +13,7 @@ import { catalogLine } from "./connproxy";
 import { coerceArgs } from "./connschema";
 import { authorizeRejected, authorizeUrl, checkIssuer, discover, exchangeCode, metadataHint, parseWww, randomToken, refreshTokens, registerClient, TokenRejected, type AsMeta, type OAuthClient, type Tokens } from "./mcpauth";
 import { checkUrl, FetchBlocked, TempFail } from "./safefetch";
-import { annotate, COMPOSIO, COMPOSIO_COLOR, COMPOSIO_NAME, COMPOSIO_PROMPT, ComposioError, composioKey, createSession, EXEC_TOOL, execRead, KEY_REJECTED, keyPrint, NO_KEY } from "./composio";
+import { annotate, COMPOSIO, COMPOSIO_COLOR, COMPOSIO_LINK_PROMPT, COMPOSIO_NAME, COMPOSIO_PROMPT, CONNECT_URL, EXEC_TOOL, execRead, KEY_HEADER, keyOk, MANAGE_URL, maskKey } from "./composio";
 
 export type Perm = "allow" | "chat" | "ask" | "block";
 export const PERMS: Perm[] = ["allow", "chat", "ask", "block"];
@@ -35,9 +35,10 @@ const CONNECT_MS = 28_000;
 
 // mode "token": token / API key người dùng tự nhập (key: tên header và giá trị, mã hóa cùng enc_auth, không bao giờ trả về trình duyệt).
 // scopeNeeded: một công cụ vừa báo thiếu quyền: connector vẫn chạy, chờ người dùng bấm "Cấp thêm quyền".
-// mode "composio": connector Composio của tài khoản (app/composio.ts). Chỉ lưu mã phiên và dấu vân tay của khóa; khóa thật lấy lúc gọi.
+// Composio (dir "composio"): connector Composio Connect của chính tài khoản, đăng nhập OAuth hoặc khóa ck_ như mọi connector (app/composio.ts).
+// mode "composio" chỉ còn ở hàng cũ của chế độ khóa dự án dùng chung đã bỏ: migrateComposio đưa chúng về trạng thái chưa liên kết.
 type Auth = {
-  mode: "none" | "oauth" | "token" | "composio"; session?: string; fp?: string; preset?: { clientId?: string; clientSecret?: string }; client?: OAuthClient; redirect?: string;
+  mode: "none" | "oauth" | "token" | "composio"; preset?: { clientId?: string; clientSecret?: string }; client?: OAuthClient; redirect?: string;
   as?: Pick<AsMeta, "issuer" | "token_endpoint" | "authorization_response_iss_parameter_supported">; resource?: string; scope?: string; tokens?: Tokens;
   key?: { header: string; value: string }; scopeNeeded?: { scope: string; tool?: string };
   /** Địa chỉ resource_metadata máy chủ khai báo trong header 401: lần đăng nhập lại không có 401 nào trong tay vẫn tìm đúng máy chủ đăng nhập. */
@@ -53,7 +54,7 @@ type Row = {
 export type PublicTool = { name: string; title: string; description: string; readOnly: boolean; guessed?: boolean; destructive: boolean; perm: Perm; locked?: "setting" | "admin" };
 export type PublicConnector = {
   id: string; name: string; url: string; host: string; dir: string | null; logo?: string; color?: string; icon?: string; enabled: boolean;
-  status: "ok" | "needs_auth" | "forbidden" | "error"; error: string | null; serverName: string | null; auth: "none" | "oauth" | "token" | "composio"; tools: PublicTool[]; checkedAt: number | null;
+  status: "ok" | "needs_auth" | "forbidden" | "error"; error: string | null; serverName: string | null; auth: "none" | "oauth" | "token"; tools: PublicTool[]; checkedAt: number | null;
   settings: ConnSettings; adminBlocked: boolean;
   /** Lỗi tạm thời gần nhất khi kiểm tra lại (connector vẫn dùng được). */
   lastError: string | null;
@@ -90,6 +91,7 @@ function table() {
     if (!cols.has("perms_gone")) d.exec("ALTER TABLE connectors ADD COLUMN perms_gone TEXT");
     if (!cols.has("empty_seen")) d.exec("ALTER TABLE connectors ADD COLUMN empty_seen INTEGER");
     ready = true;
+    migrateComposio();
   }
   return d;
 }
@@ -145,72 +147,86 @@ function publicOf(r: Row, pol: ConnPolicy = FULL_CONN): PublicConnector {
   const a = getAuth(r);
   let host = r.url;
   try { host = new URL(r.url).host; } catch {}
-  // Composio: địa chỉ phiên không cần cho trình duyệt.
   const cx = r.dir === COMPOSIO;
   return {
-    id: r.id, name: r.name, url: cx ? "" : r.url, host: cx ? "composio.dev" : host, dir: r.dir, logo: dir?.logo, color: cx ? COMPOSIO_COLOR : dir?.color, icon: dir?.logo ? undefined : r.icon ?? undefined, enabled: !!r.enabled,
-    status: r.status as PublicConnector["status"], error: r.error, serverName: r.server_name, auth: a.mode, tools, checkedAt: r.checked_at, settings: st, adminBlocked: !allowsDir(pol, r.dir),
+    id: r.id, name: r.name, url: r.url, host, dir: r.dir, logo: dir?.logo, color: cx ? COMPOSIO_COLOR : dir?.color, icon: dir?.logo ? undefined : r.icon ?? undefined, enabled: !!r.enabled,
+    status: r.status as PublicConnector["status"], error: r.error, serverName: r.server_name, auth: a.mode === "composio" ? "none" : a.mode, tools, checkedAt: r.checked_at, settings: st, adminBlocked: !allowsDir(pol, r.dir),
     lastError: r.status === "ok" ? r.last_error : null, vendorBlocked: vendorBlock(r, a),
     needsScope: !!a.scopeNeeded, toolsTotal: r.tools_total,
     ...(a.mode === "token" && a.key ? { tokenHeader: a.key.header } : {}), ...(a.preset?.clientId ? { ownClient: true } : {}),
   };
 }
 
-// Connector người dùng tự thêm (kể cả connector từ danh mục cũ đã thêm trước đây). Composio nằm riêng (composioConnector).
+// Connector người dùng tự thêm (kể cả connector từ danh mục cũ đã thêm trước đây). Composio nằm riêng (composioInfo).
 export const listConnectors = (uid: string, pol: ConnPolicy = FULL_CONN) => (table().prepare("SELECT * FROM connectors WHERE user_id = ? AND (dir IS NULL OR dir != ?) ORDER BY created_at").all(uid, COMPOSIO) as Row[]).map((r) => publicOf(r, pol));
-const composioRow = (uid: string) => table().prepare("SELECT * FROM connectors WHERE user_id = ? AND dir = ? ORDER BY created_at LIMIT 1").get(uid, COMPOSIO) as Row | undefined;
-export const composioConnector = (uid: string, pol: ConnPolicy = FULL_CONN): PublicConnector | null => { const r = composioRow(uid); return r ? publicOf(r, pol) : null; };
 
-// ---- Composio: mỗi tài khoản một hàng connector, tạo tự động khi quản trị viên đã thêm khóa ----
-// Phiên tạo một lần rồi dùng lại; khóa đổi sang dự án khác (dấu vân tay khác) hoặc Composio báo phiên không còn thì tạo phiên mới (giữ quyền công cụ đã đặt).
-export type ComposioStatus = "active" | "no_key" | "blocked" | "error";
-const cxBusy = new Map<string, Promise<void>>();
-const cxFailed = new Map<string, number>();
-const CX_RETRY = 60_000;
-async function renewSession(id: string) {
-  const r = rowById(id);
-  if (!r) throw new ConnectorError("Connector đã bị gỡ.", 404);
-  const s = await createSession(r.user_id);
-  table().prepare("UPDATE connectors SET url = ?, era = NULL, updated_at = ? WHERE id = ?").run(s.url, Date.now(), id);
-  saveAuth(id, { mode: "composio", session: s.session, fp: s.fp });
+// ---- Composio của bạn: mỗi tài khoản có sẵn một hàng connector trỏ tới Composio Connect, chờ người dùng bấm "Liên kết Composio" ----
+const cxRow = (uid: string) => table().prepare("SELECT * FROM connectors WHERE user_id = ? AND dir = ? ORDER BY created_at LIMIT 1").get(uid, COMPOSIO) as Row | undefined;
+const linkedAuth = (a: Auth) => (a.mode === "oauth" && !!a.tokens) || (a.mode === "token" && !!a.key);
+// Về trạng thái chưa liên kết: bỏ token / khóa, danh sách công cụ, lỗi, phiên đăng nhập đang chờ và quyền "cho phép trong cuộc trò chuyện". Giữ quyền từng công cụ,
+// cài đặt và OAuth client đã đăng ký với Composio (không bí mật; liên kết lại khỏi phải đăng ký lần nữa).
+function unlinkRow(id: string, a: Auth) {
+  const keep: Auth = { mode: "none", ...(a.mode === "oauth" || a.mode === "none" ? { client: a.client, redirect: a.redirect, as: a.as, prm: a.prm, preset: a.preset } : {}) };
+  const t = table();
+  t.prepare("UPDATE connectors SET url = ?, era = NULL, status = 'needs_auth', error = NULL, last_error = NULL, tools = '[]', tools_total = NULL, server_name = NULL, checked_at = NULL, empty_seen = NULL, enc_auth = ?, updated_at = ? WHERE id = ?")
+    .run(CONNECT_URL, sealSecret(JSON.stringify(keep)), Date.now(), id);
+  t.prepare("DELETE FROM connector_auth WHERE connector_id = ?").run(id);
+  t.prepare("DELETE FROM connector_grants WHERE connector_id = ?").run(id);
+  refreshing.delete(id);
 }
-/** Có khóa và được phép: bảo đảm tài khoản có connector Composio với phiên còn hợp lệ và danh sách công cụ. Lỗi được ghi lên hàng, không ném ra. */
-export async function ensureComposio(uid: string, pol: ConnPolicy = FULL_CONN, force = false): Promise<ComposioStatus> {
-  const k = composioKey();
-  if (!k) return "no_key";
-  if (!allowsDir(pol, COMPOSIO)) return "blocked";
-  const cur = composioRow(uid);
-  const fine = (r: Row) => r.status === "ok" && getAuth(r).fp === keyPrint(k.key);
-  if (cur && fine(cur) && !force) return "active";
-  // Lần trước vừa hỏng: không gọi Composio lại ở mỗi lượt chat, chờ một phút (bấm Thử lại thì force).
-  if (!force && Date.now() - (cxFailed.get(uid) ?? 0) < CX_RETRY) return cur?.status === "ok" ? "active" : "error";
-  let p = cxBusy.get(uid);
-  if (!p) {
-    p = (async () => {
-      let r = composioRow(uid);
-      try {
-        if (!r) {
-          const s = await createSession(uid);
-          r = composioRow(uid);
-          if (!r) {
-            const id = "cn_" + randomToken(9), now = Date.now();
-            table().prepare("INSERT INTO connectors (id, user_id, name, url, dir, enabled, status, enc_auth, created_at, updated_at, settings) VALUES (?, ?, ?, ?, ?, 1, 'needs_auth', ?, ?, ?, '{}')")
-              .run(id, uid, COMPOSIO_NAME, s.url, COMPOSIO, sealSecret(JSON.stringify({ mode: "composio", session: s.session, fp: s.fp } satisfies Auth)), now, now);
-            r = rowById(id)!;
-          }
-        } else if (getAuth(r).fp !== keyPrint(k.key) || !getAuth(r).session) await renewSession(r.id);
-        await syncTools(r.id, AbortSignal.timeout(CONNECT_MS));
-        cxFailed.delete(uid);
-      } catch (e) {
-        cxFailed.set(uid, Date.now());
-        if (r && rowById(r.id)) syncFailed(r.id, e);
-      }
-    })().finally(() => cxBusy.delete(uid));
-    cxBusy.set(uid, p);
+// Chế độ khóa dự án Composio dùng chung đã bỏ: hàng cũ của chế độ đó (mode "composio", phiên Tool Router) và hàng trỏ tới máy chủ Composio khác
+// (đổi COMPOSIO_CONNECT_URL) về trạng thái chưa liên kết, để người dùng thấy nút "Liên kết Composio" thay vì một connector hỏng. Hàng thừa (nhiều hơn một) thì gỡ.
+function migrateComposio() {
+  const d = db();
+  const rows = d.prepare("SELECT * FROM connectors WHERE dir = ? ORDER BY created_at").all(COMPOSIO) as Row[];
+  const seen = new Set<string>();
+  for (const r of rows) {
+    if (seen.has(r.user_id)) { for (const x of ["connector_auth", "connector_grants"]) d.prepare(`DELETE FROM ${x} WHERE connector_id = ?`).run(r.id); d.prepare("DELETE FROM connectors WHERE id = ?").run(r.id); continue; }
+    seen.add(r.user_id);
+    const a = getAuth(r);
+    if (a.mode === "composio" || r.url !== CONNECT_URL) unlinkRow(r.id, a.mode === "composio" ? { mode: "none" } : a);
   }
-  await p;
-  const after = composioRow(uid);
-  return after && after.status === "ok" ? "active" : "error";
+}
+/** Hàng Composio của tài khoản (tạo sẵn khi chưa có, nếu quản trị viên cho tài khoản dùng Composio). */
+function ensureCx(uid: string, pol: ConnPolicy): Row | null {
+  if (!allowsDir(pol, COMPOSIO)) return null;
+  const r = cxRow(uid);
+  if (r) return r;
+  const id = "cn_" + randomToken(9), now = Date.now();
+  table().prepare("INSERT INTO connectors (id, user_id, name, url, dir, enabled, status, enc_auth, created_at, updated_at, settings) VALUES (?, ?, ?, ?, ?, 1, 'needs_auth', ?, ?, ?, '{}')")
+    .run(id, uid, COMPOSIO_NAME, CONNECT_URL, COMPOSIO, sealSecret(JSON.stringify({ mode: "none" } satisfies Auth)), now, now);
+  return rowById(id)!;
+}
+export type ComposioInfo = { state: "linked" | "unlinked" | "blocked"; via?: "oauth" | "key"; keyHint?: string; manageUrl: string; connector: PublicConnector | null };
+/** Trạng thái "Composio của bạn" cho trang Connectors và menu +. Không có bí mật nào: khóa ck_ chỉ hiện dạng che. */
+export function composioInfo(uid: string, pol: ConnPolicy = FULL_CONN): ComposioInfo {
+  const r = ensureCx(uid, pol);
+  if (!r) return { state: "blocked", manageUrl: MANAGE_URL, connector: null };
+  const a = getAuth(r);
+  const on = linkedAuth(a);
+  return { state: on ? "linked" : "unlinked", ...(on ? { via: a.mode === "token" ? "key" as const : "oauth" as const } : {}), ...(on && a.mode === "token" && a.key ? { keyHint: maskKey(a.key.value) } : {}), manageUrl: MANAGE_URL, connector: publicOf(r, pol) };
+}
+const KEY_BAD = "Composio từ chối khóa này. Hãy kiểm tra lại khóa ck_ ở Composio → Settings → Sessions & API Key.";
+/** "Liên kết Composio": key (khóa ck_ ở mục Nâng cao) được thử với Composio trước khi lưu; không có key thì đăng nhập OAuth trong cửa sổ bật lên (authorizeUrl). */
+export async function linkComposio(req: Request, uid: string, pol: ConnPolicy, o: { key?: unknown }) {
+  const r = ensureCx(uid, pol);
+  if (!r) throw new ConnectorError("Quản trị viên chưa cho phép tài khoản của bạn dùng Composio.", 403);
+  const key = String(o.key ?? "").trim();
+  if (key) {
+    if (!keyOk(key)) throw new ConnectorError("Khóa Composio không hợp lệ. Khóa người dùng của Composio bắt đầu bằng ck_ (Composio → Settings → Sessions & API Key).");
+    // Composio từ chối khóa: nói rõ là khóa Composio, không phải lời chung "token hoặc API key".
+    return connect(req, uid, r.id, pol, { token: key, header: KEY_HEADER }).catch((e) => { throw e instanceof ConnectorError && e.status === 400 ? new ConnectorError(KEY_BAD) : e; });
+  }
+  const a = getAuth(r);
+  // Đang dùng khóa ck_ mà bấm đăng nhập: người dùng chủ động đổi sang đăng nhập OAuth.
+  if (a.mode === "token") unlinkRow(r.id, a);
+  return connect(req, uid, r.id, pol, a.mode === "oauth" && a.tokens ? { force: true } : {});
+}
+/** "Ngắt liên kết": Synchro quên token / khóa Composio của tài khoản này (ứng dụng trên Composio vẫn nguyên, liên kết lại là dùng tiếp). */
+export function unlinkComposio(uid: string, pol: ConnPolicy = FULL_CONN) {
+  const r = cxRow(uid);
+  if (r) unlinkRow(r.id, getAuth(r));
+  return composioInfo(uid, pol);
 }
 
 // ---- token: làm mới khi sắp hết hạn; mỗi connector chỉ làm mới một lần cùng lúc (refresh token có thể chỉ dùng được một lần) ----
@@ -281,27 +297,14 @@ async function freshAuth(id: string, force = false): Promise<Auth> {
 }
 
 function newClient(r: Row, a: Auth) {
-  if (a.mode === "composio") {
-    // Khóa lấy ngay lúc gọi: quản trị viên đổi khóa thì lời gọi sau dùng khóa mới, không phải sửa hàng của từng người.
-    const k = composioKey();
-    if (!k) throw new ConnectorError(NO_KEY, 503);
-    return new McpClient(r.url, undefined, (r.era as Era) || undefined, { header: "x-api-key", value: k.key });
-  }
   return new McpClient(r.url, a.tokens?.access_token, (r.era as Era) || undefined, a.mode === "token" ? a.key : undefined);
 }
-// Phiên Composio không còn (Composio xóa phiên, hoặc khóa đã đổi sang dự án khác): máy chủ trả 404 / 410 ngay ở cửa.
-const sessionGone = (e: unknown) => e instanceof McpError && e.kind === "protocol" && (e.status === 404 || e.status === 410);
 const isAuthErr = (e: unknown): e is McpError => e instanceof McpError && (e.kind === "auth" || e.kind === "scope" || e.kind === "forbidden");
 // Chạy một thao tác với máy chủ MCP; gặp 401 thì làm mới token và thử lại một lần, vẫn lỗi thì đánh dấu "cần kết nối lại".
 // Thiếu quyền (insufficient_scope) chỉ là chuyện của một công cụ: connector vẫn chạy, ghi lại quyền cần xin để người dùng bấm "Cấp thêm quyền".
 // Lỗi mạng, lỗi tạm thời của hãng, lỗi của riêng công cụ không đổi trạng thái connector.
 async function withClient<T>(id: string, fn: (c: McpClient) => Promise<T>, cache?: Map<string, McpClient>, toolName?: string): Promise<T> {
   let a = await freshAuth(id);
-  // Composio: khóa vừa đổi (dấu vân tay khác) thì tạo phiên mới trước khi gọi.
-  if (a.mode === "composio") {
-    const k = composioKey();
-    if (k && a.fp !== keyPrint(k.key)) { cache?.delete(id); await renewSession(id).catch((e) => { throw e instanceof ComposioError ? new ConnectorError(e.message, e.status) : e; }); a = await freshAuth(id); }
-  }
   for (let attempt = 0; ; attempt++) {
     const r = rowById(id);
     if (!r) throw new ConnectorError("Connector đã bị gỡ.", 404);
@@ -318,12 +321,6 @@ async function withClient<T>(id: string, fn: (c: McpClient) => Promise<T>, cache
       if (e instanceof McpError && e.kind === "rpc") { if (!cache) await c.close(); throw e; }
       cache?.delete(id);
       await c.close();
-      if (a.mode === "composio") {
-        if (sessionGone(e) && attempt === 0) { await renewSession(id).catch((x) => { throw x instanceof ComposioError ? new ConnectorError(x.message, x.status) : x; }); a = await freshAuth(id); continue; }
-        // Composio từ chối khóa: lỗi của quản trị viên, không phải của người dùng; không có trang đăng nhập nào để mở.
-        if (e instanceof McpError && (e.kind === "auth" || e.kind === "forbidden")) throw new McpError(KEY_REJECTED, "protocol", e.status);
-        throw e;
-      }
       if (e instanceof McpError && (e.kind === "auth" || e.kind === "forbidden") && attempt === 0 && a.tokens?.refresh_token && a.mode === "oauth") { a = await freshAuth(id, true); continue; }
       if (e instanceof McpError && e.kind === "auth") markStatus(id, "needs_auth", e.message);
       // 403 khi gọi một công cụ có thể chỉ là không có quyền với dữ liệu đó; 403 cả ở danh sách công cụ (không có toolName) mới là connector bị từ chối.
@@ -372,7 +369,7 @@ async function syncTools(id: string, signal?: AbortSignal) {
 
 // Lấy lại danh sách công cụ ở nền, không chờ: hãng vừa báo danh sách đổi, hoặc lượt chat mở mà danh sách đã cũ. Mỗi connector không quá một lần trong gap, kể cả khi lần trước lỗi.
 const nudged = new Map<string, number>();
-const NUDGE_GAP = 60_000, STALE_TOOLS = 3600_000;
+const NUDGE_GAP = 60_000, STALE_TOOLS = 3600_000, STALE_CX = 10 * 60_000;
 function nudgeSync(id: string, gap: number) {
   const now = Date.now();
   if (now - (nudged.get(id) ?? 0) < gap) return;
@@ -500,15 +497,8 @@ export function connect(req: Request, uid: string, id: string, pol: ConnPolicy =
 async function connectNow(req: Request, uid: string, id: string, pol: ConnPolicy, o: { force?: boolean } & Creds, stop: AbortSignal): Promise<{ connector: PublicConnector; authorizeUrl?: string }> {
   const row = rowOf(uid, id);
   if (!allowsDir(pol, row.dir)) throw new ConnectorError(row.dir ? "Quản trị viên chưa cho phép tài khoản của bạn dùng connector này." : "Quản trị viên chưa cho phép tài khoản của bạn dùng connector tùy chỉnh.", 403);
-  // Composio: không có đăng nhập riêng, kết nối lại là tạo phiên mới (nếu cần) rồi lấy lại công cụ.
-  if (row.dir === COMPOSIO) {
-    if (!composioKey()) throw new ConnectorError(NO_KEY, 503);
-    try {
-      if (row.status !== "ok") await renewSession(id);
-      await syncTools(id, stop);
-    } catch (e) { syncFailed(id, e); throw new ConnectorError(errText(e), e instanceof ComposioError ? e.status : e instanceof TempFail ? 503 : 502); }
-    return { connector: publicOf(rowById(id)!, pol) };
-  }
+  // Composio: luôn trỏ tới máy chủ Composio Connect đang cấu hình (hàng cũ trỏ chỗ khác thì về chưa liên kết trước khi đăng nhập).
+  if (row.dir === COMPOSIO && row.url !== CONNECT_URL) unlinkRow(id, getAuth(row));
   followDirectory(row);
   await applyCreds(req, id, o, stop);
   const a = getAuth(rowById(id)!);
@@ -683,7 +673,9 @@ export function updateConnector(uid: string, id: string, o: { enabled?: unknown;
 }
 
 export function removeConnector(uid: string, id: string) {
-  if (rowOf(uid, id).dir === COMPOSIO) throw new ConnectorError("Composio do Synchro quản lý nên không gỡ được. Bạn có thể tắt nó, hoặc ngắt từng ứng dụng đã kết nối.");
+  // Composio của bạn có sẵn cho mọi tài khoản: gỡ là ngắt liên kết (về nút "Liên kết Composio").
+  const r = rowOf(uid, id);
+  if (r.dir === COMPOSIO) { unlinkRow(id, getAuth(r)); return; }
   const t = table();
   t.prepare("DELETE FROM connectors WHERE id = ?").run(id);
   t.prepare("DELETE FROM connector_auth WHERE connector_id = ?").run(id);
@@ -702,7 +694,8 @@ export const removeUserConnectors = (uid: string) => {
 export type ChatTool = { fq: string; cid: string; cname: string; logo?: string; color?: string; icon?: string; tool: McpTool; composio?: boolean };
 /** Connector đang bật mà chưa dùng được (cần đăng nhập lại, đang lỗi, hãng chưa duyệt): model được báo để nói với người dùng, khung chat có nút kết nối lại. */
 // name: có thể kèm địa chỉ khi hai connector trùng tên; base: tên gốc. auth: token tự nhập thì thẻ kết nối lại cho nhập token, không có trang đăng nhập để mở.
-export type OfflineConn = { id: string; name: string; base?: string; logo?: string; color?: string; why: "auth" | "error" | "vendor"; auth?: Auth["mode"]; refused?: boolean };
+// why "link": Composio có sẵn nhưng người dùng chưa liên kết tài khoản Composio của mình (thẻ trong chat là nút "Liên kết Composio").
+export type OfflineConn = { id: string; name: string; base?: string; logo?: string; color?: string; why: "auth" | "error" | "vendor" | "link"; auth?: Auth["mode"]; refused?: boolean };
 
 // Tên công cụ gửi cho model: "<connector>__<công cụ>", chỉ chữ, số, _ và -. Các hãng giới hạn tên công cụ 64 ký tự và CLI còn thêm tiền tố của nó trước tên
 // (mcp__synchro__ dài 14 ký tự trên Claude Code và Codex, mcp_synchro_ trên Antigravity), nên chỉ dùng 50 ký tự. Dài hơn thì cắt và thêm mã băm ngắn, ổn định giữa các lượt.
@@ -728,9 +721,9 @@ export class ConnectorSession {
   // "Cho phép trong cuộc trò chuyện này" khi lượt không có mã cuộc trò chuyện: vẫn có hiệu lực tới hết lượt.
   private turnGrants = new Set<string>();
   constructor(public uid: string, private ctx: { conv?: string; project?: boolean; pol: ConnPolicy }) {
-    // Composio chỉ có mặt khi quản trị viên còn giữ khóa (gỡ khóa thì biến mất khỏi lượt chat, không thành "cần kết nối lại").
-    const cxOn = !!composioKey();
-    const rows = (table().prepare("SELECT * FROM connectors WHERE user_id = ? AND enabled = 1 ORDER BY created_at").all(uid) as Row[]).filter((r) => r.dir !== COMPOSIO || cxOn);
+    // Composio của bạn có sẵn (chưa liên kết thì model được dặn mời người dùng liên kết khi cần ứng dụng bên ngoài).
+    ensureCx(uid, ctx.pol);
+    const rows = table().prepare("SELECT * FROM connectors WHERE user_id = ? AND enabled = 1 ORDER BY created_at").all(uid) as Row[];
     const used = new Set<string>();
     // Hai connector trùng tên (hai tài khoản Notion, hai máy chủ nội bộ): kèm địa chỉ để thẻ duyệt và model phân biệt được đang đụng tới đâu.
     const label = (r: Row) => {
@@ -746,17 +739,19 @@ export class ConnectorSession {
       if (!allowsDir(ctx.pol, r.dir) || !(ctx.project ? st.projects : st.chat)) continue;
       const dir = DIRECTORY.find((x) => x.id === r.dir);
       const cname = label(r);
+      const cx = r.dir === COMPOSIO;
       if (r.status !== "ok") {
         const a = getAuth(r);
-        this.offline.push({ id: r.id, name: cname, base: r.name, logo: dir?.logo, color: dir?.color, why: vendorBlock(r, a) ? "vendor" : r.status === "needs_auth" || r.status === "forbidden" ? "auth" : "error", auth: a.mode });
+        this.offline.push({ id: r.id, name: cname, base: r.name, logo: dir?.logo, color: cx ? COMPOSIO_COLOR : dir?.color, why: cx && !linkedAuth(a) ? "link" : vendorBlock(r, a) ? "vendor" : r.status === "needs_auth" || r.status === "forbidden" ? "auth" : "error", auth: a.mode });
         continue;
       }
-      // Lượt này dùng danh sách đang có; lượt sau thấy công cụ hãng vừa thêm, khỏi chờ tới lần kiểm tra lại 12 giờ.
-      if (r.checked_at && Date.now() - r.checked_at > STALE_TOOLS) nudgeSync(r.id, STALE_TOOLS);
+      // Lượt này dùng danh sách đang có; lượt sau thấy công cụ hãng vừa thêm, khỏi chờ tới lần kiểm tra lại 12 giờ. Composio: công cụ meta không đổi
+      // (ứng dụng vừa liên kết trên trang Composio dùng được ngay), vẫn xem lại sau 10 phút cho chắc.
+      const stale = cx ? STALE_CX : STALE_TOOLS;
+      if (r.checked_at && Date.now() - r.checked_at > stale) nudgeSync(r.id, stale);
       const perms = json<Record<string, Perm>>(r.perms, {});
       for (const tool of json<McpTool[]>(r.tools, [])) {
         if ((perms[tool.name] ?? defaultPerm(tool)) === "block" || lockOf(tool, st, ctx.pol)) continue;
-        const cx = r.dir === COMPOSIO;
         const ct: ChatTool = { fq: fqName(r.name, tool.name, used), cid: r.id, cname, logo: dir?.logo, color: cx ? COMPOSIO_COLOR : dir?.color, icon: dir?.logo ? undefined : r.icon ?? undefined, tool, ...(cx ? { composio: true } : {}) };
         this.tools.push(ct);
         this.by.set(ct.fq, ct);
@@ -871,8 +866,9 @@ Với hành động thay đổi dữ liệu (tạo, sửa, xóa, gửi), chỉ l
 // Connector đang bật mà không dùng được: model phải nói thật với người dùng thay vì coi như chưa từng có.
 function offlineNote(s: ConnectorSession) {
   if (!s.offline.length) return "";
-  const auth = s.offline.filter((c) => c.why !== "vendor").map((c) => c.name), vendor = s.offline.filter((c) => c.why === "vendor").map((c) => c.name);
+  const auth = s.offline.filter((c) => c.why === "auth" || c.why === "error").map((c) => c.name), vendor = s.offline.filter((c) => c.why === "vendor").map((c) => c.name);
   return [
+    s.offline.some((c) => c.why === "link") ? COMPOSIO_LINK_PROMPT : "",
     auth.length ? `Các connector sau đã thêm nhưng đang cần kết nối lại nên chưa có công cụ: ${auth.join(", ")}. Nếu câu hỏi cần tới chúng, hãy nói rõ với người dùng và gọi ${RECONNECT_TOOL.name} để hiện nút kết nối lại ngay trong khung chat; đừng đoán dữ liệu và đừng nói là họ chưa từng kết nối.` : "",
     vendor.length ? `Các connector sau chưa kết nối được vì nhà cung cấp chưa duyệt Synchro: ${vendor.join(", ")}. Nếu câu hỏi cần tới chúng, hãy nói rõ điều đó; người dùng có thể thử token riêng trong Cài đặt → Connectors.` : "",
   ].filter(Boolean).join("\n");
@@ -880,7 +876,7 @@ function offlineNote(s: ConnectorSession) {
 /** Công cụ hiện nút kết nối lại trong khung chat; chỉ có khi đang có connector cần kết nối lại. */
 export const RECONNECT_TOOL = {
   name: "connector_reconnect",
-  description: "Hiện nút \"Kết nối lại\" trong khung chat cho một connector đang cần đăng nhập lại (danh sách ở phần connector trong hướng dẫn). Sau đó hãy nói người dùng bấm nút rồi nhắc lại yêu cầu.",
+  description: "Hiện nút \"Kết nối lại\" trong khung chat cho một connector đang cần đăng nhập lại, hoặc nút \"Liên kết Composio\" khi Composio chưa liên kết (danh sách ở phần connector trong hướng dẫn). Sau đó hãy nói người dùng bấm nút rồi nhắc lại yêu cầu.",
   input_schema: { type: "object", properties: { connector: { type: "string", description: "Tên connector" } }, required: ["connector"] },
 };
 // Tên công cụ (không kèm mô tả) theo từng connector, mỗi connector tối đa ~2.000 ký tự: đủ để model biết có gì mà tìm, vài nghìn token thay vì
