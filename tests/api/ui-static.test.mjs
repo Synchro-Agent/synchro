@@ -57,5 +57,15 @@ ok(/className="overlay ft-lightbox"/.test(lb) && /role="dialog" aria-modal="true
   ok(en("+6 nguồn") === "+6 sources" && en("+1 nguồn") === "+1 source", "bản tiếng Anh của +N nguồn", en("+6 nguồn"));
 }
 
+// U12: trang Speech không còn trống 2 giây chờ gói ElevenLabs — bố cục và khối giả hiện ngay, gói chỉ điền phần credit / công cụ.
+{
+  const v = read("app/speech/view.tsx"), p = read("app/speech/parts.tsx"), css = read("app/speech/speech.css");
+  ok(/const planFailed = usePlanFailed\(\);\s*const waiting = !plan && !planFailed;/.test(v), "Speech: biết lúc gói còn đang đọc (hook gọi vô điều kiện)");
+  ok(/if \(!plan && !failed\) return \(\s*<div className="sp-home" aria-busy="true">/.test(v) && /\{recentList\}\s*<\/div>\s*\);\s*if \(!plan \|\| !plan\.connected\)/.test(v), "Speech: trang chính dựng ngay ô soạn, thẻ công cụ, mục Gần đây trong lúc chờ gói");
+  ok(/waiting && <span className="sk-blk sp-credit-wait"/.test(v) && /waiting && \[[\d, ]+\]\.map\(\(w, i\) => <span key=\{i\} className="sk-blk sp-tab-wait"/.test(v), "Speech: chỗ credit và thanh công cụ có khối giả");
+  ok(!/<Spin \/> Đang đọc gói ElevenLabs…/.test(p) && /export function ToolWait\(\)/.test(p), "Speech: trang công cụ chờ gói bằng khung giả, không còn chỉ một vòng xoay");
+  ok(/\.sp-credit-wait \{/.test(css) && /\.sp-wait-card \{/.test(css), "Speech: kiểu khối giả có trong speech.css");
+}
+
 console.log(`\n${pass} đạt, ${fail} hỏng`);
 if (fail) process.exit(1);

@@ -7,7 +7,7 @@ import { SideToggle } from "../brand";
 import * as I from "../icons";
 import { useApp } from "../store";
 import { GROUPS, STARTERS, TOOLS, normTool, toolDef, toolOn, type SpeechTool } from "./data";
-import { KIND_LABEL, KIND_TOOL, ago, defaultVoice, fmtNum, refreshPlan, useItems, useMyVoices, usePlan, type Voice } from "./client";
+import { KIND_LABEL, KIND_TOOL, ago, defaultVoice, fmtNum, refreshPlan, useItems, useMyVoices, usePlan, usePlanFailed, type Voice } from "./client";
 import { Dock, NotReady, Player, VoiceChip, VoicePicker } from "./parts";
 import { TOOL_ICON } from "./toolicons";
 import { TTS } from "./tts";
@@ -25,6 +25,10 @@ export type ToolProps = { say: (m: string) => void; sub: string; setSub: (s: str
 export function SpeechView({ say, tool: raw, setTool, sideOpen, onSide }: { say: (m: string) => void; tool: SpeechTool; setTool: (t: SpeechTool) => void; sideOpen: boolean; onSide: () => void }) {
   const admin = !!useApp().me?.isAdmin;
   const plan = usePlan();
+  // Gói ElevenLabs còn đang đọc (lần gọi đầu có thể mất vài giây): khung trang, thẻ, danh sách gần đây hiện ngay; chỉ phần credit và
+  // danh sách công cụ (theo gói) chờ — hiện khối giả đúng chỗ.
+  const planFailed = usePlanFailed();
+  const waiting = !plan && !planFailed;
   const mine = useMyVoices();
   const tool = normTool(raw);
   const [subs, setSubs] = useState<Partial<Record<SpeechTool, string>>>({});
@@ -55,10 +59,12 @@ export function SpeechView({ say, tool: raw, setTool, sideOpen, onSide }: { say:
             </button>
           )}
           {plan?.connected && !plan.readPlan && <span className="sp-demo" title={plan.note ?? ""}><i />Chưa đọc được gói</span>}
+          {waiting && <span className="sk-blk sp-credit-wait" aria-hidden />}
         </div>
       </div>
       <nav className="sp-tabs" aria-label="Công cụ Speech">
         {tools.map((t) => { const Ic = TOOL_ICON[t.k]; return <button key={t.k} className={tool === t.k ? "on" : ""} onClick={() => setTool(t.k)}><Ic size={15} />{t.label}</button>; })}
+        {waiting && [64, 88, 72, 96, 60, 80].map((w, i) => <span key={i} className="sk-blk sp-tab-wait" style={{ width: w }} aria-hidden />)}
       </nav>
       <div className="sp-body" key={tool}>
         {plan?.connected && plan.note && <div className="sp-note sp-planote"><I.Alert size={14} />{plan.note}</div>}
@@ -99,7 +105,39 @@ function Home({ go, onDraft, say, voice, setVoice, admin }: ToolProps & { onDraf
   const [hint, setHint] = useState(0);
   const [recent] = useItems([]);
   useEffect(() => { const t = setInterval(() => setHint((h) => (h + 1) % HINTS.length), 3800); return () => clearInterval(t); }, []);
+  const failed = usePlanFailed();
   const model = plan?.tts.find((m) => m.id === "eleven_v4") ?? plan?.tts[0];
+  const recentList = (
+    <>
+      <div className="sp-sec-h"><b>Gần đây</b></div>
+      <div className="sp-recent">
+        {recent === null && <div className="sp-empty">Đang tải…</div>}
+        {recent?.length === 0 && <div className="sp-empty">Âm thanh và bản chép lời bạn tạo sẽ nằm ở đây.</div>}
+        {recent?.slice(0, 8).map((r) => (
+          <div key={r.id} className="sp-rrow">
+            <div className="sp-rmeta"><b data-notr>{r.title}</b><span>{KIND_LABEL[r.kind] ?? r.kind}{r.meta.voiceName ? ` · ${r.meta.voiceName}` : ""} · {ago(r.createdAt)}</span></div>
+            {r.url && r.mime?.startsWith("audio") ? <Player src={r.url} dl={r.url} label={r.title} /> : <button className="btn" onClick={() => go(normTool(KIND_TOOL[r.kind] ?? "home"), r.kind === "align" ? "align" : undefined)}>Mở</button>}
+          </div>
+        ))}
+      </div>
+    </>
+  );
+  // Gói còn đang đọc: dựng ngay bố cục trang chính (ô soạn, thẻ công cụ, gần đây) bằng khối giả; gói về thì thay bằng phần thật.
+  if (!plan && !failed) return (
+    <div className="sp-home" aria-busy="true">
+      <h1 className="sp-hero">Bạn muốn <em>tạo</em> gì hôm nay?</h1>
+      <span className="sr-only" role="status">Đang đọc gói ElevenLabs…</span>
+      <div className="sp-compose sp-wait" aria-hidden><span className="sk-blk sp-wait-ta" /><div className="sp-compose-f"><span className="sk-blk sp-wait-chip" /><span className="sk-blk sp-wait-go" /></div></div>
+      <div className="sp-quick sp-wait" aria-hidden>{QUICK.map((q) => <span key={q.label} className="sk-blk sp-wait-q" />)}</div>
+      {GROUPS.map((g) => (
+        <section key={g.label} className="sp-grp-home" aria-hidden>
+          <div className="sp-sec-h"><b>{g.label}</b></div>
+          <div className="sp-cards">{g.tools.map((k) => <span key={k} className="sk-blk sp-wait-card" />)}</div>
+        </section>
+      ))}
+      {recentList}
+    </div>
+  );
   if (!plan || !plan.connected) return <div className="sp-home"><h1 className="sp-hero">Bạn muốn <em>tạo</em> gì hôm nay?</h1><NotReady admin={admin} /></div>;
   const quick = QUICK.filter((q) => toolOn(plan, q.t));
   return (
@@ -147,17 +185,7 @@ function Home({ go, onDraft, say, voice, setVoice, admin }: ToolProps & { onDraf
           </section>
         );
       })}
-      <div className="sp-sec-h"><b>Gần đây</b></div>
-      <div className="sp-recent">
-        {recent === null && <div className="sp-empty">Đang tải…</div>}
-        {recent?.length === 0 && <div className="sp-empty">Âm thanh và bản chép lời bạn tạo sẽ nằm ở đây.</div>}
-        {recent?.slice(0, 8).map((r) => (
-          <div key={r.id} className="sp-rrow">
-            <div className="sp-rmeta"><b data-notr>{r.title}</b><span>{KIND_LABEL[r.kind] ?? r.kind}{r.meta.voiceName ? ` · ${r.meta.voiceName}` : ""} · {ago(r.createdAt)}</span></div>
-            {r.url && r.mime?.startsWith("audio") ? <Player src={r.url} dl={r.url} label={r.title} /> : <button className="btn" onClick={() => go(normTool(KIND_TOOL[r.kind] ?? "home"), r.kind === "align" ? "align" : undefined)}>Mở</button>}
-          </div>
-        ))}
-      </div>
+      {recentList}
       <a className="sp-classifier" href="https://elevenlabs.io/ai-speech-classifier" target="_blank" rel="noreferrer">
         <I.ShieldCheck size={18} /><span><b>Kiểm tra một đoạn âm thanh có phải do AI tạo ra</b><small>Công cụ chính thức của ElevenLabs (chưa có API), mở ở tab mới</small></span><I.External size={14} />
       </a>

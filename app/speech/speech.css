@@ -767,3 +767,34 @@
 }
 @media (max-width:768px){.sp-script-t {font-size:15px
 }}
+/* Gói ElevenLabs còn đang đọc (view.tsx, parts.tsx ToolWait): khối giả đúng chỗ của credit, thẻ công cụ, ô soạn; nền ánh dùng chung .sk-blk (globals.css). */
+.sp-credit-wait {width:168px;height:28px;border-radius:var(--r-pill)
+}
+.sp-tab-wait {height:30px;border-radius:var(--r-pill)
+}
+.sp-wait .sk-blk {display:block
+}
+.sp-wait-ta {width:100%;height:66px;border-radius:10px
+}
+.sp-compose.sp-wait .sp-compose-f {display:flex;align-items:center;gap:8px;margin-top:10px
+}
+.sp-wait-chip {width:132px;height:30px;border-radius:var(--r-pill)
+}
+.sp-wait-go {width:140px;height:34px;margin-left:auto;border-radius:var(--r-pill)
+}
+.sp-wait-q {height:64px;border-radius:var(--r-card)
+}
+.sp-cards .sp-wait-card {display:block;height:132px;border-radius:var(--r-card)
+}
+.sp-wait-tool {display:flex;flex-direction:column;gap:12px
+}
+.sp-wait-tool .sk-blk {display:block
+}
+.sp-wait-l1 {width:42%;height:18px
+}
+.sp-wait-l2 {width:68%;height:14px
+}
+.sp-wait-box {width:100%;height:160px;border-radius:10px
+}
+@media (max-width:600px){.sp-credit-wait {width:96px
+}}
