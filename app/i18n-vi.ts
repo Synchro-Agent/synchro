@@ -403,7 +403,7 @@ Object.assign(EN2VI, {
   "libraries have a license that does not allow copying; Synchro looks for open alternatives with the same skills.": "thư viện có giấy phép không cho sao chép; Synchro tìm thư viện mở có skill tương đương để thay.",
   "Categories": "Mục ngành nghề", "No libraries match.": "Không có thư viện nào khớp.",
   "Install all": "Cài tất cả", "Install all in": "Cài tất cả mục", "Not installed": "Chưa cài",
-  "Only skills whose license allows copying are installed. Skills with a closed license (such as Anthropic's docx, pdf, pptx and xlsx) are skipped; Synchro creates those files with code execution instead.": "Chỉ cài skill có giấy phép cho phép sao chép. Skill có giấy phép đóng (như docx, pdf, pptx và xlsx của Anthropic) được bỏ qua; Synchro tạo các loại tệp đó bằng chạy code.",
+  "Only skills whose license allows copying are installed. Skills with a closed license are skipped.": "Chỉ cài skill có giấy phép cho phép sao chép. Skill có giấy phép đóng được bỏ qua.",
   "Tickets & tasks": "Phiếu việc & nhiệm vụ", "Pipelines & jobs": "Pipeline & tác vụ", "Notes & memory": "Ghi chú & bộ nhớ", "Reference docs": "Tài liệu tham khảo",
   "Websites": "Trang web", "Databases": "Cơ sở dữ liệu", "Contacts & leads": "Liên hệ & khách tiềm năng", "Servers & cloud": "Máy chủ & đám mây", "Logs & errors": "Nhật ký & lỗi",
   "Product": "Sản phẩm", "Research": "Nghiên cứu", "Financial services": "Dịch vụ tài chính", "Jobs & career": "Việc làm & sự nghiệp", "IT & security": "CNTT & bảo mật",

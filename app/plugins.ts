@@ -224,7 +224,8 @@ function scan(entries: Entry[]) {
   return { risk, flags: [...flags], scripts: scripts.length };
 }
 
-// Anthropic giữ bản quyền các skill Office (docx, pdf, pptx, xlsx) và plugin trong repo claude-code: không được sao chép ra ngoài dịch vụ của họ.
+// Giấy phép độc quyền kiểu Anthropic ("© … Anthropic, PBC. All rights reserved." rồi điều khoản dịch vụ): không được sao chép ra ngoài dịch vụ của họ.
+// Skill Office (docx, pdf, pptx, xlsx) của anthropics/skills từng dùng giấy phép này; từ commit 2c5958e (11/2026) LICENSE.txt của chúng là Apache-2.0.
 const PROPRIETARY_HINT = /Anthropic[\s\S]{0,40}All rights reserved/i;
 
 async function readPackage(repo: string, commit: string, src: Source): Promise<Found[]> {

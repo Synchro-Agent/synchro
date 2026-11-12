@@ -439,7 +439,7 @@ export function SkillHub() {
           )}
           {cats.map(([c, list]) => <div key={c}><div className="pl-sec">{c}</div><div className="pl-dgrid">{list.map(card)}</div></div>)}
           <ClaudeDirectory q={q} onOpen={setOpen} onChanged={() => { load(); fire(); }} />
-          <p className="d pl-tip"><I.ShieldCheck size={14} />Only skills whose license allows copying are installed. Skills with a closed license (such as Anthropic&apos;s docx, pdf, pptx and xlsx) are skipped; Synchro creates those files with code execution instead.</p>
+          <p className="d pl-tip"><I.ShieldCheck size={14} />Only skills whose license allows copying are installed. Skills with a closed license are skipped.</p>
         </>
       )}
 

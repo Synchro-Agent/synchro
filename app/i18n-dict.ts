@@ -1214,7 +1214,7 @@ Object.assign(VI2EN, {
     "For the Document button: Anthropic's internal-comms, doc-coauthoring (co-writing docs, proposals and specs step by step) and theme-factory, Vercel's writing-guidelines, UI/UX Pro Max's brand (brand voice). .docx / .pdf files are made by running code (python-docx, reportlab).",
   "playwright-cli của Microsoft, webapp-testing, mcp-builder và skill-creator của Anthropic, react-best-practices và composition-patterns của Vercel. Hợp với Synchro Code.":
     "Microsoft's playwright-cli, Anthropic's webapp-testing, mcp-builder and skill-creator, Vercel's react-best-practices and composition-patterns. A good fit for Synchro Code.",
-  "Các skill độc quyền (docx, pdf, pptx, xlsx) bị bỏ qua vì giấy phép không cho sao chép.": "Proprietary skills (docx, pdf, pptx, xlsx) are skipped because their license doesn't allow copying.",
+  "Gồm cả skill Office (docx, pdf, pptx, xlsx), nay Anthropic cũng cấp theo Apache-2.0. Synchro đọc LICENSE.txt của từng skill lúc cài.": "Includes the Office skills (docx, pdf, pptx, xlsx), which Anthropic now also licenses under Apache-2.0. Synchro reads each skill's LICENSE.txt when installing.",
   "Nhiều tác giả": "Various authors", "15 skill về animation, độ mượt, cảm giác native, rà soát chuyển động.": "15 skills on animation, smoothness, native feel and motion review.",
   "Gồm ui-ux-pro-max, design, design-system, ui-styling, brand, banner-design, slides.": "Includes ui-ux-pro-max, design, design-system, ui-styling, brand, banner-design, slides.",
   "Bộ tham chiếu thiết kế trang đơn.": "A reference set of single-page designs.", "Tạo ảnh marketing cho ứng dụng di động.": "Create marketing images for mobile apps.",

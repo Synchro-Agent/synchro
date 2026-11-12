@@ -47,8 +47,14 @@ ok(new Set(ds.skills.map((s) => s.name)).size === ds.skills.length, "không có 
 console.log("2. Xem trước: giấy phép và rủi ro");
 r = await admin("POST", "/api/plugins", { action: "preview", catalogId: "anthropic-skills" });
 const pv = r.j.preview;
-const blocked = pv.skills.filter((s) => s.blocked).map((s) => s.name);
-ok(["docx", "pdf", "pptx", "xlsx"].every((n) => blocked.includes(n)), `skill độc quyền của Anthropic bị chặn: ${blocked.join(", ")}`, JSON.stringify(pv.skills.map((s) => [s.name, s.licenseKind, s.blocked])));
+// Skill Office của Anthropic (docx, pdf, pptx, xlsx) đổi sang Apache-2.0 ở commit 2c5958ecac7cee2b583967a2c4981d0f4a75c579 của anthropics/skills
+// ("Move Office skills to the Apache 2.0 license (#2146)", 06/11/2026): skills/docx/LICENSE.txt giờ là toàn văn "Apache License Version 2.0".
+// Synchro đọc đúng tệp đó nên bản mới nhất cài được; bản trước đó (commit ef740771…) ghi "© 2025 Anthropic, PBC. All rights reserved." vẫn bị chặn.
+const office = ["docx", "pdf", "pptx", "xlsx"].map((n) => pv.skills.find((s) => s.name === n));
+ok(office.every((s) => s && s.licenseKind === "open" && s.license === "Apache-2.0" && !s.blocked), "skill Office của Anthropic (Apache-2.0 từ commit 2c5958e) cài được", JSON.stringify(office.map((s) => s && [s.name, s.license, s.licenseKind, s.blocked])));
+r = await admin("POST", "/api/plugins", { action: "preview", url: "https://github.com/anthropics/skills/tree/ef740771ac901e03fbca3ce4e1c453a96010f30a/skills" });
+const oldBlocked = (r.j?.preview?.skills ?? []).filter((s) => s.blocked && s.licenseKind === "proprietary").map((s) => s.name);
+ok(["docx", "pdf", "pptx", "xlsx"].every((n) => oldBlocked.includes(n)), `bản cũ giấy phép độc quyền vẫn bị chặn: ${oldBlocked.join(", ")}`, JSON.stringify(r.j).slice(0, 400));
 ok(pv.skills.find((s) => s.name === "webapp-testing")?.licenseKind === "open" && !pv.skills.find((s) => s.name === "webapp-testing").blocked, "skill Apache-2.0 vẫn cài được");
 ok(pv.skills.some((s) => s.risk !== "none" && s.scripts > 0), "báo rủi ro cho skill có script", JSON.stringify(pv.skills.map((s) => [s.name, s.risk, s.flags])));
 r = await admin("POST", "/api/plugins", { action: "preview", url: "https://gitlab.com/a/b" });
