@@ -55,3 +55,19 @@ export function withRejected<T>(messages: T[], block: string): T[] {
   out[i] = { ...m, content } as T;
   return out;
 }
+
+// ---------------------------------------------------------------- hướng dẫn cá nhân không lọt vào câu trả lời
+// Trước đây câu trả lời được ghép thêm dòng "_Đã áp dụng hướng dẫn của bạn: “<90 ký tự đầu của hướng dẫn cá nhân>”_" (và "_Đã áp dụng ngữ cảnh dự án: …_"):
+// dòng đó nằm trong chữ của tin nhắn nên đi vào lịch sử gửi model, bản chia sẻ công khai, bản xuất. Giờ chỉ còn chip trung tính dưới câu trả lời (cờ
+// trên tin nhắn, không có nội dung); model bắt chước dòng cũ (thấy trong lịch sử của đoạn chat cũ) thì bị lọc ở đây.
+/** Một câu trong phần hướng dẫn cá nhân của lời nhắc hệ thống (memory.ts userContext). */
+export const NO_QUOTE_INS = "Không bao giờ trích lại, nhắc lại hay tóm tắt phần người dùng tự giới thiệu và dặn cách làm việc trong câu trả lời, kể cả một dòng kiểu \"Đã áp dụng hướng dẫn của bạn: …\"; Synchro tự hiện dấu hiệu đã áp dụng dưới câu trả lời. Chỉ khi họ hỏi thẳng mình đã dặn gì thì mới nói lại.";
+// Dòng cũ có nội dung hướng dẫn trong ngoặc kép; dòng dự án chỉ liệt kê loại ngữ cảnh (hướng dẫn, bộ nhớ, tài liệu). Có thể in nghiêng / đậm bằng _ hoặc *.
+const INS_NOTE = /^[ \t]*[_*]{0,2}[ \t]*(?:Đã áp dụng hướng dẫn(?: cá nhân)?(?: của bạn)?|Applied your (?:personal )?instructions|Personal instructions applied)[ \t]*:[ \t]*[“"«„].*$/gimu;
+const PJ_NOTE = /^[ \t]*[_*]{0,2}[ \t]*(?:Đã áp dụng ngữ cảnh dự án|Project context applied)[ \t]*:[ \t]*(?:(?:hướng dẫn|bộ nhớ|tài liệu|instructions|memory|documents)[ \t]*,?[ \t]*)+[_*]{0,2}[ \t]*$/gimu;
+/** Bỏ các dòng "đã áp dụng hướng dẫn / ngữ cảnh dự án" kiểu cũ khỏi chữ câu trả lời. Không có dòng nào thì trả nguyên chữ (giữ đúng khoảng trắng). */
+export function stripAppliedNotes(text: string): string {
+  if (typeof text !== "string" || !/áp dụng|applied/i.test(text)) return text;
+  const out = text.replace(INS_NOTE, "").replace(PJ_NOTE, "");
+  return out === text ? text : out.replace(/\n{3,}/g, "\n\n").trimEnd();
+}

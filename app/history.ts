@@ -4,6 +4,7 @@
 import type { Chat, Msg } from "./store";
 import type { LLMMsg } from "./llm";
 import { artBase } from "./vfs";
+import { stripAppliedNotes } from "./turnctx";
 
 const STOPPED = { id: "stop", name: "(dừng)", label: "Câu trả lời", input: "", status: "cancelled_by_user" as const, summary: "Người dùng đã bấm Dừng giữa chừng; câu trả lời trên chưa hoàn chỉnh." };
 
@@ -12,7 +13,8 @@ const CUT = { id: "cut", name: "(ngắt)", label: "Câu trả lời", input: "",
 export function chatHistory(msgs: Msg[], compact?: Chat["compact"]): LLMMsg[] {
   const from = compact ? Math.min(Math.max(0, compact.upto), msgs.length) : 0;
   // Câu trả lời bị tách vì người dùng nhắn thêm giữa chừng: phần trước chỉ có lời dẫn (nằm trong nhật ký làm việc).
-  const said = (m: Msg) => m.text || (m.parts ?? []).map((p) => (p.k === "say" ? p.text : "")).filter(Boolean).join("\n\n");
+  // Câu trả lời cũ còn dòng "Đã áp dụng hướng dẫn của bạn: “…”": không gửi lại cho model (model thấy thì bắt chước, trích lại hướng dẫn cá nhân).
+  const said = (m: Msg) => (m.role === "ai" ? stripAppliedNotes(m.text) : m.text) || (m.parts ?? []).map((p) => (p.k === "say" ? p.text : "")).filter(Boolean).join("\n\n");
   // Tin chỉ là lời báo lỗi (hết hạn mức, treo…) không phải câu trả lời của model: không gửi lại. Có giữ được phần đã viết thì ghi rõ là chưa xong.
   return msgs.slice(from).filter((m) => !m.notice?.failed && (!m.failed || m.notice?.partial) && (said(m) || m.stopped || (m.role === "user" && m.files?.length))).map((m): LLMMsg => (m.role === "ai"
     ? { role: "assistant", content: said(m), ...(m.trace?.length || m.stopped || m.notice?.partial ? { trace: [...(m.trace ?? []), ...(m.stopped ? [STOPPED] : []), ...(m.notice?.partial ? [CUT] : [])] } : {}) }
