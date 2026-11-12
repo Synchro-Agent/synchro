@@ -4,28 +4,57 @@ import { useDev } from "./devstore";
 import { extractSymbols } from "./devtools";
 
 // ------------------------------------------------------------ TOKENS (js-tiktoken)
+// Đếm ở luồng phụ (app/tokens.worker.ts): đọc bảng cl100k và dựng bộ mã hóa ở luồng chính chặn giao diện ~200ms (lần đầu ~480ms) lúc mở
+// Synchro Code. countTokens vẫn trả ngay: số đã đếm, hoặc ước lượng (chữ / 4) trong lúc gửi đi đếm; có kết quả thì encVer tăng để UI tính lại.
+// Không mở được luồng phụ thì dựng bộ mã hóa ở luồng chính như trước.
 type Enc = { encode: (s: string) => number[] };
 let enc: Enc | null = null;
 let encLoading = false;
-export function loadEncoder() {
-  if (enc || encLoading || typeof window === "undefined") return;
+let tw: Worker | null | undefined;
+const tcache = new Map<string, number>(), asked = new Set<string>();
+let queue: [string, string][] = [], flushing = false;
+function loadOnMain() {
+  if (enc || encLoading) return;
   encLoading = true;
   Promise.all([import("js-tiktoken/lite"), import("js-tiktoken/ranks/cl100k_base")])
     .then(([{ Tiktoken }, ranks]) => { enc = new Tiktoken(ranks.default); useDev.getState().bumpEnc(); })
     .catch(() => { encLoading = false; });
 }
-const tcache = new Map<string, number>();
+export function loadEncoder() {
+  if (enc || encLoading || tw !== undefined || typeof window === "undefined") return;
+  try {
+    tw = new Worker(new URL("./tokens.worker.ts", import.meta.url));
+    tw.onmessage = (e: MessageEvent<[string, number][]>) => {
+      if (tcache.size > 2000) tcache.clear();
+      for (const [k, n] of e.data) { tcache.set(k, n); asked.delete(k); }
+      useDev.getState().bumpEnc();
+    };
+    tw.onerror = () => { tw?.terminate(); tw = null; queue = []; asked.clear(); loadOnMain(); };
+    // Lần vẽ trước chỉ có ước lượng (luồng phụ chưa mở): vẽ lại để gửi các chữ đi đếm.
+    useDev.getState().bumpEnc();
+  } catch { tw = null; loadOnMain(); }
+}
+const keyOf = (s: string) => (s.length < 400 ? s : s.length + ":" + s.slice(0, 40) + s.slice(-40));
 export function countTokens(s: string): number {
-  if (!enc) return Math.ceil(s.length / 4);
-  if (s.length < 400) { try { return enc.encode(s).length; } catch { return Math.ceil(s.length / 4); } }
-  const k = s.length + ":" + s.slice(0, 40) + s.slice(-40);
-  let n = tcache.get(k);
-  if (n === undefined) {
-    try { n = enc.encode(s).length; } catch { n = Math.ceil(s.length / 4); }
-    if (tcache.size > 500) tcache.clear();
-    tcache.set(k, n);
+  const k = keyOf(s);
+  if (enc) {
+    if (s.length < 400) { try { return enc.encode(s).length; } catch { return Math.ceil(s.length / 4); } }
+    let n = tcache.get(k);
+    if (n === undefined) {
+      try { n = enc.encode(s).length; } catch { n = Math.ceil(s.length / 4); }
+      if (tcache.size > 2000) tcache.clear();
+      tcache.set(k, n);
+    }
+    return n;
   }
-  return n;
+  const n = tcache.get(k);
+  if (n !== undefined) return n;
+  if (tw && s && !asked.has(k)) {
+    asked.add(k); queue.push([k, s]);
+    // Gom các chữ của một lần vẽ thành một lần gửi.
+    if (!flushing) { flushing = true; queueMicrotask(() => { flushing = false; const q = queue; queue = []; tw?.postMessage(q); }); }
+  }
+  return Math.ceil(s.length / 4);
 }
 
 // ------------------------------------------------------------ TREE-SITTER
