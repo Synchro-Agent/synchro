@@ -69,6 +69,8 @@ export function loginNeedsCaptcha(ip: string, email: string) {
 }
 
 export const CAPTCHA_NEEDED = "Hãy hoàn tất bước kiểm tra bạn không phải máy rồi thử lại.";
+/** Cloudflare không trả lời khi đăng ký hoặc xin đặt lại mật khẩu (đăng nhập vẫn cho qua). */
+export const VERIFY_DOWN = "Không xác minh được, thử lại sau ít phút.";
 /** Kiểm tra mã Turnstile của trình duyệt. Chưa bật thì luôn qua. Sai, hết hạn, đã dùng, sai hành động hoặc tên miền thì ném lỗi có cờ captcha để trang hiện lại ô kiểm tra. */
 export async function requireTurnstile(token: unknown, action: TurnstileAction, ip: string, host: string) {
   const s = stored();
@@ -83,9 +85,12 @@ export async function requireTurnstile(token: unknown, action: TurnstileAction, 
     const r = await fetch(VERIFY_URL(), { method: "POST", body, signal: AbortSignal.timeout(8000) });
     j = await r.json();
   } catch (e) {
-    // Cloudflare không trả lời: không chặn cửa với mọi người, nhưng ghi lại. Giới hạn tần suất của authstore vẫn áp dụng.
-    console.error("[turnstile] không gọi được siteverify:", (e as Error).message);
-    return;
+    // Cloudflare không trả lời (lỗi mạng, quá 8 giây, trả về không phải JSON). Đăng nhập vẫn cho qua: chủ tài khoản không bị khóa ngoài cửa
+    // vì Cloudflare lỗi (giới hạn tần suất của authstore vẫn áp dụng). Đăng ký mới và xin đặt lại mật khẩu thì từ chối (fail-closed):
+    // kẻ tạo tài khoản hàng loạt hoặc gửi thư hàng loạt không được lợi dụng lúc Cloudflare chập chờn để đi qua mà không bị kiểm tra.
+    console.error(`[turnstile] không gọi được siteverify (${action}):`, (e as Error).message);
+    if (action === "login") return;
+    throw new AuthError(VERIFY_DOWN, 503, { captcha: true });
   }
   if (!j.success) throw bad((j["error-codes"] ?? []).join(",") || "failed");
   if (j.action && j.action !== action) throw bad(`action ${j.action}`);
