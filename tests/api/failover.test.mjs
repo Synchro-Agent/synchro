@@ -14,7 +14,10 @@ const call = async (method, p, body) => {
 };
 if (!cookie) await call("POST", "/api/auth/login", { email: "admin@synchro.test", password: "synchro-mock-123" });
 const outage = (provider, codes) => fetch(`${M}/_debug/outage`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ provider, codes }) }).then((r) => r.json());
-const hist = async () => Object.fromEntries(Object.entries(await fetch(`${M}/_debug/hist`).then((r) => r.json())).map(([k, v]) => [k, Array.isArray(v) ? v.length : 0]));
+// Số lời gọi tới từng hãng: bộ đếm không giới hạn của máy giả (/_debug/calls). Không đếm bằng độ dài /_debug/hist: lịch sử chỉ giữ 200
+// lời gọi gần nhất, chạy sau nhiều bộ kiểm khác thì đã đầy, gọi thêm bao nhiêu độ dài vẫn là 200.
+const hist = () => fetch(`${M}/_debug/calls`).then((r) => r.json());
+const served = async () => (await fetch(`${M}/_debug/outage`).then((x) => x.json())).anthropic?.served ?? {};
 const shownBefore = (await call("GET", "/api/admin/apikeys")).j?.main ?? ["*"];
 await call("POST", "/api/admin/apikeys", { action: "main", main: ["*"] });
 const CODE = "Viết code Python đọc file CSV và in tổng từng cột";
@@ -32,22 +35,25 @@ try {
   ok(r.s === 200 && r.j.auto?.vendor === "anthropic" && r.j.model.startsWith("anthropic/") && !r.j.switched, `Tự động chọn ${r.j?.model}`, r.j);
   const anthropicModel = r.j.model;
 
+  // Mỗi lượt Tự động chỉ gọi Anthropic một lần rồi chuyển sang hãng khác (dự phòng ưu tiên hãng khác, không gọi lại hãng đang quá tải),
+  // nên lượt chạy thẳng gặp 529, lượt chạy nền gặp 503: mỗi mã lỗi được kiểm bằng một lượt riêng.
   console.log("1. Anthropic sập (529, 503): Tự động chuyển hãng trong cùng lượt");
-  await outage("anthropic", [529, 503]);
+  await outage("anthropic", [529]);
   const h0 = await hist();
   r = await ask("auto");
   const h1 = await hist();
+  const s529 = await served();
   ok(r.s === 200 && !r.j.model.startsWith("anthropic/") && r.j.text, `vẫn có câu trả lời, bằng ${r.j?.model}`, r.j);
   ok(r.j.auto?.fallback === r.j.model && r.j.auto?.vendor === "anthropic", "ghi rõ đã chuyển khỏi model định chọn", r.j?.auto);
   ok((h1.anthropic ?? 0) > (h0.anthropic ?? 0), "đã thử Anthropic trước rồi mới chuyển", { h0, h1 });
   ok(typeof r.j.switched === "string" && /đang gặp lỗi, nên Synchro đã trả lời bằng/.test(r.j.switched) && r.j.notice === r.j.switched, "người dùng được báo: lời báo dưới câu trả lời và trên thanh thông báo", { switched: r.j.switched, notice: r.j.notice });
-  const o = await outage("anthropic", [529, 503]);
+  await outage("anthropic", [503]);
   r = await runAsync("auto");
   const notes = (r.run?.events ?? []).filter((e) => e.kind === "note").map((e) => e.text);
   ok(r.run?.status === "done" && !r.run.result?.model?.startsWith("anthropic/") && r.run.result?.switched, "lượt chạy nền (như trên trang): xong bằng hãng khác", r.run ?? r.start);
   ok(notes.some((t) => /đang gặp lỗi, chuyển sang/.test(t)), "dòng tiến trình lúc đang chạy: “… đang gặp lỗi, chuyển sang …”", notes);
-  const served = (await fetch(`${M}/_debug/outage`).then((x) => x.json())).anthropic?.served ?? {};
-  ok(served["529"] >= 1 && served["503"] >= 1, "máy giả đã thật sự trả cả 529 lẫn 503", { served, before: o.anthropic });
+  const s503 = await served();
+  ok(s529["529"] >= 1 && s503["503"] >= 1, "máy giả đã thật sự trả cả 529 lẫn 503", { s529, s503 });
 
   console.log("2. Chọn tay model của Anthropic: không tự đổi, thẻ lỗi có nút Dùng model khác");
   const h2 = await hist();

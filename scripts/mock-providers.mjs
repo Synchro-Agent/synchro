@@ -570,7 +570,9 @@ async function trap(res, q, fmt) {
   return true;
 }
 
-const LAST = {}, HIST = {};
+// CALLS: tổng số lời gọi tới từng hãng từ lúc máy giả chạy, không giới hạn (HIST chỉ giữ 200 lời gọi gần nhất nên sau nhiều bộ kiểm
+// độ dài của nó đứng yên ở 200, không dùng để đếm "đã gọi thêm" được).
+const LAST = {}, HIST = {}, CALLS = {};
 // Chép lời giả lập: một cuộc họp ngắn tiếng Việt, 3 người nói (dùng cho tính năng Cuộc họp).
 const MEETING_LINES = [
   [0, "Chào mọi người, hôm nay mình chốt kế hoạch ra mắt ứng dụng Synchro bản di động."],
@@ -741,10 +743,12 @@ async function handler(req, res) {
   // 200 yêu cầu gần nhất của từng hãng (khi có lời gọi chạy nền sau lượt chat, như rút bộ nhớ, đè lên "gần nhất"). Trước đây 30: bộ kiểm
   // tác vụ tự động tự tạo nhiều lời gọi tới mức đẩy lời gọi cần kiểm ra khỏi lịch sử, lúc đạt lúc không.
   if (p === "/_debug/hist") return send(res, 200, HIST);
+  if (p === "/_debug/calls") return send(res, 200, CALLS);
   // Lời gọi rút bộ nhớ chạy nền sau lượt chat không tính là "gần nhất" (chỉ ghi vào lịch sử) để kiểm thử đọc đúng lượt chat.
   if (res.__prov) {
     if (!JSON.stringify(b).includes("Bạn trích xuất bộ nhớ dài hạn")) { LAST[res.__prov] = b; LAST[`${res.__prov}_tokens`] = inTok(b); }
     (HIST[res.__prov] ??= []).push(b); HIST[res.__prov].splice(0, HIST[res.__prov].length - 200);
+    CALLS[res.__prov] = (CALLS[res.__prov] ?? 0) + 1;
   }
   res.__slow = res.__prov && JSON.stringify(b.messages ?? b.input ?? "").includes("#streamslow");
   // Một hãng đang sập (kiểm thử chuyển model): POST /_debug/outage { provider, codes: [529, 503] } → mọi lời gọi tới hãng đó lần lượt trả các mã này
