@@ -18,7 +18,7 @@ import { AdminPanel, call as api, fmtDate, METHOD } from "./adminui";
 import { MfaRow } from "./mfaui";
 import { PasskeyRows } from "./passkeyui";
 import type { AuthUser } from "./auth";
-import { OCCUPATIONS } from "./names";
+import { OCCUPATIONS, shortName } from "./names";
 import { ls } from "./userscope";
 import { setCaps, useCaps } from "./capsclient";
 import { UsageSettings } from "./usageui";
@@ -181,8 +181,9 @@ type Sess = { id: string; current: boolean; device: string; ip: string | null; m
 function Account() {
   const app = useApp();
   const me = app.me;
-  const [name, setName] = usePref("name", "Lâm Tùng");
-  const [call, setCall] = usePref("call", "Lâm Tùng");
+  // Không có tên mặc định của ai: ô trống thì gợi ý theo tên tài khoản.
+  const [name, setName] = usePref("name", "");
+  const [call, setCall] = usePref("call", "");
   const [work, setWork] = usePref("work", "");
   // Hướng dẫn cho Synchro lưu trên máy chủ (theo tài khoản, mọi thiết bị) và được gửi kèm mọi lượt chat, Synchro Code, giọng nói.
   const [, setSaved0] = usePref("ins", "");
@@ -262,9 +263,9 @@ function Account() {
   return (
     <>
       <H first>Profile</H>
-      <Row t="Profile photo" d="PNG or JPG up to 10MB." top><AvatarButton name={name} /></Row>
-      <Row t="Full name"><input className="field" aria-label="Full name" style={{ width: 280, margin: 0 }} value={name} onChange={(e) => setName(e.target.value)} onBlur={() => name.trim() && name.trim() !== me?.profile.fullName && saveProfile({ fullName: name })} /></Row>
-      <Row t="What should Synchro call you?"><input className="field" aria-label="What should Synchro call you?" style={{ width: 280, margin: 0 }} value={call} onChange={(e) => setCall(e.target.value)} onBlur={() => call.trim() !== (me?.profile.nickname ?? "") && saveProfile({ nickname: call })} /></Row>
+      <Row t="Profile photo" d="PNG or JPG up to 10MB." top><AvatarButton name={name || me?.profile.fullName || me?.name || ""} /></Row>
+      <Row t="Full name"><input className="field" aria-label="Full name" style={{ width: 280, margin: 0 }} value={name} placeholder={me?.profile.fullName || me?.name || undefined} onChange={(e) => setName(e.target.value)} onBlur={() => name.trim() && name.trim() !== me?.profile.fullName && saveProfile({ fullName: name })} /></Row>
+      <Row t="What should Synchro call you?"><input className="field" aria-label="What should Synchro call you?" style={{ width: 280, margin: 0 }} value={call} placeholder={me?.profile.nickname || shortName(me?.profile.fullName || me?.name) || undefined} onChange={(e) => setCall(e.target.value)} onBlur={() => call.trim() !== (me?.profile.nickname ?? "") && saveProfile({ nickname: call })} /></Row>
       <Row t="Date of birth"><input className="field" aria-label="Date of birth" style={{ width: 280, margin: 0 }} inputMode="numeric" placeholder="DD/MM/YYYY" value={dob} onChange={(e) => { const d = e.target.value.replace(/\D/g, "").slice(0, 8); setDob([d.slice(0, 2), d.slice(2, 4), d.slice(4)].filter(Boolean).join("/")); }} onBlur={saveDob} /></Row>
       <Row t="What best describes your work?"><Select width={200} value={work || "Choose"} onChange={(v) => { setWork(v); saveProfile({ occupation: v }); }} options={OCCUPATIONS} /></Row>
       <h3 style={{ marginTop: 14 }}>Instructions for Synchro</h3>

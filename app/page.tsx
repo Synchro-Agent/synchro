@@ -956,9 +956,10 @@ const MsgRow = memo(function MsgRow({ m, i, last, busy, mark, art, inl, fileActi
 export default function Home() {
   // Giữ khung chờ tới khi từ điển của ngôn ngữ đang dùng về (tải riêng từng thứ tiếng, i18n.tsx): không nháy chữ sai ngôn ngữ.
   const langReady = useLangReady();
-  const [name, setName] = usePref("name", "Lâm Tùng");
+  // Họ tên và tên gọi đã lưu (Cài đặt → Tài khoản). Không có tên mặc định của ai: chưa có thì lấy từ tên tài khoản (xem name / call bên dưới).
+  const [namePref, setName] = usePref("name", "");
   const [, setAcct] = usePref("acct", "");
-  const [call, setCall] = usePref("call", "Lâm Tùng");
+  const [callPref, setCall] = usePref("call", "");
   const [, setWork] = usePref("work", "");
   const [ins, setIns] = usePref("ins", "");
   const [size] = usePref("size", "Medium");
@@ -1092,6 +1093,8 @@ export default function Home() {
   const [speaking, setSpeaking] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [me, setMe] = useState<AuthUser | null | undefined>(undefined);
+  const name = namePref.trim() || me?.profile.fullName?.trim() || me?.name || "";
+  const call = callPref.trim() || me?.profile.nickname?.trim() || shortName(name);
   // Màn chờ lúc mở app: mở thẳng một đoạn chat (#c=…) thì vùng chính chờ dạng tin nhắn thay vì lời chào (đặt sau khi gắn để khớp bản dựng ở máy chủ).
   const [bootChat, setBootChat] = useState(false);
   useEffect(() => { if (/^#c=/.test(location.hash)) setBootChat(true); }, []);
