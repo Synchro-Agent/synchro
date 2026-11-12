@@ -76,5 +76,33 @@ ok(/className="overlay ft-lightbox"/.test(lb) && /role="dialog" aria-modal="true
   ok(en("Phóng to sơ đồ") === "Enlarge diagram", "bản tiếng Anh của nút phóng to");
 }
 
+// U14: trợ năng — vùng bấm 44px trên màn cảm ứng, chữ tối thiểu 12px, nút đóng có tên, hộp xác nhận (Đăng xuất?) có tên.
+{
+  const cssFiles = ["app/globals.css", "app/synchro-ds.css", "app/features.css", "app/codeview.css", "app/brainview.css", "app/glass.css", "app/speech/speech.css", "app/download/download.css"];
+  // Ngoại lệ: hình thu nhỏ trang tải về (.dl-win / .dl-phone), ảnh thu nhỏ tài liệu, nhãn loại tệp trong ô 28–30px — là hình minh họa thu nhỏ, không phải chữ để đọc.
+  const small = [];
+  for (const f of cssFiles) for (const m of read(f).matchAll(/([^{}]*)\{([^{}]*)\}/g)) {
+    if (/\.dl-(win|phone)|\.art-thumb-doc|\.out-badge\.sm|\.art-head \.out-badge/.test(m[1])) continue;
+    for (const d of m[2].matchAll(/font(?:-size)?:\s*(?:[a-z]+\s+|\d{3}\s+)*(\d+(?:\.\d+)?)px/g)) if (Number(d[1]) < 12) small.push(`${f}: ${m[1].trim().slice(-50)} ${d[0]}`);
+  }
+  ok(!small.length, "không còn cỡ chữ dưới 12px", small.slice(0, 10).join("\n"));
+  ok(/@media \(pointer:coarse\)\{\s*html body :is\(\.icon-btn,\.menu-item,\.nav-item\):not\(\.auth-root \*\),\.auth-root :is\(\.icon-btn,\.menu-item,\.nav-item\)\{min-width:44px;min-height:44px\}/.test(read("app/synchro-ds.css")), "màn cảm ứng: nút biểu tượng, mục menu, mục điều hướng tối thiểu 44×44");
+  const unnamed = [];
+  for (const f of tsx) {
+    const src = read(f);
+    for (const m of src.matchAll(/<button\b/g)) {
+      let d = 0, q = null, j = m.index + 1;
+      for (; j < src.length; j++) { const c = src[j]; if (q) { if (c === q) q = null; } else if ((c === '"' || c === "'") && !d) q = c; else if (c === "{") d++; else if (c === "}") d--; else if (c === ">" && !d) break; }
+      const tag = src.slice(m.index, j + 1);
+      if (tag.includes("aria-label") || tag.endsWith("/>")) continue;
+      const inner = src.slice(j + 1, src.indexOf("</button>", j)).trim();
+      if (/^(<I\.(X|Close)\b[^<]*\/>|×|✕)$/.test(inner)) unnamed.push(`${f}:${src.slice(0, m.index).split("\n").length}`);
+    }
+  }
+  ok(!unnamed.length, "nút đóng chỉ có dấu × đều có aria-label", unnamed.join(", "));
+  const mo = read("app/modals.tsx");
+  ok(/role="alertdialog" aria-modal="true" aria-labelledby=\{`\$\{id\}-t`\} aria-describedby=\{`\$\{id\}-d`\}/.test(mo) && /<h2 id=\{`\$\{id\}-t`\}/.test(mo), "hộp xác nhận (Đăng xuất?) có tên và mô tả");
+}
+
 console.log(`\n${pass} đạt, ${fail} hỏng`);
 if (fail) process.exit(1);

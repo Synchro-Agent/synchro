@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useId, useRef, useState } from "react";
 import { searchSettings } from "./settingsindex";
 import * as I from "./icons";
 import { UsageIcon } from "./usageui";
@@ -12,12 +12,15 @@ import { tr, type Lang } from "./i18n";
 import { createPortal } from "react-dom";
 import { Boundary } from "./ui";
 
+// Hộp xác nhận (Đăng xuất?, Xóa…?): tên và mô tả gắn thẳng vào hộp (alertdialog + aria-labelledby / describedby), trình đọc màn hình đọc
+// "Đăng xuất?" cùng câu hỏi ngay khi hộp mở, không phụ thuộc lúc cơ chế hộp thoại chung (a11y.ts) kịp gắn tên.
 export function Confirm({ title, text, ok, onCancel, onOk, children }: { title: string; text: string; ok: string; onCancel: () => void; onOk: () => void; children?: React.ReactNode }) {
+  const id = useId();
   return (
     <div className="overlay cf-top" onMouseDown={(e) => e.target === e.currentTarget && onCancel()}>
-      <div className="modal sm" style={{ width: 420 }}>
-        <h2 style={{ fontSize: 15, margin: "0 0 6px" }}>{title}</h2>
-        <p style={{ margin: "0 0 20px", fontSize: 14 }}>{text}</p>
+      <div className="modal sm" style={{ width: 420 }} role="alertdialog" aria-modal="true" aria-labelledby={`${id}-t`} aria-describedby={`${id}-d`}>
+        <h2 id={`${id}-t`} style={{ fontSize: 15, margin: "0 0 6px" }}>{title}</h2>
+        <p id={`${id}-d`} style={{ margin: "0 0 20px", fontSize: 14 }}>{text}</p>
         {children}
         <div className="modal-foot"><button className="btn" onClick={onCancel}>Hủy</button><button className="btn danger" onClick={onOk}>{ok}</button></div>
       </div>
@@ -121,7 +124,7 @@ export function UpgradeModal({ onClose, say }: { onClose: () => void; say: (m: s
   return (
     <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <div className="modal sm" style={{ width: 760 }}>
-        <button className="icon-btn" onClick={onClose} style={{ position: "absolute", top: 14, right: 14 }}><I.X size={16} /></button>
+        <button className="icon-btn" aria-label={tr("Đóng")} onClick={onClose} style={{ position: "absolute", top: 14, right: 14 }}><I.X size={16} /></button>
         <h2 style={{ fontSize: 18 }}>Chọn gói phù hợp với bạn</h2>
         <div className="plans">
           {plans.map(([n, p, d, b], i) => (

@@ -146,7 +146,7 @@ html body .rail .nav-item:not(.auth-root *):focus-visible .rail-ic{box-shadow:va
 .rail-ic>svg,.rail-ic>.ph-hover,.rail-ic .ph-hover svg{width:18px;height:18px}
 html body .rail .nav-item:not(.active):hover .rail-ic{background:var(--ds-hover)}
 html body .rail .nav-item:not(.active):active .rail-ic{background:var(--ds-press)}
-.rail-l{position:relative;z-index:1;font-size:11px;line-height:13px;letter-spacing:.005em;white-space:nowrap;max-width:52px;overflow:hidden;text-overflow:ellipsis;transition:color .18s ease}
+.rail-l{position:relative;z-index:1;font-size:12px;line-height:15px;letter-spacing:.005em;white-space:nowrap;max-width:62px;overflow:hidden;text-overflow:ellipsis;transition:color .18s ease}
 html body .rail .nav-item.active:not(.auth-root *){color:var(--ds-ink);font-weight:560}
 .rail-nav{position:relative;display:flex;flex-direction:column;align-items:center;gap:4px;flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;padding:2px 0;scrollbar-width:none}
 .rail-nav::-webkit-scrollbar{display:none}
@@ -160,7 +160,7 @@ html body .rail .rail-new{margin-bottom:4px}
 html body .rail .rail-new .rail-ic svg{width:14px;height:14px}
 /* Số chưa đọc của Hộp thư: chấm số ở góc ô icon. */
 html body .rail .nav-badge{position:absolute;top:-1px;left:auto;right:max(2px,calc(50% - 23px));z-index:2;min-width:16px;height:16px;padding:0 4px;border-radius:999px;display:grid;place-items:center;
-  font-size:10px;font-weight:600;line-height:1;background:var(--ds-ink);color:var(--ds-inv-fg);box-shadow:0 0 0 2px var(--bg);margin:0}
+  font-size:12px;font-weight:600;line-height:1;background:var(--ds-ink);color:var(--ds-inv-fg);box-shadow:0 0 0 2px var(--bg);margin:0}
 html body .rail .nav-item.active .nav-badge{background:var(--ds-inv-fg);color:var(--ds-inv);box-shadow:0 0 0 2px var(--ds-inv)}
 .rail-foot{display:flex;flex-direction:column;align-items:center;gap:4px;padding-top:8px}
 html body .rail .rail-btn{width:36px;height:36px;border-radius:var(--r-pill);color:var(--ds-muted)}
@@ -187,7 +187,7 @@ html body .shell-side .side-brand{height:32px;padding:0;color:var(--logo-ink)}
   transition:box-shadow var(--ds-fast),color var(--ds-fast),background-color var(--ds-fast)}
 .side-search:hover{color:var(--ds-muted);box-shadow:inset 0 0 0 1px var(--ds-line-2)}
 .side-search>span{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.side-search kbd{font:inherit;font-size:11px;font-weight:500;color:var(--ds-faint);height:20px;padding:0 6px;border-radius:var(--r-pill);display:grid;place-items:center;box-shadow:inset 0 0 0 1px var(--ds-line)}
+.side-search kbd{font:inherit;font-size:12px;font-weight:500;color:var(--ds-faint);height:20px;padding:0 6px;border-radius:var(--r-pill);display:grid;place-items:center;box-shadow:inset 0 0 0 1px var(--ds-line)}
 html body .shell-side .section-label{height:30px;margin-top:10px;padding:0 10px 0 18px;font-size:12px;font-weight:500;color:var(--ds-faint);letter-spacing:.005em}
 html body .shell-side .sec-toggle{margin-top:10px}
 /* Mờ dần ở đáy: dòng hay nút phân trang không bị góc bo của khung cắt cụt. Đệm dư để cuộn hết thì mục cuối ra khỏi vùng mờ. */
@@ -295,7 +295,7 @@ html body .ds-head h1{margin:0;font:400 24px/30px var(--font-display);letter-spa
   transition:background-color var(--ds-mid) var(--ds-ease),color var(--ds-mid) var(--ds-ease)}
 .ds-seg>button:hover{color:var(--ds-ink)}
 .ds-seg>button.on{background:var(--ds-inv);color:var(--ds-inv-fg)}
-.ds-seg>button i{font-style:normal;font-size:11.5px;font-weight:560}
+.ds-seg>button i{font-style:normal;font-size:12px;font-weight:560}
 .ds-sec{display:flex;align-items:center;gap:12px;margin:28px 0 12px}
 .ds-sec h2{margin:0;font-size:13px;font-weight:560;color:var(--ds-ink);white-space:nowrap}
 .ds-sec i{font-style:normal;font-size:12px;color:var(--ds-faint)}
@@ -323,7 +323,7 @@ section.st{display:grid;grid-template-columns:minmax(0,320px) minmax(0,1fr);marg
 .st-tt{display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:20px}
 .st-tt b{font-size:14px;font-weight:560;line-height:20px}
 .st-t em{font-style:normal;font-size:12.5px;line-height:18px;color:var(--ds-muted);display:block}
-.st-tag{flex:none;display:inline-flex;align-items:center;height:20px;padding:0 8px;border-radius:var(--r-pill);font-size:11px;font-weight:500;color:var(--ds-muted);box-shadow:inset 0 0 0 1px var(--ds-line-2);white-space:nowrap}
+.st-tag{flex:none;display:inline-flex;align-items:center;height:20px;padding:0 8px;border-radius:var(--r-pill);font-size:12px;font-weight:500;color:var(--ds-muted);box-shadow:inset 0 0 0 1px var(--ds-line-2);white-space:nowrap}
 .st-tag.on{background:var(--ds-inv);color:var(--ds-inv-fg);box-shadow:none}
 .st-prog{position:absolute;left:14px;right:14px;bottom:0;height:2px;border-radius:2px;background:var(--ds-line);overflow:hidden}
 .st-prog::after{content:"";position:absolute;inset:0;background:var(--ds-ink);transform-origin:left;animation:st-prog 7.2s linear both}
@@ -381,9 +381,9 @@ html body .st .st-go:hover svg{transform:translateX(2px)}
 .st-handle{fill:var(--ds-plate);stroke:var(--ds-ink);stroke-width:1.4}
 .st-cur{fill:var(--ds-ink);stroke:var(--ds-plate);stroke-width:1.4;stroke-linejoin:round}
 .st-tag{fill:var(--ds-ink)}
-.st-tagt{fill:var(--ds-inv-fg);font:600 10px var(--font-sans);letter-spacing:.01em}
+.st-tagt{fill:var(--ds-inv-fg);font:600 12px var(--font-sans);letter-spacing:.01em}
 .st-num{fill:var(--ds-ink);font:400 60px var(--font-display);letter-spacing:-.05em}
-.st-num-s{fill:var(--ds-inv-fg);font:600 10.5px var(--font-sans)}
+.st-num-s{fill:var(--ds-inv-fg);font:600 12px var(--font-sans)}
 .st-ring{fill:none;stroke:var(--ds-sunken);stroke-width:12}
 .st-arc{fill:none;stroke:var(--ds-ink);stroke-width:12;stroke-linecap:round;stroke-dasharray:1;stroke-dashoffset:.28;transform:rotate(-90deg);transform-origin:center}
 .st-red{fill:none;stroke:var(--ds-ink);stroke-width:1.2}
@@ -508,7 +508,7 @@ html body .ds-sort span{font-weight:460}
 html body .pj-desk .pj-gridf{grid-template-columns:repeat(auto-fill,minmax(164px,1fr))!important;gap:30px 8px!important;justify-items:center}
 html body .pj-desk .pj-gname{margin-top:8px;font-size:13px;line-height:18px;max-width:150px}
 html body .pj-desk .pj-gname b{font-weight:500;color:var(--ds-ink)}
-html body .pj-desk .pj-gname span:not(.pj-pin){font-size:11.5px;line-height:16px;color:var(--ds-muted);opacity:1}
+html body .pj-desk .pj-gname span:not(.pj-pin){font-size:12px;line-height:16px;color:var(--ds-muted);opacity:1}
 .pj-group+.pj-group{margin-top:12px}
 html body .pj-desk .ds-sec{margin:0 4px 20px}
 html body .pj-desk .pj-group+.pj-group .ds-sec{margin-top:8px}
@@ -614,7 +614,7 @@ html body .tk-page .tk-status{gap:8px;margin:0 0 24px}
 html body .tk-page .tk-pill{height:28px;padding:0 12px;font-size:12.5px;color:var(--ds-ink-2);background:color-mix(in srgb,var(--ds-plate) 70%,transparent);box-shadow:inset 0 0 0 1px var(--ds-line);-webkit-backdrop-filter:none;backdrop-filter:none}
 html body .tk-page .tk-pill.warn{color:var(--ds-warn);background:color-mix(in srgb,var(--ds-warn) 9%,transparent);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--ds-warn) 25%,transparent)}
 html body .tk-page .tk-tabs{margin:0 0 16px}
-html body .tk-page .ds-seg .tk-badge,html body .tk-page .ds-seg .tk-count{display:inline-grid;place-items:center;min-width:18px;height:18px;padding:0 5px;margin-left:2px;border-radius:var(--r-pill);font-size:11px;font-weight:600;font-style:normal;
+html body .tk-page .ds-seg .tk-badge,html body .tk-page .ds-seg .tk-count{display:inline-grid;place-items:center;min-width:18px;height:18px;padding:0 5px;margin-left:2px;border-radius:var(--r-pill);font-size:12px;font-weight:600;font-style:normal;
   background:var(--ds-ink);color:var(--ds-inv-fg);opacity:1}
 html body .tk-page .ds-seg button.on .tk-badge,html body .tk-page .ds-seg button.on .tk-count{background:var(--ds-inv-fg);color:var(--ds-inv)}
 html body .tk-page .ds-seg .tk-badge.warn{background:var(--ds-warn);color:#fff}
@@ -676,7 +676,7 @@ html body .pl-row2 .pl-mark{border-radius:25%;box-shadow:inset 0 0 0 1px var(--d
 html body .pl-row2-h b{font-size:13.5px;font-weight:560;color:var(--ds-ink)}
 html body .pl-row2-t>span{font-size:12.5px;color:var(--ds-muted)}
 html body .pl-date{font-size:12px;color:var(--ds-faint)}
-html body .pl-b{height:20px;padding:0 8px;border-radius:var(--r-pill);font-size:11px;font-weight:500;background:transparent;box-shadow:inset 0 0 0 1px var(--ds-line-2);color:var(--ds-muted);display:inline-flex;align-items:center}
+html body .pl-b{height:20px;padding:0 8px;border-radius:var(--r-pill);font-size:12px;font-weight:500;background:transparent;box-shadow:inset 0 0 0 1px var(--ds-line-2);color:var(--ds-muted);display:inline-flex;align-items:center}
 html body .pl-tip{display:flex;gap:8px;margin:20px 0 0;font-size:12.5px;line-height:18px;color:var(--ds-muted)}
 html body .pl-tip svg{flex:none;margin-top:2px}
 /* Kho kỹ năng trong Cài đặt: cùng thanh công cụ, không chừa chỗ cho nút đóng nữa (nút đóng nằm ở đầu trang Cài đặt). */
@@ -1001,7 +1001,7 @@ html body .menu.cm-fly{position:absolute;left:calc(100% + 6px);bottom:0;top:auto
 .cm-find{display:flex;align-items:center;gap:8px;margin:2px 4px 6px;padding:0 10px;height:34px;border-radius:10px;background:var(--ds-sunken);color:var(--ds-muted)}
 .cm-find>svg{flex:none}
 html body .cm-find input{flex:1;min-width:0;height:100%;border:0!important;outline:0;background:transparent!important;box-shadow:none!important;padding:0!important;font-size:13px;color:var(--ds-ink)}
-.cm-h{padding:8px 12px 4px;font-size:11.5px;font-weight:560;color:var(--ds-muted)}
+.cm-h{padding:8px 12px 4px;font-size:12px;font-weight:560;color:var(--ds-muted)}
 html body .menu-item.cm-conn{cursor:default}
 html body .menu-item.cm-conn:hover{background:transparent}
 .cm-conn .toggle{margin-left:auto;flex:none}
@@ -1032,7 +1032,7 @@ html body .rail .nav-item:active .rail-ic{transform:scale(.94)}
 @media (prefers-reduced-motion:reduce){html body .rail .nav-item .rail-ic{transition:none}html body .rail .nav-item:active .rail-ic{transform:none}}
 /* Phân trang gọn (thanh bên, chỗ hẹp): chữ nhỏ, nút 28px. */
 html body .adm-pager.compact{min-height:28px;margin:6px 4px 2px;gap:8px}
-html body .adm-pager.compact .adm-pg-n{font-size:11.5px}
+html body .adm-pager.compact .adm-pg-n{font-size:12px}
 html body .adm-pager.compact .icon-btn{width:28px;height:28px}
 
 /* ---------------------------------------------------------------- khối soạn tin của đoạn chat
@@ -1059,7 +1059,7 @@ html body .shell-side .chat-item:has(.ct-run){padding-right:30px}
 .chat-wrap:hover .ct-run{opacity:0}
 /* Đoạn chat đang chờ bạn duyệt: thấy được khi đang ở đoạn chat khác. */
 html body .shell-side .chat-item:has(.ct-need){padding-right:84px}
-.chat-item .ct-need{position:absolute;right:8px;top:50%;translate:0 -50%;max-width:72px;height:18px;padding:0 7px;border-radius:999px;background:var(--ds-warn);color:#fff;font-size:11px;font-weight:600;line-height:18px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;transition:opacity .15s}
+.chat-item .ct-need{position:absolute;right:8px;top:50%;translate:0 -50%;max-width:72px;height:18px;padding:0 7px;border-radius:999px;background:var(--ds-warn);color:#fff;font-size:12px;font-weight:600;line-height:18px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;transition:opacity .15s}
 [data-theme="dark"] .chat-item .ct-need{color:#111210}
 .chat-wrap:hover .ct-need{opacity:0}
 .turn-undo{margin-top:-14px}
@@ -1078,18 +1078,18 @@ html[data-motion="reduced"] .chat-item .ct-run::after{animation:none}
 .msg-sources a:hover,.msg-sources a:focus-visible{background:var(--hover);color:var(--text)}
 .msg-sources a.flash{animation:srcFlash 1.4s ease-out}
 @keyframes srcFlash{0%,40%{border-color:var(--text);box-shadow:0 0 0 2px color-mix(in srgb,var(--text) 25%,transparent)}100%{box-shadow:none}}
-.src-n{flex:none;min-width:16px;height:16px;padding:0 4px;border-radius:8px;background:var(--pill);color:var(--text-2);font-size:10.5px;font-weight:600;line-height:16px;text-align:center;font-variant-numeric:tabular-nums}
+.src-n{flex:none;min-width:16px;height:16px;padding:0 4px;border-radius:8px;background:var(--pill);color:var(--text-2);font-size:12px;font-weight:600;line-height:16px;text-align:center;font-variant-numeric:tabular-nums}
 .src-fav{flex:none;width:14px;height:14px;border-radius:3px;object-fit:contain;background:#fff}
-.src-fav-l{display:inline-grid;place-items:center;background:var(--pill);color:var(--text-2);font-size:9px;font-weight:700;line-height:1}
+.src-fav-l{display:inline-grid;place-items:center;background:var(--pill);color:var(--text-2);font-size:12px;font-weight:700;line-height:1}
 .src-t{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
-.src-h{flex:none;font-style:normal;color:var(--text-3);font-size:11px;max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.ai-msg a.cite{display:inline-block;min-width:16px;height:16px;margin:0 1px 0 2px;padding:0 4px;border-radius:8px;background:var(--pill);color:var(--text-2);font-size:10.5px;font-weight:600;line-height:16px;text-align:center;text-decoration:none;vertical-align:2px;font-variant-numeric:tabular-nums;cursor:pointer}
+.src-h{flex:none;font-style:normal;color:var(--text-3);font-size:12px;max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ai-msg a.cite{display:inline-block;min-width:16px;height:16px;margin:0 1px 0 2px;padding:0 4px;border-radius:8px;background:var(--pill);color:var(--text-2);font-size:12px;font-weight:600;line-height:16px;text-align:center;text-decoration:none;vertical-align:2px;font-variant-numeric:tabular-nums;cursor:pointer}
 .ai-msg .cite-g{white-space:nowrap}
 .ai-msg a.cite:hover,.ai-msg a.cite:focus-visible{background:var(--btn-dark);color:var(--btn-dark-text);outline:none}
 .cite-pop{position:fixed;z-index:1000;display:flex;flex-direction:column;gap:4px;width:max-content;max-width:min(300px,calc(100vw - 16px));padding:9px 11px;border-radius:10px;background:var(--gl-fill-thick,var(--card));border:1px solid var(--border-strong);box-shadow:var(--shadow);color:var(--text);font-size:12.5px;line-height:1.35;pointer-events:none;animation:fadeIn .12s both}
 .cite-pop b{font-weight:600;overflow-wrap:anywhere}
 .cite-pop-h{display:flex;align-items:center;gap:6px;color:var(--text-3)}
-.cite-pop-h em{font-style:normal;font-size:11.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cite-pop-h em{font-style:normal;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 @media (max-width:520px){.src-h{display:none}}
 /* Chip thứ 7 trở đi ẩn sau nút "+N nguồn" (cites.tsx): thuộc tính hidden thắng display:inline-flex của chip. */
 .msg-sources a[hidden]{display:none}
@@ -1141,7 +1141,7 @@ html body .scan-pick select.pl-sel{flex:0 1 340px;min-width:0;max-width:100%}
 .scan-bar i{display:block;height:100%;border-radius:inherit;background:var(--ds-ink);transition:width .4s ease}
 html body .scan-modal .scan-tabs{flex:none;align-self:flex-start;max-width:100%;margin:0 0 10px;overflow-x:auto;scrollbar-width:none}
 html body .scan-modal .scan-tabs>button{display:inline-flex;align-items:center;gap:6px;white-space:nowrap;flex:none}
-.scan-tabs>button i{display:inline-grid;place-items:center;min-width:18px;height:18px;padding:0 5px;border-radius:9px;font-size:11px;font-style:normal;font-variant-numeric:tabular-nums;background:color-mix(in srgb,currentColor 14%,transparent)}
+.scan-tabs>button i{display:inline-grid;place-items:center;min-width:18px;height:18px;padding:0 5px;border-radius:9px;font-size:12px;font-style:normal;font-variant-numeric:tabular-nums;background:color-mix(in srgb,currentColor 14%,transparent)}
 .scan-tools{flex:none;display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin:0 0 8px}
 .scan-tools .scan-sp{flex:1}
 .scan-tools .btn i{font-style:normal;opacity:.75;font-variant-numeric:tabular-nums}
@@ -1199,3 +1199,9 @@ html body select.field:not(.auth-root *),html body .tk-page select.tk-filter.fie
 :root{--sel-arrow:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' fill='none'%3E%3Cpath d='M3 4.5l3 3 3-3' stroke='%235F6058' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")}
 [data-theme="dark"]{--sel-arrow:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' fill='none'%3E%3Cpath d='M3 4.5l3 3 3-3' stroke='%239C9D95' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")}
 html body .cx-hist select{padding-left:10px}
+
+/* Màn cảm ứng (pointer: coarse): vùng bấm tối thiểu 44×44 cho nút biểu tượng, mục menu, mục điều hướng (WCAG 2.5.5).
+   Tiền tố html body … :not(.auth-root *) cùng dạng các luật phía trên (vd. .menu-item min-height:32px) và đứng sau nên thắng; trang đăng nhập cũng áp dụng. */
+@media (pointer:coarse){
+  html body :is(.icon-btn,.menu-item,.nav-item):not(.auth-root *),.auth-root :is(.icon-btn,.menu-item,.nav-item){min-width:44px;min-height:44px}
+}

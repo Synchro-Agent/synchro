@@ -2193,7 +2193,7 @@ export default function Home() {
   const [pinOpen, setPinOpen] = usePref("pinOpen", true);
   const [recentOpen, setRecentOpen] = usePref("recentOpen", true);
   const pill = false && (
-    <div className="plan-pill">Gói Free · <a onClick={() => setModal("upgrade")}>Nâng cấp</a>{view === "chat" && <button onClick={() => setBanner(false)} style={{ display: "grid", marginLeft: 2 }}><I.X size={14} /></button>}</div>
+    <div className="plan-pill">Gói Free · <a onClick={() => setModal("upgrade")}>Nâng cấp</a>{view === "chat" && <button aria-label={tr("Đóng")} onClick={() => setBanner(false)} style={{ display: "grid", marginLeft: 2 }}><I.X size={14} /></button>}</div>
   );
   const proj = projects.find((x) => x.id === curProj);
   const sideRef = useClickAway(() => setSideProj(null));
