@@ -482,8 +482,9 @@ export function isAck(text: string): boolean {
   return !hasStakes(typedPart(text)) && !((QUESTION.test(ins) || (noMarks(ins) && QUESTION_FOLD.test(ins))) && !followsUp(ins));
 }
 // Thông tin của yêu cầu mới nhất từ danh sách tin của đoạn chat: chữ, tệp / ảnh đính kèm, độ dài tài liệu, lời nhờ trước đó. Chỉ chữ người dùng gõ mới quyết định loại việc; nội dung tệp đính kèm
-// (ghi chú "Các khối <file>…", nhãn [File: …], <file>…</file>) chỉ tính số tệp và độ dài, để từ khóa nằm trong tệp không đẩy độ khó lên. Hàm thuần: bài đánh giá nhiều lượt chạy đúng đường này.
-const FILE_TEXT = /^(?:Các khối <file>|\[File: )/;
+// (ghi chú "Các khối <file>…", nhãn [File: …], <file>…</file>, khối <attachments_rejected> của tệp không đọc được) chỉ tính số tệp và độ dài, để từ khóa nằm trong tệp
+// không đẩy độ khó lên. Hàm thuần: bài đánh giá nhiều lượt chạy đúng đường này.
+const FILE_TEXT = /^(?:Các khối <file>|\[File: |<attachments_rejected>)/;
 type ChatMsg = { role?: string; content?: unknown };
 export function typedText(m: ChatMsg | undefined): string {
   if (!m) return "";

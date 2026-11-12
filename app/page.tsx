@@ -8,6 +8,7 @@ import { getLang, tr, useLangReady } from "./i18n";
 import { FileCard } from "./fileicon";
 import { useFileMenu, saveDoc, saveBlob, fileContext } from "./filemenu";
 import { capFiles, getStatus } from "./filestate";
+import type { Rejected } from "./turnctx";
 import { Boundary, Fade, Menu, Thinking } from "./ui";
 import { chatError, GENERIC_ERR, isForeign } from "./chaterror";
 import { armDraft, saveDraft, takeDraft } from "./draft";
@@ -1593,7 +1594,8 @@ export default function Home() {
   const workOf = (x?: Msg) => (x?.role === "ai" ? { parts: x.parts, plan: x.plan, seq: x.seq } : {});
   // avoid: "Chạy lại bằng model khác" dưới câu trả lời của chế độ Tự động — lượt này vẫn Tự động nhưng tránh model đó. Truyền theo lượt, không qua biến dùng chung:
   // lượt dừng sớm (tệp đính kèm không đọc được) không được để lại model cần tránh cho tin nhắn sau, ở đoạn chat khác.
-  const streamReply = async (id: number, text: string, hist?: LLMMsg[], pid?: number, studio?: Chat["studio"], picked?: string[], avoid?: string) => {
+  // rejected: thẻ tệp báo lỗi của lượt này (tên, loại, lý do): máy chủ báo cho model để câu trả lời nói rõ tệp nào không đọc được và vì sao.
+  const streamReply = async (id: number, text: string, hist?: LLMMsg[], pid?: number, studio?: Chat["studio"], picked?: string[], avoid?: string, rejected?: Rejected[]) => {
     const gen = ++genSeq.current;
     gens.current.set(id, gen);
     setBusyOf(id, true);
@@ -1640,7 +1642,7 @@ export default function Home() {
         // Model của câu trả lời trước: người dùng chê ("làm lại", "sai rồi") thì chế độ Tự động đổi sang model khác.
         extra: { ...mixExtra(chatsRef.current.find((c) => c.id === id)), web: readPref("webSearch", true), memory: readPref("chatMemory", true), incognito: !!chatsRef.current.find((c) => c.id === id)?.inc, prevModel: [...(chatsRef.current.find((c) => c.id === id)?.msgs ?? [])].reverse().find((m) => m.role === "ai" && m.done && m.via)?.via,
           // histTotal: số tin thật trước khi cắt còn HISTORY_LIMIT (để nối tiếp phiên CLI); tz: múi giờ của người dùng cho dòng giờ hiện tại.
-          histTotal: hist?.length ?? 1, ...(hist && hist.length > HISTORY_LIMIT ? { olderDigest: olderDigest(hist.slice(0, -HISTORY_LIMIT)) } : {}), tz: Intl.DateTimeFormat().resolvedOptions().timeZone, ...(avoid ? { avoidModel: avoid } : {}) } });
+          histTotal: hist?.length ?? 1, ...(hist && hist.length > HISTORY_LIMIT ? { olderDigest: olderDigest(hist.slice(0, -HISTORY_LIMIT)) } : {}), tz: Intl.DateTimeFormat().resolvedOptions().timeZone, ...(avoid ? { avoidModel: avoid } : {}), ...(rejected?.length ? { rejected } : {}) } });
       webs = meta.webs ?? [];
       // Tự động đã chuyển sang model khác vì model đầu lỗi / quá tải: giữ lời báo dưới câu trả lời (thanh thông báo chỉ hiện một lúc).
       if (meta.switched) notice = { text: meta.switched };
@@ -1677,7 +1679,7 @@ export default function Home() {
       if (Array.isArray(d.webSources)) webs = d.webSources as Msg["webs"];
       // Gói subscription hết hạn mức hoặc phiên đăng nhập hỏng: hỏi người dùng có chuyển sang khóa API của cùng hãng không (không tự chuyển).
       if (e instanceof LLMError && (e.data.planLimit || e.data.relogin) && typeof e.data.apiModel === "string") {
-        const retry = () => { patch(id, (m) => [...m.slice(0, -1), { role: "ai", text: "", time: Date.now() }]); streamReply(id, text, hist, pid, studio, picked, avoid); };
+        const retry = () => { patch(id, (m) => [...m.slice(0, -1), { role: "ai", text: "", time: Date.now() }]); streamReply(id, text, hist, pid, studio, picked, avoid, rejected); };
         setTimeout(() => askPlanSwitch(e.data, retry), 300);
       }
     }
@@ -1891,15 +1893,17 @@ export default function Home() {
   };
   // Chạy một lượt: đọc các tệp đính kèm chưa có trên máy chủ rồi gọi model (gửi mới, thử lại, sửa tin đã gửi).
   const runTurn = (id: number, t: string, f: string[], hist: LLMMsg[], pid?: number, studio?: Chat["studio"], picked?: string[], avoid?: string) => {
-    fileContext(f, t).then(({ blocks, errors, failed }) => {
+    fileContext(f, t).then(({ blocks, errors, rejected, failed }) => {
       errors.forEach((m) => say(m));
       // Nhớ mã tệp trên máy chủ: các lượt sau (kể cả khi chế độ Tự động đổi model) gửi lại tệp này cùng lịch sử.
       const fids = Object.fromEntries(f.flatMap((n) => { const x = getStatus(n)?.id; return x ? [[n, x]] : []; }));
       if (Object.keys(fids).length) patch(id, (ms) => ms.map((m, k) => (k === ms.length - 2 && m.role === "user" ? { ...m, fids: { ...m.fids, ...fids } } : m)));
-      // Không gửi được tệp: báo ngay trong khung trả lời, không hỏi model như thể tin nhắn không có tệp.
+      // Không lấy được nội dung các tệp đọc được: báo ngay trong khung trả lời, không hỏi model như thể tin nhắn không có tệp.
+      // Tệp bị từ chối (thẻ báo lỗi) thì vẫn gửi lượt, kèm danh sách để model nói rõ tệp nào không đọc được và vì sao.
       if (failed) { patch(id, (m) => [...m.slice(0, -1), { role: "ai", text: "", failed: true, err: errors[errors.length - 1] ?? "Không lấy được nội dung tệp đính kèm. Hãy gửi lại.", time: Date.now(), done: true }]); return; }
       if (blocks.length) { const c = hist[hist.length - 1].content; hist[hist.length - 1] = { role: "user", content: [...(Array.isArray(c) ? c : [{ type: "text" as const, text: t || "Hãy xem các tệp đính kèm." }]), ...blocks] }; }
-      streamReply(id, t, hist, pid, studio, picked, avoid);
+      else if (rejected.length && !t.trim()) hist[hist.length - 1] = { role: "user", content: "Hãy xem các tệp đính kèm." };
+      streamReply(id, t, hist, pid, studio, picked, avoid, rejected);
     });
   };
   // Gửi lại tin thứ k của đoạn chat (u: nội dung tin đó, đã sửa hoặc không): bỏ mọi tin sau nó, lượt mới giữ nguyên tệp và skill đã chọn.

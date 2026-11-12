@@ -44,6 +44,7 @@ import { untested } from "./modelreg";
 import { type ABlock, type Citer, anthropicCall, blocksText, searchResults, chatOnce, effortParams, HttpErr, openaiCall, outCap, respInput, respParse, respTools, responsesCall, toAnthropic, toOpenAI, toResponses, withPages } from "./llmcall";
 import { mergedProviders, prewarmClaude, sessionPlain, subCli, subTurn } from "./ai/subs";
 import { PROJECT_DOC_RULES, PROJECT_DOC_TOOL, projectDocsLong, readProjectFile } from "./projectdocs";
+import { REJECTED_RULE, rejectedBlock, withRejected } from "./turnctx";
 import { ASPECTS, generateImages, IMAGE_RULES, IMAGE_TOOL_NAME, imageBudget, imageProduct, imageTool, imageName, IMG_NAME, requestSlug, type ImgErr, type ImgOk } from "./ai/imagegen";
 import { POSTER_TEMPLATES, posterProps, type PosterTemplate } from "./design-engine/posters/props";
 import { genImageUrl } from "./artdoc";
@@ -1476,6 +1477,10 @@ const useMemory = (body: Record<string, any>, _u: UserRow) => !!body.skills && b
 export async function chatPost(body: Record<string, any>, c: Who, scope: { feature: string }): Promise<Response> { // eslint-disable-line @typescript-eslint/no-explicit-any
   // Tệp của các lượt trước đi cùng lịch sử: model nào trả lời lượt này (kể cả model vừa đổi) cũng thấy đúng tài liệu đang bàn.
   if (Array.isArray(body.messages)) { const msgs = body.messages; body = { ...body, messages: await span("file refs", "history", () => expandFileRefs(msgs, lastUserText(msgs), c.user.id)) }; }
+  // Tệp đính kèm bị từ chối (thẻ tệp báo lỗi ở khung soạn): khối <attachments_rejected> đứng đầu tin nhắn mới nhất và một dòng trong hướng dẫn hệ thống,
+  // để model nói đúng tệp nào không đọc được và vì sao, không trả lời như thể tin nhắn không có tệp. Có khối thì không đi đường nhanh (hướng dẫn khác mặc định).
+  const rej = Array.isArray(body.messages) ? rejectedBlock(body.rejected) : "";
+  if (rej) body = { ...body, messages: withRejected(body.messages as unknown[], rej), system: `${body.system || DEFAULT_SYSTEM}\n\n${REJECTED_RULE}` };
   if (typeof body.resume === "string") return chatTurn(body, c, scope);
   if (body.model !== AUTO) return withSwitch(await chatTurn(body, c, scope), body, c.user, [String(body.model)]);
   // Chọn trong đúng các model bộ chọn model đang hiện: nhóm của hãng đang dùng gói subscription thì chọn model của gói,
