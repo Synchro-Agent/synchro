@@ -44,8 +44,8 @@ export function purgeRows(uid: string) {
 /** Đăng xuất mọi CLI (xóa cả token đã lưu), xóa thư mục làm việc của CLI. Thư mục nằm trong nhà engine, thuộc user riêng của engine. */
 async function purgeEngine(uid: string) {
   const scope = safeScope(uid), root = path.join(engineHome(), "logins");
-  for (const cli of CLIS) if (listEngineDir(path.join(root, cli)).includes(scope)) await logout(cli, uid).catch((e) => console.error("[purge] logout", cli, e));
-  removeDir(path.join(engineHome(), "work", scope));
+  for (const cli of CLIS) if ((await listEngineDir(path.join(root, cli))).includes(scope)) await logout(cli, uid).catch((e) => console.error("[purge] logout", cli, e));
+  await removeDir(path.join(engineHome(), "work", scope));
 }
 
 export async function purgeUser(uid: string) {

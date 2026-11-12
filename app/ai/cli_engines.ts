@@ -10,12 +10,12 @@ import { scrubServerPaths } from "./imagefiles";
 
 type Json = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 
-function start(cli: Cli, args: string[], req: TurnRequest, stdin: string, timeoutMs?: number): Proc | null {
+async function start(cli: Cli, args: string[], req: TurnRequest, stdin: string, timeoutMs?: number): Promise<Proc | null> {
   const bin = find(cli);
   if (!bin) return null;
   // Không có workdir riêng thì chạy trong <home>/work (CLI chỉ ghi trong thư mục làm việc).
   const cwd = req.workdir ?? path.join(engineHome(), "work");
-  makeDir(cwd);
+  await makeDir(cwd);
   const p = spawnCli(bin, args, { env: req.env, cwd, stdin, signal: req.signal, idleMs: IDLE_MS, alive: req.alive, ...(timeoutMs ? { timeoutMs } : {}) });
   // Hai CLI chỉ báo mã phiên cuối lượt: lượt tạo ảnh cần biết lượt nào còn chạy trước khi dọn phiên của nó (watchSessions).
   if ((cli === "agy" || cli === "grok") && req.env?.HOME) cliRunning(req.env.HOME, p);
@@ -26,10 +26,10 @@ function start(cli: Cli, args: string[], req: TurnRequest, stdin: string, timeou
 const ARG_MAX_BYTES = 100_000;
 const tooLong = (s?: string) => Buffer.byteLength(s ?? "", "utf8") > ARG_MAX_BYTES;
 /** Tệp tạm của lượt trong thư mục làm việc (ghi bằng user của engine). */
-function turnFile(req: TurnRequest, tag: string, text: string) {
+async function turnFile(req: TurnRequest, tag: string, text: string) {
   const cwd = req.workdir ?? path.join(engineHome(), "work");
   const file = path.join(cwd, `.synchro-${tag}-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}.txt`);
-  writeEngineFile(file, Buffer.from(text, "utf8"));
+  await writeEngineFile(file, Buffer.from(text, "utf8"));
   return file;
 }
 /** Cắt bớt phần đầu (lịch sử cũ) để vừa ARG_MAX_BYTES, giữ phần cuối (tin nhắn mới nhất). */
@@ -196,11 +196,11 @@ export class ClaudeCodeEngine implements Engine {
   /** tools: công cụ dựng sẵn của Claude Code được bật ("" = tắt hết; công cụ của Synchro đi qua MCP). */
   constructor(private o: { tools?: string } = {}) {}
   /** Khởi động sẵn tiến trình cho lượt không công cụ kế tiếp của tài khoản này (không tốn lượt nào của gói). */
-  prestart(req: Pick<TurnRequest, "system" | "model" | "effort" | "env" | "workdir">) {
+  async prestart(req: Pick<TurnRequest, "system" | "model" | "effort" | "env" | "workdir">): Promise<void> {
     const bin = find("claude");
     if (!bin || tooLong(req.system)) return;
     const spec = poolSpec(req, bin, this.o.tools ?? "");
-    makeDir(spec.cwd);
+    await makeDir(spec.cwd);
     prestart(spec);
   }
   /** true: lượt đã chạy xong bằng hồ (kể cả báo lỗi). false: chưa có gì tới người dùng, chạy lại bằng tiến trình mới. */
@@ -208,7 +208,7 @@ export class ClaudeCodeEngine implements Engine {
     const bin = find("claude");
     if (!bin || tooLong(req.system)) return false;
     const spec = poolSpec(req, bin, this.o.tools ?? "");
-    makeDir(spec.cwd);
+    await makeDir(spec.cwd);
     const lease = takeProcess(spec, req.sessionId);
     if (!lease) return false;
     yield { kind: "pool", state: lease.hit ? "hit" : "cold" };
@@ -223,7 +223,7 @@ export class ClaudeCodeEngine implements Engine {
       if (r.done) {
         // Lượt báo lỗi (hết hạn mức, đăng nhập…): không biết tiến trình còn dùng được không.
         if (r.failed) lease.discard();
-        else { lease.release(r.session); this.prestart(req); }
+        else { lease.release(r.session); await this.prestart(req); }
         closed = true;
         return true;
       }
@@ -313,7 +313,7 @@ export class ClaudeCodeEngine implements Engine {
     // qua tệp, không qua tham số (giới hạn 128 KB mỗi tham số).
     let sysFile = "";
     if (req.system && tooLong(req.system)) {
-      try { sysFile = turnFile(req, "claude-sys", req.system); args.push("--system-prompt-file", sysFile); }
+      try { sysFile = await turnFile(req, "claude-sys", req.system); args.push("--system-prompt-file", sysFile); }
       catch (e) { yield err(`Không chuyển được hướng dẫn cho Claude Code: ${(e as Error).message}`, "other"); return; }
     } else if (req.system) args.push("--system-prompt", req.system);
     if (req.model) args.push("--model", req.model);
@@ -326,7 +326,7 @@ export class ClaudeCodeEngine implements Engine {
     if (atts.length) args.push("--input-format", "stream-json");
     // Công cụ của Synchro (lệnh trong workspace, build, cài gói) có thể chạy lâu: chờ tới 15 phút mỗi lời gọi.
     // Công cụ của Synchro có thể dừng chờ người dùng duyệt (chế độ quyền, trang web chưa được phép): chờ được tới hết 30 phút của lượt.
-    const p = start("claude", args, req.mcp ? { ...req, env: { ...req.env, MCP_TOOL_TIMEOUT: "1800000" } } : req, atts.length ? claudeInput(req.prompt, atts) : req.prompt);
+    const p = await start("claude", args, req.mcp ? { ...req, env: { ...req.env, MCP_TOOL_TIMEOUT: "1800000" } } : req, atts.length ? claudeInput(req.prompt, atts) : req.prompt);
     if (sysFile) void p?.done.finally(() => rmEngineFile(req, sysFile).catch(() => {}));
     if (!p) { if (sysFile) await rmEngineFile(req, sysFile).catch(() => {}); yield notInstalled("claude"); return; }
     const r = yield* this.events(objects(p), p.kill);
@@ -365,7 +365,7 @@ export class CodexEngine implements Engine {
     // Ảnh gửi kèm (cả khi nối tiếp phiên): --image=<tệp>; PDF: chữ trích ra đã có trong prompt, trang scan đi cùng ảnh (Codex không còn công cụ mở tệp).
     for (const f of imagePaths(req.attachments ?? [])) args.push(`--image=${f}`);
     args.push("-");
-    const p = start("codex", args, req, prompt);
+    const p = await start("codex", args, req, prompt);
     if (!p) { yield notInstalled("codex"); return; }
     const parts: string[] = [];
     let done = false, lastErr = "", tools = false, partial = "";
@@ -443,7 +443,7 @@ export async function agyDenied(req: Pick<TurnRequest, "env" | "workdir">, log: 
 }
 async function agyRun(args: string[], req: TurnRequest) {
   // Lệnh ngắn (thêm / gỡ cầu nối): treo thì không được giữ khóa của tài khoản lâu hơn chừng này.
-  const p = start("agy", args, { ...req, signal: undefined }, "", 60_000);
+  const p = await start("agy", args, { ...req, signal: undefined }, "", 60_000);
   if (!p) return false;
   for await (const _ of p.lines) { /* bỏ qua */ }
   return (await p.done).code === 0;
@@ -562,7 +562,7 @@ export class AntigravityEngine implements Engine {
     const log = req.mcp ? path.join(req.workdir ?? path.join(engineHome(), "work"), `.synchro-agy-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}.log`) : "";
     if (log) args.push("--log-file", log);
     args.push("-p", prompt);
-    const p = start("agy", args, req, "");
+    const p = await start("agy", args, req, "");
     if (!p) { yield notInstalled("agy"); return; }
     // Print mode không có sự kiện giữa chừng: nói trước để người dùng không tưởng là treo.
     yield { kind: "status", text: "Antigravity đang viết, chữ sẽ hiện một lần khi xong (thường 5 đến 10 giây)" };
@@ -620,7 +620,7 @@ export class AntigravityEngine implements Engine {
 const grokLocks = new Map<string, Slot>();
 export const GROK_DENY = ["Bash", "Read", "Edit", "Write", "Grep", "Glob", "WebFetch"];
 async function grokRun(args: string[], req: TurnRequest) {
-  const p = start("grok", args, { ...req, signal: undefined }, "", 60_000);
+  const p = await start("grok", args, { ...req, signal: undefined }, "", 60_000);
   if (!p) return false;
   for await (const _ of p.lines) { /* bỏ qua */ }
   return (await p.done).code === 0;
@@ -654,7 +654,7 @@ export class GrokEngine implements Engine {
   }
   private async *turn(req: TurnRequest, retried = false): AsyncIterable<Event> {
     const cwd = req.workdir ?? path.join(engineHome(), "work");
-    makeDir(cwd);
+    await makeDir(cwd);
     const atts = (req.attachments ?? []).filter((a) => a.path);
     const refs = atts.flatMap((a) => [a.path!, ...(a.pages ?? []).map((x) => x.path).filter((x): x is string => !!x)]).map((f) => `@${path.relative(cwd, f)}`);
     // Hướng dẫn hệ thống rất dài (nhiều skill, connector) không vừa một tham số dòng lệnh (giới hạn 128 KB): đưa vào đầu tệp prompt.
@@ -662,7 +662,7 @@ export class GrokEngine implements Engine {
     const prompt = (longSys ? `<system_instructions>\n${req.system}\n</system_instructions>\n\n` : "") + req.prompt
       + (refs.length ? `\n\n<attachments>\nNgười dùng gửi kèm các tệp dưới đây (đúng thứ tự [Ảnh / Tệp đính kèm n] ở trên): ${refs.join(" ")}\n</attachments>` : "");
     const file = path.join(cwd, `.synchro-grok-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}.txt`);
-    try { writeEngineFile(file, Buffer.from(prompt, "utf8")); }
+    try { await writeEngineFile(file, Buffer.from(prompt, "utf8")); }
     catch (e) { yield err(`Không chuyển được tin nhắn cho Grok: ${(e as Error).message}`, "other"); return; }
     // Lượt không có cầu nối (việc phụ: đặt tên, rút bộ nhớ…): tắt cả search_tool / use_tool để không gọi nhầm cầu nối của lượt khác
     // đang chạy cùng lúc. Có tệp đính kèm: không chặn Read để Grok CLI đọc được tệp @… (model vẫn không có công cụ đọc tệp vì --tools).
@@ -675,7 +675,7 @@ export class GrokEngine implements Engine {
     const ce = cliEffort(req.effort);
     if (ce) args.push("--effort", ce);
     if (req.sessionId) args.push("--resume", req.sessionId);
-    const p = start("grok", args, req, "");
+    const p = await start("grok", args, req, "");
     if (!p) { await rmEngineFile(req, file).catch(() => {}); yield notInstalled("grok"); return; }
     // Có dùng công cụ: phần chữ trước công cụ là lời dẫn (đã hiện trong nhật ký làm việc), câu trả lời là đoạn sau công cụ cuối cùng.
     let all = "", seg = "", tools = false, done = false, lastErr = "";

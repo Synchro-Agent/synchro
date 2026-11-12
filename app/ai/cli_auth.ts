@@ -13,7 +13,7 @@ import path from "node:path";
 import { openSecret, sealSecret } from "../providers";
 import { DATA_DIR } from "../authstore";
 import { opsEvent } from "../ops";
-import { type Cli, engineHome, find, makeDir, removeDir, runCli, spawnCli, stripAnsi, type Proc, version } from "./cli_runtime";
+import { type Cli, engineHome, find, makeDirSync, removeDir, runCli, spawnCli, stripAnsi, type Proc, version } from "./cli_runtime";
 import { dropAccount } from "./cli_pool";
 import { redact } from "./errors";
 
@@ -41,7 +41,7 @@ export const safeScope = (s: string) => s.replace(/[^A-Za-z0-9_-]/g, "_").slice(
 /** Thư mục cấu hình riêng của tài khoản (tạo nếu chưa có, quyền 0700 từ logins/ trở xuống). */
 export function scopeDir(cli: Cli, scope: string) {
   const root = path.join(engineHome(), "logins"), d = path.join(root, cli, safeScope(scope));
-  for (const p of [root, path.join(root, cli), d]) makeDir(p);
+  for (const p of [root, path.join(root, cli), d]) makeDirSync(p);
   return d;
 }
 
@@ -403,7 +403,7 @@ export async function logout(cli: Cli, scope: string) {
   if (cli === "claude") dropAccount(scopeDir(cli, scope));
   const bin = find(cli), dir = scopeDir(cli, scope), env = engineEnv(cli, scope);
   if (bin && cli !== "agy") await runCli(bin, cli === "claude" ? ["auth", "logout"] : ["logout"], { env, cwd: dir, timeoutMs: 20_000 }).catch(() => null);
-  removeDir(dir);
+  await removeDir(dir);
   if (cli === "claude") fs.rmSync(tokenFile(scope), { force: true });
   g.relogin.delete(key(cli, scope));
   fs.rmSync(marker(cli, scope), { force: true });

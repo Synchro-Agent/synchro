@@ -7,6 +7,7 @@ import { execFile, spawn, spawnSync, type ChildProcess } from "node:child_proces
 import fs from "node:fs";
 import path from "node:path";
 import readline from "node:readline";
+import { promisify } from "node:util";
 
 export type Cli = "claude" | "codex" | "agy" | "grok";
 export const CLIS: Cli[] = ["claude", "codex", "agy", "grok"];
@@ -33,11 +34,29 @@ function ensureNoBrowser() {
 
 // ---------------------------------------------------------------- thư mục trong nhà engine
 const engineUser = () => process.env.SYNCHRO_ENGINE_USER || "";
+const execFileP = promisify(execFile);
+const sudoArgs = (u: string, cmd: string, args: string[]) => ["-n", "-u", u, "--", "env", "-i", "PATH=/usr/bin:/bin", cmd, ...args];
+/**
+ * Chạy lệnh hệ thống ngắn mà không chặn vòng sự kiện (trước đây spawnSync("sudo", …): mỗi lần chờ sudo là cả máy chủ đứng).
+ * Giữ đúng như spawnSync: stdin là input (hoặc đóng ngay), ok khi mã thoát 0; err là stderr, không có thì lỗi khởi chạy (ENOENT…), mã thoát khác 0
+ * mà không in gì thì rỗng.
+ */
+async function runCmd(cmd: string, args: string[], input?: Buffer): Promise<{ ok: boolean; stdout: string; err: string }> {
+  const p = execFileP(cmd, args, { encoding: "utf8" });
+  const stdin = p.child.stdin;
+  // Tiến trình thoát trước khi đọc hết input (EPIPE): lỗi nằm ở mã thoát, không để lỗi luồng làm sập máy chủ.
+  if (stdin) { stdin.on("error", () => {}); stdin.end(input); }
+  try { const r = await p; return { ok: true, stdout: r.stdout, err: r.stderr }; }
+  catch (e) {
+    const x = e as { stdout?: string; stderr?: string; code?: number | string; message?: string };
+    return { ok: false, stdout: x.stdout ?? "", err: x.stderr || (typeof x.code === "number" ? "" : x.message ?? "") };
+  }
+}
 /** Chạy lệnh hệ thống ngắn bằng user của engine (khi có), để thư mục engine luôn thuộc về user đó. */
-function asEngine(cmd: string, args: string[]) {
+async function asEngine(cmd: string, args: string[]): Promise<void> {
   const u = engineUser();
-  const r = u ? spawnSync("sudo", ["-n", "-u", u, "--", "env", "-i", "PATH=/usr/bin:/bin", cmd, ...args], { encoding: "utf8" }) : spawnSync(cmd, args, { encoding: "utf8" });
-  if (r.status !== 0) throw new Error(`Không ${cmd === "mkdir" ? "tạo" : "xóa"} được thư mục của engine: ${(r.stderr || r.error?.message || "").trim().slice(0, 200)}`);
+  const r = u ? await runCmd("sudo", sudoArgs(u, cmd, args)) : await runCmd(cmd, args);
+  if (!r.ok) throw new Error(`Không ${cmd === "mkdir" ? "tạo" : "xóa"} được thư mục của engine: ${r.err.trim().slice(0, 200)}`);
 }
 /** Mọi tiến trình con cháu của một tiến trình (đọc cây tiến trình qua ps). */
 export function descendants(root: number): number[] {
@@ -53,32 +72,42 @@ export function descendants(root: number): number[] {
 }
 
 /** Tạo thư mục (quyền 0700) trong nhà engine. */
-export function makeDir(dir: string) {
+export async function makeDir(dir: string): Promise<void> {
   if (!engineUser()) { fs.mkdirSync(dir, { recursive: true, mode: 0o700 }); fs.chmodSync(dir, 0o700); return; }
-  if (!fs.existsSync(dir)) asEngine("mkdir", ["-p", "-m", "700", dir]);
+  if (!fs.existsSync(dir)) await asEngine("mkdir", ["-p", "-m", "700", dir]);
+}
+/**
+ * Như makeDir nhưng đồng bộ, chỉ cho cli_auth.scopeDir (trả đường dẫn đồng bộ, gọi ở rất nhiều nơi). Thư mục đăng nhập chỉ phải tạo một lần
+ * cho mỗi tài khoản và CLI; đã có thì chỉ là một lần existsSync, không gọi sudo.
+ */
+export function makeDirSync(dir: string) {
+  if (!engineUser()) { fs.mkdirSync(dir, { recursive: true, mode: 0o700 }); fs.chmodSync(dir, 0o700); return; }
+  if (fs.existsSync(dir)) return;
+  const r = spawnSync("sudo", sudoArgs(engineUser(), "mkdir", ["-p", "-m", "700", dir]), { encoding: "utf8" });
+  if (r.status !== 0) throw new Error(`Không tạo được thư mục của engine: ${(r.stderr || r.error?.message || "").trim().slice(0, 200)}`);
 }
 /** Ghi một tệp (quyền 0600) trong nhà engine bằng user của engine, tạo thư mục cha nếu chưa có (tệp đính kèm cho CLI đọc). */
-export function writeEngineFile(file: string, data: Buffer) {
+export async function writeEngineFile(file: string, data: Buffer): Promise<void> {
   const home = path.resolve(engineHome());
   if (!path.resolve(file).startsWith(home + path.sep)) throw new Error("Đường dẫn nằm ngoài thư mục engine.");
   const u = engineUser();
   if (!u) { fs.mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 }); fs.writeFileSync(file, data, { mode: 0o600 }); return; }
-  const r = spawnSync("sudo", ["-n", "-u", u, "--", "env", "-i", "PATH=/usr/bin:/bin", "sh", "-c", 'umask 077 && mkdir -p "$(dirname "$1")" && cat > "$1"', "sh", file], { input: data });
-  if (r.status !== 0) throw new Error(`Không ghi được tệp đính kèm cho engine: ${String(r.stderr ?? r.error?.message ?? "").trim().slice(0, 200)}`);
+  const r = await runCmd("sudo", sudoArgs(u, "sh", ["-c", 'umask 077 && mkdir -p "$(dirname "$1")" && cat > "$1"', "sh", file]), data);
+  if (!r.ok) throw new Error(`Không ghi được tệp đính kèm cho engine: ${r.err.trim().slice(0, 200)}`);
 }
 /** Tên các mục trong một thư mục của nhà engine (rỗng nếu chưa có). */
-export function listEngineDir(dir: string): string[] {
+export async function listEngineDir(dir: string): Promise<string[]> {
   const u = engineUser();
   if (!u) { try { return fs.readdirSync(dir); } catch { return []; } }
-  const r = spawnSync("sudo", ["-n", "-u", u, "--", "env", "-i", "PATH=/usr/bin:/bin", "ls", "-1", dir], { encoding: "utf8" });
-  return r.status === 0 ? r.stdout.split("\n").filter(Boolean) : [];
+  const r = await runCmd("sudo", sudoArgs(u, "ls", ["-1", dir]));
+  return r.ok ? r.stdout.split("\n").filter(Boolean) : [];
 }
 /** Xóa hẳn một thư mục trong nhà engine (chỉ nhận đường dẫn nằm trong nhà engine). */
-export function removeDir(dir: string) {
+export async function removeDir(dir: string): Promise<void> {
   const home = path.resolve(engineHome());
   if (!path.resolve(dir).startsWith(home + path.sep)) throw new Error("Đường dẫn nằm ngoài thư mục engine.");
   if (!engineUser()) { fs.rmSync(dir, { recursive: true, force: true }); return; }
-  asEngine("rm", ["-rf", "--", dir]);
+  await asEngine("rm", ["-rf", "--", dir]);
 }
 
 /** Xóa tệp và thư mục có tên chứa mã phiên trong thư mục đăng nhập của một CLI: lịch sử phiên chứa nguyên văn đoạn chat. Tìm theo tên thay vì đoán cấu trúc của từng hãng

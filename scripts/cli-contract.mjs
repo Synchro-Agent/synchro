@@ -176,7 +176,7 @@ async function runCli(cli) {
   if (!st.installed) { for (const c of CHECKS) table.get(cli).set(c, { st: "skip", note: "" }); log(`[${cli}] not installed: skip`); return; }
   if (!st.loggedIn) { for (const c of CHECKS) table.get(cli).set(c, { st: "skip", note: "" }); log(`[${cli}] not signed in for this account: skip`); return; }
   const env = A.engineEnv(cli, scope), workdir = path.join(R.engineHome(), "work", A.safeScope(scope));
-  R.makeDir(workdir);
+  await R.makeDir(workdir);
   // Model rẻ nhất biết chắc tên; CLI khác dùng mặc định của gói, hoặc --model.
   const model = MODELS[cli] ?? (cli === "claude" ? "haiku" : undefined);
   const base = { env, workdir, model };

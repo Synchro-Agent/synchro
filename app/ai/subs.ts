@@ -47,7 +47,7 @@ export async function codexRpc(scope: string, calls: { method: string; params?: 
   const out: (Json | null)[] = calls.map(() => null);
   if (!bin) return out;
   const work = path.join(engineHome(), "work");
-  makeDir(work);
+  await makeDir(work);
   const p = spawnCli(bin, ["app-server"], { env: engineEnv("codex", scope), cwd: work, timeoutMs });
   const send = (o: Json) => p.write(JSON.stringify({ jsonrpc: "2.0", ...o }) + "\n");
   send({ id: 0, method: "initialize", params: { clientInfo: { name: "synchro", version: "1.0" } } });
@@ -352,7 +352,7 @@ function agyUsage(scope: string): Promise<AgyUsage> {
     const bin = find("agy");
     if (!bin) return { windows: [], setup: false };
     const work = path.join(engineHome(), "work", safeScope(scope));
-    makeDir(work);
+    await makeDir(work);
     const p = spawnCli(bin, [], { env: engineEnv("agy", scope), cwd: work, pty: true, timeoutMs: 30_000 });
     let raw = "", last = Date.now(), asked = false, setup = false;
     p.child.stdout!.on("data", (d: Buffer) => { raw = (raw + d.toString()).slice(-200_000); last = Date.now(); });
@@ -550,7 +550,7 @@ export async function removeConvSessions(uid: string, conv: string) {
   d.prepare("DELETE FROM engine_sessions WHERE user_id = ? AND conv = ?").run(uid, conv);
   d.prepare("DELETE FROM engine_session_log WHERE user_id = ? AND conv = ?").run(uid, conv);
   for (const r of rows) await removeSessionFiles(scopeDir(r.cli, uid), r.session_id);
-  removeConvAttachments(uid, conv);
+  await removeConvAttachments(uid, conv);
 }
 /** Đoạn chat này chưa có phiên của CLI, hoặc phiên chưa từng gọi công cụ: đi đường nhanh được. Lịch sử có khối gọi công cụ mà lượt lại không khai báo công cụ thì API có thể từ chối. */
 export function sessionPlain(uid: string, conv: string | undefined, cli: Cli): boolean {
@@ -559,11 +559,12 @@ export function sessionPlain(uid: string, conv: string | undefined, cli: Cli): b
   return !r || r.tooled === 0;
 }
 /** Khởi động sẵn tiến trình Claude Code cho lượt không công cụ kế tiếp của người dùng (mở trang, đổi model). Không tốn lượt nào của gói. */
+// Tạo thư mục làm việc không còn chặn (makeDir chạy sudo bất đồng bộ): khởi động sẵn chạy nền, lỗi bỏ qua như mọi lời gọi prewarmChat vẫn làm.
 export function prewarmClaude(o: { user: UserRow; model: string; system: string; effort?: string }) {
   if (subCli(o.model) !== "claude") return;
   const run = resolvePlanModel("claude", o.user.id, splitKey(o.model).id, o.effort);
-  const eng = engineFor("claude") as unknown as { prestart?: (r: Pick<TurnRequest, "system" | "model" | "effort" | "env" | "workdir">) => void };
-  eng.prestart?.({ system: o.system || undefined, model: run.model, effort: run.effort, env: engineEnv("claude", o.user.id), workdir: path.join(engineHome(), "work", safeScope(o.user.id)) });
+  const eng = engineFor("claude") as unknown as { prestart?: (r: Pick<TurnRequest, "system" | "model" | "effort" | "env" | "workdir">) => Promise<void> };
+  void eng.prestart?.({ system: o.system || undefined, model: run.model, effort: run.effort, env: engineEnv("claude", o.user.id), workdir: path.join(engineHome(), "work", safeScope(o.user.id)) })?.catch(() => {});
 }
 // Codex, Antigravity chỉ nhận hướng dẫn hệ thống ở lượt mở phiên. Lượt nối tiếp gửi thêm các đoạn phiên chưa có (đoạn tài liệu dự án mới tìm được, hướng dẫn vừa sửa, danh mục connector mới, lượt có công cụ sau lượt đường nhanh);
 // nhớ dấu của từng đoạn để không gửi lại cả hướng dẫn mỗi khi bộ nhớ thêm một dòng.
@@ -625,21 +626,21 @@ function recentMedia(msgs: Msg[], max = 8): Set<Blk> {
  */
 // Tên thư mục mang dấu của đoạn chat để xóa đoạn chat thì xóa được tệp đính kèm của nó; thư mục cũ không có dấu vẫn được dọn theo tuổi như trước.
 const attTag = (conv?: string) => (conv ? `${crypto.createHash("sha1").update(conv).digest("hex").slice(0, 12)}-` : "");
-function saveAttachments(work: string, atts: Attachment[], conv?: string) {
+async function saveAttachments(work: string, atts: Attachment[], conv?: string) {
   const root = path.join(work, "att"), day = new Date().toISOString().slice(0, 10).replace(/-/g, "");
   const dir = path.join(root, day, attTag(conv) + crypto.randomBytes(6).toString("hex"));
   for (const a of atts) {
     a.path = path.join(dir, a.name);
-    writeEngineFile(a.path, Buffer.from(a.data, "base64"));
-    a.pages?.forEach((p, i) => { p.path = path.join(dir, `${a.name.replace(/\.pdf$/i, "")}-trang-${i + 1}.jpg`); writeEngineFile(p.path, Buffer.from(p.data, "base64")); });
+    await writeEngineFile(a.path, Buffer.from(a.data, "base64"));
+    for (const [i, p] of (a.pages ?? []).entries()) { p.path = path.join(dir, `${a.name.replace(/\.pdf$/i, "")}-trang-${i + 1}.jpg`); await writeEngineFile(p.path, Buffer.from(p.data, "base64")); }
   }
   const old = new Date(Date.now() - 7 * 86400_000).toISOString().slice(0, 10).replace(/-/g, "");
-  for (const d of listEngineDir(root)) if (/^\d{8}$/.test(d) && d < old) { try { removeDir(path.join(root, d)); } catch {} }
+  for (const d of await listEngineDir(root)) if (/^\d{8}$/.test(d) && d < old) { try { await removeDir(path.join(root, d)); } catch {} }
   return dir;
 }
-function removeConvAttachments(uid: string, conv: string) {
+async function removeConvAttachments(uid: string, conv: string) {
   const root = path.join(engineHome(), "work", safeScope(uid), "att"), tag = attTag(conv);
-  for (const d of listEngineDir(root)) for (const f of listEngineDir(path.join(root, d))) if (f.startsWith(tag)) { try { removeDir(path.join(root, d, f)); } catch {} }
+  for (const d of await listEngineDir(root)) for (const f of await listEngineDir(path.join(root, d))) if (f.startsWith(tag)) { try { await removeDir(path.join(root, d, f)); } catch {} }
 }
 
 /** fresh: không nối tiếp phiên của CLI (mở phiên mới kèm toàn bộ lịch sử) — dùng khi thử lại sau lỗi. */
@@ -739,7 +740,7 @@ async function subTurnInner(o: SubTurn): Promise<SubResult> {
   finally {
     if (cli) for (const id of seen) void removeSessionFiles(scopeDir(cli, o.user.id), id);
     // Tệp đính kèm của đoạn chat ẩn danh không được nằm lại máy chủ chờ dọn theo tuổi (7 ngày).
-    for (const d of dirs) { try { removeDir(d); } catch {} }
+    for (const d of dirs) { try { await removeDir(d); } catch {} }
   }
 }
 async function runTurn(o: SubTurn): Promise<SubResult> {
@@ -777,9 +778,9 @@ async function runTurn(o: SubTurn): Promise<SubResult> {
   if (older > 0) o.onStatus?.(`Đoạn chat dài: ${SUB[cli].name} đọc nguyên văn ${msgs.length} tin gần nhất, ${older} tin cũ hơn chỉ có phần trích ngắn hoặc không có. Điều quan trọng ở đó nên nhắc lại`);
   const run = resolvePlanModel(cli, o.user.id, splitKey(o.model).id, o.effort);
   const work = path.join(engineHome(), "work", safeScope(o.user.id));
-  makeDir(work);
+  await makeDir(work);
   if (col.atts.length && cli !== "claude") {
-    try { const dir = saveAttachments(work, col.atts, o.conv); o.onAttDir?.(dir); }
+    try { const dir = await saveAttachments(work, col.atts, o.conv); o.onAttDir?.(dir); }
     catch (e) { return { status: 500, json: { error: `Không chuyển được tệp đính kèm cho ${SUB[cli].name}: ${redact((e as Error).message).slice(0, 200)}` } }; }
   }
   // Bộ canh lượt treo (watchdog.ts): model không có hoạt động thật quá lâu (treo mạng, phiên kẹt) thì dừng và báo 503 để chế độ Tự động chuyển
@@ -818,7 +819,7 @@ async function runTurn(o: SubTurn): Promise<SubResult> {
     prompt, attachments: col.atts.length ? col.atts : undefined, system: o.system || undefined, model: run.model, effort: run.effort, sessionId: resume ?? fork, fork: !!fork, workdir: work, env: engineEnv(cli, o.user.id), signal: o.signal ? AbortSignal.any([o.signal, wd.signal]) : wd.signal, mcp: o.mcp && { url: o.mcp.url, onPark: o.mcp.onPark }, alive: o.mcp?.alive, web: o.web, lockMs: o.lockMs, awaitingUser: o.awaitingUser,
     history: msgs.slice(0, -1).map((m) => ({ role: m.role === "assistant" ? "assistant" : "user", content: textOf(m.content) })),
   };
-  const natStamp = cli === "agy" && o.onNativeImages ? nativeStamp(work) : null;
+  const natStamp = cli === "agy" && o.onNativeImages ? await nativeStamp(work) : null;
   // Không tự chuyển sang khóa API khi gói hết hạn mức: trả về để trình duyệt hỏi người dùng (xem planLimit bên dưới).
   const eng = engineFor(cli);
   let text = "", final: string | null = null, via: string | null = null, session: string | null = null, err: { message: string; code?: string } | null = null, denied: string[] = [];
