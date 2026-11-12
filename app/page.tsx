@@ -1643,7 +1643,9 @@ export default function Home() {
         // Model của câu trả lời trước: người dùng chê ("làm lại", "sai rồi") thì chế độ Tự động đổi sang model khác.
         extra: { ...mixExtra(chatsRef.current.find((c) => c.id === id)), web: readPref("webSearch", true), memory: readPref("chatMemory", true), incognito: !!chatsRef.current.find((c) => c.id === id)?.inc, prevModel: [...(chatsRef.current.find((c) => c.id === id)?.msgs ?? [])].reverse().find((m) => m.role === "ai" && m.done && m.via)?.via,
           // histTotal: số tin thật trước khi cắt còn HISTORY_LIMIT (để nối tiếp phiên CLI); tz: múi giờ của người dùng cho dòng giờ hiện tại.
-          histTotal: hist?.length ?? 1, ...(hist && hist.length > HISTORY_LIMIT ? { olderDigest: olderDigest(hist.slice(0, -HISTORY_LIMIT)) } : {}), tz: Intl.DateTimeFormat().resolvedOptions().timeZone, ...(avoid ? { avoidModel: avoid } : {}), ...(rejected?.length ? { rejected } : {}) } });
+          histTotal: hist?.length ?? 1, ...(hist && hist.length > HISTORY_LIMIT ? { olderDigest: olderDigest(hist.slice(0, -HISTORY_LIMIT)) } : {}), tz: Intl.DateTimeFormat().resolvedOptions().timeZone, ...(avoid ? { avoidModel: avoid } : {}), ...(rejected?.length ? { rejected } : {}),
+          // pjFull: trình duyệt có đủ dữ liệu dự án nên lời nhắc trên là bản đúng; dự án chỉ là bản rút gọn (stub) thì máy chủ tự thêm hướng dẫn dự án.
+          ...(pr && !pr.stub ? { pjFull: true } : {}) } });
       webs = meta.webs ?? [];
       // Tự động đã chuyển sang model khác vì model đầu lỗi / quá tải: giữ lời báo dưới câu trả lời (thanh thông báo chỉ hiện một lúc).
       if (meta.switched) notice = { text: meta.switched };
@@ -1877,21 +1879,29 @@ export default function Home() {
     const tp = tplMode ? TPLS.find((x) => x.k === tplMode) : undefined;
     const msgs: Msg[] = [{ role: "user", text: t, files: f.length ? f : undefined, pick, time: Date.now(), sys: tp?.sys ?? (view === "project" ? proj?.ins : undefined) }, { role: "ai", text: "", time: Date.now() }];
     let id = cur;
+    // Dự án của lượt này. Đoạn chat mới (kể cả chọn dự án ở khung soạn của trang chủ): lấy đúng dự án vừa gán, không tìm trong chatsRef — đoạn chat mới
+    // chưa có ở đó cho tới lần vẽ sau, nên câu đầu từng đi không kèm dự án (không có hướng dẫn dự án, còn đi đường nhanh).
+    let pid: number | undefined;
     if (view !== "chat" || id === null) {
       id = Date.now();
       const nid = id;
-      setChats((cs) => [{ id: nid, title: roughTitle(t), msgs, inc: incog || undefined, project: nextProj ?? (view === "project" ? curProj ?? undefined : undefined), studio: tp ? STUDIO_OF[tp.k] : undefined }, ...cs]);
+      const np = nextProj ?? (view === "project" ? curProj ?? undefined : undefined);
+      pid = np;
+      setChats((cs) => [{ id: nid, title: roughTitle(t), msgs, inc: incog || undefined, project: np, studio: tp ? STUDIO_OF[tp.k] : undefined }, ...cs]);
       setNextProj(undefined);
       setCur(id);
       setView("chat");
-    } else patch(id, (m) => [...m, ...msgs]);
+    } else {
+      const eid = id;
+      pid = chatsRef.current.find((c) => c.id === eid)?.project;
+      patch(id, (m) => [...m, ...msgs]);
+    }
     setFiles([]);
     setTplMode(null);
     setPrefill({ t: "", n: 0 });
     const prior = id !== null && view === "chat" ? (chatsRef.current.find((c) => c.id === id)?.msgs ?? []) : [];
     // Lịch sử theo chuẩn Synchro (history.ts): kèm dấu vết công cụ, đánh dấu câu trả lời bị dừng, bỏ phần đã nén.
     const hist: LLMMsg[] = [...chatHistory(prior, chatsRef.current.find((c) => c.id === id)?.compact), { role: "user", content: t }];
-    const pid = view === "project" ? curProj ?? undefined : chatsRef.current.find((c) => c.id === id)?.project;
     runTurn(id, t, f, hist, pid, tp ? STUDIO_OF[tp.k] : undefined, pick?.map((x) => x.id));
   };
   // Chạy một lượt: đọc các tệp đính kèm chưa có trên máy chủ rồi gọi model (gửi mới, thử lại, sửa tin đã gửi).

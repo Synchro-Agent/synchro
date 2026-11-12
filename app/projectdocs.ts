@@ -16,7 +16,14 @@ export function projectDocs(uid: string, project: unknown): { name: string; text
     return (p.ctx ?? []).map((d) => ({ name: String(d.name ?? ""), text: d.text ?? (d.chunks ?? []).join("\n\n") })).filter((d) => d.name && d.text);
   } catch { return []; }
 }
-export const projectDocsLong = (uid: string, project: unknown) => projectDocs(uid, project).reduce((n, d) => n + d.text.length, 0) > FULL_IN_PROMPT;
+/** Hướng dẫn của dự án trong bản đã đồng bộ lên máy chủ (rỗng khi dự án chưa đồng bộ hay không có hướng dẫn). */
+export function projectIns(uid: string, project: unknown): string {
+  if (project === undefined || project === null || project === "") return "";
+  const row = itemsByKey(uid, [`project:${String(project)}`])[0];
+  if (!row?.data || row.deleted) return "";
+  try { const p = JSON.parse(row.data) as { ins?: unknown }; return typeof p.ins === "string" ? p.ins.trim() : ""; } catch { return ""; }
+}
+export const projectDocsLong =(uid: string, project: unknown) => projectDocs(uid, project).reduce((n, d) => n + d.text.length, 0) > FULL_IN_PROMPT;
 
 export const PROJECT_DOC_TOOL = {
   name: "read_project_file",

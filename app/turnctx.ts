@@ -71,3 +71,20 @@ export function stripAppliedNotes(text: string): string {
   const out = text.replace(INS_NOTE, "").replace(PJ_NOTE, "");
   return out === text ? text : out.replace(/\n{3,}/g, "\n\n").trimEnd();
 }
+
+// ---------------------------------------------------------------- hướng dẫn của dự án luôn tới được model
+// Trình duyệt ghép hướng dẫn dự án vào lời nhắc hệ thống (llm.buildSystemPrompt), nhưng dự án có thể chỉ là bản rút gọn (stub, nội dung còn ở máy chủ),
+// hoặc đoạn chat mới vừa tạo chưa kịp mang mã dự án: lời nhắc khi đó không có hướng dẫn và model bỏ qua nó (đã gặp: "luôn kết thúc bằng KIWI-PROJ"
+// bị bỏ qua ở câu hỏi ngắn). Máy chủ bù bằng bản dự án đã đồng bộ, trước khi chọn đường đi của lượt (đường nhanh hay đầy đủ, gói hay khóa API).
+export const PROJECT_INS_HEAD = "## Hướng dẫn của dự án (hãy luôn tuân theo)";
+export const PROJECT_INS_MAX = 20_000;
+/**
+ * Lời nhắc hệ thống có hướng dẫn dự án. clientFull: trình duyệt có đủ dữ liệu dự án (không phải stub) nên lời nhắc của nó là bản đúng nhất —
+ * dự án ở đó không có hướng dẫn thì không lấy bản máy chủ có thể còn cũ (người dùng vừa xóa hướng dẫn). base: lời nhắc mặc định khi trình duyệt không gửi.
+ */
+export function withProjectIns(system: string, ins: string, o: { clientFull?: boolean; base?: string } = {}): string {
+  const text = (typeof ins === "string" ? ins : "").trim().slice(0, PROJECT_INS_MAX);
+  const sys = system || o.base || "";
+  if (!text || sys.includes(PROJECT_INS_HEAD) || o.clientFull) return system;
+  return `${sys}\n\n${PROJECT_INS_HEAD}\n${text}`;
+}

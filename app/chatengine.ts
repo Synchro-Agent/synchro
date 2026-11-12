@@ -43,8 +43,8 @@ import { anthropicWebSearch } from "./modelrules";
 import { untested } from "./modelreg";
 import { type ABlock, type Citer, anthropicCall, blocksText, searchResults, chatOnce, effortParams, HttpErr, openaiCall, outCap, respInput, respParse, respTools, responsesCall, toAnthropic, toOpenAI, toResponses, withPages } from "./llmcall";
 import { mergedProviders, prewarmClaude, sessionPlain, subCli, subTurn } from "./ai/subs";
-import { PROJECT_DOC_RULES, PROJECT_DOC_TOOL, projectDocsLong, readProjectFile } from "./projectdocs";
-import { REJECTED_RULE, rejectedBlock, stripAppliedNotes, withRejected } from "./turnctx";
+import { PROJECT_DOC_RULES, PROJECT_DOC_TOOL, projectDocsLong, projectIns, readProjectFile } from "./projectdocs";
+import { REJECTED_RULE, rejectedBlock, stripAppliedNotes, withProjectIns, withRejected } from "./turnctx";
 import { ASPECTS, generateImages, IMAGE_RULES, IMAGE_TOOL_NAME, imageBudget, imageProduct, imageTool, imageName, IMG_NAME, requestSlug, type ImgErr, type ImgOk } from "./ai/imagegen";
 import { POSTER_TEMPLATES, posterProps, type PosterTemplate } from "./design-engine/posters/props";
 import { genImageUrl } from "./artdoc";
@@ -1487,6 +1487,12 @@ async function scrubApplied(res: Response): Promise<Response> {
 async function chatPostTurn(body: Record<string, any>, c: Who, scope: { feature: string }): Promise<Response> { // eslint-disable-line @typescript-eslint/no-explicit-any
   // Tệp của các lượt trước đi cùng lịch sử: model nào trả lời lượt này (kể cả model vừa đổi) cũng thấy đúng tài liệu đang bàn.
   if (Array.isArray(body.messages)) { const msgs = body.messages; body = { ...body, messages: await span("file refs", "history", () => expandFileRefs(msgs, lastUserText(msgs), c.user.id)) }; }
+  // Hướng dẫn của dự án luôn có trong lời nhắc hệ thống, ở mọi đường đi của lượt (turnctx.withProjectIns): trình duyệt chỉ có bản rút gọn của dự án
+  // thì lấy bản đã đồng bộ lên máy chủ. Làm trước khi chọn model và đường nhanh / đầy đủ, nên đường nào cũng có.
+  if (body.project !== undefined && body.project !== null && useProfile(body) && body.feature !== "code") {
+    const sys = withProjectIns(typeof body.system === "string" ? body.system : "", projectIns(c.user.id, body.project), { clientFull: body.pjFull === true, base: DEFAULT_SYSTEM });
+    if (sys !== body.system) body = { ...body, system: sys };
+  }
   // Tệp đính kèm bị từ chối (thẻ tệp báo lỗi ở khung soạn): khối <attachments_rejected> đứng đầu tin nhắn mới nhất và một dòng trong hướng dẫn hệ thống,
   // để model nói đúng tệp nào không đọc được và vì sao, không trả lời như thể tin nhắn không có tệp. Có khối thì không đi đường nhanh (hướng dẫn khác mặc định).
   const rej = Array.isArray(body.messages) ? rejectedBlock(body.rejected) : "";
