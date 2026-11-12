@@ -15,7 +15,7 @@ import { Boundary } from "./ui";
 export function Confirm({ title, text, ok, onCancel, onOk, children }: { title: string; text: string; ok: string; onCancel: () => void; onOk: () => void; children?: React.ReactNode }) {
   return (
     <div className="overlay cf-top" onMouseDown={(e) => e.target === e.currentTarget && onCancel()}>
-      <div className="modal sm" style={{ width: 420 }}>
+      <div className="modal sm" style={{ width: 420, maxWidth: "calc(100vw - 32px)" }}>
         <h2 style={{ fontSize: 15, margin: "0 0 6px" }}>{title}</h2>
         <p style={{ margin: "0 0 20px", fontSize: 14 }}>{text}</p>
         {children}
