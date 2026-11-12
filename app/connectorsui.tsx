@@ -19,12 +19,16 @@ import { CONN_CHANGED, loginClaims } from "./connwatch";
 import { SettingsSkeleton } from "./skeleton";
 
 type Perm = "allow" | "chat" | "ask" | "block";
-type Tool = { name: string; title: string; description: string; readOnly: boolean; guessed?: boolean; destructive: boolean; perm: Perm; locked?: "setting" | "admin" };
+// askOnly: chỉ đặt được Hỏi mỗi lần hoặc Chặn (bash / workbench / gọi API của Composio).
+type Tool = { name: string; title: string; description: string; readOnly: boolean; guessed?: boolean; destructive: boolean; perm: Perm; locked?: "setting" | "admin"; askOnly?: boolean };
+/** Composio: quyền thao tác ghi của một ứng dụng (Gmail, Google Docs…). */
+type AppPerm = { app: string; name: string; perm: Perm; logo?: string; icon?: string };
 type Settings = { chat: boolean; projects: boolean; newTools: "auto" | "ask" | "block"; destructive: boolean; maxCalls: number };
 export type Conn = {
   id: string; name: string; url: string; host: string; dir: string | null; logo?: string; color?: string; icon?: string; site?: string; enabled: boolean;
   status: "ok" | "needs_auth" | "forbidden" | "error"; error: string | null; serverName: string | null; auth: "none" | "oauth" | "token"; tools: Tool[]; checkedAt: number | null;
   settings: Settings; adminBlocked: boolean; lastError?: string | null; vendorBlocked?: { why: string; whyVi: string } | null; needsScope?: boolean; toolsTotal?: number | null; tokenHeader?: string; ownClient?: boolean;
+  apps?: AppPerm[];
 };
 type Policy = { custom: boolean; allowed: string[]; destructive: boolean };
 // Composio của bạn: linked (đã liên kết bằng đăng nhập hoặc khóa ck_), unlinked (chờ bấm Liên kết Composio), blocked (quản trị viên không cho tài khoản này).
@@ -209,13 +213,14 @@ export function ReconnectLink({ c, onDone, onManage, say }: { c: Conn; onDone: (
   return <button className="cn-link cm-rec" disabled={busy} onClick={go}>{busy ? <span className="api-spin" /> : f.blocked ? "Mở cửa sổ đăng nhập" : f.pending ? "Đang chờ đăng nhập…" : "Kết nối lại"}</button>;
 }
 
-function PermSelect({ value, onChange, label, mixed, locked }: { value: Perm; onChange: (p: Perm) => void; label: string; mixed?: boolean; locked?: string }) {
+// only: các lựa chọn được phép (công cụ luôn hỏi: Hỏi mỗi lần / Chặn).
+function PermSelect({ value, onChange, label, mixed, locked, only }: { value: Perm; onChange: (p: Perm) => void; label: string; mixed?: boolean; locked?: string; only?: Perm[] }) {
   if (locked) return <span className="cn-locked" title={locked}><I.Lock size={12} />Blocked</span>;
   return (
     <span className={`api-sel cn-perm ${value}`}>
       <select aria-label={label} value={mixed ? "" : value} onChange={(e) => e.target.value && onChange(e.target.value as Perm)}>
         {mixed && <option value="">Custom</option>}
-        {(["allow", "chat", "ask", "block"] as Perm[]).map((p) => <option key={p} value={p}>{PERM_LABEL[p]}</option>)}
+        {(only ?? (["allow", "chat", "ask", "block"] as Perm[])).map((p) => <option key={p} value={p}>{PERM_LABEL[p]}</option>)}
       </select><I.Chevron size={13} />
     </span>
   );
@@ -271,7 +276,22 @@ function ToolGroup({ title, hint, kind, tools, onPerm, onGroup }: { title: strin
             <div className="cn-tool-n"><span data-notr>{t.title}</span>{t.title !== t.name && <span className="mono-s" data-notr>{t.name}</span>}{t.guessed && <span className="cn-tag" title="The server doesn't say whether this tool changes data. Synchro judged it read-only from its name. Set it to Ask every time if you prefer.">Unclassified</span>}</div>
             {t.description && <div className="cn-tool-d" data-notr>{t.description}</div>}
           </div>
-          <PermSelect label={`Permission for ${t.title}`} value={t.perm} onChange={(p) => onPerm(t, p)} locked={t.locked ? LOCK_NOTE[t.locked] : undefined} />
+          <PermSelect label={`Permission for ${t.title}`} value={t.perm} onChange={(p) => onPerm(t, p)} locked={t.locked ? LOCK_NOTE[t.locked] : undefined} only={t.askOnly ? ["ask", "block"] : undefined} />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// Composio: quyền thao tác thay đổi dữ liệu theo từng ứng dụng. Ứng dụng hiện ở đây sau lần đầu Synchro hỏi (hoặc bạn chọn trên thẻ duyệt).
+function AppPerms({ apps, onPerm }: { apps: AppPerm[]; onPerm: (a: AppPerm, p: Perm) => void }) {
+  return (
+    <div className="cn-group">
+      <div className="cn-group-h"><div><b>Changes in each app</b><div className="d">Creating, editing, sending or deleting in an app asks first unless you allow that app here or on the approval card.</div></div></div>
+      {apps.length === 0 ? <div className="cn-tool d">No app permissions yet. Synchro asks before its first change in each app.</div> : apps.map((a) => (
+        <div key={a.app} className="cn-tool">
+          <div className="cn-tool-m"><div className="cn-tool-n"><ConnLogo logo={a.logo} icon={a.icon} name={a.name} size={18} /><span data-notr>{a.name}</span></div></div>
+          <PermSelect label={`Permission for ${a.name}`} value={a.perm} onChange={(p) => onPerm(a, p)} />
         </div>
       ))}
     </div>
@@ -503,7 +523,8 @@ function ComposioSection({ info, onInfo, login }: { info: ComposioInfo; onInfo: 
         <button className="api-adv cpo-perm" aria-expanded={open} onClick={() => setOpen(!open)}><I.ChevronR size={13} />Tool permissions</button>
         {open && <div className="cn-body">
           <ToolGroup title="Read-only tools" hint="Find tools, check connections and run app actions that only read." kind="read" tools={c.tools.filter((t) => t.readOnly)} onPerm={(t, p) => { onInfo({ ...info, connector: { ...c, tools: c.tools.map((y) => (y.name === t.name ? { ...y, perm: p } : y)) } }); void patch({ perms: { [t.name]: p } }); }} onGroup={(k, p) => void patch({ group: { kind: k, perm: p } })} />
-          <ToolGroup title="Tools that can make changes" hint="Run actions in your apps, such as sending an email. Actions that only read run without asking." kind="write" tools={c.tools.filter((t) => !t.readOnly)} onPerm={(t, p) => { onInfo({ ...info, connector: { ...c, tools: c.tools.map((y) => (y.name === t.name ? { ...y, perm: p } : y)) } }); void patch({ perms: { [t.name]: p } }); }} onGroup={(k, p) => void patch({ group: { kind: k, perm: p } })} />
+          <ToolGroup title="Tools that can make changes" hint="Run actions in your apps. Always allow here only covers actions that read; actions that change data follow each app's permission below. Remote commands and API calls always ask." kind="write" tools={c.tools.filter((t) => !t.readOnly)} onPerm={(t, p) => { onInfo({ ...info, connector: { ...c, tools: c.tools.map((y) => (y.name === t.name ? { ...y, perm: p } : y)) } }); void patch({ perms: { [t.name]: p } }); }} onGroup={(k, p) => void patch({ group: { kind: k, perm: p } })} />
+          <AppPerms apps={c.apps ?? []} onPerm={(a, p) => { onInfo({ ...info, connector: { ...c, apps: (c.apps ?? []).map((y) => (y.app === a.app ? { ...y, perm: p } : y)) } }); void patch({ apps: { [a.app]: p } }); }} />
         </div>}
       </>}
     </div>

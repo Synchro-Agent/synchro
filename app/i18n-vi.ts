@@ -1068,3 +1068,10 @@ for (const [k, v] of Object.entries({
   "Active": "Hoạt động",
 })) if (!Object.prototype.hasOwnProperty.call(EN2VI, k)) EN2VI[k] = v;
 RULES_VI.push([/^Active · (\d+) apps connected$/, (m) => `Đang hoạt động · đã kết nối ${m[1]} ứng dụng`]);
+// Composio: quyền thao tác thay đổi dữ liệu theo từng ứng dụng (Cài đặt → Connectors).
+for (const [k, v] of Object.entries({
+  "Changes in each app": "Thay đổi trong từng ứng dụng",
+  "Creating, editing, sending or deleting in an app asks first unless you allow that app here or on the approval card.": "Tạo, sửa, gửi hay xóa trong một ứng dụng đều hỏi trước, trừ khi bạn cho phép ứng dụng đó ở đây hoặc trên thẻ duyệt.",
+  "No app permissions yet. Synchro asks before its first change in each app.": "Chưa có quyền nào theo ứng dụng. Synchro hỏi trước lần thay đổi đầu tiên trong mỗi ứng dụng.",
+  "Run actions in your apps. Always allow here only covers actions that read; actions that change data follow each app's permission below. Remote commands and API calls always ask.": "Chạy thao tác trong ứng dụng của bạn. Luôn cho phép ở đây chỉ áp dụng cho thao tác đọc; thao tác thay đổi dữ liệu theo quyền của từng ứng dụng bên dưới. Lệnh chạy từ xa và lời gọi API luôn hỏi trước.",
+})) if (!Object.prototype.hasOwnProperty.call(EN2VI, k)) EN2VI[k] = v;
