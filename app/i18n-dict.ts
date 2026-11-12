@@ -1821,3 +1821,5 @@ RULES_EN.push(
   [/^(\d+) lỗi$/, (m) => `${m[1]} failed`],
   [/^(\d+) bước đã thử lại$/, (m) => `${m[1]} ${m[1] === "1" ? "step" : "steps"} retried`],
 );
+// Chip nguồn dưới câu trả lời tìm web (cites.tsx): nút mở các nguồn còn lại.
+RULES_EN.push([/^\+(\d+) nguồn$/, (m) => `+${m[1]} ${m[1] === "1" ? "source" : "sources"}`]);

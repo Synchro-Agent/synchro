@@ -47,5 +47,15 @@ ok(/className="overlay ft-lightbox"/.test(lb) && /role="dialog" aria-modal="true
   ok(!/\bpane\.(appendChild|innerHTML|style)/.test(doc), "lớp bọc bảng không trùng tên biến pane của render()");
 }
 
+// U11: chip nguồn — favicon hỏng / 1×1 thành chữ cái đầu trên nền trung tính; tối đa 6 chip, còn lại "+N nguồn".
+{
+  const c = read("app/cites.tsx"), css = read("app/synchro-ds.css");
+  ok(/onLoad=\{\(e\) => \{ if \(e\.currentTarget\.naturalWidth < 2/.test(c) && /onError=\{\(\) => setBad\(true\)\}/.test(c), "favicon: ảnh lỗi hoặc ảnh 1×1 chuyển sang chữ cái đầu");
+  ok(/export const SHOWN_SOURCES = 6;/.test(c) && /tr\(`\+\$\{more\} nguồn`\)/.test(c), "tối đa 6 chip nguồn, phần còn lại gom vào +N nguồn");
+  ok(/\.msg-sources a\[hidden\]\{display:none\}/.test(css), "chip ẩn thật sự ẩn (hidden thắng display:inline-flex)");
+  ok(/\.src-fav-l\{[^}]*background:var\(--pill\)/.test(css), "chữ cái đầu trên nền trung tính");
+  ok(en("+6 nguồn") === "+6 sources" && en("+1 nguồn") === "+1 source", "bản tiếng Anh của +N nguồn", en("+6 nguồn"));
+}
+
 console.log(`\n${pass} đạt, ${fail} hỏng`);
 if (fail) process.exit(1);

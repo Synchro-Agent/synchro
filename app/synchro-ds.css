@@ -1091,6 +1091,10 @@ html[data-motion="reduced"] .chat-item .ct-run::after{animation:none}
 .cite-pop-h{display:flex;align-items:center;gap:6px;color:var(--text-3)}
 .cite-pop-h em{font-style:normal;font-size:11.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 @media (max-width:520px){.src-h{display:none}}
+/* Chip thứ 7 trở đi ẩn sau nút "+N nguồn" (cites.tsx): thuộc tính hidden thắng display:inline-flex của chip. */
+.msg-sources a[hidden]{display:none}
+.msg-sources .src-more{display:inline-flex;align-items:center;min-height:24px;padding:3px 10px;border:1px dashed var(--border-strong);border-radius:999px;background:transparent;color:var(--text-2);font:inherit;cursor:pointer;transition:background .15s,color .15s}
+.msg-sources .src-more:hover,.msg-sources .src-more:focus-visible{background:var(--hover);color:var(--text)}
 
 /* Chip thư viện trong câu trả lời: nhãn "Thư viện Tài liệu" không xuống dòng trong viên thuốc; danh sách skill co lại với dấu …. */
 .lib-chip{max-width:100%;min-width:0}

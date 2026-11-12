@@ -88,6 +88,10 @@ try {
     const denied = await IP.cachedIcon("site:gate2.test", async () => tiny, gate).then(() => "ok", (e) => e.message);
     ok(gated === 2 && denied === "429", "ảnh đã có không qua cổng giới hạn; tải mới quá giới hạn thì bị từ chối", { gated, denied });
   }
+  // U11: ảnh rỗng / dưới 100 byte không phải favicon thật: /api/favicon trả 404 để giao diện hiện chữ cái đầu thay cho ô vuông trắng.
+  ok(IP.usableIcon(null) === null && IP.usableIcon({ mime: "image/png", buf: Buffer.from([0x89, 0x50, 0x4e, 0x47]) }) === null && IP.usableIcon({ mime: "image/png", buf: Buffer.alloc(0) }) === null, "ảnh rỗng, ảnh 4 byte: coi như không có ảnh");
+  ok(IP.usableIcon({ mime: "image/png", buf: Buffer.alloc(IP.MIN_ICON_BYTES) }) !== null, "ảnh từ 100 byte trở lên: dùng được");
+  ok(/usableIcon\(await cachedIcon\(`site:/.test(fs.readFileSync(path.join(process.cwd(), "app/api/favicon/route.ts"), "utf8")), "/api/favicon lọc ảnh quá nhỏ trước khi trả");
   let blocked = null;
   delete process.env.FAVICON_BASE;
   process.env.MCP_ALLOW_PRIVATE = "0";

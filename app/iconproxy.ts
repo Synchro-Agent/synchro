@@ -92,6 +92,10 @@ export function brandHost(host: string): string {
   return parts.length > n ? parts.slice(-n).join(".") : parts.join(".");
 }
 
+/** Ảnh dưới 100 byte (tệp rỗng, ảnh 1×1, trang trả vài byte rác) không phải biểu tượng thật: coi như không có ảnh để giao diện hiện chữ cái đầu. */
+export const MIN_ICON_BYTES = 100;
+export const usableIcon = (icon: Icon | null): Icon | null => (icon && icon.buf.length >= MIN_ICON_BYTES ? icon : null);
+
 /** Phản hồi ảnh: không cho chạy script kể cả khi mở thẳng (SVG), trình duyệt giữ một ngày. */
 export const iconResponse = (icon: Icon) => new Response(new Uint8Array(icon.buf), { headers: {
   "content-type": icon.mime, "content-length": String(icon.buf.length), "cache-control": "private, max-age=86400",
