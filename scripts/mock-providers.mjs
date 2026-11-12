@@ -554,6 +554,11 @@ const capsFor = (sys, q, msgs, tools, none) => {
 };
 // Lượt có gọi công cụ và yêu cầu sửa artifact (#rev): sau kết quả công cụ vẫn gửi kèm bản sửa.
 const afterTool = (sys, q, msgs) => { const r = revReply(`${sys ?? ""}\n${dynOf(msgs)}`, q, msgs); return r ? `\n\n${r}` : ""; };
+// Lời dẫn trước khi đọc skill của thư viện studio: model của mọi hãng đều viết như nhau (model thật cũng hay nói trước khi gọi công cụ).
+// Trước đây chỉ Claude giả có lời dẫn, Gemini / GPT / Grok / DeepSeek giả gọi công cụ không kèm chữ: Tự động chọn hãng nào tùy các gói / model
+// dùng được sau những bộ kiểm chạy trước (một lượt QA chọn Gemini 3.1 Pro), chọn hãng khác Claude thì lượt không có lời giải thích nào và
+// tests/ui/pptx.mjs không còn gì để kiểm phần tổng kết.
+const STUDIO_LEAD = "Mình sẽ đọc skill trong thư viện trước.";
 const sysText = (x) => (typeof x === "string" ? x : Array.isArray(x) ? x.map((b) => b.text ?? "").join("\n") : "");
 
 // Lỗi thử nghiệm theo từ khóa trong tin nhắn; trả về true nếu đã trả lỗi.
@@ -644,13 +649,13 @@ async function compatVendor(prov, rest, req, res, b, auth) {
   const { text, q } = reply(prov, b.model, ms, b.max_tokens, b.reasoning_effort ?? (prov === "deepseek" && thinking ? "high" : undefined));
   const think = thinking ? { reasoning_content: `Suy nghĩ của ${VENDOR[prov]} (giả lập) về: ${q.slice(0, 40)}` } : {};
   const msg = (m) => ({ id: `chatcmpl-mock${Date.now()}`, object: "chat.completion", model: b.model, choices: [{ index: 0, message: { role: "assistant", ...think, ...m }, finish_reason: m.tool_calls ? "tool_calls" : "stop" }] });
-  const call = (name, args) => msg({ content: null, tool_calls: [{ id: `call_${Date.now()}`, type: "function", function: { name, arguments: JSON.stringify(args) } }] });
+  const call = (name, args, lead = null) => msg({ content: lead, tool_calls: [{ id: `call_${Date.now()}`, type: "function", function: { name, arguments: JSON.stringify(args) } }] });
   const sys = ms.find((m) => m.role === "system")?.content;
   const bst = browserStep(ms, normTools(b.tools).map((t) => t.name));
   if (bst?.tool) return send(res, 200, call(bst.tool.name, bst.tool.args));
   if (bst?.text) return send(res, 200, msg({ content: bst.text }));
   const sst = studioStep(`${sys ?? ""}\n${dynOf(ms)}`, JSON.stringify(ms), q, normTools(b.tools).map((t) => t.name));
-  if (sst?.tool) return send(res, 200, call(sst.tool.name, sst.tool.args));
+  if (sst?.tool) return send(res, 200, call(sst.tool.name, sst.tool.args, STUDIO_LEAD));
   if (sst?.text) { await sleep(latency(b.model)); return send(res, 200, msg({ content: sst.text })); }
   const lastMsg = ms[ms.length - 1];
   if (lastMsg?.role === "tool") {
@@ -814,7 +819,7 @@ async function handler(req, res) {
       if (bst?.tool) { await sleep(150); return send(res, 200, { id: `msg_mock_${Date.now()}`, type: "message", role: "assistant", model: b.model, content: [{ type: "text", text: "Mình làm trên trình duyệt." }, { type: "tool_use", id: `toolu_${Date.now()}`, name: bst.tool.name, input: bst.tool.args }], stop_reason: "tool_use", usage: { input_tokens: 60, output_tokens: 20 } }); }
       if (bst?.text) return send(res, 200, { id: `msg_mock_${Date.now()}`, type: "message", role: "assistant", model: b.model, content: [{ type: "text", text: bst.text }], stop_reason: "end_turn", usage: { input_tokens: 60, output_tokens: 30 } });
       const sst = studioStep(`${sysText(b.system)}\n${dynOf(b.messages)}`, JSON.stringify(b.messages), q, normTools(b.tools).map((t) => t.name));
-      if (sst?.tool) return send(res, 200, { id: `msg_mock_${Date.now()}`, type: "message", role: "assistant", model: b.model, content: [{ type: "text", text: "Mình sẽ đọc skill trong thư viện trước." }, { type: "tool_use", id: `toolu_${Date.now()}`, name: sst.tool.name, input: sst.tool.args }], stop_reason: "tool_use" });
+      if (sst?.tool) return send(res, 200, { id: `msg_mock_${Date.now()}`, type: "message", role: "assistant", model: b.model, content: [{ type: "text", text: STUDIO_LEAD }, { type: "tool_use", id: `toolu_${Date.now()}`, name: sst.tool.name, input: sst.tool.args }], stop_reason: "tool_use" });
       if (sst?.text) { await sleep(latency(b.model)); return send(res, 200, { id: `msg_mock_${Date.now()}`, type: "message", role: "assistant", model: b.model, content: [{ type: "text", text: sst.text }], stop_reason: "end_turn" }); }
       const last = b.messages?.[b.messages.length - 1];
       const results = Array.isArray(last?.content) ? last.content.filter((x) => x.type === "tool_result") : [];
@@ -869,7 +874,7 @@ async function handler(req, res) {
       if (bst?.tool) return send(res, 200, { id: `resp_mock${Date.now()}`, object: "response", status: "completed", model: b.model, output: [{ type: "function_call", id: "fc_mock", call_id: `call_${Date.now()}`, name: bst.tool.name, arguments: JSON.stringify(bst.tool.args), status: "completed" }] });
       if (bst?.text) return send(res, 200, { id: `resp_mock${Date.now()}`, object: "response", status: "completed", model: b.model, output: [{ type: "message", id: `msg_mock${Date.now()}`, role: "assistant", status: "completed", content: [{ type: "output_text", text: bst.text, annotations: [] }] }] });
       const sst = studioStep(`${b.instructions ?? ""}\n${dynOf(input)}`, JSON.stringify(input), q, normTools(b.tools).map((t) => t.name));
-      if (sst?.tool) return send(res, 200, { id: `resp_mock${Date.now()}`, object: "response", status: "completed", model: b.model, output: [{ type: "function_call", id: "fc_mock", call_id: `call_${Date.now()}`, name: sst.tool.name, arguments: JSON.stringify(sst.tool.args), status: "completed" }] });
+      if (sst?.tool) return send(res, 200, { id: `resp_mock${Date.now()}`, object: "response", status: "completed", model: b.model, output: [{ type: "message", id: `msg_mock${Date.now()}`, role: "assistant", status: "completed", content: [{ type: "output_text", text: STUDIO_LEAD, annotations: [] }] }, { type: "function_call", id: "fc_mock", call_id: `call_${Date.now()}`, name: sst.tool.name, arguments: JSON.stringify(sst.tool.args), status: "completed" }] });
       if (sst?.text) { await sleep(latency(b.model)); return send(res, 200, { id: `resp_mock${Date.now()}`, object: "response", status: "completed", model: b.model, output: [{ type: "message", id: `msg_mock${Date.now()}`, role: "assistant", status: "completed", content: [{ type: "output_text", text: sst.text, annotations: [] }] }] }); }
       // Gõ #tool: model gọi công cụ đầu tiên, lượt sau trả lời dựa trên kết quả.
       const lastItem = input[input.length - 1];
@@ -934,7 +939,7 @@ async function handler(req, res) {
     if (bst?.tool) return send(res, 200, { id: `mock-${Date.now()}`, object: "chat.completion", model: b.model, choices: [{ index: 0, message: { role: "assistant", content: null, tool_calls: [sig({ id: `call_${Date.now()}`, type: "function", function: { name: bst.tool.name, arguments: JSON.stringify(bst.tool.args) } })] }, finish_reason: "tool_calls" }] });
     if (bst?.text) return send(res, 200, { id: `mock-${Date.now()}`, object: "chat.completion", model: b.model, choices: [{ index: 0, message: { role: "assistant", content: bst.text }, finish_reason: "stop" }] });
     const sst = studioStep(`${b.messages?.find((m) => m.role === "system")?.content ?? ""}\n${dynOf(b.messages)}`, JSON.stringify(b.messages), q, normTools(b.tools).map((t) => t.name));
-    if (sst?.tool) return send(res, 200, { id: `mock-${Date.now()}`, object: "chat.completion", model: b.model, choices: [{ index: 0, message: { role: "assistant", content: null, tool_calls: [sig({ id: `call_${Date.now()}`, type: "function", function: { name: sst.tool.name, arguments: JSON.stringify(sst.tool.args) } })] }, finish_reason: "tool_calls" }] });
+    if (sst?.tool) return send(res, 200, { id: `mock-${Date.now()}`, object: "chat.completion", model: b.model, choices: [{ index: 0, message: { role: "assistant", content: STUDIO_LEAD, tool_calls: [sig({ id: `call_${Date.now()}`, type: "function", function: { name: sst.tool.name, arguments: JSON.stringify(sst.tool.args) } })] }, finish_reason: "tool_calls" }] });
     if (sst?.text) { await sleep(latency(b.model)); return send(res, 200, { id: `mock-${Date.now()}`, object: "chat.completion", model: b.model, choices: [{ index: 0, message: { role: "assistant", content: sst.text }, finish_reason: "stop" }] }); }
     const lastMsg = b.messages?.[b.messages.length - 1];
     if (lastMsg?.role === "tool") {
