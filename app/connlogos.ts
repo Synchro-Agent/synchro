@@ -69,7 +69,8 @@ export function appLogo(slug: string): { logo?: string; icon?: string } {
   if (own) return { logo: own };
   // Logo hãng trong public/logos giữ màu thương hiệu (Hugging Face, Microsoft…): hiện thẳng như ảnh. Logo kiểu mặt nạ cần tô màu nên bỏ qua.
   if (Object.hasOwn(FILE_LOGOS, s) && FILE_LOGOS[s].mode === "img" && !FILE_LOGOS[s].src) return { icon: logoSrc(s) };
-  return Object.hasOwn(APP_SITES, s) ? { icon: `/api/favicon?app=${s}` } : {};
+  // Mọi slug hợp lệ: proxy thử logo chính thức của Composio rồi tới biểu tượng trang chủ; không có ảnh nào thì 404 và giao diện hiện chữ cái đầu.
+  return { icon: `/api/favicon?app=${s}` };
 }
 /** Ứng dụng mà một lời gọi công cụ Composio nhắm tới: tool_slug đầu tiên (GMAIL_FETCH_EMAILS → gmail) hoặc toolkits[0]. Không rõ: "". */
 export function composioAppOf(input: unknown): string {

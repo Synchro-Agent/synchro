@@ -104,10 +104,10 @@ ok(IP.brandHost("mcp.eu.acme.co.uk") === "acme.co.uk" && IP.brandHost("api.groq.
 const g = CL.appLogo("gmail"), n = CL.appLogo("notion"), hf = CL.appLogo("cohere"), unkApp = CL.appLogo("acmeapp");
 ok(g.icon === "/api/favicon?app=gmail" && !g.logo && n.logo === "notion", "ứng dụng Composio: tệp có sẵn, không có thì biểu tượng trang chủ qua /api/favicon?app=…", JSON.stringify([g, n]));
 ok(hf.icon === "/logos/cohere.svg" && fs.existsSync(pub(hf.icon)), "ứng dụng có logo hãng chỉ trong public/logos (Cohere): dùng tệp đó", JSON.stringify(hf));
-ok(JSON.stringify(unkApp) === "{}", "ứng dụng lạ không có trang chủ trong bảng: không hỏi proxy, giao diện hiện chữ cái đầu", JSON.stringify(unkApp));
+ok(unkApp.icon === "/api/favicon?app=acmeapp" && !unkApp.logo, "ứng dụng chưa có trong bảng: vẫn hỏi proxy (logo chính thức của Composio), proxy trả 404 thì giao diện hiện chữ cái đầu", JSON.stringify(unkApp));
 // Không còn khóa dự án Composio dùng chung: logo ứng dụng không được phụ thuộc khóa nào hay API toolkits của Composio.
 const route = fs.readFileSync(path.join(process.cwd(), "app", "api", "favicon", "route.ts"), "utf8");
-ok(!/composioKey|toolkitLogoUrl|COMPOSIO_|logos\.composio/.test(route) && /APP_SITES/.test(route), "/api/favicon?app=… chỉ dùng bảng trang chủ, không dùng khóa / API Composio");
+ok(!/composioKey|toolkitLogoUrl|x-api-key|COMPOSIO_API/.test(route) && /logos\.composio\.dev/.test(route) && /APP_SITES/.test(route) && /dflt\.equals/.test(route), "/api/favicon?app=…: logo công khai của Composio (không khóa, bỏ ảnh mặc định của ứng dụng lạ) rồi trang chủ theo bảng");
 ok(JSON.stringify(CL.appLogo("../etc/passwd")) === "{}" && JSON.stringify(CL.appLogo("A B")) === "{}", "slug ứng dụng lạ không thành đường dẫn");
 ok(CL.composioAppOf({ tools: [{ tool_slug: "GMAIL_SEND_EMAIL", arguments: {} }] }) === "gmail" && CL.composioAppOf({ toolkits: ["Slack"] }) === "slack" && CL.composioAppOf({ queries: [] }) === "", "lời gọi Composio → ứng dụng nó dùng (GMAIL_SEND_EMAIL → gmail)");
 const sites = Object.entries(CL.APP_SITES).filter(([, h]) => !IP.publicHost(h)).map(([k]) => k);
