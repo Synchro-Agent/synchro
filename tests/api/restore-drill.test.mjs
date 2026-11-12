@@ -45,7 +45,7 @@ fs.writeFileSync(check, `
 import { loadTs } from ${JSON.stringify(path.join(root, "tests/lib/ts.mjs"))};
 const { authstore: AS, chatstore: CS, providers: PR } = await loadTs(["authstore", "chatstore", "providers"]);
 const u = AS.db().prepare("SELECT id, email, password_hash AS h FROM users WHERE email = ?").get("restore@synchro.test");
-const page = CS.changesSince(u.id, 0);
+const page = await CS.changesSince(u.id, 0);
 const b = AS.db().prepare("SELECT b FROM connectors_drill").get().b;
 console.log(JSON.stringify({ email: u.email, h: u.h, chat: JSON.parse(page.items[0].data).title, secret: PR.openSecret(b) }));
 `);

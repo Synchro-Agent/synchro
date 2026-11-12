@@ -31,14 +31,28 @@ const KINDS = new Set(["chat", "project"]);
 const okId = (s: unknown): s is string => typeof s === "string" && /^[\w.-]{1,64}$/.test(s);
 const WIPE_ID = "all";
 
+// Đọc nội dung một trang (tới SYNC_LIMITS.page = 4 MB) liền một mạch là chặn máy chủ đúng lúc trang vừa mở và đang chờ các yêu cầu khởi động khác:
+// cứ đọc được YIELD_BYTES thì nhường vòng sự kiện một lần.
+const YIELD_BYTES = 512 * 1024;
+const tick = () => new Promise<void>((ok) => setImmediate(ok));
 /** Những gì đổi sau mốc since, theo từng trang (tối đa SYNC_LIMITS.page byte, luôn có ít nhất một mục). */
-export function changesSince(uid: string, since: number): { items: ItemRow[]; next: number; more: boolean } {
+export async function changesSince(uid: string, since: number): Promise<{ items: ItemRow[]; next: number; more: boolean }> {
+  // Danh sách (không có data) đọc từ chỉ mục phủ user_items_meta.
   const rows = t().prepare("SELECT kind, id, upd, rev, deleted, size FROM user_items WHERE user_id = ? AND rev > ? ORDER BY rev LIMIT 2000").all(uid, since) as Omit<ItemRow, "data">[];
   let n = 0, take = 0;
   for (const r of rows) { if (take && n + r.size > SYNC_LIMITS.page) break; n += r.size; take++; }
   const pick = rows.slice(0, take);
-  const one = t().prepare("SELECT data FROM user_items WHERE user_id = ? AND kind = ? AND id = ?");
-  const items = pick.map((r) => ({ ...r, data: r.deleted ? null : (one.get(uid, r.kind, r.id) as { data: string | null } | undefined)?.data ?? null }));
+  // AND rev = ?: trong lúc nhường, mục có thể vừa được ghi lại hay xóa. Khi đó bỏ mục ở trang này (bản mới có rev lớn hơn mọi rev của trang,
+  // nên nằm ở trang sau), không bao giờ gửi nội dung mới kèm rev cũ hay một mục chưa xóa mà không có nội dung.
+  const one = t().prepare("SELECT data FROM user_items WHERE user_id = ? AND kind = ? AND id = ? AND rev = ?");
+  const items: ItemRow[] = [];
+  let read = 0;
+  for (const r of pick) {
+    if (r.deleted) { items.push({ ...r, data: null }); continue; }
+    const got = one.get(uid, r.kind, r.id, r.rev) as { data: string | null } | undefined;
+    if (got) items.push({ ...r, data: got.data ?? null });
+    if ((read += r.size) >= YIELD_BYTES) { read = 0; await tick(); }
+  }
   return { items, next: pick.length ? pick[pick.length - 1].rev : since, more: take < rows.length || rows.length === 2000 };
 }
 /** Lấy đúng các mục theo khóa "chat:123" (mục đã rút gọn trong trình duyệt, mục thua xung đột). */

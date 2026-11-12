@@ -14,7 +14,7 @@ fs.mkdirSync(process.env.DATA_DIR, { recursive: true });
 try {
   const { authstore: A, brain: BR, usage: US, runs: RU, outputs: OU, chatstore: CS } = await loadTs(["authstore", "brain", "usage", "runs", "outputs", "chatstore"]);
   const u = A.createUser({ email: "a@idx.test", name: "A", verified: true });
-  BR.getNote(u.id, "x"); US.getConfig(); RU.sweepRuns(); OU.sweepOutputs(); CS.changesSince(u.id, 0);
+  BR.getNote(u.id, "x"); US.getConfig(); RU.sweepRuns(); OU.sweepOutputs(); await CS.changesSince(u.id, 0);
   const d = A.db();
   const cols = (idx) => d.prepare(`PRAGMA index_info("${idx}")`).all().map((c) => c.name).join(",");
   const plan = (sql, ...a) => d.prepare(`EXPLAIN QUERY PLAN ${sql}`).all(...a).map((r) => r.detail).join(" | ");
