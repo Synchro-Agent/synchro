@@ -414,8 +414,11 @@ export async function generateImages(q: ImgReq): Promise<ImgOk | ImgErr> {
 }
 
 // ---------------------------------------------------------------- công cụ và hướng dẫn cho model
-export const IMAGE_TOOL = {
-  name: "generate_image",
+export const IMAGE_TOOL_NAME = "generate_image";
+// product_shot / product_relight chỉ có tác dụng khi máy chủ có khóa Replicate (FLUX + hậu tố nhiếp ảnh, IC-Light), nên chỉ có trong định nghĩa
+// khi có khóa. Cùng cấu hình máy chủ thì định nghĩa giống hệt nhau giữa các lượt (bộ đệm prompt).
+const imageToolOf = (product: boolean) => ({
+  name: IMAGE_TOOL_NAME,
   description: "Tạo ảnh bằng AI (ảnh chụp như thật, tranh, minh họa, logo, poster, ảnh sản phẩm, ảnh đại diện), khoảng 40 giây; ảnh tự hiện thành thẻ trong chat. Không dùng cho biểu đồ, sơ đồ, slide hay thứ cần chữ chính xác (dựng bằng code).",
   input_schema: {
     type: "object",
@@ -425,13 +428,20 @@ export const IMAGE_TOOL = {
       count: { type: "integer", minimum: 1, maximum: 4, description: "Số ảnh 1–4, mặc định 1." },
       template: { type: "string", enum: ["poster-master-og"], description: "Chỉ cho poster / ảnh chia sẻ dạng thẻ số liệu cần chữ chính xác: PNG 3600×1890 từ mẫu cố định, không cần gói tạo ảnh. Điền poster, bỏ aspect_ratio, count, reference." },
       poster: { type: "object", properties: Object.fromEntries(["tag", "title", "metricValue", "metricLabel", "author"].map((k) => [k, { type: "string" }])), required: ["tag", "title", "metricValue", "metricLabel", "author"] },
-      product_shot: { type: "boolean", description: "true: ảnh sản phẩm để bán / quảng cáo (bao bì, mỹ phẩm, đồ ăn). Không dùng cho logo, tranh, minh họa, ảnh người." },
-      product_relight: { type: "boolean", description: "true: đưa ảnh sản phẩm người dùng gửi (reference) vào ánh sáng studio, giữ nguyên sản phẩm." },
-      reference: { type: "string", description: "Chỉ khi sửa / dựa trên ảnh có sẵn: \"last\" (ảnh gần nhất của đoạn chat), số n (ảnh thứ n của tin gần nhất người dùng gửi ảnh) hoặc tên tệp ảnh trong đoạn chat." },
+      ...(product ? {
+        product_shot: { type: "boolean", description: "true: ảnh sản phẩm để bán / quảng cáo (bao bì, mỹ phẩm, đồ ăn). Không dùng cho logo, tranh, minh họa, ảnh người." },
+        product_relight: { type: "boolean", description: "true: đưa ảnh sản phẩm người dùng gửi (reference) vào ánh sáng studio, giữ nguyên sản phẩm." },
+      } : {}),
+      reference: { type: "string", description: "Chỉ khi sửa / dựa trên ảnh có sẵn, ảnh mới hoàn toàn thì bỏ tham số này: \"last\" (ảnh gần nhất của đoạn chat), số n (ảnh thứ n của tin gần nhất người dùng gửi ảnh) hoặc tên tệp ảnh trong đoạn chat." },
     },
     required: ["prompt"],
   },
-};
+});
+const IMAGE_TOOLS = { on: imageToolOf(true), off: imageToolOf(false) };
+/** Máy chủ có khóa Replicate: generate_image nhận product_shot / product_relight, khối <image_kit> có dòng ảnh sản phẩm. */
+export const imageProduct = () => !!serviceKey("replicate");
+/** Định nghĩa generate_image theo cấu hình máy chủ (cùng một đối tượng cho cùng cấu hình). */
+export const imageTool = (product = imageProduct()) => (product ? IMAGE_TOOLS.on : IMAGE_TOOLS.off);
 export const IMAGE_RULES = `<image_generation>
 Công cụ generate_image tạo ảnh thật bằng AI qua gói người dùng đã đăng nhập. Người dùng xin ảnh chụp, tranh, hình minh họa, logo, poster, ảnh sản phẩm, ảnh đại diện hay nhờ sửa một tấm ảnh: gọi generate_image, không dựng thay bằng code.
 Biểu đồ, sơ đồ, slide, infographic số liệu và thứ cần chữ chính xác tuyệt đối: dựng bằng code hoặc artifact như thường lệ. Chữ trong ảnh AI có thể sai chính tả, nhất là tiếng Việt: logo hay poster nhiều chữ thì nói trước điều đó.

@@ -16,6 +16,11 @@ const last = () => fetch(`${LLM}/_debug/last`).then((r) => r.json());
 const C = "anthropic/claude-opus-5-5", G = "google/gemini-3.8-flash";
 const chat = (model, text) => api("POST", "/api/llm", { system: "", messages: [{ role: "user", content: text }], model, skills: true });
 
+// Kích thước bộ công cụ phụ thuộc Cài đặt → Khả năng (chạy code thêm run_code, run_skill_script; trình duyệt thêm browser_*): bài này tự đặt
+// trạng thái mình cần thay vì dựa vào trạng thái bộ khác để lại, rồi trả lại như cũ.
+const caps0 = (await api("GET", "/api/caps")).j?.caps ?? {};
+const SET = ["art", "code", "browse"];
+
 console.log("1. Connector 300 công cụ");
 let r = await api("POST", "/api/connectors", { name: "Mock Big", url: `${MCP}/big` });
 const id = r.j?.connector?.id;
@@ -30,7 +35,13 @@ try {
   ok(!names.some((n) => n.startsWith("mock_big__")), "không gửi định nghĩa từng công cụ", names.filter((n) => n.startsWith("mock_big")).length);
   const sys = JSON.stringify(L?.system ?? "");
   ok(/Mock Big \(300 công cụ\)/.test(sys) && sys.includes("list_widget_0") && /và \d+ công cụ khác/.test(sys), "hướng dẫn có danh mục tên công cụ (cắt gọn)", sys.slice(0, 300));
-  ok(JSON.stringify(L.tools).length < 21_000, "định nghĩa công cụ gọn", JSON.stringify(L.tools).length);
+  for (const code of [true, false]) {
+    await api("PATCH", "/api/caps", { art: true, browse: true, code });
+    await chat(C, "Chào bạn");
+    const T = (await last()).anthropic?.tools ?? [];
+    const has = T.some((t) => t.name === "run_code");
+    ok(has === code && JSON.stringify(T).length < 21_000, `định nghĩa công cụ gọn (chạy code ${code ? "bật" : "tắt"})`, `${JSON.stringify(T).length} ký tự, run_code ${has}`);
+  }
 
   console.log("3. Tìm rồi gọi công cụ");
   r = await chat(C, `#tool=connector_tools #args={"query":"list widget 10","connector":"Mock Big"}`);
@@ -55,6 +66,7 @@ try {
   ok(JSON.stringify(L?.messages ?? []).includes("Big get_widget_11"), "gọi được qua input_json", JSON.stringify(L?.messages ?? []).slice(-400));
 } finally {
   if (id) await api("DELETE", `/api/connectors/${id}`);
+  await api("PATCH", "/api/caps", Object.fromEntries(SET.filter((k) => typeof caps0[k] === "boolean").map((k) => [k, caps0[k]])));
 }
 
 console.log(`\n${fail ? "✗" : "✓"} ${pass} đạt, ${fail} lỗi`);

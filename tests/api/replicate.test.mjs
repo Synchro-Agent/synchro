@@ -55,6 +55,20 @@ const isImg = (f) => f && /^image\/(jpeg|png|webp)$/.test(f.mime) && !f.skipped;
 const repLog = async () => (await fetch(`${M}/replicate/_log`).then((r) => r.json())).log;
 const clearLog = () => fetch(`${M}/replicate/_log`, { method: "DELETE" });
 const posts = (log) => log.filter((e) => e.method === "POST" && /predictions$/.test(e.path));
+// Tham số của generate_image model nhận (qua API Anthropic giả lập): product_shot / product_relight chỉ có khi máy chủ có khóa Replicate.
+// Lượt nền (bộ não, bộ nhớ) của tài khoản khác có thể gửi tới cùng API giả lập ngay sau đó: chỉ đọc đúng yêu cầu mang mã của lần này.
+const imgProps = async () => {
+  for (let i = 0; i < 4; i++) {
+    const nonce = `img-props-${Date.now().toString(36)}-${i}`;
+    await admin.api("POST", "/api/llm", { system: "", messages: ask(`Chào bạn ${nonce}`), model: "anthropic/claude-opus-5-5", skills: true });
+    const L = (await fetch(`${M}/_debug/last`).then((r) => r.json())).anthropic;
+    if (!JSON.stringify(L?.messages ?? []).includes(nonce)) { await sleep(1500); continue; }
+    const t = (L.tools ?? []).find((x) => x.name === "generate_image");
+    return t ? Object.keys(t.input_schema?.properties ?? {}) : null;
+  }
+  return null;
+};
+const productProps = (k) => !!k && k.includes("product_shot") && k.includes("product_relight");
 const res0 = (r) => r.events.filter((e) => e.kind === "res").map((e) => e.text).join("\n");
 
 // PNG nhỏ thật (ảnh sản phẩm người dùng gửi) và PNG ~900 KB (phải đi qua Files API).
@@ -88,6 +102,8 @@ try {
     await clearLog();
     const r = await run(A, { model: "sub-claude/haiku", messages: ask(`Tạo ảnh ${tool({ prompt: "ly cà phê", product_shot: true })}`) });
     ok(isImg(r.j.files?.[0]) && /Antigravity/.test(res0(r)) && !(await repLog()).length, "tạo ảnh vẫn đi qua gói Antigravity, không gọi Replicate", { res: res0(r), log: await repLog() });
+    const k = await imgProps();
+    ok(k && k.includes("reference") && !k.includes("product_shot") && !k.includes("product_relight"), "chưa có khóa: generate_image không có product_shot / product_relight", k);
   }
 
   console.log("2. Nối khóa: kiểm tra với Replicate, đọc lược đồ hai model");
@@ -103,6 +119,8 @@ try {
     ok(!good.j.catalog.some((c) => c.id === "replicate"), "vẫn không có model chat nào từ Replicate");
     const ad = (await admin.api("GET", "/api/admin")).j?.settings;
     ok(ad?.replicateKey === true, "Quản trị viên: hết chờ khóa");
+    const k = await imgProps(), k2 = await imgProps();
+    ok(productProps(k) && JSON.stringify(k) === JSON.stringify(k2), "có khóa: generate_image có product_shot, product_relight (giống nhau giữa các lượt)", k);
     const raw = JSON.stringify(dbq((d) => d.prepare("SELECT enc_key, key_hint FROM api_providers WHERE id = 'replicate'").get()));
     ok(!raw.includes("r8_mock_replicate_0001") && /r8_moc…0001/.test(raw), "khóa lưu đã mã hóa, chỉ hiện dạng che", raw.slice(0, 120));
   }
@@ -258,6 +276,8 @@ try {
     await clearLog();
     const r = await run(A, { model: "sub-claude/haiku", messages: ask(`Tạo ảnh ${tool({ prompt: "sau khi gỡ" })}`) });
     ok(/Antigravity/.test(res0(r)) && !(await repLog()).length, "không còn gọi Replicate", res0(r));
+    const k = await imgProps();
+    ok(k && !productProps(k) && !k.includes("product_shot"), "gỡ khóa: generate_image bỏ product_shot / product_relight", k);
   }
 } finally {
   await removeKey();

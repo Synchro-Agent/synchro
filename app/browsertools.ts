@@ -25,10 +25,13 @@ const STEP = obj({
   file: { type: "string" }, path: { type: "string" }, name: { type: "string" }, allow: { type: "boolean" },
 }, ["action"]);
 
-const BROWSER = { type: "string", enum: ["synchro", "user"], description: "Trình duyệt: \"user\" = Chrome / Edge / Brave của chính người dùng (qua tiện ích Synchro, có sẵn các tài khoản họ đã đăng nhập); \"synchro\" = trình duyệt của Synchro. Bỏ trống = theo lựa chọn của người dùng, hoặc trình duyệt đã dùng trước đó trong lượt." };
+// Tham số browser: giải thích đầy đủ một lần ở browser_navigate (công cụ trình duyệt luôn gửi cả bộ; BROWSER_RULES cũng nói rõ), các công
+// cụ khác trỏ về đó thay vì lặp lại cùng một câu ở mỗi công cụ.
+const BROWSER_FULL = { type: "string", enum: ["synchro", "user"], description: "Trình duyệt: \"user\" = Chrome / Edge / Brave của chính người dùng (qua tiện ích Synchro, có sẵn các tài khoản họ đã đăng nhập); \"synchro\" = trình duyệt của Synchro. Bỏ trống = theo lựa chọn của người dùng, hoặc trình duyệt đã dùng trước đó trong lượt." };
+const BROWSER = { type: "string", enum: ["synchro", "user"], description: "Như browser_navigate." };
 export const BROWSER_TOOLS = [
   { name: "browser_navigate", description: "Mở một trang trong trình duyệt (người dùng xem trực tiếp). url là địa chỉ web, hoặc \"back\" / \"forward\" / \"reload\"; gõ chữ thường (không phải địa chỉ) thì mở trang tìm Google. Trên Chrome của người dùng, trang mở ở tab riêng của Synchro (nhóm tab \"Synchro\"), không đè lên tab họ đang xem.",
-    input_schema: obj({ url: { type: "string" }, browser: BROWSER }, ["url"]) },
+    input_schema: obj({ url: { type: "string" }, browser: BROWSER_FULL }, ["url"]) },
   { name: "browser_read", description: "Đọc trang hiện tại thành cây chữ: đề mục, đoạn văn, và mọi phần tử bấm / gõ được kèm số [ref] (nút, liên kết, ô nhập, ô chọn, ô đánh dấu, thẻ div bấm được như đáp án trắc nghiệm) cùng trạng thái (giá trị, checked, selected, disabled). filter=\"interactive\" chỉ lấy phần tử tương tác (gọn hơn). Ref giữ nguyên qua các lần đọc khi phần tử còn trên trang. Trên Chrome của người dùng, chưa chọn tab thì đọc tab họ đang xem.",
     input_schema: obj({ filter: { type: "string", enum: ["all", "interactive"] }, max_chars: { type: "number", description: "Mặc định 40000" }, browser: BROWSER }) },
   { name: "browser_text", description: "Lấy toàn bộ chữ của trang (kể cả iframe cùng nguồn), theo đoạn: offset, limit (ký tự). Dùng khi trang dài hoặc chỉ cần đọc nội dung.",

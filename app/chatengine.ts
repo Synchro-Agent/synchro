@@ -43,7 +43,7 @@ import { untested } from "./modelreg";
 import { type ABlock, type Citer, anthropicCall, blocksText, searchResults, chatOnce, effortParams, HttpErr, openaiCall, outCap, respInput, respParse, respTools, responsesCall, toAnthropic, toOpenAI, toResponses, withPages } from "./llmcall";
 import { mergedProviders, prewarmClaude, sessionPlain, subCli, subTurn } from "./ai/subs";
 import { PROJECT_DOC_RULES, PROJECT_DOC_TOOL, projectDocsLong, readProjectFile } from "./projectdocs";
-import { ASPECTS, generateImages, IMAGE_RULES, IMAGE_TOOL, imageBudget, imageName, IMG_NAME, requestSlug, type ImgErr, type ImgOk } from "./ai/imagegen";
+import { ASPECTS, generateImages, IMAGE_RULES, IMAGE_TOOL_NAME, imageBudget, imageProduct, imageTool, imageName, IMG_NAME, requestSlug, type ImgErr, type ImgOk } from "./ai/imagegen";
 import { POSTER_TEMPLATES, posterProps, type PosterTemplate } from "./design-engine/posters/props";
 import { genImageUrl } from "./artdoc";
 import { IMAGE_MAX_MB, imageKind, type ImgFile, scrubServerPaths } from "./ai/imagefiles";
@@ -534,7 +534,7 @@ const IMG_REF_MAX = 20 * 1048576;
 function tracedImage(trace: unknown): string | null {
   const ok = (Array.isArray(trace) ? trace : []) as { name?: string; status?: string; summary?: string }[];
   for (const t of [...ok].reverse()) {
-    if (t?.name !== IMAGE_TOOL.name || t.status !== "ok") continue;
+    if (t?.name !== IMAGE_TOOL_NAME || t.status !== "ok") continue;
     const names = [...String(t.summary ?? "").matchAll(/^(.+?) \([^()\n]*\) — đã gửi cho người dùng$/gm)];
     if (names.length) return names[names.length - 1][1];
   }
@@ -577,7 +577,7 @@ async function refImage(x: Exec, ref: string): Promise<ImgFile | string> {
   return pick;
 }
 async function runImage(x: Exec, c: Call): Promise<Run> {
-  const used = { kind: "search" as const, name: IMAGE_TOOL.name };
+  const used = { kind: "search" as const, name: IMAGE_TOOL_NAME };
   const fail = (content: string): Run => ({ content, is_error: true, used });
   const prompt = typeof c.input?.prompt === "string" ? c.input.prompt.trim() : "";
   const template = String(c.input?.template ?? "").trim();
@@ -723,7 +723,7 @@ async function runCall(x: Exec, c: Call, d?: Decision): Promise<Run> {
   if (c.name.startsWith("brain_") && !x.sess?.get(c.name)) return { ...runBrainTool(x.uid, c.name, c.input ?? {}), used: { kind: "search", name: c.name } };
   if (c.name === "web_search" && x.search && !x.sess?.get(c.name)) return searchWeb(x.search, String(c.input?.query ?? ""), citeOf(x));
   if (c.name === "run_code" && !x.sess?.get(c.name)) { const r = await runCode(x, c.input); if (r.image) (x.heavy ??= []).push(c.id); return r; }
-  if (c.name === IMAGE_TOOL.name && x.image && !x.sess?.get(c.name)) return runImage(x, c);
+  if (c.name === IMAGE_TOOL_NAME && x.image && !x.sess?.get(c.name)) return runImage(x, c);
   if (c.name === PROJECT_DOC_TOOL.name && x.project !== undefined && !x.sess?.get(c.name)) return { ...readProjectFile(x.uid, x.project, c.input ?? {}), used: { kind: "search", name: c.name } };
   if ((c.name === "read_artifact" || c.name === "check_artifact") && x.art && !x.sess?.get(c.name)) {
     const a = findArtifact({ uid: x.uid, conv: x.conv, messages: x.art.messages, base: x.art.base, live: [...(x.turnArts ?? []), liveNow()].join("\n\n") }, typeof c.input?.identifier === "string" ? c.input.identifier : undefined);
@@ -795,7 +795,7 @@ function describe(x: Exec, c: Call) {
   if (c.name === "run_skill_script") return `Đang chạy script của skill ${n}`;
   if (c.name === "run_code") return `Đang chạy code ${String(c.input?.language ?? "python")}`;
   if (c.name === PROJECT_DOC_TOOL.name && x.project !== undefined) return `Đang đọc tệp dự án ${String(c.input?.file ?? "")}`.trim();
-  if (c.name === IMAGE_TOOL.name && x.image) return `Đang tạo ảnh: ${String(c.input?.prompt ?? "").replace(/\s+/g, " ").slice(0, 100)}`;
+  if (c.name === IMAGE_TOOL_NAME && x.image) return `Đang tạo ảnh: ${String(c.input?.prompt ?? "").replace(/\s+/g, " ").slice(0, 100)}`;
   if (c.name === "web_search" && x.search) return `Đang tìm trên web: ${String(c.input?.query ?? "").slice(0, 120)}`;
   if (c.name === "brain_search") return `Đang nhớ lại: ${String(c.input?.query ?? "").slice(0, 120)}`;
   if (c.name === "brain_read") return `Đang đọc ghi chú ${String(c.input?.title ?? "").slice(0, 80)} trong bộ não`;
@@ -808,7 +808,7 @@ function describe(x: Exec, c: Call) {
 }
 // Công cụ lấy dữ liệu (connector, chạy code, script của skill): kết quả lớn lưu theo tham chiếu và có trong dấu vết của lượt.
 // Công cụ đọc skill không tính (đó là hướng dẫn, không phải dữ liệu).
-const isData = (x: Exec, c: Call) => c.name === PROJECT_DOC_TOOL.name || !!x.sess?.get(c.name) || c.name === "run_code" || c.name === "run_skill_script" || c.name === IMAGE_TOOL.name;
+const isData = (x: Exec, c: Call) => c.name === PROJECT_DOC_TOOL.name || !!x.sess?.get(c.name) || c.name === "run_code" || c.name === "run_skill_script" || c.name === IMAGE_TOOL_NAME;
 const label = (x: Exec, c: Call) => describe(x, c).replace(/^Đang (dùng |chạy )?/, "");
 function abortable<T>(p: Promise<T>, signal?: AbortSignal): Promise<T> {
   if (!signal) return p;
@@ -1348,7 +1348,7 @@ function designOf(body: Record<string, any>, caps: { art: boolean; code: boolean
   // Nhờ làm tệp tài liệu (báo cáo PDF, đề xuất, bài 2 cột, hóa đơn / báo giá): thêm khối synchro-doc (4 mẫu Typst / WeasyPrint), chỉ image workspace.
   const k = product ? docTurn({ typed, code: caps.code, workspace: runner() === "workspace", format: d?.format }) : "";
   if (k) console.log(`[doc] synchro-doc ${Buffer.byteLength(k)}B`);
-  const f = featTurn({ typed, art: caps.art, image: caps.image, format: d && !d.compact ? d.format : null, prior });
+  const f = featTurn({ typed, art: caps.art, image: caps.image, product: caps.image && imageProduct(), format: d && !d.compact ? d.format : null, prior });
   if (f.parts.length) console.log(`[featkit] ${f.parts.join(",")} ${Buffer.byteLength(f.block)}B`);
   return [d?.block ?? "", v, k, f.block].filter(Boolean).join("\n\n");
 }
@@ -1648,7 +1648,7 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
         // Tạo ảnh: lượt chat thường của mọi model, gói nào đăng nhập thì công cụ tự chọn (Synchro Code có cách làm việc riêng).
         const image = feature !== "code";
         const pdocs = feature !== "code" && !!project && projectDocsLong(c.user.id, project);
-        const tools = [...(pdocs ? [PROJECT_DOC_TOOL] : []), ...(task ? [TASK_TOOL] : []), ...(code ? [runCodeTool(pc.net, !!pc.web)] : []), ...(arts ? [READ_ARTIFACT_TOOL] : []), ...(check ? [CHECK_ARTIFACT_TOOL] : []), ...(ss.visible.length ? skillTools(ss.visible.length, code) : []), ...(sess ? connTools(sess, cli === "agy") : []), ...(refs ? [READ_REF_TOOL] : []), ...(brainOn(body, c.user) ? BRAIN_TOOLS : []), ...(browse ? BROWSER_TOOLS : []), ...(image ? [IMAGE_TOOL] : []), PLAN_TOOL];
+        const tools = [...(pdocs ? [PROJECT_DOC_TOOL] : []), ...(task ? [TASK_TOOL] : []), ...(code ? [runCodeTool(pc.net, !!pc.web)] : []), ...(arts ? [READ_ARTIFACT_TOOL] : []), ...(check ? [CHECK_ARTIFACT_TOOL] : []), ...(ss.visible.length ? skillTools(ss.visible.length, code) : []), ...(sess ? connTools(sess, cli === "agy") : []), ...(refs ? [READ_REF_TOOL] : []), ...(brainOn(body, c.user) ? BRAIN_TOOLS : []), ...(browse ? BROWSER_TOOLS : []), ...(image ? [imageTool()] : []), PLAN_TOOL];
         const xx: Exec = { project: pdocs ? project : undefined, image, msgs: messages, toolSync: subCli(model) === "claude", list: [...ss.visible, ...ss.list.filter((k) => !ss.visible.includes(k))], scripts: code, sess, uid: c.user.id, code, net: pc.net, web: !!pc.web, art: arts ? { messages, base: body.artBase } : undefined, outs: [], libs: ss.libs, studio: studio ? ss.libs[`studio-${studio}`][0] : undefined, prefer: ss.prefer, trace: [], conv: convId, browse, task, bctx: browse ? { def: task ? taskBrowser(task) : browserDefault(bst), synchro: !bst.locks.browse, user: bst.locks.mine !== "admin", scope: convId ? `chat:${convId}` : undefined, cookies: codePrefs(c.user.id).cookies, files: chatFiles(messages, c.user.id, () => xx.outs) } : undefined };
         x = xx;
         announceOffline(xx, messages);
@@ -1831,7 +1831,7 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
       // Chạy script của skill chỉ khi máy chủ có nơi chạy code và người dùng bật "Chạy code và tạo tệp".
       const scripts = code;
       const sk = [capSys, arts ? ARTCHECK_RULES(check) : "", skillsPrompt(visible, scripts), sess ? connectorsPrompt(sess, connProxy(sess)) : "", skills ? NARRATE_RULES : "", brain ? BRAIN_RULES : "", browse ? BROWSER_RULES : "", task ? taskRules(task, browse) : "", pinned].filter(Boolean).join("\n\n");
-      const tools = [...(pdocs ? [PROJECT_DOC_TOOL] : []), ...(code ? [runCodeTool(!!cs?.caps.net, !!cs?.caps.web)] : []), ...(arts ? [READ_ARTIFACT_TOOL] : []), ...(check ? [CHECK_ARTIFACT_TOOL] : []), ...(visible.length ? skillTools(visible.length, scripts) : []), ...(sess ? connTools(sess, t.kind === "google") : []), ...(refs ? [READ_REF_TOOL] : []), ...(brain ? BRAIN_TOOLS : []), ...(browse ? BROWSER_TOOLS : []), ...(task ? [TASK_TOOL] : []), ...(image ? [IMAGE_TOOL] : []), ...(skills ? [PLAN_TOOL] : []), ...(web && synWeb ? [{ ...GEMINI_WEB_TOOL, description: t.kind === "google" ? GEMINI_WEB_TOOL.description : WEB_DESC }] : [])];
+      const tools = [...(pdocs ? [PROJECT_DOC_TOOL] : []), ...(code ? [runCodeTool(!!cs?.caps.net, !!cs?.caps.web)] : []), ...(arts ? [READ_ARTIFACT_TOOL] : []), ...(check ? [CHECK_ARTIFACT_TOOL] : []), ...(visible.length ? skillTools(visible.length, scripts) : []), ...(sess ? connTools(sess, t.kind === "google") : []), ...(refs ? [READ_REF_TOOL] : []), ...(brain ? BRAIN_TOOLS : []), ...(browse ? BROWSER_TOOLS : []), ...(task ? [TASK_TOOL] : []), ...(image ? [imageTool()] : []), ...(skills ? [PLAN_TOOL] : []), ...(web && synWeb ? [{ ...GEMINI_WEB_TOOL, description: t.kind === "google" ? GEMINI_WEB_TOOL.description : WEB_DESC }] : [])];
       // Phiên bản công cụ tìm web theo model (bản có lọc động cho dòng mới; model cũ dùng bản cơ bản).
       const webTool = { type: anthropicWebSearch(t.model), name: "web_search", max_uses: 5 };
       if (body.estimate === true) { sess?.close(); return estimate([system, capSys], [skillsPrompt(visible, scripts), sess ? connectorsPrompt(sess, connProxy(sess)) : "", JSON.stringify(tools)], pinned, prep); }
