@@ -62,7 +62,7 @@ export const quality = (p: Profile, task: Task) => BASE[p.frontier ? "frontier" 
 // ---- tách chỉ thị và nội dung ----
 // Từ trọn vẹn theo Unicode (\b của JavaScript coi chữ có dấu là ký tự ngăn cách nên "dịch vụ" vẫn khớp "dịch").
 const W = (s: string) => new RegExp(`(?<![\\p{L}\\p{N}])(?:${s})(?![\\p{L}\\p{N}])`, "iu");
-const CONNECTOR_APPS = "gmail|outlook|calendar|stripe|notion|slack|jira|linear|asana|trello|hubspot|salesforce|shopify|zalo|fanpage|google drive|drive|google sheets?|airtable|figma|vercel|supabase|sentry|telegram|discord";
+const CONNECTOR_APPS = "gmail|outlook|calendar|google calendar|stripe|notion|slack|jira|linear|asana|trello|hubspot|salesforce|shopify|zalo|fanpage|google drive|drive|google sheets?|google docs?|google slides?|tài liệu google|bảng tính google|onedrive|sharepoint|dropbox|github|gitlab|airtable|figma|canva|miro|clickup|monday|higgsfield|youtube|composio|vercel|supabase|sentry|telegram|discord";
 const count = (re: RegExp, s: string) => s.match(new RegExp(re.source, re.flags.includes("g") ? re.flags : re.flags + "g"))?.length ?? 0;
 // Dòng trông như code thật (không phải chỉ nhắc tên ngôn ngữ lập trình) và dấu vết lỗi khi chạy chương trình.
 const CODE_LINE = /^\s*(?:def \w+\(|class \w+\s*[:({]|(?:async )?function\b|(?:const|let|var) \w+\s*=|import .+ from |from [\w.]+ import |#include|(?:public|private|protected) |return\b|if\s*\(|for\s*\(|while\s*\(|\}\s*(?:else)?|<\/?[a-z][\w-]*(?:\s[^>]*)?>|select .+ from |insert into |update \w+ set |\$ \w|>>> |console\.\w+\(|print\(|echo |\w+(?:\.\w+)*\([^()]*\);\s*$|.*\)\s*(?:=>\s*)?\{\s*$)/i;
@@ -163,7 +163,7 @@ const SIG: Partial<Record<Task, Sig[]>> = {
     [W("(?:làm(?! (?:thế|sao|gì|như|cách|ơn|việc|quen|bài tập|bài kiểm tra))|tạo|dựng|quay|sản xuất|render|xuất(?! hiện| bản| khẩu| sắc)|ghép|cắt|vẽ|generate|create|make|edit|draw)(?:(?![.?!\\n]).){0,30}?(?:video|clip|phim|ảnh(?! hưởng)|hình ảnh|hình minh họa|hình minh hoạ|hình(?! (?:học|thức|như|không gian))|image|picture|photo|illustration|nhạc|bài hát|audio|giọng đọc|podcast|voiceover)"), 5],
     [W("đăng (?:bài|lên|status|ảnh|video|tin)|post (?:to|on)|publish|gửi (?:email|mail|thư|tin nhắn|hóa đơn|hoá đơn|báo giá)|send (?:an? |the )?(?:email|message|invoice)|tạo (?:sự kiện|lịch|cuộc họp|cuộc hẹn|hóa đơn|hoá đơn|đơn hàng|ticket|task)|đặt (?:lịch|vé|phòng|bàn|hẹn)|lên lịch|create (?:an? )?(?:event|invoice|ticket|meeting)|schedule (?:a|an)|book (?:a|an)|mở trang|vào trang|truy cập (?:trang|web)|open (?:the )?(?:website|page|site)|điền (?:form|biểu mẫu)|fill (?:in|out) (?:the |this )?form|crawl|scrape|cào dữ liệu|tải (?:về|xuống)"), 5],
     // Đọc / xem dữ liệu ở connector và sản phẩm người dùng đã nối: cần công cụ, không phải câu hỏi nhỏ.
-    [W("(?:đọc|xem|kiểm tra|check|lấy|tìm|liệt kê|tổng hợp|read|show|get|list|fetch|open)(?:(?![.?!\\n]).){0,40}?(?:gmail|outlook|mail|e-?mail|hộp thư|inbox|lịch(?! sử| trình)|calendar|stripe|notion|slack|jira|linear|asana|trello|hubspot|salesforce|shopify|zalo|fanpage|google drive|drive|google sheets?|airtable|figma|vercel|supabase|sentry|telegram|discord)"), 5],
+    [W(`(?:đọc|xem|kiểm tra|check|lấy|tìm|liệt kê|tổng hợp|read|show|get|list|fetch|open)(?:(?![.?!\\n]).){0,40}?(?:mail|e-?mail|hộp thư|inbox|lịch(?! sử| trình)|${CONNECTOR_APPS})`), 5],
     // Tạo, sửa, xóa trong ứng dụng đã nối: cần tìm công cụ rồi gọi đúng tham số, không phải câu hỏi nhỏ. Cùng danh sách hãng với luật đọc ở trên.
     [W(`(?:tạo|thêm|sửa|cập nhật|đổi|xóa|xoá|lưu|ghi|create|add|update|edit|delete|remove|archive|save)(?:(?![.?!\\n]).){0,40}?(?:trong|trên|vào|ở|lên|in|on|to|into|at) (?:${CONNECTOR_APPS})`), 5],
     [W("(?:tạo|thêm|sửa|cập nhật|xóa|xoá|create|add|update|edit|delete|remove|archive)(?:(?![.?!\\n]).){0,20}?(?:notion|jira|asana|trello|hubspot|salesforce|shopify|airtable|google sheets?)"), 5],
@@ -550,7 +550,8 @@ const LAG_COST = 0.6;
 // Fable của gói Claude có thể tính vào usage credits (tiền thật ngoài gói): Tự động không tự tiêu, người dùng vẫn chọn tay được. Danh sách chỉ còn nó thì vẫn dùng.
 const CREDIT = /^sub-claude\/.*fable/i;
 // Grok Build là model viết code: chỉ tính cho việc code; từng thắng cả câu hỏi sức khỏe, thuế, toán vì tên lạ được coi là hạng vừa và có thế mạnh của xAI.
-const CODE_ONLY = /grok-build/i;
+// Model chỉ dành cho code của xAI: grok-build, grok-4.7-build-fast… (tên mới có số phiên bản đứng giữa).
+const CODE_ONLY = /grok-(?:[\d.]+-)?build/i;
 /** Model tính vào tiền thật ngoài gói: việc không ai bấm thì không được chạy trên nó. */
 export const billsCredit = (k: string) => CREDIT.test(k);
 /** Danh sách có model rẻ hơn hạng mạnh nhất dùng được cho việc phụ không (kể cả đang tạm hết hạn mức). */
