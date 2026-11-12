@@ -52,6 +52,11 @@ export function db() {
   fs.mkdirSync(DATA_DIR, { recursive: true });
   const d = new Database(path.join(DATA_DIR, "synchro.db"));
   d.pragma("journal_mode = WAL");
+  // WAL: synchronous=NORMAL vẫn an toàn khi tiến trình chết (chỉ mất giao dịch cuối khi mất điện), không fsync mỗi lần ghi.
+  // Bộ đệm trang 64 MB (số âm = KiB) và đọc qua mmap tới 256 MB: truy vấn lặp lại không đọc lại đĩa.
+  d.pragma("synchronous = NORMAL");
+  d.pragma("cache_size = -65536");
+  d.pragma("mmap_size = 268435456");
   d.pragma("foreign_keys = ON");
   d.pragma("busy_timeout = 5000");
   d.exec(fs.readFileSync(path.join(process.cwd(), "db", "schema.sql"), "utf8"));
