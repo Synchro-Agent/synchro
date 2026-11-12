@@ -18,20 +18,42 @@ const clsLog = [];
 
 const { cookie, uid } = await login(B);
 // Một đoạn chat có tin trên máy chủ (để dựng đoạn chat "đang tải từ máy chủ").
-const srv = (await (await fetch(B + "/api/chats?since=0", { headers: { cookie } })).json()).items.filter((i) => i.kind === "chat" && !i.deleted).map((i) => JSON.parse(i.data))
+const findSrv = async () => (await (await fetch(B + "/api/chats?since=0", { headers: { cookie } })).json()).items.filter((i) => i.kind === "chat" && !i.deleted).map((i) => JSON.parse(i.data))
   .find((c) => c.msgs?.length >= 2 && c.msgs[0].role === "user" && c.msgs[0].text.length < 30 && !c.inc);
-if (!srv) throw new Error("máy chủ chưa có đoạn chat nào có tin (chạy tests/ui/cites-code.mjs hoặc chat một lần trước)");
+let srv = await findSrv();
+// Máy giả lập mới dựng chưa có đoạn chat nào: đẩy một đoạn chat có tin lên máy chủ (cùng đường đồng bộ của app).
+if (!srv) {
+  const id = Date.now() - 86_400_000, ans = "Kế hoạch gồm ba bước.\n\n1. Khảo sát khách hàng trong tuần đầu.\n2. Thử giá mới ở hai cửa hàng.\n3. Đo doanh thu và quyết định.\n\nBạn muốn tôi viết chi tiết bước nào trước?";
+  const chat = { id, title: "Kế hoạch thử giá", msgs: [{ role: "user", text: "Lập kế hoạch thử giá", time: id, done: true }, { role: "ai", text: ans, done: true, time: id + 1 }, { role: "user", text: "Bước một", time: id + 2, done: true }, { role: "ai", text: "Khảo sát 50 khách quen bằng phiếu ngắn năm câu.", done: true, time: id + 3 }] };
+  await fetch(B + "/api/chats", { method: "PUT", headers: { cookie, origin: B, "content-type": "application/json" }, body: JSON.stringify({ items: [{ kind: "chat", id: String(id), upd: id + 4, data: JSON.stringify(chat) }] }) });
+  srv = await findSrv();
+}
+if (!srv) throw new Error("không đưa được đoạn chat có tin lên máy chủ");
 
 const t = await openChrome({ base: B, port: Number(process.env.CDP_PORT ?? 9374), name: "skeletons", shots: process.env.SHOTS });
 const { P, ev, until } = t;
-// Giữ chậm yêu cầu khớp mẫu (một lần bật một mẫu); yêu cầu khác đi thẳng.
+// Giữ chậm yêu cầu khớp mẫu (một lần bật một mẫu); yêu cầu khác đi thẳng. Mẫu là địa chỉ (API) hoặc { js: /…/ }: tệp mã có nội dung khớp —
+// bản production đặt tên tệp mã theo số và mã băm (không có "artifactui", "settings" như bản dev), nên nhận phần mã bằng một chuỗi chỉ module đó có.
+// Tệp mã giữ ở chặng nhận trả lời (đã đọc được nội dung) rồi mới thả ra trình duyệt. Tắt bộ nhớ đệm để tệp mã đã tải ở bước trước vẫn đi qua mạng.
 let holdRe = null, held = 0, holdMs = HOLD;
-t.on("Fetch.requestPaused", (p) => {
-  if (holdRe && holdRe.test(p.request.url)) { held++; setTimeout(() => P("Fetch.continueRequest", { requestId: p.requestId }).catch(() => {}), holdMs); }
-  else P("Fetch.continueRequest", { requestId: p.requestId }).catch(() => {});
+const later = (id) => setTimeout(() => P("Fetch.continueRequest", { requestId: id }).catch(() => {}), holdMs);
+t.on("Fetch.requestPaused", async (p) => {
+  const go = () => P("Fetch.continueRequest", { requestId: p.requestId }).catch(() => {});
+  if (!holdRe) return go();
+  if (holdRe instanceof RegExp) { if (holdRe.test(p.request.url)) { held++; later(p.requestId); } else go(); return; }
+  if (p.responseStatusCode === undefined) return go();
+  const body = await P("Fetch.getResponseBody", { requestId: p.requestId }).catch(() => null);
+  const text = body ? (body.base64Encoded ? Buffer.from(body.body, "base64").toString("utf8") : body.body) : "";
+  if (holdRe.js.test(text)) { held++; later(p.requestId); } else go();
 });
-const hold = async (re, ms = HOLD) => { holdRe = re; held = 0; holdMs = ms; await P("Fetch.enable", { patterns: [{ urlPattern: "*", requestStage: "Request" }] }); };
+const hold = async (re, ms = HOLD) => {
+  holdRe = re; held = 0; holdMs = ms;
+  await P("Fetch.enable", { patterns: re instanceof RegExp ? [{ urlPattern: "*", requestStage: "Request" }] : [{ urlPattern: "*", resourceType: "Script", requestStage: "Response" }] });
+};
 const unhold = async () => { holdRe = null; await P("Fetch.disable"); };
+await P("Network.setCacheDisabled", { cacheDisabled: true });
+// Chuỗi chỉ có trong mã của khung artifact (app/artifactui.tsx) và của trang cài đặt (app/settings.tsx).
+const ART_JS = { js: /art-dl-menu/ }, SETTINGS_JS = { js: /cap-domains/ };
 // CLS: mọi layout-shift không do người dùng vừa bấm (bấm bằng .click() trong trang nên mọi dịch chuyển đều tính).
 await P("Page.addScriptToEvaluateOnNewDocument", { source: `window.__cls = { v: 0, n: [] }; try { new PerformanceObserver((l) => { for (const e of l.getEntries()) if (!e.hadRecentInput) { __cls.v += e.value; __cls.n.push(Math.round(e.value * 1e4) / 1e4 + ":" + (e.sources || []).map((s) => s.node ? (s.node.className || s.node.nodeName) : "?").join("|").slice(0, 80)); } }).observe({ type: "layout-shift", buffered: true }); } catch {}` });
 const clsReset = () => ev(`window.__cls ? (__cls.v = 0, __cls.n = [], 1) : 0`);
@@ -128,7 +150,7 @@ try {
     // ---- 3. Đoạn chat đang tải từ máy chủ ----
     console.log("3. Đoạn chat đang tải từ máy chủ");
     await seed([{ id: srv.id, title: srv.title, msgs: [], stub: true }, ...local.slice(0, 3)]);
-    await hold(/\/api\/chats\?keys=/);
+    await hold(/\/api\/chats\?(keys|since)=/);
     await go(`${B}/#c=${srv.id}`);
     await until(`!!document.querySelector(".thread")`, 30000);
     await sleep(500);
@@ -149,7 +171,7 @@ try {
     // thật (dịch chuyển trong 0,5 giây sau cú bấm không tính vào CLS, như trình duyệt tính cho người dùng; lúc khung thật thay khung chờ thì có tính).
     console.log("4. Khung artifact");
     await seed(local);
-    await hold(/artifactui/, 4000);
+    await hold(ART_JS, 4000);
     await go(`${B}/#c=${now}`);
     await until(`!!document.querySelector(".thread .art-card")`, 30000);
     await sleep(400);
@@ -176,7 +198,7 @@ try {
     // ---- 5. Cài đặt đang tải ----
     console.log("5. Cài đặt");
     await seed(local.slice(0, 3));
-    await hold(/settings/);
+    await hold(SETTINGS_JS);
     await P("Page.navigate", { url: `${B}/?settings=General` });
     await until(`!!document.querySelector(".s-body")`, 30000);
     await sleep(400);
@@ -211,7 +233,7 @@ try {
   await t.size(1280, 800);
   await seed([{ id: srv.id, title: srv.title, msgs: [], stub: true }]);
   await ev(`localStorage.setItem("theme", "dark")`);
-  await hold(/\/api\/chats\?keys=/);
+  await hold(/\/api\/chats\?(keys|since)=/);
   await go(`${B}/#c=${srv.id}`);
   await until(`!!document.querySelector(".thread .sk-ai")`, 30000).catch(() => {});
   await sleep(400);

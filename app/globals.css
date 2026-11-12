@@ -2315,8 +2315,9 @@ html body :is(.menu,.model-menu,.usermenu,.model-sub).fl-flat{background:var(--c
 .cn-card{border:.5px solid var(--border);border-radius:var(--r-card);background:var(--card);transition:box-shadow .2s,border-color .2s}
 .cn-card.open{border-color:var(--border-strong);box-shadow:0 4px 18px rgba(0,0,0,.06)}
 .cn-card .api-err.in{margin:0 14px 12px}
-.cn-card-h{display:flex;align-items:center;gap:10px;padding:10px 12px 10px 10px}
-.cn-card-main{flex:1;min-width:0;display:flex;align-items:center;gap:12px;padding:4px;border-radius:var(--r-plate);text-align:left;transition:background .15s}
+/* Thẻ hẹp (điện thoại): nút hành động rộng (Thêm khóa Composio, Kết nối…) xuống hàng riêng thay vì ép tên và trạng thái còn vài chữ bị cắt cụt. */
+.cn-card-h{display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px;padding:10px 12px 10px 10px}
+.cn-card-main{flex:1;min-width:min(160px,100%);display:flex;align-items:center;gap:12px;padding:4px;border-radius:var(--r-plate);text-align:left;transition:background .15s}
 .cn-card-main:not(:disabled):hover{background:var(--hover)}
 .cn-card-main:disabled{cursor:default;opacity:1}
 .cn-meta{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
@@ -2326,12 +2327,13 @@ html body :is(.menu,.model-menu,.usermenu,.model-sub).fl-flat{background:var(--c
 .cn-sub{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-3);min-width:0;white-space:nowrap;overflow:hidden}
 .cn-sub i{width:6px;height:6px;border-radius:50%;background:#22a35a;flex:none}
 .cn-sub.needs_auth i{background:#d99a1b}.cn-sub.error i,.cn-sub.forbidden i{background:#c6422f}
-.cn-host{overflow:hidden;text-overflow:ellipsis}
+.cn-st,.cn-host{min-width:0;overflow:hidden;text-overflow:ellipsis}
+.cn-st{flex:0 1 auto}.cn-host{flex:0 100 auto}
 /* Dấu "·" cách đều hai bên (bằng gap của .cn-sub); trước đây khoảng trắng đầu bị flex nuốt, lệch 6px / 3px. */
 .cn-dot{font-weight:inherit;margin-right:6px}
 .cn-chev{color:var(--text-3);transition:transform .2s var(--ease);flex:none;display:grid}
 .cn-card.open .cn-chev{transform:rotate(90deg)}
-.cn-actions{display:flex;align-items:center;gap:6px;flex:none}
+.cn-actions{display:flex;align-items:center;gap:6px;flex:none;margin-left:auto}
 .cn-connect{display:inline-flex;align-items:center;gap:6px}
 .cn-switch{width:36px;height:22px;border-radius:var(--r-pill);background:var(--border-strong);position:relative;transition:background .2s;flex:none}
 .cn-switch i{position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.25);transition:transform .2s var(--ease)}
@@ -2419,7 +2421,6 @@ html body :is(.menu,.model-menu,.usermenu,.model-sub).fl-flat{background:var(--c
 .cn-warn svg{flex:none;margin-top:2px;color:#d99a1b}
 @media (max-width:640px){
   .cn-grid{grid-template-columns:1fr}
-  .cn-card-h{flex-wrap:wrap}
   .cn-perm select{min-width:0;max-width:150px}
   .cn-host,.cn-tag,.cn-chev{display:none}
   .cn-card-h{gap:6px;padding:8px}
@@ -4205,9 +4206,10 @@ html[data-sess] .boot>*{visibility:visible}
 .boot-box{align-self:stretch;height:96px;border-radius:var(--r-panel,24px);background:var(--input);box-shadow:var(--shadow-input);margin-bottom:44px}
 .boot-thread{flex:1;overflow:hidden;padding:16px 24px 24px}
 .boot-thread .sk-thread-in{max-width:var(--thread-w,768px);margin:0 auto;display:flex;flex-direction:column;gap:28px}
+/* Lề ngang và đáy theo .main>.dock thật: 24px và 16px + dòng ghi chú 40px ở máy tính, 12px và 12px + 40px ở màn ≤760px. */
 .boot-dock{position:absolute;left:0;right:0;bottom:0;padding:0 24px 56px;display:flex;justify-content:center}
 .boot-dock .boot-box{width:min(var(--thread-w,768px),100%);height:46px;margin:0}
-@media (max-width:760px){.boot-rail,.boot-side{display:none}.boot-hero{padding:0 16px 10vh}.boot-greet{font-size:26px}.boot-dock .boot-box{height:76px}}
+@media (max-width:760px){.boot-rail,.boot-side{display:none}.boot-hero{padding:0 16px 10vh}.boot-greet{font-size:26px}.boot-dock{padding:0 12px 52px}.boot-dock .boot-box{height:76px}}
 /* Không hỏi được máy chủ lúc mở trang (người đã đăng nhập): báo rõ, không đưa về màn hình đăng ký. */
 .boot>.boot-err{visibility:visible;position:absolute;inset:0;margin:auto;width:min(400px,calc(100% - 32px));height:fit-content;display:flex;flex-direction:column;align-items:center;gap:10px;padding:24px;border-radius:var(--r-panel);background:var(--card);box-shadow:var(--shadow-input);text-align:center}
 .boot-err b{font-size:16px}

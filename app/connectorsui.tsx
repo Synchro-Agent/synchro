@@ -299,7 +299,7 @@ function ConnectorCard({ c, policy, open, busy, waiting, stale, onDismissScope, 
           <ConnLogo logo={c.logo} color={c.color} icon={c.icon} name={c.name} />
           <span className="cn-meta">
             <span className="cn-name"><b data-notr>{c.name}</b>{c.dir === null && <span className="cn-tag">Custom</span>}</span>
-            <span className={`cn-sub ${c.adminBlocked ? "error" : c.status}`}><i />{status}<span className="cn-host" data-notr><b className="cn-dot">·</b>{c.host}</span></span>
+            <span className={`cn-sub ${c.adminBlocked ? "error" : c.status}`}><i /><span className="cn-st">{status}</span><span className="cn-host" data-notr><b className="cn-dot">·</b>{c.host}</span></span>
           </span>
           {c.status === "ok" && <span className="cn-chev"><I.ChevronR size={14} /></span>}
         </button>
@@ -450,7 +450,7 @@ function ComposioSection({ info, onInfo }: { info: ComposioInfo; onInfo: (i: Com
           <ConnLogo color="#5B4BDB" name="Composio" />
           <span className="cn-meta">
             <span className="cn-name"><b data-notr>Composio</b><span className="cn-tag">1000+ apps</span></span>
-            <span className={`cn-sub ${info.state === "active" ? (c?.enabled ? "ok" : "needs_auth") : info.state === "error" ? "error" : "needs_auth"}`}><i />{status}</span>
+            <span className={`cn-sub ${info.state === "active" ? (c?.enabled ? "ok" : "needs_auth") : info.state === "error" ? "error" : "needs_auth"}`}><i /><span className="cn-st">{status}</span></span>
           </span>
         </div>
         <div className="cn-actions">
