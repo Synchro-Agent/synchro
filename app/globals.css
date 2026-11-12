@@ -4189,6 +4189,8 @@ body{text-wrap-style:pretty}
 /* Khung soạn rất hẹp: ô nhập một dòng riêng, các nút ở dòng dưới */
 .dock[data-tight] .composer{flex-wrap:wrap}
 .dock[data-tight] .composer textarea{flex:1 0 100%!important;order:-1;min-width:0}
+/* Khung hẹp (đang mở trình duyệt / artifact): ô chữ lên hàng riêng, cụm nút (ngữ cảnh, micro, Gửi / Dừng) vẫn dồn về mép phải như khi khung rộng. */
+.dock[data-tight] .composer>textarea+*{margin-left:auto}
 .main.has-art .dock .composer,.main.has-art .dock>.dock-mode,.main.has-art .dock>.wl-queue,.main.has-art .dock>.dock-note{width:min(var(--thread-w,768px),100%)}
 /* Sửa, sao chép tin đã gửi */
 .u-actions{display:flex;gap:0;height:26px;margin:-2px 0 -14px;color:var(--text-3);opacity:0;transition:opacity .15s}
