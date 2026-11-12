@@ -7,14 +7,14 @@ import { openSecret, sealSecret } from "./providers";
 import { DIRECTORY } from "./connectordir";
 import { allowsDir, FULL_CONN, type ConnPolicy } from "./catalog";
 import { detectIcon } from "./connicons";
-import { connLogo, type ConnLogoFields } from "./connlogos";
+import { appLogo, appSlug, connLogo, type ConnLogoFields } from "./connlogos";
 import crypto from "node:crypto";
 import { destructiveLike, guessedRead, McpClient, McpError, oldGuessedRead, readLike, resultImages, resultText, type Era, type McpTool } from "./mcp";
 import { catalogLine } from "./connproxy";
 import { coerceArgs } from "./connschema";
 import { authorizeRejected, authorizeUrl, checkIssuer, discover, exchangeCode, metadataHint, parseWww, randomToken, refreshTokens, registerClient, TokenRejected, type AsMeta, type OAuthClient, type Tokens } from "./mcpauth";
 import { checkUrl, FetchBlocked, TempFail } from "./safefetch";
-import { annotate, COMPOSIO, COMPOSIO_COLOR, COMPOSIO_LINK_PROMPT, COMPOSIO_NAME, COMPOSIO_PROMPT, CONNECT_URL, EXEC_TOOL, execRead, KEY_HEADER, keyOk, MANAGE_URL, maskKey } from "./composio";
+import { annotate, appName, askOnlyTool, COMPOSIO, COMPOSIO_COLOR, COMPOSIO_LINK_PROMPT, COMPOSIO_NAME, COMPOSIO_PROMPT, CONNECT_URL, EXEC_TOOL, execPlan, KEY_HEADER, keyOk, MANAGE_URL, maskKey, PROXY_TOOL, strictCall } from "./composio";
 
 export type Perm = "allow" | "chat" | "ask" | "block";
 export const PERMS: Perm[] = ["allow", "chat", "ask", "block"];
@@ -49,10 +49,15 @@ type Row = {
   id: string; user_id: string; name: string; url: string; dir: string | null; enabled: number; era: string | null; status: string; error: string | null;
   server_name: string | null; enc_auth: string; tools: string; perms: string; created_at: number; updated_at: number; checked_at: number | null;
   icon: string | null; settings: string; last_error: string | null; tools_total: number | null; perms_gone: string | null; empty_seen: number | null;
+  /** Composio: quyền thao tác ghi theo từng ứng dụng ({ googledocs: "allow" }), mặc định "ask". */
+  app_perms: string | null;
 };
 // locked: công cụ đang bị khóa vì connector tắt công cụ xóa dữ liệu ("setting") hoặc quản trị viên không cho ("admin").
 // guessed: máy chủ không khai báo chỉ đọc hay không, Synchro đoán theo tên công cụ.
-export type PublicTool = { name: string; title: string; description: string; readOnly: boolean; guessed?: boolean; destructive: boolean; perm: Perm; locked?: "setting" | "admin" };
+// askOnly: chỉ đặt được Hỏi mỗi lần hoặc Chặn (bash / workbench / gọi API của Composio).
+export type PublicTool = { name: string; title: string; description: string; readOnly: boolean; guessed?: boolean; destructive: boolean; perm: Perm; locked?: "setting" | "admin"; askOnly?: boolean };
+/** Quyền thao tác ghi của một ứng dụng trong Composio (Gmail, Google Docs…). */
+export type AppPerm = { app: string; name: string; perm: Perm; logo?: string; icon?: string };
 export type PublicConnector = {
   id: string; name: string; url: string; host: string; dir: string | null; logo?: string; color?: string; icon?: string; site?: string; enabled: boolean;
   status: "ok" | "needs_auth" | "forbidden" | "error"; error: string | null; serverName: string | null; auth: "none" | "oauth" | "token"; tools: PublicTool[]; checkedAt: number | null;
@@ -69,6 +74,8 @@ export type PublicConnector = {
   tokenHeader?: string;
   /** Đang dùng OAuth client người dùng tự nhập. */
   ownClient?: boolean;
+  /** Composio: quyền thao tác ghi theo từng ứng dụng đã đặt (ứng dụng chưa có ở đây: Hỏi mỗi lần). */
+  apps?: AppPerm[];
 };
 export class ConnectorError extends Error { constructor(m: string, public status = 400) { super(m); } }
 
@@ -91,8 +98,10 @@ function table() {
     if (!cols.has("tools_total")) d.exec("ALTER TABLE connectors ADD COLUMN tools_total INTEGER");
     if (!cols.has("perms_gone")) d.exec("ALTER TABLE connectors ADD COLUMN perms_gone TEXT");
     if (!cols.has("empty_seen")) d.exec("ALTER TABLE connectors ADD COLUMN empty_seen INTEGER");
+    if (!cols.has("app_perms")) d.exec("ALTER TABLE connectors ADD COLUMN app_perms TEXT");
     ready = true;
     migrateComposio();
+    migrateAskOnly();
   }
   return d;
 }
@@ -112,7 +121,19 @@ function markStatus(id: string, status: PublicConnector["status"], error: string
 const setLastError = (id: string, e: string | null) => { table().prepare("UPDATE connectors SET last_error = ? WHERE id = ?").run(e, id); };
 export const errText = (e: unknown) => (e instanceof Error ? e.message : String(e)).slice(0, 400);
 // Công cụ chỉ đọc (hoặc máy chủ không khai báo mà tên rõ là đọc: get_, list_, search_…) mặc định được dùng luôn; công cụ có thể thay đổi dữ liệu mặc định phải hỏi trước (như Claude).
-const defaultPerm = (t: McpTool): Perm => (readLike(t) ? "allow" : "ask");
+// Connector tự thêm (untrusted): mọi công cụ mặc định Hỏi mỗi lần, vì máy chủ lạ có thể khai báo sai công cụ nào chỉ đọc.
+const defaultPerm = (t: McpTool): Perm => (!t.untrusted && readLike(t) ? "allow" : "ask");
+/** Công cụ đã lưu của connector. Connector tự thêm (dir null) được đánh dấu untrusted: readOnlyHint của máy chủ không được tin (mcp.ts). */
+const toolsOf = (r: Pick<Row, "tools" | "dir">): McpTool[] => json<McpTool[]>(r.tools, []).map((t) => (r.dir === null ? { ...t, untrusted: true } : t));
+const askOnlyOf = (r: Pick<Row, "dir">, name: string) => r.dir === COMPOSIO && askOnlyTool(name);
+/** Quyền đang có của một công cụ. Bash / workbench / gọi API của Composio không bao giờ là "Luôn cho phép" hay "Hỏi một lần mỗi cuộc trò chuyện". */
+function permOf(r: Pick<Row, "dir">, perms: Record<string, Perm>, t: McpTool): Perm {
+  const p = perms[t.name] ?? defaultPerm(t);
+  return askOnlyOf(r, t.name) && (p === "allow" || p === "chat") ? "ask" : p;
+}
+/** Composio: quyền thao tác ghi theo từng ứng dụng (googledocs, gmail…); ứng dụng chưa có trong bảng là "ask". */
+const appPermsOf = (r: Pick<Row, "app_perms">) => json<Record<string, Perm>>(r.app_perms, {});
+const appsOf = (r: Pick<Row, "app_perms">): AppPerm[] => Object.entries(appPermsOf(r)).map(([app, perm]) => ({ app, name: appName(app), perm, ...appLogo(app) })).sort((a, b) => a.name.localeCompare(b.name));
 const isDestructive = (t: McpTool) => destructiveLike(t);
 const settingsOf = (r: Row): ConnSettings => ({ ...DEFAULT_SETTINGS, ...json<Partial<ConnSettings>>(r.settings, {}) });
 // Công cụ bị khóa: connector tắt công cụ xóa dữ liệu, hoặc quản trị viên không cho dùng loại công cụ này.
@@ -145,9 +166,10 @@ function logoOfRow(r: Row, a: Auth = getAuth(r)): ConnLogoFields {
 function publicOf(r: Row, pol: ConnPolicy = FULL_CONN): PublicConnector {
   const perms = json<Record<string, Perm>>(r.perms, {});
   const st = settingsOf(r);
-  const tools = json<McpTool[]>(r.tools, []).map((t) => ({
+  const tools = toolsOf(r).map((t) => ({
     name: t.name, title: t.title || t.annotations?.title || t.name, description: (t.description ?? "").slice(0, 600),
-    readOnly: readLike(t), guessed: guessedRead(t) || undefined, destructive: isDestructive(t), perm: perms[t.name] ?? defaultPerm(t), locked: lockOf(t, st, pol),
+    readOnly: readLike(t), guessed: guessedRead(t) || undefined, destructive: isDestructive(t), perm: permOf(r, perms, t), locked: lockOf(t, st, pol),
+    ...(askOnlyOf(r, t.name) ? { askOnly: true } : {}),
   }));
   const a = getAuth(r);
   let host = r.url;
@@ -158,6 +180,7 @@ function publicOf(r: Row, pol: ConnPolicy = FULL_CONN): PublicConnector {
     lastError: r.status === "ok" ? r.last_error : null, vendorBlocked: vendorBlock(r, a),
     needsScope: !!a.scopeNeeded, toolsTotal: r.tools_total,
     ...(a.mode === "token" && a.key ? { tokenHeader: a.key.header } : {}), ...(a.preset?.clientId ? { ownClient: true } : {}),
+    ...(r.dir === COMPOSIO ? { apps: appsOf(r) } : {}),
   };
 }
 
@@ -189,6 +212,18 @@ function migrateComposio() {
     seen.add(r.user_id);
     const a = getAuth(r);
     if (a.mode === "composio" || r.url !== CONNECT_URL) unlinkRow(r.id, a.mode === "composio" ? { mode: "none" } : a);
+  }
+}
+// Bash / workbench / gọi API của Composio trước đây đặt được "Luôn cho phép" (một công tắc mở mọi thao tác): về Hỏi mỗi lần, thẻ duyệt hỏi lại.
+// MULTI_EXECUTE để "Luôn cho phép" thì không cần đổi dữ liệu: từ nay quyền đó chỉ còn áp dụng cho thao tác đọc, thao tác ghi hỏi lại một lần cho từng ứng dụng.
+function migrateAskOnly() {
+  const d = db();
+  for (const r of d.prepare("SELECT id, perms FROM connectors WHERE dir = ?").all(COMPOSIO) as Pick<Row, "id" | "perms">[]) {
+    const p = json<Record<string, Perm>>(r.perms, {});
+    const bad = Object.keys(p).filter((k) => askOnlyTool(k) && (p[k] === "allow" || p[k] === "chat"));
+    if (!bad.length) continue;
+    for (const k of bad) p[k] = "ask";
+    d.prepare("UPDATE connectors SET perms = ? WHERE id = ?").run(JSON.stringify(p), r.id);
   }
 }
 /** Hàng Composio của tài khoản (tạo sẵn khi chưa có, nếu quản trị viên cho tài khoản dùng Composio). */
@@ -337,9 +372,15 @@ async function withClient<T>(id: string, fn: (c: McpClient) => Promise<T>, cache
 
 // Trước đây tên công cụ chỉ cần bắt đầu bằng động từ đọc là tự được "Luôn cho phép" (query chạy SQL bất kỳ cũng vậy). Lần lấy danh sách đầu tiên sau khi đổi quy tắc:
 // quyền "allow" do quy tắc cũ tự cấp mà quy tắc mới không còn coi là đọc thì chuyển về "ask". Người dùng tự chọn allow chỉ bị hỏi lại một lần, trên thẻ duyệt có sẵn nút Luôn cho phép.
-function migratePerms(old: Record<string, Perm>, tools: McpTool[]) {
+// Bản 2: connector tự thêm không còn tin readOnlyHint của máy chủ: "allow" có được chỉ nhờ máy chủ tự khai báo chỉ đọc (tên không cho thấy là đọc) thì hỏi lại một lần.
+const PERMS_V = 2;
+function migratePerms(old: Record<string, Perm>, tools: McpTool[], from: number) {
   const next = { ...old };
-  for (const t of tools) if (next[t.name] === "allow" && oldGuessedRead(t) && !readLike(t)) next[t.name] = "ask";
+  for (const t of tools) {
+    if (next[t.name] !== "allow") continue;
+    if (from < 1 && oldGuessedRead(t) && !readLike(t)) next[t.name] = "ask";
+    if (from < 2 && t.untrusted && t.annotations?.readOnlyHint === true && !readLike(t)) next[t.name] = "ask";
+  }
   return next;
 }
 
@@ -358,13 +399,15 @@ async function syncTools(id: string, signal?: AbortSignal) {
   const st = settingsOf(r);
   const first = r.checked_at === null;
   const slim = tools.slice(0, MAX_TOOLS).map((t) => ({ name: t.name, title: t.title, description: (t.description ?? "").slice(0, 2000), inputSchema: t.inputSchema ?? { type: "object", properties: {} }, annotations: t.annotations }));
-  const stale = !first && !st.permsV;
-  const old = stale ? migratePerms(json<Record<string, Perm>>(r.perms, {}), slim) : json<Record<string, Perm>>(r.perms, {});
-  if (stale || first) table().prepare("UPDATE connectors SET settings = ? WHERE id = ?").run(JSON.stringify({ ...json<Partial<ConnSettings>>(r.settings, {}), permsV: 1 }), id);
+  // Quyền mặc định và xét lại tính trên công cụ đã đánh dấu (connector tự thêm: untrusted); lưu danh sách gốc của máy chủ.
+  const marked = r.dir === null ? slim.map((t) => ({ ...t, untrusted: true })) : slim;
+  const stale = !first && (st.permsV ?? 0) < PERMS_V;
+  const old = stale ? migratePerms(json<Record<string, Perm>>(r.perms, {}), marked, st.permsV ?? 0) : json<Record<string, Perm>>(r.perms, {});
+  if (stale || first) table().prepare("UPDATE connectors SET settings = ? WHERE id = ?").run(JSON.stringify({ ...json<Partial<ConnSettings>>(r.settings, {}), permsV: PERMS_V }), id);
   const gone = json<Record<string, { perm: Perm; at: number }>>(r.perms_gone, {});
   // Công cụ máy chủ mới thêm (sau lần kết nối đầu) nhận quyền theo cài đặt "Công cụ mới" của connector.
   const fresh = (t: McpTool): Perm => (first || st.newTools === "auto" ? defaultPerm(t) : st.newTools);
-  const perms = Object.fromEntries(slim.map((t) => [t.name, old[t.name] ?? gone[t.name]?.perm ?? fresh(t)]));
+  const perms = Object.fromEntries(marked.map((t) => [t.name, old[t.name] ?? gone[t.name]?.perm ?? fresh(t)]));
   const away = [...Object.entries(gone).filter(([k, v]) => !(k in perms) && now - v.at < GONE_KEEP), ...Object.entries(old).filter(([k]) => !(k in perms)).map(([k, perm]) => [k, { perm, at: now }] as const)].slice(-GONE_MAX);
   table().prepare("UPDATE connectors SET tools = ?, perms = ?, perms_gone = ?, empty_seen = NULL, status = 'ok', error = NULL, last_error = NULL, tools_total = ?, server_name = ?, checked_at = ?, updated_at = ? WHERE id = ?")
     .run(JSON.stringify(slim), JSON.stringify(perms), away.length ? JSON.stringify(Object.fromEntries(away)) : null, tools.length > slim.length ? tools.length : null, name ?? null, now, now, id);
@@ -642,9 +685,14 @@ export async function refreshConnector(uid: string, id: string, pol: ConnPolicy 
   return publicOf(rowById(id)!, pol);
 }
 
-export function updateConnector(uid: string, id: string, o: { enabled?: unknown; name?: unknown; perms?: unknown; group?: unknown; settings?: unknown; dismissScope?: unknown }, pol: ConnPolicy = FULL_CONN) {
+const ASK_ONLY = "Công cụ này chạy lệnh hoặc gọi API tùy ý nên luôn hỏi trước mỗi lần, không đặt được Luôn cho phép.";
+// apps: quyền thao tác ghi theo từng ứng dụng của Composio ({ googledocs: "allow" | "chat" | "ask" | "block" }).
+export function updateConnector(uid: string, id: string, o: { enabled?: unknown; name?: unknown; perms?: unknown; group?: unknown; settings?: unknown; dismissScope?: unknown; apps?: unknown }, pol: ConnPolicy = FULL_CONN) {
   const r = rowOf(uid, id);
   const t = table();
+  // Kiểm tra trước khi đổi gì: yêu cầu không hợp lệ thì không lưu nửa chừng.
+  if (o.perms && typeof o.perms === "object" && Object.entries(o.perms as Record<string, unknown>).some(([k, v]) => askOnlyOf(r, k) && (v === "allow" || v === "chat"))) throw new ConnectorError(ASK_ONLY);
+  if (o.apps !== undefined && (r.dir !== COMPOSIO || !o.apps || typeof o.apps !== "object" || Array.isArray(o.apps))) throw new ConnectorError("Quyền theo ứng dụng chỉ có ở Composio.");
   // Người dùng bỏ qua lời nhắc thiếu quyền (token tự nhập không có trang đăng nhập để cấp thêm; công cụ đó vẫn báo lỗi rõ khi gọi).
   if (o.dismissScope === true) { const { scopeNeeded: _s, ...rest } = getAuth(r); saveAuth(id, rest); }
   if (typeof o.enabled === "boolean") t.prepare("UPDATE connectors SET enabled = ?, updated_at = ? WHERE id = ?").run(o.enabled ? 1 : 0, Date.now(), id);
@@ -653,17 +701,23 @@ export function updateConnector(uid: string, id: string, o: { enabled?: unknown;
     if (!name || name.length > 60) throw new ConnectorError("Tên connector phải từ 1 đến 60 ký tự.");
     t.prepare("UPDATE connectors SET name = ?, updated_at = ? WHERE id = ?").run(name, Date.now(), id);
   }
-  const tools = json<McpTool[]>(r.tools, []);
+  const tools = toolsOf(r);
   const perms = json<Record<string, Perm>>(r.perms, {});
   let changed = false;
   if (o.perms && typeof o.perms === "object") for (const [k, v] of Object.entries(o.perms as Record<string, unknown>)) if (tools.some((x) => x.name === k) && PERMS.includes(v as Perm)) { perms[k] = v as Perm; changed = true; }
   // Đặt quyền cho cả nhóm: công cụ chỉ đọc hoặc công cụ ghi/xóa.
   const g = o.group as { kind?: string; perm?: string } | undefined;
   if (g && (g.kind === "read" || g.kind === "write") && PERMS.includes(g.perm as Perm)) {
-    for (const x of tools) if (readLike(x) === (g.kind === "read")) perms[x.name] = g.perm as Perm;
+    // Công cụ chỉ được hỏi (bash, workbench, gọi API của Composio) giữ Hỏi mỗi lần khi cả nhóm chuyển sang Luôn cho phép / Hỏi một lần.
+    for (const x of tools) if (readLike(x) === (g.kind === "read") && !(askOnlyOf(r, x.name) && (g.perm === "allow" || g.perm === "chat"))) perms[x.name] = g.perm as Perm;
     changed = true;
   }
   if (changed) t.prepare("UPDATE connectors SET perms = ?, updated_at = ? WHERE id = ?").run(JSON.stringify(perms), Date.now(), id);
+  if (o.apps && typeof o.apps === "object") {
+    const ap = appPermsOf(r);
+    for (const [k, v] of Object.entries(o.apps as Record<string, unknown>)) { const app = appSlug(k); if (app && PERMS.includes(v as Perm)) ap[app] = v as Perm; }
+    t.prepare("UPDATE connectors SET app_perms = ?, updated_at = ? WHERE id = ?").run(JSON.stringify(ap), Date.now(), id);
+  }
   // Cài đặt riêng của connector: chỉ nhận đúng kiểu và giá trị cho phép.
   if (o.settings && typeof o.settings === "object") {
     const x = o.settings as Record<string, unknown>;
@@ -755,8 +809,8 @@ export class ConnectorSession {
       if (r.checked_at && Date.now() - r.checked_at > stale) nudgeSync(r.id, stale);
       const perms = json<Record<string, Perm>>(r.perms, {});
       const lg = logoOfRow(r);
-      for (const tool of json<McpTool[]>(r.tools, [])) {
-        if ((perms[tool.name] ?? defaultPerm(tool)) === "block" || lockOf(tool, st, ctx.pol)) continue;
+      for (const tool of toolsOf(r)) {
+        if (permOf(r, perms, tool) === "block" || lockOf(tool, st, ctx.pol)) continue;
         const ct: ChatTool = { fq: fqName(r.name, tool.name, used), cid: r.id, cname, ...lg, tool, ...(cx ? { composio: true } : {}) };
         this.tools.push(ct);
         this.by.set(ct.fq, ct);
@@ -765,37 +819,75 @@ export class ConnectorSession {
   }
   get(name: string) { return this.by.get(name); }
   // Quyền hiện tại (đọc lại từ cơ sở dữ liệu vì người dùng có thể vừa đổi). "chat" thành "allow" nếu đã cho phép trong cuộc trò chuyện này.
-  // input: tham số của lời gọi. Composio chạy thao tác chỉ đọc (GMAIL_FETCH_EMAILS…) thì như công cụ đọc: chạy luôn, trừ khi người dùng chặn.
+  // input: tham số của lời gọi. Composio tính theo thao tác thật bên trong, không theo công cụ bọc ngoài:
+  //  - MULTI_EXECUTE chỉ gồm thao tác đọc (GMAIL_FETCH_EMAILS…), gọi API bằng GET: như công cụ đọc, chạy luôn (trừ khi người dùng chặn);
+  //  - MULTI_EXECUTE có thao tác ghi: theo quyền ghi của từng ứng dụng trong lời gọi (mặc định Hỏi mỗi lần), "Luôn cho phép" ở MULTI_EXECUTE không áp dụng;
+  //  - bash / workbench từ xa, gọi API không phải GET: luôn hỏi mỗi lần.
   perm(name: string, input?: unknown): Perm {
     const ct = this.by.get(name);
     const r = ct && rowById(ct.cid);
     if (!ct || !r || !r.enabled || r.status !== "ok" || !allowsDir(this.ctx.pol, r.dir) || lockOf(ct.tool, settingsOf(r), this.ctx.pol)) return "block";
-    const p = json<Record<string, Perm>>(r.perms, {})[ct.tool.name] ?? defaultPerm(ct.tool);
+    const p = permOf(r, json<Record<string, Perm>>(r.perms, {}), ct.tool);
+    if (p === "block") return "block";
+    if (ct.composio) {
+      if (strictCall(ct.tool.name, input)) return "ask";
+      if (ct.tool.name === PROXY_TOOL) return "allow";
+      if (ct.tool.name === EXEC_TOOL) {
+        const plan = input === undefined ? null : execPlan(input);
+        if (!plan) return "ask";
+        if (!plan.writes.length) return "allow";
+        const ap = appPermsOf(r);
+        const each = plan.writes.map((k) => ap[k] ?? "ask");
+        if (each.includes("block")) return "block";
+        return plan.writes.every((k, i) => each[i] === "allow" || this.granted(ct, `app:${k}`)) ? "allow" : "ask";
+      }
+    }
     if (p !== "chat" && p !== "ask") return p;
-    if (ct.composio && ct.tool.name === EXEC_TOOL && input !== undefined && execRead(input)) return "allow";
     // Người dùng vừa chọn "Cho phép trong cuộc trò chuyện này" trên thẻ duyệt: có hiệu lực cả với công cụ để "Hỏi mỗi lần", vì đó là lựa chọn rõ ràng của họ.
-    if (this.turnGrants.has(name)) return "allow";
-    if (!this.ctx.conv) return "ask";
-    const g = table().prepare("SELECT created_at FROM connector_grants WHERE user_id = ? AND conv = ? AND connector_id = ? AND tool = ?").get(this.uid, this.ctx.conv, ct.cid, ct.tool.name) as { created_at: number } | undefined;
-    return g && Date.now() - g.created_at < GRANT_TTL ? "allow" : "ask";
+    return this.granted(ct, ct.tool.name) ? "allow" : "ask";
   }
-  allowAlways(name: string) {
+  /** Đã "Cho phép trong cuộc trò chuyện này" (trong lượt này, hoặc trong cuộc trò chuyện, nhớ 7 ngày). key: tên công cụ, hoặc app:<ứng dụng> với thao tác ghi của Composio. */
+  private granted(ct: ChatTool, key: string) {
+    if (this.turnGrants.has(`${ct.cid}:${key}`)) return true;
+    if (!this.ctx.conv) return false;
+    const g = table().prepare("SELECT created_at FROM connector_grants WHERE user_id = ? AND conv = ? AND connector_id = ? AND tool = ?").get(this.uid, this.ctx.conv, ct.cid, key) as { created_at: number } | undefined;
+    return !!g && Date.now() - g.created_at < GRANT_TTL;
+  }
+  /** Khóa quyền mà "Luôn cho phép" / "Cho phép trong cuộc trò chuyện này" cấp cho lời gọi: [] khi lời gọi luôn phải hỏi (không cấp gì ngoài lần này). */
+  private grantKeys(ct: ChatTool, input: unknown): { apps: string[] } | { tool: true } | null {
+    if (!ct.composio) return { tool: true };
+    if (strictCall(ct.tool.name, input) || ct.tool.name === PROXY_TOOL) return null;
+    if (ct.tool.name === EXEC_TOOL) { const plan = input === undefined ? null : execPlan(input); return plan?.writes.length ? { apps: plan.writes } : null; }
+    return { tool: true };
+  }
+  /** "Luôn cho phép": công cụ này; MULTI_EXECUTE thì thao tác ghi của các ứng dụng trong lời gọi (không phải mọi thao tác của mọi ứng dụng). */
+  allowAlways(name: string, input?: unknown) {
     const ct = this.by.get(name);
     const r = ct && rowById(ct.cid);
-    if (!ct || !r) return;
+    const k = ct && this.grantKeys(ct, input);
+    if (!ct || !r || !k) return;
+    if ("apps" in k) {
+      const ap = appPermsOf(r);
+      for (const a of k.apps) ap[a] = "allow";
+      table().prepare("UPDATE connectors SET app_perms = ?, updated_at = ? WHERE id = ?").run(JSON.stringify(ap), Date.now(), r.id);
+      return;
+    }
+    if (askOnlyOf(r, ct.tool.name)) return;
     const perms = json<Record<string, Perm>>(r.perms, {});
     perms[ct.tool.name] = "allow";
     table().prepare("UPDATE connectors SET perms = ?, updated_at = ? WHERE id = ?").run(JSON.stringify(perms), Date.now(), r.id);
   }
-  // Cho phép công cụ này trong cuộc trò chuyện hiện tại (nhớ 7 ngày).
-  allowChat(name: string) {
+  // Cho phép công cụ này (MULTI_EXECUTE: thao tác ghi của các ứng dụng trong lời gọi) trong cuộc trò chuyện hiện tại (nhớ 7 ngày).
+  allowChat(name: string, input?: unknown) {
     const ct = this.by.get(name);
-    if (!ct) return;
-    this.turnGrants.add(name);
+    const k = ct && this.grantKeys(ct, input);
+    if (!ct || !k) return;
+    const keys = "apps" in k ? k.apps.map((a) => `app:${a}`) : [ct.tool.name];
+    for (const key of keys) this.turnGrants.add(`${ct.cid}:${key}`);
     if (!this.ctx.conv) return;
     const t = table();
     t.prepare("DELETE FROM connector_grants WHERE created_at < ?").run(Date.now() - GRANT_TTL);
-    t.prepare("INSERT OR REPLACE INTO connector_grants (user_id, conv, connector_id, tool, created_at) VALUES (?, ?, ?, ?, ?)").run(this.uid, this.ctx.conv, ct.cid, ct.tool.name, Date.now());
+    for (const key of keys) t.prepare("INSERT OR REPLACE INTO connector_grants (user_id, conv, connector_id, tool, created_at) VALUES (?, ?, ?, ?, ?)").run(this.uid, this.ctx.conv, ct.cid, key, Date.now());
   }
   /** Công cụ chỉ đọc (khai báo hoặc đoán theo tên). */
   isRead(name: string) { const ct = this.by.get(name); return !!ct && readLike(ct.tool); }
@@ -811,7 +903,7 @@ export class ConnectorSession {
     if (r && r.status !== "ok") return { content: r.status === "forbidden" ? refused : needLogin, is_error: true, reconnect: off() };
     // CLI đã hủy lời gọi (hoặc bấm Dừng) ngay trước khi chạy: chưa gửi gì đi thì không được gửi nữa.
     if (signal?.aborted) return { content: "Lời gọi đã bị hủy nên công cụ chưa chạy.", is_error: true };
-    if (this.perm(name) === "block") return { content: "Người dùng đã chặn hoặc tắt công cụ này.", is_error: true };
+    if (this.perm(name, args) === "block") return { content: "Người dùng đã chặn hoặc tắt công cụ này.", is_error: true };
     const max = r ? settingsOf(r).maxCalls : 0;
     const n = (this.calls.get(ct.cid) ?? 0) + 1;
     if (max > 0 && n > max) return { content: `Đã đạt giới hạn ${max} lần gọi ${ct.cname} trong một tin nhắn (người dùng đặt trong Cài đặt → Connectors). Hãy trả lời với thông tin đang có.`, is_error: true };

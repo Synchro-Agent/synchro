@@ -18,8 +18,10 @@ export type Era = "modern" | "legacy" | "sse";
 export type McpTool = {
   name: string; title?: string; description?: string; inputSchema?: Record<string, unknown>;
   annotations?: { title?: string; readOnlyHint?: boolean; destructiveHint?: boolean; idempotentHint?: boolean; openWorldHint?: boolean };
+  /** Synchro đánh dấu (không phải của máy chủ, không lưu): công cụ của connector người dùng tự thêm, readOnlyHint của máy chủ không được tin. */
+  untrusted?: boolean;
 };
-type ToolInfo = Pick<McpTool, "name" | "annotations" | "description" | "inputSchema">;
+type ToolInfo = Pick<McpTool, "name" | "annotations" | "description" | "inputSchema" | "untrusted">;
 // Công cụ có vẻ chỉ đọc khi máy chủ không khai báo gì (nhiều máy chủ không gửi annotations): tên bắt đầu bằng động từ đọc, không kèm động từ ghi, và không có dấu hiệu chạy lệnh.
 // Máy chủ đã khai báo readOnlyHint (true hay false) thì luôn theo khai báo. Đoán sai theo hướng "đọc" là ghi không cần duyệt, nên mọi chỗ không chắc đều không đoán.
 const toolWords = (s: string) => s.replace(/([a-z0-9])([A-Z])/g, "$1 $2").toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
@@ -42,24 +44,19 @@ function looksRead(t: ToolInfo) {
   if (schema?.properties && typeof schema.properties === "object" && Object.keys(schema.properties).some((k) => RISKY_PARAM.test(k))) return false;
   return !/\bsql\b/i.test(JSON.stringify(schema ?? {}));
 }
-/** Tên thao tác dạng TOOLKIT_ĐỘNG_TỪ_… (Composio: GMAIL_FETCH_EMAILS, SLACK_SEND_MESSAGE) có vẻ chỉ đọc không: bỏ tên ứng dụng ở đầu (tối đa ba từ) rồi đoán như tên công cụ.
- *  Tham số có dấu hiệu chạy lệnh (sql, command…) thì không coi là đọc. Không chắc thì không đoán là đọc. */
-export function slugRead(slug: string, args?: unknown) {
-  const w = toolWords(slug);
-  const i = w.findIndex((x, k) => k > 0 && (READ_VERB.has(x) || WRITE_VERB.has(x) || WRITE_NOUN.has(x)));
-  if (i < 1 || i > 3) return false;
-  if (args && typeof args === "object" && Object.keys(args as object).some((k) => RISKY_PARAM.test(k))) return false;
-  return looksRead({ name: w.slice(i).join("_") });
-}
-export const guessedRead = (t: ToolInfo) => t.annotations?.readOnlyHint === undefined && !t.annotations?.destructiveHint && looksRead(t);
-export const readLike = (t: ToolInfo) => t.annotations?.readOnlyHint === true || guessedRead(t);
+// Connector tự thêm (untrusted): không tin readOnlyHint của máy chủ (máy chủ lạ có thể khai báo công cụ xóa dữ liệu là "chỉ đọc" để chạy không cần duyệt),
+// và tên kết thúc bằng động từ / danh từ ghi (get_post, fetch_and_send, list_update) tính là ghi.
+const endsWrite = (name: string) => { const w = toolWords(name); const last = w[w.length - 1] ?? ""; return WRITE_VERB.has(last) || WRITE_NOUN.has(last); };
+const roHint = (t: ToolInfo) => (t.untrusted ? undefined : t.annotations?.readOnlyHint);
+export const guessedRead = (t: ToolInfo) => roHint(t) === undefined && !t.annotations?.destructiveHint && looksRead(t) && !(t.untrusted && endsWrite(t.name));
+export const readLike = (t: ToolInfo) => roHint(t) === true || guessedRead(t);
 // Công cụ có thể xóa dữ liệu. Đặc tả MCP: không khai báo destructiveHint thì mặc định là có; riêng công cụ không khai báo gì mà động từ rõ là không ghi (ask_question, resolve_library_id)
 // thì không cảnh báo xóa dữ liệu, nhưng vẫn phải hỏi trước vì không phải công cụ đọc.
 const NEUTRAL_VERB = new Set(["ask", "answer", "explain", "summarize", "summarise", "analyze", "analyse", "describe", "check", "count", "compare", "validate", "lookup", "resolve", "translate", "calculate", "estimate", "preview", "suggest", "recommend"]);
 export const destructiveLike = (t: ToolInfo) => {
-  const a = t.annotations;
-  if (a?.readOnlyHint === true || a?.destructiveHint === false) return false;
-  if (a?.destructiveHint === true || a?.readOnlyHint === false) return true;
+  const a = t.annotations, ro = roHint(t);
+  if (ro === true || a?.destructiveHint === false) return false;
+  if (a?.destructiveHint === true || ro === false) return true;
   return !guessedRead(t) && !NEUTRAL_VERB.has(toolWords(t.name)[0]);
 };
 // Quy tắc đoán cũ (so chuỗi con, chấp nhận query / find đứng một mình): quyền "Luôn cho phép" tự cấp theo quy tắc này cần xét lại một lần (xem migratePerms ở connectors.ts).
@@ -487,7 +484,8 @@ export class McpClient {
     for (let page = 0; page < 25; page++) {
       const r = await this.request("tools/list", cursor ? { cursor } : {}, { timeout: 30_000, retry: true, signal });
       if (!Array.isArray(r.tools)) throw new McpError("Máy chủ trả về danh sách công cụ không hợp lệ.", "protocol");
-      out.push(...((r.tools as McpTool[]).filter((t) => t && typeof t.name === "string" && t.name.length > 0 && t.name.length <= 128 && headerParams(t.inputSchema) !== null)));
+      // "untrusted" là dấu của Synchro, máy chủ không được tự gửi.
+      out.push(...((r.tools as McpTool[]).filter((t) => t && typeof t.name === "string" && t.name.length > 0 && t.name.length <= 128 && headerParams(t.inputSchema) !== null).map(({ untrusted: _u, ...t }) => t)));
       cursor = typeof r.nextCursor === "string" && r.nextCursor ? r.nextCursor : undefined;
       if (!cursor) break;
     }

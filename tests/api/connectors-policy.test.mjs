@@ -48,6 +48,8 @@ r = await admin("POST", "/api/connectors", { name: "Mock Notes", url: `${MCP}/mc
 ok(r.j.authorizeUrl && svgOf(r.j.connector?.icon).includes("#F59E0B"), "connector cần đăng nhập vẫn có logo ngay từ trước khi đăng nhập", (r.j.connector?.icon ?? "none").slice(0, 60));
 const notesId = r.j.connector.id;
 await oauth(admin, r.j.authorizeUrl);
+// Connector tự thêm: mọi công cụ mặc định Hỏi mỗi lần (không tin readOnlyHint của máy chủ); bài kiểm thử cần công cụ đọc chạy luôn nên tự cho phép nhóm công cụ đọc.
+await admin("PATCH", `/api/connectors/${notesId}`, { group: { kind: "read", perm: "allow" } });
 r = await admin("POST", "/api/connectors", { dir: "deepwiki" });
 soft(/^data:image\/(png|svg\+xml|x-icon|jpeg|webp|gif);base64,/.test(r.j.connector?.icon ?? ""), `DeepWiki thật: tìm được logo (${(r.j.connector?.icon ?? "").slice(5, 25)})`, JSON.stringify(r.j).slice(0, 200));
 r = await admin("POST", "/api/connectors", { dir: "context7" });

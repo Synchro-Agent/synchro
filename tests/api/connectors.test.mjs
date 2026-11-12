@@ -83,7 +83,10 @@ ok(/đã dùng|hết hạn/.test(replay), "dùng lại state cũ bị chặn");
 r = await admin("GET", "/api/connectors");
 let notes = r.j.connectors.find((x) => x.id === notesId);
 ok(notes?.status === "ok" && notes.tools.length === 3 && notes.auth === "oauth" && notes.serverName === "Mock Notes", "đã kết nối, 3 công cụ", JSON.stringify(notes).slice(0, 300));
-ok(notes.tools.find((t) => t.name === "search_notes").perm === "allow" && notes.tools.find((t) => t.name === "create_note").perm === "ask" && notes.tools.find((t) => t.name === "delete_note").destructive, "quyền mặc định: chỉ đọc = luôn cho phép, ghi = hỏi trước");
+ok(notes.tools.find((t) => t.name === "search_notes").perm === "ask" && notes.tools.find((t) => t.name === "search_notes").readOnly && notes.tools.find((t) => t.name === "create_note").perm === "ask" && notes.tools.find((t) => t.name === "delete_note").destructive, "quyền mặc định của connector tự thêm: mọi công cụ hỏi trước (không tin readOnlyHint)");
+// Connector tự thêm: mọi công cụ mặc định Hỏi mỗi lần (không tin readOnlyHint của máy chủ); bài kiểm thử cần công cụ đọc chạy luôn nên tự cho phép nhóm công cụ đọc.
+r = await admin("PATCH", `/api/connectors/${notesId}`, { group: { kind: "read", perm: "allow" } });
+ok(r.j.connector?.tools.find((t) => t.name === "search_notes").perm === "allow" && r.j.connector.tools.find((t) => t.name === "create_note").perm === "ask", "cho phép nhóm công cụ đọc: search_notes chạy luôn, create_note vẫn hỏi");
 ok(!JSON.stringify(r.j).match(/at_|rt_|code_verifier|client_secret/), "không lộ token/bí mật ra trình duyệt");
 
 console.log("4. Máy chủ đời mới 2026-07-28 và SSE đời cũ");

@@ -67,6 +67,8 @@ for (const id of paused) await api("PATCH", `/api/connectors/${id}`, { enabled: 
 let r = await api("POST", "/api/connectors", { name: "Cửa hàng mẫu", url: `${MCP}/modern` });
 ok(r.s === 200 && r.j.connector?.tools?.some((t) => t.name === "list_orders"), "connector giả lập có công cụ list_orders", JSON.stringify(r.j).slice(0, 300));
 const connId = r.j.connector?.id;
+// Connector tự thêm: mọi công cụ mặc định Hỏi mỗi lần (không tin readOnlyHint của máy chủ); bài kiểm thử cần công cụ đọc chạy luôn nên tự cho phép nhóm công cụ đọc.
+if (connId) await api("PATCH", `/api/connectors/${connId}`, { group: { kind: "read", perm: "allow" } });
 
 // Làm nóng đường nghe luồng chữ: bản dev biên dịch route ở lần gọi đầu (vài giây trên máy CI), lượt trả lời ngắn có thể xong trước khi kịp nghe.
 await api("GET", "/api/runs/run_warmup_0000").catch(() => {});

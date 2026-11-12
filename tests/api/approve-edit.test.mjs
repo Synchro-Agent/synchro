@@ -49,7 +49,8 @@ if (!notesId) {
   notesId = r.j.connector?.id;
   await oauth(r.j.authorizeUrl);
 }
-await api("PATCH", `/api/connectors/${notesId}`, { perms: { create_note: "ask" } });
+// Connector tự thêm: mọi công cụ mặc định Hỏi mỗi lần (không tin readOnlyHint); search_notes cần chạy luôn ở bài này.
+await api("PATCH", `/api/connectors/${notesId}`, { perms: { create_note: "ask", search_notes: "allow" } });
 const R = Date.now() % 100000;
 
 try {

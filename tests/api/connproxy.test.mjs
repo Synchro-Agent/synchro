@@ -25,6 +25,8 @@ console.log("1. Connector 300 công cụ");
 let r = await api("POST", "/api/connectors", { name: "Mock Big", url: `${MCP}/big` });
 const id = r.j?.connector?.id;
 ok(r.s === 200 && r.j.connector?.status === "ok" && r.j.connector.tools?.length === 300, "kết nối được, đủ 300 công cụ", JSON.stringify(r.j).slice(0, 300));
+// Connector tự thêm: mọi công cụ mặc định Hỏi mỗi lần (không tin readOnlyHint của máy chủ); bài kiểm thử cần công cụ đọc chạy luôn nên tự cho phép nhóm công cụ đọc.
+if (id) await api("PATCH", `/api/connectors/${id}`, { group: { kind: "read", perm: "allow" } });
 
 try {
   console.log("2. Model nhận danh mục và hai công cụ, không phải 300 định nghĩa");
