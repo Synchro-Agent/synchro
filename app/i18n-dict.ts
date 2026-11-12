@@ -421,6 +421,8 @@ Object.assign(VI2EN, { "Model báo lỗi nên lượt này chưa xong. Hãy th�
 
 // Khung xem Excel / CSV (officeview.ts): nút thu bảng cho vừa khung.
 Object.assign(VI2EN, { "Vừa chiều rộng": "Fit width", "Kích thước thật": "Actual size" });
+// Chữ còn sót tiếng Việt trong giao diện tiếng Anh (blueprint B1): lỗi khung chụp ảnh artifact, nhãn gói ở Mức dùng, tên việc phụ Quét skill rác.
+Object.assign(VI2EN, { "Quét skill rác": "Scan for junk skills", "Không tải được thư viện chụp ảnh": "Couldn't load the screenshot library", "Gói subscription": "Subscription plan" });
 // Sơ đồ Mermaid trong câu trả lời (md.tsx MermaidCard).
 Object.assign(VI2EN, { "Phóng to sơ đồ": "Enlarge diagram" });
 
