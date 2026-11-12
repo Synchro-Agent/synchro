@@ -419,6 +419,9 @@ Object.assign(VI2EN, {
 
 Object.assign(VI2EN, { "Model báo lỗi nên lượt này chưa xong. Hãy thử lại hoặc chọn model khác; nội dung lỗi nằm ở phần chi tiết.": "The model reported an error, so this turn didn't finish. Try again or pick another model; the error is in the details.", "Thu phóng ảnh": "Zoom image", "Luật riêng": "Custom rules" });
 
+// Khung xem Excel / CSV (officeview.ts): nút thu bảng cho vừa khung.
+Object.assign(VI2EN, { "Vừa chiều rộng": "Fit width", "Kích thước thật": "Actual size" });
+
 export const RULES_EN: [RegExp, (m: RegExpMatchArray) => string][] = [
   [/^(.+) không phản hồi sau (.+)\. Hãy thử lại hoặc chọn model khác\.$/, (m) => `${m[1]} did not respond within ${m[2].replace("giây", "seconds").replace("phút", "minutes")}. Try again or pick another model.`],
   [/^(.+) không có tiến triển trong (.+)\. Hãy nhắn "tiếp tục" hoặc chọn model khác\.$/, (m) => `${m[1]} made no progress for ${m[2].replace("giây", "seconds").replace("phút", "minutes")}. Send "continue" or pick another model.`],
