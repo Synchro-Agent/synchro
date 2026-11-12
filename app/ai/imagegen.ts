@@ -420,7 +420,7 @@ export const IMAGE_TOOL = {
       prompt: { type: "string", description: "Mô tả chi tiết bức ảnh: chủ thể, bối cảnh, phong cách, ánh sáng, bố cục. Chữ cần xuất hiện trong ảnh thì viết nguyên văn trong ngoặc kép." },
       aspect_ratio: { type: "string", enum: [...ASPECTS], description: "Tỉ lệ, mặc định 1:1." },
       count: { type: "integer", minimum: 1, maximum: 4, description: "Số ảnh 1–4, mặc định 1." },
-      template: { type: "string", enum: ["poster-master-og"], description: "Chỉ cho poster / ảnh chia sẻ dạng thẻ số liệu cần chữ chính xác: PNG 3600×1890 từ mẫu cố định, không cần gói tạo ảnh. Điền poster (độ dài tối đa: tag 32 in hoa, title 90 câu kết luận, metricValue 12 vd \"+14,2%\", metricLabel 40, author 40), bỏ aspect_ratio, count, reference." },
+      template: { type: "string", enum: ["poster-master-og"], description: "Chỉ cho poster / ảnh chia sẻ dạng thẻ số liệu cần chữ chính xác: PNG 3600×1890 từ mẫu cố định, không cần gói tạo ảnh. Điền poster, bỏ aspect_ratio, count, reference." },
       poster: { type: "object", properties: Object.fromEntries(["tag", "title", "metricValue", "metricLabel", "author"].map((k) => [k, { type: "string" }])), required: ["tag", "title", "metricValue", "metricLabel", "author"] },
       product_shot: { type: "boolean", description: "true: ảnh sản phẩm để bán / quảng cáo (bao bì, mỹ phẩm, đồ ăn). Không dùng cho logo, tranh, minh họa, ảnh người." },
       product_relight: { type: "boolean", description: "true: đưa ảnh sản phẩm người dùng gửi (reference) vào ánh sáng studio, giữ nguyên sản phẩm." },
@@ -432,8 +432,7 @@ export const IMAGE_TOOL = {
 export const IMAGE_RULES = `<image_generation>
 Công cụ generate_image tạo ảnh thật bằng AI qua gói người dùng đã đăng nhập. Người dùng xin ảnh chụp, tranh, hình minh họa, logo, poster, ảnh sản phẩm, ảnh đại diện hay nhờ sửa một tấm ảnh: gọi generate_image, không dựng thay bằng code.
 Biểu đồ, sơ đồ, slide, infographic số liệu và thứ cần chữ chính xác tuyệt đối: dựng bằng code hoặc artifact như thường lệ. Chữ trong ảnh AI có thể sai chính tả, nhất là tiếng Việt: logo hay poster nhiều chữ thì nói trước điều đó.
-Viết prompt chi tiết, đủ chủ thể, bối cảnh, phong cách, ánh sáng, bố cục. Sửa ảnh có sẵn thì truyền reference. Ảnh sản phẩm để bán: product_shot true (Synchro tự thêm phong cách nhiếp ảnh studio, prompt chỉ cần tả sản phẩm và bối cảnh); người dùng gửi ảnh sản phẩm và muốn đưa vào studio: reference + product_relight true.
-Poster / ảnh chia sẻ 1200×630 kiểu thẻ số liệu (tiêu đề + một con số KPI): generate_image với template "poster-master-og" và poster, prompt một câu ngắn. Bố cục khác thì dựng artifact HTML khung .sx-og (tải PNG 3x).
+Viết prompt chi tiết, đủ chủ thể, bối cảnh, phong cách, ánh sáng, bố cục. Sửa ảnh có sẵn thì truyền reference.
 Không nói đã tạo ảnh trước khi công cụ trả kết quả; mỗi lần mất khoảng 40 giây nên báo trước một câu ngắn. Xong rồi ảnh tự hiện thành thẻ trong khung chat: trong câu trả lời đừng chèn liên kết, đường dẫn hay cú pháp ảnh markdown, chỉ nói ngắn gọn đã tạo gì.
 Ảnh dùng được trong sản phẩm: kết quả công cụ ghi địa chỉ để đặt vào artifact (src, url(...)) và đường dẫn inputs/ để run_code đọc (Word, PowerPoint, PDF, video). Thiết kế, slide hay video cần ảnh thì tạo ảnh trước rồi đưa đúng ảnh đó vào, không dùng ảnh giữ chỗ.
 Công cụ báo lỗi thì không có ảnh nào: nói đúng lý do và việc người dùng nên làm, đừng gọi sản phẩm thay thế là ảnh AI. Có thể đề nghị dựng đồ họa bằng code hoặc viết sẵn câu lệnh để họ dùng ở công cụ khác.

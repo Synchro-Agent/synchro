@@ -60,6 +60,10 @@ const capsBefore = (await api("GET", "/api/caps")).j?.caps;
 await api("PATCH", "/api/caps", { art: true, ai: true, inl: true, code: false });
 const before = (await api("GET", "/api/connectors")).j?.connectors ?? [];
 for (const x of before) if (/Cửa hàng mẫu/.test(x.name) || x.url === `${MCP}/modern`) await api("DELETE", `/api/connectors/${x.id}`);
+// Kịch bản ngân sách prompt (mục 3) là một connector duy nhất. Connector bộ kiểm thử khác để lại (connectors.test thêm DeepWiki, Context7,
+// Mock Notes… và chỉ dọn ở đầu bài của nó) mang thêm ~1.700 token định nghĩa công cụ: tạm tắt trong lúc chạy, bật lại khi xong.
+const paused = before.filter((x) => x.enabled !== false && !(/Cửa hàng mẫu/.test(x.name) || x.url === `${MCP}/modern`)).map((x) => x.id);
+for (const id of paused) await api("PATCH", `/api/connectors/${id}`, { enabled: false });
 let r = await api("POST", "/api/connectors", { name: "Cửa hàng mẫu", url: `${MCP}/modern` });
 ok(r.s === 200 && r.j.connector?.tools?.some((t) => t.name === "list_orders"), "connector giả lập có công cụ list_orders", JSON.stringify(r.j).slice(0, 300));
 const connId = r.j.connector?.id;
@@ -159,6 +163,7 @@ for (const model of MODELS) {
 }
 
 if (connId) await api("DELETE", `/api/connectors/${connId}`);
+for (const id of paused) await api("PATCH", `/api/connectors/${id}`, { enabled: true });
 if (capsBefore) await api("PATCH", "/api/caps", capsBefore);
 console.log(`\nKết quả: ${pass} đạt, ${fail} lỗi`);
 process.exit(fail ? 1 : 0);

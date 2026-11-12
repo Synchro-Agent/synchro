@@ -118,6 +118,8 @@ export const domainOf = (typed: string): DesignDomain => {
   const t = fold(typed);
   return DOMAINS.find(([, re]) => re.test(t))?.[0] ?? "general";
 };
+/** Lượt này nhờ soạn văn bản hành chính (công văn, quyết định, tờ trình…, kiểu artifact vbhc): featkit.ts nạp cấu trúc trường cho lượt đó. */
+export const isVbhcJob = (typed: string) => jobOf(clean(typed.trim().slice(0, 300)))?.format === "vbhc";
 /** Định dạng người dùng nhờ làm ra, không phải từ nào đó trong câu: "làm slide từ file excel này" là slide. */
 export function formatOf(typed: string): DesignFormat | null {
   const j = jobOf(clean(typed));

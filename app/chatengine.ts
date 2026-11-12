@@ -37,6 +37,7 @@ import { ARTIFACT_RULES, ASK_RULES, VIZ_RULES } from "./artifacts";
 import { designTurn, historyTexts } from "./designkit";
 import { videoTurn } from "./videokit";
 import { docTurn } from "./dockit";
+import { featTurn } from "./featkit";
 import { anthropicWebSearch } from "./modelrules";
 import { untested } from "./modelreg";
 import { type ABlock, type Citer, anthropicCall, blocksText, searchResults, chatOnce, effortParams, HttpErr, openaiCall, outCap, respInput, respParse, respTools, responsesCall, toAnthropic, toOpenAI, toResponses, withPages } from "./llmcall";
@@ -1333,18 +1334,23 @@ async function skillSet(user: UserRow, body: Record<string, any>, messages: unkn
 
 type Who = { user: UserRow };
 // Quy tắc thiết kế theo việc đang làm (designkit.ts): đi cạnh tin nhắn mới nhất như skill_routing, không vào hướng dẫn hệ thống. Không có với Synchro Code, lệnh nội bộ, artifact có AI.
-function designOf(body: Record<string, any>, caps: { art: boolean; code: boolean } | null, studio: string | null, conv?: string): string { // eslint-disable-line @typescript-eslint/no-explicit-any
-  if (!caps || !body.skills || body.feature === "code" || body.feature === "artifact") return "";
+// Hướng dẫn riêng của tính năng (featkit.ts: biểu đồ, 3D, Morph, văn bản hành chính, ảnh sản phẩm / poster) cũng đi ở đây, cả trong Synchro Code
+// (ARTIFACT_RULES vẫn có ở đó), chỉ khi lượt này cần: lời nhắc hệ thống giữ quy tắc chung, đứng yên giữa các lượt cho bộ đệm prompt.
+function designOf(body: Record<string, any>, caps: { art: boolean; code: boolean; image: boolean } | null, studio: string | null, conv?: string): string { // eslint-disable-line @typescript-eslint/no-explicit-any
+  if (!caps || !body.skills || body.feature === "artifact") return "";
   const typed = typedText((Array.isArray(body.messages) ? (body.messages as { role?: string; content?: unknown }[]) : []).filter((m) => m?.role === "user").pop());
-  const d = designTurn({ typed, studio, art: caps.art, code: caps.code, ack: isAck(typed), seed: conv, prior: historyTexts(body.messages, body.artBase) });
+  const prior = historyTexts(body.messages, body.artBase), product = body.feature !== "code";
+  const d = product ? designTurn({ typed, studio, art: caps.art, code: caps.code, ack: isAck(typed), seed: conv, prior }) : null;
   if (d) console.log(`[design] ${d.format} ${d.domain} ${d.own ? "own-brand" : d.preset}${d.compact ? " follow-up" : ""} ${d.bytes}B`);
   // Nhờ dựng video: thêm khối synchro-video (4 mẫu Remotion trong sandbox), chỉ khi run_code chạy trên image workspace.
-  const v = videoTurn({ typed, code: caps.code, workspace: runner() === "workspace" });
+  const v = product ? videoTurn({ typed, code: caps.code, workspace: runner() === "workspace" }) : "";
   if (v) console.log(`[video] synchro-video ${Buffer.byteLength(v)}B`);
   // Nhờ làm tệp tài liệu (báo cáo PDF, đề xuất, bài 2 cột, hóa đơn / báo giá): thêm khối synchro-doc (4 mẫu Typst / WeasyPrint), chỉ image workspace.
-  const k = docTurn({ typed, code: caps.code, workspace: runner() === "workspace", format: d?.format });
+  const k = product ? docTurn({ typed, code: caps.code, workspace: runner() === "workspace", format: d?.format }) : "";
   if (k) console.log(`[doc] synchro-doc ${Buffer.byteLength(k)}B`);
-  return [d?.block ?? "", v, k].filter(Boolean).join("\n\n");
+  const f = featTurn({ typed, art: caps.art, image: caps.image, format: d && !d.compact ? d.format : null, prior });
+  if (f.parts.length) console.log(`[featkit] ${f.parts.join(",")} ${Buffer.byteLength(f.block)}B`);
+  return [d?.block ?? "", v, k, f.block].filter(Boolean).join("\n\n");
 }
 // Bộ nhớ chỉ dùng cho lượt chat chính (không cho Code, artifact, lệnh nội bộ), khi nút "Bộ nhớ" bật và không ở chế độ ẩn danh.
 // Những gì Synchro biết về người dùng (tên, phần tự giới thiệu / hướng dẫn ở Cài đặt → Tài khoản, bộ nhớ khi bật): mọi lượt người dùng
@@ -1658,7 +1664,7 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
       const say0 = am ? undefined : fast ? holdNeedTools(live()) : live();
       // Antigravity trả cả câu trả lời một lần nên làm sạch được ngay; CLI khác làm sạch ở câu trả lời cuối (đường dẫn có thể bị cắt giữa hai đoạn chữ).
       const say = say0 && cli === "agy" ? (t: string) => say0(scrubServerPaths(t)) : say0;
-      const turnMsgs = am ?? withRecall(withRecall(messages, await recallOf(body, c.user, convId)), [route, fast || !pc ? "" : designOf(body, { art: !!pc.art, code: !!pc.code }, can(c.user, "skills") ? studioOf(body.studio) : null, convId), nowBlock(body), crisisBlock(body)].filter(Boolean).join("\n\n"));
+      const turnMsgs = am ?? withRecall(withRecall(messages, await recallOf(body, c.user, convId)), [route, fast || !pc ? "" : designOf(body, { art: !!pc.art, code: !!pc.code, image: BRIDGE_CLIS.has(subCli(model)!) && feature !== "code" }, can(c.user, "skills") ? studioOf(body.studio) : null, convId), nowBlock(body), crisisBlock(body)].filter(Boolean).join("\n\n"));
       const turn = (msgs: unknown, fresh = false) => subTurn({
         user: c.user, model, system: am ? ARTIFACT_SYSTEM : [system || (planSys || toolSys ? "Bạn là một trợ lý AI hữu ích." : ""), planSys, toolSys, contextOf(body, c.user), pinnedBlock(body.pinned)].filter(Boolean).join("\n\n"),
         ephemeral: body.incognito === true, messages: msgs, conv: am ? undefined : convId, effort: isEffort(wanted) ? wanted : wanted === "auto" ? autoEffort(routeInput(body)) : undefined, signal: turnSignal(), onDelta: say, onToolUse: am ? undefined : toolUseSeen,
@@ -1801,7 +1807,7 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
     const { list, visible, libs, prefer, route } = await span("skills", "retrieval", () => skillSet(c.user, body, messages, studio, st));
     // Lịch sử theo chuẩn Synchro → tin nhắn sẵn sàng cho mọi hãng. Gợi ý skill theo câu hỏi mới nhất đổi mỗi lượt nên ở tầng động
     // (cuối prompt), không ở phần đầu: phần đầu (hướng dẫn, danh mục skill, tài liệu ghim) giữ nguyên để đọc từ bộ đệm.
-    const dyn = [route, cs ? designOf(body, { art: !!cs.caps.art, code: !!cs.caps.code }, studio, convId) : "", await recallOf(body, c.user, convId), nowBlock(body), crisisBlock(body)];
+    const dyn = [route, cs ? designOf(body, { art: !!cs.caps.art, code: !!cs.caps.code, image }, studio, convId) : "", await recallOf(body, c.user, convId), nowBlock(body), crisisBlock(body)];
     const prep = spanSync("history", "history", () => prepareHistory(messages, dyn, mix));
     markPrompt();
     // Connector chỉ dùng trong lượt chat chính (skills = true), không dùng cho các lệnh nội bộ như tóm tắt bộ nhớ.
