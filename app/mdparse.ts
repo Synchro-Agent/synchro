@@ -320,6 +320,11 @@ export function inlineText(ns: Inl[]): string {
 
 // Ảnh trong câu trả lời: chỉ tự tải từ chính Synchro hoặc ảnh nhúng sẵn. Tự tải ảnh từ địa chỉ model viết ra là đường rò dữ liệu kinh điển
 // (model bị lừa ghép dữ liệu vào đường dẫn ảnh) và lộ IP người đọc, nên ảnh ngoài thành link để người dùng tự mở.
+/** Ô đầu của một dòng bảng không được ngắt giữa chừng khi là một "từ" ngắn (tên tệp hoa-don.png, mã SKU…): dưới 24 ký tự, không có khoảng trắng. */
+export function keepWhole(cell: string): boolean {
+  const t = (/[*_`~<[&\\$!]/.test(cell) ? inlineText(parseInline(cell)) : cell).trim();
+  return t.length > 0 && t.length < 24 && !/\s/.test(t);
+}
 export function imageKind(src: string): "inline" | "link" | "text" {
   if (/^data:image\/(png|jpe?g|gif|webp);base64,/i.test(src)) return "inline";
   if (/^\/api\/(outputs|files|artimg)\b/.test(src)) return "inline";

@@ -4,7 +4,7 @@ import { Fragment, memo, useEffect, useMemo, useState } from "react";
 import { unredact, filepathOf, autoMerge, hasHidden, splitMeta, parsePackages, checkPkg, findCron, cronInfo, type Pkg } from "./devtools";
 import * as I from "./icons";
 import { locale, tr, useLangReady } from "./i18n";
-import { codeWraps, imageKind, inlineText, parseInline, parseMarkdown, streamSafe, type Align, type Block, type Inl, type Top } from "./mdparse";
+import { codeWraps, imageKind, inlineText, keepWhole, parseInline, parseMarkdown, streamSafe, type Align, type Block, type Inl, type Top } from "./mdparse";
 import { ChartView, parseChart } from "./charts";
 import { lazyView } from "./lazy";
 import { AskCard } from "./askcard";
@@ -254,7 +254,7 @@ function MdTable({ head, rows, align, say }: { head: string[]; rows: string[][];
         <th key={k} style={align[k] ? { textAlign: align[k] as "left" | "center" | "right" } : undefined} aria-sort={sort?.col === k ? (sort.dir === 1 ? "ascending" : "descending") : undefined}>
           <button className="md-th" onClick={() => by(k)} title={tr("Bấm để sắp xếp")}><Inline t={c} /><span className={`md-sort ${sort?.col === k ? "on" : ""}`}>{sort?.col === k && sort.dir === -1 ? "↓" : "↑"}</span></button>
         </th>
-      ))}</tr></thead><tbody>{shown.map((r, k) => <tr key={k}>{r.map((c, j) => <td key={j} style={align[j] ? { textAlign: align[j] as "left" | "center" | "right" } : undefined}><Inline t={c} /></td>)}</tr>)}</tbody></table>
+      ))}</tr></thead><tbody>{shown.map((r, k) => <tr key={k}>{r.map((c, j) => <td key={j} className={j === 0 && keepWhole(c) ? "md-nw" : undefined} style={align[j] ? { textAlign: align[j] as "left" | "center" | "right" } : undefined}><Inline t={c} /></td>)}</tr>)}</tbody></table>
     </div>
   );
 }

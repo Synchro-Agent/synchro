@@ -1032,6 +1032,8 @@ table{font-variant-numeric:tabular-nums}h1,h2,h3{text-wrap:balance}
 .md-tbl th,.md-tbl td{border:.5px solid var(--border-strong);padding:6px 12px;text-align:left}
 /* .ai-msg để overflow-wrap:anywhere cho đoạn văn; anywhere làm giảm min-content nên bảng tự ép cột tới mức vỡ từng ký tự và không bao giờ cuộn ngang. Trong bảng dùng break-word: giữ nguyên độ rộng tối thiểu của từ, bảng rộng thì khung .md-tbl cuộn. */
 .md-tbl th,.md-tbl td,.md-tbl a[href]{overflow-wrap:break-word}
+/* Ô đầu là tên tệp / mã ngắn không khoảng trắng (keepWhole trong mdparse.ts): không ngắt "hoa-" / "don.png". */
+.md-tbl td.md-nw{white-space:nowrap}
 .md-tbl th{background:var(--hover);font-weight:560}
 .upl-bar .upl-meta{margin-left:auto}
 .upl-doc{min-height:0}
