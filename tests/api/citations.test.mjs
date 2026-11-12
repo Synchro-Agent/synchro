@@ -1,12 +1,11 @@
-// Nguồn trích dẫn có favicon + số [n], logo ứng dụng Composio: máy chủ tải hộ ảnh qua bộ đệm (app/iconproxy.ts), chặn tên miền nội bộ,
+// Nguồn trích dẫn có favicon + số [n] (Connect Link của Composio không phải nguồn): máy chủ tải hộ ảnh qua bộ đệm (app/iconproxy.ts), chặn tên miền nội bộ,
 // một ảnh chỉ tải một lần dù nhiều yêu cầu cùng lúc, nhớ cả lần không tải được; số trích dẫn khớp đúng thứ tự nguồn của lượt.
-// Tự chạy được, không cần dev:mock: thư mục dữ liệu riêng, máy chủ ảnh và Composio giả lập chạy ngay trong tệp này.
+// Tự chạy được, không cần dev:mock: thư mục dữ liệu riêng, máy chủ ảnh giả lập chạy ngay trong tệp này.
 import fs from "node:fs";
 import http from "node:http";
 import os from "node:os";
 import path from "node:path";
 import { loadTs } from "../lib/ts.mjs";
-import { COMPOSIO_KEY, composioHandler } from "../../scripts/mock-composio.mjs";
 import { solidPng } from "../../scripts/mock-png.mjs";
 
 let pass = 0, fail = 0;
@@ -28,7 +27,7 @@ const server = http.createServer(async (req, res) => {
     const png = solidPng(fav[1]);
     res.writeHead(200, { "content-type": "text/plain" }); res.end(png); return;
   }
-  if (!(await composioHandler(req, res, p, b))) { res.writeHead(404); res.end(); }
+  res.writeHead(404); res.end();
 });
 await new Promise((r) => server.listen(0, "127.0.0.1", r));
 const BASE = `http://127.0.0.1:${server.address().port}`;
@@ -38,11 +37,10 @@ process.env.DATA_DIR = path.join(tmp, "data");
 process.env.DATA_KEY = "cite-test-key";
 process.env.MCP_ALLOW_PRIVATE = "1";
 process.env.FAVICON_BASE = BASE;
-process.env.COMPOSIO_BASE_URL = `${BASE}/composio/api/v3.1`;
-delete process.env.COMPOSIO_API_KEY;
+delete process.env.COMPOSIO_CONNECT_URL;
 fs.mkdirSync(process.env.DATA_DIR, { recursive: true });
 
-const { iconproxy: IP, connicons: CI, composio: X, providers: PR, llmcall: L } = await loadTs(["iconproxy", "connicons", "composio", "providers", "llmcall"]);
+const { iconproxy: IP, connicons: CI, composio: X, llmcall: L, "ai/subs": SB } = await loadTs(["iconproxy", "connicons", "composio", "llmcall", "ai/subs"]);
 const isPng = (i) => i && i.mime === "image/png" && i.buf[0] === 0x89;
 
 try {
@@ -98,21 +96,11 @@ try {
   process.env.MCP_ALLOW_PRIVATE = "1";
   process.env.FAVICON_BASE = BASE;
 
-  console.log("3. Logo ứng dụng Composio (meta.logo của toolkits)");
-  ok(await X.toolkitLogoUrl("gmail").catch(() => "err") === null || X.composioKey() === null, "chưa có khóa: không gọi Composio");
-  await PR.saveProvider({ id: "composio", key: COMPOSIO_KEY });
-  const u = await X.toolkitLogoUrl("notion");
-  ok(u === `${BASE}/composio/logos/notion.png`, "địa chỉ logo lấy từ meta.logo", u);
-  ok(await X.toolkitLogoUrl("nologo") === null, "ứng dụng không có logo: null (giao diện hiện chữ cái đầu)");
-  ok(await X.toolkitLogoUrl("../etc") === null && await X.toolkitLogoUrl("A B") === null, "slug lạ không được gửi đi");
-  const logo = await IP.cachedIcon("kit:notion", async () => { const x = await X.toolkitLogoUrl("notion"); return x ? CI.fetchIconBytes(x, 256 * 1024) : null; });
-  ok(isPng(logo), "ảnh logo tải qua cùng bộ đệm");
-  await fetch(`${BASE}/composio/_debug`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ account: { user_id: "u_a", slug: "notion" } }) });
-  await fetch(`${BASE}/composio/_debug`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ account: { user_id: "u_a", slug: "github" } }) });
-  const apps = await X.listApps("u_a", true);
-  const notion = apps.find((a) => a.app === "notion"), gh = apps.find((a) => a.app === "github");
-  ok(gh?.img === "/api/favicon?app=github" && !gh.logo, "ứng dụng không có logo sẵn (GitHub): dùng logo Composio qua /api/favicon", JSON.stringify(gh));
-  ok(notion?.logo === "notion" && !notion.img, "ứng dụng có logo sẵn trong public/connectors (Notion): giữ logo đó", JSON.stringify(notion));
+  console.log("3. Connect Link của Composio không phải nguồn");
+  const cl = "https://connect.composio.dev/link/lk_gmail123";
+  const found = SB.linksIn(`Bấm 👉 [Kết nối Gmail](${cl}) nhé.\n\nSources:\n- [Kết nối Gmail](${cl})\n- [Bài báo](https://vnexpress.net/a)`);
+  ok(found.length === 1 && found[0].url === "https://vnexpress.net/a", "nguồn lấy từ câu trả lời bỏ Connect Link, giữ nguồn thật", JSON.stringify(found));
+  ok(!X.notConnectLink(cl) && X.notConnectLink("https://docs.composio.dev/docs/composio-connect"), "trang tài liệu Composio vẫn là nguồn được, Connect Link thì không");
 
   console.log("4. Số trích dẫn [n]");
   const seen = new Map();

@@ -20,11 +20,14 @@ const ReconnectCard = lazyView(() => import("./connectorsui").then((m) => m.Reco
 export type ToolConn = { name: string; logo?: string; color?: string; icon?: string; site?: string };
 export type ToolItem = { seq: number; label: string; ok?: boolean; sum?: string; args?: string; at?: number; end?: number; c?: ToolConn };
 // ask: lượt đang chờ bạn duyệt (dùng trình duyệt trên trang chưa được phép, công cụ connector). conn: connector cần kết nối lại (nút ngay trong khung chat).
-export type ConnPart = { k: "conn"; id: string; name: string; logo?: string; color?: string; site?: string; auth?: string; refused?: boolean };
+// link: Composio chưa liên kết (thẻ có nút "Liên kết Composio").
+export type ConnPart = { k: "conn"; id: string; name: string; logo?: string; color?: string; site?: string; auth?: string; refused?: boolean; link?: boolean };
 // plans: chưa tạo được ảnh vì gói (chưa đăng nhập, hết hạn mức): nút mở Providers ngay trong khung chat. why: lý do, tried: gói đã thử.
 export type PlansPart = { k: "plans"; why: string; tried: string[] };
 // link: Connect Link Composio vừa tạo (chỉ địa chỉ của Composio, máy chủ đã lọc): nút đăng nhập ứng dụng ngay trong khung chat.
-// logo / icon: logo của ứng dụng (tệp có sẵn, hoặc ảnh tải hộ /api/favicon?app=…).
+/** Ảnh logo nhận từ sự kiện của lượt chạy: chỉ ảnh cùng nguồn (proxy /api/favicon, logo hãng trong public/logos), không địa chỉ lạ. */
+const okIcon = (u: string) => /^\/api\/favicon\?[\w=&%.-]{1,200}$/.test(u) || /^\/logos\/[a-z0-9-]{2,40}\.svg$/.test(u);
+// logo / icon: logo của ứng dụng (tệp có sẵn, logo hãng /logos/…, hoặc biểu tượng trang chủ tải hộ /api/favicon?app=…); không có thì chữ cái đầu.
 export type LinkPart = { k: "link"; app: string; name: string; url: string; logo?: string; icon?: string };
 // rate: connector đang giới hạn tốc độ (429): đồng hồ đếm ngược tới lúc thử lại được (until: giờ máy chủ, ms).
 export type RatePart = { k: "rate"; name: string; until: number };
@@ -55,7 +58,7 @@ export function applyEvent(w: Work, ev: RunEv): Work {
   } else if (ev.kind === "tconn") {
     try {
       const r = JSON.parse(ev.text) as ToolConn & { ref: number };
-      const c: ToolConn = { name: String(r.name ?? ""), ...(typeof r.logo === "string" && /^[a-z0-9]{2,40}$/.test(r.logo) ? { logo: r.logo } : {}), ...(typeof r.color === "string" && /^#[0-9a-f]{3,8}$/i.test(r.color) ? { color: r.color } : {}), ...(typeof r.icon === "string" && r.icon.startsWith("/api/") ? { icon: r.icon } : {}), ...(typeof r.site === "string" && r.site.startsWith("/api/favicon?") ? { site: r.site } : {}) };
+      const c: ToolConn = { name: String(r.name ?? ""), ...(typeof r.logo === "string" && /^[a-z0-9]{2,40}$/.test(r.logo) ? { logo: r.logo } : {}), ...(typeof r.color === "string" && /^#[0-9a-f]{3,8}$/i.test(r.color) ? { color: r.color } : {}), ...(typeof r.icon === "string" && okIcon(r.icon) ? { icon: r.icon } : {}), ...(typeof r.site === "string" && r.site.startsWith("/api/favicon?") ? { site: r.site } : {}) };
       for (let i = parts.length - 1; i >= 0; i--) {
         const p = parts[i];
         if (p.k === "tools" && p.items.some((x) => x.seq === r.ref)) { parts[i] = { k: "tools", items: p.items.map((x) => (x.seq === r.ref ? { ...x, c } : x)) }; break; }
@@ -75,7 +78,7 @@ export function applyEvent(w: Work, ev: RunEv): Work {
   } else if (ev.kind === "plans") {
     try { const a = JSON.parse(ev.text) as { why?: string; tried?: string[] }; if (!parts.some((p) => p.k === "plans")) parts.push({ k: "plans", why: String(a.why ?? "noplan"), tried: a.tried ?? [] }); } catch {}
   } else if (ev.kind === "link") {
-    try { const l = JSON.parse(ev.text) as Omit<LinkPart, "k">; if (typeof l.url === "string" && /^https?:\/\//.test(l.url) && !parts.some((p) => p.k === "link" && p.url === l.url)) parts.push({ k: "link", app: String(l.app ?? ""), name: String(l.name ?? "Composio"), url: l.url, ...(typeof l.logo === "string" && /^[a-z0-9]{2,40}$/.test(l.logo) ? { logo: l.logo } : {}), ...(typeof l.icon === "string" && l.icon.startsWith("/api/favicon?") ? { icon: l.icon } : {}) }); } catch {}
+    try { const l = JSON.parse(ev.text) as Omit<LinkPart, "k">; if (typeof l.url === "string" && /^https?:\/\//.test(l.url) && !parts.some((p) => p.k === "link" && p.url === l.url)) parts.push({ k: "link", app: String(l.app ?? ""), name: String(l.name ?? "Composio"), url: l.url, ...(typeof l.logo === "string" && /^[a-z0-9]{2,40}$/.test(l.logo) ? { logo: l.logo } : {}), ...(typeof l.icon === "string" && okIcon(l.icon) ? { icon: l.icon } : {}) }); } catch {}
   } else if (ev.kind === "rate") {
     try { const a = JSON.parse(ev.text) as { name?: string; until?: number }; if (typeof a.until === "number") { const name = String(a.name ?? ""), k = parts.findIndex((p) => p.k === "rate" && p.name === name); const r: RatePart = { k: "rate", name, until: a.until }; if (k >= 0) parts[k] = r; else parts.push(r); } } catch {}
   } else if (ev.kind === "conn") {
@@ -167,7 +170,7 @@ function LinkCard({ l }: { l: LinkPart }) {
   const [opened, setOpened] = useState(false);
   return (
     <div className="wl-plans wl-link" role="group" aria-label={l.name}>
-      {l.logo || l.icon || /^[a-z0-9_-]{1,60}$/.test(l.app) ? <ConnLogo logo={l.logo} icon={l.icon ?? (l.app ? `/api/favicon?app=${l.app}` : undefined)} name={l.name} size={20} /> : <I.SetPlug size={14} />}<span>{tr(opened ? "Đăng nhập xong thì nhắn lại yêu cầu để Synchro làm tiếp." : `Kết nối ${l.name} qua Composio để Synchro dùng được ứng dụng này.`)}</span>
+      {l.logo || l.icon || /^[a-z0-9_-]{1,60}$/.test(l.app) ? <ConnLogo logo={l.logo} icon={l.icon} name={l.name} size={20} /> : <I.SetPlug size={14} />}<span>{tr(opened ? "Đăng nhập xong thì nhắn lại yêu cầu để Synchro làm tiếp." : `Kết nối ${l.name} qua Composio để Synchro dùng được ứng dụng này.`)}</span>
       <a className="btn dark" href={l.url} target="_blank" rel="noopener noreferrer" onClick={() => setOpened(true)}>{tr(opened ? "Mở lại trang kết nối" : `Kết nối ${l.name}`)}<I.External size={12} /></a>
     </div>
   );
@@ -194,10 +197,11 @@ export function WorkParts({ parts, live, render, onAnswer }: { parts: Part[]; li
     : <ToolGroup key={i} items={p.items} live={live} />))}</>;
 }
 /** Câu trả lời đã xong: nút kết nối lại vẫn hiện ngoài phần tổng kết thu gọn (người dùng vừa được bảo bấm nó). */
-export function ConnCards({ parts }: { parts?: Part[] }) {
+// text: câu trả lời; link Connect Link đã có trong câu trả lời thì đã hiện thành nút ở đó (md.tsx), không lặp lại thẻ bên dưới.
+export function ConnCards({ parts, text }: { parts?: Part[]; text?: string }) {
   const list = (parts ?? []).filter((p): p is ConnPart => p.k === "conn");
   const plans = (parts ?? []).find((p): p is PlansPart => p.k === "plans");
-  const links = (parts ?? []).filter((p): p is LinkPart => p.k === "link");
+  const links = (parts ?? []).filter((p): p is LinkPart => p.k === "link" && !(text ?? "").includes(p.url));
   // Đồng hồ thử lại của connector bị giới hạn tốc độ: chỉ hiện khi câu trả lời xong chưa quá 1 giờ kể từ lúc thử lại được.
   const rates = (parts ?? []).filter((p): p is RatePart => p.k === "rate" && p.until > Date.now() - 3_600_000);
   // Mở lại đoạn chat khi connector đã nối xong từ trước (bằng thẻ này hay trong Cài đặt) thì không nhắc nữa. Hỏi máy chủ không được thì vẫn hiện thẻ.
@@ -207,8 +211,9 @@ export function ConnCards({ parts }: { parts?: Part[] }) {
   useEffect(() => {
     if (!sig) return;
     let on = true;
-    fetch("/api/connectors").then((r) => (r.ok ? r.json() : null)).then((j: { connectors?: { id: string; status: string }[] } | null) => {
-      if (on && j?.connectors) setFine(sig.split(",").filter((id) => { const c = j.connectors!.find((x) => x.id === id); return !c || c.status === "ok"; }));
+    fetch("/api/connectors").then((r) => (r.ok ? r.json() : null)).then((j: { connectors?: { id: string; status: string }[]; composio?: { connector?: { id: string; status: string } | null } } | null) => {
+      const all = j?.connectors ? [...j.connectors, ...(j.composio?.connector ? [j.composio.connector] : [])] : null;
+      if (on && all) setFine(sig.split(",").filter((id) => { const c = all.find((x) => x.id === id); return !c || c.status === "ok"; }));
     }).catch(() => {});
     return () => { on = false; };
   }, [sig]);

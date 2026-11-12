@@ -1,16 +1,15 @@
 import { limit, sameOrigin } from "../../authstore";
-import { addConnector, listConnectors } from "../../connectors";
-import { composioSummary, connectorUser, policyOf, route } from "./shared";
+import { addConnector, composioInfo, listConnectors } from "../../connectors";
+import { connectorUser, policyOf, route } from "./shared";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-// Composio (connector chính, tạo tự động khi quản trị viên đã thêm khóa) và connector người dùng tự thêm.
+// Composio của bạn (có sẵn cho mọi tài khoản, chờ liên kết) và connector người dùng tự thêm.
 export const GET = route(async (req) => {
   const user = connectorUser(req);
   const policy = policyOf(user);
-  const composio = await composioSummary(user, policy);
-  return Response.json({ composio, connectors: listConnectors(user.id, policy), policy });
+  return Response.json({ composio: composioInfo(user.id, policy), connectors: listConnectors(user.id, policy), policy });
 });
 
 // Thêm connector tự kết nối: { name, url, … } (giao diện không còn danh mục gợi ý; { dir } vẫn nhận cho connector danh mục cũ), hoặc { name, url, clientId?, clientSecret?, token?, header? } tùy chỉnh. Trả về authorizeUrl nếu cần đăng nhập.

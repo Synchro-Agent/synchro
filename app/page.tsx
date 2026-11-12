@@ -465,8 +465,8 @@ function Composer(p: {
   ]).then(([s, l]) => { setSkq(""); setSkl([...l.filter((x) => x.enabled && x.mine?.enabled !== false).map((x) => ({ id: `lib-${x.slug}`, label: x.name, lib: true, cat: !!x.catalogId?.startsWith("cd:") })), ...s.filter((x) => x.enabled).map((x) => ({ id: x.name, label: x.name }))]); });
   const loadCx = () => fetch("/api/connectors").then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status))))).then((j) => setCx(j)).catch(() => setCx({ connectors: [] }));
   const openSub = (k: NonNullable<typeof sub>) => { setSub(sub === k ? null : k); if (k === "skills") void loadSkl(); if (k === "conn" || k === "access") void loadCx(); };
-  // Composio đang chạy của tài khoản (có trong lượt chat): thêm vào các thao tác chung như quyền dùng công cụ.
-  const cxMain = cx?.composio?.state === "active" ? cx.composio.connector ?? null : null;
+  // Composio của bạn đã liên kết và đang chạy (có trong lượt chat): thêm vào các thao tác chung như quyền dùng công cụ.
+  const cxMain = cx?.composio?.state === "linked" && cx.composio.connector?.status === "ok" ? cx.composio.connector : null;
   const cxPatch = async (id: string, body: Record<string, unknown>) => {
     const r = await fetch(`/api/connectors/${id}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
     const j = await r.json().catch(() => ({}));
@@ -665,14 +665,14 @@ function Composer(p: {
                 <div className="cm-list">
                   {cx === null ? <div className="cm-empty"><span className="art-spin sm" /></div> : <>
                     {cx.composio && (() => {
-                      const k = cx.composio, c = k.connector, on = k.state === "active" && !!c?.enabled;
-                      const note = k.state === "active" ? (k.apps === null ? "Đang bật" : `${k.apps} ứng dụng`) : k.state === "no_key" ? "Chưa bật" : k.state === "blocked" ? "Không được phép" : "Có lỗi";
+                      const k = cx.composio, c = k.connector, live = k.state === "linked" && c?.status === "ok", on = live && !!c?.enabled;
+                      const note = k.state === "unlinked" ? "Chưa liên kết" : k.state === "blocked" ? "Không được phép" : live ? "" : "Cần liên kết lại";
                       return (
                         <div className="menu-item cm-conn cm-cx">
-                          <ConnLogo logo="composio" color="#5B4BDB" name="Composio" size={20} /><span className="cv-ell" data-notr>Composio</span><span className="cm-cnt">{note}</span>
-                          {k.state === "active" && c
+                          <ConnLogo logo="composio" color="#5B4BDB" name="Composio" size={20} /><span className="cv-ell" data-notr>Composio</span>{note && <span className="cm-cnt">{note}</span>}
+                          {live && c
                             ? <button className={`toggle ${on ? "on" : ""}`} role="switch" aria-checked={on} aria-label={`${on ? "Tắt" : "Bật"} Composio`} onClick={() => cxPatch(c.id, { enabled: !c.enabled })} />
-                            : <button className="cn-link cm-rec" onClick={() => { setMenu(false); setSub(null); (p.goConnectors ?? p.goCustom)(); }}>Xem</button>}
+                            : <button className="cn-link cm-rec" onClick={() => { setMenu(false); setSub(null); (p.goConnectors ?? p.goCustom)(); }}>{k.state === "blocked" ? "Xem" : "Liên kết"}</button>}
                         </div>);
                     })()}
                     {cx.connectors.map((c) => { const on = c.enabled && !c.adminBlocked && c.status === "ok"; return (
@@ -917,7 +917,7 @@ const MsgRow = memo(function MsgRow({ m, i, last, busy, mark, art, inl, fileActi
           const active = c.artOpen && c.artIdent === sg.art.ident && c.artIndex === v;
           const full = arts.map.get(sg.art.ident)?.[v];
           return <ArtifactCard key={k} art={full ?? sg.art} version={v + 1} total={total} active={active} fix={full?.fix} onRedo={last && !busy ? () => cx.current!.send(`${tr("Bản sửa")} “${full?.title ?? sg.art.ident}” ${tr("không áp được. Hãy viết lại toàn bộ artifact này (không dùng mode=\"patch\"), giữ các thay đổi tôi vừa yêu cầu.")}`) : undefined} onOpen={() => cx.current!.openArt({ chat: chatId, ident: sg.art.ident, v, follow: false })} />;
-        })()) : <Markdown text={hasArtifacts(m.text) ? artifactsAsCode(m.text) : m.text} say={say} viz={inl} live={m.done && last && !busy} streaming={!m.done} />) : null}{m.failed ? <ErrCard raw={m.err} onRetry={last && !busy ? () => cx.current!.retry() : undefined} onProviders={() => cx.current!.openProviders()} /> : null}{m.done && last ? <ConnCards parts={m.parts} /> : null}{!m.done && m.plan?.length ? <PlanCard plan={m.plan} live /> : null}{!m.done ? <WorkStatus label={m.parts?.some((p) => p.k === "ask" && p.state === "wait") ? tr("Đang chờ bạn duyệt") : m.prog} since={m.time} steps={stepsOf(m.parts)} /> : null}{m.outs?.length ? <OutputFiles files={m.outs} onOpen={(f) => cx.current!.openFile(f)} active={fileActive} /> : null}</div></CiteCtx.Provider>
+        })()) : <Markdown text={hasArtifacts(m.text) ? artifactsAsCode(m.text) : m.text} say={say} viz={inl} live={m.done && last && !busy} streaming={!m.done} />) : null}{m.failed ? <ErrCard raw={m.err} onRetry={last && !busy ? () => cx.current!.retry() : undefined} onProviders={() => cx.current!.openProviders()} /> : null}{m.done && last ? <ConnCards parts={m.parts} text={m.text} /> : null}{!m.done && m.plan?.length ? <PlanCard plan={m.plan} live /> : null}{!m.done ? <WorkStatus label={m.parts?.some((p) => p.k === "ask" && p.state === "wait") ? tr("Đang chờ bạn duyệt") : m.prog} since={m.time} steps={stepsOf(m.parts)} /> : null}{m.outs?.length ? <OutputFiles files={m.outs} onOpen={(f) => cx.current!.openFile(f)} active={fileActive} /> : null}</div></CiteCtx.Provider>
         {m.done && m.stopped && <div className="msg-stopped"><I.Stop size={11} />{tr("Đã dừng · giữ lại phần đã viết")}</div>}
         {m.done && m.webs?.length ? <SourceChips webs={m.webs} id={citeId} /> : null}
         {m.done && m.notice && ((m.notice.text && !m.failed) || m.notice.work || m.notice.at || m.notice.tried?.length || m.notice.switchTo) ? (

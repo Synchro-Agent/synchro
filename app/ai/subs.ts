@@ -3,6 +3,7 @@
 // Khóa model: "sub-claude/sonnet", "sub-codex/gpt-6.1-sol", "sub-agy/gemini-3-pro", "sub-grok/grok-4.7" ("default" = model mặc định của gói).
 // Bộ chọn model gộp theo hãng (Claude, ChatGPT, Gemini, Grok; DeepSeek chỉ có khóa API): đã đăng nhập gói thì nhóm hiện model của gói; gói hết hạn mức thì
 // Synchro KHÔNG tự chuyển sang khóa API mà hỏi người dùng. Đồng ý thì nhóm đó hiện model của khóa API cho tới khi gói hồi lại.
+import { notConnectLink } from "../composio";
 import crypto from "node:crypto";
 import path from "node:path";
 import { db, type UserRow } from "../authstore";
@@ -685,13 +686,14 @@ async function primeWarm(key: string, base: TurnRequest, uid: string) {
   finally { priming.delete(key); }
 }
 
-/** Link trong câu trả lời (markdown hoặc trần), bỏ phần trong artifact. */
+/** Link trong câu trả lời (markdown hoặc trần), bỏ phần trong artifact và Connect Link của Composio. */
 export function linksIn(text: string): WebSource[] {
   const out = new Map<string, WebSource>();
   const s = text.replace(/<artifact\b[\s\S]*?(?:<\/artifact>|$)/gi, " ").replace(/```[\s\S]*?(?:```|$)/g, " ");
   for (const m of s.matchAll(/\[([^\]\n]{1,200})\]\((https?:\/\/[^\s)]+)\)|(https?:\/\/[^\s)>\]"']+)/g)) {
     const url = (m[2] ?? m[3]).replace(/[.,;:]+$/, "");
-    if (!out.has(url) && out.size < 12) out.set(url, { title: m[1] ?? "", url });
+    // Connect Link của Composio (nút "Kết nối <Ứng dụng>") không phải nguồn trích dẫn.
+    if (!out.has(url) && out.size < 12 && notConnectLink(url)) out.set(url, { title: m[1] ?? "", url });
   }
   return [...out.values()];
 }

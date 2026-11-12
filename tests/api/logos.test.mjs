@@ -101,8 +101,13 @@ const none = CL.connLogo({ url: "http://localhost:4111/mcp" });
 ok(!none.logo && !none.icon && !none.site, "máy chủ nội bộ không có gì: không hỏi favicon (chữ cái đầu)", JSON.stringify(none));
 ok(CL.siteOf("https://169.254.169.254/latest") === undefined && CL.siteOf("http://metadata.google.internal/") === undefined && CL.siteOf("https://foo.local/") === undefined, "không bao giờ đưa IP / tên nội bộ vào proxy favicon");
 ok(IP.brandHost("mcp.eu.acme.co.uk") === "acme.co.uk" && IP.brandHost("api.groq.com") === "groq.com", "tên miền thương hiệu (cả đuôi hai cấp)");
-const g = CL.appLogo("gmail"), n = CL.appLogo("notion");
-ok(g.icon === "/api/favicon?app=gmail" && !g.logo && n.logo === "notion", "ứng dụng Composio: tệp có sẵn, không có thì logo tải hộ qua /api/favicon?app=…", JSON.stringify([g, n]));
+const g = CL.appLogo("gmail"), n = CL.appLogo("notion"), hf = CL.appLogo("cohere"), unkApp = CL.appLogo("acmeapp");
+ok(g.icon === "/api/favicon?app=gmail" && !g.logo && n.logo === "notion", "ứng dụng Composio: tệp có sẵn, không có thì biểu tượng trang chủ qua /api/favicon?app=…", JSON.stringify([g, n]));
+ok(hf.icon === "/logos/cohere.svg" && fs.existsSync(pub(hf.icon)), "ứng dụng có logo hãng chỉ trong public/logos (Cohere): dùng tệp đó", JSON.stringify(hf));
+ok(JSON.stringify(unkApp) === "{}", "ứng dụng lạ không có trang chủ trong bảng: không hỏi proxy, giao diện hiện chữ cái đầu", JSON.stringify(unkApp));
+// Không còn khóa dự án Composio dùng chung: logo ứng dụng không được phụ thuộc khóa nào hay API toolkits của Composio.
+const route = fs.readFileSync(path.join(process.cwd(), "app", "api", "favicon", "route.ts"), "utf8");
+ok(!/composioKey|toolkitLogoUrl|COMPOSIO_|logos\.composio/.test(route) && /APP_SITES/.test(route), "/api/favicon?app=… chỉ dùng bảng trang chủ, không dùng khóa / API Composio");
 ok(JSON.stringify(CL.appLogo("../etc/passwd")) === "{}" && JSON.stringify(CL.appLogo("A B")) === "{}", "slug ứng dụng lạ không thành đường dẫn");
 ok(CL.composioAppOf({ tools: [{ tool_slug: "GMAIL_SEND_EMAIL", arguments: {} }] }) === "gmail" && CL.composioAppOf({ toolkits: ["Slack"] }) === "slack" && CL.composioAppOf({ queries: [] }) === "", "lời gọi Composio → ứng dụng nó dùng (GMAIL_SEND_EMAIL → gmail)");
 const sites = Object.entries(CL.APP_SITES).filter(([, h]) => !IP.publicHost(h)).map(([k]) => k);

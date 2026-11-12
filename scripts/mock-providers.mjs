@@ -8,14 +8,14 @@ import { createRequire } from "node:module";
 import { WebSocketServer } from "ws";
 import { capsReply, codeDone, revReply, studioStep } from "./mock-caps.mjs";
 import { EL, elevenHandler, scribeConnect } from "./mock-eleven.mjs";
-import { COMPOSIO_KEY, composioHandler } from "./mock-composio.mjs";
+import { composioHandler } from "./mock-composio.mjs";
 import { solidPng } from "./mock-png.mjs";
 import { EMBED_LOG, embedHandler } from "./mock-embed.mjs";
 import { replicateHandler } from "./mock-replicate.mjs";
 const CLI = createRequire(import.meta.url)("./mock-cli/mock-cli-common.cjs");
 
 // Khóa mà npm run dev:mock tự nhập vào Cài đặt → Providers.
-export const MOCK_KEYS = { anthropic: "sk-ant-mock-local-0001", openai: "sk-mock-openai-0001", google: "AIza-mock-gemini-0001", xai: "xai-mock-grok-local-0001", deepseek: "sk-mock-deepseek-0001", elevenlabs: "sk_mock_eleven_0001", composio: COMPOSIO_KEY, replicate: "r8_mock_replicate_0001" };
+export const MOCK_KEYS = { anthropic: "sk-ant-mock-local-0001", openai: "sk-mock-openai-0001", google: "AIza-mock-gemini-0001", xai: "xai-mock-grok-local-0001", deepseek: "sk-mock-deepseek-0001", elevenlabs: "sk_mock_eleven_0001", replicate: "r8_mock_replicate_0001" };
 
 // Danh sách model như API thật của từng hãng trả về (theo tài liệu tháng 10/2026), gồm cả model không dùng để nhắn tin mà Synchro phải tự lọc bỏ.
 const ANTHROPIC = [["claude-fable-5-1", "Claude Fable 5.1"], ["claude-opus-5-5", "Claude Opus 5.5"], ["claude-sonnet-5-5", "Claude Sonnet 5.5"], ["claude-haiku-5-5", "Claude Haiku 5.5"],
@@ -479,6 +479,8 @@ function reply(provider, id, msgs, maxTokens, effort, sys = "") {
   const brain = CLI.mockBrain(q);
   if (brain) return { text: brain, q };
   if (q.includes("#media")) return { text: CLI.mediaReply(mediaOf(msgs)), q };
+  // "#cxlink": câu trả lời lỡ chép Connect Link của Composio thành link Markdown và cả dưới "Sources:" (lỗi trong ảnh chụp của chủ sở hữu) — trang phải hiện một nút.
+  if (q.includes("#cxlink")) return { text: "Bạn chưa kết nối Gmail nên mình chưa đọc được email.\n\n👉 [Kết nối Gmail](https://connect.composio.dev/link/lk_mock_gmail)\n\nKết nối xong thì nhắn lại để mình tóm tắt nhé.\n\nSources:\n- [Kết nối Gmail](https://connect.composio.dev/link/lk_mock_gmail)", q };
   // "#artimg": artifact có ảnh từ URL ngoài (ảnh tĩnh của chính máy giả lập) — kiểm thử khung xem trước tự nhúng ảnh (artdoc.ts).
   if (q.includes("#artimg")) {
     const app = `http://localhost:${process.env.PORT ?? 3200}`;
@@ -541,7 +543,7 @@ function memoryReply(sys, q) {
 const SIDE = /^(Việc cần tự động hóa:|Đoạn chat cần (chưng cất|đặt tên):|Hồ sơ:|Trang cần biên soạn:|Các tên trong bộ não:|Các chủ đề cần xếp bản đồ:|Những điều đã biết về người dùng:|Bản người dùng tự viết:|Skill cần phân loại:|Các skill cần thẩm định:)/;
 const capsFor = (sys, q, msgs, tools, none) => {
   if (stallNow(q, msgs)) return { text: "Mình sẽ mở trình duyệt và làm ngay." };
-  if (q.includes("#media") || SIDE.test(q)) return null; // lệnh thử / lời gọi của bộ não: trả lời ở reply
+  if (q.includes("#media") || q.includes("#cxlink") || SIDE.test(q)) return null; // lệnh thử / lời gọi của bộ não: trả lời ở reply
   // "#tool=tên" ép gọi đúng công cụ đó trước mọi câu trả lời mẫu (trừ lệnh thử sửa artifact #rev).
   if (!none && q.includes("#tool=") && !/#rev\s*\d+/.test(q)) { const w = wantTool(q, tools); if (w) return { tool: w }; }
   const mem = memoryReply(sys, q);
@@ -692,7 +694,7 @@ async function handler(req, res) {
     res.writeHead(200, { "content-type": "image/png", "content-length": png.length }); res.end(png); return;
   }
   if (p === "/favicon-hits" && req.method === "GET") return send(res, 200, Object.fromEntries(favHits));
-  // Composio (connector chính): /composio/… nằm ở mock-composio.mjs.
+  // Composio Connect (MCP cá nhân, đăng nhập OAuth): /composio/… và /.well-known/…/composio nằm ở mock-composio.mjs.
   if (await composioHandler(req, res, p, b)) return;
   // Embedding (tìm kiếm theo nghĩa): xử lý trước phần ghi "yêu cầu gần nhất", để lời embed chạy nền không đè lên lượt chat mà kiểm thử đọc.
   if (p === "/_debug/embeds") return send(res, 200, EMBED_LOG);

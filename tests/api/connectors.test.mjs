@@ -37,7 +37,7 @@ let r = await admin("GET", "/api/connectors");
 for (const x of r.j.connectors ?? []) await admin("DELETE", `/api/connectors/${x.id}`);
 r = await admin("GET", "/api/connectors");
 // Danh mục connector gợi ý không còn gửi cho trình duyệt; Composio (connector chính) có trạng thái riêng.
-ok(r.s === 200 && r.j.connectors.length === 0 && r.j.directory === undefined && ["active", "no_key", "blocked", "error"].includes(r.j.composio?.state), "trống, không còn danh mục gợi ý, có trạng thái Composio", JSON.stringify(r.j).slice(0, 200));
+ok(r.s === 200 && r.j.connectors.length === 0 && r.j.directory === undefined && ["linked", "unlinked"].includes(r.j.composio?.state) && r.j.composio.connector?.dir === "composio", "trống, không còn danh mục gợi ý, Composio của bạn có sẵn (chưa liên kết / đã liên kết)", JSON.stringify(r.j).slice(0, 200));
 
 console.log("2. Kiểm tra đầu vào");
 r = await admin("POST", "/api/connectors", { name: "", url: "https://x.com/mcp" }); ok(r.s === 400 && /tên/.test(r.j.error), "thiếu tên bị chặn", JSON.stringify(r.j));

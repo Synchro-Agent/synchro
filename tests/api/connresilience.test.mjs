@@ -294,7 +294,8 @@ try {
     const c = row("cn_canva");
     ok(c?.vendorBlocked?.why && /Canva/.test(c.vendorBlocked.why) && c.status === "needs_auth", "có lý do của hãng, hàng không bị xóa", JSON.stringify(c).slice(0, 200));
     const s = session();
-    ok(s.offline.find((x) => x.id === "cn_canva")?.why === "vendor" && !C.connectorsPrompt(s).includes(C.RECONNECT_TOOL.name), "model được báo là hãng chưa duyệt, không hứa nút kết nối lại", C.connectorsPrompt(s));
+    // Dòng về hãng chưa duyệt không hứa nút kết nối lại (lời dặn liên kết Composio của bạn, chưa liên kết, là dòng riêng).
+    ok(s.offline.find((x) => x.id === "cn_canva")?.why === "vendor" && C.connectorsPrompt(s).split("\n").filter((l) => l.includes("Canva")).every((l) => !l.includes(C.RECONNECT_TOOL.name)), "model được báo là hãng chưa duyệt, không hứa nút kết nối lại", C.connectorsPrompt(s));
     C.removeConnector(uid, "cn_canva");
     wipe();
   }
@@ -389,7 +390,8 @@ try {
     await thrown(C.refreshConnector(uid, id));
     ok(row(id).status === "needs_auth", "401 ở connector không token: cần kết nối");
     const s = session("c1");
-    ok(s.tools.length === 0 && s.offline[0]?.name === "Docs" && s.offline[0].why === "auth", "phiên chat biết connector đang mất kết nối", JSON.stringify(s.offline));
+    const off = s.offline.filter((x) => x.why !== "link");
+    ok(s.tools.length === 0 && off[0]?.name === "Docs" && off[0].why === "auth", "phiên chat biết connector đang mất kết nối (Composio chưa liên kết là mục riêng)", JSON.stringify(s.offline));
     const prompt = C.connectorsPrompt(s);
     ok(/Docs/.test(prompt) && /kết nối lại/.test(prompt) && prompt.includes(C.RECONNECT_TOOL.name), "hướng dẫn cho model nói rõ và gọi nút kết nối lại", prompt);
     wipe();
@@ -663,7 +665,7 @@ try {
     let msg = await thrown(C.refreshConnector(uid, id));
     ok(row(id).status === "forbidden" && /từ chối quyền truy cập/.test(row(id).error ?? "") && !/hết hạn/.test(row(id).error ?? ""), "OAuth 403 ở danh sách công cụ: trạng thái riêng, lời đúng", JSON.stringify([row(id).status, row(id).error, msg]));
     const s = session("x27");
-    ok(s.offline[0]?.why === "auth", "connector bị từ chối hiện nút kết nối lại trong chat", JSON.stringify(s.offline));
+    ok(s.offline.find((x) => x.why !== "link")?.why === "auth", "connector bị từ chối hiện nút kết nối lại trong chat", JSON.stringify(s.offline));
     const again = await C.connect(req, uid, id, pol);
     ok(/\/authorize/.test(again.authorizeUrl ?? ""), "Kết nối lại đi tới trang đăng nhập", JSON.stringify(again).slice(0, 200));
     S.forbid = null;

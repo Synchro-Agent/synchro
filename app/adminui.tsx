@@ -162,7 +162,7 @@ function ConnPolicyEditor({ value, onChange, Toggle }: { value: ConnPolicy; onCh
   return (
     <>
       <div className="adm-perm-row" style={{ borderTop: 0, paddingTop: 0 }}>
-        <div><div className="t">Composio</div><div className="d">Connect Gmail, Slack, GitHub, Notion and 1000+ other apps from chat. Needs a Composio key in Providers.</div></div>
+        <div><div className="t">Composio</div><div className="d">Each person links their own Composio account to use Gmail, Slack, GitHub, Notion and 1000+ other apps in chat.</div></div>
         <Toggle on={cx} label="Composio" set={setCx} />
       </div>
       <div className="adm-perm-row">

@@ -4,8 +4,8 @@ import { healScript } from "./skillheal";
 import { audit, can, canModel, getUser, limit, permsOf, type UserRow } from "./authstore";
 import { clampEffort, connPolicy, effortCap, isEffort, legacyModel, type Effort } from "./catalog";
 import { catalog, mainModels, pickDefault, resolveModel, type Target } from "./providers";
-import { ConnectorSession, connectorsPrompt, ensureComposio, listConnectors, RECONNECT_TOOL, type ChatTool, type OfflineConn } from "./connectors";
-import { appsMayChange, connectLinks } from "./composio";
+import { ConnectorSession, connectorsPrompt, listConnectors, RECONNECT_TOOL, type ChatTool, type OfflineConn } from "./connectors";
+import { connectLinks, notConnectLink } from "./composio";
 import { appLogo, composioAppOf } from "./connlogos";
 import { randomToken } from "./mcpauth";
 import { browserDefault, capsState, skillsOn } from "./caps";
@@ -402,7 +402,9 @@ const REFUSED = "Người dùng đã từ chối cho dùng công cụ này ở l
 // Logo cho thẻ duyệt / dòng công cụ: logo của connector; công cụ Composio chạy thao tác trong một ứng dụng (GMAIL_SEND_EMAIL…) thì logo của ứng dụng đó.
 function callLogo(ct: ChatTool, input: unknown): { logo?: string; color?: string; icon?: string; site?: string } {
   const app = ct.composio ? composioAppOf(input) : "";
-  if (app) return appLogo(app);
+  // Ứng dụng không có logo nào (không tệp sẵn, không có trang chủ trong bảng): giữ logo Composio thay vì chữ cái đầu.
+  const own: { logo?: string; icon?: string } = app ? appLogo(app) : {};
+  if (own.logo || own.icon) return own;
   return { logo: ct.logo, color: ct.color, ...(ct.icon ? { icon: ct.icon } : {}), ...(ct.site ? { site: ct.site } : {}) };
 }
 const askOf = (x: Exec, c: Call, id: string): Ask => {
@@ -488,7 +490,7 @@ function showReconnect(x: Exec, c: OfflineConn) {
   const seen = (x.connCards ??= new Set());
   if (seen.has(c.id)) return;
   seen.add(c.id);
-  progress("conn", JSON.stringify({ id: c.id, name: c.name, logo: c.logo, color: c.color, ...(c.site ? { site: c.site } : {}), auth: c.auth, ...(c.refused ? { refused: true } : {}) }));
+  progress("conn", JSON.stringify({ id: c.id, name: c.name, logo: c.logo, color: c.color, ...(c.site ? { site: c.site } : {}), auth: c.auth, ...(c.refused ? { refused: true } : {}), ...(c.why === "link" ? { link: true } : {}) }));
 }
 // Connect Link Composio vừa trả về: nút "Kết nối <ứng dụng>" ngay trong khung chat (mỗi đường link một lần trong lượt).
 function showLinks(x: Exec, content: string) {
@@ -496,7 +498,6 @@ function showLinks(x: Exec, content: string) {
   for (const l of connectLinks(content)) {
     if (seen.has(l.url)) continue;
     seen.add(l.url);
-    appsMayChange(x.uid);
     progress("link", JSON.stringify({ ...l, ...appLogo(l.app) }));
   }
 }
@@ -768,7 +769,7 @@ async function runCall(x: Exec, c: Call, d?: Decision): Promise<Run> {
     const name = fold(String(c.input?.connector ?? "")).trim();
     const hit = x.sess.offline.find((o) => o.why !== "vendor" && (fold(o.name) === name || fold(o.name).includes(name))) ?? (x.sess.offline.length === 1 && x.sess.offline[0].why !== "vendor" ? x.sess.offline[0] : null);
     if (hit) showReconnect(x, hit);
-    return { content: hit ? `Đã hiện nút "Kết nối lại" cho ${hit.name} trong khung chat. Hãy nói người dùng bấm nút rồi nhắc lại yêu cầu.` : `Không có connector "${String(c.input?.connector ?? "")}" đang chờ kết nối lại.`, is_error: !hit, used: { kind: "search", name: c.name } };
+    return { content: hit ? `Đã hiện nút "${hit.why === "link" ? "Liên kết Composio" : "Kết nối lại"}" cho ${hit.name} trong khung chat. Hãy nói một câu ngắn để người dùng bấm nút rồi nhắc lại yêu cầu (không chép link).` : `Không có connector "${String(c.input?.connector ?? "")}" đang chờ kết nối lại.`, is_error: !hit, used: { kind: "search", name: c.name } };
   }
   const ct = x.sess?.get(c.name);
   if (!ct) return runSkillTool(x.list, c.name, c.input, x.scripts, { uid: x.uid, net: x.net, libs: x.libs, heal: x.heal ? (input) => healScript(x.heal!, input) : undefined });
@@ -787,8 +788,6 @@ async function runCall(x: Exec, c: Call, d?: Decision): Promise<Run> {
   if (x.edited?.has(c.id)) out.content = `[Người dùng đã sửa tham số trước khi cho phép. Công cụ đã chạy với tham số: ${JSON.stringify(c.input).slice(0, 1500)}]\n${out.content}`;
   return { is_error: r.is_error, ...out, used };
 }
-// Composio của tài khoản sẵn sàng trước khi mở phiên connector (lần đầu: tạo phiên Tool Router và lấy công cụ). Chờ tối đa 8 giây, lâu hơn thì lượt này đi tiếp không có Composio.
-const composioReady = (uid: string, pol: Parameters<typeof ensureComposio>[1]) => Promise.race([ensureComposio(uid, pol).catch(() => "error"), new Promise((ok) => setTimeout(ok, 8000))]);
 const needsAsk = (x: Exec, c: Call) => !!x.sess?.get(c.name) && x.sess.perm(c.name, c.input) === "ask";
 
 // Câu mô tả bước đang làm, hiện dưới "Đang suy nghĩ…" khi lượt chạy ở nền.
@@ -1650,7 +1649,7 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
         const ss = await span("skills", "retrieval", () => skillSet(c.user, body, messages, studio, st));
         route = ss.route;
         markPrompt();
-        if (can(c.user, "connectors")) { await composioReady(c.user.id, connPolicy(permsOf(c.user))); sess = new ConnectorSession(c.user.id, { conv: convId, project: !!project, pol: connPolicy(permsOf(c.user)) }); if (!sess.tools.length && !sess.offline.length) sess = null; }
+        if (can(c.user, "connectors")) { sess = new ConnectorSession(c.user.id, { conv: convId, project: !!project, pol: connPolicy(permsOf(c.user)) }); if (!sess.tools.length && !sess.offline.length) sess = null; }
         const code = pc.code;
         const refs = !!sess || code || /\bref_[\w-]{6,}/.test(JSON.stringify(messages));
         // Công cụ và hướng dẫn trình duyệt luôn có khi tính năng bật (phần đầu prompt ổn định, đọc lại từ bộ đệm).
@@ -1688,7 +1687,8 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
         onNativeImages: am ? undefined : (files) => { keepImages(c.user.id, files, x?.outs ?? natOuts); },
         // Tìm web bằng công cụ dựng sẵn của CLI: hiện trong nhật ký làm việc như công cụ khác, nguồn gửi kèm kết quả.
         onSearch: am ? undefined : (q) => { const seq = progress("tool", q.url ? `Đang đọc trang ${q.url.slice(0, 120)}` : q.query ? `Đang tìm trên web: ${q.query.slice(0, 120)}` : "Đang tìm trên web"); if (seq) progress("res", JSON.stringify({ ref: seq, ok: true })); },
-        onSources: am ? undefined : (items) => { for (const s of items) if (webs.size < 12 && !webs.has(s.url)) webs.set(s.url, s); },
+        // Connect Link của Composio không phải nguồn: không vào hàng chip "Nguồn" dù CLI báo nó là link trong câu trả lời.
+        onSources: am ? undefined : (items) => { for (const s of items) if (webs.size < 12 && !webs.has(s.url) && notConnectLink(s.url)) webs.set(s.url, s); },
       });
       // Bấm Dừng: CLI trả về mọi chữ đã viết trong lượt, kể cả các câu dẫn đã nằm trong nhật ký làm việc (ghép lại thành một đoạn dài
       // không dấu cách, trông như câu trả lời cụt rồi dừng). Câu trả lời chỉ giữ phần của bước đang viết dở, như lượt chạy bằng khóa API.
@@ -1825,7 +1825,7 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
     const prep = spanSync("history", "history", () => prepareHistory(messages, dyn, mix));
     markPrompt();
     // Connector chỉ dùng trong lượt chat chính (skills = true), không dùng cho các lệnh nội bộ như tóm tắt bộ nhớ.
-    if (skills && t.kind !== "mock" && can(c.user, "connectors")) { await composioReady(c.user.id, connPolicy(permsOf(c.user))); sess = new ConnectorSession(c.user.id, { conv: convId, project: !!project, pol: connPolicy(permsOf(c.user)) }); if (!sess.tools.length && !sess.offline.length) sess = null; }
+    if (skills && t.kind !== "mock" && can(c.user, "connectors")) { sess = new ConnectorSession(c.user.id, { conv: convId, project: !!project, pol: connPolicy(permsOf(c.user)) }); if (!sess.tools.length && !sess.offline.length) sess = null; }
     const code = !!cs?.caps.code && t.kind !== "mock";
     // read_ref: đọc dữ liệu lớn đã lưu theo tham chiếu (ở lượt này hoặc các lượt trước, kể cả khi đổi model).
     const refs = !!skills && t.kind !== "mock" && (!!sess || code || /\bref_[\w-]{6,}/.test(JSON.stringify(prep.messages)));

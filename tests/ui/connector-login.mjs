@@ -138,6 +138,23 @@ try {
   const leftover = (await api("GET", "/api/connectors")).connectors ?? [];
   say(leftover.length === 0, "xem trang không tạo hàng connector nào");
 
+  console.log("━━ Composio của bạn: Liên kết Composio trong cửa sổ đăng nhập, không liệt kê ứng dụng, Ngắt liên kết");
+  await api("DELETE", "/api/connectors/composio");
+  await page.P("Page.navigate", { url: `${B}/?settings=Connectors` });
+  say(await page.until(`!!document.querySelector(".cpo-card .cn-connect")`, 30000), "chưa liên kết: thẻ có nút Liên kết Composio");
+  say(await page.ev(`!document.querySelector(".cpo-apps") && !document.querySelector(".cpo-card .cn-switch") && /dashboard\.composio\.dev/.test(document.querySelector(".cpo-manage")?.href ?? "")`), "không có danh sách ứng dụng; có link Mở Composio để liên kết ứng dụng");
+  const kc = new Set(popups.keys());
+  await page.click(`document.querySelector(".cpo-card .cn-connect")`);
+  const popC = await openedPopup(page, kc);
+  say(!!popC && /\/composio\/oauth\/authorize/.test(popups.get(popC)?.url ?? ""), "bấm Liên kết Composio: mở trang đăng nhập Composio", popC && popups.get(popC)?.url);
+  if (popC) await inPopup(popC, ALLOW);
+  say(await page.until(`!!document.querySelector(".cpo-card .cn-sub.ok") && !!document.querySelector(".cpo-card .cpo-unlink")`, 15000), "đăng nhập xong: Đã liên kết, có Ngắt liên kết, không cần tải lại");
+  await page.click(`document.querySelector(".cpo-card .cpo-unlink")`);
+  await page.until(`!!document.querySelector(".cf-top .modal-foot .btn.danger")`, 5000);
+  await page.click(`document.querySelector(".cf-top .modal-foot .btn.danger")`);
+  say(await page.until(`!!document.querySelector(".cpo-card .cn-connect")`, 10000), "Ngắt liên kết: về nút Liên kết Composio");
+  await api("DELETE", "/api/connectors/composio");
+
   // Mọi trang Synchro khác rời đi để không ai xác nhận hộ cửa sổ đăng nhập.
   await page2.P("Page.navigate", { url: "about:blank" });
   console.log("━━ đã rời màn hình Connectors: cửa sổ tự đóng, trang chính vẫn báo kết quả");

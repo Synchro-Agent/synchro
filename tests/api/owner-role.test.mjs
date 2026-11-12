@@ -1,7 +1,7 @@
 // Ba vai trò Owner / Admin / Member: chủ sở hữu (OWNER_EMAILS, mặc định email đầu tiên của ADMIN_EMAILS) thêm / bỏ quản trị viên; quản trị viên
 // nhận 403 ở mọi việc chỉ chủ sở hữu được làm (khóa API, số dư đã nạp, bảng giá, hạn mức của quản trị viên, thêm / bỏ quản trị viên, xóa
 // vĩnh viễn tài khoản, xem phần che của khóa, cấu hình sao lưu R2, khóa Turnstile, chặn email dùng một lần, hạn mức giọng / ảnh trả tiền thật,
-// khóa dịch vụ ElevenLabs / Composio / Replicate, việc tốn khóa API của sổ model, cập nhật CLI của gói) còn chủ sở hữu làm được; quản trị viên vẫn làm được các việc quản trị khác; nhật ký ghi đổi vai trò.
+// khóa dịch vụ ElevenLabs / Replicate, việc tốn khóa API của sổ model, cập nhật CLI của gói) còn chủ sở hữu làm được; quản trị viên vẫn làm được các việc quản trị khác; nhật ký ghi đổi vai trò.
 const B = process.env.SYNCHRO_URL ?? "http://localhost:3200";
 let pass = 0, fail = 0;
 const ok = (c, n, x = "") => { c ? pass++ : fail++; console.log(c ? "  ✓" : "  ✗", n, c ? "" : String(x).slice(0, 500)); };
@@ -126,8 +126,8 @@ ok(r.s === 200 && r.j.settings.speechBudget.user === setO.speechBudget?.user && 
 r = await owner("PATCH", "/api/admin/settings", { turnstile: { loginAfter: setO.turnstile?.loginAfter ?? 5 } });
 ok(r.s === 200 && r.j.settings.turnstile.on === !!setO.turnstile?.on && r.j.settings.turnstile.loginAfter === (setO.turnstile?.loginAfter ?? 5), "Turnstile: chủ sở hữu lưu được", JSON.stringify(r.j?.settings?.turnstile));
 ok((await admin("PATCH", "/api/admin/settings", { verifyGate: setO.verifyGate !== false })).s === 200, "luật xác minh email: quản trị viên vẫn đổi được");
-// Khóa dịch vụ ElevenLabs / Composio / Replicate: thêm, đổi, gỡ chỉ chủ sở hữu.
-for (const [id, k] of [["elevenlabs", "sk_mock_eleven_0001"], ["composio", "ak_mock_composio_0001"], ["replicate", "r8_mock_replicate_0001"]]) {
+// Khóa dịch vụ ElevenLabs / Replicate: thêm, đổi, gỡ chỉ chủ sở hữu.
+for (const [id, k] of [["elevenlabs", "sk_mock_eleven_0001"], ["replicate", "r8_mock_replicate_0001"]]) {
   ok((await admin("POST", "/api/admin/apikeys", { id, kind: id, key: k })).s === 403, `khóa ${id}: quản trị viên 403 khi thêm / đổi`);
   ok((await admin("DELETE", `/api/admin/apikeys?id=${id}`)).s === 403, `khóa ${id}: quản trị viên 403 khi gỡ`);
 }

@@ -7,6 +7,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { brandHost, publicHost } from "./iconproxy";
+import { FILE_LOGOS, logoSrc } from "./vendorlogo";
 
 export const COMPOSIO_LOGO = "composio";
 export type ConnLogoFields = { logo?: string; color?: string; icon?: string; site?: string };
@@ -45,9 +46,9 @@ export function connLogo(o: { composio?: boolean; color?: string; dirLogo?: stri
 }
 
 // ---- ứng dụng trong Composio (Gmail, Slack…): nút "Kết nối <ứng dụng>", dòng công cụ và thẻ duyệt hiện logo của chính ứng dụng ----
-// Logo tải hộ qua /api/favicon?app=<slug>: meta.logo của Composio (logos.composio.dev, ảnh công khai, không cần khóa), rồi biểu tượng trang
-// của ứng dụng (APP_SITES), cuối cùng giao diện hiện chữ cái đầu.
-/** Trang chủ của các ứng dụng hay dùng (slug Composio → tên miền) để lấy biểu tượng trang khi Composio không có logo. */
+// Không cần khóa Composio nào: 1. tệp có sẵn trong public/connectors (hoặc public/logos), 2. biểu tượng trang chủ của ứng dụng (APP_SITES)
+// tải hộ qua /api/favicon?app=<slug> (cùng proxy favicon chặn địa chỉ nội bộ, có giới hạn), 3. giao diện hiện chữ cái đầu.
+/** Trang chủ của các ứng dụng hay dùng (slug Composio → tên miền) để lấy biểu tượng trang. */
 export const APP_SITES: Record<string, string> = {
   gmail: "mail.google.com", googledrive: "drive.google.com", googlesheets: "sheets.google.com", googledocs: "docs.google.com", googlecalendar: "calendar.google.com",
   googleslides: "slides.google.com", googlemeet: "meet.google.com", googlemaps: "maps.google.com", youtube: "youtube.com", slack: "slack.com", github: "github.com",
@@ -60,12 +61,15 @@ export const APP_SITES: Record<string, string> = {
 };
 /** Slug ứng dụng Composio hợp lệ (chữ thường, số, _ -). */
 export const appSlug = (s: unknown) => { const x = String(s ?? "").toLowerCase(); return /^[a-z0-9_-]{1,60}$/.test(x) ? x : ""; };
-/** Logo của một ứng dụng Composio: tệp có sẵn trong public/connectors, không có thì ảnh tải hộ qua proxy (icon). */
+/** Logo của một ứng dụng Composio: tệp có sẵn, không có thì biểu tượng trang chủ qua proxy (icon) nếu biết trang chủ, không thì {} (chữ cái đầu). */
 export function appLogo(slug: string): { logo?: string; icon?: string } {
   const s = appSlug(slug);
   if (!s) return {};
   const own = bundledLogo(s);
-  return own ? { logo: own } : { icon: `/api/favicon?app=${s}` };
+  if (own) return { logo: own };
+  // Logo hãng trong public/logos giữ màu thương hiệu (Hugging Face, Microsoft…): hiện thẳng như ảnh. Logo kiểu mặt nạ cần tô màu nên bỏ qua.
+  if (Object.hasOwn(FILE_LOGOS, s) && FILE_LOGOS[s].mode === "img" && !FILE_LOGOS[s].src) return { icon: logoSrc(s) };
+  return Object.hasOwn(APP_SITES, s) ? { icon: `/api/favicon?app=${s}` } : {};
 }
 /** Ứng dụng mà một lời gọi công cụ Composio nhắm tới: tool_slug đầu tiên (GMAIL_FETCH_EMAILS → gmail) hoặc toolkits[0]. Không rõ: "". */
 export function composioAppOf(input: unknown): string {

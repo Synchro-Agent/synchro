@@ -1,5 +1,14 @@
 // Bản dịch cho các trạng thái lỗi, tải, trống và trợ năng (trang lỗi, thẻ lỗi của lượt chat, phiên hết hạn, làm quen tài khoản mới…).
 export const UX_VI2EN: Record<string, string> = {
+  "Mở trang kết nối": "Open the connect page",
+  "Composio từ chối khóa này. Hãy kiểm tra lại khóa ck_ ở Composio → Settings → Sessions & API Key.": "Composio rejected this key. Check your ck_ key in Composio → Settings → Sessions & API Key.",
+  "Quản trị viên chưa cho phép tài khoản của bạn dùng Composio.": "Your administrator hasn't allowed Composio for your account.",
+  "Khóa Composio không hợp lệ. Khóa người dùng của Composio bắt đầu bằng ck_ (Composio → Settings → Sessions & API Key).": "That Composio key isn't valid. A Composio user key starts with ck_ (Composio → Settings → Sessions & API Key).",
+  "Đã liên kết Composio. Hãy gửi lại yêu cầu của bạn.": "Composio is linked. Send your request again.",
+  "Liên kết tài khoản Composio của bạn để Synchro dùng Gmail, Slack, Notion và các ứng dụng khác bạn liên kết trên Composio.": "Link your Composio account so Synchro can use Gmail, Slack, Notion and the other apps you link on Composio.",
+  "Liên kết Composio": "Link Composio",
+  "Chưa liên kết": "Not linked",
+  "Cần liên kết lại": "Needs relinking",
   // Trang lỗi, 404, khung lỗi
   "Synchro gặp lỗi khi hiển thị trang này": "Synchro hit an error showing this page",
   "Đoạn chat và phần bạn đang gõ vẫn còn. Tải lại trang để dùng tiếp.": "Your chats and what you were typing are still here. Reload the page to continue.",
@@ -98,6 +107,26 @@ export const UX_RULES_EN: [RegExp, (m: RegExpMatchArray) => string][] = [
 ];
 // Chữ tiếng Anh của Cài đặt (phần gốc viết bằng tiếng Anh, giao diện tiếng Việt dịch sang).
 export const UX_EN2VI: Record<string, string> = {
+  "Each person links their own Composio account to use Gmail, Slack, GitHub, Notion and 1000+ other apps in chat.": "Mỗi người tự liên kết tài khoản Composio của mình để dùng Gmail, Slack, GitHub, Notion và hơn 1000 ứng dụng khác trong chat.",
+  "Linked Composio": "Đã liên kết Composio",
+  "Unlink Composio?": "Ngắt liên kết Composio?",
+  "Synchro will forget your Composio sign-in. Your apps stay linked on Composio, and you can link again any time.": "Synchro sẽ quên đăng nhập Composio của bạn. Các ứng dụng vẫn được liên kết trên Composio, bạn có thể liên kết lại bất cứ lúc nào.",
+  "Unlink": "Ngắt liên kết",
+  "Unlinked Composio": "Đã ngắt liên kết Composio",
+  "Not linked": "Chưa liên kết",
+  "Composio rejected the key": "Composio từ chối khóa",
+  "Sign-in expired": "Phiên đăng nhập đã hết hạn",
+  "Linked with an API key": "Đã liên kết bằng khóa API",
+  "Linked": "Đã liên kết",
+  "Open Composio to link apps": "Mở Composio để liên kết ứng dụng",
+  "Your Composio": "Composio của bạn",
+  "Link Composio": "Liên kết Composio",
+  "Link your own Composio account once. Then link apps such as Gmail, Slack, Notion and Google Drive on Composio's website: Synchro picks them up automatically and uses them in your chats.": "Liên kết tài khoản Composio của bạn một lần. Sau đó liên kết các ứng dụng như Gmail, Slack, Notion, Google Drive trên trang web của Composio: Synchro tự cập nhật và dùng chúng trong các cuộc trò chuyện.",
+  "Use a Composio API key instead of signing in": "Dùng khóa API Composio thay cho đăng nhập",
+  "Save key": "Lưu khóa",
+  "Find it in Composio → Settings → Sessions & API Key. Synchro checks the key with Composio, then stores it encrypted.": "Lấy khóa ở Composio → Settings → Sessions & API Key. Synchro kiểm tra khóa với Composio rồi lưu ở dạng mã hóa.",
+  "Sign in to Composio again": "Đăng nhập lại Composio",
+  "Waiting for you to sign in…": "Đang chờ bạn đăng nhập…",
   "Changed Replicate image limits": "Đã đổi hạn mức ảnh Replicate", "Replicate images per day": "Ảnh Replicate mỗi ngày",
   "Waiting for a Replicate key in Providers. Until then images use each person's own plan and these caps have no effect.": "Đang chờ khóa Replicate ở Providers. Tới lúc đó ảnh vẫn tạo bằng gói của từng người và các hạn mức này chưa có tác dụng.",
   "Images made with the shared Replicate key are billed to its account, about $0.06 each. Past a cap, people make images with their own plan until the next day (UTC). Made today:": "Ảnh tạo bằng khóa Replicate dùng chung được tính tiền vào tài khoản đó, khoảng 0,06 USD mỗi ảnh. Quá hạn mức thì mọi người tạo ảnh bằng gói của mình tới hết ngày (UTC). Đã tạo hôm nay:",
