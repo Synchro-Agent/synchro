@@ -67,5 +67,14 @@ ok(/className="overlay ft-lightbox"/.test(lb) && /role="dialog" aria-modal="true
   ok(/\.sp-credit-wait \{/.test(css) && /\.sp-wait-card \{/.test(css), "Speech: kiểu khối giả có trong speech.css");
 }
 
+// U13: sơ đồ Mermaid trong câu trả lời không cao hơn màn hình; có nút phóng to cả màn hình.
+{
+  const md = read("app/md.tsx"), css = read("app/globals.css");
+  ok(/if \(lang === "mermaid"\) return <MermaidCard code=\{code\} \/>;/.test(md), "sơ đồ Mermaid trong chat dùng khung có nút phóng to");
+  ok(/\.viz-mm \.art-mermaid svg\{max-height:min\(70vh,520px\)\}/.test(css), "sơ đồ cao tối đa min(70vh, 520px)");
+  ok(/aria-label=\{tr\("Phóng to sơ đồ"\)\}/.test(md) && /role="dialog" aria-modal="true" aria-label=\{tr\("Sơ đồ"\)\}/.test(md) && /e\.key === "Escape"/.test(md), "nút phóng to có tên, khung cả màn hình là hộp thoại có tên, Esc đóng");
+  ok(en("Phóng to sơ đồ") === "Enlarge diagram", "bản tiếng Anh của nút phóng to");
+}
+
 console.log(`\n${pass} đạt, ${fail} hỏng`);
 if (fail) process.exit(1);

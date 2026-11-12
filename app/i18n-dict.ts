@@ -421,6 +421,8 @@ Object.assign(VI2EN, { "Model báo lỗi nên lượt này chưa xong. Hãy th�
 
 // Khung xem Excel / CSV (officeview.ts): nút thu bảng cho vừa khung.
 Object.assign(VI2EN, { "Vừa chiều rộng": "Fit width", "Kích thước thật": "Actual size" });
+// Sơ đồ Mermaid trong câu trả lời (md.tsx MermaidCard).
+Object.assign(VI2EN, { "Phóng to sơ đồ": "Enlarge diagram" });
 
 export const RULES_EN: [RegExp, (m: RegExpMatchArray) => string][] = [
   [/^(.+) không phản hồi sau (.+)\. Hãy thử lại hoặc chọn model khác\.$/, (m) => `${m[1]} did not respond within ${m[2].replace("giây", "seconds").replace("phút", "minutes")}. Try again or pick another model.`],
