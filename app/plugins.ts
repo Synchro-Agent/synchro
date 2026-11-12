@@ -646,6 +646,7 @@ export function setPref(uid: string, id: string, p: { enabled?: boolean; everywh
   const cur = d.prepare("SELECT enabled, everywhere FROM plugin_prefs WHERE user_id = ? AND plugin_id = ?").get(uid, id) as Pref | undefined;
   d.prepare("INSERT INTO plugin_prefs (user_id, plugin_id, enabled, everywhere) VALUES (?, ?, ?, ?) ON CONFLICT(user_id, plugin_id) DO UPDATE SET enabled = excluded.enabled, everywhere = excluded.everywhere")
     .run(uid, id, typeof p.enabled === "boolean" ? (p.enabled ? 1 : 0) : cur?.enabled ?? null, typeof p.everywhere === "boolean" ? (p.everywhere ? 1 : 0) : cur?.everywhere ?? null);
+  bumpPrefs();
 }
 
 // ---------------------------------------------------------------- bộ đệm thư viện (dùng trong chat)
@@ -743,6 +744,7 @@ export function setStudioOverride(uid: string, studio: Studio, name: string, on:
   const d = overrideDb();
   if (on === null) d.prepare("DELETE FROM skill_studio_user WHERE user_id = ? AND studio = ? AND name = ?").run(uid, studio, name);
   else d.prepare("INSERT OR REPLACE INTO skill_studio_user (user_id, studio, name, added, at) VALUES (?, ?, ?, ?, ?)").run(uid, studio, name, on ? 1 : 0, Date.now());
+  bumpPrefs();
 }
 export function studioSkills(uid: string, studio: Studio, act = active(uid)): { skills: Skill[]; plugins: string[]; auto: { name: string; from: string }[]; autoTotal: number; curated: number; catalogLibs: number } {
   const tagged = snap().tagged[studio];
@@ -763,12 +765,41 @@ export function studioSkills(uid: string, studio: Studio, act = active(uid)): { 
   return { skills, plugins: [...ps.map((p) => p.name), ...(mine.length ? [MINE_LABEL] : []), ...own.map((o) => o.p.name)], auto, autoTotal, curated, catalogLibs: cat.length };
 }
 export type StudioInfo = { name: string; skills: number; autoTotal: number; catalogLibs: number; auto: { name: string; from: string }[] };
-/** Cho trang Artifacts (?view=meta, gửi mỗi lần mở trang nên phải nhỏ): mỗi studio có bao nhiêu skill, từ đâu, vài skill được tự thêm; đủ số ở autoTotal, cả danh sách ở studioPage. */
-export function studioSummary(uid: string) {
+// Trang Artifacts hỏi lại mỗi lần mở; mỗi lần tính lại là duyệt cả ~18.000 skill của danh mục cho ba mục (vài chục tới hơn trăm ms chặn cả
+// máy chủ). Kết quả giữ theo (người dùng, plRev, tagRev, prefsRev): thư viện, nhãn mục hay lựa chọn riêng (plugin_prefs, thêm / bỏ skill ở
+// từng mục) đổi thì bỏ hết. Skill riêng của người dùng (Kho kỹ năng) không đi qua các mốc đó: so thêm dấu của bảng skills (số skill, đang bật,
+// lần sửa cuối), và bộ đệm thư viện (snap) đã dựng lại (hạn 6 giờ, cài hàng loạt) thì cũng tính lại. Tối đa SUMMARY_MAX người.
+type StudioSummary = Partial<Record<Studio, StudioInfo>>;
+type SummaryMemo = { revs: string; map: Map<string, { cache: Cache; fp: string; v: StudioSummary }> };
+const SG = globalThis as unknown as { __prefsRev?: number; __sumMemo?: SummaryMemo };
+export const prefsRev = () => SG.__prefsRev ?? 0;
+const bumpPrefs = () => { SG.__prefsRev = prefsRev() + 1; };
+const SUMMARY_MAX = 500;
+const userSkillsSig = (uid: string) => {
+  const r = init().prepare("SELECT COUNT(*) AS n, COALESCE(SUM(enabled), 0) AS e, COALESCE(MAX(updated_at), 0) AS u FROM skills WHERE user_id = ?").get(uid) as { n: number; e: number; u: number };
+  return `${r.n}:${r.e}:${r.u}`;
+};
+function computeSummary(uid: string): StudioSummary {
   const act = active(uid);
   return Object.fromEntries(STUDIOS.map((s) => { const r = studioSkills(uid, s, act); return [s, { name: r.plugins.slice(0, 6).join(", "), skills: r.skills.length, autoTotal: r.autoTotal, catalogLibs: r.catalogLibs, auto: r.auto }]; })
-    .filter(([, v]) => (v as StudioInfo).skills > 0)) as Partial<Record<Studio, StudioInfo>>;
+    .filter(([, v]) => (v as StudioInfo).skills > 0)) as StudioSummary;
 }
+/** Cho trang Artifacts (?view=meta, gửi mỗi lần mở trang nên phải nhỏ): mỗi studio có bao nhiêu skill, từ đâu, vài skill được tự thêm; đủ số ở autoTotal, cả danh sách ở studioPage. */
+export function studioSummary(uid: string): StudioSummary {
+  const revs = `${CG.__plRev ?? 0}|${tagRev()}|${prefsRev()}`;
+  let m = SG.__sumMemo;
+  if (!m || m.revs !== revs) m = SG.__sumMemo = { revs, map: new Map() };
+  const cache = snap(), fp = userSkillsSig(uid), hit = m.map.get(uid);
+  if (hit && hit.cache === cache && hit.fp === fp) { m.map.delete(uid); m.map.set(uid, hit); return hit.v; }
+  const v = computeSummary(uid);
+  // computeSummary có thể đã dựng lại bộ đệm thư viện: ghi theo bản nó đã dùng.
+  m.map.delete(uid);
+  m.map.set(uid, { cache: snap(), fp, v });
+  if (m.map.size > SUMMARY_MAX) { const oldest = m.map.keys().next().value; if (oldest !== undefined) m.map.delete(oldest); }
+  return v;
+}
+/** Số người đang có kết quả studioSummary trong bộ nhớ (kiểm thử). */
+export const studioSummaryMemoSize = () => SG.__sumMemo?.map.size ?? 0;
 const PAGE = 40;
 /** Danh sách skill của một studio theo trang, có tìm kiếm: một mục có thể có hàng nghìn skill, không gửi hết về trình duyệt. */
 export function studioPage(uid: string, studio: Studio, q = "", offset = 0) {
@@ -803,6 +834,7 @@ export async function removeUserPlugins(uid: string) {
   for (const id of ids) await removePlugin(id);
   init().prepare("DELETE FROM plugin_prefs WHERE user_id = ?").run(uid);
   overrideDb().prepare("DELETE FROM skill_studio_user WHERE user_id = ?").run(uid);
+  bumpPrefs();
 }
 export { isText };
 
