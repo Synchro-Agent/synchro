@@ -424,6 +424,11 @@ export function createBrowser(host) {
         if (n !== c) return ack();
         lastFrame = Date.now();
         if (lastFrame < dropUntil) { dropUntil = 0; return ack(); }
+        // Chrome thỉnh thoảng giao khung cũ hơn sau khung mới (nhất là khi máy bận, lúc phát lại sau đổi mật độ chụp): khung chụp lúc 25,718 s
+        // tới sau khung 25,735 s. Gửi nó đi thì màn hình giật lùi một nhịp khi đang cuộn và vị trí cuộn kèm khung đi lùi (900 → 800).
+        // Bỏ khung có thời điểm chụp sớm hơn khung mới nhất đã nhận của kết nối này.
+        const ts = p.metadata?.timestamp;
+        if (Number.isFinite(ts)) { if (ts < (n.lastTs ?? 0)) { stat.drop++; return ack(); } n.lastTs = ts; }
         stat.cast++; stat.jpg += p.data.length * 0.75; if (latest) stat.drop++;
         if (stat.inAt) { stat.inLat.push(lastFrame - stat.inAt); stat.inAt = 0; }
         latest?.ack();
