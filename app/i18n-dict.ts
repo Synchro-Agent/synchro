@@ -1816,3 +1816,8 @@ RULES_EN.push(
   [/^Kết nối (.+) qua Composio để Synchro dùng được ứng dụng này\.$/, (m) => `Connect ${m[1]} through Composio so Synchro can use this app.`],
   [/^Kết nối ([A-Za-z0-9][A-Za-z0-9 .+&-]*)$/, (m) => `Connect ${m[1]}`],
 );
+// Dòng tổng kết của lượt trả lời (worktone.ts): lỗi công cụ còn lại / bước model đã thử lại.
+RULES_EN.push(
+  [/^(\d+) lỗi$/, (m) => `${m[1]} failed`],
+  [/^(\d+) bước đã thử lại$/, (m) => `${m[1]} ${m[1] === "1" ? "step" : "steps"} retried`],
+);

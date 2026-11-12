@@ -11,6 +11,7 @@ import { IMAGE_PLANS } from "./catalog";
 import { refreshModels, useModels } from "./models";
 import { serverNow } from "./clock";
 import { ConnLogo } from "./connlogo";
+import { toolErrNote } from "./worktone";
 // Thẻ kết nối lại chỉ cần khi connector mất đăng nhập: không kéo cả màn hình Connectors vào phần tải đầu của trang chat.
 const ReconnectCard = lazyView(() => import("./connectorsui").then((m) => m.ReconnectCard), null);
 
@@ -99,7 +100,7 @@ function useNow(on: boolean) {
   useEffect(() => { if (!on) return; setNow(serverNow()); const t = setInterval(() => setNow(serverNow()), 1000); return () => clearInterval(t); }, [on]);
   return now;
 }
-function ToolGroup({ items, live }: { items: ToolItem[]; live: boolean }) {
+function ToolGroup({ items, live, failed, stopped }: { items: ToolItem[]; live: boolean; failed?: boolean; stopped?: boolean }) {
   const [open, setOpen] = useState(false);
   const running = live && items.some((x) => x.ok === undefined);
   const now = useNow(running);
@@ -107,16 +108,17 @@ function ToolGroup({ items, live }: { items: ToolItem[]; live: boolean }) {
   const cur = running ? items.filter((x) => x.ok === undefined && x.at).sort((a, b) => a.at! - b.at!)[0] : undefined;
   const runMs = cur?.at ? now - cur.at : 0;
   const bad = items.filter((x) => x.ok === false).length;
+  const note = toolErrNote(bad, { live, failed, stopped });
   const label = items.length === 1 ? toolLabel(items[0].label) : `${tr("Đã dùng")} ${items.length} ${tr("công cụ")}`;
   // Logo các connector đã dùng trong nhóm (tối đa 3, mỗi connector một lần) ở dòng tiêu đề.
   const heads = [...new Map(items.filter((x) => x.c).map((x) => [x.c!.name, x.c!])).values()].slice(0, 3);
   return (
     <div className={`wl-tools ${open ? "open" : ""}`}>
       <button className="wl-tools-h" aria-expanded={open} onClick={() => setOpen(!open)}>
-        {running ? <span className="wl-spin" /> : bad ? <I.Alert size={13} /> : null}
+        {running ? <span className="wl-spin" /> : note ? (note.tone === "soft" && !live && !stopped ? <I.Retry size={13} /> : <I.Alert size={13} />) : null}
         {heads.length > 0 && <span className="wl-clogos">{heads.map((c) => <ConnLogo key={c.name} logo={c.logo} color={c.color} icon={c.icon} site={c.site} name={c.name} size={16} />)}</span>}
         <span data-notr={items.length === 1 ? true : undefined}>{label}</span>
-        {bad > 0 && <em>{bad} {tr("lỗi")}</em>}
+        {note && <em className={note.tone === "soft" ? "soft" : undefined}>{tr(note.text)}</em>}
         {bad === 1 && items.length === 1 && items[0].sum ? <small className="wl-fail" data-notr title={tr(items[0].sum)}>{tr(items[0].sum)}</small> : null}
         {cur ? <span className="wl-tsec" aria-hidden="true">{secs(runMs)}</span> : null}
         <I.ChevronR size={13} />
@@ -187,14 +189,15 @@ function RateCard({ r }: { r: RatePart }) {
   );
 }
 /** Lời dẫn và công cụ của các bước đã qua; render: cách hiện chữ (Markdown) của trang. */
-export function WorkParts({ parts, live, render, onAnswer }: { parts: Part[]; live: boolean; render: (text: string) => React.ReactNode; onAnswer?: OnAnswer }) {
+// failed / stopped: lượt đã kết thúc bằng lỗi / bị dừng (chỉ khi live = false): quyết định lỗi công cụ hiện đỏ hay là bước đã thử lại (worktone.ts).
+export function WorkParts({ parts, live, render, onAnswer, failed, stopped }: { parts: Part[]; live: boolean; render: (text: string) => React.ReactNode; onAnswer?: OnAnswer; failed?: boolean; stopped?: boolean }) {
   return <>{parts.map((p, i) => (p.k === "say" ? <div key={i} className="wl-say">{render(p.text)}</div>
     : p.k === "ask" ? <AskCard key={p.id} a={!live && p.state === "wait" ? { ...p, state: "gone" } : p} onAnswer={live ? onAnswer : undefined} />
     : p.k === "conn" ? (live ? <ReconnectCard key={p.id} c={p} /> : null)
     : p.k === "plans" ? (live ? <PlansCard key={i} why={p.why} tried={p.tried} /> : null)
     : p.k === "link" ? (live ? <LinkCard key={p.url} l={p} /> : null)
     : p.k === "rate" ? (live ? <RateCard key={`rate-${p.name}`} r={p} /> : null)
-    : <ToolGroup key={i} items={p.items} live={live} />))}</>;
+    : <ToolGroup key={i} items={p.items} live={live} failed={failed} stopped={stopped} />))}</>;
 }
 /** Câu trả lời đã xong: nút kết nối lại vẫn hiện ngoài phần tổng kết thu gọn (người dùng vừa được bảo bấm nó). */
 // text: câu trả lời; link Connect Link đã có trong câu trả lời thì đã hiện thành nút ở đó (md.tsx), không lặp lại thẻ bên dưới.
@@ -225,11 +228,13 @@ export function ConnCards({ parts, text }: { parts?: Part[]; text?: string }) {
  * Câu trả lời đã xong: danh sách việc và nhật ký làm việc chỉ hiện lúc đang chạy; xong thì gom thành một dòng tổng kết (số việc đã xong,
  * số bước, thời gian), bấm vào để xem lại chi tiết. Câu trả lời cuối của model là phần tổng kết bằng lời.
  */
-export function WorkSummary({ parts, plan, ms, stopped, render }: { parts?: Part[]; plan?: PlanItem[]; ms?: number; stopped?: boolean; render: (text: string) => React.ReactNode }) {
+export function WorkSummary({ parts, plan, ms, stopped, failed, render }: { parts?: Part[]; plan?: PlanItem[]; ms?: number; stopped?: boolean; failed?: boolean; render: (text: string) => React.ReactNode }) {
   const [open, setOpen] = useState(false);
   const steps = stepsOf(parts), en = getLang() === "en";
   const total = plan?.length ?? 0, ok = plan?.filter((x) => x.status === "completed").length ?? 0;
   const bad = (parts ?? []).reduce((n, p) => n + (p.k === "tools" ? p.items.filter((x) => x.ok === false).length : 0), 0);
+  // Lượt xong bình thường: lỗi công cụ là bước model đã thử lại, màu thường; chỉ lượt kết thúc bằng lỗi mới tô đỏ.
+  const note = toolErrNote(bad, { failed, stopped });
   if (!steps && !total && !(parts ?? []).length) return null;
   const bits = [
     total ? (en ? `${ok}/${total} tasks done` : `Xong ${ok}/${total} việc`) : stopped ? (en ? "Stopped" : "Đã dừng") : en ? "Done" : "Đã xong",
@@ -241,14 +246,14 @@ export function WorkSummary({ parts, plan, ms, stopped, render }: { parts?: Part
       <button className="wl-sum-h" aria-expanded={open} onClick={() => setOpen(!open)}>
         <span className={`wl-sum-ic ${stopped || (total && ok < total) ? "part" : ""}`}>{stopped ? <I.Stop size={10} /> : <I.Check size={11} />}</span>
         <span>{bits.join(" · ")}</span>
-        {bad > 0 && <em>{bad} {tr("lỗi")}</em>}
+        {note && <em className={note.tone === "soft" ? "soft" : undefined}>{tr(note.text)}</em>}
         <span className="wl-sum-more">{open ? (en ? "Hide steps" : "Ẩn các bước") : en ? "Show steps" : "Xem các bước"}</span>
         <I.ChevronR size={13} />
       </button>
       {open && (
         <div className="wl-sum-b">
           {plan?.length ? <PlanCard plan={plan} live={false} /> : null}
-          {parts?.length ? <WorkParts parts={parts} live={false} render={render} /> : null}
+          {parts?.length ? <WorkParts parts={parts} live={false} failed={failed} stopped={stopped} render={render} /> : null}
         </div>
       )}
     </div>

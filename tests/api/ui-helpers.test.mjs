@@ -27,5 +27,18 @@ ok(/mất mạng/.test(E.termDown(null, false)) && /máy chủ/.test(E.termDown(
 ok(E.termDown({ available: false, reason: "Máy chủ chưa bật workspace." }, true) === "Máy chủ chưa bật workspace.", "terminal: nói đúng lý do máy chủ báo");
 ok(/đang tắt/.test(E.termDown({ available: true, running: false }, true)) && /vẫn chạy/.test(E.termDown({ available: true, running: true }, true)), "terminal: phân biệt workspace tắt và đang chạy");
 
+// U10: lỗi công cụ model đã thử lại không tô đỏ; chỉ lượt kết thúc bằng lỗi mới đỏ.
+{
+  const { worktone: W, "i18n-dict": D } = await loadTs(["worktone", "i18n-dict"]);
+  const en = (t) => D.VI2EN[t] ?? D.RULES_EN.map(([re, f]) => { const m = t.match(re); return m ? f(m) : null; }).find(Boolean);
+  ok(W.toolErrNote(0, {}) === null, "không có lỗi: không hiện gì");
+  const done = W.toolErrNote(1, {});
+  ok(done?.text === "1 bước đã thử lại" && done.tone === "soft", "lượt xong bình thường: 1 bước đã thử lại, màu thường", JSON.stringify(done));
+  const bad = W.toolErrNote(2, { failed: true });
+  ok(bad?.text === "2 lỗi" && bad.tone === "bad", "lượt lỗi: 2 lỗi, màu đỏ", JSON.stringify(bad));
+  ok(W.toolErrNote(1, { live: true })?.tone === "soft" && W.toolErrNote(1, { stopped: true })?.text === "1 lỗi", "đang chạy / bị dừng: chưa tô đỏ, chưa gọi là đã thử lại");
+  ok(en("1 bước đã thử lại") === "1 step retried" && en("3 bước đã thử lại") === "3 steps retried" && en("2 lỗi") === "2 failed", "bản tiếng Anh: step / steps retried, failed");
+}
+
 console.log(`\nKết quả: ${pass} đạt, ${fail} lỗi`);
 process.exit(fail ? 1 : 0);

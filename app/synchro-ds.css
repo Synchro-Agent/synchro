@@ -1104,6 +1104,8 @@ html[data-motion="reduced"] .chat-item .ct-run::after{animation:none}
 .wl-sum-ic{display:grid;place-items:center;width:18px;height:18px;flex:none;border-radius:50%;background:var(--ds-inv);color:var(--ds-inv-fg)}
 .wl-sum-ic.part{background:transparent;color:var(--ds-ink-2);box-shadow:inset 0 0 0 1.5px var(--ds-line-2)}
 .wl-sum-h em{font-style:normal;font-size:12px;color:#c4452e}
+/* Lỗi công cụ model đã thử lại, lượt vẫn xong: màu thường (worktone.ts). */
+.wl-sum-h em.soft{color:var(--ds-muted)}
 .wl-sum-more{color:var(--ds-faint);font-size:12.5px}
 .wl-sum-h>svg:last-child{flex:none;color:var(--ds-faint);transition:transform .2s var(--ds-ease)}
 .wl-sum.open .wl-sum-h>svg:last-child{transform:rotate(90deg)}
