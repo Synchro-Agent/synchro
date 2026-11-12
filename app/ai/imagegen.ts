@@ -184,10 +184,13 @@ async function grokTurn(r: Run, bin: string): Promise<Tried> {
     // Không chặn Edit, Write ở đây: Grok tính việc lưu ảnh là quyền edit, chặn thì image_gen luôn bị từ chối (đã đo trên CLI thật). --tools chỉ giữ image_gen nên model không có công cụ sửa tệp nào.
     "--tools", "image_gen", "--disallowed-tools", "search_tool,use_tool", ...GROK_DENY.filter((t) => t !== "Edit" && t !== "Write").flatMap((t) => ["--deny", t]), "--deny", "WebSearch", "--disable-web-search"];
   const watch = await watchSessions(r.login);
-  const p = spawnCli(bin, args, { env: r.env, cwd: r.work, stdin: "", signal: r.q.signal, timeoutMs: timeoutFor(r.count) });
-  cliRunning(r.login, p);
   let said = "", sid = "", called = false, failed = "", lastErr = "", paths: string[] = [];
   const named: unknown[] = [];
+  let p: ReturnType<typeof spawnCli>;
+  // Lỗi trước khối try bên dưới (không chạy được CLI…): vẫn kết thúc theo dõi phiên, kẻo việc dọn phiên của tài khoản phải chờ tới trần thời gian.
+  try { p = spawnCli(bin, args, { env: r.env, cwd: r.work, stdin: "", signal: r.q.signal, timeoutMs: timeoutFor(r.count) }); }
+  catch (e) { await watch.sweep().catch(() => {}); throw e; }
+  cliRunning(r.login, p);
   for await (const l of p.lines) {
     if (!l.trim().startsWith("{")) continue;
     let o: Record<string, unknown>;

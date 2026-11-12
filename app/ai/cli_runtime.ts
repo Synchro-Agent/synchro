@@ -98,14 +98,19 @@ export function removeSessionFiles(dir: string, id: string): Promise<void> {
 // Antigravity, Grok chỉ báo mã phiên khi xong lượt: bấm Dừng, quá giờ hay CLI chết thì không có mã để xóa, câu lệnh và ảnh dở nằm lại trong thư mục đăng nhập mà không ai quét lại.
 // Lượt tạo ảnh chụp danh sách mã phiên trước khi chạy rồi xóa các mã mới xuất hiện. Cùng tài khoản có thể có lượt chat chạy song song, phiên đó dùng để nối tiếp đoạn chat nên không được
 // xóa: còn lượt nào đang chạy thì chờ nó xong, mã lượt khác báo về (sessionSeen) được giữ lại. Lượt chat bị giết trước khi báo mã thì không ai nối tiếp được, xóa cũng không mất gì.
-type Watch = { live: number; watching: number; seen: Set<string>; idle: (() => void)[] };
+// "Đang chạy" gồm cả lượt đang theo dõi mà chưa xong việc (busy), không chỉ tiến trình CLI còn sống: lượt tạo ảnh của Antigravity chỉ đọc ảnh trong brain/<mã> SAU khi CLI thoát,
+// nên lượt nền (bộ não, bộ nhớ chạy bằng Antigravity sau mỗi lượt chat) dọn đúng lúc đó sẽ xóa mất thư mục ảnh vừa tạo ("CLI báo xong nhưng không có tệp ảnh nào").
+// Lượt nào cũng hết busy ngay khi gọi sweep() (đã đọc xong tệp của mình) nên các lượt chờ nhau không bao giờ kẹt.
+type Watch = { live: number; watching: number; busy: number; seen: Set<string>; idle: (() => void)[] };
 const watches: Map<string, Watch> = ((globalThis as { __synchroSessionWatch?: Map<string, Watch> }).__synchroSessionWatch ??= new Map());
-const watchOf = (dir: string) => { let w = watches.get(dir); if (!w) watches.set(dir, (w = { live: 0, watching: 0, seen: new Set(), idle: [] })); return w; };
+const watchOf = (dir: string) => { let w = watches.get(dir); if (!w) watches.set(dir, (w = { live: 0, watching: 0, busy: 0, seen: new Set(), idle: [] })); w.busy ??= 0; return w; };
+const quiet = (w: Watch) => !w.live && !w.busy;
+const flush = (w: Watch) => { if (quiet(w)) for (const f of w.idle.splice(0)) f(); };
 /** Một tiến trình CLI chạy trên thư mục đăng nhập này cho tới khi xong. */
 export function cliRunning(dir: string, p: { done: Promise<unknown> }) {
   const w = watchOf(dir);
   w.live++;
-  void p.done.finally(() => { w.live--; if (!w.live) for (const f of w.idle.splice(0)) f(); });
+  void p.done.finally(() => { w.live--; flush(w); });
 }
 /** Lượt khác báo mã phiên của nó: phiên đó không phải rác của lượt tạo ảnh. */
 export function sessionSeen(dir: string, id: string) { const w = watches.get(dir); if (w?.watching) w.seen.add(id); }
@@ -123,20 +128,31 @@ function sessionIds(dir: string): Promise<{ ids: Set<string>; ok: boolean }> {
 /** Chụp mã phiên trước lượt; sweep(): xóa các mã mới, ngay nếu không còn lượt nào chạy, không thì khi lượt cuối xong (chạy nền, không bắt người dùng chờ). */
 export async function watchSessions(dir: string) {
   const w = watchOf(dir);
-  w.watching++;
+  w.watching++; w.busy++;
+  // Lưới an toàn: lượt nào quên gọi sweep (lỗi giữa chừng) cũng chỉ giữ busy tới trần thời gian của một lượt, việc dọn của các lượt khác không bị treo mãi.
+  let held = true;
+  const unhold = () => { if (held) { held = false; w.busy--; } };
+  const timer = setTimeout(() => { unhold(); flush(w); }, MAX_TURN_MS + 60_000);
+  timer.unref?.();
   const before = await sessionIds(dir);
   const close = () => { if (--w.watching <= 0) w.seen.clear(); };
+  let swept = false;
   return {
     sweep: async () => {
+      if (swept) return;
+      swept = true;
+      clearTimeout(timer); unhold();
       // Không chụp được danh sách trước lượt thì không biết mã nào là mới: để sót còn hơn xóa nhầm phiên của đoạn chat.
-      if (!before.ok) { close(); return; }
+      if (!before.ok) { close(); flush(w); return; }
       const run = async (): Promise<void> => {
         const now = await sessionIds(dir);
-        if (w.live) { w.idle.push(() => void run()); return; }
+        // Kiểm lại sau khi chờ find: lượt khác có thể vừa bắt đầu (mã phiên của nó đã nằm trong now).
+        if (!quiet(w)) { w.idle.push(() => void run()); return; }
         for (const id of now.ids) if (!before.ids.has(id) && !w.seen.has(id)) await removeSessionFiles(dir, id);
         close();
       };
-      if (w.live) w.idle.push(() => void run()); else await run();
+      if (!quiet(w)) w.idle.push(() => void run());
+      else { const others = w.idle.splice(0); await run(); for (const f of others) f(); }
     },
   };
 }
