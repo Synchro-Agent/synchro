@@ -1,5 +1,6 @@
 // Độ trễ vòng lặp sự kiện (app/loopdelay.ts, bật trong instrumentation.ts): dòng "[timing] loop p50=… p99=… max=…" theo nhịp,
-// đặt lại sau mỗi lần ghi, giữ mẫu gần nhất cho trang sức khỏe. Không cần máy chủ.
+// đặt lại sau mỗi lần ghi, giữ mẫu gần nhất cho trang sức khỏe; ô "Độ trễ vòng lặp (p99)" ở Cài đặt → Sức khỏe hệ thống.
+// Phần 1–2 không cần máy chủ; phần 3 chạy trên npm run dev:mock (đổi địa chỉ bằng SYNCHRO_URL).
 import fs from "node:fs";
 import { loadTs } from "../lib/ts.mjs";
 
@@ -40,6 +41,24 @@ console.log("2. Bật lúc máy chủ khởi động");
 const inst = fs.readFileSync("instrumentation.ts", "utf8");
 ok(/import\("\.\/app\/loopdelay"\)\)\.startLoopMonitor\(/.test(inst), "instrumentation.ts gọi startLoopMonitor()");
 ok(/monitorEventLoopDelay\(\{ resolution: 20 \}\)/.test(fs.readFileSync("app/loopdelay.ts", "utf8").replace("resolution: RESOLUTION", "resolution: 20")), "lấy mẫu mỗi 20 ms");
+
+console.log("3. Cài đặt → Sức khỏe hệ thống");
+const { "i18n-vi": V } = await loadTs(["i18n-vi"]);
+ok(V.EN2VI["Event-loop delay (p99)"] === "Độ trễ vòng lặp (p99)", "nhãn ô có bản tiếng Việt", V.EN2VI["Event-loop delay (p99)"]);
+ok(/\["Event-loop delay \(p99\)", `\$\{h\.loop\.p99/.test(fs.readFileSync("app/healthui.tsx", "utf8")), "trang sức khỏe có ô Event-loop delay (p99)");
+const B = process.env.SYNCHRO_URL ?? "http://localhost:3200";
+let cookie = process.env.SYNCHRO_ADMIN_COOKIE ?? "";
+if (!cookie) {
+  const r = await fetch(`${B}/api/auth/login`, { method: "POST", headers: { "content-type": "application/json", origin: B }, body: JSON.stringify({ email: "admin@synchro.test", password: "synchro-mock-123" }) });
+  cookie = (r.headers.getSetCookie?.() ?? []).find((c) => c.startsWith("synchro_session="))?.split(";")[0] ?? "";
+}
+const hr = await fetch(`${B}/api/admin/health`, { headers: { cookie } });
+const h = await hr.json().catch(() => null);
+const lp = h?.loop;
+ok(hr.status === 200 && lp && [lp.p50, lp.p99, lp.max].every((x) => typeof x === "number" && Number.isFinite(x) && x >= 0) && lp.p50 <= lp.p99 && lp.p99 <= lp.max, `/api/admin/health có loop: p99 = ${lp?.p99} ms`, { status: hr.status, loop: lp });
+ok(typeof lp?.live === "boolean" && typeof lp?.windowSec === "number", "kèm khoảng đo và cờ live (phút đầu sau khởi động)", lp);
+const anon = await fetch(`${B}/api/admin/health`);
+ok(anon.status === 401, "chỉ quản trị viên xem được", anon.status);
 
 console.log(`\n${pass}/${pass + fail} đạt`);
 process.exit(fail ? 1 : 0);

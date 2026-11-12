@@ -108,7 +108,7 @@ export const OPS_EN2VI: Record<string, string> = {
   "Data disk": "Đĩa dữ liệu",
   "Workspace disk": "Đĩa workspace",
   "Workspace service": "Dịch vụ workspace",
-  "Server memory": "Bộ nhớ máy chủ", "Server memory (heap)": "Bộ nhớ máy chủ (heap)", "Heap used / limit": "Heap đã dùng / giới hạn", "Process memory (RSS)": "Bộ nhớ của tiến trình (RSS)",
+  "Server memory": "Bộ nhớ máy chủ", "Server memory (heap)": "Bộ nhớ máy chủ (heap)", "Event-loop delay (p99)": "Độ trễ vòng lặp (p99)", "Heap used / limit": "Heap đã dùng / giới hạn", "Process memory (RSS)": "Bộ nhớ của tiến trình (RSS)",
   "Outside the heap (external / buffers)": "Ngoài heap (external / buffer)", "Heap change": "Heap thay đổi",
   "Measured every 30 minutes and written to the server log as a [timing] mem line, so slow growth shows up before the server runs out.": "Đo mỗi 30 phút và ghi vào nhật ký máy chủ thành dòng [timing] mem, để thấy bộ nhớ lớn dần trước khi máy chủ hết chỗ.",
   "Skill index": "Chỉ mục skill", "Brain recall index": "Chỉ mục gọi lại của bộ não", "Semantic search vectors": "Vector tìm kiếm theo nghĩa", "Synchro Code runs kept": "Lượt Synchro Code đang giữ", "Downloaded plugin packages": "Gói plugin vừa tải",
