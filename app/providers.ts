@@ -8,6 +8,8 @@ import { DATA_DIR, db, getSetting, setSetting } from "./authstore";
 import { ALL, modelKey, splitKey, type ModelInfo, type ProviderInfo, type ProviderKind } from "./catalog";
 import { datedDuplicate, nonChat, providerPrice } from "./modelrules";
 import { isNewModel, regPinned, regShows, syncListed, untested, type Listed, type ModelCaps } from "./modelreg";
+import { brandHost, publicHost } from "./iconproxy";
+import { hostLogo } from "./vendorlogo";
 
 type Builtin = { kind: ProviderKind; name: string; vendor: string; base: string; keyUrl: string; prefix: string };
 export const BUILTIN: Record<string, Builtin> = {
@@ -239,6 +241,25 @@ const parse = (s: string) => { try { return JSON.parse(s) as { id: string; name:
 const stored = (r: Row) => parse(r.models).filter((m) => { const k = modelKey(r.id, m.id); return (isCurrent(r.kind, m.id) || regPinned(k)) && regShows(k); });
 const info = (key: string, id: string, name: string): ModelInfo => ({ key, id, name, ...(isNewModel(key) ? { isNew: true } : {}) });
 
+// Logo của nhà cung cấp tương thích OpenAI theo địa chỉ API: hãng đã biết (api.groq.com → groq), tên miền công khai khác → "site" (biểu tượng trang
+// tải hộ qua /api/favicon?p=<id>), địa chỉ nội bộ / máy riêng → không có (giao diện lấy logo theo dòng model hoặc chữ cái đầu).
+function logoHint(base: string): string | undefined {
+  let host = "";
+  try { host = new URL(base).host; } catch { return undefined; }
+  return hostLogo(host) ?? (providerSite(base) ? "site" : undefined);
+}
+/** Tên miền công khai để lấy biểu tượng trang của một nhà cung cấp (tên miền thương hiệu của địa chỉ API), null khi là địa chỉ nội bộ. */
+function providerSite(base: string): string | null {
+  try { const h = publicHost(new URL(base).hostname); return h ? publicHost(brandHost(h)) : null; } catch { return null; }
+}
+/** Biểu tượng trang của nhà cung cấp theo mã (cho /api/favicon?p=…): địa chỉ API chỉ đọc ở máy chủ. */
+export function providerSiteOf(id: string): string | null {
+  const r = rowById(id);
+  if (r) return r.kind === "compatible" && r.base_url ? providerSite(r.base_url) : null;
+  const v = envProvider();
+  return v && v.id === id && v.kind === "compatible" ? providerSite(v.base) : null;
+}
+
 // Mọi nhà cung cấp chat đang dùng được, kèm danh sách model (không gồm ElevenLabs vì chỉ dùng cho giọng nói).
 export async function catalog(): Promise<ProviderInfo[]> {
   const out: ProviderInfo[] = [];
@@ -246,10 +267,12 @@ export async function catalog(): Promise<ProviderInfo[]> {
   for (const r of rows()) {
     have.add(r.id);
     if (isService(r.kind)) continue;
-    out.push({ id: r.id, name: r.name, kind: r.kind, models: stored(r).map((m) => info(modelKey(r.id, m.id), m.id, m.name)) });
+    const logo = r.kind === "compatible" ? logoHint(r.base_url ?? "") : undefined;
+    out.push({ id: r.id, name: r.name, kind: r.kind, models: stored(r).map((m) => info(modelKey(r.id, m.id), m.id, m.name)), ...(logo ? { logo } : {}) });
   }
   const v = envProvider();
-  if (v && !have.has(v.id)) out.unshift({ id: v.id, name: v.name, kind: v.kind, models: (await envModels(v)).map((m) => info(modelKey(v.id, m.id), m.id, m.name)) });
+  const vlogo = v?.kind === "compatible" ? logoHint(v.base) : undefined;
+  if (v && !have.has(v.id)) out.unshift({ id: v.id, name: v.name, kind: v.kind, models: (await envModels(v)).map((m) => info(modelKey(v.id, m.id), m.id, m.name)), ...(vlogo ? { logo: vlogo } : {}) });
   return out.filter((p) => p.models.length);
 }
 

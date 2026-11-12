@@ -1,6 +1,8 @@
 "use client";
 // Logo của các hãng model (từ lobehub/icons, giấy phép MIT). OpenAI, Grok và ElevenLabs dùng currentColor để đổi theo giao diện sáng/tối.
-import { useId } from "react";
+import { useEffect, useId, useState } from "react";
+import { FILE_LOGOS, isFileLogo, logoSrc, modelLogo, providerLogo, type LogoPick, type ProviderHint } from "./vendorlogo";
+import { useModels } from "./models";
 
 type P = { size?: number };
 
@@ -51,9 +53,42 @@ function ElevenLabs({ size = 20 }: P) {
 
 const LOGOS: Record<string, (p: P) => React.ReactElement> = { anthropic: Claude, openai: OpenAI, google: Gemini, xai: Grok, deepseek: DeepSeek, elevenlabs: ElevenLabs };
 
-// Logo theo id nhà cung cấp; không có logo thì trả về null để nơi gọi tự hiện chữ cái đầu.
-export function BrandLogo({ id, size }: { id: string } & P) {
-  const L = LOGOS[id];
-  return L ? <L size={size} /> : null;
+// Logo tệp trong public/logos (app/vendorlogo.ts): giữ màu thương hiệu (<img>), hoặc tô một màu qua mask (màu thương hiệu, hay currentColor đổi theo sáng / tối).
+function FileLogo({ id, size = 20 }: { id: string } & P) {
+  const f = FILE_LOGOS[id], src = logoSrc(id);
+  if (f.mode === "img") return <img src={src} alt="" width={size} height={size} draggable={false} style={{ display: "block", flex: "none" }} />;
+  const m = `url(${src}) center / contain no-repeat`;
+  return <span aria-hidden style={{ display: "block", flex: "none", width: size, height: size, background: f.color ?? "currentColor", WebkitMask: m, mask: m }} />;
 }
-export const hasLogo = (id: string) => id in LOGOS;
+
+// Logo theo id nhà cung cấp / hãng; không có logo thì trả về null để nơi gọi tự hiện chữ cái đầu.
+export function BrandLogo({ id, size }: { id: string } & P) {
+  const L = Object.hasOwn(LOGOS, id) ? LOGOS[id] : undefined;
+  return L ? <L size={size} /> : isFileLogo(id) ? <FileLogo id={id} size={size} /> : null;
+}
+export const hasLogo = (id: string) => Object.hasOwn(LOGOS, id) || isFileLogo(id);
+
+/** Vẽ logo đã chọn (app/vendorlogo.ts) trong một ô cố định size×size: logo hãng, biểu tượng trang (lỗi thì chữ cái đầu), hoặc chữ cái đầu. */
+export function LogoMark({ pick, size = 16, className }: { pick: LogoPick; className?: string } & P) {
+  const site = "site" in pick ? pick.site : "";
+  const [bad, setBad] = useState(false);
+  useEffect(() => setBad(false), [site]);
+  const box = { width: size, height: size };
+  const cls = `vlogo${className ? ` ${className}` : ""}`;
+  if ("id" in pick && hasLogo(pick.id)) return <span className={cls} style={box} aria-hidden data-notr><BrandLogo id={pick.id} size={size} /></span>;
+  if (site && !bad) return <span className={cls} style={box} aria-hidden data-notr><img src={site} alt="" width={size} height={size} draggable={false} onError={() => setBad(true)} style={{ display: "block", borderRadius: Math.round(size / 4), objectFit: "contain" }} /></span>;
+  const mono = "mono" in pick ? pick.mono : "?";
+  return <span className={`${cls} vmono`} style={{ ...box, fontSize: Math.round(size * 0.62), borderRadius: Math.round(size / 4) }} aria-hidden data-notr>{mono}</span>;
+}
+
+/** Logo của một model theo khóa ("openai/gpt-6", "sub-claude/opus", "c-openrouter/meta-llama/llama-4"…): tìm nhà cung cấp trong danh sách model đã tải. */
+export function ModelLogo({ k, size = 16, className, name }: { k: string; className?: string; name?: string } & P) {
+  const { providers } = useModels();
+  const prov = k.slice(0, Math.max(0, k.indexOf("/")));
+  const p = providers.find((x) => x.models.some((m) => m.key === k)) ?? providers.find((x) => x.id === prov) ?? null;
+  return <LogoMark pick={modelLogo(k, p, name ?? p?.models.find((m) => m.key === k)?.name)} size={size} className={className} />;
+}
+/** Logo của một nhà cung cấp (dòng hãng trong bộ chọn model, thẻ Providers). */
+export function ProviderLogo({ p, size = 16, className }: { p: ProviderHint; className?: string } & P) {
+  return <LogoMark pick={providerLogo(p)} size={size} className={className} />;
+}

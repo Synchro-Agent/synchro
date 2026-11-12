@@ -13,7 +13,7 @@ import type { AuthUser, Providers } from "./auth";
 import { ALL, allowsModel, effortsFor, FEATURES, FULL_CONN, type ConnPolicy, type Effort, type Perms, type ProviderInfo } from "./catalog";
 import { DIRECTORY } from "./connectordir";
 const COMPOSIO = "composio";
-import { BrandLogo } from "./brands";
+import { ModelLogo } from "./brands";
 import type { ApiState } from "./apiui";
 import { refreshModels } from "./models";
 import { BulkBar, BulkButton, BulkCheck, bulkRow, each, useBulk, type BulkAct } from "./bulk";
@@ -141,7 +141,7 @@ function EffortLimits({ catalog, models, value, onChange }: { catalog: ProviderI
         const levels = effortsFor(p.kind).slice().reverse();
         return (
           <div key={m.key} className="adm-perm-row adm-eff-row">
-            <div className="adm-eff-name"><BrandLogo id={p.id} size={15} /><span data-notr>{m.name}</span></div>
+            <div className="adm-eff-name"><ModelLogo k={m.key} name={m.name} size={15} /><span data-notr>{m.name}</span></div>
             <span className="api-sel"><select aria-label={`Effort limit for ${m.name}`} value={cur[m.key] ?? ""} onChange={(e) => set(m.key, e.target.value as Effort | "")}>
               <option value="">{`Same as all models (${LEVEL[all].replace(/ \(.+\)$/, "")})`}</option>
               {levels.map((k) => <option key={k} value={k}>{k === levels[0] && k !== "max" ? `${LEVEL[k]} (model max)` : LEVEL[k]}</option>)}

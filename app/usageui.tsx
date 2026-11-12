@@ -11,7 +11,7 @@ import { useApp } from "./store";
 import { getLang, tr } from "./i18n";
 import * as I from "./icons";
 import { PageBar, usePage } from "./pager";
-import { BrandLogo } from "./brands";
+import { BrandLogo, ModelLogo } from "./brands";
 import { vendorOf } from "./router";
 
 export type Limit = { key: "session" | "weekly"; used: number; limit: number | null; pct: number; resetAt: number | null; active: boolean };
@@ -420,7 +420,7 @@ export function UsageSettings({ go }: { go?: (t: string) => void }) {
     const vc = VENDOR_COLOR[vendorKey(m.model)];
     return (
       <div key={m.model} className="us-li">
-        <div className="us-li-t"><b data-notr><i className="us-dot" style={{ background: vc }} />{modelName(m.model)}</b><span>{L(`Khóa API · ${num(m.calls)} lần gọi · vào ${kTok(m.input + m.cacheRead + m.cacheWrite)} · ra ${kTok(m.output)} · $${m.price.in} / $${m.price.out} mỗi 1 triệu token${m.price.src === "estimate" ? " (giá ước tính)" : ""}`, `API key · ${num(m.calls)} calls · ${kTok(m.input + m.cacheRead + m.cacheWrite)} in · ${kTok(m.output)} out · $${m.price.in} / $${m.price.out} per 1M tokens${m.price.src === "estimate" ? " (estimated price)" : ""}`)}</span></div>
+        <div className="us-li-t"><b data-notr><i className="us-dot" style={{ background: vc }} /><ModelLogo k={m.model} size={14} className="us-ml" />{modelName(m.model)}</b><span>{L(`Khóa API · ${num(m.calls)} lần gọi · vào ${kTok(m.input + m.cacheRead + m.cacheWrite)} · ra ${kTok(m.output)} · $${m.price.in} / $${m.price.out} mỗi 1 triệu token${m.price.src === "estimate" ? " (giá ước tính)" : ""}`, `API key · ${num(m.calls)} calls · ${kTok(m.input + m.cacheRead + m.cacheWrite)} in · ${kTok(m.output)} out · $${m.price.in} / $${m.price.out} per 1M tokens${m.price.src === "estimate" ? " (estimated price)" : ""}`)}</span></div>
         <em>{money(m.cost)}</em>
         <div className="us-li-bar"><i style={{ width: `${(m.cost / top) * 100}%`, background: vc }} /></div>
       </div>
@@ -567,7 +567,7 @@ export function UsageAdmin({ say, Toggle }: { say: (m: string) => void; Toggle: 
           <div className="us-pr h"><span>Model</span><span>Input</span><span>Output</span><span>Cache read</span><span /></div>
           {pgPr.items.map((p) => (
             <div key={p.model} className="us-pr">
-              <span data-notr>{modelName(p.model)} <i className={`us-src ${p.src}`}>{p.src === "official" ? "Official" : p.src === "custom" ? "Custom" : "Estimate"}</i></span>
+              <span data-notr><ModelLogo k={p.model} size={14} className="us-ml" />{modelName(p.model)} <i className={`us-src ${p.src}`}>{p.src === "official" ? "Official" : p.src === "custom" ? "Custom" : "Estimate"}</i></span>
               {(["in", "out", "cache"] as const).map((k) => <Money key={k} disabled={!owner} label={{ in: "Input", out: "Output", cache: "Cache read" }[k]} value={p[k]} placeholder="" onSave={(v) => v !== null && patch({ config: { prices: { [p.model]: { in: p.in, out: p.out, cache: p.cache, [k]: v } } } }, "Price saved")} />)}
               {p.src === "custom" && owner ? <button className="icon-btn" aria-label="Reset price" data-tip="Reset price" onClick={() => patch({ config: { prices: { [p.model]: null } } }, "Price reset")}><I.Retry size={14} /></button> : <span />}
             </div>

@@ -7,7 +7,8 @@ import { useApp } from "./store";
 import { call, ago } from "./adminui";
 import { refreshModels } from "./models";
 import type { ProviderInfo } from "./catalog";
-import { BrandLogo, hasLogo } from "./brands";
+import { LogoMark, ModelLogo } from "./brands";
+import { hostLogo, providerLogo } from "./vendorlogo";
 import { SettingsSkeleton } from "./skeleton";
 
 export type ApiProvider = {
@@ -23,8 +24,12 @@ const ROLE: Record<string, string> = { anthropic: "Chat, Code and Projects", ope
 const SERVICE = new Set(["elevenlabs", "composio", "replicate"]);
 
 // Logo của hãng trên ô nền trung tính; nhà cung cấp không có logo thì hiện chữ cái đầu.
+// Nhà cung cấp tương thích OpenAI: hãng nhận ra từ địa chỉ API (chủ sở hữu thấy địa chỉ), từ dòng model, hay biểu tượng trang qua /api/favicon?p=….
 function Mark({ p }: { p: ApiProvider }) {
-  return <span className="api-mark" aria-hidden data-notr>{hasLogo(p.id) ? <BrandLogo id={p.id} size={20} /> : p.name.slice(0, 1).toUpperCase()}</span>;
+  let hint = "site";
+  try { if (p.baseUrl) hint = hostLogo(new URL(p.baseUrl).host) ?? "site"; } catch {}
+  const pick = providerLogo({ id: p.id, kind: p.kind, name: p.name, logo: p.kind === "compatible" ? hint : undefined, models: p.models.map((m) => ({ id: m.key.slice(m.key.indexOf("/") + 1) })) });
+  return <span className="api-mark" aria-hidden data-notr>{"site" in pick || "id" in pick ? <LogoMark pick={pick} size={20} /> : pick.mono}</span>;
 }
 
 type WS = { need: boolean; list: { id: string; name: string }[] };
@@ -185,7 +190,7 @@ export function ProviderCard({ p, onChange, credit, bare = false }: { p: ApiProv
       {!edit && p.models.length > 0 && (
         <div className="api-models">
           <button className="api-adv" aria-expanded={showModels} onClick={() => setShowModels(!showModels)}><I.ChevronR size={13} /><span>{showModels ? "Hide models" : `View ${p.models.length} models`}{p.checkedAt && <span className="d">{` · checked ${ago(p.checkedAt)}`}</span>}</span></button>
-          {showModels && <div className="api-chips">{p.models.map((m) => <span key={m.key} className="api-chip" title={m.key} data-notr>{m.name}</span>)}</div>}
+          {showModels && <div className="api-chips">{p.models.map((m) => <span key={m.key} className="api-chip" title={m.key} data-notr><ModelLogo k={m.key} name={m.name} size={14} />{m.name}</span>)}</div>}
         </div>
       )}
     </div>

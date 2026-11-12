@@ -13,7 +13,7 @@ import { accountLimit, accountTotal, acquire, noteRefused, queuedOf, queueLimit,
 // plan: danh sách việc (JSON); steer: tin người dùng nhắn thêm đã được ghép vào lượt đang chạy; step / note: dòng trạng thái.
 // ui: yêu cầu giao diện mở một khung (vd. "browser" khi model bắt đầu dùng trình duyệt).
 // ask / asked: lượt đang chờ người dùng duyệt (JSON câu hỏi), và câu trả lời (JSON { id, ok, always }).
-export type RunEvent = { seq: number; at: number; kind: "step" | "tool" | "note" | "say" | "res" | "plan" | "steer" | "ui" | "ask" | "asked" | "conn" | "link" | "plans" | "rate"; text: string };
+export type RunEvent = { seq: number; at: number; kind: "step" | "tool" | "note" | "say" | "res" | "plan" | "steer" | "ui" | "ask" | "asked" | "conn" | "link" | "plans" | "rate" | "tconn"; text: string };
 export type RunStatus = "running" | "done" | "error";
 type Row = { id: string; user_id: string; conv: string | null; kind: string; status: RunStatus; req: string | null; result: string | null; http: number | null; events: string; created_at: number; updated_at: number; attempts: number; effects?: string | null };
 export type PublicRun = { id: string; status: RunStatus; conv: string | null; kind: string; events: RunEvent[]; result: unknown; http: number | null; createdAt: number; updatedAt: number };

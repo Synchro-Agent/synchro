@@ -6,6 +6,7 @@ import { clampEffort, connPolicy, effortCap, isEffort, legacyModel, type Effort 
 import { catalog, mainModels, pickDefault, resolveModel, type Target } from "./providers";
 import { ConnectorSession, connectorsPrompt, ensureComposio, listConnectors, RECONNECT_TOOL, type ChatTool, type OfflineConn } from "./connectors";
 import { appsMayChange, connectLinks } from "./composio";
+import { appLogo, composioAppOf } from "./connlogos";
 import { randomToken } from "./mcpauth";
 import { browserDefault, capsState, skillsOn } from "./caps";
 import { overLimit, usageScope } from "./usage";
@@ -398,11 +399,17 @@ const TYPED = "Người dùng vừa nhắn thêm thay vì trả lời thẻ duy�
 const TOOL_MIN = 60_000;
 const CALL_CANCELLED = "CLI đã hủy lời gọi này nên công cụ chưa chạy.";
 const REFUSED = "Người dùng đã từ chối cho dùng công cụ này ở lượt này. Đừng thử lại bằng cách khác; hãy cho họ biết bạn cần quyền này để làm tiếp.";
+// Logo cho thẻ duyệt / dòng công cụ: logo của connector; công cụ Composio chạy thao tác trong một ứng dụng (GMAIL_SEND_EMAIL…) thì logo của ứng dụng đó.
+function callLogo(ct: ChatTool, input: unknown): { logo?: string; color?: string; icon?: string; site?: string } {
+  const app = ct.composio ? composioAppOf(input) : "";
+  if (app) return appLogo(app);
+  return { logo: ct.logo, color: ct.color, ...(ct.icon ? { icon: ct.icon } : {}), ...(ct.site ? { site: ct.site } : {}) };
+}
 const askOf = (x: Exec, c: Call, id: string): Ask => {
   const ct = x.sess!.get(c.name)!;
   const a: Ask = {
     id, kind: "connector", tool: ct.tool.name, key: `conn:${ct.fq}`, title: ct.tool.title || ct.tool.annotations?.title || ct.tool.name, detail: "",
-    conn: { name: ct.cname, logo: ct.logo, color: ct.color, ...(ct.icon && ct.icon.length < 1500 ? { icon: ct.icon } : {}) },
+    conn: (() => { const lg = callLogo(ct, c.input); return { name: ct.cname, ...lg, ...(lg.icon && lg.icon.length >= 1500 ? { icon: undefined } : {}) }; })(),
     about: (ct.tool.description ?? "").slice(0, 300), destructive: destructiveLike(ct.tool),
   };
   // Sự kiện của lượt giữ tối đa 6000 ký tự: cắt ngang JSON thì thẻ không hiện được và lượt treo tới hết giờ.
@@ -481,7 +488,7 @@ function showReconnect(x: Exec, c: OfflineConn) {
   const seen = (x.connCards ??= new Set());
   if (seen.has(c.id)) return;
   seen.add(c.id);
-  progress("conn", JSON.stringify({ id: c.id, name: c.name, logo: c.logo, color: c.color, auth: c.auth, ...(c.refused ? { refused: true } : {}) }));
+  progress("conn", JSON.stringify({ id: c.id, name: c.name, logo: c.logo, color: c.color, ...(c.site ? { site: c.site } : {}), auth: c.auth, ...(c.refused ? { refused: true } : {}) }));
 }
 // Connect Link Composio vừa trả về: nút "Kết nối <ứng dụng>" ngay trong khung chat (mỗi đường link một lần trong lượt).
 function showLinks(x: Exec, content: string) {
@@ -490,7 +497,7 @@ function showLinks(x: Exec, content: string) {
     if (seen.has(l.url)) continue;
     seen.add(l.url);
     appsMayChange(x.uid);
-    progress("link", JSON.stringify(l));
+    progress("link", JSON.stringify({ ...l, ...appLogo(l.app) }));
   }
 }
 // Ảnh do connector trả về: lưu thành tệp cho người dùng tải; model nhận kèm kết quả nếu là loại ảnh các hãng đọc được và không quá lớn.
@@ -838,6 +845,13 @@ function noteEffects(x: Exec, calls: Call[], d: Record<string, Decision>) {
 async function execute(ad: Adapter, m: unknown[], x: Exec, calls: Call[], used: ToolRun["used"][], d: Record<string, Decision>) {
   noteEffects(x, calls, d);
   const seqs = calls.map((c) => (c.name === "update_plan" ? 0 : progress("tool", describe(x, c))));
+  // Dòng công cụ connector trong khung chat có logo của connector (icon ngắn; icon tự tìm dạng data URI dài thì dùng biểu tượng trang qua proxy).
+  calls.forEach((c, i) => {
+    const ct = seqs[i] ? x.sess?.get(c.name) : undefined;
+    if (!ct) return;
+    const lg = callLogo(ct, c.input);
+    progress("tconn", JSON.stringify({ ref: seqs[i], name: ct.cname, ...lg, ...(lg.icon && lg.icon.length >= 200 ? { icon: undefined } : {}) }));
+  });
   let res: Run[];
   try {
     res = await abortable(Promise.all(calls.map((c) => span(`tool ${c.name}`, "tool", () => runCall(x, c, d[c.id]), { "tool.name": c.name }))), runSignal());
@@ -934,7 +948,7 @@ async function loop(ad: Adapter, m: unknown[], x: Exec, used: ToolRun["used"][],
             const ct = x.sess!.get(c.name)!;
             const input = JSON.stringify(c.input ?? {});
             return {
-              id: c.id, connector: { id: ct.cid, name: ct.cname, logo: ct.logo, color: ct.color, icon: ct.icon },
+              id: c.id, connector: { id: ct.cid, name: ct.cname, ...callLogo(ct, c.input) },
               tool: { name: ct.tool.name, title: ct.tool.title || ct.tool.annotations?.title || ct.tool.name, description: (ct.tool.description ?? "").slice(0, 400), destructive: destructiveLike(ct.tool) },
               input: input.length > 20_000 ? { _: input.slice(0, 20_000) + "…" } : c.input ?? {},
               // Sửa tham số trước khi duyệt: chỉ khi tham số gửi đủ; schema để thẻ kiểm tra ngay (máy chủ kiểm tra lại khi chạy tiếp).

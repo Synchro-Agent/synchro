@@ -83,6 +83,15 @@ export function publicHost(raw: string): string | null {
   return h;
 }
 
+// Tên miền hai cấp phổ biến: thương hiệu nằm ở nhãn thứ ba từ phải (vd. example.co.uk).
+const TWO_LEVEL = new Set(["co.uk", "org.uk", "ac.uk", "com.au", "net.au", "co.jp", "co.kr", "com.vn", "com.br", "co.nz", "co.in", "com.sg", "com.cn", "com.tw", "com.hk"]);
+/** Tên miền thương hiệu của một máy chủ API / MCP (api.example.com, mcp.linear.app → example.com, linear.app): trang chủ có logo, máy chủ API thường không. */
+export function brandHost(host: string): string {
+  const parts = host.toLowerCase().replace(/\.$/, "").split(".");
+  const n = TWO_LEVEL.has(parts.slice(-2).join(".")) ? 3 : 2;
+  return parts.length > n ? parts.slice(-n).join(".") : parts.join(".");
+}
+
 /** Phản hồi ảnh: không cho chạy script kể cả khi mở thẳng (SVG), trình duyệt giữ một ngày. */
 export const iconResponse = (icon: Icon) => new Response(new Uint8Array(icon.buf), { headers: {
   "content-type": icon.mime, "content-length": String(icon.buf.length), "cache-control": "private, max-age=86400",

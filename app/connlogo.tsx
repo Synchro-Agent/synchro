@@ -21,25 +21,31 @@ function tileColor(img: HTMLImageElement): string | null {
   return full >= n * 0.9 ? `rgb(${Math.round(r / full)}, ${Math.round(g / full)}, ${Math.round(b / full)})` : null;
 }
 
-// Logo connector: logo có sẵn của danh mục, logo Synchro tự tìm (data URI, chỉ hiện trong <img>), hoặc chữ cái đầu.
-export function ConnLogo({ logo, color, icon, name, size = 36 }: { logo?: string; color?: string; icon?: string; name: string; size?: number }) {
+// Logo connector (app/connlogos.ts quyết định ở máy chủ): logo có sẵn (public/connectors), logo Synchro tự tìm (data URI) hoặc ảnh tải hộ
+// (/api/favicon?app=… của ứng dụng Composio), rồi biểu tượng trang của máy chủ MCP / máy chủ đăng nhập (site, /api/favicon?d=…), cuối cùng là chữ cái đầu.
+// Ảnh nào không tải được thì chuyển sang ảnh kế tiếp, không để ô ảnh vỡ. Mọi ảnh chỉ hiện trong <img> nên SVG có script cũng không chạy được.
+export function ConnLogo({ logo, color, icon, site, name, size = 36 }: { logo?: string; color?: string; icon?: string; site?: string; name: string; size?: number }) {
+  const srcs = [icon, site].filter((x): x is string => !!x);
+  const sig = srcs.join("\n");
+  // Ảnh đang thử (vị trí trong srcs); quá số ảnh là hết ảnh, hiện chữ cái đầu.
+  const [at, setAt] = useState(0);
+  const cur = srcs[at];
   // undefined: chưa đo (ẩn ảnh một nhịp cho khỏi nhảy cỡ); string: ảnh là một ô, màu nền của nó; null: logo nét.
-  const [tile, setTile] = useState<string | null | undefined>(() => (icon ? tiles.get(icon) : undefined));
-  // Ảnh không tải được (logo Composio chưa có, mất mạng): quay về chữ cái đầu, không để ô ảnh vỡ.
-  const [bad, setBad] = useState(false);
-  useEffect(() => { setTile(icon ? tiles.get(icon) : undefined); setBad(false); }, [icon]);
+  const [tile, setTile] = useState<string | null | undefined>(() => (cur ? tiles.get(cur) : undefined));
+  useEffect(() => { setAt(0); }, [sig]);
+  useEffect(() => { setTile(cur ? tiles.get(cur) : undefined); }, [cur]);
   const measure = (e: React.SyntheticEvent<HTMLImageElement>) => {
-    if (!icon) return;
-    if (!tiles.has(icon)) tiles.set(icon, tileColor(e.currentTarget));
-    setTile(tiles.get(icon));
+    if (!cur) return;
+    if (!tiles.has(cur)) tiles.set(cur, tileColor(e.currentTarget));
+    setTile(tiles.get(cur));
   };
-  const fill = !logo && !!icon && !bad && typeof tile === "string";
+  const fill = !logo && !!cur && typeof tile === "string";
   const px = fill ? size : Math.round(size * 0.62);
   return (
     <span className={`cn-logo${fill ? " tile" : ""}`} style={{ width: size, height: size, borderRadius: "25%", background: fill ? tile! : undefined }} aria-hidden>
-      {logo ? <img src={`/connectors/${logo}.svg`} alt="" width={Math.round(size * 0.55)} height={Math.round(size * 0.55)} />
-        : icon && !bad ? <img src={icon} alt="" width={px} height={px} onLoad={measure} onError={() => { setTile(null); setBad(true); }} style={{ objectFit: fill ? "cover" : "contain", visibility: tile === undefined ? "hidden" : undefined }} />
-        : <span className={`cn-mono ${color ? "" : "plain"}`} style={color ? { background: color } : undefined} data-notr>{name.trim().slice(0, 1).toUpperCase() || "?"}</span>}
+      {logo ? <img src={`/connectors/${logo}.svg`} alt="" width={Math.round(size * (logo === "composio" ? 0.66 : 0.55))} height={Math.round(size * (logo === "composio" ? 0.66 : 0.55))} />
+        : cur ? <img key={cur} src={cur} alt="" width={px} height={px} onLoad={measure} onError={() => { setTile(undefined); setAt((i) => i + 1); }} style={{ objectFit: fill ? "cover" : "contain", visibility: tile === undefined ? "hidden" : undefined }} />
+        : <span className={`cn-mono ${color ? "" : "plain"}`} style={{ ...(color ? { background: color } : {}), ...(size <= 16 ? { fontSize: Math.round(size * 0.6) } : {}) }} data-notr>{name.trim().slice(0, 1).toUpperCase() || "?"}</span>}
     </span>
   );
 }

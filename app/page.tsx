@@ -12,7 +12,7 @@ import { Boundary, Fade, Menu, Thinking } from "./ui";
 import { chatError, GENERIC_ERR, isForeign } from "./chaterror";
 import { armDraft, saveDraft, takeDraft } from "./draft";
 import { Lockup, Mark, SideToggle, Wordmark } from "./brand";
-import { BrandLogo } from "./brands";
+import { BrandLogo, ModelLogo, ProviderLogo } from "./brands";
 import { BulkBar, BulkCheck, bulkRow, useBulk, type BulkAct } from "./bulk";
 import { Pager, usePage } from "./pager";
 import { lazyView } from "./lazy";
@@ -311,7 +311,7 @@ function ModelPicker({ model, setModel }: { model: string; setModel: (m: string)
   const none = loaded && !providers.length;
   return (
     <div ref={mref} style={{ position: "relative" }} onKeyDown={(e) => { if (e.key === "ArrowLeft" && sub && (e.target as HTMLElement).closest(".model-sub")) setSub(null); }}>
-      <button className="model-btn" data-tip="Chọn model" aria-haspopup="menu" aria-expanded={mm} onPointerEnter={() => { if (!mm) refreshModels(); }} onClick={() => { setMm(!mm); setSub(null); }}>{none ? "Chưa có model" : model ? modelName(model) : "Chọn model"}{!(model === AUTO && autoEff) && <> <span className="muted">{eLabel}</span></>}<I.Chevron size={14} /></button>
+      <button className="model-btn" data-tip="Chọn model" aria-haspopup="menu" aria-expanded={mm} onPointerEnter={() => { if (!mm) refreshModels(); }} onClick={() => { setMm(!mm); setSub(null); }}>{!none && model ? (model === AUTO ? <span className="vlogo" style={{ width: 16, height: 16 }} aria-hidden><I.Sparkle size={15} /></span> : <ModelLogo k={model} />) : null}{none ? "Chưa có model" : model ? modelName(model) : "Chọn model"}{!(model === AUTO && autoEff) && <> <span className="muted">{eLabel}</span></>}<I.Chevron size={14} /></button>
       <Menu open={mm} className="model-menu" style={{ position: "absolute", ...(shift ? { translate: `${shift}px 0` } : {}) }}>
         {none && (
           <div className="mempty">
@@ -322,7 +322,7 @@ function ModelPicker({ model, setModel }: { model: string; setModel: (m: string)
         )}
         {!none && (
           <button className="menu-item mline mauto" onClick={() => pick(AUTO)} onMouseEnter={() => setSub(null)}>
-            <span className="mauto-t"><b>Tự động</b><em>{`Chọn qua mọi hãng đã kết nối${providers.length ? ` (${providers.map((p) => p.name).join(", ")})` : ""}: việc dễ dùng model nhanh, việc khó dùng model mạnh nhất hợp với việc đó`}</em></span>{model === AUTO && <span className="ck"><I.Check /></span>}
+            <span className="vlogo mauto-ic" style={{ width: 16, height: 16 }} aria-hidden><I.Sparkle size={15} /></span><span className="mauto-t"><b>Tự động</b><em>{`Chọn qua mọi hãng đã kết nối${providers.length ? ` (${providers.map((p) => p.name).join(", ")})` : ""}: việc dễ dùng model nhanh, việc khó dùng model mạnh nhất hợp với việc đó`}</em></span>{model === AUTO && <span className="ck"><I.Check /></span>}
           </button>
         )}
         {!none && <hr />}
@@ -330,7 +330,7 @@ function ModelPicker({ model, setModel }: { model: string; setModel: (m: string)
         {!loaded && <div className="mload" role="status"><span className="art-spin sm" /><span>Đang tải danh sách model…</span></div>}
         {providers.map((pv) => (
           <button key={pv.id} aria-haspopup="menu" aria-expanded={sub === pv.id} className={`menu-item mline mprov ${sub === pv.id ? "is-sel" : ""}`} onClick={(e) => hoverProv(pv.id, e.currentTarget)} onMouseEnter={(e) => hoverProv(pv.id, e.currentTarget)}>
-            {pv.name}<span className="sc">{pv.models.some((m) => m.key === model) && <i className="dot" />}<I.ChevronR size={16} /></span>
+            <ProviderLogo p={pv} /><span className="mname-t" data-notr>{pv.name}</span><span className="sc">{pv.models.some((m) => m.key === model) && <i className="dot" />}<I.ChevronR size={16} /></span>
           </button>
         ))}
         {!none && <hr />}
@@ -358,7 +358,7 @@ function ModelPicker({ model, setModel }: { model: string; setModel: (m: string)
             <MsubBody on={sub === pv.id} count={pv.models.length} place={placeSub}>
             {pv.models.map((m) => (
               <button key={m.key} className={`menu-item mline ${ok(m.key) ? "" : "locked"}`} onClick={() => pick(m.key)} title={ok(m.key) ? m.id : "Quản trị viên chưa cho phép tài khoản của bạn dùng model này"}>
-                <span className="mname-t">{m.name}</span>{m.isNew && !m.blockedUntil ? <span className="mtag mnew" title="Hãng vừa ra mắt, Synchro đã thử và cho dùng">Mới</span> : null}{m.blockedUntil ? <span className="mtag" title={new Date(m.blockedUntil).toLocaleString(getLang() === "en" ? "en-US" : "vi-VN", { weekday: "short", hour: "2-digit", minute: "2-digit" })}>{getLang() === "en" ? "Limit reached" : "Hết hạn mức"}</span> : null}{m.key === model ? <span className="ck"><I.Check /></span> : !ok(m.key) && <span className="sc"><I.Lock size={14} /></span>}
+                <ModelLogo k={m.key} name={m.name} /><span className="mname-t">{m.name}</span>{m.isNew && !m.blockedUntil ? <span className="mtag mnew" title="Hãng vừa ra mắt, Synchro đã thử và cho dùng">Mới</span> : null}{m.blockedUntil ? <span className="mtag" title={new Date(m.blockedUntil).toLocaleString(getLang() === "en" ? "en-US" : "vi-VN", { weekday: "short", hour: "2-digit", minute: "2-digit" })}>{getLang() === "en" ? "Limit reached" : "Hết hạn mức"}</span> : null}{m.key === model ? <span className="ck"><I.Check /></span> : !ok(m.key) && <span className="sc"><I.Lock size={14} /></span>}
               </button>
             ))}
             </MsubBody>
@@ -478,8 +478,8 @@ function Composer(p: {
   const [at, setAt] = useState<{ start: number; end: number; q: string } | null>(null);
   const [atSel, setAtSel] = useState(0);
   const foldAt = (x: string) => x.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/gi, "d").toLowerCase();
-  const atList = at && cx ? [...(cxMain && cxMain.enabled ? [{ id: cxMain.id, name: "Composio", logo: undefined as string | undefined, color: "#5B4BDB", icon: undefined as string | undefined }] : []),
-    ...cx.connectors.filter((c) => c.enabled && !c.adminBlocked && c.status === "ok").map((c) => ({ id: c.id, name: c.name, logo: c.logo, color: c.color, icon: c.icon }))]
+  const atList = at && cx ? [...(cxMain && cxMain.enabled ? [{ id: cxMain.id, name: "Composio", logo: "composio" as string | undefined, color: "#5B4BDB", icon: undefined as string | undefined, site: undefined as string | undefined }] : []),
+    ...cx.connectors.filter((c) => c.enabled && !c.adminBlocked && c.status === "ok").map((c) => ({ id: c.id, name: c.name, logo: c.logo, color: c.color, icon: c.icon, site: c.site }))]
     .filter((c) => !at.q || foldAt(c.name).includes(foldAt(at.q))).slice(0, 8) : [];
   const typed = (val: string, caret: number) => {
     setV(val);
@@ -551,7 +551,7 @@ function Composer(p: {
       {cx === null ? <div className="cm-empty"><span className="art-spin sm" /></div>
         : atList.length ? atList.map((c, i) => (
           <button key={c.id} type="button" role="option" aria-selected={i === atSel} className={`menu-item${i === atSel ? " on" : ""}`} onMouseEnter={() => setAtSel(i)} onClick={() => pickAt(c.name)}>
-            <ConnLogo logo={c.logo} color={c.color} icon={c.icon} name={c.name} size={18} /><span className="cv-ell" data-notr>{c.name}</span>
+            <ConnLogo logo={c.logo} color={c.color} icon={c.icon} site={c.site} name={c.name} size={18} /><span className="cv-ell" data-notr>{c.name}</span>
           </button>))
         : <button type="button" className="menu-item" onClick={() => { setAt(null); (p.goConnectors ?? p.goCustom)(); }}><I.Connectors />{tr(at.q ? "Không có connector nào khớp · Quản lý connectors" : "Chưa kết nối connector nào · Quản lý connectors")}</button>}
     </div>
@@ -669,7 +669,7 @@ function Composer(p: {
                       const note = k.state === "active" ? (k.apps === null ? "Đang bật" : `${k.apps} ứng dụng`) : k.state === "no_key" ? "Chưa bật" : k.state === "blocked" ? "Không được phép" : "Có lỗi";
                       return (
                         <div className="menu-item cm-conn cm-cx">
-                          <ConnLogo color="#5B4BDB" name="Composio" size={20} /><span className="cv-ell" data-notr>Composio</span><span className="cm-cnt">{note}</span>
+                          <ConnLogo logo="composio" color="#5B4BDB" name="Composio" size={20} /><span className="cv-ell" data-notr>Composio</span><span className="cm-cnt">{note}</span>
                           {k.state === "active" && c
                             ? <button className={`toggle ${on ? "on" : ""}`} role="switch" aria-checked={on} aria-label={`${on ? "Tắt" : "Bật"} Composio`} onClick={() => cxPatch(c.id, { enabled: !c.enabled })} />
                             : <button className="cn-link cm-rec" onClick={() => { setMenu(false); setSub(null); (p.goConnectors ?? p.goCustom)(); }}>Xem</button>}
@@ -677,7 +677,7 @@ function Composer(p: {
                     })()}
                     {cx.connectors.map((c) => { const on = c.enabled && !c.adminBlocked && c.status === "ok"; return (
                       <div key={c.id} className="menu-item cm-conn">
-                        <ConnLogo logo={c.logo} color={c.color} icon={c.icon} name={c.name} size={20} /><span className="cv-ell" data-notr>{c.name}</span>
+                        <ConnLogo logo={c.logo} color={c.color} icon={c.icon} site={c.site} name={c.name} size={20} /><span className="cv-ell" data-notr>{c.name}</span>
                         {c.status !== "ok" && !c.adminBlocked
                           ? <ReconnectLink c={c} say={say} onDone={loadCx} onManage={() => { setMenu(false); setSub(null); (p.goConnectors ?? p.goCustom)(); }} />
                           : <button className={`toggle ${on ? "on" : ""}`} role="switch" aria-checked={on} aria-label={`${on ? "Tắt" : "Bật"} ${c.name}`} disabled={c.adminBlocked} onClick={() => cxPatch(c.id, { enabled: !c.enabled })} />}
@@ -942,7 +942,7 @@ const MsgRow = memo(function MsgRow({ m, i, last, busy, mark, art, inl, fileActi
             <button className={`icon-btn ${m.like === -1 ? "like-on" : ""}`} onClick={() => cx.current!.like(i, -1)} aria-label="Không hữu ích" aria-pressed={m.like === -1}><I.ThumbDown size={16} /></button>
             {last && <button className="icon-btn" onClick={() => cx.current!.retry()} aria-label="Thử lại"><I.Retry size={16} /></button>}
             {!c.chat.inc && <button className="icon-btn" onClick={() => cx.current!.fork(i)} aria-label={tr("Rẽ nhánh từ đây")} data-tip={tr("Rẽ nhánh từ đây")}><I.Branch size={15} /></button>}
-            {m.via && <span className="via" title={tr("Chế độ Tự động đã chọn model này")} data-notr>{(() => { const en = getLang() === "en", task = m.viaTask ? autoTaskName(m.viaTask, en) : ""; return task ? (en ? `Auto picked ${modelName(m.via)} for ${task}` : `Tự động chọn ${modelName(m.via)} cho việc ${task}`) : modelName(m.via); })()}</span>}
+            {m.via && <span className="via" title={tr("Chế độ Tự động đã chọn model này")} data-notr><ModelLogo k={m.via} size={14} /><span className="via-t">{(() => { const en = getLang() === "en", task = m.viaTask ? autoTaskName(m.viaTask, en) : ""; return task ? (en ? `Auto picked ${modelName(m.via)} for ${task}` : `Tự động chọn ${modelName(m.via)} cho việc ${task}`) : modelName(m.via); })()}</span></span>}
             {m.via && last && !busy && c.altModels && <button className="via via-alt" onClick={() => cx.current!.retry(m.via)} title={tr("Vẫn để Tự động, chỉ không dùng model vừa trả lời")}><I.Retry size={12} />{tr("Chạy lại bằng model khác")}</button>}
             <When t={m.time} />
           </div>

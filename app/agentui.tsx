@@ -16,7 +16,7 @@ import { ghConnect, ghRepos, ghStatus, ghUnlink, gitOp, useCodeUi, type GhRepo, 
 export type ToolStep = { k: "tool"; id: string; name: string; input: Record<string, unknown>; done?: boolean; ok?: boolean; summary?: string; output?: string; diff?: { path: string; add: number; del: number }; image?: string };
 // Câu hỏi duyệt (chế độ quyền, trang web chưa được phép): wait = đang chờ bạn; ok / no = đã trả lời; always = luôn cho phép.
 // connector: công cụ connector (conn: hiện logo; about: mô tả công cụ; destructive: cảnh báo xóa dữ liệu); chat = cho phép trong đoạn chat này.
-export type AskStep = { k: "ask"; id: string; kind: "edit" | "bash" | "site" | "connector"; title: string; detail: string; host?: string; conn?: { name: string; logo?: string; color?: string; icon?: string }; about?: string; until?: number; destructive?: boolean; schema?: unknown; edited?: boolean; state: "wait" | "ok" | "always" | "chat" | "no" | "gone" | "typed" };
+export type AskStep = { k: "ask"; id: string; kind: "edit" | "bash" | "site" | "connector"; title: string; detail: string; host?: string; conn?: { name: string; logo?: string; color?: string; icon?: string; site?: string }; about?: string; until?: number; destructive?: boolean; schema?: unknown; edited?: boolean; state: "wait" | "ok" | "always" | "chat" | "no" | "gone" | "typed" };
 // steer: tin người dùng nhắn thêm khi agent đang làm (hiện ngay tại chỗ agent nhận được); think: suy nghĩ của model.
 export type AStep = { k: "text"; text: string } | { k: "steer"; text: string } | { k: "think"; text: string } | AskStep | ToolStep;
 /** Kiểu xem lượt của agent: bình thường (gọn), kèm suy nghĩ, chi tiết (mọi công cụ mở sẵn, kèm đầu vào / đầu ra). */
@@ -164,7 +164,7 @@ export function AskCard({ a, onAnswer }: { a: Omit<AskStep, "k">; onAnswer?: OnA
   const always = a.kind === "site" ? `${tr("Luôn cho phép")} ${a.host ?? tr("trang này")}` : tr(a.kind === "connector" ? "Luôn cho phép" : a.kind === "edit" ? "Cho phép mọi lần sửa tệp" : "Luôn cho phép lệnh này");
   return (
     <div className="ag-ask" role="alertdialog" aria-label={a.title}>
-      <div className="ag-ask-h">{conn ? <ConnLogo logo={conn.logo} color={conn.color} icon={conn.icon} name={conn.name} size={28} /> : <span className="ag-ask-ic">{a.kind === "site" ? <I.Globe size={15} /> : a.kind === "edit" ? <I.M icon="Pencil" size={15} /> : <I.M icon="Terminal" size={15} />}</span>}
+      <div className="ag-ask-h">{conn ? <ConnLogo logo={conn.logo} color={conn.color} icon={conn.icon} site={conn.site} name={conn.name} size={28} /> : <span className="ag-ask-ic">{a.kind === "site" ? <I.Globe size={15} /> : a.kind === "edit" ? <I.M icon="Pencil" size={15} /> : <I.M icon="Terminal" size={15} />}</span>}
         <div><b>{tr(a.kind === "connector" ? "Cho Synchro dùng công cụ này?" : a.kind === "site" ? "Cho Synchro dùng trình duyệt trên trang này?" : a.kind === "edit" ? "Cho Synchro sửa tệp này?" : "Cho Synchro chạy lệnh này?")}</b><span data-notr>{conn ? `${conn.name} · ${a.title}` : a.title}</span></div></div>
       {a.about && <p className="ag-ask-about" data-notr>{a.about}</p>}
       {a.destructive && <div className="ap-warn"><I.Alert size={14} /><span>{tr("Công cụ này có thể tạo, sửa hoặc xóa dữ liệu trong ứng dụng của bạn.")}</span></div>}

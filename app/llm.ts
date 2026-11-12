@@ -47,7 +47,7 @@ export type OutFile = { id: string; name: string; size: number; mime: string; sk
 
 // Công cụ connector cần người dùng duyệt trước khi chạy (máy chủ tạm dừng lượt chat và chờ quyết định).
 export type ApprovalCall = {
-  id: string; connector: { id: string; name: string; logo?: string; color?: string; icon?: string };
+  id: string; connector: { id: string; name: string; logo?: string; color?: string; icon?: string; site?: string };
   tool: { name: string; title: string; description: string; destructive: boolean }; input: unknown;
   // editable: tham số gửi đủ, người dùng sửa được trước khi cho phép; schema: để thẻ kiểm tra ngay khi gõ (máy chủ kiểm tra lại).
   editable?: boolean; schema?: unknown;

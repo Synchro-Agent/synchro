@@ -2013,6 +2013,13 @@ b,strong{font-weight:560}
 .api-card-h{display:flex;align-items:center;gap:12px;min-width:0}
 .api-mark{width:34px;height:34px;border-radius:25%;flex:none;display:grid;place-items:center;background:var(--pill);color:var(--text);font-size:13px;font-weight:460;letter-spacing:-.02em;box-shadow:inset 0 0 0 .5px var(--border-strong)}
 .api-mark svg{display:block}
+/* Logo model / hãng (app/brands.tsx LogoMark): ô cố định, không đổi cỡ khi ảnh tải xong. Chữ cái đầu khi không có logo nào. */
+.vlogo{display:inline-grid;place-items:center;flex:none;line-height:0}
+.vlogo>*{grid-area:1/1}
+.vmono{background:var(--pill);color:var(--text-2);font-weight:560;line-height:1;letter-spacing:0;box-shadow:inset 0 0 0 .5px var(--border-strong)}
+.model-btn .vlogo{margin-right:1px}
+.mline .vlogo{color:var(--ink)}
+.mauto .mauto-ic{margin-top:1px;color:var(--text-2)}
 .api-meta{flex:1;min-width:0}
 .api-name{display:flex;align-items:baseline;gap:8px;min-width:0}
 .api-name b{font-weight:460;font-size:14px}
@@ -2054,6 +2061,7 @@ b,strong{font-weight:560}
 .api-models .api-adv{margin:0}
 .api-chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;max-height:180px;overflow:auto}
 .api-chip{font-size:12px;padding:4px 9px;border-radius:999px;background:var(--hover);color:var(--text-2)}
+.api-chip{display:inline-flex;align-items:center;gap:5px}.api-chip .vlogo{color:var(--ink)}
 .api-test{border:.5px solid var(--border);border-radius:var(--r-plate);background:var(--card);padding:12px 14px;display:flex;flex-direction:column;gap:10px}
 .api-test-row{display:flex;gap:8px;align-items:center}
 .api-test-row .field{margin:0;flex:1;min-width:0;height:34px}
@@ -2315,6 +2323,7 @@ html body :is(.menu,.model-menu,.usermenu,.model-sub).fl-flat{background:var(--c
 .cn-card{border:.5px solid var(--border);border-radius:var(--r-card);background:var(--card);transition:box-shadow .2s,border-color .2s}
 .cn-card.open{border-color:var(--border-strong);box-shadow:0 4px 18px rgba(0,0,0,.06)}
 .cn-card .api-err.in{margin:0 14px 12px}
+.cpo-err{flex-wrap:wrap}.cpo-err>span{flex:1 1 220px;min-width:0}.cpo-err .btn{flex:none;margin-left:auto}
 /* Thẻ hẹp (điện thoại): nút hành động rộng (Thêm khóa Composio, Kết nối…) xuống hàng riêng thay vì ép tên và trạng thái còn vài chữ bị cắt cụt. */
 .cn-card-h{display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px;padding:10px 12px 10px 10px}
 .cn-card-main{flex:1;min-width:min(160px,100%);display:flex;align-items:center;gap:12px;padding:4px;border-radius:var(--r-plate);text-align:left;transition:background .15s}
@@ -2708,7 +2717,7 @@ html body .main.has-art .scroll-down.gen{left:calc((100% - var(--art-w)) / 2)}
 .us-li{display:grid;grid-template-columns:1fr auto;gap:4px 12px;padding:9px 0;align-items:center}
 .us-li+.us-li{border-top:.5px solid var(--border)}
 .us-li-t{display:flex;flex-direction:column;gap:2px;min-width:0}
-.us-li-t b{font-weight:460;font-size:13.5px;text-transform:none}.us-li-t span{font-size:12px;color:var(--text-3)}
+.us-li-t b{font-weight:460;font-size:13.5px;text-transform:none}.us-ml{vertical-align:-2px;margin-right:6px}.us-li-t span{font-size:12px;color:var(--text-3)}
 .us-li em{font-style:normal;font-weight:480;font-variant-numeric:tabular-nums}
 .us-li-bar{grid-column:1/-1;height:4px;border-radius:999px;background:color-mix(in srgb,var(--text) 7%,transparent);overflow:hidden}
 .us-li-bar i{display:block;height:100%;background:var(--accent);border-radius:inherit}
@@ -3003,6 +3012,8 @@ html body .menu.pl-menu::before{background:var(--card)!important}
 /* Nhãn "Tự động chọn … cho việc …" và nút chạy lại bằng model khác: hàng nút xuống dòng trên màn hẹp thay vì tràn; nhãn dài thì cắt bằng dấu ba chấm. */
 .actions{flex-wrap:wrap;row-gap:4px}
 .actions .via{min-width:0;max-width:min(100%,420px);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-left:4px}
+.actions .via{display:inline-flex;align-items:center;gap:5px;padding-left:6px}
+.actions .via-t{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .actions .via-alt{display:inline-flex;align-items:center;gap:5px;border:0;cursor:pointer;font:inherit;font-size:12px;background:transparent;box-shadow:inset 0 0 0 1px var(--border-strong,var(--border))}
 .actions .via-alt:hover{color:var(--text);background:var(--hover)}
 .actions .via-alt:focus-visible{outline:2px solid var(--accent,#2f6feb);outline-offset:1px}
@@ -3459,6 +3470,10 @@ button.tk-chip.warn:hover{background:color-mix(in srgb,var(--tk-warn) 20%,transp
 .wl-tools-b{margin:6px 0 2px 2px;padding-left:12px;border-left:1.5px solid var(--border);display:flex;flex-direction:column;gap:6px;animation:rise .2s var(--ease) backwards}
 .wl-tool{display:flex;gap:8px;align-items:flex-start;font-size:13px}
 .wl-tool b{font-weight:450;color:var(--text-2)}
+/* Logo connector của công cụ: dòng tiêu đề nhóm (tối đa 3 logo chồng nhẹ) và từng dòng công cụ. */
+.wl-clogos{display:inline-flex;align-items:center}
+.wl-clogos .cn-logo+.cn-logo{margin-left:-4px;box-shadow:0 0 0 1.5px var(--bg),inset 0 0 0 .5px rgba(0,0,0,.12)}
+.wl-tool b .cn-logo{display:inline-grid;vertical-align:-3px;margin-right:6px}
 .wl-tool small{display:block;color:var(--text-3);font-size:12px;line-height:1.4;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
 .wl-tool.bad b{color:#c4452e}
 .wl-ic{width:16px;height:16px;flex:none;display:grid;place-items:center;border-radius:50%;color:var(--text-3);margin-top:1px}

@@ -21,7 +21,7 @@ type Perm = "allow" | "chat" | "ask" | "block";
 type Tool = { name: string; title: string; description: string; readOnly: boolean; guessed?: boolean; destructive: boolean; perm: Perm; locked?: "setting" | "admin" };
 type Settings = { chat: boolean; projects: boolean; newTools: "auto" | "ask" | "block"; destructive: boolean; maxCalls: number };
 export type Conn = {
-  id: string; name: string; url: string; host: string; dir: string | null; logo?: string; color?: string; icon?: string; enabled: boolean;
+  id: string; name: string; url: string; host: string; dir: string | null; logo?: string; color?: string; icon?: string; site?: string; enabled: boolean;
   status: "ok" | "needs_auth" | "forbidden" | "error"; error: string | null; serverName: string | null; auth: "none" | "oauth" | "token" | "composio"; tools: Tool[]; checkedAt: number | null;
   settings: Settings; adminBlocked: boolean; lastError?: string | null; vendorBlocked?: { why: string; whyVi: string } | null; needsScope?: boolean; toolsTotal?: number | null; tokenHeader?: string; ownClient?: boolean;
 };
@@ -146,7 +146,7 @@ const connList = () => {
 // Connector cần kết nối lại, ngay trong khung chat (Synchro nói cần tới nó, hoặc nó vừa mất đăng nhập giữa lượt). Nằm trong .ai-msg nên chữ giao diện dịch bằng tr().
 // done: câu trả lời đã xong: thẻ vẫn ở lại (model vừa bảo người dùng bấm nó), nhưng connector đã chạy lại rồi hay đã gỡ thì thôi không hiện.
 // refused: máy chủ từ chối một công cụ (403) dù connector còn chạy: cần đi thẳng tới trang đăng nhập để đổi tài khoản hay quyền, thử lại danh sách công cụ không giải quyết được gì.
-export function ReconnectCard({ c, done }: { c: { id: string; name: string; logo?: string; color?: string; auth?: string; refused?: boolean }; done?: boolean }) {
+export function ReconnectCard({ c, done }: { c: { id: string; name: string; logo?: string; color?: string; site?: string; auth?: string; refused?: boolean }; done?: boolean }) {
   const [state, setState] = useState<"idle" | "busy" | "ok">("idle");
   const [err, setErr] = useState("");
   const [token, setToken] = useState("");
@@ -177,7 +177,7 @@ export function ReconnectCard({ c, done }: { c: { id: string; name: string; logo
   const line = state === "ok" ? "Đã kết nối lại. Hãy gửi lại yêu cầu của bạn." : waiting ? (f.stale ? "Chưa đăng nhập xong? Hãy mở lại cửa sổ đăng nhập." : "Đang chờ bạn đăng nhập trong cửa sổ vừa mở…") : isToken ? "Máy chủ từ chối token của connector này. Hãy nhập token mới." : refused ? "Máy chủ từ chối quyền truy cập của tài khoản này. Hãy kết nối lại, hoặc kiểm tra quyền của tài khoản." : "Connector này cần kết nối lại để Synchro dùng được.";
   return (
     <div className="ag-ask cn-rc" role="group" aria-label={c.name}>
-      <div className="ag-ask-h"><ConnLogo logo={c.logo} color={c.color} name={c.name} size={28} />
+      <div className="ag-ask-h"><ConnLogo logo={c.logo ?? info?.logo} color={c.color ?? info?.color} icon={info?.icon} site={c.site ?? info?.site} name={c.name} size={28} />
         <div><b data-notr>{c.name}</b><span>{tr(line)}</span></div>
       </div>
       {err && <div className="api-err" role="alert"><I.Alert size={14} /><span data-notr>{tr(err)}</span></div>}
@@ -296,7 +296,7 @@ function ConnectorCard({ c, policy, open, busy, waiting, stale, onDismissScope, 
       <div className="cn-card-h">
         <button className="cn-card-main" onClick={c.status === "ok" ? onToggleOpen : undefined} aria-expanded={c.status === "ok" ? open : undefined} disabled={c.status !== "ok" && !bk.on}>
           {bk.on && <BulkCheck on={bk.has(c)} />}
-          <ConnLogo logo={c.logo} color={c.color} icon={c.icon} name={c.name} />
+          <ConnLogo logo={c.logo} color={c.color} icon={c.icon} site={c.site} name={c.name} />
           <span className="cn-meta">
             <span className="cn-name"><b data-notr>{c.name}</b>{c.dir === null && <span className="cn-tag">Custom</span>}</span>
             <span className={`cn-sub ${c.adminBlocked ? "error" : c.status}`}><i /><span className="cn-st">{status}</span><span className="cn-host" data-notr><b className="cn-dot">·</b>{c.host}</span></span>
@@ -447,7 +447,7 @@ function ComposioSection({ info, onInfo }: { info: ComposioInfo; onInfo: (i: Com
     <div className={`cn-card cpo-card ${open ? "open" : ""} ${info.state === "error" ? "attn" : ""}`}>
       <div className="cn-card-h">
         <div className="cn-card-main cpo-main">
-          <ConnLogo color="#5B4BDB" name="Composio" />
+          <ConnLogo logo="composio" color="#5B4BDB" name="Composio" />
           <span className="cn-meta">
             <span className="cn-name"><b data-notr>Composio</b><span className="cn-tag">1000+ apps</span></span>
             <span className={`cn-sub ${info.state === "active" ? (c?.enabled ? "ok" : "needs_auth") : info.state === "error" ? "error" : "needs_auth"}`}><i /><span className="cn-st">{status}</span></span>
@@ -627,7 +627,7 @@ export function ApprovalCard({ calls, onDone }: { calls: ApprovalCall[]; onDone:
   return (
     <div className="ap-card" role="alertdialog" aria-label="Cho phép dùng công cụ">
       <div className="ap-h">
-        <ConnLogo logo={c.connector.logo} color={c.connector.color} icon={c.connector.icon} name={c.connector.name} size={32} />
+        <ConnLogo logo={c.connector.logo} color={c.connector.color} icon={c.connector.icon} site={c.connector.site} name={c.connector.name} size={32} />
         <div className="ap-t">
           <b>{`Cho phép Synchro dùng "${c.tool.title}"?`}</b>
           <span>{`Công cụ của ${c.connector.name}`}{calls.length > 1 && <span data-notr>{` · ${i + 1}/${calls.length}`}</span>}</span>

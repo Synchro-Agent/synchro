@@ -10,18 +10,22 @@ import { lazyView } from "./lazy";
 import { IMAGE_PLANS } from "./catalog";
 import { refreshModels, useModels } from "./models";
 import { serverNow } from "./clock";
+import { ConnLogo } from "./connlogo";
 // Thẻ kết nối lại chỉ cần khi connector mất đăng nhập: không kéo cả màn hình Connectors vào phần tải đầu của trang chat.
 const ReconnectCard = lazyView(() => import("./connectorsui").then((m) => m.ReconnectCard), null);
 
 // args: tham số đã gửi cho công cụ ghi của connector (đã che khóa bí mật).
 // at / end: lúc bắt đầu, lúc có kết quả (giờ máy chủ) — đồng hồ giây của công cụ đang chạy và thời gian đã chạy khi xong.
-export type ToolItem = { seq: number; label: string; ok?: boolean; sum?: string; args?: string; at?: number; end?: number };
+// c: connector của công cụ (logo cạnh tên công cụ), từ sự kiện "tconn" ngay sau sự kiện "tool".
+export type ToolConn = { name: string; logo?: string; color?: string; icon?: string; site?: string };
+export type ToolItem = { seq: number; label: string; ok?: boolean; sum?: string; args?: string; at?: number; end?: number; c?: ToolConn };
 // ask: lượt đang chờ bạn duyệt (dùng trình duyệt trên trang chưa được phép, công cụ connector). conn: connector cần kết nối lại (nút ngay trong khung chat).
-export type ConnPart = { k: "conn"; id: string; name: string; logo?: string; color?: string; auth?: string; refused?: boolean };
+export type ConnPart = { k: "conn"; id: string; name: string; logo?: string; color?: string; site?: string; auth?: string; refused?: boolean };
 // plans: chưa tạo được ảnh vì gói (chưa đăng nhập, hết hạn mức): nút mở Providers ngay trong khung chat. why: lý do, tried: gói đã thử.
 export type PlansPart = { k: "plans"; why: string; tried: string[] };
 // link: Connect Link Composio vừa tạo (chỉ địa chỉ của Composio, máy chủ đã lọc): nút đăng nhập ứng dụng ngay trong khung chat.
-export type LinkPart = { k: "link"; app: string; name: string; url: string };
+// logo / icon: logo của ứng dụng (tệp có sẵn, hoặc ảnh tải hộ /api/favicon?app=…).
+export type LinkPart = { k: "link"; app: string; name: string; url: string; logo?: string; icon?: string };
 // rate: connector đang giới hạn tốc độ (429): đồng hồ đếm ngược tới lúc thử lại được (until: giờ máy chủ, ms).
 export type RatePart = { k: "rate"; name: string; until: number };
 export type Part = { k: "say"; text: string } | { k: "tools"; items: ToolItem[] } | AskStep | ConnPart | PlansPart | LinkPart | RatePart;
@@ -48,6 +52,15 @@ export function applyEvent(w: Work, ev: RunEv): Work {
         if (p.k === "tools" && p.items.some((x) => x.seq === r.ref)) { parts[i] = { k: "tools", items: p.items.map((x) => (x.seq === r.ref ? { ...x, ok: r.ok, sum: r.sum, args: r.args, ...(ev.at ? { end: ev.at } : {}) } : x)) }; break; }
       }
     } catch {}
+  } else if (ev.kind === "tconn") {
+    try {
+      const r = JSON.parse(ev.text) as ToolConn & { ref: number };
+      const c: ToolConn = { name: String(r.name ?? ""), ...(typeof r.logo === "string" && /^[a-z0-9]{2,40}$/.test(r.logo) ? { logo: r.logo } : {}), ...(typeof r.color === "string" && /^#[0-9a-f]{3,8}$/i.test(r.color) ? { color: r.color } : {}), ...(typeof r.icon === "string" && r.icon.startsWith("/api/") ? { icon: r.icon } : {}), ...(typeof r.site === "string" && r.site.startsWith("/api/favicon?") ? { site: r.site } : {}) };
+      for (let i = parts.length - 1; i >= 0; i--) {
+        const p = parts[i];
+        if (p.k === "tools" && p.items.some((x) => x.seq === r.ref)) { parts[i] = { k: "tools", items: p.items.map((x) => (x.seq === r.ref ? { ...x, c } : x)) }; break; }
+      }
+    } catch {}
   } else if (ev.kind === "plan") {
     try { plan = JSON.parse(ev.text) as PlanItem[]; } catch {}
   } else if (ev.kind === "ask") {
@@ -62,7 +75,7 @@ export function applyEvent(w: Work, ev: RunEv): Work {
   } else if (ev.kind === "plans") {
     try { const a = JSON.parse(ev.text) as { why?: string; tried?: string[] }; if (!parts.some((p) => p.k === "plans")) parts.push({ k: "plans", why: String(a.why ?? "noplan"), tried: a.tried ?? [] }); } catch {}
   } else if (ev.kind === "link") {
-    try { const l = JSON.parse(ev.text) as Omit<LinkPart, "k">; if (typeof l.url === "string" && /^https?:\/\//.test(l.url) && !parts.some((p) => p.k === "link" && p.url === l.url)) parts.push({ k: "link", app: String(l.app ?? ""), name: String(l.name ?? "Composio"), url: l.url }); } catch {}
+    try { const l = JSON.parse(ev.text) as Omit<LinkPart, "k">; if (typeof l.url === "string" && /^https?:\/\//.test(l.url) && !parts.some((p) => p.k === "link" && p.url === l.url)) parts.push({ k: "link", app: String(l.app ?? ""), name: String(l.name ?? "Composio"), url: l.url, ...(typeof l.logo === "string" && /^[a-z0-9]{2,40}$/.test(l.logo) ? { logo: l.logo } : {}), ...(typeof l.icon === "string" && l.icon.startsWith("/api/favicon?") ? { icon: l.icon } : {}) }); } catch {}
   } else if (ev.kind === "rate") {
     try { const a = JSON.parse(ev.text) as { name?: string; until?: number }; if (typeof a.until === "number") { const name = String(a.name ?? ""), k = parts.findIndex((p) => p.k === "rate" && p.name === name); const r: RatePart = { k: "rate", name, until: a.until }; if (k >= 0) parts[k] = r; else parts.push(r); } } catch {}
   } else if (ev.kind === "conn") {
@@ -92,10 +105,13 @@ function ToolGroup({ items, live }: { items: ToolItem[]; live: boolean }) {
   const runMs = cur?.at ? now - cur.at : 0;
   const bad = items.filter((x) => x.ok === false).length;
   const label = items.length === 1 ? toolLabel(items[0].label) : `${tr("Đã dùng")} ${items.length} ${tr("công cụ")}`;
+  // Logo các connector đã dùng trong nhóm (tối đa 3, mỗi connector một lần) ở dòng tiêu đề.
+  const heads = [...new Map(items.filter((x) => x.c).map((x) => [x.c!.name, x.c!])).values()].slice(0, 3);
   return (
     <div className={`wl-tools ${open ? "open" : ""}`}>
       <button className="wl-tools-h" aria-expanded={open} onClick={() => setOpen(!open)}>
         {running ? <span className="wl-spin" /> : bad ? <I.Alert size={13} /> : null}
+        {heads.length > 0 && <span className="wl-clogos">{heads.map((c) => <ConnLogo key={c.name} logo={c.logo} color={c.color} icon={c.icon} site={c.site} name={c.name} size={16} />)}</span>}
         <span data-notr={items.length === 1 ? true : undefined}>{label}</span>
         {bad > 0 && <em>{bad} {tr("lỗi")}</em>}
         {bad === 1 && items.length === 1 && items[0].sum ? <small className="wl-fail" data-notr title={tr(items[0].sum)}>{tr(items[0].sum)}</small> : null}
@@ -108,7 +124,7 @@ function ToolGroup({ items, live }: { items: ToolItem[]; live: boolean }) {
           {items.map((x) => (
             <div key={x.seq} className={`wl-tool ${x.ok === false ? "bad" : ""}`}>
               <span className="wl-ic">{x.ok === undefined ? <span className="wl-spin" /> : x.ok ? <I.Check size={12} /> : <I.X size={12} />}</span>
-              <div><b data-notr>{toolLabel(x.label)}</b>{x.at && ((x.end && x.end - x.at >= 1000) || (live && x.ok === undefined)) ? <span className="wl-tsec" data-notr>{secs((x.end ?? now) - x.at)}</span> : null}{x.args && <small data-notr>{tr("Đã gửi")}: {x.args}</small>}{x.sum && <small data-notr>{tr(x.sum)}</small>}</div>
+              <div><b data-notr>{x.c && <ConnLogo logo={x.c.logo} color={x.c.color} icon={x.c.icon} site={x.c.site} name={x.c.name} size={14} />}{toolLabel(x.label)}</b>{x.at && ((x.end && x.end - x.at >= 1000) || (live && x.ok === undefined)) ? <span className="wl-tsec" data-notr>{secs((x.end ?? now) - x.at)}</span> : null}{x.args && <small data-notr>{tr("Đã gửi")}: {x.args}</small>}{x.sum && <small data-notr>{tr(x.sum)}</small>}</div>
             </div>
           ))}
         </div>
@@ -151,7 +167,7 @@ function LinkCard({ l }: { l: LinkPart }) {
   const [opened, setOpened] = useState(false);
   return (
     <div className="wl-plans wl-link" role="group" aria-label={l.name}>
-      <I.SetPlug size={14} /><span>{tr(opened ? "Đăng nhập xong thì nhắn lại yêu cầu để Synchro làm tiếp." : `Kết nối ${l.name} qua Composio để Synchro dùng được ứng dụng này.`)}</span>
+      {l.logo || l.icon || /^[a-z0-9_-]{1,60}$/.test(l.app) ? <ConnLogo logo={l.logo} icon={l.icon ?? (l.app ? `/api/favicon?app=${l.app}` : undefined)} name={l.name} size={20} /> : <I.SetPlug size={14} />}<span>{tr(opened ? "Đăng nhập xong thì nhắn lại yêu cầu để Synchro làm tiếp." : `Kết nối ${l.name} qua Composio để Synchro dùng được ứng dụng này.`)}</span>
       <a className="btn dark" href={l.url} target="_blank" rel="noopener noreferrer" onClick={() => setOpened(true)}>{tr(opened ? "Mở lại trang kết nối" : `Kết nối ${l.name}`)}<I.External size={12} /></a>
     </div>
   );

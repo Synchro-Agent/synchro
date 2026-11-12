@@ -6,6 +6,7 @@ import * as I from "./icons";
 import { useApp } from "./store";
 import { call, ago, fmtDate } from "./adminui";
 import { refreshModels } from "./models";
+import { ModelLogo } from "./brands";
 
 type Step = { name: "text" | "tool" | "image"; ok: boolean; note?: string };
 type Test = { at: number; ok: boolean; ms: number; steps: Step[]; error?: string };
@@ -33,6 +34,7 @@ function Row({ m, busy, act, owner }: { m: RegModel; busy: boolean; act: (action
     <div className={`mr-row ${m.shown ? "" : "off"}`}>
       <div className="mr-main">
         <div className="mr-name">
+          <ModelLogo k={m.key} name={m.name} />
           <b data-notr>{m.name}</b>
           {m.isNew && <span className="mtag mnew">New</span>}
           {m.pinned && <span className="mtag">Pinned</span>}

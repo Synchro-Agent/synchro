@@ -7,6 +7,7 @@ import { openSecret, sealSecret } from "./providers";
 import { DIRECTORY } from "./connectordir";
 import { allowsDir, FULL_CONN, type ConnPolicy } from "./catalog";
 import { detectIcon } from "./connicons";
+import { connLogo, type ConnLogoFields } from "./connlogos";
 import crypto from "node:crypto";
 import { destructiveLike, guessedRead, McpClient, McpError, oldGuessedRead, readLike, resultImages, resultText, type Era, type McpTool } from "./mcp";
 import { catalogLine } from "./connproxy";
@@ -52,7 +53,7 @@ type Row = {
 // guessed: máy chủ không khai báo chỉ đọc hay không, Synchro đoán theo tên công cụ.
 export type PublicTool = { name: string; title: string; description: string; readOnly: boolean; guessed?: boolean; destructive: boolean; perm: Perm; locked?: "setting" | "admin" };
 export type PublicConnector = {
-  id: string; name: string; url: string; host: string; dir: string | null; logo?: string; color?: string; icon?: string; enabled: boolean;
+  id: string; name: string; url: string; host: string; dir: string | null; logo?: string; color?: string; icon?: string; site?: string; enabled: boolean;
   status: "ok" | "needs_auth" | "forbidden" | "error"; error: string | null; serverName: string | null; auth: "none" | "oauth" | "token" | "composio"; tools: PublicTool[]; checkedAt: number | null;
   settings: ConnSettings; adminBlocked: boolean;
   /** Lỗi tạm thời gần nhất khi kiểm tra lại (connector vẫn dùng được). */
@@ -134,8 +135,12 @@ const vendorBlock = (r: Row, a: Auth) => {
   return access && !(a.preset?.clientId && a.tokens) && (a.mode !== "token" || r.status === "needs_auth") ? access : null;
 };
 
+/** Logo của connector (app/connlogos.ts): tệp có sẵn, icon đã tìm, biểu tượng trang của máy chủ MCP / máy chủ đăng nhập qua proxy. */
+function logoOfRow(r: Row, a: Auth = getAuth(r)): ConnLogoFields {
+  const dir = DIRECTORY.find((x) => x.id === r.dir), cx = r.dir === COMPOSIO;
+  return connLogo({ composio: cx, color: cx ? COMPOSIO_COLOR : dir?.color, dirLogo: dir?.logo, icon: r.icon, url: cx ? null : r.url, issuer: a.as?.issuer });
+}
 function publicOf(r: Row, pol: ConnPolicy = FULL_CONN): PublicConnector {
-  const dir = DIRECTORY.find((x) => x.id === r.dir);
   const perms = json<Record<string, Perm>>(r.perms, {});
   const st = settingsOf(r);
   const tools = json<McpTool[]>(r.tools, []).map((t) => ({
@@ -148,7 +153,7 @@ function publicOf(r: Row, pol: ConnPolicy = FULL_CONN): PublicConnector {
   // Composio: địa chỉ phiên không cần cho trình duyệt.
   const cx = r.dir === COMPOSIO;
   return {
-    id: r.id, name: r.name, url: cx ? "" : r.url, host: cx ? "composio.dev" : host, dir: r.dir, logo: dir?.logo, color: cx ? COMPOSIO_COLOR : dir?.color, icon: dir?.logo ? undefined : r.icon ?? undefined, enabled: !!r.enabled,
+    id: r.id, name: r.name, url: cx ? "" : r.url, host: cx ? "composio.dev" : host, dir: r.dir, ...logoOfRow(r, a), enabled: !!r.enabled,
     status: r.status as PublicConnector["status"], error: r.error, serverName: r.server_name, auth: a.mode, tools, checkedAt: r.checked_at, settings: st, adminBlocked: !allowsDir(pol, r.dir),
     lastError: r.status === "ok" ? r.last_error : null, vendorBlocked: vendorBlock(r, a),
     needsScope: !!a.scopeNeeded, toolsTotal: r.tools_total,
@@ -699,10 +704,10 @@ export const removeUserConnectors = (uid: string) => {
 
 // ---- dùng trong chat ----
 // composio: công cụ của connector Composio (kết quả có thể chứa Connect Link, xem connectLinks).
-export type ChatTool = { fq: string; cid: string; cname: string; logo?: string; color?: string; icon?: string; tool: McpTool; composio?: boolean };
+export type ChatTool = { fq: string; cid: string; cname: string; logo?: string; color?: string; icon?: string; site?: string; tool: McpTool; composio?: boolean };
 /** Connector đang bật mà chưa dùng được (cần đăng nhập lại, đang lỗi, hãng chưa duyệt): model được báo để nói với người dùng, khung chat có nút kết nối lại. */
 // name: có thể kèm địa chỉ khi hai connector trùng tên; base: tên gốc. auth: token tự nhập thì thẻ kết nối lại cho nhập token, không có trang đăng nhập để mở.
-export type OfflineConn = { id: string; name: string; base?: string; logo?: string; color?: string; why: "auth" | "error" | "vendor"; auth?: Auth["mode"]; refused?: boolean };
+export type OfflineConn = { id: string; name: string; base?: string; logo?: string; color?: string; site?: string; why: "auth" | "error" | "vendor"; auth?: Auth["mode"]; refused?: boolean };
 
 // Tên công cụ gửi cho model: "<connector>__<công cụ>", chỉ chữ, số, _ và -. Các hãng giới hạn tên công cụ 64 ký tự và CLI còn thêm tiền tố của nó trước tên
 // (mcp__synchro__ dài 14 ký tự trên Claude Code và Codex, mcp_synchro_ trên Antigravity), nên chỉ dùng 50 ký tự. Dài hơn thì cắt và thêm mã băm ngắn, ổn định giữa các lượt.
@@ -744,20 +749,21 @@ export class ConnectorSession {
     for (const r of rows) {
       const st = settingsOf(r);
       if (!allowsDir(ctx.pol, r.dir) || !(ctx.project ? st.projects : st.chat)) continue;
-      const dir = DIRECTORY.find((x) => x.id === r.dir);
       const cname = label(r);
       if (r.status !== "ok") {
         const a = getAuth(r);
-        this.offline.push({ id: r.id, name: cname, base: r.name, logo: dir?.logo, color: dir?.color, why: vendorBlock(r, a) ? "vendor" : r.status === "needs_auth" || r.status === "forbidden" ? "auth" : "error", auth: a.mode });
+        const lg = logoOfRow(r, a);
+        this.offline.push({ id: r.id, name: cname, base: r.name, logo: lg.logo, color: lg.color, site: lg.site, why: vendorBlock(r, a) ? "vendor" : r.status === "needs_auth" || r.status === "forbidden" ? "auth" : "error", auth: a.mode });
         continue;
       }
       // Lượt này dùng danh sách đang có; lượt sau thấy công cụ hãng vừa thêm, khỏi chờ tới lần kiểm tra lại 12 giờ.
       if (r.checked_at && Date.now() - r.checked_at > STALE_TOOLS) nudgeSync(r.id, STALE_TOOLS);
       const perms = json<Record<string, Perm>>(r.perms, {});
+      const lg = logoOfRow(r);
       for (const tool of json<McpTool[]>(r.tools, [])) {
         if ((perms[tool.name] ?? defaultPerm(tool)) === "block" || lockOf(tool, st, ctx.pol)) continue;
         const cx = r.dir === COMPOSIO;
-        const ct: ChatTool = { fq: fqName(r.name, tool.name, used), cid: r.id, cname, logo: dir?.logo, color: cx ? COMPOSIO_COLOR : dir?.color, icon: dir?.logo ? undefined : r.icon ?? undefined, tool, ...(cx ? { composio: true } : {}) };
+        const ct: ChatTool = { fq: fqName(r.name, tool.name, used), cid: r.id, cname, ...lg, tool, ...(cx ? { composio: true } : {}) };
         this.tools.push(ct);
         this.by.set(ct.fq, ct);
       }
@@ -804,7 +810,7 @@ export class ConnectorSession {
     const ct = this.by.get(name);
     if (!ct) return { content: `Không có công cụ ${name}.`, is_error: true };
     const r = rowById(ct.cid);
-    const off = (): OfflineConn => ({ id: ct.cid, name: ct.cname, logo: ct.logo, color: ct.color, why: "auth", auth: r ? getAuth(r).mode : undefined });
+    const off = (): OfflineConn => ({ id: ct.cid, name: ct.cname, logo: ct.logo, color: ct.color, site: ct.site, why: "auth", auth: r ? getAuth(r).mode : undefined });
     const refused = `${ct.cname} từ chối truy cập (lỗi 403), có thể tài khoản không có quyền với dữ liệu này hoặc quyền đã bị thu hồi. Hãy báo người dùng kiểm tra quyền của tài khoản, hoặc bấm "Kết nối lại" (ngay trong khung chat, hoặc Cài đặt → Connectors).`;
     const needLogin = `${ct.cname} cần đăng nhập lại nên chưa dùng được, không phải do người dùng chặn. Hãy báo người dùng bấm "Kết nối lại" (ngay trong khung chat, hoặc Cài đặt → Connectors) rồi nhắc lại yêu cầu.`;
     // Connector mất đăng nhập giữa lượt: nói đúng lý do, đừng để model nói là người dùng đã chặn.
