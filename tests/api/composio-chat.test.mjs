@@ -47,6 +47,12 @@ try {
   console.log("3. Quyền: đọc chạy luôn, ghi hỏi trước");
   fin = await run(`#tool=COMPOSIO_MULTI_EXECUTE_TOOL #args={"tools":[{"tool_slug":"GMAIL_FETCH_EMAILS","arguments":{}}]}`);
   ok(!fin?.events?.some((e) => e.kind === "ask") && /Mock email for alice/.test(JSON.stringify(fin)), "đọc email: chạy không cần hỏi", JSON.stringify(fin?.events ?? fin).slice(0, 400));
+  ok(fin?.events?.some((e) => e.kind === "tool" && e.text === "Đang dùng Gmail · Lấy email") && !JSON.stringify(fin?.events ?? []).includes("Multi Execute"), "dòng công cụ: Gmail · Lấy email (không phải Composio: Multi Execute Composio Tools)", JSON.stringify(fin?.events?.filter((e) => e.kind === "tool") ?? []).slice(0, 300));
+  fin = await run(`#tool=COMPOSIO_MULTI_EXECUTE_TOOL #args={"tools":[{"tool_slug":"GOOGLEDOCS_SEARCH_DOCUMENTS","arguments":{"query":"Synchro"}}]}`);
+  ok(!(fin?.result?.approval ?? fin?.result?.json?.approval) && !fin?.events?.some((e) => e.kind === "ask"), "liệt kê Google Docs: không có thẻ duyệt", JSON.stringify(fin?.result ?? fin).slice(0, 300));
+  fin = await run(`#tool=COMPOSIO_MULTI_EXECUTE_TOOL #args={"tools":[{"tool_slug":"GOOGLEDOCS_CREATE_DOCUMENT","arguments":{"title":"Synchro test"}}]}`);
+  const doc = (fin?.result?.approval ?? fin?.result?.json?.approval)?.calls?.[0];
+  ok(doc?.cx?.name === "Google Docs" && doc.cx.act === "Tạo tài liệu" && doc.cx.main === "Synchro test" && doc.cx.apps?.[0] === "googledocs", "tạo tài liệu Google Docs: thẻ duyệt Google Docs · Tạo tài liệu 'Synchro test'", JSON.stringify(fin?.result ?? fin).slice(0, 500));
   fin = await run(`#tool=COMPOSIO_MULTI_EXECUTE_TOOL #args={"tools":[{"tool_slug":"GMAIL_SEND_EMAIL","arguments":{"to":"a@b.c"}}]}`);
   const ap = fin?.result?.approval ?? fin?.result?.json?.approval;
   ok(ap?.calls?.[0]?.connector?.name === "Composio" && ap.calls[0].input?.tools?.[0]?.tool_slug === "GMAIL_SEND_EMAIL", "gửi email: dừng chờ duyệt", JSON.stringify(fin).slice(0, 500));

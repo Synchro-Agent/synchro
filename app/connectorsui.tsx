@@ -9,6 +9,7 @@ import * as I from "./icons";
 import { useApp } from "./store";
 import { ConnLogo } from "./connlogo";
 import { ArgsEditor, readArgs } from "./argsedit";
+import { CxDetails, cxHead } from "./cxcard";
 export { ConnLogo };
 import type { ApprovalCall, Decision } from "./llm";
 import { BulkBar, BulkButton, BulkCheck, bulkRow, each, useBulk, type Bulk, type BulkAct } from "./bulk";
@@ -636,8 +637,10 @@ export function ApprovalCard({ calls, onDone }: { calls: ApprovalCall[]; onDone:
     if (d !== "deny" && blocked) return;
     if (d !== "deny" && es?.changed && es.value) inputs.current[c.id] = es.value;
     acc.current[c.id] = d;
-    // "Luôn cho phép" áp dụng luôn cho các lượt gọi cùng công cụ ở bước này.
-    if (d === "always" || d === "chat") for (const x of calls) if (x.connector.id === c.connector.id && x.tool.name === c.tool.name) acc.current[x.id] ??= "allow";
+    // "Luôn cho phép" áp dụng luôn cho các lượt gọi cùng công cụ ở bước này. Composio: chỉ lượt gọi ghi trong đúng các ứng dụng vừa cho phép
+    // (cho phép Google Docs không mở luôn Gmail); lời gọi luôn phải hỏi (bash, gọi API) thì từng lần.
+    const scope = (x: ApprovalCall) => (x.cx ? (x.cx.strict ? null : (x.cx.apps ?? []).join(",")) : "");
+    if ((d === "always" || d === "chat") && scope(c) !== null) for (const x of calls) if (x.connector.id === c.connector.id && x.tool.name === c.tool.name && scope(x) === scope(c)) acc.current[x.id] ??= "allow";
     let n = i + 1;
     while (n < calls.length && acc.current[calls[n].id]) n++;
     if (n >= calls.length) onDone(acc.current, inputs.current); else { setI(n); setShow(false); setEdit(null); }
@@ -646,13 +649,13 @@ export function ApprovalCard({ calls, onDone }: { calls: ApprovalCall[]; onDone:
   return (
     <div className="ap-card" role="alertdialog" aria-label="Cho phép dùng công cụ">
       <div className="ap-h">
-        <ConnLogo logo={c.connector.logo} color={c.connector.color} icon={c.connector.icon} site={c.connector.site} name={c.connector.name} size={32} />
+        <ConnLogo logo={c.connector.logo} color={c.connector.color} icon={c.connector.icon} site={c.connector.site} name={c.cx?.name ?? c.connector.name} size={32} />
         <div className="ap-t">
-          <b>{`Cho phép Synchro dùng "${c.tool.title}"?`}</b>
-          <span>{`Công cụ của ${c.connector.name}`}{calls.length > 1 && <span data-notr>{` · ${i + 1}/${calls.length}`}</span>}</span>
+          {c.cx ? <b data-notr>{cxHead(c.cx)}</b> : <b>{`Cho phép Synchro dùng "${c.tool.title}"?`}</b>}
+          <span>{c.cx ? tr("Cho phép Synchro làm việc này qua Composio của bạn?") : `Công cụ của ${c.connector.name}`}{calls.length > 1 && <span data-notr>{` · ${i + 1}/${calls.length}`}</span>}</span>
         </div>
       </div>
-      {c.tool.description && <p className="ap-d" data-notr>{c.tool.description}</p>}
+      {c.cx ? <CxDetails cx={c.cx} /> : c.tool.description && <p className="ap-d" data-notr>{c.tool.description}</p>}
       {c.tool.destructive && <div className="ap-warn"><I.Alert size={14} /><span>Công cụ này có thể tạo, sửa hoặc xóa dữ liệu trong ứng dụng của bạn.</span></div>}
       {edit === null && !empty && <button className="api-adv ap-more" aria-expanded={show} onClick={() => setShow(!show)}><I.ChevronR size={13} />Xem dữ liệu gửi đi</button>}
       {edit === null && show && !empty && <pre className="ap-in" data-notr>{input}</pre>}
@@ -663,8 +666,8 @@ export function ApprovalCard({ calls, onDone }: { calls: ApprovalCall[]; onDone:
           : <button className="btn ap-edit" onClick={() => setEdit(null)}>Hủy sửa</button>)}
         <button className="btn" onClick={() => pick("deny")}>Từ chối</button>
         {/* Nút chính (và tiêu điểm sẵn) là cho phép một lần: Enter không bao giờ cấp quyền vĩnh viễn; "Luôn cho phép" là lựa chọn phụ, phải bấm có chủ đích. */}
-        <button className="btn" disabled={blocked} onClick={() => pick("always")}>Luôn cho phép</button>
-        <button className="btn" disabled={blocked} onClick={() => pick("chat")}>Cho phép trong cuộc trò chuyện này</button>
+        {!c.cx?.strict && <button className="btn" disabled={blocked} onClick={() => pick("always")}>Luôn cho phép</button>}
+        {!c.cx?.strict && <button className="btn" disabled={blocked} onClick={() => pick("chat")}>Cho phép trong cuộc trò chuyện này</button>}
         <button className="btn dark" disabled={blocked} onClick={() => pick("allow")} autoFocus={edit === null}>{es?.changed ? "Cho phép với tham số đã sửa" : "Cho phép một lần"}</button>
       </div>
     </div>

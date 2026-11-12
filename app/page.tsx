@@ -56,6 +56,8 @@ const roughTitle = (t: string) => {
   return cut ? cut[0].toUpperCase() + cut.slice(1) : t.slice(0, 40);
 };
 // Tin đầu chỉ là lời chào / quá ngắn: tên đặt lúc đầu chưa nói được gì, đặt lại khi đoạn chat đã rõ chủ đề (tin thứ ba).
+// Nhãn công cụ đã dùng: Composio là "<ứng dụng> · <thao tác>", thao tác dịch theo ngôn ngữ giao diện; connector khác giữ nguyên.
+const toolChip = (n: string) => { const i = n.indexOf(" · "); return i > 0 ? `${n.slice(0, i)} · ${tr(n.slice(i + 3))}` : n; };
 const vagueMsg = (t: string) => t.trim().split(/\s+/).length <= 3 || /^(xin )?ch[àa]o|^(hi|hello|hey|alo|test)\b/i.test(t.trim());
 type View = "new" | "chat" | "projects" | "project" | "artifacts" | "customize" | "code" | "speech" | "inbox" | "brain";
 import { AppCtx, useApp, VOICE_LANG, VOICE_RATE, initials, readPref, reloadPrefs, resetPrefs, usePref, type Chat, type Msg, type Project } from "./store";
@@ -910,7 +912,7 @@ const MsgRow = memo(function MsgRow({ m, i, last, busy, mark, art, inl, fileActi
       </div>
     ) : (
       <div style={est}>
-        <CiteCtx.Provider value={cites}><div className={`ai-msg${m.done ? "" : " ai-streaming"}`}>{m.tools?.length ? <div className="skill-used">{m.tools.map((n) => <span key={n} className="skill-chip tool-chip"><I.SetPlug size={13} /><span>{tr("Đã dùng")}</span><span data-notr>{n}</span></span>)}</div> : null}{m.libs?.length ? <LibChips libs={m.libs} onOpen={() => cx.current!.openPlugins()} /> : null}{m.skills?.length ? <div className="skill-used">{m.skills.map((n) => <span key={n} className="skill-chip"><I.Scroll size={13} />{tr("Đang dùng skill")}: {n}</span>)}</div> : null}{m.done ? <WorkSummary parts={m.parts} plan={m.plan} ms={m.dur} stopped={m.stopped} render={(t) => <Markdown text={t} say={say} />} /> : m.parts?.length ? <WorkParts parts={m.parts} live onAnswer={answerAsk} render={(t) => <Markdown text={t} say={say} />} /> : null}{m.text ? (art && hasArtifacts(m.text) ? splitArtifacts(m.text).map((sg, k) => sg.kind === "text" ? <Markdown key={k} text={sg.text} say={say} viz={inl} live={m.done && last && !busy} streaming={!m.done} /> : (() => {
+        <CiteCtx.Provider value={cites}><div className={`ai-msg${m.done ? "" : " ai-streaming"}`}>{m.tools?.length ? <div className="skill-used">{m.tools.map((n) => <span key={n} className="skill-chip tool-chip"><I.SetPlug size={13} /><span>{tr("Đã dùng")}</span><span data-notr>{toolChip(n)}</span></span>)}</div> : null}{m.libs?.length ? <LibChips libs={m.libs} onOpen={() => cx.current!.openPlugins()} /> : null}{m.skills?.length ? <div className="skill-used">{m.skills.map((n) => <span key={n} className="skill-chip"><I.Scroll size={13} />{tr("Đang dùng skill")}: {n}</span>)}</div> : null}{m.done ? <WorkSummary parts={m.parts} plan={m.plan} ms={m.dur} stopped={m.stopped} render={(t) => <Markdown text={t} say={say} />} /> : m.parts?.length ? <WorkParts parts={m.parts} live onAnswer={answerAsk} render={(t) => <Markdown text={t} say={say} />} /> : null}{m.text ? (art && hasArtifacts(m.text) ? splitArtifacts(m.text).map((sg, k) => sg.kind === "text" ? <Markdown key={k} text={sg.text} say={say} viz={inl} live={m.done && last && !busy} streaming={!m.done} /> : (() => {
           const pos = arts.at[i]?.find((x) => x.ident === sg.art.ident && arts.map.get(x.ident)?.[x.v]?.msg === i);
           const total = arts.map.get(sg.art.ident)?.length ?? 1;
           const v = pos?.v ?? 0;

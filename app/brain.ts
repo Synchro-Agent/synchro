@@ -358,7 +358,8 @@ export function afterTurn(user: UserRow, body: Record<string, unknown>, json: Re
   const model = String(json.model ?? body.model ?? "");
   const used = (Array.isArray(json.skills) ? json.skills : []) as { kind?: string; name?: string }[];
   const skills = used.filter((u) => u.kind === "skill" && u.name).map((u) => u.name!.slice(0, 60));
-  const connectors = used.filter((u) => u.kind === "tool" && u.name?.includes(": ")).map((u) => u.name!.split(": ")[0].slice(0, 60));
+  // "<connector>: <công cụ>", hoặc "<ứng dụng> · <thao tác>" với Composio.
+  const connectors = used.filter((u) => u.kind === "tool" && /: | · /.test(u.name ?? "")).map((u) => u.name!.split(/: | · /)[0].slice(0, 60));
   const cur = byConv(user.id, conv);
   const p: Props = cur ? parse(cur).props : { date: now, tags: [feature] };
   if (model) { p.models = { ...(p.models ?? {}), [model]: (p.models?.[model] ?? 0) + 1 }; bumpModel(user.id, model); }

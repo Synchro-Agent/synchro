@@ -2456,6 +2456,14 @@ html body :is(.menu,.model-menu,.usermenu,.model-sub).fl-flat{background:var(--c
 .ap-more{margin:10px 0 0!important}
 .ap-in{margin:8px 0 0;max-height:220px;overflow:auto;padding:10px 12px;border-radius:var(--r-pill);background:var(--hover);font-family:var(--font-mono);font-size:11.5px;line-height:1.5;white-space:pre-wrap;word-break:break-word}
 .ap-a{display:flex;justify-content:flex-end;gap:8px;margin-top:14px;flex-wrap:wrap}
+/* Thẻ duyệt lời gọi Composio: tài khoản, tham số chính, phạm vi quyền (dùng chung cho .ap-card và .ag-ask) */
+.cx-d{display:flex;flex-direction:column;gap:4px;margin-top:10px;font-size:12.5px;min-width:0}
+.ag-ask .cx-d{margin-top:0}
+.cx-row{display:flex;gap:10px;align-items:baseline;min-width:0}
+.cx-row span{flex:none;max-width:40%;color:var(--text-3);font-family:var(--font-mono);font-size:11.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cx-row b{font-weight:450;color:var(--text);min-width:0;overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.cx-note{color:var(--text-2);line-height:1.45;overflow-wrap:anywhere}
+.cx-note b{font-weight:500;color:var(--text)}
 /* Nút bị vô hiệu hóa trông mờ đi, không bấm được (trước đây trông như nút thường) */
 .btn:disabled{opacity:.45;cursor:default;pointer-events:none}
 /* Connectors: cài đặt riêng, công cụ bị khóa, quyền của quản trị viên */
