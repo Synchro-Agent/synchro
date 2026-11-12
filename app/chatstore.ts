@@ -19,7 +19,9 @@ function t() {
     // ON DELETE CASCADE: xóa tài khoản thì mọi đoạn chat và dự án trên máy chủ mất theo.
     d.exec(`CREATE TABLE IF NOT EXISTS user_items (user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, kind TEXT NOT NULL, id TEXT NOT NULL, upd INTEGER NOT NULL, rev INTEGER NOT NULL,
         deleted INTEGER NOT NULL DEFAULT 0, data TEXT, size INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (user_id, kind, id));
-      CREATE INDEX IF NOT EXISTS user_items_rev ON user_items(user_id, rev)`);
+      CREATE INDEX IF NOT EXISTS user_items_rev ON user_items(user_id, rev);
+      -- Chỉ mục phủ cho danh sách thay đổi (changesSince): đọc kind, id, upd, deleted, size theo rev mà không mở từng dòng có data (tới vài MB).
+      CREATE INDEX IF NOT EXISTS user_items_meta ON user_items(user_id, rev, kind, id, upd, deleted, size)`);
     ready = true;
   }
   return d;

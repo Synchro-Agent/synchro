@@ -61,6 +61,7 @@ function t() {
     d.exec(`CREATE TABLE IF NOT EXISTS brain_notes (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, kind TEXT NOT NULL, title TEXT NOT NULL, tkey TEXT NOT NULL, conv TEXT,
         body TEXT NOT NULL DEFAULT '', props TEXT NOT NULL DEFAULT '{}', created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, UNIQUE(user_id, tkey));
       CREATE INDEX IF NOT EXISTS brain_notes_conv ON brain_notes(user_id, conv);
+      CREATE INDEX IF NOT EXISTS brain_notes_updated ON brain_notes(user_id, updated_at);
       CREATE TABLE IF NOT EXISTS brain_links (user_id TEXT NOT NULL, src TEXT NOT NULL, dkey TEXT NOT NULL, dtitle TEXT NOT NULL, PRIMARY KEY (src, dkey));
       CREATE INDEX IF NOT EXISTS brain_links_dst ON brain_links(user_id, dkey);
       CREATE TABLE IF NOT EXISTS brain_queue (user_id TEXT NOT NULL, conv TEXT NOT NULL, feature TEXT NOT NULL, snapshot TEXT NOT NULL, updated_at INTEGER NOT NULL,

@@ -35,6 +35,9 @@ function init() {
       created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, attempts INTEGER NOT NULL DEFAULT 1)`);
     d.exec("CREATE INDEX IF NOT EXISTS runs_user ON runs(user_id, created_at)");
     d.exec("CREATE INDEX IF NOT EXISTS runs_status ON runs(status)");
+    // Dọn lượt cũ (updated_at < …) và tìm lượt của một đoạn chat (user_id, conv): không quét cả bảng.
+    d.exec("CREATE INDEX IF NOT EXISTS runs_updated ON runs(updated_at)");
+    d.exec("CREATE INDEX IF NOT EXISTS runs_conv ON runs(user_id, conv)");
     // Việc đã làm có tác động ra ngoài: bảng cũ chưa có cột này (thêm khi mở, không đụng dữ liệu cũ).
     const cols = (d.prepare("PRAGMA table_info(runs)").all() as { name: string }[]).map((c) => c.name);
     if (!cols.includes("effects")) d.exec("ALTER TABLE runs ADD COLUMN effects TEXT");

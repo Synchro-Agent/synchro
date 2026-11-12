@@ -40,6 +40,7 @@ CREATE TABLE IF NOT EXISTS sessions (
   user_agent   TEXT
 );
 CREATE INDEX IF NOT EXISTS sessions_user ON sessions(user_id);
+CREATE INDEX IF NOT EXISTS sessions_expires ON sessions(expires_at);
 
 CREATE TABLE IF NOT EXISTS audit (
   id           INTEGER PRIMARY KEY AUTOINCREMENT,
