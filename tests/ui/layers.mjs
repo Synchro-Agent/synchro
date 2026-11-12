@@ -1,13 +1,14 @@
 // Kiểm thử giao diện bằng Chrome ẩn (hồ sơ riêng) trên npm run dev:mock. Chạy tay: node tests/ui/layers.mjs
 // Khung phủ toàn màn hình mở từ trong một trang (xem artifact, sửa việc tự động) phải nằm trên thanh bên: trước đây animation hiện dần của
 // .page biến trang thành một lớp xếp chồng riêng nằm dưới thanh bên (z-index 20), thanh bên che mất nửa trái khung xem artifact.
+// Tài khoản chưa có việc tự động nào (máy giả lập mới dựng) thì bài tự tạo một việc qua API rồi xóa khi xong. BASE, CDP_PORT đổi được.
 import { spawn } from "node:child_process";
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 
-const B = "http://localhost:3200";
+const B = process.env.BASE ?? process.env.SYNCHRO_URL ?? "http://localhost:3200", CDP = Number(process.env.CDP_PORT ?? 9340);
 const SCR = (await import("node:os")).tmpdir() + "/synchro-ui/";
 mkdirSync(SCR, { recursive: true });
-const PROF = SCR + "chrome-prof-layers";
+const PROF = SCR + `chrome-prof-layers-${CDP}`;
 rmSync(PROF, { recursive: true, force: true });
 
 const email = "admin@synchro.test", password = "synchro-mock-123";
@@ -20,10 +21,17 @@ const api = async (method, p, body) => {
 };
 await api("POST", "/api/auth/login", { email, password });
 if (!cookie) throw new Error("login failed");
+// Khung sửa việc tự động cần ít nhất một việc: tạo một việc chạy lúc 03:00 Chủ nhật (không tới lượt chạy trong lúc kiểm thử).
+let madeTask = null;
+if (!((await api("GET", "/api/tasks")).j?.tasks ?? []).length) {
+  const r = await api("POST", "/api/tasks", { title: "Việc thử khung phủ", prompt: "Tóm tắt tin tức", schedule: { kind: "weekly", weekday: 0, time: "03:00", tz: "Asia/Ho_Chi_Minh" } });
+  madeTask = r.j?.task?.id ?? null;
+  if (!madeTask) throw new Error("không tạo được việc tự động: " + JSON.stringify(r));
+}
 const chrome = spawn(process.env.CHROME_PATH ?? (process.platform === "darwin" ? "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" : "google-chrome"),
-  ["--headless=new", "--remote-debugging-port=9340", `--user-data-dir=${PROF}`, "--window-size=1440,900", "--no-first-run", "--no-default-browser-check", "about:blank"], { stdio: "ignore" });
+  ["--headless=new", `--remote-debugging-port=${CDP}`, `--user-data-dir=${PROF}`, "--window-size=1440,900", "--no-first-run", "--no-default-browser-check", "about:blank"], { stdio: "ignore" });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-let ver; for (let i = 0; i < 50 && !ver; i++) { await sleep(200); ver = await fetch("http://127.0.0.1:9340/json/version").then((r) => r.json()).catch(() => null); }
+let ver; for (let i = 0; i < 50 && !ver; i++) { await sleep(200); ver = await fetch(`http://127.0.0.1:${CDP}/json/version`).then((r) => r.json()).catch(() => null); }
 const ws = new WebSocket(ver.webSocketDebuggerUrl);
 await new Promise((r) => ws.addEventListener("open", r));
 let seq = 0; const waits = new Map();
@@ -102,4 +110,5 @@ try {
 } catch (e) { ok(false, "lỗi khi chạy", e.stack); await shot("fail"); }
 const fails = results.filter((r) => !r[0]).length;
 console.log(`${results.length - fails}/${results.length} đạt`);
+if (madeTask) await api("DELETE", `/api/tasks/${madeTask}`);
 ws.close(); chrome.kill(); process.exit(fails ? 1 : 0);
