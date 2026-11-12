@@ -1060,6 +1060,7 @@ for (const [k, v] of Object.entries({
   "Your own connectors": "Connector của riêng bạn",
   "For people who run their own MCP server or want to connect a service themselves, with its URL and OAuth sign-in, a token or their own OAuth client.": "Dành cho người có máy chủ MCP riêng hoặc muốn tự kết nối một dịch vụ: bằng địa chỉ kèm đăng nhập OAuth, bằng token, hoặc bằng OAuth client của riêng mình.",
   "No connectors of your own": "Chưa có connector riêng nào",
+  "Add any remote MCP server by its URL, with OAuth sign-in, a token or your own OAuth client.": "Thêm bất kỳ máy chủ MCP từ xa nào bằng địa chỉ của nó, đăng nhập OAuth, token hoặc OAuth client của riêng bạn.",
   "Add any remote MCP server by its URL. Most people don't need this: Composio above already covers popular apps.": "Thêm bất kỳ máy chủ MCP từ xa nào bằng địa chỉ của nó. Phần lớn mọi người không cần mục này: Composio ở trên đã có sẵn các ứng dụng phổ biến.",
   "Your administrator hasn't allowed custom connectors for your account.": "Quản trị viên chưa cho phép tài khoản của bạn dùng connector tùy chỉnh.",
   "API key only. Voice (ElevenLabs) and Connectors (Composio) work with an API key only.": "Chỉ dùng khóa API. Giọng nói (ElevenLabs) và Connectors (Composio) chỉ dùng khóa API.",

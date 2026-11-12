@@ -82,6 +82,9 @@ as_web mkdir "$WORK"
 PREV=$(ls -1d "$DEST"/daily/*/ 2>/dev/null | sort | tail -1 || true)
 # Tệp không đổi so với bản trước dùng chung liên kết cứng.
 LD() { if [ -n "$PREV" ]; then printf -- '--link-dest=%s%s' "$PREV" "$1"; fi; }
+# rsync mã 24 = có tệp biến mất trong lúc chép (web đang chạy: tệp tạm, bộ đệm, khóa của Litestream, thư mục làm việc vừa dọn). Tệp đã mất thì
+# không cần sao lưu, phần còn lại vẫn chép đủ, nên không hủy cả bản sao lưu vì nó (đêm 12/11 từng hỏng đúng như vậy). Mã lỗi khác vẫn dừng.
+RS() { local rc=0; rsync "$@" || rc=$?; if [ "$rc" = 24 ]; then echo "rsync: vài tệp biến mất trong lúc chép, bỏ qua." >&2; return 0; fi; return "$rc"; }
 
 # 1. SQLite nhất quán, rồi kiểm tra tính toàn vẹn của bản sao trước khi tin nó.
 STEP="không chụp được cơ sở dữ liệu"
@@ -109,11 +112,11 @@ if [ "$(id -u)" = 0 ]; then chown -h root "$TMP/synchro.db"; fi
 
 # 2. Tệp dữ liệu. Skill riêng của người dùng nằm trong data/skills/<mã người dùng>, kho dựng sẵn ở data/skills/_plugins: chỉ bỏ kho dựng sẵn.
 STEP="không chép được tệp dữ liệu"
-rsync -a --delete $(LD data) --exclude '/synchro.db*' --exclude '/.backup-work-*' --exclude '/skills/_plugins/' --exclude '/engine/.local/' --exclude '/engine/.npm/' --exclude '/engine/.cache/' --exclude '/engine/work/' "$DATA/" "$TMP/data/"
+RS -a --delete $(LD data) --exclude '/synchro.db*' --exclude '/.backup-work-*' --exclude '/skills/_plugins/' --exclude '/engine/.local/' --exclude '/engine/.npm/' --exclude '/engine/.cache/' --exclude '/engine/work/' "$DATA/" "$TMP/data/"
 # Tệp tải lên.
-if [ -d "$APP/.cache/files" ]; then rsync -a --delete $(LD uploads) "$APP/.cache/files/" "$TMP/uploads/"; fi
+if [ -d "$APP/.cache/files" ]; then RS -a --delete $(LD uploads) "$APP/.cache/files/" "$TMP/uploads/"; fi
 # Đăng nhập CLI của từng người dùng (nhà engine thường nằm ngoài data/): mất thì mọi người phải đăng nhập lại. Không chép bản cài CLI, thư mục làm việc.
-if [ -d "$ENGINE/logins" ] && [ "$ENGINE" != "$DATA/engine" ]; then rsync -a --delete $(LD engine-logins) "$ENGINE/logins/" "$TMP/engine-logins/"; fi
+if [ -d "$ENGINE/logins" ] && [ "$ENGINE" != "$DATA/engine" ]; then RS -a --delete $(LD engine-logins) "$ENGINE/logins/" "$TMP/engine-logins/"; fi
 # Tệp môi trường: chứa APP_URL, khóa OAuth, WS_AGENT_SECRET; không có thì khôi phục xong web không chạy.
 [ -f "$ENVF" ] && cp -p "$ENVF" "$TMP/env.production"
 [ -f /etc/synchro-ws.env ] && cp -p /etc/synchro-ws.env "$TMP/synchro-ws.env"

@@ -578,7 +578,7 @@ export function ConnectorsPanel() {
       {conns.length === 0 ? (
         <div className="cn-empty">
           <b>No connectors of your own</b>
-          <span className="d">{data.policy.custom ? "Add any remote MCP server by its URL. Most people don't need this: Composio above already covers popular apps." : "Your administrator hasn't allowed custom connectors for your account."}</span>
+          <span className="d">{!data.policy.custom ? "Your administrator hasn't allowed custom connectors for your account." : data.composio?.state === "active" ? "Add any remote MCP server by its URL. Most people don't need this: Composio above already covers popular apps." : "Add any remote MCP server by its URL, with OAuth sign-in, a token or your own OAuth client."}</span>
         </div>
       ) : (
         <div className="cn-list">
@@ -643,9 +643,10 @@ export function ApprovalCard({ calls, onDone }: { calls: ApprovalCall[]; onDone:
           ? <button className="btn ap-edit" onClick={() => setEdit(input)} aria-label="Sửa tham số trước khi cho phép"><I.Icon name="BracesCode" size={14} />Sửa</button>
           : <button className="btn ap-edit" onClick={() => setEdit(null)}>Hủy sửa</button>)}
         <button className="btn" onClick={() => pick("deny")}>Từ chối</button>
-        <button className="btn" disabled={blocked} onClick={() => pick("allow")}>{es?.changed ? "Cho phép với tham số đã sửa" : "Cho phép một lần"}</button>
+        {/* Nút chính (và tiêu điểm sẵn) là cho phép một lần: Enter không bao giờ cấp quyền vĩnh viễn; "Luôn cho phép" là lựa chọn phụ, phải bấm có chủ đích. */}
+        <button className="btn" disabled={blocked} onClick={() => pick("always")}>Luôn cho phép</button>
         <button className="btn" disabled={blocked} onClick={() => pick("chat")}>Cho phép trong cuộc trò chuyện này</button>
-        <button className="btn dark" disabled={blocked} onClick={() => pick("always")} autoFocus={edit === null}>Luôn cho phép</button>
+        <button className="btn dark" disabled={blocked} onClick={() => pick("allow")} autoFocus={edit === null}>{es?.changed ? "Cho phép với tham số đã sửa" : "Cho phép một lần"}</button>
       </div>
     </div>
   );
