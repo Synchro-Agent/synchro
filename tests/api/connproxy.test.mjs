@@ -40,7 +40,10 @@ try {
     await chat(C, "Chào bạn");
     const T = (await last()).anthropic?.tools ?? [];
     const has = T.some((t) => t.name === "run_code");
-    ok(has === code && JSON.stringify(T).length < 21_000, `định nghĩa công cụ gọn (chạy code ${code ? "bật" : "tắt"})`, `${JSON.stringify(T).length} ký tự, run_code ${has}`);
+    // Hai tham số product_shot / product_relight của generate_image chỉ có khi máy chủ có khóa Replicate (không có khóa thì không gửi):
+    // ngân sách 21.000 tính cho phần chung, cộng đúng phần hai tham số đó khi chúng có mặt.
+    const img = T.find((t) => t.name === "generate_image"), extra = img?.input_schema?.properties?.product_shot ? JSON.stringify({ a: img.input_schema.properties.product_shot, b: img.input_schema.properties.product_relight }).length + 40 : 0;
+    ok(has === code && JSON.stringify(T).length < 21_000 + extra, `định nghĩa công cụ gọn (chạy code ${code ? "bật" : "tắt"})`, `${JSON.stringify(T).length} ký tự, run_code ${has}`);
   }
 
   console.log("3. Tìm rồi gọi công cụ");

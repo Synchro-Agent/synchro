@@ -35,7 +35,11 @@ export const imageKit = (product: boolean, poster: boolean) => (product || poste
 // "quyết định" là động từ) thì so trên chữ còn dấu, hoặc chỉ tính khi đi cùng dấu hiệu khác.
 const CHART = words("bieu do|do thi|charts?|graphs?|plots?|dashboards?|bang dieu khien|thong ke|so lieu|kpis?|doanh thu|doanh so|loi nhuan|ty le|ti le|xu huong|tang truong|infographics?|bao cao|reports?|analytics|waterfall|sankey|radar|pheu|funnel|truc quan hoa|visuali[sz]\\w*|echarts|recharts|statistics?|revenue");
 // WebGL không cần chữ "3D": quả địa cầu, thiên hà, hạt bay, khối kính nổi, nền gradient chuyển động, mô hình xoay được.
-const THREE = words("3d|3-d|3 chieu|ba chieu|three(?:\\.js|js)?|r3f|react-three|drei|webgl|shaders?|shadergradient|gradient dong|kinh khuc xa|vat the noi|vat the kinh|khoi kinh|lo lung|particles?|hat chuyen dong|hat bay|hieu ung hat|mo hinh 3d|mo hinh xoay|xoay 360|xoay tuong tac|xoay duoc|orbit|orbs?|globes?|dia cau|galax(?:y|ies)|thien ha|ngan ha|planets?|hanh tinh|floating|glass (?:objects?|spheres?|shapes?|blobs?)|spinning|rotating|(?:animated|moving) (?:[a-z]+ )?(?:gradients?|backgrounds?)|mesh gradients?|gradient mesh|luoi gradient|gradient chuyen dong|nen dong|nen chuyen dong|canvas");
+// 3D: từ chuyên môn luôn tính ("nền động" so trên chữ còn dấu: bỏ dấu thì trùng "nên đóng", "nên động viên"); từ thường gặp (địa cầu, hành tinh, floating, canvas, hạt bay…) chỉ tính khi câu là yêu cầu dựng giao diện
+// (động từ dựng hoặc từ chỉ trang / nền / hiệu ứng), để "floating point", "bài hát bay bổng", "mua quả địa cầu" không kéo theo khối 3D.
+const THREE = words("3d|3-d|3 chieu|ba chieu|three(?:\\.js|js)?|r3f|react-three|drei|webgl|shaders?|shadergradient|gradient dong|kinh khuc xa|vat the noi|vat the kinh|khoi kinh|mo hinh 3d|mo hinh xoay|xoay 360|mesh gradients?|gradient mesh|luoi gradient|gradient chuyen dong|nen chuyen dong|(?:animated|moving) (?:[a-z]+ )?(?:gradients?|backgrounds?)|glassmorphism");
+const THREE_LOOSE = words("lo lung|particles?|hat chuyen dong|hat bay|hieu ung hat|xoay tuong tac|orbit|orbs?|globes?|dia cau|galax(?:y|ies)|thien ha|ngan ha|planets?|hanh tinh|floating|glass (?:objects?|spheres?|shapes?|blobs?)|spinning|rotating|canvas");
+const BUILD_UI = words("tao|build|make|create|design|thiet ke|lam (?:mot|cho|qua|nen|hieu ung|trang|hero|website|landing|giao dien|canh)|dung (?:mot|trang|hero|nen|canh)|hero|landing(?: page)?|backgrounds?|nen (?:trang|toi|sang|web)|trang chu|trang web|trang gioi thieu|websites?|web ?page|section|hieu ung|animations?|animated|interactive|tuong tac|giao dien|artifact");
 const SLIDE = words("slides?|slide ?decks?|decks?|pitch ?decks?|thuyet trinh|trinh chieu|ban trinh bay|bai trinh bay|powerpoint|pptx|keynote|presentations?|morph");
 // Văn bản hành chính: tên loại rõ nghĩa luôn tính (designkit nhận cả "soạn quyết định…" khi là tân ngữ); "quyết định, thông báo, báo cáo,
 // kế hoạch, hướng dẫn, chỉ thị" ở chỗ khác chỉ tính khi câu có dấu hiệu cơ quan, tổ chức ("giúp tôi quyết định nên mua gì" là trò chuyện).
@@ -84,7 +88,7 @@ export function featTurn(i: FeatIn): FeatTurn {
   if (i.art) {
     const design = i.format === "slide" || i.format === "doc" || i.format === "graphic";
     if (CHART.test(t) || design || /data-sx-chart\b/.test(last)) parts.push(["chart", CHART_KIT]);
-    if (THREE.test(t) || THREE_SRC.test(last)) parts.push(["three", THREE_KIT]);
+    if (THREE.test(t) || /(?<![\p{L}\p{N}])nền động(?![\p{L}\p{N}])/u.test(lower) || (THREE_LOOSE.test(t) && (BUILD_UI.test(t) || /(?<![\p{L}\p{N}])vẽ(?![\p{L}\p{N}])/u.test(lower))) || THREE_SRC.test(last)) parts.push(["three", THREE_KIT]);
     if (SLIDE.test(t) || i.format === "slide" || /<section\b[^>]*class(?:Name)?=["'][^"']*\bslide\b/.test(last)) parts.push(["morph", MORPH_KIT]);
     if (isVbhcJob(head) || VBHC.test(t) || (VBHC_SOFT.test(t) && ORG.test(lower.replace(ORG_NOT, " "))) || /vnd\.synchro\.vbhc\+json|type="vbhc"/.test(last)) parts.push(["vbhc", VBHC_KIT]);
   }

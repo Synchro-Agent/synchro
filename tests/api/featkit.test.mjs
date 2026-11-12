@@ -14,6 +14,10 @@ console.log("1. Trò chuyện thường, sửa trang thường: không có khố
 for (const q of ["xin chào", "tạo trang web giới thiệu quán cà phê", "liệt kê đơn hàng rồi sửa trang #rev 3", "#rev 4", "giúp tôi quyết định nên mua laptop nào", "lên kế hoạch tính toán chi tiêu tuần này", "anh ơi giải thích giúp em", "viết code python tính fibonacci"])
   ok(parts(q) === "", `không khối: "${q}"`, parts(q));
 
+console.log("1b. Từ thường gặp của 3D trong câu không phải yêu cầu dựng giao diện: không có khối 3D");
+for (const q of ["Tôi có nên đóng tài khoản ngân hàng này không?", "Màn hình laptop không xoay được thì làm sao?", "Bạn có biết hành tinh nào lớn nhất hệ mặt trời không?", "Có nên động viên con khi thi trượt?", "Bài hát bay bổng nhất của Trịnh Công Sơn", "Explain floating point precision in Python", "Lập lịch rotating shifts cho nhân viên", "Lịch tập spinning ở phòng gym", "Viết code Python đọc file canvas.json", "Giải thích về thiên hà Milky Way", "Tôi muốn mua quả địa cầu cho con", "Viết bài thơ về ngân hà", "business model canvas", "particle physics là gì"])
+  ok(!parts(q).split(",").includes("three"), `không khối 3D: "${q}"`, parts(q));
+
 console.log("2. Đúng khối theo câu người dùng");
 for (const [q, want] of [
   ["Vẽ biểu đồ doanh thu 6 tháng trong trang", "chart"], ["make a dashboard of sales KPIs", "chart"], ["bao cao ty le chuyen doi", "chart"],
