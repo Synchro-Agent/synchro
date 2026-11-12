@@ -68,6 +68,25 @@ export function db() {
   healAdminEmails(d);
   return (g.__synchroDb = d);
 }
+// Câu lệnh đã biên dịch sẵn cho các truy vấn lặp lại trên đường nóng (mỗi yêu cầu: phiên, tài khoản, cài đặt). db().prepare() mỗi lần là
+// phân tích lại câu SQL. Chỉ dùng cho câu SQL cố định (không ghép giá trị vào chuỗi) và cho get / run / all: một câu lệnh đang iterate() thì
+// không dùng lại được giữa chừng. Gắn với đúng kết nối đang mở; tối đa STMT_MAX câu (quá thì bỏ hết, phòng ai đó ghép chuỗi động).
+const STMT_MAX = 500;
+const sg = globalThis as unknown as { __synchroStmts?: { d: Database.Database; m: Map<string, Database.Statement> } };
+export function stmt(sql: string): Database.Statement {
+  const d = db();
+  let c = sg.__synchroStmts;
+  if (!c || c.d !== d) c = sg.__synchroStmts = { d, m: new Map() };
+  let st = c.m.get(sql);
+  if (!st) {
+    st = d.prepare(sql);
+    if (c.m.size >= STMT_MAX) c.m.clear();
+    c.m.set(sql, st);
+  }
+  return st;
+}
+/** Số câu lệnh đang giữ (kiểm thử). */
+export const stmtCacheSize = () => sg.__synchroStmts?.m.size ?? 0;
 /** Bản cũ đánh dấu chưa xác minh khi quản trị viên đổi email hộ, nên tài khoản lâu năm bị coi như vừa đăng ký. Sửa một lần: chỉ đúng tài khoản còn giữ địa chỉ quản trị viên đã đặt. */
 export function healAdminEmails(d: Database.Database) {
   if (d.prepare("SELECT 1 FROM settings WHERE key = 'admin_email_healed'").get()) return;
@@ -150,22 +169,22 @@ export function limit(key: string, max: number, windowMs: number) {
 }
 
 // ---- cài đặt + nhật ký ----
-export const getSetting = (k: string, d: string) => (db().prepare("SELECT value FROM settings WHERE key = ?").get(k) as { value: string } | undefined)?.value ?? d;
-export const setSetting = (k: string, v: string) => db().prepare("INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(k, v);
+export const getSetting = (k: string, d: string) => (stmt("SELECT value FROM settings WHERE key = ?").get(k) as { value: string } | undefined)?.value ?? d;
+export const setSetting = (k: string, v: string) => stmt("INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(k, v);
 export const signupOpen = () => getSetting("signup_open", "1") === "1";
 
 let auditN = 0;
 export function audit(action: string, o: { actor?: UserRow | null; target?: UserRow | null; targetEmail?: string; ip?: string; detail?: string } = {}) {
-  db().prepare("INSERT INTO audit (at, action, actor_id, actor_email, target_id, target_email, ip, detail) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
+  stmt("INSERT INTO audit (at, action, actor_id, actor_email, target_id, target_email, ip, detail) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
     .run(Date.now(), action, o.actor?.id ?? null, o.actor?.email ?? null, o.target?.id ?? null, o.target?.email ?? o.targetEmail ?? null, o.ip ?? null, o.detail ?? null);
   if (++auditN % 200 === 0) db().prepare("DELETE FROM audit WHERE id <= (SELECT MAX(id) FROM audit) - 50000").run();
 }
 
 // ---- người dùng ----
-export const getUser = (id: string) => db().prepare("SELECT * FROM users WHERE id = ?").get(id) as UserRow | undefined;
-export const findByEmail = (email: string) => db().prepare("SELECT * FROM users WHERE email = ?").get(email) as UserRow | undefined;
+export const getUser = (id: string) => stmt("SELECT * FROM users WHERE id = ?").get(id) as UserRow | undefined;
+export const findByEmail = (email: string) => stmt("SELECT * FROM users WHERE email = ?").get(email) as UserRow | undefined;
 // Khóa truy cập (passkeys.ts) cũng là một cách đăng nhập: gỡ Google khi chỉ còn khóa vẫn vào lại được. Bảng tạo khi dùng lần đầu.
-const hasPasskeys = (uid: string) => { try { return !!db().prepare("SELECT 1 FROM user_passkeys WHERE user_id = ? LIMIT 1").get(uid); } catch { return false; } };
+const hasPasskeys = (uid: string) => { try { return !!stmt("SELECT 1 FROM user_passkeys WHERE user_id = ? LIMIT 1").get(uid); } catch { return false; } };
 const methodsOf = (u: UserRow) => [...(u.password_hash ? ["password"] : []), ...(db().prepare("SELECT provider FROM identities WHERE user_id = ? ORDER BY created_at").all(u.id) as { provider: string }[]).map((r) => r.provider), ...(hasPasskeys(u.id) ? ["passkey"] : [])];
 const inGoodStanding = (u: UserRow) => u.email_verified === 1 && u.status === "active";
 export type Role = "owner" | "admin" | "member";
@@ -318,7 +337,7 @@ export type PublicUser = ReturnType<typeof publicUser>;
 // ---- xác minh hai bước: mật khẩu hoặc Google đúng rồi mà tài khoản đã bật thì chưa tạo phiên, chỉ cấp vé 10 phút để nhập mã (mfa.ts). Vé ở bộ nhớ: khởi động lại thì đăng nhập lại. ----
 const MFA_COOKIE = "synchro_mfa";
 const mfaTickets = ((globalThis as { __synchroMfaTickets?: Map<string, { uid: string; method: string; exp: number }> }).__synchroMfaTickets ??= new Map());
-const mfaOn = (uid: string) => { try { return !!db().prepare("SELECT 1 FROM user_mfa WHERE user_id = ? AND enabled_at IS NOT NULL").get(uid); } catch { return false; } };
+const mfaOn = (uid: string) => { try { return !!stmt("SELECT 1 FROM user_mfa WHERE user_id = ? AND enabled_at IS NOT NULL").get(uid); } catch { return false; } };
 /** Tạo phiên, hoặc vé bước hai nếu tài khoản đã bật. */
 function signIn(u: UserRow, req: Request, method: string): { cookie: string; mfa: boolean } {
   if (!mfaOn(u.id)) return { cookie: createSession(u, req, method), mfa: false };
@@ -360,22 +379,22 @@ export const clearSessionCookie = (req: Request) => cookie(req, COOKIE, "", 0);
 export function current(req: Request): { user: UserRow; session: SessionRow } | null {
   const t = readCookie(req, COOKIE);
   if (!t || t.length > 100) return null;
-  const s = db().prepare("SELECT * FROM sessions WHERE id = ?").get(sha256(t)) as SessionRow | undefined;
+  const s = stmt("SELECT * FROM sessions WHERE id = ?").get(sha256(t)) as SessionRow | undefined;
   if (!s) return null;
   const now = Date.now();
-  if (s.expires_at < now) { db().prepare("DELETE FROM sessions WHERE id = ?").run(s.id); return null; }
+  if (s.expires_at < now) { stmt("DELETE FROM sessions WHERE id = ?").run(s.id); return null; }
   const user = getUser(s.user_id);
   if (!user || user.status !== "active") return null;
   // gia hạn trượt, ghi tối đa 10 phút một lần
   if (now - s.last_seen_at > 10 * MIN) {
-    db().prepare("UPDATE sessions SET last_seen_at = ?, expires_at = ? WHERE id = ?").run(now, now + SESSION_TTL, s.id);
-    db().prepare("UPDATE users SET last_seen_at = ? WHERE id = ?").run(now, user.id);
+    stmt("UPDATE sessions SET last_seen_at = ?, expires_at = ? WHERE id = ?").run(now, now + SESSION_TTL, s.id);
+    stmt("UPDATE users SET last_seen_at = ? WHERE id = ?").run(now, user.id);
   }
   return { user, session: s };
 }
 /** Tài khoản của một phiên còn hiệu lực, khi không có cookie phiên trong yêu cầu (oauth.ts: Apple gửi kết quả bằng POST từ trang khác). */
 export function sessionUser(sid: string) {
-  const s = db().prepare("SELECT * FROM sessions WHERE id = ?").get(sid) as SessionRow | undefined;
+  const s = stmt("SELECT * FROM sessions WHERE id = ?").get(sid) as SessionRow | undefined;
   const user = s && s.expires_at >= Date.now() ? getUser(s.user_id) : undefined;
   return user?.status === "active" ? user : null;
 }
@@ -402,7 +421,7 @@ export function device(ua: string | null) {
   return os ? `${b} · ${os}` : b;
 }
 export const publicSession = (s: SessionRow, cur?: string) => ({ id: s.id, current: s.id === cur, method: s.method, device: device(s.user_agent), ip: s.ip, createdAt: s.created_at, lastSeen: s.last_seen_at });
-export const sessionsOf = (userId: string) => db().prepare("SELECT * FROM sessions WHERE user_id = ? AND expires_at > ? ORDER BY last_seen_at DESC").all(userId, Date.now()) as SessionRow[];
+export const sessionsOf = (userId: string) => stmt("SELECT * FROM sessions WHERE user_id = ? AND expires_at > ? ORDER BY last_seen_at DESC").all(userId, Date.now()) as SessionRow[];
 
 // ---- đăng ký / đăng nhập bằng email ----
 /** Tab mở từ bản cũ còn gọi bước kiểm tra email: không còn cho biết email có tài khoản hay không, bản cũ đi tiếp sang ô mật khẩu. */
