@@ -91,7 +91,9 @@ sync_code() { # mã mới từ $SRC sang thư mục app (chỉ khi deploy từ t
 harden
 # Blueprint G3.3: 4 GB swap cho máy chủ (container có --memory-swap lớn hơn --memory chỉ tràn sang swap được khi máy có swap). Chạy lại không đổi gì
 # khi đã có; đĩa thiếu hay lỗi thì bỏ qua, không chặn deploy. Chạy bản trong thư mục app (scripts/ thuộc root sau harden), không giữ khóa deploy (9>&-).
-bash "$APP/scripts/setup-swap.sh" 9>&- || echo "Không thêm được swap cho máy chủ (bỏ qua)." >&2
+# Blueprint G3.3 swap: chạy bản trong $SRC (mã đang được deploy), không phải bản cũ còn trong thư mục app.
+swap() { bash "$SRC/scripts/setup-swap.sh" 9>&- || echo "Không thêm được swap cho máy chủ (bỏ qua)." >&2; }
+swap
 # Một tiến trình: thư mục app phải có mã mới trước khi build (như trước đây).
 [ "$BG" = 1 ] || { sync_code; SRC="$APP"; }
 [ -n "$PIP" ] && su - synchro -c "cd $APP && .mkvenv/bin/pip install -q -r $SRC/requirements.txt"

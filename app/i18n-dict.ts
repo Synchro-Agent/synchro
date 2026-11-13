@@ -558,12 +558,15 @@ RULES_EN.push(
   [/^Chưa bật phiên âm giọng nói nên Synchro chưa đọc được tệp âm thanh \/ video "(.+)"\. Hãy kết nối ElevenLabs trong Cài đặt rồi tải lại\.$/, (m) => `Speech transcription isn't set up, so Synchro can't read the audio / video file "${m[1]}" yet. Connect ElevenLabs in Settings and upload it again.`],
   [/^Tệp âm thanh \/ video "(.+)" lớn hơn (.+)MB nên chưa phiên âm được\. Hãy cắt ngắn rồi tải lên lại\.$/, (m) => `The audio / video file "${m[1]}" is over ${m[2]} MB, so it can't be transcribed. Trim it and upload again.`],
   [/^Không phiên âm được tệp âm thanh \/ video "(.+)"\. Hãy thử lại\.$/, (m) => `Couldn't transcribe the audio / video file "${m[1]}". Try again.`],
-  [/^Hạn mức giọng AI của bạn hôm nay: còn (.+) \/ (.+) credit( · đặt lại lúc nửa đêm \(giờ UTC\))?$/, (m) => `Your AI voice allowance today: ${m[1]} / ${m[2]} credits left${m[3] ? " · resets at midnight (UTC)" : ""}`],
+  [/^Hạn mức giọng AI của bạn hôm nay: còn (.+) \/ (.+) credit(.*)$/, (m) => `Your AI voice allowance today: ${m[1]} / ${m[2]} credits left${m[3].replace(" · đặt lại lúc nửa đêm (giờ UTC)", " · resets at midnight (UTC)")}`],
   [/^(.+) credit hôm nay$/, (m) => `${m[1]} credits today`],
 );
 Object.assign(VI2EN, {
   "Dùng Chrome của bạn trong khi đang chạy skill chưa kiểm chứng từ danh mục": "Use your Chrome while an unverified catalog skill is running",
   "Nhà cung cấp dự phòng": "Backup provider",
+  "Synchro đang chuyển sang phiên bản mới. Lượt này sẽ được gửi lại sau vài giây.": "Synchro is switching to a new version. This turn will be sent again in a few seconds.",
+  "Workspace ngắt kết nối giữa chừng.": "The workspace disconnected midway.",
+  "credit hôm nay": "credits today",
 });
 
 // Bộ chọn model và lỗi từ máy chủ khi gọi model (giao diện tiếng Anh).
