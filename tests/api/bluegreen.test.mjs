@@ -17,10 +17,29 @@ console.log("Vai trò primary / secondary");
 {
   R.resetRoleForTest();
   let n = 0;
-  const env = {};
+  const env = { SYNCHRO_PRIMARY_LOCK: path.join(tmp, "single.pid") };
   R.startRole(() => { n++; }, { env });
   R.startRole(() => { n++; }, { env });
   ok(n === 1 && R.isPrimary(), "một tiến trình (SYNCHRO_ROLE trống): primary ngay, việc nền chạy đúng một lần", { n, role: R.role() });
+  ok(fs.readFileSync(env.SYNCHRO_PRIMARY_LOCK, "utf8").startsWith(`${process.pid} single`), "DEPLOY-2: một tiến trình cũng giữ khóa primary");
+  R.releasePrimary();
+}
+{
+  // DEPLOY-2: "npm start" lỡ bật cạnh production xanh/lam (cùng thư mục dữ liệu): không thành primary thứ hai.
+  R.resetRoleForTest();
+  const lock = path.join(tmp, "single2.pid");
+  fs.writeFileSync(lock, "424243 green\n");
+  let holderAlive = true, n = 0;
+  const env = { SYNCHRO_PRIMARY_LOCK: lock, SYNCHRO_ROLE_POLL_MS: "20" };
+  const err = console.error; console.error = () => {};
+  R.startRole(() => { n++; }, { env, alive: (pid) => (pid === 424243 ? holderAlive : pid === process.pid) });
+  console.error = err;
+  await sleep(100);
+  ok(n === 0 && R.role() === "secondary", "DEPLOY-2: khóa primary đang do tiến trình khác giữ: tiến trình một-màu chỉ phục vụ, không chạy việc nền", { n, role: R.role() });
+  holderAlive = false;
+  await sleep(100);
+  ok(n === 1 && R.isPrimary(), "DEPLOY-2: tiến trình giữ khóa thoát: nhận vai một lần", { n, role: R.role() });
+  R.releasePrimary(); R.resetRoleForTest();
 }
 {
   R.resetRoleForTest();
@@ -49,12 +68,12 @@ console.log("Vai trò primary / secondary");
 {
   const live = path.join(tmp, "live2"), lock = path.join(tmp, "lock2");
   fs.writeFileSync(live, "green 3002 /x\n");
-  ok(R.canPromote({ color: "green", liveFile: live, lockFile: lock }, 1234, () => true), "không có khóa (watchdog khởi động lại màu sống): nhận vai ngay");
+  ok(R.canPromote({ bluegreen: true, color: "green", liveFile: live, lockFile: lock }, 1234, () => true), "không có khóa (watchdog khởi động lại màu sống): nhận vai ngay");
   fs.writeFileSync(lock, "999 blue\n");
-  ok(!R.canPromote({ color: "green", liveFile: live, lockFile: lock }, 1234, () => true), "khóa của tiến trình khác còn sống: chờ");
-  ok(R.canPromote({ color: "green", liveFile: live, lockFile: lock }, 1234, () => false), "khóa của tiến trình đã chết (bị SIGKILL): nhận vai");
-  ok(!R.canPromote({ color: "blue", liveFile: live, lockFile: lock }, 1234, () => false), "màu không sống thì không bao giờ nhận vai");
-  ok(!R.canPromote({ color: "", liveFile: live, lockFile: lock }, 1234, () => false), "thiếu SYNCHRO_COLOR: không nhận vai");
+  ok(!R.canPromote({ bluegreen: true, color: "green", liveFile: live, lockFile: lock }, 1234, () => true), "khóa của tiến trình khác còn sống: chờ");
+  ok(R.canPromote({ bluegreen: true, color: "green", liveFile: live, lockFile: lock }, 1234, () => false), "khóa của tiến trình đã chết (bị SIGKILL): nhận vai");
+  ok(!R.canPromote({ bluegreen: true, color: "blue", liveFile: live, lockFile: lock }, 1234, () => false), "màu không sống thì không bao giờ nhận vai");
+  ok(!R.canPromote({ bluegreen: true, color: "", liveFile: live, lockFile: lock }, 1234, () => false), "thiếu SYNCHRO_COLOR: không nhận vai");
 }
 {
   // Mọi việc chỉ được chạy ở một tiến trình phải nằm trong primaryDuties (instrumentation.ts), không ở phần chạy ở mọi tiến trình.
@@ -180,6 +199,7 @@ const calls = () => { const s = fs.existsSync(log) ? fs.readFileSync(log, "utf8"
   r = sh("bg_stop green; echo rc=$?");
   ok(/rc=0/.test(r.out) && calls().includes("pm2 stop synchro-green"), "DEPLOY-1: màu nghỉ thì dừng được", r);
   const sb = fs.readFileSync(path.join(process.cwd(), "scripts", "server-build.sh"), "utf8");
+  ok(sb.indexOf('BG=0; bg_enabled "$APP" && BG=1') > sb.indexOf("flock -w 900 9") && !/PORT=3001/.test(sb) && /bg_pm2_has "\$PM2"/.test(sb), "DEPLOY-2: chọn cách deploy sau khi giữ khóa; production đã chuyển không đi đường một tiến trình nếu thiếu app pm2; không bao giờ đoán cổng 3001");
   ok(sb.indexOf('bg_sync_live "$APP"') > sb.indexOf("flock -w 900 9") && /trap cleanup EXIT/.test(sb) && /trap 'exit 129' HUP/.test(sb), "DEPLOY-1: server-build sửa màu sống sau khi giữ khóa, trap khi thoát / mất ssh");
   fs.rmSync(up);
 }

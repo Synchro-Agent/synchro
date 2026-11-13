@@ -40,6 +40,7 @@ bg_pm2() {
   if [ "$(id -u)" = 0 ] && [ -n "$BG_WEB_USER" ]; then su - "$BG_WEB_USER" -c "pm2 $*" 9>&-
   else pm2 "$@" 9>&-; fi
 }
+bg_pm2_has() { bg_pm2 jlist 2>/dev/null | grep -q "\"name\":\"$1\""; }  # app pm2 có trong danh sách (đang chạy hay đã dừng)
 bg_start() { # bg_start <app> <màu>: bật (hoặc bật lại) màu theo ecosystem.config.cjs, môi trường lấy lại từ tệp đó.
   bg_pm2 startOrRestart "$1/ecosystem.config.cjs" --only "$(bg_pm2_name "$2")" --update-env
 }

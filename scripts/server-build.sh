@@ -2,7 +2,7 @@
 # Dựng bản production trên máy chủ rồi thay bản đang chạy (chạy bằng root): bash scripts/server-build.sh [thư mục app] [tên pm2] [pip] [cổng]
 #   bash /var/www/synchro/scripts/server-build.sh /var/www/synchro synchro pip
 # Hai cách thay bản:
-# - Xanh/lam (production sau khi chạy scripts/bluegreen-migrate.sh; BLUEGREEN=1 bắt buộc, BLUEGREEN=0 tắt): bản mới chạy ở màu đang nghỉ
+# - Xanh/lam (production sau khi chạy scripts/bluegreen-migrate.sh; BLUEGREEN=1 bắt buộc; BLUEGREEN=0 bị từ chối nếu thiếu app pm2 một tiến trình): bản mới chạy ở màu đang nghỉ
 #   (blue 3000 / green 3002) bên cạnh bản cũ, đạt kiểm tra sức khỏe mới chuyển nginx, rồi bản cũ nhận SIGTERM, chạy nốt lượt đang dở
 #   (tối đa 25 giây) và thoát. Không có lúc nào nginx trỏ vào cổng chưa sẵn sàng: không rớt lượt, không 502. Xem docs/van-hanh.md.
 # - Một tiến trình (staging, production chưa chuyển): tráo .next rồi pm2 restart như trước.
@@ -23,11 +23,20 @@ SIDE="$(dirname "$APP")"; NAME="$(basename "$APP")"
 PREV="$SIDE/.synchro-prev-$NAME"; STATICS="$SIDE/.synchro-statics-$NAME"; GOOD="$SIDE/.synchro-good-$NAME"
 SRC="${SYNCHRO_INCOMING:-$APP}"
 . "$(dirname "${BASH_SOURCE[0]}")/bluegreen-lib.sh"
-BG=0; bg_enabled "$APP" && BG=1
 # Một lần deploy mỗi lúc; watchdog (scripts/watchdog.sh) thấy khóa này thì không khởi động lại web giữa chừng. Lần sau chờ lần trước xong, không cắt ngang lúc đang tráo bản.
 if command -v flock >/dev/null 2>&1; then
   exec 9>/run/synchro-deploy.lock
   flock -w 900 9 || { echo "Đang có lần deploy khác chạy quá lâu." >&2; exit 1; }
+fi
+# Chọn cách deploy SAU khi giữ khóa: bluegreen-migrate.sh (giữ cùng khóa) có thể vừa chuyển production sang xanh/lam.
+BG=0; bg_enabled "$APP" && BG=1
+# Production đã chuyển mà vẫn đi đường một tiến trình (chỉ khi BLUEGREEN=0): chỉ được khi app pm2 "$PM2" còn tồn tại, không bao giờ tạo app
+# mới (từng tạo "synchro" ở cổng 3001 của staging, thành primary thứ hai trên dữ liệu production).
+if [ "$BG" = 0 ] && [ "$(bg_live_app)" = "$APP" ]; then
+  if [ "${BLUEGREEN:-}" != 0 ] || ! bg_pm2_has "$PM2"; then
+    echo "$APP đã chuyển sang xanh/lam (màu sống $(bg_live_color)): không deploy kiểu một tiến trình. Bỏ BLUEGREEN=0, hoặc xem docs/van-hanh.md (Bỏ hẳn xanh/lam)." >&2
+    exit 1
+  fi
 fi
 # Màu đang sống đọc sau khi đã giữ khóa: lần deploy trước (vừa xong) có thể vừa đổi màu. Cổng nginx đang trỏ là nguồn sự thật
 # (lần trước có thể chết giữa lúc đổi nginx và lúc ghi màu sống): sửa tệp màu sống theo nó trước khi chọn màu nghỉ.
@@ -198,10 +207,15 @@ if [ -z "$PORT" ]; then
       } catch {}
     });' || true)
 fi
-[ -z "$PORT" ] && [ "$PM2" = "synchro" ] && PORT=3001
+# Không đoán cổng: từng mặc định 3001 (cổng của staging) cho production. Chỉ tạo app pm2 mới khi cổng được truyền rõ ở tham số thứ 4.
+PORT_ARG="${4:-}"
 
 # 9>&-: tiến trình nền của pm2 không được mang theo khóa deploy.
-restart() { su - synchro -c "pm2 restart $PM2 --update-env" 9>&- || su - synchro -c "cd $APP && pm2 start npm --name $PM2 -- start -- -p ${PORT:-3001} && pm2 save" 9>&-; }
+restart() {
+  su - synchro -c "pm2 restart $PM2 --update-env" 9>&- && return 0
+  [ -n "$PORT_ARG" ] || { echo "Không có app pm2 \"$PM2\" và không có cổng (tham số thứ 4): không tạo app mới." >&2; return 1; }
+  su - synchro -c "cd $APP && pm2 start npm --name $PM2 -- start -- -p $PORT_ARG && pm2 save" 9>&-
+}
 healthy() { [ -n "$PORT" ] || return 0; bg_healthy "$PORT" "$1"; }
 # Sau khi trả bản trước: chỉ cần trang chủ lên (bản trước của lần deploy đầu tiên chưa có /api/health).
 up() {
@@ -216,9 +230,9 @@ rm -rf "$PREV"; mkdir -p "$PREV"
 mv "$B/.next" "$APP/.next"
 if [ -n "$NEWMOD" ]; then [ -d "$APP/node_modules" ] && mv "$APP/node_modules" "$PREV/node_modules"; mv "$B/node_modules" "$APP/node_modules"; fi
 chown -R synchro:synchro "$APP/.next" "$APP/node_modules"
-restart || true
+RESTARTED=1; restart || RESTARTED=0
 if [ -z "$PORT" ]; then echo "CẢNH BÁO: không biết cổng của $PM2 nên bỏ qua kiểm tra sức khỏe (truyền cổng ở tham số thứ 4)." >&2; fi
-if ! healthy "$NEWID"; then
+if [ "$RESTARTED" = 0 ] || ! healthy "$NEWID"; then
   echo "BẢN MỚI KHÔNG ĐẠT kiểm tra sức khỏe: trả lại bản trước." >&2
   su - synchro -c "pm2 logs $PM2 --nostream --lines 40" >&2 || true
   [ -d "$PREV/next" ] || { echo "Không có bản trước để trả lại." >&2; exit 1; }

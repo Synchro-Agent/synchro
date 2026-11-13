@@ -1,5 +1,7 @@
 // Vai trò của tiến trình web khi deploy xanh/lam (docs/van-hanh.md, "Deploy xanh/lam"). Mô-đun thuần (chỉ node:fs) để kiểm thử không cần máy chủ.
-// - Một tiến trình (staging, máy dev, production chưa chuyển): SYNCHRO_ROLE trống hoặc "primary" → là primary ngay, chạy việc nền như trước.
+// - Một tiến trình (staging, máy dev, production chưa chuyển): SYNCHRO_ROLE trống hoặc "primary" → là primary ngay, chạy việc nền như trước,
+//   trừ khi một tiến trình khác còn sống đang giữ khóa primary của cùng thư mục dữ liệu (ví dụ ai đó lỡ bật thêm "npm start" cạnh production
+//   xanh/lam): khi đó chờ như secondary, không bao giờ có hai primary trên một cơ sở dữ liệu.
 // - Xanh/lam (ecosystem.config.cjs đặt SYNCHRO_ROLE=secondary, SYNCHRO_COLOR=blue|green): khởi động là secondary, chỉ phục vụ yêu cầu.
 //   Mỗi vài giây xem tệp màu đang sống (do scripts/server-build.sh ghi, dòng "<màu> <cổng>"): đã là màu của mình và tiến trình giữ khóa
 //   primary đã thoát thì nhận vai primary và chạy việc nền đúng một lần. Nhờ vậy litestream, bộ hẹn giờ, chạy lại lượt dở dang… không bao giờ
@@ -40,9 +42,9 @@ export function primaryHolder(lockFile: string, alive: (pid: number) => boolean 
   } catch { return null; }
 }
 
-/** Secondary được nhận vai khi: màu sống là màu của mình, và không còn tiến trình nào khác giữ khóa primary. */
-export function canPromote(c: Pick<RoleConfig, "color" | "liveFile" | "lockFile">, pid = process.pid, alive: (pid: number) => boolean = pidAlive): boolean {
-  if (!c.color || liveColor(c.liveFile) !== c.color) return false;
+/** Nhận vai khi không còn tiến trình nào khác giữ khóa primary; xanh/lam thì còn phải là màu đang sống. */
+export function canPromote(c: Pick<RoleConfig, "bluegreen" | "color" | "liveFile" | "lockFile">, pid = process.pid, alive: (pid: number) => boolean = pidAlive): boolean {
+  if (c.bluegreen && (!c.color || liveColor(c.liveFile) !== c.color)) return false;
   const holder = primaryHolder(c.lockFile, alive);
   return holder === null || holder === pid;
 }
@@ -50,15 +52,17 @@ export function canPromote(c: Pick<RoleConfig, "color" | "liveFile" | "lockFile"
 export const role = (): Role => st.role;
 export const isPrimary = () => st.role === "primary";
 
-function takeLock(file: string, color: string) {
+/** Ghi khóa primary; trả về false nếu không ghi được (thư mục chỉ đọc…): khi đó vẫn nhận vai như trước, chỉ không có khóa. */
+function takeLock(file: string, color: string): boolean {
+  if (!st.hooked) { st.hooked = true; process.on("exit", releasePrimary); }
   try {
     fs.mkdirSync(path.dirname(file), { recursive: true });
     const tmp = `${file}.${process.pid}.tmp`;
     fs.writeFileSync(tmp, `${process.pid} ${color}\n`);
     fs.renameSync(tmp, file);
     st.lockFile = file;
-  } catch (e) { console.error("[role] không ghi được khóa primary", e); }
-  if (!st.hooked) { st.hooked = true; process.on("exit", releasePrimary); }
+    return true;
+  } catch (e) { console.error("[role] không ghi được khóa primary", e); return false; }
 }
 
 /** Bỏ khóa primary nếu đang giữ (lúc thoát): secondary kế tiếp nhận vai ngay ở nhịp kiểm tra sau. */
@@ -78,16 +82,20 @@ export function startRole(duties: () => void | Promise<void>, o: { env?: NodeJS.
   const env = o.env ?? process.env, c = roleConfig(env), pid = o.pid ?? process.pid;
   const become = () => {
     if (st.promoted) return;
+    // Ghi khóa rồi đọc lại: hai tiến trình cùng thấy khóa trống thì chỉ tiến trình ghi sau cùng được nhận vai.
+    if (takeLock(c.lockFile, c.color || "single") && primaryHolder(c.lockFile, () => true) !== process.pid) return;
     st.promoted = true;
     st.role = "primary";
     env.SYNCHRO_ROLE = "primary";
     if (st.timer) { clearInterval(st.timer); st.timer = null; }
-    if (c.bluegreen) { takeLock(c.lockFile, c.color); console.log(`[role] ${c.color || "web"} (pid ${pid}) nhận vai primary`); }
+    if (c.bluegreen || waited) console.log(`[role] ${c.color || "web"} (pid ${pid}) nhận vai primary`);
     try { void Promise.resolve(duties()).catch((e) => console.error("[role]", e)); } catch (e) { console.error("[role]", e); }
   };
-  if (!c.bluegreen) { become(); return st.role; }
+  let waited = false;
+  if (!c.bluegreen && canPromote(c, pid, o.alive)) { become(); if (st.promoted) return st.role; }
   st.role = "secondary";
-  if (!c.color) console.error("[role] SYNCHRO_ROLE=secondary nhưng thiếu SYNCHRO_COLOR: không bao giờ nhận vai primary");
+  if (c.bluegreen && !c.color) console.error("[role] SYNCHRO_ROLE=secondary nhưng thiếu SYNCHRO_COLOR: không bao giờ nhận vai primary");
+  if (!c.bluegreen) { waited = true; console.error(`[role] tiến trình ${primaryHolder(c.lockFile, o.alive)} đang giữ khóa primary (${c.lockFile}): chỉ phục vụ yêu cầu, không chạy việc nền`); }
   const check = () => { if (canPromote(c, pid, o.alive)) become(); };
   st.timer = setInterval(check, c.pollMs);
   st.timer.unref?.();
