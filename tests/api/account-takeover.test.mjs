@@ -107,6 +107,7 @@ try {
     const u = await mkUser({ verified: false });
     ok((await throws(() => M.startMfa(u)))?.status === 403 && (await throws(() => M.confirmMfa(u, "000000")))?.status === 403, "chưa xác minh: không bật được");
     const v = await mkUser();
+    AS.markReauth(v.id); // bật 2FA cần vừa xác minh lại (step-up); tài khoản tạo thẳng trong test chưa có phiên đăng nhập
     const s = M.startMfa(v);
     ok(/^[A-Z2-7]{32}$/.test(s.secret), "đã xác minh: bật được như cũ");
     const tok = pending(v);

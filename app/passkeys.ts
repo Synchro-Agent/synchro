@@ -8,7 +8,7 @@ import {
   generateAuthenticationOptions, generateRegistrationOptions, verifyAuthenticationResponse, verifyRegistrationResponse,
   type AuthenticationResponseJSON, type RegistrationResponseJSON,
 } from "@simplewebauthn/server";
-import { AuthError, appUrl, audit, clientIp, db, device, getUser, limit, needsVerify, passkeySignIn, VERIFY_FIRST, type UserRow } from "./authstore";
+import { AuthError, appUrl, audit, clientIp, db, device, getUser, limit, markReauth, needsVerify, passkeySignIn, requireRecentReauth, VERIFY_FIRST, type UserRow } from "./authstore";
 
 const MIN = 60_000;
 const CHALLENGE_TTL = 5 * MIN;
@@ -36,7 +36,7 @@ export function relyingParty(req: Request) {
 }
 
 // ---- thử thách: bộ nhớ trong (app chạy một tiến trình), dùng một lần ----
-type Ch = { kind: "reg" | "auth"; uid?: string; exp: number };
+type Ch = { kind: "reg" | "auth" | "reauth"; uid?: string; exp: number };
 const challenges = ((globalThis as { __synchroPasskeyCh?: Map<string, Ch> }).__synchroPasskeyCh ??= new Map());
 function issue(challenge: string, c: Omit<Ch, "exp">) {
   const now = Date.now();
@@ -50,7 +50,7 @@ function take(clientDataJSON: unknown, kind: Ch["kind"], uid?: string) {
   try { ch = String(JSON.parse(Buffer.from(String(clientDataJSON), "base64url").toString("utf8")).challenge ?? ""); } catch {}
   const c = ch ? challenges.get(ch) : undefined;
   if (ch) challenges.delete(ch);
-  if (!c || c.kind !== kind || c.exp < Date.now() || (kind === "reg" && c.uid !== uid)) throw new AuthError("Yêu cầu khóa truy cập đã hết hạn hoặc đã được dùng. Hãy thử lại.", 400);
+  if (!c || c.kind !== kind || c.exp < Date.now() || (kind !== "auth" && c.uid !== uid)) throw new AuthError("Yêu cầu khóa truy cập đã hết hạn hoặc đã được dùng. Hãy thử lại.", 400);
   return ch;
 }
 
@@ -62,6 +62,8 @@ export const hasPasskey = (uid: string) => { try { return !!t().prepare("SELECT 
 export async function registrationOptions(req: Request, u: UserRow) {
   // Email chưa xác minh có thể là của người khác: người đăng ký trước không được cài sẵn đường vào tài khoản của chủ thật.
   if (needsVerify(u)) throw new AuthError(VERIFY_FIRST, 403);
+  // Thêm khóa truy cập là hành động nhạy cảm: cần vừa xác minh lại (đăng nhập / mật khẩu) trong 5 phút.
+  requireRecentReauth(u);
   limit("passkey-reg:" + u.id, 20, 15 * MIN);
   const mine = t().prepare("SELECT id, transports FROM user_passkeys WHERE user_id = ?").all(u.id) as { id: string; transports: string }[];
   if (mine.length >= MAX_KEYS) throw new AuthError("Mỗi tài khoản có tối đa 20 khóa truy cập. Hãy xóa bớt khóa không dùng nữa.", 400);
@@ -81,6 +83,7 @@ const cleanName = (v: unknown) => (typeof v === "string" ? v.normalize("NFC").re
 
 export async function registerPasskey(req: Request, u: UserRow, response: unknown, name?: unknown) {
   if (needsVerify(u)) throw new AuthError(VERIFY_FIRST, 403);
+  requireRecentReauth(u);
   const resp = response as RegistrationResponseJSON;
   const challenge = take(resp?.response?.clientDataJSON, "reg", u.id);
   const { rpID, origin } = relyingParty(req);
@@ -161,6 +164,41 @@ export async function loginWithPasskey(req: Request, response: unknown) {
   if (u.status !== "active") { audit("login_blocked", { target: u, ip, detail: "passkey" }); throw new AuthError("Tài khoản này đã bị khóa. Hãy liên hệ quản trị viên.", 403); }
   t().prepare("UPDATE user_passkeys SET counter = ?, last_used_at = ?, backed_up = ? WHERE id = ?").run(v.authenticationInfo.newCounter, Date.now(), v.authenticationInfo.credentialBackedUp ? 1 : 0, r.id);
   return { user: u, ...passkeySignIn(u, req, v.authenticationInfo.userVerified) };
+}
+
+// ---- xác minh lại bằng khóa (tài khoản đang đăng nhập) ----
+// Trước hành động nhạy cảm (thêm khóa, bật xác minh hai bước) mà phiên không còn mới: tài khoản không có mật khẩu (chỉ Google / GitHub / Apple / khóa)
+// chứng minh lại bằng một khóa ĐÃ có của chính tài khoản này. Thử thách gắn với tài khoản, chỉ nhận khóa của tài khoản đó.
+export async function reauthOptions(req: Request, u: UserRow) {
+  limit("passkey-reauth:" + u.id, 20, 15 * MIN);
+  const mine = t().prepare("SELECT id, transports FROM user_passkeys WHERE user_id = ?").all(u.id) as { id: string; transports: string }[];
+  if (!mine.length) throw new AuthError("Tài khoản này chưa có khóa truy cập.", 400);
+  const { rpID } = relyingParty(req);
+  const opts = await generateAuthenticationOptions({ rpID, userVerification: "preferred", timeout: CHALLENGE_TTL, allowCredentials: mine.map((m) => ({ id: m.id, transports: JSON.parse(m.transports) })) });
+  issue(opts.challenge, { kind: "reauth", uid: u.id });
+  return opts;
+}
+export async function reauthWithPasskey(req: Request, u: UserRow, response: unknown) {
+  limit("passkey-reauth:" + u.id, 20, 15 * MIN);
+  const resp = response as AuthenticationResponseJSON;
+  const challenge = take(resp?.response?.clientDataJSON, "reauth", u.id);
+  const r = typeof resp?.id === "string" && resp.id.length <= 1400 ? t().prepare("SELECT * FROM user_passkeys WHERE id = ? AND user_id = ?").get(resp.id, u.id) as Row | undefined : undefined;
+  const bad = () => new AuthError("Không xác minh được khóa truy cập. Hãy thử lại.", 400);
+  if (!r) throw bad();
+  const { rpID, origin } = relyingParty(req);
+  let v;
+  try {
+    v = await verifyAuthenticationResponse({
+      response: resp, expectedChallenge: challenge, expectedOrigin: origin, expectedRPID: rpID, requireUserVerification: false,
+      credential: { id: r.id, publicKey: new Uint8Array(r.public_key), counter: r.counter, transports: JSON.parse(r.transports) },
+    });
+  } catch (e) {
+    audit("reauth_failed", { actor: u, target: u, ip: clientIp(req), detail: `passkey: ${String((e as Error).message ?? e).slice(0, 160)}` });
+    throw bad();
+  }
+  if (!v.verified) throw bad();
+  t().prepare("UPDATE user_passkeys SET counter = ?, last_used_at = ? WHERE id = ?").run(v.authenticationInfo.newCounter, Date.now(), r.id);
+  markReauth(u.id);
 }
 
 /** Cho kiểm thử: số thử thách còn chờ (để chắc thử thách đã dùng bị xóa). */

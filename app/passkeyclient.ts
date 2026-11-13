@@ -8,7 +8,7 @@ const lib = () => import("@simplewebauthn/browser");
 async function post<T>(body: unknown): Promise<T> {
   const r = await fetch("/api/auth/passkey", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
   const j = await r.json().catch(() => ({}));
-  if (!r.ok) throw Object.assign(new Error(j.error || "Something went wrong. Please try again."), { status: r.status });
+  if (!r.ok) throw Object.assign(new Error(j.error || "Something went wrong. Please try again."), { status: r.status, data: j });
   return j as T;
 }
 
@@ -28,10 +28,17 @@ export async function passkeyAssert(conditional = false): Promise<Authentication
 /** Huỷ lần hỏi khóa đang chờ (gợi ý trong ô email) khi rời trang đăng nhập. */
 export async function passkeyAbort() { try { (await lib()).WebAuthnAbortService.cancelCeremony(); } catch { /* chưa tải */ } }
 
-/** Thêm khóa cho tài khoản đang đăng nhập: trả về danh sách mới. */
-export async function passkeyRegister<T>(): Promise<T> {
+/** Thêm khóa cho tài khoản đang đăng nhập: trả về danh sách mới. extra: { password } khi vừa hỏi lại mật khẩu (lỗi { reauth: true }). */
+export async function passkeyRegister<T>(extra: { password?: string } = {}): Promise<T> {
   const { startRegistration } = await lib();
-  const optionsJSON = await post<Parameters<typeof startRegistration>[0]["optionsJSON"]>({ op: "reg-options" });
+  const optionsJSON = await post<Parameters<typeof startRegistration>[0]["optionsJSON"]>({ op: "reg-options", ...extra });
   const response = await startRegistration({ optionsJSON });
   return post<T>({ op: "register", response });
+}
+/** Xác minh lại bằng một khóa đã có của tài khoản đang đăng nhập (trước khi thêm khóa / bật xác minh hai bước, tài khoản không có mật khẩu). */
+export async function passkeyStepUp(): Promise<void> {
+  const { startAuthentication } = await lib();
+  const optionsJSON = await post<Parameters<typeof startAuthentication>[0]["optionsJSON"]>({ op: "reauth-options" });
+  const response = await startAuthentication({ optionsJSON });
+  await post({ op: "reauth", response });
 }

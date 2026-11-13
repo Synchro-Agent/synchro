@@ -274,6 +274,47 @@ try {
     ok(src.includes('"features.shell_tool=false"') && src.includes('"features.unified_exec=false"') && src.includes('"tools.view_image=false"'), "codex: gọi CLI với công cụ shell và xem tệp đã tắt");
   }
 
+  // Codex + công cụ của Synchro: địa chỉ cầu nối (có token bí mật) nằm trong config.toml của CODEX_HOME riêng của lượt, không trên dòng lệnh.
+  {
+    const http = await import("node:http");
+    const SECRET = "tok-bi-mat-" + Math.random().toString(36).slice(2);
+    const srv = http.createServer((q, s) => {
+      let b = ""; q.on("data", (d) => (b += d)); q.on("end", () => {
+        const m = (() => { try { return JSON.parse(b); } catch { return {}; } })();
+        if (!q.url.endsWith(SECRET) || m.id === undefined) { s.writeHead(q.url.endsWith(SECRET) ? 202 : 404); return s.end(); }
+        const result = m.method === "tools/list" ? { tools: [{ name: "echo" }, { name: "time" }] } : m.method === "tools/call" ? { content: [{ type: "text", text: "ok-tu-cong-cu" }] } : {};
+        s.writeHead(200, { "content-type": "application/json" }); s.end(JSON.stringify({ jsonrpc: "2.0", id: m.id, result }));
+      });
+    });
+    await new Promise((r) => srv.listen(0, "127.0.0.1", r));
+    const mcp = { url: `http://127.0.0.1:${srv.address().port}/api/mcp/bridge/${SECRET}` };
+    const env = A.engineEnv("codex", U), base = env.CODEX_HOME;
+    // Cấu hình sẵn có của tài khoản: giữ phần khác, bỏ mục synchro cũ (trùng bảng thì TOML hỏng, codex không chạy).
+    const baseCfg = 'model = "gpt-5.5"\n\n[mcp_servers.synchro]\nurl = "http://127.0.0.1:9/cu"\n\n[projects."/x"]\ntrust_level = "trusted"\n';
+    fs.writeFileSync(path.join(base, "config.toml"), baseCfg);
+    const turns = () => fs.readdirSync(base).filter((n) => n.startsWith(R.CODEX_TURN_PREFIX));
+    const r1 = await E.collect(S.engineFor("codex").runTurn({ prompt: "[mock:argv] chào", env, mcp }));
+    ok(!r1.error && /\[công cụ Synchro: 2\]/.test(r1.text), "codex: đọc cầu nối từ config.toml của lượt, thấy công cụ", JSON.stringify(r1));
+    ok(!r1.text.includes(SECRET) && /\[home \.synchro-codex-/.test(r1.text) && !/mcp_servers/.test(r1.text.match(/\[argv (.*?)\] \[home/)?.[1] ?? "x"), "codex: tham số dòng lệnh không còn địa chỉ cầu nối / mcp_servers", r1.text);
+    const r2 = await E.collect(S.engineFor("codex").runTurn({ prompt: "#tool=echo dùng công cụ", sessionId: r1.session, env, mcp }));
+    ok(!r2.error && /lượt 2/.test(r2.text) && /đã dùng echo: ok-tu-cong-cu/.test(r2.text), "codex: công cụ được duyệt sẵn, nối tiếp đúng phiên (sessions/ qua liên kết)", JSON.stringify(r2));
+    for (let i = 0; i < 40 && turns().length; i++) await sleep(100);
+    ok(!turns().length, "xong lượt: thư mục CODEX_HOME của lượt đã được dọn", turns().join());
+    ok(fs.readFileSync(path.join(base, "config.toml"), "utf8") === baseCfg && fs.existsSync(path.join(base, "auth.json")), "cấu hình và đăng nhập của tài khoản giữ nguyên");
+    const r3 = await E.collect(S.engineFor("codex").runTurn({ prompt: "[mock:authrefresh] chào", env, mcp }));
+    for (let i = 0; i < 40 && turns().length; i++) await sleep(100);
+    const auth = (() => { try { return JSON.parse(fs.readFileSync(path.join(base, "auth.json"), "utf8")); } catch { return {}; } })();
+    ok(!r3.error && auth.refreshed > 0 && !fs.lstatSync(path.join(base, "auth.json")).isSymbolicLink() && fs.existsSync(path.join(base, "history.jsonl")) && !turns().length,
+      "codex làm mới token (ghi tệp mới rồi đổi tên) / tạo tệp mới trong lượt: được đưa về thư mục đăng nhập", JSON.stringify({ r3, auth }));
+    ok(!CE.codexMcpToml("http://x/y").includes("-c") && /default_tools_approval_mode = "approve"/.test(CE.codexMcpToml("http://x/y")) && !fs.readFileSync("app/ai/cli_engines.ts", "utf8").includes("mcp_servers.synchro.url="), "mã nguồn: không còn -c mcp_servers.synchro.url=…");
+    process.env.SYNCHRO_ENGINE_BWRAP = "1";
+    const scope = R.isolate("/x/codex", ["exec"], { CODEX_HOME: path.join(base, `${R.CODEX_TURN_PREFIX}abc`), HOME, PATH: "/usr/bin" }, path.join(HOME, "work"));
+    delete process.env.SYNCHRO_ENGINE_BWRAP;
+    ok(scope.file === "bwrap" && scope.argv.join(" ").includes(`--bind ${base} ${base}`), "hộp bwrap gắn cả thư mục đăng nhập (liên kết trỏ về đó)", scope.argv.join(" "));
+    fs.rmSync(path.join(base, "config.toml"));
+    srv.close();
+  }
+
   // ------------------------------------------------------------------
   console.log("6. Khóa API dự phòng");
   {

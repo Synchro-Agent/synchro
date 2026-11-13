@@ -3,6 +3,7 @@ import { setManual, userKey } from "../../../skillstudio";
 import { STUDIO_KINDS } from "../../../studiorules";
 import { dropPatches, hashText, listPatches, setPatch } from "../../../skillheal";
 import { current, featureGate } from "../../../authstore";
+import { route } from "../../../../server/route";
 import { timed } from "../../../servertiming";
 
 export const runtime = "nodejs";
@@ -29,12 +30,11 @@ async function patchesOf(uid: string, s: Skill) {
 // { enabled } bật/tắt cho cả tài khoản; { project, enabled } bật/tắt riêng trong một dự án; { restore: n } quay lại phiên bản n;
 // { patch, action } duyệt / bỏ bản tự sửa đang chờ hoặc hoàn tác bản đang dùng;
 // { studios: ["docs" | "slides" | "design", …] } tự chọn mục ở trang Artifacts; { studios: null } để Synchro tự nhận diện lại.
-export const PATCH = timed(async (req: Request, { params }: Ctx) => {
-  const denied = featureGate(req, "skills"); if (denied) return denied;
-  const uid = current(req)!.user.id;
+export const PATCH = route<{ name: string }>({ feature: "skills", json: true }, async ({ req, user, params }) => {
+  const uid = user.id;
   try {
     const { enabled, project, restore, patch, action, studios } = await req.json();
-    const name = (await params).name;
+    const name = params.name;
     if (studios !== undefined) {
       const sk = await getSkill(uid, name);
       if (!sk) return Response.json({ error: "Không có skill này" }, { status: 404 });
@@ -54,8 +54,7 @@ export const PATCH = timed(async (req: Request, { params }: Ctx) => {
   } catch (e) { return err(e); }
 });
 
-export const DELETE = timed(async (req: Request, { params }: Ctx) => {
-  const denied = featureGate(req, "skills"); if (denied) return denied;
-  const uid = current(req)!.user.id, name = (await params).name;
+export const DELETE = route<{ name: string }>({ feature: "skills" }, async ({ user, params }) => {
+  const uid = user.id, name = params.name;
   try { const sk = await getSkill(uid, name); await removeSkill(uid, name); if (sk) dropPatches(uid, sk.id); return Response.json({ ok: true }); } catch (e) { return err(e); }
 });

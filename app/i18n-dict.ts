@@ -1753,6 +1753,8 @@ Object.assign(VI2EN, {
   "Đoạn chat quá dài cho Antigravity: model chỉ đọc phần gần nhất của lịch sử": "This chat is too long for Antigravity: the model only reads the most recent part of the history",
   "Các gói đã kết nối đều đã hết hạn mức.": "All your connected plans have hit their limits.",
   "Codex báo lỗi.": "Codex reported an error.",
+  // CODEX_HOME riêng của lượt (cli_engines.ts codexTurnHome): lỗi khi dựng thư mục.
+  "thiếu thư mục đăng nhập Codex": "the Codex sign-in folder is missing", "mã thoát": "exit code",
   "Antigravity báo lỗi.": "Antigravity reported an error.",
   "Grok báo lỗi.": "Grok reported an error.",
   "ChatGPT đang viết, chữ sẽ hiện khi xong từng đoạn": "ChatGPT is writing. Text appears as each part finishes",
@@ -1813,6 +1815,20 @@ Object.assign(VI2EN, { "Tài khoản của bạn đang chạy nhiều lượt c�
 Object.assign(VI2EN, { "Máy chủ sắp hết dung lượng nên tạm thời chưa lưu được dữ liệu mới. Hãy thử lại sau.": "The server is almost out of disk space, so new data can't be saved for now. Please try again later.", "Artifact của bạn đã dùng hết dung lượng. Hãy xóa bớt ở trang Artifacts rồi thử lại.": "Your artifacts have used up their storage. Delete some on the Artifacts page and try again." });
 Object.assign(VI2EN, { "Xác minh hai bước đang bật.": "Two-step verification is already on.", "Hãy bắt đầu lại từ đầu.": "Please start over.", "Mã không đúng. Hãy nhập mã đang hiện trong ứng dụng.": "That code isn't right. Enter the code your app shows now." });
 Object.assign(VI2EN, { "Xác minh hai bước:": "Two-step verification:", "khóa của ứng dụng tạo mã (được mã hóa) và mã băm của các mã dự phòng, nếu bạn bật. Xóa khi bạn tắt hoặc xóa tài khoản.": "the authenticator key (encrypted) and hashes of your recovery codes, if you turn it on. Deleted when you turn it off or delete your account." });
+// Xác minh lại trước khi thêm cách đăng nhập mới (stepup.tsx, authstore.stepUp, passkeys.reauthWithPasskey).
+Object.assign(VI2EN, {
+  "Xác minh lại danh tính": "Confirm it's you",
+  "Để thêm cách đăng nhập mới, hãy nhập mật khẩu hiện tại của bạn.": "To add a new way to sign in, enter your current password.",
+  "Để thêm cách đăng nhập mới, hãy xác minh bằng một khóa truy cập bạn đã có.": "To add a new way to sign in, confirm with a passkey you already have.",
+  "Đăng xuất rồi đăng nhập lại để xác nhận": "Sign out and sign in again to confirm",
+  "Tài khoản này không có mật khẩu. Sau khi đăng nhập lại, bạn có 5 phút để hoàn tất.": "This account has no password. After you sign in again, you have 5 minutes to finish.",
+  "Mật khẩu hiện tại": "Current password", "Dùng khóa truy cập": "Use a passkey", "Xác nhận": "Confirm",
+  "Hãy xác minh lại bằng mật khẩu hoặc khóa truy cập trước khi thêm cách đăng nhập mới.": "Confirm it's you with your password or a passkey before adding a new way to sign in.",
+  "Tài khoản này chưa có mật khẩu. Hãy xác minh bằng khóa truy cập, hoặc đăng xuất rồi đăng nhập lại.": "This account has no password. Confirm with a passkey, or sign out and sign in again.",
+  "Tài khoản này chưa có khóa truy cập.": "This account has no passkeys yet.",
+  // Trang đặt lại mật khẩu (reset/page.tsx): gỡ cách đăng nhập cũ khi mất thiết bị.
+  "Xóa cả passkey và xác thực 2 bước cũ (nên chọn nếu bạn mất thiết bị)": "Also remove old passkeys and two-step verification (choose this if you lost your device)",
+});
 // Composio: connector chính (Cài đặt → Connectors, menu +, nút Connect Link trong khung chat, lỗi máy chủ).
 SAME_WORDS.add("Composio");
 for (const [k, v] of Object.entries({

@@ -1,10 +1,9 @@
 // Tier 2: chạy code trong sandbox cloud E2B. Cần E2B_API_KEY.
 import { Sandbox } from "@e2b/code-interpreter";
-import { featureGate } from "../../authstore";
-import { timed } from "../../servertiming";
+import { route } from "../../../server/route";
 
-export const POST = timed(async (req: Request) => {
-  const denied = featureGate(req, "sandbox"); if (denied) return denied;
+// Mỗi lần tạo một sandbox E2B (tốn tiền): giới hạn theo tài khoản để một người không chạy hàng loạt.
+export const POST = route({ feature: "sandbox", json: true, limit: { key: "sandbox", max: 60, windowMs: 3_600_000 } }, async ({ req }) => {
   if (!process.env.E2B_API_KEY) return Response.json({ error: "Chưa cấu hình E2B_API_KEY nên chưa dùng được sandbox server." }, { status: 501 });
   const { lang = "python", code } = await req.json();
   if (typeof code !== "string" || code.length > 100_000) return Response.json({ error: "Code không hợp lệ" }, { status: 400 });

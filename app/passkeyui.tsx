@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { call as api, ago, fmtDate } from "./adminui";
 import { passkeyCancelled, passkeyRegister, passkeySupported } from "./passkeyclient";
+import { useStepUp } from "./stepup";
 import { useApp } from "./store";
 import { Fade } from "./ui";
 import * as I from "./icons";
@@ -18,12 +19,14 @@ export function PasskeyRows({ Row, onChange }: { Row: RowT; onChange?: () => voi
   const [busy, setBusy] = useState(false);
   const [edit, setEdit] = useState<{ id: string; name: string } | null>(null);
   const [ok] = useState(passkeySupported);
+  const step = useStepUp();
   useEffect(() => { void api<{ passkeys: Key[] }>("GET", "/api/auth/passkey").then((r) => setKeys(r.passkeys)).catch(() => setKeys([])); }, []);
   const got = (list: Key[]) => { setKeys(list); onChange?.(); };
   const add = async () => {
     if (busy) return;
     setBusy(true);
-    try { got((await passkeyRegister<{ passkeys: Key[] }>()).passkeys); app.say("Passkey added"); }
+    // Phiên không còn mới: máy chủ đòi xác minh lại (403 { reauth: true }), hộp xác minh hỏi mật khẩu / khóa rồi chạy lại.
+    try { const r = await step.run((p) => passkeyRegister<{ passkeys: Key[] }>(p)); if (r) { got(r.passkeys); app.say("Passkey added"); } }
     catch (e) {
       const code = (e as { code?: string }).code;
       if (code === "ERROR_AUTHENTICATOR_PREVIOUSLY_REGISTERED") app.say("This device already has a passkey for your account");
@@ -68,5 +71,6 @@ export function PasskeyRows({ Row, onChange }: { Row: RowT; onChange?: () => voi
         <div className="modal-foot"><button className="btn" onClick={() => setEdit(null)}>Cancel</button><button className="btn dark" disabled={!edit.name.trim() || busy} onClick={() => void rename()}>Save</button></div>
       </div>
     </div> : null}</Fade>, document.body)}
+    {step.node}
   </>;
 }

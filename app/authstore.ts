@@ -139,12 +139,64 @@ const sha256 = (s: string) => crypto.createHash("sha256").update(s).digest("hex"
 export const clientIp = (req: Request) => ((req.headers.get("x-real-ip") ?? req.headers.get("x-forwarded-for")?.split(",")[0] ?? "").trim() || "local").slice(0, 64);
 const host = (req: Request) => req.headers.get("x-forwarded-host") ?? req.headers.get("host") ?? new URL(req.url).host;
 const isHttps = (req: Request) => (req.headers.get("x-forwarded-proto") ?? new URL(req.url).protocol.replace(":", "")) === "https";
-export const appUrl = (req: Request) => (process.env.APP_URL ?? `${isHttps(req) ? "https" : "http"}://${host(req)}`).replace(/\/$/, "");
 
-// Mọi request thay đổi dữ liệu phải đến từ chính trang Synchro (chặn CSRF).
+// APP_URL là địa chỉ chính thức của Synchro, đặt cố định ở máy chủ thật. Khi có, appUrl() và sameOrigin() CHỈ tin nó
+// (không nghe header Host của yêu cầu — Host giả mạo không đổi được địa chỉ hay qua được kiểm tra chống CSRF).
+const APP_URL = process.env.APP_URL?.replace(/\/$/, "") || "";
+const appHost = (() => { try { return APP_URL ? new URL(APP_URL).host : ""; } catch { return ""; } })();
+// Production nên luôn đặt APP_URL. Thiếu thì CẢNH BÁO to và tạm dùng Host của yêu cầu (hành vi cũ) để không làm sập VPS;
+// chỉ hard-fail khi đặt SYNCHRO_REQUIRE_APP_URL=1 (mặc định tắt).
+if (process.env.NODE_ENV === "production" && !APP_URL) {
+  const msg = "APP_URL chưa được đặt trong môi trường production: đang tạm dùng Host của yêu cầu (dễ bị giả mạo). Hãy đặt APP_URL.";
+  if (process.env.SYNCHRO_REQUIRE_APP_URL === "1") throw new Error("[authstore] " + msg + " (SYNCHRO_REQUIRE_APP_URL=1)");
+  console.error("[authstore] " + msg + " Đặt SYNCHRO_REQUIRE_APP_URL=1 để bắt buộc.");
+}
+export const appUrl = (req: Request) => APP_URL || `${isHttps(req) ? "https" : "http"}://${host(req)}`;
+
+// Mọi request thay đổi dữ liệu phải đến từ chính trang Synchro (chặn CSRF). Tên máy được nhận (allowedOriginHosts): tên máy của APP_URL,
+// bản có / không "www." của nó (synchro.net.nz ↔ www.synchro.net.nz), và SYNCHRO_ALLOWED_ORIGINS (danh sách cách nhau bởi dấu phẩy, tên máy
+// hoặc địa chỉ đầy đủ). Header Host chỉ được tin khi chính nó nằm trong danh sách đó; không có APP_URL thì mới so với Host của yêu cầu (chỉ xảy ra
+// ngoài production, hoặc production chưa đặt APP_URL và chưa bật hard-fail).
+const twin = (h: string) => {
+  const name = h.replace(/:\d+$/, "");
+  if (!name.includes(".") || /^[\d.]+$/.test(name) || name.startsWith("[")) return "";
+  return h.startsWith("www.") ? h.slice(4) : `www.${h}`;
+};
+let allowCache: { key: string; hosts: Set<string> } | null = null;
+export function allowedOriginHosts(): Set<string> {
+  const extra = process.env.SYNCHRO_ALLOWED_ORIGINS ?? "", key = `${appHost}|${extra}`;
+  if (allowCache?.key === key) return allowCache.hosts;
+  const hosts = new Set<string>();
+  if (appHost) { hosts.add(appHost.toLowerCase()); const t = twin(appHost.toLowerCase()); if (t) hosts.add(t); }
+  for (const raw of extra.split(",")) {
+    const v = raw.trim();
+    if (!v) continue;
+    try { hosts.add(new URL(v.includes("://") ? v : `https://${v}`).host); } catch { /* bỏ mục hỏng */ }
+  }
+  allowCache = { key, hosts };
+  return hosts;
+}
+// Mỗi Origin bị từ chối được ghi một dòng cảnh báo (tối đa mỗi giờ một lần cho mỗi tên máy): đặt sai APP_URL thì nhật ký cho thấy ngay
+// mọi thao tác ghi đang bị chặn từ địa chỉ nào, mà kẻ gửi hàng loạt Origin lạ cũng không làm đầy nhật ký được.
+const originWarned = new Map<string, number>();
+function warnOrigin(h: string) {
+  const now = Date.now(), last = originWarned.get(h);
+  if (last && now - last < 60 * MIN) return;
+  if (originWarned.size >= 500) { for (const [k, v] of originWarned) if (now - v >= 60 * MIN) originWarned.delete(k); if (originWarned.size >= 500) return; }
+  originWarned.set(h, now);
+  console.warn(`[auth] từ chối yêu cầu ghi từ Origin ${JSON.stringify(h.slice(0, 200))}: không có trong APP_URL / SYNCHRO_ALLOWED_ORIGINS (${[...allowedOriginHosts()].join(", ") || "chưa đặt APP_URL"}).`);
+}
 export function sameOrigin(req: Request) {
   const o = req.headers.get("origin");
-  try { if (o && new URL(o).host === host(req)) return; } catch {}
+  let oh = "";
+  try { oh = o ? new URL(o).host : ""; } catch { oh = ""; }
+  if (oh) {
+    const allow = allowedOriginHosts(), h = host(req).toLowerCase();
+    // Có APP_URL: Origin phải nằm trong danh sách (Host trùng Origin cũng chỉ được nhận khi Host nằm trong danh sách).
+    // Không có APP_URL: như cũ, Origin trùng Host của yêu cầu, cộng các tên máy thêm bằng SYNCHRO_ALLOWED_ORIGINS.
+    if (allow.has(oh) || (!appHost && oh === h)) return;
+    warnOrigin(oh);
+  }
   throw new AuthError("Yêu cầu không hợp lệ.", 403);
 }
 
@@ -378,9 +430,48 @@ export function createSession(u: UserRow, req: Request, method: string) {
     .run(sha256(token), u.id, method, now, now, now + SESSION_TTL, clientIp(req), (req.headers.get("user-agent") ?? "").slice(0, 300));
   db().prepare("UPDATE users SET last_login_at = ?, last_seen_at = ? WHERE id = ?").run(now, now, u.id);
   db().prepare("DELETE FROM sessions WHERE user_id = ? AND id NOT IN (SELECT id FROM sessions WHERE user_id = ? ORDER BY last_seen_at DESC LIMIT ?)").run(u.id, u.id, MAX_SESSIONS);
+  // Vừa đăng nhập = vừa chứng minh danh tính: cho thêm khóa truy cập / xác minh hai bước trong 5 phút mà không phải xác minh lại.
+  markReauth(u.id);
   return cookie(req, COOKIE, token, SESSION_TTL / 1000);
 }
 export const clearSessionCookie = (req: Request) => cookie(req, COOKIE, "", 0);
+
+// ---- xác minh lại trước hành động nhạy cảm (step-up) ----
+// Thêm một cách đăng nhập (khóa truy cập, xác minh hai bước) cần vừa chứng minh danh tính trong 5 phút: phiên cũ bị chiếm không lặng lẽ
+// cài thêm đường vào. Mốc giữ trong bộ nhớ (app một tiến trình); khởi động lại thì xác minh lại — an toàn hơn chứ không kém.
+const REAUTH_TTL = 5 * MIN;
+const reauthAt = ((globalThis as { __synchroReauth?: Map<string, number> }).__synchroReauth ??= new Map<string, number>());
+export function markReauth(uid: string) {
+  const now = Date.now();
+  if (reauthAt.size > 50_000) for (const [k, v] of reauthAt) if (now - v > REAUTH_TTL) reauthAt.delete(k);
+  reauthAt.set(uid, now);
+}
+export const recentlyReauthed = (uid: string) => { const t = reauthAt.get(uid); return !!t && Date.now() - t < REAUTH_TTL; };
+/** Chặn hành động nhạy cảm khi chưa xác minh lại gần đây; { reauth: true } để giao diện hỏi mật khẩu / khóa rồi thử lại. */
+export function requireRecentReauth(u: UserRow) {
+  if (!recentlyReauthed(u.id)) throw new AuthError("Hãy xác minh lại bằng mật khẩu hoặc khóa truy cập trước khi thêm cách đăng nhập mới.", 403, { reauth: true });
+}
+/** Xác minh lại tại chỗ bằng mật khẩu (nếu đúng thì ghi mốc re-auth). Dùng cho hành động nhạy cảm của tài khoản đang đăng nhập. */
+export async function reauthPassword(u: UserRow, password: unknown) {
+  if (u.password_hash && typeof password === "string" && password.length <= PW_MAX && (await verifyPassword(password, u.password_hash))) { markReauth(u.id); return true; }
+  return false;
+}
+/** Bước xác minh lại của giao diện (hộp hỏi mật khẩu sau lỗi { reauth: true }): không gửi mật khẩu thì bỏ qua (cổng requireRecentReauth quyết định);
+ *  gửi mà sai thì báo sai ngay (400, có giới hạn số lần) thay vì hỏi lại không lý do. */
+export async function stepUp(u: UserRow, password: unknown) {
+  if (password === undefined || password === null) return;
+  limit("reauth:" + u.id, 10, 15 * MIN);
+  if (!u.password_hash) throw new AuthError("Tài khoản này chưa có mật khẩu. Hãy xác minh bằng khóa truy cập, hoặc đăng xuất rồi đăng nhập lại.", 400, { reauth: true });
+  if (!(await reauthPassword(u, password))) {
+    audit("reauth_failed", { actor: u, target: u, detail: "password" });
+    // { reauth: true }: hộp xác minh lại giữ nguyên, báo sai ngay dưới ô mật khẩu.
+    throw new AuthError("Mật khẩu không đúng.", 400, { reauth: true });
+  }
+}
+/** Tác vụ nền hằng đêm: xóa các phiên đã hết hạn còn nằm lại (phiên trượt phần lớn tự hết, nhưng phiên bỏ không vẫn đọng). Trả về số dòng đã xóa. */
+export function sweepSessions() {
+  return db().prepare("DELETE FROM sessions WHERE expires_at < ?").run(Date.now()).changes;
+}
 
 // Thời gian kiểm tra đăng nhập được tính vào phần auth của header Server-Timing (app/servertiming.ts).
 export function current(req: Request): { user: UserRow; session: SessionRow } | null { return timeAuth(() => sessionOf(req)); }
@@ -611,6 +702,7 @@ export async function changePassword(req: Request, u: UserRow, cur: unknown, nex
   db().prepare("UPDATE users SET password_hash = ? WHERE id = ?").run(await hashPassword(pw), u.id);
   const signedOut = db().prepare("DELETE FROM sessions WHERE user_id = ? AND id != ?").run(u.id, keepSession).changes;
   dropEmailChange(u.id);
+  markReauth(u.id); // vừa chứng minh danh tính bằng mật khẩu hiện tại
   audit("password_changed", { actor: u, ip: clientIp(req), detail: signedOut ? String(signedOut) : undefined });
   notifyChanged(req, u);
   return { signedOut };
@@ -700,12 +792,15 @@ const notifyChanged = (req: Request, u: UserRow, lang?: unknown) => {
   const l = mailLang(req, lang);
   sendMail(u.email, changedMail({ base: appUrl(req), name: u.name, lang: l, when: `${new Date().toLocaleString(l === "vi" ? "vi-VN" : "en-GB", { timeZone: "Asia/Ho_Chi_Minh", hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit", year: "numeric" })} (GMT+7)` }), "changed");
 };
-/** Đường dẫn còn dùng được không: trang đặt lại báo hết hạn ngay, trước khi người dùng gõ mật khẩu. */
+/** Tài khoản có khóa truy cập hoặc xác minh hai bước không (để trang đặt lại hỏi có muốn gỡ các cách đăng nhập cũ không). */
+export const hasSecondFactors = (uid: string) => hasPasskeys(uid) || mfaOn(uid);
+/** Đường dẫn còn dùng được không: trang đặt lại báo hết hạn ngay, trước khi người dùng gõ mật khẩu. Trả về có cách đăng nhập cũ (khóa / 2FA) để hỏi có gỡ không. */
 export function checkResetLink(req: Request, token: unknown) {
   // Khóa riêng với lần đổi mật khẩu thật: nhiều người chung IP mở thư không làm hỏng lần đặt mật khẩu của nhau.
   limit("reset-check:" + clientIp(req), 60, 15 * MIN);
   const r = typeof token === "string" && token.length <= 100 ? db().prepare("SELECT * FROM password_resets WHERE token_hash = ?").get(sha256(token)) as { user_id: string; expires_at: number; used_at: number | null } | undefined : undefined;
   if (!r || r.used_at || r.expires_at <= Date.now() || getUser(r.user_id)?.status !== "active") throw new AuthError(BAD_RESET, 400);
+  return { factors: hasSecondFactors(r.user_id) };
 }
 const BAD_RESET = "Đường dẫn đặt lại mật khẩu không hợp lệ hoặc đã hết hạn. Hãy yêu cầu đường dẫn mới.";
 export function createResetLink(req: Request, admin: UserRow, t: UserRow) {
@@ -715,7 +810,7 @@ export function createResetLink(req: Request, admin: UserRow, t: UserRow) {
   audit("admin_reset_link", { actor: admin, target: t, ip: clientIp(req) });
   return `${appUrl(req)}/reset#${token}`;
 }
-export async function redeemResetLink(req: Request, token: unknown, next: unknown, lang?: unknown) {
+export async function redeemResetLink(req: Request, token: unknown, next: unknown, lang?: unknown, dropFactors = false) {
   const ip = clientIp(req);
   limit("reset:" + ip, 10, 15 * MIN);
   const bad = () => new AuthError(BAD_RESET, 400);
@@ -727,19 +822,26 @@ export async function redeemResetLink(req: Request, token: unknown, next: unknow
   const hash = await hashPassword(pw);
   // Đường dẫn gửi tới hộp thư là bằng chứng sở hữu email; đường dẫn quản trị viên tạo thì không. Không đánh dấu thì lần đăng nhập Google sau sẽ xóa mất mật khẩu vừa đặt.
   const proved = r!.created_by === u.id, fresh = proved && needsVerify(u), claim = proved && !u.email_verified;
-  let dropped = false;
+  // Người dùng chọn gỡ các cách đăng nhập cũ (khóa truy cập, 2FA) khi đặt lại mật khẩu — ví dụ mất thiết bị giữ chúng.
+  const wantDropFactors = dropFactors && hasSecondFactors(u.id);
+  let dropped = false, droppedFactors = false;
   db().transaction(() => {
     db().prepare(`UPDATE users SET password_hash = ?${proved ? ", email_verified = 1" : ""} WHERE id = ?`).run(hash, u.id);
     db().prepare("UPDATE password_resets SET used_at = ? WHERE token_hash = ?").run(Date.now(), sha256(token));
     db().prepare("DELETE FROM sessions WHERE user_id = ?").run(u.id);
     dropEmailChange(u.id);
     if (claim) dropped = dropSquatter(u.id);
+    if (wantDropFactors) {
+      try { db().prepare("DELETE FROM user_passkeys WHERE user_id = ?").run(u.id); } catch { /* chưa có bảng */ }
+      try { db().prepare("DELETE FROM user_mfa WHERE user_id = ?").run(u.id); } catch { /* chưa có bảng */ }
+      droppedFactors = true;
+    }
     if (proved) db().prepare("DELETE FROM email_verifications WHERE user_id = ?").run(u.id);
   })();
-  audit("password_reset", { actor: u, target: u, ip });
+  audit("password_reset", { actor: u, target: u, ip, detail: droppedFactors ? "drop_factors" : undefined });
   if (fresh) audit("account_claimed", { target: u, ip, detail: "reset" });
   notifyChanged(req, u, lang);
-  return { user: u, fresh, dropped };
+  return { user: u, fresh, dropped, droppedFactors };
 }
 
 export async function deleteOwnAccount(req: Request, u: UserRow, pw: unknown) {

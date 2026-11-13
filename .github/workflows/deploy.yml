@@ -25,6 +25,12 @@ jobs:
       - name: Cài gói
         run: npm ci
 
+      # Dò lỗ hổng gói ở mức cao trở lên (chỉ phụ thuộc production). Advisory: continue-on-error để một CVE mới công bố
+      # KHÔNG chặn deploy VPS đang chạy; kết quả nằm trong ci.txt. Bỏ continue-on-error nếu muốn chặn build khi có lỗ hổng cao.
+      - name: Dò lỗ hổng gói (npm audit)
+        continue-on-error: true
+        run: npm audit --omit=dev --audit-level=high 2>&1 | tee audit.log; exit ${PIPESTATUS[0]}
+
       - name: Kiểm tra kiểu (TypeScript)
         run: node node_modules/typescript/bin/tsc --noEmit -p . 2>&1 | tee tsc.log; exit ${PIPESTATUS[0]}
 
@@ -46,7 +52,7 @@ jobs:
         run: |
           { echo "commit ${{ github.sha }} · ${{ job.status }} · $(date -u '+%Y-%m-%d %H:%M UTC')"
             [ -f tests.log ] && { echo; echo "━━ Các kiểm tra lỗi"; grep -n -B1 "✗" tests.log | cut -c1-600; }
-            for f in tsc.log build.log tests.log mock.log; do [ -f $f ] && { echo; echo "━━ $f"; tail -150 $f; }; done; } > ci.txt
+            for f in tsc.log build.log tests.log mock.log audit.log; do [ -f $f ] && { echo; echo "━━ $f"; tail -150 $f; }; done; } > ci.txt
       - uses: actions/upload-artifact@v4
         if: always()
         with:

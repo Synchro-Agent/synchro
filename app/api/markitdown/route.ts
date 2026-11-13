@@ -4,11 +4,11 @@ import { existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
-import { AuthError, current, featureGate, limit } from "../../authstore";
+import { AuthError, limit } from "../../authstore";
+import { route } from "../../../server/route";
 import { diskLow } from "../../diskfloor";
 import { lowPriority, parserEnv, withConvertSlot } from "../../fileproc/sandbox";
 import { FileError } from "../../fileproc/types";
-import { timed } from "../../servertiming";
 
 export const runtime = "nodejs";
 const run = promisify(execFile);
@@ -20,9 +20,8 @@ const convert = (file: string, args: string[], timeout: number) => {
   return p;
 };
 
-export const POST = timed(async (req: Request) => {
-  const denied = featureGate(req, "files"); if (denied) return denied;
-  const uid = current(req)!.user.id;
+export const POST = route({ feature: "files" }, async ({ req, user }) => {
+  const uid = user.id;
   const bin = process.env.MARKITDOWN_BIN || path.join(process.cwd(), ".mkvenv", "bin", "markitdown");
   if (!existsSync(bin) && !process.env.MARKITDOWN_BIN)
     return Response.json({ error: "Chưa cài MarkItDown. Chạy: python3 -m venv .mkvenv && .mkvenv/bin/pip install 'markitdown[all]'" }, { status: 501 });

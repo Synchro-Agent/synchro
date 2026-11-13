@@ -1,4 +1,5 @@
-import { current, limit, verifyLocked } from "../../authstore";
+import { limit, verifyLocked } from "../../authstore";
+import { route } from "../../../server/route";
 import { overLimit, usageScope } from "../../usage";
 import { chatPost } from "../../chatengine";
 import { quickLimit, queueFull, startRun, turnsTotal, withStop } from "../../runs";
@@ -6,17 +7,15 @@ import { acquire, noteRefused, runningOf, withSlot } from "../../turngate";
 import { subCli } from "../../ai/subs";
 import { AUTO } from "../../router";
 import { afterTurn } from "../../brain";
-import { timed } from "../../servertiming";
 
 // Cổng duy nhất tới model của chat. Phần xử lý nằm ở chatengine.ts.
 // async: true (lượt chat chính) → tạo lượt chạy bền ở nền và trả ngay { run }; trình duyệt theo dõi qua /api/runs/<id>.
 const TOO_MANY = "Bạn đang có quá nhiều lượt chạy và chờ cùng lúc. Hãy chờ một lượt xong hoặc bấm Dừng rồi gửi lại.";
-export const POST = timed(async (req: Request) => {
-  // Độ trễ từng chặng của lượt chat (tracing.ts): mốc yêu cầu tới và thời gian kiểm tra phiên.
+export const POST = route({ auth: "user", json: true }, async ({ req, user, session }) => {
+  // Độ trễ từng chặng của lượt chat (tracing.ts): mốc yêu cầu tới (kiểm tra phiên đã xong ở lớp bọc route).
   const at = Date.now();
-  const c = current(req);
-  const authMs = Date.now() - at;
-  if (!c) return Response.json({ error: "Bạn cần đăng nhập." }, { status: 401 });
+  const c = { user, session };
+  const authMs = 0;
   // Mỗi lượt là một CLI chạy trên máy chủ: chặn gửi dồn trước khi đọc nội dung.
   try { limit("llm:" + c.user.id, verifyLocked(c.user) ? 60 : 240, 10 * 60_000); } catch { return Response.json({ error: "Bạn gửi quá nhiều yêu cầu. Hãy thử lại sau ít phút." }, { status: 429 }); }
   const body = await req.json();

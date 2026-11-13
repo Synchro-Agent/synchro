@@ -3,7 +3,7 @@
 // dựng và truyền vào TurnRequest.env; cli_runtime lọc env, kill cả process group khi Dừng, CLI im lặng quá lâu hoặc chạm mức trần của lượt.
 import path from "node:path";
 import type { Attachment, Engine, ErrorCode, Event, RateWindow, TurnRequest, Usage, WebSource } from "./engine";
-import { type Cli, cliRunning, engineHome, find, IDLE_MS, makeDir, MAX_TURN_MS, type Proc, sessionSeen, spawnCli, stripAnsi, writeEngineFile, type Exit } from "./cli_runtime";
+import { type Cli, cliRunning, CODEX_TURN_PREFIX, engineHome, find, IDLE_MS, makeDir, MAX_TURN_MS, type Proc, sessionSeen, spawnCli, stripAnsi, writeEngineFile, type Exit } from "./cli_runtime";
 import { classify, redact } from "./errors";
 import { forgetSession, poolStrike, prestart, takeProcess, type PoolSpec } from "./cli_pool";
 import { scrubServerPaths } from "./imagefiles";
@@ -306,7 +306,14 @@ export class ClaudeCodeEngine implements Engine {
     const builtin = req.web ? "WebSearch,WebFetch" : this.o.tools ?? "";
     const args = ["-p", "--output-format", "stream-json", "--verbose", "--include-partial-messages", "--tools", builtin];
     const allow = [...(req.mcp ? ["mcp__synchro"] : []), ...(req.web ? ["WebSearch", "WebFetch"] : [])];
-    if (req.mcp) args.push("--mcp-config", JSON.stringify({ mcpServers: { synchro: { type: "http", url: req.mcp.url } } }), "--strict-mcp-config");
+    // URL cầu nối MCP mang token bí mật của lượt: qua tệp 0600 (--mcp-config nhận đường dẫn tệp), KHÔNG qua tham số dòng lệnh —
+    // tham số nhìn thấy được ở /proc/<pid>/cmdline, mà các lượt chia sẻ cùng một user hệ thống của engine.
+    let mcpFile = "";
+    if (req.mcp) {
+      try { mcpFile = await turnFile(req, "claude-mcp", JSON.stringify({ mcpServers: { synchro: { type: "http", url: req.mcp.url } } })); }
+      catch (e) { yield err(`Không chuẩn bị được cấu hình công cụ cho Claude Code: ${(e as Error).message}`, "other"); return; }
+      args.push("--mcp-config", mcpFile, "--strict-mcp-config");
+    }
     if (allow.length) args.push("--allowedTools", allow.join(","));
     // Hướng dẫn hệ thống của Synchro THAY lời nhắc mặc định của Claude Code (dành cho lập trình trong terminal, vài nghìn token mỗi lượt,
     // không dùng gì cho Synchro): lượt nhanh hơn, rẻ hơn, model không tự nhận là "Claude Code". Dài (nhiều skill, studio, connector) thì
@@ -327,8 +334,9 @@ export class ClaudeCodeEngine implements Engine {
     // Công cụ của Synchro (lệnh trong workspace, build, cài gói) có thể chạy lâu: chờ tới 15 phút mỗi lời gọi.
     // Công cụ của Synchro có thể dừng chờ người dùng duyệt (chế độ quyền, trang web chưa được phép): chờ được tới hết 30 phút của lượt.
     const p = await start("claude", args, req.mcp ? { ...req, env: { ...req.env, MCP_TOOL_TIMEOUT: "1800000" } } : req, atts.length ? claudeInput(req.prompt, atts) : req.prompt);
-    if (sysFile) void p?.done.finally(() => rmEngineFile(req, sysFile).catch(() => {}));
-    if (!p) { if (sysFile) await rmEngineFile(req, sysFile).catch(() => {}); yield notInstalled("claude"); return; }
+    const tmpFiles = [sysFile, mcpFile].filter(Boolean);
+    if (tmpFiles.length) void p?.done.finally(() => { for (const f of tmpFiles) void rmEngineFile(req, f).catch(() => {}); });
+    if (!p) { for (const f of tmpFiles) await rmEngineFile(req, f).catch(() => {}); yield notInstalled("claude"); return; }
     const r = yield* this.events(objects(p), p.kill);
     const e = await p.done;
     if (!r.done) yield exitError("claude", p, e);
@@ -336,6 +344,63 @@ export class ClaudeCodeEngine implements Engine {
 }
 
 // ---------------------------------------------------------------- Codex
+// Cầu nối MCP của lượt mang token bí mật trong URL: KHÔNG qua -c trên dòng lệnh (ai cùng user hệ thống cũng đọc được /proc/<pid>/cmdline).
+// Codex chỉ đọc máy chủ MCP từ $CODEX_HOME/config.toml, nên lượt có công cụ chạy với CODEX_HOME riêng (0700) nằm trong thư mục đăng nhập của tài khoản:
+// config.toml (0600) = cấu hình sẵn có của tài khoản (bỏ mục synchro cũ nếu có) + mục [mcp_servers.synchro] của lượt; mọi mục khác (auth.json,
+// sessions/ để nối tiếp phiên, history.jsonl…) là liên kết về thư mục đăng nhập, nên đăng nhập và lịch sử phiên vẫn ghi đúng chỗ. Xong lượt: tệp Codex
+// vừa tạo mới, hoặc tệp thật đã thay liên kết (ghi tệp mới rồi đổi tên, như khi làm mới token trong auth.json), được chuyển về thư mục đăng nhập,
+// rồi bỏ thư mục của lượt. Chạy bằng user của engine (thư mục đăng nhập 0700 của user đó); nội dung cấu hình đi qua stdin.
+const CODEX_HOME_SETUP = String.raw`set -e
+base=$1; t=$2
+umask 077
+mkdir -p "$base/sessions"
+mkdir -m 700 "$t"
+for f in "$base"/* "$base"/.[!.]* "$base"/..?*; do
+  [ -e "$f" ] || [ -L "$f" ] || continue
+  n=$(basename "$f")
+  case "$n" in config.toml|${CODEX_TURN_PREFIX}*) continue ;; esac
+  ln -s "$f" "$t/$n"
+done
+{
+  if [ -f "$base/config.toml" ]; then
+    awk '/^[[:space:]]*\[/ { skip = ($0 ~ /^[[:space:]]*\[[[:space:]]*mcp_servers\.("synchro"|synchro)[[:space:]]*(\]|\.)/) } /^[[:space:]]*mcp_servers\.("synchro"|synchro)\./ { next } !skip' "$base/config.toml"
+    echo
+  fi
+  cat
+} > "$t/config.toml"
+chmod 600 "$t/config.toml"`;
+const CODEX_HOME_CLEANUP = String.raw`base=$1; t=$2
+case "$t" in "$base"/${CODEX_TURN_PREFIX}*) ;; *) exit 1 ;; esac
+[ -d "$t" ] || exit 0
+rm -f "$t/config.toml"
+for f in "$t"/* "$t"/.[!.]* "$t"/..?*; do
+  [ -L "$f" ] && continue
+  [ -e "$f" ] || continue
+  n=$(basename "$f")
+  [ -d "$base/$n" ] && continue
+  if [ -d "$f" ]; then [ -e "$base/$n" ] || mv "$f" "$base/$n"; else mv -f "$f" "$base/$n"; fi
+done
+find "$t" -depth -mindepth 1 -delete 2>/dev/null
+rmdir "$t"`;
+/** Mục [mcp_servers.synchro] của lượt. codex exec không có ai bấm duyệt (approval_policy luôn là never), nên công cụ MCP phải được duyệt sẵn
+ *  (default_tools_approval_mode = "approve"); thiếu khóa này Codex 0.164 từ chối mọi lời gọi "MCP tool call requires approval, but approval policy is never". */
+export const codexMcpToml = (url: string) => `[mcp_servers.synchro]\nurl = ${JSON.stringify(url)}\nstartup_timeout_sec = 20\ntool_timeout_sec = 1800\ndefault_tools_approval_mode = "approve"\n`;
+/** Tạo CODEX_HOME riêng của lượt (xem trên). Trả về đường dẫn; lỗi thì đã dọn phần dở. */
+async function codexTurnHome(req: TurnRequest, url: string): Promise<string> {
+  const base = req.env?.CODEX_HOME;
+  if (!base) throw new Error("thiếu thư mục đăng nhập Codex");
+  const dir = path.join(base, `${CODEX_TURN_PREFIX}${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`);
+  const p = spawnCli("/bin/sh", ["-c", CODEX_HOME_SETUP, "sh", base, dir], { env: req.env, cwd: base, stdin: codexMcpToml(url), timeoutMs: 30_000 });
+  const e = await p.done;
+  if (e.code !== 0) { await rmCodexHome(req, dir).catch(() => {}); throw new Error(p.stderr().trim().slice(0, 200) || `mã thoát ${e.code}`); }
+  return dir;
+}
+/** Bỏ CODEX_HOME của lượt: chỉ nhận đúng thư mục con có tiền tố của thư mục đăng nhập. find -delete không đi theo liên kết. */
+async function rmCodexHome(req: TurnRequest, dir: string) {
+  const base = req.env?.CODEX_HOME;
+  if (!base || path.dirname(dir) !== base || !path.basename(dir).startsWith(CODEX_TURN_PREFIX)) return;
+  await spawnCli("/bin/sh", ["-c", CODEX_HOME_CLEANUP, "sh", base, dir], { env: req.env, cwd: base, stdin: "", timeoutMs: 60_000 }).done;
+}
 // Loại mục trong luồng sự kiện của codex exec là công cụ chạy trên máy chủ (không qua Synchro): lệnh shell, sửa / đọc tệp.
 export const CODEX_LOCAL = /command|shell|exec|file_change|patch|read_file|list_dir|grep_files|view_image/i;
 /** Cờ tắt shell và xem tệp của Codex (lý do ở runTurn bên dưới); lượt tạo ảnh dùng đúng các cờ này. */
@@ -352,11 +417,8 @@ export class CodexEngine implements Engine {
     // Tắt cả image_gen dựng sẵn (gói trả phí mới có): ảnh nó tạo nằm trong thư mục trên máy chủ, không thành tệp của người dùng, câu "đã lưu" thì đã được bỏ đường dẫn nên trông như thành công mà
     // không có ảnh. Lượt chat tạo ảnh bằng generate_image của Synchro; đường nhanh thì model báo cần công cụ. Lượt tạo ảnh của imagegen.ts không đi qua đây nên vẫn có image_gen.
     const args = ["exec", ...(req.sessionId ? ["resume", req.sessionId] : []), ...CODEX_SAFE, "-c", "features.image_generation=false"];
-    // Công cụ của Synchro qua cầu nối MCP (Streamable HTTP); tìm web dựng sẵn khi người dùng bật. codex exec không có ai bấm duyệt
-    // (approval_policy luôn là never), nên công cụ MCP phải được duyệt sẵn bằng default_tools_approval_mode="approve"; thiếu khóa này
-    // Codex 0.164 từ chối mọi lời gọi "MCP tool call requires approval, but approval policy is never". Hộp cát chỉ đọc vẫn giữ cho
-    // lệnh dựng sẵn của Codex trên máy chủ.
-    if (req.mcp) args.push("-c", `mcp_servers.synchro.url=${JSON.stringify(req.mcp.url)}`, "-c", "mcp_servers.synchro.startup_timeout_sec=20", "-c", "mcp_servers.synchro.tool_timeout_sec=1800", "-c", 'mcp_servers.synchro.default_tools_approval_mode="approve"');
+    // Công cụ của Synchro qua cầu nối MCP (Streamable HTTP): cấu hình trong CODEX_HOME riêng của lượt (codexTurnHome), không qua tham số.
+    // Tìm web dựng sẵn khi người dùng bật. Hộp cát chỉ đọc vẫn giữ cho lệnh dựng sẵn của Codex trên máy chủ.
     if (req.web) args.push("-c", "tools.web_search=true");
     if (req.model) args.push("-m", req.model);
     // Mức đã được subs.resolvePlanModel chọn theo đúng các mức model này hỗ trợ (low…max, ultra).
@@ -365,8 +427,17 @@ export class CodexEngine implements Engine {
     // Ảnh gửi kèm (cả khi nối tiếp phiên): --image=<tệp>; PDF: chữ trích ra đã có trong prompt, trang scan đi cùng ảnh (Codex không còn công cụ mở tệp).
     for (const f of imagePaths(req.attachments ?? [])) args.push(`--image=${f}`);
     args.push("-");
-    const p = await start("codex", args, req, prompt);
-    if (!p) { yield notInstalled("codex"); return; }
+    let home = "";
+    if (req.mcp) {
+      try { home = await codexTurnHome(req, req.mcp.url); }
+      catch (e) { yield err(`Không chuẩn bị được cấu hình công cụ cho Codex: ${(e as Error).message}`, "other"); return; }
+    }
+    let p: Proc | null;
+    try { p = await start("codex", args, home ? { ...req, env: { ...req.env, CODEX_HOME: home } } : req, prompt); }
+    catch (e) { if (home) await rmCodexHome(req, home).catch(() => {}); throw e; }
+    // Dọn CODEX_HOME của lượt khi CLI thoát, như tệp cấu hình MCP của Claude Code.
+    if (home) void p?.done.finally(() => { void rmCodexHome(req, home).catch(() => {}); });
+    if (!p) { if (home) await rmCodexHome(req, home).catch(() => {}); yield notInstalled("codex"); return; }
     const parts: string[] = [];
     let done = false, lastErr = "", tools = false, partial = "";
     const asked = new Set<string>();
