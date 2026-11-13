@@ -8,6 +8,8 @@ import { spawn } from "node:child_process";
 // Bộ API chạy trước: các bộ giao diện để lại việc chạy nền ở máy chủ (đặt tên đoạn chat, hội đồng phản biện…) gọi model giả lập liên tục,
 // đẩy lời gọi mà bộ API cần kiểm ra khỏi lịch sử 30 lời gọi gần nhất của máy giả lập.
 const SUITES = [
+  // B3.7: ngân sách tải đầu của trang chủ (JS ≤ 350 KB, CSS ≤ 45 KB gzip) đọc từ bản build của dev:mock:fast; vượt trần chống tăng lại là lỗi.
+  ["Ngân sách tải đầu: JS 350 KB, CSS 45 KB gzip", "scripts/budget.mjs"],
   ["Toàn bộ bộ kiểm API", "tests/run-all.mjs"],
   ["Soát giao diện toàn trang (sáng/tối × 390/768/1440px)", "tests/ui/audit.mjs"],
   ["Một ca cho mỗi lỗi U2–U14 (390/768/1440px), giao diện sáng", "tests/ui/u-bugs.mjs", { THEME: "light" }],

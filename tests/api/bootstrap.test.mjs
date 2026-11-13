@@ -99,6 +99,7 @@ try {
   ok(m.over.length === 0, "trong ngân sách thì không báo vượt");
   ok(B.measure(dist, "/page", { js: 10, css: 10 }).over.join() === "js,css", "vượt ngân sách thì báo đúng phần vượt");
   ok(B.BUDGET.js === 350 * 1024 && B.BUDGET.css === 45 * 1024, "ngân sách đúng blueprint: JS 350 KB, CSS 45 KB gzip");
+  ok(B.CEIL.js >= B.BUDGET.js && B.CEIL.css >= B.BUDGET.css && B.CEIL.js <= 360 * 1024 && B.CEIL.css <= 105 * 1024, "trần chống tăng lại không thấp hơn ngân sách, không cao hơn số đo trước khi giảm (JS 376 KB, CSS 104 KB)", B.CEIL);
 } finally {
   fs.rmSync(tmp, { recursive: true, force: true });
 }
