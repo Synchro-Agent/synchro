@@ -54,20 +54,45 @@ function items(input: unknown): Item[] | null {
   return list.every((x) => typeof obj(x).tool_slug === "string" && /^[A-Za-z0-9_]{3,120}$/.test(String(obj(x).tool_slug))) ? (list as Item[]) : null;
 }
 const method = (input: unknown) => String(obj(input).method ?? "").toUpperCase();
-// Đường dẫn API trông như thao tác ghi dù gọi bằng GET (Slack chat.postMessage, Telegram sendMessage, conversations.archive…): từng chữ của đường dẫn,
-// tách theo / . _ - và chữ hoa giữa từ, có động từ ghi thì coi là ghi. Chữ ở dạng khác ("posts", "settings") không tính.
-const PATH_WRITE = new Set(["send", "post", "create", "delete", "del", "remove", "update", "set", "add", "edit", "archive", "unarchive", "kick", "invite", "upload", "publish", "write",
-  "insert", "move", "rename", "join", "leave", "ban", "unban", "pin", "unpin", "react", "mark", "close", "open", "revoke", "approve", "reject", "destroy", "cancel", "trash", "purge",
-  "put", "patch", "merge", "deploy", "trigger", "run", "execute", "exec", "modify", "replace", "share", "forward", "reply", "submit", "star", "unstar", "subscribe", "unsubscribe",
-  "mute", "unmute", "follow", "unfollow", "like", "unlike", "accept", "decline", "enable", "disable", "transfer", "pay", "refund", "import", "restore", "assign", "lock", "unlock",
-  "clear", "reset", "grant", "start", "stop", "kill", "erase", "wipe", "drop", "copy", "invoke", "rotate", "promote", "demote"]);
+// Đường dẫn API trông như thao tác ghi dù gọi bằng GET (Slack chat.postMessage, Telegram sendMessage / SENDMESSAGE, chat.scheduleMessage, dnd.endDnd…).
+// Tên phương thức có thể viết liền, viết hoa, viết thường (Telegram không phân biệt hoa thường), nên mỗi chữ của đường dẫn (tách theo / . _ - …) viết thường mà
+// BẮT ĐẦU bằng một động từ ghi là ghi: "sendmessage" bắt đầu bằng "send". Thêm nữa, từng phần chữ hoa giữa từ ("conversationsArchive") trùng động từ ghi cũng là ghi.
+// Không chắc thì hỏi (fail-closed): chỉ chữ là dạng danh từ của động từ (posts, settings, followers, reactions, pinned, starred…) hoặc nằm trong PATH_NOUN mới bỏ qua.
+const PATH_WRITE = ["send", "unsend", "post", "create", "delete", "remove", "update", "set", "add", "edit", "archive", "unarchive", "kick", "invite", "upload", "publish", "write",
+  "insert", "move", "rename", "join", "leave", "ban", "unban", "pin", "unpin", "react", "mark", "close", "open", "reopen", "revoke", "approve", "reject", "destroy", "cancel", "trash",
+  "purge", "put", "patch", "merge", "deploy", "trigger", "run", "execute", "exec", "modify", "replace", "share", "forward", "reply", "submit", "star", "unstar", "subscribe",
+  "unsubscribe", "mute", "unmute", "follow", "unfollow", "like", "unlike", "accept", "decline", "enable", "disable", "transfer", "pay", "refund", "import", "restore", "assign",
+  "unassign", "lock", "unlock", "clear", "reset", "grant", "start", "stop", "kill", "erase", "wipe", "drop", "copy", "invoke", "rotate", "promote", "demote", "schedule",
+  "complete", "end", "restrict", "answer", "snooze", "retweet", "unretweet", "tweet", "block", "unblock", "report", "hide", "unhide", "toggle", "vote", "book", "purchase", "buy",
+  "sell", "charge", "capture", "void", "notify", "dismiss", "resolve", "confirm", "verify", "save", "upsert", "push", "commit", "apply", "dispatch", "emit", "broadcast",
+  "connect", "disconnect", "install", "uninstall", "invalidate", "logout", "signout", "unfurl", "memessage", "gift", "upgrade", "convert", "exportchat", "request", "register",
+  "unregister", "generate", "sync", "refresh", "remind", "watch", "flag", "acknowledge", "clone", "duplicate", "fork"].sort((a, b) => b.length - a.length);
+// Dạng danh từ của động từ ở cuối chữ (post+s, set+t+ings, pin+n+ed, follow+ers, react+ions, deploy+ments…): chữ dùng để đọc, không phải lệnh.
+const NOUN_END = /^(s|es|d|ed|ing|ings|er|ers|ion|ions|ment|ments)$/;
+// Chữ bắt đầu bằng động từ ghi nhưng là danh từ thường gặp trong đường dẫn đọc.
+const PATH_NOUN = new Set(["address", "addresses", "addon", "addons", "endpoint", "endpoints", "payout", "payouts", "payload", "market", "markets", "marketing", "markdown", "bank", "banks",
+  "ping", "sendas", "openid", "openapi", "copyright", "settlement", "settlements", "postal", "postcode", "postgres", "stargazers", "subscribers", "joinedteams", "sharedwithme",
+  "shareddrives", "connectors", "connector", "installations", "installation", "assignees", "executions", "execution", "editor", "editors", "bookmarks", "runtime", "runtimes", "delta"]);
+const writeWord = (w: string) => {
+  const s = w.toLowerCase();
+  if (!s || PATH_NOUN.has(s)) return false;
+  const v = PATH_WRITE.find((x) => s.startsWith(x));
+  if (!v) return false;
+  const rest = s.slice(v.length);
+  if (!rest) return true;
+  // Phụ âm cuối nhân đôi trước đuôi (pinned, starred, settings, banners).
+  return !NOUN_END.test(rest) && !(rest.length > 1 && rest[0] === v[v.length - 1] && NOUN_END.test(rest.slice(1)));
+};
+const PATH_EXACT = new Set(PATH_WRITE.concat("del"));
 /** Gọi API bằng GET mà đường dẫn có động từ ghi: phải hỏi như phương thức ghi. */
 export function proxyWritePath(input: unknown): boolean {
   const ep = obj(input).endpoint;
   if (typeof ep !== "string") return false;
   let path = ep.split(/[?#]/)[0];
   try { if (/^https?:\/\//i.test(path)) path = new URL(path).pathname; } catch {}
-  return path.split(/[^A-Za-z0-9]+/).flatMap((t) => t.split(/(?<=[a-z0-9])(?=[A-Z])/)).some((w) => PATH_WRITE.has(w.toLowerCase()));
+  try { path = decodeURIComponent(path); } catch {}
+  const toks = path.split(/[^A-Za-z0-9]+/).filter(Boolean);
+  return toks.some((t) => !PATH_NOUN.has(t.toLowerCase()) && (writeWord(t) || t.split(/(?<=[a-z0-9])(?=[A-Z])/).some((w) => PATH_EXACT.has(w.toLowerCase()))));
 }
 /** Lời gọi luôn phải hỏi mỗi lần: bash / workbench từ xa, gọi API qua Composio với phương thức khác GET (hoặc GET tới đường dẫn ghi). */
 export const strictCall = (tool: string, input: unknown) => ALWAYS_ASK.has(tool) || (tool === PROXY_TOOL && (method(input) !== "GET" || proxyWritePath(input)));

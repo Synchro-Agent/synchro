@@ -184,6 +184,13 @@ try {
   const pw = (endpoint, method = "GET") => X.strictCall("COMPOSIO_PROXY_EXECUTE", { method, endpoint });
   ok(pw("/api/chat.postMessage?channel=C1&text=hi") && pw("https://api.telegram.org/bot123/sendMessage?chat_id=1&text=x") && pw("/api/conversations.archive?channel=C1"), "chat.postMessage, sendMessage, conversations.archive bằng GET: luôn hỏi");
   ok(!pw("/gmail/v1/users/me/labels") && !pw("/v1/documents?q=post") && !pw("/api/conversations.history"), "GET đọc (labels, documents, history): theo quyền của công cụ");
+  // Tên phương thức viết liền / hoa / thường, và động từ ghi khác (Telegram không phân biệt hoa thường): vẫn hỏi.
+  const sneaky = ["/bot123/sendmessage", "/bot123/SENDMESSAGE", "/api/chat.postmessage", "/api/chat.scheduleMessage", "/api/reminders.complete", "/api/dnd.endDnd", "/bot1/restrictChatMember",
+    "/bot1/answerCallbackQuery", "/api/chat.meMessage", "/api/dnd.setSnooze", "/bot1/pinChatMessage", "/api/conversations.open", "/a/%73endMessage", "/x/conversationsArchive"];
+  ok(sneaky.every((e) => pw(e)), "GET tới phương thức ghi viết liền / khác hoa thường: luôn hỏi", sneaky.filter((e) => !pw(e)));
+  const plain = ["/bot1/getUpdates", "/api/reactions.get", "/api/pins.list", "/gmail/v1/users/me/settings/sendAs", "/repos/a/b/stargazers", "/users/x/followers", "/user/starred", "/v1/refunds",
+    "/v1/blocks/abc/children", "/me/drive/sharedWithMe", "/wp/v2/posts", "/repos/a/b/actions/runs", "/calendar/v3/calendars/primary/events"];
+  ok(!plain.some((e) => pw(e)), "GET đọc có chữ là danh từ của động từ (posts, followers, starred, runs…): theo quyền của công cụ", plain.filter((e) => pw(e)));
   ok(pw("/gmail/v1/users/me/labels", "POST") && pw("/x", "") && X.cxCard("COMPOSIO_PROXY_EXECUTE", { method: "GET", endpoint: "/api/chat.postMessage" }).strict, "phương thức khác GET luôn hỏi; thẻ GET ghi chỉ cho phép một lần");
 
   console.log("10. Học toolkit, lược đồ và tài khoản từ kết quả của chính Composio (W23-7 / W1-05)");
