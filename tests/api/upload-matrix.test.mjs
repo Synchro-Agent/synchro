@@ -134,6 +134,29 @@ round(cp1250, "Dobrý den, jak se máte? Děkuji, mám se dobře. Kde je nádra�
 round(sbEncoder("iso-8859-15"), "L'œuvre coûte 5 € et le cœur est là.", "iso-8859-15 (jschardet: iso8859-15): œ / € đúng");
 round(sbEncoder("windows-1251"), "ERROR 2026-01-01 Ошибка: файл config.yaml не найден (code=404). Повторите попытку через 5 минут.", "Windows-1251 tiếng Nga lẫn chữ ASCII vẫn ra chữ Kirin");
 round(sbEncoder("windows-1253"), "Καλημέρα κόσμε. Αυτό είναι ένα δοκιμαστικό αρχείο.", "Hy Lạp (jschardet: ISO-8859-7) vẫn ra chữ Hy Lạp");
+console.log("4d. Windows-1258 lẫn nhiều từ ASCII (C-1): nhật ký, địa chỉ, email, mã hàng vẫn là tiếng Việt");
+// Mã hoá cp1258 như Windows: chữ dựng sẵn nếu bảng mã có, không thì chữ gốc + byte dấu thanh tổ hợp.
+const T1258 = new Map(); { const d = new TextDecoder("windows-1258"); for (let b = 0x80; b < 256; b++) { const c = d.decode(B(b)); if (c !== "�") T1258.set(c, b); } }
+const TONE = { "̀": 0xcc, "́": 0xec, "̃": 0xde, "̉": 0xd2, "̣": 0xf2 };
+const cp1258 = (s) => {
+  const out = [];
+  for (const ch of s.normalize("NFC")) {
+    if (ch.charCodeAt(0) < 0x80) { out.push(ch.charCodeAt(0)); continue; }
+    if (T1258.has(ch)) { out.push(T1258.get(ch)); continue; }
+    const parts = [...ch.normalize("NFD")], tone = parts.find((c) => TONE[c]), base = parts.filter((c) => !TONE[c]).join("").normalize("NFC");
+    out.push(base.charCodeAt(0) < 0x80 ? base.charCodeAt(0) : T1258.get(base));
+    if (tone) out.push(TONE[tone]);
+  }
+  return Buffer.from(out);
+};
+round(cp1258, "ERROR Không thể đọc file config.yaml", "1258 dòng lỗi: Không thể đọc (không thành thêÒ ðoòc)");
+round(cp1258, "Địa chỉ: 123 Lê Lợi, P. Bến Thành, Q.1, TP.HCM. ĐT: 028 3822 1234. Email: info@abc.vn", "1258 địa chỉ lẫn TP.HCM / ĐT / email");
+round(cp1258, "2026-01-01 10:00:01 INFO Server started on port 8080\n2026-01-01 10:00:02 WARN Kết nối database chậm (latency=350ms)\n2026-01-01 10:00:03 INFO OK", "1258 nhật ký nhiều dòng tiếng Anh, một dòng tiếng Việt");
+round(cp1258, "Mã SP,Tên sản phẩm,Giá\nSP001,Bút bi Thiên Long,5000\nSP002,Vở học sinh,12000\nSP003,Thước kẻ,3000", "1258 CSV có mã hàng SP001");
+ok(E.looksVietnamese1258(cp1258("ERROR Không thể đọc file config.yaml config.yaml config.yaml INFO WARN DEBUG")), "tỉ lệ âm tiết chỉ tính trên từ có byte cao (từ ASCII không kéo tỉ lệ xuống)");
+// Dấu thanh tách rời ghi thẳng sau nguyên âm Latin-1 (a + 0xCC = à): bằng chứng xét theo byte gốc.
+dec(bytes("Xin cha", 0xcc, "o, la", 0xcc, "m ba", 0xcc, "i ngay."), "Xin chào, làm bài ngay.", "1258 dấu thanh tổ hợp sau nguyên âm Latin-1 (chà, là, bà): vẫn là bằng chứng");
+ok(E.looksVietnamese1258(bytes("Pu", 0xf2, " darsi, ci", 0xf2, " ", 0xe8, " vero."), true) === false, "jschardet nói cp1258 cũng không đủ cho tiếng Ý ngắn (chỉ 2 dấu thanh, không có ă đ ơ ư)");
 ok(E.normLabel("ISO8859-7") === "iso-8859-7" && E.normLabel("iso8859-15") === "iso-8859-15" && E.normLabel("CP1250") === "windows-1250" && E.normLabel("MacRoman") === "macintosh", "chuẩn hoá tên bảng mã jschardet (iso8859- → iso-8859-)");
 
 console.log("5. Trích thật qua tiến trình đọc tệp (docx/xlsx/csv/pptx/zip), mỗi tệp một DẤU HIỆU");

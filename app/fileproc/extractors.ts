@@ -41,7 +41,7 @@ export function decodeText(buf: Buffer): string {
   // - Còn lại là cp1252 (Tây Âu).
   const tries: string[] = [];
   if (det && MULTI_BYTE.test(det)) tries.push(det);
-  else if (looksVietnamese1258(buf)) tries.push("windows-1258");
+  else if (looksVietnamese1258(buf, det === "windows-1258")) tries.push("windows-1258");
   else if (det && NON_LATIN_1BYTE.test(det)) { if (looksNonLatin(buf)) tries.push(det); }
   else if (det && !WESTERN.test(det) && !det.startsWith("utf") && !det.includes("1258") && latinGuessBeats1252(buf, det)) tries.push(det);
   tries.push("windows-1252");
@@ -157,23 +157,33 @@ const VN_SYLLABLE = new RegExp(
 const isVnSyllable = (w: string) => VN_SYLLABLE.test(w.normalize("NFD").replace(/[̣̀́̃̉]/g, "").normalize("NFC"));
 
 /** Bằng chứng tích cực rằng tệp là tiếng Việt mã Windows-1258: có byte đặc trưng, và khi đọc theo 1258 thì các từ mang chữ/dấu riêng của tiếng Việt
- * là âm tiết tiếng Việt hợp lệ (không phải "Săo", "coś", "međ" như văn bản Bồ Đào Nha / Ý / Iceland mã cp1252), đồng thời đa số từ là âm tiết tiếng Việt.
- * Cần ít nhất một từ hợp lệ có ă / đ / ơ / ư; chỉ có dấu thanh tổ hợp thì cần ≥3 từ (tiếng Ý "può", "ciò" cũng ra âm tiết trông như tiếng Việt). */
-export function looksVietnamese1258(buf: Buffer): boolean {
+ * là âm tiết tiếng Việt hợp lệ (không phải "Săo", "coś", "međ" như văn bản Bồ Đào Nha / Ý / Iceland mã cp1252), đồng thời đa số từ có byte cao là âm tiết tiếng Việt.
+ * Cần ít nhất một từ hợp lệ có ă / đ / ơ / ư; chỉ có dấu thanh tổ hợp thì cần ≥3 từ (tiếng Ý "può", "ciò" cũng ra âm tiết trông như tiếng Việt).
+ * - Bằng chứng xét theo byte gốc (từ có byte trong VN_1258_BYTES), không theo chữ sau khi ghép: "chà" ghi a + 0xCC vẫn là bằng chứng dù "à" có trong Latin-1.
+ * - Tỉ lệ âm tiết hợp lệ chỉ tính trên từ có byte ≥0x80: từ ASCII (ERROR, config, TP, HCM, email, mã SP001) không mang thông tin bảng mã.
+ * - jschardet đã đoán cp1258 (detSays1258) thì bỏ qua tỉ lệ, chỉ cần bằng chứng gấp đôi phản chứng. */
+export function looksVietnamese1258(buf: Buffer, detSays1258 = false): boolean {
   const head = buf.subarray(0, 65_536);
   if (!head.some((c) => VN_1258_BYTES.has(c))) return false;
-  const words = new TextDecoder("windows-1258").decode(head).normalize("NFC").toLowerCase().match(/[\p{L}\p{M}]+/gu) ?? [];
-  let valid = 0, letters = 0, marks = 0, contra = 0;
-  for (const w of words) {
+  // Không ghép NFC ở bước tách từ: cp1258 một byte = một ký tự, nên vị trí trong chuỗi trùng vị trí byte.
+  const raw = new TextDecoder("windows-1258").decode(head);
+  if (raw.length !== head.length) return false;
+  let hiWords = 0, hiValid = 0, letters = 0, marks = 0, contra = 0;
+  for (const m of raw.matchAll(/[\p{L}\p{M}]+/gu)) {
+    const bytes = head.subarray(m.index, m.index + m[0].length);
+    if (!bytes.some((c) => c >= 0x80)) continue; // từ thuần ASCII: không là bằng chứng cho bảng mã nào
+    const w = m[0].normalize("NFC").toLowerCase();
     const ok = isVnSyllable(w);
-    if (ok) valid++;
-    if (!/[^\u0000-ÿ]/.test(w)) continue; // từ không có ký tự nào ngoài Latin-1: cp1252 và 1258 đọc như nhau, không là bằng chứng
+    hiWords++;
+    if (ok) hiValid++;
+    if (!bytes.some((c) => VN_1258_BYTES.has(c))) continue; // byte cao chung của cp1252 và 1258 (é, ô, à): đọc như nhau, không là bằng chứng
     if (!ok) contra++;
     else if (/[ăđơư]/.test(w)) letters++;
     else marks++;
   }
   const evidence = letters + marks;
-  return (letters > 0 || marks >= 3) && evidence >= 2 * contra && valid / words.length >= 0.5;
+  if (!(letters > 0 || marks >= 3) || evidence < 2 * contra) return false;
+  return detSays1258 || hiValid / hiWords >= 0.5;
 }
 
 // ---- 1. Ảnh: gửi thẳng, KHÔNG OCR; tự xoay theo EXIF (ảnh dọc chụp điện thoại lên đúng chiều), resize nếu cạnh dài > 1568px, HEIC/GIF → PNG ----
