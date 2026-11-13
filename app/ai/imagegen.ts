@@ -74,9 +74,10 @@ export function imageBudget(uid: string, n: number, now = Date.now()): number {
 
 // ---------------------------------------------------------------- câu lệnh
 // Mô tả ảnh nào không rõ là xin chữ / logo / nhãn thương hiệu thì thêm "không chữ, không logo, không nhãn thương hiệu":
-// mô hình ảnh hay tự chèn watermark, dòng chữ, logo giả vào ảnh, khiến phải sửa lại nhiều vòng. Mô tả có chữ trong ngoặc kép,
-// hay nhắc logo / poster / nhãn / tiêu đề… thì giữ nguyên (người dùng thật sự muốn có chữ). Sửa ảnh có sẵn (refPath) cũng giữ nguyên.
-const WANTS_TEXT = /["'“”‘’«»]|\b(?:text|word|words|caption|captions|title|titles|subtitle|headline|headlines|slogan|tagline|quote|quotes|lettering|letter|letters|typography|typographic|wordmark|logo|logotype|brand|branded|branding|label|labels|watermark|sign|signage|poster|posters|billboard|banner|banners|flyer|menu|number|numbers|date)\b|chữ|dòng chữ|tiêu đề|khẩu hiệu|slogan|logo|thương hiệu|nhãn|biển|chữ ký|poster|áp phích|băng rôn|tờ rơi|thực đơn|chú thích|dòng nhạc/i;
+// mô hình ảnh hay tự chèn watermark, dòng chữ, logo giả vào ảnh, khiến phải sửa lại nhiều vòng. Mô tả có chữ đặt trong cặp ngoặc kép
+// (chữ cần hiện), hay nhắc logo / poster / nhãn / tiêu đề… thì giữ nguyên (người dùng thật sự muốn có chữ). Sửa ảnh có sẵn (refPath) cũng giữ nguyên.
+// Chỉ bắt cặp ngoặc có nội dung bên trong — bỏ dấu nháy đơn lẻ (' ’) vì chúng dính cả câu bình thường như "a cat's toy".
+const WANTS_TEXT = /"[^"]+"|“[^”]+”|«[^»]+»|\b(?:text|word|words|caption|captions|title|titles|subtitle|headline|headlines|slogan|tagline|quote|quotes|lettering|letter|letters|typography|typographic|wordmark|logo|logotype|brand|branded|branding|label|labels|watermark|sign|signage|poster|posters|billboard|banner|banners|flyer|menu|number|numbers|date)\b|chữ|dòng chữ|tiêu đề|khẩu hiệu|slogan|logo|thương hiệu|nhãn|biển|chữ ký|poster|áp phích|băng rôn|tờ rơi|thực đơn|chú thích|dòng nhạc/i;
 const HAS_DEFAULT = /không chữ|khong chu|no text|no logo|without text|no watermark|không watermark/i;
 /** Hậu tố mặc định cho mô tả ảnh mới không xin chữ / logo / nhãn. Thuần, kiểm thử: tests/api/imagegen.test.mjs. */
 export function withImageDefaults(prompt: string): string {

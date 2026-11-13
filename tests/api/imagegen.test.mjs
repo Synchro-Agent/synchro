@@ -513,9 +513,9 @@ try {
   console.log("13. Hậu tố mặc định không chữ / logo / nhãn");
   {
     const SUF = ", không chữ, không logo, không nhãn thương hiệu";
-    for (const p of ["a cozy coffee shop interior", "con mèo đội mũ", "phong cảnh núi rừng mùa thu", "a red sports car on a mountain road"])
+    for (const p of ["a cozy coffee shop interior", "con mèo đội mũ", "phong cảnh núi rừng mùa thu", "a red sports car on a mountain road", "a cat's toy on the floor", "l'école at dawn", "con mèo đang chơi"])
       ok(I.withImageDefaults(p).endsWith(SUF), `thêm hậu tố cho mô tả không xin chữ: "${p}"`, I.withImageDefaults(p));
-    for (const p of ["logo cho quán cà phê", "poster sự kiện âm nhạc", 'a sign that says "OPEN"', "tiêu đề in đậm", "a banner with the word Sale", "ảnh có dòng chữ chúc mừng", "typography poster", "brand identity mockup"])
+    for (const p of ["logo cho quán cà phê", "poster sự kiện âm nhạc", 'a sign that says "OPEN"', '“SALE” on a shop window', "tiêu đề in đậm", "a banner with the word Sale", "ảnh có dòng chữ chúc mừng", "typography poster", "brand identity mockup"])
       ok(I.withImageDefaults(p) === p, `giữ nguyên khi người dùng muốn có chữ / logo / nhãn: "${p}"`, I.withImageDefaults(p));
     ok(I.withImageDefaults("con mèo, không chữ") === "con mèo, không chữ", "không thêm hai lần");
     ok(I.imagePrompt("agy", { prompt: "con mèo", count: 1 }).includes(SUF.trim()), "imagePrompt (ảnh mới) có hậu tố");
