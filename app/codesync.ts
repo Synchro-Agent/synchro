@@ -3,6 +3,7 @@
 import { useSyncExternalStore } from "react";
 import type { CodePrefs } from "./codestore";
 import { mergeData } from "./codemerge";
+import { TIMED_OUT, withDeadline } from "./chatsynccore";
 import { userScope } from "./userscope";
 
 export type { CodePrefs };
@@ -88,10 +89,26 @@ export async function flushSession(id: number): Promise<boolean> {
 }
 /** Gửi ngay mọi phiên đang chờ (đóng tab, đổi phiên). */
 export function flushAll() { for (const id of [...pending.keys()]) void flushSession(id); }
-/** Đăng xuất kèm xóa dữ liệu trên thiết bị: gửi ngay mọi phiên đang chờ và chờ kết quả. Trả về số phiên chưa gửi được. */
-export async function flushAllNow(): Promise<number> {
-  const r = await Promise.all([...pending.keys()].map((id) => flushSession(id)));
-  return r.filter((x) => !x).length;
+/**
+ * Đăng xuất kèm xóa dữ liệu trên thiết bị (đang bật Đồng bộ phiên): đảm bảo mọi phiên Code chỉ có ở thiết bị này đã lên máy chủ
+ * TRƯỚC khi xóa. Trả về số phiên chưa chắc đã đồng bộ (để nơi gọi KHÔNG xóa phần đó). Chờ tối đa ms.
+ * - Bước 1: gửi nốt mọi phiên đang chờ; cái nào gửi không xong (lỗi/hết giờ) là chưa đồng bộ.
+ * - Bước 2: so khóa codeS:* ở máy (localIds) với danh sách phiên trên máy chủ. Phiên có ở máy mà máy chủ không có — gồm phiên
+ *   từng đẩy thất bại nên đã rơi khỏi hàng chờ, không được kiểm lại — cũng tính là chưa đồng bộ. Không kiểm được thì giữ lại tất.
+ */
+export async function flushAllNow(localIds: number[] = [], ms = 10_000): Promise<number> {
+  const end = Date.now() + ms;
+  const unsynced = new Set<number>();
+  await Promise.all([...pending.keys()].map(async (id) => {
+    const r = await withDeadline(flushSession(id), end - Date.now());
+    if (r === TIMED_OUT || r === false) unsynced.add(id);
+  }));
+  if (localIds.length) {
+    const j = Date.now() < end ? await withDeadline(listServerSessions(0), end - Date.now()) : TIMED_OUT;
+    if (j === TIMED_OUT || !j) { for (const id of localIds) unsynced.add(id); }
+    else { const on = new Set(j.sessions.filter((x) => !x.deleted).map((x) => x.id)); for (const id of localIds) if (!on.has(id)) unsynced.add(id); }
+  }
+  return unsynced.size;
 }
 if (typeof window !== "undefined") window.addEventListener("pagehide", flushAll);
 
