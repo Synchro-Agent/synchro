@@ -1486,7 +1486,7 @@ async function scrubApplied(res: Response): Promise<Response> {
   const text = stripAppliedNotes(j.text);
   return text === j.text ? res : Response.json({ ...j, text }, { status: res.status });
 }
-async function chatPostTurn(body: Record<string, any>, c: Who, scope: { feature: string }): Promise<Response> { // eslint-disable-line @typescript-eslint/no-explicit-any
+async function chatPostTurn(body: Parameters<typeof chatPost>[0], c: Who, scope: { feature: string }): Promise<Response> {
   // Tệp của các lượt trước đi cùng lịch sử: model nào trả lời lượt này (kể cả model vừa đổi) cũng thấy đúng tài liệu đang bàn.
   if (Array.isArray(body.messages)) { const msgs = body.messages; body = { ...body, messages: await span("file refs", "history", () => expandFileRefs(msgs, lastUserText(msgs), c.user.id)) }; }
   // Hướng dẫn của dự án luôn có trong lời nhắc hệ thống, ở mọi đường đi của lượt (turnctx.withProjectIns): trình duyệt chỉ có bản rút gọn của dự án
