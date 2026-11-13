@@ -1,5 +1,6 @@
 import { ensureStudioTags, listSkills, previewSkill, publicSkill, saveSkill, skillErr, SkillError } from "../../skillstore";
 import { current, featureGate } from "../../authstore";
+import { route } from "../../../server/route";
 import { refining } from "../../skillstudio";
 import { timed } from "../../servertiming";
 
@@ -15,9 +16,9 @@ export const GET = timed(async (req: Request) => {
 });
 
 // multipart: file (.zip hoặc SKILL.md); dry=1 chỉ kiểm tra + xem trước, không lưu; pick = thư mục skill khi gói có nhiều skill.
-export const POST = timed(async (req: Request) => {
-  const denied = featureGate(req, "skills"); if (denied) return denied;
-  const uid = current(req)!.user.id;
+// Giới hạn theo tài khoản: nhận và giải nén gói skill tốn tài nguyên.
+export const POST = route({ feature: "skills", limit: { key: "skills-post", max: 120, windowMs: 3_600_000 } }, async ({ req, user }) => {
+  const uid = user.id;
   try {
     const fd = await req.formData();
     const f = fd.get("file");

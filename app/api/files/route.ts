@@ -1,17 +1,16 @@
 import { processFile } from "../../fileproc";
 import { FileError } from "../../fileproc/types";
-import { AuthError, current, featureGate, limit } from "../../authstore";
-import { timed } from "../../servertiming";
+import { AuthError, limit } from "../../authstore";
+import { route } from "../../../server/route";
 
 export const runtime = "nodejs";
 
 // POST multipart (field "file") -> { id, name, kind, tokens, large, preview, images }
-export const POST = timed(async (req: Request) => {
-  const denied = featureGate(req, "files"); if (denied) return denied;
+export const POST = route({ feature: "files" }, async ({ req, user }) => {
   const form = await req.formData().catch(() => null);
   const f = form?.get("file");
   if (!(f instanceof File)) return Response.json({ error: "Thiếu tệp" }, { status: 400 });
-  const uid = current(req)!.user.id;
+  const uid = user.id;
   try {
     limit("upload:" + uid, 300, 3_600_000);
     // ?raw=1 (Synchro Code): nhận mọi loại tệp, tệp không đọc được chữ vẫn được giữ để chép nguyên vào workspace.

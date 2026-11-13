@@ -2,8 +2,8 @@ import { fetchGithubSkill, getSkill, LIMITS, NoSkillError, parseEntries, type Pa
 import { findLinkDup, linkDupMessage, linkKey, type LinkDup } from "../../../plugins";
 import { fetchGitRepo, RepoError } from "../../../repofetch";
 import { GEN, readRepo, skillFromRepo } from "../../../skillgen";
-import { current, featureGate, limit } from "../../../authstore";
-import { timed } from "../../../servertiming";
+import { limit } from "../../../authstore";
+import { route } from "../../../../server/route";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -26,9 +26,8 @@ const dupRes = (d: LinkDup) => Response.json({ error: linkDupMessage(d), duplica
 
 // { url, pick?, dry? }: nhập skill từ link repo git công khai (GitHub, GitLab, Bitbucket, Codeberg / Gitea, máy chủ git riêng…):
 // repo, thư mục hoặc file SKILL.md. Repo / thư mục không có SKILL.md: tạo skill từ toàn bộ nội dung repo.
-export const POST = timed(async (req: Request) => {
-  const denied = featureGate(req, "skills"); if (denied) return denied;
-  const user = current(req)!.user, uid = user.id;
+export const POST = route({ feature: "skills", json: true }, async ({ req, user }) => {
+  const uid = user.id;
   try {
     const { url, pick, dry } = await req.json();
     const raw = String(url ?? "");
