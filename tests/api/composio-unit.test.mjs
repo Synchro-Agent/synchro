@@ -206,6 +206,21 @@ try {
   ok(X.execPlan({ tools: [{ tool_slug: "ACME_CRM_LIST_DEALS" }] }, "u9").writes.length === 0 && X.cxHints("u9", tn + 1).slug("ACME_CRM_LIST_DEALS") === "acme_crm", "Composio nói ACME_CRM_LIST_DEALS thuộc acme_crm: đọc, chạy luôn");
   ok(X.execPlan({ tools: [{ tool_slug: "ACME_CRM_LIST_DEALS" }] }, "u8").writes.join() === "acme", "người dùng khác không dùng hiểu biết của người này");
   ok(CXA.slugParts("GITHUB_MARK_A_THREAD_AS_READ", { slug: () => "github_mark_a_thread_as", kits: ["github_mark"] }).kit === "github", "toolkit học được nuốt động từ ghi: bỏ qua");
+  // Toolkit học được không dời được ranh giới đọc / ghi (SEC-1 / W1-01): Composio nhắc lại tên toolkit model hỏi trong mục lỗi → không học;
+  // toolkit đã thấy (không phải toolkit Composio báo cho đúng slug) không bao giờ biến thao tác ghi thành đọc.
+  const w1 = (u, slug) => JSON.stringify(X.execPlan({ tools: [{ tool_slug: slug }] }, u).writes);
+  ok(w1("u6", "TWITTER_FOLLOW_LIST") === '["twitter"]' && w1("u6", "TWITTER_PIN_LIST") === '["twitter"]', "trước khi học: FOLLOW_LIST / PIN_LIST là ghi của twitter");
+  X.cxLearn("u6", "COMPOSIO_MANAGE_CONNECTIONS", JSON.stringify({ data: { results: { twitter_follow: { toolkit: "twitter_follow", status: "error" } } } }), tn);
+  X.cxLearn("u6", "COMPOSIO_MANAGE_CONNECTIONS", JSON.stringify({ data: { results: { twitter_pin: { status: "failed" } } } }), tn);
+  X.cxLearn("u6", "COMPOSIO_WAIT_FOR_CONNECTIONS", JSON.stringify({ data: { results: { twitter_like: { toolkit: "twitter_like", status: "unknown" } } } }), tn);
+  X.cxLearn("u6", "COMPOSIO_MANAGE_CONNECTIONS", JSON.stringify({ data: { results: { twitter_join: { toolkit: "twitter_join", status: "active" } } } }), tn);
+  ok(w1("u6", "TWITTER_FOLLOW_LIST") === '["twitter"]' && w1("u6", "TWITTER_PIN_LIST") === '["twitter"]' && w1("u6", "TWITTER_LIKE_LIST") === '["twitter"]' && w1("u6", "TWITTER_JOIN_LIST") === '["twitter"]',
+    "toolkit giả nhắc lại trong mục lỗi / không có mã tài khoản: không học, vẫn là ghi của twitter", [w1("u6", "TWITTER_FOLLOW_LIST"), w1("u6", "TWITTER_PIN_LIST"), w1("u6", "TWITTER_JOIN_LIST")]);
+  ok(!(X.cxHints("u6", tn + 1)?.kits ?? []).some((k) => /^twitter_/.test(k)), "không toolkit giả nào được ghi nhớ", X.cxHints("u6", tn + 1)?.kits);
+  ok(!CXA.slugIsRead("TWITTER_FOLLOW_LIST", undefined, { kits: ["twitter_follow"] }) && !CXA.slugIsRead("ACME_SCHEDULE_LIST", undefined, { kits: ["acme_schedule"] }),
+    "toolkit đã thấy không biến thao tác ghi / ứng dụng lạ thành đọc");
+  X.cxLearn("u6", "COMPOSIO_MANAGE_CONNECTIONS", JSON.stringify({ data: { results: { acme_crm: { toolkit: "acme_crm", status: "ACTIVE", connected_account_id: "ca_9" } } } }), tn);
+  ok(w1("u6", "ACME_CRM_CREATE_DEAL") === '["acme_crm"]' && w1("u6", "ACME_CRM_LIST_DEALS") === '["acme_crm"]', "kết nối thật (có mã tài khoản): toolkit dùng cho khóa quyền, thao tác chưa có trong danh mục vẫn hỏi");
   // Cache theo (người dùng, toolkit): câu tìm khác chữ cho cùng toolkit vẫn trúng; toolkit khác thì không.
   const hit = X.schemaCacheLookup("u9", SEARCH, { queries: [{ use_case: "Send a quick email to Bob with Gmail" }] }, tn + 1000);
   ok(hit && hit.kits?.join() === "gmail" && hit.content.includes("GMAIL_SEND_EMAIL") && hit.content.includes("recipient_email"), "SEARCH_TOOLS khác chữ cho Gmail: lấy từ cache theo toolkit", hit);

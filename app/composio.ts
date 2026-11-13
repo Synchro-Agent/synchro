@@ -144,6 +144,14 @@ function acctLabel(o: Rec, depth = 0): string | undefined {
   if (depth === 0) { const id = o.connected_account_id ?? o.connectedAccountId; if (typeof id === "string" && /^[A-Za-z0-9_-]{3,80}$/.test(id)) return id; }
   return undefined;
 }
+// Đối tượng báo lỗi / trạng thái hỏng (toolkit không có, kết nối lỗi): không học gì từ nó — Composio có thể nhắc lại nguyên tên toolkit model đã hỏi.
+const failed = (o: Rec) => {
+  const st = o.status ?? o.connection_status;
+  if (typeof st === "string" && !/^(active|connected|enabled|ok|success|successful|initiated|initializing|pending)$/i.test(st.trim())) return true;
+  return o.successful === false || o.success === false || (o.error !== undefined && o.error !== null && o.error !== false && o.error !== "");
+};
+// Mã tài khoản kết nối thật của Composio (ca_…): chỉ kết nối đang hoạt động có mã này mới cho biết toolkit có thật.
+const accountId = (o: Rec) => [o.connected_account_id, o.connectedAccountId, obj(o.connected_account).id].find((x): x is string => typeof x === "string" && /^[A-Za-z0-9_-]{3,80}$/.test(x));
 // Đối tượng nói về một kết nối của toolkit đang hoạt động (không phải đang chờ đăng nhập).
 const activeConn = (o: Rec) => {
   const st = o.status ?? o.connection_status;
@@ -152,6 +160,7 @@ const activeConn = (o: Rec) => {
   return o.has_active_connection === true || o.is_connected === true || typeof o.connected_account_id === "string";
 };
 const connLike = (o: Rec) => "status" in o || "connected_account_id" in o || "has_active_connection" in o || "is_connected" in o;
+/** pairs: slug → toolkit trong danh mục công cụ; kits: toolkit có kết nối đang hoạt động kèm mã tài khoản thật; accounts: nhãn tài khoản đang kết nối theo toolkit. */
 type Scan = { pairs: Map<string, string>; kits: Set<string>; entries: Map<string, Rec>; accounts: Map<string, Set<string>>; session?: unknown };
 function parseJson(content: string): unknown {
   try { return JSON.parse(content); } catch {
@@ -171,13 +180,16 @@ export function cxScan(content: string): Scan {
     const slug = slugStr(o.tool_slug) ?? slugStr(o.slug) ?? slugStr(o.tool) ?? slugStr(o.name) ?? slugStr(key);
     // Kết quả theo toolkit ({ results: { gmail: { status: "active", connected_account_id } } }): tên toolkit là khóa.
     if (!kit && !slug && KIT_RE.test(key) && !GENERIC.has(key) && connLike(o)) kit = key;
-    if (slug && (!kit || under(slug, kit))) {
+    const bad = failed(o);
+    if (slug && !bad && (!kit || under(slug, kit))) {
       if (kit) out.pairs.set(slug, kit);
       out.entries.set(slug, { ...(out.entries.get(slug) ?? {}), ...o });
     }
-    if (kit) {
-      out.kits.add(kit);
-      if (!slug && activeConn(o)) { const l = acctLabel(o); if (l) out.accounts.set(kit, (out.accounts.get(kit) ?? new Set<string>()).add(l)); }
+    if (kit && !bad) {
+      if (!slug && activeConn(o)) {
+        const l = acctLabel(o); if (l) out.accounts.set(kit, (out.accounts.get(kit) ?? new Set<string>()).add(l));
+        if (accountId(o)) out.kits.add(kit);
+      }
       for (const k of ["tool_slugs", "primary_tool_slugs", "related_tool_slugs", "tools"]) { const a = o[k]; if (Array.isArray(a)) for (const x of a) { const s = slugStr(x); if (s && under(s, kit)) out.pairs.set(s, kit); } }
     }
     for (const [k, x] of Object.entries(o)) walk(x, k, depth + 1);
@@ -202,14 +214,19 @@ const capEntry = (slug: string, kit: string, e: Rec): Rec => {
 export function cxLearn(user: string, tool: string, content: string, now = Date.now()): void {
   if (!user || !META_READ.has(tool)) return;
   const sc = cxScan(content);
-  if (!sc.pairs.size && !sc.kits.size && !sc.accounts.size) return;
+  // slug → toolkit chỉ học từ danh mục công cụ (tìm công cụ / xem tham số); toolkit đã thấy: toolkit của các cặp đó, và kết nối đang hoạt động có mã tài khoản thật.
+  // Không học tên toolkit từ mục lỗi hay trạng thái lạ của quản lý / chờ kết nối: đó có thể chỉ là tên model vừa hỏi.
+  const catalog = tool === SEARCH_TOOL || tool === SCHEMAS_TOOL;
+  const pairs = catalog ? sc.pairs : new Map<string, string>();
+  const kits = new Set([...sc.kits, ...pairs.values()]);
+  if (!pairs.size && !kits.size && !sc.accounts.size) return;
   const b = bucket(user, now);
-  for (const [slug, kit] of sc.pairs) { b.slugs.delete(slug); b.slugs.set(slug, { kit, at: now }); }
-  for (const kit of sc.kits) { b.kits.delete(kit); b.kits.set(kit, now); }
+  for (const [slug, kit] of pairs) { b.slugs.delete(slug); b.slugs.set(slug, { kit, at: now }); }
+  for (const kit of kits) { b.kits.delete(kit); b.kits.set(kit, now); }
   trim(b.slugs, LEARN_SLUGS); trim(b.kits, LEARN_KITS);
   for (const [kit, labels] of sc.accounts) b.accounts.set(kit, { at: now, label: labels.size === 1 ? [...labels][0].slice(0, 80) : null });
   // Lược đồ công cụ theo toolkit: chỉ lưu từ kết quả tìm công cụ / xem tham số.
-  if (tool === SEARCH_TOOL || tool === SCHEMAS_TOOL) {
+  if (catalog) {
     for (const [slug, e] of sc.entries) {
       const kit = sc.pairs.get(slug) ?? b.slugs.get(slug)?.kit;
       if (!kit) continue;

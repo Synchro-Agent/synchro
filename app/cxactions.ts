@@ -54,18 +54,20 @@ const words = (slug: string) => slug.toUpperCase().split(/[^A-Z0-9]+/).filter(Bo
 const KNOWN_WORDS = KNOWN_KITS.map(words);
 // Từ mà tên toolkit không được nuốt (sau từ đầu): động từ ghi, từ nối.
 const HIDES_WRITE = (x: string) => WRITE_ANY.has(x) || WRITE_NOUN.has(x) || LINK_WORD.has(x);
-/** Ứng dụng (slug Composio, chữ thường) và phần còn lại của tên thao tác. known: ứng dụng xác định được (toolkit đã biết); không thì phải coi là ghi. */
-export function slugParts(slug: string, hints?: KitHints): { kit: string; rest: string[]; known: boolean } {
+/** Ứng dụng (slug Composio, chữ thường) và phần còn lại của tên thao tác. known: ứng dụng xác định được (toolkit đã biết); không thì phải coi là ghi.
+ *  learned: ranh giới lấy từ toolkit đã thấy của người dùng (hints.kits), không phải từ toolkit Composio báo cho đúng slug này hay danh sách có sẵn. */
+export function slugParts(slug: string, hints?: KitHints): { kit: string; rest: string[]; known: boolean; learned?: boolean } {
   const w = words(slug);
   const fits = (k: string[]) => k.length > 0 && k.length < w.length && k.every((x, i) => x === w[i]) && !k.slice(1).some(HIDES_WRITE);
-  const split = (n: number, known: boolean) => ({ kit: w.slice(0, n).join("_").toLowerCase(), rest: w.slice(n), known });
+  const split = (n: number, known: boolean, learned = false) => ({ kit: w.slice(0, n).join("_").toLowerCase(), rest: w.slice(n), known, ...(learned ? { learned } : {}) });
   // Composio đã nói slug này thuộc toolkit nào.
   const own = hints?.slug?.(w.join("_"));
   if (own && fits(words(own))) return split(words(own).length, true);
   let n = 0;
   for (const k of KNOWN_WORDS) if (k.length > n && fits(k)) n = k.length;
+  const base = n;
   if (hints?.kits) for (const t of hints.kits) { const k = words(t); if (k.length > n && fits(k)) n = k.length; }
-  return n ? split(n, true) : split(Math.min(1, w.length), false);
+  return n ? split(n, true, n > base) : split(Math.min(1, w.length), false);
 }
 /** Tham số của thao tác dưới dạng đối tượng, đúng như lúc gửi đi (chuỗi JSON được đọc ra, như coerceArgs). null: không đọc được thành đối tượng (coi là ghi). */
 function argsObject(args: unknown): Record<string, unknown> | null {
@@ -76,8 +78,11 @@ function argsObject(args: unknown): Record<string, unknown> | null {
 }
 /** Thao tác Composio có phải chỉ đọc không: ứng dụng xác định được, động từ đọc ngay sau tên ứng dụng, không kèm động từ ghi, tham số không có dấu hiệu chạy lệnh. Không chắc thì là ghi. */
 export function slugIsRead(slug: string, args?: unknown, hints?: KitHints): boolean {
-  const { rest, known } = slugParts(slug, hints);
+  const { rest, known, learned } = slugParts(slug, hints);
   if (!known || !rest.length || !READ_VERBS.has(rest[0])) return false;
+  // Toolkit đã thấy (không phải toolkit Composio báo cho đúng slug này) chỉ để tách tên ứng dụng / khóa quyền: không bao giờ biến thao tác ghi thành đọc
+  // (TWITTER_FOLLOW_LIST với toolkit "twitter_follow" vẫn là ghi của twitter). Đọc chỉ khi không có nó cũng là đọc.
+  if (learned && !slugIsRead(slug, args)) return false;
   // QUERY / FIND đứng một mình sau tên ứng dụng (SUPABASE_QUERY, GOOGLEBIGQUERY_QUERY): không rõ đọc cái gì → coi là ghi.
   if (rest.length === 1 && VAGUE_ALONE.has(rest[0])) return false;
   // Động từ ghi rõ ràng ở bất cứ đâu; hoặc sau từ nối (AND / OR / THEN) bất kỳ động từ không phải động từ đọc
