@@ -37,7 +37,9 @@ Rn.inRun("run_flat", () => {
 });
 ok(emitted.length === 100 && emitted[0] === 1 && emitted[99] === 100, "100 bước, seq liên tục 1..100", `${emitted[0]}..${emitted[99]} (n=${emitted.length})`);
 ok(d.prepare("SELECT COUNT(*) n FROM run_events WHERE run_id = ?").get("run_flat").n === 100, "run_events có đúng 100 dòng (ghi nối thêm, không ghi đè)");
-ok(d.prepare("SELECT events FROM runs WHERE id = ?").get("run_flat").events === "[]", "cột runs.events không bị đụng tới (giữ để quay lui)");
+// W23-15 / R9: cột cũ runs.events vẫn được ghi kèm thêm một bản phát hành, để bản trước (đọc cột này, seq = phần tử cuối + 1) quay lui được.
+const legacyFlat = JSON.parse(d.prepare("SELECT events FROM runs WHERE id = ?").get("run_flat").events);
+ok(JSON.stringify(legacyFlat) === JSON.stringify(d.prepare("SELECT seq, at, kind, text FROM run_events WHERE run_id = ? ORDER BY seq").all("run_flat")), "cột runs.events vẫn ghi kèm đủ 100 bước, đúng hình dạng (quay lui được)", JSON.stringify(legacyFlat).slice(0, 200));
 
 console.log("2. getRun trả đúng như bản cũ (tối đa 400 bước gần nhất, thứ tự tăng dần)");
 // Bản cũ lưu list.slice(-400) theo thứ tự tăng dần: dựng lại kỳ vọng từ chính các dòng đã ghi rồi so khớp từng trường.
@@ -49,6 +51,8 @@ mkRun("run_big");
 Rn.inRun("run_big", () => { for (let i = 0; i < 450; i++) Rn.progress("note", "n" + i); });
 const big = Rn.getRun("run_big").events;
 const expectBig = d.prepare("SELECT seq, at, kind, text FROM run_events WHERE run_id = ? ORDER BY seq ASC").all("run_big").slice(-400);
+const legacyBig = JSON.parse(d.prepare("SELECT events FROM runs WHERE id = ?").get("run_big").events);
+ok(legacyBig.length === 400 && legacyBig[0].seq === 51 && legacyBig[399].seq === 450 && JSON.stringify(legacyBig) === JSON.stringify(expectBig), "cột cũ cũng chỉ giữ 400 bước gần nhất (như list.slice(-400)); bản cũ đọc ra seq tiếp theo 451", `len=${legacyBig.length} ${legacyBig[0]?.seq}..${legacyBig.at(-1)?.seq}`);
 ok(big.length === 400 && big[0].seq === 51 && big[399].seq === 450 && JSON.stringify(big) === JSON.stringify(expectBig), "cắt còn 400 bước gần nhất như list.slice(-400)", `len=${big.length} ${big[0]?.seq}..${big[399]?.seq}`);
 
 console.log("3. Lượt chưa chuyển sang bảng mới: getRun đọc cột runs.events (dự phòng quay lui)");
@@ -63,7 +67,7 @@ const n2 = Rn.migrateEvents();
 ok(n1 === 2 && n2 === 0, "lần đầu chuyển 2 dòng của lượt cũ, lần sau 0 (INSERT OR IGNORE)", `${n1} rồi ${n2}`);
 ok(JSON.stringify(d.prepare("SELECT seq, at, kind, text FROM run_events WHERE run_id = ? ORDER BY seq").all("run_old")) === JSON.stringify(oldEvents), "sự kiện cũ đã nằm trong run_events sau migration");
 ok(JSON.stringify(Rn.getRun("run_old").events) === JSON.stringify(oldEvents), "getRun sau migration vẫn trả đúng như trước");
-// Lượt đã có sẵn trong bảng mới không bị migration nhân đôi (events='[]' nên bị bỏ qua).
+// Lượt đã có sẵn trong bảng mới không bị migration nhân đôi (cột cũ ghi kèm cùng seq, INSERT OR IGNORE bỏ qua).
 ok(d.prepare("SELECT COUNT(*) n FROM run_events WHERE run_id = ?").get("run_flat").n === 100, "lượt đã append-only không bị migration đụng tới");
 
 console.log("5. Xóa lượt thì xóa luôn run_events (trigger, cho mọi đường dọn)");

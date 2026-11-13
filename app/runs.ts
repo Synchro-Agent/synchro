@@ -220,6 +220,8 @@ export function deleteConvRuns(uid: string, conv: string) {
   if (id) cancelRun(id, uid);
   return init().prepare("DELETE FROM runs WHERE user_id = ? AND conv = ? AND status != 'running'").run(uid, conv).changes;
 }
+// Số bước giữ trong cột cũ runs.events (bằng mức cắt của bản trước); bỏ cùng cột cũ ở bản phát hành sau.
+const LEGACY_EVENTS = 400;
 /** Ghi một bước của lượt đang chạy (lưu để mở lại trang vẫn thấy đủ) và gửi cho người đang theo dõi. Trả về số thứ tự bước. */
 export function progress(kind: RunEvent["kind"], text: string): number {
   const s = scope.getStore();
@@ -230,8 +232,14 @@ export function progress(kind: RunEvent["kind"], text: string): number {
   // Ghi nối thêm một dòng: lấy số thứ tự tiếp theo qua MAX(seq) (dùng khóa chính nên nhanh, không đọc lại cả danh sách).
   const seq = ((d.prepare("SELECT MAX(seq) AS m FROM run_events WHERE run_id = ?").get(s.id) as { m: number | null }).m ?? 0) + 1;
   const ev: RunEvent = { seq, at: Date.now(), kind, text: text.slice(0, kind === "say" || kind === "steer" ? 4000 : kind === "plan" || kind === "ask" ? 6000 : kind === "res" ? 1000 : 300) };
-  d.prepare("INSERT INTO run_events (run_id, seq, at, kind, text) VALUES (?, ?, ?, ?, ?)").run(s.id, ev.seq, ev.at, ev.kind, ev.text);
-  d.prepare("UPDATE runs SET updated_at = ? WHERE id = ?").run(ev.at, s.id);
+  d.transaction(() => {
+    d.prepare("INSERT INTO run_events (run_id, seq, at, kind, text) VALUES (?, ?, ?, ?, ?)").run(s.id, ev.seq, ev.at, ev.kind, ev.text);
+    // Ghi kèm cột cũ runs.events thêm một bản phát hành (A4.3, W23-15/R9) để quay lui được: bản cũ đọc cột này và lấy seq tiếp theo từ phần tử cuối.
+    // Giữ 400 bước gần nhất như trước (list.slice(-400)); nối thêm bằng hàm JSON của SQLite nên không đọc-sửa-ghi cả mảng trong JS.
+    const j = JSON.stringify(ev);
+    d.prepare(`UPDATE runs SET updated_at = ?, events = CASE WHEN json_valid(events) AND json_array_length(events) >= ${LEGACY_EVENTS}
+      THEN json_insert(json_remove(events, '$[0]'), '$[#]', json(?)) WHEN json_valid(events) THEN json_insert(events, '$[#]', json(?)) ELSE json_array(json(?)) END WHERE id = ?`).run(ev.at, j, j, j, s.id);
+  })();
   notify(s.id, { event: ev });
   return seq;
 }
