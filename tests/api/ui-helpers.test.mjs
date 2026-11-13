@@ -27,16 +27,32 @@ ok(/mất mạng/.test(E.termDown(null, false)) && /máy chủ/.test(E.termDown(
 ok(E.termDown({ available: false, reason: "Máy chủ chưa bật workspace." }, true) === "Máy chủ chưa bật workspace.", "terminal: nói đúng lý do máy chủ báo");
 ok(/đang tắt/.test(E.termDown({ available: true, running: false }, true)) && /vẫn chạy/.test(E.termDown({ available: true, running: true }, true)), "terminal: phân biệt workspace tắt và đang chạy");
 
-// U10: lỗi công cụ model đã thử lại không tô đỏ; chỉ lượt kết thúc bằng lỗi mới đỏ.
+// U10: lỗi công cụ xét theo TỪNG lỗi, không theo cả lượt. Lỗi đã được gọi lại thành công (cùng tên, về sau, ok) mới là "đã thử lại";
+// lỗi còn lại tô đỏ kể cả khi lượt kết thúc bình thường.
 {
   const { worktone: W, "i18n-dict": D } = await loadTs(["worktone", "i18n-dict"]);
   const en = (t) => D.VI2EN[t] ?? D.RULES_EN.map(([re, f]) => { const m = t.match(re); return m ? f(m) : null; }).find(Boolean);
-  ok(W.toolErrNote(0, {}) === null, "không có lỗi: không hiện gì");
-  const done = W.toolErrNote(1, {});
-  ok(done?.text === "1 bước đã thử lại" && done.tone === "soft", "lượt xong bình thường: 1 bước đã thử lại, màu thường", JSON.stringify(done));
-  const bad = W.toolErrNote(2, { failed: true });
-  ok(bad?.text === "2 lỗi" && bad.tone === "bad", "lượt lỗi: 2 lỗi, màu đỏ", JSON.stringify(bad));
-  ok(W.toolErrNote(1, { live: true })?.tone === "soft" && W.toolErrNote(1, { stopped: true })?.text === "1 lỗi", "đang chạy / bị dừng: chưa tô đỏ, chưa gọi là đã thử lại");
+  const T = (...items) => items; // các mục công cụ theo thứ tự seq
+  ok(W.toolErrNote(T({ seq: 1, label: "read", ok: true }), T({ seq: 1, label: "read", ok: true }), {}) === null, "không có lỗi: không hiện gì");
+  // Lỗi được gọi lại thành công: "1 bước đã thử lại", màu thường.
+  const recov = T({ seq: 1, label: "fetch", ok: false }, { seq: 2, label: "fetch", ok: true });
+  const done = W.toolErrNote(recov, recov, {});
+  ok(done?.text === "1 bước đã thử lại" && done.tone === "soft", "lỗi đã gọi lại thành công: 1 bước đã thử lại, màu thường", JSON.stringify(done));
+  // FIX U10: lỗi KHÔNG được gọi lại, trong một lượt KẾT THÚC BÌNH THƯỜNG, vẫn phải tô đỏ (trước đây bị gọi nhầm là "đã thử lại").
+  const leak = T({ seq: 1, label: "fetch", ok: false }, { seq: 2, label: "write", ok: true });
+  const rem = W.toolErrNote(leak, leak, {});
+  ok(rem?.text === "1 lỗi" && rem.tone === "bad", "lỗi chưa gọi lại trong lượt đã xong: 1 lỗi, màu đỏ", JSON.stringify(rem));
+  // Lần gọi lại nằm ở DÒNG công cụ sau (sau một lời dẫn) vẫn tính là đã thử lại khi xét trên cả lượt (turn).
+  const g1 = T({ seq: 1, label: "fetch", ok: false });
+  const turn = T({ seq: 1, label: "fetch", ok: false }, { seq: 5, label: "fetch", ok: true });
+  ok(W.toolErrNote(g1, turn, {})?.text === "1 bước đã thử lại", "gọi lại ở dòng sau trong cùng lượt vẫn là đã thử lại");
+  // Lượt kết thúc bằng lỗi, còn lỗi: đỏ.
+  const fail = T({ seq: 1, label: "a", ok: false }, { seq: 2, label: "b", ok: false });
+  const bad = W.toolErrNote(fail, fail, { failed: true });
+  ok(bad?.text === "2 lỗi" && bad.tone === "bad", "lượt lỗi, còn 2 lỗi: 2 lỗi, màu đỏ", JSON.stringify(bad));
+  // Đang chạy / bị dừng giữa chừng: lỗi chưa gọi lại chưa tô đỏ (model còn có thể gọi lại).
+  const one = T({ seq: 1, label: "a", ok: false });
+  ok(W.toolErrNote(one, one, { live: true })?.tone === "soft" && W.toolErrNote(one, one, { stopped: true })?.text === "1 lỗi", "đang chạy / bị dừng: chưa tô đỏ, chưa gọi là đã thử lại");
   ok(en("1 bước đã thử lại") === "1 step retried" && en("3 bước đã thử lại") === "3 steps retried" && en("2 lỗi") === "2 failed", "bản tiếng Anh: step / steps retried, failed");
 }
 

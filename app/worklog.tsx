@@ -100,7 +100,7 @@ function useNow(on: boolean) {
   useEffect(() => { if (!on) return; setNow(serverNow()); const t = setInterval(() => setNow(serverNow()), 1000); return () => clearInterval(t); }, [on]);
   return now;
 }
-function ToolGroup({ items, live, failed, stopped }: { items: ToolItem[]; live: boolean; failed?: boolean; stopped?: boolean }) {
+function ToolGroup({ items, all, live, failed, stopped }: { items: ToolItem[]; all: ToolItem[]; live: boolean; failed?: boolean; stopped?: boolean }) {
   const [open, setOpen] = useState(false);
   const running = live && items.some((x) => x.ok === undefined);
   const now = useNow(running);
@@ -108,7 +108,8 @@ function ToolGroup({ items, live, failed, stopped }: { items: ToolItem[]; live: 
   const cur = running ? items.filter((x) => x.ok === undefined && x.at).sort((a, b) => a.at! - b.at!)[0] : undefined;
   const runMs = cur?.at ? now - cur.at : 0;
   const bad = items.filter((x) => x.ok === false).length;
-  const note = toolErrNote(bad, { live, failed, stopped });
+  // Lỗi "còn lại" vs "đã thử lại" xét trên cả lượt (all): lần gọi lại thành công có thể nằm ở dòng công cụ sau.
+  const note = toolErrNote(items, all, { live, failed, stopped });
   const label = items.length === 1 ? toolLabel(items[0].label) : `${tr("Đã dùng")} ${items.length} ${tr("công cụ")}`;
   // Logo các connector đã dùng trong nhóm (tối đa 3, mỗi connector một lần) ở dòng tiêu đề.
   const heads = [...new Map(items.filter((x) => x.c).map((x) => [x.c!.name, x.c!])).values()].slice(0, 3);
@@ -191,13 +192,14 @@ function RateCard({ r }: { r: RatePart }) {
 /** Lời dẫn và công cụ của các bước đã qua; render: cách hiện chữ (Markdown) của trang. */
 // failed / stopped: lượt đã kết thúc bằng lỗi / bị dừng (chỉ khi live = false): quyết định lỗi công cụ hiện đỏ hay là bước đã thử lại (worktone.ts).
 export function WorkParts({ parts, live, render, onAnswer, failed, stopped }: { parts: Part[]; live: boolean; render: (text: string) => React.ReactNode; onAnswer?: OnAnswer; failed?: boolean; stopped?: boolean }) {
+  const allTools = parts.flatMap((p) => (p.k === "tools" ? p.items : []));
   return <>{parts.map((p, i) => (p.k === "say" ? <div key={i} className="wl-say">{render(p.text)}</div>
     : p.k === "ask" ? <AskCard key={p.id} a={!live && p.state === "wait" ? { ...p, state: "gone" } : p} onAnswer={live ? onAnswer : undefined} />
     : p.k === "conn" ? (live ? <ReconnectCard key={p.id} c={p} /> : null)
     : p.k === "plans" ? (live ? <PlansCard key={i} why={p.why} tried={p.tried} /> : null)
     : p.k === "link" ? (live ? <LinkCard key={p.url} l={p} /> : null)
     : p.k === "rate" ? (live ? <RateCard key={`rate-${p.name}`} r={p} /> : null)
-    : <ToolGroup key={i} items={p.items} live={live} failed={failed} stopped={stopped} />))}</>;
+    : <ToolGroup key={i} items={p.items} all={allTools} live={live} failed={failed} stopped={stopped} />))}</>;
 }
 /** Câu trả lời đã xong: nút kết nối lại vẫn hiện ngoài phần tổng kết thu gọn (người dùng vừa được bảo bấm nó). */
 // text: câu trả lời; link Connect Link đã có trong câu trả lời thì đã hiện thành nút ở đó (md.tsx), không lặp lại thẻ bên dưới.
@@ -232,9 +234,9 @@ export function WorkSummary({ parts, plan, ms, stopped, failed, render }: { part
   const [open, setOpen] = useState(false);
   const steps = stepsOf(parts), en = getLang() === "en";
   const total = plan?.length ?? 0, ok = plan?.filter((x) => x.status === "completed").length ?? 0;
-  const bad = (parts ?? []).reduce((n, p) => n + (p.k === "tools" ? p.items.filter((x) => x.ok === false).length : 0), 0);
-  // Lượt xong bình thường: lỗi công cụ là bước model đã thử lại, màu thường; chỉ lượt kết thúc bằng lỗi mới tô đỏ.
-  const note = toolErrNote(bad, { failed, stopped });
+  const allTools = (parts ?? []).flatMap((p) => (p.k === "tools" ? p.items : []));
+  // Xét theo từng lỗi: lỗi đã được gọi lại thành công là "đã thử lại" (màu thường); lỗi còn lại tô đỏ, kể cả khi lượt kết thúc bình thường.
+  const note = toolErrNote(allTools, allTools, { failed, stopped });
   if (!steps && !total && !(parts ?? []).length) return null;
   const bits = [
     total ? (en ? `${ok}/${total} tasks done` : `Xong ${ok}/${total} việc`) : stopped ? (en ? "Stopped" : "Đã dừng") : en ? "Done" : "Đã xong",
