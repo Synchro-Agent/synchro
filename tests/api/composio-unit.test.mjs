@@ -16,7 +16,7 @@ delete process.env.COMPOSIO_CONNECT_URL;
 delete process.env.COMPOSIO_API_KEY;
 fs.mkdirSync(process.env.DATA_DIR, { recursive: true });
 
-const { connectors: C, providers: PR, authstore: AS, composio: X, cxlink: L, catalog: CAT, cxactions: CXA } = await loadTs(["connectors", "providers", "authstore", "composio", "cxlink", "catalog", "cxactions"]);
+const { connectors: C, providers: PR, authstore: AS, composio: X, cxlink: L, catalog: CAT, cxactions: CXA, connlogos: CLG } = await loadTs(["connectors", "providers", "authstore", "composio", "cxlink", "catalog", "cxactions", "connlogos"]);
 const db = AS.db();
 try {
   console.log("1. Chuyển hàng cũ của chế độ dùng chung về chưa liên kết");
@@ -217,6 +217,10 @@ try {
   X.schemaCachePut("u9", SEARCH, { queries: [{ use_case: "send an email via gmail" }] }, searchRes, tn);
   ok(X.execPlan({ tools: [{ tool_slug: "ACME_CRM_LIST_DEALS" }] }, "u9").writes.length === 0 && X.cxHints("u9", tn + 1).slug("ACME_CRM_LIST_DEALS") === "acme_crm", "Composio nói ACME_CRM_LIST_DEALS thuộc acme_crm: đọc, chạy luôn");
   ok(X.execPlan({ tools: [{ tool_slug: "ACME_CRM_LIST_DEALS" }] }, "u8").writes.join() === "acme", "người dùng khác không dùng hiểu biết của người này");
+  // Dòng công cụ, logo, thẻ duyệt và khóa quyền cùng tách ứng dụng theo toolkit Composio đã báo cho người dùng của phiên.
+  const acme = { tools: [{ tool_slug: "ACME_CRM_CREATE_DEAL", arguments: { name: "Big" } }] };
+  const same = [X.cxLabel("COMPOSIO_MULTI_EXECUTE_TOOL", acme, "u9").app, X.cxCard("COMPOSIO_MULTI_EXECUTE_TOOL", acme, "u9").name, CLG.composioAppOf(acme, X.cxHints("u9")), X.execPlan(acme, "u9").writes.join()];
+  ok(JSON.stringify(same) === '["Acme Crm","Acme Crm","acme_crm","acme_crm"]', "nhãn, thẻ duyệt, logo và khóa quyền nói cùng một ứng dụng", same);
   ok(CXA.slugParts("GITHUB_MARK_A_THREAD_AS_READ", { slug: () => "github_mark_a_thread_as", kits: ["github_mark"] }).kit === "github", "toolkit học được nuốt động từ ghi: bỏ qua");
   // Toolkit học được không dời được ranh giới đọc / ghi (SEC-1 / W1-01): Composio nhắc lại tên toolkit model hỏi trong mục lỗi → không học;
   // toolkit đã thấy (không phải toolkit Composio báo cho đúng slug) không bao giờ biến thao tác ghi thành đọc.
