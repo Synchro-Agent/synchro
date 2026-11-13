@@ -284,6 +284,18 @@ body.cv-dragging iframe,body.cv-dragging .bp-view {pointer-events:none
 }
 .cv-model {font-size:12.5px;color:var(--text-3);margin-right:2px;white-space:nowrap
 }
+/* Nhãn ba nút Chế độ / Quyền / Model: tiền tố phân loại nhạt hơn giá trị, cả cụm trên một dòng. */
+.cv-mb-t {display:inline-flex;align-items:center;min-width:0;white-space:nowrap}
+.cv-mb-k,.cv-model .mp-k {color:var(--text-3)}
+/* Dưới 1100px: ba nút này chỉ còn icon (đỡ chật hàng nút); aria-label của nút vẫn mô tả đầy đủ. */
+@media (max-width:1100px){
+  .cv-under .cv-modebtn .cv-mb-t,
+  .cv-under .cv-model .mp-lbl {display:none}
+  .cv-under .cv-modebtn>svg:last-child,
+  .cv-under .cv-model .model-btn>svg:last-child {display:none}
+  .cv-under .cv-modebtn,
+  .cv-under .cv-model .model-btn {padding:0 7px}
+}
 .cv-errbox {margin:2px 0 8px;padding:8px;border-radius:var(--r-plate);background:color-mix(in srgb,#e03131 6%,var(--card));border:.5px solid color-mix(in srgb,#e03131 30%,transparent)
 }
 .cv-errbox .cv-mh {display:flex;align-items:center;gap:6px;color:#c92a2a;padding:2px 4px 6px

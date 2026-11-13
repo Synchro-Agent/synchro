@@ -1040,6 +1040,13 @@ table{font-variant-numeric:tabular-nums}h1,h2,h3{text-wrap:balance}
 .attach{flex-wrap:nowrap;overflow-x:auto;overflow-y:hidden;padding:8px 8px 8px 2px;margin:-8px -8px 0 -2px;scrollbar-width:thin;overscroll-behavior-x:contain;-webkit-overflow-scrolling:touch}
 .attach::-webkit-scrollbar{height:6px}.attach::-webkit-scrollbar-thumb{background:var(--border-strong);border-radius:3px}
 .attach>.ft{flex:0 0 auto}
+/* Dải một hàng: làm mờ dần hai mép để thấy rõ còn thẻ bị cắt (gợi ý cuộn / còn nữa); không áp cho dải đã gửi hay lưới đã trải. */
+.attach:not(.sent):not(.attach-grid){-webkit-mask-image:linear-gradient(90deg,transparent 0,#000 18px,#000 calc(100% - 18px),transparent 100%);mask-image:linear-gradient(90deg,transparent 0,#000 18px,#000 calc(100% - 18px),transparent 100%)}
+/* Nút "+N": gộp số thẻ vượt quá CHIP_LIMIT ở mép phải, bấm vào trải ra lưới. */
+.attach-more{flex:0 0 auto;align-self:center;display:inline-flex;align-items:center;justify-content:center;min-width:40px;height:32px;padding:0 11px;border-radius:var(--r-pill);border:.5px solid var(--border-strong);background:var(--card);color:var(--text-2);font-size:13px;font-weight:500;font-variant-numeric:tabular-nums;cursor:pointer}
+.attach-more:hover{background:var(--hover);color:var(--text)}
+/* Lưới đã trải: nhiều hàng, không cuộn ngang; cao quá thì cuộn dọc trong khung. */
+.attach-grid{flex-wrap:wrap;overflow-x:visible;overflow-y:auto;max-height:168px;padding-right:2px;margin-right:-2px}
 .cv-pills{min-width:0;max-width:100%;width:100%;box-sizing:border-box}.cv-composer>*{min-width:0}
 
 /* Mũi tên xuống: căn giữa theo trục dọc, không lệch */
@@ -3407,11 +3414,21 @@ button.tk-chip.warn:hover{background:color-mix(in srgb,var(--tk-warn) 20%,transp
 .art-thumb-doc h1{font-family:var(--font-serif);font-weight:500;font-size:1.5em;margin:0 0 .4em}.art-thumb-doc h2,.art-thumb-doc h3{font-size:1.15em;margin:.6em 0 .25em}
 .art-thumb-doc p,.art-thumb-doc ul,.art-thumb-doc ol{margin:0 0 .4em}.art-thumb-doc .md-tbl-bar{display:none}
 .art-thumb-doc table{font-size:inherit}.art-thumb-doc th,.art-thumb-doc td{padding:2px 5px}
-/* Màn hình hẹp (điện thoại): thanh bên là ngăn kéo trượt đè lên nội dung (có lớp phủ), không chiếm chỗ của phần chính. */
+/* Màn hình hẹp: thanh bên là bảng nổi / ngăn kéo trượt đè lên nội dung (có lớp phủ), không chiếm chỗ của phần chính. */
 .side-scrim{display:none}
-@media (max-width:760px){
-  /* Ngăn kéo thanh bên trên điện thoại: nền đặc (không mờ kính) để không bị lớp phủ làm xám; hộp thoại nằm trên ngăn kéo. */
+/* Dưới 860px: thanh bên thành bảng nổi đè lên chat, mặc định đóng, mở ra có lớp phủ tối; chọn chat hoặc bấm lớp phủ thì đóng.
+   Để riêng ở ngưỡng 860 (các tinh chỉnh điện thoại khác vẫn ở 760) nên khoảng 640–860px chỉ thanh bên nổi, phần còn lại không đổi. */
+@media (max-width:860px){
+  /* Bảng nổi / ngăn kéo: nền đặc (không mờ kính) để không bị lớp phủ làm xám; hộp thoại nằm trên nó. */
   html body .app>aside.sidebar{--gl-fill:var(--sidebar);--gl-blur:0px}
+  /* Độ ưu tiên cao hơn lớp kính (glass.css: z-index 20, lề âm khi đóng). */
+  html body .app>aside.sidebar{position:fixed;top:0;bottom:0;left:0;z-index:65;width:min(300px,86vw);margin-left:10px;transition:transform .3s var(--ease),box-shadow .3s}
+  html body .app>aside.sidebar.closed{margin-left:10px;margin-right:0;transform:translateX(calc(-100% - 24px));box-shadow:none}
+  .side-scrim{display:block;position:fixed;inset:0;z-index:64;background:rgba(0,0,0,.32);animation:fadeIn .2s ease both}
+  /* Hộp thoại phải nằm trên bảng nổi (z-index 65) khi thanh bên đang mở. */
+  .overlay{z-index:70}
+}
+@media (max-width:760px){
   /* Bàn trộn ngữ cảnh: bảng mở ra nằm trọn trong màn hình (canh theo mép màn hình, không theo nút). */
   .cx-pop{position:fixed;left:12px;right:12px;bottom:calc(112px + env(safe-area-inset-bottom));width:auto;max-height:calc(100vh - 190px)}
   /* Synchro Code: hàng nút dưới ô soạn tin xuống dòng khi chật thay vì bóp các nút đè lên nhau. */
@@ -3420,7 +3437,6 @@ button.tk-chip.warn:hover{background:color-mix(in srgb,var(--tk-warn) 20%,transp
   .cv-under .cv-gh{max-width:min(240px,100%)}
   /* Menu chọn model: rộng vừa màn hình (canh theo nút ở mép phải). */
   .model-menu{width:min(420px,calc(100vw - 24px))}
-  .overlay{z-index:70}
   /* Tên đoạn chat cắt gọn để không đè nút Sản phẩm; dòng nhắc "Synchro là AI…" ẩn, chỉ giữ bộ chọn model. */
   .topbar .left{right:120px}
   .topbar .title-wrap{min-width:0}
@@ -3430,10 +3446,6 @@ button.tk-chip.warn:hover{background:color-mix(in srgb,var(--tk-warn) 20%,transp
   .dock .composer,.dock-note,.dock-mode,.wl-queue{width:100%}
   .dock-note>span:first-child{display:none}
   .dock-note{justify-content:flex-end}
-  /* Độ ưu tiên cao hơn lớp kính (glass.css: z-index 20, lề âm khi đóng). */
-  html body .app>aside.sidebar{position:fixed;top:0;bottom:0;left:0;z-index:65;width:min(300px,86vw);margin-left:10px;transition:transform .3s var(--ease),box-shadow .3s}
-  html body .app>aside.sidebar.closed{margin-left:10px;margin-right:0;transform:translateX(calc(-100% - 24px));box-shadow:none}
-  .side-scrim{display:block;position:fixed;inset:0;z-index:64;background:rgba(0,0,0,.32);animation:fadeIn .2s ease both}
 }
 .sel-t{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 /* Màu thẻ chế độ ở ô soạn tin (Tài liệu / Trình bày / Thiết kế), cùng tông với ảnh mẫu của từng chế độ. */

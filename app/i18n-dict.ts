@@ -7,6 +7,8 @@ import { AUTH_VI2EN } from "./i18n-auth";
 import { FX_VI2EN } from "./i18n-features";
 // Từ điển tiếng Anh: chuỗi gốc tiếng Việt → tiếng Anh. Chiều ngược lại (chuỗi gốc tiếng Anh → tiếng Việt) nằm ở i18n-vi.ts: trình duyệt chỉ tải từ điển của ngôn ngữ đang dùng (i18n.tsx).
 export const VI2EN: Record<string, string> = {
+  "Hiện thêm": "Show",
+  "Quyền": "Access",
   "Trình duyệt đang chặn nhận dạng giọng nói": "The browser is blocking speech recognition",
   "Không tìm thấy micro trên máy này": "No microphone was found on this device",
   "Nhận dạng giọng nói của trình duyệt cần kết nối mạng": "The browser's speech recognition needs a network connection",

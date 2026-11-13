@@ -1306,7 +1306,8 @@ export function CodeView({ say, sid, title, model, modelPicker, sideOpen, onSide
               <GitHubButton git={git} available={!!status?.available} reason={status?.reason} ensureSid={() => ensureSid()} say={say}
                 onCloned={(g) => { const id = ensureSid(); setGit(id, g); setWsUsed(true); openPane("files"); }} />
               <div style={{ position: "relative" }}>
-                <button className="cv-modebtn" data-tip="Chế độ làm việc" aria-label="Chế độ làm việc" onClick={() => setMenu(menu === "mode" ? "" : "mode")}>{modeIcon(mode, 14)}{m.short}<I.Chevron size={12} /></button>
+                {/* Ba nút cạnh nhau (Chế độ / Quyền / Model) từng cùng hiện "Tự động": thêm tiền tố phân loại. Dưới 1100px CSS ẩn nhãn, chỉ còn icon (aria-label vẫn đầy đủ). */}
+                <button className="cv-modebtn" data-tip="Chế độ làm việc" aria-label="Chế độ làm việc" onClick={() => setMenu(menu === "mode" ? "" : "mode")}>{modeIcon(mode, 14)}<span className="cv-mb-t"><span className="cv-mb-k">Chế độ</span>: {m.short}</span><I.Chevron size={12} /></button>
                 <Menu open={menu === "mode"} className="cv-modes" style={{ bottom: 36, left: 0, width: 340 }}>
                   {MODES.map((x) => (
                     <button key={x.k} className={`cv-mode-item ${mode === x.k ? "picked" : ""}`} onClick={() => { setMode(x.k); setMenu(""); }}>
@@ -1319,7 +1320,7 @@ export function CodeView({ say, sid, title, model, modelPicker, sideOpen, onSide
               </div>
               {/* Chế độ quyền của phiên: hỏi trước / tự sửa tệp / tự động (Cài đặt → Synchro Code đặt mặc định và cho phép chế độ tự động). */}
               <div style={{ position: "relative" }}>
-                <button className={`cv-modebtn cv-perm p-${permNow.mode}`} onClick={() => setMenu(menu === "perm" ? "" : "perm")} data-tip="Chế độ quyền" aria-label="Chế độ quyền">{permIcon(permNow.mode)}{PERMS.find((x) => x.k === permNow.mode)?.short}<I.Chevron size={12} /></button>
+                <button className={`cv-modebtn cv-perm p-${permNow.mode}`} onClick={() => setMenu(menu === "perm" ? "" : "perm")} data-tip="Chế độ quyền" aria-label="Chế độ quyền">{permIcon(permNow.mode)}<span className="cv-mb-t"><span className="cv-mb-k">Quyền</span>: {PERMS.find((x) => x.k === permNow.mode)?.short}</span><I.Chevron size={12} /></button>
                 <Menu open={menu === "perm"} className="cv-modes" style={{ bottom: 36, left: 0, width: 340 }}>
                   <div className="cv-mh">Quyền của Synchro trong phiên này</div>
                   {PERMS.map((x) => {
