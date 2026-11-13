@@ -18,6 +18,9 @@ export type Msg = { role: "user" | "ai"; text: string; pick?: { id: string; labe
   notice?: { text?: string; partial?: boolean; failed?: boolean; at?: number; switchTo?: { model: string; name: string }; work?: boolean; tried?: string[] };
   // webs: nguồn web của câu trả lời (CLI tìm web).
   webs?: { title: string; url: string }[];
+  // insApplied / pjApplied: câu trả lời đã dùng hướng dẫn cá nhân / ngữ cảnh dự án — chỉ là cờ để hiện chip trung tính dưới câu trả lời,
+  // không bao giờ ghép nội dung hướng dẫn vào chữ của tin nhắn (chữ đó đi vào lịch sử gửi model, bản chia sẻ, bản xuất).
+  insApplied?: boolean; pjApplied?: boolean;
   // failed: lượt này lỗi, không có câu trả lời hoàn chỉnh (hiện thẻ lỗi, không gửi lại cho model ở lượt sau); err: câu lỗi gốc của máy chủ.
   failed?: boolean; err?: string };
 // mixer: bàn trộn ngữ cảnh (tắt khối artifact / kết quả công cụ, chỉ gửi N tin gần nhất); compact: các tin trước "upto" đã nén thành tóm tắt;

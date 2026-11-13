@@ -43,7 +43,8 @@ import { anthropicWebSearch } from "./modelrules";
 import { untested } from "./modelreg";
 import { type ABlock, type Citer, anthropicCall, blocksText, searchResults, chatOnce, effortParams, HttpErr, openaiCall, outCap, respInput, respParse, respTools, responsesCall, toAnthropic, toOpenAI, toResponses, withPages } from "./llmcall";
 import { mergedProviders, prewarmClaude, sessionPlain, subCli, subTurn } from "./ai/subs";
-import { PROJECT_DOC_RULES, PROJECT_DOC_TOOL, projectDocsLong, readProjectFile } from "./projectdocs";
+import { PROJECT_DOC_RULES, PROJECT_DOC_TOOL, projectDocsLong, projectIns, readProjectFile } from "./projectdocs";
+import { REJECTED_RULE, REJECTED_TAG, rejectedBlock, stripAppliedNotes, withProjectIns, withRejected } from "./turnctx";
 import { ASPECTS, generateImages, IMAGE_RULES, IMAGE_TOOL_NAME, imageBudget, imageProduct, imageTool, imageName, IMG_NAME, requestSlug, type ImgErr, type ImgOk } from "./ai/imagegen";
 import { POSTER_TEMPLATES, posterProps, type PosterTemplate } from "./design-engine/posters/props";
 import { genImageUrl } from "./artdoc";
@@ -356,7 +357,8 @@ Các công cụ nói ở trên (load_skill, read_skill_file, search_skills, run_
 // Tách artifact khỏi lời dẫn, giữ trong lượt (read_artifact / check_artifact đọc được), rồi đặt vào đầu câu trả lời cuối.
 const ART_BLOCK = /<artifact\b[^>]*>[\s\S]*?(?:<\/artifact>|$)/gi;
 function sayOut(x: Exec | null | undefined, text: string) {
-  let t = scrubServerPaths(text.trim());
+  // Lời dẫn (say) cũng là chữ model viết: bỏ dòng ghi chú "Đã áp dụng …" kiểu cũ như câu trả lời cuối, để không lộ hướng dẫn cá nhân qua sự kiện 'say'.
+  let t = stripAppliedNotes(scrubServerPaths(text.trim()));
   if (x && hasArtifacts(t)) t = t.replace(ART_BLOCK, (b) => {
     (x.turnArts ??= []).push(b);
     const title = /\btitle\s*=\s*"([^"]*)"/i.exec(b)?.[1];
@@ -1037,7 +1039,9 @@ function lastUserText(messages: unknown): string {
   const m = [...list].reverse().find((x) => x?.role === "user");
   if (!m) return "";
   if (typeof m.content === "string") return m.content.slice(0, 4000);
-  return Array.isArray(m.content) ? (m.content as { type?: string; text?: string }[]).filter((b) => b?.type === "text" && typeof b.text === "string").map((b) => b.text).join("\n").slice(0, 4000) : "";
+  // Khối <attachments_rejected> (tệp không đọc được, do turnctx.withRejected chèn lên đầu tin nhắn mới nhất) là dữ liệu, không phải chữ người dùng gõ:
+  // bỏ qua ở đây để không lẫn vào brain recall, crisisHelp, mentionsConnector / announceOffline, hasOwnSkill (cùng cách router.FILE_TEXT bỏ khối này khi chọn việc).
+  return Array.isArray(m.content) ? (m.content as { type?: string; text?: string }[]).filter((b) => b?.type === "text" && typeof b.text === "string" && !b.text.trimStart().startsWith(`<${REJECTED_TAG}>`)).map((b) => b.text).join("\n").slice(0, 4000) : "";
 }
 // Gợi ý định tuyến cho lượt này: skill hợp nhất với yêu cầu (tìm trong toàn bộ kho, cả skill bên trong thư viện)
 // và skill các lượt trước đã dùng. Model đọc thẳng skill bằng tên, không phải mở thư viện trước; không hợp thì bỏ qua.
@@ -1474,8 +1478,28 @@ const useMemory = (body: Record<string, any>, _u: UserRow) => !!body.skills && b
 /** Một lượt gọi model: body là JSON trình duyệt gửi lên /api/llm. scope.feature được đặt lại theo loại lượt (tính mức dùng).
  *  model = "auto": Synchro chọn model theo độ khó của yêu cầu (router.ts) trong các model tài khoản được dùng, rồi chạy như bình thường. */
 export async function chatPost(body: Record<string, any>, c: Who, scope: { feature: string }): Promise<Response> { // eslint-disable-line @typescript-eslint/no-explicit-any
+  return scrubApplied(await chatPostTurn(body, c, scope));
+}
+/** Lọc đầu ra: model bắt chước dòng "_Đã áp dụng hướng dẫn của bạn: “…”_" kiểu cũ (trích lại hướng dẫn cá nhân) thì bỏ dòng đó khỏi câu trả lời cuối. */
+async function scrubApplied(res: Response): Promise<Response> {
+  const j = (await res.clone().json().catch(() => null)) as Record<string, unknown> | null;
+  if (!j || typeof j.text !== "string") return res;
+  const text = stripAppliedNotes(j.text);
+  return text === j.text ? res : Response.json({ ...j, text }, { status: res.status });
+}
+async function chatPostTurn(body: Parameters<typeof chatPost>[0], c: Who, scope: { feature: string }): Promise<Response> {
   // Tệp của các lượt trước đi cùng lịch sử: model nào trả lời lượt này (kể cả model vừa đổi) cũng thấy đúng tài liệu đang bàn.
   if (Array.isArray(body.messages)) { const msgs = body.messages; body = { ...body, messages: await span("file refs", "history", () => expandFileRefs(msgs, lastUserText(msgs), c.user.id)) }; }
+  // Hướng dẫn của dự án luôn có trong lời nhắc hệ thống, ở mọi đường đi của lượt (turnctx.withProjectIns): trình duyệt chỉ có bản rút gọn của dự án
+  // thì lấy bản đã đồng bộ lên máy chủ. Làm trước khi chọn model và đường nhanh / đầy đủ, nên đường nào cũng có.
+  if (body.project !== undefined && body.project !== null && useProfile(body) && body.feature !== "code") {
+    const sys = withProjectIns(typeof body.system === "string" ? body.system : "", projectIns(c.user.id, body.project), { clientFull: body.pjFull === true, base: DEFAULT_SYSTEM });
+    if (sys !== body.system) body = { ...body, system: sys };
+  }
+  // Tệp đính kèm bị từ chối (thẻ tệp báo lỗi ở khung soạn): khối <attachments_rejected> đứng đầu tin nhắn mới nhất và một dòng trong hướng dẫn hệ thống,
+  // để model nói đúng tệp nào không đọc được và vì sao, không trả lời như thể tin nhắn không có tệp. Có khối thì không đi đường nhanh (hướng dẫn khác mặc định).
+  const rej = Array.isArray(body.messages) ? rejectedBlock(body.rejected) : "";
+  if (rej) body = { ...body, messages: withRejected(body.messages as unknown[], rej), system: `${body.system || DEFAULT_SYSTEM}\n\n${REJECTED_RULE}` };
   if (typeof body.resume === "string") return chatTurn(body, c, scope);
   if (body.model !== AUTO) return withSwitch(await chatTurn(body, c, scope), body, c.user, [String(body.model)]);
   // Chọn trong đúng các model bộ chọn model đang hiện: nhóm của hãng đang dùng gói subscription thì chọn model của gói,

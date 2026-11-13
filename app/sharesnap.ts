@@ -4,6 +4,7 @@
 import { externalImageUrls, swapUrls } from "./artdoc";
 import { ART_TYPES, splitArtifacts, type ArtType } from "./artifacts";
 import { resolveArt, type ArtState } from "./vfs";
+import { stripAppliedNotes } from "./turnctx";
 
 export type ShareSeg = { k: "text"; t: string } | { k: "art"; title: string; type: ArtType; lang: string | null; content: string } | { k: "old"; title: string };
 export type ShareMsg = { r: "u" | "a"; segs: ShareSeg[]; files?: number; outs?: number };
@@ -21,7 +22,9 @@ export function snapshotOf(title: unknown, input: unknown): ShareSnap {
   const last = new Map<string, number>();
   const parsed = list.slice(-SHARE_LIMITS.msgs).map((m, i) => {
     const r: "u" | "a" = m?.role === "ai" || m?.role === "assistant" ? "a" : "u";
-    const text = clean(typeof m?.text === "string" ? m.text : "").slice(0, SHARE_LIMITS.text);
+    // Câu trả lời cũ còn dòng "Đã áp dụng hướng dẫn của bạn: “…”" (nội dung hướng dẫn cá nhân): bỏ khỏi bản chia sẻ.
+    const raw = clean(typeof m?.text === "string" ? m.text : "");
+    const text = (r === "a" ? stripAppliedNotes(raw) : raw).slice(0, SHARE_LIMITS.text);
     // Tin của người dùng là chữ thuần: thẻ <artifact> họ gõ không được dựng thành khung chạy.
     const segs = r === "a" ? splitArtifacts(text) : text.trim() ? [{ kind: "text" as const, text }] : [];
     for (const s of segs) if (s.kind === "art") { st.set(s.art.ident, resolveArt(st.get(s.art.ident), s.art)); last.set(s.art.ident, i); }

@@ -8,6 +8,7 @@ import type { ContentBlock } from "./fileproc/types";
 import type { Effort } from "./catalog";
 import type { TraceItem } from "./transpile";
 import { noteServerNow } from "./clock";
+import { PROJECT_INS_HEAD } from "./turnctx";
 
 export const CHUNK_SIZE = 1500;
 export const SMALL_DOC_LIMIT = 12000;
@@ -379,7 +380,7 @@ export function getRelevantContext(p: Project, query: string): string[] {
 
 export function buildSystemPrompt(p: Project, userMessage: string): string {
   const parts = ["Bạn là một trợ lý AI hữu ích."];
-  if (p.ins?.trim()) parts.push(`## Hướng dẫn của dự án (hãy luôn tuân theo)\n${p.ins}`);
+  if (p.ins?.trim()) parts.push(`${PROJECT_INS_HEAD}\n${p.ins}`);
   const mem = p.mem ?? [];
   if (mem.length) parts.push("## Bộ nhớ dự án (những điều đã biết từ các cuộc chat trước)\n" + mem.map((m) => `- ${m.content}`).join("\n"));
   // Luôn nói dự án có những tệp nào: model biết "tài liệu này" là gì, không hỏi lại người dùng đang nói tới tệp nào.

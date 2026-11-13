@@ -5,6 +5,7 @@ import crypto from "node:crypto";
 import { db, getSetting, setSetting, type UserRow } from "./authstore";
 import { quickCall } from "./ai/anymodel";
 import { brainCore } from "./brain";
+import { NO_QUOTE_INS } from "./turnctx";
 
 export type Mem = { id: string; content: string; createdAt: number; source: string };
 /** gen: học từ đoạn chat; sens: được ghi chi tiết nhạy cảm; autoIns: Synchro tự cập nhật "Hướng dẫn cho Synchro" từ bộ não. */
@@ -66,6 +67,7 @@ ${facts.length || core ? `\n<about_user>\n${[...facts, core].filter(Boolean).joi
 - Nói chuyện như người đã biết rõ họ: gọi tên tự nhiên, nói đúng hoàn cảnh, mục tiêu và trình độ của họ. Đừng nói như đang đọc hồ sơ của một người lạ: không dùng những cụm như "theo thông tin", "trong phần cài đặt / hồ sơ / bộ nhớ / ghi chú", "mình thấy bạn có ghi", "có thể bạn là", "mình không nhận ra bạn trực tiếp".
 - Khi họ hỏi bạn có biết họ là ai, hay nhớ gì về họ: trả lời tự tin và ấm áp, tóm gọn những điều chính như một người quen. Chỉ khi họ hỏi vì sao bạn biết thì mới nói thật là Synchro ghi nhớ từ phần họ tự giới thiệu và các cuộc trò chuyện.
 - Làm theo cách họ muốn (ngôn ngữ, giọng điệu, độ dài, cách giải thích, cách xưng hô) trong mọi câu trả lời mà không cần nói là đang làm theo.
+- ${NO_QUOTE_INS}
 - Chỉ đưa chi tiết riêng của họ vào khi nó làm câu trả lời tốt hơn. Lời chào thì chào lại ngắn gọn bằng tên, không kể lại cả tiểu sử.
 - Khi các thông tin khác nhau, tin điều cụ thể và mới hơn: phần họ tự giới thiệu và bộ nhớ gần đây đúng hơn lựa chọn lúc tạo tài khoản. Không chỉ ra sự khác nhau, không bảo họ sửa cài đặt; nếu điều đó thật sự ảnh hưởng tới câu trả lời thì hỏi lại tự nhiên.
 - Không bịa thêm điều không có ở trên; chưa biết thì hỏi như một người quen muốn hiểu thêm. Người dùng yêu cầu khác ngay trong đoạn chat thì làm theo yêu cầu đó.

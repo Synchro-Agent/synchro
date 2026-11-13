@@ -193,6 +193,11 @@ function ruleEcho(sys) {
   const m = /<top_rule>([\s\S]*?)<\/top_rule>/.exec(sys);
   return m ? `TOPRULE: ${sys.trimStart().startsWith("<top_rule>") ? "first" : "inside"} ${m[1].trim().replace(/\s+/g, " ").slice(0, 600)}` : "TOPRULE: none";
 }
+// "#pjins": nhắc lại phần hướng dẫn dự án trong lời nhắc hệ thống (và có mấy lần), để kiểm thử hướng dẫn dự án tới được model ở mọi đường đi.
+function pjEcho(sys) {
+  const parts = sys.split("## Hướng dẫn của dự án (hãy luôn tuân theo)\n");
+  return parts.length > 1 ? `PJINS x${parts.length - 1}: ${parts[1].split(/\n\s*\n/)[0].trim().replace(/\s+/g, " ").slice(0, 300)}` : "PJINS: none";
+}
 // "#sxkit": câu trả lời có sơ đồ ```d2 và bản trình bày dùng bộ CSS: nền shader 3D (data-sx-shader), biểu đồ ECharts (data-sx-chart), khối kính khúc xạ.
 // Dùng chung cho CLI giả lập và khóa API giả lập (mock-providers.mjs) để xem các tính năng đồ họa trên trang thật.
 function sxKit() {
@@ -283,4 +288,4 @@ function gate(a) {
   const status = (a[0] === "auth" && a[1] === "status") || (a[0] === "login" && a[1] === "status") || a[0] === "models";
   if (m === "smoke" || (m === "turn" && !status)) { console.error("mock: broken build (segmentation fault)"); process.exit(3); }
 }
-module.exports = { version, gate, sxKit, TINY_JPEG, tinyPng, isImageTurn, imageCount, imageMode, imageLog, saveImage, stallTurn, STALL_TEXT, mediaDesc, mediaReply, mcp, isTitleAsk, mockTitle, mockBrain, prefsEcho, ruleEcho, toolAsk, cfg, sleep, out, uuid, readStdin, readLine, flag, bumpSession, bumpUsage, totalTurns, reply, chunks, fs, path, crypto };
+module.exports = { version, gate, sxKit, TINY_JPEG, tinyPng, isImageTurn, imageCount, imageMode, imageLog, saveImage, stallTurn, STALL_TEXT, mediaDesc, mediaReply, mcp, isTitleAsk, mockTitle, mockBrain, prefsEcho, ruleEcho, pjEcho, toolAsk, cfg, sleep, out, uuid, readStdin, readLine, flag, bumpSession, bumpUsage, totalTurns, reply, chunks, fs, path, crypto };

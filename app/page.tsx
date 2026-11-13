@@ -8,6 +8,7 @@ import { getLang, tr, useLangReady } from "./i18n";
 import { FileCard } from "./fileicon";
 import { useFileMenu, saveDoc, saveBlob, fileContext } from "./filemenu";
 import { capFiles, getStatus } from "./filestate";
+import type { Rejected } from "./turnctx";
 import { Boundary, Fade, Menu, Thinking } from "./ui";
 import { chatError, GENERIC_ERR, isForeign } from "./chaterror";
 import { armDraft, saveDraft, takeDraft } from "./draft";
@@ -40,7 +41,7 @@ import { installTips } from "./tips";
 import { fit as fitFloat, installFloatFit } from "./floatfit";
 import { installA11y } from "./a11y";
 import { steerRun } from "./llm";
-import { attachRun, callLLM, olderDigest, cancelRun, LLMError, setActiveEffort, setActiveModel, setApprover, type ApprovalCall, type ApprovalAnswer, type RunMeta, type LibUse, type Decision, buildSystemPrompt, extractMemory, getRelevantContext, hasLLM, HISTORY_LIMIT, MEMORY_EVERY_N_USER_MSGS, type LLMMsg } from "./llm";
+import { attachRun, callLLM, olderDigest, cancelRun, LLMError, setActiveEffort, setActiveModel, setApprover, type ApprovalCall, type ApprovalAnswer, type RunMeta, type LibUse, type Decision, buildSystemPrompt, extractMemory, getRelevantContext, HISTORY_LIMIT, MEMORY_EVERY_N_USER_MSGS, type LLMMsg } from "./llm";
 import { Confirm, LangModal, ProjectModal, Settings, ShortcutsModal, UploadModal, UpgradeModal } from "./modals";
 import { ShareModal } from "./shareui";
 import { useBrainSync } from "./brainsync";
@@ -938,6 +939,7 @@ const MsgRow = memo(function MsgRow({ m, i, last, busy, mark, art, inl, fileActi
           return <ArtifactCard key={k} art={full ?? sg.art} version={v + 1} total={total} active={active} fix={full?.fix} onRedo={last && !busy ? () => cx.current!.send(`${tr("Bản sửa")} “${full?.title ?? sg.art.ident}” ${tr("không áp được. Hãy viết lại toàn bộ artifact này (không dùng mode=\"patch\"), giữ các thay đổi tôi vừa yêu cầu.")}`) : undefined} onOpen={() => cx.current!.openArt({ chat: chatId, ident: sg.art.ident, v, follow: false })} />;
         })()) : <Markdown text={hasArtifacts(m.text) ? artifactsAsCode(m.text) : m.text} say={say} viz={inl} live={m.done && last && !busy} streaming={!m.done} />) : null}{m.failed ? <ErrCard raw={m.err} onRetry={last && !busy ? () => cx.current!.retry() : undefined} onProviders={() => cx.current!.openProviders()} /> : null}{m.done && last ? <ConnCards parts={m.parts} text={m.text} /> : null}{!m.done && m.plan?.length ? <PlanCard plan={m.plan} live /> : null}{!m.done ? <WorkStatus label={m.parts?.some((p) => p.k === "ask" && p.state === "wait") ? tr("Đang chờ bạn duyệt") : m.prog} since={m.time} steps={stepsOf(m.parts)} /> : null}{m.outs?.length ? <OutputFiles files={m.outs} onOpen={(f) => cx.current!.openFile(f)} active={fileActive} /> : null}</div></CiteCtx.Provider>
         {m.done && m.stopped && <div className="msg-stopped"><I.Stop size={11} />{tr("Đã dừng · giữ lại phần đã viết")}</div>}
+        {m.done && !m.failed && (m.pjApplied || m.insApplied) ? <div className="msg-applied">{m.pjApplied && <span className="skill-chip"><I.Folder size={13} />{tr("Đã áp dụng ngữ cảnh dự án")}</span>}{m.insApplied && <span className="skill-chip"><I.User size={13} />{tr("Đã áp dụng hướng dẫn cá nhân")}</span>}</div> : null}
         {m.done && m.webs?.length ? <SourceChips webs={m.webs} id={citeId} /> : null}
         {m.done && m.notice && ((m.notice.text && !m.failed) || m.notice.work || m.notice.at || m.notice.tried?.length || m.notice.switchTo) ? (
           <div className="msg-notice" role="status">
@@ -1666,7 +1668,8 @@ export default function Home() {
   const workOf = (x?: Msg) => (x?.role === "ai" ? { parts: x.parts, plan: x.plan, seq: x.seq } : {});
   // avoid: "Chạy lại bằng model khác" dưới câu trả lời của chế độ Tự động — lượt này vẫn Tự động nhưng tránh model đó. Truyền theo lượt, không qua biến dùng chung:
   // lượt dừng sớm (tệp đính kèm không đọc được) không được để lại model cần tránh cho tin nhắn sau, ở đoạn chat khác.
-  const streamReply = async (id: number, text: string, hist?: LLMMsg[], pid?: number, studio?: Chat["studio"], picked?: string[], avoid?: string) => {
+  // rejected: thẻ tệp báo lỗi của lượt này (tên, loại, lý do): máy chủ báo cho model để câu trả lời nói rõ tệp nào không đọc được và vì sao.
+  const streamReply = async (id: number, text: string, hist?: LLMMsg[], pid?: number, studio?: Chat["studio"], picked?: string[], avoid?: string, rejected?: Rejected[]) => {
     const gen = ++genSeq.current;
     gens.current.set(id, gen);
     setBusyOf(id, true);
@@ -1682,9 +1685,9 @@ export default function Home() {
     let outs: Msg["outs"] = [], trace: Msg["trace"] = [], cancelled = false, failed = false, said = "", notice: Msg["notice"], webs: Msg["webs"] = [];
     // Chữ đến theo thời gian thực: cập nhật tin nhắn tối đa mỗi khung hình.
     // Vẽ tối đa khoảng 20 lần mỗi giây: mắt không thấy khác, cả trang (thanh bên, ô soạn) không phải dựng lại 60 lần mỗi giây.
-    let streamed = false, pend: string | null = null, raf = 0, lastPaint = 0;
+    let pend: string | null = null, raf = 0, lastPaint = 0;
     const flush = () => { raf = 0; if (pend === null || !mine()) return; const now = performance.now(); if (now - lastPaint < 45) { raf = requestAnimationFrame(flush); return; } lastPaint = now; const t = pend; pend = null; patch(id, (ms) => (ms.length && ms[ms.length - 1].role === "ai" ? [...ms.slice(0, -1), { ...ms[ms.length - 1], text: t, prog: undefined }] : ms)); };
-    const onDelta = (t: string) => { streamed = true; pend = t; if (!raf) raf = requestAnimationFrame(flush); };
+    const onDelta = (t: string) => { pend = t; if (!raf) raf = requestAnimationFrame(flush); };
     // Bước của lượt: lời dẫn (chuyển từ chữ đang viết sang nhật ký), công cụ, kết quả, danh sách việc; tin nhắn thêm đã ghép
     // thì đóng phần trả lời trước, hiện tin người dùng, phần tiếp theo của lượt nằm ở câu trả lời mới bên dưới.
     const onEvent = (ev: RunEv) => {
@@ -1713,7 +1716,9 @@ export default function Home() {
         // Model của câu trả lời trước: người dùng chê ("làm lại", "sai rồi") thì chế độ Tự động đổi sang model khác.
         extra: { ...mixExtra(chatsRef.current.find((c) => c.id === id)), web: readPref("webSearch", true), memory: readPref("chatMemory", true), incognito: !!chatsRef.current.find((c) => c.id === id)?.inc, prevModel: [...(chatsRef.current.find((c) => c.id === id)?.msgs ?? [])].reverse().find((m) => m.role === "ai" && m.done && m.via)?.via,
           // histTotal: số tin thật trước khi cắt còn HISTORY_LIMIT (để nối tiếp phiên CLI); tz: múi giờ của người dùng cho dòng giờ hiện tại.
-          histTotal: hist?.length ?? 1, ...(hist && hist.length > HISTORY_LIMIT ? { olderDigest: olderDigest(hist.slice(0, -HISTORY_LIMIT)) } : {}), tz: Intl.DateTimeFormat().resolvedOptions().timeZone, ...(avoid ? { avoidModel: avoid } : {}) } });
+          histTotal: hist?.length ?? 1, ...(hist && hist.length > HISTORY_LIMIT ? { olderDigest: olderDigest(hist.slice(0, -HISTORY_LIMIT)) } : {}), tz: Intl.DateTimeFormat().resolvedOptions().timeZone, ...(avoid ? { avoidModel: avoid } : {}), ...(rejected?.length ? { rejected } : {}),
+          // pjFull: trình duyệt có đủ dữ liệu dự án nên lời nhắc trên là bản đúng; dự án chỉ là bản rút gọn (stub) thì máy chủ tự thêm hướng dẫn dự án.
+          ...(pr && !pr.stub ? { pjFull: true } : {}) } });
       webs = meta.webs ?? [];
       // Tự động đã chuyển sang model khác vì model đầu lỗi / quá tải: giữ lời báo dưới câu trả lời (thanh thông báo chỉ hiện một lúc).
       if (meta.switched) notice = { text: meta.switched };
@@ -1750,7 +1755,7 @@ export default function Home() {
       if (Array.isArray(d.webSources)) webs = d.webSources as Msg["webs"];
       // Gói subscription hết hạn mức hoặc phiên đăng nhập hỏng: hỏi người dùng có chuyển sang khóa API của cùng hãng không (không tự chuyển).
       if (e instanceof LLMError && (e.data.planLimit || e.data.relogin) && typeof e.data.apiModel === "string") {
-        const retry = () => { patch(id, (m) => [...m.slice(0, -1), { role: "ai", text: "", time: Date.now() }]); streamReply(id, text, hist, pid, studio, picked, avoid); };
+        const retry = () => { patch(id, (m) => [...m.slice(0, -1), { role: "ai", text: "", time: Date.now() }]); streamReply(id, text, hist, pid, studio, picked, avoid, rejected); };
         setTimeout(() => askPlanSwitch(e.data, retry), 300);
       }
     }
@@ -1768,11 +1773,13 @@ export default function Home() {
       doneAway(id, true);
       return;
     }
-    const usedPj = !streamed && !cancelled && pr && !hasLLM && (pr.ins?.trim() || pr.mem?.length || getRelevantContext(pr, text).length);
-    const note = usedPj ? `\n\n_${getLang() === "en" ? "Project context applied" : "Đã áp dụng ngữ cảnh dự án"}: ${[pr.ins?.trim() && (getLang() === "en" ? "instructions" : "hướng dẫn"), pr.mem?.length && (getLang() === "en" ? "memory" : "bộ nhớ"), getRelevantContext(pr, text).length && (getLang() === "en" ? "documents" : "tài liệu")].filter(Boolean).join(", ")}_` : "";
+    // Đã dùng hướng dẫn cá nhân / ngữ cảnh dự án: chỉ đặt cờ để hiện chip trung tính dưới câu trả lời. Mọi câu trả lời thật đều truyền theo thời gian thực
+    // (lượt chạy bền qua waitRun/pollRun), nên KHÔNG xét "streamed" — nếu không chip cá nhân không bao giờ hiện; chỉ cần lượt xong và không bị Dừng.
+    // Không bao giờ ghép nội dung hướng dẫn vào chữ câu trả lời: dòng ghi chú kèm 90 ký tự đầu của hướng dẫn từng lộ hướng dẫn cá nhân trong lịch sử, bản chia sẻ, bản xuất.
+    const insApplied = !cancelled && !!ins.trim();
+    const pjApplied = !cancelled && !!pr && !!(pr.ins?.trim() || pr.mem?.length || getRelevantContext(pr, text).length);
     // Câu trả lời đã đầy đủ thì hiện ngay (trước đây câu không truyền theo thời gian thực phải chờ 1,6 giây rồi mới gõ dần từng chữ).
-    const full = streamed || cancelled ? reply : reply + note + (ins.trim() ? `\n\n_${getLang() === "en" ? "Applied your instructions" : "Đã áp dụng hướng dẫn của bạn"}: “${ins.trim().slice(0, 90)}”_` : "");
-    patch(id, (m) => [...m.slice(0, -1), { ...workOf(m[m.length - 1]), role: "ai", text: full, done: true, time: Date.now(), dur: Date.now() - t0, skills: usedSk.length ? usedSk : undefined, libs: libs.length ? libs : undefined, tools: usedTl.length ? usedTl : undefined, outs: outs?.length ? outs : undefined, ...(notice ? { notice } : {}), via: via ?? undefined, viaTask: via ? viaTask : undefined, webs: webs?.length ? webs : undefined, trace: trace?.length ? trace : undefined, stopped: cancelled || undefined }]);
+    patch(id, (m) => [...m.slice(0, -1), { ...workOf(m[m.length - 1]), role: "ai", text: reply, done: true, ...(insApplied ? { insApplied } : {}), ...(pjApplied ? { pjApplied } : {}), time: Date.now(), dur: Date.now() - t0, skills: usedSk.length ? usedSk : undefined, libs: libs.length ? libs : undefined, tools: usedTl.length ? usedTl : undefined, outs: outs?.length ? outs : undefined, ...(notice ? { notice } : {}), via: via ?? undefined, viaTask: via ? viaTask : undefined, webs: webs?.length ? webs : undefined, trace: trace?.length ? trace : undefined, stopped: cancelled || undefined }]);
     finishReply(id, reply, pr, history, via);
   };
   // Hỏi Có / Không trước khi dùng khóa API dùng chung thay cho gói đã hết hạn mức. Đồng ý: nhóm model của hãng đó chuyển sang model API
@@ -1945,34 +1952,44 @@ export default function Home() {
     const tp = tplMode ? TPLS.find((x) => x.k === tplMode) : undefined;
     const msgs: Msg[] = [{ role: "user", text: t, files: f.length ? f : undefined, pick, time: Date.now(), sys: tp?.sys ?? (view === "project" ? proj?.ins : undefined) }, { role: "ai", text: "", time: Date.now() }];
     let id = cur;
+    // Dự án của lượt này. Đoạn chat mới (kể cả chọn dự án ở khung soạn của trang chủ): lấy đúng dự án vừa gán, không tìm trong chatsRef — đoạn chat mới
+    // chưa có ở đó cho tới lần vẽ sau, nên câu đầu từng đi không kèm dự án (không có hướng dẫn dự án, còn đi đường nhanh).
+    let pid: number | undefined;
     if (view !== "chat" || id === null) {
       id = Date.now();
       const nid = id;
-      setChats((cs) => [{ id: nid, title: roughTitle(t), msgs, inc: incog || undefined, project: nextProj ?? (view === "project" ? curProj ?? undefined : undefined), studio: tp ? STUDIO_OF[tp.k] : undefined }, ...cs]);
+      const np = nextProj ?? (view === "project" ? curProj ?? undefined : undefined);
+      pid = np;
+      setChats((cs) => [{ id: nid, title: roughTitle(t), msgs, inc: incog || undefined, project: np, studio: tp ? STUDIO_OF[tp.k] : undefined }, ...cs]);
       setNextProj(undefined);
       setCur(id);
       setView("chat");
-    } else patch(id, (m) => [...m, ...msgs]);
+    } else {
+      const eid = id;
+      pid = chatsRef.current.find((c) => c.id === eid)?.project;
+      patch(id, (m) => [...m, ...msgs]);
+    }
     setFiles([]);
     setTplMode(null);
     setPrefill({ t: "", n: 0 });
     const prior = id !== null && view === "chat" ? (chatsRef.current.find((c) => c.id === id)?.msgs ?? []) : [];
     // Lịch sử theo chuẩn Synchro (history.ts): kèm dấu vết công cụ, đánh dấu câu trả lời bị dừng, bỏ phần đã nén.
     const hist: LLMMsg[] = [...chatHistory(prior, chatsRef.current.find((c) => c.id === id)?.compact), { role: "user", content: t }];
-    const pid = view === "project" ? curProj ?? undefined : chatsRef.current.find((c) => c.id === id)?.project;
     runTurn(id, t, f, hist, pid, tp ? STUDIO_OF[tp.k] : undefined, pick?.map((x) => x.id));
   };
   // Chạy một lượt: đọc các tệp đính kèm chưa có trên máy chủ rồi gọi model (gửi mới, thử lại, sửa tin đã gửi).
   const runTurn = (id: number, t: string, f: string[], hist: LLMMsg[], pid?: number, studio?: Chat["studio"], picked?: string[], avoid?: string) => {
-    fileContext(f, t).then(({ blocks, errors, failed }) => {
+    fileContext(f, t).then(({ blocks, errors, rejected, failed }) => {
       errors.forEach((m) => say(m));
       // Nhớ mã tệp trên máy chủ: các lượt sau (kể cả khi chế độ Tự động đổi model) gửi lại tệp này cùng lịch sử.
       const fids = Object.fromEntries(f.flatMap((n) => { const x = getStatus(n)?.id; return x ? [[n, x]] : []; }));
       if (Object.keys(fids).length) patch(id, (ms) => ms.map((m, k) => (k === ms.length - 2 && m.role === "user" ? { ...m, fids: { ...m.fids, ...fids } } : m)));
-      // Không gửi được tệp: báo ngay trong khung trả lời, không hỏi model như thể tin nhắn không có tệp.
+      // Không lấy được nội dung các tệp đọc được: báo ngay trong khung trả lời, không hỏi model như thể tin nhắn không có tệp.
+      // Tệp bị từ chối (thẻ báo lỗi) thì vẫn gửi lượt, kèm danh sách để model nói rõ tệp nào không đọc được và vì sao.
       if (failed) { patch(id, (m) => [...m.slice(0, -1), { role: "ai", text: "", failed: true, err: errors[errors.length - 1] ?? "Không lấy được nội dung tệp đính kèm. Hãy gửi lại.", time: Date.now(), done: true }]); return; }
       if (blocks.length) { const c = hist[hist.length - 1].content; hist[hist.length - 1] = { role: "user", content: [...(Array.isArray(c) ? c : [{ type: "text" as const, text: t || "Hãy xem các tệp đính kèm." }]), ...blocks] }; }
-      streamReply(id, t, hist, pid, studio, picked, avoid);
+      else if (rejected.length && !t.trim()) hist[hist.length - 1] = { role: "user", content: "Hãy xem các tệp đính kèm." };
+      streamReply(id, t, hist, pid, studio, picked, avoid, rejected);
     });
   };
   // Gửi lại tin thứ k của đoạn chat (u: nội dung tin đó, đã sửa hoặc không): bỏ mọi tin sau nó, lượt mới giữ nguyên tệp và skill đã chọn.

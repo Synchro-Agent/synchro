@@ -338,6 +338,7 @@ export const VI2EN: Record<string, string> = {
   "Xong": "Done",
   "Không thể kết nối tới model. Vui lòng thử lại.": "Couldn't reach the model. Please try again.",
   "Đã áp dụng ngữ cảnh dự án": "Project context applied",
+  "Đã áp dụng hướng dẫn cá nhân": "Personal instructions applied",
   "hướng dẫn": "instructions",
   "bộ nhớ": "memory",
   "Tìm kiếm tệp": "Search files",
@@ -508,7 +509,6 @@ export const RULES_EN: [RegExp, (m: RegExpMatchArray) => string][] = [
   [/^Hãy giúp tôi tạo một (.+) mới\.$/, (m) => `Help me create a new ${m[1]}.`],
   [/^Hướng dẫn tôi tạo một (.+) từ đầu\.$/, (m) => `Walk me through creating a ${m[1]} from scratch.`],
   [/^(\d+) (giờ|phút)$/, (m) => `${m[1]} ${m[2] === "giờ" ? "hr" : "min"}`],
-  [/^Đã áp dụng hướng dẫn của bạn: (.+)$/, (m) => `Applied your instructions: ${m[1]}`],
 ];
 
 // Mục Speech: chỉ thêm chuỗi chưa có, không ghi đè bản dịch sẵn có.
@@ -871,7 +871,7 @@ Object.assign(VI2EN, {
   "Đăng nhập gói Claude, ChatGPT, Gemini hoặc Grok của bạn, hoặc nhập khóa API dùng chung.": "Sign in with your Claude, ChatGPT, Gemini or Grok plan, or add a shared API key.",
   "Đăng nhập gói Claude, ChatGPT, Gemini hoặc Grok của bạn để bắt đầu.": "Sign in with your Claude, ChatGPT, Gemini or Grok plan to get started.",
   "Quay lại gói": "Back to my plan", "Gói cần đăng nhập lại ở Cài đặt → Providers.": "Your plan needs you to sign in again in Settings → Providers.", "Dùng khóa API dùng chung": "Use the shared API key",
-  "Từ gói của bạn": "From your plan", "nội dung đang hiện": "current content", "vị trí": "position", "Đã áp dụng hướng dẫn của bạn": "Applied your instructions",
+  "Từ gói của bạn": "From your plan", "nội dung đang hiện": "current content", "vị trí": "position",
   "cho tới khi gói dùng lại được": "until your plan is available again", "Dùng khóa API": "Use API key", "Hội đồng phản biện chưa trả lời được.": "The review panel could not answer.",
   "Không áp được bản sửa này. Hãy nhờ Synchro sửa trong khung chat.": "This fix could not be applied. Ask Synchro to fix it in the chat.",
   "Đã áp dụng bản sửa của hội đồng phản biện": "Applied the review panel's fix", "Đã áp dụng bản sửa, tạo phiên bản mới": "Fix applied as a new version",
