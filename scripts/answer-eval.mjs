@@ -107,7 +107,7 @@ try {
   if (!clis.length) { log("Không có CLI nào dùng được cho tài khoản này."); code = 2; }
   else {
     const envs = Object.fromEntries(clis.map((c) => [c, { env: A.engineEnv(c, scope), workdir: path.join(R.engineHome(), "work", A.safeScope(scope)) }]));
-    for (const c of clis) R.makeDir(envs[c].workdir);
+    for (const c of clis) await R.makeDir(envs[c].workdir);
     log(`${items.length} câu, ${clis.join(", ")}: ${items.length * clis.length} lượt thật của gói.`);
     out(`# Câu trả lời trên CLI thật\n\nTài khoản ${scope.slice(0, 8)}…, ${new Date().toISOString()}. Lượt không có công cụ.\n`);
     const tally = new Map(clis.map((c) => [c, { n: 0, err: 0, first: [] }]));

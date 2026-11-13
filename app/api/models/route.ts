@@ -22,9 +22,6 @@ export const GET = timed(async (req: Request) => {
   // Nhãn "Mới" cho cả model của gói (sổ model đọc danh sách gói bằng đăng nhập của quản trị viên).
   const merged = (await mergedProviders(c.user, providers).catch(() => providers)).map((p) => (p.source === "plan" ? { ...p, models: p.models.map((m) => (isNewModel(m.key) ? { ...m, isNew: true } : m)) } : p));
   const subKeys = merged.flatMap((p) => p.plan?.models.map((m) => m.key) ?? []);
-  // Người dùng mở trang: khởi động sẵn tiến trình cho câu đầu tiên (không chờ, lỗi cũng không sao). Lần hỏi lại nền của tab để mở lâu (bg=1,
-  // mỗi 15 phút) thì không: tiến trình chờ tự tắt sau 10 phút, khởi động lại mỗi lần hỏi chỉ tốn máy.
-  if (new URL(req.url).searchParams.get("bg") !== "1") void import("../../chatengine").then((m) => m.prewarmChat(c.user)).catch(() => {});
   // default: chỉ model quản trị viên đặt; không đặt thì người dùng mới bắt đầu ở Tự động (models.ts), không phải model đầu danh sách.
   // Model mặc định đã cũ hoặc bị hãng gỡ: bản thay thế của nó.
   const d0 = defaultModel(), d = d0 && !cat.some((p) => p.models.some((m) => m.key === d0)) ? replacementOf(d0) ?? d0 : d0;
@@ -32,5 +29,11 @@ export const GET = timed(async (req: Request) => {
   // replaced: model đã ngừng / đã cũ → bản mới nhất cùng dòng; người đã chọn tay model cũ được chuyển sang và báo một lần (models.ts fitModel).
   const shown = new Set(merged.flatMap((p) => p.models.map((m) => m.key)));
   const replaced = Object.fromEntries(Object.entries(replacements()).filter(([, r]) => shown.has(r.to)));
-  return Response.json({ providers: merged, replaced, sharedApi: providers.length > 0, default: d && cat.some((p) => p.models.some((m) => m.key === d)) ? d : null, allowed: perms.models.includes(ALL) ? perms.models : [...withReplacements(perms.models), ...subKeys], effort: perms.effort ?? {} });
+  const res = Response.json({ providers: merged, replaced, sharedApi: providers.length > 0, default: d && cat.some((p) => p.models.some((m) => m.key === d)) ? d : null, allowed: perms.models.includes(ALL) ? perms.models : [...withReplacements(perms.models), ...subKeys], effort: perms.effort ?? {} });
+  // Người dùng mở trang: khởi động sẵn tiến trình cho câu đầu tiên (không chờ, lỗi cũng không sao). Lần hỏi lại nền của tab để mở lâu (bg=1,
+  // mỗi 15 phút) thì không: tiến trình chờ tự tắt sau 10 phút, khởi động lại mỗi lần hỏi chỉ tốn máy.
+  // Gửi danh sách model trước: phần đồng bộ của prewarmChat (dựng hướng dẫn hệ thống, đọc bộ nhớ) chạy ở setImmediate, sau khi trả lời,
+  // không còn chen vào giữa lúc trang đang chờ các yêu cầu khởi động khác.
+  if (new URL(req.url).searchParams.get("bg") !== "1") { const user = c.user; setImmediate(() => { void import("../../chatengine").then((m) => m.prewarmChat(user)).catch(() => {}); }); }
+  return res;
 });

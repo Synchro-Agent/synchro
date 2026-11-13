@@ -29,7 +29,7 @@ async function* sections(u: UserRow): AsyncGenerator<string> {
     yield `,\n"${kind}s": [`;
     let since = 0, first = true;
     for (;;) {
-      const page = changesSince(u.id, since);
+      const page = await changesSince(u.id, since);
       for (const r of page.items) {
         if (r.kind !== kind || r.deleted || !r.data) continue;
         yield `${first ? "" : ",\n"}${r.data}`;

@@ -63,6 +63,7 @@ function init() {
     d.exec(`CREATE TABLE IF NOT EXISTS usage_events (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id TEXT NOT NULL, at INTEGER NOT NULL, model TEXT NOT NULL, feature TEXT NOT NULL,
         input INTEGER NOT NULL, output INTEGER NOT NULL, cache_read INTEGER NOT NULL, cache_write INTEGER NOT NULL, cost REAL NOT NULL);
       CREATE INDEX IF NOT EXISTS usage_events_user ON usage_events(user_id, at);
+      CREATE INDEX IF NOT EXISTS usage_events_at ON usage_events(at);
       CREATE TABLE IF NOT EXISTS usage_users (user_id TEXT PRIMARY KEY, session_start INTEGER, week_anchor INTEGER, override TEXT);
       CREATE TABLE IF NOT EXISTS usage_config (id INTEGER PRIMARY KEY CHECK (id = 1), json TEXT NOT NULL)`);
     // Giữ 60 ngày lịch sử là đủ cho giới hạn tuần và thống kê.

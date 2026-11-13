@@ -17,7 +17,7 @@ export const GET = handle(async (req) => {
   const { user } = requireUser(req);
   const q = new URL(req.url).searchParams, keys = q.get("keys");
   if (keys !== null) return Response.json({ items: itemsByKey(user.id, keys.split(",").filter(Boolean)) });
-  return Response.json({ ...changesSince(user.id, Math.max(0, Number(q.get("since")) || 0)), now: Date.now() });
+  return Response.json({ ...(await changesSince(user.id, Math.max(0, Number(q.get("since")) || 0))), now: Date.now() });
 });
 
 /** Xóa đoạn chat là xóa hết phần sinh ra từ nó: ghi chú và điều đã học trong bộ não, lượt chạy đã lưu, liên kết chia sẻ, kết quả công cụ, lịch sử phiên của CLI. Gọi lại nhiều lần vẫn an toàn.

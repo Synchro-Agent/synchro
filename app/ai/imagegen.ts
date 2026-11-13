@@ -125,7 +125,7 @@ async function locked<T>(r: Run, gen: AsyncGenerator<Event, T | null, unknown>):
   return st.value ? { got: st.value } : { fail: fail ?? { kind: "busy" } };
 }
 /** Đã có khóa: đặt lại tệp mốc (ảnh lượt trước ghi trong lúc chờ không phải của lượt này), rồi mới báo đang tạo và đếm giờ. */
-const begin = (r: Run) => { writeEngineFile(r.stamp, Buffer.alloc(0)); r.q.onBegin?.(); };
+const begin = async (r: Run) => { await writeEngineFile(r.stamp, Buffer.alloc(0)); r.q.onBegin?.(); };
 
 /** Antigravity: `--output-format json` như lượt chat; mã hội thoại ở cấp ngoài, bản stream-json lồng trong result. Không thêm cờ nào: agy đã đủ quyền chạy image-generator ở print mode. */
 async function viaAgy(r: Run): Promise<Tried> {
@@ -136,7 +136,7 @@ async function viaAgy(r: Run): Promise<Tried> {
   const watch = await watchSessions(r.login);
   let conv = "", paths: string[] = [];
   try {
-    begin(r);
+    await begin(r);
     // Có ảnh gốc: agy có thể tự chặn công cụ mở tệp ở print mode. Đọc nhật ký để nói thật khi ảnh tạo ra không dựa trên ảnh gốc.
     const log = r.refPath ? path.join(r.work, ".agy.log") : "";
     const args = ["--output-format", "json", ...(log ? ["--log-file", log] : []), "-p", imagePrompt("agy", { ...r.q, count: r.count }, r.refPath)];
@@ -175,11 +175,11 @@ async function viaGrok(r: Run): Promise<Tried> {
   if (!bin) return { fail: { kind: "other", detail: "CLI chưa được cài" } };
   const { got: free, fail } = await locked(r, grokImageLock({ prompt: "", env: r.env, workdir: r.work, signal: r.q.signal, lockMs: AGY_LOCK_MS }));
   if (!free) return { fail };
-  try { begin(r); return await grokTurn(r, bin); } finally { free(); }
+  try { await begin(r); return await grokTurn(r, bin); } finally { free(); }
 }
 async function grokTurn(r: Run, bin: string): Promise<Tried> {
   const file = path.join(r.work, ".prompt.txt");
-  writeEngineFile(file, Buffer.from(imagePrompt("grok", { ...r.q, count: r.count }), "utf8"));
+  await writeEngineFile(file, Buffer.from(imagePrompt("grok", { ...r.q, count: r.count }), "utf8"));
   const args = ["--prompt-file", file, "--output-format", "streaming-json", "--always-approve", "--no-memory", "--no-subagents", "--no-auto-update",
     // Không chặn Edit, Write ở đây: Grok tính việc lưu ảnh là quyền edit, chặn thì image_gen luôn bị từ chối (đã đo trên CLI thật). --tools chỉ giữ image_gen nên model không có công cụ sửa tệp nào.
     "--tools", "image_gen", "--disallowed-tools", "search_tool,use_tool", ...GROK_DENY.filter((t) => t !== "Edit" && t !== "Write").flatMap((t) => ["--deny", t]), "--deny", "WebSearch", "--disable-web-search"];
@@ -293,14 +293,14 @@ export async function runBackend(cli: ImgCli, q: ImgReq): Promise<Tried> {
   const count = Math.min(4, Math.max(1, q.count ?? 1));
   const login = scopeDir(cli, q.uid), env = engineEnv(cli, q.uid);
   const parent = path.join(engineHome(), "work", safeScope(q.uid)), work = path.join(parent, `.synchro-img-${crypto.randomBytes(6).toString("hex")}`);
-  makeDir(parent); makeDir(work);
+  await makeDir(parent); await makeDir(work);
   const stamp = path.join(work, ".stamp");
   try {
-    writeEngineFile(stamp, Buffer.alloc(0));
+    await writeEngineFile(stamp, Buffer.alloc(0));
     let refPath: string | undefined, refHash: string | undefined;
     if (q.reference) {
       refPath = path.join(work, `reference.${imageKind(q.reference.data)?.ext ?? "png"}`);
-      writeEngineFile(refPath, q.reference.data);
+      await writeEngineFile(refPath, q.reference.data);
       refHash = crypto.createHash("sha1").update(q.reference.data).digest("hex");
     }
     const r: Run = { q, count, env, work, stamp, c: { env, cwd: work, roots: [login, work], signal: q.signal }, refPath, refHash, login };
@@ -311,7 +311,7 @@ export async function runBackend(cli: ImgCli, q: ImgReq): Promise<Tried> {
   } catch (e) {
     return { fail: q.signal?.aborted ? { kind: "aborted" } : { kind: "other", detail: clip((e as Error).message) } };
   } finally {
-    try { removeDir(work); } catch (e) { console.error("[imagegen] không xóa được thư mục tạm", String((e as Error).message).slice(0, 200)); }
+    try { await removeDir(work); } catch (e) { console.error("[imagegen] không xóa được thư mục tạm", String((e as Error).message).slice(0, 200)); }
   }
 }
 const slugOf = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/đ/g, "d").replace(/Đ/g, "D").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");

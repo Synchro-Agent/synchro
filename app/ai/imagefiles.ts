@@ -107,9 +107,9 @@ export const agyBrainDir = (home: string, conv: string) => path.join(home, ".gem
 // ---------------------------------------------------------------- ảnh Antigravity tự tạo trong lượt chat
 // Antigravity có thể tự gọi image-generator của nó thay vì generate_image: ảnh nằm trong thư mục hội thoại trên máy chủ, người dùng không mở được đường dẫn đó.
 /** Tệp mốc đặt trước lượt: ảnh mới của lượt là ảnh mới hơn tệp này (hội thoại nối tiếp có sẵn ảnh của các lượt trước). */
-export function nativeStamp(workdir: string): string | null {
+export async function nativeStamp(workdir: string): Promise<string | null> {
   const f = path.join(workdir, `.synchro-stamp-${crypto.randomBytes(5).toString("hex")}`);
-  try { writeEngineFile(f, Buffer.alloc(0)); return f; } catch { return null; }
+  try { await writeEngineFile(f, Buffer.alloc(0)); return f; } catch { return null; }
 }
 export async function agyNativeImages(o: { env: Record<string, string>; workdir: string; session: string; stamp: string }): Promise<ImgFile[]> {
   const home = o.env.HOME;

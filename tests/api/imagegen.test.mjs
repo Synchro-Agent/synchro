@@ -447,7 +447,7 @@ try {
     fs.mkdirSync(dir, { recursive: true });
     const req = (await import("node:module")).createRequire(path.join(process.cwd(), "package.json"))(path.join(process.cwd(), "scripts/mock-cli/mock-cli-common.cjs"));
     const old = path.join(dir, "cu.jpg"); fs.writeFileSync(old, req.TINY_JPEG); fs.utimesSync(old, new Date(Date.now() - 3600_000), new Date(Date.now() - 3600_000));
-    const stamp = F.nativeStamp(work);
+    const stamp = await F.nativeStamp(work);
     await new Promise((r) => setTimeout(r, 20));
     fs.writeFileSync(path.join(dir, "moi.jpg"), req.TINY_JPEG);
     fs.mkdirSync(path.join(dir, ".tempmediaStorage"), { recursive: true }); fs.writeFileSync(path.join(dir, ".tempmediaStorage", "tam.jpg"), req.tinyPng(4, 4));
