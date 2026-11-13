@@ -36,7 +36,7 @@ import { allTags, cleanTags, hasTag, tagKey } from "./chattags";
 import { TagChips, TagFilter, TagPicker } from "./tagsui";
 import { Markdown } from "./md";
 import type { PaletteCmd, PaletteGo } from "./palette";
-import { CHIP_LIMIT, hiddenCards } from "./composerchips";
+import { CHIP_LIMIT, hiddenCards, useEdgeFade } from "./composerchips";
 import { ASK_EVENT } from "./askcard";
 import { installTips } from "./tips";
 import { fit as fitFloat, installFloatFit } from "./floatfit";
@@ -460,6 +460,9 @@ function Composer(p: {
   const [picks, setPicks] = useState<{ id: string; label: string }[]>([]);
   // Dải thẻ đính kèm: quá CHIP_LIMIT thẻ thì gộp phần dư vào "+N"; bấm "+N" trải ra lưới nhiều hàng (xem app/composerchips.ts).
   const [chipsOpen, setChipsOpen] = useState(false);
+  // Lưới đã trải chỉ dành cho bộ thẻ đang soạn: còn ≤ CHIP_LIMIT thẻ (đã gửi, đã gỡ bớt) thì lần đính kèm sau lại bắt đầu từ dải một hàng.
+  const chipCount = picks.length + files.length;
+  useEffect(() => { if (chipCount <= CHIP_LIMIT) setChipsOpen(false); }, [chipCount]);
   const [skl, setSkl] = useState<{ id: string; label: string; lib?: boolean; cat?: boolean }[] | null>(null);
   const [skq, setSkq] = useState("");
   // Thư viện từ danh mục Claude không tải sẵn: gõ tìm thì hỏi máy chủ.
@@ -553,7 +556,7 @@ function Composer(p: {
     // Chưa có model nào: đưa tới chỗ kết nối, tin đang gõ vẫn nằm nguyên trong ô (không gửi đi để nhận về một câu lỗi).
     if (mdl.loaded && !mdl.providers.length) { say("Hãy kết nối một gói AI để gửi tin này"); app.openSettings?.("Providers"); return; }
     onSend(v.trim() || "Xem tệp đính kèm", files, picks.length ? picks : undefined);
-    setV(""); setPicks([]); setAt(null);
+    setV(""); setPicks([]); setAt(null); setChipsOpen(false);
   };
   const keys = (e: React.KeyboardEvent) => {
     if (at && !e.nativeEvent.isComposing) {
@@ -740,10 +743,15 @@ function Composer(p: {
   ];
   const chipsExpanded = chipsOpen && cards.length > CHIP_LIMIT;
   const chipsHidden = hiddenCards(cards.length, chipsExpanded);
+  // Mờ mép chỉ khi dải (hay lưới) thật sự còn thẻ bị khuất ở mép đó. "+N" / "Thu gọn" nằm ngoài khung cuộn, luôn thấy ở mép phải dù màn hẹp.
+  const [stripRef, stripFade] = useEdgeFade<HTMLDivElement>(chipsExpanded ? "y" : "x", `${cards.length}${chipsExpanded ? "g" : ""}`);
   const chips = cards.length > 0 && (
-    <div className={`attach${chipsExpanded ? " attach-grid" : ""}`}>{fm.node}
-      {chipsHidden > 0 ? cards.slice(0, CHIP_LIMIT) : cards}
-      {chipsHidden > 0 && <button type="button" className="attach-more" onClick={() => setChipsOpen(true)} aria-label={`${tr("Hiện thêm")} ${chipsHidden} ${tr("mục")}`} data-tip={`${tr("Hiện thêm")} ${chipsHidden} ${tr("mục")}`}>+{chipsHidden}</button>}</div>
+    <div className={`attach-wrap${chipsExpanded ? " open" : ""}`}>
+      <div ref={stripRef} className={`attach${chipsExpanded ? " attach-grid" : ""}${stripFade ? ` ${stripFade}` : ""}`}>{fm.node}
+        {chipsHidden > 0 ? cards.slice(0, CHIP_LIMIT) : cards}</div>
+      {chipsHidden > 0 && <button type="button" className="attach-more" onClick={() => setChipsOpen(true)} aria-label={`${tr("Hiện thêm")} ${chipsHidden} ${tr("mục")}`} data-tip={`${tr("Hiện thêm")} ${chipsHidden} ${tr("mục")}`}>+{chipsHidden}</button>}
+      {chipsExpanded && <button type="button" className="attach-more attach-less" onClick={() => setChipsOpen(false)} aria-label={tr("Thu gọn")} data-tip={tr("Thu gọn")}>{tr("Thu gọn")}</button>}
+    </div>
   );
 
   if (dock)

@@ -1042,13 +1042,26 @@ table{font-variant-numeric:tabular-nums}h1,h2,h3{text-wrap:balance}
 .attach{flex-wrap:nowrap;overflow-x:auto;overflow-y:hidden;padding:8px 8px 8px 2px;margin:-8px -8px 0 -2px;scrollbar-width:thin;overscroll-behavior-x:contain;-webkit-overflow-scrolling:touch}
 .attach::-webkit-scrollbar{height:6px}.attach::-webkit-scrollbar-thumb{background:var(--border-strong);border-radius:3px}
 .attach>.ft{flex:0 0 auto}
-/* Dải một hàng: làm mờ dần hai mép để thấy rõ còn thẻ bị cắt (gợi ý cuộn / còn nữa); không áp cho dải đã gửi hay lưới đã trải. */
-.attach:not(.sent):not(.attach-grid){-webkit-mask-image:linear-gradient(90deg,transparent 0,#000 18px,#000 calc(100% - 18px),transparent 100%);mask-image:linear-gradient(90deg,transparent 0,#000 18px,#000 calc(100% - 18px),transparent 100%)}
+/* Dải một hàng: chỉ làm mờ mép nào thật sự còn thẻ bị khuất (lớp fade-l / fade-r do useEdgeFade bật theo vị trí cuộn), không tràn thì không mờ:
+   thẻ đầu không bị mờ, nút xóa của thẻ cuối không chìm vào mép. Không áp cho dải đã gửi. */
+.attach.fade-l:not(.sent){-webkit-mask-image:linear-gradient(90deg,transparent 0,#000 18px);mask-image:linear-gradient(90deg,transparent 0,#000 18px)}
+.attach.fade-r:not(.sent){-webkit-mask-image:linear-gradient(90deg,#000 calc(100% - 18px),transparent 100%);mask-image:linear-gradient(90deg,#000 calc(100% - 18px),transparent 100%)}
+.attach.fade-l.fade-r:not(.sent){-webkit-mask-image:linear-gradient(90deg,transparent 0,#000 18px,#000 calc(100% - 18px),transparent 100%);mask-image:linear-gradient(90deg,transparent 0,#000 18px,#000 calc(100% - 18px),transparent 100%)}
+/* Khung ngoài của dải thẻ ô soạn tin: khung cuộn bên trái, nút "+N" / "Thu gọn" đứng ngoài khung cuộn ở mép phải nên màn hẹp cỡ nào cũng thấy. */
+.attach-wrap{display:flex;align-items:center;gap:8px;min-width:0}
+.attach-wrap>.attach{flex:1 1 auto;min-width:0;margin-right:0}
+.attach-wrap.open{align-items:flex-start}
 /* Nút "+N": gộp số thẻ vượt quá CHIP_LIMIT ở mép phải, bấm vào trải ra lưới. */
 .attach-more{flex:0 0 auto;align-self:center;display:inline-flex;align-items:center;justify-content:center;min-width:40px;height:32px;padding:0 11px;border-radius:var(--r-pill);border:.5px solid var(--border-strong);background:var(--card);color:var(--text-2);font-size:13px;font-weight:500;font-variant-numeric:tabular-nums;cursor:pointer}
 .attach-more:hover{background:var(--hover);color:var(--text)}
-/* Lưới đã trải: nhiều hàng, không cuộn ngang; cao quá thì cuộn dọc trong khung. */
-.attach-grid{flex-wrap:wrap;overflow-x:visible;overflow-y:auto;max-height:168px;padding-right:2px;margin-right:-2px}
+/* Lưới đã trải: nhiều hàng, không cuộn ngang. Cao đúng hai hàng thẻ trọn vẹn (đệm trên 10px + 2 × (thẻ 120px + khe 8px)), không hàng nào bị cắt ngang;
+   nhiều hơn thì cuộn dọc trong khung, dừng theo hàng, mép còn thẻ bị khuất thì mờ dần (fade-t / fade-b). Màn thấp: một hàng. */
+.attach.attach-grid{flex-wrap:wrap;overflow-x:hidden;overflow-y:auto;max-height:266px;scroll-snap-type:y proximity;scroll-padding:10px 0 8px}
+.attach-grid>*{scroll-snap-align:start}
+@media (max-height:640px){.attach.attach-grid{max-height:138px}}
+.attach-grid.fade-b{-webkit-mask-image:linear-gradient(180deg,#000 calc(100% - 24px),transparent 100%);mask-image:linear-gradient(180deg,#000 calc(100% - 24px),transparent 100%)}
+.attach-grid.fade-t{-webkit-mask-image:linear-gradient(180deg,transparent 0,#000 24px);mask-image:linear-gradient(180deg,transparent 0,#000 24px)}
+.attach-grid.fade-t.fade-b{-webkit-mask-image:linear-gradient(180deg,transparent 0,#000 24px,#000 calc(100% - 24px),transparent 100%);mask-image:linear-gradient(180deg,transparent 0,#000 24px,#000 calc(100% - 24px),transparent 100%)}
 .cv-pills{min-width:0;max-width:100%;width:100%;box-sizing:border-box}.cv-composer>*{min-width:0}
 
 /* Mũi tên xuống: căn giữa theo trục dọc, không lệch */
