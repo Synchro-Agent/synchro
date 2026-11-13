@@ -14,7 +14,7 @@ const B = process.env.BASE ?? process.env.SYNCHRO_URL ?? "http://localhost:3200"
 const OUT = process.env.OUT ?? path.join(tmpdir(), "synchro-ui", "free-account.json");
 const API_MODEL = "anthropic/claude-haiku-5-5";
 let pass = 0, fail = 0;
-const ok = (c, n, x = "") => { c ? pass++ : fail++; console.log(c ? "  ✓" : "  ✗", n, c ? "" : String(typeof x === "string" ? x : JSON.stringify(x)).slice(0, 700)); };
+const ok = (c, n, x = "") => { c ? pass++ : fail++; console.log(c ? "  ✓" : "  ✗", n, c ? "" : String(typeof x === "string" ? x : JSON.stringify(x)).slice(0, 700)); return c; };
 
 // Lời báo hạn mức đủ ba phần (cùng tiêu chí với app/limitmsg.ts limitParts, kiểm ở tests/api/limit-messages.test.mjs).
 const parts = (msg = "") => ({
@@ -25,7 +25,18 @@ const parts = (msg = "") => ({
 const complete = (msg) => Object.values(parts(msg)).every(Boolean);
 const LIMIT = /hạn mức|giới hạn|limit/i;
 
-const u = await tempUser(B, "free-acct", { name: "Free Account" });
+// Như tài khoản miễn phí thật: quyền mặc định của thành viên mới (default_perms của máy chủ, KHÔNG cấp thêm model / tính năng) và email đã xác minh.
+const u = await tempUser(B, "free-acct", { name: "Free Account", fullPerms: false, verified: true });
+const row0 = (await u.admin("GET", "/api/admin")).j?.users?.find((x) => x.email === u.email) ?? {};
+const me0 = (await u.api("GET", "/api/auth/me")).j?.user ?? {};
+// Hồ sơ thật của lần chạy (in đầu bảng, ghi vào JSON): đã xác minh chưa, model / tính năng quyền mặc định cho phép. Máy giả lập chưa đặt
+// default_perms thì quyền mặc định là toàn quyền; khác với máy thật thì bảng nói rõ, không ngầm coi là tài khoản miễn phí của synchro.net.nz.
+const featOn = Object.entries(me0.perms?.features ?? {}).filter(([, v]) => v).map(([k]) => k);
+const featOff = Object.entries(me0.perms?.features ?? {}).filter(([, v]) => !v).map(([k]) => k);
+const profile = { verified: !!row0.verified, role: me0.role ?? "", models: me0.perms?.models ?? null, featuresOn: featOn, featuresOff: featOff, verifyLocked: !!me0.verifyLocked };
+console.log(`Hồ sơ: ${u.email} · ${profile.role || "?"} · ${profile.verified ? "đã xác minh" : "CHƯA xác minh"} · model ${JSON.stringify(profile.models)} · tắt: ${featOff.join(", ") || "(không)"}`);
+ok(profile.verified && !profile.verifyLocked, "tài khoản đã xác minh email như người dùng thật", profile);
+ok(!me0.isAdmin && profile.role !== "admin", "không phải quản trị viên (quyền mặc định của thành viên, không cấp thêm)", profile);
 const rows = [];
 const db = () => u.db();
 const setUsageOver = (on) => {
@@ -107,12 +118,14 @@ try {
     await t.size(w, h, w < 600);
     await t.P("Fetch.enable", { patterns: [{ urlPattern: "*/api/llm*", requestStage: "Request" }] });
     await t.P("Page.navigate", { url: `${B}/?free=${w}` });
-    ok(await t.until(`!!document.querySelector("textarea")`, 60_000), `${label}: trang chủ mở được`);
+    // Bản giả lập chế độ dev biên dịch trang lần đầu rất lâu khi máy bận (đo được 70 giây): chờ tới 3 phút; không mở được thì bỏ khung này, không dừng cả bộ.
+    if (!ok(await t.until(`!!document.querySelector("textarea")`, 180_000), `${label}: trang chủ mở được`)) { await t.P("Fetch.disable"); continue; }
     const box = await t.ev(`(() => { const r = document.querySelector("textarea").getBoundingClientRect(); return [r.x + r.width / 2, r.y + r.height / 2]; })()`);
     await t.click(box[0], box[1]);
     await t.type(`Xin chào ${label}`);
     await t.key("Enter", "Enter", 13);
-    const shown = await waitFor(() => t.ev(`(() => { const e = [...document.querySelectorAll(".msg-err")].at(-1); return e ? e.innerText : ""; })()`), 30_000);
+    // Lượt đầu tiên gọi /api/llm: chế độ dev biên dịch route lần đầu (đo được 86 giây khi máy bận) nên chờ tới 3 phút.
+    const shown = await waitFor(() => t.ev(`(() => { const e = [...document.querySelectorAll(".msg-err")].at(-1); return e ? e.innerText : ""; })()`), 180_000, { every: 250 });
     ok(!!shown && complete(shown) && /phiên này/.test(shown) && !/gặp lỗi ở máy chủ/.test(shown), `${label}: thẻ lỗi hiện đúng lời báo (hạn mức nào, bao giờ hồi, cách thay thế), không bị thay bằng câu chung`, shown);
     ok(await t.ev(`!![...document.querySelectorAll(".msg-err button")].length`), `${label}: thẻ lỗi có nút làm tiếp (Thử lại / mở Providers)`);
     ok(await t.ev(`document.documentElement.scrollWidth <= innerWidth + 1 && [...document.querySelectorAll(".msg-err")].every((e) => e.getBoundingClientRect().right <= innerWidth + 1)`), `${label}: thẻ lỗi nằm trọn màn hình, không cuộn ngang`);
@@ -222,9 +235,9 @@ try {
   await u.remove();
 }
 
-console.log("\n━━ Ma trận tài khoản miễn phí (giả lập)");
+console.log(`\n━━ Ma trận tài khoản miễn phí (giả lập) · ${profile.verified ? "đã xác minh" : "chưa xác minh"} · model ${JSON.stringify(profile.models)} · tính năng tắt: ${profile.featuresOff.join(", ") || "(không)"}`);
 for (const r of rows) console.log(`${String(r.id).padEnd(5)} ${String(r.ask).padEnd(46).slice(0, 46)} ${String(r.model || "-").padEnd(28).slice(0, 28)} ${String(r.seconds ?? "-").padStart(6)}s  ${r.limit ? `HẠN MỨC: ${String(r.limit).slice(0, 140)}` : r.error ? `LỖI: ${String(r.error).slice(0, 120)}` : r.notice ? String(r.notice).slice(0, 120) : "ok"}`);
-try { mkdirSync(path.dirname(OUT), { recursive: true }); writeFileSync(OUT, JSON.stringify({ at: new Date().toISOString(), base: B, rows }, null, 2)); console.log(`\nBảng JSON: ${OUT}`); } catch {}
+try { mkdirSync(path.dirname(OUT), { recursive: true }); writeFileSync(OUT, JSON.stringify({ at: new Date().toISOString(), base: B, profile, rows }, null, 2)); console.log(`\nBảng JSON: ${OUT}`); } catch {}
 console.log(`\n${pass}/${pass + fail} đạt`);
 await sleep(10);
 process.exit(fail ? 1 : 0);

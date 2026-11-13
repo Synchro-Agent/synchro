@@ -29,7 +29,10 @@ export async function adminClient(base) {
 /**
  * @param {string} base địa chỉ Synchro giả lập
  * @param {string} tag tên ngắn của bộ kiểm thử (vào email)
- * @param {{ fullPerms?: boolean, name?: string }} [o] fullPerms (mặc định true): cấp mọi model và tính năng; false: giữ quyền mặc định của thành viên mới (như tài khoản miễn phí thật)
+ * @param {{ fullPerms?: boolean, verified?: boolean, name?: string }} [o] fullPerms (mặc định true): cấp mọi model và tính năng; false: giữ quyền
+ *   mặc định của thành viên mới (default_perms của máy chủ, như tài khoản miễn phí thật). verified (mặc định false): quản trị viên đánh dấu email
+ *   đã xác minh (Cài đặt → Quản trị → Đánh dấu đã xác minh), như người dùng thật đã bấm liên kết trong thư; bản giả lập tắt cổng xác minh nên
+ *   không đánh dấu thì tài khoản vẫn "chưa xác minh" (hạn mức giọng AI, tệp… tính theo mức chưa xác minh).
  */
 export async function tempUser(base, tag, o = {}) {
   const email = `${tag.replace(/[^a-z0-9-]/gi, "").toLowerCase() || "suite"}-${Date.now().toString(36)}@synchro.test`;
@@ -40,9 +43,14 @@ export async function tempUser(base, tag, o = {}) {
   if (!me.cookie()) throw new Error(`Không tạo được người dùng tạm ${email} (${su.s}: ${JSON.stringify(su.j).slice(0, 200)})`);
   const uid = (await me.api("GET", "/api/auth/me")).j?.user?.id;
   const admin = await adminClient(base);
-  if (o.fullPerms !== false) {
+  if (o.fullPerms !== false || o.verified) {
     const u = (await admin.api("GET", "/api/admin")).j?.users?.find((x) => x.email === email);
-    if (u) await admin.api("PATCH", `/api/admin/users/${u.id}`, { action: "set_perms", perms: { models: ["*"], features: Object.fromEntries(Object.keys(u.perms?.features ?? {}).map((k) => [k, true])) } });
+    if (!u) throw new Error(`Không thấy người dùng tạm ${email} trong danh sách quản trị`);
+    if (o.fullPerms !== false) await admin.api("PATCH", `/api/admin/users/${u.id}`, { action: "set_perms", perms: { models: ["*"], features: Object.fromEntries(Object.keys(u.perms?.features ?? {}).map((k) => [k, true])) } });
+    if (o.verified) {
+      const r = await admin.api("PATCH", `/api/admin/users/${u.id}`, { action: "mark_verified" });
+      if (r.s !== 200) throw new Error(`Không đánh dấu xác minh được ${email} (${r.s}: ${JSON.stringify(r.j).slice(0, 200)})`);
+    }
   }
   return {
     email, password, uid,
