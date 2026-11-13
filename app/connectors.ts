@@ -909,15 +909,15 @@ export class ConnectorSession {
     // CLI đã hủy lời gọi (hoặc bấm Dừng) ngay trước khi chạy: chưa gửi gì đi thì không được gửi nữa.
     if (signal?.aborted) return { content: "Lời gọi đã bị hủy nên công cụ chưa chạy.", is_error: true };
     if (this.perm(name, args) === "block") return { content: "Người dùng đã chặn hoặc tắt công cụ này.", is_error: true };
-    const max = r ? settingsOf(r).maxCalls : 0;
-    const n = (this.calls.get(ct.cid) ?? 0) + 1;
-    if (max > 0 && n > max) return { content: `Đã đạt giới hạn ${max} lần gọi ${ct.cname} trong một tin nhắn (người dùng đặt trong Cài đặt → Connectors). Hãy trả lời với thông tin đang có.`, is_error: true };
-    this.calls.set(ct.cid, n);
-    // Composio đọc lược đồ công cụ (tìm công cụ, xem tham số): trả ngay từ cache 24 giờ nếu lần đọc y hệt đã có, khỏi đi vòng tới máy chủ Composio.
+    // Composio đọc lược đồ công cụ (tìm công cụ, xem tham số): trả ngay từ cache 24 giờ nếu lần đọc y hệt đã có, khỏi đi vòng tới máy chủ Composio. Trả từ cache không đi tới máy chủ nên không tính vào giới hạn số lần gọi.
     if (ct.composio && isSchemaRead(ct.tool.name)) {
       const hit = schemaCacheGet(this.uid, ct.tool.name, args);
       if (hit !== null) return { content: hit, is_error: false };
     }
+    const max = r ? settingsOf(r).maxCalls : 0;
+    const n = (this.calls.get(ct.cid) ?? 0) + 1;
+    if (max > 0 && n > max) return { content: `Đã đạt giới hạn ${max} lần gọi ${ct.cname} trong một tin nhắn (người dùng đặt trong Cài đặt → Connectors). Hãy trả lời với thông tin đang có.`, is_error: true };
+    this.calls.set(ct.cid, n);
     let sent = false;
     try {
       const res = await withClient(ct.cid, (c) => { sent = true; return c.callTool(ct.tool, coerceArgs(ct.tool.inputSchema, args && typeof args === "object" ? args : {}), { signal, timeout }); }, this.cache, ct.tool.name);
