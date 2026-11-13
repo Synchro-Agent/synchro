@@ -510,6 +510,8 @@ try {
     const UG = "user_G", env = A.engineEnv("grok", UG);
     fs.mkdirSync(env.GROK_HOME, { recursive: true }); fs.writeFileSync(path.join(env.GROK_HOME, "auth.json"), "{}");
     const mcp = { url: "http://127.0.0.1:9/mcp" };
+    // Hàng đợi của tài khoản chỉ còn ở đường dự phòng (HOME riêng của lượt tắt hoặc dựng lỗi): tests/api/turnhome.test.mjs thử đường mặc định không xếp hàng.
+    process.env.SYNCHRO_CLI_TURN_HOME = "0";
     const long = all(S.engineFor("grok").runTurn({ prompt: "[mock:holdgrok] chào", env, mcp }));
     await sleep(1500);
     let t0 = Date.now();
@@ -532,6 +534,7 @@ try {
       const quick = await all(S.engineFor("grok").runTurn({ prompt: "chào", env, mcp, lockMs: 300 }));
       ok(quick.at(-1).code === "busy", "chế độ Tự động không chờ theo thẻ duyệt, vẫn chuyển model sớm", JSON.stringify(quick));
       await held;
+      delete process.env.SYNCHRO_CLI_TURN_HOME;
     }
     // Không lắp được cầu nối: báo lỗi để Tự động chuyển model, không chạy tiếp với prompt đang hứa công cụ.
     {

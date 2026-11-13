@@ -3,10 +3,11 @@
 // dựng và truyền vào TurnRequest.env; cli_runtime lọc env, kill cả process group khi Dừng, CLI im lặng quá lâu hoặc chạm mức trần của lượt.
 import path from "node:path";
 import type { Attachment, Engine, ErrorCode, Event, RateWindow, TurnRequest, Usage, WebSource } from "./engine";
-import { type Cli, cliRunning, CODEX_TURN_PREFIX, engineHome, find, IDLE_MS, makeDir, MAX_TURN_MS, type Proc, sessionSeen, spawnCli, stripAnsi, writeEngineFile, type Exit } from "./cli_runtime";
+import { type Cli, cliRunning, CODEX_TURN_PREFIX, engineHome, find, IDLE_MS, makeDir, MAX_TURN_MS, type Proc, sessionSeen, spawnCli, stripAnsi, turnHomeBase, writeEngineFile, type Exit } from "./cli_runtime";
 import { classify, redact } from "./errors";
 import { forgetSession, poolStrike, prestart, takeProcess, type PoolSpec } from "./cli_pool";
 import { scrubServerPaths } from "./imagefiles";
+import { openTurnHome, turnHomeOn, type TurnHome } from "./turnhome";
 
 type Json = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 
@@ -18,7 +19,8 @@ async function start(cli: Cli, args: string[], req: TurnRequest, stdin: string, 
   await makeDir(cwd);
   const p = spawnCli(bin, args, { env: req.env, cwd, stdin, signal: req.signal, idleMs: IDLE_MS, alive: req.alive, ...(timeoutMs ? { timeoutMs } : {}) });
   // Hai CLI chỉ báo mã phiên cuối lượt: lượt tạo ảnh cần biết lượt nào còn chạy trước khi dọn phiên của nó (watchSessions).
-  if ((cli === "agy" || cli === "grok") && req.env?.HOME) cliRunning(req.env.HOME, p);
+  // HOME riêng của lượt (turnhome.ts) là thư mục con của thư mục đăng nhập: theo dõi theo thư mục đăng nhập, như lượt tạo ảnh.
+  if ((cli === "agy" || cli === "grok") && req.env?.HOME) cliRunning(turnHomeBase(req.env.HOME), p);
   return p;
 }
 // Linux không cho một tham số dòng lệnh dài quá 128 KB (MAX_ARG_STRLEN): vượt là "spawn E2BIG", lượt chết trước khi chạy. Đo bằng byte
@@ -88,8 +90,9 @@ export function webSources(v: unknown, out = new Map<string, WebSource>(), depth
 }
 const WEB_TOOL = /^(WebSearch|WebFetch|web_search|search_web|web_fetch)$/;
 
-// ---------------------------------------------------------------- khóa lượt theo tài khoản (Antigravity, Grok)
-// Hai CLI này chỉ đọc cầu nối MCP từ cấu hình chung của tài khoản nên các lượt có công cụ của cùng tài khoản chạy lần lượt. Chờ lượt trước
+// ---------------------------------------------------------------- khóa lượt theo tài khoản (Antigravity, Grok): chỉ còn cho đường dự phòng
+// Mặc định mỗi lượt có công cụ chạy với HOME riêng (turnhome.ts, Blueprint G1) nên không xếp hàng. Khóa dưới đây chỉ dùng khi HOME riêng tắt
+// (SYNCHRO_CLI_TURN_HOME=0) hoặc dựng lỗi, và cho lượt tạo ảnh (agyQuiet). Khi đó hai CLI này đọc cầu nối MCP từ cấu hình chung của tài khoản nên các lượt có công cụ của cùng tài khoản chạy lần lượt. Chờ lượt trước
 // phải: dừng được ngay khi bấm Dừng, có giới hạn, và báo cho người dùng biết đang chờ gì (một câu "chào" từng chờ trống 2 phút rồi báo lỗi sai).
 // Lượt đang chờ người dùng duyệt (tới 10 phút) thì nhả khóa sớm qua mcp.onPark: lúc đó CLI đã gọi tới cầu nối, tức là đã đọc xong cấu hình, nên lượt sau được ghi đè.
 // Lượt nào ghi cấu hình sau cùng mới được gỡ nó khi xong (configOwner), để lượt đang chờ duyệt không gỡ mất cầu nối của lượt đang chạy.
@@ -588,10 +591,39 @@ async function* revealText(raw: string, signal?: AbortSignal): AsyncGenerator<Ev
   }
   return true;
 }
+/** HOME riêng của lượt (turnhome.ts); null: tắt hoặc dựng lỗi (đã ghi nhật ký), lượt chạy theo cách cũ. */
+async function turnHome(cli: "agy" | "grok", req: TurnRequest, own: Parameters<typeof openTurnHome>[2]): Promise<TurnHome | null> {
+  if (!turnHomeOn() || !req.env?.HOME) return null;
+  const t0 = Date.now();
+  try {
+    const h = await openTurnHome(cli, req, own);
+    console.log(`[timing] turnhome ${cli} open=${Date.now() - t0} copied=${h.info.copied} linked=${h.info.linked}`);
+    return h;
+  } catch (e) {
+    console.warn(`[turnhome] ${cli}: không dựng được HOME riêng của lượt, dùng cấu hình chung và khóa tài khoản: ${redact((e as Error).message).slice(0, 200)}`);
+    return null;
+  }
+}
+
 export class AntigravityEngine implements Engine {
   readonly id = "agy";
   async *runTurn(req: TurnRequest): AsyncIterable<Event> {
     if (!req.mcp) { yield* this.turn(req); return; }
+    // Cầu nối và hook chỉ nằm trong HOME riêng của lượt: không xếp hàng sau lượt khác của tài khoản, không gỡ gì của ai khi xong.
+    const th = await turnHome("agy", req, {
+      ".gemini/config/mcp_config.json": { mode: "json-mcp", name: "synchro", entry: { disabled: false, serverUrl: req.mcp.url } },
+      ".gemini/config/hooks.json": { mode: "write", text: AGY_HOOK(req.web) },
+    });
+    if (th) {
+      try { yield { kind: "status" }; yield* this.turn({ ...req, env: th.env }); }
+      finally { void th.close(); }
+      return;
+    }
+    yield* this.shared(req);
+  }
+  /** Cách cũ: cầu nối trong cấu hình chung của tài khoản, các lượt có công cụ chạy lần lượt. */
+  private async *shared(req: TurnRequest): AsyncIterable<Event> {
+    if (!req.mcp) return;
     const free = yield* turnLock(agyLocks, String(req.env?.HOME ?? ""), req, "Antigravity");
     if (!free) return;
     const home = ownerKey("agy", String(req.env?.HOME ?? "")), url = req.mcp.url;
@@ -659,7 +691,7 @@ export class AntigravityEngine implements Engine {
     try { o = JSON.parse(t.slice(t.indexOf("{"))) as Json; } catch {}
     // Lượt bị dừng hoặc CLI không in gì: nhật ký của lượt không còn ai đọc, xóa để khỏi đọng tệp trong thư mục làm việc.
     if (!o) { if (log) await rmEngineFile(req, log).catch(() => {}); yield exitError("agy", p, e); return; }
-    if (typeof o.conversation_id === "string" && o.conversation_id) { if (req.env?.HOME) sessionSeen(req.env.HOME, o.conversation_id); yield { kind: "session", id: o.conversation_id }; }
+    if (typeof o.conversation_id === "string" && o.conversation_id) { if (req.env?.HOME) sessionSeen(turnHomeBase(req.env.HOME), o.conversation_id); yield { kind: "session", id: o.conversation_id }; }
     const u = (o.usage ?? {}) as Json;
     if (o.usage) yield { kind: "usage", usage: { input: num(u.input_tokens) ?? 0, output: (num(u.output_tokens) ?? 0) + (num(u.thinking_tokens) ?? 0), cacheRead: num(u.cache_read_tokens) } };
     if (o.status === "ERROR" || o.error || e.code !== 0) {
@@ -706,6 +738,24 @@ export class GrokEngine implements Engine {
   readonly id = "grok";
   async *runTurn(req: TurnRequest): AsyncIterable<Event> {
     if (!req.mcp) { yield* this.turn(req); return; }
+    // HOME riêng của lượt: config.toml của tài khoản (bỏ cầu nối cũ) rồi `grok mcp add` ghi cầu nối của lượt vào đó, đúng định dạng của Grok.
+    const th = await turnHome("grok", req, { ".grok/config.toml": { mode: "toml-drop", name: "synchro" } });
+    if (th) {
+      let ran = false;
+      try {
+        const treq = { ...req, env: th.env };
+        if (await grokRun(["mcp", "add", "--transport", "http", "synchro", req.mcp.url], treq).catch(() => false)) {
+          ran = true;
+          yield { kind: "status" };
+          yield* this.turn(treq);
+        } else console.warn("[turnhome] grok: lắp cầu nối vào HOME riêng không được, thử cách cũ");
+      } finally { void th.close(); }
+      if (ran) return;
+    }
+    yield* this.shared(req);
+  }
+  private async *shared(req: TurnRequest): AsyncIterable<Event> {
+    if (!req.mcp) return;
     const free = yield* turnLock(grokLocks, String(req.env?.HOME ?? ""), req, "Grok");
     if (!free) return;
     const home = ownerKey("grok", String(req.env?.HOME ?? "")), url = req.mcp.url;
@@ -770,7 +820,7 @@ export class GrokEngine implements Engine {
         if (classify(lastErr) === "auth") { p.kill(); done = true; yield err(lastErr, "auth"); break; }
       } else if (o.type === "end") {
         done = true;
-        if (typeof o.sessionId === "string" && o.sessionId) { if (req.env?.HOME) sessionSeen(req.env.HOME, o.sessionId); yield { kind: "session", id: o.sessionId }; }
+        if (typeof o.sessionId === "string" && o.sessionId) { if (req.env?.HOME) sessionSeen(turnHomeBase(req.env.HOME), o.sessionId); yield { kind: "session", id: o.sessionId }; }
         const u = (o.usage ?? {}) as Json;
         yield { kind: "usage", usage: { input: num(u.input_tokens) ?? num(u.prompt_tokens) ?? 0, output: (num(u.output_tokens) ?? num(u.completion_tokens) ?? 0) + (num(u.reasoning_tokens) ?? 0), cacheRead: num(u.cache_read_input_tokens) ?? num(u.cached_tokens), cacheWrite: num(u.cache_creation_input_tokens), costUsd: num(o.total_cost_usd) } };
         // Lỗi là điều cuối cùng CLI nói, kể cả khi đã có chữ: câu trả lời bị cắt ngang, không được hiện như đã xong và không được tính là lượt tốt (Tự động còn chuyển model được).
