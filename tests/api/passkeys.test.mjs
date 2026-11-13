@@ -6,6 +6,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { loadTs } from "../lib/ts.mjs";
+import { authenticator, b64u } from "../lib/fake-passkey.mjs";
 
 let pass = 0, fail = 0;
 const ok = (c, n, x = "") => { c ? pass++ : fail++; console.log(c ? "  ✓" : "  ✗", n, c ? "" : String(typeof x === "string" ? x : JSON.stringify(x)).slice(0, 500)); };
@@ -17,47 +18,6 @@ const req = (p, cookie, body, origin = B) => new Request(B + p, { method: body ?
 const cookies = (r) => (r.headers.getSetCookie?.() ?? []).map((c) => c.split(";")[0]);
 const api = async (cookie, body) => { const r = await R.POST(req("/api/auth/passkey", cookie, body)); return { r, j: await r.json(), ck: cookies(r) }; };
 
-// ---- CBOR tối thiểu (số nguyên, chuỗi byte, chuỗi chữ, map) ----
-const head = (major, n) => n < 24 ? Buffer.from([(major << 5) | n]) : n < 256 ? Buffer.from([(major << 5) | 24, n]) : (() => { const b = Buffer.alloc(3); b[0] = (major << 5) | 25; b.writeUInt16BE(n, 1); return b; })();
-function cbor(v) {
-  if (typeof v === "number") return v >= 0 ? head(0, v) : head(1, -1 - v);
-  if (Buffer.isBuffer(v)) return Buffer.concat([head(2, v.length), v]);
-  if (typeof v === "string") { const b = Buffer.from(v, "utf8"); return Buffer.concat([head(3, b.length), b]); }
-  if (v instanceof Map) return Buffer.concat([head(5, v.size), ...[...v].flatMap(([k, x]) => [cbor(k), cbor(x)])]);
-  throw new Error("cbor: " + typeof v);
-}
-const b64u = (b) => Buffer.from(b).toString("base64url");
-const sha = (b) => crypto.createHash("sha256").update(b).digest();
-
-/** Thiết bị giả: một khóa P-256, bộ đếm chữ ký, userHandle. */
-function authenticator() {
-  const { privateKey, publicKey } = crypto.generateKeyPairSync("ec", { namedCurve: "P-256" });
-  const jwk = publicKey.export({ format: "jwk" });
-  const credId = crypto.randomBytes(32);
-  const cose = cbor(new Map([[1, 2], [3, -7], [-1, 1], [-2, Buffer.from(jwk.x, "base64url")], [-3, Buffer.from(jwk.y, "base64url")]]));
-  let counter = 0, userHandle = "";
-  const count = (n) => { const b = Buffer.alloc(4); b.writeUInt32BE(n); return b; };
-  return {
-    id: b64u(credId),
-    get counter() { return counter; },
-    register(opts, { origin = B, rpId = "localhost" } = {}) {
-      userHandle = opts.user.id;
-      const cd = Buffer.from(JSON.stringify({ type: "webauthn.create", challenge: opts.challenge, origin, crossOrigin: false }));
-      const len = Buffer.alloc(2); len.writeUInt16BE(credId.length);
-      const authData = Buffer.concat([sha(rpId), Buffer.from([0x45]), count(counter), Buffer.alloc(16), len, credId, cose]);
-      const att = cbor(new Map([["fmt", "none"], ["attStmt", new Map()], ["authData", authData]]));
-      return { id: b64u(credId), rawId: b64u(credId), type: "public-key", clientExtensionResults: {}, authenticatorAttachment: "platform", response: { clientDataJSON: b64u(cd), attestationObject: b64u(att), transports: ["internal"] } };
-    },
-    assert(opts, { origin = B, rpId = "localhost", uv = true, at, handle } = {}) {
-      counter = at ?? counter + 1;
-      const cd = Buffer.from(JSON.stringify({ type: "webauthn.get", challenge: opts.challenge, origin, crossOrigin: false }));
-      const authData = Buffer.concat([sha(rpId), Buffer.from([uv ? 0x05 : 0x01]), count(counter)]);
-      const sig = crypto.sign("sha256", Buffer.concat([authData, sha(cd)]), privateKey);
-      return { id: b64u(credId), rawId: b64u(credId), type: "public-key", clientExtensionResults: {}, response: { clientDataJSON: b64u(cd), authenticatorData: b64u(authData), signature: b64u(sig), userHandle: handle ?? userHandle } };
-    },
-  };
-}
-
 const PW = "Mat-khau-dung-123";
 const u = AS.createUser({ email: "pk@synchro.test", name: "PK", verified: true, passwordHash: await AS.hashPassword(PW) });
 const loginPw = async () => { const r = await L.POST(req("/api/auth/login", "", { email: u.email, password: PW })); return { r, j: await r.json(), ck: cookies(r) }; };
@@ -68,7 +28,7 @@ try {
   ok((await api("", { op: "reg-options" })).r.status === 401, "chưa đăng nhập: không thêm khóa được");
 
   // ---- đăng ký ----
-  const dev = authenticator();
+  const dev = authenticator({ origin: B });
   let { r, j } = await api(sess, { op: "reg-options" });
   ok(r.status === 200 && j.rp?.id === "localhost" && j.rp?.name === "Synchro" && j.attestation === "none" && j.authenticatorSelection?.residentKey === "required" && j.challenge, "tùy chọn đăng ký: rpID theo APP_URL, attestation none, khóa lưu trên thiết bị", j);
   ok(Buffer.from(j.user.id, "base64url").toString() === u.id, "userHandle là mã tài khoản", j.user);
@@ -83,7 +43,7 @@ try {
   // Thử thách cấp cho tài khoản A không dùng được cho tài khoản B.
   const u2 = AS.createUser({ email: "pk2@synchro.test", name: "PK2", verified: true, passwordHash: await AS.hashPassword(PW) });
   const s2 = AS.createSession(u2, req("/"), "password").split(";")[0];
-  const dev2 = authenticator();
+  const dev2 = authenticator({ origin: B });
   ({ j } = await api(sess, { op: "reg-options" }));
   ({ r } = await api(s2, { op: "register", response: dev2.register(j) }));
   ok(r.status === 400 && P.listPasskeys(u2.id).length === 0, "thử thách của tài khoản khác: từ chối", r.status);
@@ -156,7 +116,7 @@ try {
   // Tài khoản chỉ còn khóa truy cập: không xóa được khóa cuối cùng.
   const u3 = AS.createUser({ email: "pk3@synchro.test", name: "PK3", verified: true });
   const s3 = AS.createSession(u3, req("/"), "google").split(";")[0];
-  const dev3 = authenticator();
+  const dev3 = authenticator({ origin: B });
   ({ j } = await api(s3, { op: "reg-options" }));
   ({ r } = await api(s3, { op: "register", response: dev3.register(j) }));
   ok(r.status === 200, "tài khoản không mật khẩu vẫn thêm khóa được", r.status);

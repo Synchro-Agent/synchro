@@ -105,10 +105,12 @@ try {
   console.log("4. Xác minh hai bước trên tài khoản chưa xác minh email");
   {
     const u = await mkUser({ verified: false });
-    ok((await throws(() => M.startMfa(u)))?.status === 403 && (await throws(() => M.confirmMfa(u, "000000")))?.status === 403, "chưa xác minh: không bật được");
+    ok((await throws(() => M.startMfa(u, { id: "phien-" + u.id })))?.status === 403 && (await throws(() => M.confirmMfa(u, "000000")))?.status === 403, "chưa xác minh: không bật được");
     const v = await mkUser();
-    AS.markReauth(v.id); // bật 2FA cần vừa xác minh lại (step-up); tài khoản tạo thẳng trong test chưa có phiên đăng nhập
-    const s = M.startMfa(v);
+    // Bật 2FA cần phiên vừa xác minh lại (step-up, mốc theo từng phiên); tài khoản tạo thẳng trong test chưa có phiên đăng nhập: dùng một mã phiên giả.
+    const vs = { id: "phien-" + v.id };
+    AS.markReauth(vs.id);
+    const s = M.startMfa(v, vs);
     ok(/^[A-Z2-7]{32}$/.test(s.secret), "đã xác minh: bật được như cũ");
     const tok = pending(v);
     M.confirmMfa(v, M.totpAt(s.secret, Math.floor(Date.now() / 30_000)));

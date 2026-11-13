@@ -8,7 +8,7 @@ import {
   generateAuthenticationOptions, generateRegistrationOptions, verifyAuthenticationResponse, verifyRegistrationResponse,
   type AuthenticationResponseJSON, type RegistrationResponseJSON,
 } from "@simplewebauthn/server";
-import { AuthError, appUrl, audit, clientIp, db, device, getUser, limit, markReauth, needsVerify, passkeySignIn, requireRecentReauth, VERIFY_FIRST, type UserRow } from "./authstore";
+import { AuthError, allowedOriginHosts, appUrl, audit, clientIp, db, device, getUser, limit, markReauth, needsVerify, passkeySignIn, requireRecentReauth, VERIFY_FIRST, type SessionRow, type UserRow } from "./authstore";
 
 const MIN = 60_000;
 const CHALLENGE_TTL = 5 * MIN;
@@ -29,10 +29,21 @@ function t() {
   return d;
 }
 
-/** Nơi Synchro chạy: rpID là tên máy, origin là địa chỉ đầy đủ. APP_URL đặt cố định ở máy chủ thật, nên Host giả mạo không đổi được hai giá trị này. */
+/** Nơi Synchro chạy: rpID là tên máy của APP_URL (tên miền gốc, vd. synchro.net.nz), origins là các địa chỉ đầy đủ được nhận trong câu trả lời
+ *  của trình duyệt (clientDataJSON.origin). APP_URL đặt cố định ở máy chủ thật, nên Host giả mạo không đổi được các giá trị này.
+ *  origins = địa chỉ của APP_URL, cộng bản https của mọi tên máy mà sameOrigin nhận (allowedOriginHosts: bản www, SYNCHRO_ALLOWED_ORIGINS)
+ *  NẾU tên máy đó là rpID hoặc tên miền con của rpID — chỉ những trang đó trình duyệt mới cho dùng khóa của rpID. Thiếu bước này thì trang
+ *  www.synchro.net.nz qua được kiểm tra CSRF nhưng mọi thao tác khóa truy cập ở đó đều hỏng vì sai nguồn gốc. */
 export function relyingParty(req: Request) {
   const u = new URL(process.env.APP_URL || appUrl(req));
-  return { rpID: u.hostname, origin: u.origin };
+  const rpID = u.hostname, origins = [u.origin];
+  for (const h of allowedOriginHosts()) {
+    let o: URL;
+    try { o = new URL(`https://${h}`); } catch { continue; }
+    if (o.host === u.host) continue; // chính APP_URL: đã có, đúng giao thức của nó
+    if ((o.hostname === rpID || o.hostname.endsWith("." + rpID)) && !origins.includes(o.origin)) origins.push(o.origin);
+  }
+  return { rpID, origins };
 }
 
 // ---- thử thách: bộ nhớ trong (app chạy một tiến trình), dùng một lần ----
@@ -59,11 +70,11 @@ export const listPasskeys = (uid: string) => (t().prepare("SELECT * FROM user_pa
 export const hasPasskey = (uid: string) => { try { return !!t().prepare("SELECT 1 FROM user_passkeys WHERE user_id = ? LIMIT 1").get(uid); } catch { return false; } };
 
 // ---- đăng ký (tài khoản đang đăng nhập) ----
-export async function registrationOptions(req: Request, u: UserRow) {
+export async function registrationOptions(req: Request, u: UserRow, session: SessionRow) {
   // Email chưa xác minh có thể là của người khác: người đăng ký trước không được cài sẵn đường vào tài khoản của chủ thật.
   if (needsVerify(u)) throw new AuthError(VERIFY_FIRST, 403);
   // Thêm khóa truy cập là hành động nhạy cảm: cần vừa xác minh lại (đăng nhập / mật khẩu) trong 5 phút.
-  requireRecentReauth(u);
+  requireRecentReauth(session);
   limit("passkey-reg:" + u.id, 20, 15 * MIN);
   const mine = t().prepare("SELECT id, transports FROM user_passkeys WHERE user_id = ?").all(u.id) as { id: string; transports: string }[];
   if (mine.length >= MAX_KEYS) throw new AuthError("Mỗi tài khoản có tối đa 20 khóa truy cập. Hãy xóa bớt khóa không dùng nữa.", 400);
@@ -81,15 +92,15 @@ export async function registrationOptions(req: Request, u: UserRow) {
 
 const cleanName = (v: unknown) => (typeof v === "string" ? v.normalize("NFC").replace(/\s+/g, " ").trim().slice(0, 60) : "");
 
-export async function registerPasskey(req: Request, u: UserRow, response: unknown, name?: unknown) {
+export async function registerPasskey(req: Request, u: UserRow, session: SessionRow, response: unknown, name?: unknown) {
   if (needsVerify(u)) throw new AuthError(VERIFY_FIRST, 403);
-  requireRecentReauth(u);
+  requireRecentReauth(session);
   const resp = response as RegistrationResponseJSON;
   const challenge = take(resp?.response?.clientDataJSON, "reg", u.id);
-  const { rpID, origin } = relyingParty(req);
+  const { rpID, origins } = relyingParty(req);
   let v;
   try {
-    v = await verifyRegistrationResponse({ response: resp, expectedChallenge: challenge, expectedOrigin: origin, expectedRPID: rpID, requireUserVerification: false });
+    v = await verifyRegistrationResponse({ response: resp, expectedChallenge: challenge, expectedOrigin: origins, expectedRPID: rpID, requireUserVerification: false });
   } catch (e) {
     audit("passkey_add_failed", { actor: u, ip: clientIp(req), detail: String((e as Error).message ?? e).slice(0, 200) });
     throw new AuthError("Không thêm được khóa truy cập. Hãy thử lại.", 400);
@@ -148,11 +159,11 @@ export async function loginWithPasskey(req: Request, response: unknown) {
   // userHandle (nếu có) phải trùng chủ của khóa: khóa của tài khoản này không đăng nhập được vào tài khoản khác.
   if (resp.response.userHandle && Buffer.from(resp.response.userHandle, "base64url").toString("utf8") !== u.id) { audit("login_failed", { target: u, ip, detail: "passkey: user" }); throw new AuthError(BAD_LOGIN, 401); }
   limit(`passkey-user:${u.id}`, 30, 15 * MIN);
-  const { rpID, origin } = relyingParty(req);
+  const { rpID, origins } = relyingParty(req);
   let v;
   try {
     v = await verifyAuthenticationResponse({
-      response: resp, expectedChallenge: challenge, expectedOrigin: origin, expectedRPID: rpID, requireUserVerification: false,
+      response: resp, expectedChallenge: challenge, expectedOrigin: origins, expectedRPID: rpID, requireUserVerification: false,
       credential: { id: r.id, publicKey: new Uint8Array(r.public_key), counter: r.counter, transports: JSON.parse(r.transports) },
     });
   } catch (e) {
@@ -178,18 +189,18 @@ export async function reauthOptions(req: Request, u: UserRow) {
   issue(opts.challenge, { kind: "reauth", uid: u.id });
   return opts;
 }
-export async function reauthWithPasskey(req: Request, u: UserRow, response: unknown) {
+export async function reauthWithPasskey(req: Request, u: UserRow, session: SessionRow, response: unknown) {
   limit("passkey-reauth:" + u.id, 20, 15 * MIN);
   const resp = response as AuthenticationResponseJSON;
   const challenge = take(resp?.response?.clientDataJSON, "reauth", u.id);
   const r = typeof resp?.id === "string" && resp.id.length <= 1400 ? t().prepare("SELECT * FROM user_passkeys WHERE id = ? AND user_id = ?").get(resp.id, u.id) as Row | undefined : undefined;
   const bad = () => new AuthError("Không xác minh được khóa truy cập. Hãy thử lại.", 400);
   if (!r) throw bad();
-  const { rpID, origin } = relyingParty(req);
+  const { rpID, origins } = relyingParty(req);
   let v;
   try {
     v = await verifyAuthenticationResponse({
-      response: resp, expectedChallenge: challenge, expectedOrigin: origin, expectedRPID: rpID, requireUserVerification: false,
+      response: resp, expectedChallenge: challenge, expectedOrigin: origins, expectedRPID: rpID, requireUserVerification: false,
       credential: { id: r.id, publicKey: new Uint8Array(r.public_key), counter: r.counter, transports: JSON.parse(r.transports) },
     });
   } catch (e) {
@@ -198,7 +209,7 @@ export async function reauthWithPasskey(req: Request, u: UserRow, response: unkn
   }
   if (!v.verified) throw bad();
   t().prepare("UPDATE user_passkeys SET counter = ?, last_used_at = ? WHERE id = ?").run(v.authenticationInfo.newCounter, Date.now(), r.id);
-  markReauth(u.id);
+  markReauth(session.id); // chỉ phiên đang gọi được tính là vừa xác minh
 }
 
 /** Cho kiểm thử: số thử thách còn chờ (để chắc thử thách đã dùng bị xóa). */
