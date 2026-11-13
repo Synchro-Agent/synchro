@@ -11,7 +11,8 @@
 //   ra từ chính biểu tượng, như chữ "synchro" mở ra từ mark ở cuối phim). Bỏ qua giữa phim: phim mờ đi, logo hiện lên đúng chỗ đó rồi bay.
 // - Phụ đề tiếng Việt cho các dòng chữ tiếng Anh trong phim (giao diện tiếng Việt), nằm trong dải đen dưới phim nếu có chỗ.
 // - Trình duyệt chặn tự phát có tiếng: phát không tiếng, hiện nút Bật tiếng. Giảm chuyển động: không tự phát, không nở / tách, chỉ mờ dần.
-// - Bản 720p (4 MB) cho màn hẹp / tiết kiệm dữ liệu, 1080p (19 MB) cho màn lớn; tải trước từ lúc hiện lời chào (preloadIntro).
+// - Luôn mở bằng bản 720p (4 MB); lúc hiện lời chào chỉ tải phần đầu tệp (preload="metadata", preloadIntro), phim gắn vào thì mới tải hết.
+//   Chỉ khi phim vào chế độ toàn màn hình trên màn lớn mới đổi sang bản 1080p (19 MB), giữ nguyên vị trí đang phát (blueprint B3.5).
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Loader, Mark, Wordmark } from "./brand";
 import { assemble, boxOf, center, fly as flyTo, markTarget, onScreen, openHole, reducedMotion, settleApp, type Box } from "./handoff";
@@ -35,13 +36,21 @@ const vignette = () => {
 
 // Một thẻ video dùng chung: tải từ lúc hiện lời chào, màn phim gắn chính thẻ này vào nên phần đã tải không mất.
 let shared: HTMLVideoElement | null = null;
+const SRC_720 = "/intro/synchro-intro-720.mp4", SRC_1080 = "/intro/synchro-intro.mp4";
+/** Toàn màn hình trên màn lớn (không tiết kiệm dữ liệu): đổi sang bản 1080p, giữ vị trí đang phát và trạng thái phát / dừng. */
+function hiRes(v: HTMLVideoElement) {
+  const conn = (navigator as Navigator & { connection?: { saveData?: boolean } }).connection;
+  if (!document.fullscreenElement || conn?.saveData || screen.width < 1280 || v.currentSrc.endsWith(SRC_1080)) return;
+  const t = v.currentTime, playing = !v.paused;
+  v.preload = "auto";
+  v.src = SRC_1080;
+  v.addEventListener("loadedmetadata", () => { try { v.currentTime = t; } catch {} if (playing) v.play().catch(() => {}); }, { once: true });
+}
 export function preloadIntro() {
   if (shared || typeof document === "undefined") return shared;
   const v = document.createElement("video");
-  const conn = (navigator as Navigator & { connection?: { saveData?: boolean } }).connection;
-  const small = innerWidth < 900 || innerHeight < 560 || !!conn?.saveData;
-  v.src = small ? "/intro/synchro-intro-720.mp4" : "/intro/synchro-intro.mp4";
-  v.preload = "auto";
+  v.src = SRC_720;
+  v.preload = "metadata";
   v.playsInline = true;
   v.setAttribute("playsinline", "");
   v.className = "intro-v";
@@ -121,6 +130,10 @@ export function IntroFilm({ uid, onCovered, onReveal, onDone }: { uid: string; o
     const v = preloadIntro()!;
     video.current = v;
     host.current?.appendChild(v);
+    // Phim sắp phát: tải hết bản 720p (lúc hiện lời chào chỉ tải phần đầu).
+    v.preload = "auto";
+    const fs = () => hiRes(v);
+    document.addEventListener("fullscreenchange", fs);
     v.muted = false; v.volume = 0;
     let raf = 0;
     const tick = () => {
@@ -137,7 +150,7 @@ export function IntroFilm({ uid, onCovered, onReveal, onDone }: { uid: string; o
     v.addEventListener("ended", ended); v.addEventListener("error", failed);
     const vis = () => { if (leaving.current) return; if (document.hidden) v.pause(); else if (!pausedRef.current && phaseRef.current === "play") v.play().catch(() => {}); };
     document.addEventListener("visibilitychange", vis);
-    return () => { cancelAnimationFrame(raf); v.removeEventListener("ended", ended); v.removeEventListener("error", failed); document.removeEventListener("visibilitychange", vis); v.pause(); v.remove(); shared = null; };
+    return () => { document.removeEventListener("fullscreenchange", fs); cancelAnimationFrame(raf); v.removeEventListener("ended", ended); v.removeEventListener("error", failed); document.removeEventListener("visibilitychange", vis); v.pause(); v.remove(); shared = null; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const phaseRef = useRef(phase); phaseRef.current = phase;

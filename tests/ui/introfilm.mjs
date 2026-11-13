@@ -111,7 +111,8 @@ try {
   const st = await ev(`(() => { const v = document.querySelector(".intro-v"); return { t: v.currentTime, paused: v.paused, muted: v.muted, src: v.currentSrc.split("/").pop(), op: getComputedStyle(document.querySelector(".intro-host")).opacity }; })()`);
   ok(st.t > 1.5 && !st.paused && st.op === "1", "phim đang phát và đã hiện hẳn", JSON.stringify(st));
   ok(!st.muted, "phát có tiếng (người dùng vừa thao tác trên trang)", JSON.stringify(st));
-  ok(st.src === "synchro-intro.mp4", "màn rộng dùng bản 1080p", st.src);
+  // B3.5: luôn mở bằng bản 720p; chỉ đổi sang 1080p khi phim vào chế độ toàn màn hình (phim không bắt buộc toàn màn hình).
+  ok(st.src === "synchro-intro-720.mp4", "màn rộng vẫn mở bằng bản 720p (1080p chỉ khi toàn màn hình)", st.src);
   const cap = await ev(`document.querySelector(".intro-cap")?.textContent ?? ""`);
   ok(/Claude, ChatGPT, Gemini, Grok và DeepSeek/.test(cap), "phụ đề tiếng Việt theo cảnh", cap);
   ok(await ev(`getComputedStyle(document.querySelector(".intro-btn.skip")).opacity === "1"`), "nút Bỏ qua đã hiện");
