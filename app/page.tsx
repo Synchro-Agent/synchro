@@ -691,7 +691,7 @@ function Composer(p: {
                       const note = k.state === "unlinked" ? "Chưa liên kết" : k.state === "blocked" ? "Không được phép" : live ? "" : "Cần liên kết lại";
                       return (
                         <div className="menu-item cm-conn cm-cx">
-                          <ConnLogo logo="composio" color="#5B4BDB" name="Composio" size={20} /><span className="cv-ell" data-notr>Composio</span>{note && <span className="cm-cnt">{note}</span>}
+                          <ConnLogo logo="composio" color="#5B4BDB" name="Composio" size={20} /><span className="cv-ell" data-notr>Composio</span>{note && <span className={`cm-cnt${k.state !== "blocked" ? " cm-dup" : ""}`} title={note}>{note}</span>}
                           {live && c
                             ? <button className={`toggle ${on ? "on" : ""}`} role="switch" aria-checked={on} aria-label={`${on ? "Tắt" : "Bật"} Composio`} onClick={() => cxPatch(c.id, { enabled: !c.enabled })} />
                             : <button className="cn-link cm-rec" onClick={() => { setMenu(false); setSub(null); (p.goConnectors ?? p.goCustom)(); }}>{k.state === "blocked" ? "Xem" : "Liên kết"}</button>}

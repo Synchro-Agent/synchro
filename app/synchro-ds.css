@@ -1019,8 +1019,14 @@ html body .menu .cm-conn>.cn-logo:first-child{margin-right:-4px}
 /* Không có số ứng dụng thì nút bật / tắt vẫn đứng sát mép phải như các connector khác. */
 .cm-cx .toggle,.cm-cx .cm-rec{margin-left:auto}
 .cm-cx .cm-cnt~.toggle,.cm-cx .cm-cnt~.cm-rec{margin-left:10px}
+/* LIVE-10: tên Composio được ưu tiên; ghi chú trạng thái co lại (dấu …) trước khi tên bị cắt. */
+.cm-cx>.cv-ell{flex:none}
+.cm-cx .cm-cnt{flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis}
 @media (max-width:640px){
   html body .menu.cm-fly{left:0;right:0;bottom:0;width:auto}
+  /* Menu hẹp (390px): "Chưa liên kết" / "Cần liên kết lại" trùng ý với nút "Liên kết" ngay cạnh nên ẩn đi, nút về sát mép phải. */
+  .cm-cx .cm-cnt.cm-dup{display:none}
+  .cm-cx .cm-cnt.cm-dup~.cm-rec{margin-left:auto}
   .cm-back{display:flex!important;font-weight:560}
 }
 /* Skill người dùng chọn cho tin nhắn: nhãn viên thuốc trong ô soạn và trên tin nhắn đã gửi. */
