@@ -142,6 +142,18 @@ const mdChat = {
   ],
 };
 const SEEDS = [mdChat, ...fillers];
+const SEED_IDS = SEEDS.map((c) => c.id);
+// Dọn dữ liệu mẫu khi xong (kể cả khi lỗi giữa chừng): mỗi lần chạy gieo 25 đoạn chat id mới vào tài khoản quản trị dùng chung, không dọn thì
+// danh sách và thanh phân trang của audit.mjs, popovers.mjs, skeletons… cứ dài thêm sau mỗi lần chạy. Bỏ khỏi bộ nhớ của trình duyệt (để app
+// không đẩy lại lên máy chủ) rồi xóa trên máy chủ qua đường đồng bộ của app (PUT /api/chats, deleted), như người dùng xóa đoạn chat.
+const unseedBrowser = () => ev(`(() => { const k = "u:${uid}:chats", ids = new Set(${JSON.stringify(SEED_IDS)}); try { const cur = JSON.parse(localStorage.getItem(k) || "[]"); localStorage.setItem(k, JSON.stringify(cur.filter((c) => !ids.has(c.id)))); } catch {} return true; })()`);
+const unseedServer = async () => {
+  const r = await fetch(B + "/api/chats", { method: "PUT", headers: { cookie, origin: B, "content-type": "application/json" }, body: JSON.stringify({ items: SEED_IDS.map((id) => ({ kind: "chat", id: String(id), upd: Date.now(), deleted: true })) }) });
+  const j = await r.json().catch(() => null);
+  const left = (j?.results ?? []).filter((x) => !x.ok || !x.deleted).map((x) => x.id);
+  if (!r.ok || left.length || (j?.results?.length ?? 0) !== SEED_IDS.length) console.log(`  (cảnh báo: chưa xóa hết đoạn chat mẫu trên máy chủ: ${r.status} ${left.join(",")})`);
+  else console.log(`  (đã xóa ${SEED_IDS.length} đoạn chat mẫu)`);
+};
 const row = (title) => `[...document.querySelectorAll(".chat-wrap")].find((w) => w.querySelector(".ct-t")?.textContent === ${JSON.stringify(title)})`;
 const panelSel = (size) => (size === "mobile" ? ".app>.shell-side" : ".app aside.sidebar");
 const isClosed = `!!document.querySelector(".shell-side.closed")`;
@@ -490,8 +502,11 @@ try {
   });
 } finally {
   if (jsErr.length) console.log(`\n(lỗi JavaScript trên trang: ${[...new Set(jsErr)].slice(0, 5).join(" | ")})`);
+  await unseedBrowser().catch(() => {});
   try { ws.close(); } catch { /* đã đóng */ }
   chrome.kill();
+  // Sau khi đóng Chrome: trình duyệt không còn đẩy lại bản cũ lên máy chủ.
+  await unseedServer().catch((e) => console.log(`  (cảnh báo: không xóa được đoạn chat mẫu: ${e.message})`));
 }
 console.log(`\n${pass} đạt, ${fail} lỗi${skip ? `, ${skip} bỏ qua` : ""}`);
 process.exit(fail ? 1 : 0);
