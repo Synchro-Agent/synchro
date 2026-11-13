@@ -27,15 +27,19 @@ const realTotalMB = (() => {
     return (v = Number.isFinite(t) && t > 0 ? t : 0);
   };
 })();
-// Trần số việc chạy cùng lúc tính theo RAM thật: chừa 2,5 GB cho hệ điều hành + máy chủ web, chia nửa phần còn lại cho workspace
-// (mỗi cái perMB) và nửa cho lần chạy code. Kẹp trong [min, max] để một phép tính sai không làm quá tải máy 8 GB; đo RAM hỏng (= 0)
-// thì về đúng mặc định cũ. envKey đặt tay thì theo người vận hành.
-const ramSlots = (envKey, perMB, fallback, min, max) => {
+// Ngân sách RAM (MB) chừa cho hệ điều hành + máy chủ web; phần còn lại = tổng − chừa là ngân sách chung của mọi hồ chạy. Giống
+// SYNCHRO_SERVER_RESERVE_MB ở app/turngate.ts để trừ CHỈ MỘT LẦN (trước đây cả turngate lẫn file này cùng trừ 2,5 GB rồi mỗi bên lại
+// lấy một phần → trên máy 8 GB bị chừa hai lần và bóp nhỏ số luồng).
+const SERVER_RESERVE_MB = Number(env("SYNCHRO_SERVER_RESERVE_MB", 2560));
+// Trần số việc chạy cùng lúc theo RAM thật: ngân sách chung (tổng − chừa) được CHIA MỘT LẦN cho ba hồ nên RAM của chúng cộng lại không
+// vượt ngân sách — CLI model lấy 0,5 (app/turngate.ts), workspace lấy 0,3, chạy code lấy 0,2 (tổng = 1). Phần của mỗi hồ chia tiếp cho perMB
+// một việc. Kẹp [min, max] để một phép tính sai không làm quá tải máy 8 GB; đo RAM hỏng (= 0) thì về đúng mặc định cũ. envKey đặt tay thì theo.
+const ramSlots = (envKey, perMB, share, fallback, min, max) => {
   const raw = process.env[envKey];
   if (raw !== undefined && Number.isFinite(Number(raw)) && Number(raw) > 0) return Number(raw);
   const total = realTotalMB();
   if (!total) return fallback;
-  return Math.max(min, Math.min(max, Math.floor((total - 2560) * 0.5 / perMB)));
+  return Math.max(min, Math.min(max, Math.floor((total - SERVER_RESERVE_MB) * share / perMB)));
 };
 const PORT = Number(env("WS_AGENT_PORT", 3555));
 const HOST = env("WS_AGENT_HOST", "127.0.0.1");
@@ -54,8 +58,8 @@ const RUN_BRIDGE = "br-synchro-run";
 const RUN_SUBNET = env("WS_RUN_SUBNET", "172.29.0.0/24");
 const RUN_GW = env("WS_RUN_GATEWAY", "172.29.0.1");
 const RUN_PROXY_PORT = Number(env("WS_RUN_PROXY_PORT", 3556));
-// Mỗi lần chạy code dùng RUN_MEMORY (2g): trần theo RAM thật, kẹp [1, 24], mặc định cũ 3 khi không đo được. WS_RUN_MAX đặt tay thì theo.
-const RUN_MAX = ramSlots("WS_RUN_MAX", 2048, 3, 1, 24);
+// Mỗi lần chạy code dùng RUN_MEMORY (2g): trần theo phần 0,2 ngân sách chung, kẹp [1, 24], mặc định cũ 3 khi không đo được. WS_RUN_MAX đặt tay thì theo.
+const RUN_MAX = ramSlots("WS_RUN_MAX", 2048, 0.2, 3, 1, 24);
 // Bộ nhớ một lần chạy cần (MB) để không bật container khi máy sắp hết RAM (tránh OOM cả máy chủ): mức RUN_MEMORY cộng chút đệm.
 const memMB = (s, d) => { const m = /^(\d+)\s*([gm])?/i.exec(String(s ?? "")); return m ? Math.round(Number(m[1]) * (/(g)/i.test(m[2] ?? "") ? 1024 : 1)) : d; };
 // Sàn RAM khả dụng trước khi bật một container chạy code; WS_RUN_FLOOR_MB đặt tay thì theo, không thì = RUN_MEMORY + 256. Thời gian chờ RAM rảnh trước khi báo bận.
@@ -96,8 +100,8 @@ const PKG_HOSTS = ["pypi.org", "files.pythonhosted.org", "pythonhosted.org", "re
   "crates.io", "index.crates.io", "static.crates.io", "proxy.golang.org", "sum.golang.org", "conda.anaconda.org", "repo.anaconda.com",
   "github.com", "codeload.github.com", "objects.githubusercontent.com", "deb.debian.org", "security.debian.org", "archive.ubuntu.com", "security.ubuntu.com",
   "speech.platform.bing.com", "translate.google.com"];
-// Mỗi workspace dùng MEMORY (1536m): trần số workspace chạy cùng lúc theo RAM thật, kẹp [2, 32], mặc định cũ 4 khi không đo được. WS_MAX_RUNNING đặt tay thì theo.
-const MAX_RUNNING = ramSlots("WS_MAX_RUNNING", 1536, 4, 2, 32);
+// Mỗi workspace dùng MEMORY (1536m): trần số workspace chạy cùng lúc theo phần 0,3 ngân sách chung, kẹp [2, 32], mặc định cũ 4 khi không đo được. WS_MAX_RUNNING đặt tay thì theo.
+const MAX_RUNNING = ramSlots("WS_MAX_RUNNING", 1536, 0.3, 4, 2, 32);
 const IDLE_MS = Number(env("WS_IDLE_MIN", 20)) * 60_000;
 const MEMORY = env("WS_MEMORY", "1536m");
 // Mọi CPU của máy (đọc lúc dịch vụ khởi động, nâng VPS xong là tự dùng thêm): trình duyệt của Synchro vẽ / chụp khung 2x tốn ~90 ms CPU
@@ -845,7 +849,7 @@ process.on("SIGTERM", async () => {
 
 setupHost().catch((e) => log("setup", e)).then(() => cleanRuns()).catch((e) => log("dọn lần chạy cũ", e)).finally(() => {
   server.listen(PORT, HOST, () => log(`workspace agent nghe tại ${HOST}:${PORT}`));
-  log(`[timing] mem trần theo RAM: ${realTotalMB() || "?"} MB → MAX_RUNNING=${MAX_RUNNING} (workspace), RUN_MAX=${RUN_MAX} (chạy code)`);
+  log(`[timing] mem trần theo RAM: ${realTotalMB() || "?"} MB, chừa ${SERVER_RESERVE_MB} MB, ngân sách chung ${realTotalMB() ? realTotalMB() - SERVER_RESERVE_MB : "?"} MB → MAX_RUNNING=${MAX_RUNNING} (workspace ×0,3), RUN_MAX=${RUN_MAX} (chạy code ×0,2)`);
   startProxy();
   warm.start();
 });

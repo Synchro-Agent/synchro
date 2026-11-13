@@ -19,8 +19,9 @@ const totalMB = Math.round(os.totalmem() / 1048576);
 console.log("1. Mức cả máy tính theo RAM thật, kẹp [4, 64]");
 {
   const g = await loadGate({ SYNCHRO_SERVER_RESERVE_MB: "2560", SYNCHRO_CLI_BUDGET_MB: "400" });
-  const want = Math.max(4, Math.min(64, Math.floor((totalMB - 2560) / 400)));
-  ok(g.globalLimit() === want, `globalLimit khớp công thức floor((${totalMB}-2560)/400) kẹp [4,64] = ${want}`, g.globalLimit());
+  // Hồ CLI chỉ lấy phần 0,5 của ngân sách chung (tổng − chừa), không lấy cả ngân sách: khớp CLI_SHARE ở turngate.ts.
+  const want = Math.max(4, Math.min(64, Math.floor((totalMB - 2560) * 0.5 / 400)));
+  ok(g.globalLimit() === want, `globalLimit khớp công thức floor((${totalMB}-2560)×0,5/400) kẹp [4,64] = ${want}`, g.globalLimit());
   ok(Number.isInteger(g.globalLimit()) && g.globalLimit() >= 4 && g.globalLimit() <= 64, "luôn là số nguyên trong [4, 64]", g.globalLimit());
 }
 

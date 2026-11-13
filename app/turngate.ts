@@ -27,16 +27,20 @@ function realTotalMB(): number {
   return totalMbCached;
 }
 // Mức cả máy tính theo RAM thật, không theo ước lượng 70% nữa: chừa SYNCHRO_SERVER_RESERVE_MB (mặc định 2,5 GB) cho hệ điều hành và
-// máy chủ web (khớp dòng [timing] mem rss của Next ~1 GB cộng khoảng chạy), phần còn lại chia cho ngân sách RSS mỗi CLI
+// máy chủ web (khớp dòng [timing] mem rss của Next ~1 GB cộng khoảng chạy). Phần còn lại (ngân sách = tổng − chừa) được CHIA MỘT LẦN cho
+// ba hồ chạy trên cùng máy để RAM của chúng cộng lại không vượt ngân sách: hồ CLI model này lấy CLI_SHARE, workspace lấy 0,3 và chạy code
+// lấy 0,2 (hai phần sau ở workspace/agent.mjs → ramSlots; tổng ba phần = 1). Phần của hồ này chia tiếp cho ngân sách RSS mỗi CLI
 // (SYNCHRO_CLI_BUDGET_MB, mặc định 400 MB — đo thực tế mỗi tiến trình Claude Code tới ~700 MB lúc đỉnh, phần lớn lượt thấp hơn nhiều).
 // Kẹp [4, 64]; đo RAM hỏng (= 0) thì về đúng công thức 70% cũ để không làm kẹt cả hàng.
+const CLI_SHARE = 0.5;
 let globalCached: number | null = null;
 function globalDefault(): number {
   if (globalCached !== null) return globalCached;
   const total = realTotalMB();
   const reserve = num("SYNCHRO_SERVER_RESERVE_MB", 2560), per = num("SYNCHRO_CLI_BUDGET_MB", 400);
-  globalCached = total > 0 ? Math.max(4, Math.min(64, Math.floor((total - reserve) / per))) : Math.max(4, Math.floor((os.totalmem() * 0.7) / (400 * 1048576)));
-  console.log(`[timing] turngate: global=${globalCached} (RAM ${total || "?"} MB, chừa ${reserve} MB, ${per} MB/lượt)`);
+  const budget = total - reserve;
+  globalCached = total > 0 ? Math.max(4, Math.min(64, Math.floor((budget * CLI_SHARE) / per))) : Math.max(4, Math.floor((os.totalmem() * 0.7) / (400 * 1048576)));
+  console.log(`[timing] turngate: global=${globalCached} (RAM ${total || "?"} MB, chừa ${reserve} MB, ngân sách ${total > 0 ? budget : "?"} MB × ${CLI_SHARE}, ${per} MB/lượt)`);
   return globalCached;
 }
 // SYNCHRO_TURNS_GLOBAL ghi đè (trị không hợp lệ thì về 4 như trước); không đặt thì lấy mức theo RAM thật.
