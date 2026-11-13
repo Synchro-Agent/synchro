@@ -15,7 +15,9 @@ const SCR0 = (await import("node:os")).tmpdir() + "/synchro-ui/popovers";
 for (const t of THEMES) mkdirSync(`${SCR0}${t === "dark" ? "-dark" : ""}/`, { recursive: true });
 // Khung nhìn: chiều rộng đúng ba mốc của blueprint; máy tính giữ màn thấp (720px) để menu dễ chạm khối soạn tin nhất.
 const VIEW = { desktop: { width: 1440, height: 720, deviceScaleFactor: 1, mobile: false }, tablet: { width: 768, height: 1024, deviceScaleFactor: 1, mobile: false }, mobile: { width: 390, height: 844, deviceScaleFactor: 2, mobile: true } };
-const PROF = (await import("node:os")).tmpdir() + "/synchro-ui/chrome-prof-popovers";
+// Cổng DevTools (CDP_PORT, như u-bugs.mjs): một Chrome ẩn sót lại từ lần chạy hỏng trước còn giữ cổng (và hồ sơ) thì đổi cổng, không gắn nhầm vào nó.
+const PORT = Number(process.env.CDP_PORT ?? 9343);
+const PROF = (await import("node:os")).tmpdir() + "/synchro-ui/chrome-prof-popovers" + (PORT === 9343 ? "" : "-" + PORT);
 
 const email = "admin@synchro.test", password = "synchro-mock-123";
 let cookie = "";
@@ -100,8 +102,8 @@ const runSize = async (size, theme) => {
   const SCR = `${SCR0}${theme === "dark" ? "-dark" : ""}/`;
   rmSync(PROF, { recursive: true, force: true });
   const chrome = spawn(process.env.CHROME_PATH ?? "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
-    ["--headless=new", "--remote-debugging-port=9343", `--user-data-dir=${PROF}`, "--window-size=1440,900", "--no-first-run", "--no-default-browser-check", "--use-fake-ui-for-media-stream", "--use-fake-device-for-media-stream", "about:blank"], { stdio: "ignore" });
-  let ver; for (let i = 0; i < 50 && !ver; i++) { await sleep(200); ver = await fetch("http://127.0.0.1:9343/json/version").then((r) => r.json()).catch(() => null); }
+    ["--headless=new", `--remote-debugging-port=${PORT}`, `--user-data-dir=${PROF}`, "--window-size=1440,900", "--no-first-run", "--no-default-browser-check", "--use-fake-ui-for-media-stream", "--use-fake-device-for-media-stream", "about:blank"], { stdio: "ignore" });
+  let ver; for (let i = 0; i < 50 && !ver; i++) { await sleep(200); ver = await fetch(`http://127.0.0.1:${PORT}/json/version`).then((r) => r.json()).catch(() => null); }
   const ws = new WebSocket(ver.webSocketDebuggerUrl);
   await new Promise((r) => ws.addEventListener("open", r));
   let seq = 0; const waits = new Map();
@@ -347,10 +349,10 @@ const runSize = async (size, theme) => {
     await tryOpen("điện thoại · ⋮ đoạn chat", async () => { if (!(await ev(`!!document.querySelector(".side-scrim")`))) { await click(`document.querySelector("[aria-label='Mở thanh bên']")`, "burger"); await sleep(700); } await click(`document.querySelector(".chat-wrap .dots")`, "dots"); await sleep(300); await drawer("điện thoại · ngăn kéo khi ⋮ mở"); });
     await tryOpen("điện thoại · ⋮ đoạn chat › Gắn thẻ", async () => { if (!(await ev(`!!document.querySelector(".side-scrim")`))) { await click(`document.querySelector("[aria-label='Mở thanh bên']")`, "burger"); await sleep(700); } await click(`[...document.querySelectorAll(".chat-wrap")].find((w) => w.querySelector(":scope > .chat-item:not(.code-item)") && w.getBoundingClientRect().height > 0 && !w.closest(".pj-kids") && !w.querySelector(".pj-tg, .pj-ic"))?.querySelector(".dots")`, "dots"); await sleep(350); await click(`[...document.querySelectorAll(".chat-wrap .menu:not(.out) .menu-item")].find((e) => e.textContent.includes("Gắn thẻ"))`, "tags"); await sleep(300); });
   }
-  // Chờ Chrome của vòng này thoát hẳn (vòng sau dùng lại cổng 9343; gắn nhầm vào Chrome cũ thì mang theo trạng thái của vòng trước).
+  // Chờ Chrome của vòng này thoát hẳn (vòng sau dùng lại cổng PORT; gắn nhầm vào Chrome cũ thì mang theo trạng thái của vòng trước).
   ws.close();
   await new Promise((ok) => { if (chrome.exitCode !== null) return ok(); chrome.once("exit", ok); chrome.kill(); setTimeout(() => { chrome.kill("SIGKILL"); ok(); }, 5000); });
-  for (let i = 0; i < 25 && (await fetch("http://127.0.0.1:9343/json/version").then(() => true).catch(() => false)); i++) await sleep(200);
+  for (let i = 0; i < 25 && (await fetch(`http://127.0.0.1:${PORT}/json/version`).then(() => true).catch(() => false)); i++) await sleep(200);
 };
 
 for (const theme of THEMES) for (const size of process.argv[2] ? [process.argv[2]] : ["desktop", "tablet", "mobile"]) await runSize(size, theme);
