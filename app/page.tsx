@@ -59,6 +59,10 @@ const roughTitle = (t: string) => {
 // Tin đầu chỉ là lời chào / quá ngắn: tên đặt lúc đầu chưa nói được gì, đặt lại khi đoạn chat đã rõ chủ đề (tin thứ ba).
 const vagueMsg = (t: string) => t.trim().split(/\s+/).length <= 3 || /^(xin )?ch[àa]o|^(hi|hello|hey|alo|test)\b/i.test(t.trim());
 type View = "new" | "chat" | "projects" | "project" | "artifacts" | "customize" | "code" | "speech" | "inbox" | "brain";
+// U6: mỗi mục có một địa chỉ #v=… để Back / liên kết / F5 mở đúng trang (đoạn chat vẫn dùng #c=, Cài đặt dùng #s=<tab>).
+// "project" (chi tiết một dự án) dùng chung #v=projects với danh sách dự án. "new"/"chat" không có #v=.
+const HASH_VIEW: Partial<Record<View, string>> = { projects: "projects", project: "projects", artifacts: "artifacts", inbox: "inbox", brain: "brain", code: "code", speech: "speech", customize: "skills" };
+const VIEW_OF_HASH: Record<string, View> = { projects: "projects", artifacts: "artifacts", inbox: "inbox", brain: "brain", code: "code", speech: "speech", skills: "customize" };
 import { AppCtx, useApp, VOICE_LANG, VOICE_RATE, initials, readPref, reloadPrefs, resetPrefs, usePref, type Chat, type Msg, type Project } from "./store";
 import { IMAGE_PLANS, allowsModel, clampEffort, effortCap, effortsFor, isEffort, legacyModel, type Effort } from "./catalog";
 import { AUTO, autoTaskName, fitModel, modelName, modelsSettled, refreshModels, useModels } from "./models";
@@ -1384,11 +1388,65 @@ export default function Home() {
     const t = setTimeout(() => { if (openWant.current === id) { openWant.current = null; history.replaceState(null, "", location.pathname + location.search); } }, 8000);
     return () => clearTimeout(t);
   }, [chats, loaded, me, view, cur]);
-  const chatHash = view === "chat" && cur !== null && chat && !chat.inc ? `#c=${cur}` : "";
+  // U6: mục bị tắt theo quyền (feature flags) coi như địa chỉ lạ — không ghi vào #v= và không mở khi gặp link #v= đó.
+  const viewAllowed = useCallback((v: View): boolean => {
+    if (!me) return true; // chưa biết quyền: cho qua, lớp bảo vệ ở trên sẽ chỉnh lại khi biết
+    const f = me.perms.features;
+    if (v === "code") return f.code !== false;
+    if (v === "speech") return f.speech !== false && (speechReady || !!me.isAdmin);
+    if (v === "customize") return f.skills !== false;
+    if (v === "projects" || v === "project") return f.projects !== false;
+    if (v === "artifacts") return caps.art !== false;
+    return true; // inbox, brain, new, chat
+  }, [me, speechReady, caps.art]);
+  // Địa chỉ mà trạng thái hiện tại nên có: Cài đặt (#s=) ưu tiên, rồi đoạn chat không ẩn danh (#c=), rồi mục (#v=).
+  const curHash = (): string => {
+    if (modal === "settings") return `#s=${settingsTab}`;
+    if (view === "chat" && cur !== null && chat && !chat.inc) return `#c=${cur}`;
+    const h = HASH_VIEW[view];
+    return h && viewAllowed(view) ? `#v=${h}` : "";
+  };
+  // Áp địa chỉ lúc mở app (deep-link), chỉ sau khi đoạn chat + dự án đã tải (loaded) để mở đúng; #v= cần biết quyền (me).
+  const [bootDone, setBootDone] = useState(false);
   useEffect(() => {
-    if (openWant.current !== null || !loaded) return;
-    if (location.hash !== chatHash && (chatHash || /^#c=/.test(location.hash))) history.replaceState(null, "", location.pathname + location.search + chatHash);
-  }, [chatHash, loaded]);
+    if (bootDone || !loaded) return;
+    const h = typeof location === "undefined" ? "" : location.hash;
+    if (/^#c=/.test(h)) { setBootDone(true); return; } // openWant lo phần đoạn chat ở trên
+    if (/^#s=/.test(h)) { const tab = decodeURIComponent(h.slice(3)); if (tab) { setSettingsTab(tab); setModal("settings"); } setBootDone(true); return; }
+    const mv = /^#v=([a-z]+)$/.exec(h);
+    if (mv) {
+      if (!me) return; // chờ biết quyền
+      const v = VIEW_OF_HASH[mv[1]];
+      if (v && viewAllowed(v)) { setView(v); if (v === "projects") setCurProj(null); }
+      setBootDone(true); return;
+    }
+    setBootDone(true);
+  }, [loaded, me, bootDone, viewAllowed]);
+  // Trạng thái → địa chỉ: đổi mục / mở đoạn chat = một mục lịch sử (pushState) để Back quay lại trang trước.
+  // Cài đặt là hộp thoại đè lên: chỉ thay thế (replaceState) nên không chèn mục lịch sử thừa.
+  useEffect(() => {
+    if (!loaded || !bootDone || openWant.current !== null) return;
+    const want = curHash();
+    if (location.hash === want) return;
+    const url = location.pathname + location.search + want;
+    const touchingSettings = want.startsWith("#s=") || location.hash.startsWith("#s=");
+    if (touchingSettings) history.replaceState(null, "", url);
+    else history.pushState(null, "", url);
+  }, [view, cur, chat?.inc, modal, settingsTab, loaded, bootDone, me, speechReady, caps.art]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Địa chỉ → trạng thái: nút Back / Forward (popstate). Đóng Cài đặt khi địa chỉ không còn là #s=.
+  useEffect(() => {
+    const onPop = () => {
+      const h = location.hash;
+      if (/^#s=/.test(h)) { const tab = decodeURIComponent(h.slice(3)); setSettingsTab(tab || "General"); setModal("settings"); return; }
+      setModal((m) => (m === "settings" ? null : m));
+      if (/^#c=/.test(h)) { const id = Number(/^#c=(\d{1,16})$/.exec(h)?.[1] ?? 0) || null; if (id !== null && chatsRef.current.some((c) => c.id === id && !c.inc)) { setCur(id); setView("chat"); } return; }
+      const mv = /^#v=([a-z]+)$/.exec(h);
+      if (mv) { const v = VIEW_OF_HASH[mv[1]]; if (v && viewAllowed(v)) { setCur(null); setCurProj(null); setView(v); } return; }
+      setCur(null); setView("new"); // địa chỉ trống: về trang Mới
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, [viewAllowed]);
   // Đoạn chat đang chờ bạn duyệt công cụ: ở ngoài đoạn chat đó vẫn phải thấy, quá 10 phút không trả lời thì công cụ bị từ chối và model làm tiếp.
   const needYou = useMemo(() => {
     const out = new Set<number>();
