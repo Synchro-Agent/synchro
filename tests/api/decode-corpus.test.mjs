@@ -196,5 +196,12 @@ for (const s of vnReg) {
   round("windows-1258-decomp", `dấu thanh tổ hợp: ${s.slice(0, 50)}`, s);
 }
 
+// GBK ngắn tình cờ gần giống UTF-8 (4/5 ký tự hai byte là UTF-8 hợp lệ): jschardet nói GB18030 và giải trọn vẹn → giữ GBK.
+{
+  const b = Buffer.from("c3b4cbaed2e2bcb0c5a9", "hex");
+  const got = E.decodeText(b);
+  got === "么水意及农" ? pass++ : fail++;
+  console.log(got === "么水意及农" ? "  ✓" : "  ✗", "GBK ngắn không bị đọc thành UTF-8 lỗi", got === "么水意及农" ? "" : got);
+}
 console.log(`\n${pass} đạt, ${fail} hỏng`);
 process.exit(fail ? 1 : 0);

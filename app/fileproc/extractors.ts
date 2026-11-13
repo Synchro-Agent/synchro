@@ -32,7 +32,10 @@ export function decodeText(buf: Buffer): string {
   const det = normLabel(jschardet.detect(buf.toString("binary")).encoding || "");
   // Gần như UTF-8 (cụt ký tự cuối, lẫn một byte lạ): giải UTF-8 không fatal, chỉ byte hỏng thành U+FFFD, thay vì đọc cả tệp theo cp1252 ra "Tiáº¿ng".
   const u8 = looseUtf8(buf);
-  if (u8.good >= 1 && (u8.tailOnly || (u8.good >= 3 && u8.bad * 4 <= u8.good))) return u8.text;
+  // jschardet nói một bảng mã CJK nhiều byte và bảng đó giải trọn vẹn: tin nó (chuỗi GBK ngắn có thể tình cờ gần giống UTF-8), trừ khi
+  // chỉ hỏng đúng ký tự cuối (tệp UTF-8 bị cắt).
+  const cjk = MULTI_BYTE.test(det) && (() => { try { new TextDecoder(det, { fatal: true }).decode(buf); return true; } catch { return false; } })();
+  if (u8.good >= 1 && (u8.tailOnly || (!cjk && u8.good >= 3 && u8.bad * 4 <= u8.good))) return u8.text;
   // Windows-1258 (tiếng Việt): jschardet nói cp1258 thì tin như bản gốc trừ khi có bằng chứng ngược; nhãn khác thì cần bằng chứng tích cực mạnh
   // (từ chức năng tiếng Việt + đa số từ là âm tiết tiếng Việt): jschardet hay đoán tiếng Việt ngắn thành Hy Lạp.
   if (looksVietnamese1258(buf, det === "windows-1258")) return new TextDecoder("windows-1258").decode(buf).normalize("NFC");
