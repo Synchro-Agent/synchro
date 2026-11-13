@@ -8,6 +8,7 @@ import fs from "node:fs";
 import path from "node:path";
 import readline from "node:readline";
 import { promisify } from "node:util";
+import { registerMemProbe } from "../memstat";
 
 export type Cli = "claude" | "codex" | "agy" | "grok";
 export const CLIS: Cli[] = ["claude", "codex", "agy", "grok"];
@@ -58,11 +59,10 @@ async function asEngine(cmd: string, args: string[]): Promise<void> {
   const r = u ? await runCmd("sudo", sudoArgs(u, cmd, args)) : await runCmd(cmd, args);
   if (!r.ok) throw new Error(`Không ${cmd === "mkdir" ? "tạo" : "xóa"} được thư mục của engine: ${r.err.trim().slice(0, 200)}`);
 }
-/** Mọi tiến trình con cháu của một tiến trình (đọc cây tiến trình qua ps). */
-export function descendants(root: number): number[] {
-  const r = spawnSync("ps", ["-A", "-o", "pid=,ppid="], { encoding: "utf8" });
+/** Mọi con cháu của root trong danh sách "pid ppid [...]" của ps. */
+export function treeOf(listing: string, root: number): number[] {
   const kids = new Map<number, number[]>();
-  for (const l of (r.stdout ?? "").split("\n")) {
+  for (const l of listing.split("\n")) {
     const [p, pp] = l.trim().split(/\s+/).map(Number);
     if (p && pp) { const k = kids.get(pp) ?? []; k.push(p); kids.set(pp, k); }
   }
@@ -70,6 +70,36 @@ export function descendants(root: number): number[] {
   while (stack.length) for (const k of kids.get(stack.pop()!) ?? []) { out.push(k); stack.push(k); }
   return out;
 }
+/** Mọi tiến trình con cháu của một tiến trình (đọc cây tiến trình qua ps, bất đồng bộ: không chặn vòng sự kiện lúc bấm Dừng). */
+export async function descendants(root: number): Promise<number[]> {
+  return treeOf((await runCmd("ps", ["-A", "-o", "pid=,ppid="])).stdout, root);
+}
+
+// CLI đang chạy (gốc mỗi cây tiến trình): đo RSS thật cho dòng [timing] mem (Blueprint G3.4) để đặt lại ngân sách 400 MB / lượt ở turngate.
+const liveClis = new Set<number>();
+export type CliRss = { n: number; sumMB: number; maxMB: number };
+/** RSS (MB) theo cây tiến trình của từng CLI trong danh sách "pid ppid rss(KB)" của ps: số cây còn sống, tổng và cây lớn nhất. */
+export function treeRss(listing: string, roots: number[]): CliRss {
+  const rss = new Map<number, number>();
+  for (const l of listing.split("\n")) {
+    const [p, , kb] = l.trim().split(/\s+/).map(Number);
+    if (p && Number.isFinite(kb)) rss.set(p, kb);
+  }
+  let n = 0, sum = 0, max = 0;
+  for (const r of roots) {
+    if (!rss.has(r)) continue;
+    const kb = [r, ...treeOf(listing, r)].reduce((a, p) => a + (rss.get(p) ?? 0), 0);
+    n++; sum += kb; max = Math.max(max, kb);
+  }
+  return { n, sumMB: Math.round(sum / 1024), maxMB: Math.round(max / 1024) };
+}
+/** RSS các CLI đang chạy (một lần ps, bất đồng bộ). Không có CLI nào thì không gọi ps. */
+export async function cliRss(): Promise<CliRss> {
+  if (!liveClis.size) return { n: 0, sumMB: 0, maxMB: 0 };
+  const r = await runCmd("ps", ["-A", "-o", "pid=,ppid=,rss="]);
+  return treeRss(r.stdout, [...liveClis]);
+}
+registerMemProbe("cli", cliRss);
 
 /** Tạo thư mục (quyền 0700) trong nhà engine. */
 export async function makeDir(dir: string): Promise<void> {
@@ -361,18 +391,23 @@ export function spawnCli(bin: string, args: string[], o: RunOpts = {}): Proc {
   child.stdout!.on("data", () => { lastOut = Date.now(); });
   // Chạy bằng user riêng: Synchro không gửi tín hiệu được cho tiến trình của user khác, nên ghi nhớ mọi tiến trình con cháu của sudo
   // (kể cả khi sudo đã thoát, chúng không còn trong cây) và kill chúng bằng chính user của engine.
+  // ps và sudo kill chạy bất đồng bộ (execFile, như A2.3): bấm Dừng hay hết giờ không làm đứng cả máy chủ.
   const owned = new Set<number>();
-  const killGroup = (sig: NodeJS.Signals) => {
-    try { if (child.pid) process.kill(-child.pid, sig); } catch { try { child.kill(sig); } catch {} }
+  const pid = child.pid;
+  if (pid) liveClis.add(pid);
+  const signalGroup = (sig: NodeJS.Signals) => { try { if (pid) process.kill(-pid, sig); } catch { try { child.kill(sig); } catch {} } };
+  const killGroup = async (sig: NodeJS.Signals): Promise<void> => {
     const user = engineUser();
-    if (!user || !child.pid) return;
-    for (const p of descendants(child.pid)) owned.add(p);
-    if (owned.size) spawnSync("sudo", ["-n", "-u", user, "--", "env", "-i", "PATH=/usr/bin:/bin", "kill", `-${sig.replace(/^SIG/, "")}`, ...[...owned].map(String)], { stdio: "ignore" });
+    if (!user || !pid) { signalGroup(sig); return; }
+    // Đọc cây trước khi gửi tín hiệu: tiến trình chết trước lúc ps đọc thì mất dấu con cháu của nó.
+    for (const p of await descendants(pid)) owned.add(p);
+    signalGroup(sig);
+    if (owned.size) await runCmd("sudo", sudoArgs(user, "kill", [`-${sig.replace(/^SIG/, "")}`, ...[...owned].map(String)]));
   };
   const kill = () => {
     if (child.exitCode !== null || child.signalCode !== null) return;
-    killGroup("SIGTERM");
-    killer ??= setTimeout(() => killGroup("SIGKILL"), 3000);
+    void killGroup("SIGTERM");
+    killer ??= setTimeout(() => void killGroup("SIGKILL"), 3000);
   };
   const timer = setTimeout(() => { timedOut = true; kill(); }, o.timeoutMs ?? MAX_TURN_MS);
   const idleMs = o.idleMs;
@@ -381,9 +416,10 @@ export function spawnCli(bin: string, args: string[], o: RunOpts = {}): Proc {
   if (o.signal) { if (o.signal.aborted) onAbort(); else o.signal.addEventListener("abort", onAbort, { once: true }); }
   const done = new Promise<Exit>((ok) => child.on("close", (code, signal) => {
     clearTimeout(timer); if (idler) clearInterval(idler); if (killer) clearTimeout(killer); o.signal?.removeEventListener("abort", onAbort);
-    // Tiến trình chính đã thoát nhưng con cháu có thể còn: dọn cả nhóm.
-    killGroup("SIGKILL");
-    ok({ code, signal, timedOut, aborted, ...(idle ? { idle } : {}) });
+    if (pid) liveClis.delete(pid);
+    // Tiến trình chính đã thoát nhưng con cháu có thể còn: dọn cả nhóm rồi mới báo xong (như khi còn gọi đồng bộ).
+    const exit: Exit = { code, signal, timedOut, aborted, ...(idle ? { idle } : {}) };
+    void killGroup("SIGKILL").catch(() => {}).then(() => ok(exit));
   }));
   child.on("error", (e) => { err += String(e.message); });
   child.stdin!.on("error", () => {});

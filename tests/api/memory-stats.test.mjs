@@ -14,12 +14,19 @@ try {
   const logs = [], real = console.log;
   console.log = (...a) => logs.push(a.join(" "));
   M.registerMemStat("hong", () => { throw new Error("x"); });
+  // Số liệu đo bất đồng bộ (G3.4: RSS cây tiến trình CLI): dòng nhật ký ghi sau khi đo xong; đo lỗi thì bỏ, không mất cả dòng.
+  M.registerMemProbe("cli", async () => ({ n: 2, sumMB: 812, maxMB: 455 }));
+  M.registerMemProbe("hong2", async () => { throw new Error("y"); });
   const s = M.sampleMem();
+  const early = logs.length;
+  for (let i = 0; i < 50 && !logs.length; i++) await new Promise((r) => setTimeout(r, 10));
   console.log = real;
+  ok(early === 0, "sampleMem trả mẫu ngay, chưa chặn chờ đo");
   ok(s.heapUsed > 0 && s.rss >= s.heapUsed, "mẫu có heap và RSS (MB)", s);
   ok(/^\[timing\] mem heapUsed=\d+MB heapTotal=\d+MB external=\d+MB arrayBuffers=\d+MB rss=\d+MB/.test(logs[0] ?? ""), "dòng nhật ký đúng dạng", logs[0]);
   ok(/artImages=n:0\/MB:0/.test(logs[0]) && /codeRuns=runs:0\/MB:0/.test(logs[0]) && /skillIndex=skills:\d+/.test(logs[0]), "dòng nhật ký có số liệu các bộ đệm", logs[0]);
   ok(!/hong=/.test(logs[0]), "bộ đệm lỗi số liệu không làm hỏng dòng nhật ký", logs[0]);
+  ok(/ cli=n:2\/sumMB:812\/maxMB:455/.test(logs[0]) && !/hong2=/.test(logs[0]), "dòng nhật ký có RSS cây CLI (cli=n/sumMB/maxMB), đo lỗi thì bỏ", logs[0]);
   for (let i = 0; i < 60; i++) M.sampleMem(false);
   const r = M.memReport();
   ok(r.history.length === 48, `giữ 48 mẫu gần nhất (${r.history.length})`, r.history.length);
