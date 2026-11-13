@@ -84,7 +84,7 @@ import { restylePatch } from "./artkit";
 import { presetOf } from "./designpresets";
 import { resolveArt, type ArtVersion } from "./vfs";
 import { criticKey, fixPatch, important, type CriticEntry, type Finding } from "./critic";
-import { chatHistory, mixExtra } from "./history";
+import { chatHistory, continuable, mixExtra } from "./history";
 import { ContextMixer } from "./mixer";
 import { ArtifactCard, OutputFiles, saveArtifacts } from "./artifactcard";
 import type { Product } from "./filepreview";
@@ -878,7 +878,7 @@ function scanArts(msgs: Msg[], from: number, base: ArtScan): ArtScan {
 type RowCx = {
   chat: Chat; chats: Chat[]; say: Say; fm: ReturnType<typeof useFileMenu>; arts: ArtScan; artOpen: boolean; artIdent?: string; artIndex: number;
   openPlugins: () => void; openArt: (s: { chat: number; ident: string; v: number; follow: boolean }) => void; openFile: (f: OutFile) => void; send: (t: string) => void;
-  copy: (key: string, text: string) => void; speak: (key: string, text: string) => void; like: (i: number, v: 1 | -1) => void; retry: (avoid?: string) => void; openProviders: () => void; edit: (i: number, text: string) => void; model: string; switchModel: (m: Msg, key: string) => void;
+  copy: (key: string, text: string) => void; speak: (key: string, text: string) => void; like: (i: number, v: 1 | -1) => void; retry: (avoid?: string) => void; openProviders: () => void; edit: (i: number, text: string) => void; model: string; switchModel: (key: string) => void;
   // Tài khoản có hơn một model dùng được: mới hiện nút "Chạy lại bằng model khác" dưới câu trả lời của chế độ Tự động.
   altModels: boolean;
   // Rẽ nhánh: đoạn chat mới gồm các tin tới hết câu trả lời thứ i (đoạn chat gốc giữ nguyên).
@@ -956,8 +956,8 @@ const MsgRow = memo(function MsgRow({ m, i, last, busy, mark, art, inl, fileActi
             {m.notice.tried?.length ? <p data-notr>{`${getLang() === "en" ? "Tried" : "Đã thử"}: ${m.notice.tried.join(", ")}`}</p> : null}
             {m.notice.switchTo && last && !busy ? (
               <div className="msg-notice-act">
-                <button className="btn dark" onClick={() => cx.current!.switchModel(m, m.notice!.switchTo!.model)} data-notr>{`${getLang() === "en" ? (c.model === AUTO ? "Try again with Auto" : `Use another model: ${m.notice.switchTo.name}`) : c.model === AUTO ? "Thử lại bằng Tự động" : `Dùng model khác: ${m.notice.switchTo.name}`}`}</button>
-                {c.model !== AUTO && <button className="lnk" onClick={() => cx.current!.switchModel(m, AUTO)}>{tr("Dùng Tự động")}</button>}
+                <button className="btn dark" onClick={() => cx.current!.switchModel(m.notice!.switchTo!.model)} data-notr>{`${getLang() === "en" ? (c.model === AUTO ? "Try again with Auto" : `Use another model: ${m.notice.switchTo.name}`) : c.model === AUTO ? "Thử lại bằng Tự động" : `Dùng model khác: ${m.notice.switchTo.name}`}`}</button>
+                {c.model !== AUTO && <button className="lnk" onClick={() => cx.current!.switchModel(AUTO)}>{tr("Dùng Tự động")}</button>}
               </div>
             ) : null}
           </div>
@@ -2035,18 +2035,20 @@ export default function Home() {
     if (running.has(u.chat)) stop(true, u.chat);
     setChats((cs) => cs.map((x) => (x.id === u.chat ? { ...x, msgs: u.msgs, compact: u.compact } : x)));
   };
+  // Thử lại sau lượt lỗi đã làm được một phần (bị ngắt vì hết hạn mức giữa lúc tra cứu…): giữ lượt đó trong lịch sử (phần đã viết, dấu vết công cụ)
+  // và làm tiếp, không vứt đi rồi làm lại từ đầu. "Chạy lại bằng model khác" (avoid) vẫn là chạy lại từ đầu.
   const retry = (avoid?: string) => {
     if (!chat || busy) return;
+    if (!avoid && continuable(chat.msgs[chat.msgs.length - 1])) { send(tr("Tiếp tục từ chỗ đang dở")); return; }
     const k = chat.msgs.map((m) => m.role).lastIndexOf("user");
     if (k >= 0) resend(chat, k, chat.msgs[k], avoid);
   };
   // Đổi model bằng một lần bấm sau khi lượt lỗi. Đã có phần làm dở thì làm tiếp (dấu vết công cụ nằm trong lịch sử, model mới biết việc nào đã xong),
   // chưa có gì thì gửi lại đúng tin vừa rồi. Đang để Tự động thì giữ Tự động: máy chủ đã biết model nào đang nghỉ.
-  const switchModel = (m: Msg, key: string) => {
+  const switchModel = (key: string) => {
     if (!chat || busy) return;
     if (model !== AUTO) { setActiveModel(key); setModel(key); }
-    if (m.notice?.partial || m.notice?.work || m.trace?.length || m.outs?.length) send(tr("Tiếp tục từ chỗ đang dở"));
-    else retry();
+    retry();
   };
   const copy = (key: string, text: string) => {
     navigator.clipboard?.writeText(text);
