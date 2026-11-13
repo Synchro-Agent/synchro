@@ -243,8 +243,12 @@ export function ShortcutsModal({ onClose }: { onClose: () => void }) {
   );
 }
 
-export function Settings({ onClose, theme, setTheme, initial = "General" }: { onClose: () => void; theme: string; setTheme: (t: string) => void; initial?: string }) {
-  const [tab, setTab] = useState(initial);
+export function Settings({ onClose, theme, setTheme, initial = "General", onTab }: { onClose: () => void; theme: string; setTheme: (t: string) => void; initial?: string; onTab?: (t: string) => void }) {
+  const [tab, setTabState] = useState(initial);
+  // R5: đổi mục báo lên trang để địa chỉ #s=<mục> theo kịp (F5 / chia sẻ liên kết mở đúng mục). Mở từ ngoài (openSettings("Providers"),
+  // Back / Forward) thì initial đổi và mục đổi theo, không cần gắn lại hộp (giữ ô tìm kiếm).
+  const setTab = (t: string) => { setTabState(t); onTab?.(t); };
+  useEffect(() => { setTabState(initial); }, [initial]);
   const [q, setQ] = useState("");
   const me = useApp().me;
   const admin = me?.isAdmin;
@@ -260,7 +264,11 @@ export function Settings({ onClose, theme, setTheme, initial = "General" }: { on
     ...(feat?.connectors !== false ? [["Connectors", <I.Connectors key="cn" />] as [string, React.ReactNode]] : []),
   ];
   // Tìm theo tên mục và từng dòng cài đặt (settingsindex.ts), cả chữ gốc lẫn chữ đang hiện. Dòng khớp hiện ngay dưới mục, bấm là tới đúng chỗ.
-  const found = searchSettings(q, [...items, ...custom].map(([n]) => n), (s) => tr(s));
+  const names = [...items, ...custom].map(([n]) => n);
+  // R6: mục lạ (#s=Foo) hoặc không được phép (#s=Administrator khi không phải quản trị, tính năng bị tắt) thì về General, cả địa chỉ.
+  const known = !me || names.includes(tab);
+  useEffect(() => { if (!known) setTab("General"); }, [known]); // eslint-disable-line react-hooks/exhaustive-deps
+  const found = searchSettings(q, names, (s) => tr(s));
   const f = (l: [string, React.ReactNode][]) => l.filter(([n]) => found.some((x) => x.tab === n));
   const [goRow, setGoRow] = useState<{ row: string; n: number } | null>(null);
   useEffect(() => {
@@ -289,9 +297,9 @@ export function Settings({ onClose, theme, setTheme, initial = "General" }: { on
           {f(custom).map(([n, ic]) => item(n, ic))}
           {q.trim() && !found.length && <div className="s-none" role="status">No results</div>}
         </div>
-        <div className="s-body" key={tab}>
-          <header className="sy-sbody-h"><h2>{tab}</h2><button className="icon-btn close" onClick={onClose} aria-label="Đóng"><I.X size={16} /></button></header>
-          <Boundary resetKey={tab}><SettingsBody tab={tab} theme={theme} setTheme={setTheme} go={setTab} /></Boundary>
+        <div className="s-body" key={known ? tab : "General"}>
+          <header className="sy-sbody-h"><h2>{known ? tab : "General"}</h2><button className="icon-btn close" onClick={onClose} aria-label="Đóng"><I.X size={16} /></button></header>
+          <Boundary resetKey={known ? tab : "General"}><SettingsBody tab={known ? tab : "General"} theme={theme} setTheme={setTheme} go={setTab} /></Boundary>
         </div>
       </div>
     </div>

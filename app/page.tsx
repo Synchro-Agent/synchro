@@ -100,6 +100,7 @@ type CxData = { connectors: Conn[]; composio?: ComposioInfo; err?: boolean };
 import { wantsIntro } from "./introflag";
 import { rowHeight } from "./rowsize";
 import { startWarmPing, warmChoice } from "./warmping";
+import { decodeSettingsTab, hashStep, settingsHash } from "./hashnav";
 type Say = (m: string) => void;
 
 // Trang đầu chỉ tải phần chat; các mục khác, hộp thoại và màn hình đăng nhập tải khi cần (rê chuột vào mục thì tải trước).
@@ -1421,7 +1422,7 @@ export default function Home() {
   }, [me, speechReady, caps.art]);
   // Địa chỉ mà trạng thái hiện tại nên có: Cài đặt (#s=) ưu tiên, rồi đoạn chat không ẩn danh (#c=), rồi mục (#v=).
   const curHash = (): string => {
-    if (modal === "settings") return `#s=${settingsTab}`;
+    if (modal === "settings") return settingsHash(settingsTab);
     if (view === "chat" && cur !== null && chat && !chat.inc) return `#c=${cur}`;
     const h = HASH_VIEW[view];
     return h && viewAllowed(view) ? `#v=${h}` : "";
@@ -1432,7 +1433,7 @@ export default function Home() {
     if (bootDone || !loaded) return;
     const h = typeof location === "undefined" ? "" : location.hash;
     if (/^#c=/.test(h)) { setBootDone(true); return; } // openWant lo phần đoạn chat ở trên
-    if (/^#s=/.test(h)) { const tab = decodeURIComponent(h.slice(3)); if (tab) { setSettingsTab(tab); setModal("settings"); } setBootDone(true); return; }
+    if (/^#s=/.test(h)) { setSettingsTab(decodeSettingsTab(h.slice(3))); setModal("settings"); setBootDone(true); return; } // mục lạ: Settings tự về General
     const mv = /^#v=([a-z]+)$/.exec(h);
     if (mv) {
       if (!me) return; // chờ biết quyền
@@ -1443,21 +1444,28 @@ export default function Home() {
     setBootDone(true);
   }, [loaded, me, bootDone, viewAllowed]);
   // Trạng thái → địa chỉ: đổi mục / mở đoạn chat = một mục lịch sử (pushState) để Back quay lại trang trước.
-  // Cài đặt là hộp thoại đè lên: chỉ thay thế (replaceState) nên không chèn mục lịch sử thừa.
+  // Mở Cài đặt cũng push (Back đóng Cài đặt, về lại đoạn chat); đổi mục trong Cài đặt chỉ replace; đóng Cài đặt về trang đã mở nó thì
+  // history.back() để bỏ mục #s= vừa thêm. Lần ghi đầu sau khi mở app thì replace (địa chỉ lạ không ở lại trong lịch sử). Xem hashnav.ts.
+  const settingsFrom = useRef<string | null>(null); // địa chỉ trước khi mở Cài đặt, chỉ khi chính app đã push mục #s=
+  const firstSync = useRef(true);
   useEffect(() => {
     if (!loaded || !bootDone || openWant.current !== null) return;
-    const want = curHash();
-    if (location.hash === want) return;
+    const want = curHash(), cur = location.hash;
+    const step = hashStep(cur, want, settingsFrom.current, firstSync.current);
+    firstSync.current = false;
+    if (step === "none") return;
+    if (!want.startsWith("#s=")) settingsFrom.current = null;
+    if (step === "back") { history.back(); return; } // popstate về đúng địa chỉ want, trạng thái đã khớp
     const url = location.pathname + location.search + want;
-    const touchingSettings = want.startsWith("#s=") || location.hash.startsWith("#s=");
-    if (touchingSettings) history.replaceState(null, "", url);
-    else history.pushState(null, "", url);
+    if (step === "push") { if (want.startsWith("#s=")) settingsFrom.current = cur; history.pushState(null, "", url); }
+    else history.replaceState(null, "", url);
   }, [view, cur, chat?.inc, modal, settingsTab, loaded, bootDone, me, speechReady, caps.art]); // eslint-disable-line react-hooks/exhaustive-deps
   // Địa chỉ → trạng thái: nút Back / Forward (popstate). Đóng Cài đặt khi địa chỉ không còn là #s=.
   useEffect(() => {
     const onPop = () => {
       const h = location.hash;
-      if (/^#s=/.test(h)) { const tab = decodeURIComponent(h.slice(3)); setSettingsTab(tab || "General"); setModal("settings"); return; }
+      if (/^#s=/.test(h)) { setSettingsTab(decodeSettingsTab(h.slice(3))); setModal("settings"); return; }
+      settingsFrom.current = null; // đã rời mục #s= bằng Back / Forward
       setModal((m) => (m === "settings" ? null : m));
       if (/^#c=/.test(h)) { const id = Number(/^#c=(\d{1,16})$/.exec(h)?.[1] ?? 0) || null; if (id !== null && chatsRef.current.some((c) => c.id === id && !c.inc)) { setCur(id); setView("chat"); } return; }
       const mv = /^#v=([a-z]+)$/.exec(h);
@@ -2758,7 +2766,7 @@ export default function Home() {
       {drag && <div className="drop"><div className="drop-in"><div className="drop-ic"><I.Image size={30} /><I.Copy size={30} /><I.Folder size={30} /></div><span>Thả tệp vào đây</span></div></div>}
       <Toast text={toast} />
       {voiceOn && <VoiceMode onClose={() => setVoiceOn(false)} onAsk={(t) => send(t)} onTurn={voiceTurn} busy={busy} reply={lastAi ? { text: lastAi.failed ? tr(chatError(lastAi.err).text) : lastAi.text, time: lastAi.time ?? 0 } : null} rate={VOICE_RATE[vspeed] ?? 1} voice={vvoice} say={say} />}
-      <Fade show={!!(modal === "settings")}><Settings key={settingsTab} initial={settingsTab} onClose={() => setModal(null)} theme={theme} setTheme={setTheme} /></Fade>
+      <Fade show={!!(modal === "settings")}><Settings initial={settingsTab} onTab={setSettingsTab} onClose={() => setModal(null)} theme={theme} setTheme={setTheme} /></Fade>
       <Fade show={!!(modal === "lang")}><LangModal onClose={() => setModal(null)} /></Fade>
       <Fade show={!!(modal === "search")}><CommandPalette chats={visible} projects={projects} codes={codeList} cmds={paletteCmds} go={paletteGo} seed={palSeed} onClose={() => setModal(null)} /></Fade>
       <Fade show={!!(modal === "share" && chat)}>{chat ? <ShareModal chat={chat} onClose={() => setModal(null)} say={say} /> : <></>}</Fade>
