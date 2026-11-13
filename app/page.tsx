@@ -2440,13 +2440,16 @@ export default function Home() {
                 </>
               )}
               <div className="section-label sec-toggle"><button className="sec-btn" onClick={() => setRecentOpen(!recentOpen)}><span>Đoạn chat và tác vụ</span><span className={`sec-chev ${recentOpen ? "open" : ""}`}><I.Chevron size={14} /></span></button>{sideItems.length > 0 && <button className={`icon-btn bk-side${sb.on ? " on" : ""}`} style={{ width: 24, height: 24 }} aria-pressed={sb.on} aria-label={sb.on ? "Xong" : "Chọn hàng loạt"} data-tip={sb.on ? "Xong" : "Chọn hàng loạt"} onClick={() => (sb.on ? sb.exit() : sb.start())}>{sb.on ? <I.X size={14} /> : <I.ListChecks size={16} />}</button>}<button className="icon-btn" style={{ width: 24, height: 24 }} aria-label="Tìm kiếm đoạn chat" data-tip="Tìm kiếm đoạn chat" onClick={() => setModal("search")}><I.Search size={15} /></button></div>
+              {/* Danh sách VÀ thanh phân trang nằm trong MỘT div là con duy nhất của .fold (như các khối .fold ở trên): .fold dùng grid-template-rows 0fr chỉ co được một hàng, để hai con thì khi gập, thanh phân trang "1-20/30" vẫn còn. */}
               <div className={`fold ${recentOpen ? "open" : ""}`}>
-                <div className="chat-list">
-                  {/* Thiết bị mới: danh sách đang về từ máy chủ thì hiện dòng chờ đúng cỡ, chưa nói "chưa có" khi chưa biết. */}
-                  {visible.length === 0 && (!chats.length && !syncSt.at && !syncSt.offline ? <ChatListSkeleton /> : <div className="muted" style={{ padding: "6px 10px", fontSize: 13 }}>Chưa có đoạn chat nào</div>)}
-                  {pgRest.items.map(row)}
+                <div>
+                  <div className="chat-list">
+                    {/* Thiết bị mới: danh sách đang về từ máy chủ thì hiện dòng chờ đúng cỡ, chưa nói "chưa có" khi chưa biết. */}
+                    {visible.length === 0 && (!chats.length && !syncSt.at && !syncSt.offline ? <ChatListSkeleton /> : <div className="muted" style={{ padding: "6px 10px", fontSize: 13 }}>Chưa có đoạn chat nào</div>)}
+                    {pgRest.items.map(row)}
+                  </div>
+                  {sidePager(pgRest)}
                 </div>
-                {sidePager(pgRest)}
               </div>
               <BulkBar b={sb} acts={sideActs} noun="mục" compact />
             </div>
