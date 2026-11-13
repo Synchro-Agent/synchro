@@ -1,8 +1,16 @@
 @import "tailwindcss";
 
-/* Font giống claude.ai: Anthropic Sans/Serif bản biến thiên + font dự phòng đã căn số đo. Unbounded (tiêu đề của bộ nhận diện) nạp ở layout.tsx. */
-@font-face{font-family:"Anthropic Sans";src:url(/fonts/AnthropicSans-Variable.woff2) format("woff2");font-weight:300 800;font-style:normal;font-display:swap;font-feature-settings:"dlig" 0}
-@font-face{font-family:"Anthropic Sans";src:url(/fonts/AnthropicSans-Variable-Italic.woff2) format("woff2");font-weight:300 800;font-style:italic;font-display:swap;font-feature-settings:"dlig" 0}
+/* Phông chữ thường: Be Vietnam Pro (SIL Open Font License 1.1, public/fonts/OFL-BeVietnamPro.txt), tự lưu trên máy chủ, đủ dấu tiếng Việt.
+   Bản tĩnh, chỉ các độ đậm giao diện dùng. Thang độ đậm của giao diện (360, 460, 560…) viết cho phông biến thiên: mỗi tệp nhận một khoảng
+   độ đậm để trình duyệt chọn đúng tệp mà không tự làm đậm / làm mảnh: tới 349 Light, 350–469 Regular (360, 430, 460), 470–579 Medium
+   (480, 500, 540, 560), 580–679 SemiBold (600, 660), từ 680 Bold. Nghiêng chỉ một bản (400); đậm nghiêng do trình duyệt tự dựng.
+   Serif biến thiên + font dự phòng đã căn số đo. Unbounded (tiêu đề của bộ nhận diện) nạp ở layout.tsx. */
+@font-face{font-family:"Be Vietnam Pro";src:url(/fonts/BeVietnamPro-Light.woff2) format("woff2");font-weight:100 349;font-style:normal;font-display:swap}
+@font-face{font-family:"Be Vietnam Pro";src:url(/fonts/BeVietnamPro-Regular.woff2) format("woff2");font-weight:350 469;font-style:normal;font-display:swap}
+@font-face{font-family:"Be Vietnam Pro";src:url(/fonts/BeVietnamPro-Medium.woff2) format("woff2");font-weight:470 579;font-style:normal;font-display:swap}
+@font-face{font-family:"Be Vietnam Pro";src:url(/fonts/BeVietnamPro-SemiBold.woff2) format("woff2");font-weight:580 679;font-style:normal;font-display:swap}
+@font-face{font-family:"Be Vietnam Pro";src:url(/fonts/BeVietnamPro-Bold.woff2) format("woff2");font-weight:680 1000;font-style:normal;font-display:swap}
+@font-face{font-family:"Be Vietnam Pro";src:url(/fonts/BeVietnamPro-Italic.woff2) format("woff2");font-weight:100 549;font-style:italic;font-display:swap}
 @font-face{font-family:"Anthropic Serif";src:url(/fonts/AnthropicSerif-Variable.woff2) format("woff2");font-weight:300 800;font-style:normal;font-display:swap}
 @font-face{font-family:"Anthropic Serif";src:url(/fonts/AnthropicSerif-Variable-Italic.woff2) format("woff2");font-weight:300 800;font-style:italic;font-display:swap}
 @font-face{font-family:"Anthropic Serif Fallback Georgia";src:local("Georgia");size-adjust:104.79%;ascent-override:94.71%;descent-override:24.57%;line-gap-override:0%;unicode-range:U+20-7E, U+A0-B4, U+B6-17F, U+2012-2015, U+2018-2022, U+2026, U+2030, U+2032-2034, U+2039-203A, U+2044}
@@ -71,9 +79,9 @@
 }
 
 :root {
-  /* Anthropic Sans: chữ giao diện và nội dung như cũ. Unbounded (bộ nhận diện): chỉ cho logo, lời chào, tiêu đề trang, số liệu lớn (400, khoảng chữ âm). */
-  --font-sans: "Anthropic Sans", system-ui, "Segoe UI", Roboto, Helvetica, Arial, "PingFang SC", "PingFang TC", "Hiragino Sans", "Apple SD Gothic Neo", sans-serif;
-  --font-display: "Unbounded Variable", "Anthropic Sans", ui-sans-serif, system-ui, sans-serif;
+  /* Be Vietnam Pro: chữ giao diện và nội dung. Unbounded (bộ nhận diện): chỉ cho logo, lời chào, tiêu đề trang, số liệu lớn (400, khoảng chữ âm). */
+  --font-sans: "Be Vietnam Pro", system-ui, "Segoe UI", Roboto, Helvetica, Arial, "PingFang SC", "PingFang TC", "Hiragino Sans", "Apple SD Gothic Neo", sans-serif;
+  --font-display: "Unbounded Variable", "Be Vietnam Pro", ui-sans-serif, system-ui, sans-serif;
   --font-serif: "Anthropic Serif", "Anthropic Serif Fallback Georgia", "Anthropic Serif Fallback Times", "Anthropic Serif Fallback DejaVu", "Anthropic Serif Fallback Noto", Georgia, "Times New Roman", Times, serif;
   /* Thang độ đậm của Claude (trục wght): thường 360, điều khiển 395, vừa 460, nhãn 480, đậm 560 */
   --font-weight-normal: 360;
@@ -96,7 +104,7 @@
   --fw-body:400;--fw-ui:430;--fw-strong:500;               /* đoạn văn, chữ trên nút/mục, mục đang chọn */
   --row:32px;--row-chat:30px;--row-menu:34px;--row-set:34px; /* chiều cao hàng: thanh bên, chat, menu, Cài đặt */
   --icon:18px;--icon-set:19px;--gap-nav:11px;
-  --icon-stroke:1.34px;--icon-stroke-strong:1.5px;          /* bằng thân chữ đứng cạnh (Anthropic Sans 14px: đậm 430, đậm 500) */
+  --icon-stroke:1.34px;--icon-stroke-strong:1.5px;          /* bằng thân chữ đứng cạnh (chữ giao diện 14px: đậm 430, đậm 500) */
   --ink:#2E2F2A;--ink-strong:#111210;                       /* mực chữ điều hướng: dịu hơn chữ nội dung */
 }
 [data-theme="dark"]{--ink:#D9D7CF;--ink-strong:#EEECE5}
@@ -422,7 +430,7 @@ html[data-motion="reduced"] *,html[data-motion="reduced"] *::before,html[data-mo
 .dock .composer{width:min(var(--thread-w,768px),calc(100% - 48px))}
 html[data-chat-font="System"] .ai-msg,html[data-chat-font="System"] .user-msg,html[data-chat-font="System"] .sk-ai,html[data-chat-font="System"] .sk-user{font-family:system-ui,-apple-system,sans-serif}
 html[data-chat-font="Serif"] .ai-msg,html[data-chat-font="Serif"] .user-msg,html[data-chat-font="Serif"] .sk-ai,html[data-chat-font="Serif"] .sk-user{font-family:Georgia,"Times New Roman",serif}
-html[data-chat-font="Anthropic Sans"] .user-msg,html[data-chat-font="Anthropic Sans"] .sk-user{font-family:var(--font-sans)}
+html[data-chat-font="Default"] .user-msg,html[data-chat-font="Default"] .sk-user{font-family:var(--font-sans)}
 html[data-text-size="Small"] .user-msg,html[data-text-size="Small"] .sk-user{font-size:14px}html[data-text-size="Small"] .ai-msg,html[data-text-size="Small"] .sk-ai{font-size:14px}
 html[data-text-size="Large"] .user-msg,html[data-text-size="Large"] .sk-user{font-size:18px}html[data-text-size="Large"] .ai-msg,html[data-text-size="Large"] .sk-ai{font-size:17px}
 html[data-ui-font="System"] body{font-family:system-ui,-apple-system,sans-serif}

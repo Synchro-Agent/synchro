@@ -9,14 +9,18 @@ ok(nf.status === 404, "địa chỉ sai trả 404", nf.status);
 ok(html.includes("err-page") && html.includes("Không tìm thấy trang này"), "trang 404 của Synchro, không phải trang mặc định", html.slice(0, 200));
 ok(/href="\/"/.test(html), "có đường về trang chủ");
 
-const font = await fetch(`${B}/fonts/AnthropicSans-Variable.woff2`);
-ok(/max-age=31536000/.test(font.headers.get("cache-control") ?? ""), "phông chữ giữ một năm", font.headers.get("cache-control"));
-for (const p of ["/icon-192.png", "/icon-maskable-512.png"]) {
+const font = await fetch(`${B}/fonts/BeVietnamPro-Regular.woff2`);
+ok(font.ok && /max-age=31536000/.test(font.headers.get("cache-control") ?? ""), "phông chữ giữ một năm", font.headers.get("cache-control"));
+const lic = await fetch(`${B}/fonts/OFL-BeVietnamPro.txt`);
+ok(lic.ok && /SIL Open Font License/.test(await lic.text()), "giấy phép OFL của Be Vietnam Pro đi kèm phông");
+ok((await fetch(`${B}/fonts/AnthropicSans-Variable.woff2`)).status === 404, "không còn phông Anthropic Sans");
+// Logo, bộ đọc cú pháp tree-sitter, phim giới thiệu (B3.6): giữ một tuần như biểu tượng.
+for (const p of ["/icon-192.png", "/icon-maskable-512.png", "/logos/ai2.svg", "/ts/tree-sitter-python.wasm", "/intro/synchro-intro-poster.jpg"]) {
   const r = await fetch(B + p);
   ok(r.ok && /max-age=604800/.test(r.headers.get("cache-control") ?? ""), `${p} giữ một tuần`, r.headers.get("cache-control"));
 }
 const home = await (await fetch(B, { headers: { accept: "text/html" } })).text();
-ok(html.includes("rel=\"preload\"") && home.includes("AnthropicSans-Variable.woff2"), "tải sớm phông chữ chính");
+ok(html.includes("rel=\"preload\"") && home.includes("BeVietnamPro-Regular.woff2"), "tải sớm phông chữ chính");
 ok(home.includes('class="boot"'), "trang đầu có khung app, không phải khung trắng");
 
 // Chưa đăng nhập: Mức dùng trả lỗi JSON, không làm sập gì; đăng nhập được kiểm ở tests/ui/ux-states.mjs.

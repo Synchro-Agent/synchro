@@ -1,5 +1,5 @@
 // Đóng gói tiện ích Synchro cho một máy chủ: các tệp trong extension/ (trừ tệp này), lõi thao tác workspace/browser-act.mjs chép thành act.js
-// (cùng mã với trình duyệt của Synchro), phông Anthropic Sans của app (public/fonts) và Unbounded của bộ nhận diện (node_modules/@fontsource-variable)
+// (cùng mã với trình duyệt của Synchro), phông Be Vietnam Pro của app (public/fonts, SIL OFL, kèm giấy phép) và Unbounded của bộ nhận diện (node_modules/@fontsource-variable)
 // cho cửa sổ tiện ích, và config.js ghi sẵn
 // địa chỉ máy chủ. Dùng ở
 // - /api/browser/ext/download (nút "Tải tiện ích" trong Cài đặt → Khả năng → Trình duyệt của bạn) → tệp .zip;
@@ -25,7 +25,8 @@ export function extensionFiles(root, server) {
   const dir = path.join(root, "extension");
   const files = walk(dir).map((f) => [f, fs.readFileSync(path.join(dir, f))]);
   files.push(["act.js", fs.readFileSync(path.join(root, "workspace", "browser-act.mjs"))]);
-  files.push(["fonts/AnthropicSans.woff2", fs.readFileSync(path.join(root, "public", "fonts", "AnthropicSans-Variable.woff2"))]);
+  for (const w of ["Regular", "Medium", "SemiBold"]) files.push([`fonts/BeVietnamPro-${w}.woff2`, fs.readFileSync(path.join(root, "public", "fonts", `BeVietnamPro-${w}.woff2`))]);
+  files.push(["fonts/OFL-BeVietnamPro.txt", fs.readFileSync(path.join(root, "public", "fonts", "OFL-BeVietnamPro.txt"))]);
   for (const sub of ["vietnamese", "latin"]) files.push([`fonts/unbounded-${sub}.woff2`, fs.readFileSync(path.join(root, "node_modules", "@fontsource-variable", "unbounded", "files", `unbounded-${sub}-wght-normal.woff2`))]);
   files.push(["config.js", `// Địa chỉ máy chủ Synchro mà tiện ích này nối tới (đổi được trong cửa sổ tiện ích trước khi ghép nối).\nexport const SERVER = ${JSON.stringify(String(server ?? "").replace(/\/$/, ""))};\n`]);
   return files;

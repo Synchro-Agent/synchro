@@ -1,8 +1,8 @@
 /* =====================================================================================================================
-   Phông chữ: Anthropic Sans cho mọi chữ thường (nút, menu, tiêu đề hộp thoại, Cài đặt…); Unbounded chỉ cho chỗ quan trọng:
+   Phông chữ: Be Vietnam Pro cho mọi chữ thường (nút, menu, tiêu đề hộp thoại, Cài đặt…); Unbounded chỉ cho chỗ quan trọng:
    tiêu đề trang, tên dự án ở đầu trang, lời chào ở trang chủ.
    Ngôn ngữ thiết kế riêng của Synchro ("Instrument"): nạp sau cùng, áp cho toàn bộ app sau khi đăng nhập (trang đăng nhập giữ nguyên).
-   Giữ: logo, bộ màu Carbon / Ivory (không màu nhấn), bộ icon Phosphor, phông Unbounded cho tiêu đề và Anthropic Sans cho chữ.
+   Giữ: logo, bộ màu Carbon / Ivory (không màu nhấn), bộ icon Phosphor, phông Unbounded cho tiêu đề và Be Vietnam Pro cho chữ.
    Nguyên tắc:
    1. Cấu trúc nhìn thấy được: nội dung nằm trên các tấm (plate) viền mảnh 1px, mọi thứ bám lưới 4 / 8px.
    2. Mực và giấy: thứ bậc bằng sắc độ (bàn → tấm → nổi) và độ đậm của mực; mục đang chọn đảo màu (tấm mực, chữ giấy).
@@ -908,7 +908,7 @@ html body .pj-compose .model-sub:not(.msub-models){top:0!important;bottom:auto!i
 /* Menu @ chọn connector: khung soạn của trang dự án không có position (chỉ .dock / .hero có, glass.css) nên menu từng neo vào .main và nằm ngoài màn hình; mở xuống như các menu khác ở đây. */
 html body .pj-compose .composer{position:relative}
 html body .pj-compose .composer .at-menu{top:calc(100% + 8px);bottom:auto}
-/* Chữ giao diện luôn là Anthropic Sans: tên skill, phím tắt, tiêu đề nhỏ trong Code / Bộ não / Khám phá (Unbounded chỉ cho tiêu đề trang,
+/* Chữ giao diện luôn là phông chữ thường (Be Vietnam Pro): tên skill, phím tắt, tiêu đề nhỏ trong Code / Bộ não / Khám phá (Unbounded chỉ cho tiêu đề trang,
    lời chào; chữ đơn cách chỉ cho mã, đường dẫn, khóa). */
 html body .pl-sk-t b{font-family:var(--font-sans);font-weight:560;font-size:13.5px}
 html body :is(.pal-k,.pal-foot kbd,.cv-gb kbd,.cvg-body kbd){font-family:var(--font-sans);font-weight:500}

@@ -117,3 +117,7 @@ export const VOICE_LANG: Record<string, string> = {
 };
 export const VOICE_RATE: Record<string, number> = { Slow: 0.8, Normal: 1, Fast: 1.3 };
 export const initials = (n: string) => (n.trim().split(/\s+/).map((w) => w[0]).join("").slice(-2) || "?").toUpperCase();
+
+/** Phông chữ của đoạn chat (Cài đặt → Chung): "System", "Serif", còn lại (kể cả giá trị cũ đã lưu từ phông trước) là "Default" —
+ *  phông chữ thường của app (globals.css chọn phông theo html[data-chat-font]). */
+export const chatFont = (f: string) => (f === "System" || f === "Serif" ? f : "Default");

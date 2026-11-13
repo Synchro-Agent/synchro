@@ -1225,7 +1225,7 @@ Object.assign(VI2EN, {
   "Gói Free chỉ hiện các giọng thư viện cho phép người dùng miễn phí. Mỗi giọng thêm vào dùng một chỗ lưu giọng (": "The Free plan only shows library voices open to free users. Each voice you add uses one voice slot (",
 });
 SAME.add("Skill & connector").add("Skills & connectors").add("Go (net/http)").add("OAuth Client ID").add("OAuth Client Secret").add("GlassButton").add("EaseMize").add("no json").add("not a paragraph")
-  .add('"vi"').add("AbortError").add("English (US)").add("Anthropic Sans").add("© 2026 Synchro").add("Scribe v2 Realtime").add("WebVTT (.vtt)").add("App Store").add("Google Play").add("Cron").add("esc")
+  .add('"vi"').add("AbortError").add("English (US)").add("Be Vietnam Pro").add("© 2026 Synchro").add("Scribe v2 Realtime").add("WebVTT (.vtt)").add("App Store").add("Google Play").add("Cron").add("esc")
   .add("GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET").add("GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET").add("APPLE_CLIENT_ID, APPLE_TEAM_ID, APPLE_KEY_ID, APPLE_PRIVATE_KEY").add("Jina").add("Pyodide");
 for (const w of ["Clone", "Pull", "Push", "token", "tokens", "skill", "skills", "studio", "credit", "credits", "Free", "Max", "Plus", "Providers", "kHz", "kbps", "Slide", "pptx", "docx", "doc", "md", "vtt", "srt", "Micro"]) SAME_WORDS.add(w);
 RULES_EN.push(

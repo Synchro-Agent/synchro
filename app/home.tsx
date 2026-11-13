@@ -67,7 +67,7 @@ type View = "new" | "chat" | "projects" | "project" | "artifacts" | "customize" 
 // "project" (chi tiết một dự án) dùng chung #v=projects với danh sách dự án. "new"/"chat" không có #v=.
 const HASH_VIEW: Partial<Record<View, string>> = { projects: "projects", project: "projects", artifacts: "artifacts", inbox: "inbox", brain: "brain", code: "code", speech: "speech", customize: "skills" };
 const VIEW_OF_HASH: Record<string, View> = { projects: "projects", artifacts: "artifacts", inbox: "inbox", brain: "brain", code: "code", speech: "speech", skills: "customize" };
-import { AppCtx, useApp, VOICE_LANG, VOICE_RATE, initials, readPref, reloadPrefs, resetPrefs, usePref, type Chat, type Msg, type Project } from "./store";
+import { AppCtx, chatFont, useApp, VOICE_LANG, VOICE_RATE, initials, readPref, reloadPrefs, resetPrefs, usePref, type Chat, type Msg, type Project } from "./store";
 import { IMAGE_PLANS, allowsModel, clampEffort, effortCap, effortsFor, isEffort, legacyModel, type Effort } from "./catalog";
 import { AUTO, autoTaskName, fitModel, modelName, modelsSettled, refreshModels, seedModels, useModels } from "./models";
 import type { BootData } from "./bootdata";
@@ -1018,8 +1018,8 @@ export default function Home({ boot }: { boot?: BootData | null }) {
   const [, setWork] = usePref("work", "");
   const [ins, setIns] = usePref("ins", "");
   const [size] = usePref("size", "Medium");
-  const [font] = usePref("font", "Anthropic Sans");
-  const [uiFont] = usePref("uiFont", "Anthropic Sans");
+  const [font] = usePref("font", "Default");
+  const [uiFont] = usePref("uiFont", "Default");
   const [width] = usePref("width", "Narrow");
   const [motion] = usePref("motion", "System");
   const [notif] = usePref("notif", [false, true, true, true]);
@@ -1036,7 +1036,7 @@ export default function Home({ boot }: { boot?: BootData | null }) {
   useEffect(() => {
     const r = document.documentElement;
     r.dataset.motion = motion === "Reduced" ? "reduced" : "";
-    r.dataset.chatFont = font;
+    r.dataset.chatFont = chatFont(font);
     r.dataset.uiFont = uiFont;
     r.dataset.textSize = size;
     // Mặc định bằng cột chat của Claude (48rem = 768px); Vừa / Rộng cho màn hình lớn.

@@ -67,12 +67,12 @@ export function createControl(chrome, o = {}) {
     // Người dùng bấm "Hủy" trên thanh "… đang gỡ lỗi trình duyệt này": coi như bấm Dừng.
     if (reason === "canceled_by_user") stop("user");
   });
-  // Phông Anthropic Sans của tiện ích (fonts/, chép khi đóng gói) gửi kèm dải điều khiển dạng base64: trang nạp bằng FontFace từ dữ liệu.
+  // Phông chữ của tiện ích (Be Vietnam Pro Medium, fonts/, chép khi đóng gói) gửi kèm dải điều khiển dạng base64: trang nạp bằng FontFace từ dữ liệu.
   // Không đọc được (vd. tiện ích giả lập không có chrome.runtime.getURL) thì dải dùng phông hệ thống, không bao giờ làm hỏng việc gắn vào tab.
   let fontP = null;
   const overlayFont = () => fontP ??= (async () => {
     try {
-      const r = await fetch(chrome.runtime.getURL("fonts/AnthropicSans.woff2"));
+      const r = await fetch(chrome.runtime.getURL("fonts/BeVietnamPro-Medium.woff2"));
       if (!r.ok) return "";
       const u = new Uint8Array(await r.arrayBuffer()); let bin = "";
       for (let i = 0; i < u.length; i += 0x8000) bin += String.fromCharCode(...u.subarray(i, i + 0x8000));

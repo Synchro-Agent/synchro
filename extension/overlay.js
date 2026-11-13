@@ -6,7 +6,7 @@
 // Synchro thao tác như một người vô hình: không vẽ con trỏ, vòng gợn hay dấu nào ở chỗ bấm / gõ.
 // Thiết kế: viên nổi ở mép trên bằng kính màu Carbon (mờ nền trang phía sau), chữ Ivory, đĩa chứa mark Synchro xoay theo nhịp đồng bộ (loader của
 // bộ nhận diện), hai dòng: "Synchro đang điều khiển tab này" và việc đang làm (đổi nhẹ khi việc đổi); nút Tạm dừng (viền mảnh) và Dừng (Ivory đặc).
-// Cùng một màu trên trang sáng lẫn tối; viền trang hai lớp Carbon + Ivory mảnh, quầng tối bên trong thở chậm. Chữ Anthropic Sans của app (tiện ích
+// Cùng một màu trên trang sáng lẫn tối; viền trang hai lớp Carbon + Ivory mảnh, quầng tối bên trong thở chậm. Chữ Be Vietnam Pro của app (tiện ích
 // gửi kèm phông dạng dữ liệu, nạp bằng FontFace nên không bị CSP của trang chặn; không nạp được thì dùng phông hệ thống).
 // Mọi phần tử dựng bằng DOM (không innerHTML), mark và icon là SVG dựng bằng createElementNS (không tải ảnh) để chạy được cả trên trang bật
 // Trusted Types hay CSP chặt (Gmail, ngân hàng…).
@@ -20,7 +20,7 @@ export function overlayScript(s, font = "") {
   if (window.top !== window) return;
   if (window.__synOverlay) { window.__synOverlay.show(); return; }
   const T = ${T};
-  // Phông Anthropic Sans: nạp từ dữ liệu (không tải URL) một lần cho mỗi trang, tên riêng để không đụng phông của trang.
+  // Phông chữ của app (Be Vietnam Pro Medium): nạp từ dữ liệu (không tải URL) một lần cho mỗi trang, tên riêng để không đụng phông của trang.
   if (T.font && !window.__synFont) {
     window.__synFont = 1;
     try { const b = atob(T.font), u = new Uint8Array(b.length); for (let i = 0; i < b.length; i++) u[i] = b.charCodeAt(i); document.fonts.add(new FontFace("Synchro Overlay Sans", u.buffer, { weight: "300 800" })); } catch {}
