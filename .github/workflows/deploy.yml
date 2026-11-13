@@ -13,13 +13,16 @@ jobs:
       group: verify-${{ github.ref_name }}
       cancel-in-progress: true
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # 30 phút không đủ: lần chạy ngày 1/11 bị cắt ở 30 phút 28 giây (blueprint H2.6). Build CI + build bản giả lập + bộ API + bộ giao diện
+    # cần khoảng 60–90 phút trên máy 2 nhân của GitHub.
+    timeout-minutes: 150
     steps:
       - uses: actions/checkout@v4
 
+      # Cùng bản Node với "engines" trong package.json (22.x) và máy chủ.
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version-file: package.json
           cache: npm
 
       - name: Cài gói
@@ -34,8 +37,15 @@ jobs:
       - name: Kiểm tra kiểu (TypeScript)
         run: node node_modules/typescript/bin/tsc --noEmit -p . 2>&1 | tee tsc.log; exit ${PIPESTATUS[0]}
 
+      # ESLint (next/core-web-vitals + jsx-a11y, eslint.config.mjs). Gói ESLint chưa cài thì scripts/lint.mjs bỏ qua và in lệnh cài.
+      # Chưa chặn deploy (continue-on-error) cho tới khi mã cũ hết lỗi lint; kết quả nằm trong ci.txt.
+      - name: ESLint
+        continue-on-error: true
+        run: npm run lint 2>&1 | tee lint.log; exit ${PIPESTATUS[0]}
+
+      # Cùng một lệnh build với package.json và scripts/server-build.sh (npm run build = next build).
       - name: Build production
-        run: NEXT_DIST_DIR=.next-ci NODE_OPTIONS=--max-old-space-size=4096 npx next build 2>&1 | tee build.log; exit ${PIPESTATUS[0]}
+        run: NEXT_DIST_DIR=.next-ci NODE_OPTIONS=--max-old-space-size=4096 npm run build 2>&1 | tee build.log; exit ${PIPESTATUS[0]}
 
       # Bản build vừa dựng gửi kèm deploy: máy chủ bỏ bước build khi đúng commit, đúng băm package-lock và cùng biến NEXT_PUBLIC_
       # (scripts/server-build.sh, from_artifact). Không khớp thì máy chủ tự build như cũ.
@@ -56,14 +66,32 @@ jobs:
           path: synchro-artifact/
           retention-days: 1
 
-      - name: Kiểm thử API trên Synchro giả lập
+      # Synchro giả lập bản production (dev:mock:fast: build một lần rồi next start), đúng bản npm run qa dùng trên máy chủ sở hữu; chế độ dev
+      # biên dịch theo yêu cầu nên bộ kiểm chậm và dễ quá hạn. Chạy nền, các bước sau dùng chung tới hết job.
+      - name: Khởi động Synchro giả lập
+        id: mock
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          npm run dev:mock > mock.log 2>&1 &
-          for i in $(seq 1 120); do grep -q "Synchro với API giả lập" mock.log && break; sleep 5; done
-          grep -q "Synchro với API giả lập" mock.log || { tail -60 mock.log; exit 1; }
-          node tests/run-all.mjs 2>&1 | tee tests.log; exit ${PIPESTATUS[0]}
+          nohup npm run dev:mock:fast > mock.log 2>&1 &
+          for i in $(seq 1 240); do grep -q "Synchro với API giả lập" mock.log && break; grep -q "Dựng bản chạy nhanh thất bại" mock.log && break; sleep 5; done
+          grep -q "Synchro với API giả lập" mock.log || { tail -80 mock.log; exit 1; }
+
+      - name: Kiểm thử API trên Synchro giả lập
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node tests/run-all.mjs 2>&1 | tee tests.log; exit ${PIPESTATUS[0]}
+
+      # H2.1: bộ giao diện (Chrome ẩn, scripts/qa.mjs) sau bộ API, trên cùng bản giả lập. Chạy cả khi bộ API lỗi: một lần CI cho thấy hết lỗi.
+      # Ubuntu 24.04 chặn user namespace không đặc quyền (AppArmor), sandbox của Chrome không mở được: cho phép trên máy CI dùng một lần này.
+      - name: Kiểm thử giao diện (npm run qa)
+        if: ${{ !cancelled() && steps.mock.outcome == 'success' }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
+          export CHROME_PATH="$(command -v google-chrome || command -v google-chrome-stable || command -v chromium || true)"
+          node scripts/qa.mjs --no-api 2>&1 | tee qa.log; exit ${PIPESTATUS[0]}
 
       # Repo riêng tư: kết quả kiểm tra được xem bằng SSH trên VPS, kể cả khi lỗi. Job này đã chạy mã của gói npm (npm ci, dev:mock) nên không được chạm khóa SSH: chỉ gói kết quả, job report gửi đi.
       - name: Gói kết quả kiểm tra
@@ -71,7 +99,8 @@ jobs:
         run: |
           { echo "commit ${{ github.sha }} · ${{ job.status }} · $(date -u '+%Y-%m-%d %H:%M UTC')"
             [ -f tests.log ] && { echo; echo "━━ Các kiểm tra lỗi"; grep -n -B1 "✗" tests.log | cut -c1-600; }
-            for f in tsc.log build.log tests.log mock.log audit.log; do [ -f $f ] && { echo; echo "━━ $f"; tail -150 $f; }; done; } > ci.txt
+            [ -f qa.log ] && { echo; echo "━━ Bộ giao diện chưa đạt"; grep -n "^✗" qa.log | cut -c1-300; }
+            for f in tsc.log lint.log build.log tests.log qa.log mock.log audit.log; do [ -f $f ] && { echo; echo "━━ $f"; tail -150 $f; }; done; } > ci.txt
       - uses: actions/upload-artifact@v4
         if: always()
         with:
