@@ -21,8 +21,8 @@ const db = AS.db();
 const pol = CAT.FULL_CONN;
 // Bộ dịch DOM dùng chung (VI2EN + RULES_EN): KHÔNG được chứa luật "động từ + ascii" của Composio (nó khớp quá rộng).
 const tr = (s) => { if (Object.prototype.hasOwnProperty.call(D.VI2EN, s)) return D.VI2EN[s]; for (const [re, f] of D.RULES_EN) { const m = s.match(re); if (m) return f(m); } return s; };
-// Nhãn thao tác Composio dịch riêng tại chỗ hiện nhãn (i18n.tsx trCx): bản dịch DOM chung, nếu không đổi thì áp CX_RULE_EN.
-const trCx = (s) => { const t = tr(s); if (t !== s) return t; const m = s.trim().match(CXA.CX_RULE_EN[0]); return m ? CXA.CX_RULE_EN[1](m) : s; };
+// Nhãn thao tác Composio dịch riêng tại chỗ hiện nhãn: i18n.tsx trCx và luật "Đang dùng X · Y" cùng gọi cxActEn (một chỗ duy nhất, INT-6).
+const trCx = (s) => CXA.cxActEn(s, tr);
 try {
   // Bảng như bản đang chạy (chưa có cột app_perms): Composio đã liên kết, người dùng từng đặt "Luôn cho phép" cho công cụ bọc ngoài và cho bash.
   db.exec(`CREATE TABLE IF NOT EXISTS connectors (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, name TEXT NOT NULL, url TEXT NOT NULL, dir TEXT, enabled INTEGER NOT NULL DEFAULT 1, era TEXT,

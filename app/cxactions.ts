@@ -142,3 +142,12 @@ export const CX_RULE_EN: [RegExp, (m: RegExpMatchArray) => string] = [
   new RegExp(`^(${alt(VERB_EN.keys())}) (${alt(NOUN_EN.keys())}|[a-z0-9][a-z0-9 ]{0,80})$`),
   (m) => `${VERB_EN.get(m[1]) ?? m[1]} ${NOUN_EN.get(m[2]) ?? m[2]}`,
 ];
+/** Nhãn thao tác Composio sang tiếng Anh — một chỗ duy nhất, dùng cho cả bộ dịch giao diện (i18n.tsx trCx) và luật "Đang dùng X · Y" của từ điển (i18n-dict.ts).
+ *  dict: bản dịch chung (từ điển + luật, kể cả "Gọi API GET"); dịch được thì lấy, không thì áp CX_RULE_EN cho phần chữ đã bỏ khoảng trắng hai đầu. */
+export function cxActEn(s: string, dict: (s: string) => string): string {
+  const base = dict(s);
+  if (base !== s) return base;
+  const t = s.trim();
+  const m = t.match(CX_RULE_EN[0]);
+  return m ? s.replace(t, () => CX_RULE_EN[1](m)) : s;
+}
