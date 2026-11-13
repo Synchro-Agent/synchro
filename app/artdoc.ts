@@ -123,6 +123,17 @@ const IMG_HOST = /^https?:\/\/(?:images\.unsplash\.com|plus\.unsplash\.com|uploa
 // Chỉ máy chủ đổi được địa chỉ này thành ảnh, và chỉ với đúng chủ tài khoản (artimg.ts); artifact không giữ đường dẫn hay dữ liệu riêng nào.
 export const genImageUrl = (id: string) => `https://image.synchro.invalid/${id}.png`;
 export const genImageId = (u: string) => /^https:\/\/image\.synchro\.invalid\/([\w-]{8,40})\.png$/.exec(u)?.[1] ?? null;
+/** Ảnh giữ chỗ của ảnh đang dựng ở chế độ nền (PNG 1×1, chatengine.ts placeholderImage): /api/artimg báo "đang chờ" để khung xem trước hỏi lại
+ *  tới khi byte thật thay vào (W23-2). Ảnh dựng thật không bao giờ là 1×1. */
+/** Khoảng chờ trước lần hỏi lại thứ n ảnh đang dựng nền: 5 s, tăng dần tới 30 s; null là thôi (sau khoảng 17 phút, quá thời gian dựng ảnh). */
+export const pendingRetryMs = (n: number): number | null => (n >= 40 ? null : Math.min(30_000, Math.round(5000 * 1.4 ** n)));
+export function isPlaceholderPng(b: Uint8Array): boolean {
+  if (b.length < 24 || b.length > 512) return false;
+  const sig = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+  if (!sig.every((x, k) => b[k] === x)) return false;
+  const u32 = (o: number) => ((b[o] << 24) | (b[o + 1] << 16) | (b[o + 2] << 8) | b[o + 3]) >>> 0;
+  return u32(16) === 1 && u32(20) === 1; // IHDR: rộng, cao
+}
 export function externalImageUrls(content: string, max = 60): string[] {
   const out = new Set<string>();
   const add = (u: string) => { u = u.replace(/&amp;/g, "&"); if (/^https?:\/\//i.test(u) && !FONT.test(u) && u.length < 2000 && out.size < max) out.add(u); };

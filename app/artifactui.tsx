@@ -24,7 +24,7 @@ import { htmlToBlocks } from "./htmlblocks";
 export type ArtVersion = ArtBlock & { at?: number };
 
 // ---------------------------------------------------------------- khung chạy cô lập
-import { buildDocCore, deckExport, externalImageUrls, genImageId, H2I, htmlExport, isDeck, libUrls, svgExport, swapUrls } from "./artdoc";
+import { buildDocCore, deckExport, externalImageUrls, genImageId, H2I, htmlExport, isDeck, libUrls, pendingRetryMs, svgExport, swapUrls } from "./artdoc";
 import { kitFontUrl, presetIn, withKitFontLink } from "./artkit";
 import { PRESETS, presetOf } from "./designpresets";
 export { deckExport, H2I, isDeck, libUrls };
@@ -90,14 +90,24 @@ export type StoreRef = { app: string; client?: string } | { art: { conv: string;
 // Ảnh từ URL ngoài (xem artdoc.ts): tải qua /api/artimg rồi nhúng thành data: trước khi dựng khung. Chờ tối đa 6 giây; ảnh nào
 // không tải được thì giữ URL (khung báo ảnh hỏng như trước). Nhớ theo URL cho cả phiên (ảnh thu nhỏ, phiên bản khác dùng lại).
 const imgCache = new Map<string, Promise<string | null>>();
+// W23-2: ảnh Synchro dựng ở chế độ nền còn là ảnh giữ chỗ (máy chủ báo x-synchro-pending): không nhớ lâu, khung xem trước hỏi lại (useInlineImages)
+// tới khi byte thật thay vào cùng địa chỉ. "&p=1" cho ảnh đã dựng: bỏ qua bản ảnh giữ chỗ trình duyệt lỡ lưu 24 giờ trước bản sửa này.
+const pendingImg = new Set<string>();
 const dataUrl = (u: string) => {
   let p = imgCache.get(u);
   if (!p) {
-    p = fetch(`/api/artimg?u=${encodeURIComponent(u)}`).then((r) => (r.ok ? r.blob() : null))
+    const gen = !!genImageId(u);
+    p = fetch(`/api/artimg?u=${encodeURIComponent(u)}${gen ? "&p=1" : ""}`)
+      .then((r) => { if (!r.ok) return null; if (r.headers.get("x-synchro-pending") === "1") pendingImg.add(u); else pendingImg.delete(u); return r.blob(); })
       .then((b) => b && new Promise<string>((ok, no) => { const f = new FileReader(); f.onload = () => ok(String(f.result)); f.onerror = no; f.readAsDataURL(b); }))
       .catch(() => null);
     imgCache.set(u, p);
-    p.then((d) => { if (!d) imgCache.delete(u); });
+    const mine = p;
+    p.then((d) => {
+      if (!d) imgCache.delete(u);
+      // Ảnh giữ chỗ: giữ ít giây (các khung cùng lúc dùng chung một lần tải), sau đó lần hỏi kế tiếp tải lại.
+      else if (pendingImg.has(u)) setTimeout(() => { if (imgCache.get(u) === mine) imgCache.delete(u); }, 3000);
+    });
   }
   return p;
 };
@@ -110,17 +120,24 @@ const embedGenerated = async (s: string) => {
 function useInlineImages(content: string, on: boolean): string | null {
   const urls = useMemo(() => (on ? externalImageUrls(content) : []), [content, on]);
   const [out, setOut] = useState<{ src: string; v: string } | null>(null);
+  // Lần hỏi lại ảnh đang dựng nền (W23-2): tăng thì tải lại các ảnh còn là ảnh giữ chỗ; đổi nội dung thì đếm lại từ đầu.
+  const [retry, setRetry] = useState({ src: content, n: 0 });
+  const n = retry.src === content ? retry.n : 0;
   useEffect(() => {
     if (!urls.length) return;
     let live = true;
+    let again: ReturnType<typeof setTimeout> | undefined;
     const t = setTimeout(() => { if (live) setOut((o) => (o?.src === content ? o : { src: content, v: content })); }, 6000);
     Promise.all(urls.map(async (u) => [u, await dataUrl(u)] as const)).then((got) => {
       if (!live) return;
       clearTimeout(t);
-      setOut({ src: content, v: swapUrls(content, new Map(got.filter((g): g is readonly [string, string] => !!g[1]))) });
+      const v = swapUrls(content, new Map(got.filter((g): g is readonly [string, string] => !!g[1])));
+      setOut((o) => (o?.src === content && o.v === v ? o : { src: content, v }));
+      const wait = urls.some((u) => pendingImg.has(u)) ? pendingRetryMs(n) : null;
+      if (wait !== null) again = setTimeout(() => { if (live) setRetry({ src: content, n: n + 1 }); }, wait);
     });
-    return () => { live = false; clearTimeout(t); };
-  }, [content, urls]);
+    return () => { live = false; clearTimeout(t); if (again) clearTimeout(again); };
+  }, [content, urls, n]);
   if (!urls.length) return content;
   return out?.src === content ? out.v : null;
 }
