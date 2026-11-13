@@ -1,5 +1,6 @@
 // Kiểm thử giao diện bằng Chrome ẩn (hồ sơ riêng) trên npm run dev:mock. Chạy tay: node tests/ui/apps.mjs
 // Hộp thư và tác vụ nền: tạo tác vụ từ mẫu, kết quả vào Hộp thư (có số đếm trên thanh bên), mở kết quả thành đoạn chat.
+import { waitFor } from "../lib/wait.mjs";
 import { spawn } from "node:child_process";
 import { mkdirSync, rmSync, readdirSync, statSync, writeFileSync, readFileSync } from "node:fs";
 import { createRequire } from "node:module";
@@ -99,8 +100,8 @@ const ok = (c, n, x = "") => { results.push([c, n]); console.log(c ? "  ✓" : "
 const shot = async (n) => { const { data } = await P("Page.captureScreenshot", { format: "png" }); writeFileSync(`${SCR}inbox-${n}.png`, Buffer.from(data, "base64")); };
 try {
   await sleep(800);
-  await click(byText(".nav-item", "Hộp thư"), "inbox"); await sleep(1200);
-  ok(await ev(`!!document.querySelector(".tk-top")`), "trang Hộp thư mở từ thanh bên");
+  await click(byText(".nav-item", "Hộp thư"), "inbox");
+  ok(await waitFor(() => ev(`!!document.querySelector(".tk-top")`), 8000), "trang Hộp thư mở từ thanh bên");
   await click(byText(".tk-top .btn.dark", "Tác vụ nền mới"), "new"); await sleep(600);
   await click(byText(".tk-tpl .chip", "Bản tin buổi sáng"), "template"); await sleep(200);
   ok(await ev(`document.querySelector(".tk-modal textarea").value.length > 20`), "chọn mẫu: điền sẵn tên, yêu cầu, lịch");
@@ -117,11 +118,11 @@ try {
   const badge = await ev(`document.querySelector(".nav-badge")?.textContent ?? ""`);
   ok(Number(badge) >= 1, "thanh bên hiện số kết quả chưa đọc: " + badge);
   await click(byText(".nav-item", "Hộp thư"), "inbox"); await sleep(1500);
-  await click(`[...document.querySelectorAll(".tk-item.unread .tk-row")].find((e) => e.textContent.includes("Bản tin buổi sáng"))`, "open item"); await sleep(800);
-  ok(await ev(`!!document.querySelector(".tk-body .mdx")`), "mở kết quả: hiện nội dung đầy đủ");
+  await click(`[...document.querySelectorAll(".tk-item.unread .tk-row")].find((e) => e.textContent.includes("Bản tin buổi sáng"))`, "open item");
+  ok(await waitFor(() => ev(`!!document.querySelector(".tk-body .mdx")`), 6000), "mở kết quả: hiện nội dung đầy đủ");
   await shot("2-result");
-  await click(byText(".tk-acts .btn", "Mở thành đoạn chat"), "as chat"); await sleep(1200);
-  ok(await ev(`document.querySelectorAll(".ai-msg").length >= 1 && /Bản tin buổi sáng/.test(document.body.innerText)`), "mở thành đoạn chat để hỏi tiếp");
+  await click(byText(".tk-acts .btn", "Mở thành đoạn chat"), "as chat");
+  ok(await waitFor(() => ev(`document.querySelectorAll(".ai-msg").length >= 1 && /Bản tin buổi sáng/.test(document.body.innerText)`), 8000), "mở thành đoạn chat để hỏi tiếp");
   await shot("3-chat");
 } catch (e) { ok(false, "lỗi khi chạy", e.stack); await shot("fail"); }
 const fails = results.filter((r) => !r[0]).length;

@@ -83,7 +83,7 @@ try {
   await click(byText(".cr-note .lnk", "Xem bản sửa"), "show fix"); await sleep(300);
   ok((await ev(`document.querySelector(".cr-fix")?.textContent ?? ""`)).trim() === "const items = [];", "xem trước bản sửa");
   await shot("2-note");
-  await click(byText(".cr-note .btn", "Áp dụng sửa"), "apply"); await sleep(1200);
+  await click(byText(".cr-note .btn", "Áp dụng sửa"), "apply");
   await until(`[...document.querySelectorAll(".art-ver span")].some((e) => e.textContent.trim() === "2/2")`, 8000, "version 2");
   const code2 = await ev(`document.querySelector(".art-code")?.textContent ?? ""`);
   ok(code2.includes("const items = [];") && !code2.includes("undefined"), "áp dụng sửa: phiên bản 2 có bản sửa ngay, không cần gọi model");

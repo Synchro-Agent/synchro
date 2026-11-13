@@ -1,5 +1,6 @@
 // Synchro Code trên giao diện thật: rời mục Code và tải lại trang giữa lượt không mất lượt, nút Dừng dừng ở máy chủ,
 // workspace không dùng được thì nói rõ và để người dùng chọn. Chạy tay: BASE=http://localhost:3277 node tests/ui/coderesume.mjs
+import { waitFor } from "../lib/wait.mjs";
 import { spawn } from "node:child_process";
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 
@@ -72,8 +73,7 @@ try {
   await sleep(1000);
   await click(`document.querySelector(".code-item")`, "session");
   await until(`!!document.querySelector(".cv-turn")`, 15000, "session back");
-  await sleep(1500);
-  ok(await ev(`!!document.querySelector(".cv-dock .send[aria-label*='Dừng'], .cv-dock .send[aria-label*='Stop']") || !!document.querySelector(".ai-streaming")`), "quay lại: vẫn thấy lượt đang chạy, có nút Dừng", await ev(`document.querySelector(".cv-turn")?.innerText`));
+  ok(await waitFor(() => ev(`!!document.querySelector(".cv-dock .send[aria-label*='Dừng'], .cv-dock .send[aria-label*='Stop']") || !!document.querySelector(".ai-streaming")`), 6000), "quay lại: vẫn thấy lượt đang chạy, có nút Dừng", await ev(`document.querySelector(".cv-turn")?.innerText`));
   await shot("back");
   await until(`!document.querySelector(".ai-streaming") && !!document.querySelector(".cv-ai .actions")`, 40000, "turn end");
   ok(await ev(`!document.querySelector(".cv-stopped")`), "lượt chạy hết, không bị coi là đã dừng");
@@ -133,8 +133,7 @@ try {
   await until(`!!document.querySelector(".overlay input, [role=dialog] input")`, 8000, "palette");
   await sleep(300);
   await P("Input.insertText", { text: "sửa bug trong repo" });
-  await sleep(800);
-  ok(await ev(`document.body.innerText.includes("Phiên Code")`), "gõ tên phiên: có nhóm Phiên Code", await ev(`document.querySelector(".overlay")?.innerText.slice(0, 300)`));
+  ok(await waitFor(() => ev(`document.body.innerText.includes("Phiên Code")`), 5000), "gõ tên phiên: có nhóm Phiên Code", await ev(`document.querySelector(".overlay")?.innerText.slice(0, 300)`));
   await shot("palette");
   await click(`[...document.querySelectorAll(".overlay [data-i]")].find((e) => /sửa bug trong repo/.test(e.textContent))`, "code row");
   await until(`/sửa bug trong repo/.test(document.querySelector(".cv-title")?.textContent ?? "")`, 8000, "open session");

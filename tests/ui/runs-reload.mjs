@@ -1,5 +1,6 @@
 // Kiểm thử giao diện bằng Chrome ẩn (hồ sơ riêng) trên npm run dev:mock. Chạy tay: node tests/ui/runs-reload.mjs
 // Kho kỹ năng (gộp Skills + Plugins): thanh bên, trang gộp, menu Thêm, thả tệp, Cài đặt. Chạy bằng Chrome ẩn trên dev:mock.
+import { waitFor } from "../lib/wait.mjs";
 import { spawn } from "node:child_process";
 import { mkdirSync, rmSync, readdirSync, statSync, writeFileSync, readFileSync } from "node:fs";
 import { createRequire } from "node:module";
@@ -109,13 +110,12 @@ ok(seen.size > 0, "đang chạy hiện bước: " + [...seen].join(" → "));
 await sleep(2500);
 await click(byText(".nav-item", "Mới"), "new"); await sleep(800);
 await sendMsg("Kể ngắn về lịch sử cà phê #slow");
-await sleep(2000);
-ok(await ev(`!!document.querySelector(".wl-status")`), "câu trả lời chậm đang chạy");
+ok(await waitFor(() => ev(`!!document.querySelector(".wl-status")`), 8000), "câu trả lời chậm đang chạy");
 await P("Page.reload", {}); await sleep(4000);
 const chatTitle = await ev(`[...document.querySelectorAll(".chat-item, aside button")].find((e) => e.textContent.includes("Kể ngắn về lịch sử"))?.textContent ?? ""`);
 // Tên đoạn chat có thể đã được tự đặt lại: tìm theo cụm chữ còn giữ.
-await click(`[...document.querySelectorAll(".chat-item")].find((e) => e.textContent.includes("lịch sử"))`, "open chat"); await sleep(1500);
-ok(await ev(`!!document.querySelector(".wl-status")`), "tải lại trang giữa chừng: tin nhắn vẫn đang chờ (nối lại lượt chạy)");
+await click(`[...document.querySelectorAll(".chat-item")].find((e) => e.textContent.includes("lịch sử"))`, "open chat");
+ok(await waitFor(() => ev(`!!document.querySelector(".wl-status")`), 8000), "tải lại trang giữa chừng: tin nhắn vẫn đang chờ (nối lại lượt chạy)");
 await shot("reload-pending");
 await until(`[...document.querySelectorAll(".ai-msg")].some((e) => e.textContent.includes("cà phê") && e.textContent.length > 40)`, 30000, "answer after reload");
 ok(true, "sau khi tải lại, câu trả lời vẫn hiện ra khi máy chủ chạy xong");

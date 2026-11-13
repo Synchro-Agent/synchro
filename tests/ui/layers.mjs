@@ -2,6 +2,7 @@
 // Khung phủ toàn màn hình mở từ trong một trang (xem artifact, sửa việc tự động) phải nằm trên thanh bên: trước đây animation hiện dần của
 // .page biến trang thành một lớp xếp chồng riêng nằm dưới thanh bên (z-index 20), thanh bên che mất nửa trái khung xem artifact.
 // Tài khoản chưa có việc tự động nào (máy giả lập mới dựng) thì bài tự tạo một việc qua API rồi xóa khi xong. BASE, CDP_PORT đổi được.
+import { waitFor } from "../lib/wait.mjs";
 import { spawn } from "node:child_process";
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 
@@ -67,8 +68,7 @@ try {
   await sleep(800);
   await click(`[...document.querySelectorAll(".nav-item")].find((e) => e.textContent.trim() === "Artifacts")`, "artifacts");
   await until(`!!document.querySelector(".art-tile")`, 15000, "artifact tiles");
-  await sleep(1200);
-  ok(await ev(`getComputedStyle(document.querySelector(".page")).opacity === "1" && document.querySelector(".page").getAnimations().length === 0`), "trang hiện dần xong thì không còn hiệu ứng nào gắn trên .page");
+  ok(await waitFor(() => ev(`getComputedStyle(document.querySelector(".page")).opacity === "1" && document.querySelector(".page").getAnimations().length === 0`), 5000), "trang hiện dần xong thì không còn hiệu ứng nào gắn trên .page");
   await ev(`document.querySelector(".art-tile").click(), 1`);
   await until(`!!document.querySelector(".art-modal .art-panel")`, 20000, "artifact modal");
   await sleep(500);

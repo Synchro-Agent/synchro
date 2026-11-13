@@ -1,5 +1,6 @@
 // Kiểm thử giao diện bằng Chrome ẩn (hồ sơ riêng) trên npm run dev:mock. Chạy tay: node tests/ui/mixer.mjs
 // Bàn trộn ngữ cảnh: thanh đo token cạnh ô soạn tin, bảng ba tầng, tắt khối tầng động, nén lịch sử thành tóm tắt.
+import { waitFor } from "../lib/wait.mjs";
 import { spawn } from "node:child_process";
 import { mkdirSync, rmSync, readdirSync, statSync, writeFileSync, readFileSync } from "node:fs";
 import { createRequire } from "node:module";
@@ -117,9 +118,9 @@ try {
   ok(await ev(`!!${artRow}?.querySelector(".toggle.on")`), "khối Artifact hiện tại có nút bật/tắt, đang bật");
   await shot("1-panel");
   const before = await ev(`Number((document.querySelector(".cx-h span b")?.textContent ?? "0").replace(/[^0-9]/g, ""))`);
-  await click(`${artRow}.querySelector(".toggle")`, "toggle artifact"); await sleep(1500);
+  await click(`${artRow}.querySelector(".toggle")`, "toggle artifact");
   await until(`/Đang tắt/.test(${artRow}?.textContent ?? "")`, 10000, "off");
-  await sleep(800);
+  await waitFor(async () => (await ev(`Number((document.querySelector(".cx-h span b")?.textContent ?? "0").replace(/[^0-9]/g, ""))`)) < before, 5000);
   const after = await ev(`Number((document.querySelector(".cx-h span b")?.textContent ?? "0").replace(/[^0-9]/g, ""))`);
   ok(after < before, `tắt artifact: tổng giảm ${before} → ${after}`);
   await click(`${artRow}.querySelector(".toggle")`, "toggle back"); await sleep(1200);
@@ -129,7 +130,7 @@ try {
   ok(await ev(`!!${byText(".cx-hist .lnk", "Bỏ nén")}`), "có nút bỏ nén");
   await shot("2-compacted");
   await click(`document.querySelector(".cx-pill")`, "close"); await sleep(400);
-  await sendMsg("#rev 4"); await sleep(1500); await idle(); await sleep(1500);
+  await sendMsg("#rev 4"); await sleep(1500); await idle(); await waitFor(async () => /Phiên bản 5/.test(await ev(`[...document.querySelectorAll(".art-card")].at(-1)?.textContent ?? ""`)), 6000);
   const card = await ev(`[...document.querySelectorAll(".art-card")].at(-1)?.textContent ?? ""`);
   ok(/Phiên bản 5/.test(card) && /Đã sửa 1 chỗ/.test(card), "sau khi nén vẫn sửa đúng artifact (bản hiện tại vẫn gửi kèm): " + card);
   await shot("3-after");

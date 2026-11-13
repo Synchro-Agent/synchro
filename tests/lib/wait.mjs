@@ -1,4 +1,4 @@
-// Chờ theo điều kiện thay cho chờ cố định (H2.3): `await sleep(1500)` rồi mới kiểm thì chậm khi máy nhanh và hụt khi máy chậm (CI).
+// Chờ theo điều kiện thay cho chờ cố định (H2.3): chờ cố định (sleep 1,5 giây) rồi mới kiểm thì chậm khi máy nhanh và hụt khi máy chậm (CI).
 // waitFor(cond, timeout) gọi cond lặp lại tới khi nó trả giá trị truthy (trả luôn giá trị đó) hoặc hết giờ (trả false, không ném lỗi:
 // dòng ok(...) sau đó báo lỗi như cũ). cond có thể là hàm đồng bộ / async; cond ném lỗi được coi là "chưa được" (trang đang tải lại…).
 export const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
