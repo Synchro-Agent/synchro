@@ -35,9 +35,12 @@ console.log("2. Ngân sách mỗi lượt lớn → kẹp sàn 4; nhỏ → kẹ
 
 console.log("3. Ngân sách lớn hơn thì mức không tăng (đơn điệu)");
 {
+  // Phải chốt giá trị của a NGAY sau khi nạp a, trước khi nạp b: loadGate ghi đè process.env dùng chung, mà globalLimit() đọc env lúc
+  // được gọi — gọi a.globalLimit() sau khi nạp b thì a lại đọc đúng env của b nên hai bên bằng nhau, phép kiểm thành vô nghĩa.
   const a = await loadGate({ SYNCHRO_CLI_BUDGET_MB: "300", SYNCHRO_SERVER_RESERVE_MB: "1024" });
+  const av = a.globalLimit();
   const b = await loadGate({ SYNCHRO_CLI_BUDGET_MB: "800", SYNCHRO_SERVER_RESERVE_MB: "1024" });
-  ok(b.globalLimit() <= a.globalLimit(), "ngân sách 800 ≤ mức của 300", `${b.globalLimit()} vs ${a.globalLimit()}`);
+  ok(b.globalLimit() <= av, "ngân sách 800 ≤ mức của 300", `${b.globalLimit()} vs ${av}`);
 }
 
 console.log("4. Đặt tay SYNCHRO_TURNS_GLOBAL ghi đè hoàn toàn (hành vi cũ giữ nguyên)");
