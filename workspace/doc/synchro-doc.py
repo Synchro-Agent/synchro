@@ -13,7 +13,8 @@
 Mẫu: basic-report (báo cáo doanh nghiệp: bìa, mục lục, số trang), ilm (đề xuất dự án / sách mỏng), charged-ieee (bài nghiên cứu 2 cột),
 invoice (hóa đơn / báo giá A4). Ba mẫu Typst dùng chung một hợp đồng nội dung (sections / blocks), nên cùng payload xuất được cả .docx.
 Mẫu Word (chỉ .docx, dựng bằng thư viện docx): contract (hợp đồng), minutes (biên bản họp), official-report (báo cáo có mục lục theo thể thức
-Nghị định 30), cv (sơ yếu lý lịch). --pdf: thêm bản PDF cùng tên bằng LibreOffice; --png: ảnh các trang đầu của bản PDF đó để tự kiểm bố cục.
+Nghị định 30), cv (sơ yếu lý lịch). --pdf: thêm bản PDF cùng tên bằng LibreOffice (giao cho người dùng); --png: ảnh các trang đầu của bản PDF dựng từ tệp Word để tự kiểm
+bố cục (chỉ --png thì bản PDF đó nằm trong thư mục ảnh, "check_pdf", không thành tệp của người dùng).
 Đường dẫn ảnh trong payload là đường dẫn tương đối trong thư mục hiện tại. Mã thoát: 0 xong, 2 payload / tham số sai (đọc lỗi rồi sửa), 1 lỗi bộ dựng.
 Chỉ dùng thư viện chuẩn của Python (+ WeasyPrint cho hóa đơn, Pillow nếu cần đổi định dạng ảnh); chạy được không cần mạng.
 """
@@ -637,13 +638,21 @@ def pdf_pages(pdf):
         return None
 
 
-def previews(pdf, outdir, root):
-    """Ảnh các trang đầu (70 dpi) để model tự xem bố cục và dấu tiếng Việt trước khi giao."""
+def png_dir(outdir, root):
+    """Thư mục --png (đường dẫn thật), phải nằm trong thư mục làm việc. Kiểm trước khi dựng để cờ sai không để lại tệp dở."""
     if not outdir:
-        return []
+        return None
     d = os.path.realpath(os.path.join(root, outdir))
     if not d.startswith(root + os.sep):
         raise Bad(f"--png phải là thư mục trong thư mục làm việc: {outdir}")
+    return d
+
+
+def previews(pdf, outdir, root):
+    """Ảnh các trang đầu (70 dpi) để model tự xem bố cục và dấu tiếng Việt trước khi giao."""
+    d = png_dir(outdir, root)
+    if not d:
+        return []
     os.makedirs(d, exist_ok=True)
     stem = os.path.splitext(os.path.basename(pdf))[0]
     for f in os.listdir(d):
@@ -679,10 +688,11 @@ def clean_stderr(s):
 
 def run_typst(tpl, payload, outp, png=None, keep=False):
     if tpl in WORD:
-        raise Bad(f'"{tpl}" là mẫu Word: synchro-doc docx {tpl} payload.json outputs/x.docx --pdf (bản PDF dựng từ chính tệp Word)')
+        raise Bad(f'"{tpl}" là mẫu Word: synchro-doc docx {tpl} payload.json outputs/x.docx --png outputs/_preview (thêm --pdf nếu cần cả bản PDF dựng từ chính tệp Word)')
     if tpl not in TYPST:
         raise Bad(f'mẫu Typst không có: "{tpl}" (có: {", ".join(TYPST)}; hóa đơn dùng synchro-doc invoice)')
     root = os.path.realpath(os.getcwd())
+    png_dir(png, root)
     d, notes = load_payload(tpl, payload)
     out = out_path(root, outp, ".pdf")
     tmp = tempfile.mkdtemp(prefix=".synchro-doc-", dir=root)
@@ -717,21 +727,29 @@ def run_typst(tpl, payload, outp, png=None, keep=False):
 
 
 # ---------------------------------------------------------------- Word (.docx, thư viện docx của npm)
-def docx_pdf(out, root, png=None):
-    """Bản PDF của tệp Word bằng LibreOffice (cùng thư mục, cùng tên) và ảnh các trang đầu để tự kiểm bố cục. Không có LibreOffice thì báo, không lỗi."""
+def docx_pdf(out, root, png=None, deliver=False):
+    """Bản PDF của tệp Word bằng LibreOffice và ảnh các trang đầu để tự kiểm bố cục. Không có LibreOffice thì báo, không lỗi.
+    deliver (--pdf): PDF cùng thư mục, cùng tên với tệp Word, giao cho người dùng ("pdf"). Chỉ --png: PDF chỉ để tự kiểm,
+    nằm trong thư mục ảnh xem trước (outputs/_preview không thành tệp của người dùng), ghi ở "check_pdf"."""
+    key = "pdf" if deliver else "check_pdf"
     d = tempfile.mkdtemp(prefix=".synchro-doc-pdf-", dir=root)
     try:
         try:
             r = subprocess.run([SOFFICE, "--headless", "-env:UserInstallation=" + pathlib.Path(d, "profile").as_uri(), "--convert-to", "pdf", "--outdir", d, out],
                                capture_output=True, text=True, timeout=180)
         except (OSError, subprocess.SubprocessError) as e:
-            return {"pdf": None, "pdf_error": f"không chuyển được sang PDF ({e.__class__.__name__}): cần LibreOffice (soffice)"}
+            return {key: None, "pdf_error": f"không chuyển được sang PDF ({e.__class__.__name__}): cần LibreOffice (soffice)"}
         made = os.path.join(d, os.path.splitext(os.path.basename(out))[0] + ".pdf")
         if r.returncode or not os.path.isfile(made):
-            return {"pdf": None, "pdf_error": "LibreOffice không chuyển được tệp Word sang PDF: " + (r.stderr or r.stdout).strip()[-300:]}
-        pdf = os.path.splitext(out)[0] + ".pdf"
+            return {key: None, "pdf_error": "LibreOffice không chuyển được tệp Word sang PDF: " + (r.stderr or r.stdout).strip()[-300:]}
+        if deliver:
+            pdf = os.path.splitext(out)[0] + ".pdf"
+        else:
+            pd = png_dir(png, root)
+            os.makedirs(pd, exist_ok=True)
+            pdf = os.path.join(pd, os.path.basename(made))
         shutil.move(made, pdf)
-        return {"pdf": os.path.relpath(pdf, root), "pages": pdf_pages(pdf), "previews": previews(pdf, png, root)}
+        return {key: os.path.relpath(pdf, root), "pages": pdf_pages(pdf), "previews": previews(pdf, png, root)}
     finally:
         shutil.rmtree(d, ignore_errors=True)
 
@@ -740,6 +758,7 @@ def run_docx(tpl, payload, outp, keep=False, pdf=False, png=None):
     if tpl not in TYPST and tpl not in WORD:
         raise Bad(f'bản Word có cho: {", ".join(list(TYPST) + WORD)} (hóa đơn chỉ có PDF)')
     root = os.path.realpath(os.getcwd())
+    png_dir(png, root)
     d, notes = load_payload(tpl, payload)
     out = out_path(root, outp, ".docx")
     tmp = tempfile.mkdtemp(prefix=".synchro-doc-", dir=root)
@@ -762,7 +781,7 @@ def run_docx(tpl, payload, outp, keep=False, pdf=False, png=None):
         if notes:
             res["renamed"] = notes
         if pdf or png:
-            res.update(docx_pdf(out, root, png))
+            res.update(docx_pdf(out, root, png, deliver=pdf))
             res["seconds"] = round(time.time() - t0, 2)
         report(res)
     finally:
@@ -929,6 +948,7 @@ def hidden_under_total(page):
 
 def run_invoice(payload, outp, png=None, keep=False):
     root = os.path.realpath(os.getcwd())
+    png_dir(png, root)
     d, _ = load_payload("invoice", payload)
     out = out_path(root, outp, ".pdf")
     tt = totals(d)
@@ -1018,7 +1038,7 @@ def main(argv):
         with open(os.path.join(KIT, "schemas", "word.json"), encoding="utf-8") as f:
             w = json.load(f)["templates"]
         for k in WORD:
-            print(f"{k}\t{w[k]['title']}\tsynchro-doc docx {k} payload.json outputs/x.docx --pdf --png outputs/_preview")
+            print(f"{k}\t{w[k]['title']}\tsynchro-doc docx {k} payload.json outputs/x.docx --png outputs/_preview [--pdf]")
     elif cmd == "schema" and len(rest) == 1:
         print(json.dumps(schema_of(rest[0]), ensure_ascii=False, indent=1))
     elif cmd == "example" and len(rest) == 1:

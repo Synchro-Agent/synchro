@@ -72,7 +72,7 @@ console.log("4. Phần thuần của synchro-doc (python3 -I)");
 {
   const r = spawnSync("python3", ["-I", `${D}/test_synchro_doc.py`], { encoding: "utf8" });
   const tail = (r.stderr || "").trim().split("\n").slice(-3).join(" | ");
-  ok(r.status === 0 && /\nOK\s*$/.test(r.stderr), `test_synchro_doc.py: ${tail}`, r.stderr.slice(-1500));
+  ok(r.status === 0 && /\nOK(?: \(skipped=\d+\))?\s*$/.test(r.stderr), `test_synchro_doc.py: ${tail}`, r.stderr.slice(-1500));
 }
 
 console.log("5. Hướng dẫn cho model");
@@ -113,8 +113,13 @@ console.log("5. Hướng dẫn cho model");
   const wfields = new Set([...Object.values(wd.templates).flatMap((t) => Object.keys(t.properties)), ...Object.keys(wd.$defs.party.properties), ...Object.keys(wd.$defs.signer.properties)]);
   for (const f of ["legal_bases", "parties", "label", "representative", "articles", "closing", "subject", "start_time", "end_time", "chair", "secretary", "attendees", "agenda", "decisions", "actions", "organization", "recipients", "signer", "authority", "headline", "contact", "experience", "education", "skills", "languages", "certifications"])
     ok(wfields.has(f) && b.includes(f), `mẫu Word: trường ${f} có trong schema và trong khối`);
-  ok(/--pdf --png outputs\/_preview/.test(b) && /contract\|minutes\|official-report\|cv/.test(b), "khối dặn dựng bản PDF + ảnh từ chính tệp Word để tự kiểm");
-  for (const [q, want] of [["Soạn hợp đồng dịch vụ thiết kế website, xuất file Word", "doc"], ["lập biên bản họp giao ban tuần này bản word", "doc"], ["làm CV xin việc vị trí phân tích dữ liệu", "doc"], ["Write my resume for a data analyst role", "doc"], ["viết hợp đồng thuê nhà", null], ["hợp đồng lao động là gì", null]])
+  ok(/outputs\/<tên>\.docx --png outputs\/_preview/.test(b) && /contract\|minutes\|official-report\|cv/.test(b), "khối dặn dựng ảnh + bản PDF tự kiểm từ chính tệp Word");
+  ok(/check_pdf/.test(b) && /thêm --pdf/.test(b) && !/--pdf --png/.test(b), "bản PDF chỉ để tự kiểm không giao cho người dùng; --pdf chỉ khi người dùng cần PDF");
+  for (const [q, want] of [["Soạn hợp đồng dịch vụ thiết kế website, xuất file Word", "doc"], ["lập biên bản họp giao ban tuần này bản word", "doc"], ["làm CV xin việc vị trí phân tích dữ liệu", "doc"], ["Write my resume for a data analyst role", "doc"], ["viết hợp đồng thuê nhà", null], ["hợp đồng lao động là gì", null],
+    // CV = computer vision, resume = động từ: không phải hồ sơ xin việc.
+    ["write code to resume training from checkpoint", null], ["make the download resume after reconnect", null], ["build a CV model to detect cats", null],
+    ["write a function to resume the job after a crash", null], ["create a resume button for the video player", null], ["tạo cv pipeline nhận diện biển số bằng opencv", null], ["build cv2 script to crop faces", null],
+    ["viết CV cho tôi", "doc"], ["Tạo sơ yếu lý lịch", "doc"], ["make a resume as a PDF", "doc"], ["soạn CV xin việc lập trình viên, biết code Python", "doc"], ["write a resume for a nurse position", "doc"]])
     ok(K.wantsDoc(q) === want, `nhận ra "${q}" → ${want}`, K.wantsDoc(q));
   const wm = read(`${D}/docx/word.mjs`);
   ok(/estimatePageNumbersWith/.test(wm) && /updateFields: true/.test(wm), "báo cáo: mục lục điền sẵn số trang (docx/layout), bản docx cũ thì Word tự cập nhật");

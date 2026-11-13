@@ -110,6 +110,9 @@ check outputs/minutes.pdf "Liberation\|Times" "BIÊN BẢN HỌP" "Phân công t
 check outputs/official-report.pdf "Liberation\|Times" "MỤC LỤC" "I. Kết quả thực hiện quý III" "Nơi nhận"
 check outputs/cv.pdf "Carlito\|Calibri" "Trần Thị Bình" "Kinh nghiệm làm việc" "IELTS 7.0"
 ls outputs/_preview/contract-1.png outputs/_preview/cv-1.png >/dev/null 2>&1 && ok "ảnh xem trước của bản Word" || bad "thiếu ảnh xem trước của bản Word"
+# Chỉ --png: bản PDF tự kiểm nằm trong _preview ("check_pdf"), không thành tệp của người dùng cạnh tệp Word.
+synchro-doc docx cv cv.json outputs/cv-check.docx --png outputs/_preview >"$W/png-cv.out" 2>&1 && grep -q '"check_pdf": "outputs/_preview/cv-check.pdf"' "$W/png-cv.out" \
+  && [ ! -e outputs/cv-check.pdf ] && [ -f outputs/_preview/cv-check-1.png ] && ok "docx --png: PDF tự kiểm ở _preview, không giao" || bad "docx --png: $(head -c 400 "$W/png-cv.out")"
 
 echo "== bố cục khó: ghi chú khuất dưới bảng tổng, bảng nhiều cột, chữ trùng nhãn của gói, tiền làm tròn, payload số / ngày sai"
 python3 - <<'EOF'

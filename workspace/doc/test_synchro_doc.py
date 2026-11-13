@@ -210,7 +210,8 @@ class Hardening(unittest.TestCase):
         self.assertEqual(sd.normalize("charged-ieee", {**base, "lang": "en"}, ctx)["guard"], [])
         self.assertEqual(sd.normalize("basic-report", {**base, "lang": "en"}, ctx)["guard"], ["Inhalt"])
         self.assertEqual(sd.normalize("ilm", {**base, "lang": "vi"}, ctx)["guard"], [])
-        lib = open(os.path.join(HERE, "typst", "_lib", "blocks.typ"), encoding="utf-8").read()
+        with open(os.path.join(HERE, "typst", "_lib", "blocks.typ"), encoding="utf-8") as f:
+            lib = f.read()
         self.assertIn("guarded(p)", lib)
         self.assertIn("show table: set par(justify: false)", lib)
 
@@ -426,14 +427,14 @@ HAS_DOCX = os.path.isdir(os.path.join(HERE, "docx", "node_modules", "docx")) and
 
 @unittest.skipUnless(HAS_DOCX, "cần node + workspace/doc/docx/node_modules")
 class WordRender(unittest.TestCase):
-    def build(self, tpl, payload, extra=()):
+    def build(self, tpl, payload, extra=(), soffice="/nonexistent/soffice", w=None):
         import zipfile
-        w = tempfile.mkdtemp()
-        self.addCleanup(lambda: __import__("shutil").rmtree(w, ignore_errors=True))
+        if w is None:
+            w = tempfile.mkdtemp()
+            self.addCleanup(lambda: __import__("shutil").rmtree(w, ignore_errors=True))
         with open(os.path.join(w, "p.json"), "w", encoding="utf-8") as f:
             json.dump(payload, f, ensure_ascii=False)
-        env_soffice = {"SYNCHRO_SOFFICE": "/nonexistent/soffice"}
-        r = subprocess.run([sys.executable, "-I", SCRIPT, "docx", tpl, "p.json", f"outputs/{tpl}.docx", *extra], cwd=w, capture_output=True, text=True, env={**os.environ, **env_soffice})
+        r = subprocess.run([sys.executable, "-I", SCRIPT, "docx", tpl, "p.json", f"outputs/{tpl}.docx", *extra], cwd=w, capture_output=True, text=True, env={**os.environ, "SYNCHRO_SOFFICE": soffice})
         self.assertEqual(r.returncode, 0, r.stderr)
         res = json.loads(r.stdout)
         with zipfile.ZipFile(os.path.join(w, res["output"])) as z:
@@ -464,6 +465,49 @@ class WordRender(unittest.TestCase):
             self.assertIn(s, xml, s)
         self.assertIsNone(res["pdf"])
         self.assertIn("LibreOffice", res["pdf_error"])
+
+    def fake_soffice(self):
+        """soffice giả: ghi một PDF nhỏ vào --outdir như LibreOffice (máy dev không có LibreOffice; image thật kiểm bằng selftest.sh)."""
+        d = tempfile.mkdtemp()
+        self.addCleanup(lambda: __import__("shutil").rmtree(d, ignore_errors=True))
+        p = os.path.join(d, "soffice")
+        with open(p, "w", encoding="utf-8") as f:
+            f.write(f"#!{sys.executable}\n" + "import os, sys\n"
+                    "a = sys.argv[1:]\n"
+                    "out = a[a.index('--outdir') + 1]\n"
+                    "stem = os.path.splitext(os.path.basename(a[-1]))[0]\n"
+                    "open(os.path.join(out, stem + '.pdf'), 'wb').write(b'%PDF-1.4\\n%%EOF\\n')\n")
+        os.chmod(p, 0o755)
+        return p
+
+    def test_pdf_flag_delivers_pdf_next_to_docx(self):
+        w = tempfile.mkdtemp()
+        self.addCleanup(lambda: __import__("shutil").rmtree(w, ignore_errors=True))
+        res, _ = self.build("cv", example("cv"), ("--pdf", "--png", "outputs/_preview"), soffice=self.fake_soffice(), w=w)
+        self.assertEqual(res["pdf"], "outputs/cv.pdf")
+        self.assertNotIn("check_pdf", res)
+        self.assertTrue(os.path.isfile(os.path.join(w, "outputs", "cv.pdf")))
+        self.assertFalse(os.path.exists(os.path.join(w, "outputs", "_preview", "cv.pdf")))
+
+    def test_png_only_keeps_check_pdf_out_of_outputs(self):
+        w = tempfile.mkdtemp()
+        self.addCleanup(lambda: __import__("shutil").rmtree(w, ignore_errors=True))
+        res, _ = self.build("contract", example("contract"), ("--png", "outputs/_preview"), soffice=self.fake_soffice(), w=w)
+        self.assertEqual(res["check_pdf"], "outputs/_preview/contract.pdf")
+        self.assertNotIn("pdf", res)
+        self.assertEqual(sorted(os.listdir(os.path.join(w, "outputs"))), ["_preview", "contract.docx"])
+
+    def test_bad_png_dir_writes_nothing(self):
+        for bad in ("../x", "/tmp/x"):
+            w = tempfile.mkdtemp()
+            self.addCleanup(lambda w=w: __import__("shutil").rmtree(w, ignore_errors=True))
+            with open(os.path.join(w, "p.json"), "w", encoding="utf-8") as f:
+                json.dump(example("cv"), f, ensure_ascii=False)
+            r = subprocess.run([sys.executable, "-I", SCRIPT, "docx", "cv", "p.json", "outputs/cv.docx", "--pdf", "--png", bad], cwd=w, capture_output=True, text=True,
+                               env={**os.environ, "SYNCHRO_SOFFICE": self.fake_soffice()})
+            self.assertEqual(r.returncode, 2, r.stderr)
+            self.assertIn("--png", r.stderr)
+            self.assertFalse(os.path.exists(os.path.join(w, "outputs")), os.listdir(w))
 
 
 if __name__ == "__main__":
