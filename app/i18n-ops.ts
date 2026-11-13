@@ -86,7 +86,7 @@ export const OPS_EN2VI: Record<string, string> = {
   "Already have an account? Sign in": "Đã có tài khoản? Đăng nhập",
   "Enter your password": "Nhập mật khẩu",
   "Check your email": "Kiểm tra email của bạn",
-  "We sent the next step to this address. If you already have an account, sign in or reset your password.": "Chúng tôi đã gửi bước tiếp theo tới địa chỉ này. Nếu đã có tài khoản, hãy đăng nhập hoặc đặt lại mật khẩu.",
+  "We sent the next step to this address. Open the link in the email, or sign in with your password.": "Chúng tôi đã gửi bước tiếp theo tới địa chỉ này. Hãy mở đường dẫn trong thư, hoặc đăng nhập bằng mật khẩu của bạn.",
   "Health": "Sức khỏe hệ thống",
   "System health": "Sức khỏe hệ thống",
   "What is happening on this server right now. It contains no chat content; error lines have email addresses and tokens removed.": "Những gì đang diễn ra trên máy chủ này. Không có nội dung chat; dòng lỗi đã bỏ địa chỉ email và token.",

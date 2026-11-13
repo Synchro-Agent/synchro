@@ -20,7 +20,9 @@ const PW = "Member-pass-123";
 const signup = async (email) => {
   const c = client();
   const r = await c("POST", "/api/auth/signup", { email, password: PW, profile: { fullName: "Người thử", birthDate: "2000-01-01" } });
-  ok(r.s === 200, `đăng ký ${email}`, JSON.stringify(r.j));
+  ok(r.s === 200 && r.j?.pending === true, `đăng ký ${email}`, JSON.stringify(r.j));
+  // Đăng ký không cấp phiên (blueprint F2.4): đăng nhập bằng mật khẩu vừa đặt.
+  await c("POST", "/api/auth/login", { email, password: PW });
   return c;
 };
 const owner = client(process.env.SYNCHRO_ADMIN_COOKIE ?? "");

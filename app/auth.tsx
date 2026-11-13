@@ -320,7 +320,8 @@ export const AuthComponent = ({ logo = <DefaultLogo />, brandName = "EaseMize", 
       await wait(minMs - (Date.now() - t0));
       // Tài khoản đã bật xác minh hai bước: hỏi mã rồi mới đăng nhập.
       if (mfa) { busy.current = false; setAuthStep("mfa"); setMfaCode(""); setPassword(""); setStage("form"); return; }
-      // Email này không tạo mới được: không nói lý do (ai cũng gõ được email của người khác), thư hướng dẫn đã gửi tới chính hộp thư đó.
+      // Đăng ký luôn trả về pending (blueprint F2.4), dù email mới hay đã có tài khoản: không nói lý do (ai cũng gõ được email của người khác),
+      // thư xác minh hoặc thư "bạn đã có tài khoản" đã gửi tới chính hộp thư đó. Người dùng mới đăng nhập bằng mật khẩu vừa đặt từ bước này.
       if (pending) { busy.current = false; setAuthStep("pending"); setPassword(""); setConfirmPassword(""); setStage("form"); return; }
       // Chưa có hồ sơ (vd. tài khoản cũ): bỏ qua lời chào, chuyển thẳng sang bước điền hồ sơ.
       if (u.needsProfile) { busy.current = false; onDone?.(u, k); return; }
@@ -462,7 +463,7 @@ export const AuthComponent = ({ logo = <DefaultLogo />, brandName = "EaseMize", 
     // Không lộ email đã có tài khoản hay chưa: cùng một bước cho cả hai, nói rõ cả hai đường đi.
     password: [isLogin ? (signupOpen ? "Sign in or create an account" : "Enter your password") : "Create your password", isLogin ? (signupOpen ? "Have an account? Enter your password. New here? Create one below." : "Enter your password to sign in.") : "Your password must be at least 8 characters long."],
     mfa: ["Two-step verification", "Enter the 6-digit code from your authenticator app, or a recovery code."],
-    pending: ["Check your email", "We sent the next step to this address. If you already have an account, sign in or reset your password."],
+    pending: ["Check your email", "We sent the next step to this address. Open the link in the email, or sign in with your password."],
     confirmPassword: ["One last step", "Confirm your password to continue"],
     profile: ["Tell us about you", "Synchro uses this to make your experience feel personal."],
   };
@@ -595,6 +596,7 @@ export const AuthComponent = ({ logo = <DefaultLogo />, brandName = "EaseMize", 
                     </BlurFade>}
                     {authStep === "pending" && <BlurFade delay={OUT + STEP * 2} className="w-full">
                         <p className="auth-signed-as" data-notr><b>{email}</b></p>
+                        <GlassButton type="button" className="w-full mt-4 [&>button]:w-full" contentClassName="flex items-center justify-center w-full" onClick={() => { setIsLogin(true); setPassword(""); setConfirmPassword(""); setAuthStep("password"); }}><span className="font-semibold text-foreground">Sign in</span></GlassButton>
                         <button type="button" onClick={handleGoBack} className="mt-4 flex items-center gap-2 text-sm text-foreground/70 hover:text-foreground transition-colors"><ArrowLeft className="w-4 h-4" /> Go back</button>
                     </BlurFade>}
                     <AnimatePresence>

@@ -456,8 +456,11 @@ export async function login(req: Request, email0: unknown, pw: unknown) {
   return { user: u, ...s };
 }
 
-/** pending: email này không tạo mới được (đã có tài khoản hoặc được dành riêng). Không báo trùng: chủ email nhận thư hướng dẫn, người khác không biết thêm gì. */
-export async function signup(req: Request, email0: unknown, pw0: unknown, profile: ProfileIn = {}, lang?: unknown): Promise<{ pending: true; user?: undefined; cookie?: undefined } | { pending?: false; user: UserRow; cookie: string }> {
+/** Blueprint F2.4: email mới và email đã có tài khoản (hoặc được dành riêng) trả về giống hệt nhau, { pending: true } không kèm phiên,
+ *  để không ai dò được email nào đã đăng ký. Email mới: tạo tài khoản chưa xác minh và gửi thư xác minh; người dùng đăng nhập bằng mật
+ *  khẩu vừa đặt (xác minh mềm, không chặn đăng nhập). Email đã có: chủ email nhận thư "bạn đã có tài khoản". Cả hai đường đều băm mật khẩu
+ *  và gửi một thư nên tốn thời gian gần bằng nhau. */
+export async function signup(req: Request, email0: unknown, pw0: unknown, profile: ProfileIn = {}, lang?: unknown): Promise<{ pending: true }> {
   const ip = clientIp(req);
   limit("signup:" + ip, 10, 60 * MIN);
   const email = normEmail(email0);
@@ -468,8 +471,7 @@ export async function signup(req: Request, email0: unknown, pw0: unknown, profil
   // Băm trước khi xem email có tồn tại: hai trường hợp tốn cùng thời gian.
   const hash = await hashPassword(pw);
   const taken = () => {
-    // Dò email qua đăng ký vẫn có dấu hiệu (không có phiên đăng nhập) nên giới hạn chặt theo IP, và mỗi lần dò chủ email đều nhận thư.
-    limit("signup-taken:" + ip, 3, 60 * MIN);
+    // Không có giới hạn riêng cho đường này: lỗi 429 chỉ ở đây sẽ thành dấu hiệu để dò. Giới hạn chung signup:<ip> ở trên áp cho cả hai đường.
     audit("signup_email_taken", { targetEmail: email, ip });
     try { limit("signup-taken-mail:" + email, 3, 60 * MIN); sendMail(email, signupTakenMail({ base: appUrl(req), url: `${appUrl(req)}/reset`, lang: mailLang(req, lang) }), "signup_taken"); } catch { /* đủ thư rồi */ }
     return { pending: true as const };
@@ -491,7 +493,7 @@ export async function signup(req: Request, email0: unknown, pw0: unknown, profil
   const u = getUser(id)!;
   audit("signup", { actor: u, ip, detail: "password" });
   issueVerify(req, u, lang);
-  return { user: u, cookie: createSession(u, req, "password") };
+  return { pending: true as const };
 }
 
 // ---- xác minh email: mềm, không chặn đăng nhập hay chat ----

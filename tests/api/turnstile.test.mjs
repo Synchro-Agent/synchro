@@ -51,7 +51,7 @@ try {
   let r = await j(await ME.GET(req("/api/auth/me")));
   ok(r.j.turnstile === null, "/api/auth/me không có khóa site", r.j);
   r = await signup("free1@synchro.test");
-  ok(r.s === 200 && r.j.user, "đăng ký không cần mã", r);
+  ok(r.s === 200 && r.j.pending === true && !!AS.findByEmail("free1@synchro.test"), "đăng ký không cần mã", r);
   for (let i = 0; i < 6; i++) await L.POST(req("/api/auth/login", { email: u.email, password: "sai-mat-khau" }, { ip: "8.8.8.1" }));
   r = await j(await L.POST(req("/api/auth/login", { email: u.email, password: PW }, { ip: "8.8.8.1" })));
   ok(r.s === 200 && r.j.user && !r.j.captcha, "sai mật khẩu nhiều lần rồi đúng: vẫn đăng nhập, không hỏi mã", r);
@@ -66,7 +66,7 @@ try {
   r = await j(await AD.PATCH(req("/api/admin/settings", { blockDisposable: false }, { cookie: bossCk, method: "PATCH" })));
   ok(r.s === 200 && r.j.settings.turnstile.blockDisposable === false, "quản trị viên tắt được", r);
   r = await signup("rac2@mailinator.com");
-  ok(r.s === 200 && r.j.user, "tắt rồi: đăng ký được", r);
+  ok(r.s === 200 && r.j.pending === true && !!AS.findByEmail("rac2@mailinator.com"), "tắt rồi: đăng ký được", r);
   await AD.PATCH(req("/api/admin/settings", { blockDisposable: true }, { cookie: bossCk, method: "PATCH" }));
   ok((await AD.PATCH(req("/api/admin/settings", { blockDisposable: false }, { cookie: AS.createSession(u, req("/"), "password").split(";")[0], method: "PATCH" }))).status === 403, "người thường không đổi được");
 
@@ -91,7 +91,7 @@ try {
   r = await signup("s1@synchro.test", "bad");
   ok(r.s === 400 && r.j.captcha === true, "mã sai: từ chối", r);
   r = await signup("s1@synchro.test", "signup:localhost:aaa", "4.4.4.4");
-  ok(r.s === 200 && r.j.user?.email === "s1@synchro.test", "mã đúng: đăng ký được", r);
+  ok(r.s === 200 && r.j.pending === true && !!AS.findByEmail("s1@synchro.test"), "mã đúng: đăng ký được", r);
   ok(seen.at(-1).secret === "0x4AAAAAAATestSecretKey_abc" && seen.at(-1).remoteip === "4.4.4.4" && seen.at(-1).idem, "gửi Cloudflare khóa bí mật đã giải mã, IP người dùng, khóa chống lặp", seen.at(-1));
   r = await signup("s2@synchro.test", "signup:localhost:aaa");
   ok(r.s === 400 && r.j.captcha, "mã đã dùng: từ chối", r);
@@ -136,7 +136,7 @@ try {
   ok(r.s === 200 && r.j.user?.id === u.id, "đăng nhập cần mã (sau nhiều lần sai): vẫn cho qua", r);
   down = false;
   r = await signup("s5@synchro.test", "signup:localhost:g4");
-  ok(r.s === 200 && r.j.user?.email === "s5@synchro.test", "Cloudflare trả lời lại: đăng ký được", r);
+  ok(r.s === 200 && r.j.pending === true && !!AS.findByEmail("s5@synchro.test"), "Cloudflare trả lời lại: đăng ký được", r);
   const { VI2EN } = (await loadTs(["i18n-dict"]))["i18n-dict"];
   ok(typeof VI2EN[T.VERIFY_DOWN] === "string" && /try again/i.test(VI2EN[T.VERIFY_DOWN]), "thông báo có bản tiếng Anh", VI2EN[T.VERIFY_DOWN]);
 
