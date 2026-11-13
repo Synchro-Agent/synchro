@@ -54,12 +54,24 @@ const words = (slug: string) => slug.toUpperCase().split(/[^A-Z0-9]+/).filter(Bo
 const KNOWN_WORDS = KNOWN_KITS.map(words);
 // Từ mà tên toolkit không được nuốt (sau từ đầu): động từ ghi, từ nối.
 const HIDES_WRITE = (x: string) => WRITE_ANY.has(x) || WRITE_NOUN.has(x) || LINK_WORD.has(x);
+// Composio hay lặp lại tên ứng dụng ngay sau toolkit: OUTLOOK_OUTLOOK_LIST_MESSAGES, TAVILY_TAVILY_SEARCH, PERPLEXITYAI_PERPLEXITY_AI_SEARCH, MICROSOFT_TEAMS_TEAMS_LIST.
+// Phần lặp đó vẫn là tên ứng dụng (động từ đứng ngay sau nó là "ngay sau tên toolkit"), nên bỏ đi. Chỉ bỏ chữ không phải động từ / từ nối, và luôn chừa lại ít nhất một chữ.
+const VERBISH = (x: string) => HIDES_WRITE(x) || READ_VERBS.has(x);
+function unrepeat(kit: string[], rest: string[]): string[] {
+  const flat = kit.join("");
+  for (let j = Math.min(3, rest.length - 1); j >= 1; j--) {
+    const head = rest.slice(0, j);
+    if (head.some(VERBISH)) continue;
+    if (head.join("") === flat || (j === 1 && kit.length > 1 && head[0] === kit[kit.length - 1])) return rest.slice(j);
+  }
+  return rest;
+}
 /** Ứng dụng (slug Composio, chữ thường) và phần còn lại của tên thao tác. known: ứng dụng xác định được (toolkit đã biết); không thì phải coi là ghi.
  *  learned: ranh giới lấy từ toolkit đã thấy của người dùng (hints.kits), không phải từ toolkit Composio báo cho đúng slug này hay danh sách có sẵn. */
 export function slugParts(slug: string, hints?: KitHints): { kit: string; rest: string[]; known: boolean; learned?: boolean } {
   const w = words(slug);
   const fits = (k: string[]) => k.length > 0 && k.length < w.length && k.every((x, i) => x === w[i]) && !k.slice(1).some(HIDES_WRITE);
-  const split = (n: number, known: boolean, learned = false) => ({ kit: w.slice(0, n).join("_").toLowerCase(), rest: w.slice(n), known, ...(learned ? { learned } : {}) });
+  const split = (n: number, known: boolean, learned = false) => ({ kit: w.slice(0, n).join("_").toLowerCase(), rest: known ? unrepeat(w.slice(0, n), w.slice(n)) : w.slice(n), known, ...(learned ? { learned } : {}) });
   // Composio đã nói slug này thuộc toolkit nào.
   const own = hints?.slug?.(w.join("_"));
   if (own && fits(words(own))) return split(words(own).length, true);
@@ -68,6 +80,12 @@ export function slugParts(slug: string, hints?: KitHints): { kit: string; rest: 
   const base = n;
   if (hints?.kits) for (const t of hints.kits) { const k = words(t); if (k.length > n && fits(k)) n = k.length; }
   return n ? split(n, true, n > base) : split(Math.min(1, w.length), false);
+}
+/** Tên thao tác để xét đọc / ghi và làm nhãn. Toolkit mà tên kết thúc bằng động từ đọc (composio_search: COMPOSIO_SEARCH_WEB, COMPOSIO_SEARCH_NEWS_SEARCH):
+ *  động từ đọc đó đứng ngay trước thao tác, xét như SEARCH_WEB ("Tìm web") — vẫn phải không có động từ ghi nào. */
+export function actRest(p: { kit: string; rest: string[]; known: boolean }): string[] {
+  const last = p.kit.toUpperCase().split("_").pop() ?? "";
+  return p.known && p.rest.length && READ_VERBS.has(last) && !VAGUE_ALONE.has(last) && !HIDES_WRITE(p.rest[0]) ? [last, ...p.rest] : p.rest;
 }
 /** Tham số của thao tác dưới dạng đối tượng, đúng như lúc gửi đi (chuỗi JSON được đọc ra, như coerceArgs). null: không đọc được thành đối tượng (coi là ghi). */
 function argsObject(args: unknown): Record<string, unknown> | null {
@@ -78,7 +96,9 @@ function argsObject(args: unknown): Record<string, unknown> | null {
 }
 /** Thao tác Composio có phải chỉ đọc không: ứng dụng xác định được, động từ đọc ngay sau tên ứng dụng, không kèm động từ ghi, tham số không có dấu hiệu chạy lệnh. Không chắc thì là ghi. */
 export function slugIsRead(slug: string, args?: unknown, hints?: KitHints): boolean {
-  const { rest, known, learned } = slugParts(slug, hints);
+  const p = slugParts(slug, hints);
+  const { known, learned } = p;
+  const rest = actRest(p);
   if (!known || !rest.length || !READ_VERBS.has(rest[0])) return false;
   // Toolkit đã thấy (không phải toolkit Composio báo cho đúng slug này) chỉ để tách tên ứng dụng / khóa quyền: không bao giờ biến thao tác ghi thành đọc
   // (TWITTER_FOLLOW_LIST với toolkit "twitter_follow" vẫn là ghi của twitter). Đọc chỉ khi không có nó cũng là đọc.

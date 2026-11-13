@@ -6,7 +6,7 @@
 // Token / khóa nằm mã hóa trong hàng connector của đúng tài khoản đó (app/connectors.ts), không bao giờ ra trình duyệt hay sandbox chạy code.
 import type { McpTool } from "./mcp";
 import { isConnectUrl } from "./cxlink";
-import { actionWords, appName, KNOWN_KITS, metaWords, slugIsRead, slugParts, type CxCard, type CxWrite, type KitHints } from "./cxactions";
+import { actionWords, actRest, appName, KNOWN_KITS, metaWords, slugIsRead, slugParts, type CxCard, type CxWrite, type KitHints } from "./cxactions";
 export { appName };
 
 export const COMPOSIO = "composio";
@@ -446,14 +446,15 @@ export function cxCard(tool: string, input: unknown, user?: string): CxCard | nu
     // Mọi thao tác ghi trong lời gọi (cần duyệt). Thẻ nói về thao tác ghi đầu tiên; toàn đọc thì thao tác đầu.
     const writeItems = list.filter((x) => !slugIsRead(x.tool_slug, x.arguments, h));
     const first = writeItems[0] ?? list[0];
-    const { kit, rest } = slugParts(first.tool_slug, h);
+    const fp = slugParts(first.tool_slug, h);
+    const { kit } = fp;
     const args = argsOf(first.arguments);
     const plan = execPlan(input, user);
     // Nhiều thao tác ghi: liệt kê từng dòng (ứng dụng · thao tác · tham số chính · tài khoản); "+N" còn lại là thao tác đọc.
-    const line = (x: Item): CxWrite => { const p = slugParts(x.tool_slug, h); const a = argsOf(x.arguments); return { name: appName(p.kit), act: actionWords(p.rest) || x.tool_slug, main: mainOf(a), account: accountOf(obj(x), a, inp) ?? cxAccount(user, p.kit) }; };
+    const line = (x: Item): CxWrite => { const p = slugParts(x.tool_slug, h); const a = argsOf(x.arguments); return { name: appName(p.kit), act: actionWords(actRest(p)) || x.tool_slug, main: mainOf(a), account: accountOf(obj(x), a, inp) ?? cxAccount(user, p.kit) }; };
     const writes = writeItems.length > 1 ? writeItems.map(line) : undefined;
     const more = writes ? list.length - writeItems.length : list.length - 1;
-    return { app: kit, name: appName(kit), act: actionWords(rest) || first.tool_slug, main: mainOf(args), account: accountOf(obj(first), args, inp) ?? cxAccount(user, kit), params: paramsOf(args), ...(more > 0 ? { more } : {}), apps: plan?.writes ?? [], ...(writes ? { writes } : {}) };
+    return { app: kit, name: appName(kit), act: actionWords(actRest(fp)) || first.tool_slug, main: mainOf(args), account: accountOf(obj(first), args, inp) ?? cxAccount(user, kit), params: paramsOf(args), ...(more > 0 ? { more } : {}), apps: plan?.writes ?? [], ...(writes ? { writes } : {}) };
   }
   if (tool === PROXY_TOOL) {
     const kit = String(inp.toolkit ?? inp.toolkit_slug ?? inp.app ?? "").toLowerCase().replace(/[^a-z0-9_-]/g, "").slice(0, 60);

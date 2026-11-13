@@ -149,6 +149,11 @@ try {
     ["GOOGLE_SEARCH_CONSOLE_ADD_SITE", "google_search_console", false], ["TWITTER_DELETE_LIST", "twitter", false], ["LINKEDIN_CREATE_LINKED_IN_POST", "linkedin", false],
     ["MAILCHIMP_DELETE_LIST", "mailchimp", false], ["SUPABASE_QUERY", "supabase", false], ["ZOHO_BOOKS_CREATE_INVOICE", "zoho_books", false],
     ["GMAIL_LIST_AND_FORWARD", "gmail", false], ["GITHUB_GET_OR_CREATE", "github", false], ["GOOGLE_MAPS_LIST_AND_DELETE", "google_maps", false],
+    // Tên ứng dụng lặp lại ngay sau toolkit (Outlook, Tavily, Perplexity, Teams): động từ sau phần lặp; toolkit tìm kiếm của Composio (composio_search): đọc.
+    ["OUTLOOK_OUTLOOK_LIST_MESSAGES", "outlook", true], ["OUTLOOK_OUTLOOK_GET_MESSAGE", "outlook", true], ["PERPLEXITYAI_PERPLEXITY_AI_SEARCH", "perplexityai", true],
+    ["TAVILY_TAVILY_SEARCH", "tavily", true], ["MICROSOFT_TEAMS_TEAMS_LIST", "microsoft_teams", true], ["OUTLOOK_OUTLOOK_DELETE_MESSAGE", "outlook", false],
+    ["COMPOSIO_SEARCH_WEB", "composio_search", true], ["COMPOSIO_SEARCH_NEWS_SEARCH", "composio_search", true], ["COMPOSIO_SEARCH_TAVILY_SEARCH", "composio_search", true],
+    ["COMPOSIO_SEARCH_DELETE_INDEX", "composio_search", false], ["COMPOSIO_SEARCH_WEB_AND_POST", "composio_search", false],
     // Ứng dụng không có trong danh sách toolkit: không đoán ranh giới, ghi.
     ["UNKNOWNAPP_LIST_THINGS", "unknownapp", false], ["ACME_CRM_LIST_DEALS", "acme", false],
   ];
