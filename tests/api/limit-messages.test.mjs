@@ -65,6 +65,13 @@ full(m, "ảnh");
 const ce = fs.readFileSync("app/chatengine.ts", "utf8");
 ok(!/nhiều ảnh trong một giờ qua/.test(ce) && (ce.match(/imageLimitMsg\(IMAGE_HOUR_MAX\(\), wait\)/g) ?? []).length === 2, "cả hai chỗ chặn ảnh (poster, tạo ảnh) dùng lời báo mới");
 
+console.log("4. Thẻ lỗi trong chat hiện nguyên lời báo");
+// chatError (thẻ lỗi dưới câu trả lời) thay câu dài trên 400 ký tự bằng "Lượt này gặp lỗi ở máy chủ": lời báo hạn mức phải ngắn hơn để người dùng đọc được.
+const { chaterror: CE } = await loadTs(["chaterror"]);
+const samples = [L.usageLimitMsg("session", now + 4 * 3600_000 - 60_000, now), L.usageLimitMsg("weekly", now + 6 * 86_400_000, now), L.speechLimitMsg("me", 3000, "stt"), L.speechLimitMsg("all", 5000, "other"), L.imageLimitMsg(40, 59 * 60_000)];
+for (const s of samples) ok(s.length < 400 && CE.chatError(s).text === s, `hiện nguyên văn (${s.length} ký tự): ${s.slice(0, 50)}…`, CE.chatError(s));
+ok(CE.chatError(samples[0]).act === "providers", "lời báo chi phí API có nút mở Providers (để kết nối gói)", CE.chatError(samples[0]));
+
 console.log(`\n${pass}/${pass + fail} đạt`);
 fs.rmSync(tmp, { recursive: true, force: true });
 process.exit(fail ? 1 : 0);
