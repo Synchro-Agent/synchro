@@ -1,5 +1,6 @@
-// Soát lỗi giao diện toàn trang bằng Chrome ẩn trên npm run dev:mock. Chạy tay: node tests/ui/audit.mjs [light|dark] [desktop|mobile]
-// Đi qua mọi màn hình (chat, artifact, các trang, cài đặt, menu, trang đăng nhập…) ở chế độ sáng / tối, máy tính / điện thoại;
+// Soát lỗi giao diện toàn trang bằng Chrome ẩn trên npm run dev:mock. Chạy tay: node tests/ui/audit.mjs [light|dark] [desktop|tablet|mobile]
+// Đi qua mọi màn hình (chat, artifact, các trang, cài đặt, menu, trang đăng nhập…) ở chế độ sáng / tối, ba chiều rộng của blueprint B1.14:
+// máy tính 1440px, máy tính bảng 768px (thanh đoạn chat là bảng nổi, mặc định đóng — U3), điện thoại 390px;
 // tự bắt lỗi JavaScript, phần tử tràn khỏi màn hình, chữ bị cắt không có dấu …, ảnh hỏng, phông chữ chưa tải, chữ tiếng Anh sót;
 // chụp ảnh từng màn hình vào <tmp>/synchro-ui/audit/ để xem bằng mắt.
 import { spawn } from "node:child_process";
@@ -11,7 +12,9 @@ const OUT = process.env.AUDIT_OUT ?? (await import("node:os")).tmpdir() + "/sync
 mkdirSync(OUT, { recursive: true });
 const PROF = (await import("node:os")).tmpdir() + "/synchro-ui/chrome-prof-audit";
 const THEMES = process.argv[2] ? [process.argv[2]] : ["light", "dark"];
-const SIZES = process.argv[3] ? [process.argv[3]] : ["desktop", "mobile"];
+const SIZES = process.argv[3] ? [process.argv[3]] : ["desktop", "tablet", "mobile"];
+// Khung nhìn từng cỡ: 1440 / 768 / 390px (B1.14). Máy tính bảng không giả lập cảm ứng: đúng khoảng 761–860px của máy tính có cửa sổ hẹp.
+const VIEW = { desktop: { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false }, tablet: { width: 768, height: 1024, deviceScaleFactor: 1, mobile: false }, mobile: { width: 390, height: 844, deviceScaleFactor: 2, mobile: true } };
 
 const email = "admin@synchro.test", password = "synchro-mock-123";
 let cookie = "";
@@ -302,7 +305,8 @@ for (const theme of THEMES) for (const size of SIZES) {
   const tag = `${theme}-${size}`;
   console.log(`\n━━ ${tag}`);
   rmSync(PROF, { recursive: true, force: true });
-  const mobile = size === "mobile";
+  if (!VIEW[size]) throw new Error("cỡ màn hình lạ: " + size);
+  const mobile = size === "mobile", tablet = size === "tablet";
   const chrome = spawn(process.env.CHROME_PATH ?? "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
     ["--headless=new", "--remote-debugging-port=9339", `--user-data-dir=${PROF}`, "--window-size=1440,900", "--no-first-run", "--no-default-browser-check", "about:blank"], { stdio: "ignore" });
   let ver; for (let i = 0; i < 50 && !ver; i++) { await sleep(200); ver = await fetch("http://127.0.0.1:9339/json/version").then((r) => r.json()).catch(() => null); }
@@ -322,7 +326,7 @@ for (const theme of THEMES) for (const size of SIZES) {
   const { sessionId: S } = await send("Target.attachToTarget", { targetId, flatten: true });
   const P = (method, params) => send(method, params, S);
   await P("Runtime.enable"); await P("Page.enable"); await P("Network.enable");
-  await P("Emulation.setDeviceMetricsOverride", mobile ? { width: 390, height: 844, deviceScaleFactor: 2, mobile: true } : { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false });
+  await P("Emulation.setDeviceMetricsOverride", VIEW[size]);
   if (mobile) await P("Emulation.setTouchEmulationEnabled", { enabled: true, maxTouchPoints: 5 });
   await P("Emulation.setEmulatedMedia", { features: [{ name: "prefers-color-scheme", value: theme }] });
   await P("Page.addScriptToEvaluateOnNewDocument", { source: `try { localStorage.setItem("theme", ${JSON.stringify(theme)}); } catch {}` });
@@ -359,6 +363,8 @@ for (const theme of THEMES) for (const size of SIZES) {
   const side = async () => {
     // Điện thoại: khung artifact mở toàn màn hình, đóng trước (như người dùng bấm X) rồi mới mở thanh bên.
     if (mobile && (await ev(`!!document.querySelector(".art-panel")`))) { await click(`document.querySelector(".art-panel [aria-label='Đóng']")`, "close art").catch(() => {}); await sleep(400); }
+    // Máy tính bảng: thanh điều hướng (mục Dự án, Code…, nút tài khoản) luôn hiện; bảng đoạn chat là lớp nổi có lớp phủ, không mở khi chỉ cần điều hướng.
+    if (tablet) return;
     if (await ev(`!!document.querySelector(".sidebar.closed, .shell-side.closed")`)) { await click(`document.querySelector("[aria-label='Mở thanh bên']")`, "burger").catch(() => {}); await sleep(500); } };
   const nav = async (label) => { await side(); await click(byText(".nav-item", label), label); await sleep(1500); };
   const step0 = async (name, fn) => { try { await fn(); } catch (e) { note(`${tag}/${name}`, "không chạy được bước: " + e.message.split("\n")[0]); await shot(name + "-fail").catch(() => {}); } };
@@ -399,11 +405,12 @@ for (const theme of THEMES) for (const size of SIZES) {
     await shot("che-do-slides");
   });
   // Thanh bên thu gọn, mở menu tài khoản trong đoạn chat: menu nằm trên ô soạn tin (không bị che góc dưới).
+  // Máy tính bảng: bảng đoạn chat vốn đã đóng (U3), mở thẳng menu tài khoản từ thanh điều hướng.
   if (!mobile) await step0("menu-nguoi-dung-thu-gon", async () => {
-    await click(`document.querySelector(".rail-mark")`, "collapse"); await sleep(700);
+    if (!tablet) { await click(`document.querySelector(".rail-mark")`, "collapse"); await sleep(700); }
     await click(`document.querySelector(".rail .user")`, "user"); await sleep(600);
     await shot("menu-nguoi-dung-thu-gon"); await esc(); await sleep(300);
-    await click(`document.querySelector(".rail-mark")`, "expand"); await sleep(700);
+    if (!tablet) { await click(`document.querySelector(".rail-mark")`, "expand"); await sleep(700); }
   });
   await step0("bang-lenh", async () => { await key("k", "KeyK", 75, 4); await sleep(600); await shot("bang-lenh"); await esc(); await sleep(300); });
   await step0("artifacts", async () => { await nav("Artifacts"); await shot("artifacts"); await click(byText("button", "Ứng dụng"), "apps tab").catch(() => {}); await sleep(800); await shot("ung-dung"); });
@@ -442,7 +449,8 @@ for (const theme of THEMES) for (const size of SIZES) {
       await shot(label);
       // Phần dưới của từng mục cũng phải được soát: bộ soát chỉ đo những gì đang trong khung nhìn, nên ô số của Quản trị từng lọt vì nằm dưới màn hình đầu.
       // Điện thoại đang tạm dừng (chủ dự án chỉ xét máy tính): cuộn hết trên điện thoại làm cả bộ soát kéo dài hơn một tiếng.
-      for (let k = 1; k <= (mobile ? 0 : 8); k++) {
+      // Máy tính bảng: hai lần cuộn mỗi mục (đủ thấy phần dưới, giữ thời gian chạy vừa phải).
+      for (let k = 1; k <= (mobile ? 0 : tablet ? 2 : 8); k++) {
         const more = await ev(`(() => { const b = [...document.querySelectorAll(".modal.settings .s-body, .modal.settings .s-body *")].find((e) => e.scrollHeight > e.clientHeight + 40 && /auto|scroll/.test(getComputedStyle(e).overflowY)); if (!b || b.scrollTop + b.clientHeight >= b.scrollHeight - 4) return false; b.scrollTop += b.clientHeight * 0.85; return true; })()`);
         if (!more) break;
         await sleep(350); await shot(label + "-" + k);
@@ -451,6 +459,13 @@ for (const theme of THEMES) for (const size of SIZES) {
     await esc(); await sleep(400);
   });
   if (mobile) await step0("thanh-ben", async () => { await side(); await shot("thanh-ben"); await esc(); });
+  // Máy tính bảng: bảng đoạn chat mở ra là lớp nổi trên lớp phủ tối (U3); soát lúc đang mở rồi bấm lớp phủ để đóng.
+  if (tablet) await step0("thanh-ben", async () => {
+    if (await ev(`!!document.querySelector(".shell-side.closed")`)) { await click(`document.querySelector(".rail-mark")`, "open panel"); await sleep(600); }
+    await shot("thanh-ben");
+    await P("Input.dispatchMouseEvent", { type: "mousePressed", x: VIEW.tablet.width - 24, y: VIEW.tablet.height / 2, button: "left", clickCount: 1 });
+    await P("Input.dispatchMouseEvent", { type: "mouseReleased", x: VIEW.tablet.width - 24, y: VIEW.tablet.height / 2, button: "left", clickCount: 1 }); await sleep(500);
+  });
   console.log(`  · tác vụ chặn giao diện lâu nhất (sau khi tải trang): ${lagMax}ms${lagAt ? ` (${lagAt})` : ""}`);
   // Chờ Chrome của vòng này thoát hẳn: vòng sau mở Chrome mới cùng cổng 9339; Chrome cũ còn giữ cổng thì vòng sau gắn nhầm vào nó
   // (còn phiên đăng nhập → bước "đăng nhập" không thấy màn đăng nhập).
