@@ -359,6 +359,14 @@ const mig = (name, o = {}) => {
   fs.writeFileSync(path.join(P, o.oldName ?? "synchro"), o.oldDown ? "stopped" : "online");
   fs.writeFileSync(path.join(H, "active"), "3000");
   if (o.live) fs.writeFileSync(path.join(H, "state", "live-color"), `${o.live} ${A}\n`);
+  if (o.resume) {
+    // Lần trước dừng sau khi nginx đã sang green: site include tệp upstream 3002, green chạy, app cũ đã xóa tay.
+    fs.writeFileSync(path.join(H, "nginx", "snippets", "synchro-upstream.conf"), "proxy_pass http://127.0.0.1:3002;\n");
+    fs.writeFileSync(path.join(H, "site"), `server {\n    location / {\n        include ${path.join(H, "nginx", "snippets", "synchro-upstream.conf")};\n    }\n}\n`);
+    fs.cpSync(path.join(A, ".next"), path.join(A, ".next-green"), { recursive: true });
+    fs.writeFileSync(path.join(P, "synchro-green"), "online"); fs.writeFileSync(path.join(H, "active"), "3002");
+    fs.rmSync(path.join(P, o.oldName ?? "synchro"));
+  }
   const sh = (n, body) => { fs.writeFileSync(path.join(mb, n), `#!/bin/bash\n${body}\n`); fs.chmodSync(path.join(mb, n), 0o755); };
   sh("id", `[ "$1" = -u ] && { echo 0; exit 0; }; exec /usr/bin/id "$@"`);
   sh("chown", "exit 0");
@@ -409,6 +417,14 @@ case "$*" in *"-o /dev/null"*) exit 0 ;; esac; case "$url" in *api/health*) prin
   ok(m.code !== 0 && !m.st.live && m.st.active === "3000" && m.st.pm2.synchro === "online" && m.st.pm2["synchro-green"] === "stopped", "MIGRATE-2: green không nhận vai primary: bật lại bản cũ, nginx về 3000, bỏ màu sống, dừng green", { code: m.code, st: m.st });
 }
 {
+  {
+    const g = mig("gone", { resume: true });
+    ok(g.code === 0 && g.st.live === "green" && /không còn trong pm2/.test(g.out), "MIGRATE-2: app cũ đã không còn trong pm2 và cổng cũ trống: coi như đã dừng, chuyển xong", { code: g.code, st: g.st, out: g.out.slice(-400) });
+    const w = mig("wrongname2", { oldName: "synchro-web" });
+    ok(w.code !== 0 && !w.st.live && /chạy dưới tên khác/.test(w.out), "MIGRATE-2: không có app tên đó nhưng cổng cũ còn trả lời: nói rõ bản cũ có thể chạy dưới tên khác", { code: w.code, out: w.out.slice(-300) });
+    const n = mig("stillup2", { env: { KEEP_UP: "synchro" } });
+    ok(/KHÔNG có tiến trình nào là primary/.test(n.out), "MIGRATE-2: bản cũ đã dừng mà green chưa là primary: nói rõ không có primary và cách xử lý", n.out.slice(-300));
+  }
   const m = mig("savefail", { env: { FAIL_SAVE: "1" } });
   ok(m.code !== 0 && m.st.live === "green" && !m.st.dump, "MIGRATE-3: pm2 save lỗi không bị giấu (mã lỗi)", { code: m.code, st: m.st });
   const r = m.run({ FAIL_SAVE: "" }), st = m.stNow();

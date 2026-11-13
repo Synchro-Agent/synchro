@@ -29,6 +29,20 @@ DATA="${DATA_DIR:-$APP/data}"
 has_bg_code() { grep -rqs "SYNCHRO_PRIMARY_LOCK" "$1/server" && grep -rqs "NEXT_MANUAL_SIG_HANDLE" "$1/server"; }
 primary_color() { awk 'NR==1{print $2}' "$DATA/.primary.pid" 2>/dev/null || true; }
 ENVO="${SYNCHRO_OPS_ENV:-/etc/synchro-ops.env}"
+NOPRIMARY="Lúc này KHÔNG có tiến trình nào là primary: không sao lưu litestream, không bộ hẹn giờ tác vụ."
+# Trả lại bản một tiến trình cũ (green không nhận được vai primary): bật lại app pm2 cũ, nginx về cổng cũ, bỏ màu sống, dừng green.
+# Không còn app cũ trong pm2 thì không đụng gì, chỉ hướng dẫn.
+rollback_old() {
+  if ! bg_pm2_has "$OLDPM2"; then
+    echo "$NOPRIMARY Không còn app pm2 \"$OLDPM2\" để trả lại. Xem: cat $DATA/.primary.pid; su - synchro -c 'pm2 logs synchro-green'. Khóa của tiến trình đã chết: xóa tệp khóa, green nhận vai trong vài giây." >&2
+    return 1
+  fi
+  rm -f "$BG_LIVE_FILE"
+  bg_pm2 restart "$OLDPM2" >/dev/null 2>&1 || true
+  if bg_healthy "$OLDPORT" "$ID" && bg_switch_upstream "$OLDPORT"; then bg_stop green || true; echo "Đã trả lại bản cũ \"$OLDPM2\" ở cổng $OLDPORT (nó là primary). Xem pm2 logs synchro-green rồi chạy lại." >&2
+  else echo "CẢNH BÁO: bản cũ chưa lên lại ở cổng $OLDPORT, nginx vẫn ở green 3002. $NOPRIMARY Cần xem tay ngay." >&2; fi
+  return 1
+}
 # Các bước cuối, rẻ và chạy lại được: chạy cả khi chuyển đổi trước đó bị cắt ngang sau lúc ghi màu sống (mất ssh, pm2 save lỗi).
 finish_steps() { # finish_steps <màu sống>
   local c="$1" p rc=0
@@ -144,14 +158,24 @@ fi
 say "Dừng app pm2 cũ \"$OLDPM2\" (cổng $OLDPORT)."
 # Bản cũ phải thật sự đã thoát (pm2 stop đạt và cổng thôi trả lời) rồi mới ghi màu sống: không thì green nhận vai primary bên cạnh nó.
 # Chưa xóa app cũ khỏi pm2: green không nhận vai thì bật lại nó.
+STOPPED=1
 if ! bg_pm2 stop "$OLDPM2" >/dev/null 2>&1; then
-  echo "pm2 stop \"$OLDPM2\" lỗi (tên app khác?). Web vẫn chạy: nginx ở green 3002 (cùng bản $ID, chưa nhận vai primary), bản cũ vẫn là primary. Dừng bản cũ bằng tay rồi chạy lại script." >&2
-  exit 1
+  STOPPED=0
+  # App đã không còn trong pm2 (đã xóa tay ở lần chạy trước): coi như đã dừng nếu cổng cũng trống (kiểm tra ngay dưới).
+  if bg_pm2_has "$OLDPM2"; then
+    echo "pm2 stop \"$OLDPM2\" lỗi. Web vẫn chạy: nginx ở green 3002 (cùng bản $ID, chưa nhận vai primary), bản cũ vẫn là primary. Dừng bản cũ bằng tay rồi chạy lại script." >&2
+    exit 1
+  fi
+  say "App pm2 \"$OLDPM2\" không còn trong pm2: kiểm tra cổng $OLDPORT đã trống."
 fi
 gone=0
 for _ in $(seq 1 15); do curl -s --max-time 2 -o /dev/null "http://127.0.0.1:$OLDPORT/api/health" 2>/dev/null || { gone=1; break; }; sleep 1; done
 if [ "$gone" != 1 ]; then
-  echo "Cổng $OLDPORT vẫn trả lời sau khi dừng \"$OLDPM2\": còn tiến trình khác giữ cổng. Chưa ghi màu sống (green vẫn là secondary, nginx ở 3002). Dừng tiến trình đó rồi chạy lại script." >&2
+  if [ "$STOPPED" = 0 ]; then
+    echo "Không có app pm2 \"$OLDPM2\" nhưng cổng $OLDPORT vẫn trả lời: bản cũ có thể chạy dưới tên khác (pm2 ls). Chưa ghi màu sống: green vẫn là secondary, nginx ở 3002; tiến trình ở cổng $OLDPORT (nếu là Synchro) vẫn là primary. Chạy lại script với đúng tên app cũ (tham số thứ 2)." >&2
+    exit 1
+  fi
+  echo "Cổng $OLDPORT vẫn trả lời sau khi dừng \"$OLDPM2\": còn tiến trình khác giữ cổng. Chưa ghi màu sống: green vẫn là secondary, nginx ở 3002, bản cũ đã dừng. $NOPRIMARY Cách xử lý: dừng tiến trình đang giữ cổng $OLDPORT (ss -ltnp | grep :$OLDPORT) rồi chạy lại script; hoặc trả lại bản cũ: su - synchro -c 'pm2 restart $OLDPM2' rồi đưa nginx về $OLDPORT (docs/van-hanh.md)." >&2
   exit 1
 fi
 # Ghi màu sống SAU khi bản cũ đã thoát: bản cũ chạy một tiến trình nên có thể chưa nhường khóa đúng lúc. Từ lần deploy sau, bản cũ giữ
@@ -162,10 +186,7 @@ for _ in $(seq 1 20); do [ "$(primary_color)" = green ] && break; sleep 1; done
 if [ "$(primary_color)" != green ]; then
   echo "LỖI: sau 20 giây green chưa nhận vai primary (khóa: $(cat "$DATA/.primary.pid" 2>/dev/null || echo không có)): trả lại bản cũ." >&2
   bg_pm2 logs synchro-green --nostream --lines 40 >&2 || true
-  rm -f "$BG_LIVE_FILE"
-  bg_pm2 restart "$OLDPM2" >/dev/null 2>&1 || true
-  if bg_healthy "$OLDPORT" "$ID" && bg_switch_upstream "$OLDPORT"; then bg_stop green || true; echo "Đã trả lại bản cũ ở cổng $OLDPORT. Xem pm2 logs synchro-green rồi chạy lại." >&2
-  else echo "CẢNH BÁO: bản cũ chưa lên lại ở cổng $OLDPORT, nginx vẫn ở green 3002: cần xem tay ngay." >&2; fi
+  rollback_old || true
   exit 1
 fi
 say "synchro-green đã nhận vai primary ($(cat "$DATA/.primary.pid"))"
