@@ -119,6 +119,16 @@ const deck = await zipOf({
 t = parse("pptx", deck, "m.pptx")?.text ?? "";
 ok(t.includes("DH_SLIDE_ALPHA") && t.includes("DH_SLIDE_BETA"), "cả hai slide đều tới model", t);
 ok(t.indexOf("DH_SLIDE_BETA") < t.indexOf("DH_SLIDE_ALPHA"), "slide2 (BETA) đứng trước slide1 (ALPHA) đúng theo presentation.xml", t);
+// Thuộc tính XML không có thứ tự cố định: tệp .rels ghi Target TRƯỚC Id (một số công cụ xuất kiểu này) vẫn phải theo presentation.xml.
+const deckRev = await zipOf({
+  "[Content_Types].xml": "<x/>",
+  "ppt/presentation.xml": '<?xml version="1.0"?><p:presentation xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><p:sldIdLst><p:sldId id="256" r:id="rId2"/><p:sldId id="257" r:id="rId1"/></p:sldIdLst></p:presentation>',
+  "ppt/_rels/presentation.xml.rels": "<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\"><Relationship Target=\"slides/slide1.xml\" Type=\"t\" Id=\"rId1\"/><Relationship Type='t' Target='slides/slide2.xml' Id='rId2'/></Relationships>",
+  "ppt/slides/slide1.xml": "<p:sld><a:p><a:r><a:t>DH_REV_ALPHA</a:t></a:r></a:p></p:sld>",
+  "ppt/slides/slide2.xml": "<p:sld><a:p><a:r><a:t>DH_REV_BETA</a:t></a:r></a:p></p:sld>",
+});
+t = parse("pptx", deckRev, "rev.pptx")?.text ?? "";
+ok(t.includes("DH_REV_ALPHA") && t.indexOf("DH_REV_BETA") < t.indexOf("DH_REV_ALPHA"), ".rels ghi Target trước Id: vẫn đúng thứ tự presentation.xml", t);
 // Dự phòng: presentation.xml không có sldIdLst → sắp theo tên tệp như cũ.
 const deck2 = await zipOf({ "ppt/presentation.xml": "<x/>", "ppt/slides/slide1.xml": "<p:sld><a:p><a:r><a:t>DH_A1</a:t></a:r></a:p></p:sld>", "ppt/slides/slide2.xml": "<p:sld><a:p><a:r><a:t>DH_A2</a:t></a:r></a:p></p:sld>" });
 t = parse("pptx", deck2, "m2.pptx")?.text ?? "";

@@ -167,7 +167,10 @@ async function slideOrder(z, num) {
   const pres = z.file("ppt/presentation.xml"), rels = z.file("ppt/_rels/presentation.xml.rels");
   if (!pres || !rels) return all;
   try {
-    const relMap = new Map([...(await rels.async("string")).matchAll(/<Relationship\b[^>]*\bId="([^"]+)"[^>]*\bTarget="([^"]+)"/g)].map((m) => [m[1], m[2]]));
+    // Thứ tự thuộc tính trong thẻ XML là tùy ý (Target có thể đứng trước Id): lấy từng thẻ rồi đọc riêng từng thuộc tính.
+    const attr = (tag, a) => { const m = tag.match(new RegExp(`\\s${a}\\s*=\\s*(?:"([^"]*)"|'([^']*)')`)); return m ? (m[1] ?? m[2]) : undefined; };
+    const relMap = new Map([...(await rels.async("string")).matchAll(/<Relationship\b[^>]*>/g)]
+      .map((m) => [attr(m[0], "Id"), attr(m[0], "Target")]).filter(([id, target]) => id && target));
     const norm = (t) => ("ppt/" + t.replace(/^\.\.\//, "").replace(/^\/?ppt\//, "").replace(/^\//, "")).replace(/ppt\/ppt\//, "ppt/");
     const ordered = [...(await pres.async("string")).matchAll(/<p:sldId\b[^>]*r:id="([^"]+)"/g)]
       .map((m) => relMap.get(m[1])).filter(Boolean).map(norm).filter((f) => z.file(f));
