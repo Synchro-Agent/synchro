@@ -32,20 +32,36 @@ export function liveColor(file: string): string | null {
   try { return fs.readFileSync(file, "utf8").trim().split(/\s+/)[0] || null; } catch { return null; }
 }
 
-const pidAlive = (pid: number) => { try { process.kill(pid, 0); return true; } catch (e) { return (e as NodeJS.ErrnoException).code === "EPERM"; } };
+// EPERM (không gửi được tín hiệu) nghĩa là tiến trình của user khác: hai màu cùng chạy bằng web user, nên đó không thể là tiến trình giữ khóa.
+const pidAlive = (pid: number) => { try { process.kill(pid, 0); return true; } catch { return false; } };
 
-/** pid đang giữ vai primary (tệp khóa "<pid> <màu>"), hoặc null nếu không có / đã chết. */
-export function primaryHolder(lockFile: string, alive: (pid: number) => boolean = pidAlive): number | null {
+/** Danh tính của tiến trình để phân biệt với pid được dùng lại (sau khi máy tắt đột ngột, pid lúc khởi động hay lặp lại):
+ *  boot_id của lần khởi động máy và thời điểm tiến trình bắt đầu (trường 22 của /proc/<pid>/stat). Không phải Linux: null (chỉ còn kiểm tra pid). */
+export type Ident = { boot: () => string | null; start: (pid: number) => string | null };
+const readProc = (f: string) => { try { return fs.readFileSync(f, "utf8"); } catch { return null; } };
+export const procIdent: Ident = {
+  boot: () => readProc("/proc/sys/kernel/random/boot_id")?.trim() || null,
+  start: (pid) => { const st = readProc(`/proc/${pid}/stat`); return st ? st.slice(st.lastIndexOf(")") + 2).split(" ")[19] ?? null : null; },
+};
+
+/** pid đang giữ vai primary (tệp khóa "<pid> <màu> <boot_id> <starttime>"), hoặc null nếu không có, đã chết, hay pid đó giờ là tiến trình khác. */
+export function primaryHolder(lockFile: string, alive: (pid: number) => boolean = pidAlive, ident: Ident = procIdent): number | null {
   try {
-    const pid = Number(fs.readFileSync(lockFile, "utf8").trim().split(/\s+/)[0]);
-    return Number.isInteger(pid) && pid > 1 && alive(pid) ? pid : null;
+    const [p, , boot, start] = fs.readFileSync(lockFile, "utf8").trim().split(/\s+/);
+    const pid = Number(p);
+    if (!Number.isInteger(pid) || pid <= 1 || !alive(pid)) return null;
+    const curBoot = ident.boot();
+    if (boot && boot !== "-" && curBoot && curBoot !== boot) return null;
+    const curStart = start && start !== "-" ? ident.start(pid) : null;
+    if (curStart !== null && curStart !== start) return null;
+    return pid;
   } catch { return null; }
 }
 
 /** Nhận vai khi không còn tiến trình nào khác giữ khóa primary; xanh/lam thì còn phải là màu đang sống. */
-export function canPromote(c: Pick<RoleConfig, "bluegreen" | "color" | "liveFile" | "lockFile">, pid = process.pid, alive: (pid: number) => boolean = pidAlive): boolean {
+export function canPromote(c: Pick<RoleConfig, "bluegreen" | "color" | "liveFile" | "lockFile">, pid = process.pid, alive: (pid: number) => boolean = pidAlive, ident: Ident = procIdent): boolean {
   if (c.bluegreen && (!c.color || liveColor(c.liveFile) !== c.color)) return false;
-  const holder = primaryHolder(c.lockFile, alive);
+  const holder = primaryHolder(c.lockFile, alive, ident);
   return holder === null || holder === pid;
 }
 
@@ -58,7 +74,7 @@ function takeLock(file: string, color: string): boolean {
   try {
     fs.mkdirSync(path.dirname(file), { recursive: true });
     const tmp = `${file}.${process.pid}.tmp`;
-    fs.writeFileSync(tmp, `${process.pid} ${color}\n`);
+    fs.writeFileSync(tmp, `${process.pid} ${color} ${procIdent.boot() ?? "-"} ${procIdent.start(process.pid) ?? "-"}\n`);
     fs.renameSync(tmp, file);
     st.lockFile = file;
     return true;
@@ -77,7 +93,7 @@ export function releasePrimary() {
  * Gọi một lần lúc khởi động (instrumentation.ts). duties: mọi việc chỉ được chạy ở một tiến trình; được gọi đúng một lần, ngay (một tiến trình)
  * hoặc khi secondary nhận vai. Gọi lại startRole không chạy duties lần nữa.
  */
-export function startRole(duties: () => void | Promise<void>, o: { env?: NodeJS.ProcessEnv; alive?: (pid: number) => boolean; pid?: number } = {}): Role {
+export function startRole(duties: () => void | Promise<void>, o: { env?: NodeJS.ProcessEnv; alive?: (pid: number) => boolean; pid?: number; ident?: Ident; warnMs?: number } = {}): Role {
   if (st.promoted || st.timer) return st.role;
   const env = o.env ?? process.env, c = roleConfig(env), pid = o.pid ?? process.pid;
   const become = () => {
@@ -92,11 +108,21 @@ export function startRole(duties: () => void | Promise<void>, o: { env?: NodeJS.
     try { void Promise.resolve(duties()).catch((e) => console.error("[role]", e)); } catch (e) { console.error("[role]", e); }
   };
   let waited = false;
-  if (!c.bluegreen && canPromote(c, pid, o.alive)) { become(); if (st.promoted) return st.role; }
+  if (!c.bluegreen && canPromote(c, pid, o.alive, o.ident)) { become(); if (st.promoted) return st.role; }
   st.role = "secondary";
   if (c.bluegreen && !c.color) console.error("[role] SYNCHRO_ROLE=secondary nhưng thiếu SYNCHRO_COLOR: không bao giờ nhận vai primary");
   if (!c.bluegreen) { waited = true; console.error(`[role] tiến trình ${primaryHolder(c.lockFile, o.alive)} đang giữ khóa primary (${c.lockFile}): chỉ phục vụ yêu cầu, không chạy việc nền`); }
-  const check = () => { if (canPromote(c, pid, o.alive)) become(); };
+  // Màu sống là mình mà chờ quá lâu (khóa vẫn do tiến trình khác giữ): báo lên trang Sức khỏe hệ thống (console.error → ops), một lần.
+  let blockedSince = 0, warned = false;
+  const check = () => {
+    if (canPromote(c, pid, o.alive, o.ident)) { become(); return; }
+    if (c.bluegreen && liveColor(c.liveFile) !== c.color) { blockedSince = 0; return; }
+    blockedSince ||= Date.now();
+    if (!warned && Date.now() - blockedSince > (o.warnMs ?? 60_000)) {
+      warned = true;
+      console.error(`[role] ${c.color || "web"} chờ nhận vai primary hơn ${Math.round((o.warnMs ?? 60_000) / 1000)} giây: khóa ${c.lockFile} do pid ${primaryHolder(c.lockFile, o.alive, o.ident)} giữ. Không có litestream, bộ hẹn giờ; kiểm tra pid đó, xóa khóa nếu không phải Synchro.`);
+    }
+  };
   st.timer = setInterval(check, c.pollMs);
   st.timer.unref?.();
   check();

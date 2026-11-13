@@ -76,6 +76,27 @@ console.log("Vai trò primary / secondary");
   ok(!R.canPromote({ bluegreen: true, color: "", liveFile: live, lockFile: lock }, 1234, () => false), "thiếu SYNCHRO_COLOR: không nhận vai");
 }
 {
+  // NODE-2: khóa cũ còn sót sau khi máy tắt đột ngột, pid đã thuộc tiến trình khác.
+  const lock = path.join(tmp, "lock-ident"), live = path.join(tmp, "live-ident");
+  fs.writeFileSync(live, "green 3002 /x\n");
+  fs.writeFileSync(lock, "424250 green bootA 100\n");
+  const id = (boot, start) => ({ boot: () => boot, start: () => start });
+  ok(R.primaryHolder(lock, () => true, id("bootB", "100")) === null, "NODE-2: khóa của lần khởi động máy trước (boot_id khác): coi như trống");
+  ok(R.primaryHolder(lock, () => true, id("bootA", "999")) === null, "NODE-2: pid còn sống nhưng thời điểm bắt đầu khác (pid bị dùng lại): coi như trống");
+  ok(R.primaryHolder(lock, () => true, id("bootA", "100")) === 424250, "NODE-2: đúng tiến trình giữ khóa: vẫn chờ");
+  const rootPid = execFileSync("ps", ["-U", "0", "-o", "pid="], { encoding: "utf8" }).split("\n").map(Number).find((p) => p > 1);
+  fs.writeFileSync(lock, `${rootPid} green\n`);
+  ok(!!rootPid && R.primaryHolder(lock) === null && R.canPromote({ bluegreen: true, color: "green", liveFile: live, lockFile: lock }, process.pid), "NODE-2: pid của user khác (EPERM, ví dụ tiến trình của root) không thể là khóa của Synchro", rootPid);
+  R.resetRoleForTest();
+  fs.writeFileSync(lock, "424251 blue bootA 100\n");
+  const errs = []; const err = console.error; console.error = (...a) => errs.push(a.join(" "));
+  R.startRole(() => {}, { env: { SYNCHRO_ROLE: "secondary", SYNCHRO_COLOR: "green", SYNCHRO_LIVE_FILE: live, SYNCHRO_PRIMARY_LOCK: lock, SYNCHRO_ROLE_POLL_MS: "20" }, alive: (p) => p === 424251, ident: id("bootA", "100"), warnMs: 60 });
+  await sleep(200);
+  console.error = err;
+  ok(errs.filter((e) => e.includes("chờ nhận vai primary")).length === 1, "NODE-2: chờ nhận vai quá lâu thì báo lỗi một lần (hiện ở Sức khỏe hệ thống)", errs);
+  R.resetRoleForTest();
+}
+{
   // Mọi việc chỉ được chạy ở một tiến trình phải nằm trong primaryDuties (instrumentation.ts), không ở phần chạy ở mọi tiến trình.
   const src = fs.readFileSync(path.join(process.cwd(), "instrumentation.ts"), "utf8");
   const at = src.indexOf("function primaryDuties");
