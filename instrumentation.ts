@@ -106,10 +106,16 @@ function primaryDuties(noteBoot: (detail?: string) => void, onDrain: (f: () => v
   setTimeout(sweep, 60_000); setInterval(sweep, 24 * 3600_000).unref?.();
   // Skill và plugin có từ trước khi có tính năng tự xếp mục: xếp vào Tài liệu / Trình bày / Thiết kế bằng bộ luật (model xếp lại khi
   // người dùng mở Kho kỹ năng hoặc lưu skill).
-  setTimeout(async () => {
+  // Lúc khởi động litestream (giây thứ 3) đang ghi bảng riêng của nó: SQLITE_BUSY / BUSY_SNAPSHOT (busy_timeout không chờ hộ) thì thử lại sau, tối đa 4 lần.
+  const tagStudios = async (attempt: number) => {
     try { await (await import("./app/plugins")).ensurePluginTags(); (await import("./app/skillstore")).ensureAllStudioTags(); }
-    catch (e) { console.error("[skill-studio]", e); }
-  }, 4000);
+    catch (e) {
+      const code = String((e as { code?: string })?.code ?? "");
+      if (code.startsWith("SQLITE_BUSY") && attempt < 4) { setTimeout(() => void tagStudios(attempt + 1), 15_000 * attempt).unref?.(); return; }
+      console.error("[skill-studio]", e);
+    }
+  };
+  setTimeout(() => void tagStudios(1), 4000);
   // Cài sẵn 3 studio (tắt bằng SYNCHRO_DEFAULT_PLUGINS=0), rồi cập nhật studio đã cài theo danh mục mới (luôn chạy: chỉ đụng tới studio đã cài).
   setTimeout(() => {
     import("./app/plugins").then((m) => (process.env.SYNCHRO_DEFAULT_PLUGINS === "0" ? m.syncStudioCatalog : m.ensureDefaultPlugins)()).catch((e) => console.error("[plugins]", e));
