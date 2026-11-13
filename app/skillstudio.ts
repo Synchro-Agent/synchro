@@ -109,21 +109,28 @@ export function keepPluginTags(pluginId: string, names: string[]) {
 
 // Đổi khi sửa bộ luật chặt (studiorules.ts): sau lần deploy kế, mọi skill của danh mục được xếp lại đúng một lần.
 const CATALOG_RULES = "c3";
-/** Xếp một thư viện của danh mục Claude bằng bộ luật chặt, không nhờ model. Chỉ đọc tên và mô tả nên không cần nội dung skill.
- *  Giữ mục người dùng tự chọn và nhãn model đã xếp; chữ ký không đổi thì không làm lại. */
-export function classifyCatalog(pluginId: string, rows: { name: string; description: string }[]) {
+/** Xếp một thư viện của danh mục Claude. Chỉ đọc tên và mô tả nên không cần nội dung skill.
+ *  D4: ưu tiên nhãn do model xếp sẵn lúc đồng bộ (stored, theo tên skill — claudedir.dirStudios); không có thì lùi về bộ luật từ khóa chặt.
+ *  Giữ mục người dùng tự chọn; chữ ký không đổi thì không làm lại. Chữ ký kèm nguồn nhãn để lần đồng bộ sau có nhãn model mới thì cập nhật. */
+export function classifyCatalog(pluginId: string, rows: { name: string; description: string }[], stored?: (name: string) => string[] | null) {
   const d = init();
   const cur = new Map((d.prepare("SELECT key, studios, src, sig FROM skill_studios WHERE key >= ? AND key < ?").all(...range(pluginId)) as Pick<Row, "key" | "studios" | "src" | "sig">[]).map((r) => [r.key, r]));
-  const put = d.prepare("INSERT INTO skill_studios (key, studios, src, sig, why, model_at, at) VALUES (?, ?, 'rules', ?, ?, NULL, ?) ON CONFLICT(key) DO UPDATE SET studios = excluded.studios, src = 'rules', sig = excluded.sig, why = excluded.why, model_at = NULL, at = excluded.at");
+  const put = d.prepare("INSERT INTO skill_studios (key, studios, src, sig, why, model_at, at) VALUES (?, ?, ?, ?, ?, NULL, ?) ON CONFLICT(key) DO UPDATE SET studios = excluded.studios, src = excluded.src, sig = excluded.sig, why = excluded.why, model_at = NULL, at = excluded.at");
   const now = Date.now();
   for (const r of rows) {
     const key = pluginKey(pluginId, r.name), c = cur.get(key);
     cur.delete(key);
-    if (c && c.src !== "rules") continue;
-    const sig = `${sigOf(r.name, r.description, "")}:${CATALOG_RULES}`;
-    if (c?.sig === sig) continue;
-    const g = ruleStudios(r.name, r.description, "", true), studios = JSON.stringify(g.studios);
-    put.run(key, studios, sig, g.why, now);
+    if (c && c.src === "manual") continue;
+    // Nhãn model xếp sẵn lúc đồng bộ: dùng thẳng. Không có: bộ luật chặt là phương án lùi.
+    const fromModel = stored?.(r.name) ?? null;
+    const g = fromModel ? null : ruleStudios(r.name, r.description, "", true);
+    const picked = fromModel ? STUDIO_KINDS.filter((k) => fromModel.includes(k)) : g!.studios;
+    const src: StudioSrc = fromModel ? "model" : "rules";
+    const studios = JSON.stringify(picked);
+    // Chữ ký gồm nội dung + nguồn + chính nhãn: lần đồng bộ sau đổi nhãn (hoặc chuyển model↔rules) thì làm lại, nếu không thì bỏ qua.
+    const sig = `${sigOf(r.name, r.description, "")}:${CATALOG_RULES}:${src}:${studios}`;
+    if (c?.sig === sig && c.src === src) continue;
+    put.run(key, studios, src, sig, fromModel ? "model (đồng bộ)" : g!.why, now);
     if ((c?.studios ?? "[]") !== studios) bump();
   }
   if (cur.size) { const del = d.prepare("DELETE FROM skill_studios WHERE key = ?"); for (const k of cur.keys()) del.run(k); bump(); }

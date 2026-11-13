@@ -7,8 +7,10 @@ import path from "node:path";
 import type { PluginDef } from "./plugins";
 
 // closed: giấy phép đóng, không cài; alt: thư viện mở thay thế (id trong danh mục). github: repo mở thêm từ GitHub để thay thư viện đóng (altFor).
+// studios: D4 — mục Artifacts (docs/slides/design) do bộ phân loại bằng model xếp sẵn lúc đồng bộ (sync-claude-directory.mjs), theo tên skill.
+// Không có (sync cũ, hoặc chưa bật phân loại): lúc cài lùi về bộ luật từ khóa (skillstudio.classifyCatalog).
 export type DirEntry = { id: string; slug: string; name: string; summary: string; author: string; cats: string[]; license: string; repo: string; path: string; commit: string; homepage: string; skills: string[]; verified?: string;
-  closed?: boolean; alt?: string[]; github?: boolean; altFor?: string[] };
+  closed?: boolean; alt?: string[]; github?: boolean; altFor?: string[]; studios?: Record<string, string[]> };
 type File = { synced: string; plugins: DirEntry[] };
 
 const G = globalThis as unknown as { __claudeDir?: { at: number; file: string; data: File; byId: Map<string, DirEntry>; text: Map<string, string>; tok?: Map<string, Set<string>>; df?: Map<string, number>; near?: Map<string, string[]>; weight?: Map<string, number> } };
@@ -37,6 +39,8 @@ export const dirById = (id: string) => load()?.byId.get(id) ?? null;
 export const closedReason = (e: DirEntry) => `Giấy phép đóng (${e.license}): tác giả không cho sao chép nên Synchro không cài. ${altsOf(e).length ? `Thay bằng thư viện mở: ${altsOf(e).map((a) => dirById(a)?.name ?? a).join(", ")}.` : "Chưa có thư viện mở làm được việc tương đương."}`;
 /** Mục ngành nghề của một thư viện đã cài (theo catalogId). */
 export const dirCats = (catalogId: string | null) => (catalogId ? dirEntry(catalogId)?.cats ?? [] : []);
+/** D4: mục Artifacts (docs/slides/design) đã xếp sẵn cho skill của một thư viện danh mục (model lúc đồng bộ); null nếu chưa có — lúc cài lùi về bộ luật. */
+export const dirStudios = (catalogId: string | null): Record<string, string[]> | null => (catalogId ? dirEntry(catalogId)?.studios ?? null : null);
 
 export function dirDef(e: DirEntry): PluginDef {
   return {

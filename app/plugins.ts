@@ -16,6 +16,7 @@ import { GH_API } from "./github";
 import { registerMemStat } from "./memstat";
 import { fold, warmSkillIndex } from "./skillroute";
 import { bumpTags, classify, classifyCatalog, dropAutoTags, dropPluginTags, dropTag, holdTags, keepPluginTags, pluginDetected, pluginKey, pluginTagRows, refine, tagRev, userStudioIds } from "./skillstudio";
+import { dirStudios } from "./claudedir"; // D4: nhãn mục Artifacts xếp sẵn lúc đồng bộ (claudedir chỉ import type của plugins nên không vòng lặp lúc chạy).
 
 export type Studio = "design" | "slides" | "docs";
 export const STUDIOS: Studio[] = ["design", "slides", "docs"];
@@ -384,7 +385,7 @@ function tagOne(id: string, by?: string) {
   if (!pl) return;
   // Không xếp mục: bỏ nhãn tự động, giữ mục người dùng tự chọn cho từng skill.
   if (!pl.studio && !pl.auto_tag) { keepPluginTags(id, (d.prepare("SELECT name FROM plugin_skills WHERE plugin_id = ?").all(id) as { name: string }[]).map((r) => r.name)); dropAutoTags(id); return; }
-  if (pl.catalog_id?.startsWith("cd:") && !pl.studio) { classifyCatalog(id, d.prepare("SELECT name, description FROM plugin_skills WHERE plugin_id = ?").all(id) as { name: string; description: string }[]); return; }
+  if (pl.catalog_id?.startsWith("cd:") && !pl.studio) { const st = dirStudios(pl.catalog_id); classifyCatalog(id, d.prepare("SELECT name, description FROM plugin_skills WHERE plugin_id = ?").all(id) as { name: string; description: string }[], st ? (n) => st[n] ?? null : undefined); return; }
   const rows = d.prepare("SELECT name, description, body FROM plugin_skills WHERE plugin_id = ?").all(id) as { name: string; description: string; body: string }[];
   keepPluginTags(id, rows.map((r) => r.name));
   if (pl.studio) return;
