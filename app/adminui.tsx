@@ -433,7 +433,7 @@ export function AdminPanel({ Toggle }: { Toggle: ToggleT }) {
               <Fragment key={u.id}>
                 <tr className={`adm-row ${open === u.id && !bk.on ? "on" : ""}`} onClick={() => toggle(u.id)} {...bulkRow(bk, u)}>
                   <td>
-                    <div className="adm-user">{bk.on && <BulkCheck on={bk.has(u)} />}<Avatar name={u.name || u.email} size={28} font={10} src={u.avatar} /><div style={{ minWidth: 0 }}>
+                    <div className="adm-user">{bk.on && <BulkCheck on={bk.has(u)} />}<Avatar name={u.name || u.email} size={28} font={12} src={u.avatar} /><div style={{ minWidth: 0 }}>
                       <div className="nm"><span data-notr>{u.name || u.email.split("@")[0]}</span>{u.id === app.me?.id && <span className="new-tag" style={{ marginLeft: 6 }}>You</span>}{u.role !== "member" && <span className={`adm-role ${u.role}`}>{u.role === "owner" ? "Owner" : "Admin"}</span>}</div>
                       <div className="em" data-notr>{u.email}</div>
                       <div style={{ marginTop: 3 }}>{u.methods.map((m) => <span key={m} className="adm-chip">{METHOD[m] ?? m}</span>)}{u.customPerms && <span className="adm-chip adm-chip-acc">Custom access</span>}</div>

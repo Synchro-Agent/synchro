@@ -7,7 +7,8 @@ import { initials, usePref, useApp } from "./store";
 
 // `src` truyền vào khi hiển thị người khác (vd. danh sách quản trị). Không truyền thì là ảnh của chính mình:
 // ảnh đã tải lên (lưu trên máy chủ, có bản sao trong trình duyệt) hoặc ảnh từ Google/GitHub.
-export function Avatar({ name, size = 24, font = 9, src }: { name: string; size?: number; font?: number; src?: string | null }) {
+// Chữ cái đầu cỡ 12px (U14: không chữ nào dưới 12px); hai chữ "TN" vẫn gọn trong vòng 24px.
+export function Avatar({ name, size = 24, font = 12, src }: { name: string; size?: number; font?: number; src?: string | null }) {
   const [own] = usePref("avatar", "");
   const me = useApp().me;
   const img = src !== undefined ? src : own || me?.avatar || "";
