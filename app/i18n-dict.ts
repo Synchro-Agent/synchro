@@ -1241,6 +1241,8 @@ Object.assign(VI2EN, {
   "Ngữ cảnh gửi cho model": "Context sent to the model", "12 tin gần nhất": "Last 12 messages", "6 tin gần nhất": "Last 6 messages",
   "Quay lại xem trước": "Back to preview", "Xem trong mã": "View in code", "Chạy server tĩnh cho trang demo": "Run a static server for the demo page",
   "Không kết nối được tới ElevenLabs. Tạm thời dùng giọng của trình duyệt.": "Couldn't connect to ElevenLabs. Using the browser's voice for now.",
+  "Khóa ElevenLabs không còn hợp lệ. Nhà cung cấp dự phòng đang phục vụ Đọc văn bản và Chép lời; các tính năng khác tạm ẩn cho tới khi quản trị viên thay khóa ở Cài đặt → Providers.": "The ElevenLabs key is no longer valid. The backup provider is serving Text to Speech and Speech to Text; other features are hidden until an admin replaces the key in Settings → Providers.",
+  "Không kết nối được tới ElevenLabs. Nhà cung cấp dự phòng đang phục vụ Đọc văn bản và Chép lời; các tính năng khác tạm ẩn cho tới khi kết nối lại.": "Couldn't connect to ElevenLabs. The backup provider is serving Text to Speech and Speech to Text; other features are hidden until the connection is back.",
   "Đã thêm tài liệu vào ngữ cảnh": "Added the document to the context", "Cập nhật lần cuối:": "Last updated:", "Không kết nối được tới máy chủ.": "Couldn't connect to the server.",
   "Không kết nối được tới Synchro. Kiểm tra mạng rồi thử lại.": "Couldn't connect to Synchro. Check your network and try again.",
 });

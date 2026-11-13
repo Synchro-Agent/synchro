@@ -136,6 +136,37 @@ delete process.env.SPEECH_FALLBACK_BASE;
 p = await S.plan({ fresh: true });
 ok(!p.connected, "không có dự phòng: như cũ, báo chưa kết nối");
 
+console.log("7. Chính hỏng ngay từ khi khởi động (chưa quét được lần nào), có dự phòng: gói tối thiểu chỉ Đọc văn bản + Chép lời");
+process.env.SPEECH_FALLBACK_BASE = "https://fallback.test/";
+const cold = async (name, main) => {
+  globalThis.__speech = undefined; // như tiến trình mới: chưa có gói nào trong bộ nhớ
+  reset(main, () => new Response("audio-spare", { status: 200 }));
+  const p = await S.plan();
+  ok(p.connected && p.features.tts && p.features.stt, `${name}: vẫn kết nối, mở đọc văn bản và chép lời`, p);
+  ok(Object.entries(p.features).every(([f, on]) => on === (f === "tts" || f === "stt")), `${name}: mọi tính năng khác tắt`, p.features);
+  ok(p.tts.length > 0 && p.formats.some((f) => f.id === "mp3_44100_128") && p.formats.every((f) => S.FORMATS.find((x) => x.id === f.id)?.min === "free"), `${name}: có model mặc định và định dạng gói Free`, p);
+  ok(/dự phòng/.test(p.note ?? "") && !p.readPlan && p.library === false && p.realtime === false, `${name}: ghi chú nhà cung cấp dự phòng đang phục vụ`, p.note);
+  ok((await S.need("tts")).connected && (await S.need("stt")).connected, `${name}: need("tts") / need("stt") không báo no_key`);
+  const d = await caught(() => S.need("dialogue"));
+  ok(d?.code === "plan", `${name}: tính năng khác vẫn bị chặn`, d?.code);
+  T.calls.length = 0;
+  const r = await tts();
+  ok(await r.text() === "audio-spare" && S.servedBy(r) === "spare", `${name}: lượt đọc đi qua el() sang dự phòng`, T.calls);
+  ok(!globalThis.__speech.plan, `${name}: gói tối thiểu không thay gói quét được (credit / giới hạn ngày vẫn theo mặc định)`);
+};
+await cold("khóa bị thu hồi (401)", () => json({ detail: { status: "invalid_api_key", message: "Invalid API key" } }, 401));
+await cold("mất mạng", () => { throw new TypeError("fetch failed"); });
+globalThis.__speech = undefined;
+reset(() => json({ detail: { status: "server_error", message: "boom" } }, 500));
+p = await S.plan();
+ok(p.connected && p.features.dialogue && !/dự phòng/.test(p.note ?? ""), "lỗi khác (5xx gói): như cũ, không dùng gói tối thiểu", p.note);
+delete process.env.SPEECH_FALLBACK_BASE;
+globalThis.__speech = undefined;
+reset(() => json({ detail: { status: "invalid_api_key", message: "Invalid API key" } }, 401));
+p = await S.plan();
+e = await caught(() => S.need("tts"));
+ok(!p.connected && e?.code === "no_key", "không có dự phòng: như cũ, báo chưa kết nối", e?.code);
+
 globalThis.fetch = realFetch;
 fs.rmSync(process.env.DATA_DIR, { recursive: true, force: true });
 console.log(`\n${pass} đạt, ${fail} lỗi`);
