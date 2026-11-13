@@ -1615,7 +1615,8 @@ async function chatPostTurn(body: Parameters<typeof chatPost>[0], c: Who, scope:
   // avoidModel: người dùng bấm "Chạy lại bằng model khác" dưới câu trả lời của chế độ Tự động: vẫn Tự động, chỉ tránh model vừa trả lời.
   const pool = usable.length ? usable : allowed;
   const skip = typeof body.avoidModel === "string" && pool.includes(body.avoidModel) ? [body.avoidModel] : [];
-  const r = routeModel(q, pool, { avoid: [...skip, ...stalledModels(c.user.id, pool)] });
+  // Nhật ký định tuyến (D1.6) chỉ ghi ở đây — lượt chat thật; rerun khi người dùng bấm "Chạy lại bằng model khác".
+  const r = routeModel(q, pool, { avoid: [...skip, ...stalledModels(c.user.id, pool)], log: { rerun: typeof body.avoidModel === "string" && !!body.avoidModel } });
   addSpan("routing", "routing", r0, Date.now(), r ? { "synchro.route.model": r.model, "synchro.route.task": r.task } : undefined);
   if (!r) return Response.json({ error: "Tài khoản của bạn chưa được dùng model nào. Hãy liên hệ quản trị viên." }, { status: 403 });
   // Nỗ lực: người dùng để "Tự động" (hoặc chưa chọn) thì theo độ khó của việc; chọn tay thì giữ lựa chọn đó.

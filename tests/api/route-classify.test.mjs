@@ -552,12 +552,19 @@ console.log("17. Nhật ký định tuyến (D1.6): bật sẵn, console.log [ro
   const logs = [], errs = [], L = console.log, Er = console.error;
   delete process.env.SYNCHRO_ROUTE_LOG;
   console.log = (...a) => logs.push(a.join(" ")); console.error = (...a) => errs.push(a.join(" "));
-  try { R.routeModel(q("Tỷ giá USD hôm nay"), ["anthropic/claude-haiku-5-5", "anthropic/claude-sonnet-5-5"]); process.env.SYNCHRO_ROUTE_LOG_SAMPLE = "0"; R.routeModel(q("Viết email xin nghỉ phép"), ["anthropic/claude-haiku-5-5"]); R.routeModel(q("sai rồi, làm lại đi", { turns: 3, prevAsk: "Làm trang web bán giày" }), ["anthropic/claude-haiku-5-5"]); }
+  const H = ["anthropic/claude-haiku-5-5"], log = { log: {} };
+  try {
+    // Gọi không xin ghi (khởi động sẵn bằng câu mẫu, gợi ý đổi model, chọn model cho việc phụ): không ghi gì.
+    R.routeModel(q("xin chào"), H); R.routeModel(q("viết email xin nghỉ phép"), H); R.routeModel(q("sai rồi, làm lại đi", { turns: 3, prevAsk: "Làm trang web bán giày" }), H);
+    R.routeModel(q("Tỷ giá USD hôm nay"), ["anthropic/claude-haiku-5-5", "anthropic/claude-sonnet-5-5"], log); process.env.SYNCHRO_ROUTE_LOG_SAMPLE = "0"; R.routeModel(q("Viết email xin nghỉ phép"), H, log);
+    R.routeModel(q("sai rồi, làm lại đi", { turns: 3, prevAsk: "Làm trang web bán giày" }), H, log); R.routeModel(q("Viết email xin nghỉ phép"), H, { log: { rerun: true } });
+  }
   finally { console.log = L; console.error = Er; process.env.SYNCHRO_ROUTE_LOG = "0"; delete process.env.SYNCHRO_ROUTE_LOG_SAMPLE; }
   const line = logs.find((x) => x.startsWith("[route] "));
   const j = line ? JSON.parse(line.slice(8)) : null;
   ok(j && j.task === "lookup" && typeof j.score === "number" && j.rerun === false && !errs.some((x) => x.includes("[route]")), "W23-14: mặc định ghi [route] {task, score, rerun} bằng console.log", JSON.stringify({ logs, errs }));
-  ok(logs.length === 2 && JSON.parse(logs[1].slice(8)).rerun === true, "W23-14: lấy mẫu 0 vẫn ghi lượt làm lại (rerun), bỏ lượt thường", JSON.stringify(logs));
+  ok(logs.length === 3 && JSON.parse(logs[1].slice(8)).rerun === true && JSON.parse(logs[2].slice(8)).rerun === true, "W23-14: lấy mẫu 0 vẫn ghi lượt làm lại (bị chê, hoặc bấm Chạy lại bằng model khác), bỏ lượt thường", JSON.stringify(logs));
+  ok(!logs.some((x) => /"task":"chat"/.test(x)) && JSON.parse(logs[0].slice(8)).task === "lookup", "W23-14: routeModel không có o.log (khởi động sẵn, việc phụ) không ghi [route]", JSON.stringify(logs));
 }
 console.log(`\nKết quả: ${pass} đạt, ${fail} lỗi`);
 process.exit(fail ? 1 : 0);
