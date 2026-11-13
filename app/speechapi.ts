@@ -101,7 +101,9 @@ function lock(f: Feat, msg: string) {
 
 type Failover = { at: number; from: string; to: string; path: string; reason: string; ok: boolean };
 const g = globalThis as unknown as { __speech?: { plan: Plan | null; at: number; busy: Promise<Plan> | null; fp?: string; perms?: { at: number; key: string; miss: Partial<Record<Feat | "realtime", string>> };
-  served?: Record<string, number>; lastFailover?: Failover } };
+  served?: Record<string, number>; lastFailover?: Failover;
+  /** Lần quét gói gần nhất hỏng (khóa / mạng) khi có dự phòng: gói đang dùng thay và lúc hỏng — để chờ ~30 giây rồi mới quét lại nhà cung cấp chính. */
+  fail?: { at: number; plan: Plan } } };
 const G = () => (g.__speech ??= { plan: null, at: 0, busy: null });
 
 // ---- gọi API ----
@@ -346,6 +348,9 @@ const spareOnly = (e: SpeechErr): Plan => {
   return p;
 };
 
+/** Chờ giữa hai lần quét lại nhà cung cấp chính đang hỏng khi dự phòng phục vụ thay. */
+export const FAIL_RETRY = 30_000;
+
 /** Gói hiện tại (nhớ 3 phút; fresh để quét lại ngay, ví dụ sau khi đổi khóa hoặc nâng gói). */
 export async function plan(o: { fresh?: boolean } = {}): Promise<Plan> {
   const st = G();
@@ -353,13 +358,20 @@ export async function plan(o: { fresh?: boolean } = {}): Promise<Plan> {
   // Quản trị viên đổi khóa (hoặc địa chỉ API): quét lại ngay theo khóa mới.
   const k = conn(), fp = `${k.base}|${k.key.slice(-8)}`;
   const fresh = o.fresh || st.fp !== fp;
-  if (fresh && st.fp !== fp) { st.fp = fp; st.busy = null; }
+  if (fresh && st.fp !== fp) { st.fp = fp; st.busy = null; st.fail = undefined; }
   if (!fresh && st.plan && Date.now() - st.at < 180_000) return st.plan;
+  // Nhà cung cấp chính vừa hỏng và dự phòng đang phục vụ: không quét lại ở mỗi yêu cầu (mỗi lần quét chờ tới 20 giây nếu chính treo), đợi FAIL_RETRY.
+  if (!fresh && st.fail && Date.now() - st.fail.at < FAIL_RETRY && speechProviderList().length > 1) return st.fail.plan;
   if (st.busy) return st.busy;
-  st.busy = scan(fresh).then((p) => { st.plan = p; st.at = Date.now(); return p; })
+  st.busy = scan(fresh).then((p) => { st.plan = p; st.at = Date.now(); st.fail = undefined; return p; })
     // Nhà cung cấp chính mất kết nối / khóa hỏng nhưng có dự phòng: giữ gói đọc được lần trước (chưa có thì gói tối thiểu chỉ Đọc văn bản + Chép lời)
     // để hai tính năng này vẫn đi qua el() sang dự phòng.
-    .catch((e: SpeechErr) => (speechProviderList().length > 1 && (e.code === "key" || e.code === "net") ? st.plan ?? spareOnly(e) : empty(e.message)))
+    .catch((e: SpeechErr) => {
+      if (speechProviderList().length < 2 || (e.code !== "key" && e.code !== "net")) { st.fail = undefined; return empty(e.message); }
+      const p = st.plan ?? spareOnly(e);
+      st.fail = { at: Date.now(), plan: p };
+      return p;
+    })
     .finally(() => { st.busy = null; });
   return st.busy;
 }

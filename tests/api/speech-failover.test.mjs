@@ -160,6 +160,41 @@ globalThis.__speech = undefined;
 reset(() => json({ detail: { status: "server_error", message: "boom" } }, 500));
 p = await S.plan();
 ok(p.connected && p.features.dialogue && !/dự phòng/.test(p.note ?? ""), "lỗi khác (5xx gói): như cũ, không dùng gói tối thiểu", p.note);
+
+console.log("8. Chính đang hỏng: chờ ~30 giây giữa hai lần quét lại, không quét ở mỗi yêu cầu");
+const mainCalls = () => T.calls.filter((c) => c.who === "main").length;
+const dead = () => json({ detail: { status: "invalid_api_key", message: "Invalid API key" } }, 401);
+globalThis.__speech = undefined;
+reset(dead);
+await S.plan();
+ok(mainCalls() > 0, "lần đầu: quét nhà cung cấp chính", T.calls.length);
+T.calls.length = 0;
+for (let i = 0; i < 3; i++) await S.need("tts");
+ok(mainCalls() === 0, "khởi động nguội: 3 yêu cầu tiếp theo không quét lại chính", T.calls);
+globalThis.__speech.fail.at -= S.FAIL_RETRY + 1;
+await S.need("stt");
+ok(mainCalls() > 0, "hết thời gian chờ: quét lại chính", T.calls.length);
+T.calls.length = 0;
+await S.need("tts"); await S.need("tts");
+ok(mainCalls() === 0, "quét lại vẫn hỏng: lại chờ, không quét ở mỗi yêu cầu", T.calls);
+p = await S.plan({ fresh: true });
+ok(mainCalls() > 0 && p.connected, "fresh (nút Kiểm tra lại): luôn quét ngay");
+// Gói nóng (đã quét được) hết hạn 3 phút rồi chính hỏng: chỉ yêu cầu đầu quét lại.
+globalThis.__speech = undefined;
+T.main = (u) => u.pathname === "/v1/user/subscription" ? json({ tier: "creator", status: "active", character_count: 1, character_limit: 1000, voice_limit: 30, voice_slots_used: 0, professional_voice_limit: 1, professional_voice_slots_used: 0, can_use_instant_voice_cloning: true, can_use_professional_voice_cloning: true }, 200) : json([], 200);
+p = await S.plan();
+ok(p.readPlan && p.tier === "creator", "gói nóng quét được");
+globalThis.__speech.at -= 200_000;
+reset(dead);
+const per = [];
+for (let i = 0; i < 3; i++) { T.calls.length = 0; await S.need("tts"); per.push(mainCalls()); }
+ok(per[0] > 0 && per[1] === 0 && per[2] === 0, "gói nóng hết hạn, chính hỏng: chỉ yêu cầu đầu quét lại", per);
+ok((await S.plan()).tier === "creator", "vẫn dùng gói quét được lần trước trong lúc chờ");
+globalThis.__speech.fail.at -= S.FAIL_RETRY + 1;
+T.main = (u) => u.pathname === "/v1/user/subscription" ? json({ tier: "pro", status: "active", character_count: 2, character_limit: 5000, voice_limit: 30, voice_slots_used: 0, professional_voice_limit: 1, professional_voice_slots_used: 0, can_use_instant_voice_cloning: true, can_use_professional_voice_cloning: true }, 200) : json([], 200);
+p = await S.plan();
+ok(p.tier === "pro" && !globalThis.__speech.fail, "chính hồi lại: quét lại được, bỏ trạng thái chờ", p.tier);
+
 delete process.env.SPEECH_FALLBACK_BASE;
 globalThis.__speech = undefined;
 reset(() => json({ detail: { status: "invalid_api_key", message: "Invalid API key" } }, 401));
