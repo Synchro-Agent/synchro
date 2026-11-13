@@ -1313,7 +1313,7 @@ export function CodeView({ say, sid, title, model, modelPicker, sideOpen, onSide
               <div style={{ position: "relative" }}>
                 {/* Ba nút cạnh nhau (Chế độ / Quyền / Model) từng cùng hiện "Tự động": thêm tiền tố phân loại. Dưới 1100px CSS ẩn nhãn, chỉ còn icon:
                     aria-label và chú thích mang cả giá trị đang chọn (R11/W1-06), aria-label chứa đúng chữ đang hiện (WCAG 2.5.3). */}
-                <button className="cv-modebtn" data-tip={`${tr("Chế độ")}: ${tr(m.label)}`} aria-label={`${tr("Chế độ")}: ${m.short}`} onClick={() => setMenu(menu === "mode" ? "" : "mode")}>{modeIcon(mode, 14)}<span className="cv-mb-t"><span className="cv-mb-k">Chế độ</span>: {m.short}</span><I.Chevron size={12} /></button>
+                <button className="cv-modebtn" data-tip={`${tr("Chế độ")}: ${tr(m.label)}`} aria-label={`${tr("Chế độ")}: ${tr(m.short)}`} onClick={() => setMenu(menu === "mode" ? "" : "mode")}>{modeIcon(mode, 14)}<span className="cv-mb-t"><span className="cv-mb-k">Chế độ</span>: {m.short}</span><I.Chevron size={12} /></button>
                 <Menu open={menu === "mode"} className="cv-modes" style={{ bottom: 36, left: 0, width: 340 }}>
                   {MODES.map((x) => (
                     <button key={x.k} className={`cv-mode-item ${mode === x.k ? "picked" : ""}`} onClick={() => { setMode(x.k); setMenu(""); }}>

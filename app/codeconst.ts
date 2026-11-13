@@ -1,6 +1,6 @@
 // Chế độ làm việc và bộ luật có sẵn của Synchro Code: tách khỏi codeview.tsx (nặng) vì Cài đặt cũng cần.
 export const MODES = [
-  { k: "auto", label: "Tự động", short: "Auto", desc: "Tự lập kế hoạch, viết code hay gỡ lỗi theo từng việc, và chuyển qua lại khi đang làm." },
+  { k: "auto", label: "Tự động", short: "Tự động", desc: "Tự lập kế hoạch, viết code hay gỡ lỗi theo từng việc, và chuyển qua lại khi đang làm." },
   { k: "plan", label: "Architect / Plan", short: "Plan", desc: "Chỉ phân tích cấu trúc và lập kế hoạch, không viết code dài." },
   { k: "code", label: "Write / Code", short: "Code", desc: "Tập trung sinh code hoàn chỉnh, sẵn sàng chạy ngay." },
   { k: "debug", label: "Debug", short: "Debug", desc: "Đọc lỗi, truy nguyên nhân gốc và đề xuất cách sửa." },
