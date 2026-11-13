@@ -47,19 +47,26 @@ export const procIdent: Ident = {
 };
 
 /** pid đang giữ vai primary (tệp khóa "<pid> <màu> <boot_id> <starttime>"), hoặc null nếu không có, đã chết, hay pid đó giờ là tiến trình khác. */
+/** pid còn là đúng tiến trình đã ghi (boot / start là danh tính đã ghi lúc đó, "-" hoặc rỗng nếu không có). Dùng cho khóa primary và chủ lượt Code. */
+export function sameProcess(pid: number, boot: string | null | undefined, start: string | null | undefined, alive: Alive = pidAlive, ident: Ident = procIdent): boolean {
+  if (!Number.isInteger(pid) || pid <= 1) return false;
+  const a = alive(pid);
+  if (a === false) return false;
+  const curBoot = ident.boot();
+  if (boot && boot !== "-" && curBoot && curBoot !== boot) return false;
+  const curStart = start && start !== "-" ? ident.start(pid) : null;
+  if (curStart !== null && curStart !== start) return false;
+  if (a === "eperm" && (curStart === null || !boot || boot === "-")) return false;
+  return true;
+}
+/** Danh tính của tiến trình này để ghi kèm pid. */
+export const selfIdent = () => ({ boot: procIdent.boot() ?? "-", start: procIdent.start(process.pid) ?? "-" });
+
 export function primaryHolder(lockFile: string, alive: Alive = pidAlive, ident: Ident = procIdent): number | null {
   try {
     const [p, , boot, start] = fs.readFileSync(lockFile, "utf8").trim().split(/\s+/);
     const pid = Number(p);
-    if (!Number.isInteger(pid) || pid <= 1) return null;
-    const a = alive(pid);
-    if (a === false) return null;
-    const curBoot = ident.boot();
-    if (boot && boot !== "-" && curBoot && curBoot !== boot) return null;
-    const curStart = start && start !== "-" ? ident.start(pid) : null;
-    if (curStart !== null && curStart !== start) return null;
-    if (a === "eperm" && (curStart === null || !boot || boot === "-")) return null;
-    return pid;
+    return sameProcess(pid, boot, start, alive, ident) ? pid : null;
   } catch { return null; }
 }
 

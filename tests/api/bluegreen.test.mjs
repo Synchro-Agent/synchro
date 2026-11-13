@@ -207,19 +207,25 @@ console.log("Dừng / nhắn thêm qua cơ sở dữ liệu (tiến trình cũ �
   const { agentruns: AR } = await loadTs(["agentruns"]);
   const other = spawn("sleep", ["10"]);
   AR.agentElsewhere(u.id, "warm"); // tạo bảng agent_owner
-  db.prepare("INSERT OR REPLACE INTO agent_owner (uid, sid, pid, started, ended, stop) VALUES (?, ?, ?, ?, 0, 0)").run(u.id, "s-old", other.pid, Date.now());
-  ok(AR.latestRun(u.id, "s-old") === null && AR.agentElsewhere(u.id, "s-old") === true, "NODE-3: bản mới biết lượt Code đang chạy nốt ở tiến trình cũ (trả 202 cho trình duyệt chờ, không báo mất lượt)");
+  db.prepare("INSERT OR REPLACE INTO agent_owner (uid, sid, pid, started, ended, stop, node) VALUES (?, ?, ?, ?, 0, 0, 7)").run(u.id, "s-old", other.pid, Date.now());
+  ok(AR.latestRun(u.id, "s-old") === null && AR.agentElsewhere(u.id, "s-old")?.node === 7, "NODE-3: bản mới biết lượt Code đang chạy nốt ở tiến trình cũ (trả 202 cho trình duyệt chờ, không báo mất lượt)");
   ok(AR.stopAgentElsewhere(u.id, "s-old") === true && db.prepare("SELECT stop FROM agent_owner WHERE uid = ? AND sid = ?").get(u.id, "s-old").stop === 1, "NODE-3: nút Dừng ở bản mới ghi cờ cho tiến trình cũ");
   other.kill();
   await sleep(50);
-  ok(AR.agentElsewhere(u.id, "s-old") === false, "NODE-3: tiến trình cũ đã thoát: không còn chờ (trình duyệt nhận 204 như trước)");
+  ok(AR.agentElsewhere(u.id, "s-old") === null && !db.prepare("SELECT 1 FROM agent_owner WHERE uid = ? AND sid = ?").get(u.id, "s-old"), "NODE-3: tiến trình cũ đã thoát: không còn chờ (204 như trước) và dòng của chủ đã chết bị xóa");
+  db.prepare("INSERT OR REPLACE INTO agent_owner (uid, sid, pid, started, ended, stop) VALUES (?, ?, ?, ?, 0, 0)").run(u.id, "s-dead", 999999, Date.now());
   const run = AR.startAgentRun({ uid: u.id, sid: "s-new" }, (emit, signal) => new Promise((res) => signal.addEventListener("abort", () => res())));
-  ok(db.prepare("SELECT pid, ended FROM agent_owner WHERE uid = ? AND sid = ?").get(u.id, "s-new").pid === process.pid && AR.agentElsewhere(u.id, "s-new") === false, "NODE-3: lượt Code ghi tiến trình đang chạy nó");
+  const row = db.prepare("SELECT pid, ended, boot, start FROM agent_owner WHERE uid = ? AND sid = ?").get(u.id, "s-new");
+  ok(row.pid === process.pid && row.boot && row.start && AR.agentElsewhere(u.id, "s-new") === null, "NODE-3: lượt Code ghi tiến trình đang chạy nó kèm danh tính", row);
+  ok(!db.prepare("SELECT 1 FROM agent_owner WHERE sid = 's-dead'").get(), "NODE-3: bắt đầu lượt mới thì dọn dòng của các chủ đã chết (ended = 0 mãi)");
+  ok(R.sameProcess(4321, "bootA", "100", () => true, { boot: () => "bootA", start: () => "555" }) === false && R.sameProcess(4321, "bootA", "100", () => true, { boot: () => "bootA", start: () => "100" }) === true,
+    "NODE-3: pid bị dùng lại (starttime khác) không còn được coi là bản cũ đang chạy lượt");
   db.prepare("UPDATE agent_owner SET stop = 1 WHERE uid = ? AND sid = ?").run(u.id, "s-new");
   ok(AR.applyAgentStops() === 1 && run.ac.signal.aborted, "NODE-3: tiến trình đang chạy lượt Code nhận lệnh Dừng ghi từ tiến trình khác");
   await sleep(50);
   ok(db.prepare("SELECT ended FROM agent_owner WHERE uid = ? AND sid = ?").get(u.id, "s-new").ended > 0, "NODE-3: lượt xong thì đánh dấu đã kết thúc");
   const wc = fs.readFileSync(path.join(process.cwd(), "app/wsclient.ts"), "utf8"), ar = fs.readFileSync(path.join(process.cwd(), "app/api/agent/route.ts"), "utf8");
+  ok(/if \(r\.status === 202\) \{ const j = /.test(wc) && /return \{ running: true, node: j\.node \?\? null, elsewhere: true \}/.test(wc), "NODE-3: agentRunInfo hiểu 202 (đang chạy ở bản cũ): resumeAgent hiện bận + nút Dừng, watchAgentEnd hỏi tiếp");
   ok(/r\.status === 202\) \{ if \(\+\+elsewhere > 45\) return false; await sleep\(2000, signal\); continue; \}/.test(wc) && /status: 202/.test(ar) && /stopAgentElsewhere\(c\.user\.id, sid\)/.test(ar), "NODE-3: trình duyệt chờ khi nhận 202; route trả 202 và chuyển Dừng sang tiến trình cũ");
 }
 

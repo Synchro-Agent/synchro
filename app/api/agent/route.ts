@@ -93,7 +93,8 @@ export const GET = timed(async (req: Request) => {
   const sid = u.searchParams.get("sid") ?? "";
   const run = latestRun(c.user.id, sid);
   // Lượt đang chạy nốt ở bản cũ (deploy xanh/lam, nginx đã chuyển sang bản này): bảo trình duyệt chờ rồi hỏi lại, không báo mất lượt.
-  if (!run && agentElsewhere(c.user.id, sid)) return Response.json({ elsewhere: true }, { status: 202, headers: { "Retry-After": "2", "Cache-Control": "no-store" } });
+  const away = run ? null : agentElsewhere(c.user.id, sid);
+  if (away) return Response.json({ elsewhere: true, running: true, node: away.node }, { status: 202, headers: { "Retry-After": "2", "Cache-Control": "no-store" } });
   if (!run) return new Response(null, { status: 204 });
   if (u.searchParams.get("json")) return Response.json({ running: !run.ended, node: run.node?.id ?? null, ended: run.ended || null });
   return runStream(run, Number(u.searchParams.get("after")) || 0, req.signal);

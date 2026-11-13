@@ -98,8 +98,14 @@ export async function streamAgent(body: Record<string, unknown>, on: (e: AgentLi
   if (!st.ended && !signal.aborted && !(await follow(String(body.sid), seen, signal, st))) on({ t: "error", error: GONE });
 }
 /** Mở lại phiên: lượt của phiên còn ở máy chủ không. gone: máy chủ trả lời chắc chắn là không có lượt nào; null: chưa biết (mất mạng, hết phiên đăng nhập). */
-export async function agentRunInfo(sid: number | string): Promise<{ running: boolean; node: number | null; gone?: boolean } | null> {
-  try { const r = await fetch(`/api/agent?sid=${sid}&json=1`, { cache: "no-store" }); return r.status === 204 ? { running: false, node: null, gone: true } : r.status === 200 ? await r.json() : null; } catch { return null; }
+// 202: lượt đang chạy nốt ở bản cũ trong lúc deploy: coi là đang chạy (hiện bận, nút Dừng), nối vào thì follow() chờ tới khi xong.
+export async function agentRunInfo(sid: number | string): Promise<{ running: boolean; node: number | null; gone?: boolean; elsewhere?: boolean } | null> {
+  try {
+    const r = await fetch(`/api/agent?sid=${sid}&json=1`, { cache: "no-store" });
+    if (r.status === 204) return { running: false, node: null, gone: true };
+    if (r.status === 202) { const j = (await r.json().catch(() => ({}))) as { node?: number | null }; return { running: true, node: j.node ?? null, elsewhere: true }; }
+    return r.status === 200 ? await r.json() : null;
+  } catch { return null; }
 }
 /** Nối vào lượt đang có của phiên từ đầu: nhận lại mọi sự kiện rồi theo dõi tiếp. */
 export async function attachAgent(sid: number | string, on: (e: AgentLine) => void, signal: AbortSignal) {
