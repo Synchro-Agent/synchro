@@ -14,6 +14,7 @@ ok(font.ok && /max-age=31536000/.test(font.headers.get("cache-control") ?? ""), 
 const lic = await fetch(`${B}/fonts/OFL-BeVietnamPro.txt`);
 ok(lic.ok && /SIL Open Font License/.test(await lic.text()), "giấy phép OFL của Be Vietnam Pro đi kèm phông");
 ok((await fetch(`${B}/fonts/AnthropicSans-Variable.woff2`)).status === 404, "không còn phông Anthropic Sans");
+ok((await fetch(`${B}/fonts/AnthropicSerif-Variable.woff2`)).status === 404, "không còn phông Anthropic Serif");
 // Logo, bộ đọc cú pháp tree-sitter, phim giới thiệu (B3.6): giữ một tuần như biểu tượng.
 for (const p of ["/icon-192.png", "/icon-maskable-512.png", "/logos/ai2.svg", "/ts/tree-sitter-python.wasm", "/intro/synchro-intro-poster.jpg"]) {
   const r = await fetch(B + p);
