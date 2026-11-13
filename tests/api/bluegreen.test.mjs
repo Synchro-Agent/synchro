@@ -298,6 +298,14 @@ case "$*" in *"-o /dev/null"*) exit 0 ;; esac; case "$url" in *api/health*) prin
   ok(m.code !== 0 && !m.st.live && m.st.active === "3000" && m.st.pm2.synchro === "online" && m.st.pm2["synchro-green"] === "stopped", "MIGRATE-2: green không nhận vai primary: bật lại bản cũ, nginx về 3000, bỏ màu sống, dừng green", { code: m.code, st: m.st });
 }
 {
+  const m = mig("savefail", { env: { FAIL_SAVE: "1" } });
+  ok(m.code !== 0 && m.st.live === "green" && !m.st.dump, "MIGRATE-3: pm2 save lỗi không bị giấu (mã lỗi)", { code: m.code, st: m.st });
+  const r = m.run({ FAIL_SAVE: "" }), st = m.stNow();
+  ok(r.status === 0 && /synchro-green/.test(st.dump) && /PM2=synchro-green/.test(st.env), "MIGRATE-3: chạy lại sau khi bị cắt ngang: làm nốt pm2 save và synchro-ops.env", { code: r.status, st, out: (r.stdout + r.stderr).slice(-300) });
+  const m2 = mig("rerun-old", { live: "green 3002" });
+  ok(m2.code === 0 && !m2.st.pm2.synchro && /synchro/.test(m2.out) && /PM2=synchro-green/.test(m2.st.env), "MIGRATE-3: chạy lại khi app pm2 cũ còn sót: dừng và xóa nó, lưu pm2", { code: m2.code, st: m2.st });
+}
+{
   // Mọi script shell đều đúng cú pháp.
   const bad = ["server-build.sh", "bluegreen-lib.sh", "bluegreen-migrate.sh", "watchdog.sh", "backup.sh"].filter((f) => {
     try { execFileSync("bash", ["-n", path.join(process.cwd(), "scripts", f)], { stdio: "pipe" }); return false; } catch { return true; }

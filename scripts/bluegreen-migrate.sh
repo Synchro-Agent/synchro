@@ -28,12 +28,33 @@ DATA="${DATA_DIR:-$APP/data}"
 # và không thoát khi nhận SIGTERM: không được chuyển.
 has_bg_code() { grep -rqs "SYNCHRO_PRIMARY_LOCK" "$1/server" && grep -rqs "NEXT_MANUAL_SIG_HANDLE" "$1/server"; }
 primary_color() { awk 'NR==1{print $2}' "$DATA/.primary.pid" 2>/dev/null || true; }
+ENVO="${SYNCHRO_OPS_ENV:-/etc/synchro-ops.env}"
+# Các bước cuối, rẻ và chạy lại được: chạy cả khi chuyển đổi trước đó bị cắt ngang sau lúc ghi màu sống (mất ssh, pm2 save lỗi).
+finish_steps() { # finish_steps <màu sống>
+  local c="$1" p rc=0
+  p=$(bg_port_of "$c")
+  if bg_pm2_has "$OLDPM2"; then
+    say "App pm2 cũ \"$OLDPM2\" vẫn còn trong pm2: dừng và xóa (không thì khởi động lại máy sẽ bật lại nó)."
+    bg_pm2 stop "$OLDPM2" >/dev/null 2>&1 || true
+    bg_pm2 delete "$OLDPM2" >/dev/null 2>&1 || { echo "LỖI: không xóa được app pm2 \"$OLDPM2\"." >&2; rc=1; }
+  fi
+  if bg_pm2 save >/dev/null 2>&1; then say "pm2 save: danh sách khởi động lại máy có synchro-$c"
+  else echo "LỖI: pm2 save không được: khởi động lại máy có thể bật sai app. Chạy lại script này." >&2; rc=1; fi
+  # Watchdog đọc tệp màu sống và tệp upstream trước; các dòng này chỉ là dự phòng.
+  if [ -f "$ENVO" ]; then
+    sed -i -e "s/^PM2=.*/PM2=synchro-$c/" -e "s/^PORT=.*/PORT=$p/" "$ENVO"
+    say "$ENVO: PM2=synchro-$c PORT=$p"
+  fi
+  [ "$(primary_color)" = "$c" ] || echo "CẢNH BÁO: khóa primary ($DATA/.primary.pid) không ghi màu $c: xem pm2 logs synchro-$c." >&2
+  return "$rc"
+}
 
 LIVE=$(bg_live_color)
 if [ -n "$LIVE" ]; then
-  say "Đã chuyển từ trước: màu sống $LIVE (cổng $(bg_port_of "$LIVE")), nginx trỏ cổng $(bg_upstream_port)."
-  say "Không làm gì thêm. Deploy bình thường bằng scripts/server-build.sh."
-  exit 0
+  say "Đã chuyển từ trước: màu sống $LIVE (cổng $(bg_port_of "$LIVE")), nginx trỏ cổng $(bg_upstream_port). Làm nốt các bước cuối nếu còn thiếu."
+  rc=0; finish_steps "$LIVE" || rc=$?
+  [ "$rc" = 0 ] && say "Xong. Deploy bình thường bằng scripts/server-build.sh."
+  exit "$rc"
 fi
 
 # ---- 1. nginx include ----
@@ -148,14 +169,8 @@ if [ "$(primary_color)" != green ]; then
   exit 1
 fi
 say "synchro-green đã nhận vai primary ($(cat "$DATA/.primary.pid"))"
+# ---- 5. xóa app cũ, pm2 save, watchdog ----
 bg_pm2 delete "$OLDPM2" >/dev/null 2>&1 || true
-bg_pm2 save >/dev/null 2>&1 || true
-
-# ---- 5. watchdog ----
-ENVO="${SYNCHRO_OPS_ENV:-/etc/synchro-ops.env}"
-if [ -f "$ENVO" ]; then
-  sed -i -e 's/^PM2=.*/PM2=synchro-green/' -e 's/^PORT=.*/PORT=3002/' "$ENVO"
-  say "$ENVO: PM2=synchro-green PORT=3002 (watchdog đọc tệp màu sống trước, các dòng này chỉ là dự phòng)"
-fi
-
+rc=0; finish_steps green || rc=$?
+[ "$rc" = 0 ] || exit "$rc"
 say "Xong. Màu sống: green (cổng 3002). Bản build cũ $APP/.next giữ nguyên để trả lại bằng tay (docs/van-hanh.md); xóa khi đã yên tâm."
