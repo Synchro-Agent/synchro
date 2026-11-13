@@ -18,6 +18,12 @@ const SHEETS = [
   { css: "app/codeview.css", entries: ["app/codeview.tsx", "app/browserhub.tsx"], prefix: /^(cvg?|bp|ctxp|ext)(-|$)/ },
   { css: "app/brainview.css", entries: ["app/brainui.tsx"], prefix: /^(bw|bn)(-|$)/ },
   { css: "app/download/download.css", entries: ["app/download/view.tsx"], prefix: /^dl(-|$)/ },
+  // B3.4: Dự án, Cài đặt (Quản trị, Providers, Khả năng, Connectors, trang Mức dùng), Kho kỹ năng. Lớp cùng tiền tố mà trang chat vẫn dùng
+  // (hàng dự án ở thanh bên, vòng Mức dùng, bộ chia trang, liên kết connector ở menu +) không thuộc tệp tách, vẫn ở tệp chung.
+  { css: "app/projects.css", entries: ["app/projects.tsx"], prefix: /^pj-(?!(row|tg|ic|kids)$)/ },
+  { css: "app/settings.css", entries: ["app/settings.tsx", "app/adminui.tsx", "app/healthui.tsx", "app/backupui.tsx", "app/botadmin.tsx", "app/usageui.tsx", "app/latencyui.tsx", "app/cliupdateui.tsx", "app/modelregui.tsx", "app/providersui.tsx", "app/connectorsui.tsx"],
+    prefix: /^(perm-|cap-(?!ext$)|adm-(?!(pager|pg|pg-n|pg-b)$)|pv-(?!open$)|cn-(?!(logo|mono|link)$)|us-(?!(note|wrap|ring|ring-n|pop|h|row|row-t|bar|empty|more|v|v-h|tag|money|ctx|sub)$))/ },
+  { css: "app/skills.css", entries: ["app/pluginsui.tsx", "app/skillsui.tsx", "app/skillscanui.tsx", "app/claudedirui.tsx", "app/studio.tsx", "app/appsui.tsx", "app/tasksui.tsx"], prefix: /^pl-/ },
 ];
 const classes = (css) => new Set([...css.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\{[^{}]*\}/g, "{}").matchAll(/\.(-?[A-Za-z_][\w-]*)/g)].map((m) => m[1]));
 // Lớp xuất hiện như một chữ riêng trong chuỗi của tệp (kể cả chuỗi ghép `sp-${x}`).

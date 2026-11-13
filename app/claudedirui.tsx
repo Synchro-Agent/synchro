@@ -1,4 +1,5 @@
 "use client";
+import "./skills.css";
 // Danh mục skill của Claude trong tab Khám phá của Skill Hub: lưới mục ngành nghề có số thư viện / đã cài (như Customize → Directory của Claude),
 // danh sách thư viện theo trang (máy chủ lọc, không gửi cả ~3.100 thư viện xuống trình duyệt), cài từng thư viện, và với quản trị viên:
 // cài tất cả (cả danh mục hoặc một mục) ở nền, kèm tiến độ và danh sách thư viện không cài được.

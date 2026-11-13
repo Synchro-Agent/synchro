@@ -1,4 +1,5 @@
 "use client";
+import "./settings.css";
 // Cài đặt → Providers: mỗi hãng (Claude, ChatGPT, Gemini, Grok, DeepSeek) là một mục. Bấm vào để chọn cách dùng:
 // - Đăng nhập gói subscription của chính mình: máy chủ chạy CLI chính chủ (Claude Code, Codex, Antigravity, Grok CLI), Synchro chỉ hiện link
 //   đăng nhập và nhận mã người dùng dán vào; thông tin đăng nhập nằm trong thư mục riêng của tài khoản trên máy chủ.

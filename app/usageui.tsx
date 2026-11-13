@@ -1,4 +1,5 @@
 "use client";
+import "./settings.css";
 // Mức dùng (giống "Plan usage limits" của Claude, nhưng tính theo chi phí API thật):
 // - UsageRing (usagering.tsx): vòng tròn cạnh bộ chọn model; tách riêng để trang chủ không phải tải phần dưới đây (blueprint B3.1).
 // - UsageSettings: trang Cài đặt → Usage (chi tiết 30 ngày theo model, tính năng, ngày).

@@ -1,4 +1,5 @@
 "use client";
+import "./skills.css";
 import { useCallback, useEffect, useRef, useState, type ComponentType, type ReactNode } from "react";
 import { apiFetch, statusText } from "./apierr";
 import { cachedJson, META, SKILLS_CHANGED, SKILL_STUDIOS, type PluginsMeta } from "./studios";

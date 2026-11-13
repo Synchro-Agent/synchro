@@ -1,4 +1,5 @@
 "use client";
+import "./settings.css";
 // Cài đặt → Providers → New models (chỉ quản trị viên): sổ model Synchro tự dò khi hãng ra mắt model mới (app/modelreg.ts).
 // Xem model mới thấy, kết quả thử tự động, trạng thái; bật / tắt tự nhận model mới (cả máy chủ hoặc từng hãng); ghim / ẩn / dùng ngay / thử lại; "Check now".
 import { useEffect, useMemo, useState } from "react";
