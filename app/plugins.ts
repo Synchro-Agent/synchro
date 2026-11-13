@@ -818,6 +818,16 @@ export function studioSummary(uid: string): StudioSummary {
   if (m.map.size > SUMMARY_MAX) { const oldest = m.map.keys().next().value; if (oldest !== undefined) m.map.delete(oldest); }
   return v;
 }
+/** Như studioSummary nhưng chỉ đọc kết quả đã tính sẵn, không bao giờ dựng lại bộ đệm thư viện hay duyệt ~18.000 skill (việc đồng bộ có thể
+ *  mất hàng trăm ms tới vài giây sau mỗi lần khởi động lại). Trang chủ dựng HTML ở máy chủ (app/page.tsx) dùng bản này: chưa có sẵn thì
+ *  trả null, trình duyệt tự hỏi /api/plugins?view=meta như trước, HTML không phải chờ. */
+export function studioSummaryCached(uid: string): StudioSummary | null {
+  const m = SG.__sumMemo, hit = m?.map.get(uid), c = CG.__plCache;
+  if (!m || !hit || !c || m.revs !== `${CG.__plRev ?? 0}|${tagRev()}|${prefsRev()}`) return null;
+  // Cùng điều kiện "bộ đệm còn dùng được" của snap(), không gọi snap() (nó tự dựng lại khi hết hạn).
+  if (hit.cache !== c || c.rev !== (CG.__plRev ?? 0) || c.tags !== tagRev() || Date.now() - c.at >= 6 * 3600_000) return null;
+  return hit.fp === userSkillsSig(uid) ? hit.v : null;
+}
 /** Số người đang có kết quả studioSummary trong bộ nhớ (kiểm thử). */
 export const studioSummaryMemoSize = () => SG.__sumMemo?.map.size ?? 0;
 const PAGE = 40;

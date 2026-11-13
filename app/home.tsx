@@ -20,7 +20,7 @@ import { BulkBar, BulkCheck, bulkRow, useBulk, type BulkAct } from "./bulk";
 import { Pager, usePage } from "./pager";
 import { lazyView } from "./lazy";
 import type { CodeMeta } from "./codeview";
-import { answerAsk, deleteServerSession, flushAllNow, listServerSessions, patchServerSession, pushSession, resetCodePrefs, useCodePrefs, type SessionState } from "./codesync";
+import { answerAsk, deleteServerSession, flushAllNow, listServerSessions, patchServerSession, pushSession, resetCodePrefs, seedCodePrefs, useCodePrefs, type SessionState } from "./codesync";
 import type { SpeechTool } from "./speech/data";
 import { usePlan as useSpeechPlan } from "./speech/client";
 import { aiVoiceNote, elSpeed, speakAI, type Speaking } from "./speak";
@@ -91,7 +91,7 @@ import { GEN_IMG_EVENT } from "./artgen";
 import type { Product } from "./filepreview";
 import type { OutFile } from "./llm";
 import { UsageRing } from "./usagering";
-import { cachedJson, fmtCount, HUB_DISCOVER, HUB_SEARCH, seedMeta, useStudios } from "./studios";
+import { cachedJson, clearJsonCache, fmtCount, HUB_DISCOVER, HUB_SEARCH, seedMeta, useStudios } from "./studios";
 import type { CzTab } from "./pluginsui";
 import { ConnLogo } from "./connlogo";
 import type { ComposioInfo, Conn } from "./connectorsui";
@@ -1238,7 +1238,7 @@ export default function Home({ boot }: { boot?: BootData | null }) {
     setUserScope(u.id);
     if (u.isAdmin) adoptLegacyData(u.id);
     reloadPrefs();
-    resetCodePrefs();
+    resetCodePrefs(); clearJsonCache();
     listAt.current = 0;
     loadLocal();
     setCur(null); setView("new");
@@ -1256,7 +1256,7 @@ export default function Home({ boot }: { boot?: BootData | null }) {
       if (j.user) {
         enterAccount(j.user);
         // Gieo các kho của trang từ gói khởi động (sau enterAccount: kho nào cũng theo vùng dữ liệu của tài khoản đang mở).
-        if (b) { bootSeeded.current = { uid: j.user.id, at: Date.now(), models: seedModels(b.models), caps: seedCaps(b.caps) }; seedMeta(b.studios); seedInboxCount(b.inboxCount); }
+        if (b) { bootSeeded.current = { uid: j.user.id, at: Date.now(), models: seedModels(b.models), caps: seedCaps(b.caps) }; seedMeta(b.studios); seedInboxCount(b.inboxCount); seedCodePrefs(b.codePrefs); }
         syncProfile(j.user);
       }
       // Lần thử lại về sau khi khách vừa đăng nhập xong ở màn hình đăng nhập: không ghi đè.
@@ -1335,7 +1335,9 @@ export default function Home({ boot }: { boot?: BootData | null }) {
   useEffect(() => { if (me && !seededNow(me.id, "models")) refreshModels(); }, [me]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (me && !seededNow(me.id, "caps")) loadCaps(); }, [me?.id]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (view === "code") setCpWant(true); }, [view]);
-  useEffect(() => { if (!me || !codeListRef.current.length) return; const t = setTimeout(() => setCpWant(true), 5000); return () => clearTimeout(t); }, [me?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Cài đặt Code thường đã gieo từ gói khởi động (đồng bộ phiên chạy ngay, kể cả thiết bị mới chưa có phiên nào). Không có gói (dựng lỗi,
+  // tài khoản vừa đăng nhập ở màn đăng nhập): tự tải sau 5 giây dù máy này đã có phiên Code hay chưa, để phiên của thiết bị khác vẫn về.
+  useEffect(() => { if (!me) return; const t = setTimeout(() => setCpWant(true), 5000); return () => clearTimeout(t); }, [me?.id]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!models.loaded) return;
     const f = fitModel(model, models);
@@ -2404,7 +2406,7 @@ export default function Home({ boot }: { boot?: BootData | null }) {
     const uid = userScope();
     fetch("/api/auth/logout", { method: "POST" }).catch(() => {});
     flushDirty();
-    setUserScope(null); reloadPrefs(); resetCodePrefs(); listAt.current = 0;
+    setUserScope(null); reloadPrefs(); resetCodePrefs(); clearJsonCache(); listAt.current = 0;
     if (clear) clearAccountData(uid);
     // Thôi theo dõi các câu trả lời đang chạy (không hủy ở máy chủ: đăng nhập lại thì trang nối vào lượt đó như khi tải lại).
     gens.current.clear(); runs.current.clear(); setRunning(new Set());

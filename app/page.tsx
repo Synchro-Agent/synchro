@@ -15,7 +15,8 @@ export default async function Page() {
   let boot: BootData | null = null;
   // Không cookie: màn đăng nhập, Home tự hỏi /api/auth/me như trước (không dựng gì ở máy chủ). Lỗi dựng gói: Home cũng tự hỏi lại, không sập trang.
   if (sid) {
-    try { boot = await bootFor(new Request("http://synchro.local/", { headers: { cookie: `${COOKIE}=${sid}` } })); } catch (e) { console.error("[page boot]", e); }
+    // fast: không chờ việc chậm (model của gói qua CLI, hỏi mạng, dựng lại thư viện skill); phần chưa kịp là null, trình duyệt tự hỏi.
+    try { boot = await bootFor(new Request("http://synchro.local/", { headers: { cookie: `${COOKIE}=${sid}` } }), { fast: true }); } catch (e) { console.error("[page boot]", e); }
   }
   return <Home boot={boot} />;
 }

@@ -2,6 +2,8 @@
 // Tách khỏi pluginsui.tsx và skillsui.tsx (nặng, tải chậm khi mở Kho kỹ năng) vì trang chủ luôn cần các nút studio.
 import { useEffect, useState } from "react";
 import { getLang } from "./i18n";
+import { cachedJson, clearJsonCache, seedJson } from "./jsoncache";
+export { cachedJson, clearJsonCache, seedJson };
 
 type Studio = "design" | "slides" | "docs";
 type Lib = { name: string; skills: number; autoTotal?: number; catalogLibs?: number };
@@ -44,16 +46,5 @@ export type PluginsMeta = { admin?: boolean; canInstall?: boolean; plugins?: { s
 /** Gieo /api/plugins?view=meta từ gói khởi động dựng sẵn ở máy chủ (app/bootdata.ts): lần hỏi đầu của trang dùng bản này. */
 export function seedMeta(j: PluginsMeta | null | undefined) { if (j) seedJson(META, j); }
 
-// Danh sách skill và thư viện (cả trăm KB): menu + và bảng lệnh ⌘K mỗi lần mở từng tải lại từ đầu. Giữ 5 phút, gọi trùng thì dùng chung,
-// có thay đổi trong Kho kỹ năng thì bỏ bản đệm. Lần tải lỗi không được giữ.
-const jsonCache = new Map<string, { at: number; p: Promise<unknown> }>();
-if (typeof window !== "undefined") for (const e of [PLUGINS_CHANGED, SKILLS_CHANGED, SKILL_STUDIOS]) window.addEventListener(e, () => jsonCache.clear());
-export function cachedJson<T>(url: string, ttl = 300_000): Promise<T> {
-  const hit = jsonCache.get(url);
-  if (hit && Date.now() - hit.at < ttl) return hit.p as Promise<T>;
-  const p = fetch(url).then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status))))).catch(() => { jsonCache.delete(url); return {}; });
-  jsonCache.set(url, { at: Date.now(), p });
-  return p as Promise<T>;
-}
-/** Đặt sẵn một kết quả vào bộ đệm của cachedJson (dữ liệu dựng ở máy chủ), giữ như một lần tải thật. */
-export function seedJson(url: string, data: unknown) { jsonCache.set(url, { at: Date.now(), p: Promise.resolve(data) }); }
+// Bộ đệm JSON dùng chung (app/jsoncache.ts, tách riêng để kiểm thử không cần React): có thay đổi trong Kho kỹ năng thì bỏ bản đệm.
+if (typeof window !== "undefined") for (const e of [PLUGINS_CHANGED, SKILLS_CHANGED, SKILL_STUDIOS]) window.addEventListener(e, () => clearJsonCache());
