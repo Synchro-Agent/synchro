@@ -1,7 +1,8 @@
 "use client";
+import "./skills.css";
 import { useCallback, useEffect, useRef, useState, type ComponentType, type ReactNode } from "react";
 import { apiFetch, statusText } from "./apierr";
-import { SKILLS_CHANGED, SKILL_STUDIOS } from "./studios";
+import { cachedJson, META, SKILLS_CHANGED, SKILL_STUDIOS, type PluginsMeta } from "./studios";
 import { createPortal } from "react-dom";
 import * as I from "./icons";
 import { useApp } from "./store";
@@ -108,7 +109,7 @@ export async function downloadExport(url: string, fallback: string): Promise<str
 
 export function useIsAdmin() {
   const [a, setA] = useState(false);
-  useEffect(() => { let on = true; fetch("/api/plugins?view=meta").then((r) => (r.ok ? r.json() : null)).then((j) => { if (on) setA(!!j?.admin); }).catch(() => {}); return () => { on = false; }; }, []);
+  useEffect(() => { let on = true; cachedJson<PluginsMeta>(META).then((j) => { if (on) setA(!!j?.admin); }).catch(() => {}); return () => { on = false; }; }, []);
   return a;
 }
 // Chỉ quản trị viên mới thấy lựa chọn này; tài khoản khác thêm skill vào Skill của bạn như thường.

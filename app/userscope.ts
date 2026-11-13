@@ -8,6 +8,8 @@ export const userScope = () => scope;
 export const setUserScope = (id: string | null) => { scope = id || "anon"; };
 const prefix = () => `u:${scope}:`;
 export const scoped = (k: string) => (GLOBAL.has(k) ? k : prefix() + k);
+/** Khóa localStorage của một tài khoản cụ thể (chưa chuyển vùng sang tài khoản đó). */
+export const scopedFor = (uid: string, k: string) => (GLOBAL.has(k) ? k : `u:${uid}:${k}`);
 
 export const ls = {
   get(k: string) { try { return localStorage.getItem(scoped(k)); } catch { return null; } },

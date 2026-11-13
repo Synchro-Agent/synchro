@@ -1,4 +1,5 @@
 "use client";
+import "./settings.css";
 
 import { createContext, useContext, useEffect, useRef, useState } from "react";
 import { apiFetch, statusText } from "./apierr";
@@ -6,7 +7,7 @@ import { rowKeys } from "./a11y";
 import { createPortal } from "react-dom";
 import { Fade, Menu } from "./ui";
 import { AvatarButton } from "./avatar";
-import { usePref, useApp, initials, resetPrefs } from "./store";
+import { chatFont, usePref, useApp, initials, resetPrefs } from "./store";
 import * as I from "./icons";
 import { PageBar, usePage } from "./pager";
 import { Mark } from "./brand";
@@ -123,11 +124,9 @@ function Toasts({ msg }: { msg: string }) {
   return msg && typeof document !== "undefined" ? createPortal(<div className="toast" role="status"><I.Clock size={14} />{msg}</div>, document.body) : null;
 }
 
-// Giá trị lưu vẫn là tên phông ("Anthropic Sans", globals.css chọn phông theo tên này), giao diện chỉ gọi là Mặc định.
-const fontName = (f: string) => (f === "Anthropic Sans" ? "Default" : f);
 function General({ theme, setTheme }: { theme: string; setTheme: (t: string) => void }) {
   const app = useApp();
-  const [font, setFont] = usePref("font", "Anthropic Sans");
+  const [font, setFont] = usePref("font", "Default");
   const [size, setSize] = usePref("size", "Medium");
   const [motion, setMotion] = usePref("motion", "System");
   const [lang, setLang] = usePref("vlang", "Vietnamese");
@@ -157,7 +156,7 @@ function General({ theme, setTheme }: { theme: string; setTheme: (t: string) => 
       <Row t="Theme" top>
         <div className="group" role="group" aria-label="Theme">{themes.map(([k, ic, n]) => <button key={k} title={n} aria-label={n} aria-pressed={theme === k} className={theme === k ? "on" : ""} onClick={() => setTheme(k)} style={{ padding: "0 9px" }}>{ic}</button>)}</div>
       </Row>
-      <Row t="Chat font"><Select value={fontName(font)} onChange={(v) => setFont(v === "Default" ? "Anthropic Sans" : v)} options={["Default", "System", "Serif"]} /></Row>
+      <Row t="Chat font"><Select value={chatFont(font)} onChange={(v) => setFont(chatFont(v))} options={["Default", "System", "Serif"]} /></Row>
       <Row t="Transcript text size" d="Size of the conversation transcript text."><Seg value={size} onChange={setSize} options={["Small", "Medium", "Large"]} /></Row>
       <Row t="Motion" d="Reduce animation in streaming responses and other interface elements."><Seg value={motion} onChange={setMotion} options={["System", "Reduced"]} /></Row>
       <Row t="Transcript width" d="Maximum width of the conversation and the message box, in chat and in Synchro Code."><Seg value={TW_LABEL[tw]} onChange={(l) => setTw((Object.keys(TW_LABEL) as (keyof typeof TW_LABEL)[]).find((k) => TW_LABEL[k] === l) ?? "medium")} options={Object.values(TW_LABEL)} /></Row>

@@ -6,10 +6,10 @@
 // - Trình duyệt hết chỗ: rút gọn các đoạn chat cũ đã có trên máy chủ (nội dung tải lại khi mở trang). Chưa kịp lên máy chủ thì báo ngay kèm nút xuất dữ liệu.
 // - Đoạn chat ẩn danh không bao giờ rời trình duyệt.
 import { useEffect, useRef, useSyncExternalStore } from "react";
-import { batches, hashOf, keyOf, lastTime, losesUserMsgs, parseMeta, saveFit, serialChat, serialProject, startupDirty, decideRemote, stubOf, TIMED_OUT, withDeadline, type Part, type SyncKind, type SyncMeta } from "./chatsynccore";
+import { batches, earlyUsable, hashOf, keyOf, lastTime, losesUserMsgs, parseMeta, saveFit, serialChat, serialProject, startupDirty, decideRemote, stubOf, TIMED_OUT, withDeadline, type Part, type SyncKind, type SyncMeta } from "./chatsynccore";
 import { tr } from "./i18n";
 import type { Chat, Project } from "./store";
-import { ls, userScope } from "./userscope";
+import { ls, scopedFor, userScope } from "./userscope";
 
 const PUSH_WAIT = 1500, POLL = 30_000, RUN_EVERY = 30_000, BATCH = 1_500_000, MAX_WAIT = 300_000;
 const URL_ = "/api/chats";
@@ -42,6 +42,17 @@ const setStatus = (p: Partial<SyncStatus>) => {
   if (JSON.stringify(n) !== JSON.stringify(status)) { status = n; subs.forEach((f) => f()); }
 };
 export const useSyncStatus = () => useSyncExternalStore((f) => { subs.add(f); return () => { subs.delete(f); }; }, () => status, () => status);
+
+// Lần hỏi đầu bắt đầu sớm (blueprint A3.4): trang chủ dựng sẵn ở máy chủ đã biết tài khoản, nên hỏi /api/chats?since= ngay lúc hydrate,
+// không chờ trang dựng xong và lượt đồng bộ khởi động. Lượt đồng bộ đầu dùng kết quả này nếu đúng tài khoản và đúng mốc (earlyUsable), không thì bỏ.
+let early: { uid: string; since: number; p: Promise<Response | null> } | null = null;
+export function prefetchChats(uid: string) {
+  if (early || !uid || typeof window === "undefined") return;
+  let since = 0;
+  try { since = parseMeta(localStorage.getItem(scopedFor(uid, "chatSync"))).cur; } catch {}
+  early = { uid, since, p: fetch(`${URL_}?since=${since}`, { cache: "no-store" }).catch(() => null) };
+}
+const takeEarly = (scope: string, since: number) => { const e = early; early = null; return e && earlyUsable(e, scope, since) ? e.p : null; };
 
 // Đoạn chat lấy từ máy chủ đã được thiết bị khác đưa vào bộ não, không cần nạp lại từ thiết bị này (useBrainSync).
 function brainSeen(ids: string[]) {
@@ -123,7 +134,8 @@ export function useChatSync(o: { uid: string | null; loaded: boolean; chats: Cha
     s.pulling = true;
     try {
       for (let i = 0; i < 500 && ok(s); i++) {
-        const r = await fetch(`${URL_}?since=${s.meta.cur}`, { cache: "no-store" });
+        const pre = i === 0 ? await takeEarly(s.scope, s.meta.cur) : null;
+        const r = pre ?? await fetch(`${URL_}?since=${s.meta.cur}`, { cache: "no-store" });
         if (!r.ok) throw new Error(String(r.status));
         const j = await r.json() as { items: Remote[]; next: number; more: boolean };
         if (!ok(s)) return;

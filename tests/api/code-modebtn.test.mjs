@@ -5,7 +5,7 @@ import { loadTs } from "../lib/ts.mjs";
 
 let pass = 0, fail = 0;
 const ok = (c, n, x = "") => { c ? pass++ : fail++; console.log(c ? "  ✓" : "  ✗", n, c ? "" : String(x).slice(0, 300)); };
-const cv = fs.readFileSync("app/codeview.tsx", "utf8"), page = fs.readFileSync("app/page.tsx", "utf8");
+const cv = fs.readFileSync("app/codeview.tsx", "utf8"), page = fs.readFileSync("app/home.tsx", "utf8");
 const { "i18n-dict": D } = await loadTs(["i18n-dict"]);
 
 const modeBtn = cv.match(/<button className="cv-modebtn"[^>]*>/)?.[0] ?? "";

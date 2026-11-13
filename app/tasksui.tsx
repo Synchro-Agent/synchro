@@ -1,4 +1,5 @@
 "use client";
+import "./skills.css";
 // Hộp thư tự động hóa: giao việc bằng câu thường → Synchro lên kế hoạch (tên, lịch, trình duyệt, hướng dẫn chi tiết), người dùng xem / sửa rồi tạo.
 // Việc chạy nền trên máy chủ theo lịch, kể cả khi máy người dùng tắt hay đã đóng trang. Ba mục: Kết quả (theo ngày, xem tiến độ đang chạy, nhật ký),
 // Cần duyệt (đề xuất của việc tự động: tạo skill, hành động, trang web, công cụ — duyệt là Synchro làm), Việc tự động (lịch, bật / tắt, chạy ngay).

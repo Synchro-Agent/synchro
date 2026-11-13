@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import * as I from "./icons";
 import { tr } from "./i18n";
-import { isDeck, noteGenPending, noteGenSettled, pendingRetryMs } from "./artdoc";
+import { isDeck, noteGenPending, noteGenSettled, pendingRetryMs } from "./artgen";
 import type { OutFile } from "./llm";
 import { FILE_KIND as KIND, fileKind, fmtSize } from "./fileicon";
 import { genVerdict, imgVerdict } from "./outimg";

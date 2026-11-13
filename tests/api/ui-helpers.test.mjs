@@ -98,7 +98,7 @@ ok(/đang tắt/.test(E.termDown({ available: true, running: false }, true)) && 
   ok(R.resetAt(soon, "en") === "Resets Thu 11:05 AM" && R.resetAt(soon, "vi") === "Đặt lại T5 11:05", "dưới 24 giờ vẫn tuyệt đối, không đếm ngược", `${R.resetAt(soon, "en")} | ${R.resetAt(soon, "vi")}`);
   ok(R.resetClock(far, "en") === "Thu 9:55 PM" && R.resetClock(far, "vi") === "T5 21:55", "thứ và giờ dùng chung", R.resetClock(far, "en"));
   const rd = (f) => fs.readFileSync(f, "utf8");
-  const page = rd("app/page.tsx"), usage = rd("app/usageui.tsx");
+  const page = rd("app/home.tsx"), usage = rd("app/usageui.tsx") + rd("app/usagering.tsx");
   ok(/return resetAt\(t, en\(\) \? "en" : "vi"\);/.test(usage) && /m\.notice\.at > Date\.now\(\) \? <p data-notr>\{resetAt\(m\.notice\.at, getLang\(\)\)\}<\/p>/.test(page), "bảng Mức dùng và thẻ hết hạn mức cùng gọi resetAt (tuyệt đối, một nguồn)");
   ok(!/weekday: "short", hour: "2-d/.test(page + rd("app/providersui.tsx")), "không còn nơi tự định dạng giờ đặt lại kiểu khác (Thu 09:55 PM)");
   ok(/aria-label=\{tr\("Giao việc cho Synchro"\)\}/.test(rd("app/tasksui.tsx")), "ô Giao việc: aria-label dịch được (ô mang data-notr nên bộ dịch trang bỏ qua)");

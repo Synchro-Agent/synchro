@@ -3,7 +3,7 @@ import { I18n } from "./i18n";
 import { ChunkGuard } from "./chunkguard";
 import { langScript } from "./langdetect";
 import type { Metadata, Viewport } from "next";
-// Unbounded của bộ nhận diện (tự lưu trên máy chủ, đủ dấu tiếng Việt): chỉ cho logo và tiêu đề; chữ thường vẫn là Anthropic Sans.
+// Unbounded của bộ nhận diện (tự lưu trên máy chủ, đủ dấu tiếng Việt): chỉ cho logo và tiêu đề; chữ thường là Be Vietnam Pro (globals.css).
 import "@fontsource-variable/unbounded/wght.css";
 // Hai bộ chữ của lời chào (Latin, tiếng Việt) lấy từ /fonts để tải trước được: tên tệp trong gói bị băm khi dựng. Khai báo sau nên thắng bản của gói cho đúng các chữ đó.
 import "./unbounded-preload.css";
@@ -35,8 +35,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="vi" data-theme="light" suppressHydrationWarning>
       <head>
-        {/* Phông chữ thường của toàn bộ giao diện: tải sớm để chữ không nhảy khi phông về. */}
-        <link rel="preload" href="/fonts/AnthropicSans-Variable.woff2" as="font" type="font/woff2" crossOrigin="" />
+        {/* Phông chữ thường của toàn bộ giao diện (Be Vietnam Pro, hai độ đậm dùng nhiều nhất: chữ thường và chữ vừa): tải sớm để chữ không nhảy khi phông về. */}
+        <link rel="preload" href="/fonts/BeVietnamPro-Regular.woff2" as="font" type="font/woff2" crossOrigin="" />
+        <link rel="preload" href="/fonts/BeVietnamPro-Medium.woff2" as="font" type="font/woff2" crossOrigin="" />
         <link rel="preload" href="/fonts/unbounded-latin-wght-normal.woff2" as="font" type="font/woff2" crossOrigin="" />
         <link rel="preload" href="/fonts/unbounded-vietnamese-wght-normal.woff2" as="font" type="font/woff2" crossOrigin="" />
         <script

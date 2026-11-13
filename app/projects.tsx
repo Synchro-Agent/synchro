@@ -1,4 +1,5 @@
 "use client";
+import "./projects.css";
 
 import GlassFolder from "./glass-folder";
 import { useEffect, useRef, useState } from "react";

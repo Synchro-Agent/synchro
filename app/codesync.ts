@@ -26,9 +26,10 @@ export function loadCodePrefs(force = false) {
   });
   return loading;
 }
-/** Cài đặt Synchro Code của tài khoản (null khi chưa tải xong). */
-export function useCodePrefs(): CodePrefs | null {
-  return useSyncExternalStore((f) => { subs.add(f); if (!prefs && userScope() !== "anon") loadCodePrefs(); return () => subs.delete(f); }, () => prefs, () => null);
+/** Cài đặt Synchro Code của tài khoản (null khi chưa tải xong). load = false: chỉ đọc bản đã tải, không tự hỏi máy chủ — trang chủ hoãn
+ *  /api/code/prefs tới khi mở Code (blueprint A3.5); màn Code, Cài đặt → Synchro Code tự tải khi mở. */
+export function useCodePrefs(load = true): CodePrefs | null {
+  return useSyncExternalStore((f) => { subs.add(f); if (load && !prefs && userScope() !== "anon") loadCodePrefs(); return () => subs.delete(f); }, () => prefs, () => null);
 }
 export const codePrefsNow = () => prefs;
 export async function saveCodePrefs(patch: Partial<CodePrefs>): Promise<string | null> {
@@ -39,6 +40,8 @@ export async function saveCodePrefs(patch: Partial<CodePrefs>): Promise<string |
   prefs = await r.json(); emit();
   return null;
 }
+/** Gieo cài đặt từ gói khởi động dựng ở máy chủ (app/bootdata.ts codePrefs): không cần hỏi /api/code/prefs lúc mở trang. */
+export function seedCodePrefs(p: CodePrefs | null | undefined) { if (!p || prefs) return; prefs = p; emit(); }
 /** Sau khi đổi tài khoản: tải lại cài đặt của tài khoản mới. */
 export function resetCodePrefs() { prefs = null; loading = null; emit(); }
 

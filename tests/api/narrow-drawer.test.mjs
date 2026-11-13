@@ -5,7 +5,7 @@ import fs from "node:fs";
 
 let pass = 0, fail = 0;
 const ok = (c, n, x = "") => { c ? pass++ : fail++; console.log(c ? "  ✓" : "  ✗", n, c ? "" : String(x).slice(0, 400)); };
-const page = fs.readFileSync("app/page.tsx", "utf8"), ds = fs.readFileSync("app/synchro-ds.css", "utf8"), g = fs.readFileSync("app/globals.css", "utf8");
+const page = fs.readFileSync("app/home.tsx", "utf8"), ds = fs.readFileSync("app/synchro-ds.css", "utf8"), g = fs.readFileSync("app/globals.css", "utf8");
 const strip = (css) => css.replace(/\/\*[\s\S]*?\*\//g, "");
 
 const narrow = Number(page.match(/const NARROW = "\(max-width: (\d+)px\)"/)?.[1]);
