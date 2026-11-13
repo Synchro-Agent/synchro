@@ -44,7 +44,7 @@ import { untested } from "./modelreg";
 import { type ABlock, type Citer, anthropicCall, blocksText, searchResults, chatOnce, effortParams, HttpErr, openaiCall, outCap, respInput, respParse, respTools, responsesCall, toAnthropic, toOpenAI, toResponses, withPages } from "./llmcall";
 import { mergedProviders, prewarmClaude, sessionPlain, subCli, subTurn } from "./ai/subs";
 import { PROJECT_DOC_RULES, PROJECT_DOC_TOOL, projectDocsLong, projectIns, readProjectFile } from "./projectdocs";
-import { REJECTED_RULE, rejectedBlock, stripAppliedNotes, withProjectIns, withRejected } from "./turnctx";
+import { REJECTED_RULE, REJECTED_TAG, rejectedBlock, stripAppliedNotes, withProjectIns, withRejected } from "./turnctx";
 import { ASPECTS, generateImages, IMAGE_RULES, IMAGE_TOOL_NAME, imageBudget, imageProduct, imageTool, imageName, IMG_NAME, requestSlug, type ImgErr, type ImgOk } from "./ai/imagegen";
 import { POSTER_TEMPLATES, posterProps, type PosterTemplate } from "./design-engine/posters/props";
 import { genImageUrl } from "./artdoc";
@@ -1038,7 +1038,9 @@ function lastUserText(messages: unknown): string {
   const m = [...list].reverse().find((x) => x?.role === "user");
   if (!m) return "";
   if (typeof m.content === "string") return m.content.slice(0, 4000);
-  return Array.isArray(m.content) ? (m.content as { type?: string; text?: string }[]).filter((b) => b?.type === "text" && typeof b.text === "string").map((b) => b.text).join("\n").slice(0, 4000) : "";
+  // Khối <attachments_rejected> (tệp không đọc được, do turnctx.withRejected chèn lên đầu tin nhắn mới nhất) là dữ liệu, không phải chữ người dùng gõ:
+  // bỏ qua ở đây để không lẫn vào brain recall, crisisHelp, mentionsConnector / announceOffline, hasOwnSkill (cùng cách router.FILE_TEXT bỏ khối này khi chọn việc).
+  return Array.isArray(m.content) ? (m.content as { type?: string; text?: string }[]).filter((b) => b?.type === "text" && typeof b.text === "string" && !b.text.trimStart().startsWith(`<${REJECTED_TAG}>`)).map((b) => b.text).join("\n").slice(0, 4000) : "";
 }
 // Gợi ý định tuyến cho lượt này: skill hợp nhất với yêu cầu (tìm trong toàn bộ kho, cả skill bên trong thư viện)
 // và skill các lượt trước đã dùng. Model đọc thẳng skill bằng tên, không phải mở thư viện trước; không hợp thì bỏ qua.

@@ -1,5 +1,6 @@
 // Tệp đính kèm bị từ chối tới được model: khối <attachments_rejected> liệt kê tên, loại, lý do (thoát ký tự, cắt độ dài, tối đa 20 tệp), đứng đầu tin nhắn mới nhất,
 // chữ người dùng gõ giữ nguyên và bộ định tuyến không coi khối này là chữ người dùng gõ. Hàm thuần, không cần máy chủ.
+import fs from "node:fs";
 import { loadTs } from "../lib/ts.mjs";
 let pass = 0, fail = 0;
 const ok = (c, n, x = "") => { c ? pass++ : fail++; console.log(c ? "  ✓" : "  ✗", n, c ? "" : String(x).slice(0, 600)); };
@@ -51,6 +52,13 @@ ok(T.withRejected(msgs, "") === msgs && T.withRejected([{ role: "assistant", con
 console.log("5. Bộ định tuyến không coi khối là chữ người dùng gõ");
 const q = R.inputOfChat(out);
 ok(q.text === "Tóm tắt các tệp này giúp mình", "chữ để chọn loại việc là câu người dùng gõ", q.text);
+
+console.log("6. lastUserText bỏ qua khối tệp bị từ chối (không lẫn vào recall / crisisHelp / connector / skill)");
+const eng = fs.readFileSync("app/chatengine.ts", "utf8");
+const i0 = eng.indexOf("function lastUserText");
+const fn = eng.slice(i0, i0 + 1400);
+ok(i0 >= 0 && fn.includes("startsWith(`<${REJECTED_TAG}>`)"), "lastUserText lọc khối <attachments_rejected> ra khỏi chữ người dùng gõ", fn);
+ok(/REJECTED_TAG\b/.test(eng.slice(0, eng.indexOf("from \"./turnctx\"") + 20)), "REJECTED_TAG được nhập từ turnctx");
 
 console.log(`\n${pass}/${pass + fail} đạt`);
 process.exit(fail ? 1 : 0);
