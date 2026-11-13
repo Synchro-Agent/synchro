@@ -327,7 +327,12 @@ async function pdfFallback(buf: Buffer, uid?: string): Promise<{ total: number; 
 const workerExtractor: Extractor = {
   name: "office",
   match: (k) => k === "docx" || k === "xlsx" || k === "csv" || k === "pptx" || k === "zip",
-  async run(buf, { name, kind, uid }) { return [{ type: "text", text: await parseInWorker(kind, buf, name, uid) }]; },
+  async run(buf, { name, kind, uid }) {
+    // CSV là chữ: giải mã ở đây bằng cùng decodeText với tệp .txt (UTF-16 không BOM, Windows-1258 + NFC, cp1252…) rồi gửi UTF-8 cho tiến trình đọc,
+    // thay vì để tiến trình tự đoán bằng jschardet (UTF-16 không BOM ra đầy byte 0, cp1252 ra "Cittā").
+    const input = kind === "csv" ? Buffer.from(decodeText(buf), "utf8") : buf;
+    return [{ type: "text", text: await parseInWorker(kind, input, name, uid) }];
+  },
 };
 
 // ---- 4. TXT / MD / JSON / code / HTML / XML ----

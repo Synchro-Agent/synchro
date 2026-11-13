@@ -163,6 +163,18 @@ console.log("5. Trích thật qua tiến trình đọc tệp (docx/xlsx/csv/pptx
 // csv
 let t = parse("csv", Buffer.from("cot_a,cot_b\nDH_CSV_1,DH_CSV_2\n"), "m.csv")?.text ?? "";
 ok(t.includes("DH_CSV_1") && t.includes("| cot_a | cot_b |"), "CSV: nội dung + tiêu đề", t);
+// CSV đi đúng đường thật (extractor "office" → tiến trình đọc tệp, C-2): giải mã bằng cùng decodeText với tệp .txt, KHÔNG để tiến trình tự đoán bằng jschardet.
+const office = E.EXTRACTORS.find((x) => x.name === "office");
+const csvVia = async (buf, name) => { try { return (await office.run(buf, { name, kind: "csv" }))[0]?.text ?? ""; } catch (e) { return `ERR:${e.message}`; } };
+const vnCsv = "Họ tên,Thành phố\nNguyễn Văn An,Hà Nội\nTrần Thị Bình,Hồ Chí Minh\n";
+t = await csvVia(Buffer.from(vnCsv, "utf16le"), "u16le.csv");
+ok(t.includes("| Họ tên | Thành phố |") && t.includes("| Nguyễn Văn An | Hà Nội |") && !t.includes("\u0000"), "CSV UTF-16LE không BOM qua tiến trình đọc: đúng chữ, không byte 0", JSON.stringify(t));
+t = await csvVia(Buffer.from(vnCsv, "utf16le").swap16(), "u16be.csv");
+ok(t.includes("| Trần Thị Bình | Hồ Chí Minh |") && !t.includes("\u0000"), "CSV UTF-16BE không BOM qua tiến trình đọc", JSON.stringify(t));
+t = await csvVia(cp1258(vnCsv), "vn1258.csv");
+ok(t.includes("| Nguyễn Văn An | Hà Nội |") && t.includes("Trần Thị Bình") && t === t.normalize("NFC"), "CSV Windows-1258 qua tiến trình đọc: chữ dựng sẵn (NFC), tìm được \"Nguyễn\"", JSON.stringify(t));
+t = await csvVia(cp1252("Città,Perché\nCosì,Può\nLunedì,Però\n"), "it.csv");
+ok(t.includes("| Città | Perché |") && t.includes("| Così | Può |") && !t.includes("ā"), "CSV cp1252 tiếng Ý qua tiến trình đọc: không thành Cittā / Cosė", JSON.stringify(t));
 // xlsx
 const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([["Mã", "Tên"], ["DH_XLSX_K", "DH_XLSX_V"]]), "S");
 t = parse("xlsx", XLSX.write(wb, { type: "buffer", bookType: "xlsx" }), "m.xlsx")?.text ?? "";
