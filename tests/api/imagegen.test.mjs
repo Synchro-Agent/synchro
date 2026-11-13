@@ -517,6 +517,16 @@ try {
       ok(I.withImageDefaults(p).endsWith(SUF), `thêm hậu tố cho mô tả không xin chữ: "${p}"`, I.withImageDefaults(p));
     for (const p of ["logo cho quán cà phê", "poster sự kiện âm nhạc", 'a sign that says "OPEN"', '“SALE” on a shop window', "tiêu đề in đậm", "a banner with the word Sale", "ảnh có dòng chữ chúc mừng", "typography poster", "brand identity mockup"])
       ok(I.withImageDefaults(p) === p, `giữ nguyên khi người dùng muốn có chữ / logo / nhãn: "${p}"`, I.withImageDefaults(p));
+    // R4: cặp nháy đơn (thẳng, cong) quanh chữ cần hiện vẫn là xin chữ; dấu nháy đơn lẻ (sở hữu, viết tắt) thì không.
+    for (const p of ["a birthday cake with 'Happy Birthday Mom' on top", "áo thun in 'Hà Nội 2026'", "a coffee mug that reads 'Best Dad'", "a cake with ‘Happy Birthday’ on top"])
+      ok(I.withImageDefaults(p) === p, `R4: giữ nguyên khi chữ cần hiện nằm trong cặp nháy đơn: "${p}"`, I.withImageDefaults(p));
+    for (const p of ["the dogs' and cats' toys on a rug", "a cat’s toy", "rock 'n' roll guitar", "it's the kids' room"])
+      ok(I.withImageDefaults(p).endsWith(SUF), `R4: dấu nháy đơn lẻ không tính là xin chữ: "${p}"`, I.withImageDefaults(p));
+    // W23-18: "biển" / "nhãn" chỉ là xin chữ trong cụm biển hiệu / nhãn dán; "bãi biển", "quả nhãn" là cảnh, trái cây.
+    for (const p of ["bãi biển lúc hoàng hôn", "một đĩa quả nhãn chín", "biển xanh và cát trắng", "vườn nhãn Hưng Yên"])
+      ok(I.withImageDefaults(p).endsWith(SUF), `W23-18: thêm hậu tố, không phải xin chữ: "${p}"`, I.withImageDefaults(p));
+    for (const p of ["biển hiệu quán phở", "biển quảng cáo ngoài trời", "nhãn dán cho hũ mật ong", "nhãn mác chai rượu vang", "dán nhãn hộp quà"])
+      ok(I.withImageDefaults(p) === p, `W23-18: giữ nguyên, cụm biển hiệu / nhãn dán là xin chữ: "${p}"`, I.withImageDefaults(p));
     ok(I.withImageDefaults("con mèo, không chữ") === "con mèo, không chữ", "không thêm hai lần");
     ok(I.imagePrompt("agy", { prompt: "con mèo", count: 1 }).includes(SUF.trim()), "imagePrompt (ảnh mới) có hậu tố");
     ok(!I.imagePrompt("agy", { prompt: "con mèo", count: 1 }, "/w/ref.png").includes("không chữ"), "sửa ảnh có sẵn: giữ nguyên, không thêm hậu tố");
