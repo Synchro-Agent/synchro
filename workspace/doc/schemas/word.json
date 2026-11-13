@@ -1,0 +1,146 @@
+{
+  "$comment": "Hợp đồng JSON của 4 mẫu Word (docx/word.mjs, thư viện docx): contract, minutes, official-report, cv. Khối nội dung (sections, blocks, inline, date, lang) dùng chung $defs với schemas/typst.json; synchro-doc ghép hai phần khi in schema. Bộ kiểm trong synchro-doc.py chỉ hiểu các từ khóa có ở typst.json.",
+  "$defs": {
+    "line": { "type": "string", "minLength": 1, "maxLength": 300 },
+    "time": { "type": "string", "pattern": "^([01]?\\d|2[0-3]):[0-5]\\d$", "description": "Giờ HH:MM (24 giờ)." },
+    "person": {
+      "description": "Một người: chuỗi \"Họ tên\" hoặc {name, position?}.",
+      "anyOf": [
+        { "type": "string", "minLength": 1, "maxLength": 200 },
+        { "type": "object", "required": ["name"], "additionalProperties": false, "properties": { "name": { "type": "string", "minLength": 1, "maxLength": 200 }, "position": { "type": "string", "maxLength": 200 } } }
+      ]
+    },
+    "party": {
+      "type": "object", "required": ["label", "name"], "additionalProperties": false,
+      "properties": {
+        "label": { "type": "string", "minLength": 1, "maxLength": 120, "description": "Ví dụ \"BÊN A (Bên thuê dịch vụ)\"; phần \"BÊN A\" dùng ở ô chữ ký." },
+        "name": { "type": "string", "minLength": 1, "maxLength": 300, "description": "Tên công ty hoặc họ tên cá nhân." },
+        "address": { "type": "string", "maxLength": 300 },
+        "tax_id": { "type": "string", "maxLength": 40, "description": "Mã số thuế." },
+        "id_number": { "type": "string", "maxLength": 60, "description": "Cá nhân: số CCCD, ngày cấp, nơi cấp." },
+        "representative": { "type": "string", "maxLength": 200, "description": "Người đại diện (ký hợp đồng)." },
+        "position": { "type": "string", "maxLength": 120, "description": "Chức vụ của người đại diện." },
+        "phone": { "type": "string", "maxLength": 60 },
+        "email": { "type": "string", "maxLength": 120 },
+        "bank_account": { "type": "string", "maxLength": 200, "description": "Số tài khoản, ngân hàng." },
+        "extra": { "type": "array", "maxItems": 8, "items": { "type": "object", "required": ["label", "value"], "additionalProperties": false, "properties": { "label": { "type": "string", "minLength": 1, "maxLength": 80 }, "value": { "type": "string", "maxLength": 300 } } }, "description": "Dòng thông tin thêm (Giấy ủy quyền số…)." }
+      }
+    },
+    "signer": {
+      "type": "object", "required": ["title", "name"], "additionalProperties": false,
+      "properties": {
+        "authority": { "type": "string", "maxLength": 80, "description": "Quyền hạn ký: \"KT. GIÁM ĐỐC\", \"TM. ỦY BAN NHÂN DÂN\" (bỏ trống nếu người đứng đầu ký)." },
+        "title": { "type": "string", "minLength": 1, "maxLength": 80, "description": "Chức vụ: \"GIÁM ĐỐC\", \"PHÓ GIÁM ĐỐC\"." },
+        "name": { "type": "string", "minLength": 1, "maxLength": 120 }
+      }
+    }
+  },
+  "templates": {
+    "contract": {
+      "title": "Hợp đồng (Word): quốc hiệu, căn cứ, thông tin các bên, Điều 1, Điều 2… tự đánh số, ô ký của từng bên, số trang",
+      "required": ["title", "parties", "articles"],
+      "properties": {
+        "lang": { "$ref": "#/$defs/lang" },
+        "title": { "type": "string", "minLength": 1, "maxLength": 200, "description": "Ví dụ \"Hợp đồng cung cấp dịch vụ\" (in hoa tự động)." },
+        "number": { "type": "string", "maxLength": 60, "description": "Số hợp đồng, ví dụ \"12/2026/HĐDV\"." },
+        "date": { "$ref": "#/$defs/date" },
+        "place": { "type": "string", "maxLength": 80, "description": "Nơi ký, ví dụ \"TP. Hồ Chí Minh\"." },
+        "national_header": { "type": "boolean", "description": "In Quốc hiệu, Tiêu ngữ ở đầu (mặc định true với tiếng Việt)." },
+        "legal_bases": { "type": "array", "maxItems": 20, "items": { "$ref": "#/$defs/line" }, "description": "Các dòng \"Căn cứ …;\" (in nghiêng)." },
+        "intro": { "type": "string", "maxLength": 600, "description": "Câu mở đầu; bỏ trống thì tự viết \"Hôm nay, ngày … tại …, chúng tôi gồm:\"." },
+        "parties": { "type": "array", "minItems": 2, "maxItems": 4, "items": { "$ref": "#/$defs/party" } },
+        "agreement": { "type": "string", "maxLength": 600, "description": "Câu trước Điều 1; mặc định \"Các bên thống nhất ký kết hợp đồng với các điều khoản sau:\"." },
+        "articles": { "type": "array", "minItems": 1, "maxItems": 80, "items": { "$ref": "#/$defs/section" }, "description": "Mỗi điều: {heading, text?, blocks?}; tự đánh số \"Điều 1.\", \"Điều 2.\"…" },
+        "closing": { "type": "string", "maxLength": 600, "description": "Câu cuối; mặc định \"Hợp đồng được lập thành 02 bản có giá trị pháp lý như nhau, mỗi bên giữ 01 bản.\" (số bản theo số bên)." },
+        "signature_note": { "type": "string", "maxLength": 120, "description": "Dòng nhỏ dưới ô ký; mặc định \"(Ký, ghi rõ họ tên, đóng dấu)\"." }
+      }
+    },
+    "minutes": {
+      "title": "Biên bản họp (Word): thể thức Nghị định 30, thời gian, địa điểm, thành phần, chương trình, nội dung, kết luận, bảng phân công, chữ ký chủ trì và thư ký",
+      "required": ["subject", "date", "attendees"],
+      "properties": {
+        "lang": { "$ref": "#/$defs/lang" },
+        "parent_org": { "type": "string", "maxLength": 160, "description": "Cơ quan chủ quản (nếu có)." },
+        "organization": { "type": "string", "maxLength": 160, "description": "Tên cơ quan, công ty (in hoa tự động)." },
+        "number": { "type": "string", "maxLength": 60, "description": "Ví dụ \"05/BB-KD\"." },
+        "place": { "type": "string", "maxLength": 80, "description": "Địa danh ở dòng ngày tháng, ví dụ \"Hà Nội\"." },
+        "national_header": { "type": "boolean", "description": "In Quốc hiệu, Tiêu ngữ (mặc định true với tiếng Việt)." },
+        "title": { "type": "string", "maxLength": 120, "description": "Mặc định \"Biên bản họp\"." },
+        "subject": { "type": "string", "minLength": 1, "maxLength": 300, "description": "Nội dung cuộc họp (in dưới tên loại)." },
+        "date": { "$ref": "#/$defs/date" },
+        "start_time": { "$ref": "#/$defs/time" },
+        "end_time": { "$ref": "#/$defs/time" },
+        "location": { "type": "string", "maxLength": 300 },
+        "chair": { "$ref": "#/$defs/person" },
+        "secretary": { "$ref": "#/$defs/person" },
+        "attendees": { "type": "array", "minItems": 1, "maxItems": 100, "items": { "$ref": "#/$defs/person" } },
+        "absent": { "type": "array", "maxItems": 50, "items": { "$ref": "#/$defs/person" }, "description": "Vắng mặt (ghi lý do trong position nếu cần)." },
+        "agenda": { "type": "array", "maxItems": 30, "items": { "$ref": "#/$defs/inline" } },
+        "sections": { "type": "array", "maxItems": 100, "items": { "$ref": "#/$defs/section" }, "description": "Diễn biến, ý kiến từng nội dung." },
+        "decisions": { "type": "array", "maxItems": 50, "items": { "$ref": "#/$defs/inline" }, "description": "Kết luận của chủ trì." },
+        "actions": {
+          "type": "array", "maxItems": 100, "description": "Phân công: bảng Việc / Người phụ trách / Hạn.",
+          "items": { "type": "object", "required": ["task", "owner"], "additionalProperties": false, "properties": { "task": { "$ref": "#/$defs/inline" }, "owner": { "type": "string", "minLength": 1, "maxLength": 200 }, "due": { "type": "string", "maxLength": 60 } } }
+        },
+        "closing": { "type": "string", "maxLength": 600, "description": "Câu kết; mặc định \"Cuộc họp kết thúc lúc … cùng ngày. Biên bản đã được đọc lại cho những người dự họp cùng nghe và thống nhất.\"" }
+      }
+    },
+    "official-report": {
+      "title": "Báo cáo có mục lục (Word): thể thức Nghị định 30, tên cơ quan, số ký hiệu, mục lục có số trang, đề mục I. / 1. / a), nơi nhận, chữ ký",
+      "required": ["organization", "title", "sections", "signer"],
+      "properties": {
+        "lang": { "$ref": "#/$defs/lang" },
+        "parent_org": { "type": "string", "maxLength": 160 },
+        "organization": { "type": "string", "minLength": 1, "maxLength": 160 },
+        "number": { "type": "string", "maxLength": 60, "description": "Ví dụ \"15/BC-CTY\"." },
+        "national_header": { "type": "boolean", "description": "In Quốc hiệu, Tiêu ngữ (mặc định true với tiếng Việt)." },
+        "place": { "type": "string", "maxLength": 80 },
+        "date": { "$ref": "#/$defs/date" },
+        "title": { "type": "string", "minLength": 1, "maxLength": 300, "description": "Trích yếu, ví dụ \"Kết quả kinh doanh năm 2026 và kế hoạch năm 2027\"." },
+        "toc": { "type": "boolean", "description": "Mục lục có số trang (mặc định true)." },
+        "toc_title": { "type": "string", "maxLength": 60 },
+        "intro": { "type": "string", "maxLength": 4000, "description": "Đoạn mở đầu trước mục I." },
+        "sections": { "$ref": "#/$defs/sections" },
+        "recipients": { "type": "array", "maxItems": 30, "items": { "$ref": "#/$defs/line" }, "description": "Nơi nhận; mặc định \"Như trên;\" và \"Lưu: VT.\"." },
+        "signer": { "$ref": "#/$defs/signer" }
+      }
+    },
+    "cv": {
+      "title": "CV / sơ yếu lý lịch (Word): một cột dễ đọc với máy lọc hồ sơ, ảnh tùy chọn, kinh nghiệm có mốc thời gian căn phải, học vấn, kỹ năng, ngoại ngữ",
+      "required": ["name"],
+      "properties": {
+        "lang": { "$ref": "#/$defs/lang" },
+        "name": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "headline": { "type": "string", "maxLength": 200, "description": "Vị trí / chức danh mong muốn." },
+        "photo": { "type": "string", "maxLength": 300, "description": "Ảnh chân dung (đường dẫn tương đối)." },
+        "accent": { "type": "string", "pattern": "^[0-9A-Fa-f]{6}$", "description": "Màu nhấn dạng hex không có #, mặc định 1F4E79." },
+        "contact": {
+          "type": "object", "additionalProperties": false,
+          "properties": { "email": { "type": "string", "maxLength": 120 }, "phone": { "type": "string", "maxLength": 60 }, "location": { "type": "string", "maxLength": 120 }, "website": { "type": "string", "maxLength": 200 }, "linkedin": { "type": "string", "maxLength": 200 }, "github": { "type": "string", "maxLength": 200 } }
+        },
+        "summary": { "$ref": "#/$defs/inline" },
+        "experience": {
+          "type": "array", "maxItems": 30,
+          "items": { "type": "object", "required": ["role", "org"], "additionalProperties": false, "properties": {
+            "role": { "type": "string", "minLength": 1, "maxLength": 200 }, "org": { "type": "string", "minLength": 1, "maxLength": 200 }, "location": { "type": "string", "maxLength": 120 },
+            "start": { "type": "string", "maxLength": 30, "description": "Ví dụ \"03/2022\"." }, "end": { "type": "string", "maxLength": 30, "description": "Bỏ trống là \"nay\"." },
+            "text": { "$ref": "#/$defs/inline" }, "bullets": { "type": "array", "maxItems": 20, "items": { "$ref": "#/$defs/inline" } } } }
+        },
+        "education": {
+          "type": "array", "maxItems": 15,
+          "items": { "type": "object", "required": ["degree", "school"], "additionalProperties": false, "properties": {
+            "degree": { "type": "string", "minLength": 1, "maxLength": 200 }, "school": { "type": "string", "minLength": 1, "maxLength": 200 },
+            "start": { "type": "string", "maxLength": 30 }, "end": { "type": "string", "maxLength": 30 }, "detail": { "$ref": "#/$defs/inline" } } }
+        },
+        "skills": {
+          "type": "array", "maxItems": 30, "description": "Chuỗi, hoặc nhóm {group, items}.",
+          "items": { "anyOf": [{ "type": "string", "minLength": 1, "maxLength": 200 }, { "type": "object", "required": ["items"], "additionalProperties": false, "properties": { "group": { "type": "string", "maxLength": 80 }, "items": { "type": "array", "minItems": 1, "maxItems": 40, "items": { "type": "string", "minLength": 1, "maxLength": 80 } } } }] }
+        },
+        "languages": { "type": "array", "maxItems": 10, "items": { "type": "object", "required": ["name"], "additionalProperties": false, "properties": { "name": { "type": "string", "minLength": 1, "maxLength": 60 }, "level": { "type": "string", "maxLength": 120 } } } },
+        "certifications": { "type": "array", "maxItems": 30, "items": { "$ref": "#/$defs/inline" } },
+        "projects": { "type": "array", "maxItems": 20, "items": { "type": "object", "required": ["name"], "additionalProperties": false, "properties": { "name": { "type": "string", "minLength": 1, "maxLength": 200 }, "text": { "$ref": "#/$defs/inline" }, "link": { "type": "string", "pattern": "^(https?://|mailto:)", "maxLength": 300 } } } },
+        "sections": { "type": "array", "maxItems": 20, "items": { "$ref": "#/$defs/section" }, "description": "Mục thêm ở cuối (Hoạt động, Giải thưởng…)." }
+      }
+    }
+  }
+}

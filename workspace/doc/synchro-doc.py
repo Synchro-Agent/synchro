@@ -7,10 +7,14 @@
   synchro-doc check <mẫu> payload.json               chỉ kiểm payload
   synchro-doc typst <basic-report|ilm|charged-ieee> payload.json outputs/bao-cao.pdf [--png outputs/_preview] [--keep]
   synchro-doc invoice payload.json outputs/hoa-don.pdf [--png outputs/_preview] [--keep]
-  synchro-doc docx <basic-report|ilm|charged-ieee> payload.json outputs/bao-cao.docx
+  synchro-doc docx <basic-report|ilm|charged-ieee> payload.json outputs/bao-cao.docx [--pdf] [--png outputs/_preview]
+  synchro-doc docx <contract|minutes|official-report|cv> payload.json outputs/hop-dong.docx [--pdf] [--png outputs/_preview]
 
 Mẫu: basic-report (báo cáo doanh nghiệp: bìa, mục lục, số trang), ilm (đề xuất dự án / sách mỏng), charged-ieee (bài nghiên cứu 2 cột),
 invoice (hóa đơn / báo giá A4). Ba mẫu Typst dùng chung một hợp đồng nội dung (sections / blocks), nên cùng payload xuất được cả .docx.
+Mẫu Word (chỉ .docx, dựng bằng thư viện docx): contract (hợp đồng), minutes (biên bản họp), official-report (báo cáo có mục lục theo thể thức
+Nghị định 30), cv (sơ yếu lý lịch). --pdf: thêm bản PDF cùng tên bằng LibreOffice (giao cho người dùng); --png: ảnh các trang đầu của bản PDF dựng từ tệp Word để tự kiểm
+bố cục (chỉ --png thì bản PDF đó nằm trong thư mục ảnh, "check_pdf", không thành tệp của người dùng).
 Đường dẫn ảnh trong payload là đường dẫn tương đối trong thư mục hiện tại. Mã thoát: 0 xong, 2 payload / tham số sai (đọc lỗi rồi sửa), 1 lỗi bộ dựng.
 Chỉ dùng thư viện chuẩn của Python (+ WeasyPrint cho hóa đơn, Pillow nếu cần đổi định dạng ảnh); chạy được không cần mạng.
 """
@@ -20,6 +24,7 @@ import html
 import json
 import math
 import os
+import pathlib
 import re
 import shutil
 import subprocess
@@ -40,7 +45,10 @@ TYPST = {
     "ilm": ("@preview/ilm:1.4.0", TYPST_NEW),
     "charged-ieee": ("@preview/charged-ieee:0.1.3", TYPST_NEW),
 }
-TEMPLATES = list(TYPST) + ["invoice"]
+# Mẫu Word dựng thẳng bằng thư viện docx (docx/word.mjs, schemas/word.json): không có bản Typst.
+WORD = ["contract", "minutes", "official-report", "cv"]
+TEMPLATES = list(TYPST) + ["invoice"] + WORD
+SOFFICE = os.environ.get("SYNCHRO_SOFFICE", "soffice")
 FONT_DIRS = [d for d in os.environ.get("SYNCHRO_DOC_FONTS", "/usr/share/fonts:/usr/share/texmf/fonts/opentype/public/tex-gyre").split(":") if d]
 PACKAGES = os.environ.get("TYPST_PACKAGE_PATH", "/opt/synchro/typst-packages")
 IMG_DIRECT = {".png", ".jpg", ".jpeg", ".gif", ".svg"}
@@ -59,7 +67,7 @@ def die(msg, code=2):
 
 # ---------------------------------------------------------------- schema và bộ kiểm (một phần JSON Schema, đủ cho các tệp schemas/*.json)
 def _schema_file(tpl):
-    return os.path.join(KIT, "schemas", "invoice.json" if tpl == "invoice" else "typst.json")
+    return os.path.join(KIT, "schemas", "invoice.json" if tpl == "invoice" else "word.json" if tpl in WORD else "typst.json")
 
 
 def schema_of(tpl):
@@ -69,8 +77,12 @@ def schema_of(tpl):
     with open(_schema_file(tpl), encoding="utf-8") as f:
         src = json.load(f)
     t = src["templates"][tpl]
+    defs = src["$defs"]
+    if tpl in WORD:  # khối nội dung (sections, blocks, inline, date, lang) dùng chung với các mẫu Typst
+        with open(os.path.join(KIT, "schemas", "typst.json"), encoding="utf-8") as f:
+            defs = {**json.load(f)["$defs"], **defs}
     return {"$schema": "https://json-schema.org/draft/2020-12/schema", "title": t["title"], "type": "object",
-            "required": t["required"], "additionalProperties": False, "properties": t["properties"], "$defs": src["$defs"]}
+            "required": t["required"], "additionalProperties": False, "properties": t["properties"], "$defs": defs}
 
 
 JTYPE = {"string": "chuỗi", "number": "số", "integer": "số nguyên", "boolean": "true/false", "object": "object", "array": "mảng", "null": "null"}
@@ -155,7 +167,7 @@ def validate(root, s, v, path="payload"):
         if "maxLength" in s and len(v) > s["maxLength"]:
             errs.append(f"{path}: dài {len(v)} ký tự, tối đa {s['maxLength']}")
         if "pattern" in s and not re.search(s["pattern"], v):
-            errs.append(f'{path}: "{v[:60]}" sai dạng' + (" (cần YYYY-MM-DD)" if "\\d{4}" in s["pattern"] else " (cần http://, https:// hoặc mailto:)" if "https" in s["pattern"] else ""))
+            errs.append(f'{path}: "{v[:60]}" sai dạng' + (" (cần YYYY-MM-DD)" if "\\d{4}" in s["pattern"] else " (cần HH:MM)" if "[0-5]\\d" in s["pattern"] else " (cần 6 chữ số hex, vd. 1F4E79)" if "A-Fa-f" in s["pattern"] else " (cần http://, https:// hoặc mailto:)" if "https" in s["pattern"] else ""))
     if _is("number", v):
         if "minimum" in s and v < s["minimum"]:
             errs.append(f"{path}: phải ≥ {s['minimum']}")
@@ -205,6 +217,12 @@ def aliases(tpl, d):
     if tpl == "charged-ieee" and isinstance(d.get("author"), (str, dict)) and "authors" not in d:
         d["authors"] = [d.pop("author")]
         notes.append("author → authors")
+    # Tên trường model hay viết theo thói quen của từng loại văn bản.
+    for a, b, only in (("clauses", "articles", "contract"), ("terms", "articles", "contract"), ("participants", "attendees", "minutes"),
+                       ("conclusions", "decisions", "minutes"), ("full_name", "name", "cv"), ("work_experience", "experience", "cv")):
+        if tpl == only and a in d and b not in d:
+            d[b] = d.pop(a)
+            notes.append(f"{a} → {b}")
     def fix_secs(secs):
         if isinstance(secs, list):
             for s in secs:
@@ -213,6 +231,7 @@ def aliases(tpl, d):
                     if "section.content → text" not in notes:
                         notes.append("section.content → text")
     fix_secs(d.get("sections"))
+    fix_secs(d.get("articles"))
     if isinstance(d.get("appendix"), dict):
         fix_secs(d["appendix"].get("sections"))
     return d, notes
@@ -484,7 +503,99 @@ def vi_date(s):
     return dt.date.fromisoformat(s).strftime("%d/%m/%Y") if s else None
 
 
+EN_MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
+
+
+def date_line(place, date, lang):
+    """Dòng địa danh, ngày tháng theo Nghị định 30/2020: "Hà Nội, ngày 05 tháng 02 năm 2026" (ngày dưới 10, tháng 1 và 2 thêm số 0);
+    không có ngày thì chừa chỗ ghi tay."""
+    if lang == "en":
+        if not date:
+            return place or ""
+        x = dt.date.fromisoformat(date)
+        return f"{place + ', ' if place else ''}{EN_MONTHS[x.month - 1]} {x.day}, {x.year}"
+    if not date:
+        return f"{place + ', ' if place else ''}ngày     tháng     năm {dt.date.today().year}"
+    return f"{place + ', ' if place else ''}{vi_day(date)}"
+
+
+def vi_day(date):
+    x = dt.date.fromisoformat(date)
+    return f"ngày {x.day:02d} tháng {x.month:02d} năm {x.year}" if x.month <= 2 else f"ngày {x.day:02d} tháng {x.month} năm {x.year}"
+
+
+def person(p):
+    return {"name": p, "position": ""} if isinstance(p, str) else {"name": p["name"], "position": p.get("position", "")}
+
+
+def party_short(label):
+    """"BÊN A (Bên thuê dịch vụ)" → "BÊN A" cho ô chữ ký."""
+    m = re.match(r"\s*((?:BÊN|Bên|bên|PARTY|Party)\s+[^\s(:,]+)", label)
+    return (m.group(1) if m else re.sub(r"\s*\(.*\)\s*$", "", label)).upper()
+
+
+def normalize_word(tpl, d, ctx):
+    """Mô hình nội dung cho docx/word.mjs: chữ đã tách thành đoạn định dạng, khối đã kiểm, câu mặc định theo ngôn ngữ."""
+    lang = d.get("lang", "vi")
+    vi = lang == "vi"
+    m = {"template": tpl, "lang": lang, "date": d.get("date")}
+    if tpl == "contract":
+        n = len(d["parties"])
+        place, date = d.get("place"), d.get("date")
+        if vi:
+            when = vi_day(date) if date else ""
+            intro = "Hôm nay, " + ", ".join(x for x in (when, f"tại {place}" if place else "") if x) + ", chúng tôi gồm:" if (when or place) else "Chúng tôi gồm:"
+        else:
+            intro = "This contract is made" + (f" on {date_line('', date, 'en')}" if date else "") + (f" in {place}" if place else "") + " between:"
+        m.update(title=d["title"], number=d.get("number"), place=place, national_header=d.get("national_header", vi),
+                 legal_bases=d.get("legal_bases", []), intro=d.get("intro") or intro,
+                 parties=[{**p, "short": party_short(p["label"])} for p in d["parties"]],
+                 agreement=d.get("agreement") or ("Các bên thống nhất ký kết hợp đồng với các điều khoản sau:" if vi else "The parties agree on the following terms:"),
+                 articles=norm_sections(ctx, d["articles"], "articles"),
+                 closing=d.get("closing") or (f"Hợp đồng được lập thành {n:02d} bản có giá trị pháp lý như nhau, mỗi bên giữ 01 bản." if vi
+                                             else f"This contract is made in {n} copies of equal legal validity; each party keeps one copy."),
+                 signature_note=d.get("signature_note") or ("(Ký, ghi rõ họ tên, đóng dấu)" if vi else "(Signature, full name and seal)"))
+    elif tpl == "minutes":
+        date, st, en = d["date"], d.get("start_time"), d.get("end_time")
+        hm = lambda t: (f"{int(t.split(':')[0]):02d} giờ {t.split(':')[1]}" if vi else f"{int(t.split(':')[0]):02d}:{t.split(':')[1]}")
+        time_line = (f"{hm(st)}, " if st else "") + (f"ngày {vi_date(date)}" if vi else date_line("", date, "en"))
+        end = (f"Cuộc họp kết thúc lúc {hm(en)} cùng ngày." if en else "Cuộc họp kết thúc cùng ngày.") if vi else (f"The meeting closed at {hm(en)}." if en else "The meeting closed the same day.")
+        m.update(title=(d.get("title") or ("Biên bản họp" if vi else "Meeting minutes")).upper(), subject=d["subject"],
+                 parent_org=(d.get("parent_org") or "").upper() or None, organization=(d.get("organization") or "").upper() or None,
+                 number=d.get("number"), national_header=d.get("national_header", vi), date_line=date_line(d.get("place"), date, lang),
+                 time_line=time_line, location=d.get("location"),
+                 chair=person(d["chair"]) if d.get("chair") else None, secretary=person(d["secretary"]) if d.get("secretary") else None,
+                 attendees=[person(p) for p in d["attendees"]], absent=[person(p) for p in d.get("absent", [])],
+                 agenda=[runs(x) for x in d.get("agenda", [])], sections=norm_sections(ctx, d.get("sections", [])),
+                 decisions=[runs(x) for x in d.get("decisions", [])],
+                 actions=[{"task": runs(a["task"]), "owner": a["owner"], "due": a.get("due", "")} for a in d.get("actions", [])],
+                 closing=d.get("closing") or end + (" Biên bản đã được đọc lại cho những người dự họp cùng nghe và thống nhất." if vi else " These minutes were read back to and agreed by the attendees."))
+    elif tpl == "official-report":
+        sg = d["signer"]
+        m.update(title=d["title"], parent_org=(d.get("parent_org") or "").upper() or None, organization=d["organization"].upper(),
+                 number=d.get("number"), national_header=d.get("national_header", vi), date_line=date_line(d.get("place"), d.get("date"), lang),
+                 toc=d.get("toc", True), toc_title=d.get("toc_title") or ("MỤC LỤC" if vi else "CONTENTS"),
+                 intro=[norm_block(ctx, b, "intro") for b in text_blocks(d["intro"])] if d.get("intro") else [],
+                 sections=norm_sections(ctx, d["sections"]),
+                 recipients=[re.sub(r"^[-–•]\s*", "", r) for r in d.get("recipients") or (["Như trên;", "Lưu: VT."] if vi else ["As above;", "Archive."])],
+                 signer={"authority": (sg.get("authority") or "").upper() or None, "title": sg["title"].upper(), "name": sg["name"]})
+    else:
+        def dates(x):
+            return {"start": x.get("start", ""), "end": x.get("end") or (("nay" if vi else "Present") if x.get("start") else "")}
+        skills = [{"group": None, "items": [s]} if isinstance(s, str) else {"group": s.get("group"), "items": s["items"]} for s in d.get("skills", [])]
+        m.update(name=d["name"], headline=d.get("headline"), photo=image(ctx, d["photo"]) if d.get("photo") else None, accent=d.get("accent"),
+                 contact=d.get("contact", {}), summary=runs(d.get("summary")),
+                 experience=[{"role": e["role"], "org": e["org"], "location": e.get("location"), **dates(e), "text": runs(e.get("text")), "bullets": [runs(b) for b in e.get("bullets", [])]} for e in d.get("experience", [])],
+                 education=[{"degree": e["degree"], "school": e["school"], "start": e.get("start", ""), "end": e.get("end", ""), "detail": runs(e.get("detail"))} for e in d.get("education", [])],
+                 skills=skills, languages=d.get("languages", []), certifications=[runs(c) for c in d.get("certifications", [])],
+                 projects=[{"name": p["name"], "text": runs(p.get("text")), "link": p.get("link")} for p in d.get("projects", [])],
+                 sections=norm_sections(ctx, d.get("sections", [])))
+    return m
+
+
 def normalize(tpl, d, ctx):
+    if tpl in WORD:
+        return normalize_word(tpl, d, ctx)
     lang = d.get("lang", "vi")
     m = {"template": tpl, "lang": lang, "title": d["title"], "date": d.get("date"), "date_text": vi_date(d.get("date")) if lang == "vi" else d.get("date"),
          "sections": norm_sections(ctx, d["sections"]), "references": [runs(r) for r in d.get("references", [])],
@@ -527,13 +638,21 @@ def pdf_pages(pdf):
         return None
 
 
-def previews(pdf, outdir, root):
-    """Ảnh các trang đầu (70 dpi) để model tự xem bố cục và dấu tiếng Việt trước khi giao."""
+def png_dir(outdir, root):
+    """Thư mục --png (đường dẫn thật), phải nằm trong thư mục làm việc. Kiểm trước khi dựng để cờ sai không để lại tệp dở."""
     if not outdir:
-        return []
+        return None
     d = os.path.realpath(os.path.join(root, outdir))
     if not d.startswith(root + os.sep):
         raise Bad(f"--png phải là thư mục trong thư mục làm việc: {outdir}")
+    return d
+
+
+def previews(pdf, outdir, root):
+    """Ảnh các trang đầu (70 dpi) để model tự xem bố cục và dấu tiếng Việt trước khi giao."""
+    d = png_dir(outdir, root)
+    if not d:
+        return []
     os.makedirs(d, exist_ok=True)
     stem = os.path.splitext(os.path.basename(pdf))[0]
     for f in os.listdir(d):
@@ -568,9 +687,12 @@ def clean_stderr(s):
 
 
 def run_typst(tpl, payload, outp, png=None, keep=False):
+    if tpl in WORD:
+        raise Bad(f'"{tpl}" là mẫu Word: synchro-doc docx {tpl} payload.json outputs/x.docx --png outputs/_preview (thêm --pdf nếu cần cả bản PDF dựng từ chính tệp Word)')
     if tpl not in TYPST:
         raise Bad(f'mẫu Typst không có: "{tpl}" (có: {", ".join(TYPST)}; hóa đơn dùng synchro-doc invoice)')
     root = os.path.realpath(os.getcwd())
+    png_dir(png, root)
     d, notes = load_payload(tpl, payload)
     out = out_path(root, outp, ".pdf")
     tmp = tempfile.mkdtemp(prefix=".synchro-doc-", dir=root)
@@ -605,10 +727,38 @@ def run_typst(tpl, payload, outp, png=None, keep=False):
 
 
 # ---------------------------------------------------------------- Word (.docx, thư viện docx của npm)
-def run_docx(tpl, payload, outp, keep=False):
-    if tpl not in TYPST:
-        raise Bad(f'bản Word có cho: {", ".join(TYPST)} (hóa đơn chỉ có PDF)')
+def docx_pdf(out, root, png=None, deliver=False):
+    """Bản PDF của tệp Word bằng LibreOffice và ảnh các trang đầu để tự kiểm bố cục. Không có LibreOffice thì báo, không lỗi.
+    deliver (--pdf): PDF cùng thư mục, cùng tên với tệp Word, giao cho người dùng ("pdf"). Chỉ --png: PDF chỉ để tự kiểm,
+    nằm trong thư mục ảnh xem trước (outputs/_preview không thành tệp của người dùng), ghi ở "check_pdf"."""
+    key = "pdf" if deliver else "check_pdf"
+    d = tempfile.mkdtemp(prefix=".synchro-doc-pdf-", dir=root)
+    try:
+        try:
+            r = subprocess.run([SOFFICE, "--headless", "-env:UserInstallation=" + pathlib.Path(d, "profile").as_uri(), "--convert-to", "pdf", "--outdir", d, out],
+                               capture_output=True, text=True, timeout=180)
+        except (OSError, subprocess.SubprocessError) as e:
+            return {key: None, "pdf_error": f"không chuyển được sang PDF ({e.__class__.__name__}): cần LibreOffice (soffice)"}
+        made = os.path.join(d, os.path.splitext(os.path.basename(out))[0] + ".pdf")
+        if r.returncode or not os.path.isfile(made):
+            return {key: None, "pdf_error": "LibreOffice không chuyển được tệp Word sang PDF: " + (r.stderr or r.stdout).strip()[-300:]}
+        if deliver:
+            pdf = os.path.splitext(out)[0] + ".pdf"
+        else:
+            pd = png_dir(png, root)
+            os.makedirs(pd, exist_ok=True)
+            pdf = os.path.join(pd, os.path.basename(made))
+        shutil.move(made, pdf)
+        return {key: os.path.relpath(pdf, root), "pages": pdf_pages(pdf), "previews": previews(pdf, png, root)}
+    finally:
+        shutil.rmtree(d, ignore_errors=True)
+
+
+def run_docx(tpl, payload, outp, keep=False, pdf=False, png=None):
+    if tpl not in TYPST and tpl not in WORD:
+        raise Bad(f'bản Word có cho: {", ".join(list(TYPST) + WORD)} (hóa đơn chỉ có PDF)')
     root = os.path.realpath(os.getcwd())
+    png_dir(png, root)
     d, notes = load_payload(tpl, payload)
     out = out_path(root, outp, ".docx")
     tmp = tempfile.mkdtemp(prefix=".synchro-doc-", dir=root)
@@ -618,16 +768,21 @@ def run_docx(tpl, payload, outp, keep=False):
         mp = os.path.join(tmp, "model.json")
         with open(mp, "w", encoding="utf-8") as f:
             json.dump(model, f, ensure_ascii=False)
+        script = "word.mjs" if tpl in WORD else "render.mjs"
         try:
-            r = subprocess.run(["node", os.path.join(KIT, "docx", "render.mjs"), mp, out, root], capture_output=True, text=True, timeout=120)
+            r = subprocess.run(["node", os.path.join(KIT, "docx", script), mp, out, root], capture_output=True, text=True, timeout=120)
         except FileNotFoundError:
             die("không có node", 1)
         if r.returncode:
             die(f"dựng Word lỗi:\n{r.stderr.strip()[-2000:]}", 1)
-        res = {"ok": True, "template": tpl, "output": os.path.relpath(out, root), "seconds": round(time.time() - t0, 2),
-               "note": "Mục lục đã điền sẵn số trang (ước lượng như Word); người dùng sửa nội dung thì cập nhật trong Word bằng Update Table."}
+        res = {"ok": True, "template": tpl, "output": os.path.relpath(out, root), "seconds": round(time.time() - t0, 2)}
+        if tpl in TYPST or (tpl == "official-report" and model.get("toc")):
+            res["note"] = "Mục lục đã điền sẵn số trang (ước lượng như Word); người dùng sửa nội dung thì cập nhật trong Word bằng Update Table."
         if notes:
             res["renamed"] = notes
+        if pdf or png:
+            res.update(docx_pdf(out, root, png, deliver=pdf))
+            res["seconds"] = round(time.time() - t0, 2)
         report(res)
     finally:
         if not keep:
@@ -793,6 +948,7 @@ def hidden_under_total(page):
 
 def run_invoice(payload, outp, png=None, keep=False):
     root = os.path.realpath(os.getcwd())
+    png_dir(png, root)
     d, _ = load_payload("invoice", payload)
     out = out_path(root, outp, ".pdf")
     tt = totals(d)
@@ -850,7 +1006,7 @@ def run_invoice(payload, outp, png=None, keep=False):
 
 # ---------------------------------------------------------------- dòng lệnh
 def main(argv):
-    opts = {"png": None, "keep": False}
+    opts = {"png": None, "keep": False, "pdf": False}
     pos = []
     it = iter(argv)
     for a in it:
@@ -858,6 +1014,8 @@ def main(argv):
             opts["png"] = next(it, None) or "outputs/_preview"
         elif a.startswith("--png="):
             opts["png"] = a[6:]
+        elif a == "--pdf":
+            opts["pdf"] = True
         elif a in ("--keep", "--typ"):
             opts["keep"] = True
         elif a in ("-h", "--help", "help"):
@@ -877,6 +1035,10 @@ def main(argv):
         for k in TYPST:
             print(f"{k}\t{t[k]['title']}\tsynchro-doc typst {k} payload.json outputs/x.pdf | synchro-doc docx {k} payload.json outputs/x.docx")
         print("invoice\tHóa đơn / báo giá A4 (WeasyPrint)\tsynchro-doc invoice payload.json outputs/x.pdf")
+        with open(os.path.join(KIT, "schemas", "word.json"), encoding="utf-8") as f:
+            w = json.load(f)["templates"]
+        for k in WORD:
+            print(f"{k}\t{w[k]['title']}\tsynchro-doc docx {k} payload.json outputs/x.docx --png outputs/_preview [--pdf]")
     elif cmd == "schema" and len(rest) == 1:
         print(json.dumps(schema_of(rest[0]), ensure_ascii=False, indent=1))
     elif cmd == "example" and len(rest) == 1:
@@ -893,7 +1055,7 @@ def main(argv):
     elif cmd == "invoice" and len(rest) == 2:
         run_invoice(rest[0], rest[1], opts["png"], opts["keep"])
     elif cmd == "docx" and len(rest) == 3:
-        run_docx(rest[0], rest[1], rest[2], opts["keep"])
+        run_docx(rest[0], rest[1], rest[2], opts["keep"], opts["pdf"], opts["png"])
     else:
         raise Bad("lệnh sai.\n" + __doc__.strip())
 

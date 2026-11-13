@@ -114,6 +114,17 @@ async function docxSections() {
     "word/document.xml": `${H}<w:document ${WN}><w:body>${para("Mục một", 3)}<w:p><w:pPr><w:sectPr>${refs}<w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1134" w:right="1134" w:bottom="1134" w:left="1134" w:header="500" w:footer="500"/></w:sectPr></w:pPr></w:p>${para("Hai cột", 120)}<w:p><w:pPr><w:sectPr><w:type w:val="nextPage"/><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1134" w:right="1134" w:bottom="1134" w:left="1134" w:header="500" w:footer="500"/><w:cols w:num="2" w:space="400"/></w:sectPr></w:pPr></w:p>${para("Phụ lục", 3)}<w:sectPr><w:type w:val="nextPage"/><w:pgSz w:w="16838" w:h="11906" w:orient="landscape"/><w:pgMar w:top="1134" w:right="1134" w:bottom="1134" w:left="1134" w:header="500" w:footer="500"/></w:sectPr></w:body></w:document>`,
   });
 }
+// Kiểu tệp của thư viện docx (synchro-doc docx): mục lục là tab phải có dấu chấm dẫn, trang mục lục đánh số i, ii; thân bài đếm lại từ 1.
+async function docxToc() {
+  const toc = (t, n) => `<w:p><w:pPr><w:tabs><w:tab w:val="right" w:pos="9000" w:leader="dot"/></w:tabs></w:pPr><w:hyperlink w:anchor="_Toc1"><w:r><w:t>${t}</w:t></w:r><w:r><w:tab/></w:r><w:r><w:fldChar w:fldCharType="begin"/><w:instrText xml:space="preserve">PAGEREF _Toc1 \\h</w:instrText><w:fldChar w:fldCharType="separate"/><w:t>${n}</w:t><w:fldChar w:fldCharType="end"/></w:r></w:hyperlink></w:p>`;
+  const sect = (start, fmt) => `<w:footerReference w:type="default" r:id="rId1"/><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1134" w:right="1134" w:bottom="1134" w:left="1134" w:header="500" w:footer="500"/><w:pgNumType w:start="${start}" w:fmt="${fmt}"/>`;
+  return zip({
+    "[Content_Types].xml": DEF, "_rels/.rels": rels([["rId1", "officeDocument", "word/document.xml"]]),
+    "word/_rels/document.xml.rels": rels([["rId1", "footer", "footer1.xml"]]),
+    "word/footer1.xml": `${H}<w:ftr ${WN}><w:p><w:fldSimple w:instr=" PAGE "><w:r><w:t>1</w:t></w:r></w:fldSimple></w:p></w:ftr>`,
+    "word/document.xml": `${H}<w:document ${WN}><w:body><w:sdt><w:sdtContent>${toc("1. Tóm tắt", 1)}${toc("2. Số liệu chính", 2)}</w:sdtContent></w:sdt><w:p><w:pPr><w:sectPr>${sect(1, "lowerRoman")}</w:sectPr></w:pPr></w:p><w:p><w:r><w:t>Thân bài</w:t></w:r></w:p><w:p><w:r><w:br w:type="page"/></w:r><w:r><w:t>Trang hai của thân bài</w:t></w:r></w:p><w:sectPr>${sect(1, "decimal")}</w:sectPr></w:body></w:document>`,
+  });
+}
 async function pptxShapes() {
   const shape = (id, prst, x, y, extra = "") => `<p:sp><p:nvSpPr><p:cNvPr id="${id}" name="${prst}"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="${x}" y="${y}"/><a:ext cx="1000000" cy="800000"/></a:xfrm><a:prstGeom prst="${prst}"><a:avLst>${extra}</a:avLst></a:prstGeom><a:solidFill><a:srgbClr val="2255AA"/></a:solidFill><a:ln w="19050"><a:solidFill><a:srgbClr val="FF0000"/></a:solidFill></a:ln></p:spPr></p:sp>`;
   const names = ["cloud", "heart", "star8", "donut", "wedgeRectCallout", "wave", "flowChartDocument", "mathMultiply", "leftBrace", "can", "pie", "lightningBolt"];
@@ -250,6 +261,14 @@ try {
   ok(ds.some((p) => p.cols === "2" && /^Hai cột/.test(p.txt)), "w:cols num=2 hiện hai cột", JSON.stringify(ds));
   ok(ds.every((p) => !p.over), "không trang nào tràn", JSON.stringify(ds));
   await shot("docx");
+
+  console.log("2c. Word: mục lục có dấu chấm dẫn, số trang theo mục");
+  r = await open("muc-luc.docx", await docxToc());
+  ok(r.st?.t === "done" && r.st.pages === 3, "3 trang: mục lục + 2 trang thân bài", JSON.stringify(r.st));
+  const tl = await ev(`[...document.querySelectorAll(".dp .rtab")].map(p=>{const a=p.querySelector(".tl1").getBoundingClientRect(),d=p.querySelector(".tld"),c=p.querySelector(".tl3").getBoundingClientRect(),b=p.getBoundingClientRect();return {t:p.textContent,dot:d.classList.contains("dot"),lw:d.getBoundingClientRect().width,right:Math.round(b.right-c.right),gap:Math.round(c.left-a.right)}})`);
+  ok(tl.length === 2 && tl.every((x) => x.dot && x.lw > 100 && x.right <= 1) && tl[0].t.replace(/\s/g, "") === "1.Tómtắt1", "dòng mục lục: số trang sát lề phải, khoảng giữa kẻ dấu chấm", JSON.stringify(tl));
+  const pn = await ev(`[...document.querySelectorAll(".dp")].map(p=>p.querySelector(".dpf")?.textContent||"")`);
+  ok(pn.join() === "i,1,2", "trang mục lục số i, thân bài đếm lại từ 1", JSON.stringify(pn));
 
   console.log("3. PowerPoint");
   r = await open("deck.pptx", await pptx());

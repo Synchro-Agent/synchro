@@ -1,0 +1,46 @@
+{
+  "title": "Hợp đồng cung cấp dịch vụ thiết kế website",
+  "number": "12/2026/HĐDV",
+  "date": "2026-11-11",
+  "place": "TP. Hồ Chí Minh",
+  "legal_bases": [
+    "Căn cứ Bộ luật Dân sự số 91/2015/QH13 ngày 24 tháng 11 năm 2015;",
+    "Căn cứ Luật Thương mại số 36/2005/QH11 ngày 14 tháng 6 năm 2005;",
+    "Căn cứ nhu cầu và khả năng của hai bên."
+  ],
+  "parties": [
+    {
+      "label": "BÊN A (Bên thuê dịch vụ)",
+      "name": "CÔNG TY TNHH ĐỒNG HÀNH",
+      "address": "25 Lê Lợi, phường Bến Nghé, Quận 1, TP. Hồ Chí Minh",
+      "tax_id": "0312345678",
+      "representative": "Nguyễn Văn Ánh",
+      "position": "Giám đốc",
+      "phone": "028 3822 1234"
+    },
+    {
+      "label": "BÊN B (Bên cung cấp dịch vụ)",
+      "name": "CÔNG TY CỔ PHẦN SÁNG TẠO SỐ",
+      "address": "102 Nguyễn Trãi, phường Thượng Đình, Thanh Xuân, Hà Nội",
+      "tax_id": "0109876543",
+      "representative": "Trần Thị Bình",
+      "position": "Tổng Giám đốc",
+      "bank_account": "0451 0001 23456 tại Vietcombank, chi nhánh Thanh Xuân"
+    }
+  ],
+  "articles": [
+    { "heading": "Nội dung dịch vụ", "text": "Bên B thiết kế và lập trình website giới thiệu doanh nghiệp cho Bên A gồm:\n\n- Trang chủ, trang giới thiệu, trang sản phẩm (tối đa 50 sản phẩm), trang tin tức, trang liên hệ;\n- Giao diện hiển thị tốt trên máy tính và điện thoại;\n- Hướng dẫn Bên A quản trị nội dung." },
+    {
+      "heading": "Giá trị hợp đồng và phương thức thanh toán",
+      "blocks": [
+        { "type": "paragraph", "text": "Tổng giá trị hợp đồng là **85.000.000 đồng** (bằng chữ: Tám mươi lăm triệu đồng), đã bao gồm thuế GTGT." },
+        { "type": "table", "columns": ["Đợt", "Thời điểm", "Tỷ lệ", "Số tiền (đồng)"], "rows": [["1", "Sau khi ký hợp đồng", "40%", "34.000.000"], ["2", "Sau khi nghiệm thu giao diện", "30%", "25.500.000"], ["3", "Sau khi bàn giao website", "30%", "25.500.000"], ["", "Tổng cộng", "100%", "85.000.000"]], "total": true },
+        { "type": "paragraph", "text": "Thanh toán bằng chuyển khoản vào tài khoản của Bên B trong vòng 05 ngày làm việc kể từ khi nhận được đề nghị thanh toán." }
+      ]
+    },
+    { "heading": "Thời gian thực hiện", "text": "Bên B hoàn thành và bàn giao website trong 45 ngày kể từ ngày nhận tiền tạm ứng đợt 1." },
+    { "heading": "Quyền và nghĩa vụ của Bên A", "text": "1. Cung cấp nội dung, hình ảnh, logo đúng hạn;\n2. Thanh toán đúng hạn theo Điều 2;\n3. Nghiệm thu trong 05 ngày làm việc kể từ khi nhận bàn giao." },
+    { "heading": "Quyền và nghĩa vụ của Bên B", "text": "1. Thực hiện đúng nội dung, tiến độ đã thỏa thuận;\n2. Bảo hành miễn phí 12 tháng kể từ ngày bàn giao;\n3. Giữ bí mật thông tin của Bên A." },
+    { "heading": "Điều khoản chung", "text": "Hai bên cam kết thực hiện đúng các điều khoản của hợp đồng. Tranh chấp phát sinh được giải quyết bằng thương lượng; không thương lượng được thì đưa ra Tòa án có thẩm quyền tại TP. Hồ Chí Minh.\n\nHợp đồng có hiệu lực kể từ ngày ký." }
+  ]
+}

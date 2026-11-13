@@ -172,7 +172,7 @@ class Paths(unittest.TestCase):
             self.assertEqual(run_cli(["typst", "ilm", "khong-co.json", "o.pdf"], w).returncode, 2)
             r = run_cli(["list"], w)
             self.assertEqual(r.returncode, 0)
-            self.assertEqual([l.split("\t")[0] for l in r.stdout.strip().splitlines()], ["basic-report", "ilm", "charged-ieee", "invoice"])
+            self.assertEqual([l.split("\t")[0] for l in r.stdout.strip().splitlines()], ["basic-report", "ilm", "charged-ieee", "invoice", "contract", "minutes", "official-report", "cv"])
             r = run_cli(["check", "invoice", os.path.join(HERE, "examples", "invoice.json")], w)
             self.assertEqual(r.returncode, 0, r.stderr)
             self.assertEqual(json.loads(r.stdout)["ok"], True)
@@ -210,7 +210,8 @@ class Hardening(unittest.TestCase):
         self.assertEqual(sd.normalize("charged-ieee", {**base, "lang": "en"}, ctx)["guard"], [])
         self.assertEqual(sd.normalize("basic-report", {**base, "lang": "en"}, ctx)["guard"], ["Inhalt"])
         self.assertEqual(sd.normalize("ilm", {**base, "lang": "vi"}, ctx)["guard"], [])
-        lib = open(os.path.join(HERE, "typst", "_lib", "blocks.typ"), encoding="utf-8").read()
+        with open(os.path.join(HERE, "typst", "_lib", "blocks.typ"), encoding="utf-8") as f:
+            lib = f.read()
         self.assertIn("guarded(p)", lib)
         self.assertIn("show table: set par(justify: false)", lib)
 
@@ -320,6 +321,193 @@ class Invoice(unittest.TestCase):
         self.assertIn("Invoice", h)
         self.assertIn("Grand total", h)
         self.assertIn("November 11, 2026", h)
+
+
+def example(tpl):
+    with open(os.path.join(HERE, "examples", tpl + ".json"), encoding="utf-8") as f:
+        return json.load(f)
+
+
+def word_model(tpl, payload):
+    with tempfile.TemporaryDirectory() as w:
+        return sd.normalize(tpl, sd.aliases(tpl, payload)[0], sd.Ctx(w, w, payload.get("lang", "vi"), "docx", tpl))
+
+
+class WordTemplates(unittest.TestCase):
+    """4 mẫu Word mới (H4.1): hợp đồng, biên bản họp, báo cáo có mục lục, CV."""
+
+    def test_listed_with_schema_and_example(self):
+        for t in sd.WORD:
+            self.assertIn(t, sd.TEMPLATES)
+            s = sd.schema_of(t)
+            # khối nội dung dùng chung với các mẫu Typst
+            self.assertIn("block", s["$defs"])
+            self.assertIn("party", s["$defs"])
+            self.assertEqual(errors(t, example(t)), [], t)
+
+    def test_required_and_suggestions(self):
+        e = errors("contract", {"title": "HĐ", "parties": [{"label": "BÊN A", "name": "X"}], "articles": [{"heading": "a"}]})
+        self.assertTrue(any("cần ít nhất 2" in x for x in e), e)
+        e = errors("minutes", {"subject": "Họp", "date": "2026-11-11", "attendees": ["An"], "start_time": "9h"})
+        self.assertTrue(any("start_time" in x and "HH:MM" in x for x in e), e)
+        e = errors("cv", {"name": "An", "acent": "112233"})
+        self.assertTrue(any('"acent"' in x and '"accent"' in x for x in e), e)
+        e = errors("official-report", {"organization": "A", "title": "B", "sections": [{"heading": "x"}], "signer": {"title": "GĐ"}})
+        self.assertTrue(any('signer: thiếu trường bắt buộc "name"' in x for x in e), e)
+
+    def test_aliases(self):
+        d, notes = sd.aliases("contract", {"title": "x", "parties": [], "clauses": [{"heading": "a", "content": "Nội dung"}]})
+        self.assertEqual(d["articles"][0]["text"], "Nội dung")
+        self.assertIn("clauses → articles", notes)
+        d, _ = sd.aliases("minutes", {"participants": ["An"], "conclusions": ["Chốt"]})
+        self.assertEqual(d["attendees"], ["An"])
+        self.assertEqual(d["decisions"], ["Chốt"])
+
+    def test_date_line_decree_30(self):
+        self.assertEqual(sd.date_line("Hà Nội", "2026-02-05", "vi"), "Hà Nội, ngày 05 tháng 02 năm 2026")
+        self.assertEqual(sd.date_line("Hà Nội", "2026-11-11", "vi"), "Hà Nội, ngày 11 tháng 11 năm 2026")
+        self.assertEqual(sd.date_line("Hanoi", "2026-11-11", "en"), "Hanoi, November 11, 2026")
+        self.assertRegex(sd.date_line("Huế", None, "vi"), r"^Huế, ngày\s+tháng\s+năm \d{4}$")
+
+    def test_contract_model(self):
+        m = word_model("contract", example("contract"))
+        self.assertEqual([p["short"] for p in m["parties"]], ["BÊN A", "BÊN B"])
+        self.assertEqual(m["intro"], "Hôm nay, ngày 11 tháng 11 năm 2026, tại TP. Hồ Chí Minh, chúng tôi gồm:")
+        self.assertIn("02 bản", m["closing"])
+        self.assertTrue(m["national_header"])
+        self.assertEqual(sd.plain(m["articles"][1]["heading"]), "Giá trị hợp đồng và phương thức thanh toán")
+        self.assertEqual(m["articles"][1]["blocks"][1]["type"], "table")
+        three = {**example("contract"), "parties": example("contract")["parties"] + [{"label": "Bên C (bên bảo lãnh)", "name": "Ngân hàng X"}], "lang": "en"}
+        m = word_model("contract", three)
+        self.assertEqual(m["parties"][2]["short"], "BÊN C")
+        self.assertIn("3 copies", m["closing"])
+        self.assertFalse(m["national_header"])
+
+    def test_minutes_model(self):
+        m = word_model("minutes", example("minutes"))
+        self.assertEqual(m["title"], "BIÊN BẢN HỌP")
+        self.assertEqual(m["time_line"], "09 giờ 00, ngày 11/11/2026")
+        self.assertTrue(m["closing"].startswith("Cuộc họp kết thúc lúc 11 giờ 15 cùng ngày."))
+        self.assertEqual(m["chair"], {"name": "Nguyễn Văn Ánh", "position": "Giám đốc"})
+        self.assertEqual(m["actions"][0]["owner"], "Phạm Quốc Dũng")
+        self.assertEqual(word_model("minutes", {"subject": "S", "date": "2026-11-11", "attendees": ["An"]})["attendees"], [{"name": "An", "position": ""}])
+
+    def test_report_model(self):
+        m = word_model("official-report", example("official-report"))
+        self.assertTrue(m["toc"])
+        self.assertEqual(m["organization"], "CÔNG TY TNHH ĐỒNG HÀNH")
+        self.assertEqual(m["signer"]["title"], "GIÁM ĐỐC")
+        self.assertEqual(m["intro"][0]["type"], "paragraph")
+        self.assertEqual(word_model("official-report", {"organization": "A", "title": "B", "sections": [{"heading": "x"}], "signer": {"title": "t", "name": "n"}})["recipients"], ["Như trên;", "Lưu: VT."])
+
+    def test_cv_model(self):
+        m = word_model("cv", example("cv"))
+        self.assertEqual(m["experience"][0]["end"], "nay")
+        self.assertEqual(m["experience"][1]["end"], "02/2022")
+        self.assertEqual(m["skills"][0]["group"], "Phân tích")
+        m = word_model("cv", {"name": "An", "skills": ["Python", {"items": ["SQL"]}], "lang": "en", "experience": [{"role": "r", "org": "o", "start": "2020"}]})
+        self.assertEqual(m["skills"][0], {"group": None, "items": ["Python"]})
+        self.assertEqual(m["experience"][0]["end"], "Present")
+
+    def test_word_template_not_typst(self):
+        with tempfile.TemporaryDirectory() as w:
+            with open(os.path.join(w, "p.json"), "w", encoding="utf-8") as f:
+                json.dump(example("cv"), f, ensure_ascii=False)
+            r = run_cli(["typst", "cv", "p.json", "outputs/a.pdf"], w)
+            self.assertEqual(r.returncode, 2)
+            self.assertIn("synchro-doc docx cv", r.stderr)
+            r = run_cli(["list"], w)
+            for t in sd.WORD:
+                self.assertIn(f"synchro-doc docx {t}", r.stdout)
+
+
+# Dựng thật cần node và thư viện docx (image workspace có sẵn; máy dev: npm ci trong workspace/doc/docx).
+HAS_DOCX = os.path.isdir(os.path.join(HERE, "docx", "node_modules", "docx")) and subprocess.run(["node", "--version"], capture_output=True).returncode == 0
+
+
+@unittest.skipUnless(HAS_DOCX, "cần node + workspace/doc/docx/node_modules")
+class WordRender(unittest.TestCase):
+    def build(self, tpl, payload, extra=(), soffice="/nonexistent/soffice", w=None):
+        import zipfile
+        if w is None:
+            w = tempfile.mkdtemp()
+            self.addCleanup(lambda: __import__("shutil").rmtree(w, ignore_errors=True))
+        with open(os.path.join(w, "p.json"), "w", encoding="utf-8") as f:
+            json.dump(payload, f, ensure_ascii=False)
+        r = subprocess.run([sys.executable, "-I", SCRIPT, "docx", tpl, "p.json", f"outputs/{tpl}.docx", *extra], cwd=w, capture_output=True, text=True, env={**os.environ, "SYNCHRO_SOFFICE": soffice})
+        self.assertEqual(r.returncode, 0, r.stderr)
+        res = json.loads(r.stdout)
+        with zipfile.ZipFile(os.path.join(w, res["output"])) as z:
+            xml = z.read("word/document.xml").decode("utf-8")
+        self.assertFalse([x for x in os.listdir(w) if x.startswith(".synchro-doc")], "còn thư mục tạm")
+        return res, xml
+
+    def test_contract(self):
+        res, xml = self.build("contract", example("contract"))
+        for s in ("CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM", "Điều 1. ", "Điều 6. ", "ĐẠI DIỆN BÊN A", "ĐẠI DIỆN BÊN B", "Số: 12/2026/HĐDV", "w:titlePg"):
+            self.assertIn(s, xml, s)
+
+    def test_minutes(self):
+        _, xml = self.build("minutes", example("minutes"))
+        for s in ("BIÊN BẢN HỌP", "Họp giao ban kinh doanh quý IV năm 2026", "Thời gian bắt đầu: ", "Phân công thực hiện:", "THƯ KÝ", "CHỦ TRÌ", "Lê Thị Cúc"):
+            self.assertIn(s, xml, s)
+
+    def test_report_toc(self):
+        res, xml = self.build("official-report", example("official-report"))
+        self.assertIn("TOC \\h \\o", xml)
+        for s in ("MỤC LỤC", "I. ", "Kết quả thực hiện quý III", "IV. ", "Nơi nhận:", "GIÁM ĐỐC", "BÁO CÁO"):
+            self.assertIn(s, xml, s)
+        self.assertIn("Mục lục", res["note"])
+
+    def test_cv_and_pdf_without_libreoffice(self):
+        res, xml = self.build("cv", example("cv"), ("--pdf",))
+        for s in ("Trần Thị Bình", "Kinh nghiệm làm việc", "03/2022 – nay", "IELTS 7.0", 'w:val="right"'):
+            self.assertIn(s, xml, s)
+        self.assertIsNone(res["pdf"])
+        self.assertIn("LibreOffice", res["pdf_error"])
+
+    def fake_soffice(self):
+        """soffice giả: ghi một PDF nhỏ vào --outdir như LibreOffice (máy dev không có LibreOffice; image thật kiểm bằng selftest.sh)."""
+        d = tempfile.mkdtemp()
+        self.addCleanup(lambda: __import__("shutil").rmtree(d, ignore_errors=True))
+        p = os.path.join(d, "soffice")
+        with open(p, "w", encoding="utf-8") as f:
+            f.write(f"#!{sys.executable}\n" + "import os, sys\n"
+                    "a = sys.argv[1:]\n"
+                    "out = a[a.index('--outdir') + 1]\n"
+                    "stem = os.path.splitext(os.path.basename(a[-1]))[0]\n"
+                    "open(os.path.join(out, stem + '.pdf'), 'wb').write(b'%PDF-1.4\\n%%EOF\\n')\n")
+        os.chmod(p, 0o755)
+        return p
+
+    def test_pdf_flag_delivers_pdf_next_to_docx(self):
+        w = tempfile.mkdtemp()
+        self.addCleanup(lambda: __import__("shutil").rmtree(w, ignore_errors=True))
+        res, _ = self.build("cv", example("cv"), ("--pdf", "--png", "outputs/_preview"), soffice=self.fake_soffice(), w=w)
+        self.assertEqual(res["pdf"], "outputs/cv.pdf")
+        self.assertNotIn("check_pdf", res)
+        self.assertTrue(os.path.isfile(os.path.join(w, "outputs", "cv.pdf")))
+        self.assertFalse(os.path.exists(os.path.join(w, "outputs", "_preview", "cv.pdf")))
+
+    def test_png_only_keeps_check_pdf_out_of_outputs(self):
+        w = tempfile.mkdtemp()
+        self.addCleanup(lambda: __import__("shutil").rmtree(w, ignore_errors=True))
+        res, _ = self.build("contract", example("contract"), ("--png", "outputs/_preview"), soffice=self.fake_soffice(), w=w)
+        self.assertEqual(res["check_pdf"], "outputs/_preview/contract.pdf")
+        self.assertNotIn("pdf", res)
+        self.assertEqual(sorted(os.listdir(os.path.join(w, "outputs"))), ["_preview", "contract.docx"])
+
+    def test_bad_png_dir_writes_nothing(self):
+        for bad in ("../x", "/tmp/x"):
+            w = tempfile.mkdtemp()
+            self.addCleanup(lambda w=w: __import__("shutil").rmtree(w, ignore_errors=True))
+            with open(os.path.join(w, "p.json"), "w", encoding="utf-8") as f:
+                json.dump(example("cv"), f, ensure_ascii=False)
+            r = subprocess.run([sys.executable, "-I", SCRIPT, "docx", "cv", "p.json", "outputs/cv.docx", "--pdf", "--png", bad], cwd=w, capture_output=True, text=True,
+                               env={**os.environ, "SYNCHRO_SOFFICE": self.fake_soffice()})
+            self.assertEqual(r.returncode, 2, r.stderr)
+            self.assertIn("--png", r.stderr)
+            self.assertFalse(os.path.exists(os.path.join(w, "outputs")), os.listdir(w))
 
 
 if __name__ == "__main__":

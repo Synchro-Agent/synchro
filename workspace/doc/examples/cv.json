@@ -1,0 +1,19 @@
+{
+  "name": "Trần Thị Bình",
+  "headline": "Chuyên viên phân tích dữ liệu",
+  "contact": { "email": "binh.tran@email.vn", "phone": "0912 345 678", "location": "Hà Nội", "linkedin": "linkedin.com/in/tranthibinh" },
+  "summary": "5 năm phân tích dữ liệu bán lẻ và tài chính; xây dựng bảng điều khiển giúp giảm 30% thời gian lập báo cáo. Thành thạo SQL, Python, Power BI.",
+  "experience": [
+    { "role": "Chuyên viên phân tích dữ liệu", "org": "Công ty Cổ phần Bán lẻ Sao Việt", "location": "Hà Nội", "start": "03/2022", "bullets": ["Xây dựng hệ thống báo cáo doanh thu 120 cửa hàng bằng Power BI, cập nhật mỗi giờ.", "Mô hình dự báo nhu cầu giúp giảm 18% hàng tồn kho.", "Hướng dẫn 4 nhân viên mới về SQL và quy trình dữ liệu."] },
+    { "role": "Nhân viên phân tích", "org": "Ngân hàng TMCP Phương Đông", "location": "Hà Nội", "start": "07/2019", "end": "02/2022", "bullets": ["Phân tích hành vi khách hàng thẻ tín dụng, đề xuất 3 chiến dịch tăng 12% giao dịch.", "Tự động hóa 15 báo cáo tuần bằng Python."] }
+  ],
+  "education": [
+    { "degree": "Cử nhân Hệ thống thông tin quản lý", "school": "Đại học Kinh tế Quốc dân", "start": "2015", "end": "2019", "detail": "Tốt nghiệp loại Giỏi, GPA 3,6/4" }
+  ],
+  "skills": [
+    { "group": "Phân tích", "items": ["SQL", "Python (pandas)", "Thống kê", "A/B testing"] },
+    { "group": "Công cụ", "items": ["Power BI", "Excel nâng cao", "Google BigQuery"] }
+  ],
+  "languages": [{ "name": "Tiếng Anh", "level": "IELTS 7.0" }, { "name": "Tiếng Việt", "level": "Bản ngữ" }],
+  "certifications": ["Google Data Analytics Professional Certificate (2023)", "Microsoft PL-300: Power BI Data Analyst (2024)"]
+}

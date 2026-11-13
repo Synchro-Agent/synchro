@@ -1,0 +1,33 @@
+{
+  "organization": "Công ty TNHH Đồng Hành",
+  "number": "05/BB-KD",
+  "place": "TP. Hồ Chí Minh",
+  "subject": "Họp giao ban kinh doanh quý IV năm 2026",
+  "date": "2026-11-11",
+  "start_time": "09:00",
+  "end_time": "11:15",
+  "location": "Phòng họp tầng 5, 25 Lê Lợi, Quận 1",
+  "chair": { "name": "Nguyễn Văn Ánh", "position": "Giám đốc" },
+  "secretary": { "name": "Lê Thị Cúc", "position": "Thư ký kinh doanh" },
+  "attendees": [
+    { "name": "Phạm Quốc Dũng", "position": "Trưởng phòng Kinh doanh" },
+    { "name": "Hoàng Minh Em", "position": "Trưởng phòng Marketing" },
+    { "name": "Vũ Thu Hà", "position": "Kế toán trưởng" }
+  ],
+  "absent": [{ "name": "Đỗ Văn Khoa", "position": "Trưởng chi nhánh Đà Nẵng (đi công tác)" }],
+  "agenda": ["Đánh giá kết quả kinh doanh quý III", "Kế hoạch mở chi nhánh Đà Nẵng", "Ngân sách marketing quý IV"],
+  "sections": [
+    { "heading": "Kết quả kinh doanh quý III", "text": "Ông Phạm Quốc Dũng báo cáo doanh thu quý III đạt 14,8 tỷ đồng, tăng 42% so với cùng kỳ; miền Trung tăng nhanh nhất (190%).\n\nBà Vũ Thu Hà lưu ý số liệu chưa kiểm toán, công nợ quá hạn còn 1,2 tỷ đồng." },
+    { "heading": "Chi nhánh Đà Nẵng", "text": "Các thành viên thống nhất mở chi nhánh trong tháng 12; mặt bằng tại đường Nguyễn Văn Linh đã khảo sát, chi phí thuê 45 triệu đồng/tháng." }
+  ],
+  "decisions": [
+    "Thông qua kế hoạch mở chi nhánh Đà Nẵng trước ngày 15/12/2026.",
+    "Ngân sách marketing quý IV là 1,5 tỷ đồng, ưu tiên kênh số.",
+    "Thu hồi tối thiểu 70% công nợ quá hạn trong tháng 11."
+  ],
+  "actions": [
+    { "task": "Ký hợp đồng thuê mặt bằng Đà Nẵng", "owner": "Phạm Quốc Dũng", "due": "30/11/2026" },
+    { "task": "Kế hoạch truyền thông khai trương", "owner": "Hoàng Minh Em", "due": "05/12/2026" },
+    { "task": "Danh sách công nợ quá hạn và lịch thu hồi", "owner": "Vũ Thu Hà", "due": "18/11/2026" }
+  ]
+}

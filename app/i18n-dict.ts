@@ -36,6 +36,8 @@ export const VI2EN: Record<string, string> = {
   "Trình duyệt chưa đọc được bằng giọng nói. Câu trả lời đầy đủ có trong khung chat": "The browser can't read aloud. The full answer is in the chat",
   "Ngôn ngữ trình duyệt dùng để nghe bạn nói": "The language your browser listens for",
   "Kết quả này đã quá cũ nên không còn lưu.": "This result is too old and is no longer stored.",
+  "Kết quả đã quá cũ, không còn lưu": "Result too old, no longer stored",
+  "Lần chạy này không hoàn thành nhưng không ghi lại lý do. Hãy chạy lại.": "This run didn't finish and no reason was recorded. Run it again.",
   "Không tải được Bộ não.": "Couldn't load the Brain.",
   "Không tải được": "Couldn't load",
   "Xem tất cả": "Show all",
