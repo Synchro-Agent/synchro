@@ -100,6 +100,29 @@ try {
     lbl("COMPOSIO_SEARCH_TOOLS", {}), lbl("COMPOSIO_GET_TOOL_SCHEMAS", {}),
   ];
   ok(labels.every((s) => s && !/Multi Execute|Composio Tools/i.test(s)), "không nhãn nào lộ 'Multi Execute' / 'Composio Tools'", labels);
+
+  console.log("6. Cache lược đồ công cụ Composio theo (người dùng, toolkit) 24h");
+  // Toolkit lấy từ trường toolkit / app, và từ tiền tố của tool_slug.
+  ok(JSON.stringify(X.cacheToolkits({ toolkit: "GMAIL" })) === '["gmail"]', "cacheToolkits lấy từ trường toolkit", X.cacheToolkits({ toolkit: "GMAIL" }));
+  ok(JSON.stringify(X.cacheToolkits({ tool_slugs: ["GOOGLEDOCS_CREATE_DOCUMENT", "GMAIL_FETCH_EMAILS"] })) === '["gmail","googledocs"]', "cacheToolkits lấy toolkit từ tiền tố tool_slug (đã sắp xếp)", X.cacheToolkits({ tool_slugs: ["GOOGLEDOCS_CREATE_DOCUMENT", "GMAIL_FETCH_EMAILS"] }));
+  // Khóa: giống nhau cho lần đọc y hệt; khác người dùng / toolkit / tham số thì khác; null cho công cụ không phải đọc lược đồ hoặc thiếu người dùng.
+  const argsG = { tool_slugs: ["GMAIL_FETCH_EMAILS"] };
+  const kA = X.schemaCacheKey("u1", "COMPOSIO_GET_TOOL_SCHEMAS", argsG);
+  ok(kA && kA === X.schemaCacheKey("u1", "COMPOSIO_GET_TOOL_SCHEMAS", { tool_slugs: ["GMAIL_FETCH_EMAILS"] }), "khóa y hệt cho lần đọc giống nhau", kA);
+  ok(kA !== X.schemaCacheKey("u2", "COMPOSIO_GET_TOOL_SCHEMAS", argsG), "khác người dùng → khác khóa");
+  ok(kA !== X.schemaCacheKey("u1", "COMPOSIO_GET_TOOL_SCHEMAS", { tool_slugs: ["SLACK_SEND_MESSAGE"] }), "khác toolkit → khác khóa");
+  ok(X.schemaCacheKey("u1", "COMPOSIO_MULTI_EXECUTE_TOOL", argsG) === null && X.schemaCacheKey("", "COMPOSIO_SEARCH_TOOLS", {}) === null, "không cache công cụ không phải đọc lược đồ / thiếu người dùng");
+  ok(X.isSchemaRead("COMPOSIO_SEARCH_TOOLS") && X.isSchemaRead("COMPOSIO_GET_TOOL_SCHEMAS") && !X.isSchemaRead("COMPOSIO_MULTI_EXECUTE_TOOL"), "isSchemaRead chỉ nhận SEARCH_TOOLS và GET_TOOL_SCHEMAS");
+  // TTL: lấy lại trong 24h; quá hạn thì không; đổi connector thì bỏ.
+  const t0 = 1_000_000_000_000;
+  X.schemaCachePut("u1", "COMPOSIO_GET_TOOL_SCHEMAS", argsG, "SCHEMA_BODY", t0);
+  ok(X.schemaCacheGet("u1", "COMPOSIO_GET_TOOL_SCHEMAS", argsG, t0 + 1000) === "SCHEMA_BODY", "lần đọc y hệt trong ngày lấy ngay từ cache");
+  ok(X.schemaCacheGet("u1", "COMPOSIO_GET_TOOL_SCHEMAS", argsG, t0 + X.SCHEMA_TTL - 1) === "SCHEMA_BODY", "ngay trước 24h vẫn còn");
+  ok(X.schemaCacheGet("u1", "COMPOSIO_GET_TOOL_SCHEMAS", argsG, t0 + X.SCHEMA_TTL) === null, "đúng 24h thì hết hạn");
+  ok(X.schemaCacheGet("u2", "COMPOSIO_GET_TOOL_SCHEMAS", argsG, t0 + 1000) === null, "người dùng khác không thấy cache của người này");
+  X.schemaCachePut("u1", "COMPOSIO_GET_TOOL_SCHEMAS", argsG, "SCHEMA_BODY", t0);
+  X.invalidateSchemaCache("u1");
+  ok(X.schemaCacheGet("u1", "COMPOSIO_GET_TOOL_SCHEMAS", argsG, t0 + 1000) === null, "connector đổi → cache của người đó bị bỏ");
 } finally {
   fs.rmSync(tmp, { recursive: true, force: true });
 }

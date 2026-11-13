@@ -14,7 +14,7 @@ import { catalogLine } from "./connproxy";
 import { coerceArgs } from "./connschema";
 import { authorizeRejected, authorizeUrl, checkIssuer, discover, exchangeCode, metadataHint, parseWww, randomToken, refreshTokens, registerClient, TokenRejected, type AsMeta, type OAuthClient, type Tokens } from "./mcpauth";
 import { checkUrl, FetchBlocked, TempFail } from "./safefetch";
-import { annotate, appName, askOnlyTool, COMPOSIO, COMPOSIO_COLOR, COMPOSIO_LINK_PROMPT, COMPOSIO_NAME, COMPOSIO_PROMPT, CONNECT_URL, EXEC_TOOL, execPlan, KEY_HEADER, keyOk, MANAGE_URL, maskKey, PROXY_TOOL, strictCall } from "./composio";
+import { annotate, appName, askOnlyTool, COMPOSIO, COMPOSIO_COLOR, COMPOSIO_LINK_PROMPT, COMPOSIO_NAME, COMPOSIO_PROMPT, CONNECT_URL, EXEC_TOOL, execPlan, invalidateSchemaCache, isSchemaRead, KEY_HEADER, keyOk, MANAGE_URL, maskKey, PROXY_TOOL, schemaCacheGet, schemaCachePut, strictCall } from "./composio";
 
 export type Perm = "allow" | "chat" | "ask" | "block";
 export const PERMS: Perm[] = ["allow", "chat", "ask", "block"];
@@ -265,6 +265,7 @@ export async function linkComposio(req: Request, uid: string, pol: ConnPolicy, o
 export function unlinkComposio(uid: string, pol: ConnPolicy = FULL_CONN) {
   const r = cxRow(uid);
   if (r) unlinkRow(r.id, getAuth(r));
+  invalidateSchemaCache(uid);
   return composioInfo(uid, pol);
 }
 
@@ -411,6 +412,8 @@ async function syncTools(id: string, signal?: AbortSignal) {
   const away = [...Object.entries(gone).filter(([k, v]) => !(k in perms) && now - v.at < GONE_KEEP), ...Object.entries(old).filter(([k]) => !(k in perms)).map(([k, perm]) => [k, { perm, at: now }] as const)].slice(-GONE_MAX);
   table().prepare("UPDATE connectors SET tools = ?, perms = ?, perms_gone = ?, empty_seen = NULL, status = 'ok', error = NULL, last_error = NULL, tools_total = ?, server_name = ?, checked_at = ?, updated_at = ? WHERE id = ?")
     .run(JSON.stringify(slim), JSON.stringify(perms), away.length ? JSON.stringify(Object.fromEntries(away)) : null, tools.length > slim.length ? tools.length : null, name ?? null, now, now, id);
+  // Danh sách công cụ vừa đổi (liên kết lại, làm mới, kiểm tra lại ở nền): bỏ cache lược đồ Composio của người này.
+  if (r.dir === COMPOSIO) invalidateSchemaCache(r.user_id);
   if (needsIcon(r)) await findIcon(id, icons);
 }
 
@@ -718,6 +721,8 @@ export function updateConnector(uid: string, id: string, o: { enabled?: unknown;
     for (const [k, v] of Object.entries(o.apps as Record<string, unknown>)) { const app = appSlug(k); if (app && PERMS.includes(v as Perm)) ap[app] = v as Perm; }
     t.prepare("UPDATE connectors SET app_perms = ?, updated_at = ? WHERE id = ?").run(JSON.stringify(ap), Date.now(), id);
   }
+  // Quyền / cài đặt connector đổi: bỏ cache lược đồ Composio (ứng dụng được phép có thể vừa khác).
+  if (r.dir === COMPOSIO) invalidateSchemaCache(uid);
   // Cài đặt riêng của connector: chỉ nhận đúng kiểu và giá trị cho phép.
   if (o.settings && typeof o.settings === "object") {
     const x = o.settings as Record<string, unknown>;
@@ -733,7 +738,7 @@ export function updateConnector(uid: string, id: string, o: { enabled?: unknown;
 export function removeConnector(uid: string, id: string) {
   // Composio của bạn có sẵn cho mọi tài khoản: gỡ là ngắt liên kết (về nút "Liên kết Composio").
   const r = rowOf(uid, id);
-  if (r.dir === COMPOSIO) { unlinkRow(id, getAuth(r)); return; }
+  if (r.dir === COMPOSIO) { unlinkRow(id, getAuth(r)); invalidateSchemaCache(uid); return; }
   const t = table();
   t.prepare("DELETE FROM connectors WHERE id = ?").run(id);
   t.prepare("DELETE FROM connector_auth WHERE connector_id = ?").run(id);
@@ -908,10 +913,17 @@ export class ConnectorSession {
     const n = (this.calls.get(ct.cid) ?? 0) + 1;
     if (max > 0 && n > max) return { content: `Đã đạt giới hạn ${max} lần gọi ${ct.cname} trong một tin nhắn (người dùng đặt trong Cài đặt → Connectors). Hãy trả lời với thông tin đang có.`, is_error: true };
     this.calls.set(ct.cid, n);
+    // Composio đọc lược đồ công cụ (tìm công cụ, xem tham số): trả ngay từ cache 24 giờ nếu lần đọc y hệt đã có, khỏi đi vòng tới máy chủ Composio.
+    if (ct.composio && isSchemaRead(ct.tool.name)) {
+      const hit = schemaCacheGet(this.uid, ct.tool.name, args);
+      if (hit !== null) return { content: hit, is_error: false };
+    }
     let sent = false;
     try {
       const res = await withClient(ct.cid, (c) => { sent = true; return c.callTool(ct.tool, coerceArgs(ct.tool.inputSchema, args && typeof args === "object" ? args : {}), { signal, timeout }); }, this.cache, ct.tool.name);
       const { text, isError } = resultText(res);
+      // Lưu lược đồ vừa đọc (chỉ khi không lỗi) để lần đọc y hệt trong ngày lấy ngay.
+      if (!isError && ct.composio && isSchemaRead(ct.tool.name)) schemaCachePut(this.uid, ct.tool.name, args, text);
       const { images, all } = resultImages(res);
       const [img, ...more] = images;
       return { content: text, is_error: isError, ...(img ? { image: img.data, mime: img.mime, imagesAll: all } : {}), ...(more.length ? { more } : {}) };
