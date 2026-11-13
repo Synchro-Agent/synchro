@@ -18,7 +18,7 @@ import { expandFileRefs } from "./fileproc";
 import { maybeRef, READ_REF_TOOL, readRef } from "./refs";
 import { normalizeSchema, resolveRefs, validateArgs } from "./connschema";
 import { BRIDGE_CALL_MAX, destructiveLike, TOOL_BUDGET } from "./mcp";
-import { ARTCHECK_RULES, CHECK_ARTIFACT_TOOL, checkArtifact, findArtifact, READ_ARTIFACT_TOOL, readArtifact } from "./artcheck";
+import { ARTCHECK_RULES, CHECK_ARTIFACT_TOOL, checkArtifact, checkRoundGate, findArtifact, READ_ARTIFACT_TOOL, readArtifact } from "./artcheck";
 import { artState, cleanBase, resolveArt, type ArtVersion } from "./vfs";
 import { hasArtifacts, splitArtifacts } from "./artifacts";
 import { AUTO, autoEffort, effortLabel, inputOfChat, isAck, needsNoTools, typedText, routeModel, taskLabel, taskOf as routeTask, type RouteInput } from "./router";
@@ -56,7 +56,8 @@ import { genImageUrl } from "./artdoc";
 import { IMAGE_MAX_MB, imageKind, type ImgFile, scrubServerPaths } from "./ai/imagefiles";
 import { AGY_WAIT_NOTE, BRIDGE_HOLD, openBridge } from "./mcpbridge";
 import { clearStall, noteStall, stalledModels, usableModels } from "./ai/anymodel";
-import { RENDER_ESCALATION_HINT, searchNeedsEscalation } from "./ai/webescalate";
+import { escalateText, searchNeedsEscalation, withBrowserLock } from "./ai/webescalate";
+import { checkUrl } from "./safefetch";
 import { learnFromTurn, userContext } from "./memory";
 import { crisisHelp } from "./crisishelp";
 import { afterTurn, BRAIN_RULES, BRAIN_TOOLS, brainRecallHybrid, brainReady, runBrainTool, topRule, warmRecall } from "./brain";
@@ -64,7 +65,7 @@ import { DENIED_NUDGE, MAX_NUDGE, NUDGE, stalled } from "./stall";
 import { makeGate, NO_UI, QUEUED, type Gate } from "./agentgate";
 import { queueSite, queueTool, runPropose, TASK_TOOL, taskBrowser, taskOf, taskRules } from "./tasktools";
 import type { TaskCtx } from "./tasks";
-import { answer as answerAsk, newAskId, waitAnswer, type Ask } from "./approvals";
+import { answer as answerAsk, newAskId, siteOf, siteRule, waitAnswer, type Ask } from "./approvals";
 import { callArgs, compactSchema, rankTools, resolveTool } from "./connproxy";
 import { getPrefs as codePrefs } from "./codestore";
 import { INPUTS_MAX, runInputs } from "./runinputs";
@@ -206,7 +207,7 @@ type Lib = { key: string; label: string };
 // art: lịch sử để read_artifact / check_artifact dựng lại bản hiện tại của artifact (cùng phần đã nén ở artBase).
 // turnArts: artifact model viết giữa lượt (trong lời dẫn trước công cụ), xem sayOut.
 // image: công cụ generate_image đang bật; msgs: lịch sử của lượt, để tìm ảnh gốc người dùng nhờ sửa.
-type Exec = { project?: unknown; image?: boolean; msgs?: unknown; effects?: string[]; toolSync?: boolean; list: Skl; scripts: boolean; sess: ConnectorSession | null; uid: string; code: boolean; net: boolean; web?: boolean; art?: { messages: { role: string; content: unknown }[]; base: unknown }; turnArts?: string[]; outs: OutFile[]; outPaths?: Map<string, string>; libs?: Record<string, Lib[]>; studio?: Lib; prefer?: Record<string, string>; trace: TraceItem[]; conv?: string; heal?: Target; search?: Target; browse?: boolean; bctx?: BrowserCtx; shown?: string; heavy?: string[]; gate?: Gate; task?: TaskCtx | null; asking?: Promise<void>; awaiting?: number; denied?: Map<string, string>; connCards?: Set<string>; calls?: Map<string, { at: number; cancel?: AbortSignal }>; park?: () => void; inputsSent?: Set<string>; madeImgs?: string[]; webs?: Map<string, { title: string; url: string }>; edited?: Set<string>; untrusted?: boolean };
+type Exec = { project?: unknown; image?: boolean; msgs?: unknown; effects?: string[]; toolSync?: boolean; list: Skl; scripts: boolean; sess: ConnectorSession | null; uid: string; code: boolean; net: boolean; web?: boolean; art?: { messages: { role: string; content: unknown }[]; base: unknown }; turnArts?: string[]; outs: OutFile[]; outPaths?: Map<string, string>; libs?: Record<string, Lib[]>; studio?: Lib; prefer?: Record<string, string>; trace: TraceItem[]; conv?: string; heal?: Target; search?: Target; browse?: boolean; bctx?: BrowserCtx; shown?: string; heavy?: string[]; gate?: Gate; task?: TaskCtx | null; asking?: Promise<void>; awaiting?: number; denied?: Map<string, string>; connCards?: Set<string>; calls?: Map<string, { at: number; cancel?: AbortSignal }>; park?: () => void; inputsSent?: Set<string>; madeImgs?: string[]; webs?: Map<string, { title: string; url: string }>; edited?: Set<string>; rendered?: Set<string>; roundBrowser?: boolean; untrusted?: boolean };
 // Nguồn web của lượt, đánh số theo thứ tự gặp (số [n] trong câu trả lời trỏ đúng chip thứ n). Tối đa 20 nguồn.
 const WEB_MAX = 20;
 const citeOf = (x: Exec): Citer => (url, title = "") => {
@@ -742,7 +743,9 @@ const GEMINI_WEB_TOOL = {
   input_schema: { type: "object", properties: { query: { type: "string", description: "Câu tìm kiếm ngắn, cùng ngôn ngữ người dùng" } }, required: ["query"] },
 };
 const WEB_DESC = "Tìm thông tin mới trên web. Dùng khi câu hỏi cần dữ kiện mới (tin tức, giá, tỷ giá, lịch, phiên bản phần mềm…) hoặc điều bạn không chắc. Trả về tóm tắt kèm nguồn." + WEB_GUIDE;
-async function geminiSearch(t: Target, query: string, cite: Citer): Promise<ToolRun> {
+// Kết quả tìm web kèm danh sách nguồn và cờ "kẹt" (trống / không nguồn / màn chưa dựng) để máy chủ tự mở trang nguồn (D2.1).
+type SearchRun = ToolRun & { sources?: { url: string; title: string }[]; stalled?: boolean };
+async function geminiSearch(t: Target, query: string, cite: Citer): Promise<SearchRun> {
   const used = { kind: "search" as const, name: "web_search" };
   if (!query.trim()) return { content: "Thiếu câu tìm kiếm.", is_error: true, used };
   const base = t.base.replace(/\/openai\/?$/, "");
@@ -756,13 +759,12 @@ async function geminiSearch(t: Target, query: string, cite: Citer): Promise<Tool
   const text = (c?.content?.parts ?? []).map((p) => p.text ?? "").join("").trim();
   const sources = (c?.groundingMetadata?.groundingChunks ?? []).map((g) => g.web).filter((w): w is { uri: string; title?: string } => !!w?.uri && /^https?:\/\//.test(w.uri)).map((w) => ({ url: w.uri, title: w.title ?? "" }));
   const src = srcList(sources, cite);
-  // Tóm tắt tìm web vốn ngắn gọn: chỉ nâng cấp khi trống / không nguồn / dính màn chưa dựng, không chỉ vì ít chữ.
-  const esc = searchNeedsEscalation(text, sources.length > 0) ? `\n\n${RENDER_ESCALATION_HINT}` : "";
-  return { content: `${text || "(không có kết quả)"}${esc}\n\nNguồn:\n${src}`, is_error: false, used };
+  // Tóm tắt tìm web vốn ngắn gọn: chỉ nâng cấp khi trống / không nguồn / dính màn chưa dựng, không chỉ vì ít chữ (escalateSearch xử lý).
+  return { content: `${text || "(không có kết quả)"}\n\nNguồn:\n${src}`, is_error: false, used, sources, stalled: searchNeedsEscalation(text, sources.length > 0) };
 }
 // Tìm web cho Grok / DeepSeek qua khóa API: /chat/completions của hai hãng không có công cụ tìm web phía máy chủ, nên Synchro gọi
 // API Responses của chính hãng đó (cùng khóa, cùng model) với công cụ web_search và trả câu trả lời kèm nguồn như một công cụ thường.
-async function responsesSearch(t: Target, query: string, cite: Citer): Promise<ToolRun> {
+async function responsesSearch(t: Target, query: string, cite: Citer): Promise<SearchRun> {
   const used = { kind: "search" as const, name: "web_search" };
   if (!query.trim()) return { content: "Thiếu câu tìm kiếm.", is_error: true, used };
   try {
@@ -772,15 +774,54 @@ async function responsesSearch(t: Target, query: string, cite: Citer): Promise<T
     const urls = [...parts.flatMap((c) => (c.annotations ?? []).filter((a) => a.url).map((a) => ({ url: a.url!, title: a.title ?? "" }))), ...(Array.isArray(j.citations) ? j.citations : []).filter((u): u is string => typeof u === "string").map((url) => ({ url, title: "" }))];
     const sources = [...new Map(urls.filter((u) => /^https?:\/\//.test(u.url)).map((u) => [u.url, u])).values()];
     const src = srcList(sources, cite);
-    // Tóm tắt tìm web vốn ngắn gọn: chỉ nâng cấp khi trống / không nguồn / dính màn chưa dựng, không chỉ vì ít chữ.
-    const esc = searchNeedsEscalation(text, sources.length > 0) ? `\n\n${RENDER_ESCALATION_HINT}` : "";
-    return { content: `${text || "(không có kết quả)"}${esc}\n\nNguồn:\n${src}`, is_error: false, used };
+    return { content: `${text || "(không có kết quả)"}\n\nNguồn:\n${src}`, is_error: false, used, sources, stalled: searchNeedsEscalation(text, sources.length > 0) };
   } catch (e) {
     if (isAbort(e)) throw e;
     return { content: `Chưa tìm được trên web (${e instanceof HttpErr ? e.status : "mất kết nối"}): ${String((e as Error).message).slice(0, 200)}`, is_error: true, used };
   }
 }
 const searchWeb = (t: Target, query: string, cite: Citer) => (t.kind === "google" ? geminiSearch(t, query, cite) : responsesSearch(t, query, cite));
+
+// D2.1 (W23-6 / SEC-8): kết quả lấy web mỏng hoặc kẹt thì MÁY CHỦ tự mở trang nguồn trong trình duyệt của workspace (đúng đường công cụ
+// trình duyệt: browser_navigate → browser_wait → browser_text) và gắn chữ của DOM đã dựng vào kết quả, không chỉ nhắc model.
+// Giới hạn: mỗi địa chỉ một lần mỗi lượt (x.rendered), tối đa 2 trang, mỗi trang 40 giây; chỉ địa chỉ https công khai (checkUrl: chặn
+// localhost / mạng nội bộ) và trang không bị chặn, không cần hỏi (trang cần hỏi thì bỏ qua, model vẫn tự mở được qua cổng hỏi thường).
+// Lượt không có công cụ trình duyệt: chỉ nhắc thử nguồn khác, không nhắc tên công cụ model không có.
+const renderCtx = (x: Exec): BrowserCtx => ({ ...x.bctx, target: "synchro" });
+async function renderAllowed(x: Exec, url: string) {
+  try { await checkUrl(url); } catch { return false; }
+  return siteRule(x.uid, siteOf("browser_navigate", { url }, null), new Set()) === "ok";
+}
+// Hàng đợi trình duyệt của Synchro cho đoạn chat (withBrowserLock): lần tự mở trang và công cụ browser_* của model không xen nhau.
+const browserKey = (x: Exec) => `${x.uid}|${x.bctx?.scope ?? x.conv ?? "-"}`;
+// Mở → chờ → đọc trong hàng đợi; mỗi bước xem signal (hết 40 giây / lượt bị dừng) để thôi điều khiển trình duyệt. Địa chỉ cuối cùng sau chuyển
+// hướng (vd. link chuyển hướng của Gemini grounding) phải qua lại checkUrl + quy tắc trang của người dùng: không thì không đọc, không gắn.
+async function renderPage(x: Exec, url: string, signal: AbortSignal): Promise<{ text: string; url: string } | null> {
+  return withBrowserLock(browserKey(x), async () => {
+    if (signal.aborted) return null;
+    if (x.shown !== "synchro") { x.shown = "synchro"; progress("ui", "browser"); }
+    const ctx = renderCtx(x);
+    const nav = await runBrowserTool(x.uid, "browser_navigate", { url, browser: "synchro" }, ctx);
+    if (nav.is_error || signal.aborted) return null;
+    const at = nav.url ?? url;
+    if (at !== url && !(await renderAllowed(x, at))) return null;
+    x.gate?.seen(at);
+    await runBrowserTool(x.uid, "browser_wait", { ms: 3000, browser: "synchro" }, ctx);
+    if (signal.aborted) return null;
+    const r = await runBrowserTool(x.uid, "browser_text", { browser: "synchro" }, ctx);
+    if (r.is_error || signal.aborted || !r.text) return null;
+    // Trang tự chuyển hướng bằng JavaScript trong lúc chờ: xét lại địa chỉ mới.
+    const end = r.url ?? at;
+    if (end !== at && !(await renderAllowed(x, end))) return null;
+    return { text: r.text, url: end };
+  });
+}
+async function escalateSearch(x: Exec, r: SearchRun): Promise<ToolRun> {
+  const { sources = [], stalled = false, ...run } = r;
+  if (run.is_error) return run;
+  // Cùng vòng model đang tự dùng trình duyệt (x.roundBrowser): không tự mở trang, chỉ nhắc — tránh giành trình duyệt với model.
+  return { ...run, content: await escalateText(run.content, { stalled, urls: sources.map((s) => s.url), browse: !!(x.browse && x.bctx), render: !x.roundBrowser, done: (x.rendered ??= new Set()), read: (url, signal) => renderPage(x, url, signal), allow: (url) => renderAllowed(x, url), signal: runSignal() }) };
+}
 // Danh sách nguồn trong kết quả công cụ: số [n] là số của nguồn trong cả lượt (khớp chip nguồn dưới câu trả lời), kèm lời dặn trích dẫn.
 const srcList = (list: { url: string; title: string }[], cite: Citer) => {
   const rows = list.slice(0, 8).map((u) => ({ ...u, n: cite(u.url, u.title) })).filter((u) => u.n > 0);
@@ -795,7 +836,7 @@ async function runCall(x: Exec, c: Call, d?: Decision): Promise<Run> {
   if (c.name === TASK_TOOL.name && x.task && !x.sess?.get(c.name)) return { ...(await runPropose(x.uid, x.task, c.input ?? {})), used: { kind: "search", name: c.name } };
   if (c.name === "read_ref" && !x.sess?.get(c.name)) return { ...readRef(x.uid, c.input), used: { kind: "search", name: "read_ref" } };
   if (c.name.startsWith("brain_") && !x.sess?.get(c.name)) return { ...runBrainTool(x.uid, c.name, c.input ?? {}), used: { kind: "search", name: c.name } };
-  if (c.name === "web_search" && x.search && !x.sess?.get(c.name)) return searchWeb(x.search, String(c.input?.query ?? ""), citeOf(x));
+  if (c.name === "web_search" && x.search && !x.sess?.get(c.name)) return escalateSearch(x, await searchWeb(x.search, String(c.input?.query ?? ""), citeOf(x)));
   if (c.name === "run_code" && !x.sess?.get(c.name)) { const r = await runCode(x, c.input); if (r.image) (x.heavy ??= []).push(c.id); return r; }
   if (c.name === IMAGE_TOOL_NAME && x.image && !x.sess?.get(c.name)) return runImage(x, c);
   if (c.name === PROJECT_DOC_TOOL.name && x.project !== undefined && !x.sess?.get(c.name)) return { ...readProjectFile(x.uid, x.project, c.input ?? {}), used: { kind: "search", name: c.name } };
@@ -803,6 +844,8 @@ async function runCall(x: Exec, c: Call, d?: Decision): Promise<Run> {
     const a = findArtifact({ uid: x.uid, conv: x.conv, messages: x.art.messages, base: x.art.base, live: [...(x.turnArts ?? []), liveNow()].join("\n\n") }, typeof c.input?.identifier === "string" ? c.input.identifier : undefined);
     const used = { kind: "search" as const, name: c.name };
     if (c.name === "read_artifact") return { ...readArtifact(a, c.input ?? {}), used };
+    const enough = a ? checkRoundGate(x, a) : null;
+    if (enough) return { content: enough, is_error: false, used };
     const r = await checkArtifact(x.uid, a, c.input ?? {}, process.env.APP_URL || "https://synchro.net.nz");
     if (r.image) (x.heavy ??= []).push(c.id);
     return { ...r, used };
@@ -823,7 +866,20 @@ async function runCall(x: Exec, c: Call, d?: Decision): Promise<Run> {
       gateExtra: (_name, input) => x.untrusted && browserTargetOf(input, x.bctx) === "user" ? { kind: "site", tool: "browser", key: "untrusted:user-chrome", host: "", title: "Dùng Chrome của bạn trong khi đang chạy skill chưa kiểm chứng từ danh mục", detail: "" } : null });
     const no = await x.gate.check(c.name, c.input ?? {});
     if (no) return { content: no, is_error: true, used: { kind: "search", name: c.name } };
-    const r = await runBrowserTool(x.uid, c.name, c.input ?? {}, x.bctx);
+    // Trình duyệt của Synchro: chạy trong hàng đợi của đoạn chat (cùng hàng với lần máy chủ tự mở trang), không xen với thao tác khác.
+    // Chrome của người dùng không xếp hàng ở đây (tiện ích tự xử lý theo lượt; thao tác có thể chờ người dùng bỏ Tạm dừng tới 15 phút).
+    const browserStep = async () => {
+      let r = await runBrowserTool(x.uid, c.name, c.input ?? {}, x.bctx);
+      // D2.1: đọc chữ mà trang còn mỏng / chưa dựng xong ngay từ đầu trang: máy chủ tự chờ trang dựng rồi đọc lại một lần cho mỗi địa chỉ trong lượt.
+      if (c.name === "browser_text" && r.stalled && r.url && !(x.rendered ??= new Set()).has(r.url)) {
+        x.rendered.add(r.url);
+        await runBrowserTool(x.uid, "browser_wait", { ms: 5000, ...(c.input?.browser ? { browser: c.input.browser } : {}) }, x.bctx);
+        const again = await runBrowserTool(x.uid, c.name, c.input ?? {}, x.bctx);
+        if (!again.is_error && (again.text ?? "").trim().length > (r.text ?? "").trim().length) r = { ...again, content: `${again.content}\n[Synchro đã tự chờ trang dựng xong rồi đọc lại.]` };
+      }
+      return r;
+    };
+    const r = where === "synchro" ? await withBrowserLock(browserKey(x), browserStep) : await browserStep();
     x.gate.seen(r.url);
     if (["browser_read", "browser_text", "browser_screenshot", "browser_batch"].includes(c.name)) (x.heavy ??= []).push(c.id);
     return { content: r.content, is_error: r.is_error, ...(r.image ? { image: r.image } : {}), used: { kind: "search", name: c.name } };
@@ -895,6 +951,9 @@ function describe(x: Exec, c: Call) {
 // Công cụ đọc skill không tính (đó là hướng dẫn, không phải dữ liệu).
 const isData = (x: Exec, c: Call) => c.name === PROJECT_DOC_TOOL.name || !!x.sess?.get(c.name) || c.name === "run_code" || c.name === "run_skill_script" || c.name === IMAGE_TOOL_NAME;
 const label = (x: Exec, c: Call) => describe(x, c).replace(/^Đang (dùng |chạy )?/, "");
+// Loại công cụ của một bước (worktone.ts → toolKind): tên công cụ thật; Composio chạy mọi thao tác qua một công cụ chung nên kèm ứng dụng · thao tác
+// ("Gmail · gửi thư" và "Gmail · tìm thư" là hai loại: tìm thư thành công không bù cho gửi thư lỗi).
+const kindOf = (x: Exec, c: Call) => { const ct = x.sess?.get(c.name); const cx = ct && cxOf(ct, c.input); return cx ? `${c.name}|${cx.app} · ${cx.act}` : c.name; };
 function abortable<T>(p: Promise<T>, signal?: AbortSignal): Promise<T> {
   if (!signal) return p;
   if (signal.aborted) return Promise.reject(new DOMException("Đã dừng", "AbortError"));
@@ -923,6 +982,8 @@ function noteEffects(x: Exec, calls: Call[], d: Record<string, Decision>) {
 async function execute(ad: Adapter, m: unknown[], x: Exec, calls: Call[], used: ToolRun["used"][], d: Record<string, Decision>) {
   noteEffects(x, calls, d);
   const seqs = calls.map((c) => (c.name === "update_plan" ? 0 : progress("tool", describe(x, c))));
+  // Vòng này model tự dùng trình duyệt: web_search cùng vòng không tự mở trang (escalateSearch), để không giành trình duyệt với model.
+  x.roundBrowser = !!x.browse && calls.some((c) => isBrowserTool(c.name) && !x.sess?.get(c.name));
   // Dòng công cụ connector trong khung chat có logo của connector (icon ngắn; icon tự tìm dạng data URI dài thì dùng biểu tượng trang qua proxy).
   calls.forEach((c, i) => {
     const ct = seqs[i] ? x.sess?.get(c.name) : undefined;
@@ -949,7 +1010,7 @@ async function execute(ad: Adapter, m: unknown[], x: Exec, calls: Call[], used: 
   used.push(...res.filter((r) => (!r.is_error || r.used.kind === "code") && r.used.kind !== "search").map((r) => r.used));
   // Kết quả từng công cụ (thành công / lỗi, tóm tắt ngắn) để dòng công cụ trong khung chat hiện đúng.
   // Công cụ của connector (đọc lẫn ghi): kèm tham số đã gửi (che khóa bí mật) để người dùng biết model vừa làm gì. Tóm tắt bỏ thẻ <ref> nội bộ.
-  res.forEach((r, i) => { if (seqs[i]) progress("res", JSON.stringify({ ref: seqs[i], ok: !r.is_error, sum: plainSummary(String(r.content ?? "")).slice(0, 140), ...(x.sess?.get(calls[i].name) && d[calls[i].id] !== "deny" ? { args: argLine(calls[i].input) } : {}) })); });
+  res.forEach((r, i) => { if (seqs[i]) progress("res", JSON.stringify({ ref: seqs[i], ok: !r.is_error, name: kindOf(x, calls[i]).slice(0, 160), sum: plainSummary(String(r.content ?? "")).slice(0, 140), ...(x.sess?.get(calls[i].name) && d[calls[i].id] !== "deny" ? { args: argLine(calls[i].input) } : {}) })); });
   m.push(...ad.results(calls, res));
   // Người dùng nhắn thêm trong lúc công cụ chạy: ghép vào ngay bước kế tiếp, không ngắt việc.
   const more = takeInbox();
@@ -1605,7 +1666,8 @@ async function chatPostTurn(body: Parameters<typeof chatPost>[0], c: Who, scope:
   // avoidModel: người dùng bấm "Chạy lại bằng model khác" dưới câu trả lời của chế độ Tự động: vẫn Tự động, chỉ tránh model vừa trả lời.
   const pool = usable.length ? usable : allowed;
   const skip = typeof body.avoidModel === "string" && pool.includes(body.avoidModel) ? [body.avoidModel] : [];
-  const r = routeModel(q, pool, { avoid: [...skip, ...stalledModels(c.user.id, pool)] });
+  // Nhật ký định tuyến (D1.6) chỉ ghi ở đây — lượt chat thật; rerun khi người dùng bấm "Chạy lại bằng model khác".
+  const r = routeModel(q, pool, { avoid: [...skip, ...stalledModels(c.user.id, pool)], log: { rerun: typeof body.avoidModel === "string" && !!body.avoidModel } });
   addSpan("routing", "routing", r0, Date.now(), r ? { "synchro.route.model": r.model, "synchro.route.task": r.task } : undefined);
   if (!r) return Response.json({ error: "Tài khoản của bạn chưa được dùng model nào. Hãy liên hệ quản trị viên." }, { status: 403 });
   // Nỗ lực: người dùng để "Tự động" (hoặc chưa chọn) thì theo độ khó của việc; chọn tay thì giữ lựa chọn đó.

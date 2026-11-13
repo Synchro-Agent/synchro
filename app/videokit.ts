@@ -5,17 +5,30 @@
 const fold = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/đ/gi, "d").toLowerCase();
 
 // Danh từ video và cụm động từ làm ra (đã bỏ dấu). "video" đứng sau động từ làm ra trong cùng vế, hoặc danh từ chỉ loại video rõ nghĩa.
-const NOUN = "video|clip|reels?|tiktok|shorts|audiogram|motion graphics?|do hoa chuyen dong|logo animation|animation logo|phim ngan|phim gioi thieu|intro video|video intro|outro";
-const MAKE = new RegExp(`\\b(?:lam|tao|dung|xuat|render|quay|san xuat|thiet ke|ghep|bien|chuyen|make|create|build|produce|generate|render|edit|turn|animate)\\b[^.?!\\n]{0,60}?\\b(?:${NOUN})\\b`);
+const NOUN = "video|clip|reels?|tiktok|shorts|audiogram|motion graphics?|do hoa chuyen dong|logo animation|animation logo|phim ngan|phim gioi thieu|intro video|video intro";
+const VERB = "lam|tao|dung|xuat|render|quay|san xuat|thiet ke|ghep|bien|chuyen|make|create|build|produce|generate|edit|turn|animate";
+const MAKE = new RegExp(`\\b(?:${VERB})\\b[^.?!\\n]{0,60}?\\b(?:${NOUN})\\b`);
 const KIND = /\b(?:video (?:tiktok|reels?|shorts|quang cao|gioi thieu|tong ket|ra mat|san pham|podcast|phu de|dong|ngan)|audiogram|motion graphics?|do hoa chuyen dong|logo animation|animation logo|(?:tiktok|reels?|youtube shorts) video|promo video|explainer video|year in review|unwrapped)\b/;
+// G5.2: "intro" / "outro" trần sau động từ làm ra là video CHỈ KHI cùng vế có dấu hiệu video: thời lượng ("8 giây", "10s"), kênh / YouTube / TikTok /
+// podcast / stream, chữ video / motion / animation / logo — "làm intro 8 giây cho kênh YouTube", "make a 10s intro for my channel", "dựng đoạn intro cho
+// podcast". Vế nói về một bài chữ, trang web, hồ sơ, kịch bản thì không ("edit the intro of my cover letter", "create an intro for my LinkedIn profile",
+// "make an intro for my podcast episode script", "tạo intro cho trang web công ty", "intro giới thiệu bản thân cho buổi phỏng vấn"). "introduction" không khớp.
+const INTRO = new RegExp(`\\b(?:${VERB})\\b[^.?!\\n]{0,60}?\\b(?:intro|outro)\\b`);
+const INTRO_SIGNAL = /(?:\b\d+ ?(?:s|sec|secs|seconds?|giay)\b|\b(?:kenh|channel|youtube|tiktok|podcast|stream|livestream|video|motion|animation|animated|logo)\b)/;
+const INTRO_TEXT = /\b(?:bai|essay|email|letter|luan|luan van|thesis|paragraph|doan van|section|sentence|chapter|chuong|article|blog|report|bao cao|paper|thuyet trinh|presentation|speech|slide|cv|resume|profile|linkedin|cover|script|kich ban|website|web|trang web|landing|page|ban than|phong van|interview|tu gioi thieu)\b/;
+// "animate logo của tôi", "animate my logo": động từ animate + logo là logo animation — trừ hiệu ứng logo trên trang web (CSS, hover, navbar, SVG…).
+const ANIMATE_LOGO = /\banimate\b[^.?!\n]{0,40}?\blogo\b/;
+const WEB_ANIM = /\b(?:css|hover|navbar|nav|svg|html|javascript|js|jsx|react|tailwind|website|web|trang web|button|nut|menu|header|footer|keyframes?|landing)\b/;
 // Hỏi cách làm / hỏi kiến thức, tóm tắt, tải video về: không phải nhờ dựng.
 const NOT = /\b(?:la gi|tai sao|vi sao|cach (?:lam|tao|dung)|how (?:do|to|can)|what is|tom tat|summari[sz]e|tai (?:ve|xuong)|download|xem video|phan tich video)\b/;
+// Xét trong từng vế (tách ở dấu kết câu / xuống dòng): dấu hiệu ở câu khác không tính.
+const clauseHas = (t: string, re: RegExp, ok: (c: string) => boolean) => t.split(/[.?!\n]+/).some((c) => re.test(c) && ok(c));
 
 /** Lượt này có phải nhờ dựng một video không (chỉ đọc 300 ký tự đầu: phần sau có thể là văn bản dán vào). */
 export function wantsVideo(typed: string): boolean {
   const t = fold(typed.trim().slice(0, 300));
   if (!t || NOT.test(t)) return false;
-  return MAKE.test(t) || KIND.test(t);
+  return MAKE.test(t) || KIND.test(t) || clauseHas(t, INTRO, (c) => INTRO_SIGNAL.test(c) && !INTRO_TEXT.test(c)) || clauseHas(t, ANIMATE_LOGO, (c) => !WEB_ANIM.test(c));
 }
 
 export const VIDEO_KIT = `<video_kit>

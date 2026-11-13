@@ -1886,3 +1886,21 @@ RULES_EN.push(
 );
 // Chip nguồn dưới câu trả lời tìm web (cites.tsx): nút mở các nguồn còn lại.
 RULES_EN.push([/^\+(\d+) nguồn$/, (m) => `+${m[1]} ${m[1] === "1" ? "source" : "sources"}`]);
+// Xuất PowerPoint phía máy chủ (deckexport.ts, /api/artifacts/pptx): lỗi trả về cho người dùng.
+for (const [k, v] of Object.entries({
+  "Thiếu dữ liệu bản trình bày.": "Missing presentation data.",
+  "Chỉ xuất PowerPoint được từ bản trình bày (slide) dạng HTML.": "Only HTML slide decks can be exported to PowerPoint.",
+  "Bản trình bày chưa viết xong.": "The presentation isn't finished yet.",
+  "Máy chủ này chưa có Chromium để xuất PowerPoint (cần dịch vụ workspace).": "This server has no Chromium to export PowerPoint (the workspace service is required).",
+  "Đang xuất một bản PowerPoint khác, đợi xong rồi thử lại.": "Another PowerPoint export is still running. Wait for it to finish, then try again.",
+  // Hộp thư → kết quả có bản trình bày (tasksui.tsx): xuất PowerPoint ở máy chủ.
+  "Tải PowerPoint": "Download PowerPoint",
+  "Đã tải tệp PowerPoint": "PowerPoint file downloaded",
+})) if (!Object.prototype.hasOwnProperty.call(VI2EN, k)) VI2EN[k] = v;
+// Phần sau dấu ":" là chi tiết kỹ thuật (thông báo lỗi gốc), giữ nguyên. Luật cụ thể "(trình dựng lỗi)" đứng trước luật chung.
+RULES_EN.push(
+  [/^Thiếu thư viện xuất PowerPoint trên máy chủ: ([\s\S]+)$/, (m) => `The server is missing the PowerPoint export library: ${m[1]}`],
+  [/^Không biên dịch được deckpptx: ([\s\S]+)$/, (m) => `Couldn't compile deckpptx: ${m[1]}`],
+  [/^Chưa xuất được PowerPoint \(trình dựng lỗi\): ([\s\S]+)$/, (m) => `Couldn't export PowerPoint (renderer error): ${m[1]}`],
+  [/^Chưa xuất được PowerPoint: ([\s\S]+)$/, (m) => `Couldn't export PowerPoint: ${m[1]}`],
+);

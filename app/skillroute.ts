@@ -311,23 +311,6 @@ export function rank(q: string, cands: Candidate[], limit = 10): Hit[] {
 /** Người dùng có skill riêng hợp rõ với câu này (đường nhanh không có mục lục skill nên phải biết trước). */
 export const ownSkillFits = (q: string, skills: Skill[]) => suggest(q, skills.map((skill) => ({ skill })), 1).length > 0;
 
-// ---------------------------------------------------------------- G5: định tuyến video sang Remotion
-// Video, đồ họa chuyển động, animation logo, phim / intro giới thiệu dựng bằng skill Remotion (workspace/remotion, 4 mẫu synchro-video),
-// KHÔNG dựng bằng Pillow+ffmpeg — ffmpeg chỉ là phương án lùi khi hàng dựng video của máy chủ đang đầy (queueFull, agent.mjs trả 503).
-// Luật từ khóa thuần, thêm ngay (phối hợp với D4 sau để nối vào bộ chọn skill đầy đủ). Kiểm thử: tests/api/skill-route.test.mjs.
-export const VIDEO_SKILL_KEYWORDS = [
-  "video", "motion graphic", "motion graphics", "logo animation", "animation logo", "intro",
-  "do hoa chuyen dong", "phim gioi thieu", "video gioi thieu", "intro video", "video intro",
-  "reels", "tiktok", "shorts", "audiogram", "explainer video", "promo video",
-];
-export type VideoSkill = "remotion" | "ffmpeg";
-/** Lượt làm video nên định tuyến tới skill nào: Remotion mặc định, chỉ lùi về Pillow+ffmpeg khi hàng dựng đầy. null = không khớp từ khóa video. */
-export function routeVideoSkill(typed: string, opts: { queueFull?: boolean } = {}): VideoSkill | null {
-  const t = fold(typed);
-  if (!VIDEO_SKILL_KEYWORDS.some((k) => hasPhrase(t, fold(k)))) return null;
-  return opts.queueFull ? "ffmpeg" : "remotion";
-}
-
 // Gợi ý cho lượt chat: chỉ khi yêu cầu có dấu hiệu là một việc cần chuyên môn (khớp khái niệm hoặc gọi đúng tên skill),
 // và chỉ giữ những skill có điểm đủ gần skill tốt nhất. Câu chào hỏi, câu hỏi ngắn thì không gợi ý gì.
 export function suggest(q: string, cands: Candidate[], max = 4): Hit[] {

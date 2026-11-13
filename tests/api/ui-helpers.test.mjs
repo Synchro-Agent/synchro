@@ -53,6 +53,37 @@ ok(/đang tắt/.test(E.termDown({ available: true, running: false }, true)) && 
   // Đang chạy / bị dừng giữa chừng: lỗi chưa gọi lại chưa tô đỏ (model còn có thể gọi lại).
   const one = T({ seq: 1, label: "a", ok: false });
   ok(W.toolErrNote(one, one, { live: true })?.tone === "soft" && W.toolErrNote(one, one, { stopped: true })?.text === "1 lỗi", "đang chạy / bị dừng: chưa tô đỏ, chưa gọi là đã thử lại");
+  // R2: gọi lại với THAM SỐ KHÁC (câu tìm đã sửa, trang khác) vẫn là đã thử lại — xét theo loại công cụ, không theo nguyên nhãn.
+  const q2 = T({ seq: 1, label: "tìm trên web: tỷ giá usd", ok: false }, { seq: 2, label: "tìm trên web: tỷ giá USD hôm nay vietcombank", ok: true });
+  ok(JSON.stringify(W.toolErrNote(q2, q2, {})) === JSON.stringify({ text: "1 bước đã thử lại", tone: "soft" }), "R2: tìm web lỗi rồi tìm lại bằng câu khác thành công: đã thử lại, màu thường");
+  const pg = T({ seq: 1, label: "đọc trang web: https://a.example/x", ok: false }, { seq: 2, label: "đọc trang web: https://b.example/y", ok: true });
+  ok(W.toolErrNote(pg, pg, {})?.text === "1 bước đã thử lại", "R2: trang A bị chặn, trang B đọc được: đã thử lại");
+  const br = T({ seq: 1, label: "mở a.example", ok: false }, { seq: 2, label: "mở b.example", ok: true }, { seq: 3, label: "tìm “giá” trên trang", ok: false }, { seq: 4, label: "tìm “vé” trên trang", ok: true });
+  ok(W.toolErrNote(br, br, {})?.text === "2 bước đã thử lại", "R2: bước trình duyệt gọi lại với đích khác vẫn là đã thử lại");
+  // Lần gọi cùng loại sau đó cũng lỗi (lần cuối của loại đó lỗi): vẫn đỏ. Khác loại thành công không bù được.
+  const still = T({ seq: 1, label: "tìm trên web: A", ok: false }, { seq: 2, label: "tìm trên web: B", ok: false }, { seq: 3, label: "đọc trang web: https://c.example", ok: true });
+  const st = W.toolErrNote(still, still, {});
+  ok(st?.text === "2 lỗi" && st.tone === "bad", "R2: lần gọi cùng loại cuối cùng vẫn lỗi: còn lỗi, màu đỏ", JSON.stringify(st));
+  const other = T({ seq: 1, label: "tạo ảnh: con mèo", ok: false }, { seq: 2, label: "tìm trên web: mèo", ok: true });
+  ok(W.toolErrNote(other, other, {})?.tone === "bad", "R2: công cụ khác loại thành công không tính là gọi lại");
+  ok(W.toolKind({ label: "x", name: "web_search" }) === "web_search" && W.toolKind({ label: "đọc tệp dự án a.md" }) === W.toolKind({ label: "đọc tệp dự án b.md" }), "R2: loại công cụ: ưu tiên tên, nhãn không dấu ':' vẫn bỏ tham số");
+  // R2 (sửa lại): cùng ứng dụng nhưng khác thao tác KHÔNG bù cho nhau — gửi thư Gmail lỗi, tìm thư Gmail thành công: lỗi gửi thư vẫn đỏ.
+  const gm = T({ seq: 1, label: "Gmail · gửi thư", ok: false }, { seq: 2, label: "Gmail · tìm thư", ok: true });
+  const gmn = W.toolErrNote(gm, gm, {});
+  ok(gmn?.text === "1 lỗi" && gmn.tone === "bad" && W.splitToolErrs(gm).remaining === 1, "R2: Gmail gửi thư lỗi, Gmail tìm thư thành công: vẫn 1 lỗi, màu đỏ", JSON.stringify(gmn));
+  const gmd = T({ seq: 1, label: "dùng Gmail · gửi thư", ok: false }, { seq: 2, label: "dùng Gmail · tìm thư", ok: true });
+  ok(W.toolErrNote(gmd, gmd, {})?.tone === "bad", "R2: nhãn connector có 'dùng': khác thao tác vẫn đỏ");
+  const no = T({ seq: 1, label: "Notion: Create page", ok: false }, { seq: 2, label: "Notion: Search", ok: true });
+  ok(W.toolErrNote(no, no, {})?.tone === "bad", "R2: Notion Create page lỗi, Notion Search thành công: vẫn đỏ");
+  const gmr = T({ seq: 1, label: "Gmail · gửi thư", ok: false }, { seq: 2, label: "Gmail · gửi thư", ok: true });
+  ok(W.toolErrNote(gmr, gmr, {})?.text === "1 bước đã thử lại", "R2: gửi thư lỗi rồi gửi lại thành công: đã thử lại");
+  // Loại do máy chủ gửi (kindOf) thắng nhãn: nhãn giống nhau nhưng loại khác → không bù; nhãn khác nhưng cùng loại → bù.
+  const nm = T({ seq: 1, label: "Composio · x", name: "COMPOSIO_MULTI_EXECUTE_TOOL|Gmail · gửi thư", ok: false }, { seq: 2, label: "Composio · x", name: "COMPOSIO_MULTI_EXECUTE_TOOL|Gmail · tìm thư", ok: true });
+  ok(W.toolErrNote(nm, nm, {})?.tone === "bad", "R2: tên loại khác (gửi / tìm) thì không bù dù nhãn giống");
+  const nm2 = T({ seq: 1, label: "tìm trên web: a", name: "web_search", ok: false }, { seq: 2, label: "tìm trên web: b", name: "web_search", ok: true });
+  ok(W.toolErrNote(nm2, nm2, {})?.text === "1 bước đã thử lại", "R2: cùng tên công cụ, tham số khác: đã thử lại");
+  ok(W.toolKind({ label: "dùng công cụ skill_a" }) !== W.toolKind({ label: "dùng công cụ skill_b" }), "R2: công cụ không rõ tên khác nhau không gộp");
+  ok(W.toolKind({ label: "đọc trang https://a.example/x" }) === W.toolKind({ label: "đọc trang https://b.example/y" }), "R2: 'đọc trang <url>' (có dấu ':' trong url) vẫn cùng loại");
   ok(en("1 bước đã thử lại") === "1 step retried" && en("3 bước đã thử lại") === "3 steps retried" && en("2 lỗi") === "2 failed", "bản tiếng Anh: step / steps retried, failed");
 }
 

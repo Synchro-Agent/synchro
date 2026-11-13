@@ -93,6 +93,19 @@ console.log("6. Hướng dẫn cho model");
     ok(V.wantsVideo(q), `nhận ra việc dựng video: "${q}"`);
   for (const q of ["xin chào", "video là gì?", "cách làm video tiktok", "tóm tắt video YouTube này", "tải video này về giúp mình", "làm bộ slide báo cáo quý", "viết email gửi sếp"])
     ok(!V.wantsVideo(q), `không phải dựng video: "${q}"`);
+  // W23-3 (Blueprint G5.2: "video", "motion graphic", "logo animation", "intro" → Remotion): intro trần trong ngữ cảnh video, animate logo.
+  for (const q of ["làm intro 8 giây cho kênh YouTube", "dựng đoạn intro cho podcast", "make a 10s intro for my channel", "animate logo của tôi", "Animate my logo for the launch",
+    "Làm video giới thiệu quán", "tao mot motion graphic", "animation logo cho công ty", "dựng video intro cho kênh YouTube", "video TikTok 30 giây", "làm explainer video về sản phẩm", "tạo outro cho kênh"])
+    ok(V.wantsVideo(q), `W23-3: nhận ra việc dựng video: "${q}"`);
+  for (const q of ["làm intro cho bài luận", "viết intro cho bài luận", "create an intro paragraph for my essay", "make an introduction to Python for beginners", "write an introduction to machine learning",
+    "Viết báo cáo tuần", "Thiết kế poster sự kiện", "một bài hát về mùa thu", "logo là gì"])
+    ok(!V.wantsVideo(q), `W23-3: không phải dựng video: "${q}"`);
+  // W23-3 (sửa lại): intro / outro trần chỉ là video khi cùng vế có dấu hiệu video; hiệu ứng logo trên trang web không phải video.
+  for (const q of ["edit the intro of my cover letter", "create an intro for my LinkedIn profile", "create an intro for my thesis", "make the intro of my 3000-word essay shorter",
+    "make an intro for my podcast episode script", "tạo đoạn intro giới thiệu bản thân cho buổi phỏng vấn", "tạo intro cho trang web công ty", "animate the logo in the navbar on hover using CSS"])
+    ok(!V.wantsVideo(q), `W23-3: không phải dựng video: "${q}"`);
+  for (const q of ["make a 15 second intro for my podcast", "tạo intro 5s có logo công ty", "create an animated intro for my stream", "tạo outro cho kênh TikTok"])
+    ok(V.wantsVideo(q), `W23-3: intro có dấu hiệu video: "${q}"`);
   const b = V.videoTurn({ typed: "làm video tiktok về cà phê", code: true, workspace: true });
   ok(b.startsWith("<video_kit>") && /synchro-video still/.test(b) && /outputs\/_preview/.test(b) && /60 fps|60 khung/.test(b) && /Mã thoát 75/.test(b) && /"audioHz": "48000"/.test(b), "khối có đủ bước: schema, check, still tự xem, render dựng tiếp, kiểm 60 fps / 48 kHz");
   ok(/Không dựng dự án \/ mã Remotion người dùng tải lên/.test(b), "khối nhắc điều khoản giấy phép");

@@ -73,16 +73,42 @@ const ACTION_VERB = "tạo|tao|sửa|sua|chỉnh sửa|gửi|gui|xóa|xoá|xoa|t
 // Ranh giới từ như W() để "drive" không khớp "driver".
 const B = "(?<![\\p{L}\\p{N}])", E = "(?![\\p{L}\\p{N}])", NEAR = "(?:(?![.?!\\n]).){0,30}?";
 const ACT_ON_APP_RE = new RegExp(`${B}(?:${ACTION_VERB})${E}${NEAR}${B}(?:${CONNECTOR_APPS})${E}`, "iu");
+// Thứ tự ngược, tên ứng dụng nói TRƯỚC: "Trên Notion, tạo trang mới…", "In Notion, create a page…", "Google Sheets thêm một dòng…", "Notion: tạo trang…".
+// Chặt hơn chiều xuôi: tên ứng dụng phải mở đầu câu hoặc đứng sau giới từ chỉ nơi chốn; tới động từ tối đa 20 ký tự, không qua dấu kết câu hay từ
+// nối ("rồi / và / hoặc / với / then / and / or / vs") — để "So sánh Notion và Trello rồi đánh giá nên tạo kế hoạch ở đâu" vẫn là phân tích.
+const APP_FIRST_RE = new RegExp(`(?:^\\s*|${B}(?:trên|trong|ở|tại|vào|in|on|inside|within|at)\\s+)(?:${CONNECTOR_APPS})${E}(?:(?![.?!\\n]|${B}(?:rồi|và|hoặc|với|then|and|or|vs)${E}).){0,20}?${B}(?:${ACTION_VERB})${E}`, "iu");
+// Câu báo sự cố / hỏi cách sửa ("Notion tạo trang mới bị lỗi 403, sửa sao?", "Gmail gửi thư không được"): đó là gỡ lỗi / hỏi đáp, không phải lời nhờ
+// thao tác — dù có tên ứng dụng và động từ thao tác.
+const BUG_REPORT = new RegExp(`${B}(?:lỗi|loi|bị|không được|ko được|không chạy|error|errors|failed|fails?|failing|crash(?:es|ed)?|exception|forbidden|unauthorized|not found|timeout|time out|sửa sao|tại sao|vì sao|why)${E}`, "iu");
+// Lời nhờ VIẾT CODE (động từ viết / tên ngôn ngữ đi với danh từ code): "Viết script Python gửi tin Slack", "Write a Python function to send a Slack
+// message", "viết code Node.js tạo trang Notion qua API". Có tên ứng dụng và động từ thao tác nhưng là việc code, không phải nhờ thao tác thật.
+const CODE_NOUN = "script|scripts|function|functions|hàm|code|api|sdk|chương trình|program|class|module|đoạn mã|mã nguồn|snippet|bot|webhook|cli|lambda";
+const CODE_LANG = "python|node|node\\.js|nodejs|javascript|typescript|js|ts|bash|shell|golang|go|java|php|ruby|rust|kotlin|swift|c#|powershell";
+const CODE_REQ = new RegExp([
+  `${B}(?:viết|viet|write|lập trình|lap trinh|implement|code)${E}${NEAR}${B}(?:${CODE_NOUN})${E}`,
+  `${B}(?:${CODE_LANG})${E}\\s*(?:${CODE_NOUN})${E}`,
+  `${B}(?:${CODE_NOUN})${E}\\s+(?:bằng\\s+|in\\s+)?(?:${CODE_LANG})${E}`,
+].join("|"), "iu");
+// Ứng dụng nói trước động từ chỉ là thao tác khi câu không báo sự cố (chiều xuôi giữ như cũ: "Gửi email cho khách báo lỗi đơn hàng" vẫn là thao tác).
+const actOnApp = (ins: string) => ACT_ON_APP_RE.test(ins) || (APP_FIRST_RE.test(ins) && !BUG_REPORT.test(ins));
 // Câu cần dữ liệu mới trên web → "tra cứu" (lookup): tỷ giá, giá tài sản / món hàng, thời tiết, tin tức, phiên bản mới nhất, hay lời nhờ tìm thẳng trên web.
 // Giữ chặt để không kéo "hôm nay mình rảnh" hay "đánh giá phim" vào đây: "giá" phải đi với tài sản / "hôm nay" / "bao nhiêu" (và loại "đánh giá", "giá trị", "báo giá").
+// Mốc thời gian là từ trọn vẹn (B…E như W()): "now" không khớp trong "know", "current" không khớp trong "currency".
+const FRESH_AT = `${B}(?:hôm nay|bây giờ|hiện tại|hiện nay|bao nhiêu|mấy|mới nhất|today|now|right now|latest|current)${E}`;
+const RATE = `${B}(?:tỷ giá|tỉ giá|exchange rate|interest rate|lãi suất)${E}`;
+const CURRENCY = `${B}(?:usd|đô|đô la|đô-la|dollar|dollars|euro|eur|yên|yen|jpy|nhân dân tệ|tệ|cny|rmb|bảng anh|gbp|won|krw|baht|bạt|đài tệ|twd|sgd|aud|cad|chf|vnd|vnđ|tiền việt|usdt|bitcoin|btc)${E}`;
+// D1.3: "giá", "tỷ giá" là lời tra cứu trực tiếp. "tỷ giá USD", "giá vàng SJC" là hỏi con số hiện thời dù không có mốc thời gian.
+// Trần "tỷ giá" (không đồng tiền) hay câu hỏi khái niệm ("tỷ giá là gì", PRICE_CONCEPT) thì không.
+const PRICE_ASK = new RegExp([
+  `${RATE}(?:(?![.?!\\n]).){0,30}?${FRESH_AT}`, `${FRESH_AT}(?:(?![.?!\\n]).){0,30}?${RATE}`,
+  `${B}(?:tỷ giá|tỉ giá|exchange rate)${E}(?:(?![.?!\\n]).){0,20}?${CURRENCY}`, `${CURRENCY}(?:(?![.?!\\n]).){0,12}?${B}(?:exchange rate|rate)${E}`,
+  `(?<!(?:đánh|báo|trả|định|ước|tỷ|tỉ) )${B}giá (?:vàng|bạc|đô|đô la|usd|eur|euro|yên|yen|bitcoin|btc|eth|ethereum|xăng|dầu|ga|gas|cổ phiếu|chứng khoán|nhà|đất|iphone|điện thoại)${E}`,
+  `${B}(?:giá|tỷ giá|tỉ giá|lãi suất)${E}(?:(?![.?!\\n]).){0,30}?${B}(?:hôm nay|bây giờ|hiện tại|hiện nay|bao nhiêu)${E}`,
+].join("|"), "iu");
+// Hỏi khái niệm, nguyên nhân hay lời khuyên về giá / tỷ giá: không phải tra một con số.
+const PRICE_CONCEPT = W("là gì|khái niệm|định nghĩa|nghĩa là|tại sao|vì sao|ảnh hưởng|tác động|cách tính|công thức|có nên|nên (?:mua|bán|vay|gửi|đầu tư|chọn)|what is an?|what does|meaning|define|definition|why|affect|impact|should i|how (?:is|are|do|does) .{0,30}(?:calculated|determined|work)");
+const priceAsk = (ins: string) => PRICE_ASK.test(ins) && !PRICE_CONCEPT.test(ins);
 const LOOKUP_WEB = new RegExp([
-  // "tỷ giá / tỉ giá / exchange rate / lãi suất" chỉ là tra cứu khi có mốc thời gian hay con số ở gần (trước hoặc sau). Trần "tỷ giá" hay câu hỏi
-  // khái niệm "tỷ giá là gì" / "what is the exchange rate" (không mốc) thì vẫn là hỏi đáp thường, không kéo xuống model có công cụ web.
-  "(?:tỷ giá|tỉ giá|exchange rate|interest rate|lãi suất)(?:(?![.?!\\n]).){0,30}?(?:hôm nay|bây giờ|hiện tại|hiện nay|bao nhiêu|mấy|mới nhất|today|now|right now|latest|current)",
-  "(?:hôm nay|bây giờ|hiện tại|hiện nay|bao nhiêu|mấy|mới nhất|today|now|right now|latest|current)(?:(?![.?!\\n]).){0,30}?(?:tỷ giá|tỉ giá|exchange rate|interest rate|lãi suất)",
-  // "giá <tài sản>" chỉ tính là tra cứu khi đi kèm mốc thời gian / "bao nhiêu" (bỏ trống thì "giá vàng" trần vẫn là hỏi đáp thường).
-  "giá (?:vàng|bạc|đô|đô la|usd|eur|euro|yên|yen|bitcoin|btc|eth|ethereum|xăng|dầu|ga|gas|cổ phiếu|chứng khoán|nhà|đất|iphone|điện thoại)(?:(?![.?!\\n]).){0,24}?(?:hôm nay|bây giờ|hiện tại|hiện nay|bao nhiêu|mới nhất|mấy)",
-  "(?:giá|tỷ giá|tỉ giá|lãi suất)(?:(?![.?!\\n]).){0,30}?(?:hôm nay|bây giờ|hiện tại|hiện nay|bao nhiêu)",
   "(?:bao nhiêu tiền|giá bao nhiêu|giá cả|stock price|price of|how much (?:is|does|are))",
   "thời tiết(?:(?![.?!\\n]).){0,20}?(?:hôm nay|ngày mai|hiện tại|bây giờ)", "weather (?:today|tomorrow|now|right now)",
   "tin tức(?:(?![.?!\\n]).){0,20}?(?:mới nhất|hôm nay|mới)", "latest news", "breaking news",
@@ -369,9 +395,15 @@ function scores(ins: string, a: Ask): Map<Task, number> {
   // Động từ thao tác có tân ngữ là tên ứng dụng ngay gần → việc dùng công cụ (act), trên mọi nhãn chủ đề: "Tạo Google Docs báo cáo" (từng là
   // "viết"), "Send a Slack message" (từng là hỏi đáp). Không áp đè khi câu rõ ràng nghiêng phân tích (tín hiệu ≥ 5) mà act chỉ đến từ luật gần
   // này (so "Tạo Google Docs báo cáo" chỉ có "viết" = 3 nên vẫn thành act). Guard HOWTO ngay dưới vẫn bỏ act cho câu hỏi cách làm.
-  if (ACT_ON_APP_RE.test(ins) && Math.max(out.get("analyze") ?? 0, out.get("write") ?? 0) < 5) out.set("act", Math.max(out.get("act") ?? 0, 5));
-  // Hỏi cách làm, hoặc đang nhờ viết code: không phải nhờ làm thao tác.
-  if (out.has("act") && (HOWTO.test(ins) || (out.get("code") ?? 0) >= 3 || (out.get("language") ?? 0) >= 3)) out.delete("act");
+  // D1.2: thao tác trên ứng dụng đã nối thắng mọi nhãn chủ đề (code, học ngôn ngữ…): điểm act nâng lên bằng nhãn cao nhất (hòa thì act đứng trước
+  // trong ORDER), trừ "tạo sản phẩm" (build đứng trước act). "Gửi tin Slack cho team báo deploy xong" từng thành viết code vì chữ "deploy".
+  // Không thắng khi chính câu là lời nhờ viết code hoặc báo sự cố: khi đó act chỉ được 5 như trước, và nhãn code / gỡ lỗi / ngôn ngữ (≥ 3) vẫn bỏ act.
+  const onApp = actOnApp(ins) && Math.max(out.get("analyze") ?? 0, out.get("write") ?? 0) < 5;
+  const appAct = onApp && !CODE_REQ.test(ins) && !BUG_REPORT.test(ins);
+  if (appAct) out.set("act", Math.max(5, ...[...out].filter(([t]) => t !== "build").map(([, n]) => n)));
+  else if (onApp) out.set("act", Math.max(out.get("act") ?? 0, 5));
+  // Hỏi cách làm: không phải nhờ làm thao tác. Đang nhờ viết code / hỏi ngôn ngữ cũng không — trừ khi act đến từ thao tác trên ứng dụng đã nối ở trên.
+  if (out.has("act") && (HOWTO.test(ins) || (!appAct && ((out.get("code") ?? 0) >= 3 || (out.get("language") ?? 0) >= 3)))) out.delete("act");
   // Xin ảnh là việc dùng công cụ dù câu không có chữ "ảnh" ("vẽ con mèo"): model nào được chọn cũng gọi được generate_image.
   if ((out.get("code") ?? 0) < 3 && (out.get("language") ?? 0) < 3 && wantsImageIns(ins)) out.set("act", Math.max(out.get("act") ?? 0, 5));
   if (DRAW_CHART.test(ins) && !imgQuestion(ins)) out.set("data", Math.max(out.get("data") ?? 0, 3));
@@ -476,8 +508,9 @@ function read(q: RouteInput, depth = 0): Read {
   else if (docChars > 60_000 && !["translate", "summarize", "code", "debug"].includes(task)) task = "longdoc";
   else if ((files || docChars) && strength < 2) task = "summarize";
   // Câu hỏi đáp cần dữ liệu mới trên web (tỷ giá, giá, tin tức, phiên bản mới nhất): chuyển thành "tra cứu" để đi model hạng vừa trở lên có công cụ web,
-  // thay vì model rẻ nhất trả lời từ trí nhớ cũ. Không áp cho câu sức khỏe / pháp lý / tài chính (đã có luật riêng).
-  if (task === "qa" && !stakes && LOOKUP_WEB.test(ins)) task = "lookup";
+  // thay vì model rẻ nhất trả lời từ trí nhớ cũ. Không áp cho câu sức khỏe / pháp lý / tài chính (đã có luật riêng) — trừ lời tra giá / tỷ giá trần
+  // ("giá bitcoin bây giờ", "lãi suất hôm nay"): đó là hỏi một con số hiện thời, không phải xin lời khuyên (cờ stakes vẫn giữ cho phần chọn model).
+  if (task === "qa" && (priceAsk(ins) ? !crisis : !stakes && LOOKUP_WEB.test(ins))) task = "lookup";
   s = BASE_D[task];
   // Điều chỉnh theo từng loại việc.
   if (task === "code" && !a.code && CONCEPT_Q.test(ins) && !SIG.write![0][0].test(ins)) { s = 1; why.push("hỏi khái niệm lập trình"); }
@@ -611,7 +644,20 @@ export const hasCheapSide = (list: string[]) => list.some((k) => !CREDIT.test(k)
 const CODE_TASKS = new Set<Task>(["code", "debug", "build"]);
 const TOOL_HEAVY = new Set<Task>(["code", "debug", "build", "act"]);
 /** Chọn model cho chế độ Tự động trong danh sách được phép (cả ba hãng, gói lẫn khóa API). avoid: model vừa bị chê / vừa lỗi. */
-export function routeModel(q: RouteInput, allowed: string[], o: { avoid?: string[] } = {}): Route | null {
+// D1.6: nhật ký định tuyến MỖI lượt chat thật { task, score, rerun } (+ model đã chọn), bật sẵn, mức info: console.log có tiền tố [route] — không dùng
+// console.error, vì ops.ts ghi mọi console.error thành lỗi máy chủ trên trang Health. Một dòng JSON gọn. Tắt bằng SYNCHRO_ROUTE_LOG=0;
+// SYNCHRO_ROUTE_LOG_SAMPLE (0…1, mặc định 1) lấy mẫu bớt khi lượt quá nhiều — lượt làm lại vì bị chê (rerun) luôn được ghi, đó là thứ cần đưa
+// vào bộ kiểm thử. Chỉ ghi khi nơi gọi xin (o.log: lượt chat của người dùng, chatengine.ts): khởi động sẵn (câu mẫu), gợi ý đổi model khi lỗi,
+// chọn model cho việc phụ cũng gọi routeModel nhưng không phải lượt thật — ghi vào thì bộ kiểm thử hằng tuần lẫn lượt giả.
+// rerun: lượt làm lại vì bị chê ("sai rồi, làm lại") hoặc người dùng bấm "Chạy lại bằng model khác" (o.log.rerun).
+function routeLog(task: Task, score: number, rerun: boolean, model: string) {
+  const on = process.env.SYNCHRO_ROUTE_LOG;
+  if (on === "0" || on === "off" || on === "false") return;
+  const rate = Number(process.env.SYNCHRO_ROUTE_LOG_SAMPLE ?? 1);
+  if (!rerun && Number.isFinite(rate) && rate < 1 && Math.random() >= rate) return;
+  console.log(`[route] ${JSON.stringify({ task, score, rerun, model })}`);
+}
+export function routeModel(q: RouteInput, allowed: string[], o: { avoid?: string[]; log?: { rerun?: boolean } } = {}): Route | null {
   if (!allowed.length) return null;
   const { task, score, why, retry, think, follow, long } = readOf(q);
   const needQ = need(score, task);
@@ -645,8 +691,7 @@ export function routeModel(q: RouteInput, allowed: string[], o: { avoid?: string
     .sort((a, b) => Number(a.p.vendor === pick.p.vendor) - Number(b.p.vendor === pick.p.vendor)).map((x) => x.p.key);
   // Model đang tránh (o.avoid) vẫn là lựa chọn cuối cùng khi mọi model khác đều hỏng.
   for (const x of all) if (x.p.key !== pick.p.key && !alt.includes(x.p.key)) alt.push(x.p.key);
-  // Nhật ký định tuyến từng lượt (bật bằng SYNCHRO_ROUTE_LOG) để theo dõi phân loại: loại việc, điểm độ khó, có phải lượt làm lại vì bị chê không.
-  if (process.env.SYNCHRO_ROUTE_LOG) console.error(`[route] ${JSON.stringify({ task, score, rerun: !!retry })}`);
+  if (o.log) routeLog(task, score, !!retry || !!o.log.rerun, pick.p.key);
   return { model: pick.p.key, tier: pick.p.tier, vendor: pick.p.vendor, task, effort: effortFor(score, task, think), why: [`việc ${LABEL[task]}`, ...why], alt };
 }
 /**

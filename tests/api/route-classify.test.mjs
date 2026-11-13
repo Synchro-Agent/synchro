@@ -5,6 +5,8 @@ import { loadTs } from "../lib/ts.mjs";
 
 let pass = 0, fail = 0;
 const ok = (c, n, x = "") => { c ? pass++ : fail++; console.log(c ? "  ✓" : "  ✗", n, c ? "" : String(x).slice(0, 400)); };
+// Nhật ký [route] bật sẵn ở máy chủ; tắt trong bộ thử cho đầu ra gọn (phần 17 của route-classify bật lại để kiểm tra).
+process.env.SYNCHRO_ROUTE_LOG = "0";
 const { router: R } = await loadTs(["router"]);
 const RANK = ["low", "medium", "high", "extra", "max"];
 const q = (text, o = {}) => ({ text, attachments: 0, turns: 1, studio: false, ...o });
@@ -415,7 +417,8 @@ console.log("13. Câu ngắn sau việc lớn: chỉ theo việc đó khi model 
       ok(r.task !== "build" && !/opus/.test(r.model) && r.effort !== "high", `“${t}” sau việc lớn, model không hỏi lại: không dựng tiếp, không Opus nỗ lực cao`, JSON.stringify(r));
     }
     const y = R.routeModel(q(t, { turns: 3, prevAsk: WEB }), free);
-    ok(y.task !== "build" && y.effort !== "high" && !/gemini-3-pro/.test(y.model), `“${t}” trên gói miễn phí: không dùng model mạnh nhất`, JSON.stringify(y));
+    // "giá vàng" là tra cứu (D1.3: model tầm trung trở lên có web; gói này không có hạng vừa nên lên Pro) — vẫn không dựng tiếp việc trước.
+    ok(y.task !== "build" && y.effort !== "high" && (!/gemini-3-pro/.test(y.model) || y.task === "lookup"), `“${t}” trên gói miễn phí: không dùng model mạnh nhất (trừ tra cứu)`, JSON.stringify(y));
   }
   // Model hỏi lại thật: câu trả lời ngắn theo việc đang bàn; câu khép lại thì vẫn không.
   ok(R.routeModel(q("Hà Nội", { ...opus, asked: true }), paid).task === "build", "model vừa hỏi lại: “Hà Nội” là câu trả lời");
@@ -502,7 +505,16 @@ console.log("16. Tra cứu web → model hạng vừa trở lên có công cụ;
   ok(R.routeModel(q("Tỷ giá USD hôm nay"), ["anthropic/claude-haiku-5-5", "anthropic/claude-sonnet-5-5"]).tier !== "fast", "tra cứu không chọn Haiku khi có Sonnet");
   // (b) không kéo câu đời thường có "hôm nay" thành tra cứu.
   ok(R.taskOf(q("Hôm nay 28/10 mình rảnh từ 9:30, gợi ý lịch học")) !== "lookup", "“hôm nay mình rảnh” không phải tra cứu");
-  ok(R.taskOf(q("giá vàng")) !== "lookup", "“giá vàng” trần (không mốc thời gian) vẫn là hỏi đáp thường");
+  // W23-12 (Blueprint D1.3: "giá", "tỷ giá" là lời tra cứu trực tiếp): "giá vàng" trần là hỏi giá hiện thời → tra cứu (trước đây là hỏi đáp thường).
+  ok(R.taskOf(q("giá vàng")) === "lookup", "W23-12: “giá vàng” trần → tra cứu (D1.3)");
+  for (const t of ["tỷ giá USD", "tỷ giá yên nhật", "giá vàng SJC", "giá bitcoin bây giờ", "USD exchange rate", "What's the USD to VND rate", "lãi suất ngân hàng hôm nay"])
+    ok(R.taskOf(q(t)) === "lookup", `W23-12: “${t}” → tra cứu (không cần chữ chỉ thời gian; tra giá trần không bị chặn vì là chuyện tài chính)`, R.taskOf(q(t)));
+  for (const t of ["tỷ giá USD tăng ảnh hưởng thế nào đến xuất khẩu", "giá nhà Hà Nội tại sao tăng", "giá trị cốt lõi của công ty", "đánh giá phim Mai", "giá vàng hôm nay, có nên mua vàng không"])
+    ok(R.taskOf(q(t)) !== "lookup", `W23-12: “${t}” (khái niệm / lời khuyên / không phải giá) → không tra cứu`, R.taskOf(q(t)));
+  // R15: mốc thời gian là từ trọn vẹn — "now" trong "know", "current" trong "currency" không tính.
+  ok(R.taskOf(q("what is the exchange rate you know")) !== "lookup", "R15: “know” không chứa mốc “now”", R.taskOf(q("what is the exchange rate you know")));
+  ok(R.taskOf(q("interest rate and currency")) !== "lookup", "R15: “currency” không chứa mốc “current”", R.taskOf(q("interest rate and currency")));
+  ok(R.taskOf(q("interest rate now")) === "lookup", "R15: “interest rate now” vẫn là tra cứu");
   // (c) "tỷ giá / exchange rate" trần hoặc hỏi khái niệm → KHÔNG tra cứu; đi kèm mốc thời gian / con số → tra cứu.
   ok(R.taskOf(q("tỷ giá là gì")) !== "lookup", "“tỷ giá là gì” (hỏi khái niệm) không phải tra cứu");
   ok(R.taskOf(q("tỉ giá hối đoái là gì")) !== "lookup", "“tỉ giá hối đoái là gì” không phải tra cứu");
@@ -512,12 +524,47 @@ console.log("16. Tra cứu web → model hạng vừa trở lên có công cụ;
   // (e) động từ thao tác + tên ứng dụng ở GẦN nhau mới là thao tác; ở xa nhau trong câu phân tích thì không kéo thành act.
   ok(R.taskOf(q("Tạo Google Docs báo cáo doanh thu")) === "act", "“Tạo Google Docs báo cáo” (tân ngữ sát động từ) là thao tác");
   ok(R.taskOf(q("So sánh Notion và Trello rồi đánh giá nên tạo kế hoạch ở đâu")) === "analyze", "câu phân tích có nhắc connector + động từ ở xa: vẫn là phân tích, không phải thao tác");
+  // R3: tên ứng dụng nói TRƯỚC động từ ("Trên Notion, tạo trang…") vẫn là thao tác.
+  for (const t of ["Trên Notion, tạo trang mới tên Kế hoạch", "In Notion, create a page called Roadmap", "Google Sheets thêm một dòng doanh thu tháng 10",
+    "Notion: tạo trang mới tên Kế hoạch", "Trong Google Docs, tạo tài liệu báo cáo tuần", "On Slack, send a message to the team"]) ok(R.taskOf(q(t)) === "act", `R3: “${t}” (ứng dụng trước động từ) → thao tác`, R.taskOf(q(t)));
+  for (const [t, want] of [["Notion và Trello, cái nào tốt hơn để tạo kế hoạch?", "analyze"], ["Compare Notion and Trello then create a plan", "analyze"],
+    ["Trong Slack có cách nào xóa tin nhắn không?", "qa"], ["Cách gửi mail qua Gmail là gì", "qa"], ["Gmail và Outlook khác nhau thế nào khi gửi mail", "qa"]])
+    ok(R.taskOf(q(t)) === want, `R3: “${t}” vẫn là ${want}`, R.taskOf(q(t)));
+  // W23-13 (D1.2): động từ + ứng dụng đã nối thắng mọi nhãn chủ đề — kể cả khi câu có chữ của code / học ngôn ngữ. Hỏi cách làm thì vẫn không.
+  for (const t of ["Gửi tin Slack cho team báo deploy xong", "Tạo trang Notion ghi chú API endpoint mới", "Gửi email qua Gmail cho giáo viên tiếng Anh của con"])
+    ok(R.taskOf(q(t)) === "act", `W23-13: “${t}” → thao tác`, R.taskOf(q(t)));
+  ok(R.taskOf(q("Làm sao gửi tin Slack bằng API trong Python?")) !== "act", "W23-13: hỏi cách làm (có code) vẫn không phải thao tác");
+  // W23-13 (sửa lại): lời nhờ VIẾT CODE có nhắc gửi / tạo trên ứng dụng vẫn là code; báo sự cố bắt đầu bằng tên ứng dụng (R3) vẫn là gỡ lỗi.
+  for (const [t, want] of [["Viết script Python gửi tin nhắn Slack khi build xong", "code"], ["Write a Python function to send a Slack message", "code"],
+    ["viết code Node.js tạo trang Notion qua API", "code"], ["Write a bash script that creates a GitHub issue", "code"], ["Notion tạo trang mới bị lỗi 403, sửa sao?", "debug"]])
+    ok(R.taskOf(q(t)) === want, `W23-13/R3: “${t}” → ${want}`, R.taskOf(q(t)));
+  ok(R.taskOf(q("Gmail gửi thư không được, tại sao?")) !== "act", "R3: “Gmail gửi thư không được, tại sao?” (báo sự cố) không phải thao tác");
+  for (const t of ["Gửi đoạn code này lên Slack cho team", "Gửi email cho khách báo lỗi đơn hàng"]) ok(R.taskOf(q(t)) === "act", `W23-13: “${t}” vẫn là thao tác`, R.taskOf(q(t)));
   // (d) codeOnly: chỉ bắt tên model code (xét phần sau "/"); gói "sub-codex/" bao model chung thì KHÔNG bị tính.
   for (const k of ["sub-grok/grok-build", "sub-grok/grok-4.7-build-fast", "openai/gpt-5-codex", "qwen/qwen3-coder", "codex-mini-latest"]) ok(M.codeOnly(k), `codeOnly(${k}) = true`);
   for (const k of ["sub-codex/gpt-6.1-sol", "sub-codex/gpt-6-luna", "anthropic/claude-opus-5-5", "google/gemini-4-argon", "sub-grok/grok-4.7"]) ok(!M.codeOnly(k), `codeOnly(${k}) = false`);
   // Việc không phải code: model code-only bị loại, nhưng gói ChatGPT (sub-codex) vẫn dùng bình thường.
   const codexOnly = R.routeModel(q("Thủ đô của Úc là gì?"), ["sub-codex/gpt-6.1-sol", "sub-codex/gpt-6-luna"]);
   ok(codexOnly && /sub-codex\//.test(codexOnly.model), `gói Codex (model chung) vẫn dùng cho hỏi đáp: ${codexOnly?.model}`, JSON.stringify(codexOnly));
+}
+console.log("17. Nhật ký định tuyến (D1.6): bật sẵn, console.log [route] gọn, không đi qua console.error");
+{
+  const logs = [], errs = [], L = console.log, Er = console.error;
+  delete process.env.SYNCHRO_ROUTE_LOG;
+  console.log = (...a) => logs.push(a.join(" ")); console.error = (...a) => errs.push(a.join(" "));
+  const H = ["anthropic/claude-haiku-5-5"], log = { log: {} };
+  try {
+    // Gọi không xin ghi (khởi động sẵn bằng câu mẫu, gợi ý đổi model, chọn model cho việc phụ): không ghi gì.
+    R.routeModel(q("xin chào"), H); R.routeModel(q("viết email xin nghỉ phép"), H); R.routeModel(q("sai rồi, làm lại đi", { turns: 3, prevAsk: "Làm trang web bán giày" }), H);
+    R.routeModel(q("Tỷ giá USD hôm nay"), ["anthropic/claude-haiku-5-5", "anthropic/claude-sonnet-5-5"], log); process.env.SYNCHRO_ROUTE_LOG_SAMPLE = "0"; R.routeModel(q("Viết email xin nghỉ phép"), H, log);
+    R.routeModel(q("sai rồi, làm lại đi", { turns: 3, prevAsk: "Làm trang web bán giày" }), H, log); R.routeModel(q("Viết email xin nghỉ phép"), H, { log: { rerun: true } });
+  }
+  finally { console.log = L; console.error = Er; process.env.SYNCHRO_ROUTE_LOG = "0"; delete process.env.SYNCHRO_ROUTE_LOG_SAMPLE; }
+  const line = logs.find((x) => x.startsWith("[route] "));
+  const j = line ? JSON.parse(line.slice(8)) : null;
+  ok(j && j.task === "lookup" && typeof j.score === "number" && j.rerun === false && !errs.some((x) => x.includes("[route]")), "W23-14: mặc định ghi [route] {task, score, rerun} bằng console.log", JSON.stringify({ logs, errs }));
+  ok(logs.length === 3 && JSON.parse(logs[1].slice(8)).rerun === true && JSON.parse(logs[2].slice(8)).rerun === true, "W23-14: lấy mẫu 0 vẫn ghi lượt làm lại (bị chê, hoặc bấm Chạy lại bằng model khác), bỏ lượt thường", JSON.stringify(logs));
+  ok(!logs.some((x) => /"task":"chat"/.test(x)) && JSON.parse(logs[0].slice(8)).task === "lookup", "W23-14: routeModel không có o.log (khởi động sẵn, việc phụ) không ghi [route]", JSON.stringify(logs));
 }
 console.log(`\nKết quả: ${pass} đạt, ${fail} lỗi`);
 process.exit(fail ? 1 : 0);

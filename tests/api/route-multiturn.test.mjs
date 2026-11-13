@@ -6,6 +6,8 @@ import { loadTs } from "../lib/ts.mjs";
 let pass = 0, fail = 0;
 const out = [];
 const ok = (c, n, x = "") => { c ? pass++ : fail++; if (!c) out.push(`  ✗ ${n}  ${String(x).slice(0, 220)}`); };
+// Nhật ký [route] bật sẵn ở máy chủ; tắt trong bộ thử cho đầu ra gọn (phần 17 của route-classify bật lại để kiểm tra).
+process.env.SYNCHRO_ROUTE_LOG = "0";
 const { router: R } = await loadTs(["router"]);
 const ALL = ["sub-claude/fable", "sub-claude/opus", "sub-claude/sonnet", "sub-claude/haiku", "sub-codex/gpt-6.1-astra", "sub-codex/gpt-6.1-sol", "sub-codex/gpt-6-luna", "sub-agy/gemini-3.8-argon", "sub-agy/gemini-3.8-pro", "sub-agy/gemini-3.8-flash", "sub-grok/grok-build", "sub-grok/grok-4.7"];
 const CLAUDE = ALL.filter((k) => k.startsWith("sub-claude/")), CODEX = ALL.filter((k) => k.startsWith("sub-codex/"));

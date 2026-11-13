@@ -105,7 +105,8 @@ Cách thao tác:
 </browser>`;
 
 type R = Record<string, unknown>;
-export type BrowserOut = { content: string; is_error: boolean; image?: string; summary: string; url?: string };
+// text / stalled (chỉ browser_text): chữ thô của trang và cờ "trang mỏng / chưa dựng xong ngay từ đầu trang", để máy chủ tự chờ rồi đọc lại (D2.1).
+export type BrowserOut = { content: string; is_error: boolean; image?: string; summary: string; url?: string; text?: string; stalled?: boolean };
 const host = (u: unknown) => { try { return new URL(String(u)).host || String(u); } catch { return String(u ?? ""); } };
 const q = (s: unknown, n = 60) => { const t = String(s ?? "").replace(/\s+/g, " ").trim(); return t.length > n ? `${t.slice(0, n - 1)}…` : t; };
 const page = (r: R) => (r.url ? `Trang hiện tại: ${r.title ? `"${q(r.title, 100)}" — ` : ""}${r.url}` : "");
@@ -160,9 +161,10 @@ function format(name: string, r: R): BrowserOut {
       const total = Number(r.total) || 0, off = Number(r.offset) || 0, text = String(r.text ?? "");
       const more = off + text.length < total ? `\n[Còn ${total - off - text.length} ký tự: gọi lại với offset=${off + text.length}.]` : "";
       // Trang mỏng / chưa dựng xong ngay từ đầu trang: nhắc chờ trang tải rồi đọc lại (browser_wait), hoặc thử nguồn chính thức khác.
-      const stall = off === 0 && !more && needsRenderEscalation(text)
+      const stalled = off === 0 && !more && needsRenderEscalation(text);
+      const stall = stalled
         ? "\n[Trang có vẻ chưa dựng xong hoặc chặn JavaScript: dùng browser_wait rồi đọc lại; với số liệu trong ngày, ưu tiên trang chính thức, chưa có số thì thử thêm một nguồn nữa trước khi nói \"không chắc\".]" : "";
-      return { content: join(`URL: ${r.url}\nTiêu đề: ${r.title}`, "", text || "(không có chữ)", more, stall), is_error: false, summary: `${text.length} ký tự` };
+      return { content: join(`URL: ${r.url}\nTiêu đề: ${r.title}`, "", text || "(không có chữ)", more, stall), is_error: false, summary: `${text.length} ký tự`, text, stalled };
     }
     case "browser_find": {
       const m = (r.matches as string[] | undefined) ?? [];

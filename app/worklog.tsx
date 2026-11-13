@@ -19,7 +19,7 @@ const ReconnectCard = lazyView(() => import("./connectorsui").then((m) => m.Reco
 // at / end: lúc bắt đầu, lúc có kết quả (giờ máy chủ) — đồng hồ giây của công cụ đang chạy và thời gian đã chạy khi xong.
 // c: connector của công cụ (logo cạnh tên công cụ), từ sự kiện "tconn" ngay sau sự kiện "tool".
 export type ToolConn = { name: string; logo?: string; color?: string; icon?: string; site?: string };
-export type ToolItem = { seq: number; label: string; ok?: boolean; sum?: string; args?: string; at?: number; end?: number; c?: ToolConn };
+export type ToolItem = { seq: number; label: string; name?: string; ok?: boolean; sum?: string; args?: string; at?: number; end?: number; c?: ToolConn };
 // ask: lượt đang chờ bạn duyệt (dùng trình duyệt trên trang chưa được phép, công cụ connector). conn: connector cần kết nối lại (nút ngay trong khung chat).
 // link: Composio chưa liên kết (thẻ có nút "Liên kết Composio").
 export type ConnPart = { k: "conn"; id: string; name: string; logo?: string; color?: string; site?: string; auth?: string; refused?: boolean; link?: boolean };
@@ -50,10 +50,12 @@ export function applyEvent(w: Work, ev: RunEv): Work {
     else parts.push({ k: "tools", items: [item] });
   } else if (ev.kind === "res") {
     try {
-      const r = JSON.parse(ev.text) as { ref: number; ok: boolean; sum?: string; args?: string };
+      const r = JSON.parse(ev.text) as { ref: number; ok: boolean; sum?: string; args?: string; name?: string };
+      // name: loại công cụ thật (chatengine.ts → kindOf) để xét "đã thử lại" đúng loại; bản ghi cũ không có thì đoán từ nhãn.
+      const name = typeof r.name === "string" && r.name ? r.name.slice(0, 160) : undefined;
       for (let i = parts.length - 1; i >= 0; i--) {
         const p = parts[i];
-        if (p.k === "tools" && p.items.some((x) => x.seq === r.ref)) { parts[i] = { k: "tools", items: p.items.map((x) => (x.seq === r.ref ? { ...x, ok: r.ok, sum: r.sum, args: r.args, ...(ev.at ? { end: ev.at } : {}) } : x)) }; break; }
+        if (p.k === "tools" && p.items.some((x) => x.seq === r.ref)) { parts[i] = { k: "tools", items: p.items.map((x) => (x.seq === r.ref ? { ...x, ok: r.ok, sum: r.sum, args: r.args, ...(name ? { name } : {}), ...(ev.at ? { end: ev.at } : {}) } : x)) }; break; }
       }
     } catch {}
   } else if (ev.kind === "tconn") {

@@ -216,6 +216,23 @@ const PROBE = ${PROBE};
 })().catch((e) => { console.error(String(e && e.stack || e)); process.exit(1); });
 `;
 
+// W23-17 (Blueprint G4.5): "Kiểm tra hiển thị, sửa lỗi" tối đa 2 vòng cho mỗi artifact trong một lượt — đếm thật, không chỉ nhắc trong prompt.
+// Một vòng = kiểm tra một bản mới của artifact; gọi lại trên cùng bản (vd. chụp to một slide) không tính thêm vòng.
+export const MAX_CHECK_ROUNDS = 2;
+const rounds = new WeakMap<object, Map<string, { n: number; last: string }>>();
+const fingerprint = (s: string) => { let h = 2166136261; for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619); return `${s.length}:${(h >>> 0).toString(36)}`; };
+/** Ghi một vòng kiểm tra của artifact trong lượt `turn` (đối tượng ngữ cảnh của lượt). Trả null nếu còn được kiểm tra, hoặc lời báo đã đủ vòng. */
+export function checkRoundGate(turn: object, a: ArtVersion): string | null {
+  if (!a.complete) return null; // chưa viết xong: checkArtifact tự từ chối, không tính vòng
+  let m = rounds.get(turn);
+  if (!m) rounds.set(turn, (m = new Map()));
+  const fp = fingerprint(a.content), r = m.get(a.ident);
+  if (r && r.last === fp) return null;
+  if (r && r.n >= MAX_CHECK_ROUNDS) return `Đã đủ ${MAX_CHECK_ROUNDS} vòng kiểm tra - sửa cho artifact "${a.ident}" trong lượt này nên không kiểm tra thêm. Báo xong cho người dùng; nếu lần kiểm tra trước còn lỗi chưa sửa được thì nói rõ là lỗi gì.`;
+  m.set(a.ident, { n: (r?.n ?? 0) + 1, last: fp });
+  return null;
+}
+
 export async function checkArtifact(uid: string, a: ArtVersion | null, input: Record<string, unknown>, origin: string): Promise<{ content: string; is_error: boolean; image?: string }> {
   if (!a) return notFound(typeof input.identifier === "string" ? input.identifier : undefined);
   const kinds: ArtType[] = ["html", "react", "svg"];
