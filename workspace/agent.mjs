@@ -44,8 +44,13 @@ const RUN_BRIDGE = "br-synchro-run";
 const RUN_SUBNET = env("WS_RUN_SUBNET", "172.29.0.0/24");
 const RUN_GW = env("WS_RUN_GATEWAY", "172.29.0.1");
 const RUN_PROXY_PORT = Number(env("WS_RUN_PROXY_PORT", 3556));
-// Mỗi lần chạy code dùng RUN_MEMORY (2g): trần floor((tổng − chừa) × 0,5 / 2048), kẹp [1, 24], mặc định cũ 3 khi không đo được. WS_RUN_MAX đặt tay thì theo.
-const RUN_MAX = ramSlots("WS_RUN_MAX", 2048, 3, 1, 24);
+// Kho container khởi động sẵn (xem warm bên dưới): SYNCHRO_WARM_POOL (hoặc WS_WARM_POOL) = số container giữ sẵn, mặc định 2, 0 = tắt.
+const WARM = Number(env("SYNCHRO_WARM_POOL", env("WS_WARM_POOL", "2")));
+// Mỗi lần chạy code dùng RUN_MEMORY (2g): trần floor((tổng − chừa) × 0,5 / 2048), kẹp [sàn, 24], mặc định cũ 3 khi không đo được. WS_RUN_MAX đặt tay thì theo.
+// Sàn (W23-1): ít nhất 2 và không dưới số container giữ sẵn — máy 7,9 GB theo công thức chỉ ra 1, khi đó một lần chạy chặn mọi người khác (run_code,
+// check_artifact, xuất PPTX) tới 240 giây rồi 503, và hai container giữ sẵn chỉ dùng được từng cái một.
+const RUN_MIN = Math.max(2, Math.min(24, Number.isFinite(WARM) ? WARM : 2));
+const RUN_MAX = ramSlots("WS_RUN_MAX", 2048, 3, RUN_MIN, 24);
 // Bộ nhớ một lần chạy cần (MB) để không bật container khi máy sắp hết RAM (tránh OOM cả máy chủ): mức RUN_MEMORY cộng chút đệm.
 // Sàn RAM khả dụng trước khi bật một container chạy code; WS_RUN_FLOOR_MB đặt tay thì theo, không thì = RUN_MEMORY + 256. Thời gian chờ RAM rảnh trước khi báo bận.
 const RUN_FLOOR_MB = Number(env("WS_RUN_FLOOR_MB", memMB(env("WS_RUN_MEMORY", "2g"), 2048) + 256));
@@ -70,8 +75,9 @@ const RUN_MEMORY_SWAP = env("WS_RUN_MEMORY_SWAP", swapOf(RUN_MEMORY, env("WS_SWA
 const RUN_FILES = 20, RUN_PREVIEWS = 12, RUN_FILE_MB = 100, RUN_TOTAL_MB = 150;
 // Hết chỗ chạy thì xếp hàng (có giới hạn) thay vì báo lỗi ngay: một chỗ luôn dành cho lần chạy ngắn, người đang chạy ít nhất được chọn trước.
 const RUN_QUEUE = Number(env("WS_RUN_QUEUE", 20)), RUN_QUEUE_USER = Number(env("WS_RUN_QUEUE_USER", 4)), RUN_WAIT_SEC = Number(env("WS_RUN_WAIT_SEC", 240));
-// Dựng video bằng synchro-video (Remotion: Chromium nhiều tab + x264, whisper ~1 GB) cần ~3,5 GB một lần: MEDIA_MAX = floor((tổng − chừa) × 0,5 / 3584)
-// theo cùng RAM thật (realTotalMB) như RUN_MAX, không quá RUN_MAX (mỗi lần dựng còn giữ một chỗ chạy chung) và không quá WS_MEDIA_CAP (mặc định 4),
+// Dựng video bằng synchro-video (Remotion: Chromium nhiều tab + x264, whisper ~1 GB) cần ~3,5 GB một lần, có hàng riêng (mediaQ) và KHÔNG giữ thêm chỗ
+// chạy chung (runQ, W23-1) nên một lần dựng dài không chặn run_code / check_artifact / xuất PPTX của người khác: MEDIA_MAX = floor((tổng − chừa) × 0,5 / 3584)
+// theo cùng RAM thật (realTotalMB) như RUN_MAX, không quá RUN_MAX (dè dặt) và không quá WS_MEDIA_CAP (mặc định 4),
 // ít nhất 1 — máy 8 GB và 16 GB đều ra 1, 32 GB ra 4 nếu RUN_MAX cho phép. WS_MEDIA_MAX > 0 thì đè tay. Lần sau xếp hàng tối đa WS_MEDIA_WAIT_SEC giây,
 // có báo vị trí hàng chờ. Dựng song song trên máy nhỏ chỉ chậm gấp đôi mà dễ làm máy chủ web thiếu bộ nhớ, nên mặc định rất dè dặt.
 const MEDIA_MAX = mediaSlots({ raw: process.env.WS_MEDIA_MAX, cap: env("WS_MEDIA_CAP", 4), total: realTotalMB(), reserve: SERVER_RESERVE_MB, runMax: RUN_MAX });
@@ -89,8 +95,10 @@ const PKG_HOSTS = ["pypi.org", "files.pythonhosted.org", "pythonhosted.org", "re
   "crates.io", "index.crates.io", "static.crates.io", "proxy.golang.org", "sum.golang.org", "conda.anaconda.org", "repo.anaconda.com",
   "github.com", "codeload.github.com", "objects.githubusercontent.com", "deb.debian.org", "security.debian.org", "archive.ubuntu.com", "security.ubuntu.com",
   "speech.platform.bing.com", "translate.google.com"];
-// Mỗi workspace dùng MEMORY (1536m): trần số workspace chạy cùng lúc floor((tổng − chừa) × 0,5 / 1536), kẹp [2, 32], mặc định cũ 4 khi không đo được. WS_MAX_RUNNING đặt tay thì theo.
-const MAX_RUNNING = ramSlots("WS_MAX_RUNNING", 1536, 4, 2, 32);
+// Mỗi workspace dùng MEMORY (1536m): trần số workspace chạy cùng lúc floor((tổng − chừa) × 0,5 / 1536), kẹp [3, 32], mặc định cũ 4 khi không đo được.
+// Sàn 3 (W23-1): máy 7,9 GB theo công thức chỉ ra 1 → 2, người thứ ba mở trình duyệt / terminal là đẩy container của người khác ra hoặc phải chờ.
+// Workspace hiếm khi dùng hết --memory; RAM thật vẫn được canh trước khi bật (waitMem(WS_FLOOR_MB)). WS_MAX_RUNNING đặt tay thì theo.
+const MAX_RUNNING = ramSlots("WS_MAX_RUNNING", 1536, 4, 3, 32);
 const IDLE_MS = Number(env("WS_IDLE_MIN", 20)) * 60_000;
 const MEMORY = env("WS_MEMORY", "1536m");
 const MEMORY_SWAP = env("WS_MEMORY_SWAP", swapOf(MEMORY, env("WS_SWAP_EXTRA", "1g")));
@@ -422,8 +430,7 @@ const boxLimits = () => ["--hostname", "sandbox", "--init", "--memory", RUN_MEMO
   "--cap-drop", "ALL", "--security-opt", "no-new-privileges", "--shm-size", "512m", "-u", UID, "-w", `${HOME}/run`];
 // Kho container khởi động sẵn (workspace/warmpool.mjs): lần chạy không phải chờ container khởi động (~1 giây). Container trong kho nằm
 // trên mạng chạy code với IP riêng (lần chạy có mạng dùng luôn IP đó; lần chạy không mạng thì ngắt mạng trước khi chạy), gắn thư mục rỗng
-// riêng; mỗi cái dùng một lần rồi xóa. SYNCHRO_WARM_POOL (hoặc WS_WARM_POOL) = số container giữ sẵn, mặc định 2, 0 = tắt.
-const WARM = Number(env("SYNCHRO_WARM_POOL", env("WS_WARM_POOL", "2")));
+// riêng; mỗi cái dùng một lần rồi xóa. Số container giữ sẵn: WARM (đầu tệp).
 const warmDir = (id) => `${ROOT}/_runs/warm-${id}`;
 const warm = createWarmPool({
   size: Number.isFinite(WARM) ? WARM : 2, image: IMAGE, uid: UID, log, minMemMB: Number(env("WS_WARM_MIN_MB", 1536)),
@@ -497,11 +504,13 @@ async function runOnce(u, { files = [], argv, stdin = null, net: wantNet = false
   const seen = (pos) => { if (pos > 0) q.first ||= pos; };
   const posNote = (pos) => (pos ? ` Lần chạy này đang ở vị trí ${pos} trong hàng chờ.` : "");
   let memWaitMs = 0;
-  // Lần dựng video lấy chỗ dựng trước (không giữ chỗ chạy chung trong lúc chờ), rồi mới tới chỗ chạy chung.
-  let freeSlot, freeMedia = () => {};
+  // Lần dựng video chỉ lấy chỗ dựng (mediaQ, đã giới hạn theo RAM); lần chạy khác lấy chỗ chạy chung (runQ). Không giữ cả hai (W23-1): một lần dựng
+  // vài phút giữ chỗ chạy chung thì run_code / check_artifact / xuất PPTX của mọi người khác phải chờ nó.
+  let freeSlot = () => {}, freeMedia = () => {};
   // Script có sẵn trong thư mục giữ lại (vd. "bash render.sh" ghi ở lần trước) cũng được đọc: không container nào đang gắn thư mục này (keepBusy).
   const readScript = keep ? (rel) => safeReadIn(dir, rel, 1_000_000)?.toString("utf8") ?? null : null;
-  if (isMediaRun({ files, argv, stdin, readScript })) {
+  const media = isMediaRun({ files, argv, stdin, readScript });
+  if (media) {
     // Vị trí hàng chờ dựng video: trả về cho người gọi (q, ghi chú cuối kết quả, lời báo bận) và ghi nhật ký.
     let lastPos = 0;
     const onWait = (pos, running) => { seen(pos); if (pos !== lastPos) { lastPos = pos; log("video xếp hàng", u, `vị trí ${pos}`, `đang dựng ${running}/${MEDIA_MAX}`); } };
@@ -514,10 +523,12 @@ async function runOnce(u, { files = [], argv, stdin = null, net: wantNet = false
     }
   }
   let runPos = 0;
-  try { freeSlot = await runQ.acquire(u, sec, signal, (pos) => { runPos = pos; seen(pos); }); }
-  catch (e) { freeMedia(); release(); throw e instanceof QueueFull ? new E(503, e.message.startsWith("Máy chủ đang chạy nhiều code") ? e.message.replace(/\.\s*Hãy/, `.${posNote(runPos)} Hãy`) : e.message) : e; }
+  if (!media) {
+    try { freeSlot = await runQ.acquire(u, sec, signal, (pos) => { runPos = pos; seen(pos); }); }
+    catch (e) { release(); throw e instanceof QueueFull ? new E(503, e.message.startsWith("Máy chủ đang chạy nhiều code") ? e.message.replace(/\.\s*Hãy/, `.${posNote(runPos)} Hãy`) : e.message) : e; }
+  }
   const waited = Math.round((Date.now() - queuedAt) / 1000);
-  if (waited >= 2) log("lần chạy chờ", u, `${waited} giây`, `vị trí ${q.first}`, `đang chạy ${runQ.running}, đang chờ ${runQ.queued}`);
+  if (waited >= 2) log("lần chạy chờ", u, `${waited} giây`, `vị trí ${q.first}`, media ? `đang dựng ${mediaQ.running}, đang chờ ${mediaQ.queued}` : `đang chạy ${runQ.running}, đang chờ ${runQ.queued}`);
   // Container khởi động sẵn: lần chạy không mạng thì ngắt mạng của nó trước (ngắt lỗi thì bỏ, không chạy code không mạng trên container còn mạng).
   let pooled = warm.take();
   const pooledName = pooled?.name;
@@ -865,9 +876,9 @@ process.on("SIGTERM", async () => {
   runQ.close("Máy chủ đang cập nhật workspace. Hãy thử lại sau ít phút.");
   mediaQ.close("Máy chủ đang cập nhật workspace. Hãy thử lại sau ít phút.");
   await Promise.race([warm.drain(), new Promise((r) => setTimeout(r, 20_000))]);
-  log(`đang tắt: chờ ${runQ.running} lần chạy`);
+  log(`đang tắt: chờ ${runQ.running + mediaQ.running} lần chạy`);
   const end = Date.now() + DRAIN_SEC * 1000;
-  while ((runQ.running > 0 || replying > 0) && Date.now() < end) await new Promise((r) => setTimeout(r, 500));
+  while ((runQ.running > 0 || mediaQ.running > 0 || replying > 0) && Date.now() < end) await new Promise((r) => setTimeout(r, 500));
   setTimeout(() => process.exit(0), 300); // kịp gửi nốt câu trả lời vừa ghi xuống socket
 });
 

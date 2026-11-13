@@ -75,5 +75,16 @@ console.log("2. Chờ quá giờ (WS_RUN_WAIT_SEC=2): báo bận kèm vị trí,
   await a;
 }
 
+console.log("3. W23-1: lần dựng video không giữ chỗ chạy chung (WS_RUN_MAX=1 vẫn chạy được code khác ngay)");
+{
+  const m = call(bash(U, "echo synchro-video render x >/dev/null; sleep 1.5; echo m"));
+  await sleep(300);
+  const t0 = Date.now();
+  const b = await call(bash(V, "echo b"));
+  ok(b.status === 200 && b.j.code === 0 && !b.j.queue && Date.now() - t0 < 1200, "run_code của người khác chạy ngay trong lúc đang dựng video", JSON.stringify(b.j).slice(0, 300));
+  const rm = await m;
+  ok(rm.status === 200 && rm.j.code === 0 && /m/.test(rm.j.out ?? ""), "lần dựng video vẫn xong", JSON.stringify(rm.j).slice(0, 300));
+}
+
 console.log(`\nKết quả: ${pass} đạt, ${fail} lỗi`);
 process.exit(fail ? 1 : 0);
