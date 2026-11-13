@@ -448,7 +448,7 @@ export async function runPlanAgent(o: {
   // Lời dẫn trước mỗi nhóm công cụ: hiện thành một đoạn chữ riêng như vòng lặp khóa API.
   const flush = () => { const t = pending.trim(); pending = ""; if (t) o.emit({ t: "text", text: t }); };
   const bridge = openBridge({
-    uid: o.u, tools: o.tools, ...(cli === "agy" ? { hold: BRIDGE_HOLD.agy } : {}),
+    uid: o.u, conv: o.conv, tools: o.tools, ...(cli === "agy" ? { hold: BRIDGE_HOLD.agy } : {}),
     call: async (name, input) => {
       if (o.signal.aborted) return { content: "Người dùng đã dừng.", is_error: true };
       flush();
@@ -466,7 +466,7 @@ export async function runPlanAgent(o: {
   try {
     const once = (messages: { role: string; content: unknown }[], fresh = false) => subTurn({
       user: o.user, model: o.model, system: `${o.system}\n\n${PLAN_NOTE(cli)}`, messages, conv: o.conv, effort: o.effort,
-      signal: o.signal, onDelta: (t) => { pending += t; }, mcp: { url: bridge.url, alive: bridge.alive }, fresh,
+      signal: o.signal, onDelta: (t) => { pending += t; }, mcp: { url: bridge.url, alive: bridge.alive, live: bridge.live }, fresh,
     });
     // Lỗi tạm thời của CLI khi chưa kịp dùng công cụ nào: thử lại một lần ở phiên mới kèm toàn bộ lịch sử (như chat).
     const tryOnce = async (messages: { role: string; content: unknown }[]) => {

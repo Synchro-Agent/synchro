@@ -21,6 +21,8 @@ import type { Attachment, RateWindow, TurnRequest, WebSource } from "./engine";
 import { friendlyError, redact, retryAfterMs } from "./errors";
 import { agyNativeImages, nativeStamp, removeFile, type ImgFile } from "./imagefiles";
 import { stallOf, waitText, watchLimits, type WatchState } from "./watchdog";
+import { prestartCodexServer } from "./codex_server";
+import { dropLiveBridge } from "../mcpbridge";
 
 export const SUB_PREFIX = "sub-";
 export const subCli = (key: unknown): Cli | null => {
@@ -550,6 +552,7 @@ export async function removeConvSessions(uid: string, conv: string) {
   d.prepare("DELETE FROM engine_sessions WHERE user_id = ? AND conv = ?").run(uid, conv);
   d.prepare("DELETE FROM engine_session_log WHERE user_id = ? AND conv = ?").run(uid, conv);
   for (const r of rows) await removeSessionFiles(scopeDir(r.cli, uid), r.session_id);
+  dropLiveBridge(uid, conv);
   await removeConvAttachments(uid, conv);
 }
 /** Đoạn chat này chưa có phiên của CLI, hoặc phiên chưa từng gọi công cụ: đi đường nhanh được. Lịch sử có khối gọi công cụ mà lượt lại không khai báo công cụ thì API có thể từ chối. */
@@ -561,6 +564,11 @@ export function sessionPlain(uid: string, conv: string | undefined, cli: Cli): b
 /** Khởi động sẵn tiến trình Claude Code cho lượt không công cụ kế tiếp của người dùng (mở trang, đổi model). Không tốn lượt nào của gói. */
 // Tạo thư mục làm việc không còn chặn (makeDir chạy sudo bất đồng bộ): khởi động sẵn chạy nền, lỗi bỏ qua như mọi lời gọi prewarmChat vẫn làm.
 export function prewarmClaude(o: { user: UserRow; model: string; system: string; effort?: string }) {
+  // ChatGPT (Codex): khởi động sẵn app-server của tài khoản (G2.3), không gửi tin nào nên không tốn lượt của gói.
+  if (subCli(o.model) === "codex" && find("codex") && everLoggedIn("codex", o.user.id)) {
+    void engineEnvReady("codex", o.user.id).then((env) => prestartCodexServer({ env }, path.join(engineHome(), "work", safeScope(o.user.id)))).catch(() => {});
+    return;
+  }
   if (subCli(o.model) !== "claude") return;
   const run = resolvePlanModel("claude", o.user.id, splitKey(o.model).id, o.effort);
   const eng = engineFor("claude") as unknown as { prestart?: (r: Pick<TurnRequest, "system" | "model" | "effort" | "env" | "workdir">) => Promise<void> };
@@ -648,7 +656,7 @@ async function removeConvAttachments(uid: string, conv: string) {
  *  onStatus: dòng trạng thái (đang chờ, CLI đang thử lại); onSearch, onSources: CLI đang tìm web và nguồn tìm được. */
 /** ephemeral (đoạn chat ẩn danh): không nối tiếp phiên, không nhớ phiên, xóa lịch sử CLI ghi trên đĩa ngay khi xong lượt. */
 /** onNativeImages: ảnh Antigravity tự tạo trong lượt (image-generator của nó, không qua generate_image): chuyển ra đây để giao thành tệp, người dùng không mở được đường dẫn trên máy chủ. */
-export type SubTurn = { maxWaitMs?: number; onAttDir?: (dir: string) => void; onNativeImages?: (files: ImgFile[]) => void; ephemeral?: boolean; onSession?: (id: string) => void; user: UserRow; model: string; system: string; messages: unknown; conv?: string; effort?: string; /** Lượt không công cụ (đường nhanh): được dùng tiến trình khởi động sẵn. */ fast?: boolean; /** Tên việc phụ, ghi vào [timing]; không có là lượt của người dùng. */ job?: string; /** Việc không ai đứng chờ: xếp hàng sau các việc khác (BG_MAX). */ bg?: boolean; /** Trích ngắn các tin cũ mà trình duyệt không gửi nguyên văn. */ older?: string; awaitingUser?: () => boolean; signal?: AbortSignal; onDelta?: (t: string) => void; onToolUse?: () => void; mcp?: { url: string; alive?: () => number; onPark?: (f: () => void) => void }; web?: boolean; fresh?: boolean; total?: number; lockMs?: number; onStatus?: (t: string) => void; onSearch?: (q: { query?: string; url?: string }) => void; onSources?: (s: WebSource[]) => void };
+export type SubTurn = { maxWaitMs?: number; onAttDir?: (dir: string) => void; onNativeImages?: (files: ImgFile[]) => void; ephemeral?: boolean; onSession?: (id: string) => void; user: UserRow; model: string; system: string; messages: unknown; conv?: string; effort?: string; /** Lượt không công cụ (đường nhanh): được dùng tiến trình khởi động sẵn. */ fast?: boolean; /** Tên việc phụ, ghi vào [timing]; không có là lượt của người dùng. */ job?: string; /** Việc không ai đứng chờ: xếp hàng sau các việc khác (BG_MAX). */ bg?: boolean; /** Trích ngắn các tin cũ mà trình duyệt không gửi nguyên văn. */ older?: string; awaitingUser?: () => boolean; signal?: AbortSignal; onDelta?: (t: string) => void; onToolUse?: () => void; mcp?: { url: string; alive?: () => number; onPark?: (f: () => void) => void; live?: { url: string; key: string } }; web?: boolean; fresh?: boolean; total?: number; lockMs?: number; onStatus?: (t: string) => void; onSearch?: (q: { query?: string; url?: string }) => void; onSources?: (s: WebSource[]) => void };
 export type SubResult = { status: number; json: Json };
 
 // ---------------------------------------------------------------- phiên ấm (Claude Code)
@@ -814,9 +822,10 @@ async function runTurn(o: SubTurn): Promise<SubResult> {
   if (resume) { try { sysHad = new Set(JSON.parse(prev?.sys_parts ?? "[]") as string[]); } catch {} }
   const sysNew = resume ? sysNow.filter((x) => !sysHad.has(sysMark(x))) : [];
   const req: TurnRequest = {
-    pool: !!o.fast && cli === "claude",
+    // Lượt có công cụ cũng dùng tiến trình dựng sẵn khi cầu nối có địa chỉ sống theo cuộc trò chuyện (G2.2).
+    pool: cli === "claude" && (!!o.fast || !!o.mcp?.live),
     sysUpdate: sysNew.length ? `<system_update>\nHướng dẫn của Synchro có phần mới cho lượt này. Áp dụng cùng với hướng dẫn đã nhận:\n\n${sysNew.join("\n\n")}\n</system_update>` : undefined,
-    prompt, attachments: col.atts.length ? col.atts : undefined, system: o.system || undefined, model: run.model, effort: run.effort, sessionId: resume ?? fork, fork: !!fork, workdir: work, env: await engineEnvReady(cli, o.user.id), signal: o.signal ? AbortSignal.any([o.signal, wd.signal]) : wd.signal, mcp: o.mcp && { url: o.mcp.url, onPark: o.mcp.onPark }, alive: o.mcp?.alive, web: o.web, lockMs: o.lockMs, awaitingUser: o.awaitingUser,
+    prompt, attachments: col.atts.length ? col.atts : undefined, system: o.system || undefined, model: run.model, effort: run.effort, sessionId: resume ?? fork, fork: !!fork, workdir: work, env: await engineEnvReady(cli, o.user.id), signal: o.signal ? AbortSignal.any([o.signal, wd.signal]) : wd.signal, mcp: o.mcp && { url: o.mcp.url, onPark: o.mcp.onPark, live: o.mcp.live }, alive: o.mcp?.alive, web: o.web, lockMs: o.lockMs, awaitingUser: o.awaitingUser,
     history: msgs.slice(0, -1).map((m) => ({ role: m.role === "assistant" ? "assistant" : "user", content: textOf(m.content) })),
   };
   const natStamp = cli === "agy" && o.onNativeImages ? await nativeStamp(work) : null;

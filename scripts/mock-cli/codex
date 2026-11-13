@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Codex CLI giả lập (dev:mock): login status|--device-auth, logout, exec [resume <id>] --json -.
+// Codex CLI giả lập (dev:mock): login status|--device-auth, logout, exec [resume <id>] --json -, app-server (JSON-RPC: model/list, account/*, thread/start|resume, turn/start|interrupt).
 // Trong prompt: [mock:quota] → hết hạn mức gói ChatGPT.
 const C = require(require("path").join(__dirname, "mock-cli-common.cjs"));
 const { fs, path } = C;
@@ -11,6 +11,7 @@ const home = process.env.CODEX_HOME || path.join(process.env.HOME || "/tmp", ".c
 const dir = path.basename(home).startsWith(".synchro-codex-") ? path.dirname(home) : home;
 // Như codex thật: auth.json đọc qua CODEX_HOME (liên kết trong thư mục của lượt).
 const authFile = path.join(home, "auth.json");
+const readJ = (f) => { try { return JSON.parse(fs.readFileSync(f, "utf8")); } catch { return {}; } };
 /** Như codex thật: máy chủ MCP chỉ đọc từ $CODEX_HOME/config.toml, bảng [mcp_servers.synchro] (không còn nhận qua -c). */
 function mcpConfig() {
   let text = "";
@@ -27,6 +28,72 @@ function mcpConfig() {
   if (seen > 1) { console.error("Error loading config.toml: duplicate key `synchro` in table `mcp_servers`"); process.exit(1); }
   return out;
 }
+
+// Lõi một lượt chat, dùng chung cho `exec` (sự kiện JSONL) và `app-server` (thông báo JSON-RPC): E là bộ phát sự kiện của từng đường.
+// o = { prompt, tid, effort, web, nativeOn, mcp: { url, approved } | null, images: [đường dẫn], argvNote }
+async function chatTurn(o, E) {
+  let prompt = o.prompt;
+  // [mock:codexnative]: như gói trả phí, model thấy image_gen dựng sẵn nếu Synchro không tắt: ảnh nằm trong thư mục trên máy chủ, không thành tệp của người dùng.
+  if (prompt.includes("[mock:codexnative]")) {
+    const f = path.join(dir, "generated_images", o.tid, "ig_native.png");
+    if (o.nativeOn) C.saveImage(f, "png");
+    await E.message("item_1", o.nativeOn ? `Saved ${f}` : "NATIVE_OFF");
+    return E.done({ input_tokens: 1, cached_input_tokens: 0, output_tokens: 1 });
+  }
+  if (prompt.includes("[mock:quota]")) return E.failed("You've hit your usage limit. Upgrade to Pro or try again in 2 hours 14 minutes.");
+  const turn = C.bumpSession(dir, o.tid);
+  const st = C.stallTurn(dir, o.tid, prompt);
+  if (st.stall) { await E.message("item_1", C.STALL_TEXT); return E.done({ input_tokens: prompt.length, cached_input_tokens: 0, output_tokens: 10 }); }
+  prompt = st.prompt;
+  // Như codex thật khi còn công cụ shell (read-only vẫn đọc được cả đĩa): báo mục lệnh rồi mới chạy. [mock:shell] kiểm tra Synchro dừng lượt ngay
+  // lúc đó: tiến trình còn sống sau 800 ms thì để lại dấu vết (coi như kết quả lệnh đã về tới model).
+  if (prompt.includes("[mock:shell]")) {
+    E.started({ id: "item_s", type: "command_execution", command: "cat ../../logins/codex/*/auth.json", status: "in_progress" });
+    await C.sleep(800);
+    fs.writeFileSync(path.join(dir, "shell-ran"), "1");
+    await E.message("item_1", "đã đọc auth.json của người khác");
+    return E.done({ input_tokens: 1, cached_input_tokens: 0, output_tokens: 1 });
+  }
+  // [mock:authrefresh]: như khi codex làm mới token: ghi auth.json mới rồi đổi tên đè lên (thay liên kết trong CODEX_HOME của lượt bằng tệp thật),
+  // và tạo tệp mới (history.jsonl) trong CODEX_HOME. Synchro phải đưa cả hai về thư mục đăng nhập khi xong lượt.
+  if (prompt.includes("[mock:authrefresh]")) {
+    const tmp = path.join(home, "auth.json.tmp");
+    fs.writeFileSync(tmp, JSON.stringify({ mock: true, refreshed: Date.now() }));
+    fs.renameSync(tmp, authFile);
+    fs.appendFileSync(path.join(home, "history.jsonl"), JSON.stringify({ ts: Date.now() }) + "\n");
+  }
+  await C.sleep(150);
+  E.completed({ id: "item_0", type: "reasoning", text: "**Chào hỏi**" });
+  // [mock:slowcodex]: model nghĩ 2 giây rồi mới viết (thử bấm Dừng giữa lượt).
+  if (prompt.includes("[mock:slowcodex]")) await C.sleep(2000);
+  // Như codex thật với cầu nối MCP: lời dẫn, mcp_tool_call, rồi câu trả lời. Công cụ MCP chỉ chạy khi máy chủ được duyệt sẵn (default_tools_approval_mode="approve").
+  const mcpUrl = o.mcp?.url ?? null;
+  const ask = C.toolAsk(prompt);
+  let note = "";
+  // [mock:argv]: in lại tham số dòng lệnh (kiểm thử: địa chỉ cầu nối không được nằm trên dòng lệnh).
+  if (prompt.includes("[mock:argv]")) note += o.argvNote;
+  if (mcpUrl && ask) {
+    await E.message("item_n", `Mình sẽ dùng công cụ ${ask.name} của Synchro.`);
+    E.started({ id: "item_t", type: "mcp_tool_call", server: "synchro", tool: ask.name });
+    const r = o.mcp.approved ? await C.mcp(mcpUrl, ask).catch((e) => ({ error: { message: String(e) } })) : { error: { message: "MCP tool call requires approval, but approval policy is never" } };
+    E.completed({ id: "item_t", type: "mcp_tool_call", server: "synchro", tool: ask.name, status: r.error ? "failed" : "completed" });
+    note += ` [đã dùng ${ask.name}: ${(r.error ? r.error.message : (r.result?.content ?? []).map((c) => c.text).join(" ")).replace(/\s+/g, " ").slice(0, 160)}]`;
+  } else if (mcpUrl) note += ` [công cụ Synchro: ${(await C.mcp(mcpUrl).catch(() => ({ tools: [] }))).tools.length}]`;
+  if (o.web) {
+    note += " [tìm web]";
+    if (prompt.includes("#web")) { E.started({ id: "item_w", type: "web_search", query: "" }); E.completed({ id: "item_w", type: "web_search", query: "mock", action: { type: "search", query: "mock" } }); }
+  }
+  // Ảnh gửi kèm: đọc đúng tệp ảnh như codex thật (tệp không có thì báo lỗi).
+  const missing = o.images.find((f) => !fs.existsSync(f));
+  if (missing) return E.failed(`Failed to read image ${missing}: No such file or directory`);
+  const eff = o.effort;
+  const text = /#media/.test(prompt) && !C.isTitleAsk(prompt) && !C.mockBrain(prompt) ? C.mediaReply(o.images.map((f) => `${C.mediaDesc(fs.readFileSync(f))} (--image)`)) : C.mockBrain(prompt) ?? (C.isTitleAsk(prompt) ? C.mockTitle(prompt) : /#prefs/.test(prompt) ? C.prefsEcho(prompt) : C.reply("Codex (ChatGPT)", prompt, turn) + note + (eff ? ` [effort ${eff}]` : ""));
+  await E.message("item_1", text);
+  return E.done({ input_tokens: prompt.length, cached_input_tokens: 0, output_tokens: text.length });
+}
+// app-server: tên loại mục theo giao thức v2 (camelCase).
+const CAMEL = { agent_message: "agentMessage", mcp_tool_call: "mcpToolCall", web_search: "webSearch", command_execution: "commandExecution", reasoning: "reasoning" };
+const appLog = (method, extra = {}) => { try { fs.appendFileSync(path.join(dir, "mock-appserver.log"), JSON.stringify({ at: Date.now(), pid: process.pid, method, ...extra }) + "\n"); } catch {} };
 
 (async () => {
   if (a[0] === "--version") return console.log(C.version("codex-cli 0.164.0 [mock]"));
@@ -51,10 +118,59 @@ function mcpConfig() {
     const rl = require("readline").createInterface({ input: process.stdin });
     const reply = (id, result, error) => process.stdout.write(JSON.stringify({ id, ...(error ? { error } : { result }) }) + "\n");
     const li = () => fs.existsSync(authFile);
+    const threads = new Map(), interrupted = new Set();
+    const note = (method, params) => process.stdout.write(JSON.stringify({ method, params }) + "\n");
     rl.on("line", (l) => {
       let m; try { m = JSON.parse(l); } catch { return; }
       if (m.id === undefined) return;
-      if (m.method === "initialize") return reply(m.id, { userAgent: "synchro/0.164.0 (mock)", codexHome: dir });
+      // appServerFail (mock-cli.json): "init" → app-server chết ngay; "thread" → không nhận thread/start (bản CLI cũ): Synchro phải về đường exec.
+      if (m.method === "initialize" && C.cfg.appServerFail === "init") process.exit(3);
+      if (m.method === "thread/start" && C.cfg.appServerFail === "thread") return reply(m.id, null, { code: -32601, message: "method not found" });
+      if (m.method === "initialize") { appLog("initialize"); return C.sleep(C.cfg.codexStartMs ?? 0).then(() => reply(m.id, { userAgent: "synchro/0.164.0 (mock)", codexHome: dir })); }
+      // Lượt chat qua app-server (giao thức v2): thread/start | thread/resume → turn/start, sự kiện là thông báo item/*, turn/completed.
+      // config của thread là ghi đè dạng khóa có dấu chấm như -c (mcp_servers.synchro.url, features.shell_tool…).
+      if (m.method === "thread/start" || m.method === "thread/resume") {
+        const p = m.params ?? {}, id = m.method === "thread/start" ? C.uuid() : p.threadId;
+        if (m.method === "thread/resume" && !readJ(path.join(dir, "mock-sessions.json"))[id]) return reply(m.id, null, { code: -32600, message: `no rollout found for thread id ${id}` });
+        threads.set(id, { config: p.config ?? {}, approval: p.approvalPolicy, sandbox: p.sandbox, model: p.model });
+        appLog(m.method, { thread: id, mcp: !!(p.config ?? {})["mcp_servers.synchro.url"] });
+        reply(m.id, { thread: { id }, model: p.model ?? "gpt-6.1-sol" });
+        if (m.method === "thread/start") note("thread/started", { thread: { id } });
+        return;
+      }
+      if (m.method === "turn/start") {
+        const p = m.params ?? {}, t = threads.get(p.threadId);
+        if (!t) return reply(m.id, null, { code: -32600, message: `thread not loaded: ${p.threadId}` });
+        const turnId = `turn_${C.uuid().slice(0, 8)}`, tid = p.threadId, at = { threadId: tid, turnId };
+        appLog("turn/start", { thread: tid });
+        reply(m.id, { turn: { id: turnId, status: "inProgress", items: [] } });
+        const cam = (item) => ({ ...item, type: CAMEL[item.type] ?? item.type });
+        const finish = (turn) => note("turn/completed", { threadId: tid, turn: { id: turnId, ...turn } });
+        const stopped = () => interrupted.has(turnId);
+        const E = {
+          started: (item) => note("item/started", { ...at, item: cam(item) }),
+          completed: (item) => note("item/completed", { ...at, item: cam(item) }),
+          message: async (id, text) => {
+            note("item/started", { ...at, item: { id, type: "agentMessage", text: "" } });
+            for (const ch of C.chunks(text, 24)) { if (stopped()) return; note("item/agentMessage/delta", { ...at, itemId: id, delta: ch }); await C.sleep(5); }
+            note("item/completed", { ...at, item: { id, type: "agentMessage", text } });
+          },
+          done: (u) => { if (stopped()) return finish({ status: "interrupted" }); note("thread/tokenUsage/updated", { ...at, tokenUsage: { last: { inputTokens: u.input_tokens, cachedInputTokens: u.cached_input_tokens, outputTokens: u.output_tokens } } }); finish({ status: "completed" }); },
+          failed: (message) => { note("error", { ...at, error: { message }, willRetry: false }); finish({ status: "failed", error: { message } }); },
+        };
+        note("turn/started", { ...at, turn: { id: turnId, status: "inProgress" } });
+        const c = t.config;
+        void (async () => {
+          if (!li()) return E.failed("unexpected status 401 Unauthorized: Missing bearer or basic authentication in header");
+          const text = (p.input ?? []).filter((x) => x.type === "text").map((x) => x.text).join("\n");
+          const images = (p.input ?? []).filter((x) => x.type === "localImage").map((x) => x.path);
+          await chatTurn({ prompt: text, tid, effort: p.effort ?? c.model_reasoning_effort, web: c["tools.web_search"] === true, nativeOn: c["features.image_generation"] !== false,
+            mcp: typeof c["mcp_servers.synchro.url"] === "string" ? { url: c["mcp_servers.synchro.url"], approved: c["mcp_servers.synchro.default_tools_approval_mode"] === "approve" } : null,
+            images, argvNote: ` [app-server ${JSON.stringify({ approval: t.approval, sandbox: t.sandbox, shell: c["features.shell_tool"] })}]` }, E);
+        })().catch((e) => E.failed(String(e)));
+        return;
+      }
+      if (m.method === "turn/interrupt") { interrupted.add(m.params?.turnId); return reply(m.id, {}); }
       if (m.method === "model/list") return reply(m.id, { data: [
         // Như codex thật: mỗi model một bộ mức effort hỗ trợ.
         { id: "gpt-6.1-sol", model: "gpt-6.1-sol", displayName: "GPT-6.1-Sol", hidden: false, supportedReasoningEfforts: ["low", "medium", "high", "xhigh", "max", "ultra"].map((e) => ({ reasoningEffort: e })) },
@@ -75,6 +191,8 @@ function mcpConfig() {
     return new Promise(() => {});
   }
   if (a[0] === "exec") {
+    // codexStartMs (mock-cli.json): thời gian khởi động của CLI (đọc cấu hình, đăng nhập, nối MCP) để đo đường exec lạnh với app-server ấm.
+    if (C.cfg.codexStartMs) await C.sleep(C.cfg.codexStartMs);
     const resume = a[1] === "resume" ? a[2] : undefined;
     let prompt = await C.readStdin();
     const tid = resume || C.uuid();
@@ -105,67 +223,19 @@ function mcpConfig() {
       for (let i = 0; i < C.imageCount(prompt); i++) C.saveImage(path.join(dir, "generated_images", tid, `ig_${i}.png`), "png");
       say("Saved."); return end();
     }
-    // [mock:codexnative]: như gói trả phí, model thấy image_gen dựng sẵn nếu Synchro không tắt: ảnh nằm trong thư mục trên máy chủ, không thành tệp của người dùng.
-    if (prompt.includes("[mock:codexnative]")) {
-      const on = !a.includes("features.image_generation=false"), f = path.join(dir, "generated_images", tid, "ig_native.png");
-      if (on) C.saveImage(f, "png");
-      C.out({ type: "item.completed", item: { id: "item_1", type: "agent_message", text: on ? `Saved ${f}` : "NATIVE_OFF" } });
-      return C.out({ type: "turn.completed", usage: { input_tokens: 1, cached_input_tokens: 0, output_tokens: 1 } });
-    }
-    if (prompt.includes("[mock:quota]")) { C.out({ type: "turn.failed", error: { message: "You've hit your usage limit. Upgrade to Pro or try again in 2 hours 14 minutes." } }); process.exit(1); }
-    const turn = C.bumpSession(dir, tid);
-    const st = C.stallTurn(dir, tid, prompt);
-    if (st.stall) { C.out({ type: "item.completed", item: { id: "item_1", type: "agent_message", text: C.STALL_TEXT } }); C.out({ type: "turn.completed", usage: { input_tokens: prompt.length, cached_input_tokens: 0, output_tokens: 10 } }); return; }
-    prompt = st.prompt;
-    // Như codex thật khi còn công cụ shell (read-only vẫn đọc được cả đĩa): báo mục lệnh rồi mới chạy. [mock:shell] kiểm tra Synchro dừng lượt ngay
-    // lúc đó: tiến trình còn sống sau 800 ms thì để lại dấu vết (coi như kết quả lệnh đã về tới model).
-    if (prompt.includes("[mock:shell]")) {
-      C.out({ type: "item.started", item: { id: "item_s", type: "command_execution", command: "cat ../../logins/codex/*/auth.json", status: "in_progress" } });
-      await C.sleep(800);
-      fs.writeFileSync(path.join(dir, "shell-ran"), "1");
-      C.out({ type: "item.completed", item: { id: "item_1", type: "agent_message", text: "đã đọc auth.json của người khác" } });
-      C.out({ type: "turn.completed", usage: { input_tokens: 1, cached_input_tokens: 0, output_tokens: 1 } });
-      return;
-    }
-    // [mock:authrefresh]: như khi codex làm mới token: ghi auth.json mới rồi đổi tên đè lên (thay liên kết trong CODEX_HOME của lượt bằng tệp thật),
-    // và tạo tệp mới (history.jsonl) trong CODEX_HOME. Synchro phải đưa cả hai về thư mục đăng nhập khi xong lượt.
-    if (prompt.includes("[mock:authrefresh]")) {
-      const tmp = path.join(home, "auth.json.tmp");
-      fs.writeFileSync(tmp, JSON.stringify({ mock: true, refreshed: Date.now() }));
-      fs.renameSync(tmp, authFile);
-      fs.appendFileSync(path.join(home, "history.jsonl"), JSON.stringify({ ts: Date.now() }) + "\n");
-    }
-    await C.sleep(150);
-    C.out({ type: "item.completed", item: { id: "item_0", type: "reasoning", text: "**Chào hỏi**" } });
-    const eff = (a.find((x) => x.startsWith("model_reasoning_effort=")) ?? "").split("=")[1];
-    // Như codex thật với [mcp_servers.synchro] trong config.toml: lời dẫn, mcp_tool_call, rồi câu trả lời.
+    const cfgArg = (k) => a.some((x) => x === k || x.startsWith(`${k}=`)) ? a.find((x) => x.startsWith(`${k}=`)).slice(k.length + 1) : undefined;
     const mc = mcpConfig();
-    const mcpUrl = typeof mc.url === "string" ? mc.url : null;
-    const ask = C.toolAsk(prompt);
-    let note = "";
-    // Như codex 0.164 thật: codex exec không có ai duyệt, công cụ MCP chỉ chạy khi máy chủ được duyệt sẵn (default_tools_approval_mode="approve").
-    const approved = mc.default_tools_approval_mode === "approve";
-    // [mock:argv]: in lại tham số dòng lệnh (kiểm thử: địa chỉ cầu nối không được nằm trên dòng lệnh).
-    if (prompt.includes("[mock:argv]")) note += ` [argv ${JSON.stringify(a)}] [home ${path.basename(home)}]`;
-    if (mcpUrl && ask) {
-      C.out({ type: "item.completed", item: { id: "item_n", type: "agent_message", text: `Mình sẽ dùng công cụ ${ask.name} của Synchro.` } });
-      C.out({ type: "item.started", item: { id: "item_t", type: "mcp_tool_call", server: "synchro", tool: ask.name } });
-      const r = approved ? await C.mcp(mcpUrl, ask).catch((e) => ({ error: { message: String(e) } })) : { error: { message: "MCP tool call requires approval, but approval policy is never" } };
-      C.out({ type: "item.completed", item: { id: "item_t", type: "mcp_tool_call", server: "synchro", tool: ask.name, status: r.error ? "failed" : "completed" } });
-      note += ` [đã dùng ${ask.name}: ${(r.error ? r.error.message : (r.result?.content ?? []).map((c) => c.text).join(" ")).replace(/\s+/g, " ").slice(0, 160)}]`;
-    } else if (mcpUrl) note += ` [công cụ Synchro: ${(await C.mcp(mcpUrl).catch(() => ({ tools: [] }))).tools.length}]`;
-    if (a.includes("tools.web_search=true")) {
-      note += " [tìm web]";
-      if (prompt.includes("#web")) { C.out({ type: "item.started", item: { id: "item_w", type: "web_search", query: "" } }); C.out({ type: "item.completed", item: { id: "item_w", type: "web_search", query: "mock", action: { type: "search", query: "mock" } } }); }
-    }
-    // --image=<tệp> / -i <tệp>: đọc đúng tệp ảnh như codex thật (tệp không có thì báo lỗi).
+    const E = {
+      started: (item) => C.out({ type: "item.started", item }),
+      completed: (item) => C.out({ type: "item.completed", item }),
+      message: async (id, text) => C.out({ type: "item.completed", item: { id, type: "agent_message", text } }),
+      done: (usage) => C.out({ type: "turn.completed", usage }),
+      failed: (message) => { C.out({ type: "turn.failed", error: { message } }); process.exit(1); },
+    };
     const imgs = a.flatMap((x, i) => (x.startsWith("--image=") ? [x.slice(8)] : x === "-i" || x === "--image" ? [a[i + 1]] : []));
-    const missing = imgs.find((f) => !fs.existsSync(f));
-    if (missing) { C.out({ type: "turn.failed", error: { message: `Failed to read image ${missing}: No such file or directory` } }); process.exit(1); }
-    const text = /#media/.test(prompt) && !C.isTitleAsk(prompt) && !C.mockBrain(prompt) ? C.mediaReply(imgs.map((f) => `${C.mediaDesc(fs.readFileSync(f))} (--image)`)) : C.mockBrain(prompt) ?? (C.isTitleAsk(prompt) ? C.mockTitle(prompt) : /#prefs/.test(prompt) ? C.prefsEcho(prompt) : C.reply("Codex (ChatGPT)", prompt, turn) + note + (eff ? ` [effort ${eff.replace(/"/g, "")}]` : ""));
-    C.out({ type: "item.completed", item: { id: "item_1", type: "agent_message", text } });
-    C.out({ type: "turn.completed", usage: { input_tokens: prompt.length, cached_input_tokens: 0, output_tokens: text.length } });
-    return;
+    const effRaw = cfgArg("model_reasoning_effort");
+    return chatTurn({ prompt, tid, effort: effRaw ? effRaw.replace(/"/g, "") : undefined, web: a.includes("tools.web_search=true"), nativeOn: !a.includes("features.image_generation=false"),
+      mcp: typeof mc.url === "string" ? { url: mc.url, approved: mc.default_tools_approval_mode === "approve" } : null, images: imgs, argvNote: ` [argv ${JSON.stringify(a)}] [home ${path.basename(home)}]` }, E);
   }
   console.error(`mock codex: không hỗ trợ "${a.join(" ")}"`);
   process.exit(2);

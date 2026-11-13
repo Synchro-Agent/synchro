@@ -15,6 +15,7 @@ import path from "node:path";
 import { DATA_DIR, db, getSetting, getUser, isAdmin, isOwner, setSetting, type UserRow } from "../authstore";
 import { engineEnvReady, forget, scopeDir } from "./cli_auth";
 import { retireAll } from "./cli_pool";
+import { retireCodexServers } from "./codex_server";
 import { AGY_INSTALLER, basePath, binDir, CLIS, type Cli, engineHome, GROK_INSTALLER, NPM_PKG, runCli, stripAnsi } from "./cli_runtime";
 import { redact } from "./errors";
 import { isDraining } from "../drain";
@@ -228,6 +229,7 @@ async function afterSwitch(cli: Cli) {
   liveVersions.delete(cli);
   forget(cli);
   retireAll();
+  retireCodexServers();
   try { (await import("./subs")).forgetAllSubModels(cli); } catch {}
 }
 

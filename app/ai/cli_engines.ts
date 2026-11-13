@@ -1,6 +1,8 @@
 // Các engine chạy CLI chính chủ bằng gói subscription của người dùng (ADR 0001, bước 5): Claude Code, Codex, Antigravity, Grok.
 // Engine không biết tài khoản là ai: biến môi trường đăng nhập (CLAUDE_CONFIG_DIR, CODEX_HOME, HOME…) do cli_auth.engineEnv()
 // dựng và truyền vào TurnRequest.env; cli_runtime lọc env, kill cả process group khi Dừng, CLI im lặng quá lâu hoặc chạm mức trần của lượt.
+import crypto from "node:crypto";
+import fs from "node:fs";
 import path from "node:path";
 import type { Attachment, Engine, ErrorCode, Event, RateWindow, TurnRequest, Usage, WebSource } from "./engine";
 import { type Cli, cliRunning, CODEX_TURN_PREFIX, engineHome, find, IDLE_MS, makeDir, MAX_TURN_MS, type Proc, sessionSeen, spawnCli, stripAnsi, turnHomeBase, writeEngineFile, type Exit } from "./cli_runtime";
@@ -8,6 +10,7 @@ import { classify, redact } from "./errors";
 import { forgetSession, poolStrike, prestart, takeProcess, type PoolSpec } from "./cli_pool";
 import { scrubServerPaths } from "./imagefiles";
 import { openTurnHome, turnHomeOn, type TurnHome } from "./turnhome";
+import { CodexServerUnavailable, codexServerOn, codexServerTurn } from "./codex_server";
 
 type Json = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 
@@ -184,13 +187,18 @@ export function claudeLimits(info: unknown): RateWindow[] {
 }
 
 // Lượt dùng tiến trình khởi động sẵn: đúng các cờ của lượt thường, thêm stream-json để gửi tin qua stdin. Các cờ này chỉ đọc lúc khởi động nên nằm trong khóa của hồ.
-function poolSpec(req: Pick<TurnRequest, "system" | "model" | "effort" | "env" | "workdir">, bin: string, tools: string): PoolSpec {
+// Lượt có công cụ (G2.2): cầu nối là địa chỉ sống của cuộc trò chuyện, ghi trong tệp cấu hình 0600 có tên theo địa chỉ + bộ công cụ (đổi bộ công cụ là khóa khác,
+// không dùng nhầm tiến trình đã liệt kê bộ cũ).
+const liveMcpFile = (cwd: string, live: { url: string; key: string }) => path.join(cwd, `.synchro-live-${crypto.createHash("sha256").update(`${live.url}\n${live.key}`).digest("hex").slice(0, 24)}.json`);
+function poolSpec(req: Pick<TurnRequest, "system" | "model" | "effort" | "env" | "workdir" | "mcp">, bin: string, tools: string): PoolSpec {
+  const cwd = req.workdir ?? path.join(engineHome(), "work"), live = req.mcp?.live;
   const args = ["-p", "--output-format", "stream-json", "--verbose", "--include-partial-messages", "--tools", tools, "--input-format", "stream-json"];
+  if (live) args.push("--mcp-config", liveMcpFile(cwd, live), "--strict-mcp-config", "--allowedTools", "mcp__synchro");
   if (req.system) args.push("--system-prompt", req.system);
   if (req.model) args.push("--model", req.model);
   const ce = cliEffort(req.effort);
   if (ce) args.push("--effort", ce);
-  return { bin, args, env: req.env ?? {}, cwd: req.workdir ?? path.join(engineHome(), "work"), account: req.env?.CLAUDE_CONFIG_DIR ?? "" };
+  return { bin, args, env: live ? { ...req.env, MCP_TOOL_TIMEOUT: "1800000" } : req.env ?? {}, cwd, account: req.env?.CLAUDE_CONFIG_DIR ?? "" };
 }
 type ClaudeEnd = { done: boolean; failed: boolean; session: string | null; spoke: boolean };
 
@@ -212,6 +220,13 @@ export class ClaudeCodeEngine implements Engine {
     if (!bin || tooLong(req.system)) return false;
     const spec = poolSpec(req, bin, this.o.tools ?? "");
     await makeDir(spec.cwd);
+    const live = req.mcp?.live;
+    if (live) {
+      const f = liveMcpFile(spec.cwd, live);
+      // Có user riêng của engine thì Synchro không thấy tệp (thư mục 0700 của user đó): ghi lại, nội dung không đổi.
+      try { if (!fs.existsSync(f)) await writeEngineFile(f, Buffer.from(JSON.stringify({ mcpServers: { synchro: { type: "http", url: live.url } } }))); }
+      catch { return false; }
+    }
     const lease = takeProcess(spec, req.sessionId);
     if (!lease) return false;
     yield { kind: "pool", state: lease.hit ? "hit" : "cold" };
@@ -226,7 +241,8 @@ export class ClaudeCodeEngine implements Engine {
       if (r.done) {
         // Lượt báo lỗi (hết hạn mức, đăng nhập…): không biết tiến trình còn dùng được không.
         if (r.failed) lease.discard();
-        else { lease.release(r.session); await this.prestart(req); }
+        // Tiến trình của lượt có công cụ gắn với cuộc trò chuyện này (địa chỉ sống): giữ cho câu sau của nó, không khởi động sẵn bản cho đoạn chat mới.
+        else { lease.release(r.session); if (!req.mcp) await this.prestart(req); }
         closed = true;
         return true;
       }
@@ -302,7 +318,7 @@ export class ClaudeCodeEngine implements Engine {
     return { done, failed, session, spoke: !!text };
   }
   async *runTurn(req: TurnRequest): AsyncIterable<Event> {
-    if (req.pool && !req.mcp && !req.web && !req.fork && (yield* this.pooled(req))) return;
+    if (req.pool && (!req.mcp || req.mcp.live) && !req.web && !req.fork && (yield* this.pooled(req))) return;
     // Lượt này nối tiếp một phiên bằng tiến trình riêng: tiến trình đang đợi sẵn với phiên đó không còn biết hết hội thoại.
     if (req.sessionId) forgetSession(req.env?.CLAUDE_CONFIG_DIR ?? "", req.sessionId);
     // Công cụ dựng sẵn: chỉ tìm / đọc web khi người dùng bật "Tìm kiếm trên web"; công cụ của Synchro đi qua cầu nối MCP.
@@ -419,6 +435,13 @@ export class CodexEngine implements Engine {
     // nhận các khóa này thì vòng lặp dưới dừng lượt ngay khi model định chạy lệnh (CODEX_LOCAL), trước khi kết quả kịp về tới model.
     // Tắt cả image_gen dựng sẵn (gói trả phí mới có): ảnh nó tạo nằm trong thư mục trên máy chủ, không thành tệp của người dùng, câu "đã lưu" thì đã được bỏ đường dẫn nên trông như thành công mà
     // không có ảnh. Lượt chat tạo ảnh bằng generate_image của Synchro; đường nhanh thì model báo cần công cụ. Lượt tạo ảnh của imagegen.ts không đi qua đây nên vẫn có image_gen.
+    // Đường ấm (Blueprint G2.3): một codex app-server sống lâu cho mỗi tài khoản, cùng cờ an toàn. Không dùng được (tắt, hết chỗ, lượt có cầu nối riêng của lượt,
+    // app-server lỗi trước khi lượt bắt đầu) thì chạy codex exec như cũ, có ghi nhật ký.
+    if (codexServerOn()) {
+      const ce0 = cliEffort(req.effort);
+      try { yield* codexServerTurn(req, prompt, req.workdir ?? path.join(engineHome(), "work"), req.model, ce0, imagePaths(req.attachments ?? [])); return; }
+      catch (e) { if (!(e instanceof CodexServerUnavailable)) throw e; console.warn(`[codex-server] chạy codex exec cho lượt này: ${redact(e.message).slice(0, 200)}`); }
+    }
     const args = ["exec", ...(req.sessionId ? ["resume", req.sessionId] : []), ...CODEX_SAFE, "-c", "features.image_generation=false"];
     // Công cụ của Synchro qua cầu nối MCP (Streamable HTTP): cấu hình trong CODEX_HOME riêng của lượt (codexTurnHome), không qua tham số.
     // Tìm web dựng sẵn khi người dùng bật. Hộp cát chỉ đọc vẫn giữ cho lệnh dựng sẵn của Codex trên máy chủ.

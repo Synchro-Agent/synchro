@@ -1623,8 +1623,9 @@ export async function prewarmChat(user: UserRow, o: WarmPick & { force?: boolean
     const model = chosen ?? r?.model;
     // Nỗ lực đúng như lượt thật sẽ tính: chọn tay thì giữ, "Tự động" thì theo câu; Tự động còn chọn cả model thì chưa chọn tay nỗ lực cũng theo câu.
     const effort = isEffort(pick.effort) ? pick.effort : chosen && pick.effort !== "auto" ? undefined : autoEffort(q);
-    if (!model || subCli(model) !== "claude" || seen.has(`${model}|${effort}`)) continue;
-    seen.add(`${model}|${effort}`);
+    // Codex: app-server của tài khoản (G2.3) phục vụ mọi model và nỗ lực, một lần là đủ.
+    if (!model || (subCli(model) !== "claude" && subCli(model) !== "codex") || seen.has(subCli(model) === "codex" ? "codex" : `${model}|${effort}`)) continue;
+    seen.add(subCli(model) === "codex" ? "codex" : `${model}|${effort}`);
     prewarmClaude({ user, model, effort, system });
   }
 }
@@ -1815,7 +1816,7 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
     // CLI gọi qua cầu nối MCP nội bộ, mở riêng cho lượt này và đóng khi xong.
     const cli = subCli(model)!;
     const convId = typeof conv === "string" && conv.length <= 64 ? conv : undefined;
-    let bridge: { url: string; close: () => void; alive: () => number; park: () => void; onPark: (f: () => void) => void; pendingJobs: () => { id: string; name: string }[] } | null = null, x: Exec | null = null, sess: ConnectorSession | null = null, toolSys = "", route = "";
+    let bridge: { url: string; close: () => void; alive: () => number; park: () => void; onPark: (f: () => void) => void; pendingJobs: () => { id: string; name: string }[]; live?: { url: string; key: string } } | null = null, x: Exec | null = null, sess: ConnectorSession | null = null, toolSys = "", route = "";
     const usedAll: ToolRun["used"][] = [];
     let bridged = 0;
     const webs = new Map<string, { title: string; url: string }>();
@@ -1847,7 +1848,8 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
         x = xx;
         announceOffline(xx, messages);
         const trc = currentTrace();
-        bridge = openBridge({ uid: c.user.id, tools: tools as { name: string; description: string; input_schema: unknown }[], ...(cli === "agy" ? { hold: BRIDGE_HOLD.agy } : {}), call: (name, input, cancel) => { bridged++; return spanOn(trc, `tool ${name}`, "tool", () => bridgeCall(xx, name, input, usedAll, cancel), { "tool.name": name }); }, route: sess && connProxy(sess) ? (name, input) => { const ct = resolveTool(sess!.tools, name); return ct ? { name: CONN_CALL, input: { tool: ct.fq, input } } : null; } : undefined });
+        // conv: địa chỉ sống theo cuộc trò chuyện (G2.2) cho tiến trình dựng sẵn / thread đã nạp; đoạn chat ẩn danh không giữ gì qua lượt.
+        bridge = openBridge({ uid: c.user.id, conv: body.incognito === true ? undefined : convId, tools: tools as { name: string; description: string; input_schema: unknown }[], ...(cli === "agy" ? { hold: BRIDGE_HOLD.agy } : {}), call: (name, input, cancel) => { bridged++; return spanOn(trc, `tool ${name}`, "tool", () => bridgeCall(xx, name, input, usedAll, cancel), { "tool.name": name }); }, route: sess && connProxy(sess) ? (name, input) => { const ct = resolveTool(sess!.tools, name); return ct ? { name: CONN_CALL, input: { tool: ct.fq, input } } : null; } : undefined });
         xx.park = bridge.park;
         toolSys = [studio ? STUDIO_RULES(studio, st!.plugins, st!.skills.length) : "", code ? CODE_RULES(pc.net, !!pc.web) : "", image ? IMAGE_RULES : "", pdocs ? PROJECT_DOC_RULES : "", arts ? ARTCHECK_RULES(check) : "", skillsPrompt(ss.visible, code, ss.ownSuggested), sess ? connectorsPrompt(sess, connProxy(sess)) : "", CLI_TOOLS_NOTE(cli, body.web === true, image), NARRATE_RULES, brainOn(body, c.user) ? BRAIN_RULES : "", browse ? BROWSER_RULES : "", task ? taskRules(task, browse) : ""].filter(Boolean).join("\n\n");
       }
@@ -1862,7 +1864,7 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
       const turn = (msgs: unknown, fresh = false) => subTurn({
         user: c.user, model, system: am ? ARTIFACT_SYSTEM : [system || (planSys || toolSys ? "Bạn là một trợ lý AI hữu ích." : ""), planSys, toolSys, contextOf(body, c.user), pinnedBlock(body.pinned)].filter(Boolean).join("\n\n"),
         ephemeral: body.incognito === true, messages: msgs, conv: am ? undefined : convId, effort: isEffort(wanted) ? wanted : wanted === "auto" ? autoEffort(routeInput(body)) : undefined, signal: turnSignal(), onDelta: say, onToolUse: am ? undefined : toolUseSeen,
-        older: typeof body.olderDigest === "string" ? body.olderDigest.slice(0, 8000) : undefined, fast, awaitingUser: () => !!x?.awaiting, mcp: bridge ? { url: bridge.url, alive: bridge.alive, onPark: bridge.onPark } : undefined, web: !fast && body.web === true, fresh,
+        older: typeof body.olderDigest === "string" ? body.olderDigest.slice(0, 8000) : undefined, fast, awaitingUser: () => !!x?.awaiting, mcp: bridge ? { url: bridge.url, alive: bridge.alive, onPark: bridge.onPark, live: bridge.live } : undefined, web: !fast && body.web === true, fresh,
         total: Array.isArray(msgs) ? msgs.length + cut : undefined, lockMs: o.auto ? 10_000 : undefined,
         onStatus: am ? undefined : (t) => { progress("step", t); },
         onNativeImages: am ? undefined : (files) => { keepImages(c.user.id, files, x?.outs ?? natOuts); },

@@ -15,6 +15,7 @@ import { DATA_DIR } from "../authstore";
 import { opsEvent } from "../ops";
 import { type Cli, engineHome, find, makeDir, removeDir, runCli, spawnCli, stripAnsi, type Proc, version } from "./cli_runtime";
 import { dropAccount } from "./cli_pool";
+import { dropCodexServer } from "./codex_server";
 import { redact } from "./errors";
 
 export type Method = "token" | "oauth" | "chatgpt" | "apikey" | "google" | "grok" | null;
@@ -166,7 +167,7 @@ export function grokModels(out: string): { loggedIn: boolean; plan: string | nul
 // Token hỏng thật thì lượt thử kế tiếp lại đánh dấu, Tự động chuyển model ngay, người dùng không phải chờ.
 const RELOGIN_TTL = 10 * 60_000;
 const reloginOn = (k: string) => { const at = g.reloginAt.get(k); if (g.relogin.has(k) && at && Date.now() - at > RELOGIN_TTL) { g.relogin.delete(k); g.reloginAt.delete(k); return false; } return g.relogin.has(k); };
-export const markRelogin = (cli: Cli, scope: string) => { const k = key(cli, scope); g.relogin.add(k); g.reloginAt.set(k, Date.now()); forget(cli, scope); if (cli === "claude") dropAccount(scopeDir(cli, scope)); opsEvent("cli_auth", cli, "", scope); };
+export const markRelogin = (cli: Cli, scope: string) => { const k = key(cli, scope); g.relogin.add(k); g.reloginAt.set(k, Date.now()); forget(cli, scope); if (cli === "claude") dropAccount(scopeDir(cli, scope)); if (cli === "codex") dropCodexServer(scopeDir(cli, scope)); opsEvent("cli_auth", cli, "", scope); };
 export const needsRelogin = (cli: Cli, scope: string) => reloginOn(key(cli, scope));
 /** Một lượt chat vừa chạy được: hãng đã nhận đăng nhập, báo động trước đó (nếu có) không còn đúng. */
 export const clearRelogin = (cli: Cli, scope: string) => { g.relogin.delete(key(cli, scope)); };
@@ -352,6 +353,8 @@ function finish(p: Pending, ok: boolean, message?: string) {
   forget(p.cli, p.scope);
   // Đăng nhập mới: tiến trình đang đợi sẵn của tài khoản giữ đăng nhập cũ.
   if (ok && p.cli === "claude") dropAccount(scopeDir(p.cli, p.scope));
+  // app-server của Codex (G2.3) giữ đăng nhập cũ trong bộ nhớ.
+  if (ok && p.cli === "codex") dropCodexServer(scopeDir(p.cli, p.scope));
   if (ok) { g.relogin.delete(key(p.cli, p.scope)); fs.writeFileSync(marker(p.cli, p.scope), String(Date.now()), { mode: 0o600 }); }
   update(p, ok ? { state: "done", message: undefined } : { state: "error", message: message ?? (tail(p) || "Đăng nhập không thành công.") });
   p.proc.kill();
@@ -413,6 +416,7 @@ export function cancelLogin(cli: Cli, scope: string) {
 export async function logout(cli: Cli, scope: string) {
   cancelLogin(cli, scope);
   if (cli === "claude") dropAccount(scopeDir(cli, scope));
+  if (cli === "codex") dropCodexServer(scopeDir(cli, scope));
   const bin = find(cli), dir = scopeDir(cli, scope), env = engineEnv(cli, scope);
   // Thư mục chưa từng có (chưa đăng nhập lần nào): không có gì để đăng xuất bằng CLI, không tạo ra chỉ để xóa đi.
   if (bin && cli !== "agy" && fs.existsSync(dir)) await runCli(bin, cli === "claude" ? ["auth", "logout"] : ["logout"], { env, cwd: dir, timeoutMs: 20_000 }).catch(() => null);
