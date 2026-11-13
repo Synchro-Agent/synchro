@@ -30,7 +30,7 @@ export const AUTH_VI2EN: Record<string, string> = {
 };
 export const AUTH_EN2VI: Record<string, string> = {
   "Passkey": "Khóa truy cập", "Passkeys": "Khóa truy cập", "Security": "Bảo mật",
-  "Added a passkey": "Đã thêm khóa truy cập", "Renamed a passkey": "Đã đổi tên khóa truy cập", "Removed a passkey": "Đã xóa khóa truy cập", "Couldn't add a passkey": "Không thêm được khóa truy cập",
+  "Added a passkey": "Đã thêm khóa truy cập", "Renamed a passkey": "Đã đổi tên khóa truy cập", "Removed a passkey": "Đã xóa khóa truy cập", "Failed to confirm identity": "Xác minh lại danh tính không thành công", "Couldn't add a passkey": "Không thêm được khóa truy cập",
   "Couldn't sign in with a passkey. Try another way.": "Không đăng nhập được bằng khóa truy cập. Hãy dùng cách khác.",
   "Sign in with a passkey": "Đăng nhập bằng khóa truy cập",
   "Passkey added": "Đã thêm khóa truy cập", "This device already has a passkey for your account": "Thiết bị này đã có khóa truy cập cho tài khoản của bạn",

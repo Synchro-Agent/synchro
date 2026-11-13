@@ -1,4 +1,4 @@
-import { AuthError, audit, clientIp, clearMfaCookie, createSession, handle, limit, mfaTicketUser, publicUser, reauthPassword, requireUser, sameOrigin, withCookies } from "../../../authstore";
+import { AuthError, audit, clientIp, clearMfaCookie, createSession, handle, limit, mfaTicketUser, publicUser, requireUser, sameOrigin, stepUp, withCookies } from "../../../authstore";
 import { confirmMfa, disableMfa, mfaStatus, startMfa, verifyMfa } from "../../../mfa";
 
 export const runtime = "nodejs";
@@ -19,8 +19,8 @@ export const POST = handle(async (req) => {
     return withCookies(Response.json({ user: publicUser(t.user) }), createSession(t.user, req, t.method), clearMfaCookie(req));
   }
   const { user } = requireUser(req);
-  // Bật xác minh hai bước cần vừa xác minh lại: gửi kèm mật khẩu hiện tại thì xác minh ngay (nếu chưa xác minh lại gần đây).
-  if (b.op === "start" && b.password !== undefined) await reauthPassword(user, b.password);
+  // Bật xác minh hai bước cần vừa xác minh lại: gửi kèm mật khẩu hiện tại thì xác minh ngay (sai thì báo sai), không thì startMfa trả { reauth: true }.
+  if (b.op === "start") await stepUp(user, b.password);
   if (b.op === "start") return Response.json(startMfa(user));
   if (b.op === "confirm") return Response.json(confirmMfa(user, b.code));
   if (b.op === "disable") { disableMfa(user, b.code); return Response.json({ ok: true }); }

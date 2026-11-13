@@ -64,7 +64,7 @@ Object.assign(ACTIONS, {
   speech_budget_alert: ["AI voice credit is close to today's limit", "bad"], admin_speech_budget: ["Changed AI voice credit limits", "adm"], admin_replicate_budget: ["Changed Replicate image limits", "adm"],
   github_link: ["Connected GitHub", ""], oauth_failed: ["Failed provider sign-in", "bad"], password_reset: ["Reset password with a link", ""], password_reset_request: ["Requested a password reset email", ""], admin_reset_link: ["Created password reset link", "adm"],
   mail_failed: ["Email could not be delivered", "bad"], admin_mail_test: ["Sent a test email", "adm"], signup_email_taken: ["Sign-up attempt with an existing email", "bad"], email_verify_sent: ["Sent a verification email", ""], email_verified: ["Verified email", "ok"], email_denied: ["Email owner removed an unverified account", "bad"], account_claimed: ["Email owner took back an unverified account", "bad"], admin_verify_gate: ["Changed email verification rule", "adm"], admin_mark_verified: ["Marked email as verified", "adm"],
-  passkey_added: ["Added a passkey", ""], passkey_renamed: ["Renamed a passkey", ""], passkey_removed: ["Removed a passkey", ""], passkey_add_failed: ["Couldn't add a passkey", "bad"],
+  passkey_added: ["Added a passkey", ""], passkey_renamed: ["Renamed a passkey", ""], passkey_removed: ["Removed a passkey", ""], passkey_add_failed: ["Couldn't add a passkey", "bad"], reauth_failed: ["Failed to confirm identity", "bad"],
   admin_backup_on: ["Turned on continuous backup", "adm"], admin_backup_off: ["Turned off continuous backup", "adm"], admin_backup_saved: ["Changed continuous backup settings", "adm"], admin_backup_cleared: ["Removed continuous backup settings", "adm"], admin_backup_drill: ["Tested restoring the backup", "adm"],
   admin_turnstile: ["Changed bot protection keys", "adm"], admin_turnstile_on: ["Turned on bot protection", "adm"], admin_turnstile_off: ["Turned off bot protection", "adm"], admin_block_disposable: ["Changed disposable email blocking", "adm"],
   admin_role_granted: ["Made administrator", "adm"], admin_role_revoked: ["Removed administrator", "adm"],
@@ -72,7 +72,7 @@ Object.assign(ACTIONS, {
 });
 const LOG_FILTER: Record<string, (a: string) => boolean> = {
   All: () => true,
-  "Sign-ins": (a) => a.startsWith("passkey_") || ["signup", "login", "login_failed", "login_blocked", "logout", "oauth_link", "oauth_failed", "password_reset", "email_verified", "email_verify_sent", "signup_email_taken", "email_denied", "account_claimed"].includes(a),
+  "Sign-ins": (a) => a.startsWith("passkey_") || a === "reauth_failed" || ["signup", "login", "login_failed", "login_blocked", "logout", "oauth_link", "oauth_failed", "password_reset", "email_verified", "email_verify_sent", "signup_email_taken", "email_denied", "account_claimed"].includes(a),
   Email: (a) => a.startsWith("mail_") || a === "admin_mail_test" || a === "password_reset_request" || a.startsWith("email_"),
   "Admin actions": (a) => a.startsWith("admin_"),
 };

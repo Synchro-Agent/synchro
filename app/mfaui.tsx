@@ -4,6 +4,7 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { call as api } from "./adminui";
+import { useStepUp } from "./stepup";
 import { Fade } from "./ui";
 
 type Stage = null | { step: "scan"; secret: string; uri: string } | { step: "codes"; codes: string[] } | { step: "off" };
@@ -13,10 +14,12 @@ export function MfaRow({ Row, say }: { Row: (p: { t: React.ReactNode; d?: React.
   const [st, setSt] = useState<Stage>(null);
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
+  const step = useStepUp();
   const load = () => api<{ enabled: boolean; recoveryLeft: number }>("GET", "/api/auth/mfa").then((r) => { setOn(r.enabled); setLeft(r.recoveryLeft); }).catch(() => setOn(false));
   useEffect(() => { void load(); }, []);
   const act = async (f: () => Promise<void>) => { if (busy) return; setBusy(true); try { await f(); } catch (e) { say((e as Error).message); } finally { setBusy(false); } };
-  const start = () => act(async () => { const r = await api<{ secret: string; uri: string }>("POST", "/api/auth/mfa", { op: "start" }); setCode(""); setSt({ step: "scan", ...r }); });
+  // Phiên không còn mới: máy chủ đòi xác minh lại (403 { reauth: true }), hộp xác minh hỏi mật khẩu / khóa rồi chạy lại.
+  const start = () => act(async () => { const r = await step.run((p) => api<{ secret: string; uri: string }>("POST", "/api/auth/mfa", { op: "start", ...p })); if (!r) return; setCode(""); setSt({ step: "scan", ...r }); });
   const confirm = () => act(async () => { const r = await api<{ recovery: string[] }>("POST", "/api/auth/mfa", { op: "confirm", code }); setCode(""); setSt({ step: "codes", codes: r.recovery }); await load(); });
   const off = () => act(async () => { await api("POST", "/api/auth/mfa", { op: "disable", code }); setCode(""); setSt(null); await load(); say("Two-step verification turned off"); });
   const field = (onEnter: () => void) => <input className="field" autoFocus inputMode="text" autoComplete="one-time-code" placeholder="Verification code" aria-label="Verification code" value={code} onChange={(e) => setCode(e.target.value.slice(0, 20))} onKeyDown={(e) => e.key === "Enter" && code.trim() && onEnter()} />;
@@ -49,5 +52,6 @@ export function MfaRow({ Row, say }: { Row: (p: { t: React.ReactNode; d?: React.
         </>}
       </div>
     </div> : null}</Fade>, document.body)}
+    {step.node}
   </>;
 }

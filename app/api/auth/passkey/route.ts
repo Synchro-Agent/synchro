@@ -1,5 +1,5 @@
-import { AuthError, handle, publicUser, reauthPassword, requireUser, sameOrigin, withCookies } from "../../../authstore";
-import { authenticationOptions, deletePasskey, listPasskeys, loginWithPasskey, registerPasskey, registrationOptions, renamePasskey } from "../../../passkeys";
+import { AuthError, handle, publicUser, requireUser, sameOrigin, stepUp, withCookies } from "../../../authstore";
+import { authenticationOptions, deletePasskey, listPasskeys, loginWithPasskey, reauthOptions, reauthWithPasskey, registerPasskey, registrationOptions, renamePasskey } from "../../../passkeys";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -19,8 +19,11 @@ export const POST = handle(async (req) => {
     return withCookies(Response.json({ user: publicUser(user) }), cookie);
   }
   const { user } = requireUser(req);
-  // Thêm khóa truy cập cần vừa xác minh lại: gửi kèm mật khẩu hiện tại thì xác minh ngay (nếu chưa xác minh lại gần đây).
-  if ((b.op === "reg-options" || b.op === "register") && b.password !== undefined) await reauthPassword(user, b.password);
+  // Thêm khóa truy cập cần vừa xác minh lại: gửi kèm mật khẩu hiện tại thì xác minh ngay (sai thì báo sai), không thì cổng trong passkeys.ts trả { reauth: true }.
+  if (b.op === "reg-options" || b.op === "register") await stepUp(user, b.password);
+  // Xác minh lại bằng một khóa đã có của tài khoản (tài khoản không có mật khẩu); dùng chung cho bật xác minh hai bước.
+  if (b.op === "reauth-options") return Response.json(await reauthOptions(req, user));
+  if (b.op === "reauth") { await reauthWithPasskey(req, user, b.response); return Response.json({ ok: true }); }
   if (b.op === "reg-options") return Response.json(await registrationOptions(req, user));
   if (b.op === "register") return Response.json({ passkeys: await registerPasskey(req, user, b.response, b.name) });
   if (b.op === "rename") return Response.json({ passkeys: renamePasskey(req, user, b.id, b.name) });

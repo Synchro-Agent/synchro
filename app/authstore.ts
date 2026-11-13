@@ -418,6 +418,18 @@ export async function reauthPassword(u: UserRow, password: unknown) {
   if (u.password_hash && typeof password === "string" && password.length <= PW_MAX && (await verifyPassword(password, u.password_hash))) { markReauth(u.id); return true; }
   return false;
 }
+/** Bước xác minh lại của giao diện (hộp hỏi mật khẩu sau lỗi { reauth: true }): không gửi mật khẩu thì bỏ qua (cổng requireRecentReauth quyết định);
+ *  gửi mà sai thì báo sai ngay (400, có giới hạn số lần) thay vì hỏi lại không lý do. */
+export async function stepUp(u: UserRow, password: unknown) {
+  if (password === undefined || password === null) return;
+  limit("reauth:" + u.id, 10, 15 * MIN);
+  if (!u.password_hash) throw new AuthError("Tài khoản này chưa có mật khẩu. Hãy xác minh bằng khóa truy cập, hoặc đăng xuất rồi đăng nhập lại.", 400, { reauth: true });
+  if (!(await reauthPassword(u, password))) {
+    audit("reauth_failed", { actor: u, target: u, detail: "password" });
+    // { reauth: true }: hộp xác minh lại giữ nguyên, báo sai ngay dưới ô mật khẩu.
+    throw new AuthError("Mật khẩu không đúng.", 400, { reauth: true });
+  }
+}
 /** Tác vụ nền hằng đêm: xóa các phiên đã hết hạn còn nằm lại (phiên trượt phần lớn tự hết, nhưng phiên bỏ không vẫn đọng). Trả về số dòng đã xóa. */
 export function sweepSessions() {
   return db().prepare("DELETE FROM sessions WHERE expires_at < ?").run(Date.now()).changes;
