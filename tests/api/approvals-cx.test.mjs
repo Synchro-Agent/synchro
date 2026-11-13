@@ -67,6 +67,11 @@ try {
   // Ứng dụng tên nhiều từ không có trong MULTI_KITS (Zoho Books): tách đúng ứng dụng, thao tác đọc chạy luôn.
   ok(s.perm(EXEC, ex(["ZOHO_BOOKS_LIST_INVOICES"])) === "allow", "ZOHO_BOOKS_LIST_INVOICES: đọc, không có thẻ duyệt");
   ok(s.perm(EXEC, ex(["ZOHO_BOOKS_CREATE_INVOICE", { name: "X" }])) === "ask", "ZOHO_BOOKS_CREATE_INVOICE: ghi, hỏi");
+  // Tham số dạng chuỗi JSON (Gemini): xét sau khi đọc ra, như lúc gửi đi (SEC-2).
+  ok(s.perm(EXEC, ex(["SUPABASE_LIST_TABLES", '{"sql":"drop table x"}'])) === "ask" && s.perm(EXEC, ex(["GOOGLEBIGQUERY_QUERY_TABLE", '{"query":"DELETE FROM t"}'])) === "ask", "tham số chuỗi JSON có câu lệnh đổi dữ liệu: hỏi");
+  ok(s.perm(EXEC, ex(["GMAIL_FETCH_EMAILS", '{"max_results":3}'])) === "allow" && s.perm(EXEC, ex(["GMAIL_FETCH_EMAILS", "{oops"])) === "ask", "chuỗi JSON thường: đọc; chuỗi hỏng: hỏi");
+  // toolkit do model viết không đổi được đọc / ghi (SEC-1).
+  ok(s.perm(EXEC, { tools: [{ tool_slug: "TWITTER_DELETE_LIST", toolkit: "TWITTER_DELETE" }] }) === "ask" && s.perm(EXEC, { tools: [{ tool_slug: "GOOGLE_SEARCH_CONSOLE_SUBMIT_SITEMAP" }] }) === "ask", "TWITTER_DELETE_LIST với toolkit giả, GOOGLE_SEARCH_CONSOLE_SUBMIT_SITEMAP: hỏi");
 
   s.allowAlways(EXEC, CREATE_DOC);
   ok(s.perm(EXEC, CREATE_DOC) === "allow" && s.perm(EXEC, ex(["GOOGLEDOCS_UPDATE_DOCUMENT"])) === "allow", "Luôn cho phép trên thẻ: mọi thao tác ghi của Google Docs");
@@ -83,6 +88,10 @@ try {
 
   let r = C.updateConnector("u_a", "cn_cx", { apps: { slack: "block" } }, pol);
   ok(s.perm(EXEC, ex(["SLACK_SEND_MESSAGE"])) === "block" && s.perm(EXEC, ex(["SLACK_LIST_CHANNELS"])) === "allow", "chặn thao tác ghi của Slack; đọc Slack vẫn chạy");
+  ok(s.perm(EXEC, ex(["SLACK_CHAT_POST_MESSAGE"])) === "block" && s.perm(EXEC, { tools: [{ tool_slug: "SLACK_SEND_MESSAGE", toolkit: "slack_send" }] }) === "block", "SLACK_CHAT_POST_MESSAGE, toolkit giả slack_send: vẫn bị chặn theo Slack (R1)");
+  C.updateConnector("u_a", "cn_cx", { apps: { zoho: "block" } }, pol);
+  ok(s.perm(EXEC, ex(["ZOHO_BOOKS_CREATE_INVOICE"])) === "block", "chặn zoho: áp cả cho zoho_books");
+  C.updateConnector("u_a", "cn_cx", { apps: { zoho: "ask" } }, pol);
   ok(r.apps?.find((a) => a.app === "slack")?.perm === "block" && r.apps.find((a) => a.app === "googledocs")?.name === "Google Docs" && r.apps.every((a) => a.logo || a.icon), "trang Connectors: quyền từng ứng dụng kèm tên và logo", r.apps);
   const blocked = await s.call(EXEC, ex(["SLACK_SEND_MESSAGE"]));
   ok(blocked.is_error && /chặn/.test(blocked.content), "gọi thao tác của ứng dụng bị chặn: không chạy", blocked);

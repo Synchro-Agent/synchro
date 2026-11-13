@@ -14,7 +14,7 @@ import { catalogLine } from "./connproxy";
 import { coerceArgs } from "./connschema";
 import { authorizeRejected, authorizeUrl, checkIssuer, discover, exchangeCode, metadataHint, parseWww, randomToken, refreshTokens, registerClient, TokenRejected, type AsMeta, type OAuthClient, type Tokens } from "./mcpauth";
 import { checkUrl, FetchBlocked, TempFail } from "./safefetch";
-import { annotate, appName, askOnlyTool, COMPOSIO, COMPOSIO_COLOR, COMPOSIO_LINK_PROMPT, COMPOSIO_NAME, COMPOSIO_PROMPT, CONNECT_URL, EXEC_TOOL, execPlan, invalidateSchemaCache, isSchemaRead, KEY_HEADER, keyOk, MANAGE_URL, maskKey, PROXY_TOOL, schemaCacheGet, schemaCachePut, strictCall } from "./composio";
+import { annotate, appName, askOnlyTool, COMPOSIO, COMPOSIO_COLOR, COMPOSIO_LINK_PROMPT, COMPOSIO_NAME, COMPOSIO_PROMPT, CONNECT_URL, EXEC_TOOL, cxLearn, execPlan, invalidateSchemaCache, isMetaRead, isSchemaRead, KEY_HEADER, keyOk, MANAGE_URL, maskKey, PROXY_TOOL, schemaCacheGet, schemaCachePut, strictCall } from "./composio";
 
 export type Perm = "allow" | "chat" | "ask" | "block";
 export const PERMS: Perm[] = ["allow", "chat", "ask", "block"];
@@ -133,6 +133,8 @@ function permOf(r: Pick<Row, "dir">, perms: Record<string, Perm>, t: McpTool): P
 }
 /** Composio: quyền thao tác ghi theo từng ứng dụng (googledocs, gmail…); ứng dụng chưa có trong bảng là "ask". */
 const appPermsOf = (r: Pick<Row, "app_perms">) => json<Record<string, Perm>>(r.app_perms, {});
+/** Tên ứng dụng và các tiền tố của nó theo từ (zoho_books → zoho_books, zoho). */
+const appPrefixes = (k: string) => k.split("_").map((_, i, a) => a.slice(0, a.length - i).join("_"));
 const appsOf = (r: Pick<Row, "app_perms">): AppPerm[] => Object.entries(appPermsOf(r)).map(([app, perm]) => ({ app, name: appName(app), perm, ...appLogo(app) })).sort((a, b) => a.name.localeCompare(b.name));
 const isDestructive = (t: McpTool) => destructiveLike(t);
 const settingsOf = (r: Row): ConnSettings => ({ ...DEFAULT_SETTINGS, ...json<Partial<ConnSettings>>(r.settings, {}) });
@@ -842,11 +844,12 @@ export class ConnectorSession {
       if (strictCall(ct.tool.name, input)) return "ask";
       if (ct.tool.name === PROXY_TOOL) return "allow";
       if (ct.tool.name === EXEC_TOOL) {
-        const plan = input === undefined ? null : execPlan(input);
+        const plan = input === undefined ? null : execPlan(input, this.uid);
         if (!plan) return "ask";
         if (!plan.writes.length) return "allow";
         const ap = appPermsOf(r);
-        const each = plan.writes.map((k) => ap[k] ?? "ask");
+        // Chặn ở một ứng dụng áp cả cho tên dài hơn của nó (zoho → zoho_books): tên ứng dụng của slug lạ có thể dài ra khi Synchro biết thêm toolkit.
+        const each = plan.writes.map((k) => (appPrefixes(k).some((x) => ap[x] === "block") ? "block" : ap[k] ?? "ask"));
         if (each.includes("block")) return "block";
         return plan.writes.every((k, i) => each[i] === "allow" || this.granted(ct, `app:${k}`)) ? "allow" : "ask";
       }
@@ -866,7 +869,7 @@ export class ConnectorSession {
   private grantKeys(ct: ChatTool, input: unknown): { apps: string[] } | { tool: true } | null {
     if (!ct.composio) return { tool: true };
     if (strictCall(ct.tool.name, input) || ct.tool.name === PROXY_TOOL) return null;
-    if (ct.tool.name === EXEC_TOOL) { const plan = input === undefined ? null : execPlan(input); return plan?.writes.length ? { apps: plan.writes } : null; }
+    if (ct.tool.name === EXEC_TOOL) { const plan = input === undefined ? null : execPlan(input, this.uid); return plan?.writes.length ? { apps: plan.writes } : null; }
     return { tool: true };
   }
   /** "Luôn cho phép": công cụ này; MULTI_EXECUTE thì thao tác ghi của các ứng dụng trong lời gọi (không phải mọi thao tác của mọi ứng dụng). */
@@ -926,8 +929,9 @@ export class ConnectorSession {
     try {
       const res = await withClient(ct.cid, (c) => { sent = true; return c.callTool(ct.tool, coerceArgs(ct.tool.inputSchema, args && typeof args === "object" ? args : {}), { signal, timeout }); }, this.cache, ct.tool.name);
       const { text, isError } = resultText(res);
-      // Lưu lược đồ vừa đọc (chỉ khi không lỗi) để lần đọc y hệt trong ngày lấy ngay.
+      // Lưu lược đồ vừa đọc (chỉ khi không lỗi) để lần đọc trong ngày lấy ngay; kết quả công cụ meta khác (quản lý / chờ kết nối) cho biết toolkit và tài khoản đang kết nối.
       if (!isError && ct.composio && isSchemaRead(ct.tool.name)) schemaCachePut(this.uid, ct.tool.name, args, text);
+      else if (!isError && ct.composio && isMetaRead(ct.tool.name)) cxLearn(this.uid, ct.tool.name, text);
       const { images, all } = resultImages(res);
       const [img, ...more] = images;
       return { content: text, is_error: isError, ...(img ? { image: img.data, mime: img.mime, imagesAll: all } : {}), ...(more.length ? { more } : {}) };

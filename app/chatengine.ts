@@ -419,7 +419,7 @@ const usedName = (ct: ChatTool, input: unknown) => { const l = cxOf(ct, input); 
 const askOf = (x: Exec, c: Call, id: string): Ask => {
   const ct = x.sess!.get(c.name)!;
   // Composio: thẻ nói ứng dụng (logo), tài khoản nếu biết, thao tác bằng lời thường và tham số chính; strict thì thẻ chỉ có "Cho phép một lần".
-  const cx = ct.composio ? cxCard(ct.tool.name, c.input) : null;
+  const cx = ct.composio ? cxCard(ct.tool.name, c.input, x.sess!.uid) : null;
   const a: Ask = {
     id, kind: "connector", tool: ct.tool.name, key: `conn:${ct.fq}`, title: cx?.act ?? toolTitle(ct), detail: "",
     conn: (() => { const lg = callLogo(ct, c.input); return { name: cx?.name ?? ct.cname, ...lg, ...(lg.icon && lg.icon.length >= 1500 ? { icon: undefined } : {}) }; })(),
@@ -1005,7 +1005,7 @@ async function loop(ad: Adapter, m: unknown[], x: Exec, used: ToolRun["used"][],
           id, calls: ask.map((c) => {
             const ct = x.sess!.get(c.name)!;
             const input = JSON.stringify(c.input ?? {});
-            const cx = ct.composio ? cxCard(ct.tool.name, c.input) : null;
+            const cx = ct.composio ? cxCard(ct.tool.name, c.input, uid) : null;
             return {
               id: c.id, connector: { id: ct.cid, name: ct.cname, ...callLogo(ct, c.input) },
               tool: { name: ct.tool.name, title: cx?.act ?? toolTitle(ct), description: (ct.tool.description ?? "").slice(0, 400), destructive: destructiveLike(ct.tool) },

@@ -16,7 +16,7 @@ delete process.env.COMPOSIO_CONNECT_URL;
 delete process.env.COMPOSIO_API_KEY;
 fs.mkdirSync(process.env.DATA_DIR, { recursive: true });
 
-const { connectors: C, providers: PR, authstore: AS, composio: X, cxlink: L, catalog: CAT } = await loadTs(["connectors", "providers", "authstore", "composio", "cxlink", "catalog"]);
+const { connectors: C, providers: PR, authstore: AS, composio: X, cxlink: L, catalog: CAT, cxactions: CXA } = await loadTs(["connectors", "providers", "authstore", "composio", "cxlink", "catalog", "cxactions"]);
 const db = AS.db();
 try {
   console.log("1. Chuyển hàng cũ của chế độ dùng chung về chưa liên kết");
@@ -123,6 +123,63 @@ try {
   X.schemaCachePut("u1", "COMPOSIO_GET_TOOL_SCHEMAS", argsG, "SCHEMA_BODY", t0);
   X.invalidateSchemaCache("u1");
   ok(X.schemaCacheGet("u1", "COMPOSIO_GET_TOOL_SCHEMAS", argsG, t0 + 1000) === null, "connector đổi → cache của người đó bị bỏ");
+
+  console.log("7. Đọc hay ghi theo slug thật của Composio (SEC-1 / SEC-3 / R1 / W1-01): ứng dụng = tiền tố dài nhất khớp toolkit đã biết");
+  // [slug, ứng dụng, đọc?]. Đọc chỉ khi động từ đọc đứng ngay sau tên ứng dụng; danh từ đứng trước (EVENTS_LIST, BATCH_GET) hay ứng dụng lạ: ghi (hỏi trước).
+  const TABLE = [
+    ["GMAIL_FETCH_EMAILS", "gmail", true], ["GMAIL_LIST_LABELS", "gmail", true], ["GMAIL_GET_PROFILE", "gmail", true],
+    ["GOOGLEDOCS_GET_DOCUMENT_BY_ID", "googledocs", true], ["GOOGLEDRIVE_FIND_FILE", "googledrive", true], ["GOOGLEDRIVE_LIST_FILES", "googledrive", true],
+    ["GOOGLECALENDAR_FIND_EVENT", "googlecalendar", true], ["GITHUB_LIST_REPOSITORY_ISSUES", "github", true], ["GITHUB_GET_A_REPOSITORY", "github", true],
+    ["GITHUB_SEARCH_REPOSITORIES", "github", true], ["SLACK_LIST_ALL_CHANNELS", "slack", true], ["SLACK_FETCH_CONVERSATION_HISTORY", "slack", true],
+    ["SLACK_SEARCH_MESSAGES", "slack", true], ["NOTION_QUERY_DATABASE", "notion", true], ["NOTION_SEARCH_NOTION_PAGE", "notion", true],
+    ["GOOGLE_MAPS_GET_ROUTE", "google_maps", true], ["GOOGLE_SEARCH_CONSOLE_LIST_SITES", "google_search_console", true], ["HUBSPOT_LIST_CONTACTS", "hubspot", true],
+    ["JIRA_GET_ISSUE", "jira", true], ["ZOHO_BOOKS_LIST_INVOICES", "zoho_books", true], ["YOUTUBE_LIST_USER_PLAYLISTS", "youtube", true],
+    ["SUPABASE_LIST_ALL_PROJECTS", "supabase", true], ["LINEAR_LIST_LINEAR_ISSUES", "linear", true], ["GOOGLEBIGQUERY_GET_DATASET", "googlebigquery", true],
+    // noun-first: ứng dụng vẫn đúng, nhưng không có động từ đọc ngay sau → ghi (fail-closed).
+    ["GOOGLECALENDAR_EVENTS_LIST", "googlecalendar", false], ["GOOGLESHEETS_BATCH_GET", "googlesheets", false], ["GOOGLECALENDAR_EVENTS_INSERT", "googlecalendar", false],
+    ["SLACK_CHAT_POST_MESSAGE", "slack", false], ["GMAIL_BATCH_DELETE_MESSAGES", "gmail", false], ["TWITTER_CREATION_OF_A_POST", "twitter", false],
+    ["OUTLOOK_OUTLOOK_SEND_EMAIL", "outlook", false], ["MICROSOFT_TEAMS_TEAMS_POST_CHANNEL_MESSAGE", "microsoft_teams", false], ["GOOGLE_ANALYTICS_RUN_REPORT", "google_analytics", false],
+    // verb-first ghi.
+    ["GMAIL_SEND_EMAIL", "gmail", false], ["GMAIL_CREATE_EMAIL_DRAFT", "gmail", false], ["GMAIL_REPLY_TO_THREAD", "gmail", false], ["GMAIL_MOVE_TO_TRASH", "gmail", false],
+    ["GMAIL_ADD_LABEL_TO_EMAIL", "gmail", false], ["GOOGLEDOCS_CREATE_DOCUMENT", "googledocs", false], ["GOOGLEDOCS_UPDATE_EXISTING_DOCUMENT", "googledocs", false],
+    ["GOOGLEDRIVE_UPLOAD_FILE", "googledrive", false], ["GOOGLESHEETS_BATCH_UPDATE", "googlesheets", false], ["GOOGLECALENDAR_CREATE_EVENT", "googlecalendar", false],
+    ["SLACK_SENDS_A_MESSAGE_TO_A_SLACK_CHANNEL", "slack", false], ["SLACK_ADD_REACTION_TO_AN_ITEM", "slack", false], ["SLACK_SET_READ_CURSOR_IN_A_CONVERSATION", "slack", false],
+    ["GITHUB_CREATE_AN_ISSUE", "github", false], ["GITHUB_STAR_A_REPOSITORY_FOR_THE_AUTHENTICATED_USER", "github", false], ["GITHUB_MARK_A_THREAD_AS_READ", "github", false],
+    ["NOTION_CREATE_NOTION_PAGE", "notion", false], ["NOTION_ADD_PAGE_CONTENT", "notion", false], ["GOOGLE_SEARCH_CONSOLE_SUBMIT_SITEMAP", "google_search_console", false],
+    ["GOOGLE_SEARCH_CONSOLE_ADD_SITE", "google_search_console", false], ["TWITTER_DELETE_LIST", "twitter", false], ["LINKEDIN_CREATE_LINKED_IN_POST", "linkedin", false],
+    ["MAILCHIMP_DELETE_LIST", "mailchimp", false], ["SUPABASE_QUERY", "supabase", false], ["ZOHO_BOOKS_CREATE_INVOICE", "zoho_books", false],
+    ["GMAIL_LIST_AND_FORWARD", "gmail", false], ["GITHUB_GET_OR_CREATE", "github", false], ["GOOGLE_MAPS_LIST_AND_DELETE", "google_maps", false],
+    // Ứng dụng không có trong danh sách toolkit: không đoán ranh giới, ghi.
+    ["UNKNOWNAPP_LIST_THINGS", "unknownapp", false], ["ACME_CRM_LIST_DEALS", "acme", false],
+  ];
+  const wrong = TABLE.filter(([slug, kit, read]) => CXA.slugParts(slug).kit !== kit || CXA.slugIsRead(slug) !== read || (X.execPlan({ tools: [{ tool_slug: slug }] }).writes.length === 0) !== read)
+    .map(([slug, kit, read]) => `${slug}: ${CXA.slugParts(slug).kit}/${CXA.slugIsRead(slug)} (cần ${kit}/${read})`);
+  ok(TABLE.length >= 40 && !wrong.length, `bảng ${TABLE.length} slug Composio thật: đúng ứng dụng, đúng đọc / ghi`, wrong);
+  ok(JSON.stringify(X.execPlan({ tools: [{ tool_slug: "SLACK_CHAT_POST_MESSAGE" }, { tool_slug: "GOOGLE_SEARCH_CONSOLE_SUBMIT_SITEMAP" }] }).writes) === '["slack","google_search_console"]', "khóa quyền theo ứng dụng thật: slack, google_search_console");
+
+  // toolkit / toolkit_slug / app do model viết vào thao tác: không dời được ranh giới, không đổi được khóa quyền.
+  const spoof = [
+    [{ tool_slug: "TWITTER_DELETE_LIST", toolkit: "TWITTER_DELETE" }, "twitter"],
+    [{ tool_slug: "MAILCHIMP_DELETE_LIST", app: "mailchimp_delete" }, "mailchimp"],
+    [{ tool_slug: "GITHUB_MARK_A_THREAD_AS_READ", toolkit: "github_mark_a_thread_as" }, "github"],
+    [{ tool_slug: "SLACK_UPDATE_A_VIEW", toolkit_slug: "slack_update_a" }, "slack"],
+    [{ tool_slug: "SLACK_SET_READ_CURSOR_IN_A_CONVERSATION", toolkit: "SLACK_SET" }, "slack"],
+    [{ tool_slug: "GMAIL_MOVE_TO_TRASH", toolkit: "GMAIL_MOVE_TO" }, "gmail"],
+    [{ tool_slug: "GMAIL_SEND_EMAIL", toolkit: "gmail_send" }, "gmail"],
+    [{ tool_slug: "SLACK_SEND_MESSAGE_AND_LIST", toolkit: "slack_send_message_and" }, "slack"],
+  ];
+  const leaked = spoof.filter(([it, kit]) => JSON.stringify(X.execPlan({ tools: [it] }).writes) !== JSON.stringify([kit]) || X.execRead({ tools: [it] }));
+  ok(!leaked.length, "toolkit giả do model khai báo: vẫn là ghi của đúng ứng dụng", leaked);
+  ok(X.execRead({ tools: [{ tool_slug: "GMAIL_FETCH_EMAILS", toolkit: "gmail" }] }), "toolkit khai báo đúng: đọc vẫn chạy luôn");
+  ok(X.cxCard("COMPOSIO_MULTI_EXECUTE_TOOL", { tools: [{ tool_slug: "GMAIL_SEND_EMAIL", toolkit: "gmail_send" }] }).app === "gmail", "thẻ duyệt cũng không theo toolkit giả");
+
+  console.log("8. Tham số là chuỗi JSON (SEC-2): đọc ra rồi mới xét");
+  const one = (slug, args) => X.execPlan({ tools: [{ tool_slug: slug, arguments: args }] }).writes.length === 0;
+  ok(!one("NOTION_QUERY_DATABASE", '{"sql":"drop table x"}') && !one("GOOGLEBIGQUERY_QUERY_TABLE", '{"query":"DELETE FROM t"}'), "chuỗi JSON có sql / câu lệnh đổi dữ liệu: ghi");
+  ok(one("GOOGLEBIGQUERY_QUERY_TABLE", '{"query":"select 1"}') && one("GMAIL_FETCH_EMAILS", '{"max_results":5}') && one("GMAIL_FETCH_EMAILS", ""), "chuỗi JSON thường: vẫn là đọc");
+  ok(!one("GMAIL_FETCH_EMAILS", "not json") && !one("GMAIL_FETCH_EMAILS", "[1,2]") && !one("GMAIL_FETCH_EMAILS", 5) && !one("GMAIL_FETCH_EMAILS", ["x"]), "không đọc được thành đối tượng: ghi (fail-closed)");
+  ok(X.cxCard("COMPOSIO_MULTI_EXECUTE_TOOL", { tools: [{ tool_slug: "GOOGLEDOCS_CREATE_DOCUMENT", arguments: '{"title":"Báo cáo"}' }] }).main === "Báo cáo", "thẻ duyệt đọc được tham số dạng chuỗi");
+
 } finally {
   fs.rmSync(tmp, { recursive: true, force: true });
 }

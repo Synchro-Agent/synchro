@@ -6,7 +6,7 @@
 // Token / khóa nằm mã hóa trong hàng connector của đúng tài khoản đó (app/connectors.ts), không bao giờ ra trình duyệt hay sandbox chạy code.
 import type { McpTool } from "./mcp";
 import { isConnectUrl } from "./cxlink";
-import { actionWords, appName, metaWords, slugIsRead, slugParts, type CxCard, type CxWrite } from "./cxactions";
+import { actionWords, appName, metaWords, slugIsRead, slugParts, type CxCard, type CxWrite, type KitHints } from "./cxactions";
 export { appName };
 
 export const COMPOSIO = "composio";
@@ -40,10 +40,10 @@ export const askOnlyTool = (name: string) => ALWAYS_ASK.has(name) || name === PR
 export function annotate<T extends McpTool>(tools: T[]): T[] {
   return tools.map((t) => (META_READ.has(t.name) && t.annotations?.readOnlyHint === undefined ? { ...t, annotations: { ...t.annotations, readOnlyHint: true, destructiveHint: false } } : t));
 }
-type Item = { tool_slug: string; arguments?: unknown; account?: unknown; connected_account_id?: unknown; toolkit?: unknown; toolkit_slug?: unknown; app?: unknown };
-const obj = (v: unknown): Record<string, unknown> => (v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : {});
-/** Tên ứng dụng do lời gọi khai báo (toolkit / toolkit_slug / app), nếu có: giúp tách đúng ứng dụng có tên nhiều từ. */
-const tkOf = (x: Item): string | undefined => { const t = x.toolkit ?? x.toolkit_slug ?? x.app; return typeof t === "string" && t ? t : undefined; };
+// toolkit / app trong từng thao tác là chữ do model viết: chỉ để đó, không dùng để tách ứng dụng hay xét quyền (xem slugParts).
+type Item = { tool_slug: string; arguments?: unknown; account?: unknown; connected_account_id?: unknown };
+type Rec = Record<string, unknown>;
+const obj = (v: unknown): Rec => (v && typeof v === "object" && !Array.isArray(v) ? (v as Rec) : {});
 /** Các thao tác trong một lời gọi MULTI_EXECUTE; null khi tham số không đúng dạng (khi đó coi như ghi, phải hỏi). */
 function items(input: unknown): Item[] | null {
   const list = obj(input).tools;
@@ -53,28 +53,112 @@ function items(input: unknown): Item[] | null {
 const method = (input: unknown) => String(obj(input).method ?? "").toUpperCase();
 /** Lời gọi luôn phải hỏi mỗi lần: bash / workbench từ xa, gọi API qua Composio với phương thức khác GET. */
 export const strictCall = (tool: string, input: unknown) => ALWAYS_ASK.has(tool) || (tool === PROXY_TOOL && method(input) !== "GET");
-/** Quyền mà một lời gọi MULTI_EXECUTE cần: chỉ đọc, hay ghi trong những ứng dụng nào. null: không đọc được tham số (coi như ghi, phải hỏi). */
-export function execPlan(input: unknown): { writes: string[] } | null {
+/** Quyền mà một lời gọi MULTI_EXECUTE cần: chỉ đọc, hay ghi trong những ứng dụng nào. null: không đọc được tham số (coi như ghi, phải hỏi).
+ *  user: dùng thêm toolkit mà Composio đã trả cho người này (cxLearn); không có thì chỉ theo danh sách toolkit có sẵn. */
+export function execPlan(input: unknown, user?: string): { writes: string[] } | null {
   const list = items(input);
   if (!list) return null;
+  const h = cxHints(user);
   const writes = new Set<string>();
-  for (const x of list) if (!slugIsRead(x.tool_slug, x.arguments, tkOf(x))) writes.add(slugParts(x.tool_slug, tkOf(x)).kit);
+  for (const x of list) if (!slugIsRead(x.tool_slug, x.arguments, h)) writes.add(slugParts(x.tool_slug, h).kit);
   return { writes: [...writes] };
 }
 /** Lời gọi MULTI_EXECUTE chỉ gồm thao tác đọc (GMAIL_FETCH_EMAILS, GITHUB_LIST_…): theo quy tắc "công cụ đọc chạy luôn". Không chắc thì không. */
-export const execRead = (input: unknown) => execPlan(input)?.writes.length === 0;
+export const execRead = (input: unknown, user?: string) => execPlan(input, user)?.writes.length === 0;
+
+// ---- điều Composio đã trả về cho từng người dùng (24 giờ, trong bộ nhớ tiến trình) ----
+// Chỉ học từ kết quả công cụ meta của Composio (tìm công cụ, xem tham số, quản lý / chờ kết nối), không học từ kết quả thao tác (email, trang web… do người ngoài viết)
+// và không bao giờ từ tham số model gửi. Gồm: slug → toolkit (để tách đúng ứng dụng, slugParts) và toolkit đã thấy.
+export const SCHEMA_TTL = 24 * 3600_000;
+const LEARN_USERS = 2000, LEARN_SLUGS = 3000, LEARN_KITS = 500;
+type Learned = {
+  at: number;
+  slugs: Map<string, { kit: string; at: number }>;
+  kits: Map<string, number>;
+};
+const learned = new Map<string, Learned>();
+const live = (at: number, now: number) => now - at < SCHEMA_TTL;
+function bucket(user: string, now: number): Learned {
+  let b = learned.get(user);
+  if (!b) {
+    if (learned.size >= LEARN_USERS) { const old = [...learned].sort((x, y) => x[1].at - y[1].at)[0]; if (old) learned.delete(old[0]); }
+    b = { at: now, slugs: new Map(), kits: new Map() };
+    learned.set(user, b);
+  }
+  b.at = now;
+  return b;
+}
+const trim = <K, V>(m: Map<K, V>, max: number) => { while (m.size > max) { const k = m.keys().next().value; if (k === undefined) break; m.delete(k); } };
+/** Hiểu biết về toolkit của người dùng (từ kết quả của Composio) cho slugParts / slugIsRead. */
+export function cxHints(user?: string, now = Date.now()): KitHints | undefined {
+  const b = user ? learned.get(user) : undefined;
+  if (!b) return undefined;
+  return {
+    kits: [...b.kits].filter(([, at]) => live(at, now)).map(([k]) => k),
+    slug: (s) => { const e = b.slugs.get(s); return e && live(e.at, now) ? e.kit : undefined; },
+  };
+}
+const KIT_RE = /^[a-z0-9][a-z0-9_]{1,59}$/;
+const SLUG_RE = /^[A-Z][A-Z0-9]*(_[A-Z0-9]+)+$/;
+const GENERIC = new Set(["data", "results", "result", "response", "items", "session", "connections", "toolkits", "tools", "tool_schemas", "schemas", "details", "connection_details", "error", "meta", "input_schema", "properties"]);
+const kitStr = (v: unknown): string | undefined => {
+  if (typeof v === "string") { const s = v.trim().toLowerCase(); return KIT_RE.test(s) ? s : undefined; }
+  return v && typeof v === "object" && !Array.isArray(v) ? kitStr((v as Rec).slug) : undefined;
+};
+const slugStr = (v: unknown) => (typeof v === "string" && v.length <= 120 && SLUG_RE.test(v) ? v : undefined);
+const under = (slug: string, kit: string) => slug.startsWith(`${kit.toUpperCase()}_`);
+const connLike = (o: Rec) => "status" in o || "connected_account_id" in o || "has_active_connection" in o || "is_connected" in o;
+type Scan = { pairs: Map<string, string>; kits: Set<string> };
+function parseJson(content: string): unknown {
+  try { return JSON.parse(content); } catch {
+    const m = /\{[\s\S]*\}/.exec(content);
+    try { return m ? JSON.parse(m[0]) : null; } catch { return null; }
+  }
+}
+/** Đọc kết quả công cụ meta của Composio: slug ↔ toolkit, toolkit. Không đoán: chỉ lấy trường có cấu trúc. */
+export function cxScan(content: string): Scan {
+  const out: Scan = { pairs: new Map(), kits: new Set() };
+  const walk = (v: unknown, key: string, depth: number) => {
+    if (!v || typeof v !== "object" || depth > 10) return;
+    if (Array.isArray(v)) { for (const x of v.slice(0, 500)) walk(x, key, depth + 1); return; }
+    const o = v as Rec;
+    let kit = kitStr(o.toolkit) ?? kitStr(o.toolkit_slug) ?? kitStr(o.app_slug);
+    const slug = slugStr(o.tool_slug) ?? slugStr(o.slug) ?? slugStr(o.tool) ?? slugStr(o.name) ?? slugStr(key);
+    // Kết quả theo toolkit ({ results: { gmail: { status: "active", connected_account_id } } }): tên toolkit là khóa.
+    if (!kit && !slug && KIT_RE.test(key) && !GENERIC.has(key) && connLike(o)) kit = key;
+    if (slug && kit && under(slug, kit)) out.pairs.set(slug, kit);
+    if (kit) {
+      out.kits.add(kit);
+      for (const k of ["tool_slugs", "primary_tool_slugs", "related_tool_slugs", "tools"]) { const a = o[k]; if (Array.isArray(a)) for (const x of a) { const s = slugStr(x); if (s && under(s, kit)) out.pairs.set(s, kit); } }
+    }
+    for (const [k, x] of Object.entries(o)) walk(x, k, depth + 1);
+  };
+  walk(parseJson(content), "", 0);
+  return out;
+}
+/** Ghi nhớ kết quả của một công cụ meta Composio (không lỗi) cho người dùng: gọi sau mỗi lần SEARCH_TOOLS / GET_TOOL_SCHEMAS / MANAGE_CONNECTIONS / WAIT_FOR_CONNECTIONS. */
+export function cxLearn(user: string, tool: string, content: string, now = Date.now()): void {
+  if (!user || !META_READ.has(tool)) return;
+  const sc = cxScan(content);
+  if (!sc.pairs.size && !sc.kits.size) return;
+  const b = bucket(user, now);
+  for (const [slug, kit] of sc.pairs) { b.slugs.delete(slug); b.slugs.set(slug, { kit, at: now }); }
+  for (const kit of sc.kits) { b.kits.delete(kit); b.kits.set(kit, now); }
+  trim(b.slugs, LEARN_SLUGS); trim(b.kits, LEARN_KITS);
+}
 
 // ---- cache lược đồ công cụ Composio ----
 // Một lần "đọc đơn giản" qua Composio tốn 5 bước / ~25 giây vì model phải COMPOSIO_SEARCH_TOOLS rồi COMPOSIO_GET_TOOL_SCHEMAS trước khi chạy.
 // Hai công cụ meta này chỉ đọc danh mục công cụ, trả cùng kết quả cho cùng tham số trong ngày, nên cache theo (người dùng, toolkit, công cụ, tham số) 24 giờ:
 // lần đọc y hệt sau đó lấy ngay từ cache thay vì đi vòng tới máy chủ Composio, bỏ được các bước chậm. Bỏ cache khi connector của người dùng đổi (liên kết lại,
 // đổi quyền, làm mới công cụ). Cache nằm trong bộ nhớ tiến trình (không bí mật nào: chỉ là lược đồ công cụ công khai), tự mất khi deploy.
-export const SCHEMA_TTL = 24 * 3600_000;
 const SCHEMA_MAX = 2000;
 const SCHEMA_READS = new Set(["COMPOSIO_SEARCH_TOOLS", "COMPOSIO_GET_TOOL_SCHEMAS"]);
 /** Công cụ meta chỉ đọc danh mục / lược đồ công cụ (được phép cache). */
 export const isSchemaRead = (tool: string) => SCHEMA_READS.has(tool);
-const stable = (v: unknown): unknown => Array.isArray(v) ? v.map(stable) : v && typeof v === "object" ? Object.fromEntries(Object.keys(v as Record<string, unknown>).sort().map((k) => [k, stable((v as Record<string, unknown>)[k])])) : v;
+/** Công cụ meta mà Synchro học từ kết quả (cxLearn). */
+export const isMetaRead = (tool: string) => META_READ.has(tool);
+const stable = (v: unknown): unknown => Array.isArray(v) ? v.map(stable) : v && typeof v === "object" ? Object.fromEntries(Object.keys(v as Rec).sort().map((k) => [k, stable((v as Rec)[k])])) : v;
 const stableJson = (v: unknown) => { try { return JSON.stringify(stable(v)); } catch { return ""; } };
 /** Các toolkit mà một lời gọi đọc lược đồ đụng tới (từ trường toolkit/app, hoặc tiền tố của tool_slug): dùng trong khóa cache. */
 export function cacheToolkits(input: unknown): string[] {
@@ -102,12 +186,13 @@ export function schemaCacheGet(user: string, tool: string, input: unknown, now =
   if (now - e.at >= SCHEMA_TTL) { schemaStore.delete(k); return null; }
   return e.content;
 }
-/** Lưu kết quả đọc lược đồ (chỉ khi không lỗi — nơi gọi tự kiểm tra). */
+/** Lưu kết quả đọc lược đồ (chỉ khi không lỗi — nơi gọi tự kiểm tra); học toolkit của từng slug (cxLearn). */
 export function schemaCachePut(user: string, tool: string, input: unknown, content: string, now = Date.now()): void {
   const k = schemaCacheKey(user, tool, input);
   if (!k) return;
   if (schemaStore.size >= SCHEMA_MAX && !schemaStore.has(k)) { const first = schemaStore.keys().next().value; if (first !== undefined) schemaStore.delete(first); }
   schemaStore.set(k, { at: now, content });
+  cxLearn(user, tool, content, now);
 }
 /** Connector của người dùng thay đổi (liên kết lại, đổi quyền, làm mới công cụ, gỡ): bỏ mọi lược đồ đã cache của người đó. */
 export function invalidateSchemaCache(user: string): void {
@@ -122,31 +207,35 @@ const MAIN_KEYS = ["title", "name", "subject", "summary", "file_name", "filename
 const ACCOUNT_KEYS = ["account", "account_email", "connected_account", "connected_account_id", "account_id", "user_email"];
 const short = (v: string, n: number) => (v.length > n ? `${v.slice(0, n - 1)}…` : v);
 const prim = (v: unknown) => (typeof v === "string" ? v.replace(/\s+/g, " ").trim() : typeof v === "number" || typeof v === "boolean" ? String(v) : Array.isArray(v) && v.every((x) => typeof x === "string") ? v.join(", ") : "");
-function mainOf(args: Record<string, unknown>) {
+// Tham số thao tác có thể là chuỗi JSON (Gemini): đọc ra để thẻ hiện đúng tham số chính.
+const argsOf = (v: unknown): Rec => { if (typeof v === "string") { try { return obj(JSON.parse(v)); } catch { return {}; } } return obj(v); };
+function mainOf(args: Rec) {
   for (const k of MAIN_KEYS) { const v = prim(args[k]); if (v) return short(v, 60); }
   return undefined;
 }
-function paramsOf(args: Record<string, unknown>): [string, string][] {
+function paramsOf(args: Rec): [string, string][] {
   return Object.entries(args).map(([k, v]) => [k, prim(v)] as [string, string]).filter(([k, v]) => v && !/token|secret|password|api[_-]?key|authorization|cookie/i.test(k)).slice(0, 5).map(([k, v]) => [k, short(v, 120)]);
 }
-function accountOf(...os: Record<string, unknown>[]) {
+function accountOf(...os: Rec[]) {
   for (const o of os) for (const k of ACCOUNT_KEYS) { const v = prim(o[k]); if (v) return short(v, 60); }
   return undefined;
 }
-/** Thẻ duyệt của một lời gọi Composio: ứng dụng (logo), tài khoản nếu biết, thao tác bằng lời thường, tham số chính. null: không phải công cụ Composio đã biết. */
-export function cxCard(tool: string, input: unknown): CxCard | null {
+/** Thẻ duyệt của một lời gọi Composio: ứng dụng (logo), tài khoản nếu biết, thao tác bằng lời thường, tham số chính. null: không phải công cụ Composio đã biết.
+ *  user: tách ứng dụng theo toolkit Composio đã trả cho người này. */
+export function cxCard(tool: string, input: unknown, user?: string): CxCard | null {
   const inp = obj(input);
   if (tool === EXEC_TOOL) {
     const list = items(input);
     if (!list) return null;
+    const h = cxHints(user);
     // Mọi thao tác ghi trong lời gọi (cần duyệt). Thẻ nói về thao tác ghi đầu tiên; toàn đọc thì thao tác đầu.
-    const writeItems = list.filter((x) => !slugIsRead(x.tool_slug, x.arguments, tkOf(x)));
+    const writeItems = list.filter((x) => !slugIsRead(x.tool_slug, x.arguments, h));
     const first = writeItems[0] ?? list[0];
-    const { kit, rest } = slugParts(first.tool_slug, tkOf(first));
-    const args = obj(first.arguments);
-    const plan = execPlan(input);
+    const { kit, rest } = slugParts(first.tool_slug, h);
+    const args = argsOf(first.arguments);
+    const plan = execPlan(input, user);
     // Nhiều thao tác ghi: liệt kê từng dòng (ứng dụng · thao tác · tham số chính · tài khoản); "+N" còn lại là thao tác đọc.
-    const line = (x: Item): CxWrite => { const p = slugParts(x.tool_slug, tkOf(x)); const a = obj(x.arguments); return { name: appName(p.kit), act: actionWords(p.rest) || x.tool_slug, main: mainOf(a), account: accountOf(obj(x), a, inp) }; };
+    const line = (x: Item): CxWrite => { const p = slugParts(x.tool_slug, h); const a = argsOf(x.arguments); return { name: appName(p.kit), act: actionWords(p.rest) || x.tool_slug, main: mainOf(a), account: accountOf(obj(x), a, inp) }; };
     const writes = writeItems.length > 1 ? writeItems.map(line) : undefined;
     const more = writes ? list.length - writeItems.length : list.length - 1;
     return { app: kit, name: appName(kit), act: actionWords(rest) || first.tool_slug, main: mainOf(args), account: accountOf(obj(first), args, inp), params: paramsOf(args), ...(more > 0 ? { more } : {}), apps: plan?.writes ?? [], ...(writes ? { writes } : {}) };
@@ -162,8 +251,8 @@ export function cxCard(tool: string, input: unknown): CxCard | null {
   return { app: COMPOSIO, name: COMPOSIO_NAME, act: meta, ...(detail ? { main: short(detail.split("\n")[0], 80), params: [[inp.command !== undefined ? "command" : "code", short(String(inp.command ?? inp.code ?? inp.cmd), 400)]] } : {}), ...(ALWAYS_ASK.has(tool) ? { strict: true } : {}) };
 }
 /** Nhãn ngắn của lời gọi Composio cho dòng công cụ trong chat: "Google Docs · Tạo tài liệu", "Composio · Tìm công cụ". null: để nhãn mặc định. */
-export function cxLabel(tool: string, input: unknown): { app: string; act: string } | null {
-  const c = cxCard(tool, input);
+export function cxLabel(tool: string, input: unknown, user?: string): { app: string; act: string } | null {
+  const c = cxCard(tool, input, user);
   if (c) return { app: c.name, act: c.act };
   // MULTI_EXECUTE chưa rõ tham số (danh sách thao tác lỗi): vẫn bằng lời thường.
   const meta = metaWords(tool);
