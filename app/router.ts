@@ -16,12 +16,13 @@
 //  6) gõ không dấu ("lam trang web") được so khớp lượt hai trên từ điển các cụm không thể nhầm; tạo media, thao tác trên web, connector là việc
 //     nhiều bước ("act"); câu hỏi sức khỏe, pháp lý, tài chính không dùng mức thấp nhất; việc nhẹ ưu tiên model hiện chữ dần.
 
-import { isFrontier, OPEN_WEIGHT, supersededSet, tierOf as ruleTier, type Tier } from "./modelrules";
+import { codeOnly, isFrontier, OPEN_WEIGHT, supersededSet, tierOf as ruleTier, type Tier } from "./modelrules";
 
 export const AUTO = "auto";
 export type { Tier };
 export type Vendor = "anthropic" | "openai" | "google" | "xai" | "deepseek" | "other";
-export type Task = "chat" | "qa" | "language" | "translate" | "summarize" | "write" | "code" | "debug" | "reason" | "analyze" | "build" | "act" | "vision" | "longdoc" | "data";
+// "lookup" (tra cứu): câu cần dữ liệu mới trên web (tỷ giá, giá, tin tức, phiên bản mới nhất…) — cần model hạng vừa trở lên có công cụ web, không model rẻ nhất.
+export type Task = "chat" | "qa" | "lookup" | "language" | "translate" | "summarize" | "write" | "code" | "debug" | "reason" | "analyze" | "build" | "act" | "vision" | "longdoc" | "data";
 export type AutoEffort = "low" | "medium" | "high" | "extra" | "max";
 
 // Hạng theo chữ chỉ hạng trong mã model của mọi hãng (luật chung ở app/modelrules.ts, so theo từng chữ và theo số phiên bản: model hãng ra sau này
@@ -63,6 +64,34 @@ export const quality = (p: Profile, task: Task) => BASE[p.frontier ? "frontier" 
 // Từ trọn vẹn theo Unicode (\b của JavaScript coi chữ có dấu là ký tự ngăn cách nên "dịch vụ" vẫn khớp "dịch").
 const W = (s: string) => new RegExp(`(?<![\\p{L}\\p{N}])(?:${s})(?![\\p{L}\\p{N}])`, "iu");
 const CONNECTOR_APPS = "gmail|outlook|calendar|google calendar|stripe|notion|slack|jira|linear|asana|trello|hubspot|salesforce|shopify|zalo|fanpage|google drive|drive|google sheets?|google docs?|google slides?|tài liệu google|bảng tính google|onedrive|sharepoint|dropbox|github|gitlab|airtable|figma|canva|miro|clickup|monday|higgsfield|youtube|composio|vercel|supabase|sentry|telegram|discord";
+// Một động từ thao tác + tên một ứng dụng đã nối: luôn là việc dùng công cụ (act), ưu tiên hơn mọi nhãn chủ đề ("Tạo Google Docs báo cáo" là act, không phải "viết";
+// "Send a Slack message" là act, không phải hỏi đáp). Không gồm "làm" (hay lẫn "làm sao / làm gì") — các câu đó đã có luật act riêng.
+const ACTION_VERB = "tạo|tao|sửa|sua|chỉnh sửa|gửi|gui|xóa|xoá|xoa|thêm|them|cập nhật|cap nhat|đổi|doi|lưu|luu|soạn|soan|đăng|dang|chia sẻ|share|tải|tai|create|edit|update|send|delete|remove|add|save|draft|post|upload|download|move|rename";
+// Thao tác connector thật sự: động từ thao tác RỒI tới tên ứng dụng ngay sau (tên ứng dụng là TÂN NGỮ của động từ, cách tối đa ~30 ký tự,
+// không qua dấu kết câu) — "Tạo Google Docs…", "Send a Slack message", "gửi báo cáo qua Gmail". KHÔNG tính khi hai thứ chỉ cùng xuất hiện
+// đâu đó ("So sánh Notion và Trello rồi tạo kế hoạch": connector đứng TRƯỚC động từ, tân ngữ của "tạo" là "kế hoạch" — không phải thao tác).
+// Ranh giới từ như W() để "drive" không khớp "driver".
+const B = "(?<![\\p{L}\\p{N}])", E = "(?![\\p{L}\\p{N}])", NEAR = "(?:(?![.?!\\n]).){0,30}?";
+const ACT_ON_APP_RE = new RegExp(`${B}(?:${ACTION_VERB})${E}${NEAR}${B}(?:${CONNECTOR_APPS})${E}`, "iu");
+// Câu cần dữ liệu mới trên web → "tra cứu" (lookup): tỷ giá, giá tài sản / món hàng, thời tiết, tin tức, phiên bản mới nhất, hay lời nhờ tìm thẳng trên web.
+// Giữ chặt để không kéo "hôm nay mình rảnh" hay "đánh giá phim" vào đây: "giá" phải đi với tài sản / "hôm nay" / "bao nhiêu" (và loại "đánh giá", "giá trị", "báo giá").
+const LOOKUP_WEB = new RegExp([
+  // "tỷ giá / tỉ giá / exchange rate / lãi suất" chỉ là tra cứu khi có mốc thời gian hay con số ở gần (trước hoặc sau). Trần "tỷ giá" hay câu hỏi
+  // khái niệm "tỷ giá là gì" / "what is the exchange rate" (không mốc) thì vẫn là hỏi đáp thường, không kéo xuống model có công cụ web.
+  "(?:tỷ giá|tỉ giá|exchange rate|interest rate|lãi suất)(?:(?![.?!\\n]).){0,30}?(?:hôm nay|bây giờ|hiện tại|hiện nay|bao nhiêu|mấy|mới nhất|today|now|right now|latest|current)",
+  "(?:hôm nay|bây giờ|hiện tại|hiện nay|bao nhiêu|mấy|mới nhất|today|now|right now|latest|current)(?:(?![.?!\\n]).){0,30}?(?:tỷ giá|tỉ giá|exchange rate|interest rate|lãi suất)",
+  // "giá <tài sản>" chỉ tính là tra cứu khi đi kèm mốc thời gian / "bao nhiêu" (bỏ trống thì "giá vàng" trần vẫn là hỏi đáp thường).
+  "giá (?:vàng|bạc|đô|đô la|usd|eur|euro|yên|yen|bitcoin|btc|eth|ethereum|xăng|dầu|ga|gas|cổ phiếu|chứng khoán|nhà|đất|iphone|điện thoại)(?:(?![.?!\\n]).){0,24}?(?:hôm nay|bây giờ|hiện tại|hiện nay|bao nhiêu|mới nhất|mấy)",
+  "(?:giá|tỷ giá|tỉ giá|lãi suất)(?:(?![.?!\\n]).){0,30}?(?:hôm nay|bây giờ|hiện tại|hiện nay|bao nhiêu)",
+  "(?:bao nhiêu tiền|giá bao nhiêu|giá cả|stock price|price of|how much (?:is|does|are))",
+  "thời tiết(?:(?![.?!\\n]).){0,20}?(?:hôm nay|ngày mai|hiện tại|bây giờ)", "weather (?:today|tomorrow|now|right now)",
+  "tin tức(?:(?![.?!\\n]).){0,20}?(?:mới nhất|hôm nay|mới)", "latest news", "breaking news",
+  "(?:phiên bản|version)(?:(?![.?!\\n]).){0,20}?mới nhất", "latest version",
+  "mới nhất", "newest", "latest",
+  "tìm (?:trên |giúp .{0,10} trên )?web", "tra cứu (?:trên )?(?:web|mạng|google|internet)",
+  "search (?:the )?(?:web|online|internet)", "look (?:it|this|that) up online", "google (?:giúp|hộ|dùm|giùm)",
+  "kết quả(?:(?![.?!\\n]).){0,25}?(?:trận|xổ số|bóng đá|hôm nay)",
+].join("|"), "iu");
 const count = (re: RegExp, s: string) => s.match(new RegExp(re.source, re.flags.includes("g") ? re.flags : re.flags + "g"))?.length ?? 0;
 // Dòng trông như code thật (không phải chỉ nhắc tên ngôn ngữ lập trình) và dấu vết lỗi khi chạy chương trình.
 const CODE_LINE = /^\s*(?:def \w+\(|class \w+\s*[:({]|(?:async )?function\b|(?:const|let|var) \w+\s*=|import .+ from |from [\w.]+ import |#include|(?:public|private|protected) |return\b|if\s*\(|for\s*\(|while\s*\(|\}\s*(?:else)?|<\/?[a-z][\w-]*(?:\s[^>]*)?>|select .+ from |insert into |update \w+ set |\$ \w|>>> |console\.\w+\(|print\(|echo |\w+(?:\.\w+)*\([^()]*\);\s*$|.*\)\s*(?:=>\s*)?\{\s*$)/i;
@@ -315,12 +344,12 @@ export type RouteInput = {
 };
 /** follow: câu nối tiếp ngắn theo việc của yêu cầu trước ("tiếp đi", "giải thích thêm"). */
 type Read = { task: Task; score: number; why: string[]; retry: boolean; think: boolean; follow?: boolean; long?: boolean; stakes?: boolean };
-const LABEL: Record<Task, string> = { chat: "trò chuyện", qa: "hỏi đáp", language: "học ngôn ngữ", translate: "dịch", summarize: "tóm tắt", write: "viết", code: "viết code", debug: "gỡ lỗi", reason: "suy luận", analyze: "phân tích", build: "tạo sản phẩm", act: "thao tác nhiều bước", vision: "đọc ảnh", longdoc: "tài liệu dài", data: "số liệu" };
+const LABEL: Record<Task, string> = { chat: "trò chuyện", qa: "hỏi đáp", lookup: "tra cứu", language: "học ngôn ngữ", translate: "dịch", summarize: "tóm tắt", write: "viết", code: "viết code", debug: "gỡ lỗi", reason: "suy luận", analyze: "phân tích", build: "tạo sản phẩm", act: "thao tác nhiều bước", vision: "đọc ảnh", longdoc: "tài liệu dài", data: "số liệu" };
 export const taskLabel = (t: Task) => LABEL[t];
 // Điểm gốc theo loại việc: ≤ 0 dễ, 1-2 vừa, 3-4 khó, ≥ 5 rất khó.
-const BASE_D: Record<Task, number> = { chat: -2, language: 0, translate: 0, qa: 0, summarize: 1, write: 1, vision: 1, code: 2, data: 2, analyze: 2, reason: 2, act: 2, debug: 3, longdoc: 3, build: 4 };
+const BASE_D: Record<Task, number> = { chat: -2, language: 0, translate: 0, qa: 0, summarize: 1, write: 1, vision: 1, lookup: 2, code: 2, data: 2, analyze: 2, reason: 2, act: 2, debug: 3, longdoc: 3, build: 4 };
 // Trần độ khó theo loại việc: câu hỏi ngôn ngữ, dịch, hỏi đáp, tóm tắt, viết, đọc ảnh tối đa "khó" (nỗ lực cao, không cần model mạnh nhất).
-const CAP_D: Partial<Record<Task, number>> = { chat: 0, language: 4, translate: 4, qa: 4, summarize: 4, write: 4, vision: 4, data: 6 };
+const CAP_D: Partial<Record<Task, number>> = { chat: 0, language: 4, translate: 4, qa: 4, lookup: 4, summarize: 4, write: 4, vision: 4, data: 6 };
 // Việc nhẹ: model nhanh đã đủ khi điểm ≤ 1.
 const LIGHT = new Set<Task>(["chat", "qa", "language", "translate", "summarize", "write", "vision"]);
 // Việc mà câu trả lời ngắn và lời chê ngay sau đó vẫn thuộc về nó (không tính hỏi đáp, dịch: "cảm ơn", "Hà Nội" sau câu đó là chuyện khác).
@@ -337,6 +366,10 @@ function scores(ins: string, a: Ask): Map<Task, number> {
   // Gõ không dấu: lượt so khớp thứ hai.
   const bare = noMarks(ins);
   if (bare && ![...out.values()].some((n) => n >= 2)) for (const [t, re, w] of FOLDED) if (re.test(ins) && !((t === "build" || t === "act") && HOWTO_FOLD.test(ins))) out.set(t, Math.max(out.get(t) ?? 0, w));
+  // Động từ thao tác có tân ngữ là tên ứng dụng ngay gần → việc dùng công cụ (act), trên mọi nhãn chủ đề: "Tạo Google Docs báo cáo" (từng là
+  // "viết"), "Send a Slack message" (từng là hỏi đáp). Không áp đè khi câu rõ ràng nghiêng phân tích (tín hiệu ≥ 5) mà act chỉ đến từ luật gần
+  // này (so "Tạo Google Docs báo cáo" chỉ có "viết" = 3 nên vẫn thành act). Guard HOWTO ngay dưới vẫn bỏ act cho câu hỏi cách làm.
+  if (ACT_ON_APP_RE.test(ins) && Math.max(out.get("analyze") ?? 0, out.get("write") ?? 0) < 5) out.set("act", Math.max(out.get("act") ?? 0, 5));
   // Hỏi cách làm, hoặc đang nhờ viết code: không phải nhờ làm thao tác.
   if (out.has("act") && (HOWTO.test(ins) || (out.get("code") ?? 0) >= 3 || (out.get("language") ?? 0) >= 3)) out.delete("act");
   // Xin ảnh là việc dùng công cụ dù câu không có chữ "ảnh" ("vẽ con mèo"): model nào được chọn cũng gọi được generate_image.
@@ -367,11 +400,27 @@ function scores(ins: string, a: Ask): Map<Task, number> {
   return out;
 }
 
-function pick(sc: Map<Task, number>): [Task, number] {
+// Từ cực thường của tiếng Việt / Anh (so trên chữ ĐÃ bỏ dấu, nên bắt cả câu gõ có dấu lẫn không dấu): câu hỏi đời thường nào cũng có ít nhất một
+// từ này. Vắng hẳn mà câu lại dài thì nhiều khả năng là một yêu cầu đặc (danh từ chuyên ngành, cụm từ dán vào) cần model khá — không phải hỏi vặt rẻ tiền.
+const STOPWORD = W([
+  "la", "va", "cua", "co", "khong", "ko", "cho", "voi", "mot", "cac", "nhung", "nay", "do", "day", "kia", "thi", "ma", "o", "di", "roi",
+  "nhe", "nha", "a", "oi", "ban", "toi", "minh", "em", "anh", "chi", "con", "ai", "gi", "nao", "sao", "dau", "khi", "neu", "vi",
+  "duoc", "bi", "rat", "qua", "lam", "hon", "giup", "hay", "can", "muon", "ve", "trong", "tren", "duoi", "ra", "vao", "nhu", "the",
+  "cung", "dang", "se", "bao", "nhieu", "may", "nen", "bay gio",
+  // Từ / cụm mở đầu câu hỏi, lời nhờ giải thích thường ngày: có chúng thì không đẩy lên "phân tích".
+  "giai thich", "khai niem", "dinh nghia", "y nghia", "the nao", "cho biet", "khac nhau", "explain", "define", "meaning", "mean", "difference",
+  "the", "a", "an", "is", "are", "am", "be", "of", "to", "and", "or", "in", "on", "at", "for", "with",
+  "you", "i", "me", "my", "your", "it", "this", "that", "what", "how", "why", "who", "when", "where", "which", "can", "do", "does",
+  "did", "please", "about", "from", "as", "if", "so",
+].join("|"));
+function pick(sc: Map<Task, number>, ins?: string): [Task, number] {
   let best: Task = "qa", n = 0;
   for (const t of ORDER) { const v = sc.get(t) ?? 0; if (v > n) { best = t; n = v; } }
   // Chỉ một tín hiệu yếu ("class", "react", "bảng"…) chưa đủ để đổi loại việc.
-  return n >= 2 ? [best, n] : ["qa", n];
+  if (n >= 2) return [best, n];
+  // Không tín hiệu nào đủ mạnh nhưng câu dài và không có từ đời thường nào: coi là việc phân tích (model khá, có công cụ), không hỏi đáp rẻ tiền.
+  if (ins && ins.length > 25 && !STOPWORD.test(fold(ins))) return ["analyze", 2];
+  return ["qa", n];
 }
 
 function read(q: RouteInput, depth = 0): Read {
@@ -383,7 +432,7 @@ function read(q: RouteInput, depth = 0): Read {
   let s = 0;
   const add = (n: number, w: string) => { if (!n) return; s += n; why.push(w); };
   const sc = scores(ins, a);
-  let [task, strength] = pick(sc);
+  let [task, strength] = pick(sc, ins);
   const images = q.images ?? 0, docChars = q.docChars ?? 0, files = q.files ?? 0;
   // Xét cả phần sau dấu ":" (splitAsk coi là nội dung): "Câu hỏi: có nên uống 20 viên paracetamol" từng là hỏi đáp, nỗ lực thấp, đường nhanh.
   const typed = typedPart(q.text);
@@ -426,6 +475,9 @@ function read(q: RouteInput, depth = 0): Read {
   else if (images && strength < 3) task = "vision";
   else if (docChars > 60_000 && !["translate", "summarize", "code", "debug"].includes(task)) task = "longdoc";
   else if ((files || docChars) && strength < 2) task = "summarize";
+  // Câu hỏi đáp cần dữ liệu mới trên web (tỷ giá, giá, tin tức, phiên bản mới nhất): chuyển thành "tra cứu" để đi model hạng vừa trở lên có công cụ web,
+  // thay vì model rẻ nhất trả lời từ trí nhớ cũ. Không áp cho câu sức khỏe / pháp lý / tài chính (đã có luật riêng).
+  if (task === "qa" && !stakes && LOOKUP_WEB.test(ins)) task = "lookup";
   s = BASE_D[task];
   // Điều chỉnh theo từng loại việc.
   if (task === "code" && !a.code && CONCEPT_Q.test(ins) && !SIG.write![0][0].test(ins)) { s = 1; why.push("hỏi khái niệm lập trình"); }
@@ -476,7 +528,7 @@ export function askedBack(ai: string): boolean {
 export function isAck(text: string): boolean {
   const a = splitAsk(text), whole = a.ins.toLowerCase(), ins = stripHead(whole) || whole;
   if (ins.length >= 100 || a.content) return false;
-  const [t, n] = pick(scores(ins, a));
+  const [t, n] = pick(scores(ins, a), ins);
   if (n >= 2 && t !== "chat") return false;
   // Câu hỏi mới ("thủ đô của Pháp là gì?") và câu về sức khỏe, pháp lý là lời nhờ thật: "giải thích thêm" sau đó nói về chúng, không về việc lớn ở trước.
   return !hasStakes(typedPart(text)) && !((QUESTION.test(ins) || (noMarks(ins) && QUESTION_FOLD.test(ins))) && !followsUp(ins));
@@ -530,7 +582,7 @@ export function difficulty(q: RouteInput): { score: number; why: string[] } {
 }
 const need = (score: number, task: Task) => (score <= 0 || (score <= 1 && LIGHT.has(task)) ? 6 : score <= 2 ? 7.5 : score <= 4 ? 8.8 : 9.4);
 // Mức nỗ lực cao nhất theo loại việc (trò chuyện luôn thấp; câu hỏi ngôn ngữ, dịch, hỏi đáp… tối đa "cao").
-const CAP_E: Partial<Record<Task, AutoEffort>> = { chat: "low", language: "high", translate: "high", qa: "high", summarize: "high", write: "high", vision: "high", data: "extra" };
+const CAP_E: Partial<Record<Task, AutoEffort>> = { chat: "low", language: "high", translate: "high", qa: "high", lookup: "high", summarize: "high", write: "high", vision: "high", data: "extra" };
 const RANK: AutoEffort[] = ["low", "medium", "high", "extra", "max"];
 /** Mức nỗ lực theo độ khó (máy chủ còn hạ theo giới hạn của quản trị viên và các mức model hỗ trợ). */
 export function effortFor(score: number, task: Task, think = false): AutoEffort {
@@ -550,13 +602,12 @@ const lag = (key: string) => (/^sub-(?:agy|codex)\//.test(key) ? 1 : 0);
 const LAG_COST = 0.6;
 // Fable của gói Claude có thể tính vào usage credits (tiền thật ngoài gói): Tự động không tự tiêu, người dùng vẫn chọn tay được. Danh sách chỉ còn nó thì vẫn dùng.
 const CREDIT = /^sub-claude\/.*fable/i;
-// Grok Build là model viết code: chỉ tính cho việc code; từng thắng cả câu hỏi sức khỏe, thuế, toán vì tên lạ được coi là hạng vừa và có thế mạnh của xAI.
-// Model chỉ dành cho code của xAI: grok-build, grok-4.7-build-fast… (tên mới có số phiên bản đứng giữa).
-const CODE_ONLY = /grok-(?:[\d.]+-)?build/i;
+// Model chỉ dùng để viết code (grok-build, codex, coder, …-code-…): chỉ tính cho việc code; từng thắng cả câu hỏi sức khỏe, thuế, toán vì tên lạ
+// được coi là hạng vừa và có thế mạnh của hãng. Nhận dạng bằng codeOnly() ở app/modelrules.ts (xét phần tên sau "/", nên gói "sub-codex/" không bị tính).
 /** Model tính vào tiền thật ngoài gói: việc không ai bấm thì không được chạy trên nó. */
 export const billsCredit = (k: string) => CREDIT.test(k);
 /** Danh sách có model rẻ hơn hạng mạnh nhất dùng được cho việc phụ không (kể cả đang tạm hết hạn mức). */
-export const hasCheapSide = (list: string[]) => list.some((k) => !CREDIT.test(k) && !CODE_ONLY.test(k) && tierOf(k) !== "strong");
+export const hasCheapSide = (list: string[]) => list.some((k) => !CREDIT.test(k) && !codeOnly(k) && tierOf(k) !== "strong");
 const CODE_TASKS = new Set<Task>(["code", "debug", "build"]);
 const TOOL_HEAVY = new Set<Task>(["code", "debug", "build", "act"]);
 /** Chọn model cho chế độ Tự động trong danh sách được phép (cả ba hãng, gói lẫn khóa API). avoid: model vừa bị chê / vừa lỗi. */
@@ -570,7 +621,7 @@ export function routeModel(q: RouteInput, allowed: string[], o: { avoid?: string
   // Model mới nhất của mỗi dòng giữ chỗ của dòng đó (cùng chi phí, cùng chất lượng thì bản mới thắng); bản cũ hơn vẫn là dự phòng trong alt.
   const older = supersededSet(allowed);
   const scored = allowed.map((k, i) => ({ p: profileOf(k), i: i + (older.has(k) ? allowed.length : 0) })).map((x) => ({ ...x, q: quality(x.p, task) }));
-  const fits = scored.filter((x) => !CREDIT.test(x.p.key) && (!CODE_ONLY.test(x.p.key) || CODE_TASKS.has(task)));
+  const fits = scored.filter((x) => !CREDIT.test(x.p.key) && (!codeOnly(x.p.key) || CODE_TASKS.has(task)));
   const all = fits.length ? fits : scored;
   const clean = all.filter((x) => !avoid.has(x.p.key));
   // Lời chê mà không model nào khác đạt mức cần: làm lại bằng chính model đó (nỗ lực đã nâng) hơn là tụt xuống model yếu hơn.
@@ -594,6 +645,8 @@ export function routeModel(q: RouteInput, allowed: string[], o: { avoid?: string
     .sort((a, b) => Number(a.p.vendor === pick.p.vendor) - Number(b.p.vendor === pick.p.vendor)).map((x) => x.p.key);
   // Model đang tránh (o.avoid) vẫn là lựa chọn cuối cùng khi mọi model khác đều hỏng.
   for (const x of all) if (x.p.key !== pick.p.key && !alt.includes(x.p.key)) alt.push(x.p.key);
+  // Nhật ký định tuyến từng lượt (bật bằng SYNCHRO_ROUTE_LOG) để theo dõi phân loại: loại việc, điểm độ khó, có phải lượt làm lại vì bị chê không.
+  if (process.env.SYNCHRO_ROUTE_LOG) console.error(`[route] ${JSON.stringify({ task, score, rerun: !!retry })}`);
   return { model: pick.p.key, tier: pick.p.tier, vendor: pick.p.vendor, task, effort: effortFor(score, task, think), why: [`việc ${LABEL[task]}`, ...why], alt };
 }
 /**
@@ -601,7 +654,7 @@ export function routeModel(q: RouteInput, allowed: string[], o: { avoid?: string
  * routeModel xếp Sonnet (0,75) trước Luna của Codex (0,25 + 0,6 chờ) khi Haiku tạm hết hạn mức, tức việc nền chạy hạng cao hơn cần thiết. avoid: CLI đang treo, chỉ dùng khi không còn gì khác.
  */
 export function sideModel(allowed: string[], o: { avoid?: string[] } = {}): string | null {
-  const fits = allowed.filter((k) => !CREDIT.test(k) && !CODE_ONLY.test(k));
+  const fits = allowed.filter((k) => !CREDIT.test(k) && !codeOnly(k));
   const clean = fits.filter((k) => !o.avoid?.includes(k));
   const pool = clean.length ? clean : fits.length ? fits : allowed;
   const older = supersededSet(pool);
@@ -615,7 +668,7 @@ export function sideModel(allowed: string[], o: { avoid?: string[] } = {}): stri
 export function pickCritics(allowed: string[], exclude: string, avoid: string, auto = false): string[] {
   if (auto) {
     const rank = (k: string) => [tierOf(k) === "fast" ? 0 : 1, vendorOf(k) === exclude ? 1 : 0, k === avoid ? 1 : 0, profileOf(k).cost];
-    const fits = allowed.filter((k) => !CREDIT.test(k) && !CODE_ONLY.test(k) && tierOf(k) !== "strong").map((k) => ({ k, r: rank(k) }));
+    const fits = allowed.filter((k) => !CREDIT.test(k) && !codeOnly(k) && tierOf(k) !== "strong").map((k) => ({ k, r: rank(k) }));
     return fits.sort((a, b) => a.r.reduce((d, v, i) => d || v - b.r[i], 0)).slice(0, 1).map((x) => x.k);
   }
   const order: Tier[] = ["balanced", "strong", "fast"], max = 2;

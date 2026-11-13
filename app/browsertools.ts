@@ -7,6 +7,7 @@
 //   ở khung trình duyệt; đã chọn thì cả lượt dùng tiếp trình duyệt đó.
 // Dùng ở khung chat (chatengine.ts) và ở Synchro Code (agentcore.ts, mặc định trình duyệt của workspace).
 import { AuthError } from "./authstore";
+import { needsRenderEscalation } from "./ai/webescalate";
 import { processFile, storedFile } from "./fileproc";
 import { mimeOf, readOutput } from "./outputs";
 import { cancelRun, currentRun } from "./runs";
@@ -158,7 +159,10 @@ function format(name: string, r: R): BrowserOut {
     case "browser_text": {
       const total = Number(r.total) || 0, off = Number(r.offset) || 0, text = String(r.text ?? "");
       const more = off + text.length < total ? `\n[Còn ${total - off - text.length} ký tự: gọi lại với offset=${off + text.length}.]` : "";
-      return { content: join(`URL: ${r.url}\nTiêu đề: ${r.title}`, "", text || "(không có chữ)", more), is_error: false, summary: `${text.length} ký tự` };
+      // Trang mỏng / chưa dựng xong ngay từ đầu trang: nhắc chờ trang tải rồi đọc lại (browser_wait), hoặc thử nguồn chính thức khác.
+      const stall = off === 0 && !more && needsRenderEscalation(text)
+        ? "\n[Trang có vẻ chưa dựng xong hoặc chặn JavaScript: dùng browser_wait rồi đọc lại; với số liệu trong ngày, ưu tiên trang chính thức, chưa có số thì thử thêm một nguồn nữa trước khi nói \"không chắc\".]" : "";
+      return { content: join(`URL: ${r.url}\nTiêu đề: ${r.title}`, "", text || "(không có chữ)", more, stall), is_error: false, summary: `${text.length} ký tự` };
     }
     case "browser_find": {
       const m = (r.matches as string[] | undefined) ?? [];
