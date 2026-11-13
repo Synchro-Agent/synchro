@@ -30,6 +30,9 @@ export function decodeText(buf: Buffer): string {
   const utf8 = new TextDecoder("utf-8", { fatal: true });
   try { return utf8.decode(buf).replace(/^\uFEFF/, ""); } catch { /* không phải UTF-8 */ }
   const det = (jschardet.detect(buf.toString("binary")).encoding || "").toLowerCase();
+  // Gần như UTF-8 (cụt ký tự cuối, lẫn một byte lạ): giải UTF-8 không fatal, chỉ byte hỏng thành U+FFFD, thay vì đọc cả tệp theo cp1252 ra "Tiáº¿ng".
+  const loose = looseUtf8(buf, det.startsWith("utf-8"));
+  if (loose !== null) return loose;
   // Mã một byte KHÔNG bao giờ ném lỗi (mọi byte đều có ký tự), nên thứ tự thử là tất cả: thử sai là ra chữ hỏng (São → Săo).
   // - Mã nhiều byte (Nhật/Trung/Hàn…): tin jschardet, sai thì TextDecoder fatal ném và lùi tiếp.
   // - Windows-1258 (tiếng Việt) chỉ khi có bằng chứng rõ là tiếng Việt (jschardet hay đoán tiếng Việt ngắn thành Hy Lạp).
@@ -48,7 +51,17 @@ export function decodeText(buf: Buffer): string {
   return new TextDecoder("windows-1252").decode(buf);
 }
 
-const MULTI_BYTE = /^(utf|shift_jis|euc-|gb|big5|iso-2022|hz)/;
+/** Văn bản UTF-8 có vài byte hỏng: phần lớn ký tự ngoài ASCII là chuỗi UTF-8 hợp lệ, U+FFFD chỉ chiếm phần nhỏ (≤ 1/5).
+ * cp1252 thật gần như không bao giờ tạo ra chuỗi UTF-8 hợp lệ ("Ã©"), nên cần ≥3 ký tự hợp lệ; jschardet đã nói utf-8 thì 1 là đủ. */
+function looseUtf8(buf: Buffer, detSaysUtf8: boolean): string | null {
+  const s = new TextDecoder("utf-8").decode(buf);
+  let good = 0, bad = 0;
+  for (let i = 0; i < s.length; i++) { const c = s.charCodeAt(i); if (c === 0xfffd) bad++; else if (c >= 0x80) good++; }
+  return good >= (detSaysUtf8 ? 1 : 3) && bad * 4 <= good ? s.replace(/^\uFEFF/, "") : null;
+}
+
+// Không có "utf": UTF-8 fatal đã hỏng ở trên thì thử lại vẫn hỏng (gần như UTF-8 đã do looseUtf8 lo).
+const MULTI_BYTE = /^(shift_jis|euc-|gb|big5|iso-2022|hz)/;
 const NON_LATIN_1BYTE = /^(windows-125[1356]|koi8|iso-8859-[5678]|maccyrillic|x-mac-cyrillic|ibm8(55|66)|tis-620)/;
 const WESTERN = /^(ascii|windows-1252|iso-8859-1)$/;
 

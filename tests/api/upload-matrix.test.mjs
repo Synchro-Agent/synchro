@@ -99,6 +99,17 @@ dec(bytes("DH1258 Ti", 0xea, 0xec, "ng Vi", 0xea, 0xf2, "t l", 0xe0, " ng", 0xf4
   "DH1258 Tiếng Việt là ngôn ngữ của người Việt Nam. Đây là một đoạn văn bản mẫu.", "Windows-1258 tiếng Việt: đọc đúng dấu, ghép thành chữ dựng sẵn (NFC)");
 dec(bytes("Chi", 0xf2, " bi", 0xf2, " ", 0xf4, 0xec, "m, me", 0xf2, " ", 0xf0, "i ch", 0xf5, 0xf2, "."), "Chị bị ốm, mẹ đi chợ.", "Windows-1258 tiếng Việt ngắn (jschardet đoán Hy Lạp) vẫn ra tiếng Việt");
 
+console.log("4b. UTF-8 gần như hợp lệ (C-4): một byte hỏng không làm cả tệp thành chữ lỗi cp1252");
+const vnU8 = "Tiếng Việt là ngôn ngữ chính thức của Việt Nam. ".repeat(40);
+const u8b = Buffer.from(vnU8, "utf8");
+let got = E.decodeText(Buffer.concat([u8b, B(0xe1, 0xbb)]));
+ok(got.startsWith(vnU8) && got.endsWith("�") && !got.includes("Ã"), "UTF-8 cụt ký tự cuối (jschardet: utf-8): chỉ đuôi thành U+FFFD", got.slice(0, 60) + " … " + JSON.stringify(got.slice(-4)));
+got = E.decodeText(Buffer.concat([u8b.subarray(0, 500), B(0x96), u8b.subarray(500)]));
+ok(got.includes("Tiếng Việt là ngôn ngữ") && got.split("�").length === 2 && !got.includes("Ã"), "UTF-8 lẫn một byte lạ 0x96 (jschardet đoán mã một byte): chỉ byte đó hỏng", got.slice(0, 60));
+got = E.decodeText(Buffer.concat([Buffer.from("\uFEFFXin chào bạn, ", "utf8"), B(0x96), Buffer.from(" hẹn gặp lại.", "utf8")]));
+ok(got === "Xin chào bạn, � hẹn gặp lại.", "UTF-8 ngắn có BOM + một byte lạ: BOM bị gỡ, chỉ byte lạ hỏng", got);
+dec(bytes("Ca", 0xc3, 0xa9, " cr", 0xe8, "me ", 0xe0, " la vanille, tr", 0xe8, "s bon"), "CaÃ© crème à la vanille, très bon", "cp1252 có một cặp byte trùng UTF-8 hợp lệ (Ã©) vẫn đọc theo cp1252");
+
 console.log("5. Trích thật qua tiến trình đọc tệp (docx/xlsx/csv/pptx/zip), mỗi tệp một DẤU HIỆU");
 // csv
 let t = parse("csv", Buffer.from("cot_a,cot_b\nDH_CSV_1,DH_CSV_2\n"), "m.csv")?.text ?? "";
