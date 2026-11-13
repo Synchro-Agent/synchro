@@ -38,7 +38,7 @@ ok(/className="overlay ft-lightbox"/.test(lb) && /role="dialog" aria-modal="true
 {
   const { officeview: OV } = await loadTs(["officeview"]);
   const doc = OV.officeDoc("xlsx", "a.xlsx", "https://x.test", "ch", (s) => en(s) ?? s, "en-US");
-  ok(/\.sheet\{[^}]*overflow:scroll/.test(doc) && /\.sheet::-webkit-scrollbar\{[^}]*height:10px/.test(doc), "bảng tính: thanh cuộn ngang luôn hiện");
+  ok(/\.sheet\{[^}]*overflow-x:scroll;overflow-y:auto/.test(doc) && /\.sheet::-webkit-scrollbar\{[^}]*height:10px/.test(doc), "bảng tính: thanh cuộn ngang luôn hiện, dọc chỉ khi cần (không bắt buộc với bảng ngắn)");
   ok(/scrollbar-width:thin/.test(doc), "bảng tính: Firefox cũng có thanh cuộn mảnh");
   ok(OV.STRINGS.includes("Vừa chiều rộng") && OV.STRINGS.includes("Kích thước thật"), "nút Vừa chiều rộng / Kích thước thật đi qua bộ dịch của khung xem");
   ok(doc.includes('"Vừa chiều rộng":"Fit width"') && doc.includes('"Kích thước thật":"Actual size"'), "khung xem tiếng Anh nhận nhãn Fit width / Actual size");
