@@ -5,6 +5,8 @@ import { loadTs } from "../lib/ts.mjs";
 
 let pass = 0, fail = 0;
 const ok = (c, n, x = "") => { c ? pass++ : fail++; console.log(c ? "  ✓" : "  ✗", n, c ? "" : String(x).slice(0, 400)); };
+// Nhật ký [route] bật sẵn ở máy chủ; tắt trong bộ thử cho đầu ra gọn (phần 17 của route-classify bật lại để kiểm tra).
+process.env.SYNCHRO_ROUTE_LOG = "0";
 const { router: R } = await loadTs(["router"]);
 const RANK = ["low", "medium", "high", "extra", "max"];
 const q = (text, o = {}) => ({ text, attachments: 0, turns: 1, studio: false, ...o });
@@ -538,6 +540,18 @@ console.log("16. Tra cứu web → model hạng vừa trở lên có công cụ;
   // Việc không phải code: model code-only bị loại, nhưng gói ChatGPT (sub-codex) vẫn dùng bình thường.
   const codexOnly = R.routeModel(q("Thủ đô của Úc là gì?"), ["sub-codex/gpt-6.1-sol", "sub-codex/gpt-6-luna"]);
   ok(codexOnly && /sub-codex\//.test(codexOnly.model), `gói Codex (model chung) vẫn dùng cho hỏi đáp: ${codexOnly?.model}`, JSON.stringify(codexOnly));
+}
+console.log("17. Nhật ký định tuyến (D1.6): bật sẵn, console.log [route] gọn, không đi qua console.error");
+{
+  const logs = [], errs = [], L = console.log, Er = console.error;
+  delete process.env.SYNCHRO_ROUTE_LOG;
+  console.log = (...a) => logs.push(a.join(" ")); console.error = (...a) => errs.push(a.join(" "));
+  try { R.routeModel(q("Tỷ giá USD hôm nay"), ["anthropic/claude-haiku-5-5", "anthropic/claude-sonnet-5-5"]); process.env.SYNCHRO_ROUTE_LOG_SAMPLE = "0"; R.routeModel(q("Viết email xin nghỉ phép"), ["anthropic/claude-haiku-5-5"]); R.routeModel(q("sai rồi, làm lại đi", { turns: 3, prevAsk: "Làm trang web bán giày" }), ["anthropic/claude-haiku-5-5"]); }
+  finally { console.log = L; console.error = Er; process.env.SYNCHRO_ROUTE_LOG = "0"; delete process.env.SYNCHRO_ROUTE_LOG_SAMPLE; }
+  const line = logs.find((x) => x.startsWith("[route] "));
+  const j = line ? JSON.parse(line.slice(8)) : null;
+  ok(j && j.task === "lookup" && typeof j.score === "number" && j.rerun === false && !errs.some((x) => x.includes("[route]")), "W23-14: mặc định ghi [route] {task, score, rerun} bằng console.log", JSON.stringify({ logs, errs }));
+  ok(logs.length === 2 && JSON.parse(logs[1].slice(8)).rerun === true, "W23-14: lấy mẫu 0 vẫn ghi lượt làm lại (rerun), bỏ lượt thường", JSON.stringify(logs));
 }
 console.log(`\nKết quả: ${pass} đạt, ${fail} lỗi`);
 process.exit(fail ? 1 : 0);

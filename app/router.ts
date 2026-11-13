@@ -628,6 +628,17 @@ export const hasCheapSide = (list: string[]) => list.some((k) => !CREDIT.test(k)
 const CODE_TASKS = new Set<Task>(["code", "debug", "build"]);
 const TOOL_HEAVY = new Set<Task>(["code", "debug", "build", "act"]);
 /** Chọn model cho chế độ Tự động trong danh sách được phép (cả ba hãng, gói lẫn khóa API). avoid: model vừa bị chê / vừa lỗi. */
+// D1.6: nhật ký định tuyến MỖI lượt { task, score, rerun } (+ model đã chọn), bật sẵn, mức info: console.log có tiền tố [route] — không dùng
+// console.error, vì ops.ts ghi mọi console.error thành lỗi máy chủ trên trang Health. Một dòng JSON gọn. Tắt bằng SYNCHRO_ROUTE_LOG=0;
+// SYNCHRO_ROUTE_LOG_SAMPLE (0…1, mặc định 1) lấy mẫu bớt khi lượt quá nhiều — lượt làm lại vì bị chê (rerun) luôn được ghi, đó là thứ cần đưa
+// vào bộ kiểm thử.
+function routeLog(task: Task, score: number, rerun: boolean, model: string) {
+  const on = process.env.SYNCHRO_ROUTE_LOG;
+  if (on === "0" || on === "off" || on === "false") return;
+  const rate = Number(process.env.SYNCHRO_ROUTE_LOG_SAMPLE ?? 1);
+  if (!rerun && Number.isFinite(rate) && rate < 1 && Math.random() >= rate) return;
+  console.log(`[route] ${JSON.stringify({ task, score, rerun, model })}`);
+}
 export function routeModel(q: RouteInput, allowed: string[], o: { avoid?: string[] } = {}): Route | null {
   if (!allowed.length) return null;
   const { task, score, why, retry, think, follow, long } = readOf(q);
@@ -662,8 +673,7 @@ export function routeModel(q: RouteInput, allowed: string[], o: { avoid?: string
     .sort((a, b) => Number(a.p.vendor === pick.p.vendor) - Number(b.p.vendor === pick.p.vendor)).map((x) => x.p.key);
   // Model đang tránh (o.avoid) vẫn là lựa chọn cuối cùng khi mọi model khác đều hỏng.
   for (const x of all) if (x.p.key !== pick.p.key && !alt.includes(x.p.key)) alt.push(x.p.key);
-  // Nhật ký định tuyến từng lượt (bật bằng SYNCHRO_ROUTE_LOG) để theo dõi phân loại: loại việc, điểm độ khó, có phải lượt làm lại vì bị chê không.
-  if (process.env.SYNCHRO_ROUTE_LOG) console.error(`[route] ${JSON.stringify({ task, score, rerun: !!retry })}`);
+  routeLog(task, score, !!retry, pick.p.key);
   return { model: pick.p.key, tier: pick.p.tier, vendor: pick.p.vendor, task, effort: effortFor(score, task, think), why: [`việc ${LABEL[task]}`, ...why], alt };
 }
 /**
