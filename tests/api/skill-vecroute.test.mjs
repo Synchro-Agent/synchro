@@ -40,5 +40,24 @@ const nullNear = async () => null;
 const back = (await SR.suggestSemantic("Tối ưu SEO cho website", cands, { nearest: nullNear })).map((h) => h.skill.name);
 ok(JSON.stringify(back) === JSON.stringify(base), "nearest=null: lùi về bộ chấm đầy đủ", back);
 
+console.log("5. Gộp skill trùng mô tả theo SHA-1");
+SR.dropCandidateCache();
+{
+  const dup = [
+    sk("a", "Prepare tax returns and accounting summaries"),
+    sk("b", "Prepare tax returns and accounting summaries"), // trùng hệt → gộp
+    sk("c", "  prepare TAX returns and accounting summaries  "), // chỉ khác hoa / khoảng trắng → vẫn gộp (chuẩn hóa)
+    sk("d", "Edit videos with ffmpeg"),
+    sk("e", ""), sk("f", ""), // mô tả rỗng: KHÔNG gộp
+  ];
+  const p = SR.prepareCandidates(SR.candidateKey("m", 1), dup.map((skill) => ({ skill })));
+  ok(p.names.includes("a") && !p.names.includes("b") && !p.names.includes("c"), "trùng mô tả (kể cả khác hoa / khoảng trắng) chỉ giữ bản đầu", p.names);
+  ok(p.names.includes("d"), "mô tả khác thì giữ", p.names);
+  ok(p.names.includes("e") && p.names.includes("f"), "mô tả rỗng không bị gộp vào nhau", p.names);
+  ok(p.names.length === 4, "còn đúng 4 ứng viên sau khi gộp (a, d, e, f)", p.names);
+}
+console.log("5b. descHash chuẩn hóa như skillscan (gộp khoảng trắng, bỏ đầu cuối, viết thường)");
+ok(SR.descHash("Hello  World ") === SR.descHash("hello world") && SR.descHash("x") !== SR.descHash("y"), "cùng nội dung → cùng băm; khác nội dung → khác băm");
+
 console.log(`\n${pass}/${pass + fail} đạt`);
 process.exit(fail ? 1 : 0);

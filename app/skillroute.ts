@@ -1,8 +1,13 @@
 // Định tuyến skill: chấm điểm mọi skill đã cài (cả skill nằm trong thư viện studio / plugin) theo yêu cầu mới nhất,
 // để gợi ý cho model những skill nên đọc. Model vẫn toàn quyền quyết định; đây chỉ là gợi ý đưa vào prompt.
 // Người dùng thường viết tiếng Việt còn mô tả skill phần lớn bằng tiếng Anh, nên có bảng khái niệm nối hai bên.
+import crypto from "node:crypto";
 import { registerMemStat } from "./memstat";
 import type { Skill } from "./skillstore";
+
+// Mã băm mô tả (SHA-1 của mô tả đã chuẩn hóa) — cùng cách tính với skillscan.ts; để riêng ở đây nên skillroute không phải kéo theo DB.
+// skillscan.descHash là bản dùng chung cho máy chủ; bộ định tuyến mặc định dùng bản này cho bước gộp skill trùng mô tả.
+export const descHash = (s: string) => crypto.createHash("sha1").update(s.replace(/\s+/g, " ").trim().toLowerCase()).digest("hex");
 
 export const fold = (s: string) => s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/đ/g, "d");
 
@@ -344,12 +349,23 @@ export const candidateKey = (uid: string, gen: number | string) => `${uid}\u0000
 export type PreparedCands = { byName: Map<string, Candidate>; names: string[] };
 const GC = globalThis as unknown as { __skillCandCache?: Map<string, PreparedCands> };
 const candCache = (GC.__skillCandCache ??= new Map<string, PreparedCands>());
-/** Chuẩn bị (và nhớ đệm theo khóa) tập ứng viên: chỉ dựng Map một lần cho tới khi bộ đệm plugin dựng lại (khóa đổi). */
-export function prepareCandidates(key: string, cands: Candidate[]): PreparedCands {
+/**
+ * Chuẩn bị (và nhớ đệm theo khóa) tập ứng viên: chỉ dựng Map một lần cho tới khi bộ đệm plugin dựng lại (khóa đổi).
+ * Gộp skill trùng mô tả (cùng SHA-1 của mô tả): danh mục có cùng một skill ở nhiều thư viện — giữ bản đầu (theo thứ tự
+ * người gọi: skill riêng của người dùng trước, rồi danh mục) để không chấm và liệt kê nhiều bản y hệt. Mô tả rỗng thì không gộp.
+ * hash: hàm băm mô tả (mặc định SHA-1 như skillscan); tách ra để kiểm thử và để máy chủ truyền bản dùng chung.
+ */
+export function prepareCandidates(key: string, cands: Candidate[], hash: (s: string) => string = descHash): PreparedCands {
   const p = candCache.get(key);
   if (p) return p;
   const byName = new Map<string, Candidate>();
-  for (const c of cands) byName.set(c.skill.name, c);
+  const byDesc = new Map<string, string>(); // SHA-1 mô tả → tên bản đại diện đã giữ
+  for (const c of cands) {
+    if (byName.has(c.skill.name)) continue;
+    const desc = c.skill.description?.trim() ?? "";
+    if (desc) { const h = hash(desc); if (byDesc.has(h)) continue; byDesc.set(h, c.skill.name); }
+    byName.set(c.skill.name, c);
+  }
   const prepared: PreparedCands = { byName, names: [...byName.keys()] };
   // Giữ gọn: mỗi người dùng × thế hệ một mục, bỏ mục cũ nhất khi quá nhiều (nhiều người dùng đồng thời).
   if (candCache.size >= 128) candCache.delete(candCache.keys().next().value!);

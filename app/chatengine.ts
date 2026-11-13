@@ -29,6 +29,7 @@ import { PLUGIN_CATS, STUDIO_LABEL } from "./plugindir";
 import { dirCats } from "./claudedir";
 import { candidateKey, ownSkillFits, prepareCandidates, suggestSemantic, type Hit } from "./skillroute";
 import { embeddingsConfigured, nearestSkills } from "./vecstore";
+import { descHash } from "./skillscan";
 import type { Skill } from "./skillstore";
 import { CODE_RULES, execRun, LANGS, runCodeTool, runner, RUN_LIMITS, type Lang, type RecalcReport, type RunOutput } from "./coderun";
 import { plainSummary, runBlocks } from "./runtext";
@@ -1390,7 +1391,7 @@ async function skillSet(user: UserRow, body: Record<string, any>, messages: unkn
     const want = ruleStudios("", typed).scores;
     const inStudio = (k: Skill) => (libs[k.name] ?? []).some((l) => l.key.startsWith("studio-") && want[l.key.slice(7) as Studio] > 0);
     // D4: nhớ đệm tập ứng viên theo (người dùng, thế hệ bộ đệm plugin) để không dựng lại cả kho mỗi lượt; trọng số phụ thuộc câu hỏi nên áp lên trên.
-    const prep = prepareCandidates(candidateKey(c.user.id, pluginCacheGen()), list.map((k) => ({ skill: k })));
+    const prep = prepareCandidates(candidateKey(c.user.id, pluginCacheGen()), list.map((k) => ({ skill: k })), descHash);
     const cands = prep.names.map((n) => prep.byName.get(n)!).map((b) => ({ skill: b.skill, weight: (catSkills.has(b.skill) ? 0.5 : 1) * (inStudio(b.skill) ? 1.3 : 1) }));
     // Có provider embedding: lấy ~50 skill gần nhất theo nghĩa rồi chấm lại; không có thì suggestSemantic tự lùi về bộ chấm từ khóa. Skill riêng (không thuộc danh mục) luôn được giữ.
     const keep = new Set(cands.filter((x) => !catSkills.has(x.skill)).map((x) => x.skill.name));
