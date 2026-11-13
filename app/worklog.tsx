@@ -4,7 +4,7 @@
 import { useEffect, useState } from "react";
 import * as I from "./icons";
 import { Loader } from "./brand";
-import { getLang, tr } from "./i18n";
+import { getLang, tr, trCx } from "./i18n";
 import { AskCard, type AskStep, type OnAnswer } from "./agentui";
 import { lazyView } from "./lazy";
 import { IMAGE_PLANS } from "./catalog";
@@ -93,7 +93,7 @@ const DOING = "Đang";
 const CX_LABEL = /^dùng ([^:·]+) · (.+)$/;
 const toolLabel = (l: string) => {
   const cx = CX_LABEL.exec(l);
-  if (cx) return `${cx[1]} · ${tr(cx[2])}`;
+  if (cx) return `${cx[1]} · ${trCx(cx[2])}`;
   const v = [DOING, l].join(" "), t = tr(v);
   return t !== v ? t : l.charAt(0).toUpperCase() + l.slice(1);
 };

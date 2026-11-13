@@ -1825,10 +1825,9 @@ for (const [k, v] of Object.entries({
   "Quyền theo ứng dụng chỉ có ở Composio.": "Per-app permissions are only available for Composio.",
 })) if (!Object.prototype.hasOwnProperty.call(VI2EN, k)) VI2EN[k] = v;
 RULES_EN.unshift([/^Đang dùng ([^:·]+) · (.+)$/, (m) => `Using ${m[1]} · ${trCx(m[2])}`]);
-RULES_EN.push(
-  [/^Gọi API ([A-Z?]{1,10})$/, (m) => `Call API ${m[1]}`],
-  CX_RULE_EN,
-);
+// Không đưa CX_RULE_EN vào RULES_EN chung: phần dự phòng ASCII của nó khớp quá rộng, bộ dịch DOM sẽ viết lại nhầm
+// mọi nút chữ "động từ + ascii". Nhãn thao tác Composio dịch qua trCx (i18n.tsx) ngay tại chỗ hiện nhãn.
+RULES_EN.push([/^Gọi API ([A-Z?]{1,10})$/, (m) => `Call API ${m[1]}`]);
 /** Tên thao tác Composio sang tiếng Anh (từ điển, rồi luật "động từ + danh từ"); không dịch được thì giữ nguyên. */
 function trCx(s: string) {
   if (Object.prototype.hasOwnProperty.call(VI2EN, s)) return VI2EN[s];
