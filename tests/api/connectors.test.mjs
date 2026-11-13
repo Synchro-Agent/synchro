@@ -128,10 +128,12 @@ ok(r.j.approval?.calls?.[0]?.tool?.destructive === true, "công cụ xóa đư�
 await resume(admin, r.j.approval.id, { [r.j.approval.calls[0].id]: "deny" });
 // Connector tùy chỉnh: mọi công cụ mặc định "Hỏi" (E1, không tin readOnlyHint của máy chủ lạ) — duyệt rồi mới chạy.
 r = await chat(admin, G, `Tra vùng #tool=lookup_region #args={"region":"ap-đông-nam"}`);
-if (r.j.approval) r = await resume(admin, r.j.approval.id, { [r.j.approval.calls[0].id]: "allow" });
+ok(r.j.approval?.calls?.[0]?.tool?.name === "lookup_region", "connector tự thêm: công cụ đọc của máy chủ lạ vẫn hỏi trước (E1.7)", JSON.stringify(r.j).slice(0, 300));
+r = await resume(admin, r.j.approval.id, { [r.j.approval.calls[0].id]: "allow" });
 ok(r.s === 200 && /Vùng ap-đông-nam: hoạt động bình thường/.test(r.j.text), "Gemini gọi công cụ máy chủ 2026 (header Mcp-Param mã hóa base64)", JSON.stringify(r.j).slice(0, 300));
 r = await chat(admin, C, `#tool=echo #args={"text":"xin chào SSE"}`);
-if (r.j.approval) r = await resume(admin, r.j.approval.id, { [r.j.approval.calls[0].id]: "allow" });
+ok(r.j.approval?.calls?.[0]?.tool?.name === "echo", "connector tự thêm (SSE): công cụ hỏi trước (E1.7)", JSON.stringify(r.j).slice(0, 300));
+r = await resume(admin, r.j.approval.id, { [r.j.approval.calls[0].id]: "allow" });
 ok(r.s === 200 && /Echo: xin chào SSE/.test(r.j.text), "gọi công cụ qua SSE đời cũ", JSON.stringify(r.j).slice(0, 300));
 
 console.log("6. Token hết hạn → tự làm mới");

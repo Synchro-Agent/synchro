@@ -21,8 +21,8 @@ const db = AS.db();
 const pol = CAT.FULL_CONN;
 // Bộ dịch DOM dùng chung (VI2EN + RULES_EN): KHÔNG được chứa luật "động từ + ascii" của Composio (nó khớp quá rộng).
 const tr = (s) => { if (Object.prototype.hasOwnProperty.call(D.VI2EN, s)) return D.VI2EN[s]; for (const [re, f] of D.RULES_EN) { const m = s.match(re); if (m) return f(m); } return s; };
-// Nhãn thao tác Composio dịch riêng tại chỗ hiện nhãn (i18n.tsx trCx): bản dịch DOM chung, nếu không đổi thì áp CX_RULE_EN.
-const trCx = (s) => { const t = tr(s); if (t !== s) return t; const m = s.trim().match(CXA.CX_RULE_EN[0]); return m ? CXA.CX_RULE_EN[1](m) : s; };
+// Nhãn thao tác Composio dịch riêng tại chỗ hiện nhãn: i18n.tsx trCx và luật "Đang dùng X · Y" cùng gọi cxActEn (một chỗ duy nhất, INT-6).
+const trCx = (s) => CXA.cxActEn(s, tr);
 try {
   // Bảng như bản đang chạy (chưa có cột app_perms): Composio đã liên kết, người dùng từng đặt "Luôn cho phép" cho công cụ bọc ngoài và cho bash.
   db.exec(`CREATE TABLE IF NOT EXISTS connectors (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, name TEXT NOT NULL, url TEXT NOT NULL, dir TEXT, enabled INTEGER NOT NULL DEFAULT 1, era TEXT,
@@ -67,6 +67,11 @@ try {
   // Ứng dụng tên nhiều từ không có trong MULTI_KITS (Zoho Books): tách đúng ứng dụng, thao tác đọc chạy luôn.
   ok(s.perm(EXEC, ex(["ZOHO_BOOKS_LIST_INVOICES"])) === "allow", "ZOHO_BOOKS_LIST_INVOICES: đọc, không có thẻ duyệt");
   ok(s.perm(EXEC, ex(["ZOHO_BOOKS_CREATE_INVOICE", { name: "X" }])) === "ask", "ZOHO_BOOKS_CREATE_INVOICE: ghi, hỏi");
+  // Tham số dạng chuỗi JSON (Gemini): xét sau khi đọc ra, như lúc gửi đi (SEC-2).
+  ok(s.perm(EXEC, ex(["SUPABASE_LIST_TABLES", '{"sql":"drop table x"}'])) === "ask" && s.perm(EXEC, ex(["GOOGLEBIGQUERY_QUERY_TABLE", '{"query":"DELETE FROM t"}'])) === "ask", "tham số chuỗi JSON có câu lệnh đổi dữ liệu: hỏi");
+  ok(s.perm(EXEC, ex(["GMAIL_FETCH_EMAILS", '{"max_results":3}'])) === "allow" && s.perm(EXEC, ex(["GMAIL_FETCH_EMAILS", "{oops"])) === "ask", "chuỗi JSON thường: đọc; chuỗi hỏng: hỏi");
+  // toolkit do model viết không đổi được đọc / ghi (SEC-1).
+  ok(s.perm(EXEC, { tools: [{ tool_slug: "TWITTER_DELETE_LIST", toolkit: "TWITTER_DELETE" }] }) === "ask" && s.perm(EXEC, { tools: [{ tool_slug: "GOOGLE_SEARCH_CONSOLE_SUBMIT_SITEMAP" }] }) === "ask", "TWITTER_DELETE_LIST với toolkit giả, GOOGLE_SEARCH_CONSOLE_SUBMIT_SITEMAP: hỏi");
 
   s.allowAlways(EXEC, CREATE_DOC);
   ok(s.perm(EXEC, CREATE_DOC) === "allow" && s.perm(EXEC, ex(["GOOGLEDOCS_UPDATE_DOCUMENT"])) === "allow", "Luôn cho phép trên thẻ: mọi thao tác ghi của Google Docs");
@@ -83,6 +88,10 @@ try {
 
   let r = C.updateConnector("u_a", "cn_cx", { apps: { slack: "block" } }, pol);
   ok(s.perm(EXEC, ex(["SLACK_SEND_MESSAGE"])) === "block" && s.perm(EXEC, ex(["SLACK_LIST_CHANNELS"])) === "allow", "chặn thao tác ghi của Slack; đọc Slack vẫn chạy");
+  ok(s.perm(EXEC, ex(["SLACK_CHAT_POST_MESSAGE"])) === "block" && s.perm(EXEC, { tools: [{ tool_slug: "SLACK_SEND_MESSAGE", toolkit: "slack_send" }] }) === "block", "SLACK_CHAT_POST_MESSAGE, toolkit giả slack_send: vẫn bị chặn theo Slack (R1)");
+  C.updateConnector("u_a", "cn_cx", { apps: { zoho: "block" } }, pol);
+  ok(s.perm(EXEC, ex(["ZOHO_BOOKS_CREATE_INVOICE"])) === "block", "chặn zoho: áp cả cho zoho_books");
+  C.updateConnector("u_a", "cn_cx", { apps: { zoho: "ask" } }, pol);
   ok(r.apps?.find((a) => a.app === "slack")?.perm === "block" && r.apps.find((a) => a.app === "googledocs")?.name === "Google Docs" && r.apps.every((a) => a.logo || a.icon), "trang Connectors: quyền từng ứng dụng kèm tên và logo", r.apps);
   const blocked = await s.call(EXEC, ex(["SLACK_SEND_MESSAGE"]));
   ok(blocked.is_error && /chặn/.test(blocked.content), "gọi thao tác của ứng dụng bị chặn: không chạy", blocked);
@@ -96,17 +105,32 @@ try {
   let threw = "";
   try { C.updateConnector("u_a", "cn_cx", { perms: { COMPOSIO_REMOTE_BASH_TOOL: "allow" } }, pol); } catch (e) { threw = e.message; }
   ok(/luôn hỏi trước/.test(threw), "không đặt được REMOTE_BASH thành Luôn cho phép", threw);
-  try { threw = ""; C.updateConnector("u_a", "cn_cx", { perms: { COMPOSIO_PROXY_EXECUTE: "chat" } }, pol); } catch (e) { threw = e.message; }
-  ok(/luôn hỏi trước/.test(threw), "không đặt được gọi API thành Hỏi một lần mỗi cuộc trò chuyện", threw);
   C.updateConnector("u_a", "cn_cx", { group: { kind: "write", perm: "allow" } }, pol);
   ok(s.perm(BASH, { command: "rm -rf /" }) === "ask" && C.composioInfo("u_a", pol).connector.tools.find((t) => t.name === "COMPOSIO_REMOTE_BASH_TOOL").perm === "ask", "đặt cả nhóm ghi thành Luôn cho phép: bash vẫn hỏi");
   s.allowAlways(BASH, { command: "ls" });
   s.allowChat(BASH, { command: "ls" });
   ok(s.perm(BASH, { command: "ls" }) === "ask", "bấm Luôn cho phép / Cho phép trong cuộc trò chuyện ở thẻ bash: lần sau vẫn hỏi");
   ok(s.perm(PROXY, { method: "POST", endpoint: "/gmail/v1/users/me/messages/send" }) === "ask" && s.perm(PROXY, { endpoint: "/x" }) === "ask", "gọi API POST (hoặc không rõ phương thức): hỏi");
-  ok(s.perm(PROXY, { method: "GET", endpoint: "/gmail/v1/users/me/labels" }) === "allow", "gọi API GET: như thao tác đọc");
+  // Gọi API bằng GET theo quyền của chính công cụ gọi API (SEC-4); GET tới đường dẫn ghi và phương thức khác luôn hỏi.
+  const LABELS = { method: "GET", endpoint: "/gmail/v1/users/me/labels" };
+  ok(s.perm(PROXY, LABELS) === "allow", "gọi API GET, công cụ đang Luôn cho phép: chạy");
+  ok(s.perm(PROXY, { method: "GET", endpoint: "/api/chat.postMessage?channel=C1&text=hi" }) === "ask" && s.perm(PROXY, { method: "GET", endpoint: "/bot123/sendMessage?chat_id=1&text=x" }) === "ask", "GET chat.postMessage / sendMessage: hỏi dù Luôn cho phép");
+  C.updateConnector("u_a", "cn_cx", { perms: { COMPOSIO_PROXY_EXECUTE: "ask" } }, pol);
+  ok(s.perm(PROXY, LABELS) === "ask", "gọi API để Hỏi mỗi lần: GET cũng hỏi");
+  s.allowChat(PROXY, LABELS);
+  ok(s.perm(PROXY, LABELS) === "allow" && s.perm(PROXY, { method: "DELETE", endpoint: "/x" }) === "ask", "Cho phép trong cuộc trò chuyện ở thẻ GET: GET chạy, DELETE vẫn hỏi");
+  C.updateConnector("u_a", "cn_cx", { perms: { COMPOSIO_PROXY_EXECUTE: "block" } }, pol);
+  ok(new C.ConnectorSession("u_a", { conv: "c1", pol }).tools.every((t) => t.tool.name !== "COMPOSIO_PROXY_EXECUTE") && s.perm(PROXY, LABELS) === "block", "chặn gọi API: không còn trong lượt chat");
+  C.updateConnector("u_a", "cn_cx", { perms: { COMPOSIO_PROXY_EXECUTE: "chat" } }, pol);
+  const px = C.composioInfo("u_a", pol).connector.tools.find((t) => t.name === "COMPOSIO_PROXY_EXECUTE");
+  ok(px.perm === "chat" && !px.askOnly, "trang Connectors: gọi API đặt được mọi quyền (chỉ áp cho GET)", px);
   C.updateConnector("u_a", "cn_cx", { perms: { COMPOSIO_REMOTE_BASH_TOOL: "block" } }, pol);
   ok(new C.ConnectorSession("u_a", { conv: "c1", pol }).tools.every((t) => t.tool.name !== "COMPOSIO_REMOTE_BASH_TOOL"), "chặn bash vẫn được");
+
+  // Công cụ Composio đã tìm trong 24 giờ có trong lời dặn của lượt sau, để model gọi thẳng MULTI_EXECUTE (W23-7).
+  X.cxLearn("u_a", "COMPOSIO_GET_TOOL_SCHEMAS", JSON.stringify({ data: { tool_schemas: { GOOGLEDOCS_CREATE_DOCUMENT: { toolkit: "googledocs", tool_slug: "GOOGLEDOCS_CREATE_DOCUMENT", description: "Create a doc", input_schema: { type: "object", properties: { title: { type: "string" } }, required: ["title"] } } } } }));
+  const cxPrompt = C.connectorsPrompt(new C.ConnectorSession("u_a", { conv: "c1", pol }));
+  ok(cxPrompt.includes("GOOGLEDOCS_CREATE_DOCUMENT (Google Docs)") && cxPrompt.includes("title*: string"), "lời dặn lượt chat có công cụ Composio đã biết kèm tham số", cxPrompt.slice(-600));
 
   console.log("3. Thẻ duyệt và nhãn bằng lời thường");
   const card = X.cxCard("COMPOSIO_MULTI_EXECUTE_TOOL", CREATE_DOC);

@@ -5,7 +5,7 @@ import { OPS_RULES_EN, OPS_VI2EN } from "./i18n-ops";
 import { MODELS_RULES_EN, MODELS_VI2EN } from "./i18n-models";
 import { AUTH_VI2EN } from "./i18n-auth";
 import { FX_VI2EN } from "./i18n-features";
-import { CX_RULE_EN, CX_VI2EN } from "./cxactions";
+import { CX_VI2EN, cxActEn } from "./cxactions";
 // Từ điển tiếng Anh: chuỗi gốc tiếng Việt → tiếng Anh. Chiều ngược lại (chuỗi gốc tiếng Anh → tiếng Việt) nằm ở i18n-vi.ts: trình duyệt chỉ tải từ điển của ngôn ngữ đang dùng (i18n.tsx).
 export const VI2EN: Record<string, string> = {
   "Hiện thêm": "Show",
@@ -1868,18 +1868,17 @@ for (const [k, v] of Object.entries({
   "Công cụ này chạy lệnh hoặc gọi API tùy ý nên luôn hỏi trước mỗi lần, không đặt được Luôn cho phép.": "This tool runs commands or arbitrary API calls, so it always asks first and can't be set to Always allow.",
   "Quyền theo ứng dụng chỉ có ở Composio.": "Per-app permissions are only available for Composio.",
 })) if (!Object.prototype.hasOwnProperty.call(VI2EN, k)) VI2EN[k] = v;
-RULES_EN.unshift([/^Đang dùng ([^:·]+) · (.+)$/, (m) => `Using ${m[1]} · ${trCx(m[2])}`]);
 // Không đưa CX_RULE_EN vào RULES_EN chung: phần dự phòng ASCII của nó khớp quá rộng, bộ dịch DOM sẽ viết lại nhầm
-// mọi nút chữ "động từ + ascii". Nhãn thao tác Composio dịch qua trCx (i18n.tsx) ngay tại chỗ hiện nhãn.
-RULES_EN.push([/^Gọi API ([A-Z?]{1,10})$/, (m) => `Call API ${m[1]}`]);
-/** Tên thao tác Composio sang tiếng Anh (từ điển, rồi luật "động từ + danh từ"); không dịch được thì giữ nguyên. */
-function trCx(s: string) {
+// mọi nút chữ "động từ + ascii". Nhãn thao tác Composio dịch qua cxActEn (cxactions.ts, cũng là trCx của i18n.tsx) ngay tại chỗ hiện nhãn.
+const API_RULE: [RegExp, (m: RegExpMatchArray) => string] = [/^Gọi API ([A-Z?]{1,10})$/, (m) => `Call API ${m[1]}`];
+RULES_EN.push(API_RULE);
+/** Từ điển cho nhãn thao tác Composio: bản dịch sẵn có, hoặc "Gọi API GET". */
+const cxDict = (s: string) => {
   if (Object.prototype.hasOwnProperty.call(VI2EN, s)) return VI2EN[s];
-  const api = /^Gọi API ([A-Z?]{1,10})$/.exec(s);
-  if (api) return `Call API ${api[1]}`;
-  const m = s.match(CX_RULE_EN[0]);
-  return m ? CX_RULE_EN[1](m) : s;
-}
+  const m = s.match(API_RULE[0]);
+  return m ? API_RULE[1](m) : s;
+};
+RULES_EN.unshift([/^Đang dùng ([^:·]+) · (.+)$/, (m) => `Using ${m[1]} · ${cxActEn(m[2], cxDict)}`]);
 // Dòng tổng kết của lượt trả lời (worktone.ts): lỗi công cụ còn lại / bước model đã thử lại.
 RULES_EN.push(
   [/^(\d+) lỗi$/, (m) => `${m[1]} failed`],

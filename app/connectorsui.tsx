@@ -19,7 +19,7 @@ import { CONN_CHANGED, loginClaims } from "./connwatch";
 import { SettingsSkeleton } from "./skeleton";
 
 type Perm = "allow" | "chat" | "ask" | "block";
-// askOnly: chỉ đặt được Hỏi mỗi lần hoặc Chặn (bash / workbench / gọi API của Composio).
+// askOnly: chỉ đặt được Hỏi mỗi lần hoặc Chặn (bash / workbench của Composio). Gọi API đặt được mọi quyền nhưng quyền chỉ áp cho GET đọc.
 type Tool = { name: string; title: string; description: string; readOnly: boolean; guessed?: boolean; destructive: boolean; perm: Perm; locked?: "setting" | "admin"; askOnly?: boolean };
 /** Composio: quyền thao tác ghi của một ứng dụng (Gmail, Google Docs…). */
 type AppPerm = { app: string; name: string; perm: Perm; logo?: string; icon?: string };

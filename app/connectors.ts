@@ -14,7 +14,7 @@ import { catalogLine } from "./connproxy";
 import { coerceArgs } from "./connschema";
 import { authorizeRejected, authorizeUrl, checkIssuer, discover, exchangeCode, metadataHint, parseWww, randomToken, refreshTokens, registerClient, TokenRejected, type AsMeta, type OAuthClient, type Tokens } from "./mcpauth";
 import { checkUrl, FetchBlocked, TempFail } from "./safefetch";
-import { annotate, appName, askOnlyTool, COMPOSIO, COMPOSIO_COLOR, COMPOSIO_LINK_PROMPT, COMPOSIO_NAME, COMPOSIO_PROMPT, CONNECT_URL, EXEC_TOOL, execPlan, invalidateSchemaCache, isSchemaRead, KEY_HEADER, keyOk, MANAGE_URL, maskKey, PROXY_TOOL, schemaCacheGet, schemaCachePut, strictCall } from "./composio";
+import { annotate, appName, askOnlyTool, COMPOSIO, COMPOSIO_COLOR, COMPOSIO_LINK_PROMPT, COMPOSIO_NAME, COMPOSIO_PROMPT, CONNECT_URL, EXEC_TOOL, cxKnownPrompt, cxLearn, execPlan, invalidateSchemaCache, isMetaRead, isSchemaRead, KEY_HEADER, keyOk, MANAGE_URL, maskKey, PROXY_TOOL, schemaCacheLookup, schemaCachePut, strictCall } from "./composio";
 
 export type Perm = "allow" | "chat" | "ask" | "block";
 export const PERMS: Perm[] = ["allow", "chat", "ask", "block"];
@@ -54,7 +54,7 @@ type Row = {
 };
 // locked: công cụ đang bị khóa vì connector tắt công cụ xóa dữ liệu ("setting") hoặc quản trị viên không cho ("admin").
 // guessed: máy chủ không khai báo chỉ đọc hay không, Synchro đoán theo tên công cụ.
-// askOnly: chỉ đặt được Hỏi mỗi lần hoặc Chặn (bash / workbench / gọi API của Composio).
+// askOnly: chỉ đặt được Hỏi mỗi lần hoặc Chặn (bash / workbench của Composio). Gọi API đặt được mọi quyền nhưng quyền chỉ áp cho GET đọc.
 export type PublicTool = { name: string; title: string; description: string; readOnly: boolean; guessed?: boolean; destructive: boolean; perm: Perm; locked?: "setting" | "admin"; askOnly?: boolean };
 /** Quyền thao tác ghi của một ứng dụng trong Composio (Gmail, Google Docs…). */
 export type AppPerm = { app: string; name: string; perm: Perm; logo?: string; icon?: string };
@@ -109,6 +109,9 @@ function table() {
 const json = <T,>(s: string | null, d: T): T => { try { return s ? (JSON.parse(s) as T) : d; } catch { return d; } };
 const getAuth = (r: Row): Auth => { try { return JSON.parse(openSecret(r.enc_auth)) as Auth; } catch { return { mode: "none" }; } };
 function saveAuth(id: string, a: Auth) { table().prepare("UPDATE connectors SET enc_auth = ?, updated_at = ? WHERE id = ?").run(sealSecret(JSON.stringify(a)), Date.now(), id); }
+// Đăng nhập / khóa của hàng Composio vừa đổi (khóa ck_ mới, đăng nhập OAuth lại, đổi OAuth client): có thể là tài khoản Composio khác, nên bỏ lược đồ và
+// tài khoản đích đã biết của người này — danh sách công cụ meta của Composio giống nhau ở mọi tài khoản nên syncTools không nhận ra. Làm mới token thì không gọi.
+const credsChanged = (r: Pick<Row, "dir" | "user_id">) => { if (r.dir === COMPOSIO) invalidateSchemaCache(r.user_id); };
 const rowById = (id: string) => table().prepare("SELECT * FROM connectors WHERE id = ?").get(id) as Row | undefined;
 function rowOf(uid: string, id: string): Row {
   const r = rowById(id);
@@ -126,13 +129,15 @@ const defaultPerm = (t: McpTool): Perm => (!t.untrusted && readLike(t) ? "allow"
 /** Công cụ đã lưu của connector. Connector tự thêm (dir null) được đánh dấu untrusted: readOnlyHint của máy chủ không được tin (mcp.ts). */
 const toolsOf = (r: Pick<Row, "tools" | "dir">): McpTool[] => json<McpTool[]>(r.tools, []).map((t) => (r.dir === null ? { ...t, untrusted: true } : t));
 const askOnlyOf = (r: Pick<Row, "dir">, name: string) => r.dir === COMPOSIO && askOnlyTool(name);
-/** Quyền đang có của một công cụ. Bash / workbench / gọi API của Composio không bao giờ là "Luôn cho phép" hay "Hỏi một lần mỗi cuộc trò chuyện". */
+/** Quyền đang có của một công cụ. Bash / workbench của Composio không bao giờ là "Luôn cho phép" hay "Hỏi một lần mỗi cuộc trò chuyện". */
 function permOf(r: Pick<Row, "dir">, perms: Record<string, Perm>, t: McpTool): Perm {
   const p = perms[t.name] ?? defaultPerm(t);
   return askOnlyOf(r, t.name) && (p === "allow" || p === "chat") ? "ask" : p;
 }
 /** Composio: quyền thao tác ghi theo từng ứng dụng (googledocs, gmail…); ứng dụng chưa có trong bảng là "ask". */
 const appPermsOf = (r: Pick<Row, "app_perms">) => json<Record<string, Perm>>(r.app_perms, {});
+/** Tên ứng dụng và các tiền tố của nó theo từ (zoho_books → zoho_books, zoho). */
+const appPrefixes = (k: string) => k.split("_").map((_, i, a) => a.slice(0, a.length - i).join("_"));
 const appsOf = (r: Pick<Row, "app_perms">): AppPerm[] => Object.entries(appPermsOf(r)).map(([app, perm]) => ({ app, name: appName(app), perm, ...appLogo(app) })).sort((a, b) => a.name.localeCompare(b.name));
 const isDestructive = (t: McpTool) => destructiveLike(t);
 const settingsOf = (r: Row): ConnSettings => ({ ...DEFAULT_SETTINGS, ...json<Partial<ConnSettings>>(r.settings, {}) });
@@ -374,13 +379,16 @@ async function withClient<T>(id: string, fn: (c: McpClient) => Promise<T>, cache
 // Trước đây tên công cụ chỉ cần bắt đầu bằng động từ đọc là tự được "Luôn cho phép" (query chạy SQL bất kỳ cũng vậy). Lần lấy danh sách đầu tiên sau khi đổi quy tắc:
 // quyền "allow" do quy tắc cũ tự cấp mà quy tắc mới không còn coi là đọc thì chuyển về "ask". Người dùng tự chọn allow chỉ bị hỏi lại một lần, trên thẻ duyệt có sẵn nút Luôn cho phép.
 // Bản 2: connector tự thêm không còn tin readOnlyHint của máy chủ: "allow" có được chỉ nhờ máy chủ tự khai báo chỉ đọc (tên không cho thấy là đọc) thì hỏi lại một lần.
-const PERMS_V = 2;
+// Bản 3: connector tự thêm mặc định Hỏi mọi công cụ và tên kết thúc bằng động từ / danh từ ghi (list_publish, get_post) là ghi: mọi "allow" của công cụ mà quy tắc mới
+// coi là ghi đều hỏi lại một lần, dù trước đây được cho phép nhờ khai báo của máy chủ hay nhờ quy tắc tên cũ.
+const PERMS_V = 3;
 function migratePerms(old: Record<string, Perm>, tools: McpTool[], from: number) {
   const next = { ...old };
   for (const t of tools) {
     if (next[t.name] !== "allow") continue;
     if (from < 1 && oldGuessedRead(t) && !readLike(t)) next[t.name] = "ask";
     if (from < 2 && t.untrusted && t.annotations?.readOnlyHint === true && !readLike(t)) next[t.name] = "ask";
+    if (from < 3 && t.untrusted && !readLike(t)) next[t.name] = "ask";
   }
   return next;
 }
@@ -394,7 +402,8 @@ async function syncTools(id: string, signal?: AbortSignal) {
   const tools = r.dir === COMPOSIO ? annotate(got.tools) : got.tools;
   const now = Date.now();
   if (!tools.length && json<McpTool[]>(r.tools, []).length && !r.empty_seen) {
-    table().prepare("UPDATE connectors SET status = 'ok', error = NULL, last_error = ?, empty_seen = ?, checked_at = ?, updated_at = ? WHERE id = ?").run("Máy chủ vừa trả về danh sách công cụ trống nên Synchro giữ danh sách cũ và sẽ kiểm tra lại.", now, now, now, id);
+    // checked_at giữ là lần kiểm tra tốt gần nhất (thẻ hiện "Kết nối tốt lần cuối"); lần kiểm tra này ghi vào empty_seen, lịch kiểm tra lại tính theo cả hai.
+    table().prepare("UPDATE connectors SET status = 'ok', error = NULL, last_error = ?, empty_seen = ?, updated_at = ? WHERE id = ?").run("Máy chủ vừa trả về danh sách công cụ trống nên Synchro giữ danh sách cũ và sẽ kiểm tra lại.", now, now, id);
     return;
   }
   const st = settingsOf(r);
@@ -410,10 +419,12 @@ async function syncTools(id: string, signal?: AbortSignal) {
   const fresh = (t: McpTool): Perm => (first || st.newTools === "auto" ? defaultPerm(t) : st.newTools);
   const perms = Object.fromEntries(marked.map((t) => [t.name, old[t.name] ?? gone[t.name]?.perm ?? fresh(t)]));
   const away = [...Object.entries(gone).filter(([k, v]) => !(k in perms) && now - v.at < GONE_KEEP), ...Object.entries(old).filter(([k]) => !(k in perms)).map(([k, perm]) => [k, { perm, at: now }] as const)].slice(-GONE_MAX);
+  const list = JSON.stringify(slim);
   table().prepare("UPDATE connectors SET tools = ?, perms = ?, perms_gone = ?, empty_seen = NULL, status = 'ok', error = NULL, last_error = NULL, tools_total = ?, server_name = ?, checked_at = ?, updated_at = ? WHERE id = ?")
-    .run(JSON.stringify(slim), JSON.stringify(perms), away.length ? JSON.stringify(Object.fromEntries(away)) : null, tools.length > slim.length ? tools.length : null, name ?? null, now, now, id);
-  // Danh sách công cụ vừa đổi (liên kết lại, làm mới, kiểm tra lại ở nền): bỏ cache lược đồ Composio của người này.
-  if (r.dir === COMPOSIO) invalidateSchemaCache(r.user_id);
+    .run(list, JSON.stringify(perms), away.length ? JSON.stringify(Object.fromEntries(away)) : null, tools.length > slim.length ? tools.length : null, name ?? null, now, now, id);
+  // Danh sách công cụ Composio thật sự đổi: bỏ cache lược đồ của người này (đổi khóa / đăng nhập lại đã bỏ cache ở credsChanged, ngắt liên kết ở unlinkComposio).
+  // Kiểm tra lại ở nền / mỗi 10 phút trả về đúng danh sách cũ thì giữ cache, không thì cache 24 giờ hiếm khi sống quá 10 phút.
+  if (r.dir === COMPOSIO && list !== r.tools) invalidateSchemaCache(r.user_id);
   if (needsIcon(r)) await findIcon(id, icons);
 }
 
@@ -516,12 +527,14 @@ async function applyCreds(req: Request, id: string, o: Creds, signal?: AbortSign
     catch (e) { throw new ConnectorError(errText(e), e instanceof TempFail ? 503 : 400); }
     finally { await c.close(); }
     saveAuth(id, { mode: "token", key });
+    credsChanged(r);
     // Đã biết thế hệ máy chủ qua lần thử: bước lấy công cụ ngay sau đó khỏi phải dò lại (máy chủ SSE treo khi nhận POST mất hàng chục giây mỗi lần dò).
     if (c.era && c.era !== r.era) table().prepare("UPDATE connectors SET era = ? WHERE id = ?").run(c.era, id);
   }
   else if (clientId) {
     await clientRejected(req, r, a, { clientId, clientSecret: clientSecret || undefined }, signal);
     const { client: _c, tokens: _t, key: _k, ...rest } = a; saveAuth(id, { ...rest, mode: rest.mode === "token" ? "none" : rest.mode, preset: { clientId, clientSecret: clientSecret || undefined } });
+    credsChanged(r);
   }
 }
 // Thử OAuth client mới trước khi lưu, như token: hãng từ chối thì đăng nhập đang có không mất và thẻ vẫn giữ nguyên. Chỉ từ chối khi hãng nói rõ; không dò được thì cho qua như trước.
@@ -666,6 +679,7 @@ export async function finishAuth(req: Request, q: URLSearchParams): Promise<{ ok
     const tokens = await exchangeCode({ token_endpoint: s.token_endpoint }, s.client, { code, verifier: s.verifier, redirectUri: s.redirect, resource: s.resource });
     const { scopeNeeded: _s, ...rest } = getAuth(r);
     saveAuth(r.id, { ...rest, mode: "oauth", client: s.client, redirect: s.redirect, resource: s.resource, scope: s.scope, tokens, as: { issuer: s.issuer, token_endpoint: s.token_endpoint, authorization_response_iss_parameter_supported: s.iss } });
+    credsChanged(r);
   } catch (e) {
     if (e instanceof TokenRejected && clientGone(e.oauth)) forgetClient(r.id, getAuth(r));
     // Lỗi tạm thời khi đổi mã: connector đang chạy thì vẫn giữ nguyên, người dùng chỉ cần thử lại.
@@ -783,6 +797,8 @@ export class ConnectorSession {
   private calls = new Map<string, number>();
   // "Cho phép trong cuộc trò chuyện này" khi lượt không có mã cuộc trò chuyện: vẫn có hiệu lực tới hết lượt.
   private turnGrants = new Set<string>();
+  // Toolkit Composio đã được trả từ cache theo toolkit trong lượt này: lần tìm sau cho cùng toolkit đi thẳng tới Composio (cache không có công cụ cần).
+  private cxServed = new Set<string>();
   constructor(public uid: string, private ctx: { conv?: string; project?: boolean; pol: ConnPolicy }) {
     // Composio của bạn có sẵn (chưa liên kết thì model được dặn mời người dùng liên kết khi cần ứng dụng bên ngoài).
     ensureCx(uid, ctx.pol);
@@ -811,7 +827,7 @@ export class ConnectorSession {
       // Lượt này dùng danh sách đang có; lượt sau thấy công cụ hãng vừa thêm, khỏi chờ tới lần kiểm tra lại 12 giờ. Composio: công cụ meta không đổi
       // (ứng dụng vừa liên kết trên trang Composio dùng được ngay), vẫn xem lại sau 10 phút cho chắc.
       const stale = cx ? STALE_CX : STALE_TOOLS;
-      if (r.checked_at && Date.now() - r.checked_at > stale) nudgeSync(r.id, stale);
+      if (r.checked_at && Date.now() - Math.max(r.checked_at, r.empty_seen ?? 0) > stale) nudgeSync(r.id, stale);
       const perms = json<Record<string, Perm>>(r.perms, {});
       const lg = logoOfRow(r);
       for (const tool of toolsOf(r)) {
@@ -825,9 +841,10 @@ export class ConnectorSession {
   get(name: string) { return this.by.get(name); }
   // Quyền hiện tại (đọc lại từ cơ sở dữ liệu vì người dùng có thể vừa đổi). "chat" thành "allow" nếu đã cho phép trong cuộc trò chuyện này.
   // input: tham số của lời gọi. Composio tính theo thao tác thật bên trong, không theo công cụ bọc ngoài:
-  //  - MULTI_EXECUTE chỉ gồm thao tác đọc (GMAIL_FETCH_EMAILS…), gọi API bằng GET: như công cụ đọc, chạy luôn (trừ khi người dùng chặn);
+  //  - MULTI_EXECUTE chỉ gồm thao tác đọc (GMAIL_FETCH_EMAILS…): như công cụ đọc, chạy luôn (trừ khi người dùng chặn);
   //  - MULTI_EXECUTE có thao tác ghi: theo quyền ghi của từng ứng dụng trong lời gọi (mặc định Hỏi mỗi lần), "Luôn cho phép" ở MULTI_EXECUTE không áp dụng;
-  //  - bash / workbench từ xa, gọi API không phải GET: luôn hỏi mỗi lần.
+  //  - gọi API bằng GET: theo quyền của chính công cụ gọi API (mặc định Hỏi mỗi lần), như mọi công cụ khác;
+  //  - bash / workbench từ xa, gọi API không phải GET (hoặc GET tới đường dẫn ghi như chat.postMessage): luôn hỏi mỗi lần.
   perm(name: string, input?: unknown): Perm {
     const ct = this.by.get(name);
     const r = ct && rowById(ct.cid);
@@ -836,13 +853,13 @@ export class ConnectorSession {
     if (p === "block") return "block";
     if (ct.composio) {
       if (strictCall(ct.tool.name, input)) return "ask";
-      if (ct.tool.name === PROXY_TOOL) return "allow";
       if (ct.tool.name === EXEC_TOOL) {
-        const plan = input === undefined ? null : execPlan(input);
+        const plan = input === undefined ? null : execPlan(input, this.uid);
         if (!plan) return "ask";
         if (!plan.writes.length) return "allow";
         const ap = appPermsOf(r);
-        const each = plan.writes.map((k) => ap[k] ?? "ask");
+        // Chặn ở một ứng dụng áp cả cho tên dài hơn của nó (zoho → zoho_books): tên ứng dụng của slug lạ có thể dài ra khi Synchro biết thêm toolkit.
+        const each = plan.writes.map((k) => (appPrefixes(k).some((x) => ap[x] === "block") ? "block" : ap[k] ?? "ask"));
         if (each.includes("block")) return "block";
         return plan.writes.every((k, i) => each[i] === "allow" || this.granted(ct, `app:${k}`)) ? "allow" : "ask";
       }
@@ -873,8 +890,8 @@ export class ConnectorSession {
   /** Khóa quyền mà "Luôn cho phép" / "Cho phép trong cuộc trò chuyện này" cấp cho lời gọi: [] khi lời gọi luôn phải hỏi (không cấp gì ngoài lần này). */
   private grantKeys(ct: ChatTool, input: unknown): { apps: string[] } | { tool: true } | null {
     if (!ct.composio) return { tool: true };
-    if (strictCall(ct.tool.name, input) || ct.tool.name === PROXY_TOOL) return null;
-    if (ct.tool.name === EXEC_TOOL) { const plan = input === undefined ? null : execPlan(input); return plan?.writes.length ? { apps: plan.writes } : null; }
+    if (strictCall(ct.tool.name, input)) return null;
+    if (ct.tool.name === EXEC_TOOL) { const plan = input === undefined ? null : execPlan(input, this.uid); return plan?.writes.length ? { apps: plan.writes } : null; }
     return { tool: true };
   }
   /** "Luôn cho phép": công cụ này; MULTI_EXECUTE thì thao tác ghi của các ứng dụng trong lời gọi (không phải mọi thao tác của mọi ứng dụng). */
@@ -921,10 +938,14 @@ export class ConnectorSession {
     // CLI đã hủy lời gọi (hoặc bấm Dừng) ngay trước khi chạy: chưa gửi gì đi thì không được gửi nữa.
     if (signal?.aborted) return { content: "Lời gọi đã bị hủy nên công cụ chưa chạy.", is_error: true };
     if (this.perm(name, args) === "block") return { content: "Người dùng đã chặn hoặc tắt công cụ này.", is_error: true };
-    // Composio đọc lược đồ công cụ (tìm công cụ, xem tham số): trả ngay từ cache 24 giờ nếu lần đọc y hệt đã có, khỏi đi vòng tới máy chủ Composio. Trả từ cache không đi tới máy chủ nên không tính vào giới hạn số lần gọi.
+    // Composio đọc lược đồ công cụ (tìm công cụ, xem tham số): trả ngay từ cache 24 giờ theo (người dùng, toolkit), khỏi đi vòng tới máy chủ Composio.
+    // Trả từ cache không đi tới máy chủ nên không tính vào giới hạn số lần gọi. Trả theo toolkit mà model vẫn tìm lại toolkit đó trong lượt: cache không đủ, tìm thật.
     if (ct.composio && isSchemaRead(ct.tool.name)) {
-      const hit = schemaCacheGet(this.uid, ct.tool.name, args);
-      if (hit !== null) return { content: hit, is_error: false };
+      const hit = schemaCacheLookup(this.uid, ct.tool.name, args);
+      if (hit && !hit.kits?.some((k) => this.cxServed.has(k))) {
+        for (const k of hit.kits ?? []) this.cxServed.add(k);
+        return { content: hit.content, is_error: false };
+      }
     }
     const max = r ? settingsOf(r).maxCalls : 0;
     const n = (this.calls.get(ct.cid) ?? 0) + 1;
@@ -934,8 +955,9 @@ export class ConnectorSession {
     try {
       const res = await withClient(ct.cid, (c) => { sent = true; return c.callTool(ct.tool, coerceArgs(ct.tool.inputSchema, args && typeof args === "object" ? args : {}), { signal, timeout }); }, this.cache, ct.tool.name);
       const { text, isError } = resultText(res);
-      // Lưu lược đồ vừa đọc (chỉ khi không lỗi) để lần đọc y hệt trong ngày lấy ngay.
+      // Lưu lược đồ vừa đọc (chỉ khi không lỗi) để lần đọc trong ngày lấy ngay; kết quả công cụ meta khác (quản lý / chờ kết nối) cho biết toolkit và tài khoản đang kết nối.
       if (!isError && ct.composio && isSchemaRead(ct.tool.name)) schemaCachePut(this.uid, ct.tool.name, args, text);
+      else if (!isError && ct.composio && isMetaRead(ct.tool.name)) cxLearn(this.uid, ct.tool.name, text);
       const { images, all } = resultImages(res);
       const [img, ...more] = images;
       return { content: text, is_error: isError, ...(img ? { image: img.data, mime: img.mime, imagesAll: all } : {}), ...(more.length ? { more } : {}) };
@@ -977,7 +999,9 @@ export function connectorsPrompt(s: ConnectorSession, proxy = false) {
 Danh mục công cụ theo connector:
 ${catalog(s)}`
     : `Người dùng đã kết nối Synchro với: ${names}. Các công cụ có tiền tố tên connector (ví dụ notion__search) thao tác trực tiếp trên tài khoản của họ ở các ứng dụng đó.`;
-  const cx = s.tools.some((t) => t.composio) ? `\n${COMPOSIO_PROMPT}` : "";
+  // Composio: kèm công cụ người dùng đã tìm trong 24 giờ (tên + tham số) để model gọi thẳng, khỏi tìm lại (E3.4).
+  const known = s.tools.some((t) => t.composio) ? cxKnownPrompt(s.uid) : "";
+  const cx = s.tools.some((t) => t.composio) ? `\n${COMPOSIO_PROMPT}${known ? `\n${known}` : ""}` : "";
   return `${head}${cx}
 Hãy dùng chúng khi câu hỏi cần dữ liệu hoặc hành động trong các ứng dụng này; nếu không cần thì trả lời bình thường.
 Người dùng có thể gõ @Tên (tên connector viết liền, bỏ khoảng trắng; ví dụ @GitHub, @GoogleDrive, @Composio) trong tin nhắn để chỉ định connector: khi thấy @Tên khớp một connector ở trên, hãy dùng công cụ của đúng connector đó cho yêu cầu này.
@@ -1021,7 +1045,7 @@ export async function recheckConnectors(now = Date.now()) {
   const tried = (g.__synchroConnTried ??= new Map());
   for (const [k, t] of tried) if (now - t > RECHECK_RETRY) tried.delete(k);
   // Bỏ các connector vừa thử ngay trong câu truy vấn: lọc sau LIMIT thì vài chục connector hỏng cũ nằm đầu danh sách làm connector tốt không bao giờ tới lượt.
-  const rows = table().prepare("SELECT id FROM connectors WHERE enabled = 1 AND checked_at IS NOT NULL AND checked_at < ? AND id NOT IN (SELECT value FROM json_each(?)) ORDER BY checked_at LIMIT ?").all(now - RECHECK_AFTER, JSON.stringify([...tried.keys()]), RECHECK_BATCH) as { id: string }[];
+  const rows = table().prepare("SELECT id FROM connectors WHERE enabled = 1 AND checked_at IS NOT NULL AND MAX(checked_at, COALESCE(empty_seen, 0)) < ? AND id NOT IN (SELECT value FROM json_each(?)) ORDER BY MAX(checked_at, COALESCE(empty_seen, 0)) LIMIT ?").all(now - RECHECK_AFTER, JSON.stringify([...tried.keys()]), RECHECK_BATCH) as { id: string }[];
   if (!rows.length) return 0;
   g.__synchroConnBusy = true;
   try {

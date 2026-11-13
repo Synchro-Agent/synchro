@@ -6,50 +6,114 @@
 /** Động từ đọc: đứng ngay sau tên ứng dụng thì thao tác là đọc (chạy không cần hỏi). */
 export const READ_VERBS = new Set(["GET", "LIST", "FETCH", "SEARCH", "FIND", "READ", "RETRIEVE", "DESCRIBE", "QUERY", "VIEW"]);
 // Động từ ghi rõ ràng ở bất cứ đâu sau động từ đọc (GMAIL_GET_AND_DELETE…) thì vẫn là ghi.
-const WRITE_ANY = new Set(["CREATE", "DELETE", "REMOVE", "WRITE", "INSERT", "REPLACE", "EDIT", "EXECUTE", "DROP", "CANCEL", "DESTROY", "PURGE", "UPSERT", "OVERWRITE", "TRUNCATE", "ALTER", "GRANT", "REVOKE", "SEND", "UPDATE", "MODIFY", "UPLOAD", "TRASH"]);
+const WRITE_ANY = new Set(["CREATE", "DELETE", "REMOVE", "WRITE", "INSERT", "REPLACE", "EDIT", "EXECUTE", "DROP", "CANCEL", "DESTROY", "PURGE", "UPSERT", "OVERWRITE", "TRUNCATE", "ALTER", "GRANT", "REVOKE", "SEND", "UPDATE", "MODIFY", "UPLOAD", "TRASH",
+  "SUBMIT", "FORWARD", "SHARE", "INVITE", "REPLY", "ENABLE", "DISABLE", "ACCEPT", "TRANSFER", "PAY", "REFUND", "STAR", "ENROLL"]);
 // Vừa là động từ vừa là danh từ: chỉ tính là ghi khi nối sau AND / OR / THEN (FIND_AND_UPDATE, GET_OR_SET).
 const WRITE_NOUN = new Set(["POST", "RUN", "SET", "PATCH", "PUT", "PUBLISH", "ADD", "SAVE", "STORE", "MOVE", "RENAME", "ARCHIVE", "ASSIGN", "APPROVE", "REJECT", "MARK", "LOCK", "MERGE", "DEPLOY", "TRIGGER", "IMPORT", "APPLY", "COMMIT", "PUSH", "START", "STOP"]);
 const LINK_WORD = new Set(["AND", "OR", "THEN"]);
 // Động từ vừa là danh từ, một mình không nói đọc cái gì (QUERY / FIND đứng một mình có thể là câu lệnh bất kỳ): coi là ghi (hỏi trước), như VAGUE_ALONE ở mcp.ts.
 const VAGUE_ALONE = new Set(["QUERY", "FIND"]);
-// Mọi động từ (đọc + ghi): dùng để dò ranh giới tên ứng dụng ↔ tên thao tác khi không có MULTI_KITS / toolkit.
-const ALL_VERBS = new Set([...READ_VERBS, ...WRITE_ANY, ...WRITE_NOUN]);
 // Tham số có dấu hiệu chạy lệnh / truy vấn tùy ý: không coi là đọc dù tên có động từ đọc.
 const RISKY_PARAM = /^(sql|sql_?query|query_?sql|statement|stmt|command|cmd|mutation|shell|script|code)$/i;
 // Tham số của QUERY mang câu lệnh: trị của query / q / sql có từ khóa đổi dữ liệu thì coi là ghi.
 const QUERY_KEYS = ["query", "q", "sql"];
 const RISKY_SQL = /\b(insert|update|delete|drop|alter|truncate|create|replace|merge|grant)\b/i;
-// Ứng dụng có tên hai từ (GOOGLE_MAPS_GET_ROUTE): biết trước thì tách đúng; không biết thì tên ứng dụng là từ đầu và thao tác bị coi là ghi (hỏi trước).
-const MULTI_KITS = new Set(["google_maps", "google_analytics", "google_ads", "google_tasks", "google_photos", "google_bigquery", "microsoft_teams", "one_drive", "share_point"]);
+
+// ---- ứng dụng (toolkit) của một thao tác ----
+// Ranh giới tên ứng dụng ↔ tên thao tác quyết định đọc hay ghi và khóa quyền theo ứng dụng, nên KHÔNG lấy từ trường toolkit / app do model viết vào lời gọi
+// (model, hoặc chỉ dẫn cài trong email / trang web nó vừa đọc, có thể dời ranh giới để động từ đọc đứng đầu: TWITTER_DELETE + LIST). Chỉ dùng:
+//  1. toolkit mà chính Composio trả cho đúng slug đó (kết quả SEARCH_TOOLS / GET_TOOL_SCHEMAS, xem composio.ts cxLearn);
+//  2. tiền tố dài nhất khớp một toolkit Composio đã biết (danh sách dưới đây + toolkit Composio đã trả về cho người dùng);
+//  3. không khớp toolkit nào: tên ứng dụng là từ đầu và thao tác là ghi (hỏi trước) — không đoán ranh giới theo vị trí động từ.
+// Toolkit nhận vào không được nuốt động từ ghi hay từ nối (AND / OR / THEN): như thế nó có thể giấu thao tác ghi.
+/** Slug toolkit thật của Composio (chữ thường). Tên nhiều từ (google_search_console) phải có ở đây thì mới tách đúng. */
+export const KNOWN_KITS: readonly string[] = [
+  // Google
+  "gmail", "googledocs", "googledrive", "googlesheets", "googlecalendar", "googleslides", "googlemeet", "googletasks", "googlephotos", "googlebigquery", "googlesuper", "googleads",
+  "googlemaps", "googleforms", "google_maps", "google_analytics", "google_search_console", "google_classroom", "google_admin", "google_ads", "google_tasks", "google_photos", "google_bigquery",
+  // Microsoft
+  "outlook", "excel", "microsoft_teams", "one_drive", "share_point", "onedrive", "sharepoint", "dynamics365",
+  // Zoho
+  "zoho", "zoho_books", "zoho_invoice", "zoho_inventory", "zoho_bigin", "zoho_desk", "zoho_mail",
+  // Nhắn tin, mạng xã hội
+  "slack", "slackbot", "discord", "discordbot", "telegram", "whatsapp", "twitter", "linkedin", "reddit", "youtube", "instagram", "facebook", "tiktok", "spotify",
+  // Công việc, tài liệu
+  "notion", "github", "gitlab", "bitbucket", "jira", "confluence", "linear", "asana", "trello", "clickup", "monday", "todoist", "airtable", "coda", "figma", "canva", "miro",
+  "dropbox", "box", "calendly", "zoom", "docusign", "typeform", "webflow", "wordpress", "contentful",
+  // Bán hàng, hỗ trợ, tài chính
+  "hubspot", "salesforce", "pipedrive", "attio", "apollo", "zendesk", "freshdesk", "intercom", "stripe", "shopify", "paypal", "quickbooks", "xero",
+  "mailchimp", "sendgrid", "brevo", "klaviyo",
+  // Hạ tầng, dữ liệu, tìm kiếm
+  "supabase", "vercel", "netlify", "cloudflare", "sentry", "posthog", "mixpanel", "amplitude", "snowflake", "neon",
+  "perplexityai", "tavily", "exa", "firecrawl", "serpapi", "composio_search", "elevenlabs", "hackernews",
+];
+/** Hiểu biết thêm về toolkit, lấy từ kết quả của chính Composio (không phải từ lời gọi của model): toolkit đã thấy, và toolkit của từng slug. */
+export type KitHints = { kits?: Iterable<string>; slug?: (slug: string) => string | undefined };
 
 const words = (slug: string) => slug.toUpperCase().split(/[^A-Z0-9]+/).filter(Boolean);
-/** Ứng dụng (slug Composio, chữ thường) và phần còn lại của tên thao tác.
- *  toolkit: tên ứng dụng do lời gọi khai báo (trường toolkit / app); có thì tách theo nó.
- *  Không có thì tìm động từ trong 1–3 từ đầu (mọi từ trước động từ là tên ứng dụng), cuối cùng mới dùng MULTI_KITS. */
-export function slugParts(slug: string, toolkit?: string): { kit: string; rest: string[] } {
-  const w = words(slug);
-  let n = 0;
-  const tk = toolkit ? words(toolkit) : [];
-  if (tk.length && tk.length < w.length && tk.every((x, i) => x === w[i])) n = tk.length;
-  if (!n) {
-    const i = w.findIndex((x, k) => k > 0 && k <= 3 && ALL_VERBS.has(x));
-    n = i >= 1 ? i : w.length > 2 && MULTI_KITS.has(`${w[0]}_${w[1]}`.toLowerCase()) ? 2 : 1;
+const KNOWN_WORDS = KNOWN_KITS.map(words);
+// Từ mà tên toolkit không được nuốt (sau từ đầu): động từ ghi, từ nối.
+const HIDES_WRITE = (x: string) => WRITE_ANY.has(x) || WRITE_NOUN.has(x) || LINK_WORD.has(x);
+// Composio hay lặp lại tên ứng dụng ngay sau toolkit: OUTLOOK_OUTLOOK_LIST_MESSAGES, TAVILY_TAVILY_SEARCH, PERPLEXITYAI_PERPLEXITY_AI_SEARCH, MICROSOFT_TEAMS_TEAMS_LIST.
+// Phần lặp đó vẫn là tên ứng dụng (động từ đứng ngay sau nó là "ngay sau tên toolkit"), nên bỏ đi. Chỉ bỏ chữ không phải động từ / từ nối, và luôn chừa lại ít nhất một chữ.
+const VERBISH = (x: string) => HIDES_WRITE(x) || READ_VERBS.has(x);
+function unrepeat(kit: string[], rest: string[]): string[] {
+  const flat = kit.join("");
+  for (let j = Math.min(3, rest.length - 1); j >= 1; j--) {
+    const head = rest.slice(0, j);
+    if (head.some(VERBISH)) continue;
+    if (head.join("") === flat || (j === 1 && kit.length > 1 && head[0] === kit[kit.length - 1])) return rest.slice(j);
   }
-  return { kit: w.slice(0, n).join("_").toLowerCase(), rest: w.slice(n) };
+  return rest;
 }
-/** Thao tác Composio có phải chỉ đọc không: động từ đọc ngay sau tên ứng dụng, không kèm động từ ghi, tham số không có dấu hiệu chạy lệnh. Không chắc thì là ghi. */
-export function slugIsRead(slug: string, args?: unknown, toolkit?: string): boolean {
-  const { rest } = slugParts(slug, toolkit);
-  if (!rest.length || !READ_VERBS.has(rest[0])) return false;
+/** Ứng dụng (slug Composio, chữ thường) và phần còn lại của tên thao tác. known: ứng dụng xác định được (toolkit đã biết); không thì phải coi là ghi.
+ *  learned: ranh giới lấy từ toolkit đã thấy của người dùng (hints.kits), không phải từ toolkit Composio báo cho đúng slug này hay danh sách có sẵn. */
+export function slugParts(slug: string, hints?: KitHints): { kit: string; rest: string[]; known: boolean; learned?: boolean } {
+  const w = words(slug);
+  const fits = (k: string[]) => k.length > 0 && k.length < w.length && k.every((x, i) => x === w[i]) && !k.slice(1).some(HIDES_WRITE);
+  const split = (n: number, known: boolean, learned = false) => ({ kit: w.slice(0, n).join("_").toLowerCase(), rest: known ? unrepeat(w.slice(0, n), w.slice(n)) : w.slice(n), known, ...(learned ? { learned } : {}) });
+  // Composio đã nói slug này thuộc toolkit nào.
+  const own = hints?.slug?.(w.join("_"));
+  if (own && fits(words(own))) return split(words(own).length, true);
+  let n = 0;
+  for (const k of KNOWN_WORDS) if (k.length > n && fits(k)) n = k.length;
+  const base = n;
+  if (hints?.kits) for (const t of hints.kits) { const k = words(t); if (k.length > n && fits(k)) n = k.length; }
+  return n ? split(n, true, n > base) : split(Math.min(1, w.length), false);
+}
+/** Tên thao tác để xét đọc / ghi và làm nhãn. Toolkit mà tên kết thúc bằng động từ đọc (composio_search: COMPOSIO_SEARCH_WEB, COMPOSIO_SEARCH_NEWS_SEARCH):
+ *  động từ đọc đó đứng ngay trước thao tác, xét như SEARCH_WEB ("Tìm web") — vẫn phải không có động từ ghi nào. */
+export function actRest(p: { kit: string; rest: string[]; known: boolean }): string[] {
+  const last = p.kit.toUpperCase().split("_").pop() ?? "";
+  return p.known && p.rest.length && READ_VERBS.has(last) && !VAGUE_ALONE.has(last) && !HIDES_WRITE(p.rest[0]) ? [last, ...p.rest] : p.rest;
+}
+/** Tham số của thao tác dưới dạng đối tượng, đúng như lúc gửi đi (chuỗi JSON được đọc ra, như coerceArgs). null: không đọc được thành đối tượng (coi là ghi). */
+function argsObject(args: unknown): Record<string, unknown> | null {
+  let v = args;
+  if (typeof v === "string") { if (!v.trim()) return {}; try { v = JSON.parse(v); } catch { return null; } }
+  if (v === undefined || v === null) return {};
+  return typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : null;
+}
+/** Thao tác Composio có phải chỉ đọc không: ứng dụng xác định được, động từ đọc ngay sau tên ứng dụng, không kèm động từ ghi, tham số không có dấu hiệu chạy lệnh. Không chắc thì là ghi. */
+export function slugIsRead(slug: string, args?: unknown, hints?: KitHints): boolean {
+  const p = slugParts(slug, hints);
+  const { known, learned } = p;
+  const rest = actRest(p);
+  if (!known || !rest.length || !READ_VERBS.has(rest[0])) return false;
+  // Toolkit đã thấy (không phải toolkit Composio báo cho đúng slug này) chỉ để tách tên ứng dụng / khóa quyền: không bao giờ biến thao tác ghi thành đọc
+  // (TWITTER_FOLLOW_LIST với toolkit "twitter_follow" vẫn là ghi của twitter). Đọc chỉ khi không có nó cũng là đọc.
+  if (learned && !slugIsRead(slug, args)) return false;
   // QUERY / FIND đứng một mình sau tên ứng dụng (SUPABASE_QUERY, GOOGLEBIGQUERY_QUERY): không rõ đọc cái gì → coi là ghi.
   if (rest.length === 1 && VAGUE_ALONE.has(rest[0])) return false;
   // Động từ ghi rõ ràng ở bất cứ đâu; hoặc sau từ nối (AND / OR / THEN) bất kỳ động từ không phải động từ đọc
   // (FORWARD, SHARE, STAR, INVITE, REPLY, SUBMIT, ENROLL…): coi là ghi (fail-closed). LIST_AND_FORWARD, GET_OR_CREATE.
   if (rest.some((x, i) => i > 0 && (WRITE_ANY.has(x) || (LINK_WORD.has(rest[i - 1]) && !READ_VERBS.has(x))))) return false;
-  const a = args && typeof args === "object" && !Array.isArray(args) ? (args as Record<string, unknown>) : undefined;
-  if (a && Object.keys(a).some((k) => RISKY_PARAM.test(k))) return false;
+  // Tham số là chuỗi JSON (Gemini gửi đối tượng không khai báo thuộc tính dưới dạng chuỗi): đọc ra trước khi xét, đọc không được thì là ghi.
+  const a = argsObject(args);
+  if (!a) return false;
+  if (Object.keys(a).some((k) => RISKY_PARAM.test(k))) return false;
   // QUERY kèm câu lệnh đổi dữ liệu (…_QUERY { query: "DELETE …" }): coi là ghi.
-  if (a && rest[0] === "QUERY" && QUERY_KEYS.some((k) => typeof a[k] === "string" && RISKY_SQL.test(a[k] as string))) return false;
+  if (rest[0] === "QUERY" && QUERY_KEYS.some((k) => typeof a[k] === "string" && RISKY_SQL.test(a[k] as string))) return false;
   return true;
 }
 
@@ -142,3 +206,12 @@ export const CX_RULE_EN: [RegExp, (m: RegExpMatchArray) => string] = [
   new RegExp(`^(${alt(VERB_EN.keys())}) (${alt(NOUN_EN.keys())}|[a-z0-9][a-z0-9 ]{0,80})$`),
   (m) => `${VERB_EN.get(m[1]) ?? m[1]} ${NOUN_EN.get(m[2]) ?? m[2]}`,
 ];
+/** Nhãn thao tác Composio sang tiếng Anh — một chỗ duy nhất, dùng cho cả bộ dịch giao diện (i18n.tsx trCx) và luật "Đang dùng X · Y" của từ điển (i18n-dict.ts).
+ *  dict: bản dịch chung (từ điển + luật, kể cả "Gọi API GET"); dịch được thì lấy, không thì áp CX_RULE_EN cho phần chữ đã bỏ khoảng trắng hai đầu. */
+export function cxActEn(s: string, dict: (s: string) => string): string {
+  const base = dict(s);
+  if (base !== s) return base;
+  const t = s.trim();
+  const m = t.match(CX_RULE_EN[0]);
+  return m ? s.replace(t, () => CX_RULE_EN[1](m)) : s;
+}

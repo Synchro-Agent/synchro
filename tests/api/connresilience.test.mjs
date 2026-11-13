@@ -617,8 +617,12 @@ try {
     const msg = await thrown(C.refreshConnector(uid, id));
     ok(/không hợp lệ/.test(msg) && perm("search_docs") === "block" && perm("create_page") === "allow", "thiếu mảng tools: báo lỗi, quyền nguyên vẹn", msg);
     S.list = { tools: [] };
+    const okAt = row(id).checkedAt;
+    await sleep(5);
     await C.refreshConnector(uid, id);
     ok(row(id).tools.length === TOOLS.length && perm("search_docs") === "block" && /danh sách công cụ trống/.test(row(id).lastError ?? ""), "danh sách rỗng lần đầu: chưa tin, giữ nguyên, có ghi lại", JSON.stringify(row(id).lastError));
+    // R14: thẻ hiện "Kết nối tốt lần cuối" từ checkedAt; lần kiểm tra có lỗi không được đẩy nó thành "vừa xong".
+    ok(okAt && row(id).checkedAt === okAt, "danh sách rỗng: checkedAt vẫn là lần kiểm tra tốt gần nhất", `${okAt} → ${row(id).checkedAt}`);
     S.list = undefined;
     await C.refreshConnector(uid, id);
     ok(!row(id).lastError, "có lại công cụ: hết cảnh báo");
@@ -668,6 +672,24 @@ try {
     C.updateConnector(uid, id, { perms: { wipe_db: "allow" } }, pol);
     await C.refreshConnector(uid, id);
     ok(row(id).tools.find((t) => t.name === "wipe_db").perm === "allow", "người dùng chọn lại Luôn cho phép: giữ");
+    S.tools = null;
+    wipe();
+  }
+
+  console.log("26d. Connector tự thêm: allow cũ của công cụ mà quy tắc mới coi là ghi thì hỏi lại một lần (SEC-7)");
+  {
+    S.tools = [...TOOLS, { name: "get_post", description: "Post", inputSchema: { type: "object", properties: {} } }, { name: "list_publish", description: "Publish", inputSchema: { type: "object", properties: {} } }];
+    const r = await add();
+    const id = r.connector.id;
+    // Dữ liệu cũ (bản 2): quy tắc tên cũ tự cấp "allow" cho get_post / list_publish (không có readOnlyHint), search_docs là đọc thật.
+    AS.db().prepare("UPDATE connectors SET perms = json_set(perms, '$.get_post', 'allow', '$.list_publish', 'allow', '$.search_docs', 'allow'), settings = ? WHERE id = ?").run(JSON.stringify({ permsV: 2 }), id);
+    await C.refreshConnector(uid, id);
+    const pm = (n) => row(id).tools.find((t) => t.name === n).perm;
+    ok(pm("get_post") === "ask" && pm("list_publish") === "ask", "get_post, list_publish (ghi theo quy tắc mới): về Hỏi trước", `${pm("get_post")} ${pm("list_publish")}`);
+    ok(pm("search_docs") === "allow", "search_docs (đọc) giữ Luôn cho phép");
+    C.updateConnector(uid, id, { perms: { get_post: "allow" } }, pol);
+    await C.refreshConnector(uid, id);
+    ok(pm("get_post") === "allow", "người dùng chọn lại Luôn cho phép: giữ, không hạ lần nữa");
     S.tools = null;
     wipe();
   }

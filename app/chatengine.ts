@@ -6,7 +6,7 @@ import { audit, can, canModel, getUser, limit, permsOf, type UserRow } from "./a
 import { clampEffort, connPolicy, effortCap, isEffort, legacyModel, type Effort } from "./catalog";
 import { catalog, mainModels, pickDefault, resolveModel, type Target } from "./providers";
 import { ConnectorSession, connectorsPrompt, listConnectors, RECONNECT_TOOL, type ChatTool, type OfflineConn } from "./connectors";
-import { connectLinks, cxCard, cxLabel, notConnectLink } from "./composio";
+import { connectLinks, cxCard, cxHints, cxLabel, notConnectLink } from "./composio";
 import { appLogo, composioAppOf } from "./connlogos";
 import { randomToken } from "./mcpauth";
 import { browserDefault, capsState, skillsOn } from "./caps";
@@ -413,8 +413,9 @@ const TOOL_MIN = 60_000;
 const CALL_CANCELLED = "CLI đã hủy lời gọi này nên công cụ chưa chạy.";
 const REFUSED = "Người dùng đã từ chối cho dùng công cụ này ở lượt này. Đừng thử lại bằng cách khác; hãy cho họ biết bạn cần quyền này để làm tiếp.";
 // Logo cho thẻ duyệt / dòng công cụ: logo của connector; công cụ Composio chạy thao tác trong một ứng dụng (GMAIL_SEND_EMAIL…) thì logo của ứng dụng đó.
-function callLogo(ct: ChatTool, input: unknown): { logo?: string; color?: string; icon?: string; site?: string } {
-  const app = ct.composio ? composioAppOf(input) : "";
+// uid: người dùng của phiên — logo, nhãn, thẻ duyệt và khóa quyền tách ứng dụng theo cùng toolkit Composio đã báo cho người này.
+function callLogo(ct: ChatTool, input: unknown, uid: string | undefined): { logo?: string; color?: string; icon?: string; site?: string } {
+  const app = ct.composio ? composioAppOf(input, cxHints(uid)) : "";
   // Ứng dụng không có logo nào (không tệp sẵn, không có trang chủ trong bảng): giữ logo Composio thay vì chữ cái đầu.
   const own: { logo?: string; icon?: string } = app ? appLogo(app) : {};
   if (own.logo || own.icon) return own;
@@ -423,15 +424,15 @@ function callLogo(ct: ChatTool, input: unknown): { logo?: string; color?: string
 // Tên công cụ trong chat. Composio theo thao tác thật bên trong, bằng lời thường ("Google Docs · Tạo tài liệu", "Composio · Tìm công cụ"),
 // không phải tên công cụ bọc ngoài ("Composio: Multi Execute Composio Tools"); connector khác: "<connector>: <công cụ>".
 const toolTitle = (ct: ChatTool) => ct.tool.title || ct.tool.annotations?.title || ct.tool.name;
-const cxOf = (ct: ChatTool, input: unknown) => (ct.composio ? cxLabel(ct.tool.name, input) : null);
-const usedName = (ct: ChatTool, input: unknown) => { const l = cxOf(ct, input); return l ? `${l.app} · ${l.act}` : `${ct.cname}: ${toolTitle(ct)}`; };
+const cxOf = (ct: ChatTool, input: unknown, uid: string | undefined) => (ct.composio ? cxLabel(ct.tool.name, input, uid) : null);
+const usedName = (ct: ChatTool, input: unknown, uid: string | undefined) => { const l = cxOf(ct, input, uid); return l ? `${l.app} · ${l.act}` : `${ct.cname}: ${toolTitle(ct)}`; };
 const askOf = (x: Exec, c: Call, id: string): Ask => {
   const ct = x.sess!.get(c.name)!;
   // Composio: thẻ nói ứng dụng (logo), tài khoản nếu biết, thao tác bằng lời thường và tham số chính; strict thì thẻ chỉ có "Cho phép một lần".
-  const cx = ct.composio ? cxCard(ct.tool.name, c.input) : null;
+  const cx = ct.composio ? cxCard(ct.tool.name, c.input, x.sess!.uid) : null;
   const a: Ask = {
     id, kind: "connector", tool: ct.tool.name, key: `conn:${ct.fq}`, title: cx?.act ?? toolTitle(ct), detail: "",
-    conn: (() => { const lg = callLogo(ct, c.input); return { name: cx?.name ?? ct.cname, ...lg, ...(lg.icon && lg.icon.length >= 1500 ? { icon: undefined } : {}) }; })(),
+    conn: (() => { const lg = callLogo(ct, c.input, x.sess!.uid); return { name: cx?.name ?? ct.cname, ...lg, ...(lg.icon && lg.icon.length >= 1500 ? { icon: undefined } : {}) }; })(),
     about: (ct.tool.description ?? "").slice(0, 300), destructive: destructiveLike(ct.tool), ...(cx ? { cx } : {}),
   };
   // Sự kiện của lượt giữ tối đa 6000 ký tự: cắt ngang JSON thì thẻ không hiện được và lượt treo tới hết giờ.
@@ -846,8 +847,8 @@ async function runCall(x: Exec, c: Call, d?: Decision): Promise<Run> {
     if (r.used.untrusted) { x.untrusted = true; markConvUntrusted(x.uid, x.conv); }
     return r;
   }
-  const used = { kind: "tool" as const, name: usedName(ct, c.input) };
-  const lbl = cxOf(ct, c.input);
+  const used = { kind: "tool" as const, name: usedName(ct, c.input, x.sess!.uid) };
+  const lbl = cxOf(ct, c.input, x.sess!.uid);
   if (x.task && (x.sess!.perm(c.name, c.input) === "ask" || untrustedConnWrite(x, c))) return { content: queueTool(x.uid, x.task, c, lbl ? { connector: lbl.app, title: lbl.act } : { connector: ct.cname, title: toolTitle(ct) }), is_error: true, used };
   if (d === "deny") return { content: x.denied?.get(c.id) ?? REFUSED, is_error: true, used };
   const meta = x.calls?.get(c.id), run = runSignal();
@@ -886,7 +887,7 @@ function describe(x: Exec, c: Call) {
   if (c.name === CONN_FIND && x.sess && !x.sess.get(c.name)) return `Đang tìm công cụ connector: ${String(c.input?.query ?? "").slice(0, 120)}`;
   if (x.browse && isBrowserTool(c.name)) return describeBrowser(c.name, c.input ?? {}, browserTargetOf(c.input, x.bctx));
   const ct = x.sess?.get(c.name);
-  const cx = ct && cxOf(ct, c.input);
+  const cx = ct && cxOf(ct, c.input, x.sess?.uid);
   if (cx) return `Đang dùng ${cx.app} · ${cx.act}`;
   return ct ? `Đang dùng ${ct.cname}: ${ct.tool.title || ct.tool.name}` : `Đang dùng công cụ ${c.name}`;
 }
@@ -926,8 +927,8 @@ async function execute(ad: Adapter, m: unknown[], x: Exec, calls: Call[], used: 
   calls.forEach((c, i) => {
     const ct = seqs[i] ? x.sess?.get(c.name) : undefined;
     if (!ct) return;
-    const lg = callLogo(ct, c.input);
-    progress("tconn", JSON.stringify({ ref: seqs[i], name: cxOf(ct, c.input)?.app ?? ct.cname, ...lg, ...(lg.icon && lg.icon.length >= 200 ? { icon: undefined } : {}) }));
+    const lg = callLogo(ct, c.input, x.sess?.uid);
+    progress("tconn", JSON.stringify({ ref: seqs[i], name: cxOf(ct, c.input, x.sess?.uid)?.app ?? ct.cname, ...lg, ...(lg.icon && lg.icon.length >= 200 ? { icon: undefined } : {}) }));
   });
   let res: Run[];
   try {
@@ -1024,9 +1025,9 @@ async function loop(ad: Adapter, m: unknown[], x: Exec, used: ToolRun["used"][],
           id, calls: ask.map((c) => {
             const ct = x.sess!.get(c.name)!;
             const input = JSON.stringify(c.input ?? {});
-            const cx = ct.composio ? cxCard(ct.tool.name, c.input) : null;
+            const cx = ct.composio ? cxCard(ct.tool.name, c.input, uid) : null;
             return {
-              id: c.id, connector: { id: ct.cid, name: ct.cname, ...callLogo(ct, c.input) },
+              id: c.id, connector: { id: ct.cid, name: ct.cname, ...callLogo(ct, c.input, uid) },
               tool: { name: ct.tool.name, title: cx?.act ?? toolTitle(ct), description: (ct.tool.description ?? "").slice(0, 400), destructive: destructiveLike(ct.tool) },
               ...(cx ? { cx } : {}),
               input: input.length > 20_000 ? { _: input.slice(0, 20_000) + "…" } : c.input ?? {},
