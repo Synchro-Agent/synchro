@@ -33,3 +33,34 @@ export function mediaSlots({ raw, cap, total, reserve = 2560, runMax, perMB = 35
   const c = Number.isFinite(Number(cap)) && Number(cap) > 0 ? Number(cap) : 4;
   return Math.max(1, Math.min(c, runMax, byRam));
 }
+
+/**
+ * Hàng chờ có thứ tự cho những thứ không tự báo khi rảnh (RAM khả dụng, chỗ workspace): chỉ người đứng đầu được thử check(), người sau chờ tới lượt,
+ * nên biết được vị trí (1-based) để báo cho người dùng thay vì trả 503 ngay. wait() trả { ok: true | false | "aborted", pos }: được đi thì pos là
+ * vị trí lúc vào hàng (0 khi đi ngay, không phải chờ); ok = false khi quá deadlineMs, lúc đó pos là vị trí hiện tại. onPos(pos) mỗi khi vị trí đổi.
+ */
+export function createWaitLine({ pollMs = 500, now = () => Date.now(), sleep = (ms) => new Promise((ok) => setTimeout(ok, ms)) } = {}) {
+  const line = [];
+  return {
+    async wait(check, { signal, deadlineMs = 60_000, onPos } = {}) {
+      if (signal?.aborted) return { ok: "aborted", pos: 0 };
+      if (!line.length && (await check())) return { ok: true, pos: 0 };
+      const me = {};
+      line.push(me);
+      const pos0 = line.indexOf(me) + 1;
+      let last = 0;
+      const end = now() + deadlineMs;
+      try {
+        for (;;) {
+          const pos = line.indexOf(me) + 1;
+          if (pos !== last) { last = pos; try { onPos?.(pos); } catch { /* bỏ */ } }
+          if (signal?.aborted) return { ok: "aborted", pos: pos0 };
+          if (pos === 1 && (await check())) return { ok: true, pos: pos0 };
+          if (now() >= end) return { ok: false, pos: Math.max(pos, 1) };
+          await sleep(pollMs);
+        }
+      } finally { const i = line.indexOf(me); if (i >= 0) line.splice(i, 1); }
+    },
+    get length() { return line.length; },
+  };
+}

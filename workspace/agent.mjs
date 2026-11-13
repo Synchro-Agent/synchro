@@ -15,7 +15,7 @@ import { BrowserError, createBrowser, devJson } from "./browser-core.mjs";
 import { createRelay } from "./ext-relay.mjs";
 import { clipSink, collectOutputs, createRunQueue, isMediaRun, QueueFull, safeReadIn, safeWrite } from "./safefs.mjs";
 import { createWarmPool, memAvailableMB } from "./warmpool.mjs";
-import { mediaSlots, memMB, ramSlots as slotsFor, readTotalMB } from "./capacity.mjs";
+import { createWaitLine, mediaSlots, memMB, ramSlots as slotsFor, readTotalMB } from "./capacity.mjs";
 
 const env = (k, d) => process.env[k] ?? d;
 // Tổng RAM thật của máy (MB): MemTotal trên Linux (máy chủ thật), nơi khác dùng os.totalmem (máy dev). Đọc một lần lúc khởi động.
@@ -49,18 +49,14 @@ const RUN_MAX = ramSlots("WS_RUN_MAX", 2048, 3, 1, 24);
 // Bộ nhớ một lần chạy cần (MB) để không bật container khi máy sắp hết RAM (tránh OOM cả máy chủ): mức RUN_MEMORY cộng chút đệm.
 // Sàn RAM khả dụng trước khi bật một container chạy code; WS_RUN_FLOOR_MB đặt tay thì theo, không thì = RUN_MEMORY + 256. Thời gian chờ RAM rảnh trước khi báo bận.
 const RUN_FLOOR_MB = Number(env("WS_RUN_FLOOR_MB", memMB(env("WS_RUN_MEMORY", "2g"), 2048) + 256));
-const MEM_WAIT_MS = Number(env("WS_MEM_WAIT_SEC", 60)) * 1000;
-// Chờ đủ RAM khả dụng rồi mới bật container (xếp hàng theo bộ nhớ thật thay vì báo lỗi ngay). Chỉ đo trên Linux: os.freemem trên macOS/dev
-// quá thấp dù còn RAM. Trả true khi đủ RAM, false khi hết giờ chờ, "aborted" khi người dùng dừng. needMB = 0 hoặc không đo được: cho qua.
-async function waitMem(needMB, signal) {
-  if (process.platform !== "linux" || !needMB) return true;
-  const deadline = Date.now() + MEM_WAIT_MS;
-  for (;;) {
-    if (signal?.aborted) return "aborted";
-    if ((await memAvailableMB()) >= needMB) return true;
-    if (Date.now() >= deadline) return false;
-    await new Promise((ok) => setTimeout(ok, 500));
-  }
+const MEM_WAIT_MS = Number(env("WS_MEM_WAIT_SEC", 120)) * 1000;
+// Chờ đủ RAM khả dụng rồi mới bật container (Blueprint G3.2: xếp hàng theo bộ nhớ thật và báo vị trí thay vì 503 ngay). Hàng có thứ tự
+// (workspace/capacity.mjs): chỉ người đứng đầu được bật khi đủ RAM, người sau biết mình ở vị trí mấy. Chỉ đo trên Linux: os.freemem trên macOS/dev quá
+// thấp dù còn RAM. Trả { ok: true | false | "aborted", pos }: ok = false khi hết giờ chờ (deadlineMs), "aborted" khi người dùng dừng.
+const memLine = createWaitLine({ pollMs: 500 });
+function waitMem(needMB, signal, onPos, deadlineMs = MEM_WAIT_MS) {
+  if (process.platform !== "linux" || !needMB) return Promise.resolve({ ok: true, pos: 0 });
+  return memLine.wait(async () => (await memAvailableMB()) >= needMB, { signal, deadlineMs, onPos });
 }
 // Dựng video / chuyển tài liệu bằng LibreOffice / Chromium cần nhiều bộ nhớ hơn một script phân tích dữ liệu.
 const RUN_MEMORY = env("WS_RUN_MEMORY", "2g");
@@ -209,13 +205,24 @@ async function runningIds() {
   return list.map((c) => c.Labels["synchro.ws"]).filter(okUser);
 }
 
-// Giới hạn số container chạy cùng lúc: dừng container rảnh lâu nhất để nhường chỗ.
-async function makeRoom(u) {
+// Giới hạn số container chạy cùng lúc: dừng container rảnh lâu nhất để nhường chỗ. Mọi workspace đều đang có người dùng (đang mở terminal /
+// màn hình): xếp hàng có vị trí tối đa ROOM_WAIT_MS thay vì báo bận ngay (G3.2); hết giờ mới báo bận kèm vị trí trong hàng.
+const ROOM_WAIT_MS = Number(env("WS_ROOM_WAIT_SEC", 75)) * 1000;
+// Sàn RAM khả dụng trước khi bật một workspace (G3.2); thấp hơn sàn của lần chạy code vì workspace thường dùng ít hơn mức --memory nhiều.
+const WS_FLOOR_MB = Number(env("WS_FLOOR_MB", 768));
+const roomLine = createWaitLine({ pollMs: 2000 });
+async function freeRoom(u) {
   const ids = (await runningIds()).filter((x) => x !== u);
-  if (ids.length < MAX_RUNNING) return;
+  if (ids.length < MAX_RUNNING) return true;
   const free = ids.filter((x) => !(live.get(x)?.socks > 0)).sort((a, b) => (live.get(a)?.last ?? 0) - (live.get(b)?.last ?? 0));
-  if (!free.length) throw new E(503, "Máy chủ đang bận (đã đủ số workspace chạy cùng lúc). Hãy thử lại sau ít phút.");
+  if (!free.length) return false;
   await stop(free[0]);
+  return true;
+}
+async function makeRoom(u) {
+  const r = await roomLine.wait(() => freeRoom(u), { deadlineMs: ROOM_WAIT_MS });
+  if (r.ok !== true) throw new E(503, `Máy chủ đang bận (đã đủ số workspace chạy cùng lúc), bạn đang ở vị trí ${r.pos} trong hàng chờ. Hãy thử lại sau ít phút. / Server is busy (all workspaces in use), you are number ${r.pos} in the queue. Please try again shortly.`);
+  if (r.pos) log("workspace xếp hàng", u, `vị trí ${r.pos}`);
 }
 
 async function duMB(p) {
@@ -241,6 +248,8 @@ async function ensure(u) {
     let c = await inspect(name);
     if (!c || !c.State.Running) {
       await makeRoom(u);
+      const m = await waitMem(WS_FLOOR_MB, undefined, undefined, ROOM_WAIT_MS);
+      if (m.ok !== true) throw new E(503, `Máy chủ đang thiếu bộ nhớ nên chưa bật được workspace, bạn đang ở vị trí ${m.pos} trong hàng chờ. Hãy thử lại sau ít phút. / Server is low on memory, you are number ${m.pos} in the queue. Please try again shortly.`);
       const dir = `${ROOT}/${u}`;
       fs.mkdirSync(dir, { recursive: true, mode: 0o750 });
       fs.chownSync(dir, Number(UID), Number(UID));
@@ -483,26 +492,32 @@ async function runOnce(u, { files = [], argv, stdin = null, net: wantNet = false
   let release = () => {};
   if (keep) keepBusy.set(dir, new Promise((ok) => { release = () => { keepBusy.delete(dir); ok(); }; }));
   const queuedAt = Date.now();
+  // Vị trí trong hàng chờ (dựng video, chỗ chạy chung, RAM) lúc mới vào hàng: trả về cho người gọi (queue) và ghi chú cuối kết quả (G3.2 / G5.3).
+  const q = { first: 0 };
+  const seen = (pos) => { if (pos > 0) q.first ||= pos; };
+  const posNote = (pos) => (pos ? ` Lần chạy này đang ở vị trí ${pos} trong hàng chờ.` : "");
+  let memWaitMs = 0;
   // Lần dựng video lấy chỗ dựng trước (không giữ chỗ chạy chung trong lúc chờ), rồi mới tới chỗ chạy chung.
   let freeSlot, freeMedia = () => {};
   // Script có sẵn trong thư mục giữ lại (vd. "bash render.sh" ghi ở lần trước) cũng được đọc: không container nào đang gắn thư mục này (keepBusy).
   const readScript = keep ? (rel) => safeReadIn(dir, rel, 1_000_000)?.toString("utf8") ?? null : null;
   if (isMediaRun({ files, argv, stdin, readScript })) {
-    // Báo vị trí hàng chờ dựng video cho người dùng (hiện trong nhật ký lần chạy): "đang xếp hàng dựng video, vị trí N".
+    // Vị trí hàng chờ dựng video: trả về cho người gọi (q, ghi chú cuối kết quả, lời báo bận) và ghi nhật ký.
     let lastPos = 0;
-    const onWait = (pos, running) => { if (pos !== lastPos) { lastPos = pos; log("video xếp hàng", u, `vị trí ${pos}`, `đang dựng ${running}/${MEDIA_MAX}`); } };
+    const onWait = (pos, running) => { seen(pos); if (pos !== lastPos) { lastPos = pos; log("video xếp hàng", u, `vị trí ${pos}`, `đang dựng ${running}/${MEDIA_MAX}`); } };
     try { freeMedia = await mediaQ.acquire(u, sec, signal, onWait); }
     catch (e) {
       release();
       if (!(e instanceof QueueFull)) throw e;
       const full = MEDIA_MAX > 1 ? `Máy chủ đang dựng ${MEDIA_MAX} video cùng lúc (tối đa theo bộ nhớ).` : "Máy chủ đang dựng một video khác (mỗi lần một video).";
-      throw new E(503, !e.message.startsWith("Máy chủ đang chạy nhiều code") ? e.message : `${full} Hãy chạy lại sau ít phút; các đoạn đã dựng xong vẫn được giữ.`);
+      throw new E(503, !e.message.startsWith("Máy chủ đang chạy nhiều code") ? e.message : `${full}${posNote(lastPos)} Hãy chạy lại sau ít phút; các đoạn đã dựng xong vẫn được giữ.`);
     }
   }
-  try { freeSlot = await runQ.acquire(u, sec, signal); }
-  catch (e) { freeMedia(); release(); throw e instanceof QueueFull ? new E(503, e.message) : e; }
+  let runPos = 0;
+  try { freeSlot = await runQ.acquire(u, sec, signal, (pos) => { runPos = pos; seen(pos); }); }
+  catch (e) { freeMedia(); release(); throw e instanceof QueueFull ? new E(503, e.message.startsWith("Máy chủ đang chạy nhiều code") ? e.message.replace(/\.\s*Hãy/, `.${posNote(runPos)} Hãy`) : e.message) : e; }
   const waited = Math.round((Date.now() - queuedAt) / 1000);
-  if (waited >= 2) log("lần chạy chờ", u, `${waited} giây`, `đang chạy ${runQ.running}, đang chờ ${runQ.queued}`);
+  if (waited >= 2) log("lần chạy chờ", u, `${waited} giây`, `vị trí ${q.first}`, `đang chạy ${runQ.running}, đang chờ ${runQ.queued}`);
   // Container khởi động sẵn: lần chạy không mạng thì ngắt mạng của nó trước (ngắt lỗi thì bỏ, không chạy code không mạng trên container còn mạng).
   let pooled = warm.take();
   const pooledName = pooled?.name;
@@ -588,9 +603,12 @@ async function runOnce(u, { files = [], argv, stdin = null, net: wantNet = false
     // Container trong kho đã chạy sẵn (chỉ docker exec, không thêm RAM); chỉ lần chạy lạnh mới bật container mới và chiếm RUN_MEMORY:
     // chờ đủ RAM khả dụng rồi hãy bật, hết giờ chờ thì báo bận kèm vị trí trong hàng thay vì để máy chủ thiếu bộ nhớ.
     if (r === null) {
-      const m = await waitMem(RUN_FLOOR_MB, signal);
-      if (m === "aborted") { if (signal?.aborted) return { code: 130, out: "", err: "", timedOut: false, files: [] }; }
-      else if (!m) { clearInterval(watcher); watcher = null; throw new E(503, "Máy chủ đang thiếu bộ nhớ nên chưa bật được lần chạy. Hãy thử lại sau ít phút. / Server is low on memory, please try again shortly."); }
+      const m0 = Date.now();
+      const m = await waitMem(RUN_FLOOR_MB, signal, seen);
+      memWaitMs = Date.now() - m0;
+      if (m.pos) log("lần chạy chờ RAM", u, `vị trí ${m.pos}`, `${Math.round(memWaitMs / 1000)} giây`);
+      if (m.ok === "aborted") { if (signal?.aborted) return { code: 130, out: "", err: "", timedOut: false, files: [] }; }
+      else if (!m.ok) { clearInterval(watcher); watcher = null; throw new E(503, `Máy chủ đang thiếu bộ nhớ nên chưa bật được lần chạy (đã chờ ${Math.round(memWaitMs / 1000)} giây, đang ở vị trí ${m.pos} trong hàng chờ bộ nhớ). Hãy thử lại sau ít phút. / Server is low on memory (number ${m.pos} in the queue), please try again shortly.`); }
     }
     r ??= await inBox(name, boxArgs(name, ["--network", wantNet ? RUN_NET : "none", ...(ip ? ["--ip", ip] : [])], sec, argv), { input: stdin ?? "", timeout: (sec + 30) * 1000, clip: true });
     log("lần chạy", u, pooled ? "kho" : "lạnh", `${Date.now() - t0} ms`, `mã ${r.code}`);
@@ -616,8 +634,10 @@ async function runOnce(u, { files = [], argv, stdin = null, net: wantNet = false
     }
     const got = clean ? collectOutputs(`${dir}/outputs`, { files: RUN_FILES, previews: RUN_PREVIEWS, fileBytes: RUN_FILE_MB * 1048576, totalBytes: RUN_TOTAL_MB * 1048576 }) : { files: [], skipped: ["outputs: không dừng được container"] };
     const timedOut = r.code === 124;
-    const note = (waited >= 2 ? `\n[Đã chờ ${waited} giây vì máy chủ đang bận]` : "") + (timedOut ? `\n[Đã dừng: chạy quá ${sec} giây]` : r.code === 137 ? `\n[Hệ thống đã dừng tiến trình (mã 137), thường do vượt giới hạn bộ nhớ ${RUN_MEMORY}. Hãy giảm độ phân giải, xử lý từng phần, hoặc dùng ít tiến trình song song hơn]` : "") + overDisk + (got.skipped.length ? `\n[Không gửi được: ${got.skipped.join("; ")}]` : "");
-    return { code: r.code, out: r.out, err: r.err + note, timedOut, files: got.files, ...(book ? { recalc: book } : {}), ...(got.skipped.length ? { skipped: got.skipped } : {}) };
+    const waitedAll = waited + Math.round(memWaitMs / 1000);
+    const queue = waitedAll >= 2 || q.first ? { pos: q.first, waitedSec: waitedAll } : null;
+    const note = (queue ? `\n[Đã chờ ${waitedAll} giây trong hàng chờ${q.first ? ` (vào hàng ở vị trí ${q.first})` : ""} vì máy chủ đang bận]` : "") + (timedOut ? `\n[Đã dừng: chạy quá ${sec} giây]` : r.code === 137 ? `\n[Hệ thống đã dừng tiến trình (mã 137), thường do vượt giới hạn bộ nhớ ${RUN_MEMORY}. Hãy giảm độ phân giải, xử lý từng phần, hoặc dùng ít tiến trình song song hơn]` : "") + overDisk + (got.skipped.length ? `\n[Không gửi được: ${got.skipped.join("; ")}]` : "");
+    return { code: r.code, out: r.out, err: r.err + note, timedOut, files: got.files, ...(book ? { recalc: book } : {}), ...(got.skipped.length ? { skipped: got.skipped } : {}), ...(queue ? { queue } : {}) };
   } finally {
     if (watcher) clearInterval(watcher);
     freeSlot();

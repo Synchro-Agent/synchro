@@ -864,6 +864,9 @@ RULES_EN.push(
   [/^Đang chờ (\d+) giây rồi thử lại$/, (m) => `Waiting ${m[1]} seconds, then trying again`],
   [/^Máy chủ khởi động lại khi lượt này đang chạy\. Lượt đã bắt đầu: (.+)\. Synchro không tự chạy lại để tránh làm hai lần\. Hãy kiểm tra kết quả rồi nhắn tiếp nếu cần\.$/, (m) => `The server restarted while this reply was running. It had already started: ${m[1]}. Synchro won't rerun it automatically, to avoid doing the work twice. Check the result and send a follow-up if needed.`],
   [/^Chép lời: (.+)$/, (m) => `Transcription: ${m[1]}`],
+  // Lần chạy code phải xếp hàng (app/coderun.ts queueNote).
+  [/^Lần chạy code đã xếp hàng ở vị trí (\d+), chờ (\d+) giây$/, (m) => `The code run was queued at position ${m[1]}, waited ${m[2]} ${m[2] === "1" ? "second" : "seconds"}`],
+  [/^Lần chạy code đã chờ (\d+) giây vì máy chủ đang bận$/, (m) => `The code run waited ${m[1]} ${m[1] === "1" ? "second" : "seconds"} because the server was busy`],
 );
 // Giao diện tiếng Anh: chữ tiếng Việt còn thiếu bản dịch (rà bằng scripts/i18n-audit.mjs).
 Object.assign(VI2EN, {

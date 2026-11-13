@@ -63,5 +63,64 @@ console.log("6. W23-5 / G3.3: --memory-swap lớn hơn --memory cho cả workspa
   ok(/swapOld \? \["--memory", MEMORY, "--memory-swap", MEMORY_SWAP\]/.test(src), "workspace tạo từ bản trước được docker update swap tại chỗ");
 }
 
+console.log("7. W23-4 / G3.2: hàng chờ có vị trí cho RAM và chỗ workspace");
+{
+  const line = cap.createWaitLine({ pollMs: 5 });
+  let free = false;
+  ok((await line.wait(async () => true)).pos === 0, "đủ chỗ: đi ngay, vị trí 0");
+  const seen = [[], [], []];
+  const ps = [0, 1, 2].map((i) => line.wait(async () => free, { deadlineMs: 2000, onPos: (p) => seen[i].push(p) }));
+  await new Promise((r) => setTimeout(r, 30));
+  ok(line.length === 3 && seen.map((x) => x[0]).join() === "1,2,3", "ba người chờ được báo vị trí 1, 2, 3", JSON.stringify(seen));
+  free = true;
+  const rs = await Promise.all(ps);
+  ok(rs.every((r) => r.ok === true) && rs.map((r) => r.pos).join() === "1,2,3", "có chỗ: đi theo thứ tự, mỗi người biết vị trí lúc vào hàng", JSON.stringify(rs));
+  // Vị trí đọc theo nhịp hỏi (pollMs) nên có thể nhảy cóc (3 → 1), nhưng luôn giảm dần và tới 1 trước khi đi.
+  ok(seen[2][0] === 3 && seen[2].at(-1) === 1 && seen[2].every((p, i) => i === 0 || p < seen[2][i - 1]), "người cuối thấy vị trí giảm dần từ 3 về 1", JSON.stringify(seen[2]));
+  ok(line.length === 0, "hàng trống sau khi mọi người đi");
+  free = false;
+  const a = line.wait(async () => free, { deadlineMs: 2000 });
+  const t = await line.wait(async () => free, { deadlineMs: 40 });
+  ok(t.ok === false && t.pos === 2, "hết giờ chờ: ok = false kèm vị trí hiện tại (2)", JSON.stringify(t));
+  const ac = new AbortController();
+  const c = line.wait(async () => free, { signal: ac.signal, deadlineMs: 2000 });
+  ac.abort();
+  ok((await c).ok === "aborted", "người dùng dừng: rời hàng");
+  free = true;
+  ok((await a).ok === true && line.length === 0, "người đầu vẫn đi được, hàng sạch");
+  let calls = 0;
+  const l2 = cap.createWaitLine({ pollMs: 5 });
+  const first = l2.wait(async () => { calls++; return calls > 3; }, { deadlineMs: 2000 });
+  let secondChecked = false;
+  const second = l2.wait(async () => { secondChecked = true; return true; }, { deadlineMs: 2000 });
+  await first; await second;
+  ok(!secondChecked || calls > 3, "người sau không được thử trước người đứng đầu");
+}
+{
+  ok(/memLine\.wait\(async \(\) => \(await memAvailableMB\(\)\) >= needMB/.test(src), "waitMem dùng hàng có vị trí");
+  ok(/roomLine\.wait\(\(\) => freeRoom\(u\)/.test(src) && /vị trí \$\{r\.pos\} trong hàng chờ/.test(src), "makeRoom xếp hàng có vị trí thay vì 503 ngay");
+  ok(/waitMem\(WS_FLOOR_MB/.test(src), "bật workspace cũng chờ RAM (trước docker run)");
+  ok(/vị trí \$\{m\.pos\} trong hàng chờ bộ nhớ/.test(src), "hết giờ chờ RAM: lời báo có vị trí");
+  ok(/\.\.\.\(queue \? \{ queue \} : \{\}\)/.test(src), "runOnce trả queue cho người gọi");
+  const cr = fs.readFileSync("app/coderun.ts", "utf8");
+  ok(/queue\?: RunQueue/.test(cr) && /\.\.\.\(queue \? \{ queue \} : \{\}\)/.test(cr), "coderun chuyển queue sang RunOutput");
+  ok(/RUN_QUEUE_ALLOW_SEC\) \* 1000/.test(cr), "coderun chờ đủ lâu cho hàng chờ của workspace (không bỏ ngang trước khi có vị trí)");
+}
+{
+  // Người dùng thấy vị trí trong hàng ở dòng tiến trình của lượt chat, có bản tiếng Anh.
+  const ce = fs.readFileSync("app/chatengine.ts", "utf8");
+  ok(/if \(r\.queue\) progress\("note", queueNote\(r\.queue\)\)/.test(ce), "run_code báo vị trí hàng chờ thành dòng tiến trình");
+  const { loadTs } = await import("../lib/ts.mjs");
+  const { "i18n-dict": { RULES_EN } } = await loadTs(["i18n-dict"]);
+  const cr = fs.readFileSync("app/coderun.ts", "utf8");
+  const body = cr.match(/export function queueNote\(q: RunQueue\): string \{([\s\S]*?)\n\}/)?.[1] ?? "";
+  const queueNote = new Function("q", body);
+  const en = (t) => { for (const [re, f] of RULES_EN) { const m = t.match(re); if (m) return f(m); } return null; };
+  const a = queueNote({ pos: 3, waitedSec: 41.6 }), b = queueNote({ pos: 0, waitedSec: 7 });
+  ok(a === "Lần chạy code đã xếp hàng ở vị trí 3, chờ 42 giây", "dòng tiến trình nói vị trí 3", a);
+  ok(b === "Lần chạy code đã chờ 7 giây vì máy chủ đang bận", "chỉ chờ RAM (không có hàng): nói số giây", b);
+  ok(en(a) === "The code run was queued at position 3, waited 42 seconds" && en(b) === "The code run waited 7 seconds because the server was busy", "có bản tiếng Anh", `${en(a)} | ${en(b)}`);
+}
+
 console.log(`\n${pass}/${pass + fail} đạt`);
 process.exit(fail ? 1 : 0);

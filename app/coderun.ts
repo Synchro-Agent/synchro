@@ -26,11 +26,21 @@ export type RunInput = { uid: string; files: RunFile[]; argv: string[]; stdin?: 
 export type RecalcBook = { path: string; prefixed?: number; formulas: number; filled: number; errors: { sheet: string; cell: string; value: string; formula?: string }[]; sample: string[] };
 export type RecalcReport = { files?: RecalcBook[]; failed?: { path: string; reason: string }[]; error?: string };
 // skipped: tệp không gửi được (quá dung lượng, quá số tệp): "đường-dẫn: lý do".
-export type RunOutput = { exit: number; stdout: string; stderr: string; files: RunFile[]; timedOut: boolean; recalc?: RecalcReport; skipped?: string[] };
+// queue: lần chạy phải xếp hàng (máy chủ bận, thiếu RAM, đang dựng video khác): vị trí lúc vào hàng (0 = chỉ chờ, không có hàng) và tổng số giây đã chờ.
+export type RunQueue = { pos: number; waitedSec: number };
+export type RunOutput = { exit: number; stdout: string; stderr: string; files: RunFile[]; timedOut: boolean; recalc?: RecalcReport; skipped?: string[]; queue?: RunQueue };
 export type Runner = "e2b" | "workspace" | "local";
 
 // timeout: mặc định mỗi lần chạy; maxTimeout: model xin thêm khi dựng video, chuyển tài liệu lớn (tham số timeout của run_code).
 export const RUN_LIMITS = { timeout: 120, maxTimeout: 600, out: 60_000, files: 20, fileSize: 100 * 1024 * 1024, total: 150 * 1024 * 1024 };
+// Dịch vụ workspace giữ lần chạy trong hàng (không trả 503 ngay, Blueprint G3.2) tới: chờ dựng video 300 + chờ chỗ chạy 240 + chờ RAM 120 giây.
+// Chờ lâu hơn nữa thì dịch vụ tự báo bận kèm vị trí; Next không được bỏ ngang trước đó (người dùng thấy "phản hồi quá lâu" thay vì vị trí trong hàng).
+export const RUN_QUEUE_ALLOW_SEC = 300 + 240 + 120 + 30;
+// Dòng tiến trình cho người dùng khi lần chạy đã phải xếp hàng (G3.2 / G5.3); bản tiếng Anh ở RULES_EN (app/i18n-dict.ts).
+export function queueNote(q: RunQueue): string {
+  const s = Math.max(0, Math.round(q.waitedSec));
+  return q.pos > 0 ? `Lần chạy code đã xếp hàng ở vị trí ${q.pos}, chờ ${s} giây` : `Lần chạy code đã chờ ${s} giây vì máy chủ đang bận`;
+}
 
 export function runner(): Runner | null {
   const v = process.env.CODE_RUN;
@@ -165,12 +175,13 @@ function collect(dir: string, skipped: string[] = []): RunFile[] {
 // ---------------------------------------------------------------- container dùng một lần trên VPS
 async function runWorkspace(i: RunInput, timeout: number): Promise<RunOutput> {
   // Thêm 150 giây cho bước tính lại công thức (giới hạn riêng 120 giây ở dịch vụ workspace).
-  const r = await agent<{ code: number; out: string; err: string; timedOut?: boolean; files?: { path: string; b64: string }[]; recalc?: RecalcReport; skipped?: string[] }>("/run", {
+  const r = await agent<{ code: number; out: string; err: string; timedOut?: boolean; files?: { path: string; b64: string }[]; recalc?: RecalcReport; skipped?: string[]; queue?: RunQueue }>("/run", {
     u: i.uid, argv: i.argv, stdin: i.stdin ?? null, net: i.net, web: !!i.web, keep: i.keep ?? null, timeout, recalc: !!i.recalc,
     files: i.files.map((f) => ({ path: f.path, b64: f.data.toString("base64") })),
-  }, (timeout + 90 + (i.recalc ? 150 : 0)) * 1000, i.signal);
+  }, (timeout + 90 + (i.recalc ? 150 : 0) + RUN_QUEUE_ALLOW_SEC) * 1000, i.signal);
+  const queue = r.queue && Number.isFinite(r.queue.pos) && Number.isFinite(r.queue.waitedSec) ? { pos: r.queue.pos, waitedSec: r.queue.waitedSec } : null;
   return {
-    exit: r.code, stdout: r.out ?? "", stderr: r.err ?? "", timedOut: !!r.timedOut, ...(r.recalc ? { recalc: r.recalc } : {}), ...(r.skipped?.length ? { skipped: r.skipped } : {}),
+    exit: r.code, stdout: r.out ?? "", stderr: r.err ?? "", timedOut: !!r.timedOut, ...(r.recalc ? { recalc: r.recalc } : {}), ...(r.skipped?.length ? { skipped: r.skipped } : {}), ...(queue ? { queue } : {}),
     files: (r.files ?? []).filter((f) => okRel(f.path)).map((f) => ({ path: f.path, data: Buffer.from(f.b64, "base64") })),
   };
 }
