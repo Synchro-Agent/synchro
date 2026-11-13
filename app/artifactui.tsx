@@ -652,8 +652,12 @@ Yêu cầu: ${req.trim()}`);
           {canPick && <button className={`icon-btn ${picking ? "on" : ""}`} onClick={togglePick} aria-label="Chỉ và sửa" data-tip="Chỉ vào phần muốn sửa (hoặc giữ Alt rồi bấm)" aria-pressed={picking}><I.Pointer size={15} /></button>}
           {runnable && art.type !== "markdown" && art.type !== "mermaid" && art.type !== "d2" && !showCode && <button className="icon-btn" onClick={() => setReload((x) => x + 1)} aria-label="Chạy lại" data-tip="Chạy lại"><I.Retry size={15} /></button>}
           <button className="icon-btn" onClick={copy} aria-label="Sao chép" data-tip="Sao chép">{copied ? <I.M icon="Check" size={15} /> : <I.M icon="Copy" size={15} />}</button>
-          {art.complete && extra?.(art)}
-          {art.complete && <DownloadMenu items={items} say={say} note={pptxStep ? `PowerPoint ${pptxStep}` : ""} />}
+          {/* Nút xuất bản / Tải về chỉ dùng được khi artifact viết xong, nhưng giữ sẵn chỗ (ẩn, không bấm được) từ đầu: trước đây chúng hiện ra
+              bên phải Chỉ và sửa / Chạy lại / Sao chép lúc artifact xong nên ba nút này nhảy ngang 32px ngay dưới con trỏ (nhóm canh phải). */}
+          <span className={`art-slot${art.complete ? "" : " wait"}`} inert={!art.complete} aria-hidden={art.complete ? undefined : true}>
+            {extra?.(art)}
+            <DownloadMenu items={items} say={say} note={pptxStep ? `PowerPoint ${pptxStep}` : ""} />
+          </span>
           <button className="icon-btn" onClick={() => setExpanded(!expanded)} aria-label={expanded ? "Thu nhỏ" : "Toàn màn hình"} data-tip={expanded ? "Thu nhỏ" : "Toàn màn hình"}>
             <I.M icon={expanded ? "Collapse" : "Expand"} size={15} />
           </button>

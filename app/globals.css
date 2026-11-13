@@ -2580,6 +2580,9 @@ html body .main.has-art .scroll-down.gen{left:calc((100% - var(--art-w)) / 2)}
 .art-tabs button:disabled{opacity:.45}
 .art-acts{display:flex;align-items:center;gap:2px;flex:none}
 .art-acts .icon-btn{width:30px;height:30px}
+/* Chỗ giữ sẵn cho nút xuất bản / Tải về: không tạo hộp riêng (khe 2px giữa các nút như cũ); khi artifact chưa xong thì ẩn nhưng vẫn chiếm chỗ. */
+.art-slot{display:contents}
+.art-slot.wait{visibility:hidden}
 /* Khung hẹp (mặc định nửa màn hình): tên artifact và phiên bản ở hàng trên, Xem trước / Mã và các nút ở hàng dưới, để tên không bị cắt cụt. */
 .art-panel,.sk-art{container-type:inline-size}
 @container (max-width:680px){
