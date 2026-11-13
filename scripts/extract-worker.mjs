@@ -160,6 +160,22 @@ async function sheet(buf, kind) {
   return wb.SheetNames.map((n) => sheetToText(wb.Sheets[n], n, kind === "csv", date1904)).join("\n\n");
 }
 
+// Thứ tự slide THỰC của bài trình chiếu nằm ở ppt/presentation.xml (sldIdLst → r:id → rels → tệp slide), KHÔNG theo tên tệp:
+// kéo-thả đổi chỗ slide chỉ đổi thứ tự trong presentation.xml còn tên tệp giữ nguyên, nên sắp theo tên là sai thứ tự người dùng thấy.
+async function slideOrder(z, num) {
+  const all = Object.keys(z.files).filter((f) => /^ppt\/slides\/slide\d+\.xml$/.test(f)).sort((a, b) => num(a) - num(b));
+  const pres = z.file("ppt/presentation.xml"), rels = z.file("ppt/_rels/presentation.xml.rels");
+  if (!pres || !rels) return all;
+  try {
+    const relMap = new Map([...(await rels.async("string")).matchAll(/<Relationship\b[^>]*\bId="([^"]+)"[^>]*\bTarget="([^"]+)"/g)].map((m) => [m[1], m[2]]));
+    const norm = (t) => ("ppt/" + t.replace(/^\.\.\//, "").replace(/^\/?ppt\//, "").replace(/^\//, "")).replace(/ppt\/ppt\//, "ppt/");
+    const ordered = [...(await pres.async("string")).matchAll(/<p:sldId\b[^>]*r:id="([^"]+)"/g)]
+      .map((m) => relMap.get(m[1])).filter(Boolean).map(norm).filter((f) => z.file(f));
+    for (const f of all) if (!ordered.includes(f)) ordered.push(f); // slide lạ không có trong danh sách: thêm theo tên, khỏi bỏ sót
+    return ordered.length ? ordered : all;
+  } catch { return all; }
+}
+
 // ---- PPTX: text theo slide + ghi chú ----
 async function pptx(buf) {
   const z = await JSZip.loadAsync(buf);
@@ -191,7 +207,7 @@ async function pptx(buf) {
     }
     return out.join("\n");
   };
-  const slides = Object.keys(z.files).filter((f) => /^ppt\/slides\/slide\d+\.xml$/.test(f)).sort((a, b) => num(a) - num(b));
+  const slides = await slideOrder(z, num);
   const out = [];
   for (const f of slides) {
     const n = num(f), notesF = `ppt/notesSlides/notesSlide${n}.xml`;

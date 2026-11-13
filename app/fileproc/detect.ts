@@ -23,6 +23,20 @@ export function zipNames(buf: Buffer, want: Set<string>): Set<string> | null {
 
 const OOXML = new Set(["word/document.xml", "xl/workbook.xml", "ppt/presentation.xml"]);
 
+/** UTF-16 không có dấu BOM: ký tự ASCII để lại một byte 0 ở nửa cao. Nhiều byte 0 ở vị trí lẻ → little-endian, ở vị trí chẵn → big-endian.
+ * Trả về nhãn encoding cho TextDecoder, hoặc null nếu không giống UTF-16. */
+export function sniffUtf16(buf: Buffer): "utf-16le" | "utf-16be" | null {
+  const n = Math.min(buf.length - (buf.length % 2), 8192);
+  if (n < 16) return null;
+  let evenZero = 0, oddZero = 0;
+  for (let i = 0; i < n; i++) { if (buf[i] === 0) { if (i % 2) oddZero++; else evenZero++; } }
+  const half = n / 2;
+  // Một nửa (theo chẵn/lẻ) phần lớn là byte 0 còn nửa kia gần như không có: dấu hiệu rõ của UTF-16 văn bản ASCII/Latinh.
+  if (oddZero / half > 0.3 && evenZero / half < 0.05) return "utf-16le";
+  if (evenZero / half > 0.3 && oddZero / half < 0.05) return "utf-16be";
+  return null;
+}
+
 // Nhận diện loại thật bằng magic bytes. Đuôi file chỉ dùng làm gợi ý cho loại văn bản.
 export async function detectKind(buf: Buffer, name: string): Promise<string> {
   const h = buf.subarray(0, 16);
@@ -31,15 +45,33 @@ export async function detectKind(buf: Buffer, name: string): Promise<string> {
   if (startsWith(0xff, 0xd8, 0xff)) return "image/jpeg";
   if (startsWith(0x47, 0x49, 0x46, 0x38)) return "image/gif";
   if (startsWith(0x52, 0x49, 0x46, 0x46) && buf.subarray(8, 12).toString() === "WEBP") return "image/webp";
+  if (buf.subarray(4, 8).toString() === "ftyp") {
+    // ftyp: cả HEIC/HEIF (ảnh) lẫn MP4/MOV (video) đều dùng hộp này; phân theo brand chính.
+    const brand = buf.subarray(8, 12).toString().trim().toLowerCase();
+    if (["heic", "heix", "heif", "mif1", "msf1", "hevc"].includes(brand)) return "image/heic";
+    return "audio"; // mp4 / mov / m4a → phiên âm
+  }
   if (buf.subarray(0, 5).toString() === "%PDF-") return "application/pdf";
   if (startsWith(0x50, 0x4b, 0x03, 0x04)) {
     const z = zipNames(buf, OOXML);
     if (!z) throw new FileError(`"${name}" là tệp nén bị hỏng, không mở được.`);
     return z.has("word/document.xml") ? "docx" : z.has("xl/workbook.xml") ? "xlsx" : z.has("ppt/presentation.xml") ? "pptx" : "zip";
   }
-  if (startsWith(0xd0, 0xcf, 0x11, 0xe0)) throw new FileError(`"${name}" là định dạng Office cũ (.doc/.xls/.ppt). Hãy lưu lại thành .docx/.xlsx/.pptx rồi tải lên.`);
+  // Âm thanh / video: mp3 (ID3 hoặc khung MPEG), wav (RIFF…WAVE), webm / mkv (EBML) → phiên âm bằng Scribe.
+  if (startsWith(0x49, 0x44, 0x33) || (h[0] === 0xff && (h[1] & 0xe0) === 0xe0)) return "audio";
+  if (startsWith(0x52, 0x49, 0x46, 0x46) && buf.subarray(8, 12).toString() === "WAVE") return "audio";
+  if (startsWith(0x1a, 0x45, 0xdf, 0xa3)) return "audio";
+  if (startsWith(0x4f, 0x67, 0x67, 0x53)) return "audio"; // Ogg (ogg/opus)
+  if (startsWith(0xd0, 0xcf, 0x11, 0xe0)) {
+    // Office cũ (.doc/.xls/.ppt, định dạng OLE). Chỉ chuyển bằng LibreOffice headless khi máy chủ có cài (biến môi trường SYNCHRO_SOFFICE_BIN);
+    // mặc định (không đặt biến) giữ nguyên hành vi cũ: báo người dùng lưu lại thành .docx/.xlsx/.pptx. Không hard-fail khởi động máy chủ.
+    if (process.env.SYNCHRO_SOFFICE_BIN) return "legacy-office";
+    throw new FileError(`"${name}" là định dạng Office cũ (.doc/.xls/.ppt). Hãy lưu lại thành .docx/.xlsx/.pptx rồi tải lên.`);
+  }
   // Excel "Unicode Text" lưu UTF-16 có dấu BOM: đầy byte 0 nhưng là chữ thật, phải xét trước khi kết luận tệp nhị phân.
   if ((h[0] === 0xff && h[1] === 0xfe) || (h[0] === 0xfe && h[1] === 0xff)) return /\.(csv|tsv)$/i.test(name) ? "csv" : "text";
+  // UTF-16 KHÔNG có dấu BOM (nhiều công cụ Windows xuất kiểu này): cũng đầy byte 0 nhưng là chữ, nhận trước khi coi là nhị phân.
+  if (sniffUtf16(buf)) return /\.(csv|tsv)$/i.test(name) ? "csv" : "text";
   const head = buf.subarray(0, 8192);
   let ctl = 0; for (const c of head) if (c < 9 || (c > 13 && c < 32)) ctl++;
   if (head.includes(0) || ctl / Math.max(head.length, 1) > 0.05) throw new FileError(`"${name}" là tệp nhị phân (${(name.split(".").pop() || "không rõ").toUpperCase()}) mà Synchro chưa đọc được.`);

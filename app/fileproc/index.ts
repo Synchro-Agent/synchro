@@ -4,7 +4,7 @@ import path from "node:path";
 import { type ContentBlock, FileError, LARGE_TOKENS, MAX_FILE_BYTES, estTokens } from "./types";
 import { detectKind } from "./detect";
 import { pickExtractor } from "./extractors";
-import { chunkForRag, rank, scored } from "./rag";
+import { chunkForRag, chunkSheet, rank, scored } from "./rag";
 import { checkQuota, claimFile, mayUse } from "./owners";
 import { minCos, queueEmbed, registerVecSource, rrf, sweepVecs, vecHash, vecQuery } from "../vecstore";
 import { onTick } from "../tasks";
@@ -90,6 +90,8 @@ const FILE_CHARS = 4000;
 const owns = (uid: string, id: string) => !!db().prepare("SELECT 1 FROM file_owners WHERE file_id = ? AND user_id = ?").get(id, uid);
 const fileUser: Map<string, string> = ((globalThis as { __vecFileUser?: Map<string, string> }).__vecFileUser ??= new Map());
 const textOf = (rec: Stored) => rec.blocks.map((b) => (b.type === "text" ? b.text : b.type === "document" ? b.fallbackText ?? "" : "")).join("\n\n");
+// Bảng tính: chia đoạn kiểu lặp lại dòng tiêu đề; các loại khác theo đoạn văn. Hai nơi dùng chung (nhúng vector và dựng ngữ cảnh) phải chia GIỐNG nhau để chỉ số đoạn khớp vector.
+const chunksOf = (rec: Stored) => (rec.kind === "xlsx" || rec.kind === "csv") ? chunkSheet(textOf(rec)) : chunkForRag(textOf(rec));
 registerVecSource("file", {
   maxChars: FILE_CHARS,
   shared: true,
@@ -102,7 +104,7 @@ registerVecSource("file", {
     // So mã băm từng đoạn chứ không chỉ vị trí: tệp được đọc lại (bộ đọc mới, cách chia đoạn mới) thì đoạn đổi chữ được embed lại,
     // đoạn thừa (tệp ngắn đi) bị xóa, để kết quả tìm theo nghĩa không trỏ nhầm đoạn.
     const d = db(), have = new Map((d.prepare("SELECT item, hash FROM vec_items WHERE scope = 'file' AND owner = ? AND model = ?").all(id, model) as { item: string; hash: string }[]).map((r) => [r.item, r.hash]));
-    const chunks = chunkForRag(textOf(rec));
+    const chunks = chunksOf(rec);
     const extra = [...have.keys()].filter((k) => Number(k.slice(k.lastIndexOf("#") + 1)) >= chunks.length);
     for (const k of extra) d.prepare("DELETE FROM vec_items WHERE scope = 'file' AND item = ?").run(k);
     return chunks.map((text, i) => ({ item: `${id}#${i}`, text, srcAt: 0 })).filter((x) => have.get(x.item) !== vecHash(x.text, FILE_CHARS)).slice(0, limit);
@@ -137,7 +139,7 @@ export async function buildContext(ids: string[], names: Record<string, string>,
     const label = `[File: ${name}]`;
     if (rec.large) {
       // File lớn: chỉ đưa các đoạn liên quan nhất tới câu hỏi (RAG).
-      const chunks = chunkForRag(textOf(rec));
+      const chunks = chunksOf(rec);
       const picked = (await pickChunks(id, uid, chunks, query, 12)).map((i) => `(đoạn ${i + 1}/${chunks.length})\n${chunks[i]}`);
       out.push({ type: "text", text: `${label}\n<file name="${name}" id="${id}" note="tệp lớn, chỉ hiện các đoạn liên quan nhất">\n${esc(picked.join("\n\n…\n\n"))}\n</file>` });
       continue;
