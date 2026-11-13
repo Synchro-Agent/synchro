@@ -1,8 +1,10 @@
 // Kiểm tra toàn bộ trước khi deploy: npm run qa (cần npm run dev:mock:fast đang chạy ở http://localhost:3200, dựng từ đúng mã sẽ deploy).
 // Chạy lần lượt các bộ kiểm giao diện bằng Chrome ẩn và toàn bộ bộ kiểm API; chỉ báo đạt khi không bộ nào lỗi. Bộ soát giao diện
-// (audit.mjs) không trả mã lỗi nên đọc dòng "━━ Vấn đề (N)". Thêm bộ kiểm mới vào SUITES khi có loại lỗi mới (mỗi loại lỗi người dùng
-// gặp phải có một phép thử tự động quét toàn trang).
+// (audit.mjs) không trả mã lỗi nên đọc dòng "━━ Vấn đề (N)". Mọi tệp tests/ui/*.mjs đều chạy (glob), trừ tệp nằm trong SKIP kèm lý do:
+// bộ kiểm mới tự vào QA, không thể bị bỏ sót như 27 tệp trước đây. SUITES chỉ đặt tên / biến môi trường riêng và thứ tự cho các bộ đã biết.
+// Dùng: node scripts/qa.mjs [đoạn tên tệp…]   --no-api: bỏ bộ API (CI chạy nó ở bước trước)   --list: in danh sách sẽ chạy rồi thoát.
 import { spawn } from "node:child_process";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 
 // Mỗi bộ: [tên, tệp, biến môi trường thêm (tùy chọn)]: một tệp chạy nhiều lần với biến khác nhau (vd. THEME sáng / tối) là nhiều bộ.
 // Bộ API chạy trước: các bộ giao diện để lại việc chạy nền ở máy chủ (đặt tên đoạn chat, hội đồng phản biện…) gọi model giả lập liên tục,
@@ -40,10 +42,48 @@ const SUITES = [
   ["Lượt Code mất mạng, gửi khi phiên đang chạy, lỗi lượt theo ngôn ngữ", "tests/ui/codereconnect.mjs"],
   ["Khung chờ đúng kích thước: mở app, danh sách đoạn chat, tin nhắn, khung artifact, cài đặt (đo vị trí và CLS)", "tests/ui/skeletons.mjs"],
 ];
-const only = process.argv.slice(2);
+// Tệp trong tests/ui/ KHÔNG chạy trong QA, mỗi tệp một lý do. Thêm vào đây thay vì để tệp nằm ngoài danh sách mà không ai biết.
+const SKIP = {
+  "tests/ui/snapshots.mjs": "công cụ chụp ảnh cho tests/ui/diff.py (so ảnh bằng mắt), luôn thoát mã 0, không có phép kiểm đạt / lỗi",
+  "tests/ui/lang.mjs": "chỉ in báo cáo chữ sai ngôn ngữ và luôn thoát mã 0; cổng chặn bản dịch là tests/api/i18n.test.mjs (trong bộ API)",
+};
+
+// Tên của bộ chạy theo glob: dòng chú thích đầu tiên nói bộ đó kiểm gì (bỏ dòng chung "Kiểm thử giao diện bằng Chrome ẩn…").
+function describe(file) {
+  const lines = readFileSync(file, "utf8").split("\n").slice(0, 8).filter((l) => l.startsWith("//")).map((l) => l.replace(/^\/\/\s*/, ""));
+  const first = lines.find((l) => !/^Kiểm thử giao diện bằng Chrome ẩn/.test(l)) ?? lines[0] ?? file;
+  const s = first.replace(/\s*Chạy tay:.*$/, "").replace(/\s*\(?npm run dev:mock\)?:?\s*$/, "").trim();
+  return s.length > 110 ? `${s.slice(0, 108).trimEnd()}…` : s;
+}
+
+/** Danh sách sẽ chạy: SUITES theo thứ tự đã đặt, rồi mọi tệp tests/ui/*.mjs còn lại (trừ SKIP) theo thứ tự tên. */
+function plan(dir = "tests/ui") {
+  const known = new Set(SUITES.map((s) => s[1]));
+  const rest = readdirSync(dir).filter((f) => f.endsWith(".mjs")).sort().map((f) => `${dir}/${f}`).filter((f) => !known.has(f) && !(f in SKIP));
+  return [...SUITES, ...rest.map((f) => [describe(f), f])];
+}
+
+// Chrome cho bộ giao diện: máy Linux (CI) không có đường dẫn macOS mặc định trong từng bộ, nên tìm sẵn một lần ở đây.
+function chromePath() {
+  if (process.env.CHROME_PATH || process.platform === "darwin") return process.env.CHROME_PATH;
+  return ["/usr/bin/google-chrome", "/usr/bin/google-chrome-stable", "/usr/bin/chromium", "/usr/bin/chromium-browser"].find((p) => existsSync(p));
+}
+
+const args = process.argv.slice(2);
+const only = args.filter((a) => !a.startsWith("--"));
+const noApi = args.includes("--no-api");
+const suites = plan().filter(([, file]) => !(noApi && file === "tests/run-all.mjs")).filter(([, file]) => !only.length || only.some((o) => file.includes(o)));
+for (const f of Object.keys(SKIP)) if (!existsSync(f)) console.warn(`(SKIP có ${f} nhưng tệp không còn: xóa khỏi SKIP)`);
+if (args.includes("--list")) {
+  for (const [name, file, env] of suites) console.log(`${file}${env ? ` ${JSON.stringify(env)}` : ""} — ${name}`);
+  console.log(`\n${suites.length} bộ sẽ chạy; bỏ qua có lý do:`);
+  for (const [f, why] of Object.entries(SKIP)) console.log(`  ${f}: ${why}`);
+  process.exit(0);
+}
+const CHROME = chromePath();
 
 const run = (file, env = {}) => new Promise((ok) => {
-  const p = spawn(process.execPath, [file], { stdio: ["ignore", "pipe", "pipe"], env: { ...process.env, ...env } });
+  const p = spawn(process.execPath, [file], { stdio: ["ignore", "pipe", "pipe"], env: { ...process.env, ...(CHROME ? { CHROME_PATH: CHROME } : {}), ...env } });
   let out = "";
   p.stdout.on("data", (d) => { out += d; process.stdout.write(d); });
   p.stderr.on("data", (d) => { out += d; process.stderr.write(d); });
@@ -51,8 +91,7 @@ const run = (file, env = {}) => new Promise((ok) => {
 });
 
 const res = [];
-for (const [name, file, env] of SUITES) {
-  if (only.length && !only.some((o) => file.includes(o))) continue;
+for (const [name, file, env] of suites) {
   console.log(`\n████ ${name} (${file})`);
   const t = Date.now();
   const { code, out } = await run(file, env);
