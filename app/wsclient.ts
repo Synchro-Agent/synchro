@@ -2,6 +2,7 @@
 // Gọi API workspace / GitHub / agent từ trình duyệt cho Synchro Code.
 import { create } from "zustand";
 import type { AgentEvent, PlanItem } from "./agentcore";
+import { postTurn } from "./turnretry";
 
 export type { AgentEvent, PlanItem };
 export type WsStatus = { available: boolean; reason?: string; running?: boolean; idleMin?: number };
@@ -85,7 +86,7 @@ export async function streamAgent(body: Record<string, unknown>, on: (e: AgentLi
   const st = { seq: 0, ended: false, started: false };
   const seen = (e: AgentLine) => { if (e.s) st.seq = e.s; if (e.t === "run") st.started = true; if (e.t === "end") st.ended = true; on(e); };
   try {
-    const r = await fetch("/api/agent", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body), signal });
+    const r = await postTurn("/api/agent", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body), signal });
     if (!r.ok || !r.body) { const j = await r.json().catch(() => ({})); throw new WsError((j as { error?: string }).error || `Lỗi ${r.status}`, r.status); }
     await readLines(r, seen);
   } catch (e) {
