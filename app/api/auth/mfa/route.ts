@@ -18,10 +18,10 @@ export const POST = handle(async (req) => {
     audit("login", { actor: t.user, ip: clientIp(req), detail: `${t.method}+mfa` });
     return withCookies(Response.json({ user: publicUser(t.user) }), createSession(t.user, req, t.method), clearMfaCookie(req));
   }
-  const { user } = requireUser(req);
+  const { user, session } = requireUser(req);
   // Bật xác minh hai bước cần vừa xác minh lại: gửi kèm mật khẩu hiện tại thì xác minh ngay (sai thì báo sai), không thì startMfa trả { reauth: true }.
-  if (b.op === "start") await stepUp(user, b.password);
-  if (b.op === "start") return Response.json(startMfa(user));
+  if (b.op === "start") await stepUp(user, session, b.password);
+  if (b.op === "start") return Response.json(startMfa(user, session));
   if (b.op === "confirm") return Response.json(confirmMfa(user, b.code));
   if (b.op === "disable") { disableMfa(user, b.code); return Response.json({ ok: true }); }
   throw new AuthError("Yêu cầu không hợp lệ.", 400);

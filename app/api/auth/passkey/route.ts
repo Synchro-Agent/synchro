@@ -18,14 +18,14 @@ export const POST = handle(async (req) => {
     if (mfa) return withCookies(Response.json({ mfa: true }), cookie);
     return withCookies(Response.json({ user: publicUser(user) }), cookie);
   }
-  const { user } = requireUser(req);
+  const { user, session } = requireUser(req);
   // Thêm khóa truy cập cần vừa xác minh lại: gửi kèm mật khẩu hiện tại thì xác minh ngay (sai thì báo sai), không thì cổng trong passkeys.ts trả { reauth: true }.
-  if (b.op === "reg-options" || b.op === "register") await stepUp(user, b.password);
+  if (b.op === "reg-options" || b.op === "register") await stepUp(user, session, b.password);
   // Xác minh lại bằng một khóa đã có của tài khoản (tài khoản không có mật khẩu); dùng chung cho bật xác minh hai bước.
   if (b.op === "reauth-options") return Response.json(await reauthOptions(req, user));
-  if (b.op === "reauth") { await reauthWithPasskey(req, user, b.response); return Response.json({ ok: true }); }
-  if (b.op === "reg-options") return Response.json(await registrationOptions(req, user));
-  if (b.op === "register") return Response.json({ passkeys: await registerPasskey(req, user, b.response, b.name) });
+  if (b.op === "reauth") { await reauthWithPasskey(req, user, session, b.response); return Response.json({ ok: true }); }
+  if (b.op === "reg-options") return Response.json(await registrationOptions(req, user, session));
+  if (b.op === "register") return Response.json({ passkeys: await registerPasskey(req, user, session, b.response, b.name) });
   if (b.op === "rename") return Response.json({ passkeys: renamePasskey(req, user, b.id, b.name) });
   if (b.op === "delete") return Response.json({ passkeys: deletePasskey(req, user, b.id) });
   throw new AuthError("Yêu cầu không hợp lệ.", 400);

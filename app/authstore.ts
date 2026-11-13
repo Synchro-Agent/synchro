@@ -424,14 +424,15 @@ export function mfaTicketUser(req: Request): { user: UserRow; method: string } |
 export const clearMfaCookie = (req: Request) => { const raw = readCookie(req, MFA_COOKIE); if (raw) mfaTickets.delete(sha256(raw)); return cookie(req, MFA_COOKIE, "", 0); };
 
 export function createSession(u: UserRow, req: Request, method: string) {
-  const token = crypto.randomBytes(32).toString("base64url");
+  const token = crypto.randomBytes(32).toString("base64url"), sid = sha256(token);
   const now = Date.now();
   db().prepare("INSERT INTO sessions (id, user_id, method, created_at, last_seen_at, expires_at, ip, user_agent) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
-    .run(sha256(token), u.id, method, now, now, now + SESSION_TTL, clientIp(req), (req.headers.get("user-agent") ?? "").slice(0, 300));
+    .run(sid, u.id, method, now, now, now + SESSION_TTL, clientIp(req), (req.headers.get("user-agent") ?? "").slice(0, 300));
   db().prepare("UPDATE users SET last_login_at = ?, last_seen_at = ? WHERE id = ?").run(now, now, u.id);
   db().prepare("DELETE FROM sessions WHERE user_id = ? AND id NOT IN (SELECT id FROM sessions WHERE user_id = ? ORDER BY last_seen_at DESC LIMIT ?)").run(u.id, u.id, MAX_SESSIONS);
-  // Vừa đăng nhập = vừa chứng minh danh tính: cho thêm khóa truy cập / xác minh hai bước trong 5 phút mà không phải xác minh lại.
-  markReauth(u.id);
+  // Vừa đăng nhập = vừa chứng minh danh tính: CHÍNH phiên mới này được thêm khóa truy cập / xác minh hai bước trong 5 phút mà không phải
+  // xác minh lại. Các phiên khác của tài khoản không được tính theo (xem markReauth).
+  markReauth(sid);
   return cookie(req, COOKIE, token, SESSION_TTL / 1000);
 }
 export const clearSessionCookie = (req: Request) => cookie(req, COOKIE, "", 0);
@@ -439,30 +440,33 @@ export const clearSessionCookie = (req: Request) => cookie(req, COOKIE, "", 0);
 // ---- xác minh lại trước hành động nhạy cảm (step-up) ----
 // Thêm một cách đăng nhập (khóa truy cập, xác minh hai bước) cần vừa chứng minh danh tính trong 5 phút: phiên cũ bị chiếm không lặng lẽ
 // cài thêm đường vào. Mốc giữ trong bộ nhớ (app một tiến trình); khởi động lại thì xác minh lại — an toàn hơn chứ không kém.
+// Mốc gắn với TỪNG PHIÊN (khóa là mã phiên = sha256 của cookie, SessionRow.id), không gắn với tài khoản: chủ thật đăng nhập hay xác minh lại
+// ở thiết bị khác không làm phiên cũ bị chiếm được tính là "vừa xác minh".
 const REAUTH_TTL = 5 * MIN;
 const reauthAt = ((globalThis as { __synchroReauth?: Map<string, number> }).__synchroReauth ??= new Map<string, number>());
-export function markReauth(uid: string) {
+type SessionRef = Pick<SessionRow, "id">;
+export function markReauth(sid: string) {
   const now = Date.now();
   if (reauthAt.size > 50_000) for (const [k, v] of reauthAt) if (now - v > REAUTH_TTL) reauthAt.delete(k);
-  reauthAt.set(uid, now);
+  reauthAt.set(sid, now);
 }
-export const recentlyReauthed = (uid: string) => { const t = reauthAt.get(uid); return !!t && Date.now() - t < REAUTH_TTL; };
-/** Chặn hành động nhạy cảm khi chưa xác minh lại gần đây; { reauth: true } để giao diện hỏi mật khẩu / khóa rồi thử lại. */
-export function requireRecentReauth(u: UserRow) {
-  if (!recentlyReauthed(u.id)) throw new AuthError("Hãy xác minh lại bằng mật khẩu hoặc khóa truy cập trước khi thêm cách đăng nhập mới.", 403, { reauth: true });
+export const recentlyReauthed = (sid: string) => { const t = reauthAt.get(sid); return !!t && Date.now() - t < REAUTH_TTL; };
+/** Chặn hành động nhạy cảm khi phiên này chưa xác minh lại gần đây; { reauth: true } để giao diện hỏi mật khẩu / khóa rồi thử lại. */
+export function requireRecentReauth(session: SessionRef) {
+  if (!recentlyReauthed(session.id)) throw new AuthError("Hãy xác minh lại bằng mật khẩu hoặc khóa truy cập trước khi thêm cách đăng nhập mới.", 403, { reauth: true });
 }
-/** Xác minh lại tại chỗ bằng mật khẩu (nếu đúng thì ghi mốc re-auth). Dùng cho hành động nhạy cảm của tài khoản đang đăng nhập. */
-export async function reauthPassword(u: UserRow, password: unknown) {
-  if (u.password_hash && typeof password === "string" && password.length <= PW_MAX && (await verifyPassword(password, u.password_hash))) { markReauth(u.id); return true; }
+/** Xác minh lại tại chỗ bằng mật khẩu (nếu đúng thì ghi mốc re-auth cho đúng phiên đang gọi). Dùng cho hành động nhạy cảm của tài khoản đang đăng nhập. */
+export async function reauthPassword(u: UserRow, session: SessionRef, password: unknown) {
+  if (u.password_hash && typeof password === "string" && password.length <= PW_MAX && (await verifyPassword(password, u.password_hash))) { markReauth(session.id); return true; }
   return false;
 }
 /** Bước xác minh lại của giao diện (hộp hỏi mật khẩu sau lỗi { reauth: true }): không gửi mật khẩu thì bỏ qua (cổng requireRecentReauth quyết định);
  *  gửi mà sai thì báo sai ngay (400, có giới hạn số lần) thay vì hỏi lại không lý do. */
-export async function stepUp(u: UserRow, password: unknown) {
+export async function stepUp(u: UserRow, session: SessionRef, password: unknown) {
   if (password === undefined || password === null) return;
   limit("reauth:" + u.id, 10, 15 * MIN);
   if (!u.password_hash) throw new AuthError("Tài khoản này chưa có mật khẩu. Hãy xác minh bằng khóa truy cập, hoặc đăng xuất rồi đăng nhập lại.", 400, { reauth: true });
-  if (!(await reauthPassword(u, password))) {
+  if (!(await reauthPassword(u, session, password))) {
     audit("reauth_failed", { actor: u, target: u, detail: "password" });
     // { reauth: true }: hộp xác minh lại giữ nguyên, báo sai ngay dưới ô mật khẩu.
     throw new AuthError("Mật khẩu không đúng.", 400, { reauth: true });
@@ -702,7 +706,7 @@ export async function changePassword(req: Request, u: UserRow, cur: unknown, nex
   db().prepare("UPDATE users SET password_hash = ? WHERE id = ?").run(await hashPassword(pw), u.id);
   const signedOut = db().prepare("DELETE FROM sessions WHERE user_id = ? AND id != ?").run(u.id, keepSession).changes;
   dropEmailChange(u.id);
-  markReauth(u.id); // vừa chứng minh danh tính bằng mật khẩu hiện tại
+  markReauth(keepSession); // phiên đang gọi vừa chứng minh danh tính bằng mật khẩu hiện tại (chỉ phiên này)
   audit("password_changed", { actor: u, ip: clientIp(req), detail: signedOut ? String(signedOut) : undefined });
   notifyChanged(req, u);
   return { signedOut };
