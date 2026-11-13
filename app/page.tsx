@@ -34,6 +34,7 @@ import { allTags, cleanTags, hasTag, tagKey } from "./chattags";
 import { TagChips, TagFilter, TagPicker } from "./tagsui";
 import { Markdown } from "./md";
 import type { PaletteCmd, PaletteGo } from "./palette";
+import { CHIP_LIMIT, hiddenCards } from "./composerchips";
 import { ASK_EVENT } from "./askcard";
 import { installTips } from "./tips";
 import { fit as fitFloat, installFloatFit } from "./floatfit";
@@ -443,6 +444,8 @@ function Composer(p: {
   // Menu + → Kho kỹ năng / Connectors: menu con bên phải (điện thoại: thay chỗ menu chính, có nút quay lại).
   const [sub, setSub] = useState<null | "skills" | "conn" | "access">(null);
   const [picks, setPicks] = useState<{ id: string; label: string }[]>([]);
+  // Dải thẻ đính kèm: quá CHIP_LIMIT thẻ thì gộp phần dư vào "+N"; bấm "+N" trải ra lưới nhiều hàng (xem app/composerchips.ts).
+  const [chipsOpen, setChipsOpen] = useState(false);
   const [skl, setSkl] = useState<{ id: string; label: string; lib?: boolean; cat?: boolean }[] | null>(null);
   const [skq, setSkq] = useState("");
   // Thư viện từ danh mục Claude không tải sẵn: gõ tìm thì hỏi máy chủ.
@@ -715,10 +718,17 @@ function Composer(p: {
   );
   const micBtn = <MicPicker say={say} rec={rec} onMic={mic} />;
   const modelPicker = <ModelPicker model={model} setModel={setModel} />;
-  const chips = (files.length > 0 || picks.length > 0) && (
-    <div className="attach">{fm.node}
-      {picks.map((k) => <span key={k.id} className="pick-chip">{k.id.startsWith("lib-") ? <I.Plugins size={14} /> : <I.Scroll size={14} />}<span className="cv-ell" data-notr>{k.label}</span><button className="icon-btn" aria-label={`Bỏ skill ${k.label}`} onClick={() => setPicks(picks.filter((x) => x.id !== k.id))}><I.X size={12} /></button></span>)}
-      {files.map((f, i) => <FileCard key={f + i} name={f} onOpen={() => fm.show(f)} onContextMenu={(e) => fm.open(e, f)} onRemove={() => setFiles(files.filter((_, j) => j !== i))} />)}</div>
+  // Thẻ = chip skill đã chọn + tệp đính kèm, theo đúng thứ tự đó. Quá CHIP_LIMIT thẻ: dải một hàng chỉ hiện CHIP_LIMIT thẻ rồi "+N".
+  const cards = [
+    ...picks.map((k) => <span key={"pk-" + k.id} className="pick-chip">{k.id.startsWith("lib-") ? <I.Plugins size={14} /> : <I.Scroll size={14} />}<span className="cv-ell" data-notr>{k.label}</span><button className="icon-btn" aria-label={`Bỏ skill ${k.label}`} onClick={() => setPicks(picks.filter((x) => x.id !== k.id))}><I.X size={12} /></button></span>),
+    ...files.map((f, i) => <FileCard key={"fc-" + f + i} name={f} onOpen={() => fm.show(f)} onContextMenu={(e) => fm.open(e, f)} onRemove={() => setFiles(files.filter((_, j) => j !== i))} />),
+  ];
+  const chipsExpanded = chipsOpen && cards.length > CHIP_LIMIT;
+  const chipsHidden = hiddenCards(cards.length, chipsExpanded);
+  const chips = cards.length > 0 && (
+    <div className={`attach${chipsExpanded ? " attach-grid" : ""}`}>{fm.node}
+      {chipsHidden > 0 ? cards.slice(0, CHIP_LIMIT) : cards}
+      {chipsHidden > 0 && <button type="button" className="attach-more" onClick={() => setChipsOpen(true)} aria-label={`${tr("Hiện thêm")} ${chipsHidden} ${tr("mục")}`} data-tip={`${tr("Hiện thêm")} ${chipsHidden} ${tr("mục")}`}>+{chipsHidden}</button>}</div>
   );
 
   if (dock)
