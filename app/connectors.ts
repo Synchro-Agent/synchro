@@ -109,6 +109,9 @@ function table() {
 const json = <T,>(s: string | null, d: T): T => { try { return s ? (JSON.parse(s) as T) : d; } catch { return d; } };
 const getAuth = (r: Row): Auth => { try { return JSON.parse(openSecret(r.enc_auth)) as Auth; } catch { return { mode: "none" }; } };
 function saveAuth(id: string, a: Auth) { table().prepare("UPDATE connectors SET enc_auth = ?, updated_at = ? WHERE id = ?").run(sealSecret(JSON.stringify(a)), Date.now(), id); }
+// Đăng nhập / khóa của hàng Composio vừa đổi (khóa ck_ mới, đăng nhập OAuth lại, đổi OAuth client): có thể là tài khoản Composio khác, nên bỏ lược đồ và
+// tài khoản đích đã biết của người này — danh sách công cụ meta của Composio giống nhau ở mọi tài khoản nên syncTools không nhận ra. Làm mới token thì không gọi.
+const credsChanged = (r: Pick<Row, "dir" | "user_id">) => { if (r.dir === COMPOSIO) invalidateSchemaCache(r.user_id); };
 const rowById = (id: string) => table().prepare("SELECT * FROM connectors WHERE id = ?").get(id) as Row | undefined;
 function rowOf(uid: string, id: string): Row {
   const r = rowById(id);
@@ -419,8 +422,8 @@ async function syncTools(id: string, signal?: AbortSignal) {
   const list = JSON.stringify(slim);
   table().prepare("UPDATE connectors SET tools = ?, perms = ?, perms_gone = ?, empty_seen = NULL, status = 'ok', error = NULL, last_error = NULL, tools_total = ?, server_name = ?, checked_at = ?, updated_at = ? WHERE id = ?")
     .run(list, JSON.stringify(perms), away.length ? JSON.stringify(Object.fromEntries(away)) : null, tools.length > slim.length ? tools.length : null, name ?? null, now, now, id);
-  // Danh sách công cụ Composio thật sự đổi (liên kết lại thì cache đã bỏ lúc ngắt liên kết): bỏ cache lược đồ của người này. Kiểm tra lại ở nền / mỗi 10 phút
-  // trả về đúng danh sách cũ thì giữ cache, không thì cache 24 giờ hiếm khi sống quá 10 phút.
+  // Danh sách công cụ Composio thật sự đổi: bỏ cache lược đồ của người này (đổi khóa / đăng nhập lại đã bỏ cache ở credsChanged, ngắt liên kết ở unlinkComposio).
+  // Kiểm tra lại ở nền / mỗi 10 phút trả về đúng danh sách cũ thì giữ cache, không thì cache 24 giờ hiếm khi sống quá 10 phút.
   if (r.dir === COMPOSIO && list !== r.tools) invalidateSchemaCache(r.user_id);
   if (needsIcon(r)) await findIcon(id, icons);
 }
@@ -524,12 +527,14 @@ async function applyCreds(req: Request, id: string, o: Creds, signal?: AbortSign
     catch (e) { throw new ConnectorError(errText(e), e instanceof TempFail ? 503 : 400); }
     finally { await c.close(); }
     saveAuth(id, { mode: "token", key });
+    credsChanged(r);
     // Đã biết thế hệ máy chủ qua lần thử: bước lấy công cụ ngay sau đó khỏi phải dò lại (máy chủ SSE treo khi nhận POST mất hàng chục giây mỗi lần dò).
     if (c.era && c.era !== r.era) table().prepare("UPDATE connectors SET era = ? WHERE id = ?").run(c.era, id);
   }
   else if (clientId) {
     await clientRejected(req, r, a, { clientId, clientSecret: clientSecret || undefined }, signal);
     const { client: _c, tokens: _t, key: _k, ...rest } = a; saveAuth(id, { ...rest, mode: rest.mode === "token" ? "none" : rest.mode, preset: { clientId, clientSecret: clientSecret || undefined } });
+    credsChanged(r);
   }
 }
 // Thử OAuth client mới trước khi lưu, như token: hãng từ chối thì đăng nhập đang có không mất và thẻ vẫn giữ nguyên. Chỉ từ chối khi hãng nói rõ; không dò được thì cho qua như trước.
@@ -674,6 +679,7 @@ export async function finishAuth(req: Request, q: URLSearchParams): Promise<{ ok
     const tokens = await exchangeCode({ token_endpoint: s.token_endpoint }, s.client, { code, verifier: s.verifier, redirectUri: s.redirect, resource: s.resource });
     const { scopeNeeded: _s, ...rest } = getAuth(r);
     saveAuth(r.id, { ...rest, mode: "oauth", client: s.client, redirect: s.redirect, resource: s.resource, scope: s.scope, tokens, as: { issuer: s.issuer, token_endpoint: s.token_endpoint, authorization_response_iss_parameter_supported: s.iss } });
+    credsChanged(r);
   } catch (e) {
     if (e instanceof TokenRejected && clientGone(e.oauth)) forgetClient(r.id, getAuth(r));
     // Lỗi tạm thời khi đổi mã: connector đang chạy thì vẫn giữ nguyên, người dùng chỉ cần thử lại.
