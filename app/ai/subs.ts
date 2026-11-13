@@ -14,7 +14,7 @@ import { canModel } from "../authstore";
 import { catalog, mainModels } from "../providers";
 import { engineFor } from "./selector";
 import { classifyTurn, noteCliOutcome } from "./cliupdate";
-import { clearRelogin, engineEnv, everLoggedIn, loginTime, markRelogin, needsRelogin, safeScope, scopeDir, status } from "./cli_auth";
+import { clearRelogin, engineEnvReady, ensureScopeDir, everLoggedIn, loginTime, markRelogin, needsRelogin, safeScope, scopeDir, status } from "./cli_auth";
 import { prettyGrok } from "../providers";
 import { CLIS, type Cli, engineHome, find, listEngineDir, makeDir, removeDir, removeSessionFiles, spawnCli, stripAnsi, watchSessions, writeEngineFile } from "./cli_runtime";
 import type { Attachment, RateWindow, TurnRequest, WebSource } from "./engine";
@@ -48,7 +48,7 @@ export async function codexRpc(scope: string, calls: { method: string; params?: 
   if (!bin) return out;
   const work = path.join(engineHome(), "work");
   await makeDir(work);
-  const p = spawnCli(bin, ["app-server"], { env: engineEnv("codex", scope), cwd: work, timeoutMs });
+  const p = spawnCli(bin, ["app-server"], { env: await engineEnvReady("codex", scope), cwd: work, timeoutMs });
   const send = (o: Json) => p.write(JSON.stringify({ jsonrpc: "2.0", ...o }) + "\n");
   send({ id: 0, method: "initialize", params: { clientInfo: { name: "synchro", version: "1.0" } } });
   send({ method: "initialized" });
@@ -353,7 +353,7 @@ function agyUsage(scope: string): Promise<AgyUsage> {
     if (!bin) return { windows: [], setup: false };
     const work = path.join(engineHome(), "work", safeScope(scope));
     await makeDir(work);
-    const p = spawnCli(bin, [], { env: engineEnv("agy", scope), cwd: work, pty: true, timeoutMs: 30_000 });
+    const p = spawnCli(bin, [], { env: await engineEnvReady("agy", scope), cwd: work, pty: true, timeoutMs: 30_000 });
     let raw = "", last = Date.now(), asked = false, setup = false;
     p.child.stdout!.on("data", (d: Buffer) => { raw = (raw + d.toString()).slice(-200_000); last = Date.now(); });
     const t0 = Date.now();
@@ -564,7 +564,7 @@ export function prewarmClaude(o: { user: UserRow; model: string; system: string;
   if (subCli(o.model) !== "claude") return;
   const run = resolvePlanModel("claude", o.user.id, splitKey(o.model).id, o.effort);
   const eng = engineFor("claude") as unknown as { prestart?: (r: Pick<TurnRequest, "system" | "model" | "effort" | "env" | "workdir">) => Promise<void> };
-  void eng.prestart?.({ system: o.system || undefined, model: run.model, effort: run.effort, env: engineEnv("claude", o.user.id), workdir: path.join(engineHome(), "work", safeScope(o.user.id)) })?.catch(() => {});
+  void engineEnvReady("claude", o.user.id).then((env) => eng.prestart?.({ system: o.system || undefined, model: run.model, effort: run.effort, env, workdir: path.join(engineHome(), "work", safeScope(o.user.id)) })).catch(() => {});
 }
 // Codex, Antigravity chỉ nhận hướng dẫn hệ thống ở lượt mở phiên. Lượt nối tiếp gửi thêm các đoạn phiên chưa có (đoạn tài liệu dự án mới tìm được, hướng dẫn vừa sửa, danh mục connector mới, lượt có công cụ sau lượt đường nhanh);
 // nhớ dấu của từng đoạn để không gửi lại cả hướng dẫn mỗi khi bộ nhớ thêm một dòng.
@@ -725,7 +725,7 @@ async function subTurnWatched(o: SubTurn): Promise<SubResult> {
   const c0 = subCli(o.model);
   const r = await (async () => {
     if (c0 !== "agy" && c0 !== "grok") return subTurnInner(o);
-    const watch = await watchSessions(scopeDir(c0, o.user.id));
+    const watch = await watchSessions(await ensureScopeDir(c0, o.user.id));
     try { return await subTurnInner(o); } finally { void watch.sweep(); }
   })();
   // Vừa đổi sang bản CLI mới (cập nhật hằng tuần): các lượt thật đầu tiên lỗi thì tự trả về bản trước (app/ai/cliupdate.ts).
@@ -816,7 +816,7 @@ async function runTurn(o: SubTurn): Promise<SubResult> {
   const req: TurnRequest = {
     pool: !!o.fast && cli === "claude",
     sysUpdate: sysNew.length ? `<system_update>\nHướng dẫn của Synchro có phần mới cho lượt này. Áp dụng cùng với hướng dẫn đã nhận:\n\n${sysNew.join("\n\n")}\n</system_update>` : undefined,
-    prompt, attachments: col.atts.length ? col.atts : undefined, system: o.system || undefined, model: run.model, effort: run.effort, sessionId: resume ?? fork, fork: !!fork, workdir: work, env: engineEnv(cli, o.user.id), signal: o.signal ? AbortSignal.any([o.signal, wd.signal]) : wd.signal, mcp: o.mcp && { url: o.mcp.url, onPark: o.mcp.onPark }, alive: o.mcp?.alive, web: o.web, lockMs: o.lockMs, awaitingUser: o.awaitingUser,
+    prompt, attachments: col.atts.length ? col.atts : undefined, system: o.system || undefined, model: run.model, effort: run.effort, sessionId: resume ?? fork, fork: !!fork, workdir: work, env: await engineEnvReady(cli, o.user.id), signal: o.signal ? AbortSignal.any([o.signal, wd.signal]) : wd.signal, mcp: o.mcp && { url: o.mcp.url, onPark: o.mcp.onPark }, alive: o.mcp?.alive, web: o.web, lockMs: o.lockMs, awaitingUser: o.awaitingUser,
     history: msgs.slice(0, -1).map((m) => ({ role: m.role === "assistant" ? "assistant" : "user", content: textOf(m.content) })),
   };
   const natStamp = cli === "agy" && o.onNativeImages ? await nativeStamp(work) : null;

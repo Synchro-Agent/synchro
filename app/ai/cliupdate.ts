@@ -13,7 +13,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { DATA_DIR, db, getSetting, getUser, isAdmin, isOwner, setSetting, type UserRow } from "../authstore";
-import { engineEnv, forget, scopeDir } from "./cli_auth";
+import { engineEnvReady, forget, scopeDir } from "./cli_auth";
 import { retireAll } from "./cli_pool";
 import { AGY_INSTALLER, basePath, binDir, CLIS, type Cli, engineHome, GROK_INSTALLER, NPM_PKG, runCli, stripAnsi } from "./cli_runtime";
 import { redact } from "./errors";
@@ -167,7 +167,7 @@ function checkScope(cli: Cli): UserRow | null {
 }
 type Login = { sane: boolean; loggedIn: boolean; detail: string };
 async function loginCheck(cli: Cli, bin: string, u: UserRow): Promise<Login> {
-  const e = engineEnv(cli, u.id), cwd = scopeDir(cli, u.id);
+  const e = await engineEnvReady(cli, u.id), cwd = scopeDir(cli, u.id);
   const args = cli === "claude" ? ["auth", "status"] : cli === "codex" ? ["login", "status"] : ["models"];
   const r = await runCli(bin, args, { env: e, cwd, timeoutMs: 45_000 }).catch((x) => ({ code: 1, stdout: "", stderr: String((x as Error).message) }));
   const out = stripAnsi(`${r.stdout}\n${r.stderr}`), detail = redact(out.trim()).slice(0, 300);

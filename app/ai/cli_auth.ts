@@ -13,7 +13,7 @@ import path from "node:path";
 import { openSecret, sealSecret } from "../providers";
 import { DATA_DIR } from "../authstore";
 import { opsEvent } from "../ops";
-import { type Cli, engineHome, find, makeDirSync, removeDir, runCli, spawnCli, stripAnsi, type Proc, version } from "./cli_runtime";
+import { type Cli, engineHome, find, makeDir, removeDir, runCli, spawnCli, stripAnsi, type Proc, version } from "./cli_runtime";
 import { dropAccount } from "./cli_pool";
 import { redact } from "./errors";
 
@@ -38,11 +38,23 @@ const STATUS_TTL_MS = 60_000;
 
 export const safeScope = (s: string) => s.replace(/[^A-Za-z0-9_-]/g, "_").slice(0, 64) || "default";
 
-/** Thư mục cấu hình riêng của tài khoản (tạo nếu chưa có, quyền 0700 từ logins/ trở xuống). */
+/** Đường dẫn thư mục cấu hình riêng của tài khoản: chỉ tính đường dẫn, không tạo. Trước khi chạy CLI với thư mục này: ensureScopeDir / engineEnvReady. */
 export function scopeDir(cli: Cli, scope: string) {
-  const root = path.join(engineHome(), "logins"), d = path.join(root, cli, safeScope(scope));
-  for (const p of [root, path.join(root, cli), d]) makeDirSync(p);
+  return path.join(engineHome(), "logins", cli, safeScope(scope));
+}
+/**
+ * Tạo thư mục cấu hình của tài khoản nếu chưa có (quyền 0700 từ logins/ trở xuống) rồi trả đường dẫn. Bất đồng bộ (W23-19): lần đầu mỗi tài khoản + CLI
+ * là sudo mkdir chạy nền, không chặn vòng sự kiện của máy chủ web như spawnSync trước đây; đã có thì chỉ là vài lần kiểm tra tồn tại.
+ */
+export async function ensureScopeDir(cli: Cli, scope: string): Promise<string> {
+  const root = path.join(engineHome(), "logins"), d = scopeDir(cli, scope);
+  for (const p of [root, path.join(root, cli), d]) await makeDir(p);
   return d;
+}
+/** engineEnv sau khi thư mục đăng nhập chắc chắn đã có: dùng trước mọi lần chạy CLI. */
+export async function engineEnvReady(cli: Cli, scope: string): Promise<Record<string, string>> {
+  await ensureScopeDir(cli, scope);
+  return engineEnv(cli, scope);
 }
 
 // ---------------------------------------------------------------- token Claude (mã hóa)
@@ -86,7 +98,7 @@ export function engineEnv(cli: Cli, scope: string): Record<string, string> {
  *  Xóa cùng bộ não để không model nào còn nhớ gì về người dùng; phiên đăng nhập và lịch sử từng đoạn chat giữ nguyên. */
 /** Bỏ danh sách model và gói CLI tự nhớ trên đĩa, để lần đọc sau hỏi lại hãng. Chỉ xóa tệp đệm đã biết, không đụng tệp đăng nhập. */
 export async function refreshVendorCache(cli: Cli, scope: string) {
-  const dir = scopeDir(cli, scope), files = cli === "codex" ? ["models_cache.json"] : cli === "grok" ? [".grok/models_cache.json", ".grok/settings_cache.json"] : [];
+  const dir = await ensureScopeDir(cli, scope), files = cli === "codex" ? ["models_cache.json"] : cli === "grok" ? [".grok/models_cache.json", ".grok/settings_cache.json"] : [];
   forget(cli, scope);
   if (files.length) await runCli("/bin/rm", ["-f", ...files.map((f) => path.join(dir, f))], { env: engineEnv(cli, scope), cwd: dir, timeoutMs: 10_000 }).catch(() => {});
 }
@@ -110,7 +122,7 @@ export const forget = (cli: Cli, scope?: string) => {
 };
 
 async function probe(cli: Cli, scope: string, bin: string): Promise<Pick<Status, "loggedIn" | "method" | "plan" | "models" | "detail">> {
-  const env = engineEnv(cli, scope), cwd = scopeDir(cli, scope);
+  const env = await engineEnvReady(cli, scope), cwd = scopeDir(cli, scope);
   if (cli === "claude") {
     if (env.CLAUDE_CODE_OAUTH_TOKEN) return { loggedIn: true, method: "token" };
     const r = await runCli(bin, ["auth", "status"], { env, cwd, timeoutMs: 20_000 });
@@ -264,7 +276,7 @@ export async function startLogin(cli: Cli, scope: string, method: Method = null)
   const bin = find(cli);
   if (!bin) throw new Error("CLI chưa được cài trên máy chủ.");
   cancelLogin(cli, scope);
-  const a = argsFor(cli, method), dir = scopeDir(cli, scope);
+  const a = argsFor(cli, method), dir = await ensureScopeDir(cli, scope);
   // Đăng nhập lại Claude bằng token mới: bỏ token cũ để CLI không dùng nó trong lúc đăng nhập.
   const env = engineEnv(cli, scope); delete env.CLAUDE_CODE_OAUTH_TOKEN;
   const proc = spawnCli(bin, a.args, { env, cwd: dir, pty: a.pty, timeoutMs: LOGIN_TTL_MS });
@@ -402,7 +414,8 @@ export async function logout(cli: Cli, scope: string) {
   cancelLogin(cli, scope);
   if (cli === "claude") dropAccount(scopeDir(cli, scope));
   const bin = find(cli), dir = scopeDir(cli, scope), env = engineEnv(cli, scope);
-  if (bin && cli !== "agy") await runCli(bin, cli === "claude" ? ["auth", "logout"] : ["logout"], { env, cwd: dir, timeoutMs: 20_000 }).catch(() => null);
+  // Thư mục chưa từng có (chưa đăng nhập lần nào): không có gì để đăng xuất bằng CLI, không tạo ra chỉ để xóa đi.
+  if (bin && cli !== "agy" && fs.existsSync(dir)) await runCli(bin, cli === "claude" ? ["auth", "logout"] : ["logout"], { env, cwd: dir, timeoutMs: 20_000 }).catch(() => null);
   await removeDir(dir);
   if (cli === "claude") fs.rmSync(tokenFile(scope), { force: true });
   g.relogin.delete(key(cli, scope));

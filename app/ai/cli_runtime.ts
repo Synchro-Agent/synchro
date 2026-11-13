@@ -106,16 +106,6 @@ export async function makeDir(dir: string): Promise<void> {
   if (!engineUser()) { fs.mkdirSync(dir, { recursive: true, mode: 0o700 }); fs.chmodSync(dir, 0o700); return; }
   if (!fs.existsSync(dir)) await asEngine("mkdir", ["-p", "-m", "700", dir]);
 }
-/**
- * Như makeDir nhưng đồng bộ, chỉ cho cli_auth.scopeDir (trả đường dẫn đồng bộ, gọi ở rất nhiều nơi). Thư mục đăng nhập chỉ phải tạo một lần
- * cho mỗi tài khoản và CLI; đã có thì chỉ là một lần existsSync, không gọi sudo.
- */
-export function makeDirSync(dir: string) {
-  if (!engineUser()) { fs.mkdirSync(dir, { recursive: true, mode: 0o700 }); fs.chmodSync(dir, 0o700); return; }
-  if (fs.existsSync(dir)) return;
-  const r = spawnSync("sudo", sudoArgs(engineUser(), "mkdir", ["-p", "-m", "700", dir]), { encoding: "utf8" });
-  if (r.status !== 0) throw new Error(`Không tạo được thư mục của engine: ${(r.stderr || r.error?.message || "").trim().slice(0, 200)}`);
-}
 /** Ghi một tệp (quyền 0600) trong nhà engine bằng user của engine, tạo thư mục cha nếu chưa có (tệp đính kèm cho CLI đọc). */
 export async function writeEngineFile(file: string, data: Buffer): Promise<void> {
   const home = path.resolve(engineHome());

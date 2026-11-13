@@ -15,7 +15,9 @@ fs.mkdirSync(BIN, { recursive: true }); fs.mkdirSync(HOME, { recursive: true });
 fs.writeFileSync(path.join(BIN, "sudo"), `#!/bin/sh\necho "$@" >> "${LOG}"\n[ "$1" = "-n" ] && [ "$2" = "-u" ] && [ "$4" = "--" ] || exit 9\nshift 4\nexec "$@"\n`, { mode: 0o755 });
 process.env.PATH = `${BIN}:${process.env.PATH}`;
 const src = fs.readFileSync("app/ai/cli_runtime.ts", "utf8");
-const { "ai/cli_runtime": R } = await loadTs(["ai/cli_runtime"]);
+process.env.DATA_DIR = path.join(tmp, "data"); fs.mkdirSync(process.env.DATA_DIR, { recursive: true });
+// Nạp chung một lần: cli_auth dùng đúng bản cli_runtime này (một bản nạp riêng sẽ đăng ký lại bộ đo RSS "cli" với danh sách CLI rỗng).
+const { "ai/cli_runtime": R, "ai/cli_auth": CA } = await loadTs(["ai/cli_runtime", "ai/cli_auth"]);
 const sudoCalls = () => (fs.existsSync(LOG) ? fs.readFileSync(LOG, "utf8").trim().split("\n").filter(Boolean).length : 0);
 
 try {
@@ -72,9 +74,30 @@ try {
   process.env.PATH = savedPath;
   ok(e5 && /^Không tạo được thư mục của engine: .*ENOENT/.test(e5.message), "không chạy được sudo: báo lỗi khởi chạy", e5?.message);
 
-  console.log("4. makeDirSync (thư mục đăng nhập, scopeDir) vẫn đồng bộ");
-  const d2 = path.join(HOME, "logins", "claude", "u1");
-  ok(R.makeDirSync(d2) === undefined && fs.existsSync(d2), "tạo thư mục đồng bộ");
+  console.log("4. W23-19: thư mục đăng nhập tạo bất đồng bộ (cli_auth.ensureScopeDir), scopeDir chỉ tính đường dẫn");
+  {
+    process.env.SYNCHRO_ENGINE_USER = "synchro-engine";
+    const authSrc = fs.readFileSync("app/ai/cli_auth.ts", "utf8");
+    ok(!/makeDirSync/.test(src) && !/makeDirSync|spawnSync\(/.test(authSrc), "không còn makeDirSync / spawnSync cho thư mục đăng nhập");
+    const d2 = path.join(HOME, "logins", "claude", "u1");
+    ok(CA.scopeDir("claude", "u1") === d2 && !fs.existsSync(d2), "scopeDir chỉ trả đường dẫn, không tạo (không gọi sudo)");
+    const before = sudoCalls();
+    let ticks2 = 0;
+    const iv2 = setInterval(() => ticks2++, 1);
+    const pr = CA.ensureScopeDir("claude", "u1");
+    ok(pr instanceof Promise, "ensureScopeDir trả về Promise");
+    const got = await pr;
+    clearInterval(iv2);
+    const mode = (p) => (fs.statSync(p).mode & 0o777).toString(8);
+    ok(got === d2 && [path.join(HOME, "logins"), path.join(HOME, "logins", "claude"), d2].every((p) => mode(p) === "700"), "tạo logins/, logins/claude/, logins/claude/u1 quyền 0700", got);
+    ok(sudoCalls() - before === 3 && ticks2 > 0, `qua sudo bất đồng bộ (3 lần mkdir), vòng sự kiện vẫn chạy (${ticks2} nhịp)`, sudoCalls() - before);
+    await CA.ensureScopeDir("claude", "u1");
+    ok(sudoCalls() - before === 3, "đã có: không gọi sudo lần nữa");
+    const env = await CA.engineEnvReady("codex", "u1");
+    ok(env.CODEX_HOME === path.join(HOME, "logins", "codex", "u1") && fs.existsSync(env.CODEX_HOME), "engineEnvReady: biến môi trường trỏ tới thư mục đã có", JSON.stringify(env));
+    const subs = fs.readFileSync("app/ai/subs.ts", "utf8");
+    ok(!/engineEnv\(/.test(subs) && /engineEnvReady\(/.test(subs), "subs.ts chạy CLI bằng engineEnvReady (thư mục đã tạo trước khi chạy)");
+  }
 
   console.log("4b. W23-19: Dừng CLI chạy bằng user riêng: ps và sudo kill bất đồng bộ, vẫn dọn hết con cháu");
   {
