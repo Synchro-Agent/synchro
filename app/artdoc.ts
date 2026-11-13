@@ -3,6 +3,8 @@
 import type { ArtType } from "./artifacts";
 import { ECHARTS, KIT_CSS, kitHead, SYNCHRO_3D, usesKit } from "./artkit";
 import { instrumentHtml, LOC_ATTR } from "./srcloc";
+import { GEN_IMG_EVENT, isDeck, noteGenPending, noteGenSettled, pendingRetryMs } from "./artgen";
+export { GEN_IMG_EVENT, isDeck, noteGenPending, noteGenSettled, pendingRetryMs };
 
 export const V = "/vendor/";
 // Thư viện cho artifact React: tải từ /vendor của Synchro; nếu trình duyệt chặn (khung cô lập không được gọi về máy
@@ -28,8 +30,6 @@ export const esc = (s: string) => s.replace(/</g, "\\u003c").replace(/\u2028/g, 
 // Bản trình bày HTML: mỗi slide là <section class="slide"> (hoặc các <section> nối nhau của bản trình chiếu tự viết).
 // Synchro điều khiển: chỉ hiện slide đang xem, nhận lệnh chuyển slide, báo số slide; in thì mỗi slide một trang (PDF 16:9).
 // fixed: khung ảnh thu nhỏ chỉ hiện đúng một slide, không nhận thao tác.
-export const isDeck = (a: { type: ArtType; content: string }) => a.type === "html" &&
-  ((a.content.match(/<section\b[^>]*(class=["'][^"']*\bslide\b|data-slide)/gi)?.length ?? 0) >= 2 || ((a.content.match(/<section\b/gi)?.length ?? 0) >= 2 && /ArrowRight|PageDown/.test(a.content)));
 export const deckRuntime = (fixed: number | null) => `<style>[data-sx-hide]{display:none!important}[data-sx-on]{opacity:1!important;visibility:visible!important;transform:none!important}
 ${fixed !== null ? "html{pointer-events:none}html,body{overflow:hidden!important}" : ""}
 @media print{@page{size:13.333in 7.5in;margin:0}html,body{height:auto!important;overflow:visible!important}[data-sx-slide]{position:relative!important;inset:auto!important;left:auto!important;top:auto!important;opacity:1!important;visibility:visible!important;transform:none!important;width:100vw!important;height:100vh!important;break-after:page;page-break-after:always;box-sizing:border-box}[data-sx-noprint]{display:none!important}}</style>
@@ -123,8 +123,6 @@ const IMG_HOST = /^https?:\/\/(?:images\.unsplash\.com|plus\.unsplash\.com|uploa
 // Chỉ máy chủ đổi được địa chỉ này thành ảnh, và chỉ với đúng chủ tài khoản (artimg.ts); artifact không giữ đường dẫn hay dữ liệu riêng nào.
 export const genImageUrl = (id: string) => `https://image.synchro.invalid/${id}.png`;
 export const genImageId = (u: string) => /^https:\/\/image\.synchro\.invalid\/([\w-]{8,40})\.png$/.exec(u)?.[1] ?? null;
-/** Khoảng chờ trước lần hỏi lại thứ n ảnh đang dựng nền: 5 s, tăng dần tới 30 s; null là thôi (sau khoảng 17 phút, quá thời gian dựng ảnh). */
-export const pendingRetryMs = (n: number): number | null => (n >= 40 ? null : Math.min(30_000, Math.round(5000 * 1.4 ** n)));
 /** Ảnh giữ chỗ của ảnh đang dựng ở chế độ nền (PNG 1×1, chatengine.ts placeholderImage): /api/artimg báo "đang chờ" để khung xem trước hỏi lại
  *  tới khi byte thật thay vào (W23-2). Ảnh dựng thật không bao giờ là 1×1. */
 export function isPlaceholderPng(b: Uint8Array): boolean {
@@ -133,19 +131,6 @@ export function isPlaceholderPng(b: Uint8Array): boolean {
   if (!sig.every((x, k) => b[k] === x)) return false;
   const u32 = (o: number) => ((b[o] << 24) | (b[o + 1] << 16) | (b[o + 2] << 8) | b[o + 3]) >>> 0;
   return u32(16) === 1 && u32(20) === 1; // IHDR: rộng, cao
-}
-/** Sự kiện trên window khi một ảnh dựng nền vừa xong / vừa hỏng (detail: { id, ok }): trang chat báo người dùng một dòng (W23-2, G4.2). */
-export const GEN_IMG_EVENT = "synchro:genimg";
-const genSeenPending = new Set<string>(), genTold = new Set<string>();
-/** Khung xem trước / thẻ ảnh vừa thấy ảnh giữ chỗ "đang chờ" của ảnh id. */
-export const noteGenPending = (id: string) => { genSeenPending.add(id); };
-/** Ảnh id không còn là ảnh giữ chỗ (ok) hoặc máy chủ báo dựng hỏng (!ok). Chỉ báo khi trong phiên này đã thấy ảnh đang chờ (mở đoạn chat cũ thì im),
- *  và mỗi ảnh một lần dù nhiều khung cùng thấy. Trả về true khi đã phát sự kiện. */
-export function noteGenSettled(id: string, ok: boolean): boolean {
-  if (!genSeenPending.has(id) || genTold.has(id)) return false;
-  genTold.add(id);
-  if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent(GEN_IMG_EVENT, { detail: { id, ok } }));
-  return true;
 }
 export function externalImageUrls(content: string, max = 60): string[] {
   const out = new Set<string>();

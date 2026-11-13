@@ -16,11 +16,12 @@
 //  6) gõ không dấu ("lam trang web") được so khớp lượt hai trên từ điển các cụm không thể nhầm; tạo media, thao tác trên web, connector là việc
 //     nhiều bước ("act"); câu hỏi sức khỏe, pháp lý, tài chính không dùng mức thấp nhất; việc nhẹ ưu tiên model hiện chữ dần.
 
-import { codeOnly, isFrontier, OPEN_WEIGHT, supersededSet, tierOf as ruleTier, type Tier } from "./modelrules";
+import { codeOnly, isFrontier, supersededSet, tierOf as ruleTier, type Tier } from "./modelrules";
 
 export const AUTO = "auto";
 export type { Tier };
-export type Vendor = "anthropic" | "openai" | "google" | "xai" | "deepseek" | "other";
+import { vendorOf, type Vendor } from "./vendor";
+export { vendorOf, type Vendor };
 // "lookup" (tra cứu): câu cần dữ liệu mới trên web (tỷ giá, giá, tin tức, phiên bản mới nhất…) — cần model hạng vừa trở lên có công cụ web, không model rẻ nhất.
 export type Task = "chat" | "qa" | "lookup" | "language" | "translate" | "summarize" | "write" | "code" | "debug" | "reason" | "analyze" | "build" | "act" | "vision" | "longdoc" | "data";
 export type AutoEffort = "low" | "medium" | "high" | "extra" | "max";
@@ -30,16 +31,6 @@ export type AutoEffort = "low" | "medium" | "high" | "extra" | "max";
 // Model mã nguồn mở chạy qua gói (GPT-OSS, Llama, Qwen, Mistral…): hạng nhanh, không mang thế mạnh của hãng lớn — "gpt-oss" từng bị coi là
 // GPT của OpenAI, được cộng điểm việc số liệu và được chọn làm bảng tính (rồi treo).
 export const tierOf = (key: string): Tier => ruleTier(key);
-export function vendorOf(key: string): Vendor {
-  const k = key.toLowerCase();
-  if (OPEN_WEIGHT.test(k)) return "other";
-  if (/^(anthropic|sub-claude)\//.test(k) || /claude|opus|sonnet|haiku|fable/.test(k)) return "anthropic";
-  if (/^(openai|sub-codex)\//.test(k) || /\bgpt|\bo\d|chatgpt|codex/.test(k)) return "openai";
-  if (/^(google|sub-agy)\//.test(k) || /gemini/.test(k)) return "google";
-  if (/^(xai|sub-grok)\//.test(k) || /\bgrok/.test(k)) return "xai";
-  if (/^deepseek\//.test(k) || /deepseek/.test(k)) return "deepseek";
-  return "other";
-}
 const BASE: Record<Tier | "frontier", number> = { fast: 6, balanced: 7.5, strong: 9, frontier: 9.5 };
 const COST: Record<Tier | "frontier", number> = { fast: 1, balanced: 3, strong: 8, frontier: 12 };
 // Thế mạnh của từng hãng theo loại việc (cộng vào điểm chất lượng của model).

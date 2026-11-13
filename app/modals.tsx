@@ -3,7 +3,7 @@
 import { Fragment, useEffect, useId, useRef, useState } from "react";
 import { searchSettings } from "./settingsindex";
 import * as I from "./icons";
-import { UsageIcon } from "./usageui";
+import { UsageIcon } from "./usagering";
 import { lazyView } from "./lazy";
 import { SettingsSkeleton } from "./skeleton";
 const SettingsBody = lazyView(() => import("./settings").then((m) => m.SettingsBody), <SettingsSkeleton />);

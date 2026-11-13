@@ -27,7 +27,7 @@ import { AgentSteps, GitHubButton, StatusLine, stripPhases, TaskCard, TVIEW_LABE
 import { answerAsk, codePrefsNow, getServerSession, mergeSession, pushSession, sessionBase, setSessionBase, useCodePrefs, type SessionState } from "./codesync";
 import { STYLE_DESC, STYLE_LABEL, STYLE_SYS, isStyle, type CodeStyle } from "./codestyle";
 import type { PermMode } from "./codestore";
-import { refreshUsage, UsageRing } from "./usageui";
+import { refreshUsage, UsageRing } from "./usagering";
 import { BrowserPane, FilesPane, SessionRail, TerminalPane } from "./codepanes";
 import { foldAgentEvent, closeFolded, interruptFolded, localizeNote } from "./agentfold";
 import { agentRunInfo, alreadyRunning, attachAgent, GONE, gitOp, stopAgent, streamAgent, useCodeUi, watchAgentEnd, wsStatus, type AgentLine, type PaneKind, type PlanItem } from "./wsclient";
