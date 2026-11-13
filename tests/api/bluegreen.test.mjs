@@ -87,6 +87,10 @@ console.log("Vai trò primary / secondary");
   const rootPid = execFileSync("ps", ["-U", "0", "-o", "pid="], { encoding: "utf8" }).split("\n").map(Number).find((p) => p > 1);
   fs.writeFileSync(lock, `${rootPid} green\n`);
   ok(!!rootPid && R.primaryHolder(lock) === null && R.canPromote({ bluegreen: true, color: "green", liveFile: live, lockFile: lock }, process.pid), "NODE-2: pid của user khác (EPERM, ví dụ tiến trình của root) không thể là khóa của Synchro", rootPid);
+  fs.writeFileSync(lock, "424252 single bootA 100\n");
+  ok(R.primaryHolder(lock, () => "eperm", id("bootA", "100")) === 424252 && !R.canPromote({ bluegreen: false, liveFile: live, lockFile: lock }, process.pid, () => "eperm", id("bootA", "100")),
+    "NODE-2: tiến trình user khác (EPERM) mà danh tính khớp khóa vẫn là chủ khóa (không có primary thứ hai)");
+  ok(R.primaryHolder(lock, () => "eperm", id("bootA", null)) === null, "NODE-2: EPERM mà không đọc được danh tính: không tin");
   R.resetRoleForTest();
   fs.writeFileSync(lock, "424251 blue bootA 100\n");
   const errs = []; const err = console.error; console.error = (...a) => errs.push(a.join(" "));

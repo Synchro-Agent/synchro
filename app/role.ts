@@ -32,8 +32,10 @@ export function liveColor(file: string): string | null {
   try { return fs.readFileSync(file, "utf8").trim().split(/\s+/)[0] || null; } catch { return null; }
 }
 
-// EPERM (không gửi được tín hiệu) nghĩa là tiến trình của user khác: hai màu cùng chạy bằng web user, nên đó không thể là tiến trình giữ khóa.
-const pidAlive = (pid: number) => { try { process.kill(pid, 0); return true; } catch { return false; } };
+// "eperm": tiến trình còn sống nhưng của user khác. Chỉ tin là chủ khóa khi khóa có danh tính (boot_id + starttime) và danh tính khớp; khóa kiểu
+// cũ (chỉ pid) thì coi là trống, vì hai màu cùng chạy bằng web user.
+export type Alive = (pid: number) => boolean | "eperm";
+const pidAlive: Alive = (pid) => { try { process.kill(pid, 0); return true; } catch (e) { return (e as NodeJS.ErrnoException).code === "EPERM" ? "eperm" : false; } };
 
 /** Danh tính của tiến trình để phân biệt với pid được dùng lại (sau khi máy tắt đột ngột, pid lúc khởi động hay lặp lại):
  *  boot_id của lần khởi động máy và thời điểm tiến trình bắt đầu (trường 22 của /proc/<pid>/stat). Không phải Linux: null (chỉ còn kiểm tra pid). */
@@ -45,21 +47,24 @@ export const procIdent: Ident = {
 };
 
 /** pid đang giữ vai primary (tệp khóa "<pid> <màu> <boot_id> <starttime>"), hoặc null nếu không có, đã chết, hay pid đó giờ là tiến trình khác. */
-export function primaryHolder(lockFile: string, alive: (pid: number) => boolean = pidAlive, ident: Ident = procIdent): number | null {
+export function primaryHolder(lockFile: string, alive: Alive = pidAlive, ident: Ident = procIdent): number | null {
   try {
     const [p, , boot, start] = fs.readFileSync(lockFile, "utf8").trim().split(/\s+/);
     const pid = Number(p);
-    if (!Number.isInteger(pid) || pid <= 1 || !alive(pid)) return null;
+    if (!Number.isInteger(pid) || pid <= 1) return null;
+    const a = alive(pid);
+    if (a === false) return null;
     const curBoot = ident.boot();
     if (boot && boot !== "-" && curBoot && curBoot !== boot) return null;
     const curStart = start && start !== "-" ? ident.start(pid) : null;
     if (curStart !== null && curStart !== start) return null;
+    if (a === "eperm" && (curStart === null || !boot || boot === "-")) return null;
     return pid;
   } catch { return null; }
 }
 
 /** Nhận vai khi không còn tiến trình nào khác giữ khóa primary; xanh/lam thì còn phải là màu đang sống. */
-export function canPromote(c: Pick<RoleConfig, "bluegreen" | "color" | "liveFile" | "lockFile">, pid = process.pid, alive: (pid: number) => boolean = pidAlive, ident: Ident = procIdent): boolean {
+export function canPromote(c: Pick<RoleConfig, "bluegreen" | "color" | "liveFile" | "lockFile">, pid = process.pid, alive: Alive = pidAlive, ident: Ident = procIdent): boolean {
   if (c.bluegreen && (!c.color || liveColor(c.liveFile) !== c.color)) return false;
   const holder = primaryHolder(c.lockFile, alive, ident);
   return holder === null || holder === pid;
@@ -93,7 +98,7 @@ export function releasePrimary() {
  * Gọi một lần lúc khởi động (instrumentation.ts). duties: mọi việc chỉ được chạy ở một tiến trình; được gọi đúng một lần, ngay (một tiến trình)
  * hoặc khi secondary nhận vai. Gọi lại startRole không chạy duties lần nữa.
  */
-export function startRole(duties: () => void | Promise<void>, o: { env?: NodeJS.ProcessEnv; alive?: (pid: number) => boolean; pid?: number; ident?: Ident; warnMs?: number } = {}): Role {
+export function startRole(duties: () => void | Promise<void>, o: { env?: NodeJS.ProcessEnv; alive?: Alive; pid?: number; ident?: Ident; warnMs?: number } = {}): Role {
   if (st.promoted || st.timer) return st.role;
   const env = o.env ?? process.env, c = roleConfig(env), pid = o.pid ?? process.pid;
   const become = () => {
@@ -111,7 +116,7 @@ export function startRole(duties: () => void | Promise<void>, o: { env?: NodeJS.
   if (!c.bluegreen && canPromote(c, pid, o.alive, o.ident)) { become(); if (st.promoted) return st.role; }
   st.role = "secondary";
   if (c.bluegreen && !c.color) console.error("[role] SYNCHRO_ROLE=secondary nhưng thiếu SYNCHRO_COLOR: không bao giờ nhận vai primary");
-  if (!c.bluegreen) { waited = true; console.error(`[role] tiến trình ${primaryHolder(c.lockFile, o.alive)} đang giữ khóa primary (${c.lockFile}): chỉ phục vụ yêu cầu, không chạy việc nền`); }
+  if (!c.bluegreen) { waited = true; console.error(`[role] tiến trình ${primaryHolder(c.lockFile, o.alive, o.ident)} đang giữ khóa primary (${c.lockFile}): chỉ phục vụ yêu cầu, không chạy việc nền`); }
   // Màu sống là mình mà chờ quá lâu (khóa vẫn do tiến trình khác giữ): báo lên trang Sức khỏe hệ thống (console.error → ops), một lần.
   let blockedSince = 0, warned = false;
   const check = () => {
