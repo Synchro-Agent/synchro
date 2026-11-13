@@ -22,14 +22,28 @@ const realBin = (() => {
 // Litestream giả: ghi lại lần chạy, khóa nhận được (chỉ độ dài khóa bí mật), rồi chờ tới khi bị dừng. Có tệp "crash" thì chết ngay (mã 3).
 const FAKE = path.join(tmp, "fake-litestream");
 fs.writeFileSync(FAKE, `#!/bin/sh
-if [ "$1" != "replicate" ]; then echo '[]'; exit 0; fi
+if [ "$1" != "replicate" ]; then
+  for a in "$@"; do case "$a" in *.yml) cd0=$(dirname "$a");; esac; done
+  if [ "$1" = "ltx" ] && [ -f "$cd0/synced" ]; then echo '[{"max_txid":"0000000000000005","timestamp":"'"$(cat "$cd0/synced")"'"}]'; else echo '[]'; fi
+  exit 0
+fi
 d=$(dirname "$3")
 echo "start $$ key=\${LITESTREAM_ACCESS_KEY_ID:-none} secretlen=\${#LITESTREAM_SECRET_ACCESS_KEY} other=\${DATA_KEY:-none}" >> "$d/fake.log"
 echo '{"time":"t","level":"INFO","msg":"litestream","version":"fake"}'
-if [ -f "$d/crash" ]; then rm "$d/crash"; echo '{"level":"ERROR","msg":"sync error","error":"cannot reach bucket"}'; exit 3; fi
+if [ -f "$d/crash" ]; then rm "$d/crash"; echo '{"level":"ERROR","msg":"sync error","error":"cannot reach bucket: AccessDenied: Access Denied, status code: 403"}'; exit 3; fi
 trap 'echo "stop $$" >> "$d/fake.log"; exit 0' TERM
 while true; do sleep 1; done
 `, { mode: 0o755 });
+// R2 giả cho lần ghi thử khi lưu (r2probe.ts): ghi nhận yêu cầu đã ký; deny = trả 403 AccessDenied như token chỉ có quyền đọc.
+const http = await import("node:http");
+const r2 = { deny: false, reqs: [] };
+const r2srv = http.createServer((q, s) => { let n = 0; q.on("data", (d) => { n += d.length; }); q.on("end", () => {
+  r2.reqs.push({ method: q.method, url: q.url, auth: String(q.headers.authorization ?? ""), sha: String(q.headers["x-amz-content-sha256"] ?? ""), n });
+  if (r2.deny) { s.writeHead(403, { "content-type": "application/xml" }); s.end("<?xml version=\"1.0\"?><Error><Code>AccessDenied</Code><Message>Access Denied</Message></Error>"); return; }
+  s.writeHead(q.method === "DELETE" ? 204 : 200); s.end();
+}); });
+await new Promise((ok) => r2srv.listen(0, "127.0.0.1", ok));
+process.env.SYNCHRO_R2_ENDPOINT = `http://127.0.0.1:${r2srv.address().port}`;
 process.env.DATA_DIR = path.join(tmp, "data"); process.env.DATA_KEY = "litestream-test"; process.env.SYNCHRO_RELAX_LIMITS = "1";
 process.env.ADMIN_EMAILS = "boss@synchro.test"; process.env.LITESTREAM_BIN = FAKE;
 const { authstore: AS, litestream: L, "api/admin/backup/route": R } = await loadTs(["authstore", "litestream", "api/admin/backup/route"]);
@@ -55,8 +69,15 @@ try {
   ok(r.status === 400, "Account ID sai dạng: từ chối", r.status);
   r = await R.POST(req({ action: "save", accountId: ACC, bucket: "synchro-backup", enabled: true }, ck));
   ok(r.status === 400 && !(await L.litestreamAdmin()).enabled, "bật khi chưa có khóa: từ chối", await r.json());
+  r2.deny = true;
   r = await R.POST(req({ action: "save", accountId: ACC, bucket: "synchro-backup", accessKeyId: KEY, secret: SECRET, prefix: "prod/db", enabled: true }, ck));
   let j = await r.json();
+  ok(r.status === 400 && /Object Read & Write/.test(j.error) && !(await L.litestreamAdmin()).enabled && !fs.existsSync(LOG), "token không ghi được (403): từ chối lưu, báo cần quyền Object Read & Write, không chạy litestream", j);
+  ok(r2.reqs.length === 1 && r2.reqs[0].method === "PUT" && r2.reqs[0].url.startsWith("/synchro-backup/prod/db/.synchro-write-test-") && r2.reqs[0].auth.startsWith(`AWS4-HMAC-SHA256 Credential=${KEY}/`) && r2.reqs[0].auth.includes("/auto/s3/aws4_request") && !r2.reqs[0].auth.includes(SECRET), "ghi thử: PUT đã ký SigV4 vào đúng bucket / thư mục, không lộ khóa bí mật", r2.reqs);
+  r2.deny = false; r2.reqs = [];
+  r = await R.POST(req({ action: "save", accountId: ACC, bucket: "synchro-backup", accessKeyId: KEY, secret: SECRET, prefix: "prod/db", enabled: true }, ck));
+  j = await r.json();
+  ok(r2.reqs.map((x) => x.method).join(",") === "PUT,DELETE" && r2.reqs[0].url === r2.reqs[1].url && r2.reqs[0].n > 0, "ghi được: ghi rồi xóa tệp thử", r2.reqs);
   ok(r.status === 200 && j.enabled && j.hasSecret && !JSON.stringify(j).includes(SECRET), "lưu và bật, trả về không có khóa bí mật", j);
   ok(!AS.getSetting("backup_r2", "").includes(SECRET) && AS.getSetting("backup_r2", "").includes(KEY), "khóa bí mật mã hóa trong cơ sở dữ liệu");
   ok(await until(() => starts() === 1), "tiến trình litestream chạy", log());
@@ -67,6 +88,9 @@ try {
   ok(log().includes(`key=${KEY} secretlen=${SECRET.length} other=none`), "khóa đi qua biến môi trường; khóa khác của máy chủ (DATA_KEY) không đi theo", log());
   ok(fs.readFileSync(path.join(LD, "replicate.pid"), "utf8").trim() === String((await L.litestreamAdmin()).pid), "ghi pid để lần khởi động sau dọn tiến trình mồ côi");
   ok(AS.adminAudit(5).some((a) => a.action === "admin_backup_on"), "nhật ký: bật sao lưu liên tục");
+  // scripts/r2-creds.mjs (web user đưa khóa cho scripts/backup-offsite.sh qua ống): đúng 5 dòng, giải mã được khóa bí mật.
+  const cr = execFileSync(process.execPath, ["scripts/r2-creds.mjs", process.env.DATA_DIR], { encoding: "utf8", env: { ...process.env } }).split("\n");
+  ok(cr.slice(0, 5).join("|") === [ACC, "synchro-backup", KEY, SECRET, "prod/db"].join("|") && cr.length === 6, "r2-creds.mjs: 5 dòng đúng thứ tự, khóa bí mật giải mã đúng");
 
   console.log("3. Đổi cấu hình, chết giữa chừng, tắt");
   r = await R.POST(req({ action: "save", bucket: "synchro-backup-2", secret: "" }, ck));
@@ -76,6 +100,14 @@ try {
   await L.restartLitestream();
   ok(await until(async () => (await L.litestreamAdmin()).errors.some((e) => /cannot reach bucket/.test(e.msg))), "lỗi của litestream hiện ở trạng thái", (await L.litestreamAdmin()).errors);
   ok(await until(async () => { const s = await L.litestreamAdmin(); return s.running && s.restarts === 1; }, 12000), "chết ngoài ý muốn: tự chạy lại sau ít giây", await L.litestreamAdmin());
+  st = await L.litestreamAdmin();
+  ok(/Object Read & Write/.test(st.hint ?? "") && st.errors.some((e) => !e.resolved), "lỗi 403 trong nhật ký: có hướng sửa (cần quyền ghi)", st);
+  // Sửa quyền token xong, litestream đồng bộ được: lỗi cũ đánh dấu đã hết, nhãn không còn "có lỗi".
+  fs.writeFileSync(path.join(LD, "synced"), new Date(Date.now() + 1000).toISOString());
+  await L.restartLitestream();
+  st = await L.litestreamAdmin();
+  ok(st.lastSyncAt && st.errors.length > 0 && st.errors.every((e) => e.resolved) && st.hint === null, "đồng bộ thành công sau lỗi: lỗi cũ đánh dấu đã hết, không còn hướng sửa", st);
+  ok(L.errorHint("PutObject: NoSuchBucket") && /bucket/.test(L.errorHint("NoSuchBucket")) && L.errorHint("hello") === null, "nhận ra các lỗi R2 khác");
   const pid = (await L.litestreamAdmin()).pid;
   r = await R.POST(req({ action: "save", enabled: false }, ck));
   ok(r.status === 200 && !(await r.json()).running && await until(() => { try { process.kill(pid, 0); return false; } catch { return true; } }), "tắt: tiến trình dừng hẳn");
@@ -118,6 +150,7 @@ try {
   }
 } finally {
   await L.stopLitestream().catch(() => {});
+  r2srv.close();
   fs.rmSync(tmp, { recursive: true, force: true });
 }
 console.log(`\n${pass} đạt, ${fail} lỗi`);

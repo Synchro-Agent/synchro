@@ -174,4 +174,8 @@ install_litestream() {
   echo "Đã cài litestream $V."
 }
 install_litestream || echo "CẢNH BÁO: chưa cài được litestream (sao lưu liên tục lên R2 chưa dùng được)." >&2
+# 7. age + rclone cho bản chụp tệp mã hóa đẩy lên R2 hằng đêm (scripts/backup-offsite.sh, Blueprint A6.2). Bản của Ubuntu là đủ.
+if ! command -v age >/dev/null || ! command -v rclone >/dev/null; then
+  DEBIAN_FRONTEND=noninteractive apt-get install -y -qq age rclone >/dev/null 2>&1 || echo "CẢNH BÁO: chưa cài được age / rclone (bản chụp tệp chưa đẩy lên R2 được)." >&2
+fi
 echo "Workspace sẵn sàng."

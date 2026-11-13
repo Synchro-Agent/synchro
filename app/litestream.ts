@@ -12,6 +12,7 @@ import path from "node:path";
 import Database from "better-sqlite3";
 import { AuthError, DATA_DIR, db, getSetting, setSetting } from "./authstore";
 import { openSecret, sealSecret } from "./providers";
+import { probeR2Write, r2Message } from "./r2probe";
 
 const SEC = 1000, MIN = 60 * SEC;
 export const DB_PATH = () => path.join(DATA_DIR, "synchro.db");
@@ -165,6 +166,13 @@ export async function saveLitestream(v: { enabled?: unknown; accountId?: unknown
   if (v.prefix !== undefined) { const x = str(v.prefix) || "synchro"; if (!PREFIX_RE.test(x) || x.includes("..")) throw new AuthError("Thư mục trong bucket không hợp lệ.", 400); next.prefix = x; }
   if (typeof v.enabled === "boolean") next.enabled = v.enabled;
   if (next.enabled && !configured(next)) throw new AuthError("Hãy điền đủ Account ID, bucket, Access Key ID và Secret Access Key trước khi bật.", 400);
+  // Bật, hoặc đổi nơi lưu / khóa khi đang bật: ghi thử thật lên R2 trước khi lưu. Token chỉ đọc, sai bucket, sai Account ID báo ngay ở đây
+  // bằng câu có hướng sửa, không phải đợi litestream ghi "403 AccessDenied" vào nhật ký.
+  const where = (x: Stored) => [x.accountId, x.bucket, x.accessKeyId, x.secret, x.prefix].join("\n");
+  if (next.enabled && !fileReplica() && (!cur.enabled || where(cur) !== where(next))) {
+    const e = await probeR2Write({ accountId: next.accountId, bucket: next.bucket, accessKeyId: next.accessKeyId, secret: openSecret(next.secret), prefix: next.prefix });
+    if (e) { console.warn(`[backup] ghi thử lên R2 lỗi: ${e.code} (${e.status})`); throw new AuthError(e.message, 400); }
+  }
   setSetting("backup_r2", JSON.stringify(next));
   if (next.enabled) await restartLitestream(); else await stopLitestream();
 }
@@ -192,17 +200,30 @@ async function replStatus(): Promise<ReplStatus> {
   } catch { error = error ?? ((b.err || b.out).trim().slice(0, 300) || undefined); }
   return { localTxid, replicaTxid, lastSyncAt, walSize, ...(error ? { error } : {}) };
 }
+/** Dòng nhật ký litestream (tiếng Anh, mã lỗi S3) → hướng sửa cho quản trị viên. null: không nhận ra. */
+export function errorHint(msg: string): string | null {
+  if (/AccessDenied|status code: 403|StatusCode: 403/i.test(msg)) return r2Message("AccessDenied", 403);
+  if (/NoSuchBucket/i.test(msg)) return r2Message("NoSuchBucket", 404);
+  if (/InvalidAccessKeyId|SignatureDoesNotMatch|status code: 401/i.test(msg)) return r2Message("InvalidAccessKeyId", 401);
+  if (/no such host|dial tcp|i\/o timeout|connection refused/i.test(msg)) return r2Message("network", 0);
+  return null;
+}
 /** Cho Cài đặt → Sức khỏe hệ thống. Không có khóa bí mật. Gọi R2 tối đa mỗi 20 giây. */
 export async function litestreamAdmin() {
   const s = stored(), bin = litestreamBin();
   if (configured(s) && bin && (!st.status || Date.now() - st.status.at > 20 * SEC)) st.status = { at: Date.now(), v: await replStatus().catch((e) => ({ localTxid: null, replicaTxid: null, lastSyncAt: null, walSize: null, error: String((e as Error).message) })) };
   const r = configured(s) && bin ? st.status?.v ?? null : null;
   const lagTx = r?.localTxid && r.replicaTxid ? Math.max(0, hexN(r.localTxid) - hexN(r.replicaTxid)) : null;
+  // Lỗi xảy ra trước một lần đồng bộ thành công đã tự hết (vd. token vừa được sửa quyền): vẫn giữ trong danh sách nhưng đánh dấu,
+  // nhãn trạng thái chỉ tính lỗi còn mở.
+  const last = r?.lastSyncAt ?? null;
+  const errors = [...st.errors].reverse().map((e) => ({ ...e, resolved: !!last && e.at <= last }));
+  const hint = errors.filter((e) => !e.resolved).map((e) => errorHint(e.msg)).find(Boolean) ?? null;
   return {
     enabled: s.enabled, accountId: s.accountId, bucket: s.bucket, accessKeyId: s.accessKeyId, hasSecret: !!s.secret, prefix: s.prefix, testReplica: !!fileReplica(),
     binary: bin,
     running: !!st.child, pid: st.child?.pid ?? null, startedAt: st.startedAt, restarts: st.restarts,
-    errors: [...st.errors].reverse(), lastLog: st.lastLog,
+    errors, lastLog: st.lastLog, hint,
     localTxid: r?.localTxid ?? null, replicaTxid: r?.replicaTxid ?? null, lastSyncAt: r?.lastSyncAt ?? null, walSize: r?.walSize ?? null, statusError: r?.error ?? null,
     lagTx, lagSec: lagTx && r?.lastSyncAt ? Math.round((Date.now() - r.lastSyncAt) / 1000) : lagTx === 0 ? 0 : null,
   };

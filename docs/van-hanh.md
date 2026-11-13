@@ -63,11 +63,28 @@ Không có trong bản sao, tải / dựng lại được: `data/skills/_plugins
 Bản sao nằm cùng đĩa với dữ liệu, nên **không chống được hỏng đĩa hay mất máy chủ**. Muốn chống phải đẩy ra ngoài và mã hóa, vì bản sao chứa `data/secret.key` và tệp môi trường. Đặt lệnh trong `/etc/synchro-ops.env` (không đặt trong `.env.production`: lệnh này chạy bằng root):
 
 ```bash
-# Ví dụ: mã hóa bằng age với khóa công khai (khóa riêng giữ ngoài máy chủ) rồi đẩy đi bằng rclone. Nơi lưu do chủ dịch vụ chọn.
-SYNCHRO_BACKUP_HOOK=/root/synchro-offsite.sh
+# Đang dùng (Blueprint A6.2, bật 13/11/2026): scripts/backup-offsite.sh nén tệp tải lên, tệp đã tạo, skill riêng, âm thanh Speech,
+# mã hóa bằng age với khóa CÔNG KHAI, đẩy lên cùng bucket R2 của sao lưu liên tục (thư mục "<thư mục>-files/") bằng rclone, giữ 14 bản.
+SYNCHRO_BACKUP_HOOK="/var/www/synchro/scripts/backup-offsite.sh"
+SYNCHRO_AGE_RECIPIENT="age1…"     # khóa công khai; khóa riêng (AGE-SECRET-KEY-1…) chủ dịch vụ giữ ngoài máy chủ
 ```
 
-Lệnh nhận đường dẫn bản vừa tạo làm tham số đầu; lỗi thì bản cục bộ vẫn giữ và trang sức khỏe báo.
+Lệnh nhận đường dẫn bản vừa tạo làm tham số đầu; lỗi thì bản cục bộ vẫn giữ và trang sức khỏe báo (dòng "Off-site copy").
+Khóa R2 lấy từ cài đặt sao lưu liên tục (Cài đặt → Sức khỏe hệ thống) qua `scripts/r2-creds.mjs` chạy bằng web user, chỉ đi qua biến môi trường của rclone.
+Cơ sở dữ liệu không nằm trong gói này (Litestream đã đẩy liên tục, xem docs/backup-r2.md); `secret.key` cũng không: giữ một bản riêng cùng khóa age.
+Máy chủ cần `age` và `rclone` (workspace/setup.sh tự cài bằng apt).
+
+**Mở bản chụp tệp trên R2** (máy bất kỳ có khóa riêng):
+
+```bash
+# Tải về bằng rclone (hoặc tải trên trang R2 của Cloudflare), rồi giải mã. Có lệnh age:
+age -d -i age-key.txt files-<STAMP>.tar.gz.age | tar -xz
+# Không có age, chỉ cần Node:
+node scripts/age-decrypt.mjs age-key.txt files-<STAMP>.tar.gz.age | tar -xz
+# Được: uploads/ (đặt lại vào <app>/.cache/files), data/outputs, data/skills, data/speech
+```
+
+Đã diễn tập ngày 13/11/2026: bản 202 MB tải từ R2, giải mã trên máy khác bằng `age-decrypt.mjs`, đọc đủ 319 tệp.
 
 ### Khôi phục
 
