@@ -11,7 +11,8 @@ export type OfficeKind = "docx" | "xlsx" | "csv" | "pptx" | "pdf";
 type Lib = [string, string, string];
 const JSZIP: Lib = ["jszip-3.10.1.min.js", "jszip@3.10.1/dist/jszip.min.js", "sha384-+mbV2IY1Zk/X1p/nWllGySJSUN8uMs+gUAN10Or95UBH0fpj6GfKgPmgC5EXieXG"];
 const MAMMOTH: Lib = ["mammoth-1.8.0.min.js", "mammoth@1.8.0/mammoth.browser.min.js", "sha384-/cXAMbzovUIKbBERjPmR3SnPTh8siWr5lsvFYj1Uq4XP0yaJUZJmsh0YXyGv5P0y"];
-const XLSX: Lib = ["xlsx-0.18.5.min.js", "xlsx@0.18.5/dist/xlsx.full.min.js", "sha384-vtjasyidUo0kW94K5MXDXntzOJpQgBKXmE7e2Ga4LG0skTTLeBi97eFAXsqewJjw"];
+// SheetJS 0.20.3 từ CDN chính thức (cdn.sheetjs.com): bản >0.18.5 không còn trên npm/jsDelivr, nên dự phòng là URL tuyệt đối tới CDN hãng.
+const XLSX: Lib = ["xlsx-0.20.3.min.js", "https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js", "sha384-EnyY0/GSHQGSxSgMwaIPzSESbqoOLSexfnSMN2AP+39Ckmn92stwABZynq1JyzdT"];
 // pdf.js: nạp sẵn worker như script thường (khung cô lập không tạo được Web Worker), pdf.js tự chạy worker trên luồng chính.
 const PDFW: Lib = ["pdf.worker-3.11.174.min.js", "pdfjs-dist@3.11.174/legacy/build/pdf.worker.min.js", "sha384-sS8B4COeBqzQV9DaPpp5cbpF+xz2jPcFbN3L8FL3/dx0RMC6WLUwTUOFm0iFb1lw"];
 const PDFJS: Lib = ["pdf-3.11.174.min.js", "pdfjs-dist@3.11.174/legacy/build/pdf.min.js", "sha384-OemFRmhjDZwhIKuUld0HJozkF2YErsgDaCL41trxGQZt4/WgnopJQqQl2DvDZ07Z"];
@@ -22,6 +23,8 @@ export const officeKind = (name: string): OfficeKind | null => {
 };
 
 const CDNS = "https://cdn.jsdelivr.net";
+// CDN chính thức của SheetJS (bản >0.18.5 chỉ có ở đây, không lên npm/jsDelivr): cần cho phép trong CSP khi dự phòng tải xlsx.
+const SHEETJS_CDN = "https://cdn.sheetjs.com";
 const CSS = `:root{color-scheme:light}html,body{margin:0;background:#ecebe8;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;color:#1f1f1f}
 .ld{position:fixed;inset:0;display:grid;place-items:center}.ld i{width:22px;height:22px;border-radius:50%;border:2px solid #d6d6d0;border-top-color:#545452;animation:s .8s linear infinite}@keyframes s{to{transform:rotate(360deg)}}
 .err{margin:24px;padding:14px 16px;border-radius:10px;background:#fff3f0;color:#9a2b16;font-size:14px}
@@ -452,8 +455,8 @@ const LIMITS = { SHEET_ROWS: 2000, SHEET_COLS: 200, SHEET_CELLS: 120_000, PDF_PA
 export const STRINGS = ["Không tải được thư viện xem tệp. Kiểm tra kết nối mạng.", "Không đọc được tệp: {n}", "Không đọc được tệp Word: {n}", "Không đọc được tệp PDF: {n}", "Không đọc được tệp PowerPoint: {n}", "Tệp này lớn ({n} MB), mở xem trước có thể làm trình duyệt chậm vài chục giây. Tải tệp về để mở bằng Excel sẽ nhanh hơn.", "Vẫn mở xem trước", "Đang hiện {n} / {m} trang đầu. Tải tệp về để xem đủ.", "Trang tính này trống.", "Công thức chưa có giá trị tính sẵn; mở bằng Excel sẽ tự tính.", "Đang hiện {n} / {m} dòng đầu của trang tính này. Tải tệp về để xem đủ.", "Đang hiện {n} / {m} cột đầu.", "{n} ô công thức chưa có giá trị tính sẵn nên hiện công thức; mở bằng Excel sẽ tự tính.", "Công thức trong tệp chưa được tính (đang hiện 0); mở bằng Excel sẽ tự tính.", "Biểu đồ", "Biểu đồ / đối tượng", "Ảnh", "thiếu presentation.xml", "Tài liệu dài: đang hiện {n} khối đầu. Tải tệp về để xem đủ.", "{n} quy tắc định dạng có điều kiện chưa hiện được trong bản xem trước; tệp vẫn đủ, mở bằng Excel để thấy.", "Vừa chiều rộng", "Kích thước thật"];
 
 export function officeDoc(kind: OfficeKind, name: string, origin: string, ch: string, t: (s: string) => string = (s) => s, locale = "vi-VN"): string {
-  const libs = LIBS[kind].map(([f, cdn, sri]) => [`${origin}/vendor/${f}`, `${CDNS}/npm/${cdn}`, sri]);
-  const cspMeta = `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' 'unsafe-eval' ${origin}/vendor/ ${CDNS}; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; connect-src 'none'; form-action 'none'; base-uri 'none'">`;
+  const libs = LIBS[kind].map(([f, cdn, sri]) => [`${origin}/vendor/${f}`, cdn.startsWith("http") ? cdn : `${CDNS}/npm/${cdn}`, sri]);
+  const cspMeta = `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' 'unsafe-eval' ${origin}/vendor/ ${CDNS} ${SHEETJS_CDN}; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; connect-src 'none'; form-action 'none'; base-uri 'none'">`;
   const vars = `var CH=${JSON.stringify(ch)},KIND=${JSON.stringify(kind)},NAME=${JSON.stringify(name).replace(/</g, "\\u003c")},LIBS=${JSON.stringify(libs)},STR=${JSON.stringify({ __locale: locale, ...Object.fromEntries(STRINGS.map((s) => [s, t(s)])) }).replace(/</g, "\\u003c")}${Object.entries(LIMITS).map(([k, v]) => `,${k}=${v}`).join("")};`;
   return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">${cspMeta}<style>${CSS}</style></head><body><div id="v"><div class="ld"><i></i></div></div><script>${vars}${VIEWER}</script></body></html>`;
 }

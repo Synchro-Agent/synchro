@@ -16,6 +16,31 @@ export function chunkForRag(text: string): string[] {
   return out;
 }
 
+/**
+ * Chia đoạn cho bảng tính: lặp lại dòng tiêu đề (dòng "| cột | cột |" và dòng ngăn cách "| --- |") ở đầu MỖI đoạn,
+ * để khi tìm theo nghĩa / BM25 trúng đoạn ở giữa bảng, model vẫn biết mỗi cột là cột nào. Mỗi sheet ("## Sheet:") chia riêng.
+ */
+export function chunkSheet(text: string): string[] {
+  const out: string[] = [];
+  const sections = text.split(/\n(?=## Sheet:)/);
+  for (const sec of sections) {
+    const lines = sec.split("\n");
+    let hi = -1;
+    for (let i = 0; i + 1 < lines.length; i++) if (/^\|.*\|\s*$/.test(lines[i]) && /^\|[\s\-|:]+\|\s*$/.test(lines[i + 1])) { hi = i; break; }
+    if (hi < 0) { for (const c of chunkForRag(sec)) out.push(c); continue; }
+    const header = lines[hi] + "\n" + lines[hi + 1];
+    const head = lines.slice(0, hi + 2).join("\n"); // tên sheet + phần trên tiêu đề + chính dòng tiêu đề
+    let cur = head;
+    const flush = () => { if (cur.trim()) out.push(cur); };
+    for (const row of lines.slice(hi + 2)) {
+      if (cur.length + row.length + 1 > CHUNK_CHARS && cur !== head && cur !== header) { flush(); cur = header; }
+      cur += "\n" + row;
+    }
+    flush();
+  }
+  return out;
+}
+
 const tok = (s: string) => s.toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? [];
 
 /** Điểm BM25 của từng đoạn, xếp giảm dần (chỉ đoạn có điểm). */
