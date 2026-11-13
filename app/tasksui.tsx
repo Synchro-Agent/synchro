@@ -10,6 +10,7 @@ import { INBOX_CHANGED, useInboxCount } from "./inboxcount";
 export { INBOX_CHANGED, useInboxCount };
 import { Markdown } from "./md";
 import { artifactsAsCode, hasArtifacts, splitArtifacts } from "./artifacts";
+import { isDeck } from "./artdoc";
 import { AUTO, modelName, useModels } from "./models";
 import { allowsModel } from "./catalog";
 import { useApp } from "./store";
@@ -44,6 +45,20 @@ const z = (n: number) => String(n).padStart(2, "0");
 const when = (t: number) => { const d = new Date(t), hm = `${z(d.getHours())}:${z(d.getMinutes())}`; return d.toDateString() === new Date().toDateString() ? hm : `${hm} · ${z(d.getDate())}/${z(d.getMonth() + 1)}`; };
 const dayOf = (t: number) => { const d = new Date(t); d.setHours(0, 0, 0, 0); return d.getTime(); };
 const dayLabel = (t: number) => { const today = dayOf(Date.now()); return t === today ? tr("Hôm nay") : t === today - 86_400_000 ? tr("Hôm qua") : `${tr(DAYS[new Date(t).getDay()])}, ${z(new Date(t).getDate())}/${z(new Date(t).getMonth() + 1)}`; };
+// Bản trình bày (slide HTML) trong kết quả một lượt: mỗi identifier một nút "Tải PowerPoint" (G4.6, xuất ở máy chủ qua /api/artifacts/pptx —
+// kết quả việc tự động không vào kho artifact và không có khung xem để xuất ngay trong trình duyệt). Bản vá dùng chung identifier với bản đầy đủ.
+const decksIn = (text: string) => [...new Map(splitArtifacts(text).flatMap((sg) => (sg.kind === "art" && !sg.art.patch && sg.art.complete && isDeck(sg.art) ? [[sg.art.ident, sg.art.title] as const] : []))).entries()].map(([ident, title]) => ({ ident, title }));
+/** Xuất một bản trình bày trong kết quả lượt thành .pptx ở máy chủ rồi tải về (lỗi: câu tiếng Việt của máy chủ, nơi gọi dịch bằng tr). */
+async function downloadPptx(run: string, ident: string) {
+  const r = await apiFetch("/api/artifacts/pptx", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ run, identifier: ident }) });
+  if (!r.ok) { const j = (await r.json().catch(() => ({}))) as { error?: string }; throw new Error(j.error || statusText(r.status)); }
+  const blob = await r.blob();
+  const name = /filename="([^"]+)"/.exec(r.headers.get("content-disposition") ?? "")?.[1] ?? "presentation.pptx";
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 60_000);
+}
 const excerpt = (t: string) => t.replace(/<artifact[\s\S]*?<\/artifact>/g, "").replace(/[#*_`>|]/g, "").replace(/\s+/g, " ").trim().slice(0, 160);
 const tz = () => Intl.DateTimeFormat().resolvedOptions().timeZone;
 
@@ -236,7 +251,14 @@ function ResultBody({ x, task, say, onOpenChat, onRetry, reload }: { x: Item; ta
   const [events, setEvents] = useState<RunEv[] | null>(null);
   const [props, setProps] = useState<Proposal[]>([]);
   const [log, setLog] = useState(false);
+  const [pptx, setPptx] = useState<string | null>(null);
   const { openSettings } = useApp();
+  const decks = useMemo(() => (x.status === "done" && !x.error ? decksIn(x.text) : []), [x.status, x.error, x.text]);
+  const getPptx = async (ident: string) => {
+    if (pptx) return;
+    setPptx(ident); say(tr("Đang dựng tệp PowerPoint…"));
+    try { await downloadPptx(x.run, ident); say(tr("Đã tải tệp PowerPoint")); } catch (e) { say(tr((e as Error).message)); } finally { setPptx(null); }
+  };
   const real = x.kind !== "notice" && x.status !== "waiting";
   useEffect(() => {
     if (!real) return;
@@ -262,6 +284,8 @@ function ResultBody({ x, task, say, onOpenChat, onRetry, reload }: { x: Item; ta
       {log && steps.length > 0 && <ol className="tk-log">{steps.map((e) => <li key={e.seq} className={e.kind}><span>{when(e.at).split(" ·")[0]}</span><span data-notr>{e.text}</span></li>)}</ol>}
       {x.kind !== "notice" && x.status !== "waiting" && <div className="tk-acts">
         {x.status === "done" && <button className="btn" onClick={() => onOpenChat(x.title, x.text)}><I.Chat2 size={14} />{tr("Mở thành đoạn chat")}</button>}
+        {decks.map((d) => <button key={d.ident} className="btn" disabled={!!pptx} aria-busy={pptx === d.ident} title={d.title} onClick={() => getPptx(d.ident)}>
+          {pptx === d.ident ? <span className="art-spin sm" /> : <I.Download size={14} />}{tr("Tải PowerPoint")}{decks.length > 1 && <span className="tk-deck" data-notr>{d.title}</span>}</button>)}
         {task && x.status !== "running" && <button className="btn" onClick={() => onRetry(task)}><I.Retry size={14} />{tr("Chạy lại")}</button>}
         {steps.length > 0 && <button className="btn ghost" onClick={() => setLog(!log)}><I.List size={14} />{log ? tr("Ẩn nhật ký") : `${tr("Nhật ký")} (${steps.length})`}</button>}
         {x.model && <span className="tk-model" data-notr>{modelName(x.model)}</span>}

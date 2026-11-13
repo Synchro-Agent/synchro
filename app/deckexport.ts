@@ -12,16 +12,19 @@ import path from "node:path";
 import { buildDocCore, isDeck } from "./artdoc";
 import { inlineImages } from "./artimg";
 import { execRun, runner } from "./coderun";
-import { splitArtifacts, type ArtType } from "./artifacts";
+import { type ArtType } from "./artifacts";
+import { artState } from "./vfs";
 
 export type DeckInput = { type: ArtType; content: string; title: string; complete?: boolean };
 
-/** Bản trình bày đầy đủ (không phải bản vá) mới nhất có identifier này trong văn bản kết quả của một lượt (Hộp thư / việc tự động chạy nền). */
+/** Bản trình bày HIỆN TẠI có identifier này trong văn bản kết quả của một lượt (Hộp thư / việc tự động chạy nền): bản đầy đủ mới nhất cộng
+ *  mọi bản vá (mode="patch") sau nó, áp như khung xem (vfs.ts → artState). Bản vá áp không được, hoặc chỉ có bản vá mà không có bản đầy đủ
+ *  trước nó: null — không xuất một bản cũ khác với bản người dùng đang thấy. */
 export function deckFromText(text: string, ident: string): DeckInput | null {
-  const id = ident.trim().toLowerCase();
-  let hit: DeckInput | null = null;
-  for (const sg of splitArtifacts(text)) if (sg.kind === "art" && !sg.art.patch && sg.art.ident === id) hit = { type: sg.art.type, content: sg.art.content, title: sg.art.title, complete: sg.art.complete };
-  return hit;
+  const id = ident.trim().toLowerCase().replace(/[^\w.-]+/g, "-").slice(0, 80);
+  const v = artState([text]).get(id);
+  if (!v || (v.fix && v.fix.failed.length)) return null;
+  return { type: v.type, content: v.content, title: v.title, complete: v.complete };
 }
 
 // Cầu nối giả: không có khung cha, window.synchro / storage trả rỗng để script của slide vẫn chạy (giống CHECK_BRIDGE của artcheck.ts).

@@ -43,6 +43,18 @@ console.log("3. SEC-5: chỉ xuất nội dung của chính người dùng, mạ
   const d = D.deckFromText(text, "Q3-Deck");
   ok(d && d.type === "html" && d.content === DECK && d.title === "Báo cáo Q3" && d.complete === true, "lấy đúng bản đầy đủ trong kết quả lượt (bỏ bản vá)", JSON.stringify(d)?.slice(0, 200));
   ok(D.deckFromText(text, "khac") === null, "identifier không có → null");
+  // W23-11: bản vá sau bản đầy đủ được áp (xuất đúng bản người dùng đang thấy, không phải bản cũ); vá hỏng / vá mà không có bản đầy đủ → null.
+  const patched = `<artifact identifier="q3-deck" type="text/html" title="Báo cáo Q3">${DECK}</artifact>\nSửa:\n<artifact identifier="q3-deck" mode="patch">\n<<<<<<< SEARCH\n<h1>Hai</h1>\n=======\n<h1>Hai (đã sửa)</h1>\n>>>>>>> REPLACE\n</artifact>`;
+  const dp = D.deckFromText(patched, "q3-deck");
+  ok(dp && dp.content.includes("<h1>Hai (đã sửa)</h1>") && !dp.content.includes("<h1>Hai</h1>") && dp.title === "Báo cáo Q3" && dp.type === "html" && dp.complete === true, "W23-11: bản vá sau cùng được áp vào bản đầy đủ", dp?.content);
+  const broken = `<artifact identifier="q3-deck" type="text/html" title="Báo cáo Q3">${DECK}</artifact>\n<artifact identifier="q3-deck" mode="patch">\n<<<<<<< SEARCH\n<h1>Không có</h1>\n=======\n<h1>X</h1>\n>>>>>>> REPLACE\n</artifact>`;
+  ok(D.deckFromText(broken, "q3-deck") === null, "W23-11: bản vá áp không được → không xuất bản cũ");
+  ok(D.deckFromText(`<artifact identifier="q3-deck" mode="patch">\n<<<<<<< SEARCH\na\n=======\nb\n>>>>>>> REPLACE\n</artifact>`, "q3-deck") === null, "W23-11: chỉ có bản vá, không có bản đầy đủ → null");
+  ok(D.deckFromText(`<artifact identifier="Q3 Deck" type="text/html" title="T">${DECK}</artifact>`, "Q3 Deck")?.content === DECK, "identifier chuẩn hóa như khi tách artifact");
+  // W23-11: Hộp thư có nút "Tải PowerPoint" gọi đúng route xuất ở máy chủ với { run, identifier }.
+  const inbox = fs.readFileSync(path.join(process.cwd(), "app/tasksui.tsx"), "utf8");
+  ok(/apiFetch\("\/api\/artifacts\/pptx"/.test(inbox) && /JSON\.stringify\(\{ run, identifier: ident \}\)/.test(inbox) && /tr\("Tải PowerPoint"\)/.test(inbox), "W23-11: Hộp thư gọi /api/artifacts/pptx với { run, identifier }");
+  ok(/isDeck\(sg\.art\)/.test(inbox) && /!sg\.art\.patch/.test(inbox), "W23-11: nút chỉ hiện cho bản trình bày slide HTML trong kết quả");
   const route = fs.readFileSync(path.join(process.cwd(), "app/api/artifacts/pptx/route.ts"), "utf8");
   ok(!/body\.content|body\.type/.test(route), "route không còn nhận HTML thô từ trình duyệt");
   ok(/featureGate\(req, "sandbox"\)/.test(route) && /caps\.code/.test(route), "route cần quyền sandbox + Chạy code của người dùng");

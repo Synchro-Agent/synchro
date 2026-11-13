@@ -1868,6 +1868,9 @@ for (const [k, v] of Object.entries({
   "Bản trình bày chưa viết xong.": "The presentation isn't finished yet.",
   "Máy chủ này chưa có Chromium để xuất PowerPoint (cần dịch vụ workspace).": "This server has no Chromium to export PowerPoint (the workspace service is required).",
   "Đang xuất một bản PowerPoint khác, đợi xong rồi thử lại.": "Another PowerPoint export is still running. Wait for it to finish, then try again.",
+  // Hộp thư → kết quả có bản trình bày (tasksui.tsx): xuất PowerPoint ở máy chủ.
+  "Tải PowerPoint": "Download PowerPoint",
+  "Đã tải tệp PowerPoint": "PowerPoint file downloaded",
 })) if (!Object.prototype.hasOwnProperty.call(VI2EN, k)) VI2EN[k] = v;
 // Phần sau dấu ":" là chi tiết kỹ thuật (thông báo lỗi gốc), giữ nguyên. Luật cụ thể "(trình dựng lỗi)" đứng trước luật chung.
 RULES_EN.push(

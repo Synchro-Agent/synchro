@@ -3302,6 +3302,7 @@ button.tk-chip.warn:hover{background:color-mix(in srgb,var(--tk-warn) 20%,transp
 .tk-note{display:flex;gap:6px;align-items:flex-start;margin:0 0 10px;font-size:12.5px;line-height:1.45;color:var(--text-3)}.tk-note svg{flex:none;margin-top:2px}
 .tk-run span{min-width:0;overflow:hidden;text-overflow:ellipsis}
 .tk-acts{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.tk-acts .tk-deck{max-width:14em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;opacity:.72}
 .tk-model{margin-left:auto;font-size:12px;color:var(--text-3)}
 .tk-log{list-style:none;margin:12px 0 0;padding:10px 12px;border-radius:var(--r-card);background:color-mix(in srgb,var(--card) 60%,transparent);box-shadow:0 0 0 .5px var(--gl-hair);display:flex;flex-direction:column;gap:4px;max-height:280px;overflow:auto}
 .tk-log li{display:flex;gap:10px;font-size:12.5px;line-height:1.45;color:var(--text-2)}
