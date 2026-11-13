@@ -82,6 +82,24 @@ try {
   const code = "```\n" + U + "\n```";
   ok(L.tidyConnectLinks(code) === code && L.tidyConnectLinks("Không có link.") === "Không có link.", "khối code và câu trả lời thường: giữ nguyên");
   ok(L.connectName("👉 Kết nối Gmail") === "Gmail" && L.connectName("Connect Google Drive via Composio") === "Google Drive" && L.connectName("🔗") === "" && L.connectName("https://connect.composio.dev/link/x") === "", "tên ứng dụng của nút lấy từ nhãn link");
+
+  console.log("5. Nhãn công cụ Composio trong chat (cxLabel): bằng lời thường, không lộ tên công cụ bọc ngoài");
+  const lbl = (tool, input) => { const l = X.cxLabel(tool, input); return l ? `${l.app} · ${l.act}` : null; };
+  // Công cụ meta: ứng dụng là "Composio", thao tác bằng lời thường.
+  ok(lbl("COMPOSIO_SEARCH_TOOLS", { queries: ["gmail"] }) === "Composio · Tìm công cụ", "SEARCH_TOOLS → Composio · Tìm công cụ", lbl("COMPOSIO_SEARCH_TOOLS", {}));
+  ok(lbl("COMPOSIO_GET_TOOL_SCHEMAS", { tool_slugs: ["GMAIL_FETCH_EMAILS"] }) === "Composio · Xem tham số công cụ", "GET_TOOL_SCHEMAS → Composio · Xem tham số công cụ", lbl("COMPOSIO_GET_TOOL_SCHEMAS", {}));
+  ok(lbl("COMPOSIO_MANAGE_CONNECTIONS", {}) === "Composio · Quản lý kết nối", "MANAGE_CONNECTIONS → Composio · Quản lý kết nối");
+  // MULTI_EXECUTE: nhãn theo thao tác thật bên trong (ứng dụng · thao tác), không phải "Composio: Multi Execute Composio Tools".
+  ok(lbl("COMPOSIO_MULTI_EXECUTE_TOOL", { tools: [{ tool_slug: "GMAIL_FETCH_EMAILS" }] }) === "Gmail · Lấy email", "MULTI_EXECUTE đọc Gmail → Gmail · Lấy email", lbl("COMPOSIO_MULTI_EXECUTE_TOOL", { tools: [{ tool_slug: "GMAIL_FETCH_EMAILS" }] }));
+  ok(lbl("COMPOSIO_MULTI_EXECUTE_TOOL", { tools: [{ tool_slug: "GOOGLEDOCS_CREATE_DOCUMENT", arguments: { title: "Synchro test" } }] }) === "Google Docs · Tạo tài liệu", "MULTI_EXECUTE ghi Google Docs → Google Docs · Tạo tài liệu", lbl("COMPOSIO_MULTI_EXECUTE_TOOL", { tools: [{ tool_slug: "GOOGLEDOCS_CREATE_DOCUMENT" }] }));
+  // Tham số lỗi (danh sách thao tác trống / sai dạng): không rơi về tên công cụ bọc ngoài, vẫn bằng lời thường.
+  ok(lbl("COMPOSIO_MULTI_EXECUTE_TOOL", { tools: [] }) === "Composio · Chạy thao tác", "MULTI_EXECUTE tham số lỗi → Composio · Chạy thao tác", lbl("COMPOSIO_MULTI_EXECUTE_TOOL", { tools: [] }));
+  const labels = [
+    lbl("COMPOSIO_MULTI_EXECUTE_TOOL", { tools: [{ tool_slug: "GMAIL_FETCH_EMAILS" }] }),
+    lbl("COMPOSIO_MULTI_EXECUTE_TOOL", { tools: [] }),
+    lbl("COMPOSIO_SEARCH_TOOLS", {}), lbl("COMPOSIO_GET_TOOL_SCHEMAS", {}),
+  ];
+  ok(labels.every((s) => s && !/Multi Execute|Composio Tools/i.test(s)), "không nhãn nào lộ 'Multi Execute' / 'Composio Tools'", labels);
 } finally {
   fs.rmSync(tmp, { recursive: true, force: true });
 }
