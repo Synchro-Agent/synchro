@@ -28,6 +28,8 @@ export const VI2EN: Record<string, string> = {
   "Đã có kết quả trong Hộp thư.": "A result is ready in your Inbox.",
   "Ảnh dựng nền đã xong và đã thay vào artifact.": "The background image is ready and is now in the artifact.",
   "Không dựng được ảnh nền; artifact vẫn giữ khung giữ chỗ.": "The background image couldn't be made, so the artifact keeps the placeholder.",
+  "Không dựng được ảnh này; artifact vẫn giữ khung giữ chỗ.": "This image couldn't be made, so the artifact keeps the placeholder.",
+  "Ảnh đang được dựng, sẽ tự hiện khi xong": "The image is still being made and will appear when it's ready",
   "Xem kết quả cũ hơn": "Show older results",
   "Trình duyệt chưa đọc được bằng giọng nói. Câu trả lời đầy đủ có trong khung chat": "The browser can't read aloud. The full answer is in the chat",
   "Ngôn ngữ trình duyệt dùng để nghe bạn nói": "The language your browser listens for",

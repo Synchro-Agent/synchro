@@ -3,10 +3,10 @@
 import { useEffect, useRef, useState } from "react";
 import * as I from "./icons";
 import { tr } from "./i18n";
-import { isDeck } from "./artdoc";
+import { isDeck, noteGenPending, noteGenSettled, pendingRetryMs } from "./artdoc";
 import type { OutFile } from "./llm";
 import { FILE_KIND as KIND, fileKind, fmtSize } from "./fileicon";
-import { imgVerdict } from "./outimg";
+import { genVerdict, imgVerdict } from "./outimg";
 import { ART_LABEL, type ArtBlock, type ArtType } from "./artifacts";
 
 // ---------------------------------------------------------------- biểu tượng theo loại
@@ -54,11 +54,32 @@ export async function saveArtifacts(conv: string, items: ArtBlock[]) {
 // trước đó, trên giao diện tối, nền trắng hiện thành một khung trắng chói vài giây. Tệp hết hạn thì nói rõ, không để biểu tượng ảnh hỏng.
 // Thẻ <img> lỗi không cho biết vì sao: mạng chập chờn, máy chủ đang khởi động lại (502), hết phiên đăng nhập cũng rơi vào đây. Hỏi lại máy chủ, chỉ 404 mới nói hết hạn; còn lại tự thử lại rồi để nút Thử lại.
 const OUT_IMG_H = 360;
+// Ảnh dựng nền (G4, W23-2): ảnh tải về là 1×1 thì hỏi máy chủ (HEAD) xem có phải ảnh giữ chỗ đang dựng không; đang dựng thì giữ ô chờ và hỏi lại
+// (artdoc.ts pendingRetryMs), ảnh thật về thì tải lại bằng địa chỉ mới (&v=) và báo một dòng, dựng hỏng thì nói rõ thay vì để ô xám mãi.
 function OutImage({ f, onOpen }: { f: OutFile; onOpen?: (f: OutFile) => void }) {
-  const [state, setState] = useState<"wait" | "ok" | "gone" | "fail">("wait");
+  const [state, setState] = useState<"wait" | "ok" | "gone" | "fail" | "gen" | "genfail">("wait");
   const [tries, setTries] = useState(0);
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null), alive = useRef(true);
+  const [rev, setRev] = useState(0);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null), alive = useRef(true), gen = useRef({ n: 0, saw: false, busy: false });
   useEffect(() => { alive.current = true; return () => { alive.current = false; if (timer.current) clearTimeout(timer.current); }; }, []);
+  const check = () => {
+    if (gen.current.busy) return;
+    gen.current.busy = true;
+    void fetch(`/api/outputs/${f.id}?inline=1`, { method: "HEAD", cache: "no-store" }).then((r) => (r.ok ? { pending: r.headers.get("x-synchro-pending") === "1", failed: r.headers.get("x-synchro-failed") === "1" } : null), () => null).then((h) => {
+      gen.current.busy = false;
+      if (!alive.current) return;
+      const g = gen.current;
+      const v = h ? genVerdict(h, g.saw) : "wait";
+      if (v === "failed") { setState("genfail"); noteGenSettled(f.id, false); return; }
+      if (v === "real") { setState("ok"); return; }
+      if (v === "reload") { setState("wait"); setRev((x) => x + 1); noteGenSettled(f.id, true); return; }
+      if (h?.pending) { g.saw = true; noteGenPending(f.id); }
+      setState("gen");
+      const wait = pendingRetryMs(g.n++);
+      if (wait !== null) timer.current = setTimeout(check, wait);
+    });
+  };
+  const loaded = (el: HTMLImageElement) => { if (el.naturalWidth === 1 && el.naturalHeight === 1) { if (state !== "gen") setState("gen"); check(); } else setState("ok"); };
   const again = () => { setState("wait"); setTries((t) => t + 1); };
   const failed = () => {
     void fetch(`/api/outputs/${f.id}?inline=1`, { method: "HEAD", cache: "no-store" }).then((r) => r.status, () => null).then((status) => {
@@ -71,10 +92,12 @@ function OutImage({ f, onOpen }: { f: OutFile; onOpen?: (f: OutFile) => void }) 
   const box = ratio ? { width: `min(100%, ${Math.round(Math.min(f.w!, OUT_IMG_H * ratio))}px)` } : undefined;
   if (state === "gone") return <div className="out-img-gone" role="status"><I.Image size={18} /><span>{tr("Không tải được ảnh. Tệp có thể đã hết hạn (tự xóa sau 30 ngày).")}</span></div>;
   if (state === "fail") return <div className="out-img-gone" role="status"><I.Image size={18} /><span>{tr("Chưa tải được ảnh. Có thể do mạng hoặc máy chủ đang khởi động lại.")}</span><button className="btn sm" onClick={again}>{tr("Thử lại")}</button>{onOpen && <button className="btn sm" onClick={() => onOpen(f)}>{tr("Mở")}</button>}</div>;
+  if (state === "genfail") return <div className="out-img-gone" role="status"><I.Image size={18} /><span>{tr("Không dựng được ảnh này; artifact vẫn giữ khung giữ chỗ.")}</span></div>;
+  const waiting = state === "wait" || state === "gen";
   return (
-    <button onClick={() => onOpen?.(f)} aria-label={f.name} style={box} className={state === "wait" ? "out-img-wait" : undefined}>
-      <img src={`/api/outputs/${f.id}?inline=1${tries ? `&r=${tries}` : ""}`} alt={f.name} loading="lazy" data-ready={state === "ok" ? "" : undefined} style={ratio ? { width: "100%", aspectRatio: `${f.w} / ${f.h}` } : undefined}
-        ref={(el) => { if (el?.complete && el.naturalWidth > 0 && state === "wait") setState("ok"); }} onLoad={() => setState("ok")} onError={failed} />
+    <button onClick={() => onOpen?.(f)} aria-label={f.name} style={box} className={waiting ? "out-img-wait" : undefined} aria-busy={state === "gen" || undefined} data-tip={state === "gen" ? tr("Ảnh đang được dựng, sẽ tự hiện khi xong") : undefined}>
+      <img src={`/api/outputs/${f.id}?inline=1${tries ? `&r=${tries}` : ""}${rev ? `&v=${rev}` : ""}`} alt={f.name} loading="lazy" data-ready={state === "ok" ? "" : undefined} style={ratio ? { width: "100%", aspectRatio: `${f.w} / ${f.h}` } : undefined}
+        ref={(el) => { if (el?.complete && el.naturalWidth > 0 && state === "wait") loaded(el); }} onLoad={(e) => loaded(e.currentTarget)} onError={failed} />
     </button>
   );
 }

@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import { Readable } from "node:stream";
 import { handle, requireUser } from "../../../authstore";
-import { outputFile } from "../../../outputs";
+import { genImageState, outputFile } from "../../../outputs";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -12,14 +12,19 @@ const INLINE = /^(image\/(png|jpeg|gif|webp)|audio\/(mpeg|wav|mp4|ogg|flac)|vide
 // HTML) luôn tải về dạng tệp: khung xem trước tự đọc nội dung rồi dựng trong khung cô lập, không chạy trên nguồn gốc của Synchro.
 // Hỗ trợ Range (206): trình phát video tua được và Safari mới phát MP4; tệp đọc dần từ đĩa thay vì nạp cả tệp vào bộ nhớ.
 export const GET = handle(async (req: Request, ctx: { params: Promise<{ id: string }> }) => {
-  const f = outputFile(requireUser(req).user.id, (await ctx.params).id);
+  const uid = requireUser(req).user.id;
+  const f = outputFile(uid, (await ctx.params).id);
   if (!f) return Response.json({ error: "Tệp không còn nữa (tệp được giữ 30 ngày)." }, { status: 404 });
   const inline = new URL(req.url).searchParams.get("inline") === "1" && INLINE.test(f.mime);
+  // Ảnh giữ chỗ của ảnh dựng nền (W23-2): không cho lưu đệm, báo đang chờ / hỏng để thẻ ảnh trong chat hỏi lại tới khi byte thật thay vào cùng id.
+  // Trước đây ảnh giữ chỗ được giữ 1 giờ nên thẻ ảnh đứng ở ô xám kể cả khi ảnh thật đã về. Chỉ đọc tệp PNG nhỏ (ảnh giữ chỗ dưới 512 byte).
+  const gen = f.mime === "image/png" && f.size <= 512 ? genImageState(uid, f.id, fs.readFileSync(f.path)) : null;
   const headers: Record<string, string> = {
     "content-type": inline ? f.mime : f.mime.startsWith("text/") || f.mime === "image/svg+xml" ? "application/octet-stream" : f.mime,
     "content-disposition": `${inline ? "inline" : "attachment"}; filename*=UTF-8''${encodeURIComponent(f.name)}`,
     "accept-ranges": "bytes",
-    "x-content-type-options": "nosniff", "cache-control": "private, max-age=3600",
+    "x-content-type-options": "nosniff", "cache-control": gen ? "no-store" : "private, max-age=3600",
+    ...(gen === "pending" ? { "x-synchro-pending": "1" } : gen === "failed" ? { "x-synchro-failed": "1" } : {}),
     "content-security-policy": "default-src 'none'; sandbox",
   };
   const m = /^bytes=(\d*)-(\d*)$/.exec(req.headers.get("range") ?? "");
