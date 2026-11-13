@@ -997,6 +997,9 @@ html body .menu.cm-fly{position:absolute;left:calc(100% + 6px);bottom:0;top:auto
 .cm-back{display:none!important}
 .cm-list{max-height:248px;overflow-y:auto;scrollbar-width:thin}
 .cm-empty{display:flex;align-items:center;gap:8px;min-height:36px;padding:0 12px;font-size:12.5px;color:var(--ds-muted)}
+/* Danh sách connector hỏng (mạng, máy chủ lỗi): dòng "Không tải được · Thử lại" dùng màu lỗi, dấu chấm tách mờ. */
+.cm-err{color:var(--ds-bad)}
+.cm-dot{color:var(--ds-muted)}
 /* Ô tìm skill / thư viện ở đầu menu con Kho kỹ năng (kho có thể có hàng nghìn thư viện). */
 .cm-find{display:flex;align-items:center;gap:8px;margin:2px 4px 6px;padding:0 10px;height:34px;border-radius:10px;background:var(--ds-sunken);color:var(--ds-muted)}
 .cm-find>svg{flex:none}
