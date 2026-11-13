@@ -64,6 +64,11 @@ async function waitMem(needMB, signal) {
 }
 // Dựng video / chuyển tài liệu bằng LibreOffice / Chromium cần nhiều bộ nhớ hơn một script phân tích dữ liệu.
 const RUN_MEMORY = env("WS_RUN_MEMORY", "2g");
+// Blueprint G3.3: máy chủ có 4 GB swap; --memory-swap (RAM + swap của container) lớn hơn --memory để một lần chạy vượt RAM chút ít thì tràn sang
+// swap thay vì bị kill ngay (mã 137). Mặc định thêm 1 GB swap mỗi container; WS_RUN_MEMORY_SWAP / WS_MEMORY_SWAP đặt tay thì theo ("-1" = không giới hạn).
+// Không đọc được RAM của container (định dạng lạ): giữ swap = RAM như trước, không đặt --memory-swap nhỏ hơn --memory (Docker từ chối).
+const swapOf = (mem, extra) => (memMB(mem, 0) > 0 ? `${memMB(mem, 0) + memMB(extra, 1024)}m` : mem);
+const RUN_MEMORY_SWAP = env("WS_RUN_MEMORY_SWAP", swapOf(RUN_MEMORY, env("WS_SWAP_EXTRA", "1g")));
 // Tệp code ghi vào outputs/ được gửi về: tối đa 20 tệp, mỗi tệp 100 MB, tổng 150 MB (đủ cho video MP4 vài phút).
 // RUN_PREVIEWS: giữ bằng PREVIEW_MAX trong app/runpreview.ts (quy tắc hứa với model tối đa bằng đó ảnh tự xem).
 const RUN_FILES = 20, RUN_PREVIEWS = 12, RUN_FILE_MB = 100, RUN_TOTAL_MB = 150;
@@ -92,6 +97,7 @@ const PKG_HOSTS = ["pypi.org", "files.pythonhosted.org", "pythonhosted.org", "re
 const MAX_RUNNING = ramSlots("WS_MAX_RUNNING", 1536, 4, 2, 32);
 const IDLE_MS = Number(env("WS_IDLE_MIN", 20)) * 60_000;
 const MEMORY = env("WS_MEMORY", "1536m");
+const MEMORY_SWAP = env("WS_MEMORY_SWAP", swapOf(MEMORY, env("WS_SWAP_EXTRA", "1g")));
 // Mọi CPU của máy (đọc lúc dịch vụ khởi động, nâng VPS xong là tự dùng thêm): trình duyệt của Synchro vẽ / chụp khung 2x tốn ~90 ms CPU
 // mỗi khung nên càng nhiều CPU càng cuộn mượt (đo trên VPS 2 CPU: 1 CPU 10, 2 CPU 18–21 khung / giây). Ưu tiên thấp (cpu-shares 256):
 // khi tranh CPU, máy chủ web, ffmpeg nén hình và các dịch vụ khác chạy trước, container chỉ dùng phần còn rảnh.
@@ -249,7 +255,7 @@ async function ensure(u) {
       }
       if (!c) {
         const r = await run("docker", ["run", "-d", "--name", name, "--hostname", "workspace", "--init",
-          "--network", NET, "--memory", MEMORY, "--memory-swap", MEMORY, "--cpus", CPUS, "--cpu-shares", CPU_SHARES, "--pids-limit", "512",
+          "--network", NET, "--memory", MEMORY, "--memory-swap", MEMORY_SWAP, "--cpus", CPUS, "--cpu-shares", CPU_SHARES, "--pids-limit", "512",
           "--cap-drop", "ALL", "--security-opt", "no-new-privileges", "--shm-size", "256m",
           "--label", `synchro.ws=${u}`, "-v", `${dir}:${WORK}`, IMAGE]);
         if (r.code) throw new E(500, "Không tạo được workspace: " + r.err.trim().slice(0, 300));
@@ -261,11 +267,13 @@ async function ensure(u) {
       c = await inspect(name);
       B.reset(u);
     }
-    // Container tạo từ bản trước (giới hạn CPU cũ): cập nhật tại chỗ, không cần tạo lại.
+    // Container tạo từ bản trước (giới hạn CPU cũ, swap = RAM): cập nhật tại chỗ, không cần tạo lại.
     const nano = Math.round(Number(CPUS) * 1e9);
-    if (c.HostConfig && (c.HostConfig.NanoCpus !== nano || c.HostConfig.CpuShares !== Number(CPU_SHARES))) {
-      const r = await run("docker", ["update", "--cpus", CPUS, "--cpu-shares", CPU_SHARES, name], { timeout: 30_000 });
-      if (r.code) log("không cập nhật được giới hạn CPU", u, r.err.trim().slice(0, 200)); else { log("cập nhật giới hạn CPU", u); c = await inspect(name); }
+    const swapBytes = MEMORY_SWAP === "-1" ? -1 : memMB(MEMORY_SWAP, 0) * 1048576;
+    const swapOld = !!swapBytes && c.HostConfig?.MemorySwap !== undefined && c.HostConfig.MemorySwap !== swapBytes;
+    if (c.HostConfig && (c.HostConfig.NanoCpus !== nano || c.HostConfig.CpuShares !== Number(CPU_SHARES) || swapOld)) {
+      const r = await run("docker", ["update", "--cpus", CPUS, "--cpu-shares", CPU_SHARES, ...(swapOld ? ["--memory", MEMORY, "--memory-swap", MEMORY_SWAP] : []), name], { timeout: 30_000 });
+      if (r.code) log("không cập nhật được giới hạn CPU / bộ nhớ", u, r.err.trim().slice(0, 200)); else { log("cập nhật giới hạn CPU / bộ nhớ", u); c = await inspect(name); }
     }
     const s = st(u);
     s.ip = c.NetworkSettings.Networks[NET]?.IPAddress ?? "";
@@ -401,7 +409,7 @@ const proxyEnv = () => {
 const envFlags = (e) => Object.entries(e).flatMap(([k, v]) => ["-e", `${k}=${v}`]);
 // Dùng mọi CPU của máy nhưng ưu tiên thấp (cpu-shares 256): khi tranh CPU, máy chủ web chạy trước. Chromium mở nhiều tiến trình,
 // ffmpeg nhiều luồng: pids 1024, /dev/shm 512 MB.
-const boxLimits = () => ["--hostname", "sandbox", "--init", "--memory", RUN_MEMORY, "--memory-swap", RUN_MEMORY, "--cpus", CPUS, "--cpu-shares", "256", "--pids-limit", "1024",
+const boxLimits = () => ["--hostname", "sandbox", "--init", "--memory", RUN_MEMORY, "--memory-swap", RUN_MEMORY_SWAP, "--cpus", CPUS, "--cpu-shares", "256", "--pids-limit", "1024",
   "--cap-drop", "ALL", "--security-opt", "no-new-privileges", "--shm-size", "512m", "-u", UID, "-w", `${HOME}/run`];
 // Kho container khởi động sẵn (workspace/warmpool.mjs): lần chạy không phải chờ container khởi động (~1 giây). Container trong kho nằm
 // trên mạng chạy code với IP riêng (lần chạy có mạng dùng luôn IP đó; lần chạy không mạng thì ngắt mạng trước khi chạy), gắn thư mục rỗng
@@ -845,7 +853,7 @@ process.on("SIGTERM", async () => {
 
 setupHost().catch((e) => log("setup", e)).then(() => cleanRuns()).catch((e) => log("dọn lần chạy cũ", e)).finally(() => {
   server.listen(PORT, HOST, () => log(`workspace agent nghe tại ${HOST}:${PORT}`));
-  log(`[timing] mem trần theo RAM: ${realTotalMB() || "?"} MB, chừa ${SERVER_RESERVE_MB} MB, mỗi hồ lấy (tổng − chừa) × 0,5 → MAX_RUNNING=${MAX_RUNNING} (workspace /1536 MB), RUN_MAX=${RUN_MAX} (chạy code /2048 MB), MEDIA_MAX=${MEDIA_MAX} (dựng video /3584 MB, ≤ RUN_MAX)`);
+  log(`[timing] mem trần theo RAM: ${realTotalMB() || "?"} MB, chừa ${SERVER_RESERVE_MB} MB, mỗi hồ lấy (tổng − chừa) × 0,5 → MAX_RUNNING=${MAX_RUNNING} (workspace /1536 MB), RUN_MAX=${RUN_MAX} (chạy code /2048 MB), MEDIA_MAX=${MEDIA_MAX} (dựng video /3584 MB, ≤ RUN_MAX); --memory-swap workspace ${MEMORY_SWAP}, chạy code ${RUN_MEMORY_SWAP}`);
   startProxy();
   warm.start();
 });

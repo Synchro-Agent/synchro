@@ -50,5 +50,18 @@ console.log("5. INT-1: MEDIA_MAX theo cùng RAM thật, không quá RUN_MAX, đ�
   ok(/\[timing\] mem trần theo RAM[^\n]*MEDIA_MAX=\$\{MEDIA_MAX\}/.test(src), "dòng [timing] mem trần ghi cả MEDIA_MAX");
 }
 
+console.log("6. W23-5 / G3.3: --memory-swap lớn hơn --memory cho cả workspace lẫn lần chạy code");
+{
+  ok(/"--memory", MEMORY, "--memory-swap", MEMORY_SWAP/.test(src), "workspace: --memory-swap MEMORY_SWAP");
+  ok(/"--memory", RUN_MEMORY, "--memory-swap", RUN_MEMORY_SWAP/.test(src), "chạy code (boxLimits): --memory-swap RUN_MEMORY_SWAP");
+  ok(!/"--memory-swap", (RUN_)?MEMORY[,\]]/.test(src), "không còn --memory-swap bằng đúng --memory");
+  const swapSrc = /const swapOf = [^\n]+/.exec(src)?.[0] ?? "";
+  const swapOf = new Function("memMB", `${swapSrc}; return swapOf;`)(cap.memMB);
+  ok(swapOf("2g", "1g") === "3072m" && swapOf("1536m", "1g") === "2560m", "mặc định: RAM + 1 GB (2g → 3072m, 1536m → 2560m)", `${swapOf("2g", "1g")} ${swapOf("1536m", "1g")}`);
+  ok(swapOf("lạ", "1g") === "lạ", "RAM đọc không được: giữ swap = RAM (Docker không nhận swap < RAM)");
+  ok(/env\("WS_RUN_MEMORY_SWAP"/.test(src) && /env\("WS_MEMORY_SWAP"/.test(src), "đặt tay được bằng WS_RUN_MEMORY_SWAP / WS_MEMORY_SWAP");
+  ok(/swapOld \? \["--memory", MEMORY, "--memory-swap", MEMORY_SWAP\]/.test(src), "workspace tạo từ bản trước được docker update swap tại chỗ");
+}
+
 console.log(`\n${pass}/${pass + fail} đạt`);
 process.exit(fail ? 1 : 0);
