@@ -3,6 +3,7 @@
 // máy tính 1440px, máy tính bảng 768px (thanh đoạn chat là bảng nổi, mặc định đóng — U3), điện thoại 390px;
 // tự bắt lỗi JavaScript, phần tử tràn khỏi màn hình, chữ bị cắt không có dấu …, ảnh hỏng, phông chữ chưa tải, chữ tiếng Anh sót;
 // chụp ảnh từng màn hình vào <tmp>/synchro-ui/audit/ để xem bằng mắt.
+import { settle, waitFor } from "../lib/wait.mjs";
 import { spawn } from "node:child_process";
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
@@ -313,12 +314,16 @@ for (const theme of THEMES) for (const size of SIZES) {
   const ws = new WebSocket(ver.webSocketDebuggerUrl);
   await new Promise((r) => ws.addEventListener("open", r));
   let seq = 0; const waits = new Map(), errs = [];
+  // Yêu cầu mạng đang chờ (cho ready()): bỏ EventSource / WebSocket và yêu cầu sống lâu (luồng lượt chạy, thăm dò dài) — chúng không bao giờ "xong".
+  const inflight = new Map();
   ws.addEventListener("message", (e) => {
     const m = JSON.parse(e.data);
     if (m.id && waits.has(m.id)) { const [ok, no] = waits.get(m.id); waits.delete(m.id); m.error ? no(new Error(JSON.stringify(m.error))) : ok(m.result); return; }
     if (m.method === "Runtime.exceptionThrown") errs.push("JS: " + (m.params.exceptionDetails.exception?.description ?? m.params.exceptionDetails.text).split("\n")[0].slice(0, 200));
     if (m.method === "Runtime.consoleAPICalled" && m.params.type === "error") errs.push("console: " + m.params.args.map((a) => a.value ?? a.description ?? "").join(" ").slice(0, 200));
     if (m.method === "Network.responseReceived" && m.params.response.status >= 500) errs.push(`HTTP ${m.params.response.status}: ${m.params.response.url.slice(0, 100)}`);
+    if (m.method === "Network.requestWillBeSent" && !["EventSource", "WebSocket", "Ping"].includes(m.params.type)) inflight.set(m.params.requestId, Date.now());
+    if (m.method === "Network.loadingFinished" || m.method === "Network.loadingFailed") inflight.delete(m.params.requestId);
   });
   // Chrome không trả lời (hộp thoại chặn, tab treo): báo lỗi của bước đó thay vì treo cả bộ soát hàng giờ.
   const send = (method, params = {}, sessionId) => new Promise((ok, no) => { const id = ++seq; const tm = setTimeout(() => { waits.delete(id); no(new Error("Chrome không trả lời: " + method)); }, 90_000); waits.set(id, [(v) => { clearTimeout(tm); ok(v); }, (e) => { clearTimeout(tm); no(e); }]); ws.send(JSON.stringify({ id, method, params, sessionId })); });
@@ -334,6 +339,17 @@ for (const theme of THEMES) for (const size of SIZES) {
   await P("Page.addScriptToEvaluateOnNewDocument", { source: `try { window.__lt = []; new PerformanceObserver((l) => { for (const e of l.getEntries()) window.__lt.push([Math.round(e.duration), Math.round(e.startTime)]); }).observe({ type: "longtask" }); } catch {}` });
   let lagMax = 0, lagAt = "";
   const ev = async (expr) => { const r = await P("Runtime.evaluate", { expression: expr, awaitPromise: true, returnByValue: true }); if (r.exceptionDetails) throw new Error(r.exceptionDetails.exception?.description ?? r.exceptionDetails.text); return r.result.value; };
+  // H2.3: chờ trang đứng yên thay cho chờ cố định 0,8–2 giây trước mỗi lần soát / chụp. Đứng yên = tài liệu tải xong, phông đã nạp, không còn
+  // yêu cầu mạng nào (trừ yêu cầu sống quá 5 giây), không còn hoạt ảnh hữu hạn đang chạy, và số phần tử / chiều cao / độ dài chữ không đổi trong
+  // quiet ms. Máy nhanh đi tiếp ngay; máy chậm (CI) chờ tới khi xong, tối đa max ms rồi soát như cũ (lỗi bố cục khi đó vẫn bị bắt).
+  const READY = `(() => { const a = document.getAnimations().filter((x) => x.playState === "running" && x.effect?.getTiming?.().iterations !== Infinity).length;
+    return [document.readyState, document.fonts.status, a, document.querySelectorAll("*").length, document.documentElement.scrollHeight, document.body?.innerText.length ?? 0]; })()`;
+  const busyNet = () => [...inflight.values()].some((t) => Date.now() - t < 5000);
+  const ready = async (quiet = 400, max = 8000) => {
+    const end = Date.now() + max;
+    await waitFor(async () => !busyNet() && (await ev(`document.readyState === "complete" && document.fonts.status === "loaded"`)), max, { every: 100 });
+    await settle(async () => { const v = await ev(READY); return busyNet() || v[2] ? Math.random() : v; }, quiet, Math.max(500, end - Date.now()));
+  };
   const until = async (expr, ms = 30000, what = expr) => { const t = Date.now(); while (Date.now() - t < ms) { if (await ev(expr).catch(() => false)) return; await sleep(200); } throw new Error("timeout: " + what); };
   const click = async (expr, what) => {
     const r = await ev(`(() => { const el = ${expr}; if (!el) return null; el.scrollIntoView({ block: "center" }); const b = el.getBoundingClientRect(); return [b.x + b.width / 2, b.y + b.height / 2]; })()`);
@@ -358,7 +374,7 @@ for (const theme of THEMES) for (const size of SIZES) {
     await click(`document.querySelector("textarea")`, "composer"); await P("Input.insertText", { text });
     await key("Enter", "Enter", 13);
     await until(`!document.querySelector(".thinking") && !document.querySelector(".art-card.busy") && !document.querySelector(".msg-stop, .stop-btn, [aria-label='Dừng']")`, 90000, "reply " + text);
-    await sleep(1200);
+    await ready(600);
   };
   const side = async () => {
     // Điện thoại: khung artifact mở toàn màn hình, đóng trước (như người dùng bấm X) rồi mới mở thanh bên.
@@ -366,32 +382,32 @@ for (const theme of THEMES) for (const size of SIZES) {
     // Máy tính bảng: thanh điều hướng (mục Dự án, Code…, nút tài khoản) luôn hiện; bảng đoạn chat là lớp nổi có lớp phủ, không mở khi chỉ cần điều hướng.
     if (tablet) return;
     if (await ev(`!!document.querySelector(".sidebar.closed, .shell-side.closed")`)) { await click(`document.querySelector("[aria-label='Mở thanh bên']")`, "burger").catch(() => {}); await sleep(500); } };
-  const nav = async (label) => { await side(); await click(byText(".nav-item", label), label); await sleep(1500); };
+  const nav = async (label) => { await side(); await click(byText(".nav-item", label), label); await ready(); };
   const step0 = async (name, fn) => { try { await fn(); } catch (e) { note(`${tag}/${name}`, "không chạy được bước: " + e.message.split("\n")[0]); await shot(name + "-fail").catch(() => {}); } };
 
   // Trang công khai khi chưa đăng nhập.
-  await step0("dang-nhap", async () => { await P("Page.navigate", { url: B + "/" }); await until(`!!document.querySelector("input[type=email], input[type=password], form")`, 20000, "login"); await sleep(800); await shot("dang-nhap"); });
-  await step0("dieu-khoan", async () => { await P("Page.navigate", { url: B + "/terms" }); await sleep(1500); await shot("dieu-khoan"); });
-  await step0("quyen-rieng-tu", async () => { await P("Page.navigate", { url: B + "/privacy" }); await sleep(1500); await shot("quyen-rieng-tu"); });
+  await step0("dang-nhap", async () => { await P("Page.navigate", { url: B + "/" }); await until(`!!document.querySelector("input[type=email], input[type=password], form")`, 20000, "login"); await ready(); await shot("dang-nhap"); });
+  await step0("dieu-khoan", async () => { await P("Page.navigate", { url: B + "/terms" }); await ready(); await shot("dieu-khoan"); });
+  await step0("quyen-rieng-tu", async () => { await P("Page.navigate", { url: B + "/privacy" }); await ready(); await shot("quyen-rieng-tu"); });
 
   // Các trang lẻ không cần đăng nhập, đủ trạng thái (từng chỉ soát /terms, /privacy nên icon lệch ở trang đặt lại mật khẩu lọt tới người dùng).
-  await step0("dat-lai-mk-nhap-email", async () => { await P("Page.navigate", { url: B + "/reset" }); await sleep(1500); await shot("dat-lai-mk-nhap-email"); });
-  await step0("dat-lai-mk-het-han", async () => { await P("Page.navigate", { url: "about:blank" }); await sleep(200); await P("Page.navigate", { url: B + "/reset#khong-hop-le-000000000000" }); await sleep(2000); await shot("dat-lai-mk-het-han"); });
+  await step0("dat-lai-mk-nhap-email", async () => { await P("Page.navigate", { url: B + "/reset" }); await ready(); await shot("dat-lai-mk-nhap-email"); });
+  await step0("dat-lai-mk-het-han", async () => { await P("Page.navigate", { url: "about:blank" }); await sleep(200); await P("Page.navigate", { url: B + "/reset#khong-hop-le-000000000000" }); await ready(600); await shot("dat-lai-mk-het-han"); });
   if (RESET_TOKEN) await step0("dat-lai-mk-nhap-moi", async () => { await P("Page.navigate", { url: "about:blank" }); await sleep(200); await P("Page.navigate", { url: B + "/reset#" + RESET_TOKEN }); await until(`!!document.querySelector("#rp-new")`, 15000, "ô mật khẩu"); await sleep(400); await shot("dat-lai-mk-nhap-moi"); });
-  await step0("xac-minh-email", async () => { await P("Page.navigate", { url: B + "/verify#khong-hop-le-000000000000" }); await sleep(1500); await shot("xac-minh-email"); });
-  await step0("tai-ung-dung", async () => { await P("Page.navigate", { url: B + "/download" }); await sleep(1500); await shot("tai-ung-dung"); });
-  if (SHARE_TOKEN) await step0("trang-chia-se", async () => { await P("Page.navigate", { url: B + "/share/" + SHARE_TOKEN }); await sleep(2000); await shot("trang-chia-se"); });
-  await step0("khong-tim-thay", async () => { await P("Page.navigate", { url: B + "/khong-co-trang-nay" }); await sleep(1500); await shot("khong-tim-thay"); });
+  await step0("xac-minh-email", async () => { await P("Page.navigate", { url: B + "/verify#khong-hop-le-000000000000" }); await ready(600); await shot("xac-minh-email"); });
+  await step0("tai-ung-dung", async () => { await P("Page.navigate", { url: B + "/download" }); await ready(); await shot("tai-ung-dung"); });
+  if (SHARE_TOKEN) await step0("trang-chia-se", async () => { await P("Page.navigate", { url: B + "/share/" + SHARE_TOKEN }); await ready(600); await shot("trang-chia-se"); });
+  await step0("khong-tim-thay", async () => { await P("Page.navigate", { url: B + "/khong-co-trang-nay" }); await ready(); await shot("khong-tim-thay"); });
 
   await P("Network.setCookie", { name: "synchro_session", value: cookie.split("=")[1], url: B });
-  await step0("trang-chu", async () => { await P("Page.navigate", { url: B + "/" }); await until(`!!document.querySelector("textarea")`, 30000, "app"); await sleep(1500); await shot("trang-chu"); });
+  await step0("trang-chu", async () => { await P("Page.navigate", { url: B + "/" }); await until(`!!document.querySelector("textarea")`, 30000, "app"); await ready(); await shot("trang-chu"); });
   await step0("menu-model", async () => { await click(`document.querySelector(".model-btn")`, "model"); await sleep(500); await shot("menu-model"); await esc(); await sleep(300); });
   // Người mới bắt đầu ở Tự động (CLI giả lập); ca artifact cần model của nhà cung cấp giả lập, nơi có sẵn artifact mẫu.
-  await step0("chon-model-thu", async () => { await ev(`(async () => { const me = await (await fetch("/api/auth/me")).json(), m = await (await fetch("/api/models")).json(), k = m.providers.flatMap((p) => p.models).find((x) => !x.key.startsWith("sub-"))?.key; if (k) localStorage.setItem("u:" + me.user.id + ":model", k); })()`); await P("Page.reload", {}); await until(`!!document.querySelector("textarea")`, 30000, "app"); await sleep(800); });
+  await step0("chon-model-thu", async () => { await ev(`(async () => { const me = await (await fetch("/api/auth/me")).json(), m = await (await fetch("/api/models")).json(), k = m.providers.flatMap((p) => p.models).find((x) => !x.key.startsWith("sub-"))?.key; if (k) localStorage.setItem("u:" + me.user.id + ":model", k); })()`); await P("Page.reload", {}); await until(`!!document.querySelector("textarea")`, 30000, "app"); await ready(); });
   await step0("chat-artifact", async () => { await ask("Làm trang web cho quán cà phê"); await shot("chat-artifact"); });
-  await step0("artifact-ma", async () => { await click(byText(".art-tabs button", "Mã"), "code"); await sleep(800); await shot("artifact-ma"); await click(byText(".art-tabs button", "Xem trước"), "preview"); await sleep(500); });
+  await step0("artifact-ma", async () => { await click(byText(".art-tabs button", "Mã"), "code"); await ready(); await shot("artifact-ma"); await click(byText(".art-tabs button", "Xem trước"), "preview"); await sleep(500); });
   await step0("tai-ve", async () => { await click(`document.querySelector(".art-acts [aria-label='Tải về']")`, "dl"); await sleep(500); await shot("menu-tai-ve"); await esc(); await sleep(300); });
-  await step0("ban-tron", async () => { await click(`document.querySelector(".art-panel [aria-label='Đóng']")`, "close art").catch(() => {}); await sleep(400); await click(`document.querySelector(".cx-pill")`, "mixer"); await sleep(1200); await shot("ban-tron-ngu-canh"); await esc(); });
+  await step0("ban-tron", async () => { await click(`document.querySelector(".art-panel [aria-label='Đóng']")`, "close art").catch(() => {}); await sleep(400); await click(`document.querySelector(".cx-pill")`, "mixer"); await ready(); await shot("ban-tron-ngu-canh"); await esc(); });
   await step0("chat-bieu-do", async () => { await ask("Vẽ biểu đồ doanh thu 6 tháng"); await shot("chat-bieu-do"); });
   await step0("chat-tep", async () => { await ask("Tạo file Excel báo cáo doanh thu"); await shot("chat-tao-tep"); });
   await step0("chat-markdown", async () => { await ask("Viết kế hoạch ra mắt sản phẩm có bảng lịch trình"); await shot("chat-markdown"); });
@@ -413,7 +429,7 @@ for (const theme of THEMES) for (const size of SIZES) {
     if (!tablet) { await click(`document.querySelector(".rail-mark")`, "expand"); await sleep(700); }
   });
   await step0("bang-lenh", async () => { await key("k", "KeyK", 75, 4); await sleep(600); await shot("bang-lenh"); await esc(); await sleep(300); });
-  await step0("artifacts", async () => { await nav("Artifacts"); await shot("artifacts"); await click(byText("button", "Ứng dụng"), "apps tab").catch(() => {}); await sleep(800); await shot("ung-dung"); });
+  await step0("artifacts", async () => { await nav("Artifacts"); await shot("artifacts"); await click(byText("button", "Ứng dụng"), "apps tab").catch(() => {}); await ready(); await shot("ung-dung"); });
   await step0("du-an", async () => { await nav("Dự án"); await shot("du-an"); });
   await step0("hop-thu", async () => { await nav("Hộp thư"); await shot("hop-thu"); });
   // Tạo / sửa việc tự động: ô Hướng dẫn nhiều dòng (gõ nội dung dài như người dùng), ô chọn model.
@@ -424,7 +440,7 @@ for (const theme of THEMES) for (const size of SIZES) {
     await sleep(400); await shot("viec-tu-dong"); await esc(); await sleep(400);
   });
   await step0("bo-nao", async () => { await nav("Bộ não"); await shot("bo-nao"); });
-  await step0("code", async () => { await nav("Code"); await sleep(1000); await shot("code"); });
+  await step0("code", async () => { await nav("Code"); await shot("code"); });
   // Menu ⋮ của Synchro Code khi bảng phiên đang mở: menu nằm trên bảng phiên (từng bị bảng phiên che gần hết).
   if (!mobile) await step0("code-menu", async () => {
     if (!(await ev(`!!document.querySelector(".cv-cols>.sr, aside.sr")`))) { await click(`document.querySelector(".cv-bar [aria-label='Ẩn/hiện bảng phiên']")`, "rail"); await sleep(600); }
@@ -437,13 +453,13 @@ for (const theme of THEMES) for (const size of SIZES) {
     await click(`document.querySelector(".hub-yours .pl-row2")`, "library detail"); await sleep(700); await shot("chi-tiet-thu-vien"); await esc(); await sleep(400);
     await click(`document.querySelector(".pl-scan")`, "scan"); await until(`!!document.querySelector(".scan-modal .modal-foot")`, 15000, "scan modal"); await sleep(500); await shot("quet-skill-rac"); await esc(); await sleep(400);
   });
-  await step0("kho-ky-nang", async () => { await nav("Kỹ năng"); await shot("kho-ky-nang"); await click(byText(".hub-seg button, button", "Khám phá"), "discover").catch(() => {}); await until(`!!document.querySelector(".pl-dcard")`, 10000, "discover cards").catch(() => {}); await sleep(500); await shot("kham-pha"); await click(byText("button, .cz-tab, [role=tab]", "Connectors"), "connectors").catch(() => {}); await sleep(1200); await shot("connectors"); });
+  await step0("kho-ky-nang", async () => { await nav("Kỹ năng"); await shot("kho-ky-nang"); await click(byText(".hub-seg button, button", "Khám phá"), "discover").catch(() => {}); await until(`!!document.querySelector(".pl-dcard")`, 10000, "discover cards").catch(() => {}); await sleep(500); await shot("kham-pha"); await click(byText("button, .cz-tab, [role=tab]", "Connectors"), "connectors").catch(() => {}); await ready(); await shot("connectors"); });
   await step0("menu-nguoi-dung", async () => { await side(); await click(`document.querySelector(".rail .user")`, "user"); await sleep(500); await shot("menu-nguoi-dung"); });
   await step0("cai-dat", async () => {
-    await click(byText(".menu-item", "Cài đặt"), "settings"); await sleep(1200);
+    await click(byText(".menu-item", "Cài đặt"), "settings"); await ready();
     const n = await ev(`document.querySelectorAll(".modal.settings .s-item").length`);
     for (let i = 0; i < n; i++) {
-      await click(`document.querySelectorAll(".modal.settings .s-item")[${i}]`, "tab " + i); await sleep(1300);
+      await click(`document.querySelectorAll(".modal.settings .s-item")[${i}]`, "tab " + i); await ready();
       const t = await ev(`document.querySelectorAll(".modal.settings .s-item")[${i}].getAttribute("title")`);
       const label = "cai-dat-" + String(t).toLowerCase().replace(/\s+/g, "-");
       await shot(label);
