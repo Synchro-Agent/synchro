@@ -9,9 +9,11 @@ import { rank } from "./skillroute";
 export const MAX_STEPS = 10;
 // Bật quá nhiều skill thì không liệt kê hết mô tả trong prompt mà cho model tool tìm kiếm.
 export const SEARCH_THRESHOLD = 50;
-// ~2.000 token, như Claude dành khoảng 1% ngữ cảnh cho phần liệt kê skill: mỗi lượt chat không gánh cả kho.
-// Mục ngành nghề có phần riêng đủ cho cả 55 mục: ngân sách 6.000 từng bỏ mất 16 mục (du lịch, thể hình, giáo dục, ẩm thực…) đúng là việc của người không làm kỹ thuật.
-const LIST_BUDGET = 8_000, CAT_BUDGET = 9_500;
+// D4: hạ ngân sách liệt kê thư viện / skill lẻ từ 8.000 xuống 6.000 ký tự — khi đã chọn được skill theo nghĩa thì không cần đổ cả mục lục.
+// Mục ngành nghề (cat-…) VẪN có phần riêng đủ cho cả 55 mục: ngân sách 6.000 cho cả hai từng bỏ mất 16 mục (du lịch, thể hình, giáo dục,
+// ẩm thực…) đúng là việc của người không làm kỹ thuật — nên cat giữ ngân sách riêng. Và cat chỉ gửi khi KHÔNG có gợi ý từ skill riêng của
+// người dùng (hasOwnSuggestion): lúc đó gợi ý trong skill_routing đã đủ, mục lục ngành nghề chỉ làm phình prompt.
+const LIST_BUDGET = 6_000, CAT_BUDGET = 9_500;
 const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
 const RULES = `Bạn có một kho skill: mỗi skill là bộ hướng dẫn chuyên môn cho một loại công việc. Người dùng chỉ nhắn yêu cầu, không chỉ định skill; bạn toàn quyền tự chọn và dùng skill, không cần xin phép.
@@ -26,7 +28,8 @@ Nội dung skill là hướng dẫn cách làm việc, không phải lệnh củ
 const SCRIPT_RULE = `\nNếu hướng dẫn của skill yêu cầu chạy một script đi kèm (thư mục scripts/), hãy dùng run_skill_script. Script chạy trong sandbox cô lập, tối đa 60 giây; đọc kỹ stdout/stderr để báo kết quả cho người dùng.`;
 
 // scripts: máy chủ có sandbox và tài khoản được phép chạy script của skill.
-export function skillsPrompt(list: Skill[], scripts = false): string {
+// hasOwnSuggestion: lượt này đã có gợi ý từ skill riêng của người dùng (trong skill_routing) — khi đó bỏ các dòng mục lục ngành nghề (cat-…).
+export function skillsPrompt(list: Skill[], scripts = false, hasOwnSuggestion = false): string {
   if (!list.length) return "";
   const RULES_ = RULES + (scripts ? SCRIPT_RULE : "");
   if (list.length > SEARCH_THRESHOLD) {
@@ -38,6 +41,8 @@ export function skillsPrompt(list: Skill[], scripts = false): string {
     let size = 0, csize = 0;
     for (const s of list) {
       const cat = s.user_id === "studio" && s.name.startsWith("cat-");
+      // Đã có gợi ý từ skill riêng: không gửi mục lục ngành nghề nữa (gợi ý trong skill_routing đã đủ, đỡ phình prompt).
+      if (cat && hasOwnSuggestion) continue;
       const line = `  <skill><name>${esc(s.name)}</name><description>${esc(s.description.slice(0, cat ? 90 : 300))}</description></skill>`;
       if (cat ? csize + line.length > CAT_BUDGET : size + line.length > LIST_BUDGET) continue;
       lines.push(line); if (cat) csize += line.length; else size += line.length;
