@@ -71,7 +71,7 @@ export async function oneShot(user: UserRow, key: string, system: string, messag
     if (r.status !== 200 || typeof j.text !== "string") throw new OneShotErr(j.error ?? "Gói subscription chưa trả lời được.", r.status === 200 ? 502 : r.status);
     return j.text;
   }
-  const over = overLimit(user);
+  const over = overLimit(user, "task");
   if (over) throw new OneShotErr(over, 429);
   const t = await resolveModel(key);
   if (!t) throw new OneShotErr("Model này không còn dùng được.", 400);

@@ -8,7 +8,7 @@ import { adminRole, db, getSetting, isAdmin, setSetting, type UserRow } from "./
 import { vendorOf } from "./router";
 import { familyKey, parseId, versionCmp } from "./modelrules";
 import { providerPriceOf } from "./modelreg";
-import { usageLimitMsg } from "./limitmsg";
+import { usageLimitMsg, type UsageAlt } from "./limitmsg";
 
 export const SESSION_MS = 5 * 3600_000;
 export const WEEK_MS = 7 * 86_400_000;
@@ -259,9 +259,10 @@ export function usageState(u: UserRow, provider?: string): UsageState {
 }
 
 // Thông báo khi đã dùng hết hạn mức, hoặc null nếu còn dùng được: nói hạn mức nào, bao giờ hồi, và cách dùng tiếp (limitmsg.ts, H1.2).
-export function overLimit(u: UserRow): string | null {
+// alt: chỗ người dùng gặp lời báo, để cách thay thế đúng với thứ họ bấm được ở đó (chat chọn tay, Tự động chưa có gói, Code, việc không có bộ chọn model).
+export function overLimit(u: UserRow, alt: UsageAlt = "pick"): string | null {
   for (const l of usageState(u).limits) {
-    if (l.limit !== null && l.used >= l.limit && l.resetAt) return usageLimitMsg(l.key, l.resetAt);
+    if (l.limit !== null && l.used >= l.limit && l.resetAt) return usageLimitMsg(l.key, l.resetAt, Date.now(), alt);
   }
   return null;
 }
