@@ -11,6 +11,8 @@ export async function register() {
   setTimeout(async () => {
     try {
       await import("./app/chatengine");
+      // Bảng + chỉ mục phủ của đoạn chat: dựng sẵn ở đây để lần /api/chats đầu sau deploy không dựng chỉ mục đồng bộ giữa lúc có tải (A2).
+      (await import("./app/chatstore")).ensureStore();
       // CLI mồ côi của máy chủ trước phải dừng trước khi chạy lại lượt của nó, không để hai lần chạy cùng tiêu hạn mức.
       const orphans = (await import("./app/ai/cli_runtime")).sweepOrphanClis();
       if (orphans) console.log(`[cli] đã dừng ${orphans} CLI mồ côi`);

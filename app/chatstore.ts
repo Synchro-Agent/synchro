@@ -26,6 +26,8 @@ function t() {
   }
   return d;
 }
+/** Dựng sẵn bảng + chỉ mục phủ lúc khởi động (instrumentation), để lần /api/chats đầu sau deploy không phải dựng chỉ mục đồng bộ giữa lúc có tải. */
+export function ensureStore() { t(); }
 const nextRev = (uid: string) => (t().prepare("SELECT COALESCE(MAX(rev), 0) + 1 AS r FROM user_items WHERE user_id = ?").get(uid) as { r: number }).r;
 const KINDS = new Set(["chat", "project"]);
 const okId = (s: unknown): s is string => typeof s === "string" && /^[\w.-]{1,64}$/.test(s);
@@ -46,14 +48,15 @@ export async function changesSince(uid: string, since: number): Promise<{ items:
   // nên nằm ở trang sau), không bao giờ gửi nội dung mới kèm rev cũ hay một mục chưa xóa mà không có nội dung.
   const one = t().prepare("SELECT data FROM user_items WHERE user_id = ? AND kind = ? AND id = ? AND rev = ?");
   const items: ItemRow[] = [];
-  let read = 0;
+  let read = 0, dropped = false;
   for (const r of pick) {
     if (r.deleted) { items.push({ ...r, data: null }); continue; }
     const got = one.get(uid, r.kind, r.id, r.rev) as { data: string | null } | undefined;
     if (got) items.push({ ...r, data: got.data ?? null });
+    else dropped = true; // mục vừa đổi rev / bị xóa trong lúc nhường: bản mới (rev lớn hơn) ở trang sau — buộc client lấy tiếp.
     if ((read += r.size) >= YIELD_BYTES) { read = 0; await tick(); }
   }
-  return { items, next: pick.length ? pick[pick.length - 1].rev : since, more: take < rows.length || rows.length === 2000 };
+  return { items, next: pick.length ? pick[pick.length - 1].rev : since, more: dropped || take < rows.length || rows.length === 2000 };
 }
 /** Lấy đúng các mục theo khóa "chat:123" (mục đã rút gọn trong trình duyệt, mục thua xung đột). */
 export function itemsByKey(uid: string, keys: string[]): ItemRow[] {
