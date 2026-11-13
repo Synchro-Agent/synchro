@@ -90,12 +90,20 @@ export function watch(id: string, f: (m: Msg) => void) {
   return () => { s.delete(f); if (!s.size) subs.delete(id); };
 }
 
-const pub = (r: Row): PublicRun => ({ id: r.id, status: r.status, conv: r.conv, kind: r.kind, events: JSON.parse(r.events), result: r.result ? JSON.parse(r.result) : null, http: r.http, createdAt: r.created_at, updatedAt: r.updated_at });
-export function getRun(id: string, uid?: string): PublicRun | null {
-  const r = init().prepare("SELECT * FROM runs WHERE id = ?").get(id) as Row | undefined;
-  return r && (!uid || r.user_id === uid) ? pub(r) : null;
+const pub = (r: Row, events: RunEvent[]): PublicRun => ({ id: r.id, status: r.status, conv: r.conv, kind: r.kind, events, result: r.result ? JSON.parse(r.result) : null, http: r.http, createdAt: r.created_at, updatedAt: r.updated_at });
+// Các bước của một lượt, theo đúng thứ tự seq tăng dần, tối đa 400 bước gần nhất (như bản cũ cắt list.slice(-400)): lấy 400 seq lớn nhất
+// rồi đảo lại. Lượt cũ chưa chuyển sang bảng mới (run_events chưa có dòng) thì đọc cột runs.events như trước để quay lui được.
+function eventsOf(d: ReturnType<typeof db>, id: string, oldCol: string | null): RunEvent[] {
+  const rows = d.prepare("SELECT seq, at, kind, text FROM run_events WHERE run_id = ? ORDER BY seq DESC LIMIT 400").all(id) as RunEvent[];
+  if (rows.length) return rows.reverse();
+  return oldCol ? (JSON.parse(oldCol) as RunEvent[]) : [];
 }
-export const listRuns = (uid: string, limit = 50) => (init().prepare("SELECT * FROM runs WHERE user_id = ? ORDER BY created_at DESC LIMIT ?").all(uid, limit) as Row[]).map(pub);
+export function getRun(id: string, uid?: string): PublicRun | null {
+  const d = init();
+  const r = d.prepare("SELECT * FROM runs WHERE id = ?").get(id) as Row | undefined;
+  return r && (!uid || r.user_id === uid) ? pub(r, eventsOf(d, r.id, r.events)) : null;
+}
+export const listRuns = (uid: string, limit = 50) => { const d = init(); return (d.prepare("SELECT * FROM runs WHERE user_id = ? ORDER BY created_at DESC LIMIT ?").all(uid, limit) as Row[]).map((r) => pub(r, eventsOf(d, r.id, r.events))); };
 
 // Tiến độ của lượt đang chạy: toolLoop gọi progress(...) mà không cần truyền id đi khắp nơi.
 // Toàn cục: mỗi route của Next được đóng gói riêng; cầu nối MCP (route khác) chạy công cụ trong ngữ cảnh lượt của route chat.
@@ -194,13 +202,13 @@ export function progress(kind: RunEvent["kind"], text: string): number {
   const s = scope.getStore();
   if (!s) return 0;
   const d = init();
-  const r = d.prepare("SELECT events FROM runs WHERE id = ?").get(s.id) as { events: string } | undefined;
-  if (!r) return 0;
-  const list = JSON.parse(r.events) as RunEvent[];
-  const seq = (list.at(-1)?.seq ?? 0) + 1;
+  // Lượt phải còn tồn tại (giữ đúng hành vi cũ: không ghi cho lượt đã bị xóa).
+  if (!d.prepare("SELECT 1 FROM runs WHERE id = ?").get(s.id)) return 0;
+  // Ghi nối thêm một dòng: lấy số thứ tự tiếp theo qua MAX(seq) (dùng khóa chính nên nhanh, không đọc lại cả danh sách).
+  const seq = ((d.prepare("SELECT MAX(seq) AS m FROM run_events WHERE run_id = ?").get(s.id) as { m: number | null }).m ?? 0) + 1;
   const ev: RunEvent = { seq, at: Date.now(), kind, text: text.slice(0, kind === "say" || kind === "steer" ? 4000 : kind === "plan" || kind === "ask" ? 6000 : kind === "res" ? 1000 : 300) };
-  list.push(ev);
-  d.prepare("UPDATE runs SET events = ?, updated_at = ? WHERE id = ?").run(JSON.stringify(list.slice(-400)), Date.now(), s.id);
+  d.prepare("INSERT INTO run_events (run_id, seq, at, kind, text) VALUES (?, ?, ?, ?, ?)").run(s.id, ev.seq, ev.at, ev.kind, ev.text);
+  d.prepare("UPDATE runs SET updated_at = ? WHERE id = ?").run(ev.at, s.id);
   notify(s.id, { event: ev });
   return seq;
 }
