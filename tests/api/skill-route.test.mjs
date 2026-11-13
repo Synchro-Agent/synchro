@@ -92,6 +92,14 @@ console.log("Đường nhanh biết người dùng có skill riêng");
   ok(!SR.ownSkillFits("viết một bài thơ về mùa thu", [sk("recipe-box", "Cooking recipes and meal plans")]), "skill khác lĩnh vực không chặn đường nhanh");
   ok(!SR.ownSkillFits("viết email xin nghỉ phép", []), "không có skill nào: giữ đường nhanh");
 }
+console.log("Định tuyến video sang Remotion (G5)");
+{
+  for (const q of ["Làm video giới thiệu quán", "tao mot motion graphic", "animation logo cho công ty", "dựng video intro cho kênh YouTube", "video TikTok 30 giây", "làm explainer video về sản phẩm"])
+    ok(SR.routeVideoSkill(q) === "remotion", `“${q}” → Remotion`, SR.routeVideoSkill(q));
+  ok(SR.routeVideoSkill("Làm video giới thiệu", { queueFull: true }) === "ffmpeg", "hàng dựng đầy thì lùi về ffmpeg", SR.routeVideoSkill("Làm video giới thiệu", { queueFull: true }));
+  for (const q of ["Viết báo cáo tuần", "Lập kế hoạch marketing", "Thiết kế poster sự kiện", "một bài hát về mùa thu"])
+    ok(SR.routeVideoSkill(q) === null, `“${q}”: không phải việc video`, SR.routeVideoSkill(q));
+}
 fs.rmSync(tmp, { recursive: true, force: true });
 console.log(`\n${pass}/${pass + fail} đạt`);
 process.exit(fail ? 1 : 0);

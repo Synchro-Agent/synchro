@@ -38,12 +38,18 @@ export const CHECK_ARTIFACT_TOOL = {
 
 export const ARTCHECK_RULES = (check: boolean) => `<self_check>
 Bạn chịu trách nhiệm về chất lượng sản phẩm mình giao, như một người làm nghề cẩn thận:
-${check ? "- Sau khi viết hoặc sửa artifact dạng trang web, bản trình bày (slide), ứng dụng React hay SVG: gọi check_artifact, xem ảnh chụp và danh sách lỗi, sửa hết (chữ đè chữ, tràn khung, chữ bị cắt, ảnh hỏng, chữ quá nhỏ, tiêu đề rớt chữ, tương phản thấp, lỗi script) rồi kiểm tra lại, tới khi sạch lỗi (tối đa 3 vòng) mới báo xong. Tự nhìn ảnh chụp: bố cục, căn lề, khoảng cách, độ tương phản phải chỉn chu như sản phẩm thật."
+${check ? "- Sau khi viết hoặc sửa artifact dạng trang web, bản trình bày (slide), ứng dụng React hay SVG: gọi check_artifact, xem ảnh chụp và danh sách lỗi, sửa hết (chữ đè chữ, tràn khung, phần tử tràn khỏi slide, chữ bị cắt, ảnh hỏng, chữ quá nhỏ, tiêu đề rớt chữ, tương phản thấp, lỗi script) rồi kiểm tra lại, tới khi sạch lỗi (tối đa 2 vòng kiểm tra - sửa) mới báo xong. Tự nhìn ảnh chụp: bố cục, căn lề, khoảng cách, độ tương phản phải chỉn chu như sản phẩm thật."
     : "- Sau khi viết hoặc sửa artifact: đọc lại bằng read_artifact và tự rà bố cục (chữ đè chữ, tràn khung, chữ bị cắt, ảnh hỏng) trước khi báo xong."}
 - Bố cục bền: dùng flex / grid và khoảng cách đều, không đặt chữ bằng position:absolute chồng lên nhau; slide 16:9 chừa lề, chữ dài thì giảm chữ hoặc chia slide thay vì để tràn; ảnh có kích thước và object-fit rõ ràng.
 - Người dùng báo sản phẩm có lỗi: không đổ cho công cụ hay nói "không làm được". Đọc lại bằng read_artifact${check ? ", tái hiện bằng check_artifact" : ""}, tìm nguyên nhân, sửa, kiểm tra lại, rồi báo ngắn gọn đã sửa gì và đã kiểm tra thế nào.
 - Không khẳng định đã xong hay đã sửa khi chưa kiểm tra. Còn điều chưa làm được thì nói rõ là gì, đã thử những cách nào, và giao bản tốt nhất có thể.
 </self_check>`;
+
+/** Slide tràn khung: chiều cao / rộng thật (scrollHeight/scrollWidth) vượt khung (clientHeight/clientWidth) quá dung sai px.
+ *  Dùng chung quy tắc với PROBE (chạy trong Chromium, chỗ này để kiểm thử thuần). */
+export function slideOverflows(m: { scrollH: number; clientH: number; scrollW: number; clientW: number }, tol = 4): boolean {
+  return m.scrollH > m.clientH + tol || m.scrollW > m.clientW + tol;
+}
 
 type Msg = { role: string; content: unknown };
 const textOf = (c: unknown) => typeof c === "string" ? c : Array.isArray(c) ? c.map((b) => (b && typeof b === "object" && "text" in b ? String((b as { text: unknown }).text ?? "") : "")).join("") : "";
@@ -122,6 +128,20 @@ const PROBE = String.raw`(root, deck) => {
     const fs = parseFloat(getComputedStyle(el).fontSize), art = el.closest(".sx-poster,.sx-og,.sx-slide");
     if (art) { const full = art.matches(".sx-poster") ? 1080 : art.matches(".sx-og") ? 1200 : 1280, px = fs * full / art.getBoundingClientRect().width; if (px < 12 * (full === 1080 ? 4 / 3 : 1) && r.width > 8) add("chữ quá nhỏ", Math.round(px) + "px ở cỡ thật rộng " + full + ": “" + say(el) + "”"); continue; }
     if (fs < (deck ? 12 : 10) && r.width > 8) add("chữ quá nhỏ", Math.round(fs) + "px: “" + say(el) + "”");
+  }
+  // Slide tràn nội dung: so chiều cao / rộng thật của slide với khung (scrollHeight vs clientHeight). Bắt được cả khi khung slide cắt mất (overflow hidden)
+  // mà vẫn còn phần tử thò ra — khó thấy bằng mắt trên ảnh chụp. Trả về các phần tử ngoài cùng tràn ra để model biết chỗ nào phải thu gọn hoặc chia slide.
+  if (deck && (root.scrollHeight > root.clientHeight + 4 || root.scrollWidth > root.clientWidth + 4)) {
+    const over = [];
+    for (const el of root.querySelectorAll("*")) {
+      if (!vis(el) || el.closest("script,style,noscript,[aria-hidden=true]")) continue;
+      const r = el.getBoundingClientRect();
+      if (r.width > 4 && r.height > 4 && (r.bottom > R.bottom + 2 || r.right > R.right + 2 || r.top < R.top - 2 || r.left < R.left - 2) && !clipped(el, r)) over.push({ el, r });
+    }
+    const outer = over.filter(({ el }) => !over.some((o) => o.el !== el && o.el.contains(el)));
+    const extent = "slide " + Math.round(root.scrollHeight) + "×" + Math.round(root.scrollWidth) + "px > khung " + root.clientHeight + "×" + root.clientWidth + "px";
+    if (outer.length) for (const { el } of outer.slice(0, 6)) add("phần tử tràn khỏi slide", "“" + say(el) + "” (" + extent + ")");
+    else add("slide tràn nội dung", "nội dung vượt khung (" + extent + "); thu gọn chữ hoặc chia slide");
   }
   if (deck && !boxes.length && !root.querySelector("img,svg,canvas,video")) add("slide trống", "không có chữ hay hình");
   if (!deck && document.documentElement.scrollWidth > innerWidth + 2) add("trang tràn ngang", "rộng " + document.documentElement.scrollWidth + "px trên màn " + innerWidth + "px");

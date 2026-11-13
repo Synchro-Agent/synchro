@@ -73,9 +73,22 @@ export function imageBudget(uid: string, n: number, now = Date.now()): number {
 }
 
 // ---------------------------------------------------------------- câu lệnh
+// Mô tả ảnh nào không rõ là xin chữ / logo / nhãn thương hiệu thì thêm "không chữ, không logo, không nhãn thương hiệu":
+// mô hình ảnh hay tự chèn watermark, dòng chữ, logo giả vào ảnh, khiến phải sửa lại nhiều vòng. Mô tả có chữ đặt trong cặp ngoặc kép
+// (chữ cần hiện), hay nhắc logo / poster / nhãn / tiêu đề… thì giữ nguyên (người dùng thật sự muốn có chữ). Sửa ảnh có sẵn (refPath) cũng giữ nguyên.
+// Chỉ bắt cặp ngoặc có nội dung bên trong — bỏ dấu nháy đơn lẻ (' ’) vì chúng dính cả câu bình thường như "a cat's toy".
+const WANTS_TEXT = /"[^"]+"|“[^”]+”|«[^»]+»|\b(?:text|word|words|caption|captions|title|titles|subtitle|headline|headlines|slogan|tagline|quote|quotes|lettering|letter|letters|typography|typographic|wordmark|logo|logotype|brand|branded|branding|label|labels|watermark|sign|signage|poster|posters|billboard|banner|banners|flyer|menu|number|numbers|date)\b|chữ|dòng chữ|tiêu đề|khẩu hiệu|slogan|logo|thương hiệu|nhãn|biển|chữ ký|poster|áp phích|băng rôn|tờ rơi|thực đơn|chú thích|dòng nhạc/i;
+const HAS_DEFAULT = /không chữ|khong chu|no text|no logo|without text|no watermark|không watermark/i;
+/** Hậu tố mặc định cho mô tả ảnh mới không xin chữ / logo / nhãn. Thuần, kiểm thử: tests/api/imagegen.test.mjs. */
+export function withImageDefaults(prompt: string): string {
+  const p = prompt.trim();
+  if (!p || HAS_DEFAULT.test(p) || WANTS_TEXT.test(p)) return prompt;
+  return `${p.replace(/[.,;\s]+$/, "")}, không chữ, không logo, không nhãn thương hiệu`;
+}
 /** Chữ người dùng nằm trong khối dữ liệu, mô hình chỉ coi đó là mô tả ảnh. Đổi mọi dấu ngoặc nhọn thay vì lọc theo tên thẻ: "</image_description x>", "< /image_description>" đều không còn là thẻ. */
 export function imagePrompt(cli: ImgCli, q: Pick<ImgReq, "prompt" | "aspect" | "count">, refPath?: string): string {
-  const n = q.count ?? 1, what = q.prompt.replace(/</g, "‹").replace(/>/g, "›").slice(0, 4000);
+  const base = refPath ? q.prompt : withImageDefaults(q.prompt);
+  const n = q.count ?? 1, what = base.replace(/</g, "‹").replace(/>/g, "›").slice(0, 4000);
   const tool = cli === "grok" ? `the image_gen tool${q.aspect ? ` with aspect_ratio ${q.aspect}` : ""}, one call per image` : cli === "codex" ? "the image_gen tool" : "your image generation capability";
   return `This is an image generation step inside an app. Your only job in this turn is to create ${n === 1 ? "one image file" : `exactly ${n} separate image files`} using ${tool}.
 Do not run commands, browse, read or change other files, or ask questions.${q.aspect ? `\nAspect ratio: ${q.aspect}.` : ""}${refPath ? `\nUse the image at ${refPath} as the reference picture: keep what the description does not ask to change.` : ""}

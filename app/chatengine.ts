@@ -31,7 +31,7 @@ import { ownSkillFits, suggest, type Hit } from "./skillroute";
 import type { Skill } from "./skillstore";
 import { CODE_RULES, execRun, LANGS, runCodeTool, runner, RUN_LIMITS, type Lang, type RecalcReport, type RunOutput } from "./coderun";
 import { plainSummary, runBlocks } from "./runtext";
-import { OUTPUT_QUOTA_MB, outputByName, outputRoom, outputsFull, readOutput, removeOutput, saveOutputs, type OutFile } from "./outputs";
+import { OUTPUT_QUOTA_MB, outputByName, outputRoom, outputsFull, readOutput, removeOutput, replaceOutput, saveOutputs, type OutFile } from "./outputs";
 import { mergeOuts, previewNote, previewOf } from "./runpreview";
 import { totalsNote } from "./xlsxcheck";
 import { ARTIFACT_RULES, ASK_RULES, VIZ_RULES } from "./artifacts";
@@ -46,6 +46,7 @@ import { mergedProviders, prewarmClaude, sessionPlain, subCli, subTurn } from ".
 import { PROJECT_DOC_RULES, PROJECT_DOC_TOOL, projectDocsLong, projectIns, readProjectFile } from "./projectdocs";
 import { REJECTED_RULE, REJECTED_TAG, rejectedBlock, stripAppliedNotes, withProjectIns, withRejected } from "./turnctx";
 import { ASPECTS, generateImages, IMAGE_RULES, IMAGE_TOOL_NAME, imageBudget, imageProduct, imageTool, imageName, IMG_NAME, requestSlug, type ImgErr, type ImgOk } from "./ai/imagegen";
+import { IMG_BUDGET_MS, placeholderNote } from "./ai/imgbudget";
 import { POSTER_TEMPLATES, posterProps, type PosterTemplate } from "./design-engine/posters/props";
 import { genImageUrl } from "./artdoc";
 import { IMAGE_MAX_MB, imageKind, type ImgFile, scrubServerPaths } from "./ai/imagefiles";
@@ -546,6 +547,22 @@ function keepImages(uid: string, files: ImgFile[], outs: OutFile[]) {
   for (const f of left) if (!outs.some((o) => o.skipped && o.name === f.name)) outs.push({ id: `skip-${f.name}`, name: f.name, size: f.data.length, mime: "", skipped: true });
   return { saved, left };
 }
+// 1×1 PNG xám: ảnh giữ chỗ cho ảnh đang dựng ở chế độ nền (G4). Model đặt địa chỉ ảnh vào slide / artifact ngay; byte thật thay vào đúng id khi dựng xong.
+const PLACEHOLDER_PNG = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGN49uwZAAVoArMCxcTLAAAAAElFTkSuQmCC", "base64");
+const ASPECT_DIMS: Record<string, [number, number]> = { "1:1": [1024, 1024], "16:9": [1280, 720], "9:16": [720, 1280], "4:3": [1024, 768], "3:4": [768, 1024] };
+/** Đặt tên ảnh theo lời người dùng (model hay viết prompt tiếng Anh), không trùng tên tệp đã có trong lượt. Dùng cho cả ảnh thật và ảnh giữ chỗ. */
+function renameImages(x: Exec, files: ImgFile[]): ImgFile[] {
+  const asked = requestSlug(typedText((Array.isArray(x.msgs) ? (x.msgs as { role?: string; content?: unknown }[]) : []).filter((m) => m?.role === "user").at(-1)));
+  if (!asked) return files;
+  const taken = new Set(x.outs.map((o) => o.name));
+  return files.map((f, i) => {
+    const ext = /\.[^.]+$/.exec(f.name)?.[0] ?? "";
+    let n = files.length > 1 ? i + 1 : 1, name = `${asked}${n > 1 || files.length > 1 ? `-${n}` : ""}${ext}`;
+    while (taken.has(name)) name = `${asked}-${++n}${ext}`;
+    taken.add(name);
+    return { ...f, name };
+  });
+}
 const IMG_REF_MAX = 20 * 1048576;
 /** Tên ảnh cuối cùng generate_image đã giao trong một câu trả lời cũ, đọc từ dấu vết công cụ trình duyệt gửi kèm lịch sử (dòng trong <files> của kết quả công cụ). */
 function tracedImage(trace: unknown): string | null {
@@ -634,8 +651,17 @@ async function runImage(x: Exec, c: Call): Promise<Run> {
     // Lượt Antigravity gọi công cụ này đang giữ khóa của tài khoản, mà lượt tạo ảnh cũng cần khóa đó: CLI đã đọc xong cấu hình nên nhả được, như lúc chờ người dùng duyệt.
     x.park?.();
     const stops = [runSignal(), x.calls?.get(c.id)?.cancel].filter((v): v is AbortSignal => !!v);
-    r = await generateImages({ uid: x.uid, prompt, aspect, count, reference, product: c.input?.product_shot === true, relight: c.input?.product_relight === true, signal: stops.length > 1 ? AbortSignal.any(stops) : stops[0],
-      onStatus: (t) => { progress("step", t); }, onNote: (t) => { progress("note", t); } });
+    let bg = false;
+    const gen = generateImages({ uid: x.uid, prompt, aspect, count, reference, product: c.input?.product_shot === true, relight: c.input?.product_relight === true, signal: stops.length > 1 ? AbortSignal.any(stops) : stops[0],
+      onStatus: (t) => { if (!bg) progress("step", t); }, onNote: (t) => { if (!bg) progress("note", t); } });
+    // Ngân sách 90 giây cho lời gọi công cụ: quá thì trả ảnh giữ chỗ, ảnh dựng tiếp ở chế độ nền và tự thay vào khi xong (G4).
+    let fin: ImgOk | ImgErr | undefined;
+    const genDone = gen.then((v) => { fin = v; }, (e) => { fin = { ok: false, kind: "other", text: String((e as Error)?.message ?? e), tried: [], providers: false }; });
+    let budgetTimer: ReturnType<typeof setTimeout> | undefined;
+    await Promise.race([genDone, new Promise<void>((ok) => { budgetTimer = setTimeout(ok, IMG_BUDGET_MS()); })]);
+    clearTimeout(budgetTimer);
+    if (!fin) return placeholderImage(x, gen, prompt, aspect, count, () => { bg = true; });
+    r = fin;
     if (!r.ok) {
       if (r.providers) progress("plans", JSON.stringify({ why: r.kind, tried: r.tried.filter((f) => f.kind !== "auth").map((f) => f.cli) }));
       return fail(r.text);
@@ -643,15 +669,7 @@ async function runImage(x: Exec, c: Call): Promise<Run> {
     by = IMG_NAME[r.cli];
   }
   // Tên theo lời người dùng; nhiều ảnh trong một lượt (thiết kế nhiều ảnh) không được trùng tên: inputs/ và tham chiếu đều đi theo tên.
-  const asked = requestSlug(typedText((Array.isArray(x.msgs) ? (x.msgs as { role?: string; content?: unknown }[]) : []).filter((m) => m?.role === "user").at(-1)));
-  const taken = new Set(x.outs.map((o) => o.name));
-  const named = !asked ? r.files : r.files.map((f, i) => {
-    const ext = /\.[^.]+$/.exec(f.name)?.[0] ?? "";
-    let n = r.files.length > 1 ? i + 1 : 1, name = `${asked}${n > 1 || r.files.length > 1 ? `-${n}` : ""}${ext}`;
-    while (taken.has(name)) name = `${asked}-${++n}${ext}`;
-    taken.add(name);
-    return { ...f, name };
-  });
+  const named = renameImages(x, r.files);
   const { saved, left } = keepImages(x.uid, named, x.outs);
   (x.madeImgs ??= []).push(...saved.map((f) => f.id));
   if (!saved.length) return fail(`${by} đã tạo ${r.files.length} ảnh nhưng chưa lưu được vì tài khoản đã dùng hết ${OUTPUT_QUOTA_MB()} MB dung lượng tệp đã tạo hoặc máy chủ sắp hết đĩa. Người dùng chưa nhận được ảnh nào: hãy nói rõ điều đó.`);
@@ -666,6 +684,24 @@ async function runImage(x: Exec, c: Call): Promise<Run> {
   (x.heavy ??= []).push(c.id);
   const [first, ...more] = send;
   return { content, is_error: false, used, image: first.data, mime: first.mime, ...(more.length ? { more } : {}) };
+}
+/** Quá ngân sách thời gian: giữ chỗ ảnh (địa chỉ ổn định) để model dựng slide / artifact ngay, ảnh dựng tiếp ở chế độ nền rồi tự thay byte thật vào đúng id (G4). */
+function placeholderImage(x: Exec, gen: Promise<ImgOk | ImgErr>, prompt: string, aspect: string | undefined, count: number, markBg: () => void): Run {
+  markBg();
+  const used = { kind: "search" as const, name: IMAGE_TOOL_NAME };
+  const files: ImgFile[] = Array.from({ length: count }, (_, i) => ({ name: imageName(prompt, i, count, "png"), mime: "image/png", data: PLACEHOLDER_PNG }));
+  const { saved } = keepImages(x.uid, renameImages(x, files), x.outs);
+  const ids = saved.map((f) => f.id);
+  // Chế độ nền: ảnh dựng xong thì thay byte thật vào đúng id (slide / artifact tham chiếu id nên tự cập nhật). Không báo lại được giữa lượt nên lỗi thì giữ ảnh giữ chỗ.
+  void gen.then((res) => {
+    if (res.ok && res.files.length) res.files.slice(0, ids.length).forEach((f, i) => { try { replaceOutput(x.uid, ids[i], f.data); } catch (e) { console.error("[imgbudget] không thay được ảnh nền", String((e as Error).message).slice(0, 160)); } });
+  }, () => {});
+  if (!ids.length) return { content: `Ảnh đang được dựng ở chế độ nền (quá ${Math.round(IMG_BUDGET_MS() / 1000)} giây) nhưng chưa giữ được chỗ lưu (tài khoản gần hết dung lượng tệp đã tạo). Hãy làm phần khác trước và nói người dùng biết ảnh đang hoàn thiện.`, is_error: false, used };
+  // Khung ảnh giữ chỗ giữ đúng tỉ lệ yêu cầu để bố cục slide / thẻ không nhảy.
+  const [pw, ph] = ASPECT_DIMS[aspect ?? "1:1"] ?? ASPECT_DIMS["1:1"];
+  for (const s of saved) { const o = x.outs.find((v) => v.id === s.id); if (o) { o.w = pw; o.h = ph; } }
+  (x.madeImgs ??= []).push(...ids);
+  return { content: placeholderNote({ urls: saved.map((f) => genImageUrl(f.id)), names: saved.map((f) => f.name), by: "AI" }), is_error: false, used };
 }
 // Tin người dùng nhắn thêm giữa chừng: ghép vào lượt đang chạy ở bước kế tiếp (sau kết quả công cụ, hoặc ngay khi model đang viết).
 function addFollowup(m: unknown[], text: string) {
