@@ -359,6 +359,7 @@ const mig = (name, o = {}) => {
   fs.writeFileSync(path.join(P, o.oldName ?? "synchro"), o.oldDown ? "stopped" : "online");
   fs.writeFileSync(path.join(H, "active"), "3000");
   if (o.live) fs.writeFileSync(path.join(H, "state", "live-color"), `${o.live} ${A}\n`);
+  if (o.primary) fs.writeFileSync(path.join(A, "data", ".primary.pid"), `4242 ${o.primary}\n`);
   if (o.resume) {
     // Lần trước dừng sau khi nginx đã sang green: site include tệp upstream 3002, green chạy, app cũ đã xóa tay.
     fs.writeFileSync(path.join(H, "nginx", "snippets", "synchro-upstream.conf"), "proxy_pass http://127.0.0.1:3002;\n");
@@ -379,7 +380,7 @@ grep -q synchro-upstream.conf "${H}/site" && echo "$up" > "${H}/active"; exit 0`
 case "$1" in
   startOrRestart) echo online > "$P/$4" ;;
   stop) [ "$2" = "\${KEEP_UP:-x}" ] && exit 0; [ -f "$P/$2" ] && echo stopped > "$P/$2" || exit 1 ;;
-  delete) [ -f "$P/$2" ] && rm -f "$P/$2" || exit 1 ;;
+  delete) [ -n "\${FAIL_DELETE:-}" ] && exit 1; [ -f "$P/$2" ] && rm -f "$P/$2" || exit 1 ;;
   restart) [ -f "$P/$2" ] && echo online > "$P/$2" || exit 1 ;;
   save) [ -n "\${FAIL_SAVE:-}" ] && exit 1; ls "$P" | tr '\\n' ' ' > "${H}/dump" ;;
   jlist) printf '['; for f in "$P"/*; do printf '{"name":"%s"},' "$(basename "$f")"; done; printf '{}]' ;;
@@ -429,7 +430,12 @@ case "$*" in *"-o /dev/null"*) exit 0 ;; esac; case "$url" in *api/health*) prin
   ok(m.code !== 0 && m.st.live === "green" && !m.st.dump, "MIGRATE-3: pm2 save lỗi không bị giấu (mã lỗi)", { code: m.code, st: m.st });
   const r = m.run({ FAIL_SAVE: "" }), st = m.stNow();
   ok(r.status === 0 && /synchro-green/.test(st.dump) && /PM2=synchro-green/.test(st.env), "MIGRATE-3: chạy lại sau khi bị cắt ngang: làm nốt pm2 save và synchro-ops.env", { code: r.status, st, out: (r.stdout + r.stderr).slice(-300) });
-  const m2 = mig("rerun-old", { live: "green 3002" });
+  // Lần trước bị cắt ngang lúc chờ green nhận vai, và green không bao giờ nhận: chạy lại thì trả lại bản cũ, không xóa nó.
+  const d = mig("rerun-noprim", { live: "green 3002", env: { NO_PROMOTE: "1" } });
+  ok(d.code !== 0 && d.st.pm2.synchro === "online" && !d.st.live && !/synchro-green/.test(d.st.dump), "MIGRATE-3: chạy lại khi green chưa là primary: không làm nốt (không xóa app cũ, không pm2 save) mà trả lại bản cũ", { code: d.code, st: d.st });
+  const e = mig("delfail", { live: "green 3002", primary: "green", env: { FAIL_DELETE: "1" } });
+  ok(e.code !== 0 && !e.st.dump && /chưa pm2 save/.test(e.out), "MIGRATE-3: pm2 delete app cũ lỗi thì không pm2 save", { code: e.code, st: e.st });
+  const m2 = mig("rerun-old", { live: "green 3002", primary: "green" });
   ok(m2.code === 0 && !m2.st.pm2.synchro && /synchro/.test(m2.out) && /PM2=synchro-green/.test(m2.st.env), "MIGRATE-3: chạy lại khi app pm2 cũ còn sót: dừng và xóa nó, lưu pm2", { code: m2.code, st: m2.st });
 }
 {

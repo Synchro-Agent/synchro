@@ -50,10 +50,12 @@ finish_steps() { # finish_steps <màu sống>
   if bg_pm2_has "$OLDPM2"; then
     say "App pm2 cũ \"$OLDPM2\" vẫn còn trong pm2: dừng và xóa (không thì khởi động lại máy sẽ bật lại nó)."
     bg_pm2 stop "$OLDPM2" >/dev/null 2>&1 || true
-    bg_pm2 delete "$OLDPM2" >/dev/null 2>&1 || { echo "LỖI: không xóa được app pm2 \"$OLDPM2\"." >&2; rc=1; }
+    bg_pm2 delete "$OLDPM2" >/dev/null 2>&1 || { echo "LỖI: không xóa được app pm2 \"$OLDPM2\": chưa pm2 save (không lưu app cũ vào danh sách khởi động lại máy). Xóa tay rồi chạy lại." >&2; rc=1; }
   fi
-  if bg_pm2 save >/dev/null 2>&1; then say "pm2 save: danh sách khởi động lại máy có synchro-$c"
-  else echo "LỖI: pm2 save không được: khởi động lại máy có thể bật sai app. Chạy lại script này." >&2; rc=1; fi
+  if [ "$rc" = 0 ]; then
+    if bg_pm2 save >/dev/null 2>&1; then say "pm2 save: danh sách khởi động lại máy có synchro-$c"
+    else echo "LỖI: pm2 save không được: khởi động lại máy có thể bật sai app. Chạy lại script này." >&2; rc=1; fi
+  fi
   # Watchdog đọc tệp màu sống và tệp upstream trước; các dòng này chỉ là dự phòng.
   if [ -f "$ENVO" ]; then
     sed -i -e "s/^PM2=.*/PM2=synchro-$c/" -e "s/^PORT=.*/PORT=$p/" "$ENVO"
@@ -66,6 +68,15 @@ finish_steps() { # finish_steps <màu sống>
 LIVE=$(bg_live_color)
 if [ -n "$LIVE" ]; then
   say "Đã chuyển từ trước: màu sống $LIVE (cổng $(bg_port_of "$LIVE")), nginx trỏ cổng $(bg_upstream_port). Làm nốt các bước cuối nếu còn thiếu."
+  # Chỉ làm nốt khi màu sống thật sự đang là primary (lần trước có thể bị cắt ngang lúc chờ green nhận vai). Không thì xử lý như lần chạy
+  # liền mạch: trả lại bản cũ nếu app cũ còn trong pm2; không xóa app cũ, không pm2 save.
+  for _ in $(seq 1 20); do [ "$(primary_color)" = "$LIVE" ] && break; sleep 1; done
+  if [ "$(primary_color)" != "$LIVE" ]; then
+    echo "LỖI: màu sống $LIVE chưa nhận vai primary (khóa: $(cat "$DATA/.primary.pid" 2>/dev/null || echo không có))." >&2
+    OLDPORT=3000; ID=$(cat "$APP/.next/BUILD_ID" 2>/dev/null || true)
+    if [ "$LIVE" = green ]; then rollback_old || true; else echo "$NOPRIMARY Xem pm2 logs synchro-$LIVE." >&2; fi
+    exit 1
+  fi
   rc=0; finish_steps "$LIVE" || rc=$?
   [ "$rc" = 0 ] && say "Xong. Deploy bình thường bằng scripts/server-build.sh."
   exit "$rc"
