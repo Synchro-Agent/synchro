@@ -292,6 +292,8 @@ export const SPEECH_RULES_EN: [RegExp, (m: RegExpMatchArray) => string][] = [
 
 // Speech dùng thật (gói, giọng, lịch sử lấy từ ElevenLabs).
 Object.assign(SPEECH_VI2EN, {
+  "Giọng AI": "AI voice",
+  "Độ dài tự chọn · có thể mất vài phút": "Auto length · may take a few minutes",
   "Chưa đọc được gói": "Plan not read", "Trò chuyện thời gian thực bằng giọng nói": "Real-time voice conversation", "Nhân bản nhanh từ vài phút âm thanh": "Quick clone from a few minutes of audio",
   "Nhạc": "Music", "Sáng tác nhạc nền từ mô tả": "Compose music from a description", "Dịch video và âm thanh sang ngôn ngữ khác": "Translate video and audio into other languages",
   "Âm thanh và bản chép lời bạn tạo sẽ nằm ở đây.": "Audio and transcripts you create will appear here.",
@@ -385,6 +387,14 @@ SPEECH_RULES_EN.push(
   [/^(.+) · giọng (.+) · (.+)$/, (m) => `${m[1]} · voice ${m[2]} · ${m[3]}`],
   [/^Giọng ([A-Z\u00C0-\u1EF9][^·]{0,40})$/, (m) => `Voice ${m[1]}`],
   [/^Đã có (.+) mẫu · $/, (m) => `${m[1]} of samples · `],
+  // Hạn mức giọng AI riêng của người dùng (tài khoản không phải chủ sở hữu) và ước tính nhạc.
+  [/^([\d.]+) credit hôm nay$/, (m) => `${m[1].replace(/\./g, ",")} credits today`],
+  [/^Hạn mức giọng AI của bạn hôm nay: còn ([\d.]+) \/ ([\d.]+) credit · đặt lại lúc nửa đêm \(giờ UTC\)$/, (m) => `Your AI voice limit today: ${m[1].replace(/\./g, ",")} / ${m[2].replace(/\./g, ",")} credits left · resets at midnight (UTC)`],
+  [/^≈ ([\d.]+) credit · ước tính theo thời lượng$/, (m) => `≈ ${m[1].replace(/\./g, ",")} credits · estimated by length`],
+  // Lỗi độ dài âm thanh dịch sang tiếng Việt (kiểm khi chọn tệp hoặc do ElevenLabs trả về).
+  [/^Âm thanh dài (.+) giây, dưới mức tối thiểu (.+) giây để đổi giọng\. Hãy chọn tệp dài hơn\.$/, (m) => `The audio is ${m[1].replace(",", ".")} seconds, below the ${m[2].replace(",", ".")}-second minimum for voice changing. Please pick a longer file.`],
+  [/^Âm thanh dài (.+) giây, dưới mức tối thiểu (.+) giây\. Hãy chọn tệp dài hơn\.$/, (m) => `The audio is ${m[1].replace(",", ".")} seconds, below the ${m[2].replace(",", ".")}-second minimum. Please pick a longer file.`],
+  [/^Âm thanh dài (.+) giây, vượt mức tối đa (.+) giây\. Hãy cắt ngắn hoặc chia nhỏ tệp\.$/, (m) => `The audio is ${m[1].replace(",", ".")} seconds, over the ${m[2].replace(",", ".")}-second maximum. Trim or split the file.`],
 );
 
 // Bố cục mới của Speech (hướng dẫn nhanh, mẫu bắt đầu, công cụ tách riêng, hiệu ứng, từ điển phát âm, Audio Native).

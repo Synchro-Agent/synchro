@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import * as I from "../icons";
 import { usePref } from "../store";
 import { tr } from "../i18n";
-import { DISTANCES, FX_VI, MODEL_NOTE, RECOMMENDED, STARTERS, TAG_GROUPS, stripTags, tagsOk } from "./data";
+import { DISTANCES, FX_VI, MODEL_NOTE, RECOMMENDED, STARTERS, TAG_GROUPS, estCredits, stripTags, tagsOk } from "./data";
 import { ago, del, fmtNum, on, post, useDicts, useEffectsCatalog, useItems, useMyVoices, usePlan, type Item, type Voice } from "./client";
 import { ErrBox, Field, ModelPick, Player, Range, Seg, Select, Spin, Toggle, VoiceAvatar, VoiceChip, VoicePicker } from "./parts";
 import { Group, Head, Split } from "./shell";
@@ -64,7 +64,8 @@ export function TTS({ say, sub, setSub, go, draft, auto, voice: shared, setVoice
   // Hội thoại: hai người nói mặc định là hai giọng đầu tiên của tài khoản.
   useEffect(() => { if (mine?.length && !speakers.length) setSpeakers([mine[0], mine[1] ?? mine[0]]); }, [mine]); // eslint-disable-line react-hooks/exhaustive-deps
   const chars = mode === "single" ? text.length : lines.reduce((n, l) => n + l.text.length, 0);
-  const cost = Math.ceil(chars * (m?.rate ?? 1));
+  // Ước tính theo bảng giá thật: bỏ thẻ cảm xúc không bị tính tiền, nhân hệ số giá của model đang chọn.
+  const cost = mode === "single" ? estCredits(m, text) : lines.reduce((n, l) => n + estCredits(m, l.text), 0);
   const left = plan ? Math.max(0, plan.credits.limit - plan.credits.used) : Infinity;
   const max = m?.max ?? 5000;
   const empty = chars === 0;

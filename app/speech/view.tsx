@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 import { SideToggle } from "../brand";
 import * as I from "../icons";
 import { useApp } from "../store";
-import { GROUPS, STARTERS, TOOLS, normTool, toolDef, toolOn, type SpeechTool } from "./data";
+import { GROUPS, STARTERS, TOOLS, estCredits, normTool, toolDef, toolOn, type SpeechTool } from "./data";
 import { KIND_LABEL, KIND_TOOL, ago, defaultVoice, fmtNum, refreshPlan, useItems, useMyVoices, usePlan, usePlanFailed, type Voice } from "./client";
 import { Dock, NotReady, Player, VoiceChip, VoicePicker } from "./parts";
 import { TOOL_ICON } from "./toolicons";
@@ -53,10 +53,17 @@ export function SpeechView({ say, tool: raw, setTool, sideOpen, onSide }: { say:
         </div>
         <div className="sp-bar-r">
           {plan?.connected && c && c.limit > 0 && (
-            <button className="sp-credit" title={`Đã dùng ${fmtNum(c.used)} / ${fmtNum(c.limit)} credit${c.resetAt ? ` · hồi lại ngày ${new Date(c.resetAt).toLocaleDateString("vi-VN")}` : ""} · bấm để quét lại gói`} onClick={() => { void refreshPlan(true).then(() => say("Đã quét lại gói ElevenLabs")); }}>
-              <b>ElevenLabs {plan.tierName}</b><span className="sp-credit-n">{fmtNum(left)} credit</span>
-              <span className="sp-credit-bar"><i style={{ width: `${Math.min(100, (left / c.limit) * 100)}%` }} /></span>
-            </button>
+            plan.owner ? (
+              <button className="sp-credit" title={`Đã dùng ${fmtNum(c.used)} / ${fmtNum(c.limit)} credit${c.resetAt ? ` · hồi lại ngày ${new Date(c.resetAt).toLocaleDateString("vi-VN")}` : ""} · bấm để quét lại gói`} onClick={() => { void refreshPlan(true).then(() => say("Đã quét lại gói ElevenLabs")); }}>
+                <b>ElevenLabs {plan.tierName}</b><span className="sp-credit-n">{fmtNum(left)} credit</span>
+                <span className="sp-credit-bar"><i style={{ width: `${Math.min(100, (left / c.limit) * 100)}%` }} /></span>
+              </button>
+            ) : (
+              <button className="sp-credit" title={`Hạn mức giọng AI của bạn hôm nay: còn ${fmtNum(left)} / ${fmtNum(c.limit)} credit${c.resetAt ? ` · đặt lại lúc nửa đêm (giờ UTC)` : ""}`} onClick={() => { void refreshPlan(true); }}>
+                <b>Giọng AI</b><span className="sp-credit-n">{fmtNum(left)} credit hôm nay</span>
+                <span className="sp-credit-bar"><i style={{ width: `${Math.min(100, (left / c.limit) * 100)}%` }} /></span>
+              </button>
+            )
           )}
           {plan?.connected && !plan.readPlan && <span className="sp-demo" title={plan.note ?? ""}><i />Chưa đọc được gói</span>}
           {waiting && <span className="sk-blk sp-credit-wait" aria-hidden />}
@@ -150,7 +157,7 @@ function Home({ go, onDraft, say, voice, setVoice, admin }: ToolProps & { onDraf
           <div className="sp-compose-f">
             <VoiceChip v={voice} onClick={() => setPick(true)} />
             {model && <span className="sp-pill">{model.name}</span>}
-            <span className="sp-muted" style={{ marginLeft: "auto" }}>{text.length ? `${fmtNum(text.length)} ký tự ≈ ${fmtNum(text.length * (model?.rate ?? 1))} credit` : "⌘ Enter để tạo"}</span>
+            <span className="sp-muted" style={{ marginLeft: "auto" }}>{text.length ? `${fmtNum(text.length)} ký tự ≈ ${fmtNum(estCredits(model, text))} credit` : "⌘ Enter để tạo"}</span>
             <button className="btn dark sp-go" disabled={!text.trim()} onClick={() => onDraft(text, true)}><I.Play size={13} />Tạo giọng nói</button>
           </div>
         </div>

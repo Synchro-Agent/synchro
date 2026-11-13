@@ -3,13 +3,28 @@
 import { useState } from "react";
 import * as I from "../icons";
 import { tr } from "../i18n";
-import { MODEL_NOTE, MUSIC_CHIPS, MUSIC_EX, MUSIC_MODELS, SFX_CATS, SFX_MODELS } from "./data";
+import { MODEL_NOTE, MUSIC_CHIPS, MUSIC_DEFAULT_SEC, MUSIC_EX, MUSIC_MODELS, SFX_CATS, SFX_MODELS, estMusicCredits } from "./data";
 import { ago, del, download, fmtNum, on, post, postForm, useItems, usePlan, type Item, type Voice } from "./client";
 import { Drop, ErrBox, Field, ModelPick, Player, Range, Recorder, Seg, Select, Spin, Tabs, Toggle, VoiceAvatar, VoicePicker } from "./parts";
 import { Chips, Head, Split, Wide } from "./shell";
 import type { ToolProps } from "./view";
 import { BulkBar, BulkButton, BulkCheck, bulkRow, each, useBulk, type BulkAct } from "../bulk";
 import { PageBar, usePage } from "../pager";
+
+// Độ dài tối thiểu (giây) ElevenLabs cần cho Đổi giọng (speech-to-speech). Kiểm ngay khi chọn tệp để báo sớm, không phải chờ gửi lên mới biết.
+const MIN_CHANGER_SEC = 4.6;
+/** Đọc thời lượng của tệp âm thanh / video ở trình duyệt (0 nếu không đọc được). */
+function mediaDuration(f: File): Promise<number> {
+  return new Promise((resolve) => {
+    const url = URL.createObjectURL(f);
+    const el = document.createElement(f.type.startsWith("video") ? "video" : "audio");
+    el.preload = "metadata";
+    const done = (d: number) => { URL.revokeObjectURL(url); resolve(Number.isFinite(d) && d > 0 ? d : 0); };
+    el.onloadedmetadata = () => done(el.duration);
+    el.onerror = () => done(0);
+    el.src = url;
+  });
+}
 
 /** Danh sách sản phẩm đã tạo của một công cụ: phát, tải xuống, xóa. */
 /** Chọn hàng loạt cho các danh sách bản đã tạo của Speech: tải về, xóa nhiều bản cùng lúc. */
@@ -66,7 +81,16 @@ export function ChangerTool({ say, voice: shared }: ToolProps) {
   const sts = plan?.sts ?? [];
   const v = voice ?? shared;
   const mid = model || sts.find((x) => /multilingual/.test(x.id))?.id || sts[0]?.id || "";
-  const take = (f: File) => { setFile(f); if (orig) URL.revokeObjectURL(orig); setOrig(URL.createObjectURL(f)); };
+  const take = async (f: File) => {
+    setErr("");
+    // Kiểm độ dài ngay khi chọn tệp: dưới mức tối thiểu thì báo luôn thay vì để ElevenLabs trả lỗi sau khi gửi lên.
+    const dur = await mediaDuration(f);
+    if (dur > 0 && dur < MIN_CHANGER_SEC) {
+      setErr(`Âm thanh dài ${dur.toLocaleString("vi-VN", { maximumFractionDigits: 2 })} giây, dưới mức tối thiểu ${MIN_CHANGER_SEC.toLocaleString("vi-VN")} giây để đổi giọng. Hãy chọn tệp dài hơn.`);
+      return;
+    }
+    setFile(f); if (orig) URL.revokeObjectURL(orig); setOrig(URL.createObjectURL(f));
+  };
   const go = async () => {
     if (!file || !v) return;
     setBusy(true); setErr("");
@@ -171,8 +195,9 @@ function MusicGen({ onDone }: { onDone: (it: Item) => void }) {
   const [model, setModel] = useState(MUSIC_MODELS[0].id);
   const [lyr, setLyr] = useState<"auto" | "none" | "mine">("auto");
   const [lyrics, setLyrics] = useState("");
-  const [auto, setAuto] = useState(true);
-  const [sec, setSec] = useState(60);
+  // Mặc định bản nhạc dài 30 giây (không bật "tự chọn độ dài") để người dùng thấy ngay độ dài và ước tính chi phí.
+  const [auto, setAuto] = useState(false);
+  const [sec, setSec] = useState(MUSIC_DEFAULT_SEC);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const add = (w: string) => { const t = tr(w); setP((x) => (x.trim() ? `${x.trim().replace(/[,.]$/, "")}, ${t}` : t)); };
@@ -191,7 +216,7 @@ function MusicGen({ onDone }: { onDone: (it: Item) => void }) {
       <Field label="Model"><ModelPick value={model} onChange={setModel} models={MUSIC_MODELS} /></Field>
       <Toggle checked={auto} onChange={setAuto} label="Tự chọn độ dài" />
       {!auto && <Range id="mu-d" label="Độ dài" value={sec} min={10} max={300} step={5} onChange={setSec} show={sec >= 60 ? `${Math.floor(sec / 60)} phút ${sec % 60 ? `${sec % 60} giây` : ""}` : `${sec} giây`} left="10 giây" right="5 phút" />}
-      <div className="sp-gen"><span className="sp-muted">Có thể mất tới vài phút</span><button className="btn dark sp-go" style={{ marginLeft: "auto" }} disabled={!p.trim() || (lyr === "mine" && !lyrics.trim()) || busy} onClick={go}>{busy ? <Spin /> : <I.Bars size={14} />}{busy ? "Đang sáng tác…" : "Tạo nhạc"}</button></div>
+      <div className="sp-gen"><span className="sp-muted">{auto ? "Độ dài tự chọn · có thể mất vài phút" : `≈ ${estMusicCredits(sec).toLocaleString("vi-VN")} credit · ước tính theo thời lượng`}</span><button className="btn dark sp-go" style={{ marginLeft: "auto" }} disabled={!p.trim() || (lyr === "mine" && !lyrics.trim()) || busy} onClick={go}>{busy ? <Spin /> : <I.Bars size={14} />}{busy ? "Đang sáng tác…" : "Tạo nhạc"}</button></div>
       <ErrBox msg={err} />
     </div>
   );

@@ -12,12 +12,35 @@ export class SpeechErr extends Error {
   constructor(msg: string, public status = 400, public code?: string) { super(msg); }
 }
 
-const conn = () => {
+// ---- nhà cung cấp Speech (sau el()) ----
+// Speech không phụ thuộc vào đúng một khóa: el() đi qua danh sách nhà cung cấp, ElevenLabs là chính. Có thể cấu hình thêm MỘT nhà cung
+// cấp dự phòng TƯƠNG THÍCH API ElevenLabs (TTS/STT) qua biến môi trường SPEECH_FALLBACK_BASE + SPEECH_FALLBACK_KEY (tùy chọn _ID, _LABEL, _HEADER)
+// — chỉ bật khi chủ máy chủ đặt sẵn địa chỉ + khóa; KHÔNG bịa khóa. Không đặt gì thì hành vi y hệt trước đây (chỉ ElevenLabs).
+// Chuyển sang dự phòng: xem el() — chỉ đọc văn bản và chép lời, gửi lại đúng một lần, ghi nhận nhà cung cấp đã phục vụ (servedBy).
+export type SpeechProvider = { id: string; label: string; base: string; key: string; header: string };
+function speechProviderList(): SpeechProvider[] {
+  const out: SpeechProvider[] = [];
   const k = serviceKey("elevenlabs");
-  if (!k) throw new SpeechErr("Chưa gắn khóa ElevenLabs. Quản trị viên vào Cài đặt → Providers để thêm khóa.", 503, "no_key");
-  return k;
+  if (k) out.push({ id: "elevenlabs", label: "ElevenLabs", base: k.base, key: k.key, header: "xi-api-key" });
+  const base = process.env.SPEECH_FALLBACK_BASE?.trim(), key = process.env.SPEECH_FALLBACK_KEY?.trim();
+  if (base && key) out.push({
+    id: process.env.SPEECH_FALLBACK_ID?.trim() || "fallback",
+    label: process.env.SPEECH_FALLBACK_LABEL?.trim() || "Nhà cung cấp dự phòng",
+    base: base.replace(/\/+$/, ""), key, header: process.env.SPEECH_FALLBACK_HEADER?.trim() || "xi-api-key",
+  });
+  return out;
+}
+/** Danh sách nhà cung cấp Speech đang cấu hình (không lộ khóa) — để giao diện quản trị / chẩn đoán hiển thị: số lượt mỗi nhà cung cấp đã phục vụ, lần chuyển dự phòng gần nhất. */
+export const speechProviders = () => {
+  const st = G();
+  return { providers: speechProviderList().map((p) => ({ id: p.id, label: p.label, served: st.served?.[p.id] ?? 0 })), lastFailover: st.lastFailover ?? null };
 };
-export const hasKey = () => !!serviceKey("elevenlabs");
+const conn = (): SpeechProvider => {
+  const list = speechProviderList();
+  if (!list.length) throw new SpeechErr("Chưa gắn khóa ElevenLabs. Quản trị viên vào Cài đặt → Providers để thêm khóa.", 503, "no_key");
+  return list[0];
+};
+export const hasKey = () => speechProviderList().length > 0;
 
 // ---- tính năng và gói ----
 export const FEATS = ["tts", "dialogue", "stt", "live", "agent", "sfx", "isolate", "changer", "align", "music", "design", "remix", "ivc", "pvc", "dub", "dubClean", "podcast", "book", "dict", "native"] as const;
@@ -76,7 +99,9 @@ function lock(f: Feat, msg: string) {
   if (p) { p.features[f] = false; p.locked[f] = locks[f]; }
 }
 
-const g = globalThis as unknown as { __speech?: { plan: Plan | null; at: number; busy: Promise<Plan> | null; fp?: string; perms?: { at: number; key: string; miss: Partial<Record<Feat | "realtime", string>> } } };
+type Failover = { at: number; from: string; to: string; path: string; reason: string; ok: boolean };
+const g = globalThis as unknown as { __speech?: { plan: Plan | null; at: number; busy: Promise<Plan> | null; fp?: string; perms?: { at: number; key: string; miss: Partial<Record<Feat | "realtime", string>> };
+  served?: Record<string, number>; lastFailover?: Failover } };
 const G = () => (g.__speech ??= { plan: null, at: 0, busy: null });
 
 // ---- gọi API ----
@@ -94,6 +119,22 @@ const detailOf = (text: string): { status: string; message: string } => {
 const PLAN_RE = /upgrade|subscription|subscribe|your (plan|tier)|free (tier|users?|plan)|whitelist|not available (on|for) (your|the)|requires? (a )?(paid|higher|creator|pro|starter)/i;
 const QUOTA_RE = /quota|credits?|character limit|exceed(s|ed)? your/i;
 
+// Số trong câu lỗi của ElevenLabs là tiếng Anh (dấu chấm thập phân); đổi sang kiểu Việt (dấu phẩy) khi chèn lại vào câu tiếng Việt.
+const viNum = (s: string) => { const n = Number(s); return Number.isFinite(n) ? n.toLocaleString("vi-VN", { maximumFractionDigits: 3 }) : s; };
+/** Dịch các lỗi NỘI DUNG đầu vào của ElevenLabs (độ dài âm thanh, kích thước tệp…) sang tiếng Việt. Trả về null nếu không nhận ra. */
+export function translateContentErr(msg: string): string | null {
+  let m = /audio duration is ([\d.]+) seconds?,? which is below the minimum of ([\d.]+) seconds?/i.exec(msg);
+  if (m) return `Âm thanh dài ${viNum(m[1])} giây, dưới mức tối thiểu ${viNum(m[2])} giây. Hãy chọn tệp dài hơn.`;
+  m = /audio duration is ([\d.]+) seconds?,? which is above the maximum of ([\d.]+) seconds?/i.exec(msg);
+  if (m) return `Âm thanh dài ${viNum(m[1])} giây, vượt mức tối đa ${viNum(m[2])} giây. Hãy cắt ngắn hoặc chia nhỏ tệp.`;
+  m = /(?:audio|file) (?:is )?too short|too short.{0,20}minimum/i.exec(msg);
+  if (m) return "Tệp âm thanh quá ngắn so với mức tối thiểu của ElevenLabs. Hãy chọn tệp dài hơn.";
+  m = /(?:audio|file) (?:is )?too long|exceeds (?:the )?maximum (?:duration|length)/i.exec(msg);
+  if (m) return "Tệp âm thanh quá dài so với mức tối đa của ElevenLabs. Hãy cắt ngắn hoặc chia nhỏ tệp.";
+  m = /file size.{0,20}(?:exceeds|too large|larger than)|maximum file size/i.exec(msg);
+  if (m) return "Tệp vượt quá kích thước tối đa ElevenLabs nhận. Hãy nén hoặc cắt ngắn tệp.";
+  return null;
+}
 /** Đổi lỗi của ElevenLabs thành câu dễ hiểu; lỗi do gói thì nhớ để ẩn tính năng. */
 export function explain(status: number, text: string, feat?: Feat): SpeechErr {
   const d = detailOf(text), msg = d.message || `Lỗi ${status}`;
@@ -102,6 +143,9 @@ export function explain(status: number, text: string, feat?: Feat): SpeechErr {
   if (miss) return new SpeechErr(`Khóa ElevenLabs chưa được cấp quyền ${miss === "?" ? "cho tính năng này" : `"${miss}"`}. Vào elevenlabs.io → API keys, sửa khóa và bật quyền này (hoặc dùng khóa không giới hạn).`, 403, "perm");
   // Giọng Thư viện với gói Free: lỗi của giọng, không phải của tính năng (không khóa tính năng).
   if (/library voices? via the api|cannot use library voices/i.test(msg)) return new SpeechErr("Giọng này lấy từ Thư viện ElevenLabs, gói Free không dùng được qua API. Hãy chọn một giọng khác.", 402, "voice");
+  // Lỗi nội dung đầu vào (độ dài tệp, kích thước…): dịch sang tiếng Việt để người dùng hiểu và sửa ngay.
+  const content = translateContentErr(msg);
+  if (content) return new SpeechErr(content, status || 400, "input");
   if (/quota_exceeded|insufficient_credits|exceeds_character_limit/i.test(d.status) || (status !== 404 && QUOTA_RE.test(msg) && !PLAN_RE.test(msg))) {
     const p = G().plan, at = p?.credits.resetAt ? new Date(p.credits.resetAt).toLocaleDateString("vi-VN") : "";
     return new SpeechErr(`Đã hết credit ElevenLabs của chu kỳ này${at ? ` (hồi lại ngày ${at})` : ""}. Nâng gói hoặc chờ credit hồi lại.`, 402, "quota");
@@ -116,16 +160,63 @@ export function explain(status: number, text: string, feat?: Feat): SpeechErr {
   return new SpeechErr(`ElevenLabs: ${msg.slice(0, 240)}`, status >= 500 ? 502 : 400, d.status || undefined);
 }
 
-export async function el(p: string, init: RequestInit & { feat?: Feat; timeout?: number } = {}): Promise<Response> {
-  const k = conn();
-  const headers = new Headers(init.headers);
-  headers.set("xi-api-key", k.key);
-  const r = await fetch(k.base + p, { ...init, headers, signal: init.signal ?? AbortSignal.timeout(init.timeout ?? 120_000) })
-    .catch((e: Error) => { throw new SpeechErr(e.name === "TimeoutError" ? "ElevenLabs phản hồi quá lâu. Thử lại sau." : `Không kết nối được tới ElevenLabs: ${e.message}`, 502, "net"); });
-  if (!r.ok) throw explain(r.status, await r.text().catch(() => ""), init.feat);
-  return r;
+// ---- chuyển sang nhà cung cấp dự phòng ----
+// Chỉ đọc văn bản (TTS, cả /stream và /with-timestamps) và chép lời (STT): mỗi lần gọi tạo kết quả mới, gửi lại không đổi gì ở tài khoản.
+// Không bao giờ nhân bản / thiết kế / xóa giọng hay đường nào khác: giọng nằm trên tài khoản của nhà cung cấp chính, gửi lại có thể tạo trùng hoặc xóa nhầm.
+const FAILOVER_RE = /^\/v1\/(text-to-speech\/[^/?]+(\/stream|\/with-timestamps|\/stream\/with-timestamps)?|speech-to-text)(\?|$)/;
+/** Đường này có được gửi lại ở nhà cung cấp dự phòng không. */
+export const failoverPath = (p: string, method = "GET") => method.toUpperCase() === "POST" && FAILOVER_RE.test(p);
+// Thân yêu cầu gửi lại được (luồng đọc một lần thì không).
+const reusableBody = (b: RequestInit["body"]) => b === undefined || b === null || typeof b === "string" || b instanceof FormData || b instanceof URLSearchParams || b instanceof Blob || b instanceof ArrayBuffer || ArrayBuffer.isView(b);
+/** Lỗi đáng chuyển sang dự phòng: máy chủ hãng lỗi (5xx), quá tải / hết lượt (429), khóa không hợp lệ (401/403) hoặc hết credit. Lỗi nội dung, thiếu quyền, gói thì không: dự phòng cũng sẽ từ chối, hoặc là lỗi người dùng cần sửa. */
+export function failoverWorthy(status: number, text: string) {
+  if (status >= 500 || status === 429) return true;
+  const d = detailOf(text);
+  if ((status === 401 || status === 403) && /invalid_api_key|invalid api key/i.test(`${d.status} ${d.message}`)) return true;
+  return /quota_exceeded|insufficient_credits/i.test(d.status);
 }
-export const elJson = async <T = Record<string, unknown>>(p: string, init: RequestInit & { feat?: Feat; timeout?: number } = {}) => (await (await el(p, init)).json()) as T;
+type ElInit = RequestInit & { feat?: Feat; timeout?: number };
+const served = new WeakMap<Response, string>();
+/** Mã nhà cung cấp đã trả lời yêu cầu này (null nếu không phải phản hồi của el()). */
+export const servedBy = (r: Response) => served.get(r) ?? null;
+const tag = (r: Response, k: SpeechProvider) => {
+  served.set(r, k.id);
+  const st = G();
+  st.served = { ...st.served, [k.id]: (st.served?.[k.id] ?? 0) + 1 };
+  return r;
+};
+const callProvider = (k: SpeechProvider, p: string, init: ElInit) => {
+  // Headers mới cho từng nhà cung cấp: khóa của nhà cung cấp chính không bao giờ đi theo sang dự phòng.
+  const headers = new Headers(init.headers);
+  headers.set(k.header, k.key);
+  return fetch(k.base + p, { ...init, headers, signal: init.signal ?? AbortSignal.timeout(init.timeout ?? 120_000) });
+};
+const netErr = (e: unknown) => {
+  const x = e instanceof Error ? e : new Error(String(e));
+  return new SpeechErr(x.name === "TimeoutError" ? "ElevenLabs phản hồi quá lâu. Thử lại sau." : `Không kết nối được tới ElevenLabs: ${x.message}`, 502, "net");
+};
+
+export async function el(p: string, init: ElInit = {}): Promise<Response> {
+  const list = speechProviderList();
+  const main = list[0] ?? conn(), spare = list[1];
+  let r: Response | null = null, err: unknown = null;
+  try { r = await callProvider(main, p, init); } catch (e) { err = e; }
+  if (r?.ok) return tag(r, main);
+  const text = r ? await r.text().catch(() => "") : "";
+  const first = () => (r ? explain(r.status, text, init.feat) : netErr(err));
+  // Gửi lại đúng một lần ở dự phòng: chỉ khi có cấu hình, đường cho phép, thân gửi lại được, lỗi đáng chuyển, và người gọi chưa hủy.
+  if (!spare || !failoverPath(p, init.method) || !reusableBody(init.body) || init.signal?.aborted || (r && !failoverWorthy(r.status, text))) throw first();
+  const reason = r ? `HTTP ${r.status}` : err instanceof Error ? err.name : "network";
+  let r2: Response | null = null, err2: unknown = null;
+  try { r2 = await callProvider(spare, p, init); } catch (e) { err2 = e; }
+  G().lastFailover = { at: Date.now(), from: main.id, to: spare.id, path: p.split("?")[0], reason, ok: !!r2?.ok };
+  if (r2?.ok) { console.warn(`[speech] ${main.label} lỗi (${reason}) ở ${p.split("?")[0]}: ${spare.label} đã phục vụ thay`); return tag(r2, spare); }
+  // Dự phòng cũng lỗi: báo lỗi của nhà cung cấp chính (là chỗ quản trị viên cần sửa), ghi nhật ký lỗi của dự phòng.
+  const why = r2 ? `HTTP ${r2.status} ${(await r2.text().catch(() => "")).slice(0, 200)}` : err2 instanceof Error ? err2.message : "network";
+  console.error(`[speech] ${main.label} lỗi (${reason}), dự phòng ${spare.label} cũng lỗi: ${why}`);
+  throw first();
+}
+export const elJson = async <T = Record<string, unknown>>(p: string, init: ElInit = {}) => (await (await el(p, init)).json()) as T;
 export const jsonBody = (b: unknown): RequestInit => ({ method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(b) });
 
 // ---- quyền của khóa ----
@@ -147,7 +238,7 @@ async function probePerms(fresh: boolean) {
   if (!fresh && st.perms && st.perms.key === key && Date.now() - st.perms.at < keep) return st.perms.miss;
   const miss: Partial<Record<Feat | "realtime", string>> = {};
   await Promise.all(PROBES.map(async ([f, p, kind]) => {
-    const init: RequestInit = { method: "POST", headers: { "xi-api-key": k.key }, signal: AbortSignal.timeout(15_000) };
+    const init: RequestInit = { method: "POST", headers: { [k.header]: k.key }, signal: AbortSignal.timeout(15_000) };
     if (kind === "form") init.body = new FormData();
     else { (init.headers as Record<string, string>)["content-type"] = "application/json"; init.body = "{}"; }
     const r = await fetch(k.base + p, init).catch(() => null);
@@ -248,15 +339,17 @@ export async function plan(o: { fresh?: boolean } = {}): Promise<Plan> {
   if (!fresh && st.plan && Date.now() - st.at < 180_000) return st.plan;
   if (st.busy) return st.busy;
   st.busy = scan(fresh).then((p) => { st.plan = p; st.at = Date.now(); return p; })
-    .catch((e: SpeechErr) => empty(e.message))
+    // Nhà cung cấp chính mất kết nối / khóa hỏng nhưng có dự phòng: giữ gói đọc được lần trước để Đọc văn bản và Chép lời vẫn đi qua el() sang dự phòng.
+    .catch((e: SpeechErr) => (st.plan && speechProviderList().length > 1 && (e.code === "key" || e.code === "net") ? st.plan : empty(e.message)))
     .finally(() => { st.busy = null; });
   return st.busy;
 }
 /** Sau mỗi lần tạo: cộng credit đã dùng (ElevenLabs báo trong header) để thanh credit đúng ngay, không phải quét lại; tính vào hạn mức trong ngày của người đang gọi. est: ước lượng khi hãng không báo. */
 export function spent(r: Response, est = 0) {
   const n = Number(r.headers.get("character-cost") ?? r.headers.get("x-character-count") ?? 0);
-  const p = G().plan;
-  if (p && n > 0) p.credits.used += n;
+  const p = G().plan, by = servedBy(r);
+  // Thanh credit là của gói ElevenLabs: lượt do nhà cung cấp dự phòng phục vụ không trừ vào đó (hạn mức trong ngày của người gọi vẫn tính).
+  if (p && n > 0 && (!by || by === speechProviderList()[0]?.id)) p.credits.used += n;
   const uid = spender.getStore();
   if (uid) addSpend(uid, n > 0 ? n : est);
   return n;
@@ -326,8 +419,9 @@ export function checkBudget(u: UserRow) {
 export const spender = new AsyncLocalStorage<string>();
 
 // Giọng nhân bản hay tự thiết kế nằm chung một tài khoản ElevenLabs của máy chủ: giọng của một người không được lộ cho người khác.
-// Giọng tạo trước khi có bảng này: suy chủ từ lịch sử (backfillVoiceOwners). Không suy được thì không ai biết người tạo là ai, nên giữ như trước khi có bảng: thành viên vẫn thấy,
-// không người tạo nào mất giọng của mình, cho tới khi quản trị viên gán chủ hoặc đánh dấu dùng chung. Nhưng không bao giờ được tự chọn làm giọng mặc định (defaultVoice).
+// Quyết định của chủ sở hữu (2026-11-13): giọng nhân bản / tự thiết kế chỉ người tạo thấy và dùng; các tài khoản khác dùng giọng có sẵn; quản trị viên vẫn quản lý mọi giọng.
+// Giọng tạo trước khi có bảng này: suy chủ từ lịch sử (backfillVoiceOwners). Không suy được (owner = null) thì ẨN với mọi thành viên — kể cả người tạo thật — cho tới khi
+// quản trị viên gán chủ hoặc đánh dấu dùng chung (danh sách giọng của quản trị viên hiện chủ "none" để gán). Không bao giờ được tự chọn làm giọng mặc định (defaultVoice).
 // user_id có thể là mã đặc biệt, không trùng tài khoản nào nên purgeRows không xóa mất:
 export const VOICE_SHARED = "*shared"; // quản trị viên đánh dấu cho mọi thành viên
 export const VOICE_PURGE = "*purge"; // chủ đã xóa tài khoản: chờ xóa trên ElevenLabs, lỗi thì lần sau thử lại
@@ -346,8 +440,11 @@ export const forgetVoiceOwner = (voice: string) => { ownersDb().prepare("DELETE 
 export const ownedVoices = (uid: string) => (ownersDb().prepare("SELECT COUNT(*) AS n FROM speech_voice_owner WHERE user_id = ?").get(uid) as { n: number }).n;
 /** Giọng riêng của người tạo, khác với giọng có sẵn và giọng lấy từ Thư viện. */
 export const isPrivateVoice = (v: { category: string; lib?: boolean }) => !v.lib && ["cloned", "generated", "professional"].includes(v.category);
-/** Thành viên này được thấy và dùng giọng riêng này không. Quản trị viên kiểm tra riêng ở nơi gọi. */
-export const voiceOpenTo = (voice: string, uid: string) => { const o = voiceOwner(voice); return o === null || o === VOICE_SHARED || o === uid; };
+/** Thành viên này được thấy và dùng giọng riêng này không. Quản trị viên kiểm tra riêng ở nơi gọi.
+ *  QUYẾT ĐỊNH CỦA CHỦ SỞ HỮU: giọng riêng (nhân bản / tự thiết kế) CHƯA rõ chủ (owner = null) KHÔNG hiện cho thành viên khác —
+ *  chỉ chủ của nó và quản trị viên thấy. Trước đây chưa rõ chủ thì mở cho mọi người; đổi để giọng nhân bản mang tên chủ sở hữu
+ *  (tài khoản của chủ là quản trị viên nên backfill không gán chủ, owner vẫn null) không lộ ra và không thành giọng mặc định của người khác. */
+export const voiceOpenTo = (voice: string, uid: string) => { const o = voiceOwner(voice); return o === VOICE_SHARED || o === uid; };
 
 // Ngôn ngữ của văn bản theo chữ viết (đủ để chọn giọng; model đa ngôn ngữ tự đọc đúng mọi ngôn ngữ nó hỗ trợ).
 function textLang(t: string) {
@@ -378,8 +475,8 @@ const voiceMeta = (meta: string) => {
     return [m.voice, ...(Array.isArray(m.lines) ? m.lines.map((l) => l?.voice_id) : [])].filter((x): x is string => typeof x === "string" && !!x);
   } catch { return []; }
 };
-/** Giọng có từ trước khi có bảng chủ: người duy nhất từng dùng là chủ, để họ vẫn thấy giọng của mình và người khác thì không. Chạy đúng một lần: sau đó giọng chưa có chủ vẫn mở,
- *  một người lạ dùng thử không được biến thành chủ. Quản trị viên không tính: họ thấy mọi giọng nên từng dùng không nói lên là của họ, và giọng họ làm cho mọi người phải giữ nguyên cho mọi người. */
+/** Giọng có từ trước khi có bảng chủ: người duy nhất từng dùng là chủ, để họ vẫn thấy giọng của mình và người khác thì không. Chạy đúng một lần: sau đó giọng chưa có chủ vẫn ẩn với
+ *  thành viên (chỉ quản trị viên gán được), một người lạ dùng thử không được biến thành chủ. Quản trị viên không tính: họ thấy mọi giọng nên từng dùng không nói lên là của họ, và giọng họ làm cho mọi người phải giữ nguyên cho mọi người. */
 export function backfillVoiceOwners(list: VoiceOut[]) {
   if (getSetting(VOICE_BACKFILL, "")) return 0;
   const users = new Map<string, Set<string>>();
@@ -408,7 +505,7 @@ export async function retryVoicePurges(timeout = 15_000) {
   for (const { voice_id: id } of rows) {
     try {
       const k = conn();
-      const r = await fetch(`${k.base}/v1/voices/${encodeURIComponent(id)}`, { method: "DELETE", headers: { "xi-api-key": k.key }, signal: AbortSignal.timeout(timeout) });
+      const r = await fetch(`${k.base}/v1/voices/${encodeURIComponent(id)}`, { method: "DELETE", headers: { [k.header]: k.key }, signal: AbortSignal.timeout(timeout) });
       const gone = r.ok || r.status === 404 || (r.status === 400 && /voice_does_not_exist|voice_not_found/.test(await r.text().catch(() => "")));
       if (!gone) throw new Error(`ElevenLabs ${r.status}`);
       forgetVoiceOwner(id);

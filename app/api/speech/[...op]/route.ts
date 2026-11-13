@@ -1,10 +1,11 @@
 import fs from "node:fs";
 import { Readable } from "node:stream";
-import { audit, can, current, findByEmail, getUser, isAdmin, limit, sameOrigin, VERIFY_FIRST, verifyLocked, type UserRow } from "../../../authstore";
+import { audit, can, current, findByEmail, getUser, isAdmin, isOwner, limit, sameOrigin, VERIFY_FIRST, verifyLocked, type UserRow } from "../../../authstore";
 import {
   SpeechErr, addSpend, audioOf, checkBudget, deleteItem, effectsCatalog, el, elJson, getItem, itemFile, jsonBody, langName, library, listItems, mintRealtime, myVoices, need, plan, saveItem,
-  scribeToken, sideRead, sideWrite, spender, spent, updateItem, voiceOut, backfillVoiceOwners, defaultVoice, forgetVoiceOwner, isPrivateVoice, MAX_OWN_VOICES, ownedVoices, setVoiceOwner, voiceGen, voiceOpenTo, voiceOwner, VOICE_ORPHAN, VOICE_PURGE, VOICE_SHARED, type Feat, type Plan,
+  scribeToken, servedBy, sideRead, sideWrite, speechBudget, spender, spent, spentToday, updateItem, voiceOut, backfillVoiceOwners, defaultVoice, forgetVoiceOwner, isPrivateVoice, MAX_OWN_VOICES, ownedVoices, setVoiceOwner, voiceGen, voiceOpenTo, voiceOwner, VOICE_ORPHAN, VOICE_PURGE, VOICE_SHARED, type Feat, type Plan,
 } from "../../../speechapi";
+import { estCredits, estMusicCredits } from "../../../speech/data";
 import { quickCall } from "../../../ai/anymodel";
 import { timed } from "../../../servertiming";
 
@@ -17,8 +18,16 @@ const MB = 1024 * 1024, MAX_UP = 40 * MB;
 const str = (v: unknown, max = 200) => (typeof v === "string" ? v.trim().slice(0, max) : "");
 const num = (v: unknown, lo: number, hi: number, d: number) => { if (v === null || v === undefined || v === "") return d; const n = Number(v); return Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : d; };
 const bool = (v: unknown, d = false) => (v === undefined || v === null || v === "" ? d : v === true || v === "true" || v === "1" || v === 1);
-const credits = (p: Plan) => ({ used: p.credits.used, limit: p.credits.limit, resetAt: p.credits.resetAt });
-const ok = async (o: Record<string, unknown>) => Response.json({ ...o, credits: credits(await plan()) });
+// Credit hiện cho người xem: chủ sở hữu thấy số dùng chung thật của tài khoản ElevenLabs; mọi tài khoản khác CHỈ thấy hạn mức
+// giọng AI của riêng họ trong ngày (spentToday / hạn mức). Không để lộ số credit dùng chung của cả hệ thống cho tài khoản không phải chủ.
+const nextUtcMidnight = () => { const d = new Date(); return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + 1); };
+function userCredits(u: UserRow | null, p: Plan) {
+  if (u && isOwner(u)) return { used: p.credits.used, limit: p.credits.limit, resetAt: p.credits.resetAt };
+  const b = speechBudget(), cap = u && isAdmin(u) ? 0 : u?.email_verified ? b.user : b.unverified;
+  return { used: u ? spentToday(u.id) : 0, limit: cap, resetAt: nextUtcMidnight() };
+}
+const viewer = () => { const uid = spender.getStore(); return (uid ? getUser(uid) : null) ?? null; };
+const ok = async (o: Record<string, unknown>) => Response.json({ ...o, credits: userCredits(viewer(), await plan()) });
 const voiceCache = { at: 0, gen: 0, list: [] as Awaited<ReturnType<typeof myVoices>> };
 async function voices(fresh = false) {
   if (fresh || voiceCache.gen !== voiceGen() || Date.now() - voiceCache.at > 10 * 60_000 || !voiceCache.list.length) {
@@ -120,7 +129,7 @@ const claimVoice = (voice: string) => { const uid = spender.getStore(); if (uid)
 
 async function GETop(req: Request, u: UserRow, op: string) {
   const q = new URL(req.url).searchParams;
-  if (op === "plan") return Response.json(await plan({ fresh: q.get("fresh") === "1" }));
+  if (op === "plan") { const p = await plan({ fresh: q.get("fresh") === "1" }); return Response.json({ ...p, owner: isOwner(u), credits: userCredits(u, p) }); }
   if (op === "voices") {
     if (q.get("lib") === "1") {
       await need("tts");
@@ -209,9 +218,9 @@ async function tts(u: UserRow, b: Record<string, unknown>) {
   if (fx) body.audio_effects = fx;
   if (dicts) body.pronunciation_dictionary_locators = dicts;
   const r = await el(`/v1/text-to-speech/${encodeURIComponent(voice)}?${q}`, { ...jsonBody(body), feat: "tts" });
-  const cost = spent(r);
+  const cost = spent(r, estCredits(model, text));
   const a = await audioOf(r, fmt);
-  const item = saveItem(u, "tts", titleOf(text), { text: text.slice(0, 5000), voice, voiceName: str(b.voiceName, 80), model: model.id, modelName: model.name, format: fmt, chars: text.length, cost, settings: body.voice_settings, lang, effects: fx ?? null, dicts: dicts?.length ?? 0 }, a);
+  const item = saveItem(u, "tts", titleOf(text), { text: text.slice(0, 5000), voice, voiceName: str(b.voiceName, 80), model: model.id, modelName: model.name, format: fmt, chars: text.length, cost, settings: body.voice_settings, lang, effects: fx ?? null, dicts: dicts?.length ?? 0, provider: servedBy(r) }, a);
   return ok({ item });
 }
 async function dialogue(u: UserRow, b: Record<string, unknown>) {
@@ -243,7 +252,7 @@ async function speak(u: UserRow, b: Record<string, unknown>) {
     ...jsonBody({ text: text.slice(0, model?.max ?? 5000), model_id: model?.id, voice_settings: { stability: 0.5, similarity_boost: 0.75, speed } }), feat: "tts",
   });
   spent(r, text.length);
-  return new Response(r.body, { headers: { "content-type": r.headers.get("content-type") ?? "audio/mpeg", "cache-control": "no-store", "x-accel-buffering": "no" } });
+  return new Response(r.body, { headers: { "content-type": r.headers.get("content-type") ?? "audio/mpeg", "cache-control": "no-store", "x-accel-buffering": "no", "x-speech-provider": servedBy(r) ?? "" } });
 }
 async function stt(u: UserRow, form: FormData) {
   await need("stt");
@@ -282,7 +291,7 @@ async function stt(u: UserRow, form: FormData) {
   const dur = words.length ? words[words.length - 1].e : 0;
   const speakers = [...new Set(words.map((w) => w.sp).filter(Boolean))];
   const name = f?.name ?? url.replace(/^https?:\/\//, "").slice(0, 80);
-  const item = saveItem(u, "stt", name, { lang: j.language_code ?? "", langName: langName(j.language_code ?? ""), prob: j.language_probability ?? 0, dur, speakers, words: words.length, preview: j.text.slice(0, 300), source: f ? "file" : "url", url: f ? null : url, model, edited: !!edited },
+  const item = saveItem(u, "stt", name, { lang: j.language_code ?? "", langName: langName(j.language_code ?? ""), prob: j.language_probability ?? 0, dur, speakers, words: words.length, preview: j.text.slice(0, 300), source: f ? "file" : "url", url: f ? null : url, model, edited: !!edited, provider: servedBy(r) },
     f && f.size <= MAX_UP ? { buf: Buffer.from(await f.arrayBuffer()), mime: f.type || "audio/mpeg", ext: (f.name.split(".").pop() || "mp3").toLowerCase().slice(0, 5) } : undefined);
   sideWrite(u, item.id, { text: j.text, words, entities: j.entities ?? [], edited });
   return ok({ item, data: { text: j.text, words, entities: j.entities ?? [], edited } });
@@ -309,7 +318,7 @@ async function music(u: UserRow, b: Record<string, unknown>) {
   if (lyrics) body.lyrics_text = lyrics;
   if (b.seconds) body.music_length_ms = Math.round(num(b.seconds, 3, 300, 30) * 1000);
   const r = await el("/v1/music?output_format=mp3_44100_128", { ...jsonBody(body), feat: "music", timeout: 290_000 });
-  const cost = spent(r);
+  const cost = spent(r, body.music_length_ms ? estMusicCredits(Number(body.music_length_ms) / 1000) : 0);
   const item = saveItem(u, "music", titleOf(prompt), { prompt, seconds: body.music_length_ms ? Number(body.music_length_ms) / 1000 : null, instrumental: body.force_instrumental, lyrics: !!lyrics, model: body.model_id, cost }, await audioOf(r));
   return ok({ item });
 }
@@ -775,9 +784,11 @@ async function run(req: Request, ctx: Ctx, method: "GET" | "POST" | "DELETE") {
   if (method !== "GET") { try { sameOrigin(req); } catch { return Response.json({ error: "Yêu cầu không hợp lệ." }, { status: 403 }); } }
   if (!can(c.user, "speech")) return Response.json({ error: verifyLocked(c.user) ? VERIFY_FIRST : "Quản trị viên chưa cho phép tài khoản của bạn dùng Speech." }, { status: 403 });
   const { op } = await ctx.params;
+  // Chạy mọi phương thức trong spender (giữ id người gọi) để ok()/credits luôn hiện hạn mức riêng của đúng người xem, kể cả GET và DELETE.
   try {
+    return await spender.run(c.user.id, async () => {
     if (method === "GET") return await GETop(req, c.user, op.join("/"));
-    if (method === "POST") return await spender.run(c.user.id, () => POSTop(req, c.user, op));
+    if (method === "POST") return await POSTop(req, c.user, op);
     const q = new URL(req.url).searchParams;
     if (op[0] === "items") return Response.json({ ok: deleteItem(c.user, q.get("id") ?? "") });
     if (op[0] === "voices") {
@@ -790,6 +801,7 @@ async function run(req: Request, ctx: Ctx, method: "GET" | "POST" | "DELETE") {
       return ok({ ok: true });
     }
     return Response.json({ error: "Không có thao tác này." }, { status: 404 });
+    });
   } catch (e) {
     if (e instanceof SpeechErr) return Response.json({ error: e.message, code: e.code }, { status: e.status });
     console.error("[speech]", op.join("/"), e);

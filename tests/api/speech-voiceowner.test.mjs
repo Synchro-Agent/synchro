@@ -76,13 +76,18 @@ ok(S.voiceOwner("premade-vi") === null, "giọng có sẵn không bao giờ có 
 item(C, "i8", { voice: "none" });
 ok(S.backfillVoiceOwners(old) === 0 && S.voiceOwner("none") === null, "chỉ chạy một lần: người lạ dùng sau đó không thành chủ");
 ok(S.voiceOpenTo("solo", A.id) && !S.voiceOpenTo("solo", B.id), "giọng có chủ: chỉ chủ");
-ok(S.voiceOpenTo("none", C.id) && S.voiceOpenTo("many", A.id), "giọng không rõ chủ: vẫn dùng được, người tạo không mất giọng");
+// Quyết định của chủ sở hữu (2026-11-13): giọng nhân bản chỉ người tạo thấy và dùng; người khác dùng giọng có sẵn; quản trị viên vẫn quản lý được.
+ok(!S.voiceOpenTo("none", C.id) && !S.voiceOpenTo("many", A.id), "giọng không rõ chủ: ẩn với thành viên, chỉ quản trị viên thấy để gán chủ");
 
 console.log("5. Qua route thật (ElevenLabs giả)");
 let r = await call(A, "GET", "voices?fresh=1");
 const ids = (x) => x.j.voices.map((v) => v.id);
-ok(r.s === 200 && ids(r).includes("solo") && ids(r).includes("none") && !ids(r).includes("line"), "A thấy giọng của mình và giọng không rõ chủ, không thấy giọng của B", r.j);
-ok(r.j.voices.find((v) => v.id === "solo").canDelete === true && r.j.voices.find((v) => v.id === "none").canDelete === false && !("holder" in r.j.voices[0]), "chỉ xóa được giọng ghi là của mình; thành viên không thấy chủ của giọng");
+ok(r.s === 200 && ids(r).includes("solo") && !ids(r).includes("none") && !ids(r).includes("line"), "A thấy giọng của mình, không thấy giọng không rõ chủ hay giọng của B", r.j);
+ok(r.j.voices.find((v) => v.id === "solo")?.canDelete === true && r.j.voices.every((v) => !("holder" in v)), "chỉ xóa được giọng ghi là của mình; thành viên không thấy chủ của giọng");
+r = await call(admin, "GET", "voices?fresh=1");
+ok(r.s === 200 && r.j.voices.find((v) => v.id === "none")?.holder === "none" && r.j.voices.find((v) => v.id === "none")?.canDelete === true, "quản trị viên vẫn thấy giọng không rõ chủ để gán chủ hoặc xóa", r.j);
+r = await call(C, "POST", "speak", { text: "Xin chào", voice: "none" });
+ok(r.s === 403 && r.j.code === "voice", "thành viên chọn giọng không rõ chủ: 403", r.j);
 r = await call(B, "POST", "speak", { text: "Xin chào", voice: "solo" });
 ok(r.s === 403 && r.j.code === "voice" && !/người khác/.test(r.j.error), "chọn giọng đã có chủ khác: 403, câu báo không khẳng định là của người khác", r.j);
 r = await call(C, "POST", "speak", { text: VI });

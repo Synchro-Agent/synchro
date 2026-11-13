@@ -128,6 +128,22 @@ export const TAG_GROUPS: { label: string; tags: [string, string][] }[] = [
 ];
 export const tagsOk = (model: string) => /v3|v4/.test(model);
 export const stripTags = (t: string) => t.replace(/\[[^\]\n]{1,40}\]\s?/g, "");
+
+// ---- ước tính credit ----
+// ElevenLabs tính credit theo số ký tự ĐỌC LÊN, không tính thẻ cảm xúc / audio tag ([happy], [whispers]…): model v3/v4
+// nhận thẻ nhưng không tính tiền phần trong ngoặc vuông. Ước tính cũ nhân cả độ dài thô (kể cả thẻ) nên lệch nhiều
+// (ví dụ 63 → thực tế 25). Đếm đúng phần đọc lên rồi nhân với hệ số giá thật của model (character_cost_multiplier).
+export const billableChars = (modelId: string, text: string): number => (tagsOk(modelId) ? stripTags(text) : text).length;
+/** Ước tính credit cho một lần đọc văn bản theo bảng giá thật của model đang chọn. */
+export const estCredits = (model: { id: string; rate: number } | null | undefined, text: string): number =>
+  Math.ceil(billableChars(model?.id ?? "", text) * (model?.rate ?? 1));
+// Nhạc tính credit theo thời lượng bản nhạc (không theo câu mô tả). Hệ số dưới đây là ƯỚC TÍNH theo thời lượng để
+// người dùng thấy khoảng chi phí trước khi tạo; số thật do ElevenLabs trả trong header sau khi tạo xong mới chính xác.
+// Một chỗ duy nhất để chủ máy chủ chỉnh khi ElevenLabs đổi giá.
+export const MUSIC_CREDIT_PER_SEC = 100;
+export const MUSIC_DEFAULT_SEC = 30;
+/** Ước tính credit cho một bản nhạc theo thời lượng (giây). */
+export const estMusicCredits = (seconds: number): number => Math.max(0, Math.round(seconds * MUSIC_CREDIT_PER_SEC));
 /** Mẫu “Bắt đầu với”: điền sẵn văn bản (có thẻ cảm xúc) để người mới bấm là nghe được ngay. */
 export const STARTERS: { label: string; text?: string; lines?: [number, string][] }[] = [
   { label: "Kể một câu chuyện", text: "[softly] Ngày xửa ngày xưa, ở một ngôi làng nhỏ ven sông, có một cô bé tên là Mây. [pause] Sáng nào cô cũng ra bờ sông ngắm những cánh buồm nâu trôi chầm chậm… [excited] Cho đến một hôm, cô nhìn thấy một chiếc thuyền rất lạ!" },
