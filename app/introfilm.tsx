@@ -12,7 +12,7 @@
 // - Phụ đề tiếng Việt cho các dòng chữ tiếng Anh trong phim (giao diện tiếng Việt), nằm trong dải đen dưới phim nếu có chỗ.
 // - Trình duyệt chặn tự phát có tiếng: phát không tiếng, hiện nút Bật tiếng. Giảm chuyển động: không tự phát, không nở / tách, chỉ mờ dần.
 // - Luôn mở bằng bản 720p (4 MB); lúc hiện lời chào chỉ tải phần đầu tệp (preload="metadata", preloadIntro), phim gắn vào thì mới tải hết.
-//   Chỉ khi phim vào chế độ toàn màn hình trên màn lớn (nút Toàn màn hình của phim, hoặc cửa sổ trình duyệt toàn màn hình) mới đổi sang bản
+//   Chỉ khi phim vào chế độ toàn màn hình trên màn lớn (nút Toàn màn hình của phim, màn ≥ 1280px) mới đổi sang bản
 //   1080p (19 MB), giữ nguyên vị trí đang phát (blueprint B3.5); bản 1080p tải lỗi thì quay về 720p, phim không dừng.
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Loader, Mark, Wordmark } from "./brand";
@@ -38,9 +38,9 @@ const vignette = () => {
 // Một thẻ video dùng chung: tải từ lúc hiện lời chào, màn phim gắn chính thẻ này vào nên phần đã tải không mất.
 let shared: HTMLVideoElement | null = null;
 const SRC_720 = "/intro/synchro-intro-720.mp4", SRC_1080 = "/intro/synchro-intro.mp4";
-/** Phim đang chiếm cả màn hình: chế độ toàn màn hình của trang (nút Toàn màn hình của phim), hoặc cửa sổ trình duyệt đang toàn màn hình
- *  (F11, nút xanh của macOS: khung trang bằng cả màn hình; màn phim luôn phủ kín khung trang). */
-const fullScreen = () => !!document.fullscreenElement || (innerWidth >= screen.width && innerHeight >= screen.height);
+/** Phim đang ở chế độ toàn màn hình của trang (nút Toàn màn hình của phim). Không đoán F11 theo kích thước khung trang: Chrome ẩn,
+ *  ứng dụng cài trên máy tính bảng… có khung trang bằng màn hình mà không phải người xem chọn toàn màn hình, sẽ tải 19 MB không cần. */
+const fullScreen = () => !!document.fullscreenElement;
 /** Toàn màn hình trên màn lớn (không tiết kiệm dữ liệu): đổi sang bản 1080p, giữ vị trí đang phát và trạng thái phát / dừng. */
 function hiRes(v: HTMLVideoElement) {
   const conn = (navigator as Navigator & { connection?: { saveData?: boolean } }).connection;
@@ -145,8 +145,6 @@ export function IntroFilm({ uid, onCovered, onReveal, onDone }: { uid: string; o
     v.preload = "auto";
     const fs = () => { setFull(!!document.fullscreenElement); hiRes(v); };
     document.addEventListener("fullscreenchange", fs);
-    addEventListener("resize", fs);
-    hiRes(v);
     v.muted = false; v.volume = 0;
     let raf = 0;
     const tick = () => {
@@ -164,7 +162,7 @@ export function IntroFilm({ uid, onCovered, onReveal, onDone }: { uid: string; o
     v.addEventListener("ended", ended); v.addEventListener("error", failed);
     const vis = () => { if (leaving.current) return; if (document.hidden) v.pause(); else if (!pausedRef.current && phaseRef.current === "play") v.play().catch(() => {}); };
     document.addEventListener("visibilitychange", vis);
-    return () => { document.removeEventListener("fullscreenchange", fs); removeEventListener("resize", fs); cancelAnimationFrame(raf); v.removeEventListener("ended", ended); v.removeEventListener("error", failed); document.removeEventListener("visibilitychange", vis); v.pause(); v.remove(); shared = null; };
+    return () => { document.removeEventListener("fullscreenchange", fs); cancelAnimationFrame(raf); v.removeEventListener("ended", ended); v.removeEventListener("error", failed); document.removeEventListener("visibilitychange", vis); v.pause(); v.remove(); shared = null; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const phaseRef = useRef(phase); phaseRef.current = phase;

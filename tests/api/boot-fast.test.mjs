@@ -72,7 +72,8 @@ try {
   console.log("4. Phim giới thiệu");
   const film = src("app/introfilm.tsx");
   ok(/requestFullscreen\(\)/.test(film) && /className=\{`intro-btn fs/.test(film), "có nút Toàn màn hình (requestFullscreen)");
-  ok(/document\.fullscreenElement \|\| \(innerWidth >= screen\.width && innerHeight >= screen\.height\)/.test(film), "cửa sổ trình duyệt toàn màn hình (F11) cũng tính là toàn màn hình");
+  ok(/const fullScreen = \(\) => !!document\.fullscreenElement;/.test(film) && /document\.addEventListener\("fullscreenchange", fs\)/.test(film), "chỉ đổi 1080p khi trang vào toàn màn hình (không đoán theo kích thước khung: Chrome ẩn, PWA)");
+  ok(/!!document\.fullscreenEnabled && screen\.width >= 1280/.test(film), "nút Toàn màn hình chỉ trên màn ≥ 1280px (điện thoại không thêm nút)");
   ok(/const failed = \(\) => \{ if \(v\.currentSrc\.endsWith\(SRC_1080\)\) swapSrc\(v, SRC_720\); else leave\(\); \}/.test(film), "1080p tải lỗi: quay về 720p, không kết thúc phim");
   ok(/if \(document\.fullscreenElement\) \{ document\.exitFullscreen\(\)/.test(film), "rời phim khi đang toàn màn hình: thoát toàn màn hình trước khi logo bay về");
   ok(/\.intro-btn\.fs\{/.test(src("app/globals.css")), "nút Toàn màn hình có kiểu riêng (cạnh nút tiếng)");

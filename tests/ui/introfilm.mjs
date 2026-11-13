@@ -117,6 +117,17 @@ try {
   ok(/Claude, ChatGPT, Gemini, Grok và DeepSeek/.test(cap), "phụ đề tiếng Việt theo cảnh", cap);
   ok(await ev(`getComputedStyle(document.querySelector(".intro-btn.skip")).opacity === "1"`), "nút Bỏ qua đã hiện");
   await shot("3-playing");
+  // B3.5: nút Toàn màn hình (màn ≥ 1280px) không đè nút tiếng; vào toàn màn hình thì đổi sang bản 1080p, giữ chỗ đang phát.
+  const fsb = await ev(`(() => { const a = document.querySelector(".intro-btn.fs")?.getBoundingClientRect(), b = document.querySelector(".intro-btn.snd")?.getBoundingClientRect(); return { can: document.fullscreenEnabled && screen.width >= 1280, has: !!a, apart: !a || !b || a.right <= b.left || a.left >= b.right || a.bottom <= b.top || a.top >= b.bottom }; })()`);
+  ok(fsb.has === fsb.can && fsb.apart, "màn lớn có nút Toàn màn hình, không đè nút tiếng", JSON.stringify(fsb));
+  if (fsb.has) {
+    const t0 = await ev(`document.querySelector(".intro-v").currentTime`);
+    await click(`document.querySelector(".intro-btn.fs")`, "fullscreen");
+    await sleep(1200);
+    const fs1 = await ev(`(() => { const v = document.querySelector(".intro-v"); return { full: !!document.fullscreenElement, src: v.currentSrc.split("/").pop(), t: v.currentTime }; })()`);
+    ok(!fs1.full || (fs1.src === "synchro-intro.mp4" && fs1.t >= t0), "toàn màn hình: đổi sang bản 1080p, phát tiếp từ chỗ cũ", JSON.stringify({ ...fs1, t0 }));
+    if (fs1.full) { await click(`document.querySelector(".intro-btn.fs")`, "exit fullscreen"); await until(`!document.fullscreenElement`, 3000, "exit fullscreen").catch(() => {}); await sleep(200); }
+  }
   await click(`document.querySelector(".intro-btn.skip")`, "skip");
   await sleep(150);
   const out = await ev(`(() => ({ phase: document.querySelector(".intro").dataset.phase, mk: !!document.querySelector(".intro-fly .fly-mk svg"), wd: !!document.querySelector(".intro-fly .fly-wd svg"), host: getComputedStyle(document.querySelector(".intro-host")).opacity }))()`);
@@ -171,6 +182,7 @@ try {
   await until(`document.querySelector(".intro")?.dataset.phase === "ask"`, 8000, "ask");
   ok(await ev(`!document.querySelector(".intro-iris") && !!document.querySelector(".intro-ask img") && document.querySelector(".intro-v").paused`), "giảm chuyển động: không nở vòng tròn, không tự phát, hỏi Xem phim / Vào Synchro");
   ok(await ev(`document.querySelector(".intro-v").currentSrc.endsWith("synchro-intro-720.mp4")`), "màn hẹp dùng bản 720p", await ev(`document.querySelector(".intro-v").currentSrc`));
+  ok(await ev(`!document.querySelector(".intro-btn.fs")`), "điện thoại: không có nút Toàn màn hình cạnh phụ đề");
   await shot("7-reduced-ask");
   await click(`document.querySelector(".intro-btn.pri")`, "watch");
   await until(`document.querySelector(".intro")?.dataset.phase === "play"`, 20000, "reduced play");
