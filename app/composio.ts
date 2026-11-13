@@ -64,6 +64,58 @@ export function execPlan(input: unknown): { writes: string[] } | null {
 /** Lời gọi MULTI_EXECUTE chỉ gồm thao tác đọc (GMAIL_FETCH_EMAILS, GITHUB_LIST_…): theo quy tắc "công cụ đọc chạy luôn". Không chắc thì không. */
 export const execRead = (input: unknown) => execPlan(input)?.writes.length === 0;
 
+// ---- cache lược đồ công cụ Composio ----
+// Một lần "đọc đơn giản" qua Composio tốn 5 bước / ~25 giây vì model phải COMPOSIO_SEARCH_TOOLS rồi COMPOSIO_GET_TOOL_SCHEMAS trước khi chạy.
+// Hai công cụ meta này chỉ đọc danh mục công cụ, trả cùng kết quả cho cùng tham số trong ngày, nên cache theo (người dùng, toolkit, công cụ, tham số) 24 giờ:
+// lần đọc y hệt sau đó lấy ngay từ cache thay vì đi vòng tới máy chủ Composio, bỏ được các bước chậm. Bỏ cache khi connector của người dùng đổi (liên kết lại,
+// đổi quyền, làm mới công cụ). Cache nằm trong bộ nhớ tiến trình (không bí mật nào: chỉ là lược đồ công cụ công khai), tự mất khi deploy.
+export const SCHEMA_TTL = 24 * 3600_000;
+const SCHEMA_MAX = 2000;
+const SCHEMA_READS = new Set(["COMPOSIO_SEARCH_TOOLS", "COMPOSIO_GET_TOOL_SCHEMAS"]);
+/** Công cụ meta chỉ đọc danh mục / lược đồ công cụ (được phép cache). */
+export const isSchemaRead = (tool: string) => SCHEMA_READS.has(tool);
+const stable = (v: unknown): unknown => Array.isArray(v) ? v.map(stable) : v && typeof v === "object" ? Object.fromEntries(Object.keys(v as Record<string, unknown>).sort().map((k) => [k, stable((v as Record<string, unknown>)[k])])) : v;
+const stableJson = (v: unknown) => { try { return JSON.stringify(stable(v)); } catch { return ""; } };
+/** Các toolkit mà một lời gọi đọc lược đồ đụng tới (từ trường toolkit/app, hoặc tiền tố của tool_slug): dùng trong khóa cache. */
+export function cacheToolkits(input: unknown): string[] {
+  const o = obj(input);
+  const out = new Set<string>();
+  const add = (v: unknown) => { if (typeof v === "string" && v) { const s = v.toLowerCase().replace(/[^a-z0-9_-]/g, "").slice(0, 60); if (s) out.add(s); } };
+  for (const k of ["toolkit", "toolkit_slug", "app"]) add(o[k]);
+  for (const k of ["toolkits", "apps"]) { const a = o[k]; if (Array.isArray(a)) for (const x of a) add(typeof x === "string" ? x : obj(x).slug); }
+  for (const k of ["tool_slugs", "tools"]) { const a = o[k]; if (Array.isArray(a)) for (const x of a) { const s = typeof x === "string" ? x : typeof obj(x).tool_slug === "string" ? String(obj(x).tool_slug) : ""; if (s) add(slugParts(s).kit); } }
+  return [...out].sort();
+}
+const USEP = "\u0000";
+/** Khóa cache lược đồ theo (người dùng, toolkit, công cụ, tham số). null: không cache lời gọi này (công cụ khác, hoặc không rõ người dùng). */
+export function schemaCacheKey(user: string, tool: string, input: unknown): string | null {
+  if (!user || !isSchemaRead(tool)) return null;
+  return [user, tool, cacheToolkits(input).join(","), stableJson(input)].join(USEP);
+}
+const schemaStore = new Map<string, { at: number; content: string }>();
+/** Kết quả đã cache còn trong 24 giờ, hoặc null. */
+export function schemaCacheGet(user: string, tool: string, input: unknown, now = Date.now()): string | null {
+  const k = schemaCacheKey(user, tool, input);
+  if (!k) return null;
+  const e = schemaStore.get(k);
+  if (!e) return null;
+  if (now - e.at >= SCHEMA_TTL) { schemaStore.delete(k); return null; }
+  return e.content;
+}
+/** Lưu kết quả đọc lược đồ (chỉ khi không lỗi — nơi gọi tự kiểm tra). */
+export function schemaCachePut(user: string, tool: string, input: unknown, content: string, now = Date.now()): void {
+  const k = schemaCacheKey(user, tool, input);
+  if (!k) return;
+  if (schemaStore.size >= SCHEMA_MAX && !schemaStore.has(k)) { const first = schemaStore.keys().next().value; if (first !== undefined) schemaStore.delete(first); }
+  schemaStore.set(k, { at: now, content });
+}
+/** Connector của người dùng thay đổi (liên kết lại, đổi quyền, làm mới công cụ, gỡ): bỏ mọi lược đồ đã cache của người đó. */
+export function invalidateSchemaCache(user: string): void {
+  if (!user) return;
+  const pre = user + USEP;
+  for (const k of [...schemaStore.keys()]) if (k.startsWith(pre)) schemaStore.delete(k);
+}
+
 // ---- nhãn và thẻ duyệt bằng lời thường ----
 // Tham số chính hiện ngay sau tên thao tác ("Tạo tài liệu 'Synchro test'"): tên, tiêu đề, người nhận…
 const MAIN_KEYS = ["title", "name", "subject", "summary", "file_name", "filename", "channel", "to", "recipient_email", "query", "q", "text", "message", "body", "content", "description", "url", "path"];

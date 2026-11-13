@@ -2332,6 +2332,11 @@ html body :is(.menu,.model-menu,.usermenu,.model-sub).fl-flat{background:var(--c
 .cn-card{border:.5px solid var(--border);border-radius:var(--r-card);background:var(--card);transition:box-shadow .2s,border-color .2s}
 .cn-card.open{border-color:var(--border-strong);box-shadow:0 4px 18px rgba(0,0,0,.06)}
 .cn-card .api-err.in{margin:0 14px 12px}
+/* Thẻ connector lỗi kết nối: dòng kiểm tra lại + mốc lần tốt gần nhất, tự xuống hàng khi thẻ hẹp. */
+.cn-card .api-err{flex-wrap:wrap}.cn-card .api-err>span:first-of-type{flex:1 1 180px;min-width:0}
+.api-err-recheck{display:inline-flex;align-items:center;gap:10px;margin-left:auto;flex:none}
+.api-err-recheck .cn-lastok{color:var(--muted);white-space:nowrap}
+.api-err-recheck .cn-recheck{padding:3px 10px;font-size:12px;white-space:nowrap}
 .cpo-err{flex-wrap:wrap}.cpo-err>span{flex:1 1 220px;min-width:0}.cpo-err .btn{flex:none;margin-left:auto}
 /* Thẻ hẹp (điện thoại): nút hành động rộng (Thêm khóa Composio, Kết nối…) xuống hàng riêng thay vì ép tên và trạng thái còn vài chữ bị cắt cụt. */
 .cn-card-h{display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px;padding:10px 12px 10px 10px}
@@ -4189,6 +4194,9 @@ body{text-wrap-style:pretty}
 .cn-pop .btn{height:30px;font-size:12.5px}
 .cn-warnline{display:flex;gap:6px;flex-wrap:wrap;align-items:baseline;font-size:12px;line-height:1.45;color:var(--text-3);margin:0 14px 12px;word-break:break-word}
 .cn-warnline svg{flex:none;align-self:center}
+/* Dòng "lần kiểm tra trước hỏng" của connector vẫn chạy: nút Kiểm tra lại + mốc lần tốt gần nhất đẩy về cuối, canh giữa theo chiều dọc. */
+.cn-warnline>span:not(.api-err-recheck){flex:1 1 180px;min-width:0}
+.cn-warnline .api-err-recheck{align-self:center}
 .cn-modes{margin:4px 0 12px;flex-wrap:wrap}
 .cn-tool-n .cn-tag{margin-left:6px}
 .ag-ask-about{margin:0;font-size:12.5px;line-height:1.5;color:var(--text-2);overflow-wrap:anywhere}

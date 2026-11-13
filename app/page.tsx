@@ -95,7 +95,8 @@ import type { CzTab } from "./pluginsui";
 import { ConnLogo } from "./connlogo";
 import type { ComposioInfo, Conn } from "./connectorsui";
 // Dữ liệu connector cho menu + ở ô chat: Composio (connector chính) và connector người dùng tự thêm.
-type CxData = { connectors: Conn[]; composio?: ComposioInfo };
+// err: lần tải danh sách hỏng (mạng, máy chủ lỗi) — khác với "chưa có connector nào"; menu hiện nút Thử lại thay vì báo trống.
+type CxData = { connectors: Conn[]; composio?: ComposioInfo; err?: boolean };
 import { wantsIntro } from "./introflag";
 import { rowHeight } from "./rowsize";
 import { startWarmPing, warmChoice } from "./warmping";
@@ -479,7 +480,8 @@ function Composer(p: {
     cachedJson<{ skills?: { name: string; enabled: boolean }[] }>("/api/skills").then((j) => j.skills ?? []),
     cachedJson<{ plugins?: { slug: string; name: string; enabled: boolean; mine: { enabled: boolean }; catalogId: string | null }[] }>("/api/plugins?view=lite").then((j) => j.plugins ?? []),
   ]).then(([s, l]) => { setSkq(""); setSkl([...l.filter((x) => x.enabled && x.mine?.enabled !== false).map((x) => ({ id: `lib-${x.slug}`, label: x.name, lib: true, cat: !!x.catalogId?.startsWith("cd:") })), ...s.filter((x) => x.enabled).map((x) => ({ id: x.name, label: x.name }))]); });
-  const loadCx = () => fetch("/api/connectors").then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status))))).then((j) => setCx(j)).catch(() => setCx({ connectors: [] }));
+  // Danh sách hỏng (mạng, máy chủ lỗi): báo "Không tải được · Thử lại" thay vì để như "chưa có connector nào".
+  const loadCx = () => fetch("/api/connectors").then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status))))).then((j) => setCx(j)).catch(() => setCx({ connectors: [], err: true }));
   const openSub = (k: NonNullable<typeof sub>) => { setSub(sub === k ? null : k); if (k === "skills") void loadSkl(); if (k === "conn" || k === "access") void loadCx(); };
   // Composio của bạn đã liên kết và đang chạy (có trong lượt chat): thêm vào các thao tác chung như quyền dùng công cụ.
   const cxMain = cx?.composio?.state === "linked" && cx.composio.connector?.status === "ok" ? cx.composio.connector : null;
@@ -679,7 +681,7 @@ function Composer(p: {
               </>)}
               {sub === "conn" && (<>
                 <div className="cm-list">
-                  {cx === null ? <div className="cm-empty"><span className="art-spin sm" /></div> : <>
+                  {cx === null ? <div className="cm-empty"><span className="art-spin sm" /></div> : cx.err ? <div className="cm-empty cm-err"><span>Không tải được</span><span className="cm-dot">·</span><button className="cn-link" onClick={() => { setCx(null); void loadCx(); }}>Thử lại</button></div> : <>
                     {cx.composio && (() => {
                       const k = cx.composio, c = k.connector, live = k.state === "linked" && c?.status === "ok", on = live && !!c?.enabled;
                       const note = k.state === "unlinked" ? "Chưa liên kết" : k.state === "blocked" ? "Không được phép" : live ? "" : "Cần liên kết lại";

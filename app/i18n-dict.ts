@@ -31,6 +31,7 @@ export const VI2EN: Record<string, string> = {
   "Ngôn ngữ trình duyệt dùng để nghe bạn nói": "The language your browser listens for",
   "Kết quả này đã quá cũ nên không còn lưu.": "This result is too old and is no longer stored.",
   "Không tải được Bộ não.": "Couldn't load the Brain.",
+  "Không tải được": "Couldn't load",
   "Xem tất cả": "Show all",
   "(bản trên thiết bị này)": "(copy from this device)",
   "Đoạn chat đang tải từ máy chủ, hãy thử lại sau giây lát": "This chat is loading from the server. Try again in a moment.",
