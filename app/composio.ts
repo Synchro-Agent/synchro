@@ -6,7 +6,7 @@
 // Token / khóa nằm mã hóa trong hàng connector của đúng tài khoản đó (app/connectors.ts), không bao giờ ra trình duyệt hay sandbox chạy code.
 import type { McpTool } from "./mcp";
 import { isConnectUrl } from "./cxlink";
-import { actionWords, appName, metaWords, slugIsRead, slugParts, type CxCard } from "./cxactions";
+import { actionWords, appName, metaWords, slugIsRead, slugParts, type CxCard, type CxWrite } from "./cxactions";
 export { appName };
 
 export const COMPOSIO = "composio";
@@ -40,8 +40,10 @@ export const askOnlyTool = (name: string) => ALWAYS_ASK.has(name) || name === PR
 export function annotate<T extends McpTool>(tools: T[]): T[] {
   return tools.map((t) => (META_READ.has(t.name) && t.annotations?.readOnlyHint === undefined ? { ...t, annotations: { ...t.annotations, readOnlyHint: true, destructiveHint: false } } : t));
 }
-type Item = { tool_slug: string; arguments?: unknown; account?: unknown; connected_account_id?: unknown };
+type Item = { tool_slug: string; arguments?: unknown; account?: unknown; connected_account_id?: unknown; toolkit?: unknown; toolkit_slug?: unknown; app?: unknown };
 const obj = (v: unknown): Record<string, unknown> => (v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : {});
+/** Tên ứng dụng do lời gọi khai báo (toolkit / toolkit_slug / app), nếu có: giúp tách đúng ứng dụng có tên nhiều từ. */
+const tkOf = (x: Item): string | undefined => { const t = x.toolkit ?? x.toolkit_slug ?? x.app; return typeof t === "string" && t ? t : undefined; };
 /** Các thao tác trong một lời gọi MULTI_EXECUTE; null khi tham số không đúng dạng (khi đó coi như ghi, phải hỏi). */
 function items(input: unknown): Item[] | null {
   const list = obj(input).tools;
@@ -56,7 +58,7 @@ export function execPlan(input: unknown): { writes: string[] } | null {
   const list = items(input);
   if (!list) return null;
   const writes = new Set<string>();
-  for (const x of list) if (!slugIsRead(x.tool_slug, x.arguments)) writes.add(slugParts(x.tool_slug).kit);
+  for (const x of list) if (!slugIsRead(x.tool_slug, x.arguments, tkOf(x))) writes.add(slugParts(x.tool_slug, tkOf(x)).kit);
   return { writes: [...writes] };
 }
 /** Lời gọi MULTI_EXECUTE chỉ gồm thao tác đọc (GMAIL_FETCH_EMAILS, GITHUB_LIST_…): theo quy tắc "công cụ đọc chạy luôn". Không chắc thì không. */
@@ -85,12 +87,17 @@ export function cxCard(tool: string, input: unknown): CxCard | null {
   if (tool === EXEC_TOOL) {
     const list = items(input);
     if (!list) return null;
-    // Thẻ nói về thao tác ghi đầu tiên (thao tác cần duyệt); toàn đọc thì thao tác đầu.
-    const first = list.find((x) => !slugIsRead(x.tool_slug, x.arguments)) ?? list[0];
-    const { kit, rest } = slugParts(first.tool_slug);
+    // Mọi thao tác ghi trong lời gọi (cần duyệt). Thẻ nói về thao tác ghi đầu tiên; toàn đọc thì thao tác đầu.
+    const writeItems = list.filter((x) => !slugIsRead(x.tool_slug, x.arguments, tkOf(x)));
+    const first = writeItems[0] ?? list[0];
+    const { kit, rest } = slugParts(first.tool_slug, tkOf(first));
     const args = obj(first.arguments);
     const plan = execPlan(input);
-    return { app: kit, name: appName(kit), act: actionWords(rest) || first.tool_slug, main: mainOf(args), account: accountOf(obj(first), args, inp), params: paramsOf(args), ...(list.length > 1 ? { more: list.length - 1 } : {}), apps: plan?.writes ?? [] };
+    // Nhiều thao tác ghi: liệt kê từng dòng (ứng dụng · thao tác · tham số chính · tài khoản); "+N" còn lại là thao tác đọc.
+    const line = (x: Item): CxWrite => { const p = slugParts(x.tool_slug, tkOf(x)); const a = obj(x.arguments); return { name: appName(p.kit), act: actionWords(p.rest) || x.tool_slug, main: mainOf(a), account: accountOf(obj(x), a, inp) }; };
+    const writes = writeItems.length > 1 ? writeItems.map(line) : undefined;
+    const more = writes ? list.length - writeItems.length : list.length - 1;
+    return { app: kit, name: appName(kit), act: actionWords(rest) || first.tool_slug, main: mainOf(args), account: accountOf(obj(first), args, inp), params: paramsOf(args), ...(more > 0 ? { more } : {}), apps: plan?.writes ?? [], ...(writes ? { writes } : {}) };
   }
   if (tool === PROXY_TOOL) {
     const kit = String(inp.toolkit ?? inp.toolkit_slug ?? inp.app ?? "").toLowerCase().replace(/[^a-z0-9_-]/g, "").slice(0, 60);
