@@ -28,6 +28,9 @@ const cspOverride = (extra = "") => CSP_ENFORCE
 
 const nextConfig: NextConfig = {
   devIndicators: false,
+  // ESLint chạy riêng bằng npm run lint (eslint.config.mjs, bước riêng trong CI): next build không tự lint, để thêm gói ESLint không làm
+  // bản build trên máy chủ đổi hành vi hay hỏng vì một cảnh báo trợ năng.
+  eslint: { ignoreDuringBuilds: true },
   // npm run dev:mock dùng thư mục build riêng để chạy song song với npm run dev.
   distDir: process.env.NEXT_DIST_DIR || ".next",
   // Dữ liệu lúc chạy (skill đã cài, tệp người dùng, Python cục bộ…) không phải mã nguồn: không cho bước dò tệp của bản build quét vào.
