@@ -27,11 +27,30 @@ export const GET = timed(async (req: Request, ctx: { params: Promise<{ id: strin
       let closed = false, ended = false, unwatch = () => {};
       const end = () => { if (ended) return; ended = closed = true; clearInterval(ping); unwatch(); try { ctl.close(); } catch {} };
       const send = (s: string) => { if (!closed) try { ctl.enqueue(enc.encode(s)); } catch { end(); } };
-      const ev = (e: RunEvent) => send(`id: ${e.seq}\nevent: step\ndata: ${JSON.stringify(e)}\n\n`);
-      const dl = (d: Delta) => send(`event: delta\ndata: ${JSON.stringify(d)}\n\n`);
-      const done = (r: PublicRun) => { send(`event: done\ndata: ${JSON.stringify({ status: r.status, http: r.http, result: r.result })}\n\n`); end(); };
+      // Trình duyệt nhận chậm (ctl.desiredSize âm): gom các delta chữ của cùng một bước lại rồi gửi một khung, thay vì dồn nhiều khung
+      // nhỏ vào hàng đợi của luồng. Phải xả trước mọi sự kiện khác (step/done/clock) để giữ đúng thứ tự chữ rồi mới tới bước.
+      let pend: Delta[] = [];
+      const flushDeltas = () => {
+        if (!pend.length) return;
+        const merged: Delta[] = [];
+        for (const d of pend) {
+          const last = merged[merged.length - 1];
+          if (d.t !== undefined && !d.reset && last && last.t !== undefined && !last.reset && last.s === d.s) last.t += d.t;
+          else merged.push({ ...d });
+        }
+        pend = [];
+        for (const d of merged) send(`event: delta\ndata: ${JSON.stringify(d)}\n\n`);
+      };
+      const ev = (e: RunEvent) => { flushDeltas(); send(`id: ${e.seq}\nevent: step\ndata: ${JSON.stringify(e)}\n\n`); };
+      const dl = (d: Delta) => {
+        if (ctl.desiredSize !== null && ctl.desiredSize < 0) { pend.push(d); return; }
+        flushDeltas();
+        send(`event: delta\ndata: ${JSON.stringify(d)}\n\n`);
+      };
+      const done = (r: PublicRun) => { flushDeltas(); send(`event: done\ndata: ${JSON.stringify({ status: r.status, http: r.http, result: r.result })}\n\n`); end(); };
       // Giờ máy chủ lúc mở luồng và mỗi 15 giây (thay cho dòng ping trống): đồng hồ trong khung chat theo giờ máy chủ (app/clock.ts).
-      const clock = () => send(`event: clock\ndata: {"now":${Date.now()}}\n\n`);
+      // Cũng là dịp xả các delta đã gom khi trình duyệt vừa nhận chậm rồi theo kịp (không để chữ kẹt lại quá lâu).
+      const clock = () => { flushDeltas(); send(`event: clock\ndata: {"now":${Date.now()}}\n\n`); };
       const ping = setInterval(clock, 15_000);
       // Đăng ký trước rồi mới đọc lại trạng thái, để không lỡ bước nào xảy ra ở giữa.
       unwatch = watch(id, (m) => { if (m.event && m.event.seq > after) ev(m.event); if (m.delta) dl(m.delta); if (m.done) done(m.done); });
