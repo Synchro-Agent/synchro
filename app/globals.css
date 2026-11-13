@@ -4103,6 +4103,9 @@ html[data-tw="wide"]{--thread-w:1040px}
 .intro-btn.skip{position:absolute;top:max(18px,env(safe-area-inset-top));right:max(18px,env(safe-area-inset-right));padding:0 10px 0 15px;opacity:0;pointer-events:none}
 .intro-btn.skip.on{opacity:1;pointer-events:auto}
 .intro-btn.snd{position:absolute;right:max(18px,env(safe-area-inset-right));bottom:max(22px,env(safe-area-inset-bottom));width:34px;padding:0;justify-content:center}
+/* Toàn màn hình: cạnh nút tiếng (34px + 8px); lúc trình duyệt chặn tiếng, nút tiếng nhỏ không hiện (Bật tiếng ở giữa) thì nằm ở góc. */
+.intro-btn.fs{position:absolute;right:calc(max(18px,env(safe-area-inset-right)) + 42px);bottom:max(22px,env(safe-area-inset-bottom));width:34px;padding:0;justify-content:center}
+.intro-btn.fs.solo{right:max(18px,env(safe-area-inset-right))}
 .intro-btn.sound-need{position:absolute;left:50%;bottom:max(28px,env(safe-area-inset-bottom));transform:translateX(-50%);height:38px;padding:0 18px;color:#111210;background:#EEECE5;box-shadow:0 6px 20px rgba(0,0,0,.35)}
 .intro-btn.sound-need:hover{background:#fff;color:#111210}
 .intro-bar{position:absolute;left:0;right:0;bottom:0;height:2px;background:rgba(238,236,229,.08)}

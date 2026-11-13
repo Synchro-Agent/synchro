@@ -12,7 +12,8 @@
 // - Phụ đề tiếng Việt cho các dòng chữ tiếng Anh trong phim (giao diện tiếng Việt), nằm trong dải đen dưới phim nếu có chỗ.
 // - Trình duyệt chặn tự phát có tiếng: phát không tiếng, hiện nút Bật tiếng. Giảm chuyển động: không tự phát, không nở / tách, chỉ mờ dần.
 // - Luôn mở bằng bản 720p (4 MB); lúc hiện lời chào chỉ tải phần đầu tệp (preload="metadata", preloadIntro), phim gắn vào thì mới tải hết.
-//   Chỉ khi phim vào chế độ toàn màn hình trên màn lớn mới đổi sang bản 1080p (19 MB), giữ nguyên vị trí đang phát (blueprint B3.5).
+//   Chỉ khi phim vào chế độ toàn màn hình trên màn lớn (nút Toàn màn hình của phim, hoặc cửa sổ trình duyệt toàn màn hình) mới đổi sang bản
+//   1080p (19 MB), giữ nguyên vị trí đang phát (blueprint B3.5); bản 1080p tải lỗi thì quay về 720p, phim không dừng.
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Loader, Mark, Wordmark } from "./brand";
 import { assemble, boxOf, center, fly as flyTo, markTarget, onScreen, openHole, reducedMotion, settleApp, type Box } from "./handoff";
@@ -37,13 +38,20 @@ const vignette = () => {
 // Một thẻ video dùng chung: tải từ lúc hiện lời chào, màn phim gắn chính thẻ này vào nên phần đã tải không mất.
 let shared: HTMLVideoElement | null = null;
 const SRC_720 = "/intro/synchro-intro-720.mp4", SRC_1080 = "/intro/synchro-intro.mp4";
+/** Phim đang chiếm cả màn hình: chế độ toàn màn hình của trang (nút Toàn màn hình của phim), hoặc cửa sổ trình duyệt đang toàn màn hình
+ *  (F11, nút xanh của macOS: khung trang bằng cả màn hình; màn phim luôn phủ kín khung trang). */
+const fullScreen = () => !!document.fullscreenElement || (innerWidth >= screen.width && innerHeight >= screen.height);
 /** Toàn màn hình trên màn lớn (không tiết kiệm dữ liệu): đổi sang bản 1080p, giữ vị trí đang phát và trạng thái phát / dừng. */
 function hiRes(v: HTMLVideoElement) {
   const conn = (navigator as Navigator & { connection?: { saveData?: boolean } }).connection;
-  if (!document.fullscreenElement || conn?.saveData || screen.width < 1280 || v.currentSrc.endsWith(SRC_1080)) return;
+  if (!fullScreen() || conn?.saveData || screen.width < 1280 || v.currentSrc.endsWith(SRC_1080)) return;
+  swapSrc(v, SRC_1080);
+}
+/** Đổi tệp phim giữ nguyên vị trí và trạng thái phát / dừng. */
+function swapSrc(v: HTMLVideoElement, src: string) {
   const t = v.currentTime, playing = !v.paused;
   v.preload = "auto";
-  v.src = SRC_1080;
+  v.src = src;
   v.addEventListener("loadedmetadata", () => { try { v.currentTime = t; } catch {} if (playing) v.play().catch(() => {}); }, { once: true });
 }
 export function preloadIntro() {
@@ -115,6 +123,9 @@ export function IntroFilm({ uid, onCovered, onReveal, onDone }: { uid: string; o
   const [fly, setFly] = useState<Fly | null>(null); // logo của khung cuối, bay về chỗ trong app
   const [seedOn, setSeedOn] = useState(!reduced); // logo của lời chào (bản sao) đang làm chấm mở đầu của phim
   const [vig, setVig] = useState(vignette); // vignette của khung đầu phim cho vòng mực và nền sân khấu
+  const [full, setFull] = useState(false); // màn phim đang ở chế độ toàn màn hình của trang (nút Toàn màn hình)
+  // Nút Toàn màn hình chỉ trên màn lớn (≥ 1280px, cùng ngưỡng đổi sang 1080p): điện thoại không thêm nút nào cạnh phụ đề.
+  const canFull = typeof document !== "undefined" && !!document.fullscreenEnabled && screen.width >= 1280;
   const root = useRef<HTMLDivElement>(null), host = useRef<HTMLDivElement>(null), iris = useRef<HTMLDivElement>(null), flyBox = useRef<HTMLDivElement>(null);
   const stage = useRef<HTMLDivElement>(null), seed = useRef<HTMLSpanElement>(null);
   const seedFrom = useRef<{ box: Box; color: string } | null>(null), seedOut = useRef(false), shownAt = useRef(0);
@@ -132,8 +143,10 @@ export function IntroFilm({ uid, onCovered, onReveal, onDone }: { uid: string; o
     host.current?.appendChild(v);
     // Phim sắp phát: tải hết bản 720p (lúc hiện lời chào chỉ tải phần đầu).
     v.preload = "auto";
-    const fs = () => hiRes(v);
+    const fs = () => { setFull(!!document.fullscreenElement); hiRes(v); };
     document.addEventListener("fullscreenchange", fs);
+    addEventListener("resize", fs);
+    hiRes(v);
     v.muted = false; v.volume = 0;
     let raf = 0;
     const tick = () => {
@@ -146,11 +159,12 @@ export function IntroFilm({ uid, onCovered, onReveal, onDone }: { uid: string; o
     };
     raf = requestAnimationFrame(tick);
     const ended = () => leave(true);
-    const failed = () => leave();
+    // Bản 1080p tải lỗi giữa chừng: quay về bản 720p ở đúng chỗ đang phát, không kết thúc phim. Bản 720p lỗi thì mới rời phim.
+    const failed = () => { if (v.currentSrc.endsWith(SRC_1080)) swapSrc(v, SRC_720); else leave(); };
     v.addEventListener("ended", ended); v.addEventListener("error", failed);
     const vis = () => { if (leaving.current) return; if (document.hidden) v.pause(); else if (!pausedRef.current && phaseRef.current === "play") v.play().catch(() => {}); };
     document.addEventListener("visibilitychange", vis);
-    return () => { document.removeEventListener("fullscreenchange", fs); cancelAnimationFrame(raf); v.removeEventListener("ended", ended); v.removeEventListener("error", failed); document.removeEventListener("visibilitychange", vis); v.pause(); v.remove(); shared = null; };
+    return () => { document.removeEventListener("fullscreenchange", fs); removeEventListener("resize", fs); cancelAnimationFrame(raf); v.removeEventListener("ended", ended); v.removeEventListener("error", failed); document.removeEventListener("visibilitychange", vis); v.pause(); v.remove(); shared = null; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const phaseRef = useRef(phase); phaseRef.current = phase;
@@ -257,6 +271,11 @@ export function IntroFilm({ uid, onCovered, onReveal, onDone }: { uid: string; o
     hideSeed(300);
     const v = video.current!;
     if (!v.paused && !v.muted) fade(v, 0, 450).then(() => v.pause()); else v.pause();
+    // Đang toàn màn hình: thoát trước rồi mới đo (logo bay về chỗ trong app ở khung trang thường).
+    if (document.fullscreenElement) { document.exitFullscreen().catch(() => {}).then(() => requestAnimationFrame(() => out(end))); return; }
+    out(end);
+  }
+  function out(end: boolean) {
     const r = host.current?.getBoundingClientRect();
     if (reduced || !shownRef.current || !r?.width) {
       setPhase("out"); cb.current.onReveal();
@@ -315,6 +334,10 @@ export function IntroFilm({ uid, onCovered, onReveal, onDone }: { uid: string; o
     if (v.muted) { v.muted = false; v.volume = 0; fade(v, VOLUME, 300); setMuted(false); setNeedSound(false); }
     else { v.muted = true; setMuted(true); }
   };
+  const toggleFull = () => {
+    if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+    else root.current?.requestFullscreen().catch(() => {});
+  };
   const watch = () => { onCovered(); try { localStorage.setItem(SEEN(uid), String(Date.now())); } catch {} setPhase("wait"); };
 
   return (
@@ -347,6 +370,9 @@ export function IntroFilm({ uid, onCovered, onReveal, onDone }: { uid: string; o
             : phase === "play" && <button type="button" className="intro-btn snd" aria-label={muted ? L("Bật tiếng", "Turn on sound") : L("Tắt tiếng", "Mute")} onClick={sound}>
                 <svg viewBox="0 0 20 20" aria-hidden><path d="M3.5 8h2.6L10 4.8v10.4L6.1 12H3.5z" />{muted ? <path d="M13 8l4 4M17 8l-4 4" /> : <path d="M13.2 7.2a4 4 0 010 5.6M15.4 5a7 7 0 010 10" />}</svg>
               </button>}
+          {phase === "play" && canFull && <button type="button" className={`intro-btn fs ${needSound ? "solo" : ""}`} aria-label={full ? L("Thoát toàn màn hình", "Exit full screen") : L("Toàn màn hình", "Full screen")} onClick={toggleFull}>
+            <svg viewBox="0 0 20 20" aria-hidden>{full ? <path d="M8 3.5V8H3.5M12 3.5V8h4.5M8 16.5V12H3.5M12 16.5V12h4.5" /> : <path d="M3.5 7.5v-4h4M16.5 7.5v-4h-4M3.5 12.5v4h4M16.5 12.5v4h-4" />}</svg>
+          </button>}
           <div className="intro-bar"><div ref={bar} /></div>
         </div>
       )}
