@@ -40,6 +40,11 @@ ok(/insApplied/.test(page) && /tr\("Đã áp dụng hướng dẫn cá nhân"\)/
 ok(D.VI2EN["Đã áp dụng hướng dẫn cá nhân"] === "Personal instructions applied" && D.VI2EN["Đã áp dụng ngữ cảnh dự án"] === "Project context applied", "chip có bản tiếng Anh");
 ok(!("Đã áp dụng hướng dẫn của bạn" in D.VI2EN) && !D.RULES_EN.some(([re]) => String(re).includes("Đã áp dụng hướng dẫn của bạn")), "từ điển bỏ mục của dòng cũ");
 
+console.log("3b. Chip hiện trên câu trả lời truyền theo thời gian thực (mọi câu trả lời thật đều streamed)");
+const insLine = /const insApplied = ([^;]+);/.exec(page)?.[1] ?? "";
+ok(insLine.includes("!cancelled") && insLine.includes("ins.trim()") && !insLine.includes("streamed"), "insApplied: chỉ cần lượt xong, không bị Dừng — KHÔNG xét streamed (nếu xét thì chip không bao giờ hiện)", insLine);
+ok(!/const fresh = !streamed/.test(page), "không còn cờ fresh gắn chip với !streamed", page.slice(page.indexOf("insApplied") - 200, page.indexOf("insApplied")));
+
 console.log("4. Bản chia sẻ và lịch sử gửi model");
 const old = { role: "ai", text: `${body}\n\n_Đã áp dụng hướng dẫn của bạn: “${SECRET}”_`, insApplied: true, pjApplied: true, done: true, time: 1 };
 const snap = S.snapshotOf("Chat", [{ role: "user", text: "Thủ đô của Pháp?", time: 0 }, old]);

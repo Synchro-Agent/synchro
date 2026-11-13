@@ -1612,9 +1612,9 @@ export default function Home() {
     let outs: Msg["outs"] = [], trace: Msg["trace"] = [], cancelled = false, failed = false, said = "", notice: Msg["notice"], webs: Msg["webs"] = [];
     // Chữ đến theo thời gian thực: cập nhật tin nhắn tối đa mỗi khung hình.
     // Vẽ tối đa khoảng 20 lần mỗi giây: mắt không thấy khác, cả trang (thanh bên, ô soạn) không phải dựng lại 60 lần mỗi giây.
-    let streamed = false, pend: string | null = null, raf = 0, lastPaint = 0;
+    let pend: string | null = null, raf = 0, lastPaint = 0;
     const flush = () => { raf = 0; if (pend === null || !mine()) return; const now = performance.now(); if (now - lastPaint < 45) { raf = requestAnimationFrame(flush); return; } lastPaint = now; const t = pend; pend = null; patch(id, (ms) => (ms.length && ms[ms.length - 1].role === "ai" ? [...ms.slice(0, -1), { ...ms[ms.length - 1], text: t, prog: undefined }] : ms)); };
-    const onDelta = (t: string) => { streamed = true; pend = t; if (!raf) raf = requestAnimationFrame(flush); };
+    const onDelta = (t: string) => { pend = t; if (!raf) raf = requestAnimationFrame(flush); };
     // Bước của lượt: lời dẫn (chuyển từ chữ đang viết sang nhật ký), công cụ, kết quả, danh sách việc; tin nhắn thêm đã ghép
     // thì đóng phần trả lời trước, hiện tin người dùng, phần tiếp theo của lượt nằm ở câu trả lời mới bên dưới.
     const onEvent = (ev: RunEv) => {
@@ -1700,11 +1700,11 @@ export default function Home() {
       doneAway(id, true);
       return;
     }
-    // Đã dùng hướng dẫn cá nhân / ngữ cảnh dự án: chỉ đặt cờ để hiện chip trung tính dưới câu trả lời (cùng điều kiện như dòng ghi chú trước đây).
+    // Đã dùng hướng dẫn cá nhân / ngữ cảnh dự án: chỉ đặt cờ để hiện chip trung tính dưới câu trả lời. Mọi câu trả lời thật đều truyền theo thời gian thực
+    // (lượt chạy bền qua waitRun/pollRun), nên KHÔNG xét "streamed" — nếu không chip cá nhân không bao giờ hiện; chỉ cần lượt xong và không bị Dừng.
     // Không bao giờ ghép nội dung hướng dẫn vào chữ câu trả lời: dòng ghi chú kèm 90 ký tự đầu của hướng dẫn từng lộ hướng dẫn cá nhân trong lịch sử, bản chia sẻ, bản xuất.
-    const fresh = !streamed && !cancelled;
-    const pjApplied = fresh && !!pr && !hasLLM && !!(pr.ins?.trim() || pr.mem?.length || getRelevantContext(pr, text).length);
-    const insApplied = fresh && !!ins.trim();
+    const insApplied = !cancelled && !!ins.trim();
+    const pjApplied = !cancelled && !!pr && !hasLLM && !!(pr.ins?.trim() || pr.mem?.length || getRelevantContext(pr, text).length);
     // Câu trả lời đã đầy đủ thì hiện ngay (trước đây câu không truyền theo thời gian thực phải chờ 1,6 giây rồi mới gõ dần từng chữ).
     patch(id, (m) => [...m.slice(0, -1), { ...workOf(m[m.length - 1]), role: "ai", text: reply, done: true, ...(insApplied ? { insApplied } : {}), ...(pjApplied ? { pjApplied } : {}), time: Date.now(), dur: Date.now() - t0, skills: usedSk.length ? usedSk : undefined, libs: libs.length ? libs : undefined, tools: usedTl.length ? usedTl : undefined, outs: outs?.length ? outs : undefined, ...(notice ? { notice } : {}), via: via ?? undefined, viaTask: via ? viaTask : undefined, webs: webs?.length ? webs : undefined, trace: trace?.length ? trace : undefined, stopped: cancelled || undefined }]);
     finishReply(id, reply, pr, history, via);
