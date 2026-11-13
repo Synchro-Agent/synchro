@@ -41,8 +41,10 @@ const BODY_METHODS = new Set(["POST", "PUT", "PATCH"]);
 export function route<P = undefined>(
   opts: RouteOpts,
   handler: (ctx: RouteCtx<P>) => Promise<Response> | Response,
-): (req: Request, nextCtx?: NextCtx<P>) => Promise<Response> {
-  return handle(async (req: Request, nextCtx?: NextCtx<P>) => {
+): (req: Request, nextCtx: NextCtx<P>) => Promise<Response> {
+  // Tham số thứ hai BẮT BUỘC trong kiểu trả về: next build từ chối "| undefined" (phải đúng RouteContext). Next luôn truyền nó;
+  // lời gọi trực tiếp không có nó (kiểm thử) vẫn chạy vì bên trong kiểm nextCtx trước khi đọc.
+  return handle(async (req: Request, nextCtx: NextCtx<P>) => {
     const method = req.method.toUpperCase();
     // 1) Chống CSRF: mọi phương thức ghi phải đến từ chính trang Synchro.
     if (method !== "GET" && method !== "HEAD") sameOrigin(req);
@@ -64,7 +66,7 @@ export function route<P = undefined>(
     // 5) Giới hạn tần suất theo tài khoản.
     const rl = typeof opts.limit === "function" ? opts.limit(user) : opts.limit;
     if (rl) rateLimit(`${rl.key}:${user.id}`, rl.max, rl.windowMs);
-    const params = (nextCtx ? await nextCtx.params : undefined) as P;
+    const params = (nextCtx?.params ? await nextCtx.params : undefined) as P;
     return handler({ req, user, session, params });
   });
 }
