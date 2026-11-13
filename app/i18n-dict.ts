@@ -546,6 +546,25 @@ Object.assign(VI2EN, {
   "(Câu hỏi bằng giọng nói)": "(Spoken question)", "Bảng phiên": "Session rail", "Tệp": "File",
 });
 RULES_EN.push([/^Ngữ cảnh: (.+) token \((\d+)%\)$/, (m) => `Context: ${m[1]} tokens (${m[2]}%)`]);
+// Đợt 4 (tệp tải lên, skill, giọng nói, bwrap): câu có tên tệp / số.
+RULES_EN.push(
+  [/^\[cli\] (.+) \(SYNCHRO_REQUIRE_BWRAP=1 nên chặn khởi động\)$/, (m) => `[cli] ${m[1]} (SYNCHRO_REQUIRE_BWRAP=1, so startup is blocked)`],
+  [/^Thư viện "(.+)" chưa ghim commit cụ thể nên không cài \(không cài theo nhánh HEAD\)\. Chạy lại đồng bộ danh mục để ghim commit, rồi thử lại\.$/, (m) => `The library "${m[1]}" isn't pinned to a specific commit, so it wasn't installed (Synchro never installs from a moving HEAD). Re-run the catalog sync to pin a commit, then try again.`],
+  [/^Ảnh "(.+)" quá lớn hoặc bị hỏng nên không xử lý được \(giới hạn ~40 triệu điểm ảnh\)\.$/, (m) => `The image "${m[1]}" is too large or damaged to process (limit about 40 million pixels).`],
+  [/^Ảnh "(.+)" quá lớn \((.+)×(.+) điểm ảnh\)\. Giới hạn ~40 triệu điểm ảnh — hãy thu nhỏ rồi tải lại\.$/, (m) => `The image "${m[1]}" is too large (${m[2]}×${m[3]} pixels). The limit is about 40 million pixels. Shrink it and upload again.`],
+  [/^Không đọc được ảnh HEIC "(.+)" \(máy chủ chưa hỗ trợ giải mã HEIC\)\. Hãy lưu sang JPEG \/ PNG rồi tải lại\.$/, (m) => `Couldn't read the HEIC image "${m[1]}" (this server can't decode HEIC yet). Save it as JPEG / PNG and upload again.`],
+  [/^Ảnh "(.+)" bị hỏng, không xử lý được\.$/, (m) => `The image "${m[1]}" is damaged and can't be processed.`],
+  [/^Không chuyển được tệp Office cũ "(.+)"\. Hãy lưu lại thành \.docx\/\.xlsx\/\.pptx rồi tải lên\.$/, (m) => `Couldn't convert the old Office file "${m[1]}". Save it as .docx/.xlsx/.pptx and upload it.`],
+  [/^Chưa bật phiên âm giọng nói nên Synchro chưa đọc được tệp âm thanh \/ video "(.+)"\. Hãy kết nối ElevenLabs trong Cài đặt rồi tải lại\.$/, (m) => `Speech transcription isn't set up, so Synchro can't read the audio / video file "${m[1]}" yet. Connect ElevenLabs in Settings and upload it again.`],
+  [/^Tệp âm thanh \/ video "(.+)" lớn hơn (.+)MB nên chưa phiên âm được\. Hãy cắt ngắn rồi tải lên lại\.$/, (m) => `The audio / video file "${m[1]}" is over ${m[2]} MB, so it can't be transcribed. Trim it and upload again.`],
+  [/^Không phiên âm được tệp âm thanh \/ video "(.+)"\. Hãy thử lại\.$/, (m) => `Couldn't transcribe the audio / video file "${m[1]}". Try again.`],
+  [/^Hạn mức giọng AI của bạn hôm nay: còn (.+) \/ (.+) credit( · đặt lại lúc nửa đêm \(giờ UTC\))?$/, (m) => `Your AI voice allowance today: ${m[1]} / ${m[2]} credits left${m[3] ? " · resets at midnight (UTC)" : ""}`],
+  [/^(.+) credit hôm nay$/, (m) => `${m[1]} credits today`],
+);
+Object.assign(VI2EN, {
+  "Dùng Chrome của bạn trong khi đang chạy skill chưa kiểm chứng từ danh mục": "Use your Chrome while an unverified catalog skill is running",
+  "Nhà cung cấp dự phòng": "Backup provider",
+});
 
 // Bộ chọn model và lỗi từ máy chủ khi gọi model (giao diện tiếng Anh).
 Object.assign(VI2EN, {

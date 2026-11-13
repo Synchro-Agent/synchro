@@ -4,7 +4,7 @@ import fs from "node:fs";
 import { loadTs } from "../lib/ts.mjs";
 let pass = 0, fail = 0;
 const ok = (c, n, x = "") => { c ? pass++ : fail++; console.log(c ? "  ✓" : "  ✗", n, c ? "" : String(x).slice(0, 300)); };
-const { skillroute: SR } = await loadTs(["skillroute"]);
+const { skillroute: SR, videokit: VK } = await loadTs(["skillroute", "videokit"]);
 const dir = JSON.parse(fs.readFileSync("catalog/claude-directory.json", "utf8")).plugins;
 const real = dir.flatMap((p) => p.skills.map((name) => ({ skill: { name: `${p.slug}:${name}`, description: `${name.replace(/-/g, " ")}. ${p.summary}`, user_id: "u" }, weight: 0.6 })));
 const top3 = (q) => SR.suggest(q, real).slice(0, 3).map((h) => h.skill.name.split(":").pop());
@@ -48,7 +48,7 @@ ok(hit >= 90, `chọn đúng top-3: ${hit}/100 (cần ≥ 90)`, miss.map(([q, t]
 
 console.log("Yêu cầu đồ họa chuyển động chọn Remotion");
 for (const q of ["làm một motion graphic cho logo", "dựng video đồ họa chuyển động giới thiệu sản phẩm", "tạo intro animation cho kênh"])
-  ok(SR.routeVideoSkill(q) === "remotion", `“${q}” → Remotion`, SR.routeVideoSkill(q));
+  ok(VK.wantsVideo(q) && /remotion/i.test(VK.VIDEO_KIT), `“${q}” → bộ video Remotion`, VK.wantsVideo(q));
 
 console.log(`\n${pass}/${pass + fail} đạt`);
 process.exit(fail ? 1 : 0);
