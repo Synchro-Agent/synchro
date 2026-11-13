@@ -76,7 +76,9 @@ if [ "$RESUME" = 1 ] && bg_healthy 3002 "$(cat "$APP/.next-green/BUILD_ID" 2>/de
 else
 bg_stop green
 rm -rf "$APP/.next-green.tmp"
-rsync -a --exclude /cache "$APP/.next/" "$APP/.next-green.tmp/"
+rsync -a --exclude /cache --exclude /node_modules "$APP/.next/" "$APP/.next-green.tmp/"
+# Thư viện riêng của green (ecosystem.config.cjs chạy next từ .next-green/node_modules).
+ln -sfn "$(bg_mods_current "$APP")" "$APP/.next-green.tmp/node_modules"
 rm -rf "$APP/.next-green"; mv "$APP/.next-green.tmp" "$APP/.next-green"
 chown -R synchro:synchro "$APP/.next-green"
 say "Chép bản $ID sang .next-green, bật synchro-green ở cổng 3002"

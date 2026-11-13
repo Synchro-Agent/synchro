@@ -91,6 +91,8 @@ NEWMOD=""
 if [ "$BG" = 1 ]; then
   # Xanh/lam: node_modules theo băm, $APP/node_modules là liên kết; bản đang chạy không bao giờ mất thư viện của nó.
   bg_adopt_modules "$APP" "$SIDE"
+  # Màu đang sống từ trước khi có thư viện riêng theo màu (chuyển đổi cũ): gắn liên kết tới thư viện nó đang dùng.
+  if [ ! -e "$OLDDIST/node_modules" ] && [ -d "$OLDDIST" ] && [ -n "$(bg_mods_current "$APP")" ]; then ln -s "$(bg_mods_current "$APP")" "$OLDDIST/node_modules"; fi
   MODS="$(bg_mods_dir "$SIDE")/$LOCK/node_modules"
   if [ "$(cat "$MODS/.synchro-lock" 2>/dev/null)" != "$LOCK" ]; then
     chown -R synchro:synchro "$B"
@@ -189,11 +191,12 @@ if [ "$BG" = 1 ]; then
   SHARED=1
   rm -rf "$NEWDIST.old"; [ -d "$NEWDIST" ] && mv "$NEWDIST" "$NEWDIST.old"
   mv "$B/.next" "$NEWDIST"; rm -rf "$NEWDIST.old"
+  # Thư viện riêng của từng màu: Node tìm .next-<màu>/node_modules trước $APP/node_modules, và ecosystem.config.cjs chạy next từ đây.
+  # Bản cũ đang chạy nốt lượt vẫn dùng đúng thư viện của nó dù package-lock đổi; pm2 tự khởi động lại màu nào cũng lấy đúng next của màu đó.
+  ln -sfn "$MODS" "$NEWDIST/node_modules"
   chown -R synchro:synchro "$NEWDIST"
-  # public, db, catalog, scripts, workspace… cùng lúc với bản build mới (deploy từ thư mục incoming); trước khi đổi liên kết thư viện.
+  # public, db, catalog, scripts, workspace… cùng lúc với bản build mới (deploy từ thư mục incoming).
   sync_code
-  # Thư viện: đổi liên kết nếu package-lock đổi. Bản cũ đã nạp gói của nó; thư mục cũ được giữ tới lần deploy sau để trả lại.
-  [ "$PREVMODS" = "$MODS" ] || bg_link_modules "$APP" "$MODS"
   bg_start "$APP" "$NEW" || fail "pm2 không bật được $NEWPM2"
   bg_healthy "$NEWPORT" "$NEWID" || fail "kiểm tra sức khỏe ở cổng $NEWPORT"
   bg_switch_upstream "$NEWPORT" || fail "nginx -t / reload"
@@ -206,9 +209,11 @@ if [ "$BG" = 1 ]; then
   SHARED=""
   echo "Dừng bản cũ $OLDPM2 (chạy nốt lượt đang dở, tối đa 25 giây)…"
   bg_stop "$LIVE" || echo "CẢNH BÁO: không dừng bản cũ $OLDPM2 (nginx vẫn trỏ vào nó?)." >&2
-  bg_pm2 save >/dev/null 2>&1 || true
-  # Giữ: thư viện bản mới, và của bản vừa dừng (trả lại bằng tay được, docs/van-hanh.md).
-  bg_prune_modules "$SIDE" "$MODS" "${PREVMODS:-$MODS}"
+  bg_pm2 save >/dev/null 2>&1 || echo "CẢNH BÁO: pm2 save lỗi: sau khi khởi động lại máy, pm2 có thể bật sai màu." >&2
+  # $APP/node_modules (cho script chạy từ thư mục app: scripts/*.mjs, worker đọc tệp) chỉ đổi khi bản cũ đã thoát.
+  [ "$PREVMODS" = "$MODS" ] || bg_link_modules "$APP" "$MODS"
+  # Giữ: thư viện bản mới, của bản vừa dừng (trả lại bằng tay được, docs/van-hanh.md), và của cả hai màu.
+  bg_prune_modules "$SIDE" "$MODS" "${PREVMODS:-$MODS}" "$(readlink "$APP/.next-blue/node_modules" 2>/dev/null || echo "$MODS")" "$(readlink "$APP/.next-green/node_modules" 2>/dev/null || echo "$MODS")"
   deployed
   echo "build ok: $NEWID ($NEW, cổng $NEWPORT; bản trước $OLDID giữ ở $OLDDIST)"
   exit 0

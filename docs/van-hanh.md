@@ -59,7 +59,7 @@ Production chạy hai màu trong cùng thư mục `/var/www/synchro` (chung `dat
 Mỗi lần deploy, `scripts/server-build.sh` (tự dùng xanh/lam khi `live-color` ghi đúng thư mục app; `BLUEGREEN=1` ép xanh/lam; `BLUEGREEN=0` chỉ dùng được khi app pm2 một tiến trình còn tồn tại, production đã chuyển thì bị từ chối, xem "Bỏ hẳn xanh/lam"):
 
 1. Build ở thư mục tạm (hoặc dùng bản build của CI nếu khớp commit, băm `package-lock.json` và biến `NEXT_PUBLIC_`), node_modules ở `/var/www/.synchro-mods/<băm>/node_modules` (chỉ `npm ci` khi băm đổi).
-2. Đặt bản build vào thư mục của màu nghỉ, đổi liên kết `node_modules` nếu băm đổi (`ln -sfn` + `mv -T`), chép mã mới từ thư mục incoming (nếu deploy từ CI), bật màu nghỉ.
+2. Đặt bản build vào thư mục của màu nghỉ kèm liên kết `.next-<màu>/node_modules` tới thư viện của nó, chép mã mới từ thư mục incoming (nếu deploy từ CI), bật màu nghỉ.
 3. `/api/health` ở cổng mới phải báo đúng mã bản mới và `db: true`. Không đạt: dừng màu mới, trả liên kết node_modules và `public/`, `db/` về như cũ, deploy báo lỗi. nginx chưa từng trỏ sang nên người dùng không thấy gì.
 4. Ghi tệp upstream, `nginx -t` (lỗi thì trả tệp cũ, dừng màu mới), `nginx -s reload`; kiểm tra qua nginx (`curl --resolve synchro.net.nz:443:127.0.0.1 https://synchro.net.nz/api/health`) thấy mã bản mới, không thì trả nginx về cổng cũ.
 5. Ghi `live-color`, `pm2 stop` màu cũ (tắt êm ở trên, tối đa 30 giây), `pm2 save`, dọn node_modules không còn dùng (giữ bản của màu vừa dừng).
@@ -97,7 +97,7 @@ printf 'blue 3000 /var/www/synchro\n' > /var/lib/synchro-ops/live-color
 su - synchro -c "pm2 stop synchro-green && pm2 save"
 ```
 
-Nếu lần deploy vừa rồi đổi `package-lock.json`, trỏ lại liên kết thư viện trước khi bật màu cũ: `ls -lt /var/www/.synchro-mods/`, rồi `ln -sfn /var/www/.synchro-mods/<băm cũ>/node_modules /var/www/synchro/.nm && mv -T /var/www/synchro/.nm /var/www/synchro/node_modules`.
+Mỗi màu dùng thư viện của chính nó (`.next-<màu>/node_modules` → `/var/www/.synchro-mods/<băm>/node_modules`, `ecosystem.config.cjs` chạy `next` từ đó), nên trả về màu cũ không cần đụng liên kết thư viện. `$APP/node_modules` (cho script chạy từ thư mục app) chỉ đổi sau khi bản cũ đã thoát; trả lại bằng tay thì trỏ nó theo màu cũ: `ln -sfn "$(readlink /var/www/synchro/.next-blue/node_modules)" /var/www/synchro/.nm && mv -T /var/www/synchro/.nm /var/www/synchro/node_modules`.
 
 Bỏ hẳn xanh/lam (về một tiến trình): trả site nginx từ bản sao lưu, `nginx -t && nginx -s reload`, `rm /var/lib/synchro-ops/live-color`, `cp -a .next-<màu sống> .next`, `pm2 start npm --name synchro -- start -- -p 3000`, dừng và xóa `synchro-blue`/`synchro-green`, `pm2 save`.
 

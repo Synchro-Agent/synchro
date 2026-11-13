@@ -15,7 +15,8 @@ module.exports = {
   apps: Object.entries(COLORS).map(([color, port]) => ({
     name: `synchro-${color}`,
     cwd: APP,
-    script: path.join(APP, "node_modules/next/dist/bin/next"),
+    // Thư viện riêng của màu (.next-<màu>/node_modules → kho theo băm package-lock): deploy đổi package-lock không đổi next dưới chân màu đang chạy.
+    script: path.join(APP, `.next-${color}`, "node_modules/next/dist/bin/next"),
     args: ["start", "-p", String(port)],
     interpreter: "node",
     exec_mode: "fork",

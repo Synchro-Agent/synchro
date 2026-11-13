@@ -203,6 +203,10 @@ const calls = () => { const s = fs.existsSync(log) ? fs.readFileSync(log, "utf8"
   const bgPart = sb.slice(sb.indexOf("# ---------------- Xanh/lam"));
   ok(bgPart.indexOf("SHARED=1") < bgPart.indexOf('mv "$B/.next" "$NEWDIST"') && bgPart.indexOf("sync_code") < bgPart.indexOf('bg_link_modules "$APP" "$MODS"') && /rollback "thoát giữa chừng/.test(sb) && /chown -R synchro:synchro "\$APP" 2>\/dev\/null \|\|/.test(sb),
     "DEPLOY-3: mọi bước đụng trạng thái dùng chung nằm sau khi có rollback (cleanup khi thoát lỗi); chép mã trước khi đổi liên kết thư viện; chown -R data/ không làm hỏng deploy");
+  const eco = fs.readFileSync(path.join(process.cwd(), "ecosystem.config.cjs"), "utf8");
+  ok(/script: path\.join\(APP, `\.next-\$\{color\}`, "node_modules\/next\/dist\/bin\/next"\)/.test(eco) && bgPart.includes('ln -sfn "$MODS" "$NEWDIST/node_modules"')
+    && bgPart.indexOf('bg_link_modules "$APP" "$MODS"') > bgPart.indexOf('bg_stop "$LIVE"'),
+    "DEPLOY-4: mỗi màu có node_modules riêng (.next-<màu>/node_modules), pm2 chạy next của màu đó; liên kết chung chỉ đổi khi bản cũ đã thoát");
   ok(sb.indexOf('bg_sync_live "$APP"') > sb.indexOf("flock -w 900 9") && /trap cleanup EXIT/.test(sb) && /trap 'exit 129' HUP/.test(sb), "DEPLOY-1: server-build sửa màu sống sau khi giữ khóa, trap khi thoát / mất ssh");
   fs.rmSync(up);
 }
