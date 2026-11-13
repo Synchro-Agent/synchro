@@ -12,6 +12,22 @@ export function parseMeta(s: string | null): SyncMeta {
   return emptyMeta();
 }
 
+/**
+ * Chạy một việc nhưng chỉ chờ tối đa ms. Hết giờ (hoặc việc ném lỗi) thì trả về TIMED_OUT; việc vẫn chạy nốt ở nền, vô hại.
+ * Dùng cho flush lúc đăng xuất: một yêu cầu mạng đứng không được treo cả bước đăng xuất, và phần chưa xong phải đếm được để
+ * không xóa dữ liệu chưa đồng bộ. ms ≤ 0 trả TIMED_OUT ngay.
+ */
+export const TIMED_OUT: unique symbol = Symbol("timed-out");
+export function withDeadline<T>(work: Promise<T>, ms: number): Promise<T | typeof TIMED_OUT> {
+  if (ms <= 0) return Promise.resolve(TIMED_OUT);
+  return new Promise<T | typeof TIMED_OUT>((resolve) => {
+    let done = false;
+    const settle = (v: T | typeof TIMED_OUT) => { if (!done) { done = true; clearTimeout(t); resolve(v); } };
+    const t = setTimeout(() => settle(TIMED_OUT), ms);
+    work.then((v) => settle(v), () => settle(TIMED_OUT));
+  });
+}
+
 /** Dấu nội dung (FNV-1a + độ dài): chỉ để biết bản này đã lên máy chủ chưa, không phải để bảo mật. */
 export function hashOf(s: string) {
   let h = 0x811c9dc5;
