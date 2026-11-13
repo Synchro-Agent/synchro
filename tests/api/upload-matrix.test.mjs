@@ -110,7 +110,7 @@ got = E.decodeText(Buffer.concat([Buffer.from("\uFEFFXin chào bạn, ", "utf8")
 ok(got === "Xin chào bạn, � hẹn gặp lại.", "UTF-8 ngắn có BOM + một byte lạ: BOM bị gỡ, chỉ byte lạ hỏng", got);
 dec(bytes("Ca", 0xc3, 0xa9, " cr", 0xe8, "me ", 0xe0, " la vanille, tr", 0xe8, "s bon"), "CaÃ© crème à la vanille, très bon", "cp1252 có một cặp byte trùng UTF-8 hợp lệ (Ã©) vẫn đọc theo cp1252");
 
-console.log("4c. Mã một byte Latinh khác cp1252 (C-3): chỉ tin jschardet khi có bằng chứng ngôn ngữ");
+console.log("4c. Mã một byte: tin nhãn Latinh của jschardet như bản gốc, nhãn chữ không phải Latinh chỉ khi chữ viết bằng byte cao");
 // Bộ mã hoá một byte dựng từ bảng của TextDecoder (Node không có TextEncoder cho mã cũ).
 const sbEncoder = (enc) => {
   const t = new Map(); const d = new TextDecoder(enc);
@@ -119,13 +119,11 @@ const sbEncoder = (enc) => {
 };
 const cp1252 = sbEncoder("windows-1252"), cp1250 = sbEncoder("windows-1250");
 const round = (encode, s, n) => dec(encode(s), s, n);
-// jschardet đoán Windows-1250 / iso8859-4 / Windows-1253 cho các mẫu Tây Âu ngắn này.
-round(cp1252, "Nom,Prénom,Ville\nDupont,Hélène,Paris\nMartin,Jérôme,Lyon", "cp1252 Pháp (jschardet: Windows-1250): Hélène không thành Hélčne");
-round(cp1252, "Città,Abitanti\nRoma,2800000\nForlì,118000", "cp1252 Ý (jschardet: iso8859-4, viết không gạch): Città / Forlì không thành Cittā / Forlė");
-round(cp1252, "Città,Perché\nCosì,Può\nLunedì,Però", "cp1252 Ý CSV ngắn (iso8859-4): Così / Può / Però");
+// jschardet đoán Windows-1253 / MacCyrillic cho các mẫu Tây Âu ngắn này: không có từ nào viết bằng byte cao liền nhau nên vẫn là cp1252.
+// (Nhãn Latinh sai kiểu "Hélène" → Windows-1250 thì vẫn tin như bản gốc: mọi cách bác nhãn đó đều làm hỏng tiếng Ba Lan / Séc / Baltic / Thổ ngắn mà jschardet đoán đúng.)
 round(cp1252, "Café crème: 3,50€", "cp1252 Pháp (jschardet: Windows-1253): không thành chữ Hy Lạp Cafι crθme");
-round(cp1252, "Le nº 5 coûte 3€", "cp1252 Pháp (Windows-1250): nº / coûte không thành nş / coűte");
-round(cp1252, "Año nuevo, vida nueva. ¿Qué tal?", "cp1252 Tây Ban Nha (Windows-1250): Año / ¿Qué không thành Ańo / żQué");
+round(cp1252, "Hélène a écrit à Jérôme.", "cp1252 Pháp ngắn (jschardet: MacCyrillic)");
+round(cp1252, "Ciò detto, può andare. Può anche restare.", "cp1252 Ý ngắn (jschardet: Windows-1253): không thành Cị / pụ hay chữ Hy Lạp");
 round(cp1252, "Teléfono: 912 345 678. Señora Pérez, calle Mayor.", "cp1252 Tây Ban Nha: Señora");
 // Văn bản Trung Âu thật vẫn đọc đúng theo Windows-1250 / iso-8859-15 vẫn ra œ và €.
 round(cp1250, "Zażółć gęślą jaźń. Łódź, Kraków, Wrocław.", "Windows-1250 Ba Lan: ł / ą / ż (cp1252 ra ³ ¹ ¿ giữa chữ) vẫn tin jschardet");
@@ -157,7 +155,7 @@ ok(E.looksVietnamese1258(cp1258("ERROR Không thể đọc file config.yaml conf
 // Dấu thanh tách rời ghi thẳng sau nguyên âm Latin-1 (a + 0xCC = à): bằng chứng xét theo byte gốc.
 dec(bytes("Xin cha", 0xcc, "o, la", 0xcc, "m ba", 0xcc, "i ngay."), "Xin chào, làm bài ngay.", "1258 dấu thanh tổ hợp sau nguyên âm Latin-1 (chà, là, bà): vẫn là bằng chứng");
 ok(E.looksVietnamese1258(bytes("Pu", 0xf2, " darsi, ci", 0xf2, " ", 0xe8, " vero."), true) === false, "jschardet nói cp1258 cũng không đủ cho tiếng Ý ngắn (chỉ 2 dấu thanh, không có ă đ ơ ư)");
-ok(E.normLabel("ISO8859-7") === "iso-8859-7" && E.normLabel("iso8859-15") === "iso-8859-15" && E.normLabel("CP1250") === "windows-1250" && E.normLabel("MacRoman") === "macintosh", "chuẩn hoá tên bảng mã jschardet (iso8859- → iso-8859-)");
+ok(E.normLabel("ISO8859-7") === "iso-8859-7" && E.normLabel("iso8859-15") === "iso-8859-15" && E.normLabel("CP1250") === "windows-1250" && E.normLabel("CP932") === "shift_jis" && E.normLabel("CP949") === "euc-kr", "chuẩn hoá tên bảng mã jschardet (iso8859- → iso-8859-, CP932 → shift_jis, CP949 → euc-kr)");
 
 console.log("5. Trích thật qua tiến trình đọc tệp (docx/xlsx/csv/pptx/zip), mỗi tệp một DẤU HIỆU");
 // csv
@@ -173,8 +171,8 @@ t = await csvVia(Buffer.from(vnCsv, "utf16le").swap16(), "u16be.csv");
 ok(t.includes("| Trần Thị Bình | Hồ Chí Minh |") && !t.includes("\u0000"), "CSV UTF-16BE không BOM qua tiến trình đọc", JSON.stringify(t));
 t = await csvVia(cp1258(vnCsv), "vn1258.csv");
 ok(t.includes("| Nguyễn Văn An | Hà Nội |") && t.includes("Trần Thị Bình") && t === t.normalize("NFC"), "CSV Windows-1258 qua tiến trình đọc: chữ dựng sẵn (NFC), tìm được \"Nguyễn\"", JSON.stringify(t));
-t = await csvVia(cp1252("Città,Perché\nCosì,Può\nLunedì,Però\n"), "it.csv");
-ok(t.includes("| Città | Perché |") && t.includes("| Così | Può |") && !t.includes("ā"), "CSV cp1252 tiếng Ý qua tiến trình đọc: không thành Cittā / Cosė", JSON.stringify(t));
+t = await csvVia(cp1252("Prodotto,Nota\nCaffè,Ciò detto può andare\nTè,Può anche restare\n"), "it.csv");
+ok(t.includes("| Caffè | Ciò detto può andare |") && t.includes("| Tè | Può anche restare |"), "CSV cp1252 tiếng Ý (jschardet: Windows-1253) qua tiến trình đọc: không thành chữ Hy Lạp", JSON.stringify(t));
 // xlsx
 const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([["Mã", "Tên"], ["DH_XLSX_K", "DH_XLSX_V"]]), "S");
 t = parse("xlsx", XLSX.write(wb, { type: "buffer", bookType: "xlsx" }), "m.xlsx")?.text ?? "";
