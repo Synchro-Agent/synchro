@@ -143,6 +143,11 @@ const ago = (t: number) => {
   const m = Math.max(0, Math.round((Date.now() - t) / 60_000));
   return m < 1 ? "Checked just now" : m < 60 ? `Checked ${m} min ago` : m < 2880 ? `Checked ${Math.round(m / 60)} h ago` : `Checked ${Math.round(m / 1440)} d ago`;
 };
+// Lần kết nối tốt gần nhất (checkedAt chỉ cập nhật khi kiểm tra thành công): hiện trên thẻ connector đang lỗi để biết nó từng chạy khi nào.
+const lastOk = (t: number) => {
+  const m = Math.max(0, Math.round((Date.now() - t) / 60_000));
+  return m < 1 ? "Last connected just now" : m < 60 ? `Last connected ${m} min ago` : m < 2880 ? `Last connected ${Math.round(m / 60)} h ago` : `Last connected ${Math.round(m / 1440)} d ago`;
+};
 
 // Danh sách connector cho thẻ kết nối lại trong chat: nhiều thẻ cùng lúc chỉ hỏi máy chủ một lần.
 let listCache: { at: number; p: Promise<Data | null> } | null = null;
@@ -354,7 +359,9 @@ function ConnectorCard({ c, policy, open, busy, waiting, stale, onDismissScope, 
           <div className="cn-vendor-a"><button className="cn-link" onClick={() => onCreds("token")}>Use a token instead</button><button className="cn-link" onClick={() => onCreds("client")}>Use my OAuth client</button></div>
         </div>
       )}
-      {c.status !== "ok" && c.error && <div className="api-err in" role="alert"><I.Alert size={14} /><span>{c.error}</span></div>}
+      {c.status !== "ok" && c.error && <div className="api-err in" role="alert"><I.Alert size={14} /><span>{c.error}</span>
+        {c.status === "error" && <span className="api-err-recheck">{c.checkedAt ? <span className="cn-lastok">{lastOk(c.checkedAt)}</span> : null}<button className="btn cn-recheck" onClick={onRefresh} disabled={busy}>{busy ? <span className="api-spin" /> : null}Check again</button></span>}
+      </div>}
       {c.status === "ok" && c.needsScope && <div className="cn-pop in"><I.Key size={14} /><span>{c.auth === "token" ? "A tool needs more access than this token allows. Other tools keep working." : "A tool needs more access than this sign-in allows. Other tools keep working."}</span>{c.auth === "token" ? <button className="btn" disabled={busy} onClick={() => onCreds("token")}>Update token</button> : <button className="btn" disabled={busy} onClick={onReauth}>Grant more access</button>}<button className="icon-btn" aria-label="Dismiss" onClick={onDismissScope}><I.X size={13} /></button></div>}
       {c.status === "ok" && c.lastError && <div className="cn-warnline"><I.Alert size={13} /><span>Last check failed. Tools keep working with the list from the last good check. </span><span>{c.lastError}</span></div>}
       {open && !bk.on && c.status === "ok" && (
