@@ -28,7 +28,7 @@ Người dùng mất cả ứng dụng tạo mã lẫn mã dự phòng (xác min
 
 ## Deploy và trả lại bản trước
 
-`scripts/server-build.sh` dựng bản mới ở thư mục riêng, tráo bản, khởi động lại, rồi gọi `/api/health` tối đa khoảng 90 giây.
+`scripts/server-build.sh` dựng bản mới ở thư mục riêng, tráo bản, khởi động lại, rồi gọi `/api/health` tối đa khoảng 90 giây. Đây là cách một tiến trình (staging, production trước khi chuyển); production sau khi chuyển dùng xanh/lam ở mục dưới.
 
 - Không đạt (không đúng mã bản mới, `db` sai, hoặc trang chủ lỗi): tự trả bản trước về, khởi động lại, deploy báo lỗi. Bản lỗi giữ ở `.synchro-failed-<tên>` cạnh thư mục app để xem.
 - Bản trước giữ ở `.synchro-prev-<tên>` tới lần deploy sau. Trả lại bằng tay:
@@ -44,6 +44,66 @@ su - synchro -c "pm2 restart synchro --update-env"
 - Trả bản không hoàn nguyên dữ liệu: SQLite thay đổi theo kiểu thêm bảng / cột, bản cũ vẫn chạy được trên dữ liệu mới. Dữ liệu hỏng thì khôi phục từ bản sao lưu.
 - Chunk của các bản trước giữ ở `.synchro-statics-<tên>` và được chép vào bản mới: tab đang mở vẫn tải được trong ít nhất một ngày sau khi bản đó bị thay.
 - `workspace/setup.sh` chỉ khởi động lại dịch vụ workspace khi `workspace/*.mjs` hoặc tệp dịch vụ đổi. Khi khởi động lại, dịch vụ ngừng nhận lần chạy mới và chờ lần đang chạy xong tối đa 5 phút.
+
+## Deploy xanh/lam (production)
+
+Production chạy hai màu trong cùng thư mục `/var/www/synchro` (chung `data/`, `.cache/`, `.env.production`): **blue** = cổng 3000, thư mục build `.next-blue`, pm2 `synchro-blue`; **green** = cổng 3002, `.next-green`, `synchro-green`. Cổng 3001 là staging, không bao giờ dùng. Chỉ một màu nhận lưu lượng; màu kia dừng, giữ bản build trước để trả lại.
+
+- `ecosystem.config.cjs`: chạy thẳng `node node_modules/next/dist/bin/next start -p <cổng>` (không qua npm), `kill_timeout: 30000`, `treekill: false` (pm2 không giết CLI đang trả lời), `NEXT_MANUAL_SIG_HANDLE=1`, `SYNCHRO_ROLE=secondary`, `SYNCHRO_COLOR`.
+- `/var/lib/synchro-ops/live-color` (root ghi, ai cũng đọc): `<màu> <cổng> <thư mục app>`. `/etc/nginx/snippets/synchro-upstream.conf` (root): một dòng `proxy_pass http://127.0.0.1:<cổng>;`, site nginx `include` tệp này.
+- Vai trò (`app/role.ts`): tiến trình bật lên là secondary, chỉ phục vụ yêu cầu. Nó nhận vai **primary** (litestream, bộ hẹn giờ tác vụ, bộ não, connector, theo dõi PR, cập nhật CLI, dò model, GitHub, dọn dẹp, cài plugin, chạy lại lượt dở dang) khi `live-color` ghi màu của nó **và** tiến trình giữ khóa `data/.primary.pid` đã thoát. Kiểm tra mỗi 3 giây (`SYNCHRO_ROLE_POLL_MS`). Không đặt `SYNCHRO_ROLE` (staging, máy dev) thì là primary ngay như trước.
+- Tắt êm (`app/drain.ts`): SIGTERM → `/api/llm`, `/api/agent`, chạy tác vụ ngay trả 503 kèm `Retry-After: 5` (trình duyệt tự gửi lại, tới bản mới); dừng bộ hẹn giờ; chờ tối đa 25 giây (`SYNCHRO_DRAIN_MS`) cho lượt chat và lượt Code đang chạy; dừng litestream; bỏ khóa primary; thoát. Lượt còn dở sau 25 giây giữ trạng thái "đang chạy" và được bản mới chạy lại khi nhận vai primary. Trình duyệt đang theo dõi lượt qua bản mới (SSE) vẫn nhận bước và kết quả của lượt bản cũ đang chạy nốt (đọc cơ sở dữ liệu chung mỗi 1,5 giây).
+- Nhật ký: `/home/synchro/.pm2/logs/synchro-<màu>-out.log` (trước đây `synchro-out.log`); dòng `[role]` khi nhận vai primary, `[deploy]` khi tắt êm.
+- Ô **Lần khởi động lại web (24 giờ)** đếm lần một tiến trình nhận vai primary: mỗi deploy một lần, bản mới không đạt (chưa từng nhận lưu lượng) không tính.
+
+Mỗi lần deploy, `scripts/server-build.sh` (tự dùng xanh/lam khi `live-color` ghi đúng thư mục app; `BLUEGREEN=0` ép cách cũ, `BLUEGREEN=1` ép xanh/lam):
+
+1. Build ở thư mục tạm (hoặc dùng bản build của CI nếu khớp commit, băm `package-lock.json` và biến `NEXT_PUBLIC_`), node_modules ở `/var/www/.synchro-mods/<băm>/node_modules` (chỉ `npm ci` khi băm đổi).
+2. Đặt bản build vào thư mục của màu nghỉ, đổi liên kết `node_modules` nếu băm đổi (`ln -sfn` + `mv -T`), chép mã mới từ thư mục incoming (nếu deploy từ CI), bật màu nghỉ.
+3. `/api/health` ở cổng mới phải báo đúng mã bản mới và `db: true`. Không đạt: dừng màu mới, trả liên kết node_modules và `public/`, `db/` về như cũ, deploy báo lỗi. nginx chưa từng trỏ sang nên người dùng không thấy gì.
+4. Ghi tệp upstream, `nginx -t` (lỗi thì trả tệp cũ, dừng màu mới), `nginx -s reload`; kiểm tra qua nginx (`curl --resolve synchro.net.nz:443:127.0.0.1 https://synchro.net.nz/api/health`) thấy mã bản mới, không thì trả nginx về cổng cũ.
+5. Ghi `live-color`, `pm2 stop` màu cũ (tắt êm ở trên, tối đa 30 giây), `pm2 save`, dọn node_modules không còn dùng (giữ bản của màu vừa dừng).
+
+Lần sau đổi ngược về màu kia. Watchdog (`scripts/watchdog.sh`) đọc `live-color` để theo dõi và khởi động lại đúng màu (`pm2 restart synchro-<màu>`, không kèm `--update-env`), và vẫn bỏ qua khi đang có khóa deploy.
+
+### Chuyển sang xanh/lam (một lần)
+
+Deploy bản có tệp `ecosystem.config.cjs` bằng cách cũ trước (lần deploy đó vẫn là một tiến trình), rồi chạy bằng root:
+
+```bash
+bash /var/www/synchro/scripts/bluegreen-migrate.sh /var/www/synchro synchro /etc/nginx/sites-enabled/synchro
+```
+
+Script chạy lại an toàn: tạo `snippets/synchro-upstream.conf` trỏ 3000, thay `proxy_pass http://127.0.0.1:3000;` trong site bằng `include snippets/synchro-upstream.conf;` (sao lưu site ở `/etc/nginx/synchro.before-bluegreen.<giờ>`, `nginx -t` lỗi thì trả lại), chuyển node_modules vào kho theo băm, chép `.next` đang chạy sang `.next-green`, bật `synchro-green` ở 3002, kiểm tra sức khỏe, chuyển nginx sang 3002, chờ lượt của bản cũ (tối đa 25 giây), dừng và xóa app pm2 `synchro`, ghi `live-color` = green, `pm2 save`, cập nhật `PM2`/`PORT` trong `/etc/synchro-ops.env`. `.next` cũ được giữ để trả lại; xóa khi đã yên tâm.
+
+Kiểm tra sau khi chuyển:
+
+```bash
+cat /var/lib/synchro-ops/live-color; cat /etc/nginx/snippets/synchro-upstream.conf; cat /var/www/synchro/data/.primary.pid
+su - synchro -c "pm2 ls"   # synchro-green online, không còn synchro
+grep -c ' 502 ' /var/log/nginx/access.log
+```
+
+### Trả lại bản trước bằng tay
+
+Màu nghỉ giữ bản build trước (tới lần deploy sau). Ví dụ đang ở green, trả về blue:
+
+```bash
+cat /var/lib/synchro-ops/live-color                       # green 3002 /var/www/synchro
+su - synchro -c "pm2 startOrRestart /var/www/synchro/ecosystem.config.cjs --only synchro-blue --update-env"
+curl -s http://127.0.0.1:3000/api/health                  # build của bản trước, "db":true
+printf 'proxy_pass http://127.0.0.1:3000;\n' > /etc/nginx/snippets/synchro-upstream.conf && nginx -t && nginx -s reload
+printf 'blue 3000 /var/www/synchro\n' > /var/lib/synchro-ops/live-color
+su - synchro -c "pm2 stop synchro-green && pm2 save"
+```
+
+Nếu lần deploy vừa rồi đổi `package-lock.json`, trỏ lại liên kết thư viện trước khi bật màu cũ: `ls -lt /var/www/.synchro-mods/`, rồi `ln -sfn /var/www/.synchro-mods/<băm cũ>/node_modules /var/www/synchro/.nm && mv -T /var/www/synchro/.nm /var/www/synchro/node_modules`.
+
+Bỏ hẳn xanh/lam (về một tiến trình): trả site nginx từ bản sao lưu, `nginx -t && nginx -s reload`, `rm /var/lib/synchro-ops/live-color`, `cp -a .next-<màu sống> .next`, `pm2 start npm --name synchro -- start -- -p 3000`, dừng và xóa `synchro-blue`/`synchro-green`, `pm2 save`.
+
+### Deploy từ CI
+
+`.github/workflows/deploy.yml` rsync mã vào `/var/www/synchro-incoming/` (không vào thẳng thư mục app), kèm `.synchro-artifact/` (bản build `.next-ci` của bước kiểm tra, `meta` ghi commit, băm package-lock, băm biến `NEXT_PUBLIC_`, băm tệp nén) và `.synchro-source-sha`, rồi chạy `SYNCHRO_INCOMING=/var/www/synchro-incoming bash /var/www/synchro-incoming/scripts/server-build.sh /var/www/synchro synchro pip`. `public`, `db`, `catalog`, `scripts`, `workspace`… chỉ được chép vào thư mục app ngay trước khi bật bản mới. Deploy cách lần đạt trước (`/var/lib/synchro-ops/last-deploy-synchro`) dưới 15 phút thì chờ; lần đẩy mới trong lúc chờ thay lần đang chờ, nên các lần đẩy liền nhau gộp thành một deploy. Deploy từ máy Mac (rsync thẳng vào thư mục app + `/root/deploy-<sha>.sh`) vẫn chạy như trước; khi rsync nhớ loại trừ `'.next-*'` và `node_modules` (nay là liên kết).
 
 ## Sao lưu
 
