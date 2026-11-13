@@ -12,14 +12,15 @@ import { tr, type Lang } from "./i18n";
 import { createPortal } from "react-dom";
 import { Boundary } from "./ui";
 
-export function Confirm({ title, text, ok, onCancel, onOk, children }: { title: string; text: string; ok: string; onCancel: () => void; onOk: () => void; children?: React.ReactNode }) {
+// busy: đang chạy việc không thể bỏ giữa chừng (đẩy dữ liệu lên máy chủ trước khi xóa) — khóa nút Hủy và việc bấm ra nền để không đóng hộp giữa lúc chờ.
+export function Confirm({ title, text, ok, onCancel, onOk, children, busy }: { title: string; text: string; ok: string; onCancel: () => void; onOk: () => void; children?: React.ReactNode; busy?: boolean }) {
   return (
-    <div className="overlay cf-top" onMouseDown={(e) => e.target === e.currentTarget && onCancel()}>
+    <div className="overlay cf-top" onMouseDown={(e) => { if (e.target === e.currentTarget && !busy) onCancel(); }}>
       <div className="modal sm" style={{ width: 420, maxWidth: "calc(100vw - 32px)" }}>
         <h2 style={{ fontSize: 15, margin: "0 0 6px" }}>{title}</h2>
         <p style={{ margin: "0 0 20px", fontSize: 14 }}>{text}</p>
         {children}
-        <div className="modal-foot"><button className="btn" onClick={onCancel}>Hủy</button><button className="btn danger" onClick={onOk}>{ok}</button></div>
+        <div className="modal-foot"><button className="btn" disabled={busy} onClick={onCancel}>Hủy</button><button className="btn danger" onClick={onOk}>{ok}</button></div>
       </div>
     </div>
   );
@@ -34,18 +35,24 @@ export function LogoutConfirm({ localOnly, flush, onCancel, onOk }: { localOnly:
   const [clear, setClear] = useState(true);
   const [busy, setBusy] = useState(false);
   const [left, setLeft] = useState(0);
+  // Hộp đã bị hủy/đóng/gỡ trong lúc chờ flush: việc đẩy dữ liệu vẫn chạy nốt, nhưng KHÔNG được đăng xuất/xóa sau khi nó xong.
+  const dead = useRef(false);
+  useEffect(() => () => { dead.current = true; }, []);
+  // Trong lúc bận thì nút Hủy và nền đã khóa (Confirm busy); chỉ chặn thêm trường hợp bị đóng từ ngoài.
+  const cancel = () => { if (busy) return; dead.current = true; onCancel(); };
   const go = async () => {
     if (busy) return;
     if (!clear || left > 0) { onOk(clear); return; }
     setBusy(true);
     const n = await flush().catch(() => 1);
+    if (dead.current) return; // bị hủy/đóng giữa chừng: không xóa, không đăng xuất
     setBusy(false);
     if (n > 0) { setLeft(n); return; }
     onOk(true);
   };
   const note: React.CSSProperties = { margin: "-8px 0 14px 26px", fontSize: 13, lineHeight: "19px" };
   return (
-    <Confirm title="Đăng xuất?" text="Bạn có chắc chắn muốn đăng xuất không? Dữ liệu của bạn vẫn được giữ cho lần đăng nhập sau." ok={busy ? "Đang lưu lên máy chủ…" : clear && left > 0 ? "Vẫn xóa và đăng xuất" : "Đăng xuất"} onCancel={onCancel} onOk={() => void go()}>
+    <Confirm title="Đăng xuất?" text="Bạn có chắc chắn muốn đăng xuất không? Dữ liệu của bạn vẫn được giữ cho lần đăng nhập sau." ok={busy ? "Đang lưu lên máy chủ…" : clear && left > 0 ? "Vẫn xóa và đăng xuất" : "Đăng xuất"} busy={busy} onCancel={cancel} onOk={() => void go()}>
       <label style={{ display: "flex", gap: 8, alignItems: "flex-start", margin: "0 0 14px", fontSize: 14 }}>
         <input type="checkbox" style={{ marginTop: 3, flex: "none" }} checked={clear} disabled={busy} onChange={(e) => { setClear(e.target.checked); setLeft(0); }} />
         <span>Xóa dữ liệu trên thiết bị này</span>
