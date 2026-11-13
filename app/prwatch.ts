@@ -3,7 +3,7 @@
 //   sửa, chạy lại kiểm thử, commit, push lên đúng nhánh, rồi trả lời trên PR. Lượt chạy nền hiện trong phiên như một lượt bình thường.
 // - Tự lưu trữ: PR được gộp hay đóng thì lưu trữ phiên; PR đã gộp thì xóa nhánh trên GitHub và dọn thư mục phiên nếu không còn gì chưa đẩy.
 import { getUser, type UserRow } from "./authstore";
-import { getLink, gh, gitAuthEnv } from "./github";
+import { getLink, gh, gitAuth } from "./github";
 import { appendNode, getPrefs, getSession, openPrs, patchPr, patchSession, updateNode, type PrRow } from "./codestore";
 import { pickAgentModel, runAgentTurn, sessionMeta } from "./agentturn";
 import { AUTO } from "./router";
@@ -121,9 +121,9 @@ function historyOf(data: Record<string, unknown> | null) {
 type Step = { k: "text"; text: string } | { k: "think"; text: string } | { k: "tool"; id: string; name: string; input: Record<string, unknown>; done?: boolean; ok?: boolean; summary?: string; output?: string; diff?: unknown };
 async function fixPr(user: UserRow, token: string, pr: PrRow, info: Pull, tasks: string[], label: string, ci: boolean) {
   const d = sdir(pr.sid), branch = info.head.ref;
-  const auth = gitAuthEnv(token);
+  const auth = gitAuth(token);
   // Workspace của phiên về đúng nhánh của PR, lấy commit mới nhất (người khác có thể đã đẩy thêm).
-  const prep = await exec(user.id, d, { cmd: 'git fetch -q origin "$BR" 2>&1 && git checkout -q "$BR" 2>&1 && git pull -q --ff-only origin "$BR" 2>&1', env: { ...auth, BR: branch }, timeout: 180 });
+  const prep = await exec(user.id, d, { cmd: `${auth.prelude}git fetch -q origin "$BR" 2>&1 && git checkout -q "$BR" 2>&1 && git pull -q --ff-only origin "$BR" 2>&1${auth.epilogue}`, env: { ...auth.env, BR: branch }, stdin: auth.stdin, timeout: 180 });
   if (prep.code) throw new Error(`không chuẩn bị được nhánh ${branch}: ${(prep.out + prep.err).trim().slice(-200)}`);
   const sess = getSession(user.id, pr.sid);
   const style = isStyle((sess?.data as { style?: unknown } | null)?.style) ? STYLE_SYS[(sess!.data as { style: "default" | "explain" | "learn" }).style] : "";
@@ -166,7 +166,7 @@ Bạn đang ở nhánh ${branch} của pull request ${info.html_url}. Hãy:
   const ahead = Number((await exec(user.id, d, { cmd: "git rev-list --count @{u}..HEAD 2>/dev/null || echo 0", timeout: 20 })).out.trim()) || 0;
   let pushed = false;
   if (ahead > 0) {
-    const r = await exec(user.id, d, { cmd: "git push -q origin HEAD 2>&1", env: auth, timeout: 180 });
+    const r = await exec(user.id, d, { cmd: `${auth.prelude}git push -q origin HEAD 2>&1${auth.epilogue}`, env: auth.env, stdin: auth.stdin, timeout: 180 });
     if (r.code) throw new Error(`push lỗi: ${(r.out + r.err).trim().slice(-200)}`);
     pushed = true;
   }

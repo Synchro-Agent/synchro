@@ -2,7 +2,7 @@
 // Dùng chung cho khung Changes (/api/ws op "git") và công cụ git_push / create_pull_request của agent.
 import { EXCLUDE_SYNCHRO } from "./uploads";
 import { AuthError, type UserRow } from "./authstore";
-import { getLink, gh, GH_GIT, gitAuthEnv, parseRepo, repoOfRemote } from "./github";
+import { getLink, gh, GH_GIT, gitAuth, parseRepo, repoOfRemote } from "./github";
 import { getPrefs, prsOf, trackPr } from "./codestore";
 import { exec } from "./workspace";
 
@@ -97,9 +97,10 @@ export async function gitOp(user: UserRow, d: string, b: Record<string, unknown>
     // Tệp người dùng gửi kèm (.synchro/uploads) không tính là "đã có file": cất tạm ra ngoài khi clone rồi đưa lại, git bỏ qua.
     const empty = await exec(u, d, { cmd: "ls -A | grep -vx '.synchro' | head -1", timeout: 10 });
     if (empty.out.trim()) throw new AuthError("Phiên này đã có file. Hãy tạo phiên mới để clone repo khác.", 409);
+    const a = l ? gitAuth(l.token) : { env: { GIT_TERMINAL_PROMPT: "0" }, stdin: undefined, prelude: "", epilogue: "" };
     const r = await exec(u, d, {
-      cmd: `k=""; if [ -e .synchro ]; then k="../.synchro-giu-$$"; mv .synchro "$k"; fi; git clone --quiet ${branch ? '--branch "$BR" ' : ""}"$GH/$REPO.git" . 2>&1; c=$?; if [ -n "$k" ]; then mv "$k" .synchro; fi; ${EXCLUDE_SYNCHRO}; exit $c`,
-      env: { GH: GH_GIT, REPO: `${owner}/${name}`, BR: branch, ...(l ? gitAuthEnv(l.token) : { GIT_TERMINAL_PROMPT: "0" }) }, timeout: 300,
+      cmd: `${a.prelude}k=""; if [ -e .synchro ]; then k="../.synchro-giu-$$"; mv .synchro "$k"; fi; git clone --quiet ${branch ? '--branch "$BR" ' : ""}"$GH/$REPO.git" . 2>&1; c=$?; if [ -n "$k" ]; then mv "$k" .synchro; fi; ${EXCLUDE_SYNCHRO}${a.epilogue}; exit $c`,
+      env: { GH: GH_GIT, REPO: `${owner}/${name}`, BR: branch, ...a.env }, stdin: a.stdin, timeout: 300,
     });
     if (r.code) throw new AuthError(/not found|could not read Username|Authentication/i.test(r.out + r.err) ? (l ? "Không tìm thấy repo hoặc tài khoản GitHub của bạn không có quyền với repo này." : "Repo riêng tư hoặc không tồn tại. Hãy kết nối GitHub để clone repo riêng tư.") : `Clone thất bại: ${(r.out || r.err).trim().slice(-300)}`, 400);
     await exec(u, d, { cmd: 'git config user.name "$N" && git config user.email "$M"', env: ident(user), timeout: 10 });
@@ -126,7 +127,8 @@ export async function gitOp(user: UserRow, d: string, b: Record<string, unknown>
   }
   if (sub === "pull") {
     const l = tokenOf(user, true)!;
-    const r = await exec(u, d, { cmd: "git pull --ff-only 2>&1", env: gitAuthEnv(l.token), timeout: 180 });
+    const a = gitAuth(l.token);
+    const r = await exec(u, d, { cmd: `${a.prelude}git pull --ff-only 2>&1${a.epilogue}`, env: a.env, stdin: a.stdin, timeout: 180 });
     fail(r, "Pull");
     return { ...(await status(u, d)), output: r.out.slice(-2000) };
   }
@@ -140,7 +142,8 @@ export async function gitOp(user: UserRow, d: string, b: Record<string, unknown>
       base = (await gh<{ default_branch: string }>(l.token, `/repos/${s.repo}`)).default_branch;
       if (s.branch === base) s = await newBranch(u, d, prefs.branchPrefix);
     }
-    const r = await exec(u, d, { cmd: "git push -u origin HEAD 2>&1", env: gitAuthEnv(l.token), timeout: 180 });
+    const a = gitAuth(l.token);
+    const r = await exec(u, d, { cmd: `${a.prelude}git push -u origin HEAD 2>&1${a.epilogue}`, env: a.env, stdin: a.stdin, timeout: 180 });
     fail(r, "Push");
     const pr = base && s.git && s.repo && s.branch !== base ? await ensurePr(user, d, sidOf(b), s.repo, s.branch, base, l.token) : null;
     return { ...(await status(u, d)), output: r.out.slice(-2000), ...(pr ? { pr } : {}) };
@@ -156,7 +159,7 @@ export async function gitOp(user: UserRow, d: string, b: Record<string, unknown>
       s = await newBranch(u, d, getPrefs(u).branchPrefix);
       if (!s.git) throw new AuthError("Không tạo được nhánh mới.", 400);
     }
-    if (s.ahead === null || s.ahead > 0) fail(await exec(u, d, { cmd: "git push -u origin HEAD 2>&1", env: gitAuthEnv(l.token), timeout: 180 }), "Push");
+    if (s.ahead === null || s.ahead > 0) { const a = gitAuth(l.token); fail(await exec(u, d, { cmd: `${a.prelude}git push -u origin HEAD 2>&1${a.epilogue}`, env: a.env, stdin: a.stdin, timeout: 180 }), "Push"); }
     const pr = await ensurePr(user, d, sidOf(b), s.repo!, s.branch, base, l.token, str(b.title, 200), str(b.body, 20_000));
     return { ...(await status(u, d)), pr };
   }

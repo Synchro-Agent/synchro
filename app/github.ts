@@ -115,9 +115,29 @@ export function parseRepo(s: unknown) {
 }
 
 // Biến môi trường cho git trong container: gửi token qua header HTTP, không lưu vào .git/config.
+// Git chạy trong container RIÊNG của từng phiên (dịch vụ workspace), nên token không lộ sang phiên người khác.
 export const gitAuthEnv = (token: string): Record<string, string> => ({
   GIT_TERMINAL_PROMPT: "0",
   GIT_CONFIG_COUNT: "1",
   GIT_CONFIG_KEY_0: `http.${GH_GIT}/.extraheader`,
   GIT_CONFIG_VALUE_0: `AUTHORIZATION: basic ${Buffer.from(`x-access-token:${token}`).toString("base64")}`,
 });
+
+// Hardening (mặc định TẮT — SYNCHRO_GIT_CRED_STDIN=1 để bật): thay vì để token trong môi trường tiến trình git suốt thao tác
+// (agent của chính phiên chạy trong cùng container có thể đọc /proc/<pid>/environ, và token đi trong payload env gửi tới dịch vụ
+// workspace), nạp token vào git credential-cache qua STDIN (printf là builtin của shell nên token không thành argv), rồi git tự
+// lấy từ cache. Để tắt mặc định vì cần `git credential-cache` trong container — chưa kiểm trên VPS đang chạy nên không bật ngầm.
+const gitCredStdin = () => process.env.SYNCHRO_GIT_CRED_STDIN === "1";
+const GH_GIT_HOST = (() => { try { return new URL(GH_GIT).host; } catch { return "github.com"; } })();
+const GH_GIT_PROTO = GH_GIT.startsWith("http://") ? "http" : "https";
+export type GitAuth = { env: Record<string, string>; stdin?: string; prelude: string; epilogue: string };
+/** Cấu hình xác thực git cho một lệnh exec. Mặc định: extraheader qua env (như cũ). Khi bật cờ: credential-cache nạp qua stdin. */
+export function gitAuth(token: string): GitAuth {
+  if (!gitCredStdin()) return { env: gitAuthEnv(token), prelude: "", epilogue: "" };
+  const cacheCfg = "credential.helper=cache --timeout=300";
+  const env = { GIT_TERMINAL_PROMPT: "0", GIT_CONFIG_COUNT: "1", GIT_CONFIG_KEY_0: "credential.helper", GIT_CONFIG_VALUE_0: "cache --timeout=300" };
+  // T đọc từ stdin (không export, không argv); nạp vào cache qua pipe; cuối lệnh đóng cache cho sạch.
+  const prelude = `T="$(cat)"; printf 'protocol=${GH_GIT_PROTO}\\nhost=${GH_GIT_HOST}\\nusername=x-access-token\\npassword=%s\\n\\n' "$T" | git -c '${cacheCfg}' credential approve; unset T; `;
+  const epilogue = "; git credential-cache exit 2>/dev/null || true";
+  return { env, stdin: token, prelude, epilogue };
+}
