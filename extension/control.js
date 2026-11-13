@@ -23,6 +23,18 @@ const GROUP = "Synchro";
 // Trang không gắn chrome.debugger được (trang hệ thống, cửa hàng tiện ích).
 const RESTRICTED = /^(chrome|edge|brave|opera|vivaldi|about|chrome-extension|moz-extension|devtools|view-source|chrome-search|chrome-untrusted):|^https:\/\/(chrome\.google\.com\/webstore|chromewebstore\.google\.com|microsoftedge\.microsoft\.com\/addons)/i;
 const BLANK = /^(about:blank|chrome:\/\/newtab|chrome:\/\/new-tab-page|edge:\/\/newtab|brave:\/\/newtab|chrome-search:\/\/local-ntp)/i;
+// Trang KHÔNG BAO GIỜ điều khiển (dù ở phạm vi "all"): trình quản lý mật khẩu và ngân hàng / thanh toán — nơi nhạy cảm nhất, tránh thao
+// tác nhầm hay rò rỉ. Danh sách best-effort theo host (không thể liệt kê mọi ngân hàng); người dùng vẫn tự thao tác được, chỉ Synchro không.
+const SENSITIVE_HOST = /(^|\.)(1password\.com|lastpass\.com|bitwarden\.com|dashlane\.com|keepersecurity\.com|nordpass\.com|roboform\.com|enpass\.io|protonpass\.com|paypal\.com|coinbase\.com|binance\.com|chase\.com|bankofamerica\.com|wellsfargo\.com|citibank\.com|hsbc\.com|barclays\.co\.uk|vietcombank\.com\.vn|techcombank\.com\.vn|bidv\.com\.vn|vietinbank\.vn)$/i;
+const isLocalHost = (host) => /^(localhost|127\.0\.0\.1|\[?::1\]?|::1)$/i.test(host) || /\.localhost$/i.test(host);
+// Lý do từ chối một tab, hoặc "" nếu được phép: trang nhạy cảm, hay trang không mã hóa (http) không phải localhost.
+function blockedReason(url) {
+  let u; try { u = new URL(url); } catch { return ""; }
+  const host = (u.hostname || "").toLowerCase();
+  if ((u.protocol === "http:") && !isLocalHost(host)) return "http";
+  if (SENSITIVE_HOST.test(host)) return "sensitive";
+  return "";
+}
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 // Tệp đã tải về đọc lại được cho model (browser_downloads op "read").
 const MAX_READ = 15 * 1024 * 1024;
@@ -34,7 +46,8 @@ const withTimeout = (p, ms, msg) => new Promise((ok, no) => { const t = setTimeo
 export function createControl(chrome, o = {}) {
   const notify = (m) => o.notify?.(m);
   const self = () => { try { return o.server?.() ? new URL(o.server()).origin : ""; } catch { return ""; } };
-  let scope = o.scope === "group" ? "group" : "all";
+  // Mặc định an toàn: "group" (chỉ tab Synchro tự mở + tab người dùng chia sẻ). Toàn quyền "all" phải do người dùng chọn rõ.
+  let scope = o.scope === "all" ? "all" : "group";
   const shared = new Set(o.shared ?? []); // tab người dùng chia sẻ (phạm vi "group")
   const mine = new Set(); // tab Synchro tự mở
   const sessions = new Map(); // tabId -> phiên chrome.debugger
@@ -94,6 +107,9 @@ export function createControl(chrome, o = {}) {
     } else if (RESTRICTED.test(tab.url || "") && !/^about:/i.test(tab.url || "")) {
       throw new BrowserError(400, `Tab "${tab.title || tab.url}" là trang hệ thống của trình duyệt (${String(tab.url).split("?")[0]}), Synchro không thao tác được. Mở trang web khác (browser_navigate) hoặc chọn tab khác.`);
     }
+    const bad = blockedReason(tab.url || tab.pendingUrl || "");
+    if (bad === "sensitive") throw new BrowserError(400, `Tab "${tab.title || tab.url}" là trang nhạy cảm (ngân hàng / trình quản lý mật khẩu); Synchro không điều khiển để bảo vệ bạn. Hãy tự thao tác tại đó.`);
+    if (bad === "http") throw new BrowserError(400, `Tab "${tab.title || tab.url}" dùng kết nối không mã hóa (http); Synchro chỉ điều khiển trang https (trừ localhost). Mở phiên bản https của trang.`);
     try { await chrome.debugger.attach({ tabId: tab.id }, "1.3"); }
     catch (e) {
       const m = String(e?.message ?? e);
@@ -136,6 +152,8 @@ export function createControl(chrome, o = {}) {
   }
   async function allowed(tab) {
     if (!tab || isSelf(tab.url || tab.pendingUrl || "")) return false;
+    // Trang nhạy cảm / không mã hóa: không bao giờ điều khiển, kể cả khi người dùng tự chia sẻ tab hay đang ở phạm vi "all".
+    if (blockedReason(tab.url || tab.pendingUrl || "")) return false;
     if (scope === "all" || mine.has(tab.id) || shared.has(tab.id)) return true;
     return inGroup(tab);
   }
@@ -343,7 +361,7 @@ export function createControl(chrome, o = {}) {
   return {
     call, stop, pause, release, report, status, restore,
     scope: () => scope,
-    setScope(v) { scope = v === "group" ? "group" : "all"; report().catch(() => {}); return scope; },
+    setScope(v) { scope = v === "all" ? "all" : "group"; report().catch(() => {}); return scope; },
     async share(tabId, on = true) {
       if (on) shared.add(tabId); else shared.delete(tabId);
       if (on) await group(tabId);

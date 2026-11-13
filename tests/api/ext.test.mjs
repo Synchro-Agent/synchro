@@ -90,7 +90,7 @@ if (!chrome) {
     for (let i = 0; i < 40 && !(await me("GET", "/api/browser/ext")).j?.connected; i++) await sleep(250);
     r = await me("GET", "/api/browser/ext");
     const dev = r.j.devices[0];
-    ok(r.j.connected && r.j.devices.length === 1 && dev.connected && dev.scope === "all" && /Chrome giả lập/.test(dev.name), "trình duyệt đã kết nối, mặc định toàn quyền (mọi tab)", JSON.stringify(r.j));
+    ok(r.j.connected && r.j.devices.length === 1 && dev.connected && dev.scope === "group" && /Chrome giả lập/.test(dev.name), "trình duyệt đã kết nối, mặc định chỉ tab Synchro (group)", JSON.stringify(r.j));
     ok((await raw("/api/browser/ext/pair", { code: code.code })).s === 400, "mã đã dùng không dùng lại được");
     r = await me("GET", "/api/caps");
     ok(r.j.paired === true && r.j.caps.mine === true, "trình duyệt đầu tiên: từ giờ Synchro làm mặc định trên Chrome của bạn", JSON.stringify(r.j));
