@@ -77,7 +77,20 @@ const ACT_ON_APP_RE = new RegExp(`${B}(?:${ACTION_VERB})${E}${NEAR}${B}(?:${CONN
 // Chặt hơn chiều xuôi: tên ứng dụng phải mở đầu câu hoặc đứng sau giới từ chỉ nơi chốn; tới động từ tối đa 20 ký tự, không qua dấu kết câu hay từ
 // nối ("rồi / và / hoặc / với / then / and / or / vs") — để "So sánh Notion và Trello rồi đánh giá nên tạo kế hoạch ở đâu" vẫn là phân tích.
 const APP_FIRST_RE = new RegExp(`(?:^\\s*|${B}(?:trên|trong|ở|tại|vào|in|on|inside|within|at)\\s+)(?:${CONNECTOR_APPS})${E}(?:(?![.?!\\n]|${B}(?:rồi|và|hoặc|với|then|and|or|vs)${E}).){0,20}?${B}(?:${ACTION_VERB})${E}`, "iu");
-const actOnApp = (ins: string) => ACT_ON_APP_RE.test(ins) || APP_FIRST_RE.test(ins);
+// Câu báo sự cố / hỏi cách sửa ("Notion tạo trang mới bị lỗi 403, sửa sao?", "Gmail gửi thư không được"): đó là gỡ lỗi / hỏi đáp, không phải lời nhờ
+// thao tác — dù có tên ứng dụng và động từ thao tác.
+const BUG_REPORT = new RegExp(`${B}(?:lỗi|loi|bị|không được|ko được|không chạy|error|errors|failed|fails?|failing|crash(?:es|ed)?|exception|forbidden|unauthorized|not found|timeout|time out|sửa sao|tại sao|vì sao|why)${E}`, "iu");
+// Lời nhờ VIẾT CODE (động từ viết / tên ngôn ngữ đi với danh từ code): "Viết script Python gửi tin Slack", "Write a Python function to send a Slack
+// message", "viết code Node.js tạo trang Notion qua API". Có tên ứng dụng và động từ thao tác nhưng là việc code, không phải nhờ thao tác thật.
+const CODE_NOUN = "script|scripts|function|functions|hàm|code|api|sdk|chương trình|program|class|module|đoạn mã|mã nguồn|snippet|bot|webhook|cli|lambda";
+const CODE_LANG = "python|node|node\\.js|nodejs|javascript|typescript|js|ts|bash|shell|golang|go|java|php|ruby|rust|kotlin|swift|c#|powershell";
+const CODE_REQ = new RegExp([
+  `${B}(?:viết|viet|write|lập trình|lap trinh|implement|code)${E}${NEAR}${B}(?:${CODE_NOUN})${E}`,
+  `${B}(?:${CODE_LANG})${E}\\s*(?:${CODE_NOUN})${E}`,
+  `${B}(?:${CODE_NOUN})${E}\\s+(?:bằng\\s+|in\\s+)?(?:${CODE_LANG})${E}`,
+].join("|"), "iu");
+// Ứng dụng nói trước động từ chỉ là thao tác khi câu không báo sự cố (chiều xuôi giữ như cũ: "Gửi email cho khách báo lỗi đơn hàng" vẫn là thao tác).
+const actOnApp = (ins: string) => ACT_ON_APP_RE.test(ins) || (APP_FIRST_RE.test(ins) && !BUG_REPORT.test(ins));
 // Câu cần dữ liệu mới trên web → "tra cứu" (lookup): tỷ giá, giá tài sản / món hàng, thời tiết, tin tức, phiên bản mới nhất, hay lời nhờ tìm thẳng trên web.
 // Giữ chặt để không kéo "hôm nay mình rảnh" hay "đánh giá phim" vào đây: "giá" phải đi với tài sản / "hôm nay" / "bao nhiêu" (và loại "đánh giá", "giá trị", "báo giá").
 // Mốc thời gian là từ trọn vẹn (B…E như W()): "now" không khớp trong "know", "current" không khớp trong "currency".
@@ -384,8 +397,11 @@ function scores(ins: string, a: Ask): Map<Task, number> {
   // này (so "Tạo Google Docs báo cáo" chỉ có "viết" = 3 nên vẫn thành act). Guard HOWTO ngay dưới vẫn bỏ act cho câu hỏi cách làm.
   // D1.2: thao tác trên ứng dụng đã nối thắng mọi nhãn chủ đề (code, học ngôn ngữ…): điểm act nâng lên bằng nhãn cao nhất (hòa thì act đứng trước
   // trong ORDER), trừ "tạo sản phẩm" (build đứng trước act). "Gửi tin Slack cho team báo deploy xong" từng thành viết code vì chữ "deploy".
-  const appAct = actOnApp(ins) && Math.max(out.get("analyze") ?? 0, out.get("write") ?? 0) < 5;
+  // Không thắng khi chính câu là lời nhờ viết code hoặc báo sự cố: khi đó act chỉ được 5 như trước, và nhãn code / gỡ lỗi / ngôn ngữ (≥ 3) vẫn bỏ act.
+  const onApp = actOnApp(ins) && Math.max(out.get("analyze") ?? 0, out.get("write") ?? 0) < 5;
+  const appAct = onApp && !CODE_REQ.test(ins) && !BUG_REPORT.test(ins);
   if (appAct) out.set("act", Math.max(5, ...[...out].filter(([t]) => t !== "build").map(([, n]) => n)));
+  else if (onApp) out.set("act", Math.max(out.get("act") ?? 0, 5));
   // Hỏi cách làm: không phải nhờ làm thao tác. Đang nhờ viết code / hỏi ngôn ngữ cũng không — trừ khi act đến từ thao tác trên ứng dụng đã nối ở trên.
   if (out.has("act") && (HOWTO.test(ins) || (!appAct && ((out.get("code") ?? 0) >= 3 || (out.get("language") ?? 0) >= 3)))) out.delete("act");
   // Xin ảnh là việc dùng công cụ dù câu không có chữ "ảnh" ("vẽ con mèo"): model nào được chọn cũng gọi được generate_image.

@@ -534,6 +534,12 @@ console.log("16. Tra cứu web → model hạng vừa trở lên có công cụ;
   for (const t of ["Gửi tin Slack cho team báo deploy xong", "Tạo trang Notion ghi chú API endpoint mới", "Gửi email qua Gmail cho giáo viên tiếng Anh của con"])
     ok(R.taskOf(q(t)) === "act", `W23-13: “${t}” → thao tác`, R.taskOf(q(t)));
   ok(R.taskOf(q("Làm sao gửi tin Slack bằng API trong Python?")) !== "act", "W23-13: hỏi cách làm (có code) vẫn không phải thao tác");
+  // W23-13 (sửa lại): lời nhờ VIẾT CODE có nhắc gửi / tạo trên ứng dụng vẫn là code; báo sự cố bắt đầu bằng tên ứng dụng (R3) vẫn là gỡ lỗi.
+  for (const [t, want] of [["Viết script Python gửi tin nhắn Slack khi build xong", "code"], ["Write a Python function to send a Slack message", "code"],
+    ["viết code Node.js tạo trang Notion qua API", "code"], ["Write a bash script that creates a GitHub issue", "code"], ["Notion tạo trang mới bị lỗi 403, sửa sao?", "debug"]])
+    ok(R.taskOf(q(t)) === want, `W23-13/R3: “${t}” → ${want}`, R.taskOf(q(t)));
+  ok(R.taskOf(q("Gmail gửi thư không được, tại sao?")) !== "act", "R3: “Gmail gửi thư không được, tại sao?” (báo sự cố) không phải thao tác");
+  for (const t of ["Gửi đoạn code này lên Slack cho team", "Gửi email cho khách báo lỗi đơn hàng"]) ok(R.taskOf(q(t)) === "act", `W23-13: “${t}” vẫn là thao tác`, R.taskOf(q(t)));
   // (d) codeOnly: chỉ bắt tên model code (xét phần sau "/"); gói "sub-codex/" bao model chung thì KHÔNG bị tính.
   for (const k of ["sub-grok/grok-build", "sub-grok/grok-4.7-build-fast", "openai/gpt-5-codex", "qwen/qwen3-coder", "codex-mini-latest"]) ok(M.codeOnly(k), `codeOnly(${k}) = true`);
   for (const k of ["sub-codex/gpt-6.1-sol", "sub-codex/gpt-6-luna", "anthropic/claude-opus-5-5", "google/gemini-4-argon", "sub-grok/grok-4.7"]) ok(!M.codeOnly(k), `codeOnly(${k}) = false`);
