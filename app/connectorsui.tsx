@@ -9,6 +9,7 @@ import * as I from "./icons";
 import { useApp } from "./store";
 import { ConnLogo } from "./connlogo";
 import { ArgsEditor, readArgs } from "./argsedit";
+import { CxDetails, cxHead } from "./cxcard";
 export { ConnLogo };
 import type { ApprovalCall, Decision } from "./llm";
 import { BulkBar, BulkButton, BulkCheck, bulkRow, each, useBulk, type Bulk, type BulkAct } from "./bulk";
@@ -18,12 +19,16 @@ import { CONN_CHANGED, loginClaims } from "./connwatch";
 import { SettingsSkeleton } from "./skeleton";
 
 type Perm = "allow" | "chat" | "ask" | "block";
-type Tool = { name: string; title: string; description: string; readOnly: boolean; guessed?: boolean; destructive: boolean; perm: Perm; locked?: "setting" | "admin" };
+// askOnly: chỉ đặt được Hỏi mỗi lần hoặc Chặn (bash / workbench / gọi API của Composio).
+type Tool = { name: string; title: string; description: string; readOnly: boolean; guessed?: boolean; destructive: boolean; perm: Perm; locked?: "setting" | "admin"; askOnly?: boolean };
+/** Composio: quyền thao tác ghi của một ứng dụng (Gmail, Google Docs…). */
+type AppPerm = { app: string; name: string; perm: Perm; logo?: string; icon?: string };
 type Settings = { chat: boolean; projects: boolean; newTools: "auto" | "ask" | "block"; destructive: boolean; maxCalls: number };
 export type Conn = {
   id: string; name: string; url: string; host: string; dir: string | null; logo?: string; color?: string; icon?: string; site?: string; enabled: boolean;
   status: "ok" | "needs_auth" | "forbidden" | "error"; error: string | null; serverName: string | null; auth: "none" | "oauth" | "token"; tools: Tool[]; checkedAt: number | null;
   settings: Settings; adminBlocked: boolean; lastError?: string | null; vendorBlocked?: { why: string; whyVi: string } | null; needsScope?: boolean; toolsTotal?: number | null; tokenHeader?: string; ownClient?: boolean;
+  apps?: AppPerm[];
 };
 type Policy = { custom: boolean; allowed: string[]; destructive: boolean };
 // Composio của bạn: linked (đã liên kết bằng đăng nhập hoặc khóa ck_), unlinked (chờ bấm Liên kết Composio), blocked (quản trị viên không cho tài khoản này).
@@ -208,13 +213,14 @@ export function ReconnectLink({ c, onDone, onManage, say }: { c: Conn; onDone: (
   return <button className="cn-link cm-rec" disabled={busy} onClick={go}>{busy ? <span className="api-spin" /> : f.blocked ? "Mở cửa sổ đăng nhập" : f.pending ? "Đang chờ đăng nhập…" : "Kết nối lại"}</button>;
 }
 
-function PermSelect({ value, onChange, label, mixed, locked }: { value: Perm; onChange: (p: Perm) => void; label: string; mixed?: boolean; locked?: string }) {
+// only: các lựa chọn được phép (công cụ luôn hỏi: Hỏi mỗi lần / Chặn).
+function PermSelect({ value, onChange, label, mixed, locked, only }: { value: Perm; onChange: (p: Perm) => void; label: string; mixed?: boolean; locked?: string; only?: Perm[] }) {
   if (locked) return <span className="cn-locked" title={locked}><I.Lock size={12} />Blocked</span>;
   return (
     <span className={`api-sel cn-perm ${value}`}>
       <select aria-label={label} value={mixed ? "" : value} onChange={(e) => e.target.value && onChange(e.target.value as Perm)}>
         {mixed && <option value="">Custom</option>}
-        {(["allow", "chat", "ask", "block"] as Perm[]).map((p) => <option key={p} value={p}>{PERM_LABEL[p]}</option>)}
+        {(only ?? (["allow", "chat", "ask", "block"] as Perm[])).map((p) => <option key={p} value={p}>{PERM_LABEL[p]}</option>)}
       </select><I.Chevron size={13} />
     </span>
   );
@@ -270,7 +276,22 @@ function ToolGroup({ title, hint, kind, tools, onPerm, onGroup }: { title: strin
             <div className="cn-tool-n"><span data-notr>{t.title}</span>{t.title !== t.name && <span className="mono-s" data-notr>{t.name}</span>}{t.guessed && <span className="cn-tag" title="The server doesn't say whether this tool changes data. Synchro judged it read-only from its name. Set it to Ask every time if you prefer.">Unclassified</span>}</div>
             {t.description && <div className="cn-tool-d" data-notr>{t.description}</div>}
           </div>
-          <PermSelect label={`Permission for ${t.title}`} value={t.perm} onChange={(p) => onPerm(t, p)} locked={t.locked ? LOCK_NOTE[t.locked] : undefined} />
+          <PermSelect label={`Permission for ${t.title}`} value={t.perm} onChange={(p) => onPerm(t, p)} locked={t.locked ? LOCK_NOTE[t.locked] : undefined} only={t.askOnly ? ["ask", "block"] : undefined} />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// Composio: quyền thao tác thay đổi dữ liệu theo từng ứng dụng. Ứng dụng hiện ở đây sau lần đầu Synchro hỏi (hoặc bạn chọn trên thẻ duyệt).
+function AppPerms({ apps, onPerm }: { apps: AppPerm[]; onPerm: (a: AppPerm, p: Perm) => void }) {
+  return (
+    <div className="cn-group">
+      <div className="cn-group-h"><div><b>Changes in each app</b><div className="d">Creating, editing, sending or deleting in an app asks first unless you allow that app here or on the approval card.</div></div></div>
+      {apps.length === 0 ? <div className="cn-tool d">No app permissions yet. Synchro asks before its first change in each app.</div> : apps.map((a) => (
+        <div key={a.app} className="cn-tool">
+          <div className="cn-tool-m"><div className="cn-tool-n"><ConnLogo logo={a.logo} icon={a.icon} name={a.name} size={18} /><span data-notr>{a.name}</span></div></div>
+          <PermSelect label={`Permission for ${a.name}`} value={a.perm} onChange={(p) => onPerm(a, p)} />
         </div>
       ))}
     </div>
@@ -502,7 +523,8 @@ function ComposioSection({ info, onInfo, login }: { info: ComposioInfo; onInfo: 
         <button className="api-adv cpo-perm" aria-expanded={open} onClick={() => setOpen(!open)}><I.ChevronR size={13} />Tool permissions</button>
         {open && <div className="cn-body">
           <ToolGroup title="Read-only tools" hint="Find tools, check connections and run app actions that only read." kind="read" tools={c.tools.filter((t) => t.readOnly)} onPerm={(t, p) => { onInfo({ ...info, connector: { ...c, tools: c.tools.map((y) => (y.name === t.name ? { ...y, perm: p } : y)) } }); void patch({ perms: { [t.name]: p } }); }} onGroup={(k, p) => void patch({ group: { kind: k, perm: p } })} />
-          <ToolGroup title="Tools that can make changes" hint="Run actions in your apps, such as sending an email. Actions that only read run without asking." kind="write" tools={c.tools.filter((t) => !t.readOnly)} onPerm={(t, p) => { onInfo({ ...info, connector: { ...c, tools: c.tools.map((y) => (y.name === t.name ? { ...y, perm: p } : y)) } }); void patch({ perms: { [t.name]: p } }); }} onGroup={(k, p) => void patch({ group: { kind: k, perm: p } })} />
+          <ToolGroup title="Tools that can make changes" hint="Run actions in your apps. Always allow here only covers actions that read; actions that change data follow each app's permission below. Remote commands and API calls always ask." kind="write" tools={c.tools.filter((t) => !t.readOnly)} onPerm={(t, p) => { onInfo({ ...info, connector: { ...c, tools: c.tools.map((y) => (y.name === t.name ? { ...y, perm: p } : y)) } }); void patch({ perms: { [t.name]: p } }); }} onGroup={(k, p) => void patch({ group: { kind: k, perm: p } })} />
+          <AppPerms apps={c.apps ?? []} onPerm={(a, p) => { onInfo({ ...info, connector: { ...c, apps: (c.apps ?? []).map((y) => (y.app === a.app ? { ...y, perm: p } : y)) } }); void patch({ apps: { [a.app]: p } }); }} />
         </div>}
       </>}
     </div>
@@ -636,8 +658,10 @@ export function ApprovalCard({ calls, onDone }: { calls: ApprovalCall[]; onDone:
     if (d !== "deny" && blocked) return;
     if (d !== "deny" && es?.changed && es.value) inputs.current[c.id] = es.value;
     acc.current[c.id] = d;
-    // "Luôn cho phép" áp dụng luôn cho các lượt gọi cùng công cụ ở bước này.
-    if (d === "always" || d === "chat") for (const x of calls) if (x.connector.id === c.connector.id && x.tool.name === c.tool.name) acc.current[x.id] ??= "allow";
+    // "Luôn cho phép" áp dụng luôn cho các lượt gọi cùng công cụ ở bước này. Composio: chỉ lượt gọi ghi trong đúng các ứng dụng vừa cho phép
+    // (cho phép Google Docs không mở luôn Gmail); lời gọi luôn phải hỏi (bash, gọi API) thì từng lần.
+    const scope = (x: ApprovalCall) => (x.cx ? (x.cx.strict ? null : (x.cx.apps ?? []).join(",")) : "");
+    if ((d === "always" || d === "chat") && scope(c) !== null) for (const x of calls) if (x.connector.id === c.connector.id && x.tool.name === c.tool.name && scope(x) === scope(c)) acc.current[x.id] ??= "allow";
     let n = i + 1;
     while (n < calls.length && acc.current[calls[n].id]) n++;
     if (n >= calls.length) onDone(acc.current, inputs.current); else { setI(n); setShow(false); setEdit(null); }
@@ -646,13 +670,13 @@ export function ApprovalCard({ calls, onDone }: { calls: ApprovalCall[]; onDone:
   return (
     <div className="ap-card" role="alertdialog" aria-label="Cho phép dùng công cụ">
       <div className="ap-h">
-        <ConnLogo logo={c.connector.logo} color={c.connector.color} icon={c.connector.icon} site={c.connector.site} name={c.connector.name} size={32} />
+        <ConnLogo logo={c.connector.logo} color={c.connector.color} icon={c.connector.icon} site={c.connector.site} name={c.cx?.name ?? c.connector.name} size={32} />
         <div className="ap-t">
-          <b>{`Cho phép Synchro dùng "${c.tool.title}"?`}</b>
-          <span>{`Công cụ của ${c.connector.name}`}{calls.length > 1 && <span data-notr>{` · ${i + 1}/${calls.length}`}</span>}</span>
+          {c.cx ? <b data-notr>{cxHead(c.cx)}</b> : <b>{`Cho phép Synchro dùng "${c.tool.title}"?`}</b>}
+          <span>{c.cx ? tr("Cho phép Synchro làm việc này qua Composio của bạn?") : `Công cụ của ${c.connector.name}`}{calls.length > 1 && <span data-notr>{` · ${i + 1}/${calls.length}`}</span>}</span>
         </div>
       </div>
-      {c.tool.description && <p className="ap-d" data-notr>{c.tool.description}</p>}
+      {c.cx ? <CxDetails cx={c.cx} /> : c.tool.description && <p className="ap-d" data-notr>{c.tool.description}</p>}
       {c.tool.destructive && <div className="ap-warn"><I.Alert size={14} /><span>Công cụ này có thể tạo, sửa hoặc xóa dữ liệu trong ứng dụng của bạn.</span></div>}
       {edit === null && !empty && <button className="api-adv ap-more" aria-expanded={show} onClick={() => setShow(!show)}><I.ChevronR size={13} />Xem dữ liệu gửi đi</button>}
       {edit === null && show && !empty && <pre className="ap-in" data-notr>{input}</pre>}
@@ -663,8 +687,8 @@ export function ApprovalCard({ calls, onDone }: { calls: ApprovalCall[]; onDone:
           : <button className="btn ap-edit" onClick={() => setEdit(null)}>Hủy sửa</button>)}
         <button className="btn" onClick={() => pick("deny")}>Từ chối</button>
         {/* Nút chính (và tiêu điểm sẵn) là cho phép một lần: Enter không bao giờ cấp quyền vĩnh viễn; "Luôn cho phép" là lựa chọn phụ, phải bấm có chủ đích. */}
-        <button className="btn" disabled={blocked} onClick={() => pick("always")}>Luôn cho phép</button>
-        <button className="btn" disabled={blocked} onClick={() => pick("chat")}>Cho phép trong cuộc trò chuyện này</button>
+        {!c.cx?.strict && <button className="btn" disabled={blocked} onClick={() => pick("always")}>Luôn cho phép</button>}
+        {!c.cx?.strict && <button className="btn" disabled={blocked} onClick={() => pick("chat")}>Cho phép trong cuộc trò chuyện này</button>}
         <button className="btn dark" disabled={blocked} onClick={() => pick("allow")} autoFocus={edit === null}>{es?.changed ? "Cho phép với tham số đã sửa" : "Cho phép một lần"}</button>
       </div>
     </div>

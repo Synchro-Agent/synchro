@@ -5,6 +5,7 @@ import { OPS_RULES_EN, OPS_VI2EN } from "./i18n-ops";
 import { MODELS_RULES_EN, MODELS_VI2EN } from "./i18n-models";
 import { AUTH_VI2EN } from "./i18n-auth";
 import { FX_VI2EN } from "./i18n-features";
+import { CX_RULE_EN, CX_VI2EN } from "./cxactions";
 // Từ điển tiếng Anh: chuỗi gốc tiếng Việt → tiếng Anh. Chiều ngược lại (chuỗi gốc tiếng Anh → tiếng Việt) nằm ở i18n-vi.ts: trình duyệt chỉ tải từ điển của ngôn ngữ đang dùng (i18n.tsx).
 export const VI2EN: Record<string, string> = {
   "Hiện thêm": "Show",
@@ -1815,3 +1816,25 @@ RULES_EN.push(
   [/^Kết nối (.+) qua Composio để Synchro dùng được ứng dụng này\.$/, (m) => `Connect ${m[1]} through Composio so Synchro can use this app.`],
   [/^Kết nối ([A-Za-z0-9][A-Za-z0-9 .+&-]*)$/, (m) => `Connect ${m[1]}`],
 );
+// Quyền ghi theo thao tác thật của Composio: nhãn công cụ "Google Docs · Tạo tài liệu", thẻ duyệt, quyền theo từng ứng dụng.
+for (const [k, v] of Object.entries({
+  ...CX_VI2EN,
+  "thao tác khác trong cùng lời gọi": "more actions in the same call",
+  "Việc này chạy lệnh hoặc gọi API tùy ý nên Synchro luôn hỏi trước mỗi lần.": "This runs a command or an arbitrary API call, so Synchro always asks first, every time.",
+  "Quyền bạn chọn chỉ áp dụng cho thao tác thay đổi dữ liệu trong": "The permission you choose only applies to actions that change data in",
+  "Cho phép Synchro làm việc này qua Composio của bạn?": "Allow Synchro to do this through your Composio?",
+  "Công cụ này chạy lệnh hoặc gọi API tùy ý nên luôn hỏi trước mỗi lần, không đặt được Luôn cho phép.": "This tool runs commands or arbitrary API calls, so it always asks first and can't be set to Always allow.",
+  "Quyền theo ứng dụng chỉ có ở Composio.": "Per-app permissions are only available for Composio.",
+})) if (!Object.prototype.hasOwnProperty.call(VI2EN, k)) VI2EN[k] = v;
+RULES_EN.unshift([/^Đang dùng ([^:·]+) · (.+)$/, (m) => `Using ${m[1]} · ${trCx(m[2])}`]);
+// Không đưa CX_RULE_EN vào RULES_EN chung: phần dự phòng ASCII của nó khớp quá rộng, bộ dịch DOM sẽ viết lại nhầm
+// mọi nút chữ "động từ + ascii". Nhãn thao tác Composio dịch qua trCx (i18n.tsx) ngay tại chỗ hiện nhãn.
+RULES_EN.push([/^Gọi API ([A-Z?]{1,10})$/, (m) => `Call API ${m[1]}`]);
+/** Tên thao tác Composio sang tiếng Anh (từ điển, rồi luật "động từ + danh từ"); không dịch được thì giữ nguyên. */
+function trCx(s: string) {
+  if (Object.prototype.hasOwnProperty.call(VI2EN, s)) return VI2EN[s];
+  const api = /^Gọi API ([A-Z?]{1,10})$/.exec(s);
+  if (api) return `Call API ${api[1]}`;
+  const m = s.match(CX_RULE_EN[0]);
+  return m ? CX_RULE_EN[1](m) : s;
+}

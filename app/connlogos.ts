@@ -8,6 +8,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { brandHost, publicHost } from "./iconproxy";
 import { FILE_LOGOS, logoSrc } from "./vendorlogo";
+import { slugIsRead, slugParts } from "./cxactions";
 
 export const COMPOSIO_LOGO = "composio";
 export type ConnLogoFields = { logo?: string; color?: string; icon?: string; site?: string };
@@ -75,8 +76,10 @@ export function appLogo(slug: string): { logo?: string; icon?: string } {
 /** Ứng dụng mà một lời gọi công cụ Composio nhắm tới: tool_slug đầu tiên (GMAIL_FETCH_EMAILS → gmail) hoặc toolkits[0]. Không rõ: "". */
 export function composioAppOf(input: unknown): string {
   const o = (input && typeof input === "object" ? input : {}) as { tools?: unknown; toolkits?: unknown; tool_slug?: unknown; toolkit?: unknown };
-  const first = Array.isArray(o.tools) ? (o.tools[0] as { tool_slug?: unknown } | undefined)?.tool_slug : o.tool_slug;
-  if (typeof first === "string" && first.includes("_")) return appSlug(first.split("_")[0]);
+  // Thẻ duyệt nói về thao tác ghi đầu tiên (thao tác cần duyệt): logo theo đúng ứng dụng đó.
+  const list = Array.isArray(o.tools) ? (o.tools as { tool_slug?: unknown; arguments?: unknown }[]) : [];
+  const first = list.length ? (list.find((x) => typeof x?.tool_slug === "string" && !slugIsRead(x.tool_slug, x.arguments)) ?? list[0])?.tool_slug : o.tool_slug;
+  if (typeof first === "string" && first.includes("_")) return appSlug(slugParts(first).kit);
   const kit = Array.isArray(o.toolkits) ? o.toolkits[0] : o.toolkit;
   return appSlug(kit);
 }

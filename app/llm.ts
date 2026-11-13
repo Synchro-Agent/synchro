@@ -7,6 +7,7 @@ import type { Project } from "./store";
 import type { ContentBlock } from "./fileproc/types";
 import type { Effort } from "./catalog";
 import type { TraceItem } from "./transpile";
+import type { CxCard } from "./cxactions";
 import { noteServerNow } from "./clock";
 import { PROJECT_INS_HEAD } from "./turnctx";
 
@@ -52,6 +53,8 @@ export type ApprovalCall = {
   tool: { name: string; title: string; description: string; destructive: boolean }; input: unknown;
   // editable: tham số gửi đủ, người dùng sửa được trước khi cho phép; schema: để thẻ kiểm tra ngay khi gõ (máy chủ kiểm tra lại).
   editable?: boolean; schema?: unknown;
+  // cx: lời gọi Composio nói bằng thao tác thật (ứng dụng, tài khoản, thao tác, tham số chính); strict: chỉ cho phép một lần.
+  cx?: CxCard;
 };
 export type Decision = "allow" | "chat" | "always" | "deny";
 /** Câu trả lời của thẻ duyệt: quyết định theo id lời gọi, và tham số người dùng đã sửa (chỉ lời gọi được cho phép). */

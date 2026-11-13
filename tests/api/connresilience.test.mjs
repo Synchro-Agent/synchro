@@ -139,8 +139,9 @@ try {
   {
     const r = await add();
     const by = Object.fromEntries(r.connector.tools.map((t) => [t.name, t]));
-    ok(by.get_doc.perm === "allow" && by.get_doc.readOnly && by.get_doc.guessed, "get_doc không khai báo: cho phép, đánh dấu là đoán theo tên", JSON.stringify(by.get_doc));
-    ok(by.search_docs.perm === "allow" && !by.search_docs.guessed, "khai báo chỉ đọc: cho phép, không phải đoán");
+    // Connector tự thêm: mọi công cụ mặc định Hỏi mỗi lần, readOnlyHint của máy chủ không được tin (chỉ đoán theo tên).
+    ok(by.get_doc.perm === "ask" && by.get_doc.readOnly && by.get_doc.guessed, "get_doc không khai báo: đánh dấu là đoán theo tên, connector tự thêm vẫn hỏi trước", JSON.stringify(by.get_doc));
+    ok(by.search_docs.perm === "ask" && by.search_docs.readOnly && by.search_docs.guessed, "khai báo chỉ đọc ở connector tự thêm: không tin khai báo, đoán theo tên, hỏi trước", JSON.stringify(by.search_docs));
     ok(by.create_page.perm === "ask" && !by.create_page.readOnly, "khai báo ghi: hỏi trước");
     ok(by.get_or_create_user.perm === "ask", "tên có động từ ghi (get_or_create) không bị coi là đọc");
     wipe();
@@ -642,7 +643,7 @@ try {
     const r = await add();
     const id = r.connector.id;
     // Dữ liệu cũ: chưa có dấu đã xét, query đang "allow" do quy tắc cũ tự cấp.
-    AS.db().prepare("UPDATE connectors SET perms = json_set(perms, '$.query', 'allow'), settings = '{}' WHERE id = ?").run(id);
+    AS.db().prepare("UPDATE connectors SET perms = json_set(perms, '$.query', 'allow', '$.get_doc', 'allow'), settings = '{}' WHERE id = ?").run(id);
     ok(row(id).tools.find((t) => t.name === "query").perm === "allow", "trước khi xét lại: allow");
     await C.refreshConnector(uid, id);
     ok(row(id).tools.find((t) => t.name === "query").perm === "ask", "lần lấy danh sách đầu tiên: về Hỏi trước");
@@ -650,6 +651,24 @@ try {
     C.updateConnector(uid, id, { perms: { query: "allow" } }, pol);
     await C.refreshConnector(uid, id);
     ok(row(id).tools.find((t) => t.name === "query").perm === "allow", "người dùng chọn lại Luôn cho phép: giữ, không hạ lần nữa");
+    wipe();
+  }
+
+  console.log("26c. Connector tự thêm: quyền có được chỉ nhờ readOnlyHint thì hỏi lại một lần");
+  {
+    S.tools = [...TOOLS, { name: "wipe_db", description: "Wipe", inputSchema: { type: "object", properties: {} }, annotations: { readOnlyHint: true } }];
+    const r = await add();
+    const id = r.connector.id;
+    ok(row(id).tools.find((t) => t.name === "wipe_db").perm === "ask" && !row(id).tools.find((t) => t.name === "wipe_db").readOnly, "wipe_db khai báo chỉ đọc: không tin, hỏi trước");
+    // Dữ liệu cũ (bản 1): readOnlyHint từng tự cấp "allow".
+    AS.db().prepare("UPDATE connectors SET perms = json_set(perms, '$.wipe_db', 'allow', '$.search_docs', 'allow'), settings = ? WHERE id = ?").run(JSON.stringify({ permsV: 1 }), id);
+    await C.refreshConnector(uid, id);
+    ok(row(id).tools.find((t) => t.name === "wipe_db").perm === "ask", "lần lấy danh sách đầu tiên: wipe_db về Hỏi trước");
+    ok(row(id).tools.find((t) => t.name === "search_docs").perm === "allow", "search_docs (tên cho thấy là đọc) giữ quyền đã có");
+    C.updateConnector(uid, id, { perms: { wipe_db: "allow" } }, pol);
+    await C.refreshConnector(uid, id);
+    ok(row(id).tools.find((t) => t.name === "wipe_db").perm === "allow", "người dùng chọn lại Luôn cho phép: giữ");
+    S.tools = null;
     wipe();
   }
 

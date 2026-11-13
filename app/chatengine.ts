@@ -5,7 +5,7 @@ import { audit, can, canModel, getUser, limit, permsOf, type UserRow } from "./a
 import { clampEffort, connPolicy, effortCap, isEffort, legacyModel, type Effort } from "./catalog";
 import { catalog, mainModels, pickDefault, resolveModel, type Target } from "./providers";
 import { ConnectorSession, connectorsPrompt, listConnectors, RECONNECT_TOOL, type ChatTool, type OfflineConn } from "./connectors";
-import { connectLinks, notConnectLink } from "./composio";
+import { connectLinks, cxCard, cxLabel, notConnectLink } from "./composio";
 import { appLogo, composioAppOf } from "./connlogos";
 import { randomToken } from "./mcpauth";
 import { browserDefault, capsState, skillsOn } from "./caps";
@@ -409,12 +409,19 @@ function callLogo(ct: ChatTool, input: unknown): { logo?: string; color?: string
   if (own.logo || own.icon) return own;
   return { logo: ct.logo, color: ct.color, ...(ct.icon ? { icon: ct.icon } : {}), ...(ct.site ? { site: ct.site } : {}) };
 }
+// Tên công cụ trong chat. Composio theo thao tác thật bên trong, bằng lời thường ("Google Docs · Tạo tài liệu", "Composio · Tìm công cụ"),
+// không phải tên công cụ bọc ngoài ("Composio: Multi Execute Composio Tools"); connector khác: "<connector>: <công cụ>".
+const toolTitle = (ct: ChatTool) => ct.tool.title || ct.tool.annotations?.title || ct.tool.name;
+const cxOf = (ct: ChatTool, input: unknown) => (ct.composio ? cxLabel(ct.tool.name, input) : null);
+const usedName = (ct: ChatTool, input: unknown) => { const l = cxOf(ct, input); return l ? `${l.app} · ${l.act}` : `${ct.cname}: ${toolTitle(ct)}`; };
 const askOf = (x: Exec, c: Call, id: string): Ask => {
   const ct = x.sess!.get(c.name)!;
+  // Composio: thẻ nói ứng dụng (logo), tài khoản nếu biết, thao tác bằng lời thường và tham số chính; strict thì thẻ chỉ có "Cho phép một lần".
+  const cx = ct.composio ? cxCard(ct.tool.name, c.input) : null;
   const a: Ask = {
-    id, kind: "connector", tool: ct.tool.name, key: `conn:${ct.fq}`, title: ct.tool.title || ct.tool.annotations?.title || ct.tool.name, detail: "",
-    conn: (() => { const lg = callLogo(ct, c.input); return { name: ct.cname, ...lg, ...(lg.icon && lg.icon.length >= 1500 ? { icon: undefined } : {}) }; })(),
-    about: (ct.tool.description ?? "").slice(0, 300), destructive: destructiveLike(ct.tool),
+    id, kind: "connector", tool: ct.tool.name, key: `conn:${ct.fq}`, title: cx?.act ?? toolTitle(ct), detail: "",
+    conn: (() => { const lg = callLogo(ct, c.input); return { name: cx?.name ?? ct.cname, ...lg, ...(lg.icon && lg.icon.length >= 1500 ? { icon: undefined } : {}) }; })(),
+    about: (ct.tool.description ?? "").slice(0, 300), destructive: destructiveLike(ct.tool), ...(cx ? { cx } : {}),
   };
   // Sự kiện của lượt giữ tối đa 6000 ký tự: cắt ngang JSON thì thẻ không hiện được và lượt treo tới hết giờ.
   // Tham số hiện đủ (không bị cắt) thì thẻ cho sửa; schema kèm theo khi còn chỗ để thẻ kiểm tra ngay lúc gõ (máy chủ luôn kiểm tra lại).
@@ -482,8 +489,8 @@ async function askConnector(x: Exec, c: Call): Promise<Decision> {
     if (!a.ok) return deny(a.note && a.note !== "Người dùng đã dừng." ? `Người dùng từ chối công cụ này. Lời nhắn của họ: ${a.note}. Làm theo lời nhắn nếu được; đừng tìm cách khác để lách.` : REFUSED);
     // Máy chủ đã kiểm tra tham số khi nhận câu trả lời (editCheck); kiểm tra lại ngay trước khi dùng.
     if (a.input) { if (validateArgs(x.sess!.get(c.name)!.tool.inputSchema ?? {}, a.input).length) return deny("Tham số người dùng sửa không hợp lệ nên công cụ chưa chạy."); applyEdit(x, c, a.input); }
-    if (a.always) { x.sess!.allowAlways(c.name); return "always"; }
-    if (a.chat) { x.sess!.allowChat(c.name); return "chat"; }
+    if (a.always) { x.sess!.allowAlways(c.name, c.input); return "always"; }
+    if (a.chat) { x.sess!.allowChat(c.name, c.input); return "chat"; }
     return "allow";
   } finally { release(); }
 }
@@ -775,8 +782,9 @@ async function runCall(x: Exec, c: Call, d?: Decision): Promise<Run> {
   }
   const ct = x.sess?.get(c.name);
   if (!ct) return runSkillTool(x.list, c.name, c.input, x.scripts, { uid: x.uid, net: x.net, libs: x.libs, heal: x.heal ? (input) => healScript(x.heal!, input) : undefined });
-  const used = { kind: "tool" as const, name: `${ct.cname}: ${ct.tool.title || ct.tool.annotations?.title || ct.tool.name}` };
-  if (x.task && x.sess!.perm(c.name, c.input) === "ask") return { content: queueTool(x.uid, x.task, c, { connector: ct.cname, title: ct.tool.title || ct.tool.annotations?.title || ct.tool.name }), is_error: true, used };
+  const used = { kind: "tool" as const, name: usedName(ct, c.input) };
+  const lbl = cxOf(ct, c.input);
+  if (x.task && x.sess!.perm(c.name, c.input) === "ask") return { content: queueTool(x.uid, x.task, c, lbl ? { connector: lbl.app, title: lbl.act } : { connector: ct.cname, title: toolTitle(ct) }), is_error: true, used };
   if (d === "deny") return { content: x.denied?.get(c.id) ?? REFUSED, is_error: true, used };
   const meta = x.calls?.get(c.id), run = runSignal();
   const stops = [run, meta?.cancel].filter((v): v is AbortSignal => !!v);
@@ -812,6 +820,8 @@ function describe(x: Exec, c: Call) {
   if (c.name === CONN_FIND && x.sess && !x.sess.get(c.name)) return `Đang tìm công cụ connector: ${String(c.input?.query ?? "").slice(0, 120)}`;
   if (x.browse && isBrowserTool(c.name)) return describeBrowser(c.name, c.input ?? {}, browserTargetOf(c.input, x.bctx));
   const ct = x.sess?.get(c.name);
+  const cx = ct && cxOf(ct, c.input);
+  if (cx) return `Đang dùng ${cx.app} · ${cx.act}`;
   return ct ? `Đang dùng ${ct.cname}: ${ct.tool.title || ct.tool.name}` : `Đang dùng công cụ ${c.name}`;
 }
 // Công cụ lấy dữ liệu (connector, chạy code, script của skill): kết quả lớn lưu theo tham chiếu và có trong dấu vết của lượt.
@@ -851,7 +861,7 @@ async function execute(ad: Adapter, m: unknown[], x: Exec, calls: Call[], used: 
     const ct = seqs[i] ? x.sess?.get(c.name) : undefined;
     if (!ct) return;
     const lg = callLogo(ct, c.input);
-    progress("tconn", JSON.stringify({ ref: seqs[i], name: ct.cname, ...lg, ...(lg.icon && lg.icon.length >= 200 ? { icon: undefined } : {}) }));
+    progress("tconn", JSON.stringify({ ref: seqs[i], name: cxOf(ct, c.input)?.app ?? ct.cname, ...lg, ...(lg.icon && lg.icon.length >= 200 ? { icon: undefined } : {}) }));
   });
   let res: Run[];
   try {
@@ -948,9 +958,11 @@ async function loop(ad: Adapter, m: unknown[], x: Exec, used: ToolRun["used"][],
           id, calls: ask.map((c) => {
             const ct = x.sess!.get(c.name)!;
             const input = JSON.stringify(c.input ?? {});
+            const cx = ct.composio ? cxCard(ct.tool.name, c.input) : null;
             return {
               id: c.id, connector: { id: ct.cid, name: ct.cname, ...callLogo(ct, c.input) },
-              tool: { name: ct.tool.name, title: ct.tool.title || ct.tool.annotations?.title || ct.tool.name, description: (ct.tool.description ?? "").slice(0, 400), destructive: destructiveLike(ct.tool) },
+              tool: { name: ct.tool.name, title: cx?.act ?? toolTitle(ct), description: (ct.tool.description ?? "").slice(0, 400), destructive: destructiveLike(ct.tool) },
+              ...(cx ? { cx } : {}),
               input: input.length > 20_000 ? { _: input.slice(0, 20_000) + "…" } : c.input ?? {},
               // Sửa tham số trước khi duyệt: chỉ khi tham số gửi đủ; schema để thẻ kiểm tra ngay (máy chủ kiểm tra lại khi chạy tiếp).
               ...(input.length <= 20_000 ? { editable: true, schema: resolveRefs(ct.tool.inputSchema ?? {}) } : {}),
@@ -1624,8 +1636,8 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
         if (bad.length) { d[call.id] = "deny"; (p.x.denied ??= new Map()).set(call.id, `Tham số người dùng sửa không hợp lệ nên công cụ chưa chạy (${bad.slice(0, 3).join("; ")}). Báo người dùng.`); continue; }
         applyEdit(p.x, call, e as Record<string, unknown>);
       }
-      if (v === "always") p.x.sess!.allowAlways(call.name);
-      if (v === "chat") p.x.sess!.allowChat(call.name);
+      if (v === "always") p.x.sess!.allowAlways(call.name, call.input);
+      if (v === "chat") p.x.sess!.allowChat(call.name, call.input);
     }
     try {
       await execute(p.ad, p.m, p.x, p.calls, p.used, d);

@@ -4,7 +4,7 @@
 import { useEffect, useState } from "react";
 import * as I from "./icons";
 import { Loader } from "./brand";
-import { getLang, tr } from "./i18n";
+import { getLang, tr, trCx } from "./i18n";
 import { AskCard, type AskStep, type OnAnswer } from "./agentui";
 import { lazyView } from "./lazy";
 import { IMAGE_PLANS } from "./catalog";
@@ -67,7 +67,7 @@ export function applyEvent(w: Work, ev: RunEv): Work {
   } else if (ev.kind === "plan") {
     try { plan = JSON.parse(ev.text) as PlanItem[]; } catch {}
   } else if (ev.kind === "ask") {
-    try { const a = JSON.parse(ev.text) as Omit<AskStep, "k" | "state">; parts.push({ k: "ask", id: a.id, kind: a.kind, title: a.title, detail: a.detail, host: a.host, conn: a.conn, about: a.about, destructive: a.destructive, ...(a.schema !== undefined ? { schema: a.schema } : {}), state: "wait" }); } catch {}
+    try { const a = JSON.parse(ev.text) as Omit<AskStep, "k" | "state">; parts.push({ k: "ask", id: a.id, kind: a.kind, title: a.title, detail: a.detail, host: a.host, conn: a.conn, about: a.about, destructive: a.destructive, ...(a.schema !== undefined ? { schema: a.schema } : {}), ...(a.cx ? { cx: a.cx } : {}), state: "wait" }); } catch {}
   } else if (ev.kind === "asked") {
     try {
       const a = JSON.parse(ev.text) as { id: string; ok: boolean; always?: boolean; chat?: boolean; gone?: boolean; typed?: boolean; edited?: boolean };
@@ -89,7 +89,14 @@ export function applyEvent(w: Work, ev: RunEv): Work {
 
 // Nhãn công cụ máy chủ ghi bằng tiếng Việt, đã bỏ chữ "Đang" (nhật ký lưu trong đoạn chat cũ cũng vậy): dịch khi hiện theo ngôn ngữ giao diện, chữ đầu viết hoa.
 const DOING = "Đang";
-const toolLabel = (l: string) => { const v = [DOING, l].join(" "), t = tr(v); return t !== v ? t : l.charAt(0).toUpperCase() + l.slice(1); };
+// Composio: "dùng Google Docs · Tạo tài liệu" hiện là "Google Docs · Tạo tài liệu" (tên thao tác dịch theo ngôn ngữ giao diện).
+const CX_LABEL = /^dùng ([^:·]+) · (.+)$/;
+const toolLabel = (l: string) => {
+  const cx = CX_LABEL.exec(l);
+  if (cx) return `${cx[1]} · ${trCx(cx[2])}`;
+  const v = [DOING, l].join(" "), t = tr(v);
+  return t !== v ? t : l.charAt(0).toUpperCase() + l.slice(1);
+};
 // Công cụ chạy quá 8 giây: nói rõ là vẫn đang làm (dữ liệu lớn), không để người dùng tưởng treo.
 const SLOW_MS = 8000;
 const secs = (ms: number) => { const s = Math.max(0, Math.round(ms / 1000)); return s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${String(s % 60).padStart(2, "0")}s`; };

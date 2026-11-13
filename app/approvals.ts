@@ -2,11 +2,13 @@
 // Lượt đang chạy (agent của Code, hay lượt chat chạy nền) dừng ở đây chờ câu trả lời gửi qua /api/approve; người dùng bấm Dừng thì thôi chờ.
 import crypto from "node:crypto";
 import { allowSite, getPrefs, siteHost, siteIn, type PermMode } from "./codestore";
+import type { CxCard } from "./cxactions";
 
 export type AskKind = "edit" | "bash" | "site" | "connector";
 // conn, about, destructive: chỉ với công cụ connector (hiện logo, mô tả công cụ, cảnh báo xóa dữ liệu trên thẻ).
 // schema: schema tham số của công cụ connector (khi đủ nhỏ) để thẻ duyệt kiểm tra ngay lúc người dùng sửa tham số.
-export type Ask = { id: string; kind: AskKind; tool: string; title: string; detail: string; host?: string; key: string; conn?: { name: string; logo?: string; color?: string; icon?: string }; about?: string; until?: number; destructive?: boolean; schema?: unknown };
+// cx: lời gọi Composio nói bằng thao tác thật (ứng dụng, tài khoản, thao tác, tham số chính; strict: chỉ cho phép một lần).
+export type Ask = { id: string; kind: AskKind; tool: string; title: string; detail: string; host?: string; key: string; conn?: { name: string; logo?: string; color?: string; icon?: string }; about?: string; until?: number; destructive?: boolean; schema?: unknown; cx?: CxCard };
 // chat: "Cho phép trong đoạn chat này" (công cụ connector). input: tham số người dùng đã sửa trên thẻ duyệt (chỉ dùng cho đúng lời gọi đang chờ).
 export type Answer = { ok: boolean; always?: boolean; chat?: boolean; note?: string; input?: Record<string, unknown> };
 

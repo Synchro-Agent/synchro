@@ -2,6 +2,7 @@
 
 import { useEffect, useSyncExternalStore } from "react";
 import { usePref } from "./store";
+import { CX_RULE_EN } from "./cxactions";
 
 export type Lang = "vi" | "en";
 
@@ -56,6 +57,16 @@ export function tr(s: string, lang: Lang = cur): string {
   }
   const r = out === undefined ? s : s.replace(t, () => out as string);
   return lang === "en" ? plural(r) : r;
+}
+/** Nhãn thao tác Composio ("Tạo tài liệu", "Gửi email abc") theo ngôn ngữ giao diện.
+ *  Gọi riêng ở các chỗ hiện nhãn (cxHead, toolChip, worklog); KHÔNG đưa luật "động từ + ASCII" vào RULES_EN chung,
+ *  vì bộ dịch DOM sẽ áp cho mọi nút chữ và viết lại nhầm chữ tiếng Việt thường. */
+export function trCx(s: string, lang: Lang = cur): string {
+  const base = tr(s, lang);
+  if (lang !== "en" || base !== s) return base;
+  const t = s.trim();
+  const m = t.match(CX_RULE_EN[0]);
+  return m ? s.replace(t, () => CX_RULE_EN[1](m)) : base;
 }
 // Tiếng Anh cần số nhiều: "145 skill" → "145 skills". Các từ này giữ nguyên ở cả hai ngôn ngữ nên từ điển không thấy.
 const PLURAL = /(\d[\d.,]*\s+)(skill|artifact|credit)\b(?!s)/g;
