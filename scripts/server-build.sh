@@ -50,13 +50,24 @@ fi
 B=$(mktemp -d "$SIDE/.build-$NAME.XXXXXX")
 # Thoát vì bất cứ lý do gì (lỗi, Ctrl-C, mất ssh): dọn thư mục build; xanh/lam thì ghi màu sống theo cổng nginx đang trỏ, để watchdog và
 # lần deploy sau không nhầm màu. SIGKILL không chạy được trap: lần deploy sau tự sửa (bg_sync_live ở trên).
-cleanup() { rm -rf "$B"; if [ "$BG" = 1 ]; then bg_sync_live "$APP" || true; fi; }
+# Đã đụng vào trạng thái dùng chung (thư mục build màu nghỉ, liên kết thư viện, mã trong thư mục app) mà thoát lỗi ở bất kỳ đâu
+# (set -e, tín hiệu): rollback trước, rồi mới sửa màu sống.
+cleanup() {
+  local rc=$?
+  rm -rf "$B"
+  if [ "$BG" = 1 ]; then
+    if [ "$rc" != 0 ] && [ -n "${SHARED:-}" ]; then rollback "thoát giữa chừng (mã $rc)" || true; fi
+    bg_sync_live "$APP" || true
+  fi
+}
 trap cleanup EXIT
 trap 'exit 129' HUP; trap 'exit 130' INT; trap 'exit 143' TERM
 # Mã do root chạy (scripts/, workspace/: sao lưu, cài đặt, deploy) chỉ root ghi được, kể cả thư mục app (ai sở hữu thư mục cha đổi tên được thư mục con).
 # Nhờ vậy chiếm được web user (lỗi trong bộ đọc tệp chẳng hạn) không leo được lên root qua cron hay lần deploy sau. Web user vẫn ghi được data/, .cache/, .next*/, node_modules/.
 harden() {
-  chown -R synchro:synchro "$APP"
+  # data/ và .cache/ thay đổi liên tục khi web chạy: tệp biến mất giữa lúc chown -R không phải lỗi của deploy. Phần cần cho an toàn
+  # (scripts/, workspace/ thuộc root) ở dưới vẫn phải đạt.
+  chown -R synchro:synchro "$APP" 2>/dev/null || echo "CẢNH BÁO: chown -R $APP có tệp không đổi được chủ (tệp vừa bị xóa?), bỏ qua." >&2
   mkdir -p "$APP/.cache" "$APP/data"
   chown synchro:synchro "$APP/.cache" "$APP/data"
   chown root:root "$APP"; chmod 755 "$APP"
@@ -158,24 +169,31 @@ if [ "$BG" = 1 ]; then
   fi
   # Màu nghỉ có thể còn chạy (lần trước dừng dở): dừng trước khi thay thư mục build của nó. Không phải màu nginx đang trỏ nên không ảnh hưởng ai.
   bg_stop "$NEW" || { echo "Không dừng được màu nghỉ $NEW (nginx đang trỏ vào nó?): dừng deploy." >&2; exit 1; }
-  rm -rf "$NEWDIST.old"; [ -d "$NEWDIST" ] && mv "$NEWDIST" "$NEWDIST.old"
-  mv "$B/.next" "$NEWDIST"; rm -rf "$NEWDIST.old"
-  chown -R synchro:synchro "$NEWDIST"
-  # Thư viện: đổi liên kết nếu package-lock đổi. Bản cũ đã nạp gói của nó; thư mục cũ được giữ tới lần deploy sau để trả lại.
   PREVMODS=$(bg_mods_current "$APP")
-  [ "$PREVMODS" = "$MODS" ] || bg_link_modules "$APP" "$MODS"
-  # public, db, catalog, scripts, workspace… cùng lúc với bản build mới (deploy từ thư mục incoming).
-  sync_code
-  fail() { # fail <lý do>: dừng bản mới, nginx vẫn ở bản cũ; trả thư viện, public/db về như trước.
+  # rollback: chỉ khi nginx chưa trỏ sang bản mới (đã trỏ thì bản mới đang phục vụ, phải giữ mã và thư viện của nó). Gọi lại không làm gì.
+  ROLLED=""
+  rollback() {
+    [ -z "$ROLLED" ] || return 0
+    ROLLED=1
+    if [ "$(bg_upstream_port)" = "$NEWPORT" ]; then echo "nginx đã trỏ bản mới ($NEWPORT): giữ nguyên, không rollback." >&2; return 0; fi
     echo "BẢN MỚI KHÔNG ĐẠT ($1): giữ nguyên bản $LIVE ($OLDID), web không bị gián đoạn." >&2
     bg_pm2 logs "$NEWPM2" --nostream --lines 40 >&2 || true
     bg_stop "$NEW" || true
-    [ -n "$PREVMODS" ] && [ "$PREVMODS" != "$MODS" ] && bg_link_modules "$APP" "$PREVMODS"
+    if [ -n "$PREVMODS" ] && [ "$(bg_mods_current "$APP")" != "$PREVMODS" ]; then bg_link_modules "$APP" "$PREVMODS" || true; fi
     restore_good
     rm -rf "$SIDE/.synchro-failed-$NAME"; mkdir -p "$SIDE/.synchro-failed-$NAME"; cp -a "$NEWDIST/BUILD_ID" "$SIDE/.synchro-failed-$NAME/" 2>/dev/null || true
     echo "Bản lỗi vẫn ở $NEWDIST (màu nghỉ) để xem; lần deploy sau sẽ ghi đè." >&2
-    exit 1
   }
+  fail() { rollback "$1"; exit 1; }
+  # Từ đây mọi lỗi (kể cả set -e trong sync_code / harden, Ctrl-C) đều qua rollback ở cleanup.
+  SHARED=1
+  rm -rf "$NEWDIST.old"; [ -d "$NEWDIST" ] && mv "$NEWDIST" "$NEWDIST.old"
+  mv "$B/.next" "$NEWDIST"; rm -rf "$NEWDIST.old"
+  chown -R synchro:synchro "$NEWDIST"
+  # public, db, catalog, scripts, workspace… cùng lúc với bản build mới (deploy từ thư mục incoming); trước khi đổi liên kết thư viện.
+  sync_code
+  # Thư viện: đổi liên kết nếu package-lock đổi. Bản cũ đã nạp gói của nó; thư mục cũ được giữ tới lần deploy sau để trả lại.
+  [ "$PREVMODS" = "$MODS" ] || bg_link_modules "$APP" "$MODS"
   bg_start "$APP" "$NEW" || fail "pm2 không bật được $NEWPM2"
   bg_healthy "$NEWPORT" "$NEWID" || fail "kiểm tra sức khỏe ở cổng $NEWPORT"
   bg_switch_upstream "$NEWPORT" || fail "nginx -t / reload"
@@ -185,6 +203,7 @@ if [ "$BG" = 1 ]; then
   fi
   # Từ đây người dùng đã ở bản mới. Ghi màu sống trước khi dừng bản cũ: bản mới nhận vai primary ngay khi bản cũ thoát (app/role.ts).
   bg_write_live "$NEW" "$NEWPORT" "$APP"
+  SHARED=""
   echo "Dừng bản cũ $OLDPM2 (chạy nốt lượt đang dở, tối đa 25 giây)…"
   bg_stop "$LIVE" || echo "CẢNH BÁO: không dừng bản cũ $OLDPM2 (nginx vẫn trỏ vào nó?)." >&2
   bg_pm2 save >/dev/null 2>&1 || true

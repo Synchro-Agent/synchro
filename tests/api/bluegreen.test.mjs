@@ -200,6 +200,9 @@ const calls = () => { const s = fs.existsSync(log) ? fs.readFileSync(log, "utf8"
   ok(/rc=0/.test(r.out) && calls().includes("pm2 stop synchro-green"), "DEPLOY-1: màu nghỉ thì dừng được", r);
   const sb = fs.readFileSync(path.join(process.cwd(), "scripts", "server-build.sh"), "utf8");
   ok(sb.indexOf('BG=0; bg_enabled "$APP" && BG=1') > sb.indexOf("flock -w 900 9") && !/PORT=3001/.test(sb) && /bg_pm2_has "\$PM2"/.test(sb), "DEPLOY-2: chọn cách deploy sau khi giữ khóa; production đã chuyển không đi đường một tiến trình nếu thiếu app pm2; không bao giờ đoán cổng 3001");
+  const bgPart = sb.slice(sb.indexOf("# ---------------- Xanh/lam"));
+  ok(bgPart.indexOf("SHARED=1") < bgPart.indexOf('mv "$B/.next" "$NEWDIST"') && bgPart.indexOf("sync_code") < bgPart.indexOf('bg_link_modules "$APP" "$MODS"') && /rollback "thoát giữa chừng/.test(sb) && /chown -R synchro:synchro "\$APP" 2>\/dev\/null \|\|/.test(sb),
+    "DEPLOY-3: mọi bước đụng trạng thái dùng chung nằm sau khi có rollback (cleanup khi thoát lỗi); chép mã trước khi đổi liên kết thư viện; chown -R data/ không làm hỏng deploy");
   ok(sb.indexOf('bg_sync_live "$APP"') > sb.indexOf("flock -w 900 9") && /trap cleanup EXIT/.test(sb) && /trap 'exit 129' HUP/.test(sb), "DEPLOY-1: server-build sửa màu sống sau khi giữ khóa, trap khi thoát / mất ssh");
   fs.rmSync(up);
 }
