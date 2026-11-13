@@ -39,19 +39,27 @@ try {
   U.ls.set("theme", "dark");
   sessionStorage.setItem("draft:A", SECRET);
   sessionStorage.setItem("u:A:tmp", SECRET);
+  // Khóa chứa nội dung chat nhưng nằm NGOÀI tiền tố u:<uid>: (nợ kỹ thuật, dùng chung cho cả trình duyệt). Phải xóa hết.
+  localStorage.setItem("bn:synced", JSON.stringify(["1"]));                       // id đoạn chat đã nạp vào Bộ não
+  localStorage.setItem("bn:graph:chung", JSON.stringify({ search: SECRET }));     // chữ tìm kiếm trong đồ thị Bộ não
+  localStorage.setItem("synchro:skill-suggest", JSON.stringify(["gợi ý từ " + SECRET]));
+  localStorage.setItem("synchro:intro-seen:A", String(Date.now()));              // theo uid
   U.setUserScope("B");
   U.ls.set("chats", JSON.stringify([{ id: 7, title: "Chat B", msgs: [{ role: "user", text: "của B", time: 1 }] }]));
   sessionStorage.setItem("draft:B", "nháp của B");
+  localStorage.setItem("synchro:intro-seen:B", "123");                            // của B (theo uid): phải giữ lại
   localStorage.setItem("p:uilang", "en");
   localStorage.setItem("signedIn", "1");
   U.setUserScope(null);
 
   const n = U.clearAccountData("A");
   const all = () => [...localStorage.keys().map((k) => [k, localStorage.getItem(k)]), ...sessionStorage.keys().map((k) => [k, sessionStorage.getItem(k)])];
-  ok(n === 7, "xóa đủ 5 khóa localStorage và 2 khóa sessionStorage của A", n);
+  ok(n === 11, "xóa đủ 9 khóa localStorage (5 u:A:* + 4 khóa ngoài tiền tố) và 2 khóa sessionStorage của A", n);
   ok(!localStorage.keys().some((k) => k.startsWith("u:A:")) && !sessionStorage.keys().some((k) => k.startsWith("u:A:") || k === "draft:A"), "không còn khóa u:A:* nào, kể cả bản nháp", all());
+  ok(!localStorage.getItem("bn:synced") && !localStorage.getItem("bn:graph:chung") && !localStorage.getItem("synchro:skill-suggest") && !localStorage.getItem("synchro:intro-seen:A"), "xóa cả các khóa chứa nội dung chat nằm ngoài tiền tố u:<uid>:", all());
   ok(!all().some(([, v]) => v.includes(SECRET) || v.includes("Hướng dẫn riêng của A")), "nghiệm thu: không còn khóa nào chứa nội dung chat hay hướng dẫn của A", all());
   ok(localStorage.getItem("u:B:chats")?.includes("của B") && sessionStorage.getItem("draft:B") === "nháp của B", "dữ liệu của tài khoản B giữ nguyên");
+  ok(localStorage.getItem("synchro:intro-seen:B") === "123", "cờ xem phim giới thiệu của B (theo uid) giữ nguyên");
   ok(localStorage.getItem("theme") === "dark" && localStorage.getItem("p:uilang") === "en" && localStorage.getItem("signedIn") === "1", "cài đặt của cả trình duyệt (giao diện, ngôn ngữ) giữ nguyên");
   ok(U.clearAccountData("anon") === 0 && U.clearAccountData("") === 0 && localStorage.getItem("u:B:chats"), "khách (anon) hay mã rỗng: không xóa gì");
   ok(U.clearAccountData("A") === 0, "gọi lại: không còn gì để xóa, không lỗi");

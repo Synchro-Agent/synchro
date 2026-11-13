@@ -24,16 +24,26 @@ export const ls = {
  * trong localStorage và sessionStorage, cùng bản nháp ô soạn tin (sessionStorage draft:<uid>). Cài đặt của cả trình duyệt (giao diện, ngôn ngữ)
  * và dữ liệu của tài khoản khác giữ nguyên. App chưa dùng IndexedDB; khi có kho IndexedDB theo tài khoản thì xóa thêm ở đây.
  * Trả về số khóa đã xóa.
+ *
+ * Vài khóa chứa nội dung chat lại nằm NGOÀI tiền tố u:<uid>: (nợ kỹ thuật): chúng dùng chung cho cả trình duyệt chứ không tách theo
+ * tài khoản, nên cũng xóa ở đây để sau khi xóa không còn khóa nào chứa nội dung chat. Đây là bộ nhớ đệm/cài đặt hiển thị, dựng lại
+ * được từ máy chủ, nên xóa cả phần của tài khoản khác đang dùng chung trình duyệt là chấp nhận được (họ sẽ dựng lại khi cần):
+ *   - bn:synced          (brainsync.ts, chatsync.ts): id các đoạn chat đã nạp vào Bộ não
+ *   - bn:graph:<key>      (brainui.tsx): cài đặt hiển thị đồ thị Bộ não (có thể gồm chữ tìm kiếm)
+ *   - synchro:skill-suggest (saveskill.tsx): các gợi ý kỹ năng đã hiện (suy ra từ nội dung chat)
+ *   - synchro:intro-seen:<uid> (introflag.ts): đã xem phim giới thiệu chưa (theo uid; xóa thì xem lại một lần)
+ * Khi dời các khóa trên vào tiền tố u:<uid>: thì bỏ phần xử lý riêng này đi.
  */
 export function clearAccountData(uid: string): number {
   if (!uid || uid === "anon") return 0;
   const p = `u:${uid}:`;
+  const extra = (k: string) => k === "bn:synced" || k === "synchro:skill-suggest" || k.startsWith("bn:graph:") || k === `synchro:intro-seen:${uid}`;
   let n = 0;
   for (const get of [() => localStorage, () => sessionStorage]) {
     try {
       const st = get();
       const keys: string[] = [];
-      for (let i = 0; i < st.length; i++) { const k = st.key(i); if (k !== null && (k.startsWith(p) || k === `draft:${uid}`)) keys.push(k); }
+      for (let i = 0; i < st.length; i++) { const k = st.key(i); if (k !== null && (k.startsWith(p) || k === `draft:${uid}` || extra(k))) keys.push(k); }
       for (const k of keys) { st.removeItem(k); n++; }
     } catch { /* bộ nhớ trình duyệt bị chặn: không có gì để xóa */ }
   }
