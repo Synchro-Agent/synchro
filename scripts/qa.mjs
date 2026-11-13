@@ -4,11 +4,14 @@
 // gặp phải có một phép thử tự động quét toàn trang).
 import { spawn } from "node:child_process";
 
+// Mỗi bộ: [tên, tệp, biến môi trường thêm (tùy chọn)]: một tệp chạy nhiều lần với biến khác nhau (vd. THEME sáng / tối) là nhiều bộ.
 // Bộ API chạy trước: các bộ giao diện để lại việc chạy nền ở máy chủ (đặt tên đoạn chat, hội đồng phản biện…) gọi model giả lập liên tục,
 // đẩy lời gọi mà bộ API cần kiểm ra khỏi lịch sử 30 lời gọi gần nhất của máy giả lập.
 const SUITES = [
   ["Toàn bộ bộ kiểm API", "tests/run-all.mjs"],
-  ["Soát giao diện toàn trang (sáng/tối × máy tính/điện thoại)", "tests/ui/audit.mjs"],
+  ["Soát giao diện toàn trang (sáng/tối × 390/768/1440px)", "tests/ui/audit.mjs"],
+  ["Một ca cho mỗi lỗi U2–U14 (390/768/1440px), giao diện sáng", "tests/ui/u-bugs.mjs", { THEME: "light" }],
+  ["Một ca cho mỗi lỗi U2–U14 (390/768/1440px), giao diện tối", "tests/ui/u-bugs.mjs", { THEME: "dark" }],
   ["Menu, bảng nổi, gợi ý, vòng Mức dùng", "tests/ui/popovers.mjs"],
   ["Xuất PowerPoint", "tests/ui/pptx.mjs"],
   ["Bộ thiết kế trong khung artifact: chuyển động, phép đo tự kiểm tra, chụp PowerPoint", "tests/ui/design-kit.mjs"],
@@ -39,8 +42,8 @@ const SUITES = [
 ];
 const only = process.argv.slice(2);
 
-const run = (file) => new Promise((ok) => {
-  const p = spawn(process.execPath, [file], { stdio: ["ignore", "pipe", "pipe"] });
+const run = (file, env = {}) => new Promise((ok) => {
+  const p = spawn(process.execPath, [file], { stdio: ["ignore", "pipe", "pipe"], env: { ...process.env, ...env } });
   let out = "";
   p.stdout.on("data", (d) => { out += d; process.stdout.write(d); });
   p.stderr.on("data", (d) => { out += d; process.stderr.write(d); });
@@ -48,11 +51,11 @@ const run = (file) => new Promise((ok) => {
 });
 
 const res = [];
-for (const [name, file] of SUITES) {
+for (const [name, file, env] of SUITES) {
   if (only.length && !only.some((o) => file.includes(o))) continue;
   console.log(`\n████ ${name} (${file})`);
   const t = Date.now();
-  const { code, out } = await run(file);
+  const { code, out } = await run(file, env);
   const issues = /━━ Vấn đề \((\d+)\)/.exec(out);
   const ok = code === 0 && (!issues || issues[1] === "0");
   res.push({ name, ok, s: Math.round((Date.now() - t) / 1000), note: issues ? `${issues[1]} vấn đề` : code ? `mã thoát ${code}` : "" });
