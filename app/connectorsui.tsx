@@ -337,7 +337,8 @@ function ConnectorCard({ c, policy, open, busy, waiting, stale, onDismissScope, 
             ? <button className={`cn-switch ${c.enabled && !c.adminBlocked ? "on" : ""}`} role="switch" aria-checked={c.enabled && !c.adminBlocked} aria-label={c.enabled ? "Turn off connector" : "Turn on connector"} onClick={() => onEnable(!c.enabled)} disabled={busy || c.adminBlocked}><i /></button>
             : c.vendorBlocked ? <button className="btn cn-connect" onClick={onConnect} disabled={busy}>{busy ? <span className="api-spin" /> : null}Try again</button>
             : c.auth === "token" && c.status === "needs_auth" ? <button className="btn dark cn-connect" onClick={() => onCreds("token")} disabled={busy}>Update token</button>
-            : <button className="btn dark cn-connect" onClick={c.status === "forbidden" && !waiting ? onReauth : onConnect} disabled={busy}>{busy ? <span className="api-spin" /> : null}{waiting ? "Open sign-in window" : c.status === "error" ? "Try again" : c.status === "forbidden" || (c.status === "needs_auth" && c.checkedAt) ? "Reconnect" : "Connect"}</button>}
+            : c.status === "error" && !waiting ? null
+            : <button className="btn dark cn-connect" onClick={c.status === "forbidden" && !waiting ? onReauth : onConnect} disabled={busy}>{busy ? <span className="api-spin" /> : null}{waiting ? "Open sign-in window" : c.status === "forbidden" || (c.status === "needs_auth" && c.checkedAt) ? "Reconnect" : "Connect"}</button>}
           <div className="cn-more" ref={mref}>
             <button className="icon-btn" aria-label="More options" aria-expanded={menu} onClick={() => setMenu(!menu)} disabled={busy}>{busy && c.status === "ok" ? <span className="api-spin" /> : <I.Dots size={16} />}</button>
             {menu && (
