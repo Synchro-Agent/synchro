@@ -51,7 +51,7 @@ import { genImageUrl } from "./artdoc";
 import { IMAGE_MAX_MB, imageKind, type ImgFile, scrubServerPaths } from "./ai/imagefiles";
 import { AGY_WAIT_NOTE, BRIDGE_HOLD, openBridge } from "./mcpbridge";
 import { clearStall, noteStall, stalledModels, usableModels } from "./ai/anymodel";
-import { needsRenderEscalation, RENDER_ESCALATION_HINT } from "./ai/webescalate";
+import { RENDER_ESCALATION_HINT, searchNeedsEscalation } from "./ai/webescalate";
 import { learnFromTurn, userContext } from "./memory";
 import { crisisHelp } from "./crisishelp";
 import { afterTurn, BRAIN_RULES, BRAIN_TOOLS, brainRecallHybrid, brainReady, runBrainTool, topRule, warmRecall } from "./brain";
@@ -708,8 +708,10 @@ async function geminiSearch(t: Target, query: string, cite: Citer): Promise<Tool
   const j = (await r.json().catch(() => ({}))) as { candidates?: { content?: { parts?: { text?: string }[] }; groundingMetadata?: { groundingChunks?: { web?: { uri?: string; title?: string } }[] } }[] };
   const c = j.candidates?.[0];
   const text = (c?.content?.parts ?? []).map((p) => p.text ?? "").join("").trim();
-  const src = srcList((c?.groundingMetadata?.groundingChunks ?? []).map((g) => g.web).filter((w): w is { uri: string; title?: string } => !!w?.uri && /^https?:\/\//.test(w.uri)).map((w) => ({ url: w.uri, title: w.title ?? "" })), cite);
-  const esc = needsRenderEscalation(text) ? `\n\n${RENDER_ESCALATION_HINT}` : "";
+  const sources = (c?.groundingMetadata?.groundingChunks ?? []).map((g) => g.web).filter((w): w is { uri: string; title?: string } => !!w?.uri && /^https?:\/\//.test(w.uri)).map((w) => ({ url: w.uri, title: w.title ?? "" }));
+  const src = srcList(sources, cite);
+  // Tóm tắt tìm web vốn ngắn gọn: chỉ nâng cấp khi trống / không nguồn / dính màn chưa dựng, không chỉ vì ít chữ.
+  const esc = searchNeedsEscalation(text, sources.length > 0) ? `\n\n${RENDER_ESCALATION_HINT}` : "";
   return { content: `${text || "(không có kết quả)"}${esc}\n\nNguồn:\n${src}`, is_error: false, used };
 }
 // Tìm web cho Grok / DeepSeek qua khóa API: /chat/completions của hai hãng không có công cụ tìm web phía máy chủ, nên Synchro gọi
@@ -722,8 +724,10 @@ async function responsesSearch(t: Target, query: string, cite: Citer): Promise<T
     const parts = (j.output ?? []).filter((o) => o.type === "message").flatMap((o) => o.content ?? []).filter((c) => c.type === "output_text");
     const text = parts.map((c) => c.text ?? "").join("").trim();
     const urls = [...parts.flatMap((c) => (c.annotations ?? []).filter((a) => a.url).map((a) => ({ url: a.url!, title: a.title ?? "" }))), ...(Array.isArray(j.citations) ? j.citations : []).filter((u): u is string => typeof u === "string").map((url) => ({ url, title: "" }))];
-    const src = srcList([...new Map(urls.filter((u) => /^https?:\/\//.test(u.url)).map((u) => [u.url, u])).values()], cite);
-    const esc = needsRenderEscalation(text) ? `\n\n${RENDER_ESCALATION_HINT}` : "";
+    const sources = [...new Map(urls.filter((u) => /^https?:\/\//.test(u.url)).map((u) => [u.url, u])).values()];
+    const src = srcList(sources, cite);
+    // Tóm tắt tìm web vốn ngắn gọn: chỉ nâng cấp khi trống / không nguồn / dính màn chưa dựng, không chỉ vì ít chữ.
+    const esc = searchNeedsEscalation(text, sources.length > 0) ? `\n\n${RENDER_ESCALATION_HINT}` : "";
     return { content: `${text || "(không có kết quả)"}${esc}\n\nNguồn:\n${src}`, is_error: false, used };
   } catch (e) {
     if (isAbort(e)) throw e;

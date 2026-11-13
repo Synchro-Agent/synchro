@@ -24,6 +24,16 @@ ok(!W.needsRenderEscalation("x".repeat(600)), "600 ký tự không còn mỏng")
 // Bài dài có lỡ chứa chữ "loading" ở đâu đó thì không báo nhầm.
 ok(!W.needsRenderEscalation("Nội dung đầy đủ. ".repeat(200) + " lazy loading images "), "bài dài chứa \"loading\" không bị coi là chặn");
 
+console.log("2b. Tóm tắt tìm web (có nguồn) vốn ngắn gọn → KHÔNG nâng cấp chỉ vì ngắn; chỉ nâng khi thật sự kẹt");
+// Một tóm tắt tốt, ngắn, có nguồn (dưới 500 ký tự nhưng là câu trả lời grounded): không được kích hoạt mở trình duyệt.
+ok(!W.searchNeedsEscalation("Tỷ giá USD/VND hôm nay tại Vietcombank: mua 25.100, bán 25.470 (cập nhật 09:15 ngày 13/11/2026).", true), "tóm tắt ngắn có nguồn: không nâng cấp");
+ok(!W.searchNeedsEscalation("Khoảng 25.000 đồng.", true), "câu trả lời rất ngắn nhưng có nguồn: không nâng cấp");
+// Vẫn nâng cấp khi tóm tắt thật sự kẹt: trống, không có nguồn, hoặc dính màn chưa dựng xong.
+ok(W.searchNeedsEscalation("", true), "tóm tắt trống: nâng cấp");
+ok(W.searchNeedsEscalation("Khoảng 25.000 đồng.", false), "trả lời chay không nguồn: nâng cấp");
+ok(W.searchNeedsEscalation("Trang đang cập nhật, vui lòng chờ.", true), "dính màn \"đang cập nhật\": nâng cấp dù có nguồn");
+ok(!W.searchNeedsEscalation("Nội dung đầy đủ có số liệu. ".repeat(200) + " lazy loading images ", true), "tóm tắt dài có \"loading\" rải rác: không nâng cấp nhầm");
+
 console.log("3. Có lời nhắc tự mở trình duyệt đọc DOM đã dựng");
 ok(/browser_navigate/.test(W.RENDER_ESCALATION_HINT) && /browser_text/.test(W.RENDER_ESCALATION_HINT), "lời nhắc chỉ rõ mở trình duyệt rồi đọc lại");
 ok(/chính thức/.test(W.RENDER_ESCALATION_HINT) && /không chắc/.test(W.RENDER_ESCALATION_HINT), "lời nhắc: ưu tiên nguồn chính thức, thử thêm nguồn trước khi nói \"không chắc\"");

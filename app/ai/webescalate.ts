@@ -9,10 +9,20 @@ const STALL = /đang cập nhật|đang tải|vui lòng (?:chờ|đợi|bật ja
 export const THIN_CHARS = 500;
 const STALL_MAX = 2000;
 
-/** Nội dung lấy về có quá mỏng hoặc là màn chưa dựng xong / chặn JavaScript không: nếu có thì nên mở trang trong trình duyệt và đọc DOM đã dựng. */
+/** Nội dung LẤY TRANG (browser_text / fetch nhanh) có quá mỏng hoặc là màn chưa dựng xong / chặn JavaScript không: một trang thật mà chỉ trả
+ * về vài chữ gần như luôn là chưa dựng xong, nên ở đây độ dài mới là tín hiệu. Dùng cho nơi lấy trang, KHÔNG cho tóm tắt tìm web. */
 export function needsRenderEscalation(text: string | null | undefined): boolean {
   const t = (text ?? "").trim();
   if (t.length < THIN_CHARS) return true;
+  return t.length < STALL_MAX && STALL.test(t);
+}
+
+/** Kết quả TÓM TẮT của công cụ tìm web (geminiSearch / responsesSearch) là câu trả lời CÓ DẪN NGUỒN, vốn có thể ngắn gọn một cách hợp lệ
+ * (vài con số kèm nguồn). KHÔNG nâng cấp chỉ vì ngắn — chỉ khi tóm tắt thật sự kẹt: trống, không có nguồn nào (model trả lời chay, không
+ * grounding), hoặc dính màn "đang cập nhật" / cần bật JavaScript / "loading". */
+export function searchNeedsEscalation(text: string | null | undefined, hasSource: boolean): boolean {
+  const t = (text ?? "").trim();
+  if (!t || !hasSource) return true;
   return t.length < STALL_MAX && STALL.test(t);
 }
 
