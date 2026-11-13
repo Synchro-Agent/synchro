@@ -117,6 +117,11 @@ try {
   C.updateConnector("u_a", "cn_cx", { perms: { COMPOSIO_REMOTE_BASH_TOOL: "block" } }, pol);
   ok(new C.ConnectorSession("u_a", { conv: "c1", pol }).tools.every((t) => t.tool.name !== "COMPOSIO_REMOTE_BASH_TOOL"), "chặn bash vẫn được");
 
+  // Công cụ Composio đã tìm trong 24 giờ có trong lời dặn của lượt sau, để model gọi thẳng MULTI_EXECUTE (W23-7).
+  X.cxLearn("u_a", "COMPOSIO_GET_TOOL_SCHEMAS", JSON.stringify({ data: { tool_schemas: { GOOGLEDOCS_CREATE_DOCUMENT: { toolkit: "googledocs", tool_slug: "GOOGLEDOCS_CREATE_DOCUMENT", description: "Create a doc", input_schema: { type: "object", properties: { title: { type: "string" } }, required: ["title"] } } } } }));
+  const cxPrompt = C.connectorsPrompt(new C.ConnectorSession("u_a", { conv: "c1", pol }));
+  ok(cxPrompt.includes("GOOGLEDOCS_CREATE_DOCUMENT (Google Docs)") && cxPrompt.includes("title*: string"), "lời dặn lượt chat có công cụ Composio đã biết kèm tham số", cxPrompt.slice(-600));
+
   console.log("3. Thẻ duyệt và nhãn bằng lời thường");
   const card = X.cxCard("COMPOSIO_MULTI_EXECUTE_TOOL", CREATE_DOC);
   ok(card.name === "Google Docs" && card.act === "Tạo tài liệu" && card.main === "Synchro test" && card.apps.join() === "googledocs" && !card.strict, "tạo tài liệu: Google Docs · Tạo tài liệu 'Synchro test'", card);

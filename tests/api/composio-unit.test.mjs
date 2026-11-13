@@ -180,6 +180,49 @@ try {
   ok(!one("GMAIL_FETCH_EMAILS", "not json") && !one("GMAIL_FETCH_EMAILS", "[1,2]") && !one("GMAIL_FETCH_EMAILS", 5) && !one("GMAIL_FETCH_EMAILS", ["x"]), "không đọc được thành đối tượng: ghi (fail-closed)");
   ok(X.cxCard("COMPOSIO_MULTI_EXECUTE_TOOL", { tools: [{ tool_slug: "GOOGLEDOCS_CREATE_DOCUMENT", arguments: '{"title":"Báo cáo"}' }] }).main === "Báo cáo", "thẻ duyệt đọc được tham số dạng chuỗi");
 
+  console.log("10. Học toolkit, lược đồ và tài khoản từ kết quả của chính Composio (W23-7 / W1-05)");
+  const sendSchema = { type: "object", properties: { recipient_email: { type: "string" }, subject: { type: "string" }, body: { type: "string" } }, required: ["recipient_email"] };
+  const searchRes = JSON.stringify({ successful: true, data: {
+    results: [{ use_case: "send email", primary_tool_slugs: ["GMAIL_SEND_EMAIL"], related_tool_slugs: ["GMAIL_FETCH_EMAILS"], toolkits: ["gmail"] }],
+    tool_schemas: {
+      GMAIL_SEND_EMAIL: { toolkit: "gmail", tool_slug: "GMAIL_SEND_EMAIL", description: "Send an email", input_schema: sendSchema },
+      GMAIL_FETCH_EMAILS: { toolkit: "gmail", tool_slug: "GMAIL_FETCH_EMAILS", description: "Fetch emails", input_schema: { type: "object", properties: { max_results: { type: "integer" } } } },
+      ACME_CRM_LIST_DEALS: { toolkit: "acme_crm", tool_slug: "ACME_CRM_LIST_DEALS", description: "List deals", input_schema: { type: "object", properties: {} } },
+    },
+    toolkit_connection_statuses: [{ toolkit: "gmail", has_active_connection: true, connection_details: { email: "me@work.com" } }],
+    session: { id: "sess_1" },
+  } });
+  // Thẻ duyệt / execPlan tính hạn 24 giờ theo giờ thật: dùng giờ thật ở phần này.
+  const tn = Date.now();
+  const SEARCH = "COMPOSIO_SEARCH_TOOLS", SCHEMAS = "COMPOSIO_GET_TOOL_SCHEMAS";
+  ok(X.execPlan({ tools: [{ tool_slug: "ACME_CRM_LIST_DEALS" }] }, "u9").writes.join() === "acme", "trước khi Composio nói: ứng dụng lạ là ghi");
+  X.schemaCachePut("u9", SEARCH, { queries: [{ use_case: "send an email via gmail" }] }, searchRes, tn);
+  ok(X.execPlan({ tools: [{ tool_slug: "ACME_CRM_LIST_DEALS" }] }, "u9").writes.length === 0 && X.cxHints("u9", tn + 1).slug("ACME_CRM_LIST_DEALS") === "acme_crm", "Composio nói ACME_CRM_LIST_DEALS thuộc acme_crm: đọc, chạy luôn");
+  ok(X.execPlan({ tools: [{ tool_slug: "ACME_CRM_LIST_DEALS" }] }, "u8").writes.join() === "acme", "người dùng khác không dùng hiểu biết của người này");
+  ok(CXA.slugParts("GITHUB_MARK_A_THREAD_AS_READ", { slug: () => "github_mark_a_thread_as", kits: ["github_mark"] }).kit === "github", "toolkit học được nuốt động từ ghi: bỏ qua");
+  // Cache theo (người dùng, toolkit): câu tìm khác chữ cho cùng toolkit vẫn trúng; toolkit khác thì không.
+  const hit = X.schemaCacheLookup("u9", SEARCH, { queries: [{ use_case: "Send a quick email to Bob with Gmail" }] }, tn + 1000);
+  ok(hit && hit.kits?.join() === "gmail" && hit.content.includes("GMAIL_SEND_EMAIL") && hit.content.includes("recipient_email"), "SEARCH_TOOLS khác chữ cho Gmail: lấy từ cache theo toolkit", hit);
+  ok(X.schemaCacheLookup("u9", SEARCH, { queries: [{ use_case: "create a Google Docs document" }] }, tn + 1000) === null, "toolkit chưa có trong cache: tìm thật");
+  ok(X.schemaCacheLookup("u9", SEARCH, { queries: [{ use_case: "send email with gmail and post to slack" }] }, tn + 1000) === null, "câu tìm nói thêm toolkit chưa có trong cache: tìm thật");
+  const sh = X.schemaCacheLookup("u9", SCHEMAS, { tool_slugs: ["GMAIL_SEND_EMAIL"] }, tn + 1000);
+  ok(sh && JSON.parse(sh.content).data.tool_schemas.GMAIL_SEND_EMAIL.input_schema.required[0] === "recipient_email", "GET_TOOL_SCHEMAS cho slug đã biết: lấy từ cache", sh);
+  ok(X.schemaCacheLookup("u9", SCHEMAS, { tool_slugs: ["GMAIL_SEND_EMAIL", "SLACK_SEND_MESSAGE"] }, tn + 1000) === null, "có slug chưa biết: tìm thật");
+  ok(X.schemaCacheLookup("u9", SEARCH, { queries: [{ use_case: "send email gmail" }] }, tn + X.SCHEMA_TTL + 1) === null, "quá 24 giờ: hết");
+  const known = X.cxKnownPrompt("u9", tn + 1000);
+  ok(known.includes("GMAIL_SEND_EMAIL (Gmail)") && known.includes("recipient_email*: string") && known.includes("COMPOSIO_MULTI_EXECUTE_TOOL"), "lời dặn lượt sau: công cụ đã biết kèm tham số, gọi thẳng MULTI_EXECUTE", known);
+  ok(X.cxKnownPrompt("u8", tn + 1000) === "", "người dùng khác: không có");
+  // Tài khoản đích trên thẻ duyệt khi model không truyền.
+  const cardAcct = (u) => X.cxCard("COMPOSIO_MULTI_EXECUTE_TOOL", { tools: [{ tool_slug: "GMAIL_SEND_EMAIL", arguments: { recipient_email: "a@b.c" } }] }, u)?.account;
+  ok(cardAcct("u9") === "me@work.com" && cardAcct("u8") === undefined && cardAcct(undefined) === undefined, "thẻ duyệt hiện tài khoản Gmail đang kết nối", [cardAcct("u9"), cardAcct("u8")]);
+  ok(X.cxCard("COMPOSIO_MULTI_EXECUTE_TOOL", { tools: [{ tool_slug: "GMAIL_SEND_EMAIL", arguments: { user_email: "other@x.com" } }] }, "u9").account === "other@x.com", "model truyền tài khoản: dùng tài khoản đó");
+  X.cxLearn("u9", "COMPOSIO_MANAGE_CONNECTIONS", JSON.stringify({ data: { results: { gmail: { status: "active", connected_account_id: "ca_2", user_info: { email: "second@x.com" } } } } }), tn + 2000);
+  ok(cardAcct("u9") === "second@x.com", "Composio báo lại kết nối Gmail: theo lần báo mới nhất", cardAcct("u9"));
+  X.cxLearn("u9", "COMPOSIO_MANAGE_CONNECTIONS", JSON.stringify({ data: { connections: [{ toolkit: "gmail", status: "ACTIVE", email: "a@x.com" }, { toolkit: "gmail", status: "ACTIVE", email: "b@x.com" }] } }), tn + 3000);
+  ok(cardAcct("u9") === undefined, "Gmail có hai tài khoản đang kết nối: không đoán", cardAcct("u9"));
+  ok(X.cxLearn("u9", "COMPOSIO_MULTI_EXECUTE_TOOL", searchRes) === undefined && X.cxHints("u7") === undefined, "không học từ kết quả thao tác (dữ liệu người ngoài viết)");
+  X.invalidateSchemaCache("u9");
+  ok(X.schemaCacheLookup("u9", SCHEMAS, { tool_slugs: ["GMAIL_SEND_EMAIL"] }, tn + 4000) === null && X.cxKnownPrompt("u9", tn + 4000) === "" && cardAcct("u9") === undefined, "connector đổi: bỏ lược đồ và tài khoản đã biết");
 } finally {
   fs.rmSync(tmp, { recursive: true, force: true });
 }

@@ -14,7 +14,7 @@ import { catalogLine } from "./connproxy";
 import { coerceArgs } from "./connschema";
 import { authorizeRejected, authorizeUrl, checkIssuer, discover, exchangeCode, metadataHint, parseWww, randomToken, refreshTokens, registerClient, TokenRejected, type AsMeta, type OAuthClient, type Tokens } from "./mcpauth";
 import { checkUrl, FetchBlocked, TempFail } from "./safefetch";
-import { annotate, appName, askOnlyTool, COMPOSIO, COMPOSIO_COLOR, COMPOSIO_LINK_PROMPT, COMPOSIO_NAME, COMPOSIO_PROMPT, CONNECT_URL, EXEC_TOOL, cxLearn, execPlan, invalidateSchemaCache, isMetaRead, isSchemaRead, KEY_HEADER, keyOk, MANAGE_URL, maskKey, PROXY_TOOL, schemaCacheGet, schemaCachePut, strictCall } from "./composio";
+import { annotate, appName, askOnlyTool, COMPOSIO, COMPOSIO_COLOR, COMPOSIO_LINK_PROMPT, COMPOSIO_NAME, COMPOSIO_PROMPT, CONNECT_URL, EXEC_TOOL, cxKnownPrompt, cxLearn, execPlan, invalidateSchemaCache, isMetaRead, isSchemaRead, KEY_HEADER, keyOk, MANAGE_URL, maskKey, PROXY_TOOL, schemaCacheLookup, schemaCachePut, strictCall } from "./composio";
 
 export type Perm = "allow" | "chat" | "ask" | "block";
 export const PERMS: Perm[] = ["allow", "chat", "ask", "block"];
@@ -416,10 +416,12 @@ async function syncTools(id: string, signal?: AbortSignal) {
   const fresh = (t: McpTool): Perm => (first || st.newTools === "auto" ? defaultPerm(t) : st.newTools);
   const perms = Object.fromEntries(marked.map((t) => [t.name, old[t.name] ?? gone[t.name]?.perm ?? fresh(t)]));
   const away = [...Object.entries(gone).filter(([k, v]) => !(k in perms) && now - v.at < GONE_KEEP), ...Object.entries(old).filter(([k]) => !(k in perms)).map(([k, perm]) => [k, { perm, at: now }] as const)].slice(-GONE_MAX);
+  const list = JSON.stringify(slim);
   table().prepare("UPDATE connectors SET tools = ?, perms = ?, perms_gone = ?, empty_seen = NULL, status = 'ok', error = NULL, last_error = NULL, tools_total = ?, server_name = ?, checked_at = ?, updated_at = ? WHERE id = ?")
-    .run(JSON.stringify(slim), JSON.stringify(perms), away.length ? JSON.stringify(Object.fromEntries(away)) : null, tools.length > slim.length ? tools.length : null, name ?? null, now, now, id);
-  // Danh sách công cụ vừa đổi (liên kết lại, làm mới, kiểm tra lại ở nền): bỏ cache lược đồ Composio của người này.
-  if (r.dir === COMPOSIO) invalidateSchemaCache(r.user_id);
+    .run(list, JSON.stringify(perms), away.length ? JSON.stringify(Object.fromEntries(away)) : null, tools.length > slim.length ? tools.length : null, name ?? null, now, now, id);
+  // Danh sách công cụ Composio thật sự đổi (liên kết lại thì cache đã bỏ lúc ngắt liên kết): bỏ cache lược đồ của người này. Kiểm tra lại ở nền / mỗi 10 phút
+  // trả về đúng danh sách cũ thì giữ cache, không thì cache 24 giờ hiếm khi sống quá 10 phút.
+  if (r.dir === COMPOSIO && list !== r.tools) invalidateSchemaCache(r.user_id);
   if (needsIcon(r)) await findIcon(id, icons);
 }
 
@@ -789,6 +791,8 @@ export class ConnectorSession {
   private calls = new Map<string, number>();
   // "Cho phép trong cuộc trò chuyện này" khi lượt không có mã cuộc trò chuyện: vẫn có hiệu lực tới hết lượt.
   private turnGrants = new Set<string>();
+  // Toolkit Composio đã được trả từ cache theo toolkit trong lượt này: lần tìm sau cho cùng toolkit đi thẳng tới Composio (cache không có công cụ cần).
+  private cxServed = new Set<string>();
   constructor(public uid: string, private ctx: { conv?: string; project?: boolean; pol: ConnPolicy }) {
     // Composio của bạn có sẵn (chưa liên kết thì model được dặn mời người dùng liên kết khi cần ứng dụng bên ngoài).
     ensureCx(uid, ctx.pol);
@@ -916,10 +920,14 @@ export class ConnectorSession {
     // CLI đã hủy lời gọi (hoặc bấm Dừng) ngay trước khi chạy: chưa gửi gì đi thì không được gửi nữa.
     if (signal?.aborted) return { content: "Lời gọi đã bị hủy nên công cụ chưa chạy.", is_error: true };
     if (this.perm(name, args) === "block") return { content: "Người dùng đã chặn hoặc tắt công cụ này.", is_error: true };
-    // Composio đọc lược đồ công cụ (tìm công cụ, xem tham số): trả ngay từ cache 24 giờ nếu lần đọc y hệt đã có, khỏi đi vòng tới máy chủ Composio. Trả từ cache không đi tới máy chủ nên không tính vào giới hạn số lần gọi.
+    // Composio đọc lược đồ công cụ (tìm công cụ, xem tham số): trả ngay từ cache 24 giờ theo (người dùng, toolkit), khỏi đi vòng tới máy chủ Composio.
+    // Trả từ cache không đi tới máy chủ nên không tính vào giới hạn số lần gọi. Trả theo toolkit mà model vẫn tìm lại toolkit đó trong lượt: cache không đủ, tìm thật.
     if (ct.composio && isSchemaRead(ct.tool.name)) {
-      const hit = schemaCacheGet(this.uid, ct.tool.name, args);
-      if (hit !== null) return { content: hit, is_error: false };
+      const hit = schemaCacheLookup(this.uid, ct.tool.name, args);
+      if (hit && !hit.kits?.some((k) => this.cxServed.has(k))) {
+        for (const k of hit.kits ?? []) this.cxServed.add(k);
+        return { content: hit.content, is_error: false };
+      }
     }
     const max = r ? settingsOf(r).maxCalls : 0;
     const n = (this.calls.get(ct.cid) ?? 0) + 1;
@@ -973,7 +981,9 @@ export function connectorsPrompt(s: ConnectorSession, proxy = false) {
 Danh mục công cụ theo connector:
 ${catalog(s)}`
     : `Người dùng đã kết nối Synchro với: ${names}. Các công cụ có tiền tố tên connector (ví dụ notion__search) thao tác trực tiếp trên tài khoản của họ ở các ứng dụng đó.`;
-  const cx = s.tools.some((t) => t.composio) ? `\n${COMPOSIO_PROMPT}` : "";
+  // Composio: kèm công cụ người dùng đã tìm trong 24 giờ (tên + tham số) để model gọi thẳng, khỏi tìm lại (E3.4).
+  const known = s.tools.some((t) => t.composio) ? cxKnownPrompt(s.uid) : "";
+  const cx = s.tools.some((t) => t.composio) ? `\n${COMPOSIO_PROMPT}${known ? `\n${known}` : ""}` : "";
   return `${head}${cx}
 Hãy dùng chúng khi câu hỏi cần dữ liệu hoặc hành động trong các ứng dụng này; nếu không cần thì trả lời bình thường.
 Người dùng có thể gõ @Tên (tên connector viết liền, bỏ khoảng trắng; ví dụ @GitHub, @GoogleDrive, @Composio) trong tin nhắn để chỉ định connector: khi thấy @Tên khớp một connector ở trên, hãy dùng công cụ của đúng connector đó cho yêu cầu này.
