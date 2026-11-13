@@ -199,7 +199,9 @@ const EFFORTS: [string, string][] = [["low", "Thấp"], ["medium", "Trung bình"
 type TplKey = "doc" | "slides" | "design";
 // Mỗi mẫu là một "studio": gắn với plugin cùng tên (Design / Slides / Docs Studio) để model có cả thư viện skill chuyên môn.
 const STUDIO_OF: Record<TplKey, "docs" | "slides" | "design"> = { doc: "docs", slides: "slides", design: "design" };
-const NARROW = "(max-width: 760px)";
+// Dưới 860px: thanh bên đóng sẵn, mở ra là bảng nổi đè lên chat kèm lớp phủ tối, chọn chat hoặc bấm lớp phủ thì đóng.
+// (Ngăn kéo điện thoại dưới 640px vẫn giữ nguyên — xem @media trong globals.css.)
+const NARROW = "(max-width: 860px)";
 const TPLS: { k: TplKey; name: string; label: string; ph: string; desc: string; sys: string }[] = [
   { k: "doc", name: "Tài liệu", label: "Synchro Docs", ph: "Tài liệu này nên nói về chủ đề gì?", desc: "Tài liệu mà nhóm của bạn đọc, bình luận và chỉnh sửa trực tiếp, trong khi Synchro giữ cho tài liệu luôn cập nhật.",
     sys: "Tôi tạo một tài liệu soạn thảo bằng công cụ Docs, gồm tiêu đề và nội dung các phần. Tài liệu này có thể xuất ra Word, PDF hoặc Markdown." },
