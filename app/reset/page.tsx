@@ -29,6 +29,9 @@ export default function ResetPassword() {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const [support, setSupport] = useState("");
+  // Tài khoản có khóa truy cập / xác minh hai bước (máy chủ báo khi kiểm tra đường dẫn): hỏi có gỡ luôn không, mặc định giữ.
+  const [factors, setFactors] = useState(false);
+  const [dropFactors, setDropFactors] = useState(false);
   // Turnstile (khi quản trị viên đã bật): chạy ngầm từ lúc hiện ô email; mỗi mã dùng một lần nên gửi xong thì lấy mã mới.
   const tsKey = useTurnstileKey();
   const tsTok = useRef("");
@@ -44,7 +47,7 @@ export default function ResetPassword() {
   // Kiểm tra trước: đường dẫn đã hết hạn thì nói ngay, không để người dùng gõ mật khẩu rồi mới biết.
   const check = (t: string) => {
     setStage("loading"); setErr("");
-    post("/api/auth/reset", { token: t, check: true }).then(() => setStage("set"), (e: PostError) => {
+    post("/api/auth/reset", { token: t, check: true }).then((j: { factors?: unknown }) => { setFactors(j?.factors === true); setDropFactors(false); setStage("set"); }, (e: PostError) => {
       if (e.status === 400) { setStage("bad"); history.replaceState(null, "", "/reset"); }
       else { setErr(e.message); setStage("retry"); }
     });
@@ -63,7 +66,7 @@ export default function ResetPassword() {
     if (pw.length < 8) return setErr("Mật khẩu cần ít nhất 8 ký tự.");
     if (pw !== again) return setErr("Hai mật khẩu chưa khớp.");
     setBusy(true); setErr("");
-    try { await post("/api/auth/reset", { token, password: pw, lang: getLang() }); setStage("done"); history.replaceState(null, "", "/reset"); }
+    try { await post("/api/auth/reset", { token, password: pw, lang: getLang(), dropFactors: factors && dropFactors }); setStage("done"); history.replaceState(null, "", "/reset"); }
     catch (e) { setErr((e as Error).message); } finally { setBusy(false); }
   };
   const again2 = () => { setErr(""); setStage("ask"); };
@@ -108,6 +111,7 @@ export default function ResetPassword() {
               <input id="rp-again" className="field" type={show ? "text" : "password"} autoComplete="new-password" value={again} onChange={(ev) => { setAgain(ev.target.value); setErr(""); }} />
               <button type="button" className="icon-btn" aria-label={tr(show ? "Ẩn mật khẩu" : "Hiện mật khẩu")} aria-pressed={show} onClick={() => setShow(!show)}>{show ? <EyeOff size={16} /> : <Eye size={16} />}</button>
             </div>
+            {factors && <label className="rp-check"><input type="checkbox" checked={dropFactors} onChange={(ev) => setDropFactors(ev.target.checked)} /><span>{tr("Xóa cả passkey và xác thực 2 bước cũ (nên chọn nếu bạn mất thiết bị)")}</span></label>}
             {e}
             <button className="btn dark rp-go" disabled={busy || !pw || !again}>{busy ? <span className="api-spin" /> : "Lưu mật khẩu mới"}</button>
           </form>

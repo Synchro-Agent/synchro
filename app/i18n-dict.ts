@@ -1825,6 +1825,8 @@ Object.assign(VI2EN, {
   "Hãy xác minh lại bằng mật khẩu hoặc khóa truy cập trước khi thêm cách đăng nhập mới.": "Confirm it's you with your password or a passkey before adding a new way to sign in.",
   "Tài khoản này chưa có mật khẩu. Hãy xác minh bằng khóa truy cập, hoặc đăng xuất rồi đăng nhập lại.": "This account has no password. Confirm with a passkey, or sign out and sign in again.",
   "Tài khoản này chưa có khóa truy cập.": "This account has no passkeys yet.",
+  // Trang đặt lại mật khẩu (reset/page.tsx): gỡ cách đăng nhập cũ khi mất thiết bị.
+  "Xóa cả passkey và xác thực 2 bước cũ (nên chọn nếu bạn mất thiết bị)": "Also remove old passkeys and two-step verification (choose this if you lost your device)",
 });
 // Composio: connector chính (Cài đặt → Connectors, menu +, nút Connect Link trong khung chat, lỗi máy chủ).
 SAME_WORDS.add("Composio");
