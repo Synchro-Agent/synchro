@@ -7,6 +7,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { audit, DATA_DIR, db, getSetting, getUser, isAdmin, setSetting, type UserRow } from "./authstore";
 import { elevenMissing, serviceKey } from "./providers";
+import { speechLimitMsg, type SpeechUse } from "./limitmsg";
 
 export class SpeechErr extends Error {
   constructor(msg: string, public status = 400, public code?: string) { super(msg); }
@@ -439,12 +440,13 @@ export function addSpend(uid: string, n: number) {
     console.warn(`[speech] đã dùng ${now} / ${lim} credit ElevenLabs hôm nay`);
   }
 }
-/** Trước một thao tác tốn credit: báo lỗi có mã budget khi đã hết hạn mức (nơi gọi chuyển sang giọng của trình duyệt). */
-export function checkBudget(u: UserRow) {
+/** Trước một thao tác tốn credit: báo lỗi có mã budget khi đã hết hạn mức (nơi gọi chuyển sang giọng của trình duyệt).
+ * use: lời báo gợi ý cách thay thế đúng với việc đang làm (đọc / trò chuyện → giọng trình duyệt; chép lời tệp → micro của trình duyệt; còn lại → chờ hồi). */
+export function checkBudget(u: UserRow, use: SpeechUse = "voice") {
   if (isAdmin(u)) return;
   const b = speechBudget(), mine = u.email_verified ? b.user : b.unverified;
-  if (spentToday() >= globalLimit()) throw new SpeechErr("Giọng AI đã hết hạn mức chung của hôm nay, ngày mai có lại. Đọc to và trò chuyện giọng nói vẫn dùng được bằng giọng của trình duyệt.", 429, "budget");
-  if (spentToday(u.id) >= mine) throw new SpeechErr("Bạn đã dùng hết hạn mức giọng AI của hôm nay, ngày mai có lại. Đọc to và trò chuyện giọng nói vẫn dùng được bằng giọng của trình duyệt.", 429, "budget");
+  if (spentToday() >= globalLimit()) throw new SpeechErr(speechLimitMsg("all", globalLimit(), use), 429, "budget");
+  if (spentToday(u.id) >= mine) throw new SpeechErr(speechLimitMsg("me", mine, use), 429, "budget");
 }
 /** Ai đang gọi: spent() tính credit vào đúng tài khoản mà không phải truyền qua từng công cụ. */
 export const spender = new AsyncLocalStorage<string>();

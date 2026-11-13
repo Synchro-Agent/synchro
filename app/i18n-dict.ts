@@ -6,6 +6,8 @@ import { MODELS_RULES_EN, MODELS_VI2EN } from "./i18n-models";
 import { AUTH_VI2EN } from "./i18n-auth";
 import { FX_VI2EN } from "./i18n-features";
 import { CX_VI2EN, cxActEn } from "./cxactions";
+/** Thời gian chờ "2 giờ 5 phút" / "45 phút" / "3 ngày" (limitmsg.ts waitVi) sang tiếng Anh. */
+const limitDurEn = (s: string) => s.replace(/(\d+) ngày/, (_, n: string) => `${n} ${n === "1" ? "day" : "days"}`).replace(/(\d+) giờ/, "$1 h").replace(/(\d+) phút/, "$1 min");
 // Từ điển tiếng Anh: chuỗi gốc tiếng Việt → tiếng Anh. Chiều ngược lại (chuỗi gốc tiếng Anh → tiếng Việt) nằm ở i18n-vi.ts: trình duyệt chỉ tải từ điển của ngôn ngữ đang dùng (i18n.tsx).
 export const VI2EN: Record<string, string> = {
   "Hiện thêm": "Show",
@@ -1833,6 +1835,15 @@ RULES_EN.push(
   [/^Ảnh gốc quá lớn \(tối đa (\d+) MB\)/, (m) => `The source image is too large (${m[1]} MB at most).`],
   [/^(Antigravity|Grok|ChatGPT): (.+)\. Đang thử (.+)$/, (m) => `${m[1]} couldn't make the image, trying ${m[3]}`],
   [/^Đang dùng công cụ (.+)$/, (m) => `Using tool ${m[1]}`], [/^Đang dùng ([^:]+): (.+)$/, (m) => `Using ${m[1]}: ${m[2]}`],
+);
+// Lời báo hạn mức (limitmsg.ts, H1.2): hạn mức nào + bao giờ hồi + phần "trong lúc chờ" (bản dịch nằm trong VI2EN). Đặt ĐẦU danh sách:
+// luật chung hơn (vd. "Giọng …" của mục Speech) không được bắt trước câu dài này.
+RULES_EN.unshift(
+  [/^Tài khoản đã dùng hết hạn mức (\d+) ảnh AI mỗi giờ\. Hạn mức hồi lại sau khoảng (\d+) phút\. (.+)$/, (m) => `This account has used its limit of ${m[1]} AI images per hour. It resets in about ${m[2]} min. ${VI2EN[m[3]] ?? m[3]}`],
+  [/^Bạn đã dùng hết giới hạn của phiên này \(phiên 5 giờ\)\. Phiên mới bắt đầu sau (.+?)\. (Trong lúc chờ.+)$/, (m) => `You've used this session's limit (5-hour session). A new session starts in ${limitDurEn(m[1])}. ${VI2EN[m[2]] ?? m[2]}`],
+  [/^Bạn đã dùng hết giới hạn hằng tuần\. Giới hạn được đặt lại sau (.+?)\. (Trong lúc chờ.+)$/, (m) => `You've used your weekly limit. It resets in ${limitDurEn(m[1])}. ${VI2EN[m[2]] ?? m[2]}`],
+  [/^(?:Giọng AI đã hết hạn mức chung của cả máy chủ hôm nay|Bạn đã dùng hết hạn mức giọng AI của hôm nay \((\d+) credit\))\. Hạn mức hồi lại sau (.+?) \(0 giờ UTC\)\. (.+)$/,
+    (m) => `${m[1] ? `You've used today's AI voice limit (${m[1]} credits).` : "The AI voice has reached the server's shared limit for today."} It resets in ${limitDurEn(m[2])} (00:00 UTC). ${VI2EN[m[3]] ?? m[3]}`],
 );
 // Tình trạng hệ thống, cảnh báo cho quản trị viên (ops.ts), trang quyền riêng tư.
 Object.assign(VI2EN, {

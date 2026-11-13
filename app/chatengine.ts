@@ -49,7 +49,8 @@ import { type ABlock, type Citer, anthropicCall, blocksText, searchResults, chat
 import { mergedProviders, prewarmClaude, sessionPlain, subCli, subTurn } from "./ai/subs";
 import { PROJECT_DOC_RULES, PROJECT_DOC_TOOL, projectDocsLong, projectIns, readProjectFile } from "./projectdocs";
 import { REJECTED_RULE, REJECTED_TAG, rejectedBlock, stripAppliedNotes, withProjectIns, withRejected } from "./turnctx";
-import { ASPECTS, generateImages, IMAGE_RULES, IMAGE_TOOL_NAME, imageBudget, imageProduct, imageTool, imageName, IMG_NAME, requestSlug, type ImgErr, type ImgOk } from "./ai/imagegen";
+import { ASPECTS, generateImages, HOUR_MAX as IMAGE_HOUR_MAX, IMAGE_RULES, IMAGE_TOOL_NAME, imageBudget, imageProduct, imageTool, imageName, IMG_NAME, requestSlug, type ImgErr, type ImgOk } from "./ai/imagegen";
+import { imageLimitMsg } from "./limitmsg";
 import { IMG_BUDGET_MS, placeholderNote, settleBackground } from "./ai/imgbudget";
 import { POSTER_TEMPLATES, posterProps, type PosterTemplate } from "./design-engine/posters/props";
 import { genImageUrl } from "./artdoc";
@@ -640,7 +641,7 @@ async function runImage(x: Exec, c: Call): Promise<Run> {
     const props = posterProps(c.input?.poster);
     if (typeof props === "string") return fail(props);
     const wait = imageBudget(x.uid, 1);
-    if (wait) return fail(`Tài khoản đã tạo nhiều ảnh trong một giờ qua. Hãy thử lại sau khoảng ${Math.ceil(wait / 60_000)} phút.`);
+    if (wait) return fail(imageLimitMsg(IMAGE_HOUR_MAX(), wait));
     progress("step", "Đang dựng poster 3600×1890");
     try {
       // Satori (next/og) chỉ nạp khi thật sự dựng poster.
@@ -659,7 +660,8 @@ async function runImage(x: Exec, c: Call): Promise<Run> {
       reference = r;
     }
     const wait = imageBudget(x.uid, count);
-    if (wait) return fail(`Tài khoản đã tạo nhiều ảnh trong một giờ qua. Hãy thử lại sau khoảng ${Math.ceil(wait / 60_000)} phút.`);
+    // Nói rõ trần nào (số ảnh mỗi giờ), bao giờ hồi và cách thay thế không tốn ảnh (limitmsg.ts, H1.2): model chuyển lời này cho người dùng.
+    if (wait) return fail(imageLimitMsg(IMAGE_HOUR_MAX(), wait));
     // Lượt Antigravity gọi công cụ này đang giữ khóa của tài khoản, mà lượt tạo ảnh cũng cần khóa đó: CLI đã đọc xong cấu hình nên nhả được, như lúc chờ người dùng duyệt.
     x.park?.();
     const stops = [runSignal(), x.calls?.get(c.id)?.cancel].filter((v): v is AbortSignal => !!v);

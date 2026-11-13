@@ -62,7 +62,7 @@ const AGY_LOCK_MS = 120_000;
 // ---------------------------------------------------------------- hạn mức mỗi tài khoản
 // Một người thật khó tạo quá 40 ảnh mỗi giờ; model chạy vòng lặp thì tới đây là dừng, không đốt hết hạn mức gói. Tính cả lần lỗi vì lần lỗi cũng chạy CLI.
 const budget: Map<string, number[]> = ((globalThis as { __synchroImgBudget?: Map<string, number[]> }).__synchroImgBudget ??= new Map());
-const HOUR_MAX = () => Number(process.env.SYNCHRO_IMAGE_HOUR_MAX) || 40;
+export const HOUR_MAX = () => Number(process.env.SYNCHRO_IMAGE_HOUR_MAX) || 40;
 /** Giữ chỗ cho n ảnh; trả về số ms phải chờ khi đã hết (0 là được chạy). */
 export function imageBudget(uid: string, n: number, now = Date.now()): number {
   const list = (budget.get(uid) ?? []).filter((t) => now - t < 3600_000);

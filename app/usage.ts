@@ -8,6 +8,7 @@ import { adminRole, db, getSetting, isAdmin, setSetting, type UserRow } from "./
 import { vendorOf } from "./router";
 import { familyKey, parseId, versionCmp } from "./modelrules";
 import { providerPriceOf } from "./modelreg";
+import { usageLimitMsg } from "./limitmsg";
 
 export const SESSION_MS = 5 * 3600_000;
 export const WEEK_MS = 7 * 86_400_000;
@@ -257,14 +258,10 @@ export function usageState(u: UserRow, provider?: string): UsageState {
   };
 }
 
-// Thông báo khi đã dùng hết hạn mức, hoặc null nếu còn dùng được.
-const until = (t: number) => {
-  const m = Math.max(1, Math.ceil((t - Date.now()) / 60_000));
-  return m < 60 ? `${m} phút` : m < 1440 ? `${Math.floor(m / 60)} giờ${m % 60 ? ` ${m % 60} phút` : ""}` : `${Math.round(m / 1440)} ngày`;
-};
+// Thông báo khi đã dùng hết hạn mức, hoặc null nếu còn dùng được: nói hạn mức nào, bao giờ hồi, và cách dùng tiếp (limitmsg.ts, H1.2).
 export function overLimit(u: UserRow): string | null {
   for (const l of usageState(u).limits) {
-    if (l.limit !== null && l.used >= l.limit && l.resetAt) return l.key === "session" ? `Bạn đã dùng hết giới hạn của phiên này. Phiên mới bắt đầu sau ${until(l.resetAt)}.` : `Bạn đã dùng hết giới hạn hằng tuần. Giới hạn được đặt lại sau ${until(l.resetAt)}.`;
+    if (l.limit !== null && l.used >= l.limit && l.resetAt) return usageLimitMsg(l.key, l.resetAt);
   }
   return null;
 }
