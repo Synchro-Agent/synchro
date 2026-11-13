@@ -397,7 +397,8 @@ async function syncTools(id: string, signal?: AbortSignal) {
   const tools = r.dir === COMPOSIO ? annotate(got.tools) : got.tools;
   const now = Date.now();
   if (!tools.length && json<McpTool[]>(r.tools, []).length && !r.empty_seen) {
-    table().prepare("UPDATE connectors SET status = 'ok', error = NULL, last_error = ?, empty_seen = ?, checked_at = ?, updated_at = ? WHERE id = ?").run("Máy chủ vừa trả về danh sách công cụ trống nên Synchro giữ danh sách cũ và sẽ kiểm tra lại.", now, now, now, id);
+    // checked_at giữ là lần kiểm tra tốt gần nhất (thẻ hiện "Kết nối tốt lần cuối"); lần kiểm tra này ghi vào empty_seen, lịch kiểm tra lại tính theo cả hai.
+    table().prepare("UPDATE connectors SET status = 'ok', error = NULL, last_error = ?, empty_seen = ?, updated_at = ? WHERE id = ?").run("Máy chủ vừa trả về danh sách công cụ trống nên Synchro giữ danh sách cũ và sẽ kiểm tra lại.", now, now, id);
     return;
   }
   const st = settingsOf(r);
@@ -814,7 +815,7 @@ export class ConnectorSession {
       // Lượt này dùng danh sách đang có; lượt sau thấy công cụ hãng vừa thêm, khỏi chờ tới lần kiểm tra lại 12 giờ. Composio: công cụ meta không đổi
       // (ứng dụng vừa liên kết trên trang Composio dùng được ngay), vẫn xem lại sau 10 phút cho chắc.
       const stale = cx ? STALE_CX : STALE_TOOLS;
-      if (r.checked_at && Date.now() - r.checked_at > stale) nudgeSync(r.id, stale);
+      if (r.checked_at && Date.now() - Math.max(r.checked_at, r.empty_seen ?? 0) > stale) nudgeSync(r.id, stale);
       const perms = json<Record<string, Perm>>(r.perms, {});
       const lg = logoOfRow(r);
       for (const tool of toolsOf(r)) {
@@ -1012,7 +1013,7 @@ export async function recheckConnectors(now = Date.now()) {
   const tried = (g.__synchroConnTried ??= new Map());
   for (const [k, t] of tried) if (now - t > RECHECK_RETRY) tried.delete(k);
   // Bỏ các connector vừa thử ngay trong câu truy vấn: lọc sau LIMIT thì vài chục connector hỏng cũ nằm đầu danh sách làm connector tốt không bao giờ tới lượt.
-  const rows = table().prepare("SELECT id FROM connectors WHERE enabled = 1 AND checked_at IS NOT NULL AND checked_at < ? AND id NOT IN (SELECT value FROM json_each(?)) ORDER BY checked_at LIMIT ?").all(now - RECHECK_AFTER, JSON.stringify([...tried.keys()]), RECHECK_BATCH) as { id: string }[];
+  const rows = table().prepare("SELECT id FROM connectors WHERE enabled = 1 AND checked_at IS NOT NULL AND MAX(checked_at, COALESCE(empty_seen, 0)) < ? AND id NOT IN (SELECT value FROM json_each(?)) ORDER BY MAX(checked_at, COALESCE(empty_seen, 0)) LIMIT ?").all(now - RECHECK_AFTER, JSON.stringify([...tried.keys()]), RECHECK_BATCH) as { id: string }[];
   if (!rows.length) return 0;
   g.__synchroConnBusy = true;
   try {

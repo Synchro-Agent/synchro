@@ -617,8 +617,12 @@ try {
     const msg = await thrown(C.refreshConnector(uid, id));
     ok(/không hợp lệ/.test(msg) && perm("search_docs") === "block" && perm("create_page") === "allow", "thiếu mảng tools: báo lỗi, quyền nguyên vẹn", msg);
     S.list = { tools: [] };
+    const okAt = row(id).checkedAt;
+    await sleep(5);
     await C.refreshConnector(uid, id);
     ok(row(id).tools.length === TOOLS.length && perm("search_docs") === "block" && /danh sách công cụ trống/.test(row(id).lastError ?? ""), "danh sách rỗng lần đầu: chưa tin, giữ nguyên, có ghi lại", JSON.stringify(row(id).lastError));
+    // R14: thẻ hiện "Kết nối tốt lần cuối" từ checkedAt; lần kiểm tra có lỗi không được đẩy nó thành "vừa xong".
+    ok(okAt && row(id).checkedAt === okAt, "danh sách rỗng: checkedAt vẫn là lần kiểm tra tốt gần nhất", `${okAt} → ${row(id).checkedAt}`);
     S.list = undefined;
     await C.refreshConnector(uid, id);
     ok(!row(id).lastError, "có lại công cụ: hết cảnh báo");
