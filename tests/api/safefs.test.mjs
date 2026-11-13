@@ -156,6 +156,16 @@ console.log("4. Hàng đợi chạy code");
   await new Promise((r) => setTimeout(r, 5));
   ok(seen.some(([u, p]) => u === "b" && p === 1), "vị trí cập nhật khi người trước chạy", seen);
   fa(); const fb = await p2; fb();
+
+  // Không có làn chạy ngắn (shortSec<=0, như hàng đợi dựng video): mọi slot đều dùng được, không dành riêng chỗ nào.
+  const q7 = createRunQueue({ max: 3, queue: 5, perUser: 5, waitMs: 2000, shortSec: 0 });
+  const g1 = await q7.acquire("a", 300), g2 = await q7.acquire("b", 300), g3 = await q7.acquire("c", 300);
+  ok(q7.running === 3, "shortSec<=0: song song đạt đúng max (không khóa mất một slot)", q7.running);
+  const extra = q7.acquire("d", 300);
+  await new Promise((r) => setTimeout(r, 5));
+  ok(q7.queued === 1, "vượt max thì mới xếp hàng", q7.queued);
+  g1(); g2(); g3();
+  (await extra)();
 }
 
 fs.rmSync(T, { recursive: true, force: true });

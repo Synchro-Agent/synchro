@@ -122,7 +122,8 @@ export function createRunQueue({ max = 3, queue = 20, perUser = 4, waitMs = 240_
   let closed = "";
   const active = []; // { u, short }
   const waiting = []; // { u, short, ok, no, timer }
-  const canRun = (short) => active.length < max && (short || active.filter((a) => !a.short).length < Math.max(1, max - 1));
+  // shortSec <= 0: không có làn chạy ngắn, nên không dành riêng chỗ nào (nếu không, chỗ dành riêng khóa luôn một slot vì không lần chạy nào là "ngắn").
+  const canRun = (short) => active.length < max && (short || shortSec <= 0 || active.filter((a) => !a.short).length < Math.max(1, max - 1));
   const count = (u) => active.filter((a) => a.u === u).length;
   // Báo vị trí hàng chờ cho người đang đợi (1-based theo thứ tự vào hàng) để hiện "đang xếp hàng, vị trí N".
   const notify = () => { for (let i = 0; i < waiting.length; i++) { try { waiting[i].onWait?.(i + 1, active.length, waiting.length); } catch { /* bỏ */ } } };
