@@ -38,7 +38,8 @@ const RISKY_TEXT = /(^|[.!?:;]\s+|\b(to|can|will|and|then|may|that|you)\s+)(run|
 function looksRead(t: ToolInfo) {
   const w = toolWords(t.name);
   if (!READ_VERB.has(w[0]) || (w.length === 1 && VAGUE_ALONE.has(w[0]))) return false;
-  if (w.some((x, i) => WRITE_VERB.has(x) || (WRITE_NOUN.has(x) && LINK_WORD.has(w[i - 1])))) return false;
+  // Động từ ghi rõ ràng; hoặc sau and / or / then bất kỳ từ không phải động từ đọc (get_and_forward, list_and_share): coi là ghi (fail-closed).
+  if (w.some((x, i) => WRITE_VERB.has(x) || (i > 0 && LINK_WORD.has(w[i - 1]) && !READ_VERB.has(x)))) return false;
   if (RISKY_TEXT.test(t.description ?? "")) return false;
   const schema = t.inputSchema as { properties?: Record<string, unknown> } | undefined;
   if (schema?.properties && typeof schema.properties === "object" && Object.keys(schema.properties).some((k) => RISKY_PARAM.test(k))) return false;
@@ -54,9 +55,10 @@ export const readLike = (t: ToolInfo) => roHint(t) === true || guessedRead(t);
 // thì không cảnh báo xóa dữ liệu, nhưng vẫn phải hỏi trước vì không phải công cụ đọc.
 const NEUTRAL_VERB = new Set(["ask", "answer", "explain", "summarize", "summarise", "analyze", "analyse", "describe", "check", "count", "compare", "validate", "lookup", "resolve", "translate", "calculate", "estimate", "preview", "suggest", "recommend"]);
 export const destructiveLike = (t: ToolInfo) => {
-  const a = t.annotations, ro = roHint(t);
-  if (ro === true || a?.destructiveHint === false) return false;
-  if (a?.destructiveHint === true || ro === false) return true;
+  // Connector tự thêm (untrusted): không tin readOnlyHint cũng không tin destructiveHint:false của máy chủ lạ.
+  const a = t.annotations, ro = roHint(t), dh = t.untrusted ? undefined : a?.destructiveHint;
+  if (ro === true || dh === false) return false;
+  if (dh === true || ro === false) return true;
   return !guessedRead(t) && !NEUTRAL_VERB.has(toolWords(t.name)[0]);
 };
 // Quy tắc đoán cũ (so chuỗi con, chấp nhận query / find đứng một mình): quyền "Luôn cho phép" tự cấp theo quy tắc này cần xét lại một lần (xem migratePerms ở connectors.ts).
@@ -495,7 +497,11 @@ export class McpClient {
   // Chỉ gọi lại khi máy chủ khai báo rõ là không làm thay đổi dữ liệu (chỉ đọc, hoặc idempotent): công cụ ghi gửi lại có thể làm hai lần, nên không dựa vào đoán theo tên.
   callTool(tool: McpTool, args: Record<string, unknown>, o: CallOpts = {}) {
     // Quá giờ thì không gọi lại: hạn đã là cả phần thời gian CLI còn chờ được, gọi lại sẽ vượt hạn đó và CLI tự cắt trước khi Synchro kịp trả lời.
-    return this.request("tools/call", { name: tool.name, arguments: args }, { timeout: o.timeout ?? TOOL_BUDGET, idle: o.idle ?? TOOL_IDLE, signal: o.signal, retry: tool.annotations?.readOnlyHint === true || tool.annotations?.idempotentHint === true, lateNoRetry: true }, tool);
+    // Chỉ gọi lại khi máy chủ khai báo rõ là chỉ đọc / idempotent (không bao giờ dựa vào đoán theo tên: gửi lại công cụ ghi có thể làm hai lần).
+    // Connector tự thêm (untrusted): máy chủ lạ có thể khai man readOnlyHint cho công cụ ghi để được gửi lại — chỉ gọi lại khi tên công cụ cũng cho thấy là đọc.
+    const hinted = tool.annotations?.readOnlyHint === true || tool.annotations?.idempotentHint === true;
+    const retry = tool.untrusted ? hinted && looksRead(tool) : hinted;
+    return this.request("tools/call", { name: tool.name, arguments: args }, { timeout: o.timeout ?? TOOL_BUDGET, idle: o.idle ?? TOOL_IDLE, signal: o.signal, retry, lateNoRetry: true }, tool);
   }
 
   // Đóng phiên: xóa phiên đời cũ (nếu có), đóng luồng SSE.
