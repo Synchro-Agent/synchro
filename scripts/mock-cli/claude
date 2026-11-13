@@ -114,8 +114,8 @@ const loginFile = path.join(dir, ".mock-login");
       result({ subtype: "success", is_error: false, result: "Theo kết quả tìm web: xong.", usage: { input_tokens: prompt.length, output_tokens: 20, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 } });
       return;
     }
-    // Như Claude Code thật với --mcp-config: nối máy chủ MCP "synchro", gọi công cụ (mcp__synchro__…) khi cần.
-    const cfgJson = (() => { try { return JSON.parse(C.flag(a, "--mcp-config") ?? "null"); } catch { return null; } })();
+    // Như Claude Code thật với --mcp-config: nhận cả chuỗi JSON lẫn ĐƯỜNG DẪN TỆP (Synchro gửi token MCP qua tệp 0600, không qua tham số).
+    const cfgJson = (() => { let v = C.flag(a, "--mcp-config") ?? "null"; try { if (v !== "null" && fs.existsSync(v)) v = fs.readFileSync(v, "utf8"); } catch {} try { return JSON.parse(v); } catch { return null; } })();
     const mcpUrl = cfgJson?.mcpServers?.synchro?.url;
     const ask = C.toolAsk(prompt), allowed = (C.flag(a, "--allowedTools") ?? "").split(",");
     let mcpNote = "";

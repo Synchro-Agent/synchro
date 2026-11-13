@@ -306,7 +306,14 @@ export class ClaudeCodeEngine implements Engine {
     const builtin = req.web ? "WebSearch,WebFetch" : this.o.tools ?? "";
     const args = ["-p", "--output-format", "stream-json", "--verbose", "--include-partial-messages", "--tools", builtin];
     const allow = [...(req.mcp ? ["mcp__synchro"] : []), ...(req.web ? ["WebSearch", "WebFetch"] : [])];
-    if (req.mcp) args.push("--mcp-config", JSON.stringify({ mcpServers: { synchro: { type: "http", url: req.mcp.url } } }), "--strict-mcp-config");
+    // URL cầu nối MCP mang token bí mật của lượt: qua tệp 0600 (--mcp-config nhận đường dẫn tệp), KHÔNG qua tham số dòng lệnh —
+    // tham số nhìn thấy được ở /proc/<pid>/cmdline, mà các lượt chia sẻ cùng một user hệ thống của engine.
+    let mcpFile = "";
+    if (req.mcp) {
+      try { mcpFile = await turnFile(req, "claude-mcp", JSON.stringify({ mcpServers: { synchro: { type: "http", url: req.mcp.url } } })); }
+      catch (e) { yield err(`Không chuẩn bị được cấu hình công cụ cho Claude Code: ${(e as Error).message}`, "other"); return; }
+      args.push("--mcp-config", mcpFile, "--strict-mcp-config");
+    }
     if (allow.length) args.push("--allowedTools", allow.join(","));
     // Hướng dẫn hệ thống của Synchro THAY lời nhắc mặc định của Claude Code (dành cho lập trình trong terminal, vài nghìn token mỗi lượt,
     // không dùng gì cho Synchro): lượt nhanh hơn, rẻ hơn, model không tự nhận là "Claude Code". Dài (nhiều skill, studio, connector) thì
@@ -327,8 +334,9 @@ export class ClaudeCodeEngine implements Engine {
     // Công cụ của Synchro (lệnh trong workspace, build, cài gói) có thể chạy lâu: chờ tới 15 phút mỗi lời gọi.
     // Công cụ của Synchro có thể dừng chờ người dùng duyệt (chế độ quyền, trang web chưa được phép): chờ được tới hết 30 phút của lượt.
     const p = await start("claude", args, req.mcp ? { ...req, env: { ...req.env, MCP_TOOL_TIMEOUT: "1800000" } } : req, atts.length ? claudeInput(req.prompt, atts) : req.prompt);
-    if (sysFile) void p?.done.finally(() => rmEngineFile(req, sysFile).catch(() => {}));
-    if (!p) { if (sysFile) await rmEngineFile(req, sysFile).catch(() => {}); yield notInstalled("claude"); return; }
+    const tmpFiles = [sysFile, mcpFile].filter(Boolean);
+    if (tmpFiles.length) void p?.done.finally(() => { for (const f of tmpFiles) void rmEngineFile(req, f).catch(() => {}); });
+    if (!p) { for (const f of tmpFiles) await rmEngineFile(req, f).catch(() => {}); yield notInstalled("claude"); return; }
     const r = yield* this.events(objects(p), p.kill);
     const e = await p.done;
     if (!r.done) yield exitError("claude", p, e);
