@@ -4,7 +4,7 @@
 // không đọc được kết quả và không nên làm hai lần (gửi thư, tạo hóa đơn: markEffect).
 import crypto from "node:crypto";
 import { AsyncLocalStorage } from "node:async_hooks";
-import { db, getSetting, getUser, isAdmin, verifyLocked, type UserRow } from "./authstore";
+import { db, getSetting, getUser, isAdmin, setSetting, verifyLocked, type UserRow } from "./authstore";
 import { noteRun, recordOps } from "./ops";
 import { addSpan, beginTrace, endTrace, noteFirstToken, withTrace } from "./tracing";
 import { accountLimit, accountTotal, acquire, noteRefused, queuedOf, queueLimit, withSlot, type WaitWhy } from "./turngate";
@@ -40,11 +40,35 @@ function init() {
     if (!cols.includes("effects")) d.exec("ALTER TABLE runs ADD COLUMN effects TEXT");
     // Lượt của đoạn chat ẩn danh: không giữ yêu cầu, xóa ít phút sau khi xong. Máy chủ vừa khởi động thì mọi lượt ẩn danh đã xong đều đã quá hạn.
     if (!cols.includes("ephemeral")) d.exec("ALTER TABLE runs ADD COLUMN ephemeral INTEGER");
+    // Các bước của lượt ghi nối thêm (append-only): mỗi bước một dòng, không đọc-sửa-ghi lại cả danh sách mỗi lần (lượt 100 bước
+    // không còn chậm dần theo bình phương). Khóa chính (run_id, seq) vừa là số thứ tự bước vừa cho phép lấy MAX(seq) rất nhanh.
+    d.exec(`CREATE TABLE IF NOT EXISTS run_events (
+      run_id TEXT NOT NULL, seq INTEGER NOT NULL, at INTEGER NOT NULL, kind TEXT NOT NULL, text TEXT NOT NULL,
+      PRIMARY KEY (run_id, seq))`);
+    // Lượt bị xóa (dọn 7 ngày, xóa đoạn chat, lượt ẩn danh, xóa tài khoản): xóa luôn các dòng sự kiện của nó, mọi đường xóa đều qua trigger này.
+    d.exec("CREATE TRIGGER IF NOT EXISTS runs_drop_events AFTER DELETE ON runs BEGIN DELETE FROM run_events WHERE run_id = OLD.id; END");
     d.prepare("DELETE FROM runs WHERE ephemeral = 1 AND status != 'running'").run();
     d.prepare("DELETE FROM runs WHERE updated_at < ?").run(Date.now() - KEEP_MS);
+    // Chuyển một lần các sự kiện cũ trong cột runs.events sang bảng run_events. Giữ cột cũ thêm một bản phát hành để quay lui được;
+    // getRun đọc cột cũ khi run_events chưa có dòng nào cho lượt đó.
+    if (getSetting("run_events_migrated", "") !== "1") { migrateEvents(d); setSetting("run_events_migrated", "1"); }
     ready = true;
   }
   return d;
+}
+/** Sao các sự kiện còn trong cột runs.events sang bảng run_events. Idempotent: INSERT OR IGNORE theo khóa (run_id, seq) nên chạy lại không nhân đôi. */
+export function migrateEvents(d = init()): number {
+  const rows = d.prepare("SELECT id, events FROM runs WHERE events IS NOT NULL AND events != '[]'").all() as { id: string; events: string }[];
+  const ins = d.prepare("INSERT OR IGNORE INTO run_events (run_id, seq, at, kind, text) VALUES (?, ?, ?, ?, ?)");
+  let n = 0;
+  d.transaction((list: typeof rows) => {
+    for (const r of list) {
+      let evs: RunEvent[];
+      try { evs = JSON.parse(r.events) as RunEvent[]; } catch { continue; }
+      for (const e of evs) if (e && typeof e.seq === "number") n += ins.run(r.id, e.seq, e.at ?? Date.now(), e.kind, e.text ?? "").changes;
+    }
+  })(rows);
+  return n;
 }
 /** Trang quyền riêng tư hứa tự xóa sau 7 ngày: dọn mỗi ngày, không chờ lần khởi động lại. Lượt đang chạy thì không đụng. */
 export const sweepRuns = () => { init().prepare("DELETE FROM runs WHERE updated_at < ? AND status != 'running'").run(Date.now() - KEEP_MS); };
