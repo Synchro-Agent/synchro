@@ -451,5 +451,64 @@ console.log("14. Câu khủng hoảng: luôn được trả lời cẩn thận, 
   ok(!R.isCrisis("sửa code này ```\nconsole.log('want to die')\n```"), "chữ trong khối code không tính");
   ok(R.isCrisis("x".repeat(40000) + " mình muốn tự tử"), "tài liệu dài: câu ở cuối vẫn được xét");
 }
+
+// Bộ 60 câu có nhãn (10 câu mỗi loại việc) cho blueprint D1: tra cứu web, thao tác connector / media, hỏi đáp, viết, code, phân tích.
+// Ba ca gốc từng sai: tra cứu tỷ giá rơi vào "hỏi đáp" (Haiku); tạo Google Docs qua connector rơi vào "học ngôn ngữ"; video motion graphic không dùng công cụ.
+// Yêu cầu: ít nhất 57/60 đúng loại việc.
+console.log("15. Bộ 60 câu (10 mỗi loại): định tuyến đúng ≥ 57/60");
+const SET60 = [
+  ["Tỷ giá USD hôm nay là bao nhiêu?", "lookup"], ["tỷ giá đô la hôm nay", "lookup"], ["giá vàng hôm nay thế nào", "lookup"],
+  ["giá xăng hôm nay bao nhiêu", "lookup"], ["latest exchange rate USD to VND", "lookup"], ["giá cổ phiếu VNM hôm nay", "lookup"],
+  ["thời tiết Hà Nội hôm nay ra sao", "lookup"], ["tin tức mới nhất về bóng đá", "lookup"], ["kết quả xổ số hôm nay", "lookup"],
+  ["tỉ giá euro sang tiền Việt hôm nay", "lookup"],
+  ["Tạo Google Docs báo cáo doanh thu", "act"], ["Create a Google Doc for the quarterly report", "act"], ["Send a Slack message to the team", "act"],
+  ["Gửi email cho khách hàng qua Gmail", "act"], ["sửa file trong Google Drive", "act"], ["thêm một dòng vào Google Sheets", "act"],
+  ["xóa thẻ này trên Trello", "act"], ["Tạo một tài liệu Google Docs tên Kế hoạch", "act"], ["Làm video motion graphic giới thiệu sản phẩm", "act"],
+  ["Tạo ảnh quảng cáo cho quán cà phê", "act"],
+  ["Thủ đô của Úc là gì?", "qa"], ["Giải thích khái niệm lãi kép", "qa"], ["Why is the sky blue?", "qa"],
+  ["Lịch sử nhà Trần có gì nổi bật?", "qa"], ["Vì sao lá cây có màu xanh?", "qa"], ["Ai phát minh ra bóng đèn?", "qa"],
+  ["Nên ăn sáng lúc mấy giờ thì tốt?", "qa"], ["Trà xanh có mấy loại phổ biến?", "qa"], ["What is the capital of Japan?", "qa"],
+  ["Hà Nội có bao nhiêu quận?", "qa"],
+  ["Viết email xin nghỉ phép ngày mai", "write"], ["Viết caption Instagram cho quán cà phê", "write"], ["Soạn thư cảm ơn khách hàng", "write"],
+  ["Viết một bài thơ về mùa thu Hà Nội", "write"], ["Write a short cover letter for a marketing job", "write"],
+  ["Viết lại đoạn này cho chuyên nghiệp hơn: bên em có sản phẩm tốt lắm", "write"], ["Draft a thank-you note to my teacher", "write"],
+  ["Viết nội dung quảng cáo cho sản phẩm mới", "write"], ["Soạn lời chúc mừng sinh nhật", "write"], ["Viết đoạn mở đầu cho bài luận về môi trường", "write"],
+  ["Viết hàm JavaScript kiểm tra số nguyên tố", "code"], ["Viết code Python đọc file CSV", "code"], ["Regex kiểm tra email hợp lệ", "code"],
+  ["Viết câu lệnh SQL lấy 10 khách hàng mua nhiều nhất", "code"], ["Python là gì?", "code"], ["Giải thích sự khác nhau giữa let và const trong JavaScript", "code"],
+  ["Refactor this React component to use hooks", "code"], ["Viết hàm đệ quy tính giai thừa", "code"], ["Cách dùng async await trong JavaScript", "code"],
+  ["Write a bash script to rename files", "code"],
+  ["So sánh iPhone 17 và Galaxy S26, nên mua cái nào?", "analyze"], ["Đánh giá ưu nhược điểm của làm việc từ xa", "analyze"],
+  ["Phân tích chiến lược kinh doanh của Shopee tại Việt Nam", "analyze"], ["Phân tích SWOT cho một quán cà phê nhỏ", "analyze"],
+  ["Đánh giá rủi ro khi mở rộng chi nhánh", "analyze"], ["Nên chọn thuê hay mua văn phòng, phân tích giúp tôi", "analyze"],
+  ["So sánh ưu nhược điểm của xe điện và xe xăng", "analyze"], ["Phân tích nguyên nhân doanh thu giảm quý này", "analyze"],
+  ["Evaluate the pros and cons of remote work", "analyze"], ["Đánh giá chiến lược marketing của đối thủ", "analyze"],
+];
+{
+  let good = 0;
+  const miss = [];
+  for (const [text, want] of SET60) { const got = R.taskOf(q(text)); if (got === want) good++; else miss.push(`${text} → ${got} (mong ${want})`); }
+  ok(good >= 57, `60 câu: ${good}/60 đúng loại việc (cần ≥ 57)`, miss.join(" | "));
+  ok(good === 60, `(tham khảo) cả 60 câu đúng`, miss.join(" | "));
+}
+
+console.log("16. Tra cứu web → model hạng vừa trở lên có công cụ; codeOnly ở modelrules");
+{
+  const { modelrules: M } = await loadTs(["modelrules"]);
+  for (const text of ["Tỷ giá USD hôm nay là bao nhiêu?", "giá vàng hôm nay thế nào", "latest exchange rate USD to VND"]) {
+    const r = R.routeModel(q(text), ALL);
+    ok(r.task === "lookup" && r.tier !== "fast" && !R.needsNoTools(q(text)) && RANK.indexOf(r.effort) >= RANK.indexOf("medium"), `“${text.slice(0, 40)}” → tra cứu, model ≥ hạng vừa, có công cụ: ${r.model} · ${r.effort}`, JSON.stringify(r));
+  }
+  // Trên gói chỉ có Haiku + Sonnet: tra cứu chọn Sonnet (hạng vừa), không Haiku.
+  ok(R.routeModel(q("Tỷ giá USD hôm nay"), ["anthropic/claude-haiku-5-5", "anthropic/claude-sonnet-5-5"]).tier !== "fast", "tra cứu không chọn Haiku khi có Sonnet");
+  // (b) không kéo câu đời thường có "hôm nay" thành tra cứu.
+  ok(R.taskOf(q("Hôm nay 28/10 mình rảnh từ 9:30, gợi ý lịch học")) !== "lookup", "“hôm nay mình rảnh” không phải tra cứu");
+  ok(R.taskOf(q("giá vàng")) !== "lookup", "“giá vàng” trần (không mốc thời gian) vẫn là hỏi đáp thường");
+  // (d) codeOnly: chỉ bắt tên model code (xét phần sau "/"); gói "sub-codex/" bao model chung thì KHÔNG bị tính.
+  for (const k of ["sub-grok/grok-build", "sub-grok/grok-4.7-build-fast", "openai/gpt-5-codex", "qwen/qwen3-coder", "codex-mini-latest"]) ok(M.codeOnly(k), `codeOnly(${k}) = true`);
+  for (const k of ["sub-codex/gpt-6.1-sol", "sub-codex/gpt-6-luna", "anthropic/claude-opus-5-5", "google/gemini-4-argon", "sub-grok/grok-4.7"]) ok(!M.codeOnly(k), `codeOnly(${k}) = false`);
+  // Việc không phải code: model code-only bị loại, nhưng gói ChatGPT (sub-codex) vẫn dùng bình thường.
+  const codexOnly = R.routeModel(q("Thủ đô của Úc là gì?"), ["sub-codex/gpt-6.1-sol", "sub-codex/gpt-6-luna"]);
+  ok(codexOnly && /sub-codex\//.test(codexOnly.model), `gói Codex (model chung) vẫn dùng cho hỏi đáp: ${codexOnly?.model}`, JSON.stringify(codexOnly));
+}
 console.log(`\nKết quả: ${pass} đạt, ${fail} lỗi`);
 process.exit(fail ? 1 : 0);

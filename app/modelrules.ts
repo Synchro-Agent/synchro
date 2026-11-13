@@ -102,6 +102,12 @@ export function tierOf(key: string): Tier {
 }
 export const isFrontier = (key: string) => tierOf(key) === "strong" && words(key).some((x) => FRONTIER_WORDS.has(x));
 
+// Model chỉ dùng để viết code (không hợp cho việc chung): tên dòng chứa build / codex / coder / code-. Xét phần tên model
+// sau dấu "/" (như words / tierOf), nên tiền tố gói "sub-codex/" KHÔNG bị tính — đó là gói ChatGPT bao model chung (gpt-6.1-sol…).
+// Thay cho regex CODE_ONLY cũ trong router chỉ bắt grok-build; giờ bắt thêm codex / coder và các dòng "…-code-…".
+const CODE_ONLY_RE = /(?:^|[-_])(?:build|codex|coder)(?:[-_]|$)|(?:^|[-_])code-/;
+export const codeOnly = (key: string): boolean => CODE_ONLY_RE.test(key.toLowerCase().split("/").pop() ?? "");
+
 /**
  * Dòng model của một mã model kèm tên hãng gốc khi mã có dạng "hãng/model" (nhà cung cấp chứa model của nhiều hãng kiểu OpenRouter):
  * "deepseek/deepseek-v4-pro" → "deepseek/deepseek-pro", nên "randomuser/deepseek-v9-pro" hay "x/claude-opus-99" là dòng khác, không thay được model chính chủ.

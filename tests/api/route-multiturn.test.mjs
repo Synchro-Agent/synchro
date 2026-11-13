@@ -27,7 +27,7 @@ const CONVS = [
   ]],
   ["Làm web rồi chuyển chuyện: không kéo theo model mạnh", [
     ["Làm website bán hàng cho shop quần áo", { t: "build", min: "strong" }, ART],
-    ["giá vàng hôm nay", { t: "qa", max: "balanced", fast: false }, "Giá vàng hôm nay..."],
+    ["giá vàng hôm nay", { t: ["qa", "lookup"], max: "balanced", fast: false }, "Giá vàng hôm nay..."],
     ["mấy giờ rồi", { t: ["qa", "chat"], max: "fast", eMax: "low" }, "Bây giờ là 9 giờ."],
     ["mình đi ngủ đây", { max: "fast", eMax: "low" }, "Ngủ ngon nhé!"],
   ]],
@@ -142,6 +142,18 @@ const CONVS = [
     ["lam giup minh trang web ban hang", { t: "build", min: "strong", fast: false }, "Ban muon phong cach nao?"],
     ["hien dai", { t: "build", f: true, keep: true, fast: false }, ART],
     ["cam on nhieu", { t: "chat", max: "fast", eMax: "low", fast: true }],
+  ]],
+  // Blueprint D1: thao tác connector (động từ + tên ứng dụng), tra cứu web giữa chừng, rồi lại thao tác connector.
+  ["Connector rồi tra cứu web rồi connector", [
+    ["Tạo Google Docs báo cáo quý 3", { t: "act", min: "balanced", fast: false }, "Mình đã tạo tài liệu trong Google Docs."],
+    ["Tỷ giá USD hôm nay là bao nhiêu?", { t: "lookup", min: "balanced", max: "strong", fast: false }, "Khoảng 25.000 đồng (nguồn Vietcombank)."],
+    ["còn euro thì sao", { t: ["lookup", "qa"], f: true, fast: false }, "Euro khoảng 27.000 đồng."],
+    ["gửi báo cáo đó qua Gmail cho sếp", { t: "act", fast: false }],
+  ]],
+  ["English: connector action + web lookup", [
+    ["Create a Google Doc for the Q3 report", { t: "act", min: "balanced", fast: false }, "Done, created the doc."],
+    ["what is the latest USD to VND exchange rate", { t: "lookup", min: "balanced", fast: false }, "About 25,000 VND."],
+    ["send a Slack message to the team about it", { t: "act", fast: false }],
   ]],
 ];
 
