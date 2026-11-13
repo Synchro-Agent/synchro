@@ -315,15 +315,21 @@ try {
     ok(await until(`(${cur}) === "artifacts" && location.hash === "#v=artifacts"`, 10000), "mở thẳng link #v=artifacts → đúng trang Artifacts", { hash: await ev(`location.hash`), nav: await ev(cur) });
     await home("desktop", "#v=skills");
     ok(await until(`(${cur}) === "customize"`, 10000), "mở thẳng link #v=skills → Kho kỹ năng", await ev(cur));
-    // Cài đặt: ⇧⌘, → #s=<mục>; Esc đóng thì địa chỉ không còn #s=; Back không mở lại Cài đặt (thay thế, không chèn lịch sử).
+    // Cài đặt: ⇧⌘, → #s=<mục>; Esc đóng thì địa chỉ không còn #s=; Back không mở lại Cài đặt.
+    // Mở Cài đặt là một mục lịch sử (LIVE-8, hashnav.ts): Back lúc Cài đặt đang mở chỉ đóng Cài đặt, về đúng trang đã mở nó — thay thế mục
+    // của trang đó thì Back bỏ qua luôn trang ấy. Đóng bằng Esc thì app history.back() bỏ mục #s= vừa thêm, nên Back sau đó không mở lại Cài đặt.
     await home("desktop");
     await click(`document.querySelector(".rail [data-nav=inbox]")`, "Hộp thư"); await until(`location.hash === "#v=inbox"`, 4000);
-    const len0 = await ev(`history.length`);
     await key(",", "Comma", 188, 4 | 8);
     ok(await until(`!!document.querySelector(".modal.settings") && location.hash.startsWith("#s=")`, 6000), "⇧⌘, → Cài đặt mở, địa chỉ #s=<mục>", await ev(`location.hash`));
-    ok((await ev(`history.length`)) === len0, "mở Cài đặt không chèn thêm mục lịch sử");
+    await ev(`history.back()`);
+    ok(await until(`!document.querySelector(".modal.settings") && location.hash === "#v=inbox" && (${cur}) === "inbox"`, 4000), "Back lúc Cài đặt đang mở → chỉ đóng Cài đặt, về lại Hộp thư", { hash: await ev(`location.hash`), nav: await ev(cur) });
+    await key(",", "Comma", 188, 4 | 8);
+    ok(await until(`!!document.querySelector(".modal.settings") && location.hash.startsWith("#s=")`, 6000), "mở lại Cài đặt", await ev(`location.hash`));
     await esc();
     ok(await until(`!document.querySelector(".modal.settings") && location.hash === "#v=inbox"`, 4000), "Esc đóng Cài đặt → địa chỉ về #v=inbox", await ev(`location.hash`));
+    await ev(`history.back()`);
+    ok(await until(`location.hash === "" && (${cur}) === "new"`, 4000) && !(await ev(`!!document.querySelector(".modal.settings")`)), "đóng Cài đặt rồi Back → về trang trước Hộp thư, không mở lại Cài đặt", { hash: await ev(`location.hash`), nav: await ev(cur) });
     await home("desktop", "#s=General");
     ok(await until(`!!document.querySelector(".modal.settings")`, 10000), "mở thẳng link #s=General → Cài đặt mở sẵn");
     await esc(); await sleep(300);
