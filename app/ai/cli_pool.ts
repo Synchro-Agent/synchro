@@ -6,6 +6,7 @@
 // SYNCHRO_CLAUDE_POOL_MAX: số tiến trình tối đa (0 là tắt hẳn).
 import { execFile } from "node:child_process";
 import crypto from "node:crypto";
+import fs from "node:fs";
 import os from "node:os";
 import { registerIdle, warmRoom } from "../turngate";
 import { spawnCli, type Exit, type Proc } from "./cli_runtime";
@@ -15,10 +16,28 @@ export type PoolSpec = { bin: string; args: string[]; env: Record<string, string
 type Entry = { key: string; spec: PoolSpec; proc: Proc; session: string | null; busy: boolean; stale: boolean; born: number; used: number; everUsed: boolean; gone: boolean; dropped: boolean; q: Json[]; wake: (() => void) | null };
 
 const envNum = (k: string, d: number) => { const n = Number(process.env[k]); return process.env[k] !== undefined && Number.isFinite(n) && n >= 0 ? n : d; };
-const maxTotal = () => envNum("SYNCHRO_CLAUDE_POOL_MAX", 6);
 const PER_ACCOUNT = 3;
 const IDLE_MS = 10 * 60_000, LIFE_MS = 60 * 60_000;
 const MAX_RSS_KB = 700 * 1024, MIN_FREE = 800 * 1024 * 1024;
+// Tổng RAM thật của máy (MB): MemTotal trên Linux (máy chủ thật), nơi khác dùng os.totalmem (máy dev).
+function realTotalMB(): number {
+  try { const m = /MemTotal:\s+(\d+)\s+kB/.exec(fs.readFileSync("/proc/meminfo", "utf8")); if (m) return Math.round(Number(m[1]) / 1024); } catch { /* không phải Linux */ }
+  const t = Math.round(os.totalmem() / 1048576);
+  return Number.isFinite(t) && t > 0 ? t : 0;
+}
+// Số tiến trình khởi động sẵn tối đa, tính một lần lúc khởi động theo RAM thật (trước đây cố định 6): mỗi tiến trình rảnh giữ tới
+// MAX_RSS_KB, chừa 2,5 GB cho hệ điều hành và máy chủ web, lấy nửa phần còn lại. Kẹp [2, 16]; đo RAM hỏng thì về mặc định cũ (6).
+let poolMaxCached: number | null = null;
+function poolMaxDefault(): number {
+  if (poolMaxCached !== null) return poolMaxCached;
+  const total = realTotalMB(), per = Math.round(MAX_RSS_KB / 1024);
+  const n = total > 0 ? Math.floor((total - 2560) * 0.5 / per) : NaN;
+  poolMaxCached = Number.isFinite(n) ? Math.max(2, Math.min(16, n)) : 6;
+  console.log(`[pool] claude: POOL_MAX=${poolMaxCached} (RAM ${total || "?"} MB, ${per} MB/tiến trình)`);
+  return poolMaxCached;
+}
+// SYNCHRO_CLAUDE_POOL_MAX ghi đè (0 = tắt hẳn); không đặt thì lấy mức theo RAM.
+const maxTotal = () => (process.env.SYNCHRO_CLAUDE_POOL_MAX !== undefined ? envNum("SYNCHRO_CLAUDE_POOL_MAX", 6) : poolMaxDefault());
 const STRIKES = 3, STRIKE_WINDOW = 10 * 60_000, PAUSE_MS = 30 * 60_000;
 
 type G = { entries: Set<Entry>; strikes: number[]; pausedUntil: number; sweep: NodeJS.Timeout | null };

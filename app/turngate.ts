@@ -1,6 +1,7 @@
 // Cổng lượt model (chỉ chạy ở máy chủ): mỗi lượt là một CLI chạy trên máy chủ, không có cổng thì một tài khoản gửi hàng trăm lượt là hết RAM và cả trang sập cho mọi người.
 // Ba mức: mỗi làn của tài khoản, tổng mọi làn của tài khoản, cả máy theo RAM. Quá mức thì xếp hàng (bấm Dừng được), khi có chỗ thì tài khoản đang chạy ít lượt nhất được trước, nên một tài khoản gửi dồn không chặn người khác.
 import { AsyncLocalStorage } from "node:async_hooks";
+import fs from "node:fs";
 import os from "node:os";
 
 export type Lane = "run" | "quick" | "code";
@@ -16,8 +17,34 @@ const num = (k: string, d: number) => { const v = Number(process.env[k]); return
 export const accountLimit = () => num("SYNCHRO_TURNS_PER_ACCOUNT", 4) * RELAX;
 /** Số lượt được chờ của một tài khoản; quá nữa thì từ chối ngay, không giữ yêu cầu (có thể tới vài MB) trong RAM. */
 export const queueLimit = () => num("SYNCHRO_TURN_QUEUE", 8) * RELAX;
-// Ước lượng 400 MB cho mỗi CLI (chưa đo RSS thật trên máy chủ), chỉ dùng 70% RAM. Máy khác cấu hình thì đặt SYNCHRO_TURNS_GLOBAL.
-export const globalLimit = () => num("SYNCHRO_TURNS_GLOBAL", Math.max(4, Math.floor((os.totalmem() * 0.7) / (400 * 1048576)))) * RELAX;
+// Tổng RAM thật của máy (MB): MemTotal trên Linux (máy chủ thật), nơi khác dùng os.totalmem (máy dev). Đọc một lần, nhớ lại.
+let totalMbCached: number | null = null;
+function realTotalMB(): number {
+  if (totalMbCached !== null) return totalMbCached;
+  try { const m = /MemTotal:\s+(\d+)\s+kB/.exec(fs.readFileSync("/proc/meminfo", "utf8")); if (m) { totalMbCached = Math.round(Number(m[1]) / 1024); return totalMbCached; } } catch { /* không phải Linux */ }
+  const t = Math.round(os.totalmem() / 1048576);
+  totalMbCached = Number.isFinite(t) && t > 0 ? t : 0;
+  return totalMbCached;
+}
+// Mức cả máy tính theo RAM thật, không theo ước lượng 70% nữa: chừa SYNCHRO_SERVER_RESERVE_MB (mặc định 2,5 GB) cho hệ điều hành và
+// máy chủ web (khớp dòng [timing] mem rss của Next ~1 GB cộng khoảng chạy). Phần còn lại (ngân sách = tổng − chừa) được CHIA MỘT LẦN cho
+// ba hồ chạy trên cùng máy để RAM của chúng cộng lại không vượt ngân sách: hồ CLI model này lấy CLI_SHARE, workspace lấy 0,3 và chạy code
+// lấy 0,2 (hai phần sau ở workspace/agent.mjs → ramSlots; tổng ba phần = 1). Phần của hồ này chia tiếp cho ngân sách RSS mỗi CLI
+// (SYNCHRO_CLI_BUDGET_MB, mặc định 400 MB — đo thực tế mỗi tiến trình Claude Code tới ~700 MB lúc đỉnh, phần lớn lượt thấp hơn nhiều).
+// Kẹp [4, 64]; đo RAM hỏng (= 0) thì về đúng công thức 70% cũ để không làm kẹt cả hàng.
+const CLI_SHARE = 0.5;
+let globalCached: number | null = null;
+function globalDefault(): number {
+  if (globalCached !== null) return globalCached;
+  const total = realTotalMB();
+  const reserve = num("SYNCHRO_SERVER_RESERVE_MB", 2560), per = num("SYNCHRO_CLI_BUDGET_MB", 400);
+  const budget = total - reserve;
+  globalCached = total > 0 ? Math.max(4, Math.min(64, Math.floor((budget * CLI_SHARE) / per))) : Math.max(4, Math.floor((os.totalmem() * 0.7) / (400 * 1048576)));
+  console.log(`[timing] turngate: global=${globalCached} (RAM ${total || "?"} MB, chừa ${reserve} MB, ngân sách ${total > 0 ? budget : "?"} MB × ${CLI_SHARE}, ${per} MB/lượt)`);
+  return globalCached;
+}
+// SYNCHRO_TURNS_GLOBAL ghi đè (trị không hợp lệ thì về 4 như trước); không đặt thì lấy mức theo RAM thật.
+export const globalLimit = () => (process.env.SYNCHRO_TURNS_GLOBAL !== undefined ? num("SYNCHRO_TURNS_GLOBAL", 4) : globalDefault()) * RELAX;
 /** Tổng số lượt một tài khoản giữ cùng lúc trên mọi làn. Trước đây mỗi làn đếm riêng: 4 + 6 + 5 = 15 CLI, hơn cả mức của máy (14), một tài khoản chiếm hết chỗ của mọi người. Không quá 60% cả máy. */
 export const accountTotal = () => Math.max(1, Math.min(num("SYNCHRO_TURNS_ACCOUNT_TOTAL", 6) * RELAX, Math.ceil(globalLimit() * 0.6)));
 // Việc phụ (đặt tên, tóm tắt) được thêm chút chỗ trên mức chung: đang chạy đủ lượt chat thì đoạn chat vẫn có tên, không phải chờ.
