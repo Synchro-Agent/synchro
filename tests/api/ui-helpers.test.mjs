@@ -45,14 +45,14 @@ ok(/đang tắt/.test(E.termDown({ available: true, running: false }, true)) && 
   const fs = await import("node:fs");
   const { resetfmt: R, "i18n-dict": D } = await loadTs(["resetfmt", "i18n-dict"]);
   const en = (t) => D.VI2EN[t] ?? D.RULES_EN.map(([re, f]) => { const m = t.match(re); return m ? f(m) : null; }).find(Boolean);
-  const now = new Date(2026, 10, 12, 9, 0).getTime(); // thứ Năm 12/11/2026 9:00 giờ máy
-  ok(R.resetWhen(now + 125 * 60_000, "en", now) === "Resets in 2 hr 5 min" && R.resetWhen(now + 125 * 60_000, "vi", now) === "Đặt lại sau 2 giờ 5 phút", "dưới 24 giờ: đếm ngược", R.resetWhen(now + 125 * 60_000, "en", now));
   const far = new Date(2026, 10, 19, 21, 55).getTime(); // thứ Năm tuần sau 21:55
-  ok(R.resetWhen(far, "en", now) === "Resets Thu 9:55 PM" && R.resetWhen(far, "vi", now) === "Đặt lại T5 21:55", "xa hơn: thứ và giờ, một định dạng mỗi ngôn ngữ", `${R.resetWhen(far, "en", now)} | ${R.resetWhen(far, "vi", now)}`);
+  ok(R.resetAt(far, "en") === "Resets Thu 9:55 PM" && R.resetAt(far, "vi") === "Đặt lại T5 21:55", "giờ đặt lại tuyệt đối: thứ và giờ, một định dạng mỗi ngôn ngữ", `${R.resetAt(far, "en")} | ${R.resetAt(far, "vi")}`);
+  const soon = new Date(2026, 10, 12, 11, 5).getTime(); // cùng ngày 11:05 — vẫn tuyệt đối, không đếm ngược (thẻ memo không có đồng hồ nên không cũ đi)
+  ok(R.resetAt(soon, "en") === "Resets Thu 11:05 AM" && R.resetAt(soon, "vi") === "Đặt lại T5 11:05", "dưới 24 giờ vẫn tuyệt đối, không đếm ngược", `${R.resetAt(soon, "en")} | ${R.resetAt(soon, "vi")}`);
   ok(R.resetClock(far, "en") === "Thu 9:55 PM" && R.resetClock(far, "vi") === "T5 21:55", "thứ và giờ dùng chung", R.resetClock(far, "en"));
   const rd = (f) => fs.readFileSync(f, "utf8");
   const page = rd("app/page.tsx"), usage = rd("app/usageui.tsx");
-  ok(/return resetWhen\(t, en\(\) \? "en" : "vi"\);/.test(usage) && /m\.notice\.at > Date\.now\(\) \? <p data-notr>\{resetWhen\(m\.notice\.at, getLang\(\)\)\}<\/p>/.test(page), "bảng Mức dùng và thẻ hết hạn mức cùng gọi resetWhen");
+  ok(/return resetAt\(t, en\(\) \? "en" : "vi"\);/.test(usage) && /m\.notice\.at > Date\.now\(\) \? <p data-notr>\{resetAt\(m\.notice\.at, getLang\(\)\)\}<\/p>/.test(page), "bảng Mức dùng và thẻ hết hạn mức cùng gọi resetAt (tuyệt đối, một nguồn)");
   ok(!/weekday: "short", hour: "2-d/.test(page + rd("app/providersui.tsx")), "không còn nơi tự định dạng giờ đặt lại kiểu khác (Thu 09:55 PM)");
   ok(/aria-label=\{tr\("Giao việc cho Synchro"\)\}/.test(rd("app/tasksui.tsx")), "ô Giao việc: aria-label dịch được (ô mang data-notr nên bộ dịch trang bỏ qua)");
   ok(/function ErrCard[^]*?useLangReady\(\);/.test(page), "thẻ lỗi lượt chat vẽ lại khi từ điển về");

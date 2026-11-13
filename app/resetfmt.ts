@@ -12,12 +12,10 @@ export function resetClock(t: number, lang: ResetLang): string {
     : `${VI_DAYS[d.getDay()]} ${d.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit", hour12: false })}`;
 }
 
-/** Dưới 24 giờ: đếm ngược ("Resets in 3 hr 5 min" / "Đặt lại sau 3 giờ 5 phút"); xa hơn: thứ và giờ ("Resets Thu 9:55 PM" / "Đặt lại T5 21:55"). */
-export function resetWhen(t: number, lang: ResetLang, now = Date.now()): string {
-  const ms = t - now;
-  if (ms < 24 * 3600_000) {
-    const m = Math.max(1, Math.ceil(ms / 60_000)), h = Math.floor(m / 60), mm = m % 60;
-    return lang === "en" ? `Resets in ${h ? `${h} hr ` : ""}${h && !mm ? "" : `${mm} min`}`.trim() : `Đặt lại sau ${h ? `${h} giờ ` : ""}${h && !mm ? "" : `${mm} phút`}`.trim();
-  }
+/**
+ * Giờ đặt lại tuyệt đối: "Resets Thu 9:55 PM" / "Đặt lại T5 21:55". Không đếm ngược, nên không cũ đi — dùng chung cho bảng Mức dùng
+ * và thẻ báo hết hạn mức dưới câu trả lời (MsgRow là memo(), không có đồng hồ, nên chuỗi đếm ngược tương đối sẽ cũ và lệch với bảng).
+ */
+export function resetAt(t: number, lang: ResetLang): string {
   return lang === "en" ? `Resets ${resetClock(t, lang)}` : `Đặt lại ${resetClock(t, lang)}`;
 }

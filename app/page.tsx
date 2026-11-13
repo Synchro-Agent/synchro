@@ -5,7 +5,7 @@ import { createPortal } from "react-dom";
 import * as I from "./icons";
 import { Avatar } from "./avatar";
 import { getLang, tr, useLangReady } from "./i18n";
-import { resetClock, resetWhen } from "./resetfmt";
+import { resetClock, resetAt } from "./resetfmt";
 import { FileCard } from "./fileicon";
 import { useFileMenu, saveDoc, saveBlob, fileContext } from "./filemenu";
 import { capFiles, getStatus } from "./filestate";
@@ -927,7 +927,7 @@ const MsgRow = memo(function MsgRow({ m, i, last, busy, mark, art, inl, fileActi
           <div className="msg-notice" role="status">
             {m.notice.text && !m.failed && <p>{tr(m.notice.text)}</p>}
             {m.notice.work && <p>{tr("Model đã làm một phần việc nên Synchro không tự chạy lại, để tránh làm hai lần.")}</p>}
-            {m.notice.at && m.notice.at > Date.now() ? <p data-notr>{resetWhen(m.notice.at, getLang())}</p> : null}
+            {m.notice.at && m.notice.at > Date.now() ? <p data-notr>{resetAt(m.notice.at, getLang())}</p> : null}
             {m.notice.tried?.length ? <p data-notr>{`${getLang() === "en" ? "Tried" : "Đã thử"}: ${m.notice.tried.join(", ")}`}</p> : null}
             {m.notice.switchTo && last && !busy ? (
               <div className="msg-notice-act">
