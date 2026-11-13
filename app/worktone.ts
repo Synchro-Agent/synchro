@@ -8,21 +8,31 @@
 //   - mọi lỗi đều đã được gọi lại thành công: "N bước đã thử lại", màu thường.
 export type ToolErrNote = { text: string; tone: "bad" | "soft" };
 // Một mục công cụ cần để xét lỗi: thứ tự (seq), nhãn/tên công cụ (label) và kết quả (ok === false là lỗi, true là xong, undefined là đang chạy).
-// name: tên công cụ khi nơi gọi có (ưu tiên hơn việc đoán loại từ nhãn).
+// name: loại công cụ do máy chủ gửi kèm kết quả (chatengine.ts → kindOf: tên công cụ thật, Composio kèm ứng dụng · thao tác); ưu tiên hơn đoán từ nhãn.
 export type ToolLike = { seq?: number; label: string; ok?: boolean; name?: string };
 
-// Nhãn có tham số nhưng không có dấu ":" / " · " (nhãn bước trình duyệt, tệp dự án, skill…): phần đầu cố định là loại công cụ.
+// Nhãn "<loại>: <tham số>" mà phần trước dấu ":" là loại công cụ cố định (chatengine.ts → describe, taskagent.ts).
+const PARAM_HEADS = ["tìm trên web", "đọc trang web", "tạo ảnh", "nhớ lại", "ghi vào bộ não", "tìm công cụ connector", "chạy lệnh", "trình duyệt", "gửi đề xuất vào hộp thư"];
+// Nhãn có tham số nhưng không có dấu ":" (nhãn bước trình duyệt, tệp dự án, skill…): phần đầu cố định là loại công cụ.
 // Cụm dài đứng trước cụm ngắn cùng đầu ("mở thư viện" trước "mở", "đọc tài liệu của skill" trước "đọc").
 const KIND_HEADS = [
-  "đọc tài liệu của skill", "chạy script của skill", "đọc tệp dự án", "mở thư viện", "đọc ghi chú", "đọc skill", "chạy code", "dùng công cụ",
-  "đọc trang web", "đọc trang", "đọc tệp", "tải tệp", "rê chuột lên", "chờ trang", "mở", "bấm", "gõ", "nhấn", "chọn",
+  "đọc tài liệu của skill", "chạy script của skill", "đọc tệp dự án", "mở thư viện", "đọc ghi chú", "đọc skill", "chạy code",
+  "đọc trang", "đọc tệp", "tải tệp", "rê chuột lên", "chờ trang", "mở", "bấm", "gõ", "nhấn", "chọn",
 ];
-/** Loại công cụ của một mục: tên công cụ nếu có, không thì phần nhãn trước tham số. */
+/**
+ * Loại công cụ của một mục: tên/loại máy chủ gửi nếu có, không thì đoán từ nhãn (bản ghi cũ, bước tìm web của CLI).
+ * Nhãn connector ("dùng Gmail · gửi thư", "Notion: Create page") và nhãn không nhận ra: cả nhãn là loại — thao tác khác của cùng ứng dụng
+ * (tìm thư) thành công không được che lỗi của thao tác ghi (gửi thư). Gộp nhầm thì giấu lỗi thật, nên chỉ gộp các loại biết chắc.
+ */
 export function toolKind(t: ToolLike): string {
   if (t.name) return t.name;
   // Chữ trong ngoặc “…” là tham số ("tìm “giá” trên trang" và "tìm “vé” trên trang" cùng một loại).
-  const head = t.label.split(/:| · /)[0].replace(/“[^”]*”/g, "…").replace(/\s+/g, " ").trim().toLowerCase();
-  return KIND_HEADS.find((h) => head === h || head.startsWith(h + " ")) ?? head;
+  const lab = t.label.replace(/“[^”]*”/g, "…").replace(/\s+/g, " ").trim().toLowerCase();
+  const colon = lab.indexOf(":");
+  const pre = colon > 0 ? lab.slice(0, colon).trim() : "";
+  if (pre && PARAM_HEADS.includes(pre)) return pre;
+  if (lab.includes(" · ") || lab.startsWith("dùng ")) return lab;
+  return KIND_HEADS.find((h) => lab === h || lab.startsWith(h + " ")) ?? lab;
 }
 
 /**

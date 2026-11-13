@@ -67,6 +67,23 @@ ok(/đang tắt/.test(E.termDown({ available: true, running: false }, true)) && 
   const other = T({ seq: 1, label: "tạo ảnh: con mèo", ok: false }, { seq: 2, label: "tìm trên web: mèo", ok: true });
   ok(W.toolErrNote(other, other, {})?.tone === "bad", "R2: công cụ khác loại thành công không tính là gọi lại");
   ok(W.toolKind({ label: "x", name: "web_search" }) === "web_search" && W.toolKind({ label: "đọc tệp dự án a.md" }) === W.toolKind({ label: "đọc tệp dự án b.md" }), "R2: loại công cụ: ưu tiên tên, nhãn không dấu ':' vẫn bỏ tham số");
+  // R2 (sửa lại): cùng ứng dụng nhưng khác thao tác KHÔNG bù cho nhau — gửi thư Gmail lỗi, tìm thư Gmail thành công: lỗi gửi thư vẫn đỏ.
+  const gm = T({ seq: 1, label: "Gmail · gửi thư", ok: false }, { seq: 2, label: "Gmail · tìm thư", ok: true });
+  const gmn = W.toolErrNote(gm, gm, {});
+  ok(gmn?.text === "1 lỗi" && gmn.tone === "bad" && W.splitToolErrs(gm).remaining === 1, "R2: Gmail gửi thư lỗi, Gmail tìm thư thành công: vẫn 1 lỗi, màu đỏ", JSON.stringify(gmn));
+  const gmd = T({ seq: 1, label: "dùng Gmail · gửi thư", ok: false }, { seq: 2, label: "dùng Gmail · tìm thư", ok: true });
+  ok(W.toolErrNote(gmd, gmd, {})?.tone === "bad", "R2: nhãn connector có 'dùng': khác thao tác vẫn đỏ");
+  const no = T({ seq: 1, label: "Notion: Create page", ok: false }, { seq: 2, label: "Notion: Search", ok: true });
+  ok(W.toolErrNote(no, no, {})?.tone === "bad", "R2: Notion Create page lỗi, Notion Search thành công: vẫn đỏ");
+  const gmr = T({ seq: 1, label: "Gmail · gửi thư", ok: false }, { seq: 2, label: "Gmail · gửi thư", ok: true });
+  ok(W.toolErrNote(gmr, gmr, {})?.text === "1 bước đã thử lại", "R2: gửi thư lỗi rồi gửi lại thành công: đã thử lại");
+  // Loại do máy chủ gửi (kindOf) thắng nhãn: nhãn giống nhau nhưng loại khác → không bù; nhãn khác nhưng cùng loại → bù.
+  const nm = T({ seq: 1, label: "Composio · x", name: "COMPOSIO_MULTI_EXECUTE_TOOL|Gmail · gửi thư", ok: false }, { seq: 2, label: "Composio · x", name: "COMPOSIO_MULTI_EXECUTE_TOOL|Gmail · tìm thư", ok: true });
+  ok(W.toolErrNote(nm, nm, {})?.tone === "bad", "R2: tên loại khác (gửi / tìm) thì không bù dù nhãn giống");
+  const nm2 = T({ seq: 1, label: "tìm trên web: a", name: "web_search", ok: false }, { seq: 2, label: "tìm trên web: b", name: "web_search", ok: true });
+  ok(W.toolErrNote(nm2, nm2, {})?.text === "1 bước đã thử lại", "R2: cùng tên công cụ, tham số khác: đã thử lại");
+  ok(W.toolKind({ label: "dùng công cụ skill_a" }) !== W.toolKind({ label: "dùng công cụ skill_b" }), "R2: công cụ không rõ tên khác nhau không gộp");
+  ok(W.toolKind({ label: "đọc trang https://a.example/x" }) === W.toolKind({ label: "đọc trang https://b.example/y" }), "R2: 'đọc trang <url>' (có dấu ':' trong url) vẫn cùng loại");
   ok(en("1 bước đã thử lại") === "1 step retried" && en("3 bước đã thử lại") === "3 steps retried" && en("2 lỗi") === "2 failed", "bản tiếng Anh: step / steps retried, failed");
 }
 

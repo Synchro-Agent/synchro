@@ -910,6 +910,9 @@ function describe(x: Exec, c: Call) {
 // Công cụ đọc skill không tính (đó là hướng dẫn, không phải dữ liệu).
 const isData = (x: Exec, c: Call) => c.name === PROJECT_DOC_TOOL.name || !!x.sess?.get(c.name) || c.name === "run_code" || c.name === "run_skill_script" || c.name === IMAGE_TOOL_NAME;
 const label = (x: Exec, c: Call) => describe(x, c).replace(/^Đang (dùng |chạy )?/, "");
+// Loại công cụ của một bước (worktone.ts → toolKind): tên công cụ thật; Composio chạy mọi thao tác qua một công cụ chung nên kèm ứng dụng · thao tác
+// ("Gmail · gửi thư" và "Gmail · tìm thư" là hai loại: tìm thư thành công không bù cho gửi thư lỗi).
+const kindOf = (x: Exec, c: Call) => { const ct = x.sess?.get(c.name); const cx = ct && cxOf(ct, c.input); return cx ? `${c.name}|${cx.app} · ${cx.act}` : c.name; };
 function abortable<T>(p: Promise<T>, signal?: AbortSignal): Promise<T> {
   if (!signal) return p;
   if (signal.aborted) return Promise.reject(new DOMException("Đã dừng", "AbortError"));
@@ -964,7 +967,7 @@ async function execute(ad: Adapter, m: unknown[], x: Exec, calls: Call[], used: 
   used.push(...res.filter((r) => (!r.is_error || r.used.kind === "code") && r.used.kind !== "search").map((r) => r.used));
   // Kết quả từng công cụ (thành công / lỗi, tóm tắt ngắn) để dòng công cụ trong khung chat hiện đúng.
   // Công cụ của connector (đọc lẫn ghi): kèm tham số đã gửi (che khóa bí mật) để người dùng biết model vừa làm gì. Tóm tắt bỏ thẻ <ref> nội bộ.
-  res.forEach((r, i) => { if (seqs[i]) progress("res", JSON.stringify({ ref: seqs[i], ok: !r.is_error, sum: plainSummary(String(r.content ?? "")).slice(0, 140), ...(x.sess?.get(calls[i].name) && d[calls[i].id] !== "deny" ? { args: argLine(calls[i].input) } : {}) })); });
+  res.forEach((r, i) => { if (seqs[i]) progress("res", JSON.stringify({ ref: seqs[i], ok: !r.is_error, name: kindOf(x, calls[i]).slice(0, 160), sum: plainSummary(String(r.content ?? "")).slice(0, 140), ...(x.sess?.get(calls[i].name) && d[calls[i].id] !== "deny" ? { args: argLine(calls[i].input) } : {}) })); });
   m.push(...ad.results(calls, res));
   // Người dùng nhắn thêm trong lúc công cụ chạy: ghép vào ngay bước kế tiếp, không ngắt việc.
   const more = takeInbox();
