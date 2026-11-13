@@ -5,6 +5,7 @@ import { cachedJson } from "./studios";
 import { useDeferredValue, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import * as I from "./icons";
 import { tr } from "./i18n";
+import { plainSnippet } from "./runtext";
 import { useFitPlaceholder } from "./phfit";
 
 export type PaletteCmd = { id: string; label: string; icon: ReactNode; keys?: string; hay?: string; run: () => void };
@@ -128,7 +129,7 @@ export function CommandPalette({ chats, projects, codes, cmds, go, seed, onClose
       const file = deep && !hit && (any || words.some((w) => tl.includes(w))) ? c.msgs.flatMap((m) => m.files ?? []).find((f) => words.every((w) => `${tl} ${fold(f)}`.includes(w))) : undefined;
       // Thẻ: gõ "#tên" (hay tên thẻ) tìm được đoạn chat mang thẻ đó; thẻ hiện ở dòng phụ khi không có đoạn trích.
       const tg = (Array.isArray(c.tags) ? c.tags : []).map((x) => `#${x}`).join(" ");
-      add({ key: "chat:" + c.id, group: "Đoạn chat", label: c.title, sub: hit ? hit.replace(/\s+/g, " ").slice(0, 80) : file ?? (tg || undefined), icon: file ? <I.Clip size={16} /> : <I.History size={16} />, hay: [hit ?? file ?? "", tg].join(" "), run: () => go.chat(c.id) });
+      add({ key: "chat:" + c.id, group: "Đoạn chat", label: c.title, sub: (hit && plainSnippet(hit).slice(0, 80)) || file || tg || undefined, icon: file ? <I.Clip size={16} /> : <I.History size={16} />, hay: [hit ?? file ?? "", tg].join(" "), run: () => go.chat(c.id) });
       for (const x of Array.isArray(c.tags) ? c.tags : []) if (typeof x === "string") tagN.set(fold(x), { tag: tagN.get(fold(x))?.tag ?? x, n: (tagN.get(fold(x))?.n ?? 0) + 1 });
     }
     // Mỗi thẻ một dòng: chọn để lọc thanh bên theo thẻ đó.
