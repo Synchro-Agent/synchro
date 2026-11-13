@@ -86,5 +86,39 @@ console.log("3. W23-1: lần dựng video không giữ chỗ chạy chung (WS_RU
   ok(rm.status === 200 && rm.j.code === 0 && /m/.test(rm.j.out ?? ""), "lần dựng video vẫn xong", JSON.stringify(rm.j).slice(0, 300));
 }
 
+console.log("4. W23-4: vị trí trong hàng tới Next NGAY TRONG LÚC chờ (NDJSON), không phải sau khi chạy xong");
+{
+  // app/coderun.ts + app/workspace.ts thật, nối tới dịch vụ workspace ở trên.
+  process.env.DATA_DIR = path.join(tmp, "data"); process.env.DATA_KEY = "ws-queue-key"; fs.mkdirSync(process.env.DATA_DIR, { recursive: true });
+  process.env.CODE_RUN = "workspace"; process.env.WS_AGENT_URL = `http://127.0.0.1:${port}`; process.env.WS_AGENT_SECRET = SECRET;
+  const { loadTs } = await import("../lib/ts.mjs");
+  const { coderun: CR } = await loadTs(["coderun"]);
+  const run = (u, s, extra = {}) => CR.execRun({ uid: u, files: [], argv: ["bash", "-c", s], net: false, timeout: 60, ...extra });
+
+  const t0 = Date.now();
+  let aDone = 0;
+  const a = run(U, "sleep 1.5; echo a").then((r) => { aDone = Date.now(); return r; });
+  await sleep(300);
+  const seen = [];
+  const b = await run(V, "echo b", { onQueue: (q) => seen.push({ ...q, at: Date.now() }) });
+  await a;
+  ok(seen.length >= 1 && seen[0].kind === "run" && seen[0].pos === 1, "onQueue nhận {kind: run, pos: 1}", JSON.stringify(seen));
+  ok(seen.length && seen[0].at < aDone, "vị trí tới trước khi lần chạy kia xong (trong lúc chờ)", `${seen[0]?.at - t0} vs ${aDone - t0}`);
+  ok(b.exit === 0 && /b/.test(b.stdout) && b.queue?.pos === 1, "kết quả vẫn đủ (dòng result của NDJSON)", JSON.stringify({ ...b, files: undefined }).slice(0, 300));
+
+  // Không phải xếp hàng: trả JSON như cũ, onQueue không được gọi.
+  const quiet = [];
+  const c = await run(V, "echo c", { onQueue: (q) => quiet.push(q) });
+  ok(c.exit === 0 && /c/.test(c.stdout) && !quiet.length && !c.queue, "không xếp hàng: không có dòng tiến trình", JSON.stringify(quiet));
+
+  // Chờ quá giờ khi đang ở chế độ NDJSON: lỗi trong dòng error vẫn thành lỗi có mã 503 và vị trí.
+  const slow = run(U, "sleep 4; echo a");
+  await sleep(300);
+  const seen2 = [];
+  const err = await run(V, "echo d", { onQueue: (q) => seen2.push(q) }).then(() => null, (e) => e);
+  ok(err && err.status === 503 && /vị trí 1 trong hàng chờ/.test(err.message) && seen2.length >= 1, "hết giờ chờ: 503 kèm vị trí (sau khi đã báo vị trí)", `${err?.status} ${err?.message} ${JSON.stringify(seen2)}`);
+  await slow;
+}
+
 console.log(`\nKết quả: ${pass} đạt, ${fail} lỗi`);
 process.exit(fail ? 1 : 0);

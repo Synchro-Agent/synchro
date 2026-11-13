@@ -493,7 +493,9 @@ function rotateOutputs(dir) {
 // Có sổ tính trong outputs/ không (bước tính lại công thức chỉ chạy khi có), bỏ thư mục _preview/.
 const hasBook = (d, depth = 0) => depth <= 3 && fs.lstatSync(d, { throwIfNoEntry: false })?.isDirectory() === true && fs.readdirSync(d, { withFileTypes: true }).some((e) =>
   e.isDirectory() ? e.name !== "_preview" && hasBook(`${d}/${e.name}`, depth + 1) : e.isFile() && /\.xls[xm]$/i.test(e.name));
-async function runOnce(u, { files = [], argv, stdin = null, net: wantNet = false, web = false, timeout = 120, keep = null, recalc = false }, signal) {
+// onQueue({ kind, pos }): mỗi khi vị trí trong một hàng chờ đổi (kind: "media" dựng video, "run" chỗ chạy chung, "mem" chờ RAM) — /run gửi ngay cho Next
+// (dòng NDJSON) để người dùng thấy vị trí TRONG LÚC chờ (W23-4 / G5.3), không phải sau khi chạy xong.
+async function runOnce(u, { files = [], argv, stdin = null, net: wantNet = false, web = false, timeout = 120, keep = null, recalc = false }, signal, onQueue) {
   if (!okUser(u)) throw new E(400, "Tài khoản không hợp lệ");
   if (!Array.isArray(argv) || !argv.length || argv.length > 60 || argv.some((a) => typeof a !== "string" || a.length > 4000)) throw new E(400, "Lệnh không hợp lệ");
   if (!Array.isArray(files) || files.length > 6000 || files.some((f) => !safeRel(f?.path) || typeof f.b64 !== "string")) throw new E(400, "Tệp không hợp lệ");
@@ -514,6 +516,7 @@ async function runOnce(u, { files = [], argv, stdin = null, net: wantNet = false
   // Vị trí trong hàng chờ (dựng video, chỗ chạy chung, RAM) lúc mới vào hàng: trả về cho người gọi (queue) và ghi chú cuối kết quả (G3.2 / G5.3).
   const q = { first: 0 };
   const seen = (pos) => { if (pos > 0) q.first ||= pos; };
+  const tell = (kind) => { let last = 0; return (pos) => { seen(pos); if (pos > 0 && pos !== last) { last = pos; try { onQueue?.({ kind, pos }); } catch { /* bỏ */ } } }; };
   const posNote = (pos) => (pos ? ` Lần chạy này đang ở vị trí ${pos} trong hàng chờ.` : "");
   let memWaitMs = 0;
   // Lần dựng video chỉ lấy chỗ dựng (mediaQ, đã giới hạn theo RAM); lần chạy khác lấy chỗ chạy chung (runQ). Không giữ cả hai (W23-1): một lần dựng
@@ -525,7 +528,8 @@ async function runOnce(u, { files = [], argv, stdin = null, net: wantNet = false
   if (media) {
     // Vị trí hàng chờ dựng video: trả về cho người gọi (q, ghi chú cuối kết quả, lời báo bận) và ghi nhật ký.
     let lastPos = 0;
-    const onWait = (pos, running) => { seen(pos); if (pos !== lastPos) { lastPos = pos; log("video xếp hàng", u, `vị trí ${pos}`, `đang dựng ${running}/${MEDIA_MAX}`); } };
+    const tellMedia = tell("media");
+    const onWait = (pos, running) => { tellMedia(pos); if (pos !== lastPos) { lastPos = pos; log("video xếp hàng", u, `vị trí ${pos}`, `đang dựng ${running}/${MEDIA_MAX}`); } };
     try { freeMedia = await mediaQ.acquire(u, sec, signal, onWait); }
     catch (e) {
       release();
@@ -536,7 +540,8 @@ async function runOnce(u, { files = [], argv, stdin = null, net: wantNet = false
   }
   let runPos = 0;
   if (!media) {
-    try { freeSlot = await runQ.acquire(u, sec, signal, (pos) => { runPos = pos; seen(pos); }); }
+    const tellRun = tell("run");
+    try { freeSlot = await runQ.acquire(u, sec, signal, (pos) => { runPos = pos; tellRun(pos); }); }
     catch (e) { release(); throw e instanceof QueueFull ? new E(503, e.message.startsWith("Máy chủ đang chạy nhiều code") ? e.message.replace(/\.\s*Hãy/, `.${posNote(runPos)} Hãy`) : e.message) : e; }
   }
   const waited = Math.round((Date.now() - queuedAt) / 1000);
@@ -627,7 +632,7 @@ async function runOnce(u, { files = [], argv, stdin = null, net: wantNet = false
     // chờ đủ RAM khả dụng rồi hãy bật, hết giờ chờ thì báo bận kèm vị trí trong hàng thay vì để máy chủ thiếu bộ nhớ.
     if (r === null) {
       const m0 = Date.now();
-      const m = await waitMem(RUN_FLOOR_MB, signal, seen);
+      const m = await waitMem(RUN_FLOOR_MB, signal, tell("mem"));
       memWaitMs = Date.now() - m0;
       if (m.pos) log("lần chạy chờ RAM", u, `vị trí ${m.pos}`, `${Math.round(memWaitMs / 1000)} giây`);
       if (m.ok === "aborted") { if (signal?.aborted) return { code: 130, out: "", err: "", timedOut: false, files: [] }; }
@@ -848,7 +853,24 @@ const server = http.createServer(async (req, res) => {
         res.once("close", () => { if (!res.writableEnded) ac.abort(); });
         // Chỗ chạy được nhả trước khi dọn container: đếm cả lần gọi đang trả lời để dịch vụ không thoát giữa chừng.
         replying++;
-        try { return reply(res, 200, await runOnce(b.u, b, ac.signal)); } finally { replying--; }
+        // progress: true (app/coderun.ts): phải xếp hàng thì trả NDJSON ngay — {"t":"queue","kind","pos"} mỗi khi vị trí đổi, dòng cuối {"t":"result","r":…}
+        // hoặc {"t":"error","status","error"} (mã HTTP đã gửi là 200 nên lỗi nằm trong dòng). Không phải xếp hàng thì trả JSON như cũ.
+        let streaming = false;
+        const onQueue = b.progress === true ? (ev) => {
+          if (res.writableEnded || res.destroyed) return;
+          if (!streaming) { streaming = true; res.writeHead(200, { "Content-Type": "application/x-ndjson", "Cache-Control": "no-store" }); }
+          res.write(JSON.stringify({ t: "queue", kind: ev.kind, pos: ev.pos }) + "\n");
+        } : undefined;
+        try {
+          const out = await runOnce(b.u, b, ac.signal, onQueue);
+          if (!streaming) return reply(res, 200, out);
+          return void res.end(JSON.stringify({ t: "result", r: out }) + "\n");
+        } catch (e) {
+          if (!streaming) throw e;
+          const known = e instanceof E || e instanceof BrowserError;
+          if (!known) log("lỗi", url.pathname, e);
+          return void res.end(JSON.stringify({ t: "error", status: known ? e.status : 500, error: e.message || String(e) }) + "\n");
+        } finally { replying--; }
       }
       case "/browser": return reply(res, 200, await browserTool(b.u, b));
       case "/ext": return reply(res, 200, await X.http(b));

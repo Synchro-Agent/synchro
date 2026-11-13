@@ -867,6 +867,10 @@ RULES_EN.push(
   // Lần chạy code phải xếp hàng (app/coderun.ts queueNote).
   [/^Lần chạy code đã xếp hàng ở vị trí (\d+), chờ (\d+) giây$/, (m) => `The code run was queued at position ${m[1]}, waited ${m[2]} ${m[2] === "1" ? "second" : "seconds"}`],
   [/^Lần chạy code đã chờ (\d+) giây vì máy chủ đang bận$/, (m) => `The code run waited ${m[1]} ${m[1] === "1" ? "second" : "seconds"} because the server was busy`],
+  // Đang xếp hàng, báo trong lúc chờ (app/coderun.ts queueLiveNote, W23-4).
+  [/^Lần dựng video đang xếp hàng ở vị trí (\d+), chờ video khác dựng xong$/, (m) => `The video render is queued at position ${m[1]}, waiting for another render to finish`],
+  [/^Lần chạy code đang chờ máy chủ đủ bộ nhớ, vị trí (\d+) trong hàng$/, (m) => `The code run is waiting for server memory, position ${m[1]} in the queue`],
+  [/^Lần chạy code đang xếp hàng ở vị trí (\d+) vì máy chủ đang bận$/, (m) => `The code run is queued at position ${m[1]} because the server is busy`],
 );
 // Giao diện tiếng Anh: chữ tiếng Việt còn thiếu bản dịch (rà bằng scripts/i18n-audit.mjs).
 Object.assign(VI2EN, {

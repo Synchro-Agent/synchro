@@ -28,13 +28,35 @@ export function sdir(sid: unknown) {
 // Dùng node:http, không dùng fetch: fetch của Node (undici) tự cắt sau đúng 5 phút nếu chưa có header trả lời, mà /run và /exec chỉ trả lời khi
 // lệnh xong (dựng video 300–600 giây luôn lỗi, container vẫn chạy, kết quả mất). Hạn chờ duy nhất là timeoutMs. Mỗi yêu cầu một kết nối riêng:
 // signal ngắt kết nối thì dịch vụ workspace biết để dừng container (nút Dừng).
-function post(path: string, data: string, sig: AbortSignal) {
+// Trả lời dạng NDJSON (/run với progress: true khi phải xếp hàng, W23-4): mỗi dòng {"t":"queue",…} gọi onEvent ngay khi tới; dòng cuối {"t":"result","r":…}
+// là kết quả (200), {"t":"error","status","error"} là lỗi với mã trong dòng (mã HTTP đã gửi là 200).
+type Posted = { status: number; text: string; json?: unknown };
+function post(path: string, data: string, sig: AbortSignal, onEvent?: (e: Record<string, unknown>) => void) {
   const u = new URL(AGENT + path);
-  return new Promise<{ status: number; text: string }>((ok, no) => {
+  return new Promise<Posted>((ok, no) => {
     const req = (u.protocol === "https:" ? https : http).request(u, { method: "POST", agent: false, signal: sig, headers: { Authorization: `Bearer ${SECRET}`, "Content-Type": "application/json", "Content-Length": Buffer.byteLength(data) } }, (res) => {
       const ch: Buffer[] = [];
-      res.on("data", (c: Buffer) => ch.push(c));
-      res.on("end", () => ok({ status: res.statusCode ?? 502, text: Buffer.concat(ch).toString("utf8") }));
+      const nd = /application\/x-ndjson/i.test(String(res.headers["content-type"] ?? ""));
+      let part: Buffer[] = [], last: Posted | null = null;
+      const line = (b: Buffer) => {
+        if (!b.length) return;
+        let o: Record<string, unknown>;
+        try { o = JSON.parse(b.toString("utf8")) as Record<string, unknown>; } catch { return; }
+        if (o.t === "result") last = { status: 200, text: "", json: o.r };
+        else if (o.t === "error") last = { status: Number(o.status) || 500, text: "", json: { error: typeof o.error === "string" ? o.error : "" } };
+        else { try { onEvent?.(o); } catch { /* bỏ */ } }
+      };
+      res.on("data", (c: Buffer) => {
+        if (!nd) { ch.push(c); return; }
+        for (let i = c.indexOf(10); i >= 0; i = c.indexOf(10)) { part.push(c.subarray(0, i)); line(Buffer.concat(part)); part = []; c = c.subarray(i + 1); }
+        if (c.length) part.push(c);
+      });
+      res.on("end", () => {
+        if (!nd) return ok({ status: res.statusCode ?? 502, text: Buffer.concat(ch).toString("utf8") });
+        if (part.length) line(Buffer.concat(part));
+        // Luồng đứt trước dòng kết quả (dịch vụ workspace chết giữa chừng): như mất kết nối.
+        ok(last ?? { status: 502, text: "", json: { error: "Workspace ngắt kết nối giữa chừng." } });
+      });
       res.on("error", no);
     });
     req.on("error", no);
@@ -42,17 +64,17 @@ function post(path: string, data: string, sig: AbortSignal) {
   });
 }
 
-export async function agent<T = Record<string, unknown>>(path: string, body: Record<string, unknown>, timeoutMs = 180_000, signal?: AbortSignal): Promise<T> {
+export async function agent<T = Record<string, unknown>>(path: string, body: Record<string, unknown>, timeoutMs = 180_000, signal?: AbortSignal, onEvent?: (e: Record<string, unknown>) => void): Promise<T> {
   const limit = AbortSignal.timeout(timeoutMs);
-  let r: { status: number; text: string };
+  let r: Posted;
   try {
-    r = await post(path, JSON.stringify(body), signal ? AbortSignal.any([limit, signal]) : limit);
+    r = await post(path, JSON.stringify(body), signal ? AbortSignal.any([limit, signal]) : limit, onEvent);
   } catch (e) {
     if (signal?.aborted) throw new DOMException("Đã dừng", "AbortError");
     throw new AuthError(limit.aborted ? "Workspace phản hồi quá lâu." : "Không kết nối được workspace.", 502);
   }
-  let j: unknown = {};
-  try { j = JSON.parse(r.text); } catch { /* lỗi không phải JSON: báo theo mã trạng thái */ }
+  let j: unknown = r.json ?? {};
+  if (r.json === undefined) { try { j = JSON.parse(r.text); } catch { /* lỗi không phải JSON: báo theo mã trạng thái */ } }
   if (r.status < 200 || r.status >= 300) throw new AuthError((j as { error?: string }).error || `Workspace lỗi ${r.status}`, r.status === 401 ? 502 : r.status);
   return j as T;
 }

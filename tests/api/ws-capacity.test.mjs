@@ -39,7 +39,7 @@ ok(/MAX_RUNNING = ramSlots\("WS_MAX_RUNNING", 1536, 4, 3, 32\)/.test(src), "MAX_
 {
   // W23-1: lần dựng video giữ chỗ dựng (mediaQ), không giữ thêm chỗ chạy chung (runQ).
   const body = src.slice(src.indexOf("async function runOnce("), src.indexOf("// Proxy cho code"));
-  ok(/if \(!media\) \{\s*try \{ freeSlot = await runQ\.acquire\(/.test(body) && /let freeSlot = \(\) => \{\}, freeMedia = \(\) => \{\};/.test(body), "runOnce: chỉ lần chạy không phải dựng video mới lấy runQ", body.slice(0, 200));
+  ok(/if \(!media\) \{\s*(const tellRun = tell\("run"\);\s*)?try \{ freeSlot = await runQ\.acquire\(/.test(body) && /let freeSlot = \(\) => \{\}, freeMedia = \(\) => \{\};/.test(body), "runOnce: chỉ lần chạy không phải dựng video mới lấy runQ", body.slice(0, 200));
   ok(/runQ\.running > 0 \|\| mediaQ\.running > 0 \|\| replying > 0/.test(src), "tắt dịch vụ chờ cả lần dựng video đang dở");
 }
 ok(!/ramSlots\([^)]*0\.[23],/.test(src), "không còn hệ số chia 0,3 / 0,2");
@@ -136,7 +136,8 @@ console.log("7. W23-4 / G3.2: hàng chờ có vị trí cho RAM và chỗ worksp
 {
   // Người dùng thấy vị trí trong hàng ở dòng tiến trình của lượt chat, có bản tiếng Anh.
   const ce = fs.readFileSync("app/chatengine.ts", "utf8");
-  ok(/if \(r\.queue\) progress\("note", queueNote\(r\.queue\)\)/.test(ce), "run_code báo vị trí hàng chờ thành dòng tiến trình");
+  ok(/queueReporter\(AsyncResource\.bind\(\(t: string\) => \{ progress\("note", t\); \}\)\)/.test(ce) && /onQueue: \(q\) => waitLine\.push\(q\)/.test(ce), "W23-4: run_code báo vị trí hàng chờ thành dòng tiến trình TRONG LÚC chờ (đúng lượt nhờ AsyncResource.bind)");
+  ok(/if \(r\.queue && !waitLine\.shown\) progress\("note", queueNote\(r\.queue\)\)/.test(ce), "đã báo trong lúc chờ thì không báo lại sau khi chạy");
   const { loadTs } = await import("../lib/ts.mjs");
   const { "i18n-dict": { RULES_EN } } = await loadTs(["i18n-dict"]);
   const cr = fs.readFileSync("app/coderun.ts", "utf8");
@@ -147,6 +148,29 @@ console.log("7. W23-4 / G3.2: hàng chờ có vị trí cho RAM và chỗ worksp
   ok(a === "Lần chạy code đã xếp hàng ở vị trí 3, chờ 42 giây", "dòng tiến trình nói vị trí 3", a);
   ok(b === "Lần chạy code đã chờ 7 giây vì máy chủ đang bận", "chỉ chờ RAM (không có hàng): nói số giây", b);
   ok(en(a) === "The code run was queued at position 3, waited 42 seconds" && en(b) === "The code run waited 7 seconds because the server was busy", "có bản tiếng Anh", `${en(a)} | ${en(b)}`);
+}
+
+{
+  // W23-4: dòng tiến trình trong lúc chờ (queueLiveNote) và bộ lọc (queueReporter): báo ngay, đổi hàng thì báo, tới lượt kế tiếp thì báo, còn lại thưa.
+  const { loadTs } = await import("../lib/ts.mjs");
+  const os = await import("node:os");
+  process.env.DATA_DIR ??= fs.mkdtempSync(`${os.tmpdir()}/synchro-ws-cap-`); process.env.DATA_KEY ??= "ws-cap-key";
+  const { coderun: CR, "i18n-dict": { RULES_EN } } = await loadTs(["coderun", "i18n-dict"]);
+  const en = (t) => { for (const [re, f] of RULES_EN) { const m = t.match(re); if (m) return f(m); } return null; };
+  const notes = { run: CR.queueLiveNote({ kind: "run", pos: 3 }), media: CR.queueLiveNote({ kind: "media", pos: 2 }), mem: CR.queueLiveNote({ kind: "mem", pos: 1 }) };
+  ok(notes.run === "Lần chạy code đang xếp hàng ở vị trí 3 vì máy chủ đang bận" && /vị trí 2/.test(notes.media) && /bộ nhớ, vị trí 1/.test(notes.mem), "ba loại hàng chờ có câu riêng", JSON.stringify(notes));
+  ok(en(notes.run) === "The code run is queued at position 3 because the server is busy" && en(notes.media) === "The video render is queued at position 2, waiting for another render to finish" && en(notes.mem) === "The code run is waiting for server memory, position 1 in the queue", "có bản tiếng Anh", `${en(notes.run)} | ${en(notes.media)} | ${en(notes.mem)}`);
+  let t = 0;
+  const out = [];
+  const rep = CR.queueReporter((x) => out.push(x), { gapMs: 15_000, now: () => t });
+  rep.push({ kind: "media", pos: 5 }); t = 1000; rep.push({ kind: "media", pos: 4 }); rep.push({ kind: "media", pos: 4 }); t = 2000; rep.push({ kind: "media", pos: 3 });
+  ok(out.length === 1 && /vị trí 5/.test(out[0]), "báo ngay lần đầu, vị trí đổi liên tục trong 15 giây không thành nhiều dòng", JSON.stringify(out));
+  t = 20_000; rep.push({ kind: "media", pos: 2 });
+  ok(out.length === 2 && /vị trí 2/.test(out[1]), "sau 15 giây: báo vị trí mới", JSON.stringify(out));
+  t = 21_000; rep.push({ kind: "media", pos: 1 });
+  ok(out.length === 3 && /vị trí 1/.test(out[2]), "tới lượt kế tiếp (vị trí 1): báo ngay", JSON.stringify(out));
+  t = 21_500; rep.push({ kind: "mem", pos: 1 }); rep.push({ kind: "run", pos: 0 });
+  ok(out.length === 4 && /bộ nhớ/.test(out[3]) && rep.shown === 4, "chuyển sang hàng khác: báo ngay; vị trí 0 bỏ qua", JSON.stringify(out));
 }
 
 console.log(`\n${pass}/${pass + fail} đạt`);
