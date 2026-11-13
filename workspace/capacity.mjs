@@ -10,8 +10,25 @@ export function readTotalMB() {
   return Number.isFinite(t) && t > 0 ? t : 0;
 }
 
-/** Đổi "2g", "1536m", "512" (MB) ra MB; sai định dạng thì trả d. */
-export const memMB = (s, d) => { const m = /^(\d+)\s*([gm])?/i.exec(String(s ?? "")); return m ? Math.round(Number(m[1]) * (/(g)/i.test(m[2] ?? "") ? 1024 : 1)) : d; };
+// Cỡ bộ nhớ kiểu Docker: số (có thể thập phân) + đơn vị k / m / g (có thể thêm "b"); không đơn vị thì hiểu là MB. Cả chuỗi phải khớp ("2gx", "-1" là sai).
+const MEM_RE = /^(\d+(?:\.\d+)?)\s*([kmg])?b?$/i;
+const MEM_MULT = { k: 1 / 1024, m: 1, g: 1024 };
+/** Đổi "2g", "2.5g", "1536m", "512k", "512" (MB) ra MB (làm tròn); sai định dạng thì trả d. */
+export const memMB = (s, d) => {
+  const m = MEM_RE.exec(String(s ?? "").trim());
+  if (!m) return d;
+  const v = Number(m[1]) * MEM_MULT[(m[2] ?? "m").toLowerCase()];
+  return Number.isFinite(v) ? Math.round(v) : d;
+};
+/** Số byte Docker lưu cho cỡ bộ nhớ này (HostConfig.Memory / MemorySwap: số × 1024^đơn vị, bỏ phần lẻ); "-1" = không giới hạn; sai định dạng thì 0. */
+export const memBytes = (s) => {
+  const t = String(s ?? "").trim();
+  if (t === "-1") return -1;
+  const m = MEM_RE.exec(t);
+  if (!m) return 0;
+  const v = Math.trunc(Number(m[1]) * MEM_MULT[(m[2] ?? "m").toLowerCase()] * 1048576);
+  return Number.isFinite(v) && v > 0 ? v : 0;
+};
 
 /**
  * Số việc chạy cùng lúc của MỘT hồ theo G3.1: floor((tổng RAM − chừa) × 0,5 / perMB), mỗi hồ tính RIÊNG (không chia ngân sách chung giữa các hồ).

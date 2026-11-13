@@ -28,6 +28,9 @@ ok(run(BOX, "0") === 2 && run(BOX, "abc") === 2 && run(BOX, "") === 2, "đặt t
 console.log("3. Đọc RAM thật và đổi đơn vị");
 ok(cap.readTotalMB() > 0, "readTotalMB() > 0 trên máy này", cap.readTotalMB());
 ok(cap.memMB("2g", 0) === 2048 && cap.memMB("1536m", 0) === 1536 && cap.memMB("x", 9) === 9, "memMB đổi 2g / 1536m");
+ok(cap.memMB("2.5g", 0) === 2560 && cap.memMB("1.5g", 1024) === 1536 && cap.memMB("512k", 0) === 1 && cap.memMB("3GB", 0) === 3072 && cap.memMB(" 1g ", 0) === 1024, "memMB đọc số thập phân và đơn vị (2.5g = 2560, 1.5g = 1536)", `${cap.memMB("2.5g", 0)} ${cap.memMB("1.5g", 1024)}`);
+ok(cap.memMB("2gx", 7) === 7 && cap.memMB("1,5g", 7) === 7 && cap.memMB("-1", 7) === 7 && cap.memMB("", 7) === 7, "memMB: chuỗi sai định dạng trả mặc định (không đọc nửa chừng)");
+ok(cap.memBytes("2.5g") === 2684354560 && cap.memBytes("3072m") === 3221225472 && cap.memBytes("-1") === -1 && cap.memBytes("lạ") === 0, "memBytes khớp số byte Docker lưu (2.5g = 2684354560)");
 
 console.log("4. agent.mjs dùng đúng các hồ này, không còn hệ số 0,3 / 0,2");
 const src = fs.readFileSync("workspace/agent.mjs", "utf8");
@@ -65,6 +68,8 @@ console.log("6. W23-5 / G3.3: --memory-swap lớn hơn --memory cho cả workspa
   const swapOf = new Function("memMB", `${swapSrc}; return swapOf;`)(cap.memMB);
   ok(swapOf("2g", "1g") === "3072m" && swapOf("1536m", "1g") === "2560m", "mặc định: RAM + 1 GB (2g → 3072m, 1536m → 2560m)", `${swapOf("2g", "1g")} ${swapOf("1536m", "1g")}`);
   ok(swapOf("lạ", "1g") === "lạ", "RAM đọc không được: giữ swap = RAM (Docker không nhận swap < RAM)");
+  ok(swapOf("2g", "1.5g") === "3584m" && swapOf("2.5g", "1g") === "3584m", "WS_SWAP_EXTRA / RAM thập phân: 2g + 1.5g = 3584m (trước đây ra 2049m)", `${swapOf("2g", "1.5g")} ${swapOf("2.5g", "1g")}`);
+  ok(/const swapBytes = memBytes\(MEMORY_SWAP\)/.test(src) && /!updated\.has\(want\)/.test(src) && /updated\.add\(want\)/.test(src), "ensure(): so số byte thật, mỗi container chỉ docker update một lần");
   ok(/env\("WS_RUN_MEMORY_SWAP"/.test(src) && /env\("WS_MEMORY_SWAP"/.test(src), "đặt tay được bằng WS_RUN_MEMORY_SWAP / WS_MEMORY_SWAP");
   ok(/swapOld \? \["--memory", MEMORY, "--memory-swap", MEMORY_SWAP\]/.test(src), "workspace tạo từ bản trước được docker update swap tại chỗ");
 }

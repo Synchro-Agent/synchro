@@ -15,7 +15,7 @@ import { BrowserError, createBrowser, devJson } from "./browser-core.mjs";
 import { createRelay } from "./ext-relay.mjs";
 import { clipSink, collectOutputs, createRunQueue, isMediaRun, QueueFull, safeReadIn, safeWrite } from "./safefs.mjs";
 import { createWarmPool, memAvailableMB } from "./warmpool.mjs";
-import { createWaitLine, mediaSlots, memMB, ramSlots as slotsFor, readTotalMB } from "./capacity.mjs";
+import { createWaitLine, mediaSlots, memBytes, memMB, ramSlots as slotsFor, readTotalMB } from "./capacity.mjs";
 
 const env = (k, d) => process.env[k] ?? d;
 // Tổng RAM thật của máy (MB): MemTotal trên Linux (máy chủ thật), nơi khác dùng os.totalmem (máy dev). Đọc một lần lúc khởi động.
@@ -248,6 +248,8 @@ const QUOTA_GRACE_MS = 5 * 60_000;
 const quotaNote = (u) => (live.get(u)?.over ? `\n[Workspace đang vượt hạn mức ${DISK_MB} MB và sẽ bị dừng. Hãy xóa bớt tệp (node_modules, build…).]` : "");
 
 const starting = new Map();
+// Container (Id + cấu hình) đã được docker update một lần: không thử lại ở mỗi ensure().
+const updated = new Set();
 async function ensure(u) {
   if (!okUser(u)) throw new E(400, "Tài khoản không hợp lệ");
   if (starting.has(u)) return starting.get(u);
@@ -284,13 +286,22 @@ async function ensure(u) {
       c = await inspect(name);
       B.reset(u);
     }
-    // Container tạo từ bản trước (giới hạn CPU cũ, swap = RAM): cập nhật tại chỗ, không cần tạo lại.
+    // Container tạo từ bản trước (giới hạn CPU cũ, swap = RAM): cập nhật tại chỗ, không cần tạo lại. So đúng số byte Docker lưu (memBytes, kể cả
+    // "2.5g"); mỗi container + cấu hình chỉ thử một lần (updated): Docker vẫn báo khác sau khi cập nhật thì ghi nhật ký một lần rồi thôi, không chạy
+    // docker update (tới 30 giây) ở mọi lần ensure() trên đường yêu cầu của người dùng.
     const nano = Math.round(Number(CPUS) * 1e9);
-    const swapBytes = MEMORY_SWAP === "-1" ? -1 : memMB(MEMORY_SWAP, 0) * 1048576;
+    const swapBytes = memBytes(MEMORY_SWAP);
     const swapOld = !!swapBytes && c.HostConfig?.MemorySwap !== undefined && c.HostConfig.MemorySwap !== swapBytes;
-    if (c.HostConfig && (c.HostConfig.NanoCpus !== nano || c.HostConfig.CpuShares !== Number(CPU_SHARES) || swapOld)) {
+    const want = `${c.Id}|${CPUS}|${CPU_SHARES}|${MEMORY}|${MEMORY_SWAP}`;
+    if (c.HostConfig && (c.HostConfig.NanoCpus !== nano || c.HostConfig.CpuShares !== Number(CPU_SHARES) || swapOld) && !updated.has(want)) {
+      updated.add(want);
       const r = await run("docker", ["update", "--cpus", CPUS, "--cpu-shares", CPU_SHARES, ...(swapOld ? ["--memory", MEMORY, "--memory-swap", MEMORY_SWAP] : []), name], { timeout: 30_000 });
-      if (r.code) log("không cập nhật được giới hạn CPU / bộ nhớ", u, r.err.trim().slice(0, 200)); else { log("cập nhật giới hạn CPU / bộ nhớ", u); c = await inspect(name); }
+      if (r.code) log("không cập nhật được giới hạn CPU / bộ nhớ (không thử lại cho container này)", u, r.err.trim().slice(0, 200));
+      else {
+        c = await inspect(name);
+        const still = c.HostConfig && (c.HostConfig.NanoCpus !== nano || c.HostConfig.CpuShares !== Number(CPU_SHARES) || (!!swapBytes && c.HostConfig.MemorySwap !== swapBytes));
+        log(still ? "đã cập nhật giới hạn CPU / bộ nhớ nhưng Docker vẫn báo khác (không thử lại cho container này)" : "cập nhật giới hạn CPU / bộ nhớ", u);
+      }
     }
     const s = st(u);
     s.ip = c.NetworkSettings.Networks[NET]?.IPAddress ?? "";
@@ -885,6 +896,11 @@ process.on("SIGTERM", async () => {
 setupHost().catch((e) => log("setup", e)).then(() => cleanRuns()).catch((e) => log("dọn lần chạy cũ", e)).finally(() => {
   server.listen(PORT, HOST, () => log(`workspace agent nghe tại ${HOST}:${PORT}`));
   log(`[timing] mem trần theo RAM: ${realTotalMB() || "?"} MB, chừa ${SERVER_RESERVE_MB} MB, mỗi hồ lấy (tổng − chừa) × 0,5 → MAX_RUNNING=${MAX_RUNNING} (workspace /1536 MB), RUN_MAX=${RUN_MAX} (chạy code /2048 MB), MEDIA_MAX=${MEDIA_MAX} (dựng video /3584 MB, ≤ RUN_MAX); --memory-swap workspace ${MEMORY_SWAP}, chạy code ${RUN_MEMORY_SWAP}`);
+  // Cỡ bộ nhớ đặt tay mà không đọc được (vd. "1,5g"): báo rõ một lần thay vì lặng lẽ dùng mặc định.
+  for (const k of ["WS_SWAP_EXTRA", "WS_MEMORY", "WS_RUN_MEMORY", "WS_MEMORY_SWAP", "WS_RUN_MEMORY_SWAP"]) {
+    const v = process.env[k];
+    if (v !== undefined && v !== "" && !memBytes(v)) log(`cảnh báo: ${k}="${v}" không phải cỡ bộ nhớ hợp lệ (vd. 1g, 1.5g, 1536m, -1 cho swap)${k === "WS_SWAP_EXTRA" ? ", dùng mặc định 1g" : ""}`);
+  }
   startProxy();
   warm.start();
 });
