@@ -79,10 +79,11 @@ ok(/className="overlay ft-lightbox"/.test(lb) && /role="dialog" aria-modal="true
 // U14: trợ năng — vùng bấm 44px trên màn cảm ứng, chữ tối thiểu 12px, nút đóng có tên, hộp xác nhận (Đăng xuất?) có tên.
 {
   const cssFiles = ["app/globals.css", "app/synchro-ds.css", "app/features.css", "app/codeview.css", "app/brainview.css", "app/glass.css", "app/speech/speech.css", "app/download/download.css"];
-  // Ngoại lệ: hình thu nhỏ trang tải về (.dl-win / .dl-phone), ảnh thu nhỏ tài liệu, nhãn loại tệp trong ô 28–30px — là hình minh họa thu nhỏ, không phải chữ để đọc.
+  // Ngoại lệ: chỉ hình minh họa thu nhỏ thuần túy — trang tải về (.dl-win / .dl-phone) và ảnh thu nhỏ tài liệu Markdown (.art-thumb-doc, inert + aria-hidden) —
+  // không phải chữ để đọc. Nhãn loại tệp trong ô 28–30px (.out-badge.sm, .art-head .out-badge) LÀ chữ để đọc nên không còn được miễn, phải ≥12px.
   const small = [];
   for (const f of cssFiles) for (const m of read(f).matchAll(/([^{}]*)\{([^{}]*)\}/g)) {
-    if (/\.dl-(win|phone)|\.art-thumb-doc|\.out-badge\.sm|\.art-head \.out-badge/.test(m[1])) continue;
+    if (/\.dl-(win|phone)|\.art-thumb-doc/.test(m[1])) continue;
     for (const d of m[2].matchAll(/font(?:-size)?:\s*(?:[a-z]+\s+|\d{3}\s+)*(\d+(?:\.\d+)?)px/g)) if (Number(d[1]) < 12) small.push(`${f}: ${m[1].trim().slice(-50)} ${d[0]}`);
   }
   ok(!small.length, "không còn cỡ chữ dưới 12px", small.slice(0, 10).join("\n"));
