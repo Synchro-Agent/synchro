@@ -961,7 +961,7 @@ const isData = (x: Exec, c: Call) => c.name === PROJECT_DOC_TOOL.name || !!x.ses
 const label = (x: Exec, c: Call) => describe(x, c).replace(/^Đang (dùng |chạy )?/, "");
 // Loại công cụ của một bước (worktone.ts → toolKind): tên công cụ thật; Composio chạy mọi thao tác qua một công cụ chung nên kèm ứng dụng · thao tác
 // ("Gmail · gửi thư" và "Gmail · tìm thư" là hai loại: tìm thư thành công không bù cho gửi thư lỗi).
-const kindOf = (x: Exec, c: Call) => { const ct = x.sess?.get(c.name); const cx = ct && cxOf(ct, c.input); return cx ? `${c.name}|${cx.app} · ${cx.act}` : c.name; };
+const kindOf = (x: Exec, c: Call) => { const ct = x.sess?.get(c.name); const cx = ct && cxOf(ct, c.input, x.sess!.uid); return cx ? `${c.name}|${cx.app} · ${cx.act}` : c.name; };
 function abortable<T>(p: Promise<T>, signal?: AbortSignal): Promise<T> {
   if (!signal) return p;
   if (signal.aborted) return Promise.reject(new DOMException("Đã dừng", "AbortError"));
