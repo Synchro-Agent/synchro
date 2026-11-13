@@ -56,7 +56,7 @@ for (const f of files) {
     const m = /^export (?:async )?(function|const) (GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)\b(.*)/.exec(line);
     if (!m) continue;
     methods++;
-    if (m[1] === "function" || !/^ = (handle|route|engineRoute|timed)\(/.test(m[3])) bare.push(`${path.relative(process.cwd(), f)}: ${line.slice(0, 80)}`);
+    if (m[1] === "function" || !/^ = (handle|route|engineRoute|timed)(?:<[^>]*>)?\(/.test(m[3])) bare.push(`${path.relative(process.cwd(), f)}: ${line.slice(0, 80)}`);
   }
 }
 ok(files.length > 90 && methods > 150, `quét ${files.length} tệp route, ${methods} phương thức`, { files: files.length, methods });
