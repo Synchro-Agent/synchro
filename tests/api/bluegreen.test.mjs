@@ -297,10 +297,20 @@ const calls = () => { const s = fs.existsSync(log) ? fs.readFileSync(log, "utf8"
   ok(/rc=1/.test(r.out) && running() === "3002" && !calls().includes("pm2 stop synchro-green"), "DEPLOY-1: trước khi dừng màu nào cũng nạp lại nginx nếu tệp khác màu sống; không dừng màu nginx đang chạy", { r, running: running() });
   const sb = fs.readFileSync(path.join(process.cwd(), "scripts", "server-build.sh"), "utf8");
   ok(sb.indexOf('BG=0; bg_enabled "$APP" && BG=1') > sb.indexOf("flock -w 900 9") && !/\[ "\$PM2" = "synchro" \] && PORT=3001/.test(sb) && /bg_pm2_has "\$PM2"/.test(sb), "DEPLOY-2: chọn cách deploy sau khi giữ khóa; production đã chuyển không đi đường một tiến trình nếu thiếu app pm2; không bao giờ đoán cổng 3001");
+  {
+    // DEPLOY-3: chỉ bỏ qua lỗi "tệp vừa bị xóa" của chown -R; lỗi khác (EPERM, ổ chỉ đọc…) làm dừng.
+    const fn = sb.slice(sb.indexOf("harden() {"), sb.indexOf("\n}\n", sb.indexOf("harden() {")) + 3);
+    const cb = path.join(tmp, "chownbin"); fs.mkdirSync(cb, { recursive: true });
+    fs.writeFileSync(path.join(cb, "chown"), `#!/bin/bash\n[ "$1" = -R ] && [ "$2" = synchro:synchro ] && [ -n "$CHOWN_ERR" ] && { echo "$CHOWN_ERR" >&2; exit 1; }\nexit 0\n`); fs.chmodSync(path.join(cb, "chown"), 0o755);
+    const app = path.join(tmp, "happ"); for (const d of ["scripts", "workspace"]) fs.mkdirSync(path.join(app, d), { recursive: true });
+    const h = (e) => spawnSync("bash", ["-c", `set -e; APP="${app}"; ${fn}\nharden; echo done`], { encoding: "utf8", env: { ...process.env, PATH: `${cb}:${process.env.PATH}`, CHOWN_ERR: e } });
+    const gone = h("chown: cannot access 'x/data/tmp1': No such file or directory"), perm = h("chown: changing ownership of 'x/app/a': Operation not permitted");
+    ok(gone.status === 0 && /done/.test(gone.stdout) && perm.status !== 0 && /Operation not permitted/.test(perm.stderr) && !/done/.test(perm.stdout), "DEPLOY-3: chown -R chỉ bỏ qua tệp vừa bị xóa; lỗi quyền làm dừng deploy và in ra lỗi thật", { gone: gone.status, perm: perm.status, err: perm.stderr });
+  }
   ok(/if \[ "\$PM2" = synchro-staging \]; then \[ -n "\$PORT_ARG" \] \|\| PORT_ARG=3001/.test(sb) && /bg_color_of_port "\$\(bg_upstream_port\)" >\/dev\/null; then/.test(sb) && /KHÔNG CÓ APP PM2/.test(sb) && /không biết cổng nên KHÔNG kiểm tra được web/.test(sb),
     "DEPLOY-2: staging tạo lại synchro-staging ở 3001 (chỉ staging); production đã chuyển + nginx trỏ màu xanh/lam thì từ chối cả khi còn app 'synchro'; không báo 'web đang chạy bình thường' khi không có app / không biết cổng");
   const bgPart = sb.slice(sb.indexOf("# ---------------- Xanh/lam"));
-  ok(bgPart.indexOf("SHARED=1") < bgPart.indexOf('mv "$B/.next" "$NEWDIST"') && bgPart.indexOf("sync_code") < bgPart.indexOf('bg_link_modules "$APP" "$MODS"') && /rollback "thoát giữa chừng/.test(sb) && /chown -R synchro:synchro "\$APP" 2>\/dev\/null \|\|/.test(sb),
+  ok(bgPart.indexOf("SHARED=1") < bgPart.indexOf('mv "$B/.next" "$NEWDIST"') && bgPart.indexOf("sync_code") < bgPart.indexOf('bg_link_modules "$APP" "$MODS"') && /rollback "thoát giữa chừng/.test(sb) && /grep -v 'No such file or directory'/.test(sb),
     "DEPLOY-3: mọi bước đụng trạng thái dùng chung nằm sau khi có rollback (cleanup khi thoát lỗi); chép mã trước khi đổi liên kết thư viện; chown -R data/ không làm hỏng deploy");
   const eco = fs.readFileSync(path.join(process.cwd(), "ecosystem.config.cjs"), "utf8");
   ok(/script: path\.join\(APP, `\.next-\$\{color\}`, "node_modules\/next\/dist\/bin\/next"\)/.test(eco) && bgPart.includes('ln -sfn "$MODS" "$NEWDIST/node_modules"')

@@ -69,7 +69,12 @@ trap 'exit 129' HUP; trap 'exit 130' INT; trap 'exit 143' TERM
 harden() {
   # data/ và .cache/ thay đổi liên tục khi web chạy: tệp biến mất giữa lúc chown -R không phải lỗi của deploy. Phần cần cho an toàn
   # (scripts/, workspace/ thuộc root) ở dưới vẫn phải đạt.
-  chown -R synchro:synchro "$APP" 2>/dev/null || echo "CẢNH BÁO: chown -R $APP có tệp không đổi được chủ (tệp vừa bị xóa?), bỏ qua." >&2
+  local err rest
+  err=$(chown -R synchro:synchro "$APP" 2>&1 >/dev/null) || {
+    rest=$(printf '%s\n' "$err" | grep -v 'No such file or directory' || true)
+    if [ -n "$rest" ]; then printf '%s\n' "$rest" >&2; echo "chown -R $APP lỗi (không phải do tệp vừa bị xóa): dừng." >&2; return 1; fi
+    echo "CẢNH BÁO: chown -R $APP gặp tệp vừa bị xóa trong lúc chạy, bỏ qua." >&2
+  }
   mkdir -p "$APP/.cache" "$APP/data"
   chown synchro:synchro "$APP/.cache" "$APP/data"
   chown root:root "$APP"; chmod 755 "$APP"
