@@ -222,6 +222,14 @@ export function deleteConvRuns(uid: string, conv: string) {
 }
 // Số bước giữ trong cột cũ runs.events (bằng mức cắt của bản trước); bỏ cùng cột cũ ở bản phát hành sau.
 const LEGACY_EVENTS = 400;
+// Cột cũ chỉ là bản chụp để quay lui được (A4.3, W23-15/R9): ghi lại mỗi LEGACY_EVERY bước, lúc lượt kết thúc (finish) và lúc máy chủ tắt, không ghi lại
+// cả mảng 400 bước ở mọi bước (mỗi bước "say" 4000 ký tự thì mỗi lần là ~1,6 MB, đúng thứ run_events ghi nối thêm muốn bỏ).
+const LEGACY_EVERY = 20;
+/** Chụp 400 bước gần nhất từ run_events vào cột cũ runs.events (đúng hình dạng bản trước đọc: tăng dần theo seq, phần tử cuối cho seq tiếp theo). */
+function legacySnapshot(d: ReturnType<typeof init>, id: string) {
+  const rows = d.prepare("SELECT seq, at, kind, text FROM run_events WHERE run_id = ? ORDER BY seq DESC LIMIT ?").all(id, LEGACY_EVENTS) as RunEvent[];
+  if (rows.length) d.prepare("UPDATE runs SET events = ? WHERE id = ?").run(JSON.stringify(rows.reverse()), id);
+}
 /** Ghi một bước của lượt đang chạy (lưu để mở lại trang vẫn thấy đủ) và gửi cho người đang theo dõi. Trả về số thứ tự bước. */
 export function progress(kind: RunEvent["kind"], text: string): number {
   const s = scope.getStore();
@@ -234,11 +242,9 @@ export function progress(kind: RunEvent["kind"], text: string): number {
   const ev: RunEvent = { seq, at: Date.now(), kind, text: text.slice(0, kind === "say" || kind === "steer" ? 4000 : kind === "plan" || kind === "ask" ? 6000 : kind === "res" ? 1000 : 300) };
   d.transaction(() => {
     d.prepare("INSERT INTO run_events (run_id, seq, at, kind, text) VALUES (?, ?, ?, ?, ?)").run(s.id, ev.seq, ev.at, ev.kind, ev.text);
-    // Ghi kèm cột cũ runs.events thêm một bản phát hành (A4.3, W23-15/R9) để quay lui được: bản cũ đọc cột này và lấy seq tiếp theo từ phần tử cuối.
-    // Giữ 400 bước gần nhất như trước (list.slice(-400)); nối thêm bằng hàm JSON của SQLite nên không đọc-sửa-ghi cả mảng trong JS.
-    const j = JSON.stringify(ev);
-    d.prepare(`UPDATE runs SET updated_at = ?, events = CASE WHEN json_valid(events) AND json_array_length(events) >= ${LEGACY_EVENTS}
-      THEN json_insert(json_remove(events, '$[0]'), '$[#]', json(?)) WHEN json_valid(events) THEN json_insert(events, '$[#]', json(?)) ELSE json_array(json(?)) END WHERE id = ?`).run(ev.at, j, j, j, s.id);
+    d.prepare("UPDATE runs SET updated_at = ? WHERE id = ?").run(ev.at, s.id);
+    // Bản chụp cho cột cũ runs.events thêm một bản phát hành để quay lui được (bản cũ đọc cột này, lấy seq tiếp theo từ phần tử cuối).
+    if (seq % LEGACY_EVERY === 0) legacySnapshot(d, s.id);
   })();
   notify(s.id, { event: ev });
   return seq;
@@ -295,13 +301,17 @@ export const registerExec = (kind: string, f: Exec) => { executors.set(kind, f);
 
 // Máy chủ đang tắt (deploy, khởi động lại): lỗi mạng lúc này là do tắt máy, không phải lỗi thật. Giữ lượt ở "đang chạy"
 // để lần khởi động sau chạy lại, thay vì ghi một kết quả lỗi.
-const gs = globalThis as unknown as { __synchroStopping?: boolean; __synchroStopHook?: boolean };
+const gs = globalThis as unknown as { __synchroStopping?: boolean; __synchroStopHook?: boolean; __synchroLegacyFlush?: () => void };
 if (!gs.__synchroStopHook) {
   gs.__synchroStopHook = true;
-  for (const sig of ["SIGTERM", "SIGINT"] as const) process.once(sig, () => { gs.__synchroStopping = true; });
+  for (const sig of ["SIGTERM", "SIGINT"] as const) process.once(sig, () => { gs.__synchroStopping = true; gs.__synchroLegacyFlush?.(); });
 }
+// Máy chủ tắt (deploy, quay lui): chụp cột cũ cho mọi lượt đang chạy, để bản trước tiếp tục đúng seq.
+gs.__synchroLegacyFlush = () => { for (const id of live.keys()) { try { legacySnapshot(init(), id); } catch { /* bỏ */ } } };
 
 function finish(id: string, http: number, json: unknown) {
+  // Bản chụp cuối cho cột cũ (kể cả khi máy chủ đang tắt và lượt được giữ ở "đang chạy" để chạy lại).
+  try { legacySnapshot(init(), id); } catch { /* chỉ là dự phòng quay lui */ }
   if (gs.__synchroStopping && http >= 500) return;
   // Tin nhắn thêm tới khi model đã ở bước trả lời cuối: trả về để trình duyệt gửi ngay thành lượt tiếp theo (không mất tin).
   const left = live.get(id)?.inbox ?? [];

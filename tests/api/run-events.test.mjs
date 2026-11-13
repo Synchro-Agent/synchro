@@ -37,7 +37,8 @@ Rn.inRun("run_flat", () => {
 });
 ok(emitted.length === 100 && emitted[0] === 1 && emitted[99] === 100, "100 bước, seq liên tục 1..100", `${emitted[0]}..${emitted[99]} (n=${emitted.length})`);
 ok(d.prepare("SELECT COUNT(*) n FROM run_events WHERE run_id = ?").get("run_flat").n === 100, "run_events có đúng 100 dòng (ghi nối thêm, không ghi đè)");
-// W23-15 / R9: cột cũ runs.events vẫn được ghi kèm thêm một bản phát hành, để bản trước (đọc cột này, seq = phần tử cuối + 1) quay lui được.
+// W23-15 / R9: cột cũ runs.events vẫn được chụp thêm một bản phát hành (mỗi 20 bước, lúc xong, lúc tắt máy), để bản trước (đọc cột này, seq = phần tử
+// cuối + 1) quay lui được. 100 bước: lần chụp ở bước 100 có đủ.
 const legacyFlat = JSON.parse(d.prepare("SELECT events FROM runs WHERE id = ?").get("run_flat").events);
 ok(JSON.stringify(legacyFlat) === JSON.stringify(d.prepare("SELECT seq, at, kind, text FROM run_events WHERE run_id = ? ORDER BY seq").all("run_flat")), "cột runs.events vẫn ghi kèm đủ 100 bước, đúng hình dạng (quay lui được)", JSON.stringify(legacyFlat).slice(0, 200));
 
@@ -52,8 +53,37 @@ Rn.inRun("run_big", () => { for (let i = 0; i < 450; i++) Rn.progress("note", "n
 const big = Rn.getRun("run_big").events;
 const expectBig = d.prepare("SELECT seq, at, kind, text FROM run_events WHERE run_id = ? ORDER BY seq ASC").all("run_big").slice(-400);
 const legacyBig = JSON.parse(d.prepare("SELECT events FROM runs WHERE id = ?").get("run_big").events);
-ok(legacyBig.length === 400 && legacyBig[0].seq === 51 && legacyBig[399].seq === 450 && JSON.stringify(legacyBig) === JSON.stringify(expectBig), "cột cũ cũng chỉ giữ 400 bước gần nhất (như list.slice(-400)); bản cũ đọc ra seq tiếp theo 451", `len=${legacyBig.length} ${legacyBig[0]?.seq}..${legacyBig.at(-1)?.seq}`);
+// Lần chụp gần nhất ở bước 440 (mỗi 20 bước): 400 bước 41..440, đúng hình dạng; chậm nhất 19 bước so với run_events cho tới lúc lượt xong.
+const expect440 = d.prepare("SELECT seq, at, kind, text FROM run_events WHERE run_id = ? AND seq <= 440 ORDER BY seq ASC").all("run_big").slice(-400);
+ok(legacyBig.length === 400 && legacyBig[0].seq === 41 && legacyBig[399].seq === 440 && JSON.stringify(legacyBig) === JSON.stringify(expect440), "cột cũ chỉ giữ 400 bước gần nhất (như list.slice(-400)), chụp ở bước 440", `len=${legacyBig.length} ${legacyBig[0]?.seq}..${legacyBig.at(-1)?.seq}`);
 ok(big.length === 400 && big[0].seq === 51 && big[399].seq === 450 && JSON.stringify(big) === JSON.stringify(expectBig), "cắt còn 400 bước gần nhất như list.slice(-400)", `len=${big.length} ${big[0]?.seq}..${big[399]?.seq}`);
+
+console.log("2b. R9 / W23-15: cột cũ không bị ghi lại cả mảng ở mọi bước; lượt xong thì chụp đủ");
+{
+  mkRun("run_amp");
+  const legacyOf = (id) => JSON.parse(d.prepare("SELECT events FROM runs WHERE id = ?").get(id).events);
+  const say = "x".repeat(4000);
+  let changes = 0, prev = "[]";
+  Rn.inRun("run_amp", () => {
+    for (let i = 0; i < 100; i++) {
+      Rn.progress("say", say);
+      const now = d.prepare("SELECT events FROM runs WHERE id = ?").get("run_amp").events;
+      if (now !== prev) { changes++; prev = now; }
+    }
+  });
+  ok(changes === 5, "100 bước 'say' 4000 ký tự: cột cũ chỉ ghi lại 5 lần (mỗi 20 bước), không phải 100", changes);
+  Rn.inRun("run_amp", () => { for (let i = 0; i < 19; i++) Rn.progress("step", "s" + i); });
+  ok(legacyOf("run_amp").at(-1).seq === 100, "giữa hai lần chụp: cột cũ giữ lần chụp trước (seq 100)", legacyOf("run_amp").at(-1)?.seq);
+  ok(d.prepare("SELECT updated_at FROM runs WHERE id = ?").get("run_amp").updated_at >= d.prepare("SELECT MAX(at) m FROM run_events WHERE run_id = ?").get("run_amp").m, "updated_at vẫn theo từng bước");
+
+  // Lượt chạy thật (startRun) kết thúc: finish() chụp lần cuối nên cột cũ có đủ mọi bước, kể cả khi không chia hết cho 20.
+  const user = A.createUser({ email: "legacy@run-events.test", name: "L", verified: true });
+  Rn.registerExec("t-legacy", async () => { for (let i = 0; i < 45; i++) Rn.progress("step", "b" + i); return { http: 200, json: { text: "xong" } }; });
+  const id = Rn.startRun(user, "t-legacy", { messages: ["x"] }, null);
+  for (let i = 0; i < 100 && Rn.getRun(id)?.status === "running"; i++) await new Promise((r) => setTimeout(r, 20));
+  const leg = legacyOf(id);
+  ok(Rn.getRun(id)?.status === "done" && leg.length === 45 && leg[44].seq === 45 && JSON.stringify(leg) === JSON.stringify(d.prepare("SELECT seq, at, kind, text FROM run_events WHERE run_id = ? ORDER BY seq").all(id)), "lượt xong: cột cũ có đủ 45 bước (bản trước tiếp tục từ seq 46)", `${Rn.getRun(id)?.status} len=${leg.length} last=${leg.at(-1)?.seq}`);
+}
 
 console.log("3. Lượt chưa chuyển sang bảng mới: getRun đọc cột runs.events (dự phòng quay lui)");
 const oldEvents = [{ seq: 1, at: 111, kind: "step", text: "cũ 1" }, { seq: 2, at: 222, kind: "say", text: "cũ 2" }];
