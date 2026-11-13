@@ -101,7 +101,9 @@ function lock(f: Feat, msg: string) {
 
 type Failover = { at: number; from: string; to: string; path: string; reason: string; ok: boolean };
 const g = globalThis as unknown as { __speech?: { plan: Plan | null; at: number; busy: Promise<Plan> | null; fp?: string; perms?: { at: number; key: string; miss: Partial<Record<Feat | "realtime", string>> };
-  served?: Record<string, number>; lastFailover?: Failover } };
+  served?: Record<string, number>; lastFailover?: Failover;
+  /** Lần quét gói gần nhất hỏng (khóa / mạng) khi có dự phòng: gói đang dùng thay và lúc hỏng — để chờ ~30 giây rồi mới quét lại nhà cung cấp chính. */
+  fail?: { at: number; plan: Plan } } };
 const G = () => (g.__speech ??= { plan: null, at: 0, busy: null });
 
 // ---- gọi API ----
@@ -328,6 +330,27 @@ const empty = (note: string | null): Plan => ({
   features: Object.fromEntries(FEATS.map((f) => [f, false])) as Record<Feat, boolean>, locked: {}, perms: {}, realtime: false, library: false, formats: [], tts: [], sts: [], note, checkedAt: Date.now(),
 });
 
+// Nhà cung cấp chính hỏng (khóa / mạng) mà chưa quét được gói lần nào trong tiến trình này (vừa khởi động lại, khóa đã bị thu hồi) nhưng có dự phòng:
+// gói tối thiểu chỉ mở Đọc văn bản và Chép lời — đúng hai đường el() gửi lại được ở dự phòng; mọi tính năng khác tắt. Model mặc định: model đọc văn
+// bản phổ biến nhất của API tương thích ElevenLabs (danh sách thật chỉ đọc được từ nhà cung cấp chính).
+const SPARE_TTS: ModelOut[] = [
+  { id: "eleven_multilingual_v2", name: "Eleven Multilingual v2", desc: "", langs: [], max: 5000, rate: 1, style: true, boost: true },
+  { id: "eleven_flash_v2_5", name: "Eleven Flash v2.5", desc: "", langs: [], max: 5000, rate: 0.5, style: false, boost: false },
+];
+const spareOnly = (e: SpeechErr): Plan => {
+  const p = empty(e.code === "key"
+    ? "Khóa ElevenLabs không còn hợp lệ. Nhà cung cấp dự phòng đang phục vụ Đọc văn bản và Chép lời; các tính năng khác tạm ẩn cho tới khi quản trị viên thay khóa ở Cài đặt → Providers."
+    : "Không kết nối được tới ElevenLabs. Nhà cung cấp dự phòng đang phục vụ Đọc văn bản và Chép lời; các tính năng khác tạm ẩn cho tới khi kết nối lại.");
+  p.connected = true; p.tier = "unknown"; p.tierName = "Chưa rõ gói";
+  p.features.tts = p.features.stt = true;
+  p.formats = FORMATS.filter((f) => f.min === "free").map((f) => ({ id: f.id, label: f.label }));
+  p.tts = SPARE_TTS.map((m) => ({ ...m }));
+  return p;
+};
+
+/** Chờ giữa hai lần quét lại nhà cung cấp chính đang hỏng khi dự phòng phục vụ thay. */
+export const FAIL_RETRY = 30_000;
+
 /** Gói hiện tại (nhớ 3 phút; fresh để quét lại ngay, ví dụ sau khi đổi khóa hoặc nâng gói). */
 export async function plan(o: { fresh?: boolean } = {}): Promise<Plan> {
   const st = G();
@@ -335,12 +358,20 @@ export async function plan(o: { fresh?: boolean } = {}): Promise<Plan> {
   // Quản trị viên đổi khóa (hoặc địa chỉ API): quét lại ngay theo khóa mới.
   const k = conn(), fp = `${k.base}|${k.key.slice(-8)}`;
   const fresh = o.fresh || st.fp !== fp;
-  if (fresh && st.fp !== fp) { st.fp = fp; st.busy = null; }
+  if (fresh && st.fp !== fp) { st.fp = fp; st.busy = null; st.fail = undefined; }
   if (!fresh && st.plan && Date.now() - st.at < 180_000) return st.plan;
+  // Nhà cung cấp chính vừa hỏng và dự phòng đang phục vụ: không quét lại ở mỗi yêu cầu (mỗi lần quét chờ tới 20 giây nếu chính treo), đợi FAIL_RETRY.
+  if (!fresh && st.fail && Date.now() - st.fail.at < FAIL_RETRY && speechProviderList().length > 1) return st.fail.plan;
   if (st.busy) return st.busy;
-  st.busy = scan(fresh).then((p) => { st.plan = p; st.at = Date.now(); return p; })
-    // Nhà cung cấp chính mất kết nối / khóa hỏng nhưng có dự phòng: giữ gói đọc được lần trước để Đọc văn bản và Chép lời vẫn đi qua el() sang dự phòng.
-    .catch((e: SpeechErr) => (st.plan && speechProviderList().length > 1 && (e.code === "key" || e.code === "net") ? st.plan : empty(e.message)))
+  st.busy = scan(fresh).then((p) => { st.plan = p; st.at = Date.now(); st.fail = undefined; return p; })
+    // Nhà cung cấp chính mất kết nối / khóa hỏng nhưng có dự phòng: giữ gói đọc được lần trước (chưa có thì gói tối thiểu chỉ Đọc văn bản + Chép lời)
+    // để hai tính năng này vẫn đi qua el() sang dự phòng.
+    .catch((e: SpeechErr) => {
+      if (speechProviderList().length < 2 || (e.code !== "key" && e.code !== "net")) { st.fail = undefined; return empty(e.message); }
+      const p = st.plan ?? spareOnly(e);
+      st.fail = { at: Date.now(), plan: p };
+      return p;
+    })
     .finally(() => { st.busy = null; });
   return st.busy;
 }
