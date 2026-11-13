@@ -81,6 +81,8 @@ try {
   ok(AS.findByEmail("moi@taken.test").email_verified === 1 && !AS.sessionsOf(nu.id).length, "bấm đường dẫn: đã xác minh, không tự tạo phiên (chủ email không vào nhầm tài khoản người khác lập sẵn)");
   const lg = await login("moi@taken.test", "Mat-khau-moi-456");
   ok(lg.s === 200 && lg.j.user?.email === "moi@taken.test" && lg.cookie && lg.j.user.verifyPending === false, "xác minh xong: đăng nhập bằng mật khẩu vừa đặt", lg);
+  ok(lg.j.firstLogin === true, "lần đăng nhập đầu: máy chủ báo firstLogin", lg.j);
+  ok((await login("moi@taken.test", "Mat-khau-moi-456")).j.firstLogin === undefined, "đăng nhập lần sau: không còn firstLogin");
   ok((await login("co-roi@taken.test", "Mat-khau-moi-456")).s === 401, "đăng ký trùng không đổi mật khẩu tài khoản cũ");
   // Tài khoản chưa xác minh nhưng đã từng đăng nhập (trước khi có luật này, hay lúc yêu cầu xác minh đang tắt): vẫn đăng nhập như cũ.
   const old = AS.createUser({ email: "cu-chua-xm@taken.test", name: "Cũ", verified: false, passwordHash: await AS.hashPassword(PW) });
@@ -95,6 +97,21 @@ try {
   // Giới hạn chỉ riêng đường "email đã có" sẽ thành dấu hiệu dò (429 chỉ với email đã đăng ký): chỉ còn giới hạn chung theo IP.
   const src = fs.readFileSync(path.join(process.cwd(), "app/authstore.ts"), "utf8");
   ok(!/limit\("signup-taken:"/.test(src) && /limit\("signup:" \+ ip/.test(src), "không có giới hạn riêng cho email đã có tài khoản, giới hạn chung theo IP còn nguyên");
+
+  console.log("5. Phim giới thiệu: lần đăng nhập đầu, dù đăng ký từ hôm trước");
+  // Mở thư xác minh hôm sau rồi mới đăng nhập: tài khoản đã hơn 24 giờ, chưa từng đăng nhập, chưa xem phim.
+  const late = AS.createUser({ email: "hom-sau@taken.test", name: "Hôm sau", verified: true, passwordHash: await AS.hashPassword(PW) });
+  AS.db().prepare("UPDATE users SET created_at = ? WHERE id = ?").run(Date.now() - 25 * 3600_000, late.id);
+  const lt = await login("hom-sau@taken.test", PW);
+  ok(lt.s === 200 && lt.j.firstLogin === true, "tài khoản tạo 25 giờ trước, lần đầu đăng nhập: firstLogin", lt.j);
+  const kind = IF.firstKind("login", lt.j.firstLogin);
+  ok(kind === "signup" && IF.wantsIntro(lt.j.user, kind) === true, "lần đăng nhập đầu tính như vừa đăng ký: phát phim", [kind, lt.j.user?.createdAt]);
+  const again = await login("hom-sau@taken.test", PW);
+  ok(IF.wantsIntro(again.j.user, IF.firstKind("login", again.j.firstLogin)) === false, "đăng nhập lại: không phát phim");
+  const now = Date.now();
+  ok(IF.wantsIntro({ id: "a", createdAt: now - 60_000 }, "login") === false, "đăng nhập lại tài khoản mới tạo (đã đăng nhập trước đó): không phát phim");
+  ok(IF.firstKind("profile", true) === "profile" && IF.firstKind("login", undefined) === "login", "chỉ đăng nhập bằng mật khẩu lần đầu mới đổi");
+  ok(IF.wantsIntro({ id: "c", createdAt: now - 3 * 3600_000 }, "profile") === false && IF.wantsIntro({ id: "d", createdAt: now }, "profile") === true, "bước hồ sơ (Google…) giữ như cũ");
 } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
 console.log(`\n${pass} đạt, ${fail} lỗi`);
 process.exit(fail ? 1 : 0);

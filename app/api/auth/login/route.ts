@@ -19,8 +19,9 @@ export const POST = handle(async (req) => {
     }
     throw e;
   }
-  const { user, cookie, mfa } = r;
+  const { user, cookie, mfa, firstLogin } = r;
   // Bật xác minh hai bước: chưa trả thông tin tài khoản nào trước khi nhập đúng mã.
   if (mfa) return withCookies(Response.json({ mfa: true }), cookie);
-  return withCookies(Response.json({ user: publicUser(user) }), cookie);
+  // firstLogin: lần đăng nhập đầu của tài khoản (đăng ký bằng email không tự đăng nhập): giao diện chào mừng và phát phim giới thiệu.
+  return withCookies(Response.json(firstLogin ? { user: publicUser(user), firstLogin: true } : { user: publicUser(user) }), cookie);
 });

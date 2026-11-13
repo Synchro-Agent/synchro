@@ -17,6 +17,7 @@ import { getLang } from "./i18n";
 import { LangSwitch } from "./langswitch";
 import { assemble, boxOf, center, fly, markTarget, onScreen, openHole, reducedMotion, settleApp } from "./handoff";
 import { preloadIntro, wantsIntro } from "./introfilm";
+import { firstKind } from "./introflag";
 import { TurnstileBox, useTurnstileKey } from "./turnstilebox";
 import { passkeyAbort, passkeyAssert, passkeyAutofill, passkeyCancelled, passkeySupported } from "./passkeyclient";
 
@@ -316,20 +317,23 @@ export const AuthComponent = ({ logo = <DefaultLogo />, brandName = "EaseMize", 
     setStage("loading");
     const t0 = Date.now();
     try {
-      const { user: u, pending, mfa } = await post<{ user: AuthUser; pending?: boolean; mfa?: boolean }>(url, body);
+      const { user: u, pending, mfa, firstLogin } = await post<{ user: AuthUser; pending?: boolean; mfa?: boolean; firstLogin?: boolean }>(url, body);
       await wait(minMs - (Date.now() - t0));
       // Tài khoản đã bật xác minh hai bước: hỏi mã rồi mới đăng nhập.
       if (mfa) { busy.current = false; setAuthStep("mfa"); setMfaCode(""); setPassword(""); setStage("form"); return; }
       // Đăng ký luôn trả về pending (blueprint F2.4), dù email mới hay đã có tài khoản: không nói lý do (ai cũng gõ được email của người khác),
       // thư xác minh hoặc thư "bạn đã có tài khoản" đã gửi tới chính hộp thư đó. Người dùng mới bấm đường dẫn trong thư rồi đăng nhập từ bước này.
       if (pending) { busy.current = false; setAuthStep("pending"); setPassword(""); setConfirmPassword(""); setStage("form"); return; }
+      // Lần đăng nhập đầu của tài khoản (máy chủ báo firstLogin, dù đăng ký từ hôm nào): chào "Welcome to Synchro" và phát phim như vừa đăng ký.
+      const kk: Kind = firstKind(k, firstLogin);
+      if (kk !== k) setKind(kk);
       // Chưa có hồ sơ (vd. tài khoản cũ): bỏ qua lời chào, chuyển thẳng sang bước điền hồ sơ.
-      if (u.needsProfile) { busy.current = false; onDone?.(u, k); return; }
+      if (u.needsProfile) { busy.current = false; onDone?.(u, kk); return; }
       setDoneUser(u);
       setStage("success");
       // Tài khoản mới: tải trước phim giới thiệu trong lúc hiện lời chào.
-      if (wantsIntro(u, k)) preloadIntro();
-      setTimeout(() => onDone?.(u, k), SUCCESS_HOLD);
+      if (wantsIntro(u, kk)) preloadIntro();
+      setTimeout(() => onDone?.(u, kk), SUCCESS_HOLD);
     } catch (e) { busy.current = false; setMfaCode(""); if ((e as { data?: { captcha?: boolean } }).data?.captcha) setNeedCaptcha(true); fail((e as Error).message); }
   };
 

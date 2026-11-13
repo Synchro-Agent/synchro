@@ -458,10 +458,12 @@ export async function login(req: Request, email0: unknown, pw: unknown) {
   const unproven = !!u && ok && u.last_login_at === null && verifyLocked(u);
   if (!u || !ok || unproven) { audit("login_failed", { target: u, targetEmail: email, ip, detail: unproven ? "email_unverified" : undefined }); throw new AuthError(BAD_LOGIN, 401); }
   if (u.status !== "active") { audit("login_blocked", { target: u, ip }); throw new AuthError("Tài khoản này đã bị khóa. Hãy liên hệ quản trị viên.", 403); }
+  // Lần đăng nhập đầu của tài khoản (đăng ký bằng email không tự đăng nhập): giao diện chào và phát phim giới thiệu như vừa đăng ký.
+  const firstLogin = u.last_login_at === null;
   const s = signIn(u, req, "password");
   // Chưa xong bước hai thì chưa phải đăng nhập: /api/auth/mfa ghi nhật ký khi xong.
   if (!s.mfa) audit("login", { actor: u, ip, detail: "password" });
-  return { user: u, ...s };
+  return { user: u, firstLogin, ...s };
 }
 
 /** Blueprint F2.4: email mới và email đã có tài khoản (hoặc được dành riêng) trả về giống hệt nhau, { pending: true } không kèm phiên.
