@@ -97,6 +97,20 @@ else
   bad "LibreOffice không mở được bản .docx"
 fi
 
+echo "== 4 mẫu Word (hợp đồng, biên bản họp, báo cáo có mục lục, CV): .docx và bản PDF từ chính tệp Word"
+for t in contract minutes official-report cv; do
+  synchro-doc example $t > $t.json || bad "không có ví dụ $t"
+  timed docx-$t synchro-doc docx $t $t.json outputs/$t.docx
+  # Bản PDF qua LibreOffice (khởi động nguội vài giây): không tính giờ, chỉ kiểm có PDF và ảnh.
+  synchro-doc docx $t $t.json outputs/$t.docx --pdf --png outputs/_preview >"$W/pdf-$t.out" 2>&1 && grep -q "\"pdf\": \"outputs/$t.pdf\"" "$W/pdf-$t.out" \
+    && ok "docx $t --pdf" || bad "docx $t --pdf: $(head -c 400 "$W/pdf-$t.out")"
+done
+check outputs/contract.pdf "Liberation\|Times" "CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM" "Điều 1. Nội dung dịch vụ" "ĐẠI DIỆN BÊN A"
+check outputs/minutes.pdf "Liberation\|Times" "BIÊN BẢN HỌP" "Phân công thực hiện" "THƯ KÝ"
+check outputs/official-report.pdf "Liberation\|Times" "MỤC LỤC" "I. Kết quả thực hiện quý III" "Nơi nhận"
+check outputs/cv.pdf "Carlito\|Calibri" "Trần Thị Bình" "Kinh nghiệm làm việc" "IELTS 7.0"
+ls outputs/_preview/contract-1.png outputs/_preview/cv-1.png >/dev/null 2>&1 && ok "ảnh xem trước của bản Word" || bad "thiếu ảnh xem trước của bản Word"
+
 echo "== bố cục khó: ghi chú khuất dưới bảng tổng, bảng nhiều cột, chữ trùng nhãn của gói, tiền làm tròn, payload số / ngày sai"
 python3 - <<'EOF'
 import json

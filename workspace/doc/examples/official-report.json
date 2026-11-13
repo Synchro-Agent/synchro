@@ -1,0 +1,22 @@
+{
+  "parent_org": "Tổng công ty Đầu tư Phát triển",
+  "organization": "Công ty TNHH Đồng Hành",
+  "number": "15/BC-ĐH",
+  "place": "TP. Hồ Chí Minh",
+  "date": "2026-11-11",
+  "title": "Kết quả kinh doanh quý III năm 2026 và kế hoạch quý IV",
+  "intro": "Thực hiện chỉ đạo của Tổng công ty, Công ty TNHH Đồng Hành báo cáo kết quả kinh doanh quý III năm 2026 và kế hoạch quý IV như sau:",
+  "sections": [
+    { "heading": "Kết quả thực hiện quý III", "level": 1 },
+    { "heading": "Doanh thu và lợi nhuận", "level": 2, "blocks": [
+      { "type": "paragraph", "text": "Doanh thu đạt **14,8 tỷ đồng**, tăng 42% so với cùng kỳ; biên lợi nhuận gộp 38%." },
+      { "type": "table", "caption": "Doanh thu theo khu vực (tỷ đồng)", "columns": ["Khu vực", "Quý II", "Quý III", "Tăng"], "rows": [["Miền Bắc", "3,1", "6,2", "100%"], ["Miền Trung", "1,0", "2,9", "190%"], ["Miền Nam", "4,0", "5,7", "43%"], ["Tổng", "8,1", "14,8", "83%"]], "total": true }
+    ] },
+    { "heading": "Khách hàng", "level": 2, "text": "- Khách hàng mới: 1.240\n- Tỷ lệ giữ chân: 92%" },
+    { "heading": "Tồn tại, hạn chế", "level": 1, "text": "Công nợ quá hạn còn 1,2 tỷ đồng; chi phí vận chuyển tăng 12% so với quý II." },
+    { "heading": "Kế hoạch quý IV", "level": 1, "text": "1. Mở chi nhánh Đà Nẵng trong tháng 12;\n2. Tuyển thêm 20 nhân sự kinh doanh;\n3. Thu hồi tối thiểu 70% công nợ quá hạn." },
+    { "heading": "Kiến nghị", "level": 1, "text": "Đề nghị Tổng công ty hỗ trợ bảo lãnh khoản vay 5 tỷ đồng cho chi nhánh Đà Nẵng." }
+  ],
+  "recipients": ["Tổng công ty Đầu tư Phát triển (để b/c);", "Ban Giám đốc;", "Lưu: VT, KD."],
+  "signer": { "title": "Giám đốc", "name": "Nguyễn Văn Ánh" }
+}

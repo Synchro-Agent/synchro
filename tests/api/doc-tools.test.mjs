@@ -77,6 +77,7 @@ console.log("4. Phần thuần của synchro-doc (python3 -I)");
 
 console.log("5. Hướng dẫn cho model");
 {
+  const st0 = read(`${D}/selftest.sh`);
   const rules = read("app/coderun.ts");
   ok(/WS_TOOLS = [^\n]*synchro-doc[^\n]*Typst 0\.15[^\n]*WeasyPrint 70/.test(rules), "WS_TOOLS nêu synchro-doc, Typst, WeasyPrint");
   ok(!/BASE_TOOLS = [^\n]*(?:synchro-doc|Typst|WeasyPrint)/.test(rules), "nơi chạy khác (E2B, máy giả lập) không quảng cáo synchro-doc");
@@ -106,6 +107,20 @@ console.log("5. Hướng dẫn cho model");
     ok(fields.has(f) && b.includes(f), `trường ${f} có trong schema và trong khối`);
   const blockTypes = ts.$defs.block.anyOf.map((x) => x.properties.type.const);
   ok(blockTypes.every((t) => b.includes(`"${t}"`)), `khối liệt kê đủ ${blockTypes.length} loại khối`, blockTypes.join());
+  // H4: 4 mẫu Word (hợp đồng, biên bản họp, báo cáo có mục lục, CV).
+  const wd = JSON.parse(read(`${D}/schemas/word.json`));
+  ok(["contract", "minutes", "official-report", "cv"].every((t) => wd.templates[t] && fs.existsSync(`${D}/examples/${t}.json`)), "schemas/word.json có đủ 4 mẫu Word, mỗi mẫu một ví dụ");
+  const wfields = new Set([...Object.values(wd.templates).flatMap((t) => Object.keys(t.properties)), ...Object.keys(wd.$defs.party.properties), ...Object.keys(wd.$defs.signer.properties)]);
+  for (const f of ["legal_bases", "parties", "label", "representative", "articles", "closing", "subject", "start_time", "end_time", "chair", "secretary", "attendees", "agenda", "decisions", "actions", "organization", "recipients", "signer", "authority", "headline", "contact", "experience", "education", "skills", "languages", "certifications"])
+    ok(wfields.has(f) && b.includes(f), `mẫu Word: trường ${f} có trong schema và trong khối`);
+  ok(/--pdf --png outputs\/_preview/.test(b) && /contract\|minutes\|official-report\|cv/.test(b), "khối dặn dựng bản PDF + ảnh từ chính tệp Word để tự kiểm");
+  for (const [q, want] of [["Soạn hợp đồng dịch vụ thiết kế website, xuất file Word", "doc"], ["lập biên bản họp giao ban tuần này bản word", "doc"], ["làm CV xin việc vị trí phân tích dữ liệu", "doc"], ["Write my resume for a data analyst role", "doc"], ["viết hợp đồng thuê nhà", null], ["hợp đồng lao động là gì", null]])
+    ok(K.wantsDoc(q) === want, `nhận ra "${q}" → ${want}`, K.wantsDoc(q));
+  const wm = read(`${D}/docx/word.mjs`);
+  ok(/estimatePageNumbersWith/.test(wm) && /updateFields: true/.test(wm), "báo cáo: mục lục điền sẵn số trang (docx/layout), bản docx cũ thì Word tự cập nhật");
+  ok(/titlePage: true/.test(wm) && /PageNumber\.CURRENT/.test(wm) && /cm\(3\)/.test(wm) && /Times New Roman/.test(wm), "hợp đồng / biên bản / báo cáo: lề trái 3 cm, Times New Roman, số trang từ trang 2 (Nghị định 30)");
+  ok(/def docx_pdf\(/.test(read(`${D}/synchro-doc.py`)) && /"--convert-to", "pdf"/.test(read(`${D}/synchro-doc.py`)), "synchro-doc docx --pdf dựng PDF bằng LibreOffice");
+  ok(/for t in contract minutes official-report cv/.test(st0) && /"ĐẠI DIỆN BÊN A"/.test(st0), "selftest dựng 4 mẫu Word và kiểm chữ trong bản PDF");
   const engine = read("app/chatengine.ts");
   ok(/docTurn\(\{ typed, code: caps\.code, workspace: runner\(\) === "workspace", format: d\?\.format \}\)/.test(engine), "chatengine đặt khối cạnh tin nhắn mới nhất");
 }
