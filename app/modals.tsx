@@ -8,6 +8,7 @@ import { lazyView } from "./lazy";
 import { SettingsSkeleton } from "./skeleton";
 const SettingsBody = lazyView(() => import("./settings").then((m) => m.SettingsBody), <SettingsSkeleton />);
 import { usePref, useApp } from "./store";
+import { UPLOAD_ACCEPT } from "./fileproc/types";
 import { tr, type Lang } from "./i18n";
 import { createPortal } from "react-dom";
 import { Boundary } from "./ui";
@@ -216,7 +217,7 @@ export function UploadModal({ onClose, onFiles, onConverted }: { onClose: () => 
           onDrop={(e) => { e.preventDefault(); e.stopPropagation(); setOver(false); const f = Array.from(e.dataTransfer.files); if (f.length) onFiles(f); }}>
           <b>Kéo tệp hoặc ảnh vào đây</b>
           <span>Tài liệu, hình ảnh, bảng tính và tệp mã</span>
-          <input ref={inp} type="file" multiple hidden onChange={(e) => { const f = Array.from(e.target.files ?? []); e.target.value = ""; if (f.length) onFiles(f); }} />
+          <input ref={inp} type="file" accept={UPLOAD_ACCEPT} multiple hidden onChange={(e) => { const f = Array.from(e.target.files ?? []); e.target.value = ""; if (f.length) onFiles(f); }} />
           <input ref={mdIn} type="file" hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) convert(f); }} />
           <button className="btn" onClick={() => inp.current?.click()} disabled={!!busy}>Chọn tệp</button>
           <button className="btn upl-md" onClick={() => mdIn.current?.click()} disabled={!!busy}>

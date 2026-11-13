@@ -1,5 +1,6 @@
 "use client";
-import { useFileStatus } from "./filestate";
+import { useFileStatus, retryFile, hasBlob } from "./filestate";
+import { tr } from "./i18n";
 import * as I from "./icons";
 
 const MAP: Record<string, string[]> = {
@@ -53,6 +54,16 @@ export function FileCard({ name, onRemove, onContextMenu, onOpen, folder, count,
         {err && <span className="ft-bad" aria-label="Lỗi">!</span>}
       </button>
       {onRemove && <button type="button" className="ft-x" onClick={onRemove} aria-label={`Xóa ${name}`}><I.X size={12} /></button>}
+      {/* Lỗi hiện ngay thành chữ (tối đa 2 dòng) dưới thẻ, không bắt người dùng rê chuột mới thấy lý do; kèm nút Thử lại / Bỏ. */}
+      {err && (
+        <div className="ft-err-box" role="alert">
+          <span className="ft-err-msg">{st?.error}</span>
+          <span className="ft-err-act">
+            {hasBlob(name) && <button type="button" className="ft-retry" onClick={() => retryFile(name)}>{tr("Thử lại")}</button>}
+            {onRemove && <button type="button" className="ft-drop" onClick={onRemove}>{tr("Bỏ")}</button>}
+          </span>
+        </div>
+      )}
     </div>
   );
 }

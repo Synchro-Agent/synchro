@@ -8,7 +8,8 @@ import { getLang, tr, trCx, useLangReady } from "./i18n";
 import { resetClock, resetAt } from "./resetfmt";
 import { FileCard } from "./fileicon";
 import { useFileMenu, saveDoc, saveBlob, fileContext } from "./filemenu";
-import { capFiles, getStatus } from "./filestate";
+import { capFiles, getStatus, abortFile } from "./filestate";
+import { UPLOAD_ACCEPT } from "./fileproc/types";
 import type { Rejected } from "./turnctx";
 import { Boundary, Fade, Menu, Thinking } from "./ui";
 import { chatError, GENERIC_ERR, isForeign } from "./chaterror";
@@ -552,8 +553,11 @@ function Composer(p: {
     if (!canSend || busy) return;
     // Chưa có model nào: đưa tới chỗ kết nối, tin đang gõ vẫn nằm nguyên trong ô (không gửi đi để nhận về một câu lỗi).
     if (mdl.loaded && !mdl.providers.length) { say("Hãy kết nối một gói AI để gửi tin này"); app.openSettings?.("Providers"); return; }
-    onSend(v.trim() || "Xem tệp đính kèm", files, picks.length ? picks : undefined);
-    setV(""); setPicks([]); setAt(null);
+    const fire = () => { onSend(v.trim() || "Xem tệp đính kèm", files, picks.length ? picks : undefined); setV(""); setPicks([]); setAt(null); };
+    // Có thẻ tệp báo lỗi: hỏi trước khi gửi, vì các tệp đó sẽ không gửi được (model chỉ được báo tên và lý do).
+    const bad = files.filter((f) => getStatus(f)?.state === "error").length;
+    if (bad) { app.confirm(tr("Không gửi được một số tệp"), `${bad} ${tr("tệp không đọc được sẽ không được gửi. Gửi phần còn lại?")}`, tr("Gửi phần còn lại"), fire); return; }
+    fire();
   };
   const keys = (e: React.KeyboardEvent) => {
     if (at && !e.nativeEvent.isComposing) {
@@ -612,11 +616,11 @@ function Composer(p: {
     e.preventDefault();
     const d = new Date(), stamp = `${String(d.getHours()).padStart(2, "0")}.${String(d.getMinutes()).padStart(2, "0")}.${String(d.getSeconds()).padStart(2, "0")}`;
     const named = fl.map((f, i) => (f.name && f.name !== "image.png" ? f : new File([f], `Ảnh dán ${stamp}${fl.length > 1 ? `-${i + 1}` : ""}.${(f.type.split("/")[1] || "png").replace("jpeg", "jpg")}`, { type: f.type })));
-    named.forEach((x) => saveBlob(x.name, x));
+    named.forEach((x) => saveBlob(x.name, x, say));
     setFiles(capFiles(files, named.map((x) => x.name), say));
   };
   const pick = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const fl = Array.from(e.target.files ?? []); fl.forEach((x) => saveBlob(x.name, x)); const n = fl.map((f) => f.name);
+    const fl = Array.from(e.target.files ?? []); fl.forEach((x) => saveBlob(x.name, x, say)); const n = fl.map((f) => f.name);
     if (n.length) setFiles(capFiles(files, n, say));
     e.target.value = "";
   };
@@ -637,7 +641,7 @@ function Composer(p: {
       const blob = await new Promise<Blob | null>((ok) => c.toBlob(ok, "image/png"));
       if (!blob) return say("Không chụp được màn hình");
       const d = new Date(), name = `Ảnh chụp màn hình ${String(d.getHours()).padStart(2, "0")}.${String(d.getMinutes()).padStart(2, "0")}.${String(d.getSeconds()).padStart(2, "0")}.png`;
-      saveBlob(name, new File([blob], name, { type: "image/png" }));
+      saveBlob(name, new File([blob], name, { type: "image/png" }), say);
       setFiles(capFiles(files, [name], say));
       say("Đã đính kèm ảnh chụp màn hình");
     } catch (e) { if ((e as Error).name !== "NotAllowedError") say("Không chụp được màn hình"); }
@@ -645,7 +649,7 @@ function Composer(p: {
 
   const plus = (
     <div ref={ref} style={{ position: "relative" }}>
-      <input ref={fileIn} type="file" multiple hidden onChange={pick} />
+      <input ref={fileIn} type="file" accept={UPLOAD_ACCEPT} multiple hidden onChange={pick} />
       <button className="icon-btn" onClick={() => setMenu(!menu)} aria-label="Thêm" aria-haspopup="menu" aria-expanded={menu}><I.Plus /></button>
         <Menu open={!!(menu)} className="plus-menu" style={{ bottom: 40, left: 0, width: 264 }}>
           {perms?.features.files !== false && <button className="menu-item" onClick={() => { setMenu(false); openUpload(); }}><I.Clip />Tải lên hoặc thêm tệp<span className="sc">⌘U</span></button>}
@@ -736,7 +740,7 @@ function Composer(p: {
   // Thẻ = chip skill đã chọn + tệp đính kèm, theo đúng thứ tự đó. Quá CHIP_LIMIT thẻ: dải một hàng chỉ hiện CHIP_LIMIT thẻ rồi "+N".
   const cards = [
     ...picks.map((k) => <span key={"pk-" + k.id} className="pick-chip">{k.id.startsWith("lib-") ? <I.Plugins size={14} /> : <I.Scroll size={14} />}<span className="cv-ell" data-notr>{k.label}</span><button className="icon-btn" aria-label={`Bỏ skill ${k.label}`} onClick={() => setPicks(picks.filter((x) => x.id !== k.id))}><I.X size={12} /></button></span>),
-    ...files.map((f, i) => <FileCard key={"fc-" + f + i} name={f} onOpen={() => fm.show(f)} onContextMenu={(e) => fm.open(e, f)} onRemove={() => setFiles(files.filter((_, j) => j !== i))} />),
+    ...files.map((f, i) => <FileCard key={"fc-" + f + i} name={f} onOpen={() => fm.show(f)} onContextMenu={(e) => fm.open(e, f)} onRemove={() => { abortFile(f); setFiles(files.filter((_, j) => j !== i)); }} />),
   ];
   const chipsExpanded = chipsOpen && cards.length > CHIP_LIMIT;
   const chipsHidden = hiddenCards(cards.length, chipsExpanded);
@@ -2171,7 +2175,7 @@ export default function Home() {
     const drop = (e: DragEvent) => {
       e.preventDefault(); n = 0; setDrag(false);
       if (document.querySelector("[data-av]")) return;
-      const fl = Array.from(e.dataTransfer?.files ?? []); fl.forEach((x) => saveBlob(x.name, x)); const f = fl.map((x) => x.name);
+      const fl = Array.from(e.dataTransfer?.files ?? []); fl.forEach((x) => saveBlob(x.name, x, say)); const f = fl.map((x) => x.name);
       if (f.length) { setFiles((o) => capFiles(o, f, say)); setModal((m) => (m === "upload" ? null : m)); say(`Đã thêm ${f.length} tệp`); }
     };
     const prevent = (e: DragEvent) => e.preventDefault();
@@ -2753,7 +2757,7 @@ export default function Home() {
       <Fade show={!!(modal === "search")}><CommandPalette chats={visible} projects={projects} codes={codeList} cmds={paletteCmds} go={paletteGo} seed={palSeed} onClose={() => setModal(null)} /></Fade>
       <Fade show={!!(modal === "share" && chat)}>{chat ? <ShareModal chat={chat} onClose={() => setModal(null)} say={say} /> : <></>}</Fade>
       {fm.node}
-      <Fade show={!!(modal === "upload")}><UploadModal say={say} onConverted={(f, md) => { saveDoc(f.name, md); saveBlob(f.name, f, say); setFiles((o) => capFiles(o, [f.name], say)); setModal(null); say(`Đã chuyển thành ${f.name}`); }} onClose={() => setModal(null)} onFiles={(f) => { f.forEach((x) => saveBlob(x.name, x)); setFiles((o) => [...o, ...f.map((x) => x.name)]); setModal(null); say(`Đã thêm ${f.length} tệp`); }} /></Fade>
+      <Fade show={!!(modal === "upload")}><UploadModal say={say} onConverted={(f, md) => { saveDoc(f.name, md); saveBlob(f.name, f, say); setFiles((o) => capFiles(o, [f.name], say)); setModal(null); say(`Đã chuyển thành ${f.name}`); }} onClose={() => setModal(null)} onFiles={(f) => { f.forEach((x) => saveBlob(x.name, x, say)); setFiles((o) => [...o, ...f.map((x) => x.name)]); setModal(null); say(`Đã thêm ${f.length} tệp`); }} /></Fade>
       <Fade show={!!(modal === "upgrade")}><UpgradeModal onClose={() => setModal(null)} say={say} /></Fade>
       <Fade show={!!(modal === "keys")}><ShortcutsModal onClose={() => setModal(null)} /></Fade>
       <Fade show={!!(modal === "logout")}><LogoutConfirm localOnly={modal === "logout" && !cpPage?.sync ? ls.keys().filter((k) => k.startsWith("codeS:")).length : 0}

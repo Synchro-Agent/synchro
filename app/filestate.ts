@@ -16,6 +16,10 @@ const text = new Map<string, string>();
 const blobs = new Map<string, Blob>();
 const status = new Map<string, FileStatus>();
 const pending = new Map<string, Promise<void>>();
+// Chữ ký nội dung (tên|cỡ|lần sửa cuối): cùng tên nhưng khác nội dung (người dùng sửa tệp rồi kéo lại) được tải lại, không giữ bản cũ sai.
+const sigs = new Map<string, string>();
+// Giữ XHR đang chạy để hủy được khi người dùng bỏ thẻ tệp (khỏi tốn băng thông cho tệp không còn gửi).
+const xhrs = new Map<string, XMLHttpRequest>();
 const subs = new Set<() => void>();
 let ver = 0;
 const emit = () => { ver++; subs.forEach((f) => f()); };
@@ -29,6 +33,8 @@ export const saveDoc = (n: string, t: string) => { text.set(n, t); };
 export const getBlob = (n: string) => blobs.get(n);
 export const hasBlob = (n: string) => blobs.has(n);
 export const getStatus = (n: string) => status.get(n);
+/** Chữ ký định danh một tệp theo nội dung (không chỉ theo tên): hai tệp cùng tên nhưng khác cỡ / lần sửa là hai tệp khác nhau. */
+export const fileKey = (f: File) => `${f.name}|${f.size}|${f.lastModified}`;
 export const MAX_FILES = MAX_FILES_PER_MESSAGE;
 /** Thêm tệp vào tin nhắn đang soạn, giữ trong giới hạn số tệp mỗi tin nhắn; quá thì bỏ bớt tệp cuối và báo rõ (không âm thầm gửi thiếu). */
 export function capFiles(prev: string[], add: string[], say?: (m: string) => void): string[] {
@@ -69,17 +75,24 @@ async function pdfThumb(f: File): Promise<string | undefined> {
  */
 export function ingestFile(f: File, onError?: (m: string) => void, o: { raw?: boolean; key?: string; folder?: boolean; count?: number } = {}) {
   const key = o.key ?? f.name;
+  const sig = fileKey(f);
   blobs.set(key, f);
   const prev = status.get(key);
-  if (prev && prev.state !== "error") return;
+  // Cùng tệp (tên, cỡ, lần sửa cuối giống hệt) và chưa lỗi: khỏi tải lại; khác nội dung thì tải lại dù trùng tên.
+  if (prev && prev.state !== "error" && sigs.get(key) === sig) return;
+  sigs.set(key, sig);
   const thumb = !o.folder && /^image\/(png|jpe?g|webp|gif)$/.test(f.type) ? URL.createObjectURL(f) : undefined;
   meta.set(key, { thumb, folder: o.folder || undefined, count: o.count });
+  // Kiểm tra dung lượng TRƯỚC khi dựng ảnh thu nhỏ: khỏi phải đọc hết một tệp PDF nặng rồi mới từ chối vì quá cỡ.
+  if (f.size > MAX_FILE_BYTES) { const m = `"${key}" vượt quá giới hạn ${MAX_FILE_BYTES / 1048576}MB${o.folder ? " (sau khi nén)" : ""}`; set(key, { state: "error", pct: 0, error: m }); onError?.(m); return; }
   if (!o.folder && LINES_RE.test(f.name) && f.size <= 5 * 1048576) f.text().then((t) => addMeta(key, { lines: t.split("\n").length })).catch(() => {});
   if (!o.folder && (/\.pdf$/i.test(f.name) || f.type === "application/pdf")) pdfThumb(f).then((u) => u && addMeta(key, { thumb: u, pdf: true })).catch(() => addMeta(key, { pdf: true }));
-  if (f.size > MAX_FILE_BYTES) { const m = `"${key}" vượt quá giới hạn ${MAX_FILE_BYTES / 1048576}MB${o.folder ? " (sau khi nén)" : ""}`; set(key, { state: "error", pct: 0, error: m }); onError?.(m); return; }
   set(key, { state: "uploading", pct: 0 });
   pending.set(key, new Promise<void>((resolve) => {
     const x = new XMLHttpRequest();
+    xhrs.set(key, x);
+    const done = () => { xhrs.delete(key); resolve(); };
+    x.timeout = 120_000;
     x.open("POST", o.raw ? "/api/files?raw=1" : "/api/files");
     x.upload.onprogress = (e) => e.lengthComputable && set(key, { state: "uploading", pct: Math.round((e.loaded / e.total) * 90) });
     x.onload = () => {
@@ -91,15 +104,40 @@ export function ingestFile(f: File, onError?: (m: string) => void, o: { raw?: bo
         set(key, { state: "ready", pct: 100, id: j.id, large: j.large, tokens: j.tokens });
         if (j.note) onError?.(j.note);
       } else { const m = j.error || `Lỗi ${x.status} khi xử lý "${key}"`; set(key, { state: "error", pct: 0, error: m }); onError?.(m); }
-      resolve();
+      done();
     };
-    x.onerror = () => { const m = `Không tải được "${key}" lên server`; set(key, { state: "error", pct: 0, error: m }); onError?.(m); resolve(); };
+    x.onerror = () => { const m = `Không tải được "${key}" lên server`; set(key, { state: "error", pct: 0, error: m }); onError?.(m); done(); };
+    // Tải lên quá lâu (mạng chập chờn, tệp lớn): dừng để thẻ tệp không treo ở trạng thái đang tải mãi.
+    x.ontimeout = () => { const m = `Tải "${key}" lên quá lâu (quá 2 phút). Hãy thử lại.`; set(key, { state: "error", pct: 0, error: m }); onError?.(m); done(); };
+    x.onabort = () => { done(); };
     const fd = new FormData(); fd.append("file", f);
     x.send(fd);
   }).finally(() => { pending.delete(key); }));
 }
 
 export const saveBlob = (n: string, b: Blob, onError?: (m: string) => void) => { if (b instanceof File) ingestFile(b, onError); else blobs.set(n, b); };
+
+/** Người dùng bỏ một thẻ tệp: hủy lần tải lên đang chạy (nếu có) và quên trạng thái, để kéo lại đúng tệp đó sẽ tải lại từ đầu.
+ * Tệp đã tải xong (ready) thì giữ nguyên dữ liệu: nó có thể đang được dùng ở một tin đã gửi. */
+export function abortFile(name: string) {
+  const x = xhrs.get(name);
+  if (x) { xhrs.delete(name); try { x.abort(); } catch { /* đã dừng */ } }
+  pending.delete(name);
+  if (status.get(name)?.state === "ready") return;
+  const u = meta.get(name)?.thumb;
+  if (u?.startsWith("blob:")) try { URL.revokeObjectURL(u); } catch { /* ignore */ }
+  status.delete(name); meta.delete(name); sigs.delete(name); blobs.delete(name); text.delete(name);
+  emit();
+}
+
+/** Nút "Thử lại" trên thẻ tệp lỗi: tải lại chính tệp gốc còn giữ trong bộ nhớ trình duyệt. */
+export function retryFile(name: string, onError?: (m: string) => void) {
+  const f = blobs.get(name);
+  if (!(f instanceof File)) return;
+  const m = meta.get(name);
+  status.delete(name); sigs.delete(name);
+  ingestFile(f, onError, m?.folder ? { key: name, folder: true, count: m.count } : undefined);
+}
 
 export type MsgContent = string | ContentBlock[];
 

@@ -5,6 +5,14 @@ export type ContentBlock =
   | { type: "document"; media_type: string; data: string; name?: string; fallbackText?: string; fallbackImages?: string[] };
 
 export const MAX_FILE_BYTES = 30 * 1024 * 1024;
+/** Các loại tệp máy chủ đọc được (gợi ý cho hộp chọn tệp của trình duyệt). Tệp lạ vẫn tải lên được dạng thô ở Synchro Code; danh sách này chỉ để
+ * hộp chọn tệp mặc định lọc đúng loại hay dùng. Khớp nhánh nhận diện ở fileproc/detect.ts cộng các loại mở rộng (âm thanh, ảnh HEIC, Office cũ). */
+export const UPLOAD_ACCEPT = [
+  "image/*", "audio/*", "video/*", "application/pdf", "text/*",
+  ".pdf", ".txt", ".md", ".markdown", ".mdx", ".csv", ".tsv", ".json", ".jsonl", ".xml", ".yml", ".yaml", ".toml", ".html", ".htm",
+  ".doc", ".docx", ".xls", ".xlsx", ".xlsm", ".ppt", ".pptx", ".zip",
+  ".heic", ".heif", ".mp3", ".wav", ".m4a", ".mp4", ".mov", ".webm",
+].join(",");
 /** Như Claude: tối đa 20 tệp mỗi tin nhắn (đủ cho một bộ đề nhiều trang chụp màn hình). */
 export const MAX_FILES_PER_MESSAGE = 20;
 /** Tổng dung lượng tệp gửi kèm một lượt (dưới giới hạn 40 MB của máy chủ web, chừa chỗ cho lịch sử chat). */
