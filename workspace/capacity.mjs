@@ -22,3 +22,14 @@ export function ramSlots({ raw, total, reserve = 2560, perMB, fallback, min, max
   if (!total) return fallback;
   return Math.max(min, Math.min(max, Math.floor(((total - reserve) * 0.5) / perMB)));
 }
+
+/**
+ * Số lần dựng video cùng lúc (INT-1): mỗi lần dựng cần ~3,5 GB nên floor((tổng − chừa) × 0,5 / 3584), lấy từ cùng RAM thật như RUN_MAX; mỗi lần
+ * dựng còn giữ thêm một chỗ chạy chung nên không bao giờ vượt RUN_MAX; trần cap (WS_MEDIA_CAP); ít nhất 1. raw (WS_MEDIA_MAX > 0) đặt tay thì theo.
+ */
+export function mediaSlots({ raw, cap, total, reserve = 2560, runMax, perMB = 3584 }) {
+  if (raw !== undefined && raw !== "" && Number.isFinite(Number(raw)) && Number(raw) > 0) return Number(raw);
+  const byRam = total ? Math.floor(((total - reserve) * 0.5) / perMB) : 1;
+  const c = Number.isFinite(Number(cap)) && Number(cap) > 0 ? Number(cap) : 4;
+  return Math.max(1, Math.min(c, runMax, byRam));
+}

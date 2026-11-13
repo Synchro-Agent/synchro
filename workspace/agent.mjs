@@ -15,7 +15,7 @@ import { BrowserError, createBrowser, devJson } from "./browser-core.mjs";
 import { createRelay } from "./ext-relay.mjs";
 import { clipSink, collectOutputs, createRunQueue, isMediaRun, QueueFull, safeReadIn, safeWrite } from "./safefs.mjs";
 import { createWarmPool, memAvailableMB } from "./warmpool.mjs";
-import { memMB, ramSlots as slotsFor, readTotalMB } from "./capacity.mjs";
+import { mediaSlots, memMB, ramSlots as slotsFor, readTotalMB } from "./capacity.mjs";
 
 const env = (k, d) => process.env[k] ?? d;
 // Tổng RAM thật của máy (MB): MemTotal trên Linux (máy chủ thật), nơi khác dùng os.totalmem (máy dev). Đọc một lần lúc khởi động.
@@ -69,11 +69,12 @@ const RUN_MEMORY = env("WS_RUN_MEMORY", "2g");
 const RUN_FILES = 20, RUN_PREVIEWS = 12, RUN_FILE_MB = 100, RUN_TOTAL_MB = 150;
 // Hết chỗ chạy thì xếp hàng (có giới hạn) thay vì báo lỗi ngay: một chỗ luôn dành cho lần chạy ngắn, người đang chạy ít nhất được chọn trước.
 const RUN_QUEUE = Number(env("WS_RUN_QUEUE", 20)), RUN_QUEUE_USER = Number(env("WS_RUN_QUEUE_USER", 4)), RUN_WAIT_SEC = Number(env("WS_RUN_WAIT_SEC", 240));
-// Dựng video bằng synchro-video (Remotion: Chromium nhiều tab + x264, whisper ~1 GB): mỗi máy chỉ MEDIA_MAX lần cùng lúc, tính theo RAM —
-// mỗi lần dựng cần ~3,5 GB, chừa ~2,5 GB cho hệ thống + máy chủ web; máy 8 GB ra 1, 16 GB ra 3, trần WS_MEDIA_CAP (mặc định 4). WS_MEDIA_MAX > 0 thì đè tay.
-// Lần sau xếp hàng tối đa WS_MEDIA_WAIT_SEC giây, có báo vị trí hàng chờ. Dựng song song trên máy nhỏ chỉ chậm gấp đôi mà dễ làm máy chủ web thiếu bộ nhớ, nên mặc định rất dè dặt.
-const mediaMaxByRam = () => Math.max(1, Math.min(Number(env("WS_MEDIA_CAP", 4)), Math.floor((os.totalmem() / 1e9 - 2.5) / 3.5)));
-const MEDIA_MAX = Number(env("WS_MEDIA_MAX", 0)) || mediaMaxByRam(), MEDIA_WAIT_SEC = Number(env("WS_MEDIA_WAIT_SEC", 300));
+// Dựng video bằng synchro-video (Remotion: Chromium nhiều tab + x264, whisper ~1 GB) cần ~3,5 GB một lần: MEDIA_MAX = floor((tổng − chừa) × 0,5 / 3584)
+// theo cùng RAM thật (realTotalMB) như RUN_MAX, không quá RUN_MAX (mỗi lần dựng còn giữ một chỗ chạy chung) và không quá WS_MEDIA_CAP (mặc định 4),
+// ít nhất 1 — máy 8 GB và 16 GB đều ra 1, 32 GB ra 4 nếu RUN_MAX cho phép. WS_MEDIA_MAX > 0 thì đè tay. Lần sau xếp hàng tối đa WS_MEDIA_WAIT_SEC giây,
+// có báo vị trí hàng chờ. Dựng song song trên máy nhỏ chỉ chậm gấp đôi mà dễ làm máy chủ web thiếu bộ nhớ, nên mặc định rất dè dặt.
+const MEDIA_MAX = mediaSlots({ raw: process.env.WS_MEDIA_MAX, cap: env("WS_MEDIA_CAP", 4), total: realTotalMB(), reserve: SERVER_RESERVE_MB, runMax: RUN_MAX });
+const MEDIA_WAIT_SEC = Number(env("WS_MEDIA_WAIT_SEC", 300));
 // Bảo vệ đĩa: một lần chạy không dùng quá RUN_DISK_MB (cả thư mục làm việc lẫn lớp ghi của container); dưới MIN_FREE_MB trống thì không
 // nhận việc mới và dừng việc tốn đĩa nhất, để SQLite và nhật ký của mọi người không chết vì đầy đĩa.
 const RUN_DISK_MB = Number(env("WS_RUN_DISK_MB", 6000)), MIN_FREE_MB = Number(env("WS_MIN_FREE_MB", 3000));
@@ -844,7 +845,7 @@ process.on("SIGTERM", async () => {
 
 setupHost().catch((e) => log("setup", e)).then(() => cleanRuns()).catch((e) => log("dọn lần chạy cũ", e)).finally(() => {
   server.listen(PORT, HOST, () => log(`workspace agent nghe tại ${HOST}:${PORT}`));
-  log(`[timing] mem trần theo RAM: ${realTotalMB() || "?"} MB, chừa ${SERVER_RESERVE_MB} MB, mỗi hồ lấy (tổng − chừa) × 0,5 → MAX_RUNNING=${MAX_RUNNING} (workspace /1536 MB), RUN_MAX=${RUN_MAX} (chạy code /2048 MB)`);
+  log(`[timing] mem trần theo RAM: ${realTotalMB() || "?"} MB, chừa ${SERVER_RESERVE_MB} MB, mỗi hồ lấy (tổng − chừa) × 0,5 → MAX_RUNNING=${MAX_RUNNING} (workspace /1536 MB), RUN_MAX=${RUN_MAX} (chạy code /2048 MB), MEDIA_MAX=${MEDIA_MAX} (dựng video /3584 MB, ≤ RUN_MAX)`);
   startProxy();
   warm.start();
 });

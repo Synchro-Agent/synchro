@@ -36,5 +36,19 @@ ok(/MAX_RUNNING = ramSlots\("WS_MAX_RUNNING", 1536, 4, 2, 32\)/.test(src), "MAX_
 ok(!/ramSlots\([^)]*0\.[23],/.test(src), "không còn hệ số chia 0,3 / 0,2");
 ok(!/CLI_SHARE/.test(fs.readFileSync("app/turngate.ts", "utf8")), "turngate không còn CLI_SHARE");
 
+console.log("5. INT-1: MEDIA_MAX theo cùng RAM thật, không quá RUN_MAX, đặt tay thì theo");
+{
+  const media = (total, o = {}) => cap.mediaSlots({ total, reserve: 2560, runMax: run(total), cap: 4, ...o });
+  ok(media(BOX) === 1 && media(16384) === 1, "8 GB và 16 GiB đều ra 1 (bản cũ theo GB thập phân ra 4 ở 16 GiB)", `${media(BOX)} ${media(16384)}`);
+  ok(media(32768) === 4, "32 GB: floor(30208×0,5/3584) = 4", media(32768));
+  for (const total of [BOX, 16384, 24576, 32768, 65536, 262144]) ok(media(total) <= run(total) && media(total) >= 1, `${total} MB: 1 ≤ MEDIA_MAX ≤ RUN_MAX`, `${media(total)} vs ${run(total)}`);
+  ok(media(262144) === 4, "trần WS_MEDIA_CAP (4)", media(262144));
+  ok(media(262144, { cap: "2" }) === 2, "WS_MEDIA_CAP đặt tay", media(262144, { cap: "2" }));
+  ok(media(BOX, { raw: "3" }) === 3, "WS_MEDIA_MAX đặt tay thắng", media(BOX, { raw: "3" }));
+  ok(media(0, { runMax: 3 }) === 1, "không đo được RAM: 1");
+  ok(/MEDIA_MAX = mediaSlots\(\{[^}]*total: realTotalMB\(\)[^}]*runMax: RUN_MAX/.test(src) && !/os\.totalmem\(\) \/ 1e9/.test(src), "agent.mjs: mediaSlots(realTotalMB, RUN_MAX), không còn os.totalmem/1e9");
+  ok(/\[timing\] mem trần theo RAM[^\n]*MEDIA_MAX=\$\{MEDIA_MAX\}/.test(src), "dòng [timing] mem trần ghi cả MEDIA_MAX");
+}
+
 console.log(`\n${pass}/${pass + fail} đạt`);
 process.exit(fail ? 1 : 0);
