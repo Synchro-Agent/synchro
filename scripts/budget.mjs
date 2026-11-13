@@ -36,9 +36,11 @@ export function measure(dir, page = "/page", budget = BUDGET) {
 const kb = (n) => `${(n / 1024).toFixed(1)} KB`;
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const dir = process.argv[2] ?? [".next-mockfast", ".next"].find((d) => fs.existsSync(path.join(d, "app-build-manifest.json")));
-  if (!dir) { console.error("Chưa có bản build (.next-mockfast hoặc .next): chạy npm run dev:mock:fast hoặc next build trước."); process.exit(1); }
+  // Không có bản build production (qa chạy trên npm run dev:mock, chế độ dev): bỏ qua, không đo được JS / CSS đã nén của bản dev.
+  if (!dir) { console.log("Bỏ qua: chưa có bản build production (.next-mockfast hoặc .next). Chạy npm run dev:mock:fast hoặc next build rồi chạy lại."); process.exit(0); }
   const m = measure(dir);
-  console.log(`Tải đầu trang chủ (${dir}): JS ${kb(m.js)} gzip / ngân sách ${kb(BUDGET.js)}; CSS ${kb(m.css)} gzip / ngân sách ${kb(BUDGET.css)}`);
+  const built = new Date(fs.statSync(path.join(dir, "app-build-manifest.json")).mtimeMs).toLocaleString("vi-VN");
+  console.log(`Tải đầu trang chủ (${dir}, dựng lúc ${built}): JS ${kb(m.js)} gzip / ngân sách ${kb(BUDGET.js)}; CSS ${kb(m.css)} gzip / ngân sách ${kb(BUDGET.css)}`);
   for (const x of [...m.jsFiles.slice(0, 8), ...m.cssFiles]) console.log(`  ${kb(x.gzip).padStart(9)}  ${x.file}`);
   const ceil = measure(dir, "/page", CEIL).over;
   if (ceil.length) { console.log(`✗ Vượt trần chống tăng lại (JS ${kb(CEIL.js)}, CSS ${kb(CEIL.css)}): ${ceil.join(", ")}`); process.exit(1); }
