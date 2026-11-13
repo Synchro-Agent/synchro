@@ -10,24 +10,46 @@ const WRITE_ANY = new Set(["CREATE", "DELETE", "REMOVE", "WRITE", "INSERT", "REP
 // Vừa là động từ vừa là danh từ: chỉ tính là ghi khi nối sau AND / OR / THEN (FIND_AND_UPDATE, GET_OR_SET).
 const WRITE_NOUN = new Set(["POST", "RUN", "SET", "PATCH", "PUT", "PUBLISH", "ADD", "SAVE", "STORE", "MOVE", "RENAME", "ARCHIVE", "ASSIGN", "APPROVE", "REJECT", "MARK", "LOCK", "MERGE", "DEPLOY", "TRIGGER", "IMPORT", "APPLY", "COMMIT", "PUSH", "START", "STOP"]);
 const LINK_WORD = new Set(["AND", "OR", "THEN"]);
+// Động từ vừa là danh từ, một mình không nói đọc cái gì (QUERY / FIND đứng một mình có thể là câu lệnh bất kỳ): coi là ghi (hỏi trước), như VAGUE_ALONE ở mcp.ts.
+const VAGUE_ALONE = new Set(["QUERY", "FIND"]);
+// Mọi động từ (đọc + ghi): dùng để dò ranh giới tên ứng dụng ↔ tên thao tác khi không có MULTI_KITS / toolkit.
+const ALL_VERBS = new Set([...READ_VERBS, ...WRITE_ANY, ...WRITE_NOUN]);
 // Tham số có dấu hiệu chạy lệnh / truy vấn tùy ý: không coi là đọc dù tên có động từ đọc.
 const RISKY_PARAM = /^(sql|sql_?query|query_?sql|statement|stmt|command|cmd|mutation|shell|script|code)$/i;
+// Tham số của QUERY mang câu lệnh: trị của query / q / sql có từ khóa đổi dữ liệu thì coi là ghi.
+const QUERY_KEYS = ["query", "q", "sql"];
+const RISKY_SQL = /\b(insert|update|delete|drop|alter|truncate|create|replace|merge|grant)\b/i;
 // Ứng dụng có tên hai từ (GOOGLE_MAPS_GET_ROUTE): biết trước thì tách đúng; không biết thì tên ứng dụng là từ đầu và thao tác bị coi là ghi (hỏi trước).
 const MULTI_KITS = new Set(["google_maps", "google_analytics", "google_ads", "google_tasks", "google_photos", "google_bigquery", "microsoft_teams", "one_drive", "share_point"]);
 
 const words = (slug: string) => slug.toUpperCase().split(/[^A-Z0-9]+/).filter(Boolean);
-/** Ứng dụng (slug Composio, chữ thường) và phần còn lại của tên thao tác. */
-export function slugParts(slug: string): { kit: string; rest: string[] } {
+/** Ứng dụng (slug Composio, chữ thường) và phần còn lại của tên thao tác.
+ *  toolkit: tên ứng dụng do lời gọi khai báo (trường toolkit / app); có thì tách theo nó.
+ *  Không có thì tìm động từ trong 1–3 từ đầu (mọi từ trước động từ là tên ứng dụng), cuối cùng mới dùng MULTI_KITS. */
+export function slugParts(slug: string, toolkit?: string): { kit: string; rest: string[] } {
   const w = words(slug);
-  const n = w.length > 2 && MULTI_KITS.has(`${w[0]}_${w[1]}`.toLowerCase()) ? 2 : 1;
+  let n = 0;
+  const tk = toolkit ? words(toolkit) : [];
+  if (tk.length && tk.length < w.length && tk.every((x, i) => x === w[i])) n = tk.length;
+  if (!n) {
+    const i = w.findIndex((x, k) => k > 0 && k <= 3 && ALL_VERBS.has(x));
+    n = i >= 1 ? i : w.length > 2 && MULTI_KITS.has(`${w[0]}_${w[1]}`.toLowerCase()) ? 2 : 1;
+  }
   return { kit: w.slice(0, n).join("_").toLowerCase(), rest: w.slice(n) };
 }
 /** Thao tác Composio có phải chỉ đọc không: động từ đọc ngay sau tên ứng dụng, không kèm động từ ghi, tham số không có dấu hiệu chạy lệnh. Không chắc thì là ghi. */
-export function slugIsRead(slug: string, args?: unknown): boolean {
-  const { rest } = slugParts(slug);
+export function slugIsRead(slug: string, args?: unknown, toolkit?: string): boolean {
+  const { rest } = slugParts(slug, toolkit);
   if (!rest.length || !READ_VERBS.has(rest[0])) return false;
-  if (rest.some((x, i) => i > 0 && (WRITE_ANY.has(x) || (WRITE_NOUN.has(x) && LINK_WORD.has(rest[i - 1]))))) return false;
-  if (args && typeof args === "object" && Object.keys(args as object).some((k) => RISKY_PARAM.test(k))) return false;
+  // QUERY / FIND đứng một mình sau tên ứng dụng (SUPABASE_QUERY, GOOGLEBIGQUERY_QUERY): không rõ đọc cái gì → coi là ghi.
+  if (rest.length === 1 && VAGUE_ALONE.has(rest[0])) return false;
+  // Động từ ghi rõ ràng ở bất cứ đâu; hoặc sau từ nối (AND / OR / THEN) bất kỳ động từ không phải động từ đọc
+  // (FORWARD, SHARE, STAR, INVITE, REPLY, SUBMIT, ENROLL…): coi là ghi (fail-closed). LIST_AND_FORWARD, GET_OR_CREATE.
+  if (rest.some((x, i) => i > 0 && (WRITE_ANY.has(x) || (LINK_WORD.has(rest[i - 1]) && !READ_VERBS.has(x))))) return false;
+  const a = args && typeof args === "object" && !Array.isArray(args) ? (args as Record<string, unknown>) : undefined;
+  if (a && Object.keys(a).some((k) => RISKY_PARAM.test(k))) return false;
+  // QUERY kèm câu lệnh đổi dữ liệu (…_QUERY { query: "DELETE …" }): coi là ghi.
+  if (a && rest[0] === "QUERY" && QUERY_KEYS.some((k) => typeof a[k] === "string" && RISKY_SQL.test(a[k] as string))) return false;
   return true;
 }
 
@@ -103,8 +125,10 @@ export const metaWords = (tool: string): string | undefined => META[tool]?.[0];
 
 /** Thẻ duyệt / dòng công cụ của một lời gọi Composio: ứng dụng, thao tác bằng lời thường, tham số chính.
  *  strict: luôn hỏi mỗi lần (bash, workbench, gọi API không phải GET), thẻ không có "Luôn cho phép" / "Cho phép trong cuộc trò chuyện này".
- *  apps: ứng dụng có thao tác ghi trong lời gọi (quyền ghi theo từng ứng dụng). */
-export type CxCard = { app: string; name: string; act: string; main?: string; account?: string; params?: [string, string][]; more?: number; strict?: boolean; apps?: string[] };
+ *  apps: ứng dụng có thao tác ghi trong lời gọi (quyền ghi theo từng ứng dụng).
+ *  writes: khi lời gọi có nhiều thao tác ghi, liệt kê từng thao tác (ứng dụng · thao tác · tham số chính · tài khoản). */
+export type CxWrite = { name: string; act: string; main?: string; account?: string };
+export type CxCard = { app: string; name: string; act: string; main?: string; account?: string; params?: [string, string][]; more?: number; strict?: boolean; apps?: string[]; writes?: CxWrite[] };
 
 // ---- bản tiếng Anh cho từ điển giao diện ----
 /** Chữ tiếng Việt → tiếng Anh của mọi động từ và công cụ meta (gộp vào VI2EN). Động từ + danh từ dịch bằng CX_RULE_EN. */
