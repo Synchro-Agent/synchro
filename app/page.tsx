@@ -40,7 +40,7 @@ import { installTips } from "./tips";
 import { fit as fitFloat, installFloatFit } from "./floatfit";
 import { installA11y } from "./a11y";
 import { steerRun } from "./llm";
-import { attachRun, callLLM, olderDigest, cancelRun, LLMError, setActiveEffort, setActiveModel, setApprover, type ApprovalCall, type ApprovalAnswer, type RunMeta, type LibUse, type Decision, buildSystemPrompt, extractMemory, getRelevantContext, hasLLM, HISTORY_LIMIT, MEMORY_EVERY_N_USER_MSGS, type LLMMsg } from "./llm";
+import { attachRun, callLLM, olderDigest, cancelRun, LLMError, setActiveEffort, setActiveModel, setApprover, type ApprovalCall, type ApprovalAnswer, type RunMeta, type LibUse, type Decision, buildSystemPrompt, extractMemory, getRelevantContext, HISTORY_LIMIT, MEMORY_EVERY_N_USER_MSGS, type LLMMsg } from "./llm";
 import { Confirm, LangModal, ProjectModal, Settings, ShortcutsModal, UploadModal, UpgradeModal } from "./modals";
 import { ShareModal } from "./shareui";
 import { useBrainSync } from "./brainsync";
@@ -1704,7 +1704,7 @@ export default function Home() {
     // (lượt chạy bền qua waitRun/pollRun), nên KHÔNG xét "streamed" — nếu không chip cá nhân không bao giờ hiện; chỉ cần lượt xong và không bị Dừng.
     // Không bao giờ ghép nội dung hướng dẫn vào chữ câu trả lời: dòng ghi chú kèm 90 ký tự đầu của hướng dẫn từng lộ hướng dẫn cá nhân trong lịch sử, bản chia sẻ, bản xuất.
     const insApplied = !cancelled && !!ins.trim();
-    const pjApplied = !cancelled && !!pr && !hasLLM && !!(pr.ins?.trim() || pr.mem?.length || getRelevantContext(pr, text).length);
+    const pjApplied = !cancelled && !!pr && !!(pr.ins?.trim() || pr.mem?.length || getRelevantContext(pr, text).length);
     // Câu trả lời đã đầy đủ thì hiện ngay (trước đây câu không truyền theo thời gian thực phải chờ 1,6 giây rồi mới gõ dần từng chữ).
     patch(id, (m) => [...m.slice(0, -1), { ...workOf(m[m.length - 1]), role: "ai", text: reply, done: true, ...(insApplied ? { insApplied } : {}), ...(pjApplied ? { pjApplied } : {}), time: Date.now(), dur: Date.now() - t0, skills: usedSk.length ? usedSk : undefined, libs: libs.length ? libs : undefined, tools: usedTl.length ? usedTl : undefined, outs: outs?.length ? outs : undefined, ...(notice ? { notice } : {}), via: via ?? undefined, viaTask: via ? viaTask : undefined, webs: webs?.length ? webs : undefined, trace: trace?.length ? trace : undefined, stopped: cancelled || undefined }]);
     finishReply(id, reply, pr, history, via);

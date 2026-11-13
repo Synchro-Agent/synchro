@@ -44,6 +44,9 @@ console.log("3b. Chip hiện trên câu trả lời truyền theo thời gian th
 const insLine = /const insApplied = ([^;]+);/.exec(page)?.[1] ?? "";
 ok(insLine.includes("!cancelled") && insLine.includes("ins.trim()") && !insLine.includes("streamed"), "insApplied: chỉ cần lượt xong, không bị Dừng — KHÔNG xét streamed (nếu xét thì chip không bao giờ hiện)", insLine);
 ok(!/const fresh = !streamed/.test(page), "không còn cờ fresh gắn chip với !streamed", page.slice(page.indexOf("insApplied") - 200, page.indexOf("insApplied")));
+const pjLine = /const pjApplied = ([^;]+);/.exec(page)?.[1] ?? "";
+ok(pjLine.includes("!cancelled") && pjLine.includes("getRelevantContext(pr, text)") && !pjLine.includes("hasLLM") && !pjLine.includes("streamed"), "pjApplied: !cancelled && pr có hướng dẫn/bộ nhớ/tài liệu — KHÔNG xét hasLLM (luôn true ở bản thật nên chip chết) hay streamed", pjLine);
+ok(!/hasLLM/.test(page), "page.tsx không còn dùng hasLLM (đã gỡ cả import)");
 
 console.log("4. Bản chia sẻ và lịch sử gửi model");
 const old = { role: "ai", text: `${body}\n\n_Đã áp dụng hướng dẫn của bạn: “${SECRET}”_`, insApplied: true, pjApplied: true, done: true, time: 1 };
