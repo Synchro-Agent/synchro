@@ -4,7 +4,7 @@ let pass = 0, fail = 0;
 const ok = (c, n, x = "") => { c ? pass++ : fail++; console.log(c ? "  ✓" : "  ✗", n, c ? "" : String(x).slice(0, 300)); };
 const src = (f) => readFileSync(new URL("../../app/" + f, import.meta.url), "utf8");
 
-const provider = src("providersui.tsx"), usage = src("usageui.tsx"), subs = src("ai/subs.ts"), page = src("page.tsx"), img = src("ai/imagegen.ts"), vi = src("i18n-vi.ts"), ux = src("i18n-ux.ts");
+const provider = src("providersui.tsx"), usage = src("usageui.tsx") + src("usagering.tsx"), subs = src("ai/subs.ts"), page = src("home.tsx"), img = src("ai/imagegen.ts"), vi = src("i18n-vi.ts"), ux = src("i18n-ux.ts");
 const header = /"(Use your own AI accounts\.[^"]+)"/.exec(provider)?.[1];
 ok(header && /ChatGPT, Gemini and Grok work on a free account/.test(header) && /Claude needs a Pro or Max plan/.test(header), "đầu trang Providers nói đúng ai cần trả phí", header);
 ok(header && vi.includes(`"${header}"`), "đầu trang Providers có bản tiếng Việt");

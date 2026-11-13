@@ -28,7 +28,7 @@ ok(/streaming=\{live && i === blocks\.length - 1\}/.test(read("app/agentui.tsx")
 ok(/streaming=\{!n\.done\}/.test(read("app/codeview.tsx")), "Synchro Code: câu trả lời đang viết vẫn hiện chữ dần");
 ok(/streaming=\{!art\.complete\}/.test(read("app/artifactui.tsx")), "Artifact đang viết vẫn hiện chữ dần");
 
-const page = read("app/page.tsx");
+const page = read("app/home.tsx");
 ok(/<button className="pj-tg"[^>]*aria-expanded=\{open\}/.test(page), "nút thu gọn dự án là nút thật, báo trạng thái mở");
 ok(!/<span className="pj-tg" role="button"/.test(page), "không còn nút lồng trong nút ở dòng dự án");
 const lb = read("app/filemenu.tsx");

@@ -31,7 +31,7 @@ ok(C.edgeFade(box({ clientHeight: 266, scrollHeight: 266 }), "y") === "", "lư�
 
 // LIVE-2 / LIVE-3 / R12: "+N" và "Thu gọn" nằm ngoài khung cuộn; lưới cao đúng số hàng trọn vẹn; trạng thái trải lưới đặt lại theo từng tin.
 import fs from "node:fs";
-const css = fs.readFileSync("app/globals.css", "utf8"), page = fs.readFileSync("app/page.tsx", "utf8");
+const css = fs.readFileSync("app/globals.css", "utf8"), page = fs.readFileSync("app/home.tsx", "utf8");
 ok(!/\.attach:not\(\.sent\):not\(\.attach-grid\)\{[^}]*mask-image/.test(css), "không còn lớp mờ hai mép luôn bật");
 const grid = css.match(/\.attach\.attach-grid\{[^}]*max-height:(\d+)px/);
 ok(grid && Number(grid[1]) > 138 && (Number(grid[1]) - 10) % 128 === 0, "lưới cao đúng 10px đệm + bội số của hàng 128px (thẻ 120 + khe 8)", grid?.[1]);

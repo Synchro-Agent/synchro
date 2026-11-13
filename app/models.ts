@@ -22,10 +22,20 @@ let tries = 0, again: ReturnType<typeof setTimeout> | null = null;
 export const modelsSettled = () => tries >= RETRY_S.length;
 
 /** bg: lần hỏi lại nền của tab để mở lâu (máy chủ không khởi động sẵn tiến trình chat cho lần này). */
+type Payload = { providers?: ProviderInfo[]; sharedApi?: boolean; default?: string | null; allowed?: string[]; effort?: Record<string, Effort>; replaced?: Replaced };
+const put = (j: Payload) => { fetchedAt = Date.now(); state = { providers: j.providers ?? [], sharedApi: !!j.sharedApi, default: j.default ?? null, allowed: j.allowed ?? [], effort: j.effort ?? {}, replaced: j.replaced ?? {}, loaded: true }; subs.forEach((f) => f()); };
+/** Gieo danh sách model từ gói khởi động dựng sẵn ở máy chủ (app/bootdata.ts): bộ chọn model đúng ngay, không hỏi /api/models lần đầu.
+ *  Danh sách trống (máy chủ vừa khởi động lại, chưa có hãng nào) thì không gieo: trả false để trang tự hỏi lại như trước. */
+export function seedModels(j: Payload | null | undefined) {
+  if (!j?.providers?.length) return false;
+  put(j);
+  return true;
+}
+
 export function refreshModels(o: { bg?: boolean } = {}) {
   inflight ??= fetch(o.bg ? "/api/models?bg=1" : "/api/models", { cache: "no-store" })
     .then((r) => (r.ok ? r.json() : null))
-    .then((j) => { if (j) { fetchedAt = Date.now(); state = { providers: j.providers ?? [], sharedApi: !!j.sharedApi, default: j.default ?? null, allowed: j.allowed ?? [], effort: j.effort ?? {}, replaced: j.replaced ?? {}, loaded: true }; subs.forEach((f) => f()); } return !!j?.providers?.length; })
+    .then((j: Payload | null) => { if (j) put(j); return !!j?.providers?.length; })
     .catch(() => false)
     .then((ok) => {
       if (ok) tries = 0;

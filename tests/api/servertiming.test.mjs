@@ -70,7 +70,7 @@ if (!cookie) {
   cookie = (r.headers.getSetCookie?.() ?? []).find((c) => c.startsWith("synchro_session="))?.split(";")[0] ?? "";
 }
 // Trang chính (page.tsx, store.tsx, …) gọi các API này ngay khi mở; thêm vài route không qua handle() (models, skills, runs, health).
-const LOAD = ["/api/auth/me", "/api/models", "/api/skills", "/api/plugins", "/api/connectors", "/api/inbox", "/api/caps", "/api/usage", "/api/brain", "/api/apps", "/api/artifacts", "/api/tasks", "/api/runs", "/api/health", "/api/admin/health", "/api/github"];
+const LOAD = ["/api/bootstrap", "/api/auth/me", "/api/models", "/api/skills", "/api/plugins", "/api/connectors", "/api/inbox", "/api/caps", "/api/usage", "/api/brain", "/api/apps", "/api/artifacts", "/api/tasks", "/api/runs", "/api/health", "/api/admin/health", "/api/github"];
 const missing = [], bad = [];
 for (const p of LOAD) {
   const r = await get(p);

@@ -26,7 +26,7 @@ ok(R.plainSnippet(shown) === "Báo cáo quý ba đã xong.", "đoạn trích b�
 ok(/const shownText = \(o: \{ text\?: string; role\?: string \}\) => \(o\.role === "user" \? o\.text \?\? "" : stripAppliedNotes\(o\.text \?\? ""\)\);/.test(pal), "⌘K lọc dòng ghi chú cũ trên tin AI");
 ok(/v = foldRaw\(shownText\(o\)\)/.test(pal), "⌘K tìm trên chữ đã lọc (gõ 'Đà Nẵng' không trúng dòng đã ẩn)");
 ok(/const hit = hitMsg && shownText\(hitMsg\);/.test(pal) && /plainSnippet\(hit\)/.test(pal), "đoạn trích lấy chữ đã lọc");
-const page = fs.readFileSync("app/page.tsx", "utf8");
+const page = fs.readFileSync("app/home.tsx", "utf8");
 ok(/<VoiceMode[^\n]*reply=\{lastAi \? \{ text: lastAi\.failed \? tr\(chatError\(lastAi\.err\)\.text\) : stripAppliedNotes\(lastAi\.text\)/.test(page), "chế độ giọng nói không đọc dòng ghi chú cũ");
 
 console.log(`\n${pass} đạt, ${fail} hỏng`);

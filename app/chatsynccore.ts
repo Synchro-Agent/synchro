@@ -12,6 +12,10 @@ export function parseMeta(s: string | null): SyncMeta {
   return emptyMeta();
 }
 
+/** Lần hỏi /api/chats?since= bắt đầu sớm (song song với hydrate, blueprint A3.4) chỉ được dùng khi đúng tài khoản đang mở và đúng mốc since mà
+ *  lượt đồng bộ đầu sẽ hỏi; khác tài khoản (đổi tài khoản giữa chừng, cookie của người khác) thì bỏ kết quả. */
+export const earlyUsable = (e: { uid: string; since: number } | null, scope: string, since: number) => !!e && e.uid === scope && e.since === since;
+
 /**
  * Chạy một việc nhưng chỉ chờ tối đa ms. Hết giờ (hoặc việc ném lỗi) thì trả về TIMED_OUT; việc vẫn chạy nốt ở nền, vô hại.
  * Dùng cho flush lúc đăng xuất: một yêu cầu mạng đứng không được treo cả bước đăng xuất, và phần chưa xong phải đếm được để

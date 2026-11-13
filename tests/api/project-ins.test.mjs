@@ -76,7 +76,7 @@ try {
   ok(r.s === 200 && r.text === "PJINS: none", "dự án khác (chưa đồng bộ): không lấy nhầm hướng dẫn", r.text);
 
   console.log("3. Trình duyệt gửi đúng dự án ở câu đầu của đoạn chat mới");
-  const pg = fs.readFileSync("app/page.tsx", "utf8");
+  const pg = fs.readFileSync("app/home.tsx", "utf8");
   const send = pg.slice(pg.indexOf("const send = (t: string"), pg.indexOf("const runTurn = ("));
   ok(/const np = nextProj \?\? \(view === "project" \? curProj \?\? undefined : undefined\);\s*pid = np;/.test(send) && !/const pid = view === "project"/.test(send), "đoạn chat mới (cả khi chọn dự án ở khung soạn trang chủ): lượt đầu mang đúng dự án vừa gán", send.slice(0, 200));
   ok(/pr && !pr\.stub \? \{ pjFull: true \}/.test(pg), "báo cho máy chủ khi trình duyệt có đủ dữ liệu dự án");
