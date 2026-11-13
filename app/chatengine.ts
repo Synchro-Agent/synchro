@@ -51,6 +51,7 @@ import { genImageUrl } from "./artdoc";
 import { IMAGE_MAX_MB, imageKind, type ImgFile, scrubServerPaths } from "./ai/imagefiles";
 import { AGY_WAIT_NOTE, BRIDGE_HOLD, openBridge } from "./mcpbridge";
 import { clearStall, noteStall, stalledModels, usableModels } from "./ai/anymodel";
+import { needsRenderEscalation, RENDER_ESCALATION_HINT } from "./ai/webescalate";
 import { learnFromTurn, userContext } from "./memory";
 import { crisisHelp } from "./crisishelp";
 import { afterTurn, BRAIN_RULES, BRAIN_TOOLS, brainRecallHybrid, brainReady, runBrainTool, topRule, warmRecall } from "./brain";
@@ -685,12 +686,16 @@ function takeFollowups(m: unknown[]): boolean {
 }
 // Tìm web cho Gemini qua khóa API: lớp tương thích OpenAI của Gemini chưa có Google Search, nên Synchro gọi API gốc của Gemini
 // (cùng khóa, cùng model) với công cụ google_search và trả về câu trả lời có dẫn nguồn như một công cụ thường.
+// Dặn thêm cho công cụ tìm web (blueprint D2): số liệu trong ngày thì ưu tiên nguồn chính thức; chưa có con số thì thử thêm một nguồn nữa
+// trước khi nói "không chắc"; nếu một trang trả về quá ít chữ hoặc còn "đang cập nhật" / "enable JavaScript" / "loading" thì mở trang đó
+// trong trình duyệt (browser_navigate → browser_wait → browser_text) để đọc DOM đã dựng.
+const WEB_GUIDE = " Với số liệu thay đổi trong ngày (tỷ giá, giá vàng, giá cổ phiếu, thời tiết, kết quả), ưu tiên nguồn chính thức; nếu kết quả chưa có con số, thử thêm một nguồn nữa trước khi trả lời \"không chắc\". Nếu một trang trả về quá ít chữ hoặc còn \"đang cập nhật\" / cần bật JavaScript, mở trang đó trong trình duyệt (browser_navigate → browser_wait → browser_text) để đọc nội dung đã dựng.";
 const GEMINI_WEB_TOOL = {
   name: "web_search",
-  description: "Tìm thông tin mới trên web bằng Google Search. Dùng khi câu hỏi cần dữ kiện mới (tin tức, giá, lịch, phiên bản phần mềm…) hoặc điều bạn không chắc. Trả về tóm tắt kèm nguồn.",
+  description: "Tìm thông tin mới trên web bằng Google Search. Dùng khi câu hỏi cần dữ kiện mới (tin tức, giá, tỷ giá, lịch, phiên bản phần mềm…) hoặc điều bạn không chắc. Trả về tóm tắt kèm nguồn." + WEB_GUIDE,
   input_schema: { type: "object", properties: { query: { type: "string", description: "Câu tìm kiếm ngắn, cùng ngôn ngữ người dùng" } }, required: ["query"] },
 };
-const WEB_DESC = "Tìm thông tin mới trên web. Dùng khi câu hỏi cần dữ kiện mới (tin tức, giá, lịch, phiên bản phần mềm…) hoặc điều bạn không chắc. Trả về tóm tắt kèm nguồn.";
+const WEB_DESC = "Tìm thông tin mới trên web. Dùng khi câu hỏi cần dữ kiện mới (tin tức, giá, tỷ giá, lịch, phiên bản phần mềm…) hoặc điều bạn không chắc. Trả về tóm tắt kèm nguồn." + WEB_GUIDE;
 async function geminiSearch(t: Target, query: string, cite: Citer): Promise<ToolRun> {
   const used = { kind: "search" as const, name: "web_search" };
   if (!query.trim()) return { content: "Thiếu câu tìm kiếm.", is_error: true, used };
@@ -704,7 +709,8 @@ async function geminiSearch(t: Target, query: string, cite: Citer): Promise<Tool
   const c = j.candidates?.[0];
   const text = (c?.content?.parts ?? []).map((p) => p.text ?? "").join("").trim();
   const src = srcList((c?.groundingMetadata?.groundingChunks ?? []).map((g) => g.web).filter((w): w is { uri: string; title?: string } => !!w?.uri && /^https?:\/\//.test(w.uri)).map((w) => ({ url: w.uri, title: w.title ?? "" })), cite);
-  return { content: `${text || "(không có kết quả)"}\n\nNguồn:\n${src}`, is_error: false, used };
+  const esc = needsRenderEscalation(text) ? `\n\n${RENDER_ESCALATION_HINT}` : "";
+  return { content: `${text || "(không có kết quả)"}${esc}\n\nNguồn:\n${src}`, is_error: false, used };
 }
 // Tìm web cho Grok / DeepSeek qua khóa API: /chat/completions của hai hãng không có công cụ tìm web phía máy chủ, nên Synchro gọi
 // API Responses của chính hãng đó (cùng khóa, cùng model) với công cụ web_search và trả câu trả lời kèm nguồn như một công cụ thường.
@@ -717,7 +723,8 @@ async function responsesSearch(t: Target, query: string, cite: Citer): Promise<T
     const text = parts.map((c) => c.text ?? "").join("").trim();
     const urls = [...parts.flatMap((c) => (c.annotations ?? []).filter((a) => a.url).map((a) => ({ url: a.url!, title: a.title ?? "" }))), ...(Array.isArray(j.citations) ? j.citations : []).filter((u): u is string => typeof u === "string").map((url) => ({ url, title: "" }))];
     const src = srcList([...new Map(urls.filter((u) => /^https?:\/\//.test(u.url)).map((u) => [u.url, u])).values()], cite);
-    return { content: `${text || "(không có kết quả)"}\n\nNguồn:\n${src}`, is_error: false, used };
+    const esc = needsRenderEscalation(text) ? `\n\n${RENDER_ESCALATION_HINT}` : "";
+    return { content: `${text || "(không có kết quả)"}${esc}\n\nNguồn:\n${src}`, is_error: false, used };
   } catch (e) {
     if (isAbort(e)) throw e;
     return { content: `Chưa tìm được trên web (${e instanceof HttpErr ? e.status : "mất kết nối"}): ${String((e as Error).message).slice(0, 200)}`, is_error: true, used };
