@@ -73,6 +73,31 @@ console.log("4. W23-6 / SEC-8 (D2.1): máy chủ tự mở trang trong trình du
   // Chữ dài bị cắt.
   const long = await W.autoRender(["https://l.vn"], { done: new Set(), read: async () => "a".repeat(9000) });
   ok(long[0].text.length <= W.RENDERED_MAX + 1, "chữ dài được cắt gọn", long[0]?.text.length);
+  // W23-6 (sửa lại): hết giờ thì HỦY lần mở (signal), không chỉ thôi chờ — nơi đọc thấy signal.aborted và thôi điều khiển trình duyệt.
+  let seen = null;
+  await W.autoRender(["https://slow2.vn"], { done: new Set(), read: (u, signal) => { seen = signal; return new Promise(() => {}); }, timeoutMs: 30 });
+  ok(seen && seen.aborted, "hết giờ: signal của lần mở bị hủy", String(seen?.aborted));
+  // Lượt bị dừng (signal ngoài): không mở trang nào nữa.
+  const stop = new AbortController(); stop.abort();
+  m = mk({ "https://a.vn": RICH });
+  const none = await W.autoRender(["https://a.vn"], { done: new Set(), read: m.read, signal: stop.signal });
+  ok(none.length === 0 && m.calls.length === 0, "lượt đã dừng: không tự mở trang", m.calls);
+  // Nhãn nguồn là địa chỉ cuối cùng sau chuyển hướng (read báo về), không phải link chuyển hướng ban đầu.
+  const red = await W.autoRender(["https://vertexaisearch.cloud.google.com/grounding-api-redirect/abc"], { done: new Set(), read: async () => ({ text: RICH, url: "https://vcb.com.vn/ty-gia" }) });
+  ok(red[0]?.url === "https://vcb.com.vn/ty-gia", "nhãn nguồn: địa chỉ cuối cùng", red[0]?.url);
+  // Cùng vòng model đang dùng trình duyệt (render: false): không tự mở, chỉ nhắc model mở trang.
+  m = mk({ "https://a.vn": RICH });
+  out = await W.escalateText("x", { stalled: true, urls: ["https://a.vn"], browse: true, render: false, done: new Set(), read: m.read });
+  ok(m.calls.length === 0 && /browser_navigate/.test(out), "vòng có browser_*: không tự mở, chỉ nhắc", out);
+  // Hàng đợi trình duyệt: hai lần mở cùng khóa không xen nhau (mở → chờ → đọc của A xong rồi mới tới B); khóa khác chạy song song.
+  const log = [], sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const job = (k, n) => W.withBrowserLock(k, async () => { log.push(`${n}:nav`); await sleep(20); log.push(`${n}:text`); return n; });
+  const res = await Promise.all([job("u|chat:1", "A"), job("u|chat:1", "B"), W.withBrowserLock("u|chat:1", async () => { throw new Error("hỏng"); }).catch(() => "err"), job("u|chat:1", "C")]);
+  ok(log.join() === "A:nav,A:text,B:nav,B:text,C:nav,C:text" && res.join() === "A,B,err,C", "cùng khóa: lần lượt, việc lỗi không chặn hàng đợi", log.join());
+  const log2 = [];
+  const job2 = (k, n) => W.withBrowserLock(k, async () => { log2.push(`${n}:nav`); await sleep(20); log2.push(`${n}:text`); });
+  await Promise.all([job2("u|chat:1", "A"), job2("u|chat:2", "B")]);
+  ok(log2.join() === "A:nav,B:nav,A:text,B:text", "khóa khác (đoạn chat khác): chạy song song", log2.join());
 }
 {
   const fs = await import("node:fs");
@@ -80,6 +105,10 @@ console.log("4. W23-6 / SEC-8 (D2.1): máy chủ tự mở trang trong trình du
   ok(/escalateSearch\(x, await searchWeb\(/.test(eng), "web_search đi qua escalateSearch (máy chủ tự mở trang)");
   ok(/checkUrl\(url\)/.test(eng) && /siteRule\(x\.uid/.test(eng), "trang tự mở phải qua checkUrl (chặn địa chỉ nội bộ) và quy tắc trang của người dùng");
   ok(/c\.name === "browser_text" && r\.stalled/.test(eng), "browser_text mỏng: máy chủ tự chờ rồi đọc lại");
+  ok(/withBrowserLock\(browserKey\(x\), async \(\) =>/.test(eng) && /where === "synchro" \? await withBrowserLock\(browserKey\(x\), browserStep\)/.test(eng), "W23-6: tự mở trang và browser_* của model dùng chung hàng đợi trình duyệt");
+  ok(/x\.roundBrowser = /.test(eng) && /render: !x\.roundBrowser/.test(eng), "W23-6: vòng có browser_* thì web_search không tự mở trang");
+  ok(/at !== url && !\(await renderAllowed\(x, at\)\)/.test(eng) && /end !== at && !\(await renderAllowed\(x, end\)\)/.test(eng), "W23-6: địa chỉ sau chuyển hướng phải qua lại checkUrl + quy tắc trang");
+  ok(/signal: runSignal\(\) \}\)/.test(eng) && /if \(signal\.aborted\) return null;/.test(eng), "W23-6: lần mở dừng theo signal (hết giờ / lượt dừng)");
   ok(!/\$\{RENDER_ESCALATION_HINT\}/.test(eng), "chatengine không còn tự gắn lời nhắc browser_* vào mọi kết quả tìm web");
 }
 

@@ -45,23 +45,50 @@ export const ESCALATE_MAX = 2;
 export const ESCALATE_MS = 40_000;
 export const RENDERED_MAX = 4000;
 export type Rendered = { url: string; text: string };
+// read: mở một trang, trả chữ của DOM đã dựng (kèm địa chỉ cuối cùng sau chuyển hướng, nếu biết); null: không đọc được.
+// signal: bị hủy khi quá ESCALATE_MS (hoặc lượt bị dừng) — nơi đọc phải thôi điều khiển trình duyệt (không mở / chờ / đọc tiếp).
+export type RenderRead = (url: string, signal: AbortSignal) => Promise<string | { text: string; url?: string } | null>;
 
-const withTimeout = <T>(p: Promise<T>, ms: number): Promise<T | null> =>
-  new Promise((ok) => { const t = setTimeout(() => ok(null), ms); p.then((v) => { clearTimeout(t); ok(v); }, () => { clearTimeout(t); ok(null); }); });
+// Mỗi trình duyệt một hàng đợi: các bước mở → chờ → đọc của một lần tự mở trang, và mọi công cụ browser_* của model trên cùng trình duyệt,
+// chạy lần lượt — công cụ trong một vòng chạy song song (Promise.all), hai lần tự mở xen nhau thì lần A đọc nhầm trang lần B vừa mở rồi gắn
+// nhầm nguồn. Hàng đợi theo khóa (người dùng + đoạn chat); xong việc cuối thì xóa khóa.
+const chains = new Map<string, Promise<unknown>>();
+export function withBrowserLock<T>(key: string, fn: () => Promise<T>): Promise<T> {
+  const prev = chains.get(key) ?? Promise.resolve();
+  const run = prev.then(fn, fn);
+  const tail = run.then(() => undefined, () => undefined);
+  chains.set(key, tail);
+  void tail.then(() => { if (chains.get(key) === tail) chains.delete(key); });
+  return run;
+}
 
-/** Mở lần lượt các trang nguồn (chưa mở trong lượt) tới khi có một trang đọc được đủ chữ. read: mở trang, trả chữ của DOM đã dựng (null: không đọc được). */
-export async function autoRender(urls: string[], o: { done: Set<string>; read: (url: string) => Promise<string | null>; allow?: (url: string) => Promise<boolean>; max?: number; timeoutMs?: number }): Promise<Rendered[]> {
+/** Hết giờ thì trả null và hủy (abort) để việc đang chạy dừng lại, không chỉ thôi chờ. */
+const withTimeout = <T>(start: (signal: AbortSignal) => Promise<T>, ms: number, outer?: AbortSignal): Promise<T | null> => {
+  const ac = new AbortController();
+  const stop = () => ac.abort();
+  if (outer?.aborted) ac.abort(); else outer?.addEventListener("abort", stop, { once: true });
+  return new Promise((ok) => {
+    const t = setTimeout(() => { ac.abort(); ok(null); }, ms);
+    const end = (v: T | null) => { clearTimeout(t); outer?.removeEventListener("abort", stop); ok(v); };
+    start(ac.signal).then(end, () => end(null));
+  });
+};
+
+/** Mở lần lượt các trang nguồn (chưa mở trong lượt) tới khi có một trang đọc được đủ chữ. Nhãn nguồn là địa chỉ cuối cùng read báo về. */
+export async function autoRender(urls: string[], o: { done: Set<string>; read: RenderRead; allow?: (url: string) => Promise<boolean>; max?: number; timeoutMs?: number; signal?: AbortSignal }): Promise<Rendered[]> {
   const out: Rendered[] = [];
   let tried = 0;
   for (const url of [...new Set(urls)]) {
-    if (tried >= (o.max ?? ESCALATE_MAX)) break;
+    if (tried >= (o.max ?? ESCALATE_MAX) || o.signal?.aborted) break;
     if (!/^https?:\/\//i.test(url) || o.done.has(url)) continue;
     o.done.add(url);
     if (o.allow && !(await o.allow(url).catch(() => false))) continue;
     tried++;
-    const text = ((await withTimeout(o.read(url), o.timeoutMs ?? ESCALATE_MS)) ?? "").trim();
+    const got = await withTimeout((signal) => o.read(url, signal), o.timeoutMs ?? ESCALATE_MS, o.signal);
+    const text = (typeof got === "string" ? got : got?.text ?? "").trim();
     if (!text) continue;
-    out.push({ url, text: text.length > RENDERED_MAX ? `${text.slice(0, RENDERED_MAX)}…` : text });
+    const at = typeof got === "object" && got?.url ? got.url : url;
+    out.push({ url: at, text: text.length > RENDERED_MAX ? `${text.slice(0, RENDERED_MAX)}…` : text });
     if (!needsRenderEscalation(text)) break;
   }
   return out;
@@ -72,11 +99,13 @@ export const renderedBlock = (pages: Rendered[]) =>
   pages.map((p) => `\n\nSynchro đã tự mở trang này trong trình duyệt và đọc nội dung đã dựng (${p.url}):\n${p.text}`).join("");
 
 /** Kết quả tìm web sau khi leo thang: kẹt + có trình duyệt thì gắn chữ các trang đã dựng (còn mỏng thì kèm lời nhắc tự mở trang);
- *  kẹt mà lượt không có công cụ trình duyệt thì chỉ nhắc thử nguồn khác (không nhắc tên công cụ model không có); không kẹt thì giữ nguyên. */
-export async function escalateText(content: string, o: { stalled: boolean; urls: string[]; browse: boolean; done: Set<string>; read: (url: string) => Promise<string | null>; allow?: (url: string) => Promise<boolean> }): Promise<string> {
+ *  kẹt mà lượt không có công cụ trình duyệt thì chỉ nhắc thử nguồn khác (không nhắc tên công cụ model không có); không kẹt thì giữ nguyên.
+ *  render === false (cùng vòng model đang tự dùng trình duyệt): không tự mở, chỉ nhắc model mở trang — tránh giành trình duyệt với model. */
+export async function escalateText(content: string, o: { stalled: boolean; urls: string[]; browse: boolean; render?: boolean; done: Set<string>; read: RenderRead; allow?: (url: string) => Promise<boolean>; signal?: AbortSignal }): Promise<string> {
   if (!o.stalled) return content;
   if (!o.browse) return `${content}\n\n${SEARCH_RETRY_HINT}`;
-  const pages = await autoRender(o.urls, { done: o.done, read: o.read, allow: o.allow });
+  if (o.render === false) return `${content}\n\n${RENDER_ESCALATION_HINT}`;
+  const pages = await autoRender(o.urls, { done: o.done, read: o.read, allow: o.allow, signal: o.signal });
   const good = pages.some((p) => !needsRenderEscalation(p.text));
   return `${content}${renderedBlock(pages)}${good ? "" : `\n\n${RENDER_ESCALATION_HINT}`}`;
 }
