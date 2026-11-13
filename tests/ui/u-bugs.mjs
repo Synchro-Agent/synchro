@@ -464,9 +464,10 @@ try {
     for (const size of ["desktop", "mobile"]) {
       await openMd(size);
       await ev(`document.querySelector(".viz-mm")?.scrollIntoView({ block: "center" })`);
-      if (!(await until(`!!document.querySelector(".viz-mm svg")`, 25000))) { ok(false, `${size}: sơ đồ mermaid vẽ ra được`); continue; }
+      // Chờ chính sơ đồ (.art-mermaid svg): ".viz-mm svg" khớp ngay icon của nút phóng to trong lúc mermaid còn đang tải, rồi đo nhầm icon 15px.
+      if (!(await until(`!!document.querySelector(".viz-mm .art-mermaid svg")`, 25000))) { ok(false, `${size}: sơ đồ mermaid vẽ ra được`); continue; }
       await sleep(500);
-      const r = await ev(`(() => { const s = document.querySelector(".viz-mm .art-mermaid svg") || document.querySelector(".viz-mm svg"), q = s.getBoundingClientRect(); return { h: Math.round(q.height), max: Math.round(Math.min(innerHeight * 0.7, 520)), card: Math.round(document.querySelector(".viz-mm").getBoundingClientRect().height) }; })()`);
+      const r = await ev(`(() => { const s = document.querySelector(".viz-mm .art-mermaid svg"), q = s.getBoundingClientRect(); return { h: Math.round(q.height), max: Math.round(Math.min(innerHeight * 0.7, 520)), card: Math.round(document.querySelector(".viz-mm").getBoundingClientRect().height) }; })()`);
       ok(r.h > 40 && r.h <= r.max + 1, `${size}: sơ đồ 9 nút cao ${r.h}px ≤ ${r.max}px`, r);
       ok((await ev(`document.querySelector(".viz-mm .viz-zoom")?.getAttribute("aria-label")`)) === "Phóng to sơ đồ", `${size}: có nút “Phóng to sơ đồ”`);
       await click(`document.querySelector(".viz-mm .viz-zoom")`, "Phóng to sơ đồ");
