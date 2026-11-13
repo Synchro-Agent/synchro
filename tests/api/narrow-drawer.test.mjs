@@ -22,7 +22,11 @@ ok(toggle && Number(toggle[1]) === narrow + 1, "nút logo mở thanh bên hiện
 const scrim = [...strip(g).matchAll(/@media \(max-width:(\d+)px\)\{([\s\S]*?)\n\}/g)].find((m) => /\.side-scrim\{display:block/.test(m[2]));
 ok(scrim && Number(scrim[1]) === narrow, "lớp phủ dùng đúng ngưỡng NARROW", scrim?.[1]);
 ok(scrim && /z-index:64/.test(scrim[2]), "lớp phủ z 64, dưới ngăn kéo");
-ok(!/\.app>aside\.sidebar/.test(strip(g)), "không còn quy tắc chết .app>aside.sidebar (DOM thật là .app>.shell-side>aside)");
+// Màn chờ lúc mở app ẩn thanh trái / thanh bên đúng ngưỡng NARROW: lệch thì iPad dọc (768–834px) thấy khung có thanh trái rồi nhảy sang app không có.
+const boot = [...strip(g).matchAll(/@media \(max-width:(\d+)px\)\{([^\n]*)\}/g)].find((m) => /\.boot-rail,\.boot-side\{display:none\}/.test(m[2]));
+ok(boot && Number(boot[1]) === narrow, "màn chờ ẩn thanh trái và thanh bên đúng ngưỡng NARROW", boot?.[1]);
+ok(!/@media \(max-width:760px\)\{[^\n]*\.boot-rail/.test(strip(g)), "không còn quy tắc 760px nào ẩn thanh trái của màn chờ");
+ok(!/\.app>aside\.sidebar/.test(strip(g)),"không còn quy tắc chết .app>aside.sidebar (DOM thật là .app>.shell-side>aside)");
 
 console.log(`\n${pass} đạt, ${fail} hỏng`);
 process.exit(fail ? 1 : 0);
