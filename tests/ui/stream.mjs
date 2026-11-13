@@ -1,6 +1,6 @@
 // Kiểm thử giao diện bằng Chrome ẩn (hồ sơ riêng) trên npm run dev:mock. Chạy tay: node tests/ui/stream.mjs
 // Chữ hiện dần theo thời gian thực, nút Dừng hủy luôn lượt ở máy chủ, bản sửa artifact (SEARCH/REPLACE) thành phiên bản mới.
-import { waitFor } from "../lib/wait.mjs";
+import { settle, waitFor } from "../lib/wait.mjs";
 import { spawn } from "node:child_process";
 import { mkdirSync, rmSync, readdirSync, statSync, writeFileSync, readFileSync } from "node:fs";
 import { createRequire } from "node:module";
@@ -137,7 +137,8 @@ try {
   await P("Page.reload", {}); await sleep(3500);
   await click(`[...document.querySelectorAll(".chat-item")].find((e) => /giới thiệu quán/i.test(e.textContent))`, "open chat");
   await waitFor(async () => /Phiên bản 2/.test(await ev(`[...document.querySelectorAll(".art-card")].at(-1)?.textContent ?? ""`)), 8000);
-  const card2 = await ev(`[...document.querySelectorAll(".art-card")].at(-1)?.textContent ?? ""`);
+  // Vế phủ định (không hiện "chưa khớp"): thẻ phải đứng yên một lúc rồi mới đọc, không đọc ngay khi "Phiên bản 2" vừa xuất hiện.
+  const card2 = (await settle(() => ev(`[...document.querySelectorAll(".art-card")].at(-1)?.textContent ?? ""`), 500, 4000)) ?? "";
   ok(/Phiên bản 2/.test(card2) && !/chưa khớp/.test(card2), "tải lại trang: bản sửa vẫn áp đúng từ lịch sử");
 } catch (e) { ok(false, "lỗi khi chạy", e.stack); await shot("fail"); }
 console.log(`${pass}/${pass + fail} đạt`);

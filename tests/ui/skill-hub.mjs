@@ -1,6 +1,6 @@
 // Kiểm thử giao diện bằng Chrome ẩn (hồ sơ riêng) trên npm run dev:mock. Chạy tay: node tests/ui/skill-hub.mjs
 // Kho kỹ năng (gộp Skills + Plugins): thanh bên, trang gộp, menu Thêm, thả tệp, Cài đặt. Chạy bằng Chrome ẩn trên dev:mock.
-import { waitFor } from "../lib/wait.mjs";
+import { settle, waitFor } from "../lib/wait.mjs";
 import { spawn } from "node:child_process";
 import { mkdirSync, rmSync, readdirSync, statSync, writeFileSync, readFileSync } from "node:fs";
 import { createRequire } from "node:module";
@@ -145,7 +145,10 @@ try {
   await shot("4-added");
   // Bật tắt ngay trên hàng
   await click(`[...document.querySelectorAll(".hub-yours .pl-row2")].find((r) => r.querySelector("b")?.textContent === "meeting-notes").querySelector(".toggle")`, "toggle");
-  ok(await waitFor(async () => (await api2("GET", "/api/skills")).skills.find((s) => s.name === "meeting-notes")?.enabled === false && !(await ev(`!!document.querySelector(".sk-modal")`)), 5000, { every: 250 }), "nút bật/tắt trên hàng hoạt động, không mở chi tiết");
+  const off = await waitFor(async () => (await api2("GET", "/api/skills")).skills.find((s) => s.name === "meeting-notes")?.enabled === false, 5000, { every: 250 });
+  // "Không mở chi tiết" là vế phủ định: đợi trang đứng yên 600 ms (khung chi tiết mở có độ trễ) rồi mới kiểm.
+  const modal = await settle(() => ev(`!!document.querySelector(".sk-modal")`), 600, 3000);
+  ok(off && modal === false, "nút bật/tắt trên hàng hoạt động, không mở chi tiết", { off, modal });
   await click(`[...document.querySelectorAll(".hub-yours .pl-row2")].find((r) => r.querySelector("b")?.textContent === "meeting-notes")`, "row");
   await until(`!!document.querySelector(".sk-modal")`, 10000, "detail");
   ok(true, "bấm vào hàng → mở chi tiết skill");
