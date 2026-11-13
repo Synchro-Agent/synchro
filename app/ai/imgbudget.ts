@@ -15,3 +15,20 @@ Hãy dựng slide / artifact / sản phẩm ngay bây giờ với ${n === 1 ? "�
 run_code (Word, PowerPoint, PDF, video, ghép ảnh) đọc ảnh tại inputs/${o.names.join(", inputs/")} — nếu chạy ngay thì có thể vẫn là ảnh giữ chỗ cho tới khi ảnh dựng xong.
 Nói với người dùng đúng MỘT dòng ngắn rằng ảnh đang được hoàn thiện và sẽ tự hiện khi xong, rồi tiếp tục làm phần còn lại.`;
 }
+
+/** Ảnh dựng nền đã có kết quả (W23-2): thay byte thật vào từng ảnh giữ chỗ theo thứ tự; ảnh nào không có byte (dựng hỏng, trả thiếu ảnh)
+ *  hoặc không thay được thì đánh dấu hỏng. Trả về đúng MỘT dòng báo người dùng (blueprint G4.2 "khi ảnh về thì thay vào artifact và báo một dòng"). */
+export function settleBackground<T>(o: { ids: string[]; names: string[]; files: T[] | null; replace: (id: string, data: T) => boolean; failed: (id: string) => void }): { ok: boolean; line: string; done: string[]; lost: string[] } {
+  const done: string[] = [], lost: string[] = [];
+  o.ids.forEach((id, i) => {
+    const f = o.files?.[i];
+    let put = false;
+    if (f !== undefined) try { put = o.replace(id, f); } catch { put = false; }
+    if (put) done.push(o.names[i] ?? id); else { o.failed(id); lost.push(o.names[i] ?? id); }
+  });
+  const list = (xs: string[]) => (xs.length > 3 ? `${xs.slice(0, 3).join(", ")} +${xs.length - 3}` : xs.join(", "));
+  const line = !lost.length ? `Ảnh ${list(done)} đã xong, đã thay vào artifact`
+    : !done.length ? `Không dựng được ảnh ${list(lost)}, artifact vẫn giữ khung giữ chỗ`
+    : `Ảnh ${list(done)} đã xong, đã thay vào artifact; không dựng được ${list(lost)}`;
+  return { ok: !lost.length, line, done, lost };
+}

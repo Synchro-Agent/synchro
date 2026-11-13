@@ -3,6 +3,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { DATA_DIR, db } from "./authstore";
+import { isPlaceholderPng } from "./artdoc";
 import { diskLow } from "./diskfloor";
 import { randomToken } from "./mcpauth";
 import type { RunFile } from "./coderun";
@@ -100,8 +101,18 @@ export function outputRoom(uid: string): number {
   return Math.max(0, OUTPUT_QUOTA_MB() * 1048576 - used);
 }
 
+/** Loại ảnh theo các byte đầu tệp (PNG, JPEG, WebP, GIF); không nhận ra thì null. */
+export function sniffImageMime(b: Buffer): string | null {
+  if (b.length > 8 && b.readUInt32BE(0) === 0x89504e47 && b.readUInt32BE(4) === 0x0d0a1a0a) return "image/png";
+  if (b.length > 3 && b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff) return "image/jpeg";
+  if (b.length > 12 && b.toString("latin1", 0, 4) === "RIFF" && b.toString("latin1", 8, 12) === "WEBP") return "image/webp";
+  if (b.length > 6 && /^GIF8[79]a$/.test(b.toString("latin1", 0, 6))) return "image/gif";
+  return null;
+}
+
 /** Ghi đè nội dung một tệp đã lưu (giữ nguyên id và đường dẫn tải về), cập nhật kích thước, mime và cỡ ảnh.
- *  Dùng cho ảnh dựng ở chế độ nền (G4): thay byte thật vào đúng ảnh giữ chỗ model đã đặt vào slide / artifact. Giữ nguyên tên để tham chiếu inputs/ không đổi. */
+ *  Dùng cho ảnh dựng ở chế độ nền (G4): thay byte thật vào đúng ảnh giữ chỗ model đã đặt vào slide / artifact. Giữ nguyên tên để tham chiếu inputs/ không đổi;
+ *  mime theo đúng byte thật (W23-2): ảnh giữ chỗ tên .png nhưng nhà cung cấp có thể trả JPEG / WebP, ghi image/png thì trình duyệt và tệp tải về sai loại. */
 export function replaceOutput(uid: string, id: string, data: Buffer): OutFile | null {
   if (!/^[\w-]{8,40}$/.test(id)) return null;
   const d = init();
@@ -109,11 +120,31 @@ export function replaceOutput(uid: string, id: string, data: Buffer): OutFile | 
   if (!row) return null;
   const p = path.join(ROOT, uid, id);
   try { fs.writeFileSync(p, data, { mode: 0o600 }); } catch { return null; }
-  const mime = mimeOf(row.name);
+  genFailed.delete(id);
+  const named = mimeOf(row.name);
+  const mime = named.startsWith("image/") ? sniffImageMime(data) ?? named : named;
   d.prepare("UPDATE outputs SET mime = ?, size = ? WHERE id = ? AND user_id = ?").run(mime, data.length, id, uid);
   const o: OutFile = { id, name: row.name, size: data.length, mime };
   const dim = mime.startsWith("image/") ? imageSize(data) : null;
   return dim && dim.w > 0 && dim.h > 0 ? { ...o, ...dim } : o;
+}
+
+// Ảnh dựng nền (G4) không xong (lỗi, hết nhà cung cấp, thiếu ảnh): nhớ trong tiến trình để /api/artimg và /api/outputs báo "hỏng" thay vì "đang chờ",
+// khung xem trước và thẻ ảnh thôi hỏi lại (W23-2). Toàn cục: mỗi route của Next được đóng gói riêng. Máy chủ khởi động lại thì ảnh nền đang dựng cũng mất:
+// ảnh giữ chỗ quá GEN_PENDING_MS cũng tính là hỏng.
+const gGen = globalThis as unknown as { __synchroGenFailed?: Set<string> };
+const genFailed = (gGen.__synchroGenFailed ??= new Set<string>());
+export const GEN_PENDING_MS = 20 * 60_000;
+export function markGenFailed(id: string) {
+  genFailed.add(id);
+  if (genFailed.size > 5000) genFailed.delete(genFailed.values().next().value!);
+}
+/** Trạng thái ảnh giữ chỗ của ảnh dựng nền: "pending" còn đang dựng, "failed" không dựng được; null khi byte đã là ảnh thật. */
+export function genImageState(uid: string, id: string, data: Uint8Array): "pending" | "failed" | null {
+  if (!isPlaceholderPng(data)) return null;
+  if (genFailed.has(id)) return "failed";
+  const r = init().prepare("SELECT created_at FROM outputs WHERE id = ? AND user_id = ?").get(id, uid) as { created_at: number } | undefined;
+  return !r || Date.now() - r.created_at > GEN_PENDING_MS ? "failed" : "pending";
 }
 
 /** Xóa một tệp vừa tạo mà người dùng chưa nhận (bản mới của cùng đường dẫn trong cùng lượt thay thế). */

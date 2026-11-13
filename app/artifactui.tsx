@@ -24,7 +24,7 @@ import { htmlToBlocks } from "./htmlblocks";
 export type ArtVersion = ArtBlock & { at?: number };
 
 // ---------------------------------------------------------------- khung chạy cô lập
-import { buildDocCore, deckExport, externalImageUrls, genImageId, H2I, htmlExport, isDeck, libUrls, pendingRetryMs, svgExport, swapUrls } from "./artdoc";
+import { buildDocCore, deckExport, externalImageUrls, genImageId, H2I, htmlExport, isDeck, libUrls, noteGenPending, noteGenSettled, pendingRetryMs, svgExport, swapUrls } from "./artdoc";
 import { kitFontUrl, presetIn, withKitFontLink } from "./artkit";
 import { PRESETS, presetOf } from "./designpresets";
 export { deckExport, H2I, isDeck, libUrls };
@@ -96,9 +96,15 @@ const pendingImg = new Set<string>();
 const dataUrl = (u: string) => {
   let p = imgCache.get(u);
   if (!p) {
-    const gen = !!genImageId(u);
+    const gen = genImageId(u);
+    // Ảnh nền vừa xong (hết cờ đang chờ) hay máy chủ báo dựng hỏng: báo một dòng (artdoc.ts noteGenSettled, mỗi ảnh một lần) và thôi hỏi lại.
     p = fetch(`/api/artimg?u=${encodeURIComponent(u)}${gen ? "&p=1" : ""}`)
-      .then((r) => { if (!r.ok) return null; if (r.headers.get("x-synchro-pending") === "1") pendingImg.add(u); else pendingImg.delete(u); return r.blob(); })
+      .then((r) => {
+        if (!r.ok) return null;
+        if (r.headers.get("x-synchro-pending") === "1") { pendingImg.add(u); if (gen) noteGenPending(gen); }
+        else { pendingImg.delete(u); if (gen) noteGenSettled(gen, r.headers.get("x-synchro-failed") !== "1"); }
+        return r.blob();
+      })
       .then((b) => b && new Promise<string>((ok, no) => { const f = new FileReader(); f.onload = () => ok(String(f.result)); f.onerror = no; f.readAsDataURL(b); }))
       .catch(() => null);
     imgCache.set(u, p);

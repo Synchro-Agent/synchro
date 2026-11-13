@@ -87,6 +87,7 @@ import { criticKey, fixPatch, important, type CriticEntry, type Finding } from "
 import { chatHistory, continuable, mixExtra } from "./history";
 import { ContextMixer } from "./mixer";
 import { ArtifactCard, OutputFiles, saveArtifacts } from "./artifactcard";
+import { GEN_IMG_EVENT } from "./artdoc";
 import type { Product } from "./filepreview";
 import type { OutFile } from "./llm";
 import { UsageRing } from "./usageui";
@@ -1328,6 +1329,12 @@ export default function Home() {
     window.addEventListener("synchro:forget", forget);
     return () => window.removeEventListener("synchro:forget", forget);
   }, []);
+  // Ảnh dựng nền (G4) vừa về hay không dựng được: khung xem trước / thẻ ảnh phát sự kiện (artdoc.ts noteGenSettled), báo một dòng (W23-2).
+  useEffect(() => {
+    const on = (e: Event) => say((e as CustomEvent<{ ok?: boolean }>).detail?.ok ? tr("Ảnh dựng nền đã xong và đã thay vào artifact.") : tr("Không dựng được ảnh nền; artifact vẫn giữ khung giữ chỗ."));
+    window.addEventListener(GEN_IMG_EVENT, on);
+    return () => window.removeEventListener(GEN_IMG_EVENT, on);
+  }, [say]);
   // Thẻ "chưa tạo được ảnh" trong nhật ký làm việc: mở thẳng Cài đặt → Providers.
   useEffect(() => {
     const open = () => { setSettingsTab("Providers"); setModal("settings"); };

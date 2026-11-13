@@ -26,6 +26,8 @@ export const VI2EN: Record<string, string> = {
   "Tệp và văn bản trong dự án được dùng làm ngữ cảnh cho mọi đoạn chat. Mỗi dự án chứa tối đa 2 triệu ký tự.": "Files and text in the project are used as context for every chat. Each project holds up to 2 million characters.",
   "Việc tự động có đề xuất cần bạn duyệt.": "A scheduled task has a proposal for you to review.",
   "Đã có kết quả trong Hộp thư.": "A result is ready in your Inbox.",
+  "Ảnh dựng nền đã xong và đã thay vào artifact.": "The background image is ready and is now in the artifact.",
+  "Không dựng được ảnh nền; artifact vẫn giữ khung giữ chỗ.": "The background image couldn't be made, so the artifact keeps the placeholder.",
   "Xem kết quả cũ hơn": "Show older results",
   "Trình duyệt chưa đọc được bằng giọng nói. Câu trả lời đầy đủ có trong khung chat": "The browser can't read aloud. The full answer is in the chat",
   "Ngôn ngữ trình duyệt dùng để nghe bạn nói": "The language your browser listens for",
@@ -1778,6 +1780,10 @@ RULES_EN.push(
   [/^Đang tìm “(.*)” trên trang$/, (m) => `Finding “${m[1]}” on the page`], [/^Đang bấm phần tử \[(.*)\]$/, (m) => `Clicking element [${m[1]}]`], [/^Đang bấm vị trí (.*)$/, (m) => `Clicking at ${m[1]}`], [/^Đang rê chuột lên phần tử \[(.*)\]$/, (m) => `Hovering over element [${m[1]}]`], [/^Đang rê chuột lên vị trí (.*)$/, (m) => `Hovering at ${m[1]}`],
   [/^Đang gõ “(.*)”$/, (m) => `Typing “${m[1]}”`], [/^Đang nhấn (.+)$/, (m) => `Pressing ${m[1]}`], [/^Đang chọn “(.*)”$/, (m) => `Selecting “${m[1]}”`], [/^Đang tải tệp (.*) lên trang$/, (m) => `Uploading ${m[1]} to the page`], [/^Đang đọc tệp (.*) vừa tải về$/, (m) => `Reading downloaded file ${m[1]}`],
   [/^Đang chặn quyền (.*) cho trang$/, (m) => `Blocking the ${m[1]} permission for the page`], [/^Đang cho trang quyền (.*)$/, (m) => `Granting the page the ${m[1]} permission`], [/^Đang chờ trang hiện “(.*)”$/, (m) => `Waiting for the page to show “${m[1]}”`], [/^Đang làm (\d*) ?thao tác trên trang$/, (m) => `Doing ${m[1]} actions on the page`.replace("  ", " ")], [/^Đang mở (\S+)$/, (m) => `Opening ${m[1]}`],
+  // Ảnh dựng nền về giữa lượt (chatengine.ts placeholderImage → imgbudget.ts settleBackground): nhãn không có chữ "Đang" ở đầu.
+  [/^(?:Đang )?Ảnh (.+) đã xong, đã thay vào artifact; không dựng được (.+)$/, (m) => `Image ${m[1]} is ready and now in the artifact; couldn't make ${m[2]}`],
+  [/^(?:Đang )?Ảnh (.+) đã xong, đã thay vào artifact$/, (m) => `Image ${m[1]} is ready and now in the artifact`],
+  [/^(?:Đang )?Không dựng được ảnh (.+), artifact vẫn giữ khung giữ chỗ$/, (m) => `Couldn't make image ${m[1]}; the artifact keeps the placeholder`],
   [/^Đang tạo ảnh bằng (.+), đã (\d+) giây$/, (m) => `Creating the image with ${m[1]}, ${m[2]} seconds so far`], [/^Đang tạo ảnh bằng (.+)$/, (m) => `Creating the image with ${m[1]}`], [/^Đang tạo ảnh: (.*)$/, (m) => `Creating an image: ${m[1]}`],
   [/^Chưa tạo được ảnh, không có ảnh nào được giao\. (.*)$/, () => "The image wasn't created, so nothing was delivered. See the details in the reply."],
   // Tóm tắt kết quả công cụ trong nhật ký làm việc: đã cắt ở 140 ký tự nên chỉ so phần đầu.

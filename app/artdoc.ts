@@ -123,16 +123,29 @@ const IMG_HOST = /^https?:\/\/(?:images\.unsplash\.com|plus\.unsplash\.com|uploa
 // Chỉ máy chủ đổi được địa chỉ này thành ảnh, và chỉ với đúng chủ tài khoản (artimg.ts); artifact không giữ đường dẫn hay dữ liệu riêng nào.
 export const genImageUrl = (id: string) => `https://image.synchro.invalid/${id}.png`;
 export const genImageId = (u: string) => /^https:\/\/image\.synchro\.invalid\/([\w-]{8,40})\.png$/.exec(u)?.[1] ?? null;
-/** Ảnh giữ chỗ của ảnh đang dựng ở chế độ nền (PNG 1×1, chatengine.ts placeholderImage): /api/artimg báo "đang chờ" để khung xem trước hỏi lại
- *  tới khi byte thật thay vào (W23-2). Ảnh dựng thật không bao giờ là 1×1. */
 /** Khoảng chờ trước lần hỏi lại thứ n ảnh đang dựng nền: 5 s, tăng dần tới 30 s; null là thôi (sau khoảng 17 phút, quá thời gian dựng ảnh). */
 export const pendingRetryMs = (n: number): number | null => (n >= 40 ? null : Math.min(30_000, Math.round(5000 * 1.4 ** n)));
+/** Ảnh giữ chỗ của ảnh đang dựng ở chế độ nền (PNG 1×1, chatengine.ts placeholderImage): /api/artimg báo "đang chờ" để khung xem trước hỏi lại
+ *  tới khi byte thật thay vào (W23-2). Ảnh dựng thật không bao giờ là 1×1. */
 export function isPlaceholderPng(b: Uint8Array): boolean {
   if (b.length < 24 || b.length > 512) return false;
   const sig = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
   if (!sig.every((x, k) => b[k] === x)) return false;
   const u32 = (o: number) => ((b[o] << 24) | (b[o + 1] << 16) | (b[o + 2] << 8) | b[o + 3]) >>> 0;
   return u32(16) === 1 && u32(20) === 1; // IHDR: rộng, cao
+}
+/** Sự kiện trên window khi một ảnh dựng nền vừa xong / vừa hỏng (detail: { id, ok }): trang chat báo người dùng một dòng (W23-2, G4.2). */
+export const GEN_IMG_EVENT = "synchro:genimg";
+const genSeenPending = new Set<string>(), genTold = new Set<string>();
+/** Khung xem trước / thẻ ảnh vừa thấy ảnh giữ chỗ "đang chờ" của ảnh id. */
+export const noteGenPending = (id: string) => { genSeenPending.add(id); };
+/** Ảnh id không còn là ảnh giữ chỗ (ok) hoặc máy chủ báo dựng hỏng (!ok). Chỉ báo khi trong phiên này đã thấy ảnh đang chờ (mở đoạn chat cũ thì im),
+ *  và mỗi ảnh một lần dù nhiều khung cùng thấy. Trả về true khi đã phát sự kiện. */
+export function noteGenSettled(id: string, ok: boolean): boolean {
+  if (!genSeenPending.has(id) || genTold.has(id)) return false;
+  genTold.add(id);
+  if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent(GEN_IMG_EVENT, { detail: { id, ok } }));
+  return true;
 }
 export function externalImageUrls(content: string, max = 60): string[] {
   const out = new Set<string>();
