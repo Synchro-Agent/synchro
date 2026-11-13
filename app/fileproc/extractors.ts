@@ -105,19 +105,24 @@ function byteWords(head: Buffer): Array<[number, number]> {
   return out;
 }
 
-/** Chữ Kirin / Hy Lạp / Do Thái / Thái viết cả từ bằng byte cao: ≥30% từ có byte cao chứa ≥3 byte cao liền nhau hoặc toàn byte cao ("Да", "Ναι").
+/** Chữ Kirin / Hy Lạp / Do Thái / Thái viết cả từ bằng byte cao: ≥30% từ có byte cao chứa ≥3 byte cao liền nhau hoặc toàn byte cao ("Да", "Ναι"),
+ * hoặc mọi từ có byte cao là từ một chữ với ≥3 chữ khác nhau ("В и с к у").
  * Tiếng Tây Âu chỉ có chữ có dấu lác đác, gần như không bao giờ 3 chữ có dấu liền nhau ("Café crème", "può", "Jérôme" không phải tiếng Hy Lạp / Nga).
  * Không xét tỉ lệ byte cao trên cả tệp: tiếng Nga lẫn nhiều chữ ASCII (nhật ký, mã lỗi) vẫn là tiếng Nga. */
 function looksNonLatin(buf: Buffer): boolean {
   const head = buf.subarray(0, 65_536);
-  let hiWords = 0, runs = 0;
+  let hiWords = 0, runs = 0, singles = 0;
+  const singleBytes = new Set<number>();
   for (const [s, e] of byteWords(head)) {
     let run = 0, best = 0;
     for (let i = s; i < e; i++) { run = head[i] >= 0x80 ? run + 1 : 0; best = Math.max(best, run); }
     if (best) hiWords++;
     if (best >= 3 || (best === e - s && best >= 2)) runs++;
+    if (e - s === 1 && best === 1) { singles++; singleBytes.add(head[s]); }
   }
-  return runs > 0 && runs / hiWords >= 0.3;
+  if (runs > 0 && runs / hiWords >= 0.3) return true;
+  // Toàn từ một chữ byte cao, ≥3 chữ khác nhau ("В и с к у"): tiếng Tây Âu chỉ có vài từ một chữ có dấu (à, è, é, ó) và luôn kèm từ dài có dấu.
+  return hiWords >= 3 && singles === hiWords && singleBytes.size >= 3;
 }
 
 // Byte mà cp1258 đọc khác cp1252 theo kiểu riêng của tiếng Việt: Ă ă Đ đ Ơ ơ Ư ư ₫ và 5 dấu thanh dạng tổ hợp (huyền, sắc, ngã, hỏi, nặng).
@@ -128,41 +133,58 @@ const VN_SYLLABLE = new RegExp(
   "(?:uyê|oă|oa|oe|uâ|uê|uy|iê|yê|uô|ươ|oo|a|ă|â|e|ê|i|o|ô|ơ|u|ư|y)(?:ch|ng|nh|c|m|n|p|t)" +
   "|uya|uyu|uây|uôi|ươi|ươu|iêu|yêu|oai|oay|oeo|ai|ao|au|ay|âu|ây|eo|êu|ia|iu|oa|oe|oi|ôi|ơi|ua|uê|ui|uơ|uy|ưa|ưi|ưu|a|e|ê|i|o|ô|ơ|u|ư|y)$",
 );
-const isVnSyllable = (w: string) => VN_SYLLABLE.test(w.normalize("NFD").replace(/[̣̀́̃̉]/g, "").normalize("NFC"));
+/** Âm tiết hợp lệ: đúng luật vần, và có nhiều nhất một dấu thanh, nằm trên nguyên âm ("Toṭ" = "Totò" tiếng Ý đọc theo 1258 có dấu nặng dưới chữ t: không phải). */
+const isVnSyllable = (w: string) => {
+  let base = "", tones = 0;
+  for (const ch of w.normalize("NFD")) {
+    if (/[\u0300\u0301\u0303\u0309\u0323]/.test(ch)) { if (!/[aeiouy]/.test(base) || ++tones > 1) return false; }
+    else if (!/\p{M}/u.test(ch)) base = ch;
+  }
+  return VN_SYLLABLE.test(w.normalize("NFD").replace(/[\u0300\u0301\u0303\u0309\u0323]/g, "").normalize("NFC"));
+};
 /** Từ viết tắt viết hoa có Đ (HĐ, SĐT, ĐT, ĐH, VNĐ, NĐ) và "đ" (đồng) đứng riêng: không phải âm tiết nhưng là chữ tiếng Việt thường gặp trong hoá đơn, địa chỉ. */
 const isVnAbbrev = (w: string) => w === "đ" || (/^\p{Lu}{1,6}$/u.test(w) && w.includes("Đ"));
 
-/** Từ chức năng / âm tiết rất thường gặp của tiếng Việt (chữ thường, NFC). Chỉ từ mà cp1252 đọc khác (có byte riêng của 1258) mới là bằng chứng bảng mã:
- * từ nào trong đây cũng cần ă / đ / ơ / ư hay dấu thanh tổ hợp, mà văn bản Ý / Bồ / Iceland / Thổ mã cp1252 đọc theo 1258 chỉ ra "pụ", "cị", "coś", "năo", "ađ", "mư",
- * không bao giờ ra các từ này. */
+/** Từ / âm tiết rất thường gặp của tiếng Việt (chữ thường, NFC). Nhiều từ trong đây cp1258 ghi bằng đúng byte của cp1252 (giá, cho, khách, có, là), nên
+ * từ điển chỉ là bằng chứng ngôn ngữ; bằng chứng bảng mã nằm ở (b): có âm tiết hợp lệ chứa byte riêng của 1258 (phòng = "pho" + dấu huyền tổ hợp, đâu, mới). */
 const VN_LEXICON = new Set((
   "của và là được không có người những này cho với các một đã trong để khi thì đến từ theo về năm ngày số đơn vị công ty tiếng việt " +
   "cũng nhưng như mà nên sẽ đang phải làm lại rồi nhiều nhất đi bị gì ở ra vào sau trước hơn đây đó nào bạn tôi chúng họ mình " +
   "hàng tiền giá mã tên địa chỉ điện thoại thành phố phường quận huyện tỉnh đường hóa hoá thuế tổng cộng khách sản phẩm học thể cần " +
-  "nước nam nội xin cảm ơn chào tháng giờ thị văn bản trường đại hội kết nối lỗi dữ liệu tệp tin thông báo chậm"
+  "nước nam nội xin cảm ơn chào tháng giờ thị văn bản trường đại hội kết nối lỗi dữ liệu tệp tin thông báo chậm " +
+  "mới đồng phở bò bún chả cà phê sữa đá trà sao đâu nhân viên phòng kinh doanh sách danh giao thứ bảy mạnh tăng hỏi bán căn hộ bao nhiêu " +
+  "anh chị chi phí lợi nhuận thu đạt việc rất tốt hoàn ăn uống nhà mua hôm nay mai tuần hết còn đủ vui lòng gửi nhận"
 ).split(" "));
+/** Đúng luật âm tiết nhưng không phải từ tiếng Việt: là "ciò" / "può" tiếng Ý (ò = 0xF2 = dấu nặng tổ hợp trong 1258) đọc theo 1258. */
+const NOT_VN = new Set(["cị", "pụ"]);
+/** Từ trong VN_LEXICON cũng là từ thường gặp của tiếng Tây Âu (Pháp / Ý "là", Ý "chi", Catalan "mà", tên "Theo"…): không tính là bằng chứng. */
+const VN_LEX_AMBIG = new Set(["là", "mà", "ra", "nam", "tin", "theo", "chi", "sao", "bao", "anh", "mai", "nay", "sau", "do"]);
 
 /** Bằng chứng tích cực mạnh rằng tệp là tiếng Việt mã Windows-1258 (đọc theo 1258 rồi ghép NFC):
- * (a) ≥2 lần xuất hiện từ trong VN_LEXICON, trong đó ≥1 từ có byte riêng của 1258 (jschardet đã nói cp1258 thì 1 từ như thế là đủ);
- * (b) trong các từ có byte ≥0x80, ≥70% là âm tiết tiếng Việt hợp lệ (hay viết tắt có Đ). Từ thuần ASCII (ERROR, TP, HCM, email, mã SP001) không tính.
- * Văn bản Tây Âu không có byte riêng của 1258 thì cp1252 và 1258 đọc như nhau, không cần xét. */
+ * (a) jschardet đã nói cp1258 (bản gốc tin thẳng nhãn này, nên chỉ cần (b): "bắp.", "Không sao đâu." vẫn đọc đúng như bản gốc), hoặc ≥2 lần xuất hiện
+ *     từ trong VN_LEXICON; từ không có byte riêng cũng tính ("giá cho khách hàng"), trừ các từ nhập nhằng với tiếng Tây Âu (VN_LEX_AMBIG);
+ * (b) trong các từ có byte ≥0x80, ≥70% là âm tiết tiếng Việt hợp lệ (hay viết tắt có Đ), và ≥1 âm tiết hợp lệ có byte riêng của 1258 (ă / đ / ơ / ư / ₫
+ *     hay dấu thanh tổ hợp): đó là chỗ cp1252 đọc khác, nên cũng là bằng chứng bảng mã. Từ thuần ASCII (ERROR, TP, HCM, email, mã SP001) không tính.
+ * Văn bản Tây Âu không có byte riêng của 1258 thì cp1252 và 1258 đọc như nhau, không cần xét. Tiếng Ý / Bồ / Iceland / Thổ không có 2 từ trong VN_LEXICON,
+ * và đọc theo 1258 phần lớn ra "năo", "ađ", "kưz" (không phải âm tiết). Riêng "ciò / può" ra "cị / pụ": đúng luật âm tiết
+ * nhưng không phải từ tiếng Việt (NOT_VN), nên không tính. */
 export function looksVietnamese1258(buf: Buffer, detSays1258 = false): boolean {
   const head = buf.subarray(0, 65_536);
   if (!head.some((c) => VN_1258_BYTES.has(c))) return false;
   // Không ghép NFC ở bước tách từ: cp1258 một byte = một ký tự, nên vị trí trong chuỗi trùng vị trí byte.
   const raw = new TextDecoder("windows-1258").decode(head);
   if (raw.length !== head.length) return false;
-  let hiWords = 0, hiValid = 0, lex = 0, lexOwn = 0;
+  let hiWords = 0, hiValid = 0, ownValid = 0, lex = 0;
   for (const m of raw.matchAll(/[\p{L}\p{M}]+/gu)) {
     const bytes = head.subarray(m.index, m.index + m[0].length);
     const word = m[0].normalize("NFC"), w = word.toLowerCase();
-    if (VN_LEXICON.has(w)) { lex++; if (bytes.some((c) => VN_1258_BYTES.has(c))) lexOwn++; }
+    if (VN_LEXICON.has(w) && !VN_LEX_AMBIG.has(w)) lex++;
     if (!bytes.some((c) => c >= 0x80)) continue;
     hiWords++;
-    if (isVnSyllable(w) || isVnAbbrev(word) || isVnAbbrev(w)) hiValid++;
+    if ((isVnSyllable(w) && !NOT_VN.has(w)) || isVnAbbrev(word) || isVnAbbrev(w)) { hiValid++; if (bytes.some((c) => VN_1258_BYTES.has(c))) ownValid++; }
   }
-  if (lexOwn < 1 || (lex < 2 && !detSays1258)) return false;
-  return hiWords > 0 && hiValid / hiWords >= 0.7;
+  if (ownValid < 1 || (!detSays1258 && lex < 2)) return false;
+  return hiValid / hiWords >= 0.7;
 }
 
 // ---- 1. Ảnh: gửi thẳng, KHÔNG OCR; tự xoay theo EXIF (ảnh dọc chụp điện thoại lên đúng chiều), resize nếu cạnh dài > 1568px, HEIC/GIF → PNG ----

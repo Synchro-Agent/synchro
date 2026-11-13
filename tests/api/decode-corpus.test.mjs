@@ -146,11 +146,31 @@ const tGot = E.decodeText(table);
 ok(tGot !== new TextDecoder("utf-16le").decode(table) && tGot.length === table.length, "bảng 16-bit nhị phân: không giải như UTF-16 (mỗi byte một ký tự)", `${tGot.length} ký tự`);
 
 console.log("8. Bằng chứng Windows-1258: văn bản Tây Âu không bao giờ đủ (a)");
-for (const s of ["Ciò detto, può andare. Può anche restare.", "Il est là. Je suis là. Et toi, tu es là?", "Lunedì andrò là, e là resto.", "Não sei, mãe. São Paulo não pára.", "Það er gott að vera hér, þú ert með."])
-  ok(E.looksVietnamese1258(enc["windows-1252"](s), true) === false, `không phải 1258 kể cả khi jschardet nói cp1258: ${s}`);
+const west = ["Ciò detto, può andare. Può anche restare.", "Il est là. Je suis là. Et toi, tu es là?", "Chi può dirlo? Ciò è un mistero.", "Totò, Totò, così è.", "Lunedì andrò là, e là resto.", "Não sei, mãe. São Paulo não pára.", "Það er gott að vera hér, þú ert með."];
+for (const s of west) ok(E.looksVietnamese1258(enc["windows-1252"](s), false) === false, `không phải 1258 khi jschardet không nói cp1258: ${s}`);
+// Khi jschardet nói cp1258 (bản gốc tin thẳng nhãn đó), chỉ cần âm tiết hợp lệ có byte riêng: "Ciò / può" đọc theo 1258 ra "Cị / pụ" không được tính,
+// "Totò" ra "Toṭ" (dấu nặng dưới phụ âm) không phải âm tiết.
+for (const s of west) ok(E.looksVietnamese1258(enc["windows-1252"](s), true) === false, `không phải 1258 kể cả khi jschardet nói cp1258: ${s}`);
 ok(E.looksVietnamese1258(enc["windows-1254"]("Kapı açık mı? Bu kız çok akıllı."), true) === false, "tiếng Thổ (ı → ư, ğ → đ) không phải 1258");
 ok(E.normLabel("CP932") === "shift_jis" && E.normLabel("CP949") === "euc-kr" && E.normLabel("ISO8859-7") === "iso-8859-7" && E.normLabel("cp1258") === "windows-1258" && E.normLabel("MacRoman") === "macroman",
   "chuẩn hoá nhãn jschardet (CP932 → shift_jis, CP949 → euc-kr, iso8859-N → iso-8859-N, cpNNNN → windows-NNNN; MacRoman để nguyên như bản gốc)");
+
+console.log("9. Không làm hỏng so với bản gốc: jschardet nói cp1258, từ thường gặp không có byte riêng (giá, cho, khách, hàng, là, phòng…)");
+// Byte chính xác (Windows ghi chữ thiếu trong bảng bằng chữ gốc + dấu thanh tổ hợp: "mới" = m ơ ◌́ i). Bản gốc tin nhãn cp1258 và đọc đúng các mẫu này.
+sample("vé cho khách hàng mới", hex("4769e12076e92063686f206b68e163682068e06e67206df5ec69206ce0203130302e30303020f0f4cc6e672e"), "Giá vé cho khách hàng mới là 100.000 đồng.", "windows-1258");
+sample("ký hiệu ₫", hex("4769e13a203135302e303030fe202f207468e16e672c20676961d26d203230252063686f206b68e163682068e06e67206df5ec692e"), "Giá: 150.000₫ / tháng, giảm 20% cho khách hàng mới.", "windows-1258");
+sample("giao hàng thứ bảy", hex("4769616f2068e06e672063686f206b68e163682076e06f207468fdec206261d2792e"), "Giao hàng cho khách vào thứ bảy.", "windows-1258");
+sample("giá hàng hóa tăng", hex("4769e12068e06e672068f3612074e36e67206d61f26e682074726f6e67207468e16e67206ee0792e"), "Giá hàng hóa tăng mạnh trong tháng này.", "windows-1258");
+sample("hỏi giá căn hộ", hex("4368e06f20616e682c2063686f20656d20686fd269206769e12062e16e2063e36e2068f4f2206ee079206ce02062616f206e6869ea752061f23f"), "Chào anh, cho em hỏi giá bán căn hộ này là bao nhiêu ạ?", "windows-1258");
+sample("Không sao đâu.", hex("4b68f46e672073616f20f0e2752e"), "Không sao đâu.", "windows-1258");
+sample("danh sách phòng", hex("44616e682073e16368206e68e26e207669ea6e2070686fcc6e67206b696e6820646f616e68"), "Danh sách nhân viên phòng kinh doanh", "windows-1258");
+round("windows-1258", "thực đơn nhiều dòng", "Phở bò 50.000\nBún chả 45.000\nCà phê sữa đá 25.000\nTrà đá 5.000");
+round("windows-1258", "lẫn tiếng Anh", "Báo cáo doanh thu Q3: revenue tăng 15%, profit margin đạt 20%, team Marketing làm việc rất tốt, KPI hoàn thành.");
+round("windows-1258", "CSV số liệu", "Tháng,Doanh thu,Chi phí,Lợi nhuận\n1,1200,800,400\n2,1350,900,450\n3,1500,950,550\n");
+round("windows-1258", "một từ: bắp", "bắp.");
+round("windows-1258", "một từ: đất", "đất.");
+round("windows-1258", "vài từ rời", "OK chiều trắng sáng sĩ.");
+sample("Nga: các chữ một ký tự (Windows-1251)", hex("c220e820f120ea20f3"), "В и с к у", "windows-1251");
 
 console.log(`\n${pass} đạt, ${fail} hỏng`);
 process.exit(fail ? 1 : 0);
