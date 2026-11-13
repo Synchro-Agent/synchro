@@ -16,6 +16,7 @@ bg_log() { echo "[xanh/lam] $*" >&2; }
 bg_port_of() { case "$1" in blue) echo 3000 ;; green) echo 3002 ;; *) return 1 ;; esac; }
 bg_other() { case "$1" in blue) echo green ;; green) echo blue ;; *) return 1 ;; esac; }
 bg_pm2_name() { echo "synchro-$1"; }
+bg_color_of_port() { case "$1" in 3000) echo blue ;; 3002) echo green ;; *) return 1 ;; esac; }
 
 # Màu đang sống ("" nếu chưa chuyển sang xanh/lam). bg_live_app: thư mục app ghi kèm (để staging không nhầm là đã chuyển).
 bg_live_color() { [ -f "$BG_LIVE_FILE" ] && awk 'NR==1{print $1}' "$BG_LIVE_FILE" || true; }
@@ -43,7 +44,13 @@ bg_start() { # bg_start <app> <màu>: bật (hoặc bật lại) màu theo ecosy
   bg_pm2 startOrRestart "$1/ecosystem.config.cjs" --only "$(bg_pm2_name "$2")" --update-env
 }
 # pm2 stop gửi SIGTERM rồi chờ tiến trình thoát (tối đa kill_timeout 30 giây): bản cũ chạy nốt lượt đang dở (app/drain.ts).
-bg_stop() { bg_pm2 stop "$(bg_pm2_name "$1")" >/dev/null 2>&1 || true; }
+# Không bao giờ dừng màu mà nginx đang trỏ tới (tệp upstream là nguồn sự thật): trả mã lỗi, người gọi quyết định.
+bg_stop() {
+  if [ "$(bg_port_of "$1")" = "$(bg_upstream_port)" ] && [ "${BG_STOP_FORCE:-}" != 1 ]; then
+    bg_log "không dừng $1: nginx đang trỏ cổng $(bg_port_of "$1") của nó"; return 1
+  fi
+  bg_pm2 stop "$(bg_pm2_name "$1")" >/dev/null 2>&1 || true
+}
 
 # Đạt khi: /api/health ở đúng cổng báo đúng bản $2 (không phải tiến trình cũ còn sót), ghi được cơ sở dữ liệu và trang chủ không lỗi.
 # Không xét mã 503 của /api/health: đĩa gần đầy hay dịch vụ workspace tắt không phải lỗi của bản mới.
@@ -70,6 +77,16 @@ bg_via_nginx() { # bg_via_nginx <mã bản>
   return 1
 }
 
+# Màu sống phải khớp cổng nginx đang trỏ (deploy trước chết giữa lúc đổi nginx và lúc ghi màu: SIGKILL, mất ssh). Upstream là nguồn sự thật:
+# sửa tệp màu sống theo nó. Tiến trình của màu đó nhận vai primary khi màu cũ thoát (app/role.ts).
+bg_sync_live() { # bg_sync_live <app>
+  local up c
+  up=$(bg_upstream_port); c=$(bg_color_of_port "$up") || return 0
+  [ "$(bg_live_color)" = "$c" ] && [ "$(bg_live_app)" = "$1" ] && return 0
+  [ -n "$(bg_live_color)" ] || return 0
+  bg_log "tệp màu sống ghi $(bg_live_color) nhưng nginx trỏ cổng $up: ghi lại màu sống = $c"
+  bg_write_live "$c" "$up" "$1"
+}
 bg_upstream_port() { [ -f "$BG_UPSTREAM" ] && sed -n 's/.*127\.0\.0\.1:\([0-9]*\).*/\1/p' "$BG_UPSTREAM" | head -1 || true; }
 # Trỏ nginx sang cổng mới: ghi tệp include nguyên tử, nginx -t, reload (nginx giữ kết nối đang mở tới bản cũ tới khi xong).
 # nginx -t hay reload lỗi: trả tệp cũ về (hoặc xóa nếu trước đó chưa có), reload lại cấu hình cũ, trả mã lỗi; không chuyển gì cả.

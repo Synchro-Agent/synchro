@@ -29,15 +29,21 @@ if command -v flock >/dev/null 2>&1; then
   exec 9>/run/synchro-deploy.lock
   flock -w 900 9 || { echo "Đang có lần deploy khác chạy quá lâu." >&2; exit 1; }
 fi
-# Màu đang sống đọc sau khi đã giữ khóa: lần deploy trước (vừa xong) có thể vừa đổi màu.
+# Màu đang sống đọc sau khi đã giữ khóa: lần deploy trước (vừa xong) có thể vừa đổi màu. Cổng nginx đang trỏ là nguồn sự thật
+# (lần trước có thể chết giữa lúc đổi nginx và lúc ghi màu sống): sửa tệp màu sống theo nó trước khi chọn màu nghỉ.
 if [ "$BG" = 1 ]; then
+  bg_sync_live "$APP"
   LIVE=$(bg_live_color)
   case "$LIVE" in blue|green) ;; *) echo "Tệp màu sống $BG_LIVE_FILE không hợp lệ ('$LIVE'): chạy scripts/bluegreen-migrate.sh trước." >&2; exit 1 ;; esac
   NEW=$(bg_other "$LIVE"); OLDPORT=$(bg_port_of "$LIVE"); NEWPORT=$(bg_port_of "$NEW")
   OLDDIST="$APP/.next-$LIVE"; NEWDIST="$APP/.next-$NEW"
 fi
 B=$(mktemp -d "$SIDE/.build-$NAME.XXXXXX")
-trap 'rm -rf "$B"' EXIT
+# Thoát vì bất cứ lý do gì (lỗi, Ctrl-C, mất ssh): dọn thư mục build; xanh/lam thì ghi màu sống theo cổng nginx đang trỏ, để watchdog và
+# lần deploy sau không nhầm màu. SIGKILL không chạy được trap: lần deploy sau tự sửa (bg_sync_live ở trên).
+cleanup() { rm -rf "$B"; if [ "$BG" = 1 ]; then bg_sync_live "$APP" || true; fi; }
+trap cleanup EXIT
+trap 'exit 129' HUP; trap 'exit 130' INT; trap 'exit 143' TERM
 # Mã do root chạy (scripts/, workspace/: sao lưu, cài đặt, deploy) chỉ root ghi được, kể cả thư mục app (ai sở hữu thư mục cha đổi tên được thư mục con).
 # Nhờ vậy chiếm được web user (lỗi trong bộ đọc tệp chẳng hạn) không leo được lên root qua cron hay lần deploy sau. Web user vẫn ghi được data/, .cache/, .next*/, node_modules/.
 harden() {
@@ -138,9 +144,11 @@ if [ "$BG" = 1 ]; then
   # ---------------- Xanh/lam ----------------
   NEWPM2=$(bg_pm2_name "$NEW"); OLDPM2=$(bg_pm2_name "$LIVE")
   echo "Bản đang chạy: $LIVE (cổng $OLDPORT, $OLDID). Bản mới: $NEW (cổng $NEWPORT, $NEWID)."
-  [ "$(bg_upstream_port)" = "$OLDPORT" ] || echo "CẢNH BÁO: nginx đang trỏ cổng $(bg_upstream_port), tệp màu ghi $LIVE ($OLDPORT)." >&2
-  # Màu nghỉ có thể còn chạy (lần trước dừng dở): dừng trước khi thay thư mục build của nó. Không phải màu đang sống nên không ảnh hưởng ai.
-  bg_stop "$NEW"
+  if [ -n "$(bg_upstream_port)" ] && [ "$(bg_upstream_port)" != "$OLDPORT" ]; then
+    echo "nginx đang trỏ cổng $(bg_upstream_port), không phải màu sống $LIVE ($OLDPORT): dừng, cần xem tay." >&2; exit 1
+  fi
+  # Màu nghỉ có thể còn chạy (lần trước dừng dở): dừng trước khi thay thư mục build của nó. Không phải màu nginx đang trỏ nên không ảnh hưởng ai.
+  bg_stop "$NEW" || { echo "Không dừng được màu nghỉ $NEW (nginx đang trỏ vào nó?): dừng deploy." >&2; exit 1; }
   rm -rf "$NEWDIST.old"; [ -d "$NEWDIST" ] && mv "$NEWDIST" "$NEWDIST.old"
   mv "$B/.next" "$NEWDIST"; rm -rf "$NEWDIST.old"
   chown -R synchro:synchro "$NEWDIST"
@@ -152,7 +160,7 @@ if [ "$BG" = 1 ]; then
   fail() { # fail <lý do>: dừng bản mới, nginx vẫn ở bản cũ; trả thư viện, public/db về như trước.
     echo "BẢN MỚI KHÔNG ĐẠT ($1): giữ nguyên bản $LIVE ($OLDID), web không bị gián đoạn." >&2
     bg_pm2 logs "$NEWPM2" --nostream --lines 40 >&2 || true
-    bg_stop "$NEW"
+    bg_stop "$NEW" || true
     [ -n "$PREVMODS" ] && [ "$PREVMODS" != "$MODS" ] && bg_link_modules "$APP" "$PREVMODS"
     restore_good
     rm -rf "$SIDE/.synchro-failed-$NAME"; mkdir -p "$SIDE/.synchro-failed-$NAME"; cp -a "$NEWDIST/BUILD_ID" "$SIDE/.synchro-failed-$NAME/" 2>/dev/null || true
@@ -169,7 +177,7 @@ if [ "$BG" = 1 ]; then
   # Từ đây người dùng đã ở bản mới. Ghi màu sống trước khi dừng bản cũ: bản mới nhận vai primary ngay khi bản cũ thoát (app/role.ts).
   bg_write_live "$NEW" "$NEWPORT" "$APP"
   echo "Dừng bản cũ $OLDPM2 (chạy nốt lượt đang dở, tối đa 25 giây)…"
-  bg_stop "$LIVE"
+  bg_stop "$LIVE" || echo "CẢNH BÁO: không dừng bản cũ $OLDPM2 (nginx vẫn trỏ vào nó?)." >&2
   bg_pm2 save >/dev/null 2>&1 || true
   # Giữ: thư viện bản mới, và của bản vừa dừng (trả lại bằng tay được, docs/van-hanh.md).
   bg_prune_modules "$SIDE" "$MODS" "${PREVMODS:-$MODS}"

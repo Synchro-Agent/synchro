@@ -10,9 +10,12 @@ OPS_DIR="${OPS_DIR:-/var/lib/synchro-ops}"; PORT="${PORT:-3001}"; PM2="${PM2:-sy
 LOCK="${DEPLOY_LOCK:-/run/synchro-deploy.lock}"
 # Deploy xanh/lam (scripts/bluegreen-migrate.sh): theo dõi và khởi động lại đúng màu đang nhận lưu lượng ("<màu> <cổng> <app>", do deploy ghi),
 # không theo PORT/PM2 cố định. Khởi động lại không kèm --update-env: giữ môi trường của ecosystem.config.cjs (cổng, thư mục build, vai trò).
-LIVE_FILE="${LIVE_FILE:-$OPS_DIR/live-color}"
+# Cổng nginx đang trỏ (tệp upstream) là nguồn sự thật nếu khác tệp màu sống (deploy chết giữa chừng).
+LIVE_FILE="${LIVE_FILE:-$OPS_DIR/live-color}"; UPSTREAM_FILE="${UPSTREAM_FILE:-/etc/nginx/snippets/synchro-upstream.conf}"
 if [ -z "${WATCHDOG_RESTART_CMD:-}" ] && [ -f "$LIVE_FILE" ]; then
   read -r LCOLOR LPORT _ < "$LIVE_FILE" || true
+  UPORT=$(sed -n 's/.*127\.0\.0\.1:\([0-9]*\).*/\1/p' "$UPSTREAM_FILE" 2>/dev/null | head -1)
+  case "$UPORT" in 3000) LCOLOR=blue; LPORT=3000 ;; 3002) LCOLOR=green; LPORT=3002 ;; esac
   case "$LCOLOR:$LPORT" in
     blue:3000|green:3002) PORT="$LPORT"; PM2="synchro-$LCOLOR"; WATCHDOG_RESTART_CMD="su - $WEB_USER -c 'pm2 restart $PM2'" ;;
   esac

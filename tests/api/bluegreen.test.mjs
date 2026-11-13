@@ -168,6 +168,22 @@ const calls = () => { const s = fs.existsSync(log) ? fs.readFileSync(log, "utf8"
   ok(c.includes("pm2 startOrRestart /var/www/synchro/ecosystem.config.cjs --only synchro-green --update-env") && c.includes("pm2 stop synchro-blue"), "bật màu mới từ ecosystem, dừng màu cũ bằng pm2 stop (SIGTERM, chờ kill_timeout)", c);
 }
 {
+  // DEPLOY-1: deploy trước chết sau khi đổi nginx, trước khi ghi màu sống. Upstream là nguồn sự thật; không bao giờ dừng màu nginx đang trỏ.
+  fs.mkdirSync(path.dirname(up), { recursive: true });
+  fs.writeFileSync(up, "proxy_pass http://127.0.0.1:3000;\n");
+  fs.writeFileSync(path.join(tmp, "live-color"), "green 3002 /var/www/synchro\n");
+  calls();
+  let r = sh("bg_stop blue; echo rc=$?");
+  ok(/rc=1/.test(r.out) && !calls().includes("pm2 stop synchro-blue"), "DEPLOY-1: không dừng màu nginx đang trỏ (blue 3000)", r);
+  r = sh("bg_sync_live /var/www/synchro; bg_live_color");
+  ok(r.out === "blue" && fs.readFileSync(path.join(tmp, "live-color"), "utf8") === "blue 3000 /var/www/synchro\n", "DEPLOY-1: tệp màu sống được sửa theo cổng nginx", r);
+  r = sh("bg_stop green; echo rc=$?");
+  ok(/rc=0/.test(r.out) && calls().includes("pm2 stop synchro-green"), "DEPLOY-1: màu nghỉ thì dừng được", r);
+  const sb = fs.readFileSync(path.join(process.cwd(), "scripts", "server-build.sh"), "utf8");
+  ok(sb.indexOf('bg_sync_live "$APP"') > sb.indexOf("flock -w 900 9") && /trap cleanup EXIT/.test(sb) && /trap 'exit 129' HUP/.test(sb), "DEPLOY-1: server-build sửa màu sống sau khi giữ khóa, trap khi thoát / mất ssh");
+  fs.rmSync(up);
+}
+{
   const side = path.join(tmp, "www"), app = path.join(side, "synchro");
   fs.mkdirSync(path.join(app, "node_modules", "next"), { recursive: true });
   fs.writeFileSync(path.join(app, "node_modules", ".synchro-lock"), "aaa\n");
