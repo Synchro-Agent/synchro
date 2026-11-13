@@ -29,20 +29,21 @@ export function decodeText(buf: Buffer): string {
   if (u16) return new TextDecoder(u16).decode(buf).replace(/^\uFEFF/, "");
   const utf8 = new TextDecoder("utf-8", { fatal: true });
   try { return utf8.decode(buf).replace(/^\uFEFF/, ""); } catch { /* không phải UTF-8 */ }
-  const det = (jschardet.detect(buf.toString("binary")).encoding || "").toLowerCase();
+  const det = normLabel(jschardet.detect(buf.toString("binary")).encoding || "");
   // Gần như UTF-8 (cụt ký tự cuối, lẫn một byte lạ): giải UTF-8 không fatal, chỉ byte hỏng thành U+FFFD, thay vì đọc cả tệp theo cp1252 ra "Tiáº¿ng".
   const loose = looseUtf8(buf, det.startsWith("utf-8"));
   if (loose !== null) return loose;
   // Mã một byte KHÔNG bao giờ ném lỗi (mọi byte đều có ký tự), nên thứ tự thử là tất cả: thử sai là ra chữ hỏng (São → Săo).
   // - Mã nhiều byte (Nhật/Trung/Hàn…): tin jschardet, sai thì TextDecoder fatal ném và lùi tiếp.
   // - Windows-1258 (tiếng Việt) chỉ khi có bằng chứng rõ là tiếng Việt (jschardet hay đoán tiếng Việt ngắn thành Hy Lạp).
-  // - Mã chữ không phải Latinh (Nga, Hy Lạp, Do Thái, Thái): chỉ tin khi phần lớn chữ là byte cao — jschardet hay gán nhầm tiếng Ý thành Windows-1253.
-  // - Còn lại là cp1252 (Tây Âu), kể cả khi jschardet đoán "cp1258".
+  // - Mã chữ không phải Latinh (Nga, Hy Lạp, Do Thái, Thái): chỉ tin khi chữ thật sự viết bằng byte cao (cả từ liền nhau) — jschardet hay gán nhầm "Café crème" thành Windows-1253.
+  // - Mã Latinh một byte khác (Windows-1250 Séc/Ba Lan/Hung, iso-8859-2/4/15, Mac…): chỉ tin khi có bằng chứng ngôn ngữ — jschardet hay gán nhầm tiếng Pháp/Tây Ban Nha/Ý ngắn (Hélène → Hélčne).
+  // - Còn lại là cp1252 (Tây Âu).
   const tries: string[] = [];
   if (det && MULTI_BYTE.test(det)) tries.push(det);
   else if (looksVietnamese1258(buf)) tries.push("windows-1258");
-  else if (det && NON_LATIN_1BYTE.test(det) && highByteShare(buf) >= 0.3) tries.push(det);
-  else if (det && !WESTERN.test(det) && !NON_LATIN_1BYTE.test(det) && !det.includes("1258")) tries.push(det); // vd. Windows-1250 (Séc, Ba Lan)
+  else if (det && NON_LATIN_1BYTE.test(det)) { if (looksNonLatin(buf)) tries.push(det); }
+  else if (det && !WESTERN.test(det) && !det.startsWith("utf") && !det.includes("1258") && latinGuessBeats1252(buf, det)) tries.push(det);
   tries.push("windows-1252");
   for (const enc of tries) {
     // cp1258 ghi dấu thanh tách rời (ê + dấu sắc): ghép lại thành "ế" để tìm kiếm / so khớp chữ như văn bản UTF-8.
@@ -62,16 +63,87 @@ function looseUtf8(buf: Buffer, detSaysUtf8: boolean): string | null {
 
 // Không có "utf": UTF-8 fatal đã hỏng ở trên thì thử lại vẫn hỏng (gần như UTF-8 đã do looseUtf8 lo).
 const MULTI_BYTE = /^(shift_jis|euc-|gb|big5|iso-2022|hz)/;
-const NON_LATIN_1BYTE = /^(windows-125[1356]|koi8|iso-8859-[5678]|maccyrillic|x-mac-cyrillic|ibm8(55|66)|tis-620)/;
+const NON_LATIN_1BYTE = /^(windows-(125[1356]|874)|koi8|iso-8859-([5678]|11)|maccyrillic|x-mac-cyrillic|ibm8(55|66)|tis-620)/;
 const WESTERN = /^(ascii|windows-1252|iso-8859-1)$/;
+
+/** Tên bảng mã của jschardet về dạng chuẩn để so khớp (và để TextDecoder nhận): "ISO8859-7" → "iso-8859-7", "CP1250" → "windows-1250", "MacRoman" → "macintosh". */
+export const normLabel = (e: string) => e.toLowerCase().replace(/^iso[-_]?8859[-_]?(\d+)$/, "iso-8859-$1").replace(/^cp-?(125\d|874)$/, "windows-$1").replace(/^macroman$/, "macintosh");
+
+const isAsciiLetter = (c: number) => (c | 0x20) >= 0x61 && (c | 0x20) <= 0x7a;
+/** Các "từ" theo byte: dãy liền nhau gồm chữ ASCII và byte ≥0x80 (mã một byte: byte thứ i là ký tự thứ i). */
+function byteWords(head: Buffer): Array<[number, number]> {
+  const out: Array<[number, number]> = [];
+  for (let i = 0; i < head.length;) {
+    if (!(head[i] >= 0x80 || isAsciiLetter(head[i]))) { i++; continue; }
+    const s = i;
+    while (i < head.length && (head[i] >= 0x80 || isAsciiLetter(head[i]))) i++;
+    out.push([s, i]);
+  }
+  return out;
+}
 
 // Tỉ lệ byte ≥0x80 trong số byte "chữ" (chữ ASCII hoặc byte cao): văn bản chữ Kirin/Hy Lạp gần như toàn byte cao, văn bản chữ Latinh chỉ lác đác.
 function highByteShare(buf: Buffer): number {
   let hi = 0, letters = 0;
   for (const c of buf.subarray(0, 65_536)) {
-    if (c >= 0x80) { hi++; letters++; } else if ((c | 0x20) >= 0x61 && (c | 0x20) <= 0x7a) letters++;
+    if (c >= 0x80) { hi++; letters++; } else if (isAsciiLetter(c)) letters++;
   }
   return letters ? hi / letters : 0;
+}
+
+/** Chữ Kirin / Hy Lạp / Do Thái / Thái viết cả từ bằng byte cao: nhiều byte cao, và ≥30% từ có byte cao chứa ≥3 byte cao liền nhau.
+ * Tiếng Tây Âu chỉ có chữ có dấu lác đác, gần như không bao giờ 3 chữ có dấu liền nhau ("Café crème" không phải tiếng Hy Lạp). */
+function looksNonLatin(buf: Buffer): boolean {
+  if (highByteShare(buf) < 0.3) return false;
+  const head = buf.subarray(0, 65_536);
+  let hiWords = 0, runs = 0;
+  for (const [s, e] of byteWords(head)) {
+    let run = 0, best = 0;
+    for (let i = s; i < e; i++) { run = head[i] >= 0x80 ? run + 1 : 0; best = Math.max(best, run); }
+    if (best) hiWords++;
+    if (best >= 3) runs++;
+  }
+  return hiWords > 0 && runs / hiWords >= 0.3;
+}
+
+// Ký tự không phải chữ được phép ở đầu / cuối một từ ("¿Qué", "nº", "m²", "5€"), và ở giữa từ (l’église, l·l).
+const EDGE_OK = /[¿¡«»€£¥¢°ºª§©®™¹²³‘’‚“”„–—…·•†‡‰‹›]/;
+const INNER_OK = /[‘’·–—]/;
+/** Từ đọc ra trông hỏng ở bất kỳ ngôn ngữ nào: ký tự điều khiển C1 / U+FFFD, ký hiệu (³ ¹ ¼ ¤ ¨…) nằm giữa chữ, chữ thường liền ngay chữ hoa có dấu ("jaŸñ", "żQué"). */
+function oddWord(w: string): boolean {
+  if (/[\u0080-\u009f�]/.test(w)) return true;
+  for (let i = 0; i < w.length; i++) {
+    const c = w[i];
+    // Chữ thường rồi chữ hoa, một trong hai có dấu (camelCase ASCII như "iPhone" không tính).
+    if (i > 0 && (c > "\u007f" || w[i - 1] > "\u007f") && /\p{Ll}/u.test(w[i - 1]) && /\p{Lu}/u.test(c)) return true;
+    if (c.charCodeAt(0) < 0x80 || /[\p{L}\p{M}]/u.test(c)) continue;
+    if (i === 0 || i === w.length - 1 ? !EDGE_OK.test(c) : !INNER_OK.test(c)) return true;
+  }
+  return false;
+}
+/** Thêm các mẫu hiếm trong văn bản Tây Âu thật: ì/ò/ù đứng giữa từ (tiếng Ý chỉ có ở cuối: così, può), õ không đứng trước e (tiếng Bồ chỉ có -õe, -ões),
+ * ð/þ (chỉ tiếng Iceland, mà tệp Iceland jschardet đã đoán đúng cp1252). Đọc theo cp1252 mà ra các mẫu này thì nhiều khả năng là Séc ("Dìkuji") / Hung ("tûrõ") / Thổ. */
+const odd1252 = (w: string) => oddWord(w) || /[ìòùÌÒÙ](?=\p{L})|[õÕ](?![eE])|[ðþÐÞ]/u.test(w);
+
+/** Chỉ tin mã Latinh một byte khác cp1252 (Windows-1250, iso-8859-2/4/15, Mac…) khi có bằng chứng tích cực: so từng từ có byte đọc khác nhau,
+ * từ nào cp1252 đọc ra hỏng mà mã kia đọc ra lành là bằng chứng cho mã kia; từ nào cp1252 đọc ra lành ("Hélène", "Señora", "Forlì", "nº") là bằng chứng ngược.
+ * Cần ≥1 bằng chứng và ít nhất một nửa số bằng chứng ngược (văn bản Tây Âu thật gần như không có từ nào cp1252 đọc ra hỏng, còn Séc / Ba Lan / Baltic
+ * có nhiều chữ cp1252 đọc ra vẫn trông lành: ř → ø, ę → ê, ā → â). */
+function latinGuessBeats1252(buf: Buffer, det: string): boolean {
+  let other: TextDecoder;
+  try { other = new TextDecoder(det); } catch { return false; } // Node không có bảng mã này (MacTurkish…)
+  const head = buf.subarray(0, 65_536);
+  const a = other.decode(head), w = new TextDecoder("windows-1252").decode(head);
+  if (a.length !== head.length || w.length !== head.length) return false; // không phải mã một byte
+  let evidence = 0, contra = 0;
+  for (const [s, e] of byteWords(head)) {
+    const wa = a.slice(s, e), ww = w.slice(s, e);
+    if (wa === ww) continue;
+    const bad1252 = odd1252(ww);
+    if (bad1252 && !oddWord(wa)) evidence++;
+    else if (!bad1252) contra++;
+  }
+  return evidence > 0 && evidence * 2 >= contra;
 }
 
 // Byte mà cp1258 đọc khác cp1252 theo kiểu riêng của tiếng Việt: Ă ă Đ đ Ơ ơ Ư ư ₫ và 5 dấu thanh dạng tổ hợp (huyền, sắc, ngã, hỏi, nặng).

@@ -110,6 +110,32 @@ got = E.decodeText(Buffer.concat([Buffer.from("\uFEFFXin chào bạn, ", "utf8")
 ok(got === "Xin chào bạn, � hẹn gặp lại.", "UTF-8 ngắn có BOM + một byte lạ: BOM bị gỡ, chỉ byte lạ hỏng", got);
 dec(bytes("Ca", 0xc3, 0xa9, " cr", 0xe8, "me ", 0xe0, " la vanille, tr", 0xe8, "s bon"), "CaÃ© crème à la vanille, très bon", "cp1252 có một cặp byte trùng UTF-8 hợp lệ (Ã©) vẫn đọc theo cp1252");
 
+console.log("4c. Mã một byte Latinh khác cp1252 (C-3): chỉ tin jschardet khi có bằng chứng ngôn ngữ");
+// Bộ mã hoá một byte dựng từ bảng của TextDecoder (Node không có TextEncoder cho mã cũ).
+const sbEncoder = (enc) => {
+  const t = new Map(); const d = new TextDecoder(enc);
+  for (let b = 0x80; b < 256; b++) { const c = d.decode(B(b)); if (c !== "�") t.set(c, b); }
+  return (s) => Buffer.from([...s].map((c) => (c.charCodeAt(0) < 0x80 ? c.charCodeAt(0) : t.get(c) ?? 0x3f)));
+};
+const cp1252 = sbEncoder("windows-1252"), cp1250 = sbEncoder("windows-1250");
+const round = (encode, s, n) => dec(encode(s), s, n);
+// jschardet đoán Windows-1250 / iso8859-4 / Windows-1253 cho các mẫu Tây Âu ngắn này.
+round(cp1252, "Nom,Prénom,Ville\nDupont,Hélène,Paris\nMartin,Jérôme,Lyon", "cp1252 Pháp (jschardet: Windows-1250): Hélène không thành Hélčne");
+round(cp1252, "Città,Abitanti\nRoma,2800000\nForlì,118000", "cp1252 Ý (jschardet: iso8859-4, viết không gạch): Città / Forlì không thành Cittā / Forlė");
+round(cp1252, "Città,Perché\nCosì,Può\nLunedì,Però", "cp1252 Ý CSV ngắn (iso8859-4): Così / Può / Però");
+round(cp1252, "Café crème: 3,50€", "cp1252 Pháp (jschardet: Windows-1253): không thành chữ Hy Lạp Cafι crθme");
+round(cp1252, "Le nº 5 coûte 3€", "cp1252 Pháp (Windows-1250): nº / coûte không thành nş / coűte");
+round(cp1252, "Año nuevo, vida nueva. ¿Qué tal?", "cp1252 Tây Ban Nha (Windows-1250): Año / ¿Qué không thành Ańo / żQué");
+round(cp1252, "Teléfono: 912 345 678. Señora Pérez, calle Mayor.", "cp1252 Tây Ban Nha: Señora");
+// Văn bản Trung Âu thật vẫn đọc đúng theo Windows-1250 / iso-8859-15 vẫn ra œ và €.
+round(cp1250, "Zażółć gęślą jaźń. Łódź, Kraków, Wrocław.", "Windows-1250 Ba Lan: ł / ą / ż (cp1252 ra ³ ¹ ¿ giữa chữ) vẫn tin jschardet");
+round(cp1250, "Árvíztűrő tükörfúrógép. Őszi szél fúj.", "Windows-1250 Hungary: ő / ű vẫn đúng");
+round(cp1250, "Dobrý den, jak se máte? Děkuji, mám se dobře. Kde je nádraží?", "Windows-1250 Séc: Děkuji / dobře vẫn đúng");
+round(sbEncoder("iso-8859-15"), "L'œuvre coûte 5 € et le cœur est là.", "iso-8859-15 (jschardet: iso8859-15): œ / € đúng");
+round(sbEncoder("windows-1251"), "ERROR 2026-01-01 Ошибка: файл config.yaml не найден (code=404). Повторите попытку через 5 минут.", "Windows-1251 tiếng Nga lẫn chữ ASCII vẫn ra chữ Kirin");
+round(sbEncoder("windows-1253"), "Καλημέρα κόσμε. Αυτό είναι ένα δοκιμαστικό αρχείο.", "Hy Lạp (jschardet: ISO-8859-7) vẫn ra chữ Hy Lạp");
+ok(E.normLabel("ISO8859-7") === "iso-8859-7" && E.normLabel("iso8859-15") === "iso-8859-15" && E.normLabel("CP1250") === "windows-1250" && E.normLabel("MacRoman") === "macintosh", "chuẩn hoá tên bảng mã jschardet (iso8859- → iso-8859-)");
+
 console.log("5. Trích thật qua tiến trình đọc tệp (docx/xlsx/csv/pptx/zip), mỗi tệp một DẤU HIỆU");
 // csv
 let t = parse("csv", Buffer.from("cot_a,cot_b\nDH_CSV_1,DH_CSV_2\n"), "m.csv")?.text ?? "";
