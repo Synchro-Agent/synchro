@@ -86,6 +86,9 @@ harden
 [ "$BG" = 1 ] || { sync_code; SRC="$APP"; }
 [ -n "$PIP" ] && su - synchro -c "cd $APP && .mkvenv/bin/pip install -q -r $SRC/requirements.txt"
 rsync -a "${EXCL[@]}" "$SRC/" "$B/"
+# Biến môi trường của máy chủ cho next build (NEXT_PUBLIC_*, APP_URL, SYNCHRO_FIXED_LANG… được nhúng vào HTML tĩnh và mã trình duyệt).
+# Chỉ lấy từ thư mục app trên máy chủ, không bao giờ từ mã được đẩy lên (rsync từ máy Mac / CI luôn loại .env*).
+for f in "$APP"/.env*; do [ -f "$f" ] && cp -p "$f" "$B/"; done
 LOCK=$(sha1sum "$SRC/package-lock.json" | cut -d' ' -f1)
 NEWMOD=""
 if [ "$BG" = 1 ]; then
@@ -118,10 +121,12 @@ from_artifact() {
   local a="$SRC/.synchro-artifact" m pub
   [ "${SYNCHRO_USE_ARTIFACT:-1}" = 1 ] && [ -f "$a/meta" ] && [ -f "$a/next.tgz" ] && [ -f "$SRC/.synchro-source-sha" ] || return 1
   m="$a/meta"
-  pub=$( (grep -E '^NEXT_PUBLIC_[A-Z0-9_]*=' "$APP/.env.production" 2>/dev/null || true) | LC_ALL=C sort | sha1sum | cut -d' ' -f1)
+  # Biến đọc lúc build (nhúng vào HTML tĩnh / mã trình duyệt): CI build không có .env.production của máy chủ, nên chỉ dùng bản của CI khi máy chủ
+  # cũng không đặt các biến này (băm của tập rỗng ở cả hai phía).
+  pub=$( (cat "$APP"/.env* 2>/dev/null | grep -E '^(NEXT_PUBLIC_[A-Z0-9_]*|APP_URL|SYNCHRO_FIXED_LANG)=' || true) | LC_ALL=C sort | sha1sum | cut -d' ' -f1)
   [ "$(sed -n 's/^lock=//p' "$m")" = "$LOCK" ] || { echo "Bản build của CI khác package-lock: build lại." >&2; return 1; }
   [ "$(sed -n 's/^sha=//p' "$m")" = "$(cat "$SRC/.synchro-source-sha")" ] || { echo "Bản build của CI khác commit: build lại." >&2; return 1; }
-  [ "$(sed -n 's/^pub=//p' "$m")" = "$pub" ] || { echo "Bản build của CI khác biến NEXT_PUBLIC_ của máy chủ: build lại." >&2; return 1; }
+  [ "$(sed -n 's/^pub=//p' "$m")" = "$pub" ] || { echo "Máy chủ đặt biến dùng lúc build (NEXT_PUBLIC_, APP_URL, SYNCHRO_FIXED_LANG) khác bản build của CI: build lại." >&2; return 1; }
   [ "$(sed -n 's/^tgz=//p' "$m")" = "$(sha256sum "$a/next.tgz" | cut -d' ' -f1)" ] || { echo "Tệp build của CI hỏng: build lại." >&2; return 1; }
   local dist; dist=$(sed -n 's/^dist=//p' "$m")
   case "$dist" in .next|.next-[a-z]*) ;; *) return 1 ;; esac

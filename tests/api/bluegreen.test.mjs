@@ -207,6 +207,16 @@ const calls = () => { const s = fs.existsSync(log) ? fs.readFileSync(log, "utf8"
   ok(/script: path\.join\(APP, `\.next-\$\{color\}`, "node_modules\/next\/dist\/bin\/next"\)/.test(eco) && bgPart.includes('ln -sfn "$MODS" "$NEWDIST/node_modules"')
     && bgPart.indexOf('bg_link_modules "$APP" "$MODS"') > bgPart.indexOf('bg_stop "$LIVE"'),
     "DEPLOY-4: mỗi màu có node_modules riêng (.next-<màu>/node_modules), pm2 chạy next của màu đó; liên kết chung chỉ đổi khi bản cũ đã thoát");
+  {
+    // DEPLOY-5: next build trong $B có .env.production của máy chủ (cả xanh/lam lẫn staging); đồng bộ mã vẫn không bao giờ chép .env*.
+    const app = path.join(tmp, "envapp"), b = path.join(tmp, "envb");
+    fs.mkdirSync(app, { recursive: true }); fs.mkdirSync(b, { recursive: true });
+    fs.writeFileSync(path.join(app, ".env.production"), "SYNCHRO_FIXED_LANG=en\n"); fs.writeFileSync(path.join(app, "package.json"), "{}");
+    const line = sb.split("\n").find((l) => l.startsWith('for f in "$APP"/.env*'));
+    spawnSync("bash", ["-c", `APP="${app}"; B="${b}"; ${line}`]);
+    ok(!!line && sb.indexOf(line) > sb.indexOf('rsync -a "${EXCL[@]}" "$SRC/" "$B/"') && fs.existsSync(path.join(b, ".env.production")) && /--exclude '\/\.env\*'/.test(sb),
+      "DEPLOY-5: .env* của máy chủ được chép vào thư mục build trước next build; đồng bộ mã vẫn loại .env*");
+  }
   ok(sb.indexOf('bg_sync_live "$APP"') > sb.indexOf("flock -w 900 9") && /trap cleanup EXIT/.test(sb) && /trap 'exit 129' HUP/.test(sb), "DEPLOY-1: server-build sửa màu sống sau khi giữ khóa, trap khi thoát / mất ssh");
   fs.rmSync(up);
 }

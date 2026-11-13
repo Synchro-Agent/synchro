@@ -40,7 +40,7 @@ jobs:
           tar -czf synchro-artifact/next.tgz --exclude .next-ci/cache .next-ci
           { echo "sha=${{ github.sha }}"
             echo "lock=$(sha1sum package-lock.json | cut -d' ' -f1)"
-            echo "pub=$( (env | grep -E '^NEXT_PUBLIC_[A-Z0-9_]*=' || true) | LC_ALL=C sort | sha1sum | cut -d' ' -f1)"
+            echo "pub=$( (env | grep -E '^(NEXT_PUBLIC_[A-Z0-9_]*|APP_URL|SYNCHRO_FIXED_LANG)=' || true) | LC_ALL=C sort | sha1sum | cut -d' ' -f1)"
             echo "dist=.next-ci"
             echo "tgz=$(sha256sum synchro-artifact/next.tgz | cut -d' ' -f1)"; } > synchro-artifact/meta
       - uses: actions/upload-artifact@v4
