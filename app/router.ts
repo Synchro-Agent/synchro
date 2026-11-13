@@ -67,8 +67,12 @@ const CONNECTOR_APPS = "gmail|outlook|calendar|google calendar|stripe|notion|sla
 // Một động từ thao tác + tên một ứng dụng đã nối: luôn là việc dùng công cụ (act), ưu tiên hơn mọi nhãn chủ đề ("Tạo Google Docs báo cáo" là act, không phải "viết";
 // "Send a Slack message" là act, không phải hỏi đáp). Không gồm "làm" (hay lẫn "làm sao / làm gì") — các câu đó đã có luật act riêng.
 const ACTION_VERB = "tạo|tao|sửa|sua|chỉnh sửa|gửi|gui|xóa|xoá|xoa|thêm|them|cập nhật|cap nhat|đổi|doi|lưu|luu|soạn|soan|đăng|dang|chia sẻ|share|tải|tai|create|edit|update|send|delete|remove|add|save|draft|post|upload|download|move|rename";
-const ACTION_VERB_RE = W(ACTION_VERB);
-const CONNECTOR_APP_RE = W(CONNECTOR_APPS);
+// Thao tác connector thật sự: động từ thao tác RỒI tới tên ứng dụng ngay sau (tên ứng dụng là TÂN NGỮ của động từ, cách tối đa ~30 ký tự,
+// không qua dấu kết câu) — "Tạo Google Docs…", "Send a Slack message", "gửi báo cáo qua Gmail". KHÔNG tính khi hai thứ chỉ cùng xuất hiện
+// đâu đó ("So sánh Notion và Trello rồi tạo kế hoạch": connector đứng TRƯỚC động từ, tân ngữ của "tạo" là "kế hoạch" — không phải thao tác).
+// Ranh giới từ như W() để "drive" không khớp "driver".
+const B = "(?<![\\p{L}\\p{N}])", E = "(?![\\p{L}\\p{N}])", NEAR = "(?:(?![.?!\\n]).){0,30}?";
+const ACT_ON_APP_RE = new RegExp(`${B}(?:${ACTION_VERB})${E}${NEAR}${B}(?:${CONNECTOR_APPS})${E}`, "iu");
 // Câu cần dữ liệu mới trên web → "tra cứu" (lookup): tỷ giá, giá tài sản / món hàng, thời tiết, tin tức, phiên bản mới nhất, hay lời nhờ tìm thẳng trên web.
 // Giữ chặt để không kéo "hôm nay mình rảnh" hay "đánh giá phim" vào đây: "giá" phải đi với tài sản / "hôm nay" / "bao nhiêu" (và loại "đánh giá", "giá trị", "báo giá").
 const LOOKUP_WEB = new RegExp([
@@ -359,9 +363,10 @@ function scores(ins: string, a: Ask): Map<Task, number> {
   // Gõ không dấu: lượt so khớp thứ hai.
   const bare = noMarks(ins);
   if (bare && ![...out.values()].some((n) => n >= 2)) for (const [t, re, w] of FOLDED) if (re.test(ins) && !((t === "build" || t === "act") && HOWTO_FOLD.test(ins))) out.set(t, Math.max(out.get(t) ?? 0, w));
-  // Động từ thao tác + tên ứng dụng đã nối → việc dùng công cụ (act), trên mọi nhãn chủ đề: "Tạo Google Docs báo cáo" (từng là "viết"),
-  // "Send a Slack message" (từng là hỏi đáp). Guard HOWTO ngay dưới vẫn bỏ act cho câu hỏi cách làm ("Cách gửi mail qua Gmail là gì").
-  if (ACTION_VERB_RE.test(ins) && CONNECTOR_APP_RE.test(ins)) out.set("act", Math.max(out.get("act") ?? 0, 5));
+  // Động từ thao tác có tân ngữ là tên ứng dụng ngay gần → việc dùng công cụ (act), trên mọi nhãn chủ đề: "Tạo Google Docs báo cáo" (từng là
+  // "viết"), "Send a Slack message" (từng là hỏi đáp). Không áp đè khi câu rõ ràng nghiêng phân tích (tín hiệu ≥ 5) mà act chỉ đến từ luật gần
+  // này (so "Tạo Google Docs báo cáo" chỉ có "viết" = 3 nên vẫn thành act). Guard HOWTO ngay dưới vẫn bỏ act cho câu hỏi cách làm.
+  if (ACT_ON_APP_RE.test(ins) && Math.max(out.get("analyze") ?? 0, out.get("write") ?? 0) < 5) out.set("act", Math.max(out.get("act") ?? 0, 5));
   // Hỏi cách làm, hoặc đang nhờ viết code: không phải nhờ làm thao tác.
   if (out.has("act") && (HOWTO.test(ins) || (out.get("code") ?? 0) >= 3 || (out.get("language") ?? 0) >= 3)) out.delete("act");
   // Xin ảnh là việc dùng công cụ dù câu không có chữ "ảnh" ("vẽ con mèo"): model nào được chọn cũng gọi được generate_image.

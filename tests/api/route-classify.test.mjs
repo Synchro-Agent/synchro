@@ -503,6 +503,9 @@ console.log("16. Tra cứu web → model hạng vừa trở lên có công cụ;
   // (b) không kéo câu đời thường có "hôm nay" thành tra cứu.
   ok(R.taskOf(q("Hôm nay 28/10 mình rảnh từ 9:30, gợi ý lịch học")) !== "lookup", "“hôm nay mình rảnh” không phải tra cứu");
   ok(R.taskOf(q("giá vàng")) !== "lookup", "“giá vàng” trần (không mốc thời gian) vẫn là hỏi đáp thường");
+  // (e) động từ thao tác + tên ứng dụng ở GẦN nhau mới là thao tác; ở xa nhau trong câu phân tích thì không kéo thành act.
+  ok(R.taskOf(q("Tạo Google Docs báo cáo doanh thu")) === "act", "“Tạo Google Docs báo cáo” (tân ngữ sát động từ) là thao tác");
+  ok(R.taskOf(q("So sánh Notion và Trello rồi đánh giá nên tạo kế hoạch ở đâu")) === "analyze", "câu phân tích có nhắc connector + động từ ở xa: vẫn là phân tích, không phải thao tác");
   // (d) codeOnly: chỉ bắt tên model code (xét phần sau "/"); gói "sub-codex/" bao model chung thì KHÔNG bị tính.
   for (const k of ["sub-grok/grok-build", "sub-grok/grok-4.7-build-fast", "openai/gpt-5-codex", "qwen/qwen3-coder", "codex-mini-latest"]) ok(M.codeOnly(k), `codeOnly(${k}) = true`);
   for (const k of ["sub-codex/gpt-6.1-sol", "sub-codex/gpt-6-luna", "anthropic/claude-opus-5-5", "google/gemini-4-argon", "sub-grok/grok-4.7"]) ok(!M.codeOnly(k), `codeOnly(${k}) = false`);
