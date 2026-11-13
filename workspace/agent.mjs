@@ -586,7 +586,7 @@ async function runOnce(u, { files = [], argv, stdin = null, net: wantNet = false
     if (r === null) {
       const m = await waitMem(RUN_FLOOR_MB, signal);
       if (m === "aborted") { if (signal?.aborted) return { code: 130, out: "", err: "", timedOut: false, files: [] }; }
-      else if (!m) { clearInterval(watcher); watcher = null; throw new E(503, `Máy chủ đang thiếu bộ nhớ nên chưa bật được lần chạy (bạn đang ở vị trí ${runQ.queued + 1} trong hàng). Hãy thử lại sau ít phút.`); }
+      else if (!m) { clearInterval(watcher); watcher = null; throw new E(503, "Máy chủ đang thiếu bộ nhớ nên chưa bật được lần chạy. Hãy thử lại sau ít phút. / Server is low on memory, please try again shortly."); }
     }
     r ??= await inBox(name, boxArgs(name, ["--network", wantNet ? RUN_NET : "none", ...(ip ? ["--ip", ip] : [])], sec, argv), { input: stdin ?? "", timeout: (sec + 30) * 1000, clip: true });
     log("lần chạy", u, pooled ? "kho" : "lạnh", `${Date.now() - t0} ms`, `mã ${r.code}`);
