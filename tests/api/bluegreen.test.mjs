@@ -296,7 +296,9 @@ const calls = () => { const s = fs.existsSync(log) ? fs.readFileSync(log, "utf8"
   r = sh("bg_stop green; echo rc=$?");
   ok(/rc=1/.test(r.out) && running() === "3002" && !calls().includes("pm2 stop synchro-green"), "DEPLOY-1: trước khi dừng màu nào cũng nạp lại nginx nếu tệp khác màu sống; không dừng màu nginx đang chạy", { r, running: running() });
   const sb = fs.readFileSync(path.join(process.cwd(), "scripts", "server-build.sh"), "utf8");
-  ok(sb.indexOf('BG=0; bg_enabled "$APP" && BG=1') > sb.indexOf("flock -w 900 9") && !/PORT=3001/.test(sb) && /bg_pm2_has "\$PM2"/.test(sb), "DEPLOY-2: chọn cách deploy sau khi giữ khóa; production đã chuyển không đi đường một tiến trình nếu thiếu app pm2; không bao giờ đoán cổng 3001");
+  ok(sb.indexOf('BG=0; bg_enabled "$APP" && BG=1') > sb.indexOf("flock -w 900 9") && !/\[ "\$PM2" = "synchro" \] && PORT=3001/.test(sb) && /bg_pm2_has "\$PM2"/.test(sb), "DEPLOY-2: chọn cách deploy sau khi giữ khóa; production đã chuyển không đi đường một tiến trình nếu thiếu app pm2; không bao giờ đoán cổng 3001");
+  ok(/if \[ "\$PM2" = synchro-staging \]; then \[ -n "\$PORT_ARG" \] \|\| PORT_ARG=3001/.test(sb) && /bg_color_of_port "\$\(bg_upstream_port\)" >\/dev\/null; then/.test(sb) && /KHÔNG CÓ APP PM2/.test(sb) && /không biết cổng nên KHÔNG kiểm tra được web/.test(sb),
+    "DEPLOY-2: staging tạo lại synchro-staging ở 3001 (chỉ staging); production đã chuyển + nginx trỏ màu xanh/lam thì từ chối cả khi còn app 'synchro'; không báo 'web đang chạy bình thường' khi không có app / không biết cổng");
   const bgPart = sb.slice(sb.indexOf("# ---------------- Xanh/lam"));
   ok(bgPart.indexOf("SHARED=1") < bgPart.indexOf('mv "$B/.next" "$NEWDIST"') && bgPart.indexOf("sync_code") < bgPart.indexOf('bg_link_modules "$APP" "$MODS"') && /rollback "thoát giữa chừng/.test(sb) && /chown -R synchro:synchro "\$APP" 2>\/dev\/null \|\|/.test(sb),
     "DEPLOY-3: mọi bước đụng trạng thái dùng chung nằm sau khi có rollback (cleanup khi thoát lỗi); chép mã trước khi đổi liên kết thư viện; chown -R data/ không làm hỏng deploy");

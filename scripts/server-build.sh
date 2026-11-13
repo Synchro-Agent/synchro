@@ -33,9 +33,10 @@ fi
 BG=0; bg_enabled "$APP" && BG=1
 # Production đã chuyển mà vẫn đi đường một tiến trình (chỉ khi BLUEGREEN=0): chỉ được khi app pm2 "$PM2" còn tồn tại, không bao giờ tạo app
 # mới (từng tạo "synchro" ở cổng 3001 của staging, thành primary thứ hai trên dữ liệu production).
+# Kể cả khi app còn đó: nginx đang trỏ một màu xanh/lam thì bản một tiến trình không bao giờ tới người dùng (và chiếm cổng của blue).
 if [ "$BG" = 0 ] && [ "$(bg_live_app)" = "$APP" ]; then
-  if [ "${BLUEGREEN:-}" != 0 ] || ! bg_pm2_has "$PM2"; then
-    echo "$APP đã chuyển sang xanh/lam (màu sống $(bg_live_color)): không deploy kiểu một tiến trình. Bỏ BLUEGREEN=0, hoặc xem docs/van-hanh.md (Bỏ hẳn xanh/lam)." >&2
+  if [ "${BLUEGREEN:-}" != 0 ] || ! bg_pm2_has "$PM2" || bg_color_of_port "$(bg_upstream_port)" >/dev/null; then
+    echo "$APP đã chuyển sang xanh/lam (màu sống $(bg_live_color), nginx trỏ cổng $(bg_upstream_port)): không deploy kiểu một tiến trình. Bỏ BLUEGREEN=0, hoặc xem docs/van-hanh.md (Bỏ hẳn xanh/lam)." >&2
     exit 1
   fi
 fi
@@ -239,8 +240,10 @@ if [ -z "$PORT" ]; then
       } catch {}
     });' || true)
 fi
-# Không đoán cổng: từng mặc định 3001 (cổng của staging) cho production. Chỉ tạo app pm2 mới khi cổng được truyền rõ ở tham số thứ 4.
+# Không đoán cổng cho production (từng mặc định 3001, cổng của staging). Chỉ tạo app pm2 mới khi cổng được truyền rõ ở tham số thứ 4,
+# trừ staging (CI gọi không kèm cổng): app synchro-staging bị mất thì tạo lại ở đúng cổng 3001 của nó.
 PORT_ARG="${4:-}"
+if [ "$PM2" = synchro-staging ]; then [ -n "$PORT_ARG" ] || PORT_ARG=3001; [ -n "$PORT" ] || PORT=3001; fi
 
 # 9>&-: tiến trình nền của pm2 không được mang theo khóa deploy.
 restart() {
@@ -274,8 +277,10 @@ if [ "$RESTARTED" = 0 ] || ! healthy "$NEWID"; then
   if [ -d "$PREV/node_modules" ]; then mv "$APP/node_modules" "$SIDE/.synchro-failed-$NAME/node_modules"; mv "$PREV/node_modules" "$APP/node_modules"; fi
   # rsync của deploy đã đè public/ và db/ trước khi build: trả về bản của lần deploy tốt gần nhất, không thì bản cũ chạy với tệp tĩnh và dữ liệu mẫu của bản lỗi.
   restore_good
-  restart || true
-  if up; then echo "Đã trả lại bản $OLDID, web đang chạy bình thường. Bản lỗi giữ ở $SIDE/.synchro-failed-$NAME để xem." >&2
+  BACK=1; restart || BACK=0
+  if [ "$BACK" = 0 ]; then echo "ĐÃ TRẢ LẠI BẢN $OLDID VÀO THƯ MỤC NHƯNG KHÔNG CÓ APP PM2 \"$PM2\" ĐỂ CHẠY: web không chạy, cần xử lý tay ngay (pm2 ls; xem docs/van-hanh.md)." >&2
+  elif [ -z "$PORT" ]; then echo "Đã trả lại bản $OLDID và khởi động lại $PM2, nhưng không biết cổng nên KHÔNG kiểm tra được web: xem pm2 ls và trang chủ ngay." >&2
+  elif up; then echo "Đã trả lại bản $OLDID, web đang chạy bình thường. Bản lỗi giữ ở $SIDE/.synchro-failed-$NAME để xem." >&2
   else echo "ĐÃ TRẢ LẠI BẢN $OLDID NHƯNG VẪN KHÔNG ĐẠT: cần xử lý tay ngay (xem docs/van-hanh.md)." >&2; fi
   exit 1
 fi
