@@ -121,13 +121,16 @@ const loginFile = path.join(dir, ".mock-login");
     let mcpNote = "";
     if (mcpUrl) {
       if (ask && allowed.includes("mcp__synchro")) {
-        await delta(`Mình sẽ dùng công cụ ${ask.name} của Synchro.`);
+        // [mock:dieaftertool]: như model gọi công cụ ngay không có câu dẫn, rồi tiến trình chết trước khi viết chữ nào (Synchro không được chạy lại lượt: công cụ đã chạy).
+        const die = prompt.includes("[mock:dieaftertool]");
+        if (!die) await delta(`Mình sẽ dùng công cụ ${ask.name} của Synchro.`);
         // Như CLI thật: luồng đầu ra báo khối tool_use bắt đầu trước khi gọi máy chủ MCP.
         C.out({ type: "stream_event", event: { type: "content_block_start", index: 1, content_block: { type: "tool_use", id: "toolu_mock", name: `mcp__synchro__${ask.name}`, input: {} } }, session_id: sid });
         C.out({ type: "assistant", message: { role: "assistant", content: [{ type: "tool_use", id: "toolu_mock", name: `mcp__synchro__${ask.name}`, input: ask.args }] }, session_id: sid });
         const r = await C.mcp(mcpUrl, ask).catch((e) => ({ error: { message: String(e) } }));
         const out = r.error ? `lỗi ${r.error.message}` : (r.result?.content ?? []).map((c) => c.text).join("\n");
         mcpNote = ` [đã dùng ${ask.name}: ${out.replace(/\s+/g, " ").slice(0, 160)}]`;
+        if (die) process.exit(1);
         if (prompt.includes("[mock:quotaonce]")) { await delta("Đã chạy công cụ, phần còn lại chưa xong."); result({ subtype: "success", is_error: true, result: "You've hit your usage limit" }); process.exit(1); }
       } else {
         const r = await C.mcp(mcpUrl).catch(() => ({ tools: [] }));

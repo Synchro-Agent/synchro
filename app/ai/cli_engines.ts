@@ -198,9 +198,10 @@ function poolSpec(req: Pick<TurnRequest, "system" | "model" | "effort" | "env" |
   if (req.model) args.push("--model", req.model);
   const ce = cliEffort(req.effort);
   if (ce) args.push("--effort", ce);
-  return { bin, args, env: live ? { ...req.env, MCP_TOOL_TIMEOUT: "1800000" } : req.env ?? {}, cwd, account: req.env?.CLAUDE_CONFIG_DIR ?? "" };
+  return { bin, args, env: live ? { ...req.env, MCP_TOOL_TIMEOUT: "1800000" } : req.env ?? {}, cwd, account: req.env?.CLAUDE_CONFIG_DIR ?? "", ...(live ? { tool: true } : {}) };
 }
-type ClaudeEnd = { done: boolean; failed: boolean; session: string | null; spoke: boolean };
+/** spoke: đã có chữ tới người dùng. acted: model đã định dùng công cụ (khối tool_use): lượt có thể đã làm gì đó, không được chạy lại từ đầu. */
+type ClaudeEnd = { done: boolean; failed: boolean; session: string | null; spoke: boolean; acted: boolean };
 
 export class ClaudeCodeEngine implements Engine {
   readonly id = "claude";
@@ -230,7 +231,9 @@ export class ClaudeCodeEngine implements Engine {
     const lease = takeProcess(spec, req.sessionId);
     if (!lease) return false;
     yield { kind: "pool", state: lease.hit ? "hit" : "cold" };
-    let r: ClaudeEnd = { done: false, failed: false, session: null, spoke: false }, closed = false;
+    let r: ClaudeEnd = { done: false, failed: false, session: null, spoke: false, acted: false }, closed = false;
+    // Lượt có công cụ: cầu nối có lời gọi nào trong lúc tiến trình này chạy thì alive() đổi (công cụ đang / vừa chạy).
+    const alive0 = req.alive?.();
     try {
       lease.send(claudeInput(req.prompt, req.attachments ?? []));
       // Có tiến trình sẵn thì dòng đầu tới ngay khi CLI nhận tin; vừa khởi động thì còn phải chờ khởi động xong. SYNCHRO_CLAUDE_POOL_FIRST_SEC: rút ngắn khi kiểm thử.
@@ -247,7 +250,10 @@ export class ClaudeCodeEngine implements Engine {
         return true;
       }
       lease.discard(); closed = true;
-      if (!r.spoke) { poolStrike(end === "silent" ? "tiến trình không phản hồi tin nhắn" : "tiến trình thoát giữa lượt"); return false; }
+      // Chạy lại từ đầu bằng tiến trình mới chỉ khi lượt chưa làm gì: chưa có chữ, chưa định dùng công cụ, cầu nối chưa nhận lời gọi nào.
+      // Lượt có công cụ đã gọi công cụ (connector, ghi tệp, gửi thư…) mà chạy lại thì công cụ chạy hai lần: báo lỗi thoát thay vì thử lại.
+      const acted = r.acted || (req.alive !== undefined && req.alive() !== alive0);
+      if (!r.spoke && !acted) { poolStrike(end === "silent" ? "tiến trình không phản hồi tin nhắn" : "tiến trình thoát giữa lượt"); return false; }
       yield exitError("claude", lease.proc, await lease.done());
       return true;
     } finally { if (!closed) lease.discard(); }
@@ -256,7 +262,7 @@ export class ClaudeCodeEngine implements Engine {
   private async *events(src: AsyncIterable<Json>, kill: () => void): AsyncGenerator<Event, ClaudeEnd, unknown> {
     // gap: model bắt đầu một tin mới trong lượt (sau công cụ dựng sẵn như tìm web) — chữ của tin mới cách chữ trước một dòng trống,
     // không dính liền "…dựng deck.Đã đọc 4 skill…".
-    let text = "", done = false, gap = false, failed = false, session: string | null = null;
+    let text = "", done = false, gap = false, failed = false, acted = false, session: string | null = null;
     const limits = new Map<string, RateWindow>(), webIds = new Set<string>();
     // Đo: lần đầu của từng loại sự kiện (ms từ lúc khởi động CLI), ghi một dòng [timing] khi xong — để biết thời gian chờ nằm ở đâu.
     const T0 = Date.now(), seen = new Map<string, number>();
@@ -268,6 +274,7 @@ export class ClaudeCodeEngine implements Engine {
       if (o.type === "stream_event" || o.type === "assistant" || o.type === "user" || (o.type === "system" && (o.subtype === "status" || o.subtype === "compact_boundary"))) yield { kind: "activity" };
       if (o.type === "assistant") {
         for (const b of (o.message?.content ?? []) as Json[]) {
+          if (b.type === "tool_use" || b.type === "server_tool_use") acted = true;
           if ((b.type === "tool_use" || b.type === "server_tool_use") && WEB_TOOL.test(String(b.name ?? ""))) {
             if (typeof b.id === "string") webIds.add(b.id);
             yield { kind: "search", query: typeof b.input?.query === "string" ? b.input.query : undefined, url: typeof b.input?.url === "string" ? b.input.url : undefined };
@@ -279,7 +286,10 @@ export class ClaudeCodeEngine implements Engine {
       }
       if (o.type === "system" && o.subtype === "init" && typeof o.session_id === "string") { session = o.session_id; yield { kind: "session", id: o.session_id, ...(typeof o.model === "string" ? { model: o.model } : {}) }; }
       else if (o.type === "stream_event" && o.event?.type === "message_start") gap = !!text;
-      else if (o.type === "stream_event" && o.event?.type === "content_block_start" && o.event.content_block?.type === "tool_use" && String(o.event.content_block.name ?? "").startsWith("mcp__")) yield { kind: "tooluse" };
+      else if (o.type === "stream_event" && o.event?.type === "content_block_start" && (o.event.content_block?.type === "tool_use" || o.event.content_block?.type === "server_tool_use")) {
+        acted = true;
+        if (String(o.event.content_block.name ?? "").startsWith("mcp__")) yield { kind: "tooluse" };
+      }
       else if (o.type === "stream_event" && o.event?.type === "content_block_delta" && o.event.delta?.type === "text_delta" && typeof o.event.delta.text === "string") {
         const t = (gap ? "\n\n" : "") + o.event.delta.text;
         gap = false;
@@ -315,7 +325,7 @@ export class ClaudeCodeEngine implements Engine {
         } else yield { kind: "final", text: typeof o.result === "string" && o.result ? o.result : text, via: "claude" };
       }
     }
-    return { done, failed, session, spoke: !!text };
+    return { done, failed, session, spoke: !!text, acted };
   }
   async *runTurn(req: TurnRequest): AsyncIterable<Event> {
     if (req.pool && (!req.mcp || req.mcp.live) && !req.web && !req.fork && (yield* this.pooled(req))) return;
