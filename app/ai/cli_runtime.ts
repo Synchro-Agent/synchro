@@ -246,6 +246,20 @@ export function isolate(file: string, argv: string[], env: Record<string, string
     env: { ...env, HOME: inside(logins, env.HOME ?? "") ? env.HOME : scope[0] } };
 }
 
+/**
+ * Kiểm lúc máy chủ khởi động: trên production nên bật cô lập bwrap (SYNCHRO_ENGINE_BWRAP=1) để tiến trình CLI của một tài khoản
+ * không đọc được thư mục đăng nhập của tài khoản khác (mọi login cùng một user hệ thống nên quyền tệp không ngăn được).
+ * MẶC ĐỊNH chỉ CẢNH BÁO (không chặn khởi động) — để không làm sập VPS đang chạy chưa cài bubblewrap. Chỉ khi
+ * SYNCHRO_REQUIRE_BWRAP=1 mới ném lỗi chặn khởi động production khi thiếu bwrap. Ngoài production thì bỏ qua.
+ */
+export function assertSandboxReady(): void {
+  if (process.env.NODE_ENV !== "production" || process.env.SYNCHRO_ENGINE_BWRAP === "1") return;
+  const msg = "Cô lập engine (bubblewrap) chưa bật: đặt SYNCHRO_ENGINE_BWRAP=1 (cần gói bubblewrap, xem docs/van-hanh.md). "
+    + "Thiếu nó, tiến trình CLI của các tài khoản chia sẻ cùng một user hệ thống có thể đọc được đăng nhập của nhau.";
+  if (process.env.SYNCHRO_REQUIRE_BWRAP === "1") throw new Error(`[cli] ${msg} (SYNCHRO_REQUIRE_BWRAP=1 nên chặn khởi động)`);
+  console.warn(`[cli] CẢNH BÁO: ${msg}`);
+}
+
 // ---------------------------------------------------------------- chạy tiến trình
 export type RunOpts = {
   env?: Record<string, string | undefined>;
