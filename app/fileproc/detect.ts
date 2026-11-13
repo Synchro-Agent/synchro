@@ -67,6 +67,9 @@ export async function detectKind(buf: Buffer, name: string): Promise<string> {
     if (!z) throw new FileError(`"${name}" là tệp nén bị hỏng, không mở được.`);
     return z.has("word/document.xml") ? "docx" : z.has("xl/workbook.xml") ? "xlsx" : z.has("ppt/presentation.xml") ? "pptx" : "zip";
   }
+  // Excel "Unicode Text" lưu UTF-16 có dấu BOM: đầy byte 0 nhưng là chữ thật, phải xét trước khi kết luận tệp nhị phân.
+  // Xét TRƯỚC khung MPEG: BOM UTF-16LE (FF FE) cũng khớp mẫu đồng bộ FF Ex của MP3, từng làm tệp .csv UTF-16 bị đem đi phiên âm.
+  if ((h[0] === 0xff && h[1] === 0xfe) || (h[0] === 0xfe && h[1] === 0xff)) return /\.(csv|tsv)$/i.test(name) ? "csv" : "text";
   // Âm thanh / video: mp3 (ID3 hoặc khung MPEG), wav (RIFF…WAVE), webm / mkv (EBML) → phiên âm bằng Scribe.
   if (startsWith(0x49, 0x44, 0x33) || (h[0] === 0xff && (h[1] & 0xe0) === 0xe0)) return "audio";
   if (startsWith(0x52, 0x49, 0x46, 0x46) && buf.subarray(8, 12).toString() === "WAVE") return "audio";
@@ -78,8 +81,6 @@ export async function detectKind(buf: Buffer, name: string): Promise<string> {
     if (process.env.SYNCHRO_SOFFICE_BIN) return "legacy-office";
     throw new FileError(`"${name}" là định dạng Office cũ (.doc/.xls/.ppt). Hãy lưu lại thành .docx/.xlsx/.pptx rồi tải lên.`);
   }
-  // Excel "Unicode Text" lưu UTF-16 có dấu BOM: đầy byte 0 nhưng là chữ thật, phải xét trước khi kết luận tệp nhị phân.
-  if ((h[0] === 0xff && h[1] === 0xfe) || (h[0] === 0xfe && h[1] === 0xff)) return /\.(csv|tsv)$/i.test(name) ? "csv" : "text";
   // UTF-16 KHÔNG có dấu BOM (nhiều công cụ Windows xuất kiểu này): cũng đầy byte 0 nhưng là chữ, nhận trước khi coi là nhị phân.
   // Mẫu byte 0 chẵn/lẻ cũng gặp ở tệp nhị phân (bảng số nguyên 16-bit…): chỉ nhận khi giải ra thật sự là chữ, không thì rơi xuống chặn nhị phân bên dưới.
   const u16 = sniffUtf16(buf);

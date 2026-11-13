@@ -66,6 +66,7 @@ ok(D.sniffUtf16(Buffer.from(vn, "utf16le").swap16()) === "utf-16be", "UTF-16BE k
 ok(D.sniffUtf16(Buffer.from(vn, "utf8")) === null, "UTF-8 không bị nhầm là UTF-16");
 ok(await kindOf(Buffer.from(vn, "utf16le"), "u.csv") === "csv", "UTF-16 không BOM .csv → csv (không coi là nhị phân)");
 ok(await kindOf(Buffer.from(vn.repeat(20), "utf16le").swap16(), "u.txt") === "text", "UTF-16BE không BOM .txt → text");
+ok(await kindOf(Buffer.concat([B(0xff, 0xfe), Buffer.from(vn, "utf16le")]), "bom.csv") === "csv", "UTF-16LE có BOM (FF FE) → csv, không nhầm khung MP3 (FF Ex)");
 // Tệp nhị phân có mẫu byte 0 giống UTF-16LE (bảng số 16-bit 0..255, byte cao luôn 0): giải ra đầy ký tự điều khiển → vẫn bị chặn là nhị phân.
 const u16bin = Buffer.alloc(4096); for (let i = 0; i < 2048; i++) u16bin.writeUInt16LE(i % 256, i * 2);
 ok(D.sniffUtf16(u16bin) === "utf-16le", "nhị phân 16-bit: mẫu byte 0 trông như UTF-16LE (đúng ca cần chặn)");
