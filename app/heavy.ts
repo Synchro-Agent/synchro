@@ -65,9 +65,14 @@ let tsReady: Promise<typeof import("web-tree-sitter")> | null = null;
 const langs = new Map<string, Promise<import("web-tree-sitter").Language | null>>();
 let tsParser: TSParser | null = null;
 
+// /ts/*.wasm có tên cố định và được giữ đệm một tuần (next.config.ts, blueprint B3.6), còn phần JS của web-tree-sitter đi theo gói npm đã băm.
+// Hai phần phải cùng phiên bản: URL mang phiên bản (?v=) để lần nâng web-tree-sitter sau không đọc .wasm cũ còn trong bộ đệm.
+// Nâng web-tree-sitter / tree-sitter-wasms: chép lại public/ts từ node_modules và đổi TS_REV (tests/api/bootstrap.test.mjs kiểm cả hai).
+export const TS_REV = "0.27.1-0.1.13"; // web-tree-sitter - tree-sitter-wasms
+const tsUrl = (f: string) => `/ts/${f}?v=${TS_REV}`;
 function initTS() {
   return (tsReady ??= import("web-tree-sitter").then(async (m) => {
-    await m.Parser.init({ locateFile: (f: string) => "/ts/" + f });
+    await m.Parser.init({ locateFile: (f: string) => tsUrl(f) });
     tsParser = new m.Parser();
     return m;
   }));
@@ -80,7 +85,7 @@ export async function symbolsTS(name: string, text: string): Promise<Sym[]> {
   try {
     const m = await initTS();
     let lp = langs.get(g);
-    if (!lp) { lp = m.Language.load(`/ts/tree-sitter-${g}.wasm`).catch(() => null); langs.set(g, lp); }
+    if (!lp) { lp = m.Language.load(tsUrl(`tree-sitter-${g}.wasm`)).catch(() => null); langs.set(g, lp); }
     const lang = await lp;
     if (!lang || !tsParser) return extractSymbols(name, text);
     tsParser.setLanguage(lang);

@@ -71,7 +71,8 @@ const nextConfig: NextConfig = {
       source: "/fonts/:path*", headers: [{ key: "Cache-Control", value: "public, max-age=31536000, immutable" }],
     }, ...["/brand/:path*", "/connectors/:path*", "/logos/:path*", "/ts/:path*", "/intro/:path*", "/icon-:size(\\d+).png", "/icon-maskable-:size(\\d+).png"].map((source) => ({
       // Biểu tượng, logo (cả /logos), bộ đọc cú pháp tree-sitter /ts, phim giới thiệu /intro: tên tệp không đổi khi nội dung đổi nên giữ một tuần,
-      // sau đó vẫn dùng bản cũ trong lúc tải bản mới (blueprint B3.6).
+      // sau đó vẫn dùng bản cũ trong lúc tải bản mới (blueprint B3.6). /ts phải khớp phiên bản với phần JS của web-tree-sitter: app/heavy.ts
+      // tải bằng URL có phiên bản (?v=TS_REV), nâng gói là đổi URL nên không dính bản .wasm cũ trong bộ đệm.
       source, headers: [{ key: "Cache-Control", value: "public, max-age=604800, stale-while-revalidate=2592000" }],
     }))];
   },
