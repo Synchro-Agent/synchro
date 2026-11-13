@@ -27,8 +27,16 @@ export const AUTH_VI2EN: Record<string, string> = {
   "Litestream không khôi phục được (không rõ lý do).": "Litestream couldn't restore (no reason given).",
   "Chưa cấu hình sao lưu liên tục.": "Continuous backup isn't set up.",
   "Máy chủ chưa cài litestream. Chạy lại workspace/setup.sh trên máy chủ.": "This server doesn't have litestream. Run workspace/setup.sh on the server again.",
+  // Ghi thử lên R2 (r2probe.ts)
+  "Token R2 chưa có quyền ghi vào bucket này. Tạo token với quyền Object Read & Write cho đúng bucket rồi dán lại cả hai khóa.": "This R2 token can't write to the bucket. Create a token with Object Read & Write on this bucket, then paste both keys again.",
+  "Không có bucket này trong tài khoản Cloudflare. Kiểm tra lại tên bucket và Account ID.": "This bucket doesn't exist in the Cloudflare account. Check the bucket name and Account ID.",
+  "Access Key ID hoặc Secret Access Key không đúng. Dán lại cả hai khóa của cùng một token R2.": "The Access Key ID or Secret Access Key is wrong. Paste both keys from the same R2 token.",
+  "Tên bucket R2 không hợp lệ.": "The R2 bucket name isn't valid.",
+  "Không kết nối được tới R2. Kiểm tra Account ID (32 ký tự, ở trang R2 của Cloudflare) và mạng của máy chủ.": "Couldn't reach R2. Check the Account ID (32 characters, on Cloudflare's R2 page) and the server's network.",
+  "R2 từ chối lần ghi thử. Kiểm tra token, bucket và Account ID.": "R2 refused the test write. Check the token, bucket and Account ID.",
 };
 export const AUTH_EN2VI: Record<string, string> = {
+  "Earlier errors (fixed by a later successful sync)": "Lỗi trước đó (đã hết sau một lần đồng bộ thành công)", "Fixed": "Đã hết",
   "Passkey": "Khóa truy cập", "Passkeys": "Khóa truy cập", "Security": "Bảo mật",
   "Added a passkey": "Đã thêm khóa truy cập", "Renamed a passkey": "Đã đổi tên khóa truy cập", "Removed a passkey": "Đã xóa khóa truy cập", "Couldn't add a passkey": "Không thêm được khóa truy cập",
   "Couldn't sign in with a passkey. Try another way.": "Không đăng nhập được bằng khóa truy cập. Hãy dùng cách khác.",

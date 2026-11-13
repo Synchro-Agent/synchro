@@ -10,7 +10,7 @@ import * as I from "./icons";
 
 type St = {
   enabled: boolean; accountId: string; bucket: string; accessKeyId: string; hasSecret: boolean; prefix: string; testReplica: boolean; binary: string | null;
-  running: boolean; pid: number | null; startedAt: number | null; restarts: number; errors: { at: number; level: string; msg: string }[];
+  running: boolean; pid: number | null; startedAt: number | null; restarts: number; errors: { at: number; level: string; msg: string; resolved?: boolean }[]; hint?: string | null;
   localTxid: string | null; replicaTxid: string | null; lastSyncAt: number | null; walSize: string | null; statusError: string | null; lagTx: number | null; lagSec: number | null;
   owner?: boolean;
 };
@@ -49,7 +49,9 @@ export function ContinuousBackup({ Toggle }: { Toggle: ToggleT }) {
   const stale = s.enabled && s.lagSec !== null && s.lagTx !== null && s.lagTx > 0 && s.lagSec > 300;
   // Lưu / gỡ cấu hình R2 và bật / tắt chỉ chủ sở hữu (máy chủ cũng chặn); quản trị viên vẫn xem trạng thái và chạy thử khôi phục.
   const own = s.owner !== false;
-  const state = !s.enabled ? "Off" : !s.binary ? "Not installed" : s.running ? (s.errors.length && s.errors[0].at > Date.now() - 10 * 60_000 ? "Running with errors" : "Running") : "Stopped";
+  // Lỗi đã hết sau một lần đồng bộ thành công (vd. vừa sửa quyền token) không làm nhãn thành "có lỗi".
+  const openErrs = s.errors.filter((e) => !e.resolved), oldErrs = s.errors.filter((e) => e.resolved);
+  const state = !s.enabled ? "Off" : !s.binary ? "Not installed" : s.running ? (openErrs.length && openErrs[0].at > Date.now() - 10 * 60_000 ? "Running with errors" : "Running") : "Stopped";
   return <>
     <p className="d adm-privacy"><I.Retry size={14} />Streams every change to the database to your Cloudflare R2 bucket within seconds, so a lost server loses at most a few seconds of data. Nightly backups keep running as before. Setup steps are in docs/backup-r2.md.</p>
     <div className="adm-card bk-card">
@@ -80,7 +82,9 @@ export function ContinuousBackup({ Toggle }: { Toggle: ToggleT }) {
         <Kv k="Restarts since the web app started" v={num(s.restarts)} bad={s.restarts > 3} />
         {s.statusError && <Kv k="Status check" v={s.statusError} bad />}
       </>}
-      {s.errors.length > 0 && <div className="bk-errs">{s.errors.slice(0, 5).map((e, i) => <div key={i} className="adm-log"><span className="tm" data-notr>{fmtDate(e.at)}</span><span style={{ minWidth: 0, overflowWrap: "anywhere" }} data-notr><span className="adm-chip">{e.level}</span> {e.msg}</span></div>)}</div>}
+      {s.hint && <p className="d bk-warn" role="status">{s.hint}</p>}
+      {openErrs.length > 0 && <div className="bk-errs">{openErrs.slice(0, 5).map((e, i) => <div key={i} className="adm-log"><span className="tm" data-notr>{fmtDate(e.at)}</span><span style={{ minWidth: 0, overflowWrap: "anywhere" }} data-notr><span className="adm-chip">{e.level}</span> {e.msg}</span></div>)}</div>}
+      {oldErrs.length > 0 && <details className="bk-errs bk-old"><summary className="d">Earlier errors (fixed by a later successful sync) · <span data-notr>{oldErrs.length}</span></summary>{oldErrs.slice(0, 5).map((e, i) => <div key={i} className="adm-log"><span className="tm" data-notr>{fmtDate(e.at)}</span><span style={{ minWidth: 0, overflowWrap: "anywhere", opacity: 0.7 }}><span className="adm-chip">Fixed</span> <span data-notr>{e.msg}</span></span></div>)}</details>}
       <div className="adm-perm-row">
         <div><div className="t">Test restore</div><div className="d">Restores the newest copy from R2 into a temporary file, checks it with PRAGMA integrity_check, counts rows in the main tables, then deletes it. The live database isn&apos;t touched.</div></div>
         <button className="btn" disabled={!ready || !s.binary || !!busy} onClick={() => void runDrill()}>{busy === "drill" ? <span className="api-spin" /> : "Test restore"}</button>
