@@ -512,6 +512,16 @@ console.log("16. Tra cứu web → model hạng vừa trở lên có công cụ;
   // (e) động từ thao tác + tên ứng dụng ở GẦN nhau mới là thao tác; ở xa nhau trong câu phân tích thì không kéo thành act.
   ok(R.taskOf(q("Tạo Google Docs báo cáo doanh thu")) === "act", "“Tạo Google Docs báo cáo” (tân ngữ sát động từ) là thao tác");
   ok(R.taskOf(q("So sánh Notion và Trello rồi đánh giá nên tạo kế hoạch ở đâu")) === "analyze", "câu phân tích có nhắc connector + động từ ở xa: vẫn là phân tích, không phải thao tác");
+  // R3: tên ứng dụng nói TRƯỚC động từ ("Trên Notion, tạo trang…") vẫn là thao tác.
+  for (const t of ["Trên Notion, tạo trang mới tên Kế hoạch", "In Notion, create a page called Roadmap", "Google Sheets thêm một dòng doanh thu tháng 10",
+    "Notion: tạo trang mới tên Kế hoạch", "Trong Google Docs, tạo tài liệu báo cáo tuần", "On Slack, send a message to the team"]) ok(R.taskOf(q(t)) === "act", `R3: “${t}” (ứng dụng trước động từ) → thao tác`, R.taskOf(q(t)));
+  for (const [t, want] of [["Notion và Trello, cái nào tốt hơn để tạo kế hoạch?", "analyze"], ["Compare Notion and Trello then create a plan", "analyze"],
+    ["Trong Slack có cách nào xóa tin nhắn không?", "qa"], ["Cách gửi mail qua Gmail là gì", "qa"], ["Gmail và Outlook khác nhau thế nào khi gửi mail", "qa"]])
+    ok(R.taskOf(q(t)) === want, `R3: “${t}” vẫn là ${want}`, R.taskOf(q(t)));
+  // W23-13 (D1.2): động từ + ứng dụng đã nối thắng mọi nhãn chủ đề — kể cả khi câu có chữ của code / học ngôn ngữ. Hỏi cách làm thì vẫn không.
+  for (const t of ["Gửi tin Slack cho team báo deploy xong", "Tạo trang Notion ghi chú API endpoint mới", "Gửi email qua Gmail cho giáo viên tiếng Anh của con"])
+    ok(R.taskOf(q(t)) === "act", `W23-13: “${t}” → thao tác`, R.taskOf(q(t)));
+  ok(R.taskOf(q("Làm sao gửi tin Slack bằng API trong Python?")) !== "act", "W23-13: hỏi cách làm (có code) vẫn không phải thao tác");
   // (d) codeOnly: chỉ bắt tên model code (xét phần sau "/"); gói "sub-codex/" bao model chung thì KHÔNG bị tính.
   for (const k of ["sub-grok/grok-build", "sub-grok/grok-4.7-build-fast", "openai/gpt-5-codex", "qwen/qwen3-coder", "codex-mini-latest"]) ok(M.codeOnly(k), `codeOnly(${k}) = true`);
   for (const k of ["sub-codex/gpt-6.1-sol", "sub-codex/gpt-6-luna", "anthropic/claude-opus-5-5", "google/gemini-4-argon", "sub-grok/grok-4.7"]) ok(!M.codeOnly(k), `codeOnly(${k}) = false`);

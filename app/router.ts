@@ -73,6 +73,11 @@ const ACTION_VERB = "tạo|tao|sửa|sua|chỉnh sửa|gửi|gui|xóa|xoá|xoa|t
 // Ranh giới từ như W() để "drive" không khớp "driver".
 const B = "(?<![\\p{L}\\p{N}])", E = "(?![\\p{L}\\p{N}])", NEAR = "(?:(?![.?!\\n]).){0,30}?";
 const ACT_ON_APP_RE = new RegExp(`${B}(?:${ACTION_VERB})${E}${NEAR}${B}(?:${CONNECTOR_APPS})${E}`, "iu");
+// Thứ tự ngược, tên ứng dụng nói TRƯỚC: "Trên Notion, tạo trang mới…", "In Notion, create a page…", "Google Sheets thêm một dòng…", "Notion: tạo trang…".
+// Chặt hơn chiều xuôi: tên ứng dụng phải mở đầu câu hoặc đứng sau giới từ chỉ nơi chốn; tới động từ tối đa 20 ký tự, không qua dấu kết câu hay từ
+// nối ("rồi / và / hoặc / với / then / and / or / vs") — để "So sánh Notion và Trello rồi đánh giá nên tạo kế hoạch ở đâu" vẫn là phân tích.
+const APP_FIRST_RE = new RegExp(`(?:^\\s*|${B}(?:trên|trong|ở|tại|vào|in|on|inside|within|at)\\s+)(?:${CONNECTOR_APPS})${E}(?:(?![.?!\\n]|${B}(?:rồi|và|hoặc|với|then|and|or|vs)${E}).){0,20}?${B}(?:${ACTION_VERB})${E}`, "iu");
+const actOnApp = (ins: string) => ACT_ON_APP_RE.test(ins) || APP_FIRST_RE.test(ins);
 // Câu cần dữ liệu mới trên web → "tra cứu" (lookup): tỷ giá, giá tài sản / món hàng, thời tiết, tin tức, phiên bản mới nhất, hay lời nhờ tìm thẳng trên web.
 // Giữ chặt để không kéo "hôm nay mình rảnh" hay "đánh giá phim" vào đây: "giá" phải đi với tài sản / "hôm nay" / "bao nhiêu" (và loại "đánh giá", "giá trị", "báo giá").
 const LOOKUP_WEB = new RegExp([
@@ -369,9 +374,12 @@ function scores(ins: string, a: Ask): Map<Task, number> {
   // Động từ thao tác có tân ngữ là tên ứng dụng ngay gần → việc dùng công cụ (act), trên mọi nhãn chủ đề: "Tạo Google Docs báo cáo" (từng là
   // "viết"), "Send a Slack message" (từng là hỏi đáp). Không áp đè khi câu rõ ràng nghiêng phân tích (tín hiệu ≥ 5) mà act chỉ đến từ luật gần
   // này (so "Tạo Google Docs báo cáo" chỉ có "viết" = 3 nên vẫn thành act). Guard HOWTO ngay dưới vẫn bỏ act cho câu hỏi cách làm.
-  if (ACT_ON_APP_RE.test(ins) && Math.max(out.get("analyze") ?? 0, out.get("write") ?? 0) < 5) out.set("act", Math.max(out.get("act") ?? 0, 5));
-  // Hỏi cách làm, hoặc đang nhờ viết code: không phải nhờ làm thao tác.
-  if (out.has("act") && (HOWTO.test(ins) || (out.get("code") ?? 0) >= 3 || (out.get("language") ?? 0) >= 3)) out.delete("act");
+  // D1.2: thao tác trên ứng dụng đã nối thắng mọi nhãn chủ đề (code, học ngôn ngữ…): điểm act nâng lên bằng nhãn cao nhất (hòa thì act đứng trước
+  // trong ORDER), trừ "tạo sản phẩm" (build đứng trước act). "Gửi tin Slack cho team báo deploy xong" từng thành viết code vì chữ "deploy".
+  const appAct = actOnApp(ins) && Math.max(out.get("analyze") ?? 0, out.get("write") ?? 0) < 5;
+  if (appAct) out.set("act", Math.max(5, ...[...out].filter(([t]) => t !== "build").map(([, n]) => n)));
+  // Hỏi cách làm: không phải nhờ làm thao tác. Đang nhờ viết code / hỏi ngôn ngữ cũng không — trừ khi act đến từ thao tác trên ứng dụng đã nối ở trên.
+  if (out.has("act") && (HOWTO.test(ins) || (!appAct && ((out.get("code") ?? 0) >= 3 || (out.get("language") ?? 0) >= 3)))) out.delete("act");
   // Xin ảnh là việc dùng công cụ dù câu không có chữ "ảnh" ("vẽ con mèo"): model nào được chọn cũng gọi được generate_image.
   if ((out.get("code") ?? 0) < 3 && (out.get("language") ?? 0) < 3 && wantsImageIns(ins)) out.set("act", Math.max(out.get("act") ?? 0, 5));
   if (DRAW_CHART.test(ins) && !imgQuestion(ins)) out.set("data", Math.max(out.get("data") ?? 0, 3));
