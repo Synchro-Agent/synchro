@@ -527,6 +527,11 @@ try {
       ok(I.withImageDefaults(p).endsWith(SUF), `W23-18: thêm hậu tố, không phải xin chữ: "${p}"`, I.withImageDefaults(p));
     for (const p of ["biển hiệu quán phở", "biển quảng cáo ngoài trời", "nhãn dán cho hũ mật ong", "nhãn mác chai rượu vang", "dán nhãn hộp quà"])
       ok(I.withImageDefaults(p) === p, `W23-18: giữ nguyên, cụm biển hiệu / nhãn dán là xin chữ: "${p}"`, I.withImageDefaults(p));
+    // W23-18 (sửa lại): "tấm biển … ghi X", "tấm bảng", động từ ghi / in chữ, "that says" vẫn là xin chữ; "đàn ghi-ta", "cô gái ghi-đông" không.
+    for (const p of ["tấm biển gỗ trước nhà ghi Welcome", "tấm bảng đen ghi thực đơn hôm nay", "cốc sứ in chữ Best Dad", "a wooden sign that says Welcome", "tấm biển nhỏ treo cửa"])
+      ok(I.withImageDefaults(p) === p, `W23-18: giữ nguyên, xin chữ trên biển / bảng: "${p}"`, I.withImageDefaults(p));
+    for (const p of ["chàng trai chơi đàn ghi-ta bên bãi biển", "a girl reading a book by the sea"])
+      ok(I.withImageDefaults(p).endsWith(SUF), `W23-18: thêm hậu tố, không phải xin chữ: "${p}"`, I.withImageDefaults(p));
     ok(I.withImageDefaults("con mèo, không chữ") === "con mèo, không chữ", "không thêm hai lần");
     ok(I.imagePrompt("agy", { prompt: "con mèo", count: 1 }).includes(SUF.trim()), "imagePrompt (ảnh mới) có hậu tố");
     ok(!I.imagePrompt("agy", { prompt: "con mèo", count: 1 }, "/w/ref.png").includes("không chữ"), "sửa ảnh có sẵn: giữ nguyên, không thêm hậu tố");
