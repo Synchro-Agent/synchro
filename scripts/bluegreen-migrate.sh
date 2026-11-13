@@ -98,7 +98,7 @@ say "node_modules → $(bg_mods_current "$APP")"
 ID=$(cat "$APP/.next/BUILD_ID")
 if [ "$RESUME" = 0 ]; then
   # Bản đang chạy phải chính là .next này (lần deploy kiểu cũ có thể đã lỗi rồi trả bản trước về) và phải có mã xanh/lam.
-  RUNNING=$(curl -sS --max-time 5 "http://127.0.0.1:$OLDPORT/api/health" 2>/dev/null | sed -n 's/.*"build":"\([^"]*\)".*/\1/p')
+  RUNNING=$( { curl -sS --max-time 5 "http://127.0.0.1:$OLDPORT/api/health" 2>/dev/null || true; } | sed -n 's/.*"build":"\([^"]*\)".*/\1/p')
   [ "$RUNNING" = "$ID" ] || { echo "Bản đang chạy ở cổng $OLDPORT (${RUNNING:-không trả lời}) không phải $APP/.next ($ID): deploy lại bằng cách cũ cho đạt rồi chạy lại." >&2; exit 1; }
   has_bg_code "$APP/.next" || { echo "Bản build đang chạy ($ID) chưa có mã xanh/lam (app/role.ts, app/drain.ts): deploy bản này bằng cách cũ cho đạt (build ok) rồi chạy lại." >&2; exit 1; }
 fi

@@ -356,7 +356,7 @@ const mig = (name, o = {}) => {
   fs.writeFileSync(path.join(A, "node_modules", ".synchro-lock"), "lockhash\n");
   fs.writeFileSync(path.join(H, "site"), "server {\n    location / {\n        proxy_pass http://127.0.0.1:3000;\n    }\n    location /ws { proxy_pass http://127.0.0.1:3555; }\n}\n");
   fs.writeFileSync(path.join(H, "ops.env"), "APP=/var/www/synchro\nPM2=synchro\nPORT=3000\nWATCHDOG_ALERT_CMD=keep\n");
-  fs.writeFileSync(path.join(P, o.oldName ?? "synchro"), "online");
+  fs.writeFileSync(path.join(P, o.oldName ?? "synchro"), o.oldDown ? "stopped" : "online");
   fs.writeFileSync(path.join(H, "active"), "3000");
   if (o.live) fs.writeFileSync(path.join(H, "state", "live-color"), `${o.live} ${A}\n`);
   const sh = (n, body) => { fs.writeFileSync(path.join(mb, n), `#!/bin/bash\n${body}\n`); fs.chmodSync(path.join(mb, n), 0o755); };
@@ -395,6 +395,8 @@ case "$*" in *"-o /dev/null"*) exit 0 ;; esac; case "$url" in *api/health*) prin
   let m = mig("ok"); if (process.env.DEBUG_MIG) console.log(m.out);
   ok(m.code === 0 && m.st.live === "green" && m.st.active === "3002" && m.st.pm2["synchro-green"] === "online" && !m.st.pm2.synchro && /synchro-green/.test(m.st.dump) && /PM2=synchro-green/.test(m.st.env), "chuyển đổi đủ bước: green 3002 sống, app cũ xóa, pm2 save, synchro-ops.env", { code: m.code, st: m.st, out: m.out.slice(-1500) });
   ok(fs.readlinkSync(path.join(m.A, ".next-green", "node_modules")).endsWith("lockhash/node_modules"), "DEPLOY-4: green có liên kết thư viện riêng");
+  m = mig("noanswer", { oldDown: true });
+  ok(m.code === 1 && /không trả lời/.test(m.out) && !m.st.live, "MIGRATE-1: cổng cũ không trả lời: báo rõ lý do (không thoát im lặng vì set -e)", { code: m.code, out: m.out.slice(-300) });
   m = mig("oldcode", { newCode: false });
   ok(m.code !== 0 && /chưa có mã xanh\/lam/.test(m.out) && m.st.active === "3000" && m.st.pm2.synchro === "online" && !m.st.pm2["synchro-green"] && !m.st.live, "MIGRATE-1: bản đang chạy chưa có mã xanh/lam: từ chối trước khi bật green, không đổi gì", { code: m.code, st: m.st, out: m.out.slice(-400) });
 }
