@@ -15,6 +15,8 @@ export type Plan = {
   perms: Partial<Record<Feat, string>>; realtime: boolean; library: boolean;
   formats: { id: string; label: string }[]; tts: ModelOut[]; sts: ModelOut[];
   note: string | null; checkedAt: number;
+  /** true khi người xem là chủ sở hữu: chỉ chủ sở hữu thấy số credit dùng chung của cả hệ thống; người khác thấy "credits" là hạn mức riêng của họ trong ngày. */
+  owner?: boolean;
 };
 export type Voice = {
   lib?: boolean;
