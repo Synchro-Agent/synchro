@@ -8,7 +8,7 @@ import {
   generateAuthenticationOptions, generateRegistrationOptions, verifyAuthenticationResponse, verifyRegistrationResponse,
   type AuthenticationResponseJSON, type RegistrationResponseJSON,
 } from "@simplewebauthn/server";
-import { AuthError, appUrl, audit, clientIp, db, device, getUser, limit, needsVerify, passkeySignIn, VERIFY_FIRST, type UserRow } from "./authstore";
+import { AuthError, appUrl, audit, clientIp, db, device, getUser, limit, needsVerify, passkeySignIn, requireRecentReauth, VERIFY_FIRST, type UserRow } from "./authstore";
 
 const MIN = 60_000;
 const CHALLENGE_TTL = 5 * MIN;
@@ -62,6 +62,8 @@ export const hasPasskey = (uid: string) => { try { return !!t().prepare("SELECT 
 export async function registrationOptions(req: Request, u: UserRow) {
   // Email chưa xác minh có thể là của người khác: người đăng ký trước không được cài sẵn đường vào tài khoản của chủ thật.
   if (needsVerify(u)) throw new AuthError(VERIFY_FIRST, 403);
+  // Thêm khóa truy cập là hành động nhạy cảm: cần vừa xác minh lại (đăng nhập / mật khẩu) trong 5 phút.
+  requireRecentReauth(u);
   limit("passkey-reg:" + u.id, 20, 15 * MIN);
   const mine = t().prepare("SELECT id, transports FROM user_passkeys WHERE user_id = ?").all(u.id) as { id: string; transports: string }[];
   if (mine.length >= MAX_KEYS) throw new AuthError("Mỗi tài khoản có tối đa 20 khóa truy cập. Hãy xóa bớt khóa không dùng nữa.", 400);
@@ -81,6 +83,7 @@ const cleanName = (v: unknown) => (typeof v === "string" ? v.normalize("NFC").re
 
 export async function registerPasskey(req: Request, u: UserRow, response: unknown, name?: unknown) {
   if (needsVerify(u)) throw new AuthError(VERIFY_FIRST, 403);
+  requireRecentReauth(u);
   const resp = response as RegistrationResponseJSON;
   const challenge = take(resp?.response?.clientDataJSON, "reg", u.id);
   const { rpID, origin } = relyingParty(req);

@@ -35,6 +35,8 @@ export async function register() {
         if (now - sweptAt < 86_400_000) return;
         sweptAt = now;
         void Promise.all([import("./app/outputs"), import("./app/runs"), import("./app/refs")]).then(([o, r, f]) => { o.sweepOutputs(); r.sweepRuns(); f.sweepRefs(); }).catch((e) => console.error("[sweep]", e));
+        // Dọn phiên đã hết hạn còn đọng lại (phiên trượt phần lớn tự hết, nhưng phiên bỏ không thì không).
+        void import("./app/authstore").then((a) => { const n = a.sweepSessions(); if (n) console.log(`[sweep] đã xóa ${n} phiên hết hạn`); }).catch((e) => console.error("[sweep]", e));
       });
       // Giọng của tài khoản đã xóa mà lần xóa trên ElevenLabs bị lỗi: thử lại mỗi giờ.
       let voicePurgeAt = 0;

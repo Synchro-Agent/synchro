@@ -8,9 +8,10 @@ export const runtime = "nodejs";
 // { token, check: true }: chỉ kiểm tra đường dẫn còn dùng được không.
 export const POST = handle(async (req) => {
   sameOrigin(req);
-  const { token, password, check, lang } = await req.json();
-  if (check === true) { checkResetLink(req, token); return Response.json({ ok: true }); }
-  const { user: u, fresh, dropped } = await redeemResetLink(req, token, password, lang);
+  const { token, password, check, lang, dropFactors } = await req.json();
+  // { token, check: true } cũng cho biết tài khoản có khóa truy cập / 2FA không, để trang hỏi có muốn gỡ khi đặt lại mật khẩu.
+  if (check === true) { const { factors } = checkResetLink(req, token); return Response.json({ ok: true, factors }); }
+  const { user: u, fresh, dropped } = await redeemResetLink(req, token, password, lang, dropFactors === true);
   await removeUserDevices(u.id).catch((e) => console.error("[reset]", e));
   // Chủ thật của email vừa giành lại tài khoản chưa từng được xác minh.
   if (fresh) await afterClaim(u.id, true, "reset").catch((e) => console.error("[reset]", e));

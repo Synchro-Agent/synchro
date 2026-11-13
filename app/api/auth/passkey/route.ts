@@ -1,4 +1,4 @@
-import { AuthError, handle, publicUser, requireUser, sameOrigin, withCookies } from "../../../authstore";
+import { AuthError, handle, publicUser, reauthPassword, requireUser, sameOrigin, withCookies } from "../../../authstore";
 import { authenticationOptions, deletePasskey, listPasskeys, loginWithPasskey, registerPasskey, registrationOptions, renamePasskey } from "../../../passkeys";
 
 export const runtime = "nodejs";
@@ -10,7 +10,7 @@ export const GET = handle(async (req) => Response.json({ passkeys: listPasskeys(
 // login-options, login: trang đăng nhập (chưa có phiên). reg-options, register, rename, delete: tài khoản đang đăng nhập.
 export const POST = handle(async (req) => {
   sameOrigin(req);
-  const b = (await req.json().catch(() => ({}))) as { op?: unknown; response?: unknown; id?: unknown; name?: unknown };
+  const b = (await req.json().catch(() => ({}))) as { op?: unknown; response?: unknown; id?: unknown; name?: unknown; password?: unknown };
   if (b.op === "login-options") return Response.json(await authenticationOptions(req));
   if (b.op === "login") {
     const { user, cookie, mfa } = await loginWithPasskey(req, b.response);
@@ -19,6 +19,8 @@ export const POST = handle(async (req) => {
     return withCookies(Response.json({ user: publicUser(user) }), cookie);
   }
   const { user } = requireUser(req);
+  // Thêm khóa truy cập cần vừa xác minh lại: gửi kèm mật khẩu hiện tại thì xác minh ngay (nếu chưa xác minh lại gần đây).
+  if ((b.op === "reg-options" || b.op === "register") && b.password !== undefined) await reauthPassword(user, b.password);
   if (b.op === "reg-options") return Response.json(await registrationOptions(req, user));
   if (b.op === "register") return Response.json({ passkeys: await registerPasskey(req, user, b.response, b.name) });
   if (b.op === "rename") return Response.json({ passkeys: renamePasskey(req, user, b.id, b.name) });
