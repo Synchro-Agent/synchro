@@ -15,6 +15,7 @@
 // Mọi thao tác chạy bằng user của engine (thư mục đăng nhập 0700 của user đó) qua một tiến trình node ngắn; cấu hình (có token cầu nối) đi qua stdin, không qua tham số.
 // SYNCHRO_CLI_TURN_HOME=0: tắt, về cách cũ (cấu hình chung + khóa tài khoản). Dựng HOME riêng lỗi thì lượt đó cũng về cách cũ (ghi nhật ký).
 import crypto from "node:crypto";
+import fs from "node:fs";
 import path from "node:path";
 import type { TurnRequest } from "./engine";
 import { spawnCli, TURN_HOME_PREFIX, turnHomeBase } from "./cli_runtime";
@@ -31,9 +32,9 @@ const LAYOUT: Record<HomeCli, Layout> = {
 export const turnHomeOn = () => process.env.SYNCHRO_CLI_TURN_HOME !== "0";
 const syncMs = () => { const n = Number(process.env.SYNCHRO_TURN_HOME_SYNC_MS); return Number.isFinite(n) && n >= 100 ? n : 2000; };
 
-/** Mã chạy bằng node của máy chủ dưới user của engine. Đọc JSON từ stdin, in JSON ra stdout. Không phụ thuộc gì ngoài thư viện chuẩn. */
-export const TURN_HOME_JS = String.raw`"use strict";
-const fs = require("fs"), path = require("path"), crypto = require("crypto");
+/** Thân hàm (fs, path, crypto, p, inproc) → kết quả: chỉ dùng thư viện chuẩn được truyền vào. Chạy bằng node dưới user của engine (TURN_HOME_JS), hoặc ngay trong
+ *  tiến trình máy chủ khi không có user riêng (máy dev, dev:mock, kiểm thử): khi đó không đổi umask, khóa đang bận thì ném "busy" để chạy bằng tiến trình riêng. */
+const TURN_HOME_CORE = String.raw`"use strict";
 const COPY_MAX = 256 * 1024, STABLE_MS = 300;
 // Tệp đăng nhập: tên như dưới. Chép (chế độ copy) hay liên kết; tệp khác (chỉ mục phiên, cài đặt, cơ sở dữ liệu, nhật ký) luôn liên kết.
 const LOGIN = /token|auth|cred|oauth|account|login|secret/i;
@@ -43,16 +44,10 @@ const hash = (f) => { try { return crypto.createHash("sha256").update(fs.readFil
 const nap = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
 const join = (d, n) => (d ? d + "/" + n : n);
 const tmpOf = (f) => f + ".synchro-" + crypto.randomBytes(4).toString("hex");
-let raw = "";
-process.stdin.setEncoding("utf8");
-process.stdin.on("data", (d) => { raw += d; });
-process.stdin.on("end", () => {
-  try { process.stdout.write(JSON.stringify(main(JSON.parse(raw)))); }
-  catch (e) { process.stderr.write(String((e && e.message) || e)); process.exit(1); }
-});
+return main(p);
 function main(p) {
   if (path.dirname(p.turn) !== p.base || !path.basename(p.turn).startsWith(p.prefix) || path.basename(p.turn) === p.prefix + "lock") throw new Error("bad turn dir");
-  process.umask(0o077);
+  if (!inproc) process.umask(0o077);
   if (p.op === "drop") { fs.rmSync(p.turn, { recursive: true, force: true }); return {}; }
   if (p.op === "open") return open(p);
   return locked(p, () => (p.op === "sync" ? sync(p) : merge(p)));
@@ -114,6 +109,7 @@ function locked(p, fn) {
     try { fs.mkdirSync(lk, { mode: 0o700 }); held = true; }
     catch (e) {
       if (e.code !== "EEXIST") break;
+      if (inproc) throw new Error("busy");
       const st = lst(lk);
       if (st && Date.now() - st.mtimeMs > 30000) { try { fs.rmdirSync(lk); } catch {} continue; }
       nap(20);
@@ -201,12 +197,31 @@ function merge(p) {
   return { log };
 }
 `;
+/** Chương trình node chạy dưới user của engine: đọc tham số JSON từ stdin, in kết quả JSON ra stdout. */
+export const TURN_HOME_JS = `"use strict";
+const fs = require("fs"), path = require("path"), crypto = require("crypto");
+let raw = "";
+process.stdin.setEncoding("utf8");
+process.stdin.on("data", (d) => { raw += d; });
+process.stdin.on("end", () => {
+  try { process.stdout.write(JSON.stringify((function (fs, path, crypto, p, inproc) {\n${TURN_HOME_CORE}\n})(fs, path, crypto, JSON.parse(raw), false))); }
+  catch (e) { process.stderr.write(String((e && e.message) || e)); process.exit(1); }
+});
+`;
+type Core = (f: typeof fs, p: typeof path, c: typeof crypto, op: Op, inproc: boolean) => Record<string, unknown>;
+let coreFn: Core | null = null;
+const core = (): Core => (coreFn ??= new Function("fs", "path", "crypto", "p", "inproc", TURN_HOME_CORE) as unknown as Core);
 
 export type TurnHome = { dir: string; base: string; env: Record<string, string>; info: { copied: number; linked: number }; close: () => Promise<void> };
 type Op = { op: "open" | "sync" | "merge" | "drop"; base: string; turn: string; prefix: string; copy: boolean; real: string[]; ensure: string[]; own: Record<string, OwnFile | true>; snap?: Record<string, string | null>; links?: string[] };
 
-/** Chạy TURN_HOME_JS bằng user của engine (spawnCli: sudo / bwrap như CLI). */
+/** Chạy TURN_HOME_JS bằng user của engine (spawnCli: sudo / bwrap như CLI); không có user riêng thì chạy ngay trong tiến trình (vài thao tác tệp, dưới 5 ms). */
 async function runOp(env: Record<string, string>, o: Op): Promise<Record<string, unknown>> {
+  // SYNCHRO_TURN_HOME_SPAWN=1: luôn chạy bằng tiến trình riêng như khi có user của engine (kiểm thử đường đó trên máy dev).
+  if (!process.env.SYNCHRO_ENGINE_USER && process.env.SYNCHRO_ENGINE_BWRAP !== "1" && process.env.SYNCHRO_TURN_HOME_SPAWN !== "1") {
+    try { return core()(fs, path, crypto, o, true); }
+    catch (e) { if ((e as Error).message !== "busy") throw e; }
+  }
   const p = spawnCli(process.execPath, ["-e", TURN_HOME_JS], { env, cwd: o.base, stdin: JSON.stringify(o), timeoutMs: 30_000 });
   let out = "";
   for await (const l of p.lines) out += l;

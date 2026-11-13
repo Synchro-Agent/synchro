@@ -61,9 +61,11 @@ async function turn(cli, env, prompt, br, extra = {}) {
   return o;
 }
 
-console.log("1. Dựng HOME riêng: cầu nối chỉ trong HOME của lượt, phiên và đăng nhập liên kết về thư mục đăng nhập");
-{
-  const base = path.join(HOME, "logins", "agy", "unit");
+// Cùng một bộ thử cho hai cách chạy: ngay trong tiến trình (không có user riêng của engine) và bằng tiến trình node riêng (như khi có user của engine).
+for (const spawn of [false, true]) {
+  if (spawn) process.env.SYNCHRO_TURN_HOME_SPAWN = "1";
+  console.log(`1. Dựng HOME riêng (${spawn ? "tiến trình riêng" : "trong tiến trình"}): cầu nối chỉ trong HOME của lượt, phiên và đăng nhập liên kết về thư mục đăng nhập`);
+  const base = path.join(HOME, "logins", "agy", `unit-${spawn ? "s" : "i"}`);
   fs.mkdirSync(path.join(base, ".gemini/config"), { recursive: true });
   fs.mkdirSync(path.join(base, ".gemini/antigravity-cli/cache"), { recursive: true });
   fs.writeFileSync(path.join(base, ".gemini/antigravity-cli/antigravity-oauth-token"), "T0");
@@ -123,7 +125,7 @@ console.log("1. Dựng HOME riêng: cầu nối chỉ trong HOME của lượt, 
   }
   // Grok: config.toml của tài khoản bỏ mục synchro cũ, giữ phần khác.
   {
-    const gb = path.join(HOME, "logins", "grok", "unit");
+    const gb = path.join(HOME, "logins", "grok", `unit-${spawn ? "s" : "i"}`);
     fs.mkdirSync(path.join(gb, ".grok"), { recursive: true });
     fs.writeFileSync(path.join(gb, ".grok/config.toml"), 'model = "grok-4.7"\n\n[mcp_servers.synchro]\nurl = "http://old"\n\n[mcp_servers.synchro.headers]\nx = "1"\n\n[mcp_servers.khac]\nurl = "http://k"\n');
     const h = await TH.openTurnHome("grok", { env: { HOME: gb, GROK_HOME: path.join(gb, ".grok") } }, { ".grok/config.toml": { mode: "toml-drop", name: "synchro" } });
@@ -132,6 +134,7 @@ console.log("1. Dựng HOME riêng: cầu nối chỉ trong HOME của lượt, 
     await h.close();
     ok(fs.readFileSync(path.join(gb, ".grok/config.toml"), "utf8").includes("http://old"), "grok: cấu hình chung không bị đụng tới");
   }
+  delete process.env.SYNCHRO_TURN_HOME_SPAWN;
 }
 
 async function pairs(cli, copy) {
