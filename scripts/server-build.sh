@@ -148,7 +148,8 @@ from_artifact() {
   echo "Dùng bản build của CI ($(cat "$B/.next/BUILD_ID")), bỏ bước build."
 }
 if ! from_artifact; then
-  su - synchro -c "cd $B && NODE_OPTIONS=--max-old-space-size=3072 npx next build"
+  # Cùng một lệnh build với CI và package.json (npm run build = next build, webpack); chỉ giới hạn bộ nhớ là riêng của máy chủ.
+  su - synchro -c "cd $B && NODE_OPTIONS=--max-old-space-size=3072 npm run build"
 fi
 rm -rf "$B/.next/cache" "$B/.next/server/route-cache"
 NEWID=$(cat "$B/.next/BUILD_ID")

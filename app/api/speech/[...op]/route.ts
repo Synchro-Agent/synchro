@@ -720,7 +720,8 @@ const BUDGET_EST: Record<string, number> = { tts: 0, dialogue: 0, speak: 0, sfx:
 async function POSTop(req: Request, u: UserRow, op: string[]) {
   const key = op.join("/");
   const est = BUDGET_EST[key];
-  if (est !== undefined) checkBudget(u);
+  // Lời báo hết hạn mức gợi ý cách thay thế theo việc: đọc / trò chuyện → giọng trình duyệt; chép lời → micro của trình duyệt; còn lại → chờ hồi.
+  if (est !== undefined) checkBudget(u, key === "stt" || key === "live/token" ? "stt" : key === "tts" || key === "dialogue" || key === "speak" || key === "agent/session" ? "voice" : "other");
   const res = await POSTrun(req, u, op);
   if (est && res.ok) addSpend(u.id, est);
   return res;

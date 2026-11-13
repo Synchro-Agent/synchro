@@ -49,7 +49,8 @@ import { type ABlock, type Citer, anthropicCall, blocksText, searchResults, chat
 import { mergedProviders, prewarmClaude, sessionPlain, subCli, subTurn } from "./ai/subs";
 import { PROJECT_DOC_RULES, PROJECT_DOC_TOOL, projectDocsLong, projectIns, readProjectFile } from "./projectdocs";
 import { REJECTED_RULE, REJECTED_TAG, rejectedBlock, stripAppliedNotes, withProjectIns, withRejected } from "./turnctx";
-import { ASPECTS, generateImages, IMAGE_RULES, IMAGE_TOOL_NAME, imageBudget, imageProduct, imageTool, imageName, IMG_NAME, requestSlug, type ImgErr, type ImgOk } from "./ai/imagegen";
+import { ASPECTS, generateImages, HOUR_MAX as IMAGE_HOUR_MAX, IMAGE_RULES, IMAGE_TOOL_NAME, imageBudget, imageProduct, imageTool, imageName, IMG_NAME, requestSlug, type ImgErr, type ImgOk } from "./ai/imagegen";
+import { IMAGE_LIMIT_NOTE, imageLimitMsg } from "./limitmsg";
 import { IMG_BUDGET_MS, placeholderNote, settleBackground } from "./ai/imgbudget";
 import { POSTER_TEMPLATES, posterProps, type PosterTemplate } from "./design-engine/posters/props";
 import { genImageUrl } from "./artdoc";
@@ -640,7 +641,7 @@ async function runImage(x: Exec, c: Call): Promise<Run> {
     const props = posterProps(c.input?.poster);
     if (typeof props === "string") return fail(props);
     const wait = imageBudget(x.uid, 1);
-    if (wait) return fail(`Tài khoản đã tạo nhiều ảnh trong một giờ qua. Hãy thử lại sau khoảng ${Math.ceil(wait / 60_000)} phút.`);
+    if (wait) return fail(`${imageLimitMsg(IMAGE_HOUR_MAX(), wait)}\n\n${IMAGE_LIMIT_NOTE}`);
     progress("step", "Đang dựng poster 3600×1890");
     try {
       // Satori (next/og) chỉ nạp khi thật sự dựng poster.
@@ -659,7 +660,9 @@ async function runImage(x: Exec, c: Call): Promise<Run> {
       reference = r;
     }
     const wait = imageBudget(x.uid, count);
-    if (wait) return fail(`Tài khoản đã tạo nhiều ảnh trong một giờ qua. Hãy thử lại sau khoảng ${Math.ceil(wait / 60_000)} phút.`);
+    // Nói rõ trần nào (số ảnh mỗi giờ), bao giờ hồi và cách thay thế không tốn ảnh (limitmsg.ts, H1.2). Câu đầu cho người dùng (thẻ công cụ hiện),
+    // IMAGE_LIMIT_NOTE sau dòng trống là chỉ dẫn riêng cho model.
+    if (wait) return fail(`${imageLimitMsg(IMAGE_HOUR_MAX(), wait)}\n\n${IMAGE_LIMIT_NOTE}`);
     // Lượt Antigravity gọi công cụ này đang giữ khóa của tài khoản, mà lượt tạo ảnh cũng cần khóa đó: CLI đã đọc xong cấu hình nên nhả được, như lúc chờ người dùng duyệt.
     x.park?.();
     const stops = [runSignal(), x.calls?.get(c.id)?.cancel].filter((v): v is AbortSignal => !!v);
@@ -2062,7 +2065,7 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
 registerExec("chat", async (body, user) => {
   // Gói subscription của chính người dùng không tính vào hạn mức chi phí API của Synchro.
   const over = subCli(body.model) ? null : overLimit(user);
-  if (over && body.model === AUTO) body = { ...body, plansOnly: over };
+  if (over && body.model === AUTO) body = { ...body, plansOnly: overLimit(user, "plans") ?? over };
   else if (over) return { http: 429, json: { error: over, usageLimit: true } };
   const scope = { uid: user.id, feature: "chat" };
   const res = await usageScope.run(scope, () => chatPost(body, { user }, scope));

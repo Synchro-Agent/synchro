@@ -1,6 +1,7 @@
 // Kiểm thử giao diện bằng Chrome ẩn (hồ sơ riêng) trên npm run dev:mock. Chạy tay: node tests/ui/connector-login.mjs
 // Đăng nhập connector trong cửa sổ bật lên quay về được dù trang Synchro gửi COOP same-origin: cửa sổ đi qua trang của hãng thì mất window.opener, nên trang chính
 // từng vẫn hiện "Cần kết nối" tới khi tải lại, còn cửa sổ thì nạp cả ứng dụng. Đi đúng đường thật trong trình duyệt thật với máy chủ MCP giả lập (trang đồng ý ở 127.0.0.1 khác nguồn).
+import { waitFor } from "../lib/wait.mjs";
 import { spawn } from "node:child_process";
 import { rmSync } from "node:fs";
 
@@ -102,8 +103,7 @@ try {
   await inPopup(pop, `new Promise((r) => { const t = setInterval(() => { const a = document.querySelector("#allow"); if (a) { clearInterval(t); r(true); a.click(); } }, 100); })`);
   const updated = await page.until(`!!document.querySelector(".cn-sub.ok") && ${byText(".cn-card", "Mock Notes")}?.textContent.match(/3 (tools|công cụ)/)`, 12000);
   say(updated, "trang chính hiện đã kết nối, không cần tải lại");
-  await sleep(1500);
-  say(!popups.has(pop), "cửa sổ đăng nhập tự đóng");
+  say(!!(await waitFor(() => !popups.has(pop), 5000)), "cửa sổ đăng nhập tự đóng");
   await wipe();
 
   console.log("━━ từ chối: lý do nằm ngay trên thẻ");

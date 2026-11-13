@@ -30,7 +30,8 @@ export const POST = route({ auth: "user", json: true }, async ({ req, user, sess
   // chatPost báo rõ trên thanh thông báo, không có gói nào dùng được thì mới báo hết hạn mức như cũ.
   if (body && typeof body === "object") delete body.plansOnly;
   const over = subCli(body?.model) ? null : overLimit(c.user);
-  if (over && body?.model === AUTO) body.plansOnly = over;
+  // plansOnly là lời báo khi Tự động không còn gói nào dùng được: bản "plans" chỉ gợi ý kết nối gói (người dùng đang ở Tự động rồi).
+  if (over && body?.model === AUTO) body.plansOnly = overLimit(c.user, "plans") ?? over;
   else if (over) return Response.json({ error: over, usageLimit: true }, { status: 429 });
   if (body.async === true) {
     const { async: _, ...rest } = body;

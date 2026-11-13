@@ -1,13 +1,16 @@
 // Thẻ (tag) của đoạn chat trong Chrome ẩn (npm run dev:mock): menu ⋮ → Gắn thẻ (tạo / chọn / bỏ, không phân biệt dấu), chip thẻ ở đầu trang chat,
 // lọc theo thẻ ở thanh bên, tìm "#thẻ" trong bảng lệnh ⌘K, thẻ lên máy chủ cùng đoạn chat; menu nền đặc, nằm trọn màn hình ở 375px và giao diện tối.
 // Chạy tay: BASE=http://localhost:3500 SHOTS=/tmp/x node tests/ui/tags.mjs
-import { login, openChrome, sleep } from "../lib/cdp.mjs";
+import { openChrome, sleep } from "../lib/cdp.mjs";
+import { tempUser } from "../lib/tempuser.mjs";
 
 const B = process.env.BASE ?? "http://localhost:3200";
 let pass = 0, fail = 0;
 const ok = (c, n, x = "") => { c ? pass++ : fail++; console.log(c ? "  ✓" : "  ✗", n, c ? "" : String(typeof x === "string" ? x : JSON.stringify(x)).slice(0, 600)); };
 
-const { cookie, uid } = await login(B);
+// Người dùng tạm của riêng bộ này (H2.4): đoạn chat, thẻ dựng sẵn không lẫn vào tài khoản quản trị dùng chung; xóa khi xong.
+const u = await tempUser(B, "tags");
+const { cookie, uid } = { cookie: u.cookie, uid: u.uid };
 const t = await openChrome({ base: B, port: Number(process.env.CDP_PORT ?? 9362), name: "tags", shots: process.env.SHOTS });
 const { P, ev, until } = t;
 const now = Date.now();
@@ -137,6 +140,7 @@ try {
   ok(!t.logs.length, "không có lỗi JavaScript", t.logs);
 } finally {
   t.close();
+  await u.remove();
 }
 console.log(`\n${pass}/${pass + fail} đạt`);
 process.exit(fail ? 1 : 0);

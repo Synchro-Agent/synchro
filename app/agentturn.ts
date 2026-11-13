@@ -47,7 +47,7 @@ export async function pickAgentModel(user: UserRow, picked: unknown, messages: M
   const want = wanted === "auto" ? (() => { const e = autoEffort(ask); return e === "low" ? "medium" : e; })() : wanted;
   const effort = isEffort(want) ? clampEffort(want, effortCap(permsOf(user).effort, model), target ? target.kind : "anthropic") : undefined;
   // Hạn mức chi phí chỉ áp cho khóa API (gói tính vào hạn mức của chính gói).
-  const over = plan ? null : overLimit(user);
+  const over = plan ? null : overLimit(user, "code");
   if (over) return { error: over, status: 429, usageLimit: true };
   return { model, plan, target, effort };
 }

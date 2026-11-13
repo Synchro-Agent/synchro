@@ -5,7 +5,11 @@
 `GET /api/health` (công khai): `{ ok, build, db, disk, agent }`, 200 khi ổn, 503 khi có cờ `false`. Chỉ có cờ đúng / sai.
 
 - `db`: ghi được SQLite. `disk`: còn trên 1 GB trống. `agent`: dịch vụ workspace trả lời (`null` nếu máy không bật workspace).
-- Trỏ một dịch vụ theo dõi ngoài vào `https://synchro.net.nz/api/health` để biết khi web chết. Máy chủ không tự báo được khi chính nó chết.
+- Theo dõi ngoài (Blueprint A6.4) — ping mỗi phút từ Cloudflare, báo qua GitHub:
+  - `ops/uptime-worker/` là một Cloudflare Worker có lịch `* * * * *` (gói Workers Free, cùng tài khoản Cloudflare đang giữ synchro.net.nz). Mỗi phút gọi `/api/health`; lỗi thì 15 giây sau gọi lại. Lỗi 3 phút liền (`FAILS_TO_ALERT`) thì Worker kích `.github/workflows/uptime.yml` (workflow_dispatch, lý do "down: …"); workflow kiểm lại từ máy của GitHub, lỗi thật thì job đỏ và GitHub gửi email "Run failed". Hồi lại thì Worker kích lần nữa ("up: …", job xanh). Trạng thái nằm trong KV `UPTIME`, chỉ ghi khi đổi. Kiểm thử: `node tests/api/uptime-worker.test.mjs`.
+  - Cài một lần (chủ sở hữu): (1) GitHub → Settings (tài khoản) → Developer settings → Fine-grained tokens → Generate: chỉ repo `synchro`, quyền **Actions: Read and write** (không cấp Contents), hạn 1 năm. (2) Trong `ops/uptime-worker/`: `npx wrangler login` → `npx wrangler kv namespace create UPTIME` (chép `id` vào `wrangler.toml`) → `npx wrangler secret put GH_TOKEN` (dán token) → `npx wrangler deploy`. (3) GitHub → Settings (tài khoản) → Notifications → Actions → "Send notifications for failed workflows only" + Email. Thử: tab Actions → Uptime → Run workflow phải xanh; xem nhật ký Worker bằng `npx wrangler tail`.
+  - Phút Actions: `uptime.yml` còn một lịch dự phòng 6 giờ một lần (120 phút / tháng) và 1 phút cho mỗi lần Worker báo. Không đặt lại lịch mỗi 5 phút: ≈ 8.640 phút / tháng, gói Free của repo riêng tư chỉ có 2.000 phút, hết phút thì mọi workflow (cả deploy) bị chặn tới kỳ sau. Không muốn dùng Worker: Better Stack (gói miễn phí, kiểm 3 phút một lần, báo email) hoặc UptimeRobot (5 phút) trỏ vào `https://synchro.net.nz/api/health`, từ khóa `"db":true`.
+  - GitHub tự tắt lịch của repo không có commit trong 60 ngày (chỉ lịch dự phòng; kích từ Worker vẫn chạy); bật lại ở tab Actions → Uptime → Enable workflow.
 
 ## Sức khỏe hệ thống và watchdog
 
@@ -117,6 +121,22 @@ Bỏ hẳn xanh/lam (về một tiến trình): trả site nginx từ bản sao 
 ### Deploy từ CI
 
 `.github/workflows/deploy.yml` rsync mã vào `/var/www/synchro-incoming/` (không vào thẳng thư mục app), kèm `.synchro-artifact/` (bản build `.next-ci` của bước kiểm tra, `meta` ghi commit, băm package-lock, băm biến `NEXT_PUBLIC_`, băm tệp nén) và `.synchro-source-sha`, rồi chạy `SYNCHRO_INCOMING=/var/www/synchro-incoming bash /var/www/synchro-incoming/scripts/server-build.sh /var/www/synchro synchro pip`. `public`, `db`, `catalog`, `scripts`, `workspace`… chỉ được chép vào thư mục app ngay trước khi bật bản mới. Deploy cách lần đạt trước (`/var/lib/synchro-ops/last-deploy-synchro`) dưới 15 phút thì chờ; lần đẩy mới trong lúc chờ thay lần đang chờ, nên các lần đẩy liền nhau gộp thành một deploy. Deploy từ máy Mac (rsync thẳng vào thư mục app + `/root/deploy-<sha>.sh`) vẫn chạy như trước; khi rsync nhớ loại trừ `'.next-*'` và `node_modules` (nay là liên kết).
+
+### Kiểm thử trong CI (Blueprint H2)
+
+Job `verify` của `deploy.yml` (chặn deploy): `npm ci` → `npm audit` (chỉ báo) → `tsc --noEmit` → `npm run lint` (chỉ báo) → `npm run build` → `npm run dev:mock:fast` chạy nền (heap 4096 MB như bước build) → `node tests/run-all.mjs` (bộ API). Deploy chỉ chạy khi `verify` xanh.
+
+Bộ giao diện chạy ở workflow riêng `.github/workflows/ui-qa.yml`: `npm run dev:mock:fast` → `node scripts/qa.mjs --no-api` (Chrome ẩn), kết quả ở artifact `ui-qa-result` và `/var/www/ci-status/ui-<nhánh>.txt` trên VPS. Chưa chặn deploy vì chưa từng có một lần xanh trọn vẹn trên CI; mặc định chạy mỗi tuần (Chủ nhật 19:23 UTC) và khi bấm Actions → UI QA → Run workflow. Khi đã có một lần xanh: chuyển bước "Kiểm thử giao diện" vào job `verify` (sau bộ API) để nó chặn deploy.
+
+Phút GitHub Actions (repo riêng tư, gói Free: 2.000 phút / tháng, mỗi job tính tối thiểu 1 phút; hết phút thì mọi workflow bị chặn tới kỳ sau, kể cả deploy): `verify` ≈ 40 phút mỗi lần đẩy main / staging; `ui-qa.yml` ≈ 60–90 phút mỗi lần (lịch tuần ≈ 320 phút / tháng); `uptime.yml` ≈ 120 phút / tháng. Tức còn chỗ cho khoảng 35 lần đẩy mỗi tháng; đẩy nhiều commit một lần thay vì từng commit. Biến repo `SYNCHRO_CI_UI = push` chạy bộ giao diện sau mỗi lần đẩy main — chỉ bật khi repo công khai (phút Actions miễn phí) hoặc gói trả phí.
+
+- Một lệnh build cho cả ba nơi: `npm run build` (= `next build`, webpack) ở `package.json`, CI và `scripts/server-build.sh`; mỗi nơi chỉ đặt riêng `NODE_OPTIONS` (bộ nhớ) và `NEXT_DIST_DIR`.
+- `package.json` có `"engines": { "node": "22.x" }`; CI đọc phiên bản Node từ đó (`node-version-file`). Máy chủ cũng phải chạy Node 22.
+- `scripts/qa.mjs` chạy mọi `tests/ui/*.mjs` (glob) trừ danh sách `SKIP` có lý do; `node scripts/qa.mjs --list` in danh sách. `tests/api/qa-plan.test.mjs` đỏ khi có tệp mới không chạy mà cũng không nằm trong `SKIP`.
+- ESLint (`eslint.config.mjs`: `next/core-web-vitals` + `jsx-a11y`) cần cài gói dev một lần: `npm i -D eslint@^9.39.0 eslint-config-next@15.5.28 @eslint/eslintrc@^3.3.1 eslint-plugin-jsx-a11y@^6.10.2` (phiên bản `eslint-config-next` luôn bằng phiên bản `next`). Chưa cài thì `npm run lint` bỏ qua và thoát 0; `LINT_STRICT=1` để coi thiếu gói là lỗi. Luật trợ năng đang ở mức cảnh báo (`A11Y_LEVEL`); hết cảnh báo thì đổi thành `error` và bỏ `continue-on-error` của bước ESLint.
+- Bước giao diện (ui-qa.yml) trên Ubuntu 24.04 tắt `kernel.apparmor_restrict_unprivileged_userns` trên máy CI để Chrome mở được sandbox; `qa.mjs` tự tìm `google-chrome` trên Linux (`CHROME_PATH` để đổi). `dev:mock:fast` tự đặt heap 4096 MB cho bước build khi `NODE_OPTIONS` chưa đặt (`MOCK_BUILD_HEAP_MB` để đổi).
+
+Quy tắc bảo vệ nhánh `main` (cài đặt của GitHub, không nằm trong repo — chủ repo bật một lần): GitHub → repo → Settings → Rules → Rulesets → New branch ruleset → Target: `main` → bật "Require status checks to pass" → thêm check `verify` (tên job trong `deploy.yml`) → bật "Block force pushes" → Create. Repo riêng tư trên gói Free của GitHub không áp dụng được ruleset / branch protection (cần GitHub Pro hoặc Team); khi đó vẫn giữ được an toàn vì job `deploy` có `needs: verify`, chỉ deploy khi `verify` xanh. Lưu ý: commit được rsync thẳng từ máy Mac không đi qua CI, nên không được bảo vệ bởi quy tắc này.
 
 ## Sao lưu
 

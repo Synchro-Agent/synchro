@@ -1,5 +1,6 @@
 // Người mới gõ email: bước kế tiếp nói rõ cả đăng nhập lẫn tạo tài khoản, sai mật khẩu vẫn có đường tạo tài khoản, chữ lạ trên ?auth_error= không hiện ra.
 // Chạy tay: BASE=http://localhost:3277 node tests/ui/signup-path.mjs
+import { waitFor } from "../lib/wait.mjs";
 import { spawn } from "node:child_process";
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 const B = process.env.BASE ?? "http://localhost:3200", CDP = process.env.CDP_PORT ?? "9362";
@@ -83,8 +84,7 @@ try {
   await P("Network.enable"); await P("Network.setCookie", { name: "synchro_session", value: ck.split("=")[1], url: B });
   await P("Page.navigate", { url: B + "/?settings=Account" });
   await until(`!!document.querySelector(".modal.settings")`, 30000, "settings");
-  await sleep(1200);
-  ok(await ev(`/Cách đăng nhập|Sign-in methods/.test(document.querySelector(".modal.settings").innerText)`), "có hàng Cách đăng nhập", await ev(`document.querySelector(".modal.settings").innerText.slice(0, 400)`));
+  ok(await waitFor(() => ev(`/Cách đăng nhập|Sign-in methods/.test(document.querySelector(".modal.settings").innerText)`), 6000), "có hàng Cách đăng nhập", await ev(`document.querySelector(".modal.settings").innerText.slice(0, 400)`));
   ok(await ev(`!document.documentElement.scrollWidth || document.documentElement.scrollWidth <= innerWidth`), "không tràn ngang");
   await ev(`[...document.querySelectorAll(".modal.settings *")].find((e) => e.children.length === 0 && /^(Cách đăng nhập|Sign-in methods)$/.test(e.textContent.trim()))?.scrollIntoView({ block: "center" }), 1`);
   await sleep(300);

@@ -1,5 +1,6 @@
 // Kiểm thử giao diện bằng Chrome ẩn (hồ sơ riêng) trên npm run dev:mock. Chạy tay: node tests/ui/downloads.mjs
 // Văn bản hành chính: soạn công văn trong chat, xem trước khổ A4, tải Word (.docx) đúng thể thức, in PDF.
+import { waitFor } from "../lib/wait.mjs";
 import { spawn } from "node:child_process";
 import { mkdirSync, rmSync, readdirSync, statSync, writeFileSync, readFileSync } from "node:fs";
 import { createRequire } from "node:module";
@@ -125,7 +126,7 @@ const ok = (c, n, x = "") => { results.push([c, n]); console.log(c ? "  ✓" : "
 const shot = async (n) => { const { data } = await P("Page.captureScreenshot", { format: "png" }); writeFileSync(`${SCR}vbhc-${n}.png`, Buffer.from(data, "base64")); };
 try {
   await ask("Soạn công văn đề nghị Sở Tài chính bố trí kinh phí");
-  await sleep(1500);
+  await waitFor(async () => /Văn bản hành chính/.test(await ev(`document.querySelector(".art-head-t").textContent`)), 6000);
   ok(/Văn bản hành chính/.test(await ev(`document.querySelector(".art-head-t").textContent`)), "khung bên cạnh nhận đúng loại: Văn bản hành chính");
   ok(await ev(`!!document.querySelector(".vbhc-frame")`), "xem trước trang A4");
   await shot("1-preview");

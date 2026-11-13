@@ -32,7 +32,7 @@ export async function transcribeAudio(buf: Buffer, name: string, uid?: string): 
   const user = uid ? getUser(uid) : undefined;
   try {
     await need("stt");
-    if (user) checkBudget(user); // hết hạn mức giọng nói trong ngày → SpeechErr mã budget
+    if (user) checkBudget(user, "stt"); // hết hạn mức giọng nói trong ngày → SpeechErr mã budget (gợi ý micro của trình duyệt)
     const fd = new FormData();
     fd.set("model_id", "scribe_v2");
     fd.set("file", new Blob([new Uint8Array(buf)]), name.slice(0, 200) || "audio");

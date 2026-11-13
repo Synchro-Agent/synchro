@@ -4,7 +4,8 @@ import { spawn } from "node:child_process";
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 
-export const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+export { sleep, waitFor, settle } from "./wait.mjs";
+import { sleep } from "./wait.mjs";
 
 export async function login(base, email = "admin@synchro.test", password = "synchro-mock-123") {
   const r = await fetch(base + "/api/auth/login", { method: "POST", headers: { "content-type": "application/json", origin: base }, body: JSON.stringify({ email, password }) });
@@ -18,7 +19,7 @@ export async function openChrome({ base, port = 9360, name = "r9", shots }) {
   const PROF = `${tmpdir()}/synchro-ui/chrome-prof-${name}`;
   rmSync(PROF, { recursive: true, force: true });
   if (shots) mkdirSync(shots, { recursive: true });
-  const chrome = spawn(process.env.CHROME_PATH ?? "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+  const chrome = spawn(process.env.CHROME_PATH ?? (process.platform === "darwin" ? "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" : "google-chrome"),
     ["--headless=new", `--remote-debugging-port=${port}`, `--user-data-dir=${PROF}`, "--window-size=1440,900", "--no-first-run", "--no-default-browser-check", "--hide-scrollbars"], { stdio: "ignore" });
   let ver; for (let i = 0; i < 60 && !ver; i++) { await sleep(200); ver = await fetch(`http://127.0.0.1:${port}/json/version`).then((r) => r.json()).catch(() => null); }
   if (!ver) { chrome.kill(); throw new Error("Chrome không mở được"); }

@@ -1,0 +1,57 @@
+name: Uptime synchro.net.nz
+# Blueprint A6.4: máy chủ không tự báo được khi chính nó chết. Việc ping mỗi phút do Cloudflare Worker ops/uptime-worker làm (miễn phí, không tốn
+# phút Actions); Worker kích workflow này khi /api/health lỗi 3 phút liền ("down: …") và khi hồi lại ("up: …"). Workflow kiểm lại từ máy của GitHub:
+# lỗi thật thì job đỏ và GitHub gửi email "Run failed" cho chủ repo (Settings → Notifications → Actions: "Send notifications for failed workflows only").
+# Phút Actions (repo riêng tư, gói Free 2.000 phút / tháng, mỗi job tính tối thiểu 1 phút): lịch dự phòng 6 giờ một lần = 4 × 30 = 120 phút / tháng,
+# cộng 1 phút mỗi lần Worker báo. KHÔNG đặt lịch dày hơn: mỗi 5 phút là ≈8.640 phút / tháng, hết hạn mức sau một tuần và chặn luôn job deploy.
+# Không cần secret: /api/health công khai, chỉ trả cờ đúng / sai.
+on:
+  workflow_dispatch:
+    inputs:
+      reason:
+        description: "Lý do (Worker điền: down: … / up: …)"
+        required: false
+        default: "manual"
+  schedule:
+    # Dự phòng khi Worker chưa cài hoặc ngừng chạy. GitHub tự tắt lịch của repo không có commit trong 60 ngày (bật lại ở tab Actions).
+    - cron: "17 */6 * * *"
+
+# Một lần kiểm mỗi lúc: lần trước còn đang thử lại thì lần mới chờ, không chồng nhau.
+concurrency:
+  group: uptime
+  cancel-in-progress: false
+
+permissions: {}
+
+jobs:
+  health:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Gọi /api/health (thử lại 4 lần, cách nhau 20 giây)
+        env:
+          URL: https://synchro.net.nz/api/health
+          # Chuỗi do Worker gửi: chỉ đọc qua biến môi trường, không chèn thẳng vào script (tránh chèn lệnh).
+          REASON: ${{ github.event.inputs.reason || github.event_name }}
+        run: |
+          echo "Kích bởi: $REASON"
+          # Đạt: HTTP 200, "db": true, và "agent" không phải false (null = máy không bật workspace, vẫn là ổn).
+          # Một lần chập chờn (deploy xanh/lam, mạng) không đủ để báo: chỉ báo khi cả 5 lần đều lỗi.
+          last=""
+          for i in 1 2 3 4 5; do
+            body=$(curl -sS -m 20 -A "SynchroUptime/1.0 (+https://github.com/features/actions)" -H "cache-control: no-cache" -w '\n%{http_code}' "$URL" 2>&1) || true
+            code=$(printf '%s' "$body" | tail -n1)
+            json=$(printf '%s' "$body" | sed '$d')
+            db=$(printf '%s' "$json" | jq -r 'if type == "object" then (.db | tostring) else "?" end' 2>/dev/null || echo "?")
+            agent=$(printf '%s' "$json" | jq -r 'if type == "object" then (.agent | tostring) else "?" end' 2>/dev/null || echo "?")
+            if [ "$code" = 200 ] && [ "$db" = true ] && [ "$agent" != false ]; then
+              echo "Ổn (lần $i): HTTP $code, db=$db, agent=$agent, $(printf '%s' "$json" | jq -c '{build, disk}' 2>/dev/null)"
+              case "$REASON" in down:*) echo "::notice title=Worker báo lỗi nhưng GitHub thấy ổn::$REASON";; esac
+              exit 0
+            fi
+            last="HTTP ${code:-?}, db=$db, agent=$agent: ${json:0:300}"
+            echo "Lần $i chưa đạt: $last"
+            [ "$i" -lt 5 ] && sleep 20
+          done
+          echo "::error title=synchro.net.nz không khỏe::$last (Worker: $REASON)"
+          exit 1

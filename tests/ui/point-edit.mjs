@@ -1,5 +1,6 @@
 // Kiểm thử giao diện bằng Chrome ẩn (hồ sơ riêng) trên npm run dev:mock. Chạy tay: node tests/ui/apps.mjs
 // Chỉ và sửa + so sánh phiên bản: chọn một phần tử trong artifact, yêu cầu sửa riêng phần đó, rồi so bản trước / bản sau.
+import { waitFor } from "../lib/wait.mjs";
 import { spawn } from "node:child_process";
 import { mkdirSync, rmSync, readdirSync, statSync, writeFileSync, readFileSync } from "node:fs";
 import { createRequire } from "node:module";
@@ -110,8 +111,7 @@ try {
   await click(`document.querySelector("textarea")`, "composer"); await P("Input.insertText", { text: "Làm trang web cho quán cà phê" });
   await P("Input.dispatchKeyEvent", { type: "keyDown", key: "Enter", code: "Enter", windowsVirtualKeyCode: 13, text: "\r" });
   await until(`document.querySelectorAll(".art-card:not(.busy)").length > 0 && !document.querySelector(".thinking")`, 60000, "reply");
-  await sleep(3000);
-  ok(await ev(`!!document.querySelector('.art-acts [aria-label="Chỉ và sửa"]')`), "khung artifact có nút Chỉ và sửa");
+  ok(await waitFor(() => ev(`!!document.querySelector('.art-acts [aria-label="Chỉ và sửa"]')`), 10000), "khung artifact có nút Chỉ và sửa");
   await click(`document.querySelector('.art-acts [aria-label="Chỉ và sửa"]')`, "pick"); await sleep(600);
   ok(await ev(`!!document.querySelector(".pe-hint")`), "bật chế độ chọn: hiện hướng dẫn bấm vào phần muốn sửa");
   // Tiêu đề lớn của trang mẫu nằm ở phía trên khung xem trước.
@@ -131,8 +131,8 @@ try {
   const code = await ev(`document.querySelector(".art-code").textContent`);
   ok(code.includes("Cà phê ngon mỗi ngày") && !code.includes("Cà phê rang mộc, pha chậm mỗi sáng."), "phiên bản mới chỉ đổi đúng tiêu đề");
   await click(byText(".art-tabs button", "Xem trước"), "preview tab"); await sleep(800);
-  await click(`document.querySelector('[aria-label="So sánh với bản trước"]')`, "compare"); await sleep(1500);
-  ok(await ev(`document.querySelectorAll(".cmp-side .cmp-col").length === 2`), "so sánh song song bản 1 và bản 2");
+  await click(`document.querySelector('[aria-label="So sánh với bản trước"]')`, "compare");
+  ok(await waitFor(() => ev(`document.querySelectorAll(".cmp-side .cmp-col").length === 2`), 6000), "so sánh song song bản 1 và bản 2");
   await shot("3-side");
   await click(byText(".cmp-bar button", "Mã thay đổi"), "diff"); await sleep(500);
   const n = await ev(`document.querySelector(".cmp-n").textContent`);

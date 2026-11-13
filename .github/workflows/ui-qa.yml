@@ -1,0 +1,87 @@
+name: UI QA (bộ giao diện)
+# Blueprint H2.1: mọi bộ tests/ui/*.mjs (scripts/qa.mjs, Chrome ẩn) trên Synchro giả lập bản production (dev:mock:fast). Bộ API đã chạy ở job
+# verify của deploy.yml nên ở đây bỏ (--no-api).
+# KHÔNG chặn deploy: đến 14/11/2026 bộ giao diện chưa từng có một lần xanh trọn vẹn trên CI (25 bộ mới vào QA chưa chạy ở đâu). Khi đã có một
+# lần xanh: chuyển bước "Kiểm thử giao diện" vào job verify của deploy.yml (sau bộ API) để từ đó nó chặn deploy, rồi bỏ lịch tuần ở đây.
+# Phút Actions (repo riêng tư, gói Free 2.000 phút / tháng): mỗi lần ≈ 60–90 phút. Mặc định chỉ chạy theo lịch mỗi tuần (≈ 4 × 80 = 320 phút /
+# tháng) và khi bấm "Run workflow". Đặt biến repo SYNCHRO_CI_UI = push (Settings → Secrets and variables → Actions → Variables) để chạy sau mỗi
+# lần đẩy main — chỉ nên bật khi repo công khai (phút Actions miễn phí) hoặc gói trả phí: 30 lần đẩy là ≈ 2.400 phút, vượt hạn mức gói Free.
+on:
+  workflow_dispatch:
+  schedule:
+    # Chủ nhật 19:23 UTC (thứ Hai 02:23 giờ Việt Nam): ít người dùng, không trùng giờ deploy.
+    - cron: "23 19 * * 0"
+  push:
+    branches: [main]
+
+jobs:
+  ui:
+    # Lần đẩy main chỉ chạy khi chủ repo bật biến SYNCHRO_CI_UI = push; job bị bỏ qua (if sai) không tính phút Actions.
+    if: github.event_name != 'push' || vars.SYNCHRO_CI_UI == 'push'
+    concurrency:
+      group: ui-qa-${{ github.ref_name }}
+      cancel-in-progress: true
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: package.json
+          cache: npm
+
+      - name: Cài gói
+        run: npm ci
+
+      # Build production của bản giả lập: cùng mức heap 4096 MB như bước build của deploy.yml (mặc định của Node dễ hết bộ nhớ trên máy 2 nhân).
+      - name: Khởi động Synchro giả lập (dev:mock:fast)
+        id: mock
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NODE_OPTIONS: --max-old-space-size=4096
+        run: |
+          nohup npm run dev:mock:fast > mock.log 2>&1 &
+          for i in $(seq 1 240); do grep -q "Synchro với API giả lập" mock.log && break; grep -q "Dựng bản chạy nhanh thất bại" mock.log && break; sleep 5; done
+          grep -q "Synchro với API giả lập" mock.log || { tail -80 mock.log; exit 1; }
+
+      # Ubuntu 24.04 chặn user namespace không đặc quyền (AppArmor), sandbox của Chrome không mở được: cho phép trên máy CI dùng một lần này.
+      - name: Kiểm thử giao diện (npm run qa)
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
+          export CHROME_PATH="$(command -v google-chrome || command -v google-chrome-stable || command -v chromium || true)"
+          node scripts/qa.mjs --no-api 2>&1 | tee qa.log; exit ${PIPESTATUS[0]}
+
+      - name: Gói kết quả
+        if: always()
+        run: |
+          { echo "UI QA · commit ${{ github.sha }} · ${{ job.status }} · $(date -u '+%Y-%m-%d %H:%M UTC')"
+            [ -f qa.log ] && { echo; echo "━━ Tổng kết (scripts/qa.mjs)"; sed -n '/^████ Tổng kết QA/,$p' qa.log; }
+            for f in qa.log mock.log; do [ -f $f ] && { echo; echo "━━ $f"; tail -200 $f; }; done; } > ui-ci.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ui-qa-result
+          path: |
+            ui-ci.txt
+            qa.log
+          retention-days: 7
+
+  # Như job report của deploy.yml: máy riêng, không checkout, không cài gói, chỉ chép kết quả lên VPS (/var/www/ci-status/ui-<nhánh>.txt).
+  report:
+    needs: ui
+    if: always() && needs.ui.result != 'skipped'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: ui-qa-result
+      - name: Gửi kết quả lên VPS
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.VPS_KEY }}" > ~/.ssh/id_deploy
+          chmod 600 ~/.ssh/id_deploy
+          if [ -n "${{ secrets.VPS_KNOWN_HOSTS }}" ]; then echo "${{ secrets.VPS_KNOWN_HOSTS }}" >> ~/.ssh/known_hosts; else ssh-keyscan -H ${{ secrets.VPS_HOST }} >> ~/.ssh/known_hosts 2>/dev/null; fi
+          scp -i ~/.ssh/id_deploy ui-ci.txt ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/var/www/ci-status/ui-${{ github.ref_name }}.txt || true

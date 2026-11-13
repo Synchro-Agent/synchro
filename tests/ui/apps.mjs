@@ -1,5 +1,6 @@
 // Kiểm thử giao diện bằng Chrome ẩn (hồ sơ riêng) trên npm run dev:mock. Chạy tay: node tests/ui/apps.mjs
 // Ứng dụng nội bộ: làm ứng dụng trong chat, xuất bản cho cả tổ chức, dùng thật ở /apps/<id>, tài khoản khác thấy cùng dữ liệu.
+import { waitFor } from "../lib/wait.mjs";
 import { spawn } from "node:child_process";
 import { mkdirSync, rmSync, readdirSync, statSync, writeFileSync, readFileSync } from "node:fs";
 import { createRequire } from "node:module";
@@ -103,8 +104,7 @@ try {
   await click(`document.querySelector("textarea")`, "composer"); await P("Input.insertText", { text: "Làm bảng tin nhóm" });
   await P("Input.dispatchKeyEvent", { type: "keyDown", key: "Enter", code: "Enter", windowsVirtualKeyCode: 13, text: "\r" });
   await until(`document.querySelectorAll(".art-card:not(.busy)").length > 0 && !document.querySelector(".thinking")`, 60000, "reply");
-  await sleep(2500);
-  ok(await ev(`!!document.querySelector(".pub-w .icon-btn")`), "khung artifact có nút Xuất bản (tên lửa)");
+  ok(await waitFor(() => ev(`!!document.querySelector(".pub-w .icon-btn")`), 10000), "khung artifact có nút Xuất bản (tên lửa)");
   await click(`document.querySelector(".pub-w .icon-btn")`, "publish"); await sleep(700);
   await until(`!!document.querySelector(".pub-vis")`, 10000, "publish menu");
   await shot("1-publish");
@@ -113,7 +113,7 @@ try {
   await until(`!!document.querySelector(".pub-link a")`, 15000, "app link");
   const href = await ev(`document.querySelector(".pub-link a").getAttribute("href")`);
   ok(/^\/apps\/[\w-]+$/.test(href), "xuất bản xong có địa chỉ ứng dụng: " + href);
-  await P("Page.navigate", { url: B + href }); await sleep(2500);
+  await P("Page.navigate", { url: B + href });
   await until(`!!document.querySelector(".app-frame")`, 20000, "app page");
   ok(/Bảng tin nhóm/.test(await ev(`document.querySelector(".app-bar").textContent`)), "trang /apps hiện tên ứng dụng và phạm vi");
   await sleep(2500);

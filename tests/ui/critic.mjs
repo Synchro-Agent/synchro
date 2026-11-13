@@ -1,6 +1,7 @@
 // Kiểm thử giao diện bằng Chrome ẩn (hồ sơ riêng) trên npm run dev:mock. Chạy tay: node tests/ui/critic.mjs
 // Hội đồng phản biện: model viết xong một ứng dụng có lỗi → hội đồng đọc lại ở nền, đánh dấu đúng dòng, ghi chú kèm bản sửa;
 // "Áp dụng sửa" tạo phiên bản mới ngay (không gọi model), phiên bản mới chạy được và được phản biện lại; tắt trong Cài đặt thì chỉ chạy khi bấm.
+import { settle, waitFor } from "../lib/wait.mjs";
 import { spawn } from "node:child_process";
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
@@ -83,11 +84,13 @@ try {
   await click(byText(".cr-note .lnk", "Xem bản sửa"), "show fix"); await sleep(300);
   ok((await ev(`document.querySelector(".cr-fix")?.textContent ?? ""`)).trim() === "const items = [];", "xem trước bản sửa");
   await shot("2-note");
-  await click(byText(".cr-note .btn", "Áp dụng sửa"), "apply"); await sleep(1200);
+  await click(byText(".cr-note .btn", "Áp dụng sửa"), "apply");
   await until(`[...document.querySelectorAll(".art-ver span")].some((e) => e.textContent.trim() === "2/2")`, 8000, "version 2");
   const code2 = await ev(`document.querySelector(".art-code")?.textContent ?? ""`);
   ok(code2.includes("const items = [];") && !code2.includes("undefined"), "áp dụng sửa: phiên bản 2 có bản sửa ngay, không cần gọi model");
-  const thread = await ev(`[...document.querySelectorAll(".user-msg")].map((e) => e.textContent)`);
+  // "Đúng 2 tin" có cả vế phủ định (không thêm tin thừa): chờ tin thứ hai rồi đợi danh sách đứng yên 400 ms mới đếm.
+  await waitFor(async () => (await ev(`document.querySelectorAll(".user-msg").length`)) >= 2, 5000);
+  const thread = await settle(() => ev(`[...document.querySelectorAll(".user-msg")].map((e) => e.textContent)`), 400, 3000);
   ok(thread.length === 2 && /^Áp dụng sửa “.*” \(Bộ đếm, dòng 5\)$/.test(thread[1]), "đoạn chat ghi lại lần áp dụng (lượt sau model thấy bản sửa)", JSON.stringify(thread));
   for (let i = 0; i < 60 && !/Ổn/.test(await ev(pill)); i++) await sleep(150);
   ok(/Ổn/.test(await ev(pill)), "phiên bản mới được phản biện lại: không còn lỗi", await ev(pill));

@@ -87,7 +87,7 @@ for (const { who, theme, size } of runs) {
     if (await ev(`!!document.querySelector(".sidebar.closed, .shell-side.closed")`)) { await click(`document.querySelector("[aria-label='Mở thanh bên']")`, "sidebar").catch(() => {}); await sleep(600); }
     await click(`document.querySelector(".rail .user")`, "user"); await sleep(500);
     await click(`[...document.querySelectorAll(".menu-item")].find((e) => e.textContent.trim().startsWith("Cài đặt"))`, "settings"); await sleep(900);
-    await click(`[...document.querySelectorAll(".modal.settings .s-item")].find((e) => ${JSON.stringify([tab].flat())}.some((t) => e.getAttribute("title") === t || e.textContent.trim() === t))`, String(tab)); await sleep(1500);
+    await click(`[...document.querySelectorAll(".modal.settings .s-item")].find((e) => ${JSON.stringify([tab].flat())}.some((t) => e.getAttribute("title") === t || e.textContent.trim() === t))`, String(tab));
     await until(`[...document.querySelectorAll(".modal.settings h3.sec, .modal.settings .adm-card-h b")].some((e) => e.textContent.trim() === ${JSON.stringify(heading)})`, 20000, heading);
     await ev(`[...document.querySelectorAll(".modal.settings h3.sec, .modal.settings .adm-card-h b")].find((e) => e.textContent.trim() === ${JSON.stringify(heading)}).scrollIntoView({ block: "start" }); { const b = document.querySelector(".modal.settings .s-body"); if (b) b.scrollTop -= 110; }`);
     await sleep(700);

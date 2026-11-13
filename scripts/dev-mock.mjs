@@ -56,7 +56,9 @@ if (FAST) {
   // Dựng bằng webpack: turbopack dò cả thư mục .mkvenv (Python cục bộ, có liên kết ra ngoài dự án) nên dựng trên máy này lỗi.
   // Dựng lại trên bộ nhớ đệm webpack của lần trước bị lỗi băm (WasmHash … reading 'length'): luôn xóa đệm trước khi dựng.
   fs.rmSync(path.join(env.NEXT_DIST_DIR, "cache"), { recursive: true, force: true });
-  const b = spawnSync(process.execPath, ["node_modules/next/dist/bin/next", "build"], { env, stdio: "inherit" });
+  // Cùng mức heap với build của CI (deploy.yml) và máy chủ: mặc định của Node hết bộ nhớ khi build cả app. NODE_OPTIONS đã đặt mức riêng thì giữ.
+  const heap = /--max-old-space-size=/.test(env.NODE_OPTIONS ?? "") ? {} : { NODE_OPTIONS: `${env.NODE_OPTIONS ?? ""} --max-old-space-size=${process.env.MOCK_BUILD_HEAP_MB ?? 4096}`.trim() };
+  const b = spawnSync(process.execPath, ["node_modules/next/dist/bin/next", "build"], { env: { ...env, ...heap }, stdio: "inherit" });
   if (b.status !== 0) { console.error("Dựng bản chạy nhanh thất bại."); process.exit(1); }
 }
 const next = spawn(process.execPath, ["node_modules/next/dist/bin/next", FAST ? "start" : "dev", ...(FAST ? [] : ["--turbopack"]), "-p", String(PORT)], { env, stdio: "inherit" });

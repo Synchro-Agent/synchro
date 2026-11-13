@@ -1,5 +1,6 @@
 // Kiểm thử giao diện bằng Chrome ẩn (hồ sơ riêng) trên npm run dev:mock. Chạy tay: node tests/ui/critic.mjs
 // Skill tự sửa lỗi trong Kho kỹ năng: chi tiết skill có mục "Bản tự sửa" (đang dùng / chờ duyệt), xem khác biệt, duyệt, hoàn tác.
+import { waitFor } from "../lib/wait.mjs";
 import { spawn } from "node:child_process";
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
@@ -79,9 +80,9 @@ try {
   await P("Page.navigate", { url: B + "/" });
   await until(`!!document.querySelector("textarea")`, 30000, "app");
   await sleep(1000);
-  await click(byText(".nav-item", "Kỹ năng"), "hub"); await sleep(1500);
+  await click(byText(".nav-item", "Kỹ năng"), "hub");
   await until(`!!${byText(".pl-row2", NAME)}`, 15000, "skill row");
-  await click(byText(".pl-row2", NAME), "open skill"); await sleep(1000);
+  await click(byText(".pl-row2", NAME), "open skill");
   await until(`!!document.querySelector(".sk-fix")`, 8000, "self-fixes");
   const rows = await ev(`[...document.querySelectorAll(".sk-fix")].map((e) => e.querySelector(".sk-tag").textContent + " | " + e.querySelector("b").textContent)`);
   ok(rows.length === 2 && rows.some((x) => /Chờ duyệt \| scripts\/post.py/.test(x)) && rows.some((x) => /Đang dùng \| scripts\/count.py/.test(x)), "mục Bản tự sửa: count.py đang dùng, post.py chờ duyệt", JSON.stringify(rows));
@@ -89,10 +90,10 @@ try {
   ok(/NameError/.test(await ev(`document.querySelector(".sk-fix.active .sk-fix-e").textContent`)) && /Tự sửa sau 1 lần thử/.test(await ev(`document.querySelector(".sk-fix.active .sk-fix-m").textContent`)), "ghi rõ lỗi gốc và số lần thử");
   await (async () => { await ev(`document.querySelector(".sk-fix.pending").scrollIntoView({ block: "center" }); 1`); })();
   await shot("1-fixes");
-  await click(byText(".sk-fix.pending .btn", "Duyệt bản sửa"), "approve"); await sleep(800);
-  ok(await ev(`[...document.querySelectorAll(".sk-fix .sk-tag")].filter((e) => e.textContent === "Đang dùng").length === 2`), "duyệt: bản sửa post.py chuyển sang Đang dùng");
-  await click(`[...document.querySelectorAll(".sk-fix")].find((e) => /count.py/.test(e.textContent)).querySelector(".btn")`, "undo"); await sleep(800);
-  ok(await ev(`/Đã hoàn tác/.test([...document.querySelectorAll(".sk-fix")].find((e) => /count.py/.test(e.textContent)).textContent)`), "hoàn tác bản sửa count.py");
+  await click(byText(".sk-fix.pending .btn", "Duyệt bản sửa"), "approve");
+  ok(await waitFor(() => ev(`[...document.querySelectorAll(".sk-fix .sk-tag")].filter((e) => e.textContent === "Đang dùng").length === 2`), 5000), "duyệt: bản sửa post.py chuyển sang Đang dùng");
+  await click(`[...document.querySelectorAll(".sk-fix")].find((e) => /count.py/.test(e.textContent)).querySelector(".btn")`, "undo");
+  ok(await waitFor(() => ev(`/Đã hoàn tác/.test([...document.querySelectorAll(".sk-fix")].find((e) => /count.py/.test(e.textContent)).textContent)`), 5000), "hoàn tác bản sửa count.py");
   await shot("2-after");
 } catch (e) { ok(false, "lỗi khi chạy", e.stack); await shot("fail"); }
 await api("DELETE", `/api/skills/${NAME}`);

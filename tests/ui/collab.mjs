@@ -1,6 +1,7 @@
 // Kiểm thử giao diện bằng Chrome ẩn trên npm run dev:mock. Chạy tay: node tests/ui/collab.mjs
 // Thẻ hỏi lại (```ask), bảng tương tác (sắp xếp, chép, tải CSV), và hai người cùng mở một ứng dụng nội bộ:
 // thấy nhau, dữ liệu chung cập nhật ngay trong khung ứng dụng, bình luận @nhắc tên hiện trực tiếp và vào Hộp thư.
+import { waitFor } from "../lib/wait.mjs";
 import { spawn } from "node:child_process";
 import { mkdirSync, rmSync, readFileSync, writeFileSync, existsSync } from "node:fs";
 import { createRequire } from "node:module";
@@ -122,8 +123,7 @@ try {
   await pa.until(`[...document.querySelectorAll(".user-msg")].some((u) => u.textContent.includes("Trang web dùng để làm gì? → Bán hàng online") && u.textContent.includes("Bảng giá, Form liên hệ"))`, 8000, "answer msg");
   ok(true, "câu trả lời gửi thành tin nhắn: mỗi câu hỏi → lựa chọn");
   await pa.until(`!!document.querySelector(".actions.in") && document.querySelectorAll(".ai-msg").length >= 2 && !document.querySelector(".thinking")`, 60000, "build after answer");
-  await sleep(800);
-  ok(await pa.ev(`document.querySelector(".ask-card").classList.contains("off") && !document.querySelector(".ask-card .ask-other")`), "thẻ cũ chuyển sang chỉ xem, không bấm lại được");
+  ok(await waitFor(() => pa.ev(`document.querySelector(".ask-card").classList.contains("off") && !document.querySelector(".ask-card .ask-other")`), 5000), "thẻ cũ chuyển sang chỉ xem, không bấm lại được");
   ok(await pa.ev(`document.querySelectorAll(".ask-card").length === 1`), "trả lời xong thì làm luôn, không hỏi lại");
   await pa.click(byText(".nav-item", "Mới"), "new"); await sleep(700);
   await ask(pa, "Tạo một bài thuyết trình");

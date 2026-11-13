@@ -1,5 +1,6 @@
 // Kiểm thử giao diện bằng Chrome ẩn (hồ sơ riêng) trên npm run dev:mock. Chạy tay: node tests/ui/skill-hub.mjs
 // Kho kỹ năng (gộp Skills + Plugins): thanh bên, trang gộp, menu Thêm, thả tệp, Cài đặt. Chạy bằng Chrome ẩn trên dev:mock.
+import { settle, waitFor } from "../lib/wait.mjs";
 import { spawn } from "node:child_process";
 import { mkdirSync, rmSync, readdirSync, statSync, writeFileSync, readFileSync } from "node:fs";
 import { createRequire } from "node:module";
@@ -107,7 +108,7 @@ try {
   const hub = await ev(`(() => { const x = document.querySelector('.rail [data-nav="customize"]'); return x ? x.textContent.trim() + "|" + x.getAttribute("data-tip") : null; })()`);
   ok(hub === "Kỹ năng|Kho kỹ năng" && (nav.match(/Kỹ năng/g) ?? []).length === 1, "thanh bên có mục Kho kỹ năng (nhãn Kỹ năng): " + nav, hub);
   ok(await ev(`!!${byText(".nav-item", "Kỹ năng")}?.querySelector("svg")`), "mục có icon");
-  await click(byText(".nav-item", "Kỹ năng"), "nav"); await sleep(1500);
+  await click(byText(".nav-item", "Kỹ năng"), "nav");
   await until(`!!document.querySelector(".hub-yours")`, 15000, "hub page");
   const cz = await text(".ds-tabs button");
   ok(/^(Kho kỹ năng( \| Connectors)?)?$/.test(cz), "trang Tùy chỉnh không còn Skills / Plugins riêng (một mục thì không cần tab): " + cz, cz);
@@ -144,8 +145,10 @@ try {
   await shot("4-added");
   // Bật tắt ngay trên hàng
   await click(`[...document.querySelectorAll(".hub-yours .pl-row2")].find((r) => r.querySelector("b")?.textContent === "meeting-notes").querySelector(".toggle")`, "toggle");
-  await sleep(800);
-  ok((await api2("GET", "/api/skills")).skills.find((s) => s.name === "meeting-notes")?.enabled === false && !(await ev(`!!document.querySelector(".sk-modal")`)), "nút bật/tắt trên hàng hoạt động, không mở chi tiết");
+  const off = await waitFor(async () => (await api2("GET", "/api/skills")).skills.find((s) => s.name === "meeting-notes")?.enabled === false, 5000, { every: 250 });
+  // "Không mở chi tiết" là vế phủ định: đợi trang đứng yên 600 ms (khung chi tiết mở có độ trễ) rồi mới kiểm.
+  const modal = await settle(() => ev(`!!document.querySelector(".sk-modal")`), 600, 3000);
+  ok(off && modal === false, "nút bật/tắt trên hàng hoạt động, không mở chi tiết", { off, modal });
   await click(`[...document.querySelectorAll(".hub-yours .pl-row2")].find((r) => r.querySelector("b")?.textContent === "meeting-notes")`, "row");
   await until(`!!document.querySelector(".sk-modal")`, 10000, "detail");
   ok(true, "bấm vào hàng → mở chi tiết skill");
@@ -163,8 +166,8 @@ try {
   if (st) { await click(byText(".menu-item", "Cài đặt"), "settings"); await sleep(1200);
     const tabs = await text(".s-nav button");
     ok(/Kho kỹ năng/.test(tabs) && !/Plugins/.test(tabs), "Cài đặt có mục Kho kỹ năng, không còn Plugins riêng", tabs);
-    await click(byText(".s-nav button", "Kho kỹ năng"), "settings hub"); await sleep(1500);
-    ok(await ev(`!!document.querySelector(".modal.settings .hub-yours")`), "mở Kho kỹ năng trong Cài đặt");
+    await click(byText(".s-nav button", "Kho kỹ năng"), "settings hub");
+    ok(await waitFor(() => ev(`!!document.querySelector(".modal.settings .hub-yours")`), 6000), "mở Kho kỹ năng trong Cài đặt");
     await shot("5-settings");
   } else ok(false, "không mở được Cài đặt", await text(".menu-item"));
 } catch (e) { ok(false, "lỗi khi chạy", e.stack); await shot("fail"); }
