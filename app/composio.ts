@@ -29,15 +29,17 @@ export const maskKey = (v: string) => `${/^([a-z]{1,4}_)/i.exec(v)?.[1] ?? ""}�
 // Khi máy chủ không tự khai báo, Synchro coi chúng là công cụ đọc (chạy không cần hỏi).
 // Quyền ghi tính theo thao tác thật, không theo công cụ bọc ngoài: MULTI_EXECUTE chạy thao tác của ứng dụng (GOOGLEDOCS_CREATE_DOCUMENT…), "Luôn cho phép"
 // ở MULTI_EXECUTE chỉ áp dụng cho thao tác đọc; thao tác ghi theo quyền riêng của từng ứng dụng (mặc định Hỏi mỗi lần, app_perms ở connectors.ts).
-// Bash / workbench từ xa và gọi API không phải GET luôn hỏi mỗi lần, không đặt được "Luôn cho phép".
+// Bash / workbench từ xa và gọi API không phải GET luôn hỏi mỗi lần, không đặt được "Luôn cho phép". Gọi API bằng GET theo quyền của chính công cụ đó
+// (mặc định Hỏi mỗi lần, người dùng đặt được Luôn cho phép), trừ khi đường dẫn trông như thao tác ghi (chat.postMessage, sendMessage…): khi đó vẫn luôn hỏi.
 const META_READ = new Set(["COMPOSIO_SEARCH_TOOLS", "COMPOSIO_GET_TOOL_SCHEMAS", "COMPOSIO_MANAGE_CONNECTIONS", "COMPOSIO_WAIT_FOR_CONNECTIONS"]);
 export const EXEC_TOOL = "COMPOSIO_MULTI_EXECUTE_TOOL";
 export const PROXY_TOOL = "COMPOSIO_PROXY_EXECUTE";
 const SEARCH_TOOL = "COMPOSIO_SEARCH_TOOLS", SCHEMAS_TOOL = "COMPOSIO_GET_TOOL_SCHEMAS";
 /** Công cụ luôn hỏi mỗi lần (chạy lệnh / code tùy ý trên máy của Composio): không bao giờ "Luôn cho phép", không "Cho phép trong cuộc trò chuyện này". */
 const ALWAYS_ASK = new Set(["COMPOSIO_REMOTE_BASH_TOOL", "COMPOSIO_REMOTE_WORKBENCH"]);
-/** Công cụ không đặt được "Luôn cho phép" / "Hỏi một lần mỗi cuộc trò chuyện" ở trang Connectors (chỉ Hỏi mỗi lần hoặc Chặn). */
-export const askOnlyTool = (name: string) => ALWAYS_ASK.has(name) || name === PROXY_TOOL;
+/** Công cụ không đặt được "Luôn cho phép" / "Hỏi một lần mỗi cuộc trò chuyện" ở trang Connectors (chỉ Hỏi mỗi lần hoặc Chặn).
+ *  Gọi API (PROXY_EXECUTE) không ở đây: quyền của nó chỉ áp cho GET, phương thức khác luôn hỏi (strictCall). */
+export const askOnlyTool = (name: string) => ALWAYS_ASK.has(name);
 export function annotate<T extends McpTool>(tools: T[]): T[] {
   return tools.map((t) => (META_READ.has(t.name) && t.annotations?.readOnlyHint === undefined ? { ...t, annotations: { ...t.annotations, readOnlyHint: true, destructiveHint: false } } : t));
 }
@@ -52,8 +54,23 @@ function items(input: unknown): Item[] | null {
   return list.every((x) => typeof obj(x).tool_slug === "string" && /^[A-Za-z0-9_]{3,120}$/.test(String(obj(x).tool_slug))) ? (list as Item[]) : null;
 }
 const method = (input: unknown) => String(obj(input).method ?? "").toUpperCase();
-/** Lời gọi luôn phải hỏi mỗi lần: bash / workbench từ xa, gọi API qua Composio với phương thức khác GET. */
-export const strictCall = (tool: string, input: unknown) => ALWAYS_ASK.has(tool) || (tool === PROXY_TOOL && method(input) !== "GET");
+// Đường dẫn API trông như thao tác ghi dù gọi bằng GET (Slack chat.postMessage, Telegram sendMessage, conversations.archive…): từng chữ của đường dẫn,
+// tách theo / . _ - và chữ hoa giữa từ, có động từ ghi thì coi là ghi. Chữ ở dạng khác ("posts", "settings") không tính.
+const PATH_WRITE = new Set(["send", "post", "create", "delete", "del", "remove", "update", "set", "add", "edit", "archive", "unarchive", "kick", "invite", "upload", "publish", "write",
+  "insert", "move", "rename", "join", "leave", "ban", "unban", "pin", "unpin", "react", "mark", "close", "open", "revoke", "approve", "reject", "destroy", "cancel", "trash", "purge",
+  "put", "patch", "merge", "deploy", "trigger", "run", "execute", "exec", "modify", "replace", "share", "forward", "reply", "submit", "star", "unstar", "subscribe", "unsubscribe",
+  "mute", "unmute", "follow", "unfollow", "like", "unlike", "accept", "decline", "enable", "disable", "transfer", "pay", "refund", "import", "restore", "assign", "lock", "unlock",
+  "clear", "reset", "grant", "start", "stop", "kill", "erase", "wipe", "drop", "copy", "invoke", "rotate", "promote", "demote"]);
+/** Gọi API bằng GET mà đường dẫn có động từ ghi: phải hỏi như phương thức ghi. */
+export function proxyWritePath(input: unknown): boolean {
+  const ep = obj(input).endpoint;
+  if (typeof ep !== "string") return false;
+  let path = ep.split(/[?#]/)[0];
+  try { if (/^https?:\/\//i.test(path)) path = new URL(path).pathname; } catch {}
+  return path.split(/[^A-Za-z0-9]+/).flatMap((t) => t.split(/(?<=[a-z0-9])(?=[A-Z])/)).some((w) => PATH_WRITE.has(w.toLowerCase()));
+}
+/** Lời gọi luôn phải hỏi mỗi lần: bash / workbench từ xa, gọi API qua Composio với phương thức khác GET (hoặc GET tới đường dẫn ghi). */
+export const strictCall = (tool: string, input: unknown) => ALWAYS_ASK.has(tool) || (tool === PROXY_TOOL && (method(input) !== "GET" || proxyWritePath(input)));
 /** Quyền mà một lời gọi MULTI_EXECUTE cần: chỉ đọc, hay ghi trong những ứng dụng nào. null: không đọc được tham số (coi như ghi, phải hỏi).
  *  user: dùng thêm toolkit mà Composio đã trả cho người này (cxLearn); không có thì chỉ theo danh sách toolkit có sẵn. */
 export function execPlan(input: unknown, user?: string): { writes: string[] } | null {
@@ -399,7 +416,7 @@ export function cxCard(tool: string, input: unknown, user?: string): CxCard | nu
   if (tool === PROXY_TOOL) {
     const kit = String(inp.toolkit ?? inp.toolkit_slug ?? inp.app ?? "").toLowerCase().replace(/[^a-z0-9_-]/g, "").slice(0, 60);
     const m = method(input) || "?";
-    return { app: kit || COMPOSIO, name: kit ? appName(kit) : COMPOSIO_NAME, act: `${metaWords(tool)} ${m}`, main: prim(inp.endpoint) ? short(prim(inp.endpoint), 80) : undefined, account: accountOf(inp) ?? (kit ? cxAccount(user, kit) : undefined), params: paramsOf({ method: m, endpoint: inp.endpoint, body: typeof inp.body === "string" ? inp.body : inp.body ? JSON.stringify(inp.body) : undefined }), ...(m !== "GET" ? { strict: true } : {}) };
+    return { app: kit || COMPOSIO, name: kit ? appName(kit) : COMPOSIO_NAME, act: `${metaWords(tool)} ${m}`, main: prim(inp.endpoint) ? short(prim(inp.endpoint), 80) : undefined, account: accountOf(inp) ?? (kit ? cxAccount(user, kit) : undefined), params: paramsOf({ method: m, endpoint: inp.endpoint, body: typeof inp.body === "string" ? inp.body : inp.body ? JSON.stringify(inp.body) : undefined }), ...(strictCall(tool, input) ? { strict: true } : {}) };
   }
   const meta = metaWords(tool);
   if (!meta) return null;

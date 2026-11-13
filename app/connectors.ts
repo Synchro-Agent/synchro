@@ -54,7 +54,7 @@ type Row = {
 };
 // locked: công cụ đang bị khóa vì connector tắt công cụ xóa dữ liệu ("setting") hoặc quản trị viên không cho ("admin").
 // guessed: máy chủ không khai báo chỉ đọc hay không, Synchro đoán theo tên công cụ.
-// askOnly: chỉ đặt được Hỏi mỗi lần hoặc Chặn (bash / workbench / gọi API của Composio).
+// askOnly: chỉ đặt được Hỏi mỗi lần hoặc Chặn (bash / workbench của Composio). Gọi API đặt được mọi quyền nhưng quyền chỉ áp cho GET đọc.
 export type PublicTool = { name: string; title: string; description: string; readOnly: boolean; guessed?: boolean; destructive: boolean; perm: Perm; locked?: "setting" | "admin"; askOnly?: boolean };
 /** Quyền thao tác ghi của một ứng dụng trong Composio (Gmail, Google Docs…). */
 export type AppPerm = { app: string; name: string; perm: Perm; logo?: string; icon?: string };
@@ -126,7 +126,7 @@ const defaultPerm = (t: McpTool): Perm => (!t.untrusted && readLike(t) ? "allow"
 /** Công cụ đã lưu của connector. Connector tự thêm (dir null) được đánh dấu untrusted: readOnlyHint của máy chủ không được tin (mcp.ts). */
 const toolsOf = (r: Pick<Row, "tools" | "dir">): McpTool[] => json<McpTool[]>(r.tools, []).map((t) => (r.dir === null ? { ...t, untrusted: true } : t));
 const askOnlyOf = (r: Pick<Row, "dir">, name: string) => r.dir === COMPOSIO && askOnlyTool(name);
-/** Quyền đang có của một công cụ. Bash / workbench / gọi API của Composio không bao giờ là "Luôn cho phép" hay "Hỏi một lần mỗi cuộc trò chuyện". */
+/** Quyền đang có của một công cụ. Bash / workbench của Composio không bao giờ là "Luôn cho phép" hay "Hỏi một lần mỗi cuộc trò chuyện". */
 function permOf(r: Pick<Row, "dir">, perms: Record<string, Perm>, t: McpTool): Perm {
   const p = perms[t.name] ?? defaultPerm(t);
   return askOnlyOf(r, t.name) && (p === "allow" || p === "chat") ? "ask" : p;
@@ -835,9 +835,10 @@ export class ConnectorSession {
   get(name: string) { return this.by.get(name); }
   // Quyền hiện tại (đọc lại từ cơ sở dữ liệu vì người dùng có thể vừa đổi). "chat" thành "allow" nếu đã cho phép trong cuộc trò chuyện này.
   // input: tham số của lời gọi. Composio tính theo thao tác thật bên trong, không theo công cụ bọc ngoài:
-  //  - MULTI_EXECUTE chỉ gồm thao tác đọc (GMAIL_FETCH_EMAILS…), gọi API bằng GET: như công cụ đọc, chạy luôn (trừ khi người dùng chặn);
+  //  - MULTI_EXECUTE chỉ gồm thao tác đọc (GMAIL_FETCH_EMAILS…): như công cụ đọc, chạy luôn (trừ khi người dùng chặn);
   //  - MULTI_EXECUTE có thao tác ghi: theo quyền ghi của từng ứng dụng trong lời gọi (mặc định Hỏi mỗi lần), "Luôn cho phép" ở MULTI_EXECUTE không áp dụng;
-  //  - bash / workbench từ xa, gọi API không phải GET: luôn hỏi mỗi lần.
+  //  - gọi API bằng GET: theo quyền của chính công cụ gọi API (mặc định Hỏi mỗi lần), như mọi công cụ khác;
+  //  - bash / workbench từ xa, gọi API không phải GET (hoặc GET tới đường dẫn ghi như chat.postMessage): luôn hỏi mỗi lần.
   perm(name: string, input?: unknown): Perm {
     const ct = this.by.get(name);
     const r = ct && rowById(ct.cid);
@@ -846,7 +847,6 @@ export class ConnectorSession {
     if (p === "block") return "block";
     if (ct.composio) {
       if (strictCall(ct.tool.name, input)) return "ask";
-      if (ct.tool.name === PROXY_TOOL) return "allow";
       if (ct.tool.name === EXEC_TOOL) {
         const plan = input === undefined ? null : execPlan(input, this.uid);
         if (!plan) return "ask";
@@ -872,7 +872,7 @@ export class ConnectorSession {
   /** Khóa quyền mà "Luôn cho phép" / "Cho phép trong cuộc trò chuyện này" cấp cho lời gọi: [] khi lời gọi luôn phải hỏi (không cấp gì ngoài lần này). */
   private grantKeys(ct: ChatTool, input: unknown): { apps: string[] } | { tool: true } | null {
     if (!ct.composio) return { tool: true };
-    if (strictCall(ct.tool.name, input) || ct.tool.name === PROXY_TOOL) return null;
+    if (strictCall(ct.tool.name, input)) return null;
     if (ct.tool.name === EXEC_TOOL) { const plan = input === undefined ? null : execPlan(input, this.uid); return plan?.writes.length ? { apps: plan.writes } : null; }
     return { tool: true };
   }

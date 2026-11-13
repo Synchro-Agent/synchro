@@ -105,15 +105,25 @@ try {
   let threw = "";
   try { C.updateConnector("u_a", "cn_cx", { perms: { COMPOSIO_REMOTE_BASH_TOOL: "allow" } }, pol); } catch (e) { threw = e.message; }
   ok(/luôn hỏi trước/.test(threw), "không đặt được REMOTE_BASH thành Luôn cho phép", threw);
-  try { threw = ""; C.updateConnector("u_a", "cn_cx", { perms: { COMPOSIO_PROXY_EXECUTE: "chat" } }, pol); } catch (e) { threw = e.message; }
-  ok(/luôn hỏi trước/.test(threw), "không đặt được gọi API thành Hỏi một lần mỗi cuộc trò chuyện", threw);
   C.updateConnector("u_a", "cn_cx", { group: { kind: "write", perm: "allow" } }, pol);
   ok(s.perm(BASH, { command: "rm -rf /" }) === "ask" && C.composioInfo("u_a", pol).connector.tools.find((t) => t.name === "COMPOSIO_REMOTE_BASH_TOOL").perm === "ask", "đặt cả nhóm ghi thành Luôn cho phép: bash vẫn hỏi");
   s.allowAlways(BASH, { command: "ls" });
   s.allowChat(BASH, { command: "ls" });
   ok(s.perm(BASH, { command: "ls" }) === "ask", "bấm Luôn cho phép / Cho phép trong cuộc trò chuyện ở thẻ bash: lần sau vẫn hỏi");
   ok(s.perm(PROXY, { method: "POST", endpoint: "/gmail/v1/users/me/messages/send" }) === "ask" && s.perm(PROXY, { endpoint: "/x" }) === "ask", "gọi API POST (hoặc không rõ phương thức): hỏi");
-  ok(s.perm(PROXY, { method: "GET", endpoint: "/gmail/v1/users/me/labels" }) === "allow", "gọi API GET: như thao tác đọc");
+  // Gọi API bằng GET theo quyền của chính công cụ gọi API (SEC-4); GET tới đường dẫn ghi và phương thức khác luôn hỏi.
+  const LABELS = { method: "GET", endpoint: "/gmail/v1/users/me/labels" };
+  ok(s.perm(PROXY, LABELS) === "allow", "gọi API GET, công cụ đang Luôn cho phép: chạy");
+  ok(s.perm(PROXY, { method: "GET", endpoint: "/api/chat.postMessage?channel=C1&text=hi" }) === "ask" && s.perm(PROXY, { method: "GET", endpoint: "/bot123/sendMessage?chat_id=1&text=x" }) === "ask", "GET chat.postMessage / sendMessage: hỏi dù Luôn cho phép");
+  C.updateConnector("u_a", "cn_cx", { perms: { COMPOSIO_PROXY_EXECUTE: "ask" } }, pol);
+  ok(s.perm(PROXY, LABELS) === "ask", "gọi API để Hỏi mỗi lần: GET cũng hỏi");
+  s.allowChat(PROXY, LABELS);
+  ok(s.perm(PROXY, LABELS) === "allow" && s.perm(PROXY, { method: "DELETE", endpoint: "/x" }) === "ask", "Cho phép trong cuộc trò chuyện ở thẻ GET: GET chạy, DELETE vẫn hỏi");
+  C.updateConnector("u_a", "cn_cx", { perms: { COMPOSIO_PROXY_EXECUTE: "block" } }, pol);
+  ok(new C.ConnectorSession("u_a", { conv: "c1", pol }).tools.every((t) => t.tool.name !== "COMPOSIO_PROXY_EXECUTE") && s.perm(PROXY, LABELS) === "block", "chặn gọi API: không còn trong lượt chat");
+  C.updateConnector("u_a", "cn_cx", { perms: { COMPOSIO_PROXY_EXECUTE: "chat" } }, pol);
+  const px = C.composioInfo("u_a", pol).connector.tools.find((t) => t.name === "COMPOSIO_PROXY_EXECUTE");
+  ok(px.perm === "chat" && !px.askOnly, "trang Connectors: gọi API đặt được mọi quyền (chỉ áp cho GET)", px);
   C.updateConnector("u_a", "cn_cx", { perms: { COMPOSIO_REMOTE_BASH_TOOL: "block" } }, pol);
   ok(new C.ConnectorSession("u_a", { conv: "c1", pol }).tools.every((t) => t.tool.name !== "COMPOSIO_REMOTE_BASH_TOOL"), "chặn bash vẫn được");
 

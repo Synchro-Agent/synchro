@@ -180,6 +180,12 @@ try {
   ok(!one("GMAIL_FETCH_EMAILS", "not json") && !one("GMAIL_FETCH_EMAILS", "[1,2]") && !one("GMAIL_FETCH_EMAILS", 5) && !one("GMAIL_FETCH_EMAILS", ["x"]), "không đọc được thành đối tượng: ghi (fail-closed)");
   ok(X.cxCard("COMPOSIO_MULTI_EXECUTE_TOOL", { tools: [{ tool_slug: "GOOGLEDOCS_CREATE_DOCUMENT", arguments: '{"title":"Báo cáo"}' }] }).main === "Báo cáo", "thẻ duyệt đọc được tham số dạng chuỗi");
 
+  console.log("9. Gọi API bằng GET tới đường dẫn ghi (SEC-4)");
+  const pw = (endpoint, method = "GET") => X.strictCall("COMPOSIO_PROXY_EXECUTE", { method, endpoint });
+  ok(pw("/api/chat.postMessage?channel=C1&text=hi") && pw("https://api.telegram.org/bot123/sendMessage?chat_id=1&text=x") && pw("/api/conversations.archive?channel=C1"), "chat.postMessage, sendMessage, conversations.archive bằng GET: luôn hỏi");
+  ok(!pw("/gmail/v1/users/me/labels") && !pw("/v1/documents?q=post") && !pw("/api/conversations.history"), "GET đọc (labels, documents, history): theo quyền của công cụ");
+  ok(pw("/gmail/v1/users/me/labels", "POST") && pw("/x", "") && X.cxCard("COMPOSIO_PROXY_EXECUTE", { method: "GET", endpoint: "/api/chat.postMessage" }).strict, "phương thức khác GET luôn hỏi; thẻ GET ghi chỉ cho phép một lần");
+
   console.log("10. Học toolkit, lược đồ và tài khoản từ kết quả của chính Composio (W23-7 / W1-05)");
   const sendSchema = { type: "object", properties: { recipient_email: { type: "string" }, subject: { type: "string" }, body: { type: "string" } }, required: ["recipient_email"] };
   const searchRes = JSON.stringify({ successful: true, data: {
