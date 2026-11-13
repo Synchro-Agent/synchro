@@ -2033,11 +2033,25 @@ export default function Home() {
     document.addEventListener("mousedown", h);
     return () => document.removeEventListener("mousedown", h);
   }, []);
+  // ⌘K mở bảng lệnh tải lazy: ô tìm chỉ nhận focus sau khi phần mềm của bảng tải xong, nên các phím gõ ngay sau ⌘K bị rơi.
+  // Giữ các phím đó lại từ lúc bấm ⌘K cho tới khi ô tìm có focus rồi chèn vào (bảng lệnh gọi palSeed khi đã gắn — tháo đúng lúc đó,
+  // không theo một khoảng thời gian cố định có thể hết trước khi chunk lazy tải xong trên máy chậm).
+  const palBuf = useRef("");
+  const palArmed = useRef(false);
+  const palSeed = useCallback(() => { const b = palBuf.current; palBuf.current = ""; palArmed.current = false; return b; }, []);
+  // Đóng bảng lệnh bằng bất kỳ đường nào thì ngừng giữ phím (tránh giữ nhầm phím khi người dùng làm việc khác).
+  useEffect(() => { if (modal !== "search") palArmed.current = false; }, [modal]);
   useEffect(() => {
     const h = (e: KeyboardEvent) => {
       if (document.querySelector(".app[inert]")) return;
       const mod = e.metaKey || e.ctrlKey;
       const k = e.key.toLowerCase();
+      // Đang giữ phím cho bảng lệnh và ô tìm chưa nhận focus: gom ký tự in được vào bộ đệm, chặn để không rơi vào trang.
+      if (palArmed.current && !mod && !e.altKey && e.key.length === 1) {
+        const el = document.activeElement as HTMLElement | null;
+        if (!el || !el.closest(".pal")) { palBuf.current += e.key; e.preventDefault(); return; }
+        palArmed.current = false; // ô tìm đã có focus: tự nó nhận phím từ đây
+      }
       if (e.key === "Escape") {
         // Đóng lớp phủ nằm trên cùng (z-index cao nhất; bằng nhau thì lớp sau): hộp gắn vào cuối <body> (createPortal) đứng sau hộp xác nhận
         // trong DOM dù hộp xác nhận nằm trên nó.
@@ -2046,7 +2060,7 @@ export default function Home() {
         if (ov.length) ov.reduce((a, o) => (z(o) >= z(a) ? o : a)).dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
         if (ov.length > 1) return;
         setGc(null); setModal(null); setDelId(null); setDelProj(null); setUserMenu(false); setChatMenu(null); setCodeMenu(null); setTitleMenu(false); }
-      else if (mod && k === "k") { e.preventDefault(); setModal("search"); }
+      else if (mod && k === "k") { e.preventDefault(); palBuf.current = ""; palArmed.current = true; setModal("search"); }
       else if (mod && e.shiftKey && k === "o") { e.preventDefault(); goNewRef.current(); }
       else if (mod && k === ".") { e.preventDefault(); setOpen((o) => !o); }
       else if (mod && k === "/") { e.preventDefault(); setModal("keys"); }
@@ -2645,7 +2659,7 @@ export default function Home() {
       {voiceOn && <VoiceMode onClose={() => setVoiceOn(false)} onAsk={(t) => send(t)} onTurn={voiceTurn} busy={busy} reply={lastAi ? { text: lastAi.failed ? tr(chatError(lastAi.err).text) : lastAi.text, time: lastAi.time ?? 0 } : null} rate={VOICE_RATE[vspeed] ?? 1} voice={vvoice} say={say} />}
       <Fade show={!!(modal === "settings")}><Settings key={settingsTab} initial={settingsTab} onClose={() => setModal(null)} theme={theme} setTheme={setTheme} /></Fade>
       <Fade show={!!(modal === "lang")}><LangModal onClose={() => setModal(null)} /></Fade>
-      <Fade show={!!(modal === "search")}><CommandPalette chats={visible} projects={projects} codes={codeList} cmds={paletteCmds} go={paletteGo} onClose={() => setModal(null)} /></Fade>
+      <Fade show={!!(modal === "search")}><CommandPalette chats={visible} projects={projects} codes={codeList} cmds={paletteCmds} go={paletteGo} seed={palSeed} onClose={() => setModal(null)} /></Fade>
       <Fade show={!!(modal === "share" && chat)}>{chat ? <ShareModal chat={chat} onClose={() => setModal(null)} say={say} /> : <></>}</Fade>
       {fm.node}
       <Fade show={!!(modal === "upload")}><UploadModal say={say} onConverted={(f, md) => { saveDoc(f.name, md); saveBlob(f.name, f, say); setFiles((o) => capFiles(o, [f.name], say)); setModal(null); say(`Đã chuyển thành ${f.name}`); }} onClose={() => setModal(null)} onFiles={(f) => { f.forEach((x) => saveBlob(x.name, x)); setFiles((o) => [...o, ...f.map((x) => x.name)]); setModal(null); say(`Đã thêm ${f.length} tệp`); }} /></Fade>

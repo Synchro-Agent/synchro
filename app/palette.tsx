@@ -65,7 +65,7 @@ type Remote = {
 };
 
 const MAX_SHOWN = 500;
-export function CommandPalette({ chats, projects, codes, cmds, go, onClose }: { codes?: { id: number; title: string; archived?: boolean }[]; chats: { id: number; title: string; tags?: string[]; msgs: { text: string; files?: string[] }[] }[]; projects?: PaletteProject[]; cmds: PaletteCmd[]; go: PaletteGo; onClose: () => void }) {
+export function CommandPalette({ chats, projects, codes, cmds, go, seed, onClose }: { codes?: { id: number; title: string; archived?: boolean }[]; chats: { id: number; title: string; tags?: string[]; msgs: { text: string; files?: string[] }[] }[]; projects?: PaletteProject[]; cmds: PaletteCmd[]; go: PaletteGo; seed?: () => string; onClose: () => void }) {
   const [q, setQ] = useState("");
   // Ô nhập luôn nhận chữ ngay; danh sách lọc lại sau, không chặn phím gõ.
   const dq = useDeferredValue(q);
@@ -76,6 +76,14 @@ export function CommandPalette({ chats, projects, codes, cmds, go, onClose }: { 
   // Nhóm đã bấm "Xem tất cả": đổi từ khóa thì thu gọn lại.
   const [open, setOpen] = useState<string[]>([]);
   const list = useRef<HTMLDivElement>(null);
+
+  // Bảng lệnh đã gắn: lấy các phím người dùng gõ ngay sau ⌘K (được trang cha giữ lại trong lúc chunk lazy đang tải) và chèn vào trước.
+  // Gọi seed() cũng là tín hiệu để trang cha ngừng giữ phím. Đưa con trỏ vào ô tìm (củng cố autoFocus).
+  useEffect(() => {
+    const s = seed?.() ?? "";
+    if (s) setQ((prev) => s + prev);
+    qRef.current?.focus();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     let live = true;
