@@ -88,6 +88,9 @@ try {
   ok(log().includes(`key=${KEY} secretlen=${SECRET.length} other=none`), "khóa đi qua biến môi trường; khóa khác của máy chủ (DATA_KEY) không đi theo", log());
   ok(fs.readFileSync(path.join(LD, "replicate.pid"), "utf8").trim() === String((await L.litestreamAdmin()).pid), "ghi pid để lần khởi động sau dọn tiến trình mồ côi");
   ok(AS.adminAudit(5).some((a) => a.action === "admin_backup_on"), "nhật ký: bật sao lưu liên tục");
+  // scripts/r2-creds.mjs (web user đưa khóa cho scripts/backup-offsite.sh qua ống): đúng 5 dòng, giải mã được khóa bí mật.
+  const cr = execFileSync(process.execPath, ["scripts/r2-creds.mjs", process.env.DATA_DIR], { encoding: "utf8", env: { ...process.env } }).split("\n");
+  ok(cr.slice(0, 5).join("|") === [ACC, "synchro-backup", KEY, SECRET, "prod/db"].join("|") && cr.length === 6, "r2-creds.mjs: 5 dòng đúng thứ tự, khóa bí mật giải mã đúng");
 
   console.log("3. Đổi cấu hình, chết giữa chừng, tắt");
   r = await R.POST(req({ action: "save", bucket: "synchro-backup-2", secret: "" }, ck));

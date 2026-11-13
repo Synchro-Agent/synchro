@@ -196,7 +196,8 @@ OFFSITE=false; OFFSITE_OK=false
 STEP="sao lưu xong, ghi báo cáo lỗi"
 if [ -n "${SYNCHRO_BACKUP_HOOK:-}" ]; then
   OFFSITE=true
-  if $SYNCHRO_BACKUP_HOOK "$SNAP"; then OFFSITE_OK=true; else echo "$(date +%FT%T%z) Lệnh đẩy bản sao ra ngoài lỗi" >&2; fi
+  # Lệnh đẩy (vd. scripts/backup-offsite.sh) cần biết thư mục dữ liệu và web user mà script này đã kiểm.
+  if SYNCHRO_DATA="$DATA" WEB_USER="$WEB_USER" APP="$APP" $SYNCHRO_BACKUP_HOOK "$SNAP"; then OFFSITE_OK=true; else echo "$(date +%FT%T%z) Lệnh đẩy bản sao ra ngoài lỗi" >&2; fi
 fi
 V=${VERIFY#\{}; V=${V%\}}
 report "\"ok\":true,\"lastOkAt\":$(file_ms "$DEST/LAST_OK"),\"snapshot\":\"$STAMP\",\"sizeMB\":$(cat "$SNAP/SIZE_MB"),$V,\"hasKey\":$HASKEY,\"uploads\":$UPLOADS,\"missingUploads\":$MISSING,\"checked\":$CHECKED,\"corrupt\":$CORRUPT,\"offsite\":$OFFSITE,\"offsiteOk\":$OFFSITE_OK"
