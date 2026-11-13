@@ -646,10 +646,16 @@ export function confirmVerify(req: Request, token: unknown) {
   return u;
 }
 /** "Không phải tôi đăng ký": chủ email (có đường dẫn trong thư) xóa tài khoản người khác lập bằng email của họ. Chỉ với tài khoản chưa xác minh, tạo sau khi có tính năng này. */
+/** Tài khoản vừa bị xóa: các phần giữ trạng thái trong bộ nhớ theo người dùng (cầu nối sống của mcpbridge…) đăng ký dọn ở đây.
+ *  Không import ngược các phần đó (chúng đã import authstore qua runs.ts). */
+const goneHooks: Map<string, (uid: string) => void> = ((globalThis as { __synchroAccountGone?: Map<string, (uid: string) => void> }).__synchroAccountGone ??= new Map());
+export const onAccountGone = (name: string, f: (uid: string) => void) => { goneHooks.set(name, f); };
+const accountGone = (uid: string) => { for (const f of goneHooks.values()) { try { f(uid); } catch { /* dọn bộ nhớ, không chặn việc xóa */ } } };
 export function denyVerify(req: Request, token: unknown) {
   const u = verifyRow(req, token);
   if (!needsVerify(u)) throw new AuthError(BAD_VERIFY, 400);
   db().prepare("DELETE FROM users WHERE id = ?").run(u.id);
+  accountGone(u.id);
   audit("email_denied", { target: u, ip: clientIp(req) });
   return u;
 }
@@ -866,6 +872,7 @@ export async function deleteOwnAccount(req: Request, u: UserRow, pw: unknown) {
   limit("del:" + u.id, 5, 15 * MIN);
   if (u.password_hash && !(typeof pw === "string" && (await verifyPassword(pw, u.password_hash)))) throw new AuthError("Mật khẩu không đúng.", 401);
   db().prepare("DELETE FROM users WHERE id = ?").run(u.id);
+  accountGone(u.id);
   audit("account_deleted", { actor: u, target: u, ip: clientIp(req) });
 }
 
@@ -981,6 +988,7 @@ export function adminDelete(req: Request, admin: UserRow, id: string, confirmEma
   const t = target(admin, id);
   if (typeof confirmEmail !== "string" || confirmEmail.trim().toLowerCase() !== t.email.toLowerCase()) throw new AuthError("Email xác nhận không khớp.");
   db().prepare("DELETE FROM users WHERE id = ?").run(t.id);
+  accountGone(t.id);
   audit("admin_delete", { actor: admin, target: t, ip: clientIp(req) });
 }
 

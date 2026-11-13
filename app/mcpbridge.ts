@@ -5,6 +5,7 @@
 import crypto from "node:crypto";
 import { MAX_TURN_MS } from "./ai/cli_runtime";
 import { currentRun, inRun } from "./runs";
+import { onAccountGone } from "./authstore";
 
 export type BridgeTool = { name: string; description: string; input_schema: unknown };
 // image: ảnh (base64) kèm kết quả, ví dụ ảnh chụp trình duyệt của Synchro Code (JPEG) hay ảnh connector trả về (mime cho biết loại ảnh).
@@ -59,10 +60,12 @@ function liveToken(uid: string, conv: string): string {
   }
   return t;
 }
-/** Người dùng xóa cuộc trò chuyện / đăng xuất: bỏ địa chỉ sống (tiến trình còn giữ địa chỉ cũ chỉ nhận lỗi). */
+/** Người dùng xóa cuộc trò chuyện (subs.removeConvSessions), đăng xuất khỏi thiết bị cuối cùng (api/auth/logout), tài khoản bị xóa (authstore):
+ *  bỏ địa chỉ sống (tiến trình còn giữ địa chỉ cũ chỉ nhận lỗi). */
 export function dropLiveBridge(uid: string, conv?: string) {
   for (const [t, l] of lives.byToken) if (l.uid === uid && (conv === undefined || l.key === `${uid}\u0000${conv}`)) { lives.byToken.delete(t); lives.byConv.delete(l.key); }
 }
+onAccountGone("mcpbridge", (uid) => dropLiveBridge(uid));
 /** Giữa hai lượt: danh sách công cụ của lượt gần nhất, không chạy công cụ nào. */
 const idleBridge = (l: Live): Bridge => ({ uid: l.uid, run: null, tools: l.tools, hold: l.hold, exp: Date.now() + 60_000, busy: 0, last: l.used, live: new Map(), jobs: new Map(),
   call: async () => ({ is_error: true, content: "Lượt chat đã xong nên công cụ của Synchro không chạy nữa. Hãy trả lời người dùng bằng những gì đã có." }) });
@@ -92,8 +95,12 @@ export function openBridge(o: { uid: string; tools: BridgeTool[]; call: Bridge["
   const b: Bridge = { ...o, run: currentRun(), exp: now + MAX_TURN_MS + 5 * 60_000, busy: 0, last: now, live: new Map(), jobs: new Map() };
   const onParked: (() => void)[] = [];
   bridges.set(token, b);
-  const lt = o.conv ? liveToken(o.uid, o.conv) : null, l = lt ? lives.byToken.get(lt) : undefined;
-  // Hai lượt cùng cuộc trò chuyện chồng nhau (hiếm: lượt cũ chưa kịp đóng): địa chỉ sống trỏ vào lượt mới nhất.
+  let lt = o.conv ? liveToken(o.uid, o.conv) : null, l = lt ? lives.byToken.get(lt) : undefined;
+  // Hai lượt cùng cuộc trò chuyện chồng nhau (lượt cũ chưa xong, gửi lại, hai tab): địa chỉ sống vẫn trỏ vào lượt đang chạy, lượt mới không có địa chỉ sống
+  // (chạy bằng cầu nối riêng của lượt, khởi động lạnh). Trỏ sang lượt mới thì công cụ mà tiến trình / thread của lượt cũ gọi sẽ chạy nhầm vào lượt mới
+  // (duyệt, nhật ký làm việc, bộ công cụ của lượt mới). Lượt cũ đã quá hạn mà chưa đóng thì coi như không còn.
+  const cur = l?.target ? bridges.get(l.target) : undefined;
+  if (l && cur && cur.exp >= now) { lt = null; l = undefined; }
   if (l) { l.target = token; l.tools = o.tools; l.hold = o.hold; l.used = now; }
   // alive: đang chạy công cụ thì là "bây giờ", không thì lúc công cụ gần nhất xong (để biết CLI còn làm việc).
   return {
