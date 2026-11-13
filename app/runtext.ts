@@ -48,3 +48,12 @@ export function runBlocks(o: { open: string; close: string; tags: string; stdout
 
 /** Tóm tắt một dòng cho nhật ký làm việc: người dùng đọc, không phải đọc thẻ nội bộ. */
 export const plainSummary = (t: string) => t.replace(/<\/?[a-z_]+(?:\s[^<>]*)?>/gi, " ").replace(/\s+/g, " ").trim();
+/**
+ * Đoạn trích chữ thường của một tin nhắn (⌘K, xem trước): bỏ khối <artifact …>…</artifact> (cả khối chưa đóng khi đang viết), khối mã ```,
+ * thẻ công cụ / thẻ nội bộ (plainSummary) và ký hiệu Markdown, để không lộ "<artifact identifier" trong kết quả tìm kiếm (LIVE-9).
+ */
+export const plainSnippet = (t: string) => plainSummary(String(t ?? "")
+  .replace(/<artifact\b[\s\S]*?(?:<\/artifact>|$)/gi, " ")
+  .replace(/```[\s\S]*?(?:```|$)/g, " "))
+  .replace(/!?\[([^\]]*)\]\([^)]*\)/g, "$1")
+  .replace(/[*_`#>|]+/g, "").replace(/\s+/g, " ").trim();

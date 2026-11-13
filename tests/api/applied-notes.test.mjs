@@ -83,5 +83,11 @@ ok(/appliedDelta\(/.test(runsSrc) && /l\.kind === "chat"/.test(runsSrc), "runs.d
 ok(/l\.raw = "";\s*l\.applied = false/.test(runsSrc), "deltaStep đặt lại trạng thái lọc theo từng bước");
 ok(/stripAppliedNotes\(scrubServerPaths\(/.test(fs.readFileSync("app/chatengine.ts", "utf8")), "sayOut lọc dòng cũ khỏi sự kiện 'say'");
 
+console.log("6. Đoạn chat cũ: bỏ dòng khi vẽ và khi sao chép (W1-08)");
+ok(/const cleanAiMsg = \(m: Msg\): Msg => \{ if \(m\.role !== "ai"\) return m; const text = stripAppliedNotes\(m\.text\); return text === m\.text \? m : \{ \.\.\.m, text \}; \};/.test(page), "page.tsx: cleanAiMsg lọc tin AI, giữ nguyên đối tượng khi không đổi");
+ok(/MsgRow\(\{ m: raw,/.test(page) && /const m = useMemo\(\(\) => cleanAiMsg\(raw\), \[raw\]\);/.test(page), "MsgRow vẽ và sao chép bản đã lọc");
+const legacy = `Thủ đô của Pháp là Paris.\n\n_Đã áp dụng hướng dẫn của bạn: “${SECRET}”_`;
+ok(T.stripAppliedNotes(legacy) === "Thủ đô của Pháp là Paris." && T.stripAppliedNotes(body) === body, "tin cũ được lọc, tin sạch giữ nguyên chuỗi");
+
 console.log(`\n${pass}/${pass + fail} đạt`);
 process.exit(fail ? 1 : 0);

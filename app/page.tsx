@@ -10,7 +10,7 @@ import { FileCard } from "./fileicon";
 import { useFileMenu, saveDoc, saveBlob, fileContext } from "./filemenu";
 import { capFiles, getStatus, abortFile } from "./filestate";
 import { UPLOAD_ACCEPT } from "./fileproc/types";
-import type { Rejected } from "./turnctx";
+import { stripAppliedNotes, type Rejected } from "./turnctx";
 import { Boundary, Fade, Menu, Thinking } from "./ui";
 import { chatError, GENERIC_ERR, isForeign } from "./chaterror";
 import { armDraft, saveDraft, takeDraft } from "./draft";
@@ -37,7 +37,7 @@ import { allTags, cleanTags, hasTag, tagKey } from "./chattags";
 import { TagChips, TagFilter, TagPicker } from "./tagsui";
 import { Markdown } from "./md";
 import type { PaletteCmd, PaletteGo } from "./palette";
-import { CHIP_LIMIT, hiddenCards } from "./composerchips";
+import { CHIP_LIMIT, hiddenCards, useEdgeFade } from "./composerchips";
 import { ASK_EVENT } from "./askcard";
 import { installTips } from "./tips";
 import { fit as fitFloat, installFloatFit } from "./floatfit";
@@ -85,9 +85,10 @@ import { restylePatch } from "./artkit";
 import { presetOf } from "./designpresets";
 import { resolveArt, type ArtVersion } from "./vfs";
 import { criticKey, fixPatch, important, type CriticEntry, type Finding } from "./critic";
-import { chatHistory, mixExtra } from "./history";
+import { chatHistory, continuable, mixExtra } from "./history";
 import { ContextMixer } from "./mixer";
 import { ArtifactCard, OutputFiles, saveArtifacts } from "./artifactcard";
+import { GEN_IMG_EVENT } from "./artdoc";
 import type { Product } from "./filepreview";
 import type { OutFile } from "./llm";
 import { UsageRing } from "./usageui";
@@ -101,6 +102,7 @@ type CxData = { connectors: Conn[]; composio?: ComposioInfo; err?: boolean };
 import { wantsIntro } from "./introflag";
 import { rowHeight } from "./rowsize";
 import { startWarmPing, warmChoice } from "./warmping";
+import { decodeSettingsTab, hashStep, settingsHash } from "./hashnav";
 type Say = (m: string) => void;
 
 // Trang đầu chỉ tải phần chat; các mục khác, hộp thoại và màn hình đăng nhập tải khi cần (rê chuột vào mục thì tải trước).
@@ -461,6 +463,9 @@ function Composer(p: {
   const [picks, setPicks] = useState<{ id: string; label: string }[]>([]);
   // Dải thẻ đính kèm: quá CHIP_LIMIT thẻ thì gộp phần dư vào "+N"; bấm "+N" trải ra lưới nhiều hàng (xem app/composerchips.ts).
   const [chipsOpen, setChipsOpen] = useState(false);
+  // Lưới đã trải chỉ dành cho bộ thẻ đang soạn: còn ≤ CHIP_LIMIT thẻ (đã gửi, đã gỡ bớt) thì lần đính kèm sau lại bắt đầu từ dải một hàng.
+  const chipCount = picks.length + files.length;
+  useEffect(() => { if (chipCount <= CHIP_LIMIT) setChipsOpen(false); }, [chipCount]);
   const [skl, setSkl] = useState<{ id: string; label: string; lib?: boolean; cat?: boolean }[] | null>(null);
   const [skq, setSkq] = useState("");
   // Thư viện từ danh mục Claude không tải sẵn: gõ tìm thì hỏi máy chủ.
@@ -553,7 +558,7 @@ function Composer(p: {
     if (!canSend || busy) return;
     // Chưa có model nào: đưa tới chỗ kết nối, tin đang gõ vẫn nằm nguyên trong ô (không gửi đi để nhận về một câu lỗi).
     if (mdl.loaded && !mdl.providers.length) { say("Hãy kết nối một gói AI để gửi tin này"); app.openSettings?.("Providers"); return; }
-    const fire = () => { onSend(v.trim() || "Xem tệp đính kèm", files, picks.length ? picks : undefined); setV(""); setPicks([]); setAt(null); };
+    const fire = () => { onSend(v.trim() || "Xem tệp đính kèm", files, picks.length ? picks : undefined); setV(""); setPicks([]); setAt(null); setChipsOpen(false); };
     // Có thẻ tệp báo lỗi: hỏi trước khi gửi, vì các tệp đó sẽ không gửi được (model chỉ được báo tên và lý do).
     const bad = files.filter((f) => getStatus(f)?.state === "error").length;
     if (bad) { app.confirm(tr("Không gửi được một số tệp"), `${bad} ${tr("tệp không đọc được sẽ không được gửi. Gửi phần còn lại?")}`, tr("Gửi phần còn lại"), fire); return; }
@@ -691,7 +696,7 @@ function Composer(p: {
                       const note = k.state === "unlinked" ? "Chưa liên kết" : k.state === "blocked" ? "Không được phép" : live ? "" : "Cần liên kết lại";
                       return (
                         <div className="menu-item cm-conn cm-cx">
-                          <ConnLogo logo="composio" color="#5B4BDB" name="Composio" size={20} /><span className="cv-ell" data-notr>Composio</span>{note && <span className="cm-cnt">{note}</span>}
+                          <ConnLogo logo="composio" color="#5B4BDB" name="Composio" size={20} /><span className="cv-ell" data-notr>Composio</span>{note && <span className={`cm-cnt${k.state !== "blocked" ? " cm-dup" : ""}`} title={note}>{note}</span>}
                           {live && c
                             ? <button className={`toggle ${on ? "on" : ""}`} role="switch" aria-checked={on} aria-label={`${on ? "Tắt" : "Bật"} Composio`} onClick={() => cxPatch(c.id, { enabled: !c.enabled })} />
                             : <button className="cn-link cm-rec" onClick={() => { setMenu(false); setSub(null); (p.goConnectors ?? p.goCustom)(); }}>{k.state === "blocked" ? "Xem" : "Liên kết"}</button>}
@@ -744,10 +749,15 @@ function Composer(p: {
   ];
   const chipsExpanded = chipsOpen && cards.length > CHIP_LIMIT;
   const chipsHidden = hiddenCards(cards.length, chipsExpanded);
+  // Mờ mép chỉ khi dải (hay lưới) thật sự còn thẻ bị khuất ở mép đó. "+N" / "Thu gọn" nằm ngoài khung cuộn, luôn thấy ở mép phải dù màn hẹp.
+  const [stripRef, stripFade] = useEdgeFade<HTMLDivElement>(chipsExpanded ? "y" : "x", `${cards.length}${chipsExpanded ? "g" : ""}`);
   const chips = cards.length > 0 && (
-    <div className={`attach${chipsExpanded ? " attach-grid" : ""}`}>{fm.node}
-      {chipsHidden > 0 ? cards.slice(0, CHIP_LIMIT) : cards}
-      {chipsHidden > 0 && <button type="button" className="attach-more" onClick={() => setChipsOpen(true)} aria-label={`${tr("Hiện thêm")} ${chipsHidden} ${tr("mục")}`} data-tip={`${tr("Hiện thêm")} ${chipsHidden} ${tr("mục")}`}>+{chipsHidden}</button>}</div>
+    <div className={`attach-wrap${chipsExpanded ? " open" : ""}`}>
+      <div ref={stripRef} className={`attach${chipsExpanded ? " attach-grid" : ""}${stripFade ? ` ${stripFade}` : ""}`}>{fm.node}
+        {chipsHidden > 0 ? cards.slice(0, CHIP_LIMIT) : cards}</div>
+      {chipsHidden > 0 && <button type="button" className="attach-more" onClick={() => setChipsOpen(true)} aria-label={`${tr("Hiện thêm")} ${chipsHidden} ${tr("mục")}`} data-tip={`${tr("Hiện thêm")} ${chipsHidden} ${tr("mục")}`}>+{chipsHidden}</button>}
+      {chipsExpanded && <button type="button" className="attach-more attach-less" onClick={() => setChipsOpen(false)} aria-label={tr("Thu gọn")} data-tip={tr("Thu gọn")}>{tr("Thu gọn")}</button>}
+    </div>
   );
 
   if (dock)
@@ -882,7 +892,7 @@ function scanArts(msgs: Msg[], from: number, base: ArtScan): ArtScan {
 type RowCx = {
   chat: Chat; chats: Chat[]; say: Say; fm: ReturnType<typeof useFileMenu>; arts: ArtScan; artOpen: boolean; artIdent?: string; artIndex: number;
   openPlugins: () => void; openArt: (s: { chat: number; ident: string; v: number; follow: boolean }) => void; openFile: (f: OutFile) => void; send: (t: string) => void;
-  copy: (key: string, text: string) => void; speak: (key: string, text: string) => void; like: (i: number, v: 1 | -1) => void; retry: (avoid?: string) => void; openProviders: () => void; edit: (i: number, text: string) => void; model: string; switchModel: (m: Msg, key: string) => void;
+  copy: (key: string, text: string) => void; speak: (key: string, text: string) => void; like: (i: number, v: 1 | -1) => void; retry: (avoid?: string) => void; openProviders: () => void; edit: (i: number, text: string) => void; model: string; switchModel: (key: string) => void;
   // Tài khoản có hơn một model dùng được: mới hiện nút "Chạy lại bằng model khác" dưới câu trả lời của chế độ Tự động.
   altModels: boolean;
   // Rẽ nhánh: đoạn chat mới gồm các tin tới hết câu trả lời thứ i (đoạn chat gốc giữ nguyên).
@@ -902,11 +912,16 @@ function ErrCard({ raw, onRetry, onProviders }: { raw?: string; onRetry?: () => 
     </div>
   );
 }
+/** Tin của AI không còn dòng ghi chú "đã áp dụng hướng dẫn" kiểu cũ (stripAppliedNotes); tin không đổi thì trả đúng đối tượng cũ. */
+const cleanAiMsg = (m: Msg): Msg => { if (m.role !== "ai") return m; const text = stripAppliedNotes(m.text); return text === m.text ? m : { ...m, text }; };
 // Một tin của đoạn chat. memo: mỗi khung hình chữ đang chảy chỉ vẽ lại tin cuối; đoạn chat dài không phải dựng lại toàn bộ tin nhắn.
-const MsgRow = memo(function MsgRow({ m, i, last, busy, mark, art, inl, fileActive, copied, speaking, chatId, cx }: {
+const MsgRow = memo(function MsgRow({ m: raw, i, last, busy, mark, art, inl, fileActive, copied, speaking, chatId, cx }: {
   // lang: đổi ngôn ngữ thì dòng tin đã memo cũng dịch lại các nút và lời báo.
   m: Msg; i: number; last: boolean; lang: string; busy: boolean; mark: boolean; art?: boolean; inl?: boolean; artSig: string; fileActive?: string; copied: boolean; speaking: boolean; chatId: number; cx: React.RefObject<RowCx | null>;
 }) {
+  // W1-08: câu trả lời cũ còn dòng ghi chú "đã áp dụng hướng dẫn" kèm trích dẫn trong chữ (đã lưu, đã đồng bộ): bỏ khi vẽ và khi sao chép,
+  // như lịch sử gửi model (history.ts) và bản chia sẻ (sharesnap.ts). Không có dòng đó thì giữ nguyên đối tượng tin.
+  const m = useMemo(() => cleanAiMsg(raw), [raw]);
   // Đang sửa tin đã gửi: nội dung đang sửa; null là không sửa.
   const [ed, setEd] = useState<string | null>(null);
   const saveEd = () => { const t = ed?.trim(); if (!t) return; setEd(null); if (t !== m.text.trim()) cx.current!.edit(i, t); };
@@ -960,8 +975,8 @@ const MsgRow = memo(function MsgRow({ m, i, last, busy, mark, art, inl, fileActi
             {m.notice.tried?.length ? <p data-notr>{`${getLang() === "en" ? "Tried" : "Đã thử"}: ${m.notice.tried.join(", ")}`}</p> : null}
             {m.notice.switchTo && last && !busy ? (
               <div className="msg-notice-act">
-                <button className="btn dark" onClick={() => cx.current!.switchModel(m, m.notice!.switchTo!.model)} data-notr>{`${getLang() === "en" ? (c.model === AUTO ? "Try again with Auto" : `Use another model: ${m.notice.switchTo.name}`) : c.model === AUTO ? "Thử lại bằng Tự động" : `Dùng model khác: ${m.notice.switchTo.name}`}`}</button>
-                {c.model !== AUTO && <button className="lnk" onClick={() => cx.current!.switchModel(m, AUTO)}>{tr("Dùng Tự động")}</button>}
+                <button className="btn dark" onClick={() => cx.current!.switchModel(m.notice!.switchTo!.model)} data-notr>{`${getLang() === "en" ? (c.model === AUTO ? "Try again with Auto" : `Use another model: ${m.notice.switchTo.name}`) : c.model === AUTO ? "Thử lại bằng Tự động" : `Dùng model khác: ${m.notice.switchTo.name}`}`}</button>
+                {c.model !== AUTO && <button className="lnk" onClick={() => cx.current!.switchModel(AUTO)}>{tr("Dùng Tự động")}</button>}
               </div>
             ) : null}
           </div>
@@ -1318,6 +1333,12 @@ export default function Home() {
     window.addEventListener("synchro:forget", forget);
     return () => window.removeEventListener("synchro:forget", forget);
   }, []);
+  // Ảnh dựng nền (G4) vừa về hay không dựng được: khung xem trước / thẻ ảnh phát sự kiện (artdoc.ts noteGenSettled), báo một dòng (W23-2).
+  useEffect(() => {
+    const on = (e: Event) => say((e as CustomEvent<{ ok?: boolean }>).detail?.ok ? tr("Ảnh dựng nền đã xong và đã thay vào artifact.") : tr("Không dựng được ảnh nền; artifact vẫn giữ khung giữ chỗ."));
+    window.addEventListener(GEN_IMG_EVENT, on);
+    return () => window.removeEventListener(GEN_IMG_EVENT, on);
+  }, [say]);
   // Thẻ "chưa tạo được ảnh" trong nhật ký làm việc: mở thẳng Cài đặt → Providers.
   useEffect(() => {
     const open = () => { setSettingsTab("Providers"); setModal("settings"); };
@@ -1417,7 +1438,7 @@ export default function Home() {
   }, [me, speechReady, caps.art]);
   // Địa chỉ mà trạng thái hiện tại nên có: Cài đặt (#s=) ưu tiên, rồi đoạn chat không ẩn danh (#c=), rồi mục (#v=).
   const curHash = (): string => {
-    if (modal === "settings") return `#s=${settingsTab}`;
+    if (modal === "settings") return settingsHash(settingsTab);
     if (view === "chat" && cur !== null && chat && !chat.inc) return `#c=${cur}`;
     const h = HASH_VIEW[view];
     return h && viewAllowed(view) ? `#v=${h}` : "";
@@ -1428,7 +1449,7 @@ export default function Home() {
     if (bootDone || !loaded) return;
     const h = typeof location === "undefined" ? "" : location.hash;
     if (/^#c=/.test(h)) { setBootDone(true); return; } // openWant lo phần đoạn chat ở trên
-    if (/^#s=/.test(h)) { const tab = decodeURIComponent(h.slice(3)); if (tab) { setSettingsTab(tab); setModal("settings"); } setBootDone(true); return; }
+    if (/^#s=/.test(h)) { setSettingsTab(decodeSettingsTab(h.slice(3))); setModal("settings"); setBootDone(true); return; } // mục lạ: Settings tự về General
     const mv = /^#v=([a-z]+)$/.exec(h);
     if (mv) {
       if (!me) return; // chờ biết quyền
@@ -1439,21 +1460,28 @@ export default function Home() {
     setBootDone(true);
   }, [loaded, me, bootDone, viewAllowed]);
   // Trạng thái → địa chỉ: đổi mục / mở đoạn chat = một mục lịch sử (pushState) để Back quay lại trang trước.
-  // Cài đặt là hộp thoại đè lên: chỉ thay thế (replaceState) nên không chèn mục lịch sử thừa.
+  // Mở Cài đặt cũng push (Back đóng Cài đặt, về lại đoạn chat); đổi mục trong Cài đặt chỉ replace; đóng Cài đặt về trang đã mở nó thì
+  // history.back() để bỏ mục #s= vừa thêm. Lần ghi đầu sau khi mở app thì replace (địa chỉ lạ không ở lại trong lịch sử). Xem hashnav.ts.
+  const settingsFrom = useRef<string | null>(null); // địa chỉ trước khi mở Cài đặt, chỉ khi chính app đã push mục #s=
+  const firstSync = useRef(true);
   useEffect(() => {
     if (!loaded || !bootDone || openWant.current !== null) return;
-    const want = curHash();
-    if (location.hash === want) return;
+    const want = curHash(), cur = location.hash;
+    const step = hashStep(cur, want, settingsFrom.current, firstSync.current);
+    firstSync.current = false;
+    if (step === "none") return;
+    if (!want.startsWith("#s=")) settingsFrom.current = null;
+    if (step === "back") { history.back(); return; } // popstate về đúng địa chỉ want, trạng thái đã khớp
     const url = location.pathname + location.search + want;
-    const touchingSettings = want.startsWith("#s=") || location.hash.startsWith("#s=");
-    if (touchingSettings) history.replaceState(null, "", url);
-    else history.pushState(null, "", url);
+    if (step === "push") { if (want.startsWith("#s=")) settingsFrom.current = cur; history.pushState(null, "", url); }
+    else history.replaceState(null, "", url);
   }, [view, cur, chat?.inc, modal, settingsTab, loaded, bootDone, me, speechReady, caps.art]); // eslint-disable-line react-hooks/exhaustive-deps
   // Địa chỉ → trạng thái: nút Back / Forward (popstate). Đóng Cài đặt khi địa chỉ không còn là #s=.
   useEffect(() => {
     const onPop = () => {
       const h = location.hash;
-      if (/^#s=/.test(h)) { const tab = decodeURIComponent(h.slice(3)); setSettingsTab(tab || "General"); setModal("settings"); return; }
+      if (/^#s=/.test(h)) { setSettingsTab(decodeSettingsTab(h.slice(3))); setModal("settings"); return; }
+      settingsFrom.current = null; // đã rời mục #s= bằng Back / Forward
       setModal((m) => (m === "settings" ? null : m));
       if (/^#c=/.test(h)) { const id = Number(/^#c=(\d{1,16})$/.exec(h)?.[1] ?? 0) || null; if (id !== null && chatsRef.current.some((c) => c.id === id && !c.inc)) { setCur(id); setView("chat"); } return; }
       const mv = /^#v=([a-z]+)$/.exec(h);
@@ -2039,18 +2067,20 @@ export default function Home() {
     if (running.has(u.chat)) stop(true, u.chat);
     setChats((cs) => cs.map((x) => (x.id === u.chat ? { ...x, msgs: u.msgs, compact: u.compact } : x)));
   };
+  // Thử lại sau lượt lỗi đã làm được một phần (bị ngắt vì hết hạn mức giữa lúc tra cứu…): giữ lượt đó trong lịch sử (phần đã viết, dấu vết công cụ)
+  // và làm tiếp, không vứt đi rồi làm lại từ đầu. "Chạy lại bằng model khác" (avoid) vẫn là chạy lại từ đầu.
   const retry = (avoid?: string) => {
     if (!chat || busy) return;
+    if (!avoid && continuable(chat.msgs[chat.msgs.length - 1])) { send(tr("Tiếp tục từ chỗ đang dở")); return; }
     const k = chat.msgs.map((m) => m.role).lastIndexOf("user");
     if (k >= 0) resend(chat, k, chat.msgs[k], avoid);
   };
   // Đổi model bằng một lần bấm sau khi lượt lỗi. Đã có phần làm dở thì làm tiếp (dấu vết công cụ nằm trong lịch sử, model mới biết việc nào đã xong),
   // chưa có gì thì gửi lại đúng tin vừa rồi. Đang để Tự động thì giữ Tự động: máy chủ đã biết model nào đang nghỉ.
-  const switchModel = (m: Msg, key: string) => {
+  const switchModel = (key: string) => {
     if (!chat || busy) return;
     if (model !== AUTO) { setActiveModel(key); setModel(key); }
-    if (m.notice?.partial || m.notice?.work || m.trace?.length || m.outs?.length) send(tr("Tiếp tục từ chỗ đang dở"));
-    else retry();
+    retry();
   };
   const copy = (key: string, text: string) => {
     navigator.clipboard?.writeText(text);
@@ -2751,8 +2781,8 @@ export default function Home() {
 
       {drag && <div className="drop"><div className="drop-in"><div className="drop-ic"><I.Image size={30} /><I.Copy size={30} /><I.Folder size={30} /></div><span>Thả tệp vào đây</span></div></div>}
       <Toast text={toast} />
-      {voiceOn && <VoiceMode onClose={() => setVoiceOn(false)} onAsk={(t) => send(t)} onTurn={voiceTurn} busy={busy} reply={lastAi ? { text: lastAi.failed ? tr(chatError(lastAi.err).text) : lastAi.text, time: lastAi.time ?? 0 } : null} rate={VOICE_RATE[vspeed] ?? 1} voice={vvoice} say={say} />}
-      <Fade show={!!(modal === "settings")}><Settings key={settingsTab} initial={settingsTab} onClose={() => setModal(null)} theme={theme} setTheme={setTheme} /></Fade>
+      {voiceOn && <VoiceMode onClose={() => setVoiceOn(false)} onAsk={(t) => send(t)} onTurn={voiceTurn} busy={busy} reply={lastAi ? { text: lastAi.failed ? tr(chatError(lastAi.err).text) : stripAppliedNotes(lastAi.text), time: lastAi.time ?? 0 } : null} rate={VOICE_RATE[vspeed] ?? 1} voice={vvoice} say={say} />}
+      <Fade show={!!(modal === "settings")}><Settings initial={settingsTab} onTab={setSettingsTab} onClose={() => setModal(null)} theme={theme} setTheme={setTheme} /></Fade>
       <Fade show={!!(modal === "lang")}><LangModal onClose={() => setModal(null)} /></Fade>
       <Fade show={!!(modal === "search")}><CommandPalette chats={visible} projects={projects} codes={codeList} cmds={paletteCmds} go={paletteGo} seed={palSeed} onClose={() => setModal(null)} /></Fade>
       <Fade show={!!(modal === "share" && chat)}>{chat ? <ShareModal chat={chat} onClose={() => setModal(null)} say={say} /> : <></>}</Fade>

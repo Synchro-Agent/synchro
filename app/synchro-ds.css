@@ -210,13 +210,16 @@ html body .side-toggle{display:grid;place-items:center;flex:none;width:36px;heig
   transition:background-color var(--ds-fast),box-shadow var(--ds-fast)}
 html body .side-toggle:hover{background:var(--ds-plate);box-shadow:inset 0 0 0 1px var(--ds-line-2)}
 html body .side-toggle:focus-visible{outline:0;box-shadow:var(--ds-ring)}
-@media (min-width:761px){html body .side-toggle{display:none!important}}
+/* Cùng ngưỡng NARROW (860px) của page.tsx: từ 860px trở xuống thanh bên là ngăn kéo, logo ở thanh trên mở lại. */
+@media (min-width:861px){html body .side-toggle{display:none!important}}
 
-/* ---------------------------------------------------------------- điện thoại: thanh điều hướng + bảng đoạn chat là một ngăn kéo */
-@media (max-width:760px){
+/* ---------------------------------------------------------------- điện thoại, máy tính bảng dọc: thanh điều hướng + bảng đoạn chat là một ngăn kéo
+   Ngưỡng 860px trùng NARROW trong page.tsx (JS đóng thanh bên khi mở trang, hiện lớp phủ z 64, chọn chat thì đóng). Trước đây khối này dừng ở 760px:
+   761–860px thanh bên vẫn nằm trong dòng (z 5) dưới lớp phủ nên bấm vào đoạn chat chỉ trúng lớp phủ và đóng thanh bên. Ngăn kéo z 65 nằm trên lớp phủ. */
+@media (max-width:860px){
   html body .app>.shell-side{position:fixed;top:0;bottom:0;left:0;z-index:65;height:100%;width:min(336px,92vw);background:var(--sidebar);border-radius:0 var(--r-panel) var(--r-panel) 0;
-  html body .app>.shell-side .sidebar{border-radius:var(--r-card)}
     box-shadow:0 20px 60px rgba(0,0,0,.25);transition:transform var(--ds-slow) var(--ds-ease),box-shadow var(--ds-slow)}
+  html body .app>.shell-side .sidebar{border-radius:var(--r-card)}
   html body .app>.shell-side.closed{transform:translateX(calc(-100% - 12px));box-shadow:none}
   html body .shell-side .sidebar,html body .shell-side.closed .sidebar{flex:1;width:auto;margin:10px 10px 10px 0;opacity:1;pointer-events:auto;--gl-fill:var(--ds-plate);--gl-blur:0px}
   .rail{padding-top:calc(16px + env(safe-area-inset-top));padding-bottom:calc(16px + env(safe-area-inset-bottom))}
@@ -1016,8 +1019,14 @@ html body .menu .cm-conn>.cn-logo:first-child{margin-right:-4px}
 /* Không có số ứng dụng thì nút bật / tắt vẫn đứng sát mép phải như các connector khác. */
 .cm-cx .toggle,.cm-cx .cm-rec{margin-left:auto}
 .cm-cx .cm-cnt~.toggle,.cm-cx .cm-cnt~.cm-rec{margin-left:10px}
+/* LIVE-10: tên Composio được ưu tiên; ghi chú trạng thái co lại (dấu …) trước khi tên bị cắt. */
+.cm-cx>.cv-ell{flex:none}
+.cm-cx .cm-cnt{flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis}
 @media (max-width:640px){
   html body .menu.cm-fly{left:0;right:0;bottom:0;width:auto}
+  /* Menu hẹp (390px): "Chưa liên kết" / "Cần liên kết lại" trùng ý với nút "Liên kết" ngay cạnh nên ẩn đi, nút về sát mép phải. */
+  .cm-cx .cm-cnt.cm-dup{display:none}
+  .cm-cx .cm-cnt.cm-dup~.cm-rec{margin-left:auto}
   .cm-back{display:flex!important;font-weight:560}
 }
 /* Skill người dùng chọn cho tin nhắn: nhãn viên thuốc trong ô soạn và trên tin nhắn đã gửi. */
@@ -1210,4 +1219,10 @@ html body .cx-hist select{padding-left:10px}
    Tiền tố html body … :not(.auth-root *) cùng dạng các luật phía trên (vd. .menu-item min-height:32px) và đứng sau nên thắng; trang đăng nhập cũng áp dụng. */
 @media (pointer:coarse){
   html body :is(.icon-btn,.menu-item,.nav-item):not(.auth-root *),.auth-root :is(.icon-btn,.menu-item,.nav-item){min-width:44px;min-height:44px}
+  /* Thanh công cụ artifact: 7 nút 44px cộng viên phản biện rộng hơn khung 390px và đẩy nút Đóng ra khỏi màn hình. Cho nhóm co lại theo
+     khung và xuống dòng (canh phải, nút Đóng đứng cuối nên luôn thấy), vùng bấm vẫn 44px. */
+  html body .art-acts:not(.auth-root *){flex:0 1 auto;min-width:0;max-width:100%;flex-wrap:wrap;justify-content:flex-end;row-gap:4px}
+  /* Nút hiện mật khẩu nằm trong ô nhập: giữ cỡ 30px để không cao hơn ô, vùng bấm 44px bằng lớp giả trong suốt bao quanh. */
+  html body .rp-pw .icon-btn,.auth-root .rp-pw .icon-btn{min-width:0;min-height:0}
+  html body .rp-pw .icon-btn::after{content:"";position:absolute;inset:-7px}
 }

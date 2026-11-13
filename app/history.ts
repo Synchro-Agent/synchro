@@ -16,9 +16,18 @@ export function chatHistory(msgs: Msg[], compact?: Chat["compact"]): LLMMsg[] {
   // Câu trả lời cũ còn dòng "Đã áp dụng hướng dẫn của bạn: “…”": không gửi lại cho model (model thấy thì bắt chước, trích lại hướng dẫn cá nhân).
   const said = (m: Msg) => (m.role === "ai" ? stripAppliedNotes(m.text) : m.text) || (m.parts ?? []).map((p) => (p.k === "say" ? p.text : "")).filter(Boolean).join("\n\n");
   // Tin chỉ là lời báo lỗi (hết hạn mức, treo…) không phải câu trả lời của model: không gửi lại. Có giữ được phần đã viết thì ghi rõ là chưa xong.
-  return msgs.slice(from).filter((m) => !m.notice?.failed && (!m.failed || m.notice?.partial) && (said(m) || m.stopped || (m.role === "user" && m.files?.length))).map((m): LLMMsg => (m.role === "ai"
+  // Lượt bị ngắt (hết hạn mức…) trước khi viết được chữ nào nhưng đã chạy công cụ: lời báo lỗi vẫn không gửi, chỉ gửi dấu vết công cụ kèm ghi chú
+  // "bị ngắt" để lượt "Thử lại / Tiếp tục" làm tiếp từ những gì đã tra cứu thay vì làm lại từ đầu.
+  const cutWork = (m: Msg) => m.role === "ai" && !!m.failed && !m.notice?.partial && !!m.trace?.length;
+  return msgs.slice(from).filter((m) => cutWork(m) || (!m.notice?.failed && (!m.failed || m.notice?.partial) && (said(m) || m.stopped || (m.role === "user" && m.files?.length)))).map((m): LLMMsg => (cutWork(m)
+    ? { role: "assistant", content: "", trace: [...(m.trace ?? []), CUT] }
+    : m.role === "ai"
     ? { role: "assistant", content: said(m), ...(m.trace?.length || m.stopped || m.notice?.partial ? { trace: [...(m.trace ?? []), ...(m.stopped ? [STOPPED] : []), ...(m.notice?.partial ? [CUT] : [])] } : {}) }
     : { role: "user", content: refs(m) }));
+}
+/** Lượt lỗi đã làm được một phần (đã viết dở, đã chạy công cụ, đã tạo tệp): "Thử lại" làm tiếp từ đó thay vì gửi lại câu hỏi từ đầu. */
+export function continuable(m?: Msg): boolean {
+  return !!m && m.role === "ai" && !!m.failed && !!(m.notice?.partial || m.notice?.work || m.trace?.length || m.outs?.length);
 }
 // Tệp gửi kèm ở lượt cũ: thẻ tham chiếu (mã tệp trên máy chủ), máy chủ dựng lại nội dung khi gửi cho model (fileproc expandFileRefs).
 function refs(m: Msg): LLMMsg["content"] {

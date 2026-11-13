@@ -12,7 +12,7 @@ import { randomToken } from "./mcpauth";
 import { browserDefault, capsState, skillsOn } from "./caps";
 import { overLimit, usageScope } from "./usage";
 import { addSpan, currentTrace, markPrompt, markProviderCall, noteModel, span, spanOn, spanSync } from "./tracing";
-import { awaitToolUse, currentRun, delta, deltaStep, inboxWaiting, liveNow, markEffect, onInbox, progress, registerExec, runSignal, steered, stepSignal, takeInbox, toolUseSeen, turnSignal } from "./runs";
+import { awaitToolUse, currentRun, delta, deltaStep, inboxWaiting, liveNow, liveText, markEffect, onInbox, progress, registerExec, runSignal, steered, stepSignal, takeInbox, toolUseSeen, turnSignal } from "./runs";
 import { prepareHistory, type TraceItem } from "./transpile";
 import { expandFileRefs } from "./fileproc";
 import { maybeRef, READ_REF_TOOL, readRef } from "./refs";
@@ -35,7 +35,7 @@ import { descHash } from "./skillscan";
 import type { Skill } from "./skillstore";
 import { CODE_RULES, execRun, LANGS, queueNote, queueReporter, runCodeTool, runner, RUN_LIMITS, type Lang, type RecalcReport, type RunOutput } from "./coderun";
 import { plainSummary, runBlocks } from "./runtext";
-import { OUTPUT_QUOTA_MB, outputByName, outputRoom, outputsFull, readOutput, removeOutput, replaceOutput, saveOutputs, type OutFile } from "./outputs";
+import { markGenFailed, OUTPUT_QUOTA_MB, outputByName, outputRoom, outputsFull, readOutput, removeOutput, replaceOutput, saveOutputs, type OutFile } from "./outputs";
 import { mergeOuts, previewNote, previewOf } from "./runpreview";
 import { totalsNote } from "./xlsxcheck";
 import { ARTIFACT_RULES, ASK_RULES, VIZ_RULES } from "./artifacts";
@@ -50,7 +50,7 @@ import { mergedProviders, prewarmClaude, sessionPlain, subCli, subTurn } from ".
 import { PROJECT_DOC_RULES, PROJECT_DOC_TOOL, projectDocsLong, projectIns, readProjectFile } from "./projectdocs";
 import { REJECTED_RULE, REJECTED_TAG, rejectedBlock, stripAppliedNotes, withProjectIns, withRejected } from "./turnctx";
 import { ASPECTS, generateImages, IMAGE_RULES, IMAGE_TOOL_NAME, imageBudget, imageProduct, imageTool, imageName, IMG_NAME, requestSlug, type ImgErr, type ImgOk } from "./ai/imagegen";
-import { IMG_BUDGET_MS, placeholderNote } from "./ai/imgbudget";
+import { IMG_BUDGET_MS, placeholderNote, settleBackground } from "./ai/imgbudget";
 import { POSTER_TEMPLATES, posterProps, type PosterTemplate } from "./design-engine/posters/props";
 import { genImageUrl } from "./artdoc";
 import { IMAGE_MAX_MB, imageKind, type ImgFile, scrubServerPaths } from "./ai/imagefiles";
@@ -704,10 +704,18 @@ function placeholderImage(x: Exec, gen: Promise<ImgOk | ImgErr>, prompt: string,
   const files: ImgFile[] = Array.from({ length: count }, (_, i) => ({ name: imageName(prompt, i, count, "png"), mime: "image/png", data: PLACEHOLDER_PNG }));
   const { saved } = keepImages(x.uid, renameImages(x, files), x.outs);
   const ids = saved.map((f) => f.id);
-  // Chế độ nền: ảnh dựng xong thì thay byte thật vào đúng id (slide / artifact tham chiếu id nên tự cập nhật). Không báo lại được giữa lượt nên lỗi thì giữ ảnh giữ chỗ.
-  void gen.then((res) => {
-    if (res.ok && res.files.length) res.files.slice(0, ids.length).forEach((f, i) => { try { replaceOutput(x.uid, ids[i], f.data); } catch (e) { console.error("[imgbudget] không thay được ảnh nền", String((e as Error).message).slice(0, 160)); } });
-  }, () => {});
+  // Chế độ nền: ảnh dựng xong thì thay byte thật vào đúng id (slide / artifact tham chiếu id nên tự cập nhật); ảnh không dựng được thì đánh dấu hỏng
+  // để khung xem trước / thẻ ảnh thôi chờ. Báo một dòng (G4.2, W23-2): lượt còn chạy thì thành một bước trong nhật ký của lượt; lượt đã xong thì
+  // trình duyệt báo khi khung xem trước / thẻ ảnh thấy ảnh đổi (artdoc.ts noteGenSettled).
+  const names = saved.map((f) => f.name);
+  const settle = (files: Buffer[] | null) => {
+    if (!ids.length) return;
+    const r = settleBackground({ ids, names, files, failed: markGenFailed,
+      replace: (id, data) => { try { return !!replaceOutput(x.uid, id, data); } catch (e) { console.error("[imgbudget] không thay được ảnh nền", String((e as Error).message).slice(0, 160)); return false; } } });
+    const rid = currentRun();
+    if (rid && liveText(rid)) { const seq = progress("tool", r.line); if (seq) progress("res", JSON.stringify({ ref: seq, ok: r.ok })); }
+  };
+  void gen.then((res) => settle(res.ok ? res.files.map((f) => f.data) : null), () => settle(null));
   if (!ids.length) return { content: `Ảnh đang được dựng ở chế độ nền (quá ${Math.round(IMG_BUDGET_MS() / 1000)} giây) nhưng chưa giữ được chỗ lưu (tài khoản gần hết dung lượng tệp đã tạo). Hãy làm phần khác trước và nói người dùng biết ảnh đang hoàn thiện.`, is_error: false, used };
   // Khung ảnh giữ chỗ giữ đúng tỉ lệ yêu cầu để bố cục slide / thẻ không nhảy.
   const [pw, ph] = ASPECT_DIMS[aspect ?? "1:1"] ?? ASPECT_DIMS["1:1"];

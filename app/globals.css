@@ -1042,13 +1042,26 @@ table{font-variant-numeric:tabular-nums}h1,h2,h3{text-wrap:balance}
 .attach{flex-wrap:nowrap;overflow-x:auto;overflow-y:hidden;padding:8px 8px 8px 2px;margin:-8px -8px 0 -2px;scrollbar-width:thin;overscroll-behavior-x:contain;-webkit-overflow-scrolling:touch}
 .attach::-webkit-scrollbar{height:6px}.attach::-webkit-scrollbar-thumb{background:var(--border-strong);border-radius:3px}
 .attach>.ft{flex:0 0 auto}
-/* Dải một hàng: làm mờ dần hai mép để thấy rõ còn thẻ bị cắt (gợi ý cuộn / còn nữa); không áp cho dải đã gửi hay lưới đã trải. */
-.attach:not(.sent):not(.attach-grid){-webkit-mask-image:linear-gradient(90deg,transparent 0,#000 18px,#000 calc(100% - 18px),transparent 100%);mask-image:linear-gradient(90deg,transparent 0,#000 18px,#000 calc(100% - 18px),transparent 100%)}
+/* Dải một hàng: chỉ làm mờ mép nào thật sự còn thẻ bị khuất (lớp fade-l / fade-r do useEdgeFade bật theo vị trí cuộn), không tràn thì không mờ:
+   thẻ đầu không bị mờ, nút xóa của thẻ cuối không chìm vào mép. Không áp cho dải đã gửi. */
+.attach.fade-l:not(.sent){-webkit-mask-image:linear-gradient(90deg,transparent 0,#000 18px);mask-image:linear-gradient(90deg,transparent 0,#000 18px)}
+.attach.fade-r:not(.sent){-webkit-mask-image:linear-gradient(90deg,#000 calc(100% - 18px),transparent 100%);mask-image:linear-gradient(90deg,#000 calc(100% - 18px),transparent 100%)}
+.attach.fade-l.fade-r:not(.sent){-webkit-mask-image:linear-gradient(90deg,transparent 0,#000 18px,#000 calc(100% - 18px),transparent 100%);mask-image:linear-gradient(90deg,transparent 0,#000 18px,#000 calc(100% - 18px),transparent 100%)}
+/* Khung ngoài của dải thẻ ô soạn tin: khung cuộn bên trái, nút "+N" / "Thu gọn" đứng ngoài khung cuộn ở mép phải nên màn hẹp cỡ nào cũng thấy. */
+.attach-wrap{display:flex;align-items:center;gap:8px;min-width:0}
+.attach-wrap>.attach{flex:1 1 auto;min-width:0;margin-right:0}
+.attach-wrap.open{align-items:flex-start}
 /* Nút "+N": gộp số thẻ vượt quá CHIP_LIMIT ở mép phải, bấm vào trải ra lưới. */
 .attach-more{flex:0 0 auto;align-self:center;display:inline-flex;align-items:center;justify-content:center;min-width:40px;height:32px;padding:0 11px;border-radius:var(--r-pill);border:.5px solid var(--border-strong);background:var(--card);color:var(--text-2);font-size:13px;font-weight:500;font-variant-numeric:tabular-nums;cursor:pointer}
 .attach-more:hover{background:var(--hover);color:var(--text)}
-/* Lưới đã trải: nhiều hàng, không cuộn ngang; cao quá thì cuộn dọc trong khung. */
-.attach-grid{flex-wrap:wrap;overflow-x:visible;overflow-y:auto;max-height:168px;padding-right:2px;margin-right:-2px}
+/* Lưới đã trải: nhiều hàng, không cuộn ngang. Cao đúng hai hàng thẻ trọn vẹn (đệm trên 10px + 2 × (thẻ 120px + khe 8px)), không hàng nào bị cắt ngang;
+   nhiều hơn thì cuộn dọc trong khung, dừng theo hàng, mép còn thẻ bị khuất thì mờ dần (fade-t / fade-b). Màn thấp: một hàng. */
+.attach.attach-grid{flex-wrap:wrap;overflow-x:hidden;overflow-y:auto;max-height:266px;scroll-snap-type:y proximity;scroll-padding:10px 0 8px}
+.attach-grid>*{scroll-snap-align:start}
+@media (max-height:640px){.attach.attach-grid{max-height:138px}}
+.attach-grid.fade-b{-webkit-mask-image:linear-gradient(180deg,#000 calc(100% - 24px),transparent 100%);mask-image:linear-gradient(180deg,#000 calc(100% - 24px),transparent 100%)}
+.attach-grid.fade-t{-webkit-mask-image:linear-gradient(180deg,transparent 0,#000 24px);mask-image:linear-gradient(180deg,transparent 0,#000 24px)}
+.attach-grid.fade-t.fade-b{-webkit-mask-image:linear-gradient(180deg,transparent 0,#000 24px,#000 calc(100% - 24px),transparent 100%);mask-image:linear-gradient(180deg,transparent 0,#000 24px,#000 calc(100% - 24px),transparent 100%)}
 .cv-pills{min-width:0;max-width:100%;width:100%;box-sizing:border-box}.cv-composer>*{min-width:0}
 
 /* Mũi tên xuống: căn giữa theo trục dọc, không lệch */
@@ -2567,6 +2580,9 @@ html body .main.has-art .scroll-down.gen{left:calc((100% - var(--art-w)) / 2)}
 .art-tabs button:disabled{opacity:.45}
 .art-acts{display:flex;align-items:center;gap:2px;flex:none}
 .art-acts .icon-btn{width:30px;height:30px}
+/* Chỗ giữ sẵn cho nút xuất bản / Tải về: không tạo hộp riêng (khe 2px giữa các nút như cũ); khi artifact chưa xong thì ẩn nhưng vẫn chiếm chỗ. */
+.art-slot{display:contents}
+.art-slot.wait{visibility:hidden}
 /* Khung hẹp (mặc định nửa màn hình): tên artifact và phiên bản ở hàng trên, Xem trước / Mã và các nút ở hàng dưới, để tên không bị cắt cụt. */
 .art-panel,.sk-art{container-type:inline-size}
 @container (max-width:680px){
@@ -3450,11 +3466,7 @@ button.tk-chip.warn:hover{background:color-mix(in srgb,var(--tk-warn) 20%,transp
 /* Dưới 860px: thanh bên thành bảng nổi đè lên chat, mặc định đóng, mở ra có lớp phủ tối; chọn chat hoặc bấm lớp phủ thì đóng.
    Để riêng ở ngưỡng 860 (các tinh chỉnh điện thoại khác vẫn ở 760) nên khoảng 640–860px chỉ thanh bên nổi, phần còn lại không đổi. */
 @media (max-width:860px){
-  /* Bảng nổi / ngăn kéo: nền đặc (không mờ kính) để không bị lớp phủ làm xám; hộp thoại nằm trên nó. */
-  html body .app>aside.sidebar{--gl-fill:var(--sidebar);--gl-blur:0px}
-  /* Độ ưu tiên cao hơn lớp kính (glass.css: z-index 20, lề âm khi đóng). */
-  html body .app>aside.sidebar{position:fixed;top:0;bottom:0;left:0;z-index:65;width:min(300px,86vw);margin-left:10px;transition:transform .3s var(--ease),box-shadow .3s}
-  html body .app>aside.sidebar.closed{margin-left:10px;margin-right:0;transform:translateX(calc(-100% - 24px));box-shadow:none}
+  /* Ngăn kéo (cả thanh điều hướng lẫn bảng đoạn chat, .app>.shell-side, z 65) nằm ở synchro-ds.css cùng ngưỡng này; lớp phủ ngay dưới nó. */
   .side-scrim{display:block;position:fixed;inset:0;z-index:64;background:rgba(0,0,0,.32);animation:fadeIn .2s ease both}
   /* Hộp thoại phải nằm trên bảng nổi (z-index 65) khi thanh bên đang mở. */
   .overlay{z-index:70}
@@ -4287,7 +4299,9 @@ html[data-sess] .boot>*{visibility:visible}
 /* Lề ngang và đáy theo .main>.dock thật: 24px và 16px + dòng ghi chú 40px ở máy tính, 12px và 12px + 40px ở màn ≤760px. */
 .boot-dock{position:absolute;left:0;right:0;bottom:0;padding:0 24px 56px;display:flex;justify-content:center}
 .boot-dock .boot-box{width:min(var(--thread-w,768px),100%);height:46px;margin:0}
-@media (max-width:760px){.boot-rail,.boot-side{display:none}.boot-hero{padding:0 16px 10vh}.boot-greet{font-size:26px}.boot-dock{padding:0 12px 52px}.boot-dock .boot-box{height:76px}}
+/* Thanh trái và thanh bên ẩn theo đúng ngưỡng ngăn kéo NARROW (page.tsx, 860px): ở 761–860px (iPad dọc) app thật không có thanh trái lúc mở. */
+@media (max-width:860px){.boot-rail,.boot-side{display:none}}
+@media (max-width:760px){.boot-hero{padding:0 16px 10vh}.boot-greet{font-size:26px}.boot-dock{padding:0 12px 52px}.boot-dock .boot-box{height:76px}}
 /* Không hỏi được máy chủ lúc mở trang (người đã đăng nhập): báo rõ, không đưa về màn hình đăng ký. */
 .boot>.boot-err{visibility:visible;position:absolute;inset:0;margin:auto;width:min(400px,calc(100% - 32px));height:fit-content;display:flex;flex-direction:column;align-items:center;gap:10px;padding:24px;border-radius:var(--r-panel);background:var(--card);box-shadow:var(--shadow-input);text-align:center}
 .boot-err b{font-size:16px}

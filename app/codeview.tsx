@@ -20,6 +20,7 @@ import dynamic from "next/dynamic";
 import { createPortal } from "react-dom";
 import { UploadModal } from "./modals";
 import { FileCard } from "./fileicon";
+import { useEdgeFade } from "./composerchips";
 import { useFileMenu, saveDoc } from "./filemenu";
 import { capFiles, fileContext, getStatus, ingestFile, readyFiles } from "./filestate";
 import { AgentSteps, GitHubButton, StatusLine, stripPhases, TaskCard, TVIEW_LABEL, type AStep, type OnAnswer, type TView } from "./agentui";
@@ -174,6 +175,7 @@ export function CodeView({ say, sid, title, model, modelPicker, sideOpen, onSide
   const [view, setView] = useState<TView | null>(null);
   const [suggest, setSuggest] = useState("");
   const permNow = perm ?? { mode: cp ? (cp.permMode === "auto" && !cp.allowBypass ? "edits" : cp.permMode) : "auto", allow: [] };
+  const permShort = PERMS.find((x) => x.k === permNow.mode)?.short ?? "";
   const permRef = useRef(permNow); permRef.current = permNow;
   const styleNow: CodeStyle = style ?? cp?.style ?? "default";
   const viewNow: TView = view ?? viewDef;
@@ -190,6 +192,8 @@ export function CodeView({ say, sid, title, model, modelPicker, sideOpen, onSide
   const [atts, setAtts] = useState<Att[]>([]);
   // Tệp / thư mục / .zip đính kèm tin nhắn đang soạn (thẻ giống Claude), gửi đi cùng tin nhắn rồi dọn khỏi khung soạn.
   const [files, setFiles] = useState<string[]>([]);
+  // Dải tệp đính kèm cuộn ngang: chỉ mờ mép nào còn tệp bị khuất (xem app/composerchips.ts).
+  const [fileStrip, fileFade] = useEdgeFade<HTMLDivElement>("x", files.length);
   const panel = useDev((s) => s.panel);
   const setPanel = useDev((s) => s.setPanel);
   useDev((s) => s.encVer);
@@ -1048,7 +1052,8 @@ export function CodeView({ say, sid, title, model, modelPicker, sideOpen, onSide
   // Tên mặc định lưu bằng tiếng Việt; tên người dùng hay model đặt thì giữ nguyên.
   const shownTitle = title === "Phiên code mới" || title === "Phiên code" ? tr(title) : title;
   const m = MODES.find((x) => x.k === mode) ?? MODES[0];
-  const modeIcon = (k: string, s = 16) => (k === "auto" ? <I.Sparkle size={s} /> : k === "plan" ? <I.Layers size={s} /> : k === "debug" ? <I.M icon="Alert" size={s} /> : <I.M icon="Code" size={s} />);
+  // Chế độ Tự động dùng icon luồng (chuyển qua lại các giai đoạn), không dùng tia sáng: tia sáng là Model Tự động ở nút ngay cạnh (LIVE-5).
+  const modeIcon = (k: string, s = 16) => (k === "auto" ? <I.Flow size={s} /> : k === "plan" ? <I.Layers size={s} /> : k === "debug" ? <I.M icon="Alert" size={s} /> : <I.M icon="Code" size={s} />);
   const grp = (g: string) => mentionItems.filter((x) => x.g === g);
   // Kéo đường chia để đổi độ rộng khung bên phải.
   const startDrag = (e: React.MouseEvent) => {
@@ -1262,7 +1267,7 @@ export function CodeView({ say, sid, title, model, modelPicker, sideOpen, onSide
               {(files.length > 0 || atts.length > 0) && (
                 <div className="cv-pills">
                   {files.length > 0 && (
-                    <div className="attach cv-attach">
+                    <div ref={fileStrip} className={`attach cv-attach${fileFade ? ` ${fileFade}` : ""}`}>
                       {files.map((f) => <FileCard key={f} name={f} onOpen={() => fm.show(f)} onContextMenu={(e) => fm.open(e, f)} onRemove={() => setFiles((x) => x.filter((y) => y !== f))} />)}
                     </div>
                   )}
@@ -1306,8 +1311,9 @@ export function CodeView({ say, sid, title, model, modelPicker, sideOpen, onSide
               <GitHubButton git={git} available={!!status?.available} reason={status?.reason} ensureSid={() => ensureSid()} say={say}
                 onCloned={(g) => { const id = ensureSid(); setGit(id, g); setWsUsed(true); openPane("files"); }} />
               <div style={{ position: "relative" }}>
-                {/* Ba nút cạnh nhau (Chế độ / Quyền / Model) từng cùng hiện "Tự động": thêm tiền tố phân loại. Dưới 1100px CSS ẩn nhãn, chỉ còn icon (aria-label vẫn đầy đủ). */}
-                <button className="cv-modebtn" data-tip="Chế độ làm việc" aria-label="Chế độ làm việc" onClick={() => setMenu(menu === "mode" ? "" : "mode")}>{modeIcon(mode, 14)}<span className="cv-mb-t"><span className="cv-mb-k">Chế độ</span>: {m.short}</span><I.Chevron size={12} /></button>
+                {/* Ba nút cạnh nhau (Chế độ / Quyền / Model) từng cùng hiện "Tự động": thêm tiền tố phân loại. Dưới 1100px CSS ẩn nhãn, chỉ còn icon:
+                    aria-label và chú thích mang cả giá trị đang chọn (R11/W1-06), aria-label chứa đúng chữ đang hiện (WCAG 2.5.3). */}
+                <button className="cv-modebtn" data-tip={`${tr("Chế độ")}: ${tr(m.label)}`} aria-label={`${tr("Chế độ")}: ${m.short}`} onClick={() => setMenu(menu === "mode" ? "" : "mode")}>{modeIcon(mode, 14)}<span className="cv-mb-t"><span className="cv-mb-k">Chế độ</span>: {m.short}</span><I.Chevron size={12} /></button>
                 <Menu open={menu === "mode"} className="cv-modes" style={{ bottom: 36, left: 0, width: 340 }}>
                   {MODES.map((x) => (
                     <button key={x.k} className={`cv-mode-item ${mode === x.k ? "picked" : ""}`} onClick={() => { setMode(x.k); setMenu(""); }}>
@@ -1320,7 +1326,7 @@ export function CodeView({ say, sid, title, model, modelPicker, sideOpen, onSide
               </div>
               {/* Chế độ quyền của phiên: hỏi trước / tự sửa tệp / tự động (Cài đặt → Synchro Code đặt mặc định và cho phép chế độ tự động). */}
               <div style={{ position: "relative" }}>
-                <button className={`cv-modebtn cv-perm p-${permNow.mode}`} onClick={() => setMenu(menu === "perm" ? "" : "perm")} data-tip="Chế độ quyền" aria-label="Chế độ quyền">{permIcon(permNow.mode)}<span className="cv-mb-t"><span className="cv-mb-k">Quyền</span>: {PERMS.find((x) => x.k === permNow.mode)?.short}</span><I.Chevron size={12} /></button>
+                <button className={`cv-modebtn cv-perm p-${permNow.mode}`} onClick={() => setMenu(menu === "perm" ? "" : "perm")} data-tip={`${tr("Quyền")}: ${tr(permShort)}`} aria-label={`${tr("Quyền")}: ${tr(permShort)}`}>{permIcon(permNow.mode)}<span className="cv-mb-t"><span className="cv-mb-k">Quyền</span>: {permShort}</span><I.Chevron size={12} /></button>
                 <Menu open={menu === "perm"} className="cv-modes" style={{ bottom: 36, left: 0, width: 340 }}>
                   <div className="cv-mh">Quyền của Synchro trong phiên này</div>
                   {PERMS.map((x) => {

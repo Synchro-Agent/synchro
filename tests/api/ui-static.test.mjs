@@ -103,6 +103,10 @@ ok(/className="overlay ft-lightbox"/.test(lb) && /role="dialog" aria-modal="true
   ok(!unnamed.length, "nút đóng chỉ có dấu × đều có aria-label", unnamed.join(", "));
   const mo = read("app/modals.tsx");
   ok(/role="alertdialog" aria-modal="true" aria-labelledby=\{`\$\{id\}-t`\} aria-describedby=\{`\$\{id\}-d`\}/.test(mo) && /<h2 id=\{`\$\{id\}-t`\}/.test(mo), "hộp xác nhận (Đăng xuất?) có tên và mô tả");
+  // R13/INT-4: StrictMode gắn–gỡ–gắn lại cùng ref; cờ "đã đóng" phải đặt lại khi gắn, không thì Đăng xuất (xóa dữ liệu) kẹt ở "Đang lưu lên máy chủ…".
+  const lo = mo.slice(mo.indexOf("export function LogoutConfirm"), mo.indexOf("export function LogoutConfirm") + 2000);
+  ok(/useEffect\(\(\) => \{ dead\.current = false; return \(\) => \{ dead\.current = true; \}; \}, \[\]\)/.test(lo), "hộp Đăng xuất: cờ đã đóng đặt lại khi gắn (StrictMode)");
+  ok(/dead\.current = false;\n\s*setBusy\(true\)/.test(lo), "hộp Đăng xuất: bấm Đăng xuất đặt lại cờ trước khi đẩy dữ liệu");
 }
 
 console.log(`\n${pass} đạt, ${fail} hỏng`);

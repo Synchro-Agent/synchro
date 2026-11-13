@@ -41,12 +41,14 @@ export function LogoutConfirm({ localOnly, flush, onCancel, onOk }: { localOnly:
   const [left, setLeft] = useState(0);
   // Hộp đã bị hủy/đóng/gỡ trong lúc chờ flush: việc đẩy dữ liệu vẫn chạy nốt, nhưng KHÔNG được đăng xuất/xóa sau khi nó xong.
   const dead = useRef(false);
-  useEffect(() => () => { dead.current = true; }, []);
+  // Đặt lại khi gắn: StrictMode (dev) gắn–gỡ–gắn lại cùng ref, và Fade giữ nguyên hộp nếu mở lại trong lúc đang mờ đi.
+  useEffect(() => { dead.current = false; return () => { dead.current = true; }; }, []);
   // Trong lúc bận thì nút Hủy và nền đã khóa (Confirm busy); chỉ chặn thêm trường hợp bị đóng từ ngoài.
   const cancel = () => { if (busy) return; dead.current = true; onCancel(); };
   const go = async () => {
     if (busy) return;
     if (!clear || left > 0) { onOk(clear); return; }
+    dead.current = false;
     setBusy(true);
     const n = await flush().catch(() => 1);
     if (dead.current) return; // bị hủy/đóng giữa chừng: không xóa, không đăng xuất
@@ -242,8 +244,12 @@ export function ShortcutsModal({ onClose }: { onClose: () => void }) {
   );
 }
 
-export function Settings({ onClose, theme, setTheme, initial = "General" }: { onClose: () => void; theme: string; setTheme: (t: string) => void; initial?: string }) {
-  const [tab, setTab] = useState(initial);
+export function Settings({ onClose, theme, setTheme, initial = "General", onTab }: { onClose: () => void; theme: string; setTheme: (t: string) => void; initial?: string; onTab?: (t: string) => void }) {
+  const [tab, setTabState] = useState(initial);
+  // R5: đổi mục báo lên trang để địa chỉ #s=<mục> theo kịp (F5 / chia sẻ liên kết mở đúng mục). Mở từ ngoài (openSettings("Providers"),
+  // Back / Forward) thì initial đổi và mục đổi theo, không cần gắn lại hộp (giữ ô tìm kiếm).
+  const setTab = (t: string) => { setTabState(t); onTab?.(t); };
+  useEffect(() => { setTabState(initial); }, [initial]);
   const [q, setQ] = useState("");
   const me = useApp().me;
   const admin = me?.isAdmin;
@@ -259,7 +265,11 @@ export function Settings({ onClose, theme, setTheme, initial = "General" }: { on
     ...(feat?.connectors !== false ? [["Connectors", <I.Connectors key="cn" />] as [string, React.ReactNode]] : []),
   ];
   // Tìm theo tên mục và từng dòng cài đặt (settingsindex.ts), cả chữ gốc lẫn chữ đang hiện. Dòng khớp hiện ngay dưới mục, bấm là tới đúng chỗ.
-  const found = searchSettings(q, [...items, ...custom].map(([n]) => n), (s) => tr(s));
+  const names = [...items, ...custom].map(([n]) => n);
+  // R6: mục lạ (#s=Foo) hoặc không được phép (#s=Administrator khi không phải quản trị, tính năng bị tắt) thì về General, cả địa chỉ.
+  const known = !me || names.includes(tab);
+  useEffect(() => { if (!known) setTab("General"); }, [known]); // eslint-disable-line react-hooks/exhaustive-deps
+  const found = searchSettings(q, names, (s) => tr(s));
   const f = (l: [string, React.ReactNode][]) => l.filter(([n]) => found.some((x) => x.tab === n));
   const [goRow, setGoRow] = useState<{ row: string; n: number } | null>(null);
   useEffect(() => {
@@ -288,9 +298,9 @@ export function Settings({ onClose, theme, setTheme, initial = "General" }: { on
           {f(custom).map(([n, ic]) => item(n, ic))}
           {q.trim() && !found.length && <div className="s-none" role="status">No results</div>}
         </div>
-        <div className="s-body" key={tab}>
-          <header className="sy-sbody-h"><h2>{tab}</h2><button className="icon-btn close" onClick={onClose} aria-label="Đóng"><I.X size={16} /></button></header>
-          <Boundary resetKey={tab}><SettingsBody tab={tab} theme={theme} setTheme={setTheme} go={setTab} /></Boundary>
+        <div className="s-body" key={known ? tab : "General"}>
+          <header className="sy-sbody-h"><h2>{known ? tab : "General"}</h2><button className="icon-btn close" onClick={onClose} aria-label="Đóng"><I.X size={16} /></button></header>
+          <Boundary resetKey={known ? tab : "General"}><SettingsBody tab={known ? tab : "General"} theme={theme} setTheme={setTheme} go={setTab} /></Boundary>
         </div>
       </div>
     </div>

@@ -5,6 +5,8 @@ import { cachedJson } from "./studios";
 import { useDeferredValue, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import * as I from "./icons";
 import { tr } from "./i18n";
+import { plainSnippet } from "./runtext";
+import { stripAppliedNotes } from "./turnctx";
 import { useFitPlaceholder } from "./phfit";
 
 export type PaletteCmd = { id: string; label: string; icon: ReactNode; keys?: string; hay?: string; run: () => void };
@@ -33,15 +35,18 @@ const fold = (s: string) => {
   if (v === undefined) { v = foldRaw(s); if (shortFold.size > 40_000) shortFold.clear(); shortFold.set(s, v); }
   return v;
 };
+// Chữ của tin như đang hiện trên màn hình: tin AI cũ bỏ dòng "Đã áp dụng hướng dẫn của bạn: “…”" (W1-08) để ⌘K không tìm trúng
+// và không trích lại hướng dẫn cá nhân của người dùng.
+const shownText = (o: { text?: string; role?: string }) => (o.role === "user" ? o.text ?? "" : stripAppliedNotes(o.text ?? ""));
 const textFold = new WeakMap<object, string>();
-const foldOf = (o: { text?: string }) => {
+const foldOf = (o: { text?: string; role?: string }) => {
   let v = textFold.get(o);
-  if (v === undefined) { v = foldRaw(o.text ?? ""); textFold.set(o, v); }
+  if (v === undefined) { v = foldRaw(shownText(o)); textFold.set(o, v); }
   return v;
 };
 // Cả đoạn chat gộp lại: từ khóa không có ở đây thì khỏi xét từng tin.
 const chatFold = new WeakMap<object, string>();
-const foldAll = (msgs: { text: string; files?: string[] }[]) => {
+const foldAll = (msgs: { text: string; role?: string; files?: string[] }[]) => {
   let v = chatFold.get(msgs);
   if (v === undefined) { v = msgs.map((m) => `${foldOf(m)}\n${(m.files ?? []).map(fold).join("\n")}`).join("\n"); chatFold.set(msgs, v); }
   return v;
@@ -65,7 +70,7 @@ type Remote = {
 };
 
 const MAX_SHOWN = 500;
-export function CommandPalette({ chats, projects, codes, cmds, go, seed, onClose }: { codes?: { id: number; title: string; archived?: boolean }[]; chats: { id: number; title: string; tags?: string[]; msgs: { text: string; files?: string[] }[] }[]; projects?: PaletteProject[]; cmds: PaletteCmd[]; go: PaletteGo; seed?: () => string; onClose: () => void }) {
+export function CommandPalette({ chats, projects, codes, cmds, go, seed, onClose }: { codes?: { id: number; title: string; archived?: boolean }[]; chats: { id: number; title: string; tags?: string[]; msgs: { text: string; role?: string; files?: string[] }[] }[]; projects?: PaletteProject[]; cmds: PaletteCmd[]; go: PaletteGo; seed?: () => string; onClose: () => void }) {
   const [q, setQ] = useState("");
   // Ô nhập luôn nhận chữ ngay; danh sách lọc lại sau, không chặn phím gõ.
   const dq = useDeferredValue(q);
@@ -122,13 +127,14 @@ export function CommandPalette({ chats, projects, codes, cmds, go, seed, onClose
     const tagN = new Map<string, { tag: string; n: number }>();
     for (const c of chats) {
       const any = deep && words.every((w) => foldAll(c.msgs).includes(w));
-      const hit = any ? c.msgs.find((m) => words.every((w) => foldOf(m).includes(w)))?.text : undefined;
+      const hitMsg = any ? c.msgs.find((m) => words.every((w) => foldOf(m).includes(w))) : undefined;
+      const hit = hitMsg && shownText(hitMsg);
       // Tìm cả tên tệp đã đính kèm trong đoạn chat.
       const tl = deep ? fold(c.title) : "";
       const file = deep && !hit && (any || words.some((w) => tl.includes(w))) ? c.msgs.flatMap((m) => m.files ?? []).find((f) => words.every((w) => `${tl} ${fold(f)}`.includes(w))) : undefined;
       // Thẻ: gõ "#tên" (hay tên thẻ) tìm được đoạn chat mang thẻ đó; thẻ hiện ở dòng phụ khi không có đoạn trích.
       const tg = (Array.isArray(c.tags) ? c.tags : []).map((x) => `#${x}`).join(" ");
-      add({ key: "chat:" + c.id, group: "Đoạn chat", label: c.title, sub: hit ? hit.replace(/\s+/g, " ").slice(0, 80) : file ?? (tg || undefined), icon: file ? <I.Clip size={16} /> : <I.History size={16} />, hay: [hit ?? file ?? "", tg].join(" "), run: () => go.chat(c.id) });
+      add({ key: "chat:" + c.id, group: "Đoạn chat", label: c.title, sub: (hit && plainSnippet(hit).slice(0, 80)) || file || tg || undefined, icon: file ? <I.Clip size={16} /> : <I.History size={16} />, hay: [hit ?? file ?? "", tg].join(" "), run: () => go.chat(c.id) });
       for (const x of Array.isArray(c.tags) ? c.tags : []) if (typeof x === "string") tagN.set(fold(x), { tag: tagN.get(fold(x))?.tag ?? x, n: (tagN.get(fold(x))?.n ?? 0) + 1 });
     }
     // Mỗi thẻ một dòng: chọn để lọc thanh bên theo thẻ đó.
