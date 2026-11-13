@@ -22,6 +22,9 @@ export function makeGate(o: {
   allowed?: (key: string) => void;
   /** Địa chỉ trang đang mở của trình duyệt (khi lượt chưa mở trang nào mà đã thao tác trên trang có sẵn). */
   probe?: () => Promise<string | undefined>;
+  /** D6: điều kiện hỏi thêm tùy lượt cho công cụ trình duyệt (vd. đang mở skill chưa kiểm chứng + Chrome của người dùng). Trả về Ask (chưa có id)
+   *  thì hỏi một lần cho mỗi khóa trong lượt; null thì bỏ qua. Đọc trạng thái lượt lúc gọi nên bật được giữa chừng lượt. */
+  gateExtra?: (name: string, input: Record<string, unknown>) => Omit<Ask, "id"> | null;
 }): Gate {
   const site = { current: null as string | null, once: new Set<string>(), probed: false };
   const askUser = async (a: Omit<Ask, "id">) => {
@@ -38,6 +41,17 @@ export function makeGate(o: {
     seen: (url) => { if (url) site.current = siteOf("browser_navigate", { url }, site.current); },
     check: async (name, input) => {
       if (isBrowserTool(name)) {
+        // D6: điều kiện hỏi thêm của lượt (skill chưa kiểm chứng đang mở + Chrome của người dùng). Hỏi một lần cho mỗi khóa trong lượt.
+        if (o.gateExtra) {
+          const a = o.gateExtra(name, input);
+          if (a && !site.once.has(a.key)) {
+            const r = await askUser(a);
+            if (!r.ok && r.note === QUEUED) return `Việc này cần người dùng duyệt trước (${a.title}). Synchro đã gửi yêu cầu duyệt vào Hộp thư. Không lách; làm tiếp phần không cần duyệt và ghi rõ trong kết quả.`;
+            if (!r.ok && r.note === NO_UI) return `${a.title} — lượt này không hỏi được người dùng. Báo người dùng nhờ lại trong khung chat để Synchro hỏi, hoặc làm phần không cần tới bước này.`;
+            if (!r.ok) return `Người dùng không cho phép: ${a.title}.${note(r)} Đừng thử lại cách này; làm theo lời nhắn nếu có, hoặc hỏi người dùng muốn làm thế nào.`;
+            site.once.add(a.key);
+          }
+        }
         let h = siteOf(name, input, site.current);
         // Thao tác trên trang đang mở mà lượt này chưa biết là trang nào: hỏi trình duyệt một lần (chỉ khi có quy tắc trang).
         if (h === null && !site.probed && o.probe && !(name === "browser_tabs" && (input.op ?? "list") === "list")) {

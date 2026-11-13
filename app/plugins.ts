@@ -678,7 +678,7 @@ function ensureSkillVec() {
 }
 export const setBulk = (on: boolean) => { CG.__plBulk = on; if (!on) { CG.__plCache = null; zipCache.clear(); trimZips(); } };
 // Hàm đọc nội dung chỉ giữ id của skill, không giữ cả hàng cơ sở dữ liệu (hàng có report JSON của bản kiểm tra): ~18.000 closure giữ cả hàng là vài chục MB chết.
-function lazySkill(r: Pick<CRow, "id" | "plugin_id" | "description" | "storage_path" | "use_count">, name: string): Skill {
+function lazySkill(r: Pick<CRow, "id" | "plugin_id" | "description" | "storage_path" | "use_count">, name: string, untrusted = false): Skill {
   const id = r.id;
   let full: { body: string; files: Skill["files"] } | null = null;
   const load = () => {
@@ -688,6 +688,8 @@ function lazySkill(r: Pick<CRow, "id" | "plugin_id" | "description" | "storage_p
   return {
     id: r.id, user_id: r.plugin_id, name, description: r.description, storage_path: r.storage_path, enabled: true, version: 1, versions: [1],
     created_at: "", updated_at: "", warnings: [], projects: [], use_count: r.use_count, last_used_at: null, source: null,
+    // D6: skill của danh mục Claude (cd:…) là bên thứ ba, đánh dấu chưa kiểm chứng để hạ quyền ghi khi nó được đọc trong lượt.
+    ...(untrusted ? { untrusted: true } : {}),
     get body() { return load().body; }, get files() { return load().files; },
   };
 }
@@ -715,7 +717,7 @@ function snap(): Cache {
     lite.set(p.id, ss.map((s) => ({ id: s.id, name: s.name, enabled: !!s.enabled, useCount: s.use_count })));
     // Chỉ thư viện của danh mục được đổi tên khi trùng; trùng tên giữa thư viện chọn lọc / người dùng tự cài giữ như cũ (một tên, nhiều thư viện).
     const cat = isCat(p) === 1;
-    skills.set(p.id, ss.filter((s) => s.enabled).map((s) => { const name = cat && taken.has(s.name) ? `${p.slug}:${s.name}` : s.name; taken.add(name); return lazySkill(s, name); }));
+    skills.set(p.id, ss.filter((s) => s.enabled).map((s) => { const name = cat && taken.has(s.name) ? `${p.slug}:${s.name}` : s.name; taken.add(name); return lazySkill(s, name, cat); }));
   }
   // Skill đã xếp mục của từng thư viện, tính sẵn một lần: studioSkills chạy 3–4 lần mỗi lượt chat, không tra lại nhãn của từng skill trong ~18.000 skill.
   const tags = new Map(pluginTagRows().map((r) => [r.key, r]));

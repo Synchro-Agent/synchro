@@ -204,7 +204,7 @@ type Lib = { key: string; label: string };
 // art: lịch sử để read_artifact / check_artifact dựng lại bản hiện tại của artifact (cùng phần đã nén ở artBase).
 // turnArts: artifact model viết giữa lượt (trong lời dẫn trước công cụ), xem sayOut.
 // image: công cụ generate_image đang bật; msgs: lịch sử của lượt, để tìm ảnh gốc người dùng nhờ sửa.
-type Exec = { project?: unknown; image?: boolean; msgs?: unknown; effects?: string[]; toolSync?: boolean; list: Skl; scripts: boolean; sess: ConnectorSession | null; uid: string; code: boolean; net: boolean; web?: boolean; art?: { messages: { role: string; content: unknown }[]; base: unknown }; turnArts?: string[]; outs: OutFile[]; outPaths?: Map<string, string>; libs?: Record<string, Lib[]>; studio?: Lib; prefer?: Record<string, string>; trace: TraceItem[]; conv?: string; heal?: Target; search?: Target; browse?: boolean; bctx?: BrowserCtx; shown?: string; heavy?: string[]; gate?: Gate; task?: TaskCtx | null; asking?: Promise<void>; awaiting?: number; denied?: Map<string, string>; connCards?: Set<string>; calls?: Map<string, { at: number; cancel?: AbortSignal }>; park?: () => void; inputsSent?: Set<string>; madeImgs?: string[]; webs?: Map<string, { title: string; url: string }>; edited?: Set<string> };
+type Exec = { project?: unknown; image?: boolean; msgs?: unknown; effects?: string[]; toolSync?: boolean; list: Skl; scripts: boolean; sess: ConnectorSession | null; uid: string; code: boolean; net: boolean; web?: boolean; art?: { messages: { role: string; content: unknown }[]; base: unknown }; turnArts?: string[]; outs: OutFile[]; outPaths?: Map<string, string>; libs?: Record<string, Lib[]>; studio?: Lib; prefer?: Record<string, string>; trace: TraceItem[]; conv?: string; heal?: Target; search?: Target; browse?: boolean; bctx?: BrowserCtx; shown?: string; heavy?: string[]; gate?: Gate; task?: TaskCtx | null; asking?: Promise<void>; awaiting?: number; denied?: Map<string, string>; connCards?: Set<string>; calls?: Map<string, { at: number; cancel?: AbortSignal }>; park?: () => void; inputsSent?: Set<string>; madeImgs?: string[]; webs?: Map<string, { title: string; url: string }>; edited?: Set<string>; untrusted?: boolean };
 // Nguồn web của lượt, đánh số theo thứ tự gặp (số [n] trong câu trả lời trỏ đúng chip thứ n). Tối đa 20 nguồn.
 const WEB_MAX = 20;
 const citeOf = (x: Exec): Citer => (url, title = "") => {
@@ -810,7 +810,9 @@ async function runCall(x: Exec, c: Call, d?: Decision): Promise<Run> {
     x.gate ??= makeGate({ uid: x.uid, signal: runSignal(), probe: async () => (await runBrowserTool(x.uid, "browser_tabs", { op: "list" }, x.bctx)).url,
       // Việc tự động chạy nền: không ai trả lời giữa chừng, nên gửi đề xuất cho phép trang vào Hộp thư và làm tiếp bằng nguồn khác.
       ask: (a) => { if (x.task && a.kind === "site") { queueSite(x.uid, x.task, a.host ?? "", a.detail ?? ""); answerAsk(x.uid, a.id, { ok: false, note: QUEUED }); } else if (currentRun()) { progress("ask", JSON.stringify(a)); x.park?.(); } else answerAsk(x.uid, a.id, { ok: false, note: NO_UI }); },
-      asked: (id, a) => { if (currentRun()) progress("asked", JSON.stringify({ id, ok: a.ok, always: !!a.always })); } });
+      asked: (id, a) => { if (currentRun()) progress("asked", JSON.stringify({ id, ok: a.ok, always: !!a.always })); },
+      // D6: đang mở skill của danh mục (chưa kiểm chứng) và thao tác trên Chrome của người dùng → hỏi một lần trong lượt trước khi dùng.
+      gateExtra: (_name, input) => x.untrusted && browserTargetOf(input, x.bctx) === "user" ? { kind: "site", tool: "browser", key: "untrusted:user-chrome", host: "", title: "Dùng Chrome của bạn trong khi đang chạy skill chưa kiểm chứng từ danh mục", detail: "" } : null });
     const no = await x.gate.check(c.name, c.input ?? {});
     if (no) return { content: no, is_error: true, used: { kind: "search", name: c.name } };
     const r = await runBrowserTool(x.uid, c.name, c.input ?? {}, x.bctx);
@@ -830,10 +832,15 @@ async function runCall(x: Exec, c: Call, d?: Decision): Promise<Run> {
     return { content: hit ? `Đã hiện nút "${hit.why === "link" ? "Liên kết Composio" : "Kết nối lại"}" cho ${hit.name} trong khung chat. Hãy nói một câu ngắn để người dùng bấm nút rồi nhắc lại yêu cầu (không chép link).` : `Không có connector "${String(c.input?.connector ?? "")}" đang chờ kết nối lại.`, is_error: !hit, used: { kind: "search", name: c.name } };
   }
   const ct = x.sess?.get(c.name);
-  if (!ct) return runSkillTool(x.list, c.name, c.input, x.scripts, { uid: x.uid, net: x.net, libs: x.libs, heal: x.heal ? (input) => healScript(x.heal!, input) : undefined });
+  if (!ct) {
+    const r = await runSkillTool(x.list, c.name, c.input, x.scripts, { uid: x.uid, net: x.net, libs: x.libs, heal: x.heal ? (input) => healScript(x.heal!, input) : undefined });
+    // D6: vừa đọc một skill của danh mục (chưa kiểm chứng) → hạ quyền ghi connector và dùng Chrome của người dùng cho phần còn lại của lượt.
+    if (r.used.untrusted) x.untrusted = true;
+    return r;
+  }
   const used = { kind: "tool" as const, name: usedName(ct, c.input) };
   const lbl = cxOf(ct, c.input);
-  if (x.task && x.sess!.perm(c.name, c.input) === "ask") return { content: queueTool(x.uid, x.task, c, lbl ? { connector: lbl.app, title: lbl.act } : { connector: ct.cname, title: toolTitle(ct) }), is_error: true, used };
+  if (x.task && (x.sess!.perm(c.name, c.input) === "ask" || untrustedConnWrite(x, c))) return { content: queueTool(x.uid, x.task, c, lbl ? { connector: lbl.app, title: lbl.act } : { connector: ct.cname, title: toolTitle(ct) }), is_error: true, used };
   if (d === "deny") return { content: x.denied?.get(c.id) ?? REFUSED, is_error: true, used };
   const meta = x.calls?.get(c.id), run = runSignal();
   const stops = [run, meta?.cancel].filter((v): v is AbortSignal => !!v);
@@ -847,7 +854,9 @@ async function runCall(x: Exec, c: Call, d?: Decision): Promise<Run> {
   if (x.edited?.has(c.id)) out.content = `[Người dùng đã sửa tham số trước khi cho phép. Công cụ đã chạy với tham số: ${JSON.stringify(c.input).slice(0, 1500)}]\n${out.content}`;
   return { is_error: r.is_error, ...out, used };
 }
-const needsAsk = (x: Exec, c: Call) => !!x.sess?.get(c.name) && x.sess.perm(c.name, c.input) === "ask";
+// D6: đang mở skill của danh mục (chưa kiểm chứng) và lời gọi connector là thao tác ghi → luôn hỏi, dù người dùng để "Luôn cho phép".
+const untrustedConnWrite = (x: Exec, c: Call) => !!x.untrusted && !!x.sess?.get(c.name) && x.sess.mutating(c.name, c.input) && (x.sess.perm(c.name, c.input) === "allow" || x.sess.perm(c.name, c.input) === "chat");
+const needsAsk = (x: Exec, c: Call) => !!x.sess?.get(c.name) && (x.sess.perm(c.name, c.input) === "ask" || untrustedConnWrite(x, c));
 
 // Câu mô tả bước đang làm, hiện dưới "Đang suy nghĩ…" khi lượt chạy ở nền.
 function describe(x: Exec, c: Call) {
