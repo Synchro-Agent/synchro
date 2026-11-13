@@ -9,7 +9,7 @@ import { resetClock, resetAt } from "./resetfmt";
 import { FileCard } from "./fileicon";
 import { useFileMenu, saveDoc, saveBlob, fileContext } from "./filemenu";
 import { capFiles, getStatus } from "./filestate";
-import type { Rejected } from "./turnctx";
+import { stripAppliedNotes, type Rejected } from "./turnctx";
 import { Boundary, Fade, Menu, Thinking } from "./ui";
 import { chatError, GENERIC_ERR, isForeign } from "./chaterror";
 import { armDraft, saveDraft, takeDraft } from "./draft";
@@ -907,11 +907,16 @@ function ErrCard({ raw, onRetry, onProviders }: { raw?: string; onRetry?: () => 
     </div>
   );
 }
+/** Tin của AI không còn dòng ghi chú "đã áp dụng hướng dẫn" kiểu cũ (stripAppliedNotes); tin không đổi thì trả đúng đối tượng cũ. */
+const cleanAiMsg = (m: Msg): Msg => { if (m.role !== "ai") return m; const text = stripAppliedNotes(m.text); return text === m.text ? m : { ...m, text }; };
 // Một tin của đoạn chat. memo: mỗi khung hình chữ đang chảy chỉ vẽ lại tin cuối; đoạn chat dài không phải dựng lại toàn bộ tin nhắn.
-const MsgRow = memo(function MsgRow({ m, i, last, busy, mark, art, inl, fileActive, copied, speaking, chatId, cx }: {
+const MsgRow = memo(function MsgRow({ m: raw, i, last, busy, mark, art, inl, fileActive, copied, speaking, chatId, cx }: {
   // lang: đổi ngôn ngữ thì dòng tin đã memo cũng dịch lại các nút và lời báo.
   m: Msg; i: number; last: boolean; lang: string; busy: boolean; mark: boolean; art?: boolean; inl?: boolean; artSig: string; fileActive?: string; copied: boolean; speaking: boolean; chatId: number; cx: React.RefObject<RowCx | null>;
 }) {
+  // W1-08: câu trả lời cũ còn dòng ghi chú "đã áp dụng hướng dẫn" kèm trích dẫn trong chữ (đã lưu, đã đồng bộ): bỏ khi vẽ và khi sao chép,
+  // như lịch sử gửi model (history.ts) và bản chia sẻ (sharesnap.ts). Không có dòng đó thì giữ nguyên đối tượng tin.
+  const m = useMemo(() => cleanAiMsg(raw), [raw]);
   // Đang sửa tin đã gửi: nội dung đang sửa; null là không sửa.
   const [ed, setEd] = useState<string | null>(null);
   const saveEd = () => { const t = ed?.trim(); if (!t) return; setEd(null); if (t !== m.text.trim()) cx.current!.edit(i, t); };
