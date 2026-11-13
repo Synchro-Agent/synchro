@@ -126,6 +126,44 @@ console.log("Tắt êm khi nhận SIGTERM");
   D.resetDrainForTest();
 }
 
+// ---------------- NODE-1: Dừng / nhắn thêm cho lượt do tiến trình khác chạy ----------------
+console.log("Dừng / nhắn thêm qua cơ sở dữ liệu (tiến trình cũ đang chạy nốt)");
+{
+  process.env.DATA_DIR = path.join(tmp, "data"); fs.mkdirSync(process.env.DATA_DIR, { recursive: true });
+  process.env.DATA_KEY ??= "k";
+  const { authstore: AS, runs: RN } = await loadTs(["authstore", "runs"]);
+  const u = AS.createUser({ email: `bg-${Date.now()}@x.test`, name: "BG", verified: true });
+  let reran = 0, got = [];
+  RN.registerExec("bgprobe", async () => {
+    const sig = RN.runSignal();
+    const inbox = new Promise((r) => { RN.onInbox(() => r("msg")); });
+    const why = await Promise.race([inbox, new Promise((r) => sig.addEventListener("abort", () => r("abort")))]);
+    if (why === "msg") { got = RN.takeInbox(); return { http: 200, json: { text: "steered" } }; }
+    return { http: 200, json: { text: "", cancelled: true } };
+  });
+  RN.registerExec("bgrerun", async () => { reran++; return { http: 200, json: { text: "re-ran" } }; });
+  const db = AS.db();
+  const status = (id) => db.prepare("SELECT status, result FROM runs WHERE id = ?").get(id);
+  // Lượt chạy ở tiến trình này; lệnh Dừng do tiến trình khác ghi vào cơ sở dữ liệu.
+  const a = RN.startRun(u, "bgprobe", {}, "c-a");
+  await sleep(50);
+  db.prepare("UPDATE runs SET cancel_req = 1 WHERE id = ?").run(a);
+  RN.applyRemote(); await sleep(50);
+  ok(status(a).status === "done" && JSON.parse(status(a).result).cancelled === true, "NODE-1: tiến trình đang chạy lượt nhận lệnh Dừng ghi từ tiến trình khác", status(a));
+  // Nhắn thêm qua cơ sở dữ liệu.
+  const b = RN.startRun(u, "bgprobe", {}, "c-b");
+  await sleep(50);
+  db.prepare("UPDATE runs SET steer_req = json_insert(COALESCE(steer_req, '[]'), '$[#]', ?) WHERE id = ?").run("thêm ý này", b);
+  RN.applyRemote(); await sleep(50);
+  ok(got.join() === "thêm ý này" && status(b).status === "done", "NODE-1: tin nhắn thêm gửi qua tiến trình khác tới đúng lượt đang chạy", { got, st: status(b) });
+  // Lượt của tiến trình khác (không có ở đây): Dừng ghi cờ; tiến trình đó thoát rồi thì resumeInterrupted kết thúc lượt là đã dừng, không chạy lại.
+  const c = "run_otherproc";
+  db.prepare("INSERT INTO runs (id,user_id,conv,kind,status,req,events,created_at,updated_at) VALUES (?,?,?,?, 'running', ?, '[]', ?, ?)").run(c, u.id, "c-c", "bgrerun", "{}", Date.now(), Date.now());
+  ok(RN.cancelRun(c, u.id) === true && RN.pushInbox(c, u.id, "x") === false, "NODE-1: Dừng cho lượt ở tiến trình khác được nhận (không còn trả false); sau khi đã dừng thì không nhận nhắn thêm");
+  RN.resumeInterrupted(); await sleep(50);
+  ok(reran === 0 && JSON.parse(status(c).result).cancelled === true, "NODE-1: lượt đã bấm Dừng không bị chạy lại khi bản mới nhận vai primary", { reran, st: status(c) });
+}
+
 // ---------------- Shell: nginx, màu sống, node_modules ----------------
 console.log("scripts/bluegreen-lib.sh với nginx / pm2 / curl giả");
 const bin = path.join(tmp, "bin");
@@ -276,7 +314,7 @@ case "$*" in *"-o /dev/null"*) exit 0 ;; esac; case "$url" in *api/health*) prin
   sh("sleep", `[ -n "\${NO_PROMOTE:-}" ] && exit 0
 [ "$(awk '{print $1}' "${H}/state/live-color" 2>/dev/null)" = green ] && [ "$(cat "${P}/${o.oldName ?? "synchro"}" 2>/dev/null)" != online ] && echo "4242 green" > "${A}/data/.primary.pid"; exit 0`);
   const run = (env = {}) => spawnSync("bash", [path.join(A, "scripts", "bluegreen-migrate.sh"), A, "synchro", path.join(H, "site")], { encoding: "utf8",
-    env: { ...process.env, PATH: `${mb}:${process.env.PATH}`, BG_STATE_DIR: path.join(H, "state"), BG_UPSTREAM: path.join(H, "nginx", "snippets", "synchro-upstream.conf"), BG_TRIES: "2", BG_SLEEP: "0", BG_WEB_USER: "", SYNCHRO_OPS_ENV: path.join(H, "ops.env"), ...o.env, ...env } });
+    env: { ...process.env, PATH: `${mb}:${process.env.PATH}`, BG_STATE_DIR: path.join(H, "state"), BG_UPSTREAM: path.join(H, "nginx", "snippets", "synchro-upstream.conf"), BG_TRIES: "2", BG_SLEEP: "0", BG_WEB_USER: "", DATA_DIR: path.join(A, "data"), SYNCHRO_OPS_ENV: path.join(H, "ops.env"), ...o.env, ...env } });
   const r = run();
   const st = () => ({ live: fs.existsSync(path.join(H, "state", "live-color")) ? fs.readFileSync(path.join(H, "state", "live-color"), "utf8").split(" ")[0] : "", active: fs.readFileSync(path.join(H, "active"), "utf8").trim(),
     pm2: Object.fromEntries(fs.readdirSync(P).map((f) => [f, fs.readFileSync(path.join(P, f), "utf8").trim()])), dump: fs.existsSync(path.join(H, "dump")) ? fs.readFileSync(path.join(H, "dump"), "utf8").trim() : "", env: fs.readFileSync(path.join(H, "ops.env"), "utf8") });

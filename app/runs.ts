@@ -17,7 +17,7 @@ import { isStopping, markStopping } from "./drain";
 // ask / asked: lượt đang chờ người dùng duyệt (JSON câu hỏi), và câu trả lời (JSON { id, ok, always }).
 export type RunEvent = { seq: number; at: number; kind: "step" | "tool" | "note" | "say" | "res" | "plan" | "steer" | "ui" | "ask" | "asked" | "conn" | "link" | "plans" | "rate" | "tconn"; text: string };
 export type RunStatus = "running" | "done" | "error";
-type Row = { id: string; user_id: string; conv: string | null; kind: string; status: RunStatus; req: string | null; result: string | null; http: number | null; events: string; created_at: number; updated_at: number; attempts: number; effects?: string | null };
+type Row = { id: string; user_id: string; conv: string | null; kind: string; status: RunStatus; req: string | null; result: string | null; http: number | null; events: string; created_at: number; updated_at: number; attempts: number; effects?: string | null; cancel_req?: number | null; steer_req?: string | null };
 export type PublicRun = { id: string; status: RunStatus; conv: string | null; kind: string; events: RunEvent[]; result: unknown; http: number | null; createdAt: number; updatedAt: number };
 
 // Một lượt chạy giữ tối đa 3 lần chạy lại sau sự cố máy chủ; kết quả giữ 7 ngày rồi dọn.
@@ -45,6 +45,10 @@ function init() {
     if (!cols.includes("effects")) d.exec("ALTER TABLE runs ADD COLUMN effects TEXT");
     // Lượt của đoạn chat ẩn danh: không giữ yêu cầu, xóa ít phút sau khi xong. Máy chủ vừa khởi động thì mọi lượt ẩn danh đã xong đều đã quá hạn.
     if (!cols.includes("ephemeral")) d.exec("ALTER TABLE runs ADD COLUMN ephemeral INTEGER");
+    // Dừng / nhắn thêm gửi tới tiến trình không chạy lượt đó (deploy xanh/lam: bản cũ đang chạy nốt, nginx đã đưa yêu cầu sang bản mới).
+    // Tiến trình đang chạy lượt đọc hai cột này mỗi 1,5 giây (applyRemote).
+    if (!cols.includes("cancel_req")) d.exec("ALTER TABLE runs ADD COLUMN cancel_req INTEGER");
+    if (!cols.includes("steer_req")) d.exec("ALTER TABLE runs ADD COLUMN steer_req TEXT");
     // Các bước của lượt ghi nối thêm (append-only): mỗi bước một dòng, không đọc-sửa-ghi lại cả danh sách mỗi lần (lượt 100 bước
     // không còn chậm dần theo bình phương). Khóa chính (run_id, seq) vừa là số thứ tự bước vừa cho phép lấy MAX(seq) rất nhanh.
     d.exec(`CREATE TABLE IF NOT EXISTS run_events (
@@ -204,12 +208,17 @@ export function deltaStep() {
   l.s++; l.text = ""; l.raw = ""; l.applied = false;
   notify(s!.id, { delta: { s: l.s, reset: true } });
 }
-/** Người dùng bấm Dừng: hủy mọi lời gọi đang chạy của lượt; lượt kết thúc với phần đã viết được. */
+/** Người dùng bấm Dừng: hủy mọi lời gọi đang chạy của lượt; lượt kết thúc với phần đã viết được.
+ *  Lượt không chạy ở tiến trình này (deploy xanh/lam: bản cũ đang chạy nốt) thì ghi cờ vào cơ sở dữ liệu: tiến trình đang chạy lượt dừng nó
+ *  trong vòng 1,5 giây, hoặc nếu tiến trình đó đã thoát thì lượt được kết thúc là đã dừng thay vì bị chạy lại (resumeInterrupted). */
 export function cancelRun(id: string, uid: string): boolean {
   const l = live.get(id);
-  if (!l || l.uid !== uid) return false;
-  l.ctl.abort();
-  return true;
+  if (l) {
+    if (l.uid !== uid) return false;
+    l.ctl.abort();
+    return true;
+  }
+  return init().prepare("UPDATE runs SET cancel_req = 1 WHERE id = ? AND user_id = ? AND status = 'running'").run(id, uid).changes > 0;
 }
 /** Xóa tài khoản: dừng mọi lượt đang chạy của người này. */
 export function cancelUserRuns(uid: string) {
@@ -252,7 +261,13 @@ export function markEffect(text: string) {
 /** Người dùng nhắn thêm trong lúc lượt đang chạy: xếp vào hộp thư của lượt, vòng lặp công cụ ghép vào ở bước kế tiếp. */
 export function pushInbox(id: string, uid: string, text: string): boolean {
   const l = live.get(id);
-  if (!l || l.uid !== uid || l.ctl.signal.aborted) return false;
+  // Lượt do tiến trình khác chạy: xếp vào hàng chờ trong cơ sở dữ liệu, tiến trình đó lấy ở nhịp kiểm tra kế tiếp (applyRemote).
+  if (!l) return init().prepare("UPDATE runs SET steer_req = json_insert(COALESCE(steer_req, '[]'), '$[#]', ?) WHERE id = ? AND user_id = ? AND status = 'running' AND cancel_req IS NULL")
+    .run(text.slice(0, 20_000), id, uid).changes > 0;
+  if (l.uid !== uid || l.ctl.signal.aborted) return false;
+  return pushLocal(l, text);
+}
+function pushLocal(l: Live, text: string): boolean {
   l.inbox.push(text.slice(0, 20_000));
   // Thẻ duyệt đang chờ: người dùng trả lời bằng lời thì thẻ phải thôi chờ, không thì tin nhắn nằm im tới khi có người bấm.
   for (const f of l.onMsg ?? []) f();
@@ -298,15 +313,49 @@ if (!gs.__synchroStopHook) {
 /** Số lượt đang chạy trong tiến trình này (tắt êm chờ số này về 0). */
 export const liveRunCount = () => live.size;
 
+// ---- Dừng / nhắn thêm từ tiến trình khác ----
+const REMOTE_POLL_MS = Number(process.env.SYNCHRO_REMOTE_POLL_MS) || 1500;
+const gr = globalThis as unknown as { __synchroRemotePoll?: ReturnType<typeof setInterval> | null };
+/** Chạy khi tiến trình có lượt đang chạy: nhận lệnh Dừng và tin nhắn thêm mà tiến trình khác ghi vào cơ sở dữ liệu cho các lượt của mình. */
+function remotePoll() {
+  if (gr.__synchroRemotePoll) return;
+  gr.__synchroRemotePoll = setInterval(() => {
+    if (!live.size) { clearInterval(gr.__synchroRemotePoll ?? undefined); gr.__synchroRemotePoll = null; return; }
+    try { applyRemote(); } catch (e) { console.error("[runs]", e); }
+  }, REMOTE_POLL_MS);
+  gr.__synchroRemotePoll.unref?.();
+}
+/** Áp lệnh Dừng / tin nhắn thêm đang chờ cho các lượt tiến trình này đang chạy. Trả số lượt đã xử lý. */
+export function applyRemote(): number {
+  const d = init();
+  let n = 0;
+  const rows = d.prepare("SELECT id, cancel_req, steer_req FROM runs WHERE status = 'running' AND (cancel_req = 1 OR steer_req IS NOT NULL)").all() as Pick<Row, "id" | "cancel_req" | "steer_req">[];
+  for (const r of rows) {
+    const l = live.get(r.id);
+    if (!l) continue;
+    n++;
+    if (r.cancel_req) { l.ctl.abort(); continue; }
+    const taken = d.transaction(() => {
+      const cur = (d.prepare("SELECT steer_req FROM runs WHERE id = ?").get(r.id) as { steer_req: string | null } | undefined)?.steer_req ?? null;
+      d.prepare("UPDATE runs SET steer_req = NULL WHERE id = ?").run(r.id);
+      return cur;
+    }).immediate();
+    for (const t of taken ? (JSON.parse(taken) as unknown[]) : []) if (typeof t === "string") pushLocal(l, t);
+  }
+  return n;
+}
+
 function finish(id: string, http: number, json: unknown) {
   if (isStopping() && http >= 500) return;
-  // Tin nhắn thêm tới khi model đã ở bước trả lời cuối: trả về để trình duyệt gửi ngay thành lượt tiếp theo (không mất tin).
-  const left = live.get(id)?.inbox ?? [];
+  // Tin nhắn thêm tới khi model đã ở bước trả lời cuối: trả về để trình duyệt gửi ngay thành lượt tiếp theo (không mất tin), kể cả tin
+  // gửi qua tiến trình khác chưa kịp lấy.
+  const remote = (init().prepare("SELECT steer_req FROM runs WHERE id = ?").get(id) as { steer_req: string | null } | undefined)?.steer_req;
+  const left = [...(live.get(id)?.inbox ?? []), ...(remote ? (JSON.parse(remote) as unknown[]).filter((t): t is string => typeof t === "string") : [])];
   if (left.length && json && typeof json === "object" && !Array.isArray(json)) json = { ...(json as Record<string, unknown>), steer: left };
   live.delete(id);
   const status: RunStatus = http >= 200 && http < 300 ? "done" : "error";
   // Lượt xong thì bỏ nội dung yêu cầu (có thể chứa ảnh, tệp) cho nhẹ cơ sở dữ liệu.
-  init().prepare("UPDATE runs SET status = ?, http = ?, result = ?, req = NULL, updated_at = ? WHERE id = ?").run(status, http, JSON.stringify(json), Date.now(), id);
+  init().prepare("UPDATE runs SET status = ?, http = ?, result = ?, req = NULL, steer_req = NULL, updated_at = ? WHERE id = ?").run(status, http, JSON.stringify(json), Date.now(), id);
   const r = getRun(id);
   if (r) notify(id, { done: r });
   const raw = init().prepare("SELECT user_id, conv, ephemeral FROM runs WHERE id = ?").get(id) as { user_id: string; conv: string | null; ephemeral: number | null } | undefined;
@@ -343,6 +392,7 @@ export function queueFull(uid: string) {
 function launch(id: string, kind: string, body: Record<string, unknown>, user: UserRow, conv: string | null, seed?: { at: number; authMs: number }) {
   const ctl = new AbortController();
   live.set(id, { at: Date.now(), s: 0, text: "", ctl, conv, uid: user.id, inbox: [], kind });
+  remotePoll();
   // Lượt chat: đo từng chặng (tracing.ts). Lượt chạy lại sau khi máy chủ khởi động không có seed (không đo được phần kiểm tra phiên).
   const tr = kind === "chat" ? beginTrace("chat", seed) : null;
   const go = (f: () => void) => (tr ? withTrace(tr, f) : f());
@@ -385,6 +435,8 @@ export function resumeInterrupted() {
   const d = init();
   const rows = (d.prepare("SELECT * FROM runs WHERE status = 'running'").all() as Row[]).filter((r) => !live.has(r.id));
   for (const r of rows) {
+    // Người dùng đã bấm Dừng trong lúc tiến trình cũ chạy nốt lượt này: kết thúc là đã dừng, không chạy lại.
+    if (r.cancel_req) { finish(r.id, 200, { text: "", cancelled: true }); continue; }
     const user = getUser(r.user_id);
     if (!r.req || !user || r.attempts >= MAX_ATTEMPTS) { finish(r.id, 503, { error: "Lượt trả lời bị gián đoạn khi máy chủ khởi động lại. Hãy gửi lại tin nhắn." }); continue; }
     // Chạy lại từ đầu có thể gửi thư, tạo hóa đơn lần hai: dừng ở đây, nói rõ đã làm gì để người dùng kiểm tra.
