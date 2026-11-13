@@ -210,19 +210,35 @@ html body .side-toggle{display:grid;place-items:center;flex:none;width:36px;heig
   transition:background-color var(--ds-fast),box-shadow var(--ds-fast)}
 html body .side-toggle:hover{background:var(--ds-plate);box-shadow:inset 0 0 0 1px var(--ds-line-2)}
 html body .side-toggle:focus-visible{outline:0;box-shadow:var(--ds-ring)}
-/* Cùng ngưỡng NARROW (860px) của page.tsx: từ 860px trở xuống thanh bên là ngăn kéo, logo ở thanh trên mở lại. */
-@media (min-width:861px){html body .side-toggle{display:none!important}}
+/* Logo ở thanh trên mở lại ngăn kéo: chỉ điện thoại (≤ 760px), nơi thanh điều hướng nằm trong ngăn kéo. Từ 761px thanh điều hướng luôn hiện,
+   logo đầu thanh (.rail-mark) mở bảng đoạn chat. */
+@media (min-width:761px){html body .side-toggle{display:none!important}}
 
-/* ---------------------------------------------------------------- điện thoại, máy tính bảng dọc: thanh điều hướng + bảng đoạn chat là một ngăn kéo
-   Ngưỡng 860px trùng NARROW trong page.tsx (JS đóng thanh bên khi mở trang, hiện lớp phủ z 64, chọn chat thì đóng). Trước đây khối này dừng ở 760px:
-   761–860px thanh bên vẫn nằm trong dòng (z 5) dưới lớp phủ nên bấm vào đoạn chat chỉ trúng lớp phủ và đóng thanh bên. Ngăn kéo z 65 nằm trên lớp phủ. */
-@media (max-width:860px){
+/* ---------------------------------------------------------------- điện thoại: thanh điều hướng + bảng đoạn chat là một ngăn kéo (z 65, trên lớp phủ z 64) */
+@media (max-width:760px){
   html body .app>.shell-side{position:fixed;top:0;bottom:0;left:0;z-index:65;height:100%;width:min(336px,92vw);background:var(--sidebar);border-radius:0 var(--r-panel) var(--r-panel) 0;
     box-shadow:0 20px 60px rgba(0,0,0,.25);transition:transform var(--ds-slow) var(--ds-ease),box-shadow var(--ds-slow)}
   html body .app>.shell-side .sidebar{border-radius:var(--r-card)}
   html body .app>.shell-side.closed{transform:translateX(calc(-100% - 12px));box-shadow:none}
   html body .shell-side .sidebar,html body .shell-side.closed .sidebar{flex:1;width:auto;margin:10px 10px 10px 0;opacity:1;pointer-events:auto;--gl-fill:var(--ds-plate);--gl-blur:0px}
   .rail{padding-top:calc(16px + env(safe-area-inset-top));padding-bottom:calc(16px + env(safe-area-inset-bottom))}
+}
+
+/* ---------------------------------------------------------------- máy tính bảng dọc, cửa sổ hẹp (761–860px, NARROW của home.tsx): thanh điều hướng
+   luôn hiện trong dòng; bảng đoạn chat mặc định đóng, mở ra là bảng nổi cạnh thanh điều hướng, đè lên chat (không đẩy nội dung), trên lớp phủ tối
+   (U3). Khi mở, cả .shell-side nâng lên z 65 (trên lớp phủ z 64) để bảng nổi và thanh điều hướng bấm được khi lớp phủ đang hiện; bấm lớp phủ, chọn chat
+   hay đổi mục thì bảng đóng (JS). Trước đây (LIVE-1) cả thanh điều hướng cũng ẩn vào ngăn kéo như điện thoại: iPad dọc mất lối đi nhanh giữa các mục. */
+@media (min-width:761px) and (max-width:860px){
+  /* Chỉ nâng khi bảng đang mở: lúc đóng, thanh điều hướng ở z thường như máy tính để menu của ô soạn tin (model, micro, mức dùng…) mở dài sang
+     trái vẫn nằm trên nó. */
+  html body .app>.shell-side:not(.closed){z-index:65}
+  /* Bảng đang mở: thanh điều hướng vẫn bấm được (nằm trên lớp phủ) nên giữ nền đặc, không để lớp phủ xám xuyên qua làm nó trông như bị tắt. */
+  html body .app>.shell-side:not(.closed) .rail{background:var(--bg)}
+  html body .app>.shell-side .sidebar{position:fixed;top:0;left:68px;width:min(300px,calc(100vw - 96px));height:calc(100% - 20px);margin:10px 0;
+    --gl-fill:var(--ds-plate);--gl-blur:0px;box-shadow:0 20px 60px rgba(0,0,0,.25);
+    transition:opacity var(--ds-mid) var(--ds-ease),transform var(--ds-slow) var(--ds-ease),visibility 0s}
+  html body .app>.shell-side.closed .sidebar{width:min(300px,calc(100vw - 96px));margin:10px 0;opacity:0;transform:translateX(-16px);visibility:hidden;box-shadow:none;
+    transition:opacity var(--ds-mid) var(--ds-ease),transform var(--ds-slow) var(--ds-ease),visibility 0s var(--ds-slow)}
 }
 
 /* ---------------------------------------------------------------- trang chủ: ngày, lời chào canh trái, ô soạn tin, lối tắt */
