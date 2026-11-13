@@ -99,7 +99,7 @@ bg_nginx_settle() {
   local f="$BG_UPSTREAM" up
   [ -f "$f" ] || return 0
   up=$(bg_color_of_port "$(bg_upstream_port)") || return 0
-  [ -z "$(bg_live_color)" ] || [ "$(bg_live_color)" != "$up" ] || return 0
+  [ -n "$(bg_live_color)" ] && [ "$(bg_live_color)" != "$up" ] || return 0
   if nginx -t >/dev/null 2>&1 && nginx -s reload >/dev/null 2>&1; then bg_log "tệp upstream khác màu sống: đã nạp lại nginx theo tệp (cổng $(bg_upstream_port))"; rm -f "$f.bak"; return 0; fi
   bg_log "tệp upstream không qua nginx -t: trả tệp trước đó"
   [ -f "$f.bak" ] && mv -f "$f.bak" "$f"
