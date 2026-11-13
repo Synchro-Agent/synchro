@@ -5,9 +5,9 @@
 const fold = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/đ/gi, "d").toLowerCase();
 
 // Danh từ video và cụm động từ làm ra (đã bỏ dấu). "video" đứng sau động từ làm ra trong cùng vế, hoặc danh từ chỉ loại video rõ nghĩa.
-const NOUN = "video|clip|reels?|tiktok|shorts|audiogram|motion graphics?|do hoa chuyen dong|phim ngan|intro video|video intro|outro";
-const MAKE = new RegExp(`\\b(?:lam|tao|dung|xuat|render|quay|san xuat|thiet ke|ghep|bien|chuyen|make|create|build|produce|generate|render|edit|turn)\\b[^.?!\\n]{0,60}?\\b(?:${NOUN})\\b`);
-const KIND = /\b(?:video (?:tiktok|reels?|shorts|quang cao|gioi thieu|tong ket|ra mat|san pham|podcast|phu de|dong|ngan)|audiogram|motion graphics?|do hoa chuyen dong|(?:tiktok|reels?|youtube shorts) video|promo video|explainer video|year in review|unwrapped)\b/;
+const NOUN = "video|clip|reels?|tiktok|shorts|audiogram|motion graphics?|do hoa chuyen dong|logo animation|animation logo|phim ngan|phim gioi thieu|intro video|video intro|outro";
+const MAKE = new RegExp(`\\b(?:lam|tao|dung|xuat|render|quay|san xuat|thiet ke|ghep|bien|chuyen|make|create|build|produce|generate|render|edit|turn|animate)\\b[^.?!\\n]{0,60}?\\b(?:${NOUN})\\b`);
+const KIND = /\b(?:video (?:tiktok|reels?|shorts|quang cao|gioi thieu|tong ket|ra mat|san pham|podcast|phu de|dong|ngan)|audiogram|motion graphics?|do hoa chuyen dong|logo animation|animation logo|(?:tiktok|reels?|youtube shorts) video|promo video|explainer video|year in review|unwrapped)\b/;
 // Hỏi cách làm / hỏi kiến thức, tóm tắt, tải video về: không phải nhờ dựng.
 const NOT = /\b(?:la gi|tai sao|vi sao|cach (?:lam|tao|dung)|how (?:do|to|can)|what is|tom tat|summari[sz]e|tai (?:ve|xuong)|download|xem video|phan tich video)\b/;
 
@@ -20,7 +20,8 @@ export function wantsVideo(typed: string): boolean {
 
 export const VIDEO_KIT = `<video_kit>
 Video đồ họa chuyển động: trong sandbox có lệnh synchro-video với 4 mẫu Remotion 4.0.539 dựng sẵn (60 khung/giây, không cần mạng). Bạn chỉ viết props.json theo schema; mã bố cục của mẫu là cố định.
-Chọn mẫu: tiktok (video dọc ngắn TikTok / Reels / Shorts, phụ đề nhảy từng chữ theo giọng, nền video / ảnh Ken Burns / màu), next-tailwind (giới thiệu, quảng cáo sản phẩm SaaS / công nghệ: logo, tiêu đề, lưới tính năng, ảnh chụp màn hình, số liệu, trích dẫn, kêu gọi hành động), audiogram (podcast / âm thanh: sóng âm, bìa, phụ đề chạy theo lời), github-unwrapped (tổng kết số liệu năm: top 3, bộ đếm, lưới theo ngày, theo giờ, theo thứ, so sánh). Slideshow ảnh đơn giản, cắt ghép clip của người dùng thì vẫn dựng bằng ffmpeg như hướng dẫn chung.
+Video, đồ họa chuyển động, animation logo, phim / intro giới thiệu: dựng bằng Remotion (synchro-video), không dùng Pillow+ffmpeg. Chỉ lùi về Pillow+ffmpeg khi hàng dựng video của máy chủ đang đầy (run_code trả lỗi 503 "đang dựng một video khác"): khi đó báo người dùng đợi, hoặc dựng tạm bằng ffmpeg nếu cần gấp.
+Chọn mẫu: tiktok (video dọc ngắn TikTok / Reels / Shorts, phụ đề nhảy từng chữ theo giọng, nền video / ảnh Ken Burns / màu), next-tailwind (giới thiệu, quảng cáo sản phẩm SaaS / công nghệ, animation logo: logo, tiêu đề, lưới tính năng, ảnh chụp màn hình, số liệu, trích dẫn, kêu gọi hành động), audiogram (podcast / âm thanh: sóng âm, bìa, phụ đề chạy theo lời), github-unwrapped (tổng kết số liệu năm: top 3, bộ đếm, lưới theo ngày, theo giờ, theo thứ, so sánh). Slideshow ảnh đơn giản, cắt ghép clip của người dùng thì vẫn dựng bằng ffmpeg như hướng dẫn chung.
 Các bước, mỗi bước một lần run_code (bash):
 1) synchro-video schema <mẫu> và synchro-video example <mẫu> > props.json: xem trường, giá trị mặc định, ví dụ.
 2) Giọng đọc: edge-tts --proxy "$HTTPS_PROXY" --voice vi-VN-HoaiMyNeural -f loi.txt --write-media inputs/giong.mp3 --write-subtitles giong.srt rồi synchro-video words giong.srt phu-de.json (phụ đề từng chữ), ghi "captions": "phu-de.json" và "audio" / "voiceover": "inputs/giong.mp3". Âm thanh / video người dùng gửi, hoặc không có mạng: "captions": "auto" (whisper.cpp nhận dạng tiếng Việt ngay trong sandbox) hoặc synchro-video captions inputs/tep.mp3 phu-de.json --lang vi.
