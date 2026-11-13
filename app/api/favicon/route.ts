@@ -1,5 +1,5 @@
 import { AuthError, handle, limit, requireUser } from "../../authstore";
-import { cachedIcon, iconResponse, publicHost } from "../../iconproxy";
+import { cachedIcon, iconResponse, publicHost, usableIcon } from "../../iconproxy";
 import { fetchIconBytes, siteIcon } from "../../connicons";
 import { providerSiteOf } from "../../providers";
 import { APP_SITES } from "../../connlogos";
@@ -25,7 +25,7 @@ export const GET = handle(async (req: Request) => {
   const q = new URL(req.url).searchParams;
   const d = q.get("d"), app = q.get("app"), prov = q.get("p");
   // Tên miền chỉ lấy từ bảng có sẵn hoặc từ cấu hình máy chủ, không bao giờ từ tham số; vẫn qua publicHost (chặn IP / tên nội bộ) và cùng bộ đệm site:.
-  const site = async (h: string | null) => { const host = h ? publicHost(h) : null; if (!host) return none(); const icon = await cachedIcon(`site:${host}`, () => siteIcon(host), gate); return icon ? iconResponse(icon) : none(); };
+  const site = async (h: string | null) => { const host = h ? publicHost(h) : null; if (!host) return none(); const icon = usableIcon(await cachedIcon(`site:${host}`, () => siteIcon(host), gate)); return icon ? iconResponse(icon) : none(); };
   if (d !== null) {
     const host = publicHost(d);
     if (!host) throw new AuthError("Tên miền không hợp lệ.", 400);

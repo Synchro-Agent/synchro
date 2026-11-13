@@ -1,10 +1,11 @@
 "use client";
 
 import { Fragment, memo, useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { unredact, filepathOf, autoMerge, hasHidden, splitMeta, parsePackages, checkPkg, findCron, cronInfo, type Pkg } from "./devtools";
 import * as I from "./icons";
 import { locale, tr, useLangReady } from "./i18n";
-import { codeWraps, imageKind, inlineText, parseInline, parseMarkdown, streamSafe, type Align, type Block, type Inl, type Top } from "./mdparse";
+import { codeWraps, imageKind, inlineText, keepWhole, parseInline, parseMarkdown, streamSafe, type Align, type Block, type Inl, type Top } from "./mdparse";
 import { ChartView, parseChart } from "./charts";
 import { lazyView } from "./lazy";
 import { AskCard } from "./askcard";
@@ -196,6 +197,30 @@ function Widgets({ lang, code }: { lang: string; code: string }) {
   );
 }
 
+// Sơ đồ Mermaid trong câu trả lời: khung giới hạn chiều cao min(70vh, 520px) (sơ đồ dọc 5 nút từng cao hơn cả màn hình vì SVG giãn theo bề rộng cột),
+// nút phóng to mở sơ đồ cả màn hình; Esc, nút Đóng hoặc bấm ra ngoài để đóng.
+function MermaidCard({ code }: { code: string }) {
+  const [full, setFull] = useState(false);
+  useEffect(() => {
+    if (!full) return;
+    const esc = (e: KeyboardEvent) => { if (e.key === "Escape") { e.stopPropagation(); setFull(false); } };
+    addEventListener("keydown", esc, true); return () => removeEventListener("keydown", esc, true);
+  }, [full]);
+  return (
+    <div className="viz-card viz-mm">
+      <button className="icon-btn viz-zoom" onClick={() => setFull(true)} aria-label={tr("Phóng to sơ đồ")} title={tr("Phóng to sơ đồ")}><I.Expand size={15} /></button>
+      <MermaidSvg code={code} />
+      {full && createPortal(
+        <div className="overlay viz-full" onMouseDown={(e) => e.target === e.currentTarget && setFull(false)}>
+          <div className="viz-full-b" role="dialog" aria-modal="true" aria-label={tr("Sơ đồ")}>
+            <MermaidSvg code={code} />
+            <button className="icon-btn viz-full-x" onClick={() => setFull(false)} aria-label={tr("Đóng")} title={tr("Đóng")}><I.X size={16} /></button>
+          </div>
+        </div>, document.body)}
+    </div>
+  );
+}
+
 // Hình minh họa ngay trong chat (Cài đặt → Khả năng): ```chart, ```mermaid, ```d2 (vẽ trong sandbox), ```widget. Khối chưa viết xong thì hiện chỗ chờ.
 function Visual({ lang, code, closed, say }: { lang: string; code: string; closed: boolean; say: (m: string) => void }) {
   const [h, setH] = useState(120);
@@ -205,7 +230,7 @@ function Visual({ lang, code, closed, say }: { lang: string; code: string; close
     const spec = parseChart(code);
     return typeof spec === "string" ? <><div className="viz-note">{tr("Không vẽ được biểu đồ")}: {spec}</div><Code lang="json" code={code} say={say} idx={0} /></> : <ChartView spec={spec} />;
   }
-  if (lang === "mermaid") return <div className="viz-card"><MermaidSvg code={code} /></div>;
+  if (lang === "mermaid") return <MermaidCard code={code} />;
   if (lang === "d2") return <div className="viz-card"><D2Svg code={code} /></div>;
   return (
     <div className="viz-card viz-widget">
@@ -254,7 +279,7 @@ function MdTable({ head, rows, align, say }: { head: string[]; rows: string[][];
         <th key={k} style={align[k] ? { textAlign: align[k] as "left" | "center" | "right" } : undefined} aria-sort={sort?.col === k ? (sort.dir === 1 ? "ascending" : "descending") : undefined}>
           <button className="md-th" onClick={() => by(k)} title={tr("Bấm để sắp xếp")}><Inline t={c} /><span className={`md-sort ${sort?.col === k ? "on" : ""}`}>{sort?.col === k && sort.dir === -1 ? "↓" : "↑"}</span></button>
         </th>
-      ))}</tr></thead><tbody>{shown.map((r, k) => <tr key={k}>{r.map((c, j) => <td key={j} style={align[j] ? { textAlign: align[j] as "left" | "center" | "right" } : undefined}><Inline t={c} /></td>)}</tr>)}</tbody></table>
+      ))}</tr></thead><tbody>{shown.map((r, k) => <tr key={k}>{r.map((c, j) => <td key={j} className={j === 0 && keepWhole(c) ? "md-nw" : undefined} style={align[j] ? { textAlign: align[j] as "left" | "center" | "right" } : undefined}><Inline t={c} /></td>)}</tr>)}</tbody></table>
     </div>
   );
 }

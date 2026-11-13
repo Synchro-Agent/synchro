@@ -13,7 +13,8 @@ import { BrandLogo } from "./brands";
 import { ProviderCard, TestBox, type ApiProvider, type ApiState } from "./apiui";
 import { ModelRegistry } from "./modelregui";
 import { CliUpdates } from "./cliupdateui";
-import { locale } from "./i18n";
+import { getLang } from "./i18n";
+import { resetClock } from "./resetfmt";
 
 type Cli = "claude" | "codex" | "agy" | "grok";
 type Login = { state: "starting" | "open_url" | "verifying" | "done" | "error"; method: string | null; url?: string; userCode?: string; needsCode: boolean; message?: string; startedAt: number };
@@ -32,7 +33,7 @@ const VENDORS: { id: string; cli: Cli | null; name: string; vendor: string; plan
 type Vendor = (typeof VENDORS)[number];
 type PlanVendor = Vendor & { cli: Cli };
 const METHOD: Record<string, string> = { token: "long-lived token", oauth: "claude.ai account", chatgpt: "ChatGPT account", apikey: "API key", google: "Google account", grok: "Grok account" };
-const when = (t: number) => new Date(t).toLocaleString(locale(), { weekday: "short", hour: "2-digit", minute: "2-digit" });
+const when = (t: number) => resetClock(t, getLang());
 
 /** Trạng thái CLI của chính tài khoản cho một hãng (hãng không có gói: không hỏi gì). */
 function usePlan(cli: Cli | null) {

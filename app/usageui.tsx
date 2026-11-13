@@ -9,6 +9,7 @@ import { rowKeys } from "./a11y";
 import { Menu } from "./ui";
 import { useApp } from "./store";
 import { getLang, tr } from "./i18n";
+import { resetAt } from "./resetfmt";
 import * as I from "./icons";
 import { PageBar, usePage } from "./pager";
 import { BrandLogo, ModelLogo } from "./brands";
@@ -37,7 +38,6 @@ export const refreshUsage = (fresh = false) => { if (typeof window !== "undefine
 export function useUsage(provider?: string) {
   const key = provider ?? "";
   const [st, setSt] = useState<UsageState | null>(cache?.key === key ? cache.v : null);
-  const [, tick] = useState(0);
   // idle: lượt hỏi định kỳ, không ai vừa yêu cầu số mới: máy chủ trả số đã có, không mở CLI (codex, agy) chỉ để đọc hạn mức.
   const load = useCallback((fresh = false, idle = false) => {
     const q = provider === "*" ? "?all=1" : provider ? `?provider=${encodeURIComponent(provider)}` : "";
@@ -53,9 +53,7 @@ export function useUsage(provider?: string) {
     document.addEventListener("visibilitychange", vis);
     // Tab đang ẩn thì không hỏi; quay lại tab thì vis() đọc lại ngay.
     const t = setInterval(() => { if (!document.hidden) load(false, true); }, 60_000);
-    // Đồng hồ đếm ngược "Đặt lại sau…" tự cập nhật mỗi 30 giây.
-    const c = setInterval(() => tick((x) => x + 1), 30_000);
-    return () => { window.removeEventListener("synchro:usage", on); document.removeEventListener("visibilitychange", vis); clearInterval(t); clearInterval(c); };
+    return () => { window.removeEventListener("synchro:usage", on); document.removeEventListener("visibilitychange", vis); clearInterval(t); };
   }, [load]);
   return st;
 }
@@ -66,14 +64,8 @@ export const money = (v: number) => (v > 0 && v < 0.01 ? "<$0.01" : `$${v.toFixe
 export const kTok = (n: number) => (n >= 1e6 ? `${(n / 1e6).toFixed(n >= 1e7 ? 0 : 1)}M` : n >= 1e3 ? `${(n / 1e3).toFixed(n >= 1e4 ? 0 : 1)}K` : String(n));
 export function resetText(t: number | null, active = true) {
   if (!t || !active) return en() ? "Starts with your next message" : "Bắt đầu khi bạn gửi tin nhắn";
-  const ms = t - Date.now();
-  if (ms < 24 * 3600_000) {
-    const m = Math.max(1, Math.ceil(ms / 60_000)), h = Math.floor(m / 60), mm = m % 60;
-    return en() ? `Resets in ${h ? `${h} hr ` : ""}${h && !mm ? "" : `${mm} min`}`.trim() : `Đặt lại sau ${h ? `${h} giờ ` : ""}${h && !mm ? "" : `${mm} phút`}`.trim();
-  }
-  const d = new Date(t);
-  return en() ? `Resets ${d.toLocaleString("en-US", { weekday: "short", hour: "numeric", minute: "2-digit" })}`
-    : `Đặt lại ${["CN", "T2", "T3", "T4", "T5", "T6", "T7"][d.getDay()]} ${d.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })}`;
+  // Cùng nguồn, cùng định dạng (tuyệt đối) với thẻ báo hết hạn mức dưới câu trả lời (resetfmt.ts).
+  return resetAt(t, en() ? "en" : "vi");
 }
 const level = (p: number) => (p >= 90 ? "hot" : p >= 70 ? "warn" : "");
 const LABEL = { session: ["Giới hạn phiên", "Session limit"], weekly: ["Hằng tuần · mọi model", "Weekly · all models"] } as const;

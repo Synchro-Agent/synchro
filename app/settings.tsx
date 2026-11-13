@@ -341,7 +341,7 @@ function Account() {
       <Fade show={!!pw}>
         <div className="overlay" style={{ zIndex: 60 }} onMouseDown={(e) => e.target === e.currentTarget && setPw(null)}>
           <div className="modal sm" style={{ width: 400 }}>
-            <button className="icon-btn" style={{ position: "absolute", top: 12, right: 12 }} onClick={() => setPw(null)}><I.X size={16} /></button>
+            <button className="icon-btn" aria-label={tr("Đóng")} style={{ position: "absolute", top: 12, right: 12 }} onClick={() => setPw(null)}><I.X size={16} /></button>
             <h2 style={{ fontSize: 16 }}>{me?.hasPassword ? "Change password" : "Set password"}</h2>
             {me?.hasPassword && <input className="field" type="password" autoComplete="current-password" placeholder="Current password" value={pw?.cur ?? ""} onChange={(e) => setPw((o) => o && { ...o, cur: e.target.value })} />}
             {me?.hasPassword && (resetSent === "limited"
@@ -358,7 +358,7 @@ function Account() {
       <Fade show={del !== null}>
         <div className="overlay" style={{ zIndex: 60 }} onMouseDown={(e) => e.target === e.currentTarget && setDel(null)}>
           <div className="modal sm" style={{ width: 400 }}>
-            <button className="icon-btn" style={{ position: "absolute", top: 12, right: 12 }} onClick={() => setDel(null)}><I.X size={16} /></button>
+            <button className="icon-btn" aria-label={tr("Đóng")} style={{ position: "absolute", top: 12, right: 12 }} onClick={() => setDel(null)}><I.X size={16} /></button>
             <h2 style={{ fontSize: 16 }}>Delete your account?</h2>
             <p className="d" style={{ margin: "0 0 12px" }}>Your account and everything stored with it on the server (chats, projects, files, Brain, connectors, sessions) are permanently deleted, and the copy in this browser is erased. This can&apos;t be undone.</p>
             {me?.hasPassword && <input className="field" type="password" autoFocus autoComplete="current-password" placeholder="Enter your password to confirm" value={del ?? ""} onChange={(e) => setDel(e.target.value)} />}
@@ -531,7 +531,7 @@ function Memory() {
       <Fade show={imp}>
         <div className="overlay" style={{ zIndex: 60 }} onMouseDown={(e) => e.target === e.currentTarget && setImp(false)}>
           <div className="modal sm" style={{ width: 460 }}>
-            <button className="icon-btn" style={{ position: "absolute", top: 12, right: 12 }} onClick={() => setImp(false)}><I.X size={16} /></button>
+            <button className="icon-btn" aria-label={tr("Đóng")} style={{ position: "absolute", top: 12, right: 12 }} onClick={() => setImp(false)}><I.X size={16} /></button>
             <h2 style={{ fontSize: 16 }}>Import memory to Synchro</h2>
             <p className="d" style={{ margin: "0 0 8px" }}>1&nbsp; Copy this prompt into a chat with your other AI provider</p>
             <div className="codebox cb-copy">{PROMPT}<button className="btn cb-btn" onClick={() => { navigator.clipboard?.writeText(PROMPT); app.say("Prompt copied"); }}>Copy</button></div>

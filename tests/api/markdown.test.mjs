@@ -298,5 +298,12 @@ console.log("Đang viết: ẩn tạm công thức / bảng còn dở (streamSaf
   eq(S("Chào bạn"), "Chào bạn", "chữ thường: giữ nguyên");
 }
 
+console.log("Ô đầu của bảng không ngắt giữa từ (U9)");
+{
+  ok(M.keepWhole("hoa-don.png") && M.keepWhole("`hoa-don.png`") && M.keepWhole("**SKU-00123**"), "tên tệp, mã ngắn (kể cả có nhấn chữ) giữ trên một dòng");
+  ok(!M.keepWhole("Hóa đơn tháng 10") && !M.keepWhole("a<br>b"), "ô có khoảng trắng / xuống dòng vẫn ngắt bình thường");
+  ok(!M.keepWhole("bao-cao-doanh-thu-quy-3-2026.xlsx") && !M.keepWhole(""), "từ dài từ 24 ký tự, ô trống: không ép một dòng");
+}
+
 console.log(`\n${pass} đạt, ${fail} lỗi`);
 if (fail) process.exit(1);

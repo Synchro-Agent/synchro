@@ -534,7 +534,7 @@ export function AdminPanel({ Toggle }: { Toggle: ToggleT }) {
       <Fade show={!!pwFor}>
         <div className="overlay" style={{ zIndex: 70 }} onMouseDown={(e) => e.target === e.currentTarget && setPwFor(null)}>
           <div className="modal sm" style={{ width: 420 }}>
-            <button className="icon-btn" style={{ position: "absolute", top: 12, right: 12 }} onClick={() => setPwFor(null)}><I.X size={16} /></button>
+            <button className="icon-btn" aria-label={tr("Đóng")} style={{ position: "absolute", top: 12, right: 12 }} onClick={() => setPwFor(null)}><I.X size={16} /></button>
             <h2 style={{ fontSize: 16 }}>Set a new password</h2>
             <p className="mono" style={{ margin: "0 0 6px", fontSize: 12 }} data-notr>{pwFor?.email}</p>
             <p className="d" style={{ margin: "0 0 12px" }}>Their current password isn&apos;t needed. Share the new password with them privately.</p>
@@ -579,7 +579,7 @@ export function AdminPanel({ Toggle }: { Toggle: ToggleT }) {
       <Fade show={!!del}>
         <div className="overlay" style={{ zIndex: 70 }} onMouseDown={(e) => e.target === e.currentTarget && setDel(null)}>
           <div className="modal sm" style={{ width: 420 }}>
-            <button className="icon-btn" style={{ position: "absolute", top: 12, right: 12 }} onClick={() => setDel(null)}><I.X size={16} /></button>
+            <button className="icon-btn" aria-label={tr("Đóng")} style={{ position: "absolute", top: 12, right: 12 }} onClick={() => setDel(null)}><I.X size={16} /></button>
             <h2 style={{ fontSize: 16 }}>Delete this account?</h2>
             <p className="d" style={{ margin: "0 0 12px" }}>The account, its sign-in methods and all of its sessions will be permanently removed. This can&apos;t be undone.</p>
             <p className="d" style={{ margin: "0 0 6px" }}>Type the user&apos;s email to confirm:</p>

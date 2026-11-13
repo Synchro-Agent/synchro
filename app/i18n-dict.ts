@@ -423,6 +423,13 @@ Object.assign(VI2EN, {
 
 Object.assign(VI2EN, { "Model báo lỗi nên lượt này chưa xong. Hãy thử lại hoặc chọn model khác; nội dung lỗi nằm ở phần chi tiết.": "The model reported an error, so this turn didn't finish. Try again or pick another model; the error is in the details.", "Thu phóng ảnh": "Zoom image", "Luật riêng": "Custom rules" });
 
+// Khung xem Excel / CSV (officeview.ts): nút thu bảng cho vừa khung.
+Object.assign(VI2EN, { "Vừa chiều rộng": "Fit width", "Kích thước thật": "Actual size" });
+// Chữ còn sót tiếng Việt trong giao diện tiếng Anh (blueprint B1): lỗi khung chụp ảnh artifact, nhãn gói ở Mức dùng, tên việc phụ Quét skill rác.
+Object.assign(VI2EN, { "Quét skill rác": "Scan for junk skills", "Không tải được thư viện chụp ảnh": "Couldn't load the screenshot library", "Gói subscription": "Subscription plan" });
+// Sơ đồ Mermaid trong câu trả lời (md.tsx MermaidCard).
+Object.assign(VI2EN, { "Phóng to sơ đồ": "Enlarge diagram" });
+
 export const RULES_EN: [RegExp, (m: RegExpMatchArray) => string][] = [
   [/^(.+) không phản hồi sau (.+)\. Hãy thử lại hoặc chọn model khác\.$/, (m) => `${m[1]} did not respond within ${m[2].replace("giây", "seconds").replace("phút", "minutes")}. Try again or pick another model.`],
   [/^(.+) không có tiến triển trong (.+)\. Hãy nhắn "tiếp tục" hoặc chọn model khác\.$/, (m) => `${m[1]} made no progress for ${m[2].replace("giây", "seconds").replace("phút", "minutes")}. Send "continue" or pick another model.`],
@@ -1838,3 +1845,10 @@ function trCx(s: string) {
   const m = s.match(CX_RULE_EN[0]);
   return m ? CX_RULE_EN[1](m) : s;
 }
+// Dòng tổng kết của lượt trả lời (worktone.ts): lỗi công cụ còn lại / bước model đã thử lại.
+RULES_EN.push(
+  [/^(\d+) lỗi$/, (m) => `${m[1]} failed`],
+  [/^(\d+) bước đã thử lại$/, (m) => `${m[1]} ${m[1] === "1" ? "step" : "steps"} retried`],
+);
+// Chip nguồn dưới câu trả lời tìm web (cites.tsx): nút mở các nguồn còn lại.
+RULES_EN.push([/^\+(\d+) nguồn$/, (m) => `+${m[1]} ${m[1] === "1" ? "source" : "sources"}`]);

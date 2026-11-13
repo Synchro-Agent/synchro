@@ -1094,7 +1094,7 @@ canvas.gf-sheet-art[data-ready] { opacity: 1; filter: none; }
 .gf-sheet-meta {
   flex: none;
   font-family: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 10px;
+  font-size: 12px;
   letter-spacing: .02em;
   color: rgba(24, 24, 27, .5);
 }

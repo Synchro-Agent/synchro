@@ -5,6 +5,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import * as I from "./icons";
+import { tr } from "./i18n";
 import { useFitPlaceholder } from "./phfit";
 import { inspectGithub, SkillAddModal, type Found } from "./skillsui";
 import { PreviewModal } from "./pluginsui";
@@ -45,7 +46,7 @@ export function GithubAdd({ focus, onDone }: { focus?: number; onDone?: (r: { ki
       </form>
       <p className="d gh-hint">Synchro looks at the link for you. One skill goes to Your skills. A repository with several skills is installed as a library, with license and script checks and one-click updates. A repository without SKILL.md: Synchro reads every file in it and writes the skill from it.</p>
       {reading && <p className="d gh-hint" role="status">This repository has no SKILL.md. Synchro is reading every file in it and writing the skill. This can take a minute.</p>}
-      {err && <div className="sk-err" role="alert"><span>{err}</span><button type="button" className="icon-btn" style={{ width: 22, height: 22 }} onClick={() => setErr("")}>×</button></div>}
+      {err && <div className="sk-err" role="alert"><span>{err}</span><button type="button" className="icon-btn" aria-label={tr("Đóng")} style={{ width: 22, height: 22 }} onClick={() => setErr("")}>×</button></div>}
       {skill && portal(
         <SkillAddModal src={skill.src} pv={skill.pv} onClose={() => setSkill(null)}
           onDone={() => { setSkill(null); setUrl(""); onDone?.({ kind: "skill" }); }}

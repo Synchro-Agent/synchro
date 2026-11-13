@@ -13,24 +13,37 @@ export const hostOf = (u: string) => { try { return new URL(u).hostname.replace(
 const anchor = (id: string, n: number) => `src-${id}-${n}`;
 const okUrl = (u: string) => /^https?:\/\//.test(u);
 
+// Không có ảnh dùng được (máy chủ trả 404 khi ảnh rỗng / dưới 100 byte, ảnh 1×1 trong suốt, lỗi tải): chữ cái đầu của tên miền trên nền trung tính,
+// không để ô vuông trắng trơn.
+export const favLetter = (host: string) => (host.match(/[\p{L}\p{N}]/u)?.[0] ?? "?").toUpperCase();
 function Favicon({ url, size = 14 }: { url: string; size?: number }) {
   const host = hostOf(url);
   const [bad, setBad] = useState(false);
-  if (bad || !host) return <span className="src-fav src-fav-l" style={{ width: size, height: size }} aria-hidden data-notr>{host.slice(0, 1).toUpperCase() || "?"}</span>;
-  return <img className="src-fav" src={`/api/favicon?d=${encodeURIComponent(host)}`} alt="" width={size} height={size} loading="lazy" onError={() => setBad(true)} />;
+  if (bad || !host) return <span className="src-fav src-fav-l" style={{ width: size, height: size }} aria-hidden data-notr>{favLetter(host)}</span>;
+  return <img className="src-fav" src={`/api/favicon?d=${encodeURIComponent(host)}`} alt="" width={size} height={size} loading="lazy" onError={() => setBad(true)}
+    onLoad={(e) => { if (e.currentTarget.naturalWidth < 2 || e.currentTarget.naturalHeight < 2) setBad(true); }} />;
 }
+
+/** Số chip nguồn hiện sẵn dưới câu trả lời; phần còn lại gom vào nút "+N nguồn". */
+export const SHOWN_SOURCES = 6;
 
 /** Hàng chip nguồn dưới câu trả lời. */
 export function SourceChips({ webs, id }: { webs: WebSrc[]; id: string }) {
-  if (!webs.some((w) => okUrl(w.url))) return null;
+  const [all, setAll] = useState(false);
+  const ok = webs.filter((w) => okUrl(w.url)).length;
+  if (!ok) return null;
+  // Giữ số thứ tự gốc của nguồn (số [n] trong câu trả lời trỏ đúng chip); chip thứ 7 trở đi ẩn tới khi bấm "+N nguồn" hoặc bấm một số [n] trỏ tới nó.
+  let k = 0;
+  const more = ok - SHOWN_SOURCES;
   return (
     <div className="msg-sources" role="list" aria-label={tr("Nguồn")}>
       <span>{tr("Nguồn")}</span>
       {webs.map((w, i) => (okUrl(w.url) ? (
-        <a key={w.url} id={anchor(id, i + 1)} role="listitem" className="src-chip" href={w.url} target="_blank" rel="noopener noreferrer" title={`${w.title ? `${w.title}\n` : ""}${w.url}`} data-notr>
+        <a key={w.url} id={anchor(id, i + 1)} role="listitem" className="src-chip" hidden={!all && k++ >= SHOWN_SOURCES} href={w.url} target="_blank" rel="noopener noreferrer" title={`${w.title ? `${w.title}\n` : ""}${w.url}`} data-notr>
           <span className="src-n">{i + 1}</span><Favicon url={w.url} /><span className="src-t">{w.title || hostOf(w.url)}</span>{w.title ? <em className="src-h">{hostOf(w.url)}</em> : null}
         </a>
       ) : null))}
+      {more > 0 && <button type="button" className="src-more" aria-expanded={all} onClick={() => setAll(!all)}>{all ? tr("Thu gọn") : tr(`+${more} nguồn`)}</button>}
     </div>
   );
 }
@@ -65,9 +78,14 @@ function Cite({ n, w, id }: { n: number; w: WebSrc; id: string }) {
           e.preventDefault();
           const chip = document.getElementById(anchor(id, n));
           if (!chip) return;
-          chip.scrollIntoView({ block: "nearest", behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
-          chip.classList.remove("flash"); void chip.offsetWidth; chip.classList.add("flash");
-          chip.focus({ preventScroll: true });
+          const go = () => {
+            chip.scrollIntoView({ block: "nearest", behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+            chip.classList.remove("flash"); void chip.offsetWidth; chip.classList.add("flash");
+            chip.focus({ preventScroll: true });
+          };
+          // Nguồn nằm trong phần "+N nguồn" chưa mở: mở ra (React vẽ lại) rồi mới cuộn tới.
+          if (chip.hidden) { chip.parentElement?.querySelector<HTMLButtonElement>(".src-more")?.click(); requestAnimationFrame(go); return; }
+          go();
         }}>{n}</a>
       {at && <CitePop w={w} at={at} />}
     </>

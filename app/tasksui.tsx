@@ -172,7 +172,7 @@ function Composer({ onPlan, onManual, say }: { onPlan: (p: Plan) => void; onManu
   return (
     <div className="tk-comp">
       <textarea value={text} rows={2} maxLength={4000} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); go(); } }}
-        placeholder={tr("Giao việc cho Synchro, ví dụ: mỗi sáng 8h tra giá cổ phiếu FPT, phân tích và gợi ý giao dịch")} aria-label="Giao việc cho Synchro" data-notr />
+        placeholder={tr("Giao việc cho Synchro, ví dụ: mỗi sáng 8h tra giá cổ phiếu FPT, phân tích và gợi ý giao dịch")} aria-label={tr("Giao việc cho Synchro")} data-notr />
       <div className="tk-comp-bar">
         <div className="tk-ex">{EXAMPLES.map((x) => <button key={x.label} type="button" className="chip" onClick={() => setText(tr(x.text))}>{tr(x.label)}</button>)}</div>
         <button type="button" className="btn ghost" onClick={onManual}>{tr("Tự đặt")}</button>

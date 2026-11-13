@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import * as I from "./icons";
 import { Avatar } from "./avatar";
 import { getLang, tr, trCx, useLangReady } from "./i18n";
+import { resetClock, resetAt } from "./resetfmt";
 import { FileCard } from "./fileicon";
 import { useFileMenu, saveDoc, saveBlob, fileContext } from "./filemenu";
 import { capFiles, getStatus } from "./filestate";
@@ -371,7 +372,7 @@ function ModelPicker({ model, setModel, prefix }: { model: string; setModel: (m:
             <MsubBody on={sub === pv.id} count={pv.models.length} place={placeSub}>
             {pv.models.map((m) => (
               <button key={m.key} className={`menu-item mline ${ok(m.key) ? "" : "locked"}`} onClick={() => pick(m.key)} title={ok(m.key) ? m.id : "Quản trị viên chưa cho phép tài khoản của bạn dùng model này"}>
-                <ModelLogo k={m.key} name={m.name} /><span className="mname-t">{m.name}</span>{m.isNew && !m.blockedUntil ? <span className="mtag mnew" title="Hãng vừa ra mắt, Synchro đã thử và cho dùng">Mới</span> : null}{m.blockedUntil ? <span className="mtag" title={new Date(m.blockedUntil).toLocaleString(getLang() === "en" ? "en-US" : "vi-VN", { weekday: "short", hour: "2-digit", minute: "2-digit" })}>{getLang() === "en" ? "Limit reached" : "Hết hạn mức"}</span> : null}{m.key === model ? <span className="ck"><I.Check /></span> : !ok(m.key) && <span className="sc"><I.Lock size={14} /></span>}
+                <ModelLogo k={m.key} name={m.name} /><span className="mname-t">{m.name}</span>{m.isNew && !m.blockedUntil ? <span className="mtag mnew" title="Hãng vừa ra mắt, Synchro đã thử và cho dùng">Mới</span> : null}{m.blockedUntil ? <span className="mtag" title={resetClock(m.blockedUntil, getLang())}>{getLang() === "en" ? "Limit reached" : "Hết hạn mức"}</span> : null}{m.key === model ? <span className="ck"><I.Check /></span> : !ok(m.key) && <span className="sc"><I.Lock size={14} /></span>}
               </button>
             ))}
             </MsubBody>
@@ -404,7 +405,7 @@ function MsubBody({ on, count, place, children }: { on: boolean; count: number; 
 function PlanNote({ pv }: { pv: ProviderInfo }) {
   const p = pv.plan!;
   const en = getLang() === "en";
-  const at = (t: number) => new Date(t).toLocaleString(en ? "en-US" : "vi-VN", { weekday: "short", hour: "2-digit", minute: "2-digit" });
+  const at = (t: number) => resetClock(t, en ? "en" : "vi");
   const set = (on: boolean) => fetch(`/api/engines/${p.cli}/use-api`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ on }) }).then(() => refreshModels()).catch(() => {});
   if (pv.source === "api" && p.usingApiUntil) return (
     <div className="msub-note msub-plan">
@@ -883,6 +884,8 @@ type RowCx = {
 };
 // Thẻ lỗi của một lượt chat: khác hẳn câu trả lời thường, nói việc nên làm tiếp, lỗi thô để trong phần chi tiết.
 function ErrCard({ raw, onRetry, onProviders }: { raw?: string; onRetry?: () => void; onProviders: () => void }) {
+  // Thẻ nằm trong .ai-msg (bộ dịch trang bỏ qua) và trong dòng tin đã memo: tự vẽ lại khi từ điển về / đổi ngôn ngữ, không kẹt chữ tiếng Việt.
+  useLangReady();
   const e = chatError(raw, (s) => isForeign(s, tr(s), getLang()));
   return (
     <div className="msg-err" role="alert">
@@ -932,7 +935,7 @@ const MsgRow = memo(function MsgRow({ m, i, last, busy, mark, art, inl, fileActi
       </div>
     ) : (
       <div style={est}>
-        <CiteCtx.Provider value={cites}><div className={`ai-msg${m.done ? "" : " ai-streaming"}`}>{m.tools?.length ? <div className="skill-used">{m.tools.map((n) => <span key={n} className="skill-chip tool-chip"><I.SetPlug size={13} /><span>{tr("Đã dùng")}</span><span data-notr>{toolChip(n)}</span></span>)}</div> : null}{m.libs?.length ? <LibChips libs={m.libs} onOpen={() => cx.current!.openPlugins()} /> : null}{m.skills?.length ? <div className="skill-used">{m.skills.map((n) => <span key={n} className="skill-chip"><I.Scroll size={13} />{tr("Đang dùng skill")}: {n}</span>)}</div> : null}{m.done ? <WorkSummary parts={m.parts} plan={m.plan} ms={m.dur} stopped={m.stopped} render={(t) => <Markdown text={t} say={say} />} /> : m.parts?.length ? <WorkParts parts={m.parts} live onAnswer={answerAsk} render={(t) => <Markdown text={t} say={say} />} /> : null}{m.text ? (art && hasArtifacts(m.text) ? splitArtifacts(m.text).map((sg, k) => sg.kind === "text" ? <Markdown key={k} text={sg.text} say={say} viz={inl} live={m.done && last && !busy} streaming={!m.done} /> : (() => {
+        <CiteCtx.Provider value={cites}><div className={`ai-msg${m.done ? "" : " ai-streaming"}`}>{m.tools?.length ? <div className="skill-used">{m.tools.map((n) => <span key={n} className="skill-chip tool-chip"><I.SetPlug size={13} /><span>{tr("Đã dùng")}</span><span data-notr>{toolChip(n)}</span></span>)}</div> : null}{m.libs?.length ? <LibChips libs={m.libs} onOpen={() => cx.current!.openPlugins()} /> : null}{m.skills?.length ? <div className="skill-used">{m.skills.map((n) => <span key={n} className="skill-chip"><I.Scroll size={13} />{tr("Đang dùng skill")}: {n}</span>)}</div> : null}{m.done ? <WorkSummary parts={m.parts} plan={m.plan} ms={m.dur} stopped={m.stopped} failed={m.failed || !!m.notice?.partial} render={(t) => <Markdown text={t} say={say} />} /> : m.parts?.length ? <WorkParts parts={m.parts} live onAnswer={answerAsk} render={(t) => <Markdown text={t} say={say} />} /> : null}{m.text ? (art && hasArtifacts(m.text) ? splitArtifacts(m.text).map((sg, k) => sg.kind === "text" ? <Markdown key={k} text={sg.text} say={say} viz={inl} live={m.done && last && !busy} streaming={!m.done} /> : (() => {
           const pos = arts.at[i]?.find((x) => x.ident === sg.art.ident && arts.map.get(x.ident)?.[x.v]?.msg === i);
           const total = arts.map.get(sg.art.ident)?.length ?? 1;
           const v = pos?.v ?? 0;
@@ -947,7 +950,7 @@ const MsgRow = memo(function MsgRow({ m, i, last, busy, mark, art, inl, fileActi
           <div className="msg-notice" role="status">
             {m.notice.text && !m.failed && <p>{tr(m.notice.text)}</p>}
             {m.notice.work && <p>{tr("Model đã làm một phần việc nên Synchro không tự chạy lại, để tránh làm hai lần.")}</p>}
-            {m.notice.at && m.notice.at > Date.now() ? <p data-notr>{`${getLang() === "en" ? "Available again" : "Dùng lại được"}: ${new Date(m.notice.at).toLocaleString(getLang() === "en" ? "en-US" : "vi-VN", { weekday: "short", hour: "2-digit", minute: "2-digit" })}`}</p> : null}
+            {m.notice.at && m.notice.at > Date.now() ? <p data-notr>{resetAt(m.notice.at, getLang())}</p> : null}
             {m.notice.tried?.length ? <p data-notr>{`${getLang() === "en" ? "Tried" : "Đã thử"}: ${m.notice.tried.join(", ")}`}</p> : null}
             {m.notice.switchTo && last && !busy ? (
               <div className="msg-notice-act">
@@ -1789,7 +1792,7 @@ export default function Home() {
   const askPlanSwitch = (d: Record<string, unknown>, retry: () => void) => {
     const cli = String(d.planLimit ?? d.relogin), api = String(d.apiModel), apiName = typeof d.apiModelName === "string" ? d.apiModelName : modelName(api);
     const name = ({ claude: "Claude", codex: "ChatGPT", agy: "Gemini", grok: "Grok" } as Record<string, string>)[cli] ?? cli;
-    const at = typeof d.resetsAt === "number" ? new Date(d.resetsAt).toLocaleString(getLang() === "en" ? "en-US" : "vi-VN", { weekday: "short", hour: "2-digit", minute: "2-digit" }) : "";
+    const at = typeof d.resetsAt === "number" ? resetClock(d.resetsAt, getLang()) : "";
     const en = getLang() === "en";
     setGc({
       title: d.relogin ? (en ? `Your ${name} plan needs you to sign in again` : `Gói ${name} cần đăng nhập lại`) : en ? `Your ${name} plan hit its limit` : `Gói ${name} đã hết hạn mức`,
@@ -2299,7 +2302,7 @@ export default function Home() {
   const [pinOpen, setPinOpen] = usePref("pinOpen", true);
   const [recentOpen, setRecentOpen] = usePref("recentOpen", true);
   const pill = false && (
-    <div className="plan-pill">Gói Free · <a onClick={() => setModal("upgrade")}>Nâng cấp</a>{view === "chat" && <button onClick={() => setBanner(false)} style={{ display: "grid", marginLeft: 2 }}><I.X size={14} /></button>}</div>
+    <div className="plan-pill">Gói Free · <a onClick={() => setModal("upgrade")}>Nâng cấp</a>{view === "chat" && <button aria-label={tr("Đóng")} onClick={() => setBanner(false)} style={{ display: "grid", marginLeft: 2 }}><I.X size={14} /></button>}</div>
   );
   const proj = projects.find((x) => x.id === curProj);
   const sideRef = useClickAway(() => setSideProj(null));

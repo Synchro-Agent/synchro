@@ -449,6 +449,16 @@ export function VoicePicker({ value, onPick, onClose, say }: { value?: string; o
   );
 }
 
+/** Khung chờ của một công cụ khi gói ElevenLabs còn đang đọc: khối giả đúng chỗ của thẻ công cụ, không để trang trống chỉ có vòng xoay. */
+export function ToolWait() {
+  return (
+    <div className="sp-card sp-wait-tool" aria-busy="true">
+      <span className="sr-only" role="status">Đang đọc gói ElevenLabs…</span>
+      <span className="sk-blk sp-wait-l1" aria-hidden /><span className="sk-blk sp-wait-l2" aria-hidden /><span className="sk-blk sp-wait-box" aria-hidden />
+    </div>
+  );
+}
+
 /** Trạng thái khi chưa gắn ElevenLabs hoặc gói chưa có tính năng. */
 export function NotReady({ admin }: { admin: boolean }) {
   const plan = usePlan();
@@ -456,7 +466,7 @@ export function NotReady({ admin }: { admin: boolean }) {
   const app = useApp();
   if (!plan) return failed
     ? <div className="sp-card sp-detect"><span className="sp-tic big"><I.Speaker size={26} /></span><b>Chưa đọc được gói ElevenLabs</b><p>Kiểm tra kết nối mạng rồi thử lại.</p><button className="btn" onClick={() => { void refreshPlan(true); }}><I.Retry size={14} />Thử lại</button></div>
-    : <div className="sp-empty"><Spin /> Đang đọc gói ElevenLabs…</div>;
+    : <ToolWait />;
   return (
     <>
       <div className="sp-card sp-detect">
