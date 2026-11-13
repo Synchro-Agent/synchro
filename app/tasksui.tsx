@@ -5,7 +5,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { apiFetch, statusText } from "./apierr";
 import * as I from "./icons";
-import { tr } from "./i18n";
+import { getLang, tr } from "./i18n";
+import { isForeign } from "./chaterror";
+import { canRerun, failInfo, failLine } from "./taskerr";
 import { INBOX_CHANGED, useInboxCount } from "./inboxcount";
 export { INBOX_CHANGED, useInboxCount };
 import { Markdown } from "./md";
@@ -247,6 +249,10 @@ function ProposalCard({ p, say, onDone }: { p: Proposal; say: (m: string) => voi
 
 // ---------------------------------------------------------------- một kết quả (mở ra xem chi tiết, tiến độ, nhật ký, đề xuất của lần chạy)
 const LOG_KINDS = new Set(["tool", "note", "step", "say", "ui"]);
+// Lỗi nguyên văn tiếng Anh của hãng trên giao diện tiếng Việt (hay ngược lại): câu chung, nguyên văn để ở phần chi tiết (như thẻ lỗi của chat).
+const foreign = (s: string) => isForeign(s, tr(s), getLang());
+/** Lý do lỗi một dòng cho dòng Hộp thư (đã dịch). */
+const failReason = (raw?: string) => failLine(tr(failInfo(raw, foreign).text));
 function ResultBody({ x, task, say, onOpenChat, onRetry, reload }: { x: Item; task?: Task; say: (m: string) => void; onOpenChat: (title: string, text: string) => void; onRetry: (t: Task) => void; reload: () => void }) {
   const [events, setEvents] = useState<RunEv[] | null>(null);
   const [props, setProps] = useState<Proposal[]>([]);
@@ -278,7 +284,7 @@ function ResultBody({ x, task, say, onOpenChat, onRetry, reload }: { x: Item; ta
       {x.note && <p className="tk-note"><I.InfoCircle size={13} /><span data-notr>{tr(x.note)}</span></p>}
       {x.status === "waiting" ? <div className="tk-run"><I.Clock size={14} />{tr("Đến giờ chạy nhưng Chrome của bạn đang tắt. Synchro chạy ngay khi Chrome kết nối lại, hoặc sau 12 giờ thì chạy bằng trình duyệt của Synchro.")}</div>
         : x.status === "running" ? <div className="tk-run"><span className="art-spin sm" />{lastStep ? <span data-notr>{tr(lastStep.text)}</span> : <span>{tr("Synchro đang chạy việc này trên máy chủ")}</span>}</div>
-        : x.error ? <div className="sk-err"><span data-notr>{x.error}</span></div>
+        : x.error ? ((e) => <div className="sk-err tk-err"><span data-notr>{tr(e.text)}</span>{e.detail && <details><summary>{tr("Chi tiết kỹ thuật")}</summary><code data-notr>{e.detail}</code></details>}</div>)(failInfo(x.error, foreign))
         : <div className="mdx"><Markdown text={readable(x.text)} say={say} /></div>}
       {props.length > 0 && <div className="tk-props-in"><b>{tr("Đề xuất của lần chạy này")}</b>{props.map((p) => <ProposalCard key={p.id} p={p} say={say} onDone={() => { reload(); api<{ proposals: Proposal[] }>("GET", `/api/inbox/proposals?run=${x.run}`).then((j) => setProps(j.proposals)).catch(() => {}); }} />)}</div>}
       {log && steps.length > 0 && <ol className="tk-log">{steps.map((e) => <li key={e.seq} className={e.kind}><span>{when(e.at).split(" ·")[0]}</span><span data-notr>{e.text}</span></li>)}</ol>}
@@ -349,6 +355,9 @@ export function InboxPage({ say, onOpenChat }: { say: (m: string) => void; model
   };
   const read = async (ids: string[] | "all") => { await api("POST", "/api/inbox", { read: ids }).catch(() => {}); setOlder((o) => o.map((x) => (ids === "all" || ids.includes(x.run) ? { ...x, read: true } : x))); changed(); load(); };
   const toggle = (x: Item) => { setOpen(open === x.run ? null : x.run); if (!x.read && x.status !== "running" && x.status !== "waiting") read([x.run]); };
+  // Nút "Chạy lại" ngay trên dòng lỗi: chạy lại việc đó, khóa nút tới khi máy chủ nhận lệnh.
+  const [rerun, setRerun] = useState<string | null>(null);
+  const rerunRow = async (x: Item) => { const t = byId.get(x.task); if (!t || rerun) return; setRerun(x.run); try { await runNow(t); } finally { setRerun(null); } };
   const runNow = async (t: Task) => { try { await api("POST", `/api/tasks/${t.id}/run`); say(tr("Đang chạy, kết quả sẽ vào Hộp thư")); setTab("results"); load(); } catch (e) { say((e as Error).message); } };
   const setOn = async (t: Task) => { try { await api("PATCH", `/api/tasks/${t.id}`, { enabled: !t.enabled }); load(); } catch (e) { say((e as Error).message); } };
   const del = (t: Task) => app.confirm(tr("Xóa việc tự động này?"), tr("Kết quả cũ trong Hộp thư cũng bị xóa."), tr("Xóa"), () => { void api("DELETE", `/api/tasks/${t.id}`).then(() => { say(tr("Đã xóa việc tự động")); load(); }).catch((e) => say((e as Error).message)); });
@@ -416,14 +425,18 @@ export function InboxPage({ say, onOpenChat }: { say: (m: string) => void; model
         <div className="tk-feed">{groups.map(([d, list]) => (
           <section key={d}><h3 className="tk-day">{dayLabel(d)}</h3>
             <div className="tk-list">{list.map((x) => (
-              <div key={x.run} className={`tk-item ${x.read ? "" : "unread"} ${open === x.run ? "open" : ""}`} {...bulkRow(bkR, x)}>
+              <div key={x.run} className={`tk-item ${x.read ? "" : "unread"} ${open === x.run ? "open" : ""} ${x.status === "error" ? "failed" : ""}`} {...bulkRow(bkR, x)}>
+                <div className="tk-line">
                 <button className="tk-row" onClick={() => toggle(x)} aria-expanded={open === x.run}>
                   {bkR.on ? <BulkCheck on={bkR.has(x)} /> : <span className={`tk-dot ${x.status}`} />}
-                  <span className="tk-t"><b data-notr>{x.title}</b><em>{x.status === "running" ? tr("Đang chạy trên máy chủ…") : x.status === "waiting" ? tr("Đang chờ Chrome của bạn kết nối") : x.status === "error" ? tr("Lỗi") : ((t) => (t ? <span data-notr>{t}</span> : tr("Xong")))(excerpt(x.text))}</em></span>
+                  <span className="tk-t"><b data-notr>{x.title}</b><em>{x.status === "running" ? tr("Đang chạy trên máy chủ…") : x.status === "waiting" ? tr("Đang chờ Chrome của bạn kết nối") : x.status === "error" ? <span className="tk-why" data-notr>{tr("Lỗi")}: {failReason(x.error)}</span> : ((t) => (t ? <span data-notr>{t}</span> : tr("Xong")))(excerpt(x.text))}</em></span>
                   {(x.proposals ?? 0) > 0 && <span className="tk-chip warn">{x.proposals} {tr("đề xuất")}</span>}
                   {x.kind === "action" && <span className="tk-chip">{tr("Đã duyệt")}</span>}
                   <span className="tk-when">{when(x.at).split(" ·")[0]}</span>
                 </button>
+                {!bkR.on && canRerun(x, all, byId.has(x.task)) && <button type="button" className="btn sm tk-rerun" disabled={rerun === x.run} aria-busy={rerun === x.run} onClick={() => rerunRow(x)} aria-label={`${tr("Chạy lại")}: ${x.title}`} data-tip="Chạy lại">
+                  {rerun === x.run ? <span className="art-spin sm" /> : <I.Retry size={13} />}<span>{tr("Chạy lại")}</span></button>}
+                </div>
                 {open === x.run && !bkR.on && <ResultBody x={x} task={byId.get(x.task)} say={say} onOpenChat={onOpenChat} onRetry={runNow} reload={load} />}
               </div>
             ))}</div>
