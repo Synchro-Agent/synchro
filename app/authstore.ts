@@ -153,12 +153,50 @@ if (process.env.NODE_ENV === "production" && !APP_URL) {
 }
 export const appUrl = (req: Request) => APP_URL || `${isHttps(req) ? "https" : "http"}://${host(req)}`;
 
-// Mọi request thay đổi dữ liệu phải đến từ chính trang Synchro (chặn CSRF). Khi có APP_URL, so với tên máy của nó;
-// không có thì mới dùng Host của yêu cầu (chỉ xảy ra ngoài production, hoặc production chưa đặt APP_URL và chưa bật hard-fail).
+// Mọi request thay đổi dữ liệu phải đến từ chính trang Synchro (chặn CSRF). Tên máy được nhận (allowedOriginHosts): tên máy của APP_URL,
+// bản có / không "www." của nó (synchro.net.nz ↔ www.synchro.net.nz), và SYNCHRO_ALLOWED_ORIGINS (danh sách cách nhau bởi dấu phẩy, tên máy
+// hoặc địa chỉ đầy đủ). Header Host chỉ được tin khi chính nó nằm trong danh sách đó; không có APP_URL thì mới so với Host của yêu cầu (chỉ xảy ra
+// ngoài production, hoặc production chưa đặt APP_URL và chưa bật hard-fail).
+const twin = (h: string) => {
+  const name = h.replace(/:\d+$/, "");
+  if (!name.includes(".") || /^[\d.]+$/.test(name) || name.startsWith("[")) return "";
+  return h.startsWith("www.") ? h.slice(4) : `www.${h}`;
+};
+let allowCache: { key: string; hosts: Set<string> } | null = null;
+export function allowedOriginHosts(): Set<string> {
+  const extra = process.env.SYNCHRO_ALLOWED_ORIGINS ?? "", key = `${appHost}|${extra}`;
+  if (allowCache?.key === key) return allowCache.hosts;
+  const hosts = new Set<string>();
+  if (appHost) { hosts.add(appHost.toLowerCase()); const t = twin(appHost.toLowerCase()); if (t) hosts.add(t); }
+  for (const raw of extra.split(",")) {
+    const v = raw.trim();
+    if (!v) continue;
+    try { hosts.add(new URL(v.includes("://") ? v : `https://${v}`).host); } catch { /* bỏ mục hỏng */ }
+  }
+  allowCache = { key, hosts };
+  return hosts;
+}
+// Mỗi Origin bị từ chối được ghi một dòng cảnh báo (tối đa mỗi giờ một lần cho mỗi tên máy): đặt sai APP_URL thì nhật ký cho thấy ngay
+// mọi thao tác ghi đang bị chặn từ địa chỉ nào, mà kẻ gửi hàng loạt Origin lạ cũng không làm đầy nhật ký được.
+const originWarned = new Map<string, number>();
+function warnOrigin(h: string) {
+  const now = Date.now(), last = originWarned.get(h);
+  if (last && now - last < 60 * MIN) return;
+  if (originWarned.size >= 500) { for (const [k, v] of originWarned) if (now - v >= 60 * MIN) originWarned.delete(k); if (originWarned.size >= 500) return; }
+  originWarned.set(h, now);
+  console.warn(`[auth] từ chối yêu cầu ghi từ Origin ${JSON.stringify(h.slice(0, 200))}: không có trong APP_URL / SYNCHRO_ALLOWED_ORIGINS (${[...allowedOriginHosts()].join(", ") || "chưa đặt APP_URL"}).`);
+}
 export function sameOrigin(req: Request) {
   const o = req.headers.get("origin");
-  const expect = appHost || host(req);
-  try { if (o && new URL(o).host === expect) return; } catch {}
+  let oh = "";
+  try { oh = o ? new URL(o).host : ""; } catch { oh = ""; }
+  if (oh) {
+    const allow = allowedOriginHosts(), h = host(req).toLowerCase();
+    // Có APP_URL: Origin phải nằm trong danh sách (Host trùng Origin cũng chỉ được nhận khi Host nằm trong danh sách).
+    // Không có APP_URL: như cũ, Origin trùng Host của yêu cầu, cộng các tên máy thêm bằng SYNCHRO_ALLOWED_ORIGINS.
+    if (allow.has(oh) || (!appHost && oh === h)) return;
+    warnOrigin(oh);
+  }
   throw new AuthError("Yêu cầu không hợp lệ.", 403);
 }
 
