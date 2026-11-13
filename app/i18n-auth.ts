@@ -15,6 +15,7 @@ export const AUTH_VI2EN: Record<string, string> = {
   "Khóa bí mật Turnstile không hợp lệ.": "The Turnstile secret key isn't valid.",
   "Số lần sai phải từ 1 đến 20.": "The number of failed attempts must be between 1 and 20.",
   "Hãy hoàn tất bước kiểm tra bạn không phải máy rồi thử lại.": "Complete the human check, then try again.",
+  "Không xác minh được, thử lại sau ít phút.": "Couldn't verify you're human. Try again in a few minutes.",
   "Synchro không nhận email dùng một lần. Hãy đăng ký bằng địa chỉ email bạn dùng thường xuyên.": "Synchro doesn't accept disposable email addresses. Sign up with an address you use regularly.",
   // Sao lưu liên tục (litestream.ts)
   "Account ID của Cloudflare gồm 32 ký tự 0-9, a-f.": "A Cloudflare Account ID is 32 characters, 0-9 and a-f.",

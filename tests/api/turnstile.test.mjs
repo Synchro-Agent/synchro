@@ -124,11 +124,21 @@ try {
   r = await j(await F.POST(req("/api/auth/forgot", { email: u.email }, { cookie: uCk })));
   ok(r.s === 200, "chủ tài khoản xin từ Cài đặt: không hỏi mã", r);
 
-  console.log("7. Cloudflare không trả lời");
+  console.log("7. Cloudflare không trả lời: đăng ký và đặt lại mật khẩu từ chối, đăng nhập vẫn cho qua");
   down = true;
   r = await signup("s5@synchro.test", "signup:localhost:g1");
-  ok(r.s === 200, "không chặn cửa mọi người khi Cloudflare lỗi (giới hạn tần suất vẫn còn)", r);
+  ok(r.s === 503 && r.j.error === T.VERIFY_DOWN && r.j.captcha === true && !AS.findByEmail("s5@synchro.test"), "đăng ký: từ chối, báo thử lại sau, không tạo tài khoản", r);
+  r = await j(await F.POST(req("/api/auth/forgot", { email: u.email, turnstile: "reset:localhost:g2" })));
+  ok(r.s === 503 && r.j.error === T.VERIFY_DOWN, "xin đặt lại mật khẩu khi chưa đăng nhập: từ chối", r);
+  r = await j(await F.POST(req("/api/auth/forgot", { email: u.email }, { cookie: uCk })));
+  ok(r.s === 200, "chủ tài khoản xin từ Cài đặt (không hỏi mã): vẫn được", r);
+  r = await login(PW, "login:localhost:g3");
+  ok(r.s === 200 && r.j.user?.id === u.id, "đăng nhập cần mã (sau nhiều lần sai): vẫn cho qua", r);
   down = false;
+  r = await signup("s5@synchro.test", "signup:localhost:g4");
+  ok(r.s === 200 && r.j.user?.email === "s5@synchro.test", "Cloudflare trả lời lại: đăng ký được", r);
+  const { VI2EN } = (await loadTs(["i18n-dict"]))["i18n-dict"];
+  ok(typeof VI2EN[T.VERIFY_DOWN] === "string" && /try again/i.test(VI2EN[T.VERIFY_DOWN]), "thông báo có bản tiếng Anh", VI2EN[T.VERIFY_DOWN]);
 
   console.log("8. Tắt");
   r = await j(await AD.PATCH(req("/api/admin/settings", { turnstile: { clear: true } }, { cookie: bossCk, method: "PATCH" })));

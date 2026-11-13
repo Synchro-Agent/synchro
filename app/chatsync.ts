@@ -6,7 +6,7 @@
 // - Trình duyệt hết chỗ: rút gọn các đoạn chat cũ đã có trên máy chủ (nội dung tải lại khi mở trang). Chưa kịp lên máy chủ thì báo ngay kèm nút xuất dữ liệu.
 // - Đoạn chat ẩn danh không bao giờ rời trình duyệt.
 import { useEffect, useRef, useSyncExternalStore } from "react";
-import { batches, hashOf, keyOf, lastTime, losesUserMsgs, parseMeta, saveFit, serialChat, serialProject, startupDirty, decideRemote, stubOf, type Part, type SyncKind, type SyncMeta } from "./chatsynccore";
+import { batches, hashOf, keyOf, lastTime, losesUserMsgs, parseMeta, saveFit, serialChat, serialProject, startupDirty, decideRemote, stubOf, TIMED_OUT, withDeadline, type Part, type SyncKind, type SyncMeta } from "./chatsynccore";
 import { tr } from "./i18n";
 import type { Chat, Project } from "./store";
 import { ls, userScope } from "./userscope";
@@ -54,7 +54,11 @@ type Sess = {
   timer: ReturnType<typeof setTimeout> | null; busy: boolean; fails: number; tooBig: Map<string, string>; lastPush: Map<string, number>; pulling: boolean;
 };
 
-export type ChatSync = { saveChats: (l: Chat[]) => void; saveProjects: (l: Project[]) => void; forget: (kind: SyncKind, ids: number[]) => void; wipeAll: (chats: number[], projects: number[]) => void };
+export type ChatSync = {
+  saveChats: (l: Chat[]) => void; saveProjects: (l: Project[]) => void; forget: (kind: SyncKind, ids: number[]) => void; wipeAll: (chats: number[], projects: number[]) => void;
+  /** Đẩy ngay mọi mục chưa lên máy chủ (kể cả đoạn chat đang chạy) và chờ, tối đa ms. Trả về số mục vẫn chỉ có ở thiết bị này. */
+  flush: (ms?: number) => Promise<number>;
+};
 
 export function useChatSync(o: { uid: string | null; loaded: boolean; chats: Chat[]; projects: Project[]; running: ReadonlySet<number>; setChats: React.Dispatch<React.SetStateAction<Chat[]>>; setProjects: React.Dispatch<React.SetStateAction<Project[]>> }): ChatSync {
   const live = useRef(o);
@@ -317,6 +321,30 @@ export function useChatSync(o: { uid: string | null; loaded: boolean; chats: Cha
         for (const id of ids) { const key = keyOf(kind, id); s.meta.gone[key] = Date.now(); delete s.meta.dirty[key]; delete s.meta.known[key]; s.tooBig.delete(key); }
         saveMeta(s);
         later(s, 0);
+      },
+      flush: async (ms = 15_000) => {
+        const s = sess.current;
+        if (!s || !ok(s)) return 0;
+        const end = Date.now() + ms, sent = new Set<string>();
+        // Mục còn chờ: chưa đẩy được, hoặc đã xóa mà lệnh xóa chưa tới. Đoạn chat đang chạy đã đẩy ít nhất một lần trong lượt này thì
+        // tính là đã lên (phần còn lại do máy chủ chạy tiếp, đăng nhập lại thì trang nối vào lượt đó).
+        const left = () => Object.keys(s.meta.gone).length + Object.keys(s.meta.dirty).filter((k) => !isStub(k) && !(sent.has(k) && live.current.running.has(Number(k.slice(k.indexOf(":") + 1))))).length;
+        while (ok(s) && Date.now() < end) {
+          if (s.busy) { await withDeadline(new Promise<void>((r) => setTimeout(r, 150)), end - Date.now()); continue; }
+          if (s.timer) { clearTimeout(s.timer); s.timer = null; }
+          // Bỏ nhịp đẩy thưa của đoạn chat đang chạy: lần này gửi bản mới nhất ngay.
+          s.lastPush.clear();
+          // push gồm nhiều lần fetch không có hạn giờ: một yêu cầu đứng sẽ treo cả flush. Chỉ chờ push trong hạn còn lại; hết giờ thì
+          // thôi (push vẫn chạy nốt ở nền), left() còn mục chờ nên trả về khác 0 — nơi gọi sẽ không xóa phần chưa đồng bộ.
+          const r = await withDeadline(push(s), end - Date.now());
+          for (const k of s.lastPush.keys()) sent.add(k);
+          if (r === TIMED_OUT) break;
+          if (!left()) return 0;
+          // Mất mạng, máy chủ lỗi, hoặc chỉ còn mục quá lớn (không bao giờ lên được): thôi chờ.
+          if (s.fails || (Object.keys(s.meta.dirty).every((k) => s.tooBig.has(k) || isStub(k)) && !Object.keys(s.meta.gone).length)) break;
+          await withDeadline(new Promise<void>((r) => setTimeout(r, 300)), end - Date.now());
+        }
+        return left();
       },
       wipeAll: (chats, projects) => {
         const s = sess.current;

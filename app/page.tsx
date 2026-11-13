@@ -19,7 +19,7 @@ import { BulkBar, BulkCheck, bulkRow, useBulk, type BulkAct } from "./bulk";
 import { Pager, usePage } from "./pager";
 import { lazyView } from "./lazy";
 import type { CodeMeta } from "./codeview";
-import { answerAsk, deleteServerSession, listServerSessions, patchServerSession, pushSession, resetCodePrefs, useCodePrefs, type SessionState } from "./codesync";
+import { answerAsk, deleteServerSession, flushAllNow, listServerSessions, patchServerSession, pushSession, resetCodePrefs, useCodePrefs, type SessionState } from "./codesync";
 import { TOOL_ICON } from "./speech/toolicons";
 import { TOOLS as SP_TOOLS, toolOn, type SpeechTool } from "./speech/data";
 import { usePlan as useSpeechPlan } from "./speech/client";
@@ -43,7 +43,7 @@ import { fit as fitFloat, installFloatFit } from "./floatfit";
 import { installA11y } from "./a11y";
 import { steerRun } from "./llm";
 import { attachRun, callLLM, olderDigest, cancelRun, LLMError, setActiveEffort, setActiveModel, setApprover, type ApprovalCall, type ApprovalAnswer, type RunMeta, type LibUse, type Decision, buildSystemPrompt, extractMemory, getRelevantContext, HISTORY_LIMIT, MEMORY_EVERY_N_USER_MSGS, type LLMMsg } from "./llm";
-import { Confirm, LangModal, ProjectModal, Settings, ShortcutsModal, UploadModal, UpgradeModal } from "./modals";
+import { Confirm, LangModal, LogoutConfirm, ProjectModal, Settings, ShortcutsModal, UploadModal, UpgradeModal } from "./modals";
 import { ShareModal } from "./shareui";
 import { useBrainSync } from "./brainsync";
 
@@ -74,7 +74,7 @@ import { loadMe, watchSession } from "./session";
 import { useFitPlaceholder } from "./phfit";
 import type { ProviderInfo } from "./catalog";
 import { useInboxCount } from "./inboxcount";
-import { adoptLegacyData, ls, setUserScope, userScope } from "./userscope";
+import { adoptLegacyData, clearAccountData, ls, setUserScope, userScope } from "./userscope";
 import { useChatSync, useSyncStatus } from "./chatsync";
 import { shortName } from "./names";
 import { loadCaps, useCaps } from "./capsclient";
@@ -982,9 +982,10 @@ const MsgRow = memo(function MsgRow({ m, i, last, busy, mark, art, inl, fileActi
 export default function Home() {
   // Giữ khung chờ tới khi từ điển của ngôn ngữ đang dùng về (tải riêng từng thứ tiếng, i18n.tsx): không nháy chữ sai ngôn ngữ.
   const langReady = useLangReady();
-  const [name, setName] = usePref("name", "Lâm Tùng");
+  // Họ tên và tên gọi đã lưu (Cài đặt → Tài khoản). Không có tên mặc định của ai: chưa có thì lấy từ tên tài khoản (xem name / call bên dưới).
+  const [namePref, setName] = usePref("name", "");
   const [, setAcct] = usePref("acct", "");
-  const [call, setCall] = usePref("call", "Lâm Tùng");
+  const [callPref, setCall] = usePref("call", "");
   const [, setWork] = usePref("work", "");
   const [ins, setIns] = usePref("ins", "");
   const [size] = usePref("size", "Medium");
@@ -1118,6 +1119,8 @@ export default function Home() {
   const [speaking, setSpeaking] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [me, setMe] = useState<AuthUser | null | undefined>(undefined);
+  const name = namePref.trim() || me?.profile.fullName?.trim() || me?.name || "";
+  const call = callPref.trim() || me?.profile.nickname?.trim() || shortName(name);
   // Màn chờ lúc mở app: mở thẳng một đoạn chat (#c=…) thì vùng chính chờ dạng tin nhắn thay vì lời chào (đặt sau khi gắn để khớp bản dựng ở máy chủ).
   const [bootChat, setBootChat] = useState(false);
   useEffect(() => { if (/^#c=/.test(location.hash)) setBootChat(true); }, []);
@@ -2324,11 +2327,14 @@ export default function Home() {
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
     say("Đã xuất dữ liệu");
   };
-  // Xóa phiên trên máy chủ. Dữ liệu của tài khoản vẫn được giữ (đã tách theo tài khoản) cho lần đăng nhập sau.
-  const logout = () => {
+  // Xóa phiên trên máy chủ. Mặc định dữ liệu của tài khoản vẫn được giữ trên thiết bị (đã tách theo tài khoản) cho lần đăng nhập sau;
+  // clear (hộp đăng xuất: "Xóa dữ liệu trên thiết bị này") xóa mọi khóa u:<uid>:* sau khi đã đẩy lên máy chủ (LogoutConfirm), đăng nhập lại thì tải về.
+  const logout = (clear = false) => {
+    const uid = userScope();
     fetch("/api/auth/logout", { method: "POST" }).catch(() => {});
     flushDirty();
     setUserScope(null); reloadPrefs(); resetCodePrefs(); listAt.current = 0;
+    if (clear) clearAccountData(uid);
     // Thôi theo dõi các câu trả lời đang chạy (không hủy ở máy chủ: đăng nhập lại thì trang nối vào lượt đó như khi tải lại).
     gens.current.clear(); runs.current.clear(); setRunning(new Set());
     approvalRef.current?.resolve({ decisions: {} }); setApproval(null);
@@ -2748,7 +2754,9 @@ export default function Home() {
       <Fade show={!!(modal === "upload")}><UploadModal say={say} onConverted={(f, md) => { saveDoc(f.name, md); saveBlob(f.name, f, say); setFiles((o) => capFiles(o, [f.name], say)); setModal(null); say(`Đã chuyển thành ${f.name}`); }} onClose={() => setModal(null)} onFiles={(f) => { f.forEach((x) => saveBlob(x.name, x)); setFiles((o) => [...o, ...f.map((x) => x.name)]); setModal(null); say(`Đã thêm ${f.length} tệp`); }} /></Fade>
       <Fade show={!!(modal === "upgrade")}><UpgradeModal onClose={() => setModal(null)} say={say} /></Fade>
       <Fade show={!!(modal === "keys")}><ShortcutsModal onClose={() => setModal(null)} /></Fade>
-      <Fade show={!!(modal === "logout")}><Confirm title="Đăng xuất?" text="Bạn có chắc chắn muốn đăng xuất không? Dữ liệu của bạn vẫn được giữ cho lần đăng nhập sau." ok="Đăng xuất" onCancel={() => setModal(null)} onOk={() => { setModal(null); logout(); }} /></Fade>
+      <Fade show={!!(modal === "logout")}><LogoutConfirm localOnly={modal === "logout" && !cpPage?.sync ? ls.keys().filter((k) => k.startsWith("codeS:")).length : 0}
+        flush={async () => { flushDirty(); const a = await chatSync.flush(); if (!cpPage?.sync) return a; const codeIds = ls.keys().filter((k) => k.startsWith("codeS:")).map((k) => Number(k.slice(6))).filter((n) => Number.isFinite(n)); return a + await flushAllNow(codeIds); }}
+        onCancel={() => setModal(null)} onOk={(clear) => { setModal(null); logout(clear); }} /></Fade>
       <Fade show={!!(delId !== null)}><Confirm title="Xóa đoạn chat?" text="Đoạn chat sẽ bị xóa khỏi mọi thiết bị, cùng với lịch sử phiên của model, ghi chú trong Bộ não, liên kết chia sẻ, và tệp chỉ đoạn chat này dùng. Bản đã có trong sao lưu của máy chủ mất đi theo vòng xoay, tối đa khoảng 5 tuần. Không hoàn tác được." ok="Xóa" onCancel={() => { setDelId(null); setDelArts(false); }} onOk={() => { if (delId !== null) { if (delArts) void fetch(`/api/artifacts?conv=${delId}`, { method: "DELETE" }).catch(() => {}); removeChat(delId); } setDelId(null); setDelArts(false); say("Đã xóa đoạn chat"); }}><label style={{ display: "flex", gap: 8, alignItems: "center", margin: "0 0 16px", fontSize: 14 }}><input type="checkbox" checked={delArts} onChange={(e) => setDelArts(e.target.checked)} />Xóa cả artifact của đoạn chat này (nếu không, chúng vẫn ở trang Artifacts)</label></Confirm></Fade>
       <Fade show={!!(delProj !== null)}><Confirm title="Xóa dự án?" text="Dự án sẽ bị xóa. Các đoạn chat bên trong vẫn được giữ lại." ok="Xóa" onCancel={() => setDelProj(null)} onOk={() => { setProjects((ps) => ps.filter((x) => x.id !== delProj)); if (delProj !== null) chatSync.forget("project", [delProj]); setChats((cs) => cs.map((c) => (c.project === delProj ? { ...c, project: undefined } : c))); setDelProj(null); say("Đã xóa dự án"); }} /></Fade>
       <Fade show={!!(modal === "proj")}><ProjectModal onClose={() => setModal(null)} onCreate={(n, d) => { const id = Date.now(); setProjects([{ id, name: n, desc: d, upd: id, pinned: true }, ...projects]); setModal(null); setCurProj(id); setView("project"); say("Đã tạo dự án"); }} /></Fade>
