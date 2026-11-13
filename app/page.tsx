@@ -242,7 +242,7 @@ function LibChips({ libs, onOpen }: { libs: LibUse[]; onOpen: () => void }) {
     </button>))}</div>;
 }
 
-function ModelPicker({ model, setModel }: { model: string; setModel: (m: string) => void }) {
+function ModelPicker({ model, setModel, prefix }: { model: string; setModel: (m: string) => void; prefix?: string }) {
   const [mm, setMm] = useState(false);
   const [sub, setSub] = useState<null | string>(null);
   const [subPos, setSubPos] = useState<React.CSSProperties>({});
@@ -314,7 +314,10 @@ function ModelPicker({ model, setModel }: { model: string; setModel: (m: string)
   const none = loaded && !providers.length;
   return (
     <div ref={mref} style={{ position: "relative" }} onKeyDown={(e) => { if (e.key === "ArrowLeft" && sub && (e.target as HTMLElement).closest(".model-sub")) setSub(null); }}>
-      <button className="model-btn" data-tip="Chọn model" aria-haspopup="menu" aria-expanded={mm} onPointerEnter={() => { if (!mm) refreshModels(); }} onClick={() => { setMm(!mm); setSub(null); }}>{!none && model ? (model === AUTO ? <span className="vlogo" style={{ width: 16, height: 16 }} aria-hidden><I.Sparkle size={15} /></span> : <ModelLogo k={model} />) : null}{none ? "Chưa có model" : model ? modelName(model) : "Chọn model"}{!(model === AUTO && autoEff) && <> <span className="muted">{eLabel}</span></>}<I.Chevron size={14} /></button>
+      <button className="model-btn" data-tip="Chọn model" aria-label={prefix ? `${prefix}: ${none ? "Chưa có model" : model ? modelName(model) : "Chọn model"}` : undefined} aria-haspopup="menu" aria-expanded={mm} onPointerEnter={() => { if (!mm) refreshModels(); }} onClick={() => { setMm(!mm); setSub(null); }}>{!none && model ? (model === AUTO ? <span className="vlogo" style={{ width: 16, height: 16 }} aria-hidden><I.Sparkle size={15} /></span> : <ModelLogo k={model} />) : null}{prefix ? (
+        // Trong Synchro Code: thêm tiền tố "Model:" để phân biệt với hai nút "Chế độ"/"Quyền" bên cạnh; dưới 1100px CSS ẩn nhãn, chỉ còn icon.
+        <span className="mp-lbl"><span className="mp-k">{prefix}</span>: {none ? "Chưa có model" : model ? modelName(model) : "Chọn model"}{!(model === AUTO && autoEff) && <> <span className="muted">{eLabel}</span></>}</span>
+      ) : (<>{none ? "Chưa có model" : model ? modelName(model) : "Chọn model"}{!(model === AUTO && autoEff) && <> <span className="muted">{eLabel}</span></>}</>)}<I.Chevron size={14} /></button>
       <Menu open={mm} className="model-menu" style={{ position: "absolute", ...(shift ? { translate: `${shift}px 0` } : {}) }}>
         {none && (
           <div className="mempty">
@@ -2648,7 +2651,7 @@ export default function Home() {
 
         {view === "inbox" && <InboxPage say={say} model={model} onOpenChat={openAsChat} />}
         {view === "customize" && <CustomizePage tab={czTab} setTab={setCzTab} connectors={<ConnectorsPanel />} feats={{ skills: me?.perms.features.skills !== false, connectors: me?.perms.features.connectors !== false }} />}
-        {view === "code" && <CodeView say={say} onMeta={onCodeMeta} onEmpty={setCodeEmpty} sid={codeCur} title={codeList.find((c) => c.id === codeCur)?.title ?? "Synchro Code"} model={model} modelPicker={<ModelPicker model={model} setModel={setModel} />} sideOpen={open} onSide={() => setOpen(true)} onNew={() => setCodeCur(null)} onCreate={(id, title) => { setCodeList((l) => [{ id, title }, ...l]); setCodeCur(id); }} />}
+        {view === "code" && <CodeView say={say} onMeta={onCodeMeta} onEmpty={setCodeEmpty} sid={codeCur} title={codeList.find((c) => c.id === codeCur)?.title ?? "Synchro Code"} model={model} modelPicker={<ModelPicker model={model} setModel={setModel} prefix="Model" />} sideOpen={open} onSide={() => setOpen(true)} onNew={() => setCodeCur(null)} onCreate={(id, title) => { setCodeList((l) => [{ id, title }, ...l]); setCodeCur(id); }} />}
         {view === "brain" && <BrainWorkspace initial={brainAt} onInitial={() => setBrainAt(null)} sideOpen={open} onSide={() => setOpen(true)} />}
         {view === "speech" && <SpeechView say={say} tool={spTool} setTool={setSpTool} sideOpen={open} onSide={() => setOpen(true)} />}
         </Boundary>
