@@ -290,6 +290,14 @@ case "$*" in *"-o /dev/null"*) exit 0 ;; esac; case "$url" in *api/health*) prin
   ok(m.code !== 0 && /chưa có mã xanh\/lam/.test(m.out) && m.st.active === "3000" && m.st.pm2.synchro === "online" && !m.st.pm2["synchro-green"] && !m.st.live, "MIGRATE-1: bản đang chạy chưa có mã xanh/lam: từ chối trước khi bật green, không đổi gì", { code: m.code, st: m.st, out: m.out.slice(-400) });
 }
 {
+  let m = mig("wrongname", { oldName: "synchro-web" });
+  ok(m.code !== 0 && !m.st.live && m.st.pm2["synchro-web"] === "online", "MIGRATE-2: pm2 stop app cũ lỗi (sai tên): không ghi màu sống, báo lỗi (không có hai primary)", { code: m.code, st: m.st });
+  m = mig("stillup", { env: { KEEP_UP: "synchro" } });
+  ok(m.code !== 0 && !m.st.live && /vẫn trả lời/.test(m.out), "MIGRATE-2: cổng cũ vẫn trả lời sau pm2 stop: không ghi màu sống", { code: m.code, st: m.st });
+  m = mig("nopromote", { env: { NO_PROMOTE: "1" } });
+  ok(m.code !== 0 && !m.st.live && m.st.active === "3000" && m.st.pm2.synchro === "online" && m.st.pm2["synchro-green"] === "stopped", "MIGRATE-2: green không nhận vai primary: bật lại bản cũ, nginx về 3000, bỏ màu sống, dừng green", { code: m.code, st: m.st });
+}
+{
   // Mọi script shell đều đúng cú pháp.
   const bad = ["server-build.sh", "bluegreen-lib.sh", "bluegreen-migrate.sh", "watchdog.sh", "backup.sh"].filter((f) => {
     try { execFileSync("bash", ["-n", path.join(process.cwd(), "scripts", f)], { stdio: "pipe" }); return false; } catch { return true; }

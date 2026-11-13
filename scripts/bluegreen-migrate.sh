@@ -121,11 +121,34 @@ if command -v sqlite3 >/dev/null 2>&1 && [ -f "$APP/data/synchro.db" ]; then
   say "Lượt còn dở ở bản cũ khi dừng: ${n:-0}"
 fi
 say "Dừng app pm2 cũ \"$OLDPM2\" (cổng $OLDPORT)."
-bg_pm2 stop "$OLDPM2" >/dev/null 2>&1 || true
-bg_pm2 delete "$OLDPM2" >/dev/null 2>&1 || true
-# Ghi màu sống SAU khi bản cũ đã dừng: bản cũ là một tiến trình (không giữ khóa primary), ghi sớm hơn thì green nhận vai trong lúc bản cũ
-# vẫn chạy việc nền. Từ lần deploy sau, bản cũ giữ khóa nên server-build.sh ghi màu sống trước rồi mới dừng bản cũ.
+# Bản cũ phải thật sự đã thoát (pm2 stop đạt và cổng thôi trả lời) rồi mới ghi màu sống: không thì green nhận vai primary bên cạnh nó.
+# Chưa xóa app cũ khỏi pm2: green không nhận vai thì bật lại nó.
+if ! bg_pm2 stop "$OLDPM2" >/dev/null 2>&1; then
+  echo "pm2 stop \"$OLDPM2\" lỗi (tên app khác?). Web vẫn chạy: nginx ở green 3002 (cùng bản $ID, chưa nhận vai primary), bản cũ vẫn là primary. Dừng bản cũ bằng tay rồi chạy lại script." >&2
+  exit 1
+fi
+gone=0
+for _ in $(seq 1 15); do curl -s --max-time 2 -o /dev/null "http://127.0.0.1:$OLDPORT/api/health" 2>/dev/null || { gone=1; break; }; sleep 1; done
+if [ "$gone" != 1 ]; then
+  echo "Cổng $OLDPORT vẫn trả lời sau khi dừng \"$OLDPM2\": còn tiến trình khác giữ cổng. Chưa ghi màu sống (green vẫn là secondary, nginx ở 3002). Dừng tiến trình đó rồi chạy lại script." >&2
+  exit 1
+fi
+# Ghi màu sống SAU khi bản cũ đã thoát: bản cũ chạy một tiến trình nên có thể chưa nhường khóa đúng lúc. Từ lần deploy sau, bản cũ giữ
+# khóa xanh/lam nên server-build.sh ghi màu sống trước rồi mới dừng bản cũ.
 bg_write_live green 3002 "$APP"
+# green nhận vai trong vài giây (khóa primary ghi màu green). Không nhận: trả lại bản cũ (bật lại app pm2 cũ, nginx về cổng cũ, bỏ màu sống, dừng green).
+for _ in $(seq 1 20); do [ "$(primary_color)" = green ] && break; sleep 1; done
+if [ "$(primary_color)" != green ]; then
+  echo "LỖI: sau 20 giây green chưa nhận vai primary (khóa: $(cat "$DATA/.primary.pid" 2>/dev/null || echo không có)): trả lại bản cũ." >&2
+  bg_pm2 logs synchro-green --nostream --lines 40 >&2 || true
+  rm -f "$BG_LIVE_FILE"
+  bg_pm2 restart "$OLDPM2" >/dev/null 2>&1 || true
+  if bg_healthy "$OLDPORT" "$ID" && bg_switch_upstream "$OLDPORT"; then bg_stop green || true; echo "Đã trả lại bản cũ ở cổng $OLDPORT. Xem pm2 logs synchro-green rồi chạy lại." >&2
+  else echo "CẢNH BÁO: bản cũ chưa lên lại ở cổng $OLDPORT, nginx vẫn ở green 3002: cần xem tay ngay." >&2; fi
+  exit 1
+fi
+say "synchro-green đã nhận vai primary ($(cat "$DATA/.primary.pid"))"
+bg_pm2 delete "$OLDPM2" >/dev/null 2>&1 || true
 bg_pm2 save >/dev/null 2>&1 || true
 
 # ---- 5. watchdog ----
@@ -135,8 +158,4 @@ if [ -f "$ENVO" ]; then
   say "$ENVO: PM2=synchro-green PORT=3002 (watchdog đọc tệp màu sống trước, các dòng này chỉ là dự phòng)"
 fi
 
-# green nhận vai trong vài giây sau khi bản cũ thoát (khóa primary ghi màu green).
-for _ in $(seq 1 20); do [ "$(primary_color)" = green ] && break; sleep 1; done
-if [ "$(primary_color)" = green ]; then say "synchro-green đã nhận vai primary ($(cat "$DATA/.primary.pid"))"
-else echo "LỖI: sau 20 giây green chưa nhận vai primary (khóa: $(cat "$DATA/.primary.pid" 2>/dev/null || echo không có)): xem pm2 logs synchro-green." >&2; exit 1; fi
 say "Xong. Màu sống: green (cổng 3002). Bản build cũ $APP/.next giữ nguyên để trả lại bằng tay (docs/van-hanh.md); xóa khi đã yên tâm."
