@@ -14,8 +14,9 @@ export class SpeechErr extends Error {
 
 // ---- nhà cung cấp Speech (sau el()) ----
 // Speech không phụ thuộc vào đúng một khóa: el() đi qua danh sách nhà cung cấp, ElevenLabs là chính. Có thể cấu hình thêm MỘT nhà cung
-// cấp dự phòng TƯƠNG THÍCH API ElevenLabs (TTS/STT…) qua biến môi trường — chỉ bật khi chủ máy chủ đặt sẵn địa chỉ + khóa; KHÔNG bịa khóa.
-// Không đặt gì thì hành vi y hệt trước đây (chỉ ElevenLabs), nên không làm máy chủ đang chạy hỏng vì thiếu biến mới.
+// cấp dự phòng TƯƠNG THÍCH API ElevenLabs (TTS/STT) qua biến môi trường SPEECH_FALLBACK_BASE + SPEECH_FALLBACK_KEY (tùy chọn _ID, _LABEL, _HEADER)
+// — chỉ bật khi chủ máy chủ đặt sẵn địa chỉ + khóa; KHÔNG bịa khóa. Không đặt gì thì hành vi y hệt trước đây (chỉ ElevenLabs).
+// Chuyển sang dự phòng: xem el() — chỉ đọc văn bản và chép lời, gửi lại đúng một lần, ghi nhận nhà cung cấp đã phục vụ (servedBy).
 export type SpeechProvider = { id: string; label: string; base: string; key: string; header: string };
 function speechProviderList(): SpeechProvider[] {
   const out: SpeechProvider[] = [];
@@ -29,8 +30,11 @@ function speechProviderList(): SpeechProvider[] {
   });
   return out;
 }
-/** Danh sách nhà cung cấp Speech đang cấu hình (không lộ khóa) — để giao diện quản trị / chẩn đoán hiển thị. */
-export const speechProviders = () => speechProviderList().map((p) => ({ id: p.id, label: p.label }));
+/** Danh sách nhà cung cấp Speech đang cấu hình (không lộ khóa) — để giao diện quản trị / chẩn đoán hiển thị: số lượt mỗi nhà cung cấp đã phục vụ, lần chuyển dự phòng gần nhất. */
+export const speechProviders = () => {
+  const st = G();
+  return { providers: speechProviderList().map((p) => ({ id: p.id, label: p.label, served: st.served?.[p.id] ?? 0 })), lastFailover: st.lastFailover ?? null };
+};
 const conn = (): SpeechProvider => {
   const list = speechProviderList();
   if (!list.length) throw new SpeechErr("Chưa gắn khóa ElevenLabs. Quản trị viên vào Cài đặt → Providers để thêm khóa.", 503, "no_key");
@@ -95,7 +99,9 @@ function lock(f: Feat, msg: string) {
   if (p) { p.features[f] = false; p.locked[f] = locks[f]; }
 }
 
-const g = globalThis as unknown as { __speech?: { plan: Plan | null; at: number; busy: Promise<Plan> | null; fp?: string; perms?: { at: number; key: string; miss: Partial<Record<Feat | "realtime", string>> } } };
+type Failover = { at: number; from: string; to: string; path: string; reason: string; ok: boolean };
+const g = globalThis as unknown as { __speech?: { plan: Plan | null; at: number; busy: Promise<Plan> | null; fp?: string; perms?: { at: number; key: string; miss: Partial<Record<Feat | "realtime", string>> };
+  served?: Record<string, number>; lastFailover?: Failover } };
 const G = () => (g.__speech ??= { plan: null, at: 0, busy: null });
 
 // ---- gọi API ----
@@ -154,16 +160,63 @@ export function explain(status: number, text: string, feat?: Feat): SpeechErr {
   return new SpeechErr(`ElevenLabs: ${msg.slice(0, 240)}`, status >= 500 ? 502 : 400, d.status || undefined);
 }
 
-export async function el(p: string, init: RequestInit & { feat?: Feat; timeout?: number } = {}): Promise<Response> {
-  const k = conn();
+// ---- chuyển sang nhà cung cấp dự phòng ----
+// Chỉ đọc văn bản (TTS, cả /stream và /with-timestamps) và chép lời (STT): mỗi lần gọi tạo kết quả mới, gửi lại không đổi gì ở tài khoản.
+// Không bao giờ nhân bản / thiết kế / xóa giọng hay đường nào khác: giọng nằm trên tài khoản của nhà cung cấp chính, gửi lại có thể tạo trùng hoặc xóa nhầm.
+const FAILOVER_RE = /^\/v1\/(text-to-speech\/[^/?]+(\/stream|\/with-timestamps|\/stream\/with-timestamps)?|speech-to-text)(\?|$)/;
+/** Đường này có được gửi lại ở nhà cung cấp dự phòng không. */
+export const failoverPath = (p: string, method = "GET") => method.toUpperCase() === "POST" && FAILOVER_RE.test(p);
+// Thân yêu cầu gửi lại được (luồng đọc một lần thì không).
+const reusableBody = (b: RequestInit["body"]) => b === undefined || b === null || typeof b === "string" || b instanceof FormData || b instanceof URLSearchParams || b instanceof Blob || b instanceof ArrayBuffer || ArrayBuffer.isView(b);
+/** Lỗi đáng chuyển sang dự phòng: máy chủ hãng lỗi (5xx), quá tải / hết lượt (429), khóa không hợp lệ (401/403) hoặc hết credit. Lỗi nội dung, thiếu quyền, gói thì không: dự phòng cũng sẽ từ chối, hoặc là lỗi người dùng cần sửa. */
+export function failoverWorthy(status: number, text: string) {
+  if (status >= 500 || status === 429) return true;
+  const d = detailOf(text);
+  if ((status === 401 || status === 403) && /invalid_api_key|invalid api key/i.test(`${d.status} ${d.message}`)) return true;
+  return /quota_exceeded|insufficient_credits/i.test(d.status);
+}
+type ElInit = RequestInit & { feat?: Feat; timeout?: number };
+const served = new WeakMap<Response, string>();
+/** Mã nhà cung cấp đã trả lời yêu cầu này (null nếu không phải phản hồi của el()). */
+export const servedBy = (r: Response) => served.get(r) ?? null;
+const tag = (r: Response, k: SpeechProvider) => {
+  served.set(r, k.id);
+  const st = G();
+  st.served = { ...st.served, [k.id]: (st.served?.[k.id] ?? 0) + 1 };
+  return r;
+};
+const callProvider = (k: SpeechProvider, p: string, init: ElInit) => {
+  // Headers mới cho từng nhà cung cấp: khóa của nhà cung cấp chính không bao giờ đi theo sang dự phòng.
   const headers = new Headers(init.headers);
   headers.set(k.header, k.key);
-  const r = await fetch(k.base + p, { ...init, headers, signal: init.signal ?? AbortSignal.timeout(init.timeout ?? 120_000) })
-    .catch((e: Error) => { throw new SpeechErr(e.name === "TimeoutError" ? "ElevenLabs phản hồi quá lâu. Thử lại sau." : `Không kết nối được tới ElevenLabs: ${e.message}`, 502, "net"); });
-  if (!r.ok) throw explain(r.status, await r.text().catch(() => ""), init.feat);
-  return r;
+  return fetch(k.base + p, { ...init, headers, signal: init.signal ?? AbortSignal.timeout(init.timeout ?? 120_000) });
+};
+const netErr = (e: unknown) => {
+  const x = e instanceof Error ? e : new Error(String(e));
+  return new SpeechErr(x.name === "TimeoutError" ? "ElevenLabs phản hồi quá lâu. Thử lại sau." : `Không kết nối được tới ElevenLabs: ${x.message}`, 502, "net");
+};
+
+export async function el(p: string, init: ElInit = {}): Promise<Response> {
+  const list = speechProviderList();
+  const main = list[0] ?? conn(), spare = list[1];
+  let r: Response | null = null, err: unknown = null;
+  try { r = await callProvider(main, p, init); } catch (e) { err = e; }
+  if (r?.ok) return tag(r, main);
+  const text = r ? await r.text().catch(() => "") : "";
+  const first = () => (r ? explain(r.status, text, init.feat) : netErr(err));
+  // Gửi lại đúng một lần ở dự phòng: chỉ khi có cấu hình, đường cho phép, thân gửi lại được, lỗi đáng chuyển, và người gọi chưa hủy.
+  if (!spare || !failoverPath(p, init.method) || !reusableBody(init.body) || init.signal?.aborted || (r && !failoverWorthy(r.status, text))) throw first();
+  const reason = r ? `HTTP ${r.status}` : err instanceof Error ? err.name : "network";
+  let r2: Response | null = null, err2: unknown = null;
+  try { r2 = await callProvider(spare, p, init); } catch (e) { err2 = e; }
+  G().lastFailover = { at: Date.now(), from: main.id, to: spare.id, path: p.split("?")[0], reason, ok: !!r2?.ok };
+  if (r2?.ok) { console.warn(`[speech] ${main.label} lỗi (${reason}) ở ${p.split("?")[0]}: ${spare.label} đã phục vụ thay`); return tag(r2, spare); }
+  // Dự phòng cũng lỗi: báo lỗi của nhà cung cấp chính (là chỗ quản trị viên cần sửa), ghi nhật ký lỗi của dự phòng.
+  const why = r2 ? `HTTP ${r2.status} ${(await r2.text().catch(() => "")).slice(0, 200)}` : err2 instanceof Error ? err2.message : "network";
+  console.error(`[speech] ${main.label} lỗi (${reason}), dự phòng ${spare.label} cũng lỗi: ${why}`);
+  throw first();
 }
-export const elJson = async <T = Record<string, unknown>>(p: string, init: RequestInit & { feat?: Feat; timeout?: number } = {}) => (await (await el(p, init)).json()) as T;
+export const elJson = async <T = Record<string, unknown>>(p: string, init: ElInit = {}) => (await (await el(p, init)).json()) as T;
 export const jsonBody = (b: unknown): RequestInit => ({ method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(b) });
 
 // ---- quyền của khóa ----
@@ -286,15 +339,17 @@ export async function plan(o: { fresh?: boolean } = {}): Promise<Plan> {
   if (!fresh && st.plan && Date.now() - st.at < 180_000) return st.plan;
   if (st.busy) return st.busy;
   st.busy = scan(fresh).then((p) => { st.plan = p; st.at = Date.now(); return p; })
-    .catch((e: SpeechErr) => empty(e.message))
+    // Nhà cung cấp chính mất kết nối / khóa hỏng nhưng có dự phòng: giữ gói đọc được lần trước để Đọc văn bản và Chép lời vẫn đi qua el() sang dự phòng.
+    .catch((e: SpeechErr) => (st.plan && speechProviderList().length > 1 && (e.code === "key" || e.code === "net") ? st.plan : empty(e.message)))
     .finally(() => { st.busy = null; });
   return st.busy;
 }
 /** Sau mỗi lần tạo: cộng credit đã dùng (ElevenLabs báo trong header) để thanh credit đúng ngay, không phải quét lại; tính vào hạn mức trong ngày của người đang gọi. est: ước lượng khi hãng không báo. */
 export function spent(r: Response, est = 0) {
   const n = Number(r.headers.get("character-cost") ?? r.headers.get("x-character-count") ?? 0);
-  const p = G().plan;
-  if (p && n > 0) p.credits.used += n;
+  const p = G().plan, by = servedBy(r);
+  // Thanh credit là của gói ElevenLabs: lượt do nhà cung cấp dự phòng phục vụ không trừ vào đó (hạn mức trong ngày của người gọi vẫn tính).
+  if (p && n > 0 && (!by || by === speechProviderList()[0]?.id)) p.credits.used += n;
   const uid = spender.getStore();
   if (uid) addSpend(uid, n > 0 ? n : est);
   return n;

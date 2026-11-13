@@ -3,7 +3,7 @@ import { Readable } from "node:stream";
 import { audit, can, current, findByEmail, getUser, isAdmin, isOwner, limit, sameOrigin, VERIFY_FIRST, verifyLocked, type UserRow } from "../../../authstore";
 import {
   SpeechErr, addSpend, audioOf, checkBudget, deleteItem, effectsCatalog, el, elJson, getItem, itemFile, jsonBody, langName, library, listItems, mintRealtime, myVoices, need, plan, saveItem,
-  scribeToken, sideRead, sideWrite, speechBudget, spender, spent, spentToday, updateItem, voiceOut, backfillVoiceOwners, defaultVoice, forgetVoiceOwner, isPrivateVoice, MAX_OWN_VOICES, ownedVoices, setVoiceOwner, voiceGen, voiceOpenTo, voiceOwner, VOICE_ORPHAN, VOICE_PURGE, VOICE_SHARED, type Feat, type Plan,
+  scribeToken, servedBy, sideRead, sideWrite, speechBudget, spender, spent, spentToday, updateItem, voiceOut, backfillVoiceOwners, defaultVoice, forgetVoiceOwner, isPrivateVoice, MAX_OWN_VOICES, ownedVoices, setVoiceOwner, voiceGen, voiceOpenTo, voiceOwner, VOICE_ORPHAN, VOICE_PURGE, VOICE_SHARED, type Feat, type Plan,
 } from "../../../speechapi";
 import { estCredits, estMusicCredits } from "../../../speech/data";
 import { quickCall } from "../../../ai/anymodel";
@@ -220,7 +220,7 @@ async function tts(u: UserRow, b: Record<string, unknown>) {
   const r = await el(`/v1/text-to-speech/${encodeURIComponent(voice)}?${q}`, { ...jsonBody(body), feat: "tts" });
   const cost = spent(r, estCredits(model, text));
   const a = await audioOf(r, fmt);
-  const item = saveItem(u, "tts", titleOf(text), { text: text.slice(0, 5000), voice, voiceName: str(b.voiceName, 80), model: model.id, modelName: model.name, format: fmt, chars: text.length, cost, settings: body.voice_settings, lang, effects: fx ?? null, dicts: dicts?.length ?? 0 }, a);
+  const item = saveItem(u, "tts", titleOf(text), { text: text.slice(0, 5000), voice, voiceName: str(b.voiceName, 80), model: model.id, modelName: model.name, format: fmt, chars: text.length, cost, settings: body.voice_settings, lang, effects: fx ?? null, dicts: dicts?.length ?? 0, provider: servedBy(r) }, a);
   return ok({ item });
 }
 async function dialogue(u: UserRow, b: Record<string, unknown>) {
@@ -252,7 +252,7 @@ async function speak(u: UserRow, b: Record<string, unknown>) {
     ...jsonBody({ text: text.slice(0, model?.max ?? 5000), model_id: model?.id, voice_settings: { stability: 0.5, similarity_boost: 0.75, speed } }), feat: "tts",
   });
   spent(r, text.length);
-  return new Response(r.body, { headers: { "content-type": r.headers.get("content-type") ?? "audio/mpeg", "cache-control": "no-store", "x-accel-buffering": "no" } });
+  return new Response(r.body, { headers: { "content-type": r.headers.get("content-type") ?? "audio/mpeg", "cache-control": "no-store", "x-accel-buffering": "no", "x-speech-provider": servedBy(r) ?? "" } });
 }
 async function stt(u: UserRow, form: FormData) {
   await need("stt");
@@ -291,7 +291,7 @@ async function stt(u: UserRow, form: FormData) {
   const dur = words.length ? words[words.length - 1].e : 0;
   const speakers = [...new Set(words.map((w) => w.sp).filter(Boolean))];
   const name = f?.name ?? url.replace(/^https?:\/\//, "").slice(0, 80);
-  const item = saveItem(u, "stt", name, { lang: j.language_code ?? "", langName: langName(j.language_code ?? ""), prob: j.language_probability ?? 0, dur, speakers, words: words.length, preview: j.text.slice(0, 300), source: f ? "file" : "url", url: f ? null : url, model, edited: !!edited },
+  const item = saveItem(u, "stt", name, { lang: j.language_code ?? "", langName: langName(j.language_code ?? ""), prob: j.language_probability ?? 0, dur, speakers, words: words.length, preview: j.text.slice(0, 300), source: f ? "file" : "url", url: f ? null : url, model, edited: !!edited, provider: servedBy(r) },
     f && f.size <= MAX_UP ? { buf: Buffer.from(await f.arrayBuffer()), mime: f.type || "audio/mpeg", ext: (f.name.split(".").pop() || "mp3").toLowerCase().slice(0, 5) } : undefined);
   sideWrite(u, item.id, { text: j.text, words, entities: j.entities ?? [], edited });
   return ok({ item, data: { text: j.text, words, entities: j.entities ?? [], edited } });
