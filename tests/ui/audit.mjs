@@ -342,9 +342,10 @@ for (const theme of THEMES) for (const size of SIZES) {
   // H2.3: chờ trang đứng yên thay cho chờ cố định 0,8–2 giây trước mỗi lần soát / chụp. Đứng yên = tài liệu tải xong, phông đã nạp, không còn
   // yêu cầu mạng nào (trừ yêu cầu sống quá 15 giây: luồng lượt chạy, thăm dò dài), không còn hoạt ảnh hữu hạn đang chạy, và số phần tử / chiều cao /
   // độ dài chữ không đổi trong quiet ms. Máy nhanh đi tiếp ngay; máy chậm (CI, bản dev biên dịch lần đầu) chờ tới khi xong, tối đa max ms rồi soát
-  // như cũ (lỗi bố cục khi đó vẫn bị bắt). Đo trên bản dev đang tải nặng: yêu cầu kiểm mã đặt lại mật khẩu mất 10–27 giây, nên ngưỡng 5 giây là quá ngắn.
+  // như cũ (lỗi bố cục khi đó vẫn bị bắt). Vòng quay "Đang tải" (role=status, trang đặt lại mật khẩu / xác minh email) cũng tính là chưa xong. Đo trên bản dev đang tải nặng: yêu cầu kiểm mã đặt lại mật khẩu mất 10–27 giây, nên ngưỡng 5 giây là quá ngắn.
   const READY = `(() => { const a = document.getAnimations().filter((x) => x.playState === "running" && x.effect?.getTiming?.().iterations !== Infinity).length;
-    return [document.readyState, document.fonts.status, a, document.querySelectorAll("*").length, document.documentElement.scrollHeight, document.body?.innerText.length ?? 0]; })()`;
+    const wait = document.querySelectorAll('[role="status"][aria-label="Đang tải"], [role="status"][aria-label="Loading"]').length;
+    return [document.readyState, document.fonts.status, a + wait, document.querySelectorAll("*").length, document.documentElement.scrollHeight, document.body?.innerText.length ?? 0]; })()`;
   const busyNet = () => [...inflight.values()].some((t) => Date.now() - t < 15_000);
   const ready = async (quiet = 400, max = 15_000) => {
     const end = Date.now() + max;
