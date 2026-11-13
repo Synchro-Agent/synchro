@@ -3,12 +3,13 @@ import { ALL } from "../../catalog";
 import { catalog, defaultModel, mainModels } from "../../providers";
 import { mergedProviders } from "../../ai/subs";
 import { isNewModel, replacementOf, replacements, withReplacements } from "../../modelreg";
+import { timed } from "../../servertiming";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 // Danh sách model cho bộ chọn model: chỉ những model quản trị viên cho hiện ở màn hình chính, kèm quyền của tài khoản.
-export async function GET(req: Request) {
+export const GET = timed(async (req: Request) => {
   const c = current(req);
   if (!c) return Response.json({ error: "Bạn cần đăng nhập." }, { status: 401 });
   const cat = await catalog();
@@ -32,4 +33,4 @@ export async function GET(req: Request) {
   const shown = new Set(merged.flatMap((p) => p.models.map((m) => m.key)));
   const replaced = Object.fromEntries(Object.entries(replacements()).filter(([, r]) => shown.has(r.to)));
   return Response.json({ providers: merged, replaced, sharedApi: providers.length > 0, default: d && cat.some((p) => p.models.some((m) => m.key === d)) ? d : null, allowed: perms.models.includes(ALL) ? perms.models : [...withReplacements(perms.models), ...subKeys], effort: perms.effort ?? {} });
-}
+});

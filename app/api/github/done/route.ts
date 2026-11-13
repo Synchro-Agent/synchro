@@ -1,8 +1,9 @@
+import { timed } from "../../../servertiming";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 // Trang đích của cửa sổ kết nối GitHub: báo kết quả cho tab Synchro (qua localStorage) rồi tự đóng.
-export async function GET(req: Request) {
+export const GET = timed(async (req: Request) => {
   const error = new URL(req.url).searchParams.get("error") ?? "";
   const data = JSON.stringify({ at: Date.now(), error }).replace(/</g, "\\u003c");
   const html = `<!doctype html><html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>GitHub</title>
@@ -14,4 +15,4 @@ document.getElementById("m").textContent=d.error?("Không kết nối được G
 if(!d.error)setTimeout(()=>{window.close();setTimeout(()=>{location.href="/"},300)},600);
 </script><noscript>Đã xử lý. <a href="/">Quay lại Synchro</a></noscript></body></html>`;
   return new Response(html, { headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" } });
-}
+});

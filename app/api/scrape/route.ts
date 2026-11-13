@@ -1,6 +1,7 @@
 import { featureGate } from "../../authstore";
+import { timed } from "../../servertiming";
 // Cào tài liệu từ URL thành markdown: Firecrawl nếu có FIRECRAWL_API_KEY, không thì Jina Reader (miễn phí).
-export async function POST(req: Request) {
+export const POST = timed(async (req: Request) => {
   const denied = featureGate(req, "web"); if (denied) return denied;
   const { url } = await req.json();
   if (typeof url !== "string" || !/^https?:\/\//.test(url)) return Response.json({ error: "URL không hợp lệ" }, { status: 400 });
@@ -21,4 +22,4 @@ export async function POST(req: Request) {
   } catch (e) {
     return Response.json({ error: String(e) }, { status: 502 });
   }
-}
+});

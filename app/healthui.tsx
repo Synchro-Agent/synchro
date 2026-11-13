@@ -7,6 +7,7 @@ import { useApp } from "./store";
 import { getLang, locale } from "./i18n";
 import * as I from "./icons";
 import type { MemSample } from "./memstat";
+import type { LoopSample } from "./loopdelay";
 import type { BackupStatus, Problem, WatchdogState } from "./ops";
 import { ContinuousBackup } from "./backupui";
 import { LatencyTable, type Latency } from "./latencyui";
@@ -26,6 +27,8 @@ type Health = {
   backup: BackupStatus | null; watchdog: WatchdogState | null; wdEvents: { at: number; event: string; detail?: string }[];
   latency?: Latency;
   mem?: { now: MemSample; history: MemSample[]; caches: Record<string, Record<string, number>>; heapLimit: number };
+  // Độ trễ vòng lặp sự kiện (app/loopdelay.ts): mẫu 60 giây gần nhất; null khi bộ đo chưa bật.
+  loop?: (LoopSample & { live: boolean }) | null;
 };
 // Bộ đệm lớn trong bộ nhớ máy chủ (app/memstat.ts): tên dễ hiểu cho quản trị viên.
 const CACHE: Record<string, string> = { skillIndex: "Skill index", brainRecall: "Brain recall index", codeRuns: "Synchro Code runs kept", pluginZips: "Downloaded plugin packages", artImages: "Artifact images", d2Svgs: "D2 diagrams", approvals: "Replies waiting for approval", vectors: "Semantic search vectors" };
@@ -89,6 +92,8 @@ export function HealthPanel({ Toggle }: { Toggle: (p: { on: boolean; set: (v: bo
     ["Server errors (24h)", h.errors24.toLocaleString(locale()), h.errors24 >= 200], ["Replies failed (24h)", `${h.runsFailed24.toLocaleString(locale())} / ${h.runs24.toLocaleString(locale())}`, h.runsFailed24 * 5 > h.runs24 && h.runsFailed24 > 2],
     ["Emails failed (24h)", h.mail.failed24.toLocaleString(locale()), h.mail.failed24 > 0], ["Web restarts (24h)", Math.max(0, h.boots24).toLocaleString(locale()), h.boots24 > 3],
     ["Browser errors (24h)", h.client24.toLocaleString(locale())],
+    // Độ trễ vòng lặp sự kiện, p99 của phút vừa qua: trên 100 ms là có việc đồng bộ chặn mọi người dùng cùng lúc.
+    ...(h.loop ? [["Event-loop delay (p99)", `${h.loop.p99.toLocaleString(locale(), { maximumFractionDigits: 1 })} ms`, h.loop.p99 > 100] as [string, string, boolean]] : []),
     ...(h.mem ? [["Server memory (heap)", `${gb(h.mem.now.heapUsed)} / ${gb(h.mem.heapLimit)}`, h.mem.now.heapUsed > h.mem.heapLimit * 0.75] as [string, string, boolean]] : []),
     // Lượt model cùng lúc so với trần cả máy; có lượt phải chờ nghĩa là trần đang chạm thật.
     ["Replies running now", `${h.turns.running} / ${h.turns.limit}`, h.turns.running >= h.turns.limit], ["Replies waiting now", h.turns.waiting.toLocaleString(locale()), h.turns.waiting > 0], ["Refused, queue full (since restart)", h.turns.refused.toLocaleString(locale()), h.turns.refused > 0],

@@ -1,11 +1,12 @@
 import { processFile } from "../../fileproc";
 import { FileError } from "../../fileproc/types";
 import { AuthError, current, featureGate, limit } from "../../authstore";
+import { timed } from "../../servertiming";
 
 export const runtime = "nodejs";
 
 // POST multipart (field "file") -> { id, name, kind, tokens, large, preview, images }
-export async function POST(req: Request) {
+export const POST = timed(async (req: Request) => {
   const denied = featureGate(req, "files"); if (denied) return denied;
   const form = await req.formData().catch(() => null);
   const f = form?.get("file");
@@ -22,4 +23,4 @@ export async function POST(req: Request) {
     const user = e instanceof FileError;
     return Response.json({ error: user ? e.message : `Không xử lý được "${f.name}": ${(e as Error).message.slice(0, 200)}` }, { status: user ? 422 : 500 });
   }
-}
+});

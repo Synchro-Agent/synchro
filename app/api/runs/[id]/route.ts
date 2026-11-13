@@ -1,5 +1,6 @@
 import { current, sameOrigin } from "../../../authstore";
 import { cancelRun, getRun, liveText, pushInbox, watch, type Delta, type PublicRun, type RunEvent } from "../../../runs";
+import { timed } from "../../../servertiming";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -7,7 +8,7 @@ export const dynamic = "force-dynamic";
 // Theo dõi một lượt chạy. Mặc định là SSE: gửi lại mọi bước sau Last-Event-ID (hoặc ?after=), rồi bước mới
 // cho tới khi xong ("event: done" kèm kết quả). ?json=1 trả trạng thái hiện tại một lần (dùng khi không mở được SSE).
 // Chữ model đang viết đến qua "event: delta"; mở (lại) kết nối giữa chừng thì nhận trước "event: snapshot" với phần đã viết.
-export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }) {
+export const GET = timed(async (req: Request, ctx: { params: Promise<{ id: string }> }) => {
   const c = current(req);
   if (!c) return Response.json({ error: "Bạn cần đăng nhập." }, { status: 401 });
   const { id } = await ctx.params;
@@ -48,10 +49,10 @@ export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }
     cancel() { stop(); },
   });
   return new Response(stream, { headers: { "content-type": "text/event-stream; charset=utf-8", "cache-control": "no-cache, no-transform", "x-accel-buffering": "no", connection: "keep-alive" } });
-}
+});
 
 // Dừng lượt đang chạy (nút Dừng): hủy lời gọi model, connector, chạy code đang dở; lượt kết thúc với phần đã viết được.
-export async function DELETE(req: Request, ctx: { params: Promise<{ id: string }> }) {
+export const DELETE = timed(async (req: Request, ctx: { params: Promise<{ id: string }> }) => {
   const c = current(req);
   if (!c) return Response.json({ error: "Bạn cần đăng nhập." }, { status: 401 });
   try { sameOrigin(req); } catch { return Response.json({ error: "Yêu cầu không hợp lệ." }, { status: 403 }); }
@@ -59,11 +60,11 @@ export async function DELETE(req: Request, ctx: { params: Promise<{ id: string }
   const run = getRun(id, c.user.id);
   if (!run) return Response.json({ error: "Không tìm thấy lượt trả lời này." }, { status: 404 });
   return Response.json({ ok: true, cancelled: run.status === "running" && cancelRun(id, c.user.id) });
-}
+});
 
 // Nhắn thêm khi lượt đang chạy: không ngắt việc đang làm; model nhận tin ở bước kế tiếp. Lượt đã xong (hoặc đang ở bước
 // trả lời cuối) thì trình duyệt gửi tin thành lượt mới ngay sau đó — trả queued: false để trình duyệt biết.
-export async function POST(req: Request, ctx: { params: Promise<{ id: string }> }) {
+export const POST = timed(async (req: Request, ctx: { params: Promise<{ id: string }> }) => {
   const c = current(req);
   if (!c) return Response.json({ error: "Bạn cần đăng nhập." }, { status: 401 });
   try { sameOrigin(req); } catch { return Response.json({ error: "Yêu cầu không hợp lệ." }, { status: 403 }); }
@@ -74,4 +75,4 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   const text = typeof b.text === "string" ? b.text.trim() : "";
   if (!text) return Response.json({ error: "Tin nhắn trống." }, { status: 400 });
   return Response.json({ queued: run.status === "running" && pushInbox(id, c.user.id, text) });
-}
+});

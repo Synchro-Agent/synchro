@@ -6,6 +6,7 @@ import {
   scribeToken, sideRead, sideWrite, spender, spent, updateItem, voiceOut, backfillVoiceOwners, defaultVoice, forgetVoiceOwner, isPrivateVoice, MAX_OWN_VOICES, ownedVoices, setVoiceOwner, voiceGen, voiceOpenTo, voiceOwner, VOICE_ORPHAN, VOICE_PURGE, VOICE_SHARED, type Feat, type Plan,
 } from "../../../speechapi";
 import { quickCall } from "../../../ai/anymodel";
+import { timed } from "../../../servertiming";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -795,6 +796,6 @@ async function run(req: Request, ctx: Ctx, method: "GET" | "POST" | "DELETE") {
     return Response.json({ error: "Lỗi máy chủ khi xử lý âm thanh. Thử lại sau." }, { status: 500 });
   }
 }
-export const GET = (req: Request, ctx: Ctx) => run(req, ctx, "GET");
-export const POST = (req: Request, ctx: Ctx) => run(req, ctx, "POST");
-export const DELETE = (req: Request, ctx: Ctx) => run(req, ctx, "DELETE");
+export const GET = timed((req: Request, ctx: Ctx) => run(req, ctx, "GET"));
+export const POST = timed((req: Request, ctx: Ctx) => run(req, ctx, "POST"));
+export const DELETE = timed((req: Request, ctx: Ctx) => run(req, ctx, "DELETE"));

@@ -4,6 +4,8 @@ export async function register() {
   if (process.env.NEXT_RUNTIME !== "nodejs") return;
   // Lỗi máy chủ hiện ở Cài đặt → Sức khỏe hệ thống; bật sớm nhất để không sót lỗi lúc khởi động.
   (await import("./app/ops")).captureConsole();
+  // Độ trễ vòng lặp sự kiện: dòng [timing] loop mỗi 60 giây, số mới nhất ở Cài đặt → Sức khỏe hệ thống (app/loopdelay.ts).
+  (await import("./app/loopdelay")).startLoopMonitor(Number(process.env.SYNCHRO_LOOP_LOG_MS) || 60_000);
   // Sao lưu liên tục lên Cloudflare R2 (Cài đặt → Sức khỏe hệ thống): chỉ chạy khi quản trị viên đã bật và máy có litestream.
   setTimeout(() => { import("./app/litestream").then((m) => m.startOnBoot()).catch((e) => console.error("[backup]", e)); }, 3000);
   setTimeout(async () => {

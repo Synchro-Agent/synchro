@@ -1,11 +1,12 @@
 import { appUrl, AuthError, can, current } from "../../../authstore";
 import { start } from "../../../oauth";
+import { timed } from "../../../servertiming";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 // Mở trang cấp quyền GitHub (quyền repo) để kết nối repo vào Synchro Code. Kết quả về /api/github/done.
-export async function GET(req: Request) {
+export const GET = timed(async (req: Request) => {
   try {
     const c = current(req);
     if (!c) throw new AuthError("Bạn cần đăng nhập trước khi kết nối GitHub.", 401);
@@ -16,4 +17,4 @@ export async function GET(req: Request) {
     const msg = e instanceof AuthError ? e.message : "Lỗi máy chủ. Vui lòng thử lại.";
     return new Response(null, { status: 302, headers: { Location: `${appUrl(req)}/api/github/done?error=${encodeURIComponent(msg)}` } });
   }
-}
+});

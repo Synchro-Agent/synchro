@@ -9,6 +9,7 @@ import { acquire, withSlot } from "../../turngate";
 import { withUsage } from "../../usage";
 import { MAX_FILES_PER_MESSAGE } from "../../fileproc/types";
 import type { Upload } from "../../uploads";
+import { timed } from "../../servertiming";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -17,7 +18,7 @@ export const maxDuration = 900;
 // Agent của Synchro Code: chạy vòng lặp model + công cụ trong workspace, trả sự kiện dạng NDJSON (mỗi dòng một JSON).
 // Gói subscription và khóa API dùng được như nhau: gói chạy CLI chính chủ với cùng bộ công cụ qua cầu nối MCP (runPlanAgent).
 // files: tệp gửi kèm tin nhắn mới nhất. perm: chế độ quyền của phiên ({ mode: "ask" | "edits" | "auto", allow: khóa "luôn cho phép" }); lượt dừng chờ người dùng duyệt qua /api/approve.
-export async function POST(req: Request) {
+export const POST = timed(async (req: Request) => {
   const c = current(req);
   if (!c) return Response.json({ error: "Bạn cần đăng nhập." }, { status: 401 });
   try { sameOrigin(req); } catch { return Response.json({ error: "Yêu cầu không hợp lệ." }, { status: 403 }); }
@@ -80,10 +81,10 @@ export async function POST(req: Request) {
       } catch (e) { console.warn("[agent] đánh giá phiên", (e as Error).message); }
     }));
   return runStream(run, 0, req.signal);
-}
+});
 
 // Nối lại lượt của phiên (rời trang, tải lại, mất mạng giữa chừng). ?after=: chỉ sự kiện sau mốc này. ?json=1: chỉ hỏi trạng thái. 204: không có lượt nào.
-export async function GET(req: Request) {
+export const GET = timed(async (req: Request) => {
   const c = current(req);
   if (!c) return Response.json({ error: "Bạn cần đăng nhập." }, { status: 401 });
   const u = new URL(req.url);
@@ -91,15 +92,15 @@ export async function GET(req: Request) {
   if (!run) return new Response(null, { status: 204 });
   if (u.searchParams.get("json")) return Response.json({ running: !run.ended, node: run.node?.id ?? null, ended: run.ended || null });
   return runStream(run, Number(u.searchParams.get("after")) || 0, req.signal);
-}
+});
 
 // Nút Dừng: cách duy nhất dừng lượt đang chạy.
-export async function DELETE(req: Request) {
+export const DELETE = timed(async (req: Request) => {
   const c = current(req);
   if (!c) return Response.json({ error: "Bạn cần đăng nhập." }, { status: 401 });
   try { sameOrigin(req); } catch { return Response.json({ error: "Yêu cầu không hợp lệ." }, { status: 403 }); }
   return Response.json({ ok: true, stopped: stopAgentRun(c.user.id, new URL(req.url).searchParams.get("sid") ?? "") });
-}
+});
 
 // Lượt do trình duyệt gửi kèm để máy chủ tự lưu khi không còn ai xem. Dữ liệu của chính người dùng, như khi đồng bộ phiên; quá lớn thì thôi, không phải lỗi.
 function cleanNode(v: unknown): TurnNode | null {

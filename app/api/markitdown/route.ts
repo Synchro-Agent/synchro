@@ -8,6 +8,7 @@ import { AuthError, current, featureGate, limit } from "../../authstore";
 import { diskLow } from "../../diskfloor";
 import { lowPriority, parserEnv, withConvertSlot } from "../../fileproc/sandbox";
 import { FileError } from "../../fileproc/types";
+import { timed } from "../../servertiming";
 
 export const runtime = "nodejs";
 const run = promisify(execFile);
@@ -19,7 +20,7 @@ const convert = (file: string, args: string[], timeout: number) => {
   return p;
 };
 
-export async function POST(req: Request) {
+export const POST = timed(async (req: Request) => {
   const denied = featureGate(req, "files"); if (denied) return denied;
   const uid = current(req)!.user.id;
   const bin = process.env.MARKITDOWN_BIN || path.join(process.cwd(), ".mkvenv", "bin", "markitdown");
@@ -62,4 +63,4 @@ export async function POST(req: Request) {
     const last = msg.trim().split("\n").filter(Boolean).pop() ?? "Lỗi không xác định";
     return Response.json({ error: "Không chuyển được: " + last.slice(0, 300) }, { status: 422 });
   }
-}
+});

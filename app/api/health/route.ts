@@ -5,6 +5,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { DATA_DIR, setSetting } from "../../authstore";
 import { agentAlive, wsConfigured } from "../../workspace";
+import { timed } from "../../servertiming";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -22,7 +23,7 @@ async function check() {
   return { ok: db && disk && agent !== false, build, db, disk, agent };
 }
 
-export async function GET() {
+export const GET = timed(async () => {
   if (!last || Date.now() - last.at > 5000) last = { at: Date.now(), body: await check() };
   return Response.json(last.body, { status: last.body.ok ? 200 : 503, headers: { "Cache-Control": "no-store" } });
-}
+});
