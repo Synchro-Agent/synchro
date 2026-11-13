@@ -15,7 +15,7 @@ const DIR = path.join(process.cwd(), ".cache", "files");
 /** raw: tệp không đọc được nội dung (nhị phân lạ, hỏng) nhưng vẫn giữ tệp gốc cho Synchro Code; err là lý do để báo khi khung chat đòi đọc nội dung. */
 export type Stored = { id: string; name: string; kind: string; tokens: number; large: boolean; blocks: ContentBlock[]; raw?: boolean; err?: string; note?: string; v?: number };
 // Bản cách đọc: kết quả trích được lưu mãi theo nội dung tệp, nên sửa bộ đọc bảng tính thì tệp đã tải lên vẫn mang bản cũ sai (mất cột, ngày thành số). Tăng số này là các tệp đó được đọc lại khi dùng tới.
-const EXTRACT_V = 2;
+const EXTRACT_V = 3; // 3: CSV giải mã bằng decodeText dùng chung (UTF-16 không BOM, Windows-1258 + NFC), không còn bản cũ đầy byte 0 / "Cittā".
 const stale = (r: Stored) => !r.raw && (r.kind === "xlsx" || r.kind === "csv" || r.kind === "pptx") && r.v !== EXTRACT_V;
 const tokensOf = (blocks: ContentBlock[]) => estTokens(blocks.map((b) => (b.type === "text" ? b.text : b.type === "document" ? b.fallbackText ?? "" : "")).join(""));
 /** Đọc lại tệp đã lưu bằng bộ đọc hiện tại; đọc lại lỗi thì giữ bản cũ, không làm mất tệp của người dùng. */
