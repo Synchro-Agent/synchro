@@ -321,7 +321,7 @@ export const AuthComponent = ({ logo = <DefaultLogo />, brandName = "EaseMize", 
       // Tài khoản đã bật xác minh hai bước: hỏi mã rồi mới đăng nhập.
       if (mfa) { busy.current = false; setAuthStep("mfa"); setMfaCode(""); setPassword(""); setStage("form"); return; }
       // Đăng ký luôn trả về pending (blueprint F2.4), dù email mới hay đã có tài khoản: không nói lý do (ai cũng gõ được email của người khác),
-      // thư xác minh hoặc thư "bạn đã có tài khoản" đã gửi tới chính hộp thư đó. Người dùng mới đăng nhập bằng mật khẩu vừa đặt từ bước này.
+      // thư xác minh hoặc thư "bạn đã có tài khoản" đã gửi tới chính hộp thư đó. Người dùng mới bấm đường dẫn trong thư rồi đăng nhập từ bước này.
       if (pending) { busy.current = false; setAuthStep("pending"); setPassword(""); setConfirmPassword(""); setStage("form"); return; }
       // Chưa có hồ sơ (vd. tài khoản cũ): bỏ qua lời chào, chuyển thẳng sang bước điền hồ sơ.
       if (u.needsProfile) { busy.current = false; onDone?.(u, k); return; }
@@ -463,7 +463,7 @@ export const AuthComponent = ({ logo = <DefaultLogo />, brandName = "EaseMize", 
     // Không lộ email đã có tài khoản hay chưa: cùng một bước cho cả hai, nói rõ cả hai đường đi.
     password: [isLogin ? (signupOpen ? "Sign in or create an account" : "Enter your password") : "Create your password", isLogin ? (signupOpen ? "Have an account? Enter your password. New here? Create one below." : "Enter your password to sign in.") : "Your password must be at least 8 characters long."],
     mfa: ["Two-step verification", "Enter the 6-digit code from your authenticator app, or a recovery code."],
-    pending: ["Check your email", "We sent the next step to this address. Open the link in the email, or sign in with your password."],
+    pending: ["Check your email", "We sent the next step to this address. Open the link in the email, then sign in with your password."],
     confirmPassword: ["One last step", "Confirm your password to continue"],
     profile: ["Tell us about you", "Synchro uses this to make your experience feel personal."],
   };

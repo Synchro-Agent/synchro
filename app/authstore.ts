@@ -439,6 +439,8 @@ export function lookup(req: Request, email: string) {
   return { exists: true, hasPassword: true, methods: [] as string[], reserved: false };
 }
 
+/** Một câu cho mọi lần đăng nhập không được: sai mật khẩu, không có tài khoản, tài khoản mới chưa xác minh email. */
+const BAD_LOGIN = "Email hoặc mật khẩu không đúng. Nếu bạn vừa đăng ký, hãy mở đường dẫn trong thư xác minh trước. Nếu bạn đăng ký bằng Google, GitHub hoặc Apple, hãy dùng nút đó.";
 export async function login(req: Request, email0: unknown, pw: unknown) {
   const ip = clientIp(req);
   const email = normEmail(email0);
@@ -448,7 +450,13 @@ export async function login(req: Request, email0: unknown, pw: unknown) {
   limit("login-em:" + email, 100, 15 * MIN);
   const u = findByEmail(email);
   const ok = typeof pw === "string" && pw.length <= PW_MAX && (await verifyPassword(pw, u?.password_hash ?? null));
-  if (!u || !ok) { audit("login_failed", { target: u, targetEmail: email, ip }); throw new AuthError("Email hoặc mật khẩu không đúng. Nếu bạn đăng ký bằng Google, GitHub hoặc Apple, hãy dùng nút đó.", 401); }
+  // Blueprint F2.4: tài khoản vừa đăng ký bằng email, chưa xác minh, chưa từng đăng nhập thì mật khẩu đúng cũng trả lời y như sai mật khẩu.
+  // Nếu không, đăng ký email X với mật khẩu P rồi đăng nhập bằng P sẽ cho biết X đã có tài khoản hay chưa (200 với email mới, 401 với email
+  // đã có). Lần đăng nhập đầu cần bấm đường dẫn trong thư trước (hoặc đặt lại mật khẩu: cũng xác minh email). Xác minh xong vẫn đăng nhập bằng
+  // mật khẩu, đường dẫn không tự đăng nhập: ai đó lập trước tài khoản bằng email của người khác thì chủ email bấm xác minh cũng không vào
+  // nhầm tài khoản mà kẻ lập biết mật khẩu. Quản trị viên tắt yêu cầu xác minh (thư không gửi được) thì cho đăng nhập ngay như trước.
+  const unproven = !!u && ok && u.last_login_at === null && verifyLocked(u);
+  if (!u || !ok || unproven) { audit("login_failed", { target: u, targetEmail: email, ip, detail: unproven ? "email_unverified" : undefined }); throw new AuthError(BAD_LOGIN, 401); }
   if (u.status !== "active") { audit("login_blocked", { target: u, ip }); throw new AuthError("Tài khoản này đã bị khóa. Hãy liên hệ quản trị viên.", 403); }
   const s = signIn(u, req, "password");
   // Chưa xong bước hai thì chưa phải đăng nhập: /api/auth/mfa ghi nhật ký khi xong.
@@ -456,10 +464,11 @@ export async function login(req: Request, email0: unknown, pw: unknown) {
   return { user: u, ...s };
 }
 
-/** Blueprint F2.4: email mới và email đã có tài khoản (hoặc được dành riêng) trả về giống hệt nhau, { pending: true } không kèm phiên,
- *  để không ai dò được email nào đã đăng ký. Email mới: tạo tài khoản chưa xác minh và gửi thư xác minh; người dùng đăng nhập bằng mật
- *  khẩu vừa đặt (xác minh mềm, không chặn đăng nhập). Email đã có: chủ email nhận thư "bạn đã có tài khoản". Cả hai đường đều băm mật khẩu
- *  và gửi một thư nên tốn thời gian gần bằng nhau. */
+/** Blueprint F2.4: email mới và email đã có tài khoản (hoặc được dành riêng) trả về giống hệt nhau, { pending: true } không kèm phiên.
+ *  Email mới: tạo tài khoản chưa xác minh và gửi thư xác minh; lần đăng nhập đầu cần bấm đường dẫn trong thư trước (login() trả lời như sai
+ *  mật khẩu cho tới lúc đó), nên đăng ký rồi đăng nhập thử cũng không dò được email nào đã đăng ký. Email đã có: chủ email nhận thư "bạn đã
+ *  có tài khoản". Cả hai đường đều băm mật khẩu và gửi một thư nên tốn thời gian gần bằng nhau. Khi quản trị viên tắt yêu cầu xác minh
+ *  (verifyGateOn), tài khoản mới đăng nhập ngay được và cách dò "đăng ký rồi đăng nhập" dùng lại được: đó là cái giá của việc tắt. */
 export async function signup(req: Request, email0: unknown, pw0: unknown, profile: ProfileIn = {}, lang?: unknown): Promise<{ pending: true }> {
   const ip = clientIp(req);
   limit("signup:" + ip, 10, 60 * MIN);
