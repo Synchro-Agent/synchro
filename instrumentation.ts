@@ -13,16 +13,17 @@ export async function register() {
   const { installShutdown, onDrain } = await import("./app/drain");
   const { releasePrimary, startRole } = await import("./app/role");
   // Lượt chat (runs.ts) và lượt Code (agentruns.ts) đang chạy: bản đồ lượt sống dùng chung qua globalThis giữa các gói route.
-  let busy = () => 0, describe = () => "0 lượt";
+  let busy = () => 0, describe = () => "0 lượt", partials = () => 0;
   void Promise.all([import("./app/runs"), import("./app/agentruns")]).then(([r, a]) => {
     busy = () => r.liveRunCount() + a.activeAgentCount();
+    partials = r.persistPartials;
     describe = () => `${r.liveRunCount()} lượt chat, ${a.activeAgentCount()} lượt Code`;
   }).catch((e) => console.error("[deploy]", e));
   installShutdown({
     busy: () => busy(),
     describe: () => describe(),
     timeoutMs: Number(process.env.SYNCHRO_DRAIN_MS) || undefined,
-    stop: async () => { await (await import("./app/litestream")).stopLitestream(); releasePrimary(); },
+    stop: async () => { partials(); await (await import("./app/litestream")).stopLitestream(); releasePrimary(); },
   });
   // Ở mọi tiến trình (kể cả secondary): bảng chat sẵn sàng cho yêu cầu đầu tiên.
   setTimeout(async () => {

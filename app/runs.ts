@@ -17,7 +17,7 @@ import { isStopping, markStopping } from "./drain";
 // ask / asked: lượt đang chờ người dùng duyệt (JSON câu hỏi), và câu trả lời (JSON { id, ok, always }).
 export type RunEvent = { seq: number; at: number; kind: "step" | "tool" | "note" | "say" | "res" | "plan" | "steer" | "ui" | "ask" | "asked" | "conn" | "link" | "plans" | "rate" | "tconn"; text: string };
 export type RunStatus = "running" | "done" | "error";
-type Row = { id: string; user_id: string; conv: string | null; kind: string; status: RunStatus; req: string | null; result: string | null; http: number | null; events: string; created_at: number; updated_at: number; attempts: number; effects?: string | null; cancel_req?: number | null; steer_req?: string | null };
+type Row = { id: string; user_id: string; conv: string | null; kind: string; status: RunStatus; req: string | null; result: string | null; http: number | null; events: string; created_at: number; updated_at: number; attempts: number; effects?: string | null; cancel_req?: number | null; steer_req?: string | null; partial?: string | null };
 export type PublicRun = { id: string; status: RunStatus; conv: string | null; kind: string; events: RunEvent[]; result: unknown; http: number | null; createdAt: number; updatedAt: number };
 
 // Một lượt chạy giữ tối đa 3 lần chạy lại sau sự cố máy chủ; kết quả giữ 7 ngày rồi dọn.
@@ -49,6 +49,8 @@ function init() {
     // Tiến trình đang chạy lượt đọc hai cột này mỗi 1,5 giây (applyRemote).
     if (!cols.includes("cancel_req")) d.exec("ALTER TABLE runs ADD COLUMN cancel_req INTEGER");
     if (!cols.includes("steer_req")) d.exec("ALTER TABLE runs ADD COLUMN steer_req TEXT");
+    // Chữ đã viết của lượt còn dở khi tiến trình tắt (persistPartials): lượt đã bấm Dừng được đóng kèm phần chữ này thay vì trống.
+    if (!cols.includes("partial")) d.exec("ALTER TABLE runs ADD COLUMN partial TEXT");
     // Các bước của lượt ghi nối thêm (append-only): mỗi bước một dòng, không đọc-sửa-ghi lại cả danh sách mỗi lần (lượt 100 bước
     // không còn chậm dần theo bình phương). Khóa chính (run_id, seq) vừa là số thứ tự bước vừa cho phép lấy MAX(seq) rất nhanh.
     d.exec(`CREATE TABLE IF NOT EXISTS run_events (
@@ -310,6 +312,16 @@ if (!gs.__synchroStopHook) {
   gs.__synchroStopHook = true;
   if (!process.env.NEXT_MANUAL_SIG_HANDLE) for (const sig of ["SIGTERM", "SIGINT"] as const) process.once(sig, markStopping);
 }
+/** Tắt êm hết giờ chờ (drain.ts): lưu chữ đã viết của các lượt còn dở. Lượt người dùng bấm Dừng mà tiến trình này chưa kịp thấy được đóng
+ *  kèm phần chữ này (resumeInterrupted), không hiện trống sau khi tải lại trang. */
+export function persistPartials(): number {
+  let n = 0;
+  try {
+    const st = init().prepare("UPDATE runs SET partial = ? WHERE id = ? AND status = 'running'");
+    for (const [id, l] of live) if (l.text) n += st.run(l.text.slice(0, 200_000), id).changes;
+  } catch (e) { console.error("[runs]", e); }
+  return n;
+}
 /** Số lượt đang chạy trong tiến trình này (tắt êm chờ số này về 0). */
 export const liveRunCount = () => live.size;
 
@@ -349,13 +361,18 @@ function finish(id: string, http: number, json: unknown) {
   if (isStopping() && http >= 500) return;
   // Tin nhắn thêm tới khi model đã ở bước trả lời cuối: trả về để trình duyệt gửi ngay thành lượt tiếp theo (không mất tin), kể cả tin
   // gửi qua tiến trình khác chưa kịp lấy.
-  const remote = (init().prepare("SELECT steer_req FROM runs WHERE id = ?").get(id) as { steer_req: string | null } | undefined)?.steer_req;
-  const left = [...(live.get(id)?.inbox ?? []), ...(remote ? (JSON.parse(remote) as unknown[]).filter((t): t is string => typeof t === "string") : [])];
-  if (left.length && json && typeof json === "object" && !Array.isArray(json)) json = { ...(json as Record<string, unknown>), steer: left };
+  // Đọc hàng chờ nhắn thêm và đóng lượt trong cùng một giao dịch IMMEDIATE: tiến trình khác không chen được tin vào giữa (tin đó sẽ mất),
+  // vì pushInbox chỉ ghi khi lượt còn "running".
+  const d = init(), inbox = live.get(id)?.inbox ?? [];
   live.delete(id);
   const status: RunStatus = http >= 200 && http < 300 ? "done" : "error";
-  // Lượt xong thì bỏ nội dung yêu cầu (có thể chứa ảnh, tệp) cho nhẹ cơ sở dữ liệu.
-  init().prepare("UPDATE runs SET status = ?, http = ?, result = ?, req = NULL, steer_req = NULL, updated_at = ? WHERE id = ?").run(status, http, JSON.stringify(json), Date.now(), id);
+  d.transaction(() => {
+    const remote = (d.prepare("SELECT steer_req FROM runs WHERE id = ?").get(id) as { steer_req: string | null } | undefined)?.steer_req;
+    const left = [...inbox, ...(remote ? (JSON.parse(remote) as unknown[]).filter((t): t is string => typeof t === "string") : [])];
+    if (left.length && json && typeof json === "object" && !Array.isArray(json)) json = { ...(json as Record<string, unknown>), steer: left };
+    // Lượt xong thì bỏ nội dung yêu cầu (có thể chứa ảnh, tệp) cho nhẹ cơ sở dữ liệu.
+    d.prepare("UPDATE runs SET status = ?, http = ?, result = ?, req = NULL, steer_req = NULL, partial = NULL, updated_at = ? WHERE id = ?").run(status, http, JSON.stringify(json), Date.now(), id);
+  }).immediate();
   const r = getRun(id);
   if (r) notify(id, { done: r });
   const raw = init().prepare("SELECT user_id, conv, ephemeral FROM runs WHERE id = ?").get(id) as { user_id: string; conv: string | null; ephemeral: number | null } | undefined;
@@ -436,7 +453,7 @@ export function resumeInterrupted() {
   const rows = (d.prepare("SELECT * FROM runs WHERE status = 'running'").all() as Row[]).filter((r) => !live.has(r.id));
   for (const r of rows) {
     // Người dùng đã bấm Dừng trong lúc tiến trình cũ chạy nốt lượt này: kết thúc là đã dừng, không chạy lại.
-    if (r.cancel_req) { finish(r.id, 200, { text: "", cancelled: true }); continue; }
+    if (r.cancel_req) { finish(r.id, 200, { text: r.partial ?? "", cancelled: true }); continue; }
     const user = getUser(r.user_id);
     if (!r.req || !user || r.attempts >= MAX_ATTEMPTS) { finish(r.id, 503, { error: "Lượt trả lời bị gián đoạn khi máy chủ khởi động lại. Hãy gửi lại tin nhắn." }); continue; }
     // Chạy lại từ đầu có thể gửi thư, tạo hóa đơn lần hai: dừng ở đây, nói rõ đã làm gì để người dùng kiểm tra.

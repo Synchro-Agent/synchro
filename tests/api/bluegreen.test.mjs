@@ -166,6 +166,7 @@ console.log("Dừng / nhắn thêm qua cơ sở dữ liệu (tiến trình cũ �
     return { http: 200, json: { text: "", cancelled: true } };
   });
   RN.registerExec("bgrerun", async () => { reran++; return { http: 200, json: { text: "re-ran" } }; });
+  RN.registerExec("bgpartial", async () => { RN.delta("phần đã viết"); await new Promise(() => {}); return { http: 200, json: {} }; });
   const db = AS.db();
   const status = (id) => db.prepare("SELECT status, result FROM runs WHERE id = ?").get(id);
   // Lượt chạy ở tiến trình này; lệnh Dừng do tiến trình khác ghi vào cơ sở dữ liệu.
@@ -186,6 +187,17 @@ console.log("Dừng / nhắn thêm qua cơ sở dữ liệu (tiến trình cũ �
   ok(RN.cancelRun(c, u.id) === true && RN.pushInbox(c, u.id, "x") === false, "NODE-1: Dừng cho lượt ở tiến trình khác được nhận (không còn trả false); sau khi đã dừng thì không nhận nhắn thêm");
   RN.resumeInterrupted(); await sleep(50);
   ok(reran === 0 && JSON.parse(status(c).result).cancelled === true, "NODE-1: lượt đã bấm Dừng không bị chạy lại khi bản mới nhận vai primary", { reran, st: status(c) });
+  // Bản cũ hết giờ chờ: lưu chữ đã viết; lượt được bấm Dừng lúc đó được đóng kèm phần chữ này.
+  const p = RN.startRun(u, "bgpartial", {}, "c-p");
+  await sleep(50);
+  ok(RN.persistPartials() >= 1 && db.prepare("SELECT partial FROM runs WHERE id = ?").get(p).partial === "phần đã viết", "NODE-1: tắt êm hết giờ: lưu chữ đã viết của lượt còn dở");
+  const p2 = "run_otherproc2";
+  db.prepare("INSERT INTO runs (id,user_id,conv,kind,status,req,events,created_at,updated_at,cancel_req,partial) VALUES (?,?,?,?, 'running', ?, '[]', ?, ?, 1, ?)").run(p2, u.id, "c-p2", "bgrerun", "{}", Date.now(), Date.now(), "chữ dở");
+  RN.resumeInterrupted(); await sleep(50);
+  ok(JSON.parse(status(p2).result).text === "chữ dở" && JSON.parse(status(p2).result).cancelled === true && reran === 0, "NODE-1: lượt đã bấm Dừng mà bản cũ chưa kịp thấy: đóng kèm phần chữ đã viết, không trống", status(p2));
+  const fin = fs.readFileSync(path.join(process.cwd(), "app/runs.ts"), "utf8");
+  const fstart = fin.indexOf("function finish(");
+  ok(/d\.transaction\(\(\) => \{\n\s+const remote = /.test(fin.slice(fstart, fstart + 1500)) && /\}\)\.immediate\(\);/.test(fin.slice(fstart, fstart + 1500)), "NODE-1: finish đọc hàng chờ nhắn thêm và đóng lượt trong một giao dịch IMMEDIATE");
 
   // NODE-3: lượt Code đang chạy nốt ở tiến trình cũ.
   const { agentruns: AR } = await loadTs(["agentruns"]);
