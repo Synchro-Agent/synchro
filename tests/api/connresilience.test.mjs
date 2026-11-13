@@ -672,6 +672,24 @@ try {
     wipe();
   }
 
+  console.log("26d. Connector tự thêm: allow cũ của công cụ mà quy tắc mới coi là ghi thì hỏi lại một lần (SEC-7)");
+  {
+    S.tools = [...TOOLS, { name: "get_post", description: "Post", inputSchema: { type: "object", properties: {} } }, { name: "list_publish", description: "Publish", inputSchema: { type: "object", properties: {} } }];
+    const r = await add();
+    const id = r.connector.id;
+    // Dữ liệu cũ (bản 2): quy tắc tên cũ tự cấp "allow" cho get_post / list_publish (không có readOnlyHint), search_docs là đọc thật.
+    AS.db().prepare("UPDATE connectors SET perms = json_set(perms, '$.get_post', 'allow', '$.list_publish', 'allow', '$.search_docs', 'allow'), settings = ? WHERE id = ?").run(JSON.stringify({ permsV: 2 }), id);
+    await C.refreshConnector(uid, id);
+    const pm = (n) => row(id).tools.find((t) => t.name === n).perm;
+    ok(pm("get_post") === "ask" && pm("list_publish") === "ask", "get_post, list_publish (ghi theo quy tắc mới): về Hỏi trước", `${pm("get_post")} ${pm("list_publish")}`);
+    ok(pm("search_docs") === "allow", "search_docs (đọc) giữ Luôn cho phép");
+    C.updateConnector(uid, id, { perms: { get_post: "allow" } }, pol);
+    await C.refreshConnector(uid, id);
+    ok(pm("get_post") === "allow", "người dùng chọn lại Luôn cho phép: giữ, không hạ lần nữa");
+    S.tools = null;
+    wipe();
+  }
+
   console.log("27. 403 là trạng thái riêng");
   {
     S.oauth = { need: true, valid: "Bearer at_1" };

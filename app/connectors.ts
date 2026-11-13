@@ -374,13 +374,16 @@ async function withClient<T>(id: string, fn: (c: McpClient) => Promise<T>, cache
 // Trước đây tên công cụ chỉ cần bắt đầu bằng động từ đọc là tự được "Luôn cho phép" (query chạy SQL bất kỳ cũng vậy). Lần lấy danh sách đầu tiên sau khi đổi quy tắc:
 // quyền "allow" do quy tắc cũ tự cấp mà quy tắc mới không còn coi là đọc thì chuyển về "ask". Người dùng tự chọn allow chỉ bị hỏi lại một lần, trên thẻ duyệt có sẵn nút Luôn cho phép.
 // Bản 2: connector tự thêm không còn tin readOnlyHint của máy chủ: "allow" có được chỉ nhờ máy chủ tự khai báo chỉ đọc (tên không cho thấy là đọc) thì hỏi lại một lần.
-const PERMS_V = 2;
+// Bản 3: connector tự thêm mặc định Hỏi mọi công cụ và tên kết thúc bằng động từ / danh từ ghi (list_publish, get_post) là ghi: mọi "allow" của công cụ mà quy tắc mới
+// coi là ghi đều hỏi lại một lần, dù trước đây được cho phép nhờ khai báo của máy chủ hay nhờ quy tắc tên cũ.
+const PERMS_V = 3;
 function migratePerms(old: Record<string, Perm>, tools: McpTool[], from: number) {
   const next = { ...old };
   for (const t of tools) {
     if (next[t.name] !== "allow") continue;
     if (from < 1 && oldGuessedRead(t) && !readLike(t)) next[t.name] = "ask";
     if (from < 2 && t.untrusted && t.annotations?.readOnlyHint === true && !readLike(t)) next[t.name] = "ask";
+    if (from < 3 && t.untrusted && !readLike(t)) next[t.name] = "ask";
   }
   return next;
 }
