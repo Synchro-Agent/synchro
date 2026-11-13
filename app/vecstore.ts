@@ -348,7 +348,25 @@ export const queueSkillEmbed = () => queueEmbed(SKILL_SCOPE, SKILL_OWNER);
  * chịu chi phí embed (chủ sở hữu). Các skill đã embed và không đổi nội dung được bỏ qua nhờ mã băm, nên gọi lại không tốn thêm.
  */
 export function registerSkillVecSource(enumerate: () => VecItem[], payer: () => string | null) {
-  registerVecSource(SKILL_SCOPE, { pending: () => enumerate(), userOf: () => payer(), shared: true, maxChars: TEXT_MAX });
+  registerVecSource(SKILL_SCOPE, { pending: (owner, model, limit) => skillPending(enumerate(), owner, model, limit), userOf: () => payer(), shared: true, maxChars: TEXT_MAX });
+}
+/**
+ * Hợp đồng pending của nguồn skill (như brain / file): chỉ trả skill chưa có vector của model này hoặc đã đổi nội dung (so mã băm
+ * phần chữ sẽ embed với vec_items.hash), tối đa limit mục. Không so src_at: thế hệ bộ đệm plugin đổi mỗi khi một thư viện bất kỳ đổi,
+ * so mốc đó thì cả kho ~18.000 skill bị coi là "đã sửa". Mục rỗng đã đánh dấu (dim = 0, cùng mã băm) cũng được bỏ qua.
+ */
+export function skillPending(all: VecItem[], owner: string, model: string, limit: number): VecItem[] {
+  if (limit <= 0 || !all.length) return [];
+  const have = new Map((t().prepare("SELECT item, hash FROM vec_items WHERE scope = ? AND owner = ? AND model = ?").all(SKILL_SCOPE, owner, model) as { item: string; hash: string }[])
+    .map((r) => [r.item, r.hash]));
+  const out: VecItem[] = [];
+  for (const x of all) {
+    const h = have.get(x.item);
+    if (h !== undefined && h === vecHash(x.text, TEXT_MAX)) continue;
+    out.push(x);
+    if (out.length >= limit) break;
+  }
+  return out;
 }
 /**
  * Tên các skill gần câu hỏi nhất theo nghĩa. uid: tài khoản chịu chi phí embed câu hỏi. Trả null nếu không có provider,
