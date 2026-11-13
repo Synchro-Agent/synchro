@@ -415,7 +415,8 @@ console.log("13. Câu ngắn sau việc lớn: chỉ theo việc đó khi model 
       ok(r.task !== "build" && !/opus/.test(r.model) && r.effort !== "high", `“${t}” sau việc lớn, model không hỏi lại: không dựng tiếp, không Opus nỗ lực cao`, JSON.stringify(r));
     }
     const y = R.routeModel(q(t, { turns: 3, prevAsk: WEB }), free);
-    ok(y.task !== "build" && y.effort !== "high" && !/gemini-3-pro/.test(y.model), `“${t}” trên gói miễn phí: không dùng model mạnh nhất`, JSON.stringify(y));
+    // "giá vàng" là tra cứu (D1.3: model tầm trung trở lên có web; gói này không có hạng vừa nên lên Pro) — vẫn không dựng tiếp việc trước.
+    ok(y.task !== "build" && y.effort !== "high" && (!/gemini-3-pro/.test(y.model) || y.task === "lookup"), `“${t}” trên gói miễn phí: không dùng model mạnh nhất (trừ tra cứu)`, JSON.stringify(y));
   }
   // Model hỏi lại thật: câu trả lời ngắn theo việc đang bàn; câu khép lại thì vẫn không.
   ok(R.routeModel(q("Hà Nội", { ...opus, asked: true }), paid).task === "build", "model vừa hỏi lại: “Hà Nội” là câu trả lời");
@@ -502,7 +503,16 @@ console.log("16. Tra cứu web → model hạng vừa trở lên có công cụ;
   ok(R.routeModel(q("Tỷ giá USD hôm nay"), ["anthropic/claude-haiku-5-5", "anthropic/claude-sonnet-5-5"]).tier !== "fast", "tra cứu không chọn Haiku khi có Sonnet");
   // (b) không kéo câu đời thường có "hôm nay" thành tra cứu.
   ok(R.taskOf(q("Hôm nay 28/10 mình rảnh từ 9:30, gợi ý lịch học")) !== "lookup", "“hôm nay mình rảnh” không phải tra cứu");
-  ok(R.taskOf(q("giá vàng")) !== "lookup", "“giá vàng” trần (không mốc thời gian) vẫn là hỏi đáp thường");
+  // W23-12 (Blueprint D1.3: "giá", "tỷ giá" là lời tra cứu trực tiếp): "giá vàng" trần là hỏi giá hiện thời → tra cứu (trước đây là hỏi đáp thường).
+  ok(R.taskOf(q("giá vàng")) === "lookup", "W23-12: “giá vàng” trần → tra cứu (D1.3)");
+  for (const t of ["tỷ giá USD", "tỷ giá yên nhật", "giá vàng SJC", "giá bitcoin bây giờ", "USD exchange rate", "What's the USD to VND rate", "lãi suất ngân hàng hôm nay"])
+    ok(R.taskOf(q(t)) === "lookup", `W23-12: “${t}” → tra cứu (không cần chữ chỉ thời gian; tra giá trần không bị chặn vì là chuyện tài chính)`, R.taskOf(q(t)));
+  for (const t of ["tỷ giá USD tăng ảnh hưởng thế nào đến xuất khẩu", "giá nhà Hà Nội tại sao tăng", "giá trị cốt lõi của công ty", "đánh giá phim Mai", "giá vàng hôm nay, có nên mua vàng không"])
+    ok(R.taskOf(q(t)) !== "lookup", `W23-12: “${t}” (khái niệm / lời khuyên / không phải giá) → không tra cứu`, R.taskOf(q(t)));
+  // R15: mốc thời gian là từ trọn vẹn — "now" trong "know", "current" trong "currency" không tính.
+  ok(R.taskOf(q("what is the exchange rate you know")) !== "lookup", "R15: “know” không chứa mốc “now”", R.taskOf(q("what is the exchange rate you know")));
+  ok(R.taskOf(q("interest rate and currency")) !== "lookup", "R15: “currency” không chứa mốc “current”", R.taskOf(q("interest rate and currency")));
+  ok(R.taskOf(q("interest rate now")) === "lookup", "R15: “interest rate now” vẫn là tra cứu");
   // (c) "tỷ giá / exchange rate" trần hoặc hỏi khái niệm → KHÔNG tra cứu; đi kèm mốc thời gian / con số → tra cứu.
   ok(R.taskOf(q("tỷ giá là gì")) !== "lookup", "“tỷ giá là gì” (hỏi khái niệm) không phải tra cứu");
   ok(R.taskOf(q("tỉ giá hối đoái là gì")) !== "lookup", "“tỉ giá hối đoái là gì” không phải tra cứu");

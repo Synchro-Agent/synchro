@@ -80,14 +80,22 @@ const APP_FIRST_RE = new RegExp(`(?:^\\s*|${B}(?:trên|trong|ở|tại|vào|in|o
 const actOnApp = (ins: string) => ACT_ON_APP_RE.test(ins) || APP_FIRST_RE.test(ins);
 // Câu cần dữ liệu mới trên web → "tra cứu" (lookup): tỷ giá, giá tài sản / món hàng, thời tiết, tin tức, phiên bản mới nhất, hay lời nhờ tìm thẳng trên web.
 // Giữ chặt để không kéo "hôm nay mình rảnh" hay "đánh giá phim" vào đây: "giá" phải đi với tài sản / "hôm nay" / "bao nhiêu" (và loại "đánh giá", "giá trị", "báo giá").
+// Mốc thời gian là từ trọn vẹn (B…E như W()): "now" không khớp trong "know", "current" không khớp trong "currency".
+const FRESH_AT = `${B}(?:hôm nay|bây giờ|hiện tại|hiện nay|bao nhiêu|mấy|mới nhất|today|now|right now|latest|current)${E}`;
+const RATE = `${B}(?:tỷ giá|tỉ giá|exchange rate|interest rate|lãi suất)${E}`;
+const CURRENCY = `${B}(?:usd|đô|đô la|đô-la|dollar|dollars|euro|eur|yên|yen|jpy|nhân dân tệ|tệ|cny|rmb|bảng anh|gbp|won|krw|baht|bạt|đài tệ|twd|sgd|aud|cad|chf|vnd|vnđ|tiền việt|usdt|bitcoin|btc)${E}`;
+// D1.3: "giá", "tỷ giá" là lời tra cứu trực tiếp. "tỷ giá USD", "giá vàng SJC" là hỏi con số hiện thời dù không có mốc thời gian.
+// Trần "tỷ giá" (không đồng tiền) hay câu hỏi khái niệm ("tỷ giá là gì", PRICE_CONCEPT) thì không.
+const PRICE_ASK = new RegExp([
+  `${RATE}(?:(?![.?!\\n]).){0,30}?${FRESH_AT}`, `${FRESH_AT}(?:(?![.?!\\n]).){0,30}?${RATE}`,
+  `${B}(?:tỷ giá|tỉ giá|exchange rate)${E}(?:(?![.?!\\n]).){0,20}?${CURRENCY}`, `${CURRENCY}(?:(?![.?!\\n]).){0,12}?${B}(?:exchange rate|rate)${E}`,
+  `(?<!(?:đánh|báo|trả|định|ước|tỷ|tỉ) )${B}giá (?:vàng|bạc|đô|đô la|usd|eur|euro|yên|yen|bitcoin|btc|eth|ethereum|xăng|dầu|ga|gas|cổ phiếu|chứng khoán|nhà|đất|iphone|điện thoại)${E}`,
+  `${B}(?:giá|tỷ giá|tỉ giá|lãi suất)${E}(?:(?![.?!\\n]).){0,30}?${B}(?:hôm nay|bây giờ|hiện tại|hiện nay|bao nhiêu)${E}`,
+].join("|"), "iu");
+// Hỏi khái niệm, nguyên nhân hay lời khuyên về giá / tỷ giá: không phải tra một con số.
+const PRICE_CONCEPT = W("là gì|khái niệm|định nghĩa|nghĩa là|tại sao|vì sao|ảnh hưởng|tác động|cách tính|công thức|có nên|nên (?:mua|bán|vay|gửi|đầu tư|chọn)|what is an?|what does|meaning|define|definition|why|affect|impact|should i|how (?:is|are|do|does) .{0,30}(?:calculated|determined|work)");
+const priceAsk = (ins: string) => PRICE_ASK.test(ins) && !PRICE_CONCEPT.test(ins);
 const LOOKUP_WEB = new RegExp([
-  // "tỷ giá / tỉ giá / exchange rate / lãi suất" chỉ là tra cứu khi có mốc thời gian hay con số ở gần (trước hoặc sau). Trần "tỷ giá" hay câu hỏi
-  // khái niệm "tỷ giá là gì" / "what is the exchange rate" (không mốc) thì vẫn là hỏi đáp thường, không kéo xuống model có công cụ web.
-  "(?:tỷ giá|tỉ giá|exchange rate|interest rate|lãi suất)(?:(?![.?!\\n]).){0,30}?(?:hôm nay|bây giờ|hiện tại|hiện nay|bao nhiêu|mấy|mới nhất|today|now|right now|latest|current)",
-  "(?:hôm nay|bây giờ|hiện tại|hiện nay|bao nhiêu|mấy|mới nhất|today|now|right now|latest|current)(?:(?![.?!\\n]).){0,30}?(?:tỷ giá|tỉ giá|exchange rate|interest rate|lãi suất)",
-  // "giá <tài sản>" chỉ tính là tra cứu khi đi kèm mốc thời gian / "bao nhiêu" (bỏ trống thì "giá vàng" trần vẫn là hỏi đáp thường).
-  "giá (?:vàng|bạc|đô|đô la|usd|eur|euro|yên|yen|bitcoin|btc|eth|ethereum|xăng|dầu|ga|gas|cổ phiếu|chứng khoán|nhà|đất|iphone|điện thoại)(?:(?![.?!\\n]).){0,24}?(?:hôm nay|bây giờ|hiện tại|hiện nay|bao nhiêu|mới nhất|mấy)",
-  "(?:giá|tỷ giá|tỉ giá|lãi suất)(?:(?![.?!\\n]).){0,30}?(?:hôm nay|bây giờ|hiện tại|hiện nay|bao nhiêu)",
   "(?:bao nhiêu tiền|giá bao nhiêu|giá cả|stock price|price of|how much (?:is|does|are))",
   "thời tiết(?:(?![.?!\\n]).){0,20}?(?:hôm nay|ngày mai|hiện tại|bây giờ)", "weather (?:today|tomorrow|now|right now)",
   "tin tức(?:(?![.?!\\n]).){0,20}?(?:mới nhất|hôm nay|mới)", "latest news", "breaking news",
@@ -484,8 +492,9 @@ function read(q: RouteInput, depth = 0): Read {
   else if (docChars > 60_000 && !["translate", "summarize", "code", "debug"].includes(task)) task = "longdoc";
   else if ((files || docChars) && strength < 2) task = "summarize";
   // Câu hỏi đáp cần dữ liệu mới trên web (tỷ giá, giá, tin tức, phiên bản mới nhất): chuyển thành "tra cứu" để đi model hạng vừa trở lên có công cụ web,
-  // thay vì model rẻ nhất trả lời từ trí nhớ cũ. Không áp cho câu sức khỏe / pháp lý / tài chính (đã có luật riêng).
-  if (task === "qa" && !stakes && LOOKUP_WEB.test(ins)) task = "lookup";
+  // thay vì model rẻ nhất trả lời từ trí nhớ cũ. Không áp cho câu sức khỏe / pháp lý / tài chính (đã có luật riêng) — trừ lời tra giá / tỷ giá trần
+  // ("giá bitcoin bây giờ", "lãi suất hôm nay"): đó là hỏi một con số hiện thời, không phải xin lời khuyên (cờ stakes vẫn giữ cho phần chọn model).
+  if (task === "qa" && (priceAsk(ins) ? !crisis : !stakes && LOOKUP_WEB.test(ins))) task = "lookup";
   s = BASE_D[task];
   // Điều chỉnh theo từng loại việc.
   if (task === "code" && !a.code && CONCEPT_Q.test(ins) && !SIG.write![0][0].test(ins)) { s = 1; why.push("hỏi khái niệm lập trình"); }
