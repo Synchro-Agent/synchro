@@ -100,6 +100,12 @@ console.log("6. Hướng dẫn cho model");
   for (const q of ["làm intro cho bài luận", "viết intro cho bài luận", "create an intro paragraph for my essay", "make an introduction to Python for beginners", "write an introduction to machine learning",
     "Viết báo cáo tuần", "Thiết kế poster sự kiện", "một bài hát về mùa thu", "logo là gì"])
     ok(!V.wantsVideo(q), `W23-3: không phải dựng video: "${q}"`);
+  // W23-3 (sửa lại): intro / outro trần chỉ là video khi cùng vế có dấu hiệu video; hiệu ứng logo trên trang web không phải video.
+  for (const q of ["edit the intro of my cover letter", "create an intro for my LinkedIn profile", "create an intro for my thesis", "make the intro of my 3000-word essay shorter",
+    "make an intro for my podcast episode script", "tạo đoạn intro giới thiệu bản thân cho buổi phỏng vấn", "tạo intro cho trang web công ty", "animate the logo in the navbar on hover using CSS"])
+    ok(!V.wantsVideo(q), `W23-3: không phải dựng video: "${q}"`);
+  for (const q of ["make a 15 second intro for my podcast", "tạo intro 5s có logo công ty", "create an animated intro for my stream", "tạo outro cho kênh TikTok"])
+    ok(V.wantsVideo(q), `W23-3: intro có dấu hiệu video: "${q}"`);
   const b = V.videoTurn({ typed: "làm video tiktok về cà phê", code: true, workspace: true });
   ok(b.startsWith("<video_kit>") && /synchro-video still/.test(b) && /outputs\/_preview/.test(b) && /60 fps|60 khung/.test(b) && /Mã thoát 75/.test(b) && /"audioHz": "48000"/.test(b), "khối có đủ bước: schema, check, still tự xem, render dựng tiếp, kiểm 60 fps / 48 kHz");
   ok(/Không dựng dự án \/ mã Remotion người dùng tải lên/.test(b), "khối nhắc điều khoản giấy phép");
