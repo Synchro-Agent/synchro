@@ -760,7 +760,9 @@ html body .sy-settings .bg-sw.on{background:var(--ds-inv);box-shadow:none}
 html body .sy-settings .bg-sw.on i{background:var(--ds-inv-fg)}
 
 html body .sy-settings .adm-head .adm-badge,html body .sy-settings .adm-head .s-title,html body .sy-settings .us-page>h3:first-child,html body .sy-settings .bn>h3:first-child{display:none!important}
-@media (max-width:720px){
+/* Cài đặt hẹp: thanh mục chỉ còn icon, hàng tự xuống dòng. Đến 860px (NARROW) chứ không chỉ điện thoại: ở 768px (iPad dọc) thanh mục 236px
+   chỉ chừa ~480px cho nội dung, chữ mô tả bị ép còn 76px, cột giờ trong bảng phiên ngắt dòng lẻ "2026". */
+@media (max-width:860px){
   html body .sy-settings .s-nav{width:64px!important;padding:14px 10px!important}
   html body .sy-settings :is(.sy-snav-h,.s-search,.s-item .s-lbl,.s-search+.s-group){display:none!important}
   html body .sy-settings .s-group{display:block!important;height:1px;padding:0!important;margin:10px 6px!important;background:var(--ds-line);font-size:0!important;overflow:hidden}

@@ -1188,8 +1188,9 @@ html body .codebox.cb-copy .cb-btn{position:absolute!important;right:8px!importa
 
 .adm-kv span{color:var(--text-3)}
 .adm-kv b{font-weight:360;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-/* Số liệu nhiều phần (bộ nhớ máy chủ): xuống dòng trên điện thoại thay vì bị cắt "…". */
-.adm-kv.wrap span{flex:0 1 auto;min-width:0}
+/* Số liệu nhiều phần (bộ nhớ máy chủ): xuống dòng trên điện thoại thay vì bị cắt "…". Nhãn giữ trọn một dòng tới 45% bề rộng hàng, phần số liệu
+   dài xuống dòng bên phải (768px: "Vector tìm kiếm theo nghĩa" từng bị ép thành ba dòng, chữ "nghĩa" đứng lẻ). */
+.adm-kv.wrap span{flex:0 0 auto;max-width:45%;min-width:0}
 
 
 
@@ -2244,8 +2245,8 @@ html body :is(.menu,.model-menu,.usermenu,.model-sub).fl-flat{background:var(--c
 .mempty span{font-size:12.5px;color:var(--text-2);line-height:1.45}
 .mempty .btn{align-self:flex-start;margin-top:4px}
 
-/* Cài đặt trên màn hình hẹp: thanh mục chỉ còn icon để nội dung đủ rộng */
-@media (max-width:720px){
+/* Cài đặt trên màn hình hẹp (≤ 860px, NARROW): thanh mục chỉ còn icon để nội dung đủ rộng */
+@media (max-width:860px){
   .settings{width:calc(100vw - 16px);height:calc(100dvh - 16px)}
   .s-nav{width:56px;padding:12px 6px}
   .s-nav .s-search,.s-nav .s-group,.s-nav .s-lbl{display:none}
