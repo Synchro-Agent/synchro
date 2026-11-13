@@ -59,8 +59,12 @@ export function captureConsole() {
     } finally { inside = false; }
   };
   process.on("uncaughtExceptionMonitor", (e) => opsEvent("error", "uncaught", formatArgs([e])));
-  opsEvent("boot", "web", process.env.npm_package_version ?? "");
 }
+
+/** Một lần "khởi động lại web" (ô Lần khởi động lại web (24 giờ)): ghi khi tiến trình nhận vai primary (role.ts), không phải lúc tiến trình bật.
+ * Deploy xanh/lam bật bản mới bên cạnh bản cũ: bản mới chỉ tính khi đã nhận lưu lượng và việc nền (một lần mỗi deploy); bản mới không đạt
+ * kiểm tra sức khỏe thì bị dừng mà chưa từng phục vụ ai, không tính. Một tiến trình (staging, chưa chuyển): như trước, mỗi lần bật một lần. */
+export function noteBoot(detail = "") { opsEvent("boot", "web", [process.env.npm_package_version ?? "", detail].filter(Boolean).join(" ")); }
 
 const readJson = <T>(f: string): T | null => { try { return JSON.parse(fs.readFileSync(f, "utf8")) as T; } catch { return null; } };
 function diskOf(p: string) {

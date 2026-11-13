@@ -25,31 +25,40 @@ export const GET = timed(async (req: Request, ctx: { params: Promise<{ id: strin
   const stream = new ReadableStream({
     start(ctl) {
       // ended tách khỏi closed: ghi lỗi (người xem đã đi) từng chỉ đặt closed, end() thấy closed thì bỏ qua nên hẹn giờ ping và người theo dõi ở lại mãi.
-      let closed = false, ended = false, unwatch = () => {};
-      const end = () => { if (ended) return; ended = closed = true; clearInterval(ping); gate.stop(); unwatch(); try { ctl.close(); } catch {} };
+      let closed = false, ended = false, unwatch = () => {}, poll: ReturnType<typeof setInterval> | undefined, sent = after;
+      const end = () => { if (ended) return; ended = closed = true; clearInterval(ping); clearInterval(poll); gate.stop(); unwatch(); try { ctl.close(); } catch {} };
       const send = (s: string) => { if (!closed) try { ctl.enqueue(enc.encode(s)); } catch { end(); } };
       // Trình duyệt nhận chậm (ctl.desiredSize âm): gom các delta chữ của cùng một bước lại rồi gửi một khung (app/ssedeltas.ts). Phải xả trước
       // mọi sự kiện khác (step/done/clock) để giữ đúng thứ tự chữ rồi mới tới bước; luồng thông lại (pull, hẹn giờ ngắn) thì xả ngay (R10).
       const gate = deltaGate({ desired: () => ctl.desiredSize, send: (d: Delta) => send(`event: delta\ndata: ${JSON.stringify(d)}\n\n`) });
       const flushDeltas = gate.flush;
       drained = gate.flush;
-      const ev = (e: RunEvent) => { flushDeltas(); send(`id: ${e.seq}\nevent: step\ndata: ${JSON.stringify(e)}\n\n`); };
+      // sent: bước đã gửi (theo seq) — sự kiện trực tiếp, lần đọc lại và vòng hỏi cơ sở dữ liệu (lượt ở tiến trình khác) không gửi trùng.
+      const ev = (e: RunEvent) => { if (e.seq <= sent) return; sent = e.seq; flushDeltas(); send(`id: ${e.seq}\nevent: step\ndata: ${JSON.stringify(e)}\n\n`); };
       const dl = gate.push;
       const done = (r: PublicRun) => { flushDeltas(); send(`event: done\ndata: ${JSON.stringify({ status: r.status, http: r.http, result: r.result })}\n\n`); end(); };
       // Giờ máy chủ lúc mở luồng và mỗi 15 giây (thay cho dòng ping trống): đồng hồ trong khung chat theo giờ máy chủ (app/clock.ts).
       const clock = () => { flushDeltas(); send(`event: clock\ndata: {"now":${Date.now()}}\n\n`); };
       const ping = setInterval(clock, 15_000);
       // Đăng ký trước rồi mới đọc lại trạng thái, để không lỡ bước nào xảy ra ở giữa.
-      unwatch = watch(id, (m) => { if (m.event && m.event.seq > after) ev(m.event); if (m.delta) dl(m.delta); if (m.done) done(m.done); });
+      unwatch = watch(id, (m) => { if (m.event) ev(m.event); if (m.delta) dl(m.delta); if (m.done) done(m.done); });
       stop = end;
       send("retry: 2000\n\n");
       clock();
       const now = getRun(id)!;
-      for (const e of now.events) if (e.seq > after) ev(e);
+      for (const e of now.events) ev(e);
       const lt = liveText(id);
       if (lt?.text) send(`event: snapshot\ndata: ${JSON.stringify(lt)}\n\n`);
       if (now.status !== "running") done(now);
       if (ended) return;
+      // Lượt đang chạy ở tiến trình khác (deploy xanh/lam: bản cũ đang chạy nốt lượt, nginx đã đưa kết nối này sang bản mới): tiến trình này
+      // không nhận được sự kiện của nó, nên đọc cơ sở dữ liệu dùng chung mỗi 1,5 giây cho tới khi lượt xong (bước, kết quả cuối; chữ đang viết thì không).
+      if (!lt) poll = setInterval(() => {
+        const r = getRun(id);
+        if (!r) { end(); return; }
+        for (const e of r.events) ev(e);
+        if (r.status !== "running") done(r);
+      }, 1500);
       req.signal.addEventListener("abort", end);
     },
     // Trình duyệt vừa đọc hết hàng đợi của luồng: xả chữ đang giữ ngay, không chờ delta kế tiếp hay nhịp đồng hồ.

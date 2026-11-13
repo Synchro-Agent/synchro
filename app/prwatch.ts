@@ -9,6 +9,7 @@ import { pickAgentModel, runAgentTurn, sessionMeta } from "./agentturn";
 import { AUTO } from "./router";
 import { turnsTotal } from "./runs";
 import { MAX_LIVE_RUNS } from "./agentruns";
+import { isDraining } from "./drain";
 import { acquire, withSlot } from "./turngate";
 import { exec, sdir, wsAllowed } from "./workspace";
 import { withUsage } from "./usage";
@@ -28,7 +29,8 @@ type Comment = { id: number; body: string; user?: { login?: string; type?: strin
 export function startPrWatch(ms: number) {
   let running = false;
   const tick = async () => {
-    if (running) return;
+    // Đang tắt để nhường bản mới (drain.ts): không mở lượt sửa CI mới.
+    if (running || isDraining()) return;
     running = true;
     try { await checkAll(); } catch (e) { console.error("[prwatch]", e); } finally { running = false; }
   };

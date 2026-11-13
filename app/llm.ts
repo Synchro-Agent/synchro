@@ -9,6 +9,7 @@ import type { Effort } from "./catalog";
 import type { TraceItem } from "./transpile";
 import type { CxCard } from "./cxactions";
 import { noteServerNow } from "./clock";
+import { postTurn } from "./turnretry";
 import { PROJECT_INS_HEAD } from "./turnctx";
 
 export const CHUNK_SIZE = 1500;
@@ -187,7 +188,7 @@ async function absorb(j: Record<string, any>, cb: RunCb = {}): Promise<string> {
   for (let n = 0; j.approval && n < 20; n++) {
     const calls = (j.approval.calls ?? []) as ApprovalCall[];
     const ans: ApprovalAnswer = approver ? await approver(calls, cb.conv).catch(() => ({ decisions: {} })) : { decisions: {} };
-    const r2 = await fetch(LLM_ENDPOINT, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ resume: j.approval.id, decisions: ans.decisions, ...(ans.inputs && Object.keys(ans.inputs).length ? { inputs: ans.inputs } : {}), async: true }) });
+    const r2 = await postTurn(LLM_ENDPOINT, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ resume: j.approval.id, decisions: ans.decisions, ...(ans.inputs && Object.keys(ans.inputs).length ? { inputs: ans.inputs } : {}), async: true }) });
     if (!r2.ok) { const e = await r2.json().catch(() => ({})); throw new LLMError(e.error || `LLM ${r2.status}`, r2.status, e); }
     j = await r2.json();
     if (typeof j.run === "string") {
@@ -226,7 +227,7 @@ export async function callLLM(system: string, messages: LLMMsg[], maxTokens = 15
   lastSkills = []; lastFiles = []; lastLibs = []; lastTrace = []; lastCancelled = false;
   // Không bịa câu trả lời khi chưa có model: báo rõ để người dùng kết nối gói hoặc khóa API.
   if (!hasLLM) throw new LLMError("Synchro chưa được kết nối với model nào. Đăng nhập gói Claude, ChatGPT, Gemini hoặc Grok ở Cài đặt → Providers, hoặc nhập khóa API.", 503);
-  const r = await fetch(LLM_ENDPOINT, {
+  const r = await postTurn(LLM_ENDPOINT, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ system, messages, max_tokens: maxTokens, route, skills, model: activeModel || undefined, effort: activeEffort, feature: opts.feature ?? "chat", project: opts.project, conv: opts.conv === undefined ? undefined : String(opts.conv), studio: opts.studio, recentSkills: opts.recentSkills, pickedSkills: opts.pickedSkills, ...(opts.extra ?? {}), async: opts.onRun ? true : undefined }),

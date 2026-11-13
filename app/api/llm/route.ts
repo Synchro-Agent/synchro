@@ -7,11 +7,14 @@ import { acquire, noteRefused, runningOf, withSlot } from "../../turngate";
 import { subCli } from "../../ai/subs";
 import { AUTO } from "../../router";
 import { afterTurn } from "../../brain";
+import { drainingResponse } from "../../drain";
 
 // Cổng duy nhất tới model của chat. Phần xử lý nằm ở chatengine.ts.
 // async: true (lượt chat chính) → tạo lượt chạy bền ở nền và trả ngay { run }; trình duyệt theo dõi qua /api/runs/<id>.
 const TOO_MANY = "Bạn đang có quá nhiều lượt chạy và chờ cùng lúc. Hãy chờ một lượt xong hoặc bấm Dừng rồi gửi lại.";
 export const POST = route({ auth: "user", json: true }, async ({ req, user, session }) => {
+  // Bản này đang tắt để nhường bản mới (deploy xanh/lam): 503 + Retry-After, trình duyệt gửi lại và tới bản mới.
+  const off = drainingResponse(); if (off) return off;
   // Độ trễ từng chặng của lượt chat (tracing.ts): mốc yêu cầu tới (kiểm tra phiên đã xong ở lớp bọc route).
   const at = Date.now();
   const c = { user, session };

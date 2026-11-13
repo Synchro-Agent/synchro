@@ -2,6 +2,7 @@
 // Gọi API workspace / GitHub / agent từ trình duyệt cho Synchro Code.
 import { create } from "zustand";
 import type { AgentEvent, PlanItem } from "./agentcore";
+import { postTurn } from "./turnretry";
 
 export type { AgentEvent, PlanItem };
 export type WsStatus = { available: boolean; reason?: string; running?: boolean; idleMin?: number };
@@ -68,9 +69,12 @@ async function readLines(r: Response, on: (e: AgentLine) => void) {
 const sleep = (ms: number, signal: AbortSignal) => new Promise<void>((ok) => { const t = setTimeout(ok, ms); signal.addEventListener("abort", () => { clearTimeout(t); ok(); }, { once: true }); });
 // Nối lại lượt đang chạy ở máy chủ, tự thử lại khi mất mạng. false: máy chủ không còn lượt này (vừa khởi động lại) hoặc nối không được quá lâu.
 async function follow(sid: string, on: (e: AgentLine) => void, signal: AbortSignal, st: { seq: number; ended: boolean }) {
+  // 202: lượt đang chạy nốt ở bản cũ trong lúc deploy (tối đa ~30 giây): chờ rồi hỏi lại, tối đa ~90 giây, không tính là lỗi.
+  let elsewhere = 0;
   for (let fails = 0; fails < 60 && !signal.aborted; ) {
     try {
       const r = await fetch(`/api/agent?sid=${encodeURIComponent(sid)}&after=${st.seq}`, { signal, cache: "no-store" });
+      if (r.status === 202) { if (++elsewhere > 45) return false; await sleep(2000, signal); continue; }
       if (r.status === 204 || r.status === 401) return false;
       if (r.ok && r.body) { fails = 0; await readLines(r, on); if (st.ended) return true; } else fails++;
     } catch { if (signal.aborted) return true; fails++; }
@@ -85,7 +89,7 @@ export async function streamAgent(body: Record<string, unknown>, on: (e: AgentLi
   const st = { seq: 0, ended: false, started: false };
   const seen = (e: AgentLine) => { if (e.s) st.seq = e.s; if (e.t === "run") st.started = true; if (e.t === "end") st.ended = true; on(e); };
   try {
-    const r = await fetch("/api/agent", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body), signal });
+    const r = await postTurn("/api/agent", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body), signal });
     if (!r.ok || !r.body) { const j = await r.json().catch(() => ({})); throw new WsError((j as { error?: string }).error || `Lỗi ${r.status}`, r.status); }
     await readLines(r, seen);
   } catch (e) {
@@ -94,8 +98,14 @@ export async function streamAgent(body: Record<string, unknown>, on: (e: AgentLi
   if (!st.ended && !signal.aborted && !(await follow(String(body.sid), seen, signal, st))) on({ t: "error", error: GONE });
 }
 /** Mở lại phiên: lượt của phiên còn ở máy chủ không. gone: máy chủ trả lời chắc chắn là không có lượt nào; null: chưa biết (mất mạng, hết phiên đăng nhập). */
-export async function agentRunInfo(sid: number | string): Promise<{ running: boolean; node: number | null; gone?: boolean } | null> {
-  try { const r = await fetch(`/api/agent?sid=${sid}&json=1`, { cache: "no-store" }); return r.status === 204 ? { running: false, node: null, gone: true } : r.status === 200 ? await r.json() : null; } catch { return null; }
+// 202: lượt đang chạy nốt ở bản cũ trong lúc deploy: coi là đang chạy (hiện bận, nút Dừng), nối vào thì follow() chờ tới khi xong.
+export async function agentRunInfo(sid: number | string): Promise<{ running: boolean; node: number | null; gone?: boolean; elsewhere?: boolean } | null> {
+  try {
+    const r = await fetch(`/api/agent?sid=${sid}&json=1`, { cache: "no-store" });
+    if (r.status === 204) return { running: false, node: null, gone: true };
+    if (r.status === 202) { const j = (await r.json().catch(() => ({}))) as { node?: number | null }; return { running: true, node: j.node ?? null, elsewhere: true }; }
+    return r.status === 200 ? await r.json() : null;
+  } catch { return null; }
 }
 /** Nối vào lượt đang có của phiên từ đầu: nhận lại mọi sự kiện rồi theo dõi tiếp. */
 export async function attachAgent(sid: number | string, on: (e: AgentLine) => void, signal: AbortSignal) {

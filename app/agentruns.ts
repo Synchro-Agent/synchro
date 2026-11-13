@@ -3,9 +3,10 @@
 // Máy chủ tự lưu lượt vào phiên (khi bật đồng bộ) nên kết quả vẫn còn khi trình duyệt không quay lại.
 import type { AgentEvent } from "./agentcore";
 import { closeFolded, foldAgentEvent } from "./agentfold";
-import { getUser } from "./authstore";
+import { db, getUser } from "./authstore";
 import { getPrefs, patchSession, saveTurn, type TurnNode } from "./codestore";
 import { registerMemStat } from "./memstat";
+import { sameProcess, selfIdent } from "./role";
 
 type Line = { s: number; e: AgentEvent };
 type Listener = { line: (l: Line) => void; end: () => void };
@@ -43,12 +44,72 @@ export const latestRun = (uid: string, sid: string) => { sweep(); return runs.ge
 export const activeRun = (uid: string, sid: string) => { const r = runs.get(keyOf(uid, sid)); return r && !r.ended && !r.ac.signal.aborted ? r : null; };
 export const liveCount = (uid: string) => { let n = 0; for (const r of runs.values()) if (r.uid === uid && !r.ended && !r.ac.signal.aborted) n++; return n; };
 export const MAX_LIVE_RUNS = MAX_LIVE;
+/** Lượt Code đang chạy của cả tiến trình (tắt êm khi deploy chờ số này về 0, drain.ts). */
+export const activeAgentCount = () => { let n = 0; for (const r of runs.values()) if (!r.ended && !r.ac.signal.aborted) n++; return n; };
 /** Nút Dừng (hoặc xóa phiên). */
 export function stopAgentRun(uid: string, sid: string) { const r = activeRun(uid, sid); if (!r) return false; r.ac.abort(); return true; }
 
 /** Xóa tài khoản: dừng mọi lượt và quên ngay nội dung trong bộ nhớ, đừng đợi một giờ. CLI đang chạy thoát sau đó nên phần lưu cuối lượt phải biết là không được ghi (cờ purged). */
 export function stopUserAgentRuns(uid: string) {
   for (const [k, r] of runs) if (r.uid === uid) { r.purged = true; r.ac.abort(); runs.delete(k); }
+}
+
+// ---- Lượt Code đang chạy ở tiến trình khác (deploy xanh/lam) ----
+// Lượt Code chỉ nằm trong bộ nhớ của tiến trình chạy nó và không chạy lại được. Ghi ai đang chạy lượt nào vào cơ sở dữ liệu để tiến trình mới
+// (sau khi nginx chuyển) trả lời "đang chạy nốt ở bản cũ" thay vì "không còn lượt", và chuyển được lệnh Dừng tới tiến trình cũ.
+let ownReady = false;
+function own() {
+  const d = db();
+  if (!ownReady) {
+    d.exec("CREATE TABLE IF NOT EXISTS agent_owner (uid TEXT NOT NULL, sid TEXT NOT NULL, pid INTEGER NOT NULL, started INTEGER NOT NULL, ended INTEGER NOT NULL DEFAULT 0, stop INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (uid, sid))");
+    // Danh tính tiến trình (pid có thể bị dùng lại) và lượt nào của phiên (trình duyệt mở lại phiên cần biết để hiện đang chạy).
+    const cols = (d.prepare("PRAGMA table_info(agent_owner)").all() as { name: string }[]).map((c) => c.name);
+    for (const c of ["boot TEXT", "start TEXT", "node INTEGER"]) if (!cols.includes(c.split(" ")[0])) d.exec(`ALTER TABLE agent_owner ADD COLUMN ${c}`);
+    ownReady = true;
+  }
+  return d;
+}
+const STOP_POLL_MS = Number(process.env.SYNCHRO_REMOTE_POLL_MS) || 1500;
+const gp = globalThis as unknown as { __synchroAgentStopPoll?: ReturnType<typeof setInterval> | null };
+/** Lệnh Dừng do tiến trình khác ghi cho lượt Code của tiến trình này. Trả số lượt đã dừng. */
+export function applyAgentStops(): number {
+  let n = 0;
+  const rows = own().prepare("SELECT uid, sid FROM agent_owner WHERE pid = ? AND stop = 1 AND ended = 0").all(process.pid) as { uid: string; sid: string }[];
+  for (const r of rows) if (stopAgentRun(r.uid, r.sid)) n++;
+  return n;
+}
+function stopPoll() {
+  if (gp.__synchroAgentStopPoll) return;
+  gp.__synchroAgentStopPoll = setInterval(() => {
+    if (!activeAgentCount()) { clearInterval(gp.__synchroAgentStopPoll ?? undefined); gp.__synchroAgentStopPoll = null; return; }
+    try { applyAgentStops(); } catch (e) { console.error("[agent]", e); }
+  }, STOP_POLL_MS);
+  gp.__synchroAgentStopPoll.unref?.();
+}
+type OwnerRow = { uid: string; sid: string; pid: number; boot: string | null; start: string | null; node: number | null; started: number };
+// Lượt tự dừng sau MAX_RUN_MS: dòng ended = 0 cũ hơn thế chắc chắn của tiến trình đã chết, dù pid bây giờ thuộc tiến trình nào (dòng không có danh tính).
+const ownerLive = (r: OwnerRow) => Date.now() - r.started < MAX_RUN_MS + 10 * 60_000 && sameProcess(r.pid, r.boot, r.start);
+/** Lượt Code của phiên này đang chạy ở một tiến trình khác còn sống, đúng tiến trình đã ghi (bản cũ đang chạy nốt khi deploy): trả lượt nào.
+ *  Chủ đã chết (bản cũ thoát giữa lượt, pid bị dùng lại) thì xóa dòng đó và trả null. */
+export function agentElsewhere(uid: string, sid: string): { node: number | null } | null {
+  try {
+    const d = own();
+    const r = d.prepare("SELECT uid, sid, pid, boot, start, node, started FROM agent_owner WHERE uid = ? AND sid = ? AND ended = 0").get(uid, sid) as OwnerRow | undefined;
+    if (!r || r.pid === process.pid) return null;
+    if (ownerLive(r)) return { node: r.node };
+    d.prepare("DELETE FROM agent_owner WHERE uid = ? AND sid = ? AND pid = ?").run(uid, sid, r.pid);
+    return null;
+  } catch { return null; }
+}
+/** Xóa dòng của các chủ đã chết (bản cũ thoát khi lượt Code còn chạy: dòng ở lại với ended = 0). */
+function sweepOwners(d: ReturnType<typeof own>) {
+  const rows = d.prepare("SELECT uid, sid, pid, boot, start, node, started FROM agent_owner WHERE ended = 0 AND pid != ?").all(process.pid) as OwnerRow[];
+  for (const r of rows) if (!ownerLive(r)) d.prepare("DELETE FROM agent_owner WHERE uid = ? AND sid = ? AND pid = ?").run(r.uid, r.sid, r.pid);
+}
+/** Nút Dừng cho lượt đang chạy ở tiến trình khác: ghi cờ, tiến trình đó dừng lượt trong vòng 1,5 giây. */
+export function stopAgentElsewhere(uid: string, sid: string): boolean {
+  if (!agentElsewhere(uid, sid)) return false;
+  return own().prepare("UPDATE agent_owner SET stop = 1 WHERE uid = ? AND sid = ? AND ended = 0 AND pid != ?").run(uid, sid, process.pid).changes > 0;
 }
 
 /** Bắt đầu lượt. work chạy tới khi xong, không phụ thuộc kết nối nào. */
@@ -58,6 +119,14 @@ export function startAgentRun(o: { uid: string; sid: string; node?: TurnNode | n
   const seq = ++seqN;
   seqOf.set(run, seq);
   runs.set(keyOf(o.uid, o.sid), run);
+  try {
+    const d = own();
+    const me = selfIdent();
+    d.prepare("INSERT OR REPLACE INTO agent_owner (uid, sid, pid, started, ended, stop, boot, start, node) VALUES (?, ?, ?, ?, 0, 0, ?, ?, ?)").run(o.uid, o.sid, process.pid, run.started, me.boot, me.start, o.node?.id ?? null);
+    d.prepare("DELETE FROM agent_owner WHERE ended > 0 AND ended < ?").run(run.started - 86_400_000);
+    sweepOwners(d);
+  } catch (e) { console.warn("[agent] ghi chủ lượt", (e as Error).message); }
+  stopPoll();
   const numSid = Number(o.sid);
   // Tài khoản đã xóa: getPrefs trả mặc định (đồng bộ bật) và bảng phiên không có khóa ngoại tới users, nên nếu không chặn thì lượt ghi lại prompt và kết quả sau khi đã xóa.
   const sync = () => !run.purged && Number.isSafeInteger(numSid) && !!getUser(o.uid) && getPrefs(o.uid).sync;
@@ -106,6 +175,7 @@ export function startAgentRun(o: { uid: string; sid: string; node?: TurnNode | n
   void work(emit, run.ac.signal).catch((e) => emit({ t: "error", error: (e as Error).message || "Lỗi máy chủ" })).finally(() => {
     clearInterval(saver); clearTimeout(hardStop); clearAsk();
     run.ended = Date.now();
+    try { own().prepare("UPDATE agent_owner SET ended = ? WHERE uid = ? AND sid = ? AND pid = ?").run(run.ended, o.uid, o.sid, process.pid); } catch { /* bỏ qua */ }
     if (run.node) { run.node = closeFolded({ ...run.node, done: true, ...(run.ac.signal.aborted ? { stopped: true } : {}) }); dirty = true; }
     save(true);
     // Bấm Dừng rồi gửi tiếp ngay: lượt mới đã chạy, lượt cũ thoát muộn không được báo phiên đã xong.

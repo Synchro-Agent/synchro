@@ -37,6 +37,25 @@ jobs:
       - name: Build production
         run: NEXT_DIST_DIR=.next-ci NODE_OPTIONS=--max-old-space-size=4096 npx next build 2>&1 | tee build.log; exit ${PIPESTATUS[0]}
 
+      # Bản build vừa dựng gửi kèm deploy: máy chủ bỏ bước build khi đúng commit, đúng băm package-lock và cùng biến NEXT_PUBLIC_
+      # (scripts/server-build.sh, from_artifact). Không khớp thì máy chủ tự build như cũ.
+      - name: Gói bản build cho máy chủ
+        if: github.ref_name == 'main'
+        run: |
+          mkdir -p synchro-artifact
+          tar -czf synchro-artifact/next.tgz --exclude .next-ci/cache .next-ci
+          { echo "sha=${{ github.sha }}"
+            echo "lock=$(sha1sum package-lock.json | cut -d' ' -f1)"
+            echo "pub=$( (env | grep -E '^(NEXT_PUBLIC_[A-Z0-9_]*|APP_URL|SYNCHRO_FIXED_LANG)=' || true) | LC_ALL=C sort | sha1sum | cut -d' ' -f1)"
+            echo "dist=.next-ci"
+            echo "tgz=$(sha256sum synchro-artifact/next.tgz | cut -d' ' -f1)"; } > synchro-artifact/meta
+      - uses: actions/upload-artifact@v4
+        if: github.ref_name == 'main'
+        with:
+          name: next-build
+          path: synchro-artifact/
+          retention-days: 1
+
       - name: Kiểm thử API trên Synchro giả lập
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -78,8 +97,30 @@ jobs:
           if [ -n "${{ secrets.VPS_KNOWN_HOSTS }}" ]; then echo "${{ secrets.VPS_KNOWN_HOSTS }}" >> ~/.ssh/known_hosts; else ssh-keyscan -H ${{ secrets.VPS_HOST }} >> ~/.ssh/known_hosts 2>/dev/null; fi
           scp -i ~/.ssh/id_deploy ci.txt ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/var/www/ci-status/${{ github.ref_name }}.txt || true
 
-  deploy:
+  # Gộp deploy: lần deploy đạt gần nhất (máy chủ ghi /var/lib/synchro-ops/last-deploy-synchro) chưa đủ 15 phút thì chờ cho đủ. Lần đẩy mới
+  # trong lúc chờ hủy lần đang chờ (cancel-in-progress), nên nhiều lần đẩy liền nhau thành một lần deploy của commit mới nhất.
+  coalesce:
     needs: verify
+    if: github.ref_name == 'main'
+    concurrency:
+      group: deploy-wait-${{ github.ref_name }}
+      cancel-in-progress: true
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Chờ đủ 15 phút từ lần deploy trước
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.VPS_KEY }}" > ~/.ssh/id_deploy
+          chmod 600 ~/.ssh/id_deploy
+          if [ -n "${{ secrets.VPS_KNOWN_HOSTS }}" ]; then echo "${{ secrets.VPS_KNOWN_HOSTS }}" >> ~/.ssh/known_hosts; else ssh-keyscan -H ${{ secrets.VPS_HOST }} >> ~/.ssh/known_hosts 2>/dev/null; fi
+          last=$(ssh -i ~/.ssh/id_deploy ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} 'cat /var/lib/synchro-ops/last-deploy-synchro 2>/dev/null || echo 0' | tr -dc 0-9)
+          wait=$(( 900 - ($(date +%s) - ${last:-0}) ))
+          if [ "$wait" -gt 0 ]; then echo "Lần deploy trước cách đây chưa tới 15 phút: chờ $wait giây (lần đẩy mới sẽ thay lần này)."; sleep "$wait"; fi
+
+  # Chỉ hàng đợi một lần: GitHub giữ tối đa một lần chờ trong nhóm, lần mới hơn thay lần cũ hơn. Không bao giờ hủy lần đang deploy.
+  deploy:
+    needs: [verify, coalesce]
     if: github.ref_name == 'main'
     concurrency:
       group: deploy-${{ github.ref_name }}
@@ -88,6 +129,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: next-build
+          path: .synchro-artifact
+
       - name: Cấu hình SSH
         run: |
           mkdir -p ~/.ssh
@@ -95,17 +142,20 @@ jobs:
           chmod 600 ~/.ssh/id_deploy
           if [ -n "${{ secrets.VPS_KNOWN_HOSTS }}" ]; then echo "${{ secrets.VPS_KNOWN_HOSTS }}" >> ~/.ssh/known_hosts; else ssh-keyscan -H ${{ secrets.VPS_HOST }} >> ~/.ssh/known_hosts; fi
 
+      # Vào thư mục incoming, không vào thẳng thư mục app: web đang chạy không thấy mã mới tới khi bản mới đã build xong và được bật
+      # (server-build.sh chép public, db, catalog, scripts, workspace… cùng lúc với bản build).
       - name: Đẩy code lên VPS
         run: |
+          echo "${{ github.sha }}" > .synchro-source-sha
           rsync -az --delete \
             -e "ssh -i ~/.ssh/id_deploy" \
-            --exclude node_modules --exclude .next --exclude .mkvenv --exclude .cache --exclude .git --exclude '.env*' --exclude /data \
-            ./ ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/var/www/synchro/
+            --exclude node_modules --exclude .next --exclude '.next-*' --exclude .mkvenv --exclude .cache --exclude .git --exclude '.env*' --exclude /data \
+            ./ ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/var/www/synchro-incoming/
 
-      - name: Build và khởi động lại
+      - name: Build và chuyển bản
         run: |
           ssh -i ~/.ssh/id_deploy ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} \
-            'nohup bash -c "bash /var/www/synchro/scripts/server-build.sh /var/www/synchro synchro pip && bash /var/www/synchro/workspace/setup.sh" > /var/log/synchro-deploy.log 2>&1 & p=$!; tail -n +1 --pid=$p -f /var/log/synchro-deploy.log & t=$!; wait $p; c=$?; sleep 1; kill $t 2>/dev/null; exit $c'
+            'nohup bash -c "SYNCHRO_INCOMING=/var/www/synchro-incoming bash /var/www/synchro-incoming/scripts/server-build.sh /var/www/synchro synchro pip && bash /var/www/synchro/workspace/setup.sh" > /var/log/synchro-deploy.log 2>&1 & p=$!; tail -n +1 --pid=$p -f /var/log/synchro-deploy.log & t=$!; wait $p; c=$?; sleep 1; kill $t 2>/dev/null; exit $c'
 
   deploy-staging:
     needs: verify
@@ -128,7 +178,7 @@ jobs:
         run: |
           rsync -az --delete \
             -e "ssh -i ~/.ssh/id_deploy" \
-            --exclude node_modules --exclude .next --exclude .mkvenv --exclude .cache --exclude .git --exclude '.env*' --exclude /data \
+            --exclude node_modules --exclude .next --exclude '.next-*' --exclude .mkvenv --exclude .cache --exclude .git --exclude '.env*' --exclude /data \
             ./ ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/var/www/synchro-staging/
 
       - name: Build và khởi động lại staging
