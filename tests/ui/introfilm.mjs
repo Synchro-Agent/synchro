@@ -1,5 +1,5 @@
 // Kiểm thử giao diện bằng Chrome ẩn (hồ sơ riêng) trên npm run dev:mock. Chạy tay: node tests/ui/introfilm.mjs
-// Phim giới thiệu cho tài khoản mới (app/introfilm.tsx, chuyển cảnh app/handoff.ts): đăng ký bằng email → lời chào → vòng tròn kính quanh logo
+// Phim giới thiệu cho tài khoản mới (app/introfilm.tsx, chuyển cảnh app/handoff.ts): đăng ký bằng email → Kiểm tra email → Đăng nhập lần đầu → lời chào → vòng tròn kính quanh logo
 // hoá mực rồi nở ra phủ màn hình, logo thu về giữa thành chấm mở đầu của phim → phim phát có tiếng, phụ đề tiếng Việt, chấm của phim thế chỗ
 // bản sao → Bỏ qua (tài khoản 1) / hết phim (tài khoản 2) → logo bay về chỗ trong app, nền phim mở ra thành lỗ tròn, trang chủ lắp lại → vào app;
 // tải lại không phát lại; đăng xuất rồi đăng nhập lại (tài khoản 1): logo của lời chào bay về cạnh lời chào ở trang chủ, màn đăng nhập mở ra
@@ -68,6 +68,14 @@ async function signup(tag) {
   // Ô vừa hiện còn đang chạy hiệu ứng: gõ lại tới khi ô nhận chữ.
   for (let i = 0; i < 4 && !(await ev(`${field("input[autocomplete=name]")}?.value`)); i++) { await click(field("input[autocomplete=name]"), "name"); await type("Lâm Thử Phim"); await sleep(300); }
   await click(field("input[autocomplete=bday]"), "dob"); await type("01022000"); await enter();
+  // Đăng ký không tự đăng nhập (blueprint F2.4): bước "Kiểm tra email" giống hệt email đã có tài khoản, có nút Đăng nhập; lần đăng nhập đầu
+  // của tài khoản vừa tạo mới phát phim.
+  await until(`/Check your email|Kiểm tra email/.test(document.body.innerText)`, 20000, "check-email step");
+  const signInBtn = `[...document.querySelectorAll("button")].find((b) => /^(Sign in|Đăng nhập)$/.test(b.textContent.trim()))`;
+  await until(`!!${signInBtn}`, 8000, "sign-in button"); await sleep(500);
+  await click(signInBtn, "sign in");
+  await until(`!!${field("input[type=password]")}`, 15000, "password (first login)"); await sleep(500);
+  await click(field("input[type=password]"), "password"); await type(password); await enter();
   await until(`!!document.querySelector(".auth-welcome")`, 20000, "welcome");
 }
 

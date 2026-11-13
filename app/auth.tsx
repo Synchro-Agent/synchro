@@ -17,6 +17,7 @@ import { getLang } from "./i18n";
 import { LangSwitch } from "./langswitch";
 import { assemble, boxOf, center, fly, markTarget, onScreen, openHole, reducedMotion, settleApp } from "./handoff";
 import { preloadIntro, wantsIntro } from "./introfilm";
+import { firstKind } from "./introflag";
 import { TurnstileBox, useTurnstileKey } from "./turnstilebox";
 import { passkeyAbort, passkeyAssert, passkeyAutofill, passkeyCancelled, passkeySupported } from "./passkeyclient";
 
@@ -316,19 +317,23 @@ export const AuthComponent = ({ logo = <DefaultLogo />, brandName = "EaseMize", 
     setStage("loading");
     const t0 = Date.now();
     try {
-      const { user: u, pending, mfa } = await post<{ user: AuthUser; pending?: boolean; mfa?: boolean }>(url, body);
+      const { user: u, pending, mfa, firstLogin } = await post<{ user: AuthUser; pending?: boolean; mfa?: boolean; firstLogin?: boolean }>(url, body);
       await wait(minMs - (Date.now() - t0));
       // Tài khoản đã bật xác minh hai bước: hỏi mã rồi mới đăng nhập.
       if (mfa) { busy.current = false; setAuthStep("mfa"); setMfaCode(""); setPassword(""); setStage("form"); return; }
-      // Email này không tạo mới được: không nói lý do (ai cũng gõ được email của người khác), thư hướng dẫn đã gửi tới chính hộp thư đó.
+      // Đăng ký luôn trả về pending (blueprint F2.4), dù email mới hay đã có tài khoản: không nói lý do (ai cũng gõ được email của người khác),
+      // thư xác minh hoặc thư "bạn đã có tài khoản" đã gửi tới chính hộp thư đó. Người dùng mới bấm đường dẫn trong thư rồi đăng nhập từ bước này.
       if (pending) { busy.current = false; setAuthStep("pending"); setPassword(""); setConfirmPassword(""); setStage("form"); return; }
+      // Lần đăng nhập đầu của tài khoản (máy chủ báo firstLogin, dù đăng ký từ hôm nào): chào "Welcome to Synchro" và phát phim như vừa đăng ký.
+      const kk: Kind = firstKind(k, firstLogin);
+      if (kk !== k) setKind(kk);
       // Chưa có hồ sơ (vd. tài khoản cũ): bỏ qua lời chào, chuyển thẳng sang bước điền hồ sơ.
-      if (u.needsProfile) { busy.current = false; onDone?.(u, k); return; }
+      if (u.needsProfile) { busy.current = false; onDone?.(u, kk); return; }
       setDoneUser(u);
       setStage("success");
       // Tài khoản mới: tải trước phim giới thiệu trong lúc hiện lời chào.
-      if (wantsIntro(u, k)) preloadIntro();
-      setTimeout(() => onDone?.(u, k), SUCCESS_HOLD);
+      if (wantsIntro(u, kk)) preloadIntro();
+      setTimeout(() => onDone?.(u, kk), SUCCESS_HOLD);
     } catch (e) { busy.current = false; setMfaCode(""); if ((e as { data?: { captcha?: boolean } }).data?.captcha) setNeedCaptcha(true); fail((e as Error).message); }
   };
 
@@ -462,7 +467,7 @@ export const AuthComponent = ({ logo = <DefaultLogo />, brandName = "EaseMize", 
     // Không lộ email đã có tài khoản hay chưa: cùng một bước cho cả hai, nói rõ cả hai đường đi.
     password: [isLogin ? (signupOpen ? "Sign in or create an account" : "Enter your password") : "Create your password", isLogin ? (signupOpen ? "Have an account? Enter your password. New here? Create one below." : "Enter your password to sign in.") : "Your password must be at least 8 characters long."],
     mfa: ["Two-step verification", "Enter the 6-digit code from your authenticator app, or a recovery code."],
-    pending: ["Check your email", "We sent the next step to this address. If you already have an account, sign in or reset your password."],
+    pending: ["Check your email", "We sent the next step to this address. Open the link in the email, then sign in with your password."],
     confirmPassword: ["One last step", "Confirm your password to continue"],
     profile: ["Tell us about you", "Synchro uses this to make your experience feel personal."],
   };
@@ -595,6 +600,7 @@ export const AuthComponent = ({ logo = <DefaultLogo />, brandName = "EaseMize", 
                     </BlurFade>}
                     {authStep === "pending" && <BlurFade delay={OUT + STEP * 2} className="w-full">
                         <p className="auth-signed-as" data-notr><b>{email}</b></p>
+                        <GlassButton type="button" className="w-full mt-4 [&>button]:w-full" contentClassName="flex items-center justify-center w-full" onClick={() => { setIsLogin(true); setPassword(""); setConfirmPassword(""); setAuthStep("password"); }}><span className="font-semibold text-foreground">Sign in</span></GlassButton>
                         <button type="button" onClick={handleGoBack} className="mt-4 flex items-center gap-2 text-sm text-foreground/70 hover:text-foreground transition-colors"><ArrowLeft className="w-4 h-4" /> Go back</button>
                     </BlurFade>}
                     <AnimatePresence>

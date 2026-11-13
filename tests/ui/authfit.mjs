@@ -16,9 +16,12 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 // sẵn. Đăng ký một tài khoản thường rồi sửa phản hồi /api/auth/me thành needsProfile: true, như tài khoản Google vừa tạo.
 let cookie = "";
 {
-  const r = await fetch(B + "/api/auth/signup", { method: "POST", headers: { "content-type": "application/json", origin: B }, body: JSON.stringify({ email: `authfit-${Date.now()}@synchro.test`, password: "authfit-mock-123", profile: { fullName: "Authfit Tester", birthDate: "2000-01-01" } }) });
+  // Đăng ký không cấp phiên (blueprint F2.4): đăng nhập bằng mật khẩu vừa đặt.
+  const H = { "content-type": "application/json", origin: B }, email = `authfit-${Date.now()}@synchro.test`, password = "authfit-mock-123";
+  await fetch(B + "/api/auth/signup", { method: "POST", headers: H, body: JSON.stringify({ email, password, profile: { fullName: "Authfit Tester", birthDate: "2000-01-01" } }) });
+  const r = await fetch(B + "/api/auth/login", { method: "POST", headers: H, body: JSON.stringify({ email, password }) });
   for (const c of r.headers.getSetCookie?.() ?? []) if (c.startsWith("synchro_session=")) cookie = c.split(";")[0];
-  if (!cookie) throw new Error("signup failed: " + r.status);
+  if (!cookie) throw new Error("signup/login failed: " + r.status);
 }
 
 // Logo (.auth-head) không chạm phần tử nào có chữ / ô nhập của khung; trả về danh sách phần tử bị đè.
