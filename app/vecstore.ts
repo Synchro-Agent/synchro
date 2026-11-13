@@ -167,10 +167,15 @@ export async function embedPending(scope: string, owner: string, max = 256): Pro
   };
   let done = 0;
   const seen = new Set<string>();
+  // stuck: số mục đã xét trong lần chạy này mà pending vẫn trả lại (nằm đầu danh sách). Lượt sau xin thêm đúng chừng đó để chạm tới
+  // các mục phía sau, và điều kiện dừng dựa vào độ dài thô của pending (không phải sau khi lọc), nên vài mục kẹt không chặn cả hàng.
+  let stuck = 0;
   for (let round = 0; round < 40 && done < max; round++) {
-    const limit = Math.min(BATCH * 2, max - done);
-    const list = (await src.pending(owner, tg.model, limit)).filter((x) => !seen.has(x.item));
-    if (!list.length) break;
+    const limit = Math.min(BATCH * 2, max - done), want = limit + stuck;
+    const raw = await src.pending(owner, tg.model, want);
+    const fresh = raw.filter((x) => !seen.has(x.item));
+    stuck = raw.length - fresh.length;
+    const list = fresh.slice(0, limit);
     for (const x of list) seen.add(x.item);
     const now = Date.now(), need: (VecItem & { h: string; text: string })[] = [];
     for (const it of list) {
@@ -186,7 +191,7 @@ export async function embedPending(scope: string, owner: string, max = 256): Pro
       if (n === null) return done;
       done += n;
     }
-    if (list.length < limit) break;
+    if (raw.length < want) break;
   }
   return done;
 }
@@ -360,7 +365,12 @@ export function skillPending(all: VecItem[], owner: string, model: string, limit
   const have = new Map((t().prepare("SELECT item, hash FROM vec_items WHERE scope = ? AND owner = ? AND model = ?").all(SKILL_SCOPE, owner, model) as { item: string; hash: string }[])
     .map((r) => [r.item, r.hash]));
   const out: VecItem[] = [];
+  // Một tên có thể nằm ở vài thư viện (curated / user giữ nguyên tên) với mô tả khác nhau, nhưng vec_items chỉ giữ một mã băm mỗi tên:
+  // giữ bản đầu tiên (đúng bản mà việc phân giải tên chọn, vì studio / curated đứng trước), nếu không bản còn lại luôn "đã đổi" và bị embed lại mỗi nhịp.
+  const once = new Set<string>();
   for (const x of all) {
+    if (once.has(x.item)) continue;
+    once.add(x.item);
     const h = have.get(x.item);
     if (h !== undefined && h === vecHash(x.text, TEXT_MAX)) continue;
     out.push(x);
