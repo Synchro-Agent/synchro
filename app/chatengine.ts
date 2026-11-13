@@ -22,12 +22,13 @@ import { artState, cleanBase, resolveArt, type ArtVersion } from "./vfs";
 import { hasArtifacts, splitArtifacts } from "./artifacts";
 import { AUTO, autoEffort, effortLabel, inputOfChat, isAck, needsNoTools, typedText, routeModel, taskLabel, taskOf as routeTask, type RouteInput } from "./router";
 import { ALL } from "./catalog";
-import { everywhereSkills, libraryPlugins, recordPluginUse, STUDIOS, studioOf, studioSkills, type Studio } from "./plugins";
+import { everywhereSkills, libraryPlugins, pluginCacheGen, recordPluginUse, STUDIOS, studioOf, studioSkills, type Studio } from "./plugins";
 import { rank } from "./skillroute";
 import { ruleStudios } from "./studiorules";
 import { PLUGIN_CATS, STUDIO_LABEL } from "./plugindir";
 import { dirCats } from "./claudedir";
-import { ownSkillFits, suggest, type Hit } from "./skillroute";
+import { candidateKey, ownSkillFits, prepareCandidates, suggestSemantic, type Hit } from "./skillroute";
+import { embeddingsConfigured, nearestSkills } from "./vecstore";
 import type { Skill } from "./skillstore";
 import { CODE_RULES, execRun, LANGS, runCodeTool, runner, RUN_LIMITS, type Lang, type RecalcReport, type RunOutput } from "./coderun";
 import { plainSummary, runBlocks } from "./runtext";
@@ -1388,7 +1389,12 @@ async function skillSet(user: UserRow, body: Record<string, any>, messages: unkn
     // giảm bớt, để thư viện chọn lọc đứng trước hàng nghìn skill na ná của danh mục.
     const want = ruleStudios("", typed).scores;
     const inStudio = (k: Skill) => (libs[k.name] ?? []).some((l) => l.key.startsWith("studio-") && want[l.key.slice(7) as Studio] > 0);
-    const raw = suggest(typed, list.map((k) => ({ skill: k, weight: (catSkills.has(k) ? 0.5 : 1) * (inStudio(k) ? 1.3 : 1) })));
+    // D4: nhớ đệm tập ứng viên theo (người dùng, thế hệ bộ đệm plugin) để không dựng lại cả kho mỗi lượt; trọng số phụ thuộc câu hỏi nên áp lên trên.
+    const prep = prepareCandidates(candidateKey(c.user.id, pluginCacheGen()), list.map((k) => ({ skill: k })));
+    const cands = prep.names.map((n) => prep.byName.get(n)!).map((b) => ({ skill: b.skill, weight: (catSkills.has(b.skill) ? 0.5 : 1) * (inStudio(b.skill) ? 1.3 : 1) }));
+    // Có provider embedding: lấy ~50 skill gần nhất theo nghĩa rồi chấm lại; không có thì suggestSemantic tự lùi về bộ chấm từ khóa. Skill riêng (không thuộc danh mục) luôn được giữ.
+    const keep = new Set(cands.filter((x) => !catSkills.has(x.skill)).map((x) => x.skill.name));
+    const raw = await suggestSemantic(typed, cands, { keep, nearest: embeddingsConfigured() ? (q, _names, k) => nearestSkills(c.user.id, q, k) : undefined });
     const votes = new Map<string, number>();
     for (const h of raw) for (const l of libs[h.skill.name] ?? []) votes.set(l.key, (votes.get(l.key) ?? 0) + h.score / (libs[h.skill.name]!.length));
     // Skill ở nhiều thư viện (Synchro tự xếp một skill vào 2–3 mục) mà phiếu ngang nhau: nghiêng về mục chính câu yêu cầu nói tới

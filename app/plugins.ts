@@ -9,7 +9,8 @@ import path from "node:path";
 import crypto from "node:crypto";
 import JSZip from "jszip";
 import { measureZip, SKILL_ZIP_MAX } from "../scripts/zipguard.mjs";
-import { db } from "./authstore";
+import { db, findByEmail, OWNER_EMAILS } from "./authstore";
+import { queueSkillEmbed, registerSkillVecSource } from "./vecstore";
 import { download, enabledSkillsByIds, isAllowed, isText, lenientSkillMd, parseEntries, parseSkillMd, ROOT, type Entry, type Skill } from "./skillstore";
 import { GH_API } from "./github";
 import { registerMemStat } from "./memstat";
@@ -662,6 +663,18 @@ const CG = globalThis as unknown as { __plRev?: number; __plCache?: Cache | null
 // Cài hàng loạt (plugjob.ts) đặt __plBulk: hàng nghìn thư viện được thêm liên tục trong vài giờ, dựng lại bộ đệm sau mỗi thư viện thì lượt chat
 // nào cũng phải chờ dựng lại cả kho. Khi đó giữ bộ đệm cũ tối đa 60 giây (thư viện mới vào chat chậm tối đa một phút), chat vẫn mượt.
 const touch = () => { CG.__plRev = (CG.__plRev ?? 0) + 1; if (!CG.__plBulk) CG.__plCache = null; };
+/** Thế hệ bộ đệm plugin: tăng mỗi khi thư viện / skill đổi (touch). D4 dùng làm một phần khóa nhớ đệm tập ứng viên định tuyến. */
+export const pluginCacheGen = () => CG.__plRev ?? 0;
+// D4: đăng ký nguồn embed kho skill một lần. enumerate đọc bộ đệm skill hiện tại; payer là chủ sở hữu (chịu chi phí embed).
+const SV = globalThis as unknown as { __skillVecReg?: boolean };
+function ensureSkillVec() {
+  if (SV.__skillVecReg) return;
+  SV.__skillVecReg = true;
+  registerSkillVecSource(
+    () => [...(CG.__plCache?.skills.values() ?? [])].flat().map((k) => ({ item: k.name, text: `${k.name} ${k.description}`, srcAt: CG.__plRev ?? 0 })),
+    () => { for (const e of OWNER_EMAILS) { const u = findByEmail(e); if (u) return u.id; } return null; },
+  );
+}
 export const setBulk = (on: boolean) => { CG.__plBulk = on; if (!on) { CG.__plCache = null; zipCache.clear(); trimZips(); } };
 // Hàm đọc nội dung chỉ giữ id của skill, không giữ cả hàng cơ sở dữ liệu (hàng có report JSON của bản kiểm tra): ~18.000 closure giữ cả hàng là vài chục MB chết.
 function lazySkill(r: Pick<CRow, "id" | "plugin_id" | "description" | "storage_path" | "use_count">, name: string): Skill {
@@ -714,7 +727,11 @@ function snap(): Cache {
   }
   // Dựng sẵn chỉ mục của bộ định tuyến skill ở nền, không để lượt chat kế tiếp phải chờ.
   void warmSkillIndex([...skills.values()].flat()).catch(() => {});
-  return (CG.__plCache = { rev: CG.__plRev ?? 0, tags: t, at: Date.now(), rows, meta, lite, skills, tagged });
+  const cache = (CG.__plCache = { rev: CG.__plRev ?? 0, tags: t, at: Date.now(), rows, meta, lite, skills, tagged });
+  // D4: embed kho skill cho bộ chọn theo nghĩa. Mặc định TẮT (SYNCHRO_SKILL_EMBED != "1") để không thêm tải / chi phí lên VPS đang chạy;
+  // chỉ chạy ở nền khi quản trị viên bật và đã nhập khóa embedding. embedPending bỏ qua skill đã embed và không đổi nội dung.
+  if (process.env.SYNCHRO_SKILL_EMBED === "1") { ensureSkillVec(); queueSkillEmbed(); }
+  return cache;
 }
 // Tên gốc của skill (bỏ tiền tố "thư-viện:" khi trùng tên) để tra nhãn mục.
 const rawName = (k: Skill, slug: string) => (k.name.startsWith(slug + ":") ? k.name.slice(slug.length + 1) : k.name);

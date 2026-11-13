@@ -335,3 +335,48 @@ export function suggest(q: string, cands: Candidate[], max = 4): Hit[] {
   if (top < 2) return [];
   return hits.filter((h) => h.score >= top * 0.45).slice(0, max);
 }
+
+// ---------------------------------------------------------------- D4: chọn skill theo nghĩa, chi phí cố định mỗi lượt
+// Dựng lại Map ứng viên và nạp cả kho (~18.000 skill) vào chỉ mục mỗi lượt là tốn; giữ tập ứng viên đã chuẩn bị theo
+// (người dùng, thế hệ bộ đệm plugin). Thế hệ chỉ đổi khi bộ đệm plugin dựng lại — đúng lúc các đối tượng Skill đổi — nên
+// bộ nhớ đệm không bao giờ trỏ tới đối tượng cũ. Khóa gộp cả uid vì mỗi người có bộ skill riêng (studio, thư viện đã cài).
+export const candidateKey = (uid: string, gen: number | string) => `${uid}\u0000${gen}`;
+export type PreparedCands = { byName: Map<string, Candidate>; names: string[] };
+const GC = globalThis as unknown as { __skillCandCache?: Map<string, PreparedCands> };
+const candCache = (GC.__skillCandCache ??= new Map<string, PreparedCands>());
+/** Chuẩn bị (và nhớ đệm theo khóa) tập ứng viên: chỉ dựng Map một lần cho tới khi bộ đệm plugin dựng lại (khóa đổi). */
+export function prepareCandidates(key: string, cands: Candidate[]): PreparedCands {
+  const p = candCache.get(key);
+  if (p) return p;
+  const byName = new Map<string, Candidate>();
+  for (const c of cands) byName.set(c.skill.name, c);
+  const prepared: PreparedCands = { byName, names: [...byName.keys()] };
+  // Giữ gọn: mỗi người dùng × thế hệ một mục, bỏ mục cũ nhất khi quá nhiều (nhiều người dùng đồng thời).
+  if (candCache.size >= 128) candCache.delete(candCache.keys().next().value!);
+  candCache.set(key, prepared);
+  return prepared;
+}
+/** Bỏ mục đã nhớ (bộ đệm plugin dựng lại, hoặc kiểm thử). Không có khóa: xóa hết. */
+export const dropCandidateCache = (key?: string) => { if (key) candCache.delete(key); else candCache.clear(); };
+
+// Hàm tìm skill gần nhất theo nghĩa (embedding). Trả null nghĩa là không có provider embedding / chưa có vector / quá hạn thời gian:
+// khi đó lùi về bộ chấm từ khóa. Tách khỏi vecstore (DB) để skillroute vẫn nạp được trong kiểm thử không cần máy chủ.
+export type NearestFn = (query: string, names: string[], k: number) => Promise<string[] | null>;
+let warnedNoEmbed = false;
+/**
+ * Chọn skill theo nghĩa ở chi phí cố định: lấy ~k skill gần nhất theo cosine rồi chấm lại bằng chính bộ chấm cũ (rank/suggest).
+ * Không có provider embedding (nearest không truyền hoặc trả null): lùi về bộ chấm từ khóa như cũ và ghi nhật ký một lần.
+ * keep: luôn giữ lại các skill này dù không nằm trong top gần nhất (skill riêng của người dùng — ít, luôn nên xét).
+ */
+export async function suggestSemantic(q: string, cands: Candidate[], opts: { max?: number; nearest?: NearestFn; keep?: Set<string>; k?: number } = {}): Promise<Hit[]> {
+  const { nearest, max, keep, k = 50 } = opts;
+  if (!nearest) {
+    if (!warnedNoEmbed) { warnedNoEmbed = true; console.log("[skillroute] không có provider embedding: chọn skill bằng bộ chấm từ khóa"); }
+    return suggest(q, cands, max);
+  }
+  const names = await nearest(q, cands.map((c) => c.skill.name), k).catch(() => null);
+  if (!names) return suggest(q, cands, max);
+  const near = new Set(names);
+  const narrowed = cands.filter((c) => near.has(c.skill.name) || keep?.has(c.skill.name));
+  return suggest(q, narrowed.length ? narrowed : cands, max);
+}
