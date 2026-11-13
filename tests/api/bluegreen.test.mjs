@@ -213,7 +213,9 @@ const bin = path.join(tmp, "bin");
 fs.mkdirSync(bin);
 const log = path.join(tmp, "calls.log");
 const fake = (name, body) => { fs.writeFileSync(path.join(bin, name), `#!/usr/bin/env bash\necho "${name} $*" >> "${log}"\n${body}\n`); fs.chmodSync(path.join(bin, name), 0o755); };
-fake("nginx", `[ "$1" = "-t" ] && [ -n "\${FAKE_NGINX_FAIL:-}" ] && grep -q "\${FAKE_NGINX_FAIL}" "$BG_UPSTREAM" && exit 1; exit 0`);
+// nginx giả nhớ cấu hình đang chạy (chỉ đổi khi reload); FAKE_SIG_IN_T: gửi tín hiệu cho script đang chạy nginx -t.
+fake("nginx", `if [ "$1" = "-t" ]; then [ -n "\${FAKE_SIG_IN_T:-}" ] && kill -s "$FAKE_SIG_IN_T" $PPID; [ -n "\${FAKE_NGINX_FAIL:-}" ] && grep -q "\${FAKE_NGINX_FAIL}" "$BG_UPSTREAM" && exit 1; exit 0; fi
+[ "$1 $2" = "-s reload" ] && sed -n 's/.*127\\.0\\.0\\.1:\\([0-9]*\\).*/\\1/p' "$BG_UPSTREAM" > "$BG_STATE_DIR/running"; exit 0`);
 fake("pm2", "exit 0");
 fake("curl", `case "$*" in *api/health*) printf '%s' "\${FAKE_HEALTH:-}" ;; esac; exit 0`);
 const lib = path.join(process.cwd(), "scripts", "bluegreen-lib.sh");
@@ -279,6 +281,20 @@ const calls = () => { const s = fs.existsSync(log) ? fs.readFileSync(log, "utf8"
   ok(r.out === "blue" && fs.readFileSync(path.join(tmp, "live-color"), "utf8") === "blue 3000 /var/www/synchro\n", "DEPLOY-1: tệp màu sống được sửa theo cổng nginx", r);
   r = sh("bg_stop green; echo rc=$?");
   ok(/rc=0/.test(r.out) && calls().includes("pm2 stop synchro-green"), "DEPLOY-1: màu nghỉ thì dừng được", r);
+  // Tín hiệu tới giữa nginx -t: việc đổi vẫn làm trọn (tệp = cấu hình đang chạy), tín hiệu được xử lý sau.
+  const running = () => fs.readFileSync(path.join(tmp, "running"), "utf8").trim();
+  r = sh('trap "exit 143" TERM; bg_switch_upstream 3002; echo after', { FAKE_SIG_IN_T: "TERM" });
+  ok(r.code === 143 && !/after/.test(r.out) && running() === "3002" && sh("bg_upstream_port").out === "3002", "DEPLOY-1: SIGTERM giữa nginx -t được hoãn tới khi reload xong (tệp upstream luôn khớp nginx đang chạy)", { r, running: running() });
+  // Tệp đã đổi nhưng nginx chưa reload (SIGKILL giữa chừng): nạp lại theo tệp trước khi tin nó.
+  fs.writeFileSync(path.join(tmp, "running"), "3000\n");
+  fs.writeFileSync(path.join(tmp, "live-color"), "blue 3000 /var/www/synchro\n");
+  r = sh("bg_sync_live /var/www/synchro; bg_live_color");
+  ok(r.out.endsWith("green") && running() === "3002", "DEPLOY-1: tệp upstream khác màu sống: reload nginx theo tệp rồi mới sửa màu sống", { r, running: running() });
+  fs.writeFileSync(path.join(tmp, "running"), "3000\n");
+  fs.writeFileSync(path.join(tmp, "live-color"), "blue 3000 /var/www/synchro\n");
+  calls();
+  r = sh("bg_stop green; echo rc=$?");
+  ok(/rc=1/.test(r.out) && running() === "3002" && !calls().includes("pm2 stop synchro-green"), "DEPLOY-1: trước khi dừng màu nào cũng nạp lại nginx nếu tệp khác màu sống; không dừng màu nginx đang chạy", { r, running: running() });
   const sb = fs.readFileSync(path.join(process.cwd(), "scripts", "server-build.sh"), "utf8");
   ok(sb.indexOf('BG=0; bg_enabled "$APP" && BG=1') > sb.indexOf("flock -w 900 9") && !/PORT=3001/.test(sb) && /bg_pm2_has "\$PM2"/.test(sb), "DEPLOY-2: chọn cách deploy sau khi giữ khóa; production đã chuyển không đi đường một tiến trình nếu thiếu app pm2; không bao giờ đoán cổng 3001");
   const bgPart = sb.slice(sb.indexOf("# ---------------- Xanh/lam"));

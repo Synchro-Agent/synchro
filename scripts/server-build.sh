@@ -183,6 +183,8 @@ if [ "$BG" = 1 ]; then
   rollback() {
     [ -z "$ROLLED" ] || return 0
     ROLLED=1
+    # Tệp upstream phải đúng là cấu hình nginx đang chạy trước khi dựa vào nó (đổi nginx có thể bị cắt giữa chừng).
+    bg_nginx_settle
     if [ "$(bg_upstream_port)" = "$NEWPORT" ]; then echo "nginx đã trỏ bản mới ($NEWPORT): giữ nguyên, không rollback." >&2; return 0; fi
     echo "BẢN MỚI KHÔNG ĐẠT ($1): giữ nguyên bản $LIVE ($OLDID), web không bị gián đoạn." >&2
     bg_pm2 logs "$NEWPM2" --nostream --lines 40 >&2 || true

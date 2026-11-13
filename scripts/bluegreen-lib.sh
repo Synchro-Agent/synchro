@@ -47,6 +47,7 @@ bg_start() { # bg_start <app> <màu>: bật (hoặc bật lại) màu theo ecosy
 # pm2 stop gửi SIGTERM rồi chờ tiến trình thoát (tối đa kill_timeout 30 giây): bản cũ chạy nốt lượt đang dở (app/drain.ts).
 # Không bao giờ dừng màu mà nginx đang trỏ tới (tệp upstream là nguồn sự thật): trả mã lỗi, người gọi quyết định.
 bg_stop() {
+  bg_nginx_settle
   if [ "$(bg_port_of "$1")" = "$(bg_upstream_port)" ] && [ "${BG_STOP_FORCE:-}" != 1 ]; then
     bg_log "không dừng $1: nginx đang trỏ cổng $(bg_port_of "$1") của nó"; return 1
   fi
@@ -82,6 +83,7 @@ bg_via_nginx() { # bg_via_nginx <mã bản>
 # sửa tệp màu sống theo nó. Tiến trình của màu đó nhận vai primary khi màu cũ thoát (app/role.ts).
 bg_sync_live() { # bg_sync_live <app>
   local up c
+  bg_nginx_settle
   up=$(bg_upstream_port); c=$(bg_color_of_port "$up") || return 0
   [ "$(bg_live_color)" = "$c" ] && [ "$(bg_live_app)" = "$1" ] && return 0
   [ -n "$(bg_live_color)" ] || return 0
@@ -91,7 +93,31 @@ bg_sync_live() { # bg_sync_live <app>
 bg_upstream_port() { [ -f "$BG_UPSTREAM" ] && sed -n 's/.*127\.0\.0\.1:\([0-9]*\).*/\1/p' "$BG_UPSTREAM" | head -1 || true; }
 # Trỏ nginx sang cổng mới: ghi tệp include nguyên tử, nginx -t, reload (nginx giữ kết nối đang mở tới bản cũ tới khi xong).
 # nginx -t hay reload lỗi: trả tệp cũ về (hoặc xóa nếu trước đó chưa có), reload lại cấu hình cũ, trả mã lỗi; không chuyển gì cả.
+# Tệp upstream chỉ là sự thật khi nginx đã nạp nó. Tệp khác màu sống (lần đổi trước bị cắt giữa lúc ghi tệp và reload: SIGKILL, mất điện):
+# nạp lại nginx theo tệp trước khi tin nó; nginx -t lỗi thì trả tệp trước đó (.bak nếu còn) và nạp lại.
+bg_nginx_settle() {
+  local f="$BG_UPSTREAM" up
+  [ -f "$f" ] || return 0
+  up=$(bg_color_of_port "$(bg_upstream_port)") || return 0
+  [ -z "$(bg_live_color)" ] || [ "$(bg_live_color)" != "$up" ] || return 0
+  if nginx -t >/dev/null 2>&1 && nginx -s reload >/dev/null 2>&1; then bg_log "tệp upstream khác màu sống: đã nạp lại nginx theo tệp (cổng $(bg_upstream_port))"; rm -f "$f.bak"; return 0; fi
+  bg_log "tệp upstream không qua nginx -t: trả tệp trước đó"
+  [ -f "$f.bak" ] && mv -f "$f.bak" "$f"
+  nginx -t >/dev/null 2>&1 && nginx -s reload >/dev/null 2>&1 || bg_log "CẢNH BÁO: nginx -t vẫn lỗi, cần xem tay"
+  return 0
+}
+# Ghi tệp + nginx -t + reload là một khối: HUP/INT/TERM tới giữa chừng được hoãn tới khi xong (tệp và cấu hình đang chạy luôn khớp), rồi gửi lại.
 bg_switch_upstream() { # bg_switch_upstream <cổng>
+  local old rc
+  old=$(trap -p HUP INT TERM)
+  BG_PENDING_SIG=""
+  trap 'BG_PENDING_SIG=HUP' HUP; trap 'BG_PENDING_SIG=INT' INT; trap 'BG_PENDING_SIG=TERM' TERM
+  rc=0; bg_switch_upstream_now "$1" || rc=$?
+  trap - HUP INT TERM; eval "$old"
+  if [ -n "$BG_PENDING_SIG" ]; then bg_log "nhận $BG_PENDING_SIG giữa lúc đổi nginx: đã đổi xong, giờ mới xử lý tín hiệu"; kill -s "$BG_PENDING_SIG" $$; fi
+  return "$rc"
+}
+bg_switch_upstream_now() {
   local f="$BG_UPSTREAM" had=0
   mkdir -p "$(dirname "$f")"
   if [ -f "$f" ]; then cp -p "$f" "$f.bak"; had=1; fi
