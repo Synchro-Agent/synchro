@@ -52,11 +52,12 @@ export function LogoutConfirm({ localOnly, flush, onCancel, onOk }: { localOnly:
   };
   const note: React.CSSProperties = { margin: "-8px 0 14px 26px", fontSize: 13, lineHeight: "19px" };
   return (
-    <Confirm title="Đăng xuất?" text="Bạn có chắc chắn muốn đăng xuất không? Dữ liệu của bạn vẫn được giữ cho lần đăng nhập sau." ok={busy ? "Đang lưu lên máy chủ…" : clear && left > 0 ? "Vẫn xóa và đăng xuất" : "Đăng xuất"} busy={busy} onCancel={cancel} onOk={() => void go()}>
+    <Confirm title="Đăng xuất?" text="Bạn có chắc chắn muốn đăng xuất không?" ok={busy ? "Đang lưu lên máy chủ…" : clear && left > 0 ? "Vẫn xóa và đăng xuất" : "Đăng xuất"} busy={busy} onCancel={cancel} onOk={() => void go()}>
       <label style={{ display: "flex", gap: 8, alignItems: "flex-start", margin: "0 0 14px", fontSize: 14 }}>
         <input type="checkbox" style={{ marginTop: 3, flex: "none" }} checked={clear} disabled={busy} onChange={(e) => { setClear(e.target.checked); setLeft(0); }} />
         <span>Xóa dữ liệu trên thiết bị này</span>
       </label>
+      {!clear && <p style={note}>Dữ liệu của tài khoản này vẫn được giữ trên thiết bị cho lần đăng nhập sau.</p>}
       {clear && <p style={note}>Đoạn chat, dự án và bản nháp của tài khoản này được xóa khỏi trình duyệt. Đăng nhập lại thì tải về từ máy chủ.</p>}
       {clear && localOnly > 0 && <p style={note}>Phiên Code chỉ lưu trên thiết bị này (chưa bật Đồng bộ phiên ở Cài đặt → Synchro Code) cũng sẽ bị xóa.</p>}
       {clear && left > 0 && <p role="alert" style={{ ...note, color: "var(--danger,#c4453c)" }}>Một số đoạn chat hoặc phiên Code chưa lên được máy chủ (mất mạng hoặc máy chủ lỗi). Xóa bây giờ sẽ mất phần đó. Bỏ chọn ô trên để giữ lại trên thiết bị này.</p>}

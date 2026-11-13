@@ -232,8 +232,9 @@ export const VI2EN: Record<string, string> = {
   "Tạo dự án": "Create project", "Đặt tên cho dự án": "Name your project", "Mô tả dự án, mục tiêu, chủ đề, v.v.": "Describe your project, goals, subject, etc.", "← Tất cả dự án": "← All projects",
   "Xóa dự án": "Delete project", "Xóa dự án?": "Delete project?", "Dự án sẽ bị xóa. Các đoạn chat bên trong vẫn được giữ lại.": "The project will be deleted. Chats inside it will be kept.",
   "Xóa đoạn chat?": "Delete chat?", "Bạn có chắc chắn muốn xóa đoạn chat này không?": "Are you sure you want to delete this chat?",
-  "Đăng xuất?": "Log out?", "Bạn có chắc chắn muốn đăng xuất không? Dữ liệu của bạn vẫn được giữ cho lần đăng nhập sau.": "Are you sure you want to log out? Your data is kept for the next time you sign in.",
+  "Đăng xuất?": "Log out?", "Bạn có chắc chắn muốn đăng xuất không?": "Are you sure you want to log out?",
   // Hộp đăng xuất: xóa dữ liệu trên thiết bị (modals.tsx LogoutConfirm)
+  "Dữ liệu của tài khoản này vẫn được giữ trên thiết bị cho lần đăng nhập sau.": "This account's data is kept on this device for the next time you sign in.",
   "Xóa dữ liệu trên thiết bị này": "Clear data on this device",
   "Đoạn chat, dự án và bản nháp của tài khoản này được xóa khỏi trình duyệt. Đăng nhập lại thì tải về từ máy chủ.": "This account's chats, projects and drafts are removed from this browser. Sign in again to download them from the server.",
   "Phiên Code chỉ lưu trên thiết bị này (chưa bật Đồng bộ phiên ở Cài đặt → Synchro Code) cũng sẽ bị xóa.": "Code sessions saved only on this device (session sync is off in Settings → Synchro Code) will be deleted too.",
