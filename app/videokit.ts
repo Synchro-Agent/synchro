@@ -5,9 +5,13 @@
 const fold = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/đ/gi, "d").toLowerCase();
 
 // Danh từ video và cụm động từ làm ra (đã bỏ dấu). "video" đứng sau động từ làm ra trong cùng vế, hoặc danh từ chỉ loại video rõ nghĩa.
-const NOUN = "video|clip|reels?|tiktok|shorts|audiogram|motion graphics?|do hoa chuyen dong|logo animation|animation logo|phim ngan|phim gioi thieu|intro video|video intro|outro";
+// G5.2: "intro" / "outro" trần sau động từ làm ra cũng là video ("làm intro 8 giây cho kênh YouTube", "make a 10s intro for my channel") —
+// trừ khi là phần mở đầu của một bài chữ ("làm intro cho bài luận", "create an intro paragraph"). "introduction" không khớp (ranh giới từ).
+const TEXT_INTRO = "(?![^.?!\\n]{0,12}?\\b(?:bai|essay|email|letter|luan|paragraph|doan van|section|sentence|chapter|chuong|article|blog|report|bao cao|paper|thuyet trinh|presentation|speech|slide|cv|resume)\\b)";
+const NOUN = `video|clip|reels?|tiktok|shorts|audiogram|motion graphics?|do hoa chuyen dong|logo animation|animation logo|phim ngan|phim gioi thieu|intro${TEXT_INTRO}|outro${TEXT_INTRO}`;
 const MAKE = new RegExp(`\\b(?:lam|tao|dung|xuat|render|quay|san xuat|thiet ke|ghep|bien|chuyen|make|create|build|produce|generate|render|edit|turn|animate)\\b[^.?!\\n]{0,60}?\\b(?:${NOUN})\\b`);
-const KIND = /\b(?:video (?:tiktok|reels?|shorts|quang cao|gioi thieu|tong ket|ra mat|san pham|podcast|phu de|dong|ngan)|audiogram|motion graphics?|do hoa chuyen dong|logo animation|animation logo|(?:tiktok|reels?|youtube shorts) video|promo video|explainer video|year in review|unwrapped)\b/;
+// "animate logo của tôi", "animate my logo": động từ animate + logo là logo animation.
+const KIND = /\b(?:video (?:tiktok|reels?|shorts|quang cao|gioi thieu|tong ket|ra mat|san pham|podcast|phu de|dong|ngan)|audiogram|motion graphics?|do hoa chuyen dong|logo animation|animation logo|(?:tiktok|reels?|youtube shorts) video|promo video|explainer video|year in review|unwrapped)\b|\banimate\b[^.?!\n]{0,40}?\blogo\b/;
 // Hỏi cách làm / hỏi kiến thức, tóm tắt, tải video về: không phải nhờ dựng.
 const NOT = /\b(?:la gi|tai sao|vi sao|cach (?:lam|tao|dung)|how (?:do|to|can)|what is|tom tat|summari[sz]e|tai (?:ve|xuong)|download|xem video|phan tich video)\b/;
 
