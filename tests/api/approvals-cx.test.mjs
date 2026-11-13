@@ -16,10 +16,13 @@ process.env.DATA_KEY = "cx-perm-key";
 delete process.env.COMPOSIO_CONNECT_URL;
 fs.mkdirSync(process.env.DATA_DIR, { recursive: true });
 
-const { connectors: C, providers: PR, authstore: AS, composio: X, catalog: CAT, mcp: M, "i18n-dict": D } = await loadTs(["connectors", "providers", "authstore", "composio", "catalog", "mcp", "i18n-dict"]);
+const { connectors: C, providers: PR, authstore: AS, composio: X, catalog: CAT, mcp: M, cxactions: CXA, "i18n-dict": D } = await loadTs(["connectors", "providers", "authstore", "composio", "catalog", "mcp", "cxactions", "i18n-dict"]);
 const db = AS.db();
 const pol = CAT.FULL_CONN;
+// Bộ dịch DOM dùng chung (VI2EN + RULES_EN): KHÔNG được chứa luật "động từ + ascii" của Composio (nó khớp quá rộng).
 const tr = (s) => { if (Object.prototype.hasOwnProperty.call(D.VI2EN, s)) return D.VI2EN[s]; for (const [re, f] of D.RULES_EN) { const m = s.match(re); if (m) return f(m); } return s; };
+// Nhãn thao tác Composio dịch riêng tại chỗ hiện nhãn (i18n.tsx trCx): bản dịch DOM chung, nếu không đổi thì áp CX_RULE_EN.
+const trCx = (s) => { const t = tr(s); if (t !== s) return t; const m = s.trim().match(CXA.CX_RULE_EN[0]); return m ? CXA.CX_RULE_EN[1](m) : s; };
 try {
   // Bảng như bản đang chạy (chưa có cột app_perms): Composio đã liên kết, người dùng từng đặt "Luôn cho phép" cho công cụ bọc ngoài và cho bash.
   db.exec(`CREATE TABLE IF NOT EXISTS connectors (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, name TEXT NOT NULL, url TEXT NOT NULL, dir TEXT, enabled INTEGER NOT NULL DEFAULT 1, era TEXT,
@@ -54,6 +57,16 @@ try {
   ok(s.perm(EXEC, { tools: "GOOGLEDOCS_CREATE_DOCUMENT" }) === "ask" && s.perm(EXEC, undefined) === "ask", "tham số lạ / không có: hỏi");
   ok(s.perm(EXEC, ex(["NOTION_QUERY_DATABASE", { sql: "drop table x" }])) === "ask", "động từ đọc nhưng tham số chạy lệnh: hỏi");
   ok(s.perm(EXEC, ex(["GMAIL_GET_AND_DELETE"])) === "ask", "động từ ghi đi sau động từ đọc: hỏi");
+  // QUERY / FIND đứng một mình (không rõ đọc gì): coi là ghi, có thẻ duyệt — kể cả khi tham số mang câu lệnh đổi dữ liệu.
+  ok(s.perm(EXEC, ex(["SUPABASE_QUERY", { query: "drop table x" }])) === "ask", "SUPABASE_QUERY { query: 'drop table x' }: hỏi (không còn chạy ngầm)");
+  ok(s.perm(EXEC, ex(["SUPABASE_QUERY", { query: "select 1" }])) === "ask" && s.perm(EXEC, ex(["AIRTABLE_FIND"])) === "ask", "QUERY / FIND đứng một mình: luôn hỏi");
+  ok(s.perm(EXEC, ex(["GOOGLEBIGQUERY_QUERY", { query: "DELETE FROM t" }])) === "ask", "GOOGLEBIGQUERY_QUERY { query: 'DELETE …' }: hỏi");
+  ok(s.perm(EXEC, ex(["GOOGLEBIGQUERY_GET_DATASET"])) === "allow", "GOOGLEBIGQUERY_GET_DATASET: đọc, chạy luôn");
+  // Động từ ghi sau từ nối mà trước đây thiếu (FORWARD / SHARE / STAR / INVITE / REPLY / SUBMIT / ENROLL): fail-closed, có thẻ.
+  ok(s.perm(EXEC, ex(["GMAIL_LIST_AND_FORWARD"])) === "ask" && s.perm(EXEC, ex(["DRIVE_FIND_AND_SHARE"])) === "ask", "LIST_AND_FORWARD, FIND_AND_SHARE: hỏi");
+  // Ứng dụng tên nhiều từ không có trong MULTI_KITS (Zoho Books): tách đúng ứng dụng, thao tác đọc chạy luôn.
+  ok(s.perm(EXEC, ex(["ZOHO_BOOKS_LIST_INVOICES"])) === "allow", "ZOHO_BOOKS_LIST_INVOICES: đọc, không có thẻ duyệt");
+  ok(s.perm(EXEC, ex(["ZOHO_BOOKS_CREATE_INVOICE", { name: "X" }])) === "ask", "ZOHO_BOOKS_CREATE_INVOICE: ghi, hỏi");
 
   s.allowAlways(EXEC, CREATE_DOC);
   ok(s.perm(EXEC, CREATE_DOC) === "allow" && s.perm(EXEC, ex(["GOOGLEDOCS_UPDATE_DOCUMENT"])) === "allow", "Luôn cho phép trên thẻ: mọi thao tác ghi của Google Docs");
@@ -106,7 +119,19 @@ try {
   ok(lab("COMPOSIO_SEARCH_TOOLS", {}) === "Composio · Tìm công cụ", "Composio · Tìm công cụ", lab("COMPOSIO_SEARCH_TOOLS", {}));
   ok(lab("COMPOSIO_MULTI_EXECUTE_TOOL", CREATE_DOC) === "Google Docs · Tạo tài liệu" && !/Multi Execute|Composio Tools/.test(lab("COMPOSIO_MULTI_EXECUTE_TOOL", CREATE_DOC)), "Google Docs · Tạo tài liệu (không còn 'Composio: Multi Execute Composio Tools')");
   ok(lab("COMPOSIO_MULTI_EXECUTE_TOOL", { tools: [] }) === "Composio · Chạy thao tác", "MULTI_EXECUTE không rõ thao tác: vẫn bằng lời thường");
-  ok(/^Using Google Docs · Create (a )?document$/.test(tr("Đang dùng Google Docs · Tạo tài liệu")) && tr("Gửi tin nhắn") !== "Gửi tin nhắn" && tr("Liệt kê pull request") === "List pull request" && tr("Tìm công cụ") === "Find tools" && tr("Gọi API POST") === "Call API POST", "bản tiếng Anh của nhãn", [tr("Đang dùng Google Docs · Tạo tài liệu"), tr("Gửi tin nhắn"), tr("Liệt kê pull request"), tr("Gọi API POST")]);
+  // Nhiều thao tác ghi: thẻ liệt kê từng thao tác (ứng dụng · thao tác · tham số chính · tài khoản), "+N" còn lại là thao tác đọc.
+  const multi = X.cxCard("COMPOSIO_MULTI_EXECUTE_TOOL", ex(
+    ["GMAIL_SEND_EMAIL", { recipient_email: "a@b.c", subject: "Chào", connected_account_id: "me@work.com" }],
+    ["SLACK_SEND_MESSAGE", { channel: "#chung", text: "Hi" }],
+    ["GITHUB_LIST_ISSUES", { repo: "x" }],
+  ));
+  ok(multi.writes?.length === 2 && multi.writes[0].name === "Gmail" && multi.writes[0].act === "Gửi email" && multi.writes[0].account === "me@work.com" && multi.writes[1].name === "Slack" && multi.writes[1].act === "Gửi tin nhắn", "thẻ nhiều thao tác ghi: liệt kê cả Gmail và Slack", multi.writes);
+  ok(multi.more === 1 && multi.apps.join() === "gmail,slack", "+1 thao tác đọc còn lại; phạm vi quyền gồm cả hai ứng dụng ghi", multi);
+  // Thẻ duyệt cho QUERY mang câu lệnh đổi dữ liệu.
+  ok(!!X.cxCard("COMPOSIO_MULTI_EXECUTE_TOOL", ex(["SUPABASE_QUERY", { query: "drop table x" }])), "SUPABASE_QUERY drop: có thẻ duyệt");
+  ok(/^Using Google Docs · Create (a )?document$/.test(tr("Đang dùng Google Docs · Tạo tài liệu")) && trCx("Gửi tin nhắn") !== "Gửi tin nhắn" && trCx("Liệt kê pull request") === "List pull request" && tr("Tìm công cụ") === "Find tools" && trCx("Gọi API POST") === "Call API POST", "bản tiếng Anh của nhãn (qua trCx)", [tr("Đang dùng Google Docs · Tạo tài liệu"), trCx("Gửi tin nhắn"), trCx("Liệt kê pull request"), trCx("Gọi API POST")]);
+  // Chống khớp quá rộng: bộ dịch DOM chung KHÔNG được viết lại nút chữ "động từ + ascii" (CX_RULE_EN không nằm trong RULES_EN chung).
+  ok(tr("Đọc readme") === "Đọc readme" && tr("Gửi payload") === "Gửi payload" && trCx("Đọc readme") === "Read readme" && trCx("Gửi payload") === "Send payload", "DOM chung giữ nguyên 'Đọc readme' / 'Gửi payload'; chỉ trCx mới dịch nhãn Composio", [tr("Đọc readme"), trCx("Đọc readme"), tr("Gửi payload")]);
 
   console.log("4. Connector tự thêm: không tin readOnlyHint");
   const custom = [
