@@ -28,12 +28,13 @@ const sb = (enc) => {
 // Windows-1258 như WideCharToMultiByte của Windows: chữ dựng sẵn nếu bảng mã có (à, ê, ô, ă, ơ, ư, đ…), không thì chữ gốc + byte dấu thanh tổ hợp.
 const T1258 = new Map(); { const d = new TextDecoder("windows-1258"); for (let b = 0x80; b < 256; b++) { const c = d.decode(B(b)); if (c !== "\uFFFD") T1258.set(c, b); } }
 const TONE = { "\u0300": 0xcc, "\u0301": 0xec, "\u0303": 0xde, "\u0309": 0xd2, "\u0323": 0xf2 };
-const cp1258 = (s) => {
+// decomp = true: mọi dấu thanh đều ghi bằng byte tổ hợp, kể cả chữ bảng mã có sẵn (á = a + 0xEC), như một số bộ gõ / trình chuyển mã cũ.
+const cp1258 = (s, decomp = false) => {
   const out = [];
   for (const ch of s.normalize("NFC")) {
     if (ch.charCodeAt(0) < 0x80) { out.push(ch.charCodeAt(0)); continue; }
-    if (T1258.has(ch)) { out.push(T1258.get(ch)); continue; }
     const parts = [...ch.normalize("NFD")], tone = parts.find((c) => TONE[c]), base = parts.filter((c) => !TONE[c]).join("").normalize("NFC");
+    if (T1258.has(ch) && !(decomp && tone)) { out.push(T1258.get(ch)); continue; }
     const bb = base.charCodeAt(0) < 0x80 ? base.charCodeAt(0) : T1258.get(base);
     if (bb === undefined || !tone) throw new Error(`cp1258 không ghi được ${ch}`);
     out.push(bb, TONE[tone]);
@@ -42,7 +43,7 @@ const cp1258 = (s) => {
 };
 const enc = {
   "windows-1252": sb("windows-1252"), "windows-1250": sb("windows-1250"), "windows-1257": sb("windows-1257"), "windows-1254": sb("windows-1254"),
-  "windows-1251": sb("windows-1251"), "koi8-r": sb("koi8-r"), "windows-1253": sb("windows-1253"), "windows-1258": cp1258,
+  "windows-1251": sb("windows-1251"), "koi8-r": sb("koi8-r"), "windows-1253": sb("windows-1253"), "windows-1258": (s) => cp1258(s), "windows-1258-decomp": (s) => cp1258(s, true),
 };
 
 const det = (b) => jschardet.detect(b.toString("binary")).encoding;
@@ -55,7 +56,7 @@ const sample = (name, bytes, want, trueEnc) => {
   const got = E.decodeText(bytes);
   ok(got === want, `${name} [jschardet: ${det(bytes)}]`, JSON.stringify(got));
 };
-const round = (e, name, s) => sample(name, enc[e](s), s, e);
+const round = (e, name, s) => sample(name, enc[e](s), s, e.replace(/-decomp$/, ""));
 
 // ---------------------------------------------------------------------------
 console.log("1. Tiếng Việt Windows-1258 (đọc ra chữ dựng sẵn NFC)");
@@ -148,8 +149,8 @@ ok(tGot !== new TextDecoder("utf-16le").decode(table) && tGot.length === table.l
 console.log("8. Bằng chứng Windows-1258: văn bản Tây Âu không bao giờ đủ (a)");
 const west = ["Ciò detto, può andare. Può anche restare.", "Il est là. Je suis là. Et toi, tu es là?", "Chi può dirlo? Ciò è un mistero.", "Totò, Totò, così è.", "Lunedì andrò là, e là resto.", "Não sei, mãe. São Paulo não pára.", "Það er gott að vera hér, þú ert með."];
 for (const s of west) ok(E.looksVietnamese1258(enc["windows-1252"](s), false) === false, `không phải 1258 khi jschardet không nói cp1258: ${s}`);
-// Khi jschardet nói cp1258 (bản gốc tin thẳng nhãn đó), chỉ cần âm tiết hợp lệ có byte riêng: "Ciò / può" đọc theo 1258 ra "Cị / pụ" không được tính,
-// "Totò" ra "Toṭ" (dấu nặng dưới phụ âm) không phải âm tiết.
+// Khi jschardet nói cp1258 (bản gốc tin thẳng nhãn đó), giữ 1258 trừ khi từ có byte riêng sai nhiều hơn hợp lệ: "Ciò / può" đọc theo 1258 ra "Cị / pụ"
+// không phải từ tiếng Việt, "Totò" ra "Toṭ" (dấu nặng dưới phụ âm), "così" ra "cosí", "não" ra "năo": đều là bằng chứng ngược.
 for (const s of west) ok(E.looksVietnamese1258(enc["windows-1252"](s), true) === false, `không phải 1258 kể cả khi jschardet nói cp1258: ${s}`);
 ok(E.looksVietnamese1258(enc["windows-1254"]("Kapı açık mı? Bu kız çok akıllı."), true) === false, "tiếng Thổ (ı → ư, ğ → đ) không phải 1258");
 ok(E.normLabel("CP932") === "shift_jis" && E.normLabel("CP949") === "euc-kr" && E.normLabel("ISO8859-7") === "iso-8859-7" && E.normLabel("cp1258") === "windows-1258" && E.normLabel("MacRoman") === "macroman",
@@ -171,6 +172,29 @@ round("windows-1258", "một từ: bắp", "bắp.");
 round("windows-1258", "một từ: đất", "đất.");
 round("windows-1258", "vài từ rời", "OK chiều trắng sáng sĩ.");
 sample("Nga: các chữ một ký tự (Windows-1251)", hex("c220e820f120ea20f3"), "В и с к у", "windows-1251");
+
+console.log("10. Không làm hỏng so với bản gốc: jschardet nói cp1258, địa danh Tây Nguyên (vần -k), tên nước ngoài, ít / không có từ trong từ điển");
+// Mẫu hồi quy của người kiểm tra vòng 3: bản gốc tin nhãn cp1258 và đọc đúng; bản trước đòi từ điển có byte riêng / ngưỡng 70% nên ra cp1252 "Ðãìk Lãìk".
+sample("Địa chỉ Buôn Ma Thuột (byte của người kiểm tra)", hex("d069f26120636869d23a204275f46e204d6120546875f4f2742c20d0e3ec6b204ce3ec6b"), "Địa chỉ: Buôn Ma Thuột, Đắk Lắk", "windows-1258");
+sample("Công ty TNHH Đắk Nông (byte của người kiểm tra)", hex("43f46e6720747920544e484820d0e3ec6b204ef46e672c207469d26e6820d0e3ec6b204ef46e67"), "Công ty TNHH Đắk Nông, tỉnh Đắk Nông", "windows-1258");
+sample("Krông Pắc (byte của người kiểm tra)", hex("d069f26120636869d23a207861de204561204b61722c20687579eaf26e204b72f46e672050e3ec632c207469d26e6820d0e3ec6b204ce3ec6b"), "Địa chỉ: xã Ea Kar, huyện Krông Pắc, tỉnh Đắk Lắk", "windows-1258");
+sample("café, José, André (byte của người kiểm tra)", hex("54f4692075f4ec6e6720636166e920f5d220537461726275636b732076f5ec69204a6f73e92c20416e6472e92076e0205a6fe9207461f2692053e06920476fcc6e2e"),
+  "Tôi uống café ở Starbucks với José, André và Zoé tại Sài Gòn.", "windows-1258");
+const vnReg = [
+  "Địa chỉ: Buôn Ma Thuột, Đắk Lắk", "Công ty TNHH Đắk Nông, tỉnh Đắk Nông", "Địa chỉ: xã Ea Kar, huyện Krông Pắc, tỉnh Đắk Lắk",
+  "Người gửi: Y Bih, buôn Ako Dhông, Đắk Lắk. Điện thoại: 0905123456", "Công ty của chúng tôi ở M'Drắk, Đắk Lắk.",
+  "Tôi uống café ở Starbucks với José, André và Zoé tại Sài Gòn.",
+  "Chào anh,\nEm gửi anh báo cáo tháng 10. Anh xem và phản hồi giúp em nhé.\nTrân trọng,\nHương",
+  "Danh sách: Phạm Nhật Vượng, Đoàn Nguyên Đức, Trương Gia Bình, Đặng Lê Nguyên Vũ.",
+  "Bên kia sông Đuống\nQuê hương ta lúa nếp thơm nồng\nTranh Đông Hồ gà lợn nét tươi trong\nMàu dân tộc sáng bừng trên giấy điệp",
+  "Ngoằn ngoèo, khuỷu tay, giường ngủ, nghiêng ngả, quyển sách, thuở xưa, khoẻ mạnh, tuyệt vời.",
+  "Tỉnh Đắk Lắk có các huyện Krông Pắc, Krông Bông, Krông Ana, Ea Kar, Ea Súp, M'Drắk, Lắk, Cư M'gar, Buôn Đôn. ".repeat(6),
+  "Krông Búk, Krông Năng, Ea H'leo, Đắk Mil, Đắk Song, Đắk R'lấp",
+];
+for (const s of vnReg) {
+  round("windows-1258", `chữ dựng sẵn: ${s.slice(0, 50)}`, s);
+  round("windows-1258-decomp", `dấu thanh tổ hợp: ${s.slice(0, 50)}`, s);
+}
 
 console.log(`\n${pass} đạt, ${fail} hỏng`);
 process.exit(fail ? 1 : 0);
