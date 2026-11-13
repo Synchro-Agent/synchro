@@ -357,7 +357,8 @@ Các công cụ nói ở trên (load_skill, read_skill_file, search_skills, run_
 // Tách artifact khỏi lời dẫn, giữ trong lượt (read_artifact / check_artifact đọc được), rồi đặt vào đầu câu trả lời cuối.
 const ART_BLOCK = /<artifact\b[^>]*>[\s\S]*?(?:<\/artifact>|$)/gi;
 function sayOut(x: Exec | null | undefined, text: string) {
-  let t = scrubServerPaths(text.trim());
+  // Lời dẫn (say) cũng là chữ model viết: bỏ dòng ghi chú "Đã áp dụng …" kiểu cũ như câu trả lời cuối, để không lộ hướng dẫn cá nhân qua sự kiện 'say'.
+  let t = stripAppliedNotes(scrubServerPaths(text.trim()));
   if (x && hasArtifacts(t)) t = t.replace(ART_BLOCK, (b) => {
     (x.turnArts ??= []).push(b);
     const title = /\btitle\s*=\s*"([^"]*)"/i.exec(b)?.[1];

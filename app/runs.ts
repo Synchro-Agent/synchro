@@ -8,6 +8,7 @@ import { db, getSetting, getUser, isAdmin, verifyLocked, type UserRow } from "./
 import { noteRun, recordOps } from "./ops";
 import { addSpan, beginTrace, endTrace, noteFirstToken, withTrace } from "./tracing";
 import { accountLimit, accountTotal, acquire, noteRefused, queuedOf, queueLimit, withSlot, type WaitWhy } from "./turngate";
+import { appliedDelta } from "./turnctx";
 
 // say: lời dẫn của model trước khi dùng công cụ (giữ lại, không bị câu trả lời cuối thay mất); tool / res: công cụ đang chạy và kết quả;
 // plan: danh sách việc (JSON); steer: tin người dùng nhắn thêm đã được ghép vào lượt đang chạy; step / note: dòng trạng thái.
@@ -54,7 +55,10 @@ export const sweepRuns = () => { init().prepare("DELETE FROM runs WHERE updated_
 export type Delta = { s: number; t?: string; reset?: boolean };
 type Msg = { event?: RunEvent; done?: PublicRun; delta?: Delta };
 type Live = { at?: number; s: number; text: string; ctl: AbortController; conv: string | null; uid: string; inbox: string[]; onMsg?: Set<() => void>; step?: AbortController;
-  tools?: number; toolsTaken?: number; toolWaiters?: (() => void)[] };
+  tools?: number; toolsTaken?: number; toolWaiters?: (() => void)[];
+  // Lọc dòng ghi chú "Đã áp dụng …" kiểu cũ ngay trên luồng trực tiếp của lượt chat: raw = chữ thô model đã viết ở bước này; applied = đã gặp từ khóa
+  // ("áp dụng" / "applied") nên bắt đầu lọc; text giữ bản đã lọc (đúng cái liveNow/liveText trả về). kind = loại lượt (chỉ chat mới lọc).
+  kind?: string; raw?: string; applied?: boolean };
 const g = globalThis as unknown as { __synchroRunSubs?: Map<string, Set<(e: Msg) => void>>; __synchroRunLive?: Map<string, Live> };
 const subs = (g.__synchroRunSubs ??= new Map());
 // Lượt đang chạy trong tiến trình này: chữ đang viết (để người mở lại trang thấy ngay phần đã có) và bộ hủy.
@@ -116,8 +120,24 @@ export function steered(): boolean {
 export function delta(t: string) {
   const s = scope.getStore(), l = s && live.get(s.id);
   if (!l || !t) return;
-  l.text += t;
   noteFirstToken();
+  // Lượt chat: dòng "Đã áp dụng hướng dẫn của bạn: “…”" model đôi khi bắt chước (thấy trong lịch sử cũ) từng lộ hướng dẫn cá nhân trên luồng trực tiếp
+  // trước khi bản cuối được làm sạch. Lọc ngay ở đây để không ai thấy nó, kể cả trong giây truyền chữ. Các loại lượt khác giữ nguyên (nhanh, không lọc).
+  if (l.kind === "chat") {
+    l.raw = (l.raw ?? "") + t;
+    if (!l.applied && /áp dụng|applied/i.test(l.text.slice(-8) + t)) l.applied = true;
+    if (l.applied) {
+      const d = appliedDelta(l.text, l.raw);
+      l.text = d.text;
+      if (d.reset) notify(s!.id, { delta: { s: l.s, t: d.t, reset: true } });
+      else if (d.t) notify(s!.id, { delta: { s: l.s, t: d.t } });
+      return;
+    }
+    l.text = l.raw;
+    notify(s!.id, { delta: { s: l.s, t } });
+    return;
+  }
+  l.text += t;
   notify(s!.id, { delta: { s: l.s, t } });
 }
 // Claude Code: chữ model viết đi qua luồng đầu ra của CLI, còn lời gọi công cụ đi qua cầu nối MCP (HTTP) — hai đường riêng. Đoạn chữ ngắn
@@ -145,7 +165,7 @@ export async function awaitToolUse(ms = 2500) {
 export function deltaStep() {
   const s = scope.getStore(), l = s && live.get(s.id);
   if (!l) return;
-  l.s++; l.text = "";
+  l.s++; l.text = ""; l.raw = ""; l.applied = false;
   notify(s!.id, { delta: { s: l.s, reset: true } });
 }
 /** Người dùng bấm Dừng: hủy mọi lời gọi đang chạy của lượt; lượt kết thúc với phần đã viết được. */
@@ -282,7 +302,7 @@ export function queueFull(uid: string) {
 
 function launch(id: string, kind: string, body: Record<string, unknown>, user: UserRow, conv: string | null, seed?: { at: number; authMs: number }) {
   const ctl = new AbortController();
-  live.set(id, { at: Date.now(), s: 0, text: "", ctl, conv, uid: user.id, inbox: [] });
+  live.set(id, { at: Date.now(), s: 0, text: "", ctl, conv, uid: user.id, inbox: [], kind });
   // Lượt chat: đo từng chặng (tracing.ts). Lượt chạy lại sau khi máy chủ khởi động không có seed (không đo được phần kiểm tra phiên).
   const tr = kind === "chat" ? beginTrace("chat", seed) : null;
   const go = (f: () => void) => (tr ? withTrace(tr, f) : f());

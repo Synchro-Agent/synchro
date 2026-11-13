@@ -71,6 +71,13 @@ export function stripAppliedNotes(text: string): string {
   const out = text.replace(INS_NOTE, "").replace(PJ_NOTE, "");
   return out === text ? text : out.replace(/\n{3,}/g, "\n\n").trimEnd();
 }
+// Luồng trực tiếp (SSE delta): chữ model viết tới từng mẩu, bản cuối mới được lọc — dòng ghi chú kiểu cũ có thể lộ trên màn hình trước khi bản cuối thay.
+// Lọc ngay trên luồng: trước đó đã hiện `shown`, nay toàn bộ chữ thô là `raw`. Phần lọc sạch mới thường chỉ dài thêm (gửi phần nối `t`); khi dòng ghi chú
+// vừa đủ để bị bỏ, chữ sạch ngắn lại / khác đi nên gửi lại cả đoạn (reset). Hàm thuần: kiểm thử không cần máy chủ.
+export function appliedDelta(shown: string, raw: string): { text: string; t: string; reset: boolean } {
+  const next = stripAppliedNotes(raw);
+  return next.startsWith(shown) ? { text: next, t: next.slice(shown.length), reset: false } : { text: next, t: next, reset: true };
+}
 
 // ---------------------------------------------------------------- hướng dẫn của dự án luôn tới được model
 // Trình duyệt ghép hướng dẫn dự án vào lời nhắc hệ thống (llm.buildSystemPrompt), nhưng dự án có thể chỉ là bản rút gọn (stub, nội dung còn ở máy chủ),

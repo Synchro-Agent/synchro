@@ -59,5 +59,29 @@ ok(JSON.stringify(userSaid).includes("tự gõ"), "tin người dùng tự gõ g
 const hist = H.chatHistory([{ role: "user", text: "Thủ đô của Pháp?", time: 0 }, old, { role: "user", text: "Còn Ý?", time: 2 }]);
 ok(hist.length === 3 && hist[1].content === body && !JSON.stringify(hist).includes(SECRET), "lịch sử gửi model không có dòng cũ (model không bắt chước được)", JSON.stringify(hist));
 
+console.log("5. Lọc theo thời gian thực trên luồng trực tiếp (SSE delta)");
+// Mô phỏng người xem: nhận t / reset như trình duyệt, dựng lại chữ đang hiện. Luôn khớp stripAppliedNotes(chữ thô tới lúc này), không lộ secret.
+function playStream(chunks) {
+  let shown = "", client = "", raw = "";
+  const steps = [];
+  for (const c of chunks) { raw += c; const d = T.appliedDelta(shown, raw); client = d.reset ? d.t : client + d.t; shown = d.text; steps.push(client); }
+  return { client, steps };
+}
+const full = `Thủ đô của Pháp là Paris.\n\n_Đã áp dụng hướng dẫn của bạn: “${SECRET}”_`;
+const perChar = playStream([...full]);
+ok(perChar.client === T.stripAppliedNotes(full) && perChar.client === "Thủ đô của Pháp là Paris.", "từng ký tự: chữ hiện cuối = bản đã lọc, hết dòng ghi chú", perChar.client);
+ok(!perChar.steps.some((s) => s.includes(SECRET)), "không bước nào lộ nội dung hướng dẫn cá nhân", perChar.steps.find((s) => s.includes(SECRET)));
+const chunky = playStream(["Thủ đô của Pháp là Paris.", "\n\n_Đã áp dụng hướng dẫn của bạn: ", `“${SECRET}”_`]);
+ok(chunky.client === "Thủ đô của Pháp là Paris." && !chunky.steps.some((s) => s.includes(SECRET)), "mẩu lớn (mẩu cuối cả dòng ghi chú): cũng không lộ", JSON.stringify(chunky.steps));
+const normal = playStream([..."Xin chào bạn, hôm nay thế nào?"]);
+ok(normal.client === "Xin chào bạn, hôm nay thế nào?" && normal.steps.every((s) => "Xin chào bạn, hôm nay thế nào?".startsWith(s)), "chữ thường: chỉ nối thêm, không reset, không mất chữ", normal.client);
+ok(T.appliedDelta("Paris.", "Paris.").t === "" && !T.appliedDelta("Paris.", "Paris.").reset && T.appliedDelta("", "Paris.").t === "Paris.", "không có ghi chú: chỉ gửi phần nối thêm");
+
+console.log("5b. Máy chủ lọc luồng trực tiếp (lượt chat) và lời dẫn 'say'");
+const runsSrc = fs.readFileSync("app/runs.ts", "utf8");
+ok(/appliedDelta\(/.test(runsSrc) && /l\.kind === "chat"/.test(runsSrc), "runs.delta lọc dòng cũ trên luồng trực tiếp, chỉ lượt chat");
+ok(/l\.raw = "";\s*l\.applied = false/.test(runsSrc), "deltaStep đặt lại trạng thái lọc theo từng bước");
+ok(/stripAppliedNotes\(scrubServerPaths\(/.test(fs.readFileSync("app/chatengine.ts", "utf8")), "sayOut lọc dòng cũ khỏi sự kiện 'say'");
+
 console.log(`\n${pass}/${pass + fail} đạt`);
 process.exit(fail ? 1 : 0);
