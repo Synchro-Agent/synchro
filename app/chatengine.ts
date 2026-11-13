@@ -17,7 +17,7 @@ import { expandFileRefs } from "./fileproc";
 import { maybeRef, READ_REF_TOOL, readRef } from "./refs";
 import { normalizeSchema, resolveRefs, validateArgs } from "./connschema";
 import { BRIDGE_CALL_MAX, destructiveLike, TOOL_BUDGET } from "./mcp";
-import { ARTCHECK_RULES, CHECK_ARTIFACT_TOOL, checkArtifact, findArtifact, READ_ARTIFACT_TOOL, readArtifact } from "./artcheck";
+import { ARTCHECK_RULES, CHECK_ARTIFACT_TOOL, checkArtifact, checkRoundGate, findArtifact, READ_ARTIFACT_TOOL, readArtifact } from "./artcheck";
 import { artState, cleanBase, resolveArt, type ArtVersion } from "./vfs";
 import { hasArtifacts, splitArtifacts } from "./artifacts";
 import { AUTO, autoEffort, effortLabel, inputOfChat, isAck, needsNoTools, typedText, routeModel, taskLabel, taskOf as routeTask, type RouteInput } from "./router";
@@ -793,6 +793,8 @@ async function runCall(x: Exec, c: Call, d?: Decision): Promise<Run> {
     const a = findArtifact({ uid: x.uid, conv: x.conv, messages: x.art.messages, base: x.art.base, live: [...(x.turnArts ?? []), liveNow()].join("\n\n") }, typeof c.input?.identifier === "string" ? c.input.identifier : undefined);
     const used = { kind: "search" as const, name: c.name };
     if (c.name === "read_artifact") return { ...readArtifact(a, c.input ?? {}), used };
+    const enough = a ? checkRoundGate(x, a) : null;
+    if (enough) return { content: enough, is_error: false, used };
     const r = await checkArtifact(x.uid, a, c.input ?? {}, process.env.APP_URL || "https://synchro.net.nz");
     if (r.image) (x.heavy ??= []).push(c.id);
     return { ...r, used };

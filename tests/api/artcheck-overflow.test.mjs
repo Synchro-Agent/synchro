@@ -32,6 +32,25 @@ console.log("3. Bước kiểm tra - sửa tối đa 2 vòng");
 ok(/tối đa 2 vòng/.test(A.ARTCHECK_RULES(true)), "self_check nói tối đa 2 vòng", A.ARTCHECK_RULES(true).match(/tối đa[^.)]*\)?/)?.[0] ?? "");
 ok(!/tối đa 3 vòng/.test(A.ARTCHECK_RULES(true)), "không còn 'tối đa 3 vòng'", "");
 
+console.log("4. W23-17: bộ đếm vòng kiểm tra thật (mỗi artifact, mỗi lượt)");
+{
+  const v = (content, ident = "deck") => ({ ident, title: "D", type: "html", lang: null, content, complete: true, v: 1 });
+  const turn = {};
+  ok(A.MAX_CHECK_ROUNDS === 2, "tối đa 2 vòng", A.MAX_CHECK_ROUNDS);
+  ok(A.checkRoundGate(turn, v("a")) === null, "vòng 1: được kiểm tra");
+  ok(A.checkRoundGate(turn, v("a")) === null, "gọi lại trên cùng bản (chụp to một slide) không tính thêm vòng");
+  ok(A.checkRoundGate(turn, v("b")) === null, "vòng 2 (bản đã sửa): được kiểm tra");
+  const third = A.checkRoundGate(turn, v("c"));
+  ok(typeof third === "string" && /Đã đủ 2 vòng/.test(third) && /"deck"/.test(third), "vòng 3: từ chối, báo đã đủ 2 vòng", third);
+  ok(A.checkRoundGate(turn, v("b")) === null, "bản đã kiểm tra lần cuối vẫn xem lại được");
+  ok(A.checkRoundGate(turn, v("x", "other")) === null, "artifact khác có bộ đếm riêng");
+  ok(A.checkRoundGate({}, v("c")) === null, "lượt mới bắt đầu lại từ 0");
+  const t2 = {};
+  ok(A.checkRoundGate(t2, { ...v("p"), complete: false }) === null && A.checkRoundGate(t2, v("q")) === null && A.checkRoundGate(t2, v("r")) === null, "bản chưa viết xong không tính vòng");
+  const eng = fs.readFileSync("app/chatengine.ts", "utf8");
+  ok(/checkRoundGate\(x, a\)/.test(eng), "chatengine chặn check_artifact bằng bộ đếm của lượt");
+}
+
 fs.rmSync(tmp, { recursive: true, force: true });
 console.log(`\n${pass}/${pass + fail} đạt`);
 process.exit(fail ? 1 : 0);
