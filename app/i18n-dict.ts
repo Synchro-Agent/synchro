@@ -1867,6 +1867,7 @@ for (const [k, v] of Object.entries({
   "Chỉ xuất PowerPoint được từ bản trình bày (slide) dạng HTML.": "Only HTML slide decks can be exported to PowerPoint.",
   "Bản trình bày chưa viết xong.": "The presentation isn't finished yet.",
   "Máy chủ này chưa có Chromium để xuất PowerPoint (cần dịch vụ workspace).": "This server has no Chromium to export PowerPoint (the workspace service is required).",
+  "Đang xuất một bản PowerPoint khác, đợi xong rồi thử lại.": "Another PowerPoint export is still running. Wait for it to finish, then try again.",
 })) if (!Object.prototype.hasOwnProperty.call(VI2EN, k)) VI2EN[k] = v;
 // Phần sau dấu ":" là chi tiết kỹ thuật (thông báo lỗi gốc), giữ nguyên. Luật cụ thể "(trình dựng lỗi)" đứng trước luật chung.
 RULES_EN.push(

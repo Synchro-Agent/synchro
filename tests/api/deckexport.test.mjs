@@ -37,6 +37,22 @@ ok(typeof win.__deck.boxOptions === "function" && typeof win.__deck.chartArgs ==
 // Nạp lần hai dùng bộ nhớ đệm.
 ok((await D.deckBrowserJs()) === js, "biên dịch được nhớ lại, không làm lại mỗi lần");
 
+console.log("3. SEC-5: chỉ xuất nội dung của chính người dùng, mạng theo quyền");
+{
+  const text = `Xong.\n<artifact identifier="q3-deck" type="text/html" title="Báo cáo Q3">${DECK}</artifact>\n<artifact identifier="q3-deck" mode="patch">x</artifact>`;
+  const d = D.deckFromText(text, "Q3-Deck");
+  ok(d && d.type === "html" && d.content === DECK && d.title === "Báo cáo Q3" && d.complete === true, "lấy đúng bản đầy đủ trong kết quả lượt (bỏ bản vá)", JSON.stringify(d)?.slice(0, 200));
+  ok(D.deckFromText(text, "khac") === null, "identifier không có → null");
+  const route = fs.readFileSync(path.join(process.cwd(), "app/api/artifacts/pptx/route.ts"), "utf8");
+  ok(!/body\.content|body\.type/.test(route), "route không còn nhận HTML thô từ trình duyệt");
+  ok(/featureGate\(req, "sandbox"\)/.test(route) && /caps\.code/.test(route), "route cần quyền sandbox + Chạy code của người dùng");
+  ok(/getArtifactByIdent\(user\.id/.test(route) && /getRun\(body\.run, user\.id\)/.test(route), "nội dung nạp ở máy chủ, của đúng người dùng");
+  ok(/net: caps\.net, web: caps\.web/.test(route), "mạng đi theo quyền net / web của người dùng");
+  const src = fs.readFileSync(path.join(process.cwd(), "app/deckexport.ts"), "utf8");
+  ok(/caps: \{ net: boolean; web: boolean \} = \{ net: false, web: false \}/.test(src) && !/net: true/.test(src), "exportDeckPptx mặc định tắt mạng, không còn net: true cứng");
+  ok(/inflight\.has\(uid\)/.test(src), "mỗi người một lần xuất đang chạy");
+}
+
 fs.rmSync(tmp, { recursive: true, force: true });
 console.log(`\n${pass}/${pass + fail} đạt`);
 process.exit(fail ? 1 : 0);

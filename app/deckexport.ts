@@ -12,9 +12,17 @@ import path from "node:path";
 import { buildDocCore, isDeck } from "./artdoc";
 import { inlineImages } from "./artimg";
 import { execRun, runner } from "./coderun";
-import type { ArtType } from "./artifacts";
+import { splitArtifacts, type ArtType } from "./artifacts";
 
 export type DeckInput = { type: ArtType; content: string; title: string; complete?: boolean };
+
+/** Bản trình bày đầy đủ (không phải bản vá) mới nhất có identifier này trong văn bản kết quả của một lượt (Hộp thư / việc tự động chạy nền). */
+export function deckFromText(text: string, ident: string): DeckInput | null {
+  const id = ident.trim().toLowerCase();
+  let hit: DeckInput | null = null;
+  for (const sg of splitArtifacts(text)) if (sg.kind === "art" && !sg.art.patch && sg.art.ident === id) hit = { type: sg.art.type, content: sg.art.content, title: sg.art.title, complete: sg.art.complete };
+  return hit;
+}
 
 // Cầu nối giả: không có khung cha, window.synchro / storage trả rỗng để script của slide vẫn chạy (giống CHECK_BRIDGE của artcheck.ts).
 const EXPORT_BRIDGE = `<script>(function(){var none=function(){return Promise.resolve(null)};var storage={get:none,set:none,"delete":none,list:function(){return Promise.resolve([])},onChange:function(){return function(){}}};var api={complete:function(){return Promise.resolve("")},storage:storage};window.synchro=api;window.claude=api;try{window.storage=storage}catch(e){}})();</script>`;
@@ -94,11 +102,24 @@ export type DeckExport = { ok: true; data: Buffer; name: string } | { ok: false;
 
 const slug = (s: string) => (s || "ban-trinh-bay").normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/đ/g, "d").replace(/Đ/g, "D").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 60) || "ban-trinh-bay";
 
-/** Xuất bản trình bày HTML thành .pptx ở máy chủ (dùng được trong việc tự động chạy nền và Hộp thư). origin: để nhúng ảnh ngoài đúng như khung xem. */
-export async function exportDeckPptx(uid: string, a: DeckInput, origin: string): Promise<DeckExport> {
+// Mỗi người chỉ một lần xuất đang chạy (mỗi lần giữ một chỗ của hàng chạy code tới 300 giây).
+const inflight = new Set<string>();
+
+/**
+ * Xuất bản trình bày HTML thành .pptx ở máy chủ (dùng được trong việc tự động chạy nền và Hộp thư). origin: để nhúng ảnh ngoài đúng như khung xem.
+ * SEC-5: trang chạy script trong Chromium nên mạng đi theo quyền của người dùng (capsState: net / web), mặc định tắt; nội dung phải là
+ * artifact của chính người dùng do máy chủ tự nạp (route không nhận HTML thô từ trình duyệt).
+ */
+export async function exportDeckPptx(uid: string, a: DeckInput, origin: string, caps: { net: boolean; web: boolean } = { net: false, web: false }): Promise<DeckExport> {
   if (a.type !== "html" || !isDeck({ type: a.type, content: a.content })) return { ok: false, error: "Chỉ xuất PowerPoint được từ bản trình bày (slide) dạng HTML." };
   if (a.complete === false) return { ok: false, error: "Bản trình bày chưa viết xong." };
   if (runner() !== "workspace") return { ok: false, error: "Máy chủ này chưa có Chromium để xuất PowerPoint (cần dịch vụ workspace)." };
+  if (inflight.has(uid)) return { ok: false, error: "Đang xuất một bản PowerPoint khác, đợi xong rồi thử lại." };
+  inflight.add(uid);
+  try { return await exportNow(uid, a, origin, caps); } finally { inflight.delete(uid); }
+}
+
+async function exportNow(uid: string, a: DeckInput, origin: string, caps: { net: boolean; web: boolean }): Promise<DeckExport> {
   const vendorDir = path.join(process.cwd(), "public", "vendor");
   let vendorFiles: { path: string; data: Buffer }[];
   try {
@@ -111,7 +132,7 @@ export async function exportDeckPptx(uid: string, a: DeckInput, origin: string):
   const doc = buildDocCore(a.type, await inlineImages(a.content, uid), origin, "pptx", false, EXPORT_BRIDGE, { fixed: null }, a.title);
   let r;
   try {
-    r = await execRun({ uid, net: true, web: true, timeout: 300, argv: ["node", "pptx.js"], files: [
+    r = await execRun({ uid, net: caps.net, web: caps.net && caps.web, timeout: 300, argv: ["node", "pptx.js"], files: [
       { path: "page.html", data: Buffer.from(doc) }, { path: "pptx.js", data: Buffer.from(PPTX_JS) }, { path: "deck.js", data: Buffer.from(deckJs) }, ...vendorFiles,
     ] });
   } catch (e) {
