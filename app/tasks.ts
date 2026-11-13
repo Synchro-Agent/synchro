@@ -319,6 +319,11 @@ export function startScheduler(everyMs = 30_000) {
   }, everyMs);
   g.__synchroTasks.unref?.();
 }
+/** Tắt êm khi deploy (drain.ts): không bắt đầu việc tự động nào nữa; tiến trình primary mới chạy bộ hẹn giờ của nó. */
+export function stopScheduler() {
+  if (g.__synchroTasks) clearInterval(g.__synchroTasks);
+  g.__synchroTasks = undefined;
+}
 
 // ---------------------------------------------------------------- đề xuất chờ duyệt
 export type ProposalKind = "skill" | "action" | "site" | "tool";

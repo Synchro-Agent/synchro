@@ -17,6 +17,7 @@ import { engineEnv, forget, scopeDir } from "./cli_auth";
 import { retireAll } from "./cli_pool";
 import { AGY_INSTALLER, basePath, binDir, CLIS, type Cli, engineHome, GROK_INSTALLER, NPM_PKG, runCli, stripAnsi } from "./cli_runtime";
 import { redact } from "./errors";
+import { isDraining } from "../drain";
 
 export const CLI_NAME: Record<Cli, string> = { claude: "Claude Code", codex: "Codex", agy: "Antigravity", grok: "Grok CLI" };
 const KEY = "cli_update";
@@ -384,7 +385,7 @@ export function startCliUpdates() {
   if (!s.nextAt) { s.nextAt = nextSlot(Date.now() + (s.lastRun ? Math.max(0, s.lastRun + every() - Date.now()) : 3_600_000)); save(); }
   const tick = () => {
     const st = state();
-    if (!st.on || mem.job || !st.nextAt || Date.now() < st.nextAt) return;
+    if (!st.on || mem.job || !st.nextAt || Date.now() < st.nextAt || isDraining()) return;
     void runUpdate("timer").catch((e) => console.error("[cli-update]", e));
   };
   mem.timer = setInterval(tick, Number(process.env.SYNCHRO_CLI_UPDATE_TICK_MS) || 15 * 60_000);

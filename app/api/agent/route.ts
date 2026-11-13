@@ -10,6 +10,7 @@ import { withUsage } from "../../usage";
 import { MAX_FILES_PER_MESSAGE } from "../../fileproc/types";
 import type { Upload } from "../../uploads";
 import { timed } from "../../servertiming";
+import { drainingResponse } from "../../drain";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -19,6 +20,7 @@ export const maxDuration = 900;
 // Gói subscription và khóa API dùng được như nhau: gói chạy CLI chính chủ với cùng bộ công cụ qua cầu nối MCP (runPlanAgent).
 // files: tệp gửi kèm tin nhắn mới nhất. perm: chế độ quyền của phiên ({ mode: "ask" | "edits" | "auto", allow: khóa "luôn cho phép" }); lượt dừng chờ người dùng duyệt qua /api/approve.
 export const POST = timed(async (req: Request) => {
+  const off = drainingResponse(); if (off) return off;
   const c = current(req);
   if (!c) return Response.json({ error: "Bạn cần đăng nhập." }, { status: 401 });
   try { sameOrigin(req); } catch { return Response.json({ error: "Yêu cầu không hợp lệ." }, { status: 403 }); }

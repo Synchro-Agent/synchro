@@ -43,6 +43,8 @@ export const latestRun = (uid: string, sid: string) => { sweep(); return runs.ge
 export const activeRun = (uid: string, sid: string) => { const r = runs.get(keyOf(uid, sid)); return r && !r.ended && !r.ac.signal.aborted ? r : null; };
 export const liveCount = (uid: string) => { let n = 0; for (const r of runs.values()) if (r.uid === uid && !r.ended && !r.ac.signal.aborted) n++; return n; };
 export const MAX_LIVE_RUNS = MAX_LIVE;
+/** Lượt Code đang chạy của cả tiến trình (tắt êm khi deploy chờ số này về 0, drain.ts). */
+export const activeAgentCount = () => { let n = 0; for (const r of runs.values()) if (!r.ended && !r.ac.signal.aborted) n++; return n; };
 /** Nút Dừng (hoặc xóa phiên). */
 export function stopAgentRun(uid: string, sid: string) { const r = activeRun(uid, sid); if (!r) return false; r.ac.abort(); return true; }
 

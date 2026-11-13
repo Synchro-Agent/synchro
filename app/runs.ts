@@ -9,6 +9,7 @@ import { noteRun, recordOps } from "./ops";
 import { addSpan, beginTrace, endTrace, noteFirstToken, withTrace } from "./tracing";
 import { accountLimit, accountTotal, acquire, noteRefused, queuedOf, queueLimit, withSlot, type WaitWhy } from "./turngate";
 import { appliedDelta } from "./turnctx";
+import { isStopping, markStopping } from "./drain";
 
 // say: lời dẫn của model trước khi dùng công cụ (giữ lại, không bị câu trả lời cuối thay mất); tool / res: công cụ đang chạy và kết quả;
 // plan: danh sách việc (JSON); steer: tin người dùng nhắn thêm đã được ghép vào lượt đang chạy; step / note: dòng trạng thái.
@@ -287,14 +288,18 @@ export const registerExec = (kind: string, f: Exec) => { executors.set(kind, f);
 
 // Máy chủ đang tắt (deploy, khởi động lại): lỗi mạng lúc này là do tắt máy, không phải lỗi thật. Giữ lượt ở "đang chạy"
 // để lần khởi động sau chạy lại, thay vì ghi một kết quả lỗi.
-const gs = globalThis as unknown as { __synchroStopping?: boolean; __synchroStopHook?: boolean };
+// Deploy xanh/lam (NEXT_MANUAL_SIG_HANDLE): tiến trình chờ tối đa 25 giây cho lượt đang chạy xong rồi mới thoát (drain.ts); cờ chỉ bật khi hết giờ chờ,
+// lỗi 5xx thật trong lúc chờ vẫn được ghi như thường.
+const gs = globalThis as unknown as { __synchroStopHook?: boolean };
 if (!gs.__synchroStopHook) {
   gs.__synchroStopHook = true;
-  for (const sig of ["SIGTERM", "SIGINT"] as const) process.once(sig, () => { gs.__synchroStopping = true; });
+  if (!process.env.NEXT_MANUAL_SIG_HANDLE) for (const sig of ["SIGTERM", "SIGINT"] as const) process.once(sig, markStopping);
 }
+/** Số lượt đang chạy trong tiến trình này (tắt êm chờ số này về 0). */
+export const liveRunCount = () => live.size;
 
 function finish(id: string, http: number, json: unknown) {
-  if (gs.__synchroStopping && http >= 500) return;
+  if (isStopping() && http >= 500) return;
   // Tin nhắn thêm tới khi model đã ở bước trả lời cuối: trả về để trình duyệt gửi ngay thành lượt tiếp theo (không mất tin).
   const left = live.get(id)?.inbox ?? [];
   if (left.length && json && typeof json === "object" && !Array.isArray(json)) json = { ...(json as Record<string, unknown>), steer: left };
@@ -375,9 +380,10 @@ export function startRun(user: UserRow, kind: string, body: Record<string, unkno
 }
 
 /** Gọi một lần lúc máy chủ khởi động: lượt đang chạy dở khi máy chủ tắt được chạy lại (tối đa MAX_ATTEMPTS lần). */
+// Deploy xanh/lam: tiến trình này phục vụ yêu cầu (là secondary) từ trước khi nhận vai primary, nên lượt nó đang chạy không phải lượt dở dang.
 export function resumeInterrupted() {
   const d = init();
-  const rows = d.prepare("SELECT * FROM runs WHERE status = 'running'").all() as Row[];
+  const rows = (d.prepare("SELECT * FROM runs WHERE status = 'running'").all() as Row[]).filter((r) => !live.has(r.id));
   for (const r of rows) {
     const user = getUser(r.user_id);
     if (!r.req || !user || r.attempts >= MAX_ATTEMPTS) { finish(r.id, 503, { error: "Lượt trả lời bị gián đoạn khi máy chủ khởi động lại. Hãy gửi lại tin nhắn." }); continue; }

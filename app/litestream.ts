@@ -12,6 +12,7 @@ import path from "node:path";
 import Database from "better-sqlite3";
 import { AuthError, DATA_DIR, db, getSetting, setSetting } from "./authstore";
 import { openSecret, sealSecret } from "./providers";
+import { isPrimary } from "./role";
 
 const SEC = 1000, MIN = 60 * SEC;
 export const DB_PATH = () => path.join(DATA_DIR, "synchro.db");
@@ -166,7 +167,8 @@ export async function saveLitestream(v: { enabled?: unknown; accountId?: unknown
   if (typeof v.enabled === "boolean") next.enabled = v.enabled;
   if (next.enabled && !configured(next)) throw new AuthError("Hãy điền đủ Account ID, bucket, Access Key ID và Secret Access Key trước khi bật.", 400);
   setSetting("backup_r2", JSON.stringify(next));
-  if (next.enabled) await restartLitestream(); else await stopLitestream();
+  // Deploy xanh/lam: chỉ tiến trình primary chạy litestream; bản mới chưa nhận vai thì chỉ lưu, lúc nhận vai sẽ bật theo cài đặt này.
+  if (next.enabled) { if (isPrimary()) await restartLitestream(); } else await stopLitestream();
 }
 
 // ---- trạng thái ----

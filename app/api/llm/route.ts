@@ -7,11 +7,14 @@ import { subCli } from "../../ai/subs";
 import { AUTO } from "../../router";
 import { afterTurn } from "../../brain";
 import { timed } from "../../servertiming";
+import { drainingResponse } from "../../drain";
 
 // Cổng duy nhất tới model của chat. Phần xử lý nằm ở chatengine.ts.
 // async: true (lượt chat chính) → tạo lượt chạy bền ở nền và trả ngay { run }; trình duyệt theo dõi qua /api/runs/<id>.
 const TOO_MANY = "Bạn đang có quá nhiều lượt chạy và chờ cùng lúc. Hãy chờ một lượt xong hoặc bấm Dừng rồi gửi lại.";
 export const POST = timed(async (req: Request) => {
+  // Bản này đang tắt để nhường bản mới (deploy xanh/lam): 503 + Retry-After, trình duyệt gửi lại và tới bản mới.
+  const off = drainingResponse(); if (off) return off;
   // Độ trễ từng chặng của lượt chat (tracing.ts): mốc yêu cầu tới và thời gian kiểm tra phiên.
   const at = Date.now();
   const c = current(req);
