@@ -1,3 +1,4 @@
+import { AsyncResource } from "node:async_hooks";
 import { enabledSkills, recordUse } from "./skillstore";
 import { MAX_STEPS, runSkillTool, skillsPrompt, skillTools, type ToolRun } from "./skillruntime";
 import { healScript } from "./skillheal";
@@ -32,7 +33,7 @@ import { embeddingsConfigured, nearestSkills } from "./vecstore";
 import { convUntrusted, markConvUntrusted } from "./convtrust";
 import { descHash } from "./skillscan";
 import type { Skill } from "./skillstore";
-import { CODE_RULES, execRun, LANGS, runCodeTool, runner, RUN_LIMITS, type Lang, type RecalcReport, type RunOutput } from "./coderun";
+import { CODE_RULES, execRun, LANGS, queueNote, queueReporter, runCodeTool, runner, RUN_LIMITS, type Lang, type RecalcReport, type RunOutput } from "./coderun";
 import { plainSummary, runBlocks } from "./runtext";
 import { OUTPUT_QUOTA_MB, outputByName, outputRoom, outputsFull, readOutput, removeOutput, replaceOutput, saveOutputs, type OutFile } from "./outputs";
 import { mergeOuts, previewNote, previewOf } from "./runpreview";
@@ -283,7 +284,12 @@ async function runCode(x: Exec, input: Record<string, unknown>): Promise<Run> {
     const timeout = typeof input.timeout === "number" ? input.timeout : undefined;
     // Tệp người dùng gửi và ảnh đã tạo nằm ở inputs/. Chỉ máy giữ thư mục giữa các lần chạy mới không phải chép lại trong lượt này (E2B mỗi lần một máy mới).
     const inp = await runInputs(x.uid, x.msgs, x.madeImgs ?? [], keep && runner() !== "e2b" ? (x.inputsSent ??= new Set()) : undefined);
-    const r = await execRun({ uid: x.uid, files: [{ path: LANGS[lang].file, data: Buffer.from(code) }, ...inp.files], argv: [...LANGS[lang].argv], net: x.net, web: x.web, keep, timeout, signal: runSignal(), recalc: true });
+    // Phải xếp hàng (máy chủ bận, thiếu RAM, đang dựng video khác): người dùng thấy vị trí trong hàng ở dòng tiến trình NGAY TRONG LÚC chờ (dịch vụ
+    // workspace gửi từng lần vị trí đổi, W23-4). AsyncResource.bind: lời gọi tới từ sự kiện của kết nối HTTP vẫn ghi vào đúng lượt (progress dùng AsyncLocalStorage).
+    const waitLine = queueReporter(AsyncResource.bind((t: string) => { progress("note", t); }));
+    const r = await execRun({ uid: x.uid, files: [{ path: LANGS[lang].file, data: Buffer.from(code) }, ...inp.files], argv: [...LANGS[lang].argv], net: x.net, web: x.web, keep, timeout, signal: runSignal(), recalc: true, onQueue: (q) => waitLine.push(q) });
+    // Đã báo vị trí trong lúc chờ thì thôi; chỉ chờ mà không có vị trí (nơi chạy không gửi được từng bước) thì báo tóm tắt sau khi chạy.
+    if (r.queue && !waitLine.shown) progress("note", queueNote(r.queue));
     const { saved, held, full } = deliver(x, r);
     const pv = await previewOf(r.files);
     // Chốt ô tổng: tổng / tổng phụ / chênh lệch ghi cứng thành số trong tệp Excel vừa tạo thì báo để model sửa thành công thức.

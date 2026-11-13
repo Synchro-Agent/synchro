@@ -1,6 +1,7 @@
 import { current, sameOrigin } from "../../../authstore";
 import { cancelRun, getRun, liveText, pushInbox, watch, type Delta, type PublicRun, type RunEvent } from "../../../runs";
 import { timed } from "../../../servertiming";
+import { deltaGate } from "../../../ssedeltas";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -20,36 +21,22 @@ export const GET = timed(async (req: Request, ctx: { params: Promise<{ id: strin
   if (url.searchParams.get("json")) return Response.json({ run, live: liveText(id), now: Date.now() });
   const after = Number(req.headers.get("last-event-id") ?? url.searchParams.get("after") ?? 0) || 0;
   const enc = new TextEncoder();
-  let stop = () => {};
+  let stop = () => {}, drained = () => {};
   const stream = new ReadableStream({
     start(ctl) {
       // ended tách khỏi closed: ghi lỗi (người xem đã đi) từng chỉ đặt closed, end() thấy closed thì bỏ qua nên hẹn giờ ping và người theo dõi ở lại mãi.
       let closed = false, ended = false, unwatch = () => {};
-      const end = () => { if (ended) return; ended = closed = true; clearInterval(ping); unwatch(); try { ctl.close(); } catch {} };
+      const end = () => { if (ended) return; ended = closed = true; clearInterval(ping); gate.stop(); unwatch(); try { ctl.close(); } catch {} };
       const send = (s: string) => { if (!closed) try { ctl.enqueue(enc.encode(s)); } catch { end(); } };
-      // Trình duyệt nhận chậm (ctl.desiredSize âm): gom các delta chữ của cùng một bước lại rồi gửi một khung, thay vì dồn nhiều khung
-      // nhỏ vào hàng đợi của luồng. Phải xả trước mọi sự kiện khác (step/done/clock) để giữ đúng thứ tự chữ rồi mới tới bước.
-      let pend: Delta[] = [];
-      const flushDeltas = () => {
-        if (!pend.length) return;
-        const merged: Delta[] = [];
-        for (const d of pend) {
-          const last = merged[merged.length - 1];
-          if (d.t !== undefined && !d.reset && last && last.t !== undefined && !last.reset && last.s === d.s) last.t += d.t;
-          else merged.push({ ...d });
-        }
-        pend = [];
-        for (const d of merged) send(`event: delta\ndata: ${JSON.stringify(d)}\n\n`);
-      };
+      // Trình duyệt nhận chậm (ctl.desiredSize âm): gom các delta chữ của cùng một bước lại rồi gửi một khung (app/ssedeltas.ts). Phải xả trước
+      // mọi sự kiện khác (step/done/clock) để giữ đúng thứ tự chữ rồi mới tới bước; luồng thông lại (pull, hẹn giờ ngắn) thì xả ngay (R10).
+      const gate = deltaGate({ desired: () => ctl.desiredSize, send: (d: Delta) => send(`event: delta\ndata: ${JSON.stringify(d)}\n\n`) });
+      const flushDeltas = gate.flush;
+      drained = gate.flush;
       const ev = (e: RunEvent) => { flushDeltas(); send(`id: ${e.seq}\nevent: step\ndata: ${JSON.stringify(e)}\n\n`); };
-      const dl = (d: Delta) => {
-        if (ctl.desiredSize !== null && ctl.desiredSize < 0) { pend.push(d); return; }
-        flushDeltas();
-        send(`event: delta\ndata: ${JSON.stringify(d)}\n\n`);
-      };
+      const dl = gate.push;
       const done = (r: PublicRun) => { flushDeltas(); send(`event: done\ndata: ${JSON.stringify({ status: r.status, http: r.http, result: r.result })}\n\n`); end(); };
       // Giờ máy chủ lúc mở luồng và mỗi 15 giây (thay cho dòng ping trống): đồng hồ trong khung chat theo giờ máy chủ (app/clock.ts).
-      // Cũng là dịp xả các delta đã gom khi trình duyệt vừa nhận chậm rồi theo kịp (không để chữ kẹt lại quá lâu).
       const clock = () => { flushDeltas(); send(`event: clock\ndata: {"now":${Date.now()}}\n\n`); };
       const ping = setInterval(clock, 15_000);
       // Đăng ký trước rồi mới đọc lại trạng thái, để không lỡ bước nào xảy ra ở giữa.
@@ -65,6 +52,8 @@ export const GET = timed(async (req: Request, ctx: { params: Promise<{ id: strin
       if (ended) return;
       req.signal.addEventListener("abort", end);
     },
+    // Trình duyệt vừa đọc hết hàng đợi của luồng: xả chữ đang giữ ngay, không chờ delta kế tiếp hay nhịp đồng hồ.
+    pull() { drained(); },
     cancel() { stop(); },
   });
   return new Response(stream, { headers: { "content-type": "text/event-stream; charset=utf-8", "cache-control": "no-cache, no-transform", "x-accel-buffering": "no", connection: "keep-alive" } });

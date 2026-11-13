@@ -103,7 +103,7 @@ try {
     const child = Number(fs.readFileSync(pidFile, "utf8"));
     const alive = (pid) => { try { process.kill(pid, 0); return true; } catch { return false; } };
     ok(alive(child), "tiến trình cháu (sleep) đang chạy");
-    ok(R.descendants(p.child.pid).includes(child), "đọc được cây tiến trình con cháu (dùng để kill khi chạy bằng user riêng)");
+    ok((await R.descendants(p.child.pid)).includes(child), "đọc được cây tiến trình con cháu (dùng để kill khi chạy bằng user riêng)");
     p.kill();
     const ex = await p.done;
     await sleep(200);

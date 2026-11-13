@@ -12,7 +12,7 @@ import crypto from "node:crypto";
 import path from "node:path";
 import { CODEX_LOCAL, CODEX_SAFE, agyDenied, agyQuiet, GROK_DENY, grokImageLock } from "./cli_engines";
 import type { Event } from "./engine";
-import { engineEnv, everLoggedIn, markRelogin, safeScope, scopeDir, status } from "./cli_auth";
+import { engineEnvReady, everLoggedIn, markRelogin, safeScope, scopeDir, status } from "./cli_auth";
 import { type Cli, cliRunning, engineHome, type Exit, find, makeDir, removeDir, removeSessionFiles, spawnCli, stripAnsi, watchSessions, writeEngineFile } from "./cli_runtime";
 import { classify, redact } from "./errors";
 import { agyBrainDir, gatherImages, IMAGE_MAX_MB, imageKind, type ImgFile, listImageFiles, namedPaths, removeNewFiles, scrubServerPaths, type FileCtx } from "./imagefiles";
@@ -304,7 +304,7 @@ async function viaReplicate(q: ImgReq): Promise<Tried> {
 export async function runBackend(cli: ImgCli, q: ImgReq): Promise<Tried> {
   if (cli === "replicate") return viaReplicate(q);
   const count = Math.min(4, Math.max(1, q.count ?? 1));
-  const login = scopeDir(cli, q.uid), env = engineEnv(cli, q.uid);
+  const login = scopeDir(cli, q.uid), env = await engineEnvReady(cli, q.uid);
   const parent = path.join(engineHome(), "work", safeScope(q.uid)), work = path.join(parent, `.synchro-img-${crypto.randomBytes(6).toString("hex")}`);
   await makeDir(parent); await makeDir(work);
   const stamp = path.join(work, ".stamp");
