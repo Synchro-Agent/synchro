@@ -2777,7 +2777,7 @@ export default function Home() {
 
       {drag && <div className="drop"><div className="drop-in"><div className="drop-ic"><I.Image size={30} /><I.Copy size={30} /><I.Folder size={30} /></div><span>Thả tệp vào đây</span></div></div>}
       <Toast text={toast} />
-      {voiceOn && <VoiceMode onClose={() => setVoiceOn(false)} onAsk={(t) => send(t)} onTurn={voiceTurn} busy={busy} reply={lastAi ? { text: lastAi.failed ? tr(chatError(lastAi.err).text) : lastAi.text, time: lastAi.time ?? 0 } : null} rate={VOICE_RATE[vspeed] ?? 1} voice={vvoice} say={say} />}
+      {voiceOn && <VoiceMode onClose={() => setVoiceOn(false)} onAsk={(t) => send(t)} onTurn={voiceTurn} busy={busy} reply={lastAi ? { text: lastAi.failed ? tr(chatError(lastAi.err).text) : stripAppliedNotes(lastAi.text), time: lastAi.time ?? 0 } : null} rate={VOICE_RATE[vspeed] ?? 1} voice={vvoice} say={say} />}
       <Fade show={!!(modal === "settings")}><Settings initial={settingsTab} onTab={setSettingsTab} onClose={() => setModal(null)} theme={theme} setTheme={setTheme} /></Fade>
       <Fade show={!!(modal === "lang")}><LangModal onClose={() => setModal(null)} /></Fade>
       <Fade show={!!(modal === "search")}><CommandPalette chats={visible} projects={projects} codes={codeList} cmds={paletteCmds} go={paletteGo} seed={palSeed} onClose={() => setModal(null)} /></Fade>

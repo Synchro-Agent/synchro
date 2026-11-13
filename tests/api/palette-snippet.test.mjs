@@ -17,5 +17,17 @@ ok(R.plainSnippet("") === "", "chữ rỗng");
 const pal = fs.readFileSync("app/palette.tsx", "utf8");
 ok(/plainSnippet\(hit\)/.test(pal) && !/hit\.replace\(\/\\s\+\/g, " "\)\.slice\(0, 80\)/.test(pal), "⌘K dùng plainSnippet cho đoạn trích tin nhắn");
 
+// W1-08: tin AI cũ mở đầu bằng dòng "Đã áp dụng hướng dẫn của bạn: “…”" — ⌘K không trích lại hướng dẫn cá nhân, không tìm trúng chữ trong dòng đó;
+// chế độ giọng nói không đọc dòng đó.
+const { turnctx: T } = await loadTs(["turnctx"]);
+const old = "_Đã áp dụng hướng dẫn của bạn: “Tôi là kế toán ở Đà Nẵng, trả lời ngắn”_\n\nBáo cáo quý ba đã xong.";
+const shown = T.stripAppliedNotes(old);
+ok(R.plainSnippet(shown) === "Báo cáo quý ba đã xong.", "đoạn trích bỏ dòng hướng dẫn cá nhân", R.plainSnippet(shown));
+ok(/const shownText = \(o: \{ text\?: string; role\?: string \}\) => \(o\.role === "user" \? o\.text \?\? "" : stripAppliedNotes\(o\.text \?\? ""\)\);/.test(pal), "⌘K lọc dòng ghi chú cũ trên tin AI");
+ok(/v = foldRaw\(shownText\(o\)\)/.test(pal), "⌘K tìm trên chữ đã lọc (gõ 'Đà Nẵng' không trúng dòng đã ẩn)");
+ok(/const hit = hitMsg && shownText\(hitMsg\);/.test(pal) && /plainSnippet\(hit\)/.test(pal), "đoạn trích lấy chữ đã lọc");
+const page = fs.readFileSync("app/page.tsx", "utf8");
+ok(/<VoiceMode[^\n]*reply=\{lastAi \? \{ text: lastAi\.failed \? tr\(chatError\(lastAi\.err\)\.text\) : stripAppliedNotes\(lastAi\.text\)/.test(page), "chế độ giọng nói không đọc dòng ghi chú cũ");
+
 console.log(`\n${pass} đạt, ${fail} hỏng`);
 process.exit(fail ? 1 : 0);
