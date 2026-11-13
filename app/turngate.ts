@@ -51,7 +51,7 @@ const QUICK_EXTRA = 2;
 const memOk = () => process.platform !== "linux" || os.freemem() / 1048576 >= num("SYNCHRO_MIN_FREE_RAM_MB", 300);
 
 type Idle = { count: () => number; evict: () => boolean };
-const g = globalThis as unknown as { __synchroTurnGate?: State; __synchroTurnHeld?: AsyncLocalStorage<{ open: boolean }>; __synchroTurnIdle?: Idle };
+const g = globalThis as unknown as { __synchroTurnGate?: State; __synchroTurnHeld?: AsyncLocalStorage<{ open: boolean }>; __synchroTurnIdles?: Map<string, Idle> };
 const st: State = (g.__synchroTurnGate ??= { busy: new Map(), total: 0, waiting: [], timer: null, peak: 0, waited: 0, refused: 0 });
 const held = (g.__synchroTurnHeld ??= new AsyncLocalStorage());
 const key = (lane: Lane, uid: string) => `${lane}:${uid}`;
@@ -59,13 +59,16 @@ const count = (k: string) => st.busy.get(k) ?? 0;
 const userTotal = (uid: string) => (["run", "quick", "code"] as Lane[]).reduce((n, l) => n + count(key(l, uid)), 0);
 
 // Tiến trình khởi động sẵn đang rảnh (cli_pool.ts) cũng ăn RAM mà ngoài cổng: 14 lượt cộng 6 tiến trình rảnh là 8 GB trên máy 7,9 GB, chưa kể Next.js. Tính chung vào mức của máy; chúng chỉ để chạy nhanh hơn nên lượt thật cần chỗ thì chúng nhường.
-/** Hồ tiến trình đăng ký cách đếm và cách bỏ tiến trình rảnh. */
-export const registerIdle = (i: Idle) => { g.__synchroTurnIdle = i; };
-const idleCount = () => g.__synchroTurnIdle?.count() ?? 0;
+// Nhiều nguồn: hồ Claude Code (cli_pool.ts) và app-server của Codex (codex_server.ts); nhường chỗ thì nguồn đang giữ nhiều tiến trình rảnh nhất bỏ trước.
+const idles = (g.__synchroTurnIdles ??= new Map<string, Idle>());
+/** Hồ tiến trình đăng ký cách đếm và cách bỏ tiến trình rảnh (name: tên nguồn, đăng ký lại cùng tên thì thay). */
+export const registerIdle = (i: Idle, name = "claude") => { idles.set(name, i); };
+const idleCount = () => [...idles.values()].reduce((n, i) => n + i.count(), 0);
+const evictIdle = () => { for (const i of [...idles.values()].sort((a, b) => b.count() - a.count())) if (i.count() > 0 && i.evict()) return true; return false; };
 /** Còn chỗ khởi động sẵn thêm một tiến trình không (không đuổi ai, không chiếm chỗ của lượt thật). */
 export const warmRoom = () => st.total + idleCount() < globalLimit() && memOk();
 function yieldIdle() {
-  while (idleCount() > 0 && ((st.total < globalLimit() && st.total + idleCount() >= globalLimit()) || (st.total > 0 && !memOk()))) if (!g.__synchroTurnIdle?.evict()) return;
+  while (idleCount() > 0 && ((st.total < globalLimit() && st.total + idleCount() >= globalLimit()) || (st.total > 0 && !memOk()))) if (!evictIdle()) return;
 }
 
 function take(w: Pick<Waiter, "uid" | "lane">): Slot {

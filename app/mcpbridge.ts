@@ -5,6 +5,7 @@
 import crypto from "node:crypto";
 import { MAX_TURN_MS } from "./ai/cli_runtime";
 import { currentRun, inRun } from "./runs";
+import { onAccountGone } from "./authstore";
 
 export type BridgeTool = { name: string; description: string; input_schema: unknown };
 // image: ảnh (base64) kèm kết quả, ví dụ ảnh chụp trình duyệt của Synchro Code (JPEG) hay ảnh connector trả về (mime cho biết loại ảnh).
@@ -38,6 +39,46 @@ function within(done: Promise<Reply>, ms: number, stop: AbortSignal[]): Promise<
   });
 }
 
+// ---------------------------------------------------------------- cầu nối sống theo cuộc trò chuyện (Blueprint G2.2)
+// Tiến trình CLI dựng sẵn (hồ Claude Code) và thread đã nạp trong codex app-server đọc địa chỉ MCP một lần lúc khởi động, còn cầu nối của lượt đổi token mỗi lượt:
+// trước đây lượt có công cụ vì thế luôn khởi động lạnh. Mỗi (người dùng, cuộc trò chuyện) có một địa chỉ sống với mã bí mật riêng; lượt nào đang chạy thì địa chỉ đó
+// trỏ vào cầu nối của lượt (cùng công cụ, cùng nhật ký làm việc); giữa hai lượt chỉ trả danh sách công cụ của lượt gần nhất, mọi lời gọi công cụ bị từ chối.
+// Hết hạn sau LIVE_IDLE_MS không dùng (dài hơn tuổi thọ của tiến trình dựng sẵn).
+type Live = { uid: string; key: string; target: string | null; tools: BridgeTool[]; hold?: number; used: number };
+const g2 = globalThis as unknown as { __synchroLiveBridges?: { byToken: Map<string, Live>; byConv: Map<string, string> } };
+const lives = (g2.__synchroLiveBridges ??= { byToken: new Map(), byConv: new Map() });
+const LIVE_IDLE_MS = 90 * 60_000;
+function liveToken(uid: string, conv: string): string {
+  const now = Date.now();
+  for (const [t, l] of lives.byToken) if (!l.target && now - l.used > LIVE_IDLE_MS) { lives.byToken.delete(t); lives.byConv.delete(l.key); }
+  const key = `${uid}\u0000${conv}`;
+  let t = lives.byConv.get(key);
+  if (!t || !lives.byToken.has(t)) {
+    t = `live-${crypto.randomBytes(24).toString("base64url")}`;
+    lives.byConv.set(key, t);
+    lives.byToken.set(t, { uid, key, target: null, tools: [], used: now });
+  }
+  return t;
+}
+/** Người dùng xóa cuộc trò chuyện (subs.removeConvSessions), đăng xuất khỏi thiết bị cuối cùng (api/auth/logout), tài khoản bị xóa (authstore):
+ *  bỏ địa chỉ sống (tiến trình còn giữ địa chỉ cũ chỉ nhận lỗi). */
+export function dropLiveBridge(uid: string, conv?: string) {
+  for (const [t, l] of lives.byToken) if (l.uid === uid && (conv === undefined || l.key === `${uid}\u0000${conv}`)) { lives.byToken.delete(t); lives.byConv.delete(l.key); }
+}
+onAccountGone("mcpbridge", (uid) => dropLiveBridge(uid));
+/** Giữa hai lượt: danh sách công cụ của lượt gần nhất, không chạy công cụ nào. */
+const idleBridge = (l: Live): Bridge => ({ uid: l.uid, run: null, tools: l.tools, hold: l.hold, exp: Date.now() + 60_000, busy: 0, last: l.used, live: new Map(), jobs: new Map(),
+  call: async () => ({ is_error: true, content: "Lượt chat đã xong nên công cụ của Synchro không chạy nữa. Hãy trả lời người dùng bằng những gì đã có." }) });
+function resolveBridge(token: string): Bridge | undefined {
+  const b = bridges.get(token);
+  if (b) return b;
+  const l = lives.byToken.get(token);
+  if (!l) return undefined;
+  l.used = Date.now();
+  return (l.target ? bridges.get(l.target) : undefined) ?? idleBridge(l);
+}
+const liveKey = (tools: BridgeTool[], hold?: number) => crypto.createHash("sha256").update(JSON.stringify([hold ?? 0, tools.map((t) => [t.name, t.description, t.input_schema])])).digest("hex").slice(0, 16);
+
 /** Địa chỉ nội bộ của Synchro mà CLI (cùng máy) gọi tới. */
 export const internalUrl = () => (process.env.SYNCHRO_INTERNAL_URL ?? `http://127.0.0.1:${process.env.PORT || 3000}`).replace(/\/+$/, "");
 
@@ -45,7 +86,8 @@ export const internalUrl = () => (process.env.SYNCHRO_INTERNAL_URL ?? `http://12
 /** park / onPark: lượt đang chờ người dùng duyệt (xem khóa lượt của Antigravity, Grok ở cli_engines.ts): CLI đã kết nối xong với cầu nối này nên không cần giữ chỗ trong cấu hình chung nữa. */
 /** hold: xem BRIDGE_HOLD (chỉ Antigravity); CLI khác không có, hành vi không đổi. */
 /** route: tên ngoài danh sách mà vẫn gọi được (connector qua proxy: model gọi thẳng tên connector_tools vừa in ra). */
-export function openBridge(o: { uid: string; tools: BridgeTool[]; call: Bridge["call"]; hold?: number; route?: Bridge["route"] }) {
+/** conv: cuộc trò chuyện của lượt; có thì thêm live = địa chỉ sống của cuộc trò chuyện, trỏ vào cầu nối này tới khi close() (G2.2). */
+export function openBridge(o: { uid: string; tools: BridgeTool[]; call: Bridge["call"]; hold?: number; route?: Bridge["route"]; conv?: string }) {
   const now = Date.now();
   for (const [k, b] of bridges) if (b.exp < now) bridges.delete(k);
   const token = crypto.randomBytes(24).toString("base64url");
@@ -53,12 +95,20 @@ export function openBridge(o: { uid: string; tools: BridgeTool[]; call: Bridge["
   const b: Bridge = { ...o, run: currentRun(), exp: now + MAX_TURN_MS + 5 * 60_000, busy: 0, last: now, live: new Map(), jobs: new Map() };
   const onParked: (() => void)[] = [];
   bridges.set(token, b);
+  let lt = o.conv ? liveToken(o.uid, o.conv) : null, l = lt ? lives.byToken.get(lt) : undefined;
+  // Hai lượt cùng cuộc trò chuyện chồng nhau (lượt cũ chưa xong, gửi lại, hai tab): địa chỉ sống vẫn trỏ vào lượt đang chạy, lượt mới không có địa chỉ sống
+  // (chạy bằng cầu nối riêng của lượt, khởi động lạnh). Trỏ sang lượt mới thì công cụ mà tiến trình / thread của lượt cũ gọi sẽ chạy nhầm vào lượt mới
+  // (duyệt, nhật ký làm việc, bộ công cụ của lượt mới). Lượt cũ đã quá hạn mà chưa đóng thì coi như không còn.
+  const cur = l?.target ? bridges.get(l.target) : undefined;
+  if (l && cur && cur.exp >= now) { lt = null; l = undefined; }
+  if (l) { l.target = token; l.tools = o.tools; l.hold = o.hold; l.used = now; }
   // alive: đang chạy công cụ thì là "bây giờ", không thì lúc công cụ gần nhất xong (để biết CLI còn làm việc).
   return {
     url: `${internalUrl()}/api/mcp/bridge/${token}`,
     // Lượt xong mà còn việc chưa ai lấy kết quả: không còn ai nhận, thôi chạy.
     // Lời gọi đang chờ duyệt cũng thôi: lượt đã xong thì bấm Cho phép muộn (tab cũ) không được chạy công cụ nữa.
-    close: () => { bridges.delete(token); for (const j of b.jobs.values()) j.ctl.abort(); b.jobs.clear(); for (const c of b.live.values()) c.abort(); },
+    close: () => { bridges.delete(token); if (l?.target === token) { l.target = null; l.used = Date.now(); } for (const j of b.jobs.values()) j.ctl.abort(); b.jobs.clear(); for (const c of b.live.values()) c.abort(); },
+    live: lt ? { url: `${internalUrl()}/api/mcp/bridge/${lt}`, key: liveKey(o.tools, o.hold) } : undefined,
     /** Việc đã nhận job_id mà model chưa lấy kết quả: model kết thúc lượt sớm thì nhắc nó quay lại. */
     pendingJobs: () => [...b.jobs].map(([id, j]) => ({ id, name: j.name })),
     alive: () => (b.busy ? Date.now() : b.last),
@@ -174,7 +224,7 @@ function sseReply(work: Promise<unknown[]>, tokens: unknown[], sid: string, onGo
 export async function bridgeRoute(req: Request, token: string): Promise<Response> {
   // Chỉ CLI chạy trên chính máy chủ: nginx luôn gắn X-Real-IP cho yêu cầu từ ngoài vào (Next không tự gắn header này).
   if (req.headers.get("x-real-ip")) return new Response("Forbidden", { status: 403 });
-  const b = bridges.get(token);
+  const b = resolveBridge(token);
   if (!b || b.exp < Date.now()) return Response.json(fail(null, -32001, "Cầu nối đã đóng (lượt chat đã xong)."), { status: 404 });
   if (req.method === "GET") return new Response(null, { status: 405, headers: { allow: "POST" } });
   if (req.method === "DELETE") return new Response(null, { status: 200 });

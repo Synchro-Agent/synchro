@@ -1,12 +1,16 @@
 // Các engine chạy CLI chính chủ bằng gói subscription của người dùng (ADR 0001, bước 5): Claude Code, Codex, Antigravity, Grok.
 // Engine không biết tài khoản là ai: biến môi trường đăng nhập (CLAUDE_CONFIG_DIR, CODEX_HOME, HOME…) do cli_auth.engineEnv()
 // dựng và truyền vào TurnRequest.env; cli_runtime lọc env, kill cả process group khi Dừng, CLI im lặng quá lâu hoặc chạm mức trần của lượt.
+import crypto from "node:crypto";
+import fs from "node:fs";
 import path from "node:path";
 import type { Attachment, Engine, ErrorCode, Event, RateWindow, TurnRequest, Usage, WebSource } from "./engine";
-import { type Cli, cliRunning, CODEX_TURN_PREFIX, engineHome, find, IDLE_MS, makeDir, MAX_TURN_MS, type Proc, sessionSeen, spawnCli, stripAnsi, writeEngineFile, type Exit } from "./cli_runtime";
+import { type Cli, cliRunning, CODEX_TURN_PREFIX, engineHome, find, IDLE_MS, makeDir, MAX_TURN_MS, type Proc, sessionSeen, spawnCli, stripAnsi, turnHomeBase, writeEngineFile, type Exit } from "./cli_runtime";
 import { classify, redact } from "./errors";
 import { forgetSession, poolStrike, prestart, takeProcess, type PoolSpec } from "./cli_pool";
 import { scrubServerPaths } from "./imagefiles";
+import { openTurnHome, turnHomeOn, type TurnHome } from "./turnhome";
+import { CodexServerUnavailable, codexServerOn, codexServerTurn, codexThreadLeaving } from "./codex_server";
 
 type Json = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 
@@ -18,7 +22,8 @@ async function start(cli: Cli, args: string[], req: TurnRequest, stdin: string, 
   await makeDir(cwd);
   const p = spawnCli(bin, args, { env: req.env, cwd, stdin, signal: req.signal, idleMs: IDLE_MS, alive: req.alive, ...(timeoutMs ? { timeoutMs } : {}) });
   // Hai CLI chỉ báo mã phiên cuối lượt: lượt tạo ảnh cần biết lượt nào còn chạy trước khi dọn phiên của nó (watchSessions).
-  if ((cli === "agy" || cli === "grok") && req.env?.HOME) cliRunning(req.env.HOME, p);
+  // HOME riêng của lượt (turnhome.ts) là thư mục con của thư mục đăng nhập: theo dõi theo thư mục đăng nhập, như lượt tạo ảnh.
+  if ((cli === "agy" || cli === "grok") && req.env?.HOME) cliRunning(turnHomeBase(req.env.HOME), p);
   return p;
 }
 // Linux không cho một tham số dòng lệnh dài quá 128 KB (MAX_ARG_STRLEN): vượt là "spawn E2BIG", lượt chết trước khi chạy. Đo bằng byte
@@ -88,8 +93,9 @@ export function webSources(v: unknown, out = new Map<string, WebSource>(), depth
 }
 const WEB_TOOL = /^(WebSearch|WebFetch|web_search|search_web|web_fetch)$/;
 
-// ---------------------------------------------------------------- khóa lượt theo tài khoản (Antigravity, Grok)
-// Hai CLI này chỉ đọc cầu nối MCP từ cấu hình chung của tài khoản nên các lượt có công cụ của cùng tài khoản chạy lần lượt. Chờ lượt trước
+// ---------------------------------------------------------------- khóa lượt theo tài khoản (Antigravity, Grok): chỉ còn cho đường dự phòng
+// Mặc định mỗi lượt có công cụ chạy với HOME riêng (turnhome.ts, Blueprint G1) nên không xếp hàng. Khóa dưới đây chỉ dùng khi HOME riêng tắt
+// (SYNCHRO_CLI_TURN_HOME=0) hoặc dựng lỗi, và cho lượt tạo ảnh (agyQuiet). Khi đó hai CLI này đọc cầu nối MCP từ cấu hình chung của tài khoản nên các lượt có công cụ của cùng tài khoản chạy lần lượt. Chờ lượt trước
 // phải: dừng được ngay khi bấm Dừng, có giới hạn, và báo cho người dùng biết đang chờ gì (một câu "chào" từng chờ trống 2 phút rồi báo lỗi sai).
 // Lượt đang chờ người dùng duyệt (tới 10 phút) thì nhả khóa sớm qua mcp.onPark: lúc đó CLI đã gọi tới cầu nối, tức là đã đọc xong cấu hình, nên lượt sau được ghi đè.
 // Lượt nào ghi cấu hình sau cùng mới được gỡ nó khi xong (configOwner), để lượt đang chờ duyệt không gỡ mất cầu nối của lượt đang chạy.
@@ -181,15 +187,21 @@ export function claudeLimits(info: unknown): RateWindow[] {
 }
 
 // Lượt dùng tiến trình khởi động sẵn: đúng các cờ của lượt thường, thêm stream-json để gửi tin qua stdin. Các cờ này chỉ đọc lúc khởi động nên nằm trong khóa của hồ.
-function poolSpec(req: Pick<TurnRequest, "system" | "model" | "effort" | "env" | "workdir">, bin: string, tools: string): PoolSpec {
+// Lượt có công cụ (G2.2): cầu nối là địa chỉ sống của cuộc trò chuyện, ghi trong tệp cấu hình 0600 có tên theo địa chỉ + bộ công cụ (đổi bộ công cụ là khóa khác,
+// không dùng nhầm tiến trình đã liệt kê bộ cũ).
+const liveMcpFile = (cwd: string, live: { url: string; key: string }) => path.join(cwd, `.synchro-live-${crypto.createHash("sha256").update(`${live.url}\n${live.key}`).digest("hex").slice(0, 24)}.json`);
+function poolSpec(req: Pick<TurnRequest, "system" | "model" | "effort" | "env" | "workdir" | "mcp">, bin: string, tools: string): PoolSpec {
+  const cwd = req.workdir ?? path.join(engineHome(), "work"), live = req.mcp?.live;
   const args = ["-p", "--output-format", "stream-json", "--verbose", "--include-partial-messages", "--tools", tools, "--input-format", "stream-json"];
+  if (live) args.push("--mcp-config", liveMcpFile(cwd, live), "--strict-mcp-config", "--allowedTools", "mcp__synchro");
   if (req.system) args.push("--system-prompt", req.system);
   if (req.model) args.push("--model", req.model);
   const ce = cliEffort(req.effort);
   if (ce) args.push("--effort", ce);
-  return { bin, args, env: req.env ?? {}, cwd: req.workdir ?? path.join(engineHome(), "work"), account: req.env?.CLAUDE_CONFIG_DIR ?? "" };
+  return { bin, args, env: live ? { ...req.env, MCP_TOOL_TIMEOUT: "1800000" } : req.env ?? {}, cwd, account: req.env?.CLAUDE_CONFIG_DIR ?? "", ...(live ? { tool: true } : {}) };
 }
-type ClaudeEnd = { done: boolean; failed: boolean; session: string | null; spoke: boolean };
+/** spoke: đã có chữ tới người dùng. acted: model đã định dùng công cụ (khối tool_use): lượt có thể đã làm gì đó, không được chạy lại từ đầu. */
+type ClaudeEnd = { done: boolean; failed: boolean; session: string | null; spoke: boolean; acted: boolean };
 
 export class ClaudeCodeEngine implements Engine {
   readonly id = "claude";
@@ -209,10 +221,19 @@ export class ClaudeCodeEngine implements Engine {
     if (!bin || tooLong(req.system)) return false;
     const spec = poolSpec(req, bin, this.o.tools ?? "");
     await makeDir(spec.cwd);
+    const live = req.mcp?.live;
+    if (live) {
+      const f = liveMcpFile(spec.cwd, live);
+      // Có user riêng của engine thì Synchro không thấy tệp (thư mục 0700 của user đó): ghi lại, nội dung không đổi.
+      try { if (!fs.existsSync(f)) await writeEngineFile(f, Buffer.from(JSON.stringify({ mcpServers: { synchro: { type: "http", url: live.url } } }))); }
+      catch { return false; }
+    }
     const lease = takeProcess(spec, req.sessionId);
     if (!lease) return false;
     yield { kind: "pool", state: lease.hit ? "hit" : "cold" };
-    let r: ClaudeEnd = { done: false, failed: false, session: null, spoke: false }, closed = false;
+    let r: ClaudeEnd = { done: false, failed: false, session: null, spoke: false, acted: false }, closed = false;
+    // Lượt có công cụ: cầu nối có lời gọi nào trong lúc tiến trình này chạy thì alive() đổi (công cụ đang / vừa chạy).
+    const alive0 = req.alive?.();
     try {
       lease.send(claudeInput(req.prompt, req.attachments ?? []));
       // Có tiến trình sẵn thì dòng đầu tới ngay khi CLI nhận tin; vừa khởi động thì còn phải chờ khởi động xong. SYNCHRO_CLAUDE_POOL_FIRST_SEC: rút ngắn khi kiểm thử.
@@ -223,12 +244,16 @@ export class ClaudeCodeEngine implements Engine {
       if (r.done) {
         // Lượt báo lỗi (hết hạn mức, đăng nhập…): không biết tiến trình còn dùng được không.
         if (r.failed) lease.discard();
-        else { lease.release(r.session); await this.prestart(req); }
+        // Tiến trình của lượt có công cụ gắn với cuộc trò chuyện này (địa chỉ sống): giữ cho câu sau của nó, không khởi động sẵn bản cho đoạn chat mới.
+        else { lease.release(r.session); if (!req.mcp) await this.prestart(req); }
         closed = true;
         return true;
       }
       lease.discard(); closed = true;
-      if (!r.spoke) { poolStrike(end === "silent" ? "tiến trình không phản hồi tin nhắn" : "tiến trình thoát giữa lượt"); return false; }
+      // Chạy lại từ đầu bằng tiến trình mới chỉ khi lượt chưa làm gì: chưa có chữ, chưa định dùng công cụ, cầu nối chưa nhận lời gọi nào.
+      // Lượt có công cụ đã gọi công cụ (connector, ghi tệp, gửi thư…) mà chạy lại thì công cụ chạy hai lần: báo lỗi thoát thay vì thử lại.
+      const acted = r.acted || (req.alive !== undefined && req.alive() !== alive0);
+      if (!r.spoke && !acted) { poolStrike(end === "silent" ? "tiến trình không phản hồi tin nhắn" : "tiến trình thoát giữa lượt"); return false; }
       yield exitError("claude", lease.proc, await lease.done());
       return true;
     } finally { if (!closed) lease.discard(); }
@@ -237,7 +262,7 @@ export class ClaudeCodeEngine implements Engine {
   private async *events(src: AsyncIterable<Json>, kill: () => void): AsyncGenerator<Event, ClaudeEnd, unknown> {
     // gap: model bắt đầu một tin mới trong lượt (sau công cụ dựng sẵn như tìm web) — chữ của tin mới cách chữ trước một dòng trống,
     // không dính liền "…dựng deck.Đã đọc 4 skill…".
-    let text = "", done = false, gap = false, failed = false, session: string | null = null;
+    let text = "", done = false, gap = false, failed = false, acted = false, session: string | null = null;
     const limits = new Map<string, RateWindow>(), webIds = new Set<string>();
     // Đo: lần đầu của từng loại sự kiện (ms từ lúc khởi động CLI), ghi một dòng [timing] khi xong — để biết thời gian chờ nằm ở đâu.
     const T0 = Date.now(), seen = new Map<string, number>();
@@ -249,6 +274,7 @@ export class ClaudeCodeEngine implements Engine {
       if (o.type === "stream_event" || o.type === "assistant" || o.type === "user" || (o.type === "system" && (o.subtype === "status" || o.subtype === "compact_boundary"))) yield { kind: "activity" };
       if (o.type === "assistant") {
         for (const b of (o.message?.content ?? []) as Json[]) {
+          if (b.type === "tool_use" || b.type === "server_tool_use") acted = true;
           if ((b.type === "tool_use" || b.type === "server_tool_use") && WEB_TOOL.test(String(b.name ?? ""))) {
             if (typeof b.id === "string") webIds.add(b.id);
             yield { kind: "search", query: typeof b.input?.query === "string" ? b.input.query : undefined, url: typeof b.input?.url === "string" ? b.input.url : undefined };
@@ -260,7 +286,10 @@ export class ClaudeCodeEngine implements Engine {
       }
       if (o.type === "system" && o.subtype === "init" && typeof o.session_id === "string") { session = o.session_id; yield { kind: "session", id: o.session_id, ...(typeof o.model === "string" ? { model: o.model } : {}) }; }
       else if (o.type === "stream_event" && o.event?.type === "message_start") gap = !!text;
-      else if (o.type === "stream_event" && o.event?.type === "content_block_start" && o.event.content_block?.type === "tool_use" && String(o.event.content_block.name ?? "").startsWith("mcp__")) yield { kind: "tooluse" };
+      else if (o.type === "stream_event" && o.event?.type === "content_block_start" && (o.event.content_block?.type === "tool_use" || o.event.content_block?.type === "server_tool_use")) {
+        acted = true;
+        if (String(o.event.content_block.name ?? "").startsWith("mcp__")) yield { kind: "tooluse" };
+      }
       else if (o.type === "stream_event" && o.event?.type === "content_block_delta" && o.event.delta?.type === "text_delta" && typeof o.event.delta.text === "string") {
         const t = (gap ? "\n\n" : "") + o.event.delta.text;
         gap = false;
@@ -296,10 +325,10 @@ export class ClaudeCodeEngine implements Engine {
         } else yield { kind: "final", text: typeof o.result === "string" && o.result ? o.result : text, via: "claude" };
       }
     }
-    return { done, failed, session, spoke: !!text };
+    return { done, failed, session, spoke: !!text, acted };
   }
   async *runTurn(req: TurnRequest): AsyncIterable<Event> {
-    if (req.pool && !req.mcp && !req.web && !req.fork && (yield* this.pooled(req))) return;
+    if (req.pool && (!req.mcp || req.mcp.live) && !req.web && !req.fork && (yield* this.pooled(req))) return;
     // Lượt này nối tiếp một phiên bằng tiến trình riêng: tiến trình đang đợi sẵn với phiên đó không còn biết hết hội thoại.
     if (req.sessionId) forgetSession(req.env?.CLAUDE_CONFIG_DIR ?? "", req.sessionId);
     // Công cụ dựng sẵn: chỉ tìm / đọc web khi người dùng bật "Tìm kiếm trên web"; công cụ của Synchro đi qua cầu nối MCP.
@@ -416,6 +445,15 @@ export class CodexEngine implements Engine {
     // nhận các khóa này thì vòng lặp dưới dừng lượt ngay khi model định chạy lệnh (CODEX_LOCAL), trước khi kết quả kịp về tới model.
     // Tắt cả image_gen dựng sẵn (gói trả phí mới có): ảnh nó tạo nằm trong thư mục trên máy chủ, không thành tệp của người dùng, câu "đã lưu" thì đã được bỏ đường dẫn nên trông như thành công mà
     // không có ảnh. Lượt chat tạo ảnh bằng generate_image của Synchro; đường nhanh thì model báo cần công cụ. Lượt tạo ảnh của imagegen.ts không đi qua đây nên vẫn có image_gen.
+    // Đường ấm (Blueprint G2.3): một codex app-server sống lâu cho mỗi tài khoản, cùng cờ an toàn. Không dùng được (tắt, hết chỗ, lượt có cầu nối riêng của lượt,
+    // app-server lỗi trước khi lượt bắt đầu) thì chạy codex exec như cũ, có ghi nhật ký.
+    if (codexServerOn()) {
+      const ce0 = cliEffort(req.effort);
+      try { yield* codexServerTurn(req, prompt, req.workdir ?? path.join(engineHome(), "work"), req.model, ce0, imagePaths(req.attachments ?? [])); return; }
+      catch (e) { if (!(e instanceof CodexServerUnavailable)) throw e; console.warn(`[codex-server] chạy codex exec cho lượt này: ${redact(e.message).slice(0, 200)}`); }
+    }
+    // Lượt này của thread chạy bằng exec: app-server nào đang nạp thread đó không được phục vụ lượt sau với bản cũ trong bộ nhớ.
+    codexThreadLeaving(req.env, req.sessionId);
     const args = ["exec", ...(req.sessionId ? ["resume", req.sessionId] : []), ...CODEX_SAFE, "-c", "features.image_generation=false"];
     // Công cụ của Synchro qua cầu nối MCP (Streamable HTTP): cấu hình trong CODEX_HOME riêng của lượt (codexTurnHome), không qua tham số.
     // Tìm web dựng sẵn khi người dùng bật. Hộp cát chỉ đọc vẫn giữ cho lệnh dựng sẵn của Codex trên máy chủ.
@@ -588,10 +626,39 @@ async function* revealText(raw: string, signal?: AbortSignal): AsyncGenerator<Ev
   }
   return true;
 }
+/** HOME riêng của lượt (turnhome.ts); null: tắt hoặc dựng lỗi (đã ghi nhật ký), lượt chạy theo cách cũ. */
+async function turnHome(cli: "agy" | "grok", req: TurnRequest, own: Parameters<typeof openTurnHome>[2]): Promise<TurnHome | null> {
+  if (!turnHomeOn() || !req.env?.HOME) return null;
+  const t0 = Date.now();
+  try {
+    const h = await openTurnHome(cli, req, own);
+    console.log(`[timing] turnhome ${cli} open=${Date.now() - t0} copied=${h.info.copied} linked=${h.info.linked}`);
+    return h;
+  } catch (e) {
+    console.warn(`[turnhome] ${cli}: không dựng được HOME riêng của lượt, dùng cấu hình chung và khóa tài khoản: ${redact((e as Error).message).slice(0, 200)}`);
+    return null;
+  }
+}
+
 export class AntigravityEngine implements Engine {
   readonly id = "agy";
   async *runTurn(req: TurnRequest): AsyncIterable<Event> {
     if (!req.mcp) { yield* this.turn(req); return; }
+    // Cầu nối và hook chỉ nằm trong HOME riêng của lượt: không xếp hàng sau lượt khác của tài khoản, không gỡ gì của ai khi xong.
+    const th = await turnHome("agy", req, {
+      ".gemini/config/mcp_config.json": { mode: "json-mcp", name: "synchro", entry: { disabled: false, serverUrl: req.mcp.url } },
+      ".gemini/config/hooks.json": { mode: "write", text: AGY_HOOK(req.web) },
+    });
+    if (th) {
+      try { yield { kind: "status" }; yield* this.turn({ ...req, env: th.env }); }
+      finally { void th.close(); }
+      return;
+    }
+    yield* this.shared(req);
+  }
+  /** Cách cũ: cầu nối trong cấu hình chung của tài khoản, các lượt có công cụ chạy lần lượt. */
+  private async *shared(req: TurnRequest): AsyncIterable<Event> {
+    if (!req.mcp) return;
     const free = yield* turnLock(agyLocks, String(req.env?.HOME ?? ""), req, "Antigravity");
     if (!free) return;
     const home = ownerKey("agy", String(req.env?.HOME ?? "")), url = req.mcp.url;
@@ -659,7 +726,7 @@ export class AntigravityEngine implements Engine {
     try { o = JSON.parse(t.slice(t.indexOf("{"))) as Json; } catch {}
     // Lượt bị dừng hoặc CLI không in gì: nhật ký của lượt không còn ai đọc, xóa để khỏi đọng tệp trong thư mục làm việc.
     if (!o) { if (log) await rmEngineFile(req, log).catch(() => {}); yield exitError("agy", p, e); return; }
-    if (typeof o.conversation_id === "string" && o.conversation_id) { if (req.env?.HOME) sessionSeen(req.env.HOME, o.conversation_id); yield { kind: "session", id: o.conversation_id }; }
+    if (typeof o.conversation_id === "string" && o.conversation_id) { if (req.env?.HOME) sessionSeen(turnHomeBase(req.env.HOME), o.conversation_id); yield { kind: "session", id: o.conversation_id }; }
     const u = (o.usage ?? {}) as Json;
     if (o.usage) yield { kind: "usage", usage: { input: num(u.input_tokens) ?? 0, output: (num(u.output_tokens) ?? 0) + (num(u.thinking_tokens) ?? 0), cacheRead: num(u.cache_read_tokens) } };
     if (o.status === "ERROR" || o.error || e.code !== 0) {
@@ -706,6 +773,24 @@ export class GrokEngine implements Engine {
   readonly id = "grok";
   async *runTurn(req: TurnRequest): AsyncIterable<Event> {
     if (!req.mcp) { yield* this.turn(req); return; }
+    // HOME riêng của lượt: config.toml của tài khoản (bỏ cầu nối cũ) rồi `grok mcp add` ghi cầu nối của lượt vào đó, đúng định dạng của Grok.
+    const th = await turnHome("grok", req, { ".grok/config.toml": { mode: "toml-drop", name: "synchro" } });
+    if (th) {
+      let ran = false;
+      try {
+        const treq = { ...req, env: th.env };
+        if (await grokRun(["mcp", "add", "--transport", "http", "synchro", req.mcp.url], treq).catch(() => false)) {
+          ran = true;
+          yield { kind: "status" };
+          yield* this.turn(treq);
+        } else console.warn("[turnhome] grok: lắp cầu nối vào HOME riêng không được, thử cách cũ");
+      } finally { void th.close(); }
+      if (ran) return;
+    }
+    yield* this.shared(req);
+  }
+  private async *shared(req: TurnRequest): AsyncIterable<Event> {
+    if (!req.mcp) return;
     const free = yield* turnLock(grokLocks, String(req.env?.HOME ?? ""), req, "Grok");
     if (!free) return;
     const home = ownerKey("grok", String(req.env?.HOME ?? "")), url = req.mcp.url;
@@ -770,7 +855,7 @@ export class GrokEngine implements Engine {
         if (classify(lastErr) === "auth") { p.kill(); done = true; yield err(lastErr, "auth"); break; }
       } else if (o.type === "end") {
         done = true;
-        if (typeof o.sessionId === "string" && o.sessionId) { if (req.env?.HOME) sessionSeen(req.env.HOME, o.sessionId); yield { kind: "session", id: o.sessionId }; }
+        if (typeof o.sessionId === "string" && o.sessionId) { if (req.env?.HOME) sessionSeen(turnHomeBase(req.env.HOME), o.sessionId); yield { kind: "session", id: o.sessionId }; }
         const u = (o.usage ?? {}) as Json;
         yield { kind: "usage", usage: { input: num(u.input_tokens) ?? num(u.prompt_tokens) ?? 0, output: (num(u.output_tokens) ?? num(u.completion_tokens) ?? 0) + (num(u.reasoning_tokens) ?? 0), cacheRead: num(u.cache_read_input_tokens) ?? num(u.cached_tokens), cacheWrite: num(u.cache_creation_input_tokens), costUsd: num(o.total_cost_usd) } };
         // Lỗi là điều cuối cùng CLI nói, kể cả khi đã có chữ: câu trả lời bị cắt ngang, không được hiện như đã xong và không được tính là lượt tốt (Tự động còn chuyển model được).

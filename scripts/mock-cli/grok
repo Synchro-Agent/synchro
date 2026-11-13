@@ -101,6 +101,7 @@ async function grokImage(prompt) {
     if (fmt !== "streaming-json") { console.error("mock grok: chỉ hỗ trợ --output-format streaming-json"); process.exit(2); }
     const fail = (message) => { C.out({ type: "error", message }); process.exit(1); };
     if (!li()) return fail("Not authenticated. Run `grok login` to sign in, or set XAI_API_KEY.");
+    { const oe = C.oauthTurn(authFile); if (oe) return fail(oe); }
     if (C.isImageTurn(prompt)) return grokImage(prompt);
     if (prompt.includes("[mock:quota]")) return fail("Rate limit exceeded: you've reached your SuperGrok usage limit. Try again in 2 hours.");
     const model = C.flag(a, "-m") ?? C.flag(a, "--model") ?? MODELS[0], effort = C.flag(a, "--effort");

@@ -447,6 +447,20 @@ Object.assign(VI2EN, { "Quét skill rác": "Scan for junk skills", "Không tải
 // Sơ đồ Mermaid trong câu trả lời (md.tsx MermaidCard).
 Object.assign(VI2EN, { "Phóng to sơ đồ": "Enlarge diagram" });
 
+const CODEX_STOP_WHY: Record<string, string> = {
+  "đăng nhập đổi": "the sign-in changed", "công cụ trên máy chủ": "it tried to use a tool on the server", "thiếu bộ nhớ": "the server is low on memory",
+  "không dừng được lượt": "the reply could not be stopped", "rảnh lâu": "it was idle too long", "hết tuổi": "it reached its time limit", "nhường chỗ": "it made room for another account",
+  "nhường chỗ cho lượt khác": "it made room for another reply", "tắt": "the server is shutting down", "đổi bản CLI": "the CLI was updated",
+  "thread cần cấu hình khác": "the conversation needed different settings", "lượt không bắt đầu được": "the reply could not start",
+  "thread chạy lượt bằng codex exec": "the conversation continued another way", "app-server đã tắt": "the app-server has shut down",
+};
+function codexStopWhy(r: string): string {
+  const exit = /^app-server thoát \(mã (.+)\)$/.exec(r);
+  if (exit) return `the app-server exited (code ${exit[1]})`;
+  const slow = /^(.+): quá (\d+) giây$/.exec(r);
+  if (slow) return `${slow[1]} took more than ${slow[2]} seconds`;
+  return CODEX_STOP_WHY[r] ?? r;
+}
 export const RULES_EN: [RegExp, (m: RegExpMatchArray) => string][] = [
   [/^(.+) không phản hồi sau (.+)\. Hãy thử lại hoặc chọn model khác\.$/, (m) => `${m[1]} did not respond within ${m[2].replace("giây", "seconds").replace("phút", "minutes")}. Try again or pick another model.`],
   [/^(.+) không có tiến triển trong (.+)\. Hãy nhắn "tiếp tục" hoặc chọn model khác\.$/, (m) => `${m[1]} made no progress for ${m[2].replace("giây", "seconds").replace("phút", "minutes")}. Send "continue" or pick another model.`],
@@ -458,6 +472,8 @@ export const RULES_EN: [RegExp, (m: RegExpMatchArray) => string][] = [
   [/^(.+) đã hết hạn mức\. Các model khác của gói (.+) vẫn dùng được\.$/, (m) => `${m[1]} has hit its limit. Other ${m[2]} plan models still work.`],
   [/^CLI (.+) chưa được cài trên máy chủ\.$/, (m) => `The ${m[1]} CLI isn't installed on the server.`],
   [/^CLI (.+) thoát với mã (.+)\.$/, (m) => `The ${m[1]} CLI exited with code ${m[2]}.`],
+  // Lỗi của app-server Codex giữa lượt (app/ai/codex_server.ts): lý do là chuỗi nội bộ ngắn.
+  [/^Codex dừng giữa lượt: ([\s\S]+)$/, (m) => `Codex stopped mid-reply: ${codexStopWhy(m[1])}`],
   [/^Không chuyển được (hướng dẫn|tin nhắn) cho (.+): ([\s\S]+)$/, (m) => `Couldn't pass the ${m[1] === "tin nhắn" ? "message" : "instructions"} to ${m[2]}: ${m[3]}`],
   [/^Claude từ chối đăng nhập \((.+?)\): ([\s\S]+)\. Đăng nhập lại trong Cài đặt → Providers\.$/, (m) => `Claude rejected the sign-in (${m[1]}): ${m[2] === "phiên đăng nhập không còn hợp lệ" ? "the session is no longer valid" : m[2]}. Sign in again in Settings → Providers.`],
   [/^Gói (.+) hiện không có model này\. Hãy chọn model khác\.$/, (m) => `Your ${m[1]} plan doesn't include this model right now. Pick another model.`],
@@ -1607,6 +1623,16 @@ Object.assign(VI2EN, {
   "Gửi đường dẫn mới": "Send a new link", "Đã đặt mật khẩu mới": "Your new password is set", "Mọi thiết bị đã được đăng xuất. Hãy đăng nhập bằng mật khẩu mới.": "All your devices were signed out. Sign in with your new password.",
   "Ai có đường dẫn": "Anyone with the link", "Mọi người có tài khoản Synchro và có đường dẫn đều mở được": "Anyone with a Synchro account and the link can open it", "Ứng dụng dùng chung": "Shared app",
   "Codex định chạy lệnh trực tiếp trên máy chủ nên Synchro đã dừng lượt này để bảo vệ dữ liệu. Hãy nhắn lại, hoặc dùng model khác.": "Codex tried to run a command directly on the server, so Synchro stopped this turn to protect your data. Send your message again or use another model.",
+  "lỗi JSON-RPC": "JSON-RPC error",
+  "Codex app-server dừng giữa lượt.": "The Codex app-server stopped mid-reply.",
+  "Codex app-server lỗi giữa lượt.": "The Codex app-server failed mid-reply.",
+  "thread đã nạp với cấu hình khác": "the thread was loaded with different settings",
+  "bản Codex này không nhận lượt qua app-server": "this Codex version doesn't take replies through the app-server",
+  "Synchro không hỗ trợ yêu cầu này": "Synchro does not support this request",
+  "cầu nối của lượt không có địa chỉ sống": "the turn's bridge has no live address",
+  "không có chỗ cho app-server": "no room for an app-server",
+  "thread/start không trả mã thread": "thread/start returned no thread id",
+  "thiếu thư mục đăng nhập": "missing login folder",
   "Máy chủ sắp hết dung lượng đĩa nên tạm không nhận việc mới. Hãy thử lại sau.": "The server is almost out of disk space and is not taking new work for now. Try again later.",
   "Máy chủ đang cập nhật workspace. Hãy thử lại sau ít phút.": "The server is updating the workspace. Try again in a few minutes.",
   "Máy chủ đang chạy nhiều code cùng lúc. Hãy thử lại sau ít giây.": "The server is running a lot of code right now. Try again in a few seconds.",

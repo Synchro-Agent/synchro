@@ -12,11 +12,15 @@ import { registerIdle, warmRoom } from "../turngate";
 import { spawnCli, type Exit, type Proc } from "./cli_runtime";
 
 type Json = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
-export type PoolSpec = { bin: string; args: string[]; env: Record<string, string>; cwd: string; account: string };
+/** tool: tiến trình của lượt có công cụ (cầu nối sống của một cuộc trò chuyện, G2.2): chỉ cuộc trò chuyện đó dùng lại được, nên giữ rảnh ít hơn (xem trimTools). */
+export type PoolSpec = { bin: string; args: string[]; env: Record<string, string>; cwd: string; account: string; tool?: boolean };
 type Entry = { key: string; spec: PoolSpec; proc: Proc; session: string | null; busy: boolean; stale: boolean; born: number; used: number; everUsed: boolean; gone: boolean; dropped: boolean; q: Json[]; wake: (() => void) | null };
 
 const envNum = (k: string, d: number) => { const n = Number(process.env[k]); return process.env[k] !== undefined && Number.isFinite(n) && n >= 0 ? n : d; };
 const PER_ACCOUNT = 3;
+// Tiến trình rảnh của lượt có công cụ: tối đa một cho mỗi tài khoản và một nửa hồ cho cả máy. Chúng gắn với một cuộc trò chuyện nên ít được dùng lại hơn
+// tiến trình của đường nhanh (dùng cho mọi đoạn chat mới); khởi động sẵn cho đường nhanh được đuổi chúng (makeRoom).
+const TOOL_IDLE_PER_ACCOUNT = 1;
 const IDLE_MS = 10 * 60_000, LIFE_MS = 60 * 60_000;
 const MAX_RSS_KB = 700 * 1024, MIN_FREE = 800 * 1024 * 1024;
 // Tổng RAM thật của máy (MB): MemTotal trên Linux (máy chủ thật), nơi khác dùng os.totalmem (máy dev).
@@ -49,6 +53,8 @@ const lowMem = () => process.platform === "linux" && os.freemem() < MIN_FREE;
 export const poolOn = () => maxTotal() > 0 && Date.now() >= g.pausedUntil;
 const usable = (e: Entry) => !e.gone && !e.dropped && !e.stale && Date.now() - e.born < LIFE_MS;
 const idlest = () => [...g.entries].filter((e) => !e.busy).sort((a, b) => a.used - b.used);
+const idleTools = () => idlest().filter((e) => e.spec.tool);
+const toolShare = () => Math.max(1, Math.floor(maxTotal() / 2));
 
 function drop(e: Entry) {
   if (e.dropped) return;
@@ -89,12 +95,25 @@ function launch(spec: PoolSpec, resume?: string): Entry {
   startSweep();
   return e;
 }
-/** Dọn chỗ cho một tiến trình mới. evict: được đuổi tiến trình rảnh của tài khoản khác (có lượt thật đang cần); khởi động sẵn thì không. */
+/** Dọn chỗ cho một tiến trình mới. evict: được đuổi tiến trình rảnh của tài khoản khác (có lượt thật đang cần); khởi động sẵn thì không,
+ *  trừ tiến trình rảnh của lượt có công cụ (gắn với một cuộc trò chuyện, ít khi được dùng lại hơn chỗ cho đường nhanh). */
 function makeRoom(account: string, evict: boolean) {
   const idle = (mine: boolean) => [...g.entries].filter((e) => !e.busy && (!mine || e.spec.account === account)).sort((a, b) => a.used - b.used);
   while ([...g.entries].filter((e) => e.spec.account === account).length >= PER_ACCOUNT) { const v = idle(true)[0]; if (!v) return false; drop(v); }
-  while (g.entries.size >= maxTotal()) { const v = evict ? idle(false)[0] : undefined; if (!v) return false; drop(v); }
+  while (g.entries.size >= maxTotal()) { const v = evict ? idle(false)[0] : idleTools()[0]; if (!v) return false; drop(v); }
   return true;
+}
+/** Sau khi một tiến trình của lượt có công cụ về rảnh: giữ trong mức TOOL_IDLE_PER_ACCOUNT của tài khoản và toolShare() của cả máy (bỏ cái lâu chưa dùng nhất). */
+function trimTools(keep: Entry) {
+  const mine = idleTools().filter((e) => e !== keep && e.spec.account === keep.spec.account);
+  for (const e of mine.slice(0, Math.max(0, mine.length - (TOOL_IDLE_PER_ACCOUNT - 1)))) drop(e);
+  const all = idleTools().filter((e) => e !== keep);
+  for (const e of all.slice(0, Math.max(0, all.length - (toolShare() - 1)))) drop(e);
+}
+/** Một tiến trình vừa nhận / vừa trả phiên `session`: tiến trình khác của tài khoản còn giữ phiên đó không biết lượt này, không được dùng lại
+ *  (vd. lượt nhanh và lượt có công cụ xen kẽ trong một cuộc trò chuyện: hai khóa hồ khác nhau, cùng một phiên). */
+function forgetOthers(keep: Entry, session: string) {
+  for (const e of [...g.entries]) if (e !== keep && e.spec.account === keep.spec.account && e.session === session) { if (e.busy) e.stale = true; else drop(e); }
 }
 function sweep() {
   const now = Date.now();
@@ -151,13 +170,19 @@ export function takeProcess(spec: PoolSpec, resume?: string): Lease | null {
   if (!e) { if (!makeRoom(spec.account, true)) return null; e = launch(spec, resume); }
   const it = e;
   it.busy = true; it.everUsed = true; it.used = Date.now(); it.q.length = 0;
+  if (resume) forgetOthers(it, resume);
   let end: TurnEnd | null = null, finished = false;
   const close = () => { finished = true; it.busy = false; it.used = Date.now(); };
   return {
     hit, proc: it.proc,
     send: (line) => it.proc.write(line),
     ended: () => end,
-    release: (session) => { if (finished) return; close(); if (session) it.session = session; if (it.gone || it.stale) drop(it); },
+    release: (session) => {
+      if (finished) return;
+      close();
+      if (session) { it.session = session; forgetOthers(it, session); }
+      if (it.gone || it.stale) drop(it); else if (it.spec.tool) trimTools(it);
+    },
     discard: () => { if (finished && it.dropped) return; close(); drop(it); },
     done: () => it.proc.done,
     events: async function* (signal, firstMs) {
@@ -202,6 +227,8 @@ export function dropAccount(account: string) {
   for (const e of [...g.entries]) if (e.spec.account === account) { if (e.busy) e.stale = true; else drop(e); }
 }
 export const poolSize = () => g.entries.size;
+/** Số tiến trình rảnh của lượt có công cụ (kiểm thử, trang Sức khỏe). */
+export const poolToolIdle = () => idleTools().length;
 /** CLI vừa đổi bản (app/ai/cliupdate.ts): tiến trình dựng sẵn đang chạy bản cũ; cái đang rảnh tắt ngay, cái đang dùng tắt khi xong lượt. */
 export function retireAll() { for (const e of [...g.entries]) { if (e.busy) e.stale = true; else drop(e); } }
 export function dropAll() { for (const e of [...g.entries]) drop(e); g.strikes = []; g.pausedUntil = 0; }

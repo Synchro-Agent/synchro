@@ -29,7 +29,9 @@ export type TurnRequest = {
   /** Lịch sử hội thoại cho engine không giữ phiên (khóa API); engine CLI dùng sessionId. */
   history?: { role: "user" | "assistant"; content: unknown }[];
   /** Cầu nối MCP của Synchro cho lượt này (công cụ skill, plugin, connector…); CLI gọi tới địa chỉ nội bộ này. */
-  mcp?: { url: string; onPark?: (f: () => void) => void };
+  /** live: địa chỉ cầu nối sống theo cuộc trò chuyện (mcpbridge.openBridge với conv, G2.2): tiến trình dựng sẵn / thread đã nạp dùng lại được qua nhiều lượt;
+   *  key: mã bộ công cụ của lượt (đổi bộ công cụ thì không dùng lại). */
+  mcp?: { url: string; onPark?: (f: () => void) => void; live?: { url: string; key: string } };
   /** Lúc gần nhất lượt còn hoạt động ngoài đầu ra của CLI (đang / vừa chạy công cụ qua cầu nối MCP): CLI in kết quả một lần lúc xong
    *  (Antigravity) không bị coi là treo khi đang làm việc bằng công cụ. */
   alive?: () => number;

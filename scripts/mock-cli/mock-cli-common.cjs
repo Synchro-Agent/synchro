@@ -280,6 +280,39 @@ function saveImage(file, kind = "jpg") { fs.mkdirSync(path.dirname(file), { recu
 // Bản phát hành giả cho bộ cập nhật CLI (app/ai/cliupdate.ts, nguồn SYNCHRO_CLI_UPDATE_SOURCE): tệp mock-version cạnh lệnh đổi dòng --version;
 // tệp mock-break làm hỏng bản đó: "smoke" mọi lệnh trừ --version đều lỗi (không qua kiểm tra trước khi dùng), "turn" lệnh xem đăng nhập vẫn chạy
 // nhưng lượt chat thật lỗi (qua kiểm tra, rồi tự trả về bản trước).
+// Máy chủ token giả lập (kiểm thử HOME riêng của lượt, Blueprint G1): chỉ chạy khi tệp đăng nhập là JSON có mock_oauth và mock-cli.json có tokenServer
+// (tệp trạng thái). Như OAuth có xoay vòng refresh token: token hết hạn (exp) thì CLI đổi refresh token cũ lấy cái mới (ghi tệp tạm rồi đổi tên, như CLI thật);
+// token vừa bị thay còn dùng được tokenGraceMs (hai lượt làm mới cùng lúc nhận cùng một token mới); dùng lại token cũ hơn nữa là "tái sử dụng":
+// hãng thu hồi cả họ token, mọi lượt sau báo lỗi đăng nhập. Trả chuỗi lỗi, hoặc null khi được phép chạy tiếp.
+function oauthTurn(file) {
+  let tok;
+  try { tok = JSON.parse(fs.readFileSync(file, "utf8")); } catch { return null; }
+  if (!tok || tok.mock_oauth !== true || !cfg.tokenServer) return null;
+  const st = cfg.tokenServer, lk = `${st}.lock`, now = Date.now();
+  const locked = (fn) => {
+    for (let i = 0; ; i++) {
+      try { fs.mkdirSync(lk); break; } catch { if (i > 4000) throw new Error("token server busy"); Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 5); }
+    }
+    try { return fn(readJson(st, {})); } finally { fs.rmdirSync(lk); }
+  };
+  if (tok.exp > now) return readJson(st, {}).revoked ? "authentication failed: invalid_grant (token family revoked)" : null;
+  const r = locked((s) => {
+    s.log ??= [];
+    if (s.revoked) return { err: "authentication failed: invalid_grant (token family revoked)" };
+    if (tok.rt === s.current) {
+      s.gen = (s.gen ?? 0) + 1; s.prev = s.current; s.prevUntil = now + (cfg.tokenGraceMs ?? 2000); s.current = `rt-${s.gen}-${uuid().slice(0, 8)}`;
+      s.log.push({ at: now, from: tok.rt, to: s.current, pid: process.pid });
+    } else if (tok.rt === s.prev && now < s.prevUntil) s.log.push({ at: now, from: tok.rt, to: s.current, grace: true, pid: process.pid });
+    else { s.revoked = true; s.log.push({ at: now, from: tok.rt, reuse: true, pid: process.pid }); writeJson(st, s); return { err: "authentication failed: invalid_grant (refresh token reuse detected, token family revoked)" }; }
+    writeJson(st, s);
+    return { rt: s.current, gen: s.gen };
+  });
+  if (r.err) return r.err;
+  const tmp = `${file}.tmp-${process.pid}`;
+  fs.writeFileSync(tmp, JSON.stringify({ ...tok, rt: r.rt, gen: r.gen, exp: Date.now() + (cfg.tokenTtlMs ?? 3_600_000) }));
+  fs.renameSync(tmp, file);
+  return null;
+}
 const local = (f) => { try { return fs.readFileSync(path.join(__dirname, f), "utf8").trim(); } catch { return ""; } };
 const version = (line) => local("mock-version") || line;
 function gate(a) {
@@ -288,4 +321,4 @@ function gate(a) {
   const status = (a[0] === "auth" && a[1] === "status") || (a[0] === "login" && a[1] === "status") || a[0] === "models";
   if (m === "smoke" || (m === "turn" && !status)) { console.error("mock: broken build (segmentation fault)"); process.exit(3); }
 }
-module.exports = { version, gate, sxKit, TINY_JPEG, tinyPng, isImageTurn, imageCount, imageMode, imageLog, saveImage, stallTurn, STALL_TEXT, mediaDesc, mediaReply, mcp, isTitleAsk, mockTitle, mockBrain, prefsEcho, ruleEcho, pjEcho, toolAsk, cfg, sleep, out, uuid, readStdin, readLine, flag, bumpSession, bumpUsage, totalTurns, reply, chunks, fs, path, crypto };
+module.exports = { oauthTurn, version, gate, sxKit, TINY_JPEG, tinyPng, isImageTurn, imageCount, imageMode, imageLog, saveImage, stallTurn, STALL_TEXT, mediaDesc, mediaReply, mcp, isTitleAsk, mockTitle, mockBrain, prefsEcho, ruleEcho, pjEcho, toolAsk, cfg, sleep, out, uuid, readStdin, readLine, flag, bumpSession, bumpUsage, totalTurns, reply, chunks, fs, path, crypto };
