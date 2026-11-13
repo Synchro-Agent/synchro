@@ -37,6 +37,16 @@ export function sniffUtf16(buf: Buffer): "utf-16le" | "utf-16be" | null {
   return null;
 }
 
+/** Giải 8KB đầu theo UTF-16 đã đoán: văn bản thật gần như không có ký tự điều khiển (U+0000–U+0008, U+000E–U+001F) hay ký tự hỏng U+FFFD.
+ * Dưới 2% mới coi là chữ. */
+export function utf16LooksText(buf: Buffer, enc: "utf-16le" | "utf-16be"): boolean {
+  const s = new TextDecoder(enc).decode(buf.subarray(0, Math.min(buf.length - (buf.length % 2), 8192)));
+  if (!s.length) return false;
+  let bad = 0;
+  for (let i = 0; i < s.length; i++) { const c = s.charCodeAt(i); if (c <= 0x08 || (c >= 0x0e && c <= 0x1f) || c === 0xfffd) bad++; }
+  return bad / s.length < 0.02;
+}
+
 // Nhận diện loại thật bằng magic bytes. Đuôi file chỉ dùng làm gợi ý cho loại văn bản.
 export async function detectKind(buf: Buffer, name: string): Promise<string> {
   const h = buf.subarray(0, 16);
@@ -71,7 +81,9 @@ export async function detectKind(buf: Buffer, name: string): Promise<string> {
   // Excel "Unicode Text" lưu UTF-16 có dấu BOM: đầy byte 0 nhưng là chữ thật, phải xét trước khi kết luận tệp nhị phân.
   if ((h[0] === 0xff && h[1] === 0xfe) || (h[0] === 0xfe && h[1] === 0xff)) return /\.(csv|tsv)$/i.test(name) ? "csv" : "text";
   // UTF-16 KHÔNG có dấu BOM (nhiều công cụ Windows xuất kiểu này): cũng đầy byte 0 nhưng là chữ, nhận trước khi coi là nhị phân.
-  if (sniffUtf16(buf)) return /\.(csv|tsv)$/i.test(name) ? "csv" : "text";
+  // Mẫu byte 0 chẵn/lẻ cũng gặp ở tệp nhị phân (bảng số nguyên 16-bit…): chỉ nhận khi giải ra thật sự là chữ, không thì rơi xuống chặn nhị phân bên dưới.
+  const u16 = sniffUtf16(buf);
+  if (u16 && utf16LooksText(buf, u16)) return /\.(csv|tsv)$/i.test(name) ? "csv" : "text";
   const head = buf.subarray(0, 8192);
   let ctl = 0; for (const c of head) if (c < 9 || (c > 13 && c < 32)) ctl++;
   if (head.includes(0) || ctl / Math.max(head.length, 1) > 0.05) throw new FileError(`"${name}" là tệp nhị phân (${(name.split(".").pop() || "không rõ").toUpperCase()}) mà Synchro chưa đọc được.`);

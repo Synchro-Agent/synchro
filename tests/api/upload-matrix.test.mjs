@@ -65,6 +65,14 @@ ok(D.sniffUtf16(Buffer.from(vn, "utf16le")) === "utf-16le", "UTF-16LE không BOM
 ok(D.sniffUtf16(Buffer.from(vn, "utf16le").swap16()) === "utf-16be", "UTF-16BE không BOM → be");
 ok(D.sniffUtf16(Buffer.from(vn, "utf8")) === null, "UTF-8 không bị nhầm là UTF-16");
 ok(await kindOf(Buffer.from(vn, "utf16le"), "u.csv") === "csv", "UTF-16 không BOM .csv → csv (không coi là nhị phân)");
+ok(await kindOf(Buffer.from(vn.repeat(20), "utf16le").swap16(), "u.txt") === "text", "UTF-16BE không BOM .txt → text");
+// Tệp nhị phân có mẫu byte 0 giống UTF-16LE (bảng số 16-bit 0..255, byte cao luôn 0): giải ra đầy ký tự điều khiển → vẫn bị chặn là nhị phân.
+const u16bin = Buffer.alloc(4096); for (let i = 0; i < 2048; i++) u16bin.writeUInt16LE(i % 256, i * 2);
+ok(D.sniffUtf16(u16bin) === "utf-16le", "nhị phân 16-bit: mẫu byte 0 trông như UTF-16LE (đúng ca cần chặn)");
+ok(D.utf16LooksText(u16bin, "utf-16le") === false, "nhị phân 16-bit: giải ra nhiều ký tự điều khiển → không phải chữ");
+ok(D.utf16LooksText(Buffer.from(vn, "utf16le"), "utf-16le") === true, "UTF-16 chữ thật: ít ký tự điều khiển → là chữ");
+ok((await kindOf(u16bin, "data.bin")).startsWith("ERR:"), "nhị phân giống UTF-16 không BOM bị từ chối kèm lý do");
+ok((await kindOf(u16bin, "data.csv")).startsWith("ERR:"), "kể cả khi đặt đuôi .csv");
 
 console.log("4. Giải mã văn bản: lấy lại đúng DẤU HIỆU (5 kiểu mã hoá)");
 const marker = "DẤU_HIỆU_Mừng_Xuân_Đinh";
