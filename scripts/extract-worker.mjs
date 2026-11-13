@@ -14,6 +14,8 @@ const XLSX_MAX_ROWS = 200;
 // Đủ cho hàng nghìn trang; phần trên mức này model cũng không đọc hết (tệp lớn đi qua RAG), mà JSON quá lớn làm nặng máy chủ web khi nhận về.
 const TEXT_MAX = 16_000_000;
 
+// CSV đến từ app/fileproc/extractors.ts đã được giải mã sẵn thành UTF-8 (decodeText dùng chung với tệp .txt): ở đây chỉ còn là lối dự phòng
+// cho tệp chữ trong .zip và cho ai gọi thẳng tiến trình này với byte gốc.
 function decodeText(buf) {
   if (buf[0] === 0xff && buf[1] === 0xfe) return new TextDecoder("utf-16le").decode(buf);
   if (buf[0] === 0xfe && buf[1] === 0xff) return new TextDecoder("utf-16be").decode(buf);

@@ -99,10 +99,82 @@ dec(bytes("DH1258 Ti", 0xea, 0xec, "ng Vi", 0xea, 0xf2, "t l", 0xe0, " ng", 0xf4
   "DH1258 Tiếng Việt là ngôn ngữ của người Việt Nam. Đây là một đoạn văn bản mẫu.", "Windows-1258 tiếng Việt: đọc đúng dấu, ghép thành chữ dựng sẵn (NFC)");
 dec(bytes("Chi", 0xf2, " bi", 0xf2, " ", 0xf4, 0xec, "m, me", 0xf2, " ", 0xf0, "i ch", 0xf5, 0xf2, "."), "Chị bị ốm, mẹ đi chợ.", "Windows-1258 tiếng Việt ngắn (jschardet đoán Hy Lạp) vẫn ra tiếng Việt");
 
+console.log("4b. UTF-8 gần như hợp lệ (C-4): một byte hỏng không làm cả tệp thành chữ lỗi cp1252");
+const vnU8 = "Tiếng Việt là ngôn ngữ chính thức của Việt Nam. ".repeat(40);
+const u8b = Buffer.from(vnU8, "utf8");
+let got = E.decodeText(Buffer.concat([u8b, B(0xe1, 0xbb)]));
+ok(got.startsWith(vnU8) && got.endsWith("�") && !got.includes("Ã"), "UTF-8 cụt ký tự cuối (jschardet: utf-8): chỉ đuôi thành U+FFFD", got.slice(0, 60) + " … " + JSON.stringify(got.slice(-4)));
+got = E.decodeText(Buffer.concat([u8b.subarray(0, 500), B(0x96), u8b.subarray(500)]));
+ok(got.includes("Tiếng Việt là ngôn ngữ") && got.split("�").length === 2 && !got.includes("Ã"), "UTF-8 lẫn một byte lạ 0x96 (jschardet đoán mã một byte): chỉ byte đó hỏng", got.slice(0, 60));
+got = E.decodeText(Buffer.concat([Buffer.from("\uFEFFXin chào bạn, ", "utf8"), B(0x96), Buffer.from(" hẹn gặp lại.", "utf8")]));
+ok(got === "Xin chào bạn, � hẹn gặp lại.", "UTF-8 ngắn có BOM + một byte lạ: BOM bị gỡ, chỉ byte lạ hỏng", got);
+dec(bytes("Ca", 0xc3, 0xa9, " cr", 0xe8, "me ", 0xe0, " la vanille, tr", 0xe8, "s bon"), "CaÃ© crème à la vanille, très bon", "cp1252 có một cặp byte trùng UTF-8 hợp lệ (Ã©) vẫn đọc theo cp1252");
+
+console.log("4c. Mã một byte Latinh khác cp1252 (C-3): chỉ tin jschardet khi có bằng chứng ngôn ngữ");
+// Bộ mã hoá một byte dựng từ bảng của TextDecoder (Node không có TextEncoder cho mã cũ).
+const sbEncoder = (enc) => {
+  const t = new Map(); const d = new TextDecoder(enc);
+  for (let b = 0x80; b < 256; b++) { const c = d.decode(B(b)); if (c !== "�") t.set(c, b); }
+  return (s) => Buffer.from([...s].map((c) => (c.charCodeAt(0) < 0x80 ? c.charCodeAt(0) : t.get(c) ?? 0x3f)));
+};
+const cp1252 = sbEncoder("windows-1252"), cp1250 = sbEncoder("windows-1250");
+const round = (encode, s, n) => dec(encode(s), s, n);
+// jschardet đoán Windows-1250 / iso8859-4 / Windows-1253 cho các mẫu Tây Âu ngắn này.
+round(cp1252, "Nom,Prénom,Ville\nDupont,Hélène,Paris\nMartin,Jérôme,Lyon", "cp1252 Pháp (jschardet: Windows-1250): Hélène không thành Hélčne");
+round(cp1252, "Città,Abitanti\nRoma,2800000\nForlì,118000", "cp1252 Ý (jschardet: iso8859-4, viết không gạch): Città / Forlì không thành Cittā / Forlė");
+round(cp1252, "Città,Perché\nCosì,Può\nLunedì,Però", "cp1252 Ý CSV ngắn (iso8859-4): Così / Può / Però");
+round(cp1252, "Café crème: 3,50€", "cp1252 Pháp (jschardet: Windows-1253): không thành chữ Hy Lạp Cafι crθme");
+round(cp1252, "Le nº 5 coûte 3€", "cp1252 Pháp (Windows-1250): nº / coûte không thành nş / coűte");
+round(cp1252, "Año nuevo, vida nueva. ¿Qué tal?", "cp1252 Tây Ban Nha (Windows-1250): Año / ¿Qué không thành Ańo / żQué");
+round(cp1252, "Teléfono: 912 345 678. Señora Pérez, calle Mayor.", "cp1252 Tây Ban Nha: Señora");
+// Văn bản Trung Âu thật vẫn đọc đúng theo Windows-1250 / iso-8859-15 vẫn ra œ và €.
+round(cp1250, "Zażółć gęślą jaźń. Łódź, Kraków, Wrocław.", "Windows-1250 Ba Lan: ł / ą / ż (cp1252 ra ³ ¹ ¿ giữa chữ) vẫn tin jschardet");
+round(cp1250, "Árvíztűrő tükörfúrógép. Őszi szél fúj.", "Windows-1250 Hungary: ő / ű vẫn đúng");
+round(cp1250, "Dobrý den, jak se máte? Děkuji, mám se dobře. Kde je nádraží?", "Windows-1250 Séc: Děkuji / dobře vẫn đúng");
+round(sbEncoder("iso-8859-15"), "L'œuvre coûte 5 € et le cœur est là.", "iso-8859-15 (jschardet: iso8859-15): œ / € đúng");
+round(sbEncoder("windows-1251"), "ERROR 2026-01-01 Ошибка: файл config.yaml не найден (code=404). Повторите попытку через 5 минут.", "Windows-1251 tiếng Nga lẫn chữ ASCII vẫn ra chữ Kirin");
+round(sbEncoder("windows-1253"), "Καλημέρα κόσμε. Αυτό είναι ένα δοκιμαστικό αρχείο.", "Hy Lạp (jschardet: ISO-8859-7) vẫn ra chữ Hy Lạp");
+console.log("4d. Windows-1258 lẫn nhiều từ ASCII (C-1): nhật ký, địa chỉ, email, mã hàng vẫn là tiếng Việt");
+// Mã hoá cp1258 như Windows: chữ dựng sẵn nếu bảng mã có, không thì chữ gốc + byte dấu thanh tổ hợp.
+const T1258 = new Map(); { const d = new TextDecoder("windows-1258"); for (let b = 0x80; b < 256; b++) { const c = d.decode(B(b)); if (c !== "�") T1258.set(c, b); } }
+const TONE = { "̀": 0xcc, "́": 0xec, "̃": 0xde, "̉": 0xd2, "̣": 0xf2 };
+const cp1258 = (s) => {
+  const out = [];
+  for (const ch of s.normalize("NFC")) {
+    if (ch.charCodeAt(0) < 0x80) { out.push(ch.charCodeAt(0)); continue; }
+    if (T1258.has(ch)) { out.push(T1258.get(ch)); continue; }
+    const parts = [...ch.normalize("NFD")], tone = parts.find((c) => TONE[c]), base = parts.filter((c) => !TONE[c]).join("").normalize("NFC");
+    out.push(base.charCodeAt(0) < 0x80 ? base.charCodeAt(0) : T1258.get(base));
+    if (tone) out.push(TONE[tone]);
+  }
+  return Buffer.from(out);
+};
+round(cp1258, "ERROR Không thể đọc file config.yaml", "1258 dòng lỗi: Không thể đọc (không thành thêÒ ðoòc)");
+round(cp1258, "Địa chỉ: 123 Lê Lợi, P. Bến Thành, Q.1, TP.HCM. ĐT: 028 3822 1234. Email: info@abc.vn", "1258 địa chỉ lẫn TP.HCM / ĐT / email");
+round(cp1258, "2026-01-01 10:00:01 INFO Server started on port 8080\n2026-01-01 10:00:02 WARN Kết nối database chậm (latency=350ms)\n2026-01-01 10:00:03 INFO OK", "1258 nhật ký nhiều dòng tiếng Anh, một dòng tiếng Việt");
+round(cp1258, "Mã SP,Tên sản phẩm,Giá\nSP001,Bút bi Thiên Long,5000\nSP002,Vở học sinh,12000\nSP003,Thước kẻ,3000", "1258 CSV có mã hàng SP001");
+ok(E.looksVietnamese1258(cp1258("ERROR Không thể đọc file config.yaml config.yaml config.yaml INFO WARN DEBUG")), "tỉ lệ âm tiết chỉ tính trên từ có byte cao (từ ASCII không kéo tỉ lệ xuống)");
+// Dấu thanh tách rời ghi thẳng sau nguyên âm Latin-1 (a + 0xCC = à): bằng chứng xét theo byte gốc.
+dec(bytes("Xin cha", 0xcc, "o, la", 0xcc, "m ba", 0xcc, "i ngay."), "Xin chào, làm bài ngay.", "1258 dấu thanh tổ hợp sau nguyên âm Latin-1 (chà, là, bà): vẫn là bằng chứng");
+ok(E.looksVietnamese1258(bytes("Pu", 0xf2, " darsi, ci", 0xf2, " ", 0xe8, " vero."), true) === false, "jschardet nói cp1258 cũng không đủ cho tiếng Ý ngắn (chỉ 2 dấu thanh, không có ă đ ơ ư)");
+ok(E.normLabel("ISO8859-7") === "iso-8859-7" && E.normLabel("iso8859-15") === "iso-8859-15" && E.normLabel("CP1250") === "windows-1250" && E.normLabel("MacRoman") === "macintosh", "chuẩn hoá tên bảng mã jschardet (iso8859- → iso-8859-)");
+
 console.log("5. Trích thật qua tiến trình đọc tệp (docx/xlsx/csv/pptx/zip), mỗi tệp một DẤU HIỆU");
 // csv
 let t = parse("csv", Buffer.from("cot_a,cot_b\nDH_CSV_1,DH_CSV_2\n"), "m.csv")?.text ?? "";
 ok(t.includes("DH_CSV_1") && t.includes("| cot_a | cot_b |"), "CSV: nội dung + tiêu đề", t);
+// CSV đi đúng đường thật (extractor "office" → tiến trình đọc tệp, C-2): giải mã bằng cùng decodeText với tệp .txt, KHÔNG để tiến trình tự đoán bằng jschardet.
+const office = E.EXTRACTORS.find((x) => x.name === "office");
+const csvVia = async (buf, name) => { try { return (await office.run(buf, { name, kind: "csv" }))[0]?.text ?? ""; } catch (e) { return `ERR:${e.message}`; } };
+const vnCsv = "Họ tên,Thành phố\nNguyễn Văn An,Hà Nội\nTrần Thị Bình,Hồ Chí Minh\n";
+t = await csvVia(Buffer.from(vnCsv, "utf16le"), "u16le.csv");
+ok(t.includes("| Họ tên | Thành phố |") && t.includes("| Nguyễn Văn An | Hà Nội |") && !t.includes("\u0000"), "CSV UTF-16LE không BOM qua tiến trình đọc: đúng chữ, không byte 0", JSON.stringify(t));
+t = await csvVia(Buffer.from(vnCsv, "utf16le").swap16(), "u16be.csv");
+ok(t.includes("| Trần Thị Bình | Hồ Chí Minh |") && !t.includes("\u0000"), "CSV UTF-16BE không BOM qua tiến trình đọc", JSON.stringify(t));
+t = await csvVia(cp1258(vnCsv), "vn1258.csv");
+ok(t.includes("| Nguyễn Văn An | Hà Nội |") && t.includes("Trần Thị Bình") && t === t.normalize("NFC"), "CSV Windows-1258 qua tiến trình đọc: chữ dựng sẵn (NFC), tìm được \"Nguyễn\"", JSON.stringify(t));
+t = await csvVia(cp1252("Città,Perché\nCosì,Può\nLunedì,Però\n"), "it.csv");
+ok(t.includes("| Città | Perché |") && t.includes("| Così | Può |") && !t.includes("ā"), "CSV cp1252 tiếng Ý qua tiến trình đọc: không thành Cittā / Cosė", JSON.stringify(t));
 // xlsx
 const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([["Mã", "Tên"], ["DH_XLSX_K", "DH_XLSX_V"]]), "S");
 t = parse("xlsx", XLSX.write(wb, { type: "buffer", bookType: "xlsx" }), "m.xlsx")?.text ?? "";
