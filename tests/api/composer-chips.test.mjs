@@ -36,7 +36,13 @@ ok(!/\.attach:not\(\.sent\):not\(\.attach-grid\)\{[^}]*mask-image/.test(css), "k
 const grid = css.match(/\.attach\.attach-grid\{[^}]*max-height:(\d+)px/);
 ok(grid && Number(grid[1]) > 138 && (Number(grid[1]) - 10) % 128 === 0, "lưới cao đúng 10px đệm + bội số của hàng 128px (thẻ 120 + khe 8)", grid?.[1]);
 const strip = page.match(/<div className=\{`attach-wrap[\s\S]*?\n    <\/div>\n  \);/)?.[0] ?? "";
-ok(/<\/div>\n\s*\{chipsHidden > 0 && <button[^>]*className="attach-more"/.test(strip), "nút +N là anh em của khung cuộn (đứng ngoài, luôn thấy ở mép phải)", strip.slice(0, 300));
+// U2 (u-bugs.mjs): dải một hàng chỉ dựng số thẻ hiện trọn được (useFitCount) rồi "+N" là phần tử cuối của dải: dải không tràn nên "+N" luôn thấy ở mép
+// phải mà không thẻ nào bị mép cắt. "Thu gọn" của lưới đã trải vẫn đứng ngoài khung cuộn.
+ok(/\{chipsHidden > 0 && <button[^>]*className="attach-more"[\s\S]*?<\/button>\}<\/div>/.test(strip), "nút +N là phần tử cuối của dải một hàng", strip.slice(0, 300));
+ok(/useFitCount\(stripRef,/.test(page) && /cards\.slice\(0, cards\.length - chipsHidden\)/.test(page), "dải một hàng chỉ dựng những thẻ hiện trọn được");
+ok(C.fitCount(678, [120, 120, 120, 120, 120, 120, 120], 8, 40) === 4, "768px: 4 thẻ 120px + “+3” vừa dải 678px (5 thẻ thì tràn 2px)", C.fitCount(678, Array(7).fill(120), 8, 40));
+ok(C.fitCount(316, Array(7).fill(120), 8, 40) === 2, "390px: 2 thẻ + “+5”");
+ok(C.fitCount(2000, Array(7).fill(120), 8, 40) === 5, "rộng mấy cũng không quá CHIP_LIMIT thẻ");
 ok(/chipsExpanded && <button[^>]*onClick=\{\(\) => setChipsOpen\(false\)\}/.test(strip), "lưới đã trải có nút Thu gọn");
 ok(/if \(chipCount <= CHIP_LIMIT\) setChipsOpen\(false\)/.test(page) && /setPicks\(\[\]\); setAt\(null\); setChipsOpen\(false\);/.test(page), "gửi tin / còn ít thẻ: lần sau bắt đầu lại từ dải một hàng");
 console.log(`${pass}/${pass + fail} đạt`);

@@ -1053,7 +1053,9 @@ table{font-variant-numeric:tabular-nums}h1,h2,h3{text-wrap:balance}
 /* Khung ngoài của dải thẻ ô soạn tin: khung cuộn bên trái, nút "+N" / "Thu gọn" đứng ngoài khung cuộn ở mép phải nên màn hẹp cỡ nào cũng thấy. */
 .attach-wrap{display:flex;align-items:center;gap:8px;min-width:0}
 .attach-wrap>.attach{flex:1 1 auto;min-width:0;margin-right:0}
-.attach-wrap.open{align-items:flex-start}
+/* Lưới đã trải: lưới chiếm trọn bề rộng ô soạn (trên điện thoại vẫn đủ hai thẻ mỗi hàng), "Thu gọn" xuống dưới ở mép phải. */
+.attach-wrap.open{flex-direction:column;align-items:stretch;gap:6px}
+.attach-wrap.open>.attach-less{align-self:flex-end}
 /* Nút "+N": gộp số thẻ vượt quá CHIP_LIMIT ở mép phải, bấm vào trải ra lưới. */
 .attach-more{flex:0 0 auto;align-self:center;display:inline-flex;align-items:center;justify-content:center;min-width:40px;height:32px;padding:0 11px;border-radius:var(--r-pill);border:.5px solid var(--border-strong);background:var(--card);color:var(--text-2);font-size:13px;font-weight:500;font-variant-numeric:tabular-nums;cursor:pointer}
 .attach-more:hover{background:var(--hover);color:var(--text)}

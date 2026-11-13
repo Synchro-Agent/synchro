@@ -36,7 +36,7 @@ import { allTags, cleanTags, hasTag, tagKey } from "./chattags";
 import { TagChips, TagFilter, TagPicker } from "./tagsui";
 import { Markdown } from "./md";
 import type { PaletteCmd, PaletteGo } from "./palette";
-import { CHIP_LIMIT, hiddenCards, useEdgeFade } from "./composerchips";
+import { CHIP_LIMIT, hiddenCards, useEdgeFade, useFitCount } from "./composerchips";
 import { ASK_EVENT } from "./askcard";
 import { installTips } from "./tips";
 import { fit as fitFloat, installFloatFit } from "./floatfit";
@@ -749,14 +749,18 @@ function Composer(p: {
     ...files.map((f, i) => <FileCard key={"fc-" + f + i} name={f} onOpen={() => fm.show(f)} onContextMenu={(e) => fm.open(e, f)} onRemove={() => { abortFile(f); setFiles(files.filter((_, j) => j !== i)); }} />),
   ];
   const chipsExpanded = chipsOpen && cards.length > CHIP_LIMIT;
-  const chipsHidden = hiddenCards(cards.length, chipsExpanded);
-  // Mờ mép chỉ khi dải (hay lưới) thật sự còn thẻ bị khuất ở mép đó. "+N" / "Thu gọn" nằm ngoài khung cuộn, luôn thấy ở mép phải dù màn hẹp.
-  const [stripRef, stripFade] = useEdgeFade<HTMLDivElement>(chipsExpanded ? "y" : "x", `${cards.length}${chipsExpanded ? "g" : ""}`);
+  const stripRef = useRef<HTMLDivElement>(null);
+  // U2: quá CHIP_LIMIT thẻ thì dải một hàng chỉ dựng những thẻ hiện trọn được (tối đa CHIP_LIMIT) rồi "+N" ở cuối dải: dải không tràn, không thẻ nào
+  // bị mép cắt ngang hay mờ đi, "+N" luôn thấy ở mép phải dù màn hẹp. "Thu gọn" của lưới đã trải đứng ngoài khung cuộn.
+  const chipsFit = useFitCount(stripRef, cards.length > CHIP_LIMIT && !chipsExpanded, cards.map((c) => String(c.key)));
+  const chipsHidden = hiddenCards(cards.length, chipsExpanded, cards.length > CHIP_LIMIT ? Math.min(CHIP_LIMIT, chipsFit) : CHIP_LIMIT);
+  // Mờ mép chỉ khi dải (hay lưới) thật sự còn thẻ bị khuất ở mép đó.
+  const [, stripFade] = useEdgeFade<HTMLDivElement>(chipsExpanded ? "y" : "x", `${cards.length}-${chipsHidden}${chipsExpanded ? "g" : ""}`, stripRef);
   const chips = cards.length > 0 && (
     <div className={`attach-wrap${chipsExpanded ? " open" : ""}`}>
       <div ref={stripRef} className={`attach${chipsExpanded ? " attach-grid" : ""}${stripFade ? ` ${stripFade}` : ""}`}>{fm.node}
-        {chipsHidden > 0 ? cards.slice(0, CHIP_LIMIT) : cards}</div>
-      {chipsHidden > 0 && <button type="button" className="attach-more" onClick={() => setChipsOpen(true)} aria-label={`${tr("Hiện thêm")} ${chipsHidden} ${tr("mục")}`} data-tip={`${tr("Hiện thêm")} ${chipsHidden} ${tr("mục")}`}>+{chipsHidden}</button>}
+        {chipsHidden > 0 ? cards.slice(0, cards.length - chipsHidden) : cards}
+        {chipsHidden > 0 && <button type="button" className="attach-more" onClick={() => setChipsOpen(true)} aria-label={`${tr("Hiện thêm")} ${chipsHidden} ${tr("mục")}`} data-tip={`${tr("Hiện thêm")} ${chipsHidden} ${tr("mục")}`}>+{chipsHidden}</button>}</div>
       {chipsExpanded && <button type="button" className="attach-more attach-less" onClick={() => setChipsOpen(false)} aria-label={tr("Thu gọn")} data-tip={tr("Thu gọn")}>{tr("Thu gọn")}</button>}
     </div>
   );

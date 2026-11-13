@@ -186,8 +186,9 @@ try {
       if (!inp.result.objectId) throw new Error("không thấy ô chọn tệp của ô soạn");
       await P("DOM.setFileInputFiles", { files: list, objectId: inp.result.objectId });
     };
+    // Mép mờ 18px chỉ tính theo chiều ngang khi lớp mờ là dải ngang (90deg); lưới đã trải mờ mép trên / dưới (180deg), không cắt thẻ theo chiều ngang.
     const STRIP = `(() => { const a = document.querySelector(".composer .attach:not(.sent)"); if (!a) return null; const m = a.querySelector(":scope>.attach-more"), C = a.closest(".composer").getBoundingClientRect(), A = a.getBoundingClientRect();
-      const cs = getComputedStyle(a), mask = (cs.maskImage && cs.maskImage !== "none" ? cs.maskImage : cs.webkitMaskImage) || "none", fade = /gradient/.test(mask) ? 18 : 0;
+      const cs = getComputedStyle(a), mask = (cs.maskImage && cs.maskImage !== "none" ? cs.maskImage : cs.webkitMaskImage) || "none", fade = /gradient\\(90deg/.test(mask) ? 18 : 0;
       const cards = [...a.children].filter((k) => k !== m && k.matches(".ft,.pick-chip"));
       const vis = cards.filter((k) => k.getBoundingClientRect().width > 0);
       const where = (k) => { const q = k.getBoundingClientRect(); if (q.left >= A.left + fade - 0.5 && q.right <= A.right - fade + 0.5 && q.top >= A.top - 0.5 && q.bottom <= A.bottom + 0.5) return "in"; return q.right <= A.left || q.left >= A.right || q.bottom <= A.top || q.top >= A.bottom ? "out" : "cut"; };
