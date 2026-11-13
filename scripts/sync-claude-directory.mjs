@@ -107,6 +107,33 @@ for (const p of plugins) {
   // Không có trong alternatives.json (chưa ai xem): để trống alt, lúc chạy claudedir.ts tự tìm thư viện mở gần nhất. Có mà rỗng: đã xem, danh mục không có.
   if (ALT[p.name]) p.alt = [...new Set(ids)];
 }
+
+// D5: repo mở thêm từ GitHub (gh/…) chưa có commit — thư mục của Claude ghim commit đã duyệt, các repo này thì chưa. Phân giải HEAD của nhánh
+// mặc định thành một SHA cụ thể và ghim lại, để không bao giờ cài theo nhánh trôi. Không phân giải được (hết hạn ngạch, mạng…) thì để trống:
+// claudedir.ts từ chối cài thư viện không có commit, nên không có nguy cơ cài theo HEAD.
+async function resolveHead(repo) {
+  const headers = { "user-agent": "SynchroDirectorySync/1.0", accept: "application/vnd.github+json" };
+  if (process.env.GITHUB_TOKEN) headers.authorization = `Bearer ${process.env.GITHUB_TOKEN}`;
+  for (let t = 0; t < 3; t++) {
+    try {
+      const r = await fetch(`https://api.github.com/repos/${repo}/commits/HEAD`, { headers });
+      if (r.ok) { const j = await r.json(); if (typeof j.sha === "string" && /^[0-9a-f]{40}$/.test(j.sha)) return j.sha; return ""; }
+      if (r.status === 404) return "";
+      if (r.status === 403) await new Promise((x) => setTimeout(x, 2000));
+    } catch { await new Promise((x) => setTimeout(x, 1500)); }
+  }
+  return "";
+}
+{
+  let pinned = 0;
+  for (const e of extra.values()) {
+    if (e.commit) continue;
+    e.commit = await resolveHead(e.repo);
+    if (e.commit) pinned++; else console.warn(`! ${e.repo}: không phân giải được HEAD — sẽ không cài được tới khi ghim được commit.`);
+    await new Promise((x) => setTimeout(x, 150));
+  }
+  if (extra.size) console.log(`Ghim commit cho repo mở thêm: ${pinned}/${extra.size}.`);
+}
 plugins.push(...extra.values());
 
 // ---------------------------------------------------------------- D4: xếp mục Artifacts (docs/slides/design) bằng model, một lần lúc đồng bộ

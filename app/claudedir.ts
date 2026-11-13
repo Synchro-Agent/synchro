@@ -43,9 +43,12 @@ export const dirCats = (catalogId: string | null) => (catalogId ? dirEntry(catal
 export const dirStudios = (catalogId: string | null): Record<string, string[]> | null => (catalogId ? dirEntry(catalogId)?.studios ?? null : null);
 
 export function dirDef(e: DirEntry): PluginDef {
+  // D5: không cài khi thư viện chưa ghim commit — cài theo HEAD của nhánh là cài một bản không ai duyệt, có thể đổi dưới chân mình.
+  // Thư viện của thư mục Claude luôn có reviewed_commit; chỉ repo mở thêm (gh/…) mới có thể trống nếu lúc đồng bộ chưa phân giải được HEAD.
+  if (!e.commit) throw new Error(`Thư viện "${e.name}" chưa ghim commit cụ thể nên không cài (không cài theo nhánh HEAD). Chạy lại đồng bộ danh mục để ghim commit, rồi thử lại.`);
   return {
     catalogId: CD + e.id, slug: e.slug, name: e.name, description: e.summary || e.skills.slice(0, 12).join(", "), author: e.author, homepage: e.homepage,
-    sources: [{ repo: e.repo, ref: e.commit || undefined, ...(e.path ? { path: e.path } : {}) }],
+    sources: [{ repo: e.repo, ref: e.commit, ...(e.path ? { path: e.path } : {}) }],
   };
 }
 
