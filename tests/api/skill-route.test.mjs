@@ -79,7 +79,8 @@ console.log("3. Mục lục đủ mọi mục ngành nghề");
 const cats = PD.PLUGIN_CATS.map((c) => sk(`cat-${c.key}`, `${c.label}: 12 thư viện, 340 skill (Thư viện số một dài dài, Thư viện số hai dài dài, Thư viện số ba…)`, "studio"));
 const filler = Array.from({ length: 60 }, (_, i) => sk(`skill-${i}`, "Mô tả ".repeat(30)));
 const out = RT.skillsPrompt([...filler, ...cats]);
-ok(cats.every((c) => out.includes(`<name>${c.name}</name>`)), `đủ ${cats.length} mục ngành nghề dù có nhiều skill riêng`, cats.filter((c) => !out.includes(`<name>${c.name}</name>`)).map((c) => c.name).join());
+const catBlock = out.split("\n<skill_categories>\n")[1] ?? "";
+ok(cats.every((c) => new RegExp(`(^|\\n|, )${c.name}(:|,|\\n)`).test(catBlock)), `đủ ${cats.length} mục ngành nghề dù có nhiều skill riêng`, cats.filter((c) => !catBlock.includes(c.name)).map((c) => c.name).join());
 console.log("Đường nhanh biết người dùng có skill riêng");
 {
   const brand = [sk("brand-voice-email", "Write emails and captions in our brand voice")];

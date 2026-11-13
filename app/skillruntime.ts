@@ -9,11 +9,19 @@ import { rank } from "./skillroute";
 export const MAX_STEPS = 10;
 // Bật quá nhiều skill thì không liệt kê hết mô tả trong prompt mà cho model tool tìm kiếm.
 export const SEARCH_THRESHOLD = 50;
-// D4: hạ ngân sách liệt kê thư viện / skill lẻ từ 8.000 xuống 6.000 ký tự — khi đã chọn được skill theo nghĩa thì không cần đổ cả mục lục.
-// Mục ngành nghề (cat-…) VẪN có phần riêng đủ cho cả 55 mục: ngân sách 6.000 cho cả hai từng bỏ mất 16 mục (du lịch, thể hình, giáo dục,
-// ẩm thực…) đúng là việc của người không làm kỹ thuật — nên cat giữ ngân sách riêng. Và cat chỉ gửi khi KHÔNG có gợi ý từ skill riêng của
-// người dùng (hasOwnSuggestion): lúc đó gợi ý trong skill_routing đã đủ, mục lục ngành nghề chỉ làm phình prompt.
-const LIST_BUDGET = 6_000, CAT_BUDGET = 9_500;
+// D4: một ngân sách DUY NHẤT 6.000 ký tự cho cả phần liệt kê (thư viện, skill lẻ VÀ mục ngành nghề cat-…), hạ từ 17.500 (8.000 + 9.500).
+// Khi đã chọn được skill theo nghĩa thì không cần đổ cả mục lục. Mục ngành nghề không được rơi mất (ngân sách chung từng bỏ mất 16 mục:
+// du lịch, thể hình, giáo dục, ẩm thực… đúng là việc của người không làm kỹ thuật), nên chúng đi thành một khối gọn (tên + nhãn ngắn, mỗi mục
+// một dòng) được tính trước, phần còn lại của ngân sách dành cho skill. Và cat chỉ gửi khi KHÔNG có gợi ý từ skill riêng của người dùng
+// (hasOwnSuggestion): lúc đó gợi ý trong skill_routing đã đủ, mục lục ngành nghề chỉ làm phình prompt.
+export const LIST_BUDGET = 6_000;
+/** Nhãn ngắn của một mục ngành nghề: phần mô tả trước dấu ":" ("Du lịch: 12 thư viện, …" → "Du lịch"), tối đa 28 ký tự. */
+const CAT_HINT = 28;
+const isCat = (s: Skill) => s.user_id === "studio" && s.name.startsWith("cat-");
+const catHint = (s: Skill) => { const i = s.description.indexOf(":"); return (i > 0 ? s.description.slice(0, i) : s.description).replace(/\s+/g, " ").trim().slice(0, CAT_HINT); };
+const CAT_HEAD = `<skill_categories>
+Mục ngành nghề (mỗi mục gồm nhiều thư viện của danh mục; mở bằng load_skill với tên cat-…):`;
+const CAT_TAIL = "</skill_categories>";
 const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 // D6: thuộc tính untrusted cho skill của danh mục (bên thứ ba). Đặt trên thẻ <skill> để model biết, và để hạ quyền khi skill như vậy được đọc.
 const unt = (s: Skill) => (s.untrusted ? ` untrusted="true"` : "");
@@ -21,7 +29,7 @@ const unt = (s: Skill) => (s.untrusted ? ` untrusted="true"` : "");
 const RULES = `Bạn có một kho skill: mỗi skill là bộ hướng dẫn chuyên môn cho một loại công việc. Người dùng chỉ nhắn yêu cầu, không chỉ định skill; bạn toàn quyền tự chọn và dùng skill, không cần xin phép.
 Với mỗi yêu cầu, tự quyết định theo thứ tự:
 1. Yêu cầu làm ra hoặc sửa một sản phẩm (giao diện, trang web, ứng dụng, logo, hình minh họa, slide, tài liệu, văn bản, code, dữ liệu, kiểm thử…) hoặc cần chuyên môn mà một skill mô tả: đọc skill TRƯỚC KHI làm bằng load_skill. Thường 1-3 skill là đủ; có thể gọi nhiều load_skill trong cùng một bước.
-2. Mục tên "studio-…" hoặc "lib-…" là thư viện nhiều skill, "cat-…" là một mục ngành nghề gồm nhiều thư viện: mở ra (load_skill) để xem danh sách rồi đọc skill hợp nhất. Skill bên trong thư viện cũng gọi thẳng được bằng tên.
+2. Mục tên "studio-…" hoặc "lib-…" là thư viện nhiều skill, "cat-…" là một mục ngành nghề gồm nhiều thư viện (liệt kê gọn trong <skill_categories>): mở ra (load_skill) để xem danh sách rồi đọc skill hợp nhất. Skill bên trong thư viện cũng gọi thẳng được bằng tên.
 3. Không chắc có skill phù hợp: gọi search_skills với từ khóa của việc cần làm (tiếng Việt hoặc tiếng Anh) để tìm trong toàn bộ kho.
 4. Trò chuyện, câu hỏi kiến thức ngắn, phép tính đơn giản: trả lời luôn, không cần skill.
 Đọc xong thì làm đúng theo hướng dẫn của skill; nếu hướng dẫn nhắc tới file đi kèm (ví dụ references/...), gọi read_skill_file để đọc khi cần. Yêu cầu tiếp nối một sản phẩm đã làm thì đọc lại skill đã dùng để giữ nhất quán.
@@ -39,23 +47,30 @@ export function skillsPrompt(list: Skill[], scripts = false, hasOwnSuggestion = 
     // Kho lớn: vẫn cho model thấy mục lục (thư viện studio, mục ngành nghề, thư viện) và skill lẻ trong một ngân sách cố định — như Claude
     // liệt kê skill tới một giới hạn ký tự — phần còn lại tìm bằng search_skills.
     // Giữ thứ tự của danh sách: skill của studio đang bấm và skill riêng của người dùng trước, rồi thư viện, mục ngành nghề sau cùng.
-    // Mục ngành nghề (cat-…) có phần ngân sách riêng để luôn hiện đủ, dù người dùng có nhiều skill riêng.
-    const lines: string[] = [];
-    let size = 0, csize = 0;
-    for (const s of list) {
-      const cat = s.user_id === "studio" && s.name.startsWith("cat-");
-      // Đã có gợi ý từ skill riêng: không gửi mục lục ngành nghề nữa (gợi ý trong skill_routing đã đủ, đỡ phình prompt).
-      if (cat && hasOwnSuggestion) continue;
-      const line = `  <skill${unt(s)}><name>${esc(s.name)}</name><description>${esc(s.description.slice(0, cat ? 90 : 300))}</description></skill>`;
-      if (cat ? csize + line.length > CAT_BUDGET : size + line.length > LIST_BUDGET) continue;
-      lines.push(line); if (cat) csize += line.length; else size += line.length;
+    // Mục ngành nghề (cat-…) đi thành một khối gọn ở cuối, tính vào ngân sách trước để luôn đủ mọi mục; skill lấp phần còn lại.
+    // Đã có gợi ý từ skill riêng: không gửi mục lục ngành nghề nữa (gợi ý trong skill_routing đã đủ, đỡ phình prompt).
+    const cats = hasOwnSuggestion ? [] : list.filter(isCat);
+    let catBlock = "";
+    if (cats.length) {
+      const full = [CAT_HEAD, ...cats.map((s) => `${esc(s.name)}: ${esc(catHint(s))}`), CAT_TAIL].join("\n");
+      // Nhãn dài bất thường làm khối vượt nửa ngân sách: chỉ giữ tên (tên cat-… đã tự nói lĩnh vực), để không mục nào bị bỏ.
+      catBlock = full.length <= LIST_BUDGET / 2 ? full : [CAT_HEAD, cats.map((s) => esc(s.name)).join(", "), CAT_TAIL].join("\n");
     }
+    const lines: string[] = [];
+    let size = catBlock.length;
+    for (const s of list) {
+      if (isCat(s)) continue;
+      const line = `  <skill${unt(s)}><name>${esc(s.name)}</name><description>${esc(s.description.slice(0, 300))}</description></skill>`;
+      if (size + line.length + 1 > LIST_BUDGET) continue;
+      lines.push(line); size += line.length + 1;
+    }
+    const shown = lines.length + cats.length;
     return `${RULES_}
-Người dùng đang bật ${list.length} mục skill và thư viện; dưới đây là ${lines.length} mục đầu. Việc cần chuyên môn mà chưa thấy mục hợp: gọi search_skills với từ khóa của yêu cầu (xem cả gợi ý trong skill_routing nếu có), rồi load_skill skill tìm được.
+Người dùng đang bật ${list.length} mục skill và thư viện; dưới đây là ${shown} mục đầu. Việc cần chuyên môn mà chưa thấy mục hợp: gọi search_skills với từ khóa của yêu cầu (xem cả gợi ý trong skill_routing nếu có), rồi load_skill skill tìm được.
 
 <available_skills>
 ${lines.join("\n")}
-</available_skills>`;
+</available_skills>${catBlock ? `\n\n${catBlock}` : ""}`;
   }
   return `${RULES_}
 
