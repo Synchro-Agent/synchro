@@ -162,7 +162,7 @@ const calls = () => { const s = fs.existsSync(log) ? fs.readFileSync(log, "utf8"
   ok(r.out === "no", "không ghi được cơ sở dữ liệu: không đạt", r);
   calls();
   r = sh('bg_via_nginx B2 && echo ok || echo no', { FAKE_HEALTH: '{"build":"B2","db":true}' });
-  ok(r.out === "ok" && /--resolve synchro\.net\.nz:443:127\.0\.0\.1 https:\/\/synchro\.net\.nz\/api\/health/.test(calls()), "kiểm tra qua nginx của máy (tên miền thật, --resolve 127.0.0.1)");
+  ok(r.out === "ok" && /-ksS --max-time 5 --resolve synchro\.net\.nz:443:127\.0\.0\.1 https:\/\/synchro\.net\.nz\/api\/health/.test(calls()), "kiểm tra qua nginx của máy (tên miền thật, --resolve 127.0.0.1)");
   sh("bg_start /var/www/synchro green; bg_stop blue");
   const c = calls();
   ok(c.includes("pm2 startOrRestart /var/www/synchro/ecosystem.config.cjs --only synchro-green --update-env") && c.includes("pm2 stop synchro-blue"), "bật màu mới từ ecosystem, dừng màu cũ bằng pm2 stop (SIGTERM, chờ kill_timeout)", c);

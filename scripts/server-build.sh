@@ -24,16 +24,17 @@ PREV="$SIDE/.synchro-prev-$NAME"; STATICS="$SIDE/.synchro-statics-$NAME"; GOOD="
 SRC="${SYNCHRO_INCOMING:-$APP}"
 . "$(dirname "${BASH_SOURCE[0]}")/bluegreen-lib.sh"
 BG=0; bg_enabled "$APP" && BG=1
+# Một lần deploy mỗi lúc; watchdog (scripts/watchdog.sh) thấy khóa này thì không khởi động lại web giữa chừng. Lần sau chờ lần trước xong, không cắt ngang lúc đang tráo bản.
+if command -v flock >/dev/null 2>&1; then
+  exec 9>/run/synchro-deploy.lock
+  flock -w 900 9 || { echo "Đang có lần deploy khác chạy quá lâu." >&2; exit 1; }
+fi
+# Màu đang sống đọc sau khi đã giữ khóa: lần deploy trước (vừa xong) có thể vừa đổi màu.
 if [ "$BG" = 1 ]; then
   LIVE=$(bg_live_color)
   case "$LIVE" in blue|green) ;; *) echo "Tệp màu sống $BG_LIVE_FILE không hợp lệ ('$LIVE'): chạy scripts/bluegreen-migrate.sh trước." >&2; exit 1 ;; esac
   NEW=$(bg_other "$LIVE"); OLDPORT=$(bg_port_of "$LIVE"); NEWPORT=$(bg_port_of "$NEW")
   OLDDIST="$APP/.next-$LIVE"; NEWDIST="$APP/.next-$NEW"
-fi
-# Một lần deploy mỗi lúc; watchdog (scripts/watchdog.sh) thấy khóa này thì không khởi động lại web giữa chừng. Lần sau chờ lần trước xong, không cắt ngang lúc đang tráo bản.
-if command -v flock >/dev/null 2>&1; then
-  exec 9>/run/synchro-deploy.lock
-  flock -w 900 9 || { echo "Đang có lần deploy khác chạy quá lâu." >&2; exit 1; }
 fi
 B=$(mktemp -d "$SIDE/.build-$NAME.XXXXXX")
 trap 'rm -rf "$B"' EXIT
@@ -48,7 +49,7 @@ harden() {
   if [ -d "$APP/workspace/data" ]; then chown -R synchro:synchro "$APP/workspace/data"; fi
 }
 # Thư mục chỉ có lúc chạy, không bao giờ chép đè hay xóa khi đồng bộ mã.
-EXCL=(--exclude /data --exclude /.next --exclude '/.next-*' --exclude /node_modules --exclude /.git --exclude /workspace/data --exclude /.mkvenv --exclude /.cache --exclude '/.env*' --exclude /.synchro-artifact --exclude /.node_modules.new.*)
+EXCL=(--exclude /data --exclude /.next --exclude '/.next-*' --exclude /node_modules --exclude /.git --exclude /workspace/data --exclude /.mkvenv --exclude /.cache --exclude '/.env*' --exclude /.synchro-artifact --exclude '/.node_modules.new.*')
 sync_code() { # mã mới từ $SRC sang thư mục app (chỉ khi deploy từ thư mục incoming)
   [ "$SRC" = "$APP" ] && return 0
   rsync -a --delete "${EXCL[@]}" "$SRC/" "$APP/"

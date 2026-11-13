@@ -56,11 +56,14 @@ bg_healthy() { # bg_healthy <cổng> <mã bản>
   done
   return 1
 }
-# Qua chính nginx của máy (đúng tên miền, chứng chỉ thật, --resolve về 127.0.0.1): người dùng đã tới bản $1 chưa.
+# Qua chính nginx của máy (đúng tên miền, --resolve về 127.0.0.1): người dùng đã tới bản $1 chưa. -k: nối tới chính máy này nên không cần
+# xác thực chứng chỉ (chứng chỉ gốc của Cloudflare chẳng hạn không được curl tin); nginx chỉ nghe http thì thử thêm http với Host.
 bg_via_nginx() { # bg_via_nginx <mã bản>
   local h
   for _ in $(seq 1 10); do
-    h=$(curl -sS --max-time 5 --resolve "$BG_HOST:443:127.0.0.1" "https://$BG_HOST/api/health" 2>/dev/null || true)
+    h=$(curl -ksS --max-time 5 --resolve "$BG_HOST:443:127.0.0.1" "https://$BG_HOST/api/health" 2>/dev/null || true)
+    case "$h" in *"\"build\":\"$1\""*) return 0 ;; esac
+    h=$(curl -sS --max-time 5 -H "Host: $BG_HOST" "http://127.0.0.1/api/health" 2>/dev/null || true)
     case "$h" in *"\"build\":\"$1\""*) return 0 ;; esac
     sleep 1
   done
