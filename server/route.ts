@@ -33,7 +33,8 @@ export type RouteCtx<P = undefined> = {
   params: P;
 };
 
-type NextCtx<P> = { params: Promise<P> };
+// Route không có tham số: Next truyền { params: Promise<{}> }, nên P = undefined nhận mọi thứ (unknown) để qua kiểm kiểu của next build.
+type NextCtx<P> = { params: Promise<[P] extends [undefined] ? unknown : P> };
 const BODY_METHODS = new Set(["POST", "PUT", "PATCH"]);
 
 /** Bọc một handler route ghi dữ liệu. Trả về hàm đúng chữ ký Next.js (req, { params }). */
