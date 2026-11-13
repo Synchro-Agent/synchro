@@ -1752,6 +1752,8 @@ Object.assign(VI2EN, {
   "Đoạn chat quá dài cho Antigravity: model chỉ đọc phần gần nhất của lịch sử": "This chat is too long for Antigravity: the model only reads the most recent part of the history",
   "Các gói đã kết nối đều đã hết hạn mức.": "All your connected plans have hit their limits.",
   "Codex báo lỗi.": "Codex reported an error.",
+  // CODEX_HOME riêng của lượt (cli_engines.ts codexTurnHome): lỗi khi dựng thư mục.
+  "thiếu thư mục đăng nhập Codex": "the Codex sign-in folder is missing", "mã thoát": "exit code",
   "Antigravity báo lỗi.": "Antigravity reported an error.",
   "Grok báo lỗi.": "Grok reported an error.",
   "ChatGPT đang viết, chữ sẽ hiện khi xong từng đoạn": "ChatGPT is writing. Text appears as each part finishes",

@@ -196,7 +196,9 @@ export function sweepEngineTemp(): Promise<void> {
   return run([work, "-mindepth", "1", "-maxdepth", "2", "-type", "f", "-name", ".synchro-*", "-mmin", `+${Math.ceil(MAX_TURN_MS / 60_000) + 60}`, "-delete"])
     .then(() => run([work, "-mindepth", "3", "-maxdepth", "3", "-type", "d", "-path", "*/att/*", "-mtime", "+7", "-exec", "rm", "-rf", "{}", "+"]))
     // Thư mục tạm của lượt tạo ảnh bị bỏ dở (ảnh gốc, câu lệnh của người dùng). Lượt tạo ảnh chỉ vài phút nên 2 giờ là chắc chắn đã xong.
-    .then(() => run([work, "-mindepth", "2", "-maxdepth", "2", "-type", "d", "-name", ".synchro-img-*", "-mmin", "+120", "-exec", "rm", "-rf", "{}", "+"]));
+    .then(() => run([work, "-mindepth", "2", "-maxdepth", "2", "-type", "d", "-name", ".synchro-img-*", "-mmin", "+120", "-exec", "rm", "-rf", "{}", "+"]))
+    // CODEX_HOME riêng của lượt Codex bị bỏ dở (config.toml có địa chỉ cầu nối MCP của lượt). rm -rf không đi theo liên kết nên thư mục đăng nhập không bị đụng.
+    .then(() => run([path.join(engineHome(), "logins", "codex"), "-mindepth", "2", "-maxdepth", "2", "-type", "d", "-name", `${CODEX_TURN_PREFIX}*`, "-mmin", `+${Math.ceil(MAX_TURN_MS / 60_000) + 60}`, "-exec", "rm", "-rf", "{}", "+"]));
 }
 
 /** Đường dẫn CLI nếu đã cài trong <home>/.local/bin (kể cả liên kết tới gói npm, miễn là vẫn nằm trong thư mục nhà engine). */
@@ -234,9 +236,13 @@ export function cleanEnv(extra: Record<string, string | undefined> = {}): Record
 // của chính tài khoản đó, /proc riêng (không đọc được biến môi trường của lượt khác), phần còn lại của đĩa chỉ đọc. Mọi thư mục đăng nhập thuộc cùng một
 // user hệ thống nên quyền tệp không ngăn được chuyện này. Lệnh không gắn với tài khoản nào (cài CLI, dọn thư mục) không đi qua đây vì cần ghi trong nhà engine.
 const inside = (root: string, p: string) => path.resolve(p).startsWith(path.resolve(root) + path.sep);
+/** Tiền tố thư mục CODEX_HOME riêng của một lượt Codex có công cụ (cli_engines.codexTurnHome): nằm trong thư mục đăng nhập Codex của tài khoản. */
+export const CODEX_TURN_PREFIX = ".synchro-codex-";
+/** Thư mục đăng nhập chứa CODEX_HOME của lượt (liên kết trong đó trỏ về thư mục đăng nhập nên hộp phải gắn cả thư mục đăng nhập). */
+export const codexLoginDir = (d: string) => (path.basename(d).startsWith(CODEX_TURN_PREFIX) ? path.dirname(d) : d);
 export function isolate(file: string, argv: string[], env: Record<string, string>, cwd: string): { file: string; argv: string[]; env: Record<string, string> } {
   const logins = path.join(engineHome(), "logins"), work = path.join(engineHome(), "work");
-  const scope = [env.CLAUDE_CONFIG_DIR, env.CODEX_HOME, env.HOME].filter((d): d is string => !!d && inside(logins, d));
+  const scope = [env.CLAUDE_CONFIG_DIR, env.CODEX_HOME && codexLoginDir(env.CODEX_HOME), env.HOME].filter((d): d is string => !!d && inside(logins, d));
   if (process.env.SYNCHRO_ENGINE_BWRAP !== "1" || !scope.length) return { file, argv, env };
   const app = process.cwd();
   const binds = [...new Set([...scope, ...(inside(work, cwd) ? [cwd] : [])])].flatMap((d) => ["--bind", d, d]);

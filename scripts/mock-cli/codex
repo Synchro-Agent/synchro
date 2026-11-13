@@ -5,8 +5,28 @@ const C = require(require("path").join(__dirname, "mock-cli-common.cjs"));
 const { fs, path } = C;
 const a = process.argv.slice(2);
 C.gate(a);
-const dir = process.env.CODEX_HOME || path.join(process.env.HOME || "/tmp", ".codex");
-const authFile = path.join(dir, "auth.json");
+const home = process.env.CODEX_HOME || path.join(process.env.HOME || "/tmp", ".codex");
+// Lượt có công cụ: Synchro chạy codex với CODEX_HOME riêng của lượt (thư mục con .synchro-codex-* của thư mục đăng nhập), trong đó config.toml có
+// cầu nối MCP và các mục khác là liên kết về thư mục đăng nhập. Trạng thái giả lập (đếm lượt, hạn mức…) luôn ở thư mục đăng nhập.
+const dir = path.basename(home).startsWith(".synchro-codex-") ? path.dirname(home) : home;
+// Như codex thật: auth.json đọc qua CODEX_HOME (liên kết trong thư mục của lượt).
+const authFile = path.join(home, "auth.json");
+/** Như codex thật: máy chủ MCP chỉ đọc từ $CODEX_HOME/config.toml, bảng [mcp_servers.synchro] (không còn nhận qua -c). */
+function mcpConfig() {
+  let text = "";
+  try { text = fs.readFileSync(path.join(home, "config.toml"), "utf8"); } catch { return {}; }
+  const out = {};
+  let inside = false, seen = 0;
+  for (const raw of text.split("\n")) {
+    const l = raw.trim();
+    if (l.startsWith("[")) { inside = /^\[\s*mcp_servers\.("synchro"|synchro)\s*\]$/.test(l); if (inside) seen++; continue; }
+    const m = inside && /^([\w-]+)\s*=\s*(.+)$/.exec(l);
+    if (m) { try { out[m[1]] = JSON.parse(m[2]); } catch { out[m[1]] = m[2]; } }
+  }
+  // Bảng trùng tên là TOML hỏng: codex thật không chạy.
+  if (seen > 1) { console.error("Error loading config.toml: duplicate key `synchro` in table `mcp_servers`"); process.exit(1); }
+  return out;
+}
 
 (async () => {
   if (a[0] === "--version") return console.log(C.version("codex-cli 0.164.0 [mock]"));
@@ -107,22 +127,33 @@ const authFile = path.join(dir, "auth.json");
       C.out({ type: "turn.completed", usage: { input_tokens: 1, cached_input_tokens: 0, output_tokens: 1 } });
       return;
     }
+    // [mock:authrefresh]: như khi codex làm mới token: ghi auth.json mới rồi đổi tên đè lên (thay liên kết trong CODEX_HOME của lượt bằng tệp thật),
+    // và tạo tệp mới (history.jsonl) trong CODEX_HOME. Synchro phải đưa cả hai về thư mục đăng nhập khi xong lượt.
+    if (prompt.includes("[mock:authrefresh]")) {
+      const tmp = path.join(home, "auth.json.tmp");
+      fs.writeFileSync(tmp, JSON.stringify({ mock: true, refreshed: Date.now() }));
+      fs.renameSync(tmp, authFile);
+      fs.appendFileSync(path.join(home, "history.jsonl"), JSON.stringify({ ts: Date.now() }) + "\n");
+    }
     await C.sleep(150);
     C.out({ type: "item.completed", item: { id: "item_0", type: "reasoning", text: "**Chào hỏi**" } });
     const eff = (a.find((x) => x.startsWith("model_reasoning_effort=")) ?? "").split("=")[1];
-    // Như codex thật với -c mcp_servers.synchro.url=…: lời dẫn, mcp_tool_call, rồi câu trả lời.
-    const mcpUrl = (() => { const x = a.find((v) => v.startsWith("mcp_servers.synchro.url=")); try { return x ? JSON.parse(x.slice(x.indexOf("=") + 1)) : null; } catch { return null; } })();
+    // Như codex thật với [mcp_servers.synchro] trong config.toml: lời dẫn, mcp_tool_call, rồi câu trả lời.
+    const mc = mcpConfig();
+    const mcpUrl = typeof mc.url === "string" ? mc.url : null;
     const ask = C.toolAsk(prompt);
     let note = "";
     // Như codex 0.164 thật: codex exec không có ai duyệt, công cụ MCP chỉ chạy khi máy chủ được duyệt sẵn (default_tools_approval_mode="approve").
-    const approved = a.includes('mcp_servers.synchro.default_tools_approval_mode="approve"');
+    const approved = mc.default_tools_approval_mode === "approve";
+    // [mock:argv]: in lại tham số dòng lệnh (kiểm thử: địa chỉ cầu nối không được nằm trên dòng lệnh).
+    if (prompt.includes("[mock:argv]")) note += ` [argv ${JSON.stringify(a)}] [home ${path.basename(home)}]`;
     if (mcpUrl && ask) {
       C.out({ type: "item.completed", item: { id: "item_n", type: "agent_message", text: `Mình sẽ dùng công cụ ${ask.name} của Synchro.` } });
       C.out({ type: "item.started", item: { id: "item_t", type: "mcp_tool_call", server: "synchro", tool: ask.name } });
       const r = approved ? await C.mcp(mcpUrl, ask).catch((e) => ({ error: { message: String(e) } })) : { error: { message: "MCP tool call requires approval, but approval policy is never" } };
       C.out({ type: "item.completed", item: { id: "item_t", type: "mcp_tool_call", server: "synchro", tool: ask.name, status: r.error ? "failed" : "completed" } });
-      note = ` [đã dùng ${ask.name}: ${(r.error ? r.error.message : (r.result?.content ?? []).map((c) => c.text).join(" ")).replace(/\s+/g, " ").slice(0, 160)}]`;
-    } else if (mcpUrl) note = ` [công cụ Synchro: ${(await C.mcp(mcpUrl).catch(() => ({ tools: [] }))).tools.length}]`;
+      note += ` [đã dùng ${ask.name}: ${(r.error ? r.error.message : (r.result?.content ?? []).map((c) => c.text).join(" ")).replace(/\s+/g, " ").slice(0, 160)}]`;
+    } else if (mcpUrl) note += ` [công cụ Synchro: ${(await C.mcp(mcpUrl).catch(() => ({ tools: [] }))).tools.length}]`;
     if (a.includes("tools.web_search=true")) {
       note += " [tìm web]";
       if (prompt.includes("#web")) { C.out({ type: "item.started", item: { id: "item_w", type: "web_search", query: "" } }); C.out({ type: "item.completed", item: { id: "item_w", type: "web_search", query: "mock", action: { type: "search", query: "mock" } } }); }
