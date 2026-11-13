@@ -4,6 +4,7 @@
 // commit Anthropic đã duyệt (reviewed_commit), mục ngành nghề theo taxonomy của Claude, tên skill để tìm kiếm.
 import fs from "node:fs";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 
 const API = "https://api.anthropic.com/api/directory/plugins";
 async function fetchAll() {
@@ -67,13 +68,16 @@ list.sort((a, b) => (TIER[a.verified_tier] ?? 2) - (TIER[b.verified_tier] ?? 2) 
 const plugins = list.map((p) => {
   const r = p.source.repository;
   const repo = r.url.replace(/^https?:\/\/github\.com\//, "").replace(/\.git$/, "").replace(/\/$/, "");
-  const skills = p.components.filter((c) => c.type === "skill").map((c) => c.name);
+  const comps = p.components.filter((c) => c.type === "skill");
+  const skills = comps.map((c) => c.name);
   const lic = typeof p.license === "string" ? p.license : "";
   return {
     id: p.slug, slug: slugOf(p.slug), name: p.name, summary: String(p.summary ?? "").replace(/\s+/g, " ").trim().slice(0, 280),
     author: repo.split("/")[0],
     cats: catsOf(p), license: lic, repo, path: r.path && r.path !== "." ? r.path.replace(/^\.?\/|\/$/g, "") : "", commit: r.reviewed_commit ?? "",
     homepage: p.links?.homepage || `https://github.com/${repo}`, skills, verified: p.verified_tier || undefined,
+    // D4: tên + mô tả từng skill để bộ phân loại bằng model xếp mục (không ghi ra JSON — xóa trước khi lưu).
+    _skills: comps.map((c) => ({ name: c.name, description: String(c.description ?? c.summary ?? "").replace(/\s+/g, " ").trim() })),
   };
 });
 // Giấy phép đóng (thư mục ghi rõ: Proprietary, BUSL, PolyForm, SSAL, Commons Clause…): không sao chép (closed). Thư viện mở thay thế chọn tay
@@ -103,7 +107,79 @@ for (const p of plugins) {
   // Không có trong alternatives.json (chưa ai xem): để trống alt, lúc chạy claudedir.ts tự tìm thư viện mở gần nhất. Có mà rỗng: đã xem, danh mục không có.
   if (ALT[p.name]) p.alt = [...new Set(ids)];
 }
+
+// D5: repo mở thêm từ GitHub (gh/…) chưa có commit — thư mục của Claude ghim commit đã duyệt, các repo này thì chưa. Phân giải HEAD của nhánh
+// mặc định thành một SHA cụ thể và ghim lại, để không bao giờ cài theo nhánh trôi. Không phân giải được (hết hạn ngạch, mạng…) thì để trống:
+// claudedir.ts từ chối cài thư viện không có commit, nên không có nguy cơ cài theo HEAD.
+async function resolveHead(repo) {
+  const headers = { "user-agent": "SynchroDirectorySync/1.0", accept: "application/vnd.github+json" };
+  if (process.env.GITHUB_TOKEN) headers.authorization = `Bearer ${process.env.GITHUB_TOKEN}`;
+  for (let t = 0; t < 3; t++) {
+    try {
+      const r = await fetch(`https://api.github.com/repos/${repo}/commits/HEAD`, { headers });
+      if (r.ok) { const j = await r.json(); if (typeof j.sha === "string" && /^[0-9a-f]{40}$/.test(j.sha)) return j.sha; return ""; }
+      if (r.status === 404) return "";
+      if (r.status === 403) await new Promise((x) => setTimeout(x, 2000));
+    } catch { await new Promise((x) => setTimeout(x, 1500)); }
+  }
+  return "";
+}
+{
+  let pinned = 0;
+  for (const e of extra.values()) {
+    if (e.commit) continue;
+    e.commit = await resolveHead(e.repo);
+    if (e.commit) pinned++; else console.warn(`! ${e.repo}: không phân giải được HEAD — sẽ không cài được tới khi ghim được commit.`);
+    await new Promise((x) => setTimeout(x, 150));
+  }
+  if (extra.size) console.log(`Ghim commit cho repo mở thêm: ${pinned}/${extra.size}.`);
+}
 plugins.push(...extra.values());
+
+// ---------------------------------------------------------------- D4: xếp mục Artifacts (docs/slides/design) bằng model, một lần lúc đồng bộ
+// Bật bằng SYNCHRO_CLASSIFY_STUDIOS=1 và có ANTHROPIC_API_KEY. Mặc định TẮT: không gọi mạng, không đổi hành vi — khi thiếu nhãn, lúc cài
+// skillstudio.classifyCatalog lùi về bộ luật từ khóa. Dùng chung đúng prompt với máy chủ (studiorules.ts) qua bộ nạp TypeScript của kiểm thử,
+// nên định nghĩa mục không bị lệch giữa lúc đồng bộ và lúc chạy.
+async function classifyStudios(all) {
+  const key = process.env.ANTHROPIC_API_KEY;
+  if (!key) { console.warn("! SYNCHRO_CLASSIFY_STUDIOS=1 nhưng thiếu ANTHROPIC_API_KEY — bỏ qua phân loại, lúc cài dùng bộ luật."); return 0; }
+  let R;
+  try { const { loadTs } = await import(pathToFileURL(path.join(path.dirname(new URL(import.meta.url).pathname), "..", "tests", "lib", "ts.mjs")).href); ({ studiorules: R } = await loadTs(["studiorules"])); }
+  catch (e) { console.warn("! Không nạp được studiorules để phân loại:", e.message); return 0; }
+  const model = process.env.SYNCHRO_CLASSIFY_MODEL || "claude-3-5-haiku-latest";
+  const ask = async (name, description) => {
+    const body = { model, max_tokens: 300, system: R.STUDIO_SYSTEM, messages: [{ role: "user", content: R.studioAsk(name, description, "") }] };
+    for (let t = 0; t < 4; t++) {
+      try {
+        const res = await fetch("https://api.anthropic.com/v1/messages", { method: "POST", headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json" }, body: JSON.stringify(body) });
+        if (res.status === 429 || res.status >= 500) { await new Promise((r) => setTimeout(r, 2000 * (t + 1))); continue; }
+        if (!res.ok) return null;
+        const j = await res.json();
+        const text = (j.content ?? []).filter((b) => b.type === "text").map((b) => b.text).join("");
+        return R.parseStudios(text);
+      } catch { await new Promise((r) => setTimeout(r, 2000 * (t + 1))); }
+    }
+    return null;
+  };
+  const PAR = Math.max(1, Math.min(16, Number(process.env.SYNCHRO_CLASSIFY_PAR) || 6));
+  const jobs = [];
+  for (const p of all) for (const s of p._skills ?? []) jobs.push({ p, s });
+  let done = 0, tagged = 0, next = 0;
+  const worker = async () => {
+    for (let i = next++; i < jobs.length; i = next++) {
+      const { p, s } = jobs[i];
+      const r = await ask(s.name, s.description);
+      if (r) { (p.studios ??= {})[s.name] = r.studios; tagged++; }
+      if (++done % 500 === 0) console.log(`  phân loại ${done}/${jobs.length}…`);
+    }
+  };
+  await Promise.all(Array.from({ length: PAR }, worker));
+  console.log(`Đã xếp mục ${tagged}/${jobs.length} skill bằng model (${model}).`);
+  return tagged;
+}
+if (process.env.SYNCHRO_CLASSIFY_STUDIOS === "1") await classifyStudios(plugins);
+for (const p of plugins) delete p._skills; // trường riêng, không ghi ra JSON
+
 const out = path.join(path.dirname(new URL(import.meta.url).pathname), "..", "catalog", "claude-directory.json");
 fs.mkdirSync(path.dirname(out), { recursive: true });
 fs.writeFileSync(out, JSON.stringify({ synced: new Date().toISOString(), source: API, plugins }));

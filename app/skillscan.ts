@@ -55,6 +55,9 @@ async function collect(user: UserRow): Promise<Src[]> {
 
 // Phần hướng dẫn thật của skill: bỏ tiêu đề, chú thích HTML, khoảng trắng thừa.
 const instructions = (body: string) => body.replace(/<!--[\s\S]*?-->/g, "").replace(/^#{1,6}\s.*$/gm, "").replace(/\s+/g, " ").trim();
+/** Mã băm SHA-1 của một đoạn chữ đã chuẩn hóa (gộp khoảng trắng, bỏ đầu cuối, viết thường). Dùng để gộp skill trùng nội dung
+ *  (quét skill rác dùng trên phần hướng dẫn; bộ định tuyến dùng trên mô tả để không chấm / liệt kê nhiều bản trùng). */
+export const descHash = (s: string) => crypto.createHash("sha1").update(s.replace(/\s+/g, " ").trim().toLowerCase()).digest("hex");
 // Chữ mẫu chưa điền: chỉ tính ở skill ngắn (skill thật, dài, có thể nhắc "lorem ipsum" hay "TODO" như một lời dặn).
 const PLACEHOLDER = /lorem ipsum|^\s*[-*]?\s*(TODO|TBD|FIXME)\b|your (skill|description|instructions) here|(add|write) (your )?instructions here|mô tả ở đây|điền (vào|nội dung) ở đây|skill mẫu|example skill/im;
 const TESTY = /^(test|tests|testing|demo|sample|example|untitled|new|my|temp|tmp|foo|bar|baz|abc|xyz|asdf|qwerty|hello|hello-world|skill|copy|draft)(-?(skill|test|demo|copy|draft|\d+))*$/;
@@ -135,7 +138,7 @@ async function run(user: UserRow, job: Run, srcs: Src[]) {
   for (const s of [...srcs].sort((a, b) => rank(a) - rank(b) || a.created - b.created)) {
     const text = instructions(s.body);
     if (text.length < 40) { job.items.push(item(s, { verdict: "junk", field: "", why: RULE.empty(text.length, job.lang), by: "rules" })); job.done++; continue; }
-    const h = crypto.createHash("sha1").update(text.toLowerCase()).digest("hex"), first = seen.get(h);
+    const h = descHash(text), first = seen.get(h);
     if (first && first.plugin && s.plugin && first.plugin !== s.plugin) { same.push([s, first]); continue; }
     if (first) { job.items.push(item(s, { verdict: "junk", field: "", why: RULE.dup(first, job.lang), by: "rules" })); job.done++; continue; }
     seen.set(h, s); toModel.push(s);

@@ -22,12 +22,15 @@ import { artState, cleanBase, resolveArt, type ArtVersion } from "./vfs";
 import { hasArtifacts, splitArtifacts } from "./artifacts";
 import { AUTO, autoEffort, effortLabel, inputOfChat, isAck, needsNoTools, typedText, routeModel, taskLabel, taskOf as routeTask, type RouteInput } from "./router";
 import { ALL } from "./catalog";
-import { everywhereSkills, libraryPlugins, recordPluginUse, STUDIOS, studioOf, studioSkills, type Studio } from "./plugins";
+import { everywhereSkills, libraryPlugins, pluginCacheGen, recordPluginUse, STUDIOS, studioOf, studioSkills, type Studio } from "./plugins";
 import { rank } from "./skillroute";
 import { ruleStudios } from "./studiorules";
 import { PLUGIN_CATS, STUDIO_LABEL } from "./plugindir";
 import { dirCats } from "./claudedir";
-import { ownSkillFits, suggest, type Hit } from "./skillroute";
+import { candidateKey, ownSkillFits, prepareCandidates, suggestSemantic, type Hit } from "./skillroute";
+import { embeddingsConfigured, nearestSkills } from "./vecstore";
+import { convUntrusted, markConvUntrusted } from "./convtrust";
+import { descHash } from "./skillscan";
 import type { Skill } from "./skillstore";
 import { CODE_RULES, execRun, LANGS, runCodeTool, runner, RUN_LIMITS, type Lang, type RecalcReport, type RunOutput } from "./coderun";
 import { plainSummary, runBlocks } from "./runtext";
@@ -202,7 +205,7 @@ type Lib = { key: string; label: string };
 // art: lịch sử để read_artifact / check_artifact dựng lại bản hiện tại của artifact (cùng phần đã nén ở artBase).
 // turnArts: artifact model viết giữa lượt (trong lời dẫn trước công cụ), xem sayOut.
 // image: công cụ generate_image đang bật; msgs: lịch sử của lượt, để tìm ảnh gốc người dùng nhờ sửa.
-type Exec = { project?: unknown; image?: boolean; msgs?: unknown; effects?: string[]; toolSync?: boolean; list: Skl; scripts: boolean; sess: ConnectorSession | null; uid: string; code: boolean; net: boolean; web?: boolean; art?: { messages: { role: string; content: unknown }[]; base: unknown }; turnArts?: string[]; outs: OutFile[]; outPaths?: Map<string, string>; libs?: Record<string, Lib[]>; studio?: Lib; prefer?: Record<string, string>; trace: TraceItem[]; conv?: string; heal?: Target; search?: Target; browse?: boolean; bctx?: BrowserCtx; shown?: string; heavy?: string[]; gate?: Gate; task?: TaskCtx | null; asking?: Promise<void>; awaiting?: number; denied?: Map<string, string>; connCards?: Set<string>; calls?: Map<string, { at: number; cancel?: AbortSignal }>; park?: () => void; inputsSent?: Set<string>; madeImgs?: string[]; webs?: Map<string, { title: string; url: string }>; edited?: Set<string> };
+type Exec = { project?: unknown; image?: boolean; msgs?: unknown; effects?: string[]; toolSync?: boolean; list: Skl; scripts: boolean; sess: ConnectorSession | null; uid: string; code: boolean; net: boolean; web?: boolean; art?: { messages: { role: string; content: unknown }[]; base: unknown }; turnArts?: string[]; outs: OutFile[]; outPaths?: Map<string, string>; libs?: Record<string, Lib[]>; studio?: Lib; prefer?: Record<string, string>; trace: TraceItem[]; conv?: string; heal?: Target; search?: Target; browse?: boolean; bctx?: BrowserCtx; shown?: string; heavy?: string[]; gate?: Gate; task?: TaskCtx | null; asking?: Promise<void>; awaiting?: number; denied?: Map<string, string>; connCards?: Set<string>; calls?: Map<string, { at: number; cancel?: AbortSignal }>; park?: () => void; inputsSent?: Set<string>; madeImgs?: string[]; webs?: Map<string, { title: string; url: string }>; edited?: Set<string>; untrusted?: boolean };
 // Nguồn web của lượt, đánh số theo thứ tự gặp (số [n] trong câu trả lời trỏ đúng chip thứ n). Tối đa 20 nguồn.
 const WEB_MAX = 20;
 const citeOf = (x: Exec): Citer => (url, title = "") => {
@@ -808,7 +811,9 @@ async function runCall(x: Exec, c: Call, d?: Decision): Promise<Run> {
     x.gate ??= makeGate({ uid: x.uid, signal: runSignal(), probe: async () => (await runBrowserTool(x.uid, "browser_tabs", { op: "list" }, x.bctx)).url,
       // Việc tự động chạy nền: không ai trả lời giữa chừng, nên gửi đề xuất cho phép trang vào Hộp thư và làm tiếp bằng nguồn khác.
       ask: (a) => { if (x.task && a.kind === "site") { queueSite(x.uid, x.task, a.host ?? "", a.detail ?? ""); answerAsk(x.uid, a.id, { ok: false, note: QUEUED }); } else if (currentRun()) { progress("ask", JSON.stringify(a)); x.park?.(); } else answerAsk(x.uid, a.id, { ok: false, note: NO_UI }); },
-      asked: (id, a) => { if (currentRun()) progress("asked", JSON.stringify({ id, ok: a.ok, always: !!a.always })); } });
+      asked: (id, a) => { if (currentRun()) progress("asked", JSON.stringify({ id, ok: a.ok, always: !!a.always })); },
+      // D6: đang mở skill của danh mục (chưa kiểm chứng) và thao tác trên Chrome của người dùng → hỏi một lần trong lượt trước khi dùng.
+      gateExtra: (_name, input) => x.untrusted && browserTargetOf(input, x.bctx) === "user" ? { kind: "site", tool: "browser", key: "untrusted:user-chrome", host: "", title: "Dùng Chrome của bạn trong khi đang chạy skill chưa kiểm chứng từ danh mục", detail: "" } : null });
     const no = await x.gate.check(c.name, c.input ?? {});
     if (no) return { content: no, is_error: true, used: { kind: "search", name: c.name } };
     const r = await runBrowserTool(x.uid, c.name, c.input ?? {}, x.bctx);
@@ -828,10 +833,16 @@ async function runCall(x: Exec, c: Call, d?: Decision): Promise<Run> {
     return { content: hit ? `Đã hiện nút "${hit.why === "link" ? "Liên kết Composio" : "Kết nối lại"}" cho ${hit.name} trong khung chat. Hãy nói một câu ngắn để người dùng bấm nút rồi nhắc lại yêu cầu (không chép link).` : `Không có connector "${String(c.input?.connector ?? "")}" đang chờ kết nối lại.`, is_error: !hit, used: { kind: "search", name: c.name } };
   }
   const ct = x.sess?.get(c.name);
-  if (!ct) return runSkillTool(x.list, c.name, c.input, x.scripts, { uid: x.uid, net: x.net, libs: x.libs, heal: x.heal ? (input) => healScript(x.heal!, input) : undefined });
+  if (!ct) {
+    const r = await runSkillTool(x.list, c.name, c.input, x.scripts, { uid: x.uid, net: x.net, libs: x.libs, heal: x.heal ? (input) => healScript(x.heal!, input) : undefined });
+    // D6: vừa đọc một skill của danh mục (chưa kiểm chứng) → hạ quyền ghi connector và dùng Chrome của người dùng cho phần còn lại của lượt,
+    // và ghi dấu cho cả cuộc trò chuyện: hướng dẫn của skill nằm lại trong lịch sử, các lượt sau (convUntrusted lúc dựng Exec) vẫn hạ quyền.
+    if (r.used.untrusted) { x.untrusted = true; markConvUntrusted(x.uid, x.conv); }
+    return r;
+  }
   const used = { kind: "tool" as const, name: usedName(ct, c.input) };
   const lbl = cxOf(ct, c.input);
-  if (x.task && x.sess!.perm(c.name, c.input) === "ask") return { content: queueTool(x.uid, x.task, c, lbl ? { connector: lbl.app, title: lbl.act } : { connector: ct.cname, title: toolTitle(ct) }), is_error: true, used };
+  if (x.task && (x.sess!.perm(c.name, c.input) === "ask" || untrustedConnWrite(x, c))) return { content: queueTool(x.uid, x.task, c, lbl ? { connector: lbl.app, title: lbl.act } : { connector: ct.cname, title: toolTitle(ct) }), is_error: true, used };
   if (d === "deny") return { content: x.denied?.get(c.id) ?? REFUSED, is_error: true, used };
   const meta = x.calls?.get(c.id), run = runSignal();
   const stops = [run, meta?.cancel].filter((v): v is AbortSignal => !!v);
@@ -845,7 +856,9 @@ async function runCall(x: Exec, c: Call, d?: Decision): Promise<Run> {
   if (x.edited?.has(c.id)) out.content = `[Người dùng đã sửa tham số trước khi cho phép. Công cụ đã chạy với tham số: ${JSON.stringify(c.input).slice(0, 1500)}]\n${out.content}`;
   return { is_error: r.is_error, ...out, used };
 }
-const needsAsk = (x: Exec, c: Call) => !!x.sess?.get(c.name) && x.sess.perm(c.name, c.input) === "ask";
+// D6: đang mở skill của danh mục (chưa kiểm chứng) và lời gọi connector là thao tác ghi → luôn hỏi, dù người dùng để "Luôn cho phép".
+const untrustedConnWrite = (x: Exec, c: Call) => !!x.untrusted && !!x.sess?.get(c.name) && x.sess.mutating(c.name, c.input) && (x.sess.perm(c.name, c.input) === "allow" || x.sess.perm(c.name, c.input) === "chat");
+const needsAsk = (x: Exec, c: Call) => !!x.sess?.get(c.name) && (x.sess.perm(c.name, c.input) === "ask" || untrustedConnWrite(x, c));
 
 // Câu mô tả bước đang làm, hiện dưới "Đang suy nghĩ…" khi lượt chạy ở nền.
 function describe(x: Exec, c: Call) {
@@ -1382,13 +1395,21 @@ async function skillSet(user: UserRow, body: Record<string, any>, messages: unkn
   // Định tuyến: chấm điểm toàn bộ kho skill theo yêu cầu mới nhất. Skill có ở nhiều thư viện được gán vào thư viện
   // mà các gợi ý khác cùng thuộc về (đề xuất dự án → Tài liệu, không phải Trình bày).
   let route = "";
+  let ownSuggested = false;
   const prefer: Record<string, string> = {};
   if (list.length) {
     // Yêu cầu thuộc rõ một studio ("làm slide thuyết trình" → Trình bày): skill của studio đó được cộng thêm, skill của danh mục Claude
     // giảm bớt, để thư viện chọn lọc đứng trước hàng nghìn skill na ná của danh mục.
     const want = ruleStudios("", typed).scores;
     const inStudio = (k: Skill) => (libs[k.name] ?? []).some((l) => l.key.startsWith("studio-") && want[l.key.slice(7) as Studio] > 0);
-    const raw = suggest(typed, list.map((k) => ({ skill: k, weight: (catSkills.has(k) ? 0.5 : 1) * (inStudio(k) ? 1.3 : 1) })));
+    // D4: nhớ đệm tập ứng viên theo (người dùng, thế hệ bộ đệm plugin) để không dựng lại cả kho mỗi lượt; trọng số phụ thuộc câu hỏi nên áp lên trên.
+    const prep = prepareCandidates(candidateKey(c.user.id, pluginCacheGen()), list.map((k) => ({ skill: k })), descHash);
+    const cands = prep.names.map((n) => prep.byName.get(n)!).map((b) => ({ skill: b.skill, weight: (catSkills.has(b.skill) ? 0.5 : 1) * (inStudio(b.skill) ? 1.3 : 1) }));
+    // Có provider embedding: lấy ~50 skill gần nhất theo nghĩa rồi chấm lại; không có thì suggestSemantic tự lùi về bộ chấm từ khóa. Skill riêng (không thuộc danh mục) luôn được giữ.
+    const keep = new Set(cands.filter((x) => !catSkills.has(x.skill)).map((x) => x.skill.name));
+    const raw = await suggestSemantic(typed, cands, { keep, nearest: embeddingsConfigured() ? (q, _names, k) => nearestSkills(c.user.id, q, k) : undefined });
+    // Có gợi ý từ skill riêng (không thuộc danh mục Claude): skillsPrompt bỏ mục lục ngành nghề cat-… cho lượt này.
+    ownSuggested = raw.some((h) => !catSkills.has(h.skill));
     const votes = new Map<string, number>();
     for (const h of raw) for (const l of libs[h.skill.name] ?? []) votes.set(l.key, (votes.get(l.key) ?? 0) + h.score / (libs[h.skill.name]!.length));
     // Skill ở nhiều thư viện (Synchro tự xếp một skill vào 2–3 mục) mà phiếu ngang nhau: nghiêng về mục chính câu yêu cầu nói tới
@@ -1405,7 +1426,7 @@ async function skillSet(user: UserRow, body: Record<string, any>, messages: unkn
     const picked = Array.isArray(body.pickedSkills) ? [...new Set((body.pickedSkills as unknown[]).filter((n): n is string => typeof n === "string" && known.has(n)))].slice(0, 8) : [];
     route = routingPrompt(hits, recent, picked, studio ? { lib: libs[`studio-${studio}`][0], skills: studioPicks(typed, st!) } : undefined);
   }
-  return { list, visible, libs, prefer, route };
+  return { list, visible, libs, prefer, route, ownSuggested };
 }
 
 type Who = { user: UserRow };
@@ -1745,13 +1766,13 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
         const image = feature !== "code";
         const pdocs = feature !== "code" && !!project && projectDocsLong(c.user.id, project);
         const tools = [...(pdocs ? [PROJECT_DOC_TOOL] : []), ...(task ? [TASK_TOOL] : []), ...(code ? [runCodeTool(pc.net, !!pc.web)] : []), ...(arts ? [READ_ARTIFACT_TOOL] : []), ...(check ? [CHECK_ARTIFACT_TOOL] : []), ...(ss.visible.length ? skillTools(ss.visible.length, code) : []), ...(sess ? connTools(sess, cli === "agy") : []), ...(refs ? [READ_REF_TOOL] : []), ...(brainOn(body, c.user) ? BRAIN_TOOLS : []), ...(browse ? BROWSER_TOOLS : []), ...(image ? [imageTool()] : []), PLAN_TOOL];
-        const xx: Exec = { project: pdocs ? project : undefined, image, msgs: messages, toolSync: subCli(model) === "claude", list: [...ss.visible, ...ss.list.filter((k) => !ss.visible.includes(k))], scripts: code, sess, uid: c.user.id, code, net: pc.net, web: !!pc.web, art: arts ? { messages, base: body.artBase } : undefined, outs: [], libs: ss.libs, studio: studio ? ss.libs[`studio-${studio}`][0] : undefined, prefer: ss.prefer, trace: [], conv: convId, browse, task, bctx: browse ? { def: task ? taskBrowser(task) : browserDefault(bst), synchro: !bst.locks.browse, user: bst.locks.mine !== "admin", scope: convId ? `chat:${convId}` : undefined, cookies: codePrefs(c.user.id).cookies, files: chatFiles(messages, c.user.id, () => xx.outs) } : undefined };
+        const xx: Exec = { project: pdocs ? project : undefined, image, msgs: messages, toolSync: subCli(model) === "claude", list: [...ss.visible, ...ss.list.filter((k) => !ss.visible.includes(k))], scripts: code, sess, uid: c.user.id, code, net: pc.net, web: !!pc.web, art: arts ? { messages, base: body.artBase } : undefined, outs: [], libs: ss.libs, studio: studio ? ss.libs[`studio-${studio}`][0] : undefined, prefer: ss.prefer, trace: [], conv: convId, untrusted: convUntrusted(c.user.id, convId), browse, task, bctx: browse ? { def: task ? taskBrowser(task) : browserDefault(bst), synchro: !bst.locks.browse, user: bst.locks.mine !== "admin", scope: convId ? `chat:${convId}` : undefined, cookies: codePrefs(c.user.id).cookies, files: chatFiles(messages, c.user.id, () => xx.outs) } : undefined };
         x = xx;
         announceOffline(xx, messages);
         const trc = currentTrace();
         bridge = openBridge({ uid: c.user.id, tools: tools as { name: string; description: string; input_schema: unknown }[], ...(cli === "agy" ? { hold: BRIDGE_HOLD.agy } : {}), call: (name, input, cancel) => { bridged++; return spanOn(trc, `tool ${name}`, "tool", () => bridgeCall(xx, name, input, usedAll, cancel), { "tool.name": name }); }, route: sess && connProxy(sess) ? (name, input) => { const ct = resolveTool(sess!.tools, name); return ct ? { name: CONN_CALL, input: { tool: ct.fq, input } } : null; } : undefined });
         xx.park = bridge.park;
-        toolSys = [studio ? STUDIO_RULES(studio, st!.plugins, st!.skills.length) : "", code ? CODE_RULES(pc.net, !!pc.web) : "", image ? IMAGE_RULES : "", pdocs ? PROJECT_DOC_RULES : "", arts ? ARTCHECK_RULES(check) : "", skillsPrompt(ss.visible, code), sess ? connectorsPrompt(sess, connProxy(sess)) : "", CLI_TOOLS_NOTE(cli, body.web === true, image), NARRATE_RULES, brainOn(body, c.user) ? BRAIN_RULES : "", browse ? BROWSER_RULES : "", task ? taskRules(task, browse) : ""].filter(Boolean).join("\n\n");
+        toolSys = [studio ? STUDIO_RULES(studio, st!.plugins, st!.skills.length) : "", code ? CODE_RULES(pc.net, !!pc.web) : "", image ? IMAGE_RULES : "", pdocs ? PROJECT_DOC_RULES : "", arts ? ARTCHECK_RULES(check) : "", skillsPrompt(ss.visible, code, ss.ownSuggested), sess ? connectorsPrompt(sess, connProxy(sess)) : "", CLI_TOOLS_NOTE(cli, body.web === true, image), NARRATE_RULES, brainOn(body, c.user) ? BRAIN_RULES : "", browse ? BROWSER_RULES : "", task ? taskRules(task, browse) : ""].filter(Boolean).join("\n\n");
       }
       // Gợi ý định tuyến skill đổi theo từng tin nhắn: đặt cạnh tin nhắn mới nhất, không trong hướng dẫn hệ thống. Hướng dẫn hệ thống giữ
       // nguyên từng chữ giữa các lượt và các đoạn chat thì model đọc lại từ bộ nhớ đệm (~15.000 token): câu đầu của đoạn chat mới từng
@@ -1901,7 +1922,7 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
   const convId = typeof conv === "string" && conv.length <= 64 ? conv : undefined;
   let sess: ConnectorSession | null = null;
   try {
-    const { list, visible, libs, prefer, route } = await span("skills", "retrieval", () => skillSet(c.user, body, messages, studio, st));
+    const { list, visible, libs, prefer, route, ownSuggested } = await span("skills", "retrieval", () => skillSet(c.user, body, messages, studio, st));
     // Lịch sử theo chuẩn Synchro → tin nhắn sẵn sàng cho mọi hãng. Gợi ý skill theo câu hỏi mới nhất đổi mỗi lượt nên ở tầng động
     // (cuối prompt), không ở phần đầu: phần đầu (hướng dẫn, danh mục skill, tài liệu ghim) giữ nguyên để đọc từ bộ đệm.
     const dyn = [route, cs ? designOf(body, { art: !!cs.caps.art, code: !!cs.caps.code, image }, studio, convId) : "", await recallOf(body, c.user, convId), nowBlock(body), crisisBlock(body)];
@@ -1927,12 +1948,12 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
     if (visible.length || sess || code || refs || web || brain || browse || task || arts || image) {
       // Chạy script của skill chỉ khi máy chủ có nơi chạy code và người dùng bật "Chạy code và tạo tệp".
       const scripts = code;
-      const sk = [capSys, arts ? ARTCHECK_RULES(check) : "", skillsPrompt(visible, scripts), sess ? connectorsPrompt(sess, connProxy(sess)) : "", skills ? NARRATE_RULES : "", brain ? BRAIN_RULES : "", browse ? BROWSER_RULES : "", task ? taskRules(task, browse) : "", pinned].filter(Boolean).join("\n\n");
+      const sk = [capSys, arts ? ARTCHECK_RULES(check) : "", skillsPrompt(visible, scripts, ownSuggested), sess ? connectorsPrompt(sess, connProxy(sess)) : "", skills ? NARRATE_RULES : "", brain ? BRAIN_RULES : "", browse ? BROWSER_RULES : "", task ? taskRules(task, browse) : "", pinned].filter(Boolean).join("\n\n");
       const tools = [...(pdocs ? [PROJECT_DOC_TOOL] : []), ...(code ? [runCodeTool(!!cs?.caps.net, !!cs?.caps.web)] : []), ...(arts ? [READ_ARTIFACT_TOOL] : []), ...(check ? [CHECK_ARTIFACT_TOOL] : []), ...(visible.length ? skillTools(visible.length, scripts) : []), ...(sess ? connTools(sess, t.kind === "google") : []), ...(refs ? [READ_REF_TOOL] : []), ...(brain ? BRAIN_TOOLS : []), ...(browse ? BROWSER_TOOLS : []), ...(task ? [TASK_TOOL] : []), ...(image ? [imageTool()] : []), ...(skills ? [PLAN_TOOL] : []), ...(web && synWeb ? [{ ...GEMINI_WEB_TOOL, description: t.kind === "google" ? GEMINI_WEB_TOOL.description : WEB_DESC }] : [])];
       // Phiên bản công cụ tìm web theo model (bản có lọc động cho dòng mới; model cũ dùng bản cơ bản).
       const webTool = { type: anthropicWebSearch(t.model), name: "web_search", max_uses: 5 };
-      if (body.estimate === true) { sess?.close(); return estimate([system, capSys], [skillsPrompt(visible, scripts), sess ? connectorsPrompt(sess, connProxy(sess)) : "", JSON.stringify(tools)], pinned, prep); }
-      const x: Exec = { project: pdocs ? project : undefined, image, msgs: messages, list: [...visible, ...list.filter((k) => !visible.includes(k))], scripts, sess, uid: c.user.id, code, net: !!cs?.caps.net, web: !!cs?.caps.web, art: arts ? { messages, base: body.artBase } : undefined, outs: [], libs, studio: studio ? libs[`studio-${studio}`][0] : undefined, prefer, trace: [], conv: convId, heal: scripts ? t : undefined, search: web && synWeb ? t : undefined, browse, task, bctx: browse && cs ? { def: task ? taskBrowser(task) : browserDefault(cs), synchro: !cs.locks.browse, user: cs.locks.mine !== "admin", scope: convId ? `chat:${convId}` : undefined, cookies: codePrefs(c.user.id).cookies, files: chatFiles(messages, c.user.id, () => x.outs) } : undefined };
+      if (body.estimate === true) { sess?.close(); return estimate([system, capSys], [skillsPrompt(visible, scripts, ownSuggested), sess ? connectorsPrompt(sess, connProxy(sess)) : "", JSON.stringify(tools)], pinned, prep); }
+      const x: Exec = { project: pdocs ? project : undefined, image, msgs: messages, list: [...visible, ...list.filter((k) => !visible.includes(k))], scripts, sess, uid: c.user.id, code, net: !!cs?.caps.net, web: !!cs?.caps.web, art: arts ? { messages, base: body.artBase } : undefined, outs: [], libs, studio: studio ? libs[`studio-${studio}`][0] : undefined, prefer, trace: [], conv: convId, untrusted: convUntrusted(c.user.id, convId), heal: scripts ? t : undefined, search: web && synWeb ? t : undefined, browse, task, bctx: browse && cs ? { def: task ? taskBrowser(task) : browserDefault(cs), synchro: !cs.locks.browse, user: cs.locks.mine !== "admin", scope: convId ? `chat:${convId}` : undefined, cookies: codePrefs(c.user.id).cookies, files: chatFiles(messages, c.user.id, () => x.outs) } : undefined };
       if (sess) announceOffline(x, messages);
       const msgs = prep.messages;
       const ad = t.kind === "mock" ? mockAdapter(list)

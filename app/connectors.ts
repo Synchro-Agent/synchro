@@ -851,6 +851,18 @@ export class ConnectorSession {
     // Người dùng vừa chọn "Cho phép trong cuộc trò chuyện này" trên thẻ duyệt: có hiệu lực cả với công cụ để "Hỏi mỗi lần", vì đó là lựa chọn rõ ràng của họ.
     return this.granted(ct, ct.tool.name) ? "allow" : "ask";
   }
+  /** D6: lời gọi này có ghi dữ liệu ra ngoài không (đọc = false). Dùng để hạ quyền khi đang mở skill chưa kiểm chứng từ danh mục.
+   *  Composio: MULTI_EXECUTE chỉ ghi khi kế hoạch có thao tác ghi; bash / workbench / gọi API không phải GET luôn là ghi; proxy đọc schema thì không. */
+  mutating(name: string, input?: unknown): boolean {
+    const ct = this.by.get(name);
+    if (!ct) return false;
+    if (ct.composio) {
+      if (ct.tool.name === EXEC_TOOL) { const plan = input === undefined ? null : execPlan(input); return !!plan && plan.writes.length > 0; }
+      if (ct.tool.name === PROXY_TOOL) return false;
+      if (strictCall(ct.tool.name, input)) return true;
+    }
+    return !readLike(ct.tool);
+  }
   /** Đã "Cho phép trong cuộc trò chuyện này" (trong lượt này, hoặc trong cuộc trò chuyện, nhớ 7 ngày). key: tên công cụ, hoặc app:<ứng dụng> với thao tác ghi của Composio. */
   private granted(ct: ChatTool, key: string) {
     if (this.turnGrants.has(`${ct.cid}:${key}`)) return true;

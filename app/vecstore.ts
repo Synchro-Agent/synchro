@@ -333,5 +333,50 @@ export function rrf(lists: string[][], k = 60): Map<string, number> {
   return out;
 }
 
+// ---------------------------------------------------------------- D4: chọn skill theo nghĩa
+// Danh mục skill của Claude (~18.000 skill) được embed một lần khi dựng danh mục (nguồn "skills", chung cho mọi người: shared).
+// Mỗi lượt lấy ~50 skill gần nhất theo cosine để bộ chấm từ khóa (skillroute) chấm lại — chi phí cố định, không chấm cả kho.
+export const SKILL_SCOPE = "skills";
+/** Chủ sở hữu dùng chung cho vector danh mục skill: một tập vector cho cả máy chủ. */
+export const SKILL_OWNER = "catalog";
+/** Có provider embedding (khóa OpenAI / Gemini quản trị viên đã nhập) hay không. Không có: skillroute lùi về bộ chấm từ khóa. */
+export const embeddingsConfigured = () => !!embedTarget();
+/** Đưa tập vector danh mục skill vào hàng embed ở nền (gọi khi dựng / cập nhật danh mục). */
+export const queueSkillEmbed = () => queueEmbed(SKILL_SCOPE, SKILL_OWNER);
+/**
+ * Đăng ký nguồn embed cho kho skill (một lần ở máy chủ). enumerate: danh sách skill hiện có (tên + mô tả); payer: tài khoản
+ * chịu chi phí embed (chủ sở hữu). Các skill đã embed và không đổi nội dung được bỏ qua nhờ mã băm, nên gọi lại không tốn thêm.
+ */
+export function registerSkillVecSource(enumerate: () => VecItem[], payer: () => string | null) {
+  registerVecSource(SKILL_SCOPE, { pending: (owner, model, limit) => skillPending(enumerate(), owner, model, limit), userOf: () => payer(), shared: true, maxChars: TEXT_MAX });
+}
+/**
+ * Hợp đồng pending của nguồn skill (như brain / file): chỉ trả skill chưa có vector của model này hoặc đã đổi nội dung (so mã băm
+ * phần chữ sẽ embed với vec_items.hash), tối đa limit mục. Không so src_at: thế hệ bộ đệm plugin đổi mỗi khi một thư viện bất kỳ đổi,
+ * so mốc đó thì cả kho ~18.000 skill bị coi là "đã sửa". Mục rỗng đã đánh dấu (dim = 0, cùng mã băm) cũng được bỏ qua.
+ */
+export function skillPending(all: VecItem[], owner: string, model: string, limit: number): VecItem[] {
+  if (limit <= 0 || !all.length) return [];
+  const have = new Map((t().prepare("SELECT item, hash FROM vec_items WHERE scope = ? AND owner = ? AND model = ?").all(SKILL_SCOPE, owner, model) as { item: string; hash: string }[])
+    .map((r) => [r.item, r.hash]));
+  const out: VecItem[] = [];
+  for (const x of all) {
+    const h = have.get(x.item);
+    if (h !== undefined && h === vecHash(x.text, TEXT_MAX)) continue;
+    out.push(x);
+    if (out.length >= limit) break;
+  }
+  return out;
+}
+/**
+ * Tên các skill gần câu hỏi nhất theo nghĩa. uid: tài khoản chịu chi phí embed câu hỏi. Trả null nếu không có provider,
+ * chưa có vector, hết hạn mức hoặc quá budgetMs — người gọi (skillroute) lùi về bộ chấm từ khóa.
+ */
+export async function nearestSkills(uid: string, query: string, k = 50, budgetMs = 120): Promise<string[] | null> {
+  if (!embedTarget()) return null;
+  const r = await vecQuery(SKILL_SCOPE, SKILL_OWNER, uid, query, k, budgetMs).catch(() => null);
+  return r ? r.hits.map((h) => h.item) : null;
+}
+
 onTick("vec-embed", () => { void drainEmbedQueue().catch((e) => console.warn("[vec]", e)); });
 onTick("vec-evict", (now) => { evictVecs(now); });

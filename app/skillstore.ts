@@ -53,6 +53,9 @@ export type Skill = {
   files: SkillFile[]; warnings: string[]; projects: string[]; use_count: number; last_used_at: string | null;
   /** Link repo đã dùng để thêm skill (khóa so trùng, plugins.linkKey), hoặc null (tải lên, Synchro viết…). */
   source: string | null;
+  /** D6: skill của danh mục Claude (bên thứ ba, chưa kiểm chứng). Khi một skill như vậy được đọc trong lượt, thao tác ghi của connector và
+   *  browser_* trên Chrome của người dùng hạ xuống "hỏi mỗi lần". Không đặt (undefined) = skill của Synchro / người dùng, tin được. */
+  untrusted?: boolean;
 };
 // Gói chứa nhiều skill: trả về danh sách để người dùng chọn (dir dùng làm `pick` khi gửi lại).
 export type SkillChoice = { dir: string; name: string; description: string; error?: string; exists: boolean };

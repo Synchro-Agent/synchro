@@ -9,12 +9,14 @@ import path from "node:path";
 import crypto from "node:crypto";
 import JSZip from "jszip";
 import { measureZip, SKILL_ZIP_MAX } from "../scripts/zipguard.mjs";
-import { db } from "./authstore";
+import { db, findByEmail, OWNER_EMAILS } from "./authstore";
+import { queueSkillEmbed, registerSkillVecSource } from "./vecstore";
 import { download, enabledSkillsByIds, isAllowed, isText, lenientSkillMd, parseEntries, parseSkillMd, ROOT, type Entry, type Skill } from "./skillstore";
 import { GH_API } from "./github";
 import { registerMemStat } from "./memstat";
 import { fold, warmSkillIndex } from "./skillroute";
 import { bumpTags, classify, classifyCatalog, dropAutoTags, dropPluginTags, dropTag, holdTags, keepPluginTags, pluginDetected, pluginKey, pluginTagRows, refine, tagRev, userStudioIds } from "./skillstudio";
+import { dirStudios } from "./claudedir"; // D4: nhãn mục Artifacts xếp sẵn lúc đồng bộ (claudedir chỉ import type của plugins nên không vòng lặp lúc chạy).
 
 export type Studio = "design" | "slides" | "docs";
 export const STUDIOS: Studio[] = ["design", "slides", "docs"];
@@ -383,7 +385,7 @@ function tagOne(id: string, by?: string) {
   if (!pl) return;
   // Không xếp mục: bỏ nhãn tự động, giữ mục người dùng tự chọn cho từng skill.
   if (!pl.studio && !pl.auto_tag) { keepPluginTags(id, (d.prepare("SELECT name FROM plugin_skills WHERE plugin_id = ?").all(id) as { name: string }[]).map((r) => r.name)); dropAutoTags(id); return; }
-  if (pl.catalog_id?.startsWith("cd:") && !pl.studio) { classifyCatalog(id, d.prepare("SELECT name, description FROM plugin_skills WHERE plugin_id = ?").all(id) as { name: string; description: string }[]); return; }
+  if (pl.catalog_id?.startsWith("cd:") && !pl.studio) { const st = dirStudios(pl.catalog_id); classifyCatalog(id, d.prepare("SELECT name, description FROM plugin_skills WHERE plugin_id = ?").all(id) as { name: string; description: string }[], st ? (n) => st[n] ?? null : undefined); return; }
   const rows = d.prepare("SELECT name, description, body FROM plugin_skills WHERE plugin_id = ?").all(id) as { name: string; description: string; body: string }[];
   keepPluginTags(id, rows.map((r) => r.name));
   if (pl.studio) return;
@@ -662,9 +664,21 @@ const CG = globalThis as unknown as { __plRev?: number; __plCache?: Cache | null
 // Cài hàng loạt (plugjob.ts) đặt __plBulk: hàng nghìn thư viện được thêm liên tục trong vài giờ, dựng lại bộ đệm sau mỗi thư viện thì lượt chat
 // nào cũng phải chờ dựng lại cả kho. Khi đó giữ bộ đệm cũ tối đa 60 giây (thư viện mới vào chat chậm tối đa một phút), chat vẫn mượt.
 const touch = () => { CG.__plRev = (CG.__plRev ?? 0) + 1; if (!CG.__plBulk) CG.__plCache = null; };
+/** Thế hệ bộ đệm plugin: tăng mỗi khi thư viện / skill đổi (touch). D4 dùng làm một phần khóa nhớ đệm tập ứng viên định tuyến. */
+export const pluginCacheGen = () => CG.__plRev ?? 0;
+// D4: đăng ký nguồn embed kho skill một lần. enumerate đọc bộ đệm skill hiện tại; payer là chủ sở hữu (chịu chi phí embed).
+const SV = globalThis as unknown as { __skillVecReg?: boolean };
+function ensureSkillVec() {
+  if (SV.__skillVecReg) return;
+  SV.__skillVecReg = true;
+  registerSkillVecSource(
+    () => [...(CG.__plCache?.skills.values() ?? [])].flat().map((k) => ({ item: k.name, text: `${k.name} ${k.description}`, srcAt: CG.__plRev ?? 0 })),
+    () => { for (const e of OWNER_EMAILS) { const u = findByEmail(e); if (u) return u.id; } return null; },
+  );
+}
 export const setBulk = (on: boolean) => { CG.__plBulk = on; if (!on) { CG.__plCache = null; zipCache.clear(); trimZips(); } };
 // Hàm đọc nội dung chỉ giữ id của skill, không giữ cả hàng cơ sở dữ liệu (hàng có report JSON của bản kiểm tra): ~18.000 closure giữ cả hàng là vài chục MB chết.
-function lazySkill(r: Pick<CRow, "id" | "plugin_id" | "description" | "storage_path" | "use_count">, name: string): Skill {
+function lazySkill(r: Pick<CRow, "id" | "plugin_id" | "description" | "storage_path" | "use_count">, name: string, untrusted = false): Skill {
   const id = r.id;
   let full: { body: string; files: Skill["files"] } | null = null;
   const load = () => {
@@ -674,6 +688,8 @@ function lazySkill(r: Pick<CRow, "id" | "plugin_id" | "description" | "storage_p
   return {
     id: r.id, user_id: r.plugin_id, name, description: r.description, storage_path: r.storage_path, enabled: true, version: 1, versions: [1],
     created_at: "", updated_at: "", warnings: [], projects: [], use_count: r.use_count, last_used_at: null, source: null,
+    // D6: skill của danh mục Claude (cd:…) là bên thứ ba, đánh dấu chưa kiểm chứng để hạ quyền ghi khi nó được đọc trong lượt.
+    ...(untrusted ? { untrusted: true } : {}),
     get body() { return load().body; }, get files() { return load().files; },
   };
 }
@@ -701,7 +717,7 @@ function snap(): Cache {
     lite.set(p.id, ss.map((s) => ({ id: s.id, name: s.name, enabled: !!s.enabled, useCount: s.use_count })));
     // Chỉ thư viện của danh mục được đổi tên khi trùng; trùng tên giữa thư viện chọn lọc / người dùng tự cài giữ như cũ (một tên, nhiều thư viện).
     const cat = isCat(p) === 1;
-    skills.set(p.id, ss.filter((s) => s.enabled).map((s) => { const name = cat && taken.has(s.name) ? `${p.slug}:${s.name}` : s.name; taken.add(name); return lazySkill(s, name); }));
+    skills.set(p.id, ss.filter((s) => s.enabled).map((s) => { const name = cat && taken.has(s.name) ? `${p.slug}:${s.name}` : s.name; taken.add(name); return lazySkill(s, name, cat); }));
   }
   // Skill đã xếp mục của từng thư viện, tính sẵn một lần: studioSkills chạy 3–4 lần mỗi lượt chat, không tra lại nhãn của từng skill trong ~18.000 skill.
   const tags = new Map(pluginTagRows().map((r) => [r.key, r]));
@@ -714,7 +730,11 @@ function snap(): Cache {
   }
   // Dựng sẵn chỉ mục của bộ định tuyến skill ở nền, không để lượt chat kế tiếp phải chờ.
   void warmSkillIndex([...skills.values()].flat()).catch(() => {});
-  return (CG.__plCache = { rev: CG.__plRev ?? 0, tags: t, at: Date.now(), rows, meta, lite, skills, tagged });
+  const cache = (CG.__plCache = { rev: CG.__plRev ?? 0, tags: t, at: Date.now(), rows, meta, lite, skills, tagged });
+  // D4: embed kho skill cho bộ chọn theo nghĩa. Mặc định TẮT (SYNCHRO_SKILL_EMBED != "1") để không thêm tải / chi phí lên VPS đang chạy;
+  // chỉ chạy ở nền khi quản trị viên bật và đã nhập khóa embedding. embedPending bỏ qua skill đã embed và không đổi nội dung.
+  if (process.env.SYNCHRO_SKILL_EMBED === "1") { ensureSkillVec(); queueSkillEmbed(); }
+  return cache;
 }
 // Tên gốc của skill (bỏ tiền tố "thư-viện:" khi trùng tên) để tra nhãn mục.
 const rawName = (k: Skill, slug: string) => (k.name.startsWith(slug + ":") ? k.name.slice(slug.length + 1) : k.name);
