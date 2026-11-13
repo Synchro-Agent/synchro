@@ -3,7 +3,7 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { mkdtemp, mkdir, writeFile, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import sharp from "sharp";
+import sharp, { type Metadata } from "sharp";
 import jschardet from "jschardet";
 import { parseInWorker, withParseSlot, withConvertSlot, lowPriority, parserEnv } from "./sandbox";
 import { sniffUtf16 } from "./detect";
@@ -98,7 +98,7 @@ const imageExtractor: Extractor = {
   name: "image",
   match: (k) => k.startsWith("image/"),
   async run(buf, { kind, name }) {
-    let meta: sharp.Metadata;
+    let meta: Metadata;
     try { meta = await openImage(buf).metadata(); }
     catch { throw new FileError(`Ảnh "${name}" quá lớn hoặc bị hỏng nên không xử lý được (giới hạn ~40 triệu điểm ảnh).`); }
     const w = meta.width ?? 0, hgt = meta.height ?? 0;
