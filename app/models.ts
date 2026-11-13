@@ -67,7 +67,7 @@ export function modelName(key: string) {
 
 // Loại việc chế độ Tự động nhận ra (router.ts Task), để hiện "Tự động chọn … cho việc …" dưới câu trả lời.
 const TASK_NAME: Record<string, [string, string]> = {
-  chat: ["trò chuyện", "chat"], qa: ["hỏi đáp", "questions"], language: ["học ngôn ngữ", "language learning"], translate: ["dịch", "translation"],
+  chat: ["trò chuyện", "chat"], qa: ["hỏi đáp", "questions"], lookup: ["tra cứu", "web lookup"], language: ["học ngôn ngữ", "language learning"], translate: ["dịch", "translation"],
   summarize: ["tóm tắt", "summarizing"], write: ["viết", "writing"], code: ["viết code", "coding"], debug: ["gỡ lỗi", "debugging"], reason: ["suy luận", "reasoning"],
   analyze: ["phân tích", "analysis"], build: ["tạo sản phẩm", "building"], act: ["thao tác nhiều bước", "multi-step actions"], vision: ["đọc ảnh", "reading images"],
   longdoc: ["tài liệu dài", "long documents"], data: ["số liệu", "data"],
