@@ -203,7 +203,8 @@ export class McpClient {
       const beat = () => { if (!idle) return; clearTimeout(timer); timer = setTimeout(() => idle.abort(new TempFail("Máy chủ im lặng quá lâu khi đang chạy công cụ.", 0, undefined, true)), o.idle); };
       try {
         const signal = idle ? (o.signal ? AbortSignal.any([o.signal, idle.signal]) : idle.signal) : o.signal;
-        res = await safeFetch(url, { method: "POST", headers: this.headers(extra), body: JSON.stringify(msg), timeout: o.timeout, secret: this.secret, signal });
+        // Phản hồi có thể là luồng SSE sống lâu của một công cụ chạy dài: bỏ trần đọc 10MB (JSON thường đã có trần MAX_BODY 8MB trong readText).
+        res = await safeFetch(url, { method: "POST", headers: this.headers(extra), body: JSON.stringify(msg), timeout: o.timeout, secret: this.secret, signal, maxBytes: 0 });
         if (o.retry && i < RETRIES && RETRY_STATUS.has(res.status)) {
           const wait = Math.min(retryAfterMs(res.headers.get("retry-after")) ?? 1000 * 3 ** i, MAX_WAIT);
           await res.body?.cancel();
@@ -313,7 +314,8 @@ export class McpClient {
     } finally { o.signal?.removeEventListener("abort", late); }
   }
   private async sseStart(ctl: AbortController, wait: ReturnType<typeof setTimeout>, signal?: AbortSignal) {
-    const res = await safeFetch(this.url, { method: "GET", headers: { accept: "text/event-stream", ...this.authHeaders() }, signal: ctl.signal, timeout: 40 * 60_000, secret: this.secret })
+    // Luồng SSE sống lâu (tới 40 phút), tổng byte có thể vượt trần 10MB: bỏ trần đọc cho riêng luồng này.
+    const res = await safeFetch(this.url, { method: "GET", headers: { accept: "text/event-stream", ...this.authHeaders() }, signal: ctl.signal, timeout: 40 * 60_000, secret: this.secret, maxBytes: 0 })
       .catch((e) => { throw ctl.signal.aborted ? ctl.signal.reason : e; })
       .finally(() => clearTimeout(wait));
     if (res.status === 401 || res.status === 403) { await res.body?.cancel(); throw this.authError(res.status, res.headers.get("www-authenticate") ?? ""); }

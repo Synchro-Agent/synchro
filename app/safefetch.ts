@@ -2,6 +2,7 @@
 // (localhost, mạng LAN, metadata đám mây) để không ai dùng Synchro gọi vào hạ tầng bên trong, và tự theo chuyển hướng có kiểm tra lại.
 // Thử nghiệm cục bộ (npm run dev:mock) đặt MCP_ALLOW_PRIVATE=1 để gọi được máy chủ giả lập ở 127.0.0.1 qua http.
 import { lookup } from "node:dns/promises";
+import { lookup as lookupCb } from "node:dns";
 import { isIP } from "node:net";
 
 export class FetchBlocked extends Error {}
@@ -17,18 +18,53 @@ export const retryAfterMs = (h: string | null | undefined) => {
 };
 // Câu báo chung cho sự cố phía nhà cung cấp, để không lẫn với "không phải máy chủ MCP" hay "phiên đăng nhập hết hạn".
 export const downText = (host: string, status = 0) => `${host} đang tạm thời không phản hồi${status ? ` (lỗi ${status})` : ""}. Đây là sự cố phía nhà cung cấp; hãy thử lại sau ít phút.`;
+export const allowPrivate = () => process.env.MCP_ALLOW_PRIVATE === "1";
+
+// Chống DNS rebinding (TOCTOU): checkUrl phân giải tên miền rồi fetch phân giải LẠI lúc kết nối — kẽ hở để tên miền
+// đổi sang IP nội bộ giữa hai lần. Dispatcher dưới ghim việc phân giải vào đúng lúc kết nối: cùng một lần tra cứu vừa
+// chặn IP nội bộ vừa là IP thật được dùng để nối, nên không còn khoảng trống đổi IP. Dựng Agent cùng lớp với dispatcher
+// có sẵn của Node (không thêm thư viện); dựng không được thì trả null và fetch dùng mặc định (checkUrl vẫn chặn trước khi gọi).
+// IP dạng literal không đi qua lookup (undici nối thẳng) nhưng literal không thể đổi nên checkUrl đã đủ.
+function safeLookup(hostname: string, options: unknown, cb: (err: Error | null, address?: string | { address: string; family: number }[], family?: number) => void): void {
+  const o = (options && typeof options === "object" ? options : {}) as { all?: boolean; family?: number; hints?: number };
+  lookupCb(hostname, { all: true, family: o.family, hints: o.hints }, (err, addresses) => {
+    if (err) return cb(err);
+    const list = addresses as unknown as { address: string; family: number }[];
+    if (!list.length) return cb(new FetchBlocked(`Không tìm thấy máy chủ ${hostname}.`));
+    if (!allowPrivate() && list.some((a) => isPrivate(a.address))) return cb(new FetchBlocked("Không kết nối được tới địa chỉ nội bộ."));
+    if (o.all) return cb(null, list);
+    cb(null, list[0].address, list[0].family);
+  });
+}
 // fetch mặc định của Node tự cắt sau 5 phút chờ header hoặc 5 phút không có dữ liệu. Công cụ connector chạy lâu (tới 20 phút) tự đặt hạn riêng,
-// nên tắt giới hạn ngầm đó: dựng Agent cùng lớp với dispatcher có sẵn của Node, không thêm thư viện. Không dựng được thì giữ mặc định (cắt ở 5 phút).
-let longAgent: unknown;
-function longDispatcher(): unknown {
-  if (longAgent) return longAgent;
+// nên tắt giới hạn ngầm đó khi cần (long). Hai Agent dùng lại: thường và "long" (bỏ headersTimeout / bodyTimeout).
+const agents: Record<"short" | "long", unknown> = { short: undefined, long: undefined };
+function pinnedDispatcher(long: boolean): unknown {
+  const key = long ? "long" : "short";
+  if (agents[key] !== undefined) return agents[key];
   try {
     const cur = (globalThis as unknown as Record<symbol, { constructor: new (o: object) => unknown } | undefined>)[Symbol.for("undici.globalDispatcher.1")];
-    longAgent = cur ? new cur.constructor({ headersTimeout: 0, bodyTimeout: 0 }) : null;
-  } catch { longAgent = null; }
-  return longAgent;
+    agents[key] = cur ? new cur.constructor({ connect: { lookup: safeLookup }, ...(long ? { headersTimeout: 0, bodyTimeout: 0 } : {}) }) : null;
+  } catch { agents[key] = null; }
+  return agents[key];
 }
-export const allowPrivate = () => process.env.MCP_ALLOW_PRIVATE === "1";
+// Trần đọc mặc định: phản hồi không được vượt quá 10MB (lời gọi luồng dài như SSE tự đặt maxBytes: 0 để bỏ trần).
+export const DEFAULT_MAX_BYTES = 10 * 1024 * 1024;
+function capBody(res: Response, maxBytes: number): Response {
+  if (!res.body || maxBytes <= 0) return res;
+  let seen = 0;
+  const ts = new TransformStream<Uint8Array, Uint8Array>({
+    transform(chunk, controller) {
+      seen += chunk.byteLength;
+      if (seen > maxBytes) { controller.error(new FetchBlocked(`Phản hồi vượt quá ${Math.round(maxBytes / 1048576)}MB.`)); return; }
+      controller.enqueue(chunk);
+    },
+  });
+  const wrapped = new Response(res.body.pipeThrough(ts), { status: res.status, statusText: res.statusText, headers: res.headers });
+  // Response dựng lại mất .url (mặc định ""), mà connicons dùng nó để giải địa chỉ icon tương đối sau chuyển hướng: giữ lại.
+  try { Object.defineProperty(wrapped, "url", { value: res.url, configurable: true }); } catch { /* chỉ đọc: bỏ qua */ }
+  return wrapped;
+}
 // Hạn giờ gộp với tín hiệu bên ngoài. AbortSignal.any chỉ giữ tín hiệu nguồn bằng tham chiếu yếu: GC thu tín hiệu hạn giờ thì hạn không bao giờ nổ (đo được trên Node 22.11).
 // Có người nghe thì Node giữ nó sống tới lúc nổ.
 export function timeLimit(ms: number, outer?: AbortSignal | null): AbortSignal {
@@ -55,7 +91,11 @@ export function isPrivate(ip: string) {
   const x = ip.toLowerCase();
   const v4 = embeddedV4(x);
   if (v4) return v4Private(v4);
-  return x === "::" || x === "::1" || x.startsWith("fc") || x.startsWith("fd") || x.startsWith("fe8") || x.startsWith("fe9") || x.startsWith("fea") || x.startsWith("feb");
+  // fc/fd ULA · fe8-feb link-local (fe80::/10) · fec-fef site-local cũ (fec0::/10) · ff00::/8 multicast · 2002::/16 6to4 (nhúng IPv4, có thể trỏ vào mạng trong).
+  return x === "::" || x === "::1" || x.startsWith("fc") || x.startsWith("fd")
+    || x.startsWith("fe8") || x.startsWith("fe9") || x.startsWith("fea") || x.startsWith("feb")
+    || x.startsWith("fec") || x.startsWith("fed") || x.startsWith("fee") || x.startsWith("fef")
+    || x.startsWith("ff") || x.startsWith("2002:");
 }
 
 // Kiểm tra một URL trước khi gọi; ném FetchBlocked kèm lý do dễ hiểu.
@@ -79,20 +119,23 @@ export async function checkUrl(raw: string): Promise<URL> {
 // Giống fetch nhưng kiểm tra địa chỉ ở mỗi lần chuyển hướng (tối đa 5 lần) và có thời gian chờ.
 // noFollow: trả nguyên phản hồi chuyển hướng (dò trang đăng nhập). secret: tên các header bí mật riêng của lời gọi này (API key của connector).
 // Chuyển sang nguồn khác thì bỏ authorization, cookie và các header bí mật, để máy chủ không dùng 307 đẩy token sang tên miền lạ.
-export async function safeFetch(raw: string, init: RequestInit & { timeout?: number; noFollow?: boolean; secret?: string[] } = {}): Promise<Response> {
-  const { timeout = 20_000, noFollow, secret = [], ...rest } = init;
+export async function safeFetch(raw: string, init: RequestInit & { timeout?: number; noFollow?: boolean; secret?: string[]; maxBytes?: number } = {}): Promise<Response> {
+  const { timeout = 20_000, noFollow, secret = [], maxBytes = DEFAULT_MAX_BYTES, ...rest } = init;
   const signal = timeLimit(timeout, rest.signal);
   let url = raw, method = rest.method ?? "GET", body = rest.body, headers = rest.headers;
-  // Lời gọi dài hơn 5 phút: bỏ giới hạn ngầm của fetch (xem longDispatcher), hạn thật là timeout / signal ở trên.
-  const long = timeout > 290_000 ? longDispatcher() : null;
+  // Dispatcher ghim phân giải tên miền lúc kết nối (chống rebinding); lời gọi dài hơn 5 phút thì bỏ cả giới hạn ngầm của fetch.
+  const dispatcher = pinnedDispatcher(timeout > 290_000);
   for (let hop = 0; hop < 6; hop++) {
     await checkUrl(url);
-    const r = await fetch(url, { ...rest, ...(long ? { dispatcher: long } : {}), headers, method, body, signal, redirect: "manual" } as RequestInit).catch((e) => {
+    const r = await fetch(url, { ...rest, ...(dispatcher ? { dispatcher } : {}), headers, method, body, signal, redirect: "manual" } as RequestInit).catch((e) => {
+      // Lookup ghim chặn IP nội bộ: undici bọc lỗi connect vào .cause, trả nguyên FetchBlocked để báo đúng lý do.
+      if (e instanceof FetchBlocked) throw e;
+      if ((e as { cause?: unknown }).cause instanceof FetchBlocked) throw (e as { cause: FetchBlocked }).cause;
       if (signal.aborted && !(signal.reason as Error)?.name?.includes("Timeout") && !(signal.reason instanceof TempFail)) throw e;
       const late = (e as Error).name === "TimeoutError" || signal.aborted;
       throw new TempFail(late ? "Máy chủ phản hồi quá lâu." : `Không kết nối được tới ${new URL(url).host}.`, 0, undefined, late);
     });
-    if (noFollow || r.status < 300 || r.status >= 400 || !r.headers.get("location")) return r;
+    if (noFollow || r.status < 300 || r.status >= 400 || !r.headers.get("location")) return capBody(r, maxBytes);
     const next = new URL(r.headers.get("location")!, url);
     if (next.origin !== new URL(url).origin) {
       const drop = new Set(["authorization", "cookie", "proxy-authorization", ...secret.map((x) => x.toLowerCase())]);
