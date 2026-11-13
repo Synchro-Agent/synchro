@@ -7,7 +7,7 @@ import { apiFetch, statusText } from "./apierr";
 import * as I from "./icons";
 import { getLang, tr } from "./i18n";
 import { isForeign } from "./chaterror";
-import { canRerun, failInfo, failLine } from "./taskerr";
+import { canRerun, failInfo, failLine, isExpired, TOO_OLD } from "./taskerr";
 import { INBOX_CHANGED, useInboxCount } from "./inboxcount";
 export { INBOX_CHANGED, useInboxCount };
 import { Markdown } from "./md";
@@ -284,6 +284,7 @@ function ResultBody({ x, task, say, onOpenChat, onRetry, reload }: { x: Item; ta
       {x.note && <p className="tk-note"><I.InfoCircle size={13} /><span data-notr>{tr(x.note)}</span></p>}
       {x.status === "waiting" ? <div className="tk-run"><I.Clock size={14} />{tr("Đến giờ chạy nhưng Chrome của bạn đang tắt. Synchro chạy ngay khi Chrome kết nối lại, hoặc sau 12 giờ thì chạy bằng trình duyệt của Synchro.")}</div>
         : x.status === "running" ? <div className="tk-run"><span className="art-spin sm" />{lastStep ? <span data-notr>{tr(lastStep.text)}</span> : <span>{tr("Synchro đang chạy việc này trên máy chủ")}</span>}</div>
+        : isExpired(x) ? <p className="tk-note"><I.Clock size={13} /><span>{tr(TOO_OLD)}</span></p>
         : x.error ? ((e) => <div className="sk-err tk-err"><span data-notr>{tr(e.text)}</span>{e.detail && <details><summary>{tr("Chi tiết kỹ thuật")}</summary><code data-notr>{e.detail}</code></details>}</div>)(failInfo(x.error, foreign))
         : <div className="mdx"><Markdown text={readable(x.text)} say={say} /></div>}
       {props.length > 0 && <div className="tk-props-in"><b>{tr("Đề xuất của lần chạy này")}</b>{props.map((p) => <ProposalCard key={p.id} p={p} say={say} onDone={() => { reload(); api<{ proposals: Proposal[] }>("GET", `/api/inbox/proposals?run=${x.run}`).then((j) => setProps(j.proposals)).catch(() => {}); }} />)}</div>}
@@ -429,7 +430,7 @@ export function InboxPage({ say, onOpenChat }: { say: (m: string) => void; model
                 <div className="tk-line">
                 <button className="tk-row" onClick={() => toggle(x)} aria-expanded={open === x.run}>
                   {bkR.on ? <BulkCheck on={bkR.has(x)} /> : <span className={`tk-dot ${x.status}`} />}
-                  <span className="tk-t"><b data-notr>{x.title}</b><em>{x.status === "running" ? tr("Đang chạy trên máy chủ…") : x.status === "waiting" ? tr("Đang chờ Chrome của bạn kết nối") : x.status === "error" ? <span className="tk-why" data-notr>{tr("Lỗi")}: {failReason(x.error)}</span> : ((t) => (t ? <span data-notr>{t}</span> : tr("Xong")))(excerpt(x.text))}</em></span>
+                  <span className="tk-t"><b data-notr>{x.title}</b><em>{x.status === "running" ? tr("Đang chạy trên máy chủ…") : x.status === "waiting" ? tr("Đang chờ Chrome của bạn kết nối") : isExpired(x) ? tr("Kết quả đã quá cũ, không còn lưu") : x.status === "error" ? <span className="tk-why" data-notr>{tr("Lỗi")}: {failReason(x.error)}</span> : ((t) => (t ? <span data-notr>{t}</span> : tr("Xong")))(excerpt(x.text))}</em></span>
                   {(x.proposals ?? 0) > 0 && <span className="tk-chip warn">{x.proposals} {tr("đề xuất")}</span>}
                   {x.kind === "action" && <span className="tk-chip">{tr("Đã duyệt")}</span>}
                   <span className="tk-when">{when(x.at).split(" ·")[0]}</span>

@@ -12,6 +12,7 @@ import crypto from "node:crypto";
 import { can, db, getUser } from "./authstore";
 import { getRun, startRun } from "./runs";
 import { extLive } from "./browserext";
+import { TOO_OLD } from "./taskerr";
 
 export type Schedule = { kind: "once" | "hourly" | "daily" | "weekdays" | "weekly"; time?: string; weekday?: number; every?: number; tz: string };
 export type BrowserPref = "auto" | "synchro" | "user";
@@ -232,6 +233,11 @@ const chromeLocked = (uid: string) => { const u = getUser(uid); return !!u && !c
 const LOCKED_NOTE = "Quản trị viên chưa cho phép tài khoản này dùng Chrome của người dùng: làm bằng trình duyệt của Synchro.";
 const chromeOn = async (uid: string) => !chromeLocked(uid) && (await extLive(uid).catch(() => ({ connected: false }))).connected;
 
+/** Người dùng đã tự chạy lại (nút "Chạy lại" / "Chạy ngay"): các lần lỗi trước của việc này không được bộ hẹn giờ tự chạy lại nữa,
+ *  nếu không việc có tác dụng phụ (gửi tin, đăng bài) sẽ chạy hai lần. retried = 2: đã xử lý, không thử lại. */
+export function supersede(taskId: string, newRun: string) {
+  return init().prepare("UPDATE task_runs SET retried = 2 WHERE task_id = ? AND kind = 'run' AND retried = 0 AND run_id != ?").run(taskId, newRun).changes;
+}
 /** Chạy ngay (nút "Chạy ngay"), không đổi lịch. Việc đặt dùng Chrome của người dùng thì Chrome phải đang kết nối. */
 export async function runNow(uid: string, id: string) {
   const r = getTask(uid, id);
@@ -242,6 +248,7 @@ export async function runNow(uid: string, id: string) {
   const run = launch(r, { chrome });
   if (!run) return fail("Tài khoản không còn hoạt động.", 403);
   init().prepare("UPDATE tasks SET last_run_at = ?, wait_since = NULL WHERE id = ?").run(Date.now(), id);
+  supersede(r.id, run);
   return run;
 }
 /** Chạy việc người dùng vừa duyệt (đề xuất kind "action"): một lượt riêng của việc, kết quả vào Hộp thư. */
@@ -279,7 +286,10 @@ export async function tick(now = Date.now()) {
     if (launch(r, { chrome, note: !chrome && chromeLocked(r.owner) ? LOCKED_NOTE : chrome ? (waited >= 2 ? `Đã chờ Chrome của người dùng kết nối lại ${span} rồi mới chạy.` : undefined) : `Chrome của người dùng không kết nối suốt ${span}: làm bằng trình duyệt của Synchro, phần cần tài khoản của người dùng thì ghi rõ chưa làm được.` })) n++;
   }
   // Lần chạy lỗi (model quá tải, mất mạng…): chạy lại sau RETRY_MS, tối đa MAX_RETRY lần cho mỗi lần đến hạn.
-  for (const x of d.prepare("SELECT run_id, task_id, owner FROM task_runs WHERE kind = 'run' AND retried = 0 AND at > ?").all(now - 24 * 3600_000) as { run_id: string; task_id: string; owner: string }[]) {
+  // Đã có lần chạy mới hơn của cùng việc (người dùng bấm Chạy lại, lịch đã chạy tiếp): lần lỗi cũ không chạy lại nữa.
+  const newer = d.prepare("SELECT 1 FROM task_runs WHERE task_id = ? AND kind = 'run' AND at > ? AND run_id != ? LIMIT 1");
+  for (const x of d.prepare("SELECT run_id, task_id, owner, at FROM task_runs WHERE kind = 'run' AND retried = 0 AND at > ?").all(now - 24 * 3600_000) as { run_id: string; task_id: string; owner: string; at: number }[]) {
+    if (newer.get(x.task_id, x.at, x.run_id)) { d.prepare("UPDATE task_runs SET retried = 2 WHERE run_id = ?").run(x.run_id); continue; }
     const run = getRun(x.run_id, x.owner);
     if (run?.status === "running") continue;
     const r = getTask(x.owner, x.task_id);
@@ -370,17 +380,18 @@ export type InboxItem = { run: string; task: string; title: string; at: number; 
 type RunRow = { run_id: string; task_id: string; title: string; at: number; read: number; kind: string; note: string | null; result: string | null };
 type Kept = { status: string; text?: string; error?: string; model?: string };
 export const INBOX_KEEP = 1000;
-const TOO_OLD = "Kết quả này đã quá cũ nên không còn lưu.";
+// Quá cũ: không còn biết lần đó xong hay lỗi, nên ghi "expired" chứ không phải "error" (không hiện như lần chạy lỗi, không nút Chạy lại).
+const EXPIRED = JSON.stringify({ status: "expired", error: TOO_OLD });
 // Lượt chạy chỉ được giữ 7 ngày (runs.ts) nên kết quả cuối được chép sang dòng Hộp thư ngay khi xong: báo cáo tuần trước vẫn đọc được.
 // Mỗi người giữ tối đa INBOX_KEEP kết quả đầy đủ; cũ hơn thì còn dòng và thời gian, không còn nội dung.
 function keepResult(uid: string, r: Pick<RunRow, "run_id">): Kept | null {
   const run = getRun(r.run_id, uid);
   if (run?.status === "running") return null;
   const res = (run?.result ?? {}) as { text?: string; error?: string; model?: string };
-  const k: Kept = run ? { status: run.status, text: String(res.text ?? "").slice(0, 60_000), ...(res.error ? { error: String(res.error) } : {}), ...(typeof res.model === "string" ? { model: res.model } : {}) } : { status: "error", error: TOO_OLD };
+  const k: Kept = run ? { status: run.status, text: String(res.text ?? "").slice(0, 60_000), ...(res.error ? { error: String(res.error) } : {}), ...(typeof res.model === "string" ? { model: res.model } : {}) } : { status: "expired", error: TOO_OLD };
   const d = init();
   d.prepare("UPDATE task_runs SET result = ? WHERE run_id = ? AND owner = ?").run(JSON.stringify(k), r.run_id, uid);
-  d.prepare("UPDATE task_runs SET result = ? WHERE owner = ? AND run_id IN (SELECT run_id FROM task_runs WHERE owner = ? AND result IS NOT NULL ORDER BY at DESC LIMIT -1 OFFSET ?)").run(JSON.stringify({ status: "error", error: TOO_OLD }), uid, uid, INBOX_KEEP);
+  d.prepare("UPDATE task_runs SET result = ? WHERE owner = ? AND run_id IN (SELECT run_id FROM task_runs WHERE owner = ? AND result IS NOT NULL ORDER BY at DESC LIMIT -1 OFFSET ?)").run(EXPIRED, uid, uid, INBOX_KEEP);
   return k;
 }
 /** Nhịp đều của máy chủ: chép kết quả của các lượt vừa xong, kể cả khi không ai mở Hộp thư. */
@@ -416,7 +427,7 @@ export function inbox(uid: string, o: { limit?: number; before?: number } = {}):
     if (r.result) { try { k = JSON.parse(r.result) as Kept; } catch {} }
     k ??= keepResult(uid, r);
     return {
-      run: r.run_id, task: r.task_id, title: r.title, at: r.at, read: !!r.read, status: k?.status ?? "running", text: k?.text ?? "", kind: r.kind === "action" ? "action" : "task",
+      run: r.run_id, task: r.task_id, title: r.title, at: r.at, read: !!r.read, status: k?.error === TOO_OLD ? "expired" : k?.status ?? "running", text: k?.text ?? "", kind: r.kind === "action" ? "action" : "task",
       ...(r.note ? { note: r.note } : {}), ...(k?.model ? { model: k.model } : {}), ...(props.get(r.run_id) ? { proposals: props.get(r.run_id) } : {}), ...(k?.error ? { error: k.error } : {}),
     };
   });

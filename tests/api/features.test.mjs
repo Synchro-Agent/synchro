@@ -43,7 +43,7 @@ ok(seen.size === 122, `đi hết các trang thấy đủ mọi mục, không ch�
 const old = (await a("GET", `/api/inbox?limit=5&before=${now - 100 * DAY}`)).j.items.find((x) => x.title === "Kết quả 101");
 ok(old?.status === "done" && old.text.startsWith("Nội dung 101"), "kết quả 100 ngày trước vẫn đọc được, không báo lỗi", JSON.stringify(old)?.slice(0, 200));
 const gone = (await a("GET", `/api/inbox?limit=5&before=${now - 300 * DAY}`)).j.items.find((x) => x.title === "Cũ không còn");
-ok(gone?.status === "error" && /quá cũ/.test(gone.error ?? ""), "lượt đã mất từ trước khi có bản lưu thì báo rõ", JSON.stringify(gone));
+ok(gone?.status === "expired" && /quá cũ/.test(gone.error ?? ""), "lượt đã mất từ trước khi có bản lưu thì báo rõ (hết hạn, không phải lỗi)", JSON.stringify(gone));
 ok(db.prepare("SELECT result FROM task_runs WHERE run_id = ?").get(`rn_${uid}_gone`).result !== null, "đã ghi nhận, không phải tra lại mỗi lần");
 db.prepare("DELETE FROM task_runs WHERE owner = ?").run(uid); db.prepare("DELETE FROM notices WHERE owner = ?").run(uid);
 
