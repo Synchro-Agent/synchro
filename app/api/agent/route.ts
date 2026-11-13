@@ -2,7 +2,7 @@ import { current, getUser, limit, sameOrigin } from "../../authstore";
 import { agentInbox, ModelError, type AgentEvent } from "../../agentcore";
 import { effectivePerm, pickAgentModel, runAgentTurn, sessionMeta } from "../../agentturn";
 import { getPrefs, patchSession, type TurnNode } from "../../codestore";
-import { activeRun, latestRun, liveCount, MAX_LIVE_RUNS, runStream, startAgentRun, stopAgentRun } from "../../agentruns";
+import { activeRun, agentElsewhere, latestRun, liveCount, MAX_LIVE_RUNS, runStream, startAgentRun, stopAgentElsewhere, stopAgentRun } from "../../agentruns";
 import { sdir, wsAllowed } from "../../workspace";
 import { turnsTotal, WAIT_NOTE } from "../../runs";
 import { acquire, withSlot } from "../../turngate";
@@ -90,7 +90,10 @@ export const GET = timed(async (req: Request) => {
   const c = current(req);
   if (!c) return Response.json({ error: "Bạn cần đăng nhập." }, { status: 401 });
   const u = new URL(req.url);
-  const run = latestRun(c.user.id, u.searchParams.get("sid") ?? "");
+  const sid = u.searchParams.get("sid") ?? "";
+  const run = latestRun(c.user.id, sid);
+  // Lượt đang chạy nốt ở bản cũ (deploy xanh/lam, nginx đã chuyển sang bản này): bảo trình duyệt chờ rồi hỏi lại, không báo mất lượt.
+  if (!run && agentElsewhere(c.user.id, sid)) return Response.json({ elsewhere: true }, { status: 202, headers: { "Retry-After": "2", "Cache-Control": "no-store" } });
   if (!run) return new Response(null, { status: 204 });
   if (u.searchParams.get("json")) return Response.json({ running: !run.ended, node: run.node?.id ?? null, ended: run.ended || null });
   return runStream(run, Number(u.searchParams.get("after")) || 0, req.signal);
@@ -101,7 +104,8 @@ export const DELETE = timed(async (req: Request) => {
   const c = current(req);
   if (!c) return Response.json({ error: "Bạn cần đăng nhập." }, { status: 401 });
   try { sameOrigin(req); } catch { return Response.json({ error: "Yêu cầu không hợp lệ." }, { status: 403 }); }
-  return Response.json({ ok: true, stopped: stopAgentRun(c.user.id, new URL(req.url).searchParams.get("sid") ?? "") });
+  const sid = new URL(req.url).searchParams.get("sid") ?? "";
+  return Response.json({ ok: true, stopped: stopAgentRun(c.user.id, sid) || stopAgentElsewhere(c.user.id, sid) });
 });
 
 // Lượt do trình duyệt gửi kèm để máy chủ tự lưu khi không còn ai xem. Dữ liệu của chính người dùng, như khi đồng bộ phiên; quá lớn thì thôi, không phải lỗi.

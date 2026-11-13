@@ -1,6 +1,6 @@
 // Deploy xanh/lam (A5): vai trò primary/secondary (app/role.ts), tắt êm khi nhận SIGTERM (app/drain.ts), và các hàm shell đổi upstream nginx,
 // màu sống, node_modules (scripts/bluegreen-lib.sh) với nginx / pm2 / curl giả trên PATH. Tự chạy được, không cần máy chủ.
-import { execFileSync, spawnSync } from "node:child_process";
+import { execFileSync, spawn, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -134,8 +134,11 @@ console.log("Tắt êm khi nhận SIGTERM");
   D.resetDrainForTest();
   let exitCode = null;
   const t0 = Date.now();
-  const r = await D.shutdown({ busy: () => 1, timeoutMs: 150, pollMs: 10, log: () => {}, stop: () => new Promise(() => {}), stopMs: 50, exit: (c) => { exitCode = c; } });
+  const errs = []; const err = console.error; console.error = (...a) => errs.push(a.join(" "));
+  const r = await D.shutdown({ busy: () => 1, describe: () => "0 lượt chat, 1 lượt Code", timeoutMs: 150, pollMs: 10, log: () => {}, stop: () => new Promise(() => {}), stopMs: 50, exit: (c) => { exitCode = c; } });
+  console.error = err;
   const ms = Date.now() - t0;
+  ok(errs.some((e) => e.includes("1 lượt Code") && e.includes("lượt Code dừng hẳn")), "NODE-3: hết giờ chờ: nhật ký nói rõ lượt Code dừng hẳn (không chạy lại), tách khỏi lượt chat", errs);
   ok(r.left === 1 && exitCode === 0 && ms >= 150 && ms < 1000, "lượt quá dài: chờ đúng hạn (25 giây ở production) rồi vẫn thoát, litestream treo cũng không giữ lại", { r, ms, exitCode });
 }
 {
@@ -183,6 +186,25 @@ console.log("Dừng / nhắn thêm qua cơ sở dữ liệu (tiến trình cũ �
   ok(RN.cancelRun(c, u.id) === true && RN.pushInbox(c, u.id, "x") === false, "NODE-1: Dừng cho lượt ở tiến trình khác được nhận (không còn trả false); sau khi đã dừng thì không nhận nhắn thêm");
   RN.resumeInterrupted(); await sleep(50);
   ok(reran === 0 && JSON.parse(status(c).result).cancelled === true, "NODE-1: lượt đã bấm Dừng không bị chạy lại khi bản mới nhận vai primary", { reran, st: status(c) });
+
+  // NODE-3: lượt Code đang chạy nốt ở tiến trình cũ.
+  const { agentruns: AR } = await loadTs(["agentruns"]);
+  const other = spawn("sleep", ["10"]);
+  AR.agentElsewhere(u.id, "warm"); // tạo bảng agent_owner
+  db.prepare("INSERT OR REPLACE INTO agent_owner (uid, sid, pid, started, ended, stop) VALUES (?, ?, ?, ?, 0, 0)").run(u.id, "s-old", other.pid, Date.now());
+  ok(AR.latestRun(u.id, "s-old") === null && AR.agentElsewhere(u.id, "s-old") === true, "NODE-3: bản mới biết lượt Code đang chạy nốt ở tiến trình cũ (trả 202 cho trình duyệt chờ, không báo mất lượt)");
+  ok(AR.stopAgentElsewhere(u.id, "s-old") === true && db.prepare("SELECT stop FROM agent_owner WHERE uid = ? AND sid = ?").get(u.id, "s-old").stop === 1, "NODE-3: nút Dừng ở bản mới ghi cờ cho tiến trình cũ");
+  other.kill();
+  await sleep(50);
+  ok(AR.agentElsewhere(u.id, "s-old") === false, "NODE-3: tiến trình cũ đã thoát: không còn chờ (trình duyệt nhận 204 như trước)");
+  const run = AR.startAgentRun({ uid: u.id, sid: "s-new" }, (emit, signal) => new Promise((res) => signal.addEventListener("abort", () => res())));
+  ok(db.prepare("SELECT pid, ended FROM agent_owner WHERE uid = ? AND sid = ?").get(u.id, "s-new").pid === process.pid && AR.agentElsewhere(u.id, "s-new") === false, "NODE-3: lượt Code ghi tiến trình đang chạy nó");
+  db.prepare("UPDATE agent_owner SET stop = 1 WHERE uid = ? AND sid = ?").run(u.id, "s-new");
+  ok(AR.applyAgentStops() === 1 && run.ac.signal.aborted, "NODE-3: tiến trình đang chạy lượt Code nhận lệnh Dừng ghi từ tiến trình khác");
+  await sleep(50);
+  ok(db.prepare("SELECT ended FROM agent_owner WHERE uid = ? AND sid = ?").get(u.id, "s-new").ended > 0, "NODE-3: lượt xong thì đánh dấu đã kết thúc");
+  const wc = fs.readFileSync(path.join(process.cwd(), "app/wsclient.ts"), "utf8"), ar = fs.readFileSync(path.join(process.cwd(), "app/api/agent/route.ts"), "utf8");
+  ok(/r\.status === 202\) \{ if \(\+\+elsewhere > 45\) return false; await sleep\(2000, signal\); continue; \}/.test(wc) && /status: 202/.test(ar) && /stopAgentElsewhere\(c\.user\.id, sid\)/.test(ar), "NODE-3: trình duyệt chờ khi nhận 202; route trả 202 và chuyển Dừng sang tiến trình cũ");
 }
 
 // ---------------- Shell: nginx, màu sống, node_modules ----------------

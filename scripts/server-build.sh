@@ -4,7 +4,8 @@
 # Hai cách thay bản:
 # - Xanh/lam (production sau khi chạy scripts/bluegreen-migrate.sh; BLUEGREEN=1 bắt buộc; BLUEGREEN=0 bị từ chối nếu thiếu app pm2 một tiến trình): bản mới chạy ở màu đang nghỉ
 #   (blue 3000 / green 3002) bên cạnh bản cũ, đạt kiểm tra sức khỏe mới chuyển nginx, rồi bản cũ nhận SIGTERM, chạy nốt lượt đang dở
-#   (tối đa 25 giây) và thoát. Không có lúc nào nginx trỏ vào cổng chưa sẵn sàng: không rớt lượt, không 502. Xem docs/van-hanh.md.
+#   (tối đa 25 giây) và thoát. Không có lúc nào nginx trỏ vào cổng chưa sẵn sàng (không 502); lượt chat chưa xong sau 25 giây được bản mới
+#   chạy lại, lượt Code (chỉ ở trong bộ nhớ) chưa xong sau 25 giây thì dừng hẳn. Xem docs/van-hanh.md.
 # - Một tiến trình (staging, production chưa chuyển): tráo .next rồi pm2 restart như trước.
 # Chung cho cả hai:
 # - Dựng ở thư mục riêng không có data/ (dữ liệu lúc chạy: ~3.000 thư viện skill, hàng trăm nghìn tệp): build ngay trong thư mục app thì

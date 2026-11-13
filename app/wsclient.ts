@@ -69,9 +69,12 @@ async function readLines(r: Response, on: (e: AgentLine) => void) {
 const sleep = (ms: number, signal: AbortSignal) => new Promise<void>((ok) => { const t = setTimeout(ok, ms); signal.addEventListener("abort", () => { clearTimeout(t); ok(); }, { once: true }); });
 // Nối lại lượt đang chạy ở máy chủ, tự thử lại khi mất mạng. false: máy chủ không còn lượt này (vừa khởi động lại) hoặc nối không được quá lâu.
 async function follow(sid: string, on: (e: AgentLine) => void, signal: AbortSignal, st: { seq: number; ended: boolean }) {
+  // 202: lượt đang chạy nốt ở bản cũ trong lúc deploy (tối đa ~30 giây): chờ rồi hỏi lại, tối đa ~90 giây, không tính là lỗi.
+  let elsewhere = 0;
   for (let fails = 0; fails < 60 && !signal.aborted; ) {
     try {
       const r = await fetch(`/api/agent?sid=${encodeURIComponent(sid)}&after=${st.seq}`, { signal, cache: "no-store" });
+      if (r.status === 202) { if (++elsewhere > 45) return false; await sleep(2000, signal); continue; }
       if (r.status === 204 || r.status === 401) return false;
       if (r.ok && r.body) { fails = 0; await readLines(r, on); if (st.ended) return true; } else fails++;
     } catch { if (signal.aborted) return true; fails++; }

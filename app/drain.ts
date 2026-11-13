@@ -43,6 +43,8 @@ export async function drain(o: { busy: () => number; timeoutMs?: number; pollMs?
 
 export type ShutdownOpts = {
   busy: () => number;
+  /** Mô tả số lượt còn lại cho nhật ký (lượt chat chạy lại được, lượt Code thì không). */
+  describe?: () => string;
   /** Sau khi chờ: dừng litestream, bỏ khóa primary… Có hạn giờ riêng để tổng không quá kill_timeout của pm2. */
   stop?: () => Promise<void>;
   exit?: (code: number) => void;
@@ -53,12 +55,15 @@ export type ShutdownOpts = {
 /** Toàn bộ trình tự tắt êm; gọi khi nhận SIGTERM / SIGINT. Gọi lần hai (tín hiệu lặp) không làm gì. */
 export async function shutdown(o: ShutdownOpts): Promise<{ left: number; waitedMs: number }> {
   const log = o.log ?? ((s: string) => console.log(s));
-  log(`[deploy] nhận tín hiệu tắt: ngừng nhận lượt mới, chờ ${o.busy()} lượt đang chạy (tối đa ${Math.round((o.timeoutMs ?? DRAIN_MS) / 1000)} giây)`);
+  const what = () => (o.describe ? o.describe() : `${o.busy()} lượt`);
+  log(`[deploy] nhận tín hiệu tắt: ngừng nhận lượt mới, chờ ${what()} đang chạy (tối đa ${Math.round((o.timeoutMs ?? DRAIN_MS) / 1000)} giây)`);
   const r = await drain(o);
   // Để sự kiện "done" cuối cùng của luồng SSE kịp ra khỏi máy chủ trước khi thoát.
   if (!r.left) await sleep(o.graceMs ?? 500);
   markStopping();
-  log(r.left ? `[deploy] hết giờ chờ, còn ${r.left} lượt: bản mới sẽ chạy lại` : `[deploy] các lượt đã xong sau ${Math.round(r.waitedMs / 100) / 10} giây`);
+  // Lượt chat (runs.ts) giữ "đang chạy" để bản mới chạy lại; lượt Code (agentruns.ts) chỉ ở trong bộ nhớ nên dừng hẳn (phần đã làm vẫn ở workspace).
+  if (r.left) console.error(`[deploy] hết giờ chờ, còn ${what()}: lượt chat được bản mới chạy lại, lượt Code dừng hẳn`);
+  else log(`[deploy] các lượt đã xong sau ${Math.round(r.waitedMs / 100) / 10} giây`);
   if (o.stop) await Promise.race([o.stop().catch((e) => console.error("[deploy]", e)), sleep(o.stopMs ?? 3000)]);
   (o.exit ?? ((c: number) => process.exit(c)))(0);
   return r;
