@@ -9,10 +9,28 @@ import { GUIDES, toolDef, type SpeechTool } from "./data";
 import { Tabs } from "./parts";
 import { TOOL_ICON } from "./toolicons";
 
+// Thu gọn thì kéo nút thao tác chính (.sp-go) vào tầm nhìn: khung 660px thấp, hướng dẫn chiếm nửa trên nên nút tạo nằm dưới mép màn.
+function scrollPrimaryIntoView() {
+  if (typeof document === "undefined") return;
+  requestAnimationFrame(() => {
+    const btn = document.querySelector<HTMLElement>(".sp .sp-go");
+    if (!btn) return;
+    const r = btn.getBoundingClientRect();
+    if (r.bottom > window.innerHeight || r.top < 0) btn.scrollIntoView({ block: "center", behavior: "smooth" });
+  });
+}
+
 export function Head({ tool, title, desc, children }: { tool: Exclude<SpeechTool, "home">; title?: string; desc?: string; children?: React.ReactNode }) {
   const t = toolDef(tool), Ic = TOOL_ICON[tool];
   const [hidden, setHidden] = usePref<Record<string, boolean>>("spGuideHidden", {});
-  const open = !hidden[tool];
+  const [seen, setSeen] = usePref<Record<string, boolean>>("spGuideSeen", {});
+  // Lần đầu mở một công cụ: hiện hướng dẫn đầy đủ. Các lần sau tự thu gọn (trừ khi người dùng tự bấm mở lại). Nhớ riêng theo từng công cụ.
+  const [open, setOpen] = useState(() => (hidden[tool] !== undefined ? !hidden[tool] : !seen[tool]));
+  const show = (v: boolean) => { setOpen(v); setHidden({ ...hidden, [tool]: !v }); if (!v) scrollPrimaryIntoView(); };
+  useEffect(() => {
+    if (!seen[tool]) setSeen({ ...seen, [tool]: true });
+    if (!open) scrollPrimaryIntoView();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   return (
     <>
       <div className="sp-head">
@@ -22,10 +40,10 @@ export function Head({ tool, title, desc, children }: { tool: Exclude<SpeechTool
         </div>
         <div className="sp-head-a">
           {children}
-          {!open && <button className="btn sp-guide-btn" onClick={() => setHidden({ ...hidden, [tool]: false })}><I.Help size={14} />Xem hướng dẫn</button>}
+          {!open && <button className="btn sp-guide-btn" onClick={() => show(true)}><I.Help size={14} />Xem hướng dẫn</button>}
         </div>
       </div>
-      {open && <GuideCard tool={tool} onClose={() => setHidden({ ...hidden, [tool]: true })} />}
+      {open && <GuideCard tool={tool} onClose={() => show(false)} />}
     </>
   );
 }
