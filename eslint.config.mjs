@@ -12,16 +12,18 @@ const a11yRules = Object.fromEntries(Object.entries(jsxA11y.flatConfigs.recommen
 
 export default [
   {
+    // ESLint 9 (flat config) chỉ tự bỏ node_modules và .git; thư mục chấm khác vẫn bị lint. .claude/worktrees chứa hàng chục bản sao cả repo
+    // (worktree của các phiên làm việc), nên bỏ mọi thư mục chấm (.claude, .tools, .mkvenv, .cache…: không thư mục nào chứa mã của app).
     ignores: [
       "node_modules/**", ".next/**", ".next-*/**", "out/**", "data/**", "data-mock/**", "workspace/**", "public/**", "catalog/**",
-      ".mkvenv/**", ".cache/**", "scripts/vendor-3d/**", "extension/dist/**", "next-env.d.ts",
+      "**/.*/**","scripts/vendor-3d/**", "extension/dist/**", "next-env.d.ts",
     ],
   },
   ...compat.extends("next/core-web-vitals", "next/typescript"),
   { files: ["**/*.tsx", "**/*.jsx"], rules: a11yRules },
   {
     rules: {
-      // tsc --noEmit (strict) đã là cổng kiểu; ESLint không lặp lại.
+      // Quy ước của repo: không `any`, không @ts-ignore. tsc --noEmit (strict) chỉ cấm `any` ngầm định, không cấm `any` viết ra, nên ESLint chặn.
       "@typescript-eslint/no-explicit-any": "error",
       "@typescript-eslint/ban-ts-comment": ["error", { "ts-ignore": true, "ts-expect-error": "allow-with-description" }],
       "@typescript-eslint/no-unused-vars": ["warn", { argsIgnorePattern: "^_", varsIgnorePattern: "^_", caughtErrors: "none" }],
