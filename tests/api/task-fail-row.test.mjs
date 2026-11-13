@@ -54,6 +54,7 @@ const css = fs.readFileSync("app/globals.css", "utf8");
 ok(/\.tk-why\{color:var\(--ds-bad\)\}/.test(css) && !/\.tk-why\{[^}]*--danger/.test(css), "lý do lỗi dùng --ds-bad (đổi màu theo nền tối), không dùng biến --danger không tồn tại");
 ok(/\.tk-line\{display:flex/.test(css) && /\.tk-line>\.tk-row\{flex:1;min-width:0\}/.test(css), "dòng và nút cùng hàng, chữ dài không đẩy nút ra ngoài");
 ok(css.includes("  .tk-row .tk-chip{display:none}\n  .tk-rerun.btn.sm>span:not(.art-spin){display:none}"), "điện thoại: nút chỉ còn biểu tượng, không chiếm chỗ của tên việc");
+ok(/@media \(pointer:coarse\)\{\s*\.tk-rerun\.btn\.sm\{min-width:44px;min-height:44px\}/.test(css), "màn cảm ứng: nút Chạy lại trên dòng vùng bấm 44×44");
 
 console.log(`\n${pass}/${pass + fail} đạt`);
 process.exit(fail ? 1 : 0);

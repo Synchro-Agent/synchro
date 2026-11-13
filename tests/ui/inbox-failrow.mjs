@@ -122,7 +122,7 @@ function checkRows(tagName, m, theme, phone) {
   ok(m.r1?.btn && m.r2?.btn && !m.r1.nested && m.r1.inside && m.r2.inside, `${tagName}: nút Chạy lại cạnh dòng, không lồng, nằm trong khung dòng`, JSON.stringify(m.r1));
   ok(m.r3 && !m.r3.btn && m.r3.why === null && !m.r3.failed && m.r3.em === "Kết quả đã quá cũ, không còn lưu", `${tagName}: dòng quá cũ không đỏ, không nút`, JSON.stringify(m.r3));
   ok(!m.hscroll, `${tagName}: không cuộn ngang`);
-  if (phone) ok(m.r1.btn && m.r1.bw > 0 && m.r1.bw <= 36 && !m.r1.label && m.r1.rowW >= 250, `${tagName}: điện thoại chỉ còn biểu tượng (${m.r1.bw}px), tên việc còn ${m.r1.rowW}px`, JSON.stringify(m.r1));
+  if (phone) ok(m.r1.btn && m.r1.bw >= 44 && m.r1.bw <= 48 && !m.r1.label && m.r1.rowW >= 250, `${tagName}: điện thoại chỉ còn biểu tượng, vùng bấm 44px (${m.r1.bw}px), tên việc còn ${m.r1.rowW}px`, JSON.stringify(m.r1));
   else ok(m.r1.btn && m.r1.label, `${tagName}: máy tính có chữ "Chạy lại"`);
 }
 

@@ -3245,7 +3245,7 @@ html body .menu.pub-menu::before{background:var(--card)!important}
 .tk-line>.tk-row{flex:1;min-width:0}
 .tk-rerun.btn.sm{flex:none;margin:0 10px 0 2px}
 .tk-why{color:var(--ds-bad)}
-.tk-err{flex-wrap:wrap}.tk-err details{flex-basis:100%;font-size:12px}.tk-err summary{cursor:pointer;opacity:.8}.tk-err details code{display:block;margin-top:4px;white-space:pre-wrap;word-break:break-word;font-size:11.5px;opacity:.85}
+.tk-err{flex-wrap:wrap}.tk-err details{flex-basis:100%;font-size:12px}.tk-err summary{cursor:pointer;opacity:.8}.tk-err details code{display:block;margin-top:4px;white-space:pre-wrap;word-break:break-word;font-size:12px;opacity:.85}
 .tk-body{padding:4px 16px 14px 30px}
 .tk-run{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text-3)}
 .tk-acts{margin-top:10px}.tk-acts .btn{display:inline-flex;align-items:center;gap:6px}
@@ -3394,6 +3394,10 @@ button.tk-chip.warn:hover{background:color-mix(in srgb,var(--tk-warn) 20%,transp
   .tk-rerun.btn.sm{width:32px;padding:0;justify-content:center;margin-right:8px}
   .tk-filter.field{max-width:100%;flex:1}
   .tk-prop,.tk-job{padding:12px}
+}
+/* Màn cảm ứng: nút Chạy lại trên dòng là vùng bấm 44×44 (như nút biểu tượng của synchro-ds.css). */
+@media (pointer:coarse){
+  .tk-rerun.btn.sm{min-width:44px;min-height:44px}
 }
 
 
