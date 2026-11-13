@@ -11,7 +11,7 @@ const nextConfig: NextConfig = {
   distDir: process.env.NEXT_DIST_DIR || ".next",
   // Dữ liệu lúc chạy (skill đã cài, tệp người dùng, Python cục bộ…) không phải mã nguồn: không cho bước dò tệp của bản build quét vào.
   // Từ khi cài sẵn cả danh mục skill của Claude, data/skills có hàng trăm nghìn tệp (1GB+) và bản build hết bộ nhớ khi dò qua chúng.
-  outputFileTracingExcludes: { "*": ["data/**", "data-mock/**", "workspace/**", ".mkvenv/**", "tests/**", ".next-mock/**", ".next-mockfast/**"] },
+  outputFileTracingExcludes: { "*": ["data/**", "data-mock/**", "workspace/**", ".mkvenv/**", "tests/**", ".next-mock/**", ".next-mockfast/**", ".cache/**", ".next-blue/**", ".next-green/**"] },
   // WebContainers cần trang cô lập (SharedArrayBuffer). credentialless vẫn cho phép tải CDN (Monaco, Pyodide).
   async headers() {
     return [{
