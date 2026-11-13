@@ -3929,6 +3929,9 @@ button.bn-box:disabled{cursor:default}
   .bw-brand b,.bw-status,.bw-find kbd{display:none}
   .bw-views button{flex:1;padding:0 6px}
   .bw.show-left .bw-left,.bw.show-right .bw-right{transform:none}
+  /* Ngăn kéo đang đóng ẩn hẳn sau khi trượt ra: ở 761–860px thanh điều hướng đứng bên trái .bw nên cột trái trượt -105% vẫn đè lên thanh điều hướng
+     (z 30) và nuốt cú bấm vào các mục Code, Speech…; ẩn hẳn cũng không cho Tab rơi vào ngăn kéo khuất. */
+  .bw:not(.show-left) .bw-left,.bw:not(.show-right) .bw-right{visibility:hidden;transition:transform .2s ease,visibility 0s .2s}
   .bw .bn-title{font-size:27px}
   .bw .bn-md{font-size:15px}
 }
