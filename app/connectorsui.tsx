@@ -364,7 +364,9 @@ function ConnectorCard({ c, policy, open, busy, waiting, stale, onDismissScope, 
         {c.status === "error" && <span className="api-err-recheck">{c.checkedAt ? <span className="cn-lastok">{lastOk(c.checkedAt)}</span> : null}<button className="btn cn-recheck" onClick={onRefresh} disabled={busy}>{busy ? <span className="api-spin" /> : null}Check again</button></span>}
       </div>}
       {c.status === "ok" && c.needsScope && <div className="cn-pop in"><I.Key size={14} /><span>{c.auth === "token" ? "A tool needs more access than this token allows. Other tools keep working." : "A tool needs more access than this sign-in allows. Other tools keep working."}</span>{c.auth === "token" ? <button className="btn" disabled={busy} onClick={() => onCreds("token")}>Update token</button> : <button className="btn" disabled={busy} onClick={onReauth}>Grant more access</button>}<button className="icon-btn" aria-label="Dismiss" onClick={onDismissScope}><I.X size={13} /></button></div>}
-      {c.status === "ok" && c.lastError && <div className="cn-warnline"><I.Alert size={13} /><span>Last check failed. Tools keep working with the list from the last good check. </span><span>{c.lastError}</span></div>}
+      {c.status === "ok" && c.lastError && <div className="cn-warnline"><I.Alert size={13} /><span>Last check failed. Tools keep working with the list from the last good check. </span><span>{c.lastError}</span>
+        <span className="api-err-recheck">{c.checkedAt ? <span className="cn-lastok">{lastOk(c.checkedAt)}</span> : null}<button className="btn cn-recheck" onClick={onRefresh} disabled={busy}>{busy ? <span className="api-spin" /> : null}Check again</button></span>
+      </div>}
       {open && !bk.on && c.status === "ok" && (
         <div className="cn-body">
           <ConnSettings c={c} policy={policy} onSettings={onSettings} />

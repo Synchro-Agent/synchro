@@ -4194,6 +4194,9 @@ body{text-wrap-style:pretty}
 .cn-pop .btn{height:30px;font-size:12.5px}
 .cn-warnline{display:flex;gap:6px;flex-wrap:wrap;align-items:baseline;font-size:12px;line-height:1.45;color:var(--text-3);margin:0 14px 12px;word-break:break-word}
 .cn-warnline svg{flex:none;align-self:center}
+/* Dòng "lần kiểm tra trước hỏng" của connector vẫn chạy: nút Kiểm tra lại + mốc lần tốt gần nhất đẩy về cuối, canh giữa theo chiều dọc. */
+.cn-warnline>span:not(.api-err-recheck){flex:1 1 180px;min-width:0}
+.cn-warnline .api-err-recheck{align-self:center}
 .cn-modes{margin:4px 0 12px;flex-wrap:wrap}
 .cn-tool-n .cn-tag{margin-left:6px}
 .ag-ask-about{margin:0;font-size:12.5px;line-height:1.5;color:var(--text-2);overflow-wrap:anywhere}
