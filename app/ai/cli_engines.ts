@@ -10,7 +10,7 @@ import { classify, redact } from "./errors";
 import { forgetSession, poolStrike, prestart, takeProcess, type PoolSpec } from "./cli_pool";
 import { scrubServerPaths } from "./imagefiles";
 import { openTurnHome, turnHomeOn, type TurnHome } from "./turnhome";
-import { CodexServerUnavailable, codexServerOn, codexServerTurn } from "./codex_server";
+import { CodexServerUnavailable, codexServerOn, codexServerTurn, codexThreadLeaving } from "./codex_server";
 
 type Json = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 
@@ -452,6 +452,8 @@ export class CodexEngine implements Engine {
       try { yield* codexServerTurn(req, prompt, req.workdir ?? path.join(engineHome(), "work"), req.model, ce0, imagePaths(req.attachments ?? [])); return; }
       catch (e) { if (!(e instanceof CodexServerUnavailable)) throw e; console.warn(`[codex-server] chạy codex exec cho lượt này: ${redact(e.message).slice(0, 200)}`); }
     }
+    // Lượt này của thread chạy bằng exec: app-server nào đang nạp thread đó không được phục vụ lượt sau với bản cũ trong bộ nhớ.
+    codexThreadLeaving(req.env, req.sessionId);
     const args = ["exec", ...(req.sessionId ? ["resume", req.sessionId] : []), ...CODEX_SAFE, "-c", "features.image_generation=false"];
     // Công cụ của Synchro qua cầu nối MCP (Streamable HTTP): cấu hình trong CODEX_HOME riêng của lượt (codexTurnHome), không qua tham số.
     // Tìm web dựng sẵn khi người dùng bật. Hộp cát chỉ đọc vẫn giữ cho lệnh dựng sẵn của Codex trên máy chủ.

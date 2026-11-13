@@ -232,6 +232,8 @@ const appLog = (method, extra = {}) => { try { fs.appendFileSync(path.join(dir, 
       done: (usage) => C.out({ type: "turn.completed", usage }),
       failed: (message) => { C.out({ type: "turn.failed", error: { message } }); process.exit(1); },
     };
+    // Nhật ký chung với app-server (kiểm thử: không có lượt nào chạy trên bản thread cũ trong bộ nhớ của app-server sau khi exec đã ghi thêm vào phiên).
+    appLog("exec", { thread: tid });
     const imgs = a.flatMap((x, i) => (x.startsWith("--image=") ? [x.slice(8)] : x === "-i" || x === "--image" ? [a[i + 1]] : []));
     const effRaw = cfgArg("model_reasoning_effort");
     return chatTurn({ prompt, tid, effort: effRaw ? effRaw.replace(/"/g, "") : undefined, web: a.includes("tools.web_search=true"), nativeOn: !a.includes("features.image_generation=false"),

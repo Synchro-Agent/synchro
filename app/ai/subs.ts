@@ -21,7 +21,7 @@ import type { Attachment, RateWindow, TurnRequest, WebSource } from "./engine";
 import { friendlyError, redact, retryAfterMs } from "./errors";
 import { agyNativeImages, nativeStamp, removeFile, type ImgFile } from "./imagefiles";
 import { stallOf, waitText, watchLimits, type WatchState } from "./watchdog";
-import { prestartCodexServer } from "./codex_server";
+import { codexServerRpc, prestartCodexServer } from "./codex_server";
 import { dropLiveBridge } from "../mcpbridge";
 
 export const SUB_PREFIX = "sub-";
@@ -43,14 +43,19 @@ export const SUB: Record<Cli, { name: string; vendor: "anthropic" | "openai" | "
 
 // ---------------------------------------------------------------- codex app-server (JSON-RPC qua stdio)
 type Json = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
-/** Gọi vài phương thức của `codex app-server` (danh sách model, gói, hạn mức) rồi tắt tiến trình. */
+/** Gọi vài phương thức của `codex app-server` (danh sách model, gói, hạn mức). Có app-server sống lâu của tài khoản (codex_server.ts, G2.3) thì gửi qua đó,
+ *  không thì (tắt, hết chỗ, thiếu bộ nhớ) mở một tiến trình riêng rồi tắt như trước. */
 export async function codexRpc(scope: string, calls: { method: string; params?: Json }[], timeoutMs = 20_000): Promise<(Json | null)[]> {
   const bin = find("codex");
   const out: (Json | null)[] = calls.map(() => null);
   if (!bin) return out;
+  const env = await engineEnvReady("codex", scope);
+  // Chưa từng đăng nhập ChatGPT (đang xem trạng thái đăng nhập): chỉ dùng app-server có sẵn, không khởi động một cái giữ 10 phút cho tài khoản chưa dùng tới.
+  const shared = await codexServerRpc(env, path.join(engineHome(), "work", safeScope(scope)), calls, timeoutMs, everLoggedIn("codex", scope)).catch(() => null);
+  if (shared) return shared;
   const work = path.join(engineHome(), "work");
   await makeDir(work);
-  const p = spawnCli(bin, ["app-server"], { env: await engineEnvReady("codex", scope), cwd: work, timeoutMs });
+  const p = spawnCli(bin, ["app-server"], { env, cwd: work, timeoutMs });
   const send = (o: Json) => p.write(JSON.stringify({ jsonrpc: "2.0", ...o }) + "\n");
   send({ id: 0, method: "initialize", params: { clientInfo: { name: "synchro", version: "1.0" } } });
   send({ method: "initialized" });
