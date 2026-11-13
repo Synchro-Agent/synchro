@@ -40,12 +40,14 @@ export function LogoutConfirm({ localOnly, flush, onCancel, onOk }: { localOnly:
   const [left, setLeft] = useState(0);
   // Hộp đã bị hủy/đóng/gỡ trong lúc chờ flush: việc đẩy dữ liệu vẫn chạy nốt, nhưng KHÔNG được đăng xuất/xóa sau khi nó xong.
   const dead = useRef(false);
-  useEffect(() => () => { dead.current = true; }, []);
+  // Đặt lại khi gắn: StrictMode (dev) gắn–gỡ–gắn lại cùng ref, và Fade giữ nguyên hộp nếu mở lại trong lúc đang mờ đi.
+  useEffect(() => { dead.current = false; return () => { dead.current = true; }; }, []);
   // Trong lúc bận thì nút Hủy và nền đã khóa (Confirm busy); chỉ chặn thêm trường hợp bị đóng từ ngoài.
   const cancel = () => { if (busy) return; dead.current = true; onCancel(); };
   const go = async () => {
     if (busy) return;
     if (!clear || left > 0) { onOk(clear); return; }
+    dead.current = false;
     setBusy(true);
     const n = await flush().catch(() => 1);
     if (dead.current) return; // bị hủy/đóng giữa chừng: không xóa, không đăng xuất
