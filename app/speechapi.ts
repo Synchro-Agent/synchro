@@ -364,8 +364,9 @@ export function checkBudget(u: UserRow) {
 export const spender = new AsyncLocalStorage<string>();
 
 // Giọng nhân bản hay tự thiết kế nằm chung một tài khoản ElevenLabs của máy chủ: giọng của một người không được lộ cho người khác.
-// Giọng tạo trước khi có bảng này: suy chủ từ lịch sử (backfillVoiceOwners). Không suy được thì không ai biết người tạo là ai, nên giữ như trước khi có bảng: thành viên vẫn thấy,
-// không người tạo nào mất giọng của mình, cho tới khi quản trị viên gán chủ hoặc đánh dấu dùng chung. Nhưng không bao giờ được tự chọn làm giọng mặc định (defaultVoice).
+// Quyết định của chủ sở hữu (2026-11-13): giọng nhân bản / tự thiết kế chỉ người tạo thấy và dùng; các tài khoản khác dùng giọng có sẵn; quản trị viên vẫn quản lý mọi giọng.
+// Giọng tạo trước khi có bảng này: suy chủ từ lịch sử (backfillVoiceOwners). Không suy được (owner = null) thì ẨN với mọi thành viên — kể cả người tạo thật — cho tới khi
+// quản trị viên gán chủ hoặc đánh dấu dùng chung (danh sách giọng của quản trị viên hiện chủ "none" để gán). Không bao giờ được tự chọn làm giọng mặc định (defaultVoice).
 // user_id có thể là mã đặc biệt, không trùng tài khoản nào nên purgeRows không xóa mất:
 export const VOICE_SHARED = "*shared"; // quản trị viên đánh dấu cho mọi thành viên
 export const VOICE_PURGE = "*purge"; // chủ đã xóa tài khoản: chờ xóa trên ElevenLabs, lỗi thì lần sau thử lại
@@ -419,8 +420,8 @@ const voiceMeta = (meta: string) => {
     return [m.voice, ...(Array.isArray(m.lines) ? m.lines.map((l) => l?.voice_id) : [])].filter((x): x is string => typeof x === "string" && !!x);
   } catch { return []; }
 };
-/** Giọng có từ trước khi có bảng chủ: người duy nhất từng dùng là chủ, để họ vẫn thấy giọng của mình và người khác thì không. Chạy đúng một lần: sau đó giọng chưa có chủ vẫn mở,
- *  một người lạ dùng thử không được biến thành chủ. Quản trị viên không tính: họ thấy mọi giọng nên từng dùng không nói lên là của họ, và giọng họ làm cho mọi người phải giữ nguyên cho mọi người. */
+/** Giọng có từ trước khi có bảng chủ: người duy nhất từng dùng là chủ, để họ vẫn thấy giọng của mình và người khác thì không. Chạy đúng một lần: sau đó giọng chưa có chủ vẫn ẩn với
+ *  thành viên (chỉ quản trị viên gán được), một người lạ dùng thử không được biến thành chủ. Quản trị viên không tính: họ thấy mọi giọng nên từng dùng không nói lên là của họ, và giọng họ làm cho mọi người phải giữ nguyên cho mọi người. */
 export function backfillVoiceOwners(list: VoiceOut[]) {
   if (getSetting(VOICE_BACKFILL, "")) return 0;
   const users = new Map<string, Set<string>>();
