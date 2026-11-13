@@ -31,6 +31,9 @@ chown synchro:synchro "$APP/.cache" "$APP/data"
 chown root:root "$APP"; chmod 755 "$APP"
 chown -R root:root "$APP/scripts" "$APP/workspace"; chmod -R go-w "$APP/scripts" "$APP/workspace"
 if [ -d "$APP/workspace/data" ]; then chown -R synchro:synchro "$APP/workspace/data"; fi
+# Blueprint G3.3: 4 GB swap cho máy chủ (container có --memory-swap lớn hơn --memory chỉ tràn sang swap được khi máy có swap). Chạy lại không đổi gì
+# khi đã có; đĩa thiếu hay lỗi thì bỏ qua, không chặn deploy.
+bash "$APP/scripts/setup-swap.sh" 9>&- || echo "Không thêm được swap cho máy chủ (bỏ qua)." >&2
 [ -n "$PIP" ] && su - synchro -c "cd $APP && .mkvenv/bin/pip install -q -r requirements.txt"
 rsync -a --exclude /data --exclude /.next --exclude '/.next-*' --exclude /node_modules --exclude /.git --exclude /workspace/data --exclude /.mkvenv "$APP/" "$B/"
 LOCK=$(sha1sum "$APP/package-lock.json" | cut -d' ' -f1)

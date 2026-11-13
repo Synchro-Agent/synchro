@@ -143,6 +143,13 @@ Thư mục đăng nhập (`logins/`, `engine-tokens/`) không bao giờ bị ch�
 - Tệp tải lên: 2 GB mỗi tài khoản (`SYNCHRO_UPLOAD_QUOTA_MB`), 300 tệp mỗi giờ; đĩa dưới 2 GB trống (`SYNCHRO_MIN_FREE_MB`) thì từ chối tệp mới. Người dùng tự xóa tệp ở Cài đặt → Quyền riêng tư.
 - Tệp do code tạo: 5 GB mỗi tài khoản (`SYNCHRO_OUTPUT_QUOTA_MB`), vượt thì từ chối tệp mới và báo trong tin nhắn, không xóa tệp cũ; đĩa dưới mức trên thì không lưu tệp mới và báo cho model. Tệp quá 30 ngày được dọn mỗi ngày.
 
+## Swap của máy chủ
+
+- `scripts/setup-swap.sh` (Blueprint G3.3) thêm 4 GB swap ở `/swapfile`: `fallocate` (không được thì `dd`), `chmod 600`, `mkswap`, `swapon`, một dòng trong `/etc/fstab` để bật lại sau khi khởi động máy, `vm.swappiness = 10` (ghi ở `/etc/sysctl.d/90-synchro-swap.conf`) để chỉ dùng swap khi RAM thật gần hết.
+- `scripts/server-build.sh` gọi script này mỗi lần deploy. Chạy lại không đổi gì khi máy đã có từ 4 GB swap; đĩa không còn đủ 4 GB + 3 GB trống (`SWAP_MIN_FREE_MB`) thì bỏ qua; lỗi không chặn deploy. Chạy tay: `sudo bash scripts/setup-swap.sh`; tùy chọn `SWAP_FILE`, `SWAP_MB`, `SWAP_SWAPPINESS`.
+- Container chạy code và workspace có `--memory-swap` = `--memory` + 1 GB (`WS_SWAP_EXTRA`, hoặc đặt hẳn `WS_RUN_MEMORY_SWAP` / `WS_MEMORY_SWAP`; `-1` = không giới hạn): vượt RAM chút ít thì tràn sang swap thay vì bị kill (mã 137). Không có swap trên máy chủ thì phần thêm này không có tác dụng; dịch vụ workspace ghi cảnh báo lúc khởi động. Kiểm tra: `swapon --show` và `free -m`.
+- Swap là đệm chống hết bộ nhớ, không tính vào trần số việc chạy cùng lúc (`WS_RUN_MAX`, `WS_MAX_RUNNING`, `SYNCHRO_TURNS_GLOBAL` vẫn tính theo RAM thật).
+
 ## Giới hạn và theo dõi khác
 
 - Giọng nói (khóa ElevenLabs dùng chung): có trần credit mỗi ngày cho tài khoản đã xác minh, chưa xác minh và cả máy chủ, sửa ở Cài đặt → Quản trị (`speechBudget`), quản trị viên không tính. Hết trần thì dùng giọng của trình duyệt.

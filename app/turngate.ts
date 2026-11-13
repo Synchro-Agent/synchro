@@ -29,8 +29,8 @@ function realTotalMB(): number {
 // Mức cả máy tính theo RAM thật, không theo ước lượng 70% nữa: chừa SYNCHRO_SERVER_RESERVE_MB (mặc định 2,5 GB) cho hệ điều hành và
 // máy chủ web (khớp dòng [timing] mem rss của Next ~1 GB cộng khoảng chạy), phần còn lại chia cho ngân sách RSS mỗi CLI (SYNCHRO_CLI_BUDGET_MB,
 // mặc định 400 MB — con số ước lượng: dòng [timing] mem giờ ghi cả RSS cây tiến trình CLI (cli=…) để đo lại theo Blueprint G3.4 rồi đặt
-// SYNCHRO_TURNS_GLOBAL). Workspace và chạy code tự tính trần riêng ở workspace/agent.mjs (G3.1), không chia ngân sách với hồ này; máy chủ có thêm
-// 4 GB swap làm đệm. Kẹp [4, 64]; đo RAM hỏng (= 0) thì về đúng công thức 70% cũ để không làm kẹt cả hàng.
+// SYNCHRO_TURNS_GLOBAL). Workspace và chạy code tự tính trần riêng ở workspace/agent.mjs (G3.1), không chia ngân sách với hồ này; swap của máy chủ
+// (4 GB, scripts/setup-swap.sh) chỉ là đệm, không tính vào ngân sách. Kẹp [4, 64]; đo RAM hỏng (= 0) thì về đúng công thức 70% cũ để không làm kẹt cả hàng.
 let globalCached: number | null = null;
 function globalDefault(): number {
   if (globalCached !== null) return globalCached;

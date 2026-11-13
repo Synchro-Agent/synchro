@@ -13,6 +13,12 @@ export function readTotalMB() {
 // Cỡ bộ nhớ kiểu Docker: số (có thể thập phân) + đơn vị k / m / g (có thể thêm "b"); không đơn vị thì hiểu là MB. Cả chuỗi phải khớp ("2gx", "-1" là sai).
 const MEM_RE = /^(\d+(?:\.\d+)?)\s*([kmg])?b?$/i;
 const MEM_MULT = { k: 1 / 1024, m: 1, g: 1024 };
+/** Swap của máy (MB): SwapTotal trong /proc/meminfo; null khi không đọc được (không phải Linux). */
+export function readSwapMB() {
+  try { const m = /SwapTotal:\s+(\d+)\s+kB/.exec(fs.readFileSync("/proc/meminfo", "utf8")); if (m) return Math.round(Number(m[1]) / 1024); } catch { /* không phải Linux */ }
+  return null;
+}
+
 /** Đổi "2g", "2.5g", "1536m", "512k", "512" (MB) ra MB (làm tròn); sai định dạng thì trả d. */
 export const memMB = (s, d) => {
   const m = MEM_RE.exec(String(s ?? "").trim());

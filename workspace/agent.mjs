@@ -15,7 +15,7 @@ import { BrowserError, createBrowser, devJson } from "./browser-core.mjs";
 import { createRelay } from "./ext-relay.mjs";
 import { clipSink, collectOutputs, createRunQueue, isMediaRun, QueueFull, safeReadIn, safeWrite } from "./safefs.mjs";
 import { createWarmPool, memAvailableMB } from "./warmpool.mjs";
-import { createWaitLine, mediaSlots, memBytes, memMB, ramSlots as slotsFor, readTotalMB } from "./capacity.mjs";
+import { createWaitLine, mediaSlots, memBytes, memMB, ramSlots as slotsFor, readSwapMB, readTotalMB } from "./capacity.mjs";
 
 const env = (k, d) => process.env[k] ?? d;
 // Tổng RAM thật của máy (MB): MemTotal trên Linux (máy chủ thật), nơi khác dùng os.totalmem (máy dev). Đọc một lần lúc khởi động.
@@ -65,8 +65,9 @@ function waitMem(needMB, signal, onPos, deadlineMs = MEM_WAIT_MS) {
 }
 // Dựng video / chuyển tài liệu bằng LibreOffice / Chromium cần nhiều bộ nhớ hơn một script phân tích dữ liệu.
 const RUN_MEMORY = env("WS_RUN_MEMORY", "2g");
-// Blueprint G3.3: máy chủ có 4 GB swap; --memory-swap (RAM + swap của container) lớn hơn --memory để một lần chạy vượt RAM chút ít thì tràn sang
-// swap thay vì bị kill ngay (mã 137). Mặc định thêm 1 GB swap mỗi container; WS_RUN_MEMORY_SWAP / WS_MEMORY_SWAP đặt tay thì theo ("-1" = không giới hạn).
+// Blueprint G3.3: scripts/setup-swap.sh (server-build.sh gọi mỗi lần deploy) thêm 4 GB swap cho máy chủ; --memory-swap (RAM + swap của container)
+// lớn hơn --memory để một lần chạy vượt RAM chút ít thì tràn sang swap thay vì bị kill ngay (mã 137). Máy không có swap thì phần thêm này không có
+// tác dụng (lúc khởi động có ghi cảnh báo). Mặc định thêm 1 GB swap mỗi container; WS_RUN_MEMORY_SWAP / WS_MEMORY_SWAP đặt tay thì theo ("-1" = không giới hạn).
 // Không đọc được RAM của container (định dạng lạ): giữ swap = RAM như trước, không đặt --memory-swap nhỏ hơn --memory (Docker từ chối).
 const swapOf = (mem, extra) => (memMB(mem, 0) > 0 ? `${memMB(mem, 0) + memMB(extra, 1024)}m` : mem);
 const RUN_MEMORY_SWAP = env("WS_RUN_MEMORY_SWAP", swapOf(RUN_MEMORY, env("WS_SWAP_EXTRA", "1g")));
@@ -896,6 +897,8 @@ process.on("SIGTERM", async () => {
 setupHost().catch((e) => log("setup", e)).then(() => cleanRuns()).catch((e) => log("dọn lần chạy cũ", e)).finally(() => {
   server.listen(PORT, HOST, () => log(`workspace agent nghe tại ${HOST}:${PORT}`));
   log(`[timing] mem trần theo RAM: ${realTotalMB() || "?"} MB, chừa ${SERVER_RESERVE_MB} MB, mỗi hồ lấy (tổng − chừa) × 0,5 → MAX_RUNNING=${MAX_RUNNING} (workspace /1536 MB), RUN_MAX=${RUN_MAX} (chạy code /2048 MB), MEDIA_MAX=${MEDIA_MAX} (dựng video /3584 MB, ≤ RUN_MAX); --memory-swap workspace ${MEMORY_SWAP}, chạy code ${RUN_MEMORY_SWAP}`);
+  const swapMB = readSwapMB();
+  if (swapMB === 0) log("cảnh báo: máy chủ không có swap nên --memory-swap lớn hơn --memory không có tác dụng (container vượt --memory vẫn bị kill, mã 137); chạy scripts/setup-swap.sh bằng root");
   // Cỡ bộ nhớ đặt tay mà không đọc được (vd. "1,5g"): báo rõ một lần thay vì lặng lẽ dùng mặc định.
   for (const k of ["WS_SWAP_EXTRA", "WS_MEMORY", "WS_RUN_MEMORY", "WS_MEMORY_SWAP", "WS_RUN_MEMORY_SWAP"]) {
     const v = process.env[k];
