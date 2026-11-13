@@ -23,6 +23,11 @@ if command -v flock >/dev/null 2>&1; then
   flock -w 900 9 || { echo "Đang có lần deploy khác." >&2; exit 1; }
 fi
 say() { echo "• $*"; }
+DATA="${DATA_DIR:-$APP/data}"
+# Bản build có mã xanh/lam (app/role.ts: khóa primary; app/drain.ts: tắt êm). Bản cũ hơn chạy ở green thì thành primary thứ hai ngay khi bật
+# và không thoát khi nhận SIGTERM: không được chuyển.
+has_bg_code() { grep -rqs "SYNCHRO_PRIMARY_LOCK" "$1/server" && grep -rqs "NEXT_MANUAL_SIG_HANDLE" "$1/server"; }
+primary_color() { awk 'NR==1{print $2}' "$DATA/.primary.pid" 2>/dev/null || true; }
 
 LIVE=$(bg_live_color)
 if [ -n "$LIVE" ]; then
@@ -70,7 +75,13 @@ say "node_modules → $(bg_mods_current "$APP")"
 # ---- 3. green ở 3002 với bản build đang chạy ----
 [ -f "$APP/.next/BUILD_ID" ] || { echo "Không có $APP/.next/BUILD_ID để chép sang green." >&2; exit 1; }
 ID=$(cat "$APP/.next/BUILD_ID")
-if [ "$RESUME" = 1 ] && bg_healthy 3002 "$(cat "$APP/.next-green/BUILD_ID" 2>/dev/null)"; then
+if [ "$RESUME" = 0 ]; then
+  # Bản đang chạy phải chính là .next này (lần deploy kiểu cũ có thể đã lỗi rồi trả bản trước về) và phải có mã xanh/lam.
+  RUNNING=$(curl -sS --max-time 5 "http://127.0.0.1:$OLDPORT/api/health" 2>/dev/null | sed -n 's/.*"build":"\([^"]*\)".*/\1/p')
+  [ "$RUNNING" = "$ID" ] || { echo "Bản đang chạy ở cổng $OLDPORT (${RUNNING:-không trả lời}) không phải $APP/.next ($ID): deploy lại bằng cách cũ cho đạt rồi chạy lại." >&2; exit 1; }
+  has_bg_code "$APP/.next" || { echo "Bản build đang chạy ($ID) chưa có mã xanh/lam (app/role.ts, app/drain.ts): deploy bản này bằng cách cũ cho đạt (build ok) rồi chạy lại." >&2; exit 1; }
+fi
+if [ "$RESUME" = 1 ] && has_bg_code "$APP/.next-green" && bg_healthy 3002 "$(cat "$APP/.next-green/BUILD_ID" 2>/dev/null)"; then
   ID=$(cat "$APP/.next-green/BUILD_ID")
   say "synchro-green đang chạy tốt ở 3002 ($ID)"
 else
@@ -118,14 +129,14 @@ bg_write_live green 3002 "$APP"
 bg_pm2 save >/dev/null 2>&1 || true
 
 # ---- 5. watchdog ----
-ENVO=/etc/synchro-ops.env
+ENVO="${SYNCHRO_OPS_ENV:-/etc/synchro-ops.env}"
 if [ -f "$ENVO" ]; then
   sed -i -e 's/^PM2=.*/PM2=synchro-green/' -e 's/^PORT=.*/PORT=3002/' "$ENVO"
   say "$ENVO: PM2=synchro-green PORT=3002 (watchdog đọc tệp màu sống trước, các dòng này chỉ là dự phòng)"
 fi
 
-# green nhận vai trong vài giây sau khi bản cũ thoát.
-for _ in $(seq 1 20); do [ -f "$APP/data/.primary.pid" ] && break; sleep 1; done
-if [ -f "$APP/data/.primary.pid" ]; then say "synchro-green đã nhận vai primary ($(cat "$APP/data/.primary.pid"))"
-else echo "CẢNH BÁO: sau 20 giây green chưa nhận vai primary: xem pm2 logs synchro-green." >&2; fi
+# green nhận vai trong vài giây sau khi bản cũ thoát (khóa primary ghi màu green).
+for _ in $(seq 1 20); do [ "$(primary_color)" = green ] && break; sleep 1; done
+if [ "$(primary_color)" = green ]; then say "synchro-green đã nhận vai primary ($(cat "$DATA/.primary.pid"))"
+else echo "LỖI: sau 20 giây green chưa nhận vai primary (khóa: $(cat "$DATA/.primary.pid" 2>/dev/null || echo không có)): xem pm2 logs synchro-green." >&2; exit 1; fi
 say "Xong. Màu sống: green (cổng 3002). Bản build cũ $APP/.next giữ nguyên để trả lại bằng tay (docs/van-hanh.md); xóa khi đã yên tâm."

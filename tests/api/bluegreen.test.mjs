@@ -235,6 +235,60 @@ const calls = () => { const s = fs.existsSync(log) ? fs.readFileSync(log, "utf8"
   sh(`bg_prune_modules "${side}" "${b}" "${target}"`);
   ok(fs.existsSync(b) && fs.existsSync(target) && !fs.existsSync(path.dirname(c)), "dọn: giữ bản mới và bản trước (trả lại được), xóa phần còn lại", fs.readdirSync(path.join(side, ".synchro-mods")));
 }
+// ---------------- bluegreen-migrate.sh với pm2 / nginx / curl giả ----------------
+console.log("scripts/bluegreen-migrate.sh với công cụ giả");
+const mig = (name, o = {}) => {
+  const H = path.join(tmp, `mig-${name}`), A = path.join(H, "www", "synchro"), mb = path.join(H, "bin"), P = path.join(H, "pm2");
+  for (const d of [path.join(A, ".next", "static"), path.join(A, "node_modules"), path.join(A, "data"), path.join(A, "scripts"), path.join(H, "nginx", "snippets"), path.join(H, "state"), mb, P]) fs.mkdirSync(d, { recursive: true });
+  for (const f of ["bluegreen-lib.sh", "bluegreen-migrate.sh"]) fs.copyFileSync(path.join(process.cwd(), "scripts", f), path.join(A, "scripts", f));
+  fs.copyFileSync(path.join(process.cwd(), "ecosystem.config.cjs"), path.join(A, "ecosystem.config.cjs"));
+  fs.writeFileSync(path.join(A, ".next", "BUILD_ID"), "BID1");
+  if (o.newCode !== false) { fs.mkdirSync(path.join(A, ".next", "server", "chunks"), { recursive: true }); fs.writeFileSync(path.join(A, ".next", "server", "chunks", "r.js"), "process.env.SYNCHRO_PRIMARY_LOCK;process.env.NEXT_MANUAL_SIG_HANDLE"); }
+  fs.writeFileSync(path.join(A, "node_modules", ".synchro-lock"), "lockhash\n");
+  fs.writeFileSync(path.join(H, "site"), "server {\n    location / {\n        proxy_pass http://127.0.0.1:3000;\n    }\n    location /ws { proxy_pass http://127.0.0.1:3555; }\n}\n");
+  fs.writeFileSync(path.join(H, "ops.env"), "APP=/var/www/synchro\nPM2=synchro\nPORT=3000\nWATCHDOG_ALERT_CMD=keep\n");
+  fs.writeFileSync(path.join(P, o.oldName ?? "synchro"), "online");
+  fs.writeFileSync(path.join(H, "active"), "3000");
+  if (o.live) fs.writeFileSync(path.join(H, "state", "live-color"), `${o.live} ${A}\n`);
+  const sh = (n, body) => { fs.writeFileSync(path.join(mb, n), `#!/bin/bash\n${body}\n`); fs.chmodSync(path.join(mb, n), 0o755); };
+  sh("id", `[ "$1" = -u ] && { echo 0; exit 0; }; exec /usr/bin/id "$@"`);
+  sh("chown", "exit 0");
+  sh("sqlite3", "echo 0");
+  sh("sed", `if [ "$1" = -i ]; then shift; exec /usr/bin/sed -i '' "$@"; fi; exec /usr/bin/sed "$@"`);
+  sh("nginx", `[ "$1" = -t ] && { [ -n "\${FAKE_NGINX_FAIL:-}" ] && exit 1; exit 0; }
+up=$(/usr/bin/sed -n 's/.*127\\.0\\.0\\.1:\\([0-9]*\\);.*/\\1/p' "$BG_UPSTREAM" 2>/dev/null | head -1)
+grep -q synchro-upstream.conf "${H}/site" && echo "$up" > "${H}/active"; exit 0`);
+  sh("pm2", `echo "pm2 $*" >> "${H}/calls.log"; P="${P}"
+case "$1" in
+  startOrRestart) echo online > "$P/$4" ;;
+  stop) [ "$2" = "\${KEEP_UP:-x}" ] && exit 0; [ -f "$P/$2" ] && echo stopped > "$P/$2" || exit 1 ;;
+  delete) [ -f "$P/$2" ] && rm -f "$P/$2" || exit 1 ;;
+  restart) [ -f "$P/$2" ] && echo online > "$P/$2" || exit 1 ;;
+  save) [ -n "\${FAIL_SAVE:-}" ] && exit 1; ls "$P" | tr '\\n' ' ' > "${H}/dump" ;;
+  jlist) printf '['; for f in "$P"/*; do printf '{"name":"%s"},' "$(basename "$f")"; done; printf '{}]' ;;
+esac; exit 0`);
+  sh("curl", `url="\${@: -1}"
+case "$*" in *--resolve*|*"Host: "*) p=$(cat "${H}/active") ;; *) p=$(echo "$url" | /usr/bin/sed -n 's|.*127\\.0\\.0\\.1:\\([0-9]*\\).*|\\1|p') ;; esac
+case "$p" in 3000) n=${o.oldName ?? "synchro"}; d=.next ;; 3002) n=synchro-green; d=.next-green ;; *) exit 7 ;; esac
+[ "$(cat "${P}/$n" 2>/dev/null)" = online ] || exit 7
+case "$*" in *"-o /dev/null"*) exit 0 ;; esac; case "$url" in *api/health*) printf '{"ok":true,"build":"%s","db":true}' "$(cat "${A}/$d/BUILD_ID")" ;; *) echo html ;; esac`);
+  // green nhận vai khi màu sống = green và bản cũ đã dừng (như app/role.ts).
+  sh("sleep", `[ -n "\${NO_PROMOTE:-}" ] && exit 0
+[ "$(awk '{print $1}' "${H}/state/live-color" 2>/dev/null)" = green ] && [ "$(cat "${P}/${o.oldName ?? "synchro"}" 2>/dev/null)" != online ] && echo "4242 green" > "${A}/data/.primary.pid"; exit 0`);
+  const run = (env = {}) => spawnSync("bash", [path.join(A, "scripts", "bluegreen-migrate.sh"), A, "synchro", path.join(H, "site")], { encoding: "utf8",
+    env: { ...process.env, PATH: `${mb}:${process.env.PATH}`, BG_STATE_DIR: path.join(H, "state"), BG_UPSTREAM: path.join(H, "nginx", "snippets", "synchro-upstream.conf"), BG_TRIES: "2", BG_SLEEP: "0", BG_WEB_USER: "", SYNCHRO_OPS_ENV: path.join(H, "ops.env"), ...o.env, ...env } });
+  const r = run();
+  const st = () => ({ live: fs.existsSync(path.join(H, "state", "live-color")) ? fs.readFileSync(path.join(H, "state", "live-color"), "utf8").split(" ")[0] : "", active: fs.readFileSync(path.join(H, "active"), "utf8").trim(),
+    pm2: Object.fromEntries(fs.readdirSync(P).map((f) => [f, fs.readFileSync(path.join(P, f), "utf8").trim()])), dump: fs.existsSync(path.join(H, "dump")) ? fs.readFileSync(path.join(H, "dump"), "utf8").trim() : "", env: fs.readFileSync(path.join(H, "ops.env"), "utf8") });
+  return { code: r.status, out: (r.stdout + r.stderr).trim(), st: st(), run, stNow: st, H, A };
+};
+{
+  let m = mig("ok"); if (process.env.DEBUG_MIG) console.log(m.out);
+  ok(m.code === 0 && m.st.live === "green" && m.st.active === "3002" && m.st.pm2["synchro-green"] === "online" && !m.st.pm2.synchro && /synchro-green/.test(m.st.dump) && /PM2=synchro-green/.test(m.st.env), "chuyển đổi đủ bước: green 3002 sống, app cũ xóa, pm2 save, synchro-ops.env", { code: m.code, st: m.st, out: m.out.slice(-1500) });
+  ok(fs.readlinkSync(path.join(m.A, ".next-green", "node_modules")).endsWith("lockhash/node_modules"), "DEPLOY-4: green có liên kết thư viện riêng");
+  m = mig("oldcode", { newCode: false });
+  ok(m.code !== 0 && /chưa có mã xanh\/lam/.test(m.out) && m.st.active === "3000" && m.st.pm2.synchro === "online" && !m.st.pm2["synchro-green"] && !m.st.live, "MIGRATE-1: bản đang chạy chưa có mã xanh/lam: từ chối trước khi bật green, không đổi gì", { code: m.code, st: m.st, out: m.out.slice(-400) });
+}
 {
   // Mọi script shell đều đúng cú pháp.
   const bad = ["server-build.sh", "bluegreen-lib.sh", "bluegreen-migrate.sh", "watchdog.sh", "backup.sh"].filter((f) => {
