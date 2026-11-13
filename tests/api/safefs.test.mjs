@@ -142,6 +142,20 @@ console.log("4. Hàng đợi chạy code");
   ok((await drained) === "đang cập nhật", "dịch vụ sắp tắt: trả lỗi cho người đang chờ");
   ok((await q5.acquire("z", 30).catch((e) => e.message)) === "đang cập nhật", "dịch vụ sắp tắt: từ chối lần chạy mới");
   hold5();
+
+  // Vị trí hàng chờ (G5): dựng video một lần/máy, người sau biết mình xếp thứ mấy.
+  const q6 = createRunQueue({ max: 1, queue: 5, perUser: 5, waitMs: 5000 });
+  const h = await q6.acquire("x", 300);
+  const seen = [];
+  const p1 = q6.acquire("a", 300, undefined, (pos) => seen.push(["a", pos]));
+  const p2 = q6.acquire("b", 300, undefined, (pos) => seen.push(["b", pos]));
+  await new Promise((r) => setTimeout(r, 5));
+  ok(q6.position("a") === 1 && q6.position("b") === 2 && q6.position("z") === 0, "vị trí hàng chờ đúng theo thứ tự vào hàng", [q6.position("a"), q6.position("b")]);
+  ok(seen.some(([u, p]) => u === "a" && p === 1) && seen.some(([u, p]) => u === "b" && p === 2), "onWait báo vị trí khi xếp hàng", seen);
+  h(); const fa = await p1; // a chạy xong, b dời lên vị trí 1
+  await new Promise((r) => setTimeout(r, 5));
+  ok(seen.some(([u, p]) => u === "b" && p === 1), "vị trí cập nhật khi người trước chạy", seen);
+  fa(); const fb = await p2; fb();
 }
 
 fs.rmSync(T, { recursive: true, force: true });

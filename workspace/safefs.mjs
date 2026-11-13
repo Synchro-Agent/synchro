@@ -124,14 +124,17 @@ export function createRunQueue({ max = 3, queue = 20, perUser = 4, waitMs = 240_
   const waiting = []; // { u, short, ok, no, timer }
   const canRun = (short) => active.length < max && (short || active.filter((a) => !a.short).length < Math.max(1, max - 1));
   const count = (u) => active.filter((a) => a.u === u).length;
+  // Báo vị trí hàng chờ cho người đang đợi (1-based theo thứ tự vào hàng) để hiện "đang xếp hàng, vị trí N".
+  const notify = () => { for (let i = 0; i < waiting.length; i++) { try { waiting[i].onWait?.(i + 1, active.length, waiting.length); } catch { /* bỏ */ } } };
   const pump = () => {
     for (;;) {
       const next = waiting.map((w, i) => ({ w, i })).filter(({ w }) => canRun(w.short)).sort((a, b) => count(a.w.u) - count(b.w.u) || a.i - b.i)[0];
-      if (!next) return;
+      if (!next) break;
       waiting.splice(next.i, 1);
       clearTimeout(next.w.timer);
       next.w.ok(grant(next.w.u, next.w.short));
     }
+    notify();
   };
   const grant = (u, short) => {
     const slot = { u, short };
@@ -140,21 +143,23 @@ export function createRunQueue({ max = 3, queue = 20, perUser = 4, waitMs = 240_
     return () => { if (done) return; done = true; active.splice(active.indexOf(slot), 1); pump(); };
   };
   return {
-    /** Đợi tới lượt; trả hàm nhả chỗ. Từ chối (reject) khi hàng đầy, chờ quá lâu, người gọi bỏ đi hoặc dịch vụ đang tắt. */
-    acquire(u, sec, signal) {
+    /** Đợi tới lượt; trả hàm nhả chỗ. onWait(pos, running, queued) được gọi khi phải xếp hàng và mỗi lần vị trí đổi (1-based). Từ chối (reject) khi hàng đầy, chờ quá lâu, người gọi bỏ đi hoặc dịch vụ đang tắt. */
+    acquire(u, sec, signal, onWait) {
       const short = sec <= shortSec;
       if (closed) return Promise.reject(new QueueFull(closed));
       if (canRun(short) && !waiting.length) return Promise.resolve(grant(u, short));
       if (waiting.length >= queue || waiting.filter((w) => w.u === u).length >= perUser) return Promise.reject(new QueueFull("Máy chủ đang chạy nhiều code cùng lúc. Hãy thử lại sau ít giây."));
       return new Promise((ok, no) => {
-        const w = { u, short, ok, no, timer: null };
-        const drop = (m) => { const i = waiting.indexOf(w); if (i >= 0) { waiting.splice(i, 1); clearTimeout(w.timer); no(new QueueFull(m)); } };
+        const w = { u, short, ok, no, timer: null, onWait };
+        const drop = (m) => { const i = waiting.indexOf(w); if (i >= 0) { waiting.splice(i, 1); clearTimeout(w.timer); no(new QueueFull(m)); notify(); } };
         w.timer = setTimeout(() => drop("Máy chủ đang chạy nhiều code cùng lúc. Hãy thử lại sau ít giây."), waitMs);
         signal?.addEventListener("abort", () => drop("Đã dừng."), { once: true });
         waiting.push(w);
         pump();
       });
     },
+    /** Vị trí (1-based) của lần chạy đang chờ sớm nhất của tài khoản u trong hàng; 0 nếu không có. */
+    position(u) { const i = waiting.findIndex((w) => w.u === u); return i < 0 ? 0 : i + 1; },
     /** Từ nay từ chối mọi lần chạy mới và trả lỗi cho người đang chờ (dịch vụ sắp khởi động lại). */
     close(m) { closed = m; for (const w of waiting.splice(0)) { clearTimeout(w.timer); w.no(new QueueFull(m)); } },
     get running() { return active.length; },

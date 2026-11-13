@@ -106,7 +106,8 @@ console.log("6. Hướng dẫn cho model");
 console.log("7. Hàng đợi dựng video ở dịch vụ workspace");
 {
   const a = read("workspace/agent.mjs");
-  ok(/WS_MEDIA_MAX", 1\)/.test(a) && /isMediaRun\(\{ files, argv, stdin, readScript \}\)/.test(a) && /SYNCHRO_RUN_TIMEOUT: String\(sec\)/.test(a) && /mediaQ\.close/.test(a) && /freeMedia\(\);/.test(a), "mỗi máy một lần dựng, nhả chỗ ở mọi đường thoát, đóng khi tắt dịch vụ");
+  ok(/WS_MEDIA_MAX", 0\)/.test(a) && /mediaMaxByRam/.test(a) && /os\.totalmem\(\)/.test(a) && /WS_MEDIA_CAP/.test(a) && /isMediaRun\(\{ files, argv, stdin, readScript \}\)/.test(a) && /SYNCHRO_RUN_TIMEOUT: String\(sec\)/.test(a) && /mediaQ\.close/.test(a) && /freeMedia\(\);/.test(a), "MEDIA_MAX theo RAM (đè bằng WS_MEDIA_MAX), nhả chỗ ở mọi đường thoát, đóng khi tắt dịch vụ");
+  ok(/mediaQ\.acquire\(u, sec, signal, onWait\)/.test(a) && /video xếp hàng/.test(a), "xếp hàng dựng video báo vị trí cho người dùng");
 }
 
 console.log(`\n${pass} đạt, ${fail} lỗi`);
