@@ -79,6 +79,17 @@ function OutImage({ f, onOpen }: { f: OutFile; onOpen?: (f: OutFile) => void }) 
   );
 }
 
+// Bìa video trong chat: khung hình đầu của video dựng ra hay trống (fade-in), nhìn như thẻ hỏng. Tua tới ~2 giây để lấy một khung có hình làm bìa;
+// khi người dùng bấm phát thì tua lại 0 để xem từ đầu.
+const posterSeek = (e: { currentTarget: HTMLVideoElement }) => {
+  const v = e.currentTarget;
+  try { if (!v.dataset.sxPoster && v.currentTime < 0.05 && v.duration > 0.5) { v.dataset.sxPoster = "1"; v.currentTime = Math.min(2, Math.max(0, v.duration - 0.1)); } } catch { /* trình duyệt chặn seek */ }
+};
+const posterReset = (e: { currentTarget: HTMLVideoElement }) => {
+  const v = e.currentTarget;
+  try { if (v.dataset.sxPoster === "1") { v.dataset.sxPoster = "2"; v.currentTime = 0; } } catch { /* bỏ qua */ }
+};
+
 export function OutputFiles({ files: all, onOpen, active }: { files: OutFile[]; onOpen?: (f: OutFile) => void; active?: string }) {
   const files = all.filter((f) => !f.skipped), missed = all.filter((f) => f.skipped);
   const imgs = files.filter((f) => /^image\/(png|jpeg|gif|webp)$/.test(f.mime));
@@ -86,7 +97,7 @@ export function OutputFiles({ files: all, onOpen, active }: { files: OutFile[]; 
   return (
     <div className="outs">
       {imgs.length > 0 && <div className="outs-imgs">{imgs.map((f) => <OutImage key={f.id} f={f} onOpen={onOpen} />)}</div>}
-      {vids.length > 0 && <div className="outs-imgs outs-vids">{vids.map((f) => <video key={f.id} controls playsInline preload="metadata" src={`/api/outputs/${f.id}?inline=1`} aria-label={f.name} />)}</div>}
+      {vids.length > 0 && <div className="outs-imgs outs-vids">{vids.map((f) => <video key={f.id} controls playsInline preload="metadata" src={`/api/outputs/${f.id}?inline=1`} aria-label={f.name} onLoadedMetadata={posterSeek} onPlay={posterReset} />)}</div>}
       {missed.map((f) => {
         const k = fileKind(f.name);
         return (
