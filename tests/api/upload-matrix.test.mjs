@@ -72,13 +72,23 @@ ok(E.decodeText(Buffer.from(marker, "utf8")).includes(marker), "UTF-8");
 ok(E.decodeText(Buffer.concat([B(0xff, 0xfe), Buffer.from(marker, "utf16le")])).includes(marker), "UTF-16LE có BOM (BOM bị gỡ)");
 ok(E.decodeText(Buffer.concat([B(0xfe, 0xff), Buffer.from(marker, "utf16le").swap16()])).includes(marker), "UTF-16BE có BOM");
 ok(E.decodeText(Buffer.from(marker, "utf16le")).includes(marker), "UTF-16LE không BOM");
-// Windows-1258 (tiếng Việt): các byte 0xF0→"đ", 0xE3→"ă" KHÁC hẳn cp1252 (0xF0→"ð", 0xE3→"ã").
-// decodeText phải thử 1258 trước 1252 nên ra chữ tiếng Việt, không ra chữ Bắc Âu.
-const buf1258 = Buffer.from([...Buffer.from("DH1258_D"), 0xF0, ...Buffer.from("ng "), 0xE3, 0xE2, 0xEA, 0xF4]);
-const got1258 = E.decodeText(buf1258);
-ok(got1258.includes("DH1258"), "Windows-1258: giữ được dấu hiệu ASCII", got1258);
-ok(got1258.includes("đ") && got1258.includes("ă"), "Windows-1258: 0xF0→đ, 0xE3→ă (đọc kiểu tiếng Việt)", got1258);
-ok(!got1258.includes("ð"), "KHÔNG đọc nhầm 0xF0 thành ð kiểu cp1252", got1258);
+// cp1252 và Windows-1258 đọc khác nhau ở cùng byte (0xE3: ã / ă, 0xF0: ð / đ, 0xEC: ì / dấu sắc…) và không byte nào "sai" ở cả hai:
+// chỉ đọc theo 1258 khi văn bản thật sự là tiếng Việt, còn lại cp1252 (Bồ Đào Nha / Ý / Iceland không bị đổi thành Săo, coś, međ).
+// Byte dựng tay: chuỗi ASCII giữ nguyên, số là byte cao của bảng mã.
+const bytes = (...p) => Buffer.concat(p.map((x) => (typeof x === "string" ? Buffer.from(x, "latin1") : B(x))));
+const dec = (b, want, n) => { const got = E.decodeText(b); ok(got === want, n, got); };
+dec(bytes("DH1252 S", 0xe3, "o Paulo n", 0xe3, "o ", 0xe9, " uma cidade pequena; as li", 0xe7, 0xf5, "es est", 0xe3, "o nas can", 0xe7, 0xf5, "es."),
+  "DH1252 São Paulo não é uma cidade pequena; as lições estão nas canções.", "cp1252 tiếng Bồ Đào Nha: São / não / lições (không thành Săo, liçơes)");
+dec(bytes("Cos", 0xec, " ", 0xe8, " la vita, perci", 0xf2, " non pu", 0xf2, " essere pi", 0xf9, " facile. Luned", 0xec, " andr", 0xf2, " l", 0xe0, "."),
+  "Così è la vita, perciò non può essere più facile. Lunedì andrò là.", "cp1252 tiếng Ý: così / perciò / lunedì (không thành coś)");
+dec(bytes("Pu", 0xf2, " darsi, ci", 0xf2, " ", 0xe8, " vero."), "Può darsi, ciò è vero.", "cp1252 tiếng Ý ngắn: può / ciò (trông như âm tiết Việt nhưng không có ă đ ơ ư)");
+dec(bytes(0xde, "a", 0xf0, " er gott a", 0xf0, " vera h", 0xe9, "r, ", 0xfe, 0xfa, " ert me", 0xf0, "."),
+  "Það er gott að vera hér, þú ert með.", "cp1252 tiếng Iceland: Það / að / með (không thành ađ, međ)");
+// Tiếng Việt mã Windows-1258 thật: nguyên âm có sẵn (à ê ô â ă ơ ư đ) + dấu thanh tổ hợp (0xEC sắc, 0xF2 nặng, 0xDE ngã, 0xD2 hỏi, 0xCC huyền).
+dec(bytes("DH1258 Ti", 0xea, 0xec, "ng Vi", 0xea, 0xf2, "t l", 0xe0, " ng", 0xf4, "n ng", 0xfd, 0xde, " cu", 0xd2, "a ng", 0xfd, 0xf5, 0xcc, "i Vi", 0xea, 0xf2, "t Nam. ",
+  0xd0, 0xe2, "y l", 0xe0, " m", 0xf4, 0xf2, "t ", 0xf0, "oa", 0xf2, "n v", 0xe3, "n ba", 0xd2, "n m", 0xe2, 0xde, "u."),
+  "DH1258 Tiếng Việt là ngôn ngữ của người Việt Nam. Đây là một đoạn văn bản mẫu.", "Windows-1258 tiếng Việt: đọc đúng dấu, ghép thành chữ dựng sẵn (NFC)");
+dec(bytes("Chi", 0xf2, " bi", 0xf2, " ", 0xf4, 0xec, "m, me", 0xf2, " ", 0xf0, "i ch", 0xf5, 0xf2, "."), "Chị bị ốm, mẹ đi chợ.", "Windows-1258 tiếng Việt ngắn (jschardet đoán Hy Lạp) vẫn ra tiếng Việt");
 
 console.log("5. Trích thật qua tiến trình đọc tệp (docx/xlsx/csv/pptx/zip), mỗi tệp một DẤU HIỆU");
 // csv

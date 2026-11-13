@@ -30,11 +30,65 @@ export function decodeText(buf: Buffer): string {
   const utf8 = new TextDecoder("utf-8", { fatal: true });
   try { return utf8.decode(buf).replace(/^\uFEFF/, ""); } catch { /* không phải UTF-8 */ }
   const det = (jschardet.detect(buf.toString("binary")).encoding || "").toLowerCase();
-  // Thị trường Việt Nam: khi nhận diện không chắc (ra ascii / windows-1252), thử Windows-1258 (tiếng Việt) TRƯỚC cp1252.
-  // fatal:true nên byte không hợp lệ ở 1258 sẽ ném, tự lùi về 1252 — không làm hỏng văn bản Tây Âu thuần.
-  const tries = det && det !== "ascii" && det !== "windows-1252" ? [det, "windows-1258", "windows-1252"] : ["windows-1258", "windows-1252"];
-  for (const enc of tries) { try { return new TextDecoder(enc, { fatal: true }).decode(buf); } catch { /* thử encoding kế */ } }
+  // Mã một byte KHÔNG bao giờ ném lỗi (mọi byte đều có ký tự), nên thứ tự thử là tất cả: thử sai là ra chữ hỏng (São → Săo).
+  // - Mã nhiều byte (Nhật/Trung/Hàn…): tin jschardet, sai thì TextDecoder fatal ném và lùi tiếp.
+  // - Windows-1258 (tiếng Việt) chỉ khi có bằng chứng rõ là tiếng Việt (jschardet hay đoán tiếng Việt ngắn thành Hy Lạp).
+  // - Mã chữ không phải Latinh (Nga, Hy Lạp, Do Thái, Thái): chỉ tin khi phần lớn chữ là byte cao — jschardet hay gán nhầm tiếng Ý thành Windows-1253.
+  // - Còn lại là cp1252 (Tây Âu), kể cả khi jschardet đoán "cp1258".
+  const tries: string[] = [];
+  if (det && MULTI_BYTE.test(det)) tries.push(det);
+  else if (looksVietnamese1258(buf)) tries.push("windows-1258");
+  else if (det && NON_LATIN_1BYTE.test(det) && highByteShare(buf) >= 0.3) tries.push(det);
+  else if (det && !WESTERN.test(det) && !NON_LATIN_1BYTE.test(det) && !det.includes("1258")) tries.push(det); // vd. Windows-1250 (Séc, Ba Lan)
+  tries.push("windows-1252");
+  for (const enc of tries) {
+    // cp1258 ghi dấu thanh tách rời (ê + dấu sắc): ghép lại thành "ế" để tìm kiếm / so khớp chữ như văn bản UTF-8.
+    try { const s = new TextDecoder(enc, { fatal: true }).decode(buf); return enc === "windows-1258" ? s.normalize("NFC") : s; } catch { /* thử encoding kế */ }
+  }
   return new TextDecoder("windows-1252").decode(buf);
+}
+
+const MULTI_BYTE = /^(utf|shift_jis|euc-|gb|big5|iso-2022|hz)/;
+const NON_LATIN_1BYTE = /^(windows-125[1356]|koi8|iso-8859-[5678]|maccyrillic|x-mac-cyrillic|ibm8(55|66)|tis-620)/;
+const WESTERN = /^(ascii|windows-1252|iso-8859-1)$/;
+
+// Tỉ lệ byte ≥0x80 trong số byte "chữ" (chữ ASCII hoặc byte cao): văn bản chữ Kirin/Hy Lạp gần như toàn byte cao, văn bản chữ Latinh chỉ lác đác.
+function highByteShare(buf: Buffer): number {
+  let hi = 0, letters = 0;
+  for (const c of buf.subarray(0, 65_536)) {
+    if (c >= 0x80) { hi++; letters++; } else if ((c | 0x20) >= 0x61 && (c | 0x20) <= 0x7a) letters++;
+  }
+  return letters ? hi / letters : 0;
+}
+
+// Byte mà cp1258 đọc khác cp1252 theo kiểu riêng của tiếng Việt: Ă ă Đ đ Ơ ơ Ư ư ₫ và 5 dấu thanh dạng tổ hợp (huyền, sắc, ngã, hỏi, nặng).
+const VN_1258_BYTES = new Set([0xc3, 0xe3, 0xd0, 0xf0, 0xd5, 0xf5, 0xdd, 0xfd, 0xfe, 0xcc, 0xec, 0xde, 0xd2, 0xf2]);
+// Một âm tiết tiếng Việt (đã bỏ dấu thanh): phụ âm đầu + vần. Nguyên âm ă / â / iê / uô / ươ… luôn cần phụ âm cuối ("ăn", không có "ăo").
+const VN_SYLLABLE = new RegExp(
+  "^(?:ngh|ng|nh|ch|gh|gi|kh|ph|th|tr|qu|[bcdđghklmnprstvx])?(?:" +
+  "(?:uyê|oă|oa|oe|uâ|uê|uy|iê|yê|uô|ươ|oo|a|ă|â|e|ê|i|o|ô|ơ|u|ư|y)(?:ch|ng|nh|c|m|n|p|t)" +
+  "|uya|uyu|uây|uôi|ươi|ươu|iêu|yêu|oai|oay|oeo|ai|ao|au|ay|âu|ây|eo|êu|ia|iu|oa|oe|oi|ôi|ơi|ua|uê|ui|uơ|uy|ưa|ưi|ưu|a|e|ê|i|o|ô|ơ|u|ư|y)$",
+);
+const isVnSyllable = (w: string) => VN_SYLLABLE.test(w.normalize("NFD").replace(/[̣̀́̃̉]/g, "").normalize("NFC"));
+
+/** Bằng chứng tích cực rằng tệp là tiếng Việt mã Windows-1258: có byte đặc trưng, và khi đọc theo 1258 thì các từ mang chữ/dấu riêng của tiếng Việt
+ * là âm tiết tiếng Việt hợp lệ (không phải "Săo", "coś", "međ" như văn bản Bồ Đào Nha / Ý / Iceland mã cp1252), đồng thời đa số từ là âm tiết tiếng Việt.
+ * Cần ít nhất một từ hợp lệ có ă / đ / ơ / ư; chỉ có dấu thanh tổ hợp thì cần ≥3 từ (tiếng Ý "può", "ciò" cũng ra âm tiết trông như tiếng Việt). */
+export function looksVietnamese1258(buf: Buffer): boolean {
+  const head = buf.subarray(0, 65_536);
+  if (!head.some((c) => VN_1258_BYTES.has(c))) return false;
+  const words = new TextDecoder("windows-1258").decode(head).normalize("NFC").toLowerCase().match(/[\p{L}\p{M}]+/gu) ?? [];
+  let valid = 0, letters = 0, marks = 0, contra = 0;
+  for (const w of words) {
+    const ok = isVnSyllable(w);
+    if (ok) valid++;
+    if (!/[^\u0000-ÿ]/.test(w)) continue; // từ không có ký tự nào ngoài Latin-1: cp1252 và 1258 đọc như nhau, không là bằng chứng
+    if (!ok) contra++;
+    else if (/[ăđơư]/.test(w)) letters++;
+    else marks++;
+  }
+  const evidence = letters + marks;
+  return (letters > 0 || marks >= 3) && evidence >= 2 * contra && valid / words.length >= 0.5;
 }
 
 // ---- 1. Ảnh: gửi thẳng, KHÔNG OCR; tự xoay theo EXIF (ảnh dọc chụp điện thoại lên đúng chiều), resize nếu cạnh dài > 1568px, HEIC/GIF → PNG ----
