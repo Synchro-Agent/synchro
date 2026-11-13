@@ -79,14 +79,22 @@ async function versionOf(bin: string): Promise<{ ok: boolean; line: string; num:
   const line = stripAnsi(r.stdout).split("\n").map((l) => l.trim()).find(Boolean) ?? "";
   return { ok: r.code === 0 && !!line, line: line || stripAnsi(r.stderr).trim().slice(0, 200), num: versionNum(line) };
 }
-const liveVersions = new Map<Cli, { at: number; v: string | null }>();
-/** Bản đang chạy (đọc bằng --version, nhớ 5 phút). */
-export async function liveVersion(cli: Cli, fresh = false): Promise<string | null> {
-  const hit = liveVersions.get(cli);
-  if (!fresh && hit && Date.now() - hit.at < 5 * 60_000) return hit.v;
+// Khóa theo chính lối vào trên đĩa (đích liên kết + inode + thời điểm sửa của tệp thật): đổi bản (cập nhật, trả về) ở bất kỳ đâu (route khác,
+// tiến trình xanh/lam khác) là khóa đổi, nên không bao giờ hiện bản cũ còn nhớ. Bộ nhớ trong một tiến trình chỉ để khỏi chạy --version mỗi lần xem.
+const liveVersions = new Map<Cli, { at: number; key: string; v: string | null }>();
+function entryKey(cli: Cli): string {
   const cur = currentTarget(cli);
-  const v = cur ? (await versionOf(entry(cli))).line || null : null;
-  liveVersions.set(cli, { at: Date.now(), v });
+  if (!cur) return "";
+  try { const st = fs.statSync(entry(cli)); return `${cur.kind}:${cur.target}:${st.ino}:${st.mtimeMs}:${st.size}`; } catch { return `${cur.kind}:${cur.target}`; }
+}
+/** Bản đang chạy (đọc bằng --version, nhớ 5 phút khi lối vào không đổi). */
+export async function liveVersion(cli: Cli, fresh = false): Promise<string | null> {
+  const key = entryKey(cli), hit = liveVersions.get(cli);
+  if (!fresh && hit && hit.key === key && Date.now() - hit.at < 5 * 60_000) return hit.v;
+  const v = key ? (await versionOf(entry(cli))).line || null : null;
+  // Lối vào đổi trong lúc đang đọc: đọc lại, không nhớ kết quả của bản cũ.
+  if (entryKey(cli) !== key) return liveVersion(cli, true);
+  liveVersions.set(cli, { at: Date.now(), key, v });
   return v;
 }
 
