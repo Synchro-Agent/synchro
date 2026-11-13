@@ -51,6 +51,8 @@ Production chạy hai màu trong cùng thư mục `/var/www/synchro` (chung `dat
 
 - `ecosystem.config.cjs`: chạy thẳng `node node_modules/next/dist/bin/next start -p <cổng>` (không qua npm), `kill_timeout: 30000`, `treekill: false` (pm2 không giết CLI đang trả lời), `NEXT_MANUAL_SIG_HANDLE=1`, `SYNCHRO_ROLE=secondary`, `SYNCHRO_COLOR`.
 - `/var/lib/synchro-ops/live-color` (root ghi, ai cũng đọc): `<màu> <cổng> <thư mục app>`. `/etc/nginx/snippets/synchro-upstream.conf` (root): một dòng `proxy_pass http://127.0.0.1:<cổng>;`, site nginx `include` tệp này.
+- Khóa primary `data/.primary.pid`: `<pid> <màu> <boot_id> <starttime>`. Khóa của lần khởi động máy trước, của pid đã bị tiến trình khác dùng lại, hay của tiến trình user khác (EPERM) đều coi là trống. Một tiến trình (staging, `npm start`) cũng giữ khóa này: lỡ bật thêm một tiến trình trên cùng thư mục dữ liệu thì nó chỉ phục vụ, không chạy việc nền. Chờ nhận vai quá 60 giây thì báo lỗi ở Sức khỏe hệ thống.
+- Tệp upstream của nginx là nguồn sự thật: deploy chết giữa lúc đổi nginx và lúc ghi `live-color` thì lần deploy sau (và watchdog) theo cổng nginx đang trỏ, sửa lại `live-color`, không bao giờ dừng màu nginx đang trỏ.
 - Vai trò (`app/role.ts`): tiến trình bật lên là secondary, chỉ phục vụ yêu cầu. Nó nhận vai **primary** (litestream, bộ hẹn giờ tác vụ, bộ não, connector, theo dõi PR, cập nhật CLI, dò model, GitHub, dọn dẹp, cài plugin, chạy lại lượt dở dang) khi `live-color` ghi màu của nó **và** tiến trình giữ khóa `data/.primary.pid` đã thoát. Kiểm tra mỗi 3 giây (`SYNCHRO_ROLE_POLL_MS`). Không đặt `SYNCHRO_ROLE` (staging, máy dev) thì là primary ngay như trước.
 - Tắt êm (`app/drain.ts`): SIGTERM → `/api/llm`, `/api/agent`, chạy tác vụ ngay trả 503 kèm `Retry-After: 5` (trình duyệt tự gửi lại, tới bản mới); dừng bộ hẹn giờ; chờ tối đa 25 giây (`SYNCHRO_DRAIN_MS`) cho lượt chat và lượt Code đang chạy; dừng litestream; bỏ khóa primary; thoát.
   - **Lượt chat** còn dở sau 25 giây giữ trạng thái "đang chạy" và được bản mới chạy lại khi nhận vai primary (trừ lượt đã có tác động ra ngoài, như trước). Trình duyệt theo dõi lượt qua bản mới (SSE) vẫn nhận bước và kết quả của lượt bản cũ đang chạy nốt (đọc cơ sở dữ liệu chung mỗi 1,5 giây). Nút Dừng và tin nhắn thêm gửi tới bản mới được ghi vào bảng `runs` (`cancel_req`, `steer_req`): bản cũ đọc mỗi 1,5 giây; lượt đã bấm Dừng không bị chạy lại.
@@ -70,13 +72,22 @@ Lần sau đổi ngược về màu kia. Watchdog (`scripts/watchdog.sh`) đọc
 
 ### Chuyển sang xanh/lam (một lần)
 
-Deploy bản có tệp `ecosystem.config.cjs` bằng cách cũ trước (lần deploy đó vẫn là một tiến trình), rồi chạy bằng root:
+Deploy bản có xanh/lam bằng cách cũ trước và chờ tới `build ok` (lần deploy đó vẫn là một tiến trình; tiến trình đó đã giữ khóa `data/.primary.pid` với màu `single`), rồi chạy bằng root:
 
 ```bash
 bash /var/www/synchro/scripts/bluegreen-migrate.sh /var/www/synchro synchro /etc/nginx/sites-enabled/synchro
 ```
 
-Script chạy lại an toàn: tạo `snippets/synchro-upstream.conf` trỏ 3000, thay `proxy_pass http://127.0.0.1:3000;` trong site bằng `include snippets/synchro-upstream.conf;` (sao lưu site ở `/etc/nginx/synchro.before-bluegreen.<giờ>`, `nginx -t` lỗi thì trả lại), chuyển node_modules vào kho theo băm, chép `.next` đang chạy sang `.next-green`, bật `synchro-green` ở 3002, kiểm tra sức khỏe, chuyển nginx sang 3002, chờ lượt của bản cũ (tối đa 25 giây), dừng và xóa app pm2 `synchro`, ghi `live-color` = green, `pm2 save`, cập nhật `PM2`/`PORT` trong `/etc/synchro-ops.env`. `.next` cũ được giữ để trả lại; xóa khi đã yên tâm.
+Script chạy lại an toàn, theo thứ tự:
+
+1. Tạo `snippets/synchro-upstream.conf` trỏ 3000, thay `proxy_pass http://127.0.0.1:3000;` trong site bằng `include snippets/synchro-upstream.conf;` (sao lưu site ở `/etc/nginx/synchro.before-bluegreen.<giờ>`, `nginx -t` lỗi thì trả lại).
+2. Chuyển node_modules vào kho theo băm.
+3. Từ chối nếu bản đang trả lời ở cổng 3000 không phải `.next` hiện có, hoặc `.next` chưa có mã xanh/lam (deploy kiểu cũ trước đó lỗi và đã trả bản trước về). Chép `.next` sang `.next-green` (kèm `.next-green/node_modules`), bật `synchro-green` ở 3002, kiểm tra sức khỏe.
+4. Chuyển nginx sang 3002, chờ lượt của bản cũ (tối đa 25 giây), `pm2 stop synchro`; lệnh này lỗi hoặc cổng 3000 vẫn trả lời thì dừng, chưa ghi `live-color` (green vẫn là secondary, chạy lại script sau khi dừng bản cũ bằng tay).
+5. Ghi `live-color` = green, chờ green nhận vai primary (khóa ghi `green`) tối đa 20 giây; không nhận thì bật lại `synchro`, nginx về 3000, bỏ `live-color`, dừng green, báo lỗi.
+6. Xóa app pm2 `synchro`, `pm2 save` (lỗi thì báo, không giấu), cập nhật `PM2`/`PORT` trong `/etc/synchro-ops.env`.
+
+Chạy lại khi đã có `live-color` (lần trước bị cắt ngang): làm nốt bước 6 theo màu sống. `.next` cũ được giữ để trả lại; xóa khi đã yên tâm.
 
 Kiểm tra sau khi chuyển:
 
