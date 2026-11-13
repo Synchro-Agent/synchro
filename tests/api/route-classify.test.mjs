@@ -503,6 +503,12 @@ console.log("16. Tra cứu web → model hạng vừa trở lên có công cụ;
   // (b) không kéo câu đời thường có "hôm nay" thành tra cứu.
   ok(R.taskOf(q("Hôm nay 28/10 mình rảnh từ 9:30, gợi ý lịch học")) !== "lookup", "“hôm nay mình rảnh” không phải tra cứu");
   ok(R.taskOf(q("giá vàng")) !== "lookup", "“giá vàng” trần (không mốc thời gian) vẫn là hỏi đáp thường");
+  // (c) "tỷ giá / exchange rate" trần hoặc hỏi khái niệm → KHÔNG tra cứu; đi kèm mốc thời gian / con số → tra cứu.
+  ok(R.taskOf(q("tỷ giá là gì")) !== "lookup", "“tỷ giá là gì” (hỏi khái niệm) không phải tra cứu");
+  ok(R.taskOf(q("tỉ giá hối đoái là gì")) !== "lookup", "“tỉ giá hối đoái là gì” không phải tra cứu");
+  ok(R.taskOf(q("what is the exchange rate")) !== "lookup", "“what is the exchange rate” (không mốc) không phải tra cứu");
+  ok(R.taskOf(q("tỷ giá USD hôm nay")) === "lookup", "“tỷ giá USD hôm nay” → tra cứu");
+  ok(R.taskOf(q("exchange rate today")) === "lookup", "“exchange rate today” → tra cứu");
   // (e) động từ thao tác + tên ứng dụng ở GẦN nhau mới là thao tác; ở xa nhau trong câu phân tích thì không kéo thành act.
   ok(R.taskOf(q("Tạo Google Docs báo cáo doanh thu")) === "act", "“Tạo Google Docs báo cáo” (tân ngữ sát động từ) là thao tác");
   ok(R.taskOf(q("So sánh Notion và Trello rồi đánh giá nên tạo kế hoạch ở đâu")) === "analyze", "câu phân tích có nhắc connector + động từ ở xa: vẫn là phân tích, không phải thao tác");

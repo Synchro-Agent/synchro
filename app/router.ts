@@ -76,7 +76,10 @@ const ACT_ON_APP_RE = new RegExp(`${B}(?:${ACTION_VERB})${E}${NEAR}${B}(?:${CONN
 // Câu cần dữ liệu mới trên web → "tra cứu" (lookup): tỷ giá, giá tài sản / món hàng, thời tiết, tin tức, phiên bản mới nhất, hay lời nhờ tìm thẳng trên web.
 // Giữ chặt để không kéo "hôm nay mình rảnh" hay "đánh giá phim" vào đây: "giá" phải đi với tài sản / "hôm nay" / "bao nhiêu" (và loại "đánh giá", "giá trị", "báo giá").
 const LOOKUP_WEB = new RegExp([
-  "tỷ giá", "tỉ giá", "exchange rate", "interest rate",
+  // "tỷ giá / tỉ giá / exchange rate / lãi suất" chỉ là tra cứu khi có mốc thời gian hay con số ở gần (trước hoặc sau). Trần "tỷ giá" hay câu hỏi
+  // khái niệm "tỷ giá là gì" / "what is the exchange rate" (không mốc) thì vẫn là hỏi đáp thường, không kéo xuống model có công cụ web.
+  "(?:tỷ giá|tỉ giá|exchange rate|interest rate|lãi suất)(?:(?![.?!\\n]).){0,30}?(?:hôm nay|bây giờ|hiện tại|hiện nay|bao nhiêu|mấy|mới nhất|today|now|right now|latest|current)",
+  "(?:hôm nay|bây giờ|hiện tại|hiện nay|bao nhiêu|mấy|mới nhất|today|now|right now|latest|current)(?:(?![.?!\\n]).){0,30}?(?:tỷ giá|tỉ giá|exchange rate|interest rate|lãi suất)",
   // "giá <tài sản>" chỉ tính là tra cứu khi đi kèm mốc thời gian / "bao nhiêu" (bỏ trống thì "giá vàng" trần vẫn là hỏi đáp thường).
   "giá (?:vàng|bạc|đô|đô la|usd|eur|euro|yên|yen|bitcoin|btc|eth|ethereum|xăng|dầu|ga|gas|cổ phiếu|chứng khoán|nhà|đất|iphone|điện thoại)(?:(?![.?!\\n]).){0,24}?(?:hôm nay|bây giờ|hiện tại|hiện nay|bao nhiêu|mới nhất|mấy)",
   "(?:giá|tỷ giá|tỉ giá|lãi suất)(?:(?![.?!\\n]).){0,30}?(?:hôm nay|bây giờ|hiện tại|hiện nay|bao nhiêu)",
