@@ -100,6 +100,22 @@ export function outputRoom(uid: string): number {
   return Math.max(0, OUTPUT_QUOTA_MB() * 1048576 - used);
 }
 
+/** Ghi đè nội dung một tệp đã lưu (giữ nguyên id và đường dẫn tải về), cập nhật kích thước, mime và cỡ ảnh.
+ *  Dùng cho ảnh dựng ở chế độ nền (G4): thay byte thật vào đúng ảnh giữ chỗ model đã đặt vào slide / artifact. Giữ nguyên tên để tham chiếu inputs/ không đổi. */
+export function replaceOutput(uid: string, id: string, data: Buffer): OutFile | null {
+  if (!/^[\w-]{8,40}$/.test(id)) return null;
+  const d = init();
+  const row = d.prepare("SELECT name FROM outputs WHERE id = ? AND user_id = ?").get(id, uid) as { name: string } | undefined;
+  if (!row) return null;
+  const p = path.join(ROOT, uid, id);
+  try { fs.writeFileSync(p, data, { mode: 0o600 }); } catch { return null; }
+  const mime = mimeOf(row.name);
+  d.prepare("UPDATE outputs SET mime = ?, size = ? WHERE id = ? AND user_id = ?").run(mime, data.length, id, uid);
+  const o: OutFile = { id, name: row.name, size: data.length, mime };
+  const dim = mime.startsWith("image/") ? imageSize(data) : null;
+  return dim && dim.w > 0 && dim.h > 0 ? { ...o, ...dim } : o;
+}
+
 /** Xóa một tệp vừa tạo mà người dùng chưa nhận (bản mới của cùng đường dẫn trong cùng lượt thay thế). */
 export function removeOutput(uid: string, id: string) {
   if (!/^[\w-]{8,40}$/.test(id)) return;
