@@ -3,6 +3,7 @@
 import { spawn } from "node:child_process";
 import { mkdirSync, rmSync, readdirSync, statSync, writeFileSync, readFileSync } from "node:fs";
 import { createRequire } from "node:module";
+import { idbRows, idbWipe } from "../lib/idbchats.mjs";
 
 const B = "http://localhost:3200";
 const SCR = (await import("node:os")).tmpdir() + "/synchro-ui/";
@@ -121,19 +122,26 @@ try {
   while (Date.now() - t0 < 15000) { items = await onServer(); if (items.some((x) => x.id === String(id) && !x.deleted)) break; await sleep(500); }
   ok(items.some((x) => x.id === String(id) && !x.deleted && x.data.includes("OLD123")), "đoạn chat cũ đã lên máy chủ", JSON.stringify(items).slice(0, 300));
   ok(!items.some((x) => x.id === String(inc)), "đoạn chat ẩn danh không lên máy chủ");
-  ok(await ev(`(localStorage.getItem("u:${uid}:chats") ?? "").includes("OLD123")`), "bản trong trình duyệt vẫn còn sau khi máy chủ đã nhận");
+  ok(await ev(`(localStorage.getItem("u:${uid}:chats") ?? "").includes("OLD123")`), "khóa cũ trong trình duyệt vẫn còn sau khi máy chủ đã nhận (giữ 7 ngày)");
+  // Khóa localStorage cũ đã được nhập vào kho IndexedDB của thiết bị (app/chatidb.ts); đoạn ẩn danh thì không.
+  const rows1 = await ev(idbRows(uid));
+  ok(rows1.some((r) => r.id === id && (r.body ?? "").includes("OLD123")) && !rows1.some((r) => r.id === inc), "kho IndexedDB có thân đoạn chat cũ, không có đoạn ẩn danh", rows1.map((r) => r.id));
 
   console.log("2. Thiết bị mới (trình duyệt trống) thấy đủ");
+  // Thiết bị mới: rời app (để app đóng kho), xóa kho IndexedDB và các khóa u:<uid>:chat* rồi mở lại.
+  await P("Page.navigate", { url: B + "/api/auth/me" }); await until(`location.pathname === "/api/auth/me" && document.readyState === "complete"`, 10000, "trang JSON");
+  await ev(idbWipe(uid));
   await ev(`for (const k of Object.keys(localStorage)) if (k.startsWith("u:${uid}:chat")) localStorage.removeItem(k); 1`);
-  await reload();
+  await P("Page.navigate", { url: B + "/" }); await until(`!!document.querySelector("textarea")`, 30000, "app loaded");
   await until(`[...document.querySelectorAll(".chat-item")].some((e) => e.textContent.includes("Báo cáo cũ"))`, 15000, "chat về từ máy chủ");
   await click(byText(".chat-item", "Báo cáo cũ"), "mở chat");
   await until(`document.querySelector(".thread")?.textContent.includes("OLD123")`, 5000, "nội dung về từ máy chủ");
   ok(true, "đoạn chat và nội dung về đủ từ máy chủ");
 
   console.log("3. Trình duyệt hết chỗ và máy chủ chưa nhận: báo ngay, nhận xong thì thôi báo");
-  await ev(`window.__set = Storage.prototype.setItem; window.__fetch = window.fetch;
-    Storage.prototype.setItem = function (k, v) { if (String(k).endsWith(":chats")) throw new DOMException("full", "QuotaExceededError"); return window.__set.call(this, k, v); };
+  // Kho đoạn chat (IndexedDB) báo hết chỗ khi ghi thân.
+  await ev(`window.__put = IDBObjectStore.prototype.put; window.__fetch = window.fetch;
+    IDBObjectStore.prototype.put = function (v, k) { if (this.name === "body") throw new DOMException("full", "QuotaExceededError"); return window.__put.call(this, v, k); };
     window.fetch = (u, o) => (String(u).startsWith("/api/chats") ? Promise.reject(new TypeError("offline")) : window.__fetch(u, o)); 1`);
   await click(`[...document.querySelectorAll(".chat-item")].find((e) => e.textContent.includes("Báo cáo cũ")).parentElement.querySelector(".dots")`, "menu");
   await click(byText(".menu-item", "Ghim"), "ghim");
@@ -144,7 +152,7 @@ try {
   await until(`!document.querySelector(".sync-warn")`, 70000, "hết cảnh báo khi máy chủ đã nhận");
   ok(true, "máy chủ nhận xong thì thôi cảnh báo");
   ok((await onServer()).some((x) => x.id === String(id) && JSON.parse(x.data).pinned === true), "thay đổi đã lên máy chủ");
-  await ev(`Storage.prototype.setItem = window.__set; 1`);
+  await ev(`IDBObjectStore.prototype.put = window.__put; 1`);
 
   console.log("4. Chia sẻ thật");
   await click(byText("button.btn", "Chia sẻ"), "nút chia sẻ");

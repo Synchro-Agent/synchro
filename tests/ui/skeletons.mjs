@@ -8,6 +8,7 @@
 // - Cài đặt đang tải: tiêu đề mục và hàng đầu tiên trùng chỗ tiêu đề mục và hàng thật.
 // Chạy tay: BASE=http://localhost:3500 SHOTS=/tmp/sk node tests/ui/skeletons.mjs   (BEFORE=1: chỉ đo CLS, không đòi khung chờ — đo bản cũ)
 import { login, openChrome, sleep } from "../lib/cdp.mjs";
+import { idbWipe } from "../lib/idbchats.mjs";
 
 const B = process.env.BASE ?? "http://localhost:3200";
 const BEFORE = !!process.env.BEFORE;
@@ -88,7 +89,12 @@ const local = [
 ];
 // Mở hẳn trang mới (đổi mỗi phần #… thì trình duyệt không tải lại).
 const go = async (url) => { await P("Page.navigate", { url: "about:blank" }); await sleep(150); await P("Page.navigate", { url }); };
+// Gieo như thiết bị có đúng các đoạn này: rời app (app đóng kho đoạn chat), xóa kho IndexedDB (app/chatidb.ts) và các khóa u:<uid>:*, rồi gieo
+// khóa cũ u:<uid>:chats (lần mở sau nhập vào kho). Không xóa kho thì đoạn đã về đủ từ máy chủ ở bước trước không còn là bản rút gọn.
 const seed = async (chats) => {
+  await P("Page.navigate", { url: B + "/api/auth/me" });
+  await until(`location.pathname === "/api/auth/me" && document.readyState === "complete"`, 10000);
+  await ev(idbWipe(uid));
   await ev(`(() => { for (const k of Object.keys(localStorage)) if (k.startsWith("u:${uid}:")) localStorage.removeItem(k); localStorage.setItem("signedIn", "1"); localStorage.setItem("theme", "light"); ${chats ? `localStorage.setItem("u:${uid}:chats", ${JSON.stringify(JSON.stringify(chats))});` : ""} })()`);
 };
 

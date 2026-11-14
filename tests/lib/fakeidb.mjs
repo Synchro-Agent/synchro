@@ -1,6 +1,7 @@
 // IndexedDB giả trong bộ nhớ cho kiểm thử không cần trình duyệt (dự án không có fake-indexeddb). Chỉ có phần app/chatidb.ts dùng:
 // open (onupgradeneeded / onsuccess / onerror), createObjectStore(keyPath), transaction → objectStore → put / get / getAll / delete / clear,
-// oncomplete / onabort, deleteDatabase (báo onversionchange cho kết nối đang mở). Giao dịch là nguyên khối: hủy thì không ghi gì.
+// oncomplete / onabort, deleteDatabase (báo onversionchange cho kết nối đang mở, newVersion null). Giao dịch là nguyên khối: hủy thì không ghi gì.
+// upgrade(name): tab khác mở bản cơ sở dữ liệu mới hơn (báo onversionchange với newVersion là số cho kết nối đang mở).
 // Điều khiển lỗi để thử các nhánh dự phòng:
 //   quota     : tổng dung lượng (độ dài JSON) vượt mức thì giao dịch ghi bị hủy với QuotaExceededError lúc ghi xong.
 //   throwOpen : open ném ngay (Firefox riêng tư cũ). failOpen: open báo lỗi. hangOpen: open không bao giờ xong (Safari 14.1).
@@ -92,11 +93,12 @@ export function fakeIDB(o = {}) {
       ctl.deleted.push(name);
       const r = { result: undefined, error: null, onsuccess: null, onerror: null, onblocked: null };
       const rec = dbs.get(name);
-      if (rec) for (const c of [...rec.conns]) c.onversionchange?.({});
+      if (rec) for (const c of [...rec.conns]) c.onversionchange?.({ oldVersion: rec.version, newVersion: null });
       dbs.delete(name);
       later(() => r.onsuccess?.({}));
       return r;
     },
+    upgrade(name) { const rec = dbs.get(name); if (rec) for (const c of [...rec.conns]) c.onversionchange?.({ oldVersion: rec.version, newVersion: rec.version + 1 }); },
     // Đọc thẳng dữ liệu đã ghi xong (không qua giao dịch), để kiểm thử so.
     dump(name, store) { const rec = dbs.get(name); return rec?.stores.get(store) ? [...rec.stores.get(store).data.values()].map((v) => structuredClone(v)) : []; },
     has: (name) => dbs.has(name),

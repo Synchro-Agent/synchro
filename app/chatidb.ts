@@ -7,14 +7,12 @@
 // hoặc không mở lại được, AbortError / lỗi giao dịch khác): bên gọi phải bắt, và không được coi lỗi đọc là kho rỗng.
 // Kho bị đóng từ bên ngoài (tab khác xóa / nâng cấp cơ sở dữ liệu, mất kết nối mà mở lại không được): closed = true và gọi onclosed một lần;
 // bên gọi chuyển sang LsStore hoặc tải lại trang (mọi lần ghi sau đó trả "error").
-// Lõi thuần ở chatidbcore.ts; kiểm thử: tests/api/chatidb.test.mjs. Chưa nối vào trang (home.tsx / chatsync.ts làm ở vòng sau).
-// Điều kiện cho vòng nối vào trang:
-// - Lưu qua ChatSaver; mọi chỗ xóa đoạn chat (forget / wipeAll của chatsync) gọi thêm saver.forget(ids); wipe("chats" | "all") gọi saver.wipe().
-// - Bắt lỗi của loadIndex / bodies / loadAll lúc mở trang (lỗi đọc KHÔNG phải kho rỗng); đặt store.onclosed để chuyển sang LsStore hoặc tải lại.
-// - LsStore.ignored (khóa cũ đã chuyển, bắt đầu rỗng): chatsync tải lại từ máy chủ như máy mới, không đánh dấu gì là cần đẩy.
-// - Chạy next build và next dev --turbopack với chatidb.ts được import từ trang, xác nhận tệp luồng phụ chatmigrate.worker.ts tải được
-//   (cùng cách new Worker(new URL(...)) như highlight.worker.ts / tokens.worker.ts đang chạy).
-import { MARK_KEY, dbName, diffSave, dropLegacyDue, idxOf, itemHash, legacyMerge, legacyRows, legacySigAsync, ownSig, ownSigOf, parseMark, snapshot, sortIdx, stubOfRow, toWrite, trustLegacy, type IdxRow, type ImportRow } from "./chatidbcore";
+// Lõi thuần ở chatidbcore.ts; kiểm thử: tests/api/chatidb.test.mjs (node), tests/ui/chatidb.mjs (trình duyệt thật).
+// Trang dùng kho qua app/chatload.ts: mở kho + nhập khóa cũ + đọc chỉ mục lúc mở trang, đọc thân dần ở nền, lưu qua ChatSaver;
+// xóa đoạn chat (forget) gọi saver.forget(ids); Cài đặt → xóa chat gọi saver.wipe(); đăng xuất đóng kho trước khi xóa cơ sở dữ liệu.
+// Lỗi đọc lúc mở trang (không phải kho rỗng) và kho bị đóng từ bên ngoài (onclosed) thì chatload chuyển sang LsStore;
+// LsStore.ignored thì chatsync tải lại từ máy chủ như máy mới, không đánh dấu gì là cần đẩy.
+import { MARK_KEY, dbName, diffSave, dropLegacyDue, idxOf, itemHash, legacyMerge, legacyRows, legacySigAsync, ownSig, ownSigOf, parseMark, patchBody, snapshot, sortIdx, stubOfRow, toWrite, trustLegacy, type IdxRow, type ImportRow } from "./chatidbcore";
 import { lastTime, saveFit, stubOf } from "./chatsynccore";
 import type { Chat } from "./store";
 import { scopedFor } from "./userscope";
@@ -29,8 +27,11 @@ export type WriteResult = { status: "ok" | "quota" | "error"; stubbed: number[] 
  * rows: dấu từng dòng của khóa cũ ở lần nhập đó (ImportRow.mark theo id), để lần sau chỉ nhập lại dòng đã đổi.
  */
 export type StoreMeta = { sig?: string; migratedAt?: number; rows?: Record<string, string> };
-/** Vì sao kho bị đóng từ bên ngoài: versionchange = tab khác xóa / nâng cấp cơ sở dữ liệu; lost = mất kết nối và mở lại không được. */
-export type ClosedWhy = "versionchange" | "lost";
+/**
+ * Vì sao kho bị đóng từ bên ngoài: deleted = tab khác xóa cơ sở dữ liệu (đăng xuất kèm xóa dữ liệu trên thiết bị); versionchange = tab khác
+ * nâng cấp cơ sở dữ liệu (bản app mới hơn); lost = mất kết nối và mở lại không được.
+ */
+export type ClosedWhy = "deleted" | "versionchange" | "lost";
 
 export interface ChatStore {
   readonly kind: "idb" | "ls";
@@ -240,7 +241,8 @@ export class IdbStore implements ChatStore {
   private watch(db: IDBDatabase) {
     // Tab khác xóa / nâng cấp cơ sở dữ liệu (đăng xuất kèm xóa thiết bị, bản app mới hơn): nhường ngay, không mở lại (mở lại sẽ dựng lại kho
     // vừa bị xóa) và báo onclosed để trang chuyển sang LsStore hoặc tải lại.
-    db.onversionchange = () => { try { db.close(); } catch {} this.db = null; this.lose("versionchange"); };
+    // Xóa cơ sở dữ liệu thì newVersion là null (nâng cấp thì là số).
+    db.onversionchange = (e) => { try { db.close(); } catch {} this.db = null; this.lose(typeof e?.newVersion === "number" ? "versionchange" : "deleted"); };
     db.onclose = () => { if (this.db === db) this.db = null; };
   }
   private async conn(): Promise<IDBDatabase> {
@@ -329,6 +331,11 @@ export class IdbStore implements ChatStore {
           if (r) { n = { ...r, upd: Math.max(r.upd, cur?.upd ?? 0) }; if (cur?.srv) n.srv = true; }
           // Bỏ thân: chỉ mục (mới nếu có, không thì dòng đang có) thành bản rút gọn của máy chủ.
           if (drops.has(id)) { n = n ?? (cur ? { ...cur } : null); if (!n) return null; n.srv = true; delete n.run; }
+          // Chỉ ghi chỉ mục mà thân còn ở máy này (bản rút gọn local): áp tên, ghim… lên thân trong cùng giao dịch (patchBody).
+          else if (n && !n.srv) {
+            const row = n, gb = b.get(id) as IDBRequest<{ id: number; s: string } | undefined>;
+            gb.onsuccess = () => { const s = gb.result?.s; const p = typeof s === "string" ? patchBody(s, row) : null; if (p !== null) b.put({ id, s: p }); };
+          }
           return n;
         });
       });
@@ -503,6 +510,8 @@ export class ChatSaver {
   constructor(readonly store: ChatStore) {}
   /** Danh sách vừa đọc từ kho (đã có trong kho, không cần ghi lại). */
   base(list: readonly Chat[]) { this.prev = snapshot(list); }
+  /** Các đoạn chat này đúng như bản trong kho (thân vừa đọc từ kho, chưa sửa ở trang): lần lưu tới không ghi lại. */
+  known(list: readonly Chat[]) { for (const c of list) if (!c.inc) this.prev.set(c.id, c); }
   /** Người dùng xóa các đoạn này: lần lưu tới xóa khỏi kho kể cả khi danh sách rỗng. */
   forget(ids: readonly number[]) { for (const id of ids) this.gone.add(id); }
   async save(list: readonly Chat[], canStub?: (id: number) => boolean): Promise<WriteResult> {
