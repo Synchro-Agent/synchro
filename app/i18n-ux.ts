@@ -189,6 +189,10 @@ export const UX_VI2EN: Record<string, string> = {
   "Nội dung gần như trống ({n} ký tự hướng dẫn), model không có gì để làm theo.": "Almost empty ({n} characters of instructions), so the model has nothing to follow.",
   "Trùng hệt nội dung với “{name}” ({place}), chỉ thêm một bản lặp.": "Same content as “{name}” ({place}), so it only adds a duplicate.",
   "Model chưa trả lời cho skill này. Quét lại để thử lần nữa.": "The model didn't return a verdict for this skill. Scan again to retry.",
+  // Một thuật ngữ cho mỗi khái niệm (Blueprint B6 mục 4): mục skill trên thanh bên / trang dự án ghi "Skill" (tiếng Anh "Skills" như trước);
+  // kho là "Kho kỹ năng" (Skill Hub). "Hội thoại" của Speech là Dialogue; phần lịch sử đoạn chat trong ngữ cảnh model là "Lịch sử hội thoại".
+  "Skill ‹tên mục›": "Skills",
+  "Lịch sử hội thoại": "Conversation",
 };
 export const UX_RULES_EN: [RegExp, (m: RegExpMatchArray) => string][] = [
   [/^Khóa Replicate không hợp lệ hoặc không có quyền \((\d+)\)\.$/, (m) => `The Replicate key is invalid or lacks permission (${m[1]}).`],
@@ -240,8 +244,8 @@ export const UX_EN2VI: Record<string, string> = {
   "Images will be made with each person's own plan again, as before the key was added.": "Ảnh sẽ lại được tạo bằng gói của từng người, như trước khi thêm khóa.",
   "Waiting for a key. Until one is added, images are made with each person's own plan (Antigravity, ChatGPT, Grok), exactly as now.": "Đang chờ khóa. Tới khi có khóa, ảnh vẫn tạo bằng gói của từng người (Antigravity, ChatGPT, Grok), y như hiện nay.",
   "Account": "Tài khoản", ". FLUX 1.1 Pro Ultra makes new images; IC-Light puts a product photo into a studio scene. Accounts past their daily image limit go back to their own plan.": ". FLUX 1.1 Pro Ultra tạo ảnh mới; IC-Light đưa ảnh sản phẩm vào bối cảnh studio. Tài khoản quá hạn mức ảnh trong ngày quay về gói của mình.",
-  "Images": "Ảnh", "API key only. Voice (ElevenLabs) and paid image generation (Replicate) work with an API key only.": "Chỉ dùng khóa API. Giọng nói (ElevenLabs) và tạo ảnh tính phí (Replicate) chỉ chạy bằng khóa API.",
-  "API key only. Voice (ElevenLabs), Connectors (Composio) and paid image generation (Replicate) work with an API key only.": "Chỉ dùng khóa API. Giọng nói (ElevenLabs), Connectors (Composio) và tạo ảnh tính phí (Replicate) chỉ chạy bằng khóa API.",
+  "Images": "Ảnh", "API key only. Speech (ElevenLabs) and paid image generation (Replicate) work with an API key only.": "Chỉ dùng khóa API. Speech (ElevenLabs) và tạo ảnh tính phí (Replicate) chỉ chạy bằng khóa API.",
+  "API key only. Speech (ElevenLabs), Connectors (Composio) and paid image generation (Replicate) work with an API key only.": "Chỉ dùng khóa API. Speech (ElevenLabs), Connectors (Composio) và tạo ảnh tính phí (Replicate) chỉ chạy bằng khóa API.",
   "Choose": "Chọn", "Default": "Mặc định", "Server runtime": "Máy chủ chạy code",
   "Code runs on the Synchro server.": "Code chạy trên máy chủ Synchro.",
   "Attached files and conversation history count toward the limit of the model you pick. Large files are trimmed to the most relevant parts.": "Tệp đính kèm và lịch sử hội thoại tính vào giới hạn của model bạn chọn. Tệp lớn được rút gọn còn phần liên quan nhất.",

@@ -113,7 +113,7 @@ await until(`document.querySelectorAll(".art-card:not(.busy)").length > 0 && !do
 await sleep(3500);
 await shot("chat");
 await click(byText(".nav-item", "Artifacts"), "artifacts"); await sleep(2500); await shot("artifacts");
-await click(byText(".nav-item", "Kỹ năng"), "hub"); await sleep(2000); await shot("hub");
+await click(byText(".nav-item", "Skill"), "hub"); await sleep(2000); await shot("hub");
 await click(`[...document.querySelectorAll("aside button")].find((e) => e.textContent.includes("Download Tester"))`, "user"); await sleep(500);
 await shot("usermenu");
 await click(byText(".menu-item", "Cài đặt"), "settings"); await sleep(1500); await shot("settings");

@@ -124,7 +124,7 @@ const LAYOUT = (root) => `(() => {
 const onTop = (sel) => `(() => { const m = document.querySelector(${JSON.stringify(sel)}); if (!m) return false; const b = m.getBoundingClientRect(); const pts = [[b.left + 20, b.top + 20], [b.right - 20, b.top + 20], [b.left + b.width / 2, b.top + b.height / 2], [b.left + 20, b.bottom - 20], [b.right - 20, b.bottom - 20]]; return pts.every(([x, y]) => m.contains(document.elementFromPoint(x, y))); })()`;
 const openHub = async () => {
   if (await ev(`!!document.querySelector(".sidebar.closed, .shell-side.closed")`)) { await click(`document.querySelector("[aria-label='Mở thanh bên']")`, "burger").catch(() => {}); await sleep(500); }
-  await click(byText(".nav-item", "Kỹ năng"), "hub"); await until(`!!document.querySelector(".pl-top .pl-scan")`, 20000, "nút quét");
+  await click(byText(".nav-item", "Skill"), "hub"); await until(`!!document.querySelector(".pl-top .pl-scan")`, 20000, "nút quét");
   await sleep(600);
 };
 const tabCount = (label) => ev(`(() => { const t = ${byText(".scan-tabs button", label)}; return t ? Number(t.querySelector("i").textContent) : -1; })()`);

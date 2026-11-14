@@ -451,11 +451,11 @@ for (const theme of THEMES) for (const size of SIZES) {
   await step0("speech", async () => { await nav("Speech"); await shot("speech"); });
   // Kho kỹ năng: hộp chi tiết thư viện, hộp thoại Quét skill rác.
   await step0("kho-ky-nang-hop-thoai", async () => {
-    await nav("Kỹ năng"); await until(`!!document.querySelector(".pl-row2")`, 15000, "hub rows");
+    await nav("Skill"); await until(`!!document.querySelector(".pl-row2")`, 15000, "hub rows");
     await click(`document.querySelector(".hub-yours .pl-row2")`, "library detail"); await sleep(700); await shot("chi-tiet-thu-vien"); await esc(); await sleep(400);
     await click(`document.querySelector(".pl-scan")`, "scan"); await until(`!!document.querySelector(".scan-modal .modal-foot")`, 15000, "scan modal"); await sleep(500); await shot("quet-skill-rac"); await esc(); await sleep(400);
   });
-  await step0("kho-ky-nang", async () => { await nav("Kỹ năng"); await shot("kho-ky-nang"); await click(byText(".hub-seg button, button", "Khám phá"), "discover").catch(() => {}); await until(`!!document.querySelector(".pl-dcard")`, 10000, "discover cards").catch(() => {}); await sleep(500); await shot("kham-pha"); await click(byText("button, .cz-tab, [role=tab]", "Connectors"), "connectors").catch(() => {}); await ready(); await shot("connectors"); });
+  await step0("kho-ky-nang", async () => { await nav("Skill"); await shot("kho-ky-nang"); await click(byText(".hub-seg button, button", "Khám phá"), "discover").catch(() => {}); await until(`!!document.querySelector(".pl-dcard")`, 10000, "discover cards").catch(() => {}); await sleep(500); await shot("kham-pha"); await click(byText("button, .cz-tab, [role=tab]", "Connectors"), "connectors").catch(() => {}); await ready(); await shot("connectors"); });
   await step0("menu-nguoi-dung", async () => { await side(); await click(`document.querySelector(".rail .user")`, "user"); await sleep(500); await shot("menu-nguoi-dung"); });
   await step0("cai-dat", async () => {
     await click(byText(".menu-item", "Cài đặt"), "settings"); await ready();

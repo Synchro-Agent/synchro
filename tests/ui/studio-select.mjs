@@ -73,7 +73,7 @@ const shot = async (name) => { const { data } = await P("Page.captureScreenshot"
 const setView = (w, h, mobile) => P("Emulation.setDeviceMetricsOverride", { width: w, height: h, deviceScaleFactor: 1, mobile });
 const openHub = async () => {
   if (await ev(`!!document.querySelector(".sidebar.closed, .shell-side.closed")`)) { await click(`document.querySelector("[aria-label='Mở thanh bên']")`, "burger").catch(() => {}); await sleep(300); }
-  await click(byText(".nav-item", "Kỹ năng"), "hub"); await until(`!!document.querySelector(".pl-top")`, 20000, "Kho kỹ năng");
+  await click(byText(".nav-item", "Skill"), "hub"); await until(`!!document.querySelector(".pl-top")`, 20000, "Kho kỹ năng");
   await sleep(500);
 };
 const SEL = `document.querySelector(".pl-modal select.pl-sel")`;

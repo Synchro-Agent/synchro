@@ -1892,7 +1892,7 @@ export default function Home({ boot }: { boot?: BootData | null }) {
     { id: "new", label: "Đoạn chat mới", icon: <I.Plus size={16} />, keys: "⇧⌘O", hay: "new chat tao moi", run: goNew },
     { id: "inbox", label: "Hộp thư", icon: <I.Inbox size={16} />, hay: "inbox tac vu nen lich hen ket qua", run: () => setView("inbox") },
     { id: "hub", label: "Kho kỹ năng", icon: <I.Plugins size={16} />, hay: "skill hub plugin thu vien", run: goCustom },
-    { id: "connectors", label: "Kết nối", icon: <I.Connectors size={16} />, hay: "connectors mcp", run: () => { setCzTab("connectors"); setView("customize"); } },
+    { id: "connectors", label: "Connectors", icon: <I.Connectors size={16} />, hay: "connectors mcp", run: () => { setCzTab("connectors"); setView("customize"); } },
     ...(caps.art !== false ? [{ id: "artifacts", label: "Artifacts", icon: <I.Shapes size={16} />, hay: "ung dung apps", run: () => setView("artifacts") }] : []),
     { id: "projects", label: "Dự án", icon: <I.Folder size={16} />, hay: "projects", run: () => { setCurProj(null); setView("projects"); } },
     { id: "settings", label: "Cài đặt", icon: <I.Cog size={16} />, keys: "⇧⌘,", hay: "settings", run: () => { setSettingsTab("General"); setModal("settings"); } },
@@ -2091,7 +2091,7 @@ export default function Home({ boot }: { boot?: BootData | null }) {
             setCodeCur(live ? live.id : null);
           } })}
           {me?.perms.features.speech !== false && (speechReady || me?.isAdmin) && nav({ v: "speech", icon: <I.Speech />, label: "Speech", onPick: () => setSpTool("home") })}
-          {me?.perms.features.skills !== false && nav({ v: "customize", icon: <I.Plugins />, label: "Kỹ năng", tip: "Kho kỹ năng" })}
+          {me?.perms.features.skills !== false && nav({ v: "customize", icon: <I.Plugins />, label: trc("Skill", "tên mục"), tip: "Kho kỹ năng" })}
         </div>
         <div className="rail-foot">
           <button className="icon-btn rail-btn" onClick={() => setModal("search")} aria-label="Tìm kiếm" data-tip="⌘K"><I.Search size={17} /></button>

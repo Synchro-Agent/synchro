@@ -1075,7 +1075,7 @@ export function CodeView({ say, sid, title, model, modelPicker, sideOpen, onSide
   // Bảng ngữ cảnh kiểu Claude: thanh nhiều màu + chú thích từng phần (dùng chung cho vòng tròn và session rail).
   const pctOf = (x: number) => `${((x / MAX_TOK) * 100).toFixed(1)}%`;
   const segs = [
-    { k: "Hội thoại", v: histTok, c: "#4a7fe0" },
+    { k: "Lịch sử hội thoại", v: histTok, c: "#4a7fe0" },
     { k: "Tệp đính kèm", v: ctxTok, c: "#e0784a" },
     { k: "Lời nhắc hệ thống", v: sysTok, c: "#4fae7d" },
     { k: "Đang soạn", v: draftTok, c: "#e3a83b" },

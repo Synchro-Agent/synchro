@@ -7,7 +7,7 @@ import * as I from "./icons";
 import { Fade, Menu } from "./ui";
 import { useApp, type Chat, type Project } from "./store";
 import { extractText, PROJECT_CTX_LIMIT } from "./llm";
-import { tr } from "./i18n";
+import { tr, trc } from "./i18n";
 import { UploadModal } from "./modals";
 import { useFileMenu, saveBlob } from "./filemenu";
 import { ghConnect } from "./wsclient";
@@ -32,8 +32,8 @@ function ProjectSkills({ pid, say }: { pid: number; say: Say }) {
   };
   return (
     <section>
-      <div className="pj-sh"><h3>Kỹ năng</h3></div>
-      {list === null ? <p className="muted">Đang tải…</p> : list.length === 0 ? <p className="muted">Chưa có skill nào. Tải lên trong Tùy chỉnh → Kỹ năng.</p> : (
+      <div className="pj-sh"><h3>{trc("Skill", "tên mục")}</h3></div>
+      {list === null ? <p className="muted">Đang tải…</p> : list.length === 0 ? <p className="muted">Chưa có skill nào. Tải lên trong Kho kỹ năng.</p> : (
         <ul className="pj-skills">
           {list.map((s) => {
             const on = s.projects.includes(String(pid));
@@ -342,7 +342,7 @@ export function ProjectPage({ proj, chats, composer, patch, onBack, onOpenChat, 
     if (ok) { patch(proj.id, { ctx: acc }); say(`Đã thêm ${ok} tệp`); }
   };
   const PRESETS = ["aurora", "ember", "dusk", "glacier", "verdant"] as const;
-  const tabs: [PTab, string, number | null][] = [["chats", "Đoạn chat", mine.length], ["ins", "Hướng dẫn", null], ["mem", "Bộ nhớ", mem.length], ...(canSkills ? [["skills", "Kỹ năng", null] as [PTab, string, null]] : []), ["ctx", "Ngữ cảnh", ctx.length]];
+  const tabs: [PTab, string, number | null][] = [["chats", "Đoạn chat", mine.length], ["ins", "Hướng dẫn", null], ["mem", "Bộ nhớ", mem.length], ...(canSkills ? [["skills", trc("Skill", "tên mục"), null] as [PTab, string, null]] : []), ["ctx", "Ngữ cảnh", ctx.length]];
   return (
     <div className="page ds-page sy-projpage"><div className="page-in pj-in">
       <nav className="pj-crumb"><button onClick={onBack}>Dự án</button><I.ChevronR size={13} /><b>{proj.name}</b></nav>
