@@ -48,6 +48,7 @@ import { Confirm, LangModal, LogoutConfirm, ProjectModal, Settings, ShortcutsMod
 import { ShareModal } from "./shareui";
 import { useBrainSync } from "./brainsync";
 import { countRender } from "./perfmark";
+import { useChatState, useChatStore } from "./chatstore.client";
 
 // Trình duyệt của Synchro (khung cạnh chat, trang Trình duyệt): vé xem màn hình trực tiếp.
 const browserTicket = () => fetch("/api/browser", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ op: "ticket" }) })
@@ -1044,9 +1045,14 @@ export default function Home({ boot }: { boot?: BootData | null }) {
   const narrow = () => typeof window !== "undefined" && window.matchMedia(NARROW).matches;
   useEffect(() => { if (narrow()) setOpen(false); }, []);
   useEffect(() => startWarmPing(), []);
-  const [chats, setChats] = useState<Chat[]>([]);
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [cur, setCur] = useState<number | null>(null);
+  // Đoạn chat, dự án, đoạn chat đang mở, lượt đang chạy, tin chờ gửi nằm ở kho app/chatstore.client.ts (blueprint B2).
+  // Các hàm đặt giá trị dùng như setState của React và không bao giờ đổi, nên lấy thẳng từ kho. Home đọc qua useChatState (cùng nhịp vẽ với useState).
+  const chats = useChatState((s) => s.chats);
+  const projects = useChatState((s) => s.projects);
+  const cur = useChatState((s) => s.cur);
+  const { setChats, setProjects, setCur, setRunning, setQueued, setBusy: setBusyOf, patch } = useChatStore.getState();
+  // Home gỡ khỏi trang: kho về trạng thái ban đầu như useState trước đây, lần gắn sau không mang theo dấu "đang chạy" cũ.
+  useEffect(() => () => useChatStore.getState().reset(), []);
   const curRef = useRef(cur);
   curRef.current = cur;
   // Công cụ connector đang chờ người dùng duyệt: thẻ hiện cuối cuộc trò chuyện đang trả lời.
@@ -1068,8 +1074,7 @@ export default function Home({ boot }: { boot?: BootData | null }) {
   const [nextProj, setNextProj] = useState<number | undefined>(undefined);
   // Đoạn chat đang có câu trả lời chạy (lượt chạy ở máy chủ, theo dõi qua SSE). Chuyển sang mục khác (Speech, Code…), mở đoạn chat khác
   // hay đoạn chat mới đều không dừng nó: câu trả lời vẫn chạy và hiện đủ khi quay lại; chỉ nút Dừng mới hủy.
-  const [running, setRunning] = useState<ReadonlySet<number>>(() => new Set());
-  const setBusyOf = (id: number, on: boolean) => setRunning((s) => { if (s.has(id) === on) return s; const n = new Set(s); if (on) n.add(id); else n.delete(id); return n; });
+  const running = useChatState((s) => s.running);
   // busy: đoạn chat đang mở có câu trả lời đang chạy (ô soạn tin thành "Nhắn thêm", nút Dừng…).
   const busy = view === "chat" && cur !== null && running.has(cur);
   const viewRef = useRef(view);
@@ -1624,7 +1629,6 @@ export default function Home({ boot }: { boot?: BootData | null }) {
     if (chat && liveArt) artDismissed.current = `${chat.id}-${lastIdx}-${liveArt.ident}`;
     setArtSel(null);
   };
-  const patch = (id: number, fn: (m: Msg[]) => Msg[]) => setChats((cs) => cs.map((c) => (c.id === id ? { ...c, msgs: fn(c.msgs) } : c)));
   const threadRef = useRef<HTMLDivElement>(null);
   // Khoảng đệm cuối đoạn chat và nút "cuộn xuống" theo chiều cao thật của khối soạn tin (thẻ chế độ, tin chờ gửi xếp trên ô soạn):
   // tin cuối không bao giờ nằm dưới các thẻ đó.
@@ -1705,7 +1709,7 @@ export default function Home({ boot }: { boot?: BootData | null }) {
   const gens = useRef(new Map<number, number>());
   const genSeq = useRef(0);
   // Tin nhắn gửi trong lúc đang chạy: "steer" đang chờ ghép vào lượt, "later" gửi thành lượt mới khi xong.
-  const [queued, setQueued] = useState<Queued[]>([]);
+  const queued = useChatState((s) => s.queued);
   const onSteer = async (text: string, later: boolean) => {
     const chatId = cur;
     if (chatId === null) return;
@@ -2176,8 +2180,7 @@ export default function Home({ boot }: { boot?: BootData | null }) {
   const removeChat = (id: number) => { if (running.has(id)) stop(true, id); setChats((cs) => cs.filter((c) => c.id !== id)); chatSync.forget("chat", [id]); if (cur === id) goNew(); };
   // Đoạn chat đang mở vừa bị xóa ở thiết bị khác.
   useEffect(() => { if (loaded && view === "chat" && cur !== null && !chats.some((c) => c.id === cur)) { setCur(null); setView("new"); } }, [chats]); // eslint-disable-line react-hooks/exhaustive-deps
-  const togglePin = (id: number) => setChats((cs) => cs.map((x) => (x.id === id ? { ...x, pinned: !x.pinned } : x)));
-  const setChatTags = (id: number, tags: string[]) => setChats((cs) => cs.map((x) => (x.id === id ? { ...x, tags: tags.length ? tags : undefined } : x)));
+  const { togglePin, setChatTags } = useChatStore.getState();
   const filterTag = (t: string | null) => { setTagFilter(t); if (t) setOpen(true); };
 
   useEffect(() => {
