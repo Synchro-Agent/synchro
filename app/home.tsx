@@ -394,6 +394,28 @@ function ModelPicker({ model, setModel, prefix }: { model: string; setModel: (m:
 // Ghi chú gói subscription trong menu con của hãng: gói hết hạn mức (đề nghị dùng khóa API, chỉ chuyển khi người dùng bấm),
 // đang dùng khóa API thay gói (quay lại gói), hay cần đăng nhập lại.
 // Lượt lỗi → thông báo kèm tin nhắn. text: lời báo khi còn giữ được phần đã viết; không thì lời báo chính là nội dung tin (failed).
+// Chữ đang chảy về (lượt đang gửi và lượt nối lại sau khi tải lại trang): giữ mẩu mới nhất, vẽ tối đa mỗi khung hình và cách nhau
+// ít nhất 45 ms (khoảng 20 lần mỗi giây): mắt không thấy khác, trang không phải dựng lại theo từng mẩu chữ. mine(): lần theo dõi còn hiệu lực.
+// drop(): bỏ mẩu đang chờ (lời dẫn chuyển sang nhật ký làm việc, chữ bắt đầu lại từ đầu); pending(): mẩu chưa kịp vẽ.
+function deltaSink(mine: () => boolean, write: (t: string) => void) {
+  let pend: string | null = null, raf = 0, lastPaint = 0;
+  const flush = () => {
+    raf = 0;
+    if (pend === null || !mine()) return;
+    const now = performance.now();
+    if (now - lastPaint < 45) { raf = requestAnimationFrame(flush); return; }
+    lastPaint = now;
+    const t = pend;
+    pend = null;
+    write(t);
+  };
+  return {
+    push: (t: string) => { pend = t; if (!raf) raf = requestAnimationFrame(flush); },
+    drop: () => { pend = null; },
+    pending: () => pend,
+    cancel: () => { if (raf) cancelAnimationFrame(raf); raf = 0; },
+  };
+}
 const noticeOf = (d: Record<string, unknown>, text: string): Msg["notice"] => ({
   ...(text ? { text, partial: true } : { failed: true }),
   ...(typeof d.resetsAt === "number" ? { at: d.resetsAt } : {}),
@@ -1762,11 +1784,9 @@ export default function Home({ boot }: { boot?: BootData | null }) {
     let reply: string;
     let usedSk: string[] = [], usedTl: string[] = [], libs: LibUse[] = [], via: string | null = null, viaTask: string | undefined;
     let outs: Msg["outs"] = [], trace: Msg["trace"] = [], cancelled = false, failed = false, said = "", notice: Msg["notice"], webs: Msg["webs"] = [];
-    // Chữ đến theo thời gian thực: cập nhật tin nhắn tối đa mỗi khung hình.
-    // Vẽ tối đa khoảng 20 lần mỗi giây: mắt không thấy khác, cả trang (thanh bên, ô soạn) không phải dựng lại 60 lần mỗi giây.
-    let pend: string | null = null, raf = 0, lastPaint = 0;
-    const flush = () => { raf = 0; if (pend === null || !mine()) return; const now = performance.now(); if (now - lastPaint < 45) { raf = requestAnimationFrame(flush); return; } lastPaint = now; const t = pend; pend = null; patch(id, (ms) => (ms.length && ms[ms.length - 1].role === "ai" ? [...ms.slice(0, -1), { ...ms[ms.length - 1], text: t, prog: undefined }] : ms)); };
-    const onDelta = (t: string) => { pend = t; if (!raf) raf = requestAnimationFrame(flush); };
+    // Chữ đến theo thời gian thực, gộp lại vẽ khoảng 20 lần mỗi giây (deltaSink).
+    const sink = deltaSink(mine, (t) => patch(id, (ms) => (ms.length && ms[ms.length - 1].role === "ai" ? [...ms.slice(0, -1), { ...ms[ms.length - 1], text: t, prog: undefined }] : ms)));
+    const onDelta = sink.push;
     // Bước của lượt: lời dẫn (chuyển từ chữ đang viết sang nhật ký), công cụ, kết quả, danh sách việc; tin nhắn thêm đã ghép
     // thì đóng phần trả lời trước, hiện tin người dùng, phần tiếp theo của lượt nằm ở câu trả lời mới bên dưới.
     const onEvent = (ev: RunEv) => {
@@ -1781,7 +1801,7 @@ export default function Home({ boot }: { boot?: BootData | null }) {
         setQueued((q) => { const k = q.findIndex((x) => x.chat === id && x.mode === "steer" && x.text === ev.text); return k < 0 ? q : q.filter((_, j) => j !== k); });
         return;
       }
-      if (ev.kind === "say") pend = null;
+      if (ev.kind === "say") sink.drop();
       patch(id, (ms) => (ms.length && ms[ms.length - 1].role === "ai" ? [...ms.slice(0, -1), { ...ms[ms.length - 1], ...applyEvent(ms[ms.length - 1], ev), ...(ev.kind === "say" ? { text: "" } : {}) }] : ms));
     };
     try {
@@ -1838,7 +1858,7 @@ export default function Home({ boot }: { boot?: BootData | null }) {
         setTimeout(() => askPlanSwitch(e.data, retry), 300);
       }
     }
-    if (raf) cancelAnimationFrame(raf);
+    sink.cancel();
     // Người dùng đã bấm Dừng: máy chủ trả phần đã viết và dấu vết (công cụ bị dừng ghi cancelled_by_user) — lưu lại cho lượt sau.
     if (!mine()) {
       if (cancelled) patch(id, (ms) => ms.map((m, k) => (k === ms.length - 1 && m.role === "ai" && m.stopped ? { ...m, text: m.text || reply, trace: trace?.length ? trace : m.trace, outs: outs?.length ? outs : m.outs } : m)));
@@ -1846,7 +1866,7 @@ export default function Home({ boot }: { boot?: BootData | null }) {
     }
     // Lượt lỗi: hiện thẻ lỗi ngay (không giả lập gõ chữ), giữ phần đã viết và nhật ký làm việc; không tính là câu trả lời xong.
     if (failed) {
-      const partial = notice?.partial ? reply : pend;
+      const partial = notice?.partial ? reply : sink.pending();
       patch(id, (m) => [...m.slice(0, -1), { ...workOf(m[m.length - 1]), role: "ai", text: partial ?? m[m.length - 1]?.text ?? "", failed: true, err: said, notice, done: true, time: Date.now(), dur: Date.now() - t0, outs: outs?.length ? outs : undefined, trace: trace?.length ? trace : undefined, webs: webs?.length ? webs : undefined }]);
       stop(false, id);
       doneAway(id, true);
@@ -1999,7 +2019,10 @@ export default function Home({ boot }: { boot?: BootData | null }) {
       setBusyOf(c.id, true);
       const mine = () => gens.current.get(c.id) === gen;
       const meta: Partial<RunMeta> = {};
-      attachRun(run, (prog) => { if (mine()) set((m) => ({ ...m, prog })); }, (text) => { if (mine()) set((m) => ({ ...m, text, prog: undefined })); }, (ev) => { if (!mine()) return; openBrowser(ev, c.id); if (ev.kind !== "steer") set((m) => ({ ...m, ...applyEvent(m, ev), ...(ev.kind === "say" ? { text: "" } : {}) })); }, meta, c.id).then((text) => {
+      // Chữ của lượt nối lại cũng gộp như lượt đang gửi (trước đây mỗi mẩu chữ dựng lại cả trang).
+      const sink = deltaSink(mine, (text) => set((m) => ({ ...m, text, prog: undefined })));
+      attachRun(run, (prog) => { if (mine()) set((m) => ({ ...m, prog })); }, (text) => { if (mine()) sink.push(text); }, (ev) => { if (!mine()) return; openBrowser(ev, c.id); if (ev.kind === "say") sink.drop(); if (ev.kind !== "steer") set((m) => ({ ...m, ...applyEvent(m, ev), ...(ev.kind === "say" ? { text: "" } : {}) })); }, meta, c.id).then((text) => {
+        sink.cancel();
         const used = meta.skills ?? [], libs = meta.libs ?? [], outs = meta.files ?? [], trace = meta.trace ?? [], stopped = !!meta.cancelled;
         // Người dùng bấm Dừng trong lúc chờ: tin đã đánh dấu dừng, chỉ giữ thêm phần máy chủ trả về.
         if (!mine()) { if (stopped) patch(c.id, (ms) => ms.map((m, k) => (k === ms.length - 1 && m.role === "ai" && m.stopped ? { ...m, text: m.text || text, trace: trace.length ? trace : m.trace } : m))); return; }
@@ -2012,6 +2035,7 @@ export default function Home({ boot }: { boot?: BootData | null }) {
         doneAway(c.id);
         setTimeout(() => autoTitle(c.id), 300);
       }, (e) => {
+        sink.cancel();
         if (!mine()) return;
         const said = e instanceof LLMError && e.message ? e.message : GENERIC_ERR, d = e instanceof LLMError ? e.data : {};
         const kept = typeof d.text === "string" && d.text.trim() ? d.text : "";
