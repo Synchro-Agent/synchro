@@ -522,6 +522,31 @@ console.log("13. Bản rút gọn của máy chủ giữ mốc sửa thật");
   ok(K.legacyRow({ ...srv1, upd: 9999 }).idx.upd === 9999 && K.legacyRow(srv1).idx.upd === 3000, "bản rút gọn trong khóa cũ có upd: dùng upd, không thì id");
 }
 
+// Đoạn đầy đủ thành bản rút gọn của máy chủ và đổi tên / ghim trong cùng một lần lưu: diffSave gửi cả chỉ mục lẫn bỏ thân cho cùng id.
+for (const kind of ["idb", "ls"]) {
+  globalThis.localStorage = new Store();
+  const s = kind === "idb" ? await D.openChatStore("R3", { idb: fakeIDB() }) : new D.LsStore("R3");
+  const sv = new D.ChatSaver(s);
+  const c = chat(100);
+  await sv.save([c]);
+  const stub = { ...C.stubOf(c), title: "Renamed", pinned: true };
+  const d = K.diffSave(K.snapshot([c]), [stub]);
+  ok(d.drop.join() === "100" && d.idx.length === 1, `${kind}: lần lưu có cả chỉ mục lẫn bỏ thân cho cùng đoạn`, d);
+  const r = await sv.save([stub]);
+  const i = (await s.loadIndex()).find((x) => x.id === 100);
+  ok(r.status === "ok" && i.title === "Renamed" && i.pinned === true && i.srv === true && i.upd === 102, `${kind}: đổi tên và ghim không bị lệnh bỏ thân đè`, i);
+  ok(!(await s.bodies([100])).size, `${kind}: thân đã bỏ`);
+  if (kind === "idb") ok(s.idx.get(100)?.title === "Renamed" && s.idx.get(100)?.pinned === true && s.idx.get(100)?.srv === true, "idb: bản sao chỉ mục trong bộ nhớ cũng giữ tên mới", s.idx.get(100));
+  const all = await s.loadAll();
+  ok(all.length === 1 && all[0].title === "Renamed" && all[0].pinned && all[0].stub, `${kind}: đọc lại là bản rút gọn mang tên mới`, all);
+  // Chỉ bỏ thân (không có dòng chỉ mục) và bỏ thân một id không có trong kho: như trước.
+  await sv.save([stub, chat(200)]);
+  await s.write({ drop: [200, 999] });
+  const j = await s.loadIndex();
+  ok(j.find((x) => x.id === 200)?.srv === true && !j.some((x) => x.id === 999) && j.find((x) => x.id === 100).title === "Renamed", `${kind}: chỉ bỏ thân vẫn đúng, id lạ không tạo dòng`, j);
+  s.close();
+}
+
 console.log("14. Phiên rơi về localStorage không tin khóa cũ đã chuyển sang IndexedDB");
 {
   const st = new Store();

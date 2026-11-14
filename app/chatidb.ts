@@ -306,16 +306,19 @@ export class IdbStore implements ChatStore {
         };
         for (const id of w.del ?? []) { b.delete(id); x.delete(id); delta.push([id, null]); }
         for (const p of w.put ?? []) { b.put({ id: p.id, s: p.s }); const r = { ...p.idx }; delete r.srv; x.put(r); delta.push([p.id, r]); }
-        // Chỉ ghi chỉ mục: mốc sửa không bao giờ lùi (bản rút gọn không có tin), và không bao giờ làm thân đã bỏ hiện lại (giữ srv).
-        for (const r of w.idx ?? []) edit(r.id, (cur) => {
-          const n: IdxRow = { ...r, upd: Math.max(r.upd, cur?.upd ?? 0) };
-          if (cur?.srv) n.srv = true;
+        // Chỉ ghi chỉ mục và bỏ thân: MỘT lần đọc-ghi cho mỗi id. Đoạn đầy đủ thành bản rút gọn của máy chủ thì diffSave gửi cả dòng chỉ mục lẫn
+        // lệnh bỏ thân cho cùng id; hai lần đọc-ghi riêng thì lần bỏ thân đọc dòng cũ (đọc trước khi dòng mới được ghi) rồi ghi đè, mất tên / ghim mới.
+        const rows = new Map((w.idx ?? []).map((r) => [r.id, r] as const)), drops = new Set(w.drop ?? []);
+        for (const id of drops) b.delete(id);
+        for (const id of new Set([...rows.keys(), ...drops])) edit(id, (cur) => {
+          const r = rows.get(id);
+          let n: IdxRow | null = null;
+          // Chỉ ghi chỉ mục: mốc sửa không bao giờ lùi (bản rút gọn không có tin), và không bao giờ làm thân đã bỏ hiện lại (giữ srv).
+          if (r) { n = { ...r, upd: Math.max(r.upd, cur?.upd ?? 0) }; if (cur?.srv) n.srv = true; }
+          // Bỏ thân: chỉ mục (mới nếu có, không thì dòng đang có) thành bản rút gọn của máy chủ.
+          if (drops.has(id)) { n = n ?? (cur ? { ...cur } : null); if (!n) return null; n.srv = true; delete n.run; }
           return n;
         });
-        for (const id of w.drop ?? []) {
-          b.delete(id);
-          edit(id, (cur) => { if (!cur) return null; const s: IdxRow = { ...cur, srv: true }; delete s.run; return s; });
-        }
       });
     } catch (e) { return quota(e) ? "quota" : "error"; }
     for (const [id, r] of delta) { if (r) this.idx.set(id, r); else this.idx.delete(id); }
