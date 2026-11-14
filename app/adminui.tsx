@@ -213,8 +213,9 @@ function PermsEditor({ value, onChange, Toggle, catalog }: { value: Perms; onCha
   );
 }
 
-function Seg({ value, options, onChange }: { value: string; options: string[]; onChange: (v: string) => void }) {
-  return <div className="group" role="group">{options.map((s) => <button key={s} className={value === s ? "on" : ""} aria-pressed={value === s} onClick={() => onChange(s)}>{s}</button>)}</div>;
+// label: chữ hiện cho từng giá trị (giá trị lọc giữ nguyên "Active" / "Suspended"; chữ hiện đi qua tr).
+function Seg({ value, options, onChange, label = (s: string) => s }: { value: string; options: string[]; onChange: (v: string) => void; label?: (s: string) => string }) {
+  return <div className="group" role="group">{options.map((s) => <button key={s} className={value === s ? "on" : ""} aria-pressed={value === s} onClick={() => onChange(s)}>{label(s)}</button>)}</div>;
 }
 
 // Chia trang: "1–10 / 50", nút trước / sau; more = còn dữ liệu cũ trên máy chủ (nút sau tải thêm).
@@ -420,7 +421,7 @@ export function AdminPanel({ Toggle }: { Toggle: ToggleT }) {
       <h3 className="sec">Users</h3>
       <div className="adm-bar">
         <div className="s-search"><I.Search size={14} /><input placeholder="Search by name or email" value={q} onChange={(e) => { setQ(e.target.value); setUPage(1); }} /></div>
-        <Seg value={filter} onChange={(v) => { setFilter(v); setUPage(1); }} options={["All", "Active", "Suspended"]} />
+        <Seg value={filter} onChange={(v) => { setFilter(v); setUPage(1); }} options={["All", "Active", "Suspended"]} label={(s) => tr(s)} />
         <button className="icon-btn" aria-label="Refresh" title="Refresh" onClick={load}><I.Retry size={16} /></button>
         <BulkButton b={bk} compact />
       </div>
@@ -440,7 +441,7 @@ export function AdminPanel({ Toggle }: { Toggle: ToggleT }) {
                     </div></div>
                   </td>
                   <td data-notr style={{ whiteSpace: "nowrap" }}>{ago(u.lastSeen)}</td>
-                  <td><span className={`adm-st ${u.status === "active" ? "" : "off"}`}><i />{u.status === "active" ? "Active" : "Suspended"}</span></td>
+                  <td><span className={`adm-st ${u.status === "active" ? "" : "off"}`}><i />{u.status === "active" ? tr("Active") : tr("Suspended")}</span></td>
                   <td style={{ width: 24, color: "var(--text-3)" }}><span className="adm-chev" style={{ display: "inline-flex", transform: open === u.id ? "rotate(180deg)" : undefined }}><I.Chevron size={14} /></span></td>
                 </tr>
                 {open === u.id && !bk.on && (
