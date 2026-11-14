@@ -181,9 +181,10 @@ export function extract(file) {
   return out;
 }
 
-export async function scan({ files } = {}) {
+// extra: mục từ điển thêm vào (chỉ cho kiểm thử của chính bộ quét, tests/api/i18n.test.mjs).
+export async function scan({ files, extra } = {}) {
   const { "i18n-dict": D0, "i18n-vi": V } = await loadTs(["i18n-dict", "i18n-vi"]);
-  const D = { ...D0, EN2VI: V.EN2VI, RULES_VI: V.RULES_VI };
+  const D = { ...D0, VI2EN: { ...D0.VI2EN, ...extra?.VI2EN }, EN2VI: { ...V.EN2VI, ...extra?.EN2VI }, RULES_VI: V.RULES_VI };
   const has = (m, k) => Object.prototype.hasOwnProperty.call(m, k);
   const rule = (rules, t) => rules.some(([re]) => re.test(t));
   const sameWords = D.SAME_WORDS ?? new Set();
@@ -227,6 +228,8 @@ export async function scan({ files } = {}) {
         const vi = VI.test(s.text), map = vi ? D.VI2EN : D.EN2VI;
         if (!has(map, s.text)) { if (!(vi ? false : same.has(s.text.trim()))) missing.push({ file: rel, line: s.line, text: s.text, kind: "key", need: vi ? "en" : "vi" }); continue; }
         const want = [...s.text.matchAll(/\{(\w+)\}/g)].map((m) => m[1]).sort().join(",");
+        // fill() chỉ chọn số ít / số nhiều theo {n}: mẫu không có {n} mà bản dịch có "|" sẽ hiện nguyên dấu "|".
+        if (!/\{n\}/.test(s.text) && map[s.text].includes("|")) { missing.push({ file: rel, line: s.line, text: s.text, kind: "key", need: vi ? "en" : "vi", partial: map[s.text] }); continue; }
         const forms = /\{n\}/.test(s.text) ? map[s.text].split("|") : [map[s.text]];
         const bad = forms.find((f) => [...f.matchAll(/\{(\w+)\}/g)].map((m) => m[1]).sort().join(",") !== want || (vi && VI_ONLY.test(strip(f.replace(/\{\w+\}/g, "")))));
         if (bad !== undefined) missing.push({ file: rel, line: s.line, text: s.text, kind: "key", need: vi ? "en" : "vi", partial: map[s.text] });

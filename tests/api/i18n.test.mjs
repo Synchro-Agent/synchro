@@ -56,15 +56,29 @@ walk(P.join(process.cwd(), "app"));
 const src = new Map(files.map((f) => [f, rf(f, "utf8")]));
 // Tệp nhập (không chỉ kiểu) từ tệp khác trong app/: mọi tệp mà một tệp "use client" kéo theo (kể cả gián tiếp) nằm trong gói tải về,
 // nên không được tới i18n-server.ts (kéo cả từ điển vào gói tải về). Tệp máy chủ (route, trang máy chủ, chatengine…) dùng thoải mái.
-const deps = (f, lazy = true) => [...src.get(f).matchAll(/(?:^|\n)\s*(?:import|export)\s+(?!type\b)([^;]*?)\s*from\s*"(\.{1,2}\/[^"]+)"|import\("(\.{1,2}\/[^"]+)"\)/g)]
+const depsIn = (src) => (f, lazy = true) => [...src.get(f).matchAll(/(?:^|\n)\s*(?:import|export)\s+(?!type\b)([^;]*?)\s*from\s*"(\.{1,2}\/[^"]+)"|import\("(\.{1,2}\/[^"]+)"\)/g)]
   .filter((m) => (m[3] ? lazy : true) && (m[3] || !/^\{[^}]*\}$/.test(m[1].trim()) || !m[1].trim().slice(1, -1).split(",").every((x) => !x.trim() || /^type\s/.test(x.trim()))))
   .map((m) => { const b = P.resolve(P.dirname(f), m[2] ?? m[3]); return [b + ".ts", b + ".tsx", P.join(b, "index.ts")].find((x) => src.has(x)); }).filter(Boolean);
+const deps = depsIn(src);
 const srv = P.join(process.cwd(), "app", "i18n-server.ts");
+// Chuỗi nhập từ một tệp "use client" tới i18n-server.ts (nếu có).
+const clientLeak = (src) => {
+  const dp = depsIn(src), client = new Map([...src.keys()].filter((f) => /^\s*["']use client["']/.test(src.get(f))).map((f) => [f, [f]]));
+  for (const queue = [...client.keys()]; queue.length;) { const f = queue.shift(); for (const d of dp(f)) if (!client.has(d)) { client.set(d, [...client.get(f), d]); queue.push(d); } }
+  return client.get(srv);
+};
 const users = files.filter((f) => deps(f).includes(srv));
-const client = new Map(files.filter((f) => /^\s*["']use client["']/.test(src.get(f))).map((f) => [f, [f]]));
-for (const queue = [...client.keys()]; queue.length;) { const f = queue.shift(); for (const d of deps(f)) if (!client.has(d)) { client.set(d, [...client.get(f), d]); queue.push(d); } }
-const leak = client.get(srv);
+const leak = clientLeak(src);
 ok(users.length > 1 && !leak, `không tệp giao diện nào kéo theo i18n-server.ts (${users.length} tệp máy chủ nhập trực tiếp)`, leak?.map((f) => P.relative(process.cwd(), f)).join(" → "));
+// Phép chặn phải bắt được: tệp "use client" nhập gián tiếp i18n-server.ts qua một tệp thường.
+{
+  const a = P.join(process.cwd(), "app", "zz-thu-ui.tsx"), b = P.join(process.cwd(), "app", "zz-thu-helper.ts");
+  const fake = new Map([[a, `"use client";\nimport { helper } from "./zz-thu-helper";\n`], [b, `import { trOn } from "./i18n-server";\nexport const helper = trOn;\n`], [srv, src.get(srv)]]);
+  const caught = clientLeak(fake);
+  ok(caught?.length === 3 && caught[0] === a && caught[2] === srv, "phép chặn bắt được tệp giao diện kéo i18n-server.ts qua tệp trung gian", caught);
+  const typeOnly = new Map([[a, `"use client";\nimport type { Lang } from "./zz-thu-helper";\n`], [b, `import { trOn } from "./i18n-server";\nexport type Lang = "vi";\n`], [srv, src.get(srv)]]);
+  ok(!clientLeak(typeOnly), "chỉ nhập kiểu (import type) thì không tính là kéo theo");
+}
 // Đường chat (chatengine.ts) không nhập tĩnh từ điển VI→EN: chỉ route cần dịch ở máy chủ (quét skill, xuất skill…) mới kéo nó vào, lúc được gọi.
 const reach = (start) => { const seen = new Map([[start, [start]]]); for (const q = [start]; q.length;) { const f = q.shift(); for (const d of deps(f, false)) if (!seen.has(d)) { seen.set(d, [...seen.get(f), d]); q.push(d); } } return seen; };
 const viaChat = reach(P.join(process.cwd(), "app", "chatengine.ts")).get(P.join(process.cwd(), "app", "i18n-dict.ts"));
@@ -72,11 +86,30 @@ ok(!viaChat, "chatengine.ts không nhập tĩnh từ điển VI→EN (i18n-dict.
 // Mẫu tf để trong bảng (khóa động, bộ quét không thấy): mọi giá trị phải là khóa có bản dịch giữ {biến}.
 const tbl = (file, name) => [...(rf(P.join(process.cwd(), file), "utf8").match(new RegExp(`const ${name}[^=]*= \\{([\\s\\S]*?)\\};`))?.[1] ?? "").matchAll(/:\s*"([^"]+)"/g)].map((m) => m[1]);
 for (const [file, name, v, min, what] of [["app/models.ts", "AUTO_PICK", "model", 16, "câu “Tự động chọn … cho việc …”"], ["app/healthui.tsx", "UNIT", "n", 15, "đơn vị số đếm ở Sức khỏe hệ thống"]]) {
-  const keys = tbl(file, name), bad = keys.filter((k) => !new RegExp(`\\{${v}\\}`).test(D.VI2EN[k] ?? ""));
+  const keys = tbl(file, name), bad = keys.filter((k) => !new RegExp(`\\{${v}\\}`).test(D.VI2EN[k] ?? "") || (!/\{n\}/.test(k) && D.VI2EN[k].includes("|")));
   ok(keys.length >= min && !bad.length, `${what} có bản dịch (${keys.length} mẫu)`, bad.join("; "));
 }
 // Ba khóa Blueprint B6 mục 3 từng thiếu: phải còn trong từ điển.
 ok(["Không tải được thư viện chụp ảnh", "Gói subscription", "Hội thoại"].every((k) => D.VI2EN[k] && !/[ạảãâầấậẩẫăằắặẳẵẹẻẽêềếệểễỉĩịọỏõôồốộổỗơờớợởỡụủũưừứựửữỳỵỷỹđ]/i.test(D.VI2EN[k])), "có bản tiếng Anh: “Không tải được thư viện chụp ảnh”, “Gói subscription”, “Hội thoại”");
+
+console.log("3b. Bộ quét bắt được khóa sai");
+{
+  const { mkdtempSync, writeFileSync, rmSync } = await import("node:fs");
+  const os = await import("node:os");
+  const dir = mkdtempSync(P.join(os.tmpdir(), "i18n-scan-"));
+  const f = P.join(dir, "thu.tsx");
+  writeFileSync(f, [
+    `import { tf, trc } from "./i18n";`,
+    `export const A = () => <p>{tf("Mẫu thử chưa có khóa {x}", { x: 1 })}{tf("Mẫu thử bỏ biến {name}", { name: "a" })}{tf("Mẫu thử gạch {count}", { count: 2 })}`,
+    `{tf("Mẫu thử đủ {n}", { n: 2 })}{trc("Mẫu thử", "ngữ cảnh chưa có")}{trc("Mẫu thử", "ngữ cảnh có")}{trc("Mẫu thử", "sót chữ")}</p>;`,
+  ].join("\n"));
+  const extra = { VI2EN: { "Mẫu thử bỏ biến {name}": "Test without the name", "Mẫu thử gạch {count}": "{count} item|items", "Mẫu thử đủ {n}": "{n} thing|{n} things", [C.ctxKey("Mẫu thử", "ngữ cảnh có")]: "Sample", [C.ctxKey("Mẫu thử", "sót chữ")]: "Mẫu sample" } };
+  const { missing: m } = await scan({ files: [f], extra });
+  rmSync(dir, { recursive: true, force: true });
+  const got = m.map((x) => x.text).sort();
+  const want = ["Mẫu thử bỏ biến {name}", "Mẫu thử chưa có khóa {x}", "Mẫu thử gạch {count}", C.ctxKey("Mẫu thử", "ngữ cảnh chưa có"), C.ctxKey("Mẫu thử", "sót chữ")].sort();
+  ok(JSON.stringify(got) === JSON.stringify(want), "báo: tf chưa có khóa, bản dịch bỏ {biến}, “|” khi không có {n}, trc chưa có khóa / sót tiếng Việt; không báo mẫu đúng", got.join(" | "));
+}
 
 console.log("4. Không còn tên mặc định của chủ dự án");
 // Tên / cách xưng hô mặc định phải rỗng (lấy từ hồ sơ khi trống); tên thật chỉ được nằm trong chú thích.
