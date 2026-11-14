@@ -9,6 +9,9 @@ import { tmpdir } from "node:os";
 const B = process.env.BASE ?? "http://localhost:3200", MCP = process.env.MCP_URL ?? "http://127.0.0.1:4011", LLM = process.env.MOCK_URL ?? "http://127.0.0.1:4010", CDP = Number(process.env.CDP_PORT ?? 9361);
 const PROF = `${tmpdir()}/synchro-ui/chrome-prof-states-${CDP}`;
 rmSync(PROF, { recursive: true, force: true });
+// Mọi luật CSS của trang, kể cả luật nằm trong @layer / @media / @supports (CSS của app nằm trong @layer syn từ B5): chỉ đọc cssRules
+// cấp ngoài cùng thì không thấy @keyframes hay bộ chọn nào bên trong lớp.
+const ALL_RULES = `(() => { const out = []; const walk = (rs) => { for (const r of rs) { out.push(r); if (r.cssRules && !(r instanceof CSSKeyframesRule)) walk(r.cssRules); } }; for (const s of document.styleSheets) { try { walk(s.cssRules); } catch {} } return out; })()`;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 let fails = 0, total = 0;
 const ok = (c, n, x = "") => { total++; if (!c) fails++; console.log(c ? "  ✓" : "  ✗", n, c ? "" : String(x).slice(0, 400)); };
@@ -66,7 +69,7 @@ try {
   const live = await ev(`(() => { const s = document.querySelector(".wl-status"); return { region: !!s.querySelector("[role=status]"), timerHidden: s.querySelector(".wl-st-m")?.getAttribute("aria-hidden") === "true", timerInRegion: !!s.querySelector("[role=status] .wl-st-m") }; })()`);
   ok(live.region && live.timerHidden && !live.timerInRegion, "vùng đọc cho trình đọc màn hình không chứa đồng hồ giây", JSON.stringify(live));
   ok(await until(`!!document.querySelector(".ai-streaming .w")`, 15000), "đang chảy chữ: dòng cuối còn hiệu ứng từng từ");
-  const blur = await ev(`[...document.styleSheets].flatMap((s) => { try { return [...s.cssRules]; } catch { return []; } }).filter((r) => r.name === "wIn").map((r) => r.cssText).join("")`);
+  const blur = await ev(`${ALL_RULES}.filter((r) => r.name === "wIn").map((r) => r.cssText).join("")`);
   ok(blur && !/blur/.test(blur), "hiệu ứng hiện chữ không còn làm mờ nhòe", blur);
   await reload();
   ok(await ev(`!!document.querySelector(".thread") && /cà phê/.test(document.querySelector(".thread").textContent)`), "F5 giữa lượt đang chạy: vẫn ở đoạn chat đó, không về trang chủ");
@@ -234,7 +237,7 @@ try {
   await key("Escape", "Escape", 27); await sleep(400);
 
   console.log("━━ CSS theo màn hình");
-  const hasRule = (c) => `[...document.styleSheets].some((s) => { try { return [...s.cssRules].some((r) => r.selectorText === ${JSON.stringify(c)}); } catch { return false; } })`;
+  const hasRule = (c) => `${ALL_RULES}.some((r) => r.selectorText === ${JSON.stringify(c)})`;
   await home();
   ok(!(await ev(hasRule(".sp-crumb"))) && !(await ev(hasRule(".cv-hello"))), "trang chat không tải CSS của Speech và Code");
   await click(`[...document.querySelectorAll(".nav-item")].find((e) => e.textContent.trim().startsWith("Speech"))`);
