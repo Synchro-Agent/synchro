@@ -27,6 +27,7 @@ import { aiVoiceNote, elSpeed, speakAI, type Speaking } from "./speak";
 import { toSpeech, VI } from "./voiceflow";
 import { ConnLoginWatcher } from "./connwatch";
 import { readBrowser, stopBrowserRead } from "./browserspeak";
+import { deltaSink } from "./deltasink";
 import { applyEvent, ConnCards, PlanCard, QueueChips, stepsOf, WorkParts, WorkStatus, WorkSummary, type Queued, type RunEv } from "./worklog";
 import { startScribe, type Scribe } from "./scribe";
 import type { AuthUser, Providers } from "./auth";
@@ -394,29 +395,6 @@ function ModelPicker({ model, setModel, prefix }: { model: string; setModel: (m:
 
 // Ghi chú gói subscription trong menu con của hãng: gói hết hạn mức (đề nghị dùng khóa API, chỉ chuyển khi người dùng bấm),
 // đang dùng khóa API thay gói (quay lại gói), hay cần đăng nhập lại.
-
-// Chữ đang chảy về (lượt đang gửi và lượt nối lại sau khi tải lại trang): giữ mẩu mới nhất, vẽ tối đa mỗi khung hình và cách nhau
-// ít nhất 45 ms (khoảng 20 lần mỗi giây): mắt không thấy khác, trang không phải dựng lại theo từng mẩu chữ. mine(): lần theo dõi còn hiệu lực.
-// drop(): bỏ mẩu đang chờ (lời dẫn chuyển sang nhật ký làm việc, chữ bắt đầu lại từ đầu); pending(): mẩu chưa kịp vẽ.
-function deltaSink(mine: () => boolean, write: (t: string) => void) {
-  let pend: string | null = null, raf = 0, lastPaint = 0;
-  const flush = () => {
-    raf = 0;
-    if (pend === null || !mine()) return;
-    const now = performance.now();
-    if (now - lastPaint < 45) { raf = requestAnimationFrame(flush); return; }
-    lastPaint = now;
-    const t = pend;
-    pend = null;
-    write(t);
-  };
-  return {
-    push: (t: string) => { pend = t; if (!raf) raf = requestAnimationFrame(flush); },
-    drop: () => { pend = null; },
-    pending: () => pend,
-    cancel: () => { if (raf) cancelAnimationFrame(raf); raf = 0; },
-  };
-}
 
 // Lượt lỗi → thông báo kèm tin nhắn. text: lời báo khi còn giữ được phần đã viết; không thì lời báo chính là nội dung tin (failed).
 const noticeOf = (d: Record<string, unknown>, text: string): Msg["notice"] => ({
@@ -1870,7 +1848,8 @@ export default function Home({ boot }: { boot?: BootData | null }) {
     sink.cancel();
     // Người dùng đã bấm Dừng: máy chủ trả phần đã viết và dấu vết (công cụ bị dừng ghi cancelled_by_user) — lưu lại cho lượt sau.
     if (!mine()) {
-      if (cancelled) patch(id, (ms) => ms.map((m, k) => (k === ms.length - 1 && m.role === "ai" && m.stopped ? { ...m, text: m.text || reply, trace: trace?.length ? trace : m.trace, outs: outs?.length ? outs : m.outs } : m)));
+      const pend = sink.pending();
+      if (cancelled) patch(id, (ms) => ms.map((m, k) => (k === ms.length - 1 && m.role === "ai" && m.stopped ? { ...m, text: m.text || reply || pend || "", trace: trace?.length ? trace : m.trace, outs: outs?.length ? outs : m.outs } : m)));
       return;
     }
     // Lượt lỗi: hiện thẻ lỗi ngay (không giả lập gõ chữ), giữ phần đã viết và nhật ký làm việc; không tính là câu trả lời xong.
@@ -2034,7 +2013,8 @@ export default function Home({ boot }: { boot?: BootData | null }) {
         sink.cancel();
         const used = meta.skills ?? [], libs = meta.libs ?? [], outs = meta.files ?? [], trace = meta.trace ?? [], stopped = !!meta.cancelled;
         // Người dùng bấm Dừng trong lúc chờ: tin đã đánh dấu dừng, chỉ giữ thêm phần máy chủ trả về.
-        if (!mine()) { if (stopped) patch(c.id, (ms) => ms.map((m, k) => (k === ms.length - 1 && m.role === "ai" && m.stopped ? { ...m, text: m.text || text, trace: trace.length ? trace : m.trace } : m))); return; }
+        // Chữ chưa kịp vẽ (sink.pending(), cancel() không xóa): dự phòng khi tin chưa có chữ và máy chủ không trả lại phần đã viết.
+        if (!mine()) { if (stopped) { const pend = sink.pending(); patch(c.id, (ms) => ms.map((m, k) => (k === ms.length - 1 && m.role === "ai" && m.stopped ? { ...m, text: m.text || text || pend || "", trace: trace.length ? trace : m.trace } : m))); } return; }
         const inLib = new Set(libs.flatMap((l) => [l.key, ...l.skills]));
         const sk = [...new Set(used.filter((u) => u.kind === "skill" && !inLib.has(u.name)).map((u) => u.name))];
         const tl = [...new Set(used.filter((u) => u.kind === "tool").map((u) => u.name))];
@@ -2048,7 +2028,9 @@ export default function Home({ boot }: { boot?: BootData | null }) {
         if (!mine()) return;
         const said = e instanceof LLMError && e.message ? e.message : GENERIC_ERR, d = e instanceof LLMError ? e.data : {};
         const kept = typeof d.text === "string" && d.text.trim() ? d.text : "";
-        set((m) => ({ ...m, done: true, prog: undefined, run: undefined, failed: true, err: said, text: kept || m.text, notice: noticeOf(d, kept ? said : ""), ...(Array.isArray(d.files) && d.files.length ? { outs: d.files as Msg["outs"] } : {}), ...(Array.isArray(d.trace) && d.trace.length ? { trace: d.trace as Msg["trace"] } : {}) }));
+        // Lỗi mạng / lỗi không kèm chữ: giữ mẩu chữ chưa kịp vẽ (mới hơn m.text; ở tab nền có khi là cả câu vì requestAnimationFrame không chạy).
+        const pend = sink.pending();
+        set((m) => ({ ...m, done: true, prog: undefined, run: undefined, failed: true, err: said, text: kept || pend || m.text, notice: noticeOf(d, kept ? said : ""), ...(Array.isArray(d.files) && d.files.length ? { outs: d.files as Msg["outs"] } : {}), ...(Array.isArray(d.trace) && d.trace.length ? { trace: d.trace as Msg["trace"] } : {}) }));
         stop(false, c.id);
       });
     }
