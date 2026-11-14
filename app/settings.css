@@ -258,11 +258,11 @@
 .cn-tool-n .cn-tag{margin-left:6px}
 .cn-rc .api-err{margin:0}
 .cn-rc .cn-pop{margin:0}
-html body .cz-page .adm-head{display:none!important}
+.cz-page .adm-head{display:none!important}
 html body .sy-settings .adm-head{margin:18px 0 6px!important}
 html body .sy-settings :is(.api-card:not(.bare),.us-card,.inset,.promo,.dcard,.adm-stat,.adm-card,.cn-row,.cn-card,.us-vc,.pl-hero){
   border:0!important;border-radius:var(--r-card)!important;background:var(--ds-plate)!important;box-shadow:inset 0 0 0 1px var(--ds-line)!important}
-html body .sy-settings .pv-tag.ok{color:var(--ds-ink)!important}
+.sy-settings .pv-tag.ok{color:var(--ds-ink)!important}
 html body .sy-settings .adm-bar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0 0 10px}
 html body .sy-settings .adm-bar .s-search{flex:1 1 220px;height:var(--ds-h);margin:0!important;padding:0 13px;gap:8px;border-radius:999px;background:var(--ds-plate);box-shadow:inset 0 0 0 1px var(--ds-line-2);color:var(--ds-faint)}
 html body .sy-settings .adm-bar .s-search input{font-size:13px;color:var(--ds-ink);outline:0}

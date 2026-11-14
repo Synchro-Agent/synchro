@@ -16,7 +16,7 @@ import { fileURLToPath } from "node:url";
 const postcss = createRequire(import.meta.url)("postcss");
 
 // Trần hiện tại (số đo lúc đặt trần). Chỉ được hạ.
-export const CEIL = { important: 336, htmlBody: 719, fontSize: 1278, zIndex: 63, mediaWidth: 90, darkHex: 100, inlineFontSize: 65, inlineZIndex: 22 };
+export const CEIL = { important: 336, htmlBody: 717, fontSize: 1278, zIndex: 63, mediaWidth: 90, darkHex: 100, inlineFontSize: 65, inlineZIndex: 22 };
 export const WIDTHS = new Set([480, 640, 760, 761, 860, 1100]);
 
 const walk = (d, ext, out = []) => {
