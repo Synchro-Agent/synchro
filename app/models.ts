@@ -2,7 +2,6 @@
 // Danh sách model ở trình duyệt: lấy từ /api/models (model quản trị viên cho hiện, model mặc định, quyền của tài khoản).
 import { useSyncExternalStore } from "react";
 import { allowsModel, equivalentModel, splitKey, vendorOf, type Effort, type ProviderInfo } from "./catalog";
-import { tf } from "./i18n";
 import { userScope } from "./userscope";
 
 // effort: mức nỗ lực cao nhất quản trị viên cho phép theo từng model ("*" là mọi model).
@@ -86,8 +85,9 @@ const AUTO_PICK: Record<string, string> = {
   act: "Tự động chọn {model} cho việc thao tác nhiều bước", vision: "Tự động chọn {model} cho việc đọc ảnh", longdoc: "Tự động chọn {model} cho việc tài liệu dài",
   data: "Tự động chọn {model} cho việc số liệu",
 };
-/** Câu "Tự động chọn {model} cho việc …" theo ngôn ngữ giao diện; loại việc lạ thì rỗng. */
-export const autoPickText = (task: string, model: string) => (AUTO_PICK[task] ? tf(AUTO_PICK[task], { model }) : "");
+/** Mẫu câu "Tự động chọn {model} cho việc …" (dịch bằng tf ở nơi hiện); loại việc lạ thì rỗng.
+ *  Tệp này không nhập i18n.tsx để kiểm thử nạp được không cần trình duyệt (tests/lib/ts.mjs). */
+export const autoPickKey = (task: string) => AUTO_PICK[task] ?? "";
 
 // Model nên dùng: giữ lựa chọn hiện tại nếu còn hiện và được phép, không thì model mặc định của quản trị viên, không có thì Tự động.
 export function fitModel(cur: string, s: State = state) {

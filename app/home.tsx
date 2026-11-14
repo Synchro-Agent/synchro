@@ -70,7 +70,7 @@ const HASH_VIEW: Partial<Record<View, string>> = { projects: "projects", project
 const VIEW_OF_HASH: Record<string, View> = { projects: "projects", artifacts: "artifacts", inbox: "inbox", brain: "brain", code: "code", speech: "speech", skills: "customize" };
 import { AppCtx, chatFont, useApp, VOICE_LANG, VOICE_RATE, initials, readPref, reloadPrefs, resetPrefs, usePref, type Chat, type Msg, type Project } from "./store";
 import { IMAGE_PLANS, allowsModel, clampEffort, effortCap, effortsFor, isEffort, legacyModel, type Effort } from "./catalog";
-import { AUTO, autoPickText, fitModel, modelName, modelsSettled, refreshModels, seedModels, useModels } from "./models";
+import { AUTO, autoPickKey, fitModel, modelName, modelsSettled, refreshModels, seedModels, useModels } from "./models";
 import type { BootData } from "./bootdata";
 import { seedInboxCount } from "./inboxcount";
 import { loadMe, watchSession } from "./session";
@@ -980,7 +980,7 @@ const MsgRow = memo(function MsgRow({ m: raw, i, last, busy, mark, art, inl, fil
             <button className={`icon-btn ${m.like === -1 ? "like-on" : ""}`} onClick={() => cx.current!.like(i, -1)} aria-label="Không hữu ích" aria-pressed={m.like === -1}><I.ThumbDown size={16} /></button>
             {last && <button className="icon-btn" onClick={() => cx.current!.retry()} aria-label="Thử lại"><I.Retry size={16} /></button>}
             {!c.chat.inc && <button className="icon-btn" onClick={() => cx.current!.fork(i)} aria-label={tr("Rẽ nhánh từ đây")} data-tip={tr("Rẽ nhánh từ đây")}><I.Branch size={15} /></button>}
-            {m.via && <span className="via" title={tr("Chế độ Tự động đã chọn model này")} data-notr><ModelLogo k={m.via} size={14} /><span className="via-t">{(m.viaTask && autoPickText(m.viaTask, modelName(m.via))) || modelName(m.via)}</span></span>}
+            {m.via && <span className="via" title={tr("Chế độ Tự động đã chọn model này")} data-notr><ModelLogo k={m.via} size={14} /><span className="via-t">{m.viaTask && autoPickKey(m.viaTask) ? tf(autoPickKey(m.viaTask), { model: modelName(m.via) }) : modelName(m.via)}</span></span>}
             {m.via && last && !busy && c.altModels && <button className="via via-alt" onClick={() => cx.current!.retry(m.via)} title={tr("Vẫn để Tự động, chỉ không dùng model vừa trả lời")}><I.Retry size={12} />{tr("Chạy lại bằng model khác")}</button>}
             <When t={m.time} />
           </div>
