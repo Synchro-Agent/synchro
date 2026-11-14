@@ -4,14 +4,13 @@
 // Lọc giống hệt máy chủ — "skill": parseUpload trong skillstore.ts (bỏ rác hệ điều hành và mọi thư mục ẩn: .git, .github…); "library":
 // addZipToPlugin trong plugins.ts (bỏ .git, node_modules, dist…; giữ .claude / .agents / .claude-plugin / .codex). Skill là thư mục có
 // SKILL.md (skill lồng trong skill khác thuộc skill ngoài); giữ nguyên đường dẫn nên danh sách skill để chọn và pick không đổi.
-import { getLang } from "./i18n";
+import { tf } from "./i18n";
 
 const MB = 1024 * 1024;
 /** Giới hạn mỗi lần tải lên của nginx (client_max_body_size). */
 export const UPLOAD_MAX = 40 * MB;
-const L = (vi: string, en: string) => (getLang() === "vi" ? vi : en);
 const size = (n: number) => `${(n / MB).toFixed(1)} MB`;
-export const tooLarge = () => L(`Tệp quá lớn để tải lên (tối đa ${UPLOAD_MAX / MB} MB mỗi lần).`, `The file is too large to upload (max ${UPLOAD_MAX / MB} MB at a time).`);
+export const tooLarge = () => tf("Tệp quá lớn để tải lên (tối đa {mb} MB mỗi lần).", { mb: UPLOAD_MAX / MB });
 
 type Mode = "skill" | "library";
 const SKIP_LIB = new Set([".git", ".github", "__MACOSX", "node_modules", ".DS_Store", ".venv", "venv", "__pycache__", "dist", "build"]);
@@ -36,17 +35,15 @@ async function slim(f: File, max: number, mode: Mode): Promise<File> {
   const JSZip = (await import("jszip")).default;
   let zip: InstanceType<typeof JSZip>;
   try { zip = await JSZip.loadAsync(await f.arrayBuffer()); }
-  catch { throw new Error(L(`Không đọc được ${f.name} (tệp bị hỏng hoặc không phải zip).`, `Couldn't read ${f.name} (the file is damaged or not a zip).`)); }
+  catch { throw new Error(tf("Không đọc được {name} (tệp bị hỏng hoặc không phải zip).", { name: f.name })); }
   const all = Object.values(zip.files).filter((e) => !e.dir).map((e) => ({ e, p: e.name.replace(/\\/g, "/").replace(/^(\.\/)+/, "") })).filter(({ p }) => p.split("/").every(okSeg[mode]));
   let roots = all.filter(({ p }) => p === "SKILL.md" || p.endsWith("/SKILL.md")).map(({ p }) => dirOf(p));
   roots = roots.filter((r) => !roots.some((o) => o !== r && (o === "" || r.startsWith(o + "/"))));
-  if (!roots.length) throw new Error(L(`Không tìm thấy SKILL.md trong ${f.name} (${size(f.size)}). Gói skill cần có thư mục chứa SKILL.md.`, `No SKILL.md found in ${f.name} (${size(f.size)}). A skill package needs a folder with a SKILL.md.`));
+  if (!roots.length) throw new Error(tf("Không tìm thấy SKILL.md trong {name} ({size}). Gói skill cần có thư mục chứa SKILL.md.", { name: f.name, size: size(f.size) }));
   const keep = all.filter(({ p }) => roots.some((r) => r === "" || p.startsWith(r + "/")));
   const out = new JSZip();
   for (const { e } of keep) out.file(e.name, await e.async("uint8array"));
   const data = await out.generateAsync({ type: "uint8array", compression: "DEFLATE", compressionOptions: { level: 6 } });
-  if (data.length > max) throw new Error(L(
-    `${f.name} quá lớn: ${roots.length} skill bên trong vẫn nặng ${size(data.length)} sau khi bỏ phần không thuộc skill (tối đa ${size(max)}). Hãy nén riêng thư mục của từng skill, hoặc dán link GitHub của repo.`,
-    `${f.name} is too large: its ${roots.length} skill(s) still take ${size(data.length)} after dropping everything that isn't a skill (max ${size(max)}). Zip each skill folder on its own, or paste the repo's GitHub link.`));
+  if (data.length > max) throw new Error(tf("{name} quá lớn: {n} skill bên trong vẫn nặng {size} sau khi bỏ phần không thuộc skill (tối đa {max}). Hãy nén riêng thư mục của từng skill, hoặc dán link GitHub của repo.", { name: f.name, n: roots.length, size: size(data.length), max: size(max) }));
   return new File([data as BlobPart], f.name, { type: "application/zip" });
 }

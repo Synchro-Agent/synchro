@@ -7,7 +7,7 @@ import { createPortal } from "react-dom";
 import * as I from "./icons";
 import { useApp } from "./store";
 import { BulkBar, BulkButton, BulkCheck, bulkRow, each, useBulk, type BulkAct } from "./bulk";
-import { getLang, locale, tr } from "./i18n";
+import { getLang, locale, tf, tr } from "./i18n";
 import { diffLines } from "./md";
 import { slimSkillZip, tooLarge } from "./skillzip";
 import { PageBar, usePage } from "./pager";
@@ -45,10 +45,9 @@ const api = async (url: string, init?: RequestInit) => {
 // Dung lượng tối đa một gói skill tải lên (LIMITS.zip trong skillstore.ts): gói lớn hơn được lọc trong trình duyệt, chỉ giữ thư mục các skill.
 const SKILL_ZIP_MAX = 20 * 1024 * 1024;
 const fmt = (n: number) => (n < 1024 ? `${n} B` : n < 1048576 ? `${(n / 1024).toFixed(1)} KB` : `${(n / 1048576).toFixed(1)} MB`);
-const vi = () => getLang() === "vi";
 const ago = (iso: string) => new Date(iso).toLocaleDateString(locale(), { day: "numeric", month: "short" });
 // Dòng thông tin phụ của skill, theo ngôn ngữ giao diện (nằm trong data-notr nên tự dịch ở đây).
-const meta = (s: Item) => [`v${s.version}`, ago(s.updated_at), s.fileCount ? (vi() ? `${s.fileCount} tệp` : `${s.fileCount} files`) : "", s.useCount ? (vi() ? `đã dùng ${s.useCount} lần` : `used ${s.useCount}×`) : ""].filter(Boolean).join(" · ");
+const meta = (s: Item) => [`v${s.version}`, ago(s.updated_at), s.fileCount ? tf("{n} tệp", { n: s.fileCount }) : "", s.useCount ? tf("đã dùng {n} lần", { n: s.useCount }) : ""].filter(Boolean).join(" · ");
 
 // Gửi nguồn skill lên máy chủ: dry = chỉ kiểm tra và trả bản xem trước (hoặc danh sách skill để chọn).
 // Link repo không có SKILL.md: máy chủ đọc toàn repo và viết skill ở nền ({ pending }) — gửi lại đúng yêu cầu tới khi xong (tối đa ~8 phút).
@@ -85,7 +84,7 @@ export async function inspectGithub(url: string, onWait?: () => void): Promise<F
   const ok = (j.choices ?? []).filter((c) => !c.error);
   if (!ok.length) throw new Error(j.choices?.length ? j.choices.map((c) => `${c.name || c.dir}: ${c.error}`).join("\n") : "No SKILL.md found at this link.");
   // Cài thành thư viện (plugin) hiện chỉ cho repo GitHub; nơi khác thì dán link tới thư mục của một skill.
-  if (ok.length > 1 && !onGithub(url)) throw new Error(getLang() === "vi" ? `Repo có ${ok.length} skill (${ok.map((c) => c.name || c.dir).slice(0, 6).join(", ")}). Hãy dán link tới thư mục của skill cần thêm.` : `This repository has ${ok.length} skills (${ok.map((c) => c.name || c.dir).slice(0, 6).join(", ")}). Paste a link to the folder of the skill you want.`);
+  if (ok.length > 1 && !onGithub(url)) throw new Error(tf("Repo có {n} skill ({names}). Hãy dán link tới thư mục của skill cần thêm.", { n: ok.length, names: ok.map((c) => c.name || c.dir).slice(0, 6).join(", ") }));
   if (ok.length > 1) return { kind: "bundle", count: ok.length };
   const one = await send({ ...src, pick: ok[0].dir }, true);
   return { kind: "skill", src: { ...src, pick: ok[0].dir }, pv: one.preview! };

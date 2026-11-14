@@ -7,7 +7,7 @@ import * as I from "./icons";
 import { useApp } from "./store";
 import { HUB_DISCOVER, HUB_SEARCH, PLUGINS_CHANGED, useStudios } from "./studios";
 export { HUB_DISCOVER, PLUGINS_CHANGED, useStudios };
-import { getLang, locale, tr, untranslated } from "./i18n";
+import { locale, tf, tr, untranslated } from "./i18n";
 import type { PluginSummary, PublicPlugin, Preview, Risk, SkillReport, Studio, StudioInfo, StudioMode } from "./plugins";
 import { PLUGIN_CATS, type DirPlugin } from "./plugindir";
 import { ClaudeDirectory } from "./claudedirui";
@@ -29,11 +29,10 @@ const fire = () => window.dispatchEvent(new Event(PLUGINS_CHANGED));
 
 const STUDIO: Record<Studio, string> = { design: "Design", slides: "Slides", docs: "Docs" };
 const STUDIO_ORDER: Studio[] = ["design", "slides", "docs"];
-// Dòng "12 skill ở Thiết kế, 3 skill ở Tài liệu" dưới nút studio: số lấy từ máy chủ nên dựng theo ngôn ngữ, không qua từ điển.
+// Dòng "12 skill ở Thiết kế, 3 skill ở Tài liệu" dưới nút studio: số lấy từ máy chủ nên dịch cả mẫu bằng tf (số nhiều tiếng Anh theo n).
 function detectedText(d: Partial<Record<Studio, number>>) {
-  const en = getLang() === "en";
-  const parts = STUDIO_ORDER.filter((k) => d[k]).map((k) => (en ? `${d[k]!.toLocaleString("en-US")} ${d[k] === 1 ? "skill" : "skills"} in ${STUDIO[k]}` : `${d[k]!.toLocaleString("vi-VN")} skill ở ${tr(STUDIO[k])}`));
-  return parts.length ? parts.join(", ") : en ? "No skill of this plugin fits Docs, Slides or Design." : "Chưa có skill nào của plugin này thuộc Tài liệu, Trình bày hay Thiết kế.";
+  const parts = STUDIO_ORDER.filter((k) => d[k]).map((k) => tf("{n} skill ở {studio}", { n: d[k]!.toLocaleString(locale()), studio: tr(STUDIO[k]) }));
+  return parts.length ? parts.join(", ") : tr("Chưa có skill nào của plugin này thuộc Tài liệu, Trình bày hay Thiết kế.");
 }
 const MODE_TEXT: Record<"auto" | "none" | "named", string> = {
   auto: "Synchro sorts each skill of this plugin into Docs, Slides or Design by itself.",

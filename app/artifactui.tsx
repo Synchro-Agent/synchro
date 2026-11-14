@@ -577,7 +577,7 @@ export function ArtifactPanel({ versions, index, setIndex, ai, onClose, onFix, o
     const id = Date.now() + Math.random();
     const t = setTimeout(() => { pending.current.delete(id); steps.current.delete(id); no(new Error(tr("Quá thời gian chờ"))); }, o.ms ?? 20000);
     if (o.onStep) steps.current.set(id, o.onStep);
-    pending.current.set(id, (d) => { clearTimeout(t); steps.current.delete(id); d.error ? no(new Error(String(d.error))) : ok(d); });
+    pending.current.set(id, (d) => { clearTimeout(t); steps.current.delete(id); d.error ? no(new Error(tr(String(d.error)))) : ok(d); });
     send.current({ ...m, id });
   });
   const onMsg = (d: FrameMsg) => {

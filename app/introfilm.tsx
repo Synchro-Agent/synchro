@@ -17,7 +17,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Loader, Mark, Wordmark } from "./brand";
 import { assemble, boxOf, center, fly as flyTo, markTarget, onScreen, openHole, reducedMotion, settleApp, type Box } from "./handoff";
-import { getLang } from "./i18n";
+import { getLang, tr } from "./i18n";
 import { SEEN, wantsIntro } from "./introflag";
 export { wantsIntro };
 
@@ -25,7 +25,6 @@ const BG = "#10100d"; // nền phim sau khi nén (Carbon #111210 + grain + vigne
 const IVORY = "#EEECE5";
 const OUT = "cubic-bezier(.33,1,.68,1)";
 const VOLUME = 0.9;
-const L = (vi: string, en: string) => (getLang() === "vi" ? vi : en);
 // Chấm mở đầu của phim (synchro-intro-film/src/scenes/Product.tsx): mark khoá cao 42px (cả khung S, 3R) ở giữa khung 1920×1080, đủ cỡ từ 0,3 s.
 const DOT = 42, DOT_AT = 0.3;
 // Vignette của khung đầu phim, đo trên bản 1080p (tâm rgb 25 → mép 16), trải theo khung phim đang hiện (object-fit: contain).
@@ -339,17 +338,17 @@ export function IntroFilm({ uid, onCovered, onReveal, onDone }: { uid: string; o
   const watch = () => { onCovered(); try { localStorage.setItem(SEEN(uid), String(Date.now())); } catch {} setPhase("wait"); };
 
   return (
-    <div ref={root} className={`intro ${reduced ? "reduced" : ""}`} data-phase={phase} role="dialog" aria-modal="true" aria-label={L("Phim giới thiệu Synchro", "Synchro intro film")} style={{ ["--intro-bg" as string]: BG }}>
+    <div ref={root} className={`intro ${reduced ? "reduced" : ""}`} data-phase={phase} role="dialog" aria-modal="true" aria-label={tr("Phim giới thiệu Synchro")} style={{ ["--intro-bg" as string]: BG }}>
       {!reduced && phase === "iris" && <div ref={iris} className="intro-iris" style={{ clipPath: "circle(0px at 50% 50%)", background: vig || undefined }} />}
       <div ref={stage} className="intro-stage" style={vig ? { background: vig } : undefined} onClick={() => { if (phase === "play") toggle(); }}>
         <div ref={host} className={`intro-host ${shown ? "on" : ""}`} />
-        {phase === "wait" && !seedOn && <div className="intro-load"><Loader size={34} label={L("Đang tải phim", "Loading the film")} /></div>}
+        {phase === "wait" && !seedOn && <div className="intro-load"><Loader size={34} label={tr("Đang tải phim")} /></div>}
         {phase === "ask" && (
           <div className="intro-ask" onClick={(e) => e.stopPropagation()}>
             <img src="/intro/synchro-intro-poster.jpg" alt="" />
             <div className="intro-ask-a">
-              <button type="button" className="intro-btn pri" onClick={watch}>{L("Xem phim giới thiệu (43 giây)", "Watch the intro (43 seconds)")}</button>
-              <button type="button" className="intro-btn" onClick={() => { onCovered(); try { localStorage.setItem(SEEN(uid), String(Date.now())); } catch {} leave(); }}>{L("Vào Synchro", "Go to Synchro")}</button>
+              <button type="button" className="intro-btn pri" onClick={watch}>{tr("Xem phim giới thiệu (43 giây)")}</button>
+              <button type="button" className="intro-btn" onClick={() => { onCovered(); try { localStorage.setItem(SEEN(uid), String(Date.now())); } catch {} leave(); }}>{tr("Vào Synchro")}</button>
             </div>
           </div>
         )}
@@ -361,14 +360,14 @@ export function IntroFilm({ uid, onCovered, onReveal, onDone }: { uid: string; o
       {(phase === "play" || phase === "wait" || (phase === "out" && !reduced)) && (
         <div className={`intro-ui ${phase === "out" ? "fade" : ""}`}>
           <button ref={skipBtn} type="button" className={`intro-btn skip ${skip || phase === "wait" ? "on" : ""}`} disabled={phase === "out"} onClick={() => leave()}>
-            {L("Bỏ qua", "Skip")}<svg viewBox="0 0 20 20" aria-hidden><path d="M8 5l5 5-5 5" /></svg>
+            {tr("Bỏ qua phim")}<svg viewBox="0 0 20 20" aria-hidden><path d="M8 5l5 5-5 5" /></svg>
           </button>
           {needSound
-            ? <button type="button" className="intro-btn sound-need" onClick={sound}>{L("Bật tiếng", "Turn on sound")}</button>
-            : phase === "play" && <button type="button" className="intro-btn snd" aria-label={muted ? L("Bật tiếng", "Turn on sound") : L("Tắt tiếng", "Mute")} onClick={sound}>
+            ? <button type="button" className="intro-btn sound-need" onClick={sound}>{tr("Bật tiếng")}</button>
+            : phase === "play" && <button type="button" className="intro-btn snd" aria-label={muted ? tr("Bật tiếng") : tr("Tắt tiếng")} onClick={sound}>
                 <svg viewBox="0 0 20 20" aria-hidden><path d="M3.5 8h2.6L10 4.8v10.4L6.1 12H3.5z" />{muted ? <path d="M13 8l4 4M17 8l-4 4" /> : <path d="M13.2 7.2a4 4 0 010 5.6M15.4 5a7 7 0 010 10" />}</svg>
               </button>}
-          {phase === "play" && canFull && <button type="button" className={`intro-btn fs ${needSound ? "solo" : ""}`} aria-label={full ? L("Thoát toàn màn hình", "Exit full screen") : L("Toàn màn hình", "Full screen")} onClick={toggleFull}>
+          {phase === "play" && canFull && <button type="button" className={`intro-btn fs ${needSound ? "solo" : ""}`} aria-label={full ? tr("Thoát toàn màn hình") : tr("Toàn màn hình")} onClick={toggleFull}>
             <svg viewBox="0 0 20 20" aria-hidden>{full ? <path d="M8 3.5V8H3.5M12 3.5V8h4.5M8 16.5V12H3.5M12 16.5V12h4.5" /> : <path d="M3.5 7.5v-4h4M16.5 7.5v-4h-4M3.5 12.5v4h4M16.5 12.5v4h-4" />}</svg>
           </button>}
           <div className="intro-bar"><div ref={bar} /></div>

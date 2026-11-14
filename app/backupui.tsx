@@ -6,7 +6,7 @@ import "./settings.css";
 import { useCallback, useEffect, useState } from "react";
 import { call, ago, fmtDate } from "./adminui";
 import { useApp } from "./store";
-import { getLang, locale } from "./i18n";
+import { locale, tf, tr } from "./i18n";
 import * as I from "./icons";
 
 type St = {
@@ -21,7 +21,6 @@ type ToggleT = (p: { on: boolean; set: (v: boolean) => void; label?: string; dis
 function Kv({ k, v, bad }: { k: string; v: React.ReactNode; bad?: boolean }) {
   return <div className="adm-kv"><span>{k}</span><b data-notr style={bad ? { color: "#c6422f" } : undefined}>{v}</b></div>;
 }
-const L = (vi: string, en: string) => (getLang() === "vi" ? vi : en);
 const num = (n: number | null) => (n === null ? "—" : n.toLocaleString(locale()));
 const txid = (t: string | null) => (t ? t.replace(/^0+(?=.)/, "") : "—");
 
@@ -77,7 +76,7 @@ export function ContinuousBackup({ Toggle }: { Toggle: ToggleT }) {
       </div>
       {(s.enabled || s.replicaTxid) && <>
         <Kv k="Last sync to R2" v={s.lastSyncAt ? `${ago(s.lastSyncAt)} (${fmtDate(s.lastSyncAt)})` : "—"} bad={stale} />
-        <Kv k="Behind the live database" v={s.lagTx === null ? "—" : s.lagTx === 0 ? L("Đã bắt kịp", "Up to date") : `${num(s.lagTx)} ${L("giao dịch", "transactions")}${s.lagSec !== null ? ` · ${num(s.lagSec)} ${L("giây", "s")}` : ""}`} bad={stale} />
+        <Kv k="Behind the live database" v={s.lagTx === null ? "—" : s.lagTx === 0 ? tr("Đã bắt kịp") : `${tf("{n} giao dịch", { n: num(s.lagTx) })}${s.lagSec !== null ? ` · ${tf("{n} giây", { n: num(s.lagSec) })}` : ""}`} bad={stale} />
         <Kv k="Generation (latest TXID in R2 / on this server)" v={`${txid(s.replicaTxid)} / ${txid(s.localTxid)}`} />
         {s.walSize && <Kv k="Write-ahead log" v={s.walSize} />}
         <Kv k="Restarts since the web app started" v={num(s.restarts)} bad={s.restarts > 3} />
