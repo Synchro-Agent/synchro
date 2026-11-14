@@ -252,7 +252,7 @@ export function UsageAdmin({ say, Toggle }: { say: (m: string) => void; Toggle: 
   const pgPr = usePage(d?.prices ?? [], 12);
   useEffect(() => { adm("GET").then(setD).catch((e) => say(e.message)); }, [say]);
   const patch = (body: unknown, ok: string) => adm("PATCH", body).then((x) => { setD(x); say(ok); refreshUsage(); }).catch((e) => say(e.message));
-  if (!d) return <div className="muted" style={{ fontSize: 12 }}>Loading…</div>;
+  if (!d) return <div className="muted" style={{ fontSize: "var(--fs-1)" }}>Loading…</div>;
   // Mọi người chạy bằng gói của chính họ: hạn mức đô la không áp vào đâu, hiện ra chỉ làm quản trị viên tưởng đã giới hạn được.
   if (d.apiKeys === false) return <div className="adm-card"><div className="adm-card-h"><b>Limits come from each person&apos;s AI plan</b><span className="d">Everyone here runs models through the plan they signed in with, so each vendor&apos;s plan limits apply and Synchro has no cost to cap. Spending limits appear here if you add a shared API key in Settings → Providers. To stop someone using a model, change their access below.</span></div></div>;
   const c = d.config;

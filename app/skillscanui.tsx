@@ -156,7 +156,7 @@ function ScanModal({ d, setD, reload, onClose }: { d: Data | null; setD: (f: (x:
   const when = job?.ended ? new Date(job.ended).toLocaleString(locale(), { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "";
 
   return (
-    <div className="overlay scan-ov" style={{ zIndex: 70 }} onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+    <div className="overlay scan-ov" style={{ zIndex: "var(--z-overlay)" }} onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <div className="modal pl-modal scan-modal" role="dialog" aria-modal="true" aria-labelledby="scan-h">
         <button className="icon-btn scan-x" onClick={onClose} aria-label="Close"><I.X size={16} /></button>
         <h2 id="scan-h">Scan for junk skills</h2>

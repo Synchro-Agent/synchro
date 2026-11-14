@@ -1,31 +1,84 @@
 @layer properties, theme, base, components, utilities, syn, syn-over;
 @layer syn {
+/* Chuyển từ synchro-ds.css (B5 bước 10, scripts/css-move.mjs): luật chỉ trúng phần tử của màn này, giữ thứ tự cũ (đứng trước luật riêng của tệp). */
+.ds-sec i{font-style:normal;font-size:var(--fs-1);color:var(--ds-faint)}
+.ds-sec::after{content:"";flex:1;height:1px;background:var(--ds-line)}
+
+/* ---------------------------------------------------------------- Dự án: mặt bàn đặt các thư mục kính (thư mục và hoạt hình giữ nguyên) */
+html body .sy-proj .pj-in{max-width:1080px;width:calc(100% - 64px);padding:0}
+/* Ô tìm co trước, thanh thẻ không bị cắt khi cửa sổ hẹp. */
+.sy-proj .ds-acts .ds-search{width:240px;flex:0 1 240px;min-width:120px}
+html body .sy-proj .ds-bar>.ds-seg{flex:none}
+html body .ds-sort{padding:0 12px 0 13px;gap:7px;color:var(--ds-ink-2)}
+html body .ds-sort span{font-weight:460}
+
+@media (max-width:760px){
+  html body .sy-proj .pj-in{width:calc(100% - 32px)}
+  html body .sy-proj .ds-bar{flex-direction:column;align-items:stretch}
+  .sy-proj .ds-bar .ds-acts{width:100%}
+  .sy-proj .ds-acts .ds-search{flex:1;width:auto}
+}
+
+/* ---------------------------------------------------------------- trang dự án: đầu trang có thư mục kính của dự án, ô soạn tin, các tab */
+html body .sy-projpage .pj-in{max-width:960px;width:calc(100% - 64px);padding:0}
+
+
+.pj-facts span+span::before{content:"";width:3px;height:3px;border-radius:50%;background:var(--ds-line-2);margin-right:9px}
+
+
+/* Hướng dẫn, bộ nhớ */
+
+
+
+html body .pj-note p.muted{color:var(--ds-muted)}
+@media (max-width:760px){
+  html body .sy-projpage .pj-in{width:calc(100% - 32px)}
+}
+html body .modal.pj-modal{border-radius:var(--r-panel);padding:22px 24px 20px;--gl-fill:var(--ds-plate)}
+@media (max-width:640px){
+  .sy-proj .ds-bar .ds-seg{align-self:flex-start}
+  html body .ds-sort span{display:none}
+  html body .ds-sort{padding:0 12px}
+}
+.pj-compose :is(.model-menu,.mic-wrap .menu){transform-origin:top right}
+
+
+
+/* Hết phần chuyển từ synchro-ds.css. */
+
+
+
+/* Chuyển từ globals.css (B5 bước 10, scripts/css-move.mjs): luật chỉ trúng phần tử của màn này, giữ thứ tự cũ (đứng trước luật riêng của tệp). */
+
+
+
+.pj-file.selmode{cursor:pointer}
+/* Hết phần chuyển từ globals.css. */
 /* Dự án (danh sách, trang một dự án): tách khỏi globals.css / synchro-ds.css để trang chat không phải tải trước (blueprint B3.4). Tệp này nạp sau mọi
    tệp chung, nên chỉ chứa quy tắc mà không quy tắc chung nào đứng sau nó còn nhắc tới cùng lớp; quy tắc tranh chấp vẫn ở tệp chung. */
 .pj-in{max-width:1040px;margin:0 auto;padding:36px 32px 60px}
-.pj-new{background:#fff;color:#111;border:1px solid var(--border-strong)}
 .pj-new{display:inline-flex;align-items:center;justify-content:center;line-height:1}
 .pj-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
 .pj-empty{display:flex;flex-direction:column;align-items:center;text-align:center;gap:10px;padding:70px 0 40px;opacity:.95}
-.pj-crumb{display:flex;gap:8px;align-items:center;font-size:14px;margin-bottom:14px;opacity:.85}
-.pj-chats-empty{display:flex;flex-direction:column;align-items:center;text-align:center;gap:10px;padding:46px 20px;opacity:.6;font-size:13.5px}
+.pj-crumb{display:flex;gap:8px;align-items:center;font-size:var(--fs-3);margin-bottom:14px;opacity:.85}
+.pj-chats-empty{display:flex;flex-direction:column;align-items:center;text-align:center;gap:10px;padding:46px 20px;opacity:.6;font-size:var(--fs-chat)}
 .pj-chats{margin-top:20px;display:flex;flex-direction:column;gap:6px}
 .pj-chat{display:flex;justify-content:space-between;gap:12px;padding:12px 14px;border:1px solid var(--border-strong);border-radius:var(--r-card);background:none;color:inherit;cursor:pointer;text-align:left;font:inherit}
 .pj-chat:hover{background:color-mix(in srgb,currentColor 4%,transparent)}
 .pj-sh{display:flex;align-items:center;gap:8px;margin-bottom:6px}
 .pj-ins{white-space:pre-wrap;word-break:break-word;display:-webkit-box;-webkit-line-clamp:8;-webkit-box-orient:vertical;overflow:hidden}
-.pj-memlink{background:none;border:0;color:inherit;opacity:.65;font:inherit;font-size:12.5px;text-decoration:underline;cursor:pointer;white-space:nowrap}
-.pj-ctx-empty{display:flex;flex-direction:column;align-items:center;gap:10px;text-align:center;padding:16px 8px;border:1px dashed var(--border-strong);border-radius:var(--r-card);opacity:.7}
+.pj-memlink{background:none;border:0;font:inherit;font-size:var(--fs-label);cursor:pointer;white-space:nowrap}
+.pj-ctx-empty{display:flex;flex-direction:column;align-items:center;gap:10px;text-align:center;opacity:.7}
 .pj-ctx{display:flex;flex-direction:column;gap:6px}
 .pj-modal{width:min(560px,92vw)}
-.pj-hint{font-size:13.5px;opacity:.75;line-height:1.5;margin:6px 0 14px}
+.pj-hint{font-size:var(--fs-chat);opacity:.75;line-height:1.5;margin:6px 0 14px}
 @media(max-width:900px){.pj-grid{grid-template-columns:1fr}}
 .pj-side .menu,.pj-card .menu,.pj-title .menu,.pj-tools .menu{backdrop-filter:blur(24px) saturate(1.6)}
 .pj-side .menu hr,.pj-card .menu hr,.pj-title .menu hr,.pj-tools .menu hr{border:0;border-top:1px solid var(--border-strong);margin:4px 0}
 [data-theme="dark"] .pj-card,[data-theme="dark"] .pj-side,[data-theme="dark"] .pj-side section,[data-theme="dark"] .pj-chat,[data-theme="dark"] .pj-ctx-item,[data-theme="dark"] .pj-ctx-empty{border-color:rgba(255,255,255,.14)}
-.pj-mem{margin:0;padding-left:16px;font-size:13px;line-height:1.5;display:flex;flex-direction:column;gap:4px}
+.pj-mem{margin:0;padding-left:16px;font-size:var(--fs-2);line-height:1.5;display:flex;flex-direction:column;gap:4px}
 .pj-memlist{display:flex;flex-direction:column;gap:6px;max-height:320px;overflow:auto;margin:12px 0}
-.pj-memitem{display:flex;align-items:center;gap:8px;justify-content:space-between;padding:8px 10px;border:1px solid var(--border-strong);border-radius:var(--r-pill);font-size:13.5px}
+.pj-memitem{display:flex;align-items:center;gap:8px;justify-content:space-between;padding:8px 10px;border:1px solid var(--border-strong);border-radius:var(--r-pill);font-size:var(--fs-chat)}
 .pj-ctx-empty{border-radius:var(--r-card);background:rgba(0,0,0,.045);padding:22px 16px 20px;transition:background .2s,box-shadow .2s}
 [data-theme="dark"] .pj-ctx-empty{background:#0b0b0b}
 .pj-ctx-empty:hover{background:rgba(0,0,0,.06)}
@@ -43,7 +96,7 @@
 .pj-spin{width:16px;height:16px;margin-right:9px;border-radius:50%;border:2px solid currentColor;border-right-color:transparent;opacity:.6;animation:pjspin .7s linear infinite}
 .pj-usage{margin:2px 0 14px;animation:fadeIn .3s both}
 .pj-bar{height:7px;border-radius:99px;background:color-mix(in srgb,currentColor 8%,transparent);overflow:hidden}
-.pj-usage-t{display:flex;justify-content:space-between;align-items:center;margin-top:10px;font-size:12.5px;opacity:.7}
+.pj-usage-t{display:flex;justify-content:space-between;align-items:center;margin-top:10px;font-size:var(--fs-label);opacity:.7}
 .pj-info{display:flex;cursor:help}
 .pj-info[data-tip]:hover::after{left:auto;right:0;transform:none;white-space:normal;width:200px}
 .pj-files{display:grid;grid-template-columns:repeat(auto-fill,minmax(112px,1fr));gap:10px}
@@ -59,12 +112,12 @@
 .pj-file.sk{pointer-events:none}
 .pj-file.sk i:nth-child(2){width:60%}
 .pj-file.sk u{width:40%;height:14px;margin-top:auto;text-decoration:none}
-.pj-fsearch{width:100%;height:34px;margin:0 0 12px;padding:0 12px;border-radius:var(--r-pill);border:1.5px solid var(--accent);background:transparent;color:inherit;font:inherit;font-size:13px;outline:0;animation:fadeIn .2s both}
-.pj-selbar{display:flex;align-items:center;gap:10px;margin:0 0 12px;font-size:13px;animation:fadeIn .2s both}
+.pj-fsearch{width:100%;height:34px;margin:0 0 12px;padding:0 12px;border-radius:var(--r-pill);border:1.5px solid var(--accent);background:transparent;color:inherit;font:inherit;font-size:var(--fs-2);outline:0;animation:fadeIn .2s both}
+.pj-selbar{display:flex;align-items:center;gap:10px;margin:0 0 12px;font-size:var(--fs-2);animation:fadeIn .2s both}
 .pj-sel-n{flex:1;opacity:.75}
 .pj-memlink{text-decoration:none}
 .pj-gcard{position:relative;display:flex;flex-direction:column;align-items:center;min-width:0;gap:2px}
-.pj-gname{display:flex;flex-direction:column;align-items:center;text-align:center;max-width:100%;margin-top:6px;font-size:13px}
+.pj-gname{display:flex;flex-direction:column;align-items:center;text-align:center;max-width:100%;margin-top:6px;font-size:var(--fs-2)}
 .pj-gcard .gf-title{display:inline-flex;align-items:center;gap:6px}
 .pj-gcard .pj-pin{display:inline-flex}
 .pj-gcard .menu-item svg{flex-shrink:0}
@@ -75,12 +128,12 @@ html body .pj-new,html[data-theme=dark] body .pj-new{background:transparent;colo
 .pj-skills{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
 .pj-skills li:first-child{border-top:0}
 .pj-sk-t{flex:1;min-width:0;display:flex;flex-direction:column}
-.pj-sk-all{font-size:12px;padding:2px 8px;border-radius:var(--r-pill);background:var(--hover);color:var(--text-2)}
+.pj-sk-all{font-size:var(--fs-1);padding:2px 8px;border-radius:var(--r-pill);background:var(--hover);color:var(--text-2)}
 .pj-desk{position:relative;min-height:320px;padding:28px 20px 32px;border-radius:var(--r-panel);background-color:color-mix(in srgb,var(--ds-plate) 72%,transparent);box-shadow:inset 0 0 0 1px var(--ds-line);
   background-image:radial-gradient(circle at 1px 1px,color-mix(in srgb,var(--ds-ink) 11%,transparent) 1px,transparent 1.3px);background-size:20px 20px;background-position:10px 10px}
 .pj-desk .pj-gridf{grid-template-columns:repeat(auto-fill,minmax(164px,1fr));justify-items:center}
-html body .pj-desk .pj-gname{margin-top:8px;font-size:13px;line-height:18px;max-width:150px}
-html body .pj-desk .pj-gname span:not(.pj-pin){font-size:12px;line-height:16px;color:var(--ds-muted);opacity:1}
+html body .pj-desk .pj-gname{margin-top:8px;font-size:var(--fs-2);line-height:18px;max-width:150px}
+html body .pj-desk .pj-gname span:not(.pj-pin){font-size:var(--fs-1);line-height:16px;color:var(--ds-muted);opacity:1}
 .pj-group+.pj-group{margin-top:12px}
 .pj-desk .ds-sec{margin:0 4px 20px}
 .pj-desk .pj-group+.pj-group .ds-sec{margin-top:8px}
@@ -94,13 +147,13 @@ html body .pj-desk .pj-gname span:not(.pj-pin){font-size:12px;line-height:16px;c
 html body .pj-desk .pj-empty{padding:48px 0 36px;border:0;background:transparent}
 @media (max-width:760px){.pj-desk{padding:22px 8px 24px}}
 @media (max-width:760px){.pj-desk .pj-gridf{grid-template-columns:repeat(2,minmax(0,1fr))}}
-.sy-projpage .pj-crumb{display:flex;align-items:center;gap:6px;height:24px;margin:0 0 14px;font-size:13px;color:var(--ds-muted);opacity:1}
+.sy-projpage .pj-crumb{display:flex;align-items:center;gap:6px;height:24px;margin:0 0 14px;font-size:var(--fs-2);color:var(--ds-muted);opacity:1}
 html body .sy-projpage .pj-crumb button:hover{color:var(--ds-ink);background:var(--ds-hover)}
 .pj-hero{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:20px;margin:0 0 22px}
 .pj-hero-f{width:88px;height:85px;display:grid;place-items:end center}
 .pj-hero-t{min-width:0}
-html body .pj-hero h1{margin:0;font:400 24px/30px var(--font-display);letter-spacing:-.045em;color:var(--ds-ink);overflow-wrap:anywhere}
-.pj-facts{display:flex;flex-wrap:wrap;align-items:center;gap:6px 14px;margin-top:10px;font-size:12.5px;line-height:16px;color:var(--ds-muted)}
+html body .pj-hero h1{margin:0;font:400 var(--fs-6)/30px var(--font-display);letter-spacing:-.045em;color:var(--ds-ink);overflow-wrap:anywhere}
+.pj-facts{display:flex;flex-wrap:wrap;align-items:center;gap:6px 14px;margin-top:10px;font-size:var(--fs-label);line-height:16px;color:var(--ds-muted)}
 .pj-facts span{display:inline-flex;align-items:center;gap:5px;white-space:nowrap}
 .pj-hero .ds-acts{align-self:start;margin-top:2px}
 .pj-compose{margin:0 0 28px}
@@ -113,22 +166,22 @@ html body .pj-panel .pj-chat{display:grid;grid-template-columns:28px minmax(0,1f
 html body .pj-panel .pj-chat:first-child{border-top:0}
 html body .pj-panel .pj-chat:hover{background:var(--ds-hover)}
 .pj-chat-ic{display:grid;place-items:center;width:28px;height:28px;border-radius:25%;box-shadow:inset 0 0 0 1px var(--ds-line-2);color:var(--ds-muted)}
-html body .pj-panel .pj-chat>span:not(.pj-chat-ic){font-size:12.5px;color:var(--ds-muted);opacity:1}
-html body .pj-panel .pj-chats-empty{padding:44px 24px;border-radius:var(--r-card);border:1px dashed var(--ds-line-2);opacity:1;color:var(--ds-muted);font-size:14px;line-height:20px;gap:12px}
+html body .pj-panel .pj-chat>span:not(.pj-chat-ic){font-size:var(--fs-label);color:var(--ds-muted);opacity:1}
+html body .pj-panel .pj-chats-empty{padding:44px 24px;border-radius:var(--r-card);border:1px dashed var(--ds-line-2);opacity:1;color:var(--ds-muted);font-size:var(--fs-3);line-height:20px;gap:12px}
 html body .pj-panel .pj-chats-empty p{max-width:380px}
 .pj-note{padding:18px 20px;border-radius:var(--r-card);background:var(--ds-plate);box-shadow:inset 0 0 0 1px var(--ds-line)}
-html body .pj-note p{margin:0;font-size:13.5px;line-height:21px;color:var(--ds-ink)}
+html body .pj-note p{margin:0;font-size:var(--fs-chat);line-height:21px;color:var(--ds-ink)}
 html body .pj-note .pj-ins{-webkit-line-clamp:unset;display:block}
 html body .pj-panel .pj-list{list-style:none;margin:0;padding:0;gap:0;border-radius:var(--r-card);background:var(--ds-plate);box-shadow:inset 0 0 0 1px var(--ds-line)}
-html body .pj-panel .pj-list li{padding:12px 16px;border-top:1px solid var(--ds-line);font-size:13.5px;line-height:20px;color:var(--ds-ink)}
+html body .pj-panel .pj-list li{padding:12px 16px;border-top:1px solid var(--ds-line);font-size:var(--fs-chat);line-height:20px;color:var(--ds-ink)}
 html body .pj-panel .pj-list li:first-child{border-top:0}
 html body .pj-panel>section:not(.pj-ctx){padding:0}
 html body .pj-panel .pj-sh{display:none}
 html body .pj-panel .pj-skills{margin:0;padding:0;list-style:none;border-radius:var(--r-card);background:var(--ds-plate);box-shadow:inset 0 0 0 1px var(--ds-line)}
 html body .pj-panel .pj-skills li{display:flex;align-items:center;gap:14px;min-height:52px;padding:10px 16px 10px 18px;border-radius:0}
-html body .pj-panel>section>.muted{padding:18px 20px;border-radius:var(--r-card);background:var(--ds-plate);box-shadow:inset 0 0 0 1px var(--ds-line);margin:0;font-size:14px}
+html body .pj-panel>section>.muted{padding:18px 20px;border-radius:var(--r-card);background:var(--ds-plate);box-shadow:inset 0 0 0 1px var(--ds-line);margin:0;font-size:var(--fs-3)}
 .pj-panel .pj-ctx{gap:12px}
-html body .pj-panel .pj-ctx-empty{padding:28px 16px 26px;border-radius:var(--r-card);box-shadow:inset 0 0 0 1px var(--ds-line);opacity:1;color:var(--ds-muted);font-size:14px}
+html body .pj-panel .pj-ctx-empty{padding:28px 16px 26px;border-radius:var(--r-card);box-shadow:inset 0 0 0 1px var(--ds-line);opacity:1;color:var(--ds-muted);font-size:var(--fs-3)}
 html body .pj-panel .pj-ctx-empty.drag{box-shadow:inset 0 0 0 1.5px var(--ds-ink)}
 html body .pj-panel .pj-files{grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px}
 html body .pj-panel .pj-file{border-radius:var(--r-card);border:0;box-shadow:inset 0 0 0 1px var(--ds-line);background:var(--ds-plate);min-height:112px;padding:12px 14px}
@@ -137,13 +190,13 @@ html body .pj-panel .pj-file.is-sel{box-shadow:inset 0 0 0 1.5px var(--ds-ink)}
 html body .pj-panel .pj-fsearch{height:var(--ds-h);border-radius:999px;border:1px solid var(--ds-ink);padding:0 14px;margin:0}
 @media (max-width:760px){.pj-hero{grid-template-columns:auto minmax(0,1fr);gap:14px}}
 @media (max-width:760px){.pj-hero .ds-acts{grid-column:1 / -1;grid-row:1;justify-self:end;margin:0}}
-@media (max-width:760px){.pj-hero-f{width:64px;height:62px;overflow:hidden}}
+@media (max-width:760px){.pj-hero-f{width:64px;height:62px}}
 @media (max-width:760px){html body .pj-hero h1{font-size:22px;line-height:28px}}
 @media (max-width:760px){html body .pj-tabbar{flex-direction:column;align-items:stretch}}
 @media (max-width:760px){.pj-tabbar .ds-acts{justify-content:flex-end}}
-html body .modal.pj-modal h2{font:600 16px/22px var(--font-sans)!important;letter-spacing:-.01em}
-.modal.pj-modal .pj-hint{font-size:13.5px;line-height:20px;color:var(--ds-muted);opacity:1}
-html body .modal.pj-modal label{font-size:13px;font-weight:560;margin:14px 0 6px}
+html body .modal.pj-modal h2{font:600 var(--fs-4)/22px var(--font-sans)!important;letter-spacing:-.01em}
+.modal.pj-modal .pj-hint{font-size:var(--fs-chat);line-height:20px;color:var(--ds-muted);opacity:1}
+html body .modal.pj-modal label{font-size:var(--fs-2);font-weight:560;margin:14px 0 6px}
 @media (max-width:760px){.pj-hero-f>*{transform:scale(.727);transform-origin:left bottom}}
 html body .pj-compose .plus-menu{bottom:auto!important;transform-origin:top left}
 .pj-compose .plus-menu .menu.cm-fly{top:0;bottom:auto}
@@ -151,9 +204,12 @@ html body .pj-compose .composer{position:relative}
 .pj-compose .composer .at-menu{top:calc(100% + 8px);bottom:auto}
 .pj-gcard[data-bk]{border-radius:var(--r-card);padding:8px 6px 6px}
 .pj-mem li[data-bk]{display:flex;gap:10px;align-items:flex-start}
-.pj-file .pj-file-warn{color:var(--danger,#b4442c);font-size:12px;line-height:1.3}
+.pj-file .pj-file-warn{color:var(--danger,#b4442c);font-size:var(--fs-1);line-height:1.3}
 }
 @layer syn-over{
+/* Chuyển từ synchro-ds.css (B5 bước 10, scripts/css-move.mjs): luật chỉ trúng phần tử của màn này, giữ thứ tự cũ (đứng trước luật riêng của tệp). */
+.pj-compose :is(.model-menu,.mic-wrap .menu){top:calc(100% + 8px);bottom:auto!important}
+/* Hết phần chuyển từ synchro-ds.css. */
 /* B5: khai báo trước đây mang !important chỉ để thắng thứ tự. Lớp syn-over đứng sau syn nên các luật này thắng mọi luật thường của syn bất kể specificity; giữa chúng với nhau vẫn theo specificity rồi thứ tự. Sửa một luật ở trên thì tìm cùng selector ở đây. */
 .pj-side .menu,.pj-card .menu,.pj-title .menu,.pj-tools .menu{background:#fff}
 [data-theme="dark"] .pj-side .menu,[data-theme="dark"] .pj-card .menu,[data-theme="dark"] .pj-title .menu,[data-theme="dark"] .pj-tools .menu{background:rgb(40,40,44)}

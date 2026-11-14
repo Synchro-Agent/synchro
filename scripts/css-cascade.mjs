@@ -345,13 +345,15 @@ const why = (x, y, L) => {
 
 // ---------------------------------------------------------------- diff
 /** Ghép khai báo hai phiên bản theo (selector chuẩn hóa, @media, thuộc tính gốc, giá trị, lần xuất hiện). */
-function keyed(decls) {
+// raw: khóa theo selector gốc (không bỏ html body) và lớp: dùng khi chỉ CHUYỂN luật giữa các tệp (scripts/css-move.mjs), selector không đổi —
+// hai khai báo cùng khóa thì giống hệt nhau, đổi chỗ cho nhau không đổi kết quả.
+function keyed(decls, raw = false) {
   const seen = new Map(); const m = new Map();
-  for (const d of decls) { const k = `${d.nsel}|${d.mkey}|${d.atom}|${d.prop}|${d.value}`; const i = seen.get(k) ?? 0; seen.set(k, i + 1); d.key = `${k}#${i}`; m.set(d.key, d); }
+  for (const d of decls) { const k = raw ? `${d.sel.replace(/\s+/g, " ").trim()}|${d.mkey}|${d.layer}|${d.imp}|${d.atom}|${d.prop}|${d.value}` : `${d.nsel}|${d.mkey}|${d.atom}|${d.prop}|${d.value}`; const i = seen.get(k) ?? 0; seen.set(k, i + 1); d.key = `${k}#${i}`; m.set(d.key, d); }
   return m;
 }
-export function diff(A, B, co, { max = 200, filter = () => true } = {}) {
-  const ka = keyed(A.decls), kb = keyed(B.decls);
+export function diff(A, B, co, { max = 200, filter = () => true, raw = false } = {}) {
+  const ka = keyed(A.decls, raw), kb = keyed(B.decls, raw);
   const lost = [...ka.keys()].filter((k) => !kb.has(k)), extra = [...kb.keys()].filter((k) => !ka.has(k));
   // Nhóm theo (pseudo-element, thuộc tính gốc), đánh chỉ mục theo lớp để chỉ so cặp có thể trùng phần tử.
   const groups = new Map();
@@ -362,7 +364,8 @@ export function diff(A, B, co, { max = 200, filter = () => true } = {}) {
   // lớp cũ: vẫn tính là giữ nguyên, miễn mọi lớp của bản trước còn ở bản sau theo đúng thứ tự.
   const idxB = A.layerOrder.map((l) => B.layerIdx.get(l));
   const sameLayers = idxB.every((i, k) => i != null && (k === 0 || i > idxB[k - 1]));
-  const changed = (d) => { const e = kb.get(d.key); return !sameLayers || e.imp !== d.imp || e.layer !== d.layer || cmp3(e.spec, d.spec) !== 0; };
+  // Khai báo chuyển sang tệp khác (scripts/css-move.mjs) đổi thứ tự so với mọi khai báo khác: cũng tính là đổi.
+  const changed = (d) => { const e = kb.get(d.key); return !sameLayers || e.imp !== d.imp || e.layer !== d.layer || cmp3(e.spec, d.spec) !== 0 || e.sheet !== d.sheet; };
   for (const d of A.decls) if (kb.has(d.key)) d.ch = changed(d);
   for (const list of groups.values()) {
     // Chỉ mục theo lớp không mở; selector chỉ có lớp mở (hay không lớp) là ứng viên của mọi khai báo.
@@ -416,6 +419,7 @@ export async function loadSource(root, order = "dev") {
   const g = { css: await compile(path.join(root, "app/globals.css")) };
   const font = { name: "unbounded", css: read("node_modules/@fontsource-variable/unbounded/wght.css") + read("app/unbounded-preload.css") };
   const s = (p) => ({ name: p.replace(/^app\//, ""), css: read(p) });
+  // app/tokens.css (B5) vào cùng globals.css qua @import (Tailwind dịch thẳng vào g.css), không phải tệp riêng.
   const first = order === "prod" ? [s("app/glass.css"), s("app/features.css"), { name: "globals.css", css: g.css }, font, s("app/synchro-ds.css")]
     : [font, { name: "globals.css", css: g.css }, s("app/glass.css"), s("app/synchro-ds.css"), s("app/features.css")];
   return [...first, ...LAZY.map(s), ...(await vendor(root, compile)), ...injected(root)];
@@ -450,7 +454,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(new URL(im
   const root = rootOf(a);
   const A = collect(await load(strip(a), root, oa)), B = collect(await load(strip(b), rootOf(b), ob));
   const co = cooccurrence(root, A.decls);
-  const r = diff(A, B, co);
+  const r = diff(A, B, co, { raw: args.includes("--raw-key") });
   console.log(`Lớp (trước): ${A.layerOrder.join(", ") || "(không)"}\nLớp (sau):   ${B.layerOrder.join(", ") || "(không)"}`);
   console.log(`Khai báo: trước ${A.decls.length}, sau ${B.decls.length}; cặp có thể trùng phần tử đã so: ${r.pairs}`);
   console.log(`Mất ${r.lost.length}, thừa ${r.extra.length}, đổi bên thắng ${r.flips.length}`);

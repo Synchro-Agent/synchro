@@ -510,7 +510,7 @@ function GitHubImport({ onClose, onFiles, say }: { onClose: () => void; onFiles:
     <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <div className="modal gh-imp" role="dialog" aria-modal="true" aria-label="Thêm từ GitHub">
         <button className="icon-btn" style={{ position: "absolute", top: 12, right: 12 }} onClick={onClose} aria-label="Đóng"><I.X size={16} /></button>
-        <h2 style={{ fontSize: 16 }}>{repo ? repo.full : "Thêm từ GitHub"}</h2>
+        <h2 style={{ fontSize: "var(--fs-4)" }}>{repo ? repo.full : "Thêm từ GitHub"}</h2>
         {!st ? <p className="d">Đang kiểm tra kết nối GitHub…</p> : !st.configured ? <p className="d">Máy chủ chưa cấu hình đăng nhập GitHub (GITHUB_CLIENT_ID).</p> : !st.allowed ? <p className="d">Quản trị viên chưa cho phép tài khoản của bạn dùng Synchro Code (cần cho GitHub).</p> : !st.linked ? (
           <>
             <p className="d">Kết nối tài khoản GitHub để chọn repo. Synchro chỉ đọc các tệp bạn chọn.</p>

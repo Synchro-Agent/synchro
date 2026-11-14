@@ -98,13 +98,48 @@ mkdirSync(OUT, { recursive: true });
 const shot = async (n) => { await sleep(700); const { data } = await P("Page.captureScreenshot", { format: "png" }); writeFileSync(`${OUT}/${n}.png`, Buffer.from(data, "base64")); };
 // Tắt mọi hiệu ứng chuyển động để ảnh chụp ổn định giữa hai lần. CSS của app nằm trong @layer (B5): !important không lớp thua !important
 // trong lớp, nên luật tắt đặt vào lớp được khai báo ĐẦU TIÊN (đọc từ trang) — !important ở lớp đầu thắng !important ở mọi lớp sau.
-await ev(`(() => { let first = null;
+const FREEZE = `(() => { let first = null;
   for (const sh of document.styleSheets) { let rules; try { rules = sh.cssRules; } catch { continue; }
     for (const r of rules) { if (r instanceof CSSLayerStatementRule) { first = r.nameList[0]; break; } if (r instanceof CSSLayerBlockRule) { first = r.name; break; } if (!(r instanceof CSSImportRule)) break; }
     if (first) break; }
   const css = "*,*::before,*::after{animation:none!important;transition:none!important;caret-color:transparent!important}";
-  const s = document.createElement("style"); s.textContent = first ? "@layer " + first + "{" + css + "}" : css; document.head.appendChild(s); return 1; })()`);
+  const s = document.createElement("style"); s.textContent = first ? "@layer " + first + "{" + css + "}" : css; document.head.appendChild(s); return 1; })()`;
+await ev(FREEZE);
 await sleep(800);
+// SNAP_ALL=1: mọi màn chính × 1440 / 768 / 390px × sáng / tối (B5: thay đổi CSS phải giữ ảnh <0.1% ở cả điện thoại và giao diện tối).
+// Tên ảnh: <rộng>-<màn>-<chủ đề>.png. Không đặt thì chụp 6 màn 1440px sáng như cũ.
+if (process.env.SNAP_ALL) {
+  const VIEWS = [{ w: 1440, h: 900, mobile: false }, { w: 768, h: 1024, mobile: false }, { w: 390, h: 844, mobile: true }];
+  const both = async (n) => { for (const t of ["light", "dark"]) { await ev(`document.documentElement.setAttribute("data-theme", "${t}"); 1`); await sleep(300); await shot(`${n}-${t}`); } await ev(`document.documentElement.setAttribute("data-theme", "light"); 1`); };
+  const openSide = async (v) => { if (v.mobile && !(await ev(`!!document.querySelector(".shell-side:not(.closed)")`).catch(() => false))) { await click(`document.querySelector(".side-toggle")`, "drawer"); await sleep(600); } };
+  process.on("exit", () => { try { chrome.kill(); } catch {} });
+  let sent = false;
+  for (const v of VIEWS) {
+    await P("Emulation.setDeviceMetricsOverride", { width: v.w, height: v.h, deviceScaleFactor: 1, mobile: v.mobile });
+    await P("Page.navigate", { url: B + "/" });
+    await until(`!!document.querySelector("textarea")`, 30000, "app loaded");
+    await sleep(1500); await ev(FREEZE); await sleep(500);
+    await both(`${v.w}-home`);
+    if (!sent) {
+      await click(`document.querySelector("textarea")`, "composer"); await P("Input.insertText", { text: "Làm trang web cho quán cà phê" });
+      await P("Input.dispatchKeyEvent", { type: "keyDown", key: "Enter", code: "Enter", windowsVirtualKeyCode: 13, text: "\r" });
+      await until(`document.querySelectorAll(".art-card:not(.busy)").length > 0 && !document.querySelector(".thinking")`, 60000, "reply");
+      await sleep(3500); sent = true;
+    } else { await openSide(v); await click(`document.querySelector(".chat-item")`, "chat"); await sleep(2500); }
+    await both(`${v.w}-chat`);
+    if (v.mobile) { await openSide(v); await both(`${v.w}-drawer`); }
+    for (const [nav, n] of [["Artifacts", "artifacts"], ["Kỹ năng", "hub"], ["Dự án", "projects"], ["Code", "code"], ["Speech", "speech"], ["Bộ não", "brain"]]) { await openSide(v); await click(byText(".nav-item", nav), n); await sleep(2500); await both(`${v.w}-${n}`); }
+    await openSide(v);
+    // Nút tài khoản: tên đầy đủ ở thanh bên rộng, chữ viết tắt "DT" ở thanh rail.
+    try {
+      await click(`[...document.querySelectorAll("aside button, nav button, button")].find((e) => [e.textContent, e.getAttribute("aria-label"), e.title].join(" ").includes("Download Tester") || e.textContent.trim() === "DT")`, "user"); await sleep(600);
+      await both(`${v.w}-usermenu`);
+      await click(byText(".menu-item", "Cài đặt"), "settings"); await sleep(2000); await both(`${v.w}-settings`);
+    } catch (e) { console.log(`  ✗ ${v.w}px: ${e.message}`); }
+  }
+  console.log("đã chụp vào", OUT);
+  ws.close(); chrome.kill(); process.exit(0);
+}
 await shot("home");
 // Hồ sơ Chrome mới nên chưa có đoạn chat: gửi một yêu cầu (model giả lập trả lời cố định) rồi chụp.
 await click(`document.querySelector("textarea")`, "composer"); await P("Input.insertText", { text: "Làm trang web cho quán cà phê" });

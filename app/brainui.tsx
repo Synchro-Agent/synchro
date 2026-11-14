@@ -16,6 +16,7 @@ import { Pager } from "./pager";
 import * as I from "./icons";
 import { type Chat, useApp, usePref } from "./store";
 import { locale, tf, tr, trc } from "./i18n";
+import { maxW } from "./breakpoints";
 
 type Kind = "hub" | "about" | "model" | "chat" | "code" | "topic" | "entity" | "map" | "index" | "log" | "skill" | "connector" | "note" | "daily" | "rule" | "ghost" | "tag";
 type GNode = { id: string; title: string; kind: Kind; tags: string[]; created: number; links: number; aliases?: string[]; pinned?: boolean };
@@ -869,7 +870,7 @@ export function BrainWorkspace({ initial, onInitial, sideOpen = true, onSide }: 
   const [rightOff, setRightOff] = useState(false);
   useEffect(() => { try { setRightOff(localStorage.getItem("bn:right-off") === "1"); } catch {} }, []);
   const setRight = (off: boolean) => { setRightOff(off); try { localStorage.setItem("bn:right-off", off ? "1" : "0"); } catch {} };
-  const narrow = () => typeof window !== "undefined" && window.matchMedia("(max-width: 860px)").matches;
+  const narrow = () => typeof window !== "undefined" && window.matchMedia(maxW("md")).matches;
   const [sel, setSel] = useState(0);
   const findRef = useRef<HTMLDivElement>(null);
   // Kết quả mới về thì chọn lại mục đầu; chọn bằng phím thì cuộn mục đó vào tầm nhìn.

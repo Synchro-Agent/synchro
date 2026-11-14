@@ -54,7 +54,7 @@ export function useFileMenu(say: (m: string) => void) {
   const node = typeof document === "undefined" ? null : createPortal(
     <>
       {t && (
-        <div className="menu fm-menu" style={{ position: "fixed", left: t.x, top: t.y, width: 200, zIndex: 400 }} onMouseDown={(e) => e.stopPropagation()} onContextMenu={(e) => e.preventDefault()}>
+        <div className="menu fm-menu" style={{ position: "fixed", left: t.x, top: t.y, width: 200, zIndex: "calc(var(--z-full) + 200)" }} onMouseDown={(e) => e.stopPropagation()} onContextMenu={(e) => e.preventDefault()}>
           <button className="menu-item" onClick={() => { setView({ name: t.name, text: t.text }); setRaw(false); setT(null); }}><I.Eye />Xem trước</button>
           <button className="menu-item" onClick={() => { download(t.name, t.text); setT(null); }}><I.Download />Tải về</button>
           <button className="menu-item" onClick={() => { if (!t.text) { say("Tệp này không có nội dung văn bản để sao chép"); setT(null); return; } navigator.clipboard?.writeText(t.text); say("Đã sao chép nội dung"); setT(null); }}><I.Copy />Sao chép nội dung</button>

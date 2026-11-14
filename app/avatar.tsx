@@ -86,7 +86,7 @@ function AvatarFlow({ onClose }: { onClose: () => void }) {
 
   return (
     <>
-      <div className="overlay" data-av style={{ zIndex: 70 }} onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="overlay" data-av style={{ zIndex: "var(--z-overlay)" }} onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
         {!src ? (
           <div className="modal upl">
             <div className="upl-h"><span>Tải ảnh đại diện</span><span className="upl-beta">JPG · PNG</span><button className="icon-btn" onClick={onClose} aria-label="Đóng"><I.X size={16} /></button></div>

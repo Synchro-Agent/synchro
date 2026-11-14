@@ -12,7 +12,7 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 const SUITES = [
   // B3.7: ngân sách tải đầu của trang chủ (JS ≤ 350 KB, CSS ≤ 45 KB gzip) đọc từ bản build của dev:mock:fast; vượt trần chống tăng lại là lỗi.
   // Mã thoát 2: chưa đo được (không có bản build, hay bản build cũ hơn mã nguồn) — không báo đạt khi chưa đo đúng bản sẽ deploy.
-  ["Ngân sách tải đầu: JS 350 KB gzip (bắt buộc), CSS 45 KB gzip (CHƯA BẮT BUỘC tới B5, chặn ở trần 100 KB)", "scripts/budget.mjs"],
+  ["Ngân sách tải đầu: JS 350 KB gzip (bắt buộc), CSS 45 KB gzip (CHƯA BẮT BUỘC tới B5, chặn ở trần 84 KB)", "scripts/budget.mjs"],
   // B5: chỉ số CSS (!important, tiền tố html body, cỡ chữ / z-index cứng, mốc @media lạ, hex ở giao diện tối) chỉ được giảm, không cần máy chủ.
   ["Chỉ số CSS chỉ giảm: !important, html body, cỡ chữ cứng, z-index, mốc @media, hex giao diện tối", "scripts/css-metrics.mjs"],
   ["Toàn bộ bộ kiểm API", "tests/run-all.mjs"],
