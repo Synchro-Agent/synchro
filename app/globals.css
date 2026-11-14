@@ -1191,6 +1191,13 @@ html body .codebox.cb-copy .cb-btn{position:absolute!important;right:8px!importa
 /* Số liệu nhiều phần (bộ nhớ máy chủ): xuống dòng trên điện thoại thay vì bị cắt "…". Nhãn giữ trọn một dòng tới 45% bề rộng hàng, phần số liệu
    dài xuống dòng bên phải (768px: "Vector tìm kiếm theo nghĩa" từng bị ép thành ba dòng, chữ "nghĩa" đứng lẻ). */
 .adm-kv.wrap span{flex:0 0 auto;max-width:45%;min-width:0}
+/* Điện thoại (≤ 760px): mức 45% làm nhãn 131–156px gãy hai dòng dù số liệu ngắn vừa chỗ. Ở đây nhãn luôn một dòng; số liệu không đủ chỗ
+   cạnh nhãn thì xuống hẳn dòng dưới, đủ bề rộng, canh phải ("Vector…" không còn cột 119px cao 8 dòng). */
+@media (max-width:760px){
+  html .adm-kv.wrap{flex-wrap:wrap;row-gap:2px}
+  html .adm-kv.wrap span{flex:0 1 auto;max-width:100%}
+  html .adm-kv.wrap b{flex:1 1 auto}
+}
 
 
 
