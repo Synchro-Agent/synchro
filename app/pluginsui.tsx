@@ -7,7 +7,7 @@ import * as I from "./icons";
 import { useApp } from "./store";
 import { HUB_DISCOVER, HUB_SEARCH, PLUGINS_CHANGED, useStudios } from "./studios";
 export { HUB_DISCOVER, PLUGINS_CHANGED, useStudios };
-import { getLang, tr, untranslated } from "./i18n";
+import { getLang, locale, tr, untranslated } from "./i18n";
 import type { PluginSummary, PublicPlugin, Preview, Risk, SkillReport, Studio, StudioInfo, StudioMode } from "./plugins";
 import { PLUGIN_CATS, type DirPlugin } from "./plugindir";
 import { ClaudeDirectory } from "./claudedirui";
@@ -179,7 +179,7 @@ function Detail({ p: sum, admin, onClose, onChange: up }: { p: PluginSummary; ad
         </div>
         <div className="pl-src">
           {Object.entries(p.commits).map(([r, c]) => <a key={r} href={`https://github.com/${r}/tree/${c}`} target="_blank" rel="noreferrer" data-notr><I.GitHub size={13} />{r}<em>{c.slice(0, 7)}</em></a>)}
-          <span className="d">{tr("Updated")} {new Date(p.updatedAt).toLocaleDateString(getLang() === "en" ? "en-US" : "vi-VN")}</span>
+          <span className="d">{tr("Updated")} {new Date(p.updatedAt).toLocaleDateString(locale())}</span>
         </div>
         <div className="pl-list">
           {!full ? <div className="pl-load"><span className="art-spin" /></div> : full.skills.map((s) => <SkillLine key={s.id} s={s.report} right={<>{s.useCount > 0 && <span className="pl-use">{s.useCount}×</span>}{manage && <button className={`toggle ${s.enabled ? "on" : ""}`} role="switch" aria-checked={s.enabled} aria-label={s.name} onClick={() => patch({ skills: { [s.name]: !s.enabled } })} />}</>} />)}
@@ -369,7 +369,7 @@ export function SkillHub() {
           <div className="pl-row2-h"><b data-notr><button type="button" className="art-tile-open">{p.name}</button></b>{p.studio && <Badge kind="">{STUDIO[p.studio]}</Badge>}<Badge kind="">{p.skills.length} skill</Badge><ScoreBadge s={sumScores(sc, [`lib-${p.slug}`, ...p.skills.map((k) => k.name)])} />{p.updateAvailable && <Badge kind="mid">Update</Badge>}{!(p.enabled && p.mine.enabled) && <Badge kind="">Off</Badge>}</div>
           <span>{p.author ? <>{tr("từ")} <span data-notr={untranslated(p.author) || undefined}>{tr(p.author)}</span> · </> : ""}<span data-notr={untranslated(p.description) || undefined}>{p.description}</span></span>
         </div>
-        <span className="pl-date">{new Date(p.updatedAt).toLocaleDateString(getLang() === "en" ? "en-US" : "vi-VN", { day: "numeric", month: "short" })}</span>
+        <span className="pl-date">{new Date(p.updatedAt).toLocaleDateString(locale(), { day: "numeric", month: "short" })}</span>
         {!bk.on && <RowMenu p={p} manage={manage} onOpen={() => setOpen(p.id)} onAct={(a) => act(p, a)} />}
       </div>
     );
@@ -417,7 +417,7 @@ export function SkillHub() {
             <button className="pl-row2 cd-sum" onClick={() => setTab("discover")}>
               <span className="pl-mark" style={{ width: 36, height: 36 }}><I.SquaresFour size={17} /></span>
               <div className="pl-row2-t"><div className="pl-row2-h"><b>Claude skill directory</b></div>
-                <span><span data-notr>{d.catalogInstalled.libraries.toLocaleString(getLang() === "en" ? "en-US" : "vi-VN")}</span> {tr("libraries")} · <span data-notr>{d.catalogInstalled.skills.toLocaleString(getLang() === "en" ? "en-US" : "vi-VN")}</span> skill · {tr("installed for everyone, sorted by category in Discover")}</span></div>
+                <span><span data-notr>{d.catalogInstalled.libraries.toLocaleString(locale())}</span> {tr("libraries")} · <span data-notr>{d.catalogInstalled.skills.toLocaleString(locale())}</span> skill · {tr("installed for everyone, sorted by category in Discover")}</span></div>
               <I.ChevronR size={16} />
             </button>
           )}

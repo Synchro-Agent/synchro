@@ -7,7 +7,7 @@ import "./settings.css";
 import { useCallback, useEffect, useState } from "react";
 import { apiFetch } from "./apierr";
 import { rowKeys } from "./a11y";
-import { tr } from "./i18n";
+import { locale, tr } from "./i18n";
 import * as I from "./icons";
 import { PageBar, usePage } from "./pager";
 import { BrandLogo, ModelLogo } from "./brands";
@@ -34,7 +34,7 @@ const SUB_NAME: Record<SubUsage["cli"], string> = { claude: "Claude", codex: "Ch
 const vendorKey = (model: string) => { const v = vendorOf(model); return v === "other" ? "other" : v; };
 const SERIES: [VendorUsage["vendor"] | "other", string][] = [["anthropic", "Claude"], ["openai", "ChatGPT"], ["google", "Gemini"], ["xai", "Grok"], ["deepseek", "DeepSeek"], ["other", "Khác"]];
 const CLI_VENDOR: Record<SubUsage["cli"], VendorUsage["vendor"]> = { claude: "anthropic", codex: "openai", agy: "google", grok: "xai" };
-const num = (n: number) => n.toLocaleString(en() ? "en-US" : "vi-VN");
+const num = (n: number) => n.toLocaleString(locale());
 
 /** Thẻ của một hãng trong Cài đặt → Usage: cách đang chạy, hạn mức của gói hoặc của khóa API, số lượt 30 ngày. */
 function VendorCard({ v, turns, cost, go }: { v: VendorUsage; turns: number; cost: number; go?: (t: string) => void }) {
@@ -79,7 +79,7 @@ function DailyChart({ d, cost }: { d: Details | null; cost: boolean }) {
   const max = Math.max(1, ...days.map(tot));
   const used = SERIES.filter(([k]) => days.some((x) => x.calls[k]));
   const h = hover !== null && d ? d.days[hover] : null;
-  const fmtDay = (t: number) => new Date(t).toLocaleDateString(en() ? "en-US" : "vi-VN", { day: "numeric", month: "short" });
+  const fmtDay = (t: number) => new Date(t).toLocaleDateString(locale(), { day: "numeric", month: "short" });
   return (
     <div className="us-card us-chart" onMouseLeave={() => setHover(null)}>
       <div className="us-chart-h">

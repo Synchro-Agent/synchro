@@ -15,7 +15,7 @@ import { BulkBar, BulkButton, BulkCheck, bulkRow, each, useBulk, type BulkAct } 
 import { Pager } from "./pager";
 import * as I from "./icons";
 import { type Chat, useApp, usePref } from "./store";
-import { getLang } from "./i18n";
+import { getLang, locale } from "./i18n";
 
 type Kind = "hub" | "about" | "model" | "chat" | "code" | "topic" | "entity" | "map" | "index" | "log" | "skill" | "connector" | "note" | "daily" | "rule" | "ghost" | "tag";
 type GNode = { id: string; title: string; kind: Kind; tags: string[]; created: number; links: number; aliases?: string[]; pinned?: boolean };
@@ -43,8 +43,8 @@ const KIND_ICON: Partial<Record<Kind, (p: { size?: number }) => React.ReactNode>
 };
 const KindIcon = ({ k, size = 14 }: { k: Kind; size?: number }) => { const Ic = KIND_ICON[k]; return Ic ? <span className="bw-ki" aria-hidden><Ic size={size} /></span> : <span className="bw-ki" aria-hidden>#</span>; };
 const fold = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/đ/gi, "d").toLowerCase().trim();
-const dateStr = (ms: number) => new Date(ms).toLocaleDateString(en() ? "en-US" : "vi-VN", { day: "numeric", month: "short", year: "numeric" });
-const timeStr = (ms: number) => new Date(ms).toLocaleTimeString(en() ? "en-US" : "vi-VN", { hour: "2-digit", minute: "2-digit" });
+const dateStr = (ms: number) => new Date(ms).toLocaleDateString(locale(), { day: "numeric", month: "short", year: "numeric" });
+const timeStr = (ms: number) => new Date(ms).toLocaleTimeString(locale(), { hour: "2-digit", minute: "2-digit" });
 const HUB_TITLE = "Bộ não";
 const slug = (s: string) => fold(s).replace(/[^\p{L}\p{N}]+/gu, "-").replace(/^-|-$/g, "");
 

@@ -4,7 +4,7 @@ import "./skills.css";
 import { useEffect, useRef, useState } from "react";
 import { apiFetch, statusText } from "./apierr";
 import * as I from "./icons";
-import { getLang, tr } from "./i18n";
+import { locale, tr } from "./i18n";
 import { ArtifactFrame, type ArtVersion, type FrameSend } from "./artifactui";
 import { CommentsPanel, Presence, useLive } from "./collabui";
 import { Menu } from "./ui";
@@ -105,7 +105,7 @@ export function AppsGallery({ q, say }: { q: string; say: (m: string) => void })
             {/* Dấu "·" dính vào chữ đứng trước (khoảng trắng không ngắt) và "2 lượt mở", "của Lan Anh" không bị tách: màn hẹp từng đẩy
                 "· 2/11/2026" xuống đầu dòng, bẻ tên "apps- / a", "Download / Tester". Gạch nối trong tên là gạch không ngắt. */}
             <span>{[a.visibility === "org" ? tr("Ai có đường dẫn") : tr("Chỉ mình tôi"), a.mine ? "" : `${tr("của")} ${a.ownerName}`.replace(/ /g, "\u00a0").replace(/-/g, "\u2011"), `${a.opens} ${tr("lượt mở")}`.replace(/ /g, "\u00a0"),
-              new Date(a.updated_at).toLocaleDateString(getLang() === "en" ? "en-US" : "vi-VN")].filter(Boolean).join("\u00a0· ")}</span>
+              new Date(a.updated_at).toLocaleDateString(locale())].filter(Boolean).join("\u00a0· ")}</span>
           </div>
           <a className="btn" href={`/apps/${a.id}`} target="_blank" rel="noreferrer">{tr("Mở")}</a>
           <button className="icon-btn" aria-label="Chép đường dẫn" data-tip="Chép đường dẫn" onClick={() => { navigator.clipboard?.writeText(appUrl(a.id)); say(tr("Đã chép đường dẫn")); }}><I.Copy size={15} /></button>

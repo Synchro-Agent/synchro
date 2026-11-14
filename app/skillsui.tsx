@@ -7,7 +7,7 @@ import { createPortal } from "react-dom";
 import * as I from "./icons";
 import { useApp } from "./store";
 import { BulkBar, BulkButton, BulkCheck, bulkRow, each, useBulk, type BulkAct } from "./bulk";
-import { getLang, tr } from "./i18n";
+import { getLang, locale, tr } from "./i18n";
 import { diffLines } from "./md";
 import { slimSkillZip, tooLarge } from "./skillzip";
 import { PageBar, usePage } from "./pager";
@@ -46,7 +46,7 @@ const api = async (url: string, init?: RequestInit) => {
 const SKILL_ZIP_MAX = 20 * 1024 * 1024;
 const fmt = (n: number) => (n < 1024 ? `${n} B` : n < 1048576 ? `${(n / 1024).toFixed(1)} KB` : `${(n / 1048576).toFixed(1)} MB`);
 const vi = () => getLang() === "vi";
-const ago = (iso: string) => new Date(iso).toLocaleDateString(vi() ? "vi-VN" : "en-US", { day: "numeric", month: "short" });
+const ago = (iso: string) => new Date(iso).toLocaleDateString(locale(), { day: "numeric", month: "short" });
 // Dòng thông tin phụ của skill, theo ngôn ngữ giao diện (nằm trong data-notr nên tự dịch ở đây).
 const meta = (s: Item) => [`v${s.version}`, ago(s.updated_at), s.fileCount ? (vi() ? `${s.fileCount} tệp` : `${s.fileCount} files`) : "", s.useCount ? (vi() ? `đã dùng ${s.useCount} lần` : `used ${s.useCount}×`) : ""].filter(Boolean).join(" · ");
 
@@ -412,7 +412,7 @@ function SelfFixes({ name, patches, onChange, onErr }: { name: string; patches: 
             <div className="sk-fix-h">
               <span className={`sk-tag ${p.status}`}>{p.stale ? "Skill updated, no longer applies" : PATCH_LABEL[p.status]}</span>
               <b data-notr>{p.path}</b>
-              <span className="muted" data-notr>{new Date(p.created_at).toLocaleDateString(getLang() === "en" ? "en-US" : "vi-VN")}</span>
+              <span className="muted" data-notr>{new Date(p.created_at).toLocaleDateString(locale())}</span>
               <span style={{ flex: 1 }} />
               <button className="lnk" onClick={() => setOpen(open === p.id ? null : p.id)}>{open === p.id ? "Hide changes" : "View changes"}</button>
             </div>

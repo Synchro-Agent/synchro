@@ -4,7 +4,7 @@ import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useStat
 import { createPortal } from "react-dom";
 import * as I from "./icons";
 import { Avatar } from "./avatar";
-import { getLang, tr, trCx, useLangReady } from "./i18n";
+import { getLang, locale, tr, trCx, useLangReady } from "./i18n";
 import { resetClock, resetAt } from "./resetfmt";
 import { FileCard } from "./fileicon";
 import { useFileMenu, saveDoc, saveBlob, fileContext } from "./filemenu";
@@ -799,7 +799,7 @@ function greeting(call: string): [string, string] {
   if (h < 18) return ["Chiều tốt lành", n];
   return ["Tối rồi, mọi thứ thế nào?", ""];
 }
-const fmt = (t: number) => new Date(t).toLocaleTimeString(getLang() === "en" ? "en-US" : "vi-VN", { hour: "2-digit", minute: "2-digit" });
+const fmt = (t: number) => new Date(t).toLocaleTimeString(locale(), { hour: "2-digit", minute: "2-digit" });
 
 function Toast({ text }: { text: string }) {
   const [shown, setShown] = useState(text);
@@ -2689,7 +2689,7 @@ export default function Home({ boot }: { boot?: BootData | null }) {
         {view === "new" && (
           <div className="hero" key={String(incog)}>
             <div className="hero-col">
-            <div className="hero-date" data-notr>{new Date().toLocaleDateString(getLang() === "en" ? "en-US" : "vi-VN", { weekday: "long", day: "numeric", month: "long" })}</div>
+            <div className="hero-date" data-notr>{new Date().toLocaleDateString(locale(), { weekday: "long", day: "numeric", month: "long" })}</div>
             <h1 className="greeting">{incog && <I.Ghost size={26} />}<span className="greet-t">{incog ? "Đoạn chat ẩn danh" : <>{greet[0]}{greet[1] && <>, <span data-notr>{greet[1]}</span></>}</>}</span></h1>
             {models.loaded && !models.providers.length && (!model || modelsSettled()) && (
               <section className="ob-card" aria-labelledby="ob-t">

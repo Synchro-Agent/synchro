@@ -1,14 +1,14 @@
 "use client";
 // Tách khỏi pluginsui.tsx và skillsui.tsx (nặng, tải chậm khi mở Kho kỹ năng) vì trang chủ luôn cần các nút studio.
 import { useEffect, useState } from "react";
-import { getLang } from "./i18n";
+import { locale } from "./i18n";
 import { cachedJson, clearJsonCache, seedJson } from "./jsoncache";
 export { cachedJson, clearJsonCache, seedJson };
 
 type Studio = "design" | "slides" | "docs";
 type Lib = { name: string; skills: number; autoTotal?: number; catalogLibs?: number };
 /** Số đếm có phân cách hàng nghìn theo ngôn ngữ giao diện (2.431 / 2,431). */
-export const fmtCount = (n: number) => n.toLocaleString(getLang() === "en" ? "en-US" : "vi-VN");
+export const fmtCount = (n: number) => n.toLocaleString(locale());
 // Báo cho thanh nhập và trang Artifacts biết plugin vừa đổi (studio có thêm skill).
 export const PLUGINS_CHANGED = "synchro:plugins";
 export const HUB_SEARCH = "synchro:hub-search";
