@@ -87,7 +87,8 @@ try {
   await P("Page.navigate", { url: B + "/" });
   await until(`!!document.querySelector("textarea")`, 30000, "app");
   await sleep(800);
-  await click(byText(".nav-item", "Kho kỹ năng"), "hub");
+  // Nhãn thanh bên đổi thành "Kỹ năng" (bf4ed7a, "Kho kỹ năng" chuyển vào chú thích): tìm theo data-nav.
+  await click(`document.querySelector('.nav-item[data-nav="customize"]')`, "hub");
   await until(`!!document.querySelector('input[type=file][accept=".zip,.md"]')`, 15000, "skill upload input");
   // Ghi lại dung lượng tệp thật sự gửi lên máy chủ.
   await ev(`window.__up = []; { const f0 = window.fetch; window.fetch = (u, i) => { if (i?.body instanceof FormData) { const f = i.body.get("file"); window.__up.push({ name: f?.name, size: f?.size, pick: i.body.get("pick") }); } return f0(u, i); }; } 1`);

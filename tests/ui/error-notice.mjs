@@ -1,5 +1,5 @@
 // Kiểm thử giao diện bằng Chrome ẩn (hồ sơ riêng) trên npm run dev:mock. Chạy tay: node tests/ui/error-notice.mjs
-// Hết hạn mức giữa chừng: chữ đã viết vẫn còn, lời báo hiện riêng kèm mốc dùng lại được và nút đổi model; bấm nút thì gửi tiếp. Chặn /api/llm bằng phản hồi dựng sẵn
+// Hết hạn mức giữa chừng: chữ đã viết vẫn còn, lý do ở thẻ lỗi, lời báo hiện riêng kèm giờ đặt lại tuyệt đối ("Đặt lại T7 14:27", 4170a04) và nút đổi model; bấm nút thì gửi tiếp. Chặn /api/llm bằng phản hồi dựng sẵn
 // nên không cần đăng nhập gói giả lập.
 import { spawn } from "node:child_process";
 import { rmSync } from "node:fs";
@@ -60,8 +60,10 @@ try {
   say(await until(`!!document.querySelector(".msg-notice")`, 15000), "lượt lỗi: có khung thông báo riêng");
   const bubble = await ev(`[...document.querySelectorAll(".ai-msg")].at(-1)?.textContent ?? ""`);
   say(/Phần đã viết trước khi hết hạn mức/.test(bubble), `chữ đã viết vẫn còn: “${bubble.slice(0, 80)}”`);
+  // Lượt lỗi: lý do (hết hạn mức) nằm ở thẻ lỗi .msg-err, khung thông báo chỉ còn giờ đặt lại dạng tuyệt đối (resetAt, 4170a04) và nút đổi model.
   const notice = await ev(`document.querySelector(".msg-notice").textContent`);
-  say(/hết hạn mức|hit its limit/.test(notice) && /Dùng lại được|Available again/.test(notice), `lời báo kèm mốc dùng lại được: “${notice.slice(0, 140)}”`);
+  const err = await ev(`document.querySelector(".msg-err")?.textContent ?? ""`);
+  say(/hết hạn mức|hit its limit/.test(err) && /Đặt lại|Resets/.test(notice), `lời báo kèm mốc dùng lại được: “${(err + " | " + notice).slice(0, 160)}”`);
   say(await ev(`!![...document.querySelectorAll(".msg-notice button")].find((b) => /ChatGPT Mock|Tự động|Auto/.test(b.textContent))`), "có nút đổi model");
   await click(`document.querySelector(".msg-notice .btn")`);
   say(await until(`[...document.querySelectorAll(".ai-msg")].at(-1)?.textContent.includes("Đã làm tiếp xong")`, 15000), "bấm nút: gửi tiếp và có câu trả lời");

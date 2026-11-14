@@ -102,9 +102,14 @@ try {
   await sleep(800);
   await click(byText(".nav-item", "Hộp thư"), "inbox");
   ok(await waitFor(() => ev(`!!document.querySelector(".tk-top")`), 8000), "trang Hộp thư mở từ thanh bên");
-  await click(byText(".tk-top .btn.dark", "Tác vụ nền mới"), "new"); await sleep(600);
-  await click(byText(".tk-tpl .chip", "Bản tin buổi sáng"), "template"); await sleep(200);
-  ok(await ev(`document.querySelector(".tk-modal textarea").value.length > 20`), "chọn mẫu: điền sẵn tên, yêu cầu, lịch");
+  // Hộp thư thành trung tâm tự động hóa (5917e17): nút "Tác vụ nền mới" và chip mẫu .tk-tpl được thay bằng ô giao việc (.tk-comp):
+  // chip ví dụ điền sẵn câu, "Lên kế hoạch" mở thẻ kế hoạch (.tk-modal) đã điền tên, yêu cầu, lịch.
+  await click(byText(".tk-comp .tk-ex .chip", "Bản tin AI buổi sáng"), "example"); await sleep(200);
+  await click(byText(".tk-comp .btn.dark", "Lên kế hoạch"), "plan");
+  await until(`!!document.querySelector(".tk-modal")`, 30000, "plan modal");
+  ok(await ev(`document.querySelector(".tk-modal textarea").value.length > 20`), "lên kế hoạch từ ví dụ: điền sẵn tên, yêu cầu, lịch");
+  // Tên cố định để các bước sau tìm đúng kết quả "Bản tin buổi sáng" (model lên kế hoạch tự đặt tên khác).
+  await ev(`(() => { const i = document.querySelector(".tk-modal input.field"); Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set.call(i, "Bản tin buổi sáng"); i.dispatchEvent(new Event("input", { bubbles: true })); return 1; })()`);
   await shot("1-form");
   await ev(`(() => { const s = document.querySelector(".tk-modal select"); Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value").set.call(s, "once"); s.dispatchEvent(new Event("change", { bubbles: true })); return 1; })()`);
   await sleep(200);
@@ -114,11 +119,16 @@ try {
   // Chỉ tính kết quả mới (chưa đọc): tài khoản test có thể còn kết quả cũ từ lần chạy trước.
   await until(`[...document.querySelectorAll(".tk-item.unread")].some((e) => e.textContent.includes("Bản tin buổi sáng") && !e.querySelector(".tk-dot.running"))`, 60000, "result in inbox");
   ok(true, "tác vụ chạy ở nền, kết quả hiện trong Hộp thư");
-  await P("Page.reload", {}); await sleep(3000);
+  await P("Page.reload", {});
+  // Chờ app tải lại xong (thanh bên có số chưa đọc) thay vì 3 giây cố định (H2.3).
+  await waitFor(() => ev(`Number(document.querySelector(".nav-badge")?.textContent) >= 1`), 20000);
   const badge = await ev(`document.querySelector(".nav-badge")?.textContent ?? ""`);
   ok(Number(badge) >= 1, "thanh bên hiện số kết quả chưa đọc: " + badge);
-  await click(byText(".nav-item", "Hộp thư"), "inbox"); await sleep(1500);
-  await click(`[...document.querySelectorAll(".tk-item.unread .tk-row")].find((e) => e.textContent.includes("Bản tin buổi sáng"))`, "open item");
+  await click(byText(".nav-item", "Hộp thư"), "inbox");
+  // Danh sách kết quả tải sau khung chờ (máy chậm: hơn 1,5 giây): chờ đúng mục thay vì chờ cố định (H2.3).
+  const item = `[...document.querySelectorAll(".tk-item.unread .tk-row")].find((e) => e.textContent.includes("Bản tin buổi sáng"))`;
+  await until(`!!${item}`, 15000, "result row");
+  await click(item, "open item");
   ok(await waitFor(() => ev(`!!document.querySelector(".tk-body .mdx")`), 6000), "mở kết quả: hiện nội dung đầy đủ");
   await shot("2-result");
   await click(byText(".tk-acts .btn", "Mở thành đoạn chat"), "as chat");
