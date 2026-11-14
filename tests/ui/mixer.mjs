@@ -130,7 +130,9 @@ try {
   ok(await ev(`!!${byText(".cx-hist .lnk", "Bỏ nén")}`), "có nút bỏ nén");
   await shot("2-compacted");
   await click(`document.querySelector(".cx-pill")`, "close"); await sleep(400);
-  await sendMsg("#rev 4"); await sleep(1500); await idle(); await waitFor(async () => /Phiên bản 5/.test(await ev(`[...document.querySelectorAll(".art-card")].at(-1)?.textContent ?? ""`)), 6000);
+  await sendMsg("#rev 4"); await sleep(1500); await idle();
+  // Số phiên bản lên 5 ngay khi bản sửa bắt đầu chảy (thẻ còn "Đang sửa…"): chờ tới khi sửa xong ("Đã sửa 1 chỗ"), không chỉ chờ số phiên bản.
+  await waitFor(async () => { const t = await ev(`[...document.querySelectorAll(".art-card")].at(-1)?.textContent ?? ""`); return /Phiên bản 5/.test(t) && /Đã sửa 1 chỗ/.test(t); }, 15000);
   const card = await ev(`[...document.querySelectorAll(".art-card")].at(-1)?.textContent ?? ""`);
   ok(/Phiên bản 5/.test(card) && /Đã sửa 1 chỗ/.test(card), "sau khi nén vẫn sửa đúng artifact (bản hiện tại vẫn gửi kèm): " + card);
   await shot("3-after");

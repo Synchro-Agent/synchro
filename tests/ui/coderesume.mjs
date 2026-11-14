@@ -51,7 +51,9 @@ const openCode = async () => {
 const sendMsg = async (text) => {
   await click(codeBox, "box");
   await P("Input.insertText", { text });
-  await sleep(150);
+  // Mở lại phiên vừa xong: phiên nhận lại lượt cũ từ máy chủ, trong lúc đó nút gửi là nút Dừng. Bấm lúc đó là dừng chứ không gửi
+  // (người dùng thấy nút Dừng và chờ): chờ nút về lại "Gửi" rồi mới bấm. H2.3 rút ngắn phần 1 nên phần 2 hay rơi đúng lúc này.
+  await until(`/^(Gửi|Send)$/.test(document.querySelector(".cv-dock .send")?.getAttribute("aria-label") ?? "") && !document.querySelector(".ai-streaming")`, 20000, "nút Gửi sẵn sàng");
   await click(`document.querySelector(".cv-dock .send")`, "send");
 };
 const steps = (a) => `Làm theo các bước #seq=${JSON.stringify(a)}`;

@@ -192,7 +192,9 @@ try {
 
   console.log("3. Điểm skill trong Kho kỹ năng");
   await ev(`(async () => { for (const m of ["p1", "p2", "p3"]) await fetch("/api/feedback", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ msg: "pal:" + m, skills: [${JSON.stringify(SK)}], value: -1 }) }); await fetch("/api/feedback", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ msg: "pal:p4", skills: [${JSON.stringify(SAVED)}], value: 1 }) }); return 1; })()`);
-  rows = await palette("kho ky nang"); await key("Enter", "Enter", 13); await sleep(1500);
+  rows = await palette("kho ky nang"); await key("Enter", "Enter", 13);
+  // Kho kỹ năng tải chậm (mã trang và danh sách skill hỏi máy chủ): chờ dòng của skill có điểm thay vì 1,5 giây cố định (H2.3).
+  await until(`!![...document.querySelectorAll(".pl-row2")].find((x) => x.querySelector("b")?.textContent === ${JSON.stringify(SK)})?.querySelector(".sk-score")`, 20000, "điểm skill").catch(() => {});
   const badge = (n) => ev(`(() => { const r = [...document.querySelectorAll(".pl-row2")].find((x) => x.querySelector("b")?.textContent === ${JSON.stringify(n)}); const b = r?.querySelector(".sk-score"); return b ? { t: b.textContent, low: b.classList.contains("high") } : null; })()`);
   let bd = await badge(SK);
   ok(bd?.low && /Hay bị chê|Often unhelpful/.test(bd.t) && /0.*3/.test(bd.t), "skill bị chê 3 lần → điểm đỏ \"Hay bị chê\"", JSON.stringify(bd));

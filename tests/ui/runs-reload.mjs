@@ -111,6 +111,14 @@ await sleep(2500);
 await click(byText(".nav-item", "Mới"), "new"); await sleep(800);
 await sendMsg("Kể ngắn về lịch sử cà phê #slow");
 ok(await waitFor(() => ev(`!!document.querySelector(".wl-status")`), 8000), "câu trả lời chậm đang chạy");
+// Dòng trạng thái hiện ngay ở trình duyệt, trước khi POST /api/llm kịp tạo lượt ở máy chủ (máy chậm: tới 3 giây). Tải lại lúc đó là hủy
+// chính yêu cầu gửi, không phải "tải lại khi đang trả lời": chờ máy chủ có lượt của câu này rồi mới tải lại (H2.3 bỏ sleep 2 giây cũ).
+{ const R = createRequire(process.cwd() + "/package.json");
+  const db = new (R("better-sqlite3"))(process.cwd() + "/data-mock/synchro.db", { readonly: true }); db.pragma("busy_timeout = 5000");
+  const q = db.prepare("SELECT 1 FROM runs WHERE user_id = (SELECT id FROM users WHERE email = ?) AND req LIKE ? AND created_at > ?");
+  const t0 = Date.now() - 60_000;
+  ok(!!(await waitFor(() => q.get(email, "%lịch sử cà phê #slow%", t0), 15000)), "máy chủ đã nhận lượt chạy trước khi tải lại");
+  db.close(); }
 await P("Page.reload", {}); await sleep(4000);
 const chatTitle = await ev(`[...document.querySelectorAll(".chat-item, aside button")].find((e) => e.textContent.includes("Kể ngắn về lịch sử"))?.textContent ?? ""`);
 // Tên đoạn chat có thể đã được tự đặt lại: tìm theo cụm chữ còn giữ.

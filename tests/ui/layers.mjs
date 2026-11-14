@@ -67,12 +67,14 @@ try {
   await until(`!!document.querySelector("textarea")`, 30000, "app");
   await sleep(800);
   await click(`[...document.querySelectorAll(".nav-item")].find((e) => e.textContent.trim() === "Artifacts")`, "artifacts");
-  await until(`!!document.querySelector(".art-tile")`, 15000, "artifact tiles");
+  // Khung chờ (.art-tile.sk) hiện trước khi /api/artifacts trả lời và không bấm được: chờ ô artifact thật rồi mới bấm
+  // (H2.3 bỏ 1,2 giây chờ cố định nên lúc bấm danh sách có thể chưa về).
+  await until(`!!document.querySelector(".art-tile:not(.sk)")`, 15000, "artifact tiles");
   // Giữ hạn cũ (1,2 giây cho hiệu ứng hiện dần xong, nay 1,5 giây), rồi trạng thái "không còn hiệu ứng" phải đứng yên 300 ms: hiệu ứng
   // giữ fill-mode hay gắn lại ngay sau đó vẫn bị bắt như trước.
   const pageAnim = `getComputedStyle(document.querySelector(".page")).opacity === "1" && document.querySelector(".page").getAnimations().length === 0`;
   ok((await waitFor(() => ev(pageAnim), 1500)) && (await settle(() => ev(pageAnim), 300, 1500)) === true, "trang hiện dần xong thì không còn hiệu ứng nào gắn trên .page");
-  await ev(`document.querySelector(".art-tile").click(), 1`);
+  await ev(`document.querySelector(".art-tile:not(.sk)").click(), 1`);
   await until(`!!document.querySelector(".art-modal .art-panel")`, 20000, "artifact modal");
   await sleep(500);
   const a = await onTop(".art-modal", ".art-modal .art-panel");

@@ -70,8 +70,9 @@ try {
       await until(`!!document.querySelector(".modal.settings")`, 8000, "settings");
     }
     await click(`[...document.querySelectorAll(".modal.settings .s-item")].find((e) => /Providers|Nhà cung cấp/i.test(e.textContent + e.getAttribute("title")))`, "providers");
-    await sleep(1200);
     const card = `document.querySelector('input[id="api-key-anthropic"]')`;
+    // Bảng Providers tải chậm (thân Cài đặt và settings.css nạp riêng, B3.4; danh sách khóa hỏi máy chủ): chờ mục Claude hiện ra thay vì 1,2 giây cố định.
+    await until(`!!${card} || !!document.querySelector('.pv-vendor[data-vendor="anthropic"]')`, 20000, "mục Claude trong Providers");
     if (!(await ev(`!!${card}`))) {
       // Mở mục Claude, chọn "Link an API key" rồi bấm đổi khóa.
       const v = `document.querySelector('.pv-vendor[data-vendor="anthropic"]')`;
@@ -79,7 +80,10 @@ try {
       await sleep(400);
       await click(`[...${v}.querySelectorAll(".pv-opt")].at(-1)`, "chọn khóa API");
       await sleep(400);
-      await click(`[...${v}.querySelectorAll(".api-btns button")].find((b) => /Change key|Add key|Đổi khóa|Thêm khóa/.test(b.textContent))`, "đổi khóa");
+      // Nút đổi / thêm khóa chỉ hiện khi danh sách khóa (GET /api/admin/apikeys) đã về; trước đó mục ghi "Đang tải…".
+      const keyBtn = `[...${v}.querySelectorAll(".api-btns button")].find((b) => /Change key|Add key|Đổi khóa|Thêm khóa/.test(b.textContent))`;
+      await until(`!!${keyBtn}`, 20000, "nút đổi khóa");
+      await click(keyBtn, "đổi khóa");
       await until(`!!${card}`, 5000, "form khóa");
     }
     await type(card, "sk-ant-mock-org-two-0001");
