@@ -471,6 +471,16 @@ function mediaOf(msgs = []) {
     : b.type === "input_file" ? [`${CLI.mediaDesc(b64(b.file_data))} (input_file)`]
     : b.type === "image_url" ? [`${CLI.mediaDesc(b64(b.image_url?.url))} (image_url)`] : []);
 }
+// Câu trả lời dài cố định cho "#longmd": 8 mục, mỗi mục một đoạn văn và một danh sách; giữa bài một bảng, hai khối code.
+function longMd() {
+  const para = (k) => `Phần ${k} nói về cách Synchro giữ giao diện mượt khi câu trả lời dài đang chảy về. Mỗi khung hình chỉ nên vẽ lại đúng tin nhắn đang viết, còn thanh bên, ô soạn tin và các khung khác đứng yên. Đoạn văn này đủ dài để trình duyệt phải tách dòng, đo chữ và dựng lại Markdown nhiều lần trong lúc chữ tới từng mẩu nhỏ, giống một câu trả lời thật về kỹ thuật hay kế hoạch công việc.`;
+  const list = (k) => [1, 2, 3, 4, 5].map((i) => `- Ý ${k}.${i}: kiểm tra **độ trễ** khi gõ, *thời gian vẽ* và số lần dựng lại của các khối lớn trên trang.`).join("\n");
+  const table = `| Hạng mục | Trước | Sau | Ghi chú |\n|---|---|---|---|\n${[1, 2, 3, 4, 5, 6, 7, 8].map((i) => `| Mục ${i} | ${i * 12} ms | ${i * 3} ms | Đo trên máy giảm tốc CPU 4 lần |`).join("\n")}`;
+  const code1 = "```ts\nexport function coalesce(write: (t: string) => void) {\n  let pend: string | null = null, raf = 0;\n  const flush = () => { raf = 0; if (pend !== null) { write(pend); pend = null; } };\n  return (t: string) => { pend = t; if (!raf) raf = requestAnimationFrame(flush); };\n}\n```";
+  const code2 = "```python\ndef tong_hop(ds):\n    ket_qua = {}\n    for muc in ds:\n        ket_qua[muc['ten']] = ket_qua.get(muc['ten'], 0) + muc['gia_tri']\n    return ket_qua\n\nprint(tong_hop([{'ten': 'a', 'gia_tri': 1}, {'ten': 'a', 'gia_tri': 2}]))\n```";
+  const secs = [1, 2, 3, 4, 5, 6, 7, 8].map((k) => `## Mục ${k}\n\n${para(k)} ${para(k)}\n\n${list(k)}\n\n${para(k)}${k === 3 ? `\n\n${table}` : k === 5 ? `\n\n${code1}` : k === 7 ? `\n\n${code2}` : ""}`);
+  return `Đây là bản tổng hợp dài.\n\n${secs.join("\n\n")}\n\nHết bài.`;
+}
 function reply(provider, id, msgs, maxTokens, effort, sys = "") {
   const q = lastUserText(msgs).trim();
   if (q.startsWith("Đoạn chat cần đặt tên:")) return { text: mockTitle(q), q };
@@ -490,6 +500,9 @@ function reply(provider, id, msgs, maxTokens, effort, sys = "") {
   { const g = /#artgen=([\w-]+)/.exec(q); if (g) return { text: `Trang có ảnh đã tạo.\n<artifact identifier="anh-tao" type="text/html" title="Ảnh đã tạo">\n<!doctype html><html><body style="margin:0"><img id="tao" src="https://image.synchro.invalid/${g[1]}.png" style="width:96px;height:96px"></body></html>\n</artifact>`, q }; }
   // "#sxkit": sơ đồ ```d2 và bản trình bày nền shader 3D + biểu đồ ECharts (mock-cli-common.cjs sxKit) — xem tận mắt trên trang thật.
   if (q.includes("#sxkit")) return { text: CLI.sxKit(), q };
+  // "#longmd": câu trả lời Markdown dài (khoảng 2.000 từ: tiêu đề, danh sách, bảng, hai khối code) cho bài đo số lần vẽ lúc chữ chảy
+  // (tests/ui/render-perf.mjs, blueprint B2). Tên khác #longtext của CLI giả lập (scripts/mock-cli/agy) để không bắt nhầm.
+  if (/#longmd\b/.test(q)) return { text: longMd(), q };
   // "#prefs": nhắc lại khối <user_preferences> (Hướng dẫn cho Synchro) có trong system prompt — kiểm thử hướng dẫn tới được model.
   if (q.includes("#prefs")) { const m = /<user_preferences>([\s\S]*?)<\/user_preferences>/.exec(`${sys}\n${JSON.stringify(msgs ?? [])}`); return { text: m ? `PREFS: ${m[1].replace(/\\n/g, "\n").trim().replace(/\s+/g, " ")}` : "PREFS: none", q }; }
   const vi = /[ăâđêôơưàáạảãèéẹẻẽìíịỉĩòóọỏõùúụủũỳýỵỷỹ]/i.test(q) || !q;
@@ -543,7 +556,7 @@ function memoryReply(sys, q) {
 const SIDE = /^(Việc cần tự động hóa:|Đoạn chat cần (chưng cất|đặt tên):|Hồ sơ:|Trang cần biên soạn:|Các tên trong bộ não:|Các chủ đề cần xếp bản đồ:|Những điều đã biết về người dùng:|Bản người dùng tự viết:|Skill cần phân loại:|Các skill cần thẩm định:)/;
 const capsFor = (sys, q, msgs, tools, none) => {
   if (stallNow(q, msgs)) return { text: "Mình sẽ mở trình duyệt và làm ngay." };
-  if (q.includes("#media") || q.includes("#cxlink") || SIDE.test(q)) return null; // lệnh thử / lời gọi của bộ não: trả lời ở reply
+  if (q.includes("#media") || q.includes("#cxlink") || /#longmd\b/.test(q) || SIDE.test(q)) return null; // lệnh thử / lời gọi của bộ não: trả lời ở reply
   // "#tool=tên" ép gọi đúng công cụ đó trước mọi câu trả lời mẫu (trừ lệnh thử sửa artifact #rev).
   if (!none && q.includes("#tool=") && !/#rev\s*\d+/.test(q)) { const w = wantTool(q, tools); if (w) return { tool: w }; }
   const mem = memoryReply(sys, q);

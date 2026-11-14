@@ -27,6 +27,7 @@ import { aiVoiceNote, elSpeed, speakAI, type Speaking } from "./speak";
 import { toSpeech, VI } from "./voiceflow";
 import { ConnLoginWatcher } from "./connwatch";
 import { readBrowser, stopBrowserRead } from "./browserspeak";
+import { deltaSink } from "./deltasink";
 import { applyEvent, ConnCards, PlanCard, QueueChips, stepsOf, WorkParts, WorkStatus, WorkSummary, type Queued, type RunEv } from "./worklog";
 import { startScribe, type Scribe } from "./scribe";
 import type { AuthUser, Providers } from "./auth";
@@ -47,6 +48,9 @@ import { attachRun, callLLM, olderDigest, cancelRun, LLMError, setActiveEffort, 
 import { Confirm, LangModal, LogoutConfirm, ProjectModal, Settings, ShortcutsModal, UploadModal, UpgradeModal } from "./modals";
 import { ShareModal } from "./shareui";
 import { useBrainSync } from "./brainsync";
+import { countRender } from "./perfmark";
+import { useChatState, useChatStore } from "./chatstore.client";
+import { useEvent } from "./useevent";
 
 // Trình duyệt của Synchro (khung cạnh chat, trang Trình duyệt): vé xem màn hình trực tiếp.
 const browserTicket = () => fetch("/api/browser", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ op: "ticket" }) })
@@ -86,7 +90,7 @@ import { ArtPanelSkeleton, BootSkeleton, ChatListSkeleton, ThreadSkeleton } from
 import { resolveArt, type ArtVersion } from "./vfs";
 import { criticKey, fixPatch, important, type CriticEntry, type Finding } from "./critic";
 import { chatHistory, continuable, mixExtra } from "./history";
-import { ContextMixer } from "./mixer";
+import { DockMixer } from "./mixer";
 import { ArtifactCard, OutputFiles, saveArtifacts } from "./artifactcard";
 import { GEN_IMG_EVENT } from "./artgen";
 import type { Product } from "./filepreview";
@@ -391,6 +395,7 @@ function ModelPicker({ model, setModel, prefix }: { model: string; setModel: (m:
 
 // Ghi chú gói subscription trong menu con của hãng: gói hết hạn mức (đề nghị dùng khóa API, chỉ chuyển khi người dùng bấm),
 // đang dùng khóa API thay gói (quay lại gói), hay cần đăng nhập lại.
+
 // Lượt lỗi → thông báo kèm tin nhắn. text: lời báo khi còn giữ được phần đã viết; không thì lời báo chính là nội dung tin (failed).
 const noticeOf = (d: Record<string, unknown>, text: string): Msg["notice"] => ({
   ...(text ? { text, partial: true } : { failed: true }),
@@ -432,7 +437,8 @@ type Rec = { lang: string; interimResults: boolean; continuous: boolean; onresul
 // Lỗi nhận dạng của trình duyệt → một câu cho người dùng. Không có tiếng (no-speech) và bị dừng (aborted) không phải lỗi.
 const REC_ERR: Record<string, string> = { "not-allowed": "Không mở được micro: hãy cho phép Synchro dùng micro", "service-not-allowed": "Trình duyệt đang chặn nhận dạng giọng nói", "audio-capture": "Không tìm thấy micro trên máy này", network: "Nhận dạng giọng nói của trình duyệt cần kết nối mạng", "language-not-supported": "Trình duyệt chưa nhận dạng được ngôn ngữ này" };
 
-function Composer(p: {
+// Ô soạn tin: memo, mọi prop là giá trị đơn hoặc hàm ổn định (useEvent ở Home), nên không vẽ lại theo từng mẩu chữ đang chảy (blueprint B2).
+const Composer = memo(function Composer(p: {
   onSend: (t: string, f: string[], pick?: { id: string; label: string }[]) => void; busy: boolean; onStop: () => void; dock?: boolean; say: Say;
   prefill: { t: string; n: number }; files: string[]; setFiles: (f: string[]) => void;
   model: string; setModel: (m: string) => void; goCustom: () => void; goConnectors?: () => void; placeholder?: string; focusPlaceholder?: string; openUpload: () => void;
@@ -443,6 +449,9 @@ function Composer(p: {
   /** Đổi giá trị (bấm Mới, mở đoạn chat, chọn chế độ…) thì đưa con trỏ vào ô nhập. */
   focusKey?: string;
 }) {
+  countRender("Composer");
+  // memo chặn lần vẽ lại của Home khi từ điển ngôn ngữ vừa tải xong: tự theo dõi để chữ tr() đổi ngôn ngữ.
+  useLangReady();
   const { onSend, busy, onStop, dock, say, files, setFiles, model, setModel, openUpload } = p;
   const fm = useFileMenu(say);
   const [v, setV] = useState("");
@@ -779,7 +788,7 @@ function Composer(p: {
       </div>
     </div>
   );
-}
+});
 
 function ago(t: number): string {
   const m = Math.floor((Date.now() - t) / 60000);
@@ -992,6 +1001,7 @@ const MsgRow = memo(function MsgRow({ m: raw, i, last, busy, mark, art, inl, fil
 });
 
 export default function Home({ boot }: { boot?: BootData | null }) {
+  countRender("Home");
   // Giữ khung chờ tới khi từ điển của ngôn ngữ đang dùng về (tải riêng từng thứ tiếng, i18n.tsx): không nháy chữ sai ngôn ngữ.
   const langReady = useLangReady();
   // Gói khởi động dựng sẵn ở máy chủ (app/page.tsx, blueprint A3): dùng một lần lúc mở trang thay cho /api/auth/me và các lệnh hỏi đầu.
@@ -1040,9 +1050,17 @@ export default function Home({ boot }: { boot?: BootData | null }) {
   const narrow = () => typeof window !== "undefined" && window.matchMedia(NARROW).matches;
   useEffect(() => { if (narrow()) setOpen(false); }, []);
   useEffect(() => startWarmPing(), []);
-  const [chats, setChats] = useState<Chat[]>([]);
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [cur, setCur] = useState<number | null>(null);
+  // Đoạn chat, dự án, đoạn chat đang mở, lượt đang chạy, tin chờ gửi nằm ở kho app/chatstore.client.ts (blueprint B2).
+  // Các hàm đặt giá trị dùng như setState của React và không bao giờ đổi, nên lấy thẳng từ kho. Home đọc qua useChatState (cùng nhịp vẽ với useState).
+  const chats = useChatState((s) => s.chats);
+  const projects = useChatState((s) => s.projects);
+  const cur = useChatState((s) => s.cur);
+  const { setChats, setProjects, setCur, setRunning, setQueued, setBusy: setBusyOf, patch } = useChatStore.getState();
+  // Home gắn lại sau khi đã gỡ khỏi trang: kho về trạng thái ban đầu như useState trước đây, không mang theo dấu "đang chạy", đoạn chat đang mở
+  // của lần trước. Chỉ lần gắn thật (ref mới): Fast Refresh khi sửa mã và lần chạy hiệu ứng thứ hai của StrictMode giữ ref nên không xóa gì,
+  // như useState được giữ. Đặt trước mọi hiệu ứng ghi vào kho (khởi động, tải đoạn chat đã lưu).
+  const freshMount = useRef(true);
+  useEffect(() => { if (!freshMount.current) return; freshMount.current = false; useChatStore.getState().reset(); }, []);
   const curRef = useRef(cur);
   curRef.current = cur;
   // Công cụ connector đang chờ người dùng duyệt: thẻ hiện cuối cuộc trò chuyện đang trả lời.
@@ -1064,8 +1082,7 @@ export default function Home({ boot }: { boot?: BootData | null }) {
   const [nextProj, setNextProj] = useState<number | undefined>(undefined);
   // Đoạn chat đang có câu trả lời chạy (lượt chạy ở máy chủ, theo dõi qua SSE). Chuyển sang mục khác (Speech, Code…), mở đoạn chat khác
   // hay đoạn chat mới đều không dừng nó: câu trả lời vẫn chạy và hiện đủ khi quay lại; chỉ nút Dừng mới hủy.
-  const [running, setRunning] = useState<ReadonlySet<number>>(() => new Set());
-  const setBusyOf = (id: number, on: boolean) => setRunning((s) => { if (s.has(id) === on) return s; const n = new Set(s); if (on) n.add(id); else n.delete(id); return n; });
+  const running = useChatState((s) => s.running);
   // busy: đoạn chat đang mở có câu trả lời đang chạy (ô soạn tin thành "Nhắn thêm", nút Dừng…).
   const busy = view === "chat" && cur !== null && running.has(cur);
   const viewRef = useRef(view);
@@ -1620,7 +1637,6 @@ export default function Home({ boot }: { boot?: BootData | null }) {
     if (chat && liveArt) artDismissed.current = `${chat.id}-${lastIdx}-${liveArt.ident}`;
     setArtSel(null);
   };
-  const patch = (id: number, fn: (m: Msg[]) => Msg[]) => setChats((cs) => cs.map((c) => (c.id === id ? { ...c, msgs: fn(c.msgs) } : c)));
   const threadRef = useRef<HTMLDivElement>(null);
   // Khoảng đệm cuối đoạn chat và nút "cuộn xuống" theo chiều cao thật của khối soạn tin (thẻ chế độ, tin chờ gửi xếp trên ô soạn):
   // tin cuối không bao giờ nằm dưới các thẻ đó.
@@ -1701,7 +1717,7 @@ export default function Home({ boot }: { boot?: BootData | null }) {
   const gens = useRef(new Map<number, number>());
   const genSeq = useRef(0);
   // Tin nhắn gửi trong lúc đang chạy: "steer" đang chờ ghép vào lượt, "later" gửi thành lượt mới khi xong.
-  const [queued, setQueued] = useState<Queued[]>([]);
+  const queued = useChatState((s) => s.queued);
   const onSteer = async (text: string, later: boolean) => {
     const chatId = cur;
     if (chatId === null) return;
@@ -1754,11 +1770,9 @@ export default function Home({ boot }: { boot?: BootData | null }) {
     let reply: string;
     let usedSk: string[] = [], usedTl: string[] = [], libs: LibUse[] = [], via: string | null = null, viaTask: string | undefined;
     let outs: Msg["outs"] = [], trace: Msg["trace"] = [], cancelled = false, failed = false, said = "", notice: Msg["notice"], webs: Msg["webs"] = [];
-    // Chữ đến theo thời gian thực: cập nhật tin nhắn tối đa mỗi khung hình.
-    // Vẽ tối đa khoảng 20 lần mỗi giây: mắt không thấy khác, cả trang (thanh bên, ô soạn) không phải dựng lại 60 lần mỗi giây.
-    let pend: string | null = null, raf = 0, lastPaint = 0;
-    const flush = () => { raf = 0; if (pend === null || !mine()) return; const now = performance.now(); if (now - lastPaint < 45) { raf = requestAnimationFrame(flush); return; } lastPaint = now; const t = pend; pend = null; patch(id, (ms) => (ms.length && ms[ms.length - 1].role === "ai" ? [...ms.slice(0, -1), { ...ms[ms.length - 1], text: t, prog: undefined }] : ms)); };
-    const onDelta = (t: string) => { pend = t; if (!raf) raf = requestAnimationFrame(flush); };
+    // Chữ đến theo thời gian thực, gộp lại vẽ khoảng 20 lần mỗi giây (deltaSink).
+    const sink = deltaSink(mine, (t) => patch(id, (ms) => (ms.length && ms[ms.length - 1].role === "ai" ? [...ms.slice(0, -1), { ...ms[ms.length - 1], text: t, prog: undefined }] : ms)));
+    const onDelta = sink.push;
     // Bước của lượt: lời dẫn (chuyển từ chữ đang viết sang nhật ký), công cụ, kết quả, danh sách việc; tin nhắn thêm đã ghép
     // thì đóng phần trả lời trước, hiện tin người dùng, phần tiếp theo của lượt nằm ở câu trả lời mới bên dưới.
     const onEvent = (ev: RunEv) => {
@@ -1773,7 +1787,7 @@ export default function Home({ boot }: { boot?: BootData | null }) {
         setQueued((q) => { const k = q.findIndex((x) => x.chat === id && x.mode === "steer" && x.text === ev.text); return k < 0 ? q : q.filter((_, j) => j !== k); });
         return;
       }
-      if (ev.kind === "say") pend = null;
+      if (ev.kind === "say") sink.drop();
       patch(id, (ms) => (ms.length && ms[ms.length - 1].role === "ai" ? [...ms.slice(0, -1), { ...ms[ms.length - 1], ...applyEvent(ms[ms.length - 1], ev), ...(ev.kind === "say" ? { text: "" } : {}) }] : ms));
     };
     try {
@@ -1830,15 +1844,16 @@ export default function Home({ boot }: { boot?: BootData | null }) {
         setTimeout(() => askPlanSwitch(e.data, retry), 300);
       }
     }
-    if (raf) cancelAnimationFrame(raf);
+    sink.cancel();
     // Người dùng đã bấm Dừng: máy chủ trả phần đã viết và dấu vết (công cụ bị dừng ghi cancelled_by_user) — lưu lại cho lượt sau.
     if (!mine()) {
-      if (cancelled) patch(id, (ms) => ms.map((m, k) => (k === ms.length - 1 && m.role === "ai" && m.stopped ? { ...m, text: m.text || reply, trace: trace?.length ? trace : m.trace, outs: outs?.length ? outs : m.outs } : m)));
+      const pend = sink.pending();
+      if (cancelled) patch(id, (ms) => ms.map((m, k) => (k === ms.length - 1 && m.role === "ai" && m.stopped ? { ...m, text: m.text || reply || pend || "", trace: trace?.length ? trace : m.trace, outs: outs?.length ? outs : m.outs } : m)));
       return;
     }
     // Lượt lỗi: hiện thẻ lỗi ngay (không giả lập gõ chữ), giữ phần đã viết và nhật ký làm việc; không tính là câu trả lời xong.
     if (failed) {
-      const partial = notice?.partial ? reply : pend;
+      const partial = notice?.partial ? reply : sink.pending();
       patch(id, (m) => [...m.slice(0, -1), { ...workOf(m[m.length - 1]), role: "ai", text: partial ?? m[m.length - 1]?.text ?? "", failed: true, err: said, notice, done: true, time: Date.now(), dur: Date.now() - t0, outs: outs?.length ? outs : undefined, trace: trace?.length ? trace : undefined, webs: webs?.length ? webs : undefined }]);
       stop(false, id);
       doneAway(id, true);
@@ -1990,10 +2005,14 @@ export default function Home({ boot }: { boot?: BootData | null }) {
       setBusyOf(c.id, true);
       const mine = () => gens.current.get(c.id) === gen;
       const meta: Partial<RunMeta> = {};
-      attachRun(run, (prog) => { if (mine()) set((m) => ({ ...m, prog })); }, (text) => { if (mine()) set((m) => ({ ...m, text, prog: undefined })); }, (ev) => { if (!mine()) return; openBrowser(ev, c.id); if (ev.kind !== "steer") set((m) => ({ ...m, ...applyEvent(m, ev), ...(ev.kind === "say" ? { text: "" } : {}) })); }, meta, c.id).then((text) => {
+      // Chữ của lượt nối lại cũng gộp như lượt đang gửi (trước đây mỗi mẩu chữ dựng lại cả trang).
+      const sink = deltaSink(mine, (text) => set((m) => ({ ...m, text, prog: undefined })));
+      attachRun(run, (prog) => { if (mine()) set((m) => ({ ...m, prog })); }, (text) => { if (mine()) sink.push(text); }, (ev) => { if (!mine()) return; openBrowser(ev, c.id); if (ev.kind === "say") sink.drop(); if (ev.kind !== "steer") set((m) => ({ ...m, ...applyEvent(m, ev), ...(ev.kind === "say" ? { text: "" } : {}) })); }, meta, c.id).then((text) => {
+        sink.cancel();
         const used = meta.skills ?? [], libs = meta.libs ?? [], outs = meta.files ?? [], trace = meta.trace ?? [], stopped = !!meta.cancelled;
         // Người dùng bấm Dừng trong lúc chờ: tin đã đánh dấu dừng, chỉ giữ thêm phần máy chủ trả về.
-        if (!mine()) { if (stopped) patch(c.id, (ms) => ms.map((m, k) => (k === ms.length - 1 && m.role === "ai" && m.stopped ? { ...m, text: m.text || text, trace: trace.length ? trace : m.trace } : m))); return; }
+        // Chữ chưa kịp vẽ (sink.pending(), cancel() không xóa): dự phòng khi tin chưa có chữ và máy chủ không trả lại phần đã viết.
+        if (!mine()) { if (stopped) { const pend = sink.pending(); patch(c.id, (ms) => ms.map((m, k) => (k === ms.length - 1 && m.role === "ai" && m.stopped ? { ...m, text: m.text || text || pend || "", trace: trace.length ? trace : m.trace } : m))); } return; }
         const inLib = new Set(libs.flatMap((l) => [l.key, ...l.skills]));
         const sk = [...new Set(used.filter((u) => u.kind === "skill" && !inLib.has(u.name)).map((u) => u.name))];
         const tl = [...new Set(used.filter((u) => u.kind === "tool").map((u) => u.name))];
@@ -2003,10 +2022,13 @@ export default function Home({ boot }: { boot?: BootData | null }) {
         doneAway(c.id);
         setTimeout(() => autoTitle(c.id), 300);
       }, (e) => {
+        sink.cancel();
         if (!mine()) return;
         const said = e instanceof LLMError && e.message ? e.message : GENERIC_ERR, d = e instanceof LLMError ? e.data : {};
         const kept = typeof d.text === "string" && d.text.trim() ? d.text : "";
-        set((m) => ({ ...m, done: true, prog: undefined, run: undefined, failed: true, err: said, text: kept || m.text, notice: noticeOf(d, kept ? said : ""), ...(Array.isArray(d.files) && d.files.length ? { outs: d.files as Msg["outs"] } : {}), ...(Array.isArray(d.trace) && d.trace.length ? { trace: d.trace as Msg["trace"] } : {}) }));
+        // Lỗi mạng / lỗi không kèm chữ: giữ mẩu chữ chưa kịp vẽ (mới hơn m.text; ở tab nền có khi là cả câu vì requestAnimationFrame không chạy).
+        const pend = sink.pending();
+        set((m) => ({ ...m, done: true, prog: undefined, run: undefined, failed: true, err: said, text: kept || pend || m.text, notice: noticeOf(d, kept ? said : ""), ...(Array.isArray(d.files) && d.files.length ? { outs: d.files as Msg["outs"] } : {}), ...(Array.isArray(d.trace) && d.trace.length ? { trace: d.trace as Msg["trace"] } : {}) }));
         stop(false, c.id);
       });
     }
@@ -2171,8 +2193,7 @@ export default function Home({ boot }: { boot?: BootData | null }) {
   const removeChat = (id: number) => { if (running.has(id)) stop(true, id); setChats((cs) => cs.filter((c) => c.id !== id)); chatSync.forget("chat", [id]); if (cur === id) goNew(); };
   // Đoạn chat đang mở vừa bị xóa ở thiết bị khác.
   useEffect(() => { if (loaded && view === "chat" && cur !== null && !chats.some((c) => c.id === cur)) { setCur(null); setView("new"); } }, [chats]); // eslint-disable-line react-hooks/exhaustive-deps
-  const togglePin = (id: number) => setChats((cs) => cs.map((x) => (x.id === id ? { ...x, pinned: !x.pinned } : x)));
-  const setChatTags = (id: number, tags: string[]) => setChats((cs) => cs.map((x) => (x.id === id ? { ...x, tags: tags.length ? tags : undefined } : x)));
+  const { togglePin, setChatTags } = useChatStore.getState();
   const filterTag = (t: string | null) => { setTagFilter(t); if (t) setOpen(true); };
 
   useEffect(() => {
@@ -2315,15 +2336,22 @@ export default function Home({ boot }: { boot?: BootData | null }) {
     const t = setTimeout(() => { setQueued((q) => q.filter((x) => x.id !== next.id)); followUp(next.chat, next.text); }, 250);
     return () => clearTimeout(t);
   }, [running, queued]); // eslint-disable-line react-hooks/exhaustive-deps
-  const composerProps = { focusKey: `${view}:${cur}:${focusN}:${tplMode}`, onSend: send, busy, onSteer, onStop: stop, say, prefill, files, setFiles, model, setModel, goCustom, goConnectors: () => { setCzTab("connectors"); setView("customize"); }, openUpload: () => setModal("upload"), onVoice: () => { stopSpeak(); setSpeaking(null); setVoiceOn(true); },
-    projects: projects.filter((x) => !x.archived).map((x) => ({ id: x.id, name: x.name })),
+  // Prop của ô soạn tin (Composer đã memo): hàm qua useEvent, danh sách dự án chỉ dựng lại khi dự án đổi, còn lại là giá trị đơn / state,
+  // nên lúc chữ đang chảy ô soạn tin không vẽ lại; chỉ vẽ khi bắt đầu / xong lượt (busy) hay khi chính các giá trị này đổi.
+  const projPick = useMemo(() => projects.filter((x) => !x.archived).map((x) => ({ id: x.id, name: x.name })), [projects]);
+  const composerProps = { focusKey: `${view}:${cur}:${focusN}:${tplMode}`, onSend: useEvent(send), busy, onSteer: useEvent(onSteer), onStop: useEvent(stop), say, prefill, files, setFiles, model, setModel,
+    goCustom: useEvent(goCustom), goConnectors: useEvent(() => { setCzTab("connectors"); setView("customize"); }), openUpload: useEvent(() => setModal("upload")), onVoice: useEvent(() => { stopSpeak(); setSpeaking(null); setVoiceOn(true); }),
+    projects: projPick,
     project: view === "chat" && chat ? chat.project : nextProj ?? (view === "project" ? curProj ?? undefined : undefined),
-    onProject: (pid: number | undefined) => {
+    onProject: useEvent((pid: number | undefined) => {
       if (!projects.length) { setModal("proj"); return; }
       const name = projects.find((x) => x.id === pid)?.name;
       if (view === "chat" && chat) { setChats((cs) => cs.map((x) => (x.id === chat.id ? { ...x, project: pid } : x))); say(pid ? `Đã thêm vào "${name}"` : "Đã gỡ khỏi dự án"); }
       else { setNextProj(pid); say(pid ? `Đoạn chat mới sẽ nằm trong "${name}"` : "Đoạn chat mới không thuộc dự án nào"); }
-    } };
+    }) };
+  // Bàn trộn ngữ cảnh trong ô soạn tin ở đoạn chat: phần tử chỉ dựng lại khi đổi đoạn chat hay bắt đầu / xong lượt; DockMixer tự đọc đoạn chat từ kho.
+  const chatId = chat?.id;
+  const dockMixer = useMemo(() => (chatId === undefined ? null : <DockMixer chatId={chatId} busy={busy} say={say} />), [chatId, busy, say]);
   const lastAi = chat?.msgs.filter((m) => m.role === "ai").at(-1);
   // Lượt hỏi đáp từ Eleven Realtime được lưu vào đoạn chat như tin nhắn thường.
   const voiceTurn = (u: string, a: string) => {
@@ -2392,7 +2420,7 @@ export default function Home({ boot }: { boot?: BootData | null }) {
     return () => clearInterval(t);
   }, [breakH, breakM, say]);
 
-  const exportData = () => {
+  const exportData = useEvent(() => {
     const blob = new Blob([JSON.stringify({ exportedAt: new Date().toISOString(), profile: { name, call, instructions: ins }, projects, chats: chats.filter((c) => !c.inc) }, null, 2)], { type: "application/json" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
@@ -2400,7 +2428,7 @@ export default function Home({ boot }: { boot?: BootData | null }) {
     a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
     say("Đã xuất dữ liệu");
-  };
+  });
   // Xóa phiên trên máy chủ. Mặc định dữ liệu của tài khoản vẫn được giữ trên thiết bị (đã tách theo tài khoản) cho lần đăng nhập sau;
   // clear (hộp đăng xuất: "Xóa dữ liệu trên thiết bị này") xóa mọi khóa u:<uid>:* sau khi đã đẩy lên máy chủ (LogoutConfirm), đăng nhập lại thì tải về.
   const logout = (clear = false) => {
@@ -2414,17 +2442,19 @@ export default function Home({ boot }: { boot?: BootData | null }) {
     approvalRef.current?.resolve({ decisions: {} }); setApproval(null);
     setChats([]); setProjects([]); setBanner(true); setModal(null); goNew(); setMe(null);
   };
-  const api = {
-    say, chats, exportData,
+  // Giá trị của AppCtx: các hàm ổn định (useEvent), chỉ đổi khi tài khoản đổi; hơn 50 chỗ dùng useApp() không vẽ lại theo từng mẩu chữ đang chảy.
+  const logoutEv = useEvent(logout);
+  const wipe = useEvent((what: "all" | "chats") => { if (saveT.current) { clearTimeout(saveT.current.t); saveT.current = null; } if (what === "all") ls.clear(); else ["chats", "projects", "model", "banner"].forEach((k) => ls.remove(k)); chatSync.wipeAll(chats.filter((c) => !c.inc).map((c) => c.id), projects.map((p) => p.id)); setChats([]); setProjects([]); setBanner(true); goNew(); });
+  const api = useMemo(() => ({
+    say, exportData,
     upgrade: () => setModal("upgrade"),
     openSettings: (t?: string) => { setSettingsTab(t ?? "General"); setModal("settings"); },
     goCode: () => { setModal(null); setCodeCur(null); setView("code"); },
     close: () => setModal(null),
     ask: (t: string) => { setModal(null); setTimeout(() => { goNewRef.current(); setPrefill((p) => ({ t: tr(t), n: p.n + 1 })); }, 180); },
     confirm: (title: string, text: string, ok: string, fn: () => void) => setGc({ title, text, ok, fn }),
-    wipe: (what: "all" | "chats") => { if (saveT.current) { clearTimeout(saveT.current.t); saveT.current = null; } if (what === "all") ls.clear(); else ["chats", "projects", "model", "banner"].forEach((k) => ls.remove(k)); chatSync.wipeAll(chats.filter((c) => !c.inc).map((c) => c.id), projects.map((p) => p.id)); setChats([]); setProjects([]); setBanner(true); goNew(); },
-    me: me ?? null, setMe, logout,
-  };
+    wipe, me: me ?? null, setMe, logout: logoutEv,
+  }), [me]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const rowCx = useRef<RowCx | null>(null);
   if (chat) rowCx.current = { model, switchModel, fork, altModels: models.providers.flatMap((p) => p.models).filter((x) => allowsModel(models.allowed, x.key)).length > 1, chat, chats, say, fm, arts, artOpen, artIdent: artSel?.ident, artIndex, openPlugins, openArt, openFile, send: (t) => send(t), copy, speak, like, retry, openProviders: () => { setSettingsTab("Providers"); setModal("settings"); }, edit: (i, text) => { const u = chat.msgs[i]; if (!busy && u?.role === "user") resend(chat, i, { ...u, text, time: Date.now() }); } };
@@ -2517,6 +2547,7 @@ export default function Home({ boot }: { boot?: BootData | null }) {
           </div>
         )}
         {(() => {
+          countRender("Sidebar");
           const row = (c: Chat) => (
             <div key={c.id} className="chat-wrap" {...bulkRow(sb, { k: "chat", c })}>
               {renaming === c.id ? (
@@ -2776,8 +2807,7 @@ export default function Home({ boot }: { boot?: BootData | null }) {
                 <div className="dock-mode"><span className={`mode-tag sm mt-${k}`}>{TPLS.find((x) => x.k === k)!.label}<button className="mode-x" aria-label="Bỏ chế độ" data-tip="Bỏ chế độ, để Synchro tự chọn"
                   onClick={() => { setChats((cs) => cs.map((c) => (c.id === chat.id ? { ...c, studio: undefined } : c))); say("Đã bỏ chế độ. Synchro sẽ tự chọn thư viện skill phù hợp."); }}><I.X size={12} /></button></span></div>); })()}
               <QueueChips items={queued.filter((q) => q.chat === chat.id && q.mode === "later")} onCancel={(qid) => setQueued((q) => q.filter((x) => x.id !== qid))} />
-              <Composer {...composerProps} dock extra={<ContextMixer chat={chat} studio={chat.studio} busy={busy} say={say} recentSkills={[...new Set(chat.msgs.filter((m) => m.role === "ai").slice(-2).flatMap((m) => [...(m.libs ?? []).flatMap((l) => l.skills), ...(m.skills ?? [])]))]}
-                onChange={(p) => setChats((cs) => cs.map((c) => (c.id === chat.id ? { ...c, ...p } : c)))} />} />
+              <Composer {...composerProps} dock extra={dockMixer} />
               <div className="disclaimer dock-note"><span>Synchro là AI và có thể mắc lỗi. Vui lòng kiểm tra kỹ các câu trả lời.</span><ModelPicker model={model} setModel={setModel} /><UsageRing model={model} onDetails={() => { setSettingsTab("Usage"); setModal("settings"); }} /></div>
             </div>
           </>

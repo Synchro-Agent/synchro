@@ -2,13 +2,14 @@
 // Bàn trộn ngữ cảnh: xem lượt tiếp theo sẽ gửi những gì cho model và bao nhiêu token (ước tính từ đúng prompt máy chủ lắp).
 // Ba tầng giống cách Synchro xếp prompt để dùng bộ đệm: cố định (hướng dẫn, skill, tài liệu ghim) → lịch sử → thay đổi mỗi lượt.
 // Tắt / bật khối ở tầng cuối không làm đổi phần đầu nên không mất bộ đệm. Ngữ cảnh quá lớn thì nén lịch sử thành tóm tắt.
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import * as I from "./icons";
 import { locale, tr } from "./i18n";
 import { compactHistory, estimateContext, type CtxBlock } from "./llm";
 import { chatHistory, mixExtra } from "./history";
 import { fileContext } from "./filestate";
 import type { Chat } from "./store";
+import { useChatStore } from "./chatstore.client";
 
 const HOT = 32_000;
 const LABEL: Record<CtxBlock["key"], string> = {
@@ -23,6 +24,16 @@ const TIER: [CtxBlock["tier"], string, string][] = [
 const KEEP = 4; // nén thì giữ nguyên 4 tin gần nhất
 const PIN_MAX = 200_000;
 export const kTok = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(n >= 10_000 ? 0 : 1)}K` : String(n));
+
+// Bàn trộn ở ô soạn tin của đoạn chat đang mở (blueprint B2): tự đọc đoạn chat từ kho, nên ô soạn tin (memo) nhận một phần tử không đổi
+// suốt lượt; skill hai câu trả lời gần nhất đã dùng (gửi kèm ước tính để giữ cùng phong cách), đổi lựa chọn thì ghi thẳng vào kho.
+export function DockMixer({ chatId, busy, say }: { chatId: number; busy: boolean; say: (m: string) => void }) {
+  const chat = useChatStore((s) => s.chats.find((c) => c.id === chatId));
+  const msgs = chat?.msgs;
+  const recentSkills = useMemo(() => [...new Set((msgs ?? []).filter((m) => m.role === "ai").slice(-2).flatMap((m) => [...(m.libs ?? []).flatMap((l) => l.skills), ...(m.skills ?? [])]))], [msgs]);
+  if (!chat) return null;
+  return <ContextMixer chat={chat} studio={chat.studio} busy={busy} say={say} recentSkills={recentSkills} onChange={(p) => useChatStore.getState().patchChat(chatId, p)} />;
+}
 
 export function ContextMixer({ chat, studio, recentSkills, busy, onChange, say }: {
   chat: Chat; studio?: string; recentSkills?: string[]; busy: boolean; onChange: (p: Partial<Chat>) => void; say: (m: string) => void;
