@@ -3940,6 +3940,8 @@ button.bn-box:disabled{cursor:default}
   /* Ngăn kéo đang đóng ẩn hẳn sau khi trượt ra: ở 761–860px thanh điều hướng đứng bên trái .bw nên cột trái trượt -105% vẫn đè lên thanh điều hướng
      (z 30) và nuốt cú bấm vào các mục Code, Speech…; ẩn hẳn cũng không cho Tab rơi vào ngăn kéo khuất. */
   .bw:not(.show-left) .bw-left,.bw:not(.show-right) .bw-right{visibility:hidden;transition:transform .2s ease,visibility 0s .2s}
+  /* Giảm chuyển động: quy tắc trên mạnh hơn .bw-left{transition:none} của brainview.css, nên phải tắt lại đúng ở độ ưu tiên này. */
+  @media (prefers-reduced-motion:reduce){.bw:not(.show-left) .bw-left,.bw:not(.show-right) .bw-right{transition:none}}
   .bw .bn-title{font-size:27px}
   .bw .bn-md{font-size:15px}
 }
