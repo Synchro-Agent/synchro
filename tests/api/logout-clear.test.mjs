@@ -52,6 +52,9 @@ try {
   localStorage.setItem("signedIn", "1");
   U.setUserScope(null);
 
+  // Kho đoạn chat IndexedDB theo tài khoản (app/chatidb.ts): xóa đúng cơ sở dữ liệu của A.
+  const dropped = [];
+  globalThis.indexedDB = { deleteDatabase: (name) => { dropped.push(name); return {}; } };
   const n = U.clearAccountData("A");
   const all = () => [...localStorage.keys().map((k) => [k, localStorage.getItem(k)]), ...sessionStorage.keys().map((k) => [k, sessionStorage.getItem(k)])];
   ok(n === 11, "xóa đủ 9 khóa localStorage (5 u:A:* + 4 khóa ngoài tiền tố) và 2 khóa sessionStorage của A", n);
@@ -63,6 +66,12 @@ try {
   ok(localStorage.getItem("theme") === "dark" && localStorage.getItem("p:uilang") === "en" && localStorage.getItem("signedIn") === "1", "cài đặt của cả trình duyệt (giao diện, ngôn ngữ) giữ nguyên");
   ok(U.clearAccountData("anon") === 0 && U.clearAccountData("") === 0 && localStorage.getItem("u:B:chats"), "khách (anon) hay mã rỗng: không xóa gì");
   ok(U.clearAccountData("A") === 0, "gọi lại: không còn gì để xóa, không lỗi");
+  ok(dropped.length === 2 && dropped.every((x) => x === "synchro-chats:A"), "xóa cả kho đoạn chat IndexedDB của A (không tính vào số khóa), không bao giờ của B hay khách", dropped);
+  globalThis.indexedDB = { deleteDatabase: () => { throw new DOMException("blocked", "SecurityError"); } };
+  let threwIdb = false;
+  try { U.clearAccountData("A"); } catch { threwIdb = true; }
+  ok(!threwIdb, "IndexedDB bị chặn: không ném lỗi");
+  delete globalThis.indexedDB;
   const saved = globalThis.localStorage;
   globalThis.localStorage = { get length() { throw new Error("blocked"); }, key() { throw new Error("blocked"); } };
   let threw = false;
