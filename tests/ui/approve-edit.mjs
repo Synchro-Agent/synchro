@@ -2,12 +2,19 @@
 // nút Sửa mở ô JSON, lỗi cú pháp / sai schema hiện ngay và khóa nút cho phép, sửa đúng thì "Cho phép với tham số đã sửa", thẻ ghi "đã sửa tham số",
 // công cụ chạy với tham số mới. Máy tính (sáng) và 375px (tối), không cuộn ngang. Cần connector Mock Notes đã kết nối (tests/api/approve-edit.test.mjs tự thêm).
 // Chạy tay: BASE=http://localhost:3500 SHOTS=/tmp/x node tests/ui/approve-edit.mjs
+import { createRequire } from "node:module";
 import { login, openChrome, sleep } from "../lib/cdp.mjs";
 
 const B = process.env.BASE ?? "http://localhost:3200";
 let pass = 0, fail = 0;
 const ok = (c, n, x = "") => { c ? pass++ : fail++; console.log(c ? "  ✓" : "  ✗", n, c ? "" : String(typeof x === "string" ? x : JSON.stringify(x)).slice(0, 600)); };
 const { cookie, uid } = await login(B);
+// Lượt bằng khóa API tính vào hạn mức chi phí của tài khoản quản trị thử (mặc định 5 USD mỗi phiên, lượt qua gói Claude thì không): các bộ chạy
+// trước dùng hết thì lượt OpenAI giả lập bị chặn "đã dùng hết giới hạn", không có thẻ duyệt. Bắt đầu từ mức dùng 0 như các bộ khác (chỉ dữ liệu data-mock).
+if (!process.env.BASE) {
+  const db = new (createRequire(process.cwd() + "/package.json")("better-sqlite3"))(process.cwd() + "/data-mock/synchro.db"); db.pragma("busy_timeout = 5000");
+  db.prepare("DELETE FROM usage_events WHERE user_id = ?").run(uid); db.close();
+}
 const api = (method, p, body) => fetch(B + p, { method, headers: { "content-type": "application/json", origin: B, cookie }, body: body && JSON.stringify(body) }).then((r) => r.json().catch(() => null));
 const notesId = (await api("GET", "/api/connectors")).connectors?.find((x) => x.name === "Mock Notes" && x.status === "ok")?.id;
 if (!notesId) { console.log("Thiếu connector Mock Notes: chạy tests/api/approve-edit.test.mjs trước."); process.exit(1); }
