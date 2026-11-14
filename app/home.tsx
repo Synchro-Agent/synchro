@@ -47,6 +47,7 @@ import { attachRun, callLLM, olderDigest, cancelRun, LLMError, setActiveEffort, 
 import { Confirm, LangModal, LogoutConfirm, ProjectModal, Settings, ShortcutsModal, UploadModal, UpgradeModal } from "./modals";
 import { ShareModal } from "./shareui";
 import { useBrainSync } from "./brainsync";
+import { countRender } from "./perfmark";
 
 // Trình duyệt của Synchro (khung cạnh chat, trang Trình duyệt): vé xem màn hình trực tiếp.
 const browserTicket = () => fetch("/api/browser", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ op: "ticket" }) })
@@ -444,6 +445,7 @@ function Composer(p: {
   /** Đổi giá trị (bấm Mới, mở đoạn chat, chọn chế độ…) thì đưa con trỏ vào ô nhập. */
   focusKey?: string;
 }) {
+  countRender("Composer");
   const { onSend, busy, onStop, dock, say, files, setFiles, model, setModel, openUpload } = p;
   const fm = useFileMenu(say);
   const [v, setV] = useState("");
@@ -993,6 +995,7 @@ const MsgRow = memo(function MsgRow({ m: raw, i, last, busy, mark, art, inl, fil
 });
 
 export default function Home({ boot }: { boot?: BootData | null }) {
+  countRender("Home");
   // Giữ khung chờ tới khi từ điển của ngôn ngữ đang dùng về (tải riêng từng thứ tiếng, i18n.tsx): không nháy chữ sai ngôn ngữ.
   const langReady = useLangReady();
   // Gói khởi động dựng sẵn ở máy chủ (app/page.tsx, blueprint A3): dùng một lần lúc mở trang thay cho /api/auth/me và các lệnh hỏi đầu.
@@ -2519,6 +2522,7 @@ export default function Home({ boot }: { boot?: BootData | null }) {
           </div>
         )}
         {(() => {
+          countRender("Sidebar");
           const row = (c: Chat) => (
             <div key={c.id} className="chat-wrap" {...bulkRow(sb, { k: "chat", c })}>
               {renaming === c.id ? (
