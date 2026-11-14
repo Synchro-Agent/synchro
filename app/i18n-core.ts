@@ -12,8 +12,15 @@ const own = (m: Record<string, string>, k: string) => Object.prototype.hasOwnPro
 
 /** Dịch một chuỗi bằng từ điển d: khớp nguyên câu, rồi luật, rồi từng phần nối bằng " · ". Không có từ điển: giữ nguyên. */
 export function trWith(d: Dict | undefined, s: string, lang: Lang): string {
+  if (!s.trim() || !d) return s;
+  const r = trRaw(d, s);
+  return lang === "en" ? plural(r) : r;
+}
+
+// Phần tra từ điển của trWith, chưa thêm số nhiều (tfWith tự thêm, chừa giá trị chèn ra).
+function trRaw(d: Dict, s: string): string {
   const t = s.trim();
-  if (!t || !d) return s;
+  if (!t) return s;
   const map = d.map;
   let out: string | undefined = own(map, t) ? map[t] : undefined;
   if (out === undefined) {
@@ -24,11 +31,10 @@ export function trWith(d: Dict | undefined, s: string, lang: Lang): string {
   }
   // Chuỗi ghép bằng " · " (tên model · mô tả, giọng · ngôn ngữ…): dịch từng phần, phần không có trong từ điển (tên riêng) giữ nguyên.
   if (out === undefined && t.includes(" · ")) {
-    const parts = t.split(" · "), done = parts.map((x) => trWith(d, x, lang));
+    const parts = t.split(" · "), done = parts.map((x) => trRaw(d, x));
     if (done.some((x, i) => x !== parts[i])) out = done.join(" · ");
   }
-  const r = out === undefined ? s : s.replace(t, () => out as string);
-  return lang === "en" ? plural(r) : r;
+  return out === undefined ? s : s.replace(t, () => out as string);
 }
 
 /** Khóa từ điển kèm ngữ cảnh cho chữ ngắn dễ trùng ("Lọc", "Thuộc", "Chủ đề"…): "Lọc ‹đồ thị›".
@@ -43,18 +49,40 @@ export function trcWith(d: Dict | undefined, s: string, ctx: string, lang: Lang)
   return lang === "en" ? plural(d.map[k]) : d.map[k];
 }
 
-/** Điền {biến} vào mẫu. Mẫu có dạng "một|nhiều" (ngăn bằng |) thì chọn theo vars.n: đúng 1 lấy vế đầu. */
-export function fill(tpl: string, vars: Vars): string {
+/** Điền {biến} vào mẫu. Mẫu có dạng "một|nhiều" (ngăn bằng |) thì chọn theo vars.n: đúng 1 lấy vế đầu.
+ *  shown: giá trị đem điền (mặc định là vars; tfWith điền chỗ giữ thay cho tên, tiêu đề để số nhiều không đụng tới chúng). */
+export function fill(tpl: string, vars: Vars, shown: Vars = vars): string {
   let s = tpl;
   if (own(vars as Record<string, string>, "n") && s.includes("|")) { const [one, many] = s.split("|"); s = Number(vars.n) === 1 ? one : many ?? one; }
-  return s.replace(/\{(\w+)\}/g, (m, k: string) => (own(vars as Record<string, string>, k) ? String(vars[k]) : m));
+  return s.replace(/\{(\w+)\}/g, (m, k: string) => (own(shown as Record<string, string>, k) ? String(shown[k]) : m));
+}
+
+// Giá trị chèn là con số ("5", "1,234"): để số nhiều nhìn thấy ("{n} skill" → "5 skills"). Còn lại (tên, tiêu đề người dùng đặt) giữ nguyên chữ.
+const isNum = (v: string | number) => /^\s*\d[\d.,]*\s*$/.test(String(v));
+const HOLD = /\uE000(\d+)\uE001/g;
+
+/** Số nhiều tiếng Anh cho câu đã điền mà không sửa giá trị chèn: tiêu đề "5 skill" vẫn là "5 skill".
+ *  Thay mỗi giá trị chữ (có trong câu) bằng chỗ giữ, thêm số nhiều, rồi trả giá trị về. */
+function pluralKeep(s: string, vars: Vars): string {
+  const keep = [...new Set(Object.values(vars).filter((v) => !isNum(v)).map(String).filter((v) => v && s.includes(v)))].sort((a, b) => b.length - a.length);
+  let t = s;
+  keep.forEach((v, i) => { t = t.split(v).join(`\uE000${i}\uE001`); });
+  return plural(t).replace(HOLD, (_, i: string) => keep[Number(i)]);
 }
 
 /** Dịch cả mẫu có {biến} (khóa trong từ điển là nguyên mẫu, ví dụ "Gói {name} đã hết hạn mức") rồi mới điền giá trị.
  *  Mẫu chưa có trong từ điển: ở tiếng Anh thì điền vào câu gốc rồi dịch như chuỗi thường (luật dịch vẫn bắt được);
  *  ở tiếng Việt giữ nguyên câu gốc, không đưa giá trị chèn (tên đoạn chat, tên người…) qua từ điển. */
 export function tfWith(d: Dict | undefined, key: string, vars: Vars, lang: Lang): string {
-  if (d && own(d.map, key)) { const r = fill(d.map[key], vars); return lang === "en" ? plural(r) : r; }
+  if (d && own(d.map, key)) {
+    if (lang !== "en") return fill(d.map[key], vars);
+    // Số nhiều chỉ áp lên chữ của mẫu và giá trị là con số; tên, tiêu đề điền vào sau cùng nên không bị đổi.
+    const held: string[] = [], shown: Vars = {};
+    for (const [k, v] of Object.entries(vars)) shown[k] = isNum(v) ? v : `\uE000${held.push(String(v)) - 1}\uE001`;
+    return plural(fill(d.map[key], vars, shown)).replace(HOLD, (_, i: string) => held[Number(i)]);
+  }
   const s = fill(key, vars);
-  return lang === "en" ? trWith(d, s, lang) : s;
+  if (lang !== "en" || !d) return s;
+  // Mẫu chưa có khóa: luật dịch cần thấy giá trị thật, nên dịch câu đã điền rồi thêm số nhiều chừa các giá trị chữ ra.
+  return pluralKeep(trRaw(d, s), vars);
 }

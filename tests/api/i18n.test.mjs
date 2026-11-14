@@ -78,6 +78,18 @@ const src = new Map(files.map((f) => [f, rf(f, "utf8")]));
     && K("Bắt đầu khi bạn gửi tin nhắn", "giờ đặt lại") === "Starts with your next message" && code("usagering.tsx").includes('trc("Bắt đầu khi bạn gửi tin nhắn", "giờ đặt lại")'),
     "nút chuyển sang khóa API và giờ đặt lại giữ chữ tiếng Anh của main");
 }
+// tf: số nhiều tiếng Anh chỉ áp lên mẫu và giá trị là con số, không sửa tên / tiêu đề người dùng đặt.
+{
+  const EN2 = { map: D.VI2EN, rules: D.RULES_EN };
+  const done = C.tfWith(EN2, "Synchro đã trả lời xong “{title}”", { title: "5 skill" }, "en");
+  ok(done === "Synchro finished replying in “5 skill”", "tiêu đề “5 skill” giữ nguyên trong câu đã dịch", done);
+  const del = C.tfWith(EN2, "Xóa “{title}”?", { title: "Mua 2 credit và 3 artifact" }, "en");
+  ok(del === "Delete “Mua 2 credit và 3 artifact”?", "hỏi xóa ghi chú: tiêu đề có số không bị đổi", del);
+  ok(C.tfWith(EN2, "{n} skill", { n: 5 }, "en") === "5 skills" && C.tfWith(EN2, "{n} skill", { n: "1,234" }, "en") === "1,234 skills", "giá trị là con số vẫn được thêm số nhiều", C.tfWith(EN2, "{n} skill", { n: 5 }, "en"));
+  const fb = C.tfWith(EN2, "Mẫu chưa có khóa “{title}” · 3 skill", { title: "5 skill" }, "en");
+  ok(fb === "Mẫu chưa có khóa “5 skill” · 3 skills", "mẫu chưa có khóa: số nhiều ở chữ của mẫu, tiêu đề giữ nguyên", fb);
+  ok(C.tfWith({ map: { "Gói {name} còn {n} skill (thử)": "Your {name} plan has {n} skill (test)" }, rules: [] }, "Gói {name} còn {n} skill (thử)", { name: "9 skill", n: 2 }, "en") === "Your 9 skill plan has 2 skills (test)", "tên có số đứng cạnh mẫu có {n}: chỉ phần của mẫu đổi");
+}
 // Tệp nhập (không chỉ kiểu) từ tệp khác trong app/: mọi tệp mà một tệp "use client" kéo theo (kể cả gián tiếp) nằm trong gói tải về,
 // nên không được tới i18n-server.ts (kéo cả từ điển vào gói tải về). Tệp máy chủ (route, trang máy chủ, chatengine…) dùng thoải mái.
 const depsIn = (src) => (f, lazy = true) => [...src.get(f).matchAll(/(?:^|\n)\s*(?:import|export)\s+(?!type\b)([^;]*?)\s*from\s*"(\.{1,2}\/[^"]+)"|import\("(\.{1,2}\/[^"]+)"\)/g)]
