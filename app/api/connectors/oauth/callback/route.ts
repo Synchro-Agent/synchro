@@ -1,6 +1,6 @@
 import { finishAuth } from "../../../../connectors";
 import { randomToken } from "../../../../mcpauth";
-import { RULES_EN, VI2EN } from "../../../../i18n-dict";
+import { trOn } from "../../../../i18n-server";
 import { timed } from "../../../../servertiming";
 
 export const runtime = "nodejs";
@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 const js = (v: unknown) => JSON.stringify(v).replace(/</g, "\\u003c");
-const en = (s: string) => { if (Object.prototype.hasOwnProperty.call(VI2EN, s)) return VI2EN[s]; for (const [re, f] of RULES_EN) { const m = s.match(re); if (m) return f(m); } return s; };
+const en = (s: string) => trOn(s, "en");
 
 // Máy chủ đăng nhập của connector chuyển về đây. Trang Synchro gửi header COOP same-origin (WebContainer cần), nên khi cửa sổ đăng nhập đi qua trang của hãng thì
 // bị tách khỏi trang đã mở nó: không còn window.opener. Vì vậy báo kết quả qua BroadcastChannel (cùng nguồn, không cần opener), chờ trang chính xác nhận rồi tự đóng.

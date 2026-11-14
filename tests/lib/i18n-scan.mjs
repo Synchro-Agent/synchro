@@ -23,6 +23,9 @@ const NOT_TEXT = new Set(["className", "class", "id", "key", "href", "src", "typ
 // Hàm nhận chuỗi kỹ thuật (khóa, bộ chọn, sự kiện, đường dẫn…), không phải chữ hiển thị.
 const TECH_CALL = /^(querySelector(All)?|closest|matches|addEventListener|removeEventListener|getItem|setItem|removeItem|fetch|usePref|useState|get|set|has|delete|getAttribute|setAttribute|removeAttribute|toggleAttribute|startsWith|endsWith|includes|indexOf|split|join|replace|replaceAll|match|test|exec|RegExp|createElement|createElementNS|dispatchEvent|CustomEvent|Event|postMessage|on|off|emit|send|require|import|getComputedStyle|getPropertyValue|setProperty|toLocaleString|toLocaleDateString|toLocaleTimeString|Intl\.\w+|DateTimeFormat|NumberFormat|localeCompare|padStart|padEnd|L|en|api|post|put|del|go|open|track|log|warn|error|info|debug|cn|clsx|twMerge|cva|encodeURIComponent|decodeURIComponent|atob|btoa|Blob|File|URL|URLSearchParams|append|Headers|keys|execCommand|focus|scrollTo|mark|measure|lsGet|lsSet|ss|key|pref|copy|write|writeText|download|saveAs)$/;
 
+// Hàm dịch qua từ điển: chuỗi đầu tiên truyền vào luôn là chữ giao diện cần khóa.
+const DICT_CALL = /^(tr|trOn|tf|tfOn)$/;
+
 function walkDir(d, out = []) {
   for (const f of readdirSync(d)) {
     const p = path.join(d, f);
@@ -140,8 +143,9 @@ export function extract(file) {
     if (ts.isElementAccessExpression(p) && p.argumentExpression === n) return;
     if (ts.isBinaryExpression(p) && [ts.SyntaxKind.EqualsEqualsEqualsToken, ts.SyntaxKind.ExclamationEqualsEqualsToken, ts.SyntaxKind.EqualsEqualsToken, ts.SyntaxKind.ExclamationEqualsToken, ts.SyntaxKind.InKeyword, ts.SyntaxKind.InstanceOfKeyword].includes(p.operatorToken.kind)) return;
     if (ts.isCaseClause(p)) return;
-    // tr("…"): chữ hiển thị đi qua từ điển, luôn cần bản dịch (kể cả khi nằm trong ${…}).
-    if (ts.isCallExpression(p) && ts.isIdentifier(p.expression) && p.expression.text === "tr" && p.arguments[0] === n) { if (/\p{L}{2}/u.test(s)) out.push({ line: lineOf(n), text: s, kind: "str" }); return; }
+    // tr("…") / trOn("…", lang): chữ hiển thị đi qua từ điển, luôn cần bản dịch (kể cả khi nằm trong ${…}).
+    // tf("mẫu {x}", …) / tfOn(…): khóa là nguyên mẫu, phải có đúng mục trong từ điển (kind "key").
+    if (ts.isCallExpression(p) && ts.isIdentifier(p.expression) && DICT_CALL.test(p.expression.text) && p.arguments[0] === n) { if (/\p{L}{2}/u.test(s)) out.push({ line: lineOf(n), text: s, kind: /^tf/.test(p.expression.text) ? "key" : "str" }); return; }
     const r = ctx(n);
     if (skipCtx(r, s)) return;
     if (!textLike(s, !VI.test(s)) || /\n/.test(s)) return;
@@ -205,6 +209,16 @@ export async function scan({ files } = {}) {
         const vi = s.parts.some((x) => VI.test(x));
         const okk = samples.some((x) => (vi ? enOk(x.trim()) : viOk(x.trim()) || enOk(x.trim())));
         if (!okk) missing.push({ file: rel, line: s.line, text: s.text, kind: "tpl", need: vi ? "en" : "vi" });
+        continue;
+      }
+      if (s.kind === "key") {
+        // Mẫu của tf: cần đúng khóa; bản dịch giữ đủ {biến} ở mọi dạng số ít / số nhiều và không sót chữ tiếng Việt.
+        const vi = VI.test(s.text), map = vi ? D.VI2EN : D.EN2VI;
+        if (!has(map, s.text)) { if (!(vi ? false : same.has(s.text.trim()))) missing.push({ file: rel, line: s.line, text: s.text, kind: "key", need: vi ? "en" : "vi" }); continue; }
+        const want = [...s.text.matchAll(/\{(\w+)\}/g)].map((m) => m[1]).sort().join(",");
+        const forms = /\{n\}/.test(s.text) ? map[s.text].split("|") : [map[s.text]];
+        const bad = forms.find((f) => [...f.matchAll(/\{(\w+)\}/g)].map((m) => m[1]).sort().join(",") !== want || (vi && VI_ONLY.test(strip(f.replace(/\{\w+\}/g, "")))));
+        if (bad !== undefined) missing.push({ file: rel, line: s.line, text: s.text, kind: "key", need: vi ? "en" : "vi", partial: map[s.text] });
         continue;
       }
       const t = s.text.trim();
