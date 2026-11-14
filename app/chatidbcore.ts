@@ -175,7 +175,7 @@ export function toWrite(d: ReturnType<typeof diffSave>) {
  * Dấu ở localStorage u:<uid>:chatsIdb (MARK_KEY) cho kho dự phòng LsStore: tài khoản này đã chuyển sang IndexedDB trên trình duyệt này lúc at.
  * Từ đó khóa cũ u:<uid>:chats không còn là bản đang dùng (mọi sửa đi vào IndexedDB), nên một phiên rơi về localStorage KHÔNG tin nội dung khóa
  * cũ (sẽ mang lại đoạn đã xóa, tên cũ, thiếu tin mới và chatsync sẽ đẩy bản cũ đè máy chủ), trừ khi khóa đó do chính LsStore ghi sau lần
- * IndexedDB nhập gần nhất (ls = dấu legacySig của lần ghi đó).
+ * IndexedDB nhập gần nhất (ls = dấu ownSig của lần ghi đó).
  */
 export const MARK_KEY = "chatsIdb";
 export type LegacyMark = { at: number; ls?: string };
@@ -187,5 +187,46 @@ export function parseMark(raw: string | null): LegacyMark | null {
     return typeof m.ls === "string" ? { at: m.at, ls: m.ls } : { at: m.at };
   } catch { return null; }
 }
-/** LsStore có được dùng nội dung khóa cũ không: chưa chuyển lần nào, hoặc khóa là bản LsStore tự ghi sau lần nhập cuối. */
-export const trustLegacy = (mark: LegacyMark | null, sig: string) => !mark || mark.ls === sig;
+/**
+ * LsStore có được dùng nội dung khóa cũ không: chưa chuyển lần nào, hoặc khóa là bản LsStore tự ghi sau lần nhập cuối. sig chỉ được gọi
+ * (băm cả khóa) khi dấu có "ls": chưa chuyển, hoặc đã chuyển mà LsStore chưa tự ghi, thì không băm gì.
+ */
+export const trustLegacy = (mark: LegacyMark | null, sig: () => string | null) => !mark || (mark.ls !== undefined && mark.ls === sig());
+
+/** Vị trí [a, b) của từng phần tử của mảng JSON cấp ngoài cùng `[x,y,…]` (bỏ qua dấu phẩy trong chuỗi và trong ngoặc lồng). Không phải mảng: null. */
+export function jsonItems(s: string): [number, number][] | null {
+  const n = s.length;
+  if (n < 2 || s.charCodeAt(0) !== 91 || s.charCodeAt(n - 1) !== 93) return null;
+  const out: [number, number][] = [];
+  let depth = 0, str = false, start = 1;
+  for (let i = 1; i < n - 1; i++) {
+    const c = s.charCodeAt(i);
+    if (str) { if (c === 92) i++; else if (c === 34) str = false; continue; }
+    if (c === 34) str = true;
+    else if (c === 123 || c === 91) depth++;
+    else if (c === 125 || c === 93) depth--;
+    else if (c === 44 && depth === 0) { out.push([start, i]); start = i + 1; }
+  }
+  if (n > 2) out.push([start, n - 1]);
+  return out;
+}
+/** Số ký tự đã băm cho dấu tự ghi (kiểm thử đo được mỗi lần ghi chỉ băm phần đổi). */
+export const hashStats = { chars: 0 };
+/** Băm một phần tử của khóa (s[a, b)). */
+export function itemHash(s: string, a = 0, b = s.length) {
+  hashStats.chars += b - a;
+  return fnv(FNV0, s, a, b) >>> 0;
+}
+/**
+ * Dấu tự ghi của LsStore ("ls" trong MARK_KEY): độ dài + số phần tử + trộn băm của từng phần tử theo thứ tự. LsStore nhớ băm theo mục nên mỗi lần
+ * ghi chỉ băm mục mới / đã đổi; lúc đọc thì ownSigOf tính lại từ chuỗi (một lần mỗi phiên, chỉ khi dấu có "ls"). Sửa bất kỳ phần tử nào đổi dấu.
+ */
+export function ownSig(len: number, hs: readonly number[]) {
+  let h = FNV0;
+  for (const x of hs) h = Math.imul(h ^ x, 0x01000193);
+  return `o${len}:${hs.length}:${(h >>> 0).toString(36)}`;
+}
+export function ownSigOf(json: string) {
+  const it = jsonItems(json);
+  return it ? ownSig(json.length, it.map(([a, b]) => itemHash(json, a, b))) : null;
+}

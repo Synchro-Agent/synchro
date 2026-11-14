@@ -566,7 +566,7 @@ console.log("14. Phiên rơi về localStorage không tin khóa cũ đã chuyể
   // Phiên này tải từ máy chủ / tạo đoạn mới rồi ghi: khóa thành bản của chính LsStore.
   const fromSrv = [chat(5), { ...chat(1), title: "Một" }, chat(3)];
   await ls.write(plan(K.diffSave(new Map(), fromSrv)));
-  ok(K.parseMark(st.getItem("u:M3:chatsIdb")).ls === K.legacySig(st.getItem("u:M3:chats")), "LsStore ghi: đánh dấu khóa là bản tự ghi");
+  ok(K.parseMark(st.getItem("u:M3:chatsIdb")).ls === K.ownSigOf(st.getItem("u:M3:chats")), "LsStore ghi: đánh dấu khóa là bản tự ghi");
   ls = new D.LsStore("M3");
   ok((await ls.loadIndex()).map((x) => x.id).join() === "5,3,1" && !ls.ignored, "phiên rơi về localStorage kế tiếp (chưa mở lại IndexedDB): tin bản LsStore tự ghi", (await ls.loadIndex()).map((x) => x.id));
   // IndexedDB mở lại được: nhập những gì phiên localStorage đã ghi, rồi khóa lại thành bản cũ.
@@ -591,7 +591,11 @@ console.log("14. Phiên rơi về localStorage không tin khóa cũ đã chuyể
   // Hết 7 ngày, khóa cũ đã xóa: dấu vẫn còn, phiên localStorage sau đó vẫn không tin bản không phải tự ghi.
   r = await D.importLegacy(s, { now: t0 + 8 * DAY });
   ok(r.removed && st.getItem("u:M3:chats") === null && K.parseMark(st.getItem("u:M3:chatsIdb")), "đủ 7 ngày: xóa khóa cũ, giữ dấu đã chuyển", r);
-  ok(K.trustLegacy(null, "x") && K.trustLegacy({ at: 1, ls: "x" }, "x") && !K.trustLegacy({ at: 1 }, "x") && !K.trustLegacy({ at: 1, ls: "y" }, "x"), "trustLegacy: chưa chuyển / bản tự ghi thì tin, còn lại không");
+  const x = () => "x";
+  ok(K.trustLegacy(null, x) && K.trustLegacy({ at: 1, ls: "x" }, x) && !K.trustLegacy({ at: 1 }, x) && !K.trustLegacy({ at: 1, ls: "y" }, x) && !K.trustLegacy({ at: 1, ls: "x" }, () => null), "trustLegacy: chưa chuyển / bản tự ghi thì tin, còn lại không");
+  let called = 0;
+  K.trustLegacy(null, () => (called++, "x")); K.trustLegacy({ at: 1 }, () => (called++, "x"));
+  ok(called === 0, "trustLegacy: không có dấu, hoặc dấu không có ls: không tính dấu của khóa");
   ok(K.parseMark("hỏng") === null && K.parseMark('{"at":"x"}') === null && K.parseMark(null) === null, "dấu hỏng: coi như chưa có");
   U.clearAccountData("M3");
   ok(st.getItem("u:M3:chatsIdb") === null, "đăng xuất kèm xóa thiết bị: xóa cả dấu đã chuyển");
@@ -713,6 +717,56 @@ console.log("17. Lưu từ trang (ChatSaver): xóa rõ ràng, xóa hết");
   await sl.save([chat(1)]);
   await sl.wipe();
   ok(st.getItem("u:S3:chats") === null, "LsStore: xóa hết xóa khóa");
+}
+
+console.log("18. Kho dự phòng không băm cả khóa mỗi lần đọc / ghi");
+{
+  const items = K.jsonItems('[{"a":"x,]}{y"},{"b":[1,{"c":2}]},{"d":"\\"",",}"}]');
+  ok(items?.length === 3 && K.jsonItems("[]").length === 0 && K.jsonItems("{}") === null && K.jsonItems("") === null, "tách phần tử cấp ngoài cùng, bỏ qua dấu phẩy / ngoặc trong chuỗi", items);
+  const st = new Store();
+  globalThis.localStorage = st;
+  const big = (id) => chat(id, { msgs: [{ role: "user", text: "x".repeat(5000) + id, time: id + 1 }] });
+  const list = [5, 4, 3, 2, 1].map(big);
+  st.setItem("u:H3:chats", JSON.stringify(list));
+  // Chưa chuyển sang IndexedDB (không có dấu): đọc và ghi không băm gì.
+  let h0 = K.hashStats.chars;
+  let ls = new D.LsStore("H3");
+  ok((await ls.loadIndex()).length === 5, "chưa chuyển: dùng khóa");
+  const sv = new D.ChatSaver(ls);
+  sv.base(await ls.loadAll());
+  await sv.save([{ ...list[0], title: "Năm" }, ...list.slice(1)]);
+  ok(K.hashStats.chars === h0 && st.getItem("u:H3:chatsIdb") === null, "chưa chuyển: đọc và ghi không băm khóa", K.hashStats.chars - h0);
+  // Đã chuyển, chưa từng tự ghi (dấu không có ls): không tin mà cũng không băm.
+  st.setItem("u:H3:chatsIdb", JSON.stringify({ at: 1 }));
+  h0 = K.hashStats.chars;
+  ls = new D.LsStore("H3");
+  ok(!(await ls.loadIndex()).length && ls.ignored && K.hashStats.chars === h0, "dấu không có ls: bắt đầu rỗng, không băm khóa", K.hashStats.chars - h0);
+  // Phiên này ghi lần đầu: băm từng mục một lần.
+  const sv2 = new D.ChatSaver(ls);
+  await sv2.save(list);
+  const key = () => st.getItem("u:H3:chats");
+  ok(K.parseMark(st.getItem("u:H3:chatsIdb")).ls === K.ownSigOf(key()), "ghi lần đầu: dấu tự ghi khớp khóa");
+  // Lần ghi sau chỉ băm mục đã đổi, không băm lại cả khóa.
+  const changed = { ...list[2], msgs: [...list[2].msgs, { role: "ai", text: "đáp", time: 9, done: true }] };
+  h0 = K.hashStats.chars;
+  await sv2.save([list[0], list[1], changed, list[3], list[4]]);
+  const n = K.hashStats.chars - h0, one = C.serialChat(changed).length;
+  ok(n === one && n < key().length / 4, "ghi sau: chỉ băm mục đã đổi", { n, one, total: key().length });
+  ok(K.parseMark(st.getItem("u:H3:chatsIdb")).ls === K.ownSigOf(key()), "dấu tính từ băm từng mục trùng dấu tính lại từ cả khóa");
+  ls = new D.LsStore("H3");
+  ok((await ls.loadIndex()).length === 5 && !ls.ignored, "phiên sau tin bản tự ghi");
+  // Tab app cũ sửa một chữ giữa khóa, độ dài không đổi: dấu đổi, không tin.
+  const raw = key(), at = raw.indexOf("xxxx", raw.length / 2);
+  st.setItem("u:H3:chats", raw.slice(0, at) + "y" + raw.slice(at + 1));
+  ls = new D.LsStore("H3");
+  ok(!(await ls.loadIndex()).length && ls.ignored, "sửa giữa khóa mà độ dài không đổi: không tin");
+  // Hết chỗ (rút gọn bớt): dấu vẫn khớp chuỗi đã ghi.
+  const small = new Store(16000);
+  globalThis.localStorage = small;
+  small.setItem("u:Q3:chatsIdb", JSON.stringify({ at: 1, ls: "cũ" }));
+  const q = new D.LsStore("Q3");
+  const r = await q.write(plan(K.diffSave(new Map(), list)), () => true);
+  ok(r.status === "ok" && r.stubbed.length && K.parseMark(small.getItem("u:Q3:chatsIdb")).ls === K.ownSigOf(small.getItem("u:Q3:chats")), "hết chỗ, đã rút gọn: dấu tự ghi khớp chuỗi đã ghi", r);
 }
 
 console.log(`\n${pass} đạt, ${fail} lỗi`);

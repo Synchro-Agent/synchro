@@ -14,7 +14,7 @@
 // - LsStore.ignored (khóa cũ đã chuyển, bắt đầu rỗng): chatsync tải lại từ máy chủ như máy mới, không đánh dấu gì là cần đẩy.
 // - Chạy next build và next dev --turbopack với chatidb.ts được import từ trang, xác nhận tệp luồng phụ chatmigrate.worker.ts tải được
 //   (cùng cách new Worker(new URL(...)) như highlight.worker.ts / tokens.worker.ts đang chạy).
-import { MARK_KEY, dbName, diffSave, dropLegacyDue, idxOf, legacyMerge, legacyRows, legacySig, legacySigAsync, parseMark, snapshot, sortIdx, stubOfRow, toWrite, trustLegacy, type IdxRow, type ImportRow } from "./chatidbcore";
+import { MARK_KEY, dbName, diffSave, dropLegacyDue, idxOf, itemHash, legacyMerge, legacyRows, legacySigAsync, ownSig, ownSigOf, parseMark, snapshot, sortIdx, stubOfRow, toWrite, trustLegacy, type IdxRow, type ImportRow } from "./chatidbcore";
 import { lastTime, saveFit, stubOf } from "./chatsynccore";
 import type { Chat } from "./store";
 import { scopedFor } from "./userscope";
@@ -57,7 +57,8 @@ export interface ChatStore {
 
 // ------------------------------------------------------------ localStorage (dự phòng)
 // s: chuỗi đang lưu (tính lười từ obj); stubS: chuỗi rút gọn, chỉ tính khi hết chỗ, nhớ theo mục (mục đổi là mục mới).
-type LsEntry = { s: string | null; obj: Chat | null; idx: IdxRow; stub: boolean; stubS?: string };
+// h: băm của s (dấu tự ghi), tính lười và nhớ theo mục như s.
+type LsEntry = { s: string | null; obj: Chat | null; idx: IdxRow; stub: boolean; stubS?: string; h?: number };
 type StorageLike = Pick<Storage, "getItem" | "setItem" | "removeItem">;
 
 export class LsStore implements ChatStore {
@@ -84,7 +85,8 @@ export class LsStore implements ChatStore {
     let list: unknown = [];
     try {
       const raw = this.st().getItem(this.key);
-      if (raw !== null && !trustLegacy(parseMark(this.st().getItem(this.markKey)), legacySig(raw))) this.skip = true;
+      // Chỉ băm khóa khi có dấu kèm "ls" (đã chuyển và LsStore từng tự ghi): chưa chuyển bao giờ thì không băm gì.
+      if (raw !== null && !trustLegacy(parseMark(this.st().getItem(this.markKey)), () => ownSigOf(raw))) this.skip = true;
       else list = JSON.parse(raw || "[]");
     } catch {}
     if (Array.isArray(list)) for (const x of list) {
@@ -134,22 +136,29 @@ export class LsStore implements ChatStore {
     const set = (json: string) => { try { this.st().setItem(this.key, json); wrote = json; return true; } catch { return false; } };
     const list = this.order.map((id) => rows.get(id)!);
     let res: WriteResult;
-    if (!this.stubbed.size && set(`[${list.map((e) => this.text(e)).join(",")}]`)) res = { status: "ok", stubbed: [] };
-    else {
+    let own = () => ownSigOf(wrote ?? "");
+    if (!this.stubbed.size && set(`[${list.map((e) => this.text(e)).join(",")}]`)) {
+      res = { status: "ok", stubbed: [] };
+      // Dấu tự ghi từ băm của từng mục (nhớ theo mục): mỗi lần ghi chỉ băm mục mới / đã đổi, không băm lại cả khóa.
+      const len = wrote!.length;
+      own = () => ownSig(len, list.map((e) => (e.h ??= itemHash(this.text(e)))));
+    } else {
       // Hết chỗ: rút gọn dần đoạn cũ nhất đã có trên máy chủ (saveFit, như chatsync từ trước tới nay). Chuỗi rút gọn chỉ tính ở nhánh này.
       const fit = list.map((e) => ({ key: String(e.idx.id), full: this.text(e), time: e.idx.upd, stub: !e.stub && canStub?.(e.idx.id) ? (e.stubS ??= JSON.stringify(stubOf(this.chat(e)))) : null }));
       const r = saveFit(fit, new Set([...this.stubbed].map(String)), set);
       this.stubbed = new Set([...r.stubbed].map(Number));
       res = { status: r.ok ? "ok" : "quota", stubbed: [...this.stubbed] };
     }
-    if (wrote !== null) this.markOwn(wrote);
+    if (wrote !== null) this.markOwn(own);
     return res;
   }
   // Tài khoản đã chuyển sang IndexedDB: ghi dấu rằng khóa là bản LsStore tự ghi (lần sau rơi về localStorage được tin, importLegacy sẽ nhập).
-  private markOwn(json: string) {
+  // Chưa chuyển (không có dấu): không tính dấu.
+  private markOwn(sig: () => string | null) {
     try {
       const m = parseMark(this.st().getItem(this.markKey));
-      if (m) this.st().setItem(this.markKey, JSON.stringify({ at: m.at, ls: legacySig(json) }));
+      const ls = m && sig();
+      if (m && ls) this.st().setItem(this.markKey, JSON.stringify({ at: m.at, ls }));
     } catch {}
   }
   async getMeta() { return { ...this.meta }; }
