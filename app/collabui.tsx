@@ -29,17 +29,28 @@ export function useLive(app: string | null, client: string, onData: (key: string
   useEffect(() => {
     if (!app) return;
     load();
-    const es = new EventSource(`/api/apps/${encodeURIComponent(app)}/live`);
-    es.onopen = () => { setOnline(true); load(); };
-    es.onerror = () => setOnline(false);
-    es.addEventListener("presence", (e) => setPeople(JSON.parse((e as MessageEvent).data).people));
-    es.addEventListener("data", (e) => { const d = JSON.parse((e as MessageEvent).data); if (d.client !== client) cb.current(d.key); });
-    es.addEventListener("comment", (e) => { const c = JSON.parse((e as MessageEvent).data).comment as Comment; setComments((l) => (l && !l.some((x) => x.id === c.id) ? [...l, c] : l)); });
-    es.addEventListener("comment-update", (e) => {
-      const d = JSON.parse((e as MessageEvent).data) as { id: string; resolved?: boolean; deleted?: boolean };
-      setComments((l) => l && (d.deleted ? l.filter((x) => x.id !== d.id) : l.map((x) => (x.id === d.id ? { ...x, resolved: !!d.resolved } : x))));
-    });
-    return () => es.close();
+    let es: EventSource | null = null;
+    const open = () => {
+      const s = es = new EventSource(`/api/apps/${encodeURIComponent(app)}/live`);
+      s.onopen = () => { setOnline(true); load(); };
+      s.onerror = () => setOnline(false);
+      s.addEventListener("presence", (e) => setPeople(JSON.parse((e as MessageEvent).data).people));
+      s.addEventListener("data", (e) => { const d = JSON.parse((e as MessageEvent).data); if (d.client !== client) cb.current(d.key); });
+      s.addEventListener("comment", (e) => { const c = JSON.parse((e as MessageEvent).data).comment as Comment; setComments((l) => (l && !l.some((x) => x.id === c.id) ? [...l, c] : l)); });
+      s.addEventListener("comment-update", (e) => {
+        const d = JSON.parse((e as MessageEvent).data) as { id: string; resolved?: boolean; deleted?: boolean };
+        setComments((l) => l && (d.deleted ? l.filter((x) => x.id !== d.id) : l.map((x) => (x.id === d.id ? { ...x, resolved: !!d.resolved } : x))));
+      });
+    };
+    const close = () => { es?.close(); es = null; };
+    // Rời trang mà trình duyệt giữ trang trong bộ nhớ đệm quay lại (bfcache; Chrome bản mới giữ cả trang có no-store): kết nối vẫn mở nên
+    // người khác vẫn thấy mình "đang xem cùng" tới khi đóng hẳn tab. Đóng kết nối khi rời trang, quay lại bằng nút Back thì mở lại.
+    const hide = () => { close(); setOnline(false); };
+    const show = (e: PageTransitionEvent) => { if (e.persisted && !es) open(); };
+    open();
+    window.addEventListener("pagehide", hide);
+    window.addEventListener("pageshow", show);
+    return () => { window.removeEventListener("pagehide", hide); window.removeEventListener("pageshow", show); close(); };
   }, [app, client, load]);
   return { people, comments, setComments, online };
 }
