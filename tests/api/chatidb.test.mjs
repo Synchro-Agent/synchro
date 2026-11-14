@@ -638,5 +638,57 @@ console.log("16. Hai lần ghi chồng nhau không đè bản sao chỉ mục c�
   q.close(); q2.close();
 }
 
+console.log("17. Lưu từ trang (ChatSaver): xóa rõ ràng, xóa hết");
+{
+  const st = new Store();
+  globalThis.localStorage = st;
+  const s = await D.openChatStore("S", { idb: fakeIDB() });
+  const sv = new D.ChatSaver(s);
+  const a = chat(1), b = chat(2);
+  let r = await sv.save([b, a]);
+  ok(r.status === "ok" && (await s.loadIndex()).length === 2, "lưu lần đầu");
+  // Xóa đoạn 2 (danh sách còn mục): xóa bình thường.
+  await sv.save([a]);
+  ok((await s.loadIndex()).map((x) => x.id).join() === "1", "xóa một đoạn khi còn đoạn khác");
+  // Xóa đoạn cuối cùng: chatsync đã bỏ mục khỏi meta.gone (máy chủ xác nhận) trước lần lưu, nhưng ChatSaver tự nhớ lệnh xóa.
+  sv.forget([1]);
+  r = await sv.save([]);
+  ok(r.status === "ok" && !(await s.loadIndex()).length && !(await s.bodies([1])).size, "xóa đoạn cuối cùng: kho trống dù danh sách rỗng", await s.loadIndex());
+  // Danh sách rỗng mà không có lệnh xóa (trang chưa nạp xong): giữ kho, và lần sau vẫn so đúng với kho.
+  await sv.save([a, b]);
+  r = await sv.save([]);
+  ok((await s.loadIndex()).length === 2, "danh sách rỗng không có lệnh xóa: không xóa gì");
+  await sv.save([a]);
+  ok((await s.loadIndex()).map((x) => x.id).join() === "1", "lần sau danh sách có lại: xóa đúng đoạn không còn (bản trước được giữ khi bị chặn)");
+  // Xóa hết đoạn chat (Cài đặt): xóa kho và khóa cũ, không đoạn nào quay lại khi mở lại / nhập lại.
+  st.setItem("u:S:chats", JSON.stringify([a, b]));
+  await sv.wipe();
+  ok(!(await s.loadIndex()).length && st.getItem("u:S:chats") === null, "xóa hết: kho trống, khóa cũ cũng xóa", st.getItem("u:S:chats"));
+  r = await D.importLegacy(s, { now: 1 });
+  ok(r.imported === 0 && !(await s.loadIndex()).length, "mở lại sau khi xóa hết: không có gì quay lại", r);
+  r = await sv.save([]);
+  ok(r.status === "ok" && !(await s.loadIndex()).length, "lưu danh sách rỗng sau khi xóa hết: không lỗi");
+  await sv.save([chat(9)]);
+  ok((await s.loadIndex()).map((x) => x.id).join() === "9", "đoạn mới sau khi xóa hết: lưu bình thường");
+  // Ghi không được (hết chỗ): giữ bản trước, lần sau ghi lại đúng phần đổi.
+  const g = fakeIDB();
+  const q = await D.openChatStore("S2", { idb: g });
+  const sq = new D.ChatSaver(q);
+  await sq.save([chat(1)]);
+  g.ctl.quota = 10;
+  const c2 = chat(2);
+  r = await sq.save([c2, chat(1)]);
+  ok(r.status === "quota" && (await q.loadIndex()).length === 1, "hết chỗ: không ghi gì", r);
+  g.ctl.quota = Infinity;
+  r = await sq.save([c2, chat(1)]);
+  ok(r.status === "ok" && (await q.loadIndex()).length === 2, "có chỗ lại: lần lưu sau ghi đoạn chưa ghi được", r);
+  // Kho localStorage: wipe xóa khóa.
+  const ls = new D.LsStore("S3");
+  const sl = new D.ChatSaver(ls);
+  await sl.save([chat(1)]);
+  await sl.wipe();
+  ok(st.getItem("u:S3:chats") === null, "LsStore: xóa hết xóa khóa");
+}
+
 console.log(`\n${pass} đạt, ${fail} lỗi`);
 process.exit(fail ? 1 : 0);

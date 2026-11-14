@@ -9,11 +9,12 @@
 // bên gọi chuyển sang LsStore hoặc tải lại trang (mọi lần ghi sau đó trả "error").
 // Lõi thuần ở chatidbcore.ts; kiểm thử: tests/api/chatidb.test.mjs. Chưa nối vào trang (home.tsx / chatsync.ts làm ở vòng sau).
 // Điều kiện cho vòng nối vào trang:
+// - Lưu qua ChatSaver; mọi chỗ xóa đoạn chat (forget / wipeAll của chatsync) gọi thêm saver.forget(ids); wipe("chats" | "all") gọi saver.wipe().
 // - Bắt lỗi của loadIndex / bodies / loadAll lúc mở trang (lỗi đọc KHÔNG phải kho rỗng); đặt store.onclosed để chuyển sang LsStore hoặc tải lại.
 // - LsStore.ignored (khóa cũ đã chuyển, bắt đầu rỗng): chatsync tải lại từ máy chủ như máy mới, không đánh dấu gì là cần đẩy.
 // - Chạy next build và next dev --turbopack với chatidb.ts được import từ trang, xác nhận tệp luồng phụ chatmigrate.worker.ts tải được
 //   (cùng cách new Worker(new URL(...)) như highlight.worker.ts / tokens.worker.ts đang chạy).
-import { MARK_KEY, dbName, dropLegacyDue, idxOf, legacyMerge, legacyRows, legacySig, legacySigAsync, parseMark, sortIdx, stubOfRow, trustLegacy, type IdxRow, type ImportRow } from "./chatidbcore";
+import { MARK_KEY, dbName, diffSave, dropLegacyDue, idxOf, legacyMerge, legacyRows, legacySig, legacySigAsync, parseMark, snapshot, sortIdx, stubOfRow, toWrite, trustLegacy, type IdxRow, type ImportRow } from "./chatidbcore";
 import { lastTime, saveFit, stubOf } from "./chatsynccore";
 import type { Chat } from "./store";
 import { scopedFor } from "./userscope";
@@ -473,4 +474,38 @@ export async function importLegacy(store: ChatStore, opts: { now?: number; parse
     }
   } catch { res.status = "error"; }
   return res;
+}
+
+// ------------------------------------------------------------ Lưu từ trang
+/**
+ * Lưu danh sách đoạn chat của trang vào kho, chỉ phần đã đổi (diffSave). Xóa rõ ràng (forget: người dùng xóa đoạn chat) được ghi nhận ngay ở
+ * đây, không dựa vào meta.gone của chatsync (chatsync bỏ mục khỏi gone ngay khi máy chủ xác nhận, có thể trước lần lưu): nhờ vậy xóa đoạn cuối
+ * cùng vẫn xóa khỏi kho dù danh sách rỗng. wipe: xóa hết đoạn chat của tài khoản trên thiết bị (Cài đặt → xóa chat).
+ */
+export class ChatSaver {
+  private prev = new Map<number, Chat>();
+  private gone = new Set<number>();
+  constructor(readonly store: ChatStore) {}
+  /** Danh sách vừa đọc từ kho (đã có trong kho, không cần ghi lại). */
+  base(list: readonly Chat[]) { this.prev = snapshot(list); }
+  /** Người dùng xóa các đoạn này: lần lưu tới xóa khỏi kho kể cả khi danh sách rỗng. */
+  forget(ids: readonly number[]) { for (const id of ids) this.gone.add(id); }
+  async save(list: readonly Chat[], canStub?: (id: number) => boolean): Promise<WriteResult> {
+    const d = diffSave(this.prev, list, (id) => this.gone.has(id));
+    const r = await this.store.write(toWrite(d), canStub);
+    // Ghi không được (lỗi, hết chỗ): lần ghi là nguyên khối nên không có gì được ghi; giữ bản trước để lần sau ghi lại đúng phần đổi.
+    if (r.status !== "ok") return r;
+    const next = snapshot(list);
+    // Danh sách rỗng bị chặn (chưa nạp xong…): các mục không xóa vẫn nằm trong kho, giữ chúng trong bản trước.
+    if (d.guarded) for (const [id, c] of this.prev) if (!d.del.includes(id)) next.set(id, c);
+    // Xóa rõ ràng đã xong (hoặc đoạn chưa từng được lưu): bỏ khỏi danh sách chờ. Đoạn còn trong danh sách (trang chưa cập nhật) thì giữ.
+    for (const id of this.gone) if (!next.has(id)) this.gone.delete(id);
+    this.prev = next;
+    return r;
+  }
+  async wipe() {
+    await this.store.clear();
+    this.prev = new Map();
+    this.gone.clear();
+  }
 }
