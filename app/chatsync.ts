@@ -98,7 +98,7 @@ export function useChatSync(o: SyncOpts): ChatSync {
     if (!items.length) return;
     const cur = { chat: new Map(live.current.chats.map((c) => [String(c.id), c])), project: new Map(live.current.projects.map((p) => [String(p.id), p])) };
     const up = { chat: new Map<string, Chat>(), project: new Map<string, Project>() }, del = { chat: new Set<string>(), project: new Set<string>() };
-    const copies: Chat[] = [], fresh: string[] = [], later: Remote[] = [], dead: number[] = [];
+    const copies: Chat[] = [], fresh: string[] = [], waitBody: Remote[] = [], dead: number[] = [];
     for (const it of items) {
       if (it.kind !== "chat" && it.kind !== "project") continue;
       const key = keyOf(it.kind, it.id), mine = cur[it.kind].get(it.id) as (Chat | Project) | undefined;
@@ -109,7 +109,7 @@ export function useChatSync(o: SyncOpts): ChatSync {
       const local = it.kind === "chat" && !!mine?.stub && !!(mine as Chat).local;
       if (local && !it.deleted && it.data !== null) {
         if (s.meta.known[key]?.[1] === hashOf(it.data)) continue;
-        later.push(it);
+        waitBody.push(it);
         continue;
       }
       const stubbed = !!mine?.stub && !local;
@@ -149,11 +149,11 @@ export function useChatSync(o: SyncOpts): ChatSync {
     // Đã xóa ở nơi khác: lần lưu tới xóa khỏi kho của máy này kể cả khi danh sách thành rỗng.
     if (dead.length) forgetChats(dead);
     brainSeen(fresh);
-    if (later.length) void hydrateIds(later.map((it) => Number(it.id))).then(() => {
+    if (waitBody.length) void hydrateIds(waitBody.map((it) => Number(it.id))).then(() => {
       if (!ok(s)) return;
       // Đọc không được (lỗi kho): bỏ lần này, lần hỏi sau lại về. Đọc xong: quyết như với đoạn chat đầy đủ.
       const still = new Set(live.current.chats.filter((c) => c.stub && c.local).map((c) => String(c.id)));
-      apply(s, later.filter((it) => !still.has(it.id)));
+      apply(s, waitBody.filter((it) => !still.has(it.id)));
     });
   };
   const pull = async (s: Sess) => {
