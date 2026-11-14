@@ -2,6 +2,9 @@
    (mặc định) sinh ~700 lớp từ chữ trong catalog/, docs/, mock… và vài lớp trùng tên lớp của app (.inline, .m-auto, .mr-auto, .bg-top) lặng lẽ
    thêm thuộc tính vào phần tử của app. Tệp mới dùng lớp tiện ích thì thêm một dòng @source. */
 @import "tailwindcss" source(none);
+/* Thang token của app (B5): một tệp, nạp cùng globals.css (không import riêng ở layout.tsx: thêm tệp CSS vào layout đổi cách webpack gom
+   và xếp thứ tự các tệp CSS của bản build). */
+@import "./tokens.css";
 @source "./auth.tsx";
 @source "./shader-metal.tsx";
 /* Thứ tự lớp cascade (B5): lớp của Tailwind trước, mọi CSS của app (kể cả katex / xterm và thẻ \3c style> của auth.tsx, glass-folder.tsx)
