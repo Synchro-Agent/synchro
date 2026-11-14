@@ -7,7 +7,7 @@
 import { spawn } from "node:child_process";
 import { rmSync } from "node:fs";
 
-const B = "http://localhost:3200";
+const B = "http://localhost:3200", CDP = Number(process.env.CDP_PORT ?? 9382);
 const PROF = (await import("node:os")).tmpdir() + "/synchro-ui/chrome-prof-models-retry";
 rmSync(PROF, { recursive: true, force: true });
 
@@ -25,10 +25,12 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 let fails = 0;
 const say = (ok, msg) => { if (!ok) fails++; console.log(`  ${ok ? "✓" : "✗"} ${msg}`); };
 
+// Cổng gỡ lỗi đang có Chrome khác (lần chạy trước bị ngắt): báo ngay thay vì nối nhầm vào đó rồi treo vì kết nối không bao giờ đóng.
+if (await fetch(`http://127.0.0.1:${CDP}/json/version`).then(() => true, () => false)) throw new Error(`cổng ${CDP} đang có Chrome khác: đóng nó hoặc đặt CDP_PORT`);
 const chrome = spawn(process.env.CHROME_PATH ?? "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
-  ["--headless=new", "--remote-debugging-port=9351", `--user-data-dir=${PROF}`, "--window-size=1440,900", "--no-first-run", "--no-default-browser-check", "about:blank"], { stdio: "ignore" });
+  ["--headless=new", `--remote-debugging-port=${CDP}`, `--user-data-dir=${PROF}`, "--window-size=1440,900", "--no-first-run", "--no-default-browser-check", "about:blank"], { stdio: "ignore" });
 try {
-  let ver; for (let i = 0; i < 50 && !ver; i++) { await sleep(200); ver = await fetch("http://127.0.0.1:9351/json/version").then((r) => r.json()).catch(() => null); }
+  let ver; for (let i = 0; i < 50 && !ver; i++) { await sleep(200); ver = await fetch(`http://127.0.0.1:${CDP}/json/version`).then((r) => r.json()).catch(() => null); }
   const ws = new WebSocket(ver.webSocketDebuggerUrl);
   await new Promise((r) => ws.addEventListener("open", r));
   let seq = 0, asked = 0, blocked = 0, allow = false; const waits = new Map();
@@ -90,4 +92,5 @@ try {
   chrome.kill();
 }
 console.log(fails ? `\n${fails} lỗi` : "\nTất cả đạt");
-process.exitCode = fails ? 1 : 0;
+// Thoát hẳn: kết nối CDP còn mở thì Node không tự thoát và QA đứng chờ mãi.
+process.exit(fails ? 1 : 0);

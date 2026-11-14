@@ -9,7 +9,7 @@
 import { spawn } from "node:child_process";
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 
-const B = process.env.BASE ?? process.env.SYNCHRO_URL ?? "http://localhost:3200", CDP = Number(process.env.CDP_PORT ?? 9351);
+const B = process.env.BASE ?? process.env.SYNCHRO_URL ?? "http://localhost:3200", CDP = Number(process.env.CDP_PORT ?? 9381);
 const OUT = process.argv[2];
 const SCR = (await import("node:os")).tmpdir() + "/synchro-ui/";
 mkdirSync(SCR, { recursive: true });
@@ -24,9 +24,13 @@ let cookie = "";
   if (!cookie) throw new Error("login failed");
 }
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+// Cổng gỡ lỗi đang có Chrome khác (lần chạy trước bị ngắt giữa chừng): báo ngay, không nối nhầm vào trình duyệt đó.
+if (await fetch(`http://127.0.0.1:${CDP}/json/version`).then(() => true, () => false)) throw new Error(`cổng ${CDP} đang có Chrome khác: đóng nó hoặc đặt CDP_PORT`);
 // Micro giả (không hỏi quyền) để menu micro mở được trong Chrome ẩn.
 const chrome = spawn(process.env.CHROME_PATH ?? (process.platform === "darwin" ? "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" : "google-chrome"),
   ["--headless=new", `--remote-debugging-port=${CDP}`, `--user-data-dir=${PROF}`, "--window-size=1440,900", "--no-first-run", "--no-default-browser-check", "--use-fake-ui-for-media-stream", "--use-fake-device-for-media-stream", "about:blank"], { stdio: "ignore" });
+// Lỗi giữa chừng (máy giả lập tắt, hết giờ chờ…) vẫn đóng Chrome: Chrome bị bỏ lại giữ cổng và làm treo bộ chạy sau dùng cùng cổng.
+process.on("exit", () => { try { chrome.kill(); } catch {} });
 let ver; for (let i = 0; i < 50 && !ver; i++) { await sleep(200); ver = await fetch(`http://127.0.0.1:${CDP}/json/version`).then((r) => r.json()).catch(() => null); }
 const ws = new WebSocket(ver.webSocketDebuggerUrl);
 await new Promise((r) => ws.addEventListener("open", r));
