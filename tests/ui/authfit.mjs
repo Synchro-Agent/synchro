@@ -13,7 +13,8 @@ rmSync(PROF, { recursive: true, force: true });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // Màn Giới thiệu về bạn chỉ hiện với tài khoản chưa có họ tên / ngày sinh (đăng nhập Google lần đầu); đăng ký bằng email buộc điền
-// sẵn. Đăng ký một tài khoản thường rồi sửa phản hồi /api/auth/me thành needsProfile: true, như tài khoản Google vừa tạo.
+// sẵn. Đăng ký một tài khoản thường rồi sửa phản hồi /api/auth/me thành needsProfile: true, như tài khoản Google vừa tạo (A3: sửa cả gói
+// khởi động trong HTML của trang chủ, đường trang dùng khi đã có cookie phiên).
 let cookie = "";
 {
   // Đăng ký không cấp phiên (blueprint F2.4): đăng nhập bằng mật khẩu vừa đặt.
@@ -68,6 +69,14 @@ try {
     const { requestId } = m.params;
     try {
       const { body, base64Encoded } = await send("Fetch.getResponseBody", { requestId }, m.sessionId);
+      if (m.params.resourceType === "Document") {
+        // A3: trang chủ dựng sẵn gói khởi động (tài khoản) trong HTML, không hỏi /api/auth/me: đổi needsProfile ngay trong HTML
+        // (dữ liệu của React trong HTML là chuỗi JSON lồng, dấu nháy có gạch chéo đứng trước).
+        const html = (base64Encoded ? Buffer.from(body, "base64").toString("utf8") : body).replace(/needsProfile(\\*)":false/g, 'needsProfile$1":true');
+        const headers = (m.params.responseHeaders ?? []).filter((h) => !/^(content-length|content-encoding)$/i.test(h.name));
+        await send("Fetch.fulfillRequest", { requestId, responseCode: m.params.responseStatusCode ?? 200, responseHeaders: headers, body: Buffer.from(html).toString("base64") }, m.sessionId);
+        return;
+      }
       const j = JSON.parse(base64Encoded ? Buffer.from(body, "base64").toString("utf8") : body);
       if (j.user) j.user.needsProfile = true;
       await send("Fetch.fulfillRequest", { requestId, responseCode: 200, responseHeaders: [{ name: "content-type", value: "application/json" }], body: Buffer.from(JSON.stringify(j)).toString("base64") }, m.sessionId);
@@ -86,7 +95,7 @@ try {
     await P("Network.clearBrowserCookies");
     if (screen === "gioi-thieu") {
       await P("Network.setCookie", { name: "synchro_session", value: cookie.split("=")[1], url: B });
-      await P("Fetch.enable", { patterns: [{ urlPattern: "*/api/auth/me*", requestStage: "Response" }] });
+      await P("Fetch.enable", { patterns: [{ urlPattern: "*/api/auth/me*", requestStage: "Response" }, { urlPattern: B + "/", resourceType: "Document", requestStage: "Response" }] });
     }
     for (const s of SIZES) {
       await P("Emulation.setDeviceMetricsOverride", { width: s.w, height: s.h, deviceScaleFactor: s.m ? 2 : 1, mobile: s.m });

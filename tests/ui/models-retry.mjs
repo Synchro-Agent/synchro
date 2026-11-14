@@ -2,6 +2,8 @@
 // Bộ chọn model không trống khi lần hỏi danh sách model đầu tiên lỗi. Từng sót (synchro.net.nz, ngay sau deploy: máy chủ khởi động lại,
 // nginx nạp lại cấu hình): /api/models lỗi một lần, models.ts bỏ qua và không hỏi lại, bộ chọn chỉ còn "Tự động — mọi hãng đã kết nối ()"
 // tới khi tải lại trang. Ở đây chặn hai lần hỏi đầu (lỗi kết nối) rồi cho qua: trình duyệt phải tự hỏi lại và menu hiện đủ các hãng.
+// A3: HTML của trang chủ mang sẵn danh sách model (gói khởi động); danh sách chỉ thiếu khi máy chủ dựng quá hạn 300ms (ngay sau deploy, CLI
+// khởi động chậm: đúng lúc lỗi từng xảy ra), khi đó trình duyệt tự hỏi /api/models. Bộ này bỏ danh sách khỏi HTML để đi đúng đường đó.
 import { spawn } from "node:child_process";
 import { rmSync } from "node:fs";
 
@@ -35,6 +37,18 @@ try {
     const m = JSON.parse(e.data);
     if (m.id && waits.has(m.id)) { const [ok, no] = waits.get(m.id); waits.delete(m.id); m.error ? no(new Error(JSON.stringify(m.error))) : ok(m.result); return; }
     // Lần hỏi danh sách model trước khi cho qua: lỗi kết nối (như lúc máy chủ đang khởi động lại).
+    if (m.method === "Fetch.requestPaused" && m.params.resourceType === "Document") {
+      // Gói khởi động không có danh sách model (như khi máy chủ dựng quá hạn): đổi tên khóa models (kể cả các tham chiếu tới nó) trong HTML.
+      const id = m.params.requestId;
+      void (async () => {
+        const r = await send("Fetch.getResponseBody", { requestId: id }, m.sessionId);
+        const html = (r.base64Encoded ? Buffer.from(r.body, "base64").toString("utf8") : r.body)
+          .replaceAll('\\"models\\":{\\"providers\\":', '\\"_m\\":{\\"providers\\":').replaceAll(":boot:models:", ":boot:_m:");
+        const headers = (m.params.responseHeaders ?? []).filter((x) => !/^(content-length|content-encoding)$/i.test(x.name));
+        await send("Fetch.fulfillRequest", { requestId: id, responseCode: m.params.responseStatusCode ?? 200, responseHeaders: headers, body: Buffer.from(html).toString("base64") }, m.sessionId);
+      })().catch(() => send("Fetch.continueRequest", { requestId: id }, m.sessionId).catch(() => {}));
+      return;
+    }
     if (m.method === "Fetch.requestPaused") {
       asked++;
       if (!allow) { blocked++; send("Fetch.failRequest", { requestId: m.params.requestId, errorReason: "ConnectionRefused" }, m.sessionId).catch(() => {}); }
@@ -47,7 +61,7 @@ try {
   await P("Runtime.enable"); await P("Page.enable");
   await P("Emulation.setDeviceMetricsOverride", { width: 1280, height: 800, deviceScaleFactor: 1, mobile: false });
   await P("Network.setCookie", { name: "synchro_session", value: cookie.split("=")[1], url: B });
-  await P("Fetch.enable", { patterns: [{ urlPattern: "*/api/models*", requestStage: "Request" }] });
+  await P("Fetch.enable", { patterns: [{ urlPattern: "*/api/models*", requestStage: "Request" }, { urlPattern: B + "/", resourceType: "Document", requestStage: "Response" }] });
   const ev = async (expr) => { const r = await P("Runtime.evaluate", { expression: expr, awaitPromise: true, returnByValue: true }); if (r.exceptionDetails) throw new Error(r.exceptionDetails.exception?.description ?? r.exceptionDetails.text); return r.result.value; };
   const until = async (expr, ms) => { const t = Date.now(); while (Date.now() - t < ms) { if (await ev(expr).catch(() => false)) return true; await sleep(250); } return false; };
   const click = async (expr) => {

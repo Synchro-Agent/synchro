@@ -170,10 +170,13 @@ const run = async (id, name, fn) => {
 };
 
 try {
-  // Gieo dữ liệu mẫu vào trình duyệt (đồng bộ lên máy chủ như đoạn chat thật), giữ nguyên đoạn chat sẵn có.
+  // Gieo dữ liệu mẫu vào trình duyệt (đồng bộ lên máy chủ như đoạn chat thật), giữ nguyên đoạn chat sẵn có. Gieo bằng lệnh chạy trước mã
+  // của trang ở lần mở sau: ghi thẳng vào trang đang mở thì lúc rời trang app có thể lưu lại danh sách trong bộ nhớ của nó (đã có đoạn chat
+  // của máy chủ) đè mất phần vừa gieo.
   await home("desktop");
-  await ev(`(() => { const k = "u:${uid}:chats", seeds = ${JSON.stringify(SEEDS)}, ids = new Set(seeds.map((c) => c.id)); let cur = []; try { cur = JSON.parse(localStorage.getItem(k) || "[]"); } catch {} localStorage.setItem(k, JSON.stringify([...seeds, ...cur.filter((c) => !ids.has(c.id))])); })()`);
+  const { identifier: seedJs } = await P("Page.addScriptToEvaluateOnNewDocument", { source: `(() => { if (location.origin !== ${JSON.stringify(B)}) return; const k = "u:${uid}:chats", seeds = ${JSON.stringify(SEEDS)}, ids = new Set(seeds.map((c) => c.id)); let cur = []; try { cur = JSON.parse(localStorage.getItem(k) || "[]"); } catch {} localStorage.setItem(k, JSON.stringify([...seeds, ...cur.filter((c) => !ids.has(c.id))])); })()` });
   await home("desktop");
+  await P("Page.removeScriptToEvaluateOnNewDocument", { identifier: seedJs });
   if (!(await until(`!!${row(MD_TITLE)}`, 20000))) console.log("  (cảnh báo: chưa thấy đoạn chat mẫu ở thanh bên)");
 
   // U2 — 7 tệp đính kèm: "+N" luôn thấy được bên trong ô soạn ở cả ba chiều rộng; không thẻ nào bị cắt; bấm "+N" thì trải lưới, không thẻ nào
@@ -262,7 +265,9 @@ try {
     await home("desktop");
     const SEC = `[...document.querySelectorAll(".sec-btn")].find((b) => b.textContent.includes("Đoạn chat và tác vụ"))`;
     const FOLD = `${SEC}?.closest(".section-label")?.nextElementSibling`;
-    const PAGER = `(() => { const f = ${FOLD}, p = f?.querySelector(".adm-pager"); if (!p) return null; const q = p.getBoundingClientRect(), r = f.getBoundingClientRect();
+    // Thanh bên có thêm mục khác phía trên (Đã ghim, Code với dữ liệu các bộ khác để lại) thì thanh phân trang nằm dưới mép màn hình:
+    // mục đang mở thì cuộn tới nó như người dùng rồi mới đo (mục đã gập không cuộn, vẫn phải không thấy).
+    const PAGER = `(() => { const f = ${FOLD}, p = f?.querySelector(".adm-pager"); if (!p) return null; if (f.classList.contains("open")) p.scrollIntoView({ block: "nearest" }); const q = p.getBoundingClientRect(), r = f.getBoundingClientRect();
       const h = Math.max(0, Math.min(q.bottom, r.bottom) - Math.max(q.top, r.top)); return { open: f.classList.contains("open"), fold: Math.round(r.height), seen: q.height > 0 && ${VIS}(p) ? Math.round(h) : 0 }; })()`;
     if (!(await ev(`${FOLD}?.classList.contains("open")`))) { await click(SEC, "mục Đoạn chat và tác vụ"); await sleep(600); }
     const a = await ev(PAGER);
@@ -445,7 +450,8 @@ try {
       await home("desktop");
       if (!(await ev(`!!document.querySelector(".rail [data-nav=speech]")`))) { skipped("U12 trang Speech", "tài khoản thử không có mục Speech"); return; }
       await click(`document.querySelector(".rail [data-nav=speech]")`, "Speech");
-      await sleep(700);
+      // Chờ mã trang Speech (tải chậm, trước đó là vòng xoay chung) thay vì 700ms cố định; gói vẫn đang bị giữ nên vẫn đo đúng lúc chờ.
+      await until(`!!document.querySelector(".sp-home")`, 10000);
       const r = await ev(`(() => { const h = document.querySelector(".sp-home"); if (!h) return null; const q = h.getBoundingClientRect();
         return { busy: h.getAttribute("aria-busy") === "true", h: Math.round(q.height), skel: h.querySelectorAll(".sk-blk").length, input: !!h.querySelector("textarea, input, [contenteditable=true]") }; })()`);
       ok(held.length > 0 || r?.busy, "gói ElevenLabs còn đang đọc lúc mở trang", { held: held.length, r });

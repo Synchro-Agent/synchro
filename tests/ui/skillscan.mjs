@@ -34,6 +34,13 @@ const SKILLS = {
   "scan-tax-copy": { d: "Bản sao của skill thuế", b: TAX },
   "scan-noverdict-x": { d: "Quy trình kiểm thử API trước khi phát hành", b: "# Kiểm thử API\n\nChạy bộ kiểm thử hợp đồng cho mọi endpoint, so sánh mã trạng thái và lược đồ JSON với tài liệu OpenAPI, ghi lại endpoint lệch chuẩn trước khi phát hành." },
 };
+// Bắt đầu từ trạng thái chưa quét lần nào; xóa mức dùng của tài khoản thử (giới hạn mức dùng không chặn model giả lập). Làm trước khi thêm
+// skill: lưu skill là xếp mục Tài liệu / Trình bày / Thiết kế bằng model ở nền, hết hạn mức thì skill ở lại không nhãn mục và không thử lại.
+{ const R = createRequire(process.cwd() + "/package.json");
+  const db = new (R("better-sqlite3"))(process.cwd() + "/data-mock/synchro.db"); db.pragma("busy_timeout = 5000");
+  const uid = db.prepare("SELECT id FROM users WHERE email = ?").get(email).id;
+  db.exec("CREATE TABLE IF NOT EXISTS skill_scans (user_id TEXT PRIMARY KEY, at INTEGER NOT NULL, data TEXT NOT NULL)");
+  db.prepare("DELETE FROM skill_scans WHERE user_id = ?").run(uid); db.prepare("DELETE FROM usage_events WHERE user_id = ?").run(uid); db.close(); }
 for (const n of Object.keys(SKILLS)) await api("DELETE", `/api/skills/${n}`);
 // Một skill rác nằm trong thư viện (đưa vào Thư viện cho mọi người thành thư viện "Mẫu thư viện" chỉ có skill đó): xóa trong bảng thì
 // skill rời thư viện và thư viện trống được gỡ luôn.
@@ -49,14 +56,11 @@ for (const [n, s] of Object.entries(SKILLS)) {
   const r = await api("POST", "/api/skills", fd);
   if (r.s !== 200) throw new Error(`không thêm được ${n}: ${JSON.stringify(r.j)}`);
 }
-// Bắt đầu từ trạng thái chưa quét lần nào; xóa mức dùng của tài khoản thử (giới hạn mức dùng không chặn model giả lập).
-{ const R = createRequire(process.cwd() + "/package.json");
-  const db = new (R("better-sqlite3"))(process.cwd() + "/data-mock/synchro.db"); db.pragma("busy_timeout = 5000");
-  const uid = db.prepare("SELECT id FROM users WHERE email = ?").get(email).id;
-  db.exec("CREATE TABLE IF NOT EXISTS skill_scans (user_id TEXT PRIMARY KEY, at INTEGER NOT NULL, data TEXT NOT NULL)");
-  db.prepare("DELETE FROM skill_scans WHERE user_id = ?").run(uid); db.prepare("DELETE FROM usage_events WHERE user_id = ?").run(uid); db.close(); }
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+// Tải lại khi đang ở Kho kỹ năng thì trang mở lại thẳng Kho kỹ năng (#v=customize); A3 dựng sẵn tài khoản trong HTML nên không còn
+// thoáng qua trang chủ có ô soạn tin: chờ khung app (thanh bên) thay vì chờ ô soạn tin.
+const APP = `!!document.querySelector('.nav-item[data-nav="customize"]')`;
 const chrome = spawn(process.env.CHROME_PATH ?? "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
   ["--headless=new", "--remote-debugging-port=9346", `--user-data-dir=${PROF}`, "--window-size=1440,900", "--no-first-run", "--no-default-browser-check", "about:blank"], { stdio: "ignore" });
 let ver; for (let i = 0; i < 50 && !ver; i++) { await sleep(200); ver = await fetch("http://127.0.0.1:9346/json/version").then((r) => r.json()).catch(() => null); }
@@ -229,8 +233,10 @@ try {
   check("xác nhận xóa skill thư viện: nói rõ xóa khỏi thư viện, không quay lại khi cập nhật", /khỏi thư viện Mẫu thư viện\?/.test(cf) && /không quay lại khi cập nhật/.test(cf), cf.slice(0, 160));
   await click(`document.querySelector(".overlay.cf-top .btn.danger")`, "confirm lib");
   await until(`![...document.querySelectorAll(".scan-row")].some((x) => x.querySelector("b").textContent === ${JSON.stringify(LIB)})`, 10000, "đã xóa khỏi thư viện");
-  const libGone = !((await api("GET", "/api/plugins")).j.plugins ?? []).some((p) => p.slug === `skill-${LIB}`);
+  // Đọc lời báo trước (sống khoảng 2,5 giây), rồi mới hỏi máy chủ: máy chậm thì một lần hỏi API đủ để lời báo tắt mất.
+  await until(`[...document.querySelectorAll(".toast, [role=status]")].some((e) => /đã gỡ 1 thư viện trống/.test(e.textContent))`, 4000, "báo gỡ thư viện").catch(() => {});
   const toast = await ev(`[...document.querySelectorAll(".toast, [role=status]")].map((e) => e.textContent).join(" | ")`);
+  const libGone = !((await api("GET", "/api/plugins")).j.plugins ?? []).some((p) => p.slug === `skill-${LIB}`);
   check("xóa skill cuối của thư viện: thư viện trống được gỡ, báo một dòng", libGone && /đã gỡ 1 thư viện trống/.test(toast), toast.slice(0, 160));
   // Xóa tất cả trong tab Không có tác dụng.
   await click(byText(".scan-tabs button", "Không có tác dụng"), "useless tab 2"); await sleep(300);
@@ -263,7 +269,7 @@ try {
 
   // ---------------- giao diện tối
   await view(1440, 900, false, "dark");
-  await P("Page.reload"); await until(`!!document.querySelector("textarea")`, 30000, "app"); await openHub();
+  await P("Page.reload"); await until(APP, 30000, "app"); await openHub();
   await click(`document.querySelector(".pl-scan")`, "scan dark"); await until(`!!document.querySelector(".scan-modal .scan-tabs")`, 10000, "dark modal"); await sleep(400);
   lay = await ev(LAYOUT(".scan-modal"));
   check("giao diện tối: không tràn, không đè", !lay.length, lay.join(" | "));
@@ -276,7 +282,7 @@ try {
 
   // ---------------- điện thoại
   await view(390, 844, true);
-  await P("Page.reload"); await until(`!!document.querySelector("textarea")`, 30000, "app"); await openHub();
+  await P("Page.reload"); await until(APP, 30000, "app"); await openHub();
   lay = await ev(LAYOUT(".pl-top"));
   check("điện thoại: nút quét chỉ còn biểu tượng, thanh công cụ không tràn, không đè", !lay.length && (await ev(`getComputedStyle(document.querySelector(".pl-scan-l")).display === "none"`)), lay.join(" | "));
   await shot("phone-toolbar");
@@ -294,7 +300,7 @@ try {
 
   // ---------------- Cài đặt → Kho kỹ năng (khung hẹp)
   await view(1280, 800, false);
-  await P("Page.reload"); await until(`!!document.querySelector("textarea")`, 30000, "app"); await sleep(800);
+  await P("Page.reload"); await until(APP, 30000, "app"); await sleep(800);
   await click(`document.querySelector(".rail .user, .shell-side .user, [aria-label='Tài khoản']")`, "user menu"); await sleep(500);
   await click(byText(".menu-item", "Cài đặt"), "settings"); await sleep(1000);
   await click(byText(".s-nav button", "Kho kỹ năng"), "settings hub"); await until(`!!document.querySelector(".modal.settings .pl-scan")`, 15000, "nút quét trong Cài đặt");

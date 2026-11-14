@@ -37,7 +37,8 @@ let ver; for (let i = 0; i < 50 && !ver; i++) { await sleep(200); ver = await fe
 const ws = new WebSocket(ver.webSocketDebuggerUrl);
 await new Promise((r) => ws.addEventListener("open", r));
 let seq = 0; const waits = new Map();
-ws.addEventListener("message", (e) => { const m = JSON.parse(e.data); if (m.id && waits.has(m.id)) { const [f, no] = waits.get(m.id); waits.delete(m.id); m.error ? no(new Error(JSON.stringify(m.error))) : f(m.result); } });
+const handlers = [];
+ws.addEventListener("message", (e) => { const m = JSON.parse(e.data); if (m.id && waits.has(m.id)) { const [f, no] = waits.get(m.id); waits.delete(m.id); m.error ? no(new Error(JSON.stringify(m.error))) : f(m.result); } else for (const h of handlers) h(m); });
 const send = (method, params = {}, sessionId) => new Promise((f, no) => { const id = ++seq; waits.set(id, [f, no]); ws.send(JSON.stringify({ id, method, params, sessionId })); });
 const { targetId } = await send("Target.createTarget", { url: "about:blank" });
 const { sessionId: S } = await send("Target.attachToTarget", { targetId, flatten: true });
@@ -110,6 +111,8 @@ try {
   await sleep(400);
   ok((await ev(`document.querySelector(".settings").getAttribute("role")`)) === "dialog" && (await ev(`document.querySelector(".settings").getAttribute("aria-modal")`)) === "true", "hộp thoại có vai trò dialog");
   const sel = `[...document.querySelectorAll(".settings .row")].find((r) => /Chat font|Phông chữ/i.test(r.textContent))?.querySelector(".sel")`;
+  // Thân Cài đặt nạp chậm (khung chờ trước, B3.4 tách thêm settings.css): chờ hàng Phông chữ thật thay vì chỉ 400ms.
+  await until(`!!${sel}`, 15000, "hàng Phông chữ (Cài đặt nạp chậm)");
   await click(sel, "dropdown phông chữ"); await until(`!!document.querySelector(".settings .menu")`, 3000);
   await key("Escape"); await sleep(250);
   ok(await ev(`!!document.querySelector(".settings") && !document.querySelector(".settings .menu:not(.out)")`), "Esc đóng dropdown, Cài đặt vẫn mở");
@@ -190,6 +193,21 @@ try {
 
   console.log("Tài khoản chưa có model");
   const { identifier } = await P("Page.addScriptToEvaluateOnNewDocument", { source: `localStorage.removeItem("u:${uid}:model"); { const f = window.fetch; window.fetch = (u, i) => String(u).includes("/api/models") ? Promise.resolve(new Response(JSON.stringify({ providers: [], default: null, allowed: [], effort: {} }), { status: 200, headers: { "content-type": "application/json" } })) : f(u, i); }` });
+  // A3: HTML của trang chủ mang sẵn danh sách model (gói khởi động), không hỏi /api/models lúc mở. Làm rỗng danh sách hãng ngay trong HTML
+  // (mảng cũ dời sang khóa _x, kể cả các tham chiếu tới nó) để trang đi đúng đường "chưa có model" như khi /api/models trả rỗng.
+  const noModels = (m) => {
+    if (m.method !== "Fetch.requestPaused" || m.sessionId !== S) return;
+    const id = m.params.requestId;
+    void (async () => {
+      const r = await P("Fetch.getResponseBody", { requestId: id });
+      const html = (r.base64Encoded ? Buffer.from(r.body, "base64").toString("utf8") : r.body)
+        .replaceAll('\\"models\\":{\\"providers\\":[', '\\"models\\":{\\"providers\\":[],\\"_x\\":[').replaceAll(":boot:models:providers:", ":boot:models:_x:");
+      const headers = (m.params.responseHeaders ?? []).filter((h) => !/^(content-length|content-encoding)$/i.test(h.name));
+      await P("Fetch.fulfillRequest", { requestId: id, responseCode: m.params.responseStatusCode ?? 200, responseHeaders: headers, body: Buffer.from(html).toString("base64") });
+    })().catch(() => P("Fetch.continueRequest", { requestId: id }).catch(() => {}));
+  };
+  handlers.push(noModels);
+  await P("Fetch.enable", { patterns: [{ urlPattern: B + "/", resourceType: "Document", requestStage: "Response" }] });
   await go(B);
   await click(`document.querySelector(".rail-new")`).catch(() => {});
   await until(`!!document.querySelector(".ob-card")`, 15000, "thẻ hướng dẫn kết nối gói");
@@ -200,6 +218,7 @@ try {
   ok((await ev(`document.querySelector(${JSON.stringify(COMPOSER)}).value`)) === "tin đầu tiên", "tin đang gõ vẫn còn");
   await key("Escape"); await sleep(300);
   await P("Page.removeScriptToEvaluateOnNewDocument", { identifier });
+  await P("Fetch.disable"); handlers.splice(handlers.indexOf(noModels), 1);
 
   console.log("Ô tìm của Cài đặt ra đúng dòng");
   await go(B);

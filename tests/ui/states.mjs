@@ -121,13 +121,18 @@ try {
   await key("Escape", "Escape", 27); await sleep(400);
 
   console.log("━━ Mất mạng lúc mở trang");
+  // A3: có cookie phiên thì HTML của trang chủ đã mang sẵn tài khoản (gói khởi động), không hỏi /api/auth/me nữa. Trình duyệt chỉ tự hỏi
+  // /api/auth/me khi HTML không có gói (máy chủ dựng gói lỗi…): mở trang khi chưa gửi cookie để HTML không có gói, chặn /api/auth/me như
+  // mất mạng, rồi trả cookie lại để lần tự thử lại vào được app như cũ.
   await P("Fetch.enable", { patterns: [{ urlPattern: "*/api/auth/me*" }] });
   const fail = (m) => { if (m.method === "Fetch.requestPaused") void send("Fetch.failRequest", { requestId: m.params.requestId, errorReason: "ConnectionRefused" }, S).catch(() => {}); };
   handlers.push(fail);
+  await P("Network.deleteCookies", { name: "synchro_session", url: B });
   await P("Page.navigate", { url: B + "/" });
   ok(await until(`!!document.querySelector(".boot-err")`, 15000), "đã đăng nhập mà mất mạng: báo chưa kết nối được");
   ok(await ev(`!document.querySelector("input[type=email]")`), "không hiện màn hình đăng ký / đăng nhập");
   ok(await ev(`localStorage.getItem("signedIn") === "1"`), "vẫn nhớ đã đăng nhập");
+  await setCookie();
   handlers.splice(handlers.indexOf(fail), 1);
   await P("Fetch.disable");
   ok(await until(`!!document.querySelector("textarea") && !document.querySelector(".boot-err")`, 12000), "có mạng lại: tự vào app, không cần tải lại");
