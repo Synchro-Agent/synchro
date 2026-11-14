@@ -39,6 +39,15 @@ ok(C.tfWith(EN, "Gói {name} hết hạn (thử)", { name: "Claude" }, "en") ===
 ok(C.tfWith(undefined, "{n} bước (thử)", { n: 3 }, "vi") === "3 bước (thử)" && C.tfWith(undefined, "Gói {name} hết hạn (thử)", { name: "$&x" }, "vi") === "Gói $&x hết hạn (thử)", "tiếng Việt / chưa có từ điển: điền vào câu gốc (giá trị có $ vẫn nguyên)");
 ok(C.tfWith(EN, "Gói {name} của bạn đã hết hạn mức.", { name: "Claude" }, "en") === "Your Claude plan has hit its limit.", "mẫu chưa có khóa: điền rồi dịch bằng luật", C.tfWith(EN, "Gói {name} của bạn đã hết hạn mức.", { name: "Claude" }, "en"));
 ok(C.trWith(EN, "Hội đồng phản biện", "en") === tr("Hội đồng phản biện", "en") && C.trWith(EN, "3 skill", "en") === "3 skills", "trWith dùng chung cho tr() và trOn()");
+// Chữ ngắn dễ trùng dịch theo ngữ cảnh (trc): bộ dịch trang chỉ thấy khóa trần, nên khóa trần một từ không được có trong từ điển.
+ok(C.trcWith(EN, "Lọc", "đồ thị", "en") === "Filters" && C.trcWith(undefined, "Lọc", "đồ thị", "vi") === "Lọc" && C.trcWith(EN, "Lọc", "ngữ cảnh chưa có", "en") === "Lọc", "trc tra khóa “chữ ‹ngữ cảnh›”, chưa có thì giữ chữ gốc");
+const bare = ["Lọc", "Thuộc", "Nhóm", "Hiển thị", "Loại", "Tổng hợp", "Học", "Nối", "Bảng", "Việc dở", "Lực", "Chủ đề", "Tên riêng", "Bản đồ", "Hoạt động", "Đường dẫn", "Tiến", "Lùi", "liên kết", "chủ đề", "Trong gói", "Ghi chú của bạn"].filter((k) => Object.prototype.hasOwnProperty.call(D.VI2EN, k));
+ok(!bare.length, "không còn khóa trần một hai từ của Bộ não (bộ dịch trang sẽ đổi mọi nút chữ trùng ở chỗ khác)", bare.join(", "));
+const K = (s, c) => D.VI2EN[C.ctxKey(s, c)];
+ok(K("Chủ đề", "loại ghi chú") === "Topic" && K("Tên riêng", "loại ghi chú") === "Entity" && K("Bản đồ", "loại ghi chú") === "Map" && K("Thẻ", "loại ghi chú") === "Tag" && K("Ghi chú của bạn", "loại ghi chú") === "Your note"
+  && K("Chủ đề", "nhóm ghi chú") === "Topics" && K("Ghi chú của bạn", "nhóm ghi chú") === "Your notes" && K("Đoạn chat", "nhóm ghi chú") === "Chats" && K("Ghi chú", "trang bộ não") === "Note",
+  "Bộ não: loại của một ghi chú số ít, tên nhóm số nhiều");
+ok(D.VI2EN["Synchro tự viết phần còn lại của trang này từ các đoạn chat; phần bạn viết nằm ở mục “Ghi chú của bạn”."]?.includes(`“${K("Ghi chú của bạn", "loại ghi chú")}”`), "câu hướng dẫn gọi đúng tên nút “Your note”");
 const { readFileSync: rf, readdirSync: rd, statSync: st } = await import("node:fs");
 const { default: P } = await import("node:path");
 const files = [];

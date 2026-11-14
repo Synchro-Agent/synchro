@@ -145,6 +145,11 @@ export function extract(file) {
     if (ts.isCaseClause(p)) return;
     // tr("…") / trOn("…", lang): chữ hiển thị đi qua từ điển, luôn cần bản dịch (kể cả khi nằm trong ${…}).
     // tf("mẫu {x}", …) / tfOn(…): khóa là nguyên mẫu, phải có đúng mục trong từ điển (kind "key").
+    // trc("Lọc", "đồ thị"): chữ ngắn theo ngữ cảnh, khóa là "Lọc ‹đồ thị›" (i18n-core ctxKey). Ngữ cảnh không viết thẳng thì không kiểm được: báo thiếu.
+    if (ts.isCallExpression(p) && ts.isIdentifier(p.expression) && p.expression.text === "trc") {
+      if (p.arguments[0] === n) { const c = p.arguments[1]; out.push({ line: lineOf(n), text: `${s} ‹${c && ts.isStringLiteralLike(c) ? c.text : "?"}›`, kind: "ctx" }); }
+      return;
+    }
     if (ts.isCallExpression(p) && ts.isIdentifier(p.expression) && DICT_CALL.test(p.expression.text) && p.arguments[0] === n) { if (/\p{L}{2}/u.test(s)) out.push({ line: lineOf(n), text: s, kind: /^tf/.test(p.expression.text) ? "key" : "str" }); return; }
     const r = ctx(n);
     if (skipCtx(r, s)) return;
@@ -209,6 +214,12 @@ export async function scan({ files } = {}) {
         const vi = s.parts.some((x) => VI.test(x));
         const okk = samples.some((x) => (vi ? enOk(x.trim()) : viOk(x.trim()) || enOk(x.trim())));
         if (!okk) missing.push({ file: rel, line: s.line, text: s.text, kind: "tpl", need: vi ? "en" : "vi" });
+        continue;
+      }
+      if (s.kind === "ctx") {
+        // Khóa có ngữ cảnh: chữ gốc tiếng Việt, cần đúng khóa trong VI2EN và bản dịch không sót chữ tiếng Việt.
+        const v = has(D.VI2EN, s.text) ? D.VI2EN[s.text] : undefined;
+        if (v === undefined || VI_ONLY.test(strip(v)) || /‹|›/.test(v)) missing.push({ file: rel, line: s.line, text: s.text, kind: "ctx", need: "en", partial: v });
         continue;
       }
       if (s.kind === "key") {

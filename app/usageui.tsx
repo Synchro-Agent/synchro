@@ -7,7 +7,7 @@ import "./settings.css";
 import { useCallback, useEffect, useState } from "react";
 import { apiFetch } from "./apierr";
 import { rowKeys } from "./a11y";
-import { isEn, locale, tf, tr } from "./i18n";
+import { isEn, locale, tf, tr, trc } from "./i18n";
 import * as I from "./icons";
 import { PageBar, usePage } from "./pager";
 import { BrandLogo, ModelLogo } from "./brands";
@@ -194,7 +194,7 @@ export function UsageSettings({ go }: { go?: (t: string) => void }) {
           {pgM.items.map((x) => x.kind === "plan" ? ((m) => (
             <div key={m.model} className="us-li">
               <div className="us-li-t"><b data-notr><i className="us-dot" style={{ background: VENDOR_COLOR[CLI_VENDOR[m.cli]] }} />{m.model.endsWith("/") ? tf("{name} (lượt cũ, chưa ghi tên model)", { name: m.name }) : m.name}</b><span>{tf("Gói {plan} · {n} lượt", { plan: SUB_NAME[m.cli], n: num(m.turns) })}</span></div>
-              <em className="us-incl">{tr("Trong gói")}</em>
+              <em className="us-incl">{trc("Trong gói", "mức dùng")}</em>
               <div className="us-li-bar"><i style={{ width: `${(m.turns / topTurns) * 100}%`, background: VENDOR_COLOR[CLI_VENDOR[m.cli]] }} /></div>
             </div>
           ))(x.m) : x.row)}

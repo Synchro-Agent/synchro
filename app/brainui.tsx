@@ -15,7 +15,7 @@ import { BulkBar, BulkButton, BulkCheck, bulkRow, each, useBulk, type BulkAct } 
 import { Pager } from "./pager";
 import * as I from "./icons";
 import { type Chat, useApp, usePref } from "./store";
-import { locale, tf, tr } from "./i18n";
+import { locale, tf, tr, trc } from "./i18n";
 
 type Kind = "hub" | "about" | "model" | "chat" | "code" | "topic" | "entity" | "map" | "index" | "log" | "skill" | "connector" | "note" | "daily" | "rule" | "ghost" | "tag";
 type GNode = { id: string; title: string; kind: Kind; tags: string[]; created: number; links: number; aliases?: string[]; pinned?: boolean };
@@ -30,11 +30,29 @@ type NoteData = {
 
 // Chữ trên đồ thị vẽ bằng canvas, bộ dịch giao diện không chạm tới: tên các ghi chú khung dịch ở đây. Tiêu đề người dùng và Synchro đặt theo nội dung giữ nguyên.
 const noteLabel = (t: string) => (ENTRY.includes(t) || /^Nhật ký \d/.test(t) ? tr(t) : /^Bản đồ · /.test(t) ? tf("Bản đồ · {name}", { name: t.replace(/^Bản đồ · /, "") }) : t);
-// Loại ghi chú: chữ tiếng Việt, dịch bằng tr khi hiện (cùng khóa với tên nhóm ở danh sách bên trái).
-const KIND: Record<Kind, string> = {
-  hub: "Trung tâm", about: "Về bạn", model: "Bán cầu", chat: "Đoạn chat", code: "Synchro Code",
-  topic: "Chủ đề", entity: "Tên riêng", map: "Bản đồ", index: "Mục lục", log: "Hoạt động",
-  skill: "Skill", connector: "Connector", note: "Ghi chú của bạn", daily: "Nhật ký ngày", rule: "Quy tắc hàng đầu", ghost: "Chưa có ghi chú", tag: "Thẻ",
+// Loại của một ghi chú (số ít: "Topic", "Your note"), khác tên nhóm số nhiều ở danh sách bên trái ("Topics", "Your notes"):
+// mỗi loại một khóa ngữ cảnh "loại ghi chú" (trc), dịch lúc vẽ.
+const kindName = (k: Kind): string => {
+  switch (k) {
+    case "hub": return trc("Trung tâm", "loại ghi chú");
+    case "about": return trc("Về bạn", "loại ghi chú");
+    case "model": return trc("Bán cầu", "loại ghi chú");
+    case "chat": return trc("Đoạn chat", "loại ghi chú");
+    case "code": return "Synchro Code";
+    case "topic": return trc("Chủ đề", "loại ghi chú");
+    case "entity": return trc("Tên riêng", "loại ghi chú");
+    case "map": return trc("Bản đồ", "loại ghi chú");
+    case "index": return trc("Mục lục", "loại ghi chú");
+    case "log": return trc("Hoạt động", "loại ghi chú");
+    case "skill": return "Skill";
+    case "connector": return "Connector";
+    case "note": return trc("Ghi chú của bạn", "loại ghi chú");
+    case "daily": return trc("Nhật ký ngày", "loại ghi chú");
+    case "rule": return trc("Quy tắc hàng đầu", "loại ghi chú");
+    case "ghost": return trc("Chưa có ghi chú", "loại ghi chú");
+    case "tag": return trc("Thẻ", "loại ghi chú");
+    default: return "";
+  }
 };
 const KIND_ICON: Partial<Record<Kind, (p: { size?: number }) => React.ReactNode>> = {
   hub: I.Brain, about: I.User, model: I.Sparkle, chat: I.Chat2, code: I.Code, topic: I.Bulb, entity: I.Book, map: I.Layers, index: I.List, log: I.History,
@@ -367,7 +385,7 @@ export function BrainGraph({ data, gs, onOpen, focus, height = 420, active, cuto
       {!mini && <div className="bn-zoom">
         <button className="icon-btn" aria-label={tr("Phóng to đồ thị")} onClick={() => zoom(1.3)}><I.Plus size={14} /></button>
         <button className="icon-btn" aria-label={tr("Thu nhỏ đồ thị")} onClick={() => zoom(1 / 1.3)}><I.Minus size={14} /></button>
-        <button className="icon-btn" aria-label={tr("Vừa khung")} onClick={() => { touched.current = false; fit(true); }}><I.Expand size={13} /></button>
+        <button className="icon-btn" aria-label={trc("Vừa khung", "đồ thị")} onClick={() => { touched.current = false; fit(true); }}><I.Expand size={13} /></button>
       </div>}
     </div>
   );
@@ -397,15 +415,15 @@ function GraphPanel({ gs, set, local, onAnimate, onClose }: { gs: GS; set: (p: P
         <button className="icon-btn" aria-label={tr("Đặt lại mặc định")} data-tip={tr("Đặt lại mặc định")} onClick={() => set(null)}><I.Retry size={13} /></button>
         {onClose && <button className="icon-btn" aria-label={tr("Đóng")} onClick={onClose}><I.X size={14} /></button>}
       </div>
-      {sec("filter", tr("Lọc"), <>
-        {local && sl("depth", tr("Độ sâu"), 1, 3, 1)}
+      {sec("filter", trc("Lọc", "đồ thị"), <>
+        {local && sl("depth", trc("Độ sâu", "đồ thị"), 1, 3, 1)}
         <input className="field bg-q" value={gs.search} onChange={(e) => set({ search: e.target.value })} placeholder={tr("Tìm ghi chú… (tag:, loai:, file:)")} />
         {local && <>{tog("inc", tr("Liên kết đến"))}{tog("out", tr("Liên kết đi"))}{tog("nbr", tr("Liên kết giữa lân cận"))}</>}
         {tog("tags", tr("Thẻ"))}
         {tog("orphans", tr("Ghi chú lẻ"))}
         {tog("existing", tr("Chỉ ghi chú đã có"))}
       </>)}
-      {sec("groups", tr("Nhóm"), <>
+      {sec("groups", trc("Nhóm", "đồ thị"), <>
         {gs.groups.map((g, i) => (
           <div key={i} className="bg-grp">
             <input type="color" value={g.color} aria-label={tr("Màu nhóm")} onChange={(e) => set({ groups: gs.groups.map((x, j) => (j === i ? { ...x, color: e.target.value } : x)) })} />
@@ -415,16 +433,16 @@ function GraphPanel({ gs, set, local, onAnimate, onClose }: { gs: GS; set: (p: P
         ))}
         <button className="btn sm" onClick={() => set({ groups: [...gs.groups, { q: "", color: SWATCH[gs.groups.length % SWATCH.length] }] })}><I.Plus size={12} />{tr("Nhóm mới")}</button>
       </>)}
-      {sec("display", tr("Hiển thị"), <>
-        {tog("arrows", tr("Mũi tên"))}
+      {sec("display", trc("Hiển thị", "đồ thị"), <>
+        {tog("arrows", trc("Mũi tên", "đồ thị"))}
         {sl("fade", tr("Ngưỡng mờ chữ"), 0, 1, 0.05)}
-        {sl("size", tr("Cỡ nút"), 0.4, 2.5, 0.05)}
+        {sl("size", trc("Cỡ nút", "đồ thị"), 0.4, 2.5, 0.05)}
         {sl("thick", tr("Độ dày liên kết"), 0.3, 3, 0.05)}
         {onAnimate && <button className="btn sm" onClick={onAnimate}><I.Play size={11} />{tr("Tua lại quá trình hình thành")}</button>}
       </>)}
-      {sec("forces", tr("Lực"), <>
-        {sl("center", tr("Hút tâm"), 0, 1, 0.02)}
-        {sl("repel", tr("Đẩy nhau"), 0, 20, 0.5)}
+      {sec("forces", trc("Lực", "đồ thị"), <>
+        {sl("center", trc("Hút tâm", "đồ thị"), 0, 1, 0.02)}
+        {sl("repel", trc("Đẩy nhau", "đồ thị"), 0, 20, 0.5)}
         {sl("link", tr("Lực liên kết"), 0, 1, 0.02)}
         {sl("dist", tr("Độ dài liên kết"), 30, 250, 5)}
       </>)}
@@ -603,25 +621,25 @@ function NoteView({ title, sub, exists, onOpen, onChanged, onLoaded }: { title: 
   // Đường dẫn: trung tâm › bản đồ chứa nó (nếu có) › ghi chú này.
   const crumbs = [HUB_TITLE, ...(n?.props.up ? [n.props.up] : [])].filter((c) => fold(c) !== fold(name));
   const rows: [string, React.ReactNode][] = n ? [
-    ...(n.kind === "entity" && n.props.etype ? [[tr("Loại"), <span key="t" data-notr>{n.props.etype}</span>] as [string, React.ReactNode]] : []),
-    ...(n.props.up ? [[tr("Thuộc"), <Inline key="u" t={`[[${n.props.up}]]`} exists={exists} onOpen={onOpen} />] as [string, React.ReactNode]] : []),
-    ...(n.props.aliases?.length ? [[tr("Tên khác"), <span key="a" className="bn-chips">{n.props.aliases.map((x) => <span key={x} className="bn-alias" data-notr>{x}</span>)}</span>] as [string, React.ReactNode]] : []),
+    ...(n.kind === "entity" && n.props.etype ? [[trc("Loại", "ghi chú"), <span key="t" data-notr>{n.props.etype}</span>] as [string, React.ReactNode]] : []),
+    ...(n.props.up ? [[trc("Thuộc", "ghi chú"), <Inline key="u" t={`[[${n.props.up}]]`} exists={exists} onOpen={onOpen} />] as [string, React.ReactNode]] : []),
+    ...(n.props.aliases?.length ? [[trc("Tên khác", "ghi chú"), <span key="a" className="bn-chips">{n.props.aliases.map((x) => <span key={x} className="bn-alias" data-notr>{x}</span>)}</span>] as [string, React.ReactNode]] : []),
     ...(n.tags.length ? [[tr("Thẻ"), <span key="g" className="bn-chips">{n.tags.map((x) => <span key={x} className="bn-tag" data-notr>#{x}</span>)}</span>] as [string, React.ReactNode]] : []),
     ...(n.props.models ? [["Model", <span key="m" data-notr>{Object.keys(n.props.models).map((m) => m.split("/").slice(1).join("/") || m).join(", ")}</span>] as [string, React.ReactNode]] : []),
-    ...(n.props.turns ? [[tr("Tin nhắn"), <span key="n">{n.props.turns}</span>] as [string, React.ReactNode]] : []),
+    ...(n.props.turns ? [[trc("Tin nhắn", "ghi chú"), <span key="n">{n.props.turns}</span>] as [string, React.ReactNode]] : []),
     ...(sources.length ? [[tr("Nguồn"), <span key="s">{tf("{n} đoạn chat", { n: sources.length })}</span>] as [string, React.ReactNode]] : []),
     [tr("Tạo lúc"), <span key="c">{dateStr(n.createdAt)}</span>],
   ] : [];
   return (
     <article className="bn-note" aria-label={name} ref={body}>
       <div className="bn-note-top">
-        <nav className="bn-crumbs" aria-label={tr("Đường dẫn")}>
+        <nav className="bn-crumbs" aria-label={trc("Đường dẫn", "ghi chú")}>
           {crumbs.map((c) => <span key={c} className="bn-crumb"><button onClick={() => onOpen(c)} data-notr>{c}</button><I.ChevronR size={11} /></span>)}
           <span className="bn-crumb now" data-notr>{name}</span>
         </nav>
         {(n || missing) && !edit && (
           <div className="bn-tools">
-            <button className="btn sm" onClick={() => setEdit(missing ? { title, body: "" } : { title: n!.title, body: n!.generated ? n!.props.userNote ?? "" : n!.body })}><I.Pencil size={13} />{missing ? tr("Tạo ghi chú") : n!.generated ? tr("Ghi chú của bạn") : tr("Sửa")}</button>
+            <button className="btn sm" onClick={() => setEdit(missing ? { title, body: "" } : { title: n!.title, body: n!.generated ? n!.props.userNote ?? "" : n!.body })}><I.Pencil size={13} />{missing ? tr("Tạo ghi chú") : n!.generated ? trc("Ghi chú của bạn", "loại ghi chú") : tr("Sửa")}</button>
             {n && n.kind !== "rule" && <button className={`icon-btn ${n.props.pinned ? "on" : ""}`} aria-label={n.props.pinned ? tr("Bỏ ghim") : tr("Ghim lên đầu")} data-tip={n.props.pinned ? tr("Bỏ ghim") : tr("Ghim lên đầu")} onClick={() => void call("PUT", "/api/brain/note", { title: n.title, pinned: !n.props.pinned })}>{n.props.pinned ? <I.M icon="PinOff" size={15} /> : <I.M icon="Pin" size={15} />}</button>}
             {n && (
               <div className="bn-more-w" ref={moreRef}>
@@ -639,11 +657,11 @@ function NoteView({ title, sub, exists, onOpen, onChanged, onLoaded }: { title: 
       </div>
       <h1 className="bn-title" data-notr>{name}</h1>
       <div className="bn-sub">
-        {n && <><span className="bn-kind"><KindIcon k={n.kind} size={12} />{tr(KIND[n.kind])}</span><span>{tf("Cập nhật {date}", { date: dateStr(n.updatedAt) })}</span></>}
-        {missing && <span className="bn-kind"><KindIcon k="ghost" size={12} />{tr(KIND.ghost)}</span>}
+        {n && <><span className="bn-kind"><KindIcon k={n.kind} size={12} />{kindName(n.kind)}</span><span>{tf("Cập nhật {date}", { date: dateStr(n.updatedAt) })}</span></>}
+        {missing && <span className="bn-kind"><KindIcon k="ghost" size={12} />{kindName("ghost")}</span>}
       </div>
       {n && !prop && rows.length > 1 && (
-        <dl className="bn-props" aria-label={tr("Thuộc tính")}>
+        <dl className="bn-props" aria-label={trc("Thuộc tính", "ghi chú")}>
           {rows.map(([k, v]) => <div key={k} className="bn-prop"><dt>{k}</dt><dd>{v}</dd></div>)}
         </dl>
       )}
@@ -713,10 +731,10 @@ function NoteSide({ d, graph, exists, onOpen }: { d: NoteData; graph: Graph; exi
         <p className="bw-none">{tr("Synchro tự nối dần các chỗ nhắc tên trong trang nó viết; chỗ nhắc trong ghi chú riêng của bạn giữ nguyên.")}</p>
         {d.unlinked.map((b) => row(b.title, b.kind, <span data-notr>{b.context}</span>))}
       </>)}
-      {heads.length > 0 && sec("out", tr("Đề mục"), heads.length, (
+      {heads.length > 0 && sec("out", trc("Đề mục", "ghi chú"), heads.length, (
         <div className="bw-outline">{heads.map((h, i) => <button key={i} style={{ paddingLeft: (h.level - 1) * 14 + 10 }} onClick={() => onOpen(d.note.title, h.text)} data-notr>{h.text}</button>)}</div>
       ))}
-      {d.similar.length > 0 && sec("sim", tr("Gần nghĩa"), d.similar.length, d.similar.map((x) => row(x.title, x.kind)))}
+      {d.similar.length > 0 && sec("sim", trc("Gần nghĩa", "ghi chú"), d.similar.length, d.similar.map((x) => row(x.title, x.kind)))}
     </>
   );
 }
@@ -744,11 +762,11 @@ function Bases({ onOpen, version }: { onOpen: Open; version: number }) {
   return (
     <div className="bn-bases">
       <header className="bw-page-h">
-        <h2>{tr("Bảng")}</h2>
+        <h2>{trc("Bảng", "trang bộ não")}</h2>
         <p>{tr("Xem cả bộ não theo hàng và cột: việc còn dang dở, đoạn chat, chủ đề, tên riêng. Bấm tiêu đề cột để sắp xếp.")}</p>
       </header>
       <div className="bn-filter">
-        {([["tasks", tr("Việc dang dở")], ["chats", tr("Đoạn chat")], ["topics", tr("Chủ đề")], ["entities", tr("Tên riêng")]] as const).map(([k, l]) => <button key={k} className={`bn-chip ${view === k ? "on" : ""}`} aria-pressed={view === k} onClick={() => { setView(k); setSort({ k: k === "tasks" || k === "chats" ? "date" : "links", dir: -1 }); }}>{l}</button>)}
+        {([["tasks", tr("Việc dang dở")], ["chats", trc("Đoạn chat", "nhóm ghi chú")], ["topics", trc("Chủ đề", "nhóm ghi chú")], ["entities", trc("Tên riêng", "nhóm ghi chú")]] as const).map(([k, l]) => <button key={k} className={`bn-chip ${view === k ? "on" : ""}`} aria-pressed={view === k} onClick={() => { setView(k); setSort({ k: k === "tasks" || k === "chats" ? "date" : "links", dir: -1 }); }}>{l}</button>)}
         {view === "tasks" && <label className="bn-check"><input type="checkbox" checked={showDone} onChange={(e) => setShowDone(e.target.checked)} />{tr("Hiện cả việc đã xong")}</label>}
       </div>
       {rows === null ? <div className="us-empty"><span className="art-spin sm" /></div> : view === "tasks" ? (
@@ -759,10 +777,10 @@ function Bases({ onOpen, version }: { onOpen: Open; version: number }) {
           </div>
         ))}</div> : <p className="d">{tr("Không còn việc nào dang dở. Việc còn dở dang trong các đoạn chat sẽ tự hiện ở đây.")}</p>
       ) : view === "chats" ? (
-        <div className="bn-table-w"><table className="bn-table"><thead><tr>{th("title", tr("Đoạn chat"))}{th("date", tr("Ngày"))}<th>Model</th><th>{tr("Chủ đề")}</th>{th("importance", tr("Quan trọng"))}{th("tasks", tr("Việc dở"))}</tr></thead>
+        <div className="bn-table-w"><table className="bn-table"><thead><tr>{th("title", tr("Đoạn chat"))}{th("date", tr("Ngày"))}<th>Model</th><th>{trc("Chủ đề", "nhóm ghi chú")}</th>{th("importance", trc("Quan trọng", "cột bảng"))}{th("tasks", trc("Việc dở", "cột bảng"))}</tr></thead>
           <tbody>{(sorted as ChatRow[]).map((r) => <tr key={r.title}><td>{link(r.title)}</td><td>{dateStr(r.date)}</td><td data-notr>{r.models.join(", ")}</td><td>{r.topics.map((x) => <span key={x}>{link(x)} </span>)}</td><td>{r.importance ?? "–"}</td><td>{r.tasks || ""}</td></tr>)}</tbody></table></div>
       ) : (
-        <div className="bn-table-w"><table className="bn-table"><thead><tr>{th("title", view === "topics" ? tr("Chủ đề") : tr("Tên riêng"))}{view === "entities" && <th>{tr("Loại")}</th>}{th("links", tr("Liên kết"))}{th("facts", tr("Điều đã biết"))}{view === "topics" && <th>{tr("Thuộc")}</th>}<th>{tr("Tóm lược")}</th></tr></thead>
+        <div className="bn-table-w"><table className="bn-table"><thead><tr>{th("title", view === "topics" ? trc("Chủ đề", "loại ghi chú") : trc("Tên riêng", "loại ghi chú"))}{view === "entities" && <th>{trc("Loại", "ghi chú")}</th>}{th("links", trc("Liên kết", "cột bảng"))}{th("facts", tr("Điều đã biết"))}{view === "topics" && <th>{trc("Thuộc", "ghi chú")}</th>}<th>{trc("Tóm lược", "cột bảng")}</th></tr></thead>
           <tbody>{(sorted as WikiRow[]).map((r) => <tr key={r.title}><td>{link(r.title)}</td>{view === "entities" && <td data-notr>{r.type}</td>}<td>{r.links}</td><td>{r.facts || ""}</td>{view === "topics" && <td>{r.up ? link(r.up) : ""}</td>}<td data-notr>{r.desc}</td></tr>)}</tbody></table></div>
       )}
     </div>
@@ -771,10 +789,10 @@ function Bases({ onOpen, version }: { onOpen: Open; version: number }) {
 
 // ---------------------------------------------------------------- Hoạt động: những gì bộ não vừa tự học, tự sắp xếp
 // Mỗi loại việc một biểu tượng: học từ đoạn chat, biên soạn, gộp, tự nối, xếp bản đồ, chân dung, hướng dẫn, tổng hợp.
-const ACT: [RegExp, (p: { size?: number }) => React.ReactNode, string][] = [
-  [/^Học từ/, I.Book, "Học"], [/^Biên soạn/, I.Pencil, "Biên soạn"], [/^Gộp/, I.Merge, "Gộp"],
-  [/^Tự nối/, I.Connect, "Nối"], [/^Xếp chủ đề/, I.Layers, "Bản đồ"], [/chân dung/, I.User, "Chân dung"],
-  [/^Tự cập nhật Hướng dẫn/, I.Sparkle, "Hướng dẫn"], [/^Tổng hợp/, I.Brain, "Tổng hợp"],
+const ACT: [RegExp, (p: { size?: number }) => React.ReactNode, () => string][] = [
+  [/^Học từ/, I.Book, () => trc("Học", "hoạt động bộ não")], [/^Biên soạn/, I.Pencil, () => trc("Biên soạn", "hoạt động bộ não")], [/^Gộp/, I.Merge, () => trc("Gộp", "hoạt động bộ não")],
+  [/^Tự nối/, I.Connect, () => trc("Nối", "hoạt động bộ não")], [/^Xếp chủ đề/, I.Layers, () => trc("Bản đồ", "hoạt động bộ não")], [/chân dung/, I.User, () => trc("Chân dung", "hoạt động bộ não")],
+  [/^Tự cập nhật Hướng dẫn/, I.Sparkle, () => trc("Hướng dẫn", "hoạt động bộ não")], [/^Tổng hợp/, I.Brain, () => trc("Tổng hợp", "hoạt động bộ não")],
 ];
 function Activity({ onOpen, version }: { onOpen: Open; version: number }) {
   const [rows, setRows] = useState<{ at: number; text: string }[] | null>(null);
@@ -783,7 +801,7 @@ function Activity({ onOpen, version }: { onOpen: Open; version: number }) {
   useEffect(() => { setErr(""); api<{ log?: { at: number; text: string }[] }>("GET", "/api/brain?log=1").then((j) => setRows(j.log ?? [])).catch((e) => setErr((e as Error).message)); }, [version, again]);
   const head = (
     <header className="bw-page-h">
-      <h2>{tr("Hoạt động")}</h2>
+      <h2>{trc("Hoạt động", "trang bộ não")}</h2>
       <p>{tr("Những gì bộ não tự học và tự sắp xếp, mới nhất trước. Bạn không cần làm gì: Synchro tự chạy sau mỗi đoạn chat và định kỳ.")}</p>
     </header>
   );
@@ -805,7 +823,7 @@ function Activity({ onOpen, version }: { onOpen: Open; version: number }) {
                 return (
                   <li key={i} className="bw-act">
                     <time>{timeStr(r.at)}</time>
-                    <span className="bw-act-ic" data-tip={tr(a?.[2] ?? "Bộ não")}><Ic size={13} /></span>
+                    <span className="bw-act-ic" data-tip={a ? a[2]() : tr("Bộ não")}><Ic size={13} /></span>
                     <div className="bw-act-t"><Inline t={r.text} exists={new Set()} onOpen={onOpen} /></div>
                   </li>
                 );
@@ -955,12 +973,12 @@ export function BrainWorkspace({ initial, onInitial, sideOpen = true, onSide }: 
           <button className="icon-btn bw-only-m" aria-label={tr("Danh sách ghi chú")} onClick={() => setSide(side === "left" ? "" : "left")}><I.List size={16} /></button>
           <span className="bw-brand"><I.Brain size={17} /><b>{tr("Bộ não")}</b></span>
           <span className="bw-nav">
-            <button className="icon-btn" aria-label={tr("Lùi")} data-tip={tr("Lùi (⌘[)")} disabled={hist.i <= 0} onClick={() => { setHist((h) => ({ ...h, i: h.i - 1 })); setTab("note"); }}><I.Back size={15} /></button>
-            <button className="icon-btn bw-fwd" aria-label={tr("Tiến")} data-tip={tr("Tiến (⌘])")} disabled={hist.i >= hist.list.length - 1} onClick={() => { setHist((h) => ({ ...h, i: h.i + 1 })); setTab("note"); }}><I.Back size={15} /></button>
+            <button className="icon-btn" aria-label={trc("Lùi", "lịch sử ghi chú")} data-tip={tr("Lùi (⌘[)")} disabled={hist.i <= 0} onClick={() => { setHist((h) => ({ ...h, i: h.i - 1 })); setTab("note"); }}><I.Back size={15} /></button>
+            <button className="icon-btn bw-fwd" aria-label={trc("Tiến", "lịch sử ghi chú")} data-tip={tr("Tiến (⌘])")} disabled={hist.i >= hist.list.length - 1} onClick={() => { setHist((h) => ({ ...h, i: h.i + 1 })); setTab("note"); }}><I.Back size={15} /></button>
           </span>
         </div>
         <div className="bw-views" role="tablist" aria-label={tr("Chế độ xem")}>
-          {view("graph", tr("Đồ thị"))}{view("note", tr("Ghi chú"), !at)}{view("bases", tr("Bảng"))}{view("activity", tr("Hoạt động"))}
+          {view("graph", trc("Đồ thị", "trang bộ não"))}{view("note", trc("Ghi chú", "trang bộ não"), !at)}{view("bases", trc("Bảng", "trang bộ não"))}{view("activity", trc("Hoạt động", "trang bộ não"))}
         </div>
         <div className="bw-top-r">
           <div className={`bw-find ${findOpen ? "open" : ""}`} ref={findRef}>
@@ -971,10 +989,10 @@ export function BrainWorkspace({ initial, onInitial, sideOpen = true, onSide }: 
             {q && <button className="bw-find-x" aria-label={tr("Xóa ô tìm")} onClick={() => { setQ(""); search.current?.focus(); }}><I.X size={12} /></button>}
             {findOpen && (
               <div className="bw-find-pop" id="bw-find-list" role="listbox">
-                {(q.trim().length >= 2 || items.length > 0) && <div className="bw-find-h">{q.trim().length >= 2 ? (found ? tf("{n} kết quả", { n: found.length }) : tr("Đang tìm…")) : tr("Vừa mở")}</div>}
+                {(q.trim().length >= 2 || items.length > 0) && <div className="bw-find-h">{q.trim().length >= 2 ? (found ? tf("{n} kết quả", { n: found.length }) : tr("Đang tìm…")) : trc("Vừa mở", "tìm ghi chú")}</div>}
                 {items.map((r, i) => (
                   <button key={r.title} role="option" aria-selected={i === sel} className={`bw-find-it ${i === sel ? "on" : ""}`} onMouseEnter={() => setSel(i)} onMouseDown={(e) => e.preventDefault()} onClick={() => pickAt(i)}>
-                    <KindIcon k={r.kind} size={14} /><span><b data-notr>{r.title}</b>{r.snippet && <small data-notr>{plain(r.snippet)}</small>}</span><em>{KIND[r.kind] ? tr(KIND[r.kind]) : null}</em>
+                    <KindIcon k={r.kind} size={14} /><span><b data-notr>{r.title}</b>{r.snippet && <small data-notr>{plain(r.snippet)}</small>}</span><em>{kindName(r.kind) || null}</em>
                   </button>
                 ))}
                 {!items.length && !(q.trim().length >= 2 && !found) && <p className="bw-none">{q.trim().length >= 2 ? tr("Không có ghi chú nào khớp.") : tr("Gõ để tìm ghi chú, chủ đề, đoạn chat…")}</p>}
@@ -984,7 +1002,7 @@ export function BrainWorkspace({ initial, onInitial, sideOpen = true, onSide }: 
           </div>
           <span className={`bw-status ${s?.pending ? "busy" : ""}`} data-tip={statusTip}>{s?.pending ? <span className="bw-pulse" /> : <span className="bw-dot" />}<span className="bw-status-t">{status}</span></span>
           {/* Học lỗi (gói hết hạn, hết hạn mức): nói ra thay vì để "Đã học lúc…" trông như đã cập nhật đủ. */}
-          {failed > 0 && <span className="bw-failed" data-tip={s?.learnError ? tf("Lỗi gần nhất: {learnError}", { learnError: s.learnError }) : undefined}><I.Alert size={13} /><span>{tf("Chưa học được {n} đoạn chat", { n: failed })}</span><button className="lnk" disabled={relearning} onClick={relearn}>{relearning ? tr("Đang học…") : tr("Học lại")}</button></span>}
+          {failed > 0 && <span className="bw-failed" data-tip={s?.learnError ? tf("Lỗi gần nhất: {learnError}", { learnError: s.learnError }) : undefined}><I.Alert size={13} /><span>{tf("Chưa học được {n} đoạn chat", { n: failed })}</span><button className="lnk" disabled={relearning} onClick={relearn}>{relearning ? tr("Đang học…") : trc("Học lại", "bộ não")}</button></span>}
           {tab === "note" && <button className={`icon-btn bw-rt ${narrow() ? (side === "right" ? "on" : "") : rightOff ? "" : "on"}`} aria-label={tr("Liên kết của ghi chú")} data-tip={narrow() ? undefined : rightOff ? tr("Hiện liên kết của ghi chú") : tr("Ẩn liên kết của ghi chú")}
             aria-pressed={narrow() ? side === "right" : !rightOff} onClick={() => narrow() ? setSide(side === "right" ? "" : "right") : setRight(!rightOff)}><I.PanelR size={16} /></button>}
         </div>
@@ -998,13 +1016,13 @@ export function BrainWorkspace({ initial, onInitial, sideOpen = true, onSide }: 
               {g.nodes.some((n) => n.title === today()) && <button className={`bw-item ${at?.title === today() && tab === "note" ? "on" : ""}`} onClick={() => open(today())}><KindIcon k="daily" size={14} /><span>{tr("Hôm nay")}</span></button>}
             </nav>
             {grp("pin", tr("Đã ghim"), (g.nodes ?? []).filter((n) => n.pinned && n.kind !== "rule"))}
-            {grp("map", tr("Bản đồ"), byKind(["map"]))}
-            {grp("topic", tr("Chủ đề"), byKind(["topic"]).sort(byLinks))}
-            {grp("entity", tr("Tên riêng"), byKind(["entity"]).sort(byLinks))}
-            {grp("note", tr("Ghi chú của bạn"), byKind(["note"]).sort((a, b) => b.created - a.created), 60,
+            {grp("map", trc("Bản đồ", "nhóm ghi chú"), byKind(["map"]))}
+            {grp("topic", trc("Chủ đề", "nhóm ghi chú"), byKind(["topic"]).sort(byLinks))}
+            {grp("entity", trc("Tên riêng", "nhóm ghi chú"), byKind(["entity"]).sort(byLinks))}
+            {grp("note", trc("Ghi chú của bạn", "nhóm ghi chú"), byKind(["note"]).sort((a, b) => b.created - a.created), 60,
               <button className="bw-grp-add" aria-label={tr("Ghi chú mới")} data-tip={tr("Ghi chú mới")} onClick={() => open(tr("Ghi chú mới"))}><I.Plus size={13} /></button>)}
-            {grp("chat", tr("Đoạn chat"), byKind(["chat", "code"]).sort((a, b) => b.created - a.created), 80)}
-            {grp("daily", tr("Nhật ký ngày"), byKind(["daily"]).sort((a, b) => b.title.localeCompare(a.title)), 30)}
+            {grp("chat", trc("Đoạn chat", "nhóm ghi chú"), byKind(["chat", "code"]).sort((a, b) => b.created - a.created), 80)}
+            {grp("daily", trc("Nhật ký ngày", "nhóm ghi chú"), byKind(["daily"]).sort((a, b) => b.title.localeCompare(a.title)), 30)}
             {tags.length > 0 && <section className="bw-grp">
               <div className="bw-grp-h"><button aria-expanded={!fold0.tags} onClick={() => setFold0({ ...fold0, tags: !fold0.tags })}><I.ChevronR size={11} /><span>{tr("Thẻ")}</span></button><em>{tags.length}</em></div>
               {!fold0.tags && <div className="bw-tags">{tags.slice(0, 40).map((t) => <button key={t.tag} className="bn-tag" onClick={() => { setQ(`tag:${t.tag}`); setFindOpen(true); search.current?.focus(); }} data-notr>#{t.tag}<em>{t.count}</em></button>)}</div>}
@@ -1022,7 +1040,7 @@ export function BrainWorkspace({ initial, onInitial, sideOpen = true, onSide }: 
             <BrainGraph data={g} gs={gs} cutoff={cut} active={null} height="100%" onOpen={(t) => open(t)} onBg={() => setPanel(false)} />
             <button className={`bw-gear ${panel ? "on" : ""}`} aria-expanded={panel} onClick={() => setPanel(!panel)}><I.Sliders size={14} />{tr("Tùy chỉnh")}</button>
             {panel && <GraphPanel gs={gs} set={setGs} onAnimate={animate} onClose={() => setPanel(false)} />}
-            {s && <div className="bw-count"><span><b>{s.notes}</b>{tr("ghi chú")}</span><span><b>{s.links}</b>{tr("liên kết")}</span><span><b>{s.topics}</b>{tr("chủ đề")}</span><span><b>{s.entities}</b>{tr("tên riêng")}</span></div>}
+            {s && <div className="bw-count"><span><b>{s.notes}</b>{tr("ghi chú")}</span><span><b>{s.links}</b>{trc("liên kết", "số đếm bộ não")}</span><span><b>{s.topics}</b>{trc("chủ đề", "số đếm bộ não")}</span><span><b>{s.entities}</b>{trc("tên riêng", "số đếm bộ não")}</span></div>}
             {!g.cfg.gen && <p className="bn-off">{tr("Đang tắt học từ đoạn chat (Cài đặt → Bộ não), nên bộ não không lớn thêm.")}</p>}
           </div>
           {tab === "note" && at ? <div className="bw-reader"><NoteView key={`${at.title}`} title={at.title} sub={at.sub} exists={exists} onOpen={open} onChanged={() => void load()} onLoaded={setCur} /></div>
@@ -1053,9 +1071,9 @@ export function BrainSettings({ memory }: { memory: React.ReactNode }) {
       <h3 style={{ marginTop: 0 }}>{tr("Bộ não")}</h3>
       <p className="d" style={{ margin: "-4px 0 12px" }}>{tr("Sau mỗi đoạn chat, Synchro tự rút ra phần tinh túy và nối nó vào bộ não chung: trang chủ đề, tên riêng, chân dung của bạn, các đoạn chat liên quan. Định kỳ nó tự gộp điều trùng, tự nối liên kết, xếp chủ đề vào bản đồ và tự cập nhật Hướng dẫn cho Synchro. Claude, ChatGPT, Gemini, Grok và DeepSeek là các bán cầu dùng chung bộ não này. Bộ não lưu trên máy chủ của bạn.")}</p>
       {s && <div className="bn-stats">
-        <span><b>{s.notes}</b>{tr("ghi chú")}</span><span><b>{s.links}</b>{tr("liên kết")}</span><span><b>{s.chats}</b>{tr("đoạn chat đã học")}</span>
-        <span><b>{s.topics}</b>{tr("chủ đề")}</span><span><b>{s.entities}</b>{tr("tên riêng")}</span>
-        {s.pending > 0 && <span className="wait"><b>{s.pending}</b>{tr("đang học")}</span>}
+        <span><b>{s.notes}</b>{tr("ghi chú")}</span><span><b>{s.links}</b>{trc("liên kết", "số đếm bộ não")}</span><span><b>{s.chats}</b>{tr("đoạn chat đã học")}</span>
+        <span><b>{s.topics}</b>{trc("chủ đề", "số đếm bộ não")}</span><span><b>{s.entities}</b>{trc("tên riêng", "số đếm bộ não")}</span>
+        {s.pending > 0 && <span className="wait"><b>{s.pending}</b>{trc("đang học", "số đếm bộ não")}</span>}
       </div>}
       {g ? <div className="bn-mini" role="button" tabIndex={0} aria-label={tr("Mở bộ não")} onKeyDown={rowKeys(() => openBrain())}>
         <BrainGraph data={g} gs={gs} mini height={220} onOpen={(t) => openBrain(t)} onBg={() => openBrain()} />

@@ -92,7 +92,7 @@ export const OPS_VI2EN: Record<string, string> = {
   "Chưa tải được số liệu mức dùng": "Couldn't load usage figures",
   "Theo model": "By model",
   "Chưa có lượt dùng nào. Bắt đầu một đoạn chat là số liệu hiện ở đây.": "No usage yet. Start a chat and it shows up here.",
-  "Trong gói": "Included",
+  "Trong gói ‹mức dùng›": "Included",
   "Khóa API theo tính năng": "API key cost by feature",
   "Gói subscription tính theo hạn mức hãng báo về; hãng không báo số token của gói nên Synchro đếm theo lượt.": "Plans follow the limits each provider reports; providers don't report plan tokens, so Synchro counts calls.",
   "Khóa API tính theo giá niêm yết của từng hãng, gồm cả đọc và ghi cache; hóa đơn của hãng là số cuối cùng.": "API keys are billed at each provider's list price, including cache reads and writes; the provider's invoice is final.",

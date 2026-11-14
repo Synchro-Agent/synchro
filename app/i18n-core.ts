@@ -31,6 +31,18 @@ export function trWith(d: Dict | undefined, s: string, lang: Lang): string {
   return lang === "en" ? plural(r) : r;
 }
 
+/** Khóa từ điển kèm ngữ cảnh cho chữ ngắn dễ trùng ("Lọc", "Thuộc", "Chủ đề"…): "Lọc ‹đồ thị›".
+ *  Bộ dịch trang áp từ điển cho mọi nút chữ khớp nguyên văn, nên chữ một hai từ để làm khóa trần sẽ bị dịch nhầm ở chỗ khác
+ *  (tiêu đề người dùng đặt, chữ cùng mặt chữ nhưng khác nghĩa). Khóa có ‹…› không bao giờ hiện trên trang nên chỉ trc() tra tới. */
+export const ctxKey = (s: string, ctx: string) => `${s} ‹${ctx}›`;
+
+/** Dịch chữ ngắn theo ngữ cảnh: chỉ khớp đúng khóa ctxKey (không luật, không tách " · "). Chưa có bản dịch: giữ chữ gốc. */
+export function trcWith(d: Dict | undefined, s: string, ctx: string, lang: Lang): string {
+  const k = ctxKey(s, ctx);
+  if (!d || !own(d.map, k)) return s;
+  return lang === "en" ? plural(d.map[k]) : d.map[k];
+}
+
 /** Điền {biến} vào mẫu. Mẫu có dạng "một|nhiều" (ngăn bằng |) thì chọn theo vars.n: đúng 1 lấy vế đầu. */
 export function fill(tpl: string, vars: Vars): string {
   let s = tpl;

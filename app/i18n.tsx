@@ -3,7 +3,7 @@
 import { useEffect, useSyncExternalStore } from "react";
 import { usePref } from "./store";
 import { cxActEn } from "./cxactions";
-import { type Dict, type Lang, type Vars, tfWith, trWith } from "./i18n-core";
+import { type Dict, type Lang, type Vars, tfWith, trcWith, trWith } from "./i18n-core";
 
 export type { Lang } from "./i18n-core";
 
@@ -41,6 +41,12 @@ export const LANG_NAMES: Record<Lang, string> = { vi: "Tiếng Việt", en: "Eng
 
 export function tr(s: string, lang: Lang = cur): string {
   return trWith(dicts[lang], s, lang);
+}
+/** Chữ ngắn dễ trùng ("Lọc", "Chủ đề"…) dịch theo ngữ cảnh: trc("Lọc", "đồ thị") tra khóa "Lọc ‹đồ thị›" (i18n-core ctxKey).
+ *  Bộ dịch trang không thấy khóa này nên nút chữ "Lọc" ở chỗ khác (hay tiêu đề người dùng đặt trùng chữ) không bị đổi theo.
+ *  Cả hai đối số phải là chuỗi viết thẳng để bộ quét (tests/lib/i18n-scan.mjs) kiểm được khóa. */
+export function trc(s: string, ctx: string, lang: Lang = cur): string {
+  return trcWith(dicts[lang], s, ctx, lang);
 }
 /** Câu có giá trị chèn vào: khóa từ điển là nguyên mẫu, ví dụ tf("Gói {name} đã hết hạn mức", { name }).
  *  Số nhiều tiếng Anh ghi trong bản dịch dạng "{n} step|{n} steps" (chọn theo vars.n). */
