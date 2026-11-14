@@ -152,15 +152,15 @@ export function SkillAddModal({ src, pv, onClose, onDone, onOrg }: { src: Src; p
     <div className="overlay sk-mask" onMouseDown={(e) => e.target === e.currentTarget && !saving && onClose()}>
       <div className="sk-modal">
         <div className="sk-mh"><b>{pv.exists ? `Update ${pv.name} to v${pv.version}` : `Add ${pv.name}`}</b></div>
-        {pv.source && <div className="muted" style={{ fontSize: 12, margin: "-2px 0 8px" }} data-notr>{pv.source}{src.pick ? ` · ${src.pick.split("/").slice(1).join("/")}` : ""}</div>}
+        {pv.source && <div className="muted" style={{ fontSize: "var(--fs-1)", margin: "-2px 0 8px" }} data-notr>{pv.source}{src.pick ? ` · ${src.pick.split("/").slice(1).join("/")}` : ""}</div>}
         <p className="d" style={{ margin: "0 0 10px" }} data-notr>{pv.description}</p>
         <div className="sk-note">Skills are instructions the model will follow. Only enable skills from sources you trust, and read the content below first.</div>
         {pv.warnings.length > 0 && <ul className="sk-wl">{pv.warnings.map((w, i) => <li key={i}>{w}</li>)}</ul>}
         {err && <div className="sk-err" role="alert"><span>{err}</span></div>}
-        <div className="muted" style={{ fontSize: 12, margin: "10px 0 4px" }}>SKILL.md · ~{pv.tokens} tokens</div>
+        <div className="muted" style={{ fontSize: "var(--fs-1)", margin: "10px 0 4px" }}>SKILL.md · ~{pv.tokens} tokens</div>
         <pre className="sk-pre">{pv.body || "(empty)"}</pre>
         {pv.files.length > 0 && <>
-          <div className="muted" style={{ fontSize: 12, margin: "10px 0 4px" }}>{pv.files.length} files</div>
+          <div className="muted" style={{ fontSize: "var(--fs-1)", margin: "10px 0 4px" }}>{pv.files.length} files</div>
           <div className="sk-files">{pv.files.map((f) => <div key={f.path}><span>{f.path}</span><span className="muted">{f.kind} · {fmt(f.size)}</span></div>)}</div>
         </>}
         <ScopeChoice value={scope} onChange={setScope} admin={admin} disabled={saving} />
@@ -310,7 +310,7 @@ export function SkillsPanel({ q, Toggle }: { q: string; Toggle: ComponentType<{ 
       {choose && portal(
         <div className="overlay sk-mask" onMouseDown={(e) => e.target === e.currentTarget && !bulk && setChoose(null)}>
           <div className="sk-modal">
-            <div className="sk-mh"><b>Choose skills to add</b><span className="muted" style={{ fontSize: 12 }}>{`${choose.choices.length} found`}</span><span style={{ flex: 1 }} /><button className="icon-btn" aria-label="Close" style={{ width: 24, height: 24 }} disabled={!!bulk} onClick={() => setChoose(null)}>×</button></div>
+            <div className="sk-mh"><b>Choose skills to add</b><span className="muted" style={{ fontSize: "var(--fs-1)" }}>{`${choose.choices.length} found`}</span><span style={{ flex: 1 }} /><button className="icon-btn" aria-label="Close" style={{ width: 24, height: 24 }} disabled={!!bulk} onClick={() => setChoose(null)}>×</button></div>
             <p className="d" style={{ margin: "0 0 10px" }}>This package contains several skills. Preview one to check it before adding, or add every valid skill at once.</p>
             <div className="sk-choices">
               {choose.choices.map((c) => (
@@ -334,7 +334,7 @@ export function SkillsPanel({ q, Toggle }: { q: string; Toggle: ComponentType<{ 
       {detail && portal(
         <div className="overlay sk-mask" onMouseDown={(e) => e.target === e.currentTarget && setDetail(null)}>
           <div className="sk-modal">
-            <div className="sk-mh"><b>{detail.name}</b><span className="muted" style={{ fontSize: 12 }}>v{detail.version}</span><span style={{ flex: 1 }} /><button className="icon-btn" style={{ width: 24, height: 24 }} onClick={() => setDetail(null)} aria-label="Close">×</button></div>
+            <div className="sk-mh"><b>{detail.name}</b><span className="muted" style={{ fontSize: "var(--fs-1)" }}>v{detail.version}</span><span style={{ flex: 1 }} /><button className="icon-btn" style={{ width: 24, height: 24 }} onClick={() => setDetail(null)} aria-label="Close">×</button></div>
             <p className="d" style={{ margin: "0 0 10px" }} data-notr>{detail.description}</p>
             <div className="sk-meta">
               <span>{detail.useCount ? `Used ${detail.useCount} times` : "Not used yet"}</span>
@@ -348,12 +348,12 @@ export function SkillsPanel({ q, Toggle }: { q: string; Toggle: ComponentType<{ 
             <StudioPick name={detail.name} tag={detail.studio ?? null} onSet={(studio) => { setDetail({ ...detail, studio }); setList((l) => l && l.map((x) => (x.name === detail.name ? { ...x, studio } : x))); }} onErr={setErr} />
             {sc[detail.name]?.low && <div className="sk-note bad">{LOW_NOTE}</div>}
             {detail.warnings.length > 0 && <ul className="sk-wl">{detail.warnings.map((w, i) => <li key={i}>{w}</li>)}</ul>}
-            <div className="muted" style={{ fontSize: 12, margin: "10px 0 4px" }}>SKILL.md</div>
+            <div className="muted" style={{ fontSize: "var(--fs-1)", margin: "10px 0 4px" }}>SKILL.md</div>
             <pre className="sk-pre">{detail.body || "(empty)"}</pre>
             {detail.files.length > 0 && <>
-              <div className="muted" style={{ fontSize: 12, margin: "10px 0 4px" }}>Files</div>
+              <div className="muted" style={{ fontSize: "var(--fs-1)", margin: "10px 0 4px" }}>Files</div>
               <div className="sk-files">{detail.files.map((f) => <div key={f.path} className="clk" onClick={() => openFile(detail.name, f.path)}><span>{f.path}</span><span className="muted">{f.kind} · {fmt(f.size)}</span></div>)}</div>
-              {fileView && <><div className="muted" style={{ fontSize: 12, margin: "10px 0 4px" }}>{fileView.path}</div><pre className="sk-pre">{fileView.text}</pre></>}
+              {fileView && <><div className="muted" style={{ fontSize: "var(--fs-1)", margin: "10px 0 4px" }}>{fileView.path}</div><pre className="sk-pre">{fileView.text}</pre></>}
             </>}
             {!!detail.patches?.length && <SelfFixes name={detail.name} patches={detail.patches} onChange={(patches) => setDetail({ ...detail, patches })} onErr={setErr} />}
             <div className="sk-actions">
@@ -404,7 +404,7 @@ function SelfFixes({ name, patches, onChange, onErr }: { name: string; patches: 
   };
   return (
     <>
-      <div className="muted" style={{ fontSize: 12, margin: "12px 0 4px" }}>Self-fixes</div>
+      <div className="muted" style={{ fontSize: "var(--fs-1)", margin: "12px 0 4px" }}>Self-fixes</div>
       <div className="sk-fixes">
         {patches.map((p) => (
           <div key={p.id} className={`sk-fix ${p.status} ${p.stale ? "stale" : ""}`}>

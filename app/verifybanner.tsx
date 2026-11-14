@@ -25,7 +25,7 @@ export function VerifyBanner({ me, onChange }: { me: AuthUser | null; onChange: 
     } catch { setState("limit"); }
   };
   return (
-    <div className="verify-banner" role="status" style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", padding: "8px 14px", fontSize: 13, lineHeight: 1.45, background: "var(--hover)", borderBottom: ".5px solid var(--border)", color: "var(--text-2)" }}>
+    <div className="verify-banner" role="status" style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", padding: "8px 14px", fontSize: "var(--fs-2)", lineHeight: 1.45, background: "var(--hover)", borderBottom: ".5px solid var(--border)", color: "var(--text-2)" }}>
       <span style={{ flex: "none", display: "grid" }}><I.Alert size={15} /></span>
       <span style={{ flex: "1 1 240px", minWidth: 0 }}>
         {/* Chỉ kể tính năng bị khóa khi chúng thật sự bị khóa (quản trị viên có thể tắt yêu cầu xác minh). */}

@@ -68,7 +68,7 @@ export function Select({ value, options, onChange, search, width = 160 }: { valu
         <Menu open={!!(open)} className="down" style={{ top: 36, right: 0, width, minWidth: width }}>
           <div className="menu-scroll">
           {search && <input className="field" style={{ marginBottom: 6, padding: "5px 8px" }} autoFocus placeholder="Search" value={q} onChange={(e) => setQ(e.target.value)} />}
-          {list.length === 0 && <div className="muted" style={{ padding: "6px 10px", fontSize: 13 }}>No results</div>}
+          {list.length === 0 && <div className="muted" style={{ padding: "6px 10px", fontSize: "var(--fs-2)" }}>No results</div>}
           {list.map((o) => (
             <button key={o} className="menu-item" style={{ height: 30 }} onClick={() => { onChange(o); setOpen(false); }}>{o}{o === value && <span className="ck"><I.Check size={16} /></span>}</button>
           ))}
@@ -113,7 +113,7 @@ function SitesEditor({ cp, save }: { cp: CodePrefs; save: (p: Partial<CodePrefs>
         <button className="btn" disabled={!v.trim()} onClick={() => { save({ [k]: [...cp[k], v.trim()] }); setV(""); }}>Add</button>
       </div>
       <div className="sites-list">
-        {cp[k].length === 0 && <div className="muted" style={{ fontSize: 13 }}>{k === "sites" ? "No sites yet. Sites you allow with “Always allow” appear here." : "No blocked sites."}</div>}
+        {cp[k].length === 0 && <div className="muted" style={{ fontSize: "var(--fs-2)" }}>{k === "sites" ? "No sites yet. Sites you allow with “Always allow” appear here." : "No blocked sites."}</div>}
         {cp[k].map((h) => <span key={h} className="site-chip" data-notr>{h}<button aria-label="Remove" onClick={() => save({ [k]: cp[k].filter((x) => x !== h) })}><I.X size={11} /></button></span>)}
       </div>
     </div>
@@ -328,7 +328,7 @@ function Account() {
         <div className="overlay" style={{ zIndex: 60 }} onMouseDown={(e) => e.target === e.currentTarget && setMailForm(null)}>
           <div className="modal sm" style={{ width: 400 }}>
             <button className="icon-btn" aria-label="Close" style={{ position: "absolute", top: 12, right: 12 }} onClick={() => setMailForm(null)}><I.X size={16} /></button>
-            <h2 style={{ fontSize: 16 }}>Change email</h2>
+            <h2 style={{ fontSize: "var(--fs-4)" }}>Change email</h2>
             {mailForm?.sent ? <>
               <p className="d" role="status">If that address can be used, we sent it a confirmation link. Your email stays <span data-notr>{me?.email}</span> until you press the link. It works for 24 hours.</p>
               <div className="modal-foot"><button className="btn dark" onClick={() => setMailForm(null)}>Done</button></div>
@@ -345,7 +345,7 @@ function Account() {
         <div className="overlay" style={{ zIndex: 60 }} onMouseDown={(e) => e.target === e.currentTarget && setPw(null)}>
           <div className="modal sm" style={{ width: 400 }}>
             <button className="icon-btn" aria-label={tr("Đóng")} style={{ position: "absolute", top: 12, right: 12 }} onClick={() => setPw(null)}><I.X size={16} /></button>
-            <h2 style={{ fontSize: 16 }}>{me?.hasPassword ? "Change password" : "Set password"}</h2>
+            <h2 style={{ fontSize: "var(--fs-4)" }}>{me?.hasPassword ? "Change password" : "Set password"}</h2>
             {me?.hasPassword && <input className="field" type="password" autoComplete="current-password" placeholder="Current password" value={pw?.cur ?? ""} onChange={(e) => setPw((o) => o && { ...o, cur: e.target.value })} />}
             {me?.hasPassword && (resetSent === "limited"
               ? <p className="d pw-forgot" role="status">No new email was sent: you already asked for several links this hour. Use the newest email, or try again in an hour.</p>
@@ -362,7 +362,7 @@ function Account() {
         <div className="overlay" style={{ zIndex: 60 }} onMouseDown={(e) => e.target === e.currentTarget && setDel(null)}>
           <div className="modal sm" style={{ width: 400 }}>
             <button className="icon-btn" aria-label={tr("Đóng")} style={{ position: "absolute", top: 12, right: 12 }} onClick={() => setDel(null)}><I.X size={16} /></button>
-            <h2 style={{ fontSize: 16 }}>Delete your account?</h2>
+            <h2 style={{ fontSize: "var(--fs-4)" }}>Delete your account?</h2>
             <p className="d" style={{ margin: "0 0 12px" }}>Your account and everything stored with it on the server (chats, projects, files, Brain, connectors, sessions) are permanently deleted, and the copy in this browser is erased. This can&apos;t be undone.</p>
             {me?.hasPassword && <input className="field" type="password" autoFocus autoComplete="current-password" placeholder="Enter your password to confirm" value={del ?? ""} onChange={(e) => setDel(e.target.value)} />}
             <div className="modal-foot"><button className="btn" onClick={() => setDel(null)}>Cancel</button><button className="btn danger" disabled={busy || (!!me?.hasPassword && !del)} onClick={deleteAccount}>Delete account</button></div>
@@ -394,10 +394,10 @@ function Privacy({ go }: { go: (t: string) => void }) {
         <div className="overlay" style={{ zIndex: 60 }} onMouseDown={(e) => e.target === e.currentTarget && setPanel("")}>
           <div className="modal sm" style={{ width: 460, maxHeight: "70vh", overflow: "auto" }}>
             <button className="icon-btn" aria-label="Đóng" style={{ position: "absolute", top: 12, right: 12 }} onClick={() => setPanel("")}><I.X size={16} /></button>
-            <h2 style={{ fontSize: 16 }}>{title}</h2>
+            <h2 style={{ fontSize: "var(--fs-4)" }}>{title}</h2>
             {panel === "shared" && <SharedChats say={app.say} confirm={app.confirm} />}
             {panel === "files" && <UploadedFiles say={app.say} confirm={app.confirm} />}
-            {panel === "feedback" && (fb.length ? fb.map((x, i) => <div key={i} className="item-row"><span>{x.like === 1 ? "👍" : "👎"}</span><span style={{ flex: 1 }}>{x.t}…</span><span className="muted" style={{ fontSize: 12 }}>{x.c}</span></div>) : <div className="empty">You have not given any feedback yet.</div>)}
+            {panel === "feedback" && (fb.length ? fb.map((x, i) => <div key={i} className="item-row"><span>{x.like === 1 ? "👍" : "👎"}</span><span style={{ flex: 1 }}>{x.t}…</span><span className="muted" style={{ fontSize: "var(--fs-1)" }}>{x.c}</span></div>) : <div className="empty">You have not given any feedback yet.</div>)}
           </div>
         </div>
       </Fade>
@@ -535,7 +535,7 @@ function Memory() {
         <div className="overlay" style={{ zIndex: 60 }} onMouseDown={(e) => e.target === e.currentTarget && setImp(false)}>
           <div className="modal sm" style={{ width: 460 }}>
             <button className="icon-btn" aria-label={tr("Đóng")} style={{ position: "absolute", top: 12, right: 12 }} onClick={() => setImp(false)}><I.X size={16} /></button>
-            <h2 style={{ fontSize: 16 }}>Import memory to Synchro</h2>
+            <h2 style={{ fontSize: "var(--fs-4)" }}>Import memory to Synchro</h2>
             <p className="d" style={{ margin: "0 0 8px" }}>1&nbsp; Copy this prompt into a chat with your other AI provider</p>
             <div className="codebox cb-copy">{PROMPT}<button className="btn cb-btn" onClick={() => { navigator.clipboard?.writeText(PROMPT); app.say("Prompt copied"); }}>Copy</button></div>
             <p className="d" style={{ margin: "14px 0 8px" }}>2&nbsp; Paste results below to add to Synchro&apos;s memory</p>
@@ -571,7 +571,7 @@ function Reflect() {
         <div style={{ display: "flex", gap: 4 }}><Select width={160} value={r} onChange={setR} options={["Past month", "Past 3 months", "Past 6 months", "Past year"]} /><button className="icon-btn" aria-label="Refresh" onClick={run} disabled={loading}><span className={loading ? "s-twirl" : undefined} style={{ display: "inline-flex" }}><I.Retry size={16} /></span></button></div>
       </div>
       {loading || !gen ? (
-        <div className="empty" style={{ marginTop: 90 }}><I.Layers size={72} /><span style={{ marginTop: 8 }}>{loading ? "Surfacing themes and patterns." : "No reflection yet."}</span>{loading ? <span className="muted" style={{ fontSize: 12 }}>This should only take a minute or so.</span> : <button className="btn dark" style={{ marginTop: 8 }} onClick={run}>Generate</button>}</div>
+        <div className="empty" style={{ marginTop: 90 }}><I.Layers size={72} /><span style={{ marginTop: 8 }}>{loading ? "Surfacing themes and patterns." : "No reflection yet."}</span>{loading ? <span className="muted" style={{ fontSize: "var(--fs-1)" }}>This should only take a minute or so.</span> : <button className="btn dark" style={{ marginTop: 8 }} onClick={run}>Generate</button>}</div>
       ) : chats.length === 0 ? (
         <div className="empty" style={{ marginTop: 90 }}>Start a few conversations and come back for a reflection.</div>
       ) : (
@@ -582,7 +582,7 @@ function Reflect() {
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>{gen.words.length ? gen.words.map(([w, n]) => <span key={w} className="chip-s">{w} · {n}</span>) : <span className="d">Not enough data yet.</span>}</div>
           <H>Recent topics</H>
           {gen.titles.map((x, i) => <div key={i} className="item-row">{x}</div>)}
-          <div className="muted" style={{ fontSize: 12, marginTop: 12 }}>{r} · updated {new Date(gen.at).toLocaleTimeString(locale())}</div>
+          <div className="muted" style={{ fontSize: "var(--fs-1)", marginTop: 12 }}>{r} · updated {new Date(gen.at).toLocaleTimeString(locale())}</div>
         </div>
       )}
     </>
@@ -699,7 +699,7 @@ function CodeTab() {
       <div style={{ display: "flex", gap: 12 }}>
         {[["Light", "#fff", "#222"], ["Dark", "#1b1b1b", "#ddd"]].map(([n, bg, fg]) => (
           <button key={n} className={`codebox cb-theme ${edTheme === n ? "on" : ""}`} style={{ flex: 1, background: bg, color: fg, textAlign: "left", ...ff }} onClick={() => setEdTheme(n)}>
-            <div className="dd-lbl" style={{ marginBottom: 6, opacity: 0.6, fontFamily: "var(--font-sans)", fontSize: 12 }}>Synchro {n}</div>
+            <div className="dd-lbl" style={{ marginBottom: 6, opacity: 0.6, fontFamily: "var(--font-sans)", fontSize: "var(--fs-1)" }}>Synchro {n}</div>
             {sample.map((l) => <div key={l} style={{ whiteSpace: "pre" }}>{l}</div>)}
           </button>
         ))}

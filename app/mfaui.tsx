@@ -31,7 +31,7 @@ export function MfaRow({ Row, say }: { Row: (p: { t: React.ReactNode; d?: React.
     {typeof document !== "undefined" && createPortal(<Fade show={!!st}>{st ? <div className="overlay" style={{ zIndex: 70 }} onMouseDown={(e) => e.target === e.currentTarget && st.step !== "codes" && setSt(null)}>
       <div className="modal sm" style={{ width: "min(420px, 92vw)" }}>
         {st.step === "scan" && <>
-          <h2 style={{ fontSize: 16 }}>Turn on two-step verification</h2>
+          <h2 style={{ fontSize: "var(--fs-4)" }}>Turn on two-step verification</h2>
           <p className="d">Add this key to your authenticator app (Google Authenticator, Authy, 1Password…), then enter the code it shows.</p>
           <p className="mono" data-notr style={{ overflowWrap: "anywhere", userSelect: "all" }}>{st.secret}</p>
           <p className="d"><a href={st.uri}>Open in authenticator app</a></p>
@@ -39,13 +39,13 @@ export function MfaRow({ Row, say }: { Row: (p: { t: React.ReactNode; d?: React.
           <div className="modal-foot"><button className="btn" onClick={() => setSt(null)}>Cancel</button><button className="btn dark" disabled={!code.trim() || busy} onClick={confirm}>Turn on</button></div>
         </>}
         {st.step === "codes" && <>
-          <h2 style={{ fontSize: 16 }}>Save your recovery codes</h2>
+          <h2 style={{ fontSize: "var(--fs-4)" }}>Save your recovery codes</h2>
           <p className="d">Each code works once if you lose your authenticator app. They are shown only now. Without them or the app, you can't sign in.</p>
           <p className="mono" data-notr style={{ whiteSpace: "pre-wrap", userSelect: "all" }}>{st.codes.join("\n")}</p>
           <div className="modal-foot"><button className="btn" onClick={() => { void navigator.clipboard?.writeText(st.codes.join("\n")).then(() => say("Copied"), () => say("Couldn't copy")); }}>Copy</button><button className="btn dark" onClick={() => setSt(null)}>I saved them</button></div>
         </>}
         {st.step === "off" && <>
-          <h2 style={{ fontSize: 16 }}>Turn off two-step verification</h2>
+          <h2 style={{ fontSize: "var(--fs-4)" }}>Turn off two-step verification</h2>
           <p className="d">Enter a code from your authenticator app, or a recovery code.</p>
           {field(off)}
           <div className="modal-foot"><button className="btn" onClick={() => setSt(null)}>Cancel</button><button className="btn dark" disabled={!code.trim() || busy} onClick={off}>Turn off</button></div>

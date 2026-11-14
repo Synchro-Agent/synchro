@@ -361,7 +361,7 @@ export function AdminPanel({ Toggle }: { Toggle: ToggleT }) {
       <p className="d adm-privacy"><I.Sparkle size={14} />Choose which models appear in the model picker on the main screen, and which model new chats start with.</p>
       <div className="adm-card">
         <div className="adm-card-h"><b>Models on the main screen</b><span className="d">Hidden models can&apos;t be picked by anyone. Per-person access below still applies.</span></div>
-        {!api ? <div className="muted" style={{ fontSize: 12 }}>Loading…</div> : (
+        {!api ? <div className="muted" style={{ fontSize: "var(--fs-1)" }}>Loading…</div> : (
           <>
             <ModelChips catalog={api.catalog} value={api.main} onChange={saveMain} allLabel="Show every model" allHint="New models appear automatically when a provider adds them." Toggle={Toggle} />
             {api.catalog.length > 0 && (() => {
@@ -459,7 +459,7 @@ export function AdminPanel({ Toggle }: { Toggle: ToggleT }) {
                       </div>
                       <div>
                         <h4>Active sessions</h4>
-                        {!detail ? <div className="muted" style={{ fontSize: 12 }}>Loading…</div> : detail.sessions.length === 0 ? <div className="muted" style={{ fontSize: 12 }}>No active sessions.</div> : detail.sessions.map((x) => (
+                        {!detail ? <div className="muted" style={{ fontSize: "var(--fs-1)" }}>Loading…</div> : detail.sessions.length === 0 ? <div className="muted" style={{ fontSize: "var(--fs-1)" }}>No active sessions.</div> : detail.sessions.map((x) => (
                           <div key={x.id} className="adm-sess">
                             <span style={{ flex: 1, minWidth: 0 }}><span data-notr>{x.device}</span> <span className="adm-chip">{METHOD[x.method] ?? x.method}</span><br /><span className="muted" data-notr>{x.ip ?? "—"} · {ago(x.lastSeen)}</span></span>
                             {!u.protected && <button className="btn" style={{ height: 26 }} disabled={busy} onClick={() => act(() => call("DELETE", `/api/admin/sessions/${x.id}`), "Session ended")}>End</button>}
@@ -536,8 +536,8 @@ export function AdminPanel({ Toggle }: { Toggle: ToggleT }) {
         <div className="overlay" style={{ zIndex: 70 }} onMouseDown={(e) => e.target === e.currentTarget && setPwFor(null)}>
           <div className="modal sm" style={{ width: 420 }}>
             <button className="icon-btn" aria-label={tr("Đóng")} style={{ position: "absolute", top: 12, right: 12 }} onClick={() => setPwFor(null)}><I.X size={16} /></button>
-            <h2 style={{ fontSize: 16 }}>Set a new password</h2>
-            <p className="mono" style={{ margin: "0 0 6px", fontSize: 12 }} data-notr>{pwFor?.email}</p>
+            <h2 style={{ fontSize: "var(--fs-4)" }}>Set a new password</h2>
+            <p className="mono" style={{ margin: "0 0 6px", fontSize: "var(--fs-1)" }} data-notr>{pwFor?.email}</p>
             <p className="d" style={{ margin: "0 0 12px" }}>Their current password isn&apos;t needed. Share the new password with them privately.</p>
             <input className="field" type="password" autoComplete="new-password" autoFocus placeholder="New password (at least 8 characters)" value={pw.next} onChange={(e) => setPw({ ...pw, next: e.target.value })} />
             <input className="field" type="password" autoComplete="new-password" placeholder="Confirm new password" value={pw.again} onChange={(e) => setPw({ ...pw, again: e.target.value })} />
@@ -553,8 +553,8 @@ export function AdminPanel({ Toggle }: { Toggle: ToggleT }) {
       <Fade show={!!resetFor}>
         <div className="overlay" style={{ zIndex: 70 }} onMouseDown={(e) => e.target === e.currentTarget && setResetFor(null)}>
           <div className="modal sm" style={{ width: 460 }}>
-            <h2 style={{ fontSize: 16 }}>Password reset link</h2>
-            <p className="mono" style={{ margin: "0 0 6px", fontSize: 12 }} data-notr>{resetFor?.email}</p>
+            <h2 style={{ fontSize: "var(--fs-4)" }}>Password reset link</h2>
+            <p className="mono" style={{ margin: "0 0 6px", fontSize: "var(--fs-1)" }} data-notr>{resetFor?.email}</p>
             <p className="d" style={{ margin: "0 0 12px" }}>Send this link to them privately. It works once, expires in 24 hours, and signs them out everywhere. It is shown only now.</p>
             <input className="field mono" readOnly aria-label="Password reset link" value={resetFor?.url ?? ""} onFocus={(e) => e.target.select()} data-notr />
             <div className="modal-foot">
@@ -567,7 +567,7 @@ export function AdminPanel({ Toggle }: { Toggle: ToggleT }) {
       <Fade show={!!mail}>
         <div className="overlay" style={{ zIndex: 70 }} onMouseDown={(e) => e.target === e.currentTarget && setMail(null)}>
           <div className="modal sm" style={{ width: 420 }}>
-            <h2 style={{ fontSize: 16 }}>Change email</h2>
+            <h2 style={{ fontSize: "var(--fs-4)" }}>Change email</h2>
             <p className="d">Only change it once you&apos;ve confirmed who they are. The new address counts as verified, their data stays, and they will be signed out.</p>
             <input className="field" autoFocus aria-label="Email" value={mailTxt} onChange={(e) => setMailTxt(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") saveMail(); }} placeholder="Email" />
             <div className="modal-foot">
@@ -581,10 +581,10 @@ export function AdminPanel({ Toggle }: { Toggle: ToggleT }) {
         <div className="overlay" style={{ zIndex: 70 }} onMouseDown={(e) => e.target === e.currentTarget && setDel(null)}>
           <div className="modal sm" style={{ width: 420 }}>
             <button className="icon-btn" aria-label={tr("Đóng")} style={{ position: "absolute", top: 12, right: 12 }} onClick={() => setDel(null)}><I.X size={16} /></button>
-            <h2 style={{ fontSize: 16 }}>Delete this account?</h2>
+            <h2 style={{ fontSize: "var(--fs-4)" }}>Delete this account?</h2>
             <p className="d" style={{ margin: "0 0 12px" }}>The account, its sign-in methods and all of its sessions will be permanently removed. This can&apos;t be undone.</p>
             <p className="d" style={{ margin: "0 0 6px" }}>Type the user&apos;s email to confirm:</p>
-            <div className="mono" style={{ fontSize: 12, marginBottom: 8 }} data-notr>{del?.email}</div>
+            <div className="mono" style={{ fontSize: "var(--fs-1)", marginBottom: 8 }} data-notr>{del?.email}</div>
             <input className="field" autoFocus aria-label="Email" value={delTxt} onChange={(e) => setDelTxt(e.target.value)} placeholder="Email" />
             <div className="modal-foot">
               <button className="btn" onClick={() => setDel(null)}>Cancel</button>

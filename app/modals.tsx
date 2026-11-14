@@ -22,7 +22,7 @@ export function Confirm({ title, text, ok, onCancel, onOk, children, busy }: { t
     <div className="overlay cf-top" onMouseDown={(e) => { if (e.target === e.currentTarget && !busy) onCancel(); }}>
       <div className="modal sm" style={{ width: 420, maxWidth: "calc(100vw - 32px)" }} role="alertdialog" aria-modal="true" aria-labelledby={`${id}-t`} aria-describedby={`${id}-d`}>
         <h2 id={`${id}-t`} style={{ fontSize: 15, margin: "0 0 6px" }}>{title}</h2>
-        <p id={`${id}-d`} style={{ margin: "0 0 20px", fontSize: 14 }}>{text}</p>
+        <p id={`${id}-d`} style={{ margin: "0 0 20px", fontSize: "var(--fs-3)" }}>{text}</p>
         {children}
         <div className="modal-foot"><button className="btn" disabled={busy} onClick={onCancel}>Hủy</button><button className="btn danger" onClick={onOk}>{ok}</button></div>
       </div>
@@ -56,10 +56,10 @@ export function LogoutConfirm({ localOnly, flush, onCancel, onOk }: { localOnly:
     if (n > 0) { setLeft(n); return; }
     onOk(true);
   };
-  const note: React.CSSProperties = { margin: "-8px 0 14px 26px", fontSize: 13, lineHeight: "19px" };
+  const note: React.CSSProperties = { margin: "-8px 0 14px 26px", fontSize: "var(--fs-2)", lineHeight: "19px" };
   return (
     <Confirm title="Đăng xuất?" text="Bạn có chắc chắn muốn đăng xuất không?" ok={busy ? "Đang lưu lên máy chủ…" : clear && left > 0 ? "Vẫn xóa và đăng xuất" : "Đăng xuất"} busy={busy} onCancel={cancel} onOk={() => void go()}>
-      <label style={{ display: "flex", gap: 8, alignItems: "flex-start", margin: "0 0 14px", fontSize: 14 }}>
+      <label style={{ display: "flex", gap: 8, alignItems: "flex-start", margin: "0 0 14px", fontSize: "var(--fs-3)" }}>
         <input type="checkbox" style={{ marginTop: 3, flex: "none" }} checked={clear} disabled={busy} onChange={(e) => { setClear(e.target.checked); setLeft(0); }} />
         <span>Xóa dữ liệu trên thiết bị này</span>
       </label>
@@ -173,8 +173,8 @@ export function UpgradeModal({ onClose, say }: { onClose: () => void; say: (m: s
           {plans.map(([n, p, d, b], i) => (
             <div key={n} className={`plan ${i === 1 ? "hl" : ""}`}>
               <b style={{ fontFamily: "var(--font-display)", fontSize: 19, fontWeight: 400, letterSpacing: "-.03em" }}>{n}</b>
-              <div><span style={{ fontSize: 28 }}>{p}</span><span className="muted"> / tháng</span></div>
-              <p className="muted" style={{ fontSize: 13, margin: 0, minHeight: 58 }}>{d}</p>
+              <div><span style={{ fontSize: "var(--fs-7)" }}>{p}</span><span className="muted"> / tháng</span></div>
+              <p className="muted" style={{ fontSize: "var(--fs-2)", margin: 0, minHeight: 58 }}>{d}</p>
               <button className={`btn ${i ? "dark" : ""}`} disabled={!i} style={!i ? { opacity: 0.5 } : undefined} onClick={() => { say("Đây là bản demo, chưa có thanh toán thật"); onClose(); }}>{b}</button>
             </div>
           ))}

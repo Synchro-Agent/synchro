@@ -5,7 +5,7 @@
 // - zIndex: z-index là số ≥ 20 (lớp toàn cục; -1…19 là xếp chồng cục bộ);
 // - mediaWidth: điều kiện chiều rộng của @media ngoài các mốc 480, 640, 760/761, 860, 1100;
 // - darkHex: mã hex trong luật giao diện tối (bỏ khối chỉ định nghĩa biến --x);
-// - inlineFontSize / inlineZIndex: fontSize / zIndex nội dòng trong tsx.
+// - inlineFontSize / inlineZIndex: fontSize / zIndex nội dòng trong tsx không dùng token (var(--fs-…) / var(--z-…)).
 // Mỗi chỉ số có trần ở CEIL: vượt trần là lỗi (mã thoát 1). Bước B5 nào giảm được thì hạ trần xuống đúng số mới trong cùng commit.
 // Dùng: node scripts/css-metrics.mjs [--json]   (scripts/qa.mjs chạy tệp này như một bộ kiểm)
 import fs from "node:fs";
@@ -26,7 +26,9 @@ const postcss = createRequire(import.meta.url)("postcss");
 // của cùng selector thì mới bỏ được bản chép.
 // htmlBody 581 → 560 (B5 bước 8, 2026-11-15): scripts/css-dedupe.mjs xóa 371 khai báo chết (bị khai báo cùng selector / html body cùng selector
 // che hẳn), 78 luật trống theo đó; đạt mục tiêu ≤ 572 đặt ngày 2026-11-14.
-export const CEIL = { important: 18, htmlBody: 560, fontSize: 1243, zIndex: 63, mediaWidth: 88, darkHex: 96, inlineFontSize: 65, inlineZIndex: 22 };
+// fontSize 1243 → 115, inlineFontSize 65 → 20 (B5 bước 6a): scripts/css-tokens.mjs --only fs đổi đúng-bằng sang var(--fs-…); còn lại là cỡ lệch
+// thang (15, 17, 14.5, 18…: bước 6b, cần duyệt ảnh), cỡ tính từ biến trong tsx, tùy chọn xterm / Monaco và home.tsx (đợi B2).
+export const CEIL = { important: 18, htmlBody: 560, fontSize: 115, zIndex: 63, mediaWidth: 88, darkHex: 96, inlineFontSize: 20, inlineZIndex: 22 };
 // Mục tiêu có hạn: chỉ số phải về tới max trong bước ghi ở by (đặt ngày set). In ra cùng kết quả; bước đó hạ CEIL theo.
 export const TARGET = {};
 export const WIDTHS = new Set([480, 640, 760, 761, 860, 1100]);
@@ -70,8 +72,9 @@ export function measureAll(root = ".") {
   let inlineFontSize = 0, inlineZIndex = 0;
   for (const f of walk(path.join(root, "app"), /\.tsx$/)) {
     const s = fs.readFileSync(f, "utf8");
-    inlineFontSize += (s.match(/\bfontSize\s*:/g) ?? []).length;
-    inlineZIndex += (s.match(/\bzIndex\s*:/g) ?? []).length;
+    // Giá trị là token ("var(--fs-…)" / "var(--z-…)" hay calc của nó) thì không tính (B5 bước 6a / 7a).
+    inlineFontSize += (s.match(/\bfontSize\s*:(?!\s*["'`]var\(--fs-)/g) ?? []).length;
+    inlineZIndex += (s.match(/\bzIndex\s*:(?!\s*["'`](var\(--z-|calc\(var\(--z-))/g) ?? []).length;
   }
   const total = { important: 0, htmlBody: 0, fontSize: 0, zIndex: 0, mediaWidth: 0, darkHex: 0, inlineFontSize, inlineZIndex };
   for (const m of Object.values(per)) for (const k of Object.keys(m)) total[k] += m[k];

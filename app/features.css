@@ -5,45 +5,45 @@
 html:has(.sh-page),html:has(.sh-page) body{height:auto;overflow:auto}
 .sh-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:32px}
 .sh-head a{color:var(--text);text-decoration:none;display:inline-flex}
-.sh-tag{font-size:12.5px;color:var(--text-2);border:1px solid var(--border);border-radius:999px;padding:3px 10px}
+.sh-tag{font-size:var(--fs-label);color:var(--text-2);border:1px solid var(--border);border-radius:999px;padding:3px 10px}
 .sh-page h1{font-family:var(--font-display);font-weight:400;font-size:26px;letter-spacing:-.03em;margin:0}
-.sh-at{font-size:12.5px;color:var(--text-2);margin:6px 0 0}
+.sh-at{font-size:var(--fs-label);color:var(--text-2);margin:6px 0 0}
 .sh-thread{display:flex;flex-direction:column;gap:22px;margin-top:30px}
 .sh-u{display:flex;flex-direction:column;align-items:flex-end;gap:6px}
 .sh-utext{white-space:pre-wrap;max-width:85%}
 .sh-art{margin:14px 0;border:1px solid var(--border);border-radius:12px;overflow:hidden;background:var(--panel,transparent)}
-.sh-art figcaption{font-size:13px;font-weight:560;padding:9px 12px;border-bottom:1px solid var(--border)}
+.sh-art figcaption{font-size:var(--fs-2);font-weight:560;padding:9px 12px;border-bottom:1px solid var(--border)}
 .sh-frame{display:block;width:100%;border:0;background:#fff}
 .sh-doc{padding:12px 14px}
-.sh-note{font-size:12.5px;color:var(--text-2);margin:6px 0}
-.sh-foot{margin-top:48px;padding-top:16px;border-top:1px solid var(--border);display:flex;flex-wrap:wrap;gap:8px 18px;justify-content:space-between;font-size:12.5px;color:var(--text-2)}
+.sh-note{font-size:var(--fs-label);color:var(--text-2);margin:6px 0}
+.sh-foot{margin-top:48px;padding-top:16px;border-top:1px solid var(--border);display:flex;flex-wrap:wrap;gap:8px 18px;justify-content:space-between;font-size:var(--fs-label);color:var(--text-2)}
 .sh-foot nav{display:flex;gap:14px}
 .sh-foot a{color:inherit}
 .sh-foot nav{align-items:center;flex-wrap:wrap}
-.sh-warn{font-size:12.5px;color:var(--text-2);margin:0 0 8px}
+.sh-warn{font-size:var(--fs-label);color:var(--text-2);margin:0 0 8px}
 .sh-report{font-size:inherit;color:inherit;text-decoration:underline;background:none;border:0;padding:0;cursor:pointer}
 .sh-report-form{display:inline-flex;flex-wrap:wrap;align-items:center;gap:8px;width:100%}
 .sh-report-form .field{flex:1;min-width:200px;height:32px}
 /* flex: icon nằm cạnh chữ, dòng xuống vẫn thẳng hàng; từng là inline-block nhưng quy tắc svg chung thắng nên icon đứng một dòng riêng. */
-.sh-hint{display:flex;gap:6px;align-items:flex-start;font-size:13.5px;line-height:1.55;color:var(--text-2);margin:4px 0 12px}
+.sh-hint{display:flex;gap:6px;align-items:flex-start;font-size:var(--fs-chat);line-height:1.55;color:var(--text-2);margin:4px 0 12px}
 /* Mặc định của app cho svg là display:block: biểu tượng khóa từng đứng riêng một dòng trên câu chữ. */
 .sh-hint svg{flex:none;margin-top:3px}
-.pal-cut{padding:6px 12px 10px;font-size:12.5px;color:var(--text-2)}
+.pal-cut{padding:6px 12px 10px;font-size:var(--fs-label);color:var(--text-2)}
 .sh-link{display:flex;gap:8px;margin:10px 0 4px}
-.sh-link input{flex:1;min-width:0;height:34px;padding:0 10px;border:1px solid var(--border);border-radius:8px;background:transparent;color:var(--text);font-size:13px}
-.sh-err{font-size:13px;color:var(--danger,#c0392b);margin:8px 0 0}
+.sh-link input{flex:1;min-width:0;height:34px;padding:0 10px;border:1px solid var(--border);border-radius:8px;background:transparent;color:var(--text);font-size:var(--fs-2)}
+.sh-err{font-size:var(--fs-2);color:var(--danger,#c0392b);margin:8px 0 0}
 .sh-row{gap:8px}
 .sh-row-t{flex:1;min-width:0;display:flex;flex-direction:column}
 .sh-row-t a{color:inherit;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.sh-row-t em{font-style:normal;font-size:12px;color:var(--text-2)}
+.sh-row-t em{font-style:normal;font-size:var(--fs-1);color:var(--text-2)}
 /* Dải cảnh báo khi trình duyệt hết chỗ và máy chủ chưa nhận được bản mới nhất (chatsync.ts) */
-.sync-warn{display:flex;align-items:center;gap:10px;margin:8px 12px 0;padding:8px 12px;border-radius:10px;border:1px solid var(--danger,#c4453c);color:var(--text);font-size:13px;line-height:1.45;background:var(--bg)}
+.sync-warn{display:flex;align-items:center;gap:10px;margin:8px 12px 0;padding:8px 12px;border-radius:10px;border:1px solid var(--danger,#c4453c);color:var(--text);font-size:var(--fs-2);line-height:1.45;background:var(--bg)}
 .sync-warn span{flex:1;min-width:0}
 .sync-warn svg{flex:none;color:var(--danger,#c4453c)}
-.sync-stub{display:flex;align-items:center;gap:8px;padding:24px 0;font-size:13.5px}
+.sync-stub{display:flex;align-items:center;gap:8px;padding:24px 0;font-size:var(--fs-chat)}
 /* Màn đăng nhập: báo lỗi ngay tại ô email, liên kết pháp lý, ghi chú quên mật khẩu */
-.auth-field-err{margin:8px 4px 0;font-size:13px;color:var(--danger,#c4453c)}
-.auth-note{margin-top:12px;font-size:12.5px;line-height:1.5;color:var(--text-2);text-align:center}
+.auth-field-err{margin:8px 4px 0;font-size:var(--fs-2);color:var(--danger,#c4453c)}
+.auth-note{margin-top:12px;font-size:var(--fs-label);line-height:1.5;color:var(--text-2);text-align:center}
 .auth-legal{margin-top:4px}
 .auth-legal a{color:inherit;text-decoration:underline;text-underline-offset:2px}
 /* Hộp thoại nhận tiêu điểm khi không có ô nhập: không vẽ viền quanh cả hộp */
@@ -51,9 +51,9 @@ html:has(.sh-page),html:has(.sh-page) body{height:auto;overflow:auto}
 .tk-more{display:flex;justify-content:center;margin:12px 0 4px}
 .tk-more .btn{gap:6px}
 /* Cài đặt: dòng khớp khi tìm, không có kết quả, dòng vừa được đưa tới */
-.s-found{display:block;width:100%;margin:0 0 2px;padding:5px 10px 5px 37px;border-radius:8px;font-size:12.5px;line-height:1.35;text-align:left;color:var(--text-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.s-found{display:block;width:100%;margin:0 0 2px;padding:5px 10px 5px 37px;border-radius:8px;font-size:var(--fs-label);line-height:1.35;text-align:left;color:var(--text-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .s-found:hover{background:var(--hover);color:var(--text)}
-.s-none{padding:12px 10px;font-size:13px;color:var(--text-2)}
+.s-none{padding:12px 10px;font-size:var(--fs-2);color:var(--text-2)}
 .row.s-hit,.adm-perm-row.s-hit,.adm-card.s-hit{animation:sHit 1.4s var(--ease) 1}
 @keyframes sHit{0%,60%{background:color-mix(in srgb,var(--accent,#888) 14%,transparent)}100%{background:transparent}}
 @media (max-width:760px){.s-found{padding-left:10px}}
@@ -62,9 +62,9 @@ html:has(.sh-page),html:has(.sh-page) body{height:auto;overflow:auto}
 .auth-lang.inline{position:static}
 /* Quản trị: tình trạng hệ thống */
 .ops-bad{color:var(--danger,#c0392b);font-weight:500}
-.ops-log{display:flex;flex-direction:column;gap:6px;margin:6px 0 12px;font-size:12.5px;max-height:320px;overflow:auto}
+.ops-log{display:flex;flex-direction:column;gap:6px;margin:6px 0 12px;font-size:var(--fs-label);max-height:320px;overflow:auto}
 .ops-log time{display:block;color:var(--text-2);margin-bottom:1px}
-.ops-log code{display:block;white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px}
+.ops-log code{display:block;white-space:pre-wrap;overflow-wrap:anywhere;font-size:var(--fs-1)}
 /* Hộp xem ảnh dùng cơ chế hộp thoại chung (.overlay); synchro-ds.css đổi nền của .overlay nên phải giữ lại nền tối ở đây */
 html body .overlay.ft-lightbox:not(.auth-root *){background:rgba(0,0,0,.72)}
 /* Ô số trong Quản trị (credit giọng AI mỗi ngày) */
@@ -76,7 +76,7 @@ html body .overlay.ft-lightbox:not(.auth-root *){background:rgba(0,0,0,.72)}
 .vm-type input{flex:1;min-width:0;height:40px;padding:0 14px;border-radius:var(--r-pill);border:0;outline:none;color:#fff;font-size:15px;background:rgba(255,255,255,.1);box-shadow:inset 0 0 0 .5px rgba(255,255,255,.2)}
 .vm-type input::placeholder{color:rgba(255,255,255,.55)}
 .vm-type input:focus-visible{box-shadow:inset 0 0 0 1.5px rgba(255,255,255,.6)}
-.vm-type .vm-opt{height:40px;padding:0 16px;font-size:13px}
+.vm-type .vm-opt{height:40px;padding:0 16px;font-size:var(--fs-2)}
 .vm-type .vm-opt:disabled{opacity:.45;cursor:default}
 .vm-btn:disabled{opacity:.35;cursor:default}
 .sp-bv{max-width:560px;margin:10px auto;gap:10px}
@@ -84,7 +84,7 @@ html body .overlay.ft-lightbox:not(.auth-root *){background:rgba(0,0,0,.72)}
 .bp-empty span+span{max-width:420px;text-align:center}
 
 /* Hộp đổi mật khẩu: lối quên mật khẩu hiện tại, ngay dưới ô đó */
-.pw-forgot{margin:-10px 0 14px;font-size:13px}
+.pw-forgot{margin:-10px 0 14px;font-size:var(--fs-2)}
 .pw-forgot .lnk{background:none;border:0;padding:0;font:inherit;cursor:pointer}
 .pw-forgot .lnk:disabled{opacity:.6;cursor:default}
 /* Mô tả trong Cài đặt không để một từ rớt lẻ xuống dòng cuối */

@@ -199,7 +199,7 @@ export function CommandPalette({ chats, projects, codes, cmds, go, seed, onClose
               </div>
             );
           })}
-          {dq && rows.length === 0 && <div className="muted" role="status" style={{ padding: 16, textAlign: "center", fontSize: 14 }}>{tr("Không tìm thấy kết quả")}</div>}
+          {dq && rows.length === 0 && <div className="muted" role="status" style={{ padding: 16, textAlign: "center", fontSize: "var(--fs-3)" }}>{tr("Không tìm thấy kết quả")}</div>}
         </div>
         <div className="pal-foot"><span><kbd>↑</kbd><kbd>↓</kbd>{tr("chọn")}</span><span><kbd>↵</kbd>{tr("mở")}</span><span><kbd>esc</kbd>{tr("đóng")}</span></div>
       </div>

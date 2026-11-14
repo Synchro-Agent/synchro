@@ -134,7 +134,7 @@ export function VoicesTool({ say, sub, setSub, go, voice, setVoice, admin, area 
       {tab === "library" && <LibraryGrid say={say} card={card} onUse={(v) => { setVoice(v); go("tts", "single"); }} />}
       {ownerOf && createPortal(<div className="overlay" style={{ zIndex: 60 }} onMouseDown={(e) => e.target === e.currentTarget && setOwnerOf(null)}>
         <div className="modal sm" style={{ width: 420 }}>
-          <h2 style={{ fontSize: 16 }}>Chủ giọng</h2>
+          <h2 style={{ fontSize: "var(--fs-4)" }}>Chủ giọng</h2>
           <p className="d">Email của chủ giọng này. Nhập shared nếu mọi thành viên được dùng.</p>
           <input className="field" autoFocus aria-label="Chủ giọng" value={who} onChange={(e) => setWho(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") saveOwner(); }} />
           <div className="modal-foot"><button className="btn" onClick={() => setOwnerOf(null)}>Hủy</button><button className="btn dark" disabled={!who.trim()} onClick={saveOwner}>Gán chủ</button></div>

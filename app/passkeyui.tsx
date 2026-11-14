@@ -65,7 +65,7 @@ export function PasskeyRows({ Row, onChange }: { Row: RowT; onChange?: () => voi
     </div>}
     {typeof document !== "undefined" && createPortal(<Fade show={!!edit}>{edit ? <div className="overlay" style={{ zIndex: 70 }} onMouseDown={(e) => e.target === e.currentTarget && setEdit(null)}>
       <div className="modal sm" style={{ width: "min(400px, 92vw)" }} role="dialog" aria-label="Rename passkey">
-        <h2 style={{ fontSize: 16 }}>Rename passkey</h2>
+        <h2 style={{ fontSize: "var(--fs-4)" }}>Rename passkey</h2>
         <p className="d">Use a name that tells you which device or password manager holds it.</p>
         <input className="field" autoFocus aria-label="Passkey name" maxLength={60} value={edit.name} onChange={(e) => setEdit({ ...edit, name: e.target.value })} onKeyDown={(e) => e.key === "Enter" && void rename()} />
         <div className="modal-foot"><button className="btn" onClick={() => setEdit(null)}>Cancel</button><button className="btn dark" disabled={!edit.name.trim() || busy} onClick={() => void rename()}>Save</button></div>

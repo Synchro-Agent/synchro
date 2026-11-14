@@ -58,7 +58,7 @@ export function useStepUp() {
 
   const node = typeof document !== "undefined" ? createPortal(<Fade show={!!job}>{job ? <div className="overlay" style={{ zIndex: 80 }} onMouseDown={(e) => e.target === e.currentTarget && !busy && close(null)}>
     <div className="modal sm" style={{ width: "min(420px, 92vw)" }} role="dialog" aria-label={tr("Xác minh lại danh tính")}>
-      <h2 style={{ fontSize: 16 }}>{tr("Xác minh lại danh tính")}</h2>
+      <h2 style={{ fontSize: "var(--fs-4)" }}>{tr("Xác minh lại danh tính")}</h2>
       {hasPw ? <>
         <p className="d">{tr("Để thêm cách đăng nhập mới, hãy nhập mật khẩu hiện tại của bạn.")}</p>
         <input className="field" type="password" autoFocus autoComplete="current-password" placeholder={tr("Mật khẩu hiện tại")} aria-label={tr("Mật khẩu hiện tại")} value={pw}

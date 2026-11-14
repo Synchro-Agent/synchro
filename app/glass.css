@@ -174,7 +174,7 @@ html body .modal{animation-duration:.3s}
 .mic-meter .bar i{display:block;height:100%;width:100%;transform-origin:left;background:#2f6fdc;border-radius:3px;transition:transform .06s linear}
 .mic-item{height:38px}
 .mic-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:250px}
-.mic-empty{padding:10px;font-size:13px;color:var(--text-3)}
+.mic-empty{padding:10px;font-size:var(--fs-2);color:var(--text-3)}
 .model .icon-btn{border-radius:var(--r-pill);transition:background-color .2s,color .2s}
 .model>.icon-btn:hover{background:var(--hover)}
 
