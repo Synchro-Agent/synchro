@@ -1,5 +1,60 @@
 @layer properties, theme, base, components, utilities, syn, syn-over;
 @layer syn {
+/* Chuyển từ globals.css (B5 bước 10, scripts/css-move.mjs): luật chỉ trúng phần tử của màn này, giữ thứ tự cũ (đứng trước luật riêng của tệp). */
+.api-vendor{font-size:var(--fs-1);color:var(--text-3)}
+.mono-s{font-family:var(--font-mono);font-size:var(--fs-1);color:var(--text-2)}.api-get:hover{text-decoration:underline}
+.mr-row:first-child{border-top:0}
+.mr-key .mono-s{overflow-wrap:anywhere}
+.cu-detail{font-size:var(--fs-1);line-height:1.45;color:var(--text-2);overflow-wrap:anywhere}
+.api-steps li::before{content:counter(st);position:absolute;left:0;top:0;width:22px;height:22px;border-radius:50%;display:grid;place-items:center;font-size:var(--fs-1);font-weight:560;background:var(--hover);color:var(--text-2)}
+
+
+
+
+@media (max-width:640px){
+  .api-models .api-adv .d{display:none}
+}
+
+
+
+
+.pv-opt.on{border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 16%,transparent)}
+.pv-mode.warn{background:color-mix(in srgb,var(--us-warn, #d98a1f) 14%,transparent)}
+/* Quyền truy cập: giới hạn mức nỗ lực */
+
+
+
+
+.adm-eff-name svg{flex:none}
+.cpo-manage:hover{text-decoration:underline}
+.cpo-card .cpo-keyform .api-err.in{margin:2px 0 0}
+.us-money:focus-within{border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 18%,transparent)}
+
+
+.us-pr.h{font-size:var(--fs-1);color:var(--text-3);padding-bottom:2px}
+.sites-h{font-size:var(--fs-2);font-weight:560}
+
+
+
+.cn-warnline svg{flex:none;align-self:center}
+.pk-main{flex:1;min-width:0}
+.pk-name>span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.pk-meta{font-size:var(--fs-1);color:var(--text-3);margin-top:1px}
+/* Quản trị viên → chống bot (botadmin.tsx) */
+.bot-card{margin:6px 0 4px}
+.bot-l{display:block;font-size:var(--fs-label);font-weight:500;color:var(--text-2);margin:2px 0 4px}
+.bk-foot{margin:10px 0 4px}
+.bk-errs{margin-top:6px}
+.bk-drill.bad{box-shadow:0 0 0 1px #c6422f}
+.bk-tbl{margin:6px 0}
+.lat-sel select{min-width:140px}
+.lat-wrap{max-width:100%;overflow-x:auto}
+.lat-tbl{width:100%}
+.lat-tbl .num{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+.lat-tbl tr.lat-total td{font-weight:600}
+.lat-last{margin-top:8px;font-size:var(--fs-label)}
+.ap-a .ap-edit{margin-right:auto}
+/* Hết phần chuyển từ globals.css. */
 /* Cài đặt: Quản trị (adm-, perm-), Providers (pv-), Khả năng (cap-), Connectors (cn-), trang Mức dùng (us-): tách khỏi globals.css /
    synchro-ds.css để trang chat không phải tải trước (blueprint B3.4). Nạp sau mọi tệp chung, nên chỉ chứa quy tắc mà không quy tắc chung nào
    đứng sau nó còn nhắc tới cùng lớp; lớp dùng cả ở trang chat (vòng Mức dùng, adm-pager, cn-link…) vẫn ở tệp chung. */
@@ -269,6 +324,11 @@ html body .adm-perm-row .field.adm-num{width:112px;min-width:112px;flex:none;mar
 .adm-chev{transition:transform .2s}
 }
 @layer syn-over{
+/* Chuyển từ globals.css (B5 bước 10, scripts/css-move.mjs): luật chỉ trúng phần tử của màn này, giữ thứ tự cũ (đứng trước luật riêng của tệp). */
+.adm-detail>td{border-top:0;padding:4px 0 14px}
+.cpo-sec{margin-top:26px}
+.ap-more{margin:10px 0 0}
+/* Hết phần chuyển từ globals.css. */
 /* B5: khai báo trước đây mang !important chỉ để thắng thứ tự. Lớp syn-over đứng sau syn nên các luật này thắng mọi luật thường của syn bất kể specificity; giữa chúng với nhau vẫn theo specificity rồi thứ tự. Sửa một luật ở trên thì tìm cùng selector ở đây. */
 .pv-alt{margin:0 auto 0 0}
 .adm-msearch{margin:4px 0 8px}

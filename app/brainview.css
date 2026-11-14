@@ -1,5 +1,13 @@
 @layer properties, theme, base, components, utilities, syn, syn-over;
 @layer syn {
+/* Chuyển từ globals.css (B5 bước 10, scripts/css-move.mjs): luật chỉ trúng phần tử của màn này, giữ thứ tự cũ (đứng trước luật riêng của tệp). */
+.bn-table tr:hover td{background:color-mix(in srgb,var(--text) 3%,transparent)}
+/* ô tìm nhanh và danh sách kết quả */
+.bw-find>svg{flex:none}
+.bg-row.col{flex-direction:column;align-items:stretch;gap:3px}
+.bg-row input[type=range]{width:100%;accent-color:var(--bn-accent)}
+.bg-b .btn.sm{align-self:flex-start}
+/* Hết phần chuyển từ globals.css. */
 /* Mục Bộ não: tách khỏi globals.css để trang chat không phải tải trước. Tệp này nạp sau mọi tệp chung, nên chỉ chứa quy tắc không tranh chấp với quy tắc chung đứng sau nó trong globals.css (cùng độ ưu tiên, cùng thuộc tính); quy tắc tranh chấp vẫn ở globals.css. */
 .bn-stats {display:flex;flex-wrap:wrap;gap:6px 16px;margin-bottom:12px;font-size:var(--fs-1);color:var(--text-3)
 }

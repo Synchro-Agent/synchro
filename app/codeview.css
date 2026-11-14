@@ -1,5 +1,25 @@
 @layer properties, theme, base, components, utilities, syn, syn-over;
 @layer syn {
+/* Chuyển từ globals.css (B5 bước 10, scripts/css-move.mjs): luật chỉ trúng phần tử của màn này, giữ thứ tự cũ (đứng trước luật riêng của tệp). */
+.cv-pill.pin>svg:first-child{color:var(--accent)}.cv-mode-item.picked{background:color-mix(in srgb,var(--accent) 10%,transparent)}
+.menu-item.cv-opt.is-sel{background:color-mix(in srgb,var(--accent) 10%,transparent)}
+html[data-theme="light"] body .cv-card{background:rgba(250,250,252,.82)}
+.cv-acts button:hover{background:color-mix(in srgb,var(--accent) 20%,transparent)}
+.cv-pal button.act{background:color-mix(in srgb,var(--accent) 14%,transparent)}
+.cvg-list code{flex:none;min-width:98px;text-align:center}
+.cvg-mode .ic::after,html body .cvg-logo::after,.cvg-steps i::after{content:"";position:absolute;left:8%;right:8%;top:0;height:46%;border-radius:0 0 60% 60%/0 0 100% 100%;background:linear-gradient(180deg,rgba(255,255,255,.75),rgba(255,255,255,0));pointer-events:none;z-index:-1}
+.cv-bar-r{min-width:0}
+.fp-row svg{flex:none}
+
+/* Session rail kiểu Claude: thẻ thu gọn được, hàng có biểu tượng, bảng ngữ cảnh nhiều màu */
+.sr section.sr-sec{margin:0 0 8px;padding:11px 14px 12px;border:.5px solid var(--border-strong);border-radius:var(--r-card);background:var(--card)}
+.sr-chev.off{transform:rotate(-90deg)}
+.sr-dim{color:var(--text-3);font-style:normal;font-size:var(--fs-label)}
+.sr-sum:disabled{cursor:default}
+.sr-sum .ag-diff{font-size:var(--fs-2)}
+.bh .bp{border-top:0}
+html body .btn.dark.ext-stop{align-self:flex-start;display:inline-flex;align-items:center;gap:6px}
+/* Hết phần chuyển từ globals.css. */
 /* Synchro Code: tách khỏi globals.css để trang chat không phải tải trước. Tệp này nạp sau mọi tệp chung, nên chỉ chứa quy tắc không tranh chấp với quy tắc chung đứng sau nó trong globals.css (cùng độ ưu tiên, cùng thuộc tính); quy tắc tranh chấp vẫn ở globals.css. */
 .cv-bar:where(:has(.menu:not(.out))) {z-index:var(--z-pop)
 }
@@ -555,6 +575,10 @@ html[data-tw="wide"] .cv-wrap {width:min(1160px,100%)
 }
 }
 @layer syn-over{
+/* Chuyển từ globals.css (B5 bước 10, scripts/css-move.mjs): luật chỉ trúng phần tử của màn này, giữ thứ tự cũ (đứng trước luật riêng của tệp). */
+html body .cv-composer[data-drag]{box-shadow:0 0 0 .5px var(--gl-hair),var(--gl-shadow)}
+[data-theme="dark"] .bh-seg button.on{background:#3b3938;box-shadow:0 1px 4px rgba(0,0,0,.45),inset 0 0 0 .5px #55524f}
+/* Hết phần chuyển từ globals.css. */
 /* B5: khai báo trước đây mang !important chỉ để thắng thứ tự. Lớp syn-over đứng sau syn nên các luật này thắng mọi luật thường của syn bất kể specificity; giữa chúng với nhau vẫn theo specificity rồi thứ tự. Sửa một luật ở trên thì tìm cùng selector ở đây. */
 .cv-hello,.cv-sugg{animation-fill-mode:backwards}
 .cv-sugg{animation:none}

@@ -1,5 +1,29 @@
 @layer properties, theme, base, components, utilities, syn, syn-over;
 @layer syn {
+/* Chuyển từ globals.css (B5 bước 10, scripts/css-move.mjs): luật chỉ trúng phần tử của màn này, giữ thứ tự cũ (đứng trước luật riêng của tệp). */
+.tpl:hover{transform:translateY(-2px)}
+[data-theme="dark"] .tpl{--t1:#2A2B26;--t2:#1C1D1A;--ta:#B9B8AF;--tb:#5C5D56;--tp:rgba(238,236,229,.1)}
+[data-theme="dark"] .tpl .th{background:#1b1b1b;box-shadow:none}
+.tpl:hover .th{border-color:var(--hc);box-shadow:0 0 0 1px color-mix(in srgb,var(--hc) 45%,transparent),0 6px 18px color-mix(in srgb,var(--hc) 22%,transparent)}
+.tpl:hover .ta.doc{transform:scale(1.04)}
+.tpl:hover .ta.doc i{animation:tplw 1.1s ease-in-out infinite alternate;transform-origin:left}
+.tpl:hover .ta.sl .img{transform:translateY(-3px) rotate(-4deg)}
+.tpl:hover .ta.sl .p1{width:46px}.tpl:hover .ta.sl .p2{width:34px}
+.tpl .cur svg{filter:drop-shadow(0 1px 2px rgba(0,0,0,.35))}
+.tpl .cur path{fill:var(--accent);stroke:#fff}
+.sp-mic.on::after{content:"";position:absolute;inset:-6px;border-radius:50%;border:2px solid #d9452b;animation:spRing 1.4s ease-out infinite}
+.vm.out{animation:vmOut .22s ease-in both}
+.pearl.on{--spd:.5}
+.pearl::before{content:"";position:absolute;inset:-22%;border-radius:50%;background:radial-gradient(circle,rgba(122,150,240,.34) 0%,rgba(122,150,240,.12) 45%,rgba(122,150,240,0) 68%);
+  opacity:calc(.75 + var(--lv) * .5);scale:calc(1 + var(--lv) * .14);transition:opacity .4s}
+[data-theme="dark"] .pearl-core{filter:brightness(.94)}
+[data-theme="dark"] .pearl::before{background:radial-gradient(circle,rgba(122,150,240,.26) 0%,rgba(122,150,240,.08) 45%,rgba(122,150,240,0) 68%)}
+
+
+.tpl .tl:has(.tpl-lib){flex-direction:column;align-items:flex-start;gap:4px}
+.tpl:hover,.tpl:focus-visible{z-index:2}
+.sp-guide.more .sp-guide-more svg{transform:rotate(180deg)}
+/* Hết phần chuyển từ globals.css. */
 /* Mục Speech và chế độ trò chuyện bằng giọng nói: tách khỏi globals.css để trang chat không phải tải trước. Tệp này nạp sau mọi tệp chung, nên chỉ chứa quy tắc không tranh chấp với quy tắc chung đứng sau nó trong globals.css (cùng độ ưu tiên, cùng thuộc tính); quy tắc tranh chấp vẫn ở globals.css. */
 .sp-crumb {font-size:var(--fs-3);font-weight:460;padding:4px 6px;border-radius:var(--r-pill)
 }

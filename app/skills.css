@@ -1,5 +1,59 @@
 @layer properties, theme, base, components, utilities, syn, syn-over;
 @layer syn {
+/* Chuyển từ globals.css (B5 bước 10, scripts/css-move.mjs): luật chỉ trúng phần tử của màn này, giữ thứ tự cũ (đứng trước luật riêng của tệp). */
+.sk-row .sk-desc{font-size:var(--fs-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.sk-score{gap:3px}.sk-score svg+svg,.sk-score>svg:nth-of-type(2){margin-left:5px}
+.sk-files .clk{cursor:pointer}.sk-files .clk:hover{background:var(--hover)}
+.sk-choice:first-child{border-top:0}
+.sk-bad{color:#c6422f}
+.cz-body{min-width:0}
+.pl-scope button.on{border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 16%,transparent)}
+/* Ngắt dòng ở giữa các phần, dấu "·" ở cuối dòng chứ không trôi xuống đầu dòng sau. */
+.pl-dcard-t em>span{white-space:nowrap}
+.cd-cat>span{overflow:hidden;text-overflow:ellipsis}
+.cd-cat>svg{flex:none}
+.cd-tools .btn>span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cd-count{font-size:var(--fs-label);color:var(--text-3);font-variant-numeric:tabular-nums}
+.cd-job-h>span[data-notr]{font-variant-numeric:tabular-nums}
+.cd-job-s{color:var(--text-3)}
+.cd-link{color:var(--text-2);text-decoration:underline;text-underline-offset:2px;font-size:inherit}
+/* Kho kỹ năng: thư viện + skill lẻ chung một trang, thả tệp vào đâu cũng được */
+.hub-yours{position:relative;min-height:60vh}
+/* ===================== Ứng dụng nội bộ: hộp xuất bản, danh sách ứng dụng, trang chạy ứng dụng ===================== */
+.pub-w{position:relative}
+.sk-scope-l{grid-column:1/-1;font-size:var(--fs-1);color:var(--text-3)}
+.app-home{font-family:var(--font-sans);font-size:17px;color:var(--ink-strong);text-decoration:none}
+.app-meta{font-size:var(--fs-label);color:var(--text-3)}.cl-pres .cl-av+.cl-av{margin-left:-6px}
+.app-miss .btn{text-decoration:none}
+.tk-item.unread .tk-dot{background:var(--accent)}
+.tk-dot.running{animation:pulse 1.2s ease-in-out infinite}
+.tk-item.unread .tk-t b{font-weight:560}
+.tk-when{flex:none;font-size:var(--fs-1);color:var(--text-3);font-variant-numeric:tabular-nums}
+.tk-line>.tk-row{flex:1;min-width:0}
+.tk-why{color:var(--ds-bad)}
+.tk-err{flex-wrap:wrap}.tk-err summary{cursor:pointer;opacity:.8}
+.field.tpk:focus-within,.field.tpk.open{border-color:var(--text-2);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 14%,transparent)}
+/* Gắn vào body, nổi trên hộp thoại (z-index 70); div.… để thắng quy tắc kính .menu (z-index 20) trong glass.css. */
+html body div.menu.tpk-pop{position:fixed;z-index:calc(var(--z-overlay) + 20);width:248px;min-width:0;padding:8px;border-radius:var(--r-menu);transform-origin:top left}
+.tpk-col::-webkit-scrollbar{display:none}
+.tpk-col button:focus-visible{outline:2px solid color-mix(in srgb,var(--accent) 50%,transparent);outline-offset:-2px}
+@media (prefers-reduced-motion:reduce){html body div.menu.tpk-pop{animation:none}
+}
+.tk-item.open .tk-chip,.tk-job .tk-chip{background:color-mix(in srgb,var(--text) 6%,transparent)}
+.tk-log li.say{color:var(--text)}
+.tk-prop.pending{box-shadow:0 0 0 1px color-mix(in srgb,var(--tk-warn) 45%,transparent),var(--gl-shadow-small),inset 1px 1.5px 2px -1px rgba(255,255,255,.7)}
+[data-theme="dark"] .tk-prop.pending{box-shadow:0 0 0 1px color-mix(in srgb,var(--tk-warn) 45%,transparent),var(--gl-shadow-small),inset 1px 1.5px 2px -1px rgba(255,255,255,.14)}
+.tk-prop-s{font-size:var(--fs-chat)}
+.tk-job .tk-acts .icon-btn{margin-left:auto}
+.tk-modal .modal-foot{flex-wrap:wrap}
+@media (max-width:640px){
+  .tk-comp-bar .btn.dark{margin-left:auto}
+  .tk-rerun.btn.sm>span:not(.art-spin){display:none}
+}
+.sk-fix.stale,.sk-fix.rejected,.sk-fix.reverted{opacity:.7}
+.sk-fix-h .sk-tag{margin-left:0}
+.sk-diff div{white-space:pre-wrap;word-break:break-word}
+/* Hết phần chuyển từ globals.css. */
 /* Kho kỹ năng và plugin (pl-): tách khỏi globals.css / synchro-ds.css để trang chat không phải tải trước (blueprint B3.4). Nạp sau mọi tệp chung,
    nên chỉ chứa quy tắc mà không quy tắc chung nào đứng sau nó còn nhắc tới cùng lớp. */
 .pl-dcard-t>span{text-wrap:balance}
@@ -118,6 +172,13 @@ html body .pl-top .pl-scan{flex:none;height:var(--ds-h);padding:0 14px 0 12px;ga
 @media (max-width:640px){.scan-pick select.pl-sel{flex:1 1 100%}}
 }
 @layer syn-over{
+/* Chuyển từ globals.css (B5 bước 10, scripts/css-move.mjs): luật chỉ trúng phần tử của màn này, giữ thứ tự cũ (đứng trước luật riêng của tệp). */
+.menu.pl-menu::before{background:var(--card)}
+.menu.pub-menu::before{background:var(--card)}
+.tk-dot.running{background:#d97706}
+.tk-dot.error{background:#dc2626}
+button.tk-chip.warn:hover{background:color-mix(in srgb,var(--tk-warn) 20%,transparent)}
+/* Hết phần chuyển từ globals.css. */
 /* B5: khai báo trước đây mang !important chỉ để thắng thứ tự. Lớp syn-over đứng sau syn nên các luật này thắng mọi luật thường của syn bất kể specificity; giữa chúng với nhau vẫn theo specificity rồi thứ tự. Sửa một luật ở trên thì tìm cùng selector ở đây. */
 .pl-search{margin:0}
 .pl-top{padding-right:0}
