@@ -91,7 +91,7 @@ html body :is(.group,.pl-seg):not(.auth-root *)>button{height:28px!important;pad
 html body [data-tip]:not(.auth-root *):hover::after{background:var(--ds-inv);color:var(--ds-inv-fg);font-size:var(--fs-1);font-weight:460;padding:5px 9px;border-radius:var(--r-pill);box-shadow:var(--ds-lift);letter-spacing:0}
 /* Gợi ý nổi (tips.ts): một khung gắn vào body, trên mọi lớp, tự đặt chỗ trong màn hình. Khi đã bật (html[data-tips="js"]) thì tắt gợi ý ::after
    cũ: nó nằm trong phần tử nên bị khung cha cắt (thanh điều hướng cuộn dọc, thanh công cụ khung artifact sát mép trên) hay bị lớp khác che. */
-.tip-float{position:fixed;left:0;top:0;z-index:2147483000;max-width:min(320px,calc(100vw - 16px));padding:5px 9px;border-radius:var(--r-pill);pointer-events:none;
+.tip-float{position:fixed;left:0;top:0;z-index:var(--z-tip);max-width:min(320px,calc(100vw - 16px));padding:5px 9px;border-radius:var(--r-pill);pointer-events:none;
   background:var(--ds-inv);color:var(--ds-inv-fg);font:460 var(--fs-1)/16px var(--font-sans);letter-spacing:0;box-shadow:var(--ds-lift);width:max-content;white-space:normal;overflow-wrap:anywhere;text-wrap:balance;
   opacity:0;visibility:hidden;transform:translateY(2px);transition:opacity .15s var(--ds-ease),transform .15s var(--ds-ease),visibility 0s .15s}
 .tip-float.multi{border-radius:10px;padding:6px 10px}
@@ -125,7 +125,7 @@ html body .app *{scrollbar-width:thin;scrollbar-color:color-mix(in srgb,var(--ds
    khi thanh bên thu gọn, ô soạn tin và dải kính mờ che mất góc dưới bên phải của menu tài khoản. Chỉ nâng lúc có menu (menu đóng là gỡ
    khỏi trang) nên khung phủ toàn màn hình mở từ trong trang vẫn nằm trên thanh bên như cũ. Độ ưu tiên bằng đúng .shell-side
    (:where): không bao giờ hạ ngăn kéo thanh bên trên điện thoại (z 65, trên lớp nền mờ z 64) xuống dưới lớp nền mờ. */
-.shell-side:where(:has(.menu,[data-tip]:hover)){z-index:30}
+.shell-side:where(:has(.menu,[data-tip]:hover)){z-index:var(--z-pop)}
 /* Đệm trên = đệm dưới (16px): logo và ảnh đại diện cách đều hai mép; ở màn Code, khung viên thuốc phía sau cách mép 6px nên cả hai cách khung 10px. */
 .rail{position:relative;z-index:7;width:68px;flex:none;display:flex;flex-direction:column;align-items:center;padding:16px 0;gap:4px;height:100%;min-height:0}
 .rail-mark{position:relative;display:grid;place-items:center;width:36px;height:36px;border-radius:var(--r-pill);margin:0 0 6px;color:var(--logo-ink);
@@ -215,7 +215,7 @@ html body .side-toggle:focus-visible{outline:0;box-shadow:var(--ds-ring)}
 
 /* ---------------------------------------------------------------- điện thoại: thanh điều hướng + bảng đoạn chat là một ngăn kéo (z 65, trên lớp phủ z 64) */
 @media (max-width:760px){
-  html body .app>.shell-side{position:fixed;top:0;bottom:0;left:0;z-index:65;height:100%;width:min(336px,92vw);background:var(--sidebar);border-radius:0 var(--r-panel) var(--r-panel) 0;
+  html body .app>.shell-side{position:fixed;top:0;bottom:0;left:0;z-index:calc(var(--z-drawer) + 5);height:100%;width:min(336px,92vw);background:var(--sidebar);border-radius:0 var(--r-panel) var(--r-panel) 0;
     box-shadow:0 20px 60px rgba(0,0,0,.25);transition:transform var(--ds-slow) var(--ds-ease),box-shadow var(--ds-slow)}
   html body .app>.shell-side .sidebar{border-radius:var(--r-card)}
   html body .app>.shell-side.closed{transform:translateX(calc(-100% - 12px));box-shadow:none}
@@ -230,7 +230,7 @@ html body .side-toggle:focus-visible{outline:0;box-shadow:var(--ds-ring)}
 @media (min-width:761px) and (max-width:860px){
   /* Chỉ nâng khi bảng đang mở: lúc đóng, thanh điều hướng ở z thường như máy tính để menu của ô soạn tin (model, micro, mức dùng…) mở dài sang
      trái vẫn nằm trên nó. */
-  .app>.shell-side:not(.closed){z-index:65}
+  .app>.shell-side:not(.closed){z-index:calc(var(--z-drawer) + 5)}
   /* Bảng đang mở: thanh điều hướng vẫn bấm được (nằm trên lớp phủ) nên giữ nền đặc, không để lớp phủ xám xuyên qua làm nó trông như bị tắt. */
   html body .app>.shell-side:not(.closed) .rail{background:var(--bg)}
   html body .app>.shell-side .sidebar{position:fixed;top:0;left:68px;width:min(300px,calc(100vw - 96px));height:calc(100% - 20px);margin:10px 0;
@@ -962,7 +962,7 @@ html body .ds-art .art-tile{position:relative}
 .bk-aw{position:relative;display:inline-flex}
 html body .bk-bar .icon-btn.bk-x{width:32px;height:32px;border-radius:var(--r-pill);color:color-mix(in srgb,var(--ds-inv-fg) 80%,transparent)}
 html body .bk-bar .icon-btn.bk-x:hover{background:color-mix(in srgb,var(--ds-inv-fg) 14%,transparent);color:var(--ds-inv-fg)}
-html body .bk-menu{position:absolute;bottom:calc(100% + 10px);left:50%;transform:translateX(-50%);min-width:220px;max-width:280px;max-height:260px;overflow:auto;z-index:30;color:var(--ds-ink)}
+html body .bk-menu{position:absolute;bottom:calc(100% + 10px);left:50%;transform:translateX(-50%);min-width:220px;max-width:280px;max-height:260px;overflow:auto;z-index:var(--z-pop);color:var(--ds-ink)}
 .bk-bar.compact{gap:0}
 .bk-bar.compact .bk-act{width:32px;padding:0}
 .bk-bar.compact .bk-all{padding:0 10px 0 7px;gap:6px}
@@ -1038,7 +1038,7 @@ html body .main>.dock::before{-webkit-mask-image:linear-gradient(to bottom,trans
   background:linear-gradient(to bottom,transparent 0,color-mix(in srgb,var(--bg) 84%,transparent) 34px)}
 /* Khối soạn tin đang mở một bảng nổi (chọn model và menu con, Mức dùng, bàn trộn ngữ cảnh, micro, +): nằm trên khung xem artifact (z 25)
    và thanh trên; trước đây menu con "Mức độ nỗ lực" mở sang phải thì chui xuống dưới khung artifact. Chỉ nâng lúc có bảng nổi. */
-.main>.dock:has(.menu,.cx-pop){z-index:30}
+.main>.dock:has(.menu,.cx-pop){z-index:var(--z-pop)}
 /* Cột chat hẹp (khung artifact mở, màn hình nhỏ): bỏ dòng ghi chú như trên điện thoại thay vì để nó vỡ ba dòng chen vào tên model. */
 .main>.dock[data-narrow] .dock-note>span:first-child{display:none}
 .main>.dock[data-narrow] .dock-note{justify-content:flex-end}
@@ -1083,7 +1083,7 @@ html[data-motion="reduced"] .chat-item .ct-run::after{animation:none}
 .ai-msg a.cite{display:inline-block;min-width:16px;height:16px;margin:0 1px 0 2px;padding:0 4px;border-radius:8px;background:var(--pill);color:var(--text-2);font-size:var(--fs-1);font-weight:600;line-height:16px;text-align:center;text-decoration:none;vertical-align:2px;font-variant-numeric:tabular-nums;cursor:pointer}
 .ai-msg .cite-g{white-space:nowrap}
 .ai-msg a.cite:hover,.ai-msg a.cite:focus-visible{background:var(--btn-dark);color:var(--btn-dark-text);outline:none}
-.cite-pop{position:fixed;z-index:1000;display:flex;flex-direction:column;gap:4px;width:max-content;max-width:min(300px,calc(100vw - 16px));padding:9px 11px;border-radius:10px;background:var(--gl-fill-thick,var(--card));border:1px solid var(--border-strong);box-shadow:var(--shadow);color:var(--text);font-size:var(--fs-label);line-height:1.35;pointer-events:none;animation:fadeIn .12s both}
+.cite-pop{position:fixed;z-index:var(--z-top);display:flex;flex-direction:column;gap:4px;width:max-content;max-width:min(300px,calc(100vw - 16px));padding:9px 11px;border-radius:10px;background:var(--gl-fill-thick,var(--card));border:1px solid var(--border-strong);box-shadow:var(--shadow);color:var(--text);font-size:var(--fs-label);line-height:1.35;pointer-events:none;animation:fadeIn .12s both}
 .cite-pop b{font-weight:600;overflow-wrap:anywhere}
 .cite-pop-h{display:flex;align-items:center;gap:6px;color:var(--text-3)}
 .cite-pop-h em{font-style:normal;font-size:var(--fs-1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -1115,7 +1115,7 @@ html[data-motion="reduced"] .chat-item .ct-run::after{animation:none}
 @media (prefers-reduced-motion:reduce){.wl-sum-b{animation:none}}
 
 /* Tiến độ xuất PowerPoint: nhãn nổi ngay dưới nút Tải về (không chen vào hàng nút, các nút không xô lệch khi nó hiện / ẩn). */
-.art-dl-note{position:absolute;top:calc(100% + 6px);right:0;z-index:41;padding:3px 9px;border-radius:var(--r-pill);background:var(--ds-inv);color:var(--ds-inv-fg);
+.art-dl-note{position:absolute;top:calc(100% + 6px);right:0;z-index:calc(var(--z-menu) + 1);padding:3px 9px;border-radius:var(--r-pill);background:var(--ds-inv);color:var(--ds-inv-fg);
   font-size:var(--fs-1);white-space:nowrap;font-variant-numeric:tabular-nums;box-shadow:var(--ds-lift);pointer-events:none}
 
 /* Kho kỹ năng → Quét skill rác (skillscanui.tsx): nút ở thanh công cụ (điện thoại: chỉ biểu tượng) và hộp thoại kết quả theo tab. */

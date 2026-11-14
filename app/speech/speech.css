@@ -551,7 +551,7 @@
 }
 .sp-tagwrap {position:relative
 }
-.sp-tagpop {position:absolute;right:0;bottom:calc(100% + 8px);z-index:40;width:min(440px,calc(100vw - 32px));max-height:min(460px,60dvh);display:flex;flex-direction:column;gap:10px;padding:12px;border-radius:var(--r-menu);background:var(--card);box-shadow:var(--shadow);animation:pop .18s var(--ease) both
+.sp-tagpop {position:absolute;right:0;bottom:calc(100% + 8px);z-index:var(--z-menu);width:min(440px,calc(100vw - 32px));max-height:min(460px,60dvh);display:flex;flex-direction:column;gap:10px;padding:12px;border-radius:var(--r-menu);background:var(--card);box-shadow:var(--shadow);animation:pop .18s var(--ease) both
 }
 .sp-tagpop-in {overflow:auto;display:flex;flex-direction:column;gap:12px;min-height:0
 }
@@ -687,7 +687,7 @@
 }
 @media (max-width:1100px){.sp-mbar {display:flex
 }}
-@media (max-width:1100px){.sp-aside,.sp-aside.wide {position:fixed;top:8px;right:8px;bottom:8px;left:auto;width:min(380px,calc(100vw - 16px));margin:0;z-index:46;overflow:auto;border-top:.5px solid var(--border-strong);transform:translateX(calc(100% + 20px));transition:transform .3s var(--ease);box-shadow:var(--shadow)
+@media (max-width:1100px){.sp-aside,.sp-aside.wide {position:fixed;top:8px;right:8px;bottom:8px;left:auto;width:min(380px,calc(100vw - 16px));margin:0;z-index:calc(var(--z-menu) + 6);overflow:auto;border-top:.5px solid var(--border-strong);transform:translateX(calc(100% + 20px));transition:transform .3s var(--ease);box-shadow:var(--shadow)
 }}
 @media (max-width:1100px){.sp-aside.open {transform:none
 }}
@@ -695,7 +695,7 @@
 }}
 @media (max-width:1100px){.sp-sheet-x {display:grid;margin-left:auto;align-self:center;width:28px;height:28px
 }}
-@media (max-width:1100px){.sp-sheet-bg {position:fixed;inset:0;z-index:45;background:var(--overlay);animation:fadeIn .2s both
+@media (max-width:1100px){.sp-sheet-bg {position:fixed;inset:0;z-index:calc(var(--z-menu) + 5);background:var(--overlay);animation:fadeIn .2s both
 }}
 @media (max-width:768px){.sp-aside,.sp-aside.wide {top:auto;left:0;right:0;bottom:0;width:auto;max-height:84dvh;border-radius:var(--r-panel) var(--r-panel) 0 0;transform:translateY(100%);padding-bottom:calc(18px + env(safe-area-inset-bottom))
 }}

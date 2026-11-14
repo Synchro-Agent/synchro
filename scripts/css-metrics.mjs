@@ -28,7 +28,9 @@ const postcss = createRequire(import.meta.url)("postcss");
 // che hẳn), 78 luật trống theo đó; đạt mục tiêu ≤ 572 đặt ngày 2026-11-14.
 // fontSize 1243 → 115, inlineFontSize 65 → 20 (B5 bước 6a): scripts/css-tokens.mjs --only fs đổi đúng-bằng sang var(--fs-…); còn lại là cỡ lệch
 // thang (15, 17, 14.5, 18…: bước 6b, cần duyệt ảnh), cỡ tính từ biến trong tsx, tùy chọn xterm / Monaco và home.tsx (đợi B2).
-export const CEIL = { important: 18, htmlBody: 560, fontSize: 115, zIndex: 63, mediaWidth: 88, darkHex: 96, inlineFontSize: 20, inlineZIndex: 22 };
+// zIndex 63 → 0, inlineZIndex 22 → 1 (B5 bước 7a): mọi z-index ≥ 20 theo tầng --z-* (calc(var(--z-bậc dưới) + n), giữ thứ tự); còn glass-folder
+// zIndex: v + 1 (tính từ biến).
+export const CEIL = { important: 18, htmlBody: 560, fontSize: 115, zIndex: 0, mediaWidth: 88, darkHex: 96, inlineFontSize: 20, inlineZIndex: 1 };
 // Mục tiêu có hạn: chỉ số phải về tới max trong bước ghi ở by (đặt ngày set). In ra cùng kết quả; bước đó hạ CEIL theo.
 export const TARGET = {};
 export const WIDTHS = new Set([480, 640, 760, 761, 860, 1100]);

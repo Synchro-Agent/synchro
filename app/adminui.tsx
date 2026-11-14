@@ -533,7 +533,7 @@ export function AdminPanel({ Toggle }: { Toggle: ToggleT }) {
       <Pager page={lp} pages={lPages} from={logs.length ? (lp - 1) * L_PER + 1 : 0} to={Math.min(lp * L_PER, logs.length)} total={logs.length} more={more && d.audit.length > 0 && lp >= lPages} plus={more && d.audit.length > 0} onPage={(n) => (n > lPages ? void loadMore() : setLPage(n))} />
 
       <Fade show={!!pwFor}>
-        <div className="overlay" style={{ zIndex: 70 }} onMouseDown={(e) => e.target === e.currentTarget && setPwFor(null)}>
+        <div className="overlay" style={{ zIndex: "var(--z-overlay)" }} onMouseDown={(e) => e.target === e.currentTarget && setPwFor(null)}>
           <div className="modal sm" style={{ width: 420 }}>
             <button className="icon-btn" aria-label={tr("Đóng")} style={{ position: "absolute", top: 12, right: 12 }} onClick={() => setPwFor(null)}><I.X size={16} /></button>
             <h2 style={{ fontSize: "var(--fs-4)" }}>Set a new password</h2>
@@ -551,7 +551,7 @@ export function AdminPanel({ Toggle }: { Toggle: ToggleT }) {
         </div>
       </Fade>
       <Fade show={!!resetFor}>
-        <div className="overlay" style={{ zIndex: 70 }} onMouseDown={(e) => e.target === e.currentTarget && setResetFor(null)}>
+        <div className="overlay" style={{ zIndex: "var(--z-overlay)" }} onMouseDown={(e) => e.target === e.currentTarget && setResetFor(null)}>
           <div className="modal sm" style={{ width: 460 }}>
             <h2 style={{ fontSize: "var(--fs-4)" }}>Password reset link</h2>
             <p className="mono" style={{ margin: "0 0 6px", fontSize: "var(--fs-1)" }} data-notr>{resetFor?.email}</p>
@@ -565,7 +565,7 @@ export function AdminPanel({ Toggle }: { Toggle: ToggleT }) {
         </div>
       </Fade>
       <Fade show={!!mail}>
-        <div className="overlay" style={{ zIndex: 70 }} onMouseDown={(e) => e.target === e.currentTarget && setMail(null)}>
+        <div className="overlay" style={{ zIndex: "var(--z-overlay)" }} onMouseDown={(e) => e.target === e.currentTarget && setMail(null)}>
           <div className="modal sm" style={{ width: 420 }}>
             <h2 style={{ fontSize: "var(--fs-4)" }}>Change email</h2>
             <p className="d">Only change it once you&apos;ve confirmed who they are. The new address counts as verified, their data stays, and they will be signed out.</p>
@@ -578,7 +578,7 @@ export function AdminPanel({ Toggle }: { Toggle: ToggleT }) {
         </div>
       </Fade>
       <Fade show={!!del}>
-        <div className="overlay" style={{ zIndex: 70 }} onMouseDown={(e) => e.target === e.currentTarget && setDel(null)}>
+        <div className="overlay" style={{ zIndex: "var(--z-overlay)" }} onMouseDown={(e) => e.target === e.currentTarget && setDel(null)}>
           <div className="modal sm" style={{ width: 420 }}>
             <button className="icon-btn" aria-label={tr("Đóng")} style={{ position: "absolute", top: 12, right: 12 }} onClick={() => setDel(null)}><I.X size={16} /></button>
             <h2 style={{ fontSize: "var(--fs-4)" }}>Delete this account?</h2>

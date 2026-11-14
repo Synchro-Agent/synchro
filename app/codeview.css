@@ -1,7 +1,7 @@
 @layer properties, theme, base, components, utilities, syn, syn-over;
 @layer syn {
 /* Synchro Code: tách khỏi globals.css để trang chat không phải tải trước. Tệp này nạp sau mọi tệp chung, nên chỉ chứa quy tắc không tranh chấp với quy tắc chung đứng sau nó trong globals.css (cùng độ ưu tiên, cùng thuộc tính); quy tắc tranh chấp vẫn ở globals.css. */
-.cv-bar:where(:has(.menu:not(.out))) {z-index:30
+.cv-bar:where(:has(.menu:not(.out))) {z-index:var(--z-pop)
 }
 .cv-bar-r {display:flex;align-items:center
 }
@@ -110,7 +110,7 @@
 }
 .cv-sw.on i {transform:translateX(12px)
 }
-.cv-sel {position:fixed;z-index:80;transform:translate(-50%,calc(-100% - 10px));display:flex;gap:2px;padding:4px;border-radius:var(--r-pill);animation:pop .15s var(--ease) both;background:var(--card);-webkit-backdrop-filter:blur(20px) saturate(1.8);backdrop-filter:blur(20px) saturate(1.8);box-shadow:0 0 0 .5px var(--gl-hair),var(--gl-shadow),inset 1px 1.5px 2px -1px rgba(255,255,255,.6)
+.cv-sel {position:fixed;z-index:calc(var(--z-overlay) + 10);transform:translate(-50%,calc(-100% - 10px));display:flex;gap:2px;padding:4px;border-radius:var(--r-pill);animation:pop .15s var(--ease) both;background:var(--card);-webkit-backdrop-filter:blur(20px) saturate(1.8);backdrop-filter:blur(20px) saturate(1.8);box-shadow:0 0 0 .5px var(--gl-hair),var(--gl-shadow),inset 1px 1.5px 2px -1px rgba(255,255,255,.6)
 }
 [data-theme="dark"] .cv-sel {background:var(--gl-fill-thick,#161714)
 }
@@ -162,7 +162,7 @@ html[data-theme=dark] .cv-inl,html[data-theme=dark] .cv-pal {background:rgb(40,4
 }
 .cv-guide .cv-mh {padding-top:14px
 }
-.overlay:has(.cv-guide) {z-index:200
+.overlay:has(.cv-guide) {z-index:var(--z-full)
 }
 .cvg-head {display:flex;align-items:center;gap:14px;padding:22px 26px 18px;border-bottom:1px solid var(--border)
 }
@@ -248,7 +248,7 @@ body.cv-dragging iframe,body.cv-dragging .bp-view {pointer-events:none
 }
 .cv-pane .cv-panel {width:100%;min-width:0;margin:0;border-radius:0;box-shadow:none;animation:none;flex:1;background:transparent;-webkit-backdrop-filter:none;backdrop-filter:none
 }
-@media (max-width:900px){.cv-side {position:absolute;inset:0;width:auto!important;max-width:none;z-index:20
+@media (max-width:900px){.cv-side {position:absolute;inset:0;width:auto!important;max-width:none;z-index:var(--z-sticky)
 }}
 @media (max-width:900px){.cv-split {display:none
 }}
@@ -300,7 +300,7 @@ body.cv-dragging iframe,body.cv-dragging .bp-view {pointer-events:none
 }}
 .cv-cols>.sr section:first-child {margin-top:2px
 }
-@media (max-width:1100px){.cv-cols>.sr {position:absolute;right:0;top:48px;bottom:0;z-index:25;background:var(--bg);border-left:.5px solid var(--border);box-shadow:var(--shadow);padding:0 8px 8px
+@media (max-width:1100px){.cv-cols>.sr {position:absolute;right:0;top:48px;bottom:0;z-index:calc(var(--z-sticky) + 5);background:var(--bg);border-left:.5px solid var(--border);box-shadow:var(--shadow);padding:0 8px 8px
 }}
 @media (max-width:1100px){.cv-col:has(>.cv-cols>.sr) {min-width:340px
 }}
@@ -332,7 +332,7 @@ body.cv-dragging iframe,body.cv-dragging .bp-view {pointer-events:none
 }
 .ctxp-foot {display:flex;align-items:center;gap:8px;margin-top:10px;font-size:var(--fs-label);color:var(--text-2)
 }
-.cv-cols>.sr {position:absolute;top:46px;right:8px;bottom:auto;width:296px;max-height:calc(100% - 56px);overflow:auto;z-index:22;padding:0 0 4px;background:transparent;border:0;box-shadow:none;animation:pop .16s var(--ease) both;transform-origin:top right
+.cv-cols>.sr {position:absolute;top:46px;right:8px;bottom:auto;width:296px;max-height:calc(100% - 56px);overflow:auto;z-index:calc(var(--z-sticky) + 2);padding:0 0 4px;background:transparent;border:0;box-shadow:none;animation:pop .16s var(--ease) both;transform-origin:top right
 }
 /* Thẻ nổi bên phải: menu Thêm mở đè lên từng để lòi các mẩu chữ; màn hình trống chừa chỗ để thẻ gợi ý không bị che. */
 .app:has(.menu.cv-more) .cv-cols>.sr {visibility:hidden
@@ -359,7 +359,7 @@ body.cv-dragging iframe,body.cv-dragging .bp-view {pointer-events:none
 }
 .bp-tab:hover .tp-x,.bp-tab.on .tp-x {opacity:1
 }
-.bp-menu {position:absolute;top:34px;right:0;width:280px;z-index:40;transform-origin:top right
+.bp-menu {position:absolute;top:34px;right:0;width:280px;z-index:var(--z-menu);transform-origin:top right
 }
 .bp-mi {font-size:var(--fs-2);height:32px;gap:10px
 }

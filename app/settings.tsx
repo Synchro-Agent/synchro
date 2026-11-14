@@ -325,7 +325,7 @@ function Account() {
       <PageBar pg={pgSes} />
       <Toasts msg={saved} />
       <Fade show={!!mailForm}>
-        <div className="overlay" style={{ zIndex: 60 }} onMouseDown={(e) => e.target === e.currentTarget && setMailForm(null)}>
+        <div className="overlay" style={{ zIndex: "var(--z-drawer)" }} onMouseDown={(e) => e.target === e.currentTarget && setMailForm(null)}>
           <div className="modal sm" style={{ width: 400 }}>
             <button className="icon-btn" aria-label="Close" style={{ position: "absolute", top: 12, right: 12 }} onClick={() => setMailForm(null)}><I.X size={16} /></button>
             <h2 style={{ fontSize: "var(--fs-4)" }}>Change email</h2>
@@ -342,7 +342,7 @@ function Account() {
         </div>
       </Fade>
       <Fade show={!!pw}>
-        <div className="overlay" style={{ zIndex: 60 }} onMouseDown={(e) => e.target === e.currentTarget && setPw(null)}>
+        <div className="overlay" style={{ zIndex: "var(--z-drawer)" }} onMouseDown={(e) => e.target === e.currentTarget && setPw(null)}>
           <div className="modal sm" style={{ width: 400 }}>
             <button className="icon-btn" aria-label={tr("Đóng")} style={{ position: "absolute", top: 12, right: 12 }} onClick={() => setPw(null)}><I.X size={16} /></button>
             <h2 style={{ fontSize: "var(--fs-4)" }}>{me?.hasPassword ? "Change password" : "Set password"}</h2>
@@ -359,7 +359,7 @@ function Account() {
         </div>
       </Fade>
       <Fade show={del !== null}>
-        <div className="overlay" style={{ zIndex: 60 }} onMouseDown={(e) => e.target === e.currentTarget && setDel(null)}>
+        <div className="overlay" style={{ zIndex: "var(--z-drawer)" }} onMouseDown={(e) => e.target === e.currentTarget && setDel(null)}>
           <div className="modal sm" style={{ width: 400 }}>
             <button className="icon-btn" aria-label={tr("Đóng")} style={{ position: "absolute", top: 12, right: 12 }} onClick={() => setDel(null)}><I.X size={16} /></button>
             <h2 style={{ fontSize: "var(--fs-4)" }}>Delete your account?</h2>
@@ -391,7 +391,7 @@ function Privacy({ go }: { go: (t: string) => void }) {
       <Row t="Privacy policy"><a className="btn" href="/privacy" target="_blank" rel="noopener noreferrer">Open ↗</a></Row>
       <Row t="Terms of Service"><a className="btn" href="/terms" target="_blank" rel="noopener noreferrer">Open ↗</a></Row>
       <Fade show={!!panel}>
-        <div className="overlay" style={{ zIndex: 60 }} onMouseDown={(e) => e.target === e.currentTarget && setPanel("")}>
+        <div className="overlay" style={{ zIndex: "var(--z-drawer)" }} onMouseDown={(e) => e.target === e.currentTarget && setPanel("")}>
           <div className="modal sm" style={{ width: 460, maxHeight: "70vh", overflow: "auto" }}>
             <button className="icon-btn" aria-label="Đóng" style={{ position: "absolute", top: 12, right: 12 }} onClick={() => setPanel("")}><I.X size={16} /></button>
             <h2 style={{ fontSize: "var(--fs-4)" }}>{title}</h2>
@@ -465,7 +465,7 @@ function Capabilities({ go }: { go: (t: string) => void }) {
       <H>Skills</H>
       <p className="d" style={{ marginTop: -6 }}>Skills and plugins live in the <A onClick={() => go("Skill Hub")}>Skill Hub</A>.{!v.code && !locks.code && <span className="cap-note">Skills are paused while code execution and file creation is off.</span>}</p>
       <Fade show={!!modal}>
-        <div className="overlay" style={{ zIndex: 60 }} onMouseDown={(e) => e.target === e.currentTarget && setModal("")}>
+        <div className="overlay" style={{ zIndex: "var(--z-drawer)" }} onMouseDown={(e) => e.target === e.currentTarget && setModal("")}>
           <div className="modal sm cap-modal">
             <button className="icon-btn" style={{ position: "absolute", top: 12, right: 12 }} onClick={() => setModal("")} aria-label="Close"><I.X size={16} /></button>
             {modal === "domains" ? (
@@ -532,7 +532,7 @@ function Memory() {
         </>
       )}
       <Fade show={imp}>
-        <div className="overlay" style={{ zIndex: 60 }} onMouseDown={(e) => e.target === e.currentTarget && setImp(false)}>
+        <div className="overlay" style={{ zIndex: "var(--z-drawer)" }} onMouseDown={(e) => e.target === e.currentTarget && setImp(false)}>
           <div className="modal sm" style={{ width: 460 }}>
             <button className="icon-btn" aria-label={tr("Đóng")} style={{ position: "absolute", top: 12, right: 12 }} onClick={() => setImp(false)}><I.X size={16} /></button>
             <h2 style={{ fontSize: "var(--fs-4)" }}>Import memory to Synchro</h2>

@@ -132,7 +132,7 @@ export function VoicesTool({ say, sub, setSub, go, voice, setVoice, admin, area 
       {tab === "mine" && <PageBar pg={pgV} />}
       {tab === "mine" && <BulkBar b={bkV} acts={voiceActs} noun="giọng" />}
       {tab === "library" && <LibraryGrid say={say} card={card} onUse={(v) => { setVoice(v); go("tts", "single"); }} />}
-      {ownerOf && createPortal(<div className="overlay" style={{ zIndex: 60 }} onMouseDown={(e) => e.target === e.currentTarget && setOwnerOf(null)}>
+      {ownerOf && createPortal(<div className="overlay" style={{ zIndex: "var(--z-drawer)" }} onMouseDown={(e) => e.target === e.currentTarget && setOwnerOf(null)}>
         <div className="modal sm" style={{ width: 420 }}>
           <h2 style={{ fontSize: "var(--fs-4)" }}>Chủ giọng</h2>
           <p className="d">Email của chủ giọng này. Nhập shared nếu mọi thành viên được dùng.</p>

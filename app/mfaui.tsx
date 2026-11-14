@@ -28,7 +28,7 @@ export function MfaRow({ Row, say }: { Row: (p: { t: React.ReactNode; d?: React.
       {on === null ? null : <button className="btn" disabled={busy} onClick={on ? () => { setCode(""); setSt({ step: "off" }); } : start}>{on ? "Turn off" : "Turn on"}</button>}
     </Row>
     {/* Hàng này nằm trong thẻ có overflow của Cài đặt: khung phải ra ngoài mới phủ đúng màn hình. */}
-    {typeof document !== "undefined" && createPortal(<Fade show={!!st}>{st ? <div className="overlay" style={{ zIndex: 70 }} onMouseDown={(e) => e.target === e.currentTarget && st.step !== "codes" && setSt(null)}>
+    {typeof document !== "undefined" && createPortal(<Fade show={!!st}>{st ? <div className="overlay" style={{ zIndex: "var(--z-overlay)" }} onMouseDown={(e) => e.target === e.currentTarget && st.step !== "codes" && setSt(null)}>
       <div className="modal sm" style={{ width: "min(420px, 92vw)" }}>
         {st.step === "scan" && <>
           <h2 style={{ fontSize: "var(--fs-4)" }}>Turn on two-step verification</h2>

@@ -75,7 +75,7 @@ export function PreviewModal({ target, admin, note, onClose, onDone }: { target:
   const ok = pv?.skills.filter((s) => !s.blocked && !s.duplicateOf) ?? [];
   const n = ok.filter((s) => !skip.has(s.name)).length;
   return (
-    <div className="overlay" style={{ zIndex: 70 }} onMouseDown={(e) => e.target === e.currentTarget && !busy && onClose()}>
+    <div className="overlay" style={{ zIndex: "var(--z-overlay)" }} onMouseDown={(e) => e.target === e.currentTarget && !busy && onClose()}>
       <div className="modal pl-modal">
         <button className="icon-btn" style={{ position: "absolute", top: 12, right: 12 }} onClick={onClose} disabled={busy} aria-label="Close"><I.X size={16} /></button>
         <h2>{tr("Cài")} {pv?.def.name ?? target.name}</h2>
@@ -160,7 +160,7 @@ function Detail({ p: sum, admin, onClose, onChange: up }: { p: PluginSummary; ad
   const on = p.enabled && p.mine.enabled;
   const mode: StudioMode = p.studioMode ?? p.studio ?? "auto";
   return (
-    <div className="overlay" style={{ zIndex: 70 }} onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+    <div className="overlay" style={{ zIndex: "var(--z-overlay)" }} onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <div className="modal pl-modal">
         <button className="icon-btn" style={{ position: "absolute", top: 12, right: 12 }} onClick={onClose} aria-label="Close"><I.X size={16} /></button>
         <div className="pl-dh">

@@ -131,7 +131,7 @@ function TaskEditor({ init, plan, onClose, onSaved, say }: { init?: Task | null;
     } catch (e) { say((e as Error).message); setBusy(""); }
   };
   return (
-    <div className="overlay" style={{ zIndex: 70 }} onMouseDown={(e) => e.target === e.currentTarget && !busy && onClose()}>
+    <div className="overlay" style={{ zIndex: "var(--z-overlay)" }} onMouseDown={(e) => e.target === e.currentTarget && !busy && onClose()}>
       <form className="modal tk-modal" onSubmit={(e) => { e.preventDefault(); save(false); }}>
         <button type="button" className="icon-btn" style={{ position: "absolute", top: 12, right: 12 }} onClick={onClose} aria-label="Đóng"><I.X size={16} /></button>
         <h2>{init ? tr("Sửa việc tự động") : plan ? tr("Kế hoạch của Synchro") : tr("Việc tự động mới")}</h2>

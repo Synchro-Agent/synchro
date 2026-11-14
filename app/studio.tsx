@@ -59,7 +59,7 @@ function Shelf({ item, onClose }: { item: Item; onClose: () => void }) {
   };
   useEffect(() => { const t = setTimeout(() => load(q.trim(), 0), q ? 200 : 0); return () => clearTimeout(t); }, [q]); // eslint-disable-line react-hooks/exhaustive-deps
   return (
-    <div className="overlay" style={{ zIndex: 70 }} onMouseDown={(e) => e.target === e.currentTarget && onClose()} onKeyDown={(e) => e.key === "Escape" && onClose()}>
+    <div className="overlay" style={{ zIndex: "var(--z-overlay)" }} onMouseDown={(e) => e.target === e.currentTarget && onClose()} onKeyDown={(e) => e.key === "Escape" && onClose()}>
       <div className="modal pl-modal st-shelf" role="dialog" aria-modal="true" aria-labelledby="st-shelf-h">
         <button className="icon-btn" style={{ position: "absolute", top: 12, right: 12 }} onClick={onClose} aria-label="Đóng"><I.X size={16} /></button>
         <h2 id="st-shelf-h">{item.name}</h2>
