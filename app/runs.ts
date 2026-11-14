@@ -442,10 +442,12 @@ function launch(id: string, kind: string, body: Record<string, unknown>, user: U
       // Lượt chat: luôn dùng chatengine của chính gói này (import có bộ nhớ đệm; gói chưa nạp như route "Chạy ngay" của tác vụ nền thì nạp lúc này),
       // không dùng hàm ghi sau cùng vào bảng toàn cục. Bản dev (turbopack) biên dịch route mới là dựng thêm một bộ mô-đun riêng; hàm chat của bộ đó
       // từng hỏng phần phụ thuộc ("expandFileRefs is not a function") mà vẫn đè lên bảng chung, khiến mọi lượt chat sau đó lỗi 502 tới khi khởi động lại.
-      // Gói nào có runs.ts cũng nạp được chatengine (import động ngay đây), nên production chạy như trước.
+      // Gói nào có runs.ts cũng nạp được chatengine (import động ngay đây), nên production chạy như trước. Không nạp được (bộ kiểm thử dịch
+      // riêng từng tệp, không có đường import động) thì dùng bộ chạy đã đăng ký như cũ.
       // Việc tự động chạy bằng Synchro Code (tasks.ts): bộ chạy nằm ở taskagent.ts.
       if (!executors.has(kind) && kind === "agent") await import("./taskagent");
-      const f = kind === "chat" ? (await import("./chatengine")).chatExec : executors.get(kind);
+      const own = kind === "chat" ? await import("./chatengine").then((m) => m.chatExec, () => undefined) : undefined;
+      const f = own ?? executors.get(kind);
       if (!f) return { http: 500, json: { error: `Không có bộ chạy cho loại "${kind}".` } };
       return await f(body, user);
       });
