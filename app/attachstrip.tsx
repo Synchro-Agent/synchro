@@ -42,7 +42,7 @@ export function AttachStrip({ cards, open, setOpen, lead, className = "" }: {
       <div ref={stripRef} className={`attach${className ? ` ${className}` : ""}${chipsExpanded ? " attach-grid" : ""}${stripFade ? ` ${stripFade}` : ""}`}>{lead}
         {chipsHidden > 0 ? cards.slice(0, cards.length - chipsHidden) : cards}
         {chipsHidden > 0 && <button ref={moreRef} type="button" className="attach-more" onClick={(e) => flip(true, e)} aria-label={`${tr("Hiện thêm")} ${chipsHidden} ${tr("mục")}`} data-tip={`${tr("Hiện thêm")} ${chipsHidden} ${tr("mục")}`}>+{chipsHidden}</button>}</div>
-      {chipsExpanded && <button ref={lessRef} type="button" className="attach-more attach-less" onClick={(e) => flip(false, e)} aria-label={tr("Thu gọn")} data-tip={tr("Thu gọn")}>{tr("Thu gọn")}</button>}
+      {chipsExpanded && <button ref={lessRef} type="button" className="attach-more attach-less" onClick={(e) => flip(false, e)}>{tr("Thu gọn")}</button>}
     </div>
   );
 }

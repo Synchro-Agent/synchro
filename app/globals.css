@@ -1072,8 +1072,10 @@ table{font-variant-numeric:tabular-nums}h1,h2,h3{text-wrap:balance}
 }
 /* Lưới đã trải: nhiều hàng, không cuộn ngang. Cao đúng hai hàng thẻ trọn vẹn (đệm trên 10px + 2 × (thẻ 120px + khe 8px)), không hàng nào bị cắt ngang;
    nhiều hơn thì cuộn dọc trong khung, dừng theo hàng, mép còn thẻ bị khuất thì mờ dần (fade-t / fade-b). Màn thấp: một hàng. */
-.attach.attach-grid{flex-wrap:wrap;overflow-x:hidden;overflow-y:auto;max-height:266px;scroll-snap-type:y proximity;scroll-padding:10px 0 8px}
+.attach.attach-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));flex-wrap:wrap;overflow-x:hidden;overflow-y:auto;max-height:266px;scroll-snap-type:y proximity;scroll-padding:10px 0 8px}
 .attach-grid>*{scroll-snap-align:start}
+/* Thẻ giãn đều theo cột: điện thoại hai thẻ lấp đủ bề rộng ô soạn, không chừa một khoảng trống ở mép phải. */
+.attach-grid>.ft{width:auto}
 @media (max-height:640px){.attach.attach-grid{max-height:138px}}
 .attach-grid.fade-b{-webkit-mask-image:linear-gradient(180deg,#000 calc(100% - 24px),transparent 100%);mask-image:linear-gradient(180deg,#000 calc(100% - 24px),transparent 100%)}
 .attach-grid.fade-t{-webkit-mask-image:linear-gradient(180deg,transparent 0,#000 24px);mask-image:linear-gradient(180deg,transparent 0,#000 24px)}
