@@ -57,8 +57,8 @@ export interface ChatStore {
 
 // ------------------------------------------------------------ localStorage (dự phòng)
 // s: chuỗi đang lưu (tính lười từ obj); stubS: chuỗi rút gọn, chỉ tính khi hết chỗ, nhớ theo mục (mục đổi là mục mới).
-// h: băm của s (dấu tự ghi), tính lười và nhớ theo mục như s.
-type LsEntry = { s: string | null; obj: Chat | null; idx: IdxRow; stub: boolean; stubS?: string; h?: number };
+// h / hS: băm của s / stubS (dấu tự ghi), tính lười và nhớ theo mục như s / stubS.
+type LsEntry = { s: string | null; obj: Chat | null; idx: IdxRow; stub: boolean; stubS?: string; h?: number; hS?: number };
 type StorageLike = Pick<Storage, "getItem" | "setItem" | "removeItem">;
 
 export class LsStore implements ChatStore {
@@ -136,18 +136,21 @@ export class LsStore implements ChatStore {
     const set = (json: string) => { try { this.st().setItem(this.key, json); wrote = json; return true; } catch { return false; } };
     const list = this.order.map((id) => rows.get(id)!);
     let res: WriteResult;
-    let own = () => ownSigOf(wrote ?? "");
+    // Dấu tự ghi từ băm của từng mục (nhớ theo mục): mỗi lần ghi chỉ băm mục mới / đã đổi, không băm lại cả khóa.
+    // stubAt(i): phần tử thứ i của chuỗi đã ghi là bản rút gọn (stubS) chứ không phải bản đủ.
+    const ownOf = (stubAt: (i: number) => boolean) => () => ownSig(wrote!.length, list.map((e, i) => (stubAt(i) ? (e.hS ??= itemHash(e.stubS!)) : (e.h ??= itemHash(this.text(e))))));
+    let own: () => string | null = () => ownSigOf(wrote ?? "");
     if (!this.stubbed.size && set(`[${list.map((e) => this.text(e)).join(",")}]`)) {
       res = { status: "ok", stubbed: [] };
-      // Dấu tự ghi từ băm của từng mục (nhớ theo mục): mỗi lần ghi chỉ băm mục mới / đã đổi, không băm lại cả khóa.
-      const len = wrote!.length;
-      own = () => ownSig(len, list.map((e) => (e.h ??= itemHash(this.text(e)))));
+      own = ownOf(() => false);
     } else {
       // Hết chỗ: rút gọn dần đoạn cũ nhất đã có trên máy chủ (saveFit, như chatsync từ trước tới nay). Chuỗi rút gọn chỉ tính ở nhánh này.
       const fit = list.map((e) => ({ key: String(e.idx.id), full: this.text(e), time: e.idx.upd, stub: !e.stub && canStub?.(e.idx.id) ? (e.stubS ??= JSON.stringify(stubOf(this.chat(e)))) : null }));
       const r = saveFit(fit, new Set([...this.stubbed].map(String)), set);
       this.stubbed = new Set([...r.stubbed].map(Number));
       res = { status: r.ok ? "ok" : "quota", stubbed: [...this.stubbed] };
+      // Mục nào được ghi bản rút gọn: đúng như json() của saveFit (trong tập đã rút gọn và có bản rút gọn), các mục còn lại ghi bản đủ.
+      if (r.ok) own = ownOf((i) => fit[i].stub !== null && r.stubbed.has(fit[i].key));
     }
     if (wrote !== null) this.markOwn(own);
     return res;

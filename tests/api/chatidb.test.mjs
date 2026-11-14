@@ -767,6 +767,30 @@ console.log("18. Kho dự phòng không băm cả khóa mỗi lần đọc / ghi
   const q = new D.LsStore("Q3");
   const r = await q.write(plan(K.diffSave(new Map(), list)), () => true);
   ok(r.status === "ok" && r.stubbed.length && K.parseMark(small.getItem("u:Q3:chatsIdb")).ls === K.ownSigOf(small.getItem("u:Q3:chats")), "hết chỗ, đã rút gọn: dấu tự ghi khớp chuỗi đã ghi", r);
+  // Sau lần ghi đã rút gọn, các lần ghi sau (đổi tên) vẫn chỉ băm mục đã đổi, không băm lại cả khóa.
+  const s2 = new Store(16000);
+  globalThis.localStorage = s2;
+  s2.setItem("u:Q4:chatsIdb", JSON.stringify({ at: 1 }));
+  const q4 = new D.LsStore("Q4");
+  const sv4 = new D.ChatSaver(q4);
+  h0 = K.hashStats.chars;
+  const r4 = await sv4.save(list, () => true);
+  const n4 = K.hashStats.chars - h0, key4 = () => s2.getItem("u:Q4:chats");
+  ok(n4 === key4().length - 2 - (list.length - 1), "lần ghi rút gọn đầu: mỗi phần tử đã ghi băm đúng một lần", { n4, total: key4().length });
+  ok(r4.status === "ok" && r4.stubbed.length > 0 && K.parseMark(s2.getItem("u:Q4:chatsIdb")).ls === K.ownSigOf(key4()), "ChatSaver hết chỗ: rút gọn, dấu khớp", r4);
+  const stubId = r4.stubbed[0], fullId = list.map((c) => c.id).find((id) => !r4.stubbed.includes(id));
+  const items4 = () => { const k = key4(); return Object.fromEntries(K.jsonItems(k).map(([a, b]) => [JSON.parse(k.slice(a, b)).id, b - a])); };
+  let cur = list;
+  for (const [i, id] of [stubId, fullId, stubId].entries()) {
+    cur = cur.map((c) => (c.id === id ? { ...c, title: `Tên ${i}` } : c));
+    h0 = K.hashStats.chars;
+    const rr = await sv4.save(cur, () => true);
+    const n = K.hashStats.chars - h0, it = items4();
+    ok(rr.status === "ok" && n === it[id] && n < key4().length / 2, `đổi tên lần ${i + 1} (${id === stubId ? "mục đã rút gọn" : "mục đủ thân"}) sau khi rút gọn: chỉ băm mục đã đổi`, { n, item: it[id], total: key4().length, rr });
+    ok(K.parseMark(s2.getItem("u:Q4:chatsIdb")).ls === K.ownSigOf(key4()), `đổi tên lần ${i + 1}: dấu từ băm từng mục trùng dấu tính lại từ cả khóa`);
+  }
+  const q4b = new D.LsStore("Q4");
+  ok((await q4b.loadIndex()).length === list.length && !q4b.ignored, "phiên sau tin bản tự ghi đã rút gọn");
 }
 
 console.log(`\n${pass} đạt, ${fail} lỗi`);
