@@ -21,8 +21,10 @@ import { scopedFor, userScope } from "./userscope";
 export const bodyStr = new WeakMap<object, string>();
 /** Đoạn chat vừa đọc thân từ kho, chưa sửa ở trang: chatsync so như lúc khởi động (startupDirty), không coi là vừa sửa; lần lưu không ghi lại. */
 export const localBodies = new WeakSet<object>();
-// Thân đã áp trường thanh bên của chỉ mục lúc mở trang → thân đúng như trong kho (lần lưu đầu ghi lại thân đã áp).
-const staleOf = new WeakMap<Chat, Chat>();
+// Bản rút gọn dựng từ chỉ mục lúc mở trang, chưa sửa (đổi tên, ghim… trên bản rút gọn là đối tượng mới): thân đọc về thay thẳng vào chỗ.
+// Thân trong kho không bao giờ cũ hơn chỉ mục (lần lưu chỉ ghi chỉ mục của bản rút gọn local cũng áp các trường đó lên thân, chatidb.ts), và
+// có thể mới hơn bản rút gọn này (tab khác sửa sau lúc mở trang): thân là bản đúng.
+const pristine = new WeakSet<object>();
 
 /** ready: mọi thân đã đọc xong (tìm sâu trong bảng lệnh, Bộ não, thống kê thấy đủ nội dung). kind: kho đang dùng. via: lần nhập khóa cũ chạy ở đâu. */
 export type LoadState = { ready: boolean; kind: "idb" | "ls" | null; via: "worker" | "main" | null; imported: number; uid: string | null };
@@ -64,20 +66,7 @@ function parseBody(s: string, id: number): Chat | null {
     return c;
   } catch { return null; }
 }
-// Các trường thanh bên (tên, ghim, dự án, thẻ, studio, đã đặt tên) theo cách idxOf chuẩn hóa: so thân với bản rút gọn / dòng chỉ mục.
-const sideKey = (c: Chat) => { const r = idxOf(c); return JSON.stringify([r.title, r.pinned ?? false, r.project ?? null, r.tags ?? [], r.studio ?? null, r.named ?? false]); };
-/**
- * Thân vừa đọc từ kho thay bản rút gọn local. Trường thanh bên khác nhau: người dùng đã sửa bản rút gọn (đổi tên, ghim, thẻ, dự án) mà lần lưu
- * chỉ ghi chỉ mục (không ghi thân rỗng đè thân thật), kể cả ở phiên trước rồi tải lại trang trước khi thân về. Chỉ mục là bản mới hơn: áp lên
- * thân, và đoạn này là đoạn ĐÃ SỬA (không phải thân đọc từ kho): lần lưu ghi thân, chatsync đẩy lên máy chủ.
- */
-function adopt(body: Chat, stub: Chat): Chat {
-  if (sideKey(body) === sideKey(stub)) return body;
-  localBodies.delete(body); bodyStr.delete(body);
-  const out = withIdx(body, stub);
-  staleOf.set(out, body);
-  return out;
-}
+const stubFrom = (r: IdxRow) => { const c = stubOfRow(r); pristine.add(c); return c; };
 const isLocalStub = (c: Chat | undefined) => !!c && !!c.stub && !!c.local;
 
 // ------------------------------------------------------------ Nhật ký lúc rời trang
@@ -159,9 +148,6 @@ export async function loadChats(uid: string, want: readonly number[] = []): Prom
   s.fresh = s.store instanceof LsStore && s.store.ignored;
   s.saver.base(list);
   s.committed = snapshot(list);
-  // Thân đã áp chỉ mục: trong kho vẫn là thân cũ, lần lưu tới phải ghi (và nhật ký lúc rời trang có nó).
-  const stale = list.flatMap((c) => { const o = staleOf.get(c); return o ? [o] : []; });
-  if (stale.length) { s.saver.known(stale); for (const o of stale) s.committed.set(o.id, o); }
   useChatLoad.setState({ kind: s.store.kind, ready: !list.some(isLocalStub) });
   watchOpen();
   return list;
@@ -172,7 +158,7 @@ async function loadLazy(store: ChatStore, uid: string, want: readonly number[]) 
   try { for (const k of Object.keys(parseMeta(localStorage.getItem(scopedFor(uid, "chatSync"))).dirty)) if (k.startsWith("chat:")) need.add(Number(k.slice(5))); } catch {}
   for (const r of rows) if (r.run) need.add(r.id);
   const b = await store.bodies(rows.filter((r) => !r.srv && need.has(r.id)).map((r) => r.id));
-  return rows.map((r) => { const t = b.get(r.id), st = stubOfRow(r), c = t !== undefined ? parseBody(t, r.id) : null; return c ? adopt(c, st) : st; });
+  return rows.map((r) => { const t = b.get(r.id); return (t !== undefined && parseBody(t, r.id)) || stubFrom(r); });
 }
 
 // ------------------------------------------------------------ Đọc thân
@@ -192,8 +178,8 @@ function commit(s: Sess, buf: Map<number, Chat | null>) {
       const body = buf.get(c.id);
       changed = true;
       if (!body) { lost.push(c.id); const { local: _l, ...rest } = c; return rest; }
-      // Bản rút gọn đã sửa (trong lúc chờ, hay ở phiên trước mà thân chưa ghi): áp lên thân, đoạn này là đoạn đã sửa (chatsync đẩy, lần lưu ghi).
-      return adopt(body, c);
+      // Người dùng đã sửa bản rút gọn (đổi tên, ghim, thẻ, dự án) trong lúc chờ: áp lên thân; đoạn này là đoạn đã sửa (chatsync đẩy, lần lưu ghi).
+      return pristine.has(c) ? body : withIdx(body, c);
     });
     return changed ? out : cs;
   });

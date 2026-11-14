@@ -58,6 +58,19 @@ export function withIdx(body: Chat, stub: Chat): Chat {
   return out;
 }
 
+/**
+ * Lần lưu chỉ ghi chỉ mục của bản rút gọn local (đổi tên, ghim, thẻ, dự án lúc thân chưa đọc về): áp cùng các trường đó lên thân đang lưu, trong
+ * cùng giao dịch, để thân trong kho không bao giờ cũ hơn chỉ mục. Không thì tải lại trang trước khi thân về là mất sửa: bản rút gọn dựng lại từ
+ * chỉ mục là "chưa sửa", thân cũ thay thẳng vào chỗ. Trả null khi thân hỏng hoặc không đổi gì (không ghi).
+ */
+export function patchBody(s: string, r: IdxRow): string | null {
+  let c: Chat;
+  try { c = JSON.parse(s) as Chat; } catch { return null; }
+  if (!c || typeof c !== "object" || c.id !== r.id || !Array.isArray(c.msgs)) return null;
+  const out = serialChat(withIdx(c, stubOfRow(r)));
+  return out === s ? null : out;
+}
+
 /** Bản đã lưu lần trước để so (chỉ đoạn chat không ẩn danh: ẩn danh không bao giờ được lưu). */
 export const snapshot = (list: readonly Chat[]) => new Map(list.filter((c) => !c.inc).map((c) => [c.id, c] as const));
 

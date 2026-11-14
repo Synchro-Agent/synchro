@@ -20,7 +20,7 @@ globalThis.localStorage = new Store();
 let f = fakeIDB();
 globalThis.indexedDB = f;
 
-const { chatload: L, chatidb: D, userscope: U, "chatstore.client": S, chatsynccore: C } = await loadTs(["chatload", "chatidb", "userscope", "chatstore.client", "chatsynccore"]);
+const { chatload: L, chatidb: D, userscope: U, "chatstore.client": S, chatsynccore: C, chatidbcore: K } = await loadTs(["chatload", "chatidb", "userscope", "chatstore.client", "chatsynccore", "chatidbcore"]);
 const st = () => S.useChatStore.getState();
 const tick = (ms = 0) => new Promise((r) => setTimeout(r, ms));
 const msg = (role, text, time, extra = {}) => ({ role, text, time, done: true, ...extra });
@@ -230,58 +230,56 @@ console.log("9. Đổi tài khoản giữa lúc đang nạp: bỏ kết quả c�
   ok(f.dump("synchro-chats:D", "idx").length === 0, "wipe: xóa hết đoạn chat của tài khoản trên thiết bị");
 }
 
-console.log("10. Sửa bản rút gọn (đổi tên, ghim) rồi tải lại trang trước khi thân về: sửa không mất, đoạn đó là đoạn đã sửa");
+console.log("10. Sửa bản rút gọn (đổi tên, ghim) rồi tải lại trang trước khi thân về: sửa không mất, chatsync vẫn thấy cần đẩy");
 {
   await L.closeChats();
   st().reset();
   const dbE = "synchro-chats:E";
   U.setUserScope("E");
   await L.loadChats("E");
-  await L.saveChats([chat(60), chat(50), chat(40), chat(30)]);
+  const orig = [chat(60), chat(50), chat(40), chat(30)];
+  await L.saveChats(orig);
   await L.closeChats();
   st().reset();
   await boot("E");
   ok(st().chats.length === 4 && st().chats.every((c) => c.stub && c.local), "mở lại: cả 4 là bản rút gọn local");
   st().patchChat(40, { title: "RENAMED" });
   st().togglePin(30);
-  const p0 = puts();
   await L.saveChats(st().chats);
   const bodyOf = (id) => JSON.parse(f.dump(dbE, "body").find((x) => x.id === id)?.s ?? "null");
-  ok((puts().body ?? 0) === (p0.body ?? 0) && f.dump(dbE, "idx").find((x) => x.id === 40)?.title === "RENAMED" && bodyOf(40)?.title === "Chat 40",
-    "sửa bản rút gọn: chỉ ghi chỉ mục, thân trong kho vẫn tên cũ", { p0, p1: puts(), b40: bodyOf(40)?.title });
+  const rowOf = (id) => f.dump(dbE, "idx").find((x) => x.id === id);
+  ok(rowOf(40)?.title === "RENAMED" && bodyOf(40)?.title === "RENAMED" && bodyOf(40)?.msgs.length === 2 && rowOf(30)?.pinned === true && bodyOf(30)?.pinned === true,
+    "sửa bản rút gọn: chỉ mục và thân trong kho cùng đổi (thân giữ nguyên tin nhắn)", { r40: rowOf(40), b40: bodyOf(40), b30: bodyOf(30) });
+  ok(!("local" in bodyOf(40)) && !("upd" in bodyOf(40)) && !("stub" in bodyOf(40)), "thân không mang trường của bản rút gọn", bodyOf(40));
   // Tải lại trang trước khi thân về.
   await L.closeChats(true);
   st().reset();
   await boot("E");
+  ok(st().chats.find((c) => c.id === 40)?.title === "RENAMED", "mở lại: thanh bên có tên mới");
   await L.hydrateAll(true);
   const c40 = st().chats.find((c) => c.id === 40), c30 = st().chats.find((c) => c.id === 30), c60 = st().chats.find((c) => c.id === 60);
-  ok(c40.title === "RENAMED" && c40.msgs.length === 2 && !L.localBodies.has(c40) && !("local" in c40) && !("upd" in c40), "thân về: giữ tên mới, coi là đã sửa (chatsync đẩy)", c40);
-  ok(c30.pinned === true && !L.localBodies.has(c30), "thân về: giữ dấu ghim, coi là đã sửa", c30);
-  ok(L.localBodies.has(c60) && c60.title === "Chat 60", "đoạn không sửa: thân đọc từ kho, không coi là đã sửa");
-  const p1 = puts();
-  await L.saveChats(st().chats);
-  ok((puts().body ?? 0) - (p1.body ?? 0) === 2 && bodyOf(40)?.title === "RENAMED" && bodyOf(30)?.pinned === true, "lần lưu ghi thân của 2 đoạn đã sửa", { p1, p2: puts() });
-  await L.closeChats();
-  st().reset();
-  await boot("E");
-  await L.hydrateAll(true);
-  const again = st().chats.find((c) => c.id === 40);
-  ok(again.title === "RENAMED" && L.localBodies.has(again), "lần mở sau: thân khớp chỉ mục, là thân đọc từ kho như thường");
+  ok(c40.title === "RENAMED" && c40.msgs.length === 2 && !("local" in c40) && !("upd" in c40), "thân về: vẫn tên mới", c40);
+  ok(c30.pinned === true, "thân về: vẫn dấu ghim", c30);
+  // chatsync (startupDirty): máy chủ đã xác nhận bản trước khi sửa → thân đọc từ kho khác dấu đó → cần đẩy; đoạn không sửa thì không.
+  const known = Object.fromEntries(orig.map((c) => [`chat:${c.id}`, [c.id + 1, C.hashOf(C.serialChat(c))]]));
+  const meta = { cur: 0, known, dirty: {}, gone: {} };
+  const dirty = (c) => C.startupDirty(meta, `chat:${c.id}`, C.hashOf(L.bodyStr.get(c) ?? C.serialChat(c)), C.lastTime(c));
+  ok(dirty(c40) !== null && dirty(c30) !== null && dirty(c60) === null, "chatsync thấy 40 và 30 cần đẩy, 60 thì không", [dirty(c40), dirty(c30), dirty(c60)]);
+  ok(L.localBodies.has(c60) && c60.title === "Chat 60", "đoạn không sửa: thân đọc từ kho");
 
-  // Đoạn cần thân ngay lúc mở (#c=, chưa lên máy chủ): đã đổi tên lúc còn là bản rút gọn ở phiên trước.
+  // Tab khác sửa thân SAU lúc trang này mở (bản rút gọn ở đây cũ hơn thân trong kho): thân đọc về là bản đúng, không bị bản rút gọn cũ đè.
   await L.closeChats();
   st().reset();
   await boot("E");
-  st().patchChat(50, { title: "RENAMED 50" });
+  const other = await D.openChatStore("E", { idb: f });
+  const c50b = chat(50, { title: "TAB B ĐỔI TÊN", pinned: true });
+  await other.write({ put: [{ id: 50, s: C.serialChat(c50b), idx: K.idxOf(c50b) }] });
+  other.close();
+  await L.hydrateAll(true);
+  const c50 = st().chats.find((c) => c.id === 50);
+  ok(c50.title === "TAB B ĐỔI TÊN" && c50.pinned === true && L.localBodies.has(c50), "sửa của tab khác giữ nguyên (không bị bản rút gọn cũ đè)", c50);
   await L.saveChats(st().chats);
-  await L.closeChats(true);
-  st().reset();
-  const got = await boot("E", [50]);
-  const c50 = got.find((c) => c.id === 50);
-  ok(c50 && !c50.stub && c50.title === "RENAMED 50" && !L.localBodies.has(c50) && !("upd" in c50), "đọc thân ngay lúc mở: áp tên mới, coi là đã sửa", c50);
-  const p3 = puts();
-  await L.saveChats(st().chats);
-  ok((puts().body ?? 0) - (p3.body ?? 0) === 1 && bodyOf(50)?.title === "RENAMED 50", "lần lưu đầu ghi thân đã áp tên mới", { p3, p4: puts() });
+  ok(bodyOf(50)?.title === "TAB B ĐỔI TÊN" && rowOf(50)?.title === "TAB B ĐỔI TÊN", "lần lưu sau đó không ghi bản cũ vào kho");
 }
 
 console.log("11. Xuất dữ liệu: đọc lỗi thì thử lại; vẫn lỗi thì bỏ đoạn thiếu nội dung và báo số đoạn; không ghi trường nội bộ");

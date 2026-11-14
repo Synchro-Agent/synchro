@@ -12,7 +12,7 @@
 // xóa đoạn chat (forget) gọi saver.forget(ids); Cài đặt → xóa chat gọi saver.wipe(); đăng xuất đóng kho trước khi xóa cơ sở dữ liệu.
 // Lỗi đọc lúc mở trang (không phải kho rỗng) và kho bị đóng từ bên ngoài (onclosed) thì chatload chuyển sang LsStore;
 // LsStore.ignored thì chatsync tải lại từ máy chủ như máy mới, không đánh dấu gì là cần đẩy.
-import { MARK_KEY, dbName, diffSave, dropLegacyDue, idxOf, itemHash, legacyMerge, legacyRows, legacySigAsync, ownSig, ownSigOf, parseMark, snapshot, sortIdx, stubOfRow, toWrite, trustLegacy, type IdxRow, type ImportRow } from "./chatidbcore";
+import { MARK_KEY, dbName, diffSave, dropLegacyDue, idxOf, itemHash, legacyMerge, legacyRows, legacySigAsync, ownSig, ownSigOf, parseMark, patchBody, snapshot, sortIdx, stubOfRow, toWrite, trustLegacy, type IdxRow, type ImportRow } from "./chatidbcore";
 import { lastTime, saveFit, stubOf } from "./chatsynccore";
 import type { Chat } from "./store";
 import { scopedFor } from "./userscope";
@@ -331,6 +331,11 @@ export class IdbStore implements ChatStore {
           if (r) { n = { ...r, upd: Math.max(r.upd, cur?.upd ?? 0) }; if (cur?.srv) n.srv = true; }
           // Bỏ thân: chỉ mục (mới nếu có, không thì dòng đang có) thành bản rút gọn của máy chủ.
           if (drops.has(id)) { n = n ?? (cur ? { ...cur } : null); if (!n) return null; n.srv = true; delete n.run; }
+          // Chỉ ghi chỉ mục mà thân còn ở máy này (bản rút gọn local): áp tên, ghim… lên thân trong cùng giao dịch (patchBody).
+          else if (n && !n.srv) {
+            const row = n, gb = b.get(id) as IDBRequest<{ id: number; s: string } | undefined>;
+            gb.onsuccess = () => { const s = gb.result?.s; const p = typeof s === "string" ? patchBody(s, row) : null; if (p !== null) b.put({ id, s: p }); };
+          }
           return n;
         });
       });

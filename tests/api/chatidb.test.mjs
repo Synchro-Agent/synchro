@@ -248,7 +248,9 @@ console.log("8. Kho IndexedDB (IndexedDB giả)");
   f.ctl.puts = {};
   const stub = K.stubOfRow(K.idxOf(list[2]));
   r = await s.write(plan(K.diffSave(K.snapshot([stub]), [{ ...stub, pinned: true }])));
-  ok(r.status === "ok" && !f.ctl.puts.body && f.ctl.puts.idx === 1 && JSON.parse((await s.bodies([1])).get(1)).msgs.length === 1, "ghim bản rút gọn: chỉ ghi chỉ mục, thân thật còn nguyên", f.ctl.puts);
+  // Thân không bao giờ bị thân rỗng của bản rút gọn đè; chỉ được áp dấu ghim (patchBody) để thân không cũ hơn chỉ mục.
+  const pb = JSON.parse((await s.bodies([1])).get(1));
+  ok(r.status === "ok" && f.ctl.puts.body === 1 && f.ctl.puts.idx === 1 && pb.msgs.length === 1 && pb.pinned === true && !("stub" in pb), "ghim bản rút gọn: chỉ mục + dấu ghim trên thân, tin nhắn của thân còn nguyên", { puts: f.ctl.puts, pb });
   r = await s.write({ drop: [1] });
   const i1 = (await s.loadIndex()).find((x) => x.id === 1);
   ok(r.status === "ok" && !(await s.bodies([1])).size && i1.srv === true && i1.run === undefined && i1.pinned, "bỏ thân: chỉ mục còn (srv, giữ ghim), thân không còn, bỏ mã lượt chạy", i1);
@@ -800,6 +802,30 @@ console.log("18. Kho dự phòng không băm cả khóa mỗi lần đọc / ghi
   }
   const q4b = new D.LsStore("Q4");
   ok((await q4b.loadIndex()).length === list.length && !q4b.ignored, "phiên sau tin bản tự ghi đã rút gọn");
+}
+
+console.log("19. Chỉ ghi chỉ mục của bản rút gọn local: thân trong kho cũng đổi theo (không bao giờ cũ hơn chỉ mục)");
+{
+  const s0 = C.serialChat(chat(5, { tags: ["a"] }));
+  const p = K.patchBody(s0, { id: 5, title: "Tên mới", upd: 7, pinned: true, project: 3 });
+  const pc = JSON.parse(p);
+  ok(pc.title === "Tên mới" && pc.pinned === true && pc.project === 3 && !("tags" in pc) && pc.msgs.length === 2 && !("upd" in pc) && !("stub" in pc), "patchBody: áp tên, ghim, dự án, bỏ thẻ; giữ tin nhắn; không thêm trường của bản rút gọn", pc);
+  ok(K.patchBody(s0, K.idxOf(chat(5, { tags: ["a"] }))) === null && K.patchBody("{hỏng", { id: 5, title: "x", upd: 1 }) === null && K.patchBody(s0, { id: 6, title: "x", upd: 1 }) === null, "patchBody: không đổi / thân hỏng / sai id → null (không ghi)");
+  globalThis.localStorage = new Store();
+  const h = fakeIDB();
+  const s = await D.openChatStore("P1", { idb: h });
+  const a = chat(1), b = chat(2);
+  await s.write({ put: [a, b].map((c) => ({ id: c.id, s: C.serialChat(c), idx: K.idxOf(c) })) });
+  await s.write({ drop: [2] });
+  const sv = new D.ChatSaver(s);
+  const stubs = [K.stubOfRow({ ...K.idxOf(a) }), K.stubOfRow({ ...K.idxOf(b), srv: true })];
+  sv.base(stubs);
+  const r = await sv.save([{ ...stubs[0], title: "Đổi tên 1", pinned: true }, { ...stubs[1], title: "Đổi tên 2" }]);
+  const body = (id) => h.dump("synchro-chats:P1", "body").find((x) => x.id === id);
+  const b1 = JSON.parse(body(1)?.s ?? "null");
+  ok(r.status === "ok" && b1?.title === "Đổi tên 1" && b1.pinned === true && b1.msgs.length === 2, "bản rút gọn local: thân trong kho có tên + ghim mới", b1);
+  ok(!body(2) && h.dump("synchro-chats:P1", "idx").find((x) => x.id === 2)?.title === "Đổi tên 2", "bản rút gọn của máy chủ: chỉ đổi chỉ mục, không dựng thân");
+  s.close();
 }
 
 console.log(`\n${pass} đạt, ${fail} lỗi`);

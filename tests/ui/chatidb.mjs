@@ -77,7 +77,16 @@ const clickEl = async (expr) => {
   if (!r) throw new Error("không thấy: " + expr.slice(0, 120));
   await t.click(r[0], r[1]);
 };
+// Thanh bên phân trang (trang đang xem giữ nguyên sau khi mở đoạn ở trang khác): lùi về trang đầu cho tới khi thấy dòng cần.
+const pagerBtn = (en, vi) => `document.querySelector(".adm-pager :is([aria-label='${en}'],[aria-label='${vi}']):not(:disabled)")`;
+const showRow = async (title) => {
+  for (let i = 0; i < 30 && !(await ev(`!!${rowOf(title)}`)); i++) {
+    if (!(await ev(`!!${pagerBtn("Previous page", "Trang trước")}`))) break;
+    await clickEl(pagerBtn("Previous page", "Trang trước")); await sleep(100);
+  }
+};
 const pin = async (title) => {
+  await showRow(title);
   await clickEl(`${rowOf(title)}.parentElement.querySelector(".dots")`);
   await until(`!!${rowOf(title)}.parentElement.querySelector(".menu:not(.out)")`, 3000);
   await clickEl(`[...${rowOf(title)}.parentElement.querySelectorAll(".menu-item")].find((b) => /^(Ghim|Bỏ ghim)/.test(b.textContent.trim()))`);
@@ -131,7 +140,7 @@ try {
   ok(!m2.overlap.length, "không tác vụ dài > 50ms nào trùng một lần JSON.parse trong 3 giây đầu", m2.overlap);
   ok(m2.first > 0 && m2.first < 3000, "thanh bên hiện trong 3 giây", m2.first);
   // Đoạn ở trang 3 của phân trang (đọc thân lúc mở hoặc ở nền), chữ hiện trong 1 giây.
-  for (let i = 0; i < 2; i++) { await clickEl(`document.querySelector(".adm-pager [aria-label='Next page']")`); await sleep(120); }
+  for (let i = 0; i < 2; i++) { await clickEl(`document.querySelector(".adm-pager :is([aria-label='Next page'],[aria-label='Trang sau'])")`); await sleep(120); }
   const p3 = `Đoạn chat số ${N - 1 - 45}`;
   await until(`!!${rowOf(p3)}`, 3000);
   const tOpen = Date.now();
@@ -245,7 +254,7 @@ try {
   await open("/");
   await until(`!!document.querySelector(".chat-item")`, 10000);
   if (await ev(`!!document.querySelector(".sidebar.closed, .shell-side.closed")`)) { await clickEl(`document.querySelector("[aria-label='Mở thanh bên']")`); await sleep(500); }
-  for (let i = 0; i < 4; i++) { await clickEl(`document.querySelector(".adm-pager [aria-label='Next page']")`); await sleep(80); }
+  for (let i = 0; i < 4; i++) { await clickEl(`document.querySelector(".adm-pager :is([aria-label='Next page'],[aria-label='Trang sau'])")`); await sleep(80); }
   const T9 = await ev(`[...document.querySelectorAll(".chat-item .ct-t")].at(-1)?.textContent`);
   const local9 = await ev(`(() => { const s = window.__chatLoad(); return !s.ready; })()`);
   await clickEl(rowOf(T9));
