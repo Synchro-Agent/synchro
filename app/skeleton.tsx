@@ -80,14 +80,17 @@ export function BootSkeleton({ chat }: { chat?: boolean }) {
       </div>
       <div className="boot-main">
         <div className="boot-top" />
-        {chat ? <div className="boot-thread"><div className="sk-thread-in"><ThreadSkeleton /></div></div> : (
-          <div className="boot-hero"><div className="boot-col">
+        {/* Có cả hai dạng: HTML dựng ở máy chủ (A3) có trước khi trang chạy mã, mà máy chủ không thấy #c=. Lệnh nhỏ trong <head> (layout.tsx)
+            đặt data-boot-chat trên <html> trước khi vẽ, CSS chỉ hiện dạng tin nhắn; trang chạy rồi thì chat (bootChat) quyết định. */}
+        <div className={`boot-thread boot-v-chat${chat ? " on" : ""}`}><div className="sk-thread-in"><ThreadSkeleton /></div></div>
+        {!chat && (
+          <div className="boot-hero boot-v-home"><div className="boot-col">
             <div className="boot-date"><SkText w={9} /></div>
             <div className="boot-greet"><SkText w={11} /></div>
             <div className="boot-box" />
           </div></div>
         )}
-        {chat && <div className="boot-dock"><div className="boot-box" /></div>}
+        <div className={`boot-dock boot-v-chat${chat ? " on" : ""}`}><div className="boot-box" /></div>
       </div>
     </>
   );

@@ -45,6 +45,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             __html: langScript(process.env.SYNCHRO_FIXED_LANG),
           }}
         />
+        {/* Mở thẳng một đoạn chat (#c=…): màn chờ trong HTML dựng ở máy chủ hiện dạng tin nhắn ngay, trước khi trang chạy mã (globals.css, BootSkeleton). */}
+        <script dangerouslySetInnerHTML={{ __html: `try{if(/^#c=/.test(location.hash))document.documentElement.setAttribute("data-boot-chat","")}catch(e){}` }} />
       </head>
       <body>{children}<GlassFX /><I18n /><ChunkGuard /></body>
     </html>

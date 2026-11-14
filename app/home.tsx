@@ -1149,6 +1149,8 @@ export default function Home({ boot }: { boot?: BootData | null }) {
   // Màn chờ lúc mở app: mở thẳng một đoạn chat (#c=…) thì vùng chính chờ dạng tin nhắn thay vì lời chào (đặt sau khi gắn để khớp bản dựng ở máy chủ).
   const [bootChat, setBootChat] = useState(false);
   useEffect(() => { if (/^#c=/.test(location.hash)) setBootChat(true); }, []);
+  // Đã qua màn chờ: bỏ dấu "mở thẳng đoạn chat" của lệnh trong <head> (layout.tsx), lần màn chờ sau (đổi tài khoản…) theo bootChat.
+  useEffect(() => { if (me !== undefined) document.documentElement.removeAttribute("data-boot-chat"); }, [me]);
   // Đồng bộ danh sách phiên Code với máy chủ (Cài đặt → Synchro Code → Đồng bộ phiên): phiên mở ở thiết bị khác, trạng thái mới,
   // phiên đã xóa / lưu trữ ở nơi khác. Lần đầu đẩy các phiên chỉ có ở thiết bị này lên.
   useEffect(() => {

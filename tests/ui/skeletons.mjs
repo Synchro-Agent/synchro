@@ -17,18 +17,19 @@ const ok = (c, n, x = "") => { if (BEFORE) { console.log("  ·", n, c ? "" : Str
 const clsLog = [];
 
 const { cookie, uid } = await login(B);
-// Một đoạn chat có tin trên máy chủ (để dựng đoạn chat "đang tải từ máy chủ").
-const findSrv = async () => (await (await fetch(B + "/api/chats?since=0", { headers: { cookie } })).json()).items.filter((i) => i.kind === "chat" && !i.deleted).map((i) => JSON.parse(i.data))
-  .find((c) => c.msgs?.length >= 2 && c.msgs[0].role === "user" && c.msgs[0].text.length < 30 && !c.inc);
-let srv = await findSrv();
-// Máy giả lập mới dựng chưa có đoạn chat nào: đẩy một đoạn chat có tin lên máy chủ (cùng đường đồng bộ của app).
-if (!srv) {
-  const id = Date.now() - 86_400_000, ans = "Kế hoạch gồm ba bước.\n\n1. Khảo sát khách hàng trong tuần đầu.\n2. Thử giá mới ở hai cửa hàng.\n3. Đo doanh thu và quyết định.\n\nBạn muốn tôi viết chi tiết bước nào trước?";
+// Một đoạn chat có tin trên máy chủ (để dựng đoạn chat "đang tải từ máy chủ"): luôn là đoạn chat ngắn của riêng bộ này (cùng đường đồng bộ
+// của app), không lấy một đoạn chat bất kỳ còn trên máy giả lập: đoạn chat dài thì mở ra cuộn xuống cuối, tin đầu nằm trên mép màn hình.
+const findSrv = async (id) => (await (await fetch(B + "/api/chats?since=0", { headers: { cookie } })).json()).items.filter((i) => i.kind === "chat" && !i.deleted && i.id === String(id)).map((i) => JSON.parse(i.data))[0];
+let srv = null, srvId = 0;
+{
+  const id = Date.now() - 86_400_000; srvId = id;
+  const ans = "Kế hoạch gồm ba bước.\n\n1. Khảo sát khách hàng trong tuần đầu.\n2. Thử giá mới ở hai cửa hàng.\n3. Đo doanh thu và quyết định.\n\nBạn muốn tôi viết chi tiết bước nào trước?";
   const chat = { id, title: "Kế hoạch thử giá", msgs: [{ role: "user", text: "Lập kế hoạch thử giá", time: id, done: true }, { role: "ai", text: ans, done: true, time: id + 1 }, { role: "user", text: "Bước một", time: id + 2, done: true }, { role: "ai", text: "Khảo sát 50 khách quen bằng phiếu ngắn năm câu.", done: true, time: id + 3 }] };
   await fetch(B + "/api/chats", { method: "PUT", headers: { cookie, origin: B, "content-type": "application/json" }, body: JSON.stringify({ items: [{ kind: "chat", id: String(id), upd: id + 4, data: JSON.stringify(chat) }] }) });
-  srv = await findSrv();
+  srv = await findSrv(id);
 }
 if (!srv) throw new Error("không đưa được đoạn chat có tin lên máy chủ");
+const unseedSrv = () => fetch(B + "/api/chats", { method: "PUT", headers: { cookie, origin: B, "content-type": "application/json" }, body: JSON.stringify({ items: [{ kind: "chat", id: String(srvId), upd: Date.now(), deleted: true }] }) }).catch(() => {});
 
 const t = await openChrome({ base: B, port: Number(process.env.CDP_PORT ?? 9374), name: "skeletons", shots: process.env.SHOTS });
 const { P, ev, until } = t;
@@ -36,21 +37,29 @@ const { P, ev, until } = t;
 // bản production đặt tên tệp mã theo số và mã băm (không có "artifactui", "settings" như bản dev), nên nhận phần mã bằng một chuỗi chỉ module đó có.
 // Tệp mã giữ ở chặng nhận trả lời (đã đọc được nội dung) rồi mới thả ra trình duyệt. Tắt bộ nhớ đệm để tệp mã đã tải ở bước trước vẫn đi qua mạng.
 let holdRe = null, held = 0, holdMs = HOLD;
-const later = (id) => setTimeout(() => P("Fetch.continueRequest", { requestId: id }).catch(() => {}), holdMs);
+// Yêu cầu đang giữ: thả sau holdMs, hoặc ngay khi unhold() (đo xong thì thả, không chờ đồng hồ: trang dựng chậm hơn holdMs thì yêu cầu
+// chưa kịp được giữ tới lúc đo).
+const pend = new Map();
+const release = (id) => { clearTimeout(pend.get(id)); pend.delete(id); P("Fetch.continueRequest", { requestId: id }).catch(() => {}); };
+const later = (id) => pend.set(id, setTimeout(() => release(id), holdMs));
 t.on("Fetch.requestPaused", async (p) => {
   const go = () => P("Fetch.continueRequest", { requestId: p.requestId }).catch(() => {});
-  if (!holdRe) return go();
-  if (holdRe instanceof RegExp) { if (holdRe.test(p.request.url)) { held++; later(p.requestId); } else go(); return; }
+  const re = holdRe;
+  if (!re) return go();
+  if (re instanceof RegExp) { if (re.test(p.request.url)) { held++; later(p.requestId); } else go(); return; }
   if (p.responseStatusCode === undefined) return go();
   const body = await P("Fetch.getResponseBody", { requestId: p.requestId }).catch(() => null);
   const text = body ? (body.base64Encoded ? Buffer.from(body.body, "base64").toString("utf8") : body.body) : "";
-  if (holdRe.js.test(text)) { held++; later(p.requestId); } else go();
+  if (re.js.test(text) && holdRe === re) { held++; later(p.requestId); } else go();
 });
 const hold = async (re, ms = HOLD) => {
   holdRe = re; held = 0; holdMs = ms;
   await P("Fetch.enable", { patterns: re instanceof RegExp ? [{ urlPattern: "*", requestStage: "Request" }] : [{ urlPattern: "*", resourceType: "Script", requestStage: "Response" }] });
 };
-const unhold = async () => { holdRe = null; await P("Fetch.disable"); };
+const unhold = async () => { holdRe = null; for (const id of [...pend.keys()]) release(id); await P("Fetch.disable"); };
+// A3: trang chủ dựng sẵn tài khoản trong HTML, không còn hỏi /api/auth/me; màn chờ lúc mở app là HTML của máy chủ tới khi mã trang chạy.
+// Giữ chậm tệp mã của trang (như mạng chậm) để đo màn chờ đó.
+const APP_JS = /\/_next\/static\/chunks\//;
 await P("Network.setCacheDisabled", { cacheDisabled: true });
 // Chuỗi chỉ có trong mã của khung artifact (app/artifactui.tsx) và của trang cài đặt (app/settings.tsx).
 const ART_JS = { js: /art-dl-menu/ }, SETTINGS_JS = { js: /cap-domains/ };
@@ -90,7 +99,7 @@ try {
     // ---- 1. Mở app (chờ phiên đăng nhập) ----
     console.log("1. Mở app");
     await seed(local);
-    await hold(/\/api\/auth\/me/);
+    await hold(APP_JS);
     await P("Page.navigate", { url: B + "/" });
     await until(`!!document.querySelector(".boot")`, 20000);
     await sleep(500);
@@ -112,9 +121,9 @@ try {
     await cls(`${tag} · mở app`);
 
     // Mở thẳng một đoạn chat: vùng chính chờ dạng tin nhắn, ô soạn tin dưới đáy.
-    await hold(/\/api\/auth\/me/);
+    await hold(APP_JS);
     await go(`${B}/#c=${now - 1000}`);
-    await until(`!!document.querySelector(".boot-dock")`, 20000);
+    await until(`[...document.querySelectorAll(".boot-dock")].some((e) => e.getBoundingClientRect().width > 0)`, 20000);
     await sleep(300);
     const bdock = await R(".boot-dock .boot-box"), buser = await R(".boot .sk-user");
     await t.shot(`${w}-1-boot-chat`);
@@ -150,7 +159,7 @@ try {
     // ---- 3. Đoạn chat đang tải từ máy chủ ----
     console.log("3. Đoạn chat đang tải từ máy chủ");
     await seed([{ id: srv.id, title: srv.title, msgs: [], stub: true }, ...local.slice(0, 3)]);
-    await hold(/\/api\/chats\?(keys|since)=/);
+    await hold(/\/api\/chats\?(keys|since)=/, 20000);
     await go(`${B}/#c=${srv.id}`);
     await until(`!!document.querySelector(".thread")`, 30000);
     await sleep(500);
@@ -180,6 +189,8 @@ try {
     ok(!!card, "thẻ artifact trong tin nhắn");
     if (card) await t.click(card[0], card[1]);
     await sleep(700);
+    // Tệp mã của khung artifact có thể chưa về tới chặng bị giữ sau 700ms (bản dev lớn): chờ tới khi đã giữ, hoặc khung thật đã hiện.
+    for (let i = 0; i < 40 && !held && !(await ev(`!!document.querySelector(".art-panel .art-head")`)); i++) await sleep(150);
     const threadW = await R(".thread"), sart = await R(".sk-art"), shead = await R(".sk-art-head"), sname = await ev(`document.querySelector(".sk-art .art-head-t b")?.textContent ?? ""`);
     const stillHeld = !(await ev(`!!document.querySelector(".art-panel .art-head")`));
     await t.shot(`${w}-4-art-wait`);
@@ -246,6 +257,7 @@ try {
   console.log("  ✗ lỗi:", e.message);
 } finally {
   t.close();
+  await unseedSrv();
 }
 console.log(`\nCLS: ${clsLog.join(" · ")}`);
 console.log(BEFORE ? "\n(BEFORE: chỉ đo CLS)" : `\n${pass}/${pass + fail} đạt`);

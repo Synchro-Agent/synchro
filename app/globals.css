@@ -4345,6 +4345,10 @@ html[data-sess] .boot>*{visibility:visible}
 /* Lề ngang và đáy theo .main>.dock thật: 24px và 16px + dòng ghi chú 40px ở máy tính, 12px và 12px + 40px ở màn ≤760px. */
 .boot-dock{position:absolute;left:0;right:0;bottom:0;padding:0 24px 56px;display:flex;justify-content:center}
 .boot-dock .boot-box{width:min(var(--thread-w,768px),100%);height:46px;margin:0}
+/* Màn chờ có cả dạng lời chào và dạng tin nhắn (skeleton.tsx BootSkeleton): mặc định lời chào; mở thẳng đoạn chat (#c=…) thì lệnh trong <head>
+   đặt data-boot-chat trên <html> trước khi vẽ nên hiện dạng tin nhắn ngay từ HTML của máy chủ; .on là trang đã chạy và biết chắc. */
+html:not([data-boot-chat]) .boot .boot-v-chat:not(.on){display:none}
+html[data-boot-chat] .boot .boot-v-home{display:none}
 /* Màn chờ khớp app thật: ≤ 860px (NARROW) bảng đoạn chat đóng sẵn nên ẩn khối thanh bên; thanh điều hướng chỉ vào ngăn kéo ở điện thoại (≤ 760px). */
 @media (max-width:860px){.boot-side{display:none}}
 @media (max-width:760px){.boot-rail{display:none}}
