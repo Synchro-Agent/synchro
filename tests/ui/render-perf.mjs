@@ -2,9 +2,13 @@
 // Kiểm thử giao diện bằng Chrome ẩn (hồ sơ riêng) trên npm run dev:mock. Chạy tay: node tests/ui/render-perf.mjs
 // Đếm bằng app/perfmark.ts (countRender trong Thanh bên, Ô soạn tin, Home): chỉ tính lúc chữ đang chảy, bỏ các lần vẽ lúc bắt đầu / kết thúc lượt.
 // Chạy hai khổ: 1440×900 (thanh bên mở) và điện thoại 375×812 (ngăn kéo đóng).
-// Biến môi trường: GATE=0 chỉ in số đo, không chặn (mặc định chặn: Sidebar = 0, Composer = 0, tác vụ dài nhất ≤ LT_MAX ms, mặc định 50);
-// OUT=<tệp.json> ghi số đo ra tệp để so trước / sau. Ngưỡng 50 ms chỉ đáng tin trên bản production (dev:mock:fast); dev React chậm hơn nhiều.
-// Đang nằm trong SKIP của scripts/qa.mjs cho tới khi B2 tách xong Thanh bên (bước 5–7): trước đó Sidebar còn vẽ lại theo từng mẩu chữ.
+// Mặc định chỉ chặn những gì B2 bước 1–4 đã đạt: câu trả lời về đủ và Composer = 0 (Ô soạn tin không vẽ lại lúc chữ chảy).
+// Biến môi trường (các cổng thêm đều tắt mặc định, bật bằng 1):
+//   GATE_SIDEBAR=1  chặn thêm Sidebar = 0: bật khi B2 tách xong Thanh bên (bước 5–7); trước đó Sidebar vẽ lại theo từng lần vẽ của Home.
+//   GATE_LT=1       chặn thêm tác vụ dài nhất ≤ LT_MAX ms (mặc định 50). Chỉ đáng tin trên bản production (dev:mock:fast); dev React chậm hơn nhiều.
+//   GATE=0          chỉ in số đo, không chặn gì (kể cả Composer). OUT=<tệp.json> ghi số đo ra tệp để so trước / sau.
+// Số đo Sidebar và tác vụ dài luôn được in dù cổng tắt. Với cổng mặc định, bài này chuyển được từ SKIP sang SUITES của scripts/qa.mjs
+// (dòng SKIP trùng chỗ với tests/ui/cascade.mjs của B5: khi gộp giữ cả hai dòng, hoặc bỏ dòng render-perf nếu chuyển sang SUITES).
 import { spawn } from "node:child_process";
 import { rmSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
@@ -14,7 +18,7 @@ const SCR = (await import("node:os")).tmpdir() + "/synchro-ui/";
 (await import("node:fs")).mkdirSync(SCR, { recursive: true });
 const PROF = SCR + "chrome-prof-rperf";
 rmSync(PROF, { recursive: true, force: true });
-const GATE = process.env.GATE !== "0", LT_MAX = Number(process.env.LT_MAX ?? 50);
+const GATE = process.env.GATE !== "0", GATE_SIDEBAR = GATE && process.env.GATE_SIDEBAR === "1", GATE_LT = GATE && process.env.GATE_LT === "1", LT_MAX = Number(process.env.LT_MAX ?? 50);
 
 const email = "admin@synchro.test", password = "synchro-mock-123";
 let cookie = "";
@@ -56,7 +60,7 @@ async function run(name, metrics) {
   await P("Emulation.setDeviceMetricsOverride", metrics);
   await P("Network.setCookie", { name: "synchro_session", value: cookie.split("=")[1], url: B });
   // Tác vụ dài (≥ 50 ms trên luồng chính) gom từ lúc mở trang; bài đo xóa trước khi bắt đầu đo.
-  await P("Page.addScriptToEvaluateOnNewDocument", { source: `window.__lt = []; try { new PerformanceObserver((l) => { for (const e of l.getEntries()) window.__lt.push(Math.round(e.duration)); }).observe({ type: "longtask", buffered: true }); } catch {}` });
+  await P("Page.addScriptToEvaluateOnNewDocument", { source: `window.__renders = {}; window.__lt = []; try { new PerformanceObserver((l) => { for (const e of l.getEntries()) window.__lt.push(Math.round(e.duration)); }).observe({ type: "longtask", buffered: true }); } catch {}` });
   try {
     await P("Page.navigate", { url: B + "/" });
     await until(`!!document.querySelector("textarea")`, 60000, "app loaded");
@@ -70,6 +74,8 @@ async function run(name, metrics) {
     // Đã có chữ chảy về: bỏ qua các lần vẽ lúc bắt đầu lượt (đoạn chat mới, nút Dừng hiện ra…).
     await until(`${len} > 300`, 90000, "first words", 100);
     await sleep(300);
+    // Số lần vẽ từ lúc mở trang tới đây: Ô soạn tin chắc chắn đã vẽ (gõ chữ, gửi), nên Composer > 0 chứng tỏ bộ đếm của nó còn chạy.
+    const startup = await ev(`({ ...window.__renders })`);
     await ev(`window.__renders = {}; window.__lt = []; 1`);
     const t0 = Date.now();
     let snap = null;
@@ -83,15 +89,17 @@ async function run(name, metrics) {
     await P("Emulation.setCPUThrottlingRate", { rate: 1 });
     const total = await ev(`[...document.querySelectorAll(".ai-msg")].at(-1)?.textContent.length ?? 0`);
     const r = snap?.r ?? {}, lt = snap?.lt ?? [];
-    const res = { renders: r, longTasks: lt.length, ltMax: lt.length ? Math.max(...lt) : 0, ltSum: lt.reduce((a, b) => a + b, 0), streamedMs: Date.now() - t0, chars: snap?.n ?? 0, total };
+    const res = { startup, renders: r, longTasks: lt.length, ltMax: lt.length ? Math.max(...lt) : 0, ltSum: lt.reduce((a, b) => a + b, 0), streamedMs: Date.now() - t0, chars: snap?.n ?? 0, total };
     out[name] = res;
     console.log("   ", JSON.stringify(res));
     ok(total > 10000, `câu trả lời dài về đủ (${total} ký tự)`, await ev(`[...document.querySelectorAll(".ai-msg")].at(-1)?.textContent.slice(0, 300) ?? ""`));
-    if (GATE) {
-      ok(!r.Sidebar, `thanh bên không vẽ lại lúc chữ chảy (Sidebar = ${r.Sidebar ?? 0})`);
-      ok(!r.Composer, `ô soạn tin không vẽ lại lúc chữ chảy (Composer = ${r.Composer ?? 0})`);
-      ok(res.ltMax <= LT_MAX, `không có tác vụ dài hơn ${LT_MAX} ms (dài nhất ${res.ltMax} ms, ${lt.length} tác vụ ≥ 50 ms)`);
-    }
+    // Composer = 0 chỉ có nghĩa khi bộ đếm của nó thật sự ghi (countRender("Composer") còn trong Ô soạn tin).
+    if (GATE) ok(startup.Composer > 0, `bộ đếm của Ô soạn tin có ghi lúc gõ / gửi (Composer = ${startup.Composer ?? 0} trước khi chữ chảy)`);
+    if (GATE) ok(!r.Composer, `ô soạn tin không vẽ lại lúc chữ chảy (Composer = ${r.Composer ?? 0})`);
+    if (GATE_SIDEBAR) ok(!r.Sidebar, `thanh bên không vẽ lại lúc chữ chảy (Sidebar = ${r.Sidebar ?? 0})`);
+    else console.log(`    (chưa chặn) Sidebar = ${r.Sidebar ?? 0} lần vẽ; bật GATE_SIDEBAR=1 sau B2 bước 5–7`);
+    if (GATE_LT) ok(res.ltMax <= LT_MAX, `không có tác vụ dài hơn ${LT_MAX} ms (dài nhất ${res.ltMax} ms, ${lt.length} tác vụ ≥ 50 ms)`);
+    else console.log(`    (chưa chặn) tác vụ dài nhất ${res.ltMax} ms, ${lt.length} tác vụ ≥ 50 ms; bật GATE_LT=1 trên bản production`);
   } catch (e) { ok(false, `${name}: lỗi khi chạy`, `${e.message} · ${await ev(`(document.querySelector("#main")?.innerText ?? "").slice(-400)`).catch(() => "")}`); }
   await send("Target.closeTarget", { targetId }).catch(() => {});
 }
