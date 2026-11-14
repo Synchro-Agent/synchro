@@ -284,9 +284,9 @@ html body .user-msg a{color:inherit}
 .app:not(.code-view) .cv .user-msg{background:var(--ds-inv);color:var(--ds-inv-fg)}
 /* Thanh trên: tên đoạn chat là nút viên thuốc, các nút bên phải cùng chiều cao 36px. */
 html body .topbar{height:52px}
-html body .topbar .left{left:16px;gap:6px}
-html body .topbar .right{right:16px;gap:6px}
-html body .topbar .title-wrap .sel{height:32px;padding:0 10px 0 13px;border-radius:var(--r-pill);font-size:13.5px;font-weight:500;color:var(--ds-ink);gap:6px}
+html body .topbar .left{gap:6px}
+html body .topbar .right{gap:6px}
+html body .topbar .title-wrap .sel{padding:0 10px 0 13px;border-radius:var(--r-pill);font-size:13.5px;font-weight:500;color:var(--ds-ink);gap:6px}
 html body .topbar .title-wrap .sel:hover{background:var(--ds-hover)}
 html body .topbar .icon-btn:not(.auth-root *){width:var(--ds-h);height:var(--ds-h);border-radius:var(--r-pill)}
 html body .topbar .btn{height:var(--ds-h)}

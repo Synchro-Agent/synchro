@@ -24,9 +24,11 @@ const postcss = createRequire(import.meta.url)("postcss");
 // Thử gỡ tiền tố từng selector của khối syn-over (so cascade tĩnh dev + prod sau mỗi lần gỡ) ngày 2026-11-14
 // thì gỡ được 1 (glass.css, ::before của nút kính: 582 → 581), 53 cái còn lại gỡ thì đổi bên thắng; bước 6 gộp bản syn với bản syn-over
 // của cùng selector thì mới bỏ được bản chép.
-export const CEIL = { important: 18, htmlBody: 581, fontSize: 1278, zIndex: 63, mediaWidth: 90, darkHex: 100, inlineFontSize: 65, inlineZIndex: 22 };
+// htmlBody 581 → 560 (B5 bước 8, 2026-11-15): scripts/css-dedupe.mjs xóa 371 khai báo chết (bị khai báo cùng selector / html body cùng selector
+// che hẳn), 78 luật trống theo đó; đạt mục tiêu ≤ 572 đặt ngày 2026-11-14.
+export const CEIL = { important: 18, htmlBody: 560, fontSize: 1243, zIndex: 63, mediaWidth: 88, darkHex: 96, inlineFontSize: 65, inlineZIndex: 22 };
 // Mục tiêu có hạn: chỉ số phải về tới max trong bước ghi ở by (đặt ngày set). In ra cùng kết quả; bước đó hạ CEIL theo.
-export const TARGET = { htmlBody: { max: 572, by: "B5 bước 6 (dedupe, vòng 2)", set: "2026-11-14" } };
+export const TARGET = {};
 export const WIDTHS = new Set([480, 640, 760, 761, 860, 1100]);
 
 const walk = (d, ext, out = []) => {

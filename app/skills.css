@@ -4,7 +4,7 @@
    nên chỉ chứa quy tắc mà không quy tắc chung nào đứng sau nó còn nhắc tới cùng lớp. */
 .pl-dcard-t>span{text-wrap:balance}
 .pl-mark{display:inline-grid;place-items:center;border-radius:25%;flex:none;background:var(--pill);color:var(--text-2);box-shadow:inset 0 0 0 .5px var(--border-strong)}
-.pl-b{display:inline-flex;align-items:center;height:20px;padding:0 7px;border-radius:var(--r-pill);font-size:12px;background:var(--hover);color:var(--text-3);white-space:nowrap;font-style:normal}
+.pl-b{white-space:nowrap;font-style:normal}
 .pl-b.low{background:color-mix(in srgb,var(--accent) 10%,transparent);color:var(--accent)}
 .pl-b.mid{background:color-mix(in srgb,#eda100 16%,transparent);color:#9a6700}
 .pl-b.high{background:color-mix(in srgb,#e34948 14%,transparent);color:#c13c3c}
@@ -17,7 +17,7 @@
 .pl-load,.pl-err{display:flex;align-items:center;gap:10px;padding:26px 4px;color:var(--text-2);font-size:13.5px}
 .pl-err{color:#c13c3c}
 .pl-sum{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:12.5px;color:var(--text-3);margin-bottom:8px}
-.pl-list{flex:1;min-height:0;overflow:auto;border:.5px solid var(--border);border-radius:var(--r-card);margin:6px 0 4px}
+.pl-list{flex:1;min-height:0;overflow:auto;margin:6px 0 4px}
 .pl-sk{display:flex;align-items:flex-start;gap:10px;padding:10px 16px}
 .pl-sk+.pl-sk{border-top:.5px solid var(--border)}
 .pl-sk-t{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
@@ -26,9 +26,7 @@
 .pl-sk .toggle{align-self:center}
 .pl-scope{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
 .pl-dh{display:flex;align-items:center;gap:12px;margin-bottom:8px}
-.pl-rows{border:.5px solid var(--border);border-radius:var(--r-card);margin:6px 0 10px}
-.pl-row{display:flex;align-items:center;gap:14px;padding:10px 12px}
-.pl-row+.pl-row{border-top:.5px solid var(--border)}
+.pl-row{display:flex;align-items:center}
 .pl-sel{height:30px;border-radius:var(--r-pill);border:.5px solid var(--border-strong);background:var(--input);color:var(--text);padding:0 8px;font:inherit;font-size:13px}
 .pl-src{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;margin-bottom:4px}
 .pl-src a em{font-style:normal;color:var(--text-3)}
@@ -36,22 +34,18 @@
 .pl-acts{gap:8px;flex-wrap:wrap}
 html body .modal.pl-modal{background:var(--card)}
 .modal.pl-modal::before{background:var(--card);-webkit-backdrop-filter:none;backdrop-filter:none}
-.pl-top{display:flex;align-items:center;gap:12px;margin:2px 0 18px;flex-wrap:wrap}
 .pl-title{font-family:var(--font-display);font-size:20.8px;font-weight:400;margin:0 6px 0 0;letter-spacing:-.025em}
 .pl-search{height:32px;width:min(240px,40vw)}
 .pl-addw{position:relative}
-.modal.settings .pl-top{padding-right:40px}
 .pl-add{display:inline-flex;align-items:center;gap:5px}
 .menu.pl-menu.right{min-width:310px}
 .pl-mi{display:flex;flex-direction:column;gap:1px;text-align:left}
 .pl-hero{display:flex;align-items:center;gap:24px;padding:22px 24px;border-radius:var(--r-card);background:var(--pill);border:.5px solid var(--border);margin-bottom:22px;color:var(--text-2)}
-.pl-sec{display:flex;align-items:center;gap:8px;font-weight:540;font-size:14.5px;margin:20px 0 10px}
 .pl-rows2{display:flex;flex-direction:column}
-.pl-row2{display:flex;align-items:center;gap:12px;padding:10px 8px;border-radius:var(--r-card);cursor:pointer}
-.pl-row2:hover{background:var(--hover)}
+.pl-row2{display:flex;cursor:pointer}
 .pl-row2-t{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
 .pl-row2-h{display:flex;align-items:center;gap:6px;min-width:0}
-.pl-date{font-size:12px;color:var(--text-3);white-space:nowrap}
+.pl-date{white-space:nowrap}
 .pl-more{position:relative}
 .pl-dgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:10px}
 .pl-dcard{display:flex;align-items:flex-start;gap:12px;padding:14px;border-radius:var(--r-card);border:.5px solid var(--border-strong);background:var(--card);min-width:0}
@@ -59,13 +53,12 @@ html body .modal.pl-modal{background:var(--card)}
 .pl-dcard.click{cursor:pointer;transition:background .15s}
 .pl-dcard.click:hover{background:var(--hover)}
 .pl-plus{width:30px;height:30px;flex:none;display:grid;place-items:center;border-radius:var(--r-pill);border:.5px solid var(--border-strong);background:var(--card);color:var(--text-2);transition:background .15s,color .15s}
-.pl-tip{display:flex;gap:8px;align-items:flex-start;margin-top:18px}
+.pl-tip{align-items:flex-start}
 @media (max-width:640px){.pl-top{gap:8px}}
 @media (max-width:640px){.pl-search{order:5;width:100%}}
 @media (max-width:640px){.pl-date{display:none}}
 .pl-modal .gh-add .sk-gh{margin-top:4px}
 .pl-note{display:flex;gap:8px;align-items:flex-start;margin:0 0 10px;padding:8px 12px;border-radius:var(--r-plate);background:var(--hover);font-size:12.5px;line-height:1.5;color:var(--text-2)}
-.pl-sec-d{font-size:12px;font-weight:400;color:var(--text-3)}
 .hub-yours .pl-row2 .toggle{flex:none}
 .pl-mic{flex:none;display:grid;place-items:center;width:32px;height:32px;border-radius:25%;background:var(--pill);color:var(--text-2);box-shadow:inset 0 0 0 .5px var(--border-strong)}
 .menu.pl-menu .menu-item:hover .pl-mic{background:var(--card);color:var(--text)}
