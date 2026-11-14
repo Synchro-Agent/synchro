@@ -89,7 +89,7 @@ import { ArtPanelSkeleton, BootSkeleton, ChatListSkeleton, ThreadSkeleton } from
 import { resolveArt, type ArtVersion } from "./vfs";
 import { criticKey, fixPatch, important, type CriticEntry, type Finding } from "./critic";
 import { chatHistory, continuable, mixExtra } from "./history";
-import { ContextMixer } from "./mixer";
+import { DockMixer } from "./mixer";
 import { ArtifactCard, OutputFiles, saveArtifacts } from "./artifactcard";
 import { GEN_IMG_EVENT } from "./artgen";
 import type { Product } from "./filepreview";
@@ -458,7 +458,8 @@ type Rec = { lang: string; interimResults: boolean; continuous: boolean; onresul
 // Lỗi nhận dạng của trình duyệt → một câu cho người dùng. Không có tiếng (no-speech) và bị dừng (aborted) không phải lỗi.
 const REC_ERR: Record<string, string> = { "not-allowed": "Không mở được micro: hãy cho phép Synchro dùng micro", "service-not-allowed": "Trình duyệt đang chặn nhận dạng giọng nói", "audio-capture": "Không tìm thấy micro trên máy này", network: "Nhận dạng giọng nói của trình duyệt cần kết nối mạng", "language-not-supported": "Trình duyệt chưa nhận dạng được ngôn ngữ này" };
 
-function Composer(p: {
+// Ô soạn tin: memo, mọi prop là giá trị đơn hoặc hàm ổn định (useEvent ở Home), nên không vẽ lại theo từng mẩu chữ đang chảy (blueprint B2).
+const Composer = memo(function Composer(p: {
   onSend: (t: string, f: string[], pick?: { id: string; label: string }[]) => void; busy: boolean; onStop: () => void; dock?: boolean; say: Say;
   prefill: { t: string; n: number }; files: string[]; setFiles: (f: string[]) => void;
   model: string; setModel: (m: string) => void; goCustom: () => void; goConnectors?: () => void; placeholder?: string; focusPlaceholder?: string; openUpload: () => void;
@@ -470,6 +471,8 @@ function Composer(p: {
   focusKey?: string;
 }) {
   countRender("Composer");
+  // memo chặn lần vẽ lại của Home khi từ điển ngôn ngữ vừa tải xong: tự theo dõi để chữ tr() đổi ngôn ngữ.
+  useLangReady();
   const { onSend, busy, onStop, dock, say, files, setFiles, model, setModel, openUpload } = p;
   const fm = useFileMenu(say);
   const [v, setV] = useState("");
@@ -806,7 +809,7 @@ function Composer(p: {
       </div>
     </div>
   );
-}
+});
 
 function ago(t: number): string {
   const m = Math.floor((Date.now() - t) / 60000);
@@ -2348,15 +2351,22 @@ export default function Home({ boot }: { boot?: BootData | null }) {
     const t = setTimeout(() => { setQueued((q) => q.filter((x) => x.id !== next.id)); followUp(next.chat, next.text); }, 250);
     return () => clearTimeout(t);
   }, [running, queued]); // eslint-disable-line react-hooks/exhaustive-deps
-  const composerProps = { focusKey: `${view}:${cur}:${focusN}:${tplMode}`, onSend: send, busy, onSteer, onStop: stop, say, prefill, files, setFiles, model, setModel, goCustom, goConnectors: () => { setCzTab("connectors"); setView("customize"); }, openUpload: () => setModal("upload"), onVoice: () => { stopSpeak(); setSpeaking(null); setVoiceOn(true); },
-    projects: projects.filter((x) => !x.archived).map((x) => ({ id: x.id, name: x.name })),
+  // Prop của ô soạn tin (Composer đã memo): hàm qua useEvent, danh sách dự án chỉ dựng lại khi dự án đổi, còn lại là giá trị đơn / state,
+  // nên lúc chữ đang chảy ô soạn tin không vẽ lại; chỉ vẽ khi bắt đầu / xong lượt (busy) hay khi chính các giá trị này đổi.
+  const projPick = useMemo(() => projects.filter((x) => !x.archived).map((x) => ({ id: x.id, name: x.name })), [projects]);
+  const composerProps = { focusKey: `${view}:${cur}:${focusN}:${tplMode}`, onSend: useEvent(send), busy, onSteer: useEvent(onSteer), onStop: useEvent(stop), say, prefill, files, setFiles, model, setModel,
+    goCustom: useEvent(goCustom), goConnectors: useEvent(() => { setCzTab("connectors"); setView("customize"); }), openUpload: useEvent(() => setModal("upload")), onVoice: useEvent(() => { stopSpeak(); setSpeaking(null); setVoiceOn(true); }),
+    projects: projPick,
     project: view === "chat" && chat ? chat.project : nextProj ?? (view === "project" ? curProj ?? undefined : undefined),
-    onProject: (pid: number | undefined) => {
+    onProject: useEvent((pid: number | undefined) => {
       if (!projects.length) { setModal("proj"); return; }
       const name = projects.find((x) => x.id === pid)?.name;
       if (view === "chat" && chat) { setChats((cs) => cs.map((x) => (x.id === chat.id ? { ...x, project: pid } : x))); say(pid ? `Đã thêm vào "${name}"` : "Đã gỡ khỏi dự án"); }
       else { setNextProj(pid); say(pid ? `Đoạn chat mới sẽ nằm trong "${name}"` : "Đoạn chat mới không thuộc dự án nào"); }
-    } };
+    }) };
+  // Bàn trộn ngữ cảnh trong ô soạn tin ở đoạn chat: phần tử chỉ dựng lại khi đổi đoạn chat hay bắt đầu / xong lượt; DockMixer tự đọc đoạn chat từ kho.
+  const chatId = chat?.id;
+  const dockMixer = useMemo(() => (chatId === undefined ? null : <DockMixer chatId={chatId} busy={busy} say={say} />), [chatId, busy, say]);
   const lastAi = chat?.msgs.filter((m) => m.role === "ai").at(-1);
   // Lượt hỏi đáp từ Eleven Realtime được lưu vào đoạn chat như tin nhắn thường.
   const voiceTurn = (u: string, a: string) => {
@@ -2812,8 +2822,7 @@ export default function Home({ boot }: { boot?: BootData | null }) {
                 <div className="dock-mode"><span className={`mode-tag sm mt-${k}`}>{TPLS.find((x) => x.k === k)!.label}<button className="mode-x" aria-label="Bỏ chế độ" data-tip="Bỏ chế độ, để Synchro tự chọn"
                   onClick={() => { setChats((cs) => cs.map((c) => (c.id === chat.id ? { ...c, studio: undefined } : c))); say("Đã bỏ chế độ. Synchro sẽ tự chọn thư viện skill phù hợp."); }}><I.X size={12} /></button></span></div>); })()}
               <QueueChips items={queued.filter((q) => q.chat === chat.id && q.mode === "later")} onCancel={(qid) => setQueued((q) => q.filter((x) => x.id !== qid))} />
-              <Composer {...composerProps} dock extra={<ContextMixer chat={chat} studio={chat.studio} busy={busy} say={say} recentSkills={[...new Set(chat.msgs.filter((m) => m.role === "ai").slice(-2).flatMap((m) => [...(m.libs ?? []).flatMap((l) => l.skills), ...(m.skills ?? [])]))]}
-                onChange={(p) => setChats((cs) => cs.map((c) => (c.id === chat.id ? { ...c, ...p } : c)))} />} />
+              <Composer {...composerProps} dock extra={dockMixer} />
               <div className="disclaimer dock-note"><span>Synchro là AI và có thể mắc lỗi. Vui lòng kiểm tra kỹ các câu trả lời.</span><ModelPicker model={model} setModel={setModel} /><UsageRing model={model} onDetails={() => { setSettingsTab("Usage"); setModal("settings"); }} /></div>
             </div>
           </>
