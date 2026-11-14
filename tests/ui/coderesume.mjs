@@ -53,7 +53,12 @@ const sendMsg = async (text) => {
   await P("Input.insertText", { text });
   // Mở lại phiên vừa xong: phiên nhận lại lượt cũ từ máy chủ, trong lúc đó nút gửi là nút Dừng. Bấm lúc đó là dừng chứ không gửi
   // (người dùng thấy nút Dừng và chờ): chờ nút về lại "Gửi" rồi mới bấm. H2.3 rút ngắn phần 1 nên phần 2 hay rơi đúng lúc này.
+  const t0 = Date.now();
   await until(`/^(Gửi|Send)$/.test(document.querySelector(".cv-dock .send")?.getAttribute("aria-label") ?? "") && !document.querySelector(".ai-streaming")`, 20000, "nút Gửi sẵn sàng");
+  const waited = Date.now() - t0;
+  if (waited > 300) console.log(`    chờ nút Gửi ${waited} ms`);
+  // Phiên đã xong mà còn chạy lại lượt cũ lâu (nút Dừng, chữ chảy lại) là lỗi người dùng thấy, không chỉ là chuyện thời gian của bài kiểm.
+  ok(waited <= 3000, `ô soạn của phiên vừa xong về lại nút Gửi nhanh (${waited} ms)`);
   await click(`document.querySelector(".cv-dock .send")`, "send");
 };
 const steps = (a) => `Làm theo các bước #seq=${JSON.stringify(a)}`;

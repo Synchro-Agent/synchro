@@ -103,6 +103,7 @@ console.log("Vai trò primary / secondary");
 {
   // Mọi việc chỉ được chạy ở một tiến trình phải nằm trong primaryDuties (instrumentation-node.ts), không ở phần chạy ở mọi tiến trình.
   const src = fs.readFileSync(path.join(process.cwd(), "instrumentation-node.ts"), "utf8");
+  { const entry = fs.readFileSync("instrumentation.ts", "utf8"); ok(/NEXT_RUNTIME === "nodejs"[\s\S]*import\("\.\/instrumentation-node"\)\)\.registerNode\(\)/.test(entry), "instrumentation.ts (điểm vào thật của Next) gọi registerNode() ở runtime Node"); }
   const at = src.indexOf("function primaryDuties");
   const head = src.slice(0, at), body = src.slice(at);
   const duties = ["startOnBoot", "sweepOrphanClis", "resumeInterrupted", "startScheduler", "./app/brain", "recheckConnectors", "scheduleDiscovery", "startCliUpdates", "keepLinksAlive", "startPrWatch", "sweepEngineTemp", "ensurePluginTags", "ensureDefaultPlugins", "resumeJob", "retryVoicePurges", "noteBoot("];

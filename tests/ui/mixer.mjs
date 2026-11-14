@@ -132,7 +132,11 @@ try {
   await click(`document.querySelector(".cx-pill")`, "close"); await sleep(400);
   await sendMsg("#rev 4"); await sleep(1500); await idle();
   // Số phiên bản lên 5 ngay khi bản sửa bắt đầu chảy (thẻ còn "Đang sửa…"): chờ tới khi sửa xong ("Đã sửa 1 chỗ"), không chỉ chờ số phiên bản.
+  const tIdle = Date.now();
   await waitFor(async () => { const t = await ev(`[...document.querySelectorAll(".art-card")].at(-1)?.textContent ?? ""`); return /Phiên bản 5/.test(t) && /Đã sửa 1 chỗ/.test(t); }, 15000);
+  const lag = Date.now() - tIdle;
+  // Lượt đã xong mà thẻ còn "Đang sửa…" lâu là lỗi người dùng thấy: giữ gần ngưỡng cũ (1,5 giây sau khi xong lượt), cho dư tới 3 giây.
+  ok(lag <= 3000, `thẻ artifact báo "Đã sửa 1 chỗ" ngay sau khi lượt xong (${lag} ms)`);
   const card = await ev(`[...document.querySelectorAll(".art-card")].at(-1)?.textContent ?? ""`);
   ok(/Phiên bản 5/.test(card) && /Đã sửa 1 chỗ/.test(card), "sau khi nén vẫn sửa đúng artifact (bản hiện tại vẫn gửi kèm): " + card);
   await shot("3-after");

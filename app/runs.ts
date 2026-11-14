@@ -446,7 +446,7 @@ function launch(id: string, kind: string, body: Record<string, unknown>, user: U
       // riêng từng tệp, không có đường import động) thì dùng bộ chạy đã đăng ký như cũ.
       // Việc tự động chạy bằng Synchro Code (tasks.ts): bộ chạy nằm ở taskagent.ts.
       if (!executors.has(kind) && kind === "agent") await import("./taskagent");
-      const own = kind === "chat" ? await import("./chatengine").then((m) => m.chatExec, () => undefined) : undefined;
+      const own = kind === "chat" ? await import("./chatengine").then((m) => m.chatExec, (e) => { console.error("[runs] không nạp được chatengine, dùng bộ chạy đã đăng ký", e); return undefined; }) : undefined;
       const f = own ?? executors.get(kind);
       if (!f) return { http: 500, json: { error: `Không có bộ chạy cho loại "${kind}".` } };
       return await f(body, user);

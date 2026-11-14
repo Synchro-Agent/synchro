@@ -449,9 +449,13 @@ try {
     try {
       await home("desktop");
       if (!(await ev(`!!document.querySelector(".rail [data-nav=speech]")`))) { skipped("U12 trang Speech", "tài khoản thử không có mục Speech"); return; }
+      const t0 = Date.now();
       await click(`document.querySelector(".rail [data-nav=speech]")`, "Speech");
       // Chờ mã trang Speech (tải chậm, trước đó là vòng xoay chung) thay vì 700ms cố định; gói vẫn đang bị giữ nên vẫn đo đúng lúc chờ.
+      // Vẫn giữ đúng ngưỡng của U12: bố cục phải hiện trong 2 giây kể từ lúc bấm.
       await until(`!!document.querySelector(".sp-home")`, 10000);
+      const took = Date.now() - t0;
+      ok(took <= 2000, `bố cục Speech hiện trong 2 giây sau khi bấm (${took} ms)`, { took });
       const r = await ev(`(() => { const h = document.querySelector(".sp-home"); if (!h) return null; const q = h.getBoundingClientRect();
         return { busy: h.getAttribute("aria-busy") === "true", h: Math.round(q.height), skel: h.querySelectorAll(".sk-blk").length, input: !!h.querySelector("textarea, input, [contenteditable=true]") }; })()`);
       ok(held.length > 0 || r?.busy, "gói ElevenLabs còn đang đọc lúc mở trang", { held: held.length, r });

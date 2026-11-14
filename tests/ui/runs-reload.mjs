@@ -117,7 +117,10 @@ ok(await waitFor(() => ev(`!!document.querySelector(".wl-status")`), 8000), "câ
   const db = new (R("better-sqlite3"))(process.cwd() + "/data-mock/synchro.db", { readonly: true }); db.pragma("busy_timeout = 5000");
   const q = db.prepare("SELECT 1 FROM runs WHERE user_id = (SELECT id FROM users WHERE email = ?) AND req LIKE ? AND created_at > ?");
   const t0 = Date.now() - 60_000;
-  ok(!!(await waitFor(() => q.get(email, "%lịch sử cà phê #slow%", t0), 15000)), "máy chủ đã nhận lượt chạy trước khi tải lại");
+  const tSend = Date.now();
+  const got = !!(await waitFor(() => q.get(email, "%lịch sử cà phê #slow%", t0), 15000));
+  const lag = Date.now() - tSend;
+  ok(got && lag <= 5000, `máy chủ đã nhận lượt chạy trước khi tải lại (${lag} ms, ngưỡng 5 giây)`);
   db.close(); }
 await P("Page.reload", {}); await sleep(4000);
 const chatTitle = await ev(`[...document.querySelectorAll(".chat-item, aside button")].find((e) => e.textContent.includes("Kể ngắn về lịch sử"))?.textContent ?? ""`);
