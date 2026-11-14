@@ -1062,6 +1062,14 @@ table{font-variant-numeric:tabular-nums}h1,h2,h3{text-wrap:balance}
 /* U2: "+N" đứng sát mép phải của dải (blueprint "ở mép phải"), không ngay sau thẻ cuối với một khoảng trống bên phải. Vẫn là phần tử của dải,
    useFitCount đã chừa đúng bề rộng của nó nên số thẻ hiện không đổi. */
 .attach:not(.attach-grid)>.attach-more{margin-left:auto}
+/* Màn cảm ứng: "+N" (lối duy nhất tới các tệp đã gộp) và "Thu gọn" có vùng bấm tối thiểu 44×44. Nút giữ cỡ nhìn 32px, vùng bấm nới ra bằng
+   ::before: "+N" nới đều bốn phía vào khe giữa các thẻ và đệm của dải (nút to thật thì ô soạn Synchro Code ở 390px chỉ còn chỗ cho một thẻ);
+   "Thu gọn" chỉ nới lên trên, vào khe 6px và đệm dưới 8px của lưới, không lấn xuống ô nhập ngay dưới. */
+@media (pointer:coarse){
+  .attach-more{position:relative}
+  .attach-more::before{content:"";position:absolute;inset:min(0px,calc((100% - 44px) / 2))}
+  .attach-more.attach-less::before{inset:-13px 0 0}
+}
 /* Lưới đã trải: nhiều hàng, không cuộn ngang. Cao đúng hai hàng thẻ trọn vẹn (đệm trên 10px + 2 × (thẻ 120px + khe 8px)), không hàng nào bị cắt ngang;
    nhiều hơn thì cuộn dọc trong khung, dừng theo hàng, mép còn thẻ bị khuất thì mờ dần (fade-t / fade-b). Màn thấp: một hàng. */
 .attach.attach-grid{flex-wrap:wrap;overflow-x:hidden;overflow-y:auto;max-height:266px;scroll-snap-type:y proximity;scroll-padding:10px 0 8px}
