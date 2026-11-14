@@ -1122,6 +1122,8 @@ export const SAME_WORDS = new Set([
 export const SAME = new Set<string>([
   "(resolution:", "dppx)",
   "Synchro clone UI",
+  // Tên trường của khóa R2 (Cloudflare): giữ nguyên ở cả hai ngôn ngữ như trang của Cloudflare.
+  "Access Key ID", "Secret Access Key",
 ]);
 
 // ---------------------------------------------------------------- Đồng bộ ngôn ngữ toàn web (2026-10-28)
