@@ -145,7 +145,7 @@ html body .modal.pj-modal h2{font:600 16px/22px var(--font-sans)!important;lette
 .modal.pj-modal .pj-hint{font-size:13.5px;line-height:20px;color:var(--ds-muted);opacity:1}
 html body .modal.pj-modal label{font-size:13px;font-weight:560;margin:14px 0 6px}
 @media (max-width:760px){.pj-hero-f>*{transform:scale(.727);transform-origin:left bottom}}
-html body .pj-compose .plus-menu{transform-origin:top left}
+html body .pj-compose .plus-menu{bottom:auto!important;transform-origin:top left}
 .pj-compose .plus-menu .menu.cm-fly{top:0;bottom:auto}
 html body .pj-compose .composer{position:relative}
 .pj-compose .composer .at-menu{top:calc(100% + 8px);bottom:auto}
@@ -176,6 +176,6 @@ html body .modal.pj-modal h2{margin:0 0 6px}
 @media (max-width:760px){
 .pj-hero-f{overflow:visible}
 }
-.pj-compose .plus-menu{top:calc(100% + 8px);bottom:auto}
-.pj-compose .model-sub:not(.msub-models){top:0;bottom:auto}
+.pj-compose .plus-menu{top:calc(100% + 8px)}
+.pj-compose .model-sub:not(.msub-models){top:0;bottom:auto!important}
 }

@@ -16,9 +16,11 @@ import { fileURLToPath } from "node:url";
 const postcss = createRequire(import.meta.url)("postcss");
 
 // Trần hiện tại (số đo lúc đặt trần). Chỉ được hạ.
+// important 14 → 19 (chỉ trong nhánh B5, main vẫn 333): vòng rà B5 tìm ra 5 khai báo đang đè style nội dòng mà lần soát tay bỏ sót (bottom
+// của ba menu trong ô soạn tin dự án, width / padding ≤860px của hàng Cài đặt), trả lại !important; lý do ở KEEP trong css-unimportant.mjs.
 // htmlBody 572 → 582 (lần duy nhất tăng, B5 bước 4): khi chuyển !important sang lớp syn-over, 50 selector còn tiền tố html body được chép
 // sang khối syn-over (tiền tố quyết định bên thắng giữa các luật syn-over với nhau, gỡ thì đổi bên thắng); không thêm tiền tố cho selector mới.
-export const CEIL = { important: 14, htmlBody: 582, fontSize: 1278, zIndex: 63, mediaWidth: 90, darkHex: 100, inlineFontSize: 65, inlineZIndex: 22 };
+export const CEIL = { important: 19, htmlBody: 582, fontSize: 1278, zIndex: 63, mediaWidth: 90, darkHex: 100, inlineFontSize: 65, inlineZIndex: 22 };
 export const WIDTHS = new Set([480, 640, 760, 761, 860, 1100]);
 
 const walk = (d, ext, out = []) => {

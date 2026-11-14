@@ -81,9 +81,11 @@ function Seg({ value, options, onChange }: { value: string; options: string[]; o
   return <div className="group" role="group" aria-label={useContext(RowName)}>{options.map((s) => <button key={s} className={value === s ? "on" : ""} aria-pressed={value === s} onClick={() => onChange(s)}>{s}</button>)}</div>;
 }
 
-function Row({ t, d, children, top }: { t: React.ReactNode; d?: React.ReactNode; children?: React.ReactNode; top?: boolean }) {
+// top: không còn tác dụng. Viền trên của hàng đầu do CSS quyết định (.sy-settings .s-body .row { border }); style nội dòng borderTop: 0 cũ
+// chưa bao giờ hiện vì thua !important, gỡ !important (B5) thì nó lại thắng và mất viền trên của tấm. Giữ prop để không đổi các chỗ gọi.
+function Row({ t, d, children }: { t: React.ReactNode; d?: React.ReactNode; children?: React.ReactNode; top?: boolean }) {
   return (
-    <div className="row" style={top ? { borderTop: 0 } : undefined}>
+    <div className="row">
       <div><div className="t">{t}</div>{d && <div className="d">{d}</div>}</div>
       <RowName.Provider value={typeof t === "string" ? t : undefined}>{children}</RowName.Provider>
     </div>
@@ -267,7 +269,7 @@ function Account() {
       <Row t="What should Synchro call you?"><input className="field" aria-label="What should Synchro call you?" style={{ width: 280, margin: 0 }} value={call} placeholder={me?.profile.nickname || shortName(me?.profile.fullName || me?.name) || undefined} onChange={(e) => setCall(e.target.value)} onBlur={() => call.trim() !== (me?.profile.nickname ?? "") && saveProfile({ nickname: call })} /></Row>
       <Row t="Date of birth"><input className="field" aria-label="Date of birth" style={{ width: 280, margin: 0 }} inputMode="numeric" placeholder="DD/MM/YYYY" value={dob} onChange={(e) => { const d = e.target.value.replace(/\D/g, "").slice(0, 8); setDob([d.slice(0, 2), d.slice(2, 4), d.slice(4)].filter(Boolean).join("/")); }} onBlur={saveDob} /></Row>
       <Row t="What best describes your work?"><Select width={200} value={work || "Choose"} onChange={(v) => { setWork(v); saveProfile({ occupation: v }); }} options={OCCUPATIONS} /></Row>
-      <h3 style={{ marginTop: 14 }}>Instructions for Synchro</h3>
+      <h3>Instructions for Synchro</h3>
       <p className="d" style={{ margin: "0 0 10px" }}>Introduce yourself and tell Synchro how you like to work. Synchro takes this in as what it already knows about you, together with your name above and what it remembers from your chats, in every chat, in Synchro Code and in voice conversations, with every model, on any device.</p>
       <textarea className="textarea" aria-label="Instructions for Synchro" value={ins} onChange={(e) => setIns(e.target.value)} placeholder="e.g. I'm a high school student preparing for my exams and IELTS. Always answer in Vietnamese. Explain step by step, keep answers short and get to the point." />
       <div className={`ins-f ${ins.length > 20000 ? "over" : ""}`}><span>{ins.length > 20000 ? `${(ins.length - 20000).toLocaleString(locale())} characters over the limit · ` : ""}{ins.length.toLocaleString(locale())} / {(20000).toLocaleString(locale())}</span></div>
@@ -609,7 +611,7 @@ function Focus() {
           <Select width={110} value={mins} onChange={setMins} options={["–", "15 min", "30 min", "45 min"]} />
         </div>
       </Row>
-      <h3 style={{ margin: "18px 0 2px" }}>Quiet hours</h3>
+      <h3>Quiet hours</h3>
       <p className="d" style={{ margin: "0 0 12px" }}>Set time limits for Synchro. You can dismiss or adjust anytime.</p>
       <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
         {days.map((d, i) => (

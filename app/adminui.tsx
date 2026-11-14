@@ -340,7 +340,7 @@ export function AdminPanel({ Toggle }: { Toggle: ToggleT }) {
       </div>
 
       <h3 className="sec">Sign-in</h3>
-      <div className="row" style={{ borderTop: 0 }}>
+      <div className="row">
         <div><div className="t">New sign-ups</div><div className="d">Allow new accounts to be created. People who already have an account can still sign in.</div></div>
         <Toggle on={d.settings.signupOpen} label="New sign-ups" set={(v) => act(() => call("PATCH", "/api/admin/settings", { signupOpen: v }), v ? "Sign-ups opened" : "Sign-ups closed")} />
       </div>
