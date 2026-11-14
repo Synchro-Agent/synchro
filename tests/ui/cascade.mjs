@@ -88,6 +88,10 @@ const DUMP = `(() => { const out = {}; const path = (e) => { const p = []; for (
     for (const pe of ["::before", "::after"]) { const cs = getComputedStyle(e, pe); if (cs.content && cs.content !== "none" && cs.content !== "normal") out[k + pe] = take(cs); } }
   return out; })()`;
 
+// Chuyển động còn chạy (transition: … !important trong một lớp thắng FREEZE không lớp, như ở main trước B5 bước 4) thì giá trị đọc ngay
+// sau khi ép :hover / :focus-visible là giá trị đầu của transition, không phải giá trị cuối: hai phiên bản khác nhau giả. Đẩy mọi chuyển
+// động tới cuối trước khi đọc.
+const SETTLE = `(() => { for (const a of document.getAnimations()) { try { a.finish(); } catch {} } return 1; })()`;
 const VIEWS = [{ w: 1440, h: 900, mobile: false }, { w: 768, h: 1024, mobile: false }, { w: 390, h: 844, mobile: true }];
 const result = {};
 // Ép :hover rồi :focus-visible lên tối đa 40 phần tử tương tác của màn, chụp computed style của chính phần tử đó.
@@ -98,6 +102,7 @@ async function pseudo(name) {
   for (const state of ["hover", "focus-visible"]) {
     for (const nodeId of ids) {
       await P("CSS.forcePseudoState", { nodeId, forcedPseudoClasses: [state] }).catch(() => {});
+      await ev(SETTLE);
       const { object } = await P("DOM.resolveNode", { nodeId }).catch(() => ({}));
       if (!object) continue;
       const r = await P("Runtime.callFunctionOn", { objectId: object.objectId, returnByValue: true, functionDeclaration: `function () { const cs = getComputedStyle(this); const o = {}; for (let i = 0; i < cs.length; i++) o[cs[i]] = cs.getPropertyValue(cs[i]); let p = []; for (let e = this; e && e.nodeType === 1 && e !== document.documentElement; e = e.parentElement) { let i = 1; for (let s = e.previousElementSibling; s; s = s.previousElementSibling) if (s.tagName === e.tagName) i++; p.unshift(e.tagName.toLowerCase() + ":" + i); } return [p.join(">"), o]; }` });
@@ -111,6 +116,7 @@ async function capture(name) {
   for (const theme of ["light", "dark"]) {
     await ev(`document.documentElement.setAttribute("data-theme", ${JSON.stringify(theme)}); 1`);
     await sleep(400);
+    await ev(SETTLE);
     result[`${name} ${theme}`] = await ev(DUMP);
     await pseudo(`${name} ${theme}`);
   }
