@@ -88,5 +88,5 @@ html body .overlay.ft-lightbox:not(.auth-root *){background:rgba(0,0,0,.72)}
 .pw-forgot .lnk{background:none;border:0;padding:0;font:inherit;cursor:pointer}
 .pw-forgot .lnk:disabled{opacity:.6;cursor:default}
 /* Mô tả trong Cài đặt không để một từ rớt lẻ xuống dòng cuối */
-html body .sy-settings .row .d,html body .sy-settings .adm-perm-row .d{text-wrap:pretty}
+.sy-settings .row .d,.sy-settings .adm-perm-row .d{text-wrap:pretty}
 }
