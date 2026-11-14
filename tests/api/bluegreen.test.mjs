@@ -101,14 +101,14 @@ console.log("Vai trò primary / secondary");
   R.resetRoleForTest();
 }
 {
-  // Mọi việc chỉ được chạy ở một tiến trình phải nằm trong primaryDuties (instrumentation.ts), không ở phần chạy ở mọi tiến trình.
-  const src = fs.readFileSync(path.join(process.cwd(), "instrumentation.ts"), "utf8");
+  // Mọi việc chỉ được chạy ở một tiến trình phải nằm trong primaryDuties (instrumentation-node.ts), không ở phần chạy ở mọi tiến trình.
+  const src = fs.readFileSync(path.join(process.cwd(), "instrumentation-node.ts"), "utf8");
   const at = src.indexOf("function primaryDuties");
   const head = src.slice(0, at), body = src.slice(at);
   const duties = ["startOnBoot", "sweepOrphanClis", "resumeInterrupted", "startScheduler", "./app/brain", "recheckConnectors", "scheduleDiscovery", "startCliUpdates", "keepLinksAlive", "startPrWatch", "sweepEngineTemp", "ensurePluginTags", "ensureDefaultPlugins", "resumeJob", "retryVoicePurges", "noteBoot("];
   const wrong = duties.filter((d) => head.includes(d) || !body.includes(d));
   ok(at > 0 && !wrong.length, "litestream, bộ hẹn giờ, chạy lại lượt, cài plugin… chỉ chạy trong primaryDuties", wrong);
-  ok(/startRole\(\(\) => primaryDuties/.test(head) && head.includes("installShutdown("), "register(): cài tắt êm ở mọi tiến trình, việc nền qua startRole");
+  ok(/startRole\(\(\) => primaryDuties/.test(head) && head.includes("installShutdown("), "registerNode(): cài tắt êm ở mọi tiến trình, việc nền qua startRole");
   const runs = fs.readFileSync(path.join(process.cwd(), "app/runs.ts"), "utf8");
   ok(/status = 'running'"\)\.all\(\) as Row\[\]\)\.filter\(\(r\) => !live\.has\(r\.id\)\)/.test(runs), "resumeInterrupted bỏ qua lượt đang chạy trong chính tiến trình (đã phục vụ từ lúc còn là secondary)");
 }

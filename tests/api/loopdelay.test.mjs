@@ -38,8 +38,8 @@ const next = L.sampleLoop(false);
 ok(next && next.max < 100, "sau mỗi lần ghi bộ đếm được đặt lại", next);
 
 console.log("2. Bật lúc máy chủ khởi động");
-const inst = fs.readFileSync("instrumentation.ts", "utf8");
-ok(/import\("\.\/app\/loopdelay"\)\)\.startLoopMonitor\(/.test(inst), "instrumentation.ts gọi startLoopMonitor()");
+const inst = fs.readFileSync("instrumentation-node.ts", "utf8");
+ok(/import\("\.\/app\/loopdelay"\)\)\.startLoopMonitor\(/.test(inst), "instrumentation-node.ts gọi startLoopMonitor()");
 ok(/monitorEventLoopDelay\(\{ resolution: 20 \}\)/.test(fs.readFileSync("app/loopdelay.ts", "utf8").replace("resolution: RESOLUTION", "resolution: 20")), "lấy mẫu mỗi 20 ms");
 
 console.log("3. Cài đặt → Sức khỏe hệ thống");

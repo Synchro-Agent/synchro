@@ -2,8 +2,8 @@
 // bật bộ hẹn giờ tác vụ nền, và cài sẵn các plugin studio cho cả tổ chức nếu chưa từng cài.
 // Deploy xanh/lam (docs/van-hanh.md): việc nền chỉ chạy ở tiến trình primary (app/role.ts). Một tiến trình (SYNCHRO_ROLE trống) là primary ngay;
 // bản mới (SYNCHRO_ROLE=secondary) chỉ phục vụ yêu cầu tới khi nginx đã chuyển sang nó và bản cũ đã thoát, rồi mới chạy các việc dưới đây đúng một lần.
-export async function register() {
-  if (process.env.NEXT_RUNTIME !== "nodejs") return;
+// Chỉ chạy ở runtime Node: instrumentation.ts nạp tệp này sau khi đã kiểm NEXT_RUNTIME.
+export async function registerNode() {
   // Lỗi máy chủ hiện ở Cài đặt → Sức khỏe hệ thống; bật sớm nhất để không sót lỗi lúc khởi động.
   const ops = await import("./app/ops");
   ops.captureConsole();
