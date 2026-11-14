@@ -1059,6 +1059,9 @@ table{font-variant-numeric:tabular-nums}h1,h2,h3{text-wrap:balance}
 /* Nút "+N": gộp số thẻ vượt quá CHIP_LIMIT ở mép phải, bấm vào trải ra lưới. */
 .attach-more{flex:0 0 auto;align-self:center;display:inline-flex;align-items:center;justify-content:center;min-width:40px;height:32px;padding:0 11px;border-radius:var(--r-pill);border:.5px solid var(--border-strong);background:var(--card);color:var(--text-2);font-size:13px;font-weight:500;font-variant-numeric:tabular-nums;cursor:pointer}
 .attach-more:hover{background:var(--hover);color:var(--text)}
+/* U2: "+N" đứng sát mép phải của dải (blueprint "ở mép phải"), không ngay sau thẻ cuối với một khoảng trống bên phải. Vẫn là phần tử của dải,
+   useFitCount đã chừa đúng bề rộng của nó nên số thẻ hiện không đổi. */
+.attach:not(.attach-grid)>.attach-more{margin-left:auto}
 /* Lưới đã trải: nhiều hàng, không cuộn ngang. Cao đúng hai hàng thẻ trọn vẹn (đệm trên 10px + 2 × (thẻ 120px + khe 8px)), không hàng nào bị cắt ngang;
    nhiều hơn thì cuộn dọc trong khung, dừng theo hàng, mép còn thẻ bị khuất thì mờ dần (fade-t / fade-b). Màn thấp: một hàng. */
 .attach.attach-grid{flex-wrap:wrap;overflow-x:hidden;overflow-y:auto;max-height:266px;scroll-snap-type:y proximity;scroll-padding:10px 0 8px}
