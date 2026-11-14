@@ -491,6 +491,14 @@ function reply(provider, id, msgs, maxTokens, effort, sys = "") {
   if (q.includes("#media")) return { text: CLI.mediaReply(mediaOf(msgs)), q };
   // "#cxlink": câu trả lời lỡ chép Connect Link của Composio thành link Markdown và cả dưới "Sources:" (lỗi trong ảnh chụp của chủ sở hữu) — trang phải hiện một nút.
   if (q.includes("#cxlink")) return { text: "Bạn chưa kết nối Gmail nên mình chưa đọc được email.\n\n👉 [Kết nối Gmail](https://connect.composio.dev/link/lk_mock_gmail)\n\nKết nối xong thì nhắn lại để mình tóm tắt nhé.\n\nSources:\n- [Kết nối Gmail](https://connect.composio.dev/link/lk_mock_gmail)", q };
+  // "#artlong": artifact dài (cùng #streamslow chảy khoảng 40 giây) — kiểm thử khung xem tự mở / đã đóng khi rời trang chat giữa chừng
+  // (tests/ui/artfollow.mjs). Thêm "#artlate": đoạn dẫn dài trước, artifact ngắn đến sau (khoảng 6 giây sau khi bắt đầu).
+  if (q.includes("#artlong")) {
+    const late = q.includes("#artlate");
+    const lead = late ? Array.from({ length: 6 }, (_, i) => `Đoạn dẫn ${i + 1}: mình sắp xếp nội dung trước khi viết trang.`).join("\n") : "Mình viết trang dài.";
+    const body = Array.from({ length: late ? 4 : 160 }, (_, i) => `<p>Dòng ${i + 1} của trang.</p>`).join("\n");
+    return { text: `${lead}\n<artifact identifier="trang-dai" type="text/html" title="Trang dài">\n<!doctype html><html><body>\n${body}\n</body></html>\n</artifact>`, q };
+  }
   // "#artimg": artifact có ảnh từ URL ngoài (ảnh tĩnh của chính máy giả lập) — kiểm thử khung xem trước tự nhúng ảnh (artdoc.ts).
   if (q.includes("#artimg")) {
     const app = `http://localhost:${process.env.PORT ?? 3200}`;

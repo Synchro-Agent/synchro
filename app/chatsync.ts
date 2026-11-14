@@ -10,6 +10,7 @@ import { batches, earlyUsable, hashOf, keyOf, lastTime, losesUserMsgs, parseMeta
 import { tr } from "./i18n";
 import type { Chat, Project } from "./store";
 import { ls, scopedFor, userScope } from "./userscope";
+import { useChatStore } from "./chatstore.client";
 
 const PUSH_WAIT = 1500, POLL = 30_000, RUN_EVERY = 30_000, BATCH = 1_500_000, MAX_WAIT = 300_000;
 const URL_ = "/api/chats";
@@ -41,7 +42,10 @@ const setStatus = (p: Partial<SyncStatus>) => {
   n.risk = n.localFull && (n.pending > 0 || n.tooBig > 0);
   if (JSON.stringify(n) !== JSON.stringify(status)) { status = n; subs.forEach((f) => f()); }
 };
-export const useSyncStatus = () => useSyncExternalStore((f) => { subs.add(f); return () => { subs.delete(f); }; }, () => status, () => status);
+const subStatus = (f: () => void) => { subs.add(f); return () => { subs.delete(f); }; };
+export const useSyncStatus = () => useSyncExternalStore(subStatus, () => status, () => status);
+/** Một giá trị đơn tính từ trạng thái đồng bộ: chỉ vẽ lại khi giá trị đó đổi (thanh bên không vẽ lại sau mỗi lần đẩy lên máy chủ). */
+export const useSyncFlag = <T extends string | number | boolean>(pick: (s: SyncStatus) => T) => useSyncExternalStore(subStatus, () => pick(status), () => pick(status));
 
 // Lần hỏi đầu bắt đầu sớm (blueprint A3.4): trang chủ dựng sẵn ở máy chủ đã biết tài khoản, nên hỏi /api/chats?since= ngay lúc hydrate,
 // không chờ trang dựng xong và lượt đồng bộ khởi động. Lượt đồng bộ đầu dùng kết quả này nếu đúng tài khoản và đúng mốc (earlyUsable), không thì bỏ.
@@ -71,9 +75,13 @@ export type ChatSync = {
   flush: (ms?: number) => Promise<number>;
 };
 
-export function useChatSync(o: { uid: string | null; loaded: boolean; chats: Chat[]; projects: Project[]; running: ReadonlySet<number>; setChats: React.Dispatch<React.SetStateAction<Chat[]>>; setProjects: React.Dispatch<React.SetStateAction<Project[]>> }): ChatSync {
-  const live = useRef(o);
-  live.current = o;
+// Danh sách đoạn chat và dự án đọc thẳng từ kho (app/chatstore.client.ts, blueprint B2): Home không còn vẽ lại theo từng mẩu chữ đang chảy
+// nên không truyền danh sách qua prop; live.current.chats luôn là bản mới nhất trong kho.
+type SyncOpts = { uid: string | null; loaded: boolean; running: ReadonlySet<number>; setChats: React.Dispatch<React.SetStateAction<Chat[]>>; setProjects: React.Dispatch<React.SetStateAction<Project[]>> };
+const withLists = (o: SyncOpts) => ({ ...o, get chats(): Chat[] { return useChatStore.getState().chats; }, get projects(): Project[] { return useChatStore.getState().projects; } });
+export function useChatSync(o: SyncOpts): ChatSync {
+  const live = useRef(withLists(o));
+  live.current = withLists(o);
   const sess = useRef<Sess | null>(null);
   const fit = useRef({ chat: new Set<string>(), project: new Set<string>() });
   const full = useRef({ chat: false, project: false });
@@ -266,7 +274,7 @@ export function useChatSync(o: { uid: string | null; loaded: boolean; chats: Cha
         if (d === null) delete meta.dirty[key]; else meta.dirty[key] = d;
       }
     };
-    scan("chat", o.chats); scan("project", o.projects);
+    scan("chat", live.current.chats); scan("project", live.current.projects);
     // Máy chủ đã có mà bản ở đây không còn (lần ghi trước của trình duyệt thất bại vì hết chỗ): lấy lại.
     for (const key of Object.keys(meta.known)) if (!here.has(key) && !meta.gone[key]) need.push(key);
     const tick = () => { if (!document.hidden && navigator.onLine !== false && ok(s)) void pull(s).then(() => { if (ok(s) && !s.timer) later(s, 0); }); };
@@ -284,9 +292,11 @@ export function useChatSync(o: { uid: string | null; loaded: boolean; chats: Cha
   }, [o.loaded, o.uid]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Mục nào đổi (đối tượng khác) mà không phải vừa từ máy chủ về thì chờ đẩy lên. Mục biến mất không suy ra là xóa.
-  useEffect(() => {
+  // Theo dõi kho (trước đây là hiệu ứng theo prop chats / projects của Home): chạy ngay khi danh sách đổi, kể cả khi Home không vẽ lại.
+  // apply() đánh dấu fromServer TRƯỚC khi ghi vào kho nên bản vừa từ máy chủ về không bị coi là sửa ở thiết bị này.
+  useEffect(() => useChatStore.subscribe((st, pv) => {
     const s = sess.current;
-    if (!s || !ok(s)) return;
+    if (!s || !ok(s) || (st.chats === pv.chats && st.projects === pv.projects)) return;
     let any = false;
     const now = Date.now();
     const scan = (kind: SyncKind, l: (Chat | Project)[]) => {
@@ -301,10 +311,11 @@ export function useChatSync(o: { uid: string | null; loaded: boolean; chats: Cha
       }
       s.prev[kind] = next;
     };
-    scan("chat", o.chats); scan("project", o.projects);
+    if (st.chats !== pv.chats) scan("chat", st.chats);
+    if (st.projects !== pv.projects) scan("project", st.projects);
     // Không đặt lại đồng hồ đang chạy: chữ đang chảy mỗi khung hình không được làm trễ mãi việc đẩy.
     if (any && !s.timer) later(s);
-  }, [o.chats, o.projects]); // eslint-disable-line react-hooks/exhaustive-deps
+  }), []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Câu trả lời vừa xong: đẩy bản cuối ngay, không chờ hết nhịp đẩy thưa của lúc đang chạy.
   useEffect(() => { const s = sess.current; if (s && ok(s) && Object.keys(s.meta.dirty).length) later(s); }, [o.running]); // eslint-disable-line react-hooks/exhaustive-deps

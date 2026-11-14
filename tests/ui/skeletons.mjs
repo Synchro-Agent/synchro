@@ -33,6 +33,14 @@ const unseedSrv = () => fetch(B + "/api/chats", { method: "PUT", headers: { cook
 
 const t = await openChrome({ base: B, port: Number(process.env.CDP_PORT ?? 9374), name: "skeletons", shots: process.env.SHOTS });
 const { P, ev, until } = t;
+// Lời chào ở trang chủ theo giờ của máy: đặt múi giờ để giờ địa phương luôn là khoảng 2 giờ sáng, lời chào dài nhất ("Khuya rồi, bạn chưa ngủ à?",
+// từng xuống hai dòng ở 375px trong khi khung chờ một dòng). Bài đo cho cùng kết quả dù chạy lúc nào; TZ_HOUR=<0–23> để thử giờ khác.
+{
+  const want = Number(process.env.TZ_HOUR ?? 2), d = (want - new Date().getUTCHours() + 24) % 24, o = d > 14 ? d - 24 : d;
+  const tz = o === 0 ? "Etc/GMT" : o > 0 ? `Etc/GMT-${o}` : `Etc/GMT+${-o}`;
+  await P("Emulation.setTimezoneOverride", { timezoneId: tz });
+  console.log(`(múi giờ ${tz}: giờ địa phương ${(new Date().getUTCHours() + o + 24) % 24}h)`);
+}
 // Giữ chậm yêu cầu khớp mẫu (một lần bật một mẫu); yêu cầu khác đi thẳng. Mẫu là địa chỉ (API) hoặc { js: /…/ }: tệp mã có nội dung khớp —
 // bản production đặt tên tệp mã theo số và mã băm (không có "artifactui", "settings" như bản dev), nên nhận phần mã bằng một chuỗi chỉ module đó có.
 // Tệp mã giữ ở chặng nhận trả lời (đã đọc được nội dung) rồi mới thả ra trình duyệt. Tắt bộ nhớ đệm để tệp mã đã tải ở bước trước vẫn đi qua mạng.
@@ -118,6 +126,7 @@ try {
     } else ok(!boot.panel && !boot.rail, "điện thoại: không vẽ thanh bên (thanh bên thật là ngăn kéo đang đóng)", boot);
     same("ô soạn tin", boot.box, real.box, ["l", "t", "w", "h"], 3);
     same("dòng lời chào (trên, trái)", boot.greet, real.greet, ["l", "t"], 3);
+    same("lời chào một dòng như khung chờ (cao)", boot.greet, real.greet, ["h"], 3);
     await cls(`${tag} · mở app`);
 
     // Mở thẳng một đoạn chat: vùng chính chờ dạng tin nhắn, ô soạn tin dưới đáy.

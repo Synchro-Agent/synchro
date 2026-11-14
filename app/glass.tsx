@@ -1,5 +1,6 @@
 "use client";
 import { useEffect } from "react";
+import { watch } from "./domwatch";
 
 /*
  * Liquid glass runtime.
@@ -118,13 +119,13 @@ export default function GlassFX() {
       n.querySelectorAll?.(LENS).forEach((el) => { if (!seen.has(el)) { seen.add(el); apply(el as HTMLElement); ro.observe(el); } });
     };
     scan(document);
-    const mo = new MutationObserver((ms) => ms.forEach((m) => m.addedNodes.forEach((n) => {
+    // Bộ theo dõi <body> dùng chung (domwatch.ts), chạy ngay: ô soạn tin mới gắn (trang Mới → đoạn chat) có kính ngay khung hình đầu.
+    const unwatch = watch((ms) => ms.forEach((m) => m.addedNodes.forEach((n) => {
       if (n.nodeType !== 1) return;
       const el = n as HTMLElement;
       if (el.matches?.(LENS) && !seen.has(el)) { seen.add(el); apply(el); ro.observe(el); }
       scan(el);
-    })));
-    mo.observe(document.body, { childList: true, subtree: true });
+    })), { types: ["childList"] });
 
     const near = (e: Event) => (e.target as HTMLElement)?.closest?.(GLOW) as HTMLElement | null;
     let pressed: HTMLElement | null = null;
@@ -141,7 +142,7 @@ export default function GlassFX() {
     window.addEventListener("pointercancel", up, true);
     document.addEventListener("scroll", scroll, true);
     return () => {
-      ro.disconnect(); mo.disconnect(); svg.remove();
+      ro.disconnect(); unwatch(); svg.remove();
       document.removeEventListener("pointerdown", down, true);
       window.removeEventListener("pointerup", up, true);
       window.removeEventListener("pointercancel", up, true);

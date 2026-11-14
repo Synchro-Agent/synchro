@@ -34,7 +34,8 @@ const mem = fs.readFileSync("app/memory.ts", "utf8");
 ok(/<how_to_use>[\s\S]*\$\{NO_QUOTE_INS\}[\s\S]*<\/how_to_use>/.test(mem), "câu đó nằm trong phần cách dùng hướng dẫn cá nhân (userContext)");
 
 console.log("3. Câu trả lời không còn ghép nội dung hướng dẫn");
-const page = fs.readFileSync("app/home.tsx", "utf8");
+// Trang chủ tách thành home.tsx (lượt chat) và Thread.tsx (dòng tin, blueprint B2): đọc cả hai.
+const page = fs.readFileSync("app/home.tsx", "utf8") + fs.readFileSync("app/Thread.tsx", "utf8");
 ok(!/ins\.trim\(\)\.slice\(/.test(page) && !/Applied your instructions/.test(page) && !/Đã áp dụng hướng dẫn của bạn/.test(page), "page.tsx không còn ghép đoạn đầu hướng dẫn cá nhân vào chữ câu trả lời");
 ok(/insApplied/.test(page) && /tr\("Đã áp dụng hướng dẫn cá nhân"\)/.test(page) && /tr\("Đã áp dụng ngữ cảnh dự án"\)/.test(page), "chỉ còn cờ trên tin nhắn và chip trung tính qua tr()");
 ok(D.VI2EN["Đã áp dụng hướng dẫn cá nhân"] === "Personal instructions applied" && D.VI2EN["Đã áp dụng ngữ cảnh dự án"] === "Project context applied", "chip có bản tiếng Anh");
