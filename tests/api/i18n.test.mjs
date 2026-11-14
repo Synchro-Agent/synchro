@@ -45,19 +45,25 @@ const files = [];
 const walk = (d) => { for (const f of rd(d)) { const p = P.join(d, f); if (st(p).isDirectory()) walk(p); else if (/\.tsx?$/.test(f) && !/\.d\.ts$/.test(f)) files.push(p); } };
 walk(P.join(process.cwd(), "app"));
 const src = new Map(files.map((f) => [f, rf(f, "utf8")]));
-// Tệp nhập (không chỉ kiểu) từ tệp khác trong app/: tìm ngược xem tệp giao diện nào kéo theo i18n-server.ts (kéo cả từ điển vào gói tải về).
+// Tệp nhập (không chỉ kiểu) từ tệp khác trong app/: mọi tệp mà một tệp "use client" kéo theo (kể cả gián tiếp) nằm trong gói tải về,
+// nên không được tới i18n-server.ts (kéo cả từ điển vào gói tải về). Tệp máy chủ (route, trang máy chủ, chatengine…) dùng thoải mái.
 const deps = (f) => [...src.get(f).matchAll(/(?:^|\n)\s*(?:import|export)\s+(?!type\b)([^;]*?)\s*from\s*"(\.{1,2}\/[^"]+)"|import\("(\.{1,2}\/[^"]+)"\)/g)]
   .filter((m) => m[3] || !/^\{[^}]*\}$/.test(m[1].trim()) || !m[1].trim().slice(1, -1).split(",").every((x) => !x.trim() || /^type\s/.test(x.trim())))
   .map((m) => { const b = P.resolve(P.dirname(f), m[2] ?? m[3]); return [b + ".ts", b + ".tsx", P.join(b, "index.ts")].find((x) => src.has(x)); }).filter(Boolean);
-const srv = P.join(process.cwd(), "app", "i18n-server.ts"), reach = new Set([srv]);
-for (let grew = true; grew;) { grew = false; for (const f of files) if (!reach.has(f) && deps(f).some((d) => reach.has(d))) { reach.add(f); grew = true; } }
-const clientHit = [...reach].filter((f) => /^\s*["']use client["']/.test(src.get(f)) || f.endsWith(".tsx"));
-ok(reach.size > 1 && !clientHit.length, `không tệp giao diện nào kéo theo i18n-server.ts (${reach.size - 1} tệp máy chủ dùng)`, clientHit.map((f) => P.relative(process.cwd(), f)).join(", "));
-
+const srv = P.join(process.cwd(), "app", "i18n-server.ts");
+const users = files.filter((f) => deps(f).includes(srv));
+const client = new Map(files.filter((f) => /^\s*["']use client["']/.test(src.get(f))).map((f) => [f, [f]]));
+for (const queue = [...client.keys()]; queue.length;) { const f = queue.shift(); for (const d of deps(f)) if (!client.has(d)) { client.set(d, [...client.get(f), d]); queue.push(d); } }
+const leak = client.get(srv);
+ok(users.length > 1 && !leak, `không tệp giao diện nào kéo theo i18n-server.ts (${users.length} tệp máy chủ nhập trực tiếp)`, leak?.map((f) => P.relative(process.cwd(), f)).join(" → "));
 // Mẫu tf để trong bảng (khóa động, bộ quét không thấy): mọi giá trị phải là khóa có bản dịch giữ {biến}.
-const tbl = (file, name) => [...(rf(P.join(process.cwd(), file), "utf8").match(new RegExp(`const ${name}[^=]*= \\{([\\s\\S]*?)\\n\\};`))?.[1] ?? "").matchAll(/:\s*"([^"]+)"/g)].map((m) => m[1]);
-const pick = tbl("app/models.ts", "AUTO_PICK"), badPick = pick.filter((k) => !/\{model\}/.test(D.VI2EN[k] ?? ""));
-ok(pick.length >= 16 && !badPick.length, `câu “Tự động chọn … cho việc …” có bản dịch (${pick.length} loại việc)`, badPick.join("; "));
+const tbl = (file, name) => [...(rf(P.join(process.cwd(), file), "utf8").match(new RegExp(`const ${name}[^=]*= \\{([\\s\\S]*?)\\};`))?.[1] ?? "").matchAll(/:\s*"([^"]+)"/g)].map((m) => m[1]);
+for (const [file, name, v, min, what] of [["app/models.ts", "AUTO_PICK", "model", 16, "câu “Tự động chọn … cho việc …”"], ["app/healthui.tsx", "UNIT", "n", 15, "đơn vị số đếm ở Sức khỏe hệ thống"]]) {
+  const keys = tbl(file, name), bad = keys.filter((k) => !new RegExp(`\\{${v}\\}`).test(D.VI2EN[k] ?? ""));
+  ok(keys.length >= min && !bad.length, `${what} có bản dịch (${keys.length} mẫu)`, bad.join("; "));
+}
+// Ba khóa Blueprint B6 mục 3 từng thiếu: phải còn trong từ điển.
+ok(["Không tải được thư viện chụp ảnh", "Gói subscription", "Hội thoại"].every((k) => D.VI2EN[k] && !/[ạảãâầấậẩẫăằắặẳẵẹẻẽêềếệểễỉĩịọỏõôồốộổỗơờớợởỡụủũưừứựửữỳỵỷỹđ]/i.test(D.VI2EN[k])), "có bản tiếng Anh: “Không tải được thư viện chụp ảnh”, “Gói subscription”, “Hội thoại”");
 
 console.log("4. Không còn tên mặc định của chủ dự án");
 // Tên / cách xưng hô mặc định phải rỗng (lấy từ hồ sơ khi trống); tên thật chỉ được nằm trong chú thích.

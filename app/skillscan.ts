@@ -11,6 +11,7 @@ import { OneShotErr, oneShot, pickModel, usableModels } from "./ai/anymodel";
 import { listSkills } from "./skillstore";
 import { pluginSkillsOf } from "./plugins";
 import { timeLimit } from "./safefetch";
+import { tfOn, trOn } from "./i18n-server";
 
 export type Verdict = "junk" | "useless" | "ok" | "unknown";
 // key: "u:<tên>" (skill của người dùng) hoặc "p:<id thư viện>:<tên>". where: tên thư viện ("" với skill của người dùng).
@@ -72,11 +73,12 @@ function hints(s: Src, text: string): string[] {
   if (links >= 8 && links * 60 > text.length / 2) h.push("phần lớn là link");
   return h;
 }
-const placeOf = (s: Pick<Src, "kind" | "where">, lang: Lang) => (s.kind === "skill" ? (lang === "en" ? "Your skills" : "Skill của bạn") : `${lang === "en" ? "library" : "thư viện"} ${s.where}`);
+// Lý do do bộ luật viết (không qua model): dịch ở máy chủ theo ngôn ngữ người quét (trOn / tfOn, khóa trong i18n-ux.ts).
+const placeOf = (s: Pick<Src, "kind" | "where">, lang: Lang) => (s.kind === "skill" ? trOn("Skill của bạn", lang) : tfOn("thư viện {where}", { where: s.where }, lang));
 const RULE = {
-  empty: (n: number, lang: Lang) => (lang === "en" ? `Almost empty (${n} characters of instructions), so the model has nothing to follow.` : `Nội dung gần như trống (${n} ký tự hướng dẫn), model không có gì để làm theo.`),
-  dup: (s: Src, lang: Lang) => (lang === "en" ? `Same content as “${s.name}” (${placeOf(s, lang)}), so it only adds a duplicate.` : `Trùng hệt nội dung với “${s.name}” (${placeOf(s, lang)}), chỉ thêm một bản lặp.`),
-  none: (lang: Lang) => (lang === "en" ? "The model didn't return a verdict for this skill. Scan again to retry." : "Model chưa trả lời cho skill này. Quét lại để thử lần nữa."),
+  empty: (n: number, lang: Lang) => tfOn("Nội dung gần như trống ({n} ký tự hướng dẫn), model không có gì để làm theo.", { n }, lang),
+  dup: (s: Src, lang: Lang) => tfOn("Trùng hệt nội dung với “{name}” ({place}), chỉ thêm một bản lặp.", { name: s.name, place: placeOf(s, lang) }, lang),
+  none: (lang: Lang) => trOn("Model chưa trả lời cho skill này. Quét lại để thử lần nữa.", lang),
 };
 
 const SYSTEM = (lang: Lang) => `<skill_audit>

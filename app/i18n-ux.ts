@@ -178,6 +178,12 @@ export const UX_VI2EN: Record<string, string> = {
   "{n} tệp": "{n} file|{n} files",
   "đã dùng {n} lần": "used {n}×",
   "Repo có {n} skill ({names}). Hãy dán link tới thư mục của skill cần thêm.": "This repository has {n} skill ({names}). Paste a link to the folder of the skill you want.|This repository has {n} skills ({names}). Paste a link to the folder of the skill you want.",
+  // Thông báo ở máy chủ (skillscan.ts, skillexport.ts, route xuất skill): gọi qua trOn / tfOn (i18n-server.ts)
+  "Skill của bạn": "Your skills",
+  "thư viện {where}": "library {where}",
+  "Nội dung gần như trống ({n} ký tự hướng dẫn), model không có gì để làm theo.": "Almost empty ({n} characters of instructions), so the model has nothing to follow.",
+  "Trùng hệt nội dung với “{name}” ({place}), chỉ thêm một bản lặp.": "Same content as “{name}” ({place}), so it only adds a duplicate.",
+  "Model chưa trả lời cho skill này. Quét lại để thử lần nữa.": "The model didn't return a verdict for this skill. Scan again to retry.",
 };
 export const UX_RULES_EN: [RegExp, (m: RegExpMatchArray) => string][] = [
   [/^Khóa Replicate không hợp lệ hoặc không có quyền \((\d+)\)\.$/, (m) => `The Replicate key is invalid or lacks permission (${m[1]}).`],
