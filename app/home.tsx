@@ -2460,6 +2460,9 @@ export default function Home({ boot }: { boot?: BootData | null }) {
         const t = e.target as HTMLElement;
         if (spOpen && t.closest(".nav-item,.chat-item,.user,.icon-btn") && !t.closest(".nav-row,.nav-sub")) setSpOpen(false);
         if (narrow() && t.closest(".nav-item,.chat-item") && !t.closest(".nav-row > .icon-btn, .chat-item .icon-btn, .chat-item input, [data-bk]")) setTimeout(() => setOpen(false), 0);
+        // U3, 761–860px: thanh điều hướng đứng trên lớp phủ (để bấm được mục) nhưng vẫn là "bên ngoài" bảng đoạn chat nổi: bấm chỗ trống hay nút
+        // Tìm kiếm trên thanh cũng đóng bảng. Trừ logo (tự bật / tắt bảng) và ảnh đại diện cùng menu của nó. Điện thoại: thanh nằm trong ngăn kéo.
+        else if (open && t.closest(".rail") && !t.closest(".rail-mark, .rail-user, .menu") && window.matchMedia("(min-width: 761px) and (max-width: 860px)").matches) setTimeout(() => setOpen(false), 0);
       }}>
       {/* Thanh điều hướng dọc: luôn hiện trên máy tính (cả khi thu bảng đoạn chat), có nhãn dưới icon; mục đang mở có ô icon màu mực. */}
       <nav className="rail" aria-label="Điều hướng">
