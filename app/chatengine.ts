@@ -1418,6 +1418,8 @@ async function skillSet(user: UserRow, body: Record<string, any>, messages: unkn
   const direct = st ? studioListed(st) : [];
   const names = new Set<string>();
   for (let i = 0; i < list.length; i++) { if (names.has(list[i].name)) list.splice(i--, 1); else names.add(list[i].name); }
+  // Skill người dùng tự bật / dùng ở mọi nơi (kể cả skill tự xếp vào một studio): không bao giờ bị bộ lọc studio bên dưới bỏ khỏi gợi ý.
+  const own = new Set(list.map((k) => k.name));
   for (const k of direct) if (!names.has(k.name)) { names.add(k.name); list.push(k); }
   // Mọi thư viện đã cài đều tự dùng được: mỗi studio là một mục "studio-…", mỗi plugin khác là một mục "lib-…" trong available_skills.
   // Model tự mở thư viện khi việc cần tới (load_skill), rồi chọn skill cụ thể bên trong. Prompt chỉ thêm một dòng mỗi thư viện,
@@ -1485,9 +1487,12 @@ async function skillSet(user: UserRow, body: Record<string, any>, messages: unkn
     const prep = prepareCandidates(candidateKey(c.user.id, pluginCacheGen()), list.map((k) => ({ skill: k })), descHash);
     // Câu chỉ thuộc một studio ("Soạn kế hoạch ra mắt sản phẩm mới" → Tài liệu): skill chỉ nằm trong thư viện của studio khác không được gợi ý,
     // dù trùng chữ — "product" trong mô tả UI/UX Pro Max từng đưa skill Thiết kế lên đầu và model trả trang web thay cho tài liệu.
-    // Skill riêng, skill của plugin khác và của danh mục Claude vẫn chấm như cũ; câu thuộc nhiều studio (hoặc không rõ) thì không lọc.
+    // Chỉ bỏ khỏi gợi ý: thư viện studio kia vẫn có trong available_skills, model tự mở được (load_skill / search_skills).
+    // Không lọc: skill riêng của người dùng (own), skill của studio đang bấm, skill của plugin khác và của danh mục Claude;
+    // câu thuộc nhiều studio (hoặc không rõ) thì không lọc.
     const asked = STUDIOS.filter((k) => want[k] > 0);
-    const offStudio = (k: Skill) => asked.length === 1 && !!libs[k.name]?.length && libs[k.name]!.every((l) => l.key.startsWith("studio-") && l.key !== `studio-${asked[0]}`);
+    const offStudio = (k: Skill) => asked.length === 1 && !own.has(k.name) && !!libs[k.name]?.length
+      && libs[k.name]!.every((l) => l.key.startsWith("studio-") && l.key !== `studio-${asked[0]}` && l.key !== `studio-${studio}`);
     const cands = prep.names.map((n) => prep.byName.get(n)!).filter((b) => !offStudio(b.skill)).map((b) => ({ skill: b.skill, weight: (catSkills.has(b.skill) ? 0.5 : 1) * (inStudio(b.skill) ? 1.3 : 1) }));
     // Có provider embedding: lấy ~50 skill gần nhất theo nghĩa rồi chấm lại; không có thì suggestSemantic tự lùi về bộ chấm từ khóa. Skill riêng (không thuộc danh mục) luôn được giữ.
     const keep = new Set(cands.filter((x) => !catSkills.has(x.skill)).map((x) => x.skill.name));
