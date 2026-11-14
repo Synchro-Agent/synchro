@@ -25,6 +25,13 @@ if (!cookie) throw new Error("login failed");
 { const R = createRequire(process.cwd() + "/package.json");
   const db = new (R("better-sqlite3"))(process.cwd() + "/data-mock/synchro.db"); db.pragma("busy_timeout = 5000");
   db.prepare("DELETE FROM usage_events WHERE user_id = (SELECT id FROM users WHERE email = ?)").run(email); db.close(); }
+// Model viết "#artbug" phải cố định thì hội đồng (hãng khác với model viết, model nhanh rẻ nhất) mới cố định. Trước đây để Tự động nên kết quả
+// tùy trạng thái bộ khác để lại: gói Claude của quản trị viên (tests/api/approve-edit.test.mjs, tests/ui/states.mjs đăng nhập mà không đăng xuất)
+// còn hạn mức thì Claude Code giả lập viết (không có bản dựng lỗi); hết hạn mức 5 giờ, hay chưa đăng nhập, thì Tự động chọn GPT và hội đồng
+// là Gemini / Claude. Bắt đầu như máy chủ mới (chưa đăng nhập gói, nhóm Claude dùng khóa API) và chọn tay Claude Sonnet qua khóa API.
+await api("POST", "/api/engines/claude/logout");
+const uid = (await api("GET", "/api/auth/me")).j?.user?.id;
+const WRITER = "anthropic/claude-sonnet-5-5";
 const capsBefore = (await api("GET", "/api/caps")).j?.caps ?? {};
 await api("PATCH", "/api/caps", { art: true, crit: true });
 
@@ -65,6 +72,8 @@ const ask = async (text) => {
 const pill = `document.querySelector(".art-panel .cr-pill")?.textContent ?? ""`;
 
 try {
+  // Đặt trước khi mã của trang chạy (trang đang mở ghi lại lựa chọn cũ khi tải lại).
+  await P("Page.addScriptToEvaluateOnNewDocument", { source: `try { localStorage.setItem(${JSON.stringify(`u:${uid}:model`)}, ${JSON.stringify(WRITER)}); } catch {}` });
   await P("Page.navigate", { url: B + "/" });
   await until(`!!document.querySelector("textarea")`, 30000, "app");
   await sleep(1200);
@@ -80,7 +89,9 @@ try {
   const marked = await ev(`[...document.querySelectorAll(".art-code > div.cr")].map((d) => d.querySelector("span").textContent)`);
   ok(JSON.stringify(marked) === '["5"]' && (await ev(`!!document.querySelector(".art-code > div.cr-high")`)), "chế độ Mã: đánh dấu đúng dòng 5 (mức nghiêm trọng)", JSON.stringify(marked));
   const note = await ev(`document.querySelector(".cr-note")?.textContent ?? ""`);
-  ok(/Nghiêm trọng/.test(note) && /chưa có giá trị/.test(note) && /gpt/.test(note), "ghi chú ngay dưới dòng: mức độ, lỗi, model đã phản biện", note);
+  // Model viết là Claude (WRITER) nên hội đồng tự chạy là model nhanh của hãng khác: GPT (tên hiện như ở bộ chọn model, "GPT-6 Luna").
+  const by = await ev(`document.querySelector(".cr-note .cr-by")?.textContent ?? ""`);
+  ok(/Nghiêm trọng/.test(note) && /chưa có giá trị/.test(note) && /gpt/i.test(by) && !/claude/i.test(by), "ghi chú ngay dưới dòng: mức độ, lỗi, model đã phản biện (hãng khác model viết)", note);
   await click(byText(".cr-note .lnk", "Xem bản sửa"), "show fix"); await sleep(300);
   ok((await ev(`document.querySelector(".cr-fix")?.textContent ?? ""`)).trim() === "const items = [];", "xem trước bản sửa");
   await shot("2-note");
