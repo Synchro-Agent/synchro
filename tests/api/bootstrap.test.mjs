@@ -65,8 +65,10 @@ try {
   ok(!/^"use client"/.test(page) && /cookies\(\)/.test(page) && /bootFor\(/.test(page) && /<Home boot=\{boot\} \/>/.test(page), "app/page.tsx: server component đọc cookie, dựng gói, truyền <Home boot>");
   ok(/^"use client"/.test(home) && /export default function Home\(\{ boot \}/.test(home), "app/home.tsx: thân trang (client) nhận boot");
   ok(/seedModels\(b\.models\)/.test(home) && /seedCaps\(b\.caps\)/.test(home) && /seedMeta\(b\.studios\)/.test(home) && /seedInboxCount\(b\.inboxCount\)/.test(home), "gieo models, caps, studios, số mục Hộp thư từ boot");
-  ok(/tries === undefined \? bootRef\.current : null/.test(home), "lần đầu dùng gói dựng sẵn, lần thử lại mới hỏi /api/auth/me");
-  ok(/prefetchChats\(boot\.user\.id\)/.test(home), "hỏi /api/chats?since= ngay lúc hydrate");
+  // Hiệu ứng mở app tách sang app/homehooks.ts (blueprint B2 bước 8): Home gọi useBoot({ boot: bootRef.current … }) và usePageSetup(boot).
+  const hooks = src("app/homehooks.ts");
+  ok(/tries === undefined \? live\.current\.boot : null/.test(hooks) && /useBoot\(\{ boot: bootRef\.current/.test(home), "lần đầu dùng gói dựng sẵn, lần thử lại mới hỏi /api/auth/me");
+  ok(/prefetchChats\(boot\.user\.id\)/.test(hooks) && /usePageSetup\(boot\)/.test(home), "hỏi /api/chats?since= ngay lúc hydrate");
   ok(/useCodePrefs\(cpWant\)/.test(home) && !/useCodePrefs\(\)/.test(home), "/api/code/prefs hoãn tới khi cần");
   ok(/const needBrw = view === "chat" \|\| brwFor !== null/.test(home) && !/if \(me\) fetch\("\/api\/browser"\)/.test(home), "/api/browser hoãn tới khi mở đoạn chat / khung trình duyệt");
   for (const f of ["app/studios.ts", "app/ghadd.tsx", "app/skillsui.tsx"]) ok(!/fetch\("\/api\/plugins\?view=meta"\)/.test(src(f)) && /cachedJson<PluginsMeta>\(META\)/.test(src(f)), `${f}: view=meta qua cachedJson`);

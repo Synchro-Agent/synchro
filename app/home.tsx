@@ -35,9 +35,7 @@ import type { PaletteCmd, PaletteGo } from "./palette";
 import { CHIP_LIMIT } from "./composerchips";
 import { AttachStrip } from "./attachstrip";
 import { ASK_EVENT } from "./askcard";
-import { installTips } from "./tips";
-import { fit as fitFloat, installFloatFit } from "./floatfit";
-import { installA11y } from "./a11y";
+import { fit as fitFloat } from "./floatfit";
 import { steerRun } from "./llm";
 import { attachRun, callLLM, olderDigest, cancelRun, LLMError, setActiveEffort, setActiveModel, setApprover, type ApprovalCall, type ApprovalAnswer, type RunMeta, type LibUse, type Decision, buildSystemPrompt, extractMemory, getRelevantContext, HISTORY_LIMIT, MEMORY_EVERY_N_USER_MSGS, type LLMMsg } from "./llm";
 import { Confirm, LangModal, LogoutConfirm, ProjectModal, Settings, ShortcutsModal, UploadModal, UpgradeModal } from "./modals";
@@ -47,6 +45,7 @@ import { countRender } from "./perfmark";
 import { resetUi, sameFields, selectChatMeta, selectCurChat, selectNeedKey, useChatState, useChatStore, useChats, usePanelUi, useSideUi } from "./chatstore.client";
 import { useEvent } from "./useevent";
 import { useClickAway } from "./clickaway";
+import { useBoot, useDragDrop, usePageSetup, useShortcuts } from "./homehooks";
 import type { CodeItem, Say, View } from "./hometypes";
 import { Sidebar, useTagsAll, type SideActs } from "./Sidebar";
 import { ChatThread, openLastProduct, stickToBottom, type BrwState, type ThreadActs } from "./Thread";
@@ -65,17 +64,16 @@ const vagueMsg = (t: string) => t.trim().split(/\s+/).length <= 3 || /^(xin )?ch
 // "project" (chi tiết một dự án) dùng chung #v=projects với danh sách dự án. "new"/"chat" không có #v=.
 const HASH_VIEW: Partial<Record<View, string>> = { projects: "projects", project: "projects", artifacts: "artifacts", inbox: "inbox", brain: "brain", code: "code", speech: "speech", customize: "skills" };
 const VIEW_OF_HASH: Record<string, View> = { projects: "projects", artifacts: "artifacts", inbox: "inbox", brain: "brain", code: "code", speech: "speech", skills: "customize" };
-import { AppCtx, chatFont, useApp, VOICE_LANG, VOICE_RATE, initials, readPref, reloadPrefs, resetPrefs, usePref, type Chat, type Msg, type Project } from "./store";
+import { AppCtx, useApp, VOICE_LANG, VOICE_RATE, initials, readPref, reloadPrefs, resetPrefs, usePref, type Chat, type Msg, type Project } from "./store";
 import { IMAGE_PLANS, allowsModel, clampEffort, effortCap, effortsFor, isEffort, legacyModel, type Effort } from "./catalog";
 import { AUTO, fitModel, modelName, modelsSettled, refreshModels, seedModels, useModels } from "./models";
 import type { BootData } from "./bootdata";
 import { seedInboxCount } from "./inboxcount";
-import { loadMe, watchSession } from "./session";
 import { useFitPlaceholder } from "./phfit";
 import type { ProviderInfo } from "./catalog";
 import { useInboxCount } from "./inboxcount";
 import { adoptLegacyData, clearAccountData, ls, setUserScope, userScope } from "./userscope";
-import { prefetchChats, useChatSync, useSyncStatus } from "./chatsync";
+import { useChatSync, useSyncStatus } from "./chatsync";
 import { shortName } from "./names";
 import { loadCaps, seedCaps, useCaps } from "./capsclient";
 import { hasArtifacts, splitArtifacts, type ArtBlock } from "./artifacts";
@@ -806,18 +804,14 @@ export default function Home({ boot }: { boot?: BootData | null }) {
   // Kho đã gieo từ gói khởi động (uid, lúc gieo): lần hỏi đầu của danh sách model / khả năng bỏ qua (xem các hiệu ứng refreshModels, loadCaps).
   const bootSeeded = useRef<{ uid: string; at: number; models: boolean; caps: boolean } | null>(null);
   const seededNow = (uid: string, k: "models" | "caps") => { const sd = bootSeeded.current; return !!sd && sd.uid === uid && sd[k] && Date.now() - sd.at < 10_000; };
-  useState(() => { if (boot?.user && typeof window !== "undefined") prefetchChats(boot.user.id); return 0; });
+  // Hỏi đoạn chat sớm, cài đặt hiển thị trên <html>, gợi ý / khung nổi / khả năng truy cập (homehooks.ts).
+  usePageSetup(boot);
   // Họ tên và tên gọi đã lưu (Cài đặt → Tài khoản). Không có tên mặc định của ai: chưa có thì lấy từ tên tài khoản (xem name / call bên dưới).
   const [namePref, setName] = usePref("name", "");
   const [, setAcct] = usePref("acct", "");
   const [callPref, setCall] = usePref("call", "");
   const [, setWork] = usePref("work", "");
   const [ins, setIns] = usePref("ins", "");
-  const [size] = usePref("size", "Medium");
-  const [font] = usePref("font", "Default");
-  const [uiFont] = usePref("uiFont", "Default");
-  const [width] = usePref("width", "Narrow");
-  const [motion] = usePref("motion", "System");
   const [notif] = usePref("notif", [false, true, true, true]);
   const { caps } = useCaps();
   const [vlang] = usePref("vlang", "Vietnamese");
@@ -829,15 +823,6 @@ export default function Home({ boot }: { boot?: BootData | null }) {
   const [qdays] = usePref<number[]>("qdays", []);
   const [qtimes] = usePref<Record<number, [string, string]>>("qtimes", {});
   const [gc, setGc] = useState<{ title: string; text: string; ok: string; fn: () => void } | null>(null);
-  useEffect(() => {
-    const r = document.documentElement;
-    r.dataset.motion = motion === "Reduced" ? "reduced" : "";
-    r.dataset.chatFont = chatFont(font);
-    r.dataset.uiFont = uiFont;
-    r.dataset.textSize = size;
-    // Mặc định bằng cột chat của Claude (48rem = 768px); Vừa / Rộng cho màn hình lớn.
-    r.style.setProperty("--thread-w", { Narrow: "768px", Medium: "880px", Wide: "1040px" }[width] ?? "768px");
-  }, [motion, font, uiFont, size, width]);
   const [view, setView] = useState<View>("new");
   const [open, setOpen] = useState(true);
   const openRef = useRef(open);
@@ -867,10 +852,6 @@ export default function Home({ boot }: { boot?: BootData | null }) {
   const [approval, setApproval] = useState<{ chat: number | null; calls: ApprovalCall[]; resolve: (d: ApprovalAnswer) => void } | null>(null);
   const approvalRef = useRef(approval);
   approvalRef.current = approval;
-  // Gợi ý khi rê chuột tự lật xuống dưới / canh theo mép khi sát mép màn hình hay mép khung (tips.ts).
-  useEffect(() => installTips(), []);
-  useEffect(() => installFloatFit(), []);
-  useEffect(() => installA11y(), []);
   // Bảng lệnh ⌘K cần mở tức thì: tải sẵn khi trang đã rảnh.
   useEffect(() => { const t = setTimeout(() => CommandPalette.preload(), 4000); return () => clearTimeout(t); }, []);
   useEffect(() => {
@@ -941,7 +922,6 @@ export default function Home({ boot }: { boot?: BootData | null }) {
   const [files, setFiles] = useState<string[]>([]);
   const [prefill, setPrefill] = useState({ t: "", n: 0 });
   const [greet, setGreet] = useState<[string, string]>(["", ""]);
-  const [drag, setDrag] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
   const [speaking, setSpeaking] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
@@ -1040,53 +1020,18 @@ export default function Home({ boot }: { boot?: BootData | null }) {
     loadLocal();
     setCur(null); setView("new");
   };
-  // Không hỏi được máy chủ lúc mở trang (mất mạng, máy chủ đang khởi động lại) không có nghĩa là đã đăng xuất: người đã đăng nhập thấy "không kết nối được" kèm tự thử lại,
-  // không bị đưa về màn hình đăng ký. Chỉ khi máy chủ trả lời rõ { user: null } mới coi là chưa đăng nhập.
-  const [bootErr, setBootErr] = useState(false);
-  const bootRetry = useRef<() => void>(() => {});
-  useEffect(() => {
-    localStorage.removeItem("session"); // phiên giả lập cũ, nay dùng cookie máy chủ
-    let dead = false, t: ReturnType<typeof setTimeout> | undefined;
-    const apply = (j: { user: AuthUser | null; providers: Providers; signupOpen?: boolean; speechReady?: boolean }, b?: BootData) => {
-      bootRetry.current = () => {};
-      setBootErr(false); setProviders(j.providers); setSignupOpen(j.signupOpen !== false); setSpeechReady(j.speechReady !== false);
-      if (j.user) {
-        enterAccount(j.user);
-        // Gieo các kho của trang từ gói khởi động (sau enterAccount: kho nào cũng theo vùng dữ liệu của tài khoản đang mở).
-        if (b) { bootSeeded.current = { uid: j.user.id, at: Date.now(), models: seedModels(b.models), caps: seedCaps(b.caps) }; seedMeta(b.studios); seedInboxCount(b.inboxCount); seedCodePrefs(b.codePrefs); }
-        syncProfile(j.user);
-      }
-      // Lần thử lại về sau khi khách vừa đăng nhập xong ở màn hình đăng nhập: không ghi đè.
-      setMe((m) => (m && !j.user ? m : j.user));
-    };
-    const go = (tries?: number) => {
-      clearTimeout(t);
-      // Lần đầu: gói dựng sẵn ở máy chủ, không hỏi gì thêm. Không có gói (khách chưa đăng nhập, máy chủ dựng lỗi) hay lần thử lại: hỏi /api/auth/me như trước.
-      const b = tries === undefined ? bootRef.current : null;
-      if (b) { apply(b, b); return; }
-      loadMe<{ user: AuthUser | null; providers: Providers; signupOpen?: boolean; speechReady?: boolean }>(tries).then((j) => {
-        if (dead) return;
-        apply(j);
-      }).catch(() => {
-        if (dead) return;
-        let was = false;
-        try { was = !!localStorage.getItem("signedIn"); } catch {}
-        if (was) setBootErr(true); else setMe((m) => (m === undefined ? null : m));
-        t = setTimeout(() => go(0), 5000);
-      });
-    };
-    bootRetry.current = () => go(0);
-    const online = () => bootRetry.current();
-    window.addEventListener("online", online);
-    go();
-    return () => { dead = true; clearTimeout(t); window.removeEventListener("online", online); };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-  // Phiên hết hạn khi app đang mở: phủ màn hình đăng nhập lên trên, bên dưới giữ nguyên (đoạn chat đang mở, phần đang gõ, lượt đang chạy); đăng nhập lại là dùng tiếp.
-  const [expired, setExpired] = useState(false);
-  const signedIn = useRef(false);
-  signedIn.current = !!me;
-  useEffect(() => watchSession(() => { if (signedIn.current) setExpired(true); }), []);
-  useEffect(() => { try { if (me) localStorage.setItem("signedIn", "1"); else if (me === null) localStorage.removeItem("signedIn"); } catch {} }, [me]);
+  // Mở app: gói khởi động hoặc /api/auth/me, tự thử lại khi chưa kết nối được; phiên hết hạn khi đang mở (homehooks.ts useBoot).
+  const { bootErr, retry: bootRetry, expired, setExpired } = useBoot({ boot: bootRef.current, me, setMe, apply: (j, b) => {
+    setProviders(j.providers); setSignupOpen(j.signupOpen !== false); setSpeechReady(j.speechReady !== false);
+    if (j.user) {
+      enterAccount(j.user);
+      // Gieo các kho của trang từ gói khởi động (sau enterAccount: kho nào cũng theo vùng dữ liệu của tài khoản đang mở).
+      if (b) { bootSeeded.current = { uid: j.user.id, at: Date.now(), models: seedModels(b.models), caps: seedCaps(b.caps) }; seedMeta(b.studios); seedInboxCount(b.inboxCount); seedCodePrefs(b.codePrefs); }
+      syncProfile(j.user);
+    }
+    // Lần thử lại về sau khi khách vừa đăng nhập xong ở màn hình đăng nhập: không ghi đè.
+    setMe((m) => (m && !j.user ? m : j.user));
+  } });
   const [editProj, setEditProj] = useState<number | null>(null);
   const toastT = useRef<ReturnType<typeof setTimeout> | null>(null);
   const userRef = useRef<HTMLDivElement>(null);
@@ -1874,61 +1819,10 @@ export default function Home({ boot }: { boot?: BootData | null }) {
   const { togglePin, setChatTags } = useChatStore.getState();
   const filterTag = (t: string | null) => { useSideUi.getState().setTagFilter(t); if (t) setOpen(true); };
 
-  useEffect(() => {
-    const h = (e: MouseEvent) => {
-      const t = e.target as HTMLElement;
-      if (userRef.current && !userRef.current.contains(t)) setUserMenu(false);
-      const ui = useSideUi.getState();
-      if (!t.closest(".chat-wrap")) { ui.setChatMenu(null); ui.setCodeMenu(null); ui.setPickProj(false); if (!t.closest(".title-wrap")) ui.setPickTag(false); }
-      if (!t.closest(".title-wrap")) ui.setTitleMenu(false);
-    };
-    document.addEventListener("mousedown", h);
-    return () => document.removeEventListener("mousedown", h);
-  }, []);
-  // ⌘K mở bảng lệnh tải lazy: ô tìm chỉ nhận focus sau khi phần mềm của bảng tải xong, nên các phím gõ ngay sau ⌘K bị rơi.
-  // Giữ các phím đó lại từ lúc bấm ⌘K cho tới khi ô tìm có focus rồi chèn vào (bảng lệnh gọi palSeed khi đã gắn — tháo đúng lúc đó,
-  // không theo một khoảng thời gian cố định có thể hết trước khi chunk lazy tải xong trên máy chậm).
-  const palBuf = useRef("");
-  const palArmed = useRef(false);
-  const palSeed = useCallback(() => { const b = palBuf.current; palBuf.current = ""; palArmed.current = false; return b; }, []);
-  // Đóng bảng lệnh bằng bất kỳ đường nào thì ngừng giữ phím (tránh giữ nhầm phím khi người dùng làm việc khác).
-  useEffect(() => { if (modal !== "search") palArmed.current = false; }, [modal]);
-  useEffect(() => {
-    const h = (e: KeyboardEvent) => {
-      if (document.querySelector(".app[inert]")) return;
-      const mod = e.metaKey || e.ctrlKey;
-      const k = e.key.toLowerCase();
-      // Đang giữ phím cho bảng lệnh và ô tìm chưa nhận focus: gom ký tự in được vào bộ đệm, chặn để không rơi vào trang.
-      if (palArmed.current && !mod && !e.altKey && e.key.length === 1) {
-        const el = document.activeElement as HTMLElement | null;
-        if (!el || !el.closest(".pal")) { palBuf.current += e.key; e.preventDefault(); return; }
-        palArmed.current = false; // ô tìm đã có focus: tự nó nhận phím từ đây
-      }
-      if (e.key === "Escape") {
-        // Đóng lớp phủ nằm trên cùng (z-index cao nhất; bằng nhau thì lớp sau): hộp gắn vào cuối <body> (createPortal) đứng sau hộp xác nhận
-        // trong DOM dù hộp xác nhận nằm trên nó.
-        const ov = [...document.querySelectorAll(".overlay")].filter((o) => !o.closest(".closing"));
-        const z = (o: Element) => Number(getComputedStyle(o).zIndex) || 0;
-        if (ov.length) ov.reduce((a, o) => (z(o) >= z(a) ? o : a)).dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
-        if (ov.length > 1) return;
-        // Màn hẹp (≤ 860px): bảng đoạn chat nổi / ngăn kéo điện thoại nằm trên lớp phủ tối như một hộp thoại, Esc đóng nó khi không còn lớp nào
-        // trên nó (menu đã tự đóng ở a11y.ts, hộp thoại ở trên). Đang gõ trong bảng (đổi tên, tìm) thì Esc là của ô đó. Tiêu điểm về nút đã mở bảng.
-        const tgt = e.target as HTMLElement | null;
-        if (!ov.length && openRef.current && narrow() && !tgt?.closest?.(".shell-side :is(input,textarea,select,[contenteditable=true])")) {
-          const inSide = !!document.activeElement?.closest(".shell-side") || document.activeElement === document.body;
-          setOpen(false);
-          if (inSide) requestAnimationFrame(() => document.querySelector<HTMLElement>(window.matchMedia("(max-width: 760px)").matches ? ".side-toggle" : ".rail-mark")?.focus({ preventScroll: true }));
-        }
-        setGc(null); setModal(null); setDelId(null); setDelProj(null); setUserMenu(false); useSideUi.getState().closeMenus(); }
-      else if (mod && k === "k") { e.preventDefault(); palBuf.current = ""; palArmed.current = true; setModal("search"); }
-      else if (mod && e.shiftKey && k === "o") { e.preventDefault(); goNewRef.current(); }
-      else if (mod && k === ".") { e.preventDefault(); setOpen((o) => !o); }
-      else if (mod && k === "/") { e.preventDefault(); setModal("keys"); }
-      else if (mod && e.shiftKey && k === ",") { e.preventDefault(); setSettingsTab("General"); setModal("settings"); }
-    };
-    document.addEventListener("keydown", h);
-    return () => document.removeEventListener("keydown", h);
-  }, []);
+  // Phím tắt toàn trang, bấm ra ngoài thì đóng menu (homehooks.ts useShortcuts).
+  const palSeed = useShortcuts({ searchOpen: modal === "search", isOpen: () => openRef.current, narrow, setOpen, goNew: () => goNewRef.current(), userRef, closeUserMenu: () => setUserMenu(false),
+    openSearch: () => setModal("search"), openKeys: () => setModal("keys"), openSettings: () => { setSettingsTab("General"); setModal("settings"); },
+    escape: () => { setGc(null); setModal(null); setDelId(null); setDelProj(null); setUserMenu(false); } });
   const goNewRef = useRef(goNew);
   goNewRef.current = goNew;
   // Thẻ hỏi lại (```ask): lựa chọn của người dùng thành tin nhắn tiếp theo.
@@ -1936,21 +1830,8 @@ export default function Home({ boot }: { boot?: BootData | null }) {
   sendRef.current = (t) => send(t);
   useEffect(() => { const h = (e: Event) => { const t = (e as CustomEvent<string>).detail; if (t) sendRef.current(t); }; window.addEventListener(ASK_EVENT, h); return () => window.removeEventListener(ASK_EVENT, h); }, []);
 
-  useEffect(() => {
-    let n = 0;
-    const over = (e: DragEvent) => { if (document.querySelector("[data-av]")) return; if (e.dataTransfer?.types.includes("Files")) { e.preventDefault(); n++; setDrag(true); } };
-    const leave = () => { n = Math.max(0, n - 1); if (!n) setDrag(false); };
-    const drop = (e: DragEvent) => {
-      e.preventDefault(); n = 0; setDrag(false);
-      if (document.querySelector("[data-av]")) return;
-      const fl = Array.from(e.dataTransfer?.files ?? []); fl.forEach((x) => saveBlob(x.name, x, say)); const f = fl.map((x) => x.name);
-      if (f.length) { setFiles((o) => capFiles(o, f, say)); setModal((m) => (m === "upload" ? null : m)); say(`Đã thêm ${f.length} tệp`); }
-    };
-    const prevent = (e: DragEvent) => e.preventDefault();
-    window.addEventListener("dragenter", over); window.addEventListener("dragleave", leave);
-    window.addEventListener("drop", drop); window.addEventListener("dragover", prevent);
-    return () => { window.removeEventListener("dragenter", over); window.removeEventListener("dragleave", leave); window.removeEventListener("drop", drop); window.removeEventListener("dragover", prevent); };
-  }, [say]);
+  // Kéo thả tệp vào trang (homehooks.ts useDragDrop).
+  const drag = useDragDrop(say, setFiles, () => setModal((m) => (m === "upload" ? null : m)));
 
   // Mục trên thanh điều hướng: gọi như một hàm trả về JSX (không phải component định nghĩa lại mỗi lần vẽ), nên bấm vào không dựng lại
   // cả mục; biểu tượng cố định, không đổi hình khi rê / bấm. tip: tên đầy đủ khi nhãn ngắn hơn tên trang.
@@ -2124,7 +2005,7 @@ export default function Home({ boot }: { boot?: BootData | null }) {
 
   // Chưa biết đã đăng nhập chưa: người đã đăng nhập lần trước thấy ngay khung app (html[data-sess], layout.tsx), người mới thấy nền trống rồi tới màn hình đăng nhập.
   if (me === undefined || !langReady) return <div className="boot" aria-busy={!bootErr}><BootSkeleton chat={bootChat} />
-    {bootErr && <div className="boot-err" role="alert"><Mark size={26} /><b>{tr("Chưa kết nối được tới Synchro")}</b><p>{tr("Đoạn chat và phần bạn đang gõ vẫn còn. Synchro đang tự thử lại.")}</p><button className="btn dark" onClick={() => bootRetry.current()}>{tr("Thử lại")}</button></div>}</div>;
+    {bootErr && <div className="boot-err" role="alert"><Mark size={26} /><b>{tr("Chưa kết nối được tới Synchro")}</b><p>{tr("Đoạn chat và phần bạn đang gõ vẫn còn. Synchro đang tự thử lại.")}</p><button className="btn dark" onClick={() => bootRetry()}>{tr("Thử lại")}</button></div>}</div>;
   // Màn hình đăng nhập phủ lên app: khi xong, app hiện ngay bên dưới và màn hình này tan dần (authLeaving).
   const needProfile = !!me?.needsProfile;
   const authEl = !me || needProfile || authLeaving || authHold || expired ? (
