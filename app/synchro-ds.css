@@ -725,7 +725,7 @@ html body .sy-sbody-h .close{position:static!important;width:32px;height:32px;bo
 html body .sy-sbody-h .close:hover{background:var(--ds-hover);color:var(--ds-ink)}
 /* Tiêu đề nhóm và mô tả */
 html body .sy-settings .s-body h3{display:block;margin:28px 0 10px!important;font-size:13px!important;font-weight:560!important;letter-spacing:0;color:var(--ds-ink)!important}
-.sy-settings .s-body h3::after{display:none!important}
+.sy-settings .s-body h3::after{display:none}
 html body .sy-settings .s-body h3 .muted{color:var(--ds-faint)!important;font-weight:460}
 /* Mọi mục bắt đầu cùng một độ cao dưới đường kẻ: chuyển mục không làm nội dung nhảy. */
 html body .sy-settings .sy-sbody-h+*{margin-top:20px!important}
