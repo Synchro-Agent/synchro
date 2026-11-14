@@ -1,4 +1,9 @@
-@import "tailwindcss";
+/* Tailwind chỉ quét hai tệp thật sự dùng lớp tiện ích (màn đăng nhập auth.tsx qua cn/cva, nền kim loại shader-metal.tsx). Quét cả kho
+   (mặc định) sinh ~700 lớp từ chữ trong catalog/, docs/, mock… và vài lớp trùng tên lớp của app (.inline, .m-auto, .mr-auto, .bg-top) lặng lẽ
+   thêm thuộc tính vào phần tử của app. Tệp mới dùng lớp tiện ích thì thêm một dòng @source. */
+@import "tailwindcss" source(none);
+@source "./auth.tsx";
+@source "./shader-metal.tsx";
 
 /* Phông chữ thường: Be Vietnam Pro (SIL Open Font License 1.1, public/fonts/OFL-BeVietnamPro.txt), tự lưu trên máy chủ, đủ dấu tiếng Việt.
    Bản tĩnh, chỉ các độ đậm giao diện dùng. Thang độ đậm của giao diện (360, 460, 560…) viết cho phông biến thiên: mỗi tệp nhận một khoảng
