@@ -1,6 +1,7 @@
 // Dữ liệu lưu trong trình duyệt được tách theo tài khoản: mọi khóa localStorage của app mang tiền tố
 // "u:<userId>:", nên hai tài khoản dùng chung một trình duyệt không thấy chat, dự án, ảnh đại diện… của nhau.
 // Vài khóa là cài đặt của cả trình duyệt (giao diện sáng/tối, ngôn ngữ) thì dùng chung.
+import { dbName } from "./chatidbcore";
 const GLOBAL = new Set(["theme", "p:uilang"]);
 let scope = "anon";
 
@@ -24,8 +25,8 @@ export const ls = {
 /**
  * Đăng xuất kèm "Xóa dữ liệu trên thiết bị này": xóa mọi khóa u:<uid>:* của tài khoản đó (đoạn chat, dự án, phiên Code, hướng dẫn, cài đặt)
  * trong localStorage và sessionStorage, cùng bản nháp ô soạn tin (sessionStorage draft:<uid>). Cài đặt của cả trình duyệt (giao diện, ngôn ngữ)
- * và dữ liệu của tài khoản khác giữ nguyên. App chưa dùng IndexedDB; khi có kho IndexedDB theo tài khoản thì xóa thêm ở đây.
- * Trả về số khóa đã xóa.
+ * và dữ liệu của tài khoản khác giữ nguyên. Kho đoạn chat IndexedDB của tài khoản (app/chatidb.ts, "synchro-chats:<uid>") cũng bị xóa cả cơ sở
+ * dữ liệu; kho của tài khoản khác giữ nguyên. Trả về số khóa đã xóa (không tính cơ sở dữ liệu IndexedDB).
  *
  * Vài khóa chứa nội dung chat lại nằm NGOÀI tiền tố u:<uid>: (nợ kỹ thuật): chúng dùng chung cho cả trình duyệt chứ không tách theo
  * tài khoản, nên cũng xóa ở đây để sau khi xóa không còn khóa nào chứa nội dung chat. Đây là bộ nhớ đệm/cài đặt hiển thị, dựng lại
@@ -49,6 +50,8 @@ export function clearAccountData(uid: string): number {
       for (const k of keys) { st.removeItem(k); n++; }
     } catch { /* bộ nhớ trình duyệt bị chặn: không có gì để xóa */ }
   }
+  // deleteDatabase chờ mọi kết nối đóng: trang phải đóng kho của mình trước (setChatStore(null)); kho ở tab khác tự nhường (onversionchange).
+  try { if (typeof indexedDB !== "undefined" && indexedDB) indexedDB.deleteDatabase(dbName(uid)); } catch { /* không có IndexedDB / bị chặn */ }
   return n;
 }
 

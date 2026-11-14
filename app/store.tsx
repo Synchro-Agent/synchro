@@ -32,7 +32,10 @@ export type Chat = { id: number; title: string; named?: boolean; titled?: number
   // browser: Synchro đã thao tác trình duyệt trong đoạn chat này (hiện nút mở lại khung trình duyệt cạnh đoạn chat).
   // stub: trình duyệt hết chỗ nên chỉ giữ dòng ở thanh bên, nội dung đang ở máy chủ (chatsync.ts).
   // tags: thẻ người dùng gắn (app/chattags.ts), đồng bộ cùng đoạn chat.
-  browser?: boolean; stub?: boolean; tags?: string[] };
+  // local: bản rút gọn mà nội dung đang nằm trong IndexedDB của máy này (đọc khi mở), không phải chỉ có ở máy chủ (app/chatidbcore.ts).
+  // upd: mốc sửa lấy từ dòng chỉ mục, CHỈ có trên bản rút gọn local; không bao giờ chép sang đoạn chat đầy đủ (serialChat trải ...c,
+  // thêm trường là đổi dấu nội dung, đoạn chat bị coi là đã sửa).
+  browser?: boolean; stub?: boolean; tags?: string[]; local?: boolean; upd?: number };
 export type Project = { id: number; name: string; desc: string; ins?: string; pinned?: boolean; archived?: boolean; upd?: number; mem?: { id: number; content: string }[]; ctx?: { id: number; name: string; kind: "file" | "text"; text?: string; chars?: number; size?: number; chunks?: string[] }[]; stub?: boolean };
 
 const defs = new Map<string, unknown>();
