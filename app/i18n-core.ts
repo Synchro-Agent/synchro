@@ -39,8 +39,10 @@ export function fill(tpl: string, vars: Vars): string {
 }
 
 /** Dịch cả mẫu có {biến} (khóa trong từ điển là nguyên mẫu, ví dụ "Gói {name} đã hết hạn mức") rồi mới điền giá trị.
- *  Mẫu chưa có trong từ điển: điền vào câu gốc rồi dịch như chuỗi thường (luật dịch vẫn bắt được). */
+ *  Mẫu chưa có trong từ điển: ở tiếng Anh thì điền vào câu gốc rồi dịch như chuỗi thường (luật dịch vẫn bắt được);
+ *  ở tiếng Việt giữ nguyên câu gốc, không đưa giá trị chèn (tên đoạn chat, tên người…) qua từ điển. */
 export function tfWith(d: Dict | undefined, key: string, vars: Vars, lang: Lang): string {
   if (d && own(d.map, key)) { const r = fill(d.map[key], vars); return lang === "en" ? plural(r) : r; }
-  return trWith(d, fill(key, vars), lang);
+  const s = fill(key, vars);
+  return lang === "en" ? trWith(d, s, lang) : s;
 }

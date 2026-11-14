@@ -54,6 +54,11 @@ for (let grew = true; grew;) { grew = false; for (const f of files) if (!reach.h
 const clientHit = [...reach].filter((f) => /^\s*["']use client["']/.test(src.get(f)) || f.endsWith(".tsx"));
 ok(reach.size > 1 && !clientHit.length, `không tệp giao diện nào kéo theo i18n-server.ts (${reach.size - 1} tệp máy chủ dùng)`, clientHit.map((f) => P.relative(process.cwd(), f)).join(", "));
 
+// Mẫu tf để trong bảng (khóa động, bộ quét không thấy): mọi giá trị phải là khóa có bản dịch giữ {biến}.
+const tbl = (file, name) => [...(rf(P.join(process.cwd(), file), "utf8").match(new RegExp(`const ${name}[^=]*= \\{([\\s\\S]*?)\\n\\};`))?.[1] ?? "").matchAll(/:\s*"([^"]+)"/g)].map((m) => m[1]);
+const pick = tbl("app/models.ts", "AUTO_PICK"), badPick = pick.filter((k) => !/\{model\}/.test(D.VI2EN[k] ?? ""));
+ok(pick.length >= 16 && !badPick.length, `câu “Tự động chọn … cho việc …” có bản dịch (${pick.length} loại việc)`, badPick.join("; "));
+
 console.log("4. Không còn tên mặc định của chủ dự án");
 // Tên / cách xưng hô mặc định phải rỗng (lấy từ hồ sơ khi trống); tên thật chỉ được nằm trong chú thích.
 const badPref = [], badName = [];

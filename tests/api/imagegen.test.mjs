@@ -477,7 +477,8 @@ try {
       ["Grok đã tạo 2 ảnh nhưng chưa lưu được vì tài khoản", /Grok created 2 images/], ['Không thấy ảnh "last" trong đoạn chat. Hãy nhờ', /Couldn't find the image "last"/], ["Ảnh gốc quá lớn (tối đa 20 MB).", /too large/], ["Ảnh gốc phải là PNG, JPEG hoặc WebP.", /must be PNG/],
       ["Đăng nhập lại gói ở Providers để tạo ảnh", /again/], ["Các gói đã đăng nhập chưa tạo được ảnh lúc này. Có thể đăng nhập thêm gói khác ở Providers", /right now/]]) ok(re.test(en(vi)), `tiếng Anh: ${vi.slice(0, 50)}`, en(vi));
     ok(!Object.prototype.hasOwnProperty.call(D.VI2EN, "Tạo ảnh "), "tr() cắt khoảng trắng nên không có khóa kết thúc bằng dấu cách");
-    ok(/getLang\(\) === "en" \? "Create an image of " : "Tạo ảnh "/.test(fs.readFileSync("app/home.tsx", "utf8")), "chip Tạo ảnh điền đúng câu theo ngôn ngữ");
+    // Chip điền tf("Tạo ảnh {what}", { what: "" }): tiếng Việt "Tạo ảnh ", tiếng Anh "Create an image of " (giữ dấu cách cuối để gõ tiếp).
+    ok(/tf\("Tạo ảnh \{what\}", \{ what: "" \}\)/.test(fs.readFileSync("app/home.tsx", "utf8")) && D.VI2EN["Tạo ảnh {what}"]?.replace("{what}", "") === "Create an image of ", "chip Tạo ảnh điền đúng câu theo ngôn ngữ", D.VI2EN["Tạo ảnh {what}"]);
     ok(!!D.VI2EN["Tạo ảnh"] && !!D.VI2EN["Đăng nhập gói tạo được ảnh ở Providers"] && !!V.EN2VI["Creates images in chat when you ask for a photo, illustration, logo or poster."], "chip, thẻ Providers, ghi chú Providers có đủ bản dịch");
   }
 

@@ -2,6 +2,7 @@
 // Danh sách model ở trình duyệt: lấy từ /api/models (model quản trị viên cho hiện, model mặc định, quyền của tài khoản).
 import { useSyncExternalStore } from "react";
 import { allowsModel, equivalentModel, splitKey, vendorOf, type Effort, type ProviderInfo } from "./catalog";
+import { tf } from "./i18n";
 import { userScope } from "./userscope";
 
 // effort: mức nỗ lực cao nhất quản trị viên cho phép theo từng model ("*" là mọi model).
@@ -76,13 +77,17 @@ export function modelName(key: string) {
 }
 
 // Loại việc chế độ Tự động nhận ra (router.ts Task), để hiện "Tự động chọn … cho việc …" dưới câu trả lời.
-const TASK_NAME: Record<string, [string, string]> = {
-  chat: ["trò chuyện", "chat"], qa: ["hỏi đáp", "questions"], lookup: ["tra cứu", "web lookup"], language: ["học ngôn ngữ", "language learning"], translate: ["dịch", "translation"],
-  summarize: ["tóm tắt", "summarizing"], write: ["viết", "writing"], code: ["viết code", "coding"], debug: ["gỡ lỗi", "debugging"], reason: ["suy luận", "reasoning"],
-  analyze: ["phân tích", "analysis"], build: ["tạo sản phẩm", "building"], act: ["thao tác nhiều bước", "multi-step actions"], vision: ["đọc ảnh", "reading images"],
-  longdoc: ["tài liệu dài", "long documents"], data: ["số liệu", "data"],
+// Mỗi loại một câu trọn vẹn làm khóa dịch (không thêm từ lẻ như "dịch", "viết" vào từ điển chung, bộ dịch DOM sẽ áp cho mọi chỗ).
+const AUTO_PICK: Record<string, string> = {
+  chat: "Tự động chọn {model} cho việc trò chuyện", qa: "Tự động chọn {model} cho việc hỏi đáp", lookup: "Tự động chọn {model} cho việc tra cứu",
+  language: "Tự động chọn {model} cho việc học ngôn ngữ", translate: "Tự động chọn {model} cho việc dịch", summarize: "Tự động chọn {model} cho việc tóm tắt",
+  write: "Tự động chọn {model} cho việc viết", code: "Tự động chọn {model} cho việc viết code", debug: "Tự động chọn {model} cho việc gỡ lỗi",
+  reason: "Tự động chọn {model} cho việc suy luận", analyze: "Tự động chọn {model} cho việc phân tích", build: "Tự động chọn {model} cho việc tạo sản phẩm",
+  act: "Tự động chọn {model} cho việc thao tác nhiều bước", vision: "Tự động chọn {model} cho việc đọc ảnh", longdoc: "Tự động chọn {model} cho việc tài liệu dài",
+  data: "Tự động chọn {model} cho việc số liệu",
 };
-export const autoTaskName = (task: string, en: boolean) => TASK_NAME[task]?.[en ? 1 : 0] ?? "";
+/** Câu "Tự động chọn {model} cho việc …" theo ngôn ngữ giao diện; loại việc lạ thì rỗng. */
+export const autoPickText = (task: string, model: string) => (AUTO_PICK[task] ? tf(AUTO_PICK[task], { model }) : "");
 
 // Model nên dùng: giữ lựa chọn hiện tại nếu còn hiện và được phép, không thì model mặc định của quản trị viên, không có thì Tự động.
 export function fitModel(cur: string, s: State = state) {
