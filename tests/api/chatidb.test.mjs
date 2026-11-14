@@ -1,11 +1,29 @@
-// Kho đoạn chat IndexedDB (blueprint B4), phần không cần trình duyệt: lõi thuần (chỉ mục, chỉ ghi phần đổi, dấu khóa cũ, giữ 7 ngày).
+// Kho đoạn chat IndexedDB (blueprint B4), phần không cần trình duyệt: lõi thuần (chỉ mục, chỉ ghi phần đổi, dấu khóa cũ, giữ 7 ngày),
+// kho dự phòng localStorage, kho IndexedDB trên IndexedDB giả (tests/lib/fakeidb.mjs: hết chỗ, mất kết nối, mở lỗi / treo), chuyển dữ liệu cũ.
 // Tự chạy được, không cần dev:mock.
+import { fakeIDB } from "../lib/fakeidb.mjs";
 import { loadTs } from "../lib/ts.mjs";
 
 let pass = 0, fail = 0;
 const ok = (c, n, x = "") => { c ? pass++ : fail++; console.log(c ? "  ✓" : "  ✗", n, c ? "" : String(typeof x === "string" ? x : JSON.stringify(x)).slice(0, 500)); };
 
-const { chatidbcore: K, chatsynccore: C } = await loadTs(["chatidbcore", "chatsynccore"]);
+// Kho giống Storage của trình duyệt; limit: tổng độ dài vượt mức thì setItem ném (hết chỗ).
+class Store {
+  constructor(limit = Infinity) { this.m = new Map(); this.limit = limit; this.sets = 0; }
+  get length() { return this.m.size; }
+  key(i) { return [...this.m.keys()][i] ?? null; }
+  getItem(k) { return this.m.has(k) ? this.m.get(k) : null; }
+  setItem(k, v) {
+    this.sets++;
+    const n = [...this.m].reduce((a, [kk, vv]) => a + (kk === k ? 0 : vv.length), 0) + String(v).length;
+    if (n > this.limit) throw new DOMException("full", "QuotaExceededError");
+    this.m.set(k, String(v));
+  }
+  removeItem(k) { this.m.delete(k); }
+}
+globalThis.localStorage = new Store();
+
+const { chatidbcore: K, chatsynccore: C, chatidb: D, userscope: U } = await loadTs(["chatidbcore", "chatsynccore", "chatidb", "userscope"]);
 
 const chat = (id, extra = {}) => ({ id, title: `Chat ${id}`, msgs: [{ role: "user", text: `hỏi ${id}`, time: id + 1 }, { role: "ai", text: `đáp ${id}`, time: id + 2, done: true }], ...extra });
 
@@ -127,6 +145,229 @@ console.log("6. Thứ tự và đọc khóa cũ");
   ok(!K.legacyWins(lr[0], have), "kho đã có bản có tin mới hơn: không đè bằng bản cũ");
   ok(K.legacyWins(lr[0], { ...have, upd: 12 }), "cùng mốc (đổi tên ở tab bản cũ): nhập lại");
   ok(!K.legacyWins(lr[1], { id: 13, title: "", upd: 0 }), "bản rút gọn cũ không đè thân đã có");
+}
+
+const plan = (d) => ({ put: d.put.map((c) => ({ id: c.id, s: C.serialChat(c), idx: K.idxOf(c) })), idx: d.idx, del: d.del, drop: d.drop });
+const DAY = 86_400_000;
+
+console.log("7. Kho dự phòng localStorage (trình duyệt không mở được IndexedDB)");
+{
+  const st = new Store();
+  globalThis.localStorage = st;
+  const c1 = chat(1), c2 = chat(2), c3 = chat(3), srvStub = C.stubOf(chat(4)), inc = chat(5, { inc: true });
+  st.setItem("u:A:chats", JSON.stringify([c3, c2, c1, inc, srvStub]));
+  st.setItem("u:B:chats", JSON.stringify([chat(77)]));
+  U.setUserScope("B");
+  const s = await D.openChatStore("A");
+  ok(s.kind === "ls" && s.uid === "A", "không có IndexedDB (node): rơi về localStorage", s.kind);
+  const idx = await s.loadIndex();
+  ok(idx.map((r) => r.id).join() === "4,3,2,1", "chỉ mục đủ đoạn, bỏ đoạn ẩn danh, mới nhất trước", idx.map((r) => r.id));
+  ok(idx[0].srv === true && !idx[1].srv, "bản rút gọn cũ: chỉ mục ghi thân ở máy chủ");
+  const b = await s.bodies([3, 4, 99]);
+  ok(b.size === 1 && JSON.parse(b.get(3)).msgs.length === 2, "thân chỉ có cho đoạn có nội dung ở máy này", [...b.keys()]);
+  const all = await s.loadAll();
+  ok(all.map((c) => c.id).join() === "3,2,1,4" && all[3].stub, "đọc hết: giữ thứ tự đã lưu, bản rút gọn giữ nguyên", all.map((c) => c.id));
+
+  const c2b = { ...c2, title: "Hai", msgs: [...c2.msgs, { role: "user", text: "thêm", time: 50 }] }, c6 = chat(6);
+  let r = await s.write(plan(K.diffSave(K.snapshot(all), [c6, c3, c2b, c1, all[3]])));
+  let saved = JSON.parse(st.getItem("u:A:chats"));
+  ok(r.status === "ok" && saved.map((c) => c.id).join() === "6,3,2,1,4" && saved[2].title === "Hai" && saved[2].msgs.length === 3, "ghi: đoạn mới lên đầu, đoạn đổi giữ chỗ", saved.map((c) => c.id));
+  ok(JSON.parse(st.getItem("u:B:chats"))[0].id === 77 && !st.getItem("u:anon:chats"), "ghi đúng khóa của tài khoản của kho (A), không theo vùng đang mở (B)");
+  r = await s.write({ del: [1] });
+  saved = JSON.parse(st.getItem("u:A:chats"));
+  ok(saved.map((c) => c.id).join() === "6,3,2,4", "xóa", saved.map((c) => c.id));
+  r = await s.write({ idx: [{ ...K.idxOf(srvStub), title: "Đổi tên bản rút gọn", pinned: true }, { ...K.idxOf(c3), title: "Ba" }] });
+  saved = JSON.parse(st.getItem("u:A:chats"));
+  const s4 = saved.find((c) => c.id === 4), s3 = saved.find((c) => c.id === 3);
+  ok(s4.stub && s4.title === "Đổi tên bản rút gọn" && s4.pinned && !("upd" in s4) && !("local" in s4), "chỉ ghi chỉ mục của bản rút gọn: đổi tên / ghim, không thêm upd / local", s4);
+  ok(!s3.stub && s3.title === "Ba" && s3.msgs.length === 2, "chỉ mục của đoạn đủ thân: vẫn đủ thân (không bao giờ thành rút gọn)", s3);
+  r = await s.write({ drop: [6] });
+  saved = JSON.parse(st.getItem("u:A:chats"));
+  ok(saved[0].id === 6 && saved[0].stub && saved[0].msgs.length === 0, "bỏ thân: thành bản rút gọn", saved[0]);
+
+  // Hết chỗ: rút gọn đoạn cũ nhất đã có trên máy chủ, như chatsync từ trước tới nay.
+  const big = (id) => chat(id, { msgs: [{ role: "user", text: "x".repeat(3000), time: id }] });
+  const st2 = new Store(9000);
+  globalThis.localStorage = st2;
+  const s2 = new D.LsStore("Q");
+  await s2.loadIndex();
+  r = await s2.write({ put: [big(10), big(20)].map((c) => ({ id: c.id, s: C.serialChat(c), idx: K.idxOf(c) })) });
+  ok(r.status === "ok", "vừa chỗ: ghi bình thường");
+  const third = { put: [big(30)].map((c) => ({ id: c.id, s: C.serialChat(c), idx: K.idxOf(c) })) };
+  r = await s2.write(third);
+  ok(r.status === "quota" && JSON.parse(st2.getItem("u:Q:chats")).length === 2, "hết chỗ, không có đoạn nào đã lên máy chủ: báo quota, bản cũ giữ nguyên", r);
+  r = await s2.write({}, (id) => id === 10);
+  const q = JSON.parse(st2.getItem("u:Q:chats"));
+  ok(r.status === "ok" && r.stubbed.join() === "10" && q.find((c) => c.id === 10).stub && q.find((c) => c.id === 30).msgs.length === 1, "đoạn đã lên máy chủ thì rút gọn (cũ nhất trước) để vừa chỗ", [r, q.map((c) => [c.id, !!c.stub])]);
+  await s2.clear();
+  ok(st2.getItem("u:Q:chats") === null && !(await s2.loadIndex()).length, "xóa kho: khóa localStorage của tài khoản biến mất");
+  globalThis.localStorage = st;
+  U.setUserScope(null);
+}
+
+console.log("8. Kho IndexedDB (IndexedDB giả)");
+{
+  D.resetIdbDown();
+  const f = fakeIDB();
+  const s = await D.openChatStore("A", { idb: f });
+  ok(s.kind === "idb" && f.has("synchro-chats:A"), "mở được IndexedDB: dùng kho IndexedDB riêng của tài khoản", s.kind);
+  const list = [chat(3, { tags: ["t"] }), chat(2), chat(1, { msgs: [{ role: "ai", text: "", time: 9, run: "r7" }] })];
+  let r = await s.write(plan(K.diffSave(new Map(), list)));
+  ok(r.status === "ok" && f.dump("synchro-chats:A", "body").length === 3 && f.dump("synchro-chats:A", "idx").length === 3, "ghi lần đầu: mỗi đoạn một bản ghi thân + một dòng chỉ mục", r);
+  const s2 = await D.openChatStore("A", { idb: f });
+  const idx = await s2.loadIndex();
+  ok(idx.map((x) => x.id).join() === "3,2,1" && idx[0].tags[0] === "t" && idx[2].run === "r7", "mở lại: chỉ mục còn đủ, mới nhất trước, giữ thẻ và mã lượt chạy", idx);
+  const b = await s2.bodies([1, 3, 42]);
+  ok(b.size === 2 && b.get(3) === C.serialChat(list[0]), "đọc thân theo id: đúng chuỗi serialChat (dấu nội dung khớp chatsync)");
+  const all = await s2.loadAll();
+  ok(all.length === 3 && all[0].msgs.length === 2 && !("local" in all[0]) && !("upd" in all[0]), "đọc hết: đoạn đầy đủ, không mang trường của chỉ mục", all[0]);
+  s2.close();
+
+  // Chỉ ghi phần đổi: đổi tên một đoạn → đúng 1 thân + 1 chỉ mục.
+  const prev = K.snapshot(list);
+  f.ctl.puts = {};
+  const renamed = [list[0], { ...list[1], title: "Đổi tên" }, list[2]];
+  r = await s.write(plan(K.diffSave(prev, renamed)));
+  ok(r.status === "ok" && f.ctl.puts.body === 1 && f.ctl.puts.idx === 1, "đổi tên một đoạn: đúng 1 lần ghi thân và 1 lần ghi chỉ mục", f.ctl.puts);
+  f.ctl.puts = {};
+  const stub = K.stubOfRow(K.idxOf(list[2]));
+  r = await s.write(plan(K.diffSave(K.snapshot([stub]), [{ ...stub, pinned: true }])));
+  ok(r.status === "ok" && !f.ctl.puts.body && f.ctl.puts.idx === 1 && JSON.parse((await s.bodies([1])).get(1)).msgs.length === 1, "ghim bản rút gọn: chỉ ghi chỉ mục, thân thật còn nguyên", f.ctl.puts);
+  r = await s.write({ drop: [1] });
+  const i1 = (await s.loadIndex()).find((x) => x.id === 1);
+  ok(r.status === "ok" && !(await s.bodies([1])).size && i1.srv === true && i1.run === undefined && i1.pinned, "bỏ thân: chỉ mục còn (srv, giữ ghim), thân không còn, bỏ mã lượt chạy", i1);
+  ok((await s.loadAll()).find((c) => c.id === 1).stub === true && !(await s.loadAll()).find((c) => c.id === 1).local, "đọc hết: đoạn không còn thân là bản rút gọn của máy chủ");
+  r = await s.write({ del: [2] });
+  ok(r.status === "ok" && (await s.loadIndex()).map((x) => x.id).join() === "3,1" && !(await s.bodies([2])).size, "xóa: mất cả thân lẫn chỉ mục");
+
+  // Mất kết nối (iOS): mở lại một lần rồi ghi tiếp.
+  f.ctl.loseNext = 1;
+  r = await s.write({ put: [{ id: 8, s: C.serialChat(chat(8)), idx: K.idxOf(chat(8)) }] });
+  ok(r.status === "ok" && (await s.bodies([8])).size === 1, "mất kết nối một lần: mở lại, ghi được", r);
+  f.ctl.loseNext = 2;
+  r = await s.write({ put: [{ id: 9, s: C.serialChat(chat(9)), idx: K.idxOf(chat(9)) }] });
+  ok(r.status === "error" && !(await s.bodies([9])).size, "mất kết nối cả lần thử lại: báo lỗi, không ném", r);
+
+  // Hết chỗ: giao dịch nguyên khối, rồi rút gọn đoạn cũ nhất đã có trên máy chủ.
+  const g = fakeIDB();
+  const q = await D.openChatStore("Q", { idb: g });
+  const big = (id, t) => chat(id, { msgs: [{ role: "user", text: "y".repeat(3000), time: t }] });
+  r = await q.write({ put: [big(10, 100), big(20, 50), big(30, 300)].map((c) => ({ id: c.id, s: C.serialChat(c), idx: K.idxOf(c) })) });
+  ok(r.status === "ok", "vừa chỗ: ghi bình thường");
+  g.ctl.quota = 10_500;
+  const more = { put: [big(40, 400)].map((c) => ({ id: c.id, s: C.serialChat(c), idx: K.idxOf(c) })) };
+  r = await q.write(more);
+  ok(r.status === "quota" && !(await q.bodies([40])).size && (await q.bodies([10, 20, 30])).size === 3, "hết chỗ, không được rút gọn: báo quota, không ghi nửa chừng", r);
+  r = await q.write(more, (id) => id !== 30);
+  const qi = await q.loadIndex();
+  ok(r.status === "ok" && r.stubbed[0] === 20 && (await q.bodies([40])).size === 1, "được rút gọn: bỏ thân đoạn cũ nhất (mốc sửa nhỏ nhất) trước, rồi ghi được", r);
+  ok(qi.length === 4 && qi.find((x) => x.id === 20).srv && !qi.find((x) => x.id === 30).srv, "đoạn bị rút gọn còn dòng chỉ mục (srv); đoạn chưa lên máy chủ không bao giờ bị rút gọn", qi);
+
+  // Tab khác xóa cơ sở dữ liệu (đăng xuất kèm xóa thiết bị): nhường kết nối, không dựng lại kho.
+  const h = fakeIDB();
+  const v = await D.openChatStore("V", { idb: h });
+  await v.write({ put: [{ id: 1, s: C.serialChat(chat(1)), idx: K.idxOf(chat(1)) }] });
+  h.deleteDatabase("synchro-chats:V");
+  r = await v.write({ put: [{ id: 2, s: C.serialChat(chat(2)), idx: K.idxOf(chat(2)) }] });
+  ok(r.status === "error" && !h.has("synchro-chats:V") && h.conns("synchro-chats:V") === 0, "cơ sở dữ liệu bị xóa ở tab khác: kho nhường, ghi báo lỗi, không mở lại", r);
+
+  // Kho dùng chung của trang: đặt kho mới thì đóng kho cũ.
+  const k1 = await D.openChatStore("K", { idb: h }), k2 = await D.openChatStore("K2", { idb: h });
+  D.setChatStore(k1);
+  ok(D.currentChatStore() === k1, "đặt kho đang dùng");
+  D.setChatStore(k2);
+  ok(D.currentChatStore() === k2 && (await k1.write({ del: [1] })).status === "error" && h.conns("synchro-chats:K") === 0, "đổi kho (đổi tài khoản): kho cũ đóng kết nối");
+  D.setChatStore(null);
+  ok(D.currentChatStore() === null && h.conns("synchro-chats:K2") === 0, "đăng xuất: bỏ kho, đóng kết nối");
+  await s.clear();
+  ok(!(await s.loadIndex()).length && !f.dump("synchro-chats:A", "body").length, "xóa kho: không còn thân hay chỉ mục");
+  s.close();
+}
+
+console.log("9. Mở IndexedDB lỗi thì rơi về localStorage, không ném");
+{
+  for (const [name, o] of [["open ném ngay (Firefox riêng tư cũ)", { throwOpen: true }], ["open báo lỗi", { failOpen: true }]]) {
+    D.resetIdbDown();
+    let threw = false, st = null;
+    try { st = await D.openChatStore("A", { idb: fakeIDB(o) }); } catch { threw = true; }
+    ok(!threw && st?.kind === "ls", name + ": dùng localStorage", st?.kind);
+  }
+  D.resetIdbDown();
+  const t0 = Date.now();
+  const hung = fakeIDB({ hangOpen: true });
+  const st = await D.openChatStore("A", { idb: hung, timeout: 60 });
+  ok(st.kind === "ls" && Date.now() - t0 < 1000, "open treo (Safari 14.1): quá thời gian thì dùng localStorage", Date.now() - t0);
+  const later = await D.openChatStore("B", { idb: fakeIDB() });
+  ok(later.kind === "ls", "đã rơi về localStorage thì giữ tới hết phiên trang (đổi tài khoản không chờ lại)", later.kind);
+  D.resetIdbDown();
+  ok((await D.openChatStore("A", { idb: null })).kind === "ls", "không có IndexedDB: dùng localStorage");
+  D.resetIdbDown();
+}
+
+console.log("10. Chuyển dữ liệu cũ từ localStorage một lần, giữ khóa cũ 7 ngày");
+{
+  const st = new Store();
+  globalThis.localStorage = st;
+  const t0 = 1_700_000_000_000;
+  const old = [chat(30), chat(20), chat(10), C.stubOf(chat(5)), chat(4, { inc: true })];
+  st.setItem("u:A:chats", JSON.stringify(old));
+  const f = fakeIDB();
+  const s = await D.openChatStore("A", { idb: f });
+  let r = await D.importLegacy(s, { now: t0 });
+  const idx = await s.loadIndex();
+  ok(r.imported === 4 && r.via === "main" && r.status === "ok", "lần đầu: nhập mọi đoạn (đọc ở luồng chính khi không có luồng phụ)", r);
+  ok(idx.map((x) => x.id).join() === "30,20,10,5" && idx.find((x) => x.id === 5).srv && !(await s.bodies([5])).size, "bỏ đoạn ẩn danh; bản rút gọn cũ chỉ có chỉ mục (thân ở máy chủ)", idx);
+  ok((await s.bodies([20])).get(20) === C.serialChat(old[1]), "thân nhập vào đúng chuỗi serialChat (chatsync không coi là đã sửa)");
+  let m = await s.getMeta();
+  ok(m.sig === K.legacySig(st.getItem("u:A:chats")) && m.migratedAt === t0, "ghi dấu khóa cũ và mốc nhập đầu", m);
+  ok(st.getItem("u:A:chats") !== null, "khóa cũ vẫn còn (giữ 7 ngày)");
+  f.ctl.puts = {};
+  r = await D.importLegacy(s, { now: t0 + DAY });
+  ok(r.imported === 0 && r.via === null && !f.ctl.puts.body, "mở lại, khóa cũ không đổi: không đọc / ghi lại", r);
+
+  // Bản app cũ ở tab khác ghi lại khóa cũ: nhập lại (chỉ thêm / đè), không đè bản mới hơn trong kho.
+  const newer = { ...chat(10), msgs: [...chat(10).msgs, { role: "user", text: "mới hơn ở kho", time: 500 }] };
+  await s.write({ put: [{ id: 10, s: C.serialChat(newer), idx: K.idxOf(newer) }] });
+  const edited = { ...chat(30), title: "Đổi ở tab cũ", msgs: [...chat(30).msgs, { role: "user", text: "tin mới", time: 600 }] };
+  st.setItem("u:A:chats", JSON.stringify([chat(40), edited, chat(10)]));
+  r = await D.importLegacy(s, { now: t0 + 2 * DAY });
+  const ids = (await s.loadIndex()).map((x) => x.id).join();
+  ok(r.imported === 2 && ids === "40,30,20,10,5", "khóa cũ đổi: nhập lại phần mới / đổi, không xóa đoạn vắng mặt", [r, ids]);
+  ok(JSON.parse((await s.bodies([30])).get(30)).title === "Đổi ở tab cũ" && JSON.parse((await s.bodies([10])).get(10)).msgs.length === 3, "đoạn đổi ở tab cũ được nhập; đoạn trong kho có tin mới hơn giữ nguyên");
+  m = await s.getMeta();
+  ok(m.migratedAt === t0, "mốc nhập đầu không đổi khi nhập lại (7 ngày tính từ lần đầu)", m);
+
+  r = await D.importLegacy(s, { now: t0 + 7 * DAY });
+  ok(r.removed && st.getItem("u:A:chats") === null && (await s.loadIndex()).length === 5, "đủ 7 ngày: xóa khóa cũ, kho IndexedDB còn đủ", r);
+  r = await D.importLegacy(s, { now: t0 + 8 * DAY });
+  ok(r.imported === 0 && !r.removed, "không còn khóa cũ: không làm gì", r);
+
+  // Khóa cũ hỏng: không ném, ghi dấu để không đọc lại mỗi lần mở trang.
+  st.setItem("u:A:chats", "[{hỏng");
+  r = await D.importLegacy(s, { now: t0 + 9 * DAY });
+  ok(r.imported === 0 && (await s.getMeta()).sig === K.legacySig("[{hỏng") && (await s.loadIndex()).length === 5, "khóa cũ hỏng JSON: không nhập gì, không xóa gì trong kho", r);
+
+  // Ghi không được (hết chỗ): không ghi dấu, không xóa khóa cũ, lần sau thử lại.
+  const g = fakeIDB({ quota: 50 });
+  const sq = await D.openChatStore("Z", { idb: g });
+  st.setItem("u:Z:chats", JSON.stringify([chat(1), chat(2)]));
+  r = await D.importLegacy(sq, { now: t0 });
+  ok(r.status === "quota" && !(await sq.getMeta()).sig && st.getItem("u:Z:chats") !== null, "IndexedDB hết chỗ lúc nhập: giữ khóa cũ, không ghi dấu", r);
+  r = await D.importLegacy(sq, { now: t0 + 30 * DAY });
+  ok(st.getItem("u:Z:chats") !== null, "chưa nhập xong thì không bao giờ xóa khóa cũ, kể cả sau 7 ngày");
+
+  // Kho localStorage: khóa cũ chính là kho.
+  st.setItem("u:L:chats", JSON.stringify([chat(1)]));
+  const ls = new D.LsStore("L");
+  r = await D.importLegacy(ls, { now: t0 + 30 * DAY });
+  ok(r.imported === 0 && !r.removed && st.getItem("u:L:chats") !== null, "kho localStorage: không nhập, không bao giờ xóa khóa (đó là kho)", r);
+
+  // Luồng phụ (bước 3) được thay bằng hàm đọc truyền vào: kết quả như đọc ở luồng chính.
+  const st2 = await D.openChatStore("W", { idb: fakeIDB() });
+  st.setItem("u:W:chats", JSON.stringify([chat(1), chat(2)]));
+  r = await D.importLegacy(st2, { now: t0, parse: async (raw) => ({ rows: K.legacyRows(JSON.parse(raw)), via: "worker" }) });
+  ok(r.via === "worker" && r.imported === 2, "đọc khóa cũ ở luồng phụ khi có", r);
+  ok((await D.parseLegacyMain("không phải json")) === null && (await D.parseLegacyMain('{"a":1}')).length === 0, "đọc ở luồng chính: JSON hỏng → null, không phải mảng → rỗng");
 }
 
 console.log(`\n${pass} đạt, ${fail} lỗi`);
