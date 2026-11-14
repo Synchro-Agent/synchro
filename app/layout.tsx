@@ -7,6 +7,10 @@ import type { Metadata, Viewport } from "next";
 import "@fontsource-variable/unbounded/wght.css";
 // Hai bộ chữ của lời chào (Latin, tiếng Việt) lấy từ /fonts để tải trước được: tên tệp trong gói bị băm khi dựng. Khai báo sau nên thắng bản của gói cho đúng các chữ đó.
 import "./unbounded-preload.css";
+// Mọi CSS của app nằm trong một lớp cascade syn (sau các lớp của Tailwind, câu lệnh @layer lặp ở đầu mỗi tệp; B5). Trong lớp đó bên thắng vẫn
+// theo specificity rồi thứ tự nạp. Luật trước đây mang !important chỉ để thắng thứ tự nằm ở lớp syn-over (khối cuối mỗi tệp), thắng mọi luật
+// thường của syn bất kể specificity. Lưu ý: bản build webpack gộp glass.css + features.css thành một tệp nạp TRƯỚC globals.css (next dev nạp
+// đúng thứ tự import), nên luật của hai tệp đó muốn thắng globals.css phải hơn specificity, không dựa vào thứ tự.
 // Thứ tự bốn tệp này là thứ tự ghi đè, đừng đổi. CSS riêng của Code, Speech, Bộ não, trang tải ứng dụng nằm ở tệp nạp cùng màn hình đó (codeview.css, speech/speech.css, brainview.css, download/download.css).
 // Tệp nạp chậm luôn đứng sau bốn tệp này, nên chỉ quy tắc không tranh chấp (cùng độ ưu tiên, cùng thuộc tính, cùng phần tử) với quy tắc chung đứng sau nó mới được chuyển; phần còn lại vẫn ở globals.css. tests/api/css-split.test.mjs giữ các lớp đã tách không bị dùng ở trang chat.
 import "./globals.css";

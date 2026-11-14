@@ -1,4 +1,27 @@
-@import "tailwindcss";
+/* Tailwind chỉ quét hai tệp thật sự dùng lớp tiện ích (màn đăng nhập auth.tsx qua cn/cva, nền kim loại shader-metal.tsx). Quét cả kho
+   (mặc định) sinh ~700 lớp từ chữ trong catalog/, docs/, mock… và vài lớp trùng tên lớp của app (.inline, .m-auto, .mr-auto, .bg-top) lặng lẽ
+   thêm thuộc tính vào phần tử của app. Tệp mới dùng lớp tiện ích thì thêm một dòng @source. */
+@import "tailwindcss" source(none);
+@source "./auth.tsx";
+@source "./shader-metal.tsx";
+/* Thứ tự lớp cascade (B5): lớp của Tailwind trước, mọi CSS của app (kể cả katex / xterm và thẻ \3c style> của auth.tsx, glass-folder.tsx)
+   trong một lớp syn. Câu lệnh lặp ở đầu mỗi tệp để thứ tự không phụ thuộc tệp nào được tải trước. Trong lớp syn, bên thắng vẫn theo
+   specificity rồi thứ tự nạp như khi chưa có lớp. Lớp syn-over (khối ở cuối mỗi tệp) giữ các luật trước đây phải mang !important chỉ để
+   thắng thứ tự: lớp sau thắng mọi luật thường của syn bất kể specificity, nhưng vẫn thua style nội dòng và hoạt ảnh như mọi luật thường. */
+@layer properties, theme, base, components, utilities, syn, syn-over;
+/* Chỉ thị của Tailwind (@theme) và @property phải ở ngoài cùng: Tailwind chỉ đọc @property ngoài lớp để sinh giá trị dự phòng cho trình duyệt cũ. */
+@theme {
+  --color-foreground: var(--foreground);
+  --color-background: var(--background);
+  --color-card: var(--card);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--auth-border);
+  --color-primary: var(--accent);
+  --color-primary-foreground: var(--on-accent);
+  --color-destructive: #ef4444;
+}
+@property --orb-a{syntax:"<angle>";inherits:false;initial-value:0deg}
+@layer syn {
 
 /* Phông chữ thường: Be Vietnam Pro (SIL Open Font License 1.1, public/fonts/OFL-BeVietnamPro.txt), tự lưu trên máy chủ, đủ dấu tiếng Việt.
    Bản tĩnh, chỉ các độ đậm giao diện dùng. Thang độ đậm của giao diện (360, 460, 560…) viết cho phông biến thiên: mỗi tệp nhận một khoảng
@@ -193,18 +216,15 @@ input,textarea{font:inherit;color:inherit;outline:0}
 .lk-intro .lk-l{animation:lkLi .6s var(--ease-out) both;animation-delay:calc(1.8s + var(--i) * 45ms)}
 @keyframes lkSlide{from{transform:translateX(2480.5px)}to{transform:none}}
 @keyframes lkLi{from{opacity:0;transform:translateX(-80px)}to{opacity:1;transform:none}}
-@media (prefers-reduced-motion:reduce){.mk *,.lk *{animation:none!important;transition:none!important}}
-html[data-motion="reduced"] :is(.mk,.lk) *{animation:none!important;transition:none!important}
 /* Mọi vòng quay nhỏ cũ (nút đang lưu, tải tệp, Speech, Code…) vẽ lại thành loader của logo chỉ bằng CSS: ::before / ::after là hai nửa
    đĩa (rộng R, cao 2R; chiều cao phần tử = 3R), lệch nhau R; cả khối xoay 180° rồi nghỉ, giữa vòng hai nửa thu về vòng tròn. */
-:is(.pj-spin,.upl-spin,.ag-spin,.sp-spin,.api-spin,.art-spin,.wl-spin){position:relative;display:inline-block;flex:none;width:auto!important;aspect-ratio:13/18;border:0!important;border-radius:0!important;background:none!important;opacity:1;animation:mkSpin 1.6s var(--ease-glide) infinite!important}
+:is(.pj-spin,.upl-spin,.ag-spin,.sp-spin,.api-spin,.art-spin,.wl-spin){position:relative;display:inline-block;flex:none;aspect-ratio:13/18;opacity:1}
 :is(.ag-spin,.art-spin,.wl-spin){color:var(--text-2)}
 :is(.pj-spin,.upl-spin,.ag-spin,.sp-spin,.api-spin,.art-spin,.wl-spin)::before,:is(.pj-spin,.upl-spin,.ag-spin,.sp-spin,.api-spin,.art-spin,.wl-spin)::after{content:"";position:absolute;width:46.15%;height:66.67%;background:currentColor}
 :is(.pj-spin,.upl-spin,.ag-spin,.sp-spin,.api-spin,.art-spin,.wl-spin)::before{left:0;top:0;border-radius:100% 0 0 100%/50% 0 0 50%;animation:mkLaP 1.6s infinite}
 :is(.pj-spin,.upl-spin,.ag-spin,.sp-spin,.api-spin,.art-spin,.wl-spin)::after{right:0;bottom:0;border-radius:0 100% 100% 0/0 50% 50% 0;animation:mkLbP 1.6s infinite}
 @keyframes mkLaP{0%{transform:none;animation-timing-function:cubic-bezier(.37,0,.63,1)}37.5%{transform:translateY(25%);animation-timing-function:cubic-bezier(.37,0,.63,1)}75%,100%{transform:none}}
 @keyframes mkLbP{0%{transform:none;animation-timing-function:cubic-bezier(.37,0,.63,1)}37.5%{transform:translateY(-25%);animation-timing-function:cubic-bezier(.37,0,.63,1)}75%,100%{transform:none}}
-@media (prefers-reduced-motion:reduce){:is(.pj-spin,.upl-spin,.ag-spin,.sp-spin,.api-spin,.art-spin,.wl-spin),:is(.pj-spin,.upl-spin,.ag-spin,.sp-spin,.api-spin,.art-spin,.wl-spin)::before,:is(.pj-spin,.upl-spin,.ag-spin,.sp-spin,.api-spin,.art-spin,.wl-spin)::after{animation:none!important}}
 .brand-lock{display:inline-flex;align-items:center;gap:8px;min-width:0}
 .composer{width:min(768px,calc(100% - 48px));border-radius:var(--r-panel);background:var(--input);box-shadow:var(--shadow-input);padding:14px 16px 12px;transition:box-shadow .2s;animation:rise .6s .08s var(--ease) backwards}
 .composer:focus-within{box-shadow:0 4px 20px rgba(0,0,0,.08),0 0 0 .5px rgba(0,0,0,.2)}
@@ -342,7 +362,6 @@ html[data-motion="reduced"] :is(.mk,.lk) *{animation:none!important;transition:n
 @keyframes pop{from{opacity:0;transform:scale(.96) translateY(4px)}to{opacity:1;transform:none}}
 @keyframes spin{from{transform:rotate(-90deg) scale(.6);opacity:0}to{transform:none;opacity:1}}
 @keyframes blink{50%{opacity:0}}
-@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 .overlay.top{place-items:start center;padding-top:14vh}
 /* Hộp xác nhận luôn nằm trên mọi khung đang mở (chi tiết skill, bộ não toàn màn hình, chế độ giọng nói…), không bị che phía sau. */
 .overlay.cf-top{z-index:1000}
@@ -382,8 +401,6 @@ html[data-motion="reduced"] :is(.mk,.lk) *{animation:none!important;transition:n
 .attach{display:flex;gap:8px;flex-wrap:wrap;padding:0 0 8px}
 .att{display:flex;align-items:center;gap:6px;height:28px;padding:0 6px 0 10px;border-radius:var(--r-pill);border:.5px solid var(--border-strong);font-size:12px;background:var(--hover);animation:pop .2s backwards;max-width:200px}
 .att span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.ghost-on{background:var(--active)!important}
-.like-on{color:var(--text)!important}
 .menu.up{transform-origin:bottom left}
 .model-menu{bottom:36px;right:0;width:260px;transform-origin:bottom right}
 .proj-card{display:flex;justify-content:space-between;align-items:center;padding:16px;border:.5px solid var(--border-strong);border-radius:var(--r-card);margin-bottom:10px;transition:transform .2s var(--ease),box-shadow .2s;cursor:pointer;text-align:left;width:100%}
@@ -420,7 +437,6 @@ input:focus-visible,textarea:focus-visible{outline:none}
 @keyframes shim{from{background-position:200% 0}to{background-position:-200% 0}}
 .scroll-down{position:absolute;left:50%;bottom:150px;transform:translateX(-50%);width:34px;height:34px;border-radius:50%;background:var(--card);box-shadow:var(--shadow);display:flex;align-items:center;justify-content:center;animation:pop .2s var(--ease) backwards;z-index:5}
 .toast.out{animation:sink .18s ease-in both}
-html[data-motion="reduced"] *,html[data-motion="reduced"] *::before,html[data-motion="reduced"] *::after{animation-duration:.001ms!important;animation-iteration-count:1!important;transition-duration:.001ms!important}
 .chip-s{padding:4px 10px;border-radius:999px;background:var(--hover);font-size:13px}
 .dock .composer{width:min(var(--thread-w,768px),calc(100% - 48px))}
 html[data-chat-font="System"] .ai-msg,html[data-chat-font="System"] .user-msg,html[data-chat-font="System"] .sk-ai,html[data-chat-font="System"] .sk-user{font-family:system-ui,-apple-system,sans-serif}
@@ -667,7 +683,7 @@ html[data-chat-font="System"] .ai-msg,html[data-chat-font="System"] .sk-ai{font-
 .chat-wrap>.pj-tg .sec-chev.open{transform:none}
 .chat-wrap:hover .pj-ic,.chat-wrap:has(>.pj-tg:focus-visible) .pj-ic{opacity:0}
 .chat-wrap:hover .pj-tg,.chat-wrap>.pj-tg:focus-visible{opacity:1}
-.pj-tg .sec-chev{display:flex;opacity:1!important}
+.pj-tg .sec-chev{display:flex}
 .pj-kids{padding-left:14px}
 .pj-kids .chat-item{padding-left:22px;position:relative}
 .pj-kids .chat-item::before{content:"";position:absolute;left:9px;top:50%;width:4px;height:4px;margin-top:-2px;border-radius:50%;border:1px solid currentColor;opacity:.5}
@@ -740,15 +756,15 @@ html[data-chat-font="System"] .ai-msg,html[data-chat-font="System"] .sk-ai{font-
 
 
 
-.model-sub.out{animation:none!important;opacity:0;visibility:hidden}
+.model-sub.out{opacity:0;visibility:hidden}
 .code-bg{position:fixed;inset:0;z-index:0;pointer-events:none;animation:fadeIn .5s both}
 .code-view .main{background:transparent}
 .code-view .dock::before{display:none}
 .code-view .dock{padding:0 24px 20px}
 .code-view .dock .composer{width:min(1040px,100%);margin:0 auto}
-html[data-theme="light"] body .code-view .sidebar{--gl-fill:rgba(255,255,255,.72)}
+html[data-theme="light"] .code-view .sidebar{--gl-fill:rgba(255,255,255,.72)}
 /* Thanh bên ở Code cùng tông với các trang khác: nền chấm không được làm xám mặt kính, chữ nhãn mục mới đủ tương phản. */
-html[data-theme="dark"] body .code-view .sidebar{--gl-fill:rgba(20,21,18,.9)}
+html[data-theme="dark"] .code-view .sidebar{--gl-fill:rgba(20,21,18,.9)}
 
 /* ===== Synchro Code view ===== */
 .cv{flex:1;min-height:0;display:flex;position:relative;z-index:1}
@@ -789,7 +805,6 @@ html[data-theme="dark"] body .code-view .sidebar{--gl-fill:rgba(20,21,18,.9)}
 .cb-pm{font-size:14px;line-height:1;font-weight:660}
 .cb-cnt{display:flex;gap:4px;font-style:normal;font-size:12px;margin-left:2px}.cb-cnt em{font-style:normal;font-weight:560}
 .cb-cnt .a{color:#2c9a54}.cb-cnt .d{color:#d6493a}
-.cb-diff{padding:8px 0!important}
 .cb-diff div{display:flex;padding:0 14px 0 0;min-height:1.55em}
 .cb-diff div span{width:26px;flex:none;text-align:center;color:var(--text-3);user-select:none}
 .cb-diff .ad{background:rgba(44,170,90,.15);box-shadow:inset 2px 0 0 #2caa5a}.cb-diff .ad span{color:#2c9a54}
@@ -860,11 +875,11 @@ html[data-theme="dark"] body .code-view .sidebar{--gl-fill:rgba(20,21,18,.9)}
 .cv-frame{flex:1;border:0;background:#fff;margin:10px;border-radius:var(--r-card);box-shadow:0 0 0 .5px var(--gl-hair)}
 @media(max-width:1000px){.cv-panel{position:absolute;inset:0 0 0 auto;width:min(92%,560px);margin:8px}}
 /* Màn hẹp: khung bên của Synchro Code nằm đè lên đoạn chat nên nền đặc (kính 78% để lộ chữ phía dưới). */
-@media(max-width:1000px){html body .cv-panel,html[data-theme="dark"] body .cv-panel{background:var(--gl-fill-thick,var(--card));-webkit-backdrop-filter:none;backdrop-filter:none}}
+@media(max-width:1000px){html body .cv-panel,html[data-theme="dark"] .cv-panel{background:var(--gl-fill-thick,var(--card));-webkit-backdrop-filter:none;backdrop-filter:none}}
 .cv-tools{width:100%}
 .cv-mode-item{line-height:1.3}
 .cv-thread{-webkit-mask-image:linear-gradient(to bottom,transparent 0,#000 28px);mask-image:linear-gradient(to bottom,transparent 0,#000 28px)}
-.cv-mode-item{height:auto!important;min-height:64px}
+.cv-mode-item{min-height:64px}
 .cv-card span{color:var(--text-2)}
 html body .cv-card{background:rgba(255,255,255,.6);-webkit-backdrop-filter:blur(16px) saturate(1.7) brightness(1.04);backdrop-filter:blur(16px) saturate(1.7) brightness(1.04)}
 html[data-theme="dark"] body .cv-card{background:transparent}
@@ -876,7 +891,6 @@ html[data-theme="light"] body .cv-bar :is(.btn,.cv-rule)::before{background:rgba
 html[data-theme="dark"] body .cv-bar :is(.btn,.cv-rule)::before{background:rgba(28,28,34,.45)}
 html[data-theme="light"] body .cv-bar :is(.btn,.cv-rule)::before{background:rgba(255,255,255,.72)}
 html[data-theme="light"] .cv-bar .btn{color:var(--text)}
-html body .cv-composer[data-drag]{box-shadow:0 0 0 .5px var(--gl-hair),var(--gl-shadow)!important}
 .app:not(.code-view) .cv-ai{padding:0;background:none;box-shadow:none;-webkit-backdrop-filter:none;backdrop-filter:none}
 .app:not(.code-view) .cv .user-msg{background:var(--user-bubble);-webkit-backdrop-filter:none;backdrop-filter:none}
 html body .cv-bar .chip::before{-webkit-backdrop-filter:blur(48px) saturate(1.5) brightness(1.04);backdrop-filter:blur(48px) saturate(1.5) brightness(1.04)}
@@ -889,8 +903,6 @@ html[data-theme="dark"] body .cv-card{background:rgba(64,64,76,.72)}
 html[data-theme="dark"] body .cv-bar :is(.chip,.btn,.cv-rule)::before{background:rgba(64,64,76,.8)}
 html[data-theme="light"] body .cv-card{background:rgba(250,250,252,.82)}
 html[data-theme="light"] body .cv-bar :is(.chip,.btn,.cv-rule)::before{background:rgba(250,250,252,.88)}
-html[data-theme="dark"] body .cv-bar :is(.chip,.btn,.cv-rule)::before{background:rgba(64,64,76,.8)!important;-webkit-backdrop-filter:blur(100px) saturate(1.2) brightness(1.1)!important;backdrop-filter:blur(100px) saturate(1.2) brightness(1.1)!important}
-html[data-theme="light"] body .cv-bar :is(.chip,.btn,.cv-rule)::before{background:rgba(250,250,252,.88)!important;-webkit-backdrop-filter:blur(100px) saturate(1.2)!important;backdrop-filter:blur(100px) saturate(1.2)!important}
 
 /* ===== Synchro Code: dev tools ===== */
 .cb-note{display:flex;align-items:center;gap:8px;padding:6px 12px;font-size:12px;color:var(--text-3);border-top:1px solid rgba(128,128,140,.18)}
@@ -967,17 +979,17 @@ html body .modal.cv-guide{width:min(900px,94vw);height:min(660px,86vh);max-heigh
 html[data-theme=dark] .cvg-body code{color:var(--accent)}
 @media(max-width:720px){.cvg-nav{width:56px}.cvg-nav span{display:none}}
 html body .cvg-mode .ic,html body .cvg-logo,html body .cvg-steps i{position:relative;overflow:hidden;isolation:isolate;color:var(--gc);border:.5px solid color-mix(in srgb,var(--gc) 35%,rgba(255,255,255,.7));background:linear-gradient(145deg,rgba(255,255,255,.55),color-mix(in srgb,var(--gc) 16%,rgba(255,255,255,.08)));backdrop-filter:blur(14px) saturate(1.8);-webkit-backdrop-filter:blur(14px) saturate(1.8);box-shadow:inset 0 1px 1px rgba(255,255,255,.9),inset 0 -6px 12px color-mix(in srgb,var(--gc) 14%,transparent),0 4px 14px color-mix(in srgb,var(--gc) 24%,transparent)}
-html body .cvg-mode .ic::after,html body .cvg-logo::after,html body .cvg-steps i::after{content:"";position:absolute;left:8%;right:8%;top:0;height:46%;border-radius:0 0 60% 60%/0 0 100% 100%;background:linear-gradient(180deg,rgba(255,255,255,.75),rgba(255,255,255,0));pointer-events:none;z-index:-1}
+.cvg-mode .ic::after,html body .cvg-logo::after,.cvg-steps i::after{content:"";position:absolute;left:8%;right:8%;top:0;height:46%;border-radius:0 0 60% 60%/0 0 100% 100%;background:linear-gradient(180deg,rgba(255,255,255,.75),rgba(255,255,255,0));pointer-events:none;z-index:-1}
 html[data-theme=dark] body :is(.cvg-mode .ic,.cvg-logo,.cvg-steps i){color:color-mix(in srgb,var(--gc) 55%,#fff);border-color:color-mix(in srgb,var(--gc) 40%,rgba(255,255,255,.25));background:linear-gradient(145deg,rgba(255,255,255,.2),color-mix(in srgb,var(--gc) 22%,rgba(255,255,255,.02)));box-shadow:inset 0 1px 1px rgba(255,255,255,.35),inset 0 -6px 12px color-mix(in srgb,var(--gc) 18%,transparent),0 4px 14px color-mix(in srgb,var(--gc) 28%,transparent)}
-html[data-theme=dark] body :is(.cvg-mode .ic,.cvg-logo,.cvg-steps i)::after{background:linear-gradient(180deg,rgba(255,255,255,.3),rgba(255,255,255,0))}
+html[data-theme=dark] :is(.cvg-mode .ic,.cvg-logo,.cvg-steps i)::after{background:linear-gradient(180deg,rgba(255,255,255,.3),rgba(255,255,255,0))}
 html body :is(.cvg-mode .ic,.cvg-logo,.cvg-steps i),html[data-theme=dark] body :is(.cvg-mode .ic,.cvg-logo,.cvg-steps i){color:#fff;background:linear-gradient(145deg,color-mix(in srgb,var(--gc) 62%,rgba(255,255,255,.35)),color-mix(in srgb,var(--gc) 78%,transparent))}
-html body :is(.cvg-mode .ic,.cvg-logo,.cvg-steps i)::after{height:42%;background:linear-gradient(180deg,rgba(255,255,255,.5),rgba(255,255,255,0))!important;z-index:0}
-html body .cv .dock .composer.cv-composer{--gl-blur:26px;--gl-fill:rgba(255,255,255,.5)}
-html[data-theme=dark] body .cv .dock .composer.cv-composer{--gl-fill:rgba(28,29,26,.55)}
+:is(.cvg-mode .ic,.cvg-logo,.cvg-steps i)::after{height:42%;z-index:0}
+.cv .dock .composer.cv-composer{--gl-blur:26px;--gl-fill:rgba(255,255,255,.5)}
+html[data-theme=dark] .cv .dock .composer.cv-composer{--gl-fill:rgba(28,29,26,.55)}
 /* guide icons: same material as .send / .chip */
 html body :is(.cvg-mode .ic,.cvg-logo,.cvg-steps i),html[data-theme=dark] body :is(.cvg-mode .ic,.cvg-logo,.cvg-steps i){position:relative;overflow:visible;isolation:isolate;background:transparent;border:0;color:#fff;backdrop-filter:none;-webkit-backdrop-filter:none;--gl-fill:color-mix(in srgb,var(--gc) 78%,transparent);--gl-blur:2px;box-shadow:0 0 0 .5px var(--gl-hair),var(--gl-shadow-small)}
 html body :is(.cvg-mode .ic,.cvg-logo,.cvg-steps i)::before{content:"";position:absolute;inset:0;border-radius:inherit;z-index:-1;pointer-events:none;background:var(--gl-fill);-webkit-backdrop-filter:blur(var(--gl-blur)) saturate(var(--gl-sat)) brightness(var(--gl-bright));backdrop-filter:blur(var(--gl-blur)) saturate(var(--gl-sat)) brightness(var(--gl-bright));box-shadow:inset 1px 1.5px 2px -1px rgba(255,255,255,calc(var(--gl-shine)*.55)),inset -1px -1.5px 2px -1px rgba(255,255,255,calc(var(--gl-shine)*.35)),inset 0 0 10px -2px rgba(255,255,255,calc(var(--gl-shine)*.08))}
-html body :is(.cvg-mode .ic,.cvg-logo,.cvg-steps i)::after,html[data-theme=dark] body :is(.cvg-mode .ic,.cvg-logo,.cvg-steps i)::after{content:"";position:absolute;inset:0;left:0;right:0;top:0;height:auto;border-radius:inherit;pointer-events:none;padding:.75px;opacity:.55;z-index:auto;background:linear-gradient(145deg,rgba(255,255,255,1),rgba(255,255,255,.2) 22%,rgba(255,255,255,.03) 45%,rgba(255,255,255,.03) 58%,rgba(255,255,255,.35) 80%,rgba(255,255,255,.9))!important;-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask:linear-gradient(#000 0 0) content-box exclude,linear-gradient(#000 0 0)}
+html body :is(.cvg-mode .ic,.cvg-logo,.cvg-steps i)::after,html[data-theme=dark] body :is(.cvg-mode .ic,.cvg-logo,.cvg-steps i)::after{content:"";position:absolute;inset:0;left:0;right:0;top:0;height:auto;border-radius:inherit;pointer-events:none;padding:.75px;opacity:.55;z-index:auto;-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask:linear-gradient(#000 0 0) content-box exclude,linear-gradient(#000 0 0)}
 html body :is(.cvg-mode .ic,.cvg-logo,.cvg-steps i),html[data-theme=dark] body :is(.cvg-mode .ic,.cvg-logo,.cvg-steps i){--gl-fill:color-mix(in srgb,var(--gc) 62%,rgba(255,255,255,.28))}
 .cvg-body>*{flex:none}
 html body .btn.dark{color:var(--btn-dark-text)}
@@ -989,8 +1001,8 @@ html body .cv-custom-r .btn.dark{background:var(--accent);color:var(--on-accent)
 @container (max-width:760px){.cv-bar-r>.chip{padding:0 10px}}
 @container (max-width:520px){.cv-title{font-size:0;gap:0}}
 
-html body .cv .dock .composer.cv-composer,html[data-theme=dark] body .cv .dock .composer.cv-composer{--gl-blur:var(--gl-blur-n,4px);--gl-fill:rgba(255,255,255,.34)}
-html[data-theme=dark] body .cv .dock .composer.cv-composer{--gl-fill:rgba(28,29,26,.40)}
+.cv .dock .composer.cv-composer,html[data-theme=dark] .cv .dock .composer.cv-composer{--gl-blur:var(--gl-blur-n,4px);--gl-fill:rgba(255,255,255,.34)}
+html[data-theme=dark] .cv .dock .composer.cv-composer{--gl-fill:rgba(28,29,26,.40)}
 html body .cv-card,html[data-theme=dark] body .cv-card{background:var(--gl-fill);-webkit-backdrop-filter:blur(4px) saturate(var(--gl-sat)) brightness(var(--gl-bright));backdrop-filter:blur(4px) saturate(var(--gl-sat)) brightness(var(--gl-bright))}
 .upl-md{margin-top:2px}
 .upl-hint{display:block;margin-top:14px;font-size:12px;color:var(--text-3);max-width:380px}
@@ -1095,7 +1107,6 @@ table{font-variant-numeric:tabular-nums}h1,h2,h3{text-wrap:balance}
 /* Nút Sao chép nằm dưới nội dung, không đè chữ, không xuống dòng */
 .cb-copy{padding-bottom:42px}
 .cb-btn{position:absolute;right:8px;bottom:8px;height:26px;white-space:nowrap;padding:0 12px}
-html body .codebox.cb-copy .cb-btn{position:absolute!important;right:8px!important;bottom:8px!important;top:auto!important;left:auto!important}
 
 /* Cài đặt Synchro Code */
 .s-badge{font-size:12px;padding:3px 10px;border-radius:var(--r-pill);background:var(--hover);color:var(--text-2);white-space:nowrap;flex:none}
@@ -1131,16 +1142,6 @@ html body .codebox.cb-copy .cb-btn{position:absolute!important;right:8px!importa
 .sk-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:16px}
 
 /* ---- Login screen (same palette as the main app) ---- */
-@theme {
-  --color-foreground: var(--foreground);
-  --color-background: var(--background);
-  --color-card: var(--card);
-  --color-muted-foreground: var(--muted-foreground);
-  --color-border: var(--auth-border);
-  --color-primary: var(--accent);
-  --color-primary-foreground: var(--on-accent);
-  --color-destructive: #ef4444;
-}
 .auth-root{--foreground:var(--text);--background:var(--bg);--card:var(--bg);--muted-foreground:var(--text-3);--auth-border:var(--border-strong);--color-border:var(--border-strong);font-family:var(--font-sans);background:var(--bg)}
 .auth-bg{position:absolute;inset:0;overflow:hidden;contain:strict}
 .auth-bg i{position:absolute;border-radius:50%;will-change:transform;transform:translateZ(0)}
@@ -1194,7 +1195,6 @@ html body .codebox.cb-copy .cb-btn{position:absolute!important;right:8px!importa
 
 .adm-st i{width:7px;height:7px;border-radius:50%;background:#2f9e5b}
 .adm-st.off i{background:#c6422f}
-.adm-detail>td{border-top:0!important;padding:4px 0 14px!important}
 
 
 .adm-grid h4{margin:0 0 8px;font-size:12px;font-weight:460;color:var(--text-3)}
@@ -1236,7 +1236,7 @@ html body .codebox.cb-copy .cb-btn{position:absolute!important;right:8px!importa
 .legal ul{list-style:disc;padding-left:20px;margin:6px 0}
 .legal li{margin:4px 0}
 .legal b{color:var(--text);font-weight:560}
-.legal-upd{font-size:13px;color:var(--text-3)!important;margin:6px 0 24px}
+.legal-upd{font-size:13px;margin:6px 0 24px}
 .legal-nav{display:flex;flex-wrap:wrap;gap:16px;margin-top:40px;padding-top:16px;border-top:.5px solid var(--border);font-size:13px}
 .legal-nav a{color:var(--text-2)}
 
@@ -1247,7 +1247,6 @@ html body .codebox.cb-copy .cb-btn{position:absolute!important;right:8px!importa
 .auth-scroll>*{margin-top:auto;margin-bottom:auto}
 
 /* ---- Đăng nhập: trạng thái đang xử lý / thành công / lỗi ---- */
-@property --orb-a{syntax:"<angle>";inherits:false;initial-value:0deg}
 .auth-stage{position:relative;z-index:10;display:flex;flex-direction:column;align-items:center;gap:30px;padding:16px;text-align:center}
 .auth-orb{position:relative;width:92px;height:92px;border-radius:50%;display:grid;place-items:center;color:var(--foreground);isolation:isolate;
   background:radial-gradient(circle at 32% 24%,oklch(from var(--background) l c h / 85%),transparent 52%),linear-gradient(165deg,oklch(from var(--background) l c h / 42%),oklch(from var(--background) l c h / 8%));
@@ -1290,7 +1289,6 @@ html body .codebox.cb-copy .cb-btn{position:absolute!important;right:8px!importa
 @keyframes auth-rim{to{--orb-a:360deg}}
 @keyframes auth-breathe{0%,100%{opacity:.65;transform:scale(.94)}50%{opacity:1;transform:scale(1.04)}}
 @keyframes auth-shine{0%{background-position:120% 0}100%{background-position:-120% 0}}
-@media (prefers-reduced-motion:reduce){.auth-orb::after,.auth-orb-glow,.auth-shimmer{animation-duration:0s!important;animation-iteration-count:1!important}}
 
 /* ---- Quản trị: quyền truy cập ---- */
 
@@ -1616,13 +1614,13 @@ b,strong{font-weight:560}
 .bp-tab>button:first-child{display:flex;align-items:center;gap:6px;height:28px;padding:0 4px 0 10px;font-size:12.5px;color:var(--text-2);min-width:0}
 .bp-tab>button:first-child svg{flex:none;color:var(--text-3)}
 .bp-tab.on>button:first-child{color:var(--text)}
-.bp-new{width:28px!important;height:28px!important;flex:none}
+.bp-new{flex:none}
 .bp-acts{display:flex;align-items:center;gap:2px;position:relative;flex:none}
 .bp-acts .icon-btn{width:28px;height:28px}
 .bp-mi .ck{margin-left:auto;display:flex}
 .bp-bar input{height:30px;border-radius:var(--r-pill);background:color-mix(in srgb,var(--text) 4%,var(--card))}
 .bp-addr-w{flex:1;min-width:0;position:relative;display:flex;margin:0 4px}
-.bp-addr-w input{flex:1;width:100%;margin:0!important}
+.bp-addr-w input{flex:1;width:100%}
 .bp-addr{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;gap:0;padding:0 12px;font-size:12.5px;white-space:nowrap;overflow:hidden;cursor:text}
 .bp-addr b{font-weight:520;color:var(--text);flex:none}
 .bp-addr span{color:var(--text-3);overflow:hidden;text-overflow:ellipsis;min-width:0}
@@ -1896,7 +1894,6 @@ b,strong{font-weight:560}
   .sp-dline{flex-wrap:wrap}
   .sp-editor textarea{min-height:220px}
 }
-@media (prefers-reduced-motion:reduce){.sp-orb i,.sp-call .sp-orb,.sp-mic.on::after{animation:none!important}}
 .modal .sp-vp-foot>label{margin:0;font-size:12.5px}
 .nav-sub{position:relative;display:flex;flex-direction:column;gap:1px;padding:1px 0 3px 21px}
 .nav-sub::before{content:"";position:absolute;left:19px;top:3px;bottom:5px;width:1px;background:var(--border-strong)}
@@ -2194,7 +2191,7 @@ b,strong{font-weight:560}
 .pv-code code{font-family:var(--font-mono);font-size:20px;letter-spacing:.08em;color:var(--text)}
 
 
-.pv-paste .field{flex:1;min-width:0;margin:0!important;height:34px;font-family:var(--font-mono);font-size:13px}
+.pv-paste .field{flex:1;min-width:0;height:34px;font-family:var(--font-mono);font-size:13px}
 .pv-paste .btn{display:inline-flex;align-items:center;gap:6px;flex:none}
 
 
@@ -2256,8 +2253,6 @@ b,strong{font-weight:560}
 .msub-models .msub-plan{flex:none}
 /* Khung kính không tự cuộn: nền và viền của nó là lớp phủ ::before / ::after, khung cuộn thì chúng trôi theo nội dung. Phần cuộn nằm bên trong. */
 .menu-scroll.msub-scroll,.menu-scroll.gl-scroll{flex:0 1 auto;min-height:0;max-height:none}
-html body :is(.menu,.model-menu,.usermenu,.model-sub).fl-flat::before,html body :is(.menu,.model-menu,.usermenu,.model-sub).fl-flat::after{display:none!important}
-html body :is(.menu,.model-menu,.usermenu,.model-sub).fl-flat{background:var(--card)!important}
 .mname-t{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .mempty{display:flex;flex-direction:column;gap:6px;padding:10px 12px 12px;max-width:260px}
 .mload{display:flex;align-items:center;gap:8px;min-height:36px;padding:0 12px;font-size:13px;color:var(--text-2)}
@@ -2449,12 +2444,10 @@ html body :is(.menu,.model-menu,.usermenu,.model-sub).fl-flat{background:var(--c
 
 .cpo-card .api-err.in{margin:0 16px 12px}
 .cpo-perm{margin:0 16px 12px}
-
-.cpo-sec{margin-top:26px!important}
 .cpo-sec-d{margin:-4px 0 12px;font-size:13px;color:var(--text-3);line-height:1.5}
 /* Nút Connect Link Composio trong khung chat, và Connect Link model lỡ chép vào câu trả lời (md.tsx): nút, không phải link trần. */
 .wl-link .btn{display:inline-flex;align-items:center;gap:6px;text-decoration:none}
-.md-cxlink{display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 12px;margin:2px 0;border-radius:9px;font-size:13px;text-decoration:none!important;vertical-align:middle;max-width:100%}
+.md-cxlink{display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 12px;margin:2px 0;border-radius:9px;font-size:13px;vertical-align:middle;max-width:100%}
 .md-cxlink .cn-logo{flex:none}
 /* Danh mục connector */
 
@@ -2506,7 +2499,6 @@ html body :is(.menu,.model-menu,.usermenu,.model-sub).fl-flat{background:var(--c
 .ap-d{margin:10px 0 0;font-size:13px;color:var(--text-2);line-height:1.5;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
 .ap-warn{display:flex;gap:8px;align-items:center;margin-top:10px;font-size:12.5px;color:#9a6a12;background:rgba(217,154,27,.12);border-radius:var(--r-plate);padding:7px 10px}
 [data-theme="dark"] .ap-warn{color:#f0c46a;background:rgba(240,196,106,.1)}
-.ap-more{margin:10px 0 0!important}
 .ap-in{margin:8px 0 0;max-height:220px;overflow:auto;padding:10px 12px;border-radius:var(--r-pill);background:var(--hover);font-family:var(--font-mono);font-size:12px;line-height:1.5;white-space:pre-wrap;word-break:break-word}
 .ap-a{display:flex;justify-content:flex-end;gap:8px;margin-top:14px;flex-wrap:wrap}
 /* Thẻ duyệt lời gọi Composio: tài khoản, tham số chính, phạm vi quyền (dùng chung cho .ap-card và .ag-ask). Tiền tố cxa- riêng, không đụng .cx-row / .cx-note của Context Mixer. */
@@ -2588,7 +2580,7 @@ html body :is(.menu,.model-menu,.usermenu,.model-sub).fl-flat{background:var(--c
 html body .main.has-art .scroll-down{left:calc((100% - var(--art-w)) / 2 - 17px)}
 /* Đang tạo câu trả lời mà người dùng đã kéo lên đọc: nút nổi thành viên thuốc "↓ Đang tạo tiếp…", bấm là về cuối và tự cuộn lại. */
 html body .scroll-down.gen{left:50%;translate:-50% 0;width:auto;padding:0 14px 0 10px;gap:6px;border-radius:999px;font-size:13px;color:var(--text-2);white-space:nowrap}
-html body .main.has-art .scroll-down.gen{left:calc((100% - var(--art-w)) / 2)}
+.main.has-art .scroll-down.gen{left:calc((100% - var(--art-w)) / 2)}
 .art-panel,.sk-art{position:absolute;top:0;right:0;bottom:0;width:var(--art-w);display:flex;flex-direction:column;background:var(--bg);border-left:.5px solid var(--border-strong);z-index:25;animation:artIn .28s var(--ease)}
 .main.art-full .art-panel,.main.art-full .sk-art{width:100%;border-left:0}
 @keyframes artIn{from{opacity:0;transform:translateX(24px)}to{opacity:1;transform:none}}
@@ -3030,14 +3022,13 @@ html body .menu.art-style-menu{--gl-fill:var(--card);background:var(--card);min-
 .out-card{cursor:pointer}
 .out-card.on{border-color:var(--text-2);box-shadow:0 0 0 .5px var(--text-2)}
 .out-dl{text-decoration:none}
-.out-dl:hover{background:var(--active,var(--hover))!important}
 .outs-imgs button{border:0;padding:0;background:none;cursor:zoom-in;border-radius:var(--r-plate)}
 
 /* Sản phẩm của đoạn chat: nút trên đầu trang và danh sách chuyển nhanh trong khung xem trước. */
 .prod-btn{display:inline-flex;align-items:center;gap:6px;margin-right:6px}
 .prod-n{min-width:18px;height:18px;padding:0 5px;border-radius:var(--r-pill);background:var(--hover);font-size:12px;display:grid;place-items:center;font-variant-numeric:tabular-nums}
 .prod-sw{position:relative;flex:none}
-.prod-sw-b{width:auto!important;padding:0 7px;gap:5px;display:inline-flex;align-items:center;font-size:12px;color:var(--text-2)}
+.prod-sw-b{padding:0 7px;gap:5px;display:inline-flex;align-items:center;font-size:12px;color:var(--text-2)}
 .menu.prod-menu{position:absolute;top:calc(100% + 6px);right:0;min-width:280px;max-height:60vh;display:flex;flex-direction:column;overflow:visible;padding:4px;z-index:40}
 .prod-it.on{background:var(--hover)}
 .out-badge.sm{width:28px;height:28px;font-size:12px;letter-spacing:-.02em;border-radius:var(--r-pill)}
@@ -3067,8 +3058,6 @@ html body .menu.art-style-menu{--gl-fill:var(--card);background:var(--card);min-
    thẻ nhích lên khi rê chuột (transform) tạo lớp riêng, nên nâng cả hàng mẫu và thẻ đang rê lên trên. */
 .tpl:hover,.tpl:focus-visible{z-index:2}
 /* Menu Thêm của Kho kỹ năng nằm đè lên chữ: nền đặc để không lộ chữ phía sau */
-
-html body .menu.pl-menu::before{background:var(--card)!important}
 
 /* ===================== Rõ nét: menu và icon (cỡ chữ, độ đậm, màu mực: xem biến thiết kế ở đầu tệp) ===================== */
 /* Menu: chữ chính đậm vừa, mô tả nhạt hơn một bậc */
@@ -3107,7 +3096,6 @@ html body .menu.pl-menu::before{background:var(--card)!important}
 .pub-w{position:relative}
 .icon-btn.pub-on{color:var(--accent)}
 .menu.pub-menu{position:absolute;top:calc(100% + 6px);right:0;width:340px;padding:14px;z-index:40;display:flex;flex-direction:column;gap:10px;transform-origin:top right}
-html body .menu.pub-menu::before{background:var(--card)!important}
 .pub-h{display:flex;flex-direction:column;gap:3px}
 .pub-h b{font-weight:500;font-size:14px;color:var(--ink-strong)}
 .pub-h span,.pub-note{font-size:12.5px;line-height:1.45;color:var(--text-3)}
@@ -3259,8 +3247,7 @@ html body .menu.pub-menu::before{background:var(--card)!important}
 .tk-row:hover{background:var(--hover)}
 .tk-dot{flex:none;width:8px;height:8px;border-radius:50%;background:transparent}
 .tk-item.unread .tk-dot{background:var(--accent)}
-.tk-dot.running{background:#d97706!important;animation:pulse 1.2s ease-in-out infinite}
-.tk-dot.error{background:#dc2626!important}
+.tk-dot.running{animation:pulse 1.2s ease-in-out infinite}
 .tk-t{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
 .tk-t b{font-weight:480;font-size:14px;color:var(--ink-strong);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .tk-item.unread .tk-t b{font-weight:560}
@@ -3341,12 +3328,11 @@ button.tk-pill:hover{color:var(--text)}
 .tk-filter.field{width:auto;max-width:170px;height:32px;margin:0;padding:0 8px;font-size:13px}
 .tk-feed{display:flex;flex-direction:column;gap:14px}
 .tk-day{margin:4px 10px 4px;font-size:12px;font-weight:560;letter-spacing:.02em;color:var(--text-3)}
-.tk-dot.waiting{background:var(--tk-warn)!important;opacity:.55}
+.tk-dot.waiting{opacity:.55}
 .tk-chip{flex:none;display:inline-flex;align-items:center;gap:5px;height:22px;padding:0 8px;border-radius:var(--r-pill);font-size:12px;color:var(--text-2);background:var(--hover);border:0;white-space:nowrap}
 .tk-item.open .tk-chip,.tk-job .tk-chip{background:color-mix(in srgb,var(--text) 6%,transparent)}
-.tk-chip.warn{color:var(--tk-warn);background:color-mix(in srgb,var(--tk-warn) 12%,transparent)!important}
-button.tk-chip.warn:hover{background:color-mix(in srgb,var(--tk-warn) 20%,transparent)!important}
-.tk-chip.bad{color:var(--tk-bad);background:color-mix(in srgb,var(--tk-bad) 10%,transparent)!important}
+.tk-chip.warn{color:var(--tk-warn)}
+.tk-chip.bad{color:var(--tk-bad)}
 .tk-note{display:flex;gap:6px;align-items:flex-start;margin:0 0 10px;font-size:12.5px;line-height:1.45;color:var(--text-3)}.tk-note svg{flex:none;margin-top:2px}
 .tk-run span{min-width:0;overflow:hidden;text-overflow:ellipsis}
 .tk-acts{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
@@ -3537,7 +3523,7 @@ button.tk-chip.warn:hover{background:color-mix(in srgb,var(--tk-warn) 20%,transp
 
 /* ===== Speech dùng thật: ghi âm, trạng thái, lịch sử ===== */
 @keyframes sp-blink{50%{opacity:.25}}
-.sp-progress.ind i{width:35%!important;animation:sp-ind 1.4s ease-in-out infinite}
+.sp-progress.ind i{animation:sp-ind 1.4s ease-in-out infinite}
 @keyframes sp-ind{0%{left:-35%}100%{left:100%}}
 
 /* Chế độ Tự động của Code: các giai đoạn đã đi qua */
@@ -3988,8 +3974,7 @@ button.bn-box:disabled{cursor:default}
 .bh-seg{margin-left:0;min-width:0}
 .bh-seg button{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:26px;padding:0 11px}
 .bh-seg button:disabled{opacity:.45;cursor:default}
-.bh-seg button.on{background:rgba(255,255,255,.88)!important;box-shadow:0 1px 4px rgba(17,18,16,.16),inset 0 0 0 .5px rgba(0,0,0,.06)!important;color:var(--text);font-weight:520}
-[data-theme="dark"] .bh-seg button.on{background:#3b3938!important;box-shadow:0 1px 4px rgba(0,0,0,.45),inset 0 0 0 .5px #55524f!important}
+.bh-seg button.on{color:var(--text);font-weight:520}
 .bh-acts{margin-left:auto;display:flex;gap:2px;flex:none}
 .bh .bp{border-top:0}
 .ext-hero b{font-size:15px;font-weight:600}
@@ -4235,7 +4220,7 @@ body{text-wrap-style:pretty}
 :where(.ai-msg,.mdx) kbd{font-family:ui-monospace,Menlo,monospace;font-size:.85em;padding:1px 5px;border:.5px solid var(--border-strong);border-radius:4px;background:var(--hover)}
 :where(.ai-msg,.mdx) mark{background:color-mix(in srgb,var(--accent) 25%,transparent);color:inherit;border-radius:3px;padding:0 2px}
 .md-img{display:block;max-width:100%;height:auto;border-radius:10px;margin:.4em 0}
-.md-img-link{display:inline-flex;align-items:center;gap:6px;max-width:100%;padding:2px 8px;border:.5px solid var(--border-strong);border-radius:8px;vertical-align:baseline;text-decoration:none!important}
+.md-img-link{display:inline-flex;align-items:center;gap:6px;max-width:100%;padding:2px 8px;border:.5px solid var(--border-strong);border-radius:8px;vertical-align:baseline}
 .md-img-link svg{flex:none}
 .md-img-link span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .md-img-link em{flex:none;font-style:normal;font-size:.85em;color:var(--text-3)}
@@ -4451,7 +4436,6 @@ main#main:focus{outline:0}
 .bk-drill.bad{box-shadow:0 0 0 1px #c6422f}
 .bk-drill p{margin:0 0 6px;font-size:13px}
 .bk-tbl{margin:6px 0}
-@media (max-width:560px){.bk-grid{grid-template-columns:minmax(0,1fr)}.bk-foot{flex-wrap:wrap}}
 /* Sức khỏe hệ thống → Độ trễ từng chặng (latencyui.tsx) */
 .lat-bar{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin:4px 0 8px}
 .lat-sel select{min-width:140px}
@@ -4464,7 +4448,7 @@ main#main:focus{outline:0}
 .lat-last summary{cursor:pointer;color:var(--text-2);padding:4px 0}
 /* Ba nút khoảng thời gian: cột theo độ dài chữ (không chia đều theo nhãn dài nhất), vừa 375px. */
 html body .lat-bar .group{grid-auto-columns:auto;max-width:100%;min-width:0}
-@media (max-width:560px){html body .lat-bar .group{display:flex;flex:1 1 100%}html body .lat-bar .group>button{flex:1 1 auto;justify-content:center;padding:0 8px!important}.lat-bar .lat-sel,.lat-bar .lat-sel select{width:100%}}
+@media (max-width:560px){.bk-grid{grid-template-columns:minmax(0,1fr)}.bk-foot{flex-wrap:wrap}html body .lat-bar .group{display:flex;flex:1 1 100%}html body .lat-bar .group>button{flex:1 1 auto;justify-content:center}.lat-bar .lat-sel,.lat-bar .lat-sel select{width:100%}}
 
 /* Thẻ (tag) của đoạn chat: khung Gắn thẻ trong menu, chip ở đầu trang chat, hàng lọc ở thanh bên (app/tagsui.tsx). */
 .tag-pick{display:flex;flex-direction:column;gap:6px;min-width:0}
@@ -4512,7 +4496,7 @@ html body .lat-bar .group{grid-auto-columns:auto;max-width:100%;min-width:0}
 
 /* ---- Khung chờ đúng kích thước (app/skeleton.tsx): chữ giả là khoảng trắng em mang chiều cao dòng thật, nền ánh chạy chậm. ---- */
 .sk-txt,.sk-blk,.sk-line::after{background:linear-gradient(90deg,var(--hover) 0%,var(--active) 50%,var(--hover) 100%);background-size:200% 100%;animation:skel 1.6s linear infinite}
-.sk-txt{color:transparent!important;border-radius:6px;-webkit-box-decoration-break:clone;box-decoration-break:clone;user-select:none;pointer-events:none}
+.sk-txt{border-radius:6px;-webkit-box-decoration-break:clone;box-decoration-break:clone;user-select:none;pointer-events:none}
 :where(.sk-blk){display:inline-block;flex:none;border-radius:8px}
 .sk-line{display:block;position:relative;color:transparent;user-select:none;max-width:100%}
 .sk-line::after{content:"";position:absolute;inset:20% 0;border-radius:6px}
@@ -4529,3 +4513,63 @@ html body .sk-user .sk-txt{background:color-mix(in srgb,var(--ds-inv-fg,#fff) 22
 .sk-srow .t,.sk-srow .d{display:block;white-space:nowrap;overflow:hidden}
 .sk-ctl{border-radius:var(--r-pill)}
 @media (prefers-reduced-motion:reduce){.sk-txt,.sk-blk,.sk-sheen,.sk-line::after{animation:none}}
+}
+@layer syn-over{
+/* B5: khai báo trước đây mang !important chỉ để thắng thứ tự. Lớp syn-over đứng sau syn nên các luật này thắng mọi luật thường của syn bất kể specificity; giữa chúng với nhau vẫn theo specificity rồi thứ tự. Sửa một luật ở trên thì tìm cùng selector ở đây. */
+@media (prefers-reduced-motion:reduce){
+.mk *,.lk *{animation:none;transition:none}
+}
+html[data-motion="reduced"] :is(.mk,.lk) *{animation:none;transition:none}
+:is(.pj-spin,.upl-spin,.ag-spin,.sp-spin,.api-spin,.art-spin,.wl-spin){width:auto;border:0;border-radius:0;background:none;animation:mkSpin 1.6s var(--ease-glide) infinite}
+@media (prefers-reduced-motion:reduce){
+:is(.pj-spin,.upl-spin,.ag-spin,.sp-spin,.api-spin,.art-spin,.wl-spin),:is(.pj-spin,.upl-spin,.ag-spin,.sp-spin,.api-spin,.art-spin,.wl-spin)::before,:is(.pj-spin,.upl-spin,.ag-spin,.sp-spin,.api-spin,.art-spin,.wl-spin)::after{animation:none}
+*{animation:none;transition:none}
+}
+.ghost-on{background:var(--active)}
+.like-on{color:var(--text)}
+html[data-motion="reduced"] *,html[data-motion="reduced"] *::before,html[data-motion="reduced"] *::after{animation-duration:.001ms;animation-iteration-count:1;transition-duration:.001ms}
+.pj-tg .sec-chev{opacity:1}
+.model-sub.out{animation:none}
+.cb-diff{padding:8px 0}
+.cv-mode-item{height:auto}
+html body .cv-composer[data-drag]{box-shadow:0 0 0 .5px var(--gl-hair),var(--gl-shadow)}
+html[data-theme="dark"] body .cv-bar :is(.chip,.btn,.cv-rule)::before{background:rgba(64,64,76,.8);-webkit-backdrop-filter:blur(100px) saturate(1.2) brightness(1.1);backdrop-filter:blur(100px) saturate(1.2) brightness(1.1)}
+html[data-theme="light"] body .cv-bar :is(.chip,.btn,.cv-rule)::before{background:rgba(250,250,252,.88);-webkit-backdrop-filter:blur(100px) saturate(1.2);backdrop-filter:blur(100px) saturate(1.2)}
+:is(.cvg-mode .ic,.cvg-logo,.cvg-steps i)::after{background:linear-gradient(180deg,rgba(255,255,255,.5),rgba(255,255,255,0))}
+:is(.cvg-mode .ic,.cvg-logo,.cvg-steps i)::after,html[data-theme=dark] :is(.cvg-mode .ic,.cvg-logo,.cvg-steps i)::after{background:linear-gradient(145deg,rgba(255,255,255,1),rgba(255,255,255,.2) 22%,rgba(255,255,255,.03) 45%,rgba(255,255,255,.03) 58%,rgba(255,255,255,.35) 80%,rgba(255,255,255,.9))}
+.codebox.cb-copy .cb-btn{position:absolute;right:8px;bottom:8px;top:auto;left:auto}
+.adm-detail>td{border-top:0;padding:4px 0 14px}
+.legal-upd{color:var(--text-3)}
+@media (prefers-reduced-motion:reduce){
+.auth-orb::after,.auth-orb-glow,.auth-shimmer{animation-duration:0s;animation-iteration-count:1}
+}
+.bp-new{width:28px;height:28px}
+.bp-addr-w input{margin:0}
+@media (prefers-reduced-motion:reduce){
+.sp-orb i,.sp-call .sp-orb,.sp-mic.on::after{animation:none}
+}
+.pv-paste .field{margin:0}
+:is(.menu,.model-menu,.usermenu,.model-sub).fl-flat::before,:is(.menu,.model-menu,.usermenu,.model-sub).fl-flat::after{display:none}
+html body :is(.menu,.model-menu,.usermenu,.model-sub).fl-flat{background:var(--card)}
+.cpo-sec{margin-top:26px}
+.md-cxlink{text-decoration:none}
+.ap-more{margin:10px 0 0}
+.out-dl:hover{background:var(--active,var(--hover))}
+.prod-sw-b{width:auto}
+.menu.pl-menu::before{background:var(--card)}
+.menu.pub-menu::before{background:var(--card)}
+.tk-dot.running{background:#d97706}
+.tk-dot.error{background:#dc2626}
+.tk-dot.waiting{background:var(--tk-warn)}
+.tk-chip.warn{background:color-mix(in srgb,var(--tk-warn) 12%,transparent)}
+button.tk-chip.warn:hover{background:color-mix(in srgb,var(--tk-warn) 20%,transparent)}
+.tk-chip.bad{background:color-mix(in srgb,var(--tk-bad) 10%,transparent)}
+.sp-progress.ind i{width:35%}
+.bh-seg button.on{background:rgba(255,255,255,.88);box-shadow:0 1px 4px rgba(17,18,16,.16),inset 0 0 0 .5px rgba(0,0,0,.06)}
+[data-theme="dark"] .bh-seg button.on{background:#3b3938;box-shadow:0 1px 4px rgba(0,0,0,.45),inset 0 0 0 .5px #55524f}
+.md-img-link{text-decoration:none}
+@media (max-width:560px){
+html body .lat-bar .group>button{padding:0 8px}
+}
+.sk-txt{color:transparent}
+}

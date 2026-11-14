@@ -13,6 +13,8 @@ const SUITES = [
   // B3.7: ngân sách tải đầu của trang chủ (JS ≤ 350 KB, CSS ≤ 45 KB gzip) đọc từ bản build của dev:mock:fast; vượt trần chống tăng lại là lỗi.
   // Mã thoát 2: chưa đo được (không có bản build, hay bản build cũ hơn mã nguồn) — không báo đạt khi chưa đo đúng bản sẽ deploy.
   ["Ngân sách tải đầu: JS 350 KB gzip (bắt buộc), CSS 45 KB gzip (CHƯA BẮT BUỘC tới B5, chặn ở trần 100 KB)", "scripts/budget.mjs"],
+  // B5: chỉ số CSS (!important, tiền tố html body, cỡ chữ / z-index cứng, mốc @media lạ, hex ở giao diện tối) chỉ được giảm, không cần máy chủ.
+  ["Chỉ số CSS chỉ giảm: !important, html body, cỡ chữ cứng, z-index, mốc @media, hex giao diện tối", "scripts/css-metrics.mjs"],
   ["Toàn bộ bộ kiểm API", "tests/run-all.mjs"],
   ["Soát giao diện toàn trang (sáng/tối × 390/768/1440px)", "tests/ui/audit.mjs"],
   ["Một ca cho mỗi lỗi U2–U14 (390/768/1440px), giao diện sáng", "tests/ui/u-bugs.mjs", { THEME: "light" }],
@@ -49,6 +51,7 @@ const SUITES = [
 const SKIP = {
   "tests/ui/snapshots.mjs": "công cụ chụp ảnh cho tests/ui/diff.py (so ảnh bằng mắt), luôn thoát mã 0, không có phép kiểm đạt / lỗi",
   "tests/ui/lang.mjs": "chỉ in báo cáo chữ sai ngôn ngữ và luôn thoát mã 0; cổng chặn bản dịch là tests/api/i18n.test.mjs (trong bộ API)",
+  "tests/ui/cascade.mjs": "công cụ so trước / sau (B5): chụp computed style của mọi phần tử vào JSON rồi so hai lần chụp; một lần chạy riêng không có gì để so",
 };
 
 // Tên của bộ chạy theo glob: dòng chú thích đầu tiên nói bộ đó kiểm gì (bỏ dòng chung "Kiểm thử giao diện bằng Chrome ẩn…").

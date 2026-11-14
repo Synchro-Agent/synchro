@@ -1,3 +1,5 @@
+@layer properties, theme, base, components, utilities, syn, syn-over;
+@layer syn {
 /* Mục Bộ não: tách khỏi globals.css để trang chat không phải tải trước. Tệp này nạp sau mọi tệp chung, nên chỉ chứa quy tắc không tranh chấp với quy tắc chung đứng sau nó trong globals.css (cùng độ ưu tiên, cùng thuộc tính); quy tắc tranh chấp vẫn ở globals.css. */
 .bn-stats {display:flex;flex-wrap:wrap;gap:6px 16px;margin-bottom:12px;font-size:12px;color:var(--text-3)
 }
@@ -193,7 +195,7 @@
 }
 .bw-graph[hidden] {display:none
 }
-.bw-graph .bn-graph {flex:1;height:100%!important;border-radius:0;box-shadow:none
+.bw-graph .bn-graph {flex:1;border-radius:0;box-shadow:none
 }
 .bw-graph .bn-zoom {right:12px;bottom:12px
 }
@@ -360,4 +362,9 @@
 @media (prefers-reduced-motion:reduce){.bw-left,.bw-right {transition:none
 }}
 .bn label.bn-auto {display:flex
+}
+}
+@layer syn-over{
+/* B5: khai báo trước đây mang !important chỉ để thắng thứ tự. Lớp syn-over đứng sau syn nên các luật này thắng mọi luật thường của syn bất kể specificity; giữa chúng với nhau vẫn theo specificity rồi thứ tự. Sửa một luật ở trên thì tìm cùng selector ở đây. */
+.bw-graph .bn-graph{height:100%}
 }

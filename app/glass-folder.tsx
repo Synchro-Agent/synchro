@@ -906,7 +906,9 @@ export default function GlassFolder({
   )
 }
 
-const GF_CSS = `
+// Cùng lớp syn với CSS của app (B5): thẻ <style> không lớp sẽ thắng mọi luật trong lớp bất kể specificity.
+const GF_CSS = `@layer properties, theme, base, components, utilities, syn, syn-over;
+@layer syn {
 .gf-root {
   --gf-px: 0;
   --gf-py: 0;
@@ -1347,5 +1349,6 @@ canvas.gf-sheet-art[data-ready] { opacity: 1; filter: none; }
     animation: none !important;
   }
   .gf-tilt { transform: none; }
+}
 }
 `

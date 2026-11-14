@@ -1,3 +1,5 @@
+@layer properties, theme, base, components, utilities, syn, syn-over;
+@layer syn {
 /* ===== Liquid Glass ===== */
 /* Layers: ::before = material (blur + tint + inner shine), ::after = specular rim, element = shadow.
    Only the bezel refracts (see glass.tsx); content beneath stays visible and moves under the glass. */
@@ -95,7 +97,7 @@ html body .dock .composer{--gl-blur:14px;--gl-sat:1.25;--gl-fill:rgba(250,249,24
 
 /* ---- interaction: light up on hover, grow slightly while pressed, spring back ---- */
 html body :is(.send,.scroll-down,.chip,.btn:not(.dark):not(.danger),.topbar .icon-btn)[data-press]{scale:1.07;transform:none}
-html body :is(.dock .composer,.hero .composer)[data-press]{scale:1.004}
+:is(.dock .composer,.hero .composer)[data-press]{scale:1.004}
 html body :is(.chip,.btn,.topbar .icon-btn,.send,.scroll-down,.mic-wrap):is(:active,:hover){transform:none}
 html body :is(.dock .composer,.hero .composer,.tk .tk-comp):focus-within::after{opacity:1}
 /* shadow deepens when content scrolls beneath the dock */
@@ -120,12 +122,12 @@ html body button.send.send{--gl-fill:var(--ink-glass);color:var(--ink-glass-fg)}
   html body :is(.sidebar,.dock .composer,.hero .composer,.tk .tk-comp,.send,.scroll-down,.menu,.model-menu,.usermenu,.model-sub,.modal,.toast,.chip,.btn,.seg,.topbar .icon-btn)::before{background:var(--card);-webkit-backdrop-filter:none;backdrop-filter:none}
 }
 @media (prefers-reduced-motion:reduce){
-  html body :is(.send,.scroll-down,.chip,.btn,.topbar .icon-btn,.dock .composer)[data-press]{scale:1}
+  :is(.send,.scroll-down,.chip,.btn,.topbar .icon-btn,.dock .composer)[data-press]{scale:1}
 }
 
 html body :is(.menu,.model-menu,.usermenu,.model-sub,.modal,.toast,.sidebar,.dock .composer,.hero .composer){isolation:isolate;z-index:20}
 html body .sidebar{z-index:5}html body :is(.dock .composer,.hero .composer){z-index:6}
-html body .tk .tk-comp{isolation:isolate}
+.tk .tk-comp{isolation:isolate}
 html body :is(.menu,.modal,.toast){animation-fill-mode:backwards}
 
 /* ---- enter/exit: never animate opacity on an ancestor of a backdrop-filter ---- */
@@ -139,7 +141,7 @@ html body :is(.menu,.modal,.toast){animation-fill-mode:backwards}
 html body :is(.menu,.modal,.toast){animation:gPanelIn .26s var(--gl-spring) backwards}
 html body :is(.menu,.modal,.toast)>*{animation:gFadeIn .2s .05s ease-out backwards}
 html body .menu.out,html body .toast.out,html body .closing .modal{animation:gPanelOut .12s ease-in both}
-html body .menu.out::before,html body .menu.out::after,html body .toast.out::before,html body .toast.out::after,html body .closing .modal::before,html body .closing .modal::after{animation:gHoldOut .12s linear both}
+.menu.out::before,html body .menu.out::after,.toast.out::before,html body .toast.out::after,.closing .modal::before,html body .closing .modal::after{animation:gHoldOut .12s linear both}
 html body .menu.out>*,html body .toast.out>*,html body .closing .modal>*{animation:gFadeOut .12s ease-in both}
 html body .overlay{animation:gOverlayIn .25s ease-out backwards}
 html body .closing .overlay{animation:gOverlayOut .16s ease-in both}
@@ -148,7 +150,7 @@ html body .modal{animation-duration:.3s}
 
 /* ---- segmented control: sliding thumb ---- */
 .seg{position:relative;isolation:auto}
-.seg button{position:relative;z-index:1;background:transparent!important;box-shadow:none!important;transition:color .25s}
+.seg button{position:relative;z-index:1;transition:color .25s}
 .seg .thumb{position:absolute;top:2px;bottom:2px;left:0;width:var(--w,0);transform:translateX(var(--x,0));border-radius:999px;z-index:0;
   background:rgba(255,255,255,.75);box-shadow:0 1px 4px rgba(17,18,16,.16),inset 0 0 0 .5px rgba(255,255,255,.9);pointer-events:none;opacity:0}
 [data-theme="dark"] .seg .thumb{background:#3b3938;box-shadow:0 1px 4px rgba(0,0,0,.45),inset 0 0 0 .5px #55524f}
@@ -189,14 +191,14 @@ html body :is(.icon-btn,.chev):active{background:var(--row-press);scale:.92}
 html body .chat-wrap:hover .chat-item{background:var(--row-hover)}
 html body .chat-wrap:active .chat-item{background:var(--row-press)}
 html body :is(.topbar .icon-btn,.chip,.btn:not(.dark):not(.danger)):active{scale:1.0}
-html body .btn.dark:active,html body .btn.danger:active{scale:.96;filter:brightness(.92)}
+.btn.dark:active,.btn.danger:active{scale:.96;filter:brightness(.92)}
 html body .seg button:not(.on):active{color:var(--text);scale:.96}
 html body :is(.menu-item.del):hover{background:#c6422f}
 
 /* ---- collapsed sidebar toggle: a round glass bubble ---- */
 html body .topbar .icon-btn.side-toggle{width:40px;height:40px;border-radius:50%;margin-left:-4px;margin-top:2px;
   animation:gBubbleIn .42s var(--gl-spring) backwards}
-html body .topbar .icon-btn.side-toggle::before{animation:gFadeIn .25s ease-out backwards}
+.topbar .icon-btn.side-toggle::before{animation:gFadeIn .25s ease-out backwards}
 html body .topbar .icon-btn.side-toggle svg{transition:transform .3s var(--gl-spring)}
 html body .topbar .icon-btn.side-toggle:hover svg{transform:translateX(1px)}
 html body .topbar .icon-btn.side-toggle:active{scale:.92}
@@ -228,8 +230,8 @@ html body .topbar .icon-btn.side-toggle[data-press]{scale:.94}
 html body .nav-item .plus{position:relative;background:transparent;isolation:isolate;box-shadow:0 0 0 .5px rgba(255,255,255,.25),0 2px 6px var(--ink-glow)}
 html body .nav-item .plus::before{content:"";position:absolute;inset:0;border-radius:50%;z-index:-1;background:var(--ink-glass);-webkit-backdrop-filter:blur(2px) saturate(1.7);backdrop-filter:blur(2px) saturate(1.7);box-shadow:inset 1px 1.5px 2px -1px rgba(255,255,255,.6),inset -1px -1.5px 2px -1px rgba(255,255,255,.35),inset 0 0 8px -2px rgba(255,255,255,.15)}
 html body .nav-item .plus::after{content:"";position:absolute;inset:0;border-radius:50%;pointer-events:none;padding:.75px;opacity:.7;background:linear-gradient(145deg,rgba(255,255,255,.95),rgba(255,255,255,.1) 30%,rgba(255,255,255,.05) 60%,rgba(255,255,255,.7));-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask:linear-gradient(#000 0 0) content-box exclude,linear-gradient(#000 0 0)}
-html body .nav-item:hover .plus{scale:1.08}
-html body .nav-item:active .plus{scale:.94}
+.nav-item:hover .plus{scale:1.08}
+.nav-item:active .plus{scale:.94}
 html body .nav-item .plus{transition:scale .35s var(--gl-spring)}
 
 /* light theme: clearer selected state in segmented control */
@@ -241,22 +243,13 @@ html body .nav-item .plus{transition:scale .35s var(--gl-spring)}
 :root:not([data-theme="dark"]) .seg button:not(.on):active{color:var(--text-2)}
 
 /* ===== Liquid glass buttons (SVG displacement + layered inset shadows) ===== */
-html body :is(.chip,.btn:not(.dark):not(.danger),.seg,.topbar .icon-btn,.send,.scroll-down,.cvg-mode .ic,.cvg-logo,.cvg-steps i)::before{
-  -webkit-backdrop-filter:url(#container-glass)!important;backdrop-filter:url(#container-glass)!important;
-  box-shadow:0 0 6px rgba(0,0,0,.03),0 2px 6px rgba(0,0,0,.08),inset 2px 2px .5px -2.5px rgba(0,0,0,.28),inset -2px -2px .5px -2.5px rgba(0,0,0,.26),inset 1px 1px 1px -.5px rgba(0,0,0,.16),inset -1px -1px 1px -.5px rgba(0,0,0,.16),inset 0 0 6px 6px rgba(0,0,0,.04),inset 0 0 2px 2px rgba(0,0,0,.02),0 0 12px rgba(255,255,255,.15)!important}
-html[data-theme="dark"] body :is(.chip,.btn:not(.dark):not(.danger),.seg,.topbar .icon-btn,.send,.scroll-down,.cvg-mode .ic,.cvg-logo,.cvg-steps i)::before{
-  box-shadow:0 0 8px rgba(0,0,0,.03),0 2px 6px rgba(0,0,0,.08),inset 3px 3px .5px -3.5px rgba(255,255,255,.09),inset -3px -3px .5px -3.5px rgba(255,255,255,.85),inset 1px 1px 1px -.5px rgba(255,255,255,.6),inset -1px -1px 1px -.5px rgba(255,255,255,.6),inset 0 0 6px 6px rgba(255,255,255,.12),inset 0 0 2px 2px rgba(255,255,255,.06),0 0 12px rgba(0,0,0,.15)!important}
-html body :is(.chip,.btn:not(.dark):not(.danger),.seg,.topbar .icon-btn,.send,.scroll-down,.cvg-mode .ic,.cvg-logo,.cvg-steps i)::after{display:none!important}
-html body :is(.chip,.btn:not(.dark):not(.danger),.seg,.topbar .icon-btn,.send,.scroll-down):not(:disabled):hover{scale:1.05}
+:is(.chip,.btn:not(.dark):not(.danger),.seg,.topbar .icon-btn,.send,.scroll-down):not(:disabled):hover{scale:1.05}
 html body :is(.chip,.btn:not(.dark):not(.danger),.seg,.topbar .icon-btn,.send,.scroll-down){transition:scale .3s ease,box-shadow .35s,color .2s}
 
 /* Nút liquid glass: bật/tắt tức thì theo con trỏ, không có độ trễ chuyển tiếp */
-html body :is(.chip,.btn:not(.dark):not(.danger),.seg,.topbar .icon-btn,.send,.scroll-down,.cvg-mode .ic,.cvg-logo,.cvg-steps i),
-html body :is(.chip,.btn:not(.dark):not(.danger),.seg,.topbar .icon-btn,.send,.scroll-down,.cvg-mode .ic,.cvg-logo,.cvg-steps i)::before,
-html body :is(.chip,.btn:not(.dark):not(.danger),.seg,.topbar .icon-btn,.send,.scroll-down,.cvg-mode .ic,.cvg-logo,.cvg-steps i)::after{transition:none!important}
 
 /* ===== Nút đậm (đen ở theme sáng, trắng ở theme tối) cũng là liquid glass, cùng vật liệu với nút thường ===== */
-html body :is(.btn.dark,.btn.danger){position:relative;isolation:isolate;background:transparent;border:0;box-shadow:0 2px 8px rgba(0,0,0,.14);transition:none!important}
+html body :is(.btn.dark,.btn.danger){position:relative;isolation:isolate;background:transparent;border:0;box-shadow:0 2px 8px rgba(0,0,0,.14)}
 html body :is(.btn.dark,.btn.danger):hover{background:transparent;opacity:1}
 html body :is(.btn.dark,.btn.danger)::before{content:"";position:absolute;inset:0;border-radius:inherit;z-index:-1;pointer-events:none;
   background:color-mix(in srgb,var(--btn-dark) 82%,transparent);
@@ -266,9 +259,9 @@ html[data-theme="dark"] body .btn.dark::before{background:color-mix(in srgb,var(
   box-shadow:0 0 6px rgba(0,0,0,.03),inset 2px 2px .5px -2.5px rgba(0,0,0,.28),inset -2px -2px .5px -2.5px rgba(0,0,0,.26),inset 1px 1px 1px -.5px rgba(0,0,0,.16),inset -1px -1px 1px -.5px rgba(0,0,0,.16),inset 0 0 6px 6px rgba(0,0,0,.04),inset 0 0 2px 2px rgba(0,0,0,.02)}
 html body .btn.danger::before{background:rgba(214,64,48,.86)}
 html body :is(.btn.dark,.btn.danger)::after{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;background:linear-gradient(180deg,rgba(255,255,255,.16),rgba(255,255,255,0) 55%);mix-blend-mode:screen}
-html[data-theme="dark"] body .btn.dark::after{background:linear-gradient(180deg,rgba(255,255,255,.5),rgba(255,255,255,0) 60%);mix-blend-mode:normal;opacity:.5}
-html body :is(.btn.dark,.btn.danger):not(:disabled):hover{scale:1.05}
-html body :is(.btn.dark,.btn.danger):active{scale:.97;filter:none}
+html[data-theme="dark"] .btn.dark::after{background:linear-gradient(180deg,rgba(255,255,255,.5),rgba(255,255,255,0) 60%);mix-blend-mode:normal;opacity:.5}
+:is(.btn.dark,.btn.danger):not(:disabled):hover{scale:1.05}
+:is(.btn.dark,.btn.danger):active{scale:.97;filter:none}
 @media (prefers-reduced-transparency:reduce){html body :is(.btn.dark,.btn.danger)::before{-webkit-backdrop-filter:none;backdrop-filter:none;background:var(--btn-dark)}}
 /* Danh sách con trong thanh điều hướng (Speech) cũng thu gọn được như danh sách chat */
 .nav .fold>*{min-height:0;overflow:hidden;transition:padding .28s}
@@ -280,12 +273,9 @@ html body :is(.btn.dark,.btn.danger):active{scale:.97;filter:none}
    giao diện tối: cùng cấu trúc nhưng là kính sáng màu ngà. Lớp khúc xạ (#container-glass) vẫn giữ ở ::before. */
 :root{--ink-g-top:rgba(74,74,82,.6);--ink-g-mid:rgba(18,18,22,.72);--ink-g-bot:rgba(0,0,0,.84);--ink-g-hi:rgba(255,255,255,.78);--ink-g-rim:rgba(255,255,255,.2);--ink-g-sheen:rgba(255,255,255,.46);--ink-g-glow:rgba(255,255,255,.22);--ink-g-shadow:0 8px 20px rgba(0,0,0,.24),0 1px 3px rgba(0,0,0,.28),0 0 0 .5px rgba(0,0,0,.35)}
 [data-theme="dark"]{--ink-g-top:rgba(255,255,255,.94);--ink-g-mid:rgba(238,237,232,.84);--ink-g-bot:rgba(205,204,198,.8);--ink-g-hi:rgba(255,255,255,1);--ink-g-rim:rgba(0,0,0,.22);--ink-g-sheen:rgba(255,255,255,.9);--ink-g-glow:rgba(255,255,255,.5);--ink-g-shadow:0 8px 22px rgba(0,0,0,.55),0 1px 3px rgba(0,0,0,.45),0 0 0 .5px rgba(255,255,255,.12)}
-html body button.send.send{box-shadow:var(--ink-g-shadow)!important}
-html body button.send.send::before{background:linear-gradient(180deg,var(--ink-g-top),var(--ink-g-mid) 50%,var(--ink-g-bot))!important;
-  box-shadow:inset 0 1px .5px var(--ink-g-hi),inset 0 0 0 .75px var(--ink-g-rim),inset 0 -1.5px 1.5px -.5px var(--ink-g-rim),inset 0 12px 12px -9px var(--ink-g-sheen),inset 0 -7px 9px -6px var(--ink-g-glow)!important}
-html body button.send.send::after{display:block!important;content:"";position:absolute;inset:1.5px 3px auto;height:46%;padding:0;border-radius:inherit;pointer-events:none;opacity:.5;
+button.send.send::after{content:"";position:absolute;inset:1.5px 3px auto;height:46%;padding:0;border-radius:inherit;pointer-events:none;opacity:.5;
   background:linear-gradient(180deg,var(--ink-g-sheen),rgba(255,255,255,0));-webkit-mask:none;mask:none}
-html body button.send.send:disabled::after{opacity:.3}
+button.send.send:disabled::after{opacity:.3}
 html body .nav-item .plus{box-shadow:0 0 0 .5px var(--ink-g-rim),0 3px 8px var(--ink-glow)}
 html body .nav-item .plus::before{background:linear-gradient(180deg,var(--ink-g-top),var(--ink-g-mid) 50%,var(--ink-g-bot));
   box-shadow:inset 0 1px .5px var(--ink-g-hi),inset 0 -1px 1px -.5px var(--ink-g-rim),inset 0 7px 7px -5px var(--ink-g-sheen),inset 0 -4px 5px -4px var(--ink-g-glow)}
@@ -294,39 +284,58 @@ html body .nav-item .plus::before{background:linear-gradient(180deg,var(--ink-g-
    Giữ kính: khung gõ chat (thấy chữ chạy bên dưới), nút cuộn xuống nổi trên chat, thanh bên, menu / hộp thoại / thông báo nổi.
    Nút thường, nút đậm, chip, nút chọn đoạn, nút trên thanh trên, nút gửi, "+" của Mới: phẳng theo bộ nhận diện — mực đặc (nút chính) hoặc
    viền mảnh trên nền trong (nút phụ), không khúc xạ, không vệt bóng, không phóng to khi rê chuột. */
-html body :is(.chip,.btn,.seg,.topbar .icon-btn,.send,.nav-item .plus,.cvg-mode .ic,.cvg-logo,.cvg-steps i):not(.auth-root *)::before,
-html body :is(.chip,.btn,.seg,.topbar .icon-btn,.send,.nav-item .plus,.cvg-mode .ic,.cvg-logo,.cvg-steps i):not(.auth-root *):not([data-tip])::after{display:none!important;content:none!important}
 /* Phần tử có gợi ý (data-tip): ::after là gợi ý khi rê chuột, không phải lớp kính. Trước đây quy tắc trên tắt luôn gợi ý của nút trên thanh trên,
    nút .btn, chip… (rê chuột vào nút Trình duyệt không thấy gợi ý). Lúc không rê chuột vẫn tắt như cũ. */
-html body :is(.chip,.btn,.seg,.topbar .icon-btn,.send,.nav-item .plus,.cvg-mode .ic,.cvg-logo,.cvg-steps i):not(.auth-root *)[data-tip]:not(:hover,:focus-visible)::after{display:none!important;content:none!important}
+:is(.chip,.btn,.seg,.topbar .icon-btn,.send,.nav-item .plus,.cvg-mode .ic,.cvg-logo,.cvg-steps i):not(.auth-root *)[data-tip]:not(:hover,:focus-visible)::after{content:none}
 html body :is(.chip,.btn,.seg,.topbar .icon-btn,.send,.nav-item .plus):not(.auth-root *),
 html body :is(.chip,.btn,.seg,.topbar .icon-btn,.send,.nav-item .plus):not(.auth-root *):is(:hover,:active,[data-press]){scale:none;filter:none;isolation:auto}
-html body :is(.chip,.btn,.seg,.topbar .icon-btn,.send,.nav-item .plus):not(.auth-root *){transition:background-color .15s,color .15s,box-shadow .15s,opacity .15s!important}
 /* Nút phụ / chip: nền trong, viền mảnh; rê chuột: nền nhạt. */
-html body :is(.chip,.btn:not(.dark):not(.danger)):not(.auth-root *){background:transparent;border:0;box-shadow:inset 0 0 0 .5px var(--border-strong)!important;color:var(--text)}
-html body :is(.chip,.btn:not(.dark):not(.danger)):not(.auth-root *):hover{background:var(--hover)}
+html body :is(.chip,.btn:not(.dark):not(.danger)):not(.auth-root *){background:transparent;border:0;color:var(--text)}
+:is(.chip,.btn:not(.dark):not(.danger)):not(.auth-root *):hover{background:var(--hover)}
 html body .chip:not(.auth-root *){color:var(--text-2)}
 html body .chip:not(.auth-root *):hover{color:var(--text)}
 /* Nút chính: mực đặc (Carbon ở giao diện sáng, Ivory ở giao diện tối). */
-html body .btn.dark:not(.auth-root *){background:var(--btn-dark);color:var(--btn-dark-text);border:0;box-shadow:none!important}
+html body .btn.dark:not(.auth-root *){background:var(--btn-dark);color:var(--btn-dark-text);border:0}
 html body .btn.dark:not(.auth-root *):hover{background:color-mix(in srgb,var(--btn-dark) 84%,var(--bg));opacity:1}
-html body .btn.danger:not(.auth-root *){background:#c6422f;color:#fff;border:0;box-shadow:none!important}
+html body .btn.danger:not(.auth-root *){background:#c6422f;color:#fff;border:0}
 html body .btn.danger:not(.auth-root *):hover{background:#b03a29}
 html body :is(.btn.dark,.btn.danger):not(.auth-root *):active{opacity:.9}
 /* Nút gửi, "+" của Mới: tròn / vuông mực đặc. */
-html body button.send.send:not(.auth-root *){background:var(--accent);color:var(--on-accent);box-shadow:none!important}
-html body button.send.send:not(.auth-root *):disabled{opacity:.3}
+html body button.send.send:not(.auth-root *){background:var(--accent);color:var(--on-accent)}
+button.send.send:not(.auth-root *):disabled{opacity:.3}
 html body .nav-item .plus:not(.auth-root *){background:var(--accent);color:var(--on-accent);box-shadow:none}
 /* Nút chọn đoạn: rãnh nhạt, mục đang chọn là thẻ đặc. */
-html body .seg:not(.auth-root *){background:var(--hover);box-shadow:inset 0 0 0 .5px var(--border)!important}
+html body .seg:not(.auth-root *){background:var(--hover)}
 html body .seg:not(.auth-root *) .thumb{background:var(--card);box-shadow:0 1px 2px rgba(17,18,16,.1),0 0 0 .5px var(--border-strong)}
 html[data-theme="dark"] body .seg:not(.auth-root *) .thumb{background:#2A2B26;box-shadow:0 1px 2px rgba(0,0,0,.4),0 0 0 .5px rgba(238,236,229,.1)}
 /* Nút trên thanh trên (gồm nút mở thanh bên khi đã thu gọn): trong, rê chuột nền nhạt. */
-html body .topbar .icon-btn:not(.auth-root *){background:transparent;box-shadow:none!important}
+html body .topbar .icon-btn:not(.auth-root *){background:transparent}
 html body .topbar .icon-btn:not(.auth-root *):hover{background:var(--hover)}
-html body .topbar .icon-btn.side-toggle:not(.auth-root *){width:36px;height:36px;border-radius:var(--r-pill);margin-left:0;margin-top:0;animation:none}
+.topbar .icon-btn.side-toggle:not(.auth-root *){width:36px;height:36px;border-radius:var(--r-pill);margin-left:0;margin-top:0;animation:none}
 /* Mục Xóa trong menu: rê chuột là nền đỏ nhạt, chữ / icon đỏ đậm (trước đây nền đỏ đậm trùng màu chữ đỏ nên không đọc được). */
 html body .menu .menu-item.del,html body .menu-item.del{color:#c6422f}
 html body :is(.menu .menu-item.del,.menu-item.del):hover{background:color-mix(in srgb,#c6422f 12%,transparent);color:#b03a29}
 html[data-theme="dark"] body :is(.menu .menu-item.del,.menu-item.del){color:#ff8a78}
-html[data-theme="dark"] body :is(.menu .menu-item.del,.menu-item.del):hover{background:color-mix(in srgb,#ff6b57 16%,transparent);color:#ffa497}
+html[data-theme="dark"] :is(.menu .menu-item.del,.menu-item.del):hover{background:color-mix(in srgb,#ff6b57 16%,transparent);color:#ffa497}
+}
+@layer syn-over{
+/* B5: khai báo trước đây mang !important chỉ để thắng thứ tự. Lớp syn-over đứng sau syn nên các luật này thắng mọi luật thường của syn bất kể specificity; giữa chúng với nhau vẫn theo specificity rồi thứ tự. Sửa một luật ở trên thì tìm cùng selector ở đây. */
+.seg button{background:transparent;box-shadow:none}
+html body :is(.chip,.btn:not(.dark):not(.danger),.seg,.topbar .icon-btn,.send,.scroll-down,.cvg-mode .ic,.cvg-logo,.cvg-steps i)::before{-webkit-backdrop-filter:url(#container-glass);backdrop-filter:url(#container-glass);box-shadow:0 0 6px rgba(0,0,0,.03),0 2px 6px rgba(0,0,0,.08),inset 2px 2px .5px -2.5px rgba(0,0,0,.28),inset -2px -2px .5px -2.5px rgba(0,0,0,.26),inset 1px 1px 1px -.5px rgba(0,0,0,.16),inset -1px -1px 1px -.5px rgba(0,0,0,.16),inset 0 0 6px 6px rgba(0,0,0,.04),inset 0 0 2px 2px rgba(0,0,0,.02),0 0 12px rgba(255,255,255,.15)}
+html[data-theme="dark"] :is(.chip,.btn:not(.dark):not(.danger),.seg,.topbar .icon-btn,.send,.scroll-down,.cvg-mode .ic,.cvg-logo,.cvg-steps i)::before{box-shadow:0 0 8px rgba(0,0,0,.03),0 2px 6px rgba(0,0,0,.08),inset 3px 3px .5px -3.5px rgba(255,255,255,.09),inset -3px -3px .5px -3.5px rgba(255,255,255,.85),inset 1px 1px 1px -.5px rgba(255,255,255,.6),inset -1px -1px 1px -.5px rgba(255,255,255,.6),inset 0 0 6px 6px rgba(255,255,255,.12),inset 0 0 2px 2px rgba(255,255,255,.06),0 0 12px rgba(0,0,0,.15)}
+:is(.chip,.btn:not(.dark):not(.danger),.seg,.topbar .icon-btn,.send,.scroll-down,.cvg-mode .ic,.cvg-logo,.cvg-steps i)::after{display:none}
+:is(.chip,.btn:not(.dark):not(.danger),.seg,.topbar .icon-btn,.send,.scroll-down,.cvg-mode .ic,.cvg-logo,.cvg-steps i),:is(.chip,.btn:not(.dark):not(.danger),.seg,.topbar .icon-btn,.send,.scroll-down,.cvg-mode .ic,.cvg-logo,.cvg-steps i)::before,:is(.chip,.btn:not(.dark):not(.danger),.seg,.topbar .icon-btn,.send,.scroll-down,.cvg-mode .ic,.cvg-logo,.cvg-steps i)::after{transition:none}
+:is(.btn.dark,.btn.danger){transition:none}
+html body button.send.send{box-shadow:var(--ink-g-shadow)}
+button.send.send::before{background:linear-gradient(180deg,var(--ink-g-top),var(--ink-g-mid) 50%,var(--ink-g-bot));box-shadow:inset 0 1px .5px var(--ink-g-hi),inset 0 0 0 .75px var(--ink-g-rim),inset 0 -1.5px 1.5px -.5px var(--ink-g-rim),inset 0 12px 12px -9px var(--ink-g-sheen),inset 0 -7px 9px -6px var(--ink-g-glow)}
+button.send.send::after{display:block}
+:is(.chip,.btn,.seg,.topbar .icon-btn,.send,.nav-item .plus,.cvg-mode .ic,.cvg-logo,.cvg-steps i):not(.auth-root *)::before,:is(.chip,.btn,.seg,.topbar .icon-btn,.send,.nav-item .plus,.cvg-mode .ic,.cvg-logo,.cvg-steps i):not(.auth-root *):not([data-tip])::after{display:none;content:none}
+:is(.chip,.btn,.seg,.topbar .icon-btn,.send,.nav-item .plus,.cvg-mode .ic,.cvg-logo,.cvg-steps i):not(.auth-root *)[data-tip]:not(:hover,:focus-visible)::after{display:none}
+:is(.chip,.btn,.seg,.topbar .icon-btn,.send,.nav-item .plus):not(.auth-root *){transition:background-color .15s,color .15s,box-shadow .15s,opacity .15s}
+:is(.chip,.btn:not(.dark):not(.danger)):not(.auth-root *){box-shadow:inset 0 0 0 .5px var(--border-strong)}
+html body .btn.dark:not(.auth-root *){box-shadow:none}
+html body .btn.danger:not(.auth-root *){box-shadow:none}
+html body button.send.send:not(.auth-root *){box-shadow:none}
+html body .seg:not(.auth-root *){box-shadow:inset 0 0 0 .5px var(--border)}
+html body .topbar .icon-btn:not(.auth-root *){box-shadow:none}
+}

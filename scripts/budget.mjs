@@ -3,7 +3,7 @@
 // scripts/qa.mjs chạy tệp này như một bộ kiểm. Mã thoát:
 // - 1: vượt phần ngân sách đang bắt buộc (ENFORCED), hoặc vượt CEIL (trần chống tăng lại, đặt ngay trên số đo của lần giảm gần nhất).
 // - 2: CHƯA ĐO được: không có bản build production, hoặc bản build cũ hơn mã nguồn hiện tại (đo bản cũ là báo đạt sai). BUDGET_SKIP=1 bỏ qua.
-// ENFORCED: JS bắt buộc ngay. CSS lần đầu hiện ~97 KB gzip, chỉ giảm về 45 KB được khi B5 (một hệ token, @layer, gộp khai báo trùng của
+// ENFORCED: JS bắt buộc ngay. CSS lần đầu ~97 KB gzip, còn ~87 KB sau B5 bước 1 (Tailwind chỉ quét hai tệp dùng lớp tiện ích), chỉ giảm về 45 KB được khi B5 (một hệ token, @layer, gộp khai báo trùng của
 // globals.css) xong: tới lúc đó CSS chỉ báo "CHƯA BẮT BUỘC" (in rõ trong qa) và chặn bằng CEIL.css; B5 xong thì đặt ENFORCED.css = true
 // (BUDGET_STRICT=1 bắt buộc cả CSS ngay bây giờ).
 import fs from "node:fs";
@@ -12,7 +12,7 @@ import zlib from "node:zlib";
 import { fileURLToPath } from "node:url";
 
 export const BUDGET = { js: 350 * 1024, css: 45 * 1024 };
-export const CEIL = { js: 350 * 1024, css: 100 * 1024 };
+export const CEIL = { js: 350 * 1024, css: 89 * 1024 };
 export const ENFORCED = { js: true, css: false };
 
 // Mã nguồn quyết định bản build của trang chủ: bản build cũ hơn tệp nào trong này là đo nhầm bản cũ.

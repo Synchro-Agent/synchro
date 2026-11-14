@@ -20,8 +20,9 @@ const orphan = files.filter((f) => !runs.has(f) && !skips.has(f));
 ok(!orphan.length, `mọi tệp tests/ui/*.mjs (${files.length}) đều chạy hoặc bỏ qua có lý do`, orphan.join(", "));
 ok([...skips.values()].every((why) => why.trim().length >= 20), "mỗi tệp bỏ qua có lý do rõ ràng", JSON.stringify([...skips]));
 ok(![...skips.keys()].some((f) => runs.has(f)), "tệp bỏ qua không bị chạy");
-// B3.7: kiểm ngân sách tải đầu (vài giây, không cần máy chủ) chạy trước, rồi tới bộ API.
-ok([...runs][0] === "scripts/budget.mjs" && [...runs][1] === "tests/run-all.mjs", "ngân sách tải đầu chạy trước, bộ API ngay sau", [...runs].slice(0, 3).join(", "));
+// B3.7: kiểm ngân sách tải đầu (vài giây, không cần máy chủ) chạy trước, rồi chỉ số CSS (B5, cũng không cần máy chủ), rồi tới bộ API.
+ok([...runs][0] === "scripts/budget.mjs" && [...runs][1] === "scripts/css-metrics.mjs" && [...runs][2] === "tests/run-all.mjs", "ngân sách tải đầu chạy trước, chỉ số CSS, bộ API ngay sau", [...runs].slice(0, 3).join(", "));
+ok(skips.has("tests/ui/cascade.mjs"), "cascade.mjs (công cụ so trước / sau của B5) bỏ qua có lý do");
 ok(runs.has("tests/ui/a11y-focus.mjs") && runs.has("tests/ui/downloads.mjs") && skips.has("tests/ui/snapshots.mjs"), "a11y-focus, downloads chạy; snapshots (công cụ chụp ảnh) bỏ qua có lý do");
 ok(runs.has("tests/ui/free-account.mjs"), "ma trận tài khoản miễn phí (H1.3) nằm trong QA");
 const noApi = spawnSync(process.execPath, ["scripts/qa.mjs", "--list", "--no-api"], { encoding: "utf8" }).stdout;

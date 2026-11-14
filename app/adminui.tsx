@@ -340,7 +340,7 @@ export function AdminPanel({ Toggle }: { Toggle: ToggleT }) {
       </div>
 
       <h3 className="sec">Sign-in</h3>
-      <div className="row" style={{ borderTop: 0 }}>
+      <div className="row">
         <div><div className="t">New sign-ups</div><div className="d">Allow new accounts to be created. People who already have an account can still sign in.</div></div>
         <Toggle on={d.settings.signupOpen} label="New sign-ups" set={(v) => act(() => call("PATCH", "/api/admin/settings", { signupOpen: v }), v ? "Sign-ups opened" : "Sign-ups closed")} />
       </div>
@@ -441,7 +441,7 @@ export function AdminPanel({ Toggle }: { Toggle: ToggleT }) {
                   </td>
                   <td data-notr style={{ whiteSpace: "nowrap" }}>{ago(u.lastSeen)}</td>
                   <td><span className={`adm-st ${u.status === "active" ? "" : "off"}`}><i />{u.status === "active" ? "Active" : "Suspended"}</span></td>
-                  <td style={{ width: 24, color: "var(--text-3)" }}><span style={{ display: "inline-flex", transform: open === u.id ? "rotate(180deg)" : undefined, transition: "transform .2s" }}><I.Chevron size={14} /></span></td>
+                  <td style={{ width: 24, color: "var(--text-3)" }}><span className="adm-chev" style={{ display: "inline-flex", transform: open === u.id ? "rotate(180deg)" : undefined }}><I.Chevron size={14} /></span></td>
                 </tr>
                 {open === u.id && !bk.on && (
                   <tr className="adm-detail"><td colSpan={4}>
