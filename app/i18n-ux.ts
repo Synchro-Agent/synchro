@@ -37,13 +37,11 @@ export const UX_VI2EN: Record<string, string> = {
   "Câu trả lời trong “{title}” gặp lỗi": "The reply in “{title}” hit an error", "Synchro đã trả lời xong “{title}”": "Synchro finished replying in “{title}”",
   "{title} · nhánh": "{title} · branch", "Tạo ảnh {what}": "Create an image of {what}",
   "Các phần khác của Synchro vẫn dùng được bình thường.": "The rest of Synchro still works normally.",
-  "Thử lại": "Try again",
   // Thẻ lỗi của lượt chat
   "Model chưa khởi động được trên máy chủ. Hãy thử lại hoặc chọn model khác.": "The model couldn't start on the server. Try again or pick another model.",
   "Mất kết nối tới model. Hãy kiểm tra mạng rồi thử lại.": "Lost the connection to the model. Check your network and try again.",
   "Model dừng đột ngột giữa lượt trả lời. Hãy thử lại hoặc chọn model khác.": "The model stopped unexpectedly during its reply. Try again or pick another model.",
   "Lượt này gặp lỗi ở máy chủ. Hãy thử lại hoặc chọn model khác.": "This turn hit a server error. Try again or pick another model.",
-  "Không thể kết nối tới model. Vui lòng thử lại.": "Couldn't connect to the model. Please try again.",
   "Câu trả lời chưa hoàn thành": "This reply didn't finish", "Chi tiết kỹ thuật": "Technical details", "Mở Providers": "Open Providers",
   "Không lấy được nội dung tệp đính kèm. Hãy gửi lại.": "Couldn't read the attached file. Please send it again.",
   // Phiên hết hạn, làm quen tài khoản mới, trợ năng
@@ -51,11 +49,11 @@ export const UX_VI2EN: Record<string, string> = {
   "Kết nối gói AI của bạn để bắt đầu": "Connect your AI plan to get started",
   "Synchro chạy bằng chính tài khoản AI của bạn. ChatGPT, Gemini và Grok dùng được cả tài khoản miễn phí, Claude cần gói Pro hoặc Max. Đăng nhập một tài khoản là chat được ngay, tin bạn đã gõ dưới đây vẫn được giữ.": "Synchro runs on your own AI account. ChatGPT, Gemini and Grok work on a free account; Claude needs a Pro or Max plan. Sign in to one and you can chat right away. What you've typed below stays here.",
   "Hãy kết nối một gói AI để gửi tin này": "Connect an AI plan to send this message",
-  "Đang tải": "Loading", "Đến nội dung chính": "Skip to main content", "Ngôn ngữ": "Language",
+  "Đến nội dung chính": "Skip to main content", "Ngôn ngữ": "Language",
   "Chưa tải được danh sách artifact": "Couldn't load your artifacts", "Chưa tải được Hộp thư": "Couldn't load your Inbox",
   "Hướng dẫn và khả năng": "Instructions and capabilities",
   // Terminal của Synchro Code, các thẻ làm việc
-  "Đã ngắt kết nối": "Disconnected", "Đang nối lại…": "Reconnecting…", "mất kết nối mạng": "network connection lost", "trang này": "this page", "Rê chuột": "Hover", "Kéo thả": "Drag and drop", "Tải tệp": "Upload file",
+  "Đã ngắt kết nối": "Disconnected", "Đang nối lại…": "Reconnecting…", "mất kết nối mạng": "network connection lost", "Rê chuột": "Hover", "Kéo thả": "Drag and drop", "Tải tệp": "Upload file",
   // Sửa tin đã gửi, ô soạn tin
   "Sửa tin nhắn": "Edit message", "Gửi lại": "Send again", "Sao chép": "Copy", "Hủy": "Cancel",
   "Các tin phía sau sẽ được thay bằng câu trả lời mới.": "Later messages will be replaced by the new reply.",
@@ -251,7 +249,7 @@ export const UX_EN2VI: Record<string, string> = {
   "Attached files and conversation history count toward the limit of the model you pick. Large files are trimmed to the most relevant parts.": "Tệp đính kèm và lịch sử hội thoại tính vào giới hạn của model bạn chọn. Tệp lớn được rút gọn còn phần liên quan nhất.",
   "Downloads the chats, projects and profile stored in this browser. Brain notes download from Settings → Brain; artifacts and Code sessions download where you use them.": "Tải về đoạn chat, dự án và hồ sơ lưu trong trình duyệt này. Ghi chú của bộ não tải ở Cài đặt → Bộ não; artifact và phiên Code tải ngay nơi bạn dùng chúng.",
   "Every Synchro Code conversation will be deleted from this browser and from the Synchro server, including on your other devices. This can't be undone.": "Mọi cuộc trò chuyện Synchro Code sẽ bị xóa khỏi trình duyệt này và máy chủ Synchro, kể cả trên các thiết bị khác của bạn. Không hoàn tác được.",
-  "Turned on": "Đang bật", "List every skill directly": "Liệt kê trực tiếp mọi skill", "Custom connectors": "Connector tùy chỉnh", "Tools that delete data": "Công cụ xóa dữ liệu", "All directory connectors": "Mọi connector trong danh mục", "New sign-ups": "Đăng ký mới", "Apply to administrators": "Áp dụng cho quản trị viên",
+  "Turned on": "Đang bật", "Custom connectors": "Connector tùy chỉnh", "Tools that delete data": "Công cụ xóa dữ liệu", "All directory connectors": "Mọi connector trong danh mục", "New sign-ups": "Đăng ký mới", "Apply to administrators": "Áp dụng cho quản trị viên",
   "Edited tool inputs before approving": "Sửa tham số công cụ trước khi duyệt",
 };
 export const UX_RULES_VI: [RegExp, (m: RegExpMatchArray) => string][] = [

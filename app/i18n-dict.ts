@@ -131,7 +131,6 @@ export const VI2EN: Record<string, string> = {
   "Workspace đang tắt. Thay đổi sẽ hiện khi nó chạy.": "The workspace is off. Changes show up when it runs.", "Chưa đọc được trạng thái git.": "Couldn't read the git status.",
   "Tạo PR": "Create PR", "Tạo nhánh": "Create branch", "Xem ảnh": "Image viewer", "Ảnh đang xem": "Image being viewed",
   "Đang viết câu trả lời": "Writing the reply", "Đang sửa lại bản sửa artifact cho khớp": "Reworking the artifact edit so it fits",
-  "Danh sách việc": "Task list",
   "Đã xong mọi việc": "All tasks done",
   "Đang làm…": "Working…",
   "Dán log lỗi / stack trace": "Paste error log / stack trace",
@@ -200,9 +199,7 @@ export const VI2EN: Record<string, string> = {
   "Vẽ sơ đồ": "Render diagram",
   "Kiểm tra gói": "Check packages",
   "Chấp nhận": "Accept",
-  "Từ chối": "Reject",
   "Lệnh nhanh": "Command palette",
-  "Tóm tắt & Làm gọn luồng chat": "Summarize & compact chat",
   "Báo lỗi dòng này": "Report error on this line",
   "Giải thích": "Explain",
   "Viết lại (Inline Edit)": "Rewrite (Inline Edit)",
@@ -219,7 +216,7 @@ export const VI2EN: Record<string, string> = {
   "Hôm nay tôi có thể giúp gì cho bạn?": "How can I help you today?", "Thêm": "Add", "Nhập bằng giọng nói": "Dictate", "Chọn micro": "Choose microphone", "Chế độ giọng nói": "Voice mode",
   "Chưa có dự án nào": "No projects yet", "Dự án giúp bạn sắp xếp các đoạn chat và tệp liên quan.": "Projects help you organize related chats and files.",
   "Tất cả": "All", "Của bạn": "Yours", "Được chia sẻ với bạn": "Shared with you", "Được chia sẻ": "Shared", "Tạo thứ gì đó mới": "Create something new",
-  "Tài liệu": "Docs", "Của Synchro": "By Synchro", "Trang trình bày": "Slides", "Thiết kế": "Design",
+  "Của Synchro": "By Synchro", "Trang trình bày": "Slides", "Thiết kế": "Design",
   "Tài liệu mà nhóm của bạn đọc, bình luận và chỉnh sửa trực tiếp, trong khi Synchro giữ cho tài liệu luôn cập nhật.": "Documents your team reads, comments on and edits live, while Synchro keeps them up to date.",
   "Bộ trang chiếu mà bạn có thể trình chiếu, đổi kiểu dáng bằng hệ thống thiết kế và tải về dạng PowerPoint hoặc PDF.": "Slide decks you can present, restyle with a design system and download as PowerPoint or PDF.",
   "Màn hình, luồng và đồ họa dựng bằng mã, bố trí thành các bảng vẽ trên cùng một khung vẽ mà bạn có thể tự chỉnh sửa. Ảnh chụp hay tranh được tạo bằng AI qua gói đã đăng nhập.": "Screens, flows and graphics built with code, laid out as artboards on one canvas you can edit yourself. Photos and paintings are made with AI through your signed-in plan.",
@@ -368,7 +365,6 @@ export const VI2EN: Record<string, string> = {
   "Chọn": "Select",
   "Tệp và văn bản trong dự án được dùng làm ngữ cảnh cho mọi đoạn chat": "Files and text in the project are used as context for every chat",
   // Thông báo từ máy chủ xác thực
-  "Mật khẩu cần ít nhất 8 ký tự.": "Password must be at least 8 characters.",
   "Mật khẩu quá dài.": "Password is too long.",
   "Mật khẩu này quá dễ đoán. Hãy chọn mật khẩu khác.": "This password is too easy to guess. Choose another one.",
   "Email không hợp lệ.": "Invalid email.",
@@ -562,7 +558,7 @@ Object.assign(VI2EN, {
   "Đang kết nối…": "Connecting…", "Đang mở kết nối giọng nói…": "Opening the voice connection…", "Ngôn ngữ nhận dạng": "Recognition language",
   "Mất kết nối tới máy chủ giọng nói": "Lost connection to the voice server", "Lỗi kết nối giọng nói": "Voice connection error",
   "Bạn đã mở quá nhiều phiên giọng nói. Hãy thử lại sau.": "You've opened too many voice sessions. Please try again later.",
-  "(Câu hỏi bằng giọng nói)": "(Spoken question)", "Bảng phiên": "Session rail", "Tệp": "File",
+  "(Câu hỏi bằng giọng nói)": "(Spoken question)", "Tệp": "File",
 });
 RULES_EN.push([/^Ngữ cảnh: (.+) token \((\d+)%\)$/, (m) => `Context: ${m[1]} tokens (${m[2]}%)`]);
 // Đợt 4 (tệp tải lên, skill, giọng nói, bwrap): câu có tên tệp / số.
@@ -714,7 +710,7 @@ Object.assign(VI2EN, {
   "Đang tạo…": "Creating…", "Phiên bản": "Version", "phiên bản": "versions", "Nhấn để mở": "Click to open", "Đang mở": "Open", "Mã": "Code",
   "Chạy lại": "Run again", "Toàn màn hình": "Full screen", "Thu nhỏ": "Exit full screen", "Phiên bản trước": "Previous version", "Phiên bản sau": "Next version",
   "Artifact gặp lỗi": "This artifact hit an error", "Nhờ Synchro sửa": "Ask Synchro to fix", "Đã sao chép nội dung artifact": "Artifact copied", "Đã tải": "Downloaded",
-  "Trang web": "Web page", "Ứng dụng": "App", "Hình SVG": "SVG image", "Mã nguồn": "Code", "Sơ đồ": "Diagram",
+  "Trang web": "Web page", "Hình SVG": "SVG image", "Mã nguồn": "Code", "Sơ đồ": "Diagram",
   "Không vẽ được sơ đồ": "Couldn't draw the diagram", "Không vẽ được biểu đồ": "Couldn't draw the chart", "Hình minh họa gặp lỗi": "The visual hit an error",
   "Đang vẽ biểu đồ…": "Drawing chart…", "Đang vẽ sơ đồ…": "Drawing diagram…", "Đang tạo hình minh họa…": "Creating visual…",
   "Xem bảng": "View table", "Xem biểu đồ": "View chart", "Khác": "Other",
@@ -727,7 +723,6 @@ Object.assign(VI2EN, {
   "Artifact dùng AI đang tắt. Bật trong Cài đặt → Khả năng.": "AI-powered artifacts are off. Turn them on in Settings → Capabilities.",
   "Chạy code đang tắt trong Cài đặt → Khả năng.": "Code execution is off in Settings → Capabilities.",
   "Máy chủ chưa có nơi chạy code.": "This server has no place to run code yet.",
-  "Tệp không còn nữa (tệp được giữ 30 ngày).": "This file is no longer available (files are kept for 30 days).",
   "Không lưu được cài đặt.": "Couldn't save the setting.", "Không kết nối được máy chủ.": "Couldn't reach the server.",
 });
 Object.assign(VI2EN, {
@@ -1329,9 +1324,9 @@ Object.assign(VI2EN, {
     "Type an address or keywords in the bar above (keywords search Google). Or ask Synchro in the chat, for example “open … and fill in the form for me”: Synchro works right here while you watch, and you can take over at any time.",
   "Quản trị viên chưa cho phép tài khoản của bạn dùng Synchro Code và Cloud sandbox, nên chưa dùng được trình duyệt.": "Your administrator hasn't enabled Synchro Code and Cloud sandbox for your account, so the browser isn't available.",
   "Máy chủ chưa bật dịch vụ workspace nên chưa có trình duyệt.": "This server has no workspace service yet, so there is no browser.", "Đang kiểm tra…": "Checking…",
-  "Đang đọc trang": "Reading the page", "Đang đọc chữ trên trang": "Reading the page text", "Đang chụp màn hình trang": "Taking a screenshot of the page", "Đang cuộn trang": "Scrolling the page",
+  "Đang đọc trang": "Reading the page", "Đang đọc chữ trên trang": "Reading the page text", "Đang cuộn trang": "Scrolling the page",
   "Đang kéo thả trên trang": "Dragging on the page", "Đang mở tab mới": "Opening a new tab", "Đang chuyển tab": "Switching tabs", "Đang đóng tab": "Closing a tab", "Đang xem các tab": "Listing tabs", "Đang xem các tệp đã tải về": "Listing downloaded files", "Đang đọc tệp vừa tải về": "Reading the downloaded file",
-  "Đang trả lời hộp thoại của trang": "Answering the page dialog", "Đang chạy JavaScript trên trang": "Running JavaScript on the page", "Đang xem log của trang": "Reading the page log",
+  "Đang chạy JavaScript trên trang": "Running JavaScript on the page", "Đang xem log của trang": "Reading the page log",
   "Đang quay lại trang trước": "Going back", "Đang tới trang sau": "Going forward", "Đang tải lại trang": "Reloading the page", "Đang chờ trang": "Waiting for the page", "Đang dùng trình duyệt": "Using the browser",
   "đọc chữ trên trang": "read the page text", "chụp màn hình trang": "took a screenshot", "kéo thả trên trang": "dragged on the page", "mở tab mới": "opened a new tab", "chuyển tab": "switched tabs", "đóng tab": "closed a tab",
   "xem các tab": "listed tabs", "trả lời hộp thoại của trang": "answered a page dialog", "chạy JavaScript trên trang": "ran JavaScript on the page", "xem log của trang": "read the page log",
