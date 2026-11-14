@@ -12,7 +12,7 @@ import { randomToken } from "./mcpauth";
 import { browserDefault, capsState, skillsOn } from "./caps";
 import { overLimit, usageScope } from "./usage";
 import { addSpan, currentTrace, markPrompt, markProviderCall, noteModel, span, spanOn, spanSync } from "./tracing";
-import { awaitToolUse, currentRun, delta, deltaStep, inboxWaiting, liveNow, liveText, markEffect, onInbox, progress, registerExec, runSignal, steered, stepSignal, takeInbox, toolUseSeen, turnSignal } from "./runs";
+import { type Exec as RunExec, awaitToolUse, currentRun, delta, deltaStep, inboxWaiting, liveNow, liveText, markEffect, onInbox, progress, registerExec, runSignal, steered, stepSignal, takeInbox, toolUseSeen, turnSignal } from "./runs";
 import { prepareHistory, type TraceItem } from "./transpile";
 import { expandFileRefs } from "./fileproc";
 import { maybeRef, READ_REF_TOOL, readRef } from "./refs";
@@ -2063,8 +2063,9 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
   }
 }
 
-/** Chạy chat ở nền (lượt chạy bền): kiểm tra hạn mức như /api/llm rồi dùng chung chatPost. */
-registerExec("chat", async (body, user) => {
+/** Chạy chat ở nền (lượt chạy bền): kiểm tra hạn mức như /api/llm rồi dùng chung chatPost. runs.ts lấy thẳng hàm này từ bản mô-đun
+ *  của chính gói đang chạy lượt (chatExec); đăng ký vào bảng toàn cục chỉ còn cho gói không nạp được chatengine. */
+export const chatExec: RunExec = async (body, user) => {
   // Gói subscription của chính người dùng không tính vào hạn mức chi phí API của Synchro.
   const over = subCli(body.model) ? null : overLimit(user);
   if (over && body.model === AUTO) body = { ...body, plansOnly: overLimit(user, "plans") ?? over };
@@ -2079,4 +2080,5 @@ registerExec("chat", async (body, user) => {
   // Bộ não tổng hợp: ghi nhận đoạn chat để chưng cất thành một nhánh (chạy nền, không làm chậm câu trả lời).
   if (res.status === 200 && json && typeof json === "object") try { afterTurn(user, body, json); } catch (e) { console.error("[brain]", e); }
   return { http: res.status, json };
-});
+};
+registerExec("chat", chatExec);

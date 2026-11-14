@@ -439,11 +439,13 @@ function launch(id: string, kind: string, body: Record<string, unknown>, user: U
       if (slot === "cancelled") return { http: 200, json: { text: "", cancelled: true } };
       if (slot === "timeout") return { http: 503, json: { error: "Lượt này đã xếp hàng quá lâu nên Synchro dừng lại. Hãy dừng bớt lượt đang chạy rồi gửi lại." } };
       return await withSlot(slot, async () => {
-      // Gói này chưa nạp bộ xử lý chat (ví dụ route "Chạy ngay" của tác vụ nền): nạp rồi mới chạy.
-      if (!executors.has(kind) && kind === "chat") await import("./chatengine");
+      // Lượt chat: luôn dùng chatengine của chính gói này (import có bộ nhớ đệm; gói chưa nạp như route "Chạy ngay" của tác vụ nền thì nạp lúc này),
+      // không dùng hàm ghi sau cùng vào bảng toàn cục. Bản dev (turbopack) biên dịch route mới là dựng thêm một bộ mô-đun riêng; hàm chat của bộ đó
+      // từng hỏng phần phụ thuộc ("expandFileRefs is not a function") mà vẫn đè lên bảng chung, khiến mọi lượt chat sau đó lỗi 502 tới khi khởi động lại.
+      // Gói nào có runs.ts cũng nạp được chatengine (import động ngay đây), nên production chạy như trước.
       // Việc tự động chạy bằng Synchro Code (tasks.ts): bộ chạy nằm ở taskagent.ts.
       if (!executors.has(kind) && kind === "agent") await import("./taskagent");
-      const f = executors.get(kind);
+      const f = kind === "chat" ? (await import("./chatengine")).chatExec : executors.get(kind);
       if (!f) return { http: 500, json: { error: `Không có bộ chạy cho loại "${kind}".` } };
       return await f(body, user);
       });
