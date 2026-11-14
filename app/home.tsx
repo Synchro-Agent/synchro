@@ -74,6 +74,7 @@ import type { ProviderInfo } from "./catalog";
 import { useInboxCount } from "./inboxcount";
 import { adoptLegacyData, clearAccountData, ls, setUserScope, userScope } from "./userscope";
 import { useChatSync, useSyncStatus } from "./chatsync";
+import { closeChats, hydrateAll, loadChats, wipeChats, writeJournal } from "./chatload";
 import { shortName } from "./names";
 import { loadCaps, seedCaps, useCaps } from "./capsclient";
 import { hasArtifacts, splitArtifacts, type ArtBlock } from "./artifacts";
@@ -1036,14 +1037,23 @@ export default function Home({ boot }: { boot?: BootData | null }) {
     }
   };
   const flushDirtyRef = useRef<() => void>(() => {});
-  // Chat, dự án, model đã chọn… của tài khoản đang dùng (localStorage đã tách theo tài khoản).
-  const loadLocal = () => {
+  // Dự án, model đã chọn… của tài khoản đang dùng (localStorage đã tách theo tài khoản).
+  const loadPrefs = () => {
     try {
-      setChats(JSON.parse(ls.get("chats") || "[]"));
       setProjects(JSON.parse(ls.get("projects") || "[]"));
       setModel(legacyModel(ls.get("model") ?? "") ?? "");
       setBanner(ls.get("banner") !== "0");
     } catch {}
+  };
+  // Đoạn chat của tài khoản: kho của thiết bị (IndexedDB, app/chatload.ts), đọc bất đồng bộ; thanh bên hiện khung chờ tới khi có chỉ mục.
+  // Đoạn chat tạo trong lúc chờ (gửi tin ngay khi mở trang) được giữ, xếp trên các đoạn đã lưu. Xong thì loaded, rồi đọc dần thân ở nền.
+  const startChats = (uid: string) => {
+    void loadChats(uid, openWant.current !== null ? [openWant.current] : []).then((list) => {
+      if (!list || userScope() !== uid) return;
+      setChats((cs) => { if (!cs.length) return list; const have = new Set(list.map((c) => c.id)); const extra = cs.filter((c) => !have.has(c.id)); return extra.length ? [...extra, ...list] : list; });
+      setLoaded(true);
+      void hydrateAll();
+    });
   };
   // Chuyển sang vùng dữ liệu của tài khoản u: mỗi tài khoản có chat, dự án, cài đặt, ảnh đại diện riêng.
   const enterAccount = (u: AuthUser) => {
@@ -1054,7 +1064,10 @@ export default function Home({ boot }: { boot?: BootData | null }) {
     reloadPrefs();
     resetCodePrefs(); clearJsonCache();
     listAt.current = 0;
-    loadLocal();
+    // Không để đoạn chat của tài khoản trước hiện lại trong lúc đọc kho của tài khoản này.
+    setChats([]); setLoaded(false);
+    loadPrefs();
+    startChats(u.id);
     setCur(null); setView("new");
   };
   // Mở app: gói khởi động hoặc /api/auth/me, tự thử lại khi chưa kết nối được; phiên hết hạn khi đang mở (homehooks.ts useBoot).
@@ -1091,16 +1104,16 @@ export default function Home({ boot }: { boot?: BootData | null }) {
     history.replaceState(null, "", location.pathname);
   }, [say]);
 
+  // Mở trang chưa biết tài khoản (khách, chưa có gói khởi động): dữ liệu của vùng "anon". Đã vào tài khoản (enterAccount chạy trước, trong
+  // useBoot) thì đoạn chat đang được đọc từ kho, loaded bật khi xong.
   useEffect(() => {
-    try {
-      setChats(JSON.parse(ls.get("chats") || "[]"));
-      setProjects(JSON.parse(ls.get("projects") || "[]"));
-      setModel(legacyModel(ls.get("model") ?? "") ?? "");
-      setBanner(ls.get("banner") !== "0");
-    } catch {}
+    if (userScope() === "anon") {
+      try { setChats(JSON.parse(ls.get("chats") || "[]")); } catch {}
+      loadPrefs();
+      setLoaded(true);
+    }
     setThemeS(localStorage.getItem("theme") || "light");
     setGreet(greeting(call));
-    setLoaded(true);
   }, []);
   useEffect(() => { if (loaded) setGreet(greeting(call)); }, [call, loaded]);
   useEffect(() => { setActiveModel(model); }, [model]);
@@ -1196,11 +1209,13 @@ export default function Home({ boot }: { boot?: BootData | null }) {
     }
     wasRunning.current = running;
   }, [running]);
+  // Rời trang / ẩn tab: ghi nhật ký nhỏ các đoạn chưa lưu xong (giao dịch IndexedDB có thể bị hủy cùng trang, chatload.ts) rồi lưu ngay.
   useEffect(() => {
-    const hide = () => { if (document.visibilityState === "hidden") flushDirty(); };
-    window.addEventListener("pagehide", flushDirty);
+    const leave = () => { writeJournal(); flushDirty(); };
+    const hide = () => { if (document.visibilityState === "hidden") leave(); };
+    window.addEventListener("pagehide", leave);
     document.addEventListener("visibilitychange", hide);
-    return () => { window.removeEventListener("pagehide", flushDirty); document.removeEventListener("visibilitychange", hide); };
+    return () => { window.removeEventListener("pagehide", leave); document.removeEventListener("visibilitychange", hide); };
   }, [flushDirty]);
   useEffect(() => {
     if (!loaded) return;
@@ -1692,7 +1707,7 @@ export default function Home({ boot }: { boot?: BootData | null }) {
     if (busy) return;
     setUndoTurn(null);
     const was = view === "chat" ? curChat() : undefined;
-    if (was?.stub) return say("Đoạn chat đang tải từ máy chủ, hãy thử lại sau giây lát");
+    if (was?.stub) return say(was.local ? "Đang mở đoạn chat, hãy thử lại sau giây lát" : "Đoạn chat đang tải từ máy chủ, hãy thử lại sau giây lát");
     stickToBottom();
     const now = new Date(), mins = now.getHours() * 60 + now.getMinutes();
     const pm = (x: string) => { const [t, ap] = x.split(" "); const [h, m] = t.split(":").map(Number); return ((h % 12) + (ap === "PM" ? 12 : 0)) * 60 + m; };
@@ -1974,7 +1989,9 @@ export default function Home({ boot }: { boot?: BootData | null }) {
     return () => clearInterval(t);
   }, [breakH, breakM, say]);
 
-  const exportData = useEvent(() => {
+  // Xuất đủ nội dung: đọc hết thân còn trong kho trước (bản rút gọn local chưa có tin nhắn).
+  const exportData = useEvent(async () => {
+    await hydrateAll(true);
     const blob = new Blob([JSON.stringify({ exportedAt: new Date().toISOString(), profile: { name, call, instructions: ins }, projects, chats: chatsRef.current.filter((c) => !c.inc) }, null, 2)], { type: "application/json" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
@@ -1989,6 +2006,8 @@ export default function Home({ boot }: { boot?: BootData | null }) {
     const uid = userScope();
     fetch("/api/auth/logout", { method: "POST" }).catch(() => {});
     flushDirty();
+    // Đóng kho đoạn chat (xóa thiết bị: đóng ngay vì cơ sở dữ liệu sắp bị xóa và mọi thứ đã lên máy chủ; không thì chờ lần lưu vừa rồi xong).
+    void closeChats(clear);
     setUserScope(null); reloadPrefs(); resetCodePrefs(); clearJsonCache(); listAt.current = 0;
     if (clear) clearAccountData(uid);
     // Thôi theo dõi các câu trả lời đang chạy (không hủy ở máy chủ: đăng nhập lại thì trang nối vào lượt đó như khi tải lại).
@@ -1998,7 +2017,7 @@ export default function Home({ boot }: { boot?: BootData | null }) {
   };
   // Giá trị của AppCtx: các hàm ổn định (useEvent), chỉ đổi khi tài khoản đổi; hơn 50 chỗ dùng useApp() không vẽ lại theo từng mẩu chữ đang chảy.
   const logoutEv = useEvent(logout);
-  const wipe = useEvent((what: "all" | "chats") => { if (saveT.current) { clearTimeout(saveT.current.t); saveT.current = null; } if (what === "all") ls.clear(); else ["chats", "projects", "model", "banner"].forEach((k) => ls.remove(k)); chatSync.wipeAll(chatsRef.current.filter((c) => !c.inc).map((c) => c.id), projects.map((p) => p.id)); setChats([]); setProjects([]); setBanner(true); goNew(); });
+  const wipe = useEvent((what: "all" | "chats") => { if (saveT.current) { clearTimeout(saveT.current.t); saveT.current = null; } void wipeChats(); if (what === "all") ls.clear(); else ["chats", "projects", "model", "banner"].forEach((k) => ls.remove(k)); chatSync.wipeAll(chatsRef.current.filter((c) => !c.inc).map((c) => c.id), projects.map((p) => p.id)); setChats([]); setProjects([]); setBanner(true); goNew(); });
   const api = useMemo(() => ({
     say, exportData,
     upgrade: () => setModal("upgrade"),

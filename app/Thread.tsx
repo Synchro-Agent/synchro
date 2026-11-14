@@ -51,6 +51,14 @@ const SaveSkillChip = lazyView(() => import("./saveskill").then((m) => m.SaveSki
 const toolChip = (n: string) => { const i = n.indexOf(" · "); return i > 0 ? `${n.slice(0, i)} · ${trCx(n.slice(i + 3))}` : n; };
 
 // Thư viện skill một câu trả lời đã dùng: chế độ studio người dùng chọn, hoặc thư viện model tự mở, kèm skill đã đọc.
+// Đoạn chat chưa có nội dung ở trang. local: thân nằm trong kho của máy này, đọc về trong vài mili giây, nên khung chờ chỉ hiện sau 150ms
+// (bấm mở từ thanh bên / ngăn kéo điện thoại không thấy khung chờ chớp lên rồi tắt). Không thì đang tải từ máy chủ: hiện ngay.
+function StubWait({ local }: { local: boolean }) {
+  const [show, setShow] = useState(!local);
+  useEffect(() => { if (show) return; const t = setTimeout(() => setShow(true), 150); return () => clearTimeout(t); }, [show]);
+  return <><span className="sr-only" role="status">{local ? tr("Đang mở đoạn chat…") : tr("Đang tải đoạn chat từ máy chủ…")}</span>{show && <ThreadSkeleton />}</>;
+}
+
 function LibChips({ libs, onOpen }: { libs: LibUse[]; onOpen: () => void }) {
   return <div className="skill-used">{libs.map((l) => (
     <button key={l.key} className="skill-chip lib-chip" onClick={onOpen} title={l.skills.join(", ")}>
@@ -438,7 +446,7 @@ export const ChatThread = memo(function ChatThread({ busy, copied, speaking, mod
         onTouchStart={(e) => { touchY.current = e.touches[0]?.clientY ?? 0; }} onTouchMove={(e) => { if ((e.touches[0]?.clientY ?? 0) - touchY.current > 5) userUp(); }}
         onKeyDown={(e) => { if (["PageUp", "ArrowUp", "Home"].includes(e.key)) userUp(); }}>
         <div className="thread-in">
-          {chat.stub && <><span className="sr-only" role="status">{tr("Đang tải đoạn chat từ máy chủ…")}</span><ThreadSkeleton /></>}
+          {chat.stub && <StubWait key={chat.id} local={!!chat.local} />}
           {chat.msgs.map((m, i) => <Boundary key={`${chat.id}-${i}`} compact resetKey={m.text}><MsgRow m={m} i={i} last={i === chat.msgs.length - 1} lang={getLang()} busy={busy} mark={chat.compact?.upto === i} art={caps.art} inl={caps.inl} artSig={artSig(i)}
             fileActive={m.outs?.length && fileOpen ? fileSel?.file.id : undefined} copied={copied === `${chat.id}-${i}`} speaking={speaking === `${chat.id}-${i}`} chatId={chat.id} cx={rowCx} /></Boundary>)}
           {undoFor === chat.id && <div className="msg-notice turn-undo" role="status"><p>{tr("Câu trả lời cũ đã được thay bằng lượt mới.")}</p><div className="msg-notice-act"><button className="lnk" onClick={() => x().undoLost()}>{tr("Khôi phục bản cũ")}</button></div></div>}

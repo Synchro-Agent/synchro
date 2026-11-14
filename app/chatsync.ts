@@ -7,6 +7,7 @@
 // - Đoạn chat ẩn danh không bao giờ rời trình duyệt.
 import { useEffect, useRef, useSyncExternalStore } from "react";
 import { batches, earlyUsable, hashOf, keyOf, lastTime, losesUserMsgs, parseMeta, saveFit, serialChat, serialProject, startupDirty, decideRemote, stubOf, TIMED_OUT, withDeadline, type Part, type SyncKind, type SyncMeta } from "./chatsynccore";
+import { bodyStr, forgetChats, freshDevice, hydrateAll, hydrateIds, localBodies, onNeedChats, saveChats as storeChats } from "./chatload";
 import { tr } from "./i18n";
 import type { Chat, Project } from "./store";
 import { ls, scopedFor, userScope } from "./userscope";
@@ -18,10 +19,11 @@ type Remote = { kind: SyncKind; id: string; upd: number; rev: number; deleted: n
 type Result = { kind: SyncKind; id: string; ok: boolean; upd: number; deleted?: boolean; error?: string };
 
 // Bản lưu của từng mục: nhớ theo đối tượng (mỗi khung hình chữ đang chảy chỉ đoạn chat đang viết phải làm lại).
+// Thân vừa đọc từ kho của thiết bị (chatload.ts) đã có sẵn chuỗi đã lưu: dùng luôn, không serialChat lại.
 const cacheS = new WeakMap<object, { s: string; h: string }>();
 const serial = (kind: SyncKind, x: Chat | Project) => {
   let v = cacheS.get(x);
-  if (!v) { const s = kind === "chat" ? serialChat(x as Chat) : serialProject(x as Project); v = { s, h: hashOf(s) }; cacheS.set(x, v); }
+  if (!v) { const s = (kind === "chat" ? bodyStr.get(x) : undefined) ?? (kind === "chat" ? serialChat(x as Chat) : serialProject(x as Project)); v = { s, h: hashOf(s) }; cacheS.set(x, v); }
   return v;
 };
 
@@ -96,19 +98,28 @@ export function useChatSync(o: SyncOpts): ChatSync {
     if (!items.length) return;
     const cur = { chat: new Map(live.current.chats.map((c) => [String(c.id), c])), project: new Map(live.current.projects.map((p) => [String(p.id), p])) };
     const up = { chat: new Map<string, Chat>(), project: new Map<string, Project>() }, del = { chat: new Set<string>(), project: new Set<string>() };
-    const copies: Chat[] = [], fresh: string[] = [];
+    const copies: Chat[] = [], fresh: string[] = [], later: Remote[] = [], dead: number[] = [];
     for (const it of items) {
       if (it.kind !== "chat" && it.kind !== "project") continue;
       const key = keyOf(it.kind, it.id), mine = cur[it.kind].get(it.id) as (Chat | Project) | undefined;
       // Vừa xóa ở máy này: lệnh xóa đang trên đường đi, bản cũ về không được làm nó sống lại.
       if (s.meta.gone[key]) continue;
-      const stubbed = !!mine?.stub;
+      // Bản rút gọn local: thân nằm trong kho của máy này (chưa đọc). Máy chủ gửi đúng bản đã biết thì thôi; bản khác thì đọc thân trước
+      // rồi mới quyết (thân có thể có sửa chưa lên máy chủ: phải so như đoạn chat đầy đủ, giữ bản sao nếu cần).
+      const local = it.kind === "chat" && !!mine?.stub && !!(mine as Chat).local;
+      if (local && !it.deleted && it.data !== null) {
+        if (s.meta.known[key]?.[1] === hashOf(it.data)) continue;
+        later.push(it);
+        continue;
+      }
+      const stubbed = !!mine?.stub && !local;
       // Câu trả lời cũ của lần lấy trước về sau khi máy này đã đẩy bản mới hơn.
       if (!stubbed && (s.meta.known[key]?.[0] ?? 0) > it.upd) continue;
       if (!stubbed && decideRemote(s.meta, key, it.upd, it.kind === "chat" && live.current.running.has(Number(it.id))) === "keep") continue;
       if (it.deleted || it.data === null) {
         delete s.meta.known[key]; delete s.meta.dirty[key];
         if (mine) del[it.kind].add(it.id);
+        if (it.kind === "chat") dead.push(Number(it.id));
         continue;
       }
       const h = hashOf(it.data);
@@ -135,7 +146,15 @@ export function useChatSync(o: SyncOpts): ChatSync {
     };
     if (up.chat.size || del.chat.size || copies.length) live.current.setChats((l) => merge(l, up.chat, del.chat, copies));
     if (up.project.size || del.project.size) live.current.setProjects((l) => merge(l, up.project, del.project));
+    // Đã xóa ở nơi khác: lần lưu tới xóa khỏi kho của máy này kể cả khi danh sách thành rỗng.
+    if (dead.length) forgetChats(dead);
     brainSeen(fresh);
+    if (later.length) void hydrateIds(later.map((it) => Number(it.id))).then(() => {
+      if (!ok(s)) return;
+      // Đọc không được (lỗi kho): bỏ lần này, lần hỏi sau lại về. Đọc xong: quyết như với đoạn chat đầy đủ.
+      const still = new Set(live.current.chats.filter((c) => c.stub && c.local).map((c) => String(c.id)));
+      apply(s, later.filter((it) => !still.has(it.id)));
+    });
   };
   const pull = async (s: Sess) => {
     if (s.pulling) return;
@@ -178,10 +197,12 @@ export function useChatSync(o: SyncOpts): ChatSync {
       const m = s.meta;
       for (const [key, upd] of Object.entries(m.gone)) { const i = key.indexOf(":"); parts.push({ key, kind: key.slice(0, i) as SyncKind, id: key.slice(i + 1), upd, deleted: true, size: 80 }); }
       const items = { chat: new Map(live.current.chats.map((c) => [String(c.id), c as Chat | Project])), project: new Map(live.current.projects.map((p) => [String(p.id), p as Chat | Project])) };
+      const read: number[] = [];
       for (const [key, upd] of Object.entries(m.dirty)) {
         const i = key.indexOf(":"), kind = key.slice(0, i) as SyncKind, id = key.slice(i + 1), x = items[kind]?.get(id);
         if (!x || (x as Chat).inc) { delete m.dirty[key]; continue; }
-        if (x.stub) continue;
+        // Thân còn trong kho của máy này: đọc về (đọc xong thì là thay đổi, lượt đẩy sau gửi).
+        if (x.stub) { if ((x as Chat).local) read.push(x.id); continue; }
         const v = serial(kind, x);
         if (m.known[key]?.[1] === v.h) { delete m.dirty[key]; s.tooBig.delete(key); continue; }
         if (s.tooBig.get(key) === v.h) continue;
@@ -190,6 +211,7 @@ export function useChatSync(o: SyncOpts): ChatSync {
         s.tooBig.delete(key);
         parts.push({ key, kind, id, upd, data: v.s, size: v.s.length });
       }
+      if (read.length) void hydrateIds(read);
       const conflicts: string[] = [];
       const queue = batches(parts, BATCH);
       for (let bi = 0; bi < queue.length && ok(s); bi++) {
@@ -252,13 +274,16 @@ export function useChatSync(o: SyncOpts): ChatSync {
       if (ok(s) && (again || Object.keys(s.meta.gone).length || Object.keys(s.meta.dirty).some((k) => !s.tooBig.has(k) && !isStub(k)))) later(s, again ? wait : PUSH_WAIT);
     }
   };
-  const isStub = (key: string) => { const id = Number(key.slice(key.indexOf(":") + 1)); const l: (Chat | Project)[] = key.startsWith("chat:") ? live.current.chats : live.current.projects; return !!l.find((c) => c.id === id)?.stub; };
+  // Bản rút gọn của máy chủ (nội dung chỉ còn trên máy chủ). Bản rút gọn local KHÔNG tính: thân của nó ở máy này, chưa lên máy chủ thì vẫn là việc còn chờ.
+  const isStub = (key: string) => { const id = Number(key.slice(key.indexOf(":") + 1)); const l: (Chat | Project)[] = key.startsWith("chat:") ? live.current.chats : live.current.projects; const x = l.find((c) => c.id === id); return !!x?.stub && !(x as Chat).local; };
 
   // ---- Bắt đầu theo tài khoản ----
   useEffect(() => {
     const uid = o.uid;
     if (!o.loaded || !uid || userScope() !== uid) return;
     const meta = parseMeta(ls.get("chatSync"));
+    // Kho dự phòng bỏ qua khóa cũ (chatload.ts freshDevice): như máy mới, lấy lại hết từ máy chủ, không có gì cần đẩy.
+    if (freshDevice(uid)) { meta.cur = 0; meta.dirty = {}; }
     fit.current = { chat: new Set(), project: new Set() }; full.current = { chat: false, project: false };
     const s: Sess = { on: true, scope: uid, meta, prev: { chat: new Map(), project: new Map() }, fromServer: new WeakSet(), timer: null, busy: false, fails: 0, tooBig: new Map(), lastPush: new Map(), pulling: false };
     sess.current = s;
@@ -269,7 +294,8 @@ export function useChatSync(o: SyncOpts): ChatSync {
         if ((x as Chat).inc) continue;
         const key = keyOf(kind, x.id);
         here.add(key);
-        if (x.stub) { need.push(key); continue; }
+        // Bản rút gọn local: thân ở kho của máy này (đọc dần ở nền, đọc xong thì so như ở đây: xem quét thay đổi bên dưới), không tải lại.
+        if (x.stub) { if (!(x as Chat).local) need.push(key); continue; }
         const d = startupDirty(meta, key, serial(kind, x).h, kind === "chat" ? lastTime(x as Chat) : ((x as Project).upd ?? x.id));
         if (d === null) delete meta.dirty[key]; else meta.dirty[key] = d;
       }
@@ -280,10 +306,12 @@ export function useChatSync(o: SyncOpts): ChatSync {
     const tick = () => { if (!document.hidden && navigator.onLine !== false && ok(s)) void pull(s).then(() => { if (ok(s) && !s.timer) later(s, 0); }); };
     void pull(s).then(() => fetchKeys(s, need)).then(() => { if (ok(s)) later(s, 0); });
     const t = setInterval(tick, POLL);
+    // Thân của bản rút gọn local không còn trong kho: lấy về từ máy chủ.
+    const offNeed = onNeedChats((ids) => { if (ok(s)) void fetchKeys(s, ids.map((id) => keyOf("chat", id))); });
     const vis = () => { if (!document.hidden) tick(); };
     window.addEventListener("focus", tick); window.addEventListener("online", tick); document.addEventListener("visibilitychange", vis);
     return () => {
-      s.on = false; clearInterval(t); if (s.timer) clearTimeout(s.timer);
+      s.on = false; clearInterval(t); offNeed(); if (s.timer) clearTimeout(s.timer);
       window.removeEventListener("focus", tick); window.removeEventListener("online", tick); document.removeEventListener("visibilitychange", vis);
       saveMeta(s);
       if (sess.current === s) sess.current = null;
@@ -306,6 +334,13 @@ export function useChatSync(o: SyncOpts): ChatSync {
         if (s.prev[kind].get(x.id) === x || s.fromServer.has(x) || (x as Chat).inc || x.stub) continue;
         const key = keyOf(kind, x.id);
         if (s.meta.gone[key]) continue;
+        // Thân vừa đọc từ kho của máy này (thay bản rút gọn local): chưa sửa gì ở trang, so như lúc khởi động (chưa lên / khác bản máy chủ
+        // đã xác nhận thì cần đẩy). Coi là vừa sửa thì mở trang là đẩy lại cả 500 đoạn chat.
+        if (localBodies.has(x)) {
+          const d = startupDirty(s.meta, key, serial(kind, x).h, lastTime(x as Chat));
+          if (d === null) delete s.meta.dirty[key]; else { s.meta.dirty[key] = d; any = true; }
+          continue;
+        }
         s.meta.dirty[key] = now;
         any = true;
       }
@@ -323,6 +358,21 @@ export function useChatSync(o: SyncOpts): ChatSync {
   // ---- API cho trang ----
   const api = useRef<ChatSync | null>(null);
   if (!api.current) {
+    // Đoạn chat: kho của thiết bị (chatload.ts, IndexedDB hoặc localStorage dự phòng), chỉ ghi phần đổi. Hết chỗ thì bỏ thân của đoạn cũ
+    // nhất đã có trên máy chủ (cùng luật như saveFit bên dưới); vẫn không đủ thì báo (dải cảnh báo đồng bộ).
+    const saveChat = (l: Chat[]) => {
+      const s = sess.current, by = new Map(l.map((c) => [c.id, c]));
+      const canStub = (id: number) => {
+        const x = by.get(id), key = keyOf("chat", id);
+        return !!s && !!x && !x.stub && !x.inc && s.meta.known[key]?.[1] === serial("chat", x).h && !s.meta.dirty[key];
+      };
+      void storeChats(l, canStub).then((r) => {
+        if (!r) return;
+        full.current.chat = r.status !== "ok";
+        const now = sess.current;
+        if (now) report(now); else setStatus({ localFull: full.current.chat || full.current.project });
+      });
+    };
     const save = (kind: SyncKind, name: string, l: (Chat | Project)[]) => {
       const s = sess.current;
       const rows = l.filter((x) => !(x as Chat).inc).map((x) => {
@@ -336,11 +386,12 @@ export function useChatSync(o: SyncOpts): ChatSync {
       if (s) report(s); else setStatus({ localFull: full.current.chat || full.current.project });
     };
     api.current = {
-      saveChats: (l) => save("chat", "chats", l),
+      saveChats: (l) => saveChat(l),
       saveProjects: (l) => save("project", "projects", l),
       forget: (kind, ids) => {
         const s = sess.current;
         if (!s) return;
+        if (kind === "chat") forgetChats(ids);
         for (const id of ids) { const key = keyOf(kind, id); s.meta.gone[key] = Date.now(); delete s.meta.dirty[key]; delete s.meta.known[key]; s.tooBig.delete(key); }
         saveMeta(s);
         later(s, 0);
@@ -349,6 +400,9 @@ export function useChatSync(o: SyncOpts): ChatSync {
         const s = sess.current;
         if (!s || !ok(s)) return 0;
         const end = Date.now() + ms, sent = new Set<string>();
+        // Đọc hết thân còn trong kho trước: đoạn chat chưa lên máy chủ mà chưa được đọc (bản rút gọn local) chỉ được nhận ra khi đọc thân.
+        await withDeadline(hydrateAll(true), Math.max(0, Math.min(ms / 2, end - Date.now())));
+        if (!ok(s)) return 0;
         // Mục còn chờ: chưa đẩy được, hoặc đã xóa mà lệnh xóa chưa tới. Đoạn chat đang chạy đã đẩy ít nhất một lần trong lượt này thì
         // tính là đã lên (phần còn lại do máy chủ chạy tiếp, đăng nhập lại thì trang nối vào lượt đó).
         const left = () => Object.keys(s.meta.gone).length + Object.keys(s.meta.dirty).filter((k) => !isStub(k) && !(sent.has(k) && live.current.running.has(Number(k.slice(k.indexOf(":") + 1))))).length;

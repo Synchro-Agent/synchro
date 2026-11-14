@@ -47,6 +47,8 @@ export const VI2EN: Record<string, string> = {
   "mục. Đừng đóng trang trước khi xuất dữ liệu.": "items. Don't close this page before exporting your data.",
   "Xuất dữ liệu": "Export data",
   "Đang tải đoạn chat từ máy chủ…": "Loading this chat from the server…",
+  "Đang mở đoạn chat…": "Opening this chat…",
+  "Đang mở đoạn chat, hãy thử lại sau giây lát": "This chat is still opening. Try again in a moment.",
   "Đoạn chat sẽ bị xóa khỏi mọi thiết bị, cùng với lịch sử phiên của model, ghi chú trong Bộ não, liên kết chia sẻ, và tệp chỉ đoạn chat này dùng. Bản đã có trong sao lưu của máy chủ mất đi theo vòng xoay, tối đa khoảng 5 tuần. Không hoàn tác được.": "The chat will be deleted from every device, along with the model's session history, its Brain notes, its share link and files only this chat uses. Copies already in server backups disappear as they rotate, within about 5 weeks. This can't be undone.",
   "Các đoạn chat đã chọn sẽ bị xóa khỏi mọi thiết bị, cùng với ghi chú trong Bộ não và liên kết chia sẻ. Không hoàn tác được.": "The selected chats will be deleted from all your devices, along with their notes in the Brain and any share links. This can't be undone.",
   "Bạn đang chia sẻ quá nhiều đoạn chat. Hãy dừng bớt trong Cài đặt → Quyền riêng tư.": "You are sharing too many chats. Stop some in Settings → Privacy.",
