@@ -120,6 +120,51 @@ function scanArts(msgs: Msg[], from: number, base: ArtScan): ArtScan {
   }
   return { map, at };
 }
+// Bảng artifact của một danh sách tin, giữ ở mức tệp: khung đoạn chat và bộ theo dõi artifact đang viết (useLiveArtFollow, chạy cả khi khung
+// đoạn chat chưa gắn) đọc chung, cùng một mảng tin thì chỉ tách một lần. Quét theo tiền tố: các tin trước tin cuối không đổi trong lúc chữ đang chảy,
+// chỉ tin cuối phải tách và áp bản sửa lại.
+let artBase: { msgs: Msg[]; scan: ArtScan } | null = null;
+let artLast: { msgs: Msg[]; res: ArtScan } | null = null;
+function artsOf(ms: Msg[] | undefined, on: boolean): ArtScan {
+  if (!ms || !on) return ART_EMPTY;
+  if (artLast?.msgs === ms) return artLast.res;
+  const n = Math.max(0, ms.length - 1), b = artBase;
+  if (!b || b.msgs.length !== n || b.msgs.some((m, k) => m !== ms[k])) artBase = { msgs: ms.slice(0, n), scan: scanArts(ms.slice(0, n), 0, ART_EMPTY) };
+  const res = scanArts(ms, n, artBase!.scan);
+  artLast = { msgs: ms, res };
+  return res;
+}
+/** Artifact cuối của câu trả lời đang viết (tin cuối chưa xong), nếu có. */
+function liveArtOf(chat: Chat | undefined, arts: ArtScan) {
+  const lastIdx = chat ? chat.msgs.length - 1 : -1;
+  return { lastIdx, liveArt: chat && lastIdx >= 0 && !chat.msgs[lastIdx].done ? arts.at[lastIdx]?.at(-1) : undefined };
+}
+// Artifact đang viết mà người dùng vừa đóng khung xem (khóa đoạn chat-tin-identifier): không tự mở lại. Ở mức tệp như stick: rời trang chat
+// (Dự án, Artifacts…) rồi quay lại trong lúc câu trả lời còn chảy thì khung đã đóng vẫn đóng.
+let artDismissed = "";
+
+/** Câu trả lời đang viết có artifact: tự mở khung xem và đi theo phiên bản mới nhất (trừ khi người dùng vừa đóng). Home gắn bộ theo dõi này
+ *  (không vẽ lại gì) nên nó chạy ở mọi trang như trước khi tách khung đoạn chat: artifact viết xong lúc người dùng ở trang khác thì quay lại
+ *  khung xem đã chọn sẵn. Chỉ làm việc khi đoạn chat đang mở, số tin, artifact cuối hoặc phiên bản của nó đổi (như hiệu ứng cũ của Home). */
+export function useLiveArtFollow(capsArt: boolean) {
+  useEffect(() => { artDismissed = ""; }, []);
+  useEffect(() => {
+    let prev: string | null = null;
+    const f = () => {
+      const chat = selectCurChat(useChatStore.getState());
+      const { lastIdx, liveArt } = liveArtOf(chat, artsOf(chat?.msgs, capsArt));
+      const k = `${chat?.id}|${lastIdx}|${liveArt?.ident}|${liveArt?.v}`;
+      if (k === prev) return;
+      prev = k;
+      if (!chat || !liveArt) return;
+      if (artDismissed === `${chat.id}-${lastIdx}-${liveArt.ident}`) return;
+      const { artSel, setArtSel, setFileSel } = usePanelUi.getState();
+      if (artSel?.chat !== chat.id || artSel.ident !== liveArt.ident || !artSel.follow) { setFileSel(null); setArtSel({ chat: chat.id, ident: liveArt.ident, v: liveArt.v, follow: true }); }
+    };
+    f();
+    return useChatStore.subscribe(f);
+  }, [capsArt]);
+}
 
 // Những gì một dòng tin cần từ trang (luôn là bản mới nhất, đọc qua ref): đổi hàm không làm cả danh sách vẽ lại.
 export type RowCx = {
@@ -272,29 +317,14 @@ export const ChatThread = memo(function ChatThread({ busy, copied, speaking, mod
   const { setArtSel, setFileSel, setBrwFor, setArtFull } = usePanelUi.getState();
   const x = () => hx.current!;
   const say = hx.current!.say;
-  const artDismissed = useRef("");
-  // Quét theo tiền tố: các tin trước tin cuối không đổi trong lúc chữ đang chảy, chỉ tin cuối phải tách và áp bản sửa lại.
-  const artBase = useRef<{ msgs: Msg[]; scan: ArtScan } | null>(null);
-  const arts = useMemo(() => {
-    if (!chat || !caps.art) return ART_EMPTY;
-    const ms = chat.msgs, n = Math.max(0, ms.length - 1), b = artBase.current;
-    if (!b || b.msgs.length !== n || b.msgs.some((m, k) => m !== ms[k])) artBase.current = { msgs: ms.slice(0, n), scan: scanArts(ms.slice(0, n), 0, ART_EMPTY) };
-    return scanArts(ms, n, artBase.current!.scan);
-  }, [chat?.msgs, caps.art]); // eslint-disable-line react-hooks/exhaustive-deps
+  const arts = useMemo(() => artsOf(chat?.msgs, !!caps.art), [chat?.msgs, caps.art]); // eslint-disable-line react-hooks/exhaustive-deps
   // Đoạn chat có artifact: tải sẵn khung xem để bấm thẻ là mở ngay.
   useEffect(() => { if (arts.map.size) ArtifactPanel.preload(); }, [arts.map.size]);
   const artVersions = artSel && chat && artSel.chat === chat.id ? arts.map.get(artSel.ident) ?? null : null;
   const artIndex = artVersions ? (artSel!.follow ? artVersions.length - 1 : Math.min(artSel!.v, artVersions.length - 1)) : 0;
   const artOpen = !!artVersions?.length;
-  // Câu trả lời đang viết có artifact: tự mở khung xem và đi theo phiên bản mới nhất (trừ khi người dùng vừa đóng).
-  const lastIdx = chat ? chat.msgs.length - 1 : -1;
-  const liveArt = chat && lastIdx >= 0 && !chat.msgs[lastIdx].done ? arts.at[lastIdx]?.at(-1) : undefined;
-  useEffect(() => {
-    if (!chat || !liveArt) return;
-    const key = `${chat.id}-${lastIdx}-${liveArt.ident}`;
-    if (artDismissed.current === key) return;
-    if (artSel?.chat !== chat.id || artSel.ident !== liveArt.ident || !artSel.follow) { setFileSel(null); setArtSel({ chat: chat.id, ident: liveArt.ident, v: liveArt.v, follow: true }); }
-  }, [chat?.id, lastIdx, liveArt?.ident, liveArt?.v]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Tự mở khung xem theo artifact đang viết: useLiveArtFollow (Home), chạy cả khi khung này chưa gắn.
+  const { lastIdx, liveArt } = liveArtOf(chat, arts);
   const brwOk = !!(brw?.available || brw?.ext?.allowed);
   const fileOpen = !!chat && fileSel?.chat === chat.id && !artOpen;
   const brwShow = !!chat && brwFor === chat.id && !artOpen && !fileOpen && brwOk;
@@ -315,7 +345,7 @@ export const ChatThread = memo(function ChatThread({ busy, copied, speaking, mod
   useLayoutEffect(() => () => { lastProduct = null; usePanelUi.setState({ panel: null, prodN: 0 }); }, []);
   const activeProduct = artOpen && artSel ? `a:${artSel.ident}` : fileOpen && fileSel ? `f:${fileSel.file.id}` : "";
   const closeArt = () => {
-    if (chat && liveArt) artDismissed.current = `${chat.id}-${lastIdx}-${liveArt.ident}`;
+    if (chat && liveArt) artDismissed = `${chat.id}-${lastIdx}-${liveArt.ident}`;
     setArtSel(null);
   };
   const threadRef = useRef<HTMLDivElement>(null);

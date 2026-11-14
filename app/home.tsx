@@ -4,7 +4,7 @@ import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useStat
 import { createPortal } from "react-dom";
 import * as I from "./icons";
 import { Avatar } from "./avatar";
-import { getLang, locale, tf, tr, trc, useLangReady } from "./i18n";
+import { getLang, locale, tf, tr, trc, useLangReady, useLangVer } from "./i18n";
 import { resetClock } from "./resetfmt";
 import { FileCard } from "./fileicon";
 import { useFileMenu, saveDoc, saveBlob, fileContext } from "./filemenu";
@@ -48,7 +48,7 @@ import { useClickAway } from "./clickaway";
 import { useBoot, useDragDrop, usePageSetup, useShortcuts } from "./homehooks";
 import type { CodeItem, Say, View } from "./hometypes";
 import { Sidebar, useTagsAll, type SideActs } from "./Sidebar";
-import { ChatThread, openLastProduct, stickToBottom, type BrwState, type ThreadActs } from "./Thread";
+import { ChatThread, openLastProduct, stickToBottom, useLiveArtFollow, type BrwState, type ThreadActs } from "./Thread";
 
 
 // Tên tạm khi vừa tạo đoạn chat (trước khi model đặt tên theo nội dung): câu đầu của tin nhắn, bỏ ký hiệu Markdown và tham số công cụ.
@@ -761,7 +761,10 @@ function greeting(call: string): [string, string] {
 // Lời chào luôn một dòng như khung chờ lúc mở app (.boot-greet một dòng, app/skeleton.tsx): câu dài (lời chào lúc khuya, bản tiếng Anh, tên dài)
 // ở màn hẹp thu nhỏ cỡ chữ cho vừa thay vì xuống hai dòng, giữ nguyên chiều cao dòng, nên lời chào và ô soạn tin không xê dịch so với khung chờ.
 // Trước đây từ 0 giờ tới 5 giờ, ở 375px "Khuya rồi, bạn chưa ngủ à?" xuống hai dòng: lời chào lệch 15px, ô soạn tin bị đẩy xuống.
-// Đo lại khi khung đổi bề rộng và khi chữ đổi (bộ dịch đổi chữ sau khi vẽ): ResizeObserver trên cả chữ lẫn khung. Vừa sẵn thì không đổi gì.
+// Đo lại khi khung đổi bề rộng (ResizeObserver trên cả chữ lẫn khung) và khi chữ đổi: bộ dịch đổi chữ sau khi vẽ, đổi ngôn ngữ, đổi tên gọi.
+// Chữ đã thu nhỏ (nowrap) thì đổi sang câu dài hơn không làm hộp đổi cỡ (.greet-t là mục flex min-width:0, chữ chỉ tràn bên trong), ResizeObserver
+// không báo: theo dõi chính nút chữ bằng một MutationObserver nhỏ chỉ trên span này. Không dùng domwatch: thêm loại characterData ở đó thì lúc đổi
+// ngôn ngữ bộ dịch nhận lại bản ghi do chính lần dịch cả trang của nó ghi ra. Vừa sẵn thì không đổi gì.
 function FitLine({ className, children }: { className: string; children: React.ReactNode }) {
   const ref = useRef<HTMLSpanElement>(null);
   useLayoutEffect(() => {
@@ -782,7 +785,9 @@ function FitLine({ className, children }: { className: string; children: React.R
     fit();
     const ro = new ResizeObserver(fit);
     ro.observe(el); ro.observe(box);
-    return () => ro.disconnect();
+    const mo = new MutationObserver(fit);
+    mo.observe(el, { subtree: true, childList: true, characterData: true });
+    return () => { ro.disconnect(); mo.disconnect(); };
   }, []);
   return <span ref={ref} className={className}>{children}</span>;
 }
@@ -826,7 +831,8 @@ function SyncWarn({ onExport }: { onExport: () => void }) {
 export default function Home({ boot }: { boot?: BootData | null }) {
   countRender("Home");
   // Giữ khung chờ tới khi từ điển của ngôn ngữ đang dùng về (tải riêng từng thứ tiếng, i18n.tsx): không nháy chữ sai ngôn ngữ.
-  const langReady = useLangReady();
+  // langVer: đổi ngôn ngữ thì tăng, cho deps của phần tử đã memo có chữ tr() (khối soạn tin ở đáy đoạn chat).
+  const langVer = useLangVer(), langReady = langVer > 0;
   // Gói khởi động dựng sẵn ở máy chủ (app/page.tsx, blueprint A3): dùng một lần lúc mở trang thay cho /api/auth/me và các lệnh hỏi đầu.
   // Đã biết tài khoản ngay lúc hydrate: bắt đầu hỏi đoạn chat mới song song, không chờ trang dựng xong (chatsync.ts prefetchChats).
   const bootRef = useRef(boot ?? null);
@@ -843,6 +849,8 @@ export default function Home({ boot }: { boot?: BootData | null }) {
   const [ins, setIns] = usePref("ins", "");
   const [notif] = usePref("notif", [false, true, true, true]);
   const { caps } = useCaps();
+  // Artifact đang viết: tự mở khung xem ở mọi trang (khung đoạn chat chỉ gắn ở trang chat), như trước khi tách Thread.tsx.
+  useLiveArtFollow(!!caps.art);
   const [vlang] = usePref("vlang", "Vietnamese");
   usePref("uilang", "vi");
   const [vspeed] = usePref("vspeed", "Normal");
@@ -2026,7 +2034,7 @@ export default function Home({ boot }: { boot?: BootData | null }) {
     <QueueChips items={queuedLater} onCancel={(qid) => setQueued((q) => q.filter((x) => x.id !== qid))} />
     <Composer {...composerProps} dock extra={dockMixer} />
     <div className="disclaimer dock-note"><span>Synchro là AI và có thể mắc lỗi. Vui lòng kiểm tra kỹ các câu trả lời.</span><ModelPicker model={model} setModel={setModel} /><UsageRing model={model} onDetails={() => { setSettingsTab("Usage"); setModal("settings"); }} /></div>
-  </>), [chatId, studio, queuedLater, composerProps, dockMixer, model]); // eslint-disable-line react-hooks/exhaustive-deps
+  </>), [chatId, studio, queuedLater, composerProps, dockMixer, model, langVer]); // eslint-disable-line react-hooks/exhaustive-deps
   // Menu tiêu đề đoạn chat (thanh trên cùng): trạng thái chung với thanh bên (Gắn thẻ, Đổi tên ngay trên dòng ở thanh bên).
   const titleMenu = useSideUi((st) => st.titleMenu), pickTag = useSideUi((st) => st.pickTag);
   const { setTitleMenu, setPickTag, setChatMenu, setRenaming } = useSideUi.getState();

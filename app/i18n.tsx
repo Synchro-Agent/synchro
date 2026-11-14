@@ -35,7 +35,10 @@ export function loadDict(l: Lang): Promise<void> {
 }
 if (typeof window !== "undefined") void loadDict(cur);
 /** Từ điển của ngôn ngữ đang dùng đã về (hoặc tải hỏng): dựng giao diện được rồi. Đổi ngôn ngữ thì nơi dùng hook này vẽ lại. */
-export const useLangReady = () => useSyncExternalStore((f) => { subs.add(f); return () => { subs.delete(f); }; }, () => (settled[cur] ? langVer + 1 : 0), () => 0) > 0;
+export const useLangReady = () => useLangVer() > 0;
+/** Số phiên bản ngôn ngữ: 0 khi từ điển chưa về, tăng mỗi lần đổi ngôn ngữ / từ điển về. Cho deps của useMemo dựng phần tử có chữ tr()
+ *  (useLangReady trả true trước và sau khi đổi ngôn ngữ nên không dùng làm deps được). */
+export const useLangVer = () => useSyncExternalStore((f) => { subs.add(f); return () => { subs.delete(f); }; }, () => (settled[cur] ? langVer + 1 : 0), () => 0);
 /** Định dạng ngày giờ, con số theo ngôn ngữ giao diện (không theo ngôn ngữ của trình duyệt). */
 export const locale = () => (cur === "en" ? "en-US" : "vi-VN");
 export const LANG_NAMES: Record<Lang, string> = { vi: "Tiếng Việt", en: "English" };
