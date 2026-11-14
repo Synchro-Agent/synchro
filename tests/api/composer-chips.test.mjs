@@ -47,7 +47,7 @@ ok(/useFitCount\(stripRef,/.test(page) && /cards\.slice\(0, cards\.length - chip
 ok(C.fitCount(678, [120, 120, 120, 120, 120, 120, 120], 8, 40) === 4, "768px: 4 thẻ 120px + “+3” vừa dải 678px (5 thẻ thì tràn 2px)", C.fitCount(678, Array(7).fill(120), 8, 40));
 ok(C.fitCount(316, Array(7).fill(120), 8, 40) === 2, "390px: 2 thẻ + “+5”");
 ok(C.fitCount(2000, Array(7).fill(120), 8, 40) === 5, "rộng mấy cũng không quá CHIP_LIMIT thẻ");
-ok(/chipsExpanded && <button[^>]*onClick=\{\(\) => setOpen\(false\)\}/.test(strip), "lưới đã trải có nút Thu gọn");
+ok(/chipsExpanded && <button[^>]*onClick=\{\(e\) => flip\(false, e\)\}/.test(strip), "lưới đã trải có nút Thu gọn");
 ok(/if \(chipCount <= CHIP_LIMIT\) setChipsOpen\(false\)/.test(home) && /setPicks\(\[\]\); setAt\(null\); setChipsOpen\(false\);/.test(home), "gửi tin / còn ít thẻ: lần sau bắt đầu lại từ dải một hàng");
 console.log(`${pass}/${pass + fail} đạt`);
 process.exit(fail ? 1 : 0);
