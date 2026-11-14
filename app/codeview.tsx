@@ -20,7 +20,8 @@ import dynamic from "next/dynamic";
 import { createPortal } from "react-dom";
 import { UploadModal } from "./modals";
 import { FileCard } from "./fileicon";
-import { useEdgeFade } from "./composerchips";
+import { CHIP_LIMIT } from "./composerchips";
+import { AttachStrip } from "./attachstrip";
 import { useFileMenu, saveDoc } from "./filemenu";
 import { capFiles, fileContext, getStatus, ingestFile, readyFiles } from "./filestate";
 import { AgentSteps, GitHubButton, StatusLine, stripPhases, TaskCard, TVIEW_LABEL, type AStep, type OnAnswer, type TView } from "./agentui";
@@ -192,8 +193,10 @@ export function CodeView({ say, sid, title, model, modelPicker, sideOpen, onSide
   const [atts, setAtts] = useState<Att[]>([]);
   // Tệp / thư mục / .zip đính kèm tin nhắn đang soạn (thẻ giống Claude), gửi đi cùng tin nhắn rồi dọn khỏi khung soạn.
   const [files, setFiles] = useState<string[]>([]);
-  // Dải tệp đính kèm cuộn ngang: chỉ mờ mép nào còn tệp bị khuất (xem app/composerchips.ts).
-  const [fileStrip, fileFade] = useEdgeFade<HTMLDivElement>("x", files.length);
+  // Dải tệp đính kèm (U2, app/attachstrip.tsx): quá CHIP_LIMIT tệp thì "+N" ở mép phải, bấm trải lưới. Còn ≤ CHIP_LIMIT tệp (đã gửi, gỡ bớt)
+  // thì lần đính kèm sau lại bắt đầu từ dải một hàng.
+  const [stripOpen, setStripOpen] = useState(false);
+  useEffect(() => { if (files.length <= CHIP_LIMIT) setStripOpen(false); }, [files.length]);
   const panel = useDev((s) => s.panel);
   const setPanel = useDev((s) => s.setPanel);
   useDev((s) => s.encVer);
@@ -1267,9 +1270,8 @@ export function CodeView({ say, sid, title, model, modelPicker, sideOpen, onSide
               {(files.length > 0 || atts.length > 0) && (
                 <div className="cv-pills">
                   {files.length > 0 && (
-                    <div ref={fileStrip} className={`attach cv-attach${fileFade ? ` ${fileFade}` : ""}`}>
-                      {files.map((f) => <FileCard key={f} name={f} onOpen={() => fm.show(f)} onContextMenu={(e) => fm.open(e, f)} onRemove={() => setFiles((x) => x.filter((y) => y !== f))} />)}
-                    </div>
+                    <AttachStrip className="cv-attach" open={stripOpen} setOpen={setStripOpen}
+                      cards={files.map((f) => <FileCard key={f} name={f} onOpen={() => fm.show(f)} onContextMenu={(e) => fm.open(e, f)} onRemove={() => setFiles((x) => x.filter((y) => y !== f))} />)} />
                   )}
                   {atts.map((a, k) => (
                     <div key={k} className={`cv-pill att ${a.k}`}>
