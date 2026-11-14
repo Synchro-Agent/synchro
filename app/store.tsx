@@ -79,6 +79,8 @@ export function reloadPrefs() {
   emit();
 }
 
+// Hàm và tài khoản dùng chung cho toàn app. Không có danh sách đoạn chat (đọc bằng useChats() ở app/chatstore.client.ts): giá trị của
+// context chỉ đổi khi tài khoản đổi, nên hơn 50 chỗ dùng useApp() không vẽ lại theo từng mẩu chữ đang chảy (blueprint B2).
 export type AppApi = {
   say: (m: string) => void;
   upgrade: () => void;
@@ -86,7 +88,6 @@ export type AppApi = {
   goCode: () => void;
   ask: (text: string) => void;
   confirm: (title: string, text: string, ok: string, fn: () => void) => void;
-  chats: Chat[];
   exportData: () => void;
   wipe: (what: "all" | "chats") => void;
   close: () => void;
@@ -95,7 +96,7 @@ export type AppApi = {
   logout: () => void;
 };
 export const AppCtx = createContext<AppApi>({
-  say: () => {}, ask: () => {}, upgrade: () => {}, goCode: () => {}, confirm: () => {}, chats: [], exportData: () => {}, wipe: () => {}, close: () => {},
+  say: () => {}, ask: () => {}, upgrade: () => {}, goCode: () => {}, confirm: () => {}, exportData: () => {}, wipe: () => {}, close: () => {},
   me: null, setMe: () => {}, logout: () => {},
 });
 export const useApp = () => useContext(AppCtx);

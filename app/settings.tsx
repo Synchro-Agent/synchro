@@ -8,6 +8,7 @@ import { createPortal } from "react-dom";
 import { Fade, Menu } from "./ui";
 import { AvatarButton } from "./avatar";
 import { chatFont, usePref, useApp, initials, resetPrefs } from "./store";
+import { useChats } from "./chatstore.client";
 import * as I from "./icons";
 import { PageBar, usePage } from "./pager";
 import { Mark } from "./brand";
@@ -371,9 +372,9 @@ function Account() {
 }
 
 function Privacy({ go }: { go: (t: string) => void }) {
-  const app = useApp();
+  const app = useApp(), chats = useChats();
   const [panel, setPanel] = useState<"" | "shared" | "files" | "feedback">("");
-  const fb = app.chats.flatMap((c) => c.msgs.filter((m) => m.like).map((m) => ({ c: c.title, like: m.like, t: m.text.slice(0, 80) })));
+  const fb = chats.flatMap((c) => c.msgs.filter((m) => m.like).map((m) => ({ c: c.title, like: m.like, t: m.text.slice(0, 80) })));
   const title = { shared: "Shared chats", artifacts: "Shared artifacts", files: "Uploaded files", feedback: "Your feedback", "": "" }[panel];
   return (
     <>
@@ -546,18 +547,18 @@ function Memory() {
 }
 
 function Reflect() {
-  const app = useApp();
+  const chats = useChats();
   const [r, setR] = usePref("reflectRange", "Past month");
   const [loading, setLoading] = useState(false);
   const [gen, setGen] = usePref<{ at: number; chats: number; msgs: number; words: [string, number][]; titles: string[] } | null>("reflect", null);
   const run = () => {
     setLoading(true);
     setTimeout(() => {
-      const user = app.chats.flatMap((c) => c.msgs.filter((m) => m.role === "user").map((m) => m.text));
+      const user = chats.flatMap((c) => c.msgs.filter((m) => m.role === "user").map((m) => m.text));
       const freq: Record<string, number> = {};
       user.join(" ").toLowerCase().split(/[^\p{L}]+/u).filter((w) => w.length > 3).forEach((w) => { freq[w] = (freq[w] ?? 0) + 1; });
       const words = Object.entries(freq).sort((a, b) => b[1] - a[1]).slice(0, 6) as [string, number][];
-      setGen({ at: Date.now(), chats: app.chats.length, msgs: user.length, words, titles: app.chats.slice(0, 5).map((c) => c.title) });
+      setGen({ at: Date.now(), chats: chats.length, msgs: user.length, words, titles: chats.slice(0, 5).map((c) => c.title) });
       setLoading(false);
     }, 1400);
   };
@@ -569,7 +570,7 @@ function Reflect() {
       </div>
       {loading || !gen ? (
         <div className="empty" style={{ marginTop: 90 }}><I.Layers size={72} /><span style={{ marginTop: 8 }}>{loading ? "Surfacing themes and patterns." : "No reflection yet."}</span>{loading ? <span className="muted" style={{ fontSize: 12 }}>This should only take a minute or so.</span> : <button className="btn dark" style={{ marginTop: 8 }} onClick={run}>Generate</button>}</div>
-      ) : app.chats.length === 0 ? (
+      ) : chats.length === 0 ? (
         <div className="empty" style={{ marginTop: 90 }}>Start a few conversations and come back for a reflection.</div>
       ) : (
         <div style={{ marginTop: 20 }}>

@@ -49,6 +49,7 @@ import { ShareModal } from "./shareui";
 import { useBrainSync } from "./brainsync";
 import { countRender } from "./perfmark";
 import { useChatState, useChatStore } from "./chatstore.client";
+import { useEvent } from "./useevent";
 
 // Trình duyệt của Synchro (khung cạnh chat, trang Trình duyệt): vé xem màn hình trực tiếp.
 const browserTicket = () => fetch("/api/browser", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ op: "ticket" }) })
@@ -2424,7 +2425,7 @@ export default function Home({ boot }: { boot?: BootData | null }) {
     return () => clearInterval(t);
   }, [breakH, breakM, say]);
 
-  const exportData = () => {
+  const exportData = useEvent(() => {
     const blob = new Blob([JSON.stringify({ exportedAt: new Date().toISOString(), profile: { name, call, instructions: ins }, projects, chats: chats.filter((c) => !c.inc) }, null, 2)], { type: "application/json" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
@@ -2432,7 +2433,7 @@ export default function Home({ boot }: { boot?: BootData | null }) {
     a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
     say("Đã xuất dữ liệu");
-  };
+  });
   // Xóa phiên trên máy chủ. Mặc định dữ liệu của tài khoản vẫn được giữ trên thiết bị (đã tách theo tài khoản) cho lần đăng nhập sau;
   // clear (hộp đăng xuất: "Xóa dữ liệu trên thiết bị này") xóa mọi khóa u:<uid>:* sau khi đã đẩy lên máy chủ (LogoutConfirm), đăng nhập lại thì tải về.
   const logout = (clear = false) => {
@@ -2446,17 +2447,19 @@ export default function Home({ boot }: { boot?: BootData | null }) {
     approvalRef.current?.resolve({ decisions: {} }); setApproval(null);
     setChats([]); setProjects([]); setBanner(true); setModal(null); goNew(); setMe(null);
   };
-  const api = {
-    say, chats, exportData,
+  // Giá trị của AppCtx: các hàm ổn định (useEvent), chỉ đổi khi tài khoản đổi; hơn 50 chỗ dùng useApp() không vẽ lại theo từng mẩu chữ đang chảy.
+  const logoutEv = useEvent(logout);
+  const wipe = useEvent((what: "all" | "chats") => { if (saveT.current) { clearTimeout(saveT.current.t); saveT.current = null; } if (what === "all") ls.clear(); else ["chats", "projects", "model", "banner"].forEach((k) => ls.remove(k)); chatSync.wipeAll(chats.filter((c) => !c.inc).map((c) => c.id), projects.map((p) => p.id)); setChats([]); setProjects([]); setBanner(true); goNew(); });
+  const api = useMemo(() => ({
+    say, exportData,
     upgrade: () => setModal("upgrade"),
     openSettings: (t?: string) => { setSettingsTab(t ?? "General"); setModal("settings"); },
     goCode: () => { setModal(null); setCodeCur(null); setView("code"); },
     close: () => setModal(null),
     ask: (t: string) => { setModal(null); setTimeout(() => { goNewRef.current(); setPrefill((p) => ({ t: tr(t), n: p.n + 1 })); }, 180); },
     confirm: (title: string, text: string, ok: string, fn: () => void) => setGc({ title, text, ok, fn }),
-    wipe: (what: "all" | "chats") => { if (saveT.current) { clearTimeout(saveT.current.t); saveT.current = null; } if (what === "all") ls.clear(); else ["chats", "projects", "model", "banner"].forEach((k) => ls.remove(k)); chatSync.wipeAll(chats.filter((c) => !c.inc).map((c) => c.id), projects.map((p) => p.id)); setChats([]); setProjects([]); setBanner(true); goNew(); },
-    me: me ?? null, setMe, logout,
-  };
+    wipe, me: me ?? null, setMe, logout: logoutEv,
+  }), [me]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const rowCx = useRef<RowCx | null>(null);
   if (chat) rowCx.current = { model, switchModel, fork, altModels: models.providers.flatMap((p) => p.models).filter((x) => allowsModel(models.allowed, x.key)).length > 1, chat, chats, say, fm, arts, artOpen, artIdent: artSel?.ident, artIndex, openPlugins, openArt, openFile, send: (t) => send(t), copy, speak, like, retry, openProviders: () => { setSettingsTab("Providers"); setModal("settings"); }, edit: (i, text) => { const u = chat.msgs[i]; if (!busy && u?.role === "user") resend(chat, i, { ...u, text, time: Date.now() }); } };
