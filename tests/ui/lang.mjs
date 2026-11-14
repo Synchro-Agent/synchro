@@ -58,9 +58,11 @@ const COLLECT = (lang) => `(() => {
   }
   // Thuộc tính nhắc lại nội dung người dùng (aria-label = tên artifact…) thì bỏ qua.
   const content = new Set([...document.querySelectorAll("[data-notr]")].map((e) => e.textContent.trim()));
+  // Thuộc tính ghép chữ giao diện với nội dung (aria-label "Mở <tên dự án>, 3 mục"): bỏ phần nội dung trước khi xét.
+  const unc = (v) => { for (const c of content) if (c.length > 1 && v.includes(c)) v = v.split(c).join(" "); return v; };
   for (const el of document.querySelectorAll("[placeholder],[title],[aria-label],[data-tip]")) {
     if (el.closest(SKIP.replace("textarea,input,", "")) || !shown(el)) continue;
-    for (const a of ["placeholder", "title", "aria-label", "data-tip"]) { const v = el.getAttribute(a); if (v && !content.has(v.trim()) && bad(v)) out.add("[" + a + "] " + v.trim().slice(0, 100) + (where ? "   ‹" + hint(el) + "›" : "")); }
+    for (const a of ["placeholder", "title", "aria-label", "data-tip"]) { const v = el.getAttribute(a); if (v && !content.has(v.trim()) && bad(unc(v))) out.add("[" + a + "] " + v.trim().slice(0, 100) + (where ? "   ‹" + hint(el) + "›" : "")); }
   }
   return [...out];
 })()`;

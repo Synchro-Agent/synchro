@@ -774,7 +774,7 @@ export default function GlassFolder({
               }}
             />
             <div className="gf-label">
-              <span className="gf-title">{label}{badge}</span>
+              <span className="gf-title" data-notr>{label}{badge}</span>
               <span className="gf-meta" key={metaLine}>
                 {metaLine}
               </span>

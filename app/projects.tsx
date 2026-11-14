@@ -148,7 +148,7 @@ export function ProjectsPage({ projects, chats, onNew, onOpen, patch, onEdit, on
           art={PRESETS[x.id % PRESETS.length]} seed={(x.id % 97) + 1} files={files} action="none" appear={false} width={132}
           onActivate={() => onOpen(x.id)} />
         {bk.on && <BulkCheck on={bk.has(x)} />}
-        <div className="pj-gname"><b>{x.name}{x.pinned && <span className="pj-pin"><I.Pin size={12} /></span>}</b><span>{`Cập nhật ${ago(projUpd(x, chats))}`}</span></div>
+        <div className="pj-gname"><b data-notr>{x.name}{x.pinned && <span className="pj-pin"><I.Pin size={12} /></span>}</b><span>{`Cập nhật ${ago(projUpd(x, chats))}`}</span></div>
         <div onClick={(e) => e.stopPropagation()}>
           <ProjMenu p={x} open={menu === x.id} pin style={{ top: ctxPos?.y ?? 40, left: ctxPos?.x ?? 40, width: 236 }}
             onPin={() => { patch(x.id, { pinned: !x.pinned }); setMenu(null); say(x.pinned ? "Đã bỏ ghim dự án" : "Đã ghim dự án"); }}
@@ -345,15 +345,15 @@ export function ProjectPage({ proj, chats, composer, patch, onBack, onOpenChat, 
   const tabs: [PTab, string, number | null][] = [["chats", "Đoạn chat", mine.length], ["ins", "Hướng dẫn", null], ["mem", "Bộ nhớ", mem.length], ...(canSkills ? [["skills", trc("Skill", "tên mục"), null] as [PTab, string, null]] : []), ["ctx", "Ngữ cảnh", ctx.length]];
   return (
     <div className="page ds-page sy-projpage"><div className="page-in pj-in">
-      <nav className="pj-crumb"><button onClick={onBack}>Dự án</button><I.ChevronR size={13} /><b>{proj.name}</b></nav>
+      <nav className="pj-crumb"><button onClick={onBack}>Dự án</button><I.ChevronR size={13} /><b data-notr>{proj.name}</b></nav>
       <header className="pj-hero">
         <div className="pj-hero-f">
           <GlassFolder key={proj.id + ":" + ctx.map((c) => c.name).join("|")} label={proj.name} meta="" art={PRESETS[proj.id % PRESETS.length]} seed={(proj.id % 97) + 1}
             files={ctx.map((c) => ({ name: c.name, meta: c.kind === "text" ? "TXT" : (c.name.split(".").pop() ?? "").toUpperCase() }))} action="none" appear={false} width={88} />
         </div>
         <div className="pj-hero-t">
-          <h1>{proj.name}</h1>
-          {proj.desc && <p>{proj.desc}</p>}
+          <h1 data-notr>{proj.name}</h1>
+          {proj.desc && <p data-notr>{proj.desc}</p>}
           <div className="pj-facts"><span><I.Clock size={13} />{`Cập nhật ${ago(projUpd(proj, chats))}`}</span><span>{mine.length} đoạn chat</span><span>{ctx.length} tệp ngữ cảnh</span><span>{mem.length} mục ghi nhớ</span></div>
         </div>
         <div className="ds-acts pj-tools">
