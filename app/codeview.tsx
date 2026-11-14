@@ -1006,14 +1006,16 @@ export function CodeView({ say, sid, title, model, modelPicker, sideOpen, onSide
   };
   const palItems = useMemo(() => {
     const q = (pal?.q ?? "").toLowerCase();
-    const list: { t: string; d: string; f: () => void }[] = [
-      ...MODES.map((x) => ({ t: "Chuyển chế độ: " + x.short, d: x.desc, f: () => { setMode(x.k); say("Chế độ " + x.short); } })),
+    // k: từ khóa tìm thêm ngoài chữ đang hiện. Chế độ tự động hiện "Tự động" (U7) nhưng gõ "auto" vẫn phải ra (tên mã của chế độ, và chữ
+    // tiếng Anh khi giao diện đang dịch).
+    const list: { t: string; d: string; f: () => void; k?: string }[] = [
+      ...MODES.map((x) => ({ t: "Chuyển chế độ: " + x.short, d: x.desc, k: `${x.k} ${tr(x.short)}`, f: () => { setMode(x.k); say("Chế độ " + x.short); } })),
       ...PRESETS.map((x) => ({ t: "Đổi luật: " + x.label, d: x.rule, f: () => { setRules({ ...rules, preset: x.k }); say("Đã áp dụng: " + x.label); } })),
       { t: "Xuất cuộc trò chuyện (.md)", d: "Tải về toàn bộ hội thoại", f: exportMd },
       { t: "Phiên mới", d: "Bắt đầu phiên code mới", f: newSession },
       ...path.filter((n) => n.user).map((n) => ({ t: "Tìm: " + unredact(n.user).slice(0, 60), d: "Nhảy tới tin nhắn này", f: () => document.getElementById("cv-n" + n.id)?.scrollIntoView({ behavior: "smooth", block: "center" }) })),
     ];
-    return list.filter((x) => !q || (x.t + x.d).toLowerCase().includes(q)).slice(0, 9);
+    return list.filter((x) => !q || `${x.t} ${x.d} ${x.k ?? ""}`.toLowerCase().includes(q)).slice(0, 9);
   }, [pal?.q, path, rules, mode]); // eslint-disable-line react-hooks/exhaustive-deps
   const hk = useRef<(e: KeyboardEvent) => void>(() => {});
   hk.current = (e) => {
@@ -1206,7 +1208,7 @@ export function CodeView({ say, sid, title, model, modelPicker, sideOpen, onSide
                       )}
                     </div>
                     <div className="cv-ai">
-                      <div className="cv-ai-h">{n.mode === "auto" ? (() => { const ph = phasesOf(n.ai); const list = ph.length ? ph : [guessMode(n.user, n.atts)]; return <span className="cv-mode m-auto" title="Synchro tự chọn và chuyển giai đoạn">{modeIcon("auto", 13)}Auto{list.map((k, i) => <span key={i} className={`cv-phase m-${k}`}>{i ? <I.ChevronR size={10} /> : null}{modeIcon(k, 11)}{MODES.find((x) => x.k === k)?.short}</span>)}</span>; })() : <span className={`cv-mode m-${n.mode}`}>{modeIcon(n.mode, 13)}{MODES.find((x) => x.k === n.mode)?.short}</span>}</div>
+                      <div className="cv-ai-h">{n.mode === "auto" ? (() => { const ph = phasesOf(n.ai); const list = ph.length ? ph : [guessMode(n.user, n.atts)]; return <span className="cv-mode m-auto" title="Synchro tự chọn và chuyển giai đoạn">{modeIcon("auto", 13)}{MODES.find((x) => x.k === "auto")?.short}{list.map((k, i) => <span key={i} className={`cv-phase m-${k}`}>{i ? <I.ChevronR size={10} /> : null}{modeIcon(k, 11)}{MODES.find((x) => x.k === k)?.short}</span>)}</span>; })() : <span className={`cv-mode m-${n.mode}`}>{modeIcon(n.mode, 13)}{MODES.find((x) => x.k === n.mode)?.short}</span>}</div>
                       <div className={`ai-msg${n.done ? "" : " ai-streaming"}`}>{n.skills?.length ? <div className="skill-used">{n.skills.map((k) => <span key={k} className="skill-chip"><I.Scroll size={13} />{tr("Đang dùng skill")}: {k}</span>)}</div> : null}{n.steps ? <>{n.steps.length > 0 && <AgentSteps steps={n.steps} live={!n.done} say={say} view={viewNow} onAnswer={onAnswer} />}{!n.done && n.plan?.length ? <TaskCard plan={n.plan} /> : null}{!n.done && <StatusLine steps={n.steps} start={n.time} tokens={n.usage ? n.usage.input + n.usage.output : total} />}</> : n.ai ? <Markdown text={localizeNote(stripPhases(n.ai), tr)} say={say} streaming={!n.done} dev={{ prev: prev.length ? prev : prevAny, onPanel: openPanel, files: ctx, onAccept: acceptFile, onExpand: expandHidden }} /> : !n.done ? <Thinking label="Đang suy nghĩ…" /> : null}</div>
                       {n.noWs && <div className="cv-nows"><I.M icon="Alert" size={13} />Trả lời không có workspace: chưa sửa tệp nào của bạn.</div>}
                       {n.wsWait && (
