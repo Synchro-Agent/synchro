@@ -1483,7 +1483,12 @@ async function skillSet(user: UserRow, body: Record<string, any>, messages: unkn
     const inStudio = (k: Skill) => (libs[k.name] ?? []).some((l) => l.key.startsWith("studio-") && want[l.key.slice(7) as Studio] > 0);
     // D4: nhớ đệm tập ứng viên theo (người dùng, thế hệ bộ đệm plugin) để không dựng lại cả kho mỗi lượt; trọng số phụ thuộc câu hỏi nên áp lên trên.
     const prep = prepareCandidates(candidateKey(c.user.id, pluginCacheGen()), list.map((k) => ({ skill: k })), descHash);
-    const cands = prep.names.map((n) => prep.byName.get(n)!).map((b) => ({ skill: b.skill, weight: (catSkills.has(b.skill) ? 0.5 : 1) * (inStudio(b.skill) ? 1.3 : 1) }));
+    // Câu chỉ thuộc một studio ("Soạn kế hoạch ra mắt sản phẩm mới" → Tài liệu): skill chỉ nằm trong thư viện của studio khác không được gợi ý,
+    // dù trùng chữ — "product" trong mô tả UI/UX Pro Max từng đưa skill Thiết kế lên đầu và model trả trang web thay cho tài liệu.
+    // Skill riêng, skill của plugin khác và của danh mục Claude vẫn chấm như cũ; câu thuộc nhiều studio (hoặc không rõ) thì không lọc.
+    const asked = STUDIOS.filter((k) => want[k] > 0);
+    const offStudio = (k: Skill) => asked.length === 1 && !!libs[k.name]?.length && libs[k.name]!.every((l) => l.key.startsWith("studio-") && l.key !== `studio-${asked[0]}`);
+    const cands = prep.names.map((n) => prep.byName.get(n)!).filter((b) => !offStudio(b.skill)).map((b) => ({ skill: b.skill, weight: (catSkills.has(b.skill) ? 0.5 : 1) * (inStudio(b.skill) ? 1.3 : 1) }));
     // Có provider embedding: lấy ~50 skill gần nhất theo nghĩa rồi chấm lại; không có thì suggestSemantic tự lùi về bộ chấm từ khóa. Skill riêng (không thuộc danh mục) luôn được giữ.
     const keep = new Set(cands.filter((x) => !catSkills.has(x.skill)).map((x) => x.skill.name));
     const raw = await suggestSemantic(typed, cands, { keep, nearest: embeddingsConfigured() ? (q, _names, k) => nearestSkills(c.user.id, q, k) : undefined });
