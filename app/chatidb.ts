@@ -322,7 +322,23 @@ export async function parseLegacyMain(raw: string): Promise<ImportRow[] | null> 
   return out;
 }
 export type LegacyParse = (raw: string) => Promise<{ rows: ImportRow[] | null; via: "worker" | "main" }>;
-export const parseLegacy: LegacyParse = async (raw) => ({ rows: await parseLegacyMain(raw), via: "main" });
+/**
+ * Đọc khóa cũ ở luồng phụ (app/chatmigrate.worker.ts), luồng chính chỉ nhận lại chuỗi thân + chỉ mục nhỏ (không JSON.parse vài MB).
+ * Không mở được luồng phụ, luồng phụ lỗi hay quá 20 giây thì đọc ở luồng chính (một lần, chỉ lần chuyển dữ liệu đầu sau khi cập nhật).
+ */
+export const parseLegacy: LegacyParse = (raw) => new Promise((resolve) => {
+  const main = () => { void parseLegacyMain(raw).then((rows) => resolve({ rows, via: "main" })); };
+  if (typeof Worker === "undefined") { main(); return; }
+  let w: Worker;
+  try { w = new Worker(new URL("./chatmigrate.worker.ts", import.meta.url)); } catch { main(); return; }
+  let done = false;
+  const fin = (f: () => void) => { if (done) return; done = true; clearTimeout(t); try { w.terminate(); } catch {} f(); };
+  const t = setTimeout(() => fin(main), 20_000);
+  w.onmessage = (e: MessageEvent<{ ok: boolean; rows?: ImportRow[] }>) => fin(() => resolve({ rows: e.data?.ok ? (e.data.rows ?? []) : null, via: "worker" }));
+  w.onerror = (e) => { e?.preventDefault?.(); fin(main); };
+  w.onmessageerror = () => fin(main);
+  try { w.postMessage(raw); } catch { fin(main); }
+});
 
 /**
  * Nhập khóa localStorage cũ u:<uid>:chats vào IndexedDB, một lần cho mỗi nội dung (so dấu legacySig): chỉ thêm / đè, không bao giờ xóa

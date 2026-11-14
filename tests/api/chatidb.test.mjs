@@ -370,5 +370,54 @@ console.log("10. Chuyển dữ liệu cũ từ localStorage một lần, giữ k
   ok((await D.parseLegacyMain("không phải json")) === null && (await D.parseLegacyMain('{"a":1}')).length === 0, "đọc ở luồng chính: JSON hỏng → null, không phải mảng → rỗng");
 }
 
+console.log("11. Đọc khóa cũ ở luồng phụ");
+{
+  // Chạy chính tệp app/chatmigrate.worker.ts với một "self" giả, rồi giả Worker của trình duyệt chuyển tin qua lại.
+  const ctx = { onmessage: null, postMessage: null };
+  globalThis.self = ctx;
+  await loadTs(["chatmigrate.worker"]);
+  ok(typeof ctx.onmessage === "function", "luồng phụ nhận tin");
+  const list = [chat(3), chat(2, { inc: true }), C.stubOf(chat(1))];
+  const raw = JSON.stringify(list);
+  let got;
+  ctx.postMessage = (m) => { got = m; };
+  ctx.onmessage({ data: raw });
+  ok(got.ok && got.rows.map((r) => r.id).join() === "3,1" && got.rows[0].s === C.serialChat(list[0]) && got.rows[1].s === null && got.rows[1].idx.srv, "luồng phụ trả chuỗi thân + chỉ mục, giống đọc ở luồng chính", got);
+  ctx.onmessage({ data: "{hỏng" });
+  ok(got.ok === false, "JSON hỏng: luồng phụ báo không đọc được", got);
+
+  let made = 0, mode = "ok";
+  globalThis.Worker = class {
+    constructor(url) { made++; this.url = String(url); if (mode === "throw") throw new Error("CSP chặn luồng phụ"); }
+    postMessage(data) {
+      setTimeout(() => {
+        if (mode === "error") { this.onerror?.({ preventDefault() {} }); return; }
+        ctx.postMessage = (m) => this.onmessage?.({ data: structuredClone(m) });
+        ctx.onmessage({ data });
+      }, 0);
+    }
+    terminate() { this.dead = true; }
+  };
+  let r = await D.parseLegacy(raw);
+  ok(made === 1 && r.via === "worker" && r.rows.map((x) => x.id).join() === "3,1", "có luồng phụ: đọc ở luồng phụ", r);
+  r = await D.parseLegacy("{hỏng");
+  ok(r.via === "worker" && r.rows === null, "JSON hỏng qua luồng phụ: rows null (importLegacy ghi dấu, không nhập gì)", r);
+  mode = "error";
+  r = await D.parseLegacy(raw);
+  ok(r.via === "main" && r.rows.length === 2, "luồng phụ lỗi: đọc ở luồng chính", r);
+  mode = "throw";
+  r = await D.parseLegacy(raw);
+  ok(r.via === "main" && r.rows.length === 2, "không mở được luồng phụ: đọc ở luồng chính", r);
+  mode = "ok";
+  const st = new Store();
+  globalThis.localStorage = st;
+  st.setItem("u:M:chats", raw);
+  const s = await D.openChatStore("M", { idb: fakeIDB() });
+  r = await D.importLegacy(s, { now: 1 });
+  ok(r.via === "worker" && r.imported === 2 && (await s.bodies([3])).get(3) === C.serialChat(list[0]), "chuyển dữ liệu cũ dùng luồng phụ khi có", r);
+  delete globalThis.Worker;
+  delete globalThis.self;
+}
+
 console.log(`\n${pass} đạt, ${fail} lỗi`);
 process.exit(fail ? 1 : 0);
