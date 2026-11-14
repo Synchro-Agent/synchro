@@ -146,7 +146,7 @@ html body .pj-panel .pj-fsearch{height:var(--ds-h);border-radius:999px;border:1p
 @media (max-width:760px){html body .pj-hero h1{font-size:22px;line-height:28px}}
 @media (max-width:760px){html body .pj-tabbar{flex-direction:column;align-items:stretch}}
 @media (max-width:760px){.pj-tabbar .ds-acts{justify-content:flex-end}}
-html body .modal.pj-modal h2{font:600 16px/22px var(--font-sans)!important;letter-spacing:-.01em!important;margin:0 0 6px!important}
+html body .modal.pj-modal h2{font:600 16px/22px var(--font-sans)!important;letter-spacing:-.01em;margin:0 0 6px!important}
 .modal.pj-modal .pj-hint{font-size:13.5px;line-height:20px;color:var(--ds-muted);opacity:1}
 html body .modal.pj-modal label{font-size:13px;font-weight:560;margin:14px 0 6px}
 @media (max-width:760px){.pj-hero-f{overflow:visible!important}}
