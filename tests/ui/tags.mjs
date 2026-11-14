@@ -3,6 +3,7 @@
 // Chạy tay: BASE=http://localhost:3500 SHOTS=/tmp/x node tests/ui/tags.mjs
 import { openChrome, sleep } from "../lib/cdp.mjs";
 import { tempUser } from "../lib/tempuser.mjs";
+import { idbRows } from "../lib/idbchats.mjs";
 
 const B = process.env.BASE ?? "http://localhost:3200";
 let pass = 0, fail = 0;
@@ -23,7 +24,8 @@ const chats = [
   { id: Bc, title: `Công thức nấu ăn ${R}`, msgs: [{ role: "user", text: "Nấu phở", time: Bc }, { role: "ai", text: "Cách nấu phở.", done: true, time: Bc + 1 }] },
   { id: C, title: `Bài tập toán ${R}`, msgs: [{ role: "user", text: "Giải bài", time: C }, { role: "ai", text: "Lời giải.", done: true, time: C + 1 }] },
 ];
-const LS = `JSON.parse(localStorage.getItem("u:${uid}:chats") || "[]")`;
+// Thẻ đã lưu ở thiết bị: dòng chỉ mục trong kho IndexedDB (app/chatidb.ts), không còn là khóa localStorage u:<uid>:chats.
+const LS = idbRows(uid);
 const row = (title) => `[...document.querySelectorAll(".chat-wrap")].find((w) => w.querySelector(".ct-t")?.textContent === ${JSON.stringify(title)})`;
 const menuBox = `(() => { const m = [...document.querySelectorAll(".menu")].find((x) => !x.classList.contains("out") && x.querySelector(".tag-pick")); if (!m) return null; const r = m.getBoundingClientRect(); const own = getComputedStyle(m).backgroundColor, pre = getComputedStyle(m, "::before").backgroundColor; const bg = own === "rgba(0, 0, 0, 0)" || own === "transparent" ? pre : own; return { l: r.left, r: r.right, t: r.top, b: r.bottom, bg }; })()`;
 const alpha = (c) => { const m = /rgba?\(([^)]+)\)/.exec(c ?? ""); const p = m ? m[1].split(",").map(Number) : []; return p.length === 4 ? p[3] : 1; };
@@ -34,8 +36,8 @@ const openPicker = async (title) => {
   return until(`!!document.querySelector(".tag-pick input")`, 3000);
 };
 const typeTag = async (s) => { await ev(`document.querySelector(".tag-pick input").focus()`); await t.type(s); await t.key("Enter", "Enter", 13); await sleep(150); };
-const tagsOf = async (id) => ev(`(${LS}.find((c) => c.id === ${id}) || {}).tags || []`);
-// Trang lưu localStorage sau một nhịp: chờ tới khi thẻ đúng như mong đợi (tối đa 3 giây).
+const tagsOf = async (id) => ((await ev(LS)).find((c) => c.id === id) || {}).tags || [];
+// Trang lưu vào kho sau một nhịp: chờ tới khi thẻ đúng như mong đợi (tối đa 3 giây).
 const tagsBe = async (id, want) => { for (let i = 0; i < 30; i++) { const v = await tagsOf(id); if (JSON.stringify(v) === JSON.stringify(want)) return v; await sleep(100); } return tagsOf(id); };
 
 try {

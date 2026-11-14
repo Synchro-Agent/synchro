@@ -7,6 +7,7 @@ import { spawn } from "node:child_process";
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { login, sleep } from "../lib/cdp.mjs";
+import { idbDel } from "../lib/idbchats.mjs";
 
 const B = process.env.BASE ?? process.env.SYNCHRO_URL ?? "http://localhost:3200";
 const PORT = Number(process.env.CDP_PORT ?? 9364);
@@ -146,7 +147,8 @@ const SEED_IDS = SEEDS.map((c) => c.id);
 // Dọn dữ liệu mẫu khi xong (kể cả khi lỗi giữa chừng): mỗi lần chạy gieo 25 đoạn chat id mới vào tài khoản quản trị dùng chung, không dọn thì
 // danh sách và thanh phân trang của audit.mjs, popovers.mjs, skeletons… cứ dài thêm sau mỗi lần chạy. Bỏ khỏi bộ nhớ của trình duyệt (để app
 // không đẩy lại lên máy chủ) rồi xóa trên máy chủ qua đường đồng bộ của app (PUT /api/chats, deleted), như người dùng xóa đoạn chat.
-const unseedBrowser = () => ev(`(() => { const k = "u:${uid}:chats", ids = new Set(${JSON.stringify(SEED_IDS)}); try { const cur = JSON.parse(localStorage.getItem(k) || "[]"); localStorage.setItem(k, JSON.stringify(cur.filter((c) => !ids.has(c.id)))); } catch {} return true; })()`);
+// Đoạn chat của thiết bị nằm trong kho IndexedDB (app/chatidb.ts): bỏ cả ở đó, và ở khóa cũ (không thì lần mở sau nhập lại).
+const unseedBrowser = async () => { await ev(idbDel(uid, SEED_IDS)); return ev(`(() => { const k = "u:${uid}:chats", ids = new Set(${JSON.stringify(SEED_IDS)}); try { const cur = JSON.parse(localStorage.getItem(k) || "[]"); localStorage.setItem(k, JSON.stringify(cur.filter((c) => !ids.has(c.id)))); } catch {} return true; })()`); };
 const unseedServer = async () => {
   const r = await fetch(B + "/api/chats", { method: "PUT", headers: { cookie, origin: B, "content-type": "application/json" }, body: JSON.stringify({ items: SEED_IDS.map((id) => ({ kind: "chat", id: String(id), upd: Date.now(), deleted: true })) }) });
   const j = await r.json().catch(() => null);
