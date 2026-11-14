@@ -118,7 +118,7 @@
 *{box-sizing:border-box}
 /* ===================== Biến thiết kế: chữ, độ đậm, nhịp hàng, icon. Chỉnh giao diện lõi ở đây, đừng ghi đè ở cuối tệp. ===================== */
 :root{
-  --fs-ui:14px;--fs-chat:13.5px;--fs-label:12.5px;          /* chữ điều hướng, danh sách chat, nhãn nhóm */
+  /* cỡ chữ --fs-ui / --fs-chat / --fs-label và các thang token khác: app/tokens.css */
   --fw-body:400;--fw-ui:430;--fw-strong:500;               /* đoạn văn, chữ trên nút/mục, mục đang chọn */
   --row:32px;--row-chat:30px;--row-menu:34px;--row-set:34px; /* chiều cao hàng: thanh bên, chat, menu, Cài đặt */
   --icon:18px;--icon-set:19px;--gap-nav:11px;

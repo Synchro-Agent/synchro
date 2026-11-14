@@ -13,6 +13,8 @@ import "./unbounded-preload.css";
 // đúng thứ tự import), nên luật của hai tệp đó muốn thắng globals.css phải hơn specificity, không dựa vào thứ tự.
 // Thứ tự bốn tệp này là thứ tự ghi đè, đừng đổi. CSS riêng của Code, Speech, Bộ não, trang tải ứng dụng nằm ở tệp nạp cùng màn hình đó (codeview.css, speech/speech.css, brainview.css, download/download.css).
 // Tệp nạp chậm luôn đứng sau bốn tệp này, nên chỉ quy tắc không tranh chấp (cùng độ ưu tiên, cùng thuộc tính, cùng phần tử) với quy tắc chung đứng sau nó mới được chuyển; phần còn lại vẫn ở globals.css. tests/api/css-split.test.mjs giữ các lớp đã tách không bị dùng ở trang chat.
+// Thang token (cỡ chữ, khoảng cách, bo góc, z-index, mốc màn hình): nạp trước mọi CSS của app (B5).
+import "./tokens.css";
 import "./globals.css";
 import "./glass.css";
 import "./synchro-ds.css";
