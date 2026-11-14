@@ -1035,6 +1035,8 @@ export default function Home({ boot }: { boot?: BootData | null }) {
   }, [motion, font, uiFont, size, width]);
   const [view, setView] = useState<View>("new");
   const [open, setOpen] = useState(true);
+  const openRef = useRef(open);
+  openRef.current = open;
   // Màn hình hẹp (điện thoại): thanh bên là ngăn kéo trượt đè lên nội dung, mặc định đóng, chọn mục xong tự đóng.
   const narrow = () => typeof window !== "undefined" && window.matchMedia(NARROW).matches;
   useEffect(() => { if (narrow()) setOpen(false); }, []);
@@ -2209,6 +2211,14 @@ export default function Home({ boot }: { boot?: BootData | null }) {
         const z = (o: Element) => Number(getComputedStyle(o).zIndex) || 0;
         if (ov.length) ov.reduce((a, o) => (z(o) >= z(a) ? o : a)).dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
         if (ov.length > 1) return;
+        // Màn hẹp (≤ 860px): bảng đoạn chat nổi / ngăn kéo điện thoại nằm trên lớp phủ tối như một hộp thoại, Esc đóng nó khi không còn lớp nào
+        // trên nó (menu đã tự đóng ở a11y.ts, hộp thoại ở trên). Đang gõ trong bảng (đổi tên, tìm) thì Esc là của ô đó. Tiêu điểm về nút đã mở bảng.
+        const tgt = e.target as HTMLElement | null;
+        if (!ov.length && openRef.current && narrow() && !tgt?.closest?.(".shell-side :is(input,textarea,select,[contenteditable=true])")) {
+          const inSide = !!document.activeElement?.closest(".shell-side") || document.activeElement === document.body;
+          setOpen(false);
+          if (inSide) requestAnimationFrame(() => document.querySelector<HTMLElement>(window.matchMedia("(max-width: 760px)").matches ? ".side-toggle" : ".rail-mark")?.focus({ preventScroll: true }));
+        }
         setGc(null); setModal(null); setDelId(null); setDelProj(null); setUserMenu(false); setChatMenu(null); setCodeMenu(null); setTitleMenu(false); }
       else if (mod && k === "k") { e.preventDefault(); palBuf.current = ""; palArmed.current = true; setModal("search"); }
       else if (mod && e.shiftKey && k === "o") { e.preventDefault(); goNewRef.current(); }
