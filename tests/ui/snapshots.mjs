@@ -128,7 +128,7 @@ if (process.env.SNAP_ALL) {
     } else { await openSide(v); await click(`document.querySelector(".chat-item")`, "chat"); await sleep(2500); }
     await both(`${v.w}-chat`);
     if (v.mobile) { await openSide(v); await both(`${v.w}-drawer`); }
-    for (const [nav, n] of [["Artifacts", "artifacts"], ["Kỹ năng", "hub"], ["Dự án", "projects"]]) { await openSide(v); await click(byText(".nav-item", nav), n); await sleep(2500); await both(`${v.w}-${n}`); }
+    for (const [nav, n] of [["Artifacts", "artifacts"], ["Kỹ năng", "hub"], ["Dự án", "projects"], ["Code", "code"], ["Speech", "speech"], ["Bộ não", "brain"]]) { await openSide(v); await click(byText(".nav-item", nav), n); await sleep(2500); await both(`${v.w}-${n}`); }
     await openSide(v);
     // Nút tài khoản: tên đầy đủ ở thanh bên rộng, chữ viết tắt "DT" ở thanh rail.
     try {
