@@ -128,6 +128,8 @@
 [data-theme="dark"]{--ink:#D9D7CF;--ink-strong:#EEECE5}
 
 html,body{height:100%;margin:0}
+/* Giao diện tiếng Anh ở trang dựng sẵn bằng tiếng Việt (điều khoản, chia sẻ, 404…): ẩn tới khi bộ dịch duyệt xong lần đầu, không nháy chữ gốc (langdetect.ts, i18n.tsx). */
+html[data-trwait]>body{visibility:hidden}
 body{font-family:var(--font-sans);font-weight:var(--fw-body);font-size:14px;color:var(--text);background:var(--bg);-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;transition:background .3s,color .3s}
 button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;padding:0}
 input,textarea{font:inherit;color:inherit;outline:0}

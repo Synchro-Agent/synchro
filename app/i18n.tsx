@@ -131,6 +131,8 @@ export function I18n() {
       if (titleSrc === null || (document.title !== titleTr && document.title !== titleSrc)) titleSrc = document.title;
       titleTr = tr(titleSrc, lang);
       if (document.title !== titleTr) document.title = titleTr;
+      // Trang đã dịch xong lần đầu: hiện <body> (langdetect.ts ẩn nó ở giao diện tiếng Anh để không nháy chữ tiếng Việt dựng ở máy chủ).
+      delete html.dataset.trwait;
       // Bộ theo dõi <body> dùng chung (domwatch.ts), nhận trước mọi nơi khác; bản ghi do chính lần dịch này ghi ra được domwatch bỏ đi.
       unwatch = watch((list) => {
         for (const r of list) {

@@ -1,13 +1,17 @@
 // Soát ngôn ngữ toàn trang bằng Chrome ẩn trên npm run dev:mock: đi qua mọi màn hình ở giao diện tiếng Việt rồi tiếng Anh,
 // gom chữ sai ngôn ngữ (tiếng Anh sót trong giao diện tiếng Việt, tiếng Việt sót trong giao diện tiếng Anh) theo từng màn hình.
 // Bỏ qua nội dung người dùng (tin nhắn, code, tên đoạn chat, [data-notr]). Chạy tay: node tests/ui/lang.mjs [vi|en]
+// Nháy chữ gốc (B6 bước 10): ở tiếng Anh, mỗi lần tải trang một bộ lấy mẫu chạy theo khung hình (requestAnimationFrame: chữ đúng như sắp vẽ,
+// sau khi bộ dịch đã chạy) ghi mọi chữ tiếng Việt đang hiện trên màn hình trong 8 giây đầu, báo ở mục "nháy".
+// STRICT=1: thoát mã 1 khi còn chữ sai ngôn ngữ hay chữ nháy (QA chạy như vậy). LANGS=en (hoặc vi,en): chọn ngôn ngữ khi chạy từ QA (QA không truyền đối số).
 import { spawn } from "node:child_process";
 import { rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { loadTs } from "../lib/ts.mjs";
 
 const B = "http://localhost:3200";
-const LANGS = process.argv[2] ? [process.argv[2]] : ["vi", "en"];
+const LANGS = process.argv[2] ? [process.argv[2]] : process.env.LANGS ? process.env.LANGS.split(",") : ["vi", "en"];
+const STRICT = process.env.STRICT === "1" || process.argv.includes("--strict");
 const PROF = tmpdir() + "/synchro-ui/chrome-prof-lang";
 const { "i18n-dict": D } = await loadTs(["i18n-dict"]);
 const SAME_WORDS = [...D.SAME_WORDS];
@@ -60,7 +64,34 @@ const COLLECT = (lang) => `(() => {
   return [...out];
 })()`;
 
+// Bộ lấy mẫu chữ nháy: cài trước khi trang chạy (Page.addScriptToEvaluateOnNewDocument), lấy mẫu mỗi khung hình trong 8 giây đầu.
+// Chỉ requestAnimationFrame, không MutationObserver: bộ theo dõi cài ở đây chạy trước bộ dịch của trang nên sẽ thấy chữ chưa dịch mà chưa bao giờ được vẽ.
+const FLASH = `(() => {
+  const VI = /[ạảãâầấậẩẫăằắặẳẵẹẻẽêềếệểễỉĩịọỏõôồốộổỗơờớợởỡụủũưừứựửữỳỵỷỹđ]/i;
+  const sameW = new Set(${JSON.stringify(SAME_WORDS)});
+  const SKIP = "script,style,pre,code,textarea,input,[data-notr],.ai-msg,.user-msg,.mdx,.art-code,.sk-pre,.chat-item,.title-edit,iframe,.cr-by,.cm-editor,.monaco-editor,.xterm,.codebox";
+  const strip = (v) => v.split(/[\\s+&/()·:;,.\\-–—|•@#'"“”!?…×=*%$€£¥→←↑↓~≈]+/).filter((w) => w && !sameW.has(w)).join(" ");
+  const seen = new Set(), t0 = performance.now();
+  window.__flash = seen;
+  const tick = () => {
+    if (document.body) {
+      const tw = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+      while (tw.nextNode()) {
+        const n = tw.currentNode, v = n.nodeValue, p = n.parentElement;
+        if (!v || !p || !VI.test(strip(v)) || p.closest(SKIP)) continue;
+        if (!p.checkVisibility({ visibilityProperty: true, opacityProperty: true })) continue;
+        const r = p.getBoundingClientRect();
+        if (!r.width || !r.height || r.bottom < 0 || r.top > innerHeight) continue;
+        seen.add(v.trim().slice(0, 90) + "   @" + Math.round(performance.now() - t0) + "ms");
+      }
+    }
+    if (performance.now() - t0 < 8000) requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
+})()`;
+
 const report = new Map();
+const flashes = new Map();
 for (const lang of LANGS) {
   console.log(`\n━━ ${lang}`);
   rmSync(PROF, { recursive: true, force: true });
@@ -78,6 +109,7 @@ for (const lang of LANGS) {
   await P("Runtime.enable"); await P("Page.enable");
   await P("Emulation.setDeviceMetricsOverride", { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false });
   await P("Page.addScriptToEvaluateOnNewDocument", { source: `try { localStorage.setItem("p:uilang", ${JSON.stringify(JSON.stringify(lang))}); } catch {}` });
+  if (lang === "en") await P("Page.addScriptToEvaluateOnNewDocument", { source: FLASH });
   const ev = async (expr) => { const r = await P("Runtime.evaluate", { expression: expr, awaitPromise: true, returnByValue: true }); if (r.exceptionDetails) throw new Error(r.exceptionDetails.exception?.description ?? r.exceptionDetails.text); return r.result.value; };
   const until = async (expr, ms = 30000, what = expr) => { const t = Date.now(); while (Date.now() - t < ms) { if (await ev(expr).catch(() => false)) return; await sleep(200); } throw new Error("timeout: " + what); };
   const click = async (expr, what) => {
@@ -87,8 +119,15 @@ for (const lang of LANGS) {
   };
   const key = (k, code, vk, mods = 0) => P("Input.dispatchKeyEvent", { type: "keyDown", key: k, code, windowsVirtualKeyCode: vk, modifiers: mods, ...(k === "Enter" ? { text: "\r" } : {}) }).then(() => P("Input.dispatchKeyEvent", { type: "keyUp", key: k, code, windowsVirtualKeyCode: vk, modifiers: mods }));
   const esc = () => key("Escape", "Escape", 27);
-  const look = async (name) => {
+  // Sau một lần tải trang (load = true): chờ hết 8 giây lấy mẫu rồi lấy các chữ tiếng Việt đã hiện trong lúc tải.
+  const look = async (name, load = false) => {
     await sleep(700);
+    if (load && lang === "en") {
+      await sleep(Math.max(0, 8200 - (await ev(`performance.now()`).catch(() => 8200))));
+      const fl = await ev(`[...(window.__flash ?? [])]`).catch(() => ["(không đọc được bộ lấy mẫu)"]);
+      flashes.set(`${lang} · ${name}`, fl);
+      console.log(`  ${fl.length ? "✗" : "✓"} nháy · ${name}${fl.length ? ` (${fl.length})` : ""}`);
+    }
     const found = await ev(COLLECT(lang)).catch((e) => ["(lỗi kiểm tra: " + e.message.slice(0, 80) + ")"]);
     const k = `${lang} · ${name}`;
     report.set(k, found);
@@ -97,12 +136,12 @@ for (const lang of LANGS) {
   const step = async (name, fn) => { try { await fn(); } catch (e) { report.set(`${lang} · ${name}`, ["(không chạy được: " + e.message.split("\n")[0].slice(0, 100) + ")"]); console.log("  ! " + name + ": " + e.message.split("\n")[0].slice(0, 100)); } };
   const nav = async (v) => { await click(`document.querySelector('[data-nav="${v}"]')`, v); await sleep(1500); };
 
-  await step("đăng nhập", async () => { await P("Page.navigate", { url: B + "/" }); await until(`!!document.querySelector("input[type=email], input[type=password], form")`, 20000); await look("đăng nhập"); });
-  await step("điều khoản", async () => { await P("Page.navigate", { url: B + "/terms" }); await sleep(1500); await look("điều khoản"); });
-  await step("quyền riêng tư", async () => { await P("Page.navigate", { url: B + "/privacy" }); await sleep(1500); await look("quyền riêng tư"); });
+  await step("đăng nhập", async () => { await P("Page.navigate", { url: B + "/" }); await until(`!!document.querySelector("input[type=email], input[type=password], form")`, 20000); await look("đăng nhập", true); });
+  await step("điều khoản", async () => { await P("Page.navigate", { url: B + "/terms" }); await sleep(1500); await look("điều khoản", true); });
+  await step("quyền riêng tư", async () => { await P("Page.navigate", { url: B + "/privacy" }); await sleep(1500); await look("quyền riêng tư", true); });
   await P("Network.enable");
   await P("Network.setCookie", { name: "synchro_session", value: cookie.split("=")[1], url: B });
-  await step("trang chủ", async () => { await P("Page.navigate", { url: B + "/" }); await until(`!!document.querySelector("textarea")`, 30000, "app"); await sleep(1500); await look("trang chủ"); });
+  await step("trang chủ", async () => { await P("Page.navigate", { url: B + "/" }); await until(`!!document.querySelector("textarea")`, 30000, "app"); await sleep(1500); await look("trang chủ", true); });
   await step("menu model", async () => { await click(`document.querySelector(".model-btn")`, "model"); await look("menu model"); await esc(); });
   await step("menu thêm", async () => { await click(`document.querySelector(".plus-btn, [aria-label='Thêm'], [aria-label='Add']")`, "plus"); await look("menu thêm"); await esc(); });
   await step("bảng lệnh", async () => { await key("k", "KeyK", 75, 4); await look("bảng lệnh"); await esc(); });
@@ -141,3 +180,10 @@ let total = 0;
 console.log("\n━━ Chữ sai ngôn ngữ");
 for (const [k, v] of report) { if (!v.length) continue; total += v.length; console.log(`\n${k}`); for (const x of v) console.log("   ·", x); }
 console.log(total ? `\n${total} chỗ cần xem` : "\nKhông còn chữ sai ngôn ngữ");
+let flashN = 0;
+if (flashes.size) {
+  console.log("\n━━ Nháy chữ tiếng Việt khi tải trang (giao diện tiếng Anh)");
+  for (const [k, v] of flashes) { if (!v.length) continue; flashN += v.length; console.log(`\n${k}`); for (const x of v) console.log("   ·", x); }
+  console.log(flashN ? `\n${flashN} chữ nháy` : `\nKhông nháy chữ gốc (${flashes.size} lần tải trang)`);
+}
+if (STRICT && (total || flashN)) process.exit(1);
