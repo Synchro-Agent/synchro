@@ -245,21 +245,27 @@ export function collect(sheets) {
 }
 
 // ---------------------------------------------------------------- class co-occurrence from tsx
-/** Lớp nào có thể cùng nằm trên một phần tử, và trên thẻ nào. Nhóm = các lớp của một className={…} / className="…" trong tsx (kèm tên thẻ
- *  khi là thẻ HTML), một chuỗi có từ hai lớp trở lên, hay một phần ghép trong CSS (.a.b). Lớp "mở" (wild) đi được với mọi lớp, mọi thẻ:
- *  lớp không thấy trong className nào (chỉ có trong CSS, hay ghép động), lớp truyền qua className của component, lớp thêm bằng classList,
- *  lớp đứng một mình trong một chuỗi ngoài className (biến, toán tử ba ngôi). */
+/** Lớp nào có thể cùng nằm trên một phần tử, và trên thẻ nào. Nhóm = các lớp có thể cùng nằm trên một phần tử:
+ *  - một className={…} / className="…" / class="…" trong tsx/ts (kèm tên thẻ khi là thẻ HTML), một phần ghép trong CSS (.a.b);
+ *  - lớp "rời" (chuỗi ngoài className: biến, toán tử ba ngôi, hằng) và lớp ghép động `tiền-tố-${x}` đi với các lớp tĩnh của mọi className
+ *    động (có biến) trong CÙNG tệp — giả định: lớp rời được dùng ở chính tệp khai báo nó;
+ *  - lớp không có ở đâu trong mã của app (do thư viện sinh: KaTeX, xterm, shiki…, hoặc CSS chết) chỉ đi với nhau.
+ *  Lớp "mở" (wild) đi với mọi lớp, mọi thẻ: lớp truyền qua className của component (trừ Link = thẻ a), lớp thêm bằng classList, lớp chỉ
+ *  thấy trong mã ở dạng khác (querySelector, chuỗi HTML…). */
 export function cooccurrence(root, decls) {
   const known = new Set(); for (const d of decls) for (const a of d.sub.alts) for (const c of a.cls) known.add(c);
-  const groups = []; const inClassName = new Set(); const wild = new Set();
-  const group = (list, tag = null) => { const k = [...new Set(list.filter((c) => known.has(c)))]; if (k.length) groups.push({ cls: new Set(k), tag }); return k; };
-  for (const d of decls) for (const comp of parseSelector(d.sel)) group(comp.filter((x) => x.k === "class").map((x) => x.v));
+  const groups = []; const seen = new Set(); const wild = new Set(); const why = new Map();
+  const mark = (c, r) => { if (!known.has(c)) return; wild.add(c); if (!why.has(c)) why.set(c, r); };
+  const group = (list, tag = null, css = false) => { const k = [...new Set(list.filter((c) => known.has(c)))]; if (k.length) groups.push({ cls: new Set(k), tag, css }); return k; };
+  for (const d of decls) for (const comp of parseSelector(d.sel)) group(comp.filter((x) => x.k === "class").map((x) => x.v), null, true);
+  const byPrefix = (p) => [...known].filter((c) => c.startsWith(p) && c.length > p.length);
   const files = [];
   const walk = (d) => { for (const e of fs.readdirSync(d, { withFileTypes: true })) { if (e.name === "node_modules" || e.name.startsWith(".")) continue; const p = path.join(d, e.name); if (e.isDirectory()) walk(p); else if (/\.(tsx?|mjs)$/.test(e.name)) files.push(p); } };
   walk(path.join(root, "app"));
+  let all = "";
   for (const f of files) {
-    const src = fs.readFileSync(f, "utf8");
-    const spans = [];
+    const src = fs.readFileSync(f, "utf8"); all += src + "\n";
+    const spans = [], dyn = [], loose = new Set();
     for (const m of src.matchAll(/\bclass(?:Name)?\s*=\s*/g)) {
       let i = m.index + m[0].length; const c = src[i]; let expr = ""; const st = i;
       if (c === '"' || c === "'") { const e = src.indexOf(c, i + 1); expr = src.slice(i + 1, e); i = e; }
@@ -268,23 +274,37 @@ export function cooccurrence(root, decls) {
       else continue;
       spans.push([st, i]);
       const before = src.slice(Math.max(0, m.index - 1500), m.index);
-      const t = [...before.matchAll(/<([A-Za-z][\w.]*)[\s>]/g)].pop()?.[1] ?? null;
-      const k = group(expr.split(/[^\w-]+/), t && /^[a-z]/.test(t) ? t : null);
-      for (const x of k) inClassName.add(x);
-      if (!t || !/^[a-z]/.test(t)) for (const x of k) wild.add(x);
+      let t = [...before.matchAll(/<([A-Za-z][\w.]*)[\s>]/g)].pop()?.[1] ?? null;
+      if (t === "Link") t = "a";
+      const intrinsic = t && /^[a-z]/.test(t);
+      const k = group(expr.split(/[^\w-]+/), intrinsic ? t : null);
+      for (const x of k) seen.add(x);
+      if (!intrinsic) for (const x of k) mark(x, `className của <${t}> ở ${path.basename(f)}`);
+      const pre = [...expr.matchAll(/([\w-]*-)\$\{/g)].map((x) => x[1]);
+      for (const p of pre) for (const x of byPrefix(p)) { group([...k, x], intrinsic ? t : null); seen.add(x); }
+      // Biểu thức có biến: lớp rời của tệp có thể đổ vào đây.
+      if (c === "{" && !/^\{\s*(["'])[^"'`]*\1\s*\}$/.test(expr) || c === "`" && expr.includes("${")) dyn.push({ k, tag: intrinsic ? t : null });
     }
     const inSpan = (i) => spans.some(([a, b]) => i >= a && i <= b);
     for (const m of src.matchAll(/(["'`])((?:(?!\1)[^\\\n]|\\.){1,400}?)\1/g)) {
       if (inSpan(m.index)) continue;
-      const t = m[2].split(/[\s${}?:]+/).filter(Boolean);
-      if (t.length > 1) group(t); else if (known.has(t[0])) wild.add(t[0]);
+      const toks = m[2].split(/[\s${}?:]+/).filter(Boolean);
+      for (const x of toks) if (known.has(x)) { loose.add(x); seen.add(x); }
+      if (toks.length > 1) group(toks);
+      for (const p of [...m[2].matchAll(/([\w-]*-)\$\{/g)].map((x) => x[1])) for (const x of byPrefix(p)) { loose.add(x); seen.add(x); }
     }
-    for (const m of src.matchAll(/classList\.(?:add|toggle|replace)\(\s*["'`]([\w-]+)/g)) wild.add(m[1]);
+    for (const e of dyn) for (const x of loose) group([...e.k, x], e.tag);
+    for (const m of src.matchAll(/classList\.(?:add|toggle|replace)\(\s*["'`]([\w-]+)/g)) mark(m[1], `classList ở ${path.basename(f)}`);
   }
-  for (const c of known) if (!inClassName.has(c)) wild.add(c);
+  // Lớp không thấy trong className / chuỗi nào: có nhắc ở đâu đó trong mã (querySelector…) thì coi là mở; không có thì là lớp của thư viện.
+  const lib = [];
+  for (const c of known) if (!seen.has(c)) { if (new RegExp(`(^|[^\\w-])${c.replace(/[-\\]/g, "\\$&")}([^\\w-]|$)`).test(all)) mark(c, "chỉ thấy trong mã ở dạng khác className"); else lib.push(c); }
+  if (lib.length) groups.push({ cls: new Set(lib), tag: null, css: true });
   const byCls = new Map(), tags = new Map();
   for (const g of groups) for (const c of g.cls) { (byCls.get(c) ?? byCls.set(c, []).get(c)).push(g); if (g.tag) (tags.get(c) ?? tags.set(c, new Set()).get(c)).add(g.tag); }
-  return { groups, byCls, wild, tags };
+  // Lớp có ít nhất một nhóm không rõ thẻ thì không suy được thẻ.
+  for (const g of groups) if (!g.tag && !g.css) for (const c of g.cls) tags.delete(c);
+  return { groups, byCls, wild, tags, why, lib: new Set(lib) };
 }
 
 // ---------------------------------------------------------------- overlap and precedence
