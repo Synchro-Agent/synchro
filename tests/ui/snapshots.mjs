@@ -96,8 +96,14 @@ await sleep(1500);
 const OUT = process.argv[2] ?? SCR + "shots";
 mkdirSync(OUT, { recursive: true });
 const shot = async (n) => { await sleep(700); const { data } = await P("Page.captureScreenshot", { format: "png" }); writeFileSync(`${OUT}/${n}.png`, Buffer.from(data, "base64")); };
-// Tắt mọi hiệu ứng chuyển động để ảnh chụp ổn định giữa hai lần.
-await ev(`(() => { const s = document.createElement("style"); s.textContent = "*,*::before,*::after{animation:none!important;transition:none!important;caret-color:transparent!important}"; document.head.appendChild(s); return 1; })()`);
+// Tắt mọi hiệu ứng chuyển động để ảnh chụp ổn định giữa hai lần. CSS của app nằm trong @layer (B5): !important không lớp thua !important
+// trong lớp, nên luật tắt đặt vào lớp được khai báo ĐẦU TIÊN (đọc từ trang) — !important ở lớp đầu thắng !important ở mọi lớp sau.
+await ev(`(() => { let first = null;
+  for (const sh of document.styleSheets) { let rules; try { rules = sh.cssRules; } catch { continue; }
+    for (const r of rules) { if (r instanceof CSSLayerStatementRule) { first = r.nameList[0]; break; } if (r instanceof CSSLayerBlockRule) { first = r.name; break; } if (!(r instanceof CSSImportRule)) break; }
+    if (first) break; }
+  const css = "*,*::before,*::after{animation:none!important;transition:none!important;caret-color:transparent!important}";
+  const s = document.createElement("style"); s.textContent = first ? "@layer " + first + "{" + css + "}" : css; document.head.appendChild(s); return 1; })()`);
 await sleep(800);
 await shot("home");
 // Hồ sơ Chrome mới nên chưa có đoạn chat: gửi một yêu cầu (model giả lập trả lời cố định) rồi chụp.
