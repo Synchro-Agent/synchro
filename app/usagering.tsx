@@ -5,7 +5,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Menu } from "./ui";
 import { useApp } from "./store";
-import { getLang } from "./i18n";
+import { getLang, tf, tr, trc } from "./i18n";
 import { resetAt } from "./resetfmt";
 import * as I from "./icons";
 
@@ -53,16 +53,15 @@ export function useUsage(provider?: string) {
 }
 
 // ---------------------------------------------------------------- định dạng
-export const en = () => getLang() === "en";
 export const money = (v: number) => (v > 0 && v < 0.01 ? "<$0.01" : `$${v.toFixed(v >= 100 ? 0 : 2)}`);
 export const kTok = (n: number) => (n >= 1e6 ? `${(n / 1e6).toFixed(n >= 1e7 ? 0 : 1)}M` : n >= 1e3 ? `${(n / 1e3).toFixed(n >= 1e4 ? 0 : 1)}K` : String(n));
 export function resetText(t: number | null, active = true) {
-  if (!t || !active) return en() ? "Starts with your next message" : "Bắt đầu khi bạn gửi tin nhắn";
+  if (!t || !active) return trc("Bắt đầu khi bạn gửi tin nhắn", "giờ đặt lại");
   // Cùng nguồn, cùng định dạng (tuyệt đối) với thẻ báo hết hạn mức dưới câu trả lời (resetfmt.ts).
-  return resetAt(t, en() ? "en" : "vi");
+  return resetAt(t, getLang());
 }
 const level = (p: number) => (p >= 90 ? "hot" : p >= 70 ? "warn" : "");
-const LABEL = { session: ["Giới hạn phiên", "Session limit"], weekly: ["Hằng tuần · mọi model", "Weekly · all models"] } as const;
+const LABEL = { session: "Giới hạn phiên", weekly: "Hằng tuần · mọi model" } as const;
 
 // Biểu tượng mức dùng: giọt nước trong vòng tròn (giống Claude).
 export function UsageIcon({ size = 16 }: { size?: number }) {
@@ -83,8 +82,8 @@ function LimitRow({ l }: { l: Limit }) {
   return (
     <div className="us-row" title={`${money(l.used)}${unlimited ? "" : ` / ${money(l.limit!)}`}`}>
       <div className="us-row-t">
-        <b>{en() ? LABEL[l.key][1] : LABEL[l.key][0]}</b>
-        <span>{unlimited ? <>{en() ? "No limit" : "Không giới hạn"} · {money(l.used)}</> : <>{resetText(l.resetAt, l.active)}<em>{Math.round(l.pct)}%</em></>}</span>
+        <b>{tr(LABEL[l.key])}</b>
+        <span>{unlimited ? <>{tr("Không giới hạn")} · {money(l.used)}</> : <>{resetText(l.resetAt, l.active)}<em>{Math.round(l.pct)}%</em></>}</span>
       </div>
       <Bar pct={l.pct} unlimited={unlimited} />
     </div>
@@ -96,35 +95,36 @@ export function RateRow({ r }: { r: Rate }) {
   return (
     <div className="us-row" title={`${kTok(r.remaining)} / ${kTok(r.limit)} token`}>
       <div className="us-row-t">
-        <b>{en() ? `${PROVIDER[r.provider] ?? r.provider} API · tokens per minute` : `API ${PROVIDER[r.provider] ?? r.provider} · token mỗi phút`}</b>
-        <span>{en() ? `Resets in ${secs}s` : `Đặt lại sau ${secs}s`}<em>{Math.round(r.pct)}%</em></span>
+        <b>{tf("API {name} · token mỗi phút", { name: PROVIDER[r.provider] ?? r.provider })}</b>
+        <span>{tf("Đặt lại sau {secs}s", { secs })}<em>{Math.round(r.pct)}%</em></span>
       </div>
       <Bar pct={r.pct} />
     </div>
   );
 }
 
-// Tên cửa sổ hạn mức của gói theo ngôn ngữ giao diện.
-const WIN: Record<string, [string, string]> = {
-  five_hour: ["Phiên hiện tại", "Current session"], seven_day: ["Hằng tuần · mọi model", "Weekly · all models"], seven_day_opus: ["Hằng tuần · Opus", "Weekly · Opus"],
-  seven_day_sonnet: ["Hằng tuần · Sonnet", "Weekly · Sonnet"], seven_day_overage_included: ["Hằng tuần · giới hạn theo model", "Weekly · model limit"], overage: ["Tín dụng sử dụng", "Usage credits"],
+// Tên cửa sổ hạn mức của gói (chữ gốc tiếng Việt, dịch bằng tr khi hiện).
+const WIN: Record<string, string> = {
+  five_hour: "Phiên hiện tại", seven_day: "Hằng tuần · mọi model", seven_day_opus: "Hằng tuần · Opus",
+  seven_day_sonnet: "Hằng tuần · Sonnet", seven_day_overage_included: "Hằng tuần · giới hạn theo model", overage: "Tín dụng sử dụng",
 };
-const GROUP: Record<string, [string, string]> = { "Gemini models": ["model Gemini", "Gemini models"], "Claude and GPT models": ["model Claude và GPT", "Claude and GPT models"] };
+// Nhóm hạn mức của gói Google (tên hãng trả về bằng tiếng Anh). "model Gemini" ngắn, dễ trùng: dịch theo ngữ cảnh.
+const groupName = (g: string) => (g === "Gemini models" ? trc("model Gemini", "nhóm hạn mức") : g === "Claude and GPT models" ? tr("model Claude và GPT") : g);
 function winLabel(w: PlanWindow) {
-  const i = en() ? 1 : 0;
-  if (w.group) return `${w.kind === "weekly" ? (en() ? "Weekly" : "Hằng tuần") : en() ? "Current session" : "Phiên hiện tại"} · ${GROUP[w.group]?.[i] ?? w.group}`;
-  return WIN[w.window]?.[i] ?? w.label;
+  if (w.group) return `${tr(w.kind === "weekly" ? "Hằng tuần" : "Phiên hiện tại")} · ${groupName(w.group)}`;
+  return WIN[w.window] ? tr(WIN[w.window]) : w.label;
 }
-// Cách hãng đặt lại hạn mức (ghi chú dưới các thanh).
-export const PLAN_NOTE: Record<SubUsage["cli"], [string, string]> = {
-  claude: ["Phiên 5 giờ bắt đầu từ tin nhắn đầu tiên. Hạn mức tuần đặt lại vào một giờ cố định mỗi tuần.", "The 5-hour session starts with your first message. Weekly limits reset at a fixed time each week."],
-  codex: ["Hạn mức tùy gói của tài khoản ChatGPT: gói Plus có phiên 5 giờ cuốn chiếu và hạn mức tuần, gói Pro chỉ có hạn mức tuần.", "Limits depend on your ChatGPT plan. Plus has a rolling 5-hour window and a weekly limit; Pro only has a weekly limit."],
-  agy: ["Hạn mức tùy gói của tài khoản Google và hồi theo chu kỳ. Model Gemini và model Claude/GPT tính riêng.", "Limits depend on your Google account's plan and refresh over time. Gemini and Claude/GPT models are counted separately."],
-  grok: ["Hạn mức tùy gói của tài khoản Grok và hồi dần theo thời gian; hết hạn mức thì Synchro hỏi bạn trước khi dùng khóa API.", "Limits depend on your Grok plan and refresh over time. When you hit one, Synchro asks before using an API key."],
+// Cách hãng đặt lại hạn mức (ghi chú dưới các thanh), dịch bằng tr khi hiện.
+export const PLAN_NOTE: Record<SubUsage["cli"], string> = {
+  claude: "Phiên 5 giờ bắt đầu từ tin nhắn đầu tiên. Hạn mức tuần đặt lại vào một giờ cố định mỗi tuần.",
+  codex: "Hạn mức tùy gói của tài khoản ChatGPT: gói Plus có phiên 5 giờ cuốn chiếu và hạn mức tuần, gói Pro chỉ có hạn mức tuần.",
+  agy: "Hạn mức tùy gói của tài khoản Google và hồi theo chu kỳ. Model Gemini và model Claude/GPT tính riêng.",
+  grok: "Hạn mức tùy gói của tài khoản Grok và hồi dần theo thời gian; hết hạn mức thì Synchro hỏi bạn trước khi dùng khóa API.",
 };
-/** Ghi chú khi gói chưa có thanh hạn mức nào: Antigravity chưa đọc được bảng hạn mức, Grok CLI không báo hạn mức, gói khác chờ lượt chat đầu. */
-export const noWindows = (cli: SubUsage["cli"] | null | undefined, tail: [string, string]) =>
-  cli === "grok" ? L("Grok CLI không báo hạn mức còn lại của gói. Synchro đếm số tin nhắn và báo ngay khi Grok nói đã chạm giới hạn.", "The Grok CLI doesn't report how much of the plan is left. Synchro counts your messages and tells you as soon as Grok says the limit is reached.") : cli === "agy" ? L(...tail) : L("Gửi một tin nhắn bằng gói này để xem hạn mức.", "Send a message with this plan to see its limits.");
+/** Ghi chú khi gói chưa có thanh hạn mức nào: Antigravity chưa đọc được bảng hạn mức, Grok CLI không báo hạn mức, gói khác chờ lượt chat đầu.
+ *  agyNote: câu riêng cho Antigravity (chữ gốc tiếng Việt). */
+export const noWindows = (cli: SubUsage["cli"] | null | undefined, agyNote: string) =>
+  cli === "grok" ? tr("Grok CLI không báo hạn mức còn lại của gói. Synchro đếm số tin nhắn và báo ngay khi Grok nói đã chạm giới hạn.") : cli === "agy" ? tr(agyNote) : tr("Gửi một tin nhắn bằng gói này để xem hạn mức.");
 const winLevel = (w: PlanWindow) => (w.status === "rejected" ? "hot" : w.status === "allowed_warning" ? "warn" : level(w.usedPct ?? 0));
 
 export function PlanRow({ w }: { w: PlanWindow }) {
@@ -133,7 +133,7 @@ export function PlanRow({ w }: { w: PlanWindow }) {
     <div className="us-row">
       <div className="us-row-t">
         <b>{winLabel(w)}</b>
-        <span>{w.status === "rejected" && w.resetsAt ? <>{en() ? "Limit reached · " : "Đã chạm giới hạn · "}{resetText(w.resetsAt)}</> : resetText(w.idle ? null : w.resetsAt ?? null, !w.idle && !!w.resetsAt)}<em>{w.usedPct === undefined ? "–" : `${Math.round(pct)}%`}</em></span>
+        <span>{w.status === "rejected" && w.resetsAt ? <>{tr("Đã chạm giới hạn")}{" · "}{resetText(w.resetsAt)}</> : resetText(w.idle ? null : w.resetsAt ?? null, !w.idle && !!w.resetsAt)}<em>{w.usedPct === undefined ? "–" : `${Math.round(pct)}%`}</em></span>
       </div>
       <div className={`us-bar ${winLevel(w)}`}><i style={{ width: `${Math.max(pct, pct > 0 ? 1.5 : 0)}%` }} /></div>
     </div>
@@ -145,8 +145,8 @@ export function CreditBar({ c }: { c: Credit }) {
   return (
     <div className="us-row" title={`${money(c.spent)} / ${money(c.amount)}`}>
       <div className="us-row-t">
-        <b>{en() ? `${PROVIDER[c.provider] ?? c.provider} API balance` : `Số dư API ${PROVIDER[c.provider] ?? c.provider}`}</b>
-        <span>{en() ? `${money(c.remaining)} left of ${money(c.amount)}` : `Còn ${money(c.remaining)} / ${money(c.amount)}`}<em>{Math.round(c.pct)}%</em></span>
+        <b>{tf("Số dư API {name}", { name: PROVIDER[c.provider] ?? c.provider })}</b>
+        <span>{tf("Còn {left} / {total}", { left: money(c.remaining), total: money(c.amount) })}<em>{Math.round(c.pct)}%</em></span>
       </div>
       <div className={`us-bar ${left <= 5 ? "hot" : left <= 20 ? "warn" : ""}`}><i style={{ width: `${Math.max(c.pct, c.pct > 0 ? 1.5 : 0)}%` }} /></div>
     </div>
@@ -172,19 +172,18 @@ function useLimitAlerts(st: UsageState | null) {
       const left = 100 - c.pct, name = PROVIDER[c.provider] ?? c.provider;
       const lv = left <= 0.01 ? 0 : left <= 5 ? 5 : left <= 20 ? 20 : null;
       if (lv !== null) once(`credit:${c.provider}:${c.since}:${lv}`, lv === 0
-        ? (en() ? `${name} API balance is used up. Top up the key, then update the balance in Settings → Providers.` : `Số dư API ${name} đã hết. Nạp thêm cho khóa rồi cập nhật số dư ở Cài đặt → Providers.`)
-        : (en() ? `${name} API balance is running low: ${money(c.remaining)} left (${Math.round(left)}%).` : `Số dư API ${name} sắp hết: còn ${money(c.remaining)} (${Math.round(left)}%).`));
+        ? tf("Số dư API {name} đã hết. Nạp thêm cho khóa rồi cập nhật số dư ở Cài đặt → Providers.", { name })
+        : tf("Số dư API {name} sắp hết: còn {left} ({pct}%).", { name, left: money(c.remaining), pct: Math.round(left) }));
     }
     for (const w of st.sub?.windows ?? []) if (w.status === "rejected" && w.resetsAt)
-      once(`plan:${st.sub!.cli}:${w.window}:${w.resetsAt}`, en() ? `Your ${st.sub!.name} plan hit its limit (${winLabel(w)}). ${resetText(w.resetsAt)}.` : `Gói ${st.sub!.name} đã chạm giới hạn (${winLabel(w)}). ${resetText(w.resetsAt)}.`);
+      once(`plan:${st.sub!.cli}:${w.window}:${w.resetsAt}`, tf("Gói {name} đã chạm giới hạn ({win}). {reset}.", { name: st.sub!.name, win: winLabel(w), reset: resetText(w.resetsAt) }));
   }, [st, say]);
 }
 
 // ---------------------------------------------------------------- vòng tròn cạnh bộ chọn model
-export const L = (vi: string, e: string) => (en() ? e : vi);
 // Màu cố định theo hãng (bảng màu phân loại đã kiểm tra mù màu; màu đi theo hãng, không theo thứ hạng).
 export const VENDOR_COLOR: Record<VendorUsage["vendor"] | "other", string> = { anthropic: "var(--vc-claude)", openai: "var(--vc-gpt)", google: "var(--vc-gemini)", xai: "var(--vc-grok)", deepseek: "var(--vc-deepseek)", other: "var(--vc-other)" };
-const planName = (sub?: SubUsage) => (sub?.plan ? (en() ? `${sub.plan} plan` : `Gói ${sub.plan}`) : L("Gói subscription", "Subscription plan"));
+const planName = (sub?: SubUsage) => (sub?.plan ? tf("Gói {plan}", { plan: sub.plan }) : tr("Gói subscription"));
 // Mức đã dùng của một hãng (cửa sổ gần chạm nhất của gói; với khóa API: hạn mức gọi / số dư).
 const vendorPct = (v: VendorUsage) => v.mode === "plan" ? Math.max(0, ...(v.sub?.windows ?? []).map((w) => (w.status === "rejected" ? 100 : w.usedPct ?? 0)))
   : v.mode === "api" ? Math.max(0, v.rate?.pct ?? 0, v.credit?.pct ?? 0) : 0;
@@ -193,8 +192,8 @@ export const hasApi = (st: UsageState | null) => !!st?.vendors?.some((v) => v.mo
 /** Huy hiệu cách hãng đang chạy: gói đã đăng nhập, khóa API, hoặc chưa kết nối. */
 export function ModeTag({ v }: { v: VendorUsage }) {
   if (v.mode === "plan") return <span className="us-tag plan">{planName(v.sub)}</span>;
-  if (v.mode === "api") return <span className="us-tag api">{v.usingApiUntil ? L("Khóa API · gói tạm hết", "API key · plan paused") : L("Khóa API", "API key")}</span>;
-  return <span className="us-tag none">{L("Chưa kết nối", "Not connected")}</span>;
+  if (v.mode === "api") return <span className="us-tag api">{v.usingApiUntil ? tr("Khóa API · gói tạm hết") : trc("Khóa API", "mức dùng")}</span>;
+  return <span className="us-tag none">{tr("Chưa kết nối")}</span>;
 }
 
 /** Một hãng trong vòng tròn của chế độ Tự động: tên, cách đang chạy, các thanh hạn mức. */
@@ -204,11 +203,11 @@ function VendorBlock({ v }: { v: VendorUsage }) {
     <div className="us-v">
       <div className="us-v-h"><i style={{ background: VENDOR_COLOR[v.vendor] }} /><b data-notr>{v.name}</b><ModeTag v={v} /></div>
       {v.mode === "plan" ? (wins.length ? wins.filter((w) => w.kind !== "other").map((w) => <PlanRow key={w.window} w={w} />)
-        : <p className="us-note">{v.sub?.setup ? L("Antigravity đang chờ bạn hoàn tất bước làm quen lần đầu.", "Antigravity is waiting for its first-run setup.") : noWindows(v.cli, ["Synchro chưa đọc được hạn mức của gói này.", "Synchro could not read this plan's quota yet."])}</p>)
+        : <p className="us-note">{v.sub?.setup ? tr("Antigravity đang chờ bạn hoàn tất bước làm quen lần đầu.") : noWindows(v.cli, "Synchro chưa đọc được hạn mức của gói này.")}</p>)
         : <>
           {v.rate && <RateRow r={v.rate} />}
           {v.credit && <CreditBar c={v.credit} />}
-          {!v.rate && !v.credit && <p className="us-note">{L("Tính theo chi phí API thật, trong giới hạn chung bên dưới.", "Billed by real API cost, within the shared limits below.")}</p>}
+          {!v.rate && !v.credit && <p className="us-note">{tr("Tính theo chi phí API thật, trong giới hạn chung bên dưới.")}</p>}
         </>}
     </div>
   );
@@ -237,9 +236,9 @@ export function UsageRing({ model, extra, onDetails, up = true }: { model?: stri
     : sub ? Math.max(0, ...sub.windows.map((w) => (w.status === "rejected" ? 100 : w.usedPct ?? 0)))
     : Math.max(0, ...limited.map((l) => l.pct), st?.rate?.pct ?? 0, st?.credit?.pct ?? 0);
   const r = 6.4, c = 2 * Math.PI * r;
-  const label = st ? `${L("Mức dùng", "Usage")}: ${Math.round(pct)}%` : L("Mức dùng", "Usage");
-  const head = auto ? L("Mức dùng · Tự động chọn hãng", "Usage · Auto picks the provider")
-    : sub ? `${L("Giới hạn gói", "Plan limits")} · ${sub.name}${sub.plan ? ` ${sub.plan}` : ""}` : `${L("Giới hạn sử dụng", "Usage limits")} · ${L("Khóa API", "API key")}`;
+  const label = st ? `${tr("Mức dùng")}: ${Math.round(pct)}%` : tr("Mức dùng");
+  const head = auto ? tr("Mức dùng · Tự động chọn hãng")
+    : sub ? `${tr("Giới hạn gói")} · ${sub.name}${sub.plan ? ` ${sub.plan}` : ""}` : `${tr("Giới hạn sử dụng")} · ${trc("Khóa API", "mức dùng")}`;
   return (
     <div className="us-wrap">
       <button className={`us-ring ${level(pct)} ${open ? "on" : ""}`} onClick={() => setOpen(!open)} aria-label={label} data-tip={label} aria-expanded={open}>
@@ -251,16 +250,16 @@ export function UsageRing({ model, extra, onDetails, up = true }: { model?: stri
         {!st ? <div className="us-empty"><span className="art-spin sm" /></div> : auto ? (
           <>
             {live.map((v) => <VendorBlock key={v.vendor} v={v} />)}
-            {hasApi(st) && limited.length > 0 && <div className="us-v"><div className="us-v-h"><b>{L("Giới hạn chung của khóa API", "Shared API key limits")}</b></div>{limited.map((l) => <LimitRow key={l.key} l={l} />)}</div>}
-            {!live.length && <p className="us-note">{L("Chưa kết nối hãng AI nào. Đăng nhập gói hoặc thêm khóa API ở Cài đặt → Providers.", "No AI provider is connected yet. Sign in to a plan or add an API key in Settings → Providers.")}</p>}
+            {hasApi(st) && limited.length > 0 && <div className="us-v"><div className="us-v-h"><b>{tr("Giới hạn chung của khóa API")}</b></div>{limited.map((l) => <LimitRow key={l.key} l={l} />)}</div>}
+            {!live.length && <p className="us-note">{tr("Chưa kết nối hãng AI nào. Đăng nhập gói hoặc thêm khóa API ở Cài đặt → Providers.")}</p>}
           </>
         ) : sub ? (
           <>
             {sub.windows.map((w) => <PlanRow key={w.window} w={w} />)}
-            {sub.setup && <p className="us-note">{L("Antigravity đang chờ bạn hoàn tất bước làm quen lần đầu (bảng màu, điều khoản, chia sẻ dữ liệu). Xem Cài đặt → Providers → Gemini.", "Antigravity is waiting for you to finish its first-run setup (color scheme, terms and data sharing). See Settings → Providers → Gemini.")}</p>}
-            {!sub.windows.length && !sub.setup && <p className="us-note">{noWindows(sub.cli, ["Synchro chưa đọc được hạn mức của gói.", "Synchro could not read the plan's quota yet."])}{sub.turnsToday ? ` ${L(`Hôm nay: ${sub.turnsToday} tin nhắn.`, `${sub.turnsToday} messages today.`)}` : ""}</p>}
+            {sub.setup && <p className="us-note">{tr("Antigravity đang chờ bạn hoàn tất bước làm quen lần đầu (bảng màu, điều khoản, chia sẻ dữ liệu). Xem Cài đặt → Providers → Gemini.")}</p>}
+            {!sub.windows.length && !sub.setup && <p className="us-note">{noWindows(sub.cli, "Synchro chưa đọc được hạn mức của gói.")}{sub.turnsToday ? ` ${tf("Hôm nay: {n} tin nhắn.", { n: sub.turnsToday })}` : ""}</p>}
             {sub.credits && <p className="us-note" data-notr>{sub.credits}</p>}
-            <p className="us-note">{PLAN_NOTE[sub.cli][en() ? 1 : 0]}</p>
+            <p className="us-note">{tr(PLAN_NOTE[sub.cli])}</p>
           </>
         ) : (
           <>
@@ -270,7 +269,7 @@ export function UsageRing({ model, extra, onDetails, up = true }: { model?: stri
           </>
         )}
         {extra}
-        {onDetails && <button className="us-more" onClick={() => { setOpen(false); onDetails(); }}>{L("Xem chi tiết mức dùng", "View usage details")}<I.ChevronR size={13} /></button>}
+        {onDetails && <button className="us-more" onClick={() => { setOpen(false); onDetails(); }}>{tr("Xem chi tiết mức dùng")}<I.ChevronR size={13} /></button>}
       </div>
       </Menu>
     </div>

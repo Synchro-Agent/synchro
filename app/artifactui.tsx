@@ -3,7 +3,7 @@
 // khung chạy cô lập (iframe sandbox, không cùng nguồn gốc với Synchro, CSP chặn gọi mạng) và trang Artifacts.
 import { createContext, Fragment, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import * as I from "./icons";
-import { getLang, tr } from "./i18n";
+import { isEn, locale, tr } from "./i18n";
 import { Markdown } from "./md";
 import { artifactComplete, type OutFile } from "./llm";
 import { parseVbhc, vbhcHtml } from "./vbhc";
@@ -577,7 +577,7 @@ export function ArtifactPanel({ versions, index, setIndex, ai, onClose, onFix, o
     const id = Date.now() + Math.random();
     const t = setTimeout(() => { pending.current.delete(id); steps.current.delete(id); no(new Error(tr("Quá thời gian chờ"))); }, o.ms ?? 20000);
     if (o.onStep) steps.current.set(id, o.onStep);
-    pending.current.set(id, (d) => { clearTimeout(t); steps.current.delete(id); d.error ? no(new Error(String(d.error))) : ok(d); });
+    pending.current.set(id, (d) => { clearTimeout(t); steps.current.delete(id); d.error ? no(new Error(tr(String(d.error)))) : ok(d); });
     send.current({ ...m, id });
   });
   const onMsg = (d: FrameMsg) => {
@@ -806,7 +806,7 @@ export function ArtifactsGallery({ tab, q, ai, say, onOpenChat, refreshKey }: { 
       confirm: (l) => ({ title: `${tr("Xóa")} ${l.length} artifact?`, text: tr("Mọi phiên bản của các artifact này sẽ bị xóa, không hoàn tác được."), ok: tr("Xóa") }),
       run: async (l) => { const gone = new Set<string>(); await each(l, async (a) => { const r = await fetch(`/api/artifacts/${a.id}`, { method: "DELETE" }); if (r.ok) gone.add(a.id); }); setList((x) => x?.filter((a) => !gone.has(a.id)) ?? null); say(`${tr("Đã xóa")} ${gone.size} artifact`); } },
   ];
-  const when = (t: number) => new Date(t).toLocaleDateString(getLang() === "en" ? "en-US" : "vi-VN", getLang() === "en" ? { day: "numeric", month: "short", year: "numeric" } : { day: "2-digit", month: "2-digit", year: "numeric" });
+  const when = (t: number) => new Date(t).toLocaleDateString(locale(), isEn() ? { day: "numeric", month: "short", year: "numeric" } : { day: "2-digit", month: "2-digit", year: "numeric" });
   return (
     <>
       {loadErr && list === null ? <div className="err-box" role="alert"><b>{tr("Chưa tải được danh sách artifact")}</b><button className="btn" onClick={load}>{tr("Thử lại")}</button></div>

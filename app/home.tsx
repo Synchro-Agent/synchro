@@ -4,7 +4,7 @@ import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useStat
 import { createPortal } from "react-dom";
 import * as I from "./icons";
 import { Avatar } from "./avatar";
-import { getLang, tr, trCx, useLangReady } from "./i18n";
+import { getLang, locale, tf, tr, trc, trCx, useLangReady } from "./i18n";
 import { resetClock, resetAt } from "./resetfmt";
 import { FileCard } from "./fileicon";
 import { useFileMenu, saveDoc, saveBlob, fileContext } from "./filemenu";
@@ -70,7 +70,7 @@ const HASH_VIEW: Partial<Record<View, string>> = { projects: "projects", project
 const VIEW_OF_HASH: Record<string, View> = { projects: "projects", artifacts: "artifacts", inbox: "inbox", brain: "brain", code: "code", speech: "speech", skills: "customize" };
 import { AppCtx, chatFont, useApp, VOICE_LANG, VOICE_RATE, initials, readPref, reloadPrefs, resetPrefs, usePref, type Chat, type Msg, type Project } from "./store";
 import { IMAGE_PLANS, allowsModel, clampEffort, effortCap, effortsFor, isEffort, legacyModel, type Effort } from "./catalog";
-import { AUTO, autoTaskName, fitModel, modelName, modelsSettled, refreshModels, seedModels, useModels } from "./models";
+import { AUTO, autoPickKey, fitModel, modelName, modelsSettled, refreshModels, seedModels, useModels } from "./models";
 import type { BootData } from "./bootdata";
 import { seedInboxCount } from "./inboxcount";
 import { loadMe, watchSession } from "./session";
@@ -378,7 +378,7 @@ function ModelPicker({ model, setModel, prefix }: { model: string; setModel: (m:
             <MsubBody on={sub === pv.id} count={pv.models.length} place={placeSub}>
             {pv.models.map((m) => (
               <button key={m.key} className={`menu-item mline ${ok(m.key) ? "" : "locked"}`} onClick={() => pick(m.key)} title={ok(m.key) ? m.id : "Quản trị viên chưa cho phép tài khoản của bạn dùng model này"}>
-                <ModelLogo k={m.key} name={m.name} /><span className="mname-t">{m.name}</span>{m.isNew && !m.blockedUntil ? <span className="mtag mnew" title="Hãng vừa ra mắt, Synchro đã thử và cho dùng">Mới</span> : null}{m.blockedUntil ? <span className="mtag" title={resetClock(m.blockedUntil, getLang())}>{getLang() === "en" ? "Limit reached" : "Hết hạn mức"}</span> : null}{m.key === model ? <span className="ck"><I.Check /></span> : !ok(m.key) && <span className="sc"><I.Lock size={14} /></span>}
+                <ModelLogo k={m.key} name={m.name} /><span className="mname-t">{m.name}</span>{m.isNew && !m.blockedUntil ? <span className="mtag mnew" title="Hãng vừa ra mắt, Synchro đã thử và cho dùng">Mới</span> : null}{m.blockedUntil ? <span className="mtag" title={resetClock(m.blockedUntil, getLang())}>{tr("Hết hạn mức")}</span> : null}{m.key === model ? <span className="ck"><I.Check /></span> : !ok(m.key) && <span className="sc"><I.Lock size={14} /></span>}
               </button>
             ))}
             </MsubBody>
@@ -410,23 +410,22 @@ function MsubBody({ on, count, place, children }: { on: boolean; count: number; 
 
 function PlanNote({ pv }: { pv: ProviderInfo }) {
   const p = pv.plan!;
-  const en = getLang() === "en";
-  const at = (t: number) => resetClock(t, en ? "en" : "vi");
+  const at = (t: number) => resetClock(t, getLang());
   const set = (on: boolean) => fetch(`/api/engines/${p.cli}/use-api`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ on }) }).then(() => refreshModels()).catch(() => {});
   if (pv.source === "api" && p.usingApiUntil) return (
     <div className="msub-note msub-plan">
-      <span>{en ? `Using the shared API key instead of your plan until ${at(p.usingApiUntil)}.` : `Đang dùng khóa API dùng chung thay gói tới ${at(p.usingApiUntil)}.`}</span>
-      <button className="lnk" onClick={() => set(false)}>{en ? "Back to my plan" : "Quay lại gói"}</button>
+      <span>{tf("Đang dùng khóa API dùng chung thay gói tới {at}.", { at: at(p.usingApiUntil) })}</span>
+      <button className="lnk" onClick={() => set(false)}>{tr("Quay lại gói")}</button>
     </div>
   );
-  if (p.relogin) return <div className="msub-note msub-plan"><span>{en ? "Your plan needs you to sign in again in Settings → Providers." : "Gói cần đăng nhập lại ở Cài đặt → Providers."}</span></div>;
+  if (p.relogin) return <div className="msub-note msub-plan"><span>{tr("Gói cần đăng nhập lại ở Cài đặt → Providers.")}</span></div>;
   if (p.blockedUntil) return (
     <div className="msub-note msub-plan">
-      <span>{en ? `Your plan hit its limit. It resets ${at(p.blockedUntil)}.` : `Gói đã hết hạn mức, hồi lại ${at(p.blockedUntil)}.`}</span>
-      {p.hasApi && <button className="lnk" onClick={() => set(true)}>{en ? "Use the shared API key" : "Dùng khóa API dùng chung"}</button>}
+      <span>{tf("Gói đã hết hạn mức, hồi lại {at}.", { at: at(p.blockedUntil) })}</span>
+      {p.hasApi && <button className="lnk" onClick={() => set(true)}>{tr("Dùng khóa API dùng chung")}</button>}
     </div>
   );
-  return <div className="msub-note msub-plan"><span>{en ? "From your plan" : "Từ gói của bạn"}</span></div>;
+  return <div className="msub-note msub-plan"><span>{tr("Từ gói của bạn")}</span></div>;
 }
 
 type Rec = { lang: string; interimResults: boolean; continuous: boolean; onresult: (e: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void; onerror: (e: { error: string }) => void; onend: () => void; start: () => void; stop: () => void };
@@ -799,7 +798,7 @@ function greeting(call: string): [string, string] {
   if (h < 18) return ["Chiều tốt lành", n];
   return ["Tối rồi, mọi thứ thế nào?", ""];
 }
-const fmt = (t: number) => new Date(t).toLocaleTimeString(getLang() === "en" ? "en-US" : "vi-VN", { hour: "2-digit", minute: "2-digit" });
+const fmt = (t: number) => new Date(t).toLocaleTimeString(locale(), { hour: "2-digit", minute: "2-digit" });
 
 function Toast({ text }: { text: string }) {
   const [shown, setShown] = useState(text);
@@ -964,10 +963,10 @@ const MsgRow = memo(function MsgRow({ m: raw, i, last, busy, mark, art, inl, fil
             {m.notice.text && !m.failed && <p>{tr(m.notice.text)}</p>}
             {m.notice.work && <p>{tr("Model đã làm một phần việc nên Synchro không tự chạy lại, để tránh làm hai lần.")}</p>}
             {m.notice.at && m.notice.at > Date.now() ? <p data-notr>{resetAt(m.notice.at, getLang())}</p> : null}
-            {m.notice.tried?.length ? <p data-notr>{`${getLang() === "en" ? "Tried" : "Đã thử"}: ${m.notice.tried.join(", ")}`}</p> : null}
+            {m.notice.tried?.length ? <p data-notr>{tf("Đã thử: {list}", { list: m.notice.tried.join(", ") })}</p> : null}
             {m.notice.switchTo && last && !busy ? (
               <div className="msg-notice-act">
-                <button className="btn dark" onClick={() => cx.current!.switchModel(m.notice!.switchTo!.model)} data-notr>{`${getLang() === "en" ? (c.model === AUTO ? "Try again with Auto" : `Use another model: ${m.notice.switchTo.name}`) : c.model === AUTO ? "Thử lại bằng Tự động" : `Dùng model khác: ${m.notice.switchTo.name}`}`}</button>
+                <button className="btn dark" onClick={() => cx.current!.switchModel(m.notice!.switchTo!.model)} data-notr>{c.model === AUTO ? tr("Thử lại bằng Tự động") : tf("Dùng model khác: {name}", { name: m.notice.switchTo.name })}</button>
                 {c.model !== AUTO && <button className="lnk" onClick={() => cx.current!.switchModel(AUTO)}>{tr("Dùng Tự động")}</button>}
               </div>
             ) : null}
@@ -981,7 +980,7 @@ const MsgRow = memo(function MsgRow({ m: raw, i, last, busy, mark, art, inl, fil
             <button className={`icon-btn ${m.like === -1 ? "like-on" : ""}`} onClick={() => cx.current!.like(i, -1)} aria-label="Không hữu ích" aria-pressed={m.like === -1}><I.ThumbDown size={16} /></button>
             {last && <button className="icon-btn" onClick={() => cx.current!.retry()} aria-label="Thử lại"><I.Retry size={16} /></button>}
             {!c.chat.inc && <button className="icon-btn" onClick={() => cx.current!.fork(i)} aria-label={tr("Rẽ nhánh từ đây")} data-tip={tr("Rẽ nhánh từ đây")}><I.Branch size={15} /></button>}
-            {m.via && <span className="via" title={tr("Chế độ Tự động đã chọn model này")} data-notr><ModelLogo k={m.via} size={14} /><span className="via-t">{(() => { const en = getLang() === "en", task = m.viaTask ? autoTaskName(m.viaTask, en) : ""; return task ? (en ? `Auto picked ${modelName(m.via)} for ${task}` : `Tự động chọn ${modelName(m.via)} cho việc ${task}`) : modelName(m.via); })()}</span></span>}
+            {m.via && <span className="via" title={tr("Chế độ Tự động đã chọn model này")} data-notr><ModelLogo k={m.via} size={14} /><span className="via-t">{m.viaTask && autoPickKey(m.viaTask) ? tf(autoPickKey(m.viaTask), { model: modelName(m.via) }) : modelName(m.via)}</span></span>}
             {m.via && last && !busy && c.altModels && <button className="via via-alt" onClick={() => cx.current!.retry(m.via)} title={tr("Vẫn để Tự động, chỉ không dùng model vừa trả lời")}><I.Retry size={12} />{tr("Chạy lại bằng model khác")}</button>}
             <When t={m.time} />
           </div>
@@ -1860,13 +1859,12 @@ export default function Home({ boot }: { boot?: BootData | null }) {
     const cli = String(d.planLimit ?? d.relogin), api = String(d.apiModel), apiName = typeof d.apiModelName === "string" ? d.apiModelName : modelName(api);
     const name = ({ claude: "Claude", codex: "ChatGPT", agy: "Gemini", grok: "Grok" } as Record<string, string>)[cli] ?? cli;
     const at = typeof d.resetsAt === "number" ? resetClock(d.resetsAt, getLang()) : "";
-    const en = getLang() === "en";
     setGc({
-      title: d.relogin ? (en ? `Your ${name} plan needs you to sign in again` : `Gói ${name} cần đăng nhập lại`) : en ? `Your ${name} plan hit its limit` : `Gói ${name} đã hết hạn mức`,
-      text: en
-        ? `Switch to the shared ${name} API key (${apiName})${at ? ` until your plan resets (${at})` : " until your plan is back"}? This message will be sent again with the API key. Choose Cancel to keep your plan.`
-        : `Chuyển sang khóa API ${name} dùng chung (${apiName})${at ? ` cho tới khi gói hồi lại (${at})` : " cho tới khi gói dùng lại được"}? Tin nhắn vừa rồi sẽ được gửi lại bằng khóa API. Chọn Hủy để giữ nguyên gói.`,
-      ok: en ? "Use the API key" : "Dùng khóa API",
+      title: d.relogin ? tf("Gói {name} cần đăng nhập lại", { name }) : tf("Gói {name} đã hết hạn mức", { name }),
+      text: at
+        ? tf("Chuyển sang khóa API {name} dùng chung ({api}) cho tới khi gói hồi lại ({at})? Tin nhắn vừa rồi sẽ được gửi lại bằng khóa API. Chọn Hủy để giữ nguyên gói.", { name, api: apiName, at })
+        : tf("Chuyển sang khóa API {name} dùng chung ({api}) cho tới khi gói dùng lại được? Tin nhắn vừa rồi sẽ được gửi lại bằng khóa API. Chọn Hủy để giữ nguyên gói.", { name, api: apiName }),
+      ok: trc("Dùng khóa API", "gói hết hạn mức"),
       fn: async () => {
         await fetch(`/api/engines/${cli}/use-api`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ on: true }) }).catch(() => null);
         await refreshModels();
@@ -1972,7 +1970,7 @@ export default function Home({ boot }: { boot?: BootData | null }) {
   const doneAway = (id: number, failed = false) => {
     if (viewRef.current === "chat" && curRef.current === id) return;
     const c = chatsRef.current.find((x) => x.id === id);
-    if (c && !document.hidden) say(failed ? (getLang() === "en" ? `The reply in “${c.title}” hit an error` : `Câu trả lời trong “${c.title}” gặp lỗi`) : getLang() === "en" ? `Synchro finished replying in “${c.title}”` : `Synchro đã trả lời xong “${c.title}”`);
+    if (c && !document.hidden) say(failed ? tf("Câu trả lời trong “{title}” gặp lỗi", { title: c.title }) : tf("Synchro đã trả lời xong “{title}”", { title: c.title }));
   };
   // Mở lại trang khi câu trả lời còn đang chạy ở máy chủ: nối vào lượt đó, hiện bước đang làm, nhận kết quả khi xong.
   const resumed = useRef(false);
@@ -2085,7 +2083,7 @@ export default function Home({ boot }: { boot?: BootData | null }) {
     if (!c || c.inc || c.stub) return;
     const id = Date.now();
     const msgs = c.msgs.slice(0, i + 1).map((m) => ({ ...m, run: undefined, prog: undefined, done: true }));
-    const title = `${c.title} · ${getLang() === "en" ? "branch" : "nhánh"}`;
+    const title = tf("{title} · nhánh", { title: c.title });
     setChats((cs) => [{ id, title, named: true, msgs, project: c.project, studio: c.studio, mixer: c.mixer, pins: c.pins }, ...cs]);
     setUndoTurn(null);
     setCur(id);
@@ -2689,7 +2687,7 @@ export default function Home({ boot }: { boot?: BootData | null }) {
         {view === "new" && (
           <div className="hero" key={String(incog)}>
             <div className="hero-col">
-            <div className="hero-date" data-notr>{new Date().toLocaleDateString(getLang() === "en" ? "en-US" : "vi-VN", { weekday: "long", day: "numeric", month: "long" })}</div>
+            <div className="hero-date" data-notr>{new Date().toLocaleDateString(locale(), { weekday: "long", day: "numeric", month: "long" })}</div>
             <h1 className="greeting">{incog && <I.Ghost size={26} />}<span className="greet-t">{incog ? "Đoạn chat ẩn danh" : <>{greet[0]}{greet[1] && <>, <span data-notr>{greet[1]}</span></>}</>}</span></h1>
             {models.loaded && !models.providers.length && (!model || modelsSettled()) && (
               <section className="ob-card" aria-labelledby="ob-t">
@@ -2705,7 +2703,7 @@ export default function Home({ boot }: { boot?: BootData | null }) {
               <div className="hero-quick" aria-label="Bắt đầu nhanh">
                 {TPLS.map((t) => { const Ic = t.k === "doc" ? I.Article : t.k === "slides" ? I.Slides : I.PenNib; return (
                   <button key={t.k} className="hero-chip" onClick={() => setTplMode(t.k)}><Ic size={16} /><span>{t.name}</span></button>); })}
-                {models.providers.some((p) => p.plan && IMAGE_PLANS.has(p.plan.cli)) && <button className="hero-chip" data-tip="Tạo ảnh chụp, tranh, logo, poster bằng gói đã đăng nhập" onClick={() => setPrefill((p) => ({ t: getLang() === "en" ? "Create an image of " : "Tạo ảnh ", n: p.n + 1 }))}><I.Image size={16} /><span>Tạo ảnh</span></button>}
+                {models.providers.some((p) => p.plan && IMAGE_PLANS.has(p.plan.cli)) && <button className="hero-chip" data-tip="Tạo ảnh chụp, tranh, logo, poster bằng gói đã đăng nhập" onClick={() => setPrefill((p) => ({ t: tf("Tạo ảnh {what}", { what: "" }), n: p.n + 1 }))}><I.Image size={16} /><span>Tạo ảnh</span></button>}
               </div>
             )}
             {tplMode && !incog && (() => { const t = TPLS.find((x) => x.k === tplMode)!; return (

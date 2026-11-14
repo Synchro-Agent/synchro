@@ -6,7 +6,7 @@ import "./skills.css";
 import { useCallback, useEffect, useRef, useState } from "react";
 import * as I from "./icons";
 import { useApp } from "./store";
-import { getLang, tr } from "./i18n";
+import { locale, tr } from "./i18n";
 import { apiFetch, statusText } from "./apierr";
 import { PLUGIN_CATS } from "./plugindir";
 import { Pager } from "./pager";
@@ -18,7 +18,7 @@ type Job = { cat: string | null; paused?: number | null; started: number; finish
 type Data = { totals: { plugins: number; skills: number; installed: number; closed: number; failed: number }; cats: Record<string, { plugins: number; skills: number; installed: number; closed: number; failed: number }>; items: Item[]; total: number; page: number; pages: number; admin: boolean; canInstall: boolean; job: Job | null };
 
 const PER = 24;
-const n = (x: number) => x.toLocaleString(getLang() === "en" ? "en-US" : "vi-VN");
+const n = (x: number) => x.toLocaleString(locale());
 const Icon = ({ name, size = 15 }: { name: string; size?: number }) => { const C = (I as unknown as Record<string, (p: { size?: number }) => React.ReactElement>)[name] ?? I.Plugins; return <C size={size} />; };
 const CAT = new Map(PLUGIN_CATS.map((c) => [c.key, c]));
 

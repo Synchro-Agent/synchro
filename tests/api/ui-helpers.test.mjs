@@ -1,5 +1,6 @@
 // Hàm thuần dùng chung của giao diện: phím của hàng có vai trò nút, câu báo khi không tới được máy chủ. Không cần máy chủ.
 import { loadTs } from "../lib/ts.mjs";
+import { anySource, filesMatching } from "../lib/appsrc.mjs";
 let pass = 0, fail = 0;
 const ok = (c, n, x = "") => { c ? pass++ : fail++; console.log(c ? "  ✓" : "  ✗", n, c ? "" : String(x).slice(0, 400)); };
 const { a11y: A, apierr: E } = await loadTs(["a11y", "apierr"]);
@@ -98,11 +99,12 @@ ok(/đang tắt/.test(E.termDown({ available: true, running: false }, true)) && 
   ok(R.resetAt(soon, "en") === "Resets Thu 11:05 AM" && R.resetAt(soon, "vi") === "Đặt lại T5 11:05", "dưới 24 giờ vẫn tuyệt đối, không đếm ngược", `${R.resetAt(soon, "en")} | ${R.resetAt(soon, "vi")}`);
   ok(R.resetClock(far, "en") === "Thu 9:55 PM" && R.resetClock(far, "vi") === "T5 21:55", "thứ và giờ dùng chung", R.resetClock(far, "en"));
   const rd = (f) => fs.readFileSync(f, "utf8");
-  const page = rd("app/home.tsx"), usage = rd("app/usageui.tsx") + rd("app/usagering.tsx");
-  ok(/return resetAt\(t, en\(\) \? "en" : "vi"\);/.test(usage) && /m\.notice\.at > Date\.now\(\) \? <p data-notr>\{resetAt\(m\.notice\.at, getLang\(\)\)\}<\/p>/.test(page), "bảng Mức dùng và thẻ hết hạn mức cùng gọi resetAt (tuyệt đối, một nguồn)");
-  ok(!/weekday: "short", hour: "2-d/.test(page + rd("app/providersui.tsx")), "không còn nơi tự định dạng giờ đặt lại kiểu khác (Thu 09:55 PM)");
+  // Thẻ hết hạn mức, thẻ lỗi lượt chat (đang ở home.tsx) tìm trong mọi tệp app/: tách home.tsx sang tệp khác không làm hỏng phép kiểm.
+  const usage = rd("app/usageui.tsx") + rd("app/usagering.tsx");
+  ok(/return resetAt\(t, getLang\(\)\);/.test(usage) && anySource(/m\.notice\.at > Date\.now\(\) \? <p data-notr>\{resetAt\(m\.notice\.at, getLang\(\)\)\}<\/p>/), "bảng Mức dùng và thẻ hết hạn mức cùng gọi resetAt (tuyệt đối, một nguồn)");
+  ok(!anySource(/weekday: "short", hour: "2-d/), "không còn nơi tự định dạng giờ đặt lại kiểu khác (Thu 09:55 PM)", filesMatching(/weekday: "short", hour: "2-d/).join(", "));
   ok(/aria-label=\{tr\("Giao việc cho Synchro"\)\}/.test(rd("app/tasksui.tsx")), "ô Giao việc: aria-label dịch được (ô mang data-notr nên bộ dịch trang bỏ qua)");
-  ok(/function ErrCard[^]*?useLangReady\(\);/.test(page), "thẻ lỗi lượt chat vẽ lại khi từ điển về");
+  ok(anySource(/function ErrCard[^]*?useLangReady\(\);/), "thẻ lỗi lượt chat vẽ lại khi từ điển về");
   for (const [vi, want] of [["Câu trả lời chưa hoàn thành", "This reply didn't finish"], ["Quét skill rác", "Scan for junk skills"], ["Giao việc cho Synchro", "Give Synchro a job"], ["Không tải được thư viện chụp ảnh", "Couldn't load the screenshot library"], ["Gói subscription", "Subscription plan"], ["Hội thoại", "Dialogue"]])
     ok(en(vi) === want, `bản tiếng Anh: ${vi}`, en(vi));
 }

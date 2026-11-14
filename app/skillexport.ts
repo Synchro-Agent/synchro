@@ -17,6 +17,7 @@ import { getPlugin, linkKey, type SkillReport } from "./plugins";
 import { getTag, pluginKey, tagsOf, userKey } from "./skillstudio";
 import { hashText, listPatches } from "./skillheal";
 import { scores } from "./feedback";
+import { trOn } from "./i18n-server";
 
 export const META_DIR = "_synchro";
 export class ExportError extends Error { constructor(m: string, public status = 400) { super(m); } }
@@ -79,7 +80,7 @@ function zipOut(zip: JSZip) {
 // ---------------------------------------------------------------- skill lẻ
 export async function exportSkill(uid: string, name: string, lang: Lang): Promise<{ filename: string; buf: Buffer }> {
   const s = await getSkill(uid, name);
-  if (!s) throw new ExportError(lang === "en" ? "This skill does not exist." : "Không có skill này.", 404);
+  if (!s) throw new ExportError(trOn("Không có skill này.", lang), 404);
   const zip = new JSZip();
   const at = Date.now();
   const tree = await skillTree(path.join(ROOT, s.storage_path), s, s.files.map((f) => f.path));
@@ -128,7 +129,7 @@ type SRow = { id: string; name: string; body: string; storage_path: string; file
 export async function exportPlugin(uid: string, id: string, lang: Lang): Promise<{ filename: string; buf: Buffer }> {
   const p = getPlugin(id, uid);
   const row = db().prepare("SELECT id, owner, slug, catalog_id, created_at, latest FROM plugins WHERE id = ?").get(id) as PRow | undefined;
-  if (!p || !row || (row.owner !== "org" && row.owner !== uid)) throw new ExportError(lang === "en" ? "Library not found." : "Không tìm thấy thư viện.", 404);
+  if (!p || !row || (row.owner !== "org" && row.owner !== uid)) throw new ExportError(trOn("Không tìm thấy thư viện.", lang), 404);
   const zip = new JSZip();
   const root = `${p.slug}/`;
   const tags = tagsOf(p.skills.map((s) => pluginKey(p.id, s.name)));

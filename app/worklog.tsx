@@ -4,7 +4,7 @@
 import { useEffect, useState } from "react";
 import * as I from "./icons";
 import { Loader } from "./brand";
-import { getLang, tr, trCx } from "./i18n";
+import { tf, tr, trc, trCx } from "./i18n";
 import { AskCard, type AskStep, type OnAnswer } from "./agentui";
 import { lazyView } from "./lazy";
 import { IMAGE_PLANS } from "./catalog";
@@ -189,11 +189,11 @@ function LinkCard({ l }: { l: LinkPart }) {
 }
 /** Connector đang giới hạn tốc độ (429): đếm ngược tới lúc thử lại được, hết giờ thì có nút Thử lại (gửi lại tin vừa rồi). */
 function RateCard({ r }: { r: RatePart }) {
-  const now = useNow(true), left = r.until - now, en = getLang() === "en";
+  const now = useNow(true), left = r.until - now;
   return (
     <div className="wl-plans wl-rate" role="status">
       <I.Clock size={14} />
-      <span data-notr>{left > 0 ? (en ? `${r.name} is rate-limiting requests. You can try again in ${secs(left)}.` : `${r.name} đang giới hạn tốc độ. Thử lại được sau ${secs(left)}.`) : en ? `${r.name} is ready again.` : `${r.name} đã dùng lại được.`}</span>
+      <span data-notr>{left > 0 ? tf("{name} đang giới hạn tốc độ. Thử lại được sau {wait}.", { name: r.name, wait: secs(left) }) : tf("{name} đã dùng lại được.", { name: r.name })}</span>
       {left <= 0 && <button className="btn" onClick={() => window.dispatchEvent(new Event("synchro:retry"))}>{tr("Thử lại ngay")}</button>}
     </div>
   );
@@ -241,15 +241,15 @@ export function ConnCards({ parts, text }: { parts?: Part[]; text?: string }) {
  */
 export function WorkSummary({ parts, plan, ms, stopped, failed, render }: { parts?: Part[]; plan?: PlanItem[]; ms?: number; stopped?: boolean; failed?: boolean; render: (text: string) => React.ReactNode }) {
   const [open, setOpen] = useState(false);
-  const steps = stepsOf(parts), en = getLang() === "en";
+  const steps = stepsOf(parts);
   const total = plan?.length ?? 0, ok = plan?.filter((x) => x.status === "completed").length ?? 0;
   const allTools = (parts ?? []).flatMap((p) => (p.k === "tools" ? p.items : []));
   // Xét theo từng lỗi: lỗi đã được gọi lại thành công là "đã thử lại" (màu thường); lỗi còn lại tô đỏ, kể cả khi lượt kết thúc bình thường.
   const note = toolErrNote(allTools, allTools, { failed, stopped });
   if (!steps && !total && !(parts ?? []).length) return null;
   const bits = [
-    total ? (en ? `${ok}/${total} tasks done` : `Xong ${ok}/${total} việc`) : stopped ? (en ? "Stopped" : "Đã dừng") : en ? "Done" : "Đã xong",
-    steps ? (en ? `${steps} ${steps === 1 ? "step" : "steps"}` : `${steps} bước`) : "",
+    total ? tf("Xong {ok}/{total} việc", { ok, total }) : stopped ? tr("Đã dừng") : trc("Đã xong", "nhật ký công việc"),
+    steps ? tf("{n} bước", { n: steps }) : "",
     ms && ms >= 1000 ? dur(ms) : "",
   ].filter(Boolean);
   return (
@@ -258,7 +258,7 @@ export function WorkSummary({ parts, plan, ms, stopped, failed, render }: { part
         <span className={`wl-sum-ic ${stopped || (total && ok < total) ? "part" : ""}`}>{stopped ? <I.Stop size={10} /> : <I.Check size={11} />}</span>
         <span>{bits.join(" · ")}</span>
         {note && <em className={note.tone === "soft" ? "soft" : undefined}>{tr(note.text)}</em>}
-        <span className="wl-sum-more">{open ? (en ? "Hide steps" : "Ẩn các bước") : en ? "Show steps" : "Xem các bước"}</span>
+        <span className="wl-sum-more">{tr(open ? "Ẩn các bước" : "Xem các bước")}</span>
         <I.ChevronR size={13} />
       </button>
       {open && (
@@ -286,7 +286,7 @@ export function WorkStatus({ label, since, steps }: { label?: string; since: num
       <span className="sr-only" role="status" aria-live="polite">{tr(label || "Đang suy nghĩ…")}</span>
       <Loader size={14} />
       <span className="wl-st-t" key={label} aria-hidden="true">{tr(label || "Đang suy nghĩ…")}</span>
-      <span className="wl-st-m" aria-hidden="true">{dur(now - since)}{steps > 0 ? ` · ${steps} ${getLang() === "en" ? (steps === 1 ? "step" : "steps") : "bước"}` : ""}</span>
+      <span className="wl-st-m" aria-hidden="true">{dur(now - since)}{steps > 0 ? ` · ${tf("{n} bước", { n: steps })}` : ""}</span>
     </div>
   );
 }

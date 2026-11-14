@@ -28,10 +28,10 @@ import { rank } from "./skillroute";
 import { ruleStudios } from "./studiorules";
 import { PLUGIN_CATS, STUDIO_LABEL } from "./plugindir";
 import { dirCats } from "./claudedir";
-import { candidateKey, ownSkillFits, prepareCandidates, suggestSemantic, type Hit } from "./skillroute";
+import { candidateKey, descHash, ownSkillFits, prepareCandidates, suggestSemantic, type Hit } from "./skillroute";
 import { embeddingsConfigured, nearestSkills } from "./vecstore";
 import { convUntrusted, markConvUntrusted } from "./convtrust";
-import { descHash } from "./skillscan";
+// descHash lấy từ skillroute (cùng cách tính với skillscan): skillscan nhập i18n-server, kéo cả từ điển VI→EN vào mọi lượt chat.
 import type { Skill } from "./skillstore";
 import { CODE_RULES, execRun, LANGS, queueNote, queueReporter, runCodeTool, runner, RUN_LIMITS, type Lang, type RecalcReport, type RunOutput } from "./coderun";
 import { plainSummary, runBlocks } from "./runtext";

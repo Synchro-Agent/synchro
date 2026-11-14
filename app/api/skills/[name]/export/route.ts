@@ -1,6 +1,7 @@
 import { exportSkill, ExportError, zipResponse } from "../../../../skillexport";
 import { current, featureGate } from "../../../../authstore";
 import { timed } from "../../../../servertiming";
+import { trOn } from "../../../../i18n-server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -16,7 +17,7 @@ export const GET = timed(async (req: Request, { params }: { params: Promise<{ na
   } catch (e) {
     if (e instanceof ExportError) return Response.json({ error: e.message }, { status: e.status });
     console.error("[skills/export]", e);
-    return Response.json({ error: lang === "en" ? "Could not export this skill." : "Không xuất được skill này." }, { status: 500 });
+    return Response.json({ error: trOn("Không xuất được skill này.", lang) }, { status: 500 });
   }
 });
 

@@ -5,7 +5,7 @@ import "./settings.css";
 import { useCallback, useEffect, useState } from "react";
 import { call, ago, fmtDate } from "./adminui";
 import { useApp } from "./store";
-import { getLang, locale } from "./i18n";
+import { getLang, locale, tf, tr, trc } from "./i18n";
 import * as I from "./icons";
 import type { MemSample } from "./memstat";
 import type { LoopSample } from "./loopdelay";
@@ -33,36 +33,45 @@ type Health = {
 };
 // Bộ đệm lớn trong bộ nhớ máy chủ (app/memstat.ts): tên dễ hiểu cho quản trị viên.
 const CACHE: Record<string, string> = { skillIndex: "Skill index", brainRecall: "Brain recall index", codeRuns: "Synchro Code runs kept", pluginZips: "Downloaded plugin packages", artImages: "Artifact images", d2Svgs: "D2 diagrams", approvals: "Replies waiting for approval", vectors: "Semantic search vectors" };
-const UNIT: Record<string, [string, string]> = { skills: ["skill", "skills"], words: ["từ", "words"], vocab: ["từ", "words"], building: ["đang dựng", "building"], n: ["mục", "items"], users: ["người", "users"], docs: ["ghi chú", "notes"], pending: ["đang chờ", "waiting"], runs: ["lượt", "runs"], MB: ["MB", "MB"],
-  sets: ["bộ đang nạp", "sets loaded"], vectors: ["vector", "vectors"], kb: ["KB", "KB"], embedded: ["mục đã embed", "items embedded"], calls: ["lần gọi API", "API calls"],
-  skippedCap: ["lần dừng vì hạn mức", "stopped by daily cap"], errors: ["lỗi", "errors"], rejected: ["mục bị hãng từ chối", "items refused by provider"],
-  queryTimeouts: ["câu hỏi quá thời gian", "query timeouts"], queued: ["đang xếp hàng", "queued"] };
+// Đơn vị của từng số đếm trong bộ nhớ đệm: mẫu "{n} …" dịch bằng tf (MB, KB giữ nguyên).
+const UNIT: Record<string, string> = { skills: "{n} skill", words: "{n} từ", vocab: "{n} từ", building: "{n} đang dựng", n: "{n} mục", users: "{n} người", docs: "{n} ghi chú", pending: "{n} đang chờ", runs: "{n} lượt", sets: "{n} bộ đang nạp", vectors: "{n} vector", embedded: "{n} mục đã embed", calls: "{n} lần gọi API", skippedCap: "{n} lần dừng vì hạn mức", errors: "{n} lỗi", rejected: "{n} mục bị hãng từ chối", queryTimeouts: "{n} câu hỏi quá thời gian", queued: "{n} đang xếp hàng" };
+const UNIT_SAME: Record<string, string> = { MB: "MB", kb: "KB" };
 // Dấu · dính vào chữ trước (khoảng trắng không ngắt): giá trị xuống dòng (768px, nhãn giữ tới 45% hàng) thì dấu · không đứng đầu dòng mới.
-const cacheText = (v: Record<string, number>) => Object.entries(v).map(([a, b]) => `${b.toLocaleString(locale())} ${UNIT[a] ? L(...UNIT[a]) : a}`).join("\u00a0· ");
+const cacheText = (v: Record<string, number>) => Object.entries(v).map(([a, b]) => (UNIT[a] ? tf(UNIT[a], { n: b.toLocaleString(locale()) }) : `${b.toLocaleString(locale())} ${UNIT_SAME[a] ?? a}`)).join("\u00a0· ");
 const CLI: Record<string, string> = { claude: "Claude", codex: "ChatGPT", agy: "Gemini", grok: "Grok" };
-const L = (vi: string, en: string) => (getLang() === "vi" ? vi : en);
 const gb = (mb: number) => (mb >= 1024 ? `${(mb / 1024).toLocaleString(locale(), { maximumFractionDigits: 1 })} GB` : `${mb.toLocaleString(locale())} MB`);
-const MAIL_KIND: Record<string, [string, string]> = { reset: ["Đặt lại mật khẩu", "Password reset"], changed: ["Báo đổi mật khẩu", "Password changed"], verify: ["Xác minh email", "Email verification"], signup_taken: ["Báo đăng ký trùng", "Duplicate sign-up notice"], alert: ["Cảnh báo", "Alert"], test: ["Thư thử", "Test email"], other: ["Khác", "Other"] };
-const WD: Record<string, [string, string]> = { restart: ["Đã khởi động lại web", "Restarted the web app"], restart_failed: ["Khởi động lại không thành công", "Restart failed"], gave_up: ["Dừng tự khởi động lại: lặp lại quá nhiều, cần xử lý tay", "Stopped restarting: too many in a row, needs a person"], down: ["Web không trả lời", "Web app not answering"], recovered: ["Web trả lời lại", "Web app answering again"], degraded: ["Web trả lời nhưng báo có phần lỗi (đĩa hoặc dịch vụ workspace)", "Web app answers but reports a problem (disk or workspace service)"], installed: ["Đã cài watchdog", "Watchdog installed"] };
+// Loại thư gửi lỗi: tên một loại thư ("Password reset"), không phải nhãn nút ("Reset your password"), nên mỗi loại một khóa ngữ cảnh "loại thư".
+const mailKind = (k: string): string => {
+  switch (k) {
+    case "reset": return trc("Đặt lại mật khẩu", "loại thư");
+    case "changed": return trc("Báo đổi mật khẩu", "loại thư");
+    case "verify": return trc("Xác minh email", "loại thư");
+    case "signup_taken": return trc("Báo đăng ký trùng", "loại thư");
+    case "alert": return trc("Cảnh báo", "loại thư");
+    case "test": return trc("Thư thử", "loại thư");
+    default: return trc("Khác", "loại thư");
+  }
+};
+const WD: Record<string, string> = { restart: "Đã khởi động lại web", restart_failed: "Khởi động lại không thành công", gave_up: "Dừng tự khởi động lại: lặp lại quá nhiều, cần xử lý tay", down: "Web không trả lời", recovered: "Web trả lời lại", degraded: "Web trả lời nhưng báo có phần lỗi (đĩa hoặc dịch vụ workspace)", installed: "Đã cài watchdog" };
 
 function problemText(p: Problem) {
   const n = (p.n ?? 0).toLocaleString(locale());
-  if (p.code.startsWith("engine_fail:")) return L(`${p.code.slice(12)}: ${n} lượt lỗi trong một giờ qua, nhiều hơn số lượt thành công.`, `${p.code.slice(12)}: ${n} failed replies in the last hour, more than succeeded.`);
+  if (p.code.startsWith("engine_fail:")) return tf("{engine}: {n} lượt lỗi trong một giờ qua, nhiều hơn số lượt thành công.", { engine: p.code.slice(12), n });
   switch (p.code) {
-    case "disk_crit": return L(`Đĩa chỉ còn ${gb(p.n ?? 0)} trống: tệp tải lên mới bị từ chối, và cơ sở dữ liệu sẽ ngừng ghi nếu đầy hẳn.`, `Only ${gb(p.n ?? 0)} of disk left: new uploads are refused, and the database stops writing if it fills up.`);
-    case "disk_low": return L(`Đĩa còn ${gb(p.n ?? 0)} trống. Nên dọn hoặc mở rộng sớm.`, `${gb(p.n ?? 0)} of disk left. Clean up or expand soon.`);
-    case "mail_failing": return L(`${n} thư gửi lỗi trong 24 giờ qua và chưa có thư nào gửi được sau đó. Email đặt lại mật khẩu và xác minh có thể không tới người dùng.`, `${n} emails failed in the last 24 hours with none delivered since. Password reset and verification emails may not reach people.`);
-    case "backup_none": return L("Chưa có báo cáo sao lưu nào. Sao lưu chưa chạy trên máy này, hoặc chưa có lần chạy đầu tiên (03:00 hằng đêm).", "No backup report yet. Backups aren't running on this server, or the first run (03:00 nightly) hasn't happened.");
-    case "backup_failed": return L("Lần sao lưu gần nhất thất bại. Xem chi tiết ở mục Sao lưu.", "The last backup failed. See the Backups section.");
-    case "backup_stale": return L("Không có bản sao lưu mới trong hơn 36 giờ.", "No new backup in over 36 hours.");
-    case "backup_integrity": return L("Bản sao lưu mới nhất không qua kiểm tra toàn vẹn.", "The newest backup failed its integrity check.");
-    case "backup_corrupt": return L(`${n} tệp tải lên trong bản sao lưu mới nhất không khớp mã băm: nội dung đã hỏng.`, `${n} uploaded files in the newest backup don't match their checksum: their content is damaged.`);
-    case "backup_key": return L("Khóa mã hóa trong bản sao lưu mới nhất không mở được dữ liệu đã mã hóa: khôi phục từ bản này sẽ mất token và đăng nhập đã lưu.", "The encryption key in the newest backup can't open the encrypted data: restoring from it would lose saved tokens and sign-ins.");
-    case "backup_uploads": return L(`Bản sao lưu mới nhất thiếu ${n} tệp tải lên so với cơ sở dữ liệu.`, `The newest backup is missing ${n} uploaded files compared with the database.`);
-    case "watchdog_off": return L("Watchdog không chạy: web chết sẽ không tự khởi động lại ngoài pm2. Chạy lại workspace/setup.sh trên máy chủ.", "The watchdog isn't running, so nothing but pm2 restarts a dead web app. Run workspace/setup.sh on the server again.");
-    case "watchdog_restarts": return L(`Watchdog đã khởi động lại web ${n} lần trong 24 giờ qua.`, `The watchdog restarted the web app ${n} times in the last 24 hours.`);
-    case "cli_auth": return L(`${n} người bị hãng từ chối đăng nhập gói AI trong 24 giờ qua. Có thể CLI hoặc hãng vừa đổi gì đó.`, `${n} people were refused by an AI plan's sign-in in the last 24 hours. A CLI or vendor may have changed something.`);
-    case "errors_many": return L(`${n} lỗi máy chủ trong 24 giờ qua.`, `${n} server errors in the last 24 hours.`);
+    case "disk_crit": return tf("Đĩa chỉ còn {free} trống: tệp tải lên mới bị từ chối, và cơ sở dữ liệu sẽ ngừng ghi nếu đầy hẳn.", { free: gb(p.n ?? 0) });
+    case "disk_low": return tf("Đĩa còn {free} trống. Nên dọn hoặc mở rộng sớm.", { free: gb(p.n ?? 0) });
+    case "mail_failing": return tf("{n} thư gửi lỗi trong 24 giờ qua và chưa có thư nào gửi được sau đó. Email đặt lại mật khẩu và xác minh có thể không tới người dùng.", { n });
+    case "backup_none": return tr("Chưa có báo cáo sao lưu nào. Sao lưu chưa chạy trên máy này, hoặc chưa có lần chạy đầu tiên (03:00 hằng đêm).");
+    case "backup_failed": return tr("Lần sao lưu gần nhất thất bại. Xem chi tiết ở mục Sao lưu.");
+    case "backup_stale": return tr("Không có bản sao lưu mới trong hơn 36 giờ.");
+    case "backup_integrity": return tr("Bản sao lưu mới nhất không qua kiểm tra toàn vẹn.");
+    case "backup_corrupt": return tf("{n} tệp tải lên trong bản sao lưu mới nhất không khớp mã băm: nội dung đã hỏng.", { n });
+    case "backup_key": return tr("Khóa mã hóa trong bản sao lưu mới nhất không mở được dữ liệu đã mã hóa: khôi phục từ bản này sẽ mất token và đăng nhập đã lưu.");
+    case "backup_uploads": return tf("Bản sao lưu mới nhất thiếu {n} tệp tải lên so với cơ sở dữ liệu.", { n });
+    case "watchdog_off": return tr("Watchdog không chạy: web chết sẽ không tự khởi động lại ngoài pm2. Chạy lại workspace/setup.sh trên máy chủ.");
+    case "watchdog_restarts": return tf("Watchdog đã khởi động lại web {n} lần trong 24 giờ qua.", { n });
+    case "cli_auth": return tf("{n} người bị hãng từ chối đăng nhập gói AI trong 24 giờ qua. Có thể CLI hoặc hãng vừa đổi gì đó.", { n });
+    case "errors_many": return tf("{n} lỗi máy chủ trong 24 giờ qua.", { n });
     default: return p.code;
   }
 }
@@ -99,7 +108,7 @@ export function HealthPanel({ Toggle }: { Toggle: (p: { on: boolean; set: (v: bo
     ...(h.mem ? [["Server memory (heap)", `${gb(h.mem.now.heapUsed)} / ${gb(h.mem.heapLimit)}`, h.mem.now.heapUsed > h.mem.heapLimit * 0.75] as [string, string, boolean]] : []),
     // Lượt model cùng lúc so với trần cả máy; có lượt phải chờ nghĩa là trần đang chạm thật.
     ["Replies running now", `${h.turns.running} / ${h.turns.limit}`, h.turns.running >= h.turns.limit], ["Replies waiting now", h.turns.waiting.toLocaleString(locale()), h.turns.waiting > 0], ["Refused, queue full (since restart)", h.turns.refused.toLocaleString(locale()), h.turns.refused > 0],
-    ["CLI isolation", h.isolation.engineUser && h.isolation.bwrap ? L("User riêng, sandbox bật", "Separate user, sandbox on") : h.isolation.engineUser ? L("User riêng, sandbox tắt", "Separate user, sandbox off") : L("Tắt", "Off"), !(h.isolation.engineUser && h.isolation.bwrap)],
+    ["CLI isolation", h.isolation.engineUser && h.isolation.bwrap ? tr("User riêng, sandbox bật") : h.isolation.engineUser ? tr("User riêng, sandbox tắt") : trc("Tắt", "cách ly CLI"), !(h.isolation.engineUser && h.isolation.bwrap)],
   ];
   const dnsRow = (k: string, ok: boolean) => <span key={k} className={`s-badge ${ok ? "ok" : ""}`} style={{ marginLeft: 6 }} data-notr>{k} {ok ? "✓" : "✗"}</span>;
 
@@ -110,7 +119,7 @@ export function HealthPanel({ Toggle }: { Toggle: (p: { on: boolean; set: (v: bo
         <div style={{ flex: 1, minWidth: 0 }}>
           <div className="s-title">System health</div>
           <div className="d">What is happening on this server right now. It contains no chat content; error lines have email addresses and tokens removed.</div>
-          <div className="d" style={{ marginTop: 4 }} data-notr>{`build ${h.build} · ${L("chạy được", "up for")} ${h.uptimeSec >= 86400 ? `${Math.floor(h.uptimeSec / 86400)} ${L("ngày", "d")}` : h.uptimeSec >= 3600 ? `${Math.floor(h.uptimeSec / 3600)} ${L("giờ", "h")}` : `${Math.floor(h.uptimeSec / 60)} ${L("phút", "min")}`}`}</div>
+          <div className="d" style={{ marginTop: 4 }} data-notr>{`build ${h.build} · ${h.uptimeSec >= 86400 ? tf("chạy được {n} ngày", { n: Math.floor(h.uptimeSec / 86400) }) : h.uptimeSec >= 3600 ? tf("chạy được {n} giờ", { n: Math.floor(h.uptimeSec / 3600) }) : tf("chạy được {n} phút", { n: Math.floor(h.uptimeSec / 60) })}`}</div>
         </div>
         <button className="icon-btn" aria-label="Refresh" title="Refresh" onClick={load}><I.Retry size={16} /></button>
       </div>
@@ -136,7 +145,7 @@ export function HealthPanel({ Toggle }: { Toggle: (p: { on: boolean; set: (v: bo
       {h.disks.map((d) => (
         <div key={d.path} className="row">
           <div><div className="t">{d.key === "data" ? "Data disk" : "Workspace disk"}</div><div className="d mono" data-notr>{d.path}</div></div>
-          <span className={`s-badge ${d.freeMB >= 5000 ? "ok" : ""}`} data-notr>{`${gb(d.freeMB)} ${L("trống trên", "free of")} ${gb(d.totalMB)}`}</span>
+          <span className={`s-badge ${d.freeMB >= 5000 ? "ok" : ""}`} data-notr>{tf("{free} trống trên {total}", { free: gb(d.freeMB), total: gb(d.totalMB) })}</span>
         </div>
       ))}
       {h.agent !== null && <div className="row"><div><div className="t">Workspace service</div><div className="d">Runs code and Synchro Code workspaces.</div></div><span className={`s-badge ${h.agent ? "ok" : ""}`}>{h.agent ? "Running" : "Not answering"}</span></div>}
@@ -150,7 +159,7 @@ export function HealthPanel({ Toggle }: { Toggle: (p: { on: boolean; set: (v: bo
             <Kv wrap k="Heap used / limit" v={`${gb(m.now.heapUsed)} / ${gb(m.heapLimit)}`} bad={m.now.heapUsed > m.heapLimit * 0.75} />
             <Kv wrap k="Process memory (RSS)" v={gb(m.now.rss)} />
             <Kv wrap k="Outside the heap (external / buffers)" v={`${gb(m.now.external)} / ${gb(m.now.arrayBuffers)}`} />
-            {hours >= 1 && <Kv wrap k="Heap change" v={`${grew >= 0 ? "+" : ""}${gb(grew)} ${L(`trong ${Math.round(hours)} giờ`, `in ${Math.round(hours)} h`)}`} bad={grew > 300} />}
+            {hours >= 1 && <Kv wrap k="Heap change" v={`${grew >= 0 ? "+" : ""}${gb(grew)} ${tf("trong {n} giờ", { n: Math.round(hours) })}`} bad={grew > 300} />}
             {Object.entries(m.caches).map(([k, v]) => <Kv wrap key={k} k={CACHE[k] ?? k} v={cacheText(v)} />)}
           </div>
         </>;
@@ -158,7 +167,7 @@ export function HealthPanel({ Toggle }: { Toggle: (p: { on: boolean; set: (v: bo
 
       {h.engines?.length > 0 && <>
         <h3 className="sec">Background replies, last 24 hours</h3>
-        <div className="adm-card">{h.engines.map((e) => <div key={e.engine} className="adm-kv"><span data-notr>{e.engine}</span><b data-notr style={e.fail || e.auth ? { color: "#c6422f" } : undefined}>{L(`${e.ok} thành công · ${e.fail} lỗi · ${e.auth} lỗi đăng nhập`, `${e.ok} ok · ${e.fail} failed · ${e.auth} sign-in errors`)}</b></div>)}</div>
+        <div className="adm-card">{h.engines.map((e) => <div key={e.engine} className="adm-kv"><span data-notr>{e.engine}</span><b data-notr style={e.fail || e.auth ? { color: "#c6422f" } : undefined}>{tf("{ok} thành công · {fail} lỗi · {auth} lỗi đăng nhập", { ok: e.ok, fail: e.fail, auth: e.auth })}</b></div>)}</div>
       </>}
 
       <h3 className="sec">Email</h3>
@@ -175,18 +184,18 @@ export function HealthPanel({ Toggle }: { Toggle: (p: { on: boolean; set: (v: bo
           <button className="btn" disabled={sending} onClick={sendTest}>{sending ? <span className="api-spin" /> : "Send test"}</button>
         </div>
         {test && <p className="d" role="status" style={test.ok ? undefined : { color: "#c6422f" }} data-notr>{test.ok
-          ? L(`Máy chủ thư của ${test.to} đã nhận thư (${(test.ms / 1000).toFixed(1)} giây). Hãy mở hộp thư để chắc thư không vào Spam.`, `The mail server for ${test.to} accepted it (${(test.ms / 1000).toFixed(1)} s). Open the inbox to be sure it didn't land in Spam.`)
-          : L(`Gửi không được: ${test.error}`, `Couldn't send: ${test.error}`)}</p>}
+          ? tf("Máy chủ thư của {to} đã nhận thư ({sec} giây). Hãy mở hộp thư để chắc thư không vào Spam.", { to: test.to, sec: (test.ms / 1000).toFixed(1) })
+          : tf("Gửi không được: {error}", { error: test.error ?? "" })}</p>}
       </div>
       {h.mail.failures.map((f, i) => (
-        <div key={i} className="adm-log"><span className="tm" data-notr>{fmtDate(f.at)}</span><span><span className="bad" data-notr>{L(...(MAIL_KIND[f.source] ?? MAIL_KIND.other))}{f.n > 1 ? ` × ${f.n}` : ""}</span><br /><span className="muted" data-notr>{f.detail}</span></span><span /></div>
+        <div key={i} className="adm-log"><span className="tm" data-notr>{fmtDate(f.at)}</span><span><span className="bad" data-notr>{mailKind(f.source)}{f.n > 1 ? ` × ${f.n}` : ""}</span><br /><span className="muted" data-notr>{f.detail}</span></span><span /></div>
       ))}
 
       <h3 className="sec">AI plan sign-in</h3>
       <p className="d adm-privacy"><I.Lock size={14} />Times a vendor refused someone&apos;s plan sign-in during a chat. Several people on the same plan at once usually means the CLI or the vendor changed something, not that each person needs to act.</p>
       {h.cli.length === 0 ? <div className="d" style={{ padding: "8px 0" }}>No refusals in the last 7 days.</div> : h.cli.map((c) => (
         <div key={c.source} className="row">
-          <div><div className="t" data-notr>{CLI[c.source] ?? c.source}</div><div className="d" data-notr>{L(`${c.users24} người trong 24 giờ, ${c.users7} người trong 7 ngày. Lần cuối ${ago(c.last)}.`, `${c.users24} people in 24 hours, ${c.users7} in 7 days. Last ${ago(c.last)}.`)}</div></div>
+          <div><div className="t" data-notr>{CLI[c.source] ?? c.source}</div><div className="d" data-notr>{tf("{users24} người trong 24 giờ, {users7} người trong 7 ngày. Lần cuối {ago}.", { users24: c.users24, users7: c.users7, ago: ago(c.last) })}</div></div>
           <span className={`s-badge ${c.users24 >= 3 ? "" : "ok"}`} data-notr>{c.n24}</span>
         </div>
       ))}
@@ -220,7 +229,7 @@ export function HealthPanel({ Toggle }: { Toggle: (p: { on: boolean; set: (v: bo
         <Kv k="Restarts (24h)" v={w?.restarts24 ?? 0} bad={!!w?.restarts24} />
         {h.lastBootAt && <Kv k="Web app last started" v={fmtDate(h.lastBootAt)} />}
       </div>
-      {h.wdEvents.map((e, i) => <div key={i} className="adm-log"><span className="tm" data-notr>{fmtDate(e.at)}</span><span data-notr>{L(...(WD[e.event] ?? [e.event, e.event]))}{e.detail ? <><br /><span className="muted">{e.detail}</span></> : null}</span><span /></div>)}
+      {h.wdEvents.map((e, i) => <div key={i} className="adm-log"><span className="tm" data-notr>{fmtDate(e.at)}</span><span data-notr>{WD[e.event] ? tr(WD[e.event]) : e.event}{e.detail ? <><br /><span className="muted">{e.detail}</span></> : null}</span><span /></div>)}
 
       {h.csp.length > 0 && <>
         <h3 className="sec">Script policy reports</h3>

@@ -3,18 +3,20 @@
 import { useEffect, useSyncExternalStore } from "react";
 import { usePref } from "./store";
 import { cxActEn } from "./cxactions";
+import { type Dict, type Lang, type Vars, tfWith, trcWith, trWith } from "./i18n-core";
 
-export type Lang = "vi" | "en";
+export type { Lang } from "./i18n-core";
 
 let cur: Lang = "vi";
 if (typeof window !== "undefined") {
   try { const v = JSON.parse(localStorage.getItem("p:uilang") ?? '"vi"'); cur = v === "en" ? "en" : "vi"; } catch {}
 }
 export const getLang = () => cur;
+/** Chỉ cho nhánh không phải chữ (chọn kiểu định dạng, giá trị lưu…). Chữ hiển thị thì dùng tr / tf. */
+export const isEn = () => cur === "en";
 
 // Mỗi trình duyệt chỉ tải từ điển của ngôn ngữ đang dùng (từng chiếm một phần ba JS tải đầu). Từ điển về sau khung trang: trang chính giữ khung chờ tới lúc đó (useLangReady),
 // các trang khác dịch ngay khi từ điển về. Hỏng mạng thì vẫn mở được bằng chữ gốc, không kẹt ở khung chờ.
-type Dict = { map: Record<string, string>; rules: [RegExp, (m: RegExpMatchArray) => string][] };
 const dicts: Partial<Record<Lang, Dict>> = {};
 const loads: Partial<Record<Lang, Promise<void>>> = {};
 const settled: Partial<Record<Lang, boolean>> = {};
@@ -38,25 +40,18 @@ export const locale = () => (cur === "en" ? "en-US" : "vi-VN");
 export const LANG_NAMES: Record<Lang, string> = { vi: "Tiếng Việt", en: "English" };
 
 export function tr(s: string, lang: Lang = cur): string {
-  const t = s.trim();
-  if (!t) return s;
-  const d = dicts[lang];
-  if (!d) return s;
-  const map = d.map;
-  let out: string | undefined = Object.prototype.hasOwnProperty.call(map, t) ? map[t] : undefined;
-  if (out === undefined) {
-    for (const [re, f] of d.rules) {
-      const m = t.match(re);
-      if (m) { out = f(m); break; }
-    }
-  }
-  // Chuỗi ghép bằng " · " (tên model · mô tả, giọng · ngôn ngữ…): dịch từng phần, phần không có trong từ điển (tên riêng) giữ nguyên.
-  if (out === undefined && t.includes(" · ")) {
-    const parts = t.split(" · "), done = parts.map((x) => tr(x, lang));
-    if (done.some((x, i) => x !== parts[i])) out = done.join(" · ");
-  }
-  const r = out === undefined ? s : s.replace(t, () => out as string);
-  return lang === "en" ? plural(r) : r;
+  return trWith(dicts[lang], s, lang);
+}
+/** Chữ ngắn dễ trùng ("Lọc", "Chủ đề"…) dịch theo ngữ cảnh: trc("Lọc", "đồ thị") tra khóa "Lọc ‹đồ thị›" (i18n-core ctxKey).
+ *  Bộ dịch trang không thấy khóa này nên nút chữ "Lọc" ở chỗ khác (hay tiêu đề người dùng đặt trùng chữ) không bị đổi theo.
+ *  Cả hai đối số phải là chuỗi viết thẳng để bộ quét (tests/lib/i18n-scan.mjs) kiểm được khóa. */
+export function trc(s: string, ctx: string, lang: Lang = cur): string {
+  return trcWith(dicts[lang], s, ctx, lang);
+}
+/** Câu có giá trị chèn vào: khóa từ điển là nguyên mẫu, ví dụ tf("Gói {name} đã hết hạn mức", { name }).
+ *  Số nhiều tiếng Anh ghi trong bản dịch dạng "{n} step|{n} steps" (chọn theo vars.n). */
+export function tf(key: string, vars: Vars, lang: Lang = cur): string {
+  return tfWith(dicts[lang], key, vars, lang);
 }
 /** Nhãn thao tác Composio ("Tạo tài liệu", "Gửi email abc") theo ngôn ngữ giao diện.
  *  Gọi riêng ở các chỗ hiện nhãn (cxHead, toolChip, worklog); KHÔNG đưa luật "động từ + ASCII" vào RULES_EN chung,
@@ -64,10 +59,6 @@ export function tr(s: string, lang: Lang = cur): string {
 export function trCx(s: string, lang: Lang = cur): string {
   return lang === "en" ? cxActEn(s, (x) => tr(x, "en")) : tr(s, lang);
 }
-// Tiếng Anh cần số nhiều: "145 skill" → "145 skills". Các từ này giữ nguyên ở cả hai ngôn ngữ nên từ điển không thấy.
-const PLURAL = /(\d[\d.,]*\s+)(skill|artifact|credit)\b(?!s)/g;
-const plural = (s: string) => (/skill|artifact|credit/.test(s) ? s.replace(PLURAL, (m, n: string, w: string) => (n.trim() === "1" ? m : n + w + "s")) : s);
-
 /** Chuỗi không có bản dịch ở cả hai chiều: nội dung (tên người, mô tả từ nhà cung cấp…), đánh dấu data-notr để không lẫn với chữ giao diện. */
 export const untranslated = (s: string) => !!s.trim() && tr(s, "en") === s && tr(s, "vi") === s;
 
