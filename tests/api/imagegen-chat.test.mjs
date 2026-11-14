@@ -92,13 +92,19 @@ console.log("2. Mọi model đều gọi được");
     const lg = logOf(A, "agy");
     ok(lg.length === before + 1 && lg.at(-1).bridge === false, `${model}: lượt tạo ảnh không có cầu nối MCP`, lg.at(-1));
   }
-  const cfg = JSON.parse(fs.readFileSync(path.join(dirOf("agy", A.uid), ".gemini/config/mcp_config.json"), "utf8"));
+  // HOME riêng của lượt (G1): cầu nối chỉ nằm trong cấu hình của lượt, cấu hình chung có thể chưa từng được tạo; có thì không được còn cầu nối.
+  const cfgFile = path.join(dirOf("agy", A.uid), ".gemini/config/mcp_config.json");
+  const cfg = fs.existsSync(cfgFile) ? JSON.parse(fs.readFileSync(cfgFile, "utf8")) : {};
   ok(!cfg.mcpServers?.synchro, "xong lượt: cấu hình chung của Antigravity không còn cầu nối", cfg);
   ok(logOf(A, "agy").every((l) => l.webHook === false), "lượt tạo ảnh không có quyền tìm web của lượt chat", logOf(A, "agy").map((l) => l.webHook));
   // Lượt chat Antigravity đang chờ ảnh còn chạy: hook được trả lại phòng khi CLI đọc lại.
   { const before = logOf(A, "agy").length, r = await run(A, { model: "sub-agy/gemini-3.8-flash", web: true, messages: ask(`Tạo ảnh ${tool({ prompt: "ảnh có bật tìm web" })}`) });
     ok(r.s === 200 && isImg(r.j.files?.[0]) && logOf(A, "agy").length === before + 1 && logOf(A, "agy").at(-1).webHook === false, "bật tìm web ở lượt chat: lượt tạo ảnh vẫn không có quyền đó", logOf(A, "agy").at(-1));
-    ok(fs.existsSync(path.join(dirOf("agy", A.uid), ".gemini/config/hooks.json")), "hook của lượt chat đang chạy được trả lại sau khi tạo ảnh"); }
+    // HOME riêng của lượt (G1, mặc định): hook của lượt chat nằm trong HOME của chính lượt đó, lượt tạo ảnh không đụng tới; xong thì không còn gì ở cấu hình chung
+    // và HOME của lượt đã dọn. Cách cũ (SYNCHRO_CLI_TURN_HOME=0): hook được trả lại vào cấu hình chung sau khi tạo ảnh.
+    const shared = path.join(dirOf("agy", A.uid), ".gemini/config/hooks.json");
+    const leftHomes = fs.readdirSync(dirOf("agy", A.uid)).filter((n) => n.startsWith(".synchro-home-"));
+    ok(process.env.SYNCHRO_CLI_TURN_HOME === "0" ? fs.existsSync(shared) : !leftHomes.length, "hook của lượt chat không bị lượt tạo ảnh lấy mất; xong lượt không còn HOME riêng", { shared: fs.existsSync(shared), leftHomes }); }
 
   const models = (await A.api("GET", "/api/models")).j?.providers ?? [];
   const api = models.find((p) => p.source === "api" && p.kind === "deepseek")?.models?.[0]?.key ?? models.flatMap((p) => (p.source === "api" ? p.models : []))[0]?.key;

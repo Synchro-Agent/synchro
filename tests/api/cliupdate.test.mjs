@@ -49,9 +49,10 @@ const release = (cli, ver, line, brk) => {
   fs.writeFileSync(path.join(SRC, cli, "latest"), ver);
 };
 // Ảnh chụp thư mục đăng nhập (tên, cỡ, giờ sửa) của mọi tài khoản: bộ cập nhật không được chép, chuyển, sửa hay xóa gì ở đây.
+// Tệp mock-* là nhật ký của CLI giả lập (mock-appserver.log khi codex app-server của tài khoản khởi động, mock-prompts.json…), không phải trạng thái đăng nhập.
 const snap = (root) => {
   const out = [];
-  const walk = (d) => { let es = []; try { es = fs.readdirSync(d, { withFileTypes: true }); } catch { return; } for (const e of es) { const p = path.join(d, e.name); if (e.isDirectory()) walk(p); else { const st = fs.lstatSync(p); out.push(`${path.relative(root, p)}:${st.size}:${st.mtimeMs}`); } } };
+  const walk = (d) => { let es = []; try { es = fs.readdirSync(d, { withFileTypes: true }); } catch { return; } for (const e of es) { const p = path.join(d, e.name); if (e.isDirectory()) walk(p); else if (!e.name.startsWith("mock-")) { const st = fs.lstatSync(p); out.push(`${path.relative(root, p)}:${st.size}:${st.mtimeMs}`); } } };
   walk(root);
   return crypto.createHash("sha1").update(out.sort().join("\n")).digest("hex") + `/${out.length}`;
 };
@@ -137,7 +138,8 @@ try {
   {
     const r = await chat("chào bản mới");
     ok(r.s === 200 && r.j?.via === "claude", "chat bằng gói Claude chạy trên bản mới", r.j);
-    ok(row(await view(), "claude")?.probation?.ok === 1, "lượt chạy được tính vào thời gian theo dõi", row(await view(), "claude"));
+    // ≥ 1: lượt nền (đặt tên đoạn chat) chạy bằng cùng bản cũng được tính, có thể xong trước hoặc sau lúc đọc.
+    ok((row(await view(), "claude")?.probation?.ok ?? 0) >= 1, "lượt chạy được tính vào thời gian theo dõi", row(await view(), "claude"));
   }
 
   console.log("4. Chủ sở hữu trả về bản trước");

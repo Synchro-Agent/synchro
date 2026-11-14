@@ -9,7 +9,7 @@ const cv = fs.readFileSync("app/codeview.tsx", "utf8"), page = fs.readFileSync("
 const { "i18n-dict": D } = await loadTs(["i18n-dict"]);
 
 const modeBtn = cv.match(/<button className="cv-modebtn"[^>]*>/)?.[0] ?? "";
-ok(/aria-label=\{`\$\{tr\("Chế độ"\)\}: \$\{m\.short\}`\}/.test(modeBtn), "nút Chế độ: aria-label có giá trị, đúng chữ đang hiện", modeBtn);
+ok(/aria-label=\{`\$\{tr\("Chế độ"\)\}: \$\{tr\(m\.short\)\}`\}/.test(modeBtn), "nút Chế độ: aria-label có giá trị, đúng chữ đang hiện", modeBtn);
 ok(/data-tip=\{`\$\{tr\("Chế độ"\)\}: \$\{tr\(m\.label\)\}`\}/.test(modeBtn), "nút Chế độ: chú thích có giá trị (Chế độ: Tự động)", modeBtn);
 const permBtn = cv.match(/<button className=\{`cv-modebtn cv-perm[^\n]*?>\{permIcon/)?.[0] ?? "";
 ok(/aria-label=\{`\$\{tr\("Quyền"\)\}: \$\{tr\(permShort\)\}`\}/.test(permBtn) && /data-tip=\{`\$\{tr\("Quyền"\)\}: \$\{tr\(permShort\)\}`\}/.test(permBtn), "nút Quyền: aria-label và chú thích có giá trị", permBtn);
