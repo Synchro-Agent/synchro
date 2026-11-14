@@ -48,11 +48,12 @@ const SUITES = [
   ["Khung chờ đúng kích thước: mở app, danh sách đoạn chat, tin nhắn, khung artifact, cài đặt (đo vị trí và CLS)", "tests/ui/skeletons.mjs"],
   // B2: câu trả lời dài đang chảy, CPU chậm 4 lần: Ô soạn tin và Thanh bên không vẽ lại, không tác vụ nào dài hơn 50 ms (bản production của dev:mock:fast).
   ["Chữ đang chảy: Ô soạn tin, Thanh bên không vẽ lại, không tác vụ dài > 50 ms (1440px và 375px)", "tests/ui/render-perf.mjs", { GATE_LT: "1" }],
+  // B6: đi qua mọi màn hình ở tiếng Việt rồi tiếng Anh; STRICT=1 thì còn chữ sai ngôn ngữ hay chữ tiếng Việt nháy khi tải trang là lỗi.
+  ["Chữ sai ngôn ngữ ở mọi màn hình (tiếng Việt, tiếng Anh) và chữ nháy khi tải trang", "tests/ui/lang.mjs", { STRICT: "1" }],
 ];
 // Tệp trong tests/ui/ KHÔNG chạy trong QA, mỗi tệp một lý do. Thêm vào đây thay vì để tệp nằm ngoài danh sách mà không ai biết.
 const SKIP = {
   "tests/ui/snapshots.mjs": "công cụ chụp ảnh cho tests/ui/diff.py (so ảnh bằng mắt), luôn thoát mã 0, không có phép kiểm đạt / lỗi",
-  "tests/ui/lang.mjs": "chỉ in báo cáo chữ sai ngôn ngữ và luôn thoát mã 0; cổng chặn bản dịch là tests/api/i18n.test.mjs (trong bộ API)",
   "tests/ui/cascade.mjs": "công cụ so trước / sau (B5): chụp computed style của mọi phần tử vào JSON rồi so hai lần chụp; một lần chạy riêng không có gì để so",
 };
 
