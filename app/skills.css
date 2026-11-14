@@ -1,5 +1,154 @@
 @layer properties, theme, base, components, utilities, syn, syn-over;
 @layer syn {
+/* Chuyển từ synchro-ds.css (B5 bước 10, scripts/css-move.mjs): luật chỉ trúng phần tử của màn này, giữ thứ tự cũ (đứng trước luật riêng của tệp). */
+.st-h{padding:6px 12px 8px;font-size:var(--fs-1);font-weight:500;color:var(--ds-faint);letter-spacing:.005em}
+.st-opt:hover{background:var(--ds-hover)}
+.st-opt.on{background:var(--bg);box-shadow:inset 0 0 0 1px var(--ds-line)}
+.st-opt:focus-visible{outline:0;box-shadow:var(--ds-ring)}
+.st-opt.on .st-ic{background:var(--ds-inv);color:var(--ds-inv-fg);box-shadow:none}
+.st-tag.on{background:var(--ds-inv);color:var(--ds-inv-fg);box-shadow:none}
+.st-prog::after{content:"";position:absolute;inset:0;background:var(--ds-ink);transform-origin:left;animation:st-prog 7.2s linear both}
+.st-layer{position:absolute;inset:18px 24px 64px;opacity:0;transition:opacity .7s var(--ds-ease);pointer-events:none}
+.st-layer.on{opacity:1}
+.st-cap svg{flex:none}
+.st-capb:hover{background:var(--ds-line);color:var(--ds-ink)}
+.st-shelf h2{padding-right:32px}
+.st-shelf-q{flex:none;width:100%}
+.st-shelf-row.off .st-shelf-t{opacity:.5}
+.st-shelf-sub{margin-top:8px;padding:6px 2px;font-size:var(--fs-1);color:var(--ds-ink-3,var(--text-3))}
+.st-shelf-row:first-child{border-top:0}
+.st-shelf-empty{padding:24px 2px;font-size:var(--fs-2);color:var(--ds-muted);text-align:center}
+html body .st .st-go{height:var(--ds-h);padding:0 13px 0 15px;gap:8px}
+html body .st .st-go:hover svg{transform:translateX(2px)}
+.st-paper{fill:var(--ds-plate);stroke:var(--ds-line-2);stroke-width:1}
+.st-paper2{fill:var(--ds-plate)}
+.st-shadow{fill:rgba(17,18,16,.05)}
+[data-theme="dark"] .st-shadow{fill:rgba(0,0,0,.35)}
+.st-ink{fill:var(--ds-ink)}
+.st-scene .o6{fill-opacity:.55}
+.st-line{fill:var(--ds-line-2)}
+.st-faint{fill:color-mix(in srgb,var(--ds-ink) 30%,transparent)}
+.st-sunk{fill:var(--ds-sunken)}
+.st-hl{fill:color-mix(in srgb,var(--ds-ink) 9%,transparent)}
+.st-trend{fill:none;stroke:var(--ds-ink);stroke-width:2;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:1;stroke-dashoffset:0}
+.st-link{fill:none;stroke:var(--ds-muted);stroke-width:1.2;stroke-dasharray:1;stroke-dashoffset:0}
+.st-flow{fill:none;stroke:var(--ds-muted);stroke-width:1.4;stroke-dasharray:.035 .03;stroke-linecap:round}
+.st-axis{fill:none;stroke:var(--ds-line-2);stroke-width:1}
+.st-sel{fill:none;stroke:var(--ds-ink);stroke-width:1.6;vector-effect:non-scaling-stroke}
+.st-handle{fill:var(--ds-plate);stroke:var(--ds-ink);stroke-width:1.4}
+.st-cur{fill:var(--ds-ink);stroke:var(--ds-plate);stroke-width:1.4;stroke-linejoin:round}
+.st-tagt{fill:var(--ds-inv-fg);font:600 var(--fs-1) var(--font-sans);letter-spacing:.01em}
+.st-num{fill:var(--ds-ink);font:400 60px var(--font-display);letter-spacing:-.05em}
+.st-num-s{fill:var(--ds-inv-fg);font:600 var(--fs-1) var(--font-sans)}
+.st-ring{fill:none;stroke:var(--ds-sunken);stroke-width:12}
+.st-red{fill:none;stroke:var(--ds-ink);stroke-width:1.2}
+.sw1{fill:#111210}.sw2{fill:#85867E}.sw3{fill:#D9D6CC}.sw4{fill:#F6F5F0}
+/* Cùng một nhịp cho mọi phần của cảnh: 7,2 giây, đường cong êm. */
+.st-scene :is(.d-title,.d-meta,.d-l,.d-chart,.d-bar,.d-trend,.d-hl,.d-link,.d-note,.d-cur,.s-a,.s-b,.s-c,.s-bar,.s-call,.s-arc,.s-sel,.g-cur,.g-selw,.g-sel,.g-h2,.g-h3,.g-h4,.g-img,.g-sw,.g-guide,.st-swring,.sw2){
+  animation-duration:7.2s;animation-iteration-count:infinite;animation-timing-function:cubic-bezier(.45,0,.25,1);animation-fill-mode:both}
+.d-meta{animation-name:d-meta}
+.d-chart{animation-name:d-chart}
+.d-trend{animation-name:d-trend}
+.d-link{animation-name:d-link}
+/* Thiết kế */
+.g-link{animation:g-flow 2.4s linear infinite}
+.g-cur{animation-name:g-cur}
+.g-selw{animation-name:g-selw}
+.g-h2{animation-name:g-h2}.g-h3{animation-name:g-h3}.g-h4{animation-name:g-h4}
+.g-sw{animation-name:g-sw}
+.st-design .st-swring{animation-name:g-ring}
+.st-design .sw2{transform-origin:center;animation-name:g-press}
+.g-guide{animation-name:g-guide}
+@media (prefers-reduced-motion:reduce){
+  .st-scene :is(.s-a,.s-b,.d-cur,.g-cur){display:none}
+  .st-layer{transition:none}
+}
+@media (max-width:640px){
+  .st-layer{inset:12px 12px 60px}
+}
+html body .ds-art .apps-row{border-radius:var(--r-card);background:var(--ds-plate);box-shadow:inset 0 0 0 1px var(--ds-line);border:0}
+html body .tk-page>.page-in{max-width:1080px;width:calc(100% - 64px)}
+html body .tk-page .tk-comp{padding:16px 14px 12px 18px;border-radius:var(--r-panel);margin:0 0 14px}
+html body .tk-page .tk-comp textarea{font-size:15px;line-height:22px;padding:0;min-height:44px;color:var(--ds-ink)}
+html body .tk-page .tk-comp-bar{gap:8px}
+.tk-page .tk-ex .chip{height:30px;padding:0 12px;font-size:var(--fs-label)}
+html body .tk-page .tk-status{gap:8px;margin:0 0 24px}
+html body .tk-page .tk-pill{height:28px;padding:0 12px;font-size:var(--fs-label);color:var(--ds-ink-2);background:color-mix(in srgb,var(--ds-plate) 70%,transparent);box-shadow:inset 0 0 0 1px var(--ds-line);-webkit-backdrop-filter:none;backdrop-filter:none}
+html body .tk-page .tk-pill.warn{color:var(--ds-warn);background:color-mix(in srgb,var(--ds-warn) 9%,transparent);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--ds-warn) 25%,transparent)}
+html body .tk-page .tk-tabs{margin:0 0 16px}
+html body .tk-page .ds-seg .tk-badge,html body .tk-page .ds-seg .tk-count{display:inline-grid;place-items:center;min-width:18px;height:18px;padding:0 5px;margin-left:2px;border-radius:var(--r-pill);font-size:var(--fs-1);font-weight:600;font-style:normal;
+  background:var(--ds-ink);color:var(--ds-inv-fg);opacity:1}
+.tk-page .ds-seg button.on .tk-badge,.tk-page .ds-seg button.on .tk-count{background:var(--ds-inv-fg);color:var(--ds-inv)}
+.tk-page .ds-seg .tk-badge.warn{background:var(--ds-warn);color:#fff}
+.tk-page .tk-filter.field{height:var(--ds-h);max-width:200px;padding:0 12px;border-radius:var(--r-pill);font-size:var(--fs-2)}
+html body .tk-page .tk-feed{gap:20px}
+html body .tk-page .tk-day{margin:0 0 8px;font-size:var(--fs-1);font-weight:500;letter-spacing:.005em;color:var(--ds-faint);text-transform:none}
+html body .tk-page .tk-list{gap:0;border-radius:var(--r-card);background:var(--ds-plate);box-shadow:inset 0 0 0 1px var(--ds-line)}
+html body .tk-page .tk-item{border-radius:0;border-top:1px solid var(--ds-line)}
+html body .tk-page .tk-item:first-child{border-top:0}
+html body .tk-page .tk-item.open{background:color-mix(in srgb,var(--ds-sunken) 55%,transparent)}
+html body .tk-page .tk-row{min-height:56px;padding:10px 16px;border-radius:0;gap:12px}
+html body .tk-page .tk-row:hover{background:var(--ds-hover)}
+.tk-page .tk-item.unread .tk-dot{background:var(--ds-ink)}
+html body .tk-page .tk-t em{color:var(--ds-muted)}
+html body .tk-page .tk-when{color:var(--ds-faint)}
+html body .tk-page .apps-empty{border-radius:var(--r-card);border:1px dashed var(--ds-line-2);padding:48px 24px}
+.ds-tabs::-webkit-scrollbar{display:none}
+.ds-tabs>button svg{width:16px;height:16px}
+.ds-tabs>button:hover{color:var(--ds-ink)}
+.ds-tabs>button.on{color:var(--ds-ink);font-weight:560}
+.ds-tabs>button::after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:2px;border-radius:2px;background:var(--ds-ink);transform:scaleX(0);transition:transform var(--ds-mid) var(--ds-ease)}
+.ds-tabs>button.on::after{transform:none}
+.cz-page>.page-in.cz{display:block;max-width:1080px;width:calc(100% - 64px)}
+
+
+/* ---------------------------------------------------------------- Kho kỹ năng: thanh công cụ một hàng, cùng chiều cao 36px, canh hết bề ngang */
+
+
+html body .pl-top>span[style]{display:none}
+
+
+html body .pl-top .pl-add{height:var(--ds-h);padding:0 12px 0 14px;gap:6px}
+html body .sk-gh:focus-within{box-shadow:inset 0 0 0 1px var(--ds-ink)}
+html body .sk-gh input{font-size:var(--fs-2);height:100%}
+html body .sk-gh .btn{height:32px;flex:none}
+html body .hub-yours>.gh-add{margin:0 0 4px}
+html body .sk-files{border:0;border-radius:var(--r-plate);box-shadow:inset 0 0 0 1px var(--ds-line)}
+
+/* Kho kỹ năng → Quét skill rác (skillscanui.tsx): nút ở thanh công cụ (điện thoại: chỉ biểu tượng) và hộp thoại kết quả theo tab. */
+
+html body .modal.scan-modal{width:min(780px,94vw);max-height:min(88vh,880px)}
+html body .scan-modal .scan-x{position:absolute;top:12px;right:12px}
+html body .scan-modal h2{margin:0 40px 6px 0}
+.scan-kinds b{font-weight:560}
+html body .scan-modal .scan-tabs{flex:none;align-self:flex-start;max-width:100%;margin:0 0 10px;overflow-x:auto;scrollbar-width:none}
+.scan-tabs>button i{display:inline-grid;place-items:center;min-width:18px;height:18px;padding:0 5px;border-radius:9px;font-size:var(--fs-1);font-style:normal;font-variant-numeric:tabular-nums;background:color-mix(in srgb,currentColor 14%,transparent)}
+.scan-tools .scan-sp{flex:1}
+.scan-lock svg{flex:none}
+.scan-list{flex:1 1 auto;min-height:120px;overflow:auto;border-radius:var(--r-card);box-shadow:inset 0 0 0 1px var(--ds-line)}
+.scan-list.noact .scan-row{grid-template-columns:minmax(0,.9fr) minmax(0,2fr)}
+.scan-row:first-child{border-top:0}
+.scan-name b{line-height:20px}
+.scan-name b{font-size:var(--fs-chat);font-weight:560;overflow-wrap:anywhere}
+.scan-why>span:last-child{min-width:0}
+html body .scan-modal .btn.scan-danger{color:var(--ds-bad);background:transparent;box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--ds-bad) 38%,transparent)}
+.scan-modal .btn.scan-danger:hover:not(:disabled){background:color-mix(in srgb,var(--ds-bad) 8%,transparent)}
+.scan-row.off .scan-name b{color:var(--ds-muted)}
+.scan-empty{padding:28px 16px;text-align:center;font-size:var(--fs-2);color:var(--ds-muted)}
+@media (max-width:640px){
+  
+  
+  
+  /* Ba tab nằm gọn một hàng, chia nhau bề ngang (xếp hai hàng thì tab "Ổn" đứng lẻ, kéo dài hết hàng dưới). Bốn tab (có "Chưa đọc")
+     không vừa một hàng: hai hàng hai cột, tab nào cũng thấy trọn (không phải vuốt ngang tìm tab bị khuất). */
+  html body .scan-modal .scan-tabs{align-self:stretch}
+  html body .scan-modal .scan-tabs:has(>:nth-child(4)){display:grid;grid-template-columns:1fr 1fr;height:auto;border-radius:18px;overflow:visible}
+  /* Cột tên chiếm trọn hàng khi tab không có nút thao tác (tab Ổn): quy tắc máy tính .scan-list.noact giữ tỉ lệ .9fr / 2fr nên tên
+     skill bị ép còn một phần ba bề ngang, gãy "algorithmic- / art". */
+  .scan-list.noact .scan-row{grid-template-columns:minmax(0,1fr)}
+  .scan-modal .modal-foot{flex-wrap:wrap}
+}
+/* Hết phần chuyển từ synchro-ds.css. */
 /* Chuyển từ globals.css (B5 bước 10, scripts/css-move.mjs): luật chỉ trúng phần tử của màn này, giữ thứ tự cũ (đứng trước luật riêng của tệp). */
 .sk-row .sk-desc{font-size:var(--fs-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
 .sk-score{gap:3px}.sk-score svg+svg,.sk-score>svg:nth-of-type(2){margin-left:5px}
@@ -172,6 +321,10 @@ html body .pl-top .pl-scan{flex:none;height:var(--ds-h);padding:0 14px 0 12px;ga
 @media (max-width:640px){.scan-pick select.pl-sel{flex:1 1 100%}}
 }
 @layer syn-over{
+/* Chuyển từ synchro-ds.css (B5 bước 10, scripts/css-move.mjs): luật chỉ trúng phần tử của màn này, giữ thứ tự cũ (đứng trước luật riêng của tệp). */
+.st-layer:not(.on) *{animation-play-state:paused}
+html body .tk-page .tk-count{background:transparent;color:inherit;padding:0;min-width:0}
+/* Hết phần chuyển từ synchro-ds.css. */
 /* Chuyển từ globals.css (B5 bước 10, scripts/css-move.mjs): luật chỉ trúng phần tử của màn này, giữ thứ tự cũ (đứng trước luật riêng của tệp). */
 .menu.pl-menu::before{background:var(--card)}
 .menu.pub-menu::before{background:var(--card)}

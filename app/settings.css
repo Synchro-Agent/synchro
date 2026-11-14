@@ -1,5 +1,11 @@
 @layer properties, theme, base, components, utilities, syn, syn-over;
 @layer syn {
+/* Chuyển từ synchro-ds.css (B5 bước 10, scripts/css-move.mjs): luật chỉ trúng phần tử của màn này, giữ thứ tự cũ (đứng trước luật riêng của tệp). */
+@media (max-width:860px){
+  html body .sy-settings .promo{flex-direction:column;align-items:stretch;gap:16px}
+  .sy-settings .promo .term{min-width:0}
+}
+/* Hết phần chuyển từ synchro-ds.css. */
 /* Chuyển từ globals.css (B5 bước 10, scripts/css-move.mjs): luật chỉ trúng phần tử của màn này, giữ thứ tự cũ (đứng trước luật riêng của tệp). */
 .api-vendor{font-size:var(--fs-1);color:var(--text-3)}
 .mono-s{font-family:var(--font-mono);font-size:var(--fs-1);color:var(--text-2)}.api-get:hover{text-decoration:underline}

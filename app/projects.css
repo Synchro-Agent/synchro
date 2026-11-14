@@ -1,5 +1,50 @@
 @layer properties, theme, base, components, utilities, syn, syn-over;
 @layer syn {
+/* Chuyển từ synchro-ds.css (B5 bước 10, scripts/css-move.mjs): luật chỉ trúng phần tử của màn này, giữ thứ tự cũ (đứng trước luật riêng của tệp). */
+.ds-sec i{font-style:normal;font-size:var(--fs-1);color:var(--ds-faint)}
+.ds-sec::after{content:"";flex:1;height:1px;background:var(--ds-line)}
+
+/* ---------------------------------------------------------------- Dự án: mặt bàn đặt các thư mục kính (thư mục và hoạt hình giữ nguyên) */
+html body .sy-proj .pj-in{max-width:1080px;width:calc(100% - 64px);padding:0}
+/* Ô tìm co trước, thanh thẻ không bị cắt khi cửa sổ hẹp. */
+.sy-proj .ds-acts .ds-search{width:240px;flex:0 1 240px;min-width:120px}
+html body .sy-proj .ds-bar>.ds-seg{flex:none}
+html body .ds-sort{padding:0 12px 0 13px;gap:7px;color:var(--ds-ink-2)}
+html body .ds-sort span{font-weight:460}
+
+@media (max-width:760px){
+  html body .sy-proj .pj-in{width:calc(100% - 32px)}
+  html body .sy-proj .ds-bar{flex-direction:column;align-items:stretch}
+  .sy-proj .ds-bar .ds-acts{width:100%}
+  .sy-proj .ds-acts .ds-search{flex:1;width:auto}
+}
+
+/* ---------------------------------------------------------------- trang dự án: đầu trang có thư mục kính của dự án, ô soạn tin, các tab */
+html body .sy-projpage .pj-in{max-width:960px;width:calc(100% - 64px);padding:0}
+
+
+.pj-facts span+span::before{content:"";width:3px;height:3px;border-radius:50%;background:var(--ds-line-2);margin-right:9px}
+
+
+/* Hướng dẫn, bộ nhớ */
+
+
+
+html body .pj-note p.muted{color:var(--ds-muted)}
+@media (max-width:760px){
+  html body .sy-projpage .pj-in{width:calc(100% - 32px)}
+}
+html body .modal.pj-modal{border-radius:var(--r-panel);padding:22px 24px 20px;--gl-fill:var(--ds-plate)}
+@media (max-width:640px){
+  .sy-proj .ds-bar .ds-seg{align-self:flex-start}
+  html body .ds-sort span{display:none}
+  html body .ds-sort{padding:0 12px}
+}
+.pj-compose :is(.model-menu,.mic-wrap .menu){transform-origin:top right}
+
+
+
+/* Hết phần chuyển từ synchro-ds.css. */
 
 
 
@@ -162,6 +207,9 @@ html body .pj-compose .composer{position:relative}
 .pj-file .pj-file-warn{color:var(--danger,#b4442c);font-size:var(--fs-1);line-height:1.3}
 }
 @layer syn-over{
+/* Chuyển từ synchro-ds.css (B5 bước 10, scripts/css-move.mjs): luật chỉ trúng phần tử của màn này, giữ thứ tự cũ (đứng trước luật riêng của tệp). */
+.pj-compose :is(.model-menu,.mic-wrap .menu){top:calc(100% + 8px);bottom:auto!important}
+/* Hết phần chuyển từ synchro-ds.css. */
 /* B5: khai báo trước đây mang !important chỉ để thắng thứ tự. Lớp syn-over đứng sau syn nên các luật này thắng mọi luật thường của syn bất kể specificity; giữa chúng với nhau vẫn theo specificity rồi thứ tự. Sửa một luật ở trên thì tìm cùng selector ở đây. */
 .pj-side .menu,.pj-card .menu,.pj-title .menu,.pj-tools .menu{background:#fff}
 [data-theme="dark"] .pj-side .menu,[data-theme="dark"] .pj-card .menu,[data-theme="dark"] .pj-title .menu,[data-theme="dark"] .pj-tools .menu{background:rgb(40,40,44)}
