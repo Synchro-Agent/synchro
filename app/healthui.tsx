@@ -37,7 +37,8 @@ const UNIT: Record<string, [string, string]> = { skills: ["skill", "skills"], wo
   sets: ["bộ đang nạp", "sets loaded"], vectors: ["vector", "vectors"], kb: ["KB", "KB"], embedded: ["mục đã embed", "items embedded"], calls: ["lần gọi API", "API calls"],
   skippedCap: ["lần dừng vì hạn mức", "stopped by daily cap"], errors: ["lỗi", "errors"], rejected: ["mục bị hãng từ chối", "items refused by provider"],
   queryTimeouts: ["câu hỏi quá thời gian", "query timeouts"], queued: ["đang xếp hàng", "queued"] };
-const cacheText = (v: Record<string, number>) => Object.entries(v).map(([a, b]) => `${b.toLocaleString(locale())} ${UNIT[a] ? L(...UNIT[a]) : a}`).join(" · ");
+// Dấu · dính vào chữ trước (khoảng trắng không ngắt): giá trị xuống dòng (768px, nhãn giữ tới 45% hàng) thì dấu · không đứng đầu dòng mới.
+const cacheText = (v: Record<string, number>) => Object.entries(v).map(([a, b]) => `${b.toLocaleString(locale())} ${UNIT[a] ? L(...UNIT[a]) : a}`).join("\u00a0· ");
 const CLI: Record<string, string> = { claude: "Claude", codex: "ChatGPT", agy: "Gemini", grok: "Grok" };
 const L = (vi: string, en: string) => (getLang() === "vi" ? vi : en);
 const gb = (mb: number) => (mb >= 1024 ? `${(mb / 1024).toLocaleString(locale(), { maximumFractionDigits: 1 })} GB` : `${mb.toLocaleString(locale())} MB`);
