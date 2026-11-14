@@ -26,6 +26,12 @@ await api("/api/auth/login", { email, password });
   const db = new (R("better-sqlite3"))(process.cwd() + "/data-mock/synchro.db"); db.pragma("busy_timeout = 5000");
   db.prepare("DELETE FROM usage_events WHERE user_id = (SELECT id FROM users WHERE email = ?)").run(email); db.close(); }
 if (!cookie) throw new Error("login failed");
+// Đoạn chat đi theo tài khoản: lời dặn "dùng bảng khi so sánh…" của lần chạy trước còn trên máy chủ thì lời dặn "lần đầu" ở mục 2
+// đã thành lặp lại và có gợi ý ngay. Tài khoản thử riêng của bộ này bắt đầu sạch (không xóa đoạn chat khi chạy bằng tài khoản quản trị).
+if (!process.env.ADMIN) {
+  await fetch(B + "/api/chats", { method: "PUT", headers: { "content-type": "application/json", origin: B, cookie }, body: JSON.stringify({ wipe: Date.now() }) });
+  await new Promise((r) => setTimeout(r, 20));
+}
 // Quyền mặc định của thành viên do quản trị viên đặt (có thể tắt Skills): cấp đủ quyền cho tài khoản test.
 { let ac = process.env.SYNCHRO_ADMIN_COOKIE ?? "";
   if (!ac) { const r = await fetch(B + "/api/auth/login", { method: "POST", headers: { "content-type": "application/json", origin: B }, body: JSON.stringify({ email: "admin@synchro.test", password: "synchro-mock-123" }) }); ac = (r.headers.getSetCookie?.() ?? []).find((c) => c.startsWith("synchro_session="))?.split(";")[0] ?? ""; }
