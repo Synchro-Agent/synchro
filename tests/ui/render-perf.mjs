@@ -2,13 +2,13 @@
 // Kiểm thử giao diện bằng Chrome ẩn (hồ sơ riêng) trên npm run dev:mock. Chạy tay: node tests/ui/render-perf.mjs
 // Đếm bằng app/perfmark.ts (countRender trong Thanh bên, Ô soạn tin, Home): chỉ tính lúc chữ đang chảy, bỏ các lần vẽ lúc bắt đầu / kết thúc lượt.
 // Chạy hai khổ: 1440×900 (thanh bên mở) và điện thoại 375×812 (ngăn kéo đóng).
-// Mặc định chỉ chặn những gì B2 bước 1–4 đã đạt: câu trả lời về đủ và Composer = 0 (Ô soạn tin không vẽ lại lúc chữ chảy).
-// Biến môi trường (các cổng thêm đều tắt mặc định, bật bằng 1):
-//   GATE_SIDEBAR=1  chặn thêm Sidebar = 0: bật khi B2 tách xong Thanh bên (bước 5–7); trước đó Sidebar vẽ lại theo từng lần vẽ của Home.
+// Mặc định chặn: câu trả lời về đủ, Composer = 0 (Ô soạn tin không vẽ lại lúc chữ chảy, B2 bước 1–4) và Sidebar = 0 (Thanh bên tách khỏi
+// Home, Home không đăng ký danh sách đoạn chat: B2 bước 5–7). Biến môi trường:
+//   GATE_SIDEBAR=0  bỏ cổng Sidebar = 0 (vẫn in số đo).
 //   GATE_LT=1       chặn thêm tác vụ dài nhất ≤ LT_MAX ms (mặc định 50). Chỉ đáng tin trên bản production (dev:mock:fast); dev React chậm hơn nhiều.
+//                   scripts/qa.mjs (chạy trên dev:mock:fast) bật cổng này.
 //   GATE=0          chỉ in số đo, không chặn gì (kể cả Composer). OUT=<tệp.json> ghi số đo ra tệp để so trước / sau.
-// Số đo Sidebar và tác vụ dài luôn được in dù cổng tắt. Với cổng mặc định, bài này chuyển được từ SKIP sang SUITES của scripts/qa.mjs
-// (dòng SKIP trùng chỗ với tests/ui/cascade.mjs của B5: khi gộp giữ cả hai dòng, hoặc bỏ dòng render-perf nếu chuyển sang SUITES).
+// Số đo Sidebar, Home và tác vụ dài luôn được in dù cổng tắt.
 import { spawn } from "node:child_process";
 import { rmSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
@@ -18,7 +18,7 @@ const SCR = (await import("node:os")).tmpdir() + "/synchro-ui/";
 (await import("node:fs")).mkdirSync(SCR, { recursive: true });
 const PROF = SCR + "chrome-prof-rperf";
 rmSync(PROF, { recursive: true, force: true });
-const GATE = process.env.GATE !== "0", GATE_SIDEBAR = GATE && process.env.GATE_SIDEBAR === "1", GATE_LT = GATE && process.env.GATE_LT === "1", LT_MAX = Number(process.env.LT_MAX ?? 50);
+const GATE = process.env.GATE !== "0", GATE_SIDEBAR = GATE && process.env.GATE_SIDEBAR !== "0", GATE_LT = GATE && process.env.GATE_LT === "1", LT_MAX = Number(process.env.LT_MAX ?? 50);
 
 const email = "admin@synchro.test", password = "synchro-mock-123";
 let cookie = "";
@@ -97,7 +97,8 @@ async function run(name, metrics) {
     if (GATE) ok(startup.Composer > 0, `bộ đếm của Ô soạn tin có ghi lúc gõ / gửi (Composer = ${startup.Composer ?? 0} trước khi chữ chảy)`);
     if (GATE) ok(!r.Composer, `ô soạn tin không vẽ lại lúc chữ chảy (Composer = ${r.Composer ?? 0})`);
     if (GATE_SIDEBAR) ok(!r.Sidebar, `thanh bên không vẽ lại lúc chữ chảy (Sidebar = ${r.Sidebar ?? 0})`);
-    else console.log(`    (chưa chặn) Sidebar = ${r.Sidebar ?? 0} lần vẽ; bật GATE_SIDEBAR=1 sau B2 bước 5–7`);
+    else console.log(`    (chưa chặn) Sidebar = ${r.Sidebar ?? 0} lần vẽ (GATE_SIDEBAR=0)`);
+    console.log(`    Home vẽ lại ${r.Home ?? 0} lần lúc chữ chảy (không chặn; B2: Home không đăng ký danh sách đoạn chat)`);
     if (GATE_LT) ok(res.ltMax <= LT_MAX, `không có tác vụ dài hơn ${LT_MAX} ms (dài nhất ${res.ltMax} ms, ${lt.length} tác vụ ≥ 50 ms)`);
     else console.log(`    (chưa chặn) tác vụ dài nhất ${res.ltMax} ms, ${lt.length} tác vụ ≥ 50 ms; bật GATE_LT=1 trên bản production`);
   } catch (e) { ok(false, `${name}: lỗi khi chạy`, `${e.message} · ${await ev(`(document.querySelector("#main")?.innerText ?? "").slice(-400)`).catch(() => "")}`); }

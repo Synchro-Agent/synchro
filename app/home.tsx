@@ -758,6 +758,35 @@ function greeting(call: string): [string, string] {
   return ["Tối rồi, mọi thứ thế nào?", ""];
 }
 
+// Lời chào luôn một dòng như khung chờ lúc mở app (.boot-greet một dòng, app/skeleton.tsx): câu dài (lời chào lúc khuya, bản tiếng Anh, tên dài)
+// ở màn hẹp thu nhỏ cỡ chữ cho vừa thay vì xuống hai dòng, giữ nguyên chiều cao dòng, nên lời chào và ô soạn tin không xê dịch so với khung chờ.
+// Trước đây từ 0 giờ tới 5 giờ, ở 375px "Khuya rồi, bạn chưa ngủ à?" xuống hai dòng: lời chào lệch 15px, ô soạn tin bị đẩy xuống.
+// Đo lại khi khung đổi bề rộng và khi chữ đổi (bộ dịch đổi chữ sau khi vẽ): ResizeObserver trên cả chữ lẫn khung. Vừa sẵn thì không đổi gì.
+function FitLine({ className, children }: { className: string; children: React.ReactNode }) {
+  const ref = useRef<HTMLSpanElement>(null);
+  useLayoutEffect(() => {
+    const el = ref.current, box = el?.parentElement;
+    if (!el || !box) return;
+    const fit = () => {
+      const st = el.style;
+      st.fontSize = ""; st.lineHeight = ""; st.whiteSpace = "nowrap";
+      const cs = getComputedStyle(el), right = box.getBoundingClientRect().right - (parseFloat(getComputedStyle(box).paddingRight) || 0);
+      const avail = right - el.getBoundingClientRect().left, need = el.scrollWidth, fs = parseFloat(cs.fontSize);
+      if (need <= avail + 0.5 || !fs || avail <= 0) { st.whiteSpace = ""; return; }
+      const size = Math.floor(((fs * avail) / need) * 2) / 2;
+      // Quá dài (tên rất dài): thu nhỏ quá thì khó đọc, để xuống dòng như trước.
+      if (size < fs * 0.6) { st.whiteSpace = ""; return; }
+      st.lineHeight = cs.lineHeight;
+      st.fontSize = `${size}px`;
+    };
+    fit();
+    const ro = new ResizeObserver(fit);
+    ro.observe(el); ro.observe(box);
+    return () => ro.disconnect();
+  }, []);
+  return <span ref={ref} className={className}>{children}</span>;
+}
+
 function Toast({ text }: { text: string }) {
   const [shown, setShown] = useState(text);
   const [out, setOut] = useState(false);
@@ -2115,7 +2144,7 @@ export default function Home({ boot }: { boot?: BootData | null }) {
           <div className="hero" key={String(incog)}>
             <div className="hero-col">
             <div className="hero-date" data-notr>{new Date().toLocaleDateString(locale(), { weekday: "long", day: "numeric", month: "long" })}</div>
-            <h1 className="greeting">{incog && <I.Ghost size={26} />}<span className="greet-t">{incog ? "Đoạn chat ẩn danh" : <>{greet[0]}{greet[1] && <>, <span data-notr>{greet[1]}</span></>}</>}</span></h1>
+            <h1 className="greeting">{incog && <I.Ghost size={26} />}<FitLine className="greet-t">{incog ? "Đoạn chat ẩn danh" : <>{greet[0]}{greet[1] && <>, <span data-notr>{greet[1]}</span></>}</>}</FitLine></h1>
             {models.loaded && !models.providers.length && (!model || modelsSettled()) && (
               <section className="ob-card" aria-labelledby="ob-t">
                 <b id="ob-t">Kết nối gói AI của bạn để bắt đầu</b>
