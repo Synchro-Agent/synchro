@@ -71,10 +71,13 @@ export function TimePick({ value, onChange }: { value: string; onChange: (v: str
     document.addEventListener("mousedown", away, true);
     return () => document.removeEventListener("mousedown", away, true);
   });
+  // Esc khi bảng chọn đang mở chỉ đóng bảng: bảng không phải menu đăng ký ở a11y.ts nên phím đi tiếp tới bộ Esc chung của trang (home.tsx),
+  // bộ đó đóng luôn hộp thoại bên dưới (Sửa việc tự động) và mất phần đang sửa. Bảng đã đóng thì Esc đóng hộp thoại như thường.
+  const stopEsc = (e: React.KeyboardEvent) => { e.stopPropagation(); e.nativeEvent.stopImmediatePropagation(); };
   const focusSel = () => requestAnimationFrame(() => pop.current?.querySelector<HTMLElement>(".tpk-col [aria-selected=true]")?.focus());
   // ↑ / ↓ trong một cột: chọn ô kề bên và giữ tiêu điểm ở đó.
   const colKey = (e: React.KeyboardEvent<HTMLDivElement>, pick: (i: number) => void, n: number) => {
-    if (e.key === "Escape") { e.preventDefault(); setOpen(false); inp.current?.focus(); return; }
+    if (e.key === "Escape") { e.preventDefault(); stopEsc(e); setOpen(false); inp.current?.focus(); return; }
     if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
     e.preventDefault();
     const btns = [...e.currentTarget.querySelectorAll<HTMLButtonElement>("button")];
@@ -91,7 +94,7 @@ export function TimePick({ value, onChange }: { value: string; onChange: (v: str
         onClick={() => setOpen(true)} onChange={(e) => setDraft(e.target.value)} onBlur={commit}
         onKeyDown={(e) => {
           if (e.key === "Enter") { e.preventDefault(); commit(); setOpen(false); }
-          else if (e.key === "Escape") { setDraft(value); setOpen(false); }
+          else if (e.key === "Escape") { if (open) stopEsc(e); setDraft(value); setOpen(false); }
           else if (e.key === "ArrowDown") { e.preventDefault(); setOpen(true); focusSel(); }
         }} />
       <button type="button" className="tpk-ic" tabIndex={-1} aria-label={tr("Chọn giờ")} onMouseDown={(e) => e.preventDefault()} onClick={() => { if (open) setOpen(false); else { inp.current?.focus(); setOpen(true); } }}><I.Clock size={15} /></button>

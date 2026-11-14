@@ -20,6 +20,11 @@ const api = async (method, p, body) => {
 };
 await api("POST", "/api/auth/login", { email, password });
 if (!cookie) throw new Error("login failed");
+// Việc tự động của riêng bộ này để mở hộp Sửa (trước đây dựa vào việc do inbox.mjs bỏ lại; luồng tạo việc ở Hộp thư đã đổi, 5917e17),
+// đặt tên riêng để tìm đúng thẻ; xóa khi xong. Không chạy lần nào (lịch hằng ngày).
+const TITLE = "Kiểm thử ô chọn giờ";
+const made = await api("POST", "/api/tasks", { title: TITLE, prompt: "Tóm tắt tin công nghệ buổi sáng", schedule: { kind: "daily", time: "08:00", tz: "Asia/Ho_Chi_Minh" }, browser: "auto", engine: "chat" });
+if (!made.j?.task?.id) throw new Error("không tạo được việc tự động: " + JSON.stringify(made.j));
 const chrome = spawn(process.env.CHROME_PATH ?? (process.platform === "darwin" ? "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" : "google-chrome"),
   ["--headless=new", "--remote-debugging-port=9343", `--user-data-dir=${PROF}`, "--window-size=1440,900", "--no-first-run", "--no-default-browser-check", "about:blank"], { stdio: "ignore" });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -66,8 +71,9 @@ try {
   await ev(`[...document.querySelectorAll(".nav-item")].find((e) => e.textContent.trim().startsWith("Hộp thư"))?.click(), 1`);
   await until(`!![...document.querySelectorAll("button")].find((e) => e.textContent.trim().startsWith("Việc tự động"))`, 15000, "jobs tab");
   await ev(`[...document.querySelectorAll("button")].find((e) => e.textContent.trim().startsWith("Việc tự động")).click(), 1`);
-  await until(`!!document.querySelector(".tk-acts .btn.ghost")`, 15000, "edit");
-  await ev(`document.querySelector(".tk-acts .btn.ghost").click(), 1`);
+  const edit = `[...document.querySelectorAll(".tk-job")].find((e) => e.querySelector(".tk-t b")?.textContent === ${JSON.stringify(TITLE)})?.querySelector(".tk-acts .btn.ghost")`;
+  await until(`!!${edit}`, 15000, "edit");
+  await ev(`${edit}.click(), 1`);
   await until(`!!document.querySelector(".modal.tk-modal")`, 10000, "modal");
   await sleep(400);
   await ev(`(() => { const s = document.querySelector(".tk-modal select"); Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value").set.call(s, "daily"); s.dispatchEvent(new Event("change", { bubbles: true })); return 1; })()`);
@@ -103,6 +109,7 @@ try {
   await shot("2-done");
   await ev(`[...document.querySelectorAll(".tk-modal .modal-foot .btn")].find((b) => /Hủy|Cancel/.test(b.textContent))?.click(), 1`);
 } catch (e) { ok(false, "lỗi khi chạy", e.stack); await shot("fail"); }
+await api("DELETE", `/api/tasks/${made.j.task.id}`);
 const fails = results.filter((r) => !r[0]).length;
 console.log(`${results.length - fails}/${results.length} đạt`);
 ws.close(); chrome.kill(); process.exit(fails ? 1 : 0);
