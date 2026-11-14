@@ -4,6 +4,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { loadTs } from "../lib/ts.mjs";
+import { anySource } from "../lib/appsrc.mjs";
 
 let pass = 0, fail = 0;
 const ok = (c, n, x = "") => { c ? pass++ : fail++; console.log(c ? "  ✓" : "  ✗", n, c ? "" : String(typeof x === "string" ? x : JSON.stringify(x)).slice(0, 1200)); };
@@ -478,7 +479,10 @@ try {
       ["Đăng nhập lại gói ở Providers để tạo ảnh", /again/], ["Các gói đã đăng nhập chưa tạo được ảnh lúc này. Có thể đăng nhập thêm gói khác ở Providers", /right now/]]) ok(re.test(en(vi)), `tiếng Anh: ${vi.slice(0, 50)}`, en(vi));
     ok(!Object.prototype.hasOwnProperty.call(D.VI2EN, "Tạo ảnh "), "tr() cắt khoảng trắng nên không có khóa kết thúc bằng dấu cách");
     // Chip điền tf("Tạo ảnh {what}", { what: "" }): tiếng Việt "Tạo ảnh ", tiếng Anh "Create an image of " (giữ dấu cách cuối để gõ tiếp).
-    ok(/tf\("Tạo ảnh \{what\}", \{ what: "" \}\)/.test(fs.readFileSync("app/home.tsx", "utf8")) && D.VI2EN["Tạo ảnh {what}"]?.replace("{what}", "") === "Create an image of ", "chip Tạo ảnh điền đúng câu theo ngôn ngữ", D.VI2EN["Tạo ảnh {what}"]);
+    // Tìm trong mọi tệp app/ (chip có thể chuyển khỏi home.tsx), rồi chạy thật tf của từ điển: tiếng Anh giữ dấu cách cuối để gõ tiếp.
+    const { "i18n-core": C } = await loadTs(["i18n-core"]);
+    const chip = C.tfWith({ map: D.VI2EN, rules: D.RULES_EN }, "Tạo ảnh {what}", { what: "" }, "en");
+    ok(anySource(/tf\("Tạo ảnh \{what\}", \{ what: "" \}\)/) && chip === "Create an image of " && C.tfWith(undefined, "Tạo ảnh {what}", { what: "" }, "vi") === "Tạo ảnh ", "chip Tạo ảnh điền đúng câu theo ngôn ngữ", chip);
     ok(!!D.VI2EN["Tạo ảnh"] && !!D.VI2EN["Đăng nhập gói tạo được ảnh ở Providers"] && !!V.EN2VI["Creates images in chat when you ask for a photo, illustration, logo or poster."], "chip, thẻ Providers, ghi chú Providers có đủ bản dịch");
   }
 
