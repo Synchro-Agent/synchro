@@ -1,3 +1,5 @@
+@layer properties, theme, base, components, utilities, syn;
+@layer syn {
 /* Mục Speech và chế độ trò chuyện bằng giọng nói: tách khỏi globals.css để trang chat không phải tải trước. Tệp này nạp sau mọi tệp chung, nên chỉ chứa quy tắc không tranh chấp với quy tắc chung đứng sau nó trong globals.css (cùng độ ưu tiên, cùng thuộc tính); quy tắc tranh chấp vẫn ở globals.css. */
 .sp-crumb {font-size:14px;font-weight:460;padding:4px 6px;border-radius:var(--r-pill)
 }
@@ -798,3 +800,4 @@
 }
 @media (max-width:600px){.sp-credit-wait {width:96px
 }}
+}

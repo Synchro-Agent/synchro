@@ -1,0 +1,3 @@
+/* Cửa sổ dòng lệnh (xterm) trong lớp syn cùng CSS của app (B5), cùng lý do như vendor/katex.css. */
+@layer properties, theme, base, components, utilities, syn;
+@import "@xterm/xterm/css/xterm.css" layer(syn);

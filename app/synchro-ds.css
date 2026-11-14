@@ -1,3 +1,5 @@
+@layer properties, theme, base, components, utilities, syn;
+@layer syn {
 /* =====================================================================================================================
    Phông chữ: Be Vietnam Pro cho mọi chữ thường (nút, menu, tiêu đề hộp thoại, Cài đặt…); Unbounded chỉ cho chỗ quan trọng:
    tiêu đề trang, tên dự án ở đầu trang, lời chào ở trang chủ.
@@ -1235,4 +1237,5 @@ html body .cx-hist select{padding-left:10px}
   /* Nút hiện mật khẩu nằm trong ô nhập: giữ cỡ 30px để không cao hơn ô, vùng bấm 44px bằng lớp giả trong suốt bao quanh. */
   html body .rp-pw .icon-btn,.auth-root .rp-pw .icon-btn{min-width:0;min-height:0}
   html body .rp-pw .icon-btn::after{content:"";position:absolute;inset:-7px}
+}
 }

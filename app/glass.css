@@ -1,3 +1,5 @@
+@layer properties, theme, base, components, utilities, syn;
+@layer syn {
 /* ===== Liquid Glass ===== */
 /* Layers: ::before = material (blur + tint + inner shine), ::after = specular rim, element = shadow.
    Only the bezel refracts (see glass.tsx); content beneath stays visible and moves under the glass. */
@@ -330,3 +332,4 @@ html body .menu .menu-item.del,html body .menu-item.del{color:#c6422f}
 html body :is(.menu .menu-item.del,.menu-item.del):hover{background:color-mix(in srgb,#c6422f 12%,transparent);color:#b03a29}
 html[data-theme="dark"] body :is(.menu .menu-item.del,.menu-item.del){color:#ff8a78}
 html[data-theme="dark"] body :is(.menu .menu-item.del,.menu-item.del):hover{background:color-mix(in srgb,#ff6b57 16%,transparent);color:#ffa497}
+}

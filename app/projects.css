@@ -1,3 +1,5 @@
+@layer properties, theme, base, components, utilities, syn;
+@layer syn {
 /* Dự án (danh sách, trang một dự án): tách khỏi globals.css / synchro-ds.css để trang chat không phải tải trước (blueprint B3.4). Tệp này nạp sau mọi
    tệp chung, nên chỉ chứa quy tắc mà không quy tắc chung nào đứng sau nó còn nhắc tới cùng lớp; quy tắc tranh chấp vẫn ở tệp chung. */
 .pj-in{max-width:1040px;margin:0 auto;padding:36px 32px 60px}
@@ -157,3 +159,4 @@ html body .pj-compose .composer .at-menu{top:calc(100% + 8px);bottom:auto}
 .pj-gcard[data-bk]{border-radius:var(--r-card);padding:8px 6px 6px}
 .pj-mem li[data-bk]{display:flex;gap:10px;align-items:flex-start}
 .pj-file .pj-file-warn{color:var(--danger,#b4442c);font-size:12px;line-height:1.3}
+}

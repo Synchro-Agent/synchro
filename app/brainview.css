@@ -1,3 +1,5 @@
+@layer properties, theme, base, components, utilities, syn;
+@layer syn {
 /* Mục Bộ não: tách khỏi globals.css để trang chat không phải tải trước. Tệp này nạp sau mọi tệp chung, nên chỉ chứa quy tắc không tranh chấp với quy tắc chung đứng sau nó trong globals.css (cùng độ ưu tiên, cùng thuộc tính); quy tắc tranh chấp vẫn ở globals.css. */
 .bn-stats {display:flex;flex-wrap:wrap;gap:6px 16px;margin-bottom:12px;font-size:12px;color:var(--text-3)
 }
@@ -360,4 +362,5 @@
 @media (prefers-reduced-motion:reduce){.bw-left,.bw-right {transition:none
 }}
 .bn label.bn-auto {display:flex
+}
 }

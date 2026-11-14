@@ -4,6 +4,23 @@
 @import "tailwindcss" source(none);
 @source "./auth.tsx";
 @source "./shader-metal.tsx";
+/* Thứ tự lớp cascade (B5): lớp của Tailwind trước, mọi CSS của app (kể cả katex / xterm và thẻ <style> của auth.tsx, glass-folder.tsx)
+   trong một lớp syn. Câu lệnh lặp ở đầu mỗi tệp để thứ tự không phụ thuộc tệp nào được tải trước. Trong lớp syn, bên thắng vẫn theo
+   specificity rồi thứ tự nạp như khi chưa có lớp. */
+@layer properties, theme, base, components, utilities, syn;
+/* Chỉ thị của Tailwind (@theme) và @property phải ở ngoài cùng: Tailwind chỉ đọc @property ngoài lớp để sinh giá trị dự phòng cho trình duyệt cũ. */
+@theme {
+  --color-foreground: var(--foreground);
+  --color-background: var(--background);
+  --color-card: var(--card);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--auth-border);
+  --color-primary: var(--accent);
+  --color-primary-foreground: var(--on-accent);
+  --color-destructive: #ef4444;
+}
+@property --orb-a{syntax:"<angle>";inherits:false;initial-value:0deg}
+@layer syn {
 
 /* Phông chữ thường: Be Vietnam Pro (SIL Open Font License 1.1, public/fonts/OFL-BeVietnamPro.txt), tự lưu trên máy chủ, đủ dấu tiếng Việt.
    Bản tĩnh, chỉ các độ đậm giao diện dùng. Thang độ đậm của giao diện (360, 460, 560…) viết cho phông biến thiên: mỗi tệp nhận một khoảng
@@ -1136,16 +1153,6 @@ html body .codebox.cb-copy .cb-btn{position:absolute!important;right:8px!importa
 .sk-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:16px}
 
 /* ---- Login screen (same palette as the main app) ---- */
-@theme {
-  --color-foreground: var(--foreground);
-  --color-background: var(--background);
-  --color-card: var(--card);
-  --color-muted-foreground: var(--muted-foreground);
-  --color-border: var(--auth-border);
-  --color-primary: var(--accent);
-  --color-primary-foreground: var(--on-accent);
-  --color-destructive: #ef4444;
-}
 .auth-root{--foreground:var(--text);--background:var(--bg);--card:var(--bg);--muted-foreground:var(--text-3);--auth-border:var(--border-strong);--color-border:var(--border-strong);font-family:var(--font-sans);background:var(--bg)}
 .auth-bg{position:absolute;inset:0;overflow:hidden;contain:strict}
 .auth-bg i{position:absolute;border-radius:50%;will-change:transform;transform:translateZ(0)}
@@ -1252,7 +1259,6 @@ html body .codebox.cb-copy .cb-btn{position:absolute!important;right:8px!importa
 .auth-scroll>*{margin-top:auto;margin-bottom:auto}
 
 /* ---- Đăng nhập: trạng thái đang xử lý / thành công / lỗi ---- */
-@property --orb-a{syntax:"<angle>";inherits:false;initial-value:0deg}
 .auth-stage{position:relative;z-index:10;display:flex;flex-direction:column;align-items:center;gap:30px;padding:16px;text-align:center}
 .auth-orb{position:relative;width:92px;height:92px;border-radius:50%;display:grid;place-items:center;color:var(--foreground);isolation:isolate;
   background:radial-gradient(circle at 32% 24%,oklch(from var(--background) l c h / 85%),transparent 52%),linear-gradient(165deg,oklch(from var(--background) l c h / 42%),oklch(from var(--background) l c h / 8%));
@@ -4534,3 +4540,4 @@ html body .sk-user .sk-txt{background:color-mix(in srgb,var(--ds-inv-fg,#fff) 22
 .sk-srow .t,.sk-srow .d{display:block;white-space:nowrap;overflow:hidden}
 .sk-ctl{border-radius:var(--r-pill)}
 @media (prefers-reduced-motion:reduce){.sk-txt,.sk-blk,.sk-sheen,.sk-line::after{animation:none}}
+}

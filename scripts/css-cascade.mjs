@@ -10,7 +10,8 @@
 // mà tsx có đặt nội dòng, để soát tay.
 // Dùng:
 //   node scripts/css-cascade.mjs <trước> <sau> [--json tệp] [--max N]
-//   mỗi phiên bản là một thư mục mã nguồn (src:<thư mục gốc dự án>, dịch Tailwind như bản dựng) hoặc bản build (build:<thư mục .next>).
+//   mỗi phiên bản là một thư mục mã nguồn (src:<thư mục gốc dự án>, dịch Tailwind như bản dựng) hoặc bản build (build:<thư mục .next>,
+//   thêm @<thư mục mã nguồn> để đọc thẻ <style> của tsx từ đúng phiên bản đó).
 //   Thêm --order dev|prod cho src: dev = thứ tự import của layout.tsx (next dev); prod: thứ tự <link> của bản build webpack hiện tại
 //   (glass+features trước globals, xem báo cáo B5). Mã thoát 1 khi có cặp đổi bên thắng hoặc khai báo mất / thừa.
 import fs from "node:fs";
@@ -232,7 +233,7 @@ export function collect(sheets) {
           const media = conj(ctx.media.map(parseMedia));
           for (const d of ds) {
             const value = normVal(d.value);
-            for (const at of atoms(d.prop)) decls.push({ sheet: sh0.name, sel: s, nsel: n, spec: sp, sub, media, mkey: [...ctx.media.map(normMedia), ...ctx.cond.map(normMedia)].join("&"), layer: ctx.layer, prop: d.prop.toLowerCase(), atom: at, value, imp: !!d.important, order: order, line: d.source?.start?.line });
+            for (const at of atoms(d.prop)) decls.push({ sheet: sh0.name, rsel: ch.selector, sel: s, nsel: n, spec: sp, sub, media, mkey: [...ctx.media.map(normMedia), ...ctx.cond.map(normMedia)].join("&"), layer: ctx.layer, prop: d.prop.toLowerCase(), atom: at, value, imp: !!d.important, order: order, line: d.source?.start?.line });
             order++;
           }
         }
@@ -336,6 +337,11 @@ export function diff(A, B, co, { max = 200, filter = () => true } = {}) {
   const groups = new Map();
   for (const d of A.decls) { if (!kb.has(d.key)) continue; const g = `${d.sub.pel}|${d.atom}`; (groups.get(g) ?? groups.set(g, []).get(g)).push(d); }
   const flips = []; let pairs = 0;
+  // Lớp giữ nguyên thứ tự thì cặp hai khai báo không đổi (cùng !important, lớp, specificity) giữ nguyên bên thắng: chỉ so cặp có ít nhất một
+  // khai báo đổi (đổi nhiều nhanh gấp chục lần khi chỉ một vài luật đổi).
+  const sameLayers = A.layerOrder.join() === B.layerOrder.join();
+  const changed = (d) => { const e = kb.get(d.key); return !sameLayers || e.imp !== d.imp || e.layer !== d.layer || cmp3(e.spec, d.spec) !== 0; };
+  for (const d of A.decls) if (kb.has(d.key)) d.ch = changed(d);
   for (const list of groups.values()) {
     // Chỉ mục theo lớp không mở; selector chỉ có lớp mở (hay không lớp) là ứng viên của mọi khai báo.
     const byCls = new Map(), bare = [];
@@ -347,11 +353,13 @@ export function diff(A, B, co, { max = 200, filter = () => true } = {}) {
       else { cand = new Set(bare); for (const a of x.sub.alts) for (const c of own(a)) for (const g of co.byCls.get(c) ?? []) for (const c2 of g.cls) for (const y of byCls.get(c2) ?? []) cand.add(y); }
       for (const y of cand) {
         if (y.i <= x.i) continue;
+        if (!x.ch && !y.ch) continue;
         if (!overlap(x, y, co)) continue;
         pairs++;
         const xb = kb.get(x.key), yb = kb.get(y.key);
         const s1 = Math.sign(precede(x, y, A)), s2 = Math.sign(precede(xb, yb, B));
-        if (s1 !== s2 && filter(x, y)) { const [w, l] = s1 > 0 ? [x, y] : [y, x]; flips.push({ atom: x.atom, pel: x.sub.pel, before: { win: fmt(w), lose: fmt(l), why: why(w, l, A) }, after: { win: fmt(s2 > 0 ? xb : yb), why: why(s2 > 0 ? xb : yb, s2 > 0 ? yb : xb, B) } }); }
+        // Cùng thuộc tính, cùng giá trị: bên nào thắng cũng ra một kết quả.
+        if (s1 !== s2 && !(x.prop === y.prop && x.value === y.value) && filter(x, y)) { const [w, l] = s1 > 0 ? [x, y] : [y, x]; flips.push({ atom: x.atom, pel: x.sub.pel, sides: [x, y].map((d) => ({ sheet: d.sheet, nsel: d.nsel, sel: d.sel, changed: d.ch, declKey: `${d.rsel.replace(/\s+/g, " ").trim()}|${d.prop}|${d.value}` })), before: { win: fmt(w), lose: fmt(l), why: why(w, l, A) }, after: { win: fmt(s2 > 0 ? xb : yb), why: why(s2 > 0 ? xb : yb, s2 > 0 ? yb : xb, B) } }); }
       }
     }
   }
@@ -367,20 +375,28 @@ function injected(root) {
   const au = fs.readFileSync(path.join(root, "app/auth.tsx"), "utf8"); const m2 = /<style>\{`([\s\S]*?)`\}<\/style>/.exec(au); if (m2) out.push({ name: "auth.tsx <style>", css: m2[1].replace(/\$\{[^}]*\}/g, "0") });
   return out;
 }
-// Thư viện ngoài nạp chậm, không lớp.
-const vendor = (root) => ["katex/dist/katex.min.css", "@xterm/xterm/css/xterm.css"].map((p) => ({ name: p, css: fs.readFileSync(path.join(root, "node_modules", p), "utf8") }));
+// Thư viện ngoài nạp chậm: qua tệp bọc app/vendor/*.css (B5, dịch như bản dựng để có lớp), hay thẳng tệp trong node_modules (không lớp).
+async function vendor(root, compile) {
+  const out = [];
+  for (const [wrap, raw] of [["app/vendor/katex.css", "katex/dist/katex.min.css"], ["app/vendor/xterm.css", "@xterm/xterm/css/xterm.css"]]) {
+    const w = path.join(root, wrap);
+    out.push(fs.existsSync(w) ? { name: raw, css: await compile(w) } : { name: raw, css: fs.readFileSync(path.join(root, "node_modules", raw), "utf8") });
+  }
+  return out;
+}
 const LAZY = ["app/codeview.css", "app/speech/speech.css", "app/brainview.css", "app/download/download.css", "app/projects.css", "app/settings.css", "app/skills.css"];
 /** Bản mã nguồn: dịch globals.css qua Tailwind như bản dựng, rồi xếp theo thứ tự nạp. */
 export async function loadSource(root, order = "dev") {
   const postcss = req("postcss");
   const tw = (await import(path.join(root, "node_modules/@tailwindcss/postcss/dist/index.mjs"))).default;
   const read = (p) => fs.readFileSync(path.join(root, p), "utf8");
-  const g = await postcss([tw({ base: root, optimize: false })]).process(read("app/globals.css"), { from: path.join(root, "app/globals.css") });
+  const compile = async (f) => (await postcss([tw({ base: root, optimize: false })]).process(fs.readFileSync(f, "utf8"), { from: f })).css;
+  const g = { css: await compile(path.join(root, "app/globals.css")) };
   const font = { name: "unbounded", css: read("node_modules/@fontsource-variable/unbounded/wght.css") + read("app/unbounded-preload.css") };
   const s = (p) => ({ name: p.replace(/^app\//, ""), css: read(p) });
   const first = order === "prod" ? [s("app/glass.css"), s("app/features.css"), { name: "globals.css", css: g.css }, font, s("app/synchro-ds.css")]
     : [font, { name: "globals.css", css: g.css }, s("app/glass.css"), s("app/synchro-ds.css"), s("app/features.css")];
-  return [...first, ...LAZY.map(s), ...vendor(root), ...injected(root)];
+  return [...first, ...LAZY.map(s), ...(await vendor(root, compile)), ...injected(root)];
 }
 /** Bản build: tệp CSS tải đầu theo thứ tự <link> của trang tĩnh, rồi các tệp còn lại (tải chậm). */
 export function loadBuild(dir, root) {
@@ -406,8 +422,11 @@ if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(new URL(im
   const json = opt("--json"), max = +opt("--max", 60), oa = opt("--order-a", opt("--order", "dev")), ob = opt("--order-b", oa);
   const [a, b] = args;
   if (!a || !b) { console.log("Dùng: node scripts/css-cascade.mjs <src:thư mục | build:.next-x> <src:… | build:…> [--order dev|prod] [--json tệp]"); process.exit(2); }
-  const root = path.resolve(a.startsWith("src:") ? a.slice(4) : ".");
-  const A = collect(await load(a, root, oa)), B = collect(await load(b, path.resolve(b.startsWith("src:") ? b.slice(4) : "."), ob));
+  // build:<thư mục .next>@<thư mục mã nguồn>: thẻ <style> trong tsx đọc từ mã nguồn đó (mặc định thư mục hiện tại).
+  const rootOf = (x) => path.resolve(x.startsWith("src:") ? x.slice(4) : x.includes("@") ? x.split("@")[1] : ".");
+  const strip = (x) => (x.startsWith("build:") ? x.split("@")[0] : x);
+  const root = rootOf(a);
+  const A = collect(await load(strip(a), root, oa)), B = collect(await load(strip(b), rootOf(b), ob));
   const co = cooccurrence(root, A.decls);
   const r = diff(A, B, co);
   console.log(`Lớp (trước): ${A.layerOrder.join(", ") || "(không)"}\nLớp (sau):   ${B.layerOrder.join(", ") || "(không)"}`);
