@@ -115,7 +115,7 @@ console.log("5. Dấu khóa cũ và giữ 7 ngày");
 {
   const list = Array.from({ length: 60 }, (_, i) => chat(1000 - i));
   const raw = JSON.stringify(list);
-  ok(raw.length > 8192, "dữ liệu thử đủ lớn để chỉ băm đầu + cuối", raw.length);
+  ok(raw.length > 8192, "dữ liệu thử đủ lớn (vài đoạn băm)", raw.length);
   ok(K.legacySig(raw) === K.legacySig(String(raw)), "cùng nội dung: cùng dấu");
   const head = JSON.stringify([{ ...list[0], title: "Chat 1000!" }, ...list.slice(1)]);
   ok(K.legacySig(head) !== K.legacySig(raw), "đoạn mới nhất (đầu danh sách) đổi: dấu đổi");
@@ -123,6 +123,13 @@ console.log("5. Dấu khóa cũ và giữ 7 ngày");
   ok(K.legacySig(tail) !== K.legacySig(raw), "đoạn cũ nhất (cuối danh sách) đổi: dấu đổi");
   ok(K.legacySig(JSON.stringify([...list, chat(1)])) !== K.legacySig(raw), "thêm đoạn: độ dài đổi, dấu đổi");
   ok(K.legacySig("[]") !== K.legacySig("[1]") && K.legacySig("").startsWith("0:"), "khóa nhỏ: băm cả chuỗi");
+  // Sửa một đoạn ở giữa danh sách mà độ dài không đổi (đổi tên cùng số chữ): dấu vẫn phải đổi, không thì khóa cũ không bao giờ được nhập lại.
+  const mid = JSON.stringify([...list.slice(0, 30), { ...list[30], title: "Chat 97X" }, ...list.slice(31)]);
+  ok(mid.length === raw.length && K.legacySig(mid) !== K.legacySig(raw), "sửa giữa danh sách, cùng độ dài: dấu đổi (băm cả chuỗi)", [mid.length, raw.length]);
+  let pauses = 0;
+  const pause = async () => { pauses++; };
+  ok((await K.legacySigAsync(raw, pause, 1000)) === K.legacySig(raw) && pauses === Math.ceil(raw.length / 1000) - 1, "băm từng đoạn (nhường luồng giữa các đoạn): cùng kết quả với băm một lần", pauses);
+  ok((await K.legacySigAsync("", pause)) === K.legacySig("") && (await K.legacySigAsync(mid, pause, 7)) === K.legacySig(mid), "chuỗi rỗng / đoạn lẻ: cùng kết quả");
   const DAY = 86_400_000, t0 = 1_700_000_000_000;
   ok(!K.dropLegacyDue(t0, t0 + 6 * DAY + DAY - 1), "chưa đủ 7 ngày: giữ khóa cũ");
   ok(K.dropLegacyDue(t0, t0 + 7 * DAY), "đủ 7 ngày: xóa khóa cũ");
@@ -140,14 +147,23 @@ console.log("6. Thứ tự và đọc khóa cũ");
   ok(lr[1].s === null && lr[1].idx.srv === true, "bản rút gọn cũ (hết chỗ): chỉ ghi chỉ mục, thân ở máy chủ", lr[1]);
   ok(!lr[2].s.includes("đang viết") && lr[2].idx.run === "r1", "đoạn đang chạy: bỏ dòng tiến độ như bản lưu cũ, chỉ mục giữ mã lượt chạy", lr[2]);
   ok(K.legacyRows({ a: 1 }).length === 0 && K.legacyRows(null).length === 0, "khóa cũ không phải mảng: không có gì để nhập");
-  const have = { id: 10, title: "", upd: 50 };
-  ok(K.legacyWins(lr[0], undefined), "kho chưa có: nhập");
-  ok(!K.legacyWins(lr[0], have), "kho đã có bản có tin mới hơn: không đè bằng bản cũ");
-  ok(K.legacyWins(lr[0], { ...have, upd: 12 }), "cùng mốc (đổi tên ở tab bản cũ): nhập lại");
-  ok(!K.legacyWins(lr[1], { id: 13, title: "", upd: 0 }), "bản rút gọn cũ không đè thân đã có");
+  ok(/^[^|]+\|[^|]+$/.test(lr[0].mark) && lr[0].mark !== lr[2].mark, "mỗi dòng có dấu nội dung | dấu trường thanh bên", lr[0].mark);
+  const have = { id: 10, title: "Chat 10", upd: 50 };
+  ok(K.legacyMerge(lr[0], undefined, undefined) === lr[0], "kho chưa có: nhập");
+  ok(K.legacyMerge(lr[0], have, undefined) === null, "kho đã có bản có tin mới hơn: không đè bằng bản cũ");
+  ok(K.legacyMerge(lr[0], { ...have, upd: 12 }, undefined) === null, "cùng mốc, không có dấu lần nhập trước: không phân biệt được bản cũ, giữ kho");
+  ok(K.legacyMerge(lr[0], { ...have, upd: 12 }, lr[0].mark) === null, "dòng không đổi so với lần nhập trước: bỏ qua");
+  const renamedOld = K.legacyRow({ ...src[0], title: "Đổi ở tab cũ" });
+  ok(K.legacyMerge(renamedOld, { ...have, upd: 12 }, lr[0].mark) === renamedOld, "cùng mốc, tab bản cũ đổi tên (trường thanh bên khác lần trước): nhập lại");
+  ok(K.legacyMerge(lr[1], { id: 13, title: "", upd: 0 }, undefined) === null, "bản rút gọn cũ không đè thân đã có");
+  // Tab cũ thêm tin vào đoạn mà app mới đã đổi tên + ghim: nhập nội dung mới, giữ tên / ghim của kho.
+  const more = K.legacyRow({ ...src[0], msgs: [...src[0].msgs, { role: "user", text: "tin ở tab cũ", time: 80 }] });
+  const m = K.legacyMerge(more, { ...have, title: "Tên ở app mới", pinned: true, upd: 12 }, lr[0].mark);
+  ok(m && JSON.parse(m.s).msgs.length === 3 && JSON.parse(m.s).title === "Tên ở app mới" && JSON.parse(m.s).pinned === true && m.idx.title === "Tên ở app mới" && m.idx.pinned && m.idx.upd === 80, "nội dung đổi ở tab cũ, tên / ghim ở tab cũ không đổi: giữ tên / ghim của kho", m);
+  ok(m && !/"upd"|"local"|"stub"/.test(m.s) && m.s === C.serialChat(JSON.parse(m.s)), "thân sau khi gộp vẫn là chuỗi serialChat sạch", m?.s);
 }
 
-const plan = (d) => ({ put: d.put.map((c) => ({ id: c.id, s: C.serialChat(c), idx: K.idxOf(c) })), idx: d.idx, del: d.del, drop: d.drop });
+const plan = (d) => K.toWrite(d);
 const DAY = 86_400_000;
 
 console.log("7. Kho dự phòng localStorage (trình duyệt không mở được IndexedDB)");
@@ -270,6 +286,7 @@ console.log("8. Kho IndexedDB (IndexedDB giả)");
   h.deleteDatabase("synchro-chats:V");
   r = await v.write({ put: [{ id: 2, s: C.serialChat(chat(2)), idx: K.idxOf(chat(2)) }] });
   ok(r.status === "error" && !h.has("synchro-chats:V") && h.conns("synchro-chats:V") === 0, "cơ sở dữ liệu bị xóa ở tab khác: kho nhường, ghi báo lỗi, không mở lại", r);
+  ok(v.closed === true, "kho bị đóng từ bên ngoài: closed = true để trang chuyển sang localStorage hoặc tải lại");
 
   // Kho dùng chung của trang: đặt kho mới thì đóng kho cũ.
   const k1 = await D.openChatStore("K", { idb: h }), k2 = await D.openChatStore("K2", { idb: h });
@@ -417,6 +434,208 @@ console.log("11. Đọc khóa cũ ở luồng phụ");
   ok(r.via === "worker" && r.imported === 2 && (await s.bodies([3])).get(3) === C.serialChat(list[0]), "chuyển dữ liệu cũ dùng luồng phụ khi có", r);
   delete globalThis.Worker;
   delete globalThis.self;
+}
+
+console.log("12. Nhập lại khóa cũ không đè sửa chỉ mục ở app mới");
+{
+  // Lỗi cũ: nhập lại MỌI dòng của khóa cũ mỗi khi khóa đổi, nên đổi tên / ghim (chỉ ghi chỉ mục, mốc sửa không đổi) bị khóa cũ đè.
+  const st = new Store();
+  globalThis.localStorage = st;
+  const t0 = 1_700_000_000_000;
+  const a = chat(1000), b = chat(2000);
+  st.setItem("u:R:chats", JSON.stringify([b, a]));
+  const s = await D.openChatStore("R", { idb: fakeIDB() });
+  let r = await D.importLegacy(s, { now: t0 });
+  ok(r.imported === 2, "chuyển lần đầu", r);
+  // App mới: đổi tên + ghim đoạn 1000 khi chỉ có bản rút gọn (chỉ ghi chỉ mục), và đổi tên đoạn 2000 khi đã mở thân (ghi thân + chỉ mục).
+  const stubA = K.stubOfRow((await s.loadIndex()).find((x) => x.id === 1000));
+  await s.write(plan(K.diffSave(K.snapshot([stubA]), [{ ...stubA, title: "Tên mới", pinned: true }])));
+  const b2 = { ...b, title: "Hai nghìn" };
+  await s.write(plan(K.diffSave(K.snapshot([b]), [b2])));
+  // Tab bản cũ (hoặc một phiên rơi về localStorage) thêm một chat mới 3000: khóa cũ đổi, đoạn 1000 / 2000 trong khóa cũ không đổi.
+  st.setItem("u:R:chats", JSON.stringify([chat(3000), b, a]));
+  r = await D.importLegacy(s, { now: t0 + DAY });
+  let idx = await s.loadIndex();
+  const i1 = idx.find((x) => x.id === 1000), i2 = idx.find((x) => x.id === 2000);
+  ok(r.imported === 1 && idx.map((x) => x.id).join() === "3000,2000,1000", "chỉ nhập đúng dòng mới", [r, idx.map((x) => x.id)]);
+  ok(i1.title === "Tên mới" && i1.pinned === true, "đổi tên + ghim chỉ mục ở app mới còn nguyên sau khi nhập lại", i1);
+  ok(i2.title === "Hai nghìn" && JSON.parse((await s.bodies([2000])).get(2000)).title === "Hai nghìn", "đổi tên đoạn đã mở thân còn nguyên (thân lẫn chỉ mục)", i2);
+  // Tab cũ thêm tin vào đoạn 1000 (tên cũ, không ghim): nhập tin mới, giữ tên / ghim đặt ở app mới.
+  const a3 = { ...a, msgs: [...a.msgs, { role: "user", text: "tin ở tab cũ", time: 5000 }] };
+  st.setItem("u:R:chats", JSON.stringify([chat(3000), b, a3]));
+  r = await D.importLegacy(s, { now: t0 + 2 * DAY });
+  idx = await s.loadIndex();
+  const body1 = JSON.parse((await s.bodies([1000])).get(1000));
+  ok(r.imported === 1 && body1.msgs.length === 3 && body1.title === "Tên mới" && body1.pinned === true && idx.find((x) => x.id === 1000).pinned, "tab cũ thêm tin: tin mới vào kho, tên / ghim của app mới giữ nguyên", [r, body1.title, body1.pinned]);
+  // Tab cũ đổi tên đoạn 2000 (cùng mốc sửa): đó là sửa thật ở tab cũ, nhập.
+  st.setItem("u:R:chats", JSON.stringify([chat(3000), { ...b, title: "Tên ở tab cũ" }, a3]));
+  r = await D.importLegacy(s, { now: t0 + 3 * DAY });
+  ok(r.imported === 1 && (await s.loadIndex()).find((x) => x.id === 2000).title === "Tên ở tab cũ", "tab cũ đổi tên (cùng mốc sửa): nhập", r);
+  ok(Object.keys((await s.getMeta()).rows ?? {}).sort().join() === "1000,2000,3000", "ghi dấu từng dòng của lần nhập", (await s.getMeta()).rows);
+}
+
+console.log("13. Bản rút gọn của máy chủ giữ mốc sửa thật");
+{
+  const full = chat(3000, { msgs: [{ role: "user", text: "q", time: 9999 }] });
+  let d = K.diffSave(K.snapshot([full]), [C.stubOf(full)]);
+  ok(d.drop.join() === "3000" && d.idx.length === 1 && d.idx[0].upd === 9999 && d.idx[0].srv, "đoạn đầy đủ thành bản rút gọn của máy chủ: chỉ mục giữ mốc sửa 9999, không rơi về id", d);
+  const srv1 = C.stubOf(full), srv2 = { ...srv1, title: "Đổi tên" };
+  d = K.diffSave(K.snapshot([srv1]), [srv2]);
+  ok(d.idx.length === 1 && d.idx[0].upd === 3000, "bản rút gọn không có mốc nào khác ngoài id: dùng id", d);
+  const loc = K.stubOfRow(K.idxOf(full));
+  d = K.diffSave(K.snapshot([loc]), [{ ...loc, title: "Tên mới" }]);
+  ok(d.idx[0].upd === 9999, "bản rút gọn local đổi tên: giữ mốc sửa", d);
+
+  const f = fakeIDB();
+  const s = await D.openChatStore("U", { idb: f });
+  await s.write({ put: [{ id: 3000, s: C.serialChat(full), idx: K.idxOf(full) }] });
+  await s.write({ idx: [K.idxOf(srv1)], drop: [3000] });
+  let i = (await s.loadIndex())[0];
+  ok(i.upd === 9999 && i.srv && !(await s.bodies([3000])).size, "kho IndexedDB: dòng chỉ mục từ bản rút gọn (mốc = id) không làm lùi mốc sửa", i);
+  await s.write({ idx: [{ ...K.idxOf(srv2), srv: undefined }] });
+  i = (await s.loadIndex())[0];
+  ok(i.title === "Đổi tên" && i.srv === true && i.upd === 9999, "chỉ ghi chỉ mục không bao giờ làm thân đã bỏ hiện lại (giữ srv)", i);
+
+  // Khóa cũ có thân cũ của 3000; ở app mới 3000 có tin mới rồi bị rút gọn. Khóa cũ đổi chỗ khác: thân cũ không quay lại.
+  const st = new Store();
+  globalThis.localStorage = st;
+  const old = chat(3000), other = chat(4000);
+  st.setItem("u:V3:chats", JSON.stringify([other, old]));
+  const v = await D.openChatStore("V3", { idb: fakeIDB() });
+  await D.importLegacy(v, { now: 1 });
+  const newer = { ...old, msgs: [...old.msgs, { role: "user", text: "mới", time: 9999 }] };
+  await v.write({ put: [{ id: 3000, s: C.serialChat(newer), idx: K.idxOf(newer) }] });
+  await v.write(plan(K.diffSave(K.snapshot([newer]), [C.stubOf(newer)])));
+  st.setItem("u:V3:chats", JSON.stringify([{ ...other, title: "Bốn nghìn" }, old]));
+  await D.importLegacy(v, { now: 2 });
+  i = (await v.loadIndex()).find((x) => x.id === 3000);
+  ok(i.srv && i.upd === 9999 && !(await v.bodies([3000])).size, "nhập lại khóa cũ: thân cũ hơn không đè bản rút gọn của máy chủ", i);
+
+  // Kho localStorage: bỏ thân / ghi chỉ mục của bản rút gọn cũng không làm lùi mốc sửa.
+  globalThis.localStorage = new Store();
+  const ls = new D.LsStore("W3");
+  await ls.write({ put: [{ id: 3000, s: C.serialChat(full), idx: K.idxOf(full) }] });
+  await ls.write({ drop: [3000] });
+  ok((await ls.loadIndex())[0].upd === 9999, "LsStore bỏ thân: giữ mốc sửa", await ls.loadIndex());
+  await ls.write({ idx: [K.idxOf(srv2)] });
+  ok((await ls.loadIndex())[0].upd === 9999 && (await ls.loadIndex())[0].title === "Đổi tên", "LsStore đổi tên bản rút gọn: giữ mốc sửa", await ls.loadIndex());
+  ok(K.legacyRow({ ...srv1, upd: 9999 }).idx.upd === 9999 && K.legacyRow(srv1).idx.upd === 3000, "bản rút gọn trong khóa cũ có upd: dùng upd, không thì id");
+}
+
+console.log("14. Phiên rơi về localStorage không tin khóa cũ đã chuyển sang IndexedDB");
+{
+  const st = new Store();
+  globalThis.localStorage = st;
+  const t0 = 1_700_000_000_000;
+  st.setItem("u:M3:chats", JSON.stringify([chat(2), chat(1)]));
+  D.resetIdbDown();
+  const s = await D.openChatStore("M3", { idb: fakeIDB() });
+  await D.importLegacy(s, { now: t0 });
+  ok(K.parseMark(st.getItem("u:M3:chatsIdb"))?.at === t0 && st.getItem("u:M3:chats") !== null, "lần chuyển đầu ghi dấu đã chuyển, khóa cũ còn giữ 7 ngày", st.getItem("u:M3:chatsIdb"));
+  // App mới: đổi tên 1, xóa 2, thêm 3 (chỉ vào IndexedDB).
+  await s.write({ del: [2], put: [chat(3)].map((c) => ({ id: c.id, s: C.serialChat(c), idx: K.idxOf(c) })), idx: [{ ...K.idxOf(chat(1)), title: "Một" }] });
+  // Phiên sau mở IndexedDB quá thời gian: rơi về localStorage.
+  let ls = new D.LsStore("M3");
+  ok(!(await ls.loadIndex()).length && ls.ignored, "khóa cũ là bản trước khi chuyển: bắt đầu rỗng (không mang lại đoạn đã xóa, tên cũ; chatsync tải lại từ máy chủ)", await ls.loadIndex());
+  ok(!(await ls.loadAll()).length, "đọc hết cũng rỗng");
+  // Phiên này tải từ máy chủ / tạo đoạn mới rồi ghi: khóa thành bản của chính LsStore.
+  const fromSrv = [chat(5), { ...chat(1), title: "Một" }, chat(3)];
+  await ls.write(plan(K.diffSave(new Map(), fromSrv)));
+  ok(K.parseMark(st.getItem("u:M3:chatsIdb")).ls === K.legacySig(st.getItem("u:M3:chats")), "LsStore ghi: đánh dấu khóa là bản tự ghi");
+  ls = new D.LsStore("M3");
+  ok((await ls.loadIndex()).map((x) => x.id).join() === "5,3,1" && !ls.ignored, "phiên rơi về localStorage kế tiếp (chưa mở lại IndexedDB): tin bản LsStore tự ghi", (await ls.loadIndex()).map((x) => x.id));
+  // IndexedDB mở lại được: nhập những gì phiên localStorage đã ghi, rồi khóa lại thành bản cũ.
+  let r = await D.importLegacy(s, { now: t0 + DAY });
+  const idx = await s.loadIndex();
+  // 5 là đoạn mới; 1 đổi tên "Một" so với lần nhập trước nên được nhập lại (cùng nội dung với kho); 3 cùng mốc, không có dấu trước: giữ kho.
+  ok(r.imported === 2 && idx.map((x) => x.id).join() === "5,3,1" && idx.find((x) => x.id === 1).title === "Một" && JSON.parse((await s.bodies([1])).get(1)).title === "Một", "IndexedDB nhập đoạn mới của phiên localStorage, đoạn đã xóa không quay lại", [r, idx.map((x) => x.id)]);
+  ok(K.parseMark(st.getItem("u:M3:chatsIdb")).ls === undefined, "đã nhập: khóa không còn là bản LsStore tự ghi");
+  ls = new D.LsStore("M3");
+  ok(!(await ls.loadIndex()).length && ls.ignored, "phiên rơi về localStorage sau đó: lại bắt đầu rỗng");
+  // Bản app cũ ở tab khác ghi lại khóa cũ (bản cũ trong bộ nhớ của nó) sau khi đã chuyển: LsStore không tin.
+  st.setItem("u:M3:chats", JSON.stringify([chat(2), chat(1)]));
+  ls = new D.LsStore("M3");
+  ok(!(await ls.loadIndex()).length, "khóa do bản app cũ ghi lại sau khi chuyển: không tin");
+  // Chưa chuyển bao giờ (không có dấu): LsStore dùng khóa như trước đây.
+  st.setItem("u:N3:chats", JSON.stringify([chat(7)]));
+  ok((await new D.LsStore("N3").loadIndex()).length === 1, "chưa chuyển sang IndexedDB: dùng khóa như trước đây");
+  // Mất dấu (xóa tay): lần mở IndexedDB sau ghi lại.
+  st.removeItem("u:M3:chatsIdb");
+  await D.importLegacy(s, { now: t0 + 2 * DAY });
+  ok(K.parseMark(st.getItem("u:M3:chatsIdb"))?.at === t0, "mất dấu: ghi lại với mốc chuyển đầu", st.getItem("u:M3:chatsIdb"));
+  // Hết 7 ngày, khóa cũ đã xóa: dấu vẫn còn, phiên localStorage sau đó vẫn không tin bản không phải tự ghi.
+  r = await D.importLegacy(s, { now: t0 + 8 * DAY });
+  ok(r.removed && st.getItem("u:M3:chats") === null && K.parseMark(st.getItem("u:M3:chatsIdb")), "đủ 7 ngày: xóa khóa cũ, giữ dấu đã chuyển", r);
+  ok(K.trustLegacy(null, "x") && K.trustLegacy({ at: 1, ls: "x" }, "x") && !K.trustLegacy({ at: 1 }, "x") && !K.trustLegacy({ at: 1, ls: "y" }, "x"), "trustLegacy: chưa chuyển / bản tự ghi thì tin, còn lại không");
+  ok(K.parseMark("hỏng") === null && K.parseMark('{"at":"x"}') === null && K.parseMark(null) === null, "dấu hỏng: coi như chưa có");
+  U.clearAccountData("M3");
+  ok(st.getItem("u:M3:chatsIdb") === null, "đăng xuất kèm xóa thiết bị: xóa cả dấu đã chuyển");
+  s.close();
+}
+
+console.log("15. Kho bị đóng: không ném ra ngoài ở chỗ không được ném, báo onclosed");
+{
+  const st = new Store();
+  globalThis.localStorage = st;
+  const h = fakeIDB();
+  const s = await D.openChatStore("C1", { idb: h });
+  await s.write({ put: [{ id: 1, s: C.serialChat(chat(1)), idx: K.idxOf(chat(1)) }] });
+  const why = [];
+  s.onclosed = (w) => why.push(w);
+  h.deleteDatabase("synchro-chats:C1");
+  ok(s.closed && why.join() === "versionchange", "tab khác xóa cơ sở dữ liệu: closed, onclosed('versionchange') một lần", why);
+  const rejects = async (p) => { try { await p; return null; } catch (e) { return e?.name ?? "?"; } };
+  ok((await rejects(s.loadIndex())) === "ClosedError" && (await rejects(s.bodies([1]))) === "ClosedError" && (await rejects(s.loadAll())) === "ClosedError" && (await rejects(s.clear())) === "ClosedError", "đọc / xóa trên kho đã đóng: từ chối với ClosedError (bên gọi phải bắt, không coi là kho rỗng)");
+  ok((await s.write({ del: [1] })).status === "error" && JSON.stringify(await s.getMeta()) === "{}", "ghi / đọc dấu: không ném");
+  st.setItem("u:C1:chats", JSON.stringify([chat(1)]));
+  let threw = false, r;
+  try { r = await D.importLegacy(s, { now: 1 }); } catch { threw = true; }
+  ok(!threw && r.status === "error" && r.imported === 0 && st.getItem("u:C1:chats") !== null, "nhập khóa cũ vào kho đã đóng: trả status error, không ném, giữ khóa cũ", r);
+  ok(why.length === 1, "onclosed chỉ gọi một lần", why);
+
+  // Mất kết nối mà mở lại không được: đóng hẳn, báo onclosed('lost'), các lần ghi sau báo lỗi ngay (không chờ hết thời gian mở mỗi lần).
+  const g = fakeIDB();
+  const s2 = await D.openChatStore("C2", { idb: g, timeout: 200 });
+  const why2 = [];
+  s2.onclosed = (w) => why2.push(w);
+  g.ctl.loseNext = 1; g.ctl.hangOpen = true;
+  let t = Date.now();
+  r = await s2.write({ put: [{ id: 1, s: C.serialChat(chat(1)), idx: K.idxOf(chat(1)) }] });
+  ok(r.status === "error" && s2.closed && why2.join() === "lost", "mở lại không được: báo lỗi, closed, onclosed('lost')", [r, why2]);
+  t = Date.now();
+  r = await s2.write({ del: [1] });
+  ok(r.status === "error" && Date.now() - t < 100, "lần ghi sau: báo lỗi ngay", Date.now() - t);
+  // Trang tự đóng kho (đổi tài khoản): không gọi onclosed.
+  const s3 = await D.openChatStore("C3", { idb: fakeIDB() });
+  let called = false;
+  s3.onclosed = () => { called = true; };
+  s3.close();
+  ok(s3.closed && !called, "trang tự đóng kho: closed nhưng không gọi onclosed");
+  const l = new D.LsStore("C4");
+  ok(l.closed === false && l.onclosed === null, "LsStore không bao giờ đóng");
+}
+
+console.log("16. Hai lần ghi chồng nhau không đè bản sao chỉ mục của nhau");
+{
+  const g = fakeIDB();
+  const q = await D.openChatStore("P", { idb: g });
+  const big = (id, t) => chat(id, { msgs: [{ role: "user", text: "z".repeat(3000), time: t }] });
+  const w = (c) => ({ put: [{ id: c.id, s: C.serialChat(c), idx: K.idxOf(c) }] });
+  // Không chờ lần ghi đầu xong đã ghi lần hai (lưu dồn khi đang chạy câu trả lời).
+  const [r1, r2] = await Promise.all([q.write(w(big(10, 100))), q.write(w(big(20, 50)))]);
+  ok(r1.status === "ok" && r2.status === "ok", "cả hai lần ghi xong");
+  g.ctl.quota = 7_000;
+  const r = await q.write(w(big(30, 300)), () => true);
+  ok(r.status === "ok" && r.stubbed.join() === "20", "hết chỗ: chọn đúng đoạn cũ nhất (20) trong cả hai lần ghi trước (bản sao chỉ mục đủ cả hai)", r);
+  const order = [];
+  const a = q.write({ idx: [{ ...K.idxOf(big(10, 100)), title: "A" }] }).then(() => order.push("a"));
+  const b = q.loadIndex().then((x) => order.push("b:" + x.find((y) => y.id === 10).title));
+  await Promise.all([a, b]);
+  ok(order.join() === "a,b:A", "ghi và đọc chỉ mục chạy lần lượt theo thứ tự gọi", order);
+  // Bỏ thân của đoạn mà bản sao chỉ mục chưa biết (kho có, trang chưa đọc chỉ mục): vẫn đánh dấu srv đúng.
+  const q2 = await D.openChatStore("P", { idb: g });
+  ok((await q2.write({ drop: [10] })).status === "ok" && (await q2.loadIndex()).find((x) => x.id === 10).srv === true && !(await q2.bodies([10])).size, "bỏ thân đọc dòng chỉ mục ngay trong giao dịch, không dựa vào bản sao trong bộ nhớ");
+  q.close(); q2.close();
 }
 
 console.log(`\n${pass} đạt, ${fail} lỗi`);

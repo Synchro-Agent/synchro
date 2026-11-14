@@ -2,10 +2,19 @@
 // - IdbStore: IndexedDB "synchro-chats:<uid>", mỗi đoạn chat một bản ghi thân (chuỗi serialChat) + một dòng chỉ mục; mỗi lần lưu chỉ ghi phần đổi.
 // - LsStore: như từ trước tới nay (cả danh sách trong localStorage u:<uid>:chats), dùng khi trình duyệt không mở được IndexedDB
 //   (Firefox riêng tư cũ, Safari riêng tư cũ, vài WebView trong ứng dụng, mở bị treo). Đã rơi về LsStore thì giữ tới hết phiên trang.
-// Lỗi của IndexedDB không bao giờ ném ra ngoài: rơi về LsStore, thử mở lại một lần, hoặc trả "error" / "quota" cho bên gọi.
+// Lỗi của IndexedDB: openChatStore, write, getMeta và importLegacy không bao giờ ném (rơi về LsStore, thử mở lại một lần, trả "error" / "quota" /
+// {} cho bên gọi). Các hàm đọc loadIndex / bodies / loadAll và setMeta / clear thì CÓ THỂ từ chối (Error có name: ClosedError khi kho đã đóng
+// hoặc không mở lại được, AbortError / lỗi giao dịch khác): bên gọi phải bắt, và không được coi lỗi đọc là kho rỗng.
+// Kho bị đóng từ bên ngoài (tab khác xóa / nâng cấp cơ sở dữ liệu, mất kết nối mà mở lại không được): closed = true và gọi onclosed một lần;
+// bên gọi chuyển sang LsStore hoặc tải lại trang (mọi lần ghi sau đó trả "error").
 // Lõi thuần ở chatidbcore.ts; kiểm thử: tests/api/chatidb.test.mjs. Chưa nối vào trang (home.tsx / chatsync.ts làm ở vòng sau).
-import { dbName, dropLegacyDue, idxOf, legacyRows, legacySig, legacyWins, sortIdx, stubOfRow, type IdxRow, type ImportRow } from "./chatidbcore";
-import { saveFit, stubOf } from "./chatsynccore";
+// Điều kiện cho vòng nối vào trang:
+// - Bắt lỗi của loadIndex / bodies / loadAll lúc mở trang (lỗi đọc KHÔNG phải kho rỗng); đặt store.onclosed để chuyển sang LsStore hoặc tải lại.
+// - LsStore.ignored (khóa cũ đã chuyển, bắt đầu rỗng): chatsync tải lại từ máy chủ như máy mới, không đánh dấu gì là cần đẩy.
+// - Chạy next build và next dev --turbopack với chatidb.ts được import từ trang, xác nhận tệp luồng phụ chatmigrate.worker.ts tải được
+//   (cùng cách new Worker(new URL(...)) như highlight.worker.ts / tokens.worker.ts đang chạy).
+import { MARK_KEY, dbName, dropLegacyDue, idxOf, legacyMerge, legacyRows, legacySig, legacySigAsync, parseMark, sortIdx, stubOfRow, trustLegacy, type IdxRow, type ImportRow } from "./chatidbcore";
+import { lastTime, saveFit, stubOf } from "./chatsynccore";
 import type { Chat } from "./store";
 import { scopedFor } from "./userscope";
 
@@ -14,12 +23,21 @@ export type PutRow = { id: number; s: string; idx: IdxRow };
 export type ChatWrite = { put?: PutRow[]; idx?: IdxRow[]; del?: number[]; drop?: number[] };
 /** stubbed: các đoạn đã bị rút gọn (bỏ thân, nội dung còn trên máy chủ) để lần ghi này vừa chỗ. */
 export type WriteResult = { status: "ok" | "quota" | "error"; stubbed: number[] };
-/** sig: dấu của khóa localStorage cũ đã nhập; migratedAt: lần nhập đầu (giữ khóa cũ thêm 7 ngày từ mốc này). */
-export type StoreMeta = { sig?: string; migratedAt?: number };
+/**
+ * sig: dấu của khóa localStorage cũ đã nhập; migratedAt: lần nhập đầu (giữ khóa cũ thêm 7 ngày từ mốc này);
+ * rows: dấu từng dòng của khóa cũ ở lần nhập đó (ImportRow.mark theo id), để lần sau chỉ nhập lại dòng đã đổi.
+ */
+export type StoreMeta = { sig?: string; migratedAt?: number; rows?: Record<string, string> };
+/** Vì sao kho bị đóng từ bên ngoài: versionchange = tab khác xóa / nâng cấp cơ sở dữ liệu; lost = mất kết nối và mở lại không được. */
+export type ClosedWhy = "versionchange" | "lost";
 
 export interface ChatStore {
   readonly kind: "idb" | "ls";
   readonly uid: string;
+  /** Kho đã đóng (close() hoặc bị đóng từ bên ngoài): mọi lần ghi trả "error", đọc thì từ chối với ClosedError. */
+  readonly closed: boolean;
+  /** Gọi một lần khi kho bị đóng từ bên ngoài (không gọi khi chính trang close()). */
+  onclosed: ((why: ClosedWhy) => void) | null;
   /** Các dòng chỉ mục, mới nhất trước. LsStore phải đọc cả danh sách để có chỉ mục. */
   loadIndex(): Promise<IdxRow[]>;
   /** Thân (chuỗi serialChat) của các id có thân ở máy này; id không có thì vắng trong kết quả. */
@@ -43,18 +61,31 @@ type StorageLike = Pick<Storage, "getItem" | "setItem" | "removeItem">;
 
 export class LsStore implements ChatStore {
   readonly kind = "ls" as const;
+  readonly closed = false;
+  onclosed: ((why: ClosedWhy) => void) | null = null;
   private rows: Map<number, LsEntry> | null = null;
   private order: number[] = [];
   private stubbed = new Set<number>();
   private meta: StoreMeta = {};
   constructor(readonly uid: string, private st: () => StorageLike = () => localStorage) {}
   private get key() { return scopedFor(this.uid, "chats"); }
+  private get markKey() { return scopedFor(this.uid, MARK_KEY); }
+  private skip = false;
+  /** Đã bỏ qua nội dung khóa cũ lúc đọc (khóa cũ đã chuyển sang IndexedDB, không còn là bản đang dùng): bắt đầu rỗng như máy mới. */
+  get ignored() { return this.skip; }
   // Đọc một lần cả danh sách (bản dự phòng: như trước đây). Đối tượng đã đọc thuộc về kho; state React không sửa tại chỗ nên chuỗi tính lại từ đó vẫn đúng.
+  // Tài khoản đã chuyển sang IndexedDB trên trình duyệt này (dấu MARK_KEY) mà khóa không phải do LsStore tự ghi sau lần nhập cuối: khóa là bản
+  // cũ (thiếu tin mới, còn đoạn đã xóa, tên cũ), bắt đầu rỗng. chatsync lấy lại từ máy chủ mọi mục máy chủ có mà ở đây không có (như máy mới),
+  // nên không đẩy bản cũ đè máy chủ. Lần IndexedDB mở lại được sau đó, importLegacy nhập những gì phiên này ghi vào khóa.
   private load() {
     if (this.rows) return this.rows;
     const rows = new Map<number, LsEntry>();
     let list: unknown = [];
-    try { list = JSON.parse(this.st().getItem(this.key) || "[]"); } catch {}
+    try {
+      const raw = this.st().getItem(this.key);
+      if (raw !== null && !trustLegacy(parseMark(this.st().getItem(this.markKey)), legacySig(raw))) this.skip = true;
+      else list = JSON.parse(raw || "[]");
+    } catch {}
     if (Array.isArray(list)) for (const x of list) {
       const c = x as Chat;
       if (!c || typeof c !== "object" || typeof c.id !== "number" || c.inc || !Array.isArray(c.msgs) || rows.has(c.id)) continue;
@@ -86,25 +117,39 @@ export class LsStore implements ChatStore {
       const base = e ? this.chat(e) : ({ id: r.id, title: r.title, msgs: [] } as Chat);
       const obj: Chat = { ...base, title: r.title, pinned: r.pinned, project: r.project, tags: r.tags, studio: r.studio, named: r.named, ...(full ? {} : { stub: true }) };
       delete obj.local; delete obj.upd;
-      rows.set(r.id, { s: null, obj, idx: full ? idxOf(obj) : { ...r, srv: true }, stub: !full });
+      // Mốc sửa của bản rút gọn không bao giờ lùi (bản rút gọn không có tin, mốc tính lại rơi về id).
+      rows.set(r.id, { s: null, obj, idx: full ? idxOf(obj) : { ...r, srv: true, upd: Math.max(r.upd, e?.idx.upd ?? 0) }, stub: !full });
     }
     for (const id of w.drop ?? []) {
       const e = rows.get(id);
       if (!e || e.stub) continue;
       const obj = stubOf(this.chat(e)) as Chat;
-      rows.set(id, { s: null, obj, idx: { ...idxOf(obj), srv: true }, stub: true });
+      rows.set(id, { s: null, obj, idx: { ...idxOf(obj), srv: true, upd: Math.max(e.idx.upd, lastTime(obj)) }, stub: true });
     }
     // Thứ tự lưu: đoạn đã có giữ chỗ cũ, đoạn mới lên đầu (như danh sách trên thanh bên).
     const had = new Set(this.order);
     this.order = [...[...rows.keys()].filter((id) => !had.has(id)).sort((a, b) => b - a), ...this.order.filter((id) => rows.has(id))];
-    const set = (json: string) => { try { this.st().setItem(this.key, json); return true; } catch { return false; } };
+    let wrote: string | null = null;
+    const set = (json: string) => { try { this.st().setItem(this.key, json); wrote = json; return true; } catch { return false; } };
     const list = this.order.map((id) => rows.get(id)!);
-    if (!this.stubbed.size && set(`[${list.map((e) => this.text(e)).join(",")}]`)) return { status: "ok", stubbed: [] };
-    // Hết chỗ: rút gọn dần đoạn cũ nhất đã có trên máy chủ (saveFit, như chatsync từ trước tới nay). Chuỗi rút gọn chỉ tính ở nhánh này.
-    const fit = list.map((e) => ({ key: String(e.idx.id), full: this.text(e), time: e.idx.upd, stub: !e.stub && canStub?.(e.idx.id) ? (e.stubS ??= JSON.stringify(stubOf(this.chat(e)))) : null }));
-    const r = saveFit(fit, new Set([...this.stubbed].map(String)), set);
-    this.stubbed = new Set([...r.stubbed].map(Number));
-    return { status: r.ok ? "ok" : "quota", stubbed: [...this.stubbed] };
+    let res: WriteResult;
+    if (!this.stubbed.size && set(`[${list.map((e) => this.text(e)).join(",")}]`)) res = { status: "ok", stubbed: [] };
+    else {
+      // Hết chỗ: rút gọn dần đoạn cũ nhất đã có trên máy chủ (saveFit, như chatsync từ trước tới nay). Chuỗi rút gọn chỉ tính ở nhánh này.
+      const fit = list.map((e) => ({ key: String(e.idx.id), full: this.text(e), time: e.idx.upd, stub: !e.stub && canStub?.(e.idx.id) ? (e.stubS ??= JSON.stringify(stubOf(this.chat(e)))) : null }));
+      const r = saveFit(fit, new Set([...this.stubbed].map(String)), set);
+      this.stubbed = new Set([...r.stubbed].map(Number));
+      res = { status: r.ok ? "ok" : "quota", stubbed: [...this.stubbed] };
+    }
+    if (wrote !== null) this.markOwn(wrote);
+    return res;
+  }
+  // Tài khoản đã chuyển sang IndexedDB: ghi dấu rằng khóa là bản LsStore tự ghi (lần sau rơi về localStorage được tin, importLegacy sẽ nhập).
+  private markOwn(json: string) {
+    try {
+      const m = parseMark(this.st().getItem(this.markKey));
+      if (m) this.st().setItem(this.markKey, JSON.stringify({ at: m.at, ls: legacySig(json) }));
+    } catch {}
   }
   async getMeta() { return { ...this.meta }; }
   async setMeta(m: StoreMeta) { this.meta = { ...this.meta, ...m }; }
@@ -158,24 +203,40 @@ export function openDb(f: IDBFactory, name: string, timeout: number): Promise<ID
 export class IdbStore implements ChatStore {
   readonly kind = "idb" as const;
   private db: IDBDatabase | null;
-  private closed = false;
-  // Bản sao chỉ mục trong bộ nhớ: chọn đoạn để rút gọn khi hết chỗ mà không phải đọc lại kho.
+  private shut = false;
+  onclosed: ((why: ClosedWhy) => void) | null = null;
+  // Bản sao chỉ mục trong bộ nhớ: chọn đoạn để rút gọn khi hết chỗ mà không phải đọc lại kho. Chỉ sửa theo phần đổi của giao dịch đã xong.
   private idx = new Map<number, IdxRow>();
+  // Các lần ghi / đọc chỉ mục chạy lần lượt: hai lần ghi chồng nhau không đè bản sao chỉ mục của nhau.
+  private chain: Promise<unknown> = Promise.resolve();
   constructor(readonly uid: string, db: IDBDatabase, private f: IDBFactory, private timeout = 3000) {
     this.db = db;
     this.watch(db);
   }
+  get closed() { return this.shut; }
+  private lose(why: ClosedWhy) {
+    if (this.shut) return;
+    this.shut = true;
+    try { this.onclosed?.(why); } catch {}
+  }
+  private seq<T>(fn: () => Promise<T>): Promise<T> {
+    const p = this.chain.then(fn, fn);
+    this.chain = p.catch(() => {});
+    return p;
+  }
   private watch(db: IDBDatabase) {
-    // Tab khác xóa / nâng cấp cơ sở dữ liệu (đăng xuất kèm xóa thiết bị): nhường ngay, không mở lại (mở lại sẽ dựng lại kho vừa bị xóa).
-    db.onversionchange = () => { try { db.close(); } catch {} this.db = null; this.closed = true; };
+    // Tab khác xóa / nâng cấp cơ sở dữ liệu (đăng xuất kèm xóa thiết bị, bản app mới hơn): nhường ngay, không mở lại (mở lại sẽ dựng lại kho
+    // vừa bị xóa) và báo onclosed để trang chuyển sang LsStore hoặc tải lại.
+    db.onversionchange = () => { try { db.close(); } catch {} this.db = null; this.lose("versionchange"); };
     db.onclose = () => { if (this.db === db) this.db = null; };
   }
   private async conn(): Promise<IDBDatabase> {
-    if (this.closed) throw oops(CLOSED);
+    if (this.shut) throw oops(CLOSED);
     if (this.db) return this.db;
     const db = await openDb(this.f, dbName(this.uid), this.timeout);
-    if (!db) throw oops(CLOSED);
-    if (this.closed) { db.close(); throw oops(CLOSED); }
+    // Mở lại không được: đóng hẳn (không để mỗi lần ghi sau lại chờ hết thời gian mở) và báo onclosed.
+    if (!db) { this.lose("lost"); throw oops(CLOSED); }
+    if (this.shut) { db.close(); throw oops(CLOSED); }
     this.watch(db);
     return (this.db = db);
   }
@@ -193,17 +254,19 @@ export class IdbStore implements ChatStore {
       });
     };
     try { return await once(); } catch (e) {
-      if (!lost(e) || this.closed) throw e;
+      if (!lost(e) || this.shut) throw e;
       try { this.db?.close(); } catch {}
       this.db = null;
       return once();
     }
   }
-  async loadIndex() {
-    let rows: IdxRow[] = [];
-    await this.run(["idx"], "readonly", (t) => { const r = t.objectStore("idx").getAll() as IDBRequest<IdxRow[]>; r.onsuccess = () => { rows = r.result ?? []; }; });
-    this.idx = new Map(rows.map((r) => [r.id, r]));
-    return sortIdx(rows);
+  loadIndex() {
+    return this.seq(async () => {
+      let rows: IdxRow[] = [];
+      await this.run(["idx"], "readonly", (t) => { const r = t.objectStore("idx").getAll() as IDBRequest<IdxRow[]>; r.onsuccess = () => { rows = r.result ?? []; }; });
+      this.idx = new Map(rows.map((r) => [r.id, r]));
+      return sortIdx(rows);
+    });
   }
   async bodies(ids: readonly number[]) {
     const out = new Map<number, string>();
@@ -227,27 +290,40 @@ export class IdbStore implements ChatStore {
     }
     return out;
   }
-  // Một giao dịch trên body + idx: ghi trọn hoặc không ghi gì.
+  // Một giao dịch trên body + idx: ghi trọn hoặc không ghi gì. Bản sao chỉ mục chỉ đổi theo phần đổi của giao dịch, sau khi giao dịch xong.
   private async apply(w: ChatWrite): Promise<WriteResult["status"]> {
     if (!w.put?.length && !w.idx?.length && !w.del?.length && !w.drop?.length) return "ok";
-    const next = new Map(this.idx);
+    let delta: [number, IdxRow | null][] = [];
     try {
       await this.run(["body", "idx"], "readwrite", (t) => {
+        delta = [];
         const b = t.objectStore("body"), x = t.objectStore("idx");
-        for (const id of w.del ?? []) { b.delete(id); x.delete(id); next.delete(id); }
-        for (const p of w.put ?? []) { b.put({ id: p.id, s: p.s }); const r = { ...p.idx }; delete r.srv; x.put(r); next.set(p.id, r); }
-        for (const r of w.idx ?? []) { x.put(r); next.set(r.id, r); }
+        // Đọc dòng chỉ mục đang có trong chính giao dịch (không tin bản sao trong bộ nhớ), rồi ghi dòng mới.
+        const edit = (id: number, fn: (cur: IdxRow | undefined) => IdxRow | null) => {
+          const g = x.get(id) as IDBRequest<IdxRow | undefined>;
+          g.onsuccess = () => { const r = fn(g.result); if (r) { x.put(r); delta.push([id, r]); } };
+        };
+        for (const id of w.del ?? []) { b.delete(id); x.delete(id); delta.push([id, null]); }
+        for (const p of w.put ?? []) { b.put({ id: p.id, s: p.s }); const r = { ...p.idx }; delete r.srv; x.put(r); delta.push([p.id, r]); }
+        // Chỉ ghi chỉ mục: mốc sửa không bao giờ lùi (bản rút gọn không có tin), và không bao giờ làm thân đã bỏ hiện lại (giữ srv).
+        for (const r of w.idx ?? []) edit(r.id, (cur) => {
+          const n: IdxRow = { ...r, upd: Math.max(r.upd, cur?.upd ?? 0) };
+          if (cur?.srv) n.srv = true;
+          return n;
+        });
         for (const id of w.drop ?? []) {
           b.delete(id);
-          const r = next.get(id);
-          if (r) { const s: IdxRow = { ...r, srv: true }; delete s.run; x.put(s); next.set(id, s); }
+          edit(id, (cur) => { if (!cur) return null; const s: IdxRow = { ...cur, srv: true }; delete s.run; return s; });
         }
       });
     } catch (e) { return quota(e) ? "quota" : "error"; }
-    this.idx = next;
+    for (const [id, r] of delta) { if (r) this.idx.set(id, r); else this.idx.delete(id); }
     return "ok";
   }
-  async write(w: ChatWrite, canStub?: (id: number) => boolean): Promise<WriteResult> {
+  write(w: ChatWrite, canStub?: (id: number) => boolean): Promise<WriteResult> {
+    return this.seq(() => this.fit(w, canStub));
+  }
+  private async fit(w: ChatWrite, canStub?: (id: number) => boolean): Promise<WriteResult> {
     const st = await this.apply(w);
     if (st !== "quota" || !canStub) return { status: st, stubbed: [] };
     // Hết chỗ: bỏ thân của đoạn cũ nhất đã có trên máy chủ (mỗi lần thêm một phần tư số còn lại, như saveFit), giữ chỉ mục, rồi ghi lại.
@@ -269,19 +345,23 @@ export class IdbStore implements ChatStore {
     try {
       let m: StoreMeta | undefined;
       await this.run(["meta"], "readonly", (t) => { const r = t.objectStore("meta").get("legacy") as IDBRequest<StoreMeta | undefined>; r.onsuccess = () => { m = r.result; }; });
-      return m ? { ...(m.sig ? { sig: m.sig } : {}), ...(m.migratedAt ? { migratedAt: m.migratedAt } : {}) } : {};
+      return m ? { ...(m.sig ? { sig: m.sig } : {}), ...(m.migratedAt ? { migratedAt: m.migratedAt } : {}), ...(m.rows && typeof m.rows === "object" ? { rows: m.rows } : {}) } : {};
     } catch { return {}; }
   }
   async setMeta(m: StoreMeta) {
     const cur = await this.getMeta();
     await this.run(["meta"], "readwrite", (t) => { t.objectStore("meta").put({ ...cur, ...m, k: "legacy" }); });
   }
-  async clear() {
-    await this.run(["body", "idx", "meta"], "readwrite", (t) => { for (const n of ["body", "idx", "meta"]) t.objectStore(n).clear(); });
-    this.idx = new Map();
+  clear() {
+    return this.seq(async () => {
+      await this.run(["body", "idx", "meta"], "readwrite", (t) => { for (const n of ["body", "idx", "meta"]) t.objectStore(n).clear(); });
+      this.idx = new Map();
+      // Khóa localStorage cũ cũng là đoạn chat của tài khoản trên thiết bị: còn thì lần mở sau importLegacy nhập lại các đoạn vừa xóa.
+      try { if (typeof localStorage !== "undefined") localStorage.removeItem(scopedFor(this.uid, "chats")); } catch {}
+    });
   }
   close() {
-    this.closed = true;
+    this.shut = true;
     try { this.db?.close(); } catch {}
     this.db = null;
   }
@@ -344,37 +424,53 @@ export const parseLegacy: LegacyParse = (raw) => new Promise((resolve) => {
 });
 
 /**
- * Nhập khóa localStorage cũ u:<uid>:chats vào IndexedDB, một lần cho mỗi nội dung (so dấu legacySig): chỉ thêm / đè, không bao giờ xóa
- * (xóa luôn là lệnh rõ ràng). Khóa cũ xuất hiện lại (bản app cũ ở tab khác, kiểm thử gieo dữ liệu) thì dấu khác, nhập lại.
- * Khóa cũ giữ 7 ngày từ lần nhập đầu rồi xóa, và chỉ xóa khi nội dung hiện tại đã nhập xong. LsStore: khóa cũ chính là kho, không làm gì.
+ * Nhập khóa localStorage cũ u:<uid>:chats vào IndexedDB, một lần cho mỗi nội dung (so dấu legacySig của cả chuỗi): chỉ thêm / đè, không bao giờ
+ * xóa (xóa luôn là lệnh rõ ràng). Khóa cũ đổi (bản app cũ ở tab khác, phiên rơi về LsStore, kiểm thử gieo dữ liệu) thì chỉ nhập lại những dòng
+ * đã đổi so với lần nhập trước (legacyMerge), nên sửa chỉ mục ở app mới (đổi tên, ghim…) không bị khóa cũ đè.
+ * Lần nhập đầu ghi dấu MARK_KEY ở localStorage (LsStore thôi tin khóa cũ). Khóa cũ giữ 7 ngày từ lần nhập đầu rồi xóa, và chỉ xóa khi nội dung
+ * hiện tại đã nhập xong. LsStore: khóa cũ chính là kho, không làm gì. Không bao giờ ném: lỗi kho thì status "error".
  */
 export async function importLegacy(store: ChatStore, opts: { now?: number; parse?: LegacyParse; storage?: () => StorageLike } = {}) {
   const res = { imported: 0, removed: false, via: null as "worker" | "main" | null, status: "ok" as WriteResult["status"] };
   if (store.kind !== "idb") return res;
   const st = opts.storage ?? (() => localStorage), key = scopedFor(store.uid, "chats"), now = opts.now ?? Date.now();
-  let raw: string | null = null;
-  try { raw = st().getItem(key); } catch {}
-  if (raw === null) return res;
-  const sig = legacySig(raw);
-  let meta = await store.getMeta();
-  if (sig !== meta.sig) {
-    const p = await (opts.parse ?? parseLegacy)(raw);
-    res.via = p.via;
-    const have = new Map((await store.loadIndex()).map((r) => [r.id, r]));
-    const rows = (p.rows ?? []).filter((r) => legacyWins(r, have.get(r.id)));
-    // Từng đợt 100 đoạn, mỗi đợt một giao dịch: trang đóng giữa chừng thì lần sau nhập lại (thêm / đè nên không sao).
-    for (let i = 0; i < rows.length; i += 100) {
-      const part = rows.slice(i, i + 100);
-      const r = await store.write({ put: part.filter((x) => x.s !== null).map((x) => ({ id: x.id, s: x.s!, idx: x.idx })), idx: part.filter((x) => x.s === null).map((x) => x.idx) });
-      if (r.status !== "ok") { res.status = r.status; return res; }
-      res.imported += part.length;
+  // Dấu cho LsStore khi tài khoản đã chuyển: { at }. Kho IndexedDB đã thấy nội dung khóa hiện tại (hoặc không còn khóa), nên bỏ "ls" (khóa
+  // không còn là bản LsStore tự ghi mà IndexedDB chưa nhập). Mất dấu (xóa tay) thì ghi lại. Chỉ ghi khi khác.
+  const mark = (at: number) => {
+    try {
+      const k = scopedFor(store.uid, MARK_KEY), m = parseMark(st().getItem(k));
+      if (!m || m.ls !== undefined) st().setItem(k, JSON.stringify({ at: m?.at || at }));
+    } catch {}
+  };
+  try {
+    let raw: string | null = null;
+    try { raw = st().getItem(key); } catch {}
+    let meta = await store.getMeta();
+    if (raw === null) { if (meta.migratedAt) mark(meta.migratedAt); return res; }
+    const sig = await legacySigAsync(raw, tick);
+    if (sig !== meta.sig) {
+      const p = await (opts.parse ?? parseLegacy)(raw);
+      res.via = p.via;
+      const have = new Map((await store.loadIndex()).map((r) => [r.id, r]));
+      const base = meta.rows ?? {};
+      const rows = (p.rows ?? []).map((r) => legacyMerge(r, have.get(r.id), base[r.id])).filter((r): r is ImportRow => r !== null);
+      // Từng đợt 100 đoạn, mỗi đợt một giao dịch: trang đóng giữa chừng thì lần sau nhập lại (thêm / đè nên không sao).
+      for (let i = 0; i < rows.length; i += 100) {
+        const part = rows.slice(i, i + 100);
+        const r = await store.write({ put: part.filter((x) => x.s !== null).map((x) => ({ id: x.id, s: x.s!, idx: x.idx })), idx: part.filter((x) => x.s === null).map((x) => x.idx) });
+        if (r.status !== "ok") { res.status = r.status; return res; }
+        res.imported += part.length;
+      }
+      // JSON hỏng (p.rows null): không có gì nhập được; vẫn ghi dấu để không đọc lại mỗi lần mở trang.
+      const marks: Record<string, string> = {};
+      for (const r of p.rows ?? []) marks[r.id] = r.mark;
+      await store.setMeta({ sig, migratedAt: meta.migratedAt || now, rows: marks });
+      meta = await store.getMeta();
     }
-    // JSON hỏng (p.rows null): không có gì nhập được; vẫn ghi dấu để không đọc lại mỗi lần mở trang.
-    await store.setMeta({ sig, migratedAt: meta.migratedAt || now });
-    meta = await store.getMeta();
-  }
-  if (meta.sig === sig && dropLegacyDue(meta.migratedAt ?? 0, now)) {
-    try { st().removeItem(key); res.removed = true; } catch {}
-  }
+    if (meta.sig === sig && meta.migratedAt) mark(meta.migratedAt);
+    if (meta.sig === sig && dropLegacyDue(meta.migratedAt ?? 0, now)) {
+      try { st().removeItem(key); res.removed = true; } catch {}
+    }
+  } catch { res.status = "error"; }
   return res;
 }

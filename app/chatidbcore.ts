@@ -79,6 +79,8 @@ export function diffSave(prev: ReadonlyMap<number, Chat>, list: readonly Chat[],
     if (old === c) continue;
     if (!c.stub) { put.push(c); continue; }
     const r = idxOf(c);
+    // Bản rút gọn của máy chủ không có tin, mốc sửa của nó rơi về id: giữ mốc sửa thật của bản trước (đầy đủ hoặc rút gọn), không bao giờ lùi.
+    if (old) r.upd = Math.max(r.upd, lastTime(old));
     if (!old || idxKey(idxOf(old)) !== idxKey(r)) idx.push(r);
     if (old && r.srv && !(old.stub && !old.local)) drop.push(c.id);
   }
@@ -91,9 +93,25 @@ export function diffSave(prev: ReadonlyMap<number, Chat>, list: readonly Chat[],
   return { put, idx, drop, del, guarded };
 }
 
-/** Dấu của khóa localStorage cũ: độ dài + 4KB đầu + 4KB cuối (đoạn mới nhất nằm đầu danh sách). Đọc dấu không phải JSON.parse cả khóa. */
-export function legacySig(s: string) {
-  return `${s.length}:${hashOf(s.length <= 8192 ? s : s.slice(0, 4096) + s.slice(-4096))}`;
+/** Một bước FNV-1a 32 bit trên s[a, b) (như hashOf ở chatsynccore.ts), để băm chuỗi dài từng đoạn mà kết quả vẫn như băm một lần. */
+export function fnv(h: number, s: string, a: number, b: number) {
+  for (let i = a; i < b; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193); }
+  return h;
+}
+const FNV0 = 0x811c9dc5;
+const sigOf = (len: number, h: number) => `${len}:${(h >>> 0).toString(36)}`;
+/**
+ * Dấu của khóa localStorage cũ: độ dài + băm CẢ chuỗi (sửa một đoạn giữa danh sách mà độ dài không đổi vẫn đổi dấu). Không JSON.parse.
+ * Ở luồng chính dùng legacySigAsync (cùng kết quả, nhường luồng giữa các đoạn) để khóa vài MB không thành một tác vụ dài.
+ */
+export const legacySig = (s: string) => sigOf(s.length, fnv(FNV0, s, 0, s.length));
+export async function legacySigAsync(s: string, pause: () => Promise<void>, chunk = 1 << 19) {
+  let h = FNV0;
+  for (let i = 0; i < s.length; i += chunk) {
+    if (i) await pause();
+    h = fnv(h, s, i, Math.min(s.length, i + chunk));
+  }
+  return sigOf(s.length, h);
 }
 /** Đã đủ 7 ngày từ lần chuyển đầu: xóa khóa cũ. at = 0 (chưa chuyển) thì không bao giờ. */
 export const dropLegacyDue = (at: number, now: number) => at > 0 && now - at >= LEGACY_KEEP;
@@ -101,24 +119,73 @@ export const dropLegacyDue = (at: number, now: number) => at > 0 && now - at >= 
 /** Thanh bên xếp đoạn mới nhất lên đầu (id giảm dần), như thứ tự trộn ở chatsync.ts. */
 export const sortIdx = (rows: readonly IdxRow[]) => [...rows].sort((a, b) => b.id - a.id);
 
-/** Một đoạn chat từ khóa cũ, sẵn để ghi: s = chuỗi thân (null: bản rút gọn cũ, chỉ ghi chỉ mục với srv). */
-export type ImportRow = { id: number; s: string | null; idx: IdxRow };
+/**
+ * Một đoạn chat từ khóa cũ, sẵn để ghi: s = chuỗi thân (null: bản rút gọn cũ, chỉ ghi chỉ mục với srv).
+ * mark = dấu của dòng này ở khóa cũ, "<băm nội dung>|<băm các trường thanh bên>": lần nhập sau so với dấu đã nhập (StoreMeta.rows)
+ * để chỉ nhập lại đúng đoạn đã đổi ở khóa cũ, và biết thay đổi đó có đụng tên / ghim / thẻ… hay chỉ là nội dung.
+ */
+export type ImportRow = { id: number; s: string | null; idx: IdxRow; mark: string };
+/** Các trường thanh bên sửa được mà không đổi mốc sửa (đổi tên, ghim, dự án, thẻ, studio). */
+const fieldsKey = (r: IdxRow) => JSON.stringify([r.title, !!r.pinned, r.project ?? null, r.tags ?? [], r.studio ?? null, !!r.named]);
 export function legacyRow(x: unknown): ImportRow | null {
   if (!x || typeof x !== "object") return null;
   const c = x as Chat;
   if (typeof c.id !== "number" || !Number.isFinite(c.id) || c.inc || !Array.isArray(c.msgs)) return null;
   const { upd: _u, local: _l, ...body } = c;
-  if (c.stub) return { id: c.id, s: null, idx: idxOf(body) };
-  return { id: c.id, s: serialChat(body), idx: idxOf(body) };
+  const idx = idxOf(body);
+  if (c.stub) {
+    // Bản rút gọn cũ không có tin: mốc sửa lấy upd nếu bản lưu có (LsStore ghi kèm), không thì rơi về id.
+    if (typeof c.upd === "number" && Number.isFinite(c.upd)) idx.upd = Math.max(idx.upd, c.upd);
+    return { id: c.id, s: null, idx, mark: `${hashOf(idxKey(idx))}|${hashOf(fieldsKey(idx))}` };
+  }
+  const s = serialChat(body);
+  return { id: c.id, s, idx, mark: `${hashOf(s)}|${hashOf(fieldsKey(idx))}` };
 }
 export const legacyRows = (list: unknown): ImportRow[] => (Array.isArray(list) ? list.map(legacyRow).filter((r): r is ImportRow => r !== null) : []);
 
 /**
- * Nhập lại khóa cũ (bản app cũ ở tab khác vừa ghi, hoặc kiểm thử gieo dữ liệu) chỉ thêm / đè, không bao giờ xóa. Không đè khi kho đã có bản
- * có tin mới hơn, và bản rút gọn cũ không đè thân đã có.
+ * Nhập lại khóa cũ (bản app cũ ở tab khác vừa ghi, kho dự phòng localStorage của một phiên không mở được IndexedDB, kiểm thử gieo dữ liệu):
+ * chỉ thêm / đè, không bao giờ xóa. Trả dòng cần ghi, hoặc null (giữ bản trong kho). have: chỉ mục trong kho; base: dấu lần nhập trước.
+ * - Kho chưa có: nhập.
+ * - Dòng không đổi so với lần nhập trước: bỏ qua. Kho là bản đang dùng; nhập lại sẽ xóa mất các sửa chỉ chỉ mục (đổi tên, ghim…) làm ở app mới.
+ * - Bản rút gọn cũ không bao giờ đè thứ đã có. Bản cũ có tin cũ hơn kho: bỏ qua.
+ * - Cùng mốc sửa: chỉ nhập khi biết chắc khóa cũ đã đổi tên / ghim / thẻ (có dấu lần trước và dấu trường thanh bên khác); không có dấu lần trước
+ *   thì không phân biệt được bản cũ với bản đã đổi, giữ kho.
+ * - Nhập nội dung mà các trường thanh bên ở khóa cũ không đổi so với lần trước: giữ tên / ghim / thẻ… của kho (sửa ở app mới), áp lên thân.
  */
-export function legacyWins(row: ImportRow, have: IdxRow | undefined) {
-  if (!have) return true;
-  if (row.s === null) return false;
-  return row.idx.upd >= have.upd;
+export function legacyMerge(row: ImportRow, have: IdxRow | undefined, base: string | undefined): ImportRow | null {
+  if (!have) return row;
+  if (base === row.mark || row.s === null || row.idx.upd < have.upd) return null;
+  if (row.idx.upd === have.upd && base === undefined) return null;
+  // Trường thanh bên ở khóa cũ đổi so với lần nhập trước (đổi tên ở tab cũ), hoặc không có lần trước để so: nhập nguyên dòng.
+  if (base === undefined || base.split("|")[1] !== row.mark.split("|")[1]) return row;
+  let body: Chat;
+  try { body = JSON.parse(row.s) as Chat; } catch { return null; }
+  const merged = withIdx(body, stubOfRow(have));
+  const s = serialChat(merged);
+  return { id: row.id, s, idx: idxOf(merged), mark: row.mark };
 }
+
+/** Kế hoạch ghi của diffSave thành lệnh ghi cho kho (thân là chuỗi serialChat, đúng dấu nội dung của chatsync). */
+export function toWrite(d: ReturnType<typeof diffSave>) {
+  return { put: d.put.map((c) => ({ id: c.id, s: serialChat(c), idx: idxOf(c) })), idx: d.idx, del: d.del, drop: d.drop };
+}
+
+/**
+ * Dấu ở localStorage u:<uid>:chatsIdb (MARK_KEY) cho kho dự phòng LsStore: tài khoản này đã chuyển sang IndexedDB trên trình duyệt này lúc at.
+ * Từ đó khóa cũ u:<uid>:chats không còn là bản đang dùng (mọi sửa đi vào IndexedDB), nên một phiên rơi về localStorage KHÔNG tin nội dung khóa
+ * cũ (sẽ mang lại đoạn đã xóa, tên cũ, thiếu tin mới và chatsync sẽ đẩy bản cũ đè máy chủ), trừ khi khóa đó do chính LsStore ghi sau lần
+ * IndexedDB nhập gần nhất (ls = dấu legacySig của lần ghi đó).
+ */
+export const MARK_KEY = "chatsIdb";
+export type LegacyMark = { at: number; ls?: string };
+export function parseMark(raw: string | null): LegacyMark | null {
+  if (!raw) return null;
+  try {
+    const m = JSON.parse(raw) as LegacyMark;
+    if (!m || typeof m !== "object" || typeof m.at !== "number") return null;
+    return typeof m.ls === "string" ? { at: m.at, ls: m.ls } : { at: m.at };
+  } catch { return null; }
+}
+/** LsStore có được dùng nội dung khóa cũ không: chưa chuyển lần nào, hoặc khóa là bản LsStore tự ghi sau lần nhập cuối. */
+export const trustLegacy = (mark: LegacyMark | null, sig: string) => !mark || mark.ls === sig;
