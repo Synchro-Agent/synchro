@@ -27,8 +27,11 @@ export type WriteResult = { status: "ok" | "quota" | "error"; stubbed: number[] 
  * rows: dấu từng dòng của khóa cũ ở lần nhập đó (ImportRow.mark theo id), để lần sau chỉ nhập lại dòng đã đổi.
  */
 export type StoreMeta = { sig?: string; migratedAt?: number; rows?: Record<string, string> };
-/** Vì sao kho bị đóng từ bên ngoài: versionchange = tab khác xóa / nâng cấp cơ sở dữ liệu; lost = mất kết nối và mở lại không được. */
-export type ClosedWhy = "versionchange" | "lost";
+/**
+ * Vì sao kho bị đóng từ bên ngoài: deleted = tab khác xóa cơ sở dữ liệu (đăng xuất kèm xóa dữ liệu trên thiết bị); versionchange = tab khác
+ * nâng cấp cơ sở dữ liệu (bản app mới hơn); lost = mất kết nối và mở lại không được.
+ */
+export type ClosedWhy = "deleted" | "versionchange" | "lost";
 
 export interface ChatStore {
   readonly kind: "idb" | "ls";
@@ -238,7 +241,8 @@ export class IdbStore implements ChatStore {
   private watch(db: IDBDatabase) {
     // Tab khác xóa / nâng cấp cơ sở dữ liệu (đăng xuất kèm xóa thiết bị, bản app mới hơn): nhường ngay, không mở lại (mở lại sẽ dựng lại kho
     // vừa bị xóa) và báo onclosed để trang chuyển sang LsStore hoặc tải lại.
-    db.onversionchange = () => { try { db.close(); } catch {} this.db = null; this.lose("versionchange"); };
+    // Xóa cơ sở dữ liệu thì newVersion là null (nâng cấp thì là số).
+    db.onversionchange = (e) => { try { db.close(); } catch {} this.db = null; this.lose(typeof e?.newVersion === "number" ? "versionchange" : "deleted"); };
     db.onclose = () => { if (this.db === db) this.db = null; };
   }
   private async conn(): Promise<IDBDatabase> {

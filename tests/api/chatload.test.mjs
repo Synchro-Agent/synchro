@@ -142,22 +142,47 @@ console.log("6. Thân mất (đoạn chỉ còn chỉ mục): thành bản rút 
   off();
 }
 
-console.log("7. Kho bị xóa từ tab khác (đăng xuất kèm xóa thiết bị): dùng localStorage cho phần còn lại của phiên");
+console.log("7. Tab khác đăng xuất kèm xóa dữ liệu trên thiết bị: tab này thôi lưu hẳn, không ghi nội dung chat vào localStorage");
 {
   await L.closeChats(true);
+  st().reset();
+  await boot("A");
+  await L.hydrateAll(true);
+  st().patch(300, (ms) => [...ms, msg("user", "bí mật của tab B", 5000)]);
+  await L.saveChats(st().chats);
+  // Tab A: clearAccountData xóa u:A:* rồi xóa cơ sở dữ liệu (tab này nhận onversionchange, newVersion null).
+  U.clearAccountData("A");
+  await tick(5);
+  const leak = () => [...localStorage.m.entries()].filter(([k, v]) => k.startsWith("u:A:") && /bí mật của tab B|hỏi 300|đáp 100|sau khi kho bị xóa/.test(v)).map(([k]) => k);
+  ok(L.useChatLoad.getState().kind === null && L.useChatLoad.getState().ready, "không chuyển sang localStorage", L.useChatLoad.getState());
+  ok(!leak().length, "không khóa u:A:* nào chứa nội dung chat ngay sau khi tab khác xóa", leak());
+  ok(!f.has(db), "không dựng lại cơ sở dữ liệu vừa bị xóa");
+  st().setChats((cs) => [chat(400, { title: "sửa sau khi kho bị xóa" }), ...cs]);
+  const r = await L.saveChats(st().chats);
+  L.writeJournal();
+  ok(r === null && !leak().length && !f.has(db), "sửa sau đó: không lưu vào đâu cả (kể cả nhật ký lúc rời trang)", { r, leak: leak() });
+  await L.closeChats(true);
+}
+
+console.log("7b. Tab khác nâng cấp cơ sở dữ liệu (bản app mới hơn): dùng localStorage cho phần còn lại của phiên");
+{
+  st().reset();
+  await boot("A");
+  await L.saveChats([chat(300), chat(200), chat(100)]);
+  await L.closeChats();
   st().reset();
   await boot("A");
   const need = [];
   const off = L.onNeedChats((ids) => need.push(...ids));
   const stubs = st().chats.filter((c) => c.stub && c.local).map((c) => c.id);
-  f.deleteDatabase(db);
+  f.upgrade(db);
   await tick(5);
   ok(L.useChatLoad.getState().kind === "ls", "chuyển sang localStorage", L.useChatLoad.getState());
-  ok(st().chats.every((c) => !c.local) && stubs.every((id) => need.includes(id)), "bản rút gọn local thành bản rút gọn của máy chủ, chatsync lấy về", { stubs, need });
-  ok(!f.has(db), "không dựng lại cơ sở dữ liệu vừa bị xóa");
-  st().setChats((cs) => [chat(400, { title: "sửa sau khi kho bị xóa" }), ...cs]);
+  ok(stubs.length === 3 && st().chats.every((c) => !c.local) && stubs.every((id) => need.includes(id)), "bản rút gọn local thành bản rút gọn của máy chủ, chatsync lấy về", { stubs, need });
+  ok(f.conns(db) === 0, "đã nhường kết nối cho tab nâng cấp");
+  st().setChats((cs) => [chat(400, { title: "sửa sau khi nâng cấp" }), ...cs]);
   await L.saveChats(st().chats);
-  ok((localStorage.getItem("u:A:chats") ?? "").includes("sửa sau khi kho bị xóa"), "sửa sau đó lưu vào localStorage");
+  ok((localStorage.getItem("u:A:chats") ?? "").includes("sửa sau khi nâng cấp"), "sửa sau đó lưu vào localStorage");
   off();
 }
 
@@ -203,6 +228,81 @@ console.log("9. Đổi tài khoản giữa lúc đang nạp: bỏ kết quả c�
   ok(L.saveChats.length >= 1 && (await L.saveChats([chat(1)])) !== null, "lưu theo tài khoản đang mở (D)");
   await L.wipeChats();
   ok(f.dump("synchro-chats:D", "idx").length === 0, "wipe: xóa hết đoạn chat của tài khoản trên thiết bị");
+}
+
+console.log("10. Sửa bản rút gọn (đổi tên, ghim) rồi tải lại trang trước khi thân về: sửa không mất, đoạn đó là đoạn đã sửa");
+{
+  await L.closeChats();
+  st().reset();
+  const dbE = "synchro-chats:E";
+  U.setUserScope("E");
+  await L.loadChats("E");
+  await L.saveChats([chat(60), chat(50), chat(40), chat(30)]);
+  await L.closeChats();
+  st().reset();
+  await boot("E");
+  ok(st().chats.length === 4 && st().chats.every((c) => c.stub && c.local), "mở lại: cả 4 là bản rút gọn local");
+  st().patchChat(40, { title: "RENAMED" });
+  st().togglePin(30);
+  const p0 = puts();
+  await L.saveChats(st().chats);
+  const bodyOf = (id) => JSON.parse(f.dump(dbE, "body").find((x) => x.id === id)?.s ?? "null");
+  ok((puts().body ?? 0) === (p0.body ?? 0) && f.dump(dbE, "idx").find((x) => x.id === 40)?.title === "RENAMED" && bodyOf(40)?.title === "Chat 40",
+    "sửa bản rút gọn: chỉ ghi chỉ mục, thân trong kho vẫn tên cũ", { p0, p1: puts(), b40: bodyOf(40)?.title });
+  // Tải lại trang trước khi thân về.
+  await L.closeChats(true);
+  st().reset();
+  await boot("E");
+  await L.hydrateAll(true);
+  const c40 = st().chats.find((c) => c.id === 40), c30 = st().chats.find((c) => c.id === 30), c60 = st().chats.find((c) => c.id === 60);
+  ok(c40.title === "RENAMED" && c40.msgs.length === 2 && !L.localBodies.has(c40) && !("local" in c40) && !("upd" in c40), "thân về: giữ tên mới, coi là đã sửa (chatsync đẩy)", c40);
+  ok(c30.pinned === true && !L.localBodies.has(c30), "thân về: giữ dấu ghim, coi là đã sửa", c30);
+  ok(L.localBodies.has(c60) && c60.title === "Chat 60", "đoạn không sửa: thân đọc từ kho, không coi là đã sửa");
+  const p1 = puts();
+  await L.saveChats(st().chats);
+  ok((puts().body ?? 0) - (p1.body ?? 0) === 2 && bodyOf(40)?.title === "RENAMED" && bodyOf(30)?.pinned === true, "lần lưu ghi thân của 2 đoạn đã sửa", { p1, p2: puts() });
+  await L.closeChats();
+  st().reset();
+  await boot("E");
+  await L.hydrateAll(true);
+  const again = st().chats.find((c) => c.id === 40);
+  ok(again.title === "RENAMED" && L.localBodies.has(again), "lần mở sau: thân khớp chỉ mục, là thân đọc từ kho như thường");
+
+  // Đoạn cần thân ngay lúc mở (#c=, chưa lên máy chủ): đã đổi tên lúc còn là bản rút gọn ở phiên trước.
+  await L.closeChats();
+  st().reset();
+  await boot("E");
+  st().patchChat(50, { title: "RENAMED 50" });
+  await L.saveChats(st().chats);
+  await L.closeChats(true);
+  st().reset();
+  const got = await boot("E", [50]);
+  const c50 = got.find((c) => c.id === 50);
+  ok(c50 && !c50.stub && c50.title === "RENAMED 50" && !L.localBodies.has(c50) && !("upd" in c50), "đọc thân ngay lúc mở: áp tên mới, coi là đã sửa", c50);
+  const p3 = puts();
+  await L.saveChats(st().chats);
+  ok((puts().body ?? 0) - (p3.body ?? 0) === 1 && bodyOf(50)?.title === "RENAMED 50", "lần lưu đầu ghi thân đã áp tên mới", { p3, p4: puts() });
+}
+
+console.log("11. Xuất dữ liệu: đọc lỗi thì thử lại; vẫn lỗi thì bỏ đoạn thiếu nội dung và báo số đoạn; không ghi trường nội bộ");
+{
+  await L.closeChats();
+  st().reset();
+  await boot("E");
+  // Lần đọc nền hỏng (cả lần mở lại kết nối): lần thử lại đọc được.
+  f.ctl.loseNext = 2;
+  const a = await L.chatsForExport();
+  f.ctl.loseNext = 0;
+  ok(a.missing === 0 && a.chats.length === 4 && a.chats.every((c) => c.msgs.length === 2 && !c.stub), "lỗi đọc một lần: thử lại, xuất đủ 4 đoạn có nội dung", a);
+  ok(!/"(local|upd)"/.test(JSON.stringify(a.chats)), "bản xuất không có trường local / upd");
+  await L.closeChats();
+  st().reset();
+  await boot("E");
+  f.ctl.loseNext = 1000;
+  const b = await L.chatsForExport();
+  f.ctl.loseNext = 0;
+  ok(b.missing === 4 && b.chats.length === 0, "đọc lỗi mãi: bỏ 4 đoạn rỗng khỏi bản xuất, báo missing = 4", b);
+  await L.closeChats();
 }
 
 console.log(`\n${pass} đạt, ${fail} lỗi`);

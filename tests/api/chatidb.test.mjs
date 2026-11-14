@@ -612,7 +612,7 @@ console.log("15. Kho bị đóng: không ném ra ngoài ở chỗ không đượ
   const why = [];
   s.onclosed = (w) => why.push(w);
   h.deleteDatabase("synchro-chats:C1");
-  ok(s.closed && why.join() === "versionchange", "tab khác xóa cơ sở dữ liệu: closed, onclosed('versionchange') một lần", why);
+  ok(s.closed && why.join() === "deleted", "tab khác xóa cơ sở dữ liệu: closed, onclosed('deleted') một lần", why);
   const rejects = async (p) => { try { await p; return null; } catch (e) { return e?.name ?? "?"; } };
   ok((await rejects(s.loadIndex())) === "ClosedError" && (await rejects(s.bodies([1]))) === "ClosedError" && (await rejects(s.loadAll())) === "ClosedError" && (await rejects(s.clear())) === "ClosedError", "đọc / xóa trên kho đã đóng: từ chối với ClosedError (bên gọi phải bắt, không coi là kho rỗng)");
   ok((await s.write({ del: [1] })).status === "error" && JSON.stringify(await s.getMeta()) === "{}", "ghi / đọc dấu: không ném");
@@ -621,6 +621,15 @@ console.log("15. Kho bị đóng: không ném ra ngoài ở chỗ không đượ
   try { r = await D.importLegacy(s, { now: 1 }); } catch { threw = true; }
   ok(!threw && r.status === "error" && r.imported === 0 && st.getItem("u:C1:chats") !== null, "nhập khóa cũ vào kho đã đóng: trả status error, không ném, giữ khóa cũ", r);
   ok(why.length === 1, "onclosed chỉ gọi một lần", why);
+
+  // Tab khác nâng cấp cơ sở dữ liệu (bản app mới hơn): onclosed('versionchange'), không phải 'deleted'.
+  {
+    const s2 = await D.openChatStore("C1b", { idb: h });
+    const w2 = [];
+    s2.onclosed = (w) => w2.push(w);
+    h.upgrade("synchro-chats:C1b");
+    ok(s2.closed && w2.join() === "versionchange" && h.conns("synchro-chats:C1b") === 0, "tab khác nâng cấp cơ sở dữ liệu: closed, nhường kết nối, onclosed('versionchange')", w2);
+  }
 
   // Mất kết nối mà mở lại không được: đóng hẳn, báo onclosed('lost'), các lần ghi sau báo lỗi ngay (không chờ hết thời gian mở mỗi lần).
   const g = fakeIDB();

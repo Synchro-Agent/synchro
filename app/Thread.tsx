@@ -50,7 +50,6 @@ const SaveSkillChip = lazyView(() => import("./saveskill").then((m) => m.SaveSki
 // Nhãn công cụ đã dùng: Composio là "<ứng dụng> · <thao tác>", thao tác dịch theo ngôn ngữ giao diện; connector khác giữ nguyên.
 const toolChip = (n: string) => { const i = n.indexOf(" · "); return i > 0 ? `${n.slice(0, i)} · ${trCx(n.slice(i + 3))}` : n; };
 
-// Thư viện skill một câu trả lời đã dùng: chế độ studio người dùng chọn, hoặc thư viện model tự mở, kèm skill đã đọc.
 // Đoạn chat chưa có nội dung ở trang. local: thân nằm trong kho của máy này, đọc về trong vài mili giây, nên khung chờ chỉ hiện sau 150ms
 // (bấm mở từ thanh bên / ngăn kéo điện thoại không thấy khung chờ chớp lên rồi tắt). Không thì đang tải từ máy chủ: hiện ngay.
 function StubWait({ local }: { local: boolean }) {
@@ -59,6 +58,7 @@ function StubWait({ local }: { local: boolean }) {
   return <><span className="sr-only" role="status">{local ? tr("Đang mở đoạn chat…") : tr("Đang tải đoạn chat từ máy chủ…")}</span>{show && <ThreadSkeleton />}</>;
 }
 
+// Thư viện skill một câu trả lời đã dùng: chế độ studio người dùng chọn, hoặc thư viện model tự mở, kèm skill đã đọc.
 function LibChips({ libs, onOpen }: { libs: LibUse[]; onOpen: () => void }) {
   return <div className="skill-used">{libs.map((l) => (
     <button key={l.key} className="skill-chip lib-chip" onClick={onOpen} title={l.skills.join(", ")}>

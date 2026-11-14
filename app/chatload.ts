@@ -7,9 +7,10 @@
 // - Lưu: ChatSaver chỉ ghi phần đổi; các lần lưu chạy lần lượt (lần chờ chỉ giữ danh sách mới nhất). Thân vừa đọc từ kho không ghi lại.
 // - Rời trang (pagehide / ẩn tab): giao dịch IndexedDB có thể không kịp xong, nên ghi thêm một "nhật ký" nhỏ vào localStorage (chỉ các đoạn
 //   chưa lưu xong, thường là đoạn đang mở / đang chạy); lần mở sau áp nhật ký vào kho rồi xóa. Lần lưu sau đó xong thì nhật ký cũng bị xóa.
-// - Không mở được IndexedDB / lỗi đọc lúc mở trang (không phải kho rỗng) / kho bị đóng từ bên ngoài: dùng LsStore như trước đây.
+// - Không mở được IndexedDB / lỗi đọc lúc mở trang (không phải kho rỗng) / kho bị đóng từ bên ngoài: dùng LsStore như trước đây; trừ khi tab
+//   khác xóa cơ sở dữ liệu (đăng xuất kèm xóa dữ liệu trên thiết bị): thôi lưu hẳn.
 import { create } from "zustand";
-import { ChatSaver, LsStore, currentChatStore, importLegacy, openChatStore, setChatStore, type ChatStore, type WriteResult } from "./chatidb";
+import { ChatSaver, LsStore, currentChatStore, importLegacy, openChatStore, setChatStore, type ClosedWhy, type ChatStore, type WriteResult } from "./chatidb";
 import { idxOf, snapshot, stubOfRow, withIdx, type IdxRow } from "./chatidbcore";
 import { parseMeta, serialChat } from "./chatsynccore";
 import { useChatStore } from "./chatstore.client";
@@ -20,8 +21,8 @@ import { scopedFor, userScope } from "./userscope";
 export const bodyStr = new WeakMap<object, string>();
 /** Đoạn chat vừa đọc thân từ kho, chưa sửa ở trang: chatsync so như lúc khởi động (startupDirty), không coi là vừa sửa; lần lưu không ghi lại. */
 export const localBodies = new WeakSet<object>();
-// Bản rút gọn dựng từ chỉ mục lúc mở trang, chưa sửa (đổi tên, ghim… trên bản rút gọn là đối tượng mới): thân đọc về thay thẳng vào chỗ.
-const pristine = new WeakSet<object>();
+// Thân đã áp trường thanh bên của chỉ mục lúc mở trang → thân đúng như trong kho (lần lưu đầu ghi lại thân đã áp).
+const staleOf = new WeakMap<Chat, Chat>();
 
 /** ready: mọi thân đã đọc xong (tìm sâu trong bảng lệnh, Bộ não, thống kê thấy đủ nội dung). kind: kho đang dùng. via: lần nhập khóa cũ chạy ở đâu. */
 export type LoadState = { ready: boolean; kind: "idb" | "ls" | null; via: "worker" | "main" | null; imported: number; uid: string | null };
@@ -63,7 +64,20 @@ function parseBody(s: string, id: number): Chat | null {
     return c;
   } catch { return null; }
 }
-const stubFrom = (r: IdxRow) => { const c = stubOfRow(r); pristine.add(c); return c; };
+// Các trường thanh bên (tên, ghim, dự án, thẻ, studio, đã đặt tên) theo cách idxOf chuẩn hóa: so thân với bản rút gọn / dòng chỉ mục.
+const sideKey = (c: Chat) => { const r = idxOf(c); return JSON.stringify([r.title, r.pinned ?? false, r.project ?? null, r.tags ?? [], r.studio ?? null, r.named ?? false]); };
+/**
+ * Thân vừa đọc từ kho thay bản rút gọn local. Trường thanh bên khác nhau: người dùng đã sửa bản rút gọn (đổi tên, ghim, thẻ, dự án) mà lần lưu
+ * chỉ ghi chỉ mục (không ghi thân rỗng đè thân thật), kể cả ở phiên trước rồi tải lại trang trước khi thân về. Chỉ mục là bản mới hơn: áp lên
+ * thân, và đoạn này là đoạn ĐÃ SỬA (không phải thân đọc từ kho): lần lưu ghi thân, chatsync đẩy lên máy chủ.
+ */
+function adopt(body: Chat, stub: Chat): Chat {
+  if (sideKey(body) === sideKey(stub)) return body;
+  localBodies.delete(body); bodyStr.delete(body);
+  const out = withIdx(body, stub);
+  staleOf.set(out, body);
+  return out;
+}
 const isLocalStub = (c: Chat | undefined) => !!c && !!c.stub && !!c.local;
 
 // ------------------------------------------------------------ Nhật ký lúc rời trang
@@ -123,7 +137,7 @@ export async function loadChats(uid: string, want: readonly number[] = []): Prom
   const s: Sess = { uid, store, saver: new ChatSaver(store), dead: false, fresh: false, committed: new Map(), gone: new Set(), job: null, running: null, journal: 0, hyd: null, fast: false };
   cur = s;
   setChatStore(store);
-  store.onclosed = () => onClosed(s);
+  store.onclosed = (why) => onClosed(s, why);
   if (store.kind === "idb") {
     await applyJournal(s);
     const imp = await importLegacy(store);
@@ -145,6 +159,9 @@ export async function loadChats(uid: string, want: readonly number[] = []): Prom
   s.fresh = s.store instanceof LsStore && s.store.ignored;
   s.saver.base(list);
   s.committed = snapshot(list);
+  // Thân đã áp chỉ mục: trong kho vẫn là thân cũ, lần lưu tới phải ghi (và nhật ký lúc rời trang có nó).
+  const stale = list.flatMap((c) => { const o = staleOf.get(c); return o ? [o] : []; });
+  if (stale.length) { s.saver.known(stale); for (const o of stale) s.committed.set(o.id, o); }
   useChatLoad.setState({ kind: s.store.kind, ready: !list.some(isLocalStub) });
   watchOpen();
   return list;
@@ -155,7 +172,7 @@ async function loadLazy(store: ChatStore, uid: string, want: readonly number[]) 
   try { for (const k of Object.keys(parseMeta(localStorage.getItem(scopedFor(uid, "chatSync"))).dirty)) if (k.startsWith("chat:")) need.add(Number(k.slice(5))); } catch {}
   for (const r of rows) if (r.run) need.add(r.id);
   const b = await store.bodies(rows.filter((r) => !r.srv && need.has(r.id)).map((r) => r.id));
-  return rows.map((r) => { const t = b.get(r.id); return (t !== undefined && parseBody(t, r.id)) || stubFrom(r); });
+  return rows.map((r) => { const t = b.get(r.id), st = stubOfRow(r), c = t !== undefined ? parseBody(t, r.id) : null; return c ? adopt(c, st) : st; });
 }
 
 // ------------------------------------------------------------ Đọc thân
@@ -175,8 +192,8 @@ function commit(s: Sess, buf: Map<number, Chat | null>) {
       const body = buf.get(c.id);
       changed = true;
       if (!body) { lost.push(c.id); const { local: _l, ...rest } = c; return rest; }
-      // Người dùng đã sửa bản rút gọn (đổi tên, ghim, thẻ, dự án) trong lúc chờ: áp lên thân; đoạn này là đoạn đã sửa (chatsync đẩy, lần lưu ghi).
-      return pristine.has(c) ? body : withIdx(body, c);
+      // Bản rút gọn đã sửa (trong lúc chờ, hay ở phiên trước mà thân chưa ghi): áp lên thân, đoạn này là đoạn đã sửa (chatsync đẩy, lần lưu ghi).
+      return adopt(body, c);
     });
     return changed ? out : cs;
   });
@@ -227,6 +244,26 @@ async function runHydrate(s: Sess) {
     commit(s, buf);
   }
   if (!s.dead && !useChatStore.getState().chats.some(isLocalStub)) useChatLoad.setState({ ready: true });
+}
+/**
+ * Xuất dữ liệu: đọc hết thân còn trong kho (lượt đọc nền dừng ở lần đọc lỗi đầu tiên: thử lại một lần các đoạn còn thiếu). Bản rút gọn local
+ * vẫn chưa đọc được thân thì bỏ khỏi bản xuất, không xuất đoạn rỗng như thể đủ; bản rút gọn của máy chủ (hết chỗ) giữ như trước (dấu stub).
+ * missing: số đoạn thiếu nội dung trong bản xuất (trang báo người dùng). Không ghi trường nội bộ local / upd.
+ */
+export async function chatsForExport(): Promise<{ chats: Chat[]; missing: number }> {
+  await hydrateAll(true);
+  const left = useChatStore.getState().chats.filter(isLocalStub).map((c) => c.id);
+  if (left.length) await hydrateIds(left);
+  const chats: Chat[] = [];
+  let missing = 0;
+  for (const c of useChatStore.getState().chats) {
+    if (c.inc) continue;
+    if (c.stub) { missing++; if (c.local) continue; }
+    if (!("local" in c) && !("upd" in c)) { chats.push(c); continue; }
+    const { local: _l, upd: _u, ...rest } = c;
+    chats.push(rest);
+  }
+  return { chats, missing };
 }
 // Mở một đoạn chat còn là bản rút gọn local: đọc thân đoạn đó ngay, không chờ lượt đọc nền.
 let watching = false;
@@ -300,10 +337,21 @@ export function closeChats(now = false): Promise<void> {
   return (retiring = retire(s));
 }
 
-// Kho bị đóng từ bên ngoài (tab khác đăng xuất kèm xóa thiết bị, mất kết nối mà mở lại không được): dùng localStorage cho phần còn lại của phiên.
-// Thân của bản rút gọn local không đọc được nữa: thành bản rút gọn của máy chủ (chatsync lấy về); kho IndexedDB không bị ghi gì thêm.
-function onClosed(s: Sess) {
+// Kho bị đóng từ bên ngoài.
+// - deleted: tab khác đăng xuất kèm xóa dữ liệu trên thiết bị (đã xóa u:<uid>:* và cơ sở dữ liệu; phiên đăng nhập chung cookie cũng đã hết).
+//   Phiên kho của tab này chết luôn: không lưu gì nữa, KHÔNG chuyển sang localStorage (ghi lại danh sách vào u:<uid>:chats là để lại nội dung
+//   chat trên thiết bị mà người dùng vừa xóa). Trang thấy phiên hết hạn ở lần gọi máy chủ tới.
+// - versionchange (bản app mới hơn nâng cấp cơ sở dữ liệu) / lost (mất kết nối mà mở lại không được): dùng localStorage cho phần còn lại của
+//   phiên. Thân của bản rút gọn local không đọc được nữa: thành bản rút gọn của máy chủ (chatsync lấy về); kho IndexedDB không bị ghi gì thêm.
+function onClosed(s: Sess, why: ClosedWhy) {
   if (s.dead || s.store.kind !== "idb") return;
+  if (why === "deleted") {
+    // Lần lưu đang chờ vẫn chạy và trả "error" (kho đã đóng): không ghi gì, người chờ vẫn nhận kết quả.
+    s.dead = true; s.journal = 0;
+    if (currentChatStore() === s.store) setChatStore(null);
+    useChatLoad.setState({ ready: true, kind: null });
+    return;
+  }
   const l = new LsStore(s.uid);
   s.store = l; s.saver = new ChatSaver(l); s.saver.base([]); s.committed = new Map(); s.journal = 0;
   setChatStore(l);

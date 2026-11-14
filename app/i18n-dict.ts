@@ -262,7 +262,7 @@ export const VI2EN: Record<string, string> = {
   "Gấp 5–20 lần Pro, truy cập sớm tính năng mới": "5–20× more than Pro, early access to new features", "Nhiều lượt dùng hơn, Synchro Code, Projects, nghiên cứu": "More usage, Synchro Code, Projects, research",
   "Mạnh nhất cho việc phức tạp": "Most capable for complex work", "Cân bằng tốc độ và chất lượng": "Balances speed and quality", "Nhanh nhất cho việc đơn giản": "Fastest for simple tasks",
   "Đã bật bộ nhớ": "Memory on", "Đã tắt bộ nhớ": "Memory off", "Đã bật tìm kiếm web": "Web search on", "Đã tắt tìm kiếm web": "Web search off",
-  "Đã tạo dự án": "Project created", "Đã xóa dự án": "Project deleted", "Đã xóa đoạn chat": "Chat deleted", "Đã đăng xuất": "Logged out", "Đã ghim": "Pinned", "Đã xuất dữ liệu": "Data exported",
+  "Đã tạo dự án": "Project created", "Đã xóa dự án": "Project deleted", "Đã xóa đoạn chat": "Chat deleted", "Đã đăng xuất": "Logged out", "Đã ghim": "Pinned", "Đã xuất dữ liệu": "Data exported", "Đã xuất dữ liệu, nhưng tệp thiếu nội dung của {n} đoạn chat (chưa đọc được trên thiết bị này). Tải lại trang rồi xuất lại.": "Data exported, but the file is missing the content of {n} chat(s) that couldn't be read on this device. Reload the page and export again.",
   "Đã sao chép liên kết": "Link copied", "Đã sao chép mã": "Code copied", "Đã dừng chia sẻ": "Sharing stopped", "Đã chụp ảnh màn hình": "Screenshot captured",
   "Cảm ơn phản hồi của bạn": "Thanks for your feedback", "Câu trả lời đã hoàn tất.": "The answer is complete.", "Tính năng này sẽ sớm ra mắt": "This feature is coming soon",
   "Nhóm đoạn chat sẽ sớm ra mắt": "Chat groups are coming soon", "Hãy tạo dự án trước ở mục Dự án": "Create a project first under Projects",

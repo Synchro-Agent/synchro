@@ -74,7 +74,7 @@ import type { ProviderInfo } from "./catalog";
 import { useInboxCount } from "./inboxcount";
 import { adoptLegacyData, clearAccountData, ls, setUserScope, userScope } from "./userscope";
 import { useChatSync, useSyncStatus } from "./chatsync";
-import { closeChats, hydrateAll, loadChats, wipeChats, writeJournal } from "./chatload";
+import { chatsForExport, closeChats, hydrateAll, loadChats, wipeChats, writeJournal } from "./chatload";
 import { shortName } from "./names";
 import { loadCaps, seedCaps, useCaps } from "./capsclient";
 import { hasArtifacts, splitArtifacts, type ArtBlock } from "./artifacts";
@@ -1989,16 +1989,16 @@ export default function Home({ boot }: { boot?: BootData | null }) {
     return () => clearInterval(t);
   }, [breakH, breakM, say]);
 
-  // Xuất đủ nội dung: đọc hết thân còn trong kho trước (bản rút gọn local chưa có tin nhắn).
+  // Xuất đủ nội dung: đọc hết thân còn trong kho trước (bản rút gọn local chưa có tin nhắn); đoạn vẫn không đọc được thì bỏ ra và báo.
   const exportData = useEvent(async () => {
-    await hydrateAll(true);
-    const blob = new Blob([JSON.stringify({ exportedAt: new Date().toISOString(), profile: { name, call, instructions: ins }, projects, chats: chatsRef.current.filter((c) => !c.inc) }, null, 2)], { type: "application/json" });
+    const { chats: out, missing } = await chatsForExport();
+    const blob = new Blob([JSON.stringify({ exportedAt: new Date().toISOString(), profile: { name, call, instructions: ins }, projects, chats: out }, null, 2)], { type: "application/json" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
     a.download = "synchro-data-export.json";
     a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
-    say("Đã xuất dữ liệu");
+    say(missing ? tf("Đã xuất dữ liệu, nhưng tệp thiếu nội dung của {n} đoạn chat (chưa đọc được trên thiết bị này). Tải lại trang rồi xuất lại.", { n: missing }) : "Đã xuất dữ liệu");
   });
   // Xóa phiên trên máy chủ. Mặc định dữ liệu của tài khoản vẫn được giữ trên thiết bị (đã tách theo tài khoản) cho lần đăng nhập sau;
   // clear (hộp đăng xuất: "Xóa dữ liệu trên thiết bị này") xóa mọi khóa u:<uid>:* sau khi đã đẩy lên máy chủ (LogoutConfirm), đăng nhập lại thì tải về.
