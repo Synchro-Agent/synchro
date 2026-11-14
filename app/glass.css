@@ -1,4 +1,4 @@
-@layer properties, theme, base, components, utilities, syn;
+@layer properties, theme, base, components, utilities, syn, syn-over;
 @layer syn {
 /* ===== Liquid Glass ===== */
 /* Layers: ::before = material (blur + tint + inner shine), ::after = specular rim, element = shadow.

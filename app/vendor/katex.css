@@ -1,4 +1,4 @@
 /* KaTeX (công thức) trong lớp syn cùng CSS của app (B5): tệp ngoài nạp không lớp sẽ thắng mọi luật của app bất kể specificity. Trong cùng
    lớp, bên thắng giữa luật của app và của KaTeX vẫn theo specificity rồi thứ tự nạp như trước. Tailwind gộp tệp này lúc dựng. */
-@layer properties, theme, base, components, utilities, syn;
+@layer properties, theme, base, components, utilities, syn, syn-over;
 @import "katex/dist/katex.min.css" layer(syn);

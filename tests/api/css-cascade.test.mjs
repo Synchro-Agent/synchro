@@ -38,7 +38,20 @@ const r1 = C.diff(A, B1, co), r2 = C.diff(A, B2, co);
 ok(r1.flips.length === 0 && r1.lost.length === 0 && r1.pairs === 1, "lớp đúng thứ tự: 0 cặp đổi", JSON.stringify(r1));
 ok(r2.flips.length === 1, "lớp sai thứ tự: báo 1 cặp đổi", JSON.stringify(r2.flips));
 
-console.log("5. Chỉ số CSS");
+console.log("5. Chuyển !important sang lớp syn-over (css-unimportant.mjs) không đổi bên thắng");
+const U = await import(path.resolve("scripts/css-unimportant.mjs"));
+const HEAD = "@layer base, syn, syn-over;\n";
+const src = `${HEAD}@layer syn {\n.x{color:red!important;margin:0}\n.a .x{color:teal!important}\n@media (max-width:760px){.y .x{color:blue!important}}\n.x.x.x{color:black}\n}\n`;
+const later = { name: "l.css", css: `${HEAD}@layer syn{.y.x.x.x{color:gray}}` };
+const t = U.transform(src, "t.css");
+const co2 = { groups: [{ cls: new Set(["x", "y", "a"]) }], byCls: new Map(["x", "y", "a"].map((c) => [c, [{ cls: new Set(["x", "y", "a"]) }]])), wild: new Set(), tags: new Map() };
+const r3 = C.diff(C.collect([{ name: "t.css", css: src }, later]), C.collect([{ name: "t.css", css: t.css }, later]), co2);
+ok(t.moved.length === 3 && M.measureCss(t.css).important === 0 && /@layer syn-over\s*\{[\s\S]*@media \(max-width:760px\)\{\s*\.y \.x\{color:blue\}/.test(t.css), "chuyển đủ 3 khai báo, giữ @media bao quanh", t.css);
+ok(r3.flips.length === 0 && r3.lost.length === 0 && r3.extra.length === 0 && r3.pairs > 0, "0 cặp đổi bên thắng", JSON.stringify(r3.flips[0] ?? r3.lost));
+const k = U.transform(`${HEAD}@layer syn {\nhtml body .modal.sm h2{font-size:16px!important;font-weight:560!important}\n}\n`, "app/synchro-ds.css");
+ok(k.kept.length === 1 && k.kept[0].prop === "font-size" && k.moved.length === 1, "giữ !important ở chỗ đè style nội dòng (KEEP)", JSON.stringify(k));
+
+console.log("6. Chỉ số CSS");
 const x = M.measureCss('html body .a{font-size:13px!important;z-index:30} html[data-theme="dark"] body .b{color:#fff;--t:#000} @media (max-width:700px){.c{font:600 12px/1.4 x;z-index:5}} .d{font-size:.9em}');
 ok(eq(x, { important: 1, htmlBody: 2, fontSize: 2, zIndex: 1, mediaWidth: 1, darkHex: 1 }), "đếm đúng từng loại", JSON.stringify(x));
 const all = M.measureAll(".");

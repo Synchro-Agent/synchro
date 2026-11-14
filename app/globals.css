@@ -6,8 +6,9 @@
 @source "./shader-metal.tsx";
 /* Thứ tự lớp cascade (B5): lớp của Tailwind trước, mọi CSS của app (kể cả katex / xterm và thẻ \3c style> của auth.tsx, glass-folder.tsx)
    trong một lớp syn. Câu lệnh lặp ở đầu mỗi tệp để thứ tự không phụ thuộc tệp nào được tải trước. Trong lớp syn, bên thắng vẫn theo
-   specificity rồi thứ tự nạp như khi chưa có lớp. */
-@layer properties, theme, base, components, utilities, syn;
+   specificity rồi thứ tự nạp như khi chưa có lớp. Lớp syn-over (khối ở cuối mỗi tệp) giữ các luật trước đây phải mang !important chỉ để
+   thắng thứ tự: lớp sau thắng mọi luật thường của syn bất kể specificity, nhưng vẫn thua style nội dòng và hoạt ảnh như mọi luật thường. */
+@layer properties, theme, base, components, utilities, syn, syn-over;
 /* Chỉ thị của Tailwind (@theme) và @property phải ở ngoài cùng: Tailwind chỉ đọc @property ngoài lớp để sinh giá trị dự phòng cho trình duyệt cũ. */
 @theme {
   --color-foreground: var(--foreground);

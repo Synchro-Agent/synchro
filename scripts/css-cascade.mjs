@@ -358,8 +358,10 @@ export function diff(A, B, co, { max = 200, filter = () => true } = {}) {
   for (const d of A.decls) { if (!kb.has(d.key)) continue; const g = `${d.sub.pel}|${d.atom}`; (groups.get(g) ?? groups.set(g, []).get(g)).push(d); }
   const flips = []; let pairs = 0;
   // Lớp giữ nguyên thứ tự thì cặp hai khai báo không đổi (cùng !important, lớp, specificity) giữ nguyên bên thắng: chỉ so cặp có ít nhất một
-  // khai báo đổi (đổi nhiều nhanh gấp chục lần khi chỉ một vài luật đổi).
-  const sameLayers = A.layerOrder.join() === B.layerOrder.join();
+  // khai báo đổi (đổi nhiều nhanh gấp chục lần khi chỉ một vài luật đổi). Thêm lớp mới (như syn-over ở cuối) không đổi thứ tự giữa các
+  // lớp cũ: vẫn tính là giữ nguyên, miễn mọi lớp của bản trước còn ở bản sau theo đúng thứ tự.
+  const idxB = A.layerOrder.map((l) => B.layerIdx.get(l));
+  const sameLayers = idxB.every((i, k) => i != null && (k === 0 || i > idxB[k - 1]));
   const changed = (d) => { const e = kb.get(d.key); return !sameLayers || e.imp !== d.imp || e.layer !== d.layer || cmp3(e.spec, d.spec) !== 0; };
   for (const d of A.decls) if (kb.has(d.key)) d.ch = changed(d);
   for (const list of groups.values()) {

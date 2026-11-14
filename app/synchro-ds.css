@@ -1,4 +1,4 @@
-@layer properties, theme, base, components, utilities, syn;
+@layer properties, theme, base, components, utilities, syn, syn-over;
 @layer syn {
 /* =====================================================================================================================
    Phông chữ: Be Vietnam Pro cho mọi chữ thường (nút, menu, tiêu đề hộp thoại, Cài đặt…); Unbounded chỉ cho chỗ quan trọng:

@@ -1,4 +1,4 @@
-@layer properties, theme, base, components, utilities, syn;
+@layer properties, theme, base, components, utilities, syn, syn-over;
 @layer syn {
 /* Kho kỹ năng và plugin (pl-): tách khỏi globals.css / synchro-ds.css để trang chat không phải tải trước (blueprint B3.4). Nạp sau mọi tệp chung,
    nên chỉ chứa quy tắc mà không quy tắc chung nào đứng sau nó còn nhắc tới cùng lớp. */

@@ -1,4 +1,4 @@
-@layer properties, theme, base, components, utilities, syn;
+@layer properties, theme, base, components, utilities, syn, syn-over;
 @layer syn {
 /* Cài đặt: Quản trị (adm-, perm-), Providers (pv-), Khả năng (cap-), Connectors (cn-), trang Mức dùng (us-): tách khỏi globals.css /
    synchro-ds.css để trang chat không phải tải trước (blueprint B3.4). Nạp sau mọi tệp chung, nên chỉ chứa quy tắc mà không quy tắc chung nào
