@@ -141,6 +141,14 @@ try {
   ok(!rows.some((r) => /^(Tri thức|Cuộc họp)/.test(r)), "không có lệnh Tri thức, Cuộc họp", rows.join(" | "));
   rows = await palette("hop thu");
   ok(rows[0]?.startsWith("Hộp thư"), "gõ không dấu \"hop thu\" → lệnh Hộp thư đứng đầu", rows.join(" | "));
+  await key("Escape", "Escape", 27); await sleep(400);
+  // Mục đổi nhãn thành "Connectors": người gõ tiếng Việt (có dấu hay không dấu) vẫn tìm được lệnh.
+  for (const q of ["kết nối", "ket noi"]) {
+    rows = await palette(q);
+    ok(rows.some((r) => r.startsWith("Connectors")), `gõ "${q}" → có lệnh Connectors`, rows.join(" | "));
+    await key("Escape", "Escape", 27); await sleep(400);
+  }
+  rows = await palette("hop thu");
   await key("Enter", "Enter", 13);
   await until(`!!document.querySelector(".tk-top")`, 8000, "inbox page");
   await sleep(600);

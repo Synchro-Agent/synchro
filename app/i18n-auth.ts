@@ -47,7 +47,7 @@ export const AUTH_EN2VI: Record<string, string> = {
   "Passkey removed": "Đã xóa khóa truy cập",
   "Sign in with your fingerprint, face or device PIN instead of a password. Passkeys can't be phished or reused on another site.": "Đăng nhập bằng vân tay, khuôn mặt hoặc mã PIN của thiết bị thay cho mật khẩu. Khóa truy cập không bị lừa lấy mất và không dùng được ở trang khác.",
   "This browser can't create passkeys. Try a recent version of Chrome, Safari, Edge or Firefox.": "Trình duyệt này chưa tạo được khóa truy cập. Hãy dùng Chrome, Safari, Edge hoặc Firefox bản mới.",
-  "Add passkey": "Thêm khóa truy cập", "Synced": "Đồng bộ", "Added": "Thêm lúc", "Last used": "Dùng lần cuối", "Not used yet": "Chưa dùng lần nào",
+  "Add passkey": "Thêm khóa truy cập", "Synced": "Đồng bộ", "Last used": "Dùng lần cuối", 
   "Rename": "Đổi tên", "Rename passkey": "Đổi tên khóa truy cập", "Use a name that tells you which device or password manager holds it.": "Đặt tên cho biết thiết bị hay trình quản lý mật khẩu nào đang giữ khóa này.",
   "Passkey name": "Tên khóa truy cập",
   // Chống bot (botadmin.tsx, turnstilebox.tsx)
@@ -68,7 +68,7 @@ export const AUTH_EN2VI: Record<string, string> = {
   "Streams every change to the database to your Cloudflare R2 bucket within seconds, so a lost server loses at most a few seconds of data. Nightly backups keep running as before. Setup steps are in docs/backup-r2.md.": "Đẩy mọi thay đổi của cơ sở dữ liệu lên bucket Cloudflare R2 của bạn trong vài giây: mất cả máy chủ cũng chỉ mất vài giây dữ liệu cuối. Bản sao lưu hằng đêm vẫn chạy như cũ. Các bước cài đặt ở docs/backup-r2.md.",
   "This server doesn't have litestream yet. Run workspace/setup.sh on the server (every deploy runs it) and it installs a pinned, checksum-verified copy.": "Máy chủ này chưa có litestream. Chạy workspace/setup.sh trên máy chủ (mỗi lần deploy đều chạy), tệp sẽ cài đúng bản cố định đã kiểm mã băm.",
   "Test mode: replicating to a local folder instead of R2.": "Chế độ thử: sao lưu vào một thư mục trên máy thay vì R2.",
-  "Bucket": "Bucket", "Access Key ID": "Access Key ID", "Secret Access Key": "Secret Access Key", "Account ID": "Account ID", "Folder in the bucket": "Thư mục trong bucket",
+  "Bucket": "Bucket", "Access Key ID": "Access Key ID", "Secret Access Key": "Secret Access Key", "Folder in the bucket": "Thư mục trong bucket",
   "Remove the R2 settings?": "Xóa cài đặt R2?", "Continuous backup stops and the keys are deleted from this server. Copies already in your bucket stay there.": "Sao lưu liên tục dừng và khóa bị xóa khỏi máy chủ này. Các bản đã có trong bucket vẫn còn nguyên.",
   "R2 settings removed": "Đã xóa cài đặt R2", "Backup settings saved": "Đã lưu cài đặt sao lưu",
   "Back up continuously": "Sao lưu liên tục", "Runs litestream next to Synchro. It restarts on its own if it stops.": "Chạy litestream cạnh Synchro, tự chạy lại nếu bị dừng.",

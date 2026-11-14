@@ -37,25 +37,22 @@ export const UX_VI2EN: Record<string, string> = {
   "Câu trả lời trong “{title}” gặp lỗi": "The reply in “{title}” hit an error", "Synchro đã trả lời xong “{title}”": "Synchro finished replying in “{title}”",
   "{title} · nhánh": "{title} · branch", "Tạo ảnh {what}": "Create an image of {what}",
   "Các phần khác của Synchro vẫn dùng được bình thường.": "The rest of Synchro still works normally.",
-  "Thử lại": "Try again",
   // Thẻ lỗi của lượt chat
   "Model chưa khởi động được trên máy chủ. Hãy thử lại hoặc chọn model khác.": "The model couldn't start on the server. Try again or pick another model.",
   "Mất kết nối tới model. Hãy kiểm tra mạng rồi thử lại.": "Lost the connection to the model. Check your network and try again.",
   "Model dừng đột ngột giữa lượt trả lời. Hãy thử lại hoặc chọn model khác.": "The model stopped unexpectedly during its reply. Try again or pick another model.",
   "Lượt này gặp lỗi ở máy chủ. Hãy thử lại hoặc chọn model khác.": "This turn hit a server error. Try again or pick another model.",
-  "Không thể kết nối tới model. Vui lòng thử lại.": "Couldn't connect to the model. Please try again.",
   "Câu trả lời chưa hoàn thành": "This reply didn't finish", "Chi tiết kỹ thuật": "Technical details", "Mở Providers": "Open Providers",
-  "Không lấy được nội dung tệp đính kèm. Hãy gửi lại.": "Couldn't read the attached file. Please send it again.",
   // Phiên hết hạn, làm quen tài khoản mới, trợ năng
   "Phiên đăng nhập đã hết hạn. Đăng nhập lại để dùng tiếp, phần đang làm vẫn được giữ.": "Your session has expired. Sign in again to continue. Your work is still here.",
   "Kết nối gói AI của bạn để bắt đầu": "Connect your AI plan to get started",
   "Synchro chạy bằng chính tài khoản AI của bạn. ChatGPT, Gemini và Grok dùng được cả tài khoản miễn phí, Claude cần gói Pro hoặc Max. Đăng nhập một tài khoản là chat được ngay, tin bạn đã gõ dưới đây vẫn được giữ.": "Synchro runs on your own AI account. ChatGPT, Gemini and Grok work on a free account; Claude needs a Pro or Max plan. Sign in to one and you can chat right away. What you've typed below stays here.",
   "Hãy kết nối một gói AI để gửi tin này": "Connect an AI plan to send this message",
-  "Đang tải": "Loading", "Đến nội dung chính": "Skip to main content", "Ngôn ngữ": "Language",
+  "Đến nội dung chính": "Skip to main content", "Ngôn ngữ": "Language",
   "Chưa tải được danh sách artifact": "Couldn't load your artifacts", "Chưa tải được Hộp thư": "Couldn't load your Inbox",
   "Hướng dẫn và khả năng": "Instructions and capabilities",
   // Terminal của Synchro Code, các thẻ làm việc
-  "Đã ngắt kết nối": "Disconnected", "Đang nối lại…": "Reconnecting…", "mất kết nối mạng": "network connection lost", "trang này": "this page", "Rê chuột": "Hover", "Kéo thả": "Drag and drop", "Tải tệp": "Upload file",
+  "Đã ngắt kết nối": "Disconnected", "Đang nối lại…": "Reconnecting…", "mất kết nối mạng": "network connection lost", "Rê chuột": "Hover", "Kéo thả": "Drag and drop", "Tải tệp": "Upload file",
   // Sửa tin đã gửi, ô soạn tin
   "Sửa tin nhắn": "Edit message", "Gửi lại": "Send again", "Sao chép": "Copy", "Hủy": "Cancel",
   "Các tin phía sau sẽ được thay bằng câu trả lời mới.": "Later messages will be replaced by the new reply.",
@@ -189,6 +186,10 @@ export const UX_VI2EN: Record<string, string> = {
   "Nội dung gần như trống ({n} ký tự hướng dẫn), model không có gì để làm theo.": "Almost empty ({n} characters of instructions), so the model has nothing to follow.",
   "Trùng hệt nội dung với “{name}” ({place}), chỉ thêm một bản lặp.": "Same content as “{name}” ({place}), so it only adds a duplicate.",
   "Model chưa trả lời cho skill này. Quét lại để thử lần nữa.": "The model didn't return a verdict for this skill. Scan again to retry.",
+  // Một thuật ngữ cho mỗi khái niệm (Blueprint B6 mục 4): mục skill trên thanh bên / trang dự án ghi "Skill" (tiếng Anh "Skills" như trước);
+  // kho là "Kho kỹ năng" (Skill Hub). "Hội thoại" của Speech là Dialogue; phần lịch sử đoạn chat trong ngữ cảnh model là "Lịch sử hội thoại".
+  "Skill ‹tên mục›": "Skills",
+  "Lịch sử hội thoại": "Conversation",
 };
 export const UX_RULES_EN: [RegExp, (m: RegExpMatchArray) => string][] = [
   [/^Khóa Replicate không hợp lệ hoặc không có quyền \((\d+)\)\.$/, (m) => `The Replicate key is invalid or lacks permission (${m[1]}).`],
@@ -240,14 +241,14 @@ export const UX_EN2VI: Record<string, string> = {
   "Images will be made with each person's own plan again, as before the key was added.": "Ảnh sẽ lại được tạo bằng gói của từng người, như trước khi thêm khóa.",
   "Waiting for a key. Until one is added, images are made with each person's own plan (Antigravity, ChatGPT, Grok), exactly as now.": "Đang chờ khóa. Tới khi có khóa, ảnh vẫn tạo bằng gói của từng người (Antigravity, ChatGPT, Grok), y như hiện nay.",
   "Account": "Tài khoản", ". FLUX 1.1 Pro Ultra makes new images; IC-Light puts a product photo into a studio scene. Accounts past their daily image limit go back to their own plan.": ". FLUX 1.1 Pro Ultra tạo ảnh mới; IC-Light đưa ảnh sản phẩm vào bối cảnh studio. Tài khoản quá hạn mức ảnh trong ngày quay về gói của mình.",
-  "Images": "Ảnh", "API key only. Voice (ElevenLabs) and paid image generation (Replicate) work with an API key only.": "Chỉ dùng khóa API. Giọng nói (ElevenLabs) và tạo ảnh tính phí (Replicate) chỉ chạy bằng khóa API.",
-  "API key only. Voice (ElevenLabs), Connectors (Composio) and paid image generation (Replicate) work with an API key only.": "Chỉ dùng khóa API. Giọng nói (ElevenLabs), Connectors (Composio) và tạo ảnh tính phí (Replicate) chỉ chạy bằng khóa API.",
+  "Images": "Ảnh", "API key only. Speech (ElevenLabs) and paid image generation (Replicate) work with an API key only.": "Chỉ dùng khóa API. Speech (ElevenLabs) và tạo ảnh tính phí (Replicate) chỉ chạy bằng khóa API.",
+  "API key only. Speech (ElevenLabs), Connectors (Composio) and paid image generation (Replicate) work with an API key only.": "Chỉ dùng khóa API. Speech (ElevenLabs), Connectors (Composio) và tạo ảnh tính phí (Replicate) chỉ chạy bằng khóa API.",
   "Choose": "Chọn", "Default": "Mặc định", "Server runtime": "Máy chủ chạy code",
   "Code runs on the Synchro server.": "Code chạy trên máy chủ Synchro.",
   "Attached files and conversation history count toward the limit of the model you pick. Large files are trimmed to the most relevant parts.": "Tệp đính kèm và lịch sử hội thoại tính vào giới hạn của model bạn chọn. Tệp lớn được rút gọn còn phần liên quan nhất.",
   "Downloads the chats, projects and profile stored in this browser. Brain notes download from Settings → Brain; artifacts and Code sessions download where you use them.": "Tải về đoạn chat, dự án và hồ sơ lưu trong trình duyệt này. Ghi chú của bộ não tải ở Cài đặt → Bộ não; artifact và phiên Code tải ngay nơi bạn dùng chúng.",
   "Every Synchro Code conversation will be deleted from this browser and from the Synchro server, including on your other devices. This can't be undone.": "Mọi cuộc trò chuyện Synchro Code sẽ bị xóa khỏi trình duyệt này và máy chủ Synchro, kể cả trên các thiết bị khác của bạn. Không hoàn tác được.",
-  "Turned on": "Đang bật", "List every skill directly": "Liệt kê trực tiếp mọi skill", "Custom connectors": "Connector tùy chỉnh", "Tools that delete data": "Công cụ xóa dữ liệu", "All directory connectors": "Mọi connector trong danh mục", "New sign-ups": "Đăng ký mới", "Apply to administrators": "Áp dụng cho quản trị viên",
+  "Turned on": "Đang bật", "Custom connectors": "Connector tùy chỉnh", "Tools that delete data": "Công cụ xóa dữ liệu", "All directory connectors": "Mọi connector trong danh mục", "New sign-ups": "Đăng ký mới", "Apply to administrators": "Áp dụng cho quản trị viên",
   "Edited tool inputs before approving": "Sửa tham số công cụ trước khi duyệt",
 };
 export const UX_RULES_VI: [RegExp, (m: RegExpMatchArray) => string][] = [

@@ -104,11 +104,11 @@ const api2 = (m, p, b) => fetch(B + p, { method: m, headers: { "content-type": "
 await api2("DELETE", "/api/skills/meeting-notes");
 try {
   const nav = await text(".rail .nav-item, .sidebar .nav-item");
-  // Nhãn ngắn "Kỹ năng" trên thanh điều hướng (tên đầy đủ "Kho kỹ năng" ở chú thích khi rê chuột), đúng một mục.
+  // Nhãn ngắn "Skill" trên thanh điều hướng (thuật ngữ chung cho từng skill, B6 mục 4; "Kho kỹ năng" dài quá 62px của nhãn nên nằm ở chú thích khi rê chuột), đúng một mục.
   const hub = await ev(`(() => { const x = document.querySelector('.rail [data-nav="customize"]'); return x ? x.textContent.trim() + "|" + x.getAttribute("data-tip") : null; })()`);
-  ok(hub === "Kỹ năng|Kho kỹ năng" && (nav.match(/Kỹ năng/g) ?? []).length === 1, "thanh bên có mục Kho kỹ năng (nhãn Kỹ năng): " + nav, hub);
-  ok(await ev(`!!${byText(".nav-item", "Kỹ năng")}?.querySelector("svg")`), "mục có icon");
-  await click(byText(".nav-item", "Kỹ năng"), "nav");
+  ok(hub === "Skill|Kho kỹ năng" && (nav.match(/\bSkill\b/g) ?? []).length === 1, "thanh bên có mục Kho kỹ năng (nhãn Skill): " + nav, hub);
+  ok(await ev(`!!${byText(".nav-item", "Skill")}?.querySelector("svg")`), "mục có icon");
+  await click(byText(".nav-item", "Skill"), "nav");
   await until(`!!document.querySelector(".hub-yours")`, 15000, "hub page");
   const cz = await text(".ds-tabs button");
   ok(/^(Kho kỹ năng( \| Connectors)?)?$/.test(cz), "trang Tùy chỉnh không còn Skills / Plugins riêng (một mục thì không cần tab): " + cz, cz);

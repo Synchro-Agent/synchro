@@ -133,7 +133,6 @@ export const VI2EN: Record<string, string> = {
   "Workspace đang tắt. Thay đổi sẽ hiện khi nó chạy.": "The workspace is off. Changes show up when it runs.", "Chưa đọc được trạng thái git.": "Couldn't read the git status.",
   "Tạo PR": "Create PR", "Tạo nhánh": "Create branch", "Xem ảnh": "Image viewer", "Ảnh đang xem": "Image being viewed",
   "Đang viết câu trả lời": "Writing the reply", "Đang sửa lại bản sửa artifact cho khớp": "Reworking the artifact edit so it fits",
-  "Danh sách việc": "Task list",
   "Đã xong mọi việc": "All tasks done",
   "Đang làm…": "Working…",
   "Dán log lỗi / stack trace": "Paste error log / stack trace",
@@ -202,9 +201,7 @@ export const VI2EN: Record<string, string> = {
   "Vẽ sơ đồ": "Render diagram",
   "Kiểm tra gói": "Check packages",
   "Chấp nhận": "Accept",
-  "Từ chối": "Reject",
   "Lệnh nhanh": "Command palette",
-  "Tóm tắt & Làm gọn luồng chat": "Summarize & compact chat",
   "Báo lỗi dòng này": "Report error on this line",
   "Giải thích": "Explain",
   "Viết lại (Inline Edit)": "Rewrite (Inline Edit)",
@@ -221,7 +218,7 @@ export const VI2EN: Record<string, string> = {
   "Hôm nay tôi có thể giúp gì cho bạn?": "How can I help you today?", "Thêm": "Add", "Nhập bằng giọng nói": "Dictate", "Chọn micro": "Choose microphone", "Chế độ giọng nói": "Voice mode",
   "Chưa có dự án nào": "No projects yet", "Dự án giúp bạn sắp xếp các đoạn chat và tệp liên quan.": "Projects help you organize related chats and files.",
   "Tất cả": "All", "Của bạn": "Yours", "Được chia sẻ với bạn": "Shared with you", "Được chia sẻ": "Shared", "Tạo thứ gì đó mới": "Create something new",
-  "Tài liệu": "Docs", "Của Synchro": "By Synchro", "Trang trình bày": "Slides", "Thiết kế": "Design",
+  "Của Synchro": "By Synchro", "Trang trình bày": "Slides", "Thiết kế": "Design",
   "Tài liệu mà nhóm của bạn đọc, bình luận và chỉnh sửa trực tiếp, trong khi Synchro giữ cho tài liệu luôn cập nhật.": "Documents your team reads, comments on and edits live, while Synchro keeps them up to date.",
   "Bộ trang chiếu mà bạn có thể trình chiếu, đổi kiểu dáng bằng hệ thống thiết kế và tải về dạng PowerPoint hoặc PDF.": "Slide decks you can present, restyle with a design system and download as PowerPoint or PDF.",
   "Màn hình, luồng và đồ họa dựng bằng mã, bố trí thành các bảng vẽ trên cùng một khung vẽ mà bạn có thể tự chỉnh sửa. Ảnh chụp hay tranh được tạo bằng AI qua gói đã đăng nhập.": "Screens, flows and graphics built with code, laid out as artboards on one canvas you can edit yourself. Photos and paintings are made with AI through your signed-in plan.",
@@ -229,7 +226,7 @@ export const VI2EN: Record<string, string> = {
   "Bắt đầu từ một mẫu ở trên, hoặc yêu cầu Synchro tạo thứ gì đó trong bất kỳ đoạn chat nào.": "Start from a template above, or ask Synchro to create something in any chat.",
   "Synchro understands your codebase and helps you build, debug, and ship faster. Nâng cấp gói của bạn để bắt đầu.": "Synchro understands your codebase and helps you build, debug, and ship faster. Upgrade your plan to get started.",
   "Nâng cấp lên Max hoặc Pro ↗": "Upgrade to Max or Pro ↗",
-  "Tải lên hoặc thêm tệp": "Upload or add files", "Chụp ảnh màn hình": "Take a screenshot", "Thêm vào dự án": "Add to project", "Thêm trình kết nối": "Add connectors",
+  "Tải lên hoặc thêm tệp": "Upload or add files", "Chụp ảnh màn hình": "Take a screenshot", "Thêm vào dự án": "Add to project",
   "Hệ thống thiết kế": "Design system", "Thêm plugin": "Add plugins", "Tìm kiếm trên web": "Web search", "Bộ nhớ": "Memory", "Mức độ nỗ lực": "Effort",
   "Mức nỗ lực cao hơn đồng nghĩa với phản hồi kỹ lưỡng hơn, nhưng mất nhiều thời gian hơn và dùng hết giới hạn của bạn nhanh hơn.": "Higher effort means more thorough responses, but takes longer and uses up your limits faster.",
   "Mức Tối đa dùng giới hạn nhanh hơn từ 5 lần": "Max uses your limits at least 5× faster",
@@ -370,7 +367,6 @@ export const VI2EN: Record<string, string> = {
   "Chọn": "Select",
   "Tệp và văn bản trong dự án được dùng làm ngữ cảnh cho mọi đoạn chat": "Files and text in the project are used as context for every chat",
   // Thông báo từ máy chủ xác thực
-  "Mật khẩu cần ít nhất 8 ký tự.": "Password must be at least 8 characters.",
   "Mật khẩu quá dài.": "Password is too long.",
   "Mật khẩu này quá dễ đoán. Hãy chọn mật khẩu khác.": "This password is too easy to guess. Choose another one.",
   "Email không hợp lệ.": "Invalid email.",
@@ -414,12 +410,11 @@ export const VI2EN: Record<string, string> = {
   "Quản trị viên chưa cho phép tài khoản của bạn dùng model này": "The administrator hasn't allowed your account to use this model",
   "Ảnh đại diện không hợp lệ hoặc quá lớn.": "The profile photo is invalid or too large.",
   "Mã dự án không hợp lệ": "Invalid project id",
-  "Kỹ năng": "Skills",
   "Đang bật cho mọi đoạn chat": "On for every chat",
   "Chỉ bật trong dự án này": "On in this project only",
   "Đang tắt": "Off",
   "Mọi nơi": "Everywhere",
-  "Chưa có skill nào. Tải lên trong Tùy chỉnh → Kỹ năng.": "No skills yet. Upload one in Customize → Skills.",
+  "Chưa có skill nào. Tải lên trong Kho kỹ năng.": "No skills yet. Upload one in the Skill Hub.",
   "Không lưu được thay đổi": "Couldn't save the change",
   "Đang tải…": "Loading…",
   // Skills
@@ -565,7 +560,7 @@ Object.assign(VI2EN, {
   "Đang kết nối…": "Connecting…", "Đang mở kết nối giọng nói…": "Opening the voice connection…", "Ngôn ngữ nhận dạng": "Recognition language",
   "Mất kết nối tới máy chủ giọng nói": "Lost connection to the voice server", "Lỗi kết nối giọng nói": "Voice connection error",
   "Bạn đã mở quá nhiều phiên giọng nói. Hãy thử lại sau.": "You've opened too many voice sessions. Please try again later.",
-  "(Câu hỏi bằng giọng nói)": "(Spoken question)", "Bảng phiên": "Session rail", "Tệp": "File",
+  "(Câu hỏi bằng giọng nói)": "(Spoken question)", "Tệp": "File",
 });
 RULES_EN.push([/^Ngữ cảnh: (.+) token \((\d+)%\)$/, (m) => `Context: ${m[1]} tokens (${m[2]}%)`]);
 // Đợt 4 (tệp tải lên, skill, giọng nói, bwrap): câu có tên tệp / số.
@@ -717,7 +712,7 @@ Object.assign(VI2EN, {
   "Đang tạo…": "Creating…", "Phiên bản": "Version", "phiên bản": "versions", "Nhấn để mở": "Click to open", "Đang mở": "Open", "Mã": "Code",
   "Chạy lại": "Run again", "Toàn màn hình": "Full screen", "Thu nhỏ": "Exit full screen", "Phiên bản trước": "Previous version", "Phiên bản sau": "Next version",
   "Artifact gặp lỗi": "This artifact hit an error", "Nhờ Synchro sửa": "Ask Synchro to fix", "Đã sao chép nội dung artifact": "Artifact copied", "Đã tải": "Downloaded",
-  "Trang web": "Web page", "Ứng dụng": "App", "Hình SVG": "SVG image", "Mã nguồn": "Code", "Sơ đồ": "Diagram",
+  "Trang web": "Web page", "Hình SVG": "SVG image", "Mã nguồn": "Code", "Sơ đồ": "Diagram",
   "Không vẽ được sơ đồ": "Couldn't draw the diagram", "Không vẽ được biểu đồ": "Couldn't draw the chart", "Hình minh họa gặp lỗi": "The visual hit an error",
   "Đang vẽ biểu đồ…": "Drawing chart…", "Đang vẽ sơ đồ…": "Drawing diagram…", "Đang tạo hình minh họa…": "Creating visual…",
   "Xem bảng": "View table", "Xem biểu đồ": "View chart", "Khác": "Other",
@@ -730,7 +725,6 @@ Object.assign(VI2EN, {
   "Artifact dùng AI đang tắt. Bật trong Cài đặt → Khả năng.": "AI-powered artifacts are off. Turn them on in Settings → Capabilities.",
   "Chạy code đang tắt trong Cài đặt → Khả năng.": "Code execution is off in Settings → Capabilities.",
   "Máy chủ chưa có nơi chạy code.": "This server has no place to run code yet.",
-  "Tệp không còn nữa (tệp được giữ 30 ngày).": "This file is no longer available (files are kept for 30 days).",
   "Không lưu được cài đặt.": "Couldn't save the setting.", "Không kết nối được máy chủ.": "Couldn't reach the server.",
 });
 Object.assign(VI2EN, {
@@ -833,7 +827,7 @@ Object.assign(VI2EN, {
   "Bảng lệnh": "Command palette", "Tìm lệnh, đoạn chat, artifact, skill, tài liệu…": "Search commands, chats, artifacts, skills, documents…", "Lệnh": "Commands",
   "Artifact và ứng dụng": "Artifacts and apps", "Skill và thư viện": "Skills and libraries", "Tri thức và cuộc họp": "Knowledge and meetings",
   "Ứng dụng của tổ chức": "Organization app", "Tài liệu của tổ chức": "Organization document", "Tài liệu riêng": "Private document",
-  "chọn": "select", "mở": "open", "đóng": "close", "Kết nối": "Connectors", "Dự án": "Projects", "Chuyển sang giao diện sáng": "Switch to light theme",
+  "chọn": "select", "mở": "open", "đóng": "close", "Kết nối": "Connect", "Dự án": "Projects", "Chuyển sang giao diện sáng": "Switch to light theme",
   "Chuyển sang giao diện tối": "Switch to dark theme", "Ẩn / hiện thanh bên": "Toggle sidebar",
   "Đây là một lời dặn lâu dài.": "This sounds like a standing instruction.", "Lưu thành skill": "Save as skill", "Bỏ qua gợi ý": "Dismiss suggestion",
   "Lưu cách làm thành skill": "Save this as a skill", "Synchro sẽ tự đọc skill này khi yêu cầu có liên quan, ở mọi đoạn chat. Bạn tắt hoặc sửa nó trong Kho kỹ năng.": "Synchro will read this skill whenever a request is related, in every chat. Turn it off or edit it in Skill Hub.",
@@ -1130,6 +1124,8 @@ export const SAME_WORDS = new Set([
 export const SAME = new Set<string>([
   "(resolution:", "dppx)",
   "Synchro clone UI",
+  // Tên trường của khóa R2 (Cloudflare): giữ nguyên ở cả hai ngôn ngữ như trang của Cloudflare.
+  "Access Key ID", "Secret Access Key",
 ]);
 
 // ---------------------------------------------------------------- Đồng bộ ngôn ngữ toàn web (2026-10-28)
@@ -1332,9 +1328,9 @@ Object.assign(VI2EN, {
     "Type an address or keywords in the bar above (keywords search Google). Or ask Synchro in the chat, for example “open … and fill in the form for me”: Synchro works right here while you watch, and you can take over at any time.",
   "Quản trị viên chưa cho phép tài khoản của bạn dùng Synchro Code và Cloud sandbox, nên chưa dùng được trình duyệt.": "Your administrator hasn't enabled Synchro Code and Cloud sandbox for your account, so the browser isn't available.",
   "Máy chủ chưa bật dịch vụ workspace nên chưa có trình duyệt.": "This server has no workspace service yet, so there is no browser.", "Đang kiểm tra…": "Checking…",
-  "Đang đọc trang": "Reading the page", "Đang đọc chữ trên trang": "Reading the page text", "Đang chụp màn hình trang": "Taking a screenshot of the page", "Đang cuộn trang": "Scrolling the page",
+  "Đang đọc trang": "Reading the page", "Đang đọc chữ trên trang": "Reading the page text", "Đang cuộn trang": "Scrolling the page",
   "Đang kéo thả trên trang": "Dragging on the page", "Đang mở tab mới": "Opening a new tab", "Đang chuyển tab": "Switching tabs", "Đang đóng tab": "Closing a tab", "Đang xem các tab": "Listing tabs", "Đang xem các tệp đã tải về": "Listing downloaded files", "Đang đọc tệp vừa tải về": "Reading the downloaded file",
-  "Đang trả lời hộp thoại của trang": "Answering the page dialog", "Đang chạy JavaScript trên trang": "Running JavaScript on the page", "Đang xem log của trang": "Reading the page log",
+  "Đang chạy JavaScript trên trang": "Running JavaScript on the page", "Đang xem log của trang": "Reading the page log",
   "Đang quay lại trang trước": "Going back", "Đang tới trang sau": "Going forward", "Đang tải lại trang": "Reloading the page", "Đang chờ trang": "Waiting for the page", "Đang dùng trình duyệt": "Using the browser",
   "đọc chữ trên trang": "read the page text", "chụp màn hình trang": "took a screenshot", "kéo thả trên trang": "dragged on the page", "mở tab mới": "opened a new tab", "chuyển tab": "switched tabs", "đóng tab": "closed a tab",
   "xem các tab": "listed tabs", "trả lời hộp thoại của trang": "answered a page dialog", "chạy JavaScript trên trang": "ran JavaScript on the page", "xem log của trang": "read the page log",
@@ -1448,12 +1444,12 @@ addNew(VI2EN, {
   "Kiểu xem": "Transcript view", "Kiểu trả lời": "Output style", "Gợi ý: bấm Tab để dùng": "Suggestion: press Tab to use it",
   "Chế độ quyền": "Permission mode", "Quyền của Synchro trong phiên này": "Synchro's permissions in this session",
   "Đang tắt ở Cài đặt → Synchro Code (Cho phép chế độ Tự động).": "Turned off in Settings → Synchro Code (Allow auto mode).",
-  "Đã bỏ các quyền \"luôn cho phép\" của phiên": "Cleared this session's \"always allow\" permissions", "Bỏ": "Clear", "quyền \"luôn cho phép\"": "\"always allow\" permissions",
+  "Đã bỏ các quyền \"luôn cho phép\" của phiên": "Cleared this session's \"always allow\" permissions", "quyền \"luôn cho phép\"": "\"always allow\" permissions",
   "Đang chạy": "Running", "Cần bạn": "Needs you", "Chờ xem lại": "Ready for review", "Xong": "Done",
   "Đã khôi phục phiên code": "Code session restored", "Đã lưu trữ phiên code": "Code session archived", "Khôi phục": "Restore", "Code đã lưu trữ ·": "Archived code ·",
   "Đã gộp": "Merged", "Đã đóng": "Closed",
   "Bật \"Cho phép chế độ Tự động\" để Synchro tự sửa PR (lượt chạy nền không có ai bấm duyệt).": "Turn on \"Allow auto mode\" so Synchro can fix pull requests (background runs have nobody to approve them).",
-  "Mặc định": "Default", "Giải thích": "Explanatory", "Học cùng": "Learning",
+  "Mặc định": "Default", "Học cùng": "Learning",
   "Làm việc gọn, tập trung vào kết quả.": "Works concisely and focuses on the result.",
   "Vừa làm vừa giải thích lựa chọn trong code và cách code này chạy.": "Explains the choices in the code and how it works as it goes.",
   "Cùng làm: Synchro để lại vài phần nhỏ, có ý nghĩa cho bạn tự viết, rồi xem lại giúp bạn.": "Works with you: Synchro leaves a few small, meaningful parts for you to write, then reviews them.",
@@ -1533,11 +1529,11 @@ addNew(VI2EN, {
   "Mỗi ngày lúc 7h sáng, lên GitHub tìm những repo mới có ý tưởng hay, tốt, đột phá ở mọi lĩnh vực, phân tích từng repo và chuyển repo đáng giá nhất thành skill (hỏi tôi trước khi tạo skill)": "Every day at 7 am, search GitHub for new repos with great, breakthrough ideas in any field, analyse each one and turn the most valuable into a skill (ask me before creating the skill)",
   "Mỗi ngày 7h sáng tóm tắt 5 tin công nghệ và AI quan trọng nhất trong 24 giờ qua, mỗi tin một đoạn ngắn kèm nguồn": "Every day at 7 am, summarise the 5 most important tech and AI stories of the past 24 hours, one short paragraph each with sources",
   "Mỗi 6 giờ kiểm tra giá iPhone 17 Pro 256GB ở các nhà bán lẻ lớn tại Việt Nam, so với lần trước và báo rõ nơi nào đang rẻ nhất": "Every 6 hours check the price of the iPhone 17 Pro 256GB at major Vietnamese retailers, compare with last time and say which store is cheapest",
-  "Tự chọn": "Automatic", "Trình duyệt của Synchro": "Synchro's browser", "Chrome của bạn": "Your Chrome",
+  "Trình duyệt của Synchro": "Synchro's browser", "Chrome của bạn": "Your Chrome",
   "Trình duyệt của Synchro trên máy chủ (chạy được cả khi máy bạn tắt); Chrome của bạn khi cần tài khoản bạn đã đăng nhập và Chrome đang mở.": "Synchro's browser on the server (works even when your computer is off); your Chrome when the job needs accounts you're signed in to and Chrome is open.",
   "Luôn chạy trên máy chủ, không đụng tới Chrome của bạn.": "Always runs on the server and never touches your Chrome.",
   "Dùng tài khoản bạn đã đăng nhập. Đến giờ mà Chrome đang tắt thì chờ bạn mở lại (tối đa 12 giờ) rồi mới chạy.": "Uses the accounts you're signed in to. If Chrome is off when it's time, it waits for you to open it (up to 12 hours) before running.",
-  "Tạo skill": "Create skill", "Việc cần làm": "Action", "Cho phép trang web": "Allow a website", "Dùng công cụ": "Use a tool", "Cho phép làm": "Allow it", "Cho phép trang này": "Allow this site", "Cho phép chạy": "Allow the run",
+  "Tạo skill": "Create skill", "Cho phép trang web": "Allow a website", "Dùng công cụ": "Use a tool", "Cho phép làm": "Allow it", "Cho phép trang này": "Allow this site", "Cho phép chạy": "Allow the run",
   "Việc tự động đã chạy xong và có đề xuất chờ bạn duyệt.": "An automation finished and has proposals waiting for your approval.", "Việc tự động đã chạy xong. Mở Hộp thư để xem kết quả.": "An automation finished. Open your Inbox to see the result.",
   "Tự động: chọn model hợp với việc, lỗi thì chuyển model khác": "Auto: picks the right model for the job and switches models on errors",
   "Đã lưu việc tự động": "Automation saved", "Đã xóa việc tự động": "Automation deleted", "Hôm nay": "Today", "Hôm qua": "Yesterday", "Model": "Model", "Trình duyệt": "Browser",
@@ -1567,7 +1563,7 @@ addNew(VI2EN, {
   "Quản trị viên chưa cho phép tài khoản của bạn dùng Synchro Code, nên việc này chưa chạy bằng Synchro Code được.": "Your administrator hasn't enabled Synchro Code for your account, so this automation can't run with Synchro Code yet.",
   "Thiếu thông tin việc tự động.": "Missing automation details.",
 });
-addNew(VI2EN, { "Đang tắt": "Turned off", "Việc tự động không dùng được những khả năng đang tắt. Bấm để mở Cài đặt → Khả năng.": "Automations can't use capabilities that are turned off. Click to open Settings → Capabilities." });
+addNew(VI2EN, { "Việc tự động không dùng được những khả năng đang tắt. Bấm để mở Cài đặt → Khả năng.": "Automations can't use capabilities that are turned off. Click to open Settings → Capabilities." });
 
 // Xuất skill / thư viện thành .zip (app/skillexport.ts).
 Object.assign(VI2EN, { "Đã xuất": "Exported", "Không xuất được skill này.": "Could not export this skill.", "Không có skill này.": "This skill does not exist.", "Không tìm thấy thư viện.": "Library not found." });
@@ -1661,9 +1657,9 @@ Object.assign(VI2EN, { "Đóng bảng đoạn chat": "Close chats panel", "Mở 
     "Thao tác hàng loạt": "Bulk actions", "Chọn tất cả": "Select all", "Bỏ chọn tất cả": "Deselect all",
     "Bật": "Turn on", "Tắt": "Turn off", "Kiểm tra cập nhật": "Check for updates", "Xuất .zip": "Export .zip", "Gỡ": "Uninstall", "Xóa": "Delete",
     "Ghim": "Pin", "Bỏ ghim": "Unpin", "Lưu trữ": "Archive", "Khôi phục": "Restore", "Bỏ lưu trữ": "Unarchive", "Thêm vào dự án": "Add to project", "Gỡ khỏi dự án": "Remove from project",
-    "Đánh dấu đã đọc": "Mark as read", "Đánh dấu chưa đọc": "Mark as unread", "Gỡ khỏi Hộp thư": "Remove from Inbox", "Bật lịch": "Turn schedule on", "Tắt lịch": "Turn schedule off",
+    "Đánh dấu đã đọc": "Mark as read", "Đánh dấu chưa đọc": "Mark as unread", "Gỡ khỏi Hộp thư": "Remove from Inbox", "Tắt lịch": "Turn schedule off",
     "Làm mới công cụ": "Refresh tools", "Ngắt kết nối": "Disconnect", "Tạm khóa": "Suspend", "Mở khóa": "Restore", "Đăng xuất mọi nơi": "Sign out everywhere",
-    "Xóa tài khoản": "Delete account", "Xóa vĩnh viễn": "Delete permanently", "Tải về": "Download", "Xóa giọng": "Delete voice", "Đăng xuất": "Sign out",
+    "Xóa tài khoản": "Delete account", "Xóa vĩnh viễn": "Delete permanently", "Tải về": "Download", "Xóa giọng": "Delete voice",
     "Đã bật các thư viện đã chọn": "Selected libraries turned on", "Đã tắt các thư viện đã chọn": "Selected libraries turned off", "Đã gỡ các thư viện đã chọn": "Selected libraries uninstalled",
     "thư viện có bản cập nhật": "libraries have updates", "thư viện": "libraries", "skill sẽ bị gỡ": "skills will be uninstalled",
     " (thư viện cho mọi người: gỡ cho cả nhóm)": " (libraries for everyone are uninstalled for the whole team)", "thư viện không thuộc quyền bạn được giữ nguyên.": "libraries you don't manage are kept.",

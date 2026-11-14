@@ -56,21 +56,22 @@ export function Toggle({ on, set, disabled, label }: { on: boolean; set: (v: boo
   return <button className={`toggle ${on ? "on" : ""}`} onClick={() => set(!on)} role="switch" aria-checked={on} aria-label={label ?? row} disabled={disabled} />;
 }
 
-export function Select({ value, options, onChange, search, width = 160 }: { value: string; options: string[]; onChange: (v: string) => void; search?: boolean; width?: number }) {
+// label: chữ hiện cho từng giá trị (giá trị lưu giữ nguyên, ví dụ "Past month"; chữ hiện đi qua tr). Mặc định hiện chính giá trị.
+export function Select({ value, options, onChange, search, width = 160, label = (o: string) => o }: { value: string; options: string[]; onChange: (v: string) => void; search?: boolean; width?: number; label?: (o: string) => string }) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
   const ref = useAway(() => setOpen(false));
   const rowName = useContext(RowName);
-  const list = options.filter((o) => o.toLowerCase().includes(q.toLowerCase()));
+  const list = options.filter((o) => o.toLowerCase().includes(q.toLowerCase()) || label(o).toLowerCase().includes(q.toLowerCase()));
   return (
     <div ref={ref} style={{ position: "relative" }}>
-      <button className="sel" aria-haspopup="menu" aria-expanded={open} aria-label={rowName ? `${tr(rowName)}: ${tr(value)}` : undefined} onClick={() => { setOpen(!open); setQ(""); }}>{value}<I.Chevron size={14} /></button>
+      <button className="sel" aria-haspopup="menu" aria-expanded={open} aria-label={rowName ? `${tr(rowName)}: ${tr(value)}` : undefined} onClick={() => { setOpen(!open); setQ(""); }}>{label(value)}<I.Chevron size={14} /></button>
         <Menu open={!!(open)} className="down" style={{ top: 36, right: 0, width, minWidth: width }}>
           <div className="menu-scroll">
           {search && <input className="field" style={{ marginBottom: 6, padding: "5px 8px" }} autoFocus placeholder="Search" value={q} onChange={(e) => setQ(e.target.value)} />}
           {list.length === 0 && <div className="muted" style={{ padding: "6px 10px", fontSize: "var(--fs-2)" }}>No results</div>}
           {list.map((o) => (
-            <button key={o} className="menu-item" style={{ height: 30 }} onClick={() => { onChange(o); setOpen(false); }}>{o}{o === value && <span className="ck"><I.Check size={16} /></span>}</button>
+            <button key={o} className="menu-item" style={{ height: 30 }} onClick={() => { onChange(o); setOpen(false); }}>{label(o)}{o === value && <span className="ck"><I.Check size={16} /></span>}</button>
           ))}
         </div>
         </Menu>
@@ -266,8 +267,9 @@ function Account() {
     <>
       <H first>Profile</H>
       <Row t="Profile photo" d="PNG or JPG up to 10MB." top><AvatarButton name={name || me?.profile.fullName || me?.name || ""} /></Row>
-      <Row t="Full name"><input className="field" aria-label="Full name" style={{ width: 280, margin: 0 }} value={name} placeholder={me?.profile.fullName || me?.name || undefined} onChange={(e) => setName(e.target.value)} onBlur={() => name.trim() && name.trim() !== me?.profile.fullName && saveProfile({ fullName: name })} /></Row>
-      <Row t="What should Synchro call you?"><input className="field" aria-label="What should Synchro call you?" style={{ width: 280, margin: 0 }} value={call} placeholder={me?.profile.nickname || shortName(me?.profile.fullName || me?.name) || undefined} onChange={(e) => setCall(e.target.value)} onBlur={() => call.trim() !== (me?.profile.nickname ?? "") && saveProfile({ nickname: call })} /></Row>
+      {/* Gợi ý trong ô là tên của chính người dùng (nội dung, không dịch: data-notr); nhãn đọc màn hình thì dịch bằng tr. */}
+      <Row t="Full name"><input className="field" data-notr aria-label={tr("Full name")} style={{ width: 280, margin: 0 }} value={name} placeholder={me?.profile.fullName || me?.name || undefined} onChange={(e) => setName(e.target.value)} onBlur={() => name.trim() && name.trim() !== me?.profile.fullName && saveProfile({ fullName: name })} /></Row>
+      <Row t="What should Synchro call you?"><input className="field" data-notr aria-label={tr("What should Synchro call you?")} style={{ width: 280, margin: 0 }} value={call} placeholder={me?.profile.nickname || shortName(me?.profile.fullName || me?.name) || undefined} onChange={(e) => setCall(e.target.value)} onBlur={() => call.trim() !== (me?.profile.nickname ?? "") && saveProfile({ nickname: call })} /></Row>
       <Row t="Date of birth"><input className="field" aria-label="Date of birth" style={{ width: 280, margin: 0 }} inputMode="numeric" placeholder="DD/MM/YYYY" value={dob} onChange={(e) => { const d = e.target.value.replace(/\D/g, "").slice(0, 8); setDob([d.slice(0, 2), d.slice(2, 4), d.slice(4)].filter(Boolean).join("/")); }} onBlur={saveDob} /></Row>
       <Row t="What best describes your work?"><Select width={200} value={work || "Choose"} onChange={(v) => { setWork(v); saveProfile({ occupation: v }); }} options={OCCUPATIONS} /></Row>
       <h3>Instructions for Synchro</h3>
@@ -568,7 +570,7 @@ function Reflect() {
     <>
       <div style={{ display: "flex", justifyContent: "space-between" }}>
         <div><div className="s-title">Reflect</div><div className="d">Based on your conversations in Synchro chat.</div></div>
-        <div style={{ display: "flex", gap: 4 }}><Select width={160} value={r} onChange={setR} options={["Past month", "Past 3 months", "Past 6 months", "Past year"]} /><button className="icon-btn" aria-label="Refresh" onClick={run} disabled={loading}><span className={loading ? "s-twirl" : undefined} style={{ display: "inline-flex" }}><I.Retry size={16} /></span></button></div>
+        <div style={{ display: "flex", gap: 4 }}><Select width={160} value={r} onChange={setR} options={["Past month", "Past 3 months", "Past 6 months", "Past year"]} label={(o) => tr(o)} /><button className="icon-btn" aria-label={tr("Refresh")} onClick={run} disabled={loading}><span className={loading ? "s-twirl" : undefined} style={{ display: "inline-flex" }}><I.Retry size={16} /></span></button></div>
       </div>
       {loading || !gen ? (
         <div className="empty" style={{ marginTop: 90 }}><I.Layers size={72} /><span style={{ marginTop: 8 }}>{loading ? "Surfacing themes and patterns." : "No reflection yet."}</span>{loading ? <span className="muted" style={{ fontSize: "var(--fs-1)" }}>This should only take a minute or so.</span> : <button className="btn dark" style={{ marginTop: 8 }} onClick={run}>Generate</button>}</div>

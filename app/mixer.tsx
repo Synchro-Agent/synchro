@@ -14,7 +14,7 @@ import { useChatStore } from "./chatstore.client";
 const HOT = 32_000;
 const LABEL: Record<CtxBlock["key"], string> = {
   system: "Hướng dẫn và khả năng", skills: "Skill, connector, công cụ", pinned: "Tài liệu ghim",
-  summary: "Tóm tắt đã nén", history: "Hội thoại", tools: "Kết quả công cụ (tóm tắt)", artifacts: "Artifact hiện tại", dynamic: "Gợi ý skill theo câu hỏi",
+  summary: "Tóm tắt đã nén", history: "Lịch sử hội thoại", tools: "Kết quả công cụ (tóm tắt)", artifacts: "Artifact hiện tại", dynamic: "Gợi ý skill theo câu hỏi",
 };
 const TIER: [CtxBlock["tier"], string, string][] = [
   ["static", "Cố định", "Giữ nguyên giữa các lượt, đọc lại từ bộ đệm nên rẻ"],

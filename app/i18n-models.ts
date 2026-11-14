@@ -11,8 +11,8 @@ export const MODELS_EN2VI: Record<string, string> = {
   "Add new models automatically": "Tự thêm model mới",
   "When a provider releases a model, Synchro tests it with one short message, one tool call and one image, then shows it with a New label. Auto picks the newest model of each line; the previous one stays as a fallback.":
     "Khi hãng ra mắt model, Synchro thử nó bằng một câu ngắn, một lần gọi công cụ và một ảnh, rồi hiện nó với nhãn Mới. Chế độ Tự động chọn bản mới nhất của mỗi dòng; bản trước vẫn là dự phòng.",
-  "Last check": "Kiểm tra lần cuối", ". Synchro checks every 6 hours.": ". Synchro tự kiểm tra mỗi 6 giờ.", "Synchro checks every 6 hours.": "Synchro tự kiểm tra mỗi 6 giờ.",
-  "Check now": "Kiểm tra ngay", "Checking…": "Đang kiểm tra…", "Recent changes": "Thay đổi gần đây", "All models": "Tất cả model", "Providers": "Nhà cung cấp",
+  ". Synchro checks every 6 hours.": ". Synchro tự kiểm tra mỗi 6 giờ.", "Synchro checks every 6 hours.": "Synchro tự kiểm tra mỗi 6 giờ.",
+  "Check now": "Kiểm tra ngay", "Checking…": "Đang kiểm tra…", "Recent changes": "Thay đổi gần đây", "Providers": "Nhà cung cấp",
   "No new models yet. Models found here are tested before anyone can use them.": "Chưa có model mới. Model thấy ở đây được thử trước khi ai đó dùng được.",
 };
 export const MODELS_VI2EN: Record<string, string> = {

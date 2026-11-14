@@ -21,7 +21,31 @@ const NOT_TEXT = new Set(["className", "class", "id", "key", "href", "src", "typ
   "enterKeyHint", "draggable", "tabIndex", "for", "media", "sizes", "srcSet", "poster", "preload", "download", "language", "theme", "path", "file", "url",
   "provider", "model", "vendor", "brand", "color", "align", "justify", "side", "place", "position", "anchor", "sel", "cls", "at", "order", "group", "slot"]);
 // Hàm nhận chuỗi kỹ thuật (khóa, bộ chọn, sự kiện, đường dẫn…), không phải chữ hiển thị.
-const TECH_CALL = /^(querySelector(All)?|closest|matches|addEventListener|removeEventListener|getItem|setItem|removeItem|fetch|usePref|useState|get|set|has|delete|getAttribute|setAttribute|removeAttribute|toggleAttribute|startsWith|endsWith|includes|indexOf|split|join|replace|replaceAll|match|test|exec|RegExp|createElement|createElementNS|dispatchEvent|CustomEvent|Event|postMessage|on|off|emit|send|require|import|getComputedStyle|getPropertyValue|setProperty|toLocaleString|toLocaleDateString|toLocaleTimeString|Intl\.\w+|DateTimeFormat|NumberFormat|localeCompare|padStart|padEnd|L|en|api|post|put|del|go|open|track|log|warn|error|info|debug|cn|clsx|twMerge|cva|encodeURIComponent|decodeURIComponent|atob|btoa|Blob|File|URL|URLSearchParams|append|Headers|keys|execCommand|focus|scrollTo|mark|measure|countRender|lsGet|lsSet|ss|key|pref|copy|write|writeText|download|saveAs)$/;
+const TECH_CALL = /^(querySelector(All)?|closest|matches|addEventListener|removeEventListener|getItem|setItem|removeItem|fetch|usePref|useState|get|set|has|delete|getAttribute|setAttribute|removeAttribute|toggleAttribute|startsWith|endsWith|includes|indexOf|split|join|replace|replaceAll|match|test|exec|RegExp|createElement|createElementNS|dispatchEvent|CustomEvent|Event|postMessage|on|off|emit|send|require|import|getComputedStyle|getPropertyValue|setProperty|toLocaleString|toLocaleDateString|toLocaleTimeString|Intl\.\w+|DateTimeFormat|NumberFormat|localeCompare|padStart|padEnd|api|post|put|del|go|open|track|log|warn|error|info|debug|cn|clsx|twMerge|cva|encodeURIComponent|decodeURIComponent|atob|btoa|Blob|File|URL|URLSearchParams|append|Headers|keys|execCommand|focus|scrollTo|mark|measure|countRender|lsGet|lsSet|ss|key|pref|copy|write|writeText|download|saveAs)$/;
+
+// Cặp chữ chọn theo ngôn ngữ ngay tại chỗ (en ? "English" : "Tiếng Việt", bộ ["Tiếng Việt", "English"]) chỉ được phép ở các tệp này, mỗi tệp một lý do
+// (Blueprint B6 bước 9). Ngoài danh sách, cặp chữ bị quét như chữ thường nên chữ tiếng Việt / tiếng Anh nào chưa có khóa đều bị báo;
+// tests/api/i18n-keys.test.mjs còn chặn mọi toán tử ngôn ngữ chọn chữ và mọi từ điển cục bộ L(vi, en) mới.
+export const PAIR_ALLOW = {
+  "app/global-error.tsx": "trang lỗi gốc phải chạy được khi không có từ điển lẫn CSS (xem chú thích đầu tệp)",
+  "app/voiceflow.ts": "câu nói đáp theo ngôn ngữ người dùng vừa nói, không theo ngôn ngữ giao diện",
+  "app/voicemode.tsx": "vlang là giá trị lưu (English / Vietnamese); câu báo chờ lâu nói theo ngôn ngữ của lượt nói",
+  "app/speech/voices.tsx": "ngôn ngữ mặc định của bộ lọc giọng, không phải chữ",
+  "app/authstore.ts": "ngôn ngữ thư gửi đi theo yêu cầu / Accept-Language",
+  "app/api/skill-scan/route.ts": "chuẩn hóa tham số lang của yêu cầu",
+  "app/api/admin/health/route.ts": "chuẩn hóa tham số lang của yêu cầu",
+  "app/api/speech/[...op]/route.ts": "lời nhắc gửi model theo ngôn ngữ người dùng chọn",
+  "app/skillscan.ts": "lời nhắc gửi model (ngôn ngữ của field / why)",
+  "app/resetfmt.ts": "hàm thuần nhận lang, kiểm thử chạy không cần từ điển (giữ nguyên chữ của main)",
+  // Bảng hai cột không phải cặp ngôn ngữ (tệp#tên hằng): chỉ miễn đúng bảng đó.
+  "app/introfilm.tsx#CAPS": "phụ đề tiếng Việt kèm dòng tiếng Anh gốc của phim, chỉ hiện ở giao diện tiếng Việt",
+  "app/speech/dict.tsx#EXAMPLES": "ví dụ từ điển phát âm: từ và cách đọc, là nội dung chứ không phải chữ giao diện",
+  "app/speech/data.ts#TAG_GROUPS": "thẻ âm thanh tiếng Anh gửi API Eleven v3 kèm nhãn tiếng Việt (nhãn dịch qua từ điển)",
+  "app/speech/data.ts#SFX_CATS": "nhãn tiếng Việt kèm câu lệnh tiếng Anh gửi API tiếng động (câu lệnh không hiện, nhãn dịch qua từ điển)",
+  "app/cxactions.ts#META": "chính là dữ liệu từ điển: tên công cụ meta của Composio, nạp vào VI2EN qua CX_VI2EN",
+  "app/i18n.tsx#LANG_NAMES": "tên mỗi ngôn ngữ viết bằng chính ngôn ngữ đó (Tiếng Việt, English)",
+};
+const PAIR_RE = /\ben\(\)|getLang\(\)|lang\s*===?\s*"en"|isEn\b|\ben\b/;
 
 // Hàm dịch qua từ điển: chuỗi đầu tiên truyền vào luôn là chữ giao diện cần khóa.
 const DICT_CALL = /^(tr|trOn|tf|tfOn)$/;
@@ -85,6 +109,10 @@ const PROMPT_NAME = /(^|_)(SYS|sys)$|SYS_|^sys|system|prompt|PROMPT|instruct|INS
 export function extract(file) {
   const src = readFileSync(file, "utf8");
   const isTsx = file.endsWith(".tsx");
+  const relf = path.relative(process.cwd(), file).split(path.sep).join("/");
+  const pairOk = Object.prototype.hasOwnProperty.call(PAIR_ALLOW, relf);
+  // Bảng được miễn theo tên hằng (PAIR_ALLOW "tệp#TÊN"): tìm khai báo biến bao quanh.
+  const tableOk = (n) => { for (let p = n; p && !ts.isSourceFile(p); p = p.parent) if (ts.isVariableDeclaration(p)) return Object.prototype.hasOwnProperty.call(PAIR_ALLOW, `${relf}#${p.name.getText(sf)}`); return false; };
   const sf = ts.createSourceFile(file, src, ts.ScriptTarget.Latest, true, isTsx ? ts.ScriptKind.TSX : ts.ScriptKind.TS);
   const out = [];
   const lineOf = (node) => sf.getLineAndCharacterOfPosition(node.getStart(sf)).line + 1;
@@ -98,8 +126,8 @@ export function extract(file) {
     let c = n, direct = true;
     for (let p = n.parent; p; c = p, p = p.parent) {
       // Cặp chữ theo ngôn ngữ: en() ? "English" : "Tiếng Việt", hoặc bộ ["Tiếng Việt", "English"] — đã tự chọn đúng ngôn ngữ.
-      if (ts.isConditionalExpression(p) && p.condition !== c && /\ben\(\)|getLang\(\)|lang\s*===?\s*"en"|isEn\b|\ben\b/.test(p.condition.getText(sf))) { r.pair = true; break; }
-      if (ts.isArrayLiteralExpression(p) && p.elements.length === 2 && p.elements.every((e) => ts.isStringLiteralLike(e)) && VI.test(p.elements[0].text) !== VI.test(p.elements[1].text)) { r.pair = true; break; }
+      if (pairOk && ts.isConditionalExpression(p) && p.condition !== c && PAIR_RE.test(p.condition.getText(sf))) { r.pair = true; break; }
+      if ((pairOk || tableOk(p)) && ts.isArrayLiteralExpression(p) && p.elements.length === 2 && p.elements.every((e) => ts.isStringLiteralLike(e)) && VI.test(p.elements[0].text) !== VI.test(p.elements[1].text)) { r.pair = true; break; }
       if (ts.isPropertyAccessExpression(p) && p.expression === c && TECH_CALL.test(p.name.text)) { r.call = p.name.text; break; }
       if (ts.isCallExpression(p) && ts.isPropertyAccessExpression(p.expression) && p.expression.name.text === "join" && p.expression.expression === c) {
         const a = p.arguments[0]; if (a && ts.isStringLiteralLike(a) && /\n/.test(a.text)) r.prompt = true;
@@ -190,7 +218,7 @@ export async function scan({ files, extra } = {}) {
   const sameWords = D.SAME_WORDS ?? new Set();
   // Chuỗi trung tính: chỉ gồm tên riêng / thuật ngữ giữ nguyên, chữ viết tắt, số, phím tắt.
   const neutral = (t) => t.split(/[\s+&/()·:;,.\-–—|•@#'"“”!?…×=*%$€£¥→←↑↓~≈]+/).filter(Boolean)
-    .every((w) => sameWords.has(w) || /^\d/.test(w) || /^[A-Z0-9]{2,}s?$/.test(w) || /^[⌘⇧⌥⌃↵⏎]+\w?$/.test(w) || /^\p{L}$/u.test(w) || /^v\d/.test(w));
+    .every((w) => sameWords.has(w) || /^\d/.test(w) || /^[A-Z0-9]{2,}s?$/.test(w) || /^[⌘⇧⌥⌃↵⏎⌫⌦]+\w?$/.test(w) || /^\p{L}$/u.test(w) || /^v\d/.test(w));
   const same = { has: (t) => (D.SAME ?? new Set()).has(t) || neutral(t) };
   const strip = (t) => t.split(/\s+/).filter((w) => !sameWords.has(w.replace(/[^\p{L}\d]/gu, ""))).join(" ");
   const trEn = (t) => {

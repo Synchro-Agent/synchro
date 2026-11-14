@@ -21,7 +21,6 @@ export const FX_VI2EN: Record<string, string> = {
   "Kết quả cũ trong Hộp thư cũng bị xóa.": "Its past results in the Inbox are deleted too.",
   "Chưa tải được danh sách cần duyệt": "Couldn't load your approvals",
   "Chưa tải được danh sách việc tự động": "Couldn't load your automations",
-  "Synchro đang khởi động lại để cập nhật. Thử lại sau vài giây.": "Synchro is restarting to update. Try again in a few seconds.",
   "Máy chủ phản hồi quá lâu. Thử lại sau ít phút.": "The server took too long to respond. Try again in a few minutes.",
   "Lỗi máy chủ. Vui lòng thử lại.": "Server error. Please try again.",
   "Xóa tệp này?": "Delete this file?",
@@ -263,7 +262,6 @@ Object.assign(FX_VI2EN, {
   "Trả lời không có workspace: chưa sửa tệp nào của bạn.": "Answered without a workspace: none of your files were changed.",
   "Không kiểm tra được workspace.": "Couldn't check the workspace.",
   "Workspace chưa sẵn sàng.": "The workspace isn't ready yet.",
-  "Máy chủ chưa bật workspace.": "The server doesn't have the workspace turned on.",
   "Không kết nối được workspace.": "Couldn't connect to the workspace.",
   "Máy chủ vừa khởi động lại hoặc mất kết nối quá lâu nên không theo dõi tiếp được lượt này. Phần đã làm vẫn còn trong workspace.": "The server restarted or the connection was down too long, so this turn can't be followed any more. Work already done is still in the workspace.",
   "Phiên này đang có một lượt chạy.": "This session already has a turn running.",
@@ -286,7 +284,6 @@ Object.assign(FX_EN2VI, {
 });
 Object.assign(FX_VI2EN, {
   "Cách đăng nhập này chưa được cấu hình trên máy chủ.": "This sign-in method isn't set up on the server yet.",
-  "Phản hồi từ Apple không hợp lệ.": "Apple's response wasn't valid.",
 });
 // Đặt lại mật khẩu, xác minh email: lỗi mạng khác với đường dẫn hết hạn.
 Object.assign(FX_VI2EN, {
@@ -349,7 +346,7 @@ Object.assign(FX_VI2EN, {
   "Tài khoản chưa gắn với cách đăng nhập này.": "This sign-in method isn't linked to your account.",
 });
 Object.assign(FX_EN2VI, {
-  "Sign-in methods": "Cách đăng nhập", "Connect": "Kết nối", "Disconnect": "Gỡ",
+  "Sign-in methods": "Cách đăng nhập", "Connect": "Kết nối", 
   "Add another way to sign in, even with a different email address.": "Thêm cách đăng nhập khác, kể cả khi email khác.",
   "Sign-in method added": "Đã thêm cách đăng nhập", "That account is already linked to another Synchro account": "Tài khoản đó đã gắn với một tài khoản Synchro khác", "Couldn't add the sign-in method": "Chưa thêm được cách đăng nhập",
 });

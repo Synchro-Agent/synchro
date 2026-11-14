@@ -128,7 +128,7 @@ if (process.env.SNAP_ALL) {
     } else { await openSide(v); await click(`document.querySelector(".chat-item")`, "chat"); await sleep(2500); }
     await both(`${v.w}-chat`);
     if (v.mobile) { await openSide(v); await both(`${v.w}-drawer`); }
-    for (const [nav, n] of [["Artifacts", "artifacts"], ["Kỹ năng", "hub"], ["Dự án", "projects"], ["Code", "code"], ["Speech", "speech"], ["Bộ não", "brain"]]) { await openSide(v); await click(byText(".nav-item", nav), n); await sleep(2500); await both(`${v.w}-${n}`); }
+    for (const [nav, n] of [["Artifacts", "artifacts"], ["Skill", "hub"], ["Dự án", "projects"], ["Code", "code"], ["Speech", "speech"], ["Bộ não", "brain"]]) { await openSide(v); await click(byText(".nav-item", nav), n); await sleep(2500); await both(`${v.w}-${n}`); }
     await openSide(v);
     // Nút tài khoản: tên đầy đủ ở thanh bên rộng, chữ viết tắt "DT" ở thanh rail.
     try {
@@ -148,7 +148,7 @@ await until(`document.querySelectorAll(".art-card:not(.busy)").length > 0 && !do
 await sleep(3500);
 await shot("chat");
 await click(byText(".nav-item", "Artifacts"), "artifacts"); await sleep(2500); await shot("artifacts");
-await click(byText(".nav-item", "Kỹ năng"), "hub"); await sleep(2000); await shot("hub");
+await click(byText(".nav-item", "Skill"), "hub"); await sleep(2000); await shot("hub");
 await click(`[...document.querySelectorAll("aside button")].find((e) => e.textContent.includes("Download Tester"))`, "user"); await sleep(500);
 await shot("usermenu");
 await click(byText(".menu-item", "Cài đặt"), "settings"); await sleep(1500); await shot("settings");

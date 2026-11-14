@@ -142,7 +142,7 @@ for (const v of VIEWS) {
   }
   await capture(`${v.w} chat`);
   if (v.mobile) { await click(`document.querySelector(".side-toggle")`); await sleep(600); await capture(`${v.w} drawer`); }
-  for (const [nav, n] of [["Artifacts", "artifacts"], ["Kỹ năng", "hub"], ["Dự án", "projects"], ["Code", "code"], ["Speech", "speech"], ["Bộ não", "brain"]]) {
+  for (const [nav, n] of [["Artifacts", "artifacts"], ["Skill", "hub"], ["Dự án", "projects"], ["Code", "code"], ["Speech", "speech"], ["Bộ não", "brain"]]) {
     if (v.mobile && !(await ev(`!!document.querySelector(".shell-side:not(.closed)")`).catch(() => false))) { await click(`document.querySelector(".side-toggle")`); await sleep(600); }
     if (await click(byText(".nav-item", nav))) { await sleep(2000); await capture(`${v.w} ${n}`); }
   }

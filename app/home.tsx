@@ -290,7 +290,7 @@ function ModelPicker({ model, setModel, prefix }: { model: string; setModel: (m:
   const none = loaded && !providers.length;
   return (
     <div ref={mref} style={{ position: "relative" }} onKeyDown={(e) => { if (e.key === "ArrowLeft" && sub && (e.target as HTMLElement).closest(".model-sub")) setSub(null); }}>
-      <button className="model-btn" data-tip="Chọn model" aria-label={prefix ? `${prefix}: ${none ? "Chưa có model" : model ? modelName(model) : "Chọn model"}` : undefined} aria-haspopup="menu" aria-expanded={mm} onPointerEnter={() => { if (!mm) refreshModels(); }} onClick={() => { setMm(!mm); setSub(null); }}>{!none && model ? (model === AUTO ? <span className="vlogo" style={{ width: 16, height: 16 }} aria-hidden><I.Sparkle size={15} /></span> : <ModelLogo k={model} />) : null}{prefix ? (
+      <button className="model-btn" data-tip="Chọn model" aria-label={prefix ? `${prefix}: ${none ? tr("Chưa có model") : model ? tr(modelName(model)) : tr("Chọn model")}` : undefined} aria-haspopup="menu" aria-expanded={mm} onPointerEnter={() => { if (!mm) refreshModels(); }} onClick={() => { setMm(!mm); setSub(null); }}>{!none && model ? (model === AUTO ? <span className="vlogo" style={{ width: 16, height: 16 }} aria-hidden><I.Sparkle size={15} /></span> : <ModelLogo k={model} />) : null}{prefix ? (
         // Trong Synchro Code: thêm tiền tố "Model:" để phân biệt với hai nút "Chế độ"/"Quyền" bên cạnh; dưới 1100px CSS ẩn nhãn, chỉ còn icon.
         <span className="mp-lbl"><span className="mp-k">{prefix}</span>: {none ? "Chưa có model" : model ? modelName(model) : "Chọn model"}{!(model === AUTO && autoEff) && <> <span className="muted">{eLabel}</span></>}</span>
       ) : (<>{none ? "Chưa có model" : model ? modelName(model) : "Chọn model"}{!(model === AUTO && autoEff) && <> <span className="muted">{eLabel}</span></>}</>)}<I.Chevron size={14} /></button>
@@ -1907,7 +1907,7 @@ export default function Home({ boot }: { boot?: BootData | null }) {
     { id: "new", label: "Đoạn chat mới", icon: <I.Plus size={16} />, keys: "⇧⌘O", hay: "new chat tao moi", run: goNew },
     { id: "inbox", label: "Hộp thư", icon: <I.Inbox size={16} />, hay: "inbox tac vu nen lich hen ket qua", run: () => setView("inbox") },
     { id: "hub", label: "Kho kỹ năng", icon: <I.Plugins size={16} />, hay: "skill hub plugin thu vien", run: goCustom },
-    { id: "connectors", label: "Kết nối", icon: <I.Connectors size={16} />, hay: "connectors mcp", run: () => { setCzTab("connectors"); setView("customize"); } },
+    { id: "connectors", label: "Connectors", icon: <I.Connectors size={16} />, hay: "connectors mcp ket noi", run: () => { setCzTab("connectors"); setView("customize"); } },
     ...(caps.art !== false ? [{ id: "artifacts", label: "Artifacts", icon: <I.Shapes size={16} />, hay: "ung dung apps", run: () => setView("artifacts") }] : []),
     { id: "projects", label: "Dự án", icon: <I.Folder size={16} />, hay: "projects", run: () => { setCurProj(null); setView("projects"); } },
     { id: "settings", label: "Cài đặt", icon: <I.Cog size={16} />, keys: "⇧⌘,", hay: "settings", run: () => { setSettingsTab("General"); setModal("settings"); } },
@@ -2110,7 +2110,7 @@ export default function Home({ boot }: { boot?: BootData | null }) {
             setCodeCur(live ? live.id : null);
           } })}
           {me?.perms.features.speech !== false && (speechReady || me?.isAdmin) && nav({ v: "speech", icon: <I.Speech />, label: "Speech", onPick: () => setSpTool("home") })}
-          {me?.perms.features.skills !== false && nav({ v: "customize", icon: <I.Plugins />, label: "Kỹ năng", tip: "Kho kỹ năng" })}
+          {me?.perms.features.skills !== false && nav({ v: "customize", icon: <I.Plugins />, label: trc("Skill", "tên mục"), tip: "Kho kỹ năng" })}
         </div>
         <div className="rail-foot">
           <button className="icon-btn rail-btn" onClick={() => setModal("search")} aria-label="Tìm kiếm" data-tip="⌘K"><I.Search size={17} /></button>
