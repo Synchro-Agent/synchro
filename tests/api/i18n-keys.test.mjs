@@ -2,7 +2,8 @@
 // 1. Mọi chữ giao diện trong app/ có khóa ở ngôn ngữ còn lại (tests/lib/i18n-scan.mjs, kể cả chữ trong toán tử ngôn ngữ và bảng [vi, en] cũ).
 // 2. Không còn toán tử ngôn ngữ chọn chữ (en ? "English" : "Tiếng Việt") ngoài PAIR_ALLOW của bộ quét.
 // 3. Không còn từ điển cục bộ: hàm L(vi, en), bảng ["Tiếng Việt", "English"], đối tượng { vi, en } ngoài PAIR_ALLOW.
-// 4. Không có khóa trùng mà khác bản dịch giữa các tệp từ điển (Object.assign / addNew: chỉ một bản thắng, bản kia là chữ chết gây hiểu nhầm).
+// 4. Không có khóa trùng mà khác bản dịch giữa các tệp từ điển (khai báo, Object.assign, addNew(BẢNG, {…}), hàm ghi gói add({…}), BẢNG["k"] = "v",
+//    for … of Object.entries({…}) … BẢNG[k] = v: chỉ một bản thắng, bản kia là chữ chết gây hiểu nhầm).
 // 5. Một thuật ngữ cho mỗi khái niệm (B6 mục 4): connector, skill (Kho kỹ năng là tên kho), Speech, "Hội thoại" chỉ là Dialogue của Speech.
 // Tên mặc định "Lâm Tùng" và việc tệp giao diện kéo theo i18n-server.ts đã chặn ở tests/api/i18n.test.mjs.
 import { createRequire } from "node:module";
@@ -109,19 +110,50 @@ function dictEntries(list) {
   const seen = { VI2EN: new Map(), EN2VI: new Map() };
   for (const [f, src] of list) {
     const sf = parse(f, src);
+    const dirOf = (name) => (/VI2EN/.test(name) ? "VI2EN" : /EN2VI/.test(name) ? "EN2VI" : null);
+    const put = (dir, k, t, node) => {
+      if (!seen[dir].has(k)) seen[dir].set(k, []);
+      seen[dir].get(k).push([t, `${rel(f)}:${sf.getLineAndCharacterOfPosition(node.getStart(sf)).line + 1}`]);
+    };
     const take = (name, obj) => {
-      const dir = /VI2EN/.test(name) ? "VI2EN" : /EN2VI/.test(name) ? "EN2VI" : null;
+      const dir = dirOf(name);
       if (!dir) return;
       for (const p of obj.properties) {
         if (!ts.isPropertyAssignment(p) || !ts.isStringLiteralLike(p.initializer)) continue;
-        const k = ts.isStringLiteralLike(p.name) ? p.name.text : p.name.getText(sf);
-        if (!seen[dir].has(k)) seen[dir].set(k, []);
-        seen[dir].get(k).push([p.initializer.text, `${rel(f)}:${sf.getLineAndCharacterOfPosition(p.getStart(sf)).line + 1}`]);
+        put(dir, ts.isStringLiteralLike(p.name) ? p.name.text : p.name.getText(sf), p.initializer.text, p);
       }
     };
+    // Hàm ghi gói vào một bảng cố định, khai báo gần nhất theo khối: const add = (m) => { … VI2EN[k] = v … } → add({…}) là VI2EN.
+    const helperDir = (call) => {
+      const name = call.expression.getText(sf);
+      for (let p = call.parent; p; p = p.parent) {
+        if (!ts.isBlock(p) && !ts.isSourceFile(p)) continue;
+        for (const st of p.statements) if (ts.isVariableStatement(st)) for (const d of st.declarationList.declarations)
+          if (d.name.getText(sf) === name && d.initializer && (ts.isArrowFunction(d.initializer) || ts.isFunctionExpression(d.initializer))) {
+            const m = d.initializer.body.getText(sf).match(/\b\w*(VI2EN|EN2VI)\s*\[/);
+            return m ? m[1] : null;
+          }
+      }
+      return null;
+    };
+    const tableArg = (a) => a && ts.isIdentifier(a) && /VI2EN|EN2VI/.test(a.text);
     const v = (n) => {
       if (ts.isVariableDeclaration(n) && n.initializer && ts.isObjectLiteralExpression(n.initializer)) take(n.name.getText(sf), n.initializer);
-      if (ts.isCallExpression(n) && n.expression.getText(sf) === "Object.assign") for (const a of n.arguments.slice(1)) if (ts.isObjectLiteralExpression(a)) take(n.arguments[0].getText(sf), a);
+      if (ts.isCallExpression(n)) {
+        // Object.assign(BẢNG, {…}), addNew(BẢNG, {…}) và mọi hàm nhận bảng làm đối số đầu.
+        if (tableArg(n.arguments[0])) { for (const a of n.arguments.slice(1)) if (ts.isObjectLiteralExpression(a)) take(n.arguments[0].getText(sf), a); }
+        else if (ts.isIdentifier(n.expression)) { const d = helperDir(n); if (d) for (const a of n.arguments) if (ts.isObjectLiteralExpression(a)) take(d, a); }
+      }
+      // BẢNG["khóa"] = "bản dịch"
+      if (ts.isBinaryExpression(n) && n.operatorToken.kind === ts.SyntaxKind.EqualsToken && ts.isElementAccessExpression(n.left) && ts.isStringLiteralLike(n.left.argumentExpression) && ts.isStringLiteralLike(n.right)) {
+        const dir = dirOf(n.left.expression.getText(sf));
+        if (dir) put(dir, n.left.argumentExpression.text, n.right.text, n);
+      }
+      // for (const [k, v] of Object.entries({…})) … BẢNG[k] = v
+      if (ts.isForOfStatement(n) && ts.isCallExpression(n.expression) && n.expression.expression.getText(sf) === "Object.entries" && ts.isObjectLiteralExpression(n.expression.arguments[0] ?? n)) {
+        const m = n.statement.getText(sf).match(/\b(\w*(?:VI2EN|EN2VI))\s*\[/);
+        if (m) take(m[1], n.expression.arguments[0]);
+      }
       ts.forEachChild(n, v);
     };
     v(sf);
@@ -136,6 +168,21 @@ function dictEntries(list) {
   ok(!clash.length, `không khóa nào có hai bản dịch khác nhau (${clash.length})`, clash.slice(0, 30).join("\n     "));
   const fake = dictEntries([[path.join(process.cwd(), "app", "zz-a.ts"), `export const A_VI2EN = { "Thử": "Try" };\nObject.assign(A_VI2EN, { "Thử": "Retry", "Khác": "Other" });\nexport const B_EN2VI = { "Other": "Khác" };`]]);
   ok(fake.clash.length === 1 && fake.clash[0].startsWith('VI2EN "Thử"'), "phép kiểm bắt được khóa trùng qua Object.assign", fake.clash.join("; "));
+  // Các dạng ghi khác: addNew(BẢNG, {…}) (chiều theo đối số đầu), hàm ghi gói add({…}) khai báo trong khối, gán BẢNG["k"] = "v", vòng Object.entries({…}).
+  const forms = dictEntries([[path.join(process.cwd(), "app", "zz-b.ts"), [
+    `const VI2EN: Record<string, string> = { "Bỏ": "Discard", "Đăng xuất": "Log out", "Tắt": "Off", "Giữ": "Keep" };`,
+    `const EN2VI: Record<string, string> = { "Width": "Độ rộng", "Same": "Giống" };`,
+    `const addNew = (d: Record<string, string>, o: Record<string, string>) => { for (const [k, v] of Object.entries(o)) if (!(k in d)) d[k] = v; };`,
+    `addNew(VI2EN, { "Bỏ": "Clear", "Giữ": "Keep" });`,
+    `addNew(EN2VI, { "Width": "Độ rộng khung", "Same": "Giống" });`,
+    `{ const add = (m: Record<string, string>) => { for (const [k, v] of Object.entries(m)) if (!(k in VI2EN)) VI2EN[k] = v; }; add({ "Đăng xuất": "Sign out" }); }`,
+    `{ const add = (m: Record<string, string>) => m; add({ "Tắt": "Not a dictionary" }); }`,
+    `VI2EN["Tắt"] = "Turned off";`,
+    `for (const [k, v] of Object.entries({ "Width": "Bề rộng" })) if (!(k in EN2VI)) EN2VI[k] = v;`,
+  ].join("\n")]]);
+  const want = ['VI2EN "Bỏ"', 'VI2EN "Đăng xuất"', 'VI2EN "Tắt"', 'EN2VI "Width"'];
+  ok(forms.clash.length === want.length && want.every((w) => forms.clash.some((c) => c.startsWith(w))) && /Bề rộng/.test(forms.clash.find((c) => c.startsWith('EN2VI "Width"'))) && !forms.clash.some((c) => /Not a dictionary/.test(c)),
+    "phép kiểm bắt được khóa trùng qua addNew(BẢNG, {…}), hàm add({…}) ghi VI2EN, BẢNG[\"k\"] = \"v\" và vòng Object.entries; bỏ qua hàm không ghi bảng", forms.clash.join("\n     "));
 }
 
 console.log("5. Một thuật ngữ cho mỗi khái niệm");
@@ -161,6 +208,9 @@ const { "i18n-dict": D, "i18n-vi": V } = await loadTs(["i18n-dict", "i18n-vi"]);
   const home = readFileSync(path.join(process.cwd(), "app", "home.tsx"), "utf8");
   ok(/id: "connectors", label: "Connectors"/.test(home) && /customize: "Kho kỹ năng"/.test(home) && /speech: "Speech"/.test(home) && /label: "Speech"/.test(home) && !/label: "(Kỹ năng|Kết nối|Giọng nói)"/.test(home),
     "thanh bên, tiêu đề trang và bảng lệnh: Connectors, Speech, Kho kỹ năng (nhãn ngắn Skill)");
+  // Bảng lệnh ⌘K tìm theo nhãn + hay (palette.tsx score: mọi từ phải khớp). Nhãn đổi sang "Connectors" thì người gõ "kết nối" / "ket noi" vẫn phải thấy lệnh.
+  const hay = home.match(/id: "connectors", label: "Connectors",[^\n]*?hay: "([^"]*)"/)?.[1] ?? "";
+  ok(/\bket noi\b/.test(hay) && /\bconnectors\b/.test(hay), "lệnh Connectors trong bảng lệnh vẫn tìm được bằng “kết nối” / “ket noi”", hay);
   ok(D.VI2EN["Skill ‹tên mục›"] === "Skills" && D.VI2EN["Kho kỹ năng"] === "Skill Hub", "Skill → Skills, Kho kỹ năng → Skill Hub ở giao diện tiếng Anh");
   // "Hội thoại" là Dialogue (công cụ của Speech); lịch sử đoạn chat trong ngữ cảnh model là "Lịch sử hội thoại".
   const src = (f) => readFileSync(path.join(process.cwd(), "app", f), "utf8");
