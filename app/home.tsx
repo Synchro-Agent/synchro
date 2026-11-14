@@ -394,7 +394,7 @@ function ModelPicker({ model, setModel, prefix }: { model: string; setModel: (m:
 
 // Ghi chú gói subscription trong menu con của hãng: gói hết hạn mức (đề nghị dùng khóa API, chỉ chuyển khi người dùng bấm),
 // đang dùng khóa API thay gói (quay lại gói), hay cần đăng nhập lại.
-// Lượt lỗi → thông báo kèm tin nhắn. text: lời báo khi còn giữ được phần đã viết; không thì lời báo chính là nội dung tin (failed).
+
 // Chữ đang chảy về (lượt đang gửi và lượt nối lại sau khi tải lại trang): giữ mẩu mới nhất, vẽ tối đa mỗi khung hình và cách nhau
 // ít nhất 45 ms (khoảng 20 lần mỗi giây): mắt không thấy khác, trang không phải dựng lại theo từng mẩu chữ. mine(): lần theo dõi còn hiệu lực.
 // drop(): bỏ mẩu đang chờ (lời dẫn chuyển sang nhật ký làm việc, chữ bắt đầu lại từ đầu); pending(): mẩu chưa kịp vẽ.
@@ -417,6 +417,8 @@ function deltaSink(mine: () => boolean, write: (t: string) => void) {
     cancel: () => { if (raf) cancelAnimationFrame(raf); raf = 0; },
   };
 }
+
+// Lượt lỗi → thông báo kèm tin nhắn. text: lời báo khi còn giữ được phần đã viết; không thì lời báo chính là nội dung tin (failed).
 const noticeOf = (d: Record<string, unknown>, text: string): Msg["notice"] => ({
   ...(text ? { text, partial: true } : { failed: true }),
   ...(typeof d.resetsAt === "number" ? { at: d.resetsAt } : {}),
@@ -1077,8 +1079,11 @@ export default function Home({ boot }: { boot?: BootData | null }) {
   const projects = useChatState((s) => s.projects);
   const cur = useChatState((s) => s.cur);
   const { setChats, setProjects, setCur, setRunning, setQueued, setBusy: setBusyOf, patch } = useChatStore.getState();
-  // Home gỡ khỏi trang: kho về trạng thái ban đầu như useState trước đây, lần gắn sau không mang theo dấu "đang chạy" cũ.
-  useEffect(() => () => useChatStore.getState().reset(), []);
+  // Home gắn lại sau khi đã gỡ khỏi trang: kho về trạng thái ban đầu như useState trước đây, không mang theo dấu "đang chạy", đoạn chat đang mở
+  // của lần trước. Chỉ lần gắn thật (ref mới): Fast Refresh khi sửa mã và lần chạy hiệu ứng thứ hai của StrictMode giữ ref nên không xóa gì,
+  // như useState được giữ. Đặt trước mọi hiệu ứng ghi vào kho (khởi động, tải đoạn chat đã lưu).
+  const freshMount = useRef(true);
+  useEffect(() => { if (!freshMount.current) return; freshMount.current = false; useChatStore.getState().reset(); }, []);
   const curRef = useRef(cur);
   curRef.current = cur;
   // Công cụ connector đang chờ người dùng duyệt: thẻ hiện cuối cuộc trò chuyện đang trả lời.

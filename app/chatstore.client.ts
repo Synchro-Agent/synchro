@@ -37,7 +37,7 @@ export type ChatState = {
   removeChats: (ids: number[]) => void;
   /** Bật / tắt dấu "đang chạy" của một đoạn chat. */
   setBusy: (id: number, on: boolean) => void;
-  /** Về trạng thái ban đầu (Home gỡ khỏi trang). */
+  /** Về trạng thái ban đầu (Home gắn lại sau khi đã gỡ khỏi trang). */
   reset: () => void;
 };
 
