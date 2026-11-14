@@ -38,7 +38,7 @@ html body .modal.pl-modal{background:var(--card)}
 .modal.pl-modal::before{background:var(--card);-webkit-backdrop-filter:none;backdrop-filter:none}
 .pl-top{display:flex;align-items:center;gap:12px;margin:2px 0 18px;flex-wrap:wrap}
 .pl-title{font-family:var(--font-display);font-size:20.8px;font-weight:400;margin:0 6px 0 0;letter-spacing:-.025em}
-.pl-search{margin:0!important;height:32px;width:min(240px,40vw)}
+.pl-search{height:32px;width:min(240px,40vw)}
 .pl-addw{position:relative}
 .modal.settings .pl-top{padding-right:40px}
 .pl-add{display:inline-flex;align-items:center;gap:5px}
@@ -72,19 +72,18 @@ html body .modal.pl-modal{background:var(--card)}
 .menu.pl-menu.right .menu-item{gap:12px;padding-left:8px}
 .menu.pl-menu{--gl-fill:var(--card)}
 .tk-tabs .pl-seg{max-width:100%;overflow-x:auto;scrollbar-width:none}
-html body .pl-top{display:flex;align-items:center;gap:8px;margin:0 0 14px;padding-right:0!important;flex-wrap:nowrap}
+html body .pl-top{display:flex;align-items:center;gap:8px;margin:0 0 14px;flex-wrap:nowrap}
 .pl-top .pl-title{display:none}
-html body .pl-top .pl-search{flex:1 1 auto;width:auto;min-width:0;height:var(--ds-h);margin:0!important;padding:0 13px;gap:8px;border-radius:var(--r-pill);background:color-mix(in srgb,var(--ds-plate) 60%,transparent);
+html body .pl-top .pl-search{flex:1 1 auto;width:auto;min-width:0;height:var(--ds-h);padding:0 13px;gap:8px;border-radius:var(--r-pill);background:color-mix(in srgb,var(--ds-plate) 60%,transparent);
   box-shadow:inset 0 0 0 1px var(--ds-line-2);color:var(--ds-faint)}
 html body .pl-top .pl-search input{font-size:13px;color:var(--ds-ink);outline:0}
 .pl-top .pl-addw{flex:none}
-html body .pl-sec{display:flex;align-items:center;gap:8px;margin:28px 0 10px!important;font-size:13px!important;font-weight:560!important;color:var(--ds-ink)!important}
+html body .pl-sec{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:560}
 html body .pl-sec i{font-style:normal;font-size:12px;font-weight:460;color:var(--ds-muted)}
 html body .pl-sec-d{font-size:12px;font-weight:460;color:var(--ds-faint)}
-html body .pl-rows2{border-radius:var(--r-card);background:var(--ds-plate);box-shadow:inset 0 0 0 1px var(--ds-line);border-top:0!important}
-html body .pl-row2{min-height:60px;padding:12px 12px 12px 16px!important;gap:14px;border-radius:0!important;border-top:1px solid var(--ds-line);border-bottom:0!important;background:transparent!important;align-items:center}
+html body .pl-rows2{border-radius:var(--r-card);background:var(--ds-plate);box-shadow:inset 0 0 0 1px var(--ds-line)}
+html body .pl-row2{min-height:60px;gap:14px;border-top:1px solid var(--ds-line);align-items:center}
 html body .pl-row2:first-child{border-top:0}
-html body .pl-row2:hover{background:var(--ds-hover)!important}
 html body .pl-row2 .pl-mark{border-radius:25%;box-shadow:inset 0 0 0 1px var(--ds-line-2);background:transparent}
 html body .pl-row2-h b{font-size:13.5px;font-weight:560;color:var(--ds-ink)}
 html body .pl-row2-t>span{font-size:12.5px;color:var(--ds-muted)}
@@ -92,7 +91,6 @@ html body .pl-date{font-size:12px;color:var(--ds-faint)}
 html body .pl-b{height:20px;padding:0 8px;border-radius:var(--r-pill);font-size:12px;font-weight:500;background:transparent;box-shadow:inset 0 0 0 1px var(--ds-line-2);color:var(--ds-muted);display:inline-flex;align-items:center}
 html body .pl-tip{display:flex;gap:8px;margin:20px 0 0;font-size:12.5px;line-height:18px;color:var(--ds-muted)}
 html body .pl-tip svg{flex:none;margin-top:2px}
-.modal.settings .pl-top{padding-right:0!important}
 html body .modal.pl-modal{border-radius:var(--r-panel);--gl-fill:var(--ds-plate)}
 html body .modal.pl-modal h2{font-size:18px!important;font-weight:560!important}
 html body .pl-rows{border:0;border-radius:var(--r-card);background:var(--ds-bg);box-shadow:inset 0 0 0 1px var(--ds-line);margin:10px 0 12px}
@@ -125,4 +123,15 @@ html body .pl-top .pl-scan{flex:none;height:var(--ds-h);padding:0 14px 0 12px;ga
 @media (max-width:640px){html body .pl-top .pl-scan .pl-scan-l{display:none}}
 @media (max-width:640px){html body .pl-top .pl-scan+.pl-addw{margin-left:0}}
 @media (max-width:640px){.scan-pick select.pl-sel{flex:1 1 100%}}
+}
+@layer syn-over{
+/* B5: khai báo trước đây mang !important chỉ để thắng thứ tự. Lớp syn-over đứng sau syn nên các luật này thắng mọi luật thường của syn bất kể specificity; giữa chúng với nhau vẫn theo specificity rồi thứ tự. Sửa một luật ở trên thì tìm cùng selector ở đây. */
+.pl-search{margin:0}
+.pl-top{padding-right:0}
+.pl-top .pl-search{margin:0}
+.pl-sec{margin:28px 0 10px;color:var(--ds-ink)}
+.pl-rows2{border-top:0}
+.pl-row2{padding:12px 12px 12px 16px;border-radius:0;border-bottom:0;background:transparent}
+html body .pl-row2:hover{background:var(--ds-hover)}
+.modal.settings .pl-top{padding-right:0}
 }

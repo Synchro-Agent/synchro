@@ -5,10 +5,14 @@
 // cuối mỗi tệp, giữ nguyên thứ tự các luật, nên thứ tự giữa các tệp cũng giữ nguyên. Khác biệt duy nhất: khai báo thường ở syn-over thua
 // style nội dòng, CSS không lớp, khai báo !important còn lại và hoạt ảnh (@keyframes, Web Animations), nên khai báo nào đang phải thắng
 // những thứ đó thì giữ !important (KEEP bên dưới, kèm lý do). scripts/css-cascade.mjs chứng minh phần còn lại không đổi bên thắng.
-// Dùng: node scripts/css-unimportant.mjs app/projects.css [--dry]
+// Khai báo nào bỏ chữ !important tại chỗ (vẫn ở syn) mà không đổi bên thắng thì không cần chuyển (opt.plain). Bản chép sang syn-over bỏ
+// được tiền tố html body khi tiền tố đó không quyết định bên thắng giữa các luật syn-over (opt.strip, opt.keepPrefix). Hai danh sách này
+// tìm bằng cách lặp với scripts/css-cascade.mjs: bỏ hết, khai báo / selector nào gây đổi bên thắng thì trả lại, tới khi 0 cặp đổi.
+// Dùng: node scripts/css-unimportant.mjs app/projects.css [--opts tệp.json] [--strip] [--dry]
 import fs from "node:fs";
 import path from "node:path";
 import { createRequire } from "node:module";
+import { splitList } from "./css-cascade.mjs";
 
 const postcss = createRequire(import.meta.url)("postcss");
 export const LAYER = "syn-over";
@@ -23,6 +27,17 @@ export const KEEP = [
   ["app/synchro-ds.css", "html body .modal.sm h2", "margin", "đè margin nội dòng của tiêu đề hộp thoại nhỏ (modals.tsx Confirm)"],
   ["app/synchro-ds.css", "html body .sk-mh .icon-btn", "width", "đè width nội dòng 22–24px của nút trong đầu hộp thoại skill (saveskill.tsx, skillsui.tsx)"],
   ["app/synchro-ds.css", "html body .sk-mh .icon-btn", "height", "đè height nội dòng 22–24px của nút trong đầu hộp thoại skill (saveskill.tsx, skillsui.tsx)"],
+  // Nền tấm của thẻ trong Cài đặt đang thắng hoạt ảnh nháy sHit (features.css, .adm-card.s-hit khi tìm kiếm trong Cài đặt nhảy tới): hoạt ảnh
+  // CSS thắng khai báo thường ở mọi lớp nhưng thua !important, nên bỏ !important thì thẻ .adm-card bắt đầu nháy nền.
+  ["app/settings.css", "html body .sy-settings :is(.api-card:not(.bare),.us-card,.inset,.promo,.dcard,.adm-stat,.adm-card,.cn-row,.cn-card,.us-vc,.pl-hero)", "background", "thắng hoạt ảnh sHit (nháy nền khi tìm kiếm) trên .adm-card"],
+  ["app/synchro-ds.css", "html body :is(.group,.pl-seg):not(.auth-root *)>button.on", "background", "thắng nền tấm thẻ Cài đặt (giữ ở trên) theo specificity"],
+  ["app/synchro-ds.css", "html body .shell-side .side-tools .nav-item.active", "background", "thắng nền nút đang chọn của .group (giữ ở trên) theo specificity"],
+  // Bốn khai báo dưới đây không đè style nội dòng, nhưng đang thắng một khai báo giữ !important ở trên (cùng thuộc tính, phần tử mà công cụ
+  // so tĩnh không loại được là trúng cả hai); bỏ !important thì đổi bên thắng. Gỡ được cùng lúc với khai báo kia khi bỏ style nội dòng.
+  ["app/synchro-ds.css", "html body :is(.group,.pl-seg):not(.auth-root *)>button", "height", "thắng .sk-mh .icon-btn { height !important } theo specificity"],
+  ["app/projects.css", "html body .modal.pj-modal h2", "font", "thắng .modal.sm h2 { font-size !important } theo thứ tự nạp"],
+  ["app/skills.css", "html body .modal.pl-modal h2", "font-size", "thắng .modal.sm h2 { font-size !important } theo thứ tự nạp"],
+  ["app/skills.css", "html body .modal.pl-modal h2", "font-weight", "thắng .modal.pj-modal h2 { font !important } (giữ ở trên) theo thứ tự nạp"],
 ];
 
 const norm = (s) => s.replace(/\s+/g, " ").trim();
@@ -32,21 +47,31 @@ export function keepReason(file, decl) {
   return null;
 }
 
-/** Trả về CSS mới và danh sách khai báo đã chuyển / giữ. */
-export function transform(css, file) {
+// Bỏ tiền tố chỉ để tăng specificity (B5 bước 3) ở bản chép sang syn-over: html body X → X, html[…] body X → html[…] X.
+export const stripPrefix = (sel) => sel.replace(/(^|[\s(,])html body /g, "$1").replace(/(^|[\s(,])(html\[[^\]]*\]) body /g, "$1$2 ");
+/** Bỏ tiền tố ở từng selector của danh sách (mỗi selector có specificity riêng), trừ selector có trong keep. */
+export const stripItems = (sel, keep = new Set()) => splitList(sel).map((x) => (keep.has(norm(x)) ? x : stripPrefix(x))).join(",");
+export const keyOf = (file, sel, prop) => `${file.replace(/^.*?app\//, "")}|${norm(sel)}|${prop}`;
+
+/** Trả về CSS mới và danh sách khai báo đã chuyển / giữ / bỏ chữ !important tại chỗ.
+ * opt.plain: khóa (keyOf) của khai báo chỉ cần bỏ chữ !important tại chỗ (đã chứng minh không đổi bên thắng), không chuyển lớp.
+ * opt.strip: bỏ tiền tố html body ở bản chép sang syn-over, trừ selector (từng mục của danh sách) có trong opt.keepPrefix (bỏ thì đổi bên thắng). */
+export function transform(css, file, opt = {}) {
+  const plain = opt.plain ?? new Set(), keepPrefix = opt.keepPrefix ?? new Set();
   const root = postcss.parse(css, { from: file });
   const wrap = root.nodes.find((n) => n.type === "atrule" && n.name === "layer" && n.params.trim() === "syn" && n.nodes);
   if (!wrap) throw new Error(`${file}: không thấy khối @layer syn { … }`);
-  const moved = [], kept = [];
+  const moved = [], kept = [], dropped = [];
   const byRule = new Map();
   wrap.walkDecls((d) => {
     if (!d.important) return;
     for (let p = d.parent; p && p !== wrap; p = p.parent) if (p.type === "atrule" && /keyframes$/i.test(p.name)) return;
     const why = keepReason(file, d);
     if (why) { kept.push({ line: d.source.start.line, sel: norm(d.parent.selector ?? ""), prop: d.prop, value: d.value, why }); return; }
+    if (plain.has(keyOf(file, d.parent.selector, d.prop))) { d.important = false; delete d.raws.important; dropped.push({ line: d.source.start.line, sel: norm(d.parent.selector), prop: d.prop }); return; }
     (byRule.get(d.parent) ?? byRule.set(d.parent, []).get(d.parent)).push(d);
   });
-  if (!byRule.size) return { css, moved, kept };
+  if (!byRule.size) return { css: dropped.length ? root.toString() : css, moved, kept, dropped };
   // Khối syn-over: cùng thứ tự luật, cùng chuỗi @media / @supports bao quanh; các luật liền nhau cùng chuỗi bao gộp chung một khối.
   const over = postcss.atRule({ name: "layer", params: LAYER, raws: { afterName: " ", between: "", after: "\n" } });
   let last = null;
@@ -54,10 +79,11 @@ export function transform(css, file) {
     const chain = [];
     for (let p = rule.parent; p && p !== wrap; p = p.parent) chain.unshift(p);
     const key = chain.map((a) => `@${a.name} ${norm(a.params)}`).join(" ");
-    const nr = postcss.rule({ selector: rule.selector, raws: { before: "\n", between: "", semicolon: false, after: "" } });
+    const sel = opt.strip ? stripItems(rule.selector, keepPrefix) : rule.selector;
+    const nr = postcss.rule({ selector: sel, raws: { before: "\n", between: "", semicolon: false, after: "" } });
     for (const d of ds) {
       nr.append(postcss.decl({ prop: d.prop, value: d.value, raws: { before: "", between: ":" } }));
-      moved.push({ line: d.source.start.line, sel: norm(rule.selector), prop: d.prop, value: d.value });
+      moved.push({ line: d.source.start.line, sel: norm(rule.selector), newSel: norm(sel), prop: d.prop, value: d.value });
     }
     if (last && last.key === key && last.box) last.box.append(nr);
     else if (!chain.length) { over.append(nr); last = { key, box: null }; }
@@ -77,13 +103,16 @@ export function transform(css, file) {
   over.prepend(postcss.comment({ text: `B5: khai báo trước đây mang !important chỉ để thắng thứ tự. Lớp ${LAYER} đứng sau syn nên các luật này thắng mọi luật thường của syn bất kể specificity; giữa chúng với nhau vẫn theo specificity rồi thứ tự. Sửa một luật ở trên thì tìm cùng selector ở đây.`, raws: { before: "\n", left: " ", right: " " } }));
   root.append(over);
   root.raws.after = "\n";
-  return { css: root.toString(), moved, kept };
+  return { css: root.toString(), moved, kept, dropped };
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(new URL(import.meta.url).pathname)) {
+  // --opts tệp.json: { "plain": [khóa keyOf…], "keepPrefix": [selector…] }; --strip: bỏ tiền tố html body ở bản chép.
   const file = process.argv[2];
-  const r = transform(fs.readFileSync(file, "utf8"), file);
+  const oi = process.argv.indexOf("--opts");
+  const o = oi > 0 ? JSON.parse(fs.readFileSync(process.argv[oi + 1], "utf8")) : {};
+  const r = transform(fs.readFileSync(file, "utf8"), file, { plain: new Set(o.plain ?? []), keepPrefix: new Set(o.keepPrefix ?? []), strip: process.argv.includes("--strip") });
   if (!process.argv.includes("--dry")) fs.writeFileSync(file, r.css);
-  console.log(`${file}: chuyển ${r.moved.length}, giữ ${r.kept.length}`);
+  console.log(`${file}: bỏ !important tại chỗ ${r.dropped.length}, chuyển sang ${LAYER} ${r.moved.length}, giữ ${r.kept.length}`);
   for (const k of r.kept) console.log(`  giữ :${k.line} ${k.sel} { ${k.prop} } — ${k.why}`);
 }

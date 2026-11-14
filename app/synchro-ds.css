@@ -54,13 +54,13 @@
 :where(.btn:not(.auth-root *)){display:inline-flex;align-items:center;justify-content:center;gap:7px}
 html body :is(.btn):not(.auth-root *){height:var(--ds-h);padding:0 14px;border-radius:var(--ds-r);
   font-size:13px;font-weight:500;letter-spacing:-.003em;white-space:nowrap;line-height:1}
-html body .btn:not(.dark):not(.danger):not(.auth-root *){box-shadow:inset 0 0 0 1px var(--ds-line-2)!important;color:var(--ds-ink);background:transparent}
+html body .btn:not(.dark):not(.danger):not(.auth-root *){color:var(--ds-ink);background:transparent}
 .btn:not(.dark):not(.danger):not(.auth-root *):hover{background:var(--ds-hover)}
 html body .btn:not(.auth-root *):disabled{opacity:.42;cursor:default}
 html body .btn:not(.auth-root *) svg{flex:none}
 html body .btn.dark:not(.auth-root *){background:var(--ds-inv);color:var(--ds-inv-fg)}
 .btn.dark:not(.auth-root *):hover:not(:disabled){background:color-mix(in srgb,var(--ds-inv) 86%,var(--bg))}
-html body .btn:not(.auth-root *):focus-visible,html body .icon-btn:focus-visible{outline:0;box-shadow:var(--ds-ring)!important}
+html body .btn:not(.auth-root *):focus-visible,html body .icon-btn:focus-visible{outline:0}
 html body .icon-btn:not(.auth-root *){border-radius:var(--ds-r-row);color:var(--ds-ink-2)}
 html body .icon-btn:not(.auth-root *):hover{background:var(--ds-hover);color:var(--ds-ink)}
 html body .icon-btn:not(.auth-root *):active{background:var(--ds-press)}
@@ -83,16 +83,14 @@ html[data-theme=dark] body .toggle:not(.on):not(.auth-root *)::after{background:
 .toggle.sm.on:not(.auth-root *)::after{transform:translateX(14px)}
 .toggle:not(.auth-root *):disabled{opacity:.45}
 /* Bộ chọn đoạn (Cài đặt, Kho kỹ năng…): rãnh trũng, mục chọn là tấm mực. */
-html body :is(.group,.pl-seg):not(.auth-root *){display:inline-flex;align-items:center;gap:2px;height:var(--ds-h);padding:3px;border-radius:var(--ds-r);background:var(--ds-sunken)!important;border:0!important;box-shadow:inset 0 0 0 1px var(--ds-line)}
-html body :is(.group,.pl-seg):not(.auth-root *)>button{height:28px!important;padding:0 13px;border-radius:var(--r-pill)!important;font-size:13px;font-weight:460;color:var(--ds-muted)!important;background:transparent!important;box-shadow:none!important;
-  display:inline-flex;align-items:center;gap:6px;transition:background-color var(--ds-mid) var(--ds-ease),color var(--ds-mid) var(--ds-ease)!important}
-html body :is(.group,.pl-seg):not(.auth-root *)>button:hover{color:var(--ds-ink)!important}
-html body :is(.group,.pl-seg):not(.auth-root *)>button.on{background:var(--ds-inv)!important;color:var(--ds-inv-fg)!important}
+html body :is(.group,.pl-seg):not(.auth-root *){display:inline-flex;align-items:center;gap:2px;height:var(--ds-h);padding:3px;border-radius:var(--ds-r);box-shadow:inset 0 0 0 1px var(--ds-line)}
+html body :is(.group,.pl-seg):not(.auth-root *)>button{height:28px!important;padding:0 13px;font-size:13px;font-weight:460;
+  display:inline-flex;align-items:center;gap:6px}
+:is(.group,.pl-seg):not(.auth-root *)>button.on{background:var(--ds-inv)!important}
 /* Gợi ý khi rê chuột: tấm mực, chữ giấy. */
 html body [data-tip]:not(.auth-root *):hover::after{background:var(--ds-inv);color:var(--ds-inv-fg);font-size:12px;font-weight:460;padding:5px 9px;border-radius:var(--r-pill);box-shadow:var(--ds-lift);letter-spacing:0}
 /* Gợi ý nổi (tips.ts): một khung gắn vào body, trên mọi lớp, tự đặt chỗ trong màn hình. Khi đã bật (html[data-tips="js"]) thì tắt gợi ý ::after
    cũ: nó nằm trong phần tử nên bị khung cha cắt (thanh điều hướng cuộn dọc, thanh công cụ khung artifact sát mép trên) hay bị lớp khác che. */
-html[data-tips="js"] [data-tip]:hover::after{content:none!important;display:none!important}
 .tip-float{position:fixed;left:0;top:0;z-index:2147483000;max-width:min(320px,calc(100vw - 16px));padding:5px 9px;border-radius:var(--r-pill);pointer-events:none;
   background:var(--ds-inv);color:var(--ds-inv-fg);font:460 12px/16px var(--font-sans);letter-spacing:0;box-shadow:var(--ds-lift);width:max-content;white-space:normal;overflow-wrap:anywhere;text-wrap:balance;
   opacity:0;visibility:hidden;transform:translateY(2px);transition:opacity .15s var(--ds-ease),transform .15s var(--ds-ease),visibility 0s .15s}
@@ -140,7 +138,7 @@ html body .app *{scrollbar-width:thin;scrollbar-color:color-mix(in srgb,var(--ds
 .rail-mark:is(:hover,:focus-visible) .rm-panel{opacity:1;transform:none}
 /* Mục của thanh điều hướng: ô icon 44×32 và nhãn 11px bên dưới, cả mục rộng 68px. */
 html body .rail .nav-item:not(.auth-root *){position:relative;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;gap:3px;width:60px;height:auto;padding:3px 0 4px;
-  border-radius:var(--r-plate);background:transparent!important;box-shadow:none!important;scale:none!important;color:var(--ds-muted);font-weight:430}
+  border-radius:var(--r-plate);color:var(--ds-muted);font-weight:430}
 html body .rail .nav-item:not(.auth-root *):hover{color:var(--ds-ink)}
 .rail .nav-item:not(.auth-root *):focus-visible{outline:0}
 .rail .nav-item:not(.auth-root *):focus-visible .rail-ic{box-shadow:var(--ds-ring)}
@@ -196,7 +194,7 @@ html body .shell-side .sec-toggle{margin-top:10px}
 html body .shell-side .chat-scroll{padding:0 10px 28px;-webkit-mask-image:linear-gradient(to bottom,#000 calc(100% - 22px),transparent);mask-image:linear-gradient(to bottom,#000 calc(100% - 22px),transparent)}
 html body .shell-side .chat-scroll .section-label{padding:0 0 0 8px}
 html body .shell-side .chat-item,html body .shell-side .sk-chat,html body .boot .sk-chat{height:32px;line-height:32px;padding:0 10px;border-radius:var(--r-pill);font-size:13px;font-weight:430;color:var(--ds-ink-2)}
-html body .shell-side .chat-item.active{background:color-mix(in srgb,var(--ds-plate) 92%,transparent)!important;box-shadow:inset 0 0 0 1px var(--ds-line)!important;color:var(--ds-ink);font-weight:500}
+html body .shell-side .chat-item.active{color:var(--ds-ink);font-weight:500}
 html body .shell-side .chat-wrap .dots{top:4px;right:4px;width:24px;height:24px;border-radius:var(--r-pill)}
 .side-tools{flex:none;padding:0 10px 4px}
 html body .shell-side .side-tools .section-label{padding:0 0 0 8px;margin-top:6px}
@@ -204,7 +202,7 @@ html body .shell-side .side-tools .nav-sub{padding:0;gap:1px}
 .shell-side .side-tools .nav-sub::before{display:none}
 html body .shell-side .side-tools .nav-item{height:32px;padding:0 10px;gap:10px;border-radius:var(--r-pill);font-size:13px;color:var(--ds-ink-2)}
 html body .shell-side .side-tools .nav-item svg{width:16px;height:16px;color:var(--ds-muted)}
-html body .shell-side .side-tools .nav-item.active{background:color-mix(in srgb,var(--ds-plate) 92%,transparent)!important;box-shadow:inset 0 0 0 1px var(--ds-line)!important;color:var(--ds-ink)}
+html body .shell-side .side-tools .nav-item.active{background:color-mix(in srgb,var(--ds-plate) 92%,transparent)!important;color:var(--ds-ink)}
 /* Thanh điều hướng luôn hiện trên máy tính nên nút mở thanh bên ở thanh trên chỉ dùng cho điện thoại. */
 /* Mở thanh bên: chỉ một chỗ là logo. Máy tính: logo đầu thanh điều hướng (.rail-mark). Điện thoại: thanh điều hướng nằm trong ngăn kéo,
    khi đóng thì chính logo (cùng vòng tròn 36px như trên thanh điều hướng) hiện ở góc trái trên của trang để mở lại. */
@@ -214,7 +212,6 @@ html body .side-toggle:hover{background:var(--ds-plate);box-shadow:inset 0 0 0 1
 html body .side-toggle:focus-visible{outline:0;box-shadow:var(--ds-ring)}
 /* Logo ở thanh trên mở lại ngăn kéo: chỉ điện thoại (≤ 760px), nơi thanh điều hướng nằm trong ngăn kéo. Từ 761px thanh điều hướng luôn hiện,
    logo đầu thanh (.rail-mark) mở bảng đoạn chat. */
-@media (min-width:761px){html body .side-toggle{display:none!important}}
 
 /* ---------------------------------------------------------------- điện thoại: thanh điều hướng + bảng đoạn chat là một ngăn kéo (z 65, trên lớp phủ z 64) */
 @media (max-width:760px){
@@ -353,7 +350,6 @@ section.st{display:grid;grid-template-columns:minmax(0,320px) minmax(0,1fr);marg
   background-image:radial-gradient(circle at 1px 1px,color-mix(in srgb,var(--ds-ink) 13%,transparent) 1px,transparent 1.3px);background-size:16px 16px;background-position:8px 8px}
 .st-layer{position:absolute;inset:18px 24px 64px;opacity:0;transition:opacity .7s var(--ds-ease);pointer-events:none}
 .st-layer.on{opacity:1}
-.st-layer:not(.on) *{animation-play-state:paused!important}
 .st-scene{width:100%;height:100%;display:block;overflow:visible}
 .st-foot{position:absolute;left:24px;right:20px;bottom:16px;display:flex;align-items:center;justify-content:space-between;gap:12px}
 .st-cap{display:inline-flex;align-items:center;gap:6px;min-width:0;font-size:12px;color:var(--ds-muted)}
@@ -419,14 +415,14 @@ html body .st .st-go:hover svg{transform:translateX(2px)}
 @keyframes d-title{0%{transform:scaleX(0)}6%,94%{transform:scaleX(1);opacity:1}100%{transform:scaleX(1);opacity:0}}
 .d-meta{animation-name:d-meta}
 @keyframes d-meta{0%,4%{opacity:0}9%,94%{opacity:1}100%{opacity:0}}
-.d-l{transform-origin:left center;animation-timing-function:linear!important}
+.d-l{transform-origin:left center}
 .d-l1{animation-name:d-l1}.d-l2{animation-name:d-l2}.d-l3{animation-name:d-l3}.d-l4{animation-name:d-l4}.d-l5{animation-name:d-l5}
 @keyframes d-l1{0%,8%{transform:scaleX(0)}16%,94%{transform:scaleX(1);opacity:1}100%{transform:scaleX(1);opacity:0}}
 @keyframes d-l2{0%,16.5%{transform:scaleX(0)}24%,94%{transform:scaleX(1);opacity:1}100%{transform:scaleX(1);opacity:0}}
 @keyframes d-l3{0%,24.5%{transform:scaleX(0)}32%,94%{transform:scaleX(1);opacity:1}100%{transform:scaleX(1);opacity:0}}
 @keyframes d-l4{0%,32.5%{transform:scaleX(0)}40%,94%{transform:scaleX(1);opacity:1}100%{transform:scaleX(1);opacity:0}}
 @keyframes d-l5{0%,40.5%{transform:scaleX(0)}46%,94%{transform:scaleX(1);opacity:1}100%{transform:scaleX(1);opacity:0}}
-.d-cur{animation-name:d-cur;animation-timing-function:linear!important}
+.d-cur{animation-name:d-cur}
 @keyframes d-cur{
   0%{transform:translate(178px,58px);opacity:0}2%{opacity:1}6%{transform:translate(350px,58px)}
   8%{transform:translate(180px,104px)}16%{transform:translate(424px,104px)}16.5%{transform:translate(180px,116px)}24%{transform:translate(412px,116px)}
@@ -486,7 +482,6 @@ html body .st .st-go:hover svg{transform:translateX(2px)}
 .g-guide{animation-name:g-guide}
 @keyframes g-guide{0%,68%{opacity:0}74%,88%{opacity:1}94%,100%{opacity:0}}
 @media (prefers-reduced-motion:reduce){
-  .st-scene *{animation:none!important}
   .st-scene :is(.s-a,.s-b,.d-cur,.g-cur){display:none}
   .st-layer{transition:none}
 }
@@ -636,7 +631,6 @@ html body .tk-page .ds-seg .tk-badge,html body .tk-page .ds-seg .tk-count{displa
   background:var(--ds-ink);color:var(--ds-inv-fg);opacity:1}
 .tk-page .ds-seg button.on .tk-badge,.tk-page .ds-seg button.on .tk-count{background:var(--ds-inv-fg);color:var(--ds-inv)}
 .tk-page .ds-seg .tk-badge.warn{background:var(--ds-warn);color:#fff}
-html body .tk-page .tk-count{background:transparent!important;color:inherit!important;padding:0!important;min-width:0!important}
 .tk-page .tk-filter.field{height:var(--ds-h);max-width:200px;padding:0 12px;border-radius:var(--r-pill);font-size:13px}
 html body .tk-page .tk-tabs>.btn{height:var(--ds-h)}
 html body .tk-page .tk-feed{gap:20px}
@@ -701,85 +695,67 @@ html body .gh-hint{margin:8px 16px 0;font-size:12.5px;line-height:18px;color:var
 
 /* ---------------------------------------------------------------- Cài đặt: thanh bên nhóm mục, đầu trang dính kèm nút đóng, hàng cài đặt gom thành tấm */
 html body .modal.settings.sy-settings{width:min(1000px,94vw);height:min(720px,90vh);padding:0;border-radius:var(--r-panel);display:flex;overflow:hidden;--gl-fill:var(--ds-bg)}
-html body .sy-settings .s-nav{width:236px;flex:none;display:flex;flex-direction:column;gap:2px;padding:18px 12px 16px!important;overflow-y:auto;
-  background:color-mix(in srgb,var(--ds-sunken) 70%,transparent)!important;border-right:1px solid var(--ds-line)!important}
+html body .sy-settings .s-nav{width:236px;flex:none;display:flex;flex-direction:column;gap:2px;overflow-y:auto}
 html body .sy-settings .sy-snav-h{display:flex;align-items:center;height:32px;padding:0 10px;margin:0 0 10px}
 html body .sy-settings .sy-snav-h b{font:600 16px/22px var(--font-sans);letter-spacing:-.01em;color:var(--ds-ink)}
-html body .sy-settings .s-nav .s-search{height:32px;margin:0 0 14px!important;padding:0 12px!important;gap:8px;border-radius:var(--r-pill)!important;background:var(--ds-plate)!important;box-shadow:inset 0 0 0 1px var(--ds-line-2);border:0!important;color:var(--ds-faint)}
+html body .sy-settings .s-nav .s-search{height:32px;gap:8px;box-shadow:inset 0 0 0 1px var(--ds-line-2);border:0;color:var(--ds-faint)}
 .sy-settings .s-nav .s-search:focus-within{box-shadow:inset 0 0 0 1px var(--ds-ink)}
 html body .sy-settings .s-nav .s-search input{font-size:13px;color:var(--ds-ink);outline:0}
-html body .sy-settings .s-group{height:28px;display:flex;align-items:center;padding:0 10px!important;margin:12px 0 2px!important;font-size:12px!important;font-weight:500!important;color:var(--ds-muted)!important}
-.sy-settings .s-search+.s-group{margin-top:0!important}
-html body .sy-settings .s-item{flex:none;display:flex;align-items:center;gap:10px;height:34px!important;padding:0 10px!important;border:0;border-radius:var(--r-pill)!important;font-size:13.5px;font-weight:430;color:var(--ds-ink-2)!important;background:transparent!important;
-  transition:background-color .18s ease,color .18s ease!important}
+html body .sy-settings .s-group{height:28px;display:flex;align-items:center;font-weight:500}
+html body .sy-settings .s-item{flex:none;display:flex;align-items:center;gap:10px;border:0;border-radius:var(--r-pill);font-size:13.5px;font-weight:430}
 html body .sy-settings .s-item>svg,html body .sy-settings .s-item>span:first-child svg{width:17px;height:17px;flex:none;color:var(--ds-muted);transition:color .18s ease}
-html body .sy-settings .s-item:hover{background:var(--ds-hover)!important;color:var(--ds-ink)!important}
-html body .sy-settings .s-item.on{background:var(--ds-inv)!important;color:var(--ds-inv-fg)!important;font-weight:500}
+.sy-settings .s-item.on{font-weight:500}
 html body .sy-settings .s-item.on svg{color:var(--ds-inv-fg)}
-html body .sy-settings .s-body{flex:1;min-width:0;overflow-y:auto;padding:0 32px 40px!important;background:var(--ds-bg);animation:none}
+html body .sy-settings .s-body{flex:1;min-width:0;overflow-y:auto;background:var(--ds-bg);animation:none}
 html body .sy-settings .s-body>*:not(.sy-sbody-h){animation:ds-in .36s var(--ds-ease) backwards}
-html body .sy-sbody-h{position:sticky;top:0;z-index:4;display:flex;align-items:center;justify-content:space-between;gap:16px;height:64px;margin:0 -32px 8px;padding:0 16px 0 32px!important;border-bottom:1px solid var(--ds-line)!important;
+html body .sy-sbody-h{position:sticky;top:0;z-index:4;display:flex;align-items:center;justify-content:space-between;gap:16px;height:64px;margin:0 -32px 8px;
   background:var(--ds-bg)}
-html body .sy-sbody-h h2{margin:0!important;font:600 17px/24px var(--font-sans)!important;letter-spacing:-.01em;color:var(--ds-ink)}
-html body .sy-sbody-h .close{position:static!important;width:32px;height:32px;border-radius:var(--r-pill);border:0;box-shadow:inset 0 0 0 1px var(--ds-line-2);color:var(--ds-ink-2)}
+html body .sy-sbody-h h2{letter-spacing:-.01em;color:var(--ds-ink)}
+html body .sy-sbody-h .close{width:32px;height:32px;border-radius:var(--r-pill);border:0;box-shadow:inset 0 0 0 1px var(--ds-line-2);color:var(--ds-ink-2)}
 html body .sy-sbody-h .close:hover{background:var(--ds-hover);color:var(--ds-ink)}
 /* Tiêu đề nhóm và mô tả */
-html body .sy-settings .s-body h3{display:block;margin:28px 0 10px!important;font-size:13px!important;font-weight:560!important;letter-spacing:0;color:var(--ds-ink)!important}
+html body .sy-settings .s-body h3{display:block;letter-spacing:0}
 .sy-settings .s-body h3::after{display:none}
-html body .sy-settings .s-body h3 .muted{color:var(--ds-faint)!important;font-weight:460}
+.sy-settings .s-body h3 .muted{font-weight:460}
 /* Mọi mục bắt đầu cùng một độ cao dưới đường kẻ: chuyển mục không làm nội dung nhảy. */
-html body .sy-settings .sy-sbody-h+*{margin-top:20px!important}
-.sy-settings .sy-sbody-h+*>h3:first-child{margin-top:0!important}
 html[data-theme=dark] body .modal.settings{box-shadow:0 0 0 1px rgba(238,236,229,.11),0 4px 14px rgba(0,0,0,.4),0 1px 3px rgba(0,0,0,.3)}
 html body .sy-settings :is(.adm-head .d,.us-page>.d,.bn>p.d,.s-body>p.d){font-size:13.5px;line-height:20px;color:var(--ds-muted);max-width:68ch}
 
 /* Hàng cài đặt: các hàng liền nhau thành một tấm bo 16px, ngăn bằng kẻ mảnh; chữ bên trái, điều khiển bên phải, canh giữa theo chiều dọc. */
-html body .sy-settings .s-body .row{display:flex;align-items:center;justify-content:space-between;gap:24px;min-height:52px;margin:0;padding:9px 16px!important;
-  background:var(--ds-plate);border:1px solid var(--ds-line)!important;border-bottom:0!important;border-radius:0}
+html body .sy-settings .s-body .row{display:flex;align-items:center;justify-content:space-between;gap:24px;min-height:52px;margin:0;padding:9px 16px;
+  background:var(--ds-plate);border:1px solid var(--ds-line);border-bottom:0;border-radius:0}
 .sy-settings .s-body .row:not(.row+.row){border-top-left-radius:var(--r-plate);border-top-right-radius:var(--r-plate)}
-html body .sy-settings .s-body .row:not(:has(+.row)){border-bottom:1px solid var(--ds-line)!important;border-bottom-left-radius:var(--r-plate);border-bottom-right-radius:var(--r-plate)}
+html body .sy-settings .s-body .row:not(:has(+.row)){border-bottom:1px solid var(--ds-line);border-bottom-left-radius:var(--r-plate);border-bottom-right-radius:var(--r-plate)}
 html body .sy-settings .s-body .row>div:first-child{min-width:0}
 html body .sy-settings .s-body .row .t{font-size:13.5px;font-weight:500;line-height:20px;color:var(--ds-ink)}
-html body .sy-settings .s-body .row .d{margin-top:2px;font-size:12px;line-height:17px;color:var(--ds-muted)!important;max-width:56ch}
+html body .sy-settings .s-body .row .d{margin-top:2px;font-size:12px;line-height:17px;max-width:56ch}
 html body .sy-settings .s-body .row>:not(:first-child){flex:none}
-html body .sy-settings .sel{height:32px;padding:0 11px 0 13px!important;gap:6px;border-radius:var(--r-pill)!important;box-shadow:inset 0 0 0 1px var(--ds-line-2);background:transparent;font-size:13px;color:var(--ds-ink);border:0}
-html body .sy-settings .sel:hover{background:var(--ds-hover)!important}
-html body .sy-settings .field,html body .sy-settings .textarea{border:1px solid var(--ds-line-2)!important;border-radius:var(--r-pill)!important;background:var(--ds-plate)!important}
-html body .sy-settings .textarea{border-radius:var(--r-plate)!important}
-html body .sy-settings .field:focus,html body .sy-settings .textarea:focus{border-color:var(--ds-ink)!important;box-shadow:0 0 0 3px color-mix(in srgb,var(--ds-ink) 10%,transparent)!important}
+html body .sy-settings .sel{height:32px;gap:6px;box-shadow:inset 0 0 0 1px var(--ds-line-2);background:transparent;font-size:13px;color:var(--ds-ink);border:0}
 /* Ô bị khóa (việc chỉ chủ sở hữu làm): viền nét đứt, nền trong, chữ nhạt — nhìn là biết không sửa được. */
-html body .field:disabled:not(.auth-root *),html body .sy-settings .field:disabled{background:transparent!important;border-style:dashed!important;color:var(--ds-faint)!important;cursor:not-allowed}
+.field:disabled:not(.auth-root *),.sy-settings .field:disabled{cursor:not-allowed}
 /* Thẻ trong các mục (Providers, Mức dùng, Quản trị, Connectors…): tấm phẳng, viền mảnh. Thẻ "bare" nằm trong thẻ khác: không viền, không đệm. */
-
-.sy-settings .api-card.bare{border:0!important;background:transparent!important;box-shadow:none!important;padding:0!important;border-radius:0!important}
-html body .sy-settings .bn-stats{display:grid!important;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:0!important;margin:14px 0!important;border-radius:var(--r-card);background:var(--ds-plate);box-shadow:inset 0 0 0 1px var(--ds-line);overflow:hidden}
-html body .sy-settings .bn-stats>span{display:flex!important;flex-direction:column;gap:2px;padding:12px 16px!important;border:0!important;border-radius:0!important;background:transparent!important;font-size:12px!important;color:var(--ds-muted)!important}
+html body .sy-settings .bn-stats{grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:0;border-radius:var(--r-card);background:var(--ds-plate);box-shadow:inset 0 0 0 1px var(--ds-line);overflow:hidden}
+html body .sy-settings .bn-stats>span{flex-direction:column;gap:2px}
 html body .sy-settings .bn-stats>span+span{box-shadow:inset 1px 0 0 var(--ds-line)}
-html body .sy-settings .bn-stats b{font-size:18px!important;font-weight:560!important;line-height:24px;color:var(--ds-ink);font-variant-numeric:tabular-nums}
+html body .sy-settings .bn-stats b{line-height:24px;color:var(--ds-ink);font-variant-numeric:tabular-nums}
 html body .sy-settings .bg-sw{background:var(--ds-sunken);box-shadow:inset 0 0 0 1px var(--ds-line-2)}
 html body .sy-settings .bg-sw i{background:var(--ds-plate);box-shadow:0 1px 2px rgba(17,18,16,.25)}
 html body .sy-settings .bg-sw.on{background:var(--ds-inv);box-shadow:none}
 html body .sy-settings .bg-sw.on i{background:var(--ds-inv-fg)}
-
-.sy-settings .adm-head .adm-badge,.sy-settings .adm-head .s-title,.sy-settings .us-page>h3:first-child,.sy-settings .bn>h3:first-child{display:none!important}
 /* Cài đặt hẹp: thanh mục chỉ còn icon, hàng tự xuống dòng. Đến 860px (NARROW) chứ không chỉ điện thoại: ở 768px (iPad dọc) thanh mục 236px
    chỉ chừa ~480px cho nội dung, chữ mô tả bị ép còn 76px, cột giờ trong bảng phiên ngắt dòng lẻ "2026". */
 @media (max-width:860px){
-  html body .sy-settings .s-nav{width:64px!important;padding:14px 10px!important}
-  .sy-settings :is(.sy-snav-h,.s-search,.s-item .s-lbl,.s-search+.s-group){display:none!important}
-  html body .sy-settings .s-group{display:block!important;height:1px;padding:0!important;margin:10px 6px!important;background:var(--ds-line);font-size:0!important;overflow:hidden}
-  html body .sy-settings .s-item{justify-content:center;padding:0!important;height:44px!important}
-  html body .sy-settings .s-body{padding:0 16px 32px!important}
-  html body .sy-sbody-h{height:64px;margin:0 -16px 8px;padding:0 12px 0 16px!important}
-  html body .sy-sbody-h h2{font-size:19px!important}
-  html body .sy-settings .s-body .row{flex-wrap:wrap;row-gap:10px;padding:12px 14px!important}
+  html body .sy-settings .s-group{height:1px;background:var(--ds-line);overflow:hidden}
+  html body .sy-settings .s-item{justify-content:center}
+  html body .sy-sbody-h{height:64px;margin:0 -16px 8px}
+  html body .sy-settings .s-body .row{flex-wrap:wrap;row-gap:10px;padding:12px 14px}
   html body .sy-settings .s-body .row>div:first-child{flex:1 1 200px}
   html body .sy-settings .s-body .row>:not(:first-child){margin-left:auto;max-width:100%}
   /* Điện thoại: ô nhập (rộng cố định 280px trên máy tính) và bộ chọn đoạn chiếm trọn chiều ngang của hàng thay vì tràn ra ngoài tấm;
      thẻ giới thiệu Synchro Code xếp khung terminal xuống dưới chữ. */
-  html body .sy-settings .s-body .row>.field{flex:1 1 100%;width:100%!important;min-width:0;margin-left:0}
+  html body .sy-settings .s-body .row>.field{flex:1 1 100%;min-width:0;margin-left:0}
   html body .sy-settings .s-body .row>:is(.group,.pl-seg){flex:1 1 100%;margin-left:0}
-  html body .sy-settings .s-body .row>:is(.group,.pl-seg)>button{flex:1 1 auto;justify-content:center;padding:0 8px!important}
+  html body .sy-settings .s-body .row>:is(.group,.pl-seg)>button{flex:1 1 auto;justify-content:center}
   html body .sy-settings .promo{flex-direction:column;align-items:stretch;gap:16px}
   .sy-settings .promo .term{min-width:0}
 }
@@ -787,12 +763,12 @@ html body .sy-settings .bg-sw.on i{background:var(--ds-inv-fg)}
 /* ---------------------------------------------------------------- hộp thoại */
 html body .modal.sy-modal{width:min(520px,94vw);padding:0;border-radius:var(--r-panel);--gl-fill:var(--ds-plate)}
 .sy-mh{display:flex;align-items:center;justify-content:space-between;gap:16px;height:64px;padding:0 16px 0 24px;border-bottom:1px solid var(--ds-line)}
-html body .sy-mh h2{margin:0!important;font:600 16px/22px var(--font-sans)!important;letter-spacing:-.01em;color:var(--ds-ink)}
+html body .sy-mh h2{letter-spacing:-.01em;color:var(--ds-ink)}
 html body .sy-x{flex:none;width:32px;height:32px;border-radius:999px;box-shadow:inset 0 0 0 1px var(--ds-line-2);color:var(--ds-ink-2)}
 .sy-mb{padding:6px 24px 4px}
 .sy-fieldrow{padding:16px 0;border-bottom:1px solid var(--ds-line)}
 .sy-fieldrow:last-child{border-bottom:0}
-html body .sy-fieldrow label{display:block;margin:0 0 2px!important;font-size:13.5px!important;font-weight:560!important;line-height:20px;color:var(--ds-ink)}
+html body .sy-fieldrow label{display:block;line-height:20px;color:var(--ds-ink)}
 .sy-fieldrow small{display:block;margin:0 0 10px;font-size:12.5px;line-height:18px;color:var(--ds-muted)}
 .sy-input{width:100%;display:block;border:1px solid var(--ds-line-2);border-radius:var(--r-pill);background:var(--ds-bg);padding:9px 13px;font-size:13.5px;line-height:20px;color:var(--ds-ink);transition:border-color .16s,box-shadow .16s;resize:vertical}
 textarea.sy-input{border-radius:var(--r-plate)}
@@ -820,7 +796,7 @@ input.sy-input{height:40px}
 @media (max-width:520px){.sy-langs{grid-template-columns:1fr}}
 /* Hộp nhỏ (xác nhận) và hộp của trang dự án */
 html body .modal.sm{border-radius:var(--r-panel);padding:22px 24px 20px}
-html body .modal.sm h2{font-size:16px!important;font-weight:560!important;line-height:22px;margin:0 0 6px!important;color:var(--ds-ink)}
+html body .modal.sm h2{font-size:16px!important;line-height:22px;margin:0 0 6px!important;color:var(--ds-ink)}
 html body .modal.sm p{color:var(--ds-muted);line-height:21px}
 html body .modal-foot{display:flex;justify-content:flex-end;align-items:center;gap:8px;margin-top:20px}
 html body .modal.pj-modal{border-radius:var(--r-panel);padding:22px 24px 20px;--gl-fill:var(--ds-plate)}
@@ -880,10 +856,9 @@ html[data-theme=dark] body .app.code-view .rail::after{background:linear-gradien
 html body .menu-item:is(.mrow,:has(.item-sub)){padding-top:8px;padding-bottom:8px}
 html body .menu-item.mauto{padding-top:8px;padding-bottom:8px;align-items:flex-start}
 /* Vạch ngăn trong menu thẳng hàng với chữ của mục (đệm menu 4 + đệm mục 12). */
-:is(.menu,.model-menu,.usermenu,.model-sub) hr{margin:4px 12px!important}
 /* Chia sẻ, Tải lên, Phím tắt: cùng khung hộp thoại (đầu 72px, nút đóng tròn 36px, thân lề 24px). */
 .sy-sub{margin:14px 0 12px;font-size:13.5px;line-height:20px;color:var(--ds-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.sy-share{display:flex;flex-direction:column;gap:8px;padding-bottom:20px!important}
+.sy-share{display:flex;flex-direction:column;gap:8px}
 .modal.sy-modal.upl{width:min(560px,94vw)}
 html body .upl .upl-zone{margin:20px 24px 24px;border:1px dashed var(--ds-line-2);border-radius:var(--r-card);background:var(--ds-bg)}
 html body .upl .upl-zone.over{border:1.5px solid var(--ds-ink)}
@@ -896,13 +871,12 @@ html body .upl .upl-zone span{color:var(--ds-muted)}
 html body .kbd{display:inline-grid;place-items:center;min-width:28px;height:26px;padding:0 8px;border-radius:var(--r-pill);background:transparent;box-shadow:inset 0 0 0 1px var(--ds-line-2),0 1px 0 var(--ds-line-2);font-size:12px;font-weight:500;color:var(--ds-ink-2)}
 /* Hàng cài đặt con (vd. "Allow network egress" dưới "Code execution"): chung một tấm với hàng cha, ngăn bằng kẻ mảnh; chữ thụt vào 20px
    để thấy là mục con, công tắc thẳng cột với hàng cha. Trước đây hàng con thành một tấm riêng thụt 24px: hai khung lệch mép trái. */
-html body .sy-settings .inset{margin:0!important;padding:0!important;border:0!important;border-radius:0!important;background:transparent!important;box-shadow:none!important}
-html body .sy-settings .s-body .row:has(+.inset){border-bottom:0!important;border-bottom-left-radius:0!important;border-bottom-right-radius:0!important}
-.sy-settings .s-body .inset>.row{border-top-left-radius:0!important;border-top-right-radius:0!important;padding-left:36px!important}
-.sy-settings .s-body .inset>.row:first-child{border-top:1px solid var(--ds-line)!important}
+html body .sy-settings .s-body .row:has(+.inset){border-bottom:0}
+.sy-settings .s-body .inset>.row{padding-left:36px}
+.sy-settings .s-body .inset>.row:first-child{border-top:1px solid var(--ds-line)}
 .sy-settings .s-body .inset>.row:first-child>div:first-child{position:relative}
 .sy-settings .s-body .inset>.row:first-child>div:first-child::before{content:"";position:absolute;left:-16px;top:3px;width:8px;height:9px;border-left:1.5px solid var(--ds-line-2);border-bottom:1.5px solid var(--ds-line-2);border-bottom-left-radius:4px}
-.sy-settings .s-body .inset:not(:has(+.row))>.row:last-child{border-bottom:1px solid var(--ds-line)!important;border-bottom-left-radius:var(--r-plate)!important;border-bottom-right-radius:var(--r-plate)!important}
+.sy-settings .s-body .inset:not(:has(+.row))>.row:last-child{border-bottom:1px solid var(--ds-line)}
 /* Thanh trên: tên đoạn chat co lại (… ở cuối) thay vì chạy đè lên các nút bên phải khi khung artifact đang mở. */
 html body .topbar{justify-content:space-between;gap:12px;padding:0 16px}
 html body .topbar .left,html body .topbar .right{position:static;left:auto;right:auto}
@@ -911,12 +885,10 @@ html body .topbar .right{flex:none}
 html body .topbar .title-wrap{min-width:0;max-width:100%}
 html body .topbar .title-wrap .sel{max-width:100%;min-width:0}
 /* Danh sách trên tấm: không cắt phần tràn (để menu ⋯ của từng hàng mở ra ngoài được), góc bo ở hàng đầu / hàng cuối. */
-html body :is(.pj-panel .pj-chats,.pj-panel .pj-list,.pj-panel .pj-skills,.tk-page .tk-list,.pl-rows2,.pl-rows)>:first-child{border-top-left-radius:var(--r-card)!important;border-top-right-radius:var(--r-card)!important}
-html body :is(.pj-panel .pj-chats,.pj-panel .pj-list,.pj-panel .pj-skills,.tk-page .tk-list,.pl-rows2,.pl-rows)>:last-child{border-bottom-left-radius:var(--r-card)!important;border-bottom-right-radius:var(--r-card)!important}
 html body :is(.pl-row2,.tk-item,.pj-chat):has(.menu:not(.out)){position:relative;z-index:3}
 /* Ô soạn tin ở đầu trang (trang dự án): menu model / micro mở xuống dưới, không chui lên thanh trên. */
 /* Ô soạn tin của trang dự án nằm sát đầu trang: mọi menu của nó mở xuống dưới (menu + từng mở lên trên, bị thanh trên che mất đầu). */
-.pj-compose :is(.model-menu,.mic-wrap .menu){top:calc(100% + 8px)!important;bottom:auto!important;transform-origin:top right}
+.pj-compose :is(.model-menu,.mic-wrap .menu){transform-origin:top right}
 
 
 
@@ -948,7 +920,7 @@ html body .topbar .title-wrap .sel{height:var(--ds-h)}
 /* ---------------------------------------------------------------- chọn hàng loạt (app/bulk.tsx)
    Nút "Chọn hàng loạt" là nút viên thuốc (đang bật: tấm mực). Ô chọn tròn 18px; mục đã chọn tô nhạt, thẻ có thêm viền mực.
    Thanh thao tác là viên thuốc màu mực nổi ở đáy khung cuộn của danh sách (đệm 4 + nút 32 tròn 16 = bo 20, đồng tâm). */
-html body .bk-btn.on:not(.auth-root *){background:var(--ds-inv);color:var(--ds-inv-fg);box-shadow:none!important}
+html body .bk-btn.on:not(.auth-root *){background:var(--ds-inv);color:var(--ds-inv-fg)}
 html body .bk-btn.sm:not(.auth-root *){height:28px;padding:0 11px;font-size:12.5px;gap:6px}
 .bk-head{display:flex;align-items:center;justify-content:flex-end;gap:8px;min-height:28px;margin:0 0 8px}
 .bk-head-n{margin-right:auto;font-size:12.5px;color:var(--ds-muted)}
@@ -966,7 +938,6 @@ html body .bk-btn.sm:not(.auth-root *){height:28px;padding:0 11px;font-size:12.5
 [data-bk]{cursor:pointer;-webkit-user-select:none;user-select:none}
 [data-bk]:hover .bk-check:not(.on){box-shadow:inset 0 0 0 1.5px var(--ds-ink-2)}
 html body [data-bk=on]{background:color-mix(in srgb,var(--ds-ink) 6%,var(--ds-plate))}
-html body :is(.pj-gcard,.art-tile,.sp-vcard,.cn-card,.tk-job)[data-bk=on]{box-shadow:inset 0 0 0 1.5px var(--ds-ink)!important}
 
 :is(.pj-gcard,.art-tile)>.bk-check{position:absolute;top:10px;left:10px;z-index:3;box-shadow:inset 0 0 0 1.5px var(--ds-line-2),0 1px 3px rgba(0,0,0,.12)}
 html body .ds-art .art-tile{position:relative}
@@ -1009,7 +980,6 @@ html body .bk-menu{position:absolute;bottom:calc(100% + 10px);left:50%;transform
 html body .menu .menu-item.on{background:var(--ds-hover)}
 html body .menu.cm-fly{position:absolute;left:calc(100% + 6px);bottom:0;top:auto;width:280px;max-height:min(460px,70vh);overflow:visible;z-index:2;animation:cmIn .18s var(--ds-ease) backwards}
 @keyframes cmIn{from{opacity:0;transform:translateX(-4px)}}
-.cm-back{display:none!important}
 .cm-list{max-height:248px;overflow-y:auto;scrollbar-width:thin}
 .cm-empty{display:flex;align-items:center;gap:8px;min-height:36px;padding:0 12px;font-size:12.5px;color:var(--ds-muted)}
 /* Danh sách connector hỏng (mạng, máy chủ lỗi): dòng "Không tải được · Thử lại" dùng màu lỗi, dấu chấm tách mờ. */
@@ -1018,7 +988,7 @@ html body .menu.cm-fly{position:absolute;left:calc(100% + 6px);bottom:0;top:auto
 /* Ô tìm skill / thư viện ở đầu menu con Kho kỹ năng (kho có thể có hàng nghìn thư viện). */
 .cm-find{display:flex;align-items:center;gap:8px;margin:2px 4px 6px;padding:0 10px;height:34px;border-radius:10px;background:var(--ds-sunken);color:var(--ds-muted)}
 .cm-find>svg{flex:none}
-html body .cm-find input{flex:1;min-width:0;height:100%;border:0!important;outline:0;background:transparent!important;box-shadow:none!important;padding:0!important;font-size:13px;color:var(--ds-ink)}
+html body .cm-find input{flex:1;min-width:0;height:100%;outline:0;font-size:13px;color:var(--ds-ink)}
 .cm-h{padding:8px 12px 4px;font-size:12px;font-weight:560;color:var(--ds-muted)}
 .menu-item.cm-conn{cursor:default}
 html body .menu-item.cm-conn:hover{background:transparent}
@@ -1039,7 +1009,7 @@ html body .menu-item.cm-conn:hover{background:transparent}
   /* Menu hẹp (390px): "Chưa liên kết" / "Cần liên kết lại" trùng ý với nút "Liên kết" ngay cạnh nên ẩn đi, nút về sát mép phải. */
   .cm-cx .cm-cnt.cm-dup{display:none}
   .cm-cx .cm-cnt.cm-dup~.cm-rec{margin-left:auto}
-  .cm-back{display:flex!important;font-weight:560}
+  .cm-back{font-weight:560}
 }
 /* Skill người dùng chọn cho tin nhắn: nhãn viên thuốc trong ô soạn và trên tin nhắn đã gửi. */
 .pick-chip{display:inline-flex;align-items:center;gap:6px;height:28px;max-width:240px;padding:0 4px 0 10px;border-radius:var(--r-pill);background:var(--ds-sunken);
@@ -1215,13 +1185,11 @@ html body .scan-modal .btn.scan-danger{color:var(--ds-bad);background:transparen
 }
 
 /* Ô nhập nhiều dòng không bo kiểu viên thuốc: bán kính 999px cắt mất chữ ở bốn góc (ô Hướng dẫn của việc tự động). */
-html body textarea.field:not(.auth-root *),html body .sy-settings textarea.field{border-radius:var(--r-card)!important}
 /* Ô chọn bo tròn: tự vẽ mũi tên, cách viền phải 13px, chừa chỗ cho chữ. Mũi tên mặc định của trình duyệt luôn nằm sát viền (chừa thêm
    padding cũng không dời được), rơi vào phần bo: ô chọn model của việc tự động và của Quét skill rác, ô lọc Hộp thư / Bộ não,
    ô "Gửi … tin gần nhất" của bảng ngữ cảnh, ô Studio của thư viện. */
-html body select.field:not(.auth-root *),html body .tk-page select.tk-filter.field,html body .cx-hist select,html body .sy-settings select.field,select.pl-sel{
-  -webkit-appearance:none;appearance:none;padding-right:34px!important;cursor:pointer;text-overflow:ellipsis;
-  background-image:var(--sel-arrow)!important;background-position:right 13px center!important;background-size:12px 12px!important;background-repeat:no-repeat!important}
+select.field:not(.auth-root *),.tk-page select.tk-filter.field,.cx-hist select,.sy-settings select.field,select.pl-sel{
+  -webkit-appearance:none;appearance:none;cursor:pointer;text-overflow:ellipsis}
 /* Mũi tên dạng nét (như mũi tên mặc định của các ô chọn khác), màu chữ phụ của từng giao diện. */
 :root{--sel-arrow:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' fill='none'%3E%3Cpath d='M3 4.5l3 3 3-3' stroke='%235F6058' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")}
 [data-theme="dark"]{--sel-arrow:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' fill='none'%3E%3Cpath d='M3 4.5l3 3 3-3' stroke='%239C9D95' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")}
@@ -1238,4 +1206,86 @@ html body .cx-hist select{padding-left:10px}
   html body .rp-pw .icon-btn,.auth-root .rp-pw .icon-btn{min-width:0;min-height:0}
   html body .rp-pw .icon-btn::after{content:"";position:absolute;inset:-7px}
 }
+}
+@layer syn-over{
+/* B5: khai báo trước đây mang !important chỉ để thắng thứ tự. Lớp syn-over đứng sau syn nên các luật này thắng mọi luật thường của syn bất kể specificity; giữa chúng với nhau vẫn theo specificity rồi thứ tự. Sửa một luật ở trên thì tìm cùng selector ở đây. */
+.btn:not(.dark):not(.danger):not(.auth-root *){box-shadow:inset 0 0 0 1px var(--ds-line-2)}
+html body .btn:not(.auth-root *):focus-visible,html body .icon-btn:focus-visible{box-shadow:var(--ds-ring)}
+html body :is(.group,.pl-seg):not(.auth-root *){background:var(--ds-sunken);border:0}
+html body :is(.group,.pl-seg):not(.auth-root *)>button{border-radius:var(--r-pill);color:var(--ds-muted);background:transparent;box-shadow:none;transition:background-color var(--ds-mid) var(--ds-ease),color var(--ds-mid) var(--ds-ease)}
+html body :is(.group,.pl-seg):not(.auth-root *)>button:hover{color:var(--ds-ink)}
+html body :is(.group,.pl-seg):not(.auth-root *)>button.on{color:var(--ds-inv-fg)}
+html[data-tips="js"] [data-tip]:hover::after{content:none;display:none}
+html body .rail .nav-item:not(.auth-root *){background:transparent;box-shadow:none;scale:none}
+html body .shell-side .chat-item.active{background:color-mix(in srgb,var(--ds-plate) 92%,transparent);box-shadow:inset 0 0 0 1px var(--ds-line)}
+.shell-side .side-tools .nav-item.active{box-shadow:inset 0 0 0 1px var(--ds-line)}
+@media (min-width:761px){
+.side-toggle{display:none}
+}
+.st-layer:not(.on) *{animation-play-state:paused}
+.d-l{animation-timing-function:linear}
+.d-cur{animation-timing-function:linear}
+@media (prefers-reduced-motion:reduce){
+.st-scene *{animation:none}
+}
+html body .tk-page .tk-count{background:transparent;color:inherit;padding:0;min-width:0}
+html body .sy-settings .s-nav{padding:18px 12px 16px;background:color-mix(in srgb,var(--ds-sunken) 70%,transparent);border-right:1px solid var(--ds-line)}
+.sy-settings .s-nav .s-search{margin:0 0 14px;padding:0 12px;border-radius:var(--r-pill);background:var(--ds-plate)}
+.sy-settings .s-group{padding:0 10px;margin:12px 0 2px;font-size:12px;color:var(--ds-muted)}
+.sy-settings .s-search+.s-group{margin-top:0}
+html body .sy-settings .s-item{height:34px;padding:0 10px;color:var(--ds-ink-2);background:transparent;transition:background-color .18s ease,color .18s ease}
+html body .sy-settings .s-item:hover{background:var(--ds-hover);color:var(--ds-ink)}
+html body .sy-settings .s-item.on{background:var(--ds-inv);color:var(--ds-inv-fg)}
+.sy-settings .s-body{padding:0 32px 40px}
+.sy-sbody-h{padding:0 16px 0 32px;border-bottom:1px solid var(--ds-line)}
+.sy-sbody-h h2{margin:0;font:600 17px/24px var(--font-sans)}
+.sy-sbody-h .close{position:static}
+html body .sy-settings .s-body h3{margin:28px 0 10px;font-size:13px;font-weight:560;color:var(--ds-ink)}
+html body .sy-settings .s-body h3 .muted{color:var(--ds-faint)}
+.sy-settings .sy-sbody-h+*{margin-top:20px}
+.sy-settings .sy-sbody-h+*>h3:first-child{margin-top:0}
+.sy-settings .s-body .row .d{color:var(--ds-muted)}
+.sy-settings .sel{padding:0 11px 0 13px;border-radius:var(--r-pill)}
+html body .sy-settings .sel:hover{background:var(--ds-hover)}
+html body .sy-settings .field,html body .sy-settings .textarea{border:1px solid var(--ds-line-2);border-radius:var(--r-pill);background:var(--ds-plate)}
+html body .sy-settings .textarea{border-radius:var(--r-plate)}
+html body .sy-settings .field:focus,html body .sy-settings .textarea:focus{border-color:var(--ds-ink);box-shadow:0 0 0 3px color-mix(in srgb,var(--ds-ink) 10%,transparent)}
+html body .field:disabled:not(.auth-root *),html body .sy-settings .field:disabled{background:transparent;border-style:dashed;color:var(--ds-faint)}
+.sy-settings .api-card.bare{border:0;background:transparent;box-shadow:none;padding:0;border-radius:0}
+.sy-settings .bn-stats{display:grid;margin:14px 0}
+html body .sy-settings .bn-stats>span{display:flex;padding:12px 16px;border:0;border-radius:0;background:transparent;font-size:12px;color:var(--ds-muted)}
+.sy-settings .bn-stats b{font-size:18px;font-weight:560}
+.sy-settings .adm-head .adm-badge,.sy-settings .adm-head .s-title,.sy-settings .us-page>h3:first-child,.sy-settings .bn>h3:first-child{display:none}
+@media (max-width:860px){
+html body .sy-settings .s-nav{width:64px;padding:14px 10px}
+.sy-settings :is(.sy-snav-h,.s-search,.s-item .s-lbl,.s-search+.s-group){display:none}
+.sy-settings .s-group{display:block;padding:0;margin:10px 6px;font-size:0}
+html body .sy-settings .s-item{padding:0;height:44px}
+.sy-settings .s-body{padding:0 16px 32px}
+.sy-sbody-h{padding:0 12px 0 16px}
+.sy-sbody-h h2{font-size:19px}
+.sy-settings .s-body .row>.field{width:100%}
+.sy-settings .s-body .row>:is(.group,.pl-seg)>button{padding:0 8px}
+}
+.sy-mh h2{margin:0;font:600 16px/22px var(--font-sans)}
+.sy-fieldrow label{margin:0 0 2px;font-size:13.5px;font-weight:560}
+.modal.sm h2{font-weight:560}
+:is(.menu,.model-menu,.usermenu,.model-sub) hr{margin:4px 12px}
+.sy-share{padding-bottom:20px}
+html body .sy-settings .inset{margin:0;padding:0;border:0;border-radius:0;background:transparent;box-shadow:none}
+.sy-settings .s-body .row:has(+.inset){border-bottom-left-radius:0;border-bottom-right-radius:0}
+.sy-settings .s-body .inset>.row{border-top-left-radius:0;border-top-right-radius:0}
+.sy-settings .s-body .inset:not(:has(+.row))>.row:last-child{border-bottom-left-radius:var(--r-plate);border-bottom-right-radius:var(--r-plate)}
+:is(.pj-panel .pj-chats,.pj-panel .pj-list,.pj-panel .pj-skills,.tk-page .tk-list,.pl-rows2,.pl-rows)>:first-child{border-top-left-radius:var(--r-card);border-top-right-radius:var(--r-card)}
+:is(.pj-panel .pj-chats,.pj-panel .pj-list,.pj-panel .pj-skills,.tk-page .tk-list,.pl-rows2,.pl-rows)>:last-child{border-bottom-left-radius:var(--r-card);border-bottom-right-radius:var(--r-card)}
+.pj-compose :is(.model-menu,.mic-wrap .menu){top:calc(100% + 8px);bottom:auto}
+html body .bk-btn.on:not(.auth-root *){box-shadow:none}
+html body :is(.pj-gcard,.art-tile,.sp-vcard,.cn-card,.tk-job)[data-bk=on]{box-shadow:inset 0 0 0 1.5px var(--ds-ink)}
+.cm-back{display:none}
+html body .cm-find input{border:0;background:transparent;box-shadow:none;padding:0}
+@media (max-width:640px){
+.cm-back{display:flex}
+}
+html body textarea.field:not(.auth-root *),html body .sy-settings textarea.field{border-radius:var(--r-card)}
+html body select.field:not(.auth-root *),html body .tk-page select.tk-filter.field,.cx-hist select,html body .sy-settings select.field,select.pl-sel{padding-right:34px;background-image:var(--sel-arrow);background-position:right 13px center;background-size:12px 12px;background-repeat:no-repeat}
 }

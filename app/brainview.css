@@ -195,7 +195,7 @@
 }
 .bw-graph[hidden] {display:none
 }
-.bw-graph .bn-graph {flex:1;height:100%!important;border-radius:0;box-shadow:none
+.bw-graph .bn-graph {flex:1;border-radius:0;box-shadow:none
 }
 .bw-graph .bn-zoom {right:12px;bottom:12px
 }
@@ -363,4 +363,8 @@
 }}
 .bn label.bn-auto {display:flex
 }
+}
+@layer syn-over{
+/* B5: khai báo trước đây mang !important chỉ để thắng thứ tự. Lớp syn-over đứng sau syn nên các luật này thắng mọi luật thường của syn bất kể specificity; giữa chúng với nhau vẫn theo specificity rồi thứ tự. Sửa một luật ở trên thì tìm cùng selector ở đây. */
+.bw-graph .bn-graph{height:100%}
 }

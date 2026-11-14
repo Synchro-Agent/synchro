@@ -28,7 +28,9 @@ ok(tab && !/\.app>\.shell-side\{z-index/.test(tab[3]), "bảng đóng: thanh đi
 ok(tab && /\.sidebar\{position:fixed;[^}]*left:68px/.test(tab[3]), "bảng nổi đứng cạnh thanh điều hướng 68px, không đẩy nội dung");
 ok(tab && /\.shell-side\.closed \.sidebar\{[^}]*visibility:hidden/.test(tab[3]), "đóng thì ẩn hẳn (không bấm / Tab được vào bảng đã đóng)");
 ok(tab && !/\.app>\.shell-side\{[^}]*position:fixed/.test(tab[3]), "máy tính bảng: thanh điều hướng không thành ngăn kéo");
-const toggle = strip(ds).match(/@media \(min-width:(\d+)px\)\{html body \.side-toggle\{display:none!important\}\}/);
+// Luật ẩn nằm ở lớp syn-over (B5: thắng mọi luật thường của lớp syn mà không cần !important), hoặc còn mang !important.
+const dsOver = strip(ds).split("@layer syn-over{")[1] ?? "";
+const toggle = dsOver.match(/@media \(min-width:(\d+)px\)\{\s*(?:html body )?\.side-toggle\{display:none\}\s*\}/) ?? strip(ds).match(/@media \(min-width:(\d+)px\)\{\s*html body \.side-toggle\{display:none!important\}\s*\}/);
 ok(toggle && Number(toggle[1]) === PHONE + 1, "nút logo ở thanh trên chỉ ở điện thoại (thanh điều hướng có .rail-mark từ 761px)", toggle?.[1]);
 const scrim = [...strip(g).matchAll(/@media \(max-width:(\d+)px\)\{([\s\S]*?)\n\}/g)].find((m) => /\.side-scrim\{display:block/.test(m[2]));
 ok(scrim && Number(scrim[1]) === narrow, "lớp phủ dùng đúng ngưỡng NARROW", scrim?.[1]);

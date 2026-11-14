@@ -74,8 +74,6 @@
 }
 .cv-modebtn svg:last-child {opacity:.55
 }
-.cv-composer[data-drag] {box-shadow:0 0 0 1.5px var(--accent),var(--gl-shadow)!important
-}
 .cv-mh {padding:6px 12px 4px;font-size:12px;font-weight:560;letter-spacing:.02em;color:var(--text-3);text-transform:none
 }
 .cv-mh.big {display:flex;align-items:center;gap:8px;font-size:14px;color:var(--text);padding:2px 2px 10px
@@ -144,13 +142,7 @@
 }
 [data-theme="dark"] .cv-card {background:rgba(30,30,36,.5)
 }
-.cv-thread:has(.cv-empty) {-webkit-mask-image:none!important;mask-image:none!important
-}
-.cv-hello,.cv-sugg {animation-fill-mode:backwards!important
-}
-.cv-sugg {animation:none!important
-}
-.cv-drop {display:none!important
+.cv-thread:has(.cv-empty) {-webkit-mask-image:none;mask-image:none
 }
 .app:not(.code-view) .cv-thread {-webkit-mask-image:none;mask-image:none
 }
@@ -577,4 +569,11 @@ html[data-tw="wide"] .cv-wrap {width:min(1160px,100%)
 }
 .cv-composer textarea.cv-sugg-on::placeholder {color:color-mix(in srgb,var(--text-2) 70%,transparent);font-style:italic
 }
+}
+@layer syn-over{
+/* B5: khai báo trước đây mang !important chỉ để thắng thứ tự. Lớp syn-over đứng sau syn nên các luật này thắng mọi luật thường của syn bất kể specificity; giữa chúng với nhau vẫn theo specificity rồi thứ tự. Sửa một luật ở trên thì tìm cùng selector ở đây. */
+.cv-composer[data-drag]{box-shadow:0 0 0 1.5px var(--accent),var(--gl-shadow)}
+.cv-hello,.cv-sugg{animation-fill-mode:backwards}
+.cv-sugg{animation:none}
+.cv-drop{display:none}
 }

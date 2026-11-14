@@ -16,7 +16,9 @@ import { fileURLToPath } from "node:url";
 const postcss = createRequire(import.meta.url)("postcss");
 
 // Trần hiện tại (số đo lúc đặt trần). Chỉ được hạ.
-export const CEIL = { important: 333, htmlBody: 572, fontSize: 1278, zIndex: 63, mediaWidth: 90, darkHex: 100, inlineFontSize: 65, inlineZIndex: 22 };
+// htmlBody 572 → 582 (lần duy nhất tăng, B5 bước 4): khi chuyển !important sang lớp syn-over, 50 selector còn tiền tố html body được chép
+// sang khối syn-over (tiền tố quyết định bên thắng giữa các luật syn-over với nhau, gỡ thì đổi bên thắng); không thêm tiền tố cho selector mới.
+export const CEIL = { important: 14, htmlBody: 582, fontSize: 1278, zIndex: 63, mediaWidth: 90, darkHex: 100, inlineFontSize: 65, inlineZIndex: 22 };
 export const WIDTHS = new Set([480, 640, 760, 761, 860, 1100]);
 
 const walk = (d, ext, out = []) => {

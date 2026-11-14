@@ -15,7 +15,7 @@
 }
 .sp-credit-n {color:var(--text-2)
 }
-.sp-nav {display:flex!important;align-items:center;gap:9px
+.sp-nav {align-items:center;gap:9px
 }
 .sp-fl {display:flex;justify-content:space-between;gap:8px;font-size:12.5px;color:var(--text-2);font-weight:460
 }
@@ -345,7 +345,7 @@
 }
 .sp-pm-h .sp-search {flex:1;height:34px;min-width:120px
 }
-.sp-pf-t {display:none!important;position:relative
+.sp-pf-t {position:relative
 }
 .sp-picker .sp-vlist {padding:6px 8px
 }
@@ -416,8 +416,6 @@
 @media (max-width:820px){.sp-picker.show-f .sp-pf {display:flex;animation:fadeIn .2s both
 }}
 @media (max-width:820px){.sp-pf-x {display:grid
-}}
-@media (max-width:820px){.sp-pf-t {display:grid!important
 }}
 @media (max-width:820px){.sp-vrow {grid-template-columns:34px minmax(0,1fr) auto
 }}
@@ -800,4 +798,12 @@
 }
 @media (max-width:600px){.sp-credit-wait {width:96px
 }}
+}
+@layer syn-over{
+/* B5: khai báo trước đây mang !important chỉ để thắng thứ tự. Lớp syn-over đứng sau syn nên các luật này thắng mọi luật thường của syn bất kể specificity; giữa chúng với nhau vẫn theo specificity rồi thứ tự. Sửa một luật ở trên thì tìm cùng selector ở đây. */
+.sp-nav{display:flex}
+.sp-pf-t{display:none}
+@media (max-width:820px){
+.sp-pf-t{display:grid}
+}
 }
