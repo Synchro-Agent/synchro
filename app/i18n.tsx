@@ -2,6 +2,7 @@
 
 import { useEffect, useSyncExternalStore } from "react";
 import { usePref } from "./store";
+import { watch } from "./domwatch";
 import { cxActEn } from "./cxactions";
 import { type Dict, type Lang, type Vars, tfWith, trcWith, trWith } from "./i18n-core";
 
@@ -95,10 +96,14 @@ function doAttrs(e: Element, lang: Lang) {
   attrs.set(e, m);
 }
 
+// Cả cây nằm trong vùng không dịch (câu trả lời, mã, [data-notr]…): không có chữ hay thuộc tính nào để dịch, khỏi duyệt từng nút
+// (mỗi lần câu trả lời đang chảy thêm khối Markdown là một cây như vậy). Không tính textarea / input: chính chúng vẫn có placeholder cần dịch.
+const SKIP_TREE = SKIP.replace("textarea,input,", "");
 function walk(root: Node, lang: Lang) {
   if (root.nodeType === 3) { doText(root as Text, lang); return; }
   if (root.nodeType !== 1) return;
   const el = root as Element;
+  if (el.closest(SKIP_TREE)) return;
   const tw = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
   let n: Node | null;
   while ((n = tw.nextNode())) doText(n as Text, lang);
@@ -113,7 +118,7 @@ export function I18n() {
     const html = document.documentElement;
     html.lang = lang;
     html.dataset.lang = lang;
-    let mo: MutationObserver | null = null, mt: MutationObserver | null = null, off = false;
+    let unwatch: (() => void) | null = null, mt: MutationObserver | null = null, off = false;
     void loadDict(lang).then(() => {
       if (off) return;
       // Đổi ngôn ngữ: chỉ chuyển khi từ điển mới đã về, nơi dùng useLangReady vẽ lại bằng ngôn ngữ mới.
@@ -123,18 +128,14 @@ export function I18n() {
       if (titleSrc === null || (document.title !== titleTr && document.title !== titleSrc)) titleSrc = document.title;
       titleTr = tr(titleSrc, lang);
       if (document.title !== titleTr) document.title = titleTr;
-      const cfg: MutationObserverInit = { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ATTRS };
-      const o = new MutationObserver((list) => {
-        o.disconnect();
+      // Bộ theo dõi <body> dùng chung (domwatch.ts), nhận trước mọi nơi khác; bản ghi do chính lần dịch này ghi ra được domwatch bỏ đi.
+      unwatch = watch((list) => {
         for (const r of list) {
           if (r.type === "characterData") doText(r.target as Text, lang);
           else if (r.type === "attributes") doAttrs(r.target as Element, lang);
           else r.addedNodes.forEach((n) => walk(n, lang));
         }
-        o.observe(document.body, cfg);
-      });
-      mo = o;
-      o.observe(document.body, cfg);
+      }, { types: ["childList", "characterData", "attributes"], attrs: ATTRS, order: 0 });
       // Next gắn tiêu đề trang (metadata) sau khi trang đã chạy, có khi sau cả đoạn trên: /terms từng giữ tiêu đề tiếng Việt ở giao diện tiếng Anh.
       const ot = new MutationObserver(() => {
         if (document.title === titleTr) return;
@@ -145,7 +146,7 @@ export function I18n() {
       mt = ot;
       ot.observe(document.head, { subtree: true, childList: true, characterData: true });
     });
-    return () => { off = true; mo?.disconnect(); mt?.disconnect(); };
+    return () => { off = true; unwatch?.(); mt?.disconnect(); };
   }, [lang]);
   return null;
 }

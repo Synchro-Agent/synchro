@@ -1,6 +1,7 @@
 // Bàn phím và tiêu điểm dùng chung cho mọi menu và hộp thoại của app (không phải sửa từng nơi, hộp và menu thêm sau tự có):
 // - Menu (ui.tsx): Esc đóng menu rồi trả tiêu điểm về nút mở (không đóng luôn hộp thoại bên dưới); mũi tên, Home, End đi giữa các mục; phải / trái vào, ra menu con.
 // - Hộp thoại (.overlay): vai trò dialog, tiêu điểm đầu tiên, Tab chỉ đi trong hộp, đóng thì trả tiêu điểm về chỗ cũ.
+import { watch } from "./domwatch";
 type Entry = { el: HTMLElement; opener: HTMLElement | null };
 const menus: Entry[] = [];
 // Người dùng đang thao tác bằng bàn phím hay chuột: menu mở bằng chuột không tự chuyển tiêu điểm vào trong.
@@ -233,8 +234,8 @@ export function installA11y() {
   lastOutside = active() && active() !== document.body ? active() : null;
   window.addEventListener("keydown", onKey, true);
   window.addEventListener("pointerdown", onPointer, true);
-  const mo = new MutationObserver(syncModals);
-  mo.observe(document.body, { childList: true, subtree: true });
+  // Bộ theo dõi <body> dùng chung (domwatch.ts): hộp thoại mở / đóng (thêm / bớt phần tử).
+  const unwatch = watch(() => syncModals(), { types: ["childList"] });
   syncModals();
-  return () => { installed = false; document.removeEventListener("focusin", onFocus, true); window.removeEventListener("keydown", onKey, true); window.removeEventListener("pointerdown", onPointer, true); mo.disconnect(); };
+  return () => { installed = false; document.removeEventListener("focusin", onFocus, true); window.removeEventListener("keydown", onKey, true); window.removeEventListener("pointerdown", onPointer, true); unwatch(); };
 }

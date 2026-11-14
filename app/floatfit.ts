@@ -3,6 +3,8 @@
 // lên trên) tràn quá mép trên khi ô soạn tin nằm giữa màn hình (trang chủ, cửa sổ thấp): mất viền, mất góc bo, mục đầu dính sát mép.
 // Mỗi khi một khung nổi hiện ra hoặc đổi kích thước (danh sách tải xong thì cao lên), đo lại; tràn mép nào thì dời vào trong bằng thuộc tính
 // translate (không đụng transform của animation mở menu). Cao hơn cả màn hình thì giới hạn chiều cao và cho cuộn.
+import { watch as domWatch } from "./domwatch";
+
 const SEL = ".menu, .model-menu, .model-sub, .usermenu";
 const M = 8;
 
@@ -33,16 +35,16 @@ export function fit(el: HTMLElement) {
 export function installFloatFit() {
   const ro = new ResizeObserver((es) => { for (const e of es) { const el = e.target as HTMLElement; if (el.isConnected) fit(el); else ro.unobserve(el); } });
   const watch = (el: Element) => { if (el instanceof HTMLElement) ro.observe(el); };
-  const mo = new MutationObserver((recs) => {
+  // Bộ theo dõi <body> dùng chung (domwatch.ts), chạy ngay (trước khi vẽ) để menu không hiện một khung hình tràn mép.
+  const unwatch = domWatch((recs) => {
     for (const r of recs) for (const n of r.addedNodes) {
       if (!(n instanceof Element)) continue;
       if (n.matches(SEL)) watch(n);
       n.querySelectorAll(SEL).forEach(watch);
     }
-  });
+  }, { types: ["childList"] });
   document.querySelectorAll(SEL).forEach(watch);
-  mo.observe(document.body, { childList: true, subtree: true });
   const re = () => document.querySelectorAll<HTMLElement>(SEL).forEach(fit);
   addEventListener("resize", re);
-  return () => { mo.disconnect(); ro.disconnect(); removeEventListener("resize", re); };
+  return () => { unwatch(); ro.disconnect(); removeEventListener("resize", re); };
 }
