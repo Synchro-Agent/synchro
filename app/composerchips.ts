@@ -69,6 +69,9 @@ export function fitCount(avail: number, widths: number[], gap: number, moreW: nu
 export function useFitCount<T extends HTMLElement>(ref: RefObject<T | null>, active: boolean, keys: string[]) {
   const [fit, setFit] = useState(CHIP_LIMIT);
   const seen = useRef(new Map<string, number>());
+  // Bề rộng lớn nhất của "+N" đã đo với bộ thẻ này. "+N" đổi bề rộng theo N ("+10" 45px, "+11" 44px): lấy số đo hiện tại thì hai trạng thái có thể
+  // đẩy nhau mãi (2 thẻ + "+10" không vừa → 1 thẻ + "+11" vừa → lại 2 thẻ…, React báo "Maximum update depth" và cả ô soạn sập). Lấy số lớn nhất.
+  const moreMax = useRef({ sig: "", w: 0 });
   const sig = keys.join("\u0001");
   useLayoutEffect(() => {
     const el = ref.current;
@@ -86,7 +89,9 @@ export function useFitCount<T extends HTMLElement>(ref: RefObject<T | null>, act
       const widths = keys.map((k) => seen.current.get(k) ?? typical);
       const more = el.querySelector<HTMLElement>(":scope>.attach-more");
       // Nút "+N" rộng theo số chữ số: đo nút đang có, chưa có thì lấy bề rộng tối thiểu của nó + khe.
-      const moreW = more ? more.offsetWidth : 48;
+      if (moreMax.current.sig !== sig) moreMax.current = { sig, w: 0 };
+      if (more) moreMax.current.w = Math.max(moreMax.current.w, more.offsetWidth);
+      const moreW = moreMax.current.w || 48;
       // Trừ 1px: offsetWidth làm tròn, thẻ rộng lẻ (chip skill) có thể nhỉnh hơn số đo nửa px.
       setFit(fitCount(avail - 1, widths, gap, moreW));
     };
