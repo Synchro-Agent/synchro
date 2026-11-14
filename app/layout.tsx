@@ -7,13 +7,15 @@ import type { Metadata, Viewport } from "next";
 import "@fontsource-variable/unbounded/wght.css";
 // Hai bộ chữ của lời chào (Latin, tiếng Việt) lấy từ /fonts để tải trước được: tên tệp trong gói bị băm khi dựng. Khai báo sau nên thắng bản của gói cho đúng các chữ đó.
 import "./unbounded-preload.css";
-// Mọi CSS của app nằm trong một lớp cascade syn (sau các lớp của Tailwind, câu lệnh @layer lặp ở đầu mỗi tệp; B5). Trong lớp đó bên thắng vẫn
-// theo specificity rồi thứ tự nạp. Luật trước đây mang !important chỉ để thắng thứ tự nằm ở lớp syn-over (khối cuối mỗi tệp), thắng mọi luật
-// thường của syn bất kể specificity. Lưu ý: bản build webpack gộp glass.css + features.css thành một tệp nạp TRƯỚC globals.css (next dev nạp
-// đúng thứ tự import), nên luật của hai tệp đó muốn thắng globals.css phải hơn specificity, không dựa vào thứ tự.
-// Thứ tự bốn tệp này là thứ tự ghi đè, đừng đổi. CSS riêng của Code, Speech, Bộ não, trang tải ứng dụng nằm ở tệp nạp cùng màn hình đó (codeview.css, speech/speech.css, brainview.css, download/download.css).
-// Tệp nạp chậm luôn đứng sau bốn tệp này, nên chỉ quy tắc không tranh chấp (cùng độ ưu tiên, cùng thuộc tính, cùng phần tử) với quy tắc chung đứng sau nó mới được chuyển; phần còn lại vẫn ở globals.css. tests/api/css-split.test.mjs giữ các lớp đã tách không bị dùng ở trang chat.
-// Thang token (cỡ chữ, khoảng cách, bo góc, z-index, mốc màn hình): nạp trước mọi CSS của app (B5).
+// Thứ tự cascade (B5) do câu lệnh @layer quyết định, lặp y hệt ở đầu mọi tệp CSS: properties, theme, base, components, utilities (Tailwind),
+// rồi syn (mọi CSS của app, kể cả katex / xterm bọc lại) và syn-over (khối cuối mỗi tệp: luật trước đây cần !important chỉ để thắng thứ tự;
+// lớp sau thắng mọi luật thường của syn bất kể specificity, vẫn thua style nội dòng). Trong syn, bên thắng theo specificity rồi thứ tự nạp:
+// - tokens.css chỉ định nghĩa biến (thang cỡ chữ, khoảng cách, bo góc, tầng z-index, mốc màn hình, màu bổ sung), vị trí không quan trọng;
+// - globals.css → glass.css → synchro-ds.css → features.css là thứ tự ghi đè ở next dev, đừng đổi. Bản build webpack gộp glass.css +
+//   features.css thành một tệp nạp TRƯỚC globals.css, nên luật của hai tệp đó muốn thắng globals.css phải hơn specificity;
+// - CSS riêng của từng màn tải chậm (codeview.css, speech/speech.css, brainview.css, download/download.css, projects.css, settings.css,
+//   skills.css) nạp cùng màn đó, luôn sau bốn tệp trên. Luật chỉ được chuyển sang đó khi mọi selector neo vào tệp riêng của màn và không đổi
+//   bên thắng với luật chung đứng sau nó: scripts/css-move.mjs + css-move-verify.mjs; tests/api/css-split.test.mjs canh lớp đã tách.
 import "./tokens.css";
 import "./globals.css";
 import "./glass.css";

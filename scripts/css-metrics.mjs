@@ -34,7 +34,14 @@ const postcss = createRequire(import.meta.url)("postcss");
 // Còn lại: nền xám cũ (#222, #252525, #2d2d2d…), #fff / #000 / mặt nạ, vài màu riêng (#ec82b2, #6aa8f0, #ffa497…): cần chọn token bề mặt.
 export const CEIL = { important: 18, htmlBody: 560, fontSize: 115, zIndex: 0, mediaWidth: 88, darkHex: 43, inlineFontSize: 20, inlineZIndex: 1 };
 // Mục tiêu có hạn: chỉ số phải về tới max trong bước ghi ở by (đặt ngày set). In ra cùng kết quả; bước đó hạ CEIL theo.
-export const TARGET = {};
+// Đích cuối của B5 (acceptance 1 của kế hoạch): in kèm số còn thừa, không làm hỏng bộ kiểm; mỗi bước sau hạ CEIL dần về đây.
+// important < 30 và zIndex / inlineZIndex 0 (trừ một chỗ tính từ biến) đã đạt.
+export const TARGET = {
+  htmlBody: { max: 0, by: "B5 bước 3 còn lại (gỡ tiền tố cần so cascade động từng tệp)", set: "2026-11-15" },
+  fontSize: { max: 0, by: "B5 bước 6b (cỡ lệch thang, cần chủ dự án duyệt ảnh trước / sau)", set: "2026-11-15" },
+  mediaWidth: { max: 0, by: "B5 bước 7b (mốc @media ngoài thang, chuyển theo bảng kèm ảnh điện thoại / máy tính bảng)", set: "2026-11-15" },
+  darkHex: { max: 0, by: "B5 bước 9b (nền xám cũ, #fff / #000: chọn token bề mặt)", set: "2026-11-15" },
+};
 export const WIDTHS = new Set([480, 640, 760, 761, 860, 1100]);
 
 const walk = (d, ext, out = []) => {
