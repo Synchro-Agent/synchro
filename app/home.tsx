@@ -4,38 +4,33 @@ import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useStat
 import { createPortal } from "react-dom";
 import * as I from "./icons";
 import { Avatar } from "./avatar";
-import { getLang, locale, tf, tr, trc, trCx, useLangReady } from "./i18n";
-import { resetClock, resetAt } from "./resetfmt";
+import { getLang, locale, tf, tr, trc, useLangReady } from "./i18n";
+import { resetClock } from "./resetfmt";
 import { FileCard } from "./fileicon";
 import { useFileMenu, saveDoc, saveBlob, fileContext } from "./filemenu";
 import { capFiles, getStatus, abortFile } from "./filestate";
 import { UPLOAD_ACCEPT } from "./fileproc/types";
 import { stripAppliedNotes, type Rejected } from "./turnctx";
 import { Boundary, Fade, Menu, Thinking } from "./ui";
-import { chatError, GENERIC_ERR, isForeign } from "./chaterror";
+import { chatError, GENERIC_ERR } from "./chaterror";
 import { armDraft, saveDraft, takeDraft } from "./draft";
-import { Lockup, Mark, SideToggle, Wordmark } from "./brand";
+import { Lockup, Mark, SideToggle } from "./brand";
 import { BrandLogo, ModelLogo, ProviderLogo } from "./brands";
-import { BulkBar, BulkCheck, bulkRow, useBulk, type BulkAct } from "./bulk";
-import { Pager, usePage } from "./pager";
 import { lazyView } from "./lazy";
 import type { CodeMeta } from "./codeview";
-import { answerAsk, deleteServerSession, flushAllNow, listServerSessions, patchServerSession, pushSession, resetCodePrefs, seedCodePrefs, useCodePrefs, type SessionState } from "./codesync";
+import { deleteServerSession, flushAllNow, listServerSessions, patchServerSession, pushSession, resetCodePrefs, seedCodePrefs, useCodePrefs } from "./codesync";
 import type { SpeechTool } from "./speech/data";
-import { usePlan as useSpeechPlan } from "./speech/client";
 import { aiVoiceNote, elSpeed, speakAI, type Speaking } from "./speak";
 import { toSpeech, VI } from "./voiceflow";
 import { ConnLoginWatcher } from "./connwatch";
 import { readBrowser, stopBrowserRead } from "./browserspeak";
 import { deltaSink } from "./deltasink";
-import { applyEvent, ConnCards, PlanCard, QueueChips, stepsOf, WorkParts, WorkStatus, WorkSummary, type Queued, type RunEv } from "./worklog";
+import { applyEvent, QueueChips, type Queued, type RunEv } from "./worklog";
 import { startScribe, type Scribe } from "./scribe";
 import type { AuthUser, Providers } from "./auth";
 import { VerifyBanner } from "./verifybanner";
-import { CiteCtx, SourceChips } from "./cites";
-import { allTags, cleanTags, hasTag, tagKey } from "./chattags";
-import { TagChips, TagFilter, TagPicker } from "./tagsui";
-import { Markdown } from "./md";
+import { cleanTags } from "./chattags";
+import { TagChips, TagPicker } from "./tagsui";
 import type { PaletteCmd, PaletteGo } from "./palette";
 import { CHIP_LIMIT } from "./composerchips";
 import { AttachStrip } from "./attachstrip";
@@ -49,12 +44,13 @@ import { Confirm, LangModal, LogoutConfirm, ProjectModal, Settings, ShortcutsMod
 import { ShareModal } from "./shareui";
 import { useBrainSync } from "./brainsync";
 import { countRender } from "./perfmark";
-import { useChatState, useChatStore } from "./chatstore.client";
+import { resetUi, sameFields, selectChatMeta, selectCurChat, selectNeedKey, useChatState, useChatStore, useChats, usePanelUi, useSideUi } from "./chatstore.client";
 import { useEvent } from "./useevent";
+import { useClickAway } from "./clickaway";
+import type { CodeItem, Say, View } from "./hometypes";
+import { Sidebar, useTagsAll, type SideActs } from "./Sidebar";
+import { ChatThread, openLastProduct, stickToBottom, type BrwState, type ThreadActs } from "./Thread";
 
-// Trình duyệt của Synchro (khung cạnh chat, trang Trình duyệt): vé xem màn hình trực tiếp.
-const browserTicket = () => fetch("/api/browser", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ op: "ticket" }) })
-  .then(async (r) => { const j = await r.json().catch(() => ({})); if (!r.ok || !j.url) throw new Error(j.error || "Không mở được trình duyệt."); return j.url as string; });
 
 // Tên tạm khi vừa tạo đoạn chat (trước khi model đặt tên theo nội dung): câu đầu của tin nhắn, bỏ ký hiệu Markdown và tham số công cụ.
 const roughTitle = (t: string) => {
@@ -64,17 +60,14 @@ const roughTitle = (t: string) => {
   return cut ? cut[0].toUpperCase() + cut.slice(1) : t.slice(0, 40);
 };
 // Tin đầu chỉ là lời chào / quá ngắn: tên đặt lúc đầu chưa nói được gì, đặt lại khi đoạn chat đã rõ chủ đề (tin thứ ba).
-// Nhãn công cụ đã dùng: Composio là "<ứng dụng> · <thao tác>", thao tác dịch theo ngôn ngữ giao diện; connector khác giữ nguyên.
-const toolChip = (n: string) => { const i = n.indexOf(" · "); return i > 0 ? `${n.slice(0, i)} · ${trCx(n.slice(i + 3))}` : n; };
 const vagueMsg = (t: string) => t.trim().split(/\s+/).length <= 3 || /^(xin )?ch[àa]o|^(hi|hello|hey|alo|test)\b/i.test(t.trim());
-type View = "new" | "chat" | "projects" | "project" | "artifacts" | "customize" | "code" | "speech" | "inbox" | "brain";
 // U6: mỗi mục có một địa chỉ #v=… để Back / liên kết / F5 mở đúng trang (đoạn chat vẫn dùng #c=, Cài đặt dùng #s=<tab>).
 // "project" (chi tiết một dự án) dùng chung #v=projects với danh sách dự án. "new"/"chat" không có #v=.
 const HASH_VIEW: Partial<Record<View, string>> = { projects: "projects", project: "projects", artifacts: "artifacts", inbox: "inbox", brain: "brain", code: "code", speech: "speech", customize: "skills" };
 const VIEW_OF_HASH: Record<string, View> = { projects: "projects", artifacts: "artifacts", inbox: "inbox", brain: "brain", code: "code", speech: "speech", skills: "customize" };
 import { AppCtx, chatFont, useApp, VOICE_LANG, VOICE_RATE, initials, readPref, reloadPrefs, resetPrefs, usePref, type Chat, type Msg, type Project } from "./store";
 import { IMAGE_PLANS, allowsModel, clampEffort, effortCap, effortsFor, isEffort, legacyModel, type Effort } from "./catalog";
-import { AUTO, autoPickKey, fitModel, modelName, modelsSettled, refreshModels, seedModels, useModels } from "./models";
+import { AUTO, fitModel, modelName, modelsSettled, refreshModels, seedModels, useModels } from "./models";
 import type { BootData } from "./bootdata";
 import { seedInboxCount } from "./inboxcount";
 import { loadMe, watchSession } from "./session";
@@ -85,16 +78,14 @@ import { adoptLegacyData, clearAccountData, ls, setUserScope, userScope } from "
 import { prefetchChats, useChatSync, useSyncStatus } from "./chatsync";
 import { shortName } from "./names";
 import { loadCaps, seedCaps, useCaps } from "./capsclient";
-import { ART_LABEL, artifactsAsCode, hasArtifacts, PUBLISHABLE, splitArtifacts, type ArtBlock } from "./artifacts";
-import { ArtPanelSkeleton, BootSkeleton, ChatListSkeleton, ThreadSkeleton } from "./skeleton";
+import { hasArtifacts, splitArtifacts, type ArtBlock } from "./artifacts";
+import { BootSkeleton } from "./skeleton";
 import { resolveArt, type ArtVersion } from "./vfs";
 import { criticKey, fixPatch, important, type CriticEntry, type Finding } from "./critic";
 import { chatHistory, continuable, mixExtra } from "./history";
 import { DockMixer } from "./mixer";
-import { ArtifactCard, OutputFiles, saveArtifacts } from "./artifactcard";
+import { saveArtifacts } from "./artifactcard";
 import { GEN_IMG_EVENT } from "./artgen";
-import type { Product } from "./filepreview";
-import type { OutFile } from "./llm";
 import { UsageRing } from "./usagering";
 import { cachedJson, clearJsonCache, fmtCount, HUB_DISCOVER, HUB_SEARCH, seedMeta, useStudios } from "./studios";
 import type { CzTab } from "./pluginsui";
@@ -104,16 +95,12 @@ import type { ComposioInfo, Conn } from "./connectorsui";
 // err: lần tải danh sách hỏng (mạng, máy chủ lỗi) — khác với "chưa có connector nào"; menu hiện nút Thử lại thay vì báo trống.
 type CxData = { connectors: Conn[]; composio?: ComposioInfo; err?: boolean };
 import { wantsIntro } from "./introflag";
-import { rowHeight } from "./rowsize";
 import { startWarmPing, warmChoice } from "./warmping";
 import { decodeSettingsTab, hashStep, settingsHash } from "./hashnav";
-type Say = (m: string) => void;
 
 // Trang đầu chỉ tải phần chat; các mục khác, hộp thoại và màn hình đăng nhập tải khi cần (rê chuột vào mục thì tải trước).
 const CodeView = lazyView(() => import("./codeview").then((m) => m.CodeView));
 const SpeechView = lazyView(() => import("./speech/view").then((m) => m.SpeechView));
-// Công cụ Speech ở thanh bên: danh mục công cụ chỉ tải khi đang ở Speech (blueprint B3.3).
-const SpeechSideTools = lazyView(() => import("./speech/sidetools").then((m) => m.SpeechSideTools), null);
 const BrainWorkspace = lazyView(() => import("./brainui").then((m) => m.BrainWorkspace));
 const InboxPage = lazyView(() => import("./tasksui").then((m) => m.InboxPage));
 const CustomizePage = lazyView(() => import("./pluginsui").then((m) => m.CustomizePage));
@@ -122,17 +109,8 @@ const ProjectsPage = lazyView(() => import("./projects").then((m) => m.ProjectsP
 const ProjectPage = lazyView(() => import("./projects").then((m) => m.ProjectPage));
 const Studio = lazyView(() => import("./studio").then((m) => m.Studio), null);
 const AppsGallery = lazyView(() => import("./appsui").then((m) => m.AppsGallery));
-const ProjMenu = lazyView(() => import("./projects").then((m) => m.ProjMenu), null);
-const PublishButton = lazyView(() => import("./appsui").then((m) => m.PublishButton), null);
-const BrowserHub = lazyView(() => import("./browserhub").then((m) => m.BrowserHub));
-// Khung xem tệp / artifact đang tải phần mã: khung chờ cùng chỗ, cùng bề rộng, có sẵn tên (cột chat không co giãn hai lần).
-const FilePanel = lazyView(() => import("./filepreview").then((m) => m.FilePanel), (p) => <ArtPanelSkeleton title={p.file.name} expanded={p.expanded} acts={3} />);
-const ArtifactPanel = lazyView(() => import("./artifactui").then((m) => m.ArtifactPanel), (p) => { const a = p.versions[p.index] ?? p.versions.at(-1); return <ArtPanelSkeleton title={a?.title} sub={a ? tr(ART_LABEL[a.type]) : undefined} tabs={!!a && a.type !== "code"} expanded={p.expanded} acts={6} />; });
 const ArtifactsGallery = lazyView(() => import("./artifactui").then((m) => m.ArtifactsGallery));
-const ProductSwitcher = lazyView(() => import("./filepreview").then((m) => m.ProductSwitcher), null);
-const ApprovalCard = lazyView(() => import("./connectorsui").then((m) => m.ApprovalCard), null);
 const ReconnectLink = lazyView(() => import("./connectorsui").then((m) => m.ReconnectLink), null);
-const SaveSkillChip = lazyView(() => import("./saveskill").then((m) => m.SaveSkillChip), null);
 const VoiceMode = lazyView(() => import("./voicemode").then((m) => m.VoiceMode), null);
 const CommandPalette = lazyView(() => import("./palette").then((m) => m.CommandPalette), null);
 const AuthComponent = lazyView(() => import("./auth").then((m) => m.AuthComponent), null);
@@ -143,16 +121,6 @@ if (typeof document !== "undefined" && !document.documentElement.dataset.sess) A
 const PRELOAD: Partial<Record<View, () => void>> = { artifacts: ArtifactsGallery.preload, code: CodeView.preload, speech: SpeechView.preload, brain: BrainWorkspace.preload, inbox: InboxPage.preload, customize: CustomizePage.preload, projects: ProjectsPage.preload };
 
 const MODELS: [string, string][] = [["Opus 5", "Mạnh nhất cho việc phức tạp"], ["Sonnet 5.5", "Cân bằng tốc độ và chất lượng"], ["Haiku 5", "Nhanh nhất cho việc đơn giản"]];
-
-function useClickAway(close: () => void) {
-  const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const h = (e: MouseEvent) => ref.current && !ref.current.contains(e.target as Node) && close();
-    document.addEventListener("mousedown", h);
-    return () => document.removeEventListener("mousedown", h);
-  });
-  return ref;
-}
 
 
 function MicPicker({ say, rec, onMic }: { say: Say; rec: boolean; onMic: () => void }) {
@@ -250,15 +218,6 @@ const STARTERS: Record<TplKey, { t: string; d: string; p: string }[]> = {
     { t: "Thông báo toàn công ty", d: "Rõ ràng, giọng văn thân thiện", p: "Viết thông báo toàn công ty về việc chuyển văn phòng sang địa điểm mới từ tháng sau, giọng văn thân thiện và rõ ràng." },
   ],
 };
-
-// Thư viện skill một câu trả lời đã dùng: chế độ studio người dùng chọn, hoặc thư viện model tự mở, kèm skill đã đọc.
-function LibChips({ libs, onOpen }: { libs: LibUse[]; onOpen: () => void }) {
-  return <div className="skill-used">{libs.map((l) => (
-    <button key={l.key} className="skill-chip lib-chip" onClick={onOpen} title={l.skills.join(", ")}>
-      <I.Plugins size={13} /><span>{tr(l.forced ? "Chế độ" : "Thư viện")} <b data-notr={l.key.startsWith("lib-") || undefined}>{l.key.startsWith("lib-") ? l.label : tr(l.label)}</b></span>
-      {l.skills.length > 0 && <span className="lib-sk" data-notr>{l.skills.slice(0, 3).join(", ")}{l.skills.length > 3 ? ` +${l.skills.length - 3}` : ""}</span>}
-    </button>))}</div>;
-}
 
 function ModelPicker({ model, setModel, prefix }: { model: string; setModel: (m: string) => void; prefix?: string }) {
   const [mm, setMm] = useState(false);
@@ -790,13 +749,6 @@ const Composer = memo(function Composer(p: {
   );
 });
 
-function ago(t: number): string {
-  const m = Math.floor((Date.now() - t) / 60000);
-  if (m < 1) return "bây giờ";
-  if (m < 60) return `${m} phút trước`;
-  return fmt(t);
-}
-
 // Lời chào và tên gọi tách riêng: lời chào dịch theo giao diện, tên giữ nguyên.
 function greeting(call: string): [string, string] {
   const n = call.trim().split(/\s+/).pop() || "";
@@ -807,7 +759,6 @@ function greeting(call: string): [string, string] {
   if (h < 18) return ["Chiều tốt lành", n];
   return ["Tối rồi, mọi thứ thế nào?", ""];
 }
-const fmt = (t: number) => new Date(t).toLocaleTimeString(locale(), { hour: "2-digit", minute: "2-digit" });
 
 function Toast({ text }: { text: string }) {
   const [shown, setShown] = useState(text);
@@ -823,182 +774,27 @@ function Toast({ text }: { text: string }) {
   return createPortal(<div className={`toast ${out ? "out" : ""}`} key={shown} role="status">{shown}</div>, document.body);
 }
 
-// Tin "Chỉ và sửa": hiện gọn phần tử đã chỉ (thẻ, nội dung, dòng mã) và yêu cầu; khối <point_edit> đầy đủ chỉ dành cho model.
-const PE_RE = /^([\s\S]*?)<point_edit>([\s\S]*?)<\/point_edit>\s*(?:Yêu cầu:\s*)?([\s\S]*)$/;
-function UserText({ text }: { text: string }) {
-  const m = PE_RE.exec(text);
-  if (!m) return <>{text}</>;
-  const get = (k: string) => new RegExp(`^${k}:[ \\t]*(.*)$`, "m").exec(m[2])?.[1]?.trim() ?? "";
-  const tag = /^<([a-zA-Z][\w-]*)/.exec(get("mã của phần tử"))?.[1];
-  const line = /^(\d+)-(\d+)$/.exec(get("dòng"));
-  const title = /“([^”]*)”/.exec(m[1])?.[1];
-  return (
-    <>
-      <span className="pe-msg" title={title}>
-        <I.Pointer size={12} />{tag && <code data-notr>{`<${tag}>`}</code>}<span data-notr>{get("nội dung đang hiện") || get("vị trí")}</span>
-        {line && <em>{tr("Dòng")} <span data-notr>{line[1] === line[2] ? line[1] : `${line[1]}–${line[2]}`}</span></em>}
-      </span>
-      {m[3].trim()}
-    </>
-  );
+// Phần cần cả danh sách hay nội dung đoạn chat (trang dự án, bảng lệnh ⌘K, hộp chia sẻ, chế độ giọng nói) tự đăng ký kho, chỉ trong lúc đang
+// mở: Home không đăng ký danh sách đoạn chat nên mẩu chữ đang chảy không vẽ lại cả trang (blueprint B2 bước 7).
+function ProjectsFor(p: Omit<React.ComponentProps<typeof ProjectsPage>, "chats">) { const chats = useChats(); return <ProjectsPage {...p} chats={chats} />; }
+function ProjectFor(p: Omit<React.ComponentProps<typeof ProjectPage>, "chats">) { const chats = useChats(); return <ProjectPage {...p} chats={chats} />; }
+function PaletteFor(p: Omit<React.ComponentProps<typeof CommandPalette>, "chats">) {
+  const chats = useChats();
+  const visible = useMemo(() => chats.filter((c) => !c.inc), [chats]);
+  return <CommandPalette {...p} chats={visible} />;
 }
-
-// Đoạn chat đang chờ người dùng duyệt công cụ: phải thấy được từ ngoài đoạn chat đó (cột bên, thông báo), không thì lượt treo tới hết giờ mà không ai biết.
-// Phiên Synchro Code ở thanh bên (danh sách lưu ở trình duyệt, đồng bộ với máy chủ khi bật).
-type CodeItem = { id: number; title: string; pinned?: boolean; archived?: boolean; state?: SessionState; reason?: string | null; running?: boolean; upd?: number; pr?: { number: number; url: string | null; state: string } | null };
-// Trạng thái phiên: đang chạy, cần bạn (hỏi lại / chờ duyệt / gặp lỗi / bị dừng), chờ xem lại (có thay đổi chưa commit / chưa push / PR chờ duyệt), xong.
-function CodeBadge({ c }: { c: CodeItem }) {
-  if (c.running && c.state !== "blocked") return <span className="cb run" title={tr("Đang chạy")} aria-label={tr("Đang chạy")}><span className="wl-spin" /></span>;
-  if (!c.state) return null;
-  const t = tr(c.state === "blocked" ? "Cần bạn" : c.state === "review" ? "Chờ xem lại" : "Xong");
-  return <span className={`cb ${c.state}`} title={c.reason ? `${t}: ${c.reason}` : t} aria-label={t} />;
+function ShareFor(p: Omit<React.ComponentProps<typeof ShareModal>, "chat">) { const chat = useChatStore(selectCurChat); return chat ? <ShareModal {...p} chat={chat} /> : null; }
+// Câu trả lời mới nhất của đoạn chat đang mở: chế độ giọng nói đọc nó (chỉ đăng ký khi đang mở chế độ này).
+function VoiceFor(p: Omit<React.ComponentProps<typeof VoiceMode>, "reply">) {
+  const lastAi = useChatStore((s) => selectCurChat(s)?.msgs.filter((m) => m.role === "ai").at(-1));
+  return <VoiceMode {...p} reply={lastAi ? { text: lastAi.failed ? tr(chatError(lastAi.err).text) : stripAppliedNotes(lastAi.text), time: lastAi.time ?? 0 } : null} />;
 }
-
-// Giờ gửi của một tin: dòng đã memo thì không tự vẽ lại, tin còn mới tự đếm "N phút trước" theo đồng hồ riêng.
-function When({ t }: { t: number }) {
-  const [, tick] = useState(0);
-  useEffect(() => {
-    if (Date.now() - t > 3600_000) return;
-    const x = setInterval(() => tick((n) => n + 1), 60_000);
-    return () => clearInterval(x);
-  }, [t]);
-  return <span className="when">{ago(t)}</span>;
+// Dải cảnh báo trình duyệt hết chỗ: tự đăng ký trạng thái đồng bộ (đổi sau mỗi lần đẩy lên máy chủ), không làm Home vẽ lại.
+function SyncWarn({ onExport }: { onExport: () => void }) {
+  const st = useSyncStatus();
+  if (!st.risk) return null;
+  return <div className="sync-warn" role="alert"><I.InfoCircle size={16} /><span>{tr("Trình duyệt đã hết chỗ và máy chủ chưa nhận được bản mới nhất của")} {st.pending + st.tooBig} {tr("mục. Đừng đóng trang trước khi xuất dữ liệu.")}</span><button className="btn" onClick={onExport}>{tr("Xuất dữ liệu")}</button></div>;
 }
-
-// Bảng artifact của đoạn chat: mỗi identifier một danh sách phiên bản; bản sửa (mode="patch") áp vào phiên bản trước thành bản đầy đủ (vfs.ts).
-type ArtScan = { map: Map<string, (ArtVersion & { msg: number })[]>; at: Record<number, { ident: string; v: number }[]> };
-const ART_EMPTY: ArtScan = { map: new Map(), at: {} };
-// Kết quả tách artifact theo từng tin: tin đã xong không đổi nên không tách lại mỗi khung hình.
-const artSegs = new WeakMap<Msg, ReturnType<typeof splitArtifacts>>();
-function scanArts(msgs: Msg[], from: number, base: ArtScan): ArtScan {
-  const map: ArtScan["map"] = new Map(), at = { ...base.at };
-  for (const [k, v] of base.map) map.set(k, [...v]);
-  for (let i = from; i < msgs.length; i++) {
-    const m = msgs[i];
-    if (m.role !== "ai" || !hasArtifacts(m.text)) continue;
-    let segs = artSegs.get(m);
-    if (!segs) { segs = splitArtifacts(m.text); artSegs.set(m, segs); }
-    for (const sg of segs) if (sg.kind === "art") {
-      const l = map.get(sg.art.ident) ?? [];
-      l.push({ ...resolveArt(l[l.length - 1], sg.art), msg: i });
-      map.set(sg.art.ident, l);
-      (at[i] = [...(at[i] ?? [])]).push({ ident: sg.art.ident, v: l.length - 1 });
-    }
-  }
-  return { map, at };
-}
-
-// Những gì một dòng tin cần từ trang (luôn là bản mới nhất, đọc qua ref): đổi hàm không làm cả danh sách vẽ lại.
-type RowCx = {
-  chat: Chat; chats: Chat[]; say: Say; fm: ReturnType<typeof useFileMenu>; arts: ArtScan; artOpen: boolean; artIdent?: string; artIndex: number;
-  openPlugins: () => void; openArt: (s: { chat: number; ident: string; v: number; follow: boolean }) => void; openFile: (f: OutFile) => void; send: (t: string) => void;
-  copy: (key: string, text: string) => void; speak: (key: string, text: string) => void; like: (i: number, v: 1 | -1) => void; retry: (avoid?: string) => void; openProviders: () => void; edit: (i: number, text: string) => void; model: string; switchModel: (key: string) => void;
-  // Tài khoản có hơn một model dùng được: mới hiện nút "Chạy lại bằng model khác" dưới câu trả lời của chế độ Tự động.
-  altModels: boolean;
-  // Rẽ nhánh: đoạn chat mới gồm các tin tới hết câu trả lời thứ i (đoạn chat gốc giữ nguyên).
-  fork: (i: number) => void;
-};
-// Thẻ lỗi của một lượt chat: khác hẳn câu trả lời thường, nói việc nên làm tiếp, lỗi thô để trong phần chi tiết.
-function ErrCard({ raw, onRetry, onProviders }: { raw?: string; onRetry?: () => void; onProviders: () => void }) {
-  // Thẻ nằm trong .ai-msg (bộ dịch trang bỏ qua) và trong dòng tin đã memo: tự vẽ lại khi từ điển về / đổi ngôn ngữ, không kẹt chữ tiếng Việt.
-  useLangReady();
-  const e = chatError(raw, (s) => isForeign(s, tr(s), getLang()));
-  return (
-    <div className="msg-err" role="alert">
-      <div className="msg-err-h"><I.M icon="WarningCircle" size={16} /><b>{tr("Câu trả lời chưa hoàn thành")}</b></div>
-      <p>{tr(e.text)}</p>
-      {e.detail && <details><summary>{tr("Chi tiết kỹ thuật")}</summary><code data-notr>{e.detail}</code></details>}
-      {(onRetry || e.act) && <div className="msg-err-a">{onRetry && <button className="btn dark" onClick={onRetry}><I.Retry size={14} />{tr("Thử lại")}</button>}{e.act === "providers" && <button className="btn" onClick={onProviders}>{tr("Mở Providers")}</button>}</div>}
-    </div>
-  );
-}
-/** Tin của AI không còn dòng ghi chú "đã áp dụng hướng dẫn" kiểu cũ (stripAppliedNotes); tin không đổi thì trả đúng đối tượng cũ. */
-const cleanAiMsg = (m: Msg): Msg => { if (m.role !== "ai") return m; const text = stripAppliedNotes(m.text); return text === m.text ? m : { ...m, text }; };
-// Một tin của đoạn chat. memo: mỗi khung hình chữ đang chảy chỉ vẽ lại tin cuối; đoạn chat dài không phải dựng lại toàn bộ tin nhắn.
-const MsgRow = memo(function MsgRow({ m: raw, i, last, busy, mark, art, inl, fileActive, copied, speaking, chatId, cx }: {
-  // lang: đổi ngôn ngữ thì dòng tin đã memo cũng dịch lại các nút và lời báo.
-  m: Msg; i: number; last: boolean; lang: string; busy: boolean; mark: boolean; art?: boolean; inl?: boolean; artSig: string; fileActive?: string; copied: boolean; speaking: boolean; chatId: number; cx: React.RefObject<RowCx | null>;
-}) {
-  // W1-08: câu trả lời cũ còn dòng ghi chú "đã áp dụng hướng dẫn" kèm trích dẫn trong chữ (đã lưu, đã đồng bộ): bỏ khi vẽ và khi sao chép,
-  // như lịch sử gửi model (history.ts) và bản chia sẻ (sharesnap.ts). Không có dòng đó thì giữ nguyên đối tượng tin.
-  const m = useMemo(() => cleanAiMsg(raw), [raw]);
-  // Đang sửa tin đã gửi: nội dung đang sửa; null là không sửa.
-  const [ed, setEd] = useState<string | null>(null);
-  const saveEd = () => { const t = ed?.trim(); if (!t) return; setEd(null); if (t !== m.text.trim()) cx.current!.edit(i, t); };
-  const c = cx.current!;
-  const { say, fm, arts } = c;
-  const key = `${chatId}-${i}`;
-  // Nguồn tìm web: số [n] trong câu trả lời trỏ tới chip thứ n (cites.tsx). Chỉ khi câu trả lời đã xong và có nguồn.
-  const citeId = key;
-  const cites = useMemo(() => (m.done && m.webs?.length ? { webs: m.webs, id: citeId } : null), [m.done, m.webs, citeId]);
-  const est = useMemo<React.CSSProperties>(() => ({ containIntrinsicSize: `auto ${rowHeight(m)}px` }), [m.text, m.files?.length, m.outs?.length]); // eslint-disable-line react-hooks/exhaustive-deps
-  return (<>
-    {mark && <div className="cx-mark" role="note"><I.Sparkle size={13} /><span>{tr("Các tin phía trên đã được nén thành bản tóm tắt; model nhận bản tóm tắt thay cho chúng.")}</span></div>}
-    {m.role === "user" ? (
-      <div className="user-wrap" style={est}>
-        {m.files && <div className="attach sent">{m.files.map((f, k) => <FileCard key={k} name={f} fid={m.fids?.[f]} onOpen={() => cx.current!.fm.show(f, m.fids?.[f])} onContextMenu={(e) => cx.current!.fm.open(e, f)} />)}</div>}
-        {m.steer && <span className="steer-tag">{tr("Nhắn thêm khi Synchro đang làm")}</span>}
-        {m.pick?.length ? <div className="u-picks">{m.pick.map((k) => <span key={k.id} className="skill-chip">{k.id.startsWith("lib-") ? <I.Plugins size={13} /> : <I.Scroll size={13} />}<span data-notr>{k.label}</span></span>)}</div> : null}
-        {ed === null ? <div className="user-msg"><UserText text={m.text} /></div> : (
-          <div className="u-edit">
-            <textarea autoFocus rows={Math.min(10, ed.split("\n").length + 1)} value={ed} aria-label={tr("Sửa tin nhắn")} onChange={(e) => setEd(e.target.value)} onFocus={(e) => e.target.setSelectionRange(e.target.value.length, e.target.value.length)}
-              onKeyDown={(e) => { if (e.key === "Escape") { e.stopPropagation(); e.nativeEvent.stopImmediatePropagation(); setEd(null); } else if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); saveEd(); } }} />
-            {!last && <div className="u-edit-n">{tr("Các tin phía sau sẽ được thay bằng câu trả lời mới.")}</div>}
-            <div className="u-edit-a"><button className="btn" onClick={() => setEd(null)}>{tr("Hủy")}</button><button className="btn dark" disabled={!ed.trim() || busy} onClick={saveEd}>{tr("Gửi lại")}</button></div>
-          </div>
-        )}
-        {ed === null && (
-          <div className="u-actions">
-            <button className="icon-btn" onClick={() => cx.current!.copy(key, m.text)} aria-label={tr("Sao chép")} data-tip={tr("Sao chép")}>{copied ? <I.M icon="Check" size={15} /> : <I.M icon="Copy" size={15} />}</button>
-            {!busy && !m.steer && !PE_RE.test(m.text) && <button className="icon-btn" onClick={() => setEd(m.text)} aria-label={tr("Sửa tin nhắn")} data-tip={tr("Sửa tin nhắn")}><I.Pencil size={15} /></button>}
-          </div>
-        )}
-      </div>
-    ) : (
-      <div style={est}>
-        <CiteCtx.Provider value={cites}><div className={`ai-msg${m.done ? "" : " ai-streaming"}`}>{m.tools?.length ? <div className="skill-used">{m.tools.map((n) => <span key={n} className="skill-chip tool-chip"><I.SetPlug size={13} /><span>{tr("Đã dùng")}</span><span data-notr>{toolChip(n)}</span></span>)}</div> : null}{m.libs?.length ? <LibChips libs={m.libs} onOpen={() => cx.current!.openPlugins()} /> : null}{m.skills?.length ? <div className="skill-used">{m.skills.map((n) => <span key={n} className="skill-chip"><I.Scroll size={13} />{tr("Đang dùng skill")}: {n}</span>)}</div> : null}{m.done ? <WorkSummary parts={m.parts} plan={m.plan} ms={m.dur} stopped={m.stopped} failed={m.failed || !!m.notice?.partial} render={(t) => <Markdown text={t} say={say} />} /> : m.parts?.length ? <WorkParts parts={m.parts} live onAnswer={answerAsk} render={(t) => <Markdown text={t} say={say} />} /> : null}{m.text ? (art && hasArtifacts(m.text) ? splitArtifacts(m.text).map((sg, k) => sg.kind === "text" ? <Markdown key={k} text={sg.text} say={say} viz={inl} live={m.done && last && !busy} streaming={!m.done} /> : (() => {
-          const pos = arts.at[i]?.find((x) => x.ident === sg.art.ident && arts.map.get(x.ident)?.[x.v]?.msg === i);
-          const total = arts.map.get(sg.art.ident)?.length ?? 1;
-          const v = pos?.v ?? 0;
-          const active = c.artOpen && c.artIdent === sg.art.ident && c.artIndex === v;
-          const full = arts.map.get(sg.art.ident)?.[v];
-          return <ArtifactCard key={k} art={full ?? sg.art} version={v + 1} total={total} active={active} fix={full?.fix} onRedo={last && !busy ? () => cx.current!.send(`${tr("Bản sửa")} “${full?.title ?? sg.art.ident}” ${tr("không áp được. Hãy viết lại toàn bộ artifact này (không dùng mode=\"patch\"), giữ các thay đổi tôi vừa yêu cầu.")}`) : undefined} onOpen={() => cx.current!.openArt({ chat: chatId, ident: sg.art.ident, v, follow: false })} />;
-        })()) : <Markdown text={hasArtifacts(m.text) ? artifactsAsCode(m.text) : m.text} say={say} viz={inl} live={m.done && last && !busy} streaming={!m.done} />) : null}{m.failed ? <ErrCard raw={m.err} onRetry={last && !busy ? () => cx.current!.retry() : undefined} onProviders={() => cx.current!.openProviders()} /> : null}{m.done && last ? <ConnCards parts={m.parts} text={m.text} /> : null}{!m.done && m.plan?.length ? <PlanCard plan={m.plan} live /> : null}{!m.done ? <WorkStatus label={m.parts?.some((p) => p.k === "ask" && p.state === "wait") ? tr("Đang chờ bạn duyệt") : m.prog} since={m.time} steps={stepsOf(m.parts)} /> : null}{m.outs?.length ? <OutputFiles files={m.outs} onOpen={(f) => cx.current!.openFile(f)} active={fileActive} /> : null}</div></CiteCtx.Provider>
-        {m.done && m.stopped && <div className="msg-stopped"><I.Stop size={11} />{tr("Đã dừng · giữ lại phần đã viết")}</div>}
-        {m.done && !m.failed && (m.pjApplied || m.insApplied) ? <div className="msg-applied">{m.pjApplied && <span className="skill-chip"><I.Folder size={13} />{tr("Đã áp dụng ngữ cảnh dự án")}</span>}{m.insApplied && <span className="skill-chip"><I.User size={13} />{tr("Đã áp dụng hướng dẫn cá nhân")}</span>}</div> : null}
-        {m.done && m.webs?.length ? <SourceChips webs={m.webs} id={citeId} /> : null}
-        {m.done && m.notice && ((m.notice.text && !m.failed) || m.notice.work || m.notice.at || m.notice.tried?.length || m.notice.switchTo) ? (
-          <div className="msg-notice" role="status">
-            {m.notice.text && !m.failed && <p>{tr(m.notice.text)}</p>}
-            {m.notice.work && <p>{tr("Model đã làm một phần việc nên Synchro không tự chạy lại, để tránh làm hai lần.")}</p>}
-            {m.notice.at && m.notice.at > Date.now() ? <p data-notr>{resetAt(m.notice.at, getLang())}</p> : null}
-            {m.notice.tried?.length ? <p data-notr>{tf("Đã thử: {list}", { list: m.notice.tried.join(", ") })}</p> : null}
-            {m.notice.switchTo && last && !busy ? (
-              <div className="msg-notice-act">
-                <button className="btn dark" onClick={() => cx.current!.switchModel(m.notice!.switchTo!.model)} data-notr>{c.model === AUTO ? tr("Thử lại bằng Tự động") : tf("Dùng model khác: {name}", { name: m.notice.switchTo.name })}</button>
-                {c.model !== AUTO && <button className="lnk" onClick={() => cx.current!.switchModel(AUTO)}>{tr("Dùng Tự động")}</button>}
-              </div>
-            ) : null}
-          </div>
-        ) : null}
-        {m.done && !m.failed && (
-          <div className="actions in">
-            <button className="icon-btn" onClick={() => cx.current!.copy(key, m.text)} aria-label="Sao chép">{copied ? <I.M icon="Check" size={16} /> : <I.M icon="Copy" size={16} />}</button>
-            <button className={`icon-btn ${speaking ? "like-on" : ""}`} onClick={() => cx.current!.speak(key, m.text)} aria-label="Đọc to"><I.Speaker size={16} /></button>
-            <button className={`icon-btn ${m.like === 1 ? "like-on" : ""}`} onClick={() => cx.current!.like(i, 1)} aria-label="Hữu ích" aria-pressed={m.like === 1}><I.ThumbUp size={16} /></button>
-            <button className={`icon-btn ${m.like === -1 ? "like-on" : ""}`} onClick={() => cx.current!.like(i, -1)} aria-label="Không hữu ích" aria-pressed={m.like === -1}><I.ThumbDown size={16} /></button>
-            {last && <button className="icon-btn" onClick={() => cx.current!.retry()} aria-label="Thử lại"><I.Retry size={16} /></button>}
-            {!c.chat.inc && <button className="icon-btn" onClick={() => cx.current!.fork(i)} aria-label={tr("Rẽ nhánh từ đây")} data-tip={tr("Rẽ nhánh từ đây")}><I.Branch size={15} /></button>}
-            {m.via && <span className="via" title={tr("Chế độ Tự động đã chọn model này")} data-notr><ModelLogo k={m.via} size={14} /><span className="via-t">{m.viaTask && autoPickKey(m.viaTask) ? tf(autoPickKey(m.viaTask), { model: modelName(m.via) }) : modelName(m.via)}</span></span>}
-            {m.via && last && !busy && c.altModels && <button className="via via-alt" onClick={() => cx.current!.retry(m.via)} title={tr("Vẫn để Tự động, chỉ không dùng model vừa trả lời")}><I.Retry size={12} />{tr("Chạy lại bằng model khác")}</button>}
-            <When t={m.time} />
-          </div>
-        )}
-        {m.done && !m.failed && last && !busy && <SaveSkillChip chat={c.chat} all={c.chats} say={say} />}
-      </div>
-    )}
-  </>);
-});
 
 export default function Home({ boot }: { boot?: BootData | null }) {
   countRender("Home");
@@ -1052,15 +848,19 @@ export default function Home({ boot }: { boot?: BootData | null }) {
   useEffect(() => startWarmPing(), []);
   // Đoạn chat, dự án, đoạn chat đang mở, lượt đang chạy, tin chờ gửi nằm ở kho app/chatstore.client.ts (blueprint B2).
   // Các hàm đặt giá trị dùng như setState của React và không bao giờ đổi, nên lấy thẳng từ kho. Home đọc qua useChatState (cùng nhịp vẽ với useState).
-  const chats = useChatState((s) => s.chats);
+  // Home không đăng ký cả danh sách đoạn chat (blueprint B2 bước 7): mẩu chữ đang chảy chỉ vẽ lại khung đoạn chat (Thread.tsx).
+  // Home cần gì về đoạn chat đang mở thì lấy phần không có tin nhắn (meta); hàm xử lý đọc bản mới nhất từ kho lúc chạy (chatsRef, curChat).
   const projects = useChatState((s) => s.projects);
   const cur = useChatState((s) => s.cur);
+  const meta = useChatState(selectChatMeta, sameFields);
   const { setChats, setProjects, setCur, setRunning, setQueued, setBusy: setBusyOf, patch } = useChatStore.getState();
+  const chatsRef = useMemo(() => ({ get current() { return useChatStore.getState().chats; } }), []);
+  const curChat = () => selectCurChat(useChatStore.getState());
   // Home gắn lại sau khi đã gỡ khỏi trang: kho về trạng thái ban đầu như useState trước đây, không mang theo dấu "đang chạy", đoạn chat đang mở
   // của lần trước. Chỉ lần gắn thật (ref mới): Fast Refresh khi sửa mã và lần chạy hiệu ứng thứ hai của StrictMode giữ ref nên không xóa gì,
   // như useState được giữ. Đặt trước mọi hiệu ứng ghi vào kho (khởi động, tải đoạn chat đã lưu).
   const freshMount = useRef(true);
-  useEffect(() => { if (!freshMount.current) return; freshMount.current = false; useChatStore.getState().reset(); }, []);
+  useEffect(() => { if (!freshMount.current) return; freshMount.current = false; useChatStore.getState().reset(); resetUi(); }, []);
   const curRef = useRef(cur);
   curRef.current = cur;
   // Công cụ connector đang chờ người dùng duyệt: thẻ hiện cuối cuộc trò chuyện đang trả lời.
@@ -1090,10 +890,8 @@ export default function Home({ boot }: { boot?: BootData | null }) {
   const fm = useFileMenu((m) => say(m));
   const [modal, setModal] = useState<null | "settings" | "lang" | "proj" | "search" | "share" | "upgrade" | "keys" | "logout" | "upload">(null);
   const [userMenu, setUserMenu] = useState(false);
-  const [chatMenu, setChatMenu] = useState<number | null>(null);
   const [codeList, setCodeList] = usePref<CodeItem[]>("codeList", []);
   const codeListRef = useRef(codeList); codeListRef.current = codeList;
-  const [archOpen, setArchOpen] = useState(false);
   // Cài đặt Synchro Code: không hỏi lúc mở trang (blueprint A3.5). Hỏi khi mở Code, hoặc lúc trang đã rảnh nếu máy này có phiên Code
   // (đồng bộ danh sách phiên, trạng thái đang chạy ở thanh bên vẫn như trước).
   const [cpWant, setCpWant] = useState(false);
@@ -1124,22 +922,10 @@ export default function Home({ boot }: { boot?: BootData | null }) {
   };
   const [codeCur, setCodeCur] = useState<number | null>(null);
   const [codeEmpty, setCodeEmpty] = useState(false);
-  const [codeOpen, setCodeOpen] = useState(true);
   const [spTool, setSpTool] = usePref<SpeechTool>("spTool", "home");
   const [spOpen, setSpOpen] = usePref("spOpen", false);
   // Rời Speech sang mục khác thì tự thu gọn danh sách công cụ.
   useEffect(() => { if (view !== "speech") setSpOpen(false); }, [view]); // eslint-disable-line react-hooks/exhaustive-deps
-  // Công cụ Speech ở thanh bên hiện theo gói ElevenLabs (chỉ quét khi đã mở Speech).
-  const spPlan = useSpeechPlan(view === "speech" || spOpen);
-  const [codeRen, setCodeRen] = useState<number | null>(null);
-  const [codeMenu, setCodeMenu] = useState<number | null>(null);
-  const [pickProj, setPickProj] = useState(false);
-  // Thẻ: khung "Gắn thẻ" đang mở trong menu ⋮ / menu tiêu đề; thẻ đang lọc ở thanh bên (null: tất cả).
-  const [pickTag, setPickTag] = useState(false);
-  const [tagFilter, setTagFilter] = useState<string | null>(null);
-  const [pjClosed, setPjClosed] = usePref<Record<number, boolean>>("pjClosed", {});
-  const [titleMenu, setTitleMenu] = useState(false);
-  const [renaming, setRenaming] = useState<number | null>(null);
   const [delId, setDelId] = useState<number | null>(null);
   const [delArts, setDelArts] = useState(false);
   const [delProj, setDelProj] = useState<number | null>(null);
@@ -1302,9 +1088,7 @@ export default function Home({ boot }: { boot?: BootData | null }) {
   useEffect(() => watchSession(() => { if (signedIn.current) setExpired(true); }), []);
   useEffect(() => { try { if (me) localStorage.setItem("signedIn", "1"); else if (me === null) localStorage.removeItem("signedIn"); } catch {} }, [me]);
   const [editProj, setEditProj] = useState<number | null>(null);
-  const [sideProj, setSideProj] = useState<number | null>(null);
   const toastT = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const endRef = useRef<HTMLDivElement>(null);
   const userRef = useRef<HTMLDivElement>(null);
 
   const say = useCallback((m: string) => {
@@ -1383,17 +1167,17 @@ export default function Home({ boot }: { boot?: BootData | null }) {
     window.addEventListener("synchro:providers", open);
     return () => window.removeEventListener("synchro:providers", open);
   }, []);
+  const retryRef = useRef<(avoid?: string) => void>(() => {});
   // Thẻ đếm ngược của connector bị giới hạn tốc độ: hết giờ, nút "Thử lại ngay" gửi lại tin vừa rồi của đoạn chat đang mở.
   useEffect(() => {
-    const again = () => rowCx.current?.retry();
+    const again = () => retryRef.current();
     window.addEventListener("synchro:retry", again);
     return () => window.removeEventListener("synchro:retry", again);
   }, []);
   // Đoạn chat và dự án theo tài khoản: đồng bộ với máy chủ, chuyển dần từ trình duyệt (chatsync.ts).
-  const chatSync = useChatSync({ uid: me?.id ?? null, loaded, chats, projects, running, setChats, setProjects });
+  const chatSync = useChatSync({ uid: me?.id ?? null, loaded, running, setChats, setProjects });
   const chatSyncRef = useRef(chatSync);
   chatSyncRef.current = chatSync;
-  const syncSt = useSyncStatus();
   // Lưu đoạn chat: gộp ghi, không ghi toàn bộ lịch sử mỗi khung hình lúc chữ đang chảy. Có tin mới, lượt chạy mới thì ghi gần như ngay
   // (tải lại trang vẫn nối được vào lượt đó); đang chảy chữ thì vài giây một lần; xong lượt, rời trang thì ghi ngay.
   const saveT = useRef<{ t: ReturnType<typeof setTimeout>; at: number } | null>(null);
@@ -1407,13 +1191,18 @@ export default function Home({ boot }: { boot?: BootData | null }) {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const flushDirty = useCallback(() => { if (saveT.current) flushChats(); }, [flushChats]);
   flushDirtyRef.current = flushDirty;
+  // Theo dõi kho thay cho hiệu ứng [chats] (Home không vẽ lại theo từng mẩu chữ nữa): mỗi lần danh sách đổi thì hẹn lần ghi như trước.
   useEffect(() => {
     if (!loaded) return;
-    const d = saveSig() !== savedSig.current ? 300 : running.size ? 5000 : 800, at = Date.now() + d;
-    if (saveT.current && saveT.current.at <= at) return;
-    if (saveT.current) clearTimeout(saveT.current.t);
-    saveT.current = { t: setTimeout(flushChats, d), at };
-  }, [chats, loaded]); // eslint-disable-line react-hooks/exhaustive-deps
+    const schedule = () => {
+      const d = saveSig() !== savedSig.current ? 300 : useChatStore.getState().running.size ? 5000 : 800, at = Date.now() + d;
+      if (saveT.current && saveT.current.at <= at) return;
+      if (saveT.current) clearTimeout(saveT.current.t);
+      saveT.current = { t: setTimeout(flushChats, d), at };
+    };
+    schedule();
+    return useChatStore.subscribe((st, prev) => { if (st.chats !== prev.chats) schedule(); });
+  }, [loaded]); // eslint-disable-line react-hooks/exhaustive-deps
   const runN = running.size, lastRunN = useRef(runN);
   useEffect(() => { if (runN < lastRunN.current) flushDirty(); lastRunN.current = runN; }, [runN, flushDirty]);
   const wasRunning = useRef<ReadonlySet<number>>(running);
@@ -1449,20 +1238,21 @@ export default function Home({ boot }: { boot?: BootData | null }) {
     document.querySelectorAll('meta[name="theme-color"]').forEach((m) => m.setAttribute("content", dark ? "#111210" : "#EEECE5"));
   }, [theme]);
 
-  const chat = chats.find((c) => c.id === cur);
   // Đoạn chat đang mở nằm trong địa chỉ trang (#c=<mã>, không tới máy chủ): F5 mở lại đúng đoạn đó, kể cả khi câu trả lời còn đang chạy (lượt tự nối lại bên dưới).
   // Trước đây tải lại luôn về trang chủ, trông như mất câu trả lời nên người dùng gửi lại và tốn hạn mức. Đoạn chat ẩn danh không ghi vào địa chỉ.
   const openWant = useRef<number | null>(typeof location === "undefined" ? null : Number(/^#c=(\d{1,16})$/.exec(location.hash)?.[1] ?? 0) || null);
+  // Chỉ trong lúc chờ đoạn chat của #c= (lúc mở app): Home theo danh sách đoạn chat để thử lại mỗi lần danh sách đổi; xong thì thôi theo.
+  const waitChats = useChatState((s) => (openWant.current === null ? null : s.chats));
   useEffect(() => {
     const id = openWant.current;
     if (id === null || !loaded || !me) return;
     // Người dùng đã tự đi nơi khác trong lúc chờ.
     if (view !== "new" || cur !== null) { openWant.current = null; return; }
-    if (chats.some((c) => c.id === id && !c.inc)) { openWant.current = null; setCur(id); setView("chat"); return; }
+    if (chatsRef.current.some((c) => c.id === id && !c.inc)) { openWant.current = null; setCur(id); setView("chat"); return; }
     // Chưa có ở trình duyệt này: đợi đồng bộ về một lúc (thiết bị mới), không có thì thôi.
     const t = setTimeout(() => { if (openWant.current === id) { openWant.current = null; history.replaceState(null, "", location.pathname + location.search); } }, 8000);
     return () => clearTimeout(t);
-  }, [chats, loaded, me, view, cur]);
+  }, [waitChats, loaded, me, view, cur]); // eslint-disable-line react-hooks/exhaustive-deps
   // U6: mục bị tắt theo quyền (feature flags) coi như địa chỉ lạ — không ghi vào #v= và không mở khi gặp link #v= đó.
   const viewAllowed = useCallback((v: View): boolean => {
     if (!me) return true; // chưa biết quyền: cho qua, lớp bảo vệ ở trên sẽ chỉnh lại khi biết
@@ -1477,7 +1267,7 @@ export default function Home({ boot }: { boot?: BootData | null }) {
   // Địa chỉ mà trạng thái hiện tại nên có: Cài đặt (#s=) ưu tiên, rồi đoạn chat không ẩn danh (#c=), rồi mục (#v=).
   const curHash = (): string => {
     if (modal === "settings") return settingsHash(settingsTab);
-    if (view === "chat" && cur !== null && chat && !chat.inc) return `#c=${cur}`;
+    if (view === "chat" && cur !== null && meta && !meta.inc) return `#c=${cur}`;
     const h = HASH_VIEW[view];
     return h && viewAllowed(view) ? `#v=${h}` : "";
   };
@@ -1513,7 +1303,7 @@ export default function Home({ boot }: { boot?: BootData | null }) {
     const url = location.pathname + location.search + want;
     if (step === "push") { if (want.startsWith("#s=")) settingsFrom.current = cur; history.pushState(null, "", url); }
     else history.replaceState(null, "", url);
-  }, [view, cur, chat?.inc, modal, settingsTab, loaded, bootDone, me, speechReady, caps.art]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [view, cur, meta?.inc, modal, settingsTab, loaded, bootDone, me, speechReady, caps.art]); // eslint-disable-line react-hooks/exhaustive-deps
   // Địa chỉ → trạng thái: nút Back / Forward (popstate). Đóng Cài đặt khi địa chỉ không còn là #s=.
   useEffect(() => {
     const onPop = () => {
@@ -1530,16 +1320,13 @@ export default function Home({ boot }: { boot?: BootData | null }) {
     return () => window.removeEventListener("popstate", onPop);
   }, [viewAllowed]);
   // Đoạn chat đang chờ bạn duyệt công cụ: ở ngoài đoạn chat đó vẫn phải thấy, quá 10 phút không trả lời thì công cụ bị từ chối và model làm tiếp.
+  // So bằng chuỗi mã (selectNeedKey): chữ đang chảy không đổi chuỗi nên Home không vẽ lại.
+  const needKey = useChatState(selectNeedKey);
   const needYou = useMemo(() => {
-    const out = new Set<number>();
-    for (const c of chats) {
-      if (!running.has(c.id)) continue;
-      const m = c.msgs[c.msgs.length - 1];
-      if (m?.role === "ai" && !m.done && m.parts?.some((p) => p.k === "ask" && p.state === "wait")) out.add(c.id);
-    }
+    const out = new Set<number>(needKey ? needKey.split(",").map(Number) : []);
     if (approval?.chat !== null && approval?.chat !== undefined) out.add(approval.chat);
     return out;
-  }, [chats, running, approval]);
+  }, [needKey, approval]);
   const needSeen = useRef<ReadonlySet<number>>(new Set());
   // Lời báo cho trình đọc màn hình: câu trả lời xong, cần duyệt. Nằm ngoài chữ đang chảy nên không đọc từng chữ.
   const [sayAt, setSayAt] = useState("");
@@ -1556,21 +1343,18 @@ export default function Home({ boot }: { boot?: BootData | null }) {
   }, [needYou]); // eslint-disable-line react-hooks/exhaustive-deps
   // Tiêu đề thẻ trình duyệt theo màn hình đang xem: nhiều thẻ vẫn phân biệt được, trình đọc màn hình có tín hiệu đổi trang. Đoạn chat ẩn danh không lộ tên lên thẻ.
   const VIEW_TITLE: Partial<Record<View, string>> = { projects: "Dự án", project: "Dự án", artifacts: "Artifacts", customize: "Kho kỹ năng", code: "Code", speech: "Speech", inbox: "Hộp thư", brain: "Bộ não" };
-  const tabName = view === "chat" ? (chat && !chat.inc ? chat.title : "") : tr(VIEW_TITLE[view] ?? "");
+  const tabName = view === "chat" ? (meta && !meta.inc ? meta.title : "") : tr(VIEW_TITLE[view] ?? "");
   useEffect(() => {
     const n = needYou.size;
     document.title = `${n ? `(${n}) ` : ""}${tabName ? `${tabName} · ` : ""}Synchro`;
   }, [needYou.size, tabName]);
-  // Artifact của cuộc trò chuyện đang mở: mỗi identifier là một artifact, mỗi lần model viết lại là một phiên bản.
-  const [artSel, setArtSel] = useState<{ chat: number; ident: string; v: number; follow: boolean } | null>(null);
-  const [artFull, setArtFull] = useState(false);
+  // Khung bên cạnh đoạn chat (artifact, tệp, trình duyệt) nằm ở usePanelUi: khung đoạn chat (Thread.tsx) vẽ và báo lại khung nào đang mở.
+  const { setArtSel, setFileSel, setBrwFor, setBrwPrefer, setArtFull } = usePanelUi.getState();
+  const panel = usePanelUi((s) => s.panel), prodN = usePanelUi((s) => s.prodN), artFull = usePanelUi((s) => s.artFull), brwFor = usePanelUi((s) => s.brwFor);
   // Trình duyệt cạnh đoạn chat (như khung trình duyệt của Synchro Code): nút quả địa cầu ở đầu mọi đoạn chat mở / đóng khung;
   // khung tự mở khi Synchro bắt đầu dùng trình duyệt (của Synchro, hoặc Chrome của bạn qua tiện ích), và đoạn chat đó được đánh
   // dấu (chấm trên nút quả địa cầu). brwFor: đoạn chat đang mở khung.
-  const [brwFor, setBrwFor] = useState<number | null>(null);
-  const [brw, setBrw] = useState<{ available: boolean; reason?: string; control?: boolean; ext?: { allowed: boolean; paired: boolean }; target?: "synchro" | "user" } | null>(null);
-  // Synchro vừa bắt đầu làm ở trình duyệt nào (của Synchro / Chrome của bạn): khung trình duyệt chuyển sang đó.
-  const [brwPrefer, setBrwPrefer] = useState<{ v: "synchro" | "user"; n: number } | null>(null);
+  const [brw, setBrw] = useState<BrwState | null>(null);
   // Trạng thái trình duyệt chỉ cần cho nút / khung trình duyệt ở đoạn chat đang mở: không hỏi lúc mở trang (blueprint A3.5), hỏi một lần
   // cho mỗi tài khoản khi lần đầu mở một đoạn chat hay khi khung trình duyệt được mở.
   const brwAsked = useRef("");
@@ -1580,6 +1364,7 @@ export default function Home({ boot }: { boot?: BootData | null }) {
     brwAsked.current = me.id;
     fetch("/api/browser").then((r) => (r.ok ? r.json() : null)).then((j) => j && setBrw(j)).catch(() => { brwAsked.current = ""; });
   }, [me?.id, needBrw]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Synchro vừa bắt đầu làm ở trình duyệt nào (của Synchro / Chrome của bạn): khung trình duyệt chuyển sang đó.
   const openBrowser = (ev: RunEv, chatId: number) => {
     if (ev.kind !== "ui" || !ev.text.startsWith("browser")) return;
     setBrwPrefer((p) => ({ v: ev.text === "browser:user" ? "user" : "synchro", n: (p?.n ?? 0) + 1 }));
@@ -1589,35 +1374,9 @@ export default function Home({ boot }: { boot?: BootData | null }) {
     setArtSel(null); setFileSel(null); setBrwFor(chatId);
   };
   const brwOk = !!(brw?.available || brw?.ext?.allowed);
-  // Tệp do code tạo đang xem trước (cùng khung bên cạnh với artifact; mở cái này thì đóng cái kia).
-  const [fileSel, setFileSel] = useState<{ chat: number; file: OutFile } | null>(null);
-  const artDismissed = useRef("");
-  // Quét theo tiền tố: các tin trước tin cuối không đổi trong lúc chữ đang chảy, chỉ tin cuối phải tách và áp bản sửa lại.
-  const artBase = useRef<{ msgs: Msg[]; scan: ArtScan } | null>(null);
-  const arts = useMemo(() => {
-    if (!chat || !caps.art) return ART_EMPTY;
-    const ms = chat.msgs, n = Math.max(0, ms.length - 1), b = artBase.current;
-    if (!b || b.msgs.length !== n || b.msgs.some((m, k) => m !== ms[k])) artBase.current = { msgs: ms.slice(0, n), scan: scanArts(ms.slice(0, n), 0, ART_EMPTY) };
-    return scanArts(ms, n, artBase.current!.scan);
-  }, [chat?.msgs, caps.art]); // eslint-disable-line react-hooks/exhaustive-deps
-  // Đoạn chat có artifact: tải sẵn khung xem để bấm thẻ là mở ngay.
-  useEffect(() => { if (arts.map.size) ArtifactPanel.preload(); }, [arts.map.size]);
-  const artVersions = artSel && chat && artSel.chat === chat.id ? arts.map.get(artSel.ident) ?? null : null;
-  const artIndex = artVersions ? (artSel!.follow ? artVersions.length - 1 : Math.min(artSel!.v, artVersions.length - 1)) : 0;
-  const artOpen = view === "chat" && !!artVersions?.length;
-  // Câu trả lời đang viết có artifact: tự mở khung xem và đi theo phiên bản mới nhất (trừ khi người dùng vừa đóng).
-  const lastIdx = chat ? chat.msgs.length - 1 : -1;
-  const liveArt = chat && lastIdx >= 0 && !chat.msgs[lastIdx].done ? arts.at[lastIdx]?.at(-1) : undefined;
-  useEffect(() => {
-    if (!chat || !liveArt) return;
-    const key = `${chat.id}-${lastIdx}-${liveArt.ident}`;
-    if (artDismissed.current === key) return;
-    if (artSel?.chat !== chat.id || artSel.ident !== liveArt.ident || !artSel.follow) { setFileSel(null); setArtSel({ chat: chat.id, ident: liveArt.ident, v: liveArt.v, follow: true }); }
-  }, [chat?.id, lastIdx, liveArt?.ident, liveArt?.v]); // eslint-disable-line react-hooks/exhaustive-deps
-  const fileOpen = view === "chat" && !!chat && fileSel?.chat === chat.id && !artOpen;
-  const brwShow = view === "chat" && !!chat && brwFor === chat.id && !artOpen && !fileOpen && brwOk;
-  const panelOpen = artOpen || fileOpen || brwShow;
-  useEffect(() => { if (!panelOpen) setArtFull(false); }, [panelOpen]);
+  const panelOpen = view === "chat" && panel !== null;
+  const brwShow = view === "chat" && panel === "brw";
+  useEffect(() => { if (!panelOpen) setArtFull(false); }, [panelOpen]); // eslint-disable-line react-hooks/exhaustive-deps
   // Laptop: khung xem mở cạnh chat thì ô soạn tin từng bị ép còn vài chục px. Tự thu bảng đoạn chat (thanh điều hướng vẫn còn) cho đủ chỗ, đóng khung thì mở lại.
   const sideAuto = useRef(false);
   useEffect(() => {
@@ -1625,91 +1384,6 @@ export default function Home({ boot }: { boot?: BootData | null }) {
     if (panelOpen && open && window.innerWidth < 1360) { sideAuto.current = true; setOpen(false); }
     else if (!panelOpen && sideAuto.current) { sideAuto.current = false; setOpen(true); }
   }, [panelOpen]); // eslint-disable-line react-hooks/exhaustive-deps
-  const openArt = (s: { chat: number; ident: string; v: number; follow: boolean }) => { setFileSel(null); setArtSel(s); };
-  const openFile = (f: OutFile) => { if (!chat) return; setArtSel(null); setFileSel({ chat: chat.id, file: f }); };
-  // Mọi sản phẩm của đoạn chat (artifact bản mới nhất, tệp code đã tạo), để chuyển nhanh trong khung xem trước.
-  const products: Product[] = !chat ? [] : [
-    ...[...arts.map.entries()].map(([ident, vs]) => { const a = vs[vs.length - 1]; return { key: `a:${ident}`, title: a.title, type: a.type, content: a.content, open: () => openArt({ chat: chat.id, ident, v: vs.length - 1, follow: false }) }; }),
-    ...chat.msgs.flatMap((m) => m.outs ?? []).filter((f) => !f.skipped).map((f) => ({ key: `f:${f.id}`, title: f.name, file: f, open: () => openFile(f) })),
-  ];
-  const activeProduct = artOpen && artSel ? `a:${artSel.ident}` : fileOpen && fileSel ? `f:${fileSel.file.id}` : "";
-  const closeArt = () => {
-    if (chat && liveArt) artDismissed.current = `${chat.id}-${lastIdx}-${liveArt.ident}`;
-    setArtSel(null);
-  };
-  const threadRef = useRef<HTMLDivElement>(null);
-  // Khoảng đệm cuối đoạn chat và nút "cuộn xuống" theo chiều cao thật của khối soạn tin (thẻ chế độ, tin chờ gửi xếp trên ô soạn):
-  // tin cuối không bao giờ nằm dưới các thẻ đó.
-  // Theo chính phần tử: khối soạn tin có thể gắn lại mà view, chat không đổi (phần tải sau, khung bắt lỗi), lúc đó bộ theo dõi cũ nằm trên phần tử đã mất.
-  const [dockEl, dockRef] = useState<HTMLDivElement | null>(null);
-  useEffect(() => {
-    const d = dockEl, host = d?.parentElement;
-    if (!d || !host) return;
-    // Cột chat hẹp (khung artifact mở, màn hình nhỏ): data-narrow bỏ dòng ghi chú dưới ô soạn tin để nó không vỡ nhiều dòng.
-    const ro = new ResizeObserver(() => {
-      host.style.setProperty("--dock-h", `${Math.round(d.getBoundingClientRect().height)}px`);
-      const w = (d.querySelector(".composer") as HTMLElement | null)?.offsetWidth ?? d.clientWidth;
-      if (w < 600) d.dataset.narrow = ""; else delete d.dataset.narrow;
-      // Hẹp hơn nữa: ô nhập chiếm một dòng riêng, các nút xuống dòng dưới; ô nhập không bao giờ bị ép còn vài ký tự.
-      if (w < 520) d.dataset.tight = ""; else delete d.dataset.tight;
-    });
-    ro.observe(d);
-    return () => { ro.disconnect(); host.style.removeProperty("--dock-h"); };
-  }, [dockEl]);
-  const stick = useRef(true);
-  const lastTop = useRef(0);
-  const [showDown, setShowDown] = useState(false);
-  // Tự cuộn theo chữ đang viết chỉ khi người dùng đang đứng ở cuối. Kéo lên dù chỉ hơn 5px (lăn chuột, vuốt, kéo thanh cuộn, phím) là dừng
-  // tự cuộn ngay, hiện nút nổi để quay xuống; trước đây phải lên quá 120px mới dừng nên đọc phần trên vẫn bị kéo tuột xuống.
-  // Nội dung co lại (thu gọn khối, ảnh nở xong) làm trình duyệt hạ scrollTop nhưng vẫn sát đáy: xét khoảng cách tới đáy trước.
-  const onScroll = () => {
-    const el = threadRef.current;
-    if (!el) return;
-    const top = el.scrollTop, gap = el.scrollHeight - top - el.clientHeight;
-    if (gap <= 6) stick.current = true;
-    else if (top < lastTop.current - 5) stick.current = false;
-    lastTop.current = top;
-    setShowDown(!stick.current && gap > 6);
-  };
-  // Lăn chuột / vuốt lên, phím lên trang: dừng tự cuộn ngay lúc đó (sự kiện scroll tới sau một khung hình, chữ mới có thể kịp kéo xuống trước).
-  const userUp = () => { const el = threadRef.current; if (el && el.scrollTop > 0) stick.current = false; };
-  const touchY = useRef(0);
-  // Kéo về cuối khi đang bám đáy. Người dùng vừa kéo lên mà sự kiện scroll chưa kịp tới (chữ đang chảy): coi là đã rời đáy, không kéo lại.
-  const follow = (el: HTMLElement) => {
-    if (!stick.current) return;
-    if (el.scrollTop < lastTop.current - 5 && el.scrollHeight - el.scrollTop - el.clientHeight > 6) { stick.current = false; setShowDown(true); return; }
-    el.scrollTop = el.scrollHeight;
-    lastTop.current = el.scrollTop;
-  };
-  // Xa hơn vài màn hình thì nhảy tới gần cuối rồi mới trượt nốt: trượt suốt đoạn chat dài từng mất gần 1,5 giây, hàng ẩn dựng lại khi lướt qua.
-  const toBottom = () => {
-    const el = threadRef.current;
-    if (!el) return;
-    const left = el.scrollHeight - el.scrollTop - el.clientHeight;
-    if (left > el.clientHeight * 3) el.scrollTop = el.scrollHeight - el.clientHeight * 2;
-    el.scrollTo({ top: 1e9, behavior: "smooth" });
-  };
-  // Mở một đoạn chat: đứng ngay ở tin cuối, không trôi từ đầu xuống (trôi mượt chỉ dành cho nút "cuộn xuống").
-  useLayoutEffect(() => {
-    const el = threadRef.current;
-    if (!el) return;
-    stick.current = true;
-    setShowDown(false);
-    el.scrollTop = el.scrollHeight;
-    lastTop.current = el.scrollTop;
-  }, [chat?.id, view]);
-  useEffect(() => {
-    const el = threadRef.current;
-    if (el) follow(el);
-  }, [chat?.msgs, busy]);
-  // Tin ngoài màn hình chỉ có chiều cao ước tính (content-visibility), vẽ thật mới đủ cao; ảnh, biểu đồ cũng nở sau. Đang đứng ở cuối thì giữ ở cuối.
-  useEffect(() => {
-    const el = threadRef.current, inner = el?.firstElementChild;
-    if (!el || !inner) return;
-    const ro = new ResizeObserver(() => follow(el));
-    ro.observe(inner);
-    return () => ro.disconnect();
-  }, [chat?.id, view]);
 
   // Theo từng đoạn chat: mã lượt chạy ở máy chủ, và số thế hệ của lần theo dõi hiện tại (Dừng hay chạy lại thì số cũ hết hiệu lực,
   // mọi cập nhật đến muộn của lần trước bị bỏ qua).
@@ -1748,8 +1422,6 @@ export default function Home({ boot }: { boot?: BootData | null }) {
   // Plugin gắn với các nút studio (Thiết kế / Trình bày / Tài liệu): tên và số skill để hiện trên nút.
   const studios = useStudios(!!me);
   const openPlugins = () => { setCzTab("hub"); setView("customize"); };
-  const chatsRef = useRef<Chat[]>([]);
-  chatsRef.current = chats;
   const projsRef = useRef<Project[]>([]);
   projsRef.current = projects;
   const workOf = (x?: Msg) => (x?.role === "ai" ? { parts: x.parts, plan: x.plan, seq: x.seq } : {});
@@ -2037,8 +1709,9 @@ export default function Home({ boot }: { boot?: BootData | null }) {
   const send = (t: string, f: string[] = [], pick?: { id: string; label: string }[]) => {
     if (busy) return;
     setUndoTurn(null);
-    if (view === "chat" && chat?.stub) return say("Đoạn chat đang tải từ máy chủ, hãy thử lại sau giây lát");
-    stick.current = true;
+    const was = view === "chat" ? curChat() : undefined;
+    if (was?.stub) return say("Đoạn chat đang tải từ máy chủ, hãy thử lại sau giây lát");
+    stickToBottom();
     const now = new Date(), mins = now.getHours() * 60 + now.getMinutes();
     const pm = (x: string) => { const [t, ap] = x.split(" "); const [h, m] = t.split(":").map(Number); return ((h % 12) + (ap === "PM" ? 12 : 0)) * 60 + m; };
     const quiet = (d: number) => { const w = qtimes[d]; if (!w || !qdays.includes(d)) return false; const a = pm(w[0]), b = pm(w[1]); return a > b ? mins >= a : mins >= a && mins < b; };
@@ -2066,7 +1739,8 @@ export default function Home({ boot }: { boot?: BootData | null }) {
     setFiles([]);
     setTplMode(null);
     setPrefill({ t: "", n: 0 });
-    const prior = id !== null && view === "chat" ? (chatsRef.current.find((c) => c.id === id)?.msgs ?? []) : [];
+    // Tin trước lượt này: đọc từ đoạn chat lấy TRƯỚC khi thêm tin mới (chatsRef đọc thẳng kho, đã có tin vừa thêm).
+    const prior = id !== null && view === "chat" ? (was?.msgs ?? []) : [];
     // Lịch sử theo chuẩn Synchro (history.ts): kèm dấu vết công cụ, đánh dấu câu trả lời bị dừng, bỏ phần đã nén.
     const hist: LLMMsg[] = [...chatHistory(prior, chatsRef.current.find((c) => c.id === id)?.compact), { role: "user", content: t }];
     runTurn(id, t, f, hist, pid, tp ? STUDIO_OF[tp.k] : undefined, pick?.map((x) => x.id));
@@ -2089,7 +1763,7 @@ export default function Home({ boot }: { boot?: BootData | null }) {
   // Gửi lại tin thứ k của đoạn chat (u: nội dung tin đó, đã sửa hoặc không): bỏ mọi tin sau nó, lượt mới giữ nguyên tệp và skill đã chọn.
   // Số tin đổi nên máy chủ tự mở phiên CLI mới kèm lịch sử (subs.ts, so số lượt) thay vì nối vào phiên cũ.
   const resend = (c: Chat, k: number, u: Msg, avoid?: string) => {
-    stick.current = true;
+    stickToBottom();
     const upto = [...c.msgs.slice(0, k), u];
     const compact = c.compact && c.compact.upto <= k ? c.compact : undefined;
     // Sửa tin hay thử lại đều thay các tin phía sau: giữ bản cũ để khôi phục được, tới khi gửi tin mới.
@@ -2101,7 +1775,7 @@ export default function Home({ boot }: { boot?: BootData | null }) {
   // Rẽ nhánh đoạn chat từ một câu trả lời: chép các tin tới đó sang đoạn chat mới (cùng dự án, chế độ), mở đoạn chat mới để hỏi tiếp theo hướng khác.
   // Không chép mã lượt đang chạy, kết quả hội đồng phản biện hay bản nén ngữ cảnh: nhánh mới gửi lại đủ lịch sử ở lượt đầu.
   const fork = (i: number) => {
-    const c = chat;
+    const c = curChat();
     if (!c || c.inc || c.stub) return;
     const id = Date.now();
     const msgs = c.msgs.slice(0, i + 1).map((m) => ({ ...m, run: undefined, prog: undefined, done: true }));
@@ -2122,15 +1796,17 @@ export default function Home({ boot }: { boot?: BootData | null }) {
   // Thử lại sau lượt lỗi đã làm được một phần (bị ngắt vì hết hạn mức giữa lúc tra cứu…): giữ lượt đó trong lịch sử (phần đã viết, dấu vết công cụ)
   // và làm tiếp, không vứt đi rồi làm lại từ đầu. "Chạy lại bằng model khác" (avoid) vẫn là chạy lại từ đầu.
   const retry = (avoid?: string) => {
+    const chat = curChat();
     if (!chat || busy) return;
     if (!avoid && continuable(chat.msgs[chat.msgs.length - 1])) { send(tr("Tiếp tục từ chỗ đang dở")); return; }
     const k = chat.msgs.map((m) => m.role).lastIndexOf("user");
     if (k >= 0) resend(chat, k, chat.msgs[k], avoid);
   };
+  retryRef.current = retry;
   // Đổi model bằng một lần bấm sau khi lượt lỗi. Đã có phần làm dở thì làm tiếp (dấu vết công cụ nằm trong lịch sử, model mới biết việc nào đã xong),
   // chưa có gì thì gửi lại đúng tin vừa rồi. Đang để Tự động thì giữ Tự động: máy chủ đã biết model nào đang nghỉ.
   const switchModel = (key: string) => {
-    if (!chat || busy) return;
+    if (!curChat() || busy) return;
     if (model !== AUTO) { setActiveModel(key); setModel(key); }
     retry();
   };
@@ -2173,6 +1849,7 @@ export default function Home({ boot }: { boot?: BootData | null }) {
     browserRead(parts);
   };
   const like = (i: number, v: 1 | -1) => {
+    const chat = curChat();
     if (!chat) return;
     const m = chat.msgs[i], next = m?.like === v ? undefined : v;
     patch(chat.id, (ms) => ms.map((x, j) => (j === i ? { ...x, like: next } : x)));
@@ -2192,16 +1869,18 @@ export default function Home({ boot }: { boot?: BootData | null }) {
   const goCustom = () => { setCzTab("hub"); setView("customize"); };
   const removeChat = (id: number) => { if (running.has(id)) stop(true, id); setChats((cs) => cs.filter((c) => c.id !== id)); chatSync.forget("chat", [id]); if (cur === id) goNew(); };
   // Đoạn chat đang mở vừa bị xóa ở thiết bị khác.
-  useEffect(() => { if (loaded && view === "chat" && cur !== null && !chats.some((c) => c.id === cur)) { setCur(null); setView("new"); } }, [chats]); // eslint-disable-line react-hooks/exhaustive-deps
+  const curGone = useChatState((st) => st.cur !== null && !st.chats.some((c) => c.id === st.cur));
+  useEffect(() => { if (curGone && loaded && view === "chat" && cur !== null) { setCur(null); setView("new"); } }, [curGone]); // eslint-disable-line react-hooks/exhaustive-deps
   const { togglePin, setChatTags } = useChatStore.getState();
-  const filterTag = (t: string | null) => { setTagFilter(t); if (t) setOpen(true); };
+  const filterTag = (t: string | null) => { useSideUi.getState().setTagFilter(t); if (t) setOpen(true); };
 
   useEffect(() => {
     const h = (e: MouseEvent) => {
       const t = e.target as HTMLElement;
       if (userRef.current && !userRef.current.contains(t)) setUserMenu(false);
-      if (!t.closest(".chat-wrap")) { setChatMenu(null); setCodeMenu(null); setPickProj(false); if (!t.closest(".title-wrap")) setPickTag(false); }
-      if (!t.closest(".title-wrap")) setTitleMenu(false);
+      const ui = useSideUi.getState();
+      if (!t.closest(".chat-wrap")) { ui.setChatMenu(null); ui.setCodeMenu(null); ui.setPickProj(false); if (!t.closest(".title-wrap")) ui.setPickTag(false); }
+      if (!t.closest(".title-wrap")) ui.setTitleMenu(false);
     };
     document.addEventListener("mousedown", h);
     return () => document.removeEventListener("mousedown", h);
@@ -2240,7 +1919,7 @@ export default function Home({ boot }: { boot?: BootData | null }) {
           setOpen(false);
           if (inSide) requestAnimationFrame(() => document.querySelector<HTMLElement>(window.matchMedia("(max-width: 760px)").matches ? ".side-toggle" : ".rail-mark")?.focus({ preventScroll: true }));
         }
-        setGc(null); setModal(null); setDelId(null); setDelProj(null); setUserMenu(false); setChatMenu(null); setCodeMenu(null); setTitleMenu(false); }
+        setGc(null); setModal(null); setDelId(null); setDelProj(null); setUserMenu(false); useSideUi.getState().closeMenus(); }
       else if (mod && k === "k") { e.preventDefault(); palBuf.current = ""; palArmed.current = true; setModal("search"); }
       else if (mod && e.shiftKey && k === "o") { e.preventDefault(); goNewRef.current(); }
       else if (mod && k === ".") { e.preventDefault(); setOpen((o) => !o); }
@@ -2288,7 +1967,7 @@ export default function Home({ boot }: { boot?: BootData | null }) {
     window.addEventListener("synchro:brain", h);
     return () => window.removeEventListener("synchro:brain", h);
   }, []);
-  useBrainSync(chats, !!me);
+  useBrainSync(!!me);
   const inboxN = useInboxCount(!!me);
   // Bảng lệnh ⌘K: lệnh nhanh và cách mở từng loại kết quả.
   const paletteCmds: PaletteCmd[] = [
@@ -2305,7 +1984,7 @@ export default function Home({ boot }: { boot?: BootData | null }) {
   ];
   const paletteGo: PaletteGo = {
     chat: (id) => { setCur(id); setView("chat"); },
-    artifact: (conv, title) => { const c = chats.find((x) => String(x.id) === conv); if (c) { setCur(c.id); setView("chat"); } else { setTab(0); setArtQ(title); setView("artifacts"); } },
+    artifact: (conv, title) => { const c = chatsRef.current.find((x) => String(x.id) === conv); if (c) { setCur(c.id); setView("chat"); } else { setTab(0); setArtQ(title); setView("artifacts"); } },
     app: (id) => window.open(`/apps/${id}`, "_blank", "noopener"),
     skillHub: (q) => { if (q) { try { sessionStorage.setItem("hub-q", q); } catch {} } goCustom(); if (q) window.dispatchEvent(new CustomEvent(HUB_SEARCH, { detail: q })); },
     project: (id) => { setCurProj(id); setView("project"); },
@@ -2324,7 +2003,7 @@ export default function Home({ boot }: { boot?: BootData | null }) {
   const followUp = (id: number, t: string) => {
     const c = chatsRef.current.find((x) => x.id === id);
     if (!c) return;
-    if (id === curRef.current) stick.current = true;
+    if (id === curRef.current) stickToBottom();
     const hist: LLMMsg[] = [...chatHistory(c.msgs, c.compact), { role: "user", content: t }];
     patch(id, (m) => [...m, { role: "user", text: t, time: Date.now() }, { role: "ai", text: "", time: Date.now() }]);
     streamReply(id, t, hist, c.project, c.studio);
@@ -2339,20 +2018,24 @@ export default function Home({ boot }: { boot?: BootData | null }) {
   // Prop của ô soạn tin (Composer đã memo): hàm qua useEvent, danh sách dự án chỉ dựng lại khi dự án đổi, còn lại là giá trị đơn / state,
   // nên lúc chữ đang chảy ô soạn tin không vẽ lại; chỉ vẽ khi bắt đầu / xong lượt (busy) hay khi chính các giá trị này đổi.
   const projPick = useMemo(() => projects.filter((x) => !x.archived).map((x) => ({ id: x.id, name: x.name })), [projects]);
-  const composerProps = { focusKey: `${view}:${cur}:${focusN}:${tplMode}`, onSend: useEvent(send), busy, onSteer: useEvent(onSteer), onStop: useEvent(stop), say, prefill, files, setFiles, model, setModel,
-    goCustom: useEvent(goCustom), goConnectors: useEvent(() => { setCzTab("connectors"); setView("customize"); }), openUpload: useEvent(() => setModal("upload")), onVoice: useEvent(() => { stopSpeak(); setSpeaking(null); setVoiceOn(true); }),
-    projects: projPick,
-    project: view === "chat" && chat ? chat.project : nextProj ?? (view === "project" ? curProj ?? undefined : undefined),
-    onProject: useEvent((pid: number | undefined) => {
-      if (!projects.length) { setModal("proj"); return; }
-      const name = projects.find((x) => x.id === pid)?.name;
-      if (view === "chat" && chat) { setChats((cs) => cs.map((x) => (x.id === chat.id ? { ...x, project: pid } : x))); say(pid ? `Đã thêm vào "${name}"` : "Đã gỡ khỏi dự án"); }
-      else { setNextProj(pid); say(pid ? `Đoạn chat mới sẽ nằm trong "${name}"` : "Đoạn chat mới không thuộc dự án nào"); }
-    }) };
+  const onSend = useEvent(send), onSteerE = useEvent(onSteer), onStop = useEvent(stop), goCustomE = useEvent(goCustom);
+  const goConnectors = useEvent(() => { setCzTab("connectors"); setView("customize"); }), openUpload = useEvent(() => setModal("upload"));
+  const onVoice = useEvent(() => { stopSpeak(); setSpeaking(null); setVoiceOn(true); });
+  const onProject = useEvent((pid: number | undefined) => {
+    if (!projects.length) { setModal("proj"); return; }
+    const name = projects.find((x) => x.id === pid)?.name;
+    const chat = view === "chat" ? curChat() : undefined;
+    if (chat) { setChats((cs) => cs.map((x) => (x.id === chat.id ? { ...x, project: pid } : x))); say(pid ? `Đã thêm vào "${name}"` : "Đã gỡ khỏi dự án"); }
+    else { setNextProj(pid); say(pid ? `Đoạn chat mới sẽ nằm trong "${name}"` : "Đoạn chat mới không thuộc dự án nào"); }
+  });
+  const focusKey = `${view}:${cur}:${focusN}:${tplMode}`;
+  const project = view === "chat" && meta ? meta.project : nextProj ?? (view === "project" ? curProj ?? undefined : undefined);
+  // Cùng một đối tượng khi các giá trị không đổi: khối soạn tin ở đáy đoạn chat là phần tử đã memo (dock), khung đoạn chat (memo) nhận lại đúng nó.
+  const composerProps = useMemo(() => ({ focusKey, onSend, busy, onSteer: onSteerE, onStop, say, prefill, files, setFiles, model, setModel,
+    goCustom: goCustomE, goConnectors, openUpload, onVoice, projects: projPick, project, onProject }), [focusKey, busy, prefill, files, model, projPick, project]); // eslint-disable-line react-hooks/exhaustive-deps
   // Bàn trộn ngữ cảnh trong ô soạn tin ở đoạn chat: phần tử chỉ dựng lại khi đổi đoạn chat hay bắt đầu / xong lượt; DockMixer tự đọc đoạn chat từ kho.
-  const chatId = chat?.id;
+  const chatId = meta?.id;
   const dockMixer = useMemo(() => (chatId === undefined ? null : <DockMixer chatId={chatId} busy={busy} say={say} />), [chatId, busy, say]);
-  const lastAi = chat?.msgs.filter((m) => m.role === "ai").at(-1);
   // Lượt hỏi đáp từ Eleven Realtime được lưu vào đoạn chat như tin nhắn thường.
   const voiceTurn = (u: string, a: string) => {
     const now = Date.now();
@@ -2360,57 +2043,10 @@ export default function Home({ boot }: { boot?: BootData | null }) {
     if (view === "chat" && cur !== null) patch(cur, (m) => [...m, ...msgs]);
     else { setChats((cs) => [{ id: now, title: (u || a).slice(0, 40), msgs }, ...cs]); setCur(now); setView("chat"); }
   };
-  const visible = chats.filter((c) => !c.inc);
-  const tagsAll = allTags(visible);
-  // Thẻ đang lọc không còn đoạn chat nào (vừa gỡ thẻ cuối): thôi lọc.
-  const tagOn = tagFilter && tagsAll.some((x) => tagKey(x.tag) === tagKey(tagFilter)) ? tagFilter : null;
-  // Chọn hàng loạt ở thanh bên: đoạn chat và phiên code (ghim, đưa vào dự án, lưu trữ, xóa nhiều mục cùng lúc).
-  type SideItem = { k: "chat"; c: Chat } | { k: "code"; c: CodeItem };
-  const sideItems: SideItem[] = [...codeList.map((c) => ({ k: "code" as const, c })), ...visible.map((c) => ({ k: "chat" as const, c }))];
-  const sb = useBulk(sideItems, (x) => `${x.k}:${x.c.id}`);
-  // Thanh bên: danh sách dài chia trang gọn (đoạn chat 20 / trang, phiên code 10 / trang), không phải cuộn mãi.
-  const pinPj = new Set(projects.filter((x) => x.pinned && !x.archived).map((x) => x.id));
-  const pgRest = usePage(visible.filter((c) => !c.pinned && !(c.project !== undefined && pinPj.has(c.project))), 20);
-  const pgCode = usePage(codeList.filter((c) => !c.pinned && !c.archived), 10);
-  const pgArch = usePage(codeList.filter((c) => c.archived), 10);
-  const sidePager = (pg: { page: number; pages: number; from: number; to: number; total: number; setPage: (n: number) => void }) => <Pager compact page={pg.page} pages={pg.pages} from={pg.from} to={pg.to} total={pg.total} onPage={pg.setPage} />;
-  const chatsOf = (l: SideItem[]) => l.flatMap((x) => (x.k === "chat" ? [x.c] : []));
-  const codesOf = (l: SideItem[]) => l.flatMap((x) => (x.k === "code" ? [x.c] : []));
-  const sideActs: BulkAct<SideItem>[] = [
-    { id: "pin", label: "Ghim", icon: <I.M icon="Pin" size={15} />, when: (l) => l.some((x) => !x.c.pinned), run: (l) => {
-      const ids = new Set(chatsOf(l).map((c) => c.id)); setChats((cs) => cs.map((x) => (ids.has(x.id) ? { ...x, pinned: true } : x)));
-      for (const c of codesOf(l)) if (!c.pinned) codePatch(c.id, { pinned: true });
-      say(`Đã ghim ${l.length} mục`);
-    } },
-    { id: "unpin", label: "Bỏ ghim", icon: <I.M icon="PinOff" size={15} />, when: (l) => l.some((x) => x.c.pinned), run: (l) => {
-      const ids = new Set(chatsOf(l).map((c) => c.id)); setChats((cs) => cs.map((x) => (ids.has(x.id) ? { ...x, pinned: false } : x)));
-      for (const c of codesOf(l)) if (c.pinned) codePatch(c.id, { pinned: false });
-      say(`Đã bỏ ghim ${l.length} mục`);
-    } },
-    { id: "proj", label: "Thêm vào dự án", icon: <I.FolderPlus size={15} />, when: (l) => chatsOf(l).length > 0 && projects.some((p) => !p.archived),
-      choices: () => projects.filter((p) => !p.archived).map((p) => ({ id: String(p.id), label: p.name })),
-      run: (l, pid) => { const ids = new Set(chatsOf(l).map((c) => c.id)); const pr = projects.find((p) => String(p.id) === pid); if (!pr) return; setChats((cs) => cs.map((x) => (ids.has(x.id) ? { ...x, project: pr.id } : x))); say(`Đã thêm ${ids.size} đoạn chat vào "${pr.name}"`); } },
-    { id: "unproj", label: "Gỡ khỏi dự án", icon: <I.Layers size={15} />, when: (l) => chatsOf(l).some((c) => c.project !== undefined), run: (l) => {
-      const ids = new Set(chatsOf(l).map((c) => c.id)); setChats((cs) => cs.map((x) => (ids.has(x.id) ? { ...x, project: undefined } : x))); say("Đã gỡ khỏi dự án");
-    } },
-    { id: "arch", label: "Lưu trữ", icon: <I.Archive size={15} />, when: (l) => codesOf(l).some((c) => !c.archived), run: (l) => { for (const c of codesOf(l)) if (!c.archived) codePatch(c.id, { archived: true }); say("Đã lưu trữ các phiên code đã chọn"); } },
-    { id: "unarch", label: "Khôi phục", icon: <I.Restore size={15} />, when: (l) => codesOf(l).some((c) => c.archived), run: (l) => { for (const c of codesOf(l)) if (c.archived) codePatch(c.id, { archived: false }); say("Đã khôi phục các phiên code đã chọn"); } },
-    { id: "del", label: "Xóa", icon: <I.Trash size={15} />, danger: true,
-      confirm: (l) => { const a = chatsOf(l).length, b = codesOf(l).length; return { title: `Xóa ${l.length} mục?`, text: `${[a ? `${a} đoạn chat` : "", b ? `${b} phiên code` : ""].filter(Boolean).join(" và ")} sẽ bị xóa khỏi mọi thiết bị, cùng với ghi chú trong Bộ não và liên kết chia sẻ. Không hoàn tác được.`, ok: "Xóa" }; },
-      run: (l) => {
-        const ids = new Set(chatsOf(l).map((c) => c.id)), cids = new Set(codesOf(l).map((c) => c.id));
-        if (ids.size) { for (const x of ids) if (running.has(x)) stop(true, x); setChats((cs) => cs.filter((c) => !ids.has(c.id))); chatSync.forget("chat", [...ids]); if (cur !== null && ids.has(cur)) goNew(); }
-        if (cids.size) { setCodeList((x) => x.filter((c) => !cids.has(c.id))); for (const id of cids) { ls.remove("codeS:" + id); if (cpPage?.sync) deleteServerSession(id); } if (codeCur !== null && cids.has(codeCur)) setCodeCur(null); }
-        say(`Đã xóa ${l.length} mục`);
-      } },
-  ];
-  const [pinOpen, setPinOpen] = usePref("pinOpen", true);
-  const [recentOpen, setRecentOpen] = usePref("recentOpen", true);
   const pill = false && (
     <div className="plan-pill">Gói Free · <a onClick={() => setModal("upgrade")}>Nâng cấp</a>{view === "chat" && <button aria-label={tr("Đóng")} onClick={() => setBanner(false)} style={{ display: "grid", marginLeft: 2 }}><I.X size={14} /></button>}</div>
   );
   const proj = projects.find((x) => x.id === curProj);
-  const sideRef = useClickAway(() => setSideProj(null));
   const patchProj = (id: number, f: Partial<Project>) => setProjects((ps) => ps.map((x) => (x.id === id ? { ...x, ...f, upd: Date.now() } : x)));
 
   useEffect(() => {
@@ -2421,7 +2057,7 @@ export default function Home({ boot }: { boot?: BootData | null }) {
   }, [breakH, breakM, say]);
 
   const exportData = useEvent(() => {
-    const blob = new Blob([JSON.stringify({ exportedAt: new Date().toISOString(), profile: { name, call, instructions: ins }, projects, chats: chats.filter((c) => !c.inc) }, null, 2)], { type: "application/json" });
+    const blob = new Blob([JSON.stringify({ exportedAt: new Date().toISOString(), profile: { name, call, instructions: ins }, projects, chats: chatsRef.current.filter((c) => !c.inc) }, null, 2)], { type: "application/json" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
     a.download = "synchro-data-export.json";
@@ -2444,7 +2080,7 @@ export default function Home({ boot }: { boot?: BootData | null }) {
   };
   // Giá trị của AppCtx: các hàm ổn định (useEvent), chỉ đổi khi tài khoản đổi; hơn 50 chỗ dùng useApp() không vẽ lại theo từng mẩu chữ đang chảy.
   const logoutEv = useEvent(logout);
-  const wipe = useEvent((what: "all" | "chats") => { if (saveT.current) { clearTimeout(saveT.current.t); saveT.current = null; } if (what === "all") ls.clear(); else ["chats", "projects", "model", "banner"].forEach((k) => ls.remove(k)); chatSync.wipeAll(chats.filter((c) => !c.inc).map((c) => c.id), projects.map((p) => p.id)); setChats([]); setProjects([]); setBanner(true); goNew(); });
+  const wipe = useEvent((what: "all" | "chats") => { if (saveT.current) { clearTimeout(saveT.current.t); saveT.current = null; } if (what === "all") ls.clear(); else ["chats", "projects", "model", "banner"].forEach((k) => ls.remove(k)); chatSync.wipeAll(chatsRef.current.filter((c) => !c.inc).map((c) => c.id), projects.map((p) => p.id)); setChats([]); setProjects([]); setBanner(true); goNew(); });
   const api = useMemo(() => ({
     say, exportData,
     upgrade: () => setModal("upgrade"),
@@ -2456,10 +2092,35 @@ export default function Home({ boot }: { boot?: BootData | null }) {
     wipe, me: me ?? null, setMe, logout: logoutEv,
   }), [me]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const rowCx = useRef<RowCx | null>(null);
-  if (chat) rowCx.current = { model, switchModel, fork, altModels: models.providers.flatMap((p) => p.models).filter((x) => allowsModel(models.allowed, x.key)).length > 1, chat, chats, say, fm, arts, artOpen, artIdent: artSel?.ident, artIndex, openPlugins, openArt, openFile, send: (t) => send(t), copy, speak, like, retry, openProviders: () => { setSettingsTab("Providers"); setModal("settings"); }, edit: (i, text) => { const u = chat.msgs[i]; if (!busy && u?.role === "user") resend(chat, i, { ...u, text, time: Date.now() }); } };
-  // Dấu của phần artifact trong một tin: có phiên bản mới, đổi bản đang xem thì dòng tin đó vẽ lại.
-  const artSig = (i: number) => arts.at[i]?.map((x) => `${x.ident}:${x.v}:${arts.map.get(x.ident)?.length}:${artOpen && artSel?.ident === x.ident && artIndex === x.v ? 1 : 0}`).join("|") ?? "";
+  // Thanh bên và khung đoạn chat là component memo (Sidebar.tsx, Thread.tsx): nhận một ref hàm luôn trỏ tới bản mới nhất của Home
+  // (gán mỗi lần vẽ như rowCx trước đây, chỉ đọc lúc bấm), nên hàm dựng lại mỗi lần vẽ không làm chúng vẽ lại.
+  const sideHx = useRef<SideActs>(null!);
+  sideHx.current = {
+    goNew, openSearch: () => setModal("search"), setView, setCurProj, setCodeCur, codePatch, setCodeList, patchProj, setDelId, setDelProj, setEditProj, confirm: setGc, say,
+    stop: (id) => stop(true, id), forget: (ids) => chatSync.forget("chat", ids), dropCode: (id) => { ls.remove("codeS:" + id); if (cpPage?.sync) deleteServerSession(id); },
+  };
+  const threadHx = useRef<ThreadActs>(null!);
+  threadHx.current = {
+    say, fm, openPlugins, openProviders: () => { setSettingsTab("Providers"); setModal("settings"); }, send: (t) => send(t), copy, speak, like, retry, switchModel, fork, resend,
+    stop: () => stop(), undoLost, approvalDone: (a) => { approvalRef.current?.resolve(a); setApproval(null); }, runCritic, applyFix, restyle,
+  };
+  const altModels = models.providers.flatMap((p) => p.models).filter((x) => allowsModel(models.allowed, x.key)).length > 1;
+  // Khối soạn tin ở đáy đoạn chat: phần tử dựng ở đây (chế độ studio, tin chờ gửi, ô soạn tin, dòng ghi chú) và chỉ dựng lại khi chính các giá trị
+  // này đổi; khung đoạn chat nhận đúng phần tử cũ nên ô soạn tin không vẽ lại khi chữ đang chảy.
+  const studio = meta?.studio;
+  const queuedLater = useMemo(() => queued.filter((q) => q.chat === chatId && q.mode === "later"), [queued, chatId]);
+  const dock = useMemo(() => (chatId === undefined ? null : <>
+    {studio && (() => { const k = (Object.keys(STUDIO_OF) as TplKey[]).find((x) => STUDIO_OF[x] === studio)!; return (
+      <div className="dock-mode"><span className={`mode-tag sm mt-${k}`}>{TPLS.find((x) => x.k === k)!.label}<button className="mode-x" aria-label="Bỏ chế độ" data-tip="Bỏ chế độ, để Synchro tự chọn"
+        onClick={() => { setChats((cs) => cs.map((c) => (c.id === chatId ? { ...c, studio: undefined } : c))); say("Đã bỏ chế độ. Synchro sẽ tự chọn thư viện skill phù hợp."); }}><I.X size={12} /></button></span></div>); })()}
+    <QueueChips items={queuedLater} onCancel={(qid) => setQueued((q) => q.filter((x) => x.id !== qid))} />
+    <Composer {...composerProps} dock extra={dockMixer} />
+    <div className="disclaimer dock-note"><span>Synchro là AI và có thể mắc lỗi. Vui lòng kiểm tra kỹ các câu trả lời.</span><ModelPicker model={model} setModel={setModel} /><UsageRing model={model} onDetails={() => { setSettingsTab("Usage"); setModal("settings"); }} /></div>
+  </>), [chatId, studio, queuedLater, composerProps, dockMixer, model]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Menu tiêu đề đoạn chat (thanh trên cùng): trạng thái chung với thanh bên (Gắn thẻ, Đổi tên ngay trên dòng ở thanh bên).
+  const titleMenu = useSideUi((st) => st.titleMenu), pickTag = useSideUi((st) => st.pickTag);
+  const { setTitleMenu, setPickTag, setChatMenu, setRenaming } = useSideUi.getState();
+  const tagsAll = useTagsAll();
 
   // Chưa biết đã đăng nhập chưa: người đã đăng nhập lần trước thấy ngay khung app (html[data-sess], layout.tsx), người mới thấy nền trống rồi tới màn hình đăng nhập.
   if (me === undefined || !langReady) return <div className="boot" aria-busy={!bootErr}><BootSkeleton chat={bootChat} />
@@ -2532,185 +2193,39 @@ export default function Home({ boot }: { boot?: BootData | null }) {
           </div>
         </div>
       </nav>
-      <aside className="sidebar">
-        <div className="side-top">
-          <a className="side-brand" href="/" onClick={(e) => { e.preventDefault(); goNew(); }} aria-label="Synchro"><Wordmark height={17} /></a>
-        </div>
-        <button className="side-search" onClick={() => setModal("search")}><I.Search size={15} /><span>Tìm đoạn chat, tệp, lệnh…</span><kbd>⌘K</kbd></button>
-        {view === "speech" && me?.perms.features.speech !== false && (
-          <div className="side-tools">
-            <div className="section-label">Công cụ Speech</div>
-            <div className="nav-sub" aria-label="Công cụ Speech">
-              <button data-nav="sp-home" className={`nav-item ${spTool === "home" ? "active" : ""}`} onClick={() => setSpTool("home")}><I.Speech />Trang chủ Speech</button>
-              <SpeechSideTools plan={spPlan} tool={spTool} pick={(k) => { setView("speech"); setSpTool(k); }} />
-            </div>
-          </div>
-        )}
-        {(() => {
-          countRender("Sidebar");
-          const row = (c: Chat) => (
-            <div key={c.id} className="chat-wrap" {...bulkRow(sb, { k: "chat", c })}>
-              {renaming === c.id ? (
-                <input className="field" autoFocus aria-label="Đổi tên" defaultValue={c.title} style={{ margin: 0, height: 32 }}
-                  onBlur={(e) => { const v = e.target.value.trim(); setChats((cs) => cs.map((x) => (x.id === c.id && v && v !== x.title ? { ...x, title: v, named: true } : x))); setRenaming(null); }}
-                  onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()} />
-              ) : (
-                <button className={`chat-item ${view === "chat" && cur === c.id ? "active" : ""}`} aria-current={view === "chat" && cur === c.id ? "page" : undefined} onClick={() => { setCur(c.id); setView("chat"); }}>{sb.on && <BulkCheck on={sb.has({ k: "chat", c })} />}<span key={c.title} className="ct-t" data-notr>{c.title}</span>{needYou.has(c.id) ? <span className="ct-need" data-tip={tr("Đang chờ bạn duyệt")}>{tr("Cần bạn")}</span> : running.has(c.id) && <span className="ct-run" role="img" aria-label={tr("Đang trả lời")} data-tip={tr("Đang trả lời")} />}</button>
-              )}
-              {!sb.on && <button className="dots" aria-label="Tùy chọn" aria-haspopup="menu" aria-expanded={chatMenu === c.id} onClick={() => { setChatMenu(chatMenu === c.id ? null : c.id); setPickProj(false); setPickTag(false); setTitleMenu(false); }}>⋮</button>}
-                <Menu open={!!(chatMenu === c.id)} className="down" style={{ top: 34, right: 0, width: pickTag ? 240 : 220 }}>
-                  {pickTag ? (
-                    <TagPicker tags={cleanTags(c.tags)} all={tagsAll} onChange={(t) => setChatTags(c.id, t)} onBack={() => setPickTag(false)} />
-                  ) : !pickProj ? (
-                    <>
-                      <button className="menu-item" onClick={() => { togglePin(c.id); setChatMenu(null); }}>{c.pinned ? <I.M icon="PinOff" /> : <I.M icon="Pin" />}{c.pinned ? "Bỏ ghim" : "Ghim"}</button>
-                      <button className="menu-item" onClick={() => { setRenaming(c.id); setChatMenu(null); }}><I.Pencil />Đổi tên</button>
-                      <button className="menu-item" onClick={() => setPickTag(true)}><I.Icon name="Tag" />Gắn thẻ{c.tags?.length ? <span className="sc tag-n">{c.tags.length}</span> : <span className="sc"><I.ChevronR size={16} /></span>}</button>
-                      <button className="menu-item" onClick={() => (projects.length ? setPickProj(true) : (say("Hãy tạo dự án trước ở mục Dự án"), setChatMenu(null)))}><I.Layers />Thêm vào dự án<span className="sc"><I.ChevronR size={16} /></span></button>
-                      {c.project !== undefined && <button className="menu-item" onClick={() => { setChats((cs) => cs.map((x) => (x.id === c.id ? { ...x, project: undefined } : x))); setChatMenu(null); say("Đã gỡ khỏi dự án"); }}><I.Layers />Gỡ khỏi dự án</button>}
-                      <hr />
-                      <button className="menu-item del" onClick={() => { setDelId(c.id); setChatMenu(null); }}><I.Trash />Xóa</button>
-                    </>
-                  ) : (
-                    projects.map((pr) => (
-                      <button key={pr.id} className="menu-item" onClick={() => { setChats((cs) => cs.map((x) => (x.id === c.id ? { ...x, project: pr.id } : x))); say(`Đã thêm vào "${pr.name}"`); setChatMenu(null); setPickProj(false); }}><I.Layers />{pr.name}{c.project === pr.id && <span className="ck"><I.Check /></span>}</button>
-                    ))
-                  )}
-                </Menu>
-            </div>
-          );
-          const codeRow = (c: CodeItem) => (
-            <div key={"code" + c.id} className="chat-wrap" {...bulkRow(sb, { k: "code", c })}>
-              {codeRen === c.id ? (
-                <input className="field" autoFocus aria-label="Đổi tên" defaultValue={c.title} style={{ margin: 0, height: 32 }}
-                  onBlur={(e) => { codePatch(c.id, { title: e.target.value || c.title }); setCodeRen(null); }}
-                  onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()} />
-              ) : (
-                <button className={`chat-item code-item ${view === "code" && codeCur === c.id ? "active" : ""}`} onClick={() => { setCodeCur(c.id); setView("code"); if (c.archived) codePatch(c.id, { archived: false }); }}>
-                  {sb.on && <BulkCheck on={sb.has({ k: "code", c })} />}<span className="cv-ell">{c.title}</span><CodeBadge c={c} />
-                </button>
-              )}
-              {!sb.on && <button className="dots" aria-label="Tùy chọn" aria-haspopup="menu" aria-expanded={codeMenu === c.id} onClick={() => setCodeMenu(codeMenu === c.id ? null : c.id)}>⋮</button>}
-              <Menu open={codeMenu === c.id} className="down" style={{ top: 34, right: 0, width: 220 }}>
-                <button className="menu-item" onClick={() => { codePatch(c.id, { pinned: !c.pinned }); setCodeMenu(null); }}>{c.pinned ? <I.M icon="PinOff" /> : <I.M icon="Pin" />}{c.pinned ? "Bỏ ghim" : "Ghim"}</button>
-                <button className="menu-item" onClick={() => { setCodeRen(c.id); setCodeMenu(null); }}><I.Pencil />Đổi tên</button>
-                <button className="menu-item" onClick={() => { codePatch(c.id, { archived: !c.archived }); setCodeMenu(null); say(c.archived ? "Đã khôi phục phiên code" : "Đã lưu trữ phiên code"); }}>{c.archived ? <I.M icon="Retry" /> : <I.M icon="Inbox" />}{c.archived ? "Khôi phục" : "Lưu trữ"}</button>
-                <hr />
-                <button className="menu-item del" onClick={() => { setCodeMenu(null); setGc({ title: "Xóa phiên code?", text: "Phiên code và lịch sử của nó sẽ bị xóa, kể cả trên máy chủ nếu đang bật đồng bộ. Không hoàn tác được.", ok: "Xóa", fn: () => { setCodeList((l) => l.filter((x) => x.id !== c.id)); ls.remove("codeS:" + c.id); if (cpPage?.sync) deleteServerSession(c.id); if (codeCur === c.id) setCodeCur(null); say("Đã xóa phiên code"); } }); }}><I.Trash />Xóa</button>
-              </Menu>
-            </div>
-          );
-          const pinProjs = projects.filter((x) => x.pinned && !x.archived);
-          const pjIds = new Set(pinProjs.map((x) => x.id));
-          const nested = (c: Chat) => c.project !== undefined && pjIds.has(c.project);
-          const projRow = (x: Project) => {
-            const kids = visible.filter((c) => c.project === x.id);
-            const open = !pjClosed[x.id];
-            return (
-              <div key={x.id}>
-                <div className="chat-wrap" ref={sideProj === x.id ? sideRef : undefined}>
-                  <button className={`chat-item pj-row ${view === "project" && curProj === x.id ? "active" : ""}`} onClick={() => { setCurProj(x.id); setView("project"); }}>
-                    <span className="pj-ic"><I.Layers size={15} /></span>
-                    <span>{x.name}</span>
-                  </button>
-                  {/* Nút riêng đặt đè lên biểu tượng, không lồng trong nút của dòng: nút lồng nút thì bàn phím không tới được. */}
-                  <button className="pj-tg" aria-label={open ? "Thu gọn" : "Mở rộng"} aria-expanded={open} onClick={() => setPjClosed({ ...pjClosed, [x.id]: open })}><span className={`sec-chev ${open ? "open" : ""}`}><I.Chevron size={14} /></span></button>
-                  <button className="dots" aria-label="Tùy chọn" aria-haspopup="menu" aria-expanded={sideProj === x.id} onClick={() => setSideProj(sideProj === x.id ? null : x.id)}>⋮</button>
-                  {sideProj === x.id && <ProjMenu p={x} open pin style={{ top: 34, right: 0, width: 240 }}
-                    onPin={() => { patchProj(x.id, { pinned: false }); setSideProj(null); }}
-                    onEdit={() => { setSideProj(null); setEditProj(x.id); }}
-                    onArchive={() => { patchProj(x.id, { archived: true }); setSideProj(null); if (view === "project" && curProj === x.id) setView("projects"); say("Đã lưu trữ dự án"); }}
-                    onDelete={() => { setSideProj(null); setDelProj(x.id); }} />}
-                </div>
-                <div className={`fold ${open && kids.length ? "open" : ""}`}><div className="pj-kids">{kids.map(row)}</div></div>
-              </div>
-            );
-          };
-          const pinned = visible.filter((c) => c.pinned && !nested(c));
-          const rest = visible.filter((c) => !c.pinned && !nested(c));
-          const codePinned = codeList.filter((c) => c.pinned && !c.archived);
-          const codeRest = codeList.filter((c) => !c.pinned && !c.archived);
-          const codeArch = codeList.filter((c) => c.archived);
-          if (tagOn) {
-            const hit = visible.filter((c) => hasTag(c.tags, tagOn));
-            return (
-              <div className="chat-scroll">
-                <TagFilter all={tagsAll} cur={tagOn} onPick={setTagFilter} />
-                <div className="section-label tag-sec"><span><span aria-hidden>#</span><span data-notr>{tagOn}</span> · {hit.length}</span><button className="icon-btn" onClick={() => setTagFilter(null)} aria-label="Bỏ lọc theo thẻ" data-tip="Bỏ lọc theo thẻ"><I.X size={14} /></button></div>
-                <div className="chat-list">{hit.map(row)}</div>
-              </div>
-            );
-          }
-          return (
-            <div className="chat-scroll">
-              <TagFilter all={tagsAll} cur={null} onPick={setTagFilter} />
-              {(pinned.length > 0 || pinProjs.length > 0 || codePinned.length > 0) && (
-                <>
-                  <div className="section-label sec-toggle"><button className="sec-btn" onClick={() => setPinOpen(!pinOpen)}><span>Đã ghim</span><span className={`sec-chev ${pinOpen ? "open" : ""}`}><I.Chevron size={14} /></span></button></div>
-                  <div className={`fold ${pinOpen ? "open" : ""}`}><div className="chat-list">{pinProjs.map(projRow)}{codePinned.map(codeRow)}{pinned.map(row)}</div></div>
-                </>
-              )}
-              {codeRest.length > 0 && (
-                <>
-                  <div className="section-label sec-toggle"><button className="sec-btn" onClick={() => setCodeOpen(!codeOpen)}><span>Code</span><span className={`sec-chev ${codeOpen ? "open" : ""}`}><I.Chevron size={14} /></span></button></div>
-                  <div className={`fold ${codeOpen ? "open" : ""}`}><div><div className="chat-list">{pgCode.items.map(codeRow)}</div>{sidePager(pgCode)}</div></div>
-                </>
-              )}
-              {codeArch.length > 0 && (
-                <>
-                  <div className="section-label sec-toggle"><button className="sec-btn" onClick={() => setArchOpen(!archOpen)}><span>Code đã lưu trữ · {codeArch.length}</span><span className={`sec-chev ${archOpen ? "open" : ""}`}><I.Chevron size={14} /></span></button></div>
-                  <div className={`fold ${archOpen ? "open" : ""}`}><div><div className="chat-list code-arch">{pgArch.items.map(codeRow)}</div>{sidePager(pgArch)}</div></div>
-                </>
-              )}
-              <div className="section-label sec-toggle"><button className="sec-btn" onClick={() => setRecentOpen(!recentOpen)}><span>Đoạn chat và tác vụ</span><span className={`sec-chev ${recentOpen ? "open" : ""}`}><I.Chevron size={14} /></span></button>{sideItems.length > 0 && <button className={`icon-btn bk-side${sb.on ? " on" : ""}`} style={{ width: 24, height: 24 }} aria-pressed={sb.on} aria-label={sb.on ? "Xong" : "Chọn hàng loạt"} data-tip={sb.on ? "Xong" : "Chọn hàng loạt"} onClick={() => (sb.on ? sb.exit() : sb.start())}>{sb.on ? <I.X size={14} /> : <I.ListChecks size={16} />}</button>}<button className="icon-btn" style={{ width: 24, height: 24 }} aria-label="Tìm kiếm đoạn chat" data-tip="Tìm kiếm đoạn chat" onClick={() => setModal("search")}><I.Search size={15} /></button></div>
-              {/* Danh sách VÀ thanh phân trang nằm trong MỘT div là con duy nhất của .fold (như các khối .fold ở trên): .fold dùng grid-template-rows 0fr chỉ co được một hàng, để hai con thì khi gập, thanh phân trang "1-20/30" vẫn còn. */}
-              <div className={`fold ${recentOpen ? "open" : ""}`}>
-                <div>
-                  <div className="chat-list">
-                    {/* Thiết bị mới: danh sách đang về từ máy chủ thì hiện dòng chờ đúng cỡ, chưa nói "chưa có" khi chưa biết. */}
-                    {visible.length === 0 && (!chats.length && !syncSt.at && !syncSt.offline ? <ChatListSkeleton /> : <div className="muted" style={{ padding: "6px 10px", fontSize: 13 }}>Chưa có đoạn chat nào</div>)}
-                    {pgRest.items.map(row)}
-                  </div>
-                  {sidePager(pgRest)}
-                </div>
-              </div>
-              <BulkBar b={sb} acts={sideActs} noun="mục" compact />
-            </div>
-          );
-        })()}
-      </aside>
+      <Sidebar view={view} cur={cur} curProj={curProj} codeCur={codeCur} codeList={codeList} approvalChat={approval?.chat ?? null} speech={view === "speech" && me?.perms.features.speech !== false} hx={sideHx} />
       </div>
       {open && <div className="side-scrim" onClick={() => setOpen(false)} aria-hidden />}
 
       <main id="main" tabIndex={-1} className={`main ${panelOpen ? `has-art ${artFull ? "art-full" : ""}` : ""}`}>
         <VerifyBanner me={me ?? null} onChange={setMe} />
         <div className="sr-only" role="status" aria-live="polite" data-notr>{sayAt}</div>
-        {syncSt.risk && <div className="sync-warn" role="alert"><I.InfoCircle size={16} /><span>{tr("Trình duyệt đã hết chỗ và máy chủ chưa nhận được bản mới nhất của")} {syncSt.pending + syncSt.tooBig} {tr("mục. Đừng đóng trang trước khi xuất dữ liệu.")}</span><button className="btn" onClick={exportData}>{tr("Xuất dữ liệu")}</button></div>}
+        <SyncWarn onExport={exportData} />
         {view !== "code" && view !== "speech" && view !== "brain" && <div className="topbar">
           <div className="left">
             {!open && <SideToggle onClick={() => setOpen(true)} />}
-            {view === "chat" && chat && (
+            {view === "chat" && meta && (
               <div className="title-wrap" style={{ position: "relative" }}>
-                <button className="sel" style={{ fontSize: 14 }} aria-haspopup="menu" aria-expanded={titleMenu} onClick={() => { setTitleMenu(!titleMenu); setPickTag(false); setChatMenu(null); }}><span className="sel-t" data-notr>{chat.title}</span><I.Chevron size={14} /></button>
+                <button className="sel" style={{ fontSize: 14 }} aria-haspopup="menu" aria-expanded={titleMenu} onClick={() => { setTitleMenu(!titleMenu); setPickTag(false); setChatMenu(null); }}><span className="sel-t" data-notr>{meta.title}</span><I.Chevron size={14} /></button>
                   <Menu open={!!(titleMenu)} className="down" style={{ top: 36, left: 0, width: pickTag ? 240 : 200 }}>
-                    {pickTag && titleMenu ? <TagPicker tags={cleanTags(chat.tags)} all={tagsAll} onChange={(t) => setChatTags(chat.id, t)} onBack={() => setPickTag(false)} /> : <>
-                    <button className="menu-item" onClick={() => { togglePin(chat.id); setTitleMenu(false); }}>{chat.pinned ? <I.M icon="PinOff" /> : <I.M icon="Pin" />}{chat.pinned ? "Bỏ ghim" : "Ghim"}</button>
-                    <button className="menu-item" onClick={() => { setRenaming(chat.id); setOpen(true); setTitleMenu(false); }}><I.Pencil />Đổi tên</button>
-                    <button className="menu-item" onClick={() => setPickTag(true)}><I.Icon name="Tag" />Gắn thẻ{chat.tags?.length ? <span className="sc tag-n">{chat.tags.length}</span> : <span className="sc"><I.ChevronR size={16} /></span>}</button>
-                    <button className="menu-item" onClick={() => { setTitleMenu(false); autoTitle(chat.id, true); }}><I.Sparkle />Đặt tên tự động</button>
+                    {pickTag && titleMenu ? <TagPicker tags={cleanTags(meta.tags)} all={tagsAll} onChange={(t) => setChatTags(meta.id, t)} onBack={() => setPickTag(false)} /> : <>
+                    <button className="menu-item" onClick={() => { togglePin(meta.id); setTitleMenu(false); }}>{meta.pinned ? <I.M icon="PinOff" /> : <I.M icon="Pin" />}{meta.pinned ? "Bỏ ghim" : "Ghim"}</button>
+                    <button className="menu-item" onClick={() => { setRenaming(meta.id); setOpen(true); setTitleMenu(false); }}><I.Pencil />Đổi tên</button>
+                    <button className="menu-item" onClick={() => setPickTag(true)}><I.Icon name="Tag" />Gắn thẻ{meta.tags?.length ? <span className="sc tag-n">{meta.tags.length}</span> : <span className="sc"><I.ChevronR size={16} /></span>}</button>
+                    <button className="menu-item" onClick={() => { setTitleMenu(false); autoTitle(meta.id, true); }}><I.Sparkle />Đặt tên tự động</button>
                     <hr />
-                    <button className="menu-item del" onClick={() => { setDelId(chat.id); setTitleMenu(false); }}><I.Trash />Xóa</button>
+                    <button className="menu-item del" onClick={() => { setDelId(meta.id); setTitleMenu(false); }}><I.Trash />Xóa</button>
                     </>}
                   </Menu>
               </div>
             )}
-            {view === "chat" && chat ? <TagChips tags={cleanTags(chat.tags)} onPick={filterTag} onOpen={() => { setChatMenu(null); setTitleMenu(true); setPickTag(true); }} /> : null}
+            {view === "chat" && meta ? <TagChips tags={cleanTags(meta.tags)} onPick={filterTag} onOpen={() => { setChatMenu(null); setTitleMenu(true); setPickTag(true); }} /> : null}
           </div>
           {(view === "new" || view === "chat") && pill}
           <div className="right">
             {view === "new" && <button className={`icon-btn ${incog ? "ghost-on" : ""}`} onClick={() => { armDraft(); setIncog(!incog); say(incog ? "Đã tắt chế độ ẩn danh" : "Chế độ ẩn danh: không lưu vào lịch sử, không vào Bộ não"); }} aria-label="Ẩn danh" aria-pressed={incog}><I.Ghost /></button>}
-            {view === "chat" && products.length > 0 && !panelOpen && <button className="btn prod-btn" onClick={() => products[products.length - 1].open()} title={tr("Xem trước sản phẩm của đoạn chat")}><I.Eye size={15} />{tr("Sản phẩm")}<span className="prod-n">{products.length}</span></button>}
-            {view === "chat" && chat && brwOk && <button className={`icon-btn brw-btn ${brwShow ? "on" : ""}`} onClick={() => { setArtSel(null); setFileSel(null); setBrwFor(brwShow ? null : chat.id); }} aria-label={brwShow ? "Đóng trình duyệt" : "Mở trình duyệt"} data-tip={brwShow ? "Đóng trình duyệt" : "Trình duyệt"}><I.Globe size={17} />{chat.browser && <span className="brw-dot" aria-hidden />}</button>}
+            {view === "chat" && prodN > 0 && !panelOpen && <button className="btn prod-btn" onClick={() => openLastProduct()} title={tr("Xem trước sản phẩm của đoạn chat")}><I.Eye size={15} />{tr("Sản phẩm")}<span className="prod-n">{prodN}</span></button>}
+            {view === "chat" && meta && brwOk && <button className={`icon-btn brw-btn ${brwShow ? "on" : ""}`} onClick={() => { setArtSel(null); setFileSel(null); setBrwFor(brwShow ? null : meta.id); }} aria-label={brwShow ? "Đóng trình duyệt" : "Mở trình duyệt"} data-tip={brwShow ? "Đóng trình duyệt" : "Trình duyệt"}><I.Globe size={17} />{meta.browser && <span className="brw-dot" aria-hidden />}</button>}
             {view === "chat" && <button className="btn" onClick={() => setModal("share")}>Chia sẻ</button>}
           </div>
         </div>}
@@ -2756,71 +2271,16 @@ export default function Home({ boot }: { boot?: BootData | null }) {
           </div>
         )}
 
-        {view === "chat" && chat && (
-          <>
-            <h1 className="sr-only" data-notr>{chat.title}</h1>
-            <div className="thread" ref={threadRef} onScroll={onScroll} onWheel={(e) => { if (e.deltaY < 0) userUp(); }}
-              onTouchStart={(e) => { touchY.current = e.touches[0]?.clientY ?? 0; }} onTouchMove={(e) => { if ((e.touches[0]?.clientY ?? 0) - touchY.current > 5) userUp(); }}
-              onKeyDown={(e) => { if (["PageUp", "ArrowUp", "Home"].includes(e.key)) userUp(); }}>
-              <div className="thread-in">
-                {chat.stub && <><span className="sr-only" role="status">{tr("Đang tải đoạn chat từ máy chủ…")}</span><ThreadSkeleton /></>}
-                {chat.msgs.map((m, i) => <Boundary key={`${chat.id}-${i}`} compact resetKey={m.text}><MsgRow m={m} i={i} last={i === chat.msgs.length - 1} lang={getLang()} busy={busy} mark={chat.compact?.upto === i} art={caps.art} inl={caps.inl} artSig={artSig(i)}
-                  fileActive={m.outs?.length && fileOpen ? fileSel?.file.id : undefined} copied={copied === `${chat.id}-${i}`} speaking={speaking === `${chat.id}-${i}`} chatId={chat.id} cx={rowCx} /></Boundary>)}
-                {undoTurn?.chat === chat.id && <div className="msg-notice turn-undo" role="status"><p>{tr("Câu trả lời cũ đã được thay bằng lượt mới.")}</p><div className="msg-notice-act"><button className="lnk" onClick={undoLost}>{tr("Khôi phục bản cũ")}</button></div></div>}
-                {approval && approval.chat === chat.id && <ApprovalCard calls={approval.calls} onDone={(d, inputs) => { approval.resolve({ decisions: d, inputs }); setApproval(null); }} />}
-                {/* Tin nhắn thêm khi Synchro đang làm: hiện ngay trong đoạn chat (như Claude); model đọc ở bước kế tiếp rồi trả lời tiếp. */}
-                {queued.filter((q) => q.chat === chat.id && q.mode === "steer").map((q) => (
-                  <div key={q.id} className="user-wrap steer-pending">
-                    <span className="steer-tag">{tr("Đã gửi · Synchro đang đọc")}</span>
-                    <div className="user-msg"><UserText text={q.text} /></div>
-                  </div>
-                ))}
-                <div ref={endRef} />
-              </div>
-            </div>
-            {showDown && (busy
-              ? <button className="scroll-down gen" onClick={() => { stick.current = true; toBottom(); }} aria-label={tr("Cuộn xuống phần đang tạo")}><I.Chevron size={15} /><span>{tr("Đang tạo tiếp…")}</span></button>
-              : <button className="scroll-down" onClick={() => { stick.current = true; toBottom(); }} aria-label="Cuộn xuống cuối"><I.Chevron size={16} /></button>)}
-            <Boundary resetKey={`${artSel?.ident}-${fileSel?.file.id}-${brwFor}`}>
-            {artOpen && artVersions && (
-              <ArtifactPanel versions={artVersions} index={artIndex} setIndex={(v) => setArtSel({ chat: chat.id, ident: artSel!.ident, v, follow: false })} ai={caps.ai} onClose={closeArt}
-                expanded={artFull} setExpanded={setArtFull} say={say} switcher={<ProductSwitcher items={products} active={activeProduct} />}
-                conv={chat.inc ? undefined : String(chat.id)} extra={(a) => (!chat.inc && PUBLISHABLE.has(a.type) ? <PublishButton conv={String(chat.id)} art={a} say={say} /> : null)}
-                onAsk={busy ? undefined : (text) => send(text)}
-                criticOf={(a) => chat.critic?.[criticKey(a.ident, a.content)]} onCritic={chat.inc ? undefined : (a) => runCritic(chat.id, a)}
-                onApplyFix={busy || chat.inc ? undefined : (a, f) => applyFix(chat.id, a, f)}
-                onRestyle={busy || chat.inc ? undefined : (a, preset) => { restyle(chat.id, a, preset).catch(() => {}); }}
-                onFix={busy ? undefined : (a, err) => send(`${tr("Artifact")} “${a.title}” ${tr("gặp lỗi")}: ${err}\n${tr("Hãy sửa lỗi này.")}`)} />
-            )}
-            {brwShow && (
-              <div className="brw-panel">
-                <BrowserHub ticket={browserTicket} synchro={{ available: !!brw?.available, reason: brw?.reason }} prefer={brwPrefer} visible say={say} onClose={() => setBrwFor(null)} onExpand={() => setArtFull(!artFull)} expanded={artFull} busy={busy}
-                  onStop={busy ? () => stop() : undefined} />
-              </div>
-            )}
-            {fileOpen && fileSel && (
-              <FilePanel file={fileSel.file} onClose={() => setFileSel(null)} expanded={artFull} setExpanded={setArtFull} say={say} switcher={<ProductSwitcher items={products} active={activeProduct} />} />
-            )}
-            </Boundary>
-            <div className="dock" ref={dockRef}>
-              {chat.studio && (() => { const k = (Object.keys(STUDIO_OF) as TplKey[]).find((x) => STUDIO_OF[x] === chat.studio)!; return (
-                <div className="dock-mode"><span className={`mode-tag sm mt-${k}`}>{TPLS.find((x) => x.k === k)!.label}<button className="mode-x" aria-label="Bỏ chế độ" data-tip="Bỏ chế độ, để Synchro tự chọn"
-                  onClick={() => { setChats((cs) => cs.map((c) => (c.id === chat.id ? { ...c, studio: undefined } : c))); say("Đã bỏ chế độ. Synchro sẽ tự chọn thư viện skill phù hợp."); }}><I.X size={12} /></button></span></div>); })()}
-              <QueueChips items={queued.filter((q) => q.chat === chat.id && q.mode === "later")} onCancel={(qid) => setQueued((q) => q.filter((x) => x.id !== qid))} />
-              <Composer {...composerProps} dock extra={dockMixer} />
-              <div className="disclaimer dock-note"><span>Synchro là AI và có thể mắc lỗi. Vui lòng kiểm tra kỹ các câu trả lời.</span><ModelPicker model={model} setModel={setModel} /><UsageRing model={model} onDetails={() => { setSettingsTab("Usage"); setModal("settings"); }} /></div>
-            </div>
-          </>
-        )}
+        {view === "chat" && meta && <ChatThread busy={busy} copied={copied} speaking={speaking} model={model} altModels={altModels} undoFor={undoTurn?.chat ?? null} approval={approval} brw={brw} dock={dock} hx={threadHx} />}
 
         <Boundary resetKey={`${view}-${curProj}`}>
         {view === "projects" && (
-          <ProjectsPage projects={projects} chats={chats} say={say} onNew={() => setModal("proj")} onOpen={(id) => { setCurProj(id); setView("project"); }} patch={patchProj} onEdit={(id) => setEditProj(id)} onDelete={(id) => setDelProj(id)}
+          <ProjectsFor projects={projects} say={say} onNew={() => setModal("proj")} onOpen={(id) => { setCurProj(id); setView("project"); }} patch={patchProj} onEdit={(id) => setEditProj(id)} onDelete={(id) => setDelProj(id)}
             onDeleteMany={(ids) => { const del = new Set(ids); setProjects((ps) => ps.filter((x) => !del.has(x.id))); chatSync.forget("project", ids); setChats((cs) => cs.map((c) => (c.project !== undefined && del.has(c.project) ? { ...c, project: undefined } : c))); if (curProj !== null && del.has(curProj)) setCurProj(null); }} />
         )}
 
         {view === "project" && proj && (
-          <ProjectPage proj={proj} chats={chats} say={say} patch={patchProj} onBack={() => setView("projects")} onOpenChat={(id) => { setCur(id); setView("chat"); }} onEdit={() => setEditProj(proj.id)} onDelete={() => setDelProj(proj.id)}
+          <ProjectFor proj={proj} say={say} patch={patchProj} onBack={() => setView("projects")} onOpenChat={(id) => { setCur(id); setView("chat"); }} onEdit={() => setEditProj(proj.id)} onDelete={() => setDelProj(proj.id)}
             onChats={(ids, op) => { const set = new Set(ids); if (op === "delete") { for (const x of ids) if (running.has(x)) stop(true, x); chatSync.forget("chat", ids); } setChats((cs) => (op === "delete" ? cs.filter((c) => !set.has(c.id)) : cs.map((c) => (set.has(c.id) ? { ...c, project: undefined } : c)))); if (op === "delete" && cur !== null && set.has(cur)) setCur(null); }}
             composer={<Composer {...composerProps} placeholder="Hôm nay tôi có thể giúp gì cho bạn?" focusPlaceholder="Nhập / để dùng Skills" />} />
         )}
@@ -2838,7 +2298,7 @@ export default function Home({ boot }: { boot?: BootData | null }) {
               </div>
             </div>
             {tab === 3 ? <AppsGallery q={artQ} say={say} /> : <ArtifactsGallery tab={tab} q={artQ} ai={caps.ai} say={say} refreshKey={artRefresh}
-              onOpenChat={(conv) => { const c = chats.find((x) => String(x.id) === conv); if (!c) return false; setCur(c.id); setView("chat"); return true; }} />}
+              onOpenChat={(conv) => { const c = chatsRef.current.find((x) => String(x.id) === conv); if (!c) return false; setCur(c.id); setView("chat"); return true; }} />}
           </div></div>
         )}
 
@@ -2852,11 +2312,11 @@ export default function Home({ boot }: { boot?: BootData | null }) {
 
       {drag && <div className="drop"><div className="drop-in"><div className="drop-ic"><I.Image size={30} /><I.Copy size={30} /><I.Folder size={30} /></div><span>Thả tệp vào đây</span></div></div>}
       <Toast text={toast} />
-      {voiceOn && <VoiceMode onClose={() => setVoiceOn(false)} onAsk={(t) => send(t)} onTurn={voiceTurn} busy={busy} reply={lastAi ? { text: lastAi.failed ? tr(chatError(lastAi.err).text) : stripAppliedNotes(lastAi.text), time: lastAi.time ?? 0 } : null} rate={VOICE_RATE[vspeed] ?? 1} voice={vvoice} say={say} />}
+      {voiceOn && <VoiceFor onClose={() => setVoiceOn(false)} onAsk={(t) => send(t)} onTurn={voiceTurn} busy={busy} rate={VOICE_RATE[vspeed] ?? 1} voice={vvoice} say={say} />}
       <Fade show={!!(modal === "settings")}><Settings initial={settingsTab} onTab={setSettingsTab} onClose={() => setModal(null)} theme={theme} setTheme={setTheme} /></Fade>
       <Fade show={!!(modal === "lang")}><LangModal onClose={() => setModal(null)} /></Fade>
-      <Fade show={!!(modal === "search")}><CommandPalette chats={visible} projects={projects} codes={codeList} cmds={paletteCmds} go={paletteGo} seed={palSeed} onClose={() => setModal(null)} /></Fade>
-      <Fade show={!!(modal === "share" && chat)}>{chat ? <ShareModal chat={chat} onClose={() => setModal(null)} say={say} /> : <></>}</Fade>
+      <Fade show={!!(modal === "search")}><PaletteFor projects={projects} codes={codeList} cmds={paletteCmds} go={paletteGo} seed={palSeed} onClose={() => setModal(null)} /></Fade>
+      <Fade show={!!(modal === "share" && meta)}>{meta ? <ShareFor onClose={() => setModal(null)} say={say} /> : <></>}</Fade>
       {fm.node}
       <Fade show={!!(modal === "upload")}><UploadModal say={say} onConverted={(f, md) => { saveDoc(f.name, md); saveBlob(f.name, f, say); setFiles((o) => capFiles(o, [f.name], say)); setModal(null); say(`Đã chuyển thành ${f.name}`); }} onClose={() => setModal(null)} onFiles={(f) => { f.forEach((x) => saveBlob(x.name, x, say)); setFiles((o) => [...o, ...f.map((x) => x.name)]); setModal(null); say(`Đã thêm ${f.length} tệp`); }} /></Fade>
       <Fade show={!!(modal === "upgrade")}><UpgradeModal onClose={() => setModal(null)} say={say} /></Fade>

@@ -92,11 +92,16 @@ console.log("── home.tsx: Ô soạn tin và AppCtx không vẽ lại theo ch
   ok(api && !/\bchats\b|\bchat\b|\bbusy\b|\bcur\b/.test(api[1]), "giá trị AppCtx (api) không phụ thuộc chats / chat / busy / cur", api?.[1]);
   ok(api && !/\bchats\b/.test(api[0].replace(/\/\/.*$/gm, "")), "giá trị AppCtx không chứa danh sách đoạn chat (đọc bằng useChats())");
   ok(/<AppCtx\.Provider value=\{api\}>/.test(src), "AppCtx.Provider dùng đúng giá trị api đã memo");
-  // Thân composerProps: bỏ các lời gọi useEvent(...) (cân ngoặc) và chuỗi mẫu; phần còn lại không được có hàm viết tại chỗ.
-  const at = src.indexOf("const composerProps = {");
-  ok(at > 0, "có composerProps");
-  let i = at + "const composerProps = ".length, depth = 0, body = "";
+  // Thân composerProps (useMemo(() => ({ … }), [deps]) từ B2 bước 7, để khối soạn tin ở đáy đoạn chat là phần tử đã memo): bỏ các lời gọi
+  // useEvent(...) (cân ngoặc) và chuỗi mẫu; phần còn lại không được có hàm viết tại chỗ. Hàm qua useEvent đặt ngay trên (hook không gọi trong useMemo).
+  const at = src.indexOf("const composerProps = useMemo(() => ({");
+  ok(at > 0, "có composerProps (useMemo)");
+  let i = at + "const composerProps = useMemo(() => (".length, depth = 0, body = "";
   for (; i < src.length; i++) { const ch = src[i]; body += ch; if (ch === "{") depth++; else if (ch === "}" && --depth === 0) break; }
+  const deps = /^\), \[([^\]]*)\]\)/.exec(src.slice(i + 1))?.[1] ?? "";
+  ok(deps && !/\bchats\b|\bchat\b/.test(deps), "composerProps chỉ dựng lại theo giá trị của nó (không theo danh sách đoạn chat)", deps);
+  const fns = [...body.matchAll(/\b(onSend|onSteer|onStop|goCustom|goConnectors|openUpload|onVoice|onProject)\b(?:: (\w+))?/g)].map((m) => m[2] ?? m[1]);
+  ok(fns.length >= 8 && fns.every((f) => new RegExp(`\\b${f} = useEvent\\(|, ${f} = useEvent\\(`).test(src)), "các hàm của composerProps đều là useEvent", fns);
   let rest = "", k = 0;
   while (k < body.length) {
     if (body.startsWith("useEvent(", k)) { let d = 0; for (; k < body.length; k++) { if (body[k] === "(") d++; else if (body[k] === ")" && --d === 0) { k++; break; } } rest += "useEvent()"; continue; }
