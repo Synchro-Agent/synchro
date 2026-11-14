@@ -565,7 +565,7 @@ function Reflect() {
     <>
       <div style={{ display: "flex", justifyContent: "space-between" }}>
         <div><div className="s-title">Reflect</div><div className="d">Based on your conversations in Synchro chat.</div></div>
-        <div style={{ display: "flex", gap: 4 }}><Select width={160} value={r} onChange={setR} options={["Past month", "Past 3 months", "Past 6 months", "Past year"]} /><button className="icon-btn" aria-label="Refresh" onClick={run} disabled={loading}><span style={{ display: "inline-flex", animation: loading ? "twirl 1s linear infinite" : undefined }}><I.Retry size={16} /></span></button></div>
+        <div style={{ display: "flex", gap: 4 }}><Select width={160} value={r} onChange={setR} options={["Past month", "Past 3 months", "Past 6 months", "Past year"]} /><button className="icon-btn" aria-label="Refresh" onClick={run} disabled={loading}><span className={loading ? "s-twirl" : undefined} style={{ display: "inline-flex" }}><I.Retry size={16} /></span></button></div>
       </div>
       {loading || !gen ? (
         <div className="empty" style={{ marginTop: 90 }}><I.Layers size={72} /><span style={{ marginTop: 8 }}>{loading ? "Surfacing themes and patterns." : "No reflection yet."}</span>{loading ? <span className="muted" style={{ fontSize: 12 }}>This should only take a minute or so.</span> : <button className="btn dark" style={{ marginTop: 8 }} onClick={run}>Generate</button>}</div>

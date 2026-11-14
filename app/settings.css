@@ -268,4 +268,8 @@ html body .sy-settings .adm-bar .s-search{flex:1 1 220px;height:var(--ds-h);marg
 html body .sy-settings .adm-bar .s-search input{font-size:13px;color:var(--ds-ink);outline:0}
 html body .adm-perm-row .field.adm-num{width:112px;min-width:112px;flex:none;margin:0;text-align:right}
 .adm-perm-row:has(.adm-num)>div:first-child{flex:1;min-width:0}
+/* Chuyển động của nút Làm mới (Reflect) và mũi tên mở hàng người dùng (Quản trị): đặt bằng lớp, không bằng style nội dòng, để luật giảm
+   chuyển động (globals.css, prefers-reduced-motion / data-motion) tắt được mà không cần !important (B5). */
+.s-twirl{animation:twirl 1s linear infinite}
+.adm-chev{transition:transform .2s}
 }

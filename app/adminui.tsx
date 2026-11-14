@@ -441,7 +441,7 @@ export function AdminPanel({ Toggle }: { Toggle: ToggleT }) {
                   </td>
                   <td data-notr style={{ whiteSpace: "nowrap" }}>{ago(u.lastSeen)}</td>
                   <td><span className={`adm-st ${u.status === "active" ? "" : "off"}`}><i />{u.status === "active" ? "Active" : "Suspended"}</span></td>
-                  <td style={{ width: 24, color: "var(--text-3)" }}><span style={{ display: "inline-flex", transform: open === u.id ? "rotate(180deg)" : undefined, transition: "transform .2s" }}><I.Chevron size={14} /></span></td>
+                  <td style={{ width: 24, color: "var(--text-3)" }}><span className="adm-chev" style={{ display: "inline-flex", transform: open === u.id ? "rotate(180deg)" : undefined }}><I.Chevron size={14} /></span></td>
                 </tr>
                 {open === u.id && !bk.on && (
                   <tr className="adm-detail"><td colSpan={4}>
