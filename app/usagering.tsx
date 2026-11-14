@@ -5,7 +5,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Menu } from "./ui";
 import { useApp } from "./store";
-import { getLang, tf, tr } from "./i18n";
+import { getLang, tf, tr, trc } from "./i18n";
 import { resetAt } from "./resetfmt";
 import * as I from "./icons";
 
@@ -56,7 +56,7 @@ export function useUsage(provider?: string) {
 export const money = (v: number) => (v > 0 && v < 0.01 ? "<$0.01" : `$${v.toFixed(v >= 100 ? 0 : 2)}`);
 export const kTok = (n: number) => (n >= 1e6 ? `${(n / 1e6).toFixed(n >= 1e7 ? 0 : 1)}M` : n >= 1e3 ? `${(n / 1e3).toFixed(n >= 1e4 ? 0 : 1)}K` : String(n));
 export function resetText(t: number | null, active = true) {
-  if (!t || !active) return tr("Bắt đầu khi bạn gửi tin nhắn");
+  if (!t || !active) return trc("Bắt đầu khi bạn gửi tin nhắn", "giờ đặt lại");
   // Cùng nguồn, cùng định dạng (tuyệt đối) với thẻ báo hết hạn mức dưới câu trả lời (resetfmt.ts).
   return resetAt(t, getLang());
 }
@@ -108,9 +108,10 @@ const WIN: Record<string, string> = {
   five_hour: "Phiên hiện tại", seven_day: "Hằng tuần · mọi model", seven_day_opus: "Hằng tuần · Opus",
   seven_day_sonnet: "Hằng tuần · Sonnet", seven_day_overage_included: "Hằng tuần · giới hạn theo model", overage: "Tín dụng sử dụng",
 };
-const GROUP: Record<string, string> = { "Gemini models": "model Gemini", "Claude and GPT models": "model Claude và GPT" };
+// Nhóm hạn mức của gói Google (tên hãng trả về bằng tiếng Anh). "model Gemini" ngắn, dễ trùng: dịch theo ngữ cảnh.
+const groupName = (g: string) => (g === "Gemini models" ? trc("model Gemini", "nhóm hạn mức") : g === "Claude and GPT models" ? tr("model Claude và GPT") : g);
 function winLabel(w: PlanWindow) {
-  if (w.group) return `${tr(w.kind === "weekly" ? "Hằng tuần" : "Phiên hiện tại")} · ${GROUP[w.group] ? tr(GROUP[w.group]) : w.group}`;
+  if (w.group) return `${tr(w.kind === "weekly" ? "Hằng tuần" : "Phiên hiện tại")} · ${groupName(w.group)}`;
   return WIN[w.window] ? tr(WIN[w.window]) : w.label;
 }
 // Cách hãng đặt lại hạn mức (ghi chú dưới các thanh), dịch bằng tr khi hiện.
@@ -191,7 +192,7 @@ export const hasApi = (st: UsageState | null) => !!st?.vendors?.some((v) => v.mo
 /** Huy hiệu cách hãng đang chạy: gói đã đăng nhập, khóa API, hoặc chưa kết nối. */
 export function ModeTag({ v }: { v: VendorUsage }) {
   if (v.mode === "plan") return <span className="us-tag plan">{planName(v.sub)}</span>;
-  if (v.mode === "api") return <span className="us-tag api">{v.usingApiUntil ? tr("Khóa API · gói tạm hết") : tr("Khóa API")}</span>;
+  if (v.mode === "api") return <span className="us-tag api">{v.usingApiUntil ? tr("Khóa API · gói tạm hết") : trc("Khóa API", "mức dùng")}</span>;
   return <span className="us-tag none">{tr("Chưa kết nối")}</span>;
 }
 
@@ -237,7 +238,7 @@ export function UsageRing({ model, extra, onDetails, up = true }: { model?: stri
   const r = 6.4, c = 2 * Math.PI * r;
   const label = st ? `${tr("Mức dùng")}: ${Math.round(pct)}%` : tr("Mức dùng");
   const head = auto ? tr("Mức dùng · Tự động chọn hãng")
-    : sub ? `${tr("Giới hạn gói")} · ${sub.name}${sub.plan ? ` ${sub.plan}` : ""}` : `${tr("Giới hạn sử dụng")} · ${tr("Khóa API")}`;
+    : sub ? `${tr("Giới hạn gói")} · ${sub.name}${sub.plan ? ` ${sub.plan}` : ""}` : `${tr("Giới hạn sử dụng")} · ${trc("Khóa API", "mức dùng")}`;
   return (
     <div className="us-wrap">
       <button className={`us-ring ${level(pct)} ${open ? "on" : ""}`} onClick={() => setOpen(!open)} aria-label={label} data-tip={label} aria-expanded={open}>

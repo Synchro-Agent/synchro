@@ -54,6 +54,30 @@ const files = [];
 const walk = (d) => { for (const f of rd(d)) { const p = P.join(d, f); if (st(p).isDirectory()) walk(p); else if (/\.tsx?$/.test(f) && !/\.d\.ts$/.test(f)) files.push(p); } };
 walk(P.join(process.cwd(), "app"));
 const src = new Map(files.map((f) => [f, rf(f, "utf8")]));
+// Mọi khóa trần một hai từ mới đều phải có ngữ cảnh: bộ dịch trang áp VI2EN cho mọi nút chữ khớp nguyên văn (tiêu đề phiên "Đồ thị" thành "Graph",
+// chữ trong sơ đồ mermaid…). Khóa có {biến} là mẫu tf, không bao giờ hiện nguyên văn trên trang. Danh sách khóa trần có từ trước: tests/fixtures/i18n-bare-short-keys.json.
+{
+  const legacy = new Set(JSON.parse(rf(P.join(process.cwd(), "tests", "fixtures", "i18n-bare-short-keys.json"), "utf8")).keys);
+  const shortBare = (map) => Object.keys(map).filter((k) => !k.includes("‹") && !k.includes("{") && k.trim().split(/\s+/).length <= 2 && !legacy.has(k));
+  const fresh = shortBare(D.VI2EN);
+  ok(!fresh.length, `không có khóa trần một hai từ mới trong VI2EN (dùng trc với ngữ cảnh; ${legacy.size} khóa có từ trước)`, fresh.join(", "));
+  ok(JSON.stringify(shortBare({ "Đồ thị": "Graph", "Đồ thị ‹khung đồ thị›": "Graph", "Xóa “{title}”?": "Delete “{title}”?", "Đồ thị bộ não của bạn": "x" })) === '["Đồ thị"]', "phép kiểm bắt được khóa trần mới, bỏ qua khóa có ngữ cảnh, mẫu tf và câu dài");
+}
+// Chữ gốc tiếng Việt giữ như main, chỉ thêm ngữ cảnh: "Nhật ký" (Bộ não), "Bỏ qua" (phim giới thiệu), "Tắt" (CLI isolation).
+{
+  const code = (f) => src.get(P.join(process.cwd(), "app", f)) ?? "";
+  ok(K("Nhật ký", "loại ghi chú") === "Daily note" && K("Nhật ký", "nhóm ghi chú") === "Daily notes" && code("brainui.tsx").includes('trc("Nhật ký", "loại ghi chú")') && code("brainui.tsx").includes('trc("Nhật ký", "nhóm ghi chú")') && !code("brainui.tsx").includes("Nhật ký ngày"),
+    "Bộ não: nhóm và loại ghi chú vẫn là “Nhật ký” (Daily notes / Daily note)");
+  ok(K("Bỏ qua", "phim giới thiệu") === "Skip" && code("introfilm.tsx").includes('trc("Bỏ qua", "phim giới thiệu")') && !code("introfilm.tsx").includes("Bỏ qua phim"), "phim giới thiệu: nút vẫn là “Bỏ qua” (Skip)");
+  ok(K("Tắt", "cách ly CLI") === "Off" && code("healthui.tsx").includes('trc("Tắt", "cách ly CLI")') && !code("healthui.tsx").includes('tr("Đang tắt")'), "Sức khỏe hệ thống: CLI isolation vẫn là “Tắt” (Off)");
+  // Loại thư gửi lỗi: tên loại thư như main, không phải nhãn nút ("Reset your password", "Verify email").
+  const mail = { "Đặt lại mật khẩu": "Password reset", "Báo đổi mật khẩu": "Password changed", "Xác minh email": "Email verification", "Báo đăng ký trùng": "Duplicate sign-up notice", "Cảnh báo": "Alert", "Thư thử": "Test email", "Khác": "Other" };
+  const badMail = Object.entries(mail).filter(([vi, en]) => K(vi, "loại thư") !== en || !code("healthui.tsx").includes(`trc("${vi}", "loại thư")`));
+  ok(!badMail.length, "Sức khỏe hệ thống → thư gửi lỗi: tên loại thư giống main (Password reset, Email verification…)", badMail.map((x) => x[0]).join(", "));
+  ok(K("Dùng khóa API", "gói hết hạn mức") === "Use the API key" && code("home.tsx").includes('trc("Dùng khóa API", "gói hết hạn mức")')
+    && K("Bắt đầu khi bạn gửi tin nhắn", "giờ đặt lại") === "Starts with your next message" && code("usagering.tsx").includes('trc("Bắt đầu khi bạn gửi tin nhắn", "giờ đặt lại")'),
+    "nút chuyển sang khóa API và giờ đặt lại giữ chữ tiếng Anh của main");
+}
 // Tệp nhập (không chỉ kiểu) từ tệp khác trong app/: mọi tệp mà một tệp "use client" kéo theo (kể cả gián tiếp) nằm trong gói tải về,
 // nên không được tới i18n-server.ts (kéo cả từ điển vào gói tải về). Tệp máy chủ (route, trang máy chủ, chatengine…) dùng thoải mái.
 const depsIn = (src) => (f, lazy = true) => [...src.get(f).matchAll(/(?:^|\n)\s*(?:import|export)\s+(?!type\b)([^;]*?)\s*from\s*"(\.{1,2}\/[^"]+)"|import\("(\.{1,2}\/[^"]+)"\)/g)]

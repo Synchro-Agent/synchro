@@ -4,7 +4,7 @@
 import { useEffect, useState } from "react";
 import * as I from "./icons";
 import { Loader } from "./brand";
-import { tf, tr, trCx } from "./i18n";
+import { tf, tr, trc, trCx } from "./i18n";
 import { AskCard, type AskStep, type OnAnswer } from "./agentui";
 import { lazyView } from "./lazy";
 import { IMAGE_PLANS } from "./catalog";
@@ -248,7 +248,7 @@ export function WorkSummary({ parts, plan, ms, stopped, failed, render }: { part
   const note = toolErrNote(allTools, allTools, { failed, stopped });
   if (!steps && !total && !(parts ?? []).length) return null;
   const bits = [
-    total ? tf("Xong {ok}/{total} việc", { ok, total }) : tr(stopped ? "Đã dừng" : "Đã xong"),
+    total ? tf("Xong {ok}/{total} việc", { ok, total }) : stopped ? tr("Đã dừng") : trc("Đã xong", "nhật ký công việc"),
     steps ? tf("{n} bước", { n: steps }) : "",
     ms && ms >= 1000 ? dur(ms) : "",
   ].filter(Boolean);

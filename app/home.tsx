@@ -4,7 +4,7 @@ import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useStat
 import { createPortal } from "react-dom";
 import * as I from "./icons";
 import { Avatar } from "./avatar";
-import { getLang, locale, tf, tr, trCx, useLangReady } from "./i18n";
+import { getLang, locale, tf, tr, trc, trCx, useLangReady } from "./i18n";
 import { resetClock, resetAt } from "./resetfmt";
 import { FileCard } from "./fileicon";
 import { useFileMenu, saveDoc, saveBlob, fileContext } from "./filemenu";
@@ -1864,7 +1864,7 @@ export default function Home({ boot }: { boot?: BootData | null }) {
       text: at
         ? tf("Chuyển sang khóa API {name} dùng chung ({api}) cho tới khi gói hồi lại ({at})? Tin nhắn vừa rồi sẽ được gửi lại bằng khóa API. Chọn Hủy để giữ nguyên gói.", { name, api: apiName, at })
         : tf("Chuyển sang khóa API {name} dùng chung ({api}) cho tới khi gói dùng lại được? Tin nhắn vừa rồi sẽ được gửi lại bằng khóa API. Chọn Hủy để giữ nguyên gói.", { name, api: apiName }),
-      ok: tr("Dùng khóa API"),
+      ok: trc("Dùng khóa API", "gói hết hạn mức"),
       fn: async () => {
         await fetch(`/api/engines/${cli}/use-api`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ on: true }) }).catch(() => null);
         await refreshModels();

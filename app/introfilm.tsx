@@ -17,7 +17,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Loader, Mark, Wordmark } from "./brand";
 import { assemble, boxOf, center, fly as flyTo, markTarget, onScreen, openHole, reducedMotion, settleApp, type Box } from "./handoff";
-import { getLang, tr } from "./i18n";
+import { getLang, tr, trc } from "./i18n";
 import { SEEN, wantsIntro } from "./introflag";
 export { wantsIntro };
 
@@ -348,7 +348,7 @@ export function IntroFilm({ uid, onCovered, onReveal, onDone }: { uid: string; o
             <img src="/intro/synchro-intro-poster.jpg" alt="" />
             <div className="intro-ask-a">
               <button type="button" className="intro-btn pri" onClick={watch}>{tr("Xem phim giới thiệu (43 giây)")}</button>
-              <button type="button" className="intro-btn" onClick={() => { onCovered(); try { localStorage.setItem(SEEN(uid), String(Date.now())); } catch {} leave(); }}>{tr("Vào Synchro")}</button>
+              <button type="button" className="intro-btn" onClick={() => { onCovered(); try { localStorage.setItem(SEEN(uid), String(Date.now())); } catch {} leave(); }}>{trc("Vào Synchro", "phim giới thiệu")}</button>
             </div>
           </div>
         )}
@@ -360,11 +360,11 @@ export function IntroFilm({ uid, onCovered, onReveal, onDone }: { uid: string; o
       {(phase === "play" || phase === "wait" || (phase === "out" && !reduced)) && (
         <div className={`intro-ui ${phase === "out" ? "fade" : ""}`}>
           <button ref={skipBtn} type="button" className={`intro-btn skip ${skip || phase === "wait" ? "on" : ""}`} disabled={phase === "out"} onClick={() => leave()}>
-            {tr("Bỏ qua phim")}<svg viewBox="0 0 20 20" aria-hidden><path d="M8 5l5 5-5 5" /></svg>
+            {trc("Bỏ qua", "phim giới thiệu")}<svg viewBox="0 0 20 20" aria-hidden><path d="M8 5l5 5-5 5" /></svg>
           </button>
           {needSound
-            ? <button type="button" className="intro-btn sound-need" onClick={sound}>{tr("Bật tiếng")}</button>
-            : phase === "play" && <button type="button" className="intro-btn snd" aria-label={muted ? tr("Bật tiếng") : tr("Tắt tiếng")} onClick={sound}>
+            ? <button type="button" className="intro-btn sound-need" onClick={sound}>{trc("Bật tiếng", "phim giới thiệu")}</button>
+            : phase === "play" && <button type="button" className="intro-btn snd" aria-label={muted ? trc("Bật tiếng", "phim giới thiệu") : trc("Tắt tiếng", "phim giới thiệu")} onClick={sound}>
                 <svg viewBox="0 0 20 20" aria-hidden><path d="M3.5 8h2.6L10 4.8v10.4L6.1 12H3.5z" />{muted ? <path d="M13 8l4 4M17 8l-4 4" /> : <path d="M13.2 7.2a4 4 0 010 5.6M15.4 5a7 7 0 010 10" />}</svg>
               </button>}
           {phase === "play" && canFull && <button type="button" className={`intro-btn fs ${needSound ? "solo" : ""}`} aria-label={full ? tr("Thoát toàn màn hình") : tr("Toàn màn hình")} onClick={toggleFull}>

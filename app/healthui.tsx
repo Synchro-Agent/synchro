@@ -5,7 +5,7 @@ import "./settings.css";
 import { useCallback, useEffect, useState } from "react";
 import { call, ago, fmtDate } from "./adminui";
 import { useApp } from "./store";
-import { getLang, locale, tf, tr } from "./i18n";
+import { getLang, locale, tf, tr, trc } from "./i18n";
 import * as I from "./icons";
 import type { MemSample } from "./memstat";
 import type { LoopSample } from "./loopdelay";
@@ -40,7 +40,18 @@ const UNIT_SAME: Record<string, string> = { MB: "MB", kb: "KB" };
 const cacheText = (v: Record<string, number>) => Object.entries(v).map(([a, b]) => (UNIT[a] ? tf(UNIT[a], { n: b.toLocaleString(locale()) }) : `${b.toLocaleString(locale())} ${UNIT_SAME[a] ?? a}`)).join("\u00a0· ");
 const CLI: Record<string, string> = { claude: "Claude", codex: "ChatGPT", agy: "Gemini", grok: "Grok" };
 const gb = (mb: number) => (mb >= 1024 ? `${(mb / 1024).toLocaleString(locale(), { maximumFractionDigits: 1 })} GB` : `${mb.toLocaleString(locale())} MB`);
-const MAIL_KIND: Record<string, string> = { reset: "Đặt lại mật khẩu", changed: "Báo đổi mật khẩu", verify: "Xác minh email", signup_taken: "Báo đăng ký trùng", alert: "Cảnh báo", test: "Thư thử", other: "Khác" };
+// Loại thư gửi lỗi: tên một loại thư ("Password reset"), không phải nhãn nút ("Reset your password"), nên mỗi loại một khóa ngữ cảnh "loại thư".
+const mailKind = (k: string): string => {
+  switch (k) {
+    case "reset": return trc("Đặt lại mật khẩu", "loại thư");
+    case "changed": return trc("Báo đổi mật khẩu", "loại thư");
+    case "verify": return trc("Xác minh email", "loại thư");
+    case "signup_taken": return trc("Báo đăng ký trùng", "loại thư");
+    case "alert": return trc("Cảnh báo", "loại thư");
+    case "test": return trc("Thư thử", "loại thư");
+    default: return trc("Khác", "loại thư");
+  }
+};
 const WD: Record<string, string> = { restart: "Đã khởi động lại web", restart_failed: "Khởi động lại không thành công", gave_up: "Dừng tự khởi động lại: lặp lại quá nhiều, cần xử lý tay", down: "Web không trả lời", recovered: "Web trả lời lại", degraded: "Web trả lời nhưng báo có phần lỗi (đĩa hoặc dịch vụ workspace)", installed: "Đã cài watchdog" };
 
 function problemText(p: Problem) {
@@ -97,7 +108,7 @@ export function HealthPanel({ Toggle }: { Toggle: (p: { on: boolean; set: (v: bo
     ...(h.mem ? [["Server memory (heap)", `${gb(h.mem.now.heapUsed)} / ${gb(h.mem.heapLimit)}`, h.mem.now.heapUsed > h.mem.heapLimit * 0.75] as [string, string, boolean]] : []),
     // Lượt model cùng lúc so với trần cả máy; có lượt phải chờ nghĩa là trần đang chạm thật.
     ["Replies running now", `${h.turns.running} / ${h.turns.limit}`, h.turns.running >= h.turns.limit], ["Replies waiting now", h.turns.waiting.toLocaleString(locale()), h.turns.waiting > 0], ["Refused, queue full (since restart)", h.turns.refused.toLocaleString(locale()), h.turns.refused > 0],
-    ["CLI isolation", h.isolation.engineUser && h.isolation.bwrap ? tr("User riêng, sandbox bật") : h.isolation.engineUser ? tr("User riêng, sandbox tắt") : tr("Đang tắt"), !(h.isolation.engineUser && h.isolation.bwrap)],
+    ["CLI isolation", h.isolation.engineUser && h.isolation.bwrap ? tr("User riêng, sandbox bật") : h.isolation.engineUser ? tr("User riêng, sandbox tắt") : trc("Tắt", "cách ly CLI"), !(h.isolation.engineUser && h.isolation.bwrap)],
   ];
   const dnsRow = (k: string, ok: boolean) => <span key={k} className={`s-badge ${ok ? "ok" : ""}`} style={{ marginLeft: 6 }} data-notr>{k} {ok ? "✓" : "✗"}</span>;
 
@@ -177,7 +188,7 @@ export function HealthPanel({ Toggle }: { Toggle: (p: { on: boolean; set: (v: bo
           : tf("Gửi không được: {error}", { error: test.error ?? "" })}</p>}
       </div>
       {h.mail.failures.map((f, i) => (
-        <div key={i} className="adm-log"><span className="tm" data-notr>{fmtDate(f.at)}</span><span><span className="bad" data-notr>{tr(MAIL_KIND[f.source] ?? MAIL_KIND.other)}{f.n > 1 ? ` × ${f.n}` : ""}</span><br /><span className="muted" data-notr>{f.detail}</span></span><span /></div>
+        <div key={i} className="adm-log"><span className="tm" data-notr>{fmtDate(f.at)}</span><span><span className="bad" data-notr>{mailKind(f.source)}{f.n > 1 ? ` × ${f.n}` : ""}</span><br /><span className="muted" data-notr>{f.detail}</span></span><span /></div>
       ))}
 
       <h3 className="sec">AI plan sign-in</h3>

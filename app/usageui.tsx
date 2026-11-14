@@ -188,7 +188,7 @@ export function UsageSettings({ go }: { go?: (t: string) => void }) {
       {!(dErr && !d) && <div className="us-stats" style={{ "--n": Math.min(stats.length, 4) } as React.CSSProperties}>{stats.slice(0, 4).map(([v, t]) => <div key={t}><b>{v}</b><span>{t}</span></div>)}</div>}
       {!(dErr && !d) && <DailyChart d={d} cost={apiNow} />}
 
-      <h3 className="sec">{tr("Theo model")}</h3>
+      <h3 className="sec">{trc("Theo model", "mức dùng")}</h3>
       {!d ? null : !d.byPlan.length && !(apiNow && d.byModel.length) ? <p className="d">{tr("Chưa có lượt dùng nào. Bắt đầu một đoạn chat là số liệu hiện ở đây.")}</p> : (
         <div className="us-card us-list">
           {pgM.items.map((x) => x.kind === "plan" ? ((m) => (
