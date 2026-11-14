@@ -16,15 +16,15 @@ import { fileURLToPath } from "node:url";
 const postcss = createRequire(import.meta.url)("postcss");
 
 // Trần hiện tại (số đo lúc đặt trần). Chỉ được hạ.
-// important 14 → 19 (chỉ trong nhánh B5, main vẫn 333): vòng rà B5 tìm ra 5 khai báo đang đè style nội dòng mà lần soát tay bỏ sót (bottom
-// của ba menu trong ô soạn tin dự án, width / padding ≤860px của hàng Cài đặt), trả lại !important; lý do ở KEEP trong css-unimportant.mjs.
+// important 14 → 18 (chỉ trong nhánh B5, main vẫn 333): vòng rà B5 tìm ra 4 khai báo đang đè style nội dòng mà lần soát tay bỏ sót (bottom
+// của ba menu trong ô soạn tin dự án, padding ≤860px của nút chủ đề trong Cài đặt), trả lại !important; lý do ở KEEP trong css-unimportant.mjs.
 // htmlBody 572 → 582 (lần duy nhất tăng, B5 bước 4): khi chuyển !important sang lớp syn-over, 50 selector còn tiền tố html body được chép
 // sang khối syn-over (tiền tố quyết định bên thắng giữa các luật syn-over với nhau, gỡ thì đổi bên thắng); không thêm tiền tố cho selector mới.
 // Chủ dự án giao quyết định (2026-11-14): giữ trần ~582 tạm thời (nay 581); B5 bước 6 (dedupe, vòng 2) phải đưa htmlBody về ≤ 572 (TARGET dưới đây).
 // Thử gỡ tiền tố từng selector của khối syn-over (so cascade tĩnh dev + prod sau mỗi lần gỡ) ngày 2026-11-14
 // thì gỡ được 1 (glass.css, ::before của nút kính: 582 → 581), 53 cái còn lại gỡ thì đổi bên thắng; bước 6 gộp bản syn với bản syn-over
 // của cùng selector thì mới bỏ được bản chép.
-export const CEIL = { important: 19, htmlBody: 581, fontSize: 1278, zIndex: 63, mediaWidth: 90, darkHex: 100, inlineFontSize: 65, inlineZIndex: 22 };
+export const CEIL = { important: 18, htmlBody: 581, fontSize: 1278, zIndex: 63, mediaWidth: 90, darkHex: 100, inlineFontSize: 65, inlineZIndex: 22 };
 // Mục tiêu có hạn: chỉ số phải về tới max trong bước ghi ở by (đặt ngày set). In ra cùng kết quả; bước đó hạ CEIL theo.
 export const TARGET = { htmlBody: { max: 572, by: "B5 bước 6 (dedupe, vòng 2)", set: "2026-11-14" } };
 export const WIDTHS = new Set([480, 640, 760, 761, 860, 1100]);

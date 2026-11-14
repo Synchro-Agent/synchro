@@ -38,14 +38,13 @@ export const KEEP = [
   ["app/projects.css", "html body .modal.pj-modal h2", "font", "thắng .modal.sm h2 { font-size !important } theo thứ tự nạp"],
   ["app/skills.css", "html body .modal.pl-modal h2", "font-size", "thắng .modal.sm h2 { font-size !important } theo thứ tự nạp"],
   ["app/skills.css", "html body .modal.pl-modal h2", "font-weight", "thắng .modal.pj-modal h2 { font !important } (giữ ở trên) theo thứ tự nạp"],
-  // Năm khai báo dưới đây trả lại !important sau vòng rà B5: chúng đè style nội dòng mà lần soát tay bỏ sót vì style đi qua prop
-  // (Menu style={…}) hoặc chỉ đè ở một khoảng rộng; scripts/css-inline.mjs giờ bắt loại này. Bốn khai báo nằm ngay trong khối syn-over (nơi
+  // Bốn khai báo dưới đây trả lại !important sau vòng rà B5: chúng đè style nội dòng mà lần soát tay bỏ sót vì style đi qua prop
+  // (Menu style={…}) hoặc chỉ đè ở một khoảng rộng; scripts/css-inline.mjs giờ bắt loại này. Ba khai báo nằm ngay trong khối syn-over (nơi
   // codemod đã chuyển tới); bottom của menu + về lại luật syn gốc vì nó phải thua .codebox.cb-copy .cb-btn { bottom !important } theo
   // specificity như trước (!important ở syn-over thua mọi !important ở syn).
   ["app/projects.css", "html body .pj-compose .plus-menu", "bottom", "đè bottom: 40 nội dòng của menu + (home.tsx, Menu style) trong ô soạn tin dự án"],
   ["app/projects.css", ".pj-compose .model-sub:not(.msub-models)", "bottom", "đè bottom: 0 nội dòng của menu con Mức độ nỗ lực (home.tsx, Menu style)"],
   ["app/synchro-ds.css", ".pj-compose :is(.model-menu,.mic-wrap .menu)", "bottom", "đè bottom: calc(100% + 8px) nội dòng của menu micro (home.tsx, Menu style)"],
-  ["app/synchro-ds.css", ".sy-settings .s-body .row>.field", "width", "≤860px: đè width: 280 nội dòng của ô trong hàng Cài đặt (settings.tsx)"],
   ["app/synchro-ds.css", ".sy-settings .s-body .row>:is(.group,.pl-seg)>button", "padding", "≤860px: đè padding: 0 9px nội dòng của nút chủ đề (settings.tsx General)"],
 ];
 

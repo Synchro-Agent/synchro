@@ -1264,7 +1264,7 @@ html body .sy-settings .s-item{padding:0;height:44px}
 .sy-settings .s-body{padding:0 16px 32px}
 .sy-sbody-h{padding:0 12px 0 16px}
 .sy-sbody-h h2{font-size:19px}
-.sy-settings .s-body .row>.field{width:100%!important}
+.sy-settings .s-body .row>.field{width:100%}
 .sy-settings .s-body .row>:is(.group,.pl-seg)>button{padding:0 8px!important}
 }
 .sy-mh h2{margin:0;font:600 16px/22px var(--font-sans)}

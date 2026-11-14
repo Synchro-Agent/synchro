@@ -60,6 +60,7 @@ export const ALLOW = [
   ["app/healthui.tsx", "div.d", ".sy-settings .s-body .row .d", "dòng sự cố nằm trong .adm-card > .adm-perm-row, không trong .row"],
   ["app/healthui.tsx", "p.d", ".sy-settings .s-body .row .d", "kết quả thư thử nằm trong .adm-card, không trong .row"],
   ["app/home.tsx", "label", ".sy-fieldrow label", "nhãn ô đánh dấu trong hộp Confirm (.modal.sm), không có .sy-fieldrow (chỉ ở hộp Dự án của modals.tsx)"],
+  ["app/settings.tsx", "input.field", ".sy-settings .s-body .row>.field", "≤860px cỡ ô do flex:1 1 100% (luật syn cùng chỗ) quyết định, width không dùng tới: width: 280 nội dòng thắng cũng không đổi bề rộng (tests/ui/inline-over.mjs đo)"],
   ["app/filemenu.tsx", "div.fm-menu.menu", ".pj-compose :is(.model-menu,.mic-wrap .menu)", "menu tệp mở theo tọa độ chuột, không nằm trong .mic-wrap"],
   ["app/settings.tsx", "div.down.menu.out", ".pj-compose :is(.model-menu,.mic-wrap .menu)", "menu của Select trong Cài đặt, không nằm trong ô soạn tin dự án"],
 ];
