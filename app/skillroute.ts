@@ -6,7 +6,7 @@ import { registerMemStat } from "./memstat";
 import type { Skill } from "./skillstore";
 
 // Mã băm mô tả (SHA-1 của mô tả đã chuẩn hóa) — cùng cách tính với skillscan.ts; để riêng ở đây nên skillroute không phải kéo theo DB.
-// skillscan.descHash là bản dùng chung cho máy chủ; bộ định tuyến mặc định dùng bản này cho bước gộp skill trùng mô tả.
+// Bộ định tuyến và chatengine dùng bản này (skillscan kéo theo từ điển dịch ở máy chủ, không nhập vào đường chat).
 export const descHash = (s: string) => crypto.createHash("sha1").update(s.replace(/\s+/g, " ").trim().toLowerCase()).digest("hex");
 
 export const fold = (s: string) => s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/đ/g, "d");

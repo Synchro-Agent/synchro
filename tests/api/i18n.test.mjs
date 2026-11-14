@@ -56,8 +56,8 @@ walk(P.join(process.cwd(), "app"));
 const src = new Map(files.map((f) => [f, rf(f, "utf8")]));
 // Tệp nhập (không chỉ kiểu) từ tệp khác trong app/: mọi tệp mà một tệp "use client" kéo theo (kể cả gián tiếp) nằm trong gói tải về,
 // nên không được tới i18n-server.ts (kéo cả từ điển vào gói tải về). Tệp máy chủ (route, trang máy chủ, chatengine…) dùng thoải mái.
-const deps = (f) => [...src.get(f).matchAll(/(?:^|\n)\s*(?:import|export)\s+(?!type\b)([^;]*?)\s*from\s*"(\.{1,2}\/[^"]+)"|import\("(\.{1,2}\/[^"]+)"\)/g)]
-  .filter((m) => m[3] || !/^\{[^}]*\}$/.test(m[1].trim()) || !m[1].trim().slice(1, -1).split(",").every((x) => !x.trim() || /^type\s/.test(x.trim())))
+const deps = (f, lazy = true) => [...src.get(f).matchAll(/(?:^|\n)\s*(?:import|export)\s+(?!type\b)([^;]*?)\s*from\s*"(\.{1,2}\/[^"]+)"|import\("(\.{1,2}\/[^"]+)"\)/g)]
+  .filter((m) => (m[3] ? lazy : true) && (m[3] || !/^\{[^}]*\}$/.test(m[1].trim()) || !m[1].trim().slice(1, -1).split(",").every((x) => !x.trim() || /^type\s/.test(x.trim()))))
   .map((m) => { const b = P.resolve(P.dirname(f), m[2] ?? m[3]); return [b + ".ts", b + ".tsx", P.join(b, "index.ts")].find((x) => src.has(x)); }).filter(Boolean);
 const srv = P.join(process.cwd(), "app", "i18n-server.ts");
 const users = files.filter((f) => deps(f).includes(srv));
@@ -65,6 +65,10 @@ const client = new Map(files.filter((f) => /^\s*["']use client["']/.test(src.get
 for (const queue = [...client.keys()]; queue.length;) { const f = queue.shift(); for (const d of deps(f)) if (!client.has(d)) { client.set(d, [...client.get(f), d]); queue.push(d); } }
 const leak = client.get(srv);
 ok(users.length > 1 && !leak, `không tệp giao diện nào kéo theo i18n-server.ts (${users.length} tệp máy chủ nhập trực tiếp)`, leak?.map((f) => P.relative(process.cwd(), f)).join(" → "));
+// Đường chat (chatengine.ts) không nhập tĩnh từ điển VI→EN: chỉ route cần dịch ở máy chủ (quét skill, xuất skill…) mới kéo nó vào, lúc được gọi.
+const reach = (start) => { const seen = new Map([[start, [start]]]); for (const q = [start]; q.length;) { const f = q.shift(); for (const d of deps(f, false)) if (!seen.has(d)) { seen.set(d, [...seen.get(f), d]); q.push(d); } } return seen; };
+const viaChat = reach(P.join(process.cwd(), "app", "chatengine.ts")).get(P.join(process.cwd(), "app", "i18n-dict.ts"));
+ok(!viaChat, "chatengine.ts không nhập tĩnh từ điển VI→EN (i18n-dict.ts)", viaChat?.map((f) => P.relative(process.cwd(), f)).join(" → "));
 // Mẫu tf để trong bảng (khóa động, bộ quét không thấy): mọi giá trị phải là khóa có bản dịch giữ {biến}.
 const tbl = (file, name) => [...(rf(P.join(process.cwd(), file), "utf8").match(new RegExp(`const ${name}[^=]*= \\{([\\s\\S]*?)\\};`))?.[1] ?? "").matchAll(/:\s*"([^"]+)"/g)].map((m) => m[1]);
 for (const [file, name, v, min, what] of [["app/models.ts", "AUTO_PICK", "model", 16, "câu “Tự động chọn … cho việc …”"], ["app/healthui.tsx", "UNIT", "n", 15, "đơn vị số đếm ở Sức khỏe hệ thống"]]) {
