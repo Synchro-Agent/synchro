@@ -7,9 +7,11 @@ export const firstLang = (keys: string[], nav: string): "vi" | "en" =>
 /** fixed: ép một ngôn ngữ (máy thử nghiệm: Chrome ẩn của bộ kiểm thử luôn là en-US).
  *  Chống nháy chữ gốc (Blueprint B6 bước 10): giao diện tiếng Anh ở trang không phải trang chủ (điều khoản, quyền riêng tư, xác minh, đặt lại
  *  mật khẩu, tải ứng dụng, app, chia sẻ, 404) dựng ở máy chủ bằng chữ tiếng Việt và chỉ dịch khi từ điển về. html[data-trwait] ẩn <body>
- *  (globals.css) tới lúc bộ dịch duyệt xong lần đầu (i18n.tsx); quá TRWAIT_MS mà chưa xong (hỏng mạng, lỗi tải mã) thì tự hiện lại.
+ *  (globals.css) tới lúc bộ dịch duyệt xong lần đầu (i18n.tsx gỡ cờ cả khi tải từ điển hỏng); TRWAIT_MS chỉ là lưới cuối khi mã trang không chạy.
+ *  Đo trên bản production, bộ nhớ đệm trống: 3G nhanh (1,6 Mb/s, 562 ms) dịch xong 3,2 s sau đoạn script này, mạng chậm hơn (750 kb/s, CPU chậm 4 lần)
+ *  4,7 s; mức 2,5 s ban đầu hết giờ trước nên vẫn nháy chữ tiếng Việt 0,7–2,2 s. 8 s đủ cho cả hai.
  *  Trang chủ "/" không cần: Home giữ khung chờ không chữ tới khi từ điển về (useLangReady), ẩn <body> sẽ làm mất khung chờ đó. */
-export const TRWAIT_MS = 2500;
+export const TRWAIT_MS = 8000;
 /** Đường dẫn cần chờ bộ dịch khi giao diện là tiếng Anh. */
 export const needsTrWait = (path: string) => path !== "/";
 export const langScript = (fixed?: string) => `try{var t=localStorage.getItem('theme')||'light';if(t==='auto')t=matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';document.documentElement.dataset.theme=t;if(localStorage.getItem('signedIn'))document.documentElement.dataset.sess='1';var s=localStorage.getItem('p:uilang'),u;if(s===null){u=${fixed ? JSON.stringify(fixed) : `(${firstLang.toString().replace(/\s+/g, " ")})(Object.keys(localStorage),navigator.language)`};localStorage.setItem('p:uilang',JSON.stringify(u))}else u=JSON.parse(s);document.documentElement.lang=u==='en'?'en':'vi';if(u==='en'&&(${needsTrWait.toString().replace(/\s+/g, " ")})(location.pathname)){document.documentElement.dataset.trwait='1';setTimeout(function(){delete document.documentElement.dataset.trwait},${TRWAIT_MS})}}catch(e){}`;

@@ -32,7 +32,7 @@ ok(run({ signedIn: "1" }, "vi-VN").sess === "1", "đã đăng nhập ở lần t
 // Chống nháy chữ gốc (B6 bước 10): giao diện tiếng Anh ở trang dựng sẵn bằng tiếng Việt thì ẩn <body> tới khi bộ dịch chạy xong.
 const terms = run({ "p:uilang": '"en"' }, "en-US", undefined, "/terms");
 ok(terms.wait === "1" && terms.lang === "en", "tiếng Anh, /terms: chờ bộ dịch (html[data-trwait])", JSON.stringify(terms));
-ok(terms.timers.length === 1 && terms.timers[0] === L.TRWAIT_MS && L.TRWAIT_MS <= 3000 && terms.after === undefined, `quá ${L.TRWAIT_MS} ms thì tự hiện lại (hỏng mạng, lỗi tải mã)`, JSON.stringify(terms));
+ok(terms.timers.length === 1 && terms.timers[0] === L.TRWAIT_MS && L.TRWAIT_MS >= 5000 && L.TRWAIT_MS <= 10000 && terms.after === undefined, `quá ${L.TRWAIT_MS} ms thì tự hiện lại (mã trang không chạy); đủ dài cho 3G (đo: dịch xong sau 3,2–4,7 s)`, JSON.stringify(terms));
 ok(run({ "p:uilang": '"en"' }, "en-US", undefined, "/").wait === undefined, "trang chủ: không ẩn (Home giữ khung chờ không chữ tới khi từ điển về)");
 ok(run({ "p:uilang": '"vi"' }, "en-US", undefined, "/share/abc").wait === undefined, "giao diện tiếng Việt: không chờ gì");
 ok(run({}, "en-US", undefined, "/privacy").wait === "1", "người mới, trình duyệt tiếng Anh, mở thẳng /privacy: chờ bộ dịch");
