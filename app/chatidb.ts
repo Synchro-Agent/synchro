@@ -120,6 +120,9 @@ const VERSION = 1;
 const STORES: [string, string][] = [["body", "id"], ["idx", "id"], ["meta", "k"]];
 /** Lỗi "mất kết nối" (iOS sau khi app nằm nền lâu, kết nối bị đóng ngầm): mở lại một lần rồi thử lại. */
 const lost = (e: unknown) => { const n = (e as { name?: string } | null)?.name; return n === "InvalidStateError" || n === "UnknownError"; };
+// Lỗi nội bộ, không bao giờ hiện cho người dùng: chỉ cần tên để phân nhánh (ClosedError: kho đã đóng / không mở lại được; AbortError: giao dịch bị hủy).
+const oops = (name: string) => Object.assign(new Error(), { name });
+const CLOSED = "ClosedError";
 const quota = (e: unknown) => (e as { name?: string } | null)?.name === "QuotaExceededError";
 
 /** Mở cơ sở dữ liệu; null khi không mở được (ném lỗi, báo lỗi, quá thời gian). Không bao giờ ném. */
@@ -168,11 +171,11 @@ export class IdbStore implements ChatStore {
     db.onclose = () => { if (this.db === db) this.db = null; };
   }
   private async conn(): Promise<IDBDatabase> {
-    if (this.closed) throw Object.assign(new Error("closed"), { name: "ClosedError" });
+    if (this.closed) throw oops(CLOSED);
     if (this.db) return this.db;
     const db = await openDb(this.f, dbName(this.uid), this.timeout);
-    if (!db) throw Object.assign(new Error("reopen failed"), { name: "ClosedError" });
-    if (this.closed) { db.close(); throw Object.assign(new Error("closed"), { name: "ClosedError" }); }
+    if (!db) throw oops(CLOSED);
+    if (this.closed) { db.close(); throw oops(CLOSED); }
     this.watch(db);
     return (this.db = db);
   }
@@ -185,7 +188,7 @@ export class IdbStore implements ChatStore {
         try { t = db.transaction(names, mode); } catch (e) { no(e); return; }
         t.oncomplete = () => ok(out);
         // Lỗi của một yêu cầu (kể cả hết chỗ lúc ghi xong) làm cả giao dịch hủy: báo ở đây. Không preventDefault ở onerror (sẽ chặn việc hủy).
-        t.onabort = () => no(t.error ?? Object.assign(new Error("abort"), { name: "AbortError" }));
+        t.onabort = () => no(t.error ?? oops("AbortError"));
         try { out = fn(t); } catch (e) { try { t.abort(); } catch {} no(e); }
       });
     };
