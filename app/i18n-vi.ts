@@ -870,9 +870,9 @@ addNew(EN2VI, MODELS_EN2VI);
 addNew(EN2VI, FX_EN2VI);
 addNew(EN2VI, AUTH_EN2VI);
 addNew(EN2VI, {
-  "Transcript width": "Độ rộng khung hội thoại", "Narrow": "Hẹp", "Wide": "Rộng",
+  "Narrow": "Hẹp", "Wide": "Rộng",
   "Maximum width of the conversation and the message box, in chat and in Synchro Code.": "Độ rộng tối đa của đoạn hội thoại và ô soạn tin, ở khung chat và Synchro Code.",
-  "Sessions": "Phiên làm việc", "Classify session states": "Tự phân loại trạng thái phiên",
+  "Sessions": "Phiên làm việc",
   "After every turn, a fast model marks the session in the sidebar as needs you, ready for review, or done. Counts toward your usage.": "Sau mỗi lượt, một model nhanh đánh dấu phiên ở thanh bên là cần bạn, chờ xem lại hay đã xong. Tính vào mức dùng của bạn.",
   "Sync sessions across devices": "Đồng bộ phiên giữa các thiết bị",
   "Keep Code sessions on this Synchro server so you can continue them on another computer or your phone. Work Synchro does in the background, like fixing a pull request, also shows up in the session.": "Lưu phiên Code trên máy chủ Synchro này để mở tiếp ở máy tính khác hay trên điện thoại. Việc Synchro làm nền, như tự sửa pull request, cũng hiện trong phiên.",
@@ -889,7 +889,6 @@ addNew(EN2VI, {
   "Output style": "Kiểu trả lời",
   "How Synchro writes its responses in new Code sessions. Explanatory adds short notes on why the code is written that way. Learning leaves small, meaningful parts for you to write and reviews them. The session menu can change it for one session.": "Cách Synchro viết câu trả lời ở phiên Code mới. Giải thích: thêm ghi chú ngắn vì sao code viết như vậy. Học cùng: để lại vài phần nhỏ, có ý nghĩa cho bạn tự viết rồi xem lại giúp bạn. Menu của phiên đổi được cho từng phiên.",
   "Explanatory": "Giải thích", "Learning": "Học cùng",
-  "Default transcript view": "Kiểu xem mặc định",
   "Normal keeps tool steps folded. Thinking also shows the model's reasoning when the model returns it. Verbose opens every step with its input and output. The session menu can change it for one session.": "Bình thường: gọn các bước dùng công cụ. Suy nghĩ: hiện thêm phần suy nghĩ của model khi model trả về. Chi tiết: mở mọi bước kèm đầu vào và đầu ra. Menu của phiên đổi được cho từng phiên.",
   "Thinking": "Suy nghĩ", "Verbose": "Chi tiết",
   "Keep cookies": "Giữ cookie",

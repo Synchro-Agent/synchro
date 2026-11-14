@@ -43,7 +43,6 @@ export const UX_VI2EN: Record<string, string> = {
   "Model dừng đột ngột giữa lượt trả lời. Hãy thử lại hoặc chọn model khác.": "The model stopped unexpectedly during its reply. Try again or pick another model.",
   "Lượt này gặp lỗi ở máy chủ. Hãy thử lại hoặc chọn model khác.": "This turn hit a server error. Try again or pick another model.",
   "Câu trả lời chưa hoàn thành": "This reply didn't finish", "Chi tiết kỹ thuật": "Technical details", "Mở Providers": "Open Providers",
-  "Không lấy được nội dung tệp đính kèm. Hãy gửi lại.": "Couldn't read the attached file. Please send it again.",
   // Phiên hết hạn, làm quen tài khoản mới, trợ năng
   "Phiên đăng nhập đã hết hạn. Đăng nhập lại để dùng tiếp, phần đang làm vẫn được giữ.": "Your session has expired. Sign in again to continue. Your work is still here.",
   "Kết nối gói AI của bạn để bắt đầu": "Connect your AI plan to get started",
