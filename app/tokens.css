@@ -34,5 +34,15 @@
   /* Mốc màn hình (px). Biến CSS không dùng được trong @media (và @custom-media chỉ được dịch ở bản build production), nên mốc ghi ở đây
      làm tài liệu, khớp với app/breakpoints.ts; scripts/css-metrics.mjs báo mọi @media ngoài danh sách này (mediaWidth).
      xs 480 · sm 640 · drawer 760 / 761 (ngăn kéo điện thoại ↔ thanh bên, home.tsx matchMedia) · md 860 (thanh rail máy tính bảng, NARROW) · lg 1100 */
+
+  /* Màu bổ sung cho thang trạng thái của sổ tay (--ds-ok / --ds-warn / --ds-bad ở synchro-ds.css), cặp sáng / tối đặt cạnh nhau:
+     --ds-plan: chế độ lập kế hoạch, gói Pro / Studio (tím) · --ds-ask: hỏi trước khi làm (cam). Giao diện tối ≥ 4,5:1 trên --ds-plate. */
+  --ds-plan:#7452d1; --ds-ask:#c66a22;
+  /* Bảng màu phân loại của biểu đồ (.vz-s0…7, charts.tsx): cố định thứ tự, đã kiểm tra mù màu cho nền sáng và tối. */
+  --viz-0:#2a78d6;--viz-1:#eb6834;--viz-2:#1baf7a;--viz-3:#eda100;--viz-4:#e87ba4;--viz-5:#008300;--viz-6:#6250d6;--viz-7:#e34948;
+}
+[data-theme="dark"]{
+  --ds-plan:#c1a6ff; --ds-ask:#ffb27a;
+  --viz-0:#3987e5;--viz-1:#d95926;--viz-2:#199e70;--viz-3:#c98500;--viz-4:#d55181;--viz-5:#008300;--viz-6:#9085e9;--viz-7:#e66767;
 }
 }

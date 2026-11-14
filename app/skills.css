@@ -9,9 +9,9 @@
 .pl-b.mid{background:color-mix(in srgb,#eda100 16%,transparent);color:#9a6700}
 .pl-b.high{background:color-mix(in srgb,#e34948 14%,transparent);color:#c13c3c}
 .pl-b.studio{background:color-mix(in srgb,#7c3aed 14%,transparent);color:#6d28d9}
-[data-theme="dark"] .pl-b.mid{color:#e3b34c}
-[data-theme="dark"] .pl-b.high{color:#f08585}
-[data-theme="dark"] .pl-b.studio{color:#b49cf5}
+[data-theme="dark"] .pl-b.mid{color:var(--ds-warn)}
+[data-theme="dark"] .pl-b.high{color:var(--ds-bad)}
+[data-theme="dark"] .pl-b.studio{color:var(--ds-plan)}
 [data-theme="dark"] .pl-b.low{color:#6aa8f0}
 .pl-tags{display:flex;flex-wrap:wrap;gap:4px;margin-top:4px}
 .pl-load,.pl-err{display:flex;align-items:center;gap:10px;padding:26px 4px;color:var(--text-2);font-size:var(--fs-chat)}

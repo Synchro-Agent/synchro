@@ -225,7 +225,7 @@
 }
 [data-theme="dark"] .sp-badge.k-cloned {color:var(--accent)
 }
-[data-theme="dark"] .sp-badge.k-pro {color:#b3a6ec
+[data-theme="dark"] .sp-badge.k-pro {color:var(--ds-plan)
 }
 .sp-libf .sp-search {flex:1;min-width:220px
 }

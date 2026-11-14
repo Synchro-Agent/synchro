@@ -30,7 +30,9 @@ const postcss = createRequire(import.meta.url)("postcss");
 // thang (15, 17, 14.5, 18…: bước 6b, cần duyệt ảnh), cỡ tính từ biến trong tsx, tùy chọn xterm / Monaco và home.tsx (đợi B2).
 // zIndex 63 → 0, inlineZIndex 22 → 1 (B5 bước 7a): mọi z-index ≥ 20 theo tầng --z-* (calc(var(--z-bậc dưới) + n), giữ thứ tự); còn glass-folder
 // zIndex: v + 1 (tính từ biến).
-export const CEIL = { important: 18, htmlBody: 560, fontSize: 115, zIndex: 0, mediaWidth: 88, darkHex: 96, inlineFontSize: 20, inlineZIndex: 1 };
+// darkHex 96 → 43 (B5 bước 9): màu trạng thái của giao diện tối → --ds-ok / --ds-warn / --ds-bad / --ds-plan / --ds-ask, bảng màu biểu đồ → --viz-0…7.
+// Còn lại: nền xám cũ (#222, #252525, #2d2d2d…), #fff / #000 / mặt nạ, vài màu riêng (#ec82b2, #6aa8f0, #ffa497…): cần chọn token bề mặt.
+export const CEIL = { important: 18, htmlBody: 560, fontSize: 115, zIndex: 0, mediaWidth: 88, darkHex: 43, inlineFontSize: 20, inlineZIndex: 1 };
 // Mục tiêu có hạn: chỉ số phải về tới max trong bước ghi ở by (đặt ngày set). In ra cùng kết quả; bước đó hạ CEIL theo.
 export const TARGET = {};
 export const WIDTHS = new Set([480, 640, 760, 761, 860, 1100]);
