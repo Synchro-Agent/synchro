@@ -20,7 +20,13 @@ const postcss = createRequire(import.meta.url)("postcss");
 // của ba menu trong ô soạn tin dự án, width / padding ≤860px của hàng Cài đặt), trả lại !important; lý do ở KEEP trong css-unimportant.mjs.
 // htmlBody 572 → 582 (lần duy nhất tăng, B5 bước 4): khi chuyển !important sang lớp syn-over, 50 selector còn tiền tố html body được chép
 // sang khối syn-over (tiền tố quyết định bên thắng giữa các luật syn-over với nhau, gỡ thì đổi bên thắng); không thêm tiền tố cho selector mới.
-export const CEIL = { important: 19, htmlBody: 582, fontSize: 1278, zIndex: 63, mediaWidth: 90, darkHex: 100, inlineFontSize: 65, inlineZIndex: 22 };
+// Chủ dự án giao quyết định (2026-11-14): giữ trần ~582 tạm thời (nay 581); B5 bước 6 (dedupe, vòng 2) phải đưa htmlBody về ≤ 572 (TARGET dưới đây).
+// Thử gỡ tiền tố từng selector của khối syn-over (so cascade tĩnh dev + prod sau mỗi lần gỡ) ngày 2026-11-14
+// thì gỡ được 1 (glass.css, ::before của nút kính: 582 → 581), 53 cái còn lại gỡ thì đổi bên thắng; bước 6 gộp bản syn với bản syn-over
+// của cùng selector thì mới bỏ được bản chép.
+export const CEIL = { important: 19, htmlBody: 581, fontSize: 1278, zIndex: 63, mediaWidth: 90, darkHex: 100, inlineFontSize: 65, inlineZIndex: 22 };
+// Mục tiêu có hạn: chỉ số phải về tới max trong bước ghi ở by (đặt ngày set). In ra cùng kết quả; bước đó hạ CEIL theo.
+export const TARGET = { htmlBody: { max: 572, by: "B5 bước 6 (dedupe, vòng 2)", set: "2026-11-14" } };
 export const WIDTHS = new Set([480, 640, 760, 761, 860, 1100]);
 
 const walk = (d, ext, out = []) => {
@@ -82,6 +88,8 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
     const over = total[k] > CEIL[k];
     if (over) bad++;
     console.log(`${over ? "✗" : "✓"} ${k}: ${total[k]} / trần ${CEIL[k]}${over ? " — VƯỢT TRẦN: chỉ số này chỉ được giảm" : total[k] < CEIL[k] ? ` (hạ trần xuống ${total[k]} được)` : ""}`);
+    const t = TARGET[k];
+    if (t && total[k] > t.max) console.log(`  → mục tiêu ${k} ≤ ${t.max} trong ${t.by} (đặt ${t.set}); còn thừa ${total[k] - t.max}`);
   }
   process.exit(bad ? 1 : 0);
 }
