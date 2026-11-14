@@ -16,6 +16,7 @@ export function resetClock(t: number, lang: ResetLang): string {
  * Giờ đặt lại tuyệt đối: "Resets Thu 9:55 PM" / "Đặt lại T5 21:55". Không đếm ngược, nên không cũ đi — dùng chung cho bảng Mức dùng
  * và thẻ báo hết hạn mức dưới câu trả lời (MsgRow là memo(), không có đồng hồ, nên chuỗi đếm ngược tương đối sẽ cũ và lệch với bảng).
  */
+// Giữ ngôn ngữ truyền vào thay cho tf: hàm thuần, không cần từ điển (kiểm thử chạy không cần trình duyệt, nạp được qua tests/lib/ts.mjs).
 export function resetAt(t: number, lang: ResetLang): string {
   return lang === "en" ? `Resets ${resetClock(t, lang)}` : `Đặt lại ${resetClock(t, lang)}`;
 }
