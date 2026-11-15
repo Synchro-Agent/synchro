@@ -14,7 +14,7 @@ crons = ["* * * * *"]
 
 [[kv_namespaces]]
 binding = "UPTIME"
-id = "REPLACE_WITH_KV_NAMESPACE_ID"
+id = "d9a43b77710d4e6897f601e018e89f05"
 
 [vars]
 HEALTH_URL = "https://synchro.net.nz/api/health"
