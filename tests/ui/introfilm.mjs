@@ -9,6 +9,20 @@ import crypto from "node:crypto";
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 
 const B = "http://localhost:3200";
+// Phim (hai tệp mp4) không nằm trong git (Blueprint H3.9): dev:mock tự lấy về public/intro/ (tools/fetch-intro.mjs). Máy chủ giả lập không có
+// thì không có gì để kiểm: bỏ qua, nói rõ lý do và cách lấy, không báo lỗi giả. tools/qa.mjs đọc dòng "BỎ QUA:" và ghi bộ này là bỏ qua.
+{
+  const miss = [];
+  for (const f of ["synchro-intro-720.mp4", "synchro-intro.mp4"]) {
+    const r = await fetch(`${B}/intro/${f}`, { headers: { range: "bytes=0-11" } }).catch((e) => ({ ok: false, status: e.message }));
+    const head = r.ok ? Buffer.from(await r.arrayBuffer()) : null;
+    if (!head || head.toString("latin1", 4, 8) !== "ftyp") miss.push(`${f} (${r.status})`);
+  }
+  if (miss.length) {
+    console.log(`BỎ QUA: máy chủ ở ${B} không có phim giới thiệu: ${miss.join(", ")}. Chạy node tools/fetch-intro.mjs trong thư mục của dev:mock rồi bật lại dev:mock.`);
+    process.exit(0);
+  }
+}
 const SCR = (await import("node:os")).tmpdir() + "/synchro-ui/";
 mkdirSync(SCR, { recursive: true });
 const PROF = SCR + "chrome-prof-introfilm";

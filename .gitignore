@@ -54,3 +54,7 @@ next-env.d.ts
 # Kiểm thử (CI)
 .next-ci/
 mock.log
+
+# Phim giới thiệu (Blueprint H3.9): không nằm trong git. Production: nginx phục vụ /intro/*.mp4 từ /var/www/synchro-media/intro/
+# (docs/van-hanh.md). Máy dev / CI: node tools/fetch-intro.mjs (dev:mock tự chạy). Ảnh chờ synchro-intro-poster.jpg vẫn trong git.
+/public/intro/*.mp4
