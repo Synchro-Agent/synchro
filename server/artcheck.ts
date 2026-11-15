@@ -5,13 +5,13 @@
 //   chụp từng slide / trang ở máy tính và điện thoại, đo lỗi hiển thị (chữ đè chữ, tràn khung, chữ bị cắt, ảnh không tải được, chữ quá nhỏ,
 //   trang tràn ngang, lỗi script) rồi trả ảnh ghép + danh sách lỗi để model tự sửa trước khi báo xong.
 import "server-only";
-import { buildDocCore, isDeck } from "../app/artdoc";
+import { buildDocCore, isDeck } from "../shared/artdoc";
 import { DESIGN_PROBE } from "./artprobe";
 import { getArtifactByIdent } from "./artifactstore";
 import { inlineImages } from "./artimg";
-import { splitArtifacts, type ArtType } from "../app/artifacts";
+import { splitArtifacts, type ArtType } from "../shared/artifacts";
 import { execRun, runner } from "./coderun";
-import { artState, cleanBase, type ArtVersion } from "../app/vfs";
+import { artState, cleanBase, type ArtVersion } from "../shared/vfs";
 
 export const READ_ARTIFACT_TOOL = {
   name: "read_artifact",

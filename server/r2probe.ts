@@ -32,7 +32,7 @@ export function signS3(c: R2Cfg, method: string, key: string, body: Buffer, now 
   };
 }
 
-/** Lỗi R2 / S3 → câu cho quản trị viên (tiếng Việt; bản tiếng Anh ở app/i18n-auth.ts). */
+/** Lỗi R2 / S3 → câu cho quản trị viên (tiếng Việt; bản tiếng Anh ở shared/i18n-auth.ts). */
 export function r2Message(code: string, status: number): string {
   if (code === "AccessDenied" || (status === 403 && !code)) return "Token R2 chưa có quyền ghi vào bucket này. Tạo token với quyền Object Read & Write cho đúng bucket rồi dán lại cả hai khóa.";
   if (code === "NoSuchBucket") return "Không có bucket này trong tài khoản Cloudflare. Kiểm tra lại tên bucket và Account ID.";

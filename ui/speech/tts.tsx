@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import * as I from "../icons";
 import { usePref } from "../store";
 import { tr } from "../../app/i18n";
-import { DISTANCES, FX_VI, MODEL_NOTE, RECOMMENDED, STARTERS, TAG_GROUPS, estCredits, stripTags, tagsOk } from "../../app/speech/data";
+import { DISTANCES, FX_VI, MODEL_NOTE, RECOMMENDED, STARTERS, TAG_GROUPS, estCredits, stripTags, tagsOk } from "../../shared/speech/data";
 import { ago, del, fmtNum, on, post, useDicts, useEffectsCatalog, useItems, useMyVoices, usePlan, type Item, type Voice } from "./client";
 import { ErrBox, Field, ModelPick, Player, Range, Seg, Select, Spin, Toggle, VoiceAvatar, VoiceChip, VoicePicker } from "./parts";
 import { Group, Head, Split } from "./shell";

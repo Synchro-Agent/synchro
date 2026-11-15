@@ -3,7 +3,7 @@
 // Máy chủ tự lưu lượt vào phiên (khi bật đồng bộ) nên kết quả vẫn còn khi trình duyệt không quay lại.
 import "server-only";
 import type { AgentEvent } from "./agentcore";
-import { closeFolded, foldAgentEvent } from "../app/agentfold";
+import { closeFolded, foldAgentEvent } from "../shared/agentfold";
 import { db, getUser } from "./authstore";
 import { getPrefs, patchSession, saveTurn, type TurnNode } from "./codestore";
 import { registerMemStat } from "./memstat";

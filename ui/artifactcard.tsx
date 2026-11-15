@@ -3,11 +3,11 @@
 import { useEffect, useRef, useState } from "react";
 import * as I from "./icons";
 import { tr } from "../app/i18n";
-import { isDeck, noteGenPending, noteGenSettled, pendingRetryMs } from "../app/artgen";
+import { isDeck, noteGenPending, noteGenSettled, pendingRetryMs } from "../shared/artgen";
 import type { OutFile } from "./llm";
 import { FILE_KIND as KIND, fileKind, fmtSize } from "./fileicon";
 import { genVerdict, imgVerdict } from "./outimg";
-import { ART_LABEL, type ArtBlock, type ArtType } from "../app/artifacts";
+import { ART_LABEL, type ArtBlock, type ArtType } from "../shared/artifacts";
 
 // ---------------------------------------------------------------- biểu tượng theo loại
 export function ArtIcon({ type, size = 18 }: { type: ArtType; size?: number }) {

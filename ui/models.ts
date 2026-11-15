@@ -1,7 +1,7 @@
 "use client";
 // Danh sách model ở trình duyệt: lấy từ /api/models (model quản trị viên cho hiện, model mặc định, quyền của tài khoản).
 import { useSyncExternalStore } from "react";
-import { allowsModel, equivalentModel, splitKey, vendorOf, type Effort, type ProviderInfo } from "../app/catalog";
+import { allowsModel, equivalentModel, splitKey, vendorOf, type Effort, type ProviderInfo } from "../shared/catalog";
 import { userScope } from "./userscope";
 
 // effort: mức nỗ lực cao nhất quản trị viên cho phép theo từng model ("*" là mọi model).

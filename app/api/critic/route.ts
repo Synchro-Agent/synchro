@@ -1,7 +1,7 @@
 import { handle, limit, requireUser, sameOrigin } from "../../../server/authstore";
 import { pickCritics, vendorOf } from "../../../server/router";
-import { mergeFindings, numbered, parseFindings, type Finding } from "../../critic";
-import { isDeck } from "../../artdoc";
+import { mergeFindings, numbered, parseFindings, type Finding } from "../../../shared/critic";
+import { isDeck } from "../../../shared/artdoc";
 import { OneShotErr, oneShot, stalledModels, usableModels } from "../../../server/ai/anymodel";
 import { BUSY } from "../../../server/ai/subs";
 

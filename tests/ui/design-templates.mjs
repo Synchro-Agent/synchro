@@ -1,4 +1,4 @@
-// Mẫu điền sẵn (app/designtemplates.ts…) dựng trong Chrome ẩn thật, không cần máy chủ Synchro: trang dựng đúng bằng buildDocCore (CSP thật, bộ CSS thật, tự vá FIT_JS thật).
+// Mẫu điền sẵn (shared/designtemplates.ts…) dựng trong Chrome ẩn thật, không cần máy chủ Synchro: trang dựng đúng bằng buildDocCore (CSP thật, bộ CSS thật, tự vá FIT_JS thật).
 // Kiểm: mọi slide / trang / poster không đo thấy lỗi bằng đúng phép đo của check_artifact (chữ tràn, đè, cắt, tương phản), tự co chữ khi tiêu đề quá dài,
 // tự đổi màu chữ khi tương phản thấp, thư HTML chỉ có bảng và style nội dòng. Ảnh chụp (hai phong cách mỗi loại) ghi vào OUT để người xem bằng mắt.
 // Chạy: node tests/ui/design-templates.mjs

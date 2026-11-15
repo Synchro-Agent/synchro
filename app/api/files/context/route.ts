@@ -1,5 +1,5 @@
 import { buildContext } from "../../../../server/fileproc";
-import { MAX_FILES_PER_MESSAGE } from "../../../fileproc/types";
+import { MAX_FILES_PER_MESSAGE } from "../../../../shared/fileproc/types";
 import { route } from "../../../../server/route";
 
 export const runtime = "nodejs";

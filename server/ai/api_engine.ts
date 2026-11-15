@@ -4,7 +4,7 @@
 import "server-only";
 import type { Engine, Event, TurnRequest } from "./engine";
 import { catalog, mainModels, resolveModel } from "../providers";
-import { ALL, splitKey } from "../../app/catalog";
+import { ALL, splitKey } from "../../shared/catalog";
 import { chatOnce, HttpErr } from "../llmcall";
 import { classify, redact } from "./errors";
 import { engineFor, registerEngine } from "./selector";

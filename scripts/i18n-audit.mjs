@@ -1,6 +1,6 @@
-// Rà chữ hiện trên giao diện còn thiếu bản dịch (giao diện tự dịch từng đoạn chữ theo app/i18n-dict.ts khi chạy):
+// Rà chữ hiện trên giao diện còn thiếu bản dịch (giao diện tự dịch từng đoạn chữ theo shared/i18n-dict.ts khi chạy):
 // chữ tiếng Việt cần bản tiếng Anh (VI2EN / RULES_EN), chữ tiếng Anh cần bản tiếng Việt (EN2VI / RULES_VI).
-// Dùng: node scripts/i18n-audit.mjs [--json out.json] [--files app/speech]
+// Dùng: node scripts/i18n-audit.mjs [--json out.json] [--files ui/speech]
 import fs from "node:fs";
 import path from "node:path";
 import { createRequire } from "node:module";

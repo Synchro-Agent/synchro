@@ -1,5 +1,5 @@
 import { handle, limit, requireUser, sameOrigin } from "../../../server/authstore";
-import { isEffort } from "../../catalog";
+import { isEffort } from "../../../shared/catalog";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

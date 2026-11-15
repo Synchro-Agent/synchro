@@ -2,7 +2,7 @@ import "server-only";
 import { createHash } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { type ContentBlock, FileError, LARGE_TOKENS, MAX_FILE_BYTES, estTokens } from "../../app/fileproc/types";
+import { type ContentBlock, FileError, LARGE_TOKENS, MAX_FILE_BYTES, estTokens } from "../../shared/fileproc/types";
 import { detectKind } from "./detect";
 import { pickExtractor } from "./extractors";
 import { chunkForRag, chunkSheet, rank, scored } from "./rag";

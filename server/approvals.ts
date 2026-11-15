@@ -3,7 +3,7 @@
 import "server-only";
 import crypto from "node:crypto";
 import { allowSite, getPrefs, siteHost, siteIn, type PermMode } from "./codestore";
-import type { CxCard } from "../app/cxactions";
+import type { CxCard } from "../shared/cxactions";
 
 export type AskKind = "edit" | "bash" | "site" | "connector";
 // conn, about, destructive: chỉ với công cụ connector (hiện logo, mô tả công cụ, cảnh báo xóa dữ liệu trên thẻ).

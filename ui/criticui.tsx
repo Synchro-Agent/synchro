@@ -3,7 +3,7 @@
 import { useState } from "react";
 import * as I from "./icons";
 import { tr } from "../app/i18n";
-import { SEV_LABEL, type CriticEntry, type Finding } from "../app/critic";
+import { SEV_LABEL, type CriticEntry, type Finding } from "../shared/critic";
 import { modelName } from "./models";
 
 // Tên model như ở bộ chọn model ("Claude Sonnet 5.5"), không phải mã ("sub-claude/sonnet" → "sonnet").

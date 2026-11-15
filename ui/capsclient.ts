@@ -2,7 +2,7 @@
 // Cài đặt → Khả năng ở trình duyệt: đọc/ghi /api/caps (máy chủ là nơi lưu và áp dụng), giữ bản sao trong
 // localStorage của tài khoản để giao diện hiện đúng ngay khi mở trang, trước khi máy chủ trả lời.
 import { useEffect, useSyncExternalStore } from "react";
-import { DEFAULT_CAPS, type Caps, type CapsState } from "../app/catalog";
+import { DEFAULT_CAPS, type Caps, type CapsState } from "../shared/catalog";
 import { ls, userScope } from "./userscope";
 
 const FALLBACK: CapsState = { caps: DEFAULT_CAPS, locks: {}, runner: null };

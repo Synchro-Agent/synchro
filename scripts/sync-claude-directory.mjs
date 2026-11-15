@@ -24,7 +24,7 @@ async function fetchAll() {
   }
 }
 
-// taxonomy của Claude → khóa mục của Synchro (app/plugindir.ts PLUGIN_CATS). Hai mục riêng của Claude (claude-history, claude-settings)
+// taxonomy của Claude → khóa mục của Synchro (shared/plugindir.ts PLUGIN_CATS). Hai mục riêng của Claude (claude-history, claude-settings)
 // chuyển sang mục gần nhất của Synchro.
 const MAP = {
   work_department: { engineering: "engineering", marketing: "marketing", sales: "sales", operations: "operations", product: "product", finance: "finance", data: "data", design: "design", legal: "legal", "it-security": "security", hr: "hr", "customer-support": "support" },

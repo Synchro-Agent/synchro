@@ -7,12 +7,12 @@ import * as I from "./icons";
 import { Markdown } from "./md";
 import { Loader } from "./brand";
 import { tr, useLangReady } from "../app/i18n";
-import { localizeNote } from "../app/agentfold";
+import { localizeNote } from "../shared/agentfold";
 import { ConnLogo } from "./connlogo";
 import { ASK_GONE } from "./codesync";
 import { ArgsEditor, readArgs } from "./argsedit";
 import { CxDetails, cxHead } from "./cxcard";
-import type { CxCard } from "../app/cxactions";
+import type { CxCard } from "../shared/cxactions";
 import { ghConnect, ghRepos, ghStatus, ghUnlink, gitOp, useCodeUi, type GhRepo, type GhStatus, type GitState, type PlanItem } from "./wsclient";
 
 export type ToolStep = { k: "tool"; id: string; name: string; input: Record<string, unknown>; done?: boolean; ok?: boolean; summary?: string; output?: string; diff?: { path: string; add: number; del: number }; image?: string };

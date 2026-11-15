@@ -1,5 +1,5 @@
 import { audit, clientIp, defaultPerms, handle, ownerOnly, requireAdmin, sameOrigin, setSetting, setVerifyGate, signupOpen, verifyGateOn } from "../../../../server/authstore";
-import { normPerms } from "../../../catalog";
+import { normPerms } from "../../../../shared/catalog";
 import { setSpeechBudget, speechBudget, spentToday } from "../../../../server/speechapi";
 import { saveTurnstile, setBlockDisposable, turnstileAdmin } from "../../../../server/turnstile";
 

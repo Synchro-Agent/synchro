@@ -6,7 +6,7 @@ import crypto from "node:crypto";
 import { db, getSetting, setSetting, type UserRow } from "./authstore";
 import { quickCall } from "./ai/anymodel";
 import { brainCore } from "./brain";
-import { NO_QUOTE_INS } from "../app/turnctx";
+import { NO_QUOTE_INS } from "../shared/turnctx";
 
 export type Mem = { id: string; content: string; createdAt: number; source: string };
 /** gen: học từ đoạn chat; sens: được ghi chi tiết nhạy cảm; autoIns: Synchro tự cập nhật "Hướng dẫn cho Synchro" từ bộ não. */

@@ -1,5 +1,5 @@
 import { handle, limit, requireUser, sameOrigin } from "../../../server/authstore";
-import { parseVbhc } from "../../vbhc";
+import { parseVbhc } from "../../../shared/vbhc";
 import { vbhcDocx } from "../../../server/vbhcdocx";
 
 export const runtime = "nodejs";

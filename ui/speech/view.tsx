@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 import { SideToggle } from "../brand";
 import * as I from "../icons";
 import { useApp } from "../store";
-import { GROUPS, STARTERS, TOOLS, estCredits, normTool, toolDef, toolOn, type SpeechTool } from "../../app/speech/data";
+import { GROUPS, STARTERS, TOOLS, estCredits, normTool, toolDef, toolOn, type SpeechTool } from "../../shared/speech/data";
 import { KIND_LABEL, KIND_TOOL, ago, defaultVoice, fmtNum, refreshPlan, useItems, useMyVoices, usePlan, usePlanFailed, type Voice } from "./client";
 import { Dock, NotReady, Player, VoiceChip, VoicePicker } from "./parts";
 import { TOOL_ICON } from "./toolicons";

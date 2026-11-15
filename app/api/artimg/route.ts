@@ -1,6 +1,6 @@
 import { handle, requireUser } from "../../../server/authstore";
 import { fetchImage } from "../../../server/artimg";
-import { genImageId } from "../../artdoc";
+import { genImageId } from "../../../shared/artdoc";
 import { genImageState } from "../../../server/outputs";
 
 export const runtime = "nodejs";

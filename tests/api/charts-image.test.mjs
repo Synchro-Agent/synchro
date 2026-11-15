@@ -1,5 +1,5 @@
 // Biểu đồ ECharts và sơ đồ D2 trong image sandbox: ghim phiên bản và mã băm (workspace/Dockerfile, workspace/charts/package*.json), cấu hình biểu đồ trong sandbox
-// giống hệt khung artifact (sinh từ app/design-engine/charts/echarts-presets.ts), setup.sh dựng lại image khi tệp biểu đồ đổi, ECharts trong public/vendor đúng bản npm.
+// giống hệt khung artifact (sinh từ shared/design-engine/charts/echarts-presets.ts), setup.sh dựng lại image khi tệp biểu đồ đổi, ECharts trong public/vendor đúng bản npm.
 // Không cần máy chủ. Phần chạy thật: bước tự kiểm tra biểu đồ / D2 lúc build image (không mạng).
 import fs from "node:fs";
 import crypto from "node:crypto";
@@ -25,7 +25,7 @@ console.log("1. ECharts: một bản 6.1.0 ở mọi nơi");
 console.log("2. Cấu hình biểu đồ trong sandbox giống khung artifact");
 {
   const r = spawnSync(process.execPath, ["scripts/gen-chart-presets.mjs", "--check"], { encoding: "utf8" });
-  ok(r.status === 0, "workspace/charts/synchro-charts.js khớp app/design-engine/charts/echarts-presets.ts", r.stdout + r.stderr);
+  ok(r.status === 0, "workspace/charts/synchro-charts.js khớp shared/design-engine/charts/echarts-presets.ts", r.stdout + r.stderr);
   const m = { exports: {} };
   new Function("module", "exports", read("workspace/charts/synchro-charts.js"))(m, m.exports);
   const { sxChartOption, PRESETS } = m.exports;

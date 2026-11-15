@@ -53,7 +53,7 @@ const handler = /catch \(e\) \{\n\s*if \(alreadyRunning\(e\)[^\n]*\n/.exec(view)
 ok(/joinRun\(/.test(handler) && /return;/.test(handler), "codeview: 409 nối vào lượt và không chạy nhánh kết thúc lượt (endAgent báo running:false)", handler);
 
 // Lời báo của hệ thống theo ngôn ngữ giao diện, chữ của model giữ nguyên.
-const dict = readFileSync(new URL("../../app/i18n-features.ts", import.meta.url), "utf8") + readFileSync(new URL("../../app/i18n-dict.ts", import.meta.url), "utf8");
+const dict = readFileSync(new URL("../../shared/i18n-features.ts", import.meta.url), "utf8") + readFileSync(new URL("../../shared/i18n-dict.ts", import.meta.url), "utf8");
 const en = { [W.GONE]: "The server restarted", "Không có ai duyệt sau 30 phút nên lượt này đã dừng.": "Nobody approved" };
 const t = (s) => en[s] ?? s;
 const folded = F.foldAgentEvent({ ai: "", steps: [] }, { t: "error", error: W.GONE });

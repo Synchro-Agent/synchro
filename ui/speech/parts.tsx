@@ -9,7 +9,7 @@ import { readBrowser, stopBrowserRead } from "../browserspeak";
 import { useApp, usePref, VOICE_RATE } from "../store";
 import { toSpeech, VI } from "../voiceflow";
 import { CAT_LABEL, LANGS, api, fmtDur, fmtNum, hueOf, on, post, refreshPlan, reloadVoices, useMyVoices, usePlan, usePlanFailed, type Voice } from "./client";
-import { AGES, CATEGORIES, GENDERS } from "../../app/speech/data";
+import { AGES, CATEGORIES, GENDERS } from "../../shared/speech/data";
 
 // Mức hoạt động khi đang phát (âm tiết và quãng nghỉ), dùng chung cho các quả cầu.
 const talking = () => { const t = performance.now() / 1000; return Math.max(0, Math.sin(t * 0.85) + 0.35) * (0.12 + Math.max(0, Math.sin(t * 9.3 + Math.sin(t * 2.1))) ** 2 * 0.6); };

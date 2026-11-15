@@ -1,7 +1,7 @@
 import { handle, limit, requireUser, sameOrigin } from "../../../server/authstore";
-import { splitArtifacts } from "../../artifacts";
+import { splitArtifacts } from "../../../shared/artifacts";
 import { OneShotErr, quickCall } from "../../../server/ai/anymodel";
-import { cleanTitle as clean } from "../../names";
+import { cleanTitle as clean } from "../../../shared/names";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

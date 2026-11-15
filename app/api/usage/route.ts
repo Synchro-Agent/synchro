@@ -1,7 +1,7 @@
 import { handle, requireUser } from "../../../server/authstore";
 import { usageState } from "../../../server/usage";
 import { mergedProviders, subCli, subUsage, SUB } from "../../../server/ai/subs";
-import { ALL } from "../../catalog";
+import { ALL } from "../../../shared/catalog";
 import { catalog, mainModels } from "../../../server/providers";
 
 export const runtime = "nodejs";

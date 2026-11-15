@@ -1,5 +1,5 @@
 // Sinh workspace/charts/synchro-charts.js (CommonJS, chạy trong sandbox run_code) từ đúng mã cấu hình biểu đồ của khung artifact
-// (app/design-engine/charts/echarts-presets.ts) và bảng màu 8 phong cách (app/designpresets.ts): biểu đồ dựng bằng synchro-chart giống hệt biểu đồ trong artifact.
+// (shared/design-engine/charts/echarts-presets.ts) và bảng màu 8 phong cách (shared/designpresets.ts): biểu đồ dựng bằng synchro-chart giống hệt biểu đồ trong artifact.
 // Chạy: node scripts/gen-chart-presets.mjs        Kiểm (không ghi): node scripts/gen-chart-presets.mjs --check
 import fs from "node:fs";
 import { loadTs } from "../tests/lib/ts.mjs";

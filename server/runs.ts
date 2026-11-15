@@ -9,7 +9,7 @@ import { db, getSetting, getUser, isAdmin, setSetting, verifyLocked, type UserRo
 import { noteRun, recordOps } from "./ops";
 import { addSpan, beginTrace, endTrace, noteFirstToken, withTrace } from "./tracing";
 import { accountLimit, accountTotal, acquire, noteRefused, queuedOf, queueLimit, withSlot, type WaitWhy } from "./turngate";
-import { appliedDelta } from "../app/turnctx";
+import { appliedDelta } from "../shared/turnctx";
 import { isStopping, markStopping } from "./drain";
 
 // say: lời dẫn của model trước khi dùng công cụ (giữ lại, không bị câu trả lời cuối thay mất); tool / res: công cụ đang chạy và kết quả;

@@ -5,7 +5,7 @@ import {
   SpeechErr, addSpend, audioOf, checkBudget, deleteItem, effectsCatalog, el, elJson, getItem, itemFile, jsonBody, langName, library, listItems, mintRealtime, myVoices, need, plan, saveItem,
   scribeToken, servedBy, sideRead, sideWrite, speechBudget, spender, spent, spentToday, updateItem, voiceOut, backfillVoiceOwners, defaultVoice, forgetVoiceOwner, isPrivateVoice, MAX_OWN_VOICES, ownedVoices, setVoiceOwner, voiceGen, voiceOpenTo, voiceOwner, VOICE_ORPHAN, VOICE_PURGE, VOICE_SHARED, type Feat, type Plan,
 } from "../../../../server/speechapi";
-import { estCredits, estMusicCredits } from "../../../speech/data";
+import { estCredits, estMusicCredits } from "../../../../shared/speech/data";
 import { quickCall } from "../../../../server/ai/anymodel";
 import { timed } from "../../../../server/servertiming";
 

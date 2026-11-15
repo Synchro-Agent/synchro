@@ -20,7 +20,7 @@ import { AdminPanel, call as api, fmtDate, METHOD } from "./adminui";
 import { MfaRow } from "./mfaui";
 import { PasskeyRows } from "./passkeyui";
 import type { AuthUser } from "./auth";
-import { OCCUPATIONS, shortName } from "../app/names";
+import { OCCUPATIONS, shortName } from "../shared/names";
 import { ls } from "./userscope";
 import { setCaps, useCaps } from "./capsclient";
 import { UsageSettings } from "./usageui";
@@ -30,7 +30,7 @@ const ConnectorsPanel = lazyView(() => import("./connectorsui").then((m) => m.Co
 const ExtSettings = lazyView(() => import("./browserhub").then((m) => m.ExtSettings), null);
 const BrainSettings = lazyView(() => import("./brainui").then((m) => m.BrainSettings), <SettingsSkeleton />);
 const SkillHub = lazyView(() => import("./pluginsui").then((m) => m.SkillHub), <SettingsSkeleton />);
-import { PKG_DOMAINS, type Caps } from "../app/catalog";
+import { PKG_DOMAINS, type Caps } from "../shared/catalog";
 import { usePlan as useSpeechPlan, useMyVoices, type Voice } from "./speech/client";
 import { getLang, locale, tr } from "../app/i18n";
 import { fmtSize } from "./fileicon";

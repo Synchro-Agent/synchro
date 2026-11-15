@@ -10,7 +10,7 @@ export type ModelInfo = { key: string; id: string; name: string; blockedUntil?: 
 export const IMAGE_PLANS = new Set<string>(["agy", "grok", "codex"]);
 export type PlanInfo = { cli: "claude" | "codex" | "agy" | "grok"; models: ModelInfo[]; blockedUntil: number | null; usingApiUntil: number | null; relogin: boolean; hasApi?: boolean };
 /** source: nhóm đang hiện model của gói ("plan") hay của khóa API dùng chung ("api"). */
-/** logo: gợi ý logo của nhà cung cấp tương thích OpenAI do máy chủ tính từ địa chỉ API (app/vendorlogo.ts): id logo của hãng đã biết, hoặc "site"
+/** logo: gợi ý logo của nhà cung cấp tương thích OpenAI do máy chủ tính từ địa chỉ API (shared/vendorlogo.ts): id logo của hãng đã biết, hoặc "site"
  *  (dùng biểu tượng trang qua /api/favicon?p=<id>; địa chỉ API không gửi về trình duyệt). */
 export type ProviderInfo = { id: string; name: string; kind: ProviderKind; models: ModelInfo[]; source?: "plan" | "api"; plan?: PlanInfo; logo?: string };
 export type ProviderKind = "anthropic" | "openai" | "google" | "xai" | "deepseek" | "compatible" | "elevenlabs" | "composio" | "replicate" | "mock";

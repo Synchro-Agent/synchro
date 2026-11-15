@@ -1,5 +1,5 @@
 "use client";
-import { authErrorText } from "../app/autherrors";
+import { authErrorText } from "../shared/autherrors";
 import { cn } from "./cn";
 import React, { useState, useRef, useEffect, useLayoutEffect } from "react";
 // Importing class-variance-authority for the built-in button component
@@ -8,10 +8,10 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { ArrowRight, Mail, Gem, Lock, Eye, EyeOff, ArrowLeft, User, Smile, CalendarDays, KeyRound } from "lucide-react";
 // Importing animation components from framer-motion
 import { AnimatePresence, motion, Variants } from "framer-motion";
-import type { Perms } from "../app/catalog";
+import type { Perms } from "../shared/catalog";
 import { Mark } from "./brand";
 import { usePref } from "./store";
-import { OCCUPATIONS } from "../app/names";
+import { OCCUPATIONS } from "../shared/names";
 export { OCCUPATIONS };
 import { getLang } from "../app/i18n";
 import { LangSwitch } from "./langswitch";

@@ -2,8 +2,8 @@
 // và pull request Synchro theo dõi để tự sửa (CI lỗi, góp ý review) và tự lưu trữ phiên khi PR được gộp / đóng.
 import "server-only";
 import { db, getUser, needDisk } from "./authstore";
-import type { CodeStyle } from "../app/codestyle";
-import { fitSession, mergeData, type CodeNode } from "../app/codemerge";
+import type { CodeStyle } from "../shared/codestyle";
+import { fitSession, mergeData, type CodeNode } from "../shared/codemerge";
 
 export type PermMode = "ask" | "edits" | "auto";
 export type CookieMode = "keep" | "until-stop" | "session";

@@ -3,7 +3,7 @@
 // trang chính, tab trên điện thoại và mục con ở thanh bên.
 import React from "react";
 import { HoverMorph } from "../morph";
-import type { SpeechTool } from "../../app/speech/data";
+import type { SpeechTool } from "../../shared/speech/data";
 
 type P = { size?: number };
 const mk = (a: string, b: string) => {

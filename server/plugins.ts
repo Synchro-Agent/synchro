@@ -875,7 +875,7 @@ export { isText };
 export async function ensureDefaultPlugins() {
   const d = init();
   d.exec("CREATE TABLE IF NOT EXISTS plugin_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)");
-  const { PLUGIN_DIR } = await import("../app/plugindir");
+  const { PLUGIN_DIR } = await import("../shared/plugindir");
   const studios = PLUGIN_DIR.filter((p) => p.category === "studio");
   if (!d.prepare("SELECT 1 FROM plugin_meta WHERE key = 'defaults'").get()) {
     let ok = true;
@@ -890,7 +890,7 @@ export async function ensureDefaultPlugins() {
 }
 export async function syncStudioCatalog() {
   const d = init();
-  const { PLUGIN_DIR } = await import("../app/plugindir");
+  const { PLUGIN_DIR } = await import("../shared/plugindir");
   const studios = PLUGIN_DIR.filter((p) => p.category === "studio");
   // Danh mục studio có thêm skill (vd. sau một lượt rà các repo): cập nhật plugin studio đã cài của tổ chức theo nguồn mới, giữ studio,
   // lựa chọn bật / tắt từng skill và skill tải lên. Chỉ khi nguồn đã cài khác danh mục; quản trị viên đã gỡ thì thôi; lỗi mạng thì thử lại lần sau.

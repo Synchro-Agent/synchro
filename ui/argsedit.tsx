@@ -1,9 +1,9 @@
 "use client";
 // Sửa tham số của công cụ trước khi cho phép (thẻ duyệt công cụ connector): ô JSON, kiểm tra ngay khi gõ theo schema của công cụ
-// (app/connschema.ts validateArgs, cùng hàm máy chủ dùng để kiểm tra lại). Lỗi hiện ngay dưới ô, nút cho phép tắt tới khi hợp lệ.
+// (shared/connschema.ts validateArgs, cùng hàm máy chủ dùng để kiểm tra lại). Lỗi hiện ngay dưới ô, nút cho phép tắt tới khi hợp lệ.
 import { useId } from "react";
 import { locale, tr } from "../app/i18n";
-import { validateArgs } from "../app/connschema";
+import { validateArgs } from "../shared/connschema";
 
 export type ArgsState = { value: Record<string, unknown> | null; errors: string[]; changed: boolean };
 /** Đọc và kiểm tra chữ trong ô: JSON đúng cú pháp, là đối tượng, khớp schema (nếu có). changed: khác tham số ban đầu. */

@@ -3,7 +3,7 @@
 import "server-only";
 import { findFile, LIMITS, readSkillFile, readSkillRaw, SkillError, type Skill } from "./skillstore";
 import { execRun } from "./coderun";
-import { clipOut, runBlocks } from "../app/runtext";
+import { clipOut, runBlocks } from "../shared/runtext";
 import { activePatch, hashText, isMutating, looksLikeBug, markUsed, MAX_RETRIES, savePatch } from "./skillheal";
 import { rank } from "./skillroute";
 

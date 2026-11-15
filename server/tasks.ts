@@ -13,7 +13,7 @@ import crypto from "node:crypto";
 import { can, db, getUser } from "./authstore";
 import { getRun, startRun } from "./runs";
 import { extLive } from "./browserext";
-import { TOO_OLD } from "../app/taskerr";
+import { TOO_OLD } from "../shared/taskerr";
 
 export type Schedule = { kind: "once" | "hourly" | "daily" | "weekdays" | "weekly"; time?: string; weekday?: number; every?: number; tz: string };
 export type BrowserPref = "auto" | "synchro" | "user";

@@ -9,7 +9,7 @@ import jschardet from "jschardet";
 import { parseInWorker, withParseSlot, withConvertSlot, lowPriority, parserEnv } from "./sandbox";
 import { sniffUtf16, utf16LooksText } from "./detect";
 import { transcribeAudio } from "./transcribe";
-import { type ContentBlock, type Extractor, FileError, IMAGE_MAX_BYTES, IMAGE_MAX_EDGE } from "../../app/fileproc/types";
+import { type ContentBlock, type Extractor, FileError, IMAGE_MAX_BYTES, IMAGE_MAX_EDGE } from "../../shared/fileproc/types";
 
 const run = promisify(execFile);
 // Trần số điểm ảnh của một tấm ảnh: chặn "bom giải nén ảnh" (ảnh 20000×20000 = 400 triệu điểm ngốn hàng GB bộ nhớ khi giải nén).

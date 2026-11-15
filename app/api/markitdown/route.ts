@@ -8,7 +8,7 @@ import { AuthError, limit } from "../../../server/authstore";
 import { route } from "../../../server/route";
 import { diskLow } from "../../../server/diskfloor";
 import { lowPriority, parserEnv, withConvertSlot } from "../../../server/fileproc/sandbox";
-import { FileError } from "../../fileproc/types";
+import { FileError } from "../../../shared/fileproc/types";
 
 export const runtime = "nodejs";
 const run = promisify(execFile);

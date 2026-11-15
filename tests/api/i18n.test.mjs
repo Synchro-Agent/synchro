@@ -1,4 +1,4 @@
-// Đồng bộ ngôn ngữ: mọi chữ giao diện trong app/ phải có bản dịch sang ngôn ngữ còn lại (từ điển app/i18n-dict.ts),
+// Đồng bộ ngôn ngữ: mọi chữ giao diện trong app/ phải có bản dịch sang ngôn ngữ còn lại (từ điển shared/i18n-dict.ts),
 // bản dịch tiếng Anh không được sót chữ tiếng Việt, và các luật dịch chuỗi ghép cho ra đúng câu. Không cần máy chủ.
 import { scan } from "../lib/i18n-scan.mjs";
 import { loadTs } from "../lib/ts.mjs";
@@ -118,7 +118,7 @@ ok(users.length > 1 && !leak, `không tệp giao diện nào kéo theo i18n-serv
 }
 // Đường chat (chatengine.ts) không nhập tĩnh từ điển VI→EN: chỉ route cần dịch ở máy chủ (quét skill, xuất skill…) mới kéo nó vào, lúc được gọi.
 const reach = (start) => { const seen = new Map([[start, [start]]]); for (const q = [start]; q.length;) { const f = q.shift(); for (const d of deps(f, false)) if (!seen.has(d)) { seen.set(d, [...seen.get(f), d]); q.push(d); } } return seen; };
-const viaChat = reach(P.join(process.cwd(), "server", "chatengine.ts")).get(P.join(process.cwd(), "app", "i18n-dict.ts"));
+const viaChat = reach(P.join(process.cwd(), "server", "chatengine.ts")).get(P.join(process.cwd(), "shared", "i18n-dict.ts"));
 ok(!viaChat, "chatengine.ts không nhập tĩnh từ điển VI→EN (i18n-dict.ts)", viaChat?.map((f) => P.relative(process.cwd(), f)).join(" → "));
 // Mẫu tf để trong bảng (khóa động, bộ quét không thấy): mọi giá trị phải là khóa có bản dịch giữ {biến}.
 const tbl = (file, name) => [...(rf(P.join(process.cwd(), file), "utf8").match(new RegExp(`const ${name}[^=]*= \\{([\\s\\S]*?)\\};`))?.[1] ?? "").matchAll(/:\s*"([^"]+)"/g)].map((m) => m[1]);

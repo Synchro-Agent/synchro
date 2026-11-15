@@ -12,8 +12,8 @@
 //  5) Báo quản trị viên vào Hộp thư: "Synchro đã thêm model mới: …" kèm kết quả thử.
 import "server-only";
 import { ADMIN_EMAILS, db, getSetting, setSetting } from "./authstore";
-import type { ProviderKind } from "../app/catalog";
-import { compareModels, isFrontier, modelFamily, parseId, tierOf, versionText, visionUnsupported } from "../app/modelrules";
+import type { ProviderKind } from "../shared/catalog";
+import { compareModels, isFrontier, modelFamily, parseId, tierOf, versionText, visionUnsupported } from "../shared/modelrules";
 
 export type ModelCaps = { vision?: boolean; tools?: boolean; thinking?: "adaptive" | "budget" | "none"; effort?: string[] | null };
 export type Price = { in: number; out: number; cache: number };

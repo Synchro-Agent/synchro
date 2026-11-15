@@ -18,7 +18,7 @@ import { NO_CHEAP, oneShot, quickCall, usableModels } from "./ai/anymodel";
 const BRAIN_WAIT_MS = Number(process.env.SYNCHRO_BRAIN_WAIT_MS) || 20_000;
 const bgOpts = (maxTokens: number) => ({ maxTokens, job: "brain", bg: true, maxWaitMs: BRAIN_WAIT_MS });
 import { clearMemory, listMemory, memCfg } from "./memory";
-import { splitArtifacts } from "../app/artifacts";
+import { splitArtifacts } from "../shared/artifacts";
 import { chatGone } from "./chatstore";
 import { sideModel, tierOf, vendorOf } from "./router";
 import { registerMemStat } from "./memstat";

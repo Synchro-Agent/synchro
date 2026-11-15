@@ -1,9 +1,9 @@
 "use client";
 import { useSyncExternalStore } from "react";
-import type { ContentBlock } from "../app/fileproc/types";
+import type { ContentBlock } from "../shared/fileproc/types";
 import { serverExtract } from "./llm";
-import { MAX_ATTACH_BYTES, MAX_FILE_BYTES, MAX_FILES_PER_MESSAGE } from "../app/fileproc/types";
-import type { Rejected } from "../app/turnctx";
+import { MAX_ATTACH_BYTES, MAX_FILE_BYTES, MAX_FILES_PER_MESSAGE } from "../shared/fileproc/types";
+import type { Rejected } from "../shared/turnctx";
 
 /**
  * Trạng thái một tệp đính kèm. lines: số dòng (tệp chữ / code, hiện "N dòng" như Claude); pdf: thumb là ảnh trang đầu;

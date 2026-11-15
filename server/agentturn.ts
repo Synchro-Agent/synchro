@@ -4,7 +4,7 @@ import "server-only";
 import { askedBack, AUTO, autoEffort, routeModel } from "./router";
 import { can, canModel, permsOf, type UserRow } from "./authstore";
 import { agentSystem, agentTools, anthropicAgent, mockAgent, openaiAgent, responsesAgent, runAgent, runPlanAgent, type AgentEvent, type ExtraTool } from "./agentcore";
-import { clampEffort, effortCap, isEffort, legacyModel } from "../app/catalog";
+import { clampEffort, effortCap, isEffort, legacyModel } from "../shared/catalog";
 import { catalog, mainModels, pickDefault, resolveModel } from "./providers";
 import { subCli } from "./ai/subs";
 import { usableModels } from "./ai/anymodel";

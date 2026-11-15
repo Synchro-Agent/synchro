@@ -6,13 +6,13 @@ import * as I from "./icons";
 import { isEn, locale, tr } from "../app/i18n";
 import { Markdown } from "./md";
 import { artifactComplete, type OutFile } from "./llm";
-import { parseVbhc, vbhcHtml } from "../app/vbhc";
+import { parseVbhc, vbhcHtml } from "../shared/vbhc";
 import { ArtIcon } from "./artifactcard";
 import { Menu } from "./ui";
-import { ART_LABEL, artFileName, type ArtBlock, type ArtType } from "../app/artifacts";
+import { ART_LABEL, artFileName, type ArtBlock, type ArtType } from "../shared/artifacts";
 import { TokLine, useHighlight } from "./highlight";
-import { instrumentHtml, LOC_ATTR, parseLoc, snippet } from "../app/srcloc";
-import { fixPatch, hashOf, important, type CriticEntry, type Finding } from "../app/critic";
+import { instrumentHtml, LOC_ATTR, parseLoc, snippet } from "../shared/srcloc";
+import { fixPatch, hashOf, important, type CriticEntry, type Finding } from "../shared/critic";
 import { CriticNote, CriticPill } from "./criticui";
 import { BulkBar, BulkButton, BulkCheck, bulkRow, each, useBulk, type BulkAct } from "./bulk";
 import { useApp } from "./store";
@@ -24,9 +24,9 @@ import { htmlToBlocks } from "./htmlblocks";
 export type ArtVersion = ArtBlock & { at?: number };
 
 // ---------------------------------------------------------------- khung chạy cô lập
-import { buildDocCore, deckExport, externalImageUrls, genImageId, H2I, htmlExport, isDeck, libUrls, noteGenPending, noteGenSettled, pendingRetryMs, svgExport, swapUrls } from "../app/artdoc";
-import { kitFontUrl, presetIn, withKitFontLink } from "../app/artkit";
-import { PRESETS, presetOf } from "../app/designpresets";
+import { buildDocCore, deckExport, externalImageUrls, genImageId, H2I, htmlExport, isDeck, libUrls, noteGenPending, noteGenSettled, pendingRetryMs, svgExport, swapUrls } from "../shared/artdoc";
+import { kitFontUrl, presetIn, withKitFontLink } from "../shared/artkit";
+import { PRESETS, presetOf } from "../shared/designpresets";
 export { deckExport, H2I, isDeck, libUrls };
 
 // Cầu nối trong artifact: window.synchro.complete (và window.claude.complete cho artifact viết theo Claude),

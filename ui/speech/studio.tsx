@@ -3,7 +3,7 @@
 // Các việc này chạy lâu ở ElevenLabs: tạo xong thì Synchro tự hỏi lại trạng thái tới khi có âm thanh.
 import { useEffect, useState } from "react";
 import * as I from "../icons";
-import { DUB_LANGS } from "../../app/speech/data";
+import { DUB_LANGS } from "../../shared/speech/data";
 import { LANGS, ago, api, del, on, post, postForm, useItems, useMyVoices, usePlan, type Item, type Voice } from "./client";
 import { Drop, ErrBox, Field, Player, Seg, Select, Spin, Tabs, Toggle, VoiceChip, VoicePicker } from "./parts";
 import { Head, Wide } from "./shell";

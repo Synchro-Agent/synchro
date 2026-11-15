@@ -6,7 +6,7 @@ import "server-only";
 import http from "node:http";
 import net from "node:net";
 import { lookup } from "node:dns/promises";
-import { pkgHostAllowed } from "../app/catalog";
+import { pkgHostAllowed } from "../shared/catalog";
 import { isPrivate } from "./safefetch";
 
 type G = { __synchroEgress?: Promise<number>; __synchroEgressWeb?: Promise<number> };

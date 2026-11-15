@@ -4,13 +4,13 @@
 //
 // Model thật được gọi qua /api/llm; muốn dùng backend riêng thì đặt NEXT_PUBLIC_LLM_ENDPOINT.
 import type { Project } from "./store";
-import type { ContentBlock } from "../app/fileproc/types";
-import type { Effort } from "../app/catalog";
+import type { ContentBlock } from "../shared/fileproc/types";
+import type { Effort } from "../shared/catalog";
 import type { TraceItem } from "../server/transpile";
-import type { CxCard } from "../app/cxactions";
+import type { CxCard } from "../shared/cxactions";
 import { noteServerNow } from "./clock";
 import { postTurn } from "./turnretry";
-import { PROJECT_INS_HEAD } from "../app/turnctx";
+import { PROJECT_INS_HEAD } from "../shared/turnctx";
 
 export const CHUNK_SIZE = 1500;
 export const SMALL_DOC_LIMIT = 12000;

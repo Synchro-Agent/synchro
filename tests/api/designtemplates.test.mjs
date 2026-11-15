@@ -1,4 +1,4 @@
-// Mẫu điền sẵn (app/designtemplates.ts và các mô-đun mẫu): model viết JSON, Synchro dựng HTML. Không cần máy chủ.
+// Mẫu điền sẵn (shared/designtemplates.ts và các mô-đun mẫu): model viết JSON, Synchro dựng HTML. Không cần máy chủ.
 // Trình duyệt thật (co chữ, đổi màu chữ, ảnh chụp): tests/ui/design-templates.mjs.
 import { loadTs } from "../lib/ts.mjs";
 

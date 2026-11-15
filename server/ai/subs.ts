@@ -10,7 +10,7 @@ import path from "node:path";
 import { db, type UserRow } from "../authstore";
 import { quickLimit, runAge, turnsTotal } from "../runs";
 import { acquire, holdsSlot, noteRefused, queuedOf, queueLimit, withSlot } from "../turngate";
-import { ALL, equivalentModel, splitKey, vendorOf, type ProviderInfo } from "../../app/catalog";
+import { ALL, equivalentModel, splitKey, vendorOf, type ProviderInfo } from "../../shared/catalog";
 import { canModel } from "../authstore";
 import { catalog, mainModels } from "../providers";
 import { engineFor } from "./selector";

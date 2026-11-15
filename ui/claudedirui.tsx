@@ -8,7 +8,7 @@ import * as I from "./icons";
 import { useApp } from "./store";
 import { locale, tr } from "../app/i18n";
 import { apiFetch, statusText } from "./apierr";
-import { PLUGIN_CATS } from "../app/plugindir";
+import { PLUGIN_CATS } from "../shared/plugindir";
 import { Pager } from "./pager";
 
 type Item = { id: string; name: string; summary: string; author: string; cats: string[]; license: string; skillCount: number; skills: string[]; homepage: string; verified: string | null; installed: string | null;

@@ -1,5 +1,5 @@
 import { handle, limit, requireUser, sameOrigin } from "../../../../server/authstore";
-import { splitArtifacts } from "../../../artifacts";
+import { splitArtifacts } from "../../../../shared/artifacts";
 import { OneShotErr, quickCall } from "../../../../server/ai/anymodel";
 import { memCfg } from "../../../../server/memory";
 

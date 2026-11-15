@@ -2,7 +2,7 @@
 // Chỉ những model quản trị viên cho hiện ở màn hình chính, kèm quyền của tài khoản.
 import "server-only";
 import { permsOf, type UserRow } from "./authstore";
-import { ALL } from "../app/catalog";
+import { ALL } from "../shared/catalog";
 import { catalog, defaultModel, mainModels } from "./providers";
 import { mergedProviders } from "./ai/subs";
 import { isNewModel, replacementOf, replacements, withReplacements } from "./modelreg";

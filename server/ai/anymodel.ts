@@ -3,7 +3,7 @@
 // (tóm tắt để đọc to, nén ngữ cảnh, rút bộ nhớ, hội đồng phản biện) chạy qua gói (CLI chính chủ) hoặc qua API tùy model được chọn.
 import "server-only";
 import { canModel, type UserRow } from "../authstore";
-import { ALL } from "../../app/catalog";
+import { ALL } from "../../shared/catalog";
 import { catalog, mainModels, resolveModel } from "../providers";
 import { billsCredit, hasCheapSide, routeModel, sideModel, tierOf, type RouteInput } from "../router";
 import { chatOnce, HttpErr } from "../llmcall";

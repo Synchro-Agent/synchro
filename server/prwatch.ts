@@ -14,7 +14,7 @@ import { isDraining } from "./drain";
 import { acquire, withSlot } from "./turngate";
 import { exec, sdir, wsAllowed } from "./workspace";
 import { withUsage } from "./usage";
-import { STYLE_SYS, isStyle } from "../app/codestyle";
+import { STYLE_SYS, isStyle } from "../shared/codestyle";
 import type { AgentEvent } from "./agentcore";
 
 // Lời trả lời của Synchro trên PR mang dấu này để lần sau không coi là góp ý mới.

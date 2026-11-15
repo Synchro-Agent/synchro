@@ -5,7 +5,7 @@ import { sendMail } from "./mailer";
 import { DISK_FULL, diskLow } from "./diskfloor";
 import { emailChangeMail, emailChangeNoticeMail, changedMail, resetMail, signupTakenMail, verifyMail, type MailLang } from "./mailtpl";
 import Database from "better-sqlite3";
-import { allowsModel, FULL_PERMS, normPerms, type Feature, type Perms } from "../app/catalog";
+import { allowsModel, FULL_PERMS, normPerms, type Feature, type Perms } from "../shared/catalog";
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";

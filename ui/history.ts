@@ -3,8 +3,8 @@
 // Lượt lỗi (failed) không gửi: câu báo lỗi không phải lời của model, model từng đọc nó như câu trả lời của chính mình.
 import type { Chat, Msg } from "./store";
 import type { LLMMsg } from "./llm";
-import { artBase } from "../app/vfs";
-import { stripAppliedNotes } from "../app/turnctx";
+import { artBase } from "../shared/vfs";
+import { stripAppliedNotes } from "../shared/turnctx";
 
 const STOPPED = { id: "stop", name: "(dừng)", label: "Câu trả lời", input: "", status: "cancelled_by_user" as const, summary: "Người dùng đã bấm Dừng giữa chừng; câu trả lời trên chưa hoàn chỉnh." };
 

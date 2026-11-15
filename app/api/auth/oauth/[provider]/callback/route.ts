@@ -1,4 +1,4 @@
-import { authErrorCode } from "../../../../../autherrors";
+import { authErrorCode } from "../../../../../../shared/autherrors";
 import { connectIdentity, appUrl, audit, AuthError, clientIp, current, limit, oauthLogin } from "../../../../../../server/authstore";
 import { afterClaim, noticeDropped } from "../../../../../../server/claim";
 import { saveLink } from "../../../../../../server/github";

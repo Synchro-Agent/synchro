@@ -6,8 +6,8 @@
 // Token / khóa nằm mã hóa trong hàng connector của đúng tài khoản đó (server/connectors.ts), không bao giờ ra trình duyệt hay sandbox chạy code.
 import "server-only";
 import type { McpTool } from "./mcp";
-import { isConnectUrl } from "../app/cxlink";
-import { actionWords, actRest, appName, KNOWN_KITS, metaWords, slugIsRead, slugParts, type CxCard, type CxWrite, type KitHints } from "../app/cxactions";
+import { isConnectUrl } from "../shared/cxlink";
+import { actionWords, actRest, appName, KNOWN_KITS, metaWords, slugIsRead, slugParts, type CxCard, type CxWrite, type KitHints } from "../shared/cxactions";
 export { appName };
 
 export const COMPOSIO = "composio";

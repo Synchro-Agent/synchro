@@ -4,7 +4,7 @@
 import "server-only";
 import { db, getUser, needDisk, type UserRow } from "./authstore";
 import { randomToken } from "./mcpauth";
-import { ART_TYPES, type ArtType } from "../app/artifacts";
+import { ART_TYPES, type ArtType } from "../shared/artifacts";
 import { publish } from "./live";
 
 export type Visibility = "private" | "org";

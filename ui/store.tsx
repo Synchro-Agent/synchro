@@ -6,7 +6,7 @@ import type { TraceItem } from "../server/transpile";
 import { ls } from "./userscope";
 
 // trace: dấu vết công cụ (chuẩn Synchro) gửi lại ở lượt sau; stopped: người dùng đã bấm Dừng giữa chừng.
-import type { CriticEntry } from "../app/critic";
+import type { CriticEntry } from "../shared/critic";
 export type Msg = { role: "user" | "ai"; text: string; pick?: { id: string; label: string }[]; done?: boolean; trace?: TraceItem[]; stopped?: boolean; files?: string[]; fids?: Record<string, string>; like?: 1 | -1; time: number; searched?: boolean; sys?: string; skills?: string[]; libs?: { key: string; label: string; forced?: boolean; skills: string[] }[]; tools?: string[]; outs?: { id: string; name: string; size: number; mime: string; skipped?: boolean }[]; run?: string; prog?: string; via?: string;
   // viaTask: loại việc chế độ Tự động nhận ra khi chọn model (router.ts Task: "code", "write"…), hiện cạnh tên model dưới câu trả lời.
   viaTask?: string;

@@ -10,11 +10,11 @@
 import "server-only";
 import fs from "node:fs";
 import path from "node:path";
-import { buildDocCore, isDeck } from "../app/artdoc";
+import { buildDocCore, isDeck } from "../shared/artdoc";
 import { inlineImages } from "./artimg";
 import { execRun, runner } from "./coderun";
-import { type ArtType } from "../app/artifacts";
-import { artState } from "../app/vfs";
+import { type ArtType } from "../shared/artifacts";
+import { artState } from "../shared/vfs";
 
 export type DeckInput = { type: ArtType; content: string; title: string; complete?: boolean };
 

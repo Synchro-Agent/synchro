@@ -3,7 +3,7 @@
 import "server-only";
 import { can, db, type UserRow } from "./authstore";
 import { hasDevice } from "./browserext";
-import { CAP_KEYS, DEFAULT_CAPS, type Caps, type CapsState } from "../app/catalog";
+import { CAP_KEYS, DEFAULT_CAPS, type Caps, type CapsState } from "../shared/catalog";
 import { runner } from "./coderun";
 import { wsConfigured } from "./workspace";
 

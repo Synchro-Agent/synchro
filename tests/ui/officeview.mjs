@@ -321,7 +321,7 @@ try {
   ok(blocks[11].src?.startsWith("data:image/png") && blocks[12].svg?.includes("svg"), "ảnh và sơ đồ giữ lại", JSON.stringify(blocks.slice(11, 13)));
 
   console.log("6. Bản dịch");
-  const dict = fs.readFileSync("app/i18n-dict.ts", "utf8");
+  const dict = fs.readFileSync("shared/i18n-dict.ts", "utf8");
   const missing = V.STRINGS.filter((s) => !dict.includes(JSON.stringify(s) + ":"));
   ok(!missing.length, "mọi chuỗi của khung xem có tiếng Anh", missing.join(" | "));
   ok(!errors.length, "không có lỗi JavaScript", errors.join(" | "));

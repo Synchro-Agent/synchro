@@ -7,7 +7,7 @@ import "server-only";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { adminRole, db, getSetting, isAdmin, setSetting, type UserRow } from "./authstore";
 import { vendorOf } from "./router";
-import { familyKey, parseId, versionCmp } from "../app/modelrules";
+import { familyKey, parseId, versionCmp } from "../shared/modelrules";
 import { providerPriceOf } from "./modelreg";
 import { usageLimitMsg, type UsageAlt } from "./limitmsg";
 

@@ -5,13 +5,13 @@ import { createPortal } from "react-dom";
 import { unredact, filepathOf, autoMerge, hasHidden, splitMeta, parsePackages, checkPkg, findCron, cronInfo, type Pkg } from "./devtools";
 import * as I from "./icons";
 import { locale, tr, useLangReady } from "../app/i18n";
-import { codeWraps, imageKind, inlineText, keepWhole, parseInline, parseMarkdown, streamSafe, type Align, type Block, type Inl, type Top } from "../app/mdparse";
+import { codeWraps, imageKind, inlineText, keepWhole, parseInline, parseMarkdown, streamSafe, type Align, type Block, type Inl, type Top } from "../shared/mdparse";
 import { ChartView, parseChart } from "./charts";
 import { lazyView } from "./lazy";
 import { AskCard } from "./askcard";
 import { CiteText, hasCite } from "./cites";
 import { TokLine, useHighlight } from "./highlight";
-import { connectName, isConnectUrl, tidyConnectLinks } from "../app/cxlink";
+import { connectName, isConnectUrl, tidyConnectLinks } from "../shared/cxlink";
 import { ConnLogo } from "./connlogo";
 // Trang đang chạy bản giả lập ở máy cục bộ: nhận cả Connect Link của Composio giả lập.
 // Logo ứng dụng của nút Kết nối (Gmail, Google Drive → googledrive): biểu tượng trang chủ qua /api/favicon?app=…, không có thì chữ cái đầu.

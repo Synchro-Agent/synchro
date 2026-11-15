@@ -4,6 +4,7 @@
 // 2. Bộ quét mã nguồn (tests/lib/srcroots.mjs) thấy đủ số tệp tối thiểu: thiếu một gốc thì phép kiểm quét mã không thể qua vì không đọc gì.
 // 3. server/: mỗi tệp mở đầu bằng import "server-only" (gói giao diện nhập nhầm thì bản build báo lỗi); không tệp "use client" nào nhập
 //    (không chỉ kiểu) một tệp trong server/.
+// 4. ui/ giữ mã giao diện. 5. shared/ không mang dấu phía nào và chỉ nhập mã trong shared/.
 import fs from "node:fs";
 import path from "node:path";
 import { walkSrc } from "../lib/srcroots.mjs";
@@ -36,6 +37,9 @@ const ALLOW = [
   [/^tests\/api\/css-inline\.test\.mjs$/, /^app\/(a\.css|ui\.tsx)$/],     // CSS, tsx giả trong thư mục tạm
   [/^tests\/(api|ui)\/skill[\w-]*\.(test\.)?mjs$/, /^scripts\/[\w-]+\.py$/], // tệp bên trong một skill thử, không phải scripts/ của repo
   [/^tests\/api\/synchro-video\.test\.mjs$/, /^tools\/make\.py$/],          // tệp bên trong dự án video thử
+  // Dòng đầu của workspace/charts/synchro-charts.js do script này sinh ra: tệp đó nằm trong mã băm image sandbox (workspace/setup.sh), sửa chữ
+  // ở đây thì phải sinh lại và dựng lại image. Giữ nguyên cho tới lần sửa chú thích workspace/ (cùng lúc với các chú thích cũ khác trong workspace/).
+  [/^scripts\/gen-chart-presets\.mjs$/, /^app\/design-engine\/charts\/echarts-presets\.ts$/],
 ];
 const missing = [];
 for (const f of scanned.filter((x) => x !== "tests/api/paths-guard.test.mjs")) {
@@ -111,6 +115,25 @@ for (const f of [...src.keys()].filter((x) => x.startsWith("ui/"))) {
   }
 }
 ok(!uiLeaks.length, "không tệp ui/ nào nhập mã server/", uiLeaks.join("\n"));
+
+console.log("5. shared/ dùng được ở cả hai phía");
+// Mã dùng chung (từ điển, dữ liệu thiết kế, danh mục, mdparse, kiểu) không mang "use client" hay import "server-only", và không nhập mã
+// server/ hay ui/ (trừ kiểu, bị xóa khi biên dịch): nhập vào thì gói giao diện kéo theo mã máy chủ, hoặc máy chủ kéo theo mã trình duyệt.
+const shared = [...src.keys()].filter((f) => f.startsWith("shared/"));
+ok(shared.length >= 45, `shared/ có ${shared.length} tệp`);
+const marked = shared.filter((f) => isClient(src.get(f)) || /^\s*import\s+["']server-only["']/m.test(src.get(f)));
+ok(!marked.length, 'không tệp shared/ nào mang "use client" hay import "server-only"', marked.join(", "));
+const sharedLeaks = [];
+for (const f of shared) {
+  for (const m of src.get(f).matchAll(/(?:^|\n)\s*(?:import|export)\s+(?!type\b)([^;]*?)\s*from\s*["'](\.{1,2}\/[^"']+)["']|import\(\s*["'](\.{1,2}\/[^"']+)["']\s*\)|(?:^|\n)\s*import\s*["'](\.{1,2}\/[^"']+)["']/g)) {
+    const names = m[1]?.trim();
+    if (names && /^\{[^}]*\}$/.test(names) && names.slice(1, -1).split(",").every((x) => !x.trim() || /^type\s/.test(x.trim()))) continue;
+    const spec = m[2] ?? m[3] ?? m[4];
+    const t = resolve(f, spec) ?? P.normalize(P.join(P.dirname(f), spec));
+    if (!t.startsWith("shared/")) sharedLeaks.push(`${f} → ${t}`);
+  }
+}
+ok(!sharedLeaks.length, "shared/ chỉ nhập mã trong shared/ (và gói npm)", sharedLeaks.join("\n"));
 
 console.log(`\n${pass} đạt, ${fail} lỗi`);
 process.exit(fail ? 1 : 0);

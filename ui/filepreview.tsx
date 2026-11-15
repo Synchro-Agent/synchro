@@ -10,7 +10,7 @@ import type { OutFile } from "./llm";
 import { FILE_KIND as KIND, fileKind, fmtSize } from "./fileicon";
 import { ArtifactFrame, isDeck } from "./artifactui";
 import { Menu } from "./ui";
-import { ART_LABEL, type ArtType } from "../app/artifacts";
+import { ART_LABEL, type ArtType } from "../shared/artifacts";
 import { officeDoc, officeKind, type OfficeKind } from "./officeview";
 
 export const fileLabel = (f: OutFile) => `${tr(KIND[fileKind(f.name).ext] ?? "Tệp")} · ${fmtSize(f.size)}`;

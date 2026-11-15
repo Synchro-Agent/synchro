@@ -1,6 +1,6 @@
 import { AuthError, can, handle, isAdmin, limit, requireUser, sameOrigin } from "../../../server/authstore";
 import { catalogInstalled, findLinkDup, installPlugin, linkDupMessage, listPlugins, listPluginsLite, parseRepo, PluginError, previewPlugin, studioOf, studioPage, studioSummary, type PluginDef } from "../../../server/plugins";
-import { PLUGIN_DIR } from "../../plugindir";
+import { PLUGIN_DIR } from "../../../shared/plugindir";
 import { closedReason, dirDef, dirEntry } from "../../../server/claudedir";
 import { blockedLibs, clearFailed, clearRemoved, failedLibs, freeSlug, noteInstallError } from "../../../server/plugjob";
 

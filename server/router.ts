@@ -17,17 +17,17 @@
 //     nhiều bước ("act"); câu hỏi sức khỏe, pháp lý, tài chính không dùng mức thấp nhất; việc nhẹ ưu tiên model hiện chữ dần.
 
 import "server-only";
-import { codeOnly, isFrontier, supersededSet, tierOf as ruleTier, type Tier } from "../app/modelrules";
+import { codeOnly, isFrontier, supersededSet, tierOf as ruleTier, type Tier } from "../shared/modelrules";
 
 export const AUTO = "auto";
 export type { Tier };
-import { vendorOf, type Vendor } from "../app/vendor";
+import { vendorOf, type Vendor } from "../shared/vendor";
 export { vendorOf, type Vendor };
 // "lookup" (tra cứu): câu cần dữ liệu mới trên web (tỷ giá, giá, tin tức, phiên bản mới nhất…) — cần model hạng vừa trở lên có công cụ web, không model rẻ nhất.
 export type Task = "chat" | "qa" | "lookup" | "language" | "translate" | "summarize" | "write" | "code" | "debug" | "reason" | "analyze" | "build" | "act" | "vision" | "longdoc" | "data";
 export type AutoEffort = "low" | "medium" | "high" | "extra" | "max";
 
-// Hạng theo chữ chỉ hạng trong mã model của mọi hãng (luật chung ở app/modelrules.ts, so theo từng chữ và theo số phiên bản: model hãng ra sau này
+// Hạng theo chữ chỉ hạng trong mã model của mọi hãng (luật chung ở shared/modelrules.ts, so theo từng chữ và theo số phiên bản: model hãng ra sau này
 // tự có hạng, "gemini-5" không còn bị coi là "mini", Grok 10 vẫn là hạng mạnh). Không khớp thì coi là "balanced"; "mạnh nhất" là dòng đầu bảng.
 // Model mã nguồn mở chạy qua gói (GPT-OSS, Llama, Qwen, Mistral…): hạng nhanh, không mang thế mạnh của hãng lớn — "gpt-oss" từng bị coi là
 // GPT của OpenAI, được cộng điểm việc số liệu và được chọn làm bảng tính (rồi treo).
@@ -628,7 +628,7 @@ const LAG_COST = 0.6;
 // Fable của gói Claude có thể tính vào usage credits (tiền thật ngoài gói): Tự động không tự tiêu, người dùng vẫn chọn tay được. Danh sách chỉ còn nó thì vẫn dùng.
 const CREDIT = /^sub-claude\/.*fable/i;
 // Model chỉ dùng để viết code (grok-build, codex, coder, …-code-…): chỉ tính cho việc code; từng thắng cả câu hỏi sức khỏe, thuế, toán vì tên lạ
-// được coi là hạng vừa và có thế mạnh của hãng. Nhận dạng bằng codeOnly() ở app/modelrules.ts (xét phần tên sau "/", nên gói "sub-codex/" không bị tính).
+// được coi là hạng vừa và có thế mạnh của hãng. Nhận dạng bằng codeOnly() ở shared/modelrules.ts (xét phần tên sau "/", nên gói "sub-codex/" không bị tính).
 /** Model tính vào tiền thật ngoài gói: việc không ai bấm thì không được chạy trên nó. */
 export const billsCredit = (k: string) => CREDIT.test(k);
 /** Danh sách có model rẻ hơn hạng mạnh nhất dùng được cho việc phụ không (kể cả đang tạm hết hạn mức). */

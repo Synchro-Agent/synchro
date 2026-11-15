@@ -3,11 +3,11 @@
 // Gemini và các nhà cung cấp tương thích OpenAI dùng /chat/completions.
 import "server-only";
 import type { Target } from "./providers";
-import type { Effort } from "../app/catalog";
+import type { Effort } from "../shared/catalog";
 import { noteResponse } from "./usage";
 import { noteProviderResponse } from "./tracing";
 import { learnFromRetry, modelParams } from "./modelreg";
-import { visionUnsupported } from "../app/modelrules";
+import { visionUnsupported } from "../shared/modelrules";
 
 // Đo thời gian tới byte đầu tiên của hãng cho từng lượt chat (tracing.ts): từ lúc gửi tới lúc có header phản hồi.
 async function timed(kind: string, f: () => Promise<Response>): Promise<Response> {

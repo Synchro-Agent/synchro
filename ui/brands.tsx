@@ -1,7 +1,7 @@
 "use client";
 // Logo của các hãng model (từ lobehub/icons, giấy phép MIT). OpenAI, Grok và ElevenLabs dùng currentColor để đổi theo giao diện sáng/tối.
 import { useEffect, useId, useState } from "react";
-import { FILE_LOGOS, isFileLogo, logoSrc, modelLogo, providerLogo, type LogoPick, type ProviderHint } from "../app/vendorlogo";
+import { FILE_LOGOS, isFileLogo, logoSrc, modelLogo, providerLogo, type LogoPick, type ProviderHint } from "../shared/vendorlogo";
 import { useModels } from "./models";
 
 type P = { size?: number };
@@ -53,7 +53,7 @@ function ElevenLabs({ size = 20 }: P) {
 
 const LOGOS: Record<string, (p: P) => React.ReactElement> = { anthropic: Claude, openai: OpenAI, google: Gemini, xai: Grok, deepseek: DeepSeek, elevenlabs: ElevenLabs };
 
-// Logo tệp trong public/logos (app/vendorlogo.ts): giữ màu thương hiệu (<img>), hoặc tô một màu qua mask (màu thương hiệu, hay currentColor đổi theo sáng / tối).
+// Logo tệp trong public/logos (shared/vendorlogo.ts): giữ màu thương hiệu (<img>), hoặc tô một màu qua mask (màu thương hiệu, hay currentColor đổi theo sáng / tối).
 function FileLogo({ id, size = 20 }: { id: string } & P) {
   const f = FILE_LOGOS[id], src = logoSrc(id);
   if (f.mode === "img") return <img src={src} alt="" width={size} height={size} draggable={false} style={{ display: "block", flex: "none" }} />;
@@ -68,7 +68,7 @@ export function BrandLogo({ id, size }: { id: string } & P) {
 }
 export const hasLogo = (id: string) => Object.hasOwn(LOGOS, id) || isFileLogo(id);
 
-/** Vẽ logo đã chọn (app/vendorlogo.ts) trong một ô cố định size×size: logo hãng, biểu tượng trang (lỗi thì chữ cái đầu), hoặc chữ cái đầu. */
+/** Vẽ logo đã chọn (shared/vendorlogo.ts) trong một ô cố định size×size: logo hãng, biểu tượng trang (lỗi thì chữ cái đầu), hoặc chữ cái đầu. */
 export function LogoMark({ pick, size = 16, className }: { pick: LogoPick; className?: string } & P) {
   const site = "site" in pick ? pick.site : "";
   const [bad, setBad] = useState(false);

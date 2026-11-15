@@ -1,5 +1,5 @@
 // Giao diện ↔ mã nguồn (Alt+Click): đánh dấu dòng mã lên từng thẻ HTML / SVG mà không đổi số dòng, đoạn mã quanh vị trí.
-// Hàm thuần, không cần máy chủ: dịch app/srcloc.ts bằng TypeScript rồi gọi trực tiếp.
+// Hàm thuần, không cần máy chủ: dịch shared/srcloc.ts bằng TypeScript rồi gọi trực tiếp.
 import { createRequire } from "node:module";
 import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -7,7 +7,7 @@ import path from "node:path";
 let pass = 0, fail = 0;
 const ok = (c, n, x = "") => { c ? pass++ : fail++; console.log(c ? "  ✓" : "  ✗", n, c ? "" : String(x).slice(0, 400)); };
 const ts = createRequire(path.join(process.cwd(), "package.json"))("typescript");
-const out = ts.transpileModule(readFileSync("app/srcloc.ts", "utf8"), { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText;
+const out = ts.transpileModule(readFileSync("shared/srcloc.ts", "utf8"), { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText;
 const f = path.join(mkdtempSync(path.join(tmpdir(), "srcloc-")), "srcloc.mjs");
 writeFileSync(f, out);
 const { instrumentHtml, stripLoc, parseLoc, snippet } = await import(f);

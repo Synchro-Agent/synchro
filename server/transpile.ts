@@ -8,7 +8,7 @@
 //   4. Tầng động (tri thức tìm theo câu hỏi, artifact hiện tại, khối ngữ cảnh bật tạm) đặt ở cuối tin nhắn mới nhất,
 //      để phần đầu (hướng dẫn hệ thống, danh mục skill, lịch sử) giữ nguyên giữa các lượt và đọc được từ bộ nhớ đệm prompt.
 import "server-only";
-import { artState, currentArtifactsBlock, stubArtifacts, type ArtVersion } from "../app/vfs";
+import { artState, currentArtifactsBlock, stubArtifacts, type ArtVersion } from "../shared/vfs";
 
 export type TraceStatus = "ok" | "error" | "cancelled_by_user" | "denied";
 export type TraceItem = { id: string; name: string; label: string; input: string; status: TraceStatus; summary: string; ref?: string };

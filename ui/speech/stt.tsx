@@ -7,7 +7,7 @@ import { startScribe, type Scribe } from "../scribe";
 import { PearlOrb } from "../pearlorb";
 import { LANGS, KIND_LABEL, ago, api, del, fmtDur, on, post, postForm, saveText, useItems, usePlan, type Item } from "./client";
 import { tr } from "../../app/i18n";
-import { EDIT_IDEAS, STT_MODELS } from "../../app/speech/data";
+import { EDIT_IDEAS, STT_MODELS } from "../../shared/speech/data";
 import { Drop, ErrBox, Field, ModelPick, Player, Recorder, Select, Spin, Tabs, Toggle } from "./parts";
 import { Chips, Group, Head, Split } from "./shell";
 import type { ToolProps } from "./view";

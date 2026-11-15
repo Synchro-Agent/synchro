@@ -6,7 +6,7 @@ import { runSkillTool, skillTools } from "./skillruntime";
 import type { Skill } from "./skillstore";
 import { compatBody, compatImages, compatRetry, effortParams, respInput, respParse, respTools } from "./llmcall";
 import { noteResponse } from "./usage";
-import type { Effort, ProviderKind } from "../app/catalog";
+import type { Effort, ProviderKind } from "../shared/catalog";
 import type { UserRow } from "./authstore";
 import { AGY_WAIT_NOTE, BRIDGE_HOLD, openBridge } from "./mcpbridge";
 import { subCli, subTurn } from "./ai/subs";

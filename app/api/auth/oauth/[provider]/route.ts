@@ -1,4 +1,4 @@
-import { authErrorCode } from "../../../../autherrors";
+import { authErrorCode } from "../../../../../shared/autherrors";
 import { appUrl, AuthError } from "../../../../../server/authstore";
 import { isProvider, start } from "../../../../../server/oauth";
 import { timed } from "../../../../../server/servertiming";

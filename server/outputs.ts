@@ -4,7 +4,7 @@ import "server-only";
 import fs from "node:fs";
 import path from "node:path";
 import { DATA_DIR, db } from "./authstore";
-import { isPlaceholderPng } from "../app/artdoc";
+import { isPlaceholderPng } from "../shared/artdoc";
 import { diskLow } from "./diskfloor";
 import { randomToken } from "./mcpauth";
 import type { RunFile } from "./coderun";

@@ -3,7 +3,7 @@
 // Đường kẻ dưới tên cơ quan, tiêu ngữ và trích yếu là viền dưới của một đoạn trống có thụt lề hai bên (độ dài 1/3 - 1/2 dòng chữ).
 import "server-only";
 import { AlignmentType, BorderStyle, Document, Packer, Paragraph, Table, TableCell, TableLayoutType, TableRow, TextRun, WidthType } from "docx";
-import { dateLine, noiNhanLines, paras, soLine, tenLoai, type Vbhc } from "../app/vbhc";
+import { dateLine, noiNhanLines, paras, soLine, tenLoai, type Vbhc } from "../shared/vbhc";
 
 // mm → twip, làm tròn (hàm của thư viện làm tròn xuống: A4 ra 11905 thay vì 11906 chuẩn).
 const mm = (n: number) => Math.round((n * 1440) / 25.4);

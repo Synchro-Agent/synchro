@@ -6,7 +6,7 @@ import { spawn } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { FileError } from "../../app/fileproc/types";
+import { FileError } from "../../shared/fileproc/types";
 
 const MAX_RUN = Number(process.env.SYNCHRO_PARSE_MAX) || 2;
 const MAX_WAIT = 30, MAX_USER = 4, WAIT_MS = 90_000;

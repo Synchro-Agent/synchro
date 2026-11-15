@@ -3,7 +3,7 @@
 import "server-only";
 import { AuthError, db, needDisk } from "./authstore";
 import { randomToken } from "./mcpauth";
-import { ART_TYPES, type ArtType } from "../app/artifacts";
+import { ART_TYPES, type ArtType } from "../shared/artifacts";
 
 export type ArtVersion = { content: string; at: number };
 export type ArtRow = { id: string; conv: string; ident: string; title: string; type: ArtType; lang: string | null; versions: ArtVersion[]; created_at: number; updated_at: number };

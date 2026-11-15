@@ -3,7 +3,7 @@
 // ElevenLabs chuyển thành giọng nói (vài phút) và trả mã nhúng; Synchro tự hỏi lại trạng thái tới khi sẵn sàng.
 import { useEffect, useState } from "react";
 import * as I from "../icons";
-import { MODEL_NOTE } from "../../app/speech/data";
+import { MODEL_NOTE } from "../../shared/speech/data";
 import { ago, api, del, fmtNum, post, useItems, usePlan, type Item, type Voice } from "./client";
 import { ErrBox, Field, Player, Select, Spin, VoiceAvatar, VoicePicker } from "./parts";
 import { Head, Wide } from "./shell";

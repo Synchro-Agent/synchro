@@ -6,9 +6,9 @@ import * as I from "./icons";
 import { useApp } from "./store";
 import { call, ago } from "./adminui";
 import { refreshModels } from "./models";
-import type { ProviderInfo } from "../app/catalog";
+import type { ProviderInfo } from "../shared/catalog";
 import { LogoMark, ModelLogo } from "./brands";
-import { hostLogo, providerLogo } from "../app/vendorlogo";
+import { hostLogo, providerLogo } from "../shared/vendorlogo";
 import { SettingsSkeleton } from "./skeleton";
 
 export type ApiProvider = {

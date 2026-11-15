@@ -3,11 +3,11 @@
 // Trò chuyện thường, câu hỏi kiến thức, đường nhanh: không thêm gì. Lượt tiếp theo trên cùng sản phẩm: bản rút gọn, vì mỗi dòng ở đây còn lại trong lịch sử đoạn chat.
 // Tệp thuần (không DB, không mạng), kiểm thử bằng tests/api/designkit.test.mjs. #nodesign trong tin nhắn hoặc SYNCHRO_DESIGNKIT=0 thì tắt, để so sánh trước / sau với model thật.
 import "server-only";
-import { PRESET_ALIASES, presetId, presetOf, PRESETS } from "../app/designpresets";
-import { CHART_RULE } from "../app/designcharts";
-import { DOC_TPL_GUIDE } from "../app/designdocs";
-import { EMAIL_TPL_GUIDE } from "../app/designemails";
-import { POSTER_TPL_GUIDE, SLIDE_TPL_GUIDE, templateKinds } from "../app/designtemplates";
+import { PRESET_ALIASES, presetId, presetOf, PRESETS } from "../shared/designpresets";
+import { CHART_RULE } from "../shared/designcharts";
+import { DOC_TPL_GUIDE } from "../shared/designdocs";
+import { EMAIL_TPL_GUIDE } from "../shared/designemails";
+import { POSTER_TPL_GUIDE, SLIDE_TPL_GUIDE, templateKinds } from "../shared/designtemplates";
 
 export type DesignFormat = "slide" | "doc" | "sheet" | "graphic";
 export type DesignDomain = "finance" | "data" | "tech" | "editorial" | "marketing" | "event" | "product" | "general";

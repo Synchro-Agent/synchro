@@ -3,7 +3,7 @@
 import { useState } from "react";
 import * as I from "../icons";
 import { tr } from "../../app/i18n";
-import { MODEL_NOTE, MUSIC_CHIPS, MUSIC_DEFAULT_SEC, MUSIC_EX, MUSIC_MODELS, SFX_CATS, SFX_MODELS, estMusicCredits } from "../../app/speech/data";
+import { MODEL_NOTE, MUSIC_CHIPS, MUSIC_DEFAULT_SEC, MUSIC_EX, MUSIC_MODELS, SFX_CATS, SFX_MODELS, estMusicCredits } from "../../shared/speech/data";
 import { ago, del, download, fmtNum, on, post, postForm, useItems, usePlan, type Item, type Voice } from "./client";
 import { Drop, ErrBox, Field, ModelPick, Player, Range, Recorder, Seg, Select, Spin, Tabs, Toggle, VoiceAvatar, VoicePicker } from "./parts";
 import { Chips, Head, Split, Wide } from "./shell";

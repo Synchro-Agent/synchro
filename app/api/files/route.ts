@@ -1,5 +1,5 @@
 import { processFile } from "../../../server/fileproc";
-import { FileError } from "../../fileproc/types";
+import { FileError } from "../../../shared/fileproc/types";
 import { AuthError, limit } from "../../../server/authstore";
 import { route } from "../../../server/route";
 

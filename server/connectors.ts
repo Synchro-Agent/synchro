@@ -5,14 +5,14 @@
 import "server-only";
 import { appUrl, current, db } from "./authstore";
 import { openSecret, sealSecret } from "./providers";
-import { DIRECTORY } from "../app/connectordir";
-import { allowsDir, FULL_CONN, type ConnPolicy } from "../app/catalog";
+import { DIRECTORY } from "../shared/connectordir";
+import { allowsDir, FULL_CONN, type ConnPolicy } from "../shared/catalog";
 import { detectIcon } from "./connicons";
 import { appLogo, appSlug, connLogo, type ConnLogoFields } from "./connlogos";
 import crypto from "node:crypto";
 import { destructiveLike, guessedRead, McpClient, McpError, oldGuessedRead, readLike, resultImages, resultText, type Era, type McpTool } from "./mcp";
 import { catalogLine } from "./connproxy";
-import { coerceArgs } from "../app/connschema";
+import { coerceArgs } from "../shared/connschema";
 import { authorizeRejected, authorizeUrl, checkIssuer, discover, exchangeCode, metadataHint, parseWww, randomToken, refreshTokens, registerClient, TokenRejected, type AsMeta, type OAuthClient, type Tokens } from "./mcpauth";
 import { checkUrl, FetchBlocked, TempFail } from "./safefetch";
 import { annotate, appName, askOnlyTool, COMPOSIO, COMPOSIO_COLOR, COMPOSIO_LINK_PROMPT, COMPOSIO_NAME, COMPOSIO_PROMPT, CONNECT_URL, EXEC_TOOL, cxKnownPrompt, cxLearn, execPlan, invalidateSchemaCache, isMetaRead, isSchemaRead, KEY_HEADER, keyOk, MANAGE_URL, maskKey, PROXY_TOOL, schemaCacheLookup, schemaCachePut, strictCall } from "./composio";

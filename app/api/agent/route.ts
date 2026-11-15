@@ -7,7 +7,7 @@ import { sdir, wsAllowed } from "../../../server/workspace";
 import { turnsTotal, WAIT_NOTE } from "../../../server/runs";
 import { acquire, withSlot } from "../../../server/turngate";
 import { withUsage } from "../../../server/usage";
-import { MAX_FILES_PER_MESSAGE } from "../../fileproc/types";
+import { MAX_FILES_PER_MESSAGE } from "../../../shared/fileproc/types";
 import type { Upload } from "../../../server/uploads";
 import { timed } from "../../../server/servertiming";
 import { drainingResponse } from "../../../server/drain";

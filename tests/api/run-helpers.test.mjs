@@ -168,7 +168,7 @@ console.log("6. Log dài không che lỗi và trạng thái");
   ok(c.length < 41_000 && c.endsWith("RuntimeError: hết bộ nhớ") && /Đã bỏ \d+ KB ở giữa/.test(c), "cắt giữ đầu và cuối, lỗi ở cuối còn nguyên", c.length);
   ok(X.clipOut("ngắn", 60_000) === "ngắn", "log ngắn giữ nguyên");
   ok(X.tidyLog("a\nframe=1\rframe=2\rframe=3\r\nb\r\n") === "a\nframe=3\nb\n", "thanh tiến trình chỉ còn trạng thái cuối", X.tidyLog("a\nframe=1\rframe=2\rframe=3\r\nb\r\n"));
-  for (const [name, mk] of [["app/runtext.ts", X.clipSink], ["workspace/safefs.mjs", wsSink]]) {
+  for (const [name, mk] of [["shared/runtext.ts", X.clipSink], ["workspace/safefs.mjs", wsSink]]) {
     const s = mk();
     for (let i = 0; i < 3000; i++) s.push(Buffer.from(`status line ${i} ${"-".repeat(120)}\n`));
     s.push(Buffer.from("RuntimeError: moov atom not found\n"));

@@ -8,8 +8,8 @@ import "server-only";
 import fs from "node:fs";
 import path from "node:path";
 import { brandHost, publicHost } from "./iconproxy";
-import { FILE_LOGOS, logoSrc } from "../app/vendorlogo";
-import { slugIsRead, slugParts, type KitHints } from "../app/cxactions";
+import { FILE_LOGOS, logoSrc } from "../shared/vendorlogo";
+import { slugIsRead, slugParts, type KitHints } from "../shared/cxactions";
 
 export const COMPOSIO_LOGO = "composio";
 export type ConnLogoFields = { logo?: string; color?: string; icon?: string; site?: string };

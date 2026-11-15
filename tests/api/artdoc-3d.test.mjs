@@ -1,4 +1,4 @@
-// Gói 3D (nền shader, kính khúc xạ) và ECharts trong khung artifact (app/artdoc.ts, app/artkit.ts): chỉ nạp khi trang thật sự dùng, đúng tệp ghim SRI,
+// Gói 3D (nền shader, kính khúc xạ) và ECharts trong khung artifact (shared/artdoc.ts, shared/artkit.ts): chỉ nạp khi trang thật sự dùng, đúng tệp ghim SRI,
 // CSP của khung không nới ra (không mạng, không tệp HDR), gói 3D dựng lại được từ nguồn ghim. Không cần máy chủ.
 // Trình duyệt thật (WebGL vẽ ra, xuất PNG / PowerPoint / PDF không trắng, giảm chuyển động): tests/ui/media-kit.mjs.
 import fs from "node:fs";

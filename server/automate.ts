@@ -5,7 +5,7 @@ import "server-only";
 import JSZip from "jszip";
 import { isAdmin, permsOf, type UserRow } from "./authstore";
 import { quickCall } from "./ai/anymodel";
-import { connPolicy } from "../app/catalog";
+import { connPolicy } from "../shared/catalog";
 import { allowSite } from "./codestore";
 import { ConnectorSession } from "./connectors";
 import { removeSkill, saveSkill } from "./skillstore";

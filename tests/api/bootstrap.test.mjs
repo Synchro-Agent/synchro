@@ -82,8 +82,8 @@ try {
   const imports = (f) => [...all[f].replace(/^import type .*$/gm, "").matchAll(/^(?:import|export)\s[^;'"]*?from\s+["']([^"']+)["']/gm)].map((m) => resolve(f, m[1])).filter(Boolean);
   const first = new Set(["ui/home.tsx", "app/layout.tsx"]), q = [...first];
   while (q.length) for (const n of imports(q.pop())) if (!first.has(n)) { first.add(n); q.push(n); }
-  for (const f of ["server/router.ts", "app/artkit.ts", "app/speech/data.ts", "ui/usageui.tsx", "ui/settings.tsx"]) ok(!first.has(f), `${f} không nằm trong phần tải đầu`);
-  ok(first.has("ui/usagering.tsx") && first.has("app/vendor.ts") === false, "vòng Mức dùng (usagering.tsx) có sẵn; vendor.ts chỉ theo trang Mức dùng");
+  for (const f of ["server/router.ts", "shared/artkit.ts", "shared/speech/data.ts", "ui/usageui.tsx", "ui/settings.tsx"]) ok(!first.has(f), `${f} không nằm trong phần tải đầu`);
+  ok(first.has("ui/usagering.tsx") && first.has("shared/vendor.ts") === false, "vòng Mức dùng (usagering.tsx) có sẵn; vendor.ts chỉ theo trang Mức dùng");
 
   console.log("4. Ngân sách tải đầu (scripts/budget.mjs)");
   const B = await import(path.resolve("scripts/budget.mjs"));

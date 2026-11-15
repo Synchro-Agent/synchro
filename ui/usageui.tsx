@@ -11,7 +11,7 @@ import { isEn, locale, tf, tr, trc } from "../app/i18n";
 import * as I from "./icons";
 import { PageBar, usePage } from "./pager";
 import { BrandLogo, ModelLogo } from "./brands";
-import { vendorOf } from "../app/vendor";
+import { vendorOf } from "../shared/vendor";
 import { Bar, CreditBar, ModeTag, PLAN_NOTE, PlanRow, RateRow, VENDOR_COLOR, hasApi, kTok, money, noWindows, refreshUsage, resetText, useUsage, type Limit, type SubUsage, type VendorUsage } from "./usagering";
 export * from "./usagering";
 

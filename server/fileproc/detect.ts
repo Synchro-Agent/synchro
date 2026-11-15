@@ -1,5 +1,5 @@
 import "server-only";
-import { FileError } from "../../app/fileproc/types";
+import { FileError } from "../../shared/fileproc/types";
 
 // Tên các tệp trong zip, đọc thẳng từ danh mục trung tâm: không giải nén, không tạo đối tượng cho từng mục (zip độc hại có thể khai hàng trăm nghìn mục).
 // Trả về null nếu tệp không phải zip đọc được.

@@ -2,10 +2,10 @@
 // bản mới nhất. Mọi thứ khác của tin nhắn (dấu vết công cụ, tên tệp, skill, connector, model, thời gian, ghi chú hệ thống…) không đi qua hàm này,
 // và máy chủ luôn dựng lại bản chụp từ đầu nên trình duyệt có gửi thêm trường nào cũng bị bỏ.
 import "server-only";
-import { externalImageUrls, swapUrls } from "../app/artdoc";
-import { ART_TYPES, splitArtifacts, type ArtType } from "../app/artifacts";
-import { resolveArt, type ArtState } from "../app/vfs";
-import { stripAppliedNotes } from "../app/turnctx";
+import { externalImageUrls, swapUrls } from "../shared/artdoc";
+import { ART_TYPES, splitArtifacts, type ArtType } from "../shared/artifacts";
+import { resolveArt, type ArtState } from "../shared/vfs";
+import { stripAppliedNotes } from "../shared/turnctx";
 
 export type ShareSeg = { k: "text"; t: string } | { k: "art"; title: string; type: ArtType; lang: string | null; content: string } | { k: "old"; title: string };
 export type ShareMsg = { r: "u" | "a"; segs: ShareSeg[]; files?: number; outs?: number };

@@ -13,7 +13,7 @@ import { BulkBar, BulkCheck, bulkRow, useBulk, type BulkAct } from "./bulk";
 import { Pager, usePage } from "./pager";
 import { lazyView } from "./lazy";
 import { usePref, type Project } from "./store";
-import type { SpeechTool } from "../app/speech/data";
+import type { SpeechTool } from "../shared/speech/data";
 import { usePlan as useSpeechPlan } from "./speech/client";
 import { allTags, cleanTags, hasTag, tagKey } from "./chattags";
 import { TagFilter, TagPicker } from "./tagsui";

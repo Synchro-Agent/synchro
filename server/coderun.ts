@@ -14,9 +14,9 @@ import { spawn } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { PKG_HOSTS } from "../app/catalog";
+import { PKG_HOSTS } from "../shared/catalog";
 import { PREVIEW_MAX } from "./runpreview";
-import { clipOut, clipSink, tidyLog } from "../app/runtext";
+import { clipOut, clipSink, tidyLog } from "../shared/runtext";
 import { agent, wsConfigured } from "./workspace";
 
 export type RunFile = { path: string; data: Buffer };
@@ -41,13 +41,13 @@ export const RUN_LIMITS = { timeout: 120, maxTimeout: 600, out: 60_000, files: 2
 // Dịch vụ workspace giữ lần chạy trong hàng (không trả 503 ngay, Blueprint G3.2) tới: chờ dựng video 300 + chờ chỗ chạy 240 + chờ RAM 120 giây.
 // Chờ lâu hơn nữa thì dịch vụ tự báo bận kèm vị trí; Next không được bỏ ngang trước đó (người dùng thấy "phản hồi quá lâu" thay vì vị trí trong hàng).
 export const RUN_QUEUE_ALLOW_SEC = 300 + 240 + 120 + 30;
-// Dòng tiến trình cho người dùng khi lần chạy đã phải xếp hàng (G3.2 / G5.3); bản tiếng Anh ở RULES_EN (app/i18n-dict.ts).
+// Dòng tiến trình cho người dùng khi lần chạy đã phải xếp hàng (G3.2 / G5.3); bản tiếng Anh ở RULES_EN (shared/i18n-dict.ts).
 export function queueNote(q: RunQueue): string {
   const s = Math.max(0, Math.round(q.waitedSec));
   return q.pos > 0 ? `Lần chạy code đã xếp hàng ở vị trí ${q.pos}, chờ ${s} giây` : `Lần chạy code đã chờ ${s} giây vì máy chủ đang bận`;
 }
 
-// Dòng tiến trình TRONG LÚC chờ (W23-4 / G5.3); bản tiếng Anh ở RULES_EN (app/i18n-dict.ts).
+// Dòng tiến trình TRONG LÚC chờ (W23-4 / G5.3); bản tiếng Anh ở RULES_EN (shared/i18n-dict.ts).
 export function queueLiveNote(q: QueueLive): string {
   return q.kind === "media" ? `Lần dựng video đang xếp hàng ở vị trí ${q.pos}, chờ video khác dựng xong`
     : q.kind === "mem" ? `Lần chạy code đang chờ máy chủ đủ bộ nhớ, vị trí ${q.pos} trong hàng`

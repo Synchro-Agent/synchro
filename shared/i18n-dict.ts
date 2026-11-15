@@ -178,7 +178,7 @@ export const VI2EN: Record<string, string> = {
   "Đang chụp màn hình…": "Taking a screenshot…",
   "Chọn tệp và chuyển thành markdown": "Choose a file and convert to markdown",
   "Không tải được ảnh. Tệp có thể đã hết hạn (tự xóa sau 30 ngày).": "Couldn't load the image. The file may have expired (files are removed after 30 days).",
-  // Đổi phong cách artifact (tên phong cách của bộ thiết kế, app/designpresets.ts)
+  // Đổi phong cách artifact (tên phong cách của bộ thiết kế, shared/designpresets.ts)
   "Đổi phong cách": "Change style", "Phong cách": "Style", "Đang dùng": "Current", "Giữ phong cách này": "Keep this style", "Bỏ": "Discard",
   "Đã đổi phong cách sang": "Style changed to",
   "Lưới Thụy Sĩ": "Swiss grid", "Công nghệ đêm": "Midnight tech", "Bento mềm": "Soft bento", "Tạp chí": "Editorial", "Điều hành": "Executive",

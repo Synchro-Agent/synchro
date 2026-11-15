@@ -1,7 +1,7 @@
 // Ảnh từ URL ngoài cho artifact (chỉ chạy ở máy chủ): tải qua safeFetch (chặn địa chỉ nội bộ, kiểm tra mỗi lần chuyển hướng), chỉ nhận
 // tệp ảnh tới 6 MB, nhớ tạm tối đa 100 ảnh, 64 MB và 30 phút. Dùng cho /api/artimg (khung xem trước) và máy kiểm tra hiển thị (artcheck.ts).
 import "server-only";
-import { externalImageUrls, genImageId, swapUrls } from "../app/artdoc";
+import { externalImageUrls, genImageId, swapUrls } from "../shared/artdoc";
 import { readOutput } from "./outputs";
 import { registerMemStat } from "./memstat";
 import { safeFetch } from "./safefetch";

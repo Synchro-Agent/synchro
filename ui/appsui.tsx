@@ -8,7 +8,7 @@ import { locale, tr } from "../app/i18n";
 import { ArtifactFrame, type ArtVersion, type FrameSend } from "./artifactui";
 import { CommentsPanel, Presence, useLive } from "./collabui";
 import { Menu } from "./ui";
-import { PUBLISHABLE } from "../app/artifacts";
+import { PUBLISHABLE } from "../shared/artifacts";
 
 export type AppInfo = { id: string; title: string; type: "html" | "react" | "svg"; visibility: "private" | "org"; conv: string; ident: string; created_at: number; updated_at: number; opens: number; mine: boolean; ownerName: string };
 const api = async <T,>(method: string, url: string, body?: unknown): Promise<T> => {

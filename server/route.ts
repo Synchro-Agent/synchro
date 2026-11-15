@@ -11,7 +11,7 @@ import {
   AuthError, current, featureGate, handle, isAdmin, limit as rateLimit, ownerOnly, sameOrigin,
   type SessionRow, type UserRow,
 } from "./authstore";
-import type { Feature } from "../app/catalog";
+import type { Feature } from "../shared/catalog";
 
 export type RouteAuth = "user" | "admin" | "owner";
 export type RateLimit = { key: string; max: number; windowMs: number };

@@ -1,5 +1,5 @@
 // Quét chữ giao diện trong mã nguồn (app/, server/, ui/, shared/) để biết chuỗi nào chưa có bản dịch sang ngôn ngữ còn lại.
-// Giao diện dịch bằng từ điển (app/i18n-dict.ts): chữ gốc tiếng Việt cần mục trong VI2EN (hoặc luật RULES_EN), chữ gốc tiếng Anh cần
+// Giao diện dịch bằng từ điển (shared/i18n-dict.ts): chữ gốc tiếng Việt cần mục trong VI2EN (hoặc luật RULES_EN), chữ gốc tiếng Anh cần
 // mục trong EN2VI (hoặc RULES_VI); chuỗi giữ nguyên ở cả hai ngôn ngữ (tên riêng, thuật ngữ) ghi trong SAME.
 // Dùng: node tests/lib/i18n-scan.mjs [--all]  — in các chuỗi thiếu bản dịch theo tệp.
 import { createRequire } from "node:module";
@@ -41,9 +41,9 @@ export const PAIR_ALLOW = {
   // Bảng hai cột không phải cặp ngôn ngữ (tệp#tên hằng): chỉ miễn đúng bảng đó.
   "ui/introfilm.tsx#CAPS": "phụ đề tiếng Việt kèm dòng tiếng Anh gốc của phim, chỉ hiện ở giao diện tiếng Việt",
   "ui/speech/dict.tsx#EXAMPLES": "ví dụ từ điển phát âm: từ và cách đọc, là nội dung chứ không phải chữ giao diện",
-  "app/speech/data.ts#TAG_GROUPS": "thẻ âm thanh tiếng Anh gửi API Eleven v3 kèm nhãn tiếng Việt (nhãn dịch qua từ điển)",
-  "app/speech/data.ts#SFX_CATS": "nhãn tiếng Việt kèm câu lệnh tiếng Anh gửi API tiếng động (câu lệnh không hiện, nhãn dịch qua từ điển)",
-  "app/cxactions.ts#META": "chính là dữ liệu từ điển: tên công cụ meta của Composio, nạp vào VI2EN qua CX_VI2EN",
+  "shared/speech/data.ts#TAG_GROUPS": "thẻ âm thanh tiếng Anh gửi API Eleven v3 kèm nhãn tiếng Việt (nhãn dịch qua từ điển)",
+  "shared/speech/data.ts#SFX_CATS": "nhãn tiếng Việt kèm câu lệnh tiếng Anh gửi API tiếng động (câu lệnh không hiện, nhãn dịch qua từ điển)",
+  "shared/cxactions.ts#META": "chính là dữ liệu từ điển: tên công cụ meta của Composio, nạp vào VI2EN qua CX_VI2EN",
   "app/i18n.tsx#LANG_NAMES": "tên mỗi ngôn ngữ viết bằng chính ngôn ngữ đó (Tiếng Việt, English)",
 };
 const PAIR_RE = /\ben\(\)|getLang\(\)|lang\s*===?\s*"en"|isEn\b|\ben\b/;

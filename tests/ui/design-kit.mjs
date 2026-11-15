@@ -1,4 +1,4 @@
-// Bộ CSS trong khung artifact (app/artkit.ts) kiểm bằng Chrome ẩn thật, không cần máy chủ Synchro, không gọi mạng: mọi yêu cầu đều do bài thử trả lời
+// Bộ CSS trong khung artifact (shared/artkit.ts) kiểm bằng Chrome ẩn thật, không cần máy chủ Synchro, không gọi mạng: mọi yêu cầu đều do bài thử trả lời
 // (trang dựng đúng bằng buildDocCore nên CSP là CSP thật; Google Fonts được đóng vai bằng tệp phông cục bộ), yêu cầu lạ bị chặn và tính là lỗi.
 // Kiểm: phông có đủ dấu tiếng Việt (bảng cmap của tệp phông và phông Chrome thật sự dùng, dấu chồng không chạm dòng trên), khung slide và poster co theo cửa sổ, luật in của phong cách tối, mạng treo khi tải phông, chụp PNG lúc đang có stagger, chuyển động tôn trọng prefers-reduced-motion, không để chữ vô hình khi
 // animation hỏng / lúc in / lúc chụp PowerPoint, các phép đo mới của check_artifact (chạy đúng mã PROBE trong artcheck.ts), lý do không tự thu nhỏ chữ.

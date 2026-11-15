@@ -3,7 +3,7 @@
 // - Trên trần tải lên (MAX_FILE_BYTES, 30MB): từ chối — cùng một con số với giới hạn tải lên, không hứa một trần không bao giờ tới được.
 // - Tính vào hạn mức giọng nói trong ngày của người dùng; hết hạn mức thì từ chối kèm lý do (giống đọc to / trò chuyện giọng nói).
 import "server-only";
-import { FileError, MAX_FILE_BYTES } from "../../app/fileproc/types";
+import { FileError, MAX_FILE_BYTES } from "../../shared/fileproc/types";
 import { el, hasKey, checkBudget, spent, spender, need, SpeechErr } from "../speechapi";
 import { getUser } from "../authstore";
 

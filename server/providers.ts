@@ -6,11 +6,11 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { DATA_DIR, db, getSetting, setSetting } from "./authstore";
-import { ALL, modelKey, splitKey, type ModelInfo, type ProviderInfo, type ProviderKind } from "../app/catalog";
-import { datedDuplicate, nonChat, providerPrice } from "../app/modelrules";
+import { ALL, modelKey, splitKey, type ModelInfo, type ProviderInfo, type ProviderKind } from "../shared/catalog";
+import { datedDuplicate, nonChat, providerPrice } from "../shared/modelrules";
 import { isNewModel, regPinned, regShows, syncListed, untested, type Listed, type ModelCaps } from "./modelreg";
 import { brandHost, publicHost } from "./iconproxy";
-import { hostLogo } from "../app/vendorlogo";
+import { hostLogo } from "../shared/vendorlogo";
 
 type Builtin = { kind: ProviderKind; name: string; vendor: string; base: string; keyUrl: string; prefix: string };
 export const BUILTIN: Record<string, Builtin> = {
@@ -140,7 +140,7 @@ const workspaceFailure = (e: unknown, ws: string) => /^Lỗi 404/.test((e as Err
 /** Danh sách model chat hiện tại (bỏ đời cũ) — dùng khi lưu khóa. all: mọi model chat hãng trả về, kèm thông tin hãng tự báo (ghi vào sổ model). */
 export async function listModels(kind: ProviderKind, base: string, key: string, workspace?: string | null): Promise<{ models: { id: string; name: string }[]; all: Listed[]; info?: string }> {
   const r = await listAll(kind, base, key, workspace);
-  // Luật chung (app/modelrules.ts) loại thêm model không dùng để nhắn tin và bản chụp có ngày trùng tên chung, kể cả loại hãng mới đặt ra sau này.
+  // Luật chung (shared/modelrules.ts) loại thêm model không dùng để nhắn tin và bản chụp có ngày trùng tên chung, kể cả loại hãng mới đặt ra sau này.
   const ids = new Set(r.models.map((m) => m.id.toLowerCase()));
   // Nhà cung cấp tương thích chứa model của nhiều hãng (OpenRouter…): chỉ loại loại chắc chắn không nhắn tin, như trước khi có sổ model.
   const all = r.models.filter((m) => !nonChat(m.id, { loose: kind === "compatible" }) && !datedDuplicate(m.id, ids));

@@ -5,7 +5,7 @@
 import { useEffect, useState } from "react";
 import * as I from "../icons";
 import { usePref } from "../store";
-import { GUIDES, toolDef, type SpeechTool } from "../../app/speech/data";
+import { GUIDES, toolDef, type SpeechTool } from "../../shared/speech/data";
 import { Tabs } from "./parts";
 import { TOOL_ICON } from "./toolicons";
 

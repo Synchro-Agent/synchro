@@ -3,10 +3,10 @@
 import { useEffect, useSyncExternalStore } from "react";
 import { usePref } from "../ui/store";
 import { watch } from "../ui/domwatch";
-import { cxActEn } from "./cxactions";
-import { type Dict, type Lang, type Vars, tfWith, trcWith, trWith } from "./i18n-core";
+import { cxActEn } from "../shared/cxactions";
+import { type Dict, type Lang, type Vars, tfWith, trcWith, trWith } from "../shared/i18n-core";
 
-export type { Lang } from "./i18n-core";
+export type { Lang } from "../shared/i18n-core";
 
 let cur: Lang = "vi";
 if (typeof window !== "undefined") {
@@ -26,8 +26,8 @@ let langVer = 0;
 const ping = () => { langVer++; subs.forEach((f) => f()); };
 export function loadDict(l: Lang): Promise<void> {
   return (loads[l] ??= (l === "en"
-    ? import("./i18n-dict").then((m): Dict => ({ map: m.VI2EN, rules: m.RULES_EN }))
-    : import("./i18n-vi").then((m): Dict => ({ map: m.EN2VI, rules: m.RULES_VI })))
+    ? import("../shared/i18n-dict").then((m): Dict => ({ map: m.VI2EN, rules: m.RULES_EN }))
+    : import("../shared/i18n-vi").then((m): Dict => ({ map: m.EN2VI, rules: m.RULES_VI })))
     .then((d) => { dicts[l] = d; })
     // Tab mở từ bản cũ: tệp đã bị thay. Ném lại để ChunkGuard tải lại trang một lần; lần đổi ngôn ngữ sau tải lại từ đầu.
     .catch((e) => { loads[l] = undefined; setTimeout(() => { throw e; }); })

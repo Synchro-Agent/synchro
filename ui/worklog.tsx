@@ -7,7 +7,7 @@ import { Loader } from "./brand";
 import { tf, tr, trc, trCx } from "../app/i18n";
 import { AskCard, type AskStep, type OnAnswer } from "./agentui";
 import { lazyView } from "./lazy";
-import { IMAGE_PLANS } from "../app/catalog";
+import { IMAGE_PLANS } from "../shared/catalog";
 import { refreshModels, useModels } from "./models";
 import { serverNow } from "./clock";
 import { ConnLogo } from "./connlogo";
