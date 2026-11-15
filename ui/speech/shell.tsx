@@ -5,7 +5,10 @@
 import { useEffect, useState } from "react";
 import * as I from "../icons";
 import { usePref } from "../store";
+import { tf, tr, useLangVer } from "../i18n";
 import { GUIDES, toolDef, type SpeechTool } from "../../shared/speech/data";
+import { createWhatOf } from "../../shared/speech/fmt";
+import { on, usePlan } from "./client";
 import { Tabs } from "./parts";
 import { TOOL_ICON } from "./toolicons";
 
@@ -53,6 +56,9 @@ export function Head({ tool, title, desc, children }: { tool: Exclude<SpeechTool
 function GuideCard({ tool, onClose }: { tool: Exclude<SpeechTool, "home">; onClose: () => void }) {
   const g = GUIDES[tool], t = toolDef(tool);
   const [more, setMore] = useState(false);
+  const plan = usePlan(tool === "create");
+  useLangVer();
+  const what = tool === "create" ? createWhatOf(plan?.connected ? (f) => on(plan, f) : null, g.what, tr, tf) : g.what;
   return (
     <section className={`sp-guide ${t.color} ${more ? "more" : ""}`} aria-label={`Hướng dẫn: ${t.label}`}>
       <div className="sp-guide-h">
@@ -60,7 +66,7 @@ function GuideCard({ tool, onClose }: { tool: Exclude<SpeechTool, "home">; onClo
         <b>{`${t.label} là gì?`}</b>
         <button className="btn sp-guide-x" title="Mở lại bằng nút Xem hướng dẫn" onClick={onClose}><I.X size={13} />Ẩn hướng dẫn</button>
       </div>
-      <p className="sp-guide-what">{g.what}</p>
+      <p className="sp-guide-what">{what}</p>
       <div className="sp-guide-body">
         <div className="sp-guide-col">
           <span className="sp-guide-l">Cách dùng</span>

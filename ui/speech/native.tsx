@@ -1,10 +1,10 @@
 "use client";
 // Audio Native: trình phát nhúng vào website, đọc bài viết cho người xem bằng giọng ElevenLabs. Synchro gửi nội dung bài,
 // ElevenLabs chuyển thành giọng nói (vài phút) và trả mã nhúng; Synchro tự hỏi lại trạng thái tới khi sẵn sàng.
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import * as I from "../icons";
 import { MODEL_NOTE } from "../../shared/speech/data";
-import { ago, api, del, fmtNum, post, useItems, usePlan, type Item, type Voice } from "./client";
+import { ago, del, fmtNum, post, useItems, usePoll, usePlan, type Item, type Voice } from "./client";
 import { ErrBox, Field, Player, Select, Spin, VoiceAvatar, VoicePicker } from "./parts";
 import { Head, Wide } from "./shell";
 import type { ToolProps } from "./view";
@@ -23,18 +23,8 @@ export function NativeTool({ say, voice: shared }: ToolProps) {
   const [err, setErr] = useState("");
   const [items, setItems] = useItems(["native"]);
   const v = voice ?? shared;
-  // Hỏi lại trạng thái các trình phát đang chuyển giọng mỗi 12 giây.
-  useEffect(() => {
-    const busyOnes = (items ?? []).filter((x) => x.meta.status === "converting");
-    if (!busyOnes.length) return;
-    const t = setTimeout(async () => {
-      for (const it of busyOnes) {
-        const j = await api<{ item: Item }>(`native?id=${it.id}`).catch(() => null);
-        if (j) setItems((l) => l?.map((x) => (x.id === it.id ? j.item : x)) ?? null);
-      }
-    }, 12_000);
-    return () => clearTimeout(t);
-  }, [items, setItems]);
+  // Hỏi lại trạng thái các trình phát đang chuyển giọng (cùng vòng hỏi với Lồng tiếng: một lần hỏi lỗi không làm dừng vòng hỏi).
+  usePoll(items, setItems, "native", 12_000);
   const go = async () => {
     setBusy(true); setErr("");
     try {
@@ -63,7 +53,7 @@ export function NativeTool({ say, voice: shared }: ToolProps) {
           <Field label="Xem trước trình phát">
             <div className="sp-anprev" style={{ color: fg, background: bg }}>
               <span className="sp-anplay" style={{ background: fg, color: bg }}><I.Play size={12} /></span>
-              <span><b data-notr>{title || "Nghe bài viết này"}</b><small>{v?.name ? `Giọng ${v.name}` : "Giọng AI"} · ElevenLabs</small></span>
+              <span>{title ? <b data-notr>{title}</b> : <b>Nghe bài viết này</b>}<small>{v?.name ? `Giọng ${v.name}` : "Giọng AI"} · ElevenLabs</small></span>
             </div>
           </Field>
           <div className="sp-gen"><span className="sp-muted">≈ {fmtNum(text.length)} credit</span><button className="btn dark sp-go" style={{ marginLeft: "auto" }} disabled={!text.trim() || busy} onClick={go}>{busy ? <Spin /> : <I.Sparkle size={14} />}{busy ? "Đang gửi…" : "Tạo trình phát"}</button></div>

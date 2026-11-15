@@ -130,20 +130,36 @@ export const tagsOk = (model: string) => /v3|v4/.test(model);
 export const stripTags = (t: string) => t.replace(/\[[^\]\n]{1,40}\]\s?/g, "");
 
 // ---- ước tính credit ----
-// ElevenLabs tính credit theo số ký tự ĐỌC LÊN, không tính thẻ cảm xúc / audio tag ([happy], [whispers]…): model v3/v4
-// nhận thẻ nhưng không tính tiền phần trong ngoặc vuông. Ước tính cũ nhân cả độ dài thô (kể cả thẻ) nên lệch nhiều
-// (ví dụ 63 → thực tế 25). Đếm đúng phần đọc lên rồi nhân với hệ số giá thật của model (character_cost_multiplier).
-export const billableChars = (modelId: string, text: string): number => (tagsOk(modelId) ? stripTags(text) : text).length;
-/** Ước tính credit cho một lần đọc văn bản theo bảng giá thật của model đang chọn. */
-export const estCredits = (model: { id: string; rate: number } | null | undefined, text: string): number =>
-  Math.ceil(billableChars(model?.id ?? "", text) * (model?.rate ?? 1));
-// Nhạc tính credit theo thời lượng bản nhạc (không theo câu mô tả). Hệ số dưới đây là ƯỚC TÍNH theo thời lượng để
-// người dùng thấy khoảng chi phí trước khi tạo; số thật do ElevenLabs trả trong header sau khi tạo xong mới chính xác.
-// Một chỗ duy nhất để chủ máy chủ chỉnh khi ElevenLabs đổi giá.
-export const MUSIC_CREDIT_PER_SEC = 100;
+// Bảng giá theo model (credit mỗi ký tự). API /v1/models báo character_cost_multiplier = 1 cho cả Eleven v4 trong khi bản thật
+// tính rẻ hơn, nên model có trong bảng dùng số trong bảng; model lạ mới dùng hệ số API báo (rate).
+// - Eleven v4: 0,4 credit mỗi ký tự. Đo trên bản thật (G6.5): 71 ký tự → 28 credit; lần đo trước: 63 ký tự → 25 credit (cả hai = 0,4 × số ký tự, làm tròn).
+// - Flash và Turbo (mọi đời): 0,5 credit mỗi ký tự (bảng giá ElevenLabs).
+// - Eleven v3, Multilingual, English / Monolingual: 1 credit mỗi ký tự.
+// Thẻ cảm xúc ([happy]…) là một phần văn bản gửi đi và được tính như ký tự thường: cả hai số đo trên khớp số ký tự THÔ × 0,4.
+export const CREDIT_PER_CHAR: [RegExp, number][] = [[/flash|turbo/, 0.5], [/^eleven_v4/, 0.4], [/^eleven_(v3|multilingual|monolingual|english)/, 1]];
+/** Credit mỗi ký tự của model: theo bảng giá thật, model lạ thì theo hệ số ElevenLabs báo. */
+export const creditRate = (model: { id: string; rate?: number } | null | undefined): number => {
+  const id = model?.id ?? "";
+  return CREDIT_PER_CHAR.find(([re]) => re.test(id))?.[1] ?? model?.rate ?? 1;
+};
+/** Số ký tự bị tính tiền: toàn bộ văn bản gửi đi (kể cả thẻ cảm xúc). */
+export const billableChars = (_modelId: string, text: string): number => text.length;
+/** Ước tính credit cho một lần đọc văn bản theo bảng giá thật của model đang chọn (làm tròn như ElevenLabs; có chữ thì ít nhất 1). */
+export const estCredits = (model: { id: string; rate?: number } | null | undefined, text: string): number => {
+  const n = billableChars(model?.id ?? "", text);
+  return n ? Math.max(1, Math.round(n * creditRate(model))) : 0;
+};
+// Nhạc tính credit theo thời lượng bản nhạc (không theo câu mô tả). Đo trên bản thật (G6.5): bài 30 giây có lời, Music v2.5 → gói tăng
+// đúng 375 credit (20.650 → 21.025), tức 12,5 credit mỗi giây. Một chỗ duy nhất để chủ máy chủ chỉnh khi ElevenLabs đổi giá.
+export const MUSIC_CREDIT_PER_SEC = 12.5;
 export const MUSIC_DEFAULT_SEC = 30;
 /** Ước tính credit cho một bản nhạc theo thời lượng (giây). */
 export const estMusicCredits = (seconds: number): number => Math.max(0, Math.round(seconds * MUSIC_CREDIT_PER_SEC));
+// Tách stem: CHƯA đo trên bản thật (ElevenLabs không báo chi phí trong header). Tạm lấy giá của Lọc giọng (1.000 credit mỗi phút âm thanh) làm mốc;
+// máy chủ ghi log [speech-cost] mỗi lần đo để chỉnh số này theo giá thật. Dùng làm ước lượng dự phòng và mốc chặn độ tăng lẫn việc của người khác.
+export const STEM_CREDIT_PER_SEC = 1000 / 60;
+/** Ước tính credit cho một lần tách stem theo thời lượng bài (giây); có tệp thì ít nhất 1. */
+export const estStemCredits = (seconds: number): number => (seconds > 0 ? Math.max(1, Math.round(seconds * STEM_CREDIT_PER_SEC)) : 0);
 /** Mẫu “Bắt đầu với”: điền sẵn văn bản (có thẻ cảm xúc) để người mới bấm là nghe được ngay. */
 export const STARTERS: { label: string; text?: string; lines?: [number, string][] }[] = [
   { label: "Kể một câu chuyện", text: "[softly] Ngày xửa ngày xưa, ở một ngôi làng nhỏ ven sông, có một cô bé tên là Mây. [pause] Sáng nào cô cũng ra bờ sông ngắm những cánh buồm nâu trôi chầm chậm… [excited] Cho đến một hôm, cô nhìn thấy một chiếc thuyền rất lạ!" },

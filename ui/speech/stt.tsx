@@ -5,7 +5,7 @@ import { useMemo, useRef, useState } from "react";
 import * as I from "../icons";
 import { startScribe, type Scribe } from "../scribe";
 import { PearlOrb } from "../pearlorb";
-import { LANGS, KIND_LABEL, ago, api, del, fmtDur, on, post, postForm, saveText, useItems, usePlan, type Item } from "./client";
+import { LANGS, KIND_LABEL, ago, api, del, fmtDur, langLabel, micError, on, post, postForm, saveText, useItems, usePlan, type Item } from "./client";
 import { tr } from "../i18n";
 import { EDIT_IDEAS, STT_MODELS } from "../../shared/speech/data";
 import { Drop, ErrBox, Field, ModelPick, Player, Recorder, Select, Spin, Tabs, Toggle } from "./parts";
@@ -186,7 +186,8 @@ function Transcript({ item, data, say, onClose, onDelete }: { item: Item; data: 
   const [now, setNow] = useState(0);
   const n = useRef(0);
   const timed = words.length > 0;
-  const m = item.meta as { langName?: string; prob?: number; dur?: number };
+  const m = item.meta as { lang?: string; langName?: string; prob?: number; dur?: number };
+  const lname = langLabel(m.lang, m.langName ?? "");
   const out = (fmt: string) => {
     setExp(false);
     const base = item.title.replace(/\.[^.]+$/, "") || "ban-chep-loi";
@@ -201,7 +202,7 @@ function Transcript({ item, data, say, onClose, onDelete }: { item: Item; data: 
   return (
     <div className="sp-trans">
       <div className="sp-trans-h">
-        <div style={{ minWidth: 0 }}><b data-notr>{item.title}</b><span className="sp-muted">{[m.dur ? fmtDur(m.dur) : "", m.langName ? `${m.langName}${m.prob ? ` (${Math.round(m.prob * 100)}%)` : ""}` : "", speakers.length > 1 ? `${speakers.length} người nói` : ""].filter(Boolean).join(" · ")}</span></div>
+        <div style={{ minWidth: 0 }}><b data-notr>{item.title}</b><span className="sp-muted">{[m.dur ? fmtDur(m.dur) : "", lname ? `${lname}${m.prob ? ` (${Math.round(m.prob * 100)}%)` : ""}` : "", speakers.length > 1 ? `${speakers.length} người nói` : ""].filter(Boolean).join(" · ")}</span></div>
         <div className="sp-trans-a">
           <label className="sp-search sm"><I.Search size={14} /><input value={find} onChange={(e) => setFind(e.target.value)} placeholder="Tìm trong bản chép" aria-label="Tìm trong bản chép" /></label>
           <div style={{ position: "relative" }}>
@@ -256,7 +257,7 @@ function Live({ say, lang, keyterms, onSaved }: { say: (m: string) => void; lang
       if (!x) { say("Không mở được chép lời trực tiếp."); return; }
       s.current = x; setOn(true);
       timer.current = setInterval(() => setSec((v) => v + 1), 1000);
-    } catch { say("Không mở được micro: hãy cho phép Synchro dùng micro"); }
+    } catch (e) { say(micError(e)); }
   };
   const save = async () => {
     try { const j = await post<{ item: Item }>("live/save", { kind: "live", lines: lines.map((text) => ({ who: "", text })), seconds: sec, lang }); onSaved(j.item); say("Đã lưu bản chép lời"); }

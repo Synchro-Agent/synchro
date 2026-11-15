@@ -4,7 +4,7 @@
 import { useEffect, useState } from "react";
 import * as I from "../icons";
 import { useApp, usePref } from "../store";
-import { tr } from "../i18n";
+import { tf, tr } from "../i18n";
 import { api, post, reloadDicts, setDicts, useDicts, type Dict, type Item, type Rule } from "./client";
 import { ErrBox, Field, Player, Spin } from "./parts";
 import { Head, Wide } from "./shell";
@@ -82,7 +82,7 @@ export function DictTool({ say, voice }: ToolProps) {
             const onIt = sel.some((s) => s.id === d.id);
             return (
               <div key={d.id} className={`sp-dict ${edit?.id === d.id ? "on" : ""}`}>
-                <button className="sp-dict-t" onClick={() => open(d)}><I.Book size={16} /><span><b data-notr>{d.name}</b><small>{d.count} quy tắc{d.desc ? ` · ${d.desc}` : ""}</small></span>{busy === d.id && <Spin />}</button>
+                <button className="sp-dict-t" onClick={() => open(d)}><I.Book size={16} /><span><b data-notr>{d.name}</b><small>{tf("{n} quy tắc", { n: d.count })}{d.desc ? ` · ${d.desc}` : ""}</small></span>{busy === d.id && <Spin />}</button>
                 <div className="sp-dict-a">
                   <label className="sp-check sm"><input type="checkbox" checked={onIt} onChange={() => flip(d)} /><span>Dùng khi đọc</span></label>
                   <button className="icon-btn" aria-label={`Lưu trữ ${d.name}`} title="Lưu trữ" onClick={() => archive(d)}><I.Trash size={14} /></button>

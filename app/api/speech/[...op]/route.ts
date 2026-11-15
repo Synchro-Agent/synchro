@@ -3,9 +3,15 @@ import { Readable } from "node:stream";
 import { audit, can, current, findByEmail, getUser, isAdmin, isOwner, limit, sameOrigin, VERIFY_FIRST, verifyLocked, type UserRow } from "../../../../server/authstore";
 import {
   SpeechErr, addSpend, audioOf, checkBudget, deleteItem, effectsCatalog, el, elJson, getItem, itemFile, jsonBody, langName, library, listItems, mintRealtime, myVoices, need, plan, saveItem,
-  scribeToken, servedBy, sideRead, sideWrite, speechBudget, spender, spent, spentToday, updateItem, voiceOut, backfillVoiceOwners, defaultVoice, forgetVoiceOwner, isPrivateVoice, MAX_OWN_VOICES, ownedVoices, setVoiceOwner, voiceGen, voiceOpenTo, voiceOwner, VOICE_ORPHAN, VOICE_PURGE, VOICE_SHARED, type Feat, type Plan,
+  audioSecOf, scribeToken, servedBy, sideRead, sideWrite, speechBudget, spender, spent, spentMeasured, spentToday, usageNow, updateItem, voiceOut, backfillVoiceOwners, defaultVoice, forgetVoiceOwner, isPrivateVoice, MAX_OWN_VOICES, ownedVoices, setVoiceOwner, voiceGen, voiceOpenTo, voiceOwner, VOICE_ORPHAN, VOICE_PURGE, VOICE_SHARED, type Feat, type Plan,
 } from "../../../../server/speechapi";
-import { estCredits, estMusicCredits } from "../../../../shared/speech/data";
+import { estCredits, estMusicCredits, estStemCredits } from "../../../../shared/speech/data";
+
+// Thời lượng (giây) của MP3 128 kbps theo số byte: ước lượng chi phí nhạc khi người dùng để AI tự chọn độ dài.
+const mp3Sec = (bytes: number) => (bytes * 8) / 128_000;
+// Độ tăng credit của gói quanh lần gọi được nhận tới cap × ước lượng (spentMeasured): Nhạc đã đo trên bản thật (12,5 credit/giây) nên chỉ chừa 50%;
+// Tách stem mới có giá tạm nên chừa rộng hơn; Nhạc cho video chưa có giá nào đo được nên không chặn.
+const MEASURE_CAP = { music: 1.5, stems: 4, video: Infinity };
 import { quickCall } from "../../../../server/ai/anymodel";
 import { timed } from "../../../../server/servertiming";
 
@@ -233,7 +239,7 @@ async function dialogue(u: UserRow, b: Record<string, unknown>) {
   const fx = await effectsOf(b), dicts = dictsOf(b);
   if (fx && !stereoOk(fmt, fx)) throw new SpeechErr("Hiệu ứng vang và lệch kênh cần định dạng MP3, Opus hoặc WAV. Đổi định dạng rồi thử lại.");
   const r = await el(`/v1/text-to-dialogue?output_format=${fmt}`, { ...jsonBody({ inputs: lines.map(({ text, voice_id }) => ({ text, voice_id })), model_id: model.id, ...(str(b.lang, 8) ? { language_code: str(b.lang, 8) } : {}), ...(fx ? { audio_effects: fx } : {}), ...(dicts ? { pronunciation_dictionary_locators: dicts } : {}) }), feat: "dialogue", timeout: 240_000 });
-  const cost = spent(r);
+  const cost = spent(r, lines.reduce((n, l) => n + estCredits(model, l.text), 0));
   const a = await audioOf(r, fmt);
   const chars = lines.reduce((n, l) => n + l.text.length, 0);
   const item = saveItem(u, "dialogue", titleOf(lines.map((l) => l.text).join(" ")), { lines, model: model.id, modelName: model.name, format: fmt, chars, cost, speakers: [...new Set(lines.map((l) => l.name || l.voice_id))] }, a);
@@ -251,7 +257,7 @@ async function speak(u: UserRow, b: Record<string, unknown>) {
   const r = await el(`/v1/text-to-speech/${encodeURIComponent(voice)}/stream?output_format=mp3_44100_128${/_v2/.test(model?.id ?? "") ? "&optimize_streaming_latency=2" : ""}`, {
     ...jsonBody({ text: text.slice(0, model?.max ?? 5000), model_id: model?.id, voice_settings: { stability: 0.5, similarity_boost: 0.75, speed } }), feat: "tts",
   });
-  spent(r, text.length);
+  spent(r, estCredits(model, text));
   return new Response(r.body, { headers: { "content-type": r.headers.get("content-type") ?? "audio/mpeg", "cache-control": "no-store", "x-accel-buffering": "no", "x-speech-provider": servedBy(r) ?? "" } });
 }
 async function stt(u: UserRow, form: FormData) {
@@ -317,9 +323,13 @@ async function music(u: UserRow, b: Record<string, unknown>) {
   const body: Record<string, unknown> = { prompt, force_instrumental: !lyrics && bool(b.instrumental), model_id: ["music_v1", "music_v2", "music_v2_5"].find((m) => m === b.model) ?? "music_v2_5" };
   if (lyrics) body.lyrics_text = lyrics;
   if (b.seconds) body.music_length_ms = Math.round(num(b.seconds, 3, 300, 30) * 1000);
+  // ElevenLabs không báo chi phí của Nhạc trong header: đo độ tăng credit của gói quanh lần gọi (spentMeasured).
+  const before = await usageNow();
   const r = await el("/v1/music?output_format=mp3_44100_128", { ...jsonBody(body), feat: "music", timeout: 290_000 });
-  const cost = spent(r, body.music_length_ms ? estMusicCredits(Number(body.music_length_ms) / 1000) : 0);
-  const item = saveItem(u, "music", titleOf(prompt), { prompt, seconds: body.music_length_ms ? Number(body.music_length_ms) / 1000 : null, instrumental: body.force_instrumental, lyrics: !!lyrics, model: body.model_id, cost }, await audioOf(r));
+  const a = await audioOf(r);
+  const sec = body.music_length_ms ? Number(body.music_length_ms) / 1000 : mp3Sec(a.buf.length);
+  const cost = await spentMeasured(r, before, estMusicCredits(sec), { tool: "music", cap: MEASURE_CAP.music, sec });
+  const item = saveItem(u, "music", titleOf(prompt), { prompt, seconds: body.music_length_ms ? Number(body.music_length_ms) / 1000 : null, instrumental: body.force_instrumental, lyrics: !!lyrics, model: body.model_id, cost }, a);
   return ok({ item });
 }
 // Nhạc cho video: ElevenLabs xem video rồi sáng tác nhạc nền khớp nhịp, có thể thêm tiếng động theo cảnh.
@@ -334,9 +344,14 @@ async function videoMusic(u: UserRow, form: FormData) {
   for (const t of str(form.get("tags"), 300).split(",").map((x) => x.trim()).filter(Boolean).slice(0, 10)) fd.append("tags", t);
   fd.set("model_id", ["music_v1", "music_v2", "music_v2_5"].find((m) => m === form.get("model")) ?? "music_v2_5");
   fd.set("add_sfx", String(bool(form.get("sfx"))));
+  const before = await usageNow();
   const r = await el("/v1/music/video-to-music?output_format=mp3_44100_128", { method: "POST", body: fd, feat: "music", timeout: 290_000 });
-  const cost = spent(r);
-  const item = saveItem(u, "music", `Nhạc cho ${f.name}`.slice(0, 120), { prompt: desc, video: f.name, sfx: bool(form.get("sfx")), cost }, await audioOf(r));
+  const a = await audioOf(r);
+  // Giá của Nhạc cho video chưa đo trên bản thật: nhận mọi độ tăng (ước lượng theo giá Nhạc chỉ dùng khi không đo được) và ghi log để biết giá thật.
+  const sec = mp3Sec(a.buf.length);
+  const cost = await spentMeasured(r, before, estMusicCredits(sec), { tool: "music/video", cap: MEASURE_CAP.video, sec, log: true });
+  // Tiêu đề lưu kiểu Việt (tên tệp tải về); giao diện hiện tiêu đề theo ngôn ngữ từ meta.video (ui/speech/client.ts itemTitle).
+  const item = saveItem(u, "music", `Nhạc cho ${f.name}`.slice(0, 120), { prompt: desc, video: f.name, sfx: bool(form.get("sfx")), cost }, a);
   return ok({ item });
 }
 // Tách stem: tách bài hát thành giọng hát và nhạc (2 stem) hoặc giọng, trống, bass, guitar, piano, khác (6 stem). Kết quả là tệp ZIP.
@@ -348,8 +363,11 @@ async function stems(u: UserRow, form: FormData) {
   fd.set("file", f, f.name);
   const six = form.get("stems") === "6";
   fd.set("stem_variation_id", six ? "six_stems_v1" : "two_stems_v1");
+  // Ước lượng theo thời lượng bài: dự phòng khi gói chưa kịp tăng, và mốc chặn độ tăng lẫn việc của người khác dùng chung khóa.
+  const sec = audioSecOf(Buffer.from(await f.arrayBuffer()));
+  const before = await usageNow();
   const r = await el("/v1/music/stem-separation", { method: "POST", body: fd, feat: "music", timeout: 290_000 });
-  const cost = spent(r);
+  const cost = await spentMeasured(r, before, estStemCredits(sec), { tool: "music/stems", cap: MEASURE_CAP.stems, sec, log: true });
   const ct = (r.headers.get("content-type") ?? "application/zip").split(";")[0];
   const buf = Buffer.from(await r.arrayBuffer());
   const zip = /zip/.test(ct) || buf.subarray(0, 2).toString() === "PK";

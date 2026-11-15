@@ -1,6 +1,7 @@
 // ElevenLabs giả lập cho npm run dev:mock: cùng đường dẫn, tham số, lỗi và giới hạn theo gói như API thật (đặc tả OpenAPI 10/2026),
 // trả âm thanh WAV thật (tiếng ngân nhẹ theo nhịp âm tiết) để trình phát, tải xuống, dạng sóng đều chạy được.
 // Đổi gói để thử giao diện theo gói: POST /_debug/el { tier: "free" | "starter" | "creator" | "pro", studio: true, lockMusic: true, used: 9990 }.
+// Như bản thật (G6.5): Nhạc, Nhạc cho video, Tách stem KHÔNG báo character-cost trong header: POST /_debug/el { noCost: true } (credit vẫn trừ vào gói).
 // Khóa giới hạn quyền như khóa thật: POST /_debug/el { noPerms: ["convai_write", "dubbing_write"] } (ElevenLabs kiểm tra quyền trước nội dung).
 const TIER = {
   free: { chars: 10_000, voices: 3, pro: 0, ivc: false, pvc: false },
@@ -263,17 +264,20 @@ export async function elevenHandler(req, res, p, b, raw, valid, elevenNo) {
     if (EL.cfg.lockMusic) return err(res, 403, "subscription_required", "Music generation is not available on your plan. Please upgrade your subscription.");
     if (b.model_id && !["music_v1", "music_v2", "music_v2_5"].includes(b.model_id)) return err(res, 422, "invalid", `model_id: unknown ${b.model_id}`);
     if (b.lyrics_text && b.force_instrumental) return err(res, 422, "invalid", "lyrics_text cannot be used with force_instrumental");
+    // Như API thật: thiếu câu mô tả (và không có composition_plan) là lỗi 422, không tạo gì, không trừ credit — lần dò quyền của khóa gửi đúng yêu cầu rỗng này.
+    if (!b.prompt && !b.composition_plan) return err(res, 422, "invalid", "prompt: field required");
     EL.last.music = { model_id: b.model_id ?? null, lyrics_text: b.lyrics_text ?? null };
-    const sec = (b.music_length_ms ?? 15000) / 1000, cost = charge(res, Math.round(sec * 30));
+    // Giá như bản thật (G6.5: bài 30 giây, Music v2.5 → 375 credit, tức 12,5 credit mỗi giây).
+    const sec = (b.music_length_ms ?? 15000) / 1000, cost = charge(res, Math.round(sec * 12.5));
     if (cost < 0) return true;
-    return audio(res, sec, 9, cost);
+    return audio(res, sec, 9, EL.cfg.noCost ? 0 : cost);
   }
   if (ep === "/v1/music/video-to-music" && m === "POST") {
     const f = await formOf(req, raw);
     if (!f.getAll("videos").length) return err(res, 422, "invalid", "videos: field required");
     EL.last.videoMusic = { description: f.get("description"), tags: f.getAll("tags"), add_sfx: f.get("add_sfx") };
     const cost = charge(res, 600); if (cost < 0) return true;
-    return audio(res, 8, 11, cost);
+    return audio(res, 8, 11, EL.cfg.noCost ? 0 : cost);
   }
   if (ep === "/v1/music/stem-separation" && m === "POST") {
     const f = await formOf(req, raw);
@@ -282,7 +286,7 @@ export async function elevenHandler(req, res, p, b, raw, valid, elevenNo) {
     const cost = charge(res, 300); if (cost < 0) return true;
     // ZIP rỗng hợp lệ (chỉ cần để trình duyệt tải về).
     const zip = Buffer.from("504b0506000000000000000000000000000000000000", "hex");
-    res.writeHead(200, { "content-type": "application/zip", "content-length": zip.length, "character-cost": String(cost) }); res.end(zip); return true;
+    res.writeHead(200, { "content-type": "application/zip", "content-length": zip.length, ...(EL.cfg.noCost ? {} : { "character-cost": String(cost) }) }); res.end(zip); return true;
   }
   // ---- từ điển phát âm ----
   if (ep === "/v1/audio-effects/catalog" && m === "GET") return json(res, 200, FX);

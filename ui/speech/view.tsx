@@ -7,7 +7,7 @@ import { SideToggle } from "../brand";
 import * as I from "../icons";
 import { useApp } from "../store";
 import { GROUPS, STARTERS, TOOLS, estCredits, normTool, toolDef, toolOn, type SpeechTool } from "../../shared/speech/data";
-import { KIND_LABEL, KIND_TOOL, ago, defaultVoice, fmtNum, refreshPlan, useItems, useMyVoices, usePlan, usePlanFailed, type Voice } from "./client";
+import { KIND_LABEL, KIND_TOOL, ago, defaultVoice, fmtNum, itemTitle, refreshPlan, useItems, useMyVoices, usePlan, usePlanFailed, type Voice } from "./client";
 import { Dock, NotReady, Player, VoiceChip, VoicePicker } from "./parts";
 import { TOOL_ICON } from "./toolicons";
 import { TTS } from "./tts";
@@ -122,8 +122,8 @@ function Home({ go, onDraft, say, voice, setVoice, admin }: ToolProps & { onDraf
         {recent?.length === 0 && <div className="sp-empty">Âm thanh và bản chép lời bạn tạo sẽ nằm ở đây.</div>}
         {recent?.slice(0, 8).map((r) => (
           <div key={r.id} className="sp-rrow">
-            <div className="sp-rmeta"><b data-notr>{r.title}</b><span>{KIND_LABEL[r.kind] ?? r.kind}{r.meta.voiceName ? ` · ${r.meta.voiceName}` : ""} · {ago(r.createdAt)}</span></div>
-            {r.url && r.mime?.startsWith("audio") ? <Player src={r.url} dl={r.url} label={r.title} /> : <button className="btn" onClick={() => go(normTool(KIND_TOOL[r.kind] ?? "home"), r.kind === "align" ? "align" : undefined)}>Mở</button>}
+            <div className="sp-rmeta"><b data-notr>{itemTitle(r)}</b><span>{KIND_LABEL[r.kind] ?? r.kind}{r.meta.voiceName ? ` · ${r.meta.voiceName}` : ""} · {ago(r.createdAt)}</span></div>
+            {r.url && r.mime?.startsWith("audio") ? <Player src={r.url} dl={r.url} label={itemTitle(r)} /> : <button className="btn" onClick={() => go(normTool(KIND_TOOL[r.kind] ?? "home"), r.kind === "align" ? "align" : undefined)}>Mở</button>}
           </div>
         ))}
       </div>
