@@ -15,7 +15,7 @@ process.env.ELEVENLABS_API_KEY = "khoa-gia";
 for (const k of ["BASE", "KEY", "ID", "LABEL", "HEADER"]) delete process.env[`SPEECH_FALLBACK_${k}`];
 
 // ElevenLabs giả: số credit đã dùng của gói (used) tăng khi tạo; Nhạc / Tách stem không báo character-cost như bản thật.
-const EL = { used: 1000, music: 375, stems: 120, video: 200, other: 0, header: 0, subFail: false, dub: 0, calls: [] };
+const EL = { used: 1000, music: 375, stems: 120, video: 200, other: 0 /* việc của người khác cùng lúc (Nhạc, Tách stem) */, header: 0, subFail: false, dub: 0, calls: [] };
 const realFetch = globalThis.fetch;
 const json = (o, status = 200) => new Response(JSON.stringify(o), { status, headers: { "content-type": "application/json" } });
 const mp3 = (sec) => new Response(Buffer.alloc(Math.round((sec * 128_000) / 8)), { status: 200, headers: { "content-type": "audio/mpeg", ...(EL.header ? { "character-cost": String(EL.header) } : {}) } });
@@ -31,13 +31,15 @@ globalThis.fetch = async (url, init = {}) => {
     return mp3(b.music_length_ms ? b.music_length_ms / 1000 : 42);
   }
   if (m === "POST" && u.pathname === "/v1/music/video-to-music") { EL.used += EL.video; return mp3(8); }
-  if (m === "POST" && u.pathname === "/v1/music/stem-separation") { EL.used += EL.stems; return new Response(Buffer.from("504b0506000000000000000000000000000000000000", "hex"), { status: 200, headers: { "content-type": "application/zip" } }); }
+  if (m === "POST" && u.pathname === "/v1/music/stem-separation") { EL.used += EL.stems + EL.other; return new Response(Buffer.from("504b0506000000000000000000000000000000000000", "hex"), { status: 200, headers: { "content-type": "application/zip" } }); }
   if (m === "POST" && u.pathname === "/v1/dubbing" && init.body instanceof FormData && init.body.get("target_lang")) return json({ dubbing_id: "dub_1", expected_duration_sec: 63 });
   if (m === "GET" && u.pathname === "/v1/dubbing/dub_1") { EL.dub++; return json({ status: EL.dub > 1 ? "dubbed" : "dubbing", media_metadata: { duration: 63 }, error: null }); }
   if (m === "GET" && u.pathname === "/v1/dubbing/dub_1/audio/en") return mp3(63);
   if (m === "POST") return json({ detail: { status: "invalid", message: "thiếu dữ liệu" } }, 422); // dò quyền của khóa: yêu cầu rỗng
   throw new Error("đường chưa giả lập: " + m + " " + u.pathname);
 };
+// Log [speech-cost] của spentMeasured: giữ lại để kiểm, không in ra.
+const warns = []; const realWarn = console.warn; console.warn = (...a) => { if (String(a[0]).startsWith("[speech-cost]")) warns.push(a.join(" ")); else realWarn(...a); };
 const { speechapi: S, authstore: AS, "api/speech/[...op]/route": R } = await loadTs(["speechapi", "authstore", "api/speech/[...op]/route"]);
 const mk = (email) => AS.createUser({ email, name: "U", verified: true });
 const owner = mk("owner@g65.test"), M1 = mk("m1@g65.test");
@@ -49,7 +51,8 @@ const call = async (u, method, op, body) => {
   const r = await R[method](req, { params: Promise.resolve({ op: op.split("?")[0].split("/") }) });
   return { s: r.status, j: /json/.test(r.headers.get("content-type") ?? "") ? await r.json() : null };
 };
-const fileForm = (fields, name = "song.mp3", type = "audio/mpeg") => { const fd = new FormData(); fd.set("file", new File([Buffer.alloc(2048)], name, { type })); for (const [k, v] of Object.entries(fields)) fd.set(k, v); return fd; };
+// size: số byte của tệp (mặc định 6 giây MP3 128 kbps = 96.000 byte, để ước lượng Tách stem theo thời lượng có nghĩa).
+const fileForm = (fields, name = "song.mp3", type = "audio/mpeg", size = 96_000) => { const fd = new FormData(); fd.set("file", new File([Buffer.alloc(size)], name, { type })); for (const [k, v] of Object.entries(fields)) fd.set(k, v); return fd; };
 
 console.log("1. Nhạc: chi phí thật theo độ tăng credit của gói (bản thật trả cost 0)");
 await S.plan({ fresh: true });
@@ -63,6 +66,14 @@ ok(r.s === 200 && r.j.item.meta.cost === 125 && r.j.credits.used === 125, "thàn
 EL.other = 9000;
 r = await call(owner, "POST", "music", { prompt: "lần đo lẫn người khác", seconds: 10 });
 ok(r.j.item.meta.cost === 125, "gói tăng lệch quá xa ước lượng (người khác dùng chung khóa cùng lúc): ghi ước lượng 12,5 credit/giây", r.j.item.meta);
+// Lẫn ít hơn (gói tăng 2× ước lượng): trước đây vẫn nhận (tới 4×) và tính vào hạn mức của người gọi. Giá Nhạc đã đo nên chỉ chừa 50%.
+EL.music = 125; EL.other = 125;
+let b0 = S.spentToday(M1.id);
+r = await call(M1, "POST", "music", { prompt: "lẫn một lần đọc của người khác", seconds: 10 });
+ok(r.j.item.meta.cost === 125 && S.spentToday(M1.id) - b0 === 125, "gói tăng 250 cho bài 10 giây (≈125): mục và hạn mức trong ngày của người gọi chỉ tính 125", [r.j.item.meta.cost, S.spentToday(M1.id) - b0]);
+EL.other = 50; b0 = S.spentToday(M1.id);
+r = await call(M1, "POST", "music", { prompt: "giá lệch nhẹ", seconds: 10 });
+ok(r.j.item.meta.cost === 175 && S.spentToday(M1.id) - b0 === 175, "gói tăng trong khoảng 1,5× ước lượng: ghi đúng số đo (175)", r.j.item.meta);
 EL.other = 0; EL.music = 0;
 r = await call(owner, "POST", "music", { prompt: "gói chưa kịp tăng", seconds: 20 });
 ok(r.j.item.meta.cost === 250, "gói chưa tăng: ghi ước lượng theo thời lượng", r.j.item.meta);
@@ -83,8 +94,29 @@ let used0 = EL.used;
 r = await call(owner, "POST", "music/stems", fileForm({ stems: "2" }));
 ok(r.s === 200 && r.j.item.meta.cost === 120 && r.j.item.meta.stems === 2 && r.j.item.meta.source === "song.mp3", "Tách stem ghi đúng 120 credit (trước đây 0)", r.j);
 ok(r.j.credits.used === used0 + 120, "thanh credit cập nhật sau Tách stem", r.j.credits);
+ok(warns.some((w) => /music\/stems: gói tăng 120 credit, ước lượng 100 \(6 giây\) → ghi số đo/.test(w)), "Tách stem (giá chưa đo trên bản thật): ghi log số đo để chủ máy chủ chỉnh giá", warns);
+EL.stems = 0;
+r = await call(owner, "POST", "music/stems", fileForm({ stems: "2" }));
+ok(r.s === 200 && r.j.item.meta.cost === 100, "Tách stem, gói chưa kịp tăng: ghi ước lượng theo thời lượng bài (6 giây ≈ 100), không còn 0", r.j.item.meta);
+EL.subFail = true;
+r = await call(owner, "POST", "music/stems", fileForm({ stems: "6" }, "dai.mp3", "audio/mpeg", 960_000));
+ok(r.s === 200 && r.j.item.meta.cost === 1000, "Tách stem, khóa không đọc được gói: ước lượng 60 giây ≈ 1.000 credit", r.j.item.meta);
+EL.subFail = false;
+EL.stems = 120; EL.other = 9000;
+const t0 = S.spentToday(M1.id);
+r = await call(M1, "POST", "music/stems", fileForm({ stems: "2" }));
+ok(r.s === 200 && r.j.item.meta.cost === 100 && S.spentToday(M1.id) - t0 === 100, "Tách stem lẫn việc người khác (gói tăng 9.120): mục và hạn mức trong ngày của người gọi chỉ tính ước lượng 100", [r.j.item.meta, S.spentToday(M1.id) - t0]);
+ok(warns.some((w) => /music\/stems: gói tăng 9120 credit, ước lượng 100 .*bỏ số đo/.test(w)), "độ tăng bị bỏ có ghi log", warns.slice(-2));
+EL.other = 0;
+// WAV: thời lượng đọc từ header (không theo kích thước như MP3).
+const wav = (sec, rate = 8000) => { const n = Math.round(sec * rate), b = Buffer.alloc(44 + n * 2); b.write("RIFF", 0); b.writeUInt32LE(36 + n * 2, 4); b.write("WAVEfmt ", 8); b.writeUInt32LE(16, 16); b.writeUInt16LE(1, 20); b.writeUInt16LE(1, 22); b.writeUInt32LE(rate, 24); b.writeUInt32LE(rate * 2, 28); b.writeUInt16LE(2, 32); b.writeUInt16LE(16, 34); b.write("data", 36); b.writeUInt32LE(n * 2, 40); return b; };
+ok(Math.abs(S.audioSecOf(wav(6)) - 6) < 1e-9 && Math.abs(S.audioSecOf(wav(2.5, 44100)) - 2.5) < 1e-9 && S.audioSecOf(Buffer.alloc(16_000)) === 1, "thời lượng tệp tải lên: WAV theo header, định dạng khác theo 128 kbps", [S.audioSecOf(wav(6)), S.audioSecOf(wav(2.5, 44100))]);
 r = await call(owner, "POST", "music/video", fileForm({ prompt: "" }, "sunrise.webm", "video/webm"));
 ok(r.s === 200 && r.j.item.meta.cost === 200 && r.j.item.meta.video === "sunrise.webm", "Nhạc cho video ghi đúng 200 credit, giữ tên video trong meta để dựng tiêu đề theo ngôn ngữ", r.j);
+EL.video = 600;
+r = await call(owner, "POST", "music/video", fileForm({ prompt: "" }, "sunrise.webm", "video/webm"));
+ok(r.s === 200 && r.j.item.meta.cost === 600, "Nhạc cho video (giá chưa đo): 600 credit cho 8 giây vẫn được ghi, không bị thay bằng ước lượng theo giá Nhạc (100)", r.j.item.meta);
+ok(warns.some((w) => /music\/video: gói tăng 600 credit, ước lượng 100 \(8 giây\) → ghi số đo/.test(w)), "Nhạc cho video: log giá thật mỗi lần đo", warns.slice(-1));
 
 console.log("3. Lồng tiếng: thời gian dự kiến và trạng thái");
 r = await call(owner, "POST", "dub", fileForm({ target: "en" }, "clip.mp4", "video/mp4"));
@@ -102,6 +134,16 @@ const en = (s) => C.trWith(dict, s, "en"), tfe = (k, v) => C.tfWith(dict, k, v, 
 ok(F.fmtClockOf(0, 0.48, "en-US") === "0:00.0" && F.fmtClockOf(0.48, 0.48, "en-US") === "0:00.5", "âm thanh 0,48 giây: “0:00.0 / 0:00.5”, không còn “0:00 / 0:00”", [F.fmtClockOf(0, 0.48, "en-US"), F.fmtClockOf(0.48, 0.48, "en-US")]);
 ok(F.fmtClockOf(0.48, 0.48, "vi-VN") === "0:00,5" && F.fmtClockOf(4.5, 7, "en-US") === "0:04.5", "dấu thập phân theo ngôn ngữ giao diện");
 ok(F.fmtClockOf(65, 70, "en-US") === "1:05" && F.fmtClockOf(0, 0, "en-US") === "0:00", "bản dài và chưa biết thời lượng: như cũ");
+// 9,95–10 giây làm tròn thành 10,0: trước đây hiện “0:010.0”.
+const c997 = [F.fmtClockOf(0, 9.97, "en-US"), F.fmtClockOf(9.97, 9.97, "en-US"), F.fmtClockOf(9.96, 9.97, "vi-VN")];
+ok(c997.join(" ") === "0:00 0:10 0:10", "tiếng động 9,97 giây: “0:00 / 0:10”, không còn “0:010.0”", c997);
+const c994 = [F.fmtClockOf(9.94, 9.94, "en-US"), F.fmtClockOf(9.96, 9.94, "en-US"), F.fmtClockOf(4.96, 9.94, "en-US")];
+ok(c994.join(" ") === "0:09.9 0:09.9 0:05.0", "9,94 giây vẫn có phần mười; vị trí làm tròn trước khi định dạng (4,96 → “0:05.0”)", c994);
+ok(tfe("{n} bản", { n: 1 }) === "1 item" && tfe("{n} bản", { n: 3 }) === "3 items" && en("1 bản") === "1 item" && en("12 bản") === "12 items" && tfv("{n} bản", { n: 1 }) === "1 bản", "số bản trong Kết quả: “1 item”, “3 items” (không còn “1 items”)", [tfe("{n} bản", { n: 1 }), en("1 bản")]);
+const estEn = tfe("≈ {n} credit · ước tính theo thời lượng", { n: (1000).toLocaleString("en-US") }), estVi = tfv("≈ {n} credit · ước tính theo thời lượng", { n: (3750).toLocaleString("vi-VN") });
+ok(estEn === "≈ 1,000 credits · estimated by length" && estVi === "≈ 3.750 credit · ước tính theo thời lượng", "ước tính Nhạc theo ngôn ngữ giao diện: “≈ 1,000 credits” (không còn “≈ 1.000”)", [estEn, estVi]);
+ok(tfe("Ghi âm {time}", { time: "14-05" }) === "Recording 14-05" && tfv("Ghi âm {time}", { time: "14-05" }) === "Ghi âm 14-05", "tên tệp ghi âm theo ngôn ngữ giao diện: “Recording 14-05”");
+ok(en("Trợ lý Synchro") === "Synchro assistant" && SD.AGENT_TEMPLATES.every((t) => ["name", "first", "prompt"].every((k) => !/[ạảấầẩẫậắằẳẵặẹẻẽếềểễệỉịọỏốồổỗộớờởỡợụủứừửữựỳỵỷỹđ]/i.test(en(t[k])))), "mẫu agent (tên mặc định “Trợ lý Synchro”, lời chào, hướng dẫn) đều có bản tiếng Anh");
 ok(F.langLabelOf("vie", "en-US") === "Vietnamese" && F.langLabelOf("en", "en-US") === "English" && F.langLabelOf("en", "vi-VN") === "Tiếng Anh", "tên ngôn ngữ theo giao diện (không còn “Tiếng Anh” ở giao diện tiếng Anh)");
 ok(F.langLabelOf("", "en-US", "x") === "x" && F.langLabelOf("zz", "en-US", "Khác") === "Khác", "mã trống / lạ: dùng tên dự phòng");
 const [k1, v1] = F.itemTitleKey({ kind: "stems", meta: { source: "song.mp3", stems: 2 } });
@@ -134,7 +176,7 @@ for (const n of ["NotAllowedError", "SecurityError", "NotFoundError", "NotReadab
 }
 ok(/Allow|allow/.test(en(F.micErrorOf("NotAllowedError"))) && /address bar/.test(en(F.micErrorOf("NotAllowedError"))), "bị chặn: chỉ cách cho phép micro ở thanh địa chỉ");
 
-globalThis.fetch = realFetch;
+globalThis.fetch = realFetch; console.warn = realWarn;
 fs.rmSync(process.env.DATA_DIR, { recursive: true, force: true });
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

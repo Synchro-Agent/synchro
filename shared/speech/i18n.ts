@@ -699,7 +699,8 @@ Object.assign(SPEECH_VI2EN, {
   "Tiếng Hungary": "Hungarian", "Tiếng Romania": "Romanian", "Tiếng Bulgaria": "Bulgarian", "Tiếng Croatia": "Croatian", "Tiếng Hy Lạp": "Greek",
 
   // G6.5: tiêu đề do Synchro đặt dựng theo ngôn ngữ giao diện, số nhiều, định dạng tải xuống (dấu chấm thập phân), hướng dẫn Tạo giọng theo gói, micro, tiến độ
-  "Tách {n} stem · {name}": "{n} stem · {name}|{n} stems · {name}", "Nhạc cho {name}": "Music for {name}", "{n} quy tắc": "{n} rule|{n} rules",
+  "Tách {n} stem · {name}": "{n} stem · {name}|{n} stems · {name}", "Nhạc cho {name}": "Music for {name}", "{n} quy tắc": "{n} rule|{n} rules", "{n} bản": "{n} item|{n} items",
+  "≈ {n} credit · ước tính theo thời lượng": "≈ {n} credit · estimated by length", "Ghi âm {time}": "Recording {time}",
   "MP3 44,1 kHz · 128 kbps": "MP3 44.1 kHz · 128 kbps", "MP3 44,1 kHz · 192 kbps": "MP3 44.1 kHz · 192 kbps", "WAV 44,1 kHz": "WAV 44.1 kHz",
   "nhân bản nhanh từ vài phút ghi âm": "instant cloning from a few minutes of audio", "nhân bản chuyên sâu giống thật nhất": "professional cloning for the most lifelike result",
   "thiết kế giọng từ một câu mô tả": "voice design from a description", "remix một giọng sẵn có": "remixing an existing voice", "{a} hoặc {b}": "{a} or {b}",
@@ -724,7 +725,7 @@ SPEECH_RULES_EN.push(
   [/^(\d)\/3 đang bật$/, (m) => `${m[1]}/3 on`],
   [/^Đọc tự nhiên như khi nói chuyện, nơi yên tĩnh, micro cách miệng khoảng một gang tay\. Mỗi đoạn khoảng một phút(?: · đã ghi (\d+) đoạn)?\.$/, (m) => `Read naturally, as if talking, somewhere quiet, with the mic about a hand's width away. Each passage takes about a minute${m[1] ? ` · ${m[1]} recorded` : ""}.`],
   [/^Giọng trong tài khoản ElevenLabs( và thư viện cộng đồng)?\.(?: Đã dùng (\d+)\/(\d+) chỗ lưu giọng\.)?$/, (m) => `Voices in your ElevenLabs account${m[1] ? " and the community library" : ""}.${m[2] ? ` ${m[2]}/${m[3]} voice slots used.` : ""}`],
-  [/^(\d+) bản$/, (m) => `${m[1]} items`],
+  [/^(\d+) bản$/, (m) => `${m[1]} ${m[1] === "1" ? "item" : "items"}`],
   [/^(\d+) quy tắc$/, (m) => `${m[1]} ${m[1] === "1" ? "rule" : "rules"}`],
   [/^(.+) · tính theo thời lượng âm thanh$/, (m) => `${m[1]} · billed by audio duration`],
   [/^(\d+) phút (?:(\d+) giây)?$/, (m) => `${m[1]} min${m[2] ? ` ${m[2]} s` : ""}`],

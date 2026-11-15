@@ -2,7 +2,7 @@
 // Thành phần dùng chung của mục Speech: tab, thanh trượt, công tắc, chọn, vùng thả tệp, ghi âm, dạng sóng, trình phát, bộ chọn giọng.
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
-import { tr } from "../i18n";
+import { tf, tr } from "../i18n";
 import * as I from "../icons";
 import { LiquidOrb } from "../liquidorb";
 import { readBrowser, stopBrowserRead } from "../browserspeak";
@@ -101,7 +101,7 @@ export function Recorder({ onDone, say, label = "Ghi âm", max = 300 }: { onDone
         setRec(null);
         const mime = r.mimeType || "audio/webm", ext = /mp4/.test(mime) ? "m4a" : "webm";
         const d = new Date();
-        if (chunks.length) onDone(new File(chunks, `Ghi âm ${String(d.getHours()).padStart(2, "0")}-${String(d.getMinutes()).padStart(2, "0")}.${ext}`, { type: mime.split(";")[0] }));
+        if (chunks.length) onDone(new File(chunks, `${tf("Ghi âm {time}", { time: `${String(d.getHours()).padStart(2, "0")}-${String(d.getMinutes()).padStart(2, "0")}` })}.${ext}`, { type: mime.split(";")[0] }));
       };
       r.start(250); setSec(0); setRec(r);
     } catch (e) { say(micError(e)); }

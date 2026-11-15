@@ -155,6 +155,11 @@ export const MUSIC_CREDIT_PER_SEC = 12.5;
 export const MUSIC_DEFAULT_SEC = 30;
 /** Ước tính credit cho một bản nhạc theo thời lượng (giây). */
 export const estMusicCredits = (seconds: number): number => Math.max(0, Math.round(seconds * MUSIC_CREDIT_PER_SEC));
+// Tách stem: CHƯA đo trên bản thật (ElevenLabs không báo chi phí trong header). Tạm lấy giá của Lọc giọng (1.000 credit mỗi phút âm thanh) làm mốc;
+// máy chủ ghi log [speech-cost] mỗi lần đo để chỉnh số này theo giá thật. Dùng làm ước lượng dự phòng và mốc chặn độ tăng lẫn việc của người khác.
+export const STEM_CREDIT_PER_SEC = 1000 / 60;
+/** Ước tính credit cho một lần tách stem theo thời lượng bài (giây); có tệp thì ít nhất 1. */
+export const estStemCredits = (seconds: number): number => (seconds > 0 ? Math.max(1, Math.round(seconds * STEM_CREDIT_PER_SEC)) : 0);
 /** Mẫu “Bắt đầu với”: điền sẵn văn bản (có thẻ cảm xúc) để người mới bấm là nghe được ngay. */
 export const STARTERS: { label: string; text?: string; lines?: [number, string][] }[] = [
   { label: "Kể một câu chuyện", text: "[softly] Ngày xửa ngày xưa, ở một ngôi làng nhỏ ven sông, có một cô bé tên là Mây. [pause] Sáng nào cô cũng ra bờ sông ngắm những cánh buồm nâu trôi chầm chậm… [excited] Cho đến một hôm, cô nhìn thấy một chiếc thuyền rất lạ!" },

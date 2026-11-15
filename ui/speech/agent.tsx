@@ -26,7 +26,12 @@ type Conn = { close: () => void; sync?: () => void };
 export function AgentTool({ say, sub, setSub, voice: shared }: ToolProps) {
   const tab = sub === "hist" ? "hist" : "agent";
   const [cfg, setCfg] = usePref<Cfg>("spAgent", CFG0);
-  const c = { ...CFG0, ...cfg, ...(cfg.langSet ? {} : { lang: "" }) };
+  const c0 = { ...CFG0, ...cfg, ...(cfg.langSet ? {} : { lang: "" }) };
+  // Tên, lời chào, hướng dẫn còn đúng chữ gốc của một mẫu (chưa sửa, như mặc định “Trợ lý Synchro”): hiện và dùng theo ngôn ngữ giao diện,
+  // để giao diện tiếng Anh không còn chữ Việt dưới quả cầu, trong tiêu đề cuộc gọi hay lời agent chào. Chữ người dùng tự gõ giữ nguyên.
+  // So cả bản tiếng Anh của mẫu: đổi cài đặt khi đang ở giao diện tiếng Anh lưu chữ Anh, quay về tiếng Việt vẫn hiện chữ Việt.
+  const loc = (v: string, k: "name" | "first" | "prompt") => { const t = AGENT_TEMPLATES.find((x) => x[k] === v || tr(x[k], "en") === v); return t ? tr(t[k]) : v; };
+  const c = { ...c0, name: loc(c0.name, "name"), first: loc(c0.first, "first"), prompt: loc(c0.prompt, "prompt") };
   const set = (p: Partial<Cfg>) => setCfg({ ...c, ...p });
   const [phase, setPhase] = useState<"idle" | "connecting" | RtPhase>("idle");
   const [lines, setLines] = useState<Line[]>([]);

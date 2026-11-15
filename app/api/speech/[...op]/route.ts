@@ -3,12 +3,15 @@ import { Readable } from "node:stream";
 import { audit, can, current, findByEmail, getUser, isAdmin, isOwner, limit, sameOrigin, VERIFY_FIRST, verifyLocked, type UserRow } from "../../../../server/authstore";
 import {
   SpeechErr, addSpend, audioOf, checkBudget, deleteItem, effectsCatalog, el, elJson, getItem, itemFile, jsonBody, langName, library, listItems, mintRealtime, myVoices, need, plan, saveItem,
-  scribeToken, servedBy, sideRead, sideWrite, speechBudget, spender, spent, spentMeasured, spentToday, usageNow, updateItem, voiceOut, backfillVoiceOwners, defaultVoice, forgetVoiceOwner, isPrivateVoice, MAX_OWN_VOICES, ownedVoices, setVoiceOwner, voiceGen, voiceOpenTo, voiceOwner, VOICE_ORPHAN, VOICE_PURGE, VOICE_SHARED, type Feat, type Plan,
+  audioSecOf, scribeToken, servedBy, sideRead, sideWrite, speechBudget, spender, spent, spentMeasured, spentToday, usageNow, updateItem, voiceOut, backfillVoiceOwners, defaultVoice, forgetVoiceOwner, isPrivateVoice, MAX_OWN_VOICES, ownedVoices, setVoiceOwner, voiceGen, voiceOpenTo, voiceOwner, VOICE_ORPHAN, VOICE_PURGE, VOICE_SHARED, type Feat, type Plan,
 } from "../../../../server/speechapi";
-import { estCredits, estMusicCredits } from "../../../../shared/speech/data";
+import { estCredits, estMusicCredits, estStemCredits } from "../../../../shared/speech/data";
 
 // Thời lượng (giây) của MP3 128 kbps theo số byte: ước lượng chi phí nhạc khi người dùng để AI tự chọn độ dài.
 const mp3Sec = (bytes: number) => (bytes * 8) / 128_000;
+// Độ tăng credit của gói quanh lần gọi được nhận tới cap × ước lượng (spentMeasured): Nhạc đã đo trên bản thật (12,5 credit/giây) nên chỉ chừa 50%;
+// Tách stem mới có giá tạm nên chừa rộng hơn; Nhạc cho video chưa có giá nào đo được nên không chặn.
+const MEASURE_CAP = { music: 1.5, stems: 4, video: Infinity };
 import { quickCall } from "../../../../server/ai/anymodel";
 import { timed } from "../../../../server/servertiming";
 
@@ -324,7 +327,8 @@ async function music(u: UserRow, b: Record<string, unknown>) {
   const before = await usageNow();
   const r = await el("/v1/music?output_format=mp3_44100_128", { ...jsonBody(body), feat: "music", timeout: 290_000 });
   const a = await audioOf(r);
-  const cost = await spentMeasured(r, before, estMusicCredits(body.music_length_ms ? Number(body.music_length_ms) / 1000 : mp3Sec(a.buf.length)));
+  const sec = body.music_length_ms ? Number(body.music_length_ms) / 1000 : mp3Sec(a.buf.length);
+  const cost = await spentMeasured(r, before, estMusicCredits(sec), { tool: "music", cap: MEASURE_CAP.music, sec });
   const item = saveItem(u, "music", titleOf(prompt), { prompt, seconds: body.music_length_ms ? Number(body.music_length_ms) / 1000 : null, instrumental: body.force_instrumental, lyrics: !!lyrics, model: body.model_id, cost }, a);
   return ok({ item });
 }
@@ -343,7 +347,9 @@ async function videoMusic(u: UserRow, form: FormData) {
   const before = await usageNow();
   const r = await el("/v1/music/video-to-music?output_format=mp3_44100_128", { method: "POST", body: fd, feat: "music", timeout: 290_000 });
   const a = await audioOf(r);
-  const cost = await spentMeasured(r, before, estMusicCredits(mp3Sec(a.buf.length)));
+  // Giá của Nhạc cho video chưa đo trên bản thật: nhận mọi độ tăng (ước lượng theo giá Nhạc chỉ dùng khi không đo được) và ghi log để biết giá thật.
+  const sec = mp3Sec(a.buf.length);
+  const cost = await spentMeasured(r, before, estMusicCredits(sec), { tool: "music/video", cap: MEASURE_CAP.video, sec, log: true });
   // Tiêu đề lưu kiểu Việt (tên tệp tải về); giao diện hiện tiêu đề theo ngôn ngữ từ meta.video (ui/speech/client.ts itemTitle).
   const item = saveItem(u, "music", `Nhạc cho ${f.name}`.slice(0, 120), { prompt: desc, video: f.name, sfx: bool(form.get("sfx")), cost }, a);
   return ok({ item });
@@ -357,9 +363,11 @@ async function stems(u: UserRow, form: FormData) {
   fd.set("file", f, f.name);
   const six = form.get("stems") === "6";
   fd.set("stem_variation_id", six ? "six_stems_v1" : "two_stems_v1");
+  // Ước lượng theo thời lượng bài: dự phòng khi gói chưa kịp tăng, và mốc chặn độ tăng lẫn việc của người khác dùng chung khóa.
+  const sec = audioSecOf(Buffer.from(await f.arrayBuffer()));
   const before = await usageNow();
   const r = await el("/v1/music/stem-separation", { method: "POST", body: fd, feat: "music", timeout: 290_000 });
-  const cost = await spentMeasured(r, before);
+  const cost = await spentMeasured(r, before, estStemCredits(sec), { tool: "music/stems", cap: MEASURE_CAP.stems, sec, log: true });
   const ct = (r.headers.get("content-type") ?? "application/zip").split(";")[0];
   const buf = Buffer.from(await r.arrayBuffer());
   const zip = /zip/.test(ct) || buf.subarray(0, 2).toString() === "PK";

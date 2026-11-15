@@ -91,14 +91,34 @@ const viLeft = () => ev(`(() => { const VI = /[ạảãâầấậẩẫăằắ
   let n; while ((n = w.nextNode())) { const p = n.parentElement; if (!p || p.closest("[data-notr],textarea,input,script,style,pre") || !p.getClientRects().length) continue; if (VI.test(n.nodeValue)) out.push(n.nodeValue.trim().slice(0, 60)); }
   for (const e of document.querySelectorAll(".sp-body option")) if (VI.test(e.textContent)) out.push(e.textContent.trim().slice(0, 60));
   return [...new Set(out)]; })()`);
+// Mở công cụ như người dùng: bấm mục Speech (danh sách công cụ chỉ hiện ở thanh bên khi đang ở Speech) rồi bấm công cụ [data-nav="sp-<t>"].
+// (Đặt localStorage p:spTool rồi tải lại không đổi được công cụ: ứng dụng vẫn mở Trang chủ Speech.) Mỗi lần tải lại trang để bắt đầu sạch.
 const openTool = async (t) => {
-  await ev(`localStorage.setItem("p:spTool", ${JSON.stringify(JSON.stringify(t))}); 1`);
   await P("Page.navigate", { url: B + "/" });
   await until(`!!document.querySelector('[data-nav="speech"]')`, 40000, "app");
   await sleep(600);
-  if (!(await ev(`!!document.querySelector(".sp-tabs")`))) { await click(`document.querySelector('[data-nav="speech"]')`, "speech"); }
-  await until(`!!document.querySelector(".sp-body") && !document.querySelector(".sp-tab-wait")`, 30000, "speech " + t);
+  const nav = `document.querySelector('[data-nav="sp-${t}"]')`;
+  if (!(await ev(`!!${nav}`))) await click(`document.querySelector('[data-nav="speech"]')`, "speech");
+  await until(`!!${nav}`, 20000, "nav sp-" + t);
+  await click(nav, "sp-" + t);
+  await until(`${nav}.classList.contains("active") && !!document.querySelector(".sp-body") && !document.querySelector(".sp-tab-wait")`, 30000, "speech " + t);
   await sleep(900);
+};
+// Khung điện thoại 390px với ngăn kéo thanh bên ĐÓNG (đổi cỡ khi thanh bên máy tính đang mở thì ngăn kéo phủ cả trang, kiểm tràn ngang sẽ không thấy công cụ).
+// sel: phần cần kiểm, cuộn tới và phải thấy thật (không bị gì phủ) trước khi kiểm tràn ngang và chụp màn hình.
+const phone = async (sel, what) => {
+  await P("Emulation.setDeviceMetricsOverride", { width: 390, height: 844, deviceScaleFactor: 2, mobile: true }); await sleep(800);
+  for (let i = 0; i < 3 && (await ev(`!!document.querySelector(".side-scrim")`)); i++) {
+    const at = await ev(`(() => { const b = document.querySelector(".side-scrim").getBoundingClientRect(); return [b.right - 12, b.top + b.height / 2]; })()`);
+    for (const type of ["mouseMoved", "mousePressed", "mouseReleased"]) await P("Input.dispatchMouseEvent", { type, x: at[0], y: at[1], button: "left", clickCount: 1 });
+    await sleep(700);
+  }
+  ok(!(await ev(`!!document.querySelector(".side-scrim")`)), `điện thoại: ngăn kéo thanh bên đã đóng trước khi kiểm ${what}`);
+  const seen = await ev(`(() => { const e = document.querySelector(${JSON.stringify(sel)}); if (!e) return "không có " + ${JSON.stringify(sel)}; e.scrollIntoView({ block: "center" });
+    const b = e.getBoundingClientRect(); if (!b.width || b.right > innerWidth + 1 || b.left < -1) return "ngoài khung: " + JSON.stringify([b.left, b.right]);
+    const top = document.elementFromPoint(b.left + b.width / 2, b.top + Math.min(b.height / 2, 20)); return top && e.contains(top) ? "" : "bị phủ bởi " + (top?.className || top?.tagName); })()`);
+  ok(!seen, `điện thoại: thấy ${what} (không bị ngăn kéo phủ)`, seen);
+  ok(await ev(`document.documentElement.scrollWidth <= innerWidth + 1`), `điện thoại: ${what} không tràn ngang`);
 };
 const credit = () => ev(`document.querySelector(".sp-credit-n")?.textContent ?? ""`);
 const num = (s) => Number(String(s).replace(/[^\d]/g, "")) || 0;
@@ -118,17 +138,27 @@ try {
 
   console.log("2. Nhạc: ước tính 30 giây và chi phí thật, thanh credit cập nhật");
   await openTool("music");
+  await until(`!!document.querySelector(".sp-card-h")`, 15000, "results header");
   const est = await ev(`[...document.querySelectorAll(".sp-gen .sp-muted")].map((e) => e.textContent).join(" | ")`);
   ok(/≈ 375 credits/.test(est), `ước tính nhạc 30 giây: “${est}” (bản thật 375; trước đây ≈3.000)`, est);
-  const c0 = num(await credit());
+  // Bài dài: số nghìn theo ngôn ngữ giao diện (“≈ 1,500 credits”, không còn “≈ 1.500”). Sau đó trả về 30 giây cho lần tạo bên dưới.
+  await fill("#mu-d", "120"); await sleep(300);
+  const est2 = await ev(`[...document.querySelectorAll(".sp-gen .sp-muted")].map((e) => e.textContent).join(" | ")`);
+  ok(/≈ 1,500 credits · estimated by length/.test(est2) && !/1\.500/.test(est2), `ước tính nhạc 2 phút: “${est2}”`, est2);
+  await fill("#mu-d", "30"); await sleep(300);
+  const cnt = await ev(`document.querySelector(".sp-card-h .sp-muted")?.textContent ?? ""`);
+  ok(!cnt || /^\d+ items?$/.test(cnt) && !/^1 items$/.test(cnt), `số bản trong Kết quả: “${cnt}”`, cnt);
+  // Thanh credit đo theo gói thật của mock (số đã dùng đọc lại sau lần gọi), không theo con số cố định: mọi lần gói tăng đều phải hiện lên thanh.
+  const used = async () => (await api("GET", "/api/speech/plan?fresh=1")).j?.credits?.used ?? NaN;
+  const u0 = await used(), c0 = num(await credit());
   await fill("#mu-p", "Upbeat lo-fi for studying");
   await click(byText(".sp-go", "Generate music"), "generate music");
   await until(`[...document.querySelectorAll(".sp-hrow .sp-muted")].some((e) => /credit/.test(e.textContent))`, 30000, "music row");
   const row = await text(".sp-hrow .sp-muted");
-  // Mock trừ 30 credit/giây vào gói mà không báo header: mục phải ghi 900 (độ tăng của gói), không phải 0.
-  ok(/900 credits/.test(row), `mục Nhạc ghi chi phí thật (độ tăng gói): “${row}”`, row);
-  const c1 = num(await credit());
-  ok(c0 > 0 && c0 - c1 === 900, `thanh credit cập nhật ngay sau Nhạc: ${c0} → ${c1}`, [c0, c1]);
+  // Mock trừ 12,5 credit/giây như bản thật mà không báo header: mục phải ghi 375 (độ tăng của gói), không phải 0.
+  ok(/\b375 credits/.test(row), `mục Nhạc ghi chi phí thật (độ tăng gói): “${row}”`, row);
+  const c1 = num(await credit()), u1 = await used();
+  ok(c0 > 0 && u1 - u0 === 375 && c0 - c1 === u1 - u0, `thanh credit cập nhật ngay sau Nhạc: ${c0} → ${c1} (gói ${u0} → ${u1})`, [c0, c1, u0, u1]);
   await shot("1-music");
 
   console.log("3. Tách stem, Nhạc cho video: tiêu đề tiếng Anh, số nhiều, chi phí");
@@ -139,21 +169,37 @@ try {
   const stemRow = await text(".sp-hrow");
   ok(/2 stems · g65-song\.wav/.test(stemRow) && !/2 stem ·/.test(stemRow), `tiêu đề: “2 stems · g65-song.wav”`, stemRow);
   ok(/300 credits/.test(stemRow), "Tách stem ghi chi phí thật (trước đây 0)", stemRow);
-  ok(num(await credit()) === c1 - 300, "thanh credit cập nhật sau Tách stem", await credit());
+  const u2 = await used();
+  ok(u2 - u1 === 300 && num(await credit()) === c1 - (u2 - u1), `thanh credit cập nhật sau Tách stem (gói ${u1} → ${u2})`, [await credit(), u1, u2]);
+  const cnt2 = await ev(`[...document.querySelectorAll(".sp-card-h .sp-muted")].map((e) => e.textContent).join(" | ")`);
+  ok(/\b1 item\b/.test(cnt2) && !/\b1 items\b/.test(cnt2), `số bản Tách stem: “${cnt2}” (không còn “1 items”)`, cnt2);
   await click(byText(".sp-body button", "Video to music"), "video tab"); await sleep(500);
+  const u3 = await used();
   await upload(".sp-body input[type=file]", CLIP); await sleep(300);
   await click(`document.querySelector(".sp-go")`, "video music");
   await until(`[...document.querySelectorAll(".sp-hrow b")].some((e) => /Music for/.test(e.textContent))`, 30000, "video music row");
   const vm = await text(".sp-hrow b");
   ok(/Music for g65-clip\.wav/.test(vm) && !/Nhạc cho/.test(vm), "tiêu đề Nhạc cho video ở giao diện tiếng Anh: “Music for …”", vm);
+  // Giá Nhạc cho video chưa đo trên bản thật: ghi đúng độ tăng của gói (mock 600 cho 8 giây), không thay bằng ước lượng theo giá Nhạc (100).
+  const vrow = await text(".sp-hrow .sp-muted"), u4 = await used();
+  ok(u4 - u3 === 600 && /\b600 credits/.test(vrow), `Nhạc cho video ghi đúng độ tăng gói (${u4 - u3})`, [vrow, u3, u4]);
   ok(!(await viLeft()).length, "không còn chữ Việt ở Nhạc", await viLeft());
 
-  console.log("4. Âm thanh dưới một giây");
+  console.log("4. Âm thanh dưới một giây, gần 10 giây; đồng hồ không chạm dạng sóng trên điện thoại");
+  await api("POST", "/api/speech/sfx", { text: "Almost ten seconds", duration: 9.97 });
   await api("POST", "/api/speech/sfx", { text: "Short click", duration: 0.5 });
   await openTool("sfx");
-  await until(`!!document.querySelector(".sp-hrow .sp-time") && /\\d\\.\\d/.test(document.querySelector(".sp-hrow .sp-time").textContent)`, 15000, "sfx time");
-  const tm = await ev(`document.querySelector(".sp-hrow .sp-time").textContent`);
-  ok(/^0:00\.0 \/ 0:00\.5$/.test(tm), `tiếng động 0,5 giây hiện “${tm}” (không còn “0:00 / 0:00”)`, tm);
+  await until(`[...document.querySelectorAll(".sp-hrow .sp-time")].length >= 2 && [...document.querySelectorAll(".sp-hrow .sp-time")].every((e) => !/ 0:00$/.test(e.textContent))`, 15000, "sfx time");
+  const tms = await ev(`[...document.querySelectorAll(".sp-hrow .sp-time")].map((e) => e.textContent)`);
+  ok(/^0:00\.0 \/ 0:00\.5$/.test(tms[0]), `tiếng động 0,5 giây hiện “${tms[0]}” (không còn “0:00 / 0:00”)`, tms);
+  ok(tms[1] === "0:00 / 0:10", `tiếng động 9,97 giây hiện “${tms[1]}” (không còn “0:010.0”)`, tms);
+  // Trình phát thật (WAV mock có thể lệch vài mẫu so với 9,97): mọi đồng hồ chỉ có một hoặc hai chữ số giây.
+  ok(tms.every((x) => /^\d+:\d\d(\.\d)? \/ \d+:\d\d(\.\d)?$/.test(x)), "đồng hồ đúng dạng m:ss hoặc m:ss.d", tms);
+  await phone(".sp-hrow .sp-player", "trình phát tiếng động");
+  const gap = await ev(`[...document.querySelectorAll(".sp-hrow .sp-player")].map((p) => { const w = p.querySelector(".sp-wave"), t = p.querySelector(".sp-time"); return { gap: Math.round(t.getBoundingClientRect().left - w.getBoundingClientRect().right), fit: w.scrollWidth <= w.clientWidth + 1, wave: Math.round(w.clientWidth) }; })`);
+  ok(gap.every((g) => g.gap >= 8 && g.fit), `điện thoại: dạng sóng không tràn sang đồng hồ (khe ≥ 8px, vạch vừa khung): ${JSON.stringify(gap)}`, gap);
+  await shot("4b-sfx-phone");
+  await desk();
 
   console.log("5. Từ điển phát âm: “1 rule”");
   await api("POST", "/api/speech/dicts", { name: "G65 one", rules: [{ word: "Synchro", say: "sin-crow" }] });
@@ -185,8 +231,8 @@ try {
   ok(/blocking the microphone/.test(me) && /address bar/.test(me), `lỗi trong khung gọi: “${me.slice(0, 90)}…”`, me);
   ok(await ev(`!!${byText(".sp-call .sp-go", "Test call")}`), "nút Test call quay lại, gọi lại được sau khi cho phép micro");
   await shot("2-agent-mic");
-  await P("Emulation.setDeviceMetricsOverride", { width: 390, height: 844, deviceScaleFactor: 2, mobile: true }); await sleep(800);
-  ok(await ev(`document.documentElement.scrollWidth <= innerWidth + 1`), "điện thoại: khung gọi có lỗi không tràn ngang");
+  ok(await ev(`document.querySelector(".sp-call-n").textContent`) === "Synchro assistant", "tên agent mặc định ở giao diện tiếng Anh: “Synchro assistant”", await ev(`document.querySelector(".sp-call-n").textContent`));
+  await phone(".sp-call .api-err", "khung gọi có lỗi micro");
   await shot("3-agent-phone");
   await desk();
 
@@ -200,8 +246,7 @@ try {
   const pill = await text(".sp-proj .sp-pill");
   ok(pill === "English", `ngôn ngữ đích: “${pill}” (không còn “Tiếng Anh”)`, pill);
   await shot("4-dub-progress");
-  await P("Emulation.setDeviceMetricsOverride", { width: 390, height: 844, deviceScaleFactor: 2, mobile: true }); await sleep(800);
-  ok(await ev(`document.documentElement.scrollWidth <= innerWidth + 1`), "điện thoại: thanh tiến độ không tràn ngang");
+  await phone(".sp-proj .sp-progress", "thanh tiến độ lồng tiếng");
   await shot("5-dub-phone");
   await desk();
   await until(`!!document.querySelector(".sp-proj .sp-player")`, 45000, "dub done");

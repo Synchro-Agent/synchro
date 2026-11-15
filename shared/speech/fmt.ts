@@ -5,10 +5,12 @@ import type { Feat } from "../types/speech";
 /** Thời lượng “m:ss” (hoặc “h:mm:ss”), làm tròn tới giây. */
 export const fmtDurOf = (s: number) => { s = Math.max(0, Math.round(s)); const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), x = s % 60; return h ? `${h}:${String(m).padStart(2, "0")}:${String(x).padStart(2, "0")}` : `${m}:${String(x).padStart(2, "0")}`; };
 /** Đồng hồ của trình phát: bản từ 10 giây trở lên hiện như fmtDurOf; bản ngắn hơn hiện một chữ số thập phân (dấu thập phân theo loc) để âm thanh
- *  dưới một giây (tiếng động 0,48 giây) không còn hiện “0:00 / 0:00” (G6.5). total: thời lượng cả bản, t: vị trí đang phát. */
+ *  dưới một giây (tiếng động 0,48 giây) không còn hiện “0:00 / 0:00” (G6.5). total: thời lượng cả bản, t: vị trí đang phát.
+ *  So với 10 giây SAU khi làm tròn tới phần mười: bản 9,97 giây làm tròn thành 10,0 thì hiện “0:10”, không thành “0:010.0”. */
 export const fmtClockOf = (t: number, total: number, loc: string) => {
-  if (!(total > 0) || total >= 10) return fmtDurOf(t);
-  const x = Math.min(Math.max(0, t), total);
+  if (!(total > 0) || Math.round(total * 10) / 10 >= 10) return fmtDurOf(t);
+  // Làm tròn trước khi định dạng: vị trí luôn ≤ thời lượng (đã làm tròn) < 10 nên phần giây chỉ một chữ số.
+  const x = Math.round(Math.min(Math.max(0, t), total) * 10) / 10;
   return `0:0${x.toLocaleString(loc, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}`;
 };
 /** Tên ngôn ngữ theo loc từ mã ISO (vi, en, vie…); mã lạ thì fallback. Máy chủ lưu tên tiếng Việt trong meta (langName, targetName) nên giao diện tự đặt tên. */

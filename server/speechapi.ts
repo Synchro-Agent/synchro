@@ -399,19 +399,42 @@ export async function usageNow(): Promise<number | null> {
 }
 /** Chi phí thật của công cụ mà ElevenLabs KHÔNG báo trong header (Nhạc, Nhạc cho video, Tách stem — bản thật trả cost 0, G6.5):
  *  lấy độ tăng của số credit đã dùng trong gói quanh lần gọi (before đọc bằng usageNow() trước khi gọi). Header có số thì dùng header như spent().
- *  Không đọc được gói, gói chưa kịp tăng, hoặc độ tăng lệch quá xa ước lượng (người khác dùng chung khóa cùng lúc): dùng ước lượng est.
- *  Cập nhật luôn số credit của gói (thanh credit trên đầu trang) và hạn mức trong ngày của người gọi. */
-export async function spentMeasured(r: Response, before: number | null, est = 0): Promise<number> {
+ *  Khóa ElevenLabs dùng chung cho mọi người: một lần Nhạc kéo dài vài phút, việc của người khác trong lúc đó cũng làm gói tăng. Vì vậy độ tăng chỉ
+ *  được nhận khi không vượt cap × ước lượng est (cap theo độ chắc của bảng giá: Nhạc đã đo trên bản thật nên cap nhỏ); vượt thì ghi ước lượng.
+ *  Không đọc được gói hoặc gói chưa kịp tăng (độ tăng 0): ghi ước lượng (không bao giờ 0 khi có ước lượng). Số ghi vào mục cũng là số tính vào hạn mức
+ *  trong ngày của người gọi, nên việc của người khác không tính quá cap × est cho họ. cap = Infinity: giá chưa đo (Nhạc cho video) — nhận mọi độ tăng.
+ *  Mỗi lần độ tăng bị bỏ, và mọi lần đo khi opt.log (công cụ chưa đo giá trên bản thật), đều ghi log [speech-cost] để chủ máy chủ thấy giá thật trên bản chạy.
+ *  Cập nhật luôn số credit của gói (thanh credit trên đầu trang) theo số đọc được sau lần gọi. */
+export async function spentMeasured(r: Response, before: number | null, est = 0, opt: { tool?: string; cap?: number; sec?: number; log?: boolean } = {}): Promise<number> {
   if (headerCost(r) > 0) return spent(r, est);
   const main = fromMain(r);
   const after = before !== null && main ? await usageNow() : null;
   const delta = after !== null && before !== null ? after - before : 0;
-  const n = delta > 0 && (!(est > 0) || delta <= est * 4) ? delta : Math.max(0, Math.round(est));
+  const cap = opt.cap ?? 4, e = Math.max(0, Math.round(est));
+  const take = delta > 0 && (!(e > 0) || delta <= e * cap);
+  const n = take ? delta : e;
+  if (delta > 0 && (!take || opt.log)) console.warn(`[speech-cost] ${opt.tool ?? "?"}: gói tăng ${delta} credit, ước lượng ${e}${opt.sec ? ` (${Math.round(opt.sec * 10) / 10} giây)` : ""} → ${take ? "ghi số đo" : `bỏ số đo (quá ${cap}× ước lượng), ghi ước lượng`}`);
   const p = G().plan;
   if (p && main) p.credits.used = after !== null && after >= p.credits.used ? after : p.credits.used + n;
   const uid = spender.getStore();
   if (uid) addSpend(uid, n);
   return n;
+}
+/** Thời lượng ước chừng (giây) của tệp người dùng tải lên, để ước lượng credit của công cụ tính theo thời lượng (Tách stem): WAV đọc đúng từ header,
+ *  định dạng khác coi như MP3 128 kbps (tệp nén mạnh hơn thì ước lượng thấp hơn thật, tệp không nén thì cao hơn — chỉ dùng làm mốc và dự phòng). */
+export function audioSecOf(buf: Buffer): number {
+  if (buf.length >= 44 && buf.toString("latin1", 0, 4) === "RIFF" && buf.toString("latin1", 8, 12) === "WAVE") {
+    for (let o = 12; o + 8 <= buf.length;) {
+      const id = buf.toString("latin1", o, o + 4), size = buf.readUInt32LE(o + 4);
+      if (id === "fmt " && o + 20 <= buf.length) { const rate = buf.readUInt32LE(o + 16); if (rate > 0) { const data = findChunk(buf, "data"); return (data ?? buf.length - 44) / rate; } }
+      o += 8 + size + (size & 1);
+    }
+  }
+  return (buf.length * 8) / 128_000;
+}
+function findChunk(buf: Buffer, want: string): number | null {
+  for (let o = 12; o + 8 <= buf.length;) { const id = buf.toString("latin1", o, o + 4), size = buf.readUInt32LE(o + 4); if (id === want) return Math.min(size, buf.length - o - 8); o += 8 + size + (size & 1); }
+  return null;
 }
 
 // ---- hạn mức credit trong ngày ----
