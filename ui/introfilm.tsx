@@ -222,6 +222,9 @@ export function IntroFilm({ uid, onCovered, onReveal, onDone }: { uid: string; o
   useEffect(() => {
     if (phase !== "wait") return;
     const v = video.current!;
+    // Bản 720p đã lỗi từ lúc tải trước (tệp phim thiếu trên máy chủ: sự kiện "error" xảy ra trước khi gắn thẻ video): không có gì để chờ,
+    // rời phim vào thẳng app thay vì quay chấm chờ mãi.
+    if (v.error && !v.currentSrc.endsWith(SRC_1080)) { leave(); return; }
     let off = false, spin: Animation | null = null;
     const slow = setTimeout(() => {
       const r = seedOn ? seed.current?.querySelector(".mk-r") : null;

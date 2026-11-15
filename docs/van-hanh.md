@@ -138,6 +138,80 @@ Phút GitHub Actions (repo riêng tư, gói Free: 2.000 phút / tháng, mỗi jo
 
 Quy tắc bảo vệ nhánh `main` (cài đặt của GitHub, không nằm trong repo — chủ repo bật một lần): GitHub → repo → Settings → Rules → Rulesets → New branch ruleset → Target: `main` → bật "Require status checks to pass" → thêm check `verify` (tên job trong `deploy.yml`) → bật "Block force pushes" → Create. Repo riêng tư trên gói Free của GitHub không áp dụng được ruleset / branch protection (cần GitHub Pro hoặc Team); khi đó vẫn giữ được an toàn vì job `deploy` có `needs: verify`, chỉ deploy khi `verify` xanh. Lưu ý: commit được rsync thẳng từ máy Mac không đi qua CI, nên không được bảo vệ bởi quy tắc này.
 
+## Phim giới thiệu
+
+Từ Blueprint H3.9 hai tệp mp4 của phim giới thiệu (`ui/introfilm.tsx`) không còn nằm trong git. Trình duyệt vẫn tải ở cùng URL `/intro/synchro-intro-720.mp4` (3,9 MB, mặc định) và `/intro/synchro-intro.mp4` (19 MB, chỉ khi xem toàn màn hình). Trên máy chủ, nginx phục vụ các URL này thẳng từ thư mục riêng, nằm ngoài thư mục app:
+
+```
+/var/www/synchro-media/intro/          root:root 755
+├── synchro-intro-720.mp4              root:root 644
+├── synchro-intro.mp4                  root:root 644
+└── synchro-intro-poster.jpg           root:root 644   (bản sao của public/intro/synchro-intro-poster.jpg trong git)
+```
+
+Lý do: deploy chép mã bằng `rsync --delete` vào `/var/www/synchro` (`sync_code` trong `ops/server-build.sh`), và khi bản mới lỗi thì trả `public/` của lần deploy tốt gần nhất về bằng `rsync --delete`. `/var/www/synchro-media` không nằm trong hai đường đó và cũng không nằm trong `/var/www/synchro-incoming`, nên không lần deploy nào (một tiến trình hay xanh/lam, đạt hay trả lại bản trước) xóa hay ghi đè được phim. Ngoài ra, `ops/server-build.sh` loại `/public/intro/*.mp4` khỏi rsync (`EXCL`), và bước rsync vào staging trong `deploy.yml` cũng loại như vậy. Nhờ thế bản sao cũ trong `/var/www/synchro/public/intro/` vẫn còn nếu nginx chưa đổi, và Next vẫn phục vụ phim như trước.
+
+### Cài một lần (người vận hành, quyền root)
+
+1. Tạo thư mục và chép phim. Lấy từ bản đang chạy, hoặc chép từ máy Mac bằng `scp`:
+
+```bash
+install -d -o root -g root -m 755 /var/www/synchro-media/intro
+cp -p /var/www/synchro/public/intro/synchro-intro-720.mp4 /var/www/synchro/public/intro/synchro-intro.mp4 /var/www/synchro/public/intro/synchro-intro-poster.jpg /var/www/synchro-media/intro/
+chown root:root /var/www/synchro-media/intro/*; chmod 644 /var/www/synchro-media/intro/*
+```
+
+2. Thêm khối sau vào `server { … }` có `listen 443 ssl` trong `/etc/nginx/sites-enabled/synchro`, đặt trước `location /` (khối chuyển tiếp tới app). Nếu staging có site nginx riêng thì thêm cùng khối đó vào site staging, trỏ cùng thư mục.
+
+```nginx
+# Phim giới thiệu (Blueprint H3.9): tệp tĩnh ngoài thư mục app, deploy (rsync --delete vào /var/www/synchro) không đụng tới.
+# ^~: khớp tiền tố này thì nginx không xét các location dạng regex nữa (vd. một khối ~* \.(mp4|jpg)$ khác).
+location ^~ /intro/ {
+    alias /var/www/synchro-media/intro/;
+    # Giống next.config.ts (/intro/:path*): tên tệp không đổi khi nội dung đổi, nên giữ một tuần, sau đó vẫn dùng bản cũ trong lúc tải bản mới.
+    add_header Cache-Control "public, max-age=604800, stale-while-revalidate=2592000";
+}
+```
+
+Lưu ý:
+
+- Khối này bắt mọi URL dưới `/intro/`, kể cả ảnh chờ `synchro-intro-poster.jpg`. Vì vậy ảnh chờ phải có trong thư mục media (bước 1). Đổi ảnh chờ trong git thì chép lại vào đó.
+- Một `location` có `add_header` riêng thì không thừa hưởng `add_header` ở mức `server`. Nếu site đặt header ở mức `server` (vd. `Strict-Transport-Security`), chép các dòng `add_header` đó vào khối này. Header COOP/COEP mà Next đặt cho mọi đường dẫn chỉ có tác dụng với trang HTML, không cần cho tệp video.
+- nginx tự xử lý yêu cầu `Range` (206) cho video và đặt `Content-Type: video/mp4` theo `mime.types`. Không cần thêm gì.
+- Thiếu tệp thì nginx trả 404 và không chuyển sang app. Khi đó app tự bỏ phim, đi thẳng vào trang chủ.
+
+3. Kiểm tra rồi nạp lại, sau đó thử qua đúng tên miền:
+
+```bash
+nginx -t && systemctl reload nginx
+curl -sI https://synchro.net.nz/intro/synchro-intro-720.mp4 | grep -iE '^(HTTP|content-type|content-length|cache-control|accept-ranges|etag)'
+#   HTTP/2 200 · content-type: video/mp4 · content-length: 3913526 · cache-control: public, max-age=604800, stale-while-revalidate=2592000
+#   · accept-ranges: bytes · etag: "…-3bb736" (nginx: ETag dạng "<giờ>-<cỡ>" hệ 16, không có W/ như Next)
+curl -s -o /dev/null -w '%{http_code}\n' -H 'Range: bytes=0-99' https://synchro.net.nz/intro/synchro-intro.mp4   # 206
+curl -sI https://synchro.net.nz/intro/synchro-intro-poster.jpg | head -1                                          # 200
+```
+
+Sau khi nginx đã phục vụ từ `/var/www/synchro-media`, có thể để nguyên bản sao cũ trong `/var/www/synchro/public/intro/*.mp4`: không còn ai đọc, và deploy không xóa nó. Muốn gọn thì xóa hai tệp mp4 đó, nhưng không xóa ảnh chờ (nó nằm trong git).
+
+### Thay phim
+
+Dựng lại bằng dự án `synchro-intro-film` (Remotion, ngoài repo). Chép lên máy chủ vào thư mục tạm rồi `mv` vào chỗ. `mv` trong cùng ổ đĩa là nguyên tử, nên người đang tải không bao giờ nhận nửa tệp:
+
+```bash
+# Trên máy Mac
+scp synchro-intro-720.mp4 synchro-intro.mp4 root@<máy chủ>:/var/www/synchro-media/intro/.new/
+# Trên máy chủ
+cd /var/www/synchro-media/intro && chown root:root .new/*.mp4 && chmod 644 .new/*.mp4 && mv .new/*.mp4 ./ && rmdir .new
+```
+
+- Không cần deploy, không cần khởi động lại app hay nginx.
+- Tên tệp giữ nguyên nên trình duyệt đã xem có thể dùng bản cũ tới một tuần (`Cache-Control`). Muốn mọi người thấy bản mới ngay thì đặt tên mới (vd. `synchro-intro-720-v2.mp4`), rồi đổi `SRC_720` / `SRC_1080` trong `ui/introfilm.tsx`, `INTRO_FILES` trong `tools/fetch-intro.mjs` và tên tệp trong `tests/ui/introfilm.mjs`. Chép tệp mới lên máy chủ trước khi deploy mã trỏ tới nó.
+- Máy dev và CI không nhận phim mới qua git. `node tools/fetch-intro.mjs` chỉ lấy tệp còn thiếu (từ lịch sử git, không có thì tải từ `https://synchro.net.nz/intro/`). Muốn lấy bản mới thì xóa `public/intro/*.mp4` rồi chạy lại với `--no-git`.
+
+### Máy dev và CI
+
+`tools/fetch-intro.mjs` lấy tệp còn thiếu vào `public/intro/`. Nó lấy từ lịch sử git trước (commit cuối còn tệp), không có thì tải từ `https://synchro.net.nz/intro/…`. Tệp tải về phải đúng là mp4 (có hộp `ftyp`) và lớn hơn 100 KB thì mới được đặt vào chỗ. `npm run dev:mock` tự chạy bước này trước khi bật Next. `SYNCHRO_INTRO_FETCH=0` bỏ bước này; job `verify` của `deploy.yml` đặt biến này vì bộ API không cần phim. `ui-qa.yml` tải phim trước khi build. Thiếu phim thì `tests/ui/introfilm.mjs` in `BỎ QUA: <lý do>`, và tổng kết của `tools/qa.mjs` ghi bộ đó là ○ bỏ qua.
+
 ## Sao lưu
 
 `ops/backup.sh` tạo bản sao cục bộ nhất quán, 7 bản ngày và 4 bản tuần. `ops/setup.sh` tự thêm lịch nếu máy chưa có:

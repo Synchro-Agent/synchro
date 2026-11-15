@@ -75,6 +75,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NODE_OPTIONS: --max-old-space-size=4096
+          # Bộ API không cần phim giới thiệu: không tải 23 MB từ synchro.net.nz mỗi lần đẩy (tools/fetch-intro.mjs).
+          SYNCHRO_INTRO_FETCH: "0"
         run: |
           nohup npm run dev:mock:fast > mock.log 2>&1 &
           for i in $(seq 1 240); do grep -q "Synchro với API giả lập" mock.log && break; grep -q "Dựng bản chạy nhanh thất bại" mock.log && break; sleep 5; done
@@ -202,6 +204,7 @@ jobs:
           rsync -az --delete \
             -e "ssh -i ~/.ssh/id_deploy" \
             --exclude node_modules --exclude .next --exclude '.next-*' --exclude .mkvenv --exclude .cache --exclude .git --exclude '.env*' --exclude /data \
+            --exclude '/public/intro/*.mp4' \
             ./ ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/var/www/synchro-staging/
 
       - name: Build và khởi động lại staging

@@ -106,10 +106,13 @@ for (const [name, file, env] of suites) {
   const { code, out } = await run(file, env);
   const issues = /━━ Vấn đề \((\d+)\)/.exec(out);
   const ok = code === 0 && (!issues || issues[1] === "0");
-  res.push({ name, ok, s: Math.round((Date.now() - t) / 1000), note: issues ? `${issues[1]} vấn đề` : code === 2 && file === "tools/budget.mjs" ? "chưa đo: không có bản build hoặc bản build cũ hơn mã nguồn" : code ? `mã thoát ${code}` : "" });
+  // Bộ thiếu điều kiện để chạy (vd. tests/ui/introfilm.mjs khi máy giả lập không có tệp phim) in "BỎ QUA: <lý do>" và thoát 0: không tính lỗi, nhưng tổng kết ghi rõ.
+  const skip = code === 0 && /^BỎ QUA: (.*)$/m.exec(out)?.[1];
+  res.push({ name, ok, skip, s: Math.round((Date.now() - t) / 1000), note: issues ? `${issues[1]} vấn đề` : code === 2 && file === "tools/budget.mjs" ? "chưa đo: không có bản build hoặc bản build cũ hơn mã nguồn" : code ? `mã thoát ${code}` : "" });
 }
 console.log("\n████ Tổng kết QA");
-for (const r of res) console.log(`${r.ok ? "✓" : "✗"} ${r.name} (${r.s}s)${r.ok ? "" : ` — ${r.note}`}`);
+for (const r of res) console.log(`${r.skip ? "○" : r.ok ? "✓" : "✗"} ${r.name} (${r.s}s)${r.skip ? ` — bỏ qua: ${r.skip}` : r.ok ? "" : ` — ${r.note}`}`);
 const bad = res.filter((r) => !r.ok).length;
-console.log(bad ? `\n${bad} bộ chưa đạt: không deploy.` : "\nTất cả đạt.");
+const skipped = res.filter((r) => r.skip).length;
+console.log(bad ? `\n${bad} bộ chưa đạt: không deploy.` : skipped ? `\nTất cả đạt, ${skipped} bộ bỏ qua (xem lý do ở trên).` : "\nTất cả đạt.");
 process.exitCode = bad ? 1 : 0;

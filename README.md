@@ -11,15 +11,21 @@ Giao diện có tiếng Việt và tiếng Anh. Mã viết bằng Next.js 15 (ap
 
 ## Video giới thiệu
 
-Tài khoản mới xem một phim giới thiệu dài 43 giây (`ui/introfilm.tsx`). Phim nằm trong repo:
+Tài khoản mới xem một phim giới thiệu dài 43 giây (`ui/introfilm.tsx`). Trình duyệt luôn tải ở cùng các URL:
 
-| Tệp | Cỡ | Dùng khi |
-|---|---|---|
-| `public/intro/synchro-intro-720.mp4` | 3,9 MB | mặc định, màn rộng và màn hẹp |
-| `public/intro/synchro-intro.mp4` | 19 MB | chỉ khi xem toàn màn hình (1080p) |
-| `public/intro/synchro-intro-poster.jpg` | | ảnh chờ |
+| URL | Cỡ | Dùng khi | Nằm ở đâu |
+|---|---|---|---|
+| `/intro/synchro-intro-720.mp4` | 3,9 MB | mặc định, màn rộng và màn hẹp | ngoài git |
+| `/intro/synchro-intro.mp4` | 19 MB | chỉ khi xem toàn màn hình (1080p) | ngoài git |
+| `/intro/synchro-intro-poster.jpg` | 0,1 MB | ảnh chờ | trong git (`public/intro/`) |
 
-Phim dựng bằng Remotion từ dự án riêng `synchro-intro-film`, dự án này không nằm trong repo. `next.config.ts` cho trình duyệt giữ `/intro/*` trong bộ nhớ đệm một tuần. Hai tệp mp4 chưa được chuyển ra R2 hay release asset. Khi chuyển, chỉ cần đổi `SRC_720` / `SRC_1080` trong `ui/introfilm.tsx` và đường dẫn trong `tests/ui/introfilm.mjs`.
+Hai tệp mp4 không nằm trong git (Blueprint H3.9, `.gitignore`: `/public/intro/*.mp4`):
+
+- **Production**: nginx phục vụ `/intro/` từ `/var/www/synchro-media/intro/`, nằm ngoài thư mục app `/var/www/synchro`. Deploy (rsync `--delete` vào thư mục app) không đụng được tới phim. Cách cài khối `location` của nginx và cách thay phim nằm ở `docs/van-hanh.md`, mục "Phim giới thiệu".
+- **Máy dev, `dev:mock`, CI**: `node tools/fetch-intro.mjs` lấy tệp còn thiếu vào `public/intro/`. Nó lấy từ lịch sử git trước (commit cuối còn tệp, không cần mạng), không có thì tải từ `https://synchro.net.nz/intro/…` và kiểm tra đúng là mp4. `dev:mock` tự chạy bước này trước khi bật Next. `SYNCHRO_INTRO_FETCH=0` để bỏ qua; job `verify` của CI đặt biến này vì bộ API không cần phim. `ui-qa.yml` tải phim trước khi build.
+- Thiếu phim thì app tự bỏ qua phim và vào thẳng trang chủ. `tests/ui/introfilm.mjs` in `BỎ QUA: …` kèm lý do, và tổng kết của `tools/qa.mjs` ghi bộ đó là bỏ qua (○), không tính là lỗi.
+
+Phim dựng bằng Remotion từ dự án riêng `synchro-intro-film`, dự án này không nằm trong repo. `next.config.ts` (khi Next phục vụ, tức máy dev) và khối nginx (production) cùng cho trình duyệt giữ `/intro/*` trong bộ nhớ đệm một tuần. Tên tệp không đổi khi nội dung đổi, nên người đã xem có thể thấy bản cũ tới một tuần.
 
 ## Chạy ở máy
 

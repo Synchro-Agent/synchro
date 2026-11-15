@@ -12,6 +12,7 @@ import { startMockMcp } from "./mock-mcp.mjs";
 import { startMockWs } from "./mock-workspace.mjs";
 import { startMockGithub } from "./mock-github.mjs";
 import { writeExtension } from "../extension/build.mjs";
+import { fetchIntro } from "./fetch-intro.mjs";
 
 const PORT = Number(process.env.PORT ?? 3200), MOCK_PORT = Number(process.env.MOCK_PORT ?? 4010), MCP_PORT = Number(process.env.MCP_PORT ?? 4011), WS_PORT = Number(process.env.WS_PORT ?? 4012), GH_PORT = Number(process.env.GH_PORT ?? 4013);
 // Workspace giả lập cho Synchro Code (khóa chỉ dùng trên máy này).
@@ -45,6 +46,15 @@ const EXT_DIR = writeExtension(process.cwd(), B, path.join(DATA, "extension"));
 if (!fs.existsSync(path.join(DATA, "synchro.db"))) {
   const r = spawnSync(process.execPath, ["ops/create-admin.mjs", ADMIN.email], { env, input: `${ADMIN.password}\n${ADMIN.password}\n`, encoding: "utf8" });
   if (r.status !== 0) { console.error(r.stderr || r.stdout); process.exit(1); }
+}
+
+// Phim giới thiệu không nằm trong git (Blueprint H3.9): thiếu ở public/intro/ thì lấy một lần (lịch sử git, rồi tải từ synchro.net.nz) trước khi
+// bật Next (next start chỉ đọc danh sách tệp public lúc khởi động). Không lấy được thì vẫn chạy: app tự bỏ phim, tests/ui/introfilm.mjs bỏ qua.
+// SYNCHRO_INTRO_FETCH=0 (job verify của CI, chỉ chạy bộ API) hoặc SYNCHRO_MOCK_OFFLINE: không tải mạng.
+if (process.env.SYNCHRO_INTRO_FETCH !== "0") {
+  const { got, missing } = await fetchIntro({ net: !process.env.SYNCHRO_MOCK_OFFLINE });
+  for (const [f, src] of got) console.log(`Phim giới thiệu: đã lấy ${f} (${src}).`);
+  for (const [f, why] of missing) console.warn(`Phim giới thiệu: thiếu ${f} (${why}); phim sẽ không phát, node tools/fetch-intro.mjs để lấy lại.`);
 }
 
 // --fast (npm run dev:mock:fast): dựng bản production một lần rồi chạy `next start` — trang mở gần như tức thì, không biên dịch lại
