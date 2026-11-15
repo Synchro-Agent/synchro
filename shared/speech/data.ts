@@ -34,9 +34,6 @@ export const normTool = (k: string): SpeechTool => (TOOLS.some((t) => t.k === k)
 /** Công cụ hiện khi gói có ít nhất một tính năng của nó (trang chính luôn hiện). */
 export const toolOn = (p: Plan | null, k: SpeechTool) => { const t = TOOLS.find((x) => x.k === k); return !t || !t.feats.length || (!!p?.connected && t.feats.some((f) => p.features[f])); };
 
-/** Các cách tạo giọng, đúng thứ tự thẻ trên trang Tạo giọng: hướng dẫn “là gì” chỉ kể những cách gói đang có (thẻ nào ẩn thì câu không nhắc tới). */
-export const CREATE_WAYS: [Feat, string][] = [["ivc", "nhân bản nhanh từ vài phút ghi âm"], ["pvc", "nhân bản chuyên sâu giống thật nhất"], ["design", "thiết kế giọng từ một câu mô tả"], ["remix", "remix một giọng sẵn có"]];
-
 // ---- hướng dẫn nhanh cho người mới: tính năng là gì, 3 bước, mẹo, chi phí ----
 export type Guide = { what: string; steps: [string, string, string]; tips: string[]; cost: string };
 export const GUIDES: Record<Exclude<SpeechTool, "home">, Guide> = {

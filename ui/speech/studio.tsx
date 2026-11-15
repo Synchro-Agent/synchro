@@ -67,8 +67,8 @@ function Progress({ kind, it, now }: { kind: string; it: Item; now: number }) {
   const pct = exp > 0 ? Math.min(95, Math.round((sec / exp) * 100)) : 0;
   const label = kind === "dub" ? "Đang dịch và lồng tiếng" : "Đang tạo âm thanh";
   return (
-    <div className={`sp-progress ${exp > 0 ? "det" : "ind"}`} role="progressbar" aria-label={label} aria-valuemin={0} aria-valuemax={100} {...(exp > 0 ? { "aria-valuenow": pct } : {})}>
-      <i style={exp > 0 ? { width: `${pct}%` } : undefined} />
+    <div className={`sp-progress ${exp > 0 ? "det" : "ind"}`} role="progressbar" aria-label={label} aria-valuemin={0} aria-valuemax={100} {...(exp > 0 ? { "aria-valuenow": pct, style: { "--pct": `${pct}%` } as React.CSSProperties } : {})}>
+      <i />
       <span title={tr("Synchro tự cập nhật khi xong.")}>{label}{exp > 0 ? ` · ${pct}% · ${fmtDur(sec)} / ~${fmtDur(exp)}` : "… Synchro tự cập nhật khi xong."}</span>
     </div>
   );

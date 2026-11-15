@@ -1,4 +1,3 @@
-import { CREATE_WAYS } from "./data";
 import type { Feat } from "../types/speech";
 
 // Định dạng thuần của Speech (không React, không từ điển): ui/speech/client.ts gọi kèm ngôn ngữ giao diện; kiểm thử chạy thẳng không cần trình duyệt.
@@ -34,6 +33,9 @@ export function micErrorOf(name: string): string {
   if (name === "NoMic") return "Trình duyệt này không cho trang dùng micro. Hãy mở Synchro bằng Chrome, Edge, Safari hoặc Firefox bản mới (qua https).";
   return "Trình duyệt đang chặn micro. Bấm biểu tượng ổ khóa hoặc micro cạnh thanh địa chỉ, chọn Cho phép micro cho trang này, rồi thử lại.";
 }
+/** (Ở đây, không ở data.ts: client.ts nạp tệp này trong phần tải đầu, data.ts thì không.) Các cách tạo giọng, đúng thứ tự thẻ trên trang Tạo giọng: hướng dẫn “là gì” chỉ kể những cách gói đang có (thẻ nào ẩn thì câu không nhắc tới). */
+export const CREATE_WAYS: [Feat, string][] = [["ivc", "nhân bản nhanh từ vài phút ghi âm"], ["pvc", "nhân bản chuyên sâu giống thật nhất"], ["design", "thiết kế giọng từ một câu mô tả"], ["remix", "remix một giọng sẵn có"]];
+
 /** Đoạn “là gì” của hướng dẫn Tạo giọng chỉ kể những cách tạo giọng gói đang có, khớp số thẻ trên trang (gói Starter không có nhân bản chuyên sâu:
  *  ba cách, không phải bốn — G6.5). Chưa biết gói hoặc có đủ bốn cách: giữ câu gốc full. tr / tf: hàm dịch của nơi gọi. */
 export function createWhatOf(has: ((f: Feat) => boolean) | null, full: string, tr: (s: string) => string, tf: (k: string, v: Record<string, string | number>) => string) {
