@@ -120,7 +120,23 @@ Bỏ hẳn xanh/lam (về một tiến trình): trả site nginx từ bản sao 
 
 ### Deploy từ CI
 
-`.github/workflows/deploy.yml` rsync mã vào `/var/www/synchro-incoming/` (không vào thẳng thư mục app), kèm `.synchro-artifact/` (bản build `.next-ci` của bước kiểm tra, `meta` ghi commit, băm package-lock, băm biến `NEXT_PUBLIC_`, băm tệp nén) và `.synchro-source-sha`, rồi chạy `SYNCHRO_INCOMING=/var/www/synchro-incoming bash /var/www/synchro-incoming/ops/server-build.sh /var/www/synchro synchro pip`. `public`, `db`, `catalog`, `scripts`, `workspace`… chỉ được chép vào thư mục app ngay trước khi bật bản mới. Deploy cách lần đạt trước (`/var/lib/synchro-ops/last-deploy-synchro`) dưới 15 phút thì chờ; lần đẩy mới trong lúc chờ thay lần đang chờ, nên các lần đẩy liền nhau gộp thành một deploy. Deploy từ máy Mac (rsync thẳng vào thư mục app + `/root/deploy-<sha>.sh`) vẫn chạy như trước; khi rsync nhớ loại trừ `'.next-*'` và `node_modules` (nay là liên kết).
+`.github/workflows/deploy.yml` rsync mã vào `/var/www/synchro-incoming/` (không vào thẳng thư mục app), kèm `.synchro-artifact/` (bản build `.next-ci` của bước kiểm tra, `meta` ghi commit, băm package-lock, băm biến `NEXT_PUBLIC_`, băm tệp nén) và `.synchro-source-sha`, rồi chạy `SYNCHRO_INCOMING=/var/www/synchro-incoming bash /var/www/synchro-incoming/ops/server-build.sh /var/www/synchro synchro pip`. `public`, `db`, `catalog`, `scripts`, `workspace`… chỉ được chép vào thư mục app ngay trước khi bật bản mới. Deploy cách lần đạt trước (`/var/lib/synchro-ops/last-deploy-synchro`) dưới 15 phút thì chờ; lần đẩy mới trong lúc chờ thay lần đang chờ, nên các lần đẩy liền nhau gộp thành một deploy. Deploy từ máy Mac (rsync thẳng vào thư mục app + `/root/deploy-<sha>.sh`) vẫn chạy được, nhưng phải dùng đúng danh sách loại trừ ở mục dưới.
+
+### Deploy từ máy Mac
+
+Đường này không qua `/var/www/synchro-incoming`: rsync chép thẳng vào thư mục app, nên `SRC` = `APP`, `sync_code` của `ops/server-build.sh` không chạy và `EXCL` của nó không có tác dụng. Mọi thứ phải loại trừ nằm ở lệnh rsync trên máy Mac. Danh sách dưới đây giống hệt `EXCL` (kể cả `/public/intro/*.mp4`: thiếu nó thì `--delete` xóa phim giới thiệu trong `public/intro/` vì phim không còn trong git, xem mục Phim giới thiệu).
+
+```bash
+# Trên máy Mac, trong bản sao repo. Viết thẳng từng --exclude, không gom vào biến shell:
+# zsh không tách từ, rsync nhận một mẫu hỏng và --delete xóa /var/www/synchro/data.
+D=$(mktemp -d) && git archive <sha> | tar -x -C "$D"
+rsync -a --delete --dry-run --itemize-changes \
+  --exclude '/public/intro/*.mp4' --exclude /data --exclude /.next --exclude '/.next-*' --exclude /node_modules --exclude /.git \
+  --exclude /workspace/data --exclude /.mkvenv --exclude /.cache --exclude '/.env*' --exclude /.synchro-artifact --exclude '/.node_modules.new.*' \
+  "$D/" root@<máy chủ>:/var/www/synchro/ | grep '^\*deleting'
+# Đọc danh sách xóa (không được có data/, node_modules, .next-*, public/intro/*.mp4). Ổn thì chạy lại đúng lệnh rsync đó,
+# bỏ --dry-run --itemize-changes và | grep, rồi chạy /root/deploy-<sha>.sh trên máy chủ như trước.
+```
 
 ### Kiểm thử trong CI (Blueprint H2)
 
@@ -149,17 +165,24 @@ Từ Blueprint H3.9 hai tệp mp4 của phim giới thiệu (`ui/introfilm.tsx`)
 └── synchro-intro-poster.jpg           root:root 644   (bản sao của public/intro/synchro-intro-poster.jpg trong git)
 ```
 
-Lý do: deploy chép mã bằng `rsync --delete` vào `/var/www/synchro` (`sync_code` trong `ops/server-build.sh`), và khi bản mới lỗi thì trả `public/` của lần deploy tốt gần nhất về bằng `rsync --delete`. `/var/www/synchro-media` không nằm trong hai đường đó và cũng không nằm trong `/var/www/synchro-incoming`, nên không lần deploy nào (một tiến trình hay xanh/lam, đạt hay trả lại bản trước) xóa hay ghi đè được phim. Ngoài ra, `ops/server-build.sh` loại `/public/intro/*.mp4` khỏi rsync (`EXCL`), và bước rsync vào staging trong `deploy.yml` cũng loại như vậy. Nhờ thế bản sao cũ trong `/var/www/synchro/public/intro/` vẫn còn nếu nginx chưa đổi, và Next vẫn phục vụ phim như trước.
+Lý do: deploy chép mã bằng `rsync --delete` vào `/var/www/synchro` (`sync_code` trong `ops/server-build.sh`), và khi bản mới lỗi thì trả `public/` của lần deploy tốt gần nhất về bằng `rsync --delete`. `/var/www/synchro-media` không nằm trong hai đường đó và cũng không nằm trong `/var/www/synchro-incoming`, nên không lần deploy nào (một tiến trình hay xanh/lam, đạt hay trả lại bản trước) xóa hay ghi đè được phim. Ngoài ra, `ops/server-build.sh` loại `/public/intro/*.mp4` khỏi rsync (`EXCL`), và bước rsync vào staging trong `deploy.yml` cũng loại như vậy. Nhờ thế bản sao cũ trong `/var/www/synchro/public/intro/` vẫn còn nếu nginx chưa đổi, và Next vẫn phục vụ phim như trước. Deploy từ máy Mac chỉ giữ được bản sao đó khi lệnh rsync có `--exclude '/public/intro/*.mp4'` (mục Deploy từ máy Mac).
+
+**Làm phần "Cài một lần" dưới đây trước lần deploy đầu tiên của commit H3.9 (commit bỏ phim khỏi git), dù deploy bằng đường nào (CI, máy Mac, tay).** Một lần rsync `--delete` với danh sách loại trừ cũ (chưa có `/public/intro/*.mp4`) xóa phim khỏi `/var/www/synchro/public/intro/`. Nếu nginx chưa trỏ sang `/var/www/synchro-media`, mọi người dùng mới nhận 404 và app bỏ qua phim; bản sao trong thư mục app khi đó cũng mất, nên bước 1 phải chép từ máy Mac.
 
 ### Cài một lần (người vận hành, quyền root)
 
-1. Tạo thư mục và chép phim. Lấy từ bản đang chạy, hoặc chép từ máy Mac bằng `scp`:
+1. Tạo thư mục và chép phim từ máy Mac. Nguồn là `public/intro/` của bản sao repo trên máy Mac (thiếu thì chạy `node tools/fetch-intro.mjs` trước để lấy lại từ lịch sử git):
 
 ```bash
-install -d -o root -g root -m 755 /var/www/synchro-media/intro
-cp -p /var/www/synchro/public/intro/synchro-intro-720.mp4 /var/www/synchro/public/intro/synchro-intro.mp4 /var/www/synchro/public/intro/synchro-intro-poster.jpg /var/www/synchro-media/intro/
+# Trên máy Mac, trong bản sao repo
+ssh root@<máy chủ> install -d -o root -g root -m 755 /var/www/synchro-media/intro
+scp -p public/intro/synchro-intro-720.mp4 public/intro/synchro-intro.mp4 public/intro/synchro-intro-poster.jpg root@<máy chủ>:/var/www/synchro-media/intro/
+# Trên máy chủ
 chown root:root /var/www/synchro-media/intro/*; chmod 644 /var/www/synchro-media/intro/*
+stat -c '%s %n' /var/www/synchro-media/intro/*.mp4   # 3913526 …-720.mp4 · 19025144 …intro.mp4
 ```
+
+   Chỉ khi không có máy Mac: chép từ bản đang chạy, nếu deploy chưa xóa nó (`ls -l /var/www/synchro/public/intro/`): `cp -p /var/www/synchro/public/intro/{synchro-intro-720.mp4,synchro-intro.mp4,synchro-intro-poster.jpg} /var/www/synchro-media/intro/`.
 
 2. Thêm khối sau vào `server { … }` có `listen 443 ssl` trong `/etc/nginx/sites-enabled/synchro`, đặt trước `location /` (khối chuyển tiếp tới app). Nếu staging có site nginx riêng thì thêm cùng khối đó vào site staging, trỏ cùng thư mục.
 
@@ -195,13 +218,14 @@ Sau khi nginx đã phục vụ từ `/var/www/synchro-media`, có thể để ng
 
 ### Thay phim
 
-Dựng lại bằng dự án `synchro-intro-film` (Remotion, ngoài repo). Chép lên máy chủ vào thư mục tạm rồi `mv` vào chỗ. `mv` trong cùng ổ đĩa là nguyên tử, nên người đang tải không bao giờ nhận nửa tệp:
+Dựng lại bằng dự án `synchro-intro-film` (Remotion, ngoài repo). Chép lên máy chủ vào thư mục tạm `/var/www/synchro-media/.new-intro` rồi `mv` vào chỗ. Thư mục tạm nằm ngoài `/intro/` mà nginx phục vụ, nên tệp đang chép dở không ai tải được; nó cùng ổ đĩa với `intro/`, nên `mv` là đổi tên nguyên tử và người đang tải không bao giờ nhận nửa tệp. `scp` nhiều tệp cần thư mục đích có sẵn, nên tạo nó trước:
 
 ```bash
 # Trên máy Mac
-scp synchro-intro-720.mp4 synchro-intro.mp4 root@<máy chủ>:/var/www/synchro-media/intro/.new/
+ssh root@<máy chủ> install -d -o root -g root -m 755 /var/www/synchro-media/.new-intro
+scp synchro-intro-720.mp4 synchro-intro.mp4 root@<máy chủ>:/var/www/synchro-media/.new-intro/
 # Trên máy chủ
-cd /var/www/synchro-media/intro && chown root:root .new/*.mp4 && chmod 644 .new/*.mp4 && mv .new/*.mp4 ./ && rmdir .new
+cd /var/www/synchro-media && chown root:root .new-intro/*.mp4 && chmod 644 .new-intro/*.mp4 && mv .new-intro/*.mp4 intro/ && rmdir .new-intro
 ```
 
 - Không cần deploy, không cần khởi động lại app hay nginx.
@@ -211,6 +235,8 @@ cd /var/www/synchro-media/intro && chown root:root .new/*.mp4 && chmod 644 .new/
 ### Máy dev và CI
 
 `tools/fetch-intro.mjs` lấy tệp còn thiếu vào `public/intro/`. Nó lấy từ lịch sử git trước (commit cuối còn tệp), không có thì tải từ `https://synchro.net.nz/intro/…`. Tệp tải về phải đúng là mp4 (có hộp `ftyp`) và lớn hơn 100 KB thì mới được đặt vào chỗ. `npm run dev:mock` tự chạy bước này trước khi bật Next. `SYNCHRO_INTRO_FETCH=0` bỏ bước này; job `verify` của `deploy.yml` đặt biến này vì bộ API không cần phim. `ui-qa.yml` tải phim trước khi build. Thiếu phim thì `tests/ui/introfilm.mjs` in `BỎ QUA: <lý do>`, và tổng kết của `tools/qa.mjs` ghi bộ đó là ○ bỏ qua.
+
+Merge (hoặc checkout, pull) commit H3.9 vào một bản sao từng có phim trong git thì git xóa hai tệp mp4 khỏi đĩa, vì trước đó chúng được git theo dõi. Bản sao chính trên máy Mac cũng vậy: sau merge, `npm run dev:mock` và mọi lần rsync từ thư mục đó không còn phim. Cách giữ: chép `public/intro/*.mp4` ra ngoài trước `git merge` rồi chép lại sau, hoặc chạy `node tools/fetch-intro.mjs` ngay sau merge (lấy lại từ lịch sử git, không cần mạng). Sau đó `git status` không báo gì vì `.gitignore` có `/public/intro/*.mp4`.
 
 ## Sao lưu
 

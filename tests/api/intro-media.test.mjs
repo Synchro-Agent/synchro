@@ -2,6 +2,7 @@
 // 1) hai tệp mp4 không còn trong git, .gitignore chặn thêm lại, ảnh chờ vẫn trong git; URL của ui/introfilm.tsx không đổi;
 // 2) bộ nhớ đệm một tuần giống nhau ở next.config.ts và khối nginx trong docs/van-hanh.md (alias tới /var/www/synchro-media/intro/, ngoài thư mục app);
 // 3) rsync --delete của deploy (EXCL trong ops/server-build.sh) không xóa bản sao cũ public/intro/*.mp4 trong thư mục app, vẫn xóa tệp cũ khác;
+//    deploy từ máy Mac (git archive + rsync thẳng vào app) dùng đúng danh sách đó; cài media trước deploy đầu; thay phim qua thư mục tạm;
 // 4) tools/fetch-intro.mjs: tải tệp thiếu, từ chối thứ không phải mp4 (không để lại tệp dở), không ghi đè tệp đã có, lấy được từ lịch sử git;
 // 5) tests/ui/introfilm.mjs bỏ qua kèm lý do khi máy giả lập không có phim, tools/qa.mjs ghi bộ đó là bỏ qua.
 import { spawnSync } from "node:child_process";
@@ -64,6 +65,55 @@ try {
     ok(INTRO_FILES.every((f) => fs.existsSync(path.join(a, "public", "intro", f))), "bản sao cũ của phim trong thư mục app còn nguyên sau rsync --delete");
     ok(!fs.existsSync(path.join(a, "public", "stale.txt")) && src(path.join(a, "public", "intro", "synchro-intro-poster.jpg")) === "new-poster-v2", "tệp cũ khác vẫn bị xóa, ảnh chờ mới vẫn được chép");
   } else console.log("  (không có rsync: bỏ qua bước chạy thử)");
+
+  console.log("3b. Deploy từ máy Mac (git archive + rsync --delete thẳng vào thư mục app, SRC = APP nên EXCL không chạy)");
+  const macSec = doc.slice(doc.indexOf("### Deploy từ máy Mac"), doc.indexOf("### Kiểm thử trong CI"));
+  const macBlock = /```bash\n([\s\S]*?)```/.exec(macSec)?.[1] ?? "";
+  const macCmd = /^rsync -a --delete(?:.*\\\n)*.*$/m.exec(macBlock)?.[0]?.replace(/\\\n\s*/g, " ") ?? "";
+  ok(/git archive <sha>/.test(macBlock) && /root@<máy chủ>:\/var\/www\/synchro\//.test(macCmd), "docs/van-hanh.md: mục Deploy từ máy Mac có lệnh git archive + rsync vào /var/www/synchro/", macBlock);
+  ok(macCmd.includes("--exclude '/public/intro/*.mp4'"), "lệnh rsync của máy Mac viết thẳng --exclude '/public/intro/*.mp4'", macCmd);
+  ok(!/--exclude[= ]"?\$/.test(macCmd) && !/rsync[^\n]*\$(?!D\/)[A-Z]/.test(macCmd), "không gom loại trừ vào biến shell (zsh không tách từ)", macCmd);
+  const macExcl = [...macCmd.matchAll(/--exclude ('([^']*)'|(\S+))/g)].map((m) => m[2] ?? m[3]);
+  const srvExcl = excl.filter((x) => x !== "--exclude");
+  ok(srvExcl.length > 0 && srvExcl.every((x) => macExcl.includes(x)) && macExcl.every((x) => srvExcl.includes(x)), "danh sách loại trừ của máy Mac giống hệt EXCL của server-build.sh", { macExcl, srvExcl });
+  ok(/^`\.github\/workflows\/deploy\.yml` rsync[^\n]*Deploy từ máy Mac[^\n]*đúng danh sách loại trừ ở mục dưới\.$/m.test(doc) && !doc.includes("vẫn chạy như trước; khi rsync nhớ loại trừ"), "mục Deploy từ CI trỏ tới danh sách loại trừ mới, bỏ câu cũ chỉ nhắc .next-* và node_modules");
+  if (spawnSync("rsync", ["--version"]).status === 0) {
+    const run = (args) => {
+      const s = path.join(tmp, "mac-src"), a = path.join(tmp, "mac-app");
+      fs.rmSync(s, { recursive: true, force: true }); fs.rmSync(a, { recursive: true, force: true });
+      fs.mkdirSync(s, { recursive: true }); fs.mkdirSync(path.join(a, "public", "intro"), { recursive: true }); fs.mkdirSync(path.join(a, "data"), { recursive: true });
+      const ar = spawnSync("sh", ["-c", 'git archive HEAD public | tar -x -C "$1"', "sh", s], { encoding: "utf8" });
+      for (const f of INTRO_FILES) fs.writeFileSync(path.join(a, "public", "intro", f), "film");
+      fs.writeFileSync(path.join(a, "public", "intro", "synchro-intro-poster.jpg"), "old-poster");
+      fs.writeFileSync(path.join(a, "data", "app.db"), "db");
+      fs.writeFileSync(path.join(a, "public", "stale.txt"), "x");
+      const r = spawnSync("rsync", ["-a", "--delete", ...args, `${s}/`, `${a}/`], { encoding: "utf8" });
+      return { ar, r, a, film: INTRO_FILES.filter((f) => fs.existsSync(path.join(a, "public", "intro", f))) };
+    };
+    const m = run(macExcl.flatMap((x) => ["--exclude", x]));
+    ok(m.ar.status === 0 && m.r.status === 0, "git archive HEAD + rsync -a --delete với loại trừ của docs chạy được", m.ar.stderr + m.r.stderr);
+    ok(m.film.length === 2, "phim trong public/intro/ của thư mục app còn nguyên", m.film);
+    ok(fs.existsSync(path.join(m.a, "data", "app.db")) && !fs.existsSync(path.join(m.a, "public", "stale.txt")) && src(path.join(m.a, "public", "intro", "synchro-intro-poster.jpg")) !== "old-poster", "data/ còn, tệp cũ khác bị xóa, ảnh chờ lấy từ git");
+    const old = run(macExcl.filter((x) => x !== "/public/intro/*.mp4").flatMap((x) => ["--exclude", x]));
+    ok(old.r.status === 0 && old.film.length === 0, "đối chứng: danh sách loại trừ cũ (thiếu /public/intro/*.mp4) xóa phim — đúng lỗi mà loại trừ mới chặn", old.film);
+  }
+
+  console.log("3c. Thứ tự cài đặt và thay phim");
+  const filmSec = doc.slice(doc.indexOf("## Phim giới thiệu"), doc.indexOf("## Sao lưu"));
+  const setupAt = filmSec.indexOf("### Cài một lần");
+  const warn = filmSec.indexOf("trước lần deploy đầu tiên của commit H3.9");
+  ok(warn > 0 && warn < setupAt && /dù deploy bằng đường nào \(CI, máy Mac, tay\)/.test(filmSec), "nói rõ: cài thư mục media + nginx trước lần deploy đầu tiên của commit này, mọi đường deploy");
+  const step1 = filmSec.slice(setupAt, filmSec.indexOf("2. Thêm khối"));
+  const scpAt = step1.indexOf("scp -p public/intro/synchro-intro-720.mp4"), cpAt = step1.indexOf("cp -p /var/www/synchro/public/intro/");
+  ok(scpAt > 0 && step1.indexOf("ssh root@<máy chủ> install -d") < scpAt && (cpAt < 0 || cpAt > scpAt), "bước 1: nguồn chính là scp từ máy Mac (tạo thư mục trước), chép từ thư mục app chỉ là dự phòng", step1);
+  ok(/synchro-intro-poster\.jpg root@<máy chủ>:\/var\/www\/synchro-media\/intro\//.test(step1), "bước 1 chép cả ảnh chờ vào thư mục media");
+  const swap = /### Thay phim[\s\S]*?```bash\n([\s\S]*?)```/.exec(filmSec)?.[1] ?? "";
+  const stage = /scp synchro-intro-720\.mp4 synchro-intro\.mp4 root@<máy chủ>:(\S+)\/$/m.exec(swap)?.[1] ?? "";
+  ok(stage && swap.indexOf(`install -d -o root -g root -m 755 ${stage}`) >= 0 && swap.indexOf(`install -d -o root -g root -m 755 ${stage}`) < swap.indexOf("scp "), "Thay phim: tạo thư mục tạm trước khi scp nhiều tệp vào đó", swap);
+  ok(stage.startsWith("/var/www/synchro-media/") && !stage.startsWith("/var/www/synchro-media/intro/") && path.posix.dirname(stage) === "/var/www/synchro-media", "thư mục tạm ngoài /intro/ mà nginx phục vụ, cùng ổ đĩa (mv nguyên tử)", stage);
+  const stageName = path.posix.basename(stage);
+  ok(swap.includes(`mv ${stageName}/*.mp4 intro/ && rmdir ${stageName}`) && swap.includes("cd /var/www/synchro-media &&"), "mv từ thư mục tạm vào intro/ rồi xóa thư mục tạm", swap);
+  ok(/Merge \(hoặc checkout, pull\) commit H3\.9[^\n]*git xóa hai tệp mp4 khỏi đĩa[^\n]*node tools\/fetch-intro\.mjs` ngay sau merge/.test(filmSec), "ghi chú merge: git xóa phim khỏi đĩa, chép ra trước hoặc chạy fetch-intro ngay sau");
 
   console.log("4. tools/fetch-intro.mjs");
   const mp4 = Buffer.concat([Buffer.from([0, 0, 0, 0x20]), Buffer.from("ftypisom"), Buffer.alloc(200_000, 7)]);
