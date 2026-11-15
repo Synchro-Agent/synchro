@@ -15,16 +15,16 @@ const reach = (roots) => { const out = new Set(roots), q = [...roots]; while (q.
 const first = reach(["app/page.tsx", "app/layout.tsx"]);
 
 const SHEETS = [
-  { css: "app/speech/speech.css", entries: ["ui/speech/view.tsx", "ui/voicemode.tsx"], prefix: /^(sp|vm)(-|$)/ },
-  { css: "app/codeview.css", entries: ["ui/codeview.tsx", "ui/browserhub.tsx"], prefix: /^(cvg?|bp|ctxp|ext)(-|$)/ },
-  { css: "app/brainview.css", entries: ["ui/brainui.tsx"], prefix: /^(bw|bn)(-|$)/ },
-  { css: "app/download/download.css", entries: ["ui/download/view.tsx"], prefix: /^dl(-|$)/ },
+  { css: "ui/styles/speech.css", entries: ["ui/speech/view.tsx", "ui/voicemode.tsx"], prefix: /^(sp|vm)(-|$)/ },
+  { css: "ui/styles/codeview.css", entries: ["ui/codeview.tsx", "ui/browserhub.tsx"], prefix: /^(cvg?|bp|ctxp|ext)(-|$)/ },
+  { css: "ui/styles/brainview.css", entries: ["ui/brainui.tsx"], prefix: /^(bw|bn)(-|$)/ },
+  { css: "ui/styles/download.css", entries: ["ui/download/view.tsx"], prefix: /^dl(-|$)/ },
   // B3.4: Dự án, Cài đặt (Quản trị, Providers, Khả năng, Connectors, trang Mức dùng), Kho kỹ năng. Lớp cùng tiền tố mà trang chat vẫn dùng
   // (hàng dự án ở thanh bên, vòng Mức dùng, bộ chia trang, liên kết connector ở menu +) không thuộc tệp tách, vẫn ở tệp chung.
-  { css: "app/projects.css", entries: ["ui/projects.tsx"], prefix: /^pj-(?!(row|tg|ic|kids)$)/ },
-  { css: "app/settings.css", entries: ["ui/settings.tsx", "ui/adminui.tsx", "ui/healthui.tsx", "ui/backupui.tsx", "ui/botadmin.tsx", "ui/usageui.tsx", "ui/latencyui.tsx", "ui/cliupdateui.tsx", "ui/modelregui.tsx", "ui/providersui.tsx", "ui/connectorsui.tsx"],
+  { css: "ui/styles/projects.css", entries: ["ui/projects.tsx"], prefix: /^pj-(?!(row|tg|ic|kids)$)/ },
+  { css: "ui/styles/settings.css", entries: ["ui/settings.tsx", "ui/adminui.tsx", "ui/healthui.tsx", "ui/backupui.tsx", "ui/botadmin.tsx", "ui/usageui.tsx", "ui/latencyui.tsx", "ui/cliupdateui.tsx", "ui/modelregui.tsx", "ui/providersui.tsx", "ui/connectorsui.tsx"],
     prefix: /^(perm-|cap-(?!ext$)|adm-(?!(pager|pg|pg-n|pg-b)$)|pv-(?!open$)|cn-(?!(logo|mono|link)$)|us-(?!(note|wrap|ring|ring-n|pop|h|row|row-t|bar|empty|more|v|v-h|tag|money|ctx|sub)$))/ },
-  { css: "app/skills.css", entries: ["ui/pluginsui.tsx", "ui/skillsui.tsx", "ui/skillscanui.tsx", "ui/claudedirui.tsx", "ui/studio.tsx", "ui/appsui.tsx", "ui/tasksui.tsx"], prefix: /^pl-/ },
+  { css: "ui/styles/skills.css", entries: ["ui/pluginsui.tsx", "ui/skillsui.tsx", "ui/skillscanui.tsx", "ui/claudedirui.tsx", "ui/studio.tsx", "ui/appsui.tsx", "ui/tasksui.tsx"], prefix: /^pl-/ },
 ];
 const classes = (css) => new Set([...css.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\{[^{}]*\}/g, "{}").matchAll(/\.(-?[A-Za-z_][\w-]*)/g)].map((m) => m[1]));
 // Lớp xuất hiện như một chữ riêng trong chuỗi của tệp (kể cả chuỗi ghép `sp-${x}`).

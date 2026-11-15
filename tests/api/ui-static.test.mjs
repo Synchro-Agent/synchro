@@ -61,7 +61,7 @@ ok(/className="overlay ft-lightbox"/.test(lb) && /role="dialog" aria-modal="true
 
 // U12: trang Speech không còn trống 2 giây chờ gói ElevenLabs — bố cục và khối giả hiện ngay, gói chỉ điền phần credit / công cụ.
 {
-  const v = read("ui/speech/view.tsx"), p = read("ui/speech/parts.tsx"), css = read("app/speech/speech.css");
+  const v = read("ui/speech/view.tsx"), p = read("ui/speech/parts.tsx"), css = read("ui/styles/speech.css");
   ok(/const planFailed = usePlanFailed\(\);\s*const waiting = !plan && !planFailed;/.test(v), "Speech: biết lúc gói còn đang đọc (hook gọi vô điều kiện)");
   ok(/if \(!plan && !failed\) return \(\s*<div className="sp-home" aria-busy="true">/.test(v) && /\{recentList\}\s*<\/div>\s*\);\s*if \(!plan \|\| !plan\.connected\)/.test(v), "Speech: trang chính dựng ngay ô soạn, thẻ công cụ, mục Gần đây trong lúc chờ gói");
   ok(/waiting && <span className="sk-blk sp-credit-wait"/.test(v) && /waiting && \[[\d, ]+\]\.map\(\(w, i\) => <span key=\{i\} className="sk-blk sp-tab-wait"/.test(v), "Speech: chỗ credit và thanh công cụ có khối giả");
@@ -80,7 +80,7 @@ ok(/className="overlay ft-lightbox"/.test(lb) && /role="dialog" aria-modal="true
 
 // U14: trợ năng — vùng bấm 44px trên màn cảm ứng, chữ tối thiểu 12px, nút đóng có tên, hộp xác nhận (Đăng xuất?) có tên.
 {
-  const cssFiles = ["app/globals.css", "app/synchro-ds.css", "app/features.css", "app/codeview.css", "app/brainview.css", "app/glass.css", "app/speech/speech.css", "app/download/download.css"];
+  const cssFiles = ["app/globals.css", "app/synchro-ds.css", "app/features.css", "ui/styles/codeview.css", "ui/styles/brainview.css", "app/glass.css", "ui/styles/speech.css", "ui/styles/download.css"];
   // Ngoại lệ: chỉ hình minh họa thu nhỏ thuần túy — trang tải về (.dl-win / .dl-phone) và ảnh thu nhỏ tài liệu Markdown (.art-thumb-doc, inert + aria-hidden) —
   // không phải chữ để đọc. Nhãn loại tệp trong ô 28–30px (.out-badge.sm, .art-head .out-badge) LÀ chữ để đọc nên không còn được miễn, phải ≥12px.
   const small = [];

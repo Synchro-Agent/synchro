@@ -2,7 +2,7 @@
 // Trình duyệt cạnh khung chat và trang Trình duyệt: chọn nơi Synchro làm việc khi bạn nhờ — trình duyệt của Synchro (BrowserPane, xem
 // trực tiếp ngay đây) hoặc Chrome / Edge / Brave của bạn qua tiện ích Synchro (extension/): cài và ghép nối, trạng thái kết nối,
 // Synchro đang làm gì trên Chrome của bạn, nút Dừng. Phần cài đặt + ghép nối (ExtSetup) dùng chung với Cài đặt → Khả năng.
-import "../app/codeview.css";
+import "./styles/codeview.css";
 import { useCallback, useEffect, useRef, useState } from "react";
 import * as I from "./icons";
 import { BrowserPane } from "./codepanes";

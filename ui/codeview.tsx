@@ -1,6 +1,6 @@
 "use client";
 
-import "../app/codeview.css";
+import "./styles/codeview.css";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { MODES, PRESETS } from "./codeconst";
 export { MODES, PRESETS };

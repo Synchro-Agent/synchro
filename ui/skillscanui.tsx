@@ -1,5 +1,5 @@
 "use client";
-import "../app/skills.css";
+import "./styles/skills.css";
 // Kho kỹ năng → "Quét skill rác" (máy chủ: server/skillscan.ts). Nút ở thanh công cụ mở hộp thoại: chọn model (mặc định Synchro tự chọn)
 // rồi quét; model đọc mọi skill ở nền, kết quả hiện dần theo tab Rác / Không có tác dụng / Ổn (kèm ngành nghề), mỗi skill một lý do.
 // Đóng hộp thoại hay chuyển trang thì việc quét vẫn chạy (nút có vòng xoay), quét xong khi còn ở Kho kỹ năng thì báo một dòng.

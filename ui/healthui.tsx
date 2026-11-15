@@ -1,5 +1,5 @@
 "use client";
-import "../app/settings.css";
+import "./styles/settings.css";
 
 // Cài đặt → Sức khỏe hệ thống: quản trị viên thấy ngay máy chủ có ổn không mà không phải vào SSH. Không có nội dung chat. Số liệu từ /api/admin/health (server/ops.ts).
 import { useCallback, useEffect, useState } from "react";

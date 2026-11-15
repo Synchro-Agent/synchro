@@ -7,7 +7,7 @@
 import fs from "node:fs"; import { execSync } from "node:child_process";
 const W = process.cwd(); const T = (await import("node:os")).tmpdir();
 const BASE = process.argv[2]; const KEEP = process.argv[3]; const FROM = process.argv[4] ?? "app/globals.css";
-const files = ["app/globals.css", "app/synchro-ds.css", "app/glass.css", "app/features.css", "app/speech/speech.css", "app/codeview.css", "app/brainview.css", "app/download/download.css", "app/projects.css", "app/settings.css", "app/skills.css"];
+const files = ["app/globals.css", "app/synchro-ds.css", "app/glass.css", "app/features.css", "ui/styles/speech.css", "ui/styles/codeview.css", "ui/styles/brainview.css", "ui/styles/download.css", "ui/styles/projects.css", "ui/styles/settings.css", "ui/styles/skills.css"];
 const M = await import(W + "/scripts/css-move.mjs");
 const { splitList } = await import(W + "/scripts/css-cascade.mjs");
 const C = await import(W + "/scripts/css-cascade.mjs");

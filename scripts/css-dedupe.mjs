@@ -17,7 +17,7 @@ import { splitList, specificity, atoms } from "./css-cascade.mjs";
 
 const postcss = createRequire(import.meta.url)("postcss");
 export const FIRST = ["app/globals.css", "app/glass.css", "app/synchro-ds.css", "app/features.css"];
-export const LAZY = ["app/codeview.css", "app/speech/speech.css", "app/brainview.css", "app/download/download.css", "app/projects.css", "app/settings.css", "app/skills.css"];
+export const LAZY = ["ui/styles/codeview.css", "ui/styles/speech.css", "ui/styles/brainview.css", "ui/styles/download.css", "ui/styles/projects.css", "ui/styles/settings.css", "ui/styles/skills.css"];
 // Thứ tự nạp: dev = thứ tự import của layout.tsx; prod = thứ tự <link> của bản build webpack (glass + features gộp một tệp, trước globals).
 const ORDERS = {
   dev: ["app/globals.css", "app/glass.css", "app/synchro-ds.css", "app/features.css", ...LAZY],

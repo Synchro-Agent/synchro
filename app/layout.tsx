@@ -13,8 +13,10 @@ import "./unbounded-preload.css";
 // - tokens.css (globals.css @import nó; không import riêng ở đây: thêm một tệp CSS vào layout làm webpack gom và xếp lại các tệp CSS của bản
 //   build) chỉ định nghĩa biến (thang cỡ chữ, khoảng cách, bo góc, tầng z-index, mốc màn hình, màu bổ sung), vị trí không quan trọng;
 // - globals.css → glass.css → synchro-ds.css → features.css là thứ tự ghi đè ở next dev, đừng đổi. Bản build webpack gộp glass.css +
-//   features.css thành một tệp nạp TRƯỚC globals.css, nên luật của hai tệp đó muốn thắng globals.css phải hơn specificity;
-// - CSS riêng của từng màn tải chậm (codeview.css, speech/speech.css, brainview.css, download/download.css, projects.css, settings.css,
+//   features.css thành một tệp nạp TRƯỚC globals.css, nên luật của hai tệp đó muốn thắng globals.css phải hơn specificity. Thứ tự đó đến
+//   từ phép sắp xếp theo tên đường dẫn của next (flight-client-entry-plugin) trộn các tệp CSS này với ba component client nhập ở trên
+//   (glass.tsx, i18n.tsx, chunkguard.tsx): các tệp CSS tải đầu và ba component đó phải ở cùng thư mục app/, đổi tên / chuyển đi là đổi thứ tự;
+// - CSS riêng của từng màn tải chậm (ui/styles/: codeview.css, speech.css, brainview.css, download.css, projects.css, settings.css,
 //   skills.css) nạp cùng màn đó, luôn sau bốn tệp trên. Luật chỉ được chuyển sang đó khi mọi selector neo vào tệp riêng của màn và không đổi
 //   bên thắng với luật chung đứng sau nó: scripts/css-move.mjs + css-move-verify.mjs; tests/api/css-split.test.mjs canh lớp đã tách.
 import "./globals.css";

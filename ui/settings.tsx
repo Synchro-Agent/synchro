@@ -1,5 +1,5 @@
 "use client";
-import "../app/settings.css";
+import "./styles/settings.css";
 
 import { createContext, useContext, useEffect, useRef, useState } from "react";
 import { apiFetch, statusText } from "./apierr";

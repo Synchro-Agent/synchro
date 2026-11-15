@@ -46,8 +46,8 @@ html body .cv-dragging{cursor:col-resize}
 .l{color:blue!important}
 }`);
 put("app/glass.css", `@layer syn{.m{color:blue}}`);
-put("app/projects.css", `@layer syn{.p{color:red}.q{color:red}.q{color:blue}}`);
-put("app/settings.css", `@layer syn{.p{color:blue}}`);
+put("ui/styles/projects.css", `@layer syn{.p{color:red}.q{color:red}.q{color:blue}}`);
+put("ui/styles/settings.css", `@layer syn{.p{color:blue}}`);
 const dead = D.findDead(D.load(tmp));
 const has = (sel, prop) => [...dead.keys()].some((d) => d.parent.selector === sel && d.prop === prop);
 ok(has(".a", "color"), "cùng selector, tệp tải đầu nạp sau (DS sau globals ở cả dev lẫn prod) → chết");

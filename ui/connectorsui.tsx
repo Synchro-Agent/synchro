@@ -1,5 +1,5 @@
 "use client";
-import "../app/settings.css";
+import "./styles/settings.css";
 // Cài đặt → Connectors: kết nối Synchro với ứng dụng khác qua MCP (giống Connectors của Claude).
 // Phần chính là "Composio của bạn" (có sẵn cho mọi tài khoản: bấm Liên kết Composio để đăng nhập tài khoản Composio riêng, ứng dụng liên kết trên trang Composio);
 // phần riêng cho người tự thêm connector bằng địa chỉ máy chủ MCP, đăng nhập OAuth trong cửa sổ bật lên,

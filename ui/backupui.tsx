@@ -1,5 +1,5 @@
 "use client";
-import "../app/settings.css";
+import "./styles/settings.css";
 
 // Cài đặt → Sức khỏe hệ thống → Sao lưu liên tục (server/litestream.ts, hướng dẫn cho chủ dịch vụ ở docs/backup-r2.md).
 // Khóa bí mật không quay lại trình duyệt: ô để trống nghĩa là giữ khóa đã lưu.

@@ -1,5 +1,5 @@
 "use client";
-import "../app/skills.css";
+import "./styles/skills.css";
 // Sân khấu "Tạo mới" của trang Artifacts: danh sách ba loại bên trái, cảnh hoạt hình của loại đang chọn bên phải (ui/syart.tsx).
 // Tự chuyển sang loại kế tiếp sau mỗi lượt cảnh (7,2 giây, có vạch tiến trình); rê chuột / chọn bằng bàn phím thì dừng ở loại đó.
 // Bấm một loại hoặc nút ở góc sân khấu để bắt đầu tạo (giống các thẻ cũ). Hai cảnh mờ chéo nhau; cảnh đang ẩn đứng yên ở khung hình cuối.

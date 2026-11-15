@@ -93,6 +93,11 @@ console.log("4. ui/ giữ mã giao diện");
 const NEXT_SPECIAL = /^app\/(.+\/)?(page|layout|error|global-error|not-found|loading|template|default)\.tsx$/;
 const LAYOUT_SHELL = ["app/glass.tsx", "app/i18n.tsx", "app/chunkguard.tsx"];
 const strays = clients.filter((f) => !f.startsWith("ui/") && !NEXT_SPECIAL.test(f) && !LAYOUT_SHELL.includes(f));
+const FIRST_CSS = ["app/unbounded-preload.css", "app/globals.css", "app/glass.css", "app/synchro-ds.css", "app/features.css"];
+ok([...LAYOUT_SHELL, ...FIRST_CSS].every((f) => fs.existsSync(f)), "component client của layout và CSS tải đầu cùng ở app/ (giữ thứ tự <link> của bản build)",
+  [...LAYOUT_SHELL, ...FIRST_CSS].filter((f) => !fs.existsSync(f)).join(", "));
+ok(!css.some((f) => f.startsWith("app/") && !FIRST_CSS.includes(f) && f !== "app/tokens.css"), "CSS khác (tải chậm, vendor) nằm ở ui/styles/",
+  css.filter((f) => f.startsWith("app/") && !FIRST_CSS.includes(f) && f !== "app/tokens.css").join(", "));
 ok(clients.filter((f) => f.startsWith("ui/")).length >= 120, `ui/ có ${clients.filter((f) => f.startsWith("ui/")).length} tệp "use client"`);
 ok(!strays.length, `không tệp "use client" nào ngoài ui/ (trừ tệp đặc biệt của Next trong app/)`, strays.join(", "));
 // Không tệp nào trong ui/ (kể cả tiện ích không mang "use client") nhập mã server/ ngoài kiểu.

@@ -1,7 +1,7 @@
 "use client";
 // Trang tải ứng dụng (/download): Synchro cho macOS, Windows, iPhone và Android.
 // Ứng dụng chưa phát hành nên các nút tải chỉ báo "sắp ra mắt"; khi có bản cài đặt, điền đường dẫn vào URL.
-import "../../app/download/download.css";
+import "../styles/download.css";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import * as I from "../icons";

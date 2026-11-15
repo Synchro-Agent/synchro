@@ -5,7 +5,7 @@ import { tr } from "../app/i18n";
 import { termDown } from "./apierr";
 import { useCallback, useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
-import "../app/vendor/xterm.css";
+import "./styles/vendor/xterm.css";
 import * as I from "./icons";
 import { Mark } from "./brand";
 import { AskText } from "./modals";

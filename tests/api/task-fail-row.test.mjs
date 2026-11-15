@@ -51,7 +51,7 @@ ok(/disabled=\{rerun === x\.run\}/.test(row) && /const rerunRow = async/.test(ui
 ok(/className="sk-err tk-err"/.test(ui) && /tr\("Chi tiết kỹ thuật"\)/.test(ui), "mở ra: câu đọc được, lỗi thô trong \"Chi tiết kỹ thuật\"");
 for (const s of ["Lỗi", "Chạy lại", "Chi tiết kỹ thuật"]) ok(Object.prototype.hasOwnProperty.call(D.VI2EN, s), `có bản tiếng Anh: ${s}`);
 // Luật tk- của trang Tác vụ có thể nằm ở globals.css hay ở skills.css (tệp tải cùng màn Tác vụ, B5 bước 10: scripts/css-move.mjs).
-const css = fs.readFileSync("app/globals.css", "utf8") + "\n" + fs.readFileSync("app/skills.css", "utf8");
+const css = fs.readFileSync("app/globals.css", "utf8") + "\n" + fs.readFileSync("ui/styles/skills.css", "utf8");
 ok(/\.tk-why\{color:var\(--ds-bad\)\}/.test(css) && !/\.tk-why\{[^}]*--danger/.test(css), "lý do lỗi dùng --ds-bad (đổi màu theo nền tối), không dùng biến --danger không tồn tại");
 ok(/\.tk-line\{display:flex/.test(css) && /\.tk-line>\.tk-row\{flex:1;min-width:0\}/.test(css), "dòng và nút cùng hàng, chữ dài không đẩy nút ra ngoài");
 ok(/@media \(max-width:640px\)\{[^@]*\.tk-row \.tk-chip\{display:none\}/.test(css) && /@media \(max-width:640px\)\{[^@]*\.tk-rerun\.btn\.sm>span:not\(\.art-spin\)\{display:none\}/.test(css), "điện thoại: nút chỉ còn biểu tượng, không chiếm chỗ của tên việc");

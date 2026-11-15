@@ -1,5 +1,5 @@
 "use client";
-import "../app/settings.css";
+import "./styles/settings.css";
 
 // Cài đặt → Sức khỏe hệ thống → Độ trễ từng chặng (server/tracing.ts): bảng gọn p50 / p95 của từng chặng một lượt chat, lọc theo hãng và khoảng thời gian.
 import { useState } from "react";

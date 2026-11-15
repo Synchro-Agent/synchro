@@ -6,7 +6,7 @@
 // Không mở được Realtime (hết phút của gói, khóa thiếu quyền) nhưng có ElevenLabs: chế độ nối tiếp, Scribe nghe → model chat → giọng ElevenLabs đọc.
 // Khi máy chủ chưa có khoá ElevenLabs: dự phòng bằng nhận dạng giọng nói + đọc to của trình duyệt, câu hỏi đi qua model chat. Trình duyệt không nghe được thì gõ, vẫn đọc câu trả lời.
 // Hai luồng: nói ngay một câu xác nhận, việc chính chạy trong khung chat; xong thì đọc bản tóm tắt vài câu (bản đầy đủ ở khung chat).
-import "../app/speech/speech.css";
+import "./styles/speech.css";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import * as I from "./icons";

@@ -16,14 +16,14 @@ import { splitList } from "./css-cascade.mjs";
 const postcss = createRequire(import.meta.url)("postcss");
 // Màn tải chậm và lối vào của chúng (cùng danh sách với tests/api/css-split.test.mjs).
 export const SHEETS = [
-  { css: "app/speech/speech.css", entries: ["ui/speech/view.tsx", "ui/voicemode.tsx"], prefix: /^(sp|vm)(-|$)/ },
-  { css: "app/codeview.css", entries: ["ui/codeview.tsx", "ui/browserhub.tsx"], prefix: /^(cvg?|bp|ctxp|ext)(-|$)/ },
-  { css: "app/brainview.css", entries: ["ui/brainui.tsx"], prefix: /^(bw|bn)(-|$)/ },
-  { css: "app/download/download.css", entries: ["ui/download/view.tsx"], prefix: /^dl(-|$)/ },
-  { css: "app/projects.css", entries: ["ui/projects.tsx"], prefix: /^pj-(?!(row|tg|ic|kids)$)/ },
-  { css: "app/settings.css", entries: ["ui/settings.tsx", "ui/adminui.tsx", "ui/healthui.tsx", "ui/backupui.tsx", "ui/botadmin.tsx", "ui/usageui.tsx", "ui/latencyui.tsx", "ui/cliupdateui.tsx", "ui/modelregui.tsx", "ui/providersui.tsx", "ui/connectorsui.tsx"],
+  { css: "ui/styles/speech.css", entries: ["ui/speech/view.tsx", "ui/voicemode.tsx"], prefix: /^(sp|vm)(-|$)/ },
+  { css: "ui/styles/codeview.css", entries: ["ui/codeview.tsx", "ui/browserhub.tsx"], prefix: /^(cvg?|bp|ctxp|ext)(-|$)/ },
+  { css: "ui/styles/brainview.css", entries: ["ui/brainui.tsx"], prefix: /^(bw|bn)(-|$)/ },
+  { css: "ui/styles/download.css", entries: ["ui/download/view.tsx"], prefix: /^dl(-|$)/ },
+  { css: "ui/styles/projects.css", entries: ["ui/projects.tsx"], prefix: /^pj-(?!(row|tg|ic|kids)$)/ },
+  { css: "ui/styles/settings.css", entries: ["ui/settings.tsx", "ui/adminui.tsx", "ui/healthui.tsx", "ui/backupui.tsx", "ui/botadmin.tsx", "ui/usageui.tsx", "ui/latencyui.tsx", "ui/cliupdateui.tsx", "ui/modelregui.tsx", "ui/providersui.tsx", "ui/connectorsui.tsx"],
     prefix: /^(perm-|cap-(?!ext$)|adm-(?!(pager|pg|pg-n|pg-b)$)|pv-(?!open$)|cn-(?!(logo|mono|link)$)|us-(?!(note|wrap|ring|ring-n|pop|h|row|row-t|bar|empty|more|v|v-h|tag|money|ctx|sub)$))/ },
-  { css: "app/skills.css", entries: ["ui/pluginsui.tsx", "ui/skillsui.tsx", "ui/skillscanui.tsx", "ui/claudedirui.tsx", "ui/studio.tsx", "ui/appsui.tsx", "ui/tasksui.tsx"], prefix: /^pl-/ },
+  { css: "ui/styles/skills.css", entries: ["ui/pluginsui.tsx", "ui/skillsui.tsx", "ui/skillscanui.tsx", "ui/claudedirui.tsx", "ui/studio.tsx", "ui/appsui.tsx", "ui/tasksui.tsx"], prefix: /^pl-/ },
 ];
 // Mốc @media trong danh sách của scripts/css-metrics.mjs: luật nằm trong @media ngoài danh sách thì không chuyển (chuyển sẽ tách khối, tăng mediaWidth).
 const WIDTHS = new Set([480, 640, 760, 761, 860, 1100]);

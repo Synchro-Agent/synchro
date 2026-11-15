@@ -1,5 +1,5 @@
 "use client";
-import "../app/settings.css";
+import "./styles/settings.css";
 
 // Tab Quản trị viên. Chỉ hiện với tài khoản quản trị; mọi quyền vẫn được kiểm tra lại ở /api/admin/*.
 import { Fragment, useCallback, useEffect, useState } from "react";

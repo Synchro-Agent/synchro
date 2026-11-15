@@ -1,5 +1,5 @@
 "use client";
-import "../app/skills.css";
+import "./styles/skills.css";
 // Kho kỹ năng (gộp Skills và Plugins; ở thanh bên, Tùy chỉnh và Cài đặt) và trang Tùy chỉnh có hai mục Kho kỹ năng / Connectors.
 import { useCallback, useEffect, useRef, useState } from "react";
 import { apiFetch, statusText } from "./apierr";

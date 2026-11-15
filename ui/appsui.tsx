@@ -1,5 +1,5 @@
 "use client";
-import "../app/skills.css";
+import "./styles/skills.css";
 // Ứng dụng nội bộ: nút Xuất bản trên khung artifact, danh sách ứng dụng (trang Artifacts → Ứng dụng) và trang chạy ứng dụng /apps/<id>.
 import { useEffect, useRef, useState } from "react";
 import { apiFetch, statusText } from "./apierr";

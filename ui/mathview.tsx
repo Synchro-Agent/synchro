@@ -2,7 +2,7 @@
 // Công thức trong câu trả lời ($…$, $$…$$, \(…\), \[…\]). Tải riêng khi câu trả lời thật sự có công thức: KaTeX và phông chữ của nó khá nặng.
 // trust mặc định tắt: \href, \includegraphics không chạy được nên chuỗi HTML KaTeX tạo ra an toàn để gắn. Lỗi cú pháp thì hiện nguyên nguồn.
 import katex from "katex";
-import "../app/vendor/katex.css";
+import "./styles/vendor/katex.css";
 
 export function MathView({ v, display }: { v: string; display?: boolean }) {
   let html = "";

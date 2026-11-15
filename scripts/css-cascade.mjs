@@ -401,16 +401,16 @@ function injected(root) {
   const au = fs.readFileSync(path.join(root, "ui/auth.tsx"), "utf8"); const m2 = /<style>\{`([\s\S]*?)`\}<\/style>/.exec(au); if (m2) out.push({ name: "auth.tsx <style>", css: m2[1].replace(/\$\{[^}]*\}/g, "0") });
   return out;
 }
-// Thư viện ngoài nạp chậm: qua tệp bọc app/vendor/*.css (B5, dịch như bản dựng để có lớp), hay thẳng tệp trong node_modules (không lớp).
+// Thư viện ngoài nạp chậm: qua tệp bọc ui/styles/vendor/*.css (B5, dịch như bản dựng để có lớp), hay thẳng tệp trong node_modules (không lớp).
 async function vendor(root, compile) {
   const out = [];
-  for (const [wrap, raw] of [["app/vendor/katex.css", "katex/dist/katex.min.css"], ["app/vendor/xterm.css", "@xterm/xterm/css/xterm.css"]]) {
+  for (const [wrap, raw] of [["ui/styles/vendor/katex.css", "katex/dist/katex.min.css"], ["ui/styles/vendor/xterm.css", "@xterm/xterm/css/xterm.css"]]) {
     const w = path.join(root, wrap);
     out.push(fs.existsSync(w) ? { name: raw, css: await compile(w) } : { name: raw, css: fs.readFileSync(path.join(root, "node_modules", raw), "utf8") });
   }
   return out;
 }
-const LAZY = ["app/codeview.css", "app/speech/speech.css", "app/brainview.css", "app/download/download.css", "app/projects.css", "app/settings.css", "app/skills.css"];
+const LAZY = ["ui/styles/codeview.css", "ui/styles/speech.css", "ui/styles/brainview.css", "ui/styles/download.css", "ui/styles/projects.css", "ui/styles/settings.css", "ui/styles/skills.css"];
 /** Bản mã nguồn: dịch globals.css qua Tailwind như bản dựng, rồi xếp theo thứ tự nạp. */
 export async function loadSource(root, order = "dev") {
   const postcss = req("postcss");
