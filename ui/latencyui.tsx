@@ -4,7 +4,7 @@ import "./styles/settings.css";
 // Cài đặt → Sức khỏe hệ thống → Độ trễ từng chặng (server/tracing.ts): bảng gọn p50 / p95 của từng chặng một lượt chat, lọc theo hãng và khoảng thời gian.
 import { useState } from "react";
 import { fmtDate } from "./adminui";
-import { locale, tf, tr, trc } from "../app/i18n";
+import { locale, tf, tr, trc } from "./i18n";
 
 type Row = { stage: string; provider: string; n: number; p50: number | null; p95: number | null };
 export type Latency = { stages: string[]; turns: number; recent: Row[]; daily: Row[]; week: Row[]; last: { at: number; provider: string | null; model: string | null; status: number | null; totalMs: number; slowest: [string, number] | null; stages?: Record<string, number> }[] };

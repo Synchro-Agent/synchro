@@ -32,7 +32,7 @@ const BrainSettings = lazyView(() => import("./brainui").then((m) => m.BrainSett
 const SkillHub = lazyView(() => import("./pluginsui").then((m) => m.SkillHub), <SettingsSkeleton />);
 import { PKG_DOMAINS, type Caps } from "../shared/catalog";
 import { usePlan as useSpeechPlan, useMyVoices, type Voice } from "./speech/client";
-import { getLang, locale, tr } from "../app/i18n";
+import { getLang, locale, tr } from "./i18n";
 import { fmtSize } from "./fileicon";
 import { SharedChats } from "./shareui";
 import { UploadedFiles } from "./filesui";

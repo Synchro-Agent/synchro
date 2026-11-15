@@ -8,7 +8,7 @@ import { usePref } from "../store";
 import { startRealtime, type RtHandlers, type RtPhase } from "../realtime";
 import { startCascade } from "../voicecall";
 import { PearlOrb } from "../pearlorb";
-import { tr, locale } from "../../app/i18n";
+import { tr, locale } from "../i18n";
 import { AGENT_MODELS, AGENT_TEMPLATES } from "../../shared/speech/data";
 import { LANGS, ago, api, del, fmtDur, post, useItems, usePlan, type Item, type Voice } from "./client";
 import { Field, ModelPick, Range, Select, Spin, Toggle, VoiceAvatar, VoicePicker } from "./parts";

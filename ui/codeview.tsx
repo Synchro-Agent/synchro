@@ -10,7 +10,7 @@ import { SideToggle } from "./brand";
 import { Markdown, fileNameFor, type DevBlock } from "./md";
 import { callLLM, getActiveEffort, hasLLM, LLMError, takeSkillsUsed, type LLMMsg } from "./llm";
 import { ls } from "./userscope";
-import { tr } from "../app/i18n";
+import { tr } from "./i18n";
 import { useFitPlaceholder } from "./phfit";
 import { usePref, useApp } from "./store";
 import { redact, unredact, analyzePaste, SLASH, balanceBraces, type Pill } from "./devtools";

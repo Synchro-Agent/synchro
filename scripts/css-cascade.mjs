@@ -417,12 +417,12 @@ export async function loadSource(root, order = "dev") {
   const tw = (await import(path.join(root, "node_modules/@tailwindcss/postcss/dist/index.mjs"))).default;
   const read = (p) => fs.readFileSync(path.join(root, p), "utf8");
   const compile = async (f) => (await postcss([tw({ base: root, optimize: false })]).process(fs.readFileSync(f, "utf8"), { from: f })).css;
-  const g = { css: await compile(path.join(root, "app/globals.css")) };
-  const font = { name: "unbounded", css: read("node_modules/@fontsource-variable/unbounded/wght.css") + read("app/unbounded-preload.css") };
+  const g = { css: await compile(path.join(root, "app/_shell/globals.css")) };
+  const font = { name: "unbounded", css: read("node_modules/@fontsource-variable/unbounded/wght.css") + read("app/_shell/unbounded-preload.css") };
   const s = (p) => ({ name: p.replace(/^app\//, ""), css: read(p) });
-  // app/tokens.css (B5) vào cùng globals.css qua @import (Tailwind dịch thẳng vào g.css), không phải tệp riêng.
-  const first = order === "prod" ? [s("app/glass.css"), s("app/features.css"), { name: "globals.css", css: g.css }, font, s("app/synchro-ds.css")]
-    : [font, { name: "globals.css", css: g.css }, s("app/glass.css"), s("app/synchro-ds.css"), s("app/features.css")];
+  // app/_shell/tokens.css (B5) vào cùng globals.css qua @import (Tailwind dịch thẳng vào g.css), không phải tệp riêng.
+  const first = order === "prod" ? [s("app/_shell/glass.css"), s("app/_shell/features.css"), { name: "globals.css", css: g.css }, font, s("app/_shell/synchro-ds.css")]
+    : [font, { name: "globals.css", css: g.css }, s("app/_shell/glass.css"), s("app/_shell/synchro-ds.css"), s("app/_shell/features.css")];
   return [...first, ...LAZY.map(s), ...(await vendor(root, compile)), ...injected(root)];
 }
 /** Bản build: tệp CSS tải đầu theo thứ tự <link> của trang tĩnh, rồi các tệp còn lại (tải chậm). */

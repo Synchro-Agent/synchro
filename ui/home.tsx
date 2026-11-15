@@ -4,7 +4,7 @@ import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useStat
 import { createPortal } from "react-dom";
 import * as I from "./icons";
 import { Avatar } from "./avatar";
-import { getLang, locale, tf, tr, trc, useLangReady, useLangVer } from "../app/i18n";
+import { getLang, locale, tf, tr, trc, useLangReady, useLangVer } from "./i18n";
 import { resetClock } from "./resetfmt";
 import { FileCard } from "./fileicon";
 import { useFileMenu, saveDoc, saveBlob, fileContext } from "./filemenu";

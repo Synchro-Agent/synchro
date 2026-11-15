@@ -4,7 +4,7 @@ import "./styles/skills.css";
 import { useEffect, useRef, useState } from "react";
 import { apiFetch, statusText } from "./apierr";
 import * as I from "./icons";
-import { locale, tr } from "../app/i18n";
+import { locale, tr } from "./i18n";
 import { ArtifactFrame, type ArtVersion, type FrameSend } from "./artifactui";
 import { CommentsPanel, Presence, useLive } from "./collabui";
 import { Menu } from "./ui";

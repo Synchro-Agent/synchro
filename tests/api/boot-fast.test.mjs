@@ -76,7 +76,7 @@ try {
   ok(/!!document\.fullscreenEnabled && screen\.width >= 1280/.test(film), "nút Toàn màn hình chỉ trên màn ≥ 1280px (điện thoại không thêm nút)");
   ok(/const failed = \(\) => \{ if \(v\.currentSrc\.endsWith\(SRC_1080\)\) swapSrc\(v, SRC_720\); else leave\(\); \}/.test(film), "1080p tải lỗi: quay về 720p, không kết thúc phim");
   ok(/if \(document\.fullscreenElement\) \{ document\.exitFullscreen\(\)/.test(film), "rời phim khi đang toàn màn hình: thoát toàn màn hình trước khi logo bay về");
-  ok(/\.intro-btn\.fs\{/.test(src("app/globals.css")), "nút Toàn màn hình có kiểu riêng (cạnh nút tiếng)");
+  ok(/\.intro-btn\.fs\{/.test(src("app/_shell/globals.css")), "nút Toàn màn hình có kiểu riêng (cạnh nút tiếng)");
 
   console.log("5. /ts mang phiên bản");
   const heavy = src("ui/heavy.ts");
@@ -112,7 +112,7 @@ try {
 
   console.log("7. Phông chữ");
   ok(!fs.readdirSync("public/fonts").some((f) => /^Anthropic/.test(f)), "không còn tệp phông Anthropic (Sans, Serif) trong public/fonts");
-  ok(!/Anthropic Serif"|AnthropicSerif/.test(src("app/globals.css")), "globals.css không còn dùng Anthropic Serif");
+  ok(!/Anthropic Serif"|AnthropicSerif/.test(src("app/_shell/globals.css")), "globals.css không còn dùng Anthropic Serif");
 } finally {
   fs.rmSync(tmp, { recursive: true, force: true });
 }

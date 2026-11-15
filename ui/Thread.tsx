@@ -7,7 +7,7 @@
 // DOM giữ nguyên như khi còn nằm trong home.tsx (một Fragment ngay trong <main>): CSS, --dock-h trên <main> và các bài kiểm giao diện dựa vào đó.
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import * as I from "./icons";
-import { getLang, tf, tr, trCx, useLangReady, locale } from "../app/i18n";
+import { getLang, tf, tr, trCx, useLangReady, locale } from "./i18n";
 import { resetAt } from "./resetfmt";
 import { FileCard } from "./fileicon";
 import type { useFileMenu } from "./filemenu";

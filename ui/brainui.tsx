@@ -15,7 +15,7 @@ import { BulkBar, BulkButton, BulkCheck, bulkRow, each, useBulk, type BulkAct } 
 import { Pager } from "./pager";
 import * as I from "./icons";
 import { type Chat, useApp, usePref } from "./store";
-import { locale, tf, tr, trc } from "../app/i18n";
+import { locale, tf, tr, trc } from "./i18n";
 import { maxW } from "./breakpoints";
 
 type Kind = "hub" | "about" | "model" | "chat" | "code" | "topic" | "entity" | "map" | "index" | "log" | "skill" | "connector" | "note" | "daily" | "rule" | "ghost" | "tag";

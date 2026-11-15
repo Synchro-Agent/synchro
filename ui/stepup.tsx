@@ -6,7 +6,7 @@
 // phiên vừa tạo được tính là vừa xác minh trong 5 phút.
 import { useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { tr } from "../app/i18n";
+import { tr } from "./i18n";
 import { passkeyCancelled, passkeyStepUp, passkeySupported } from "./passkeyclient";
 import { useApp } from "./store";
 import { Fade } from "./ui";

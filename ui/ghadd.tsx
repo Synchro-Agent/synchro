@@ -5,7 +5,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import * as I from "./icons";
-import { tr } from "../app/i18n";
+import { tr } from "./i18n";
 import { useFitPlaceholder } from "./phfit";
 import { inspectGithub, SkillAddModal, type Found } from "./skillsui";
 import { PreviewModal } from "./pluginsui";

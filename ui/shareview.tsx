@@ -4,7 +4,7 @@
 import { useEffect, useState } from "react";
 import { ArtifactFrame, D2Svg, MermaidSvg, PublicFrames, setD2Share, VbhcView } from "./artifactui";
 import { Lockup } from "./brand";
-import { locale, tr, useLangReady } from "../app/i18n";
+import { locale, tr, useLangReady } from "./i18n";
 import { LangSwitch } from "./langswitch";
 import { Markdown } from "./md";
 import type { ShareSeg, ShareSnap } from "../shared/types/share";

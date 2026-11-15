@@ -1,7 +1,7 @@
 "use client";
 // Số mục cần xem của Hộp thư trên thanh bên: tách khỏi tasksui.tsx (nặng, tải chậm khi mở Hộp thư) vì thanh điều hướng luôn cần số này.
 import { useCallback, useEffect, useRef, useState } from "react";
-import { tr } from "../app/i18n";
+import { tr } from "./i18n";
 
 export const INBOX_CHANGED = "synchro:inbox";
 

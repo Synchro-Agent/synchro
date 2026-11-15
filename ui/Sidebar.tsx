@@ -6,7 +6,7 @@
 // Phần bọc .shell-side (tự đóng ngăn kéo khi chọn mục), thanh điều hướng và lớp phủ tối vẫn ở Home.
 import { memo, useMemo, useState } from "react";
 import * as I from "./icons";
-import { tr, useLangReady } from "../app/i18n";
+import { tr, useLangReady } from "./i18n";
 import { Menu } from "./ui";
 import { Wordmark } from "./brand";
 import { BulkBar, BulkCheck, bulkRow, useBulk, type BulkAct } from "./bulk";

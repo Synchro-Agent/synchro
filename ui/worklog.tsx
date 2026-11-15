@@ -4,7 +4,7 @@
 import { useEffect, useState } from "react";
 import * as I from "./icons";
 import { Loader } from "./brand";
-import { tf, tr, trc, trCx } from "../app/i18n";
+import { tf, tr, trc, trCx } from "./i18n";
 import { AskCard, type AskStep, type OnAnswer } from "./agentui";
 import { lazyView } from "./lazy";
 import { IMAGE_PLANS } from "../shared/catalog";

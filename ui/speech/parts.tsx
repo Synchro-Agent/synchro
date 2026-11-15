@@ -2,7 +2,7 @@
 // Thành phần dùng chung của mục Speech: tab, thanh trượt, công tắc, chọn, vùng thả tệp, ghi âm, dạng sóng, trình phát, bộ chọn giọng.
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
-import { tr } from "../../app/i18n";
+import { tr } from "../i18n";
 import * as I from "../icons";
 import { LiquidOrb } from "../liquidorb";
 import { readBrowser, stopBrowserRead } from "../browserspeak";

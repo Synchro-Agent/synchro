@@ -2,7 +2,7 @@
 // Chia sẻ đoạn chat: hộp thoại tạo / cập nhật / dừng liên kết, và danh sách các liên kết trong Cài đặt → Quyền riêng tư.
 import { useEffect, useState } from "react";
 import * as I from "./icons";
-import { locale, tr } from "../app/i18n";
+import { locale, tr } from "./i18n";
 import type { Chat } from "./store";
 
 export type ShareInfo = { token: string; conv: string; title: string; size: number; createdAt: number; updatedAt: number };

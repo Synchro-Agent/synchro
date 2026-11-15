@@ -4,7 +4,7 @@ import { Fragment, memo, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { unredact, filepathOf, autoMerge, hasHidden, splitMeta, parsePackages, checkPkg, findCron, cronInfo, type Pkg } from "./devtools";
 import * as I from "./icons";
-import { locale, tr, useLangReady } from "../app/i18n";
+import { locale, tr, useLangReady } from "./i18n";
 import { codeWraps, imageKind, inlineText, keepWhole, parseInline, parseMarkdown, streamSafe, type Align, type Block, type Inl, type Top } from "../shared/mdparse";
 import { ChartView, parseChart } from "./charts";
 import { lazyView } from "./lazy";

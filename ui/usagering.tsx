@@ -5,7 +5,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Menu } from "./ui";
 import { useApp } from "./store";
-import { getLang, tf, tr, trc } from "../app/i18n";
+import { getLang, tf, tr, trc } from "./i18n";
 import { resetAt } from "./resetfmt";
 import * as I from "./icons";
 

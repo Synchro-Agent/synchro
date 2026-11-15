@@ -2,7 +2,7 @@
 // Tệp đã tải lên của tài khoản (Cài đặt → Quyền riêng tư): xem dung lượng đã dùng, xóa từng tệp để giải phóng hạn mức hoặc bỏ một tệp nhạy cảm mà không phải xóa tài khoản.
 import { useEffect, useState } from "react";
 import * as I from "./icons";
-import { locale, tr } from "../app/i18n";
+import { locale, tr } from "./i18n";
 
 type MyFile = { id: string; name: string; size: number; at: number; kind: string };
 const PAGE = 50;

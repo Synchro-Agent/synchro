@@ -1,6 +1,7 @@
 // Dùng chung cho API đăng nhập CLI: kiểm tra tên CLI, phạm vi đăng nhập là chính tài khoản đang gọi.
-import { AuthError, handle, requireUser, sameOrigin, type UserRow } from "../../../server/authstore";
-import { CLIS, type Cli } from "../../../server/ai/cli_runtime";
+import "server-only";
+import { AuthError, handle, requireUser, sameOrigin, type UserRow } from "../authstore";
+import { CLIS, type Cli } from "../ai/cli_runtime";
 
 export type Ctx = { params: Promise<{ cli: string }> };
 

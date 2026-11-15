@@ -8,7 +8,7 @@ import fs from "node:fs";
 
 let pass = 0, fail = 0;
 const ok = (c, n, x = "") => { c ? pass++ : fail++; console.log(c ? "  ✓" : "  ✗", n, c ? "" : String(x).slice(0, 400)); };
-const page = fs.readFileSync("ui/home.tsx", "utf8"), ds = fs.readFileSync("app/synchro-ds.css", "utf8"), g = fs.readFileSync("app/globals.css", "utf8");
+const page = fs.readFileSync("ui/home.tsx", "utf8"), ds = fs.readFileSync("app/_shell/synchro-ds.css", "utf8"), g = fs.readFileSync("app/_shell/globals.css", "utf8");
 const strip = (css) => css.replace(/\/\*[\s\S]*?\*\//g, "");
 const PHONE = 760;
 
@@ -17,9 +17,9 @@ ok(narrow > PHONE, "home.tsx có NARROW, rộng hơn ngưỡng điện thoại",
 // Ngăn kéo điện thoại: .app>.shell-side position:fixed z-index 65.
 const drawer = [...strip(ds).matchAll(/@media \(max-width:(\d+)px\)\{([\s\S]*?)\n\}/g)].find((m) => /\.app>\.shell-side\{position:fixed/.test(m[2]));
 ok(drawer && Number(drawer[1]) === PHONE, "ngăn kéo (thanh điều hướng + bảng) chỉ ở điện thoại ≤ 760px", drawer?.[1]);
-// z-index theo tầng token (B5 bước 7a): 65 = calc(var(--z-drawer) + 5), 64 = calc(var(--z-drawer) + 4) (--z-drawer: 60, app/tokens.css).
+// z-index theo tầng token (B5 bước 7a): 65 = calc(var(--z-drawer) + 5), 64 = calc(var(--z-drawer) + 4) (--z-drawer: 60, app/_shell/tokens.css).
 const Z65 = String.raw`calc\(var\(--z-drawer\) \+ 5\)`, Z64 = String.raw`calc\(var\(--z-drawer\) \+ 4\)`;
-ok(/--z-drawer:60;/.test(fs.readFileSync("app/tokens.css", "utf8")), "tầng --z-drawer = 60 (app/tokens.css)");
+ok(/--z-drawer:60;/.test(fs.readFileSync("app/_shell/tokens.css", "utf8")), "tầng --z-drawer = 60 (app/_shell/tokens.css)");
 ok(drawer && new RegExp(String.raw`\.app>\.shell-side\{[^}]*z-index:${Z65}`).test(drawer[2]), "ngăn kéo nằm trên lớp phủ (z 65 > 64)");
 ok(drawer && /\.app>\.shell-side\.closed\{[^}]*transform/.test(drawer[2]), "đóng thì trượt ra ngoài màn hình");
 ok(drawer && !/\{[^}]*\{/.test(drawer[2]), "không có quy tắc lồng lạc trong khối ngăn kéo", drawer?.[2].slice(0, 300));

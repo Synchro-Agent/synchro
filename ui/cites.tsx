@@ -4,7 +4,7 @@
 // Favicon tải qua /api/favicon (máy chủ tải hộ, có bộ đệm, chặn địa chỉ nội bộ): trình duyệt không gọi thẳng trang lạ hay dịch vụ ảnh của bên thứ ba.
 import { createContext, Fragment, useContext, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { tr } from "../app/i18n";
+import { tr } from "./i18n";
 
 export type WebSrc = { title: string; url: string };
 export const CiteCtx = createContext<{ webs: WebSrc[]; id: string } | null>(null);

@@ -1,7 +1,7 @@
 "use client";
 // Các khung bên phải của Synchro Code: terminal (PTY thật trong workspace), trình duyệt (Chromium của workspace,
 // người dùng và agent cùng điều khiển), file (cây thư mục + Monaco) và session rail (môi trường, ngữ cảnh, thay đổi git).
-import { tr } from "../app/i18n";
+import { tr } from "./i18n";
 import { termDown } from "./apierr";
 import { useCallback, useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";

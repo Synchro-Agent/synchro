@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Lockup } from "../../ui/brand";
-import { tr } from "../i18n";
+import { tr } from "../../ui/i18n";
 import { LangSwitch } from "../../ui/langswitch";
 import { AlertCircle, Check, Mail } from "lucide-react";
 

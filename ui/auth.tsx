@@ -13,7 +13,7 @@ import { Mark } from "./brand";
 import { usePref } from "./store";
 import { OCCUPATIONS } from "../shared/names";
 export { OCCUPATIONS };
-import { getLang } from "../app/i18n";
+import { getLang } from "./i18n";
 import { LangSwitch } from "./langswitch";
 import { assemble, boxOf, center, fly, markTarget, onScreen, openHole, reducedMotion, settleApp } from "./handoff";
 import { preloadIntro, wantsIntro } from "./introfilm";

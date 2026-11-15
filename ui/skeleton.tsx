@@ -1,5 +1,5 @@
 "use client";
-import { tr } from "../app/i18n";
+import { tr } from "./i18n";
 // Khung chờ đúng kích thước thật: dòng đoạn chat, tin nhắn, khung artifact, trang cài đặt. Mỗi khung chờ dùng chung luật CSS với phần thật
 // (.sk-chat đi cùng .chat-item, .sk-user cùng .user-msg, .sk-art cùng .art-panel…; trang cài đặt dùng thẳng .row / h3), chữ giả là khoảng trắng
 // có chiều cao dòng thật nên khi nội dung về, không có gì bị đẩy đi (đo bằng tests/ui/skeletons.mjs). Tên lớp riêng (không dùng .chat-item,

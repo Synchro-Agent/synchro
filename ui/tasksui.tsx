@@ -6,7 +6,7 @@ import "./styles/skills.css";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { apiFetch, statusText } from "./apierr";
 import * as I from "./icons";
-import { getLang, tr } from "../app/i18n";
+import { getLang, tr } from "./i18n";
 import { isForeign } from "../shared/chaterror";
 import { canRerun, failInfo, failLine, isExpired, TOO_OLD } from "../shared/taskerr";
 import { INBOX_CHANGED, useInboxCount } from "./inboxcount";

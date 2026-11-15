@@ -7,7 +7,7 @@ import "./styles/settings.css";
 import { useCallback, useEffect, useState } from "react";
 import { apiFetch } from "./apierr";
 import { rowKeys } from "./a11y";
-import { isEn, locale, tf, tr, trc } from "../app/i18n";
+import { isEn, locale, tf, tr, trc } from "./i18n";
 import * as I from "./icons";
 import { PageBar, usePage } from "./pager";
 import { BrandLogo, ModelLogo } from "./brands";

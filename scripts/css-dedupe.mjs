@@ -16,12 +16,12 @@ import { fileURLToPath } from "node:url";
 import { splitList, specificity, atoms } from "./css-cascade.mjs";
 
 const postcss = createRequire(import.meta.url)("postcss");
-export const FIRST = ["app/globals.css", "app/glass.css", "app/synchro-ds.css", "app/features.css"];
+export const FIRST = ["app/_shell/globals.css", "app/_shell/glass.css", "app/_shell/synchro-ds.css", "app/_shell/features.css"];
 export const LAZY = ["ui/styles/codeview.css", "ui/styles/speech.css", "ui/styles/brainview.css", "ui/styles/download.css", "ui/styles/projects.css", "ui/styles/settings.css", "ui/styles/skills.css"];
 // Thứ tự nạp: dev = thứ tự import của layout.tsx; prod = thứ tự <link> của bản build webpack (glass + features gộp một tệp, trước globals).
 const ORDERS = {
-  dev: ["app/globals.css", "app/glass.css", "app/synchro-ds.css", "app/features.css", ...LAZY],
-  prod: ["app/glass.css", "app/features.css", "app/globals.css", "app/synchro-ds.css", ...LAZY],
+  dev: ["app/_shell/globals.css", "app/_shell/glass.css", "app/_shell/synchro-ds.css", "app/_shell/features.css", ...LAZY],
+  prod: ["app/_shell/glass.css", "app/_shell/features.css", "app/_shell/globals.css", "app/_shell/synchro-ds.css", ...LAZY],
 };
 const LAYERS = ["properties", "theme", "base", "components", "utilities", "syn", "syn-over"];
 // Giá trị có thể không được trình duyệt cũ hiểu (bị bỏ khi phân tích) — khai báo nó che có thể là dự phòng.

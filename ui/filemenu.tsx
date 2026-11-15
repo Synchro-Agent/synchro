@@ -5,7 +5,7 @@ import * as I from "./icons";
 import { Markdown } from "./md";
 
 import { docText, getBlob, getStatus, hasBlob } from "./filestate";
-import { locale } from "../app/i18n";
+import { locale } from "./i18n";
 export { saveBlob, saveDoc, fileContext } from "./filestate";
 
 function NoText({ name }: { name: string }) {

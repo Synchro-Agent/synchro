@@ -3,7 +3,7 @@
 // mọi thay đổi (bình luận, dữ liệu chung) hiện ngay cho người đang mở nhờ kênh trực tiếp /api/apps/<id>/live.
 import { useCallback, useEffect, useRef, useState } from "react";
 import * as I from "./icons";
-import { tr } from "../app/i18n";
+import { tr } from "./i18n";
 
 const ago = (ts: number) => {
   const m = Math.floor((Date.now() - ts) / 60000);

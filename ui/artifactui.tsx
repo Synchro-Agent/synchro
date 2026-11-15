@@ -3,7 +3,7 @@
 // khung chạy cô lập (iframe sandbox, không cùng nguồn gốc với Synchro, CSP chặn gọi mạng) và trang Artifacts.
 import { createContext, Fragment, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import * as I from "./icons";
-import { isEn, locale, tr } from "../app/i18n";
+import { isEn, locale, tr } from "./i18n";
 import { Markdown } from "./md";
 import { artifactComplete, type OutFile } from "./llm";
 import { parseVbhc, vbhcHtml } from "../shared/vbhc";

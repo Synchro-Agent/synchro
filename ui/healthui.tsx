@@ -5,7 +5,7 @@ import "./styles/settings.css";
 import { useCallback, useEffect, useState } from "react";
 import { call, ago, fmtDate } from "./adminui";
 import { useApp } from "./store";
-import { getLang, locale, tf, tr, trc } from "../app/i18n";
+import { getLang, locale, tf, tr, trc } from "./i18n";
 import * as I from "./icons";
 import type { MemSample } from "../shared/types/health";
 import type { LoopSample } from "../shared/types/health";

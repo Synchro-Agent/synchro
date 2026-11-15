@@ -1,6 +1,6 @@
 "use client";
 import { useFileStatus, retryFile, hasBlob } from "./filestate";
-import { tr } from "../app/i18n";
+import { tr } from "./i18n";
 import * as I from "./icons";
 
 const MAP: Record<string, string[]> = {

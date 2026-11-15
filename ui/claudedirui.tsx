@@ -6,7 +6,7 @@ import "./styles/skills.css";
 import { useCallback, useEffect, useRef, useState } from "react";
 import * as I from "./icons";
 import { useApp } from "./store";
-import { locale, tr } from "../app/i18n";
+import { locale, tr } from "./i18n";
 import { apiFetch, statusText } from "./apierr";
 import { PLUGIN_CATS } from "../shared/plugindir";
 import { Pager } from "./pager";

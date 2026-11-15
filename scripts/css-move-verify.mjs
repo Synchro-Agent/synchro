@@ -2,12 +2,12 @@
 // prod) với bản gốc, ghi mọi luật đã chuyển có selector dính một cặp đổi bên thắng vào tệp KEEP, khôi phục tệp CSS rồi chạy lại tới khi 0 cặp.
 // Mặc định bảo thủ hoàn toàn (mọi cặp css-cascade coi là có thể trùng phần tử đều tính). APART=1: bỏ cặp mà hai bên chắc chắn khác phần tử
 // theo các giả định ghi ở hàm apart (chưa dùng cho lần chuyển của B5).
-// Dùng: node scripts/css-move-verify.mjs <thư mục mã nguồn gốc (có app/ và node_modules)> <keep.json> [tệp nguồn, mặc định app/globals.css]
+// Dùng: node scripts/css-move-verify.mjs <thư mục mã nguồn gốc (có app/ và node_modules)> <keep.json> [tệp nguồn, mặc định app/_shell/globals.css]
 // Cần cây làm việc sạch ở các tệp CSS (lệnh này git checkout chúng mỗi vòng).
 import fs from "node:fs"; import { execSync } from "node:child_process";
 const W = process.cwd(); const T = (await import("node:os")).tmpdir();
-const BASE = process.argv[2]; const KEEP = process.argv[3]; const FROM = process.argv[4] ?? "app/globals.css";
-const files = ["app/globals.css", "app/synchro-ds.css", "app/glass.css", "app/features.css", "ui/styles/speech.css", "ui/styles/codeview.css", "ui/styles/brainview.css", "ui/styles/download.css", "ui/styles/projects.css", "ui/styles/settings.css", "ui/styles/skills.css"];
+const BASE = process.argv[2]; const KEEP = process.argv[3]; const FROM = process.argv[4] ?? "app/_shell/globals.css";
+const files = ["app/_shell/globals.css", "app/_shell/synchro-ds.css", "app/_shell/glass.css", "app/_shell/features.css", "ui/styles/speech.css", "ui/styles/codeview.css", "ui/styles/brainview.css", "ui/styles/download.css", "ui/styles/projects.css", "ui/styles/settings.css", "ui/styles/skills.css"];
 const M = await import(W + "/scripts/css-move.mjs");
 const { splitList } = await import(W + "/scripts/css-cascade.mjs");
 const C = await import(W + "/scripts/css-cascade.mjs");

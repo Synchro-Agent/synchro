@@ -4,7 +4,7 @@
 // màn hẹp. Bấm "+N" thì trải ra lưới nhiều hàng; "Thu gọn" của lưới đứng ngoài khung cuộn. Logic đo đạc ở ui/composerchips.ts.
 import { useLayoutEffect, useRef, type ReactElement, type ReactNode } from "react";
 import { CHIP_LIMIT, hiddenCards, useEdgeFade, useFitCount } from "./composerchips";
-import { tr } from "../app/i18n";
+import { tr } from "./i18n";
 
 export function AttachStrip({ cards, open, setOpen, lead, className = "" }: {
   /** Thẻ theo thứ tự (mỗi thẻ có key riêng, gốc là .ft hoặc .pick-chip). */

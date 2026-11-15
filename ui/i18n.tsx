@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useSyncExternalStore } from "react";
-import { usePref } from "../ui/store";
-import { watch } from "../ui/domwatch";
+import { usePref } from "./store";
+import { watch } from "./domwatch";
 import { cxActEn } from "../shared/cxactions";
 import { type Dict, type Lang, type Vars, tfWith, trcWith, trWith } from "../shared/i18n-core";
 

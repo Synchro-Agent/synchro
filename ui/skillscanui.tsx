@@ -9,7 +9,7 @@ import { apiFetch, statusText } from "./apierr";
 import { createPortal } from "react-dom";
 import * as I from "./icons";
 import { useApp, usePref } from "./store";
-import { getLang, locale } from "../app/i18n";
+import { getLang, locale } from "./i18n";
 import { SKILLS_CHANGED } from "./skillsui";
 import type { ScanItem, ScanJob, Verdict } from "../shared/types/skillscan";
 

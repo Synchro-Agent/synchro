@@ -7,7 +7,7 @@ import * as I from "./icons";
 import { Fade, Menu } from "./ui";
 import { useApp, type Chat, type Project } from "./store";
 import { extractText, PROJECT_CTX_LIMIT } from "./llm";
-import { tf, tr, trc } from "../app/i18n";
+import { tf, tr, trc } from "./i18n";
 import { UploadModal } from "./modals";
 import { useFileMenu, saveBlob } from "./filemenu";
 import { ghConnect } from "./wsclient";

@@ -4,7 +4,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Lockup } from "../../ui/brand";
-import { getLang, tr } from "../i18n";
+import { getLang, tr } from "../../ui/i18n";
 import { LangSwitch } from "../../ui/langswitch";
 import { AlertCircle, Check, Eye, EyeOff, Mail } from "lucide-react";
 import { TurnstileBox, useTurnstileKey } from "../../ui/turnstilebox";

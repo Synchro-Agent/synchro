@@ -20,21 +20,21 @@ export const LAYER = "syn-over";
 // Khai báo !important cần giữ: [tệp, selector (đã gộp khoảng trắng, so khớp nguyên văn), thuộc tính, lý do]. Chỉ giữ chỗ đang phải thắng
 // style nội dòng đặt trong tsx (khai báo thường ở bất kỳ lớp nào cũng thua style nội dòng).
 export const KEEP = [
-  ["app/globals.css", ".dock[data-tight] .composer textarea", "flex", "đè style={{ flex: 1 }} nội dòng của ô soạn tin (home.tsx, Composer)"],
+  ["app/_shell/globals.css", ".dock[data-tight] .composer textarea", "flex", "đè style={{ flex: 1 }} nội dòng của ô soạn tin (home.tsx, Composer)"],
   ["ui/styles/codeview.css", ".cv-side", "width", "đè độ rộng nội dòng của cột bên Code (codeview.tsx, style={{ width: dragW ?? paneW }})"],
   ["ui/styles/codeview.css", ".cv-body.pane-max>.cv-side", "width", "đè độ rộng nội dòng của cột bên Code (codeview.tsx, style={{ width: dragW ?? paneW }})"],
-  ["app/synchro-ds.css", "html body .modal.sm h2", "font-size", "đè fontSize nội dòng của tiêu đề hộp thoại nhỏ (modals, settings, adminui, mfaui, passkeyui, stepup, speech/voices)"],
-  ["app/synchro-ds.css", "html body .modal.sm h2", "margin", "đè margin nội dòng của tiêu đề hộp thoại nhỏ (modals.tsx Confirm)"],
-  ["app/synchro-ds.css", "html body .sk-mh .icon-btn", "width", "đè width nội dòng 22–24px của nút trong đầu hộp thoại skill (saveskill.tsx, skillsui.tsx)"],
-  ["app/synchro-ds.css", "html body .sk-mh .icon-btn", "height", "đè height nội dòng 22–24px của nút trong đầu hộp thoại skill (saveskill.tsx, skillsui.tsx)"],
+  ["app/_shell/synchro-ds.css", "html body .modal.sm h2", "font-size", "đè fontSize nội dòng của tiêu đề hộp thoại nhỏ (modals, settings, adminui, mfaui, passkeyui, stepup, speech/voices)"],
+  ["app/_shell/synchro-ds.css", "html body .modal.sm h2", "margin", "đè margin nội dòng của tiêu đề hộp thoại nhỏ (modals.tsx Confirm)"],
+  ["app/_shell/synchro-ds.css", "html body .sk-mh .icon-btn", "width", "đè width nội dòng 22–24px của nút trong đầu hộp thoại skill (saveskill.tsx, skillsui.tsx)"],
+  ["app/_shell/synchro-ds.css", "html body .sk-mh .icon-btn", "height", "đè height nội dòng 22–24px của nút trong đầu hộp thoại skill (saveskill.tsx, skillsui.tsx)"],
   // Nền tấm của thẻ trong Cài đặt đang thắng hoạt ảnh nháy sHit (features.css, .adm-card.s-hit khi tìm kiếm trong Cài đặt nhảy tới): hoạt ảnh
   // CSS thắng khai báo thường ở mọi lớp nhưng thua !important, nên bỏ !important thì thẻ .adm-card bắt đầu nháy nền.
   ["ui/styles/settings.css", "html body .sy-settings :is(.api-card:not(.bare),.us-card,.inset,.promo,.dcard,.adm-stat,.adm-card,.cn-row,.cn-card,.us-vc,.pl-hero)", "background", "thắng hoạt ảnh sHit (nháy nền khi tìm kiếm) trên .adm-card"],
-  ["app/synchro-ds.css", "html body :is(.group,.pl-seg):not(.auth-root *)>button.on", "background", "thắng nền tấm thẻ Cài đặt (giữ ở trên) theo specificity"],
-  ["app/synchro-ds.css", "html body .shell-side .side-tools .nav-item.active", "background", "thắng nền nút đang chọn của .group (giữ ở trên) theo specificity"],
+  ["app/_shell/synchro-ds.css", "html body :is(.group,.pl-seg):not(.auth-root *)>button.on", "background", "thắng nền tấm thẻ Cài đặt (giữ ở trên) theo specificity"],
+  ["app/_shell/synchro-ds.css", "html body .shell-side .side-tools .nav-item.active", "background", "thắng nền nút đang chọn của .group (giữ ở trên) theo specificity"],
   // Bốn khai báo dưới đây không đè style nội dòng, nhưng đang thắng một khai báo giữ !important ở trên (cùng thuộc tính, phần tử mà công cụ
   // so tĩnh không loại được là trúng cả hai); bỏ !important thì đổi bên thắng. Gỡ được cùng lúc với khai báo kia khi bỏ style nội dòng.
-  ["app/synchro-ds.css", "html body :is(.group,.pl-seg):not(.auth-root *)>button", "height", "thắng .sk-mh .icon-btn { height !important } theo specificity"],
+  ["app/_shell/synchro-ds.css", "html body :is(.group,.pl-seg):not(.auth-root *)>button", "height", "thắng .sk-mh .icon-btn { height !important } theo specificity"],
   ["ui/styles/projects.css", "html body .modal.pj-modal h2", "font", "thắng .modal.sm h2 { font-size !important } theo thứ tự nạp"],
   ["ui/styles/skills.css", "html body .modal.pl-modal h2", "font-size", "thắng .modal.sm h2 { font-size !important } theo thứ tự nạp"],
   ["ui/styles/skills.css", "html body .modal.pl-modal h2", "font-weight", "thắng .modal.pj-modal h2 { font !important } (giữ ở trên) theo thứ tự nạp"],
@@ -44,8 +44,8 @@ export const KEEP = [
   // specificity như trước (!important ở syn-over thua mọi !important ở syn).
   ["ui/styles/projects.css", "html body .pj-compose .plus-menu", "bottom", "đè bottom: 40 nội dòng của menu + (home.tsx, Menu style) trong ô soạn tin dự án"],
   ["ui/styles/projects.css", ".pj-compose .model-sub:not(.msub-models)", "bottom", "đè bottom: 0 nội dòng của menu con Mức độ nỗ lực (home.tsx, Menu style)"],
-  ["app/synchro-ds.css", ".pj-compose :is(.model-menu,.mic-wrap .menu)", "bottom", "đè bottom: calc(100% + 8px) nội dòng của menu micro (home.tsx, Menu style)"],
-  ["app/synchro-ds.css", ".sy-settings .s-body .row>:is(.group,.pl-seg)>button", "padding", "≤860px: đè padding: 0 9px nội dòng của nút chủ đề (settings.tsx General)"],
+  ["app/_shell/synchro-ds.css", ".pj-compose :is(.model-menu,.mic-wrap .menu)", "bottom", "đè bottom: calc(100% + 8px) nội dòng của menu micro (home.tsx, Menu style)"],
+  ["app/_shell/synchro-ds.css", ".sy-settings .s-body .row>:is(.group,.pl-seg)>button", "padding", "≤860px: đè padding: 0 9px nội dòng của nút chủ đề (settings.tsx General)"],
 ];
 
 const norm = (s) => s.replace(/\s+/g, " ").trim();

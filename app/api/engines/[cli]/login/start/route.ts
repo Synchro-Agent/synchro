@@ -1,6 +1,6 @@
 import { limit } from "../../../../../../server/authstore";
 import { cancelLogin, type Method, startLogin } from "../../../../../../server/ai/cli_auth";
-import { engineRoute, noStore } from "../../../shared";
+import { engineRoute, noStore } from "../../../../../../server/routes/engines";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

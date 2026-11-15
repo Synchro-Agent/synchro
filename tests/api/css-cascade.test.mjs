@@ -48,7 +48,7 @@ const co2 = { groups: [{ cls: new Set(["x", "y", "a"]) }], byCls: new Map(["x", 
 const r3 = C.diff(C.collect([{ name: "t.css", css: src }, later]), C.collect([{ name: "t.css", css: t.css }, later]), co2);
 ok(t.moved.length === 3 && M.measureCss(t.css).important === 0 && /@layer syn-over\s*\{[\s\S]*@media \(max-width:760px\)\{\s*\.y \.x\{color:blue\}/.test(t.css), "chuyển đủ 3 khai báo, giữ @media bao quanh", t.css);
 ok(r3.flips.length === 0 && r3.lost.length === 0 && r3.extra.length === 0 && r3.pairs > 0, "0 cặp đổi bên thắng", JSON.stringify(r3.flips[0] ?? r3.lost));
-const k = U.transform(`${HEAD}@layer syn {\nhtml body .modal.sm h2{font-size:16px!important;font-weight:560!important}\n}\n`, "app/synchro-ds.css");
+const k = U.transform(`${HEAD}@layer syn {\nhtml body .modal.sm h2{font-size:16px!important;font-weight:560!important}\n}\n`, "app/_shell/synchro-ds.css");
 ok(k.kept.length === 1 && k.kept[0].prop === "font-size" && k.moved.length === 1, "giữ !important ở chỗ đè style nội dòng (KEEP)", JSON.stringify(k));
 
 console.log("6. Chỉ số CSS");

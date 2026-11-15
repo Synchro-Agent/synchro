@@ -6,7 +6,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import * as I from "./icons";
-import { tr } from "../app/i18n";
+import { tr } from "./i18n";
 
 const pad = (n: number) => String(n).padStart(2, "0");
 const QUICK = ["07:00", "08:00", "12:00", "17:30", "21:00"];

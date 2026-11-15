@@ -4,7 +4,7 @@
 // văn bản, Markdown, JSON, mã nguồn đọc thẳng; trang HTML và SVG chạy trong khung artifact. Luôn có nút tải về.
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import * as I from "./icons";
-import { locale, tr } from "../app/i18n";
+import { locale, tr } from "./i18n";
 import { Markdown } from "./md";
 import type { OutFile } from "./llm";
 import { FILE_KIND as KIND, fileKind, fmtSize } from "./fileicon";

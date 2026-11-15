@@ -1,7 +1,7 @@
 "use client";
 // Tách khỏi pluginsui.tsx và skillsui.tsx (nặng, tải chậm khi mở Kho kỹ năng) vì trang chủ luôn cần các nút studio.
 import { useEffect, useState } from "react";
-import { locale } from "../app/i18n";
+import { locale } from "./i18n";
 import { cachedJson, clearJsonCache, seedJson } from "./jsoncache";
 export { cachedJson, clearJsonCache, seedJson };
 

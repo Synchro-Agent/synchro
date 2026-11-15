@@ -2,7 +2,7 @@
 // Hội đồng phản biện trong khung artifact: nhãn trạng thái ở đầu khung và ghi chú ngay dưới các dòng có vấn đề (chế độ Mã).
 import { useState } from "react";
 import * as I from "./icons";
-import { tr } from "../app/i18n";
+import { tr } from "./i18n";
 import { SEV_LABEL, type CriticEntry, type Finding } from "../shared/critic";
 import { modelName } from "./models";
 

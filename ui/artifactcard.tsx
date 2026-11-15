@@ -2,7 +2,7 @@
 // Phần artifact hiện ngay trong tin nhắn: thẻ artifact, tệp code đã tạo. Nằm riêng để trang chat tải đầu không phải kéo theo khung xem artifact và trang Artifacts (artifactui.tsx, tải khi mở).
 import { useEffect, useRef, useState } from "react";
 import * as I from "./icons";
-import { tr } from "../app/i18n";
+import { tr } from "./i18n";
 import { isDeck, noteGenPending, noteGenSettled, pendingRetryMs } from "../shared/artgen";
 import type { OutFile } from "./llm";
 import { FILE_KIND as KIND, fileKind, fmtSize } from "./fileicon";

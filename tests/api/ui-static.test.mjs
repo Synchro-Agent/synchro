@@ -51,7 +51,7 @@ ok(/className="overlay ft-lightbox"/.test(lb) && /role="dialog" aria-modal="true
 
 // U11: chip nguồn — favicon hỏng / 1×1 thành chữ cái đầu trên nền trung tính; tối đa 6 chip, còn lại "+N nguồn".
 {
-  const c = read("ui/cites.tsx"), css = read("app/synchro-ds.css");
+  const c = read("ui/cites.tsx"), css = read("app/_shell/synchro-ds.css");
   ok(/onLoad=\{\(e\) => \{ if \(e\.currentTarget\.naturalWidth < 2/.test(c) && /onError=\{\(\) => setBad\(true\)\}/.test(c), "favicon: ảnh lỗi hoặc ảnh 1×1 chuyển sang chữ cái đầu");
   ok(/export const SHOWN_SOURCES = 6;/.test(c) && /tr\(`\+\$\{more\} nguồn`\)/.test(c), "tối đa 6 chip nguồn, phần còn lại gom vào +N nguồn");
   ok(/\.msg-sources a\[hidden\]\{display:none\}/.test(css), "chip ẩn thật sự ẩn (hidden thắng display:inline-flex)");
@@ -71,7 +71,7 @@ ok(/className="overlay ft-lightbox"/.test(lb) && /role="dialog" aria-modal="true
 
 // U13: sơ đồ Mermaid trong câu trả lời không cao hơn màn hình; có nút phóng to cả màn hình.
 {
-  const md = read("ui/md.tsx"), css = read("app/globals.css");
+  const md = read("ui/md.tsx"), css = read("app/_shell/globals.css");
   ok(/if \(lang === "mermaid"\) return <MermaidCard code=\{code\} \/>;/.test(md), "sơ đồ Mermaid trong chat dùng khung có nút phóng to");
   ok(/\.viz-mm \.art-mermaid svg\{max-height:min\(70vh,520px\)\}/.test(css), "sơ đồ cao tối đa min(70vh, 520px)");
   ok(/aria-label=\{tr\("Phóng to sơ đồ"\)\}/.test(md) && /role="dialog" aria-modal="true" aria-label=\{tr\("Sơ đồ"\)\}/.test(md) && /e\.key === "Escape"/.test(md), "nút phóng to có tên, khung cả màn hình là hộp thoại có tên, Esc đóng");
@@ -80,7 +80,7 @@ ok(/className="overlay ft-lightbox"/.test(lb) && /role="dialog" aria-modal="true
 
 // U14: trợ năng — vùng bấm 44px trên màn cảm ứng, chữ tối thiểu 12px, nút đóng có tên, hộp xác nhận (Đăng xuất?) có tên.
 {
-  const cssFiles = ["app/globals.css", "app/synchro-ds.css", "app/features.css", "ui/styles/codeview.css", "ui/styles/brainview.css", "app/glass.css", "ui/styles/speech.css", "ui/styles/download.css"];
+  const cssFiles = ["app/_shell/globals.css", "app/_shell/synchro-ds.css", "app/_shell/features.css", "ui/styles/codeview.css", "ui/styles/brainview.css", "app/_shell/glass.css", "ui/styles/speech.css", "ui/styles/download.css"];
   // Ngoại lệ: chỉ hình minh họa thu nhỏ thuần túy — trang tải về (.dl-win / .dl-phone) và ảnh thu nhỏ tài liệu Markdown (.art-thumb-doc, inert + aria-hidden) —
   // không phải chữ để đọc. Nhãn loại tệp trong ô 28–30px (.out-badge.sm, .art-head .out-badge) LÀ chữ để đọc nên không còn được miễn, phải ≥12px.
   const small = [];
@@ -89,7 +89,7 @@ ok(/className="overlay ft-lightbox"/.test(lb) && /role="dialog" aria-modal="true
     for (const d of m[2].matchAll(/font(?:-size)?:\s*(?:[a-z]+\s+|\d{3}\s+)*(\d+(?:\.\d+)?)px/g)) if (Number(d[1]) < 12) small.push(`${f}: ${m[1].trim().slice(-50)} ${d[0]}`);
   }
   ok(!small.length, "không còn cỡ chữ dưới 12px", small.slice(0, 10).join("\n"));
-  ok(/@media \(pointer:coarse\)\{\s*html body :is\(\.icon-btn,\.menu-item,\.nav-item\):not\(\.auth-root \*\),\.auth-root :is\(\.icon-btn,\.menu-item,\.nav-item\)\{min-width:44px;min-height:44px\}/.test(read("app/synchro-ds.css")), "màn cảm ứng: nút biểu tượng, mục menu, mục điều hướng tối thiểu 44×44");
+  ok(/@media \(pointer:coarse\)\{\s*html body :is\(\.icon-btn,\.menu-item,\.nav-item\):not\(\.auth-root \*\),\.auth-root :is\(\.icon-btn,\.menu-item,\.nav-item\)\{min-width:44px;min-height:44px\}/.test(read("app/_shell/synchro-ds.css")), "màn cảm ứng: nút biểu tượng, mục menu, mục điều hướng tối thiểu 44×44");
   const unnamed = [];
   for (const f of tsx) {
     const src = read(f);

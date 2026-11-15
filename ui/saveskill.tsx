@@ -5,7 +5,7 @@
 import { useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import * as I from "./icons";
-import { tr } from "../app/i18n";
+import { tr } from "./i18n";
 import { ScopeChoice, shareSkill, SKILLS_CHANGED, useIsAdmin, type Scope } from "./skillsui";
 
 const fold = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").replace(/Đ/g, "D").toLowerCase();

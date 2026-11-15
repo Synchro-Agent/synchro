@@ -4,7 +4,7 @@
 import { cachedJson } from "./studios";
 import { useDeferredValue, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import * as I from "./icons";
-import { tr } from "../app/i18n";
+import { tr } from "./i18n";
 import { plainSnippet } from "../shared/runtext";
 import { stripAppliedNotes } from "../shared/turnctx";
 import { useFitPlaceholder } from "./phfit";

@@ -2,7 +2,7 @@
 // Phía trình duyệt của Speech: gọi /api/speech, giữ gói ElevenLabs (credit, tính năng) dùng chung cho mọi công cụ và thanh bên.
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { NO_SERVER } from "../apierr";
-import { locale } from "../../app/i18n";
+import { locale } from "../i18n";
 
 // Kiểu dùng chung với phía bên kia: shared/types/speech.ts.
 import type { Feat, ModelOut, Plan } from "../../shared/types/speech";

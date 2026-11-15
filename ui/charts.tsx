@@ -3,7 +3,7 @@
 // ở đây vẽ bằng SVG. Theo quy tắc trực quan hóa dữ liệu: bảng màu phân loại cố định thứ tự (đã kiểm tra mù màu),
 // một trục, cột ≤ 24px bo 4px ở đầu, đường 2px, chú giải khi ≥ 2 chuỗi, tooltip khi rê chuột, và chế độ xem bảng.
 import { useEffect, useMemo, useRef, useState } from "react";
-import { locale, tr } from "../app/i18n";
+import { locale, tr } from "./i18n";
 
 export type ChartSpec = { type: "bar" | "line" | "area" | "pie" | "donut" | "scatter"; title?: string; x: string; y: string[]; unit?: string; stacked?: boolean; data: Record<string, unknown>[] };
 const SLOTS = 8;

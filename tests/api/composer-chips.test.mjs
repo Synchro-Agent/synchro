@@ -31,7 +31,7 @@ ok(C.edgeFade(box({ clientHeight: 266, scrollHeight: 266 }), "y") === "", "lư�
 
 // LIVE-2 / LIVE-3 / R12: "+N" và "Thu gọn" nằm ngoài khung cuộn; lưới cao đúng số hàng trọn vẹn; trạng thái trải lưới đặt lại theo từng tin.
 import fs from "node:fs";
-const css = fs.readFileSync("app/globals.css", "utf8"), home = fs.readFileSync("ui/home.tsx", "utf8"), code = fs.readFileSync("ui/codeview.tsx", "utf8");
+const css = fs.readFileSync("app/_shell/globals.css", "utf8"), home = fs.readFileSync("ui/home.tsx", "utf8"), code = fs.readFileSync("ui/codeview.tsx", "utf8");
 // Dải thẻ dùng chung (ui/attachstrip.tsx) cho ô soạn tin thường và Synchro Code.
 const page = fs.readFileSync("ui/attachstrip.tsx", "utf8");
 ok(/<AttachStrip cards=\{cards\} open=\{chipsOpen\} setOpen=\{setChipsOpen\}/.test(home) && /<AttachStrip className="cv-attach" open=\{stripOpen\} setOpen=\{setStripOpen\}/.test(code), "ô soạn thường và Synchro Code cùng dùng AttachStrip");

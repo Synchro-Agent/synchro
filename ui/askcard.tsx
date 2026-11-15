@@ -3,7 +3,7 @@
 // Người dùng bấm chọn (hoặc gõ ý khác) rồi gửi; câu trả lời thành tin nhắn tiếp theo. Thẻ ở các lượt cũ chỉ hiện, không bấm được.
 import { useMemo, useState } from "react";
 import * as I from "./icons";
-import { tr } from "../app/i18n";
+import { tr } from "./i18n";
 
 export type AskQ = { q: string; options: string[]; multi: boolean };
 export const ASK_EVENT = "synchro:ask";

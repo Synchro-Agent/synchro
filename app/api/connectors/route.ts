@@ -1,6 +1,6 @@
 import { limit, sameOrigin } from "../../../server/authstore";
 import { addConnector, composioInfo, listConnectors } from "../../../server/connectors";
-import { connectorUser, policyOf, route } from "./shared";
+import { connectorUser, policyOf, route } from "../../../server/routes/connectors";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

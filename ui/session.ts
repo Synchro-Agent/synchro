@@ -1,7 +1,7 @@
 "use client";
 // Phiên đăng nhập hết hạn khi app đang mở: mọi lệnh gọi /api của app đều đi qua đây, gặp 401 thì hỏi lại /api/auth/me cho chắc (vài API có thể trả 401
 // vì lý do riêng) rồi báo cho trang. Trang giữ nguyên mọi thứ đang mở, chỉ phủ màn hình đăng nhập lên trên; thay cho từng chỗ hiện "Bạn cần đăng nhập." hay sập.
-import { tr } from "../app/i18n";
+import { tr } from "./i18n";
 let installed = false;
 let raw: typeof fetch | null = null;
 let notify: (() => void) | null = null;

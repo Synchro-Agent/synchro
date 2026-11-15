@@ -4,7 +4,7 @@ import { Loader } from "./brand";
 import { Component, useEffect, useRef, useState } from "react";
 import { armDraft } from "./draft";
 import { labelMenu, registerMenu } from "./a11y";
-import { tr } from "../app/i18n";
+import { tr } from "./i18n";
 import { reportError } from "./errorreport";
 
 // role: menu thật (mặc định); bảng thông tin dùng chung khung này thì đặt "dialog".

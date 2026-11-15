@@ -3,7 +3,7 @@
 // - Tài liệu: con trỏ Synchro viết từng dòng, biểu đồ dâng lên, một đồng nghiệp đánh dấu câu và để lại bình luận.
 // - Trình bày: bộ slide tự dựng, khung chọn ở dải ảnh nhỏ chạy qua ba trang (trang bìa, biểu đồ, con số lớn).
 // - Thiết kế: khung vẽ có bản điện thoại và bản máy tính nối với nhau; con trỏ Synchro kéo khung chọn phóng to ảnh, chọn màu, hiện số đo.
-// Chuyển động ở app/synchro-ds.css (.st-*); người dùng chọn giảm chuyển động thì cảnh đứng yên ở trạng thái đã dựng xong.
+// Chuyển động ở app/_shell/synchro-ds.css (.st-*); người dùng chọn giảm chuyển động thì cảnh đứng yên ở trạng thái đã dựng xong.
 
 const W = 640, H = 300;
 

@@ -1,7 +1,7 @@
 import { clearRelogin, refreshVendorCache, status } from "../../../../../server/ai/cli_auth";
 import { forgetPlan } from "../../../../../server/ai/subs";
 import { codexRpc } from "../../../../../server/ai/subs";
-import { engineRoute, noStore } from "../../shared";
+import { engineRoute, noStore } from "../../../../../server/routes/engines";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

@@ -5,8 +5,8 @@
 /* Thang token của app (B5): một tệp, nạp cùng globals.css (không import riêng ở layout.tsx: thêm tệp CSS vào layout đổi cách webpack gom
    và xếp thứ tự các tệp CSS của bản build). */
 @import "./tokens.css";
-@source "../ui/auth.tsx";
-@source "../ui/shader-metal.tsx";
+@source "../../ui/auth.tsx";
+@source "../../ui/shader-metal.tsx";
 /* Thứ tự lớp cascade (B5): lớp của Tailwind trước, mọi CSS của app (kể cả katex / xterm và thẻ \3c style> của auth.tsx, glass-folder.tsx)
    trong một lớp syn. Câu lệnh lặp ở đầu mỗi tệp để thứ tự không phụ thuộc tệp nào được tải trước. Trong lớp syn, bên thắng vẫn theo
    specificity rồi thứ tự nạp như khi chưa có lớp. Lớp syn-over (khối ở cuối mỗi tệp) giữ các luật trước đây phải mang !important chỉ để
@@ -121,7 +121,7 @@
 *{box-sizing:border-box}
 /* ===================== Biến thiết kế: chữ, độ đậm, nhịp hàng, icon. Chỉnh giao diện lõi ở đây, đừng ghi đè ở cuối tệp. ===================== */
 :root{
-  /* cỡ chữ --fs-ui / --fs-chat / --fs-label và các thang token khác: app/tokens.css */
+  /* cỡ chữ --fs-ui / --fs-chat / --fs-label và các thang token khác: app/_shell/tokens.css */
   --fw-body:400;--fw-ui:430;--fw-strong:500;               /* đoạn văn, chữ trên nút/mục, mục đang chọn */
   --row:32px;--row-chat:30px;--row-menu:34px;--row-set:34px; /* chiều cao hàng: thanh bên, chat, menu, Cài đặt */
   --icon:18px;--icon-set:19px;--gap-nav:11px;
@@ -2628,7 +2628,7 @@ html body .scroll-down.gen{left:50%;translate:-50% 0;width:auto;padding:0 14px 0
 .vz-tip span{display:flex;align-items:center;gap:6px;color:var(--text-2)}
 .vz-tip em{font-style:normal;margin-left:auto;padding-left:12px;color:var(--text);font-variant-numeric:tabular-nums}
 .vz-table{max-height:300px;overflow:auto}
-/* Bảng màu phân loại: --viz-0…7 (cặp sáng / tối) ở app/tokens.css */
+/* Bảng màu phân loại: --viz-0…7 (cặp sáng / tối) ở app/_shell/tokens.css */
 .vz-s0{color:var(--viz-0)}.vz-s1{color:var(--viz-1)}.vz-s2{color:var(--viz-2)}.vz-s3{color:var(--viz-3)}.vz-s4{color:var(--viz-4)}.vz-s5{color:var(--viz-5)}.vz-s6{color:var(--viz-6)}.vz-s7{color:var(--viz-7)}
 @keyframes twirl{to{transform:rotate(360deg)}}
 

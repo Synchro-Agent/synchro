@@ -1,7 +1,8 @@
 // Dùng chung cho các route connector: kiểm tra đăng nhập + quyền dùng connector, đổi lỗi thành JSON.
-import { AuthError, can, handle, permsOf, requireUser, VERIFY_FIRST, verifyLocked } from "../../../server/authstore";
-import { connPolicy } from "../../../shared/catalog";
-import { ConnectorError } from "../../../server/connectors";
+import "server-only";
+import { AuthError, can, handle, permsOf, requireUser, VERIFY_FIRST, verifyLocked } from "../authstore";
+import { connPolicy } from "../../shared/catalog";
+import { ConnectorError } from "../connectors";
 
 export function connectorUser(req: Request) {
   const { user } = requireUser(req);

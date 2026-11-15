@@ -4,7 +4,7 @@
 import { useEffect, useState } from "react";
 import * as I from "../icons";
 import { useApp, usePref } from "../store";
-import { tr } from "../../app/i18n";
+import { tr } from "../i18n";
 import { api, post, reloadDicts, setDicts, useDicts, type Dict, type Item, type Rule } from "./client";
 import { ErrBox, Field, Player, Spin } from "./parts";
 import { Head, Wide } from "./shell";

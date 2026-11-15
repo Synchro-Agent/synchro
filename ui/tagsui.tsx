@@ -3,7 +3,7 @@
 // hàng lọc theo thẻ ở thanh bên. Dữ liệu: ui/chattags.ts.
 import { useState } from "react";
 import * as I from "./icons";
-import { tr } from "../app/i18n";
+import { tr } from "./i18n";
 import { hasTag, normTag, TAG_MAX, tagKey, toggleTag } from "./chattags";
 
 /** Khung "Gắn thẻ" trong menu: ô tìm / tạo thẻ, danh sách thẻ đang dùng có dấu chọn. Enter: bật / tắt thẻ đang gõ (tạo mới nếu chưa có). */

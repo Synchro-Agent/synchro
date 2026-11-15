@@ -5,7 +5,7 @@
 // Luật chuyển giữ nguyên lớp (syn / syn-over) và @media, đặt ở ĐẦU khối lớp tương ứng của tệp đích (trước luật riêng của tệp đó, như khi
 // còn ở globals.css). Thứ tự so với luật chung đứng sau nó thì đổi: chạy scripts/css-cascade.mjs (dev và prod) để tìm cặp đổi bên thắng
 // và ghi luật liên quan vào KEEP (giữ lại ở tệp tải đầu), rồi chạy lại.
-// Dùng: node scripts/css-move.mjs [--write] [--from app/globals.css] [--keep tệp.json]   (in số byte chuyển được theo tệp đích)
+// Dùng: node scripts/css-move.mjs [--write] [--from app/_shell/globals.css] [--keep tệp.json]   (in số byte chuyển được theo tệp đích)
 import fs from "node:fs";
 import path from "node:path";
 import { createRequire } from "node:module";
@@ -70,7 +70,7 @@ export function anchor(sel, G, sheets) {
 const condKey = (n) => { const k = []; for (let p = n.parent; p && p.type !== "root"; p = p.parent) if (p.type === "atrule") k.unshift(`@${p.name} ${p.params}`); return k; };
 export const ruleKey = (r) => `${condKey(r).join(" ")} ${r.selector.replace(/\s+/g, " ")} {${r.nodes.filter((n) => n.type === "decl").map((d) => `${d.prop}:${d.value}`).join(";")}}`;
 
-export function move(root = ".", { from = "app/globals.css", keep = [], write = false } = {}) {
+export function move(root = ".", { from = "app/_shell/globals.css", keep = [], write = false } = {}) {
   const G = graph(root);
   const sheets = SHEETS.map((s) => ({ ...s, owners: G.reach(s.entries), only: G.exclusive(s.entries) }));
   const keepSet = new Set(keep);
@@ -138,7 +138,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   const a = process.argv; const opt = (k, d) => (a.includes(k) ? a[a.indexOf(k) + 1] : d);
   const keepFile = opt("--keep", null);
   const keep = keepFile && fs.existsSync(keepFile) ? JSON.parse(fs.readFileSync(keepFile, "utf8")) : [];
-  const r = move(".", { from: opt("--from", "app/globals.css"), keep, write: a.includes("--write") });
+  const r = move(".", { from: opt("--from", "app/_shell/globals.css"), keep, write: a.includes("--write") });
   for (const [k, v] of Object.entries(r.bytes)) console.log(`${k}: ${v} byte`);
   console.log(`${a.includes("--write") ? "đã chuyển" : "sẽ chuyển"} ${r.moved.length} luật, ${Object.values(r.bytes).reduce((x, y) => x + y, 0)} byte`);
 }

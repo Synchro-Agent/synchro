@@ -6,7 +6,7 @@ import { createPortal } from "react-dom";
 import { useApp } from "../store";
 import * as I from "../icons";
 import { CAT_LABEL, LANGS, api, del, fmtNum, hueOf, on, post, postForm, reloadVoices, useMyVoices, usePlan, type Voice } from "./client";
-import { getLang, tr, untranslated } from "../../app/i18n";
+import { getLang, tr, untranslated } from "../i18n";
 import { AGES, DESIGN_PRESETS, GENDERS, REMIX_IDEAS } from "../../shared/speech/data";
 import { Drop, ErrBox, Field, OrbStage, Player, Range, Recorder, Seg, Select, Spin, Tabs, Toggle, VoiceAvatar, VoiceChip, VoicePicker, voiceLine } from "./parts";
 import { Head, Wide } from "./shell";

@@ -7,7 +7,7 @@ import { createPortal } from "react-dom";
 import * as I from "./icons";
 import { useApp } from "./store";
 import { BulkBar, BulkButton, BulkCheck, bulkRow, each, useBulk, type BulkAct } from "./bulk";
-import { getLang, locale, tf, tr } from "../app/i18n";
+import { getLang, locale, tf, tr } from "./i18n";
 import { diffLines } from "./md";
 import { slimSkillZip, tooLarge } from "./skillzip";
 import { PageBar, usePage } from "./pager";

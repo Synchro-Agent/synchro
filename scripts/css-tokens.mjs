@@ -1,4 +1,4 @@
-// B5 bước 6a / 7a: thay số cứng bằng token của app/tokens.css, KHÔNG đổi giá trị (chỉ ánh xạ đúng bằng; số lệch thang để nguyên cho bước
+// B5 bước 6a / 7a: thay số cứng bằng token của app/_shell/tokens.css, KHÔNG đổi giá trị (chỉ ánh xạ đúng bằng; số lệch thang để nguyên cho bước
 // 6b / 7b, cần chủ dự án duyệt ảnh trước / sau).
 // - font-size và cỡ chữ trong font: viết tắt: 12/13/14/16/20/24/28px → var(--fs-1..7), 12.5px → var(--fs-label), 13.5px → var(--fs-chat).
 // - z-index ≥ 20 → tầng --z-* theo bảng ZMAP (giữ nguyên thứ tự tương đối: calc(var(--z-bậc dưới) + n) cho số xen giữa).
@@ -24,7 +24,7 @@ export function zToken(n) {
 const ONLY = process.argv.includes("--only") ? process.argv[process.argv.indexOf("--only") + 1] : "";
 const fsToken = (px) => (ONLY !== "z" && FS[px] ? `var(${FS[px]})` : null);
 
-const SKIP_CSS = new Set(["app/tokens.css"]);
+const SKIP_CSS = new Set(["app/_shell/tokens.css"]);
 const walk = (d, ext, out = []) => {
   for (const e of fs.readdirSync(d, { withFileTypes: true })) {
     const p = path.join(d, e.name);

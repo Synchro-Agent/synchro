@@ -10,7 +10,7 @@ import "./styles/speech.css";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import * as I from "./icons";
-import { getLang } from "../app/i18n";
+import { getLang } from "./i18n";
 import { usePref, VOICE_LANG } from "./store";
 import { SiriWave, startMicLevel, useSpeakingLevel } from "./voicefx";
 import { startRealtime, type RtPhase } from "./realtime";

@@ -1,7 +1,7 @@
 "use client";
 // Dải nhắc xác minh email cho tài khoản mới: không chặn chat. Gửi lại thư ngay tại đây; xác minh ở tab khác thì quay lại trang này là tự biến mất và mở đủ tính năng.
 import { useEffect, useState } from "react";
-import { getLang } from "../app/i18n";
+import { getLang } from "./i18n";
 import type { AuthUser } from "./auth";
 import * as I from "./icons";
 

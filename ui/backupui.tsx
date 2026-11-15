@@ -6,7 +6,7 @@ import "./styles/settings.css";
 import { useCallback, useEffect, useState } from "react";
 import { call, ago, fmtDate } from "./adminui";
 import { useApp } from "./store";
-import { locale, tf, tr } from "../app/i18n";
+import { locale, tf, tr } from "./i18n";
 import * as I from "./icons";
 
 type St = {

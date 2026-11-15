@@ -4,7 +4,7 @@
 // 2. Bộ quét mã nguồn (tests/lib/srcroots.mjs) thấy đủ số tệp tối thiểu: thiếu một gốc thì phép kiểm quét mã không thể qua vì không đọc gì.
 // 3. server/: mỗi tệp mở đầu bằng import "server-only" (gói giao diện nhập nhầm thì bản build báo lỗi); không tệp "use client" nào nhập
 //    (không chỉ kiểu) một tệp trong server/.
-// 4. ui/ giữ mã giao diện. 5. shared/ không mang dấu phía nào và chỉ nhập mã trong shared/.
+// 4. ui/ giữ mã giao diện; app/ chỉ giữ tệp của Next (và app/_shell/). 5. shared/ không mang dấu phía nào và chỉ nhập mã trong shared/.
 import fs from "node:fs";
 import path from "node:path";
 import { walkSrc } from "../lib/srcroots.mjs";
@@ -89,19 +89,38 @@ for (const f of clients) {
 }
 ok(!leaks.length, `không tệp "use client" nào nhập mã server/ (${clients.length} tệp)`, leaks.join("\n"));
 
-console.log("4. ui/ giữ mã giao diện");
-// Tệp "use client" chỉ nằm trong ui/, trừ các tệp đặc biệt của Next phải ở app/ (error, global-error, page…) và ba component client
-// layout.tsx nhập (LAYOUT_SHELL). Ba tệp này ở lại app/ cùng các tệp CSS tải đầu: bản build webpack xếp thứ tự tệp CSS tải đầu bằng một phép
-// sắp xếp theo tên đường dẫn trộn lẫn component client với tệp CSS (next flight-client-entry-plugin), chuyển chúng đi thì thứ tự <link>
-// của bản production đổi (glass.css + features.css thôi đứng trước globals.css) và bên thắng của cascade đổi theo.
+console.log("4. ui/ giữ mã giao diện; app/ chỉ giữ tệp của Next");
+// Tệp "use client" chỉ nằm trong ui/, trừ các tệp đặc biệt của Next phải ở app/ (error, global-error, page…) và ba ranh giới client mỏng
+// app/layout.tsx nhập (LAYOUT_SHELL, chỉ chuyển tiếp sang ui/). Ba tệp đó ở app/_shell/ cùng các tệp CSS tải đầu: bản build webpack xếp thứ
+// tự tệp CSS tải đầu bằng một phép sắp xếp theo đường dẫn trộn lẫn component client với tệp CSS và với node_modules/ của bộ chữ (next
+// flight-client-entry-plugin); chúng không cùng ở một thư mục xếp trước "node_modules" thì thứ tự <link> của bản production đổi (glass.css +
+// features.css thôi đứng trước globals.css) và bên thắng của cascade đổi theo. app/_shell/ là thư mục riêng (gạch dưới): Next không coi là route.
 const NEXT_SPECIAL = /^app\/(.+\/)?(page|layout|error|global-error|not-found|loading|template|default)\.tsx$/;
-const LAYOUT_SHELL = ["app/glass.tsx", "app/i18n.tsx", "app/chunkguard.tsx"];
+const SHELL_DIR = "app/_shell/";
+const LAYOUT_SHELL = ["app/_shell/glass.tsx", "app/_shell/i18n.tsx", "app/_shell/chunkguard.tsx"];
 const strays = clients.filter((f) => !f.startsWith("ui/") && !NEXT_SPECIAL.test(f) && !LAYOUT_SHELL.includes(f));
-const FIRST_CSS = ["app/unbounded-preload.css", "app/globals.css", "app/glass.css", "app/synchro-ds.css", "app/features.css"];
-ok([...LAYOUT_SHELL, ...FIRST_CSS].every((f) => fs.existsSync(f)), "component client của layout và CSS tải đầu cùng ở app/ (giữ thứ tự <link> của bản build)",
+const FIRST_CSS = ["app/_shell/unbounded-preload.css", "app/_shell/globals.css", "app/_shell/glass.css", "app/_shell/synchro-ds.css", "app/_shell/features.css"];
+ok([...LAYOUT_SHELL, ...FIRST_CSS].every((f) => fs.existsSync(f)), "ranh giới client của layout và CSS tải đầu cùng ở app/_shell/ (giữ thứ tự <link> của bản build)",
   [...LAYOUT_SHELL, ...FIRST_CSS].filter((f) => !fs.existsSync(f)).join(", "));
-ok(!css.some((f) => f.startsWith("app/") && !FIRST_CSS.includes(f) && f !== "app/tokens.css"), "CSS khác (tải chậm, vendor) nằm ở ui/styles/",
-  css.filter((f) => f.startsWith("app/") && !FIRST_CSS.includes(f) && f !== "app/tokens.css").join(", "));
+const layout = fs.readFileSync("app/layout.tsx", "utf8");
+const layoutImports = [...layout.matchAll(/^import\s+(?:[^"';]*?\s+from\s+)?["']([^"']+)["'];/gm)].map((m) => m[1]);
+const WANT_IMPORTS = ["./_shell/glass", "./_shell/i18n", "./_shell/chunkguard", "../server/langdetect", "next", "@fontsource-variable/unbounded/wght.css",
+  "./_shell/unbounded-preload.css", "./_shell/globals.css", "./_shell/glass.css", "./_shell/synchro-ds.css", "./_shell/features.css"];
+ok(JSON.stringify(layoutImports) === JSON.stringify(WANT_IMPORTS), "app/layout.tsx nhập đúng các tệp đó theo đúng thứ tự (thứ tự nạp CSS ở next dev)", layoutImports.join("\n"));
+const thin = LAYOUT_SHELL.filter((f) => {
+  const body = fs.readFileSync(f, "utf8").replace(/^\s*["']use client["'];?/, "").replace(/\/\/[^\n]*/g, "").trim();
+  return !/^export\s+\{[^}]*\}\s+from\s+["']\.\.\/\.\.\/ui\/[\w-]+["'];$/.test(body);
+});
+ok(!thin.length, "ba ranh giới client trong app/_shell/ chỉ chuyển tiếp sang ui/ (một dòng export … from)", thin.join(", "));
+ok(!css.some((f) => f.startsWith("app/") && !FIRST_CSS.includes(f) && f !== "app/_shell/tokens.css"), "CSS khác (tải chậm, vendor) nằm ở ui/styles/",
+  css.filter((f) => f.startsWith("app/") && !FIRST_CSS.includes(f) && f !== "app/_shell/tokens.css").join(", "));
+// app/ chỉ giữ route, layout, page, route handler, tệp đặc biệt và ảnh metadata của Next, cùng đúng các tệp đã kể trong app/_shell/.
+const APP_OK = /^app\/(.+\/)?(page|layout|route|error|global-error|not-found|loading|template|default)\.tsx?$|^app\/manifest\.ts$|^app\/(favicon\.ico|icon\.svg|apple-icon\.png|(opengraph|twitter)-image\.(png|alt\.txt))$/;
+const SHELL_FILES = [...LAYOUT_SHELL, ...FIRST_CSS, "app/_shell/tokens.css"];
+const appFiles = walk("app", /./);
+const appExtra = appFiles.filter((f) => (f.startsWith(SHELL_DIR) ? !SHELL_FILES.includes(f) : !APP_OK.test(f)));
+ok(appFiles.length >= 140, `app/ có ${appFiles.length} tệp`);
+ok(!appExtra.length, "app/ chỉ giữ tệp của Next (route, layout, page, tệp đặc biệt, ảnh metadata) và app/_shell/", appExtra.join("\n"));
 ok(clients.filter((f) => f.startsWith("ui/")).length >= 120, `ui/ có ${clients.filter((f) => f.startsWith("ui/")).length} tệp "use client"`);
 ok(!strays.length, `không tệp "use client" nào ngoài ui/ (trừ tệp đặc biệt của Next trong app/)`, strays.join(", "));
 // Không tệp nào trong ui/ (kể cả tiện ích không mang "use client") nhập mã server/ ngoài kiểu.

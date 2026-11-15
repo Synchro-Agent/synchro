@@ -8,7 +8,7 @@
 import { useEffect, useRef, useSyncExternalStore } from "react";
 import { batches, earlyUsable, hashOf, keyOf, lastTime, losesUserMsgs, parseMeta, saveFit, serialChat, serialProject, startupDirty, decideRemote, stubOf, TIMED_OUT, withDeadline, type Part, type SyncKind, type SyncMeta } from "./chatsynccore";
 import { bodyStr, forgetChats, freshDevice, hydrateAll, hydrateIds, localBodies, onNeedChats, saveChats as storeChats } from "./chatload";
-import { tr } from "../app/i18n";
+import { tr } from "./i18n";
 import type { Chat, Project } from "./store";
 import { ls, scopedFor, userScope } from "./userscope";
 import { useChatStore } from "./chatstore.client";

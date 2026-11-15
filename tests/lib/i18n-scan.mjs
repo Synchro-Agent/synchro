@@ -44,7 +44,7 @@ export const PAIR_ALLOW = {
   "shared/speech/data.ts#TAG_GROUPS": "thẻ âm thanh tiếng Anh gửi API Eleven v3 kèm nhãn tiếng Việt (nhãn dịch qua từ điển)",
   "shared/speech/data.ts#SFX_CATS": "nhãn tiếng Việt kèm câu lệnh tiếng Anh gửi API tiếng động (câu lệnh không hiện, nhãn dịch qua từ điển)",
   "shared/cxactions.ts#META": "chính là dữ liệu từ điển: tên công cụ meta của Composio, nạp vào VI2EN qua CX_VI2EN",
-  "app/i18n.tsx#LANG_NAMES": "tên mỗi ngôn ngữ viết bằng chính ngôn ngữ đó (Tiếng Việt, English)",
+  "ui/i18n.tsx#LANG_NAMES": "tên mỗi ngôn ngữ viết bằng chính ngôn ngữ đó (Tiếng Việt, English)",
 };
 const PAIR_RE = /\ben\(\)|getLang\(\)|lang\s*===?\s*"en"|isEn\b|\ben\b/;
 

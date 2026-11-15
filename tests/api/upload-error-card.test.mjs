@@ -30,7 +30,7 @@ ok(/tr\("Bỏ"\)/.test(box) && /onRemove/.test(box), "có nút Bỏ (onRemove)",
 ok(/import\s*\{[^}]*retryFile[^}]*\}\s*from\s*"\.\/filestate"/.test(src), "retryFile được nhập từ filestate");
 
 console.log("4. Chữ clamp 2 dòng trong CSS (lý do dài vẫn gọn, không che cả thẻ)");
-const css = fs.readFileSync("app/globals.css", "utf8");
+const css = fs.readFileSync("app/_shell/globals.css", "utf8");
 const ci = css.indexOf(".ft-err-msg");
 const crule = css.slice(ci, ci + 240);
 ok(ci >= 0 && /line-clamp:\s*2/.test(crule), ".ft-err-msg giới hạn 2 dòng", crule);

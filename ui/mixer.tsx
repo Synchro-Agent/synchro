@@ -4,7 +4,7 @@
 // Tắt / bật khối ở tầng cuối không làm đổi phần đầu nên không mất bộ đệm. Ngữ cảnh quá lớn thì nén lịch sử thành tóm tắt.
 import { useEffect, useMemo, useRef, useState } from "react";
 import * as I from "./icons";
-import { locale, tr } from "../app/i18n";
+import { locale, tr } from "./i18n";
 import { compactHistory, estimateContext, type CtxBlock } from "./llm";
 import { chatHistory, mixExtra } from "./history";
 import { fileContext } from "./filestate";

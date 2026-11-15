@@ -3,7 +3,7 @@
 // Code trên điện thoại, ô dán link repo trong hộp Cài đặt chỉ còn 153px). Chọn bản dài nhất còn vừa ô: đo bằng canvas theo đúng phông của ô
 // và theo ngôn ngữ đang dùng (lớp dịch đổi chữ sau đó), ô đổi kích thước hoặc phông tải xong thì chọn lại. Bản cuối là bản ngắn nhất.
 import { useEffect, useState, type RefObject } from "react";
-import { getLang, tr } from "../app/i18n";
+import { getLang, tr } from "./i18n";
 
 let cv: CanvasRenderingContext2D | null = null;
 

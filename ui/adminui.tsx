@@ -7,7 +7,7 @@ import { apiFetch, statusText } from "./apierr";
 import { Avatar } from "./avatar";
 import { Fade } from "./ui";
 import { useApp } from "./store";
-import { getLang, tr, locale } from "../app/i18n";
+import { getLang, tr, locale } from "./i18n";
 import * as I from "./icons";
 import { UsageAdmin, UsageIcon } from "./usageui";
 import type { AuthUser, Providers } from "./auth";

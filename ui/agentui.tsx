@@ -6,7 +6,7 @@ import { createPortal } from "react-dom";
 import * as I from "./icons";
 import { Markdown } from "./md";
 import { Loader } from "./brand";
-import { tr, useLangReady } from "../app/i18n";
+import { tr, useLangReady } from "./i18n";
 import { localizeNote } from "../shared/agentfold";
 import { ConnLogo } from "./connlogo";
 import { ASK_GONE } from "./codesync";

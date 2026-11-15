@@ -1,4 +1,4 @@
-// Bảng trong câu trả lời đo bằng Chrome ẩn trên HTML tĩnh với đúng app/globals.css, không cần máy chủ: chữ trong ô không vỡ từng ký tự, bảng rộng cuộn ngang được, đoạn văn thường vẫn không tràn.
+// Bảng trong câu trả lời đo bằng Chrome ẩn trên HTML tĩnh với đúng app/_shell/globals.css, không cần máy chủ: chữ trong ô không vỡ từng ký tự, bảng rộng cuộn ngang được, đoạn văn thường vẫn không tràn.
 // Chạy tay: node tests/ui/mdtable.mjs
 import { execFile } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -7,7 +7,7 @@ import { join } from "node:path";
 
 let pass = 0, fail = 0;
 const ok = (c, n, x = "") => { c ? pass++ : fail++; console.log(c ? "  ✓" : "  ✗", n, c ? "" : JSON.stringify(x).slice(0, 700)); };
-const css = readFileSync(new URL("../../app/globals.css", import.meta.url), "utf8");
+const css = readFileSync(new URL("../../app/_shell/globals.css", import.meta.url), "utf8");
 const dir = mkdtempSync(join(tmpdir(), "synchro-mdtable-"));
 const LONG = "Mô tả rất dài về công việc đang làm ở bước này, kèm giải thích thêm để cột chữ chiếm gần hết chiều ngang của khung chat. ".repeat(2);
 const row = (a) => `<tr><td>${a}</td><td>${LONG}</td><td>${LONG}</td></tr>`;

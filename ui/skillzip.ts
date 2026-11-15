@@ -4,7 +4,7 @@
 // Lọc giống hệt máy chủ — "skill": parseUpload trong skillstore.ts (bỏ rác hệ điều hành và mọi thư mục ẩn: .git, .github…); "library":
 // addZipToPlugin trong plugins.ts (bỏ .git, node_modules, dist…; giữ .claude / .agents / .claude-plugin / .codex). Skill là thư mục có
 // SKILL.md (skill lồng trong skill khác thuộc skill ngoài); giữ nguyên đường dẫn nên danh sách skill để chọn và pick không đổi.
-import { tf } from "../app/i18n";
+import { tf } from "./i18n";
 
 const MB = 1024 * 1024;
 /** Giới hạn mỗi lần tải lên của nginx (client_max_body_size). */

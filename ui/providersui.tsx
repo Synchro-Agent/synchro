@@ -14,7 +14,7 @@ import { BrandLogo } from "./brands";
 import { ProviderCard, TestBox, type ApiProvider, type ApiState } from "./apiui";
 import { ModelRegistry } from "./modelregui";
 import { CliUpdates } from "./cliupdateui";
-import { getLang } from "../app/i18n";
+import { getLang } from "./i18n";
 import { resetClock } from "./resetfmt";
 
 type Cli = "claude" | "codex" | "agy" | "grok";

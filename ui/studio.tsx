@@ -5,7 +5,7 @@ import "./styles/skills.css";
 // Bấm một loại hoặc nút ở góc sân khấu để bắt đầu tạo (giống các thẻ cũ). Hai cảnh mờ chéo nhau; cảnh đang ẩn đứng yên ở khung hình cuối.
 import { useEffect, useRef, useState } from "react";
 import * as I from "./icons";
-import { tr } from "../app/i18n";
+import { tr } from "./i18n";
 import { fmtCount } from "./studios";
 import { StudioScene } from "./syart";
 

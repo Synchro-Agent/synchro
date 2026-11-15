@@ -4,7 +4,7 @@ import fs from "node:fs";
 
 let pass = 0, fail = 0;
 const ok = (c, n, x = "") => { c ? pass++ : fail++; console.log(c ? "  ✓" : "  ✗", n, c ? "" : String(x).slice(0, 300)); };
-const css = fs.readFileSync("app/synchro-ds.css", "utf8").replace(/\/\*[\s\S]*?\*\//g, ""), page = fs.readFileSync("ui/home.tsx", "utf8");
+const css = fs.readFileSync("app/_shell/synchro-ds.css", "utf8").replace(/\/\*[\s\S]*?\*\//g, ""), page = fs.readFileSync("ui/home.tsx", "utf8");
 
 ok(/className=\{`cm-cnt\$\{k\.state !== "blocked" \? " cm-dup" : ""\}`\}/.test(page), "ghi chú chưa liên kết / cần liên kết lại được đánh dấu trùng ý với nút");
 ok(/\.cm-cx>\.cv-ell\{flex:none\}/.test(css), "tên Composio không co");

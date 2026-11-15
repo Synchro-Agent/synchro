@@ -1,7 +1,7 @@
 "use client";
 // Phần riêng của thẻ duyệt khi lời gọi đi qua Composio: nói bằng thao tác thật (ứng dụng, tài khoản, thao tác, tham số chính) thay cho tên công cụ bọc ngoài.
 // Dùng chung cho thẻ trong nhật ký làm việc (agentui.tsx) và thẻ chờ duyệt của lượt chat (connectorsui.tsx).
-import { tr, trCx } from "../app/i18n";
+import { tr, trCx } from "./i18n";
 import { appName, type CxCard, type CxWrite } from "../shared/cxactions";
 
 /** "Google Docs · Tạo tài liệu 'Synchro test'": tên thao tác theo ngôn ngữ giao diện, tên ứng dụng và tham số giữ nguyên. */

@@ -9,7 +9,7 @@ import { SettingsSkeleton } from "./skeleton";
 const SettingsBody = lazyView(() => import("./settings").then((m) => m.SettingsBody), <SettingsSkeleton />);
 import { usePref, useApp } from "./store";
 import { UPLOAD_ACCEPT } from "../shared/fileproc/types";
-import { tr, type Lang } from "../app/i18n";
+import { tr, type Lang } from "./i18n";
 import { createPortal } from "react-dom";
 import { Boundary } from "./ui";
 

@@ -7,7 +7,7 @@ import * as I from "./icons";
 import { useApp } from "./store";
 import { HUB_DISCOVER, HUB_SEARCH, PLUGINS_CHANGED, useStudios } from "./studios";
 export { HUB_DISCOVER, PLUGINS_CHANGED, useStudios };
-import { locale, tf, tr, untranslated } from "../app/i18n";
+import { locale, tf, tr, untranslated } from "./i18n";
 import type { PluginSummary, PublicPlugin, Preview, Risk, SkillReport, Studio, StudioInfo, StudioMode } from "../shared/types/plugins";
 import { PLUGIN_CATS, type DirPlugin } from "../shared/plugindir";
 import { ClaudeDirectory } from "./claudedirui";

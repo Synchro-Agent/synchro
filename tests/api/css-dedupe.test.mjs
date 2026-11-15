@@ -17,7 +17,7 @@ console.log("2. Bộ mẫu");
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "css-dedupe-"));
 for (const f of [...D.FIRST, ...D.LAZY]) { fs.mkdirSync(path.dirname(path.join(tmp, f)), { recursive: true }); fs.writeFileSync(path.join(tmp, f), "@layer syn, syn-over;\n"); }
 const put = (f, css) => fs.writeFileSync(path.join(tmp, f), `@layer syn, syn-over;\n${css}\n`);
-put("app/globals.css", `@layer syn{
+put("app/_shell/globals.css", `@layer syn{
 .a{color:red;margin:0}
 .b{height:100vh;height:100dvh}
 .c{height:100vh}
@@ -33,7 +33,7 @@ put("app/globals.css", `@layer syn{
 .m{color:red}
 }
 @layer syn-over{.g{color:blue}}`);
-put("app/synchro-ds.css", `@layer syn{
+put("app/_shell/synchro-ds.css", `@layer syn{
 .a{color:blue}
 .c{height:100dvh}
 html body .d{color:blue}
@@ -45,7 +45,7 @@ html body .cv-dragging{cursor:col-resize}
 .k{-webkit-backdrop-filter:blur(3px)}
 .l{color:blue!important}
 }`);
-put("app/glass.css", `@layer syn{.m{color:blue}}`);
+put("app/_shell/glass.css", `@layer syn{.m{color:blue}}`);
 put("ui/styles/projects.css", `@layer syn{.p{color:red}.q{color:red}.q{color:blue}}`);
 put("ui/styles/settings.css", `@layer syn{.p{color:blue}}`);
 const dead = D.findDead(D.load(tmp));

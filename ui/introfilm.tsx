@@ -17,7 +17,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Loader, Mark, Wordmark } from "./brand";
 import { assemble, boxOf, center, fly as flyTo, markTarget, onScreen, openHole, reducedMotion, settleApp, type Box } from "./handoff";
-import { getLang, tr, trc } from "../app/i18n";
+import { getLang, tr, trc } from "./i18n";
 import { SEEN, wantsIntro } from "./introflag";
 export { wantsIntro };
 

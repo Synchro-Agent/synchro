@@ -15,7 +15,7 @@ export { ConnLogo };
 import type { ApprovalCall, Decision } from "./llm";
 import { BulkBar, BulkButton, BulkCheck, bulkRow, each, useBulk, type Bulk, type BulkAct } from "./bulk";
 import { PageBar, usePage } from "./pager";
-import { tr } from "../app/i18n";
+import { tr } from "./i18n";
 import { CONN_CHANGED, loginClaims } from "./connwatch";
 import { SettingsSkeleton } from "./skeleton";
 

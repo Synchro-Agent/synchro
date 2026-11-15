@@ -2,7 +2,7 @@ import { audit, AuthError, isAdmin } from "../../../../../server/authstore";
 import { forget } from "../../../../../server/ai/cli_auth";
 import { install } from "../../../../../server/ai/cli_runtime";
 import { redact } from "../../../../../server/ai/errors";
-import { engineRoute, noStore } from "../../shared";
+import { engineRoute, noStore } from "../../../../../server/routes/engines";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
