@@ -117,23 +117,28 @@ for (const f of [...src.keys()].filter((x) => x.startsWith("ui/"))) {
 ok(!uiLeaks.length, "không tệp ui/ nào nhập mã server/", uiLeaks.join("\n"));
 
 console.log("5. shared/ dùng được ở cả hai phía");
-// Mã dùng chung (từ điển, dữ liệu thiết kế, danh mục, mdparse, kiểu) không mang "use client" hay import "server-only", và không nhập mã
-// server/ hay ui/ (trừ kiểu, bị xóa khi biên dịch): nhập vào thì gói giao diện kéo theo mã máy chủ, hoặc máy chủ kéo theo mã trình duyệt.
+// Mã dùng chung (từ điển, dữ liệu thiết kế, danh mục, mdparse, kiểu trong shared/types/) không mang "use client" hay import "server-only",
+// và chỉ nhập mã trong shared/ (kể cả kiểu): nhập mã server/ hay ui/ thì gói giao diện kéo theo mã máy chủ, hoặc máy chủ kéo theo mã trình duyệt.
 const shared = [...src.keys()].filter((f) => f.startsWith("shared/"));
-ok(shared.length >= 45, `shared/ có ${shared.length} tệp`);
+ok(shared.length >= 53, `shared/ có ${shared.length} tệp`);
 const marked = shared.filter((f) => isClient(src.get(f)) || /^\s*import\s+["']server-only["']/m.test(src.get(f)));
 ok(!marked.length, 'không tệp shared/ nào mang "use client" hay import "server-only"', marked.join(", "));
+const IMPORTS = /(?:^|\n)\s*(?:import|export)\s+(type\s+)?([^;]*?)\s*from\s*["'](\.{1,2}\/[^"']+)["']|import\(\s*["'](\.{1,2}\/[^"']+)["']\s*\)|(?:^|\n)\s*import\s*["'](\.{1,2}\/[^"']+)["']/g;
+const target = (f, spec) => resolve(f, spec) ?? P.normalize(P.join(P.dirname(f), spec));
 const sharedLeaks = [];
-for (const f of shared) {
-  for (const m of src.get(f).matchAll(/(?:^|\n)\s*(?:import|export)\s+(?!type\b)([^;]*?)\s*from\s*["'](\.{1,2}\/[^"']+)["']|import\(\s*["'](\.{1,2}\/[^"']+)["']\s*\)|(?:^|\n)\s*import\s*["'](\.{1,2}\/[^"']+)["']/g)) {
-    const names = m[1]?.trim();
-    if (names && /^\{[^}]*\}$/.test(names) && names.slice(1, -1).split(",").every((x) => !x.trim() || /^type\s/.test(x.trim()))) continue;
-    const spec = m[2] ?? m[3] ?? m[4];
-    const t = resolve(f, spec) ?? P.normalize(P.join(P.dirname(f), spec));
-    if (!t.startsWith("shared/")) sharedLeaks.push(`${f} → ${t}`);
-  }
+for (const f of shared) for (const m of src.get(f).matchAll(IMPORTS)) {
+  const t = target(f, m[3] ?? m[4] ?? m[5]);
+  if (!t.startsWith("shared/")) sharedLeaks.push(`${f} → ${t}`);
 }
-ok(!sharedLeaks.length, "shared/ chỉ nhập mã trong shared/ (và gói npm)", sharedLeaks.join("\n"));
+ok(!sharedLeaks.length, "shared/ chỉ nhập mã trong shared/ (và gói npm), kể cả kiểu", sharedLeaks.join("\n"));
+// Kiểu ui/ cần từ máy chủ nằm ở shared/types/. Còn lại: BootData (server/bootdata.ts) suy ra từ giá trị trả về của bootOf, chưa viết thành kiểu riêng.
+const TYPE_FROM_SERVER = ["server/bootdata.ts"];
+const uiTypes = [];
+for (const f of [...src.keys()].filter((x) => x.startsWith("ui/"))) for (const m of src.get(f).matchAll(IMPORTS)) {
+  const t = target(f, m[3] ?? m[4] ?? m[5]);
+  if (t.startsWith("server/") && !TYPE_FROM_SERVER.includes(t)) uiTypes.push(`${f} → ${t}`);
+}
+ok(!uiTypes.length, `ui/ chỉ lấy kiểu từ server/ ở ${TYPE_FROM_SERVER.join(", ")}; kiểu khác ở shared/types/`, uiTypes.join("\n"));
 
 console.log(`\n${pass} đạt, ${fail} lỗi`);
 process.exit(fail ? 1 : 0);

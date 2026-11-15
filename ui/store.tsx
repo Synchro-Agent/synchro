@@ -2,7 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useState, useSyncExternalStore } from "react";
 import type { AuthUser } from "./auth";
-import type { TraceItem } from "../server/transpile";
+import type { TraceItem } from "../shared/types/trace";
 import { ls } from "./userscope";
 
 // trace: dấu vết công cụ (chuẩn Synchro) gửi lại ở lượt sau; stopped: người dùng đã bấm Dừng giữa chừng.

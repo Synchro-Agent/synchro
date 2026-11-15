@@ -4,20 +4,9 @@ import { useEffect, useState, useSyncExternalStore } from "react";
 import { NO_SERVER } from "../apierr";
 import { locale } from "../../app/i18n";
 
-export type Feat = "tts" | "dialogue" | "stt" | "live" | "agent" | "sfx" | "isolate" | "changer" | "align" | "music" | "design" | "remix" | "ivc" | "pvc" | "dub" | "dubClean" | "podcast" | "book" | "dict" | "native";
-export type ModelOut = { id: string; name: string; desc: string; langs: { id: string; name: string }[]; max: number; rate: number; style: boolean; boost: boolean };
-export type Plan = {
-  connected: boolean; readPlan: boolean; tier: string; tierName: string; status: string;
-  credits: { used: number; limit: number; resetAt: number | null };
-  voices: { used: number; limit: number }; pro: { used: number; limit: number };
-  features: Record<Feat, boolean>; locked: Partial<Record<Feat, string>>;
-  /** Quyền khóa còn thiếu (tính năng đó bị ẩn); realtime: dùng được Eleven Realtime; library: dùng được giọng Thư viện qua API (gói trả phí). */
-  perms: Partial<Record<Feat, string>>; realtime: boolean; library: boolean;
-  formats: { id: string; label: string }[]; tts: ModelOut[]; sts: ModelOut[];
-  note: string | null; checkedAt: number;
-  /** true khi người xem là chủ sở hữu: chỉ chủ sở hữu thấy số credit dùng chung của cả hệ thống; người khác thấy "credits" là hạn mức riêng của họ trong ngày. */
-  owner?: boolean;
-};
+// Kiểu dùng chung với phía bên kia: shared/types/speech.ts.
+import type { Feat, ModelOut, Plan } from "../../shared/types/speech";
+export type { Feat, ModelOut, Plan } from "../../shared/types/speech";
 export type Voice = {
   lib?: boolean;
   id: string; name: string; desc: string; lang: string; langCode: string; accent: string; gender: string; age: string; use: string; category: string;

@@ -74,15 +74,14 @@ function diskOf(p: string) {
 const fileMB = (f: string) => { try { return Math.round(fs.statSync(f).size / 1048576); } catch { return 0; } };
 const sum = (sql: string, ...a: unknown[]) => { try { return (db().prepare(sql).get(...a) as { n: number | null }).n ?? 0; } catch { return 0; } };
 
-export type BackupStatus = { ok: boolean; at: number; lastOkAt?: number; snapshot?: string; sizeMB?: number; integrity?: string; tables?: number; users?: number; hasKey?: boolean; keyOk?: boolean | null; uploads?: number; missingUploads?: number; checked?: number; corrupt?: number; offsite?: boolean; offsiteOk?: boolean; error?: string };
-export type WatchdogState = { at: number; fails: number; status: string; lastRestartAt?: number; restarts24?: number };
+// Kiểu dùng chung với phía bên kia: shared/types/health.ts.
+import type { BackupStatus, WatchdogState, Problem } from "../shared/types/health";
+export type { BackupStatus, WatchdogState, Problem } from "../shared/types/health";
 type WatchdogEvent = { at: number; event: string; detail?: string };
 
 const BACKUP_STALE_MS = 36 * 3_600_000;
 const WATCHDOG_STALE_MS = 5 * 60_000;
 const DISK_WARN_MB = 5000, DISK_CRIT_MB = 2000;
-
-export type Problem = { code: string; level: "crit" | "warn"; n?: number; at?: number };
 
 /** Những gì quản trị viên cần xử lý. Mã để giao diện viết thành câu theo ngôn ngữ; cũng là khóa để cảnh báo không lặp lại. */
 export function opsProblems(r: Pick<ReturnType<typeof opsSnapshot>, "disks" | "mail" | "cli" | "backup" | "watchdog" | "errors24"> & { engineHour?: EngineRuns[] }): Problem[] {

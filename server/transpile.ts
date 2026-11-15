@@ -10,8 +10,9 @@
 import "server-only";
 import { artState, currentArtifactsBlock, stubArtifacts, type ArtVersion } from "../shared/vfs";
 
-export type TraceStatus = "ok" | "error" | "cancelled_by_user" | "denied";
-export type TraceItem = { id: string; name: string; label: string; input: string; status: TraceStatus; summary: string; ref?: string };
+// Kiểu dùng chung với phía bên kia: shared/types/trace.ts.
+import type { TraceStatus, TraceItem } from "../shared/types/trace";
+export type { TraceStatus, TraceItem } from "../shared/types/trace";
 export type CanonMsg = { role: "user" | "assistant"; content: string | Block[]; trace?: TraceItem[] };
 type Block = { type: string; text?: string; [k: string]: unknown };
 

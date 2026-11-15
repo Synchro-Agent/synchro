@@ -1,7 +1,7 @@
 "use client";
 // Synchro Code ở trình duyệt: cài đặt (lưu ở máy chủ), đồng bộ phiên giữa các thiết bị, trả lời câu hỏi duyệt của lượt đang chạy.
 import { useSyncExternalStore } from "react";
-import type { CodePrefs } from "../server/codestore";
+import type { CodePrefs } from "../shared/types/code";
 import { mergeData } from "../shared/codemerge";
 import { TIMED_OUT, withDeadline } from "./chatsynccore";
 import { userScope } from "./userscope";

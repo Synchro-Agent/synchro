@@ -27,7 +27,7 @@ import { capFiles, fileContext, getStatus, ingestFile, readyFiles } from "./file
 import { AgentSteps, GitHubButton, StatusLine, stripPhases, TaskCard, TVIEW_LABEL, type AStep, type OnAnswer, type TView } from "./agentui";
 import { answerAsk, codePrefsNow, getServerSession, mergeSession, pushSession, sessionBase, setSessionBase, useCodePrefs, type SessionState } from "./codesync";
 import { STYLE_DESC, STYLE_LABEL, STYLE_SYS, isStyle, type CodeStyle } from "../shared/codestyle";
-import type { PermMode } from "../server/codestore";
+import type { PermMode } from "../shared/types/code";
 import { refreshUsage, UsageRing } from "./usagering";
 import { BrowserPane, FilesPane, SessionRail, TerminalPane } from "./codepanes";
 import { foldAgentEvent, closeFolded, interruptFolded, localizeNote } from "../shared/agentfold";

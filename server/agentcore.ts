@@ -16,25 +16,9 @@ import type { Ask } from "./approvals";
 import { DENIED_NUDGE, MAX_NUDGE, NUDGE, stalled } from "./stall";
 
 export const AGENT_MAX_STEPS = 40;
-export type PlanItem = { content: string; status: "pending" | "in_progress" | "completed" };
-export type Pane = "terminal" | "browser" | "files";
-export type AgentEvent =
-  | { t: "text"; text: string }
-  | { t: "tool"; id: string; name: string; input: Record<string, unknown> }
-  | { t: "result"; id: string; ok: boolean; summary: string; output?: string; image?: string; diff?: { path: string; add: number; del: number } }
-  | { t: "plan"; items: PlanItem[] }
-  | { t: "ui"; open: Pane; path?: string; tab?: "log" | "term" }
-  | { t: "usage"; input: number; output: number }
-  | { t: "steer"; text: string }
-  | { t: "done"; text: string; skills: string[]; steer?: string[] }
-  // think: suy nghĩ của model (khi model trả về); ask / asked: hỏi người dùng trước khi làm (chế độ quyền, trang web chưa được phép);
-  // perm: khóa "luôn cho phép trong phiên này" vừa thêm; meta: trạng thái phiên và gợi ý câu nhắn tiếp sau khi lượt xong.
-  | { t: "think"; text: string }
-  | ({ t: "ask" } & Ask)
-  | { t: "asked"; id: string; ok: boolean; always?: boolean }
-  | { t: "perm"; allow: string[] }
-  | { t: "meta"; state: string | null; reason: string | null; suggest: string | null }
-  | { t: "error"; error: string };
+// Kiểu dùng chung với phía bên kia: shared/types/agent.ts.
+import type { PlanItem, Pane, AgentEvent } from "../shared/types/agent";
+export type { PlanItem, Pane, AgentEvent } from "../shared/types/agent";
 type Emit = (e: AgentEvent) => void;
 
 // ------------------------------------------------------------------ định nghĩa công cụ (dạng Anthropic)

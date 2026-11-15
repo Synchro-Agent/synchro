@@ -6,7 +6,7 @@
 import type { Project } from "./store";
 import type { ContentBlock } from "../shared/fileproc/types";
 import type { Effort } from "../shared/catalog";
-import type { TraceItem } from "../server/transpile";
+import type { TraceItem } from "../shared/types/trace";
 import type { CxCard } from "../shared/cxactions";
 import { noteServerNow } from "./clock";
 import { postTurn } from "./turnretry";

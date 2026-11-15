@@ -11,7 +11,7 @@ import * as I from "./icons";
 import { useApp, usePref } from "./store";
 import { getLang, locale } from "../app/i18n";
 import { SKILLS_CHANGED } from "./skillsui";
-import type { ScanItem, ScanJob, Verdict } from "../server/skillscan";
+import type { ScanItem, ScanJob, Verdict } from "../shared/types/skillscan";
 
 type Group = { name: string; models: { key: string; name: string }[] };
 type Data = { job: ScanJob | null; count: number; models: Group[] };

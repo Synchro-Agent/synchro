@@ -3,13 +3,10 @@
 import "server-only";
 import crypto from "node:crypto";
 import { allowSite, getPrefs, siteHost, siteIn, type PermMode } from "./codestore";
-import type { CxCard } from "../shared/cxactions";
 
-export type AskKind = "edit" | "bash" | "site" | "connector";
-// conn, about, destructive: chỉ với công cụ connector (hiện logo, mô tả công cụ, cảnh báo xóa dữ liệu trên thẻ).
-// schema: schema tham số của công cụ connector (khi đủ nhỏ) để thẻ duyệt kiểm tra ngay lúc người dùng sửa tham số.
-// cx: lời gọi Composio nói bằng thao tác thật (ứng dụng, tài khoản, thao tác, tham số chính; strict: chỉ cho phép một lần).
-export type Ask = { id: string; kind: AskKind; tool: string; title: string; detail: string; host?: string; key: string; conn?: { name: string; logo?: string; color?: string; icon?: string }; about?: string; until?: number; destructive?: boolean; schema?: unknown; cx?: CxCard };
+// Kiểu dùng chung với phía bên kia: shared/types/agent.ts.
+import type { AskKind, Ask } from "../shared/types/agent";
+export type { AskKind, Ask } from "../shared/types/agent";
 // chat: "Cho phép trong đoạn chat này" (công cụ connector). input: tham số người dùng đã sửa trên thẻ duyệt (chỉ dùng cho đúng lời gọi đang chờ).
 export type Answer = { ok: boolean; always?: boolean; chat?: boolean; note?: string; input?: Record<string, unknown> };
 

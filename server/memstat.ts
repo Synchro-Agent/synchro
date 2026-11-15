@@ -3,7 +3,9 @@
 // mô-đun nào, để route sức khỏe không kéo cả chatengine vào).
 import "server-only";
 import { getHeapStatistics } from "node:v8";
-export type MemSample = { at: number; heapUsed: number; heapTotal: number; external: number; arrayBuffers: number; rss: number };
+// Kiểu dùng chung với phía bên kia: shared/types/health.ts.
+import type { MemSample } from "../shared/types/health";
+export type { MemSample } from "../shared/types/health";
 type Stat = () => Record<string, number>;
 type Probe = () => Promise<Record<string, number>>;
 const g = globalThis as unknown as { __synchroMemStats?: Map<string, Stat>; __synchroMemProbes?: Map<string, Probe>; __synchroMemHist?: MemSample[] };

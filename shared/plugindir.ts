@@ -1,6 +1,6 @@
 // Danh mục plugin dựng sẵn (dùng ở cả trình duyệt và máy chủ). Mỗi plugin gom skill từ một hoặc nhiều repo GitHub công khai;
 // chỉ lấy skill có giấy phép mở (MIT / Apache-2.0). Ba plugin "studio" gắn với nút Thiết kế / Trình bày / Tài liệu ở trang Artifacts.
-import type { PluginDef } from "../server/plugins";
+import type { PluginDef } from "./types/plugins";
 
 // Mục ngành nghề của Khám phá: cùng cách chia với thư mục skill của Claude (Customize → Skills → Categories), bỏ hai mục riêng của Claude
 // (Claude history, Claude settings). Thư viện có một mục chính (category) và có thể nằm thêm ở mục khác (cats), như nhãn "+3" của Claude.

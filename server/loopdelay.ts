@@ -5,7 +5,9 @@
 import "server-only";
 import { monitorEventLoopDelay, type IntervalHistogram } from "node:perf_hooks";
 
-export type LoopSample = { at: number; p50: number; p99: number; max: number; windowSec: number };
+// Kiểu dùng chung với phía bên kia: shared/types/health.ts.
+import type { LoopSample } from "../shared/types/health";
+export type { LoopSample } from "../shared/types/health";
 const RESOLUTION = 20;
 type State = { h: IntervalHistogram; since: number; last: LoopSample | null; timer: ReturnType<typeof setInterval> | null };
 const g = globalThis as unknown as { __synchroLoop?: State };

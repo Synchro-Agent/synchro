@@ -19,15 +19,10 @@ import { fold, warmSkillIndex } from "./skillroute";
 import { bumpTags, classify, classifyCatalog, dropAutoTags, dropPluginTags, dropTag, holdTags, keepPluginTags, pluginDetected, pluginKey, pluginTagRows, refine, tagRev, userStudioIds } from "./skillstudio";
 import { dirStudios } from "./claudedir"; // D4: nhãn mục Artifacts xếp sẵn lúc đồng bộ (claudedir chỉ import type của plugins nên không vòng lặp lúc chạy).
 
-export type Studio = "design" | "slides" | "docs";
+// Kiểu dùng chung với phía bên kia: shared/types/plugins.ts.
+import type { Studio, StudioMode, Source, PluginDef, Risk, SkillReport, LicenseKind, Preview, PluginSkill, PublicPlugin, PluginSummary, StudioInfo } from "../shared/types/plugins";
+export type { Studio, StudioMode, Source, PluginDef, Risk, SkillReport, LicenseKind, Preview, PluginSkill, PublicPlugin, PluginSummary, StudioInfo } from "../shared/types/plugins";
 export const STUDIOS: Studio[] = ["design", "slides", "docs"];
-// Nút studio của một plugin: auto: Synchro tự xếp từng skill vào các mục (mặc định); none: không vào mục nào; tên mục: cả thư viện vào nút đó.
-export type StudioMode = "auto" | "none" | Studio;
-export type Source = { repo: string; ref?: string; path?: string; include?: string[]; exclude?: string[] };
-export type PluginDef = { catalogId?: string; slug: string; name: string; description: string; author?: string; homepage?: string; studio?: Studio | null; everywhere?: boolean; color?: string; sources: Source[] };
-export type Risk = "none" | "low" | "medium" | "high";
-export type SkillReport = { name: string; description: string; dir: string; repo: string; files: number; size: number; scripts: number; license: string; licenseKind: LicenseKind; risk: Risk; flags: string[]; blocked?: string; duplicateOf?: string };
-export type LicenseKind = "open" | "proprietary" | "unknown";
 
 // Như Claude: không giới hạn số thư viện hay số skill được cài (Claude không đặt mức này; thứ bị giới hạn là phần liệt kê skill trong prompt,
 // xem skillruntime.ts LIST_BUDGET và mục lục ngành nghề ở chatengine.ts). Chỉ giữ các mức bảo vệ máy chủ: zip / pluginBytes / skillBytes
@@ -302,7 +297,6 @@ async function collect(def: PluginDef) {
   return { commits, found: all };
 }
 
-export type Preview = { def: PluginDef; skills: SkillReport[]; commits: Record<string, string>; size: number; installable: number };
 export async function previewPlugin(def: PluginDef): Promise<Preview> {
   const { commits, found } = await collect(def);
   const ok = found.filter((f) => !f.report.blocked && !f.report.duplicateOf);
@@ -567,18 +561,6 @@ function restoreUploads(id: string, uploads: SRow[], owner: string) {
 }
 
 // ---------------------------------------------------------------- đọc
-export type PluginSkill = { id: string; name: string; description: string; enabled: boolean; report: SkillReport; useCount: number; lastUsed: number | null };
-export type PublicPlugin = {
-  id: string; scope: "org" | "personal"; slug: string; catalogId: string | null; name: string; description: string; author: string | null; homepage: string | null; color: string | null;
-  studio: Studio | null; studioMode: StudioMode; everywhere: boolean; enabled: boolean; mine: { enabled: boolean; everywhere: boolean }; sources: Source[]; commits: Record<string, string>; size: number;
-  updatedAt: number; checkedAt: number | null; updateAvailable: boolean; skills: PluginSkill[];
-  risk: Risk; licenses: string[];
-  /** Số skill của thư viện này đã nằm trong từng mục (Tự động nhận diện, và mục người dùng tự chọn). */
-  detected?: Partial<Record<Studio, number>>;
-};
-// Danh sách thư viện (Kho kỹ năng, menu +, bảng lệnh): mỗi skill chỉ có tên và trạng thái. Thư viện chung có thể chứa cả danh mục của Claude
-// (~3.100 thư viện, ~18.000 skill): gửi đủ mô tả và báo cáo của mọi skill mỗi lần mở trang là vài chục MB. Chi tiết: getPlugin (GET /api/plugins/[id]).
-export type PluginSummary = Omit<PublicPlugin, "skills"> & { skills: { id: string; name: string; enabled: boolean; useCount: number }[] };
 type Pref = { enabled: number | null; everywhere: number | null };
 const mineOf = (r: Pick<Row, "everywhere">, pref?: Pref) => ({ enabled: pref?.enabled === null || pref?.enabled === undefined ? true : !!pref.enabled, everywhere: pref?.everywhere === null || pref?.everywhere === undefined ? !!r.everywhere : !!pref.everywhere });
 const prefsOf = (uid: string) => new Map((init().prepare("SELECT plugin_id, enabled, everywhere FROM plugin_prefs WHERE user_id = ?").all(uid) as (Pref & { plugin_id: string })[]).map((p) => [p.plugin_id, p]));
@@ -785,7 +767,6 @@ export function studioSkills(uid: string, studio: Studio, act = active(uid)): { 
   for (const o of cat) for (const k of o.skills) add(k, o.p.name);
   return { skills, plugins: [...ps.map((p) => p.name), ...(mine.length ? [MINE_LABEL] : []), ...own.map((o) => o.p.name)], auto, autoTotal, curated, catalogLibs: cat.length };
 }
-export type StudioInfo = { name: string; skills: number; autoTotal: number; catalogLibs: number; auto: { name: string; from: string }[] };
 // Trang Artifacts hỏi lại mỗi lần mở; mỗi lần tính lại là duyệt cả ~18.000 skill của danh mục cho ba mục (vài chục tới hơn trăm ms chặn cả
 // máy chủ). Kết quả giữ theo (người dùng, plRev, tagRev, prefsRev): thư viện, nhãn mục hay lựa chọn riêng (plugin_prefs, thêm / bỏ skill ở
 // từng mục) đổi thì bỏ hết. Skill riêng của người dùng (Kho kỹ năng) không đi qua các mốc đó: so thêm dấu của bảng skills (số skill, đang bật,

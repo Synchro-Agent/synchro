@@ -14,17 +14,9 @@ import { pluginSkillsOf } from "./plugins";
 import { timeLimit } from "./safefetch";
 import { tfOn, trOn } from "./i18n-server";
 
-export type Verdict = "junk" | "useless" | "ok" | "unknown";
-// key: "u:<tên>" (skill của người dùng) hoặc "p:<id thư viện>:<tên>". where: tên thư viện ("" với skill của người dùng).
-// manage: người này tắt / bật được (thư viện cho mọi người: chỉ quản trị viên).
-export type ScanItem = {
-  key: string; name: string; description: string; where: string; kind: "skill" | "personal" | "org"; plugin: string | null;
-  enabled: boolean; manage: boolean; verdict: Verdict; field: string; why: string; by: "model" | "rules";
-};
-export type ScanJob = {
-  id: string; status: "running" | "done" | "stopped" | "error"; model: string; modelName: string; lang: Lang;
-  total: number; done: number; items: ScanItem[]; started: number; ended: number | null; error: string;
-};
+// Kiểu dùng chung với phía bên kia: shared/types/skillscan.ts.
+import type { Verdict, ScanItem, ScanJob } from "../shared/types/skillscan";
+export type { Verdict, ScanItem, ScanJob } from "../shared/types/skillscan";
 type Lang = "vi" | "en";
 // created: lúc tạo (skill của bạn) để biết bản nào là bản gốc khi trùng nội dung.
 type Src = Omit<ScanItem, "verdict" | "field" | "why" | "by"> & { body: string; files: number; created: number };

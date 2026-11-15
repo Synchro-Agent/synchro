@@ -1,7 +1,7 @@
 "use client";
 // Gọi API workspace / GitHub / agent từ trình duyệt cho Synchro Code.
 import { create } from "zustand";
-import type { AgentEvent, PlanItem } from "../server/agentcore";
+import type { AgentEvent, PlanItem } from "../shared/types/agent";
 import { postTurn } from "./turnretry";
 
 export type { AgentEvent, PlanItem };

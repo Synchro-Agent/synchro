@@ -7,10 +7,9 @@ import { ART_TYPES, splitArtifacts, type ArtType } from "../shared/artifacts";
 import { resolveArt, type ArtState } from "../shared/vfs";
 import { stripAppliedNotes } from "../shared/turnctx";
 
-export type ShareSeg = { k: "text"; t: string } | { k: "art"; title: string; type: ArtType; lang: string | null; content: string } | { k: "old"; title: string };
-export type ShareMsg = { r: "u" | "a"; segs: ShareSeg[]; files?: number; outs?: number };
-// imgs: ảnh ngoài trong artifact đã được nhúng vào bản chụp (sharestore.ts); missing: số ảnh không nhúng được. Bản chụp cũ chưa có trường này được nhúng khi có người mở lần đầu.
-export type ShareSnap = { title: string; msgs: ShareMsg[]; imgs?: { missing: number } };
+// Kiểu dùng chung với phía bên kia: shared/types/share.ts.
+import type { ShareSeg, ShareMsg, ShareSnap } from "../shared/types/share";
+export type { ShareSeg, ShareMsg, ShareSnap } from "../shared/types/share";
 export const SHARE_LIMITS = { bytes: 4_000_000, withImages: 16_000_000, totalBytes: 100_000_000, msgs: 2000, text: 400_000, perUser: 200, title: 200 };
 
 // Chú thích ẩn của giao diện (<!-- meta --> / <!-- mode -->) và ký tự điều khiển không phải là nội dung để đọc.
