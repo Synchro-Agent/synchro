@@ -36,6 +36,16 @@ ok(typeof win.__deck.PPTX_FRAME_JS === "string" && /sxPptx/.test(win.__deck.PPTX
 ok(typeof win.__deck.boxOptions === "function" && typeof win.__deck.chartArgs === "function", "các hàm phụ cũng có mặt");
 // Nạp lần hai dùng bộ nhớ đệm.
 ok((await D.deckBrowserJs()) === js, "biên dịch được nhớ lại, không làm lại mỗi lần");
+// Bản trước H3 (còn phục vụ trên cây mã mới lúc deploy xanh/lam và sau rollback) đọc process.cwd()/app/deckpptx.ts: bản sao giữ một bản
+// phát hành (tests/lib/srcroots.mjs PREV_RELEASE_COMPAT) phải chạy được đúng như bản cũ dựng nó (cùng bước bỏ "use client" và biên dịch).
+{
+  const ts = (await import("typescript")).default;
+  const old = fs.readFileSync(path.join(process.cwd(), "app", "deckpptx.ts"), "utf8").replace(/^\s*"use client";?\s*/, "");
+  const out = ts.transpileModule(old, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2019, removeComments: true } }).outputText;
+  const w = {};
+  new Function("window", "self", "document", `(function(){var exports={},module={exports:exports};\n${out}\n;window.__deck=module.exports;})();`)(w, w, { title: "x" });
+  ok(typeof w.__deck?.buildPptx === "function" && w.__deck.PPTX_FRAME_JS === win.__deck.PPTX_FRAME_JS, "bản trước đọc app/deckpptx.ts (bản sao) vẫn có window.__deck.buildPptx");
+}
 
 console.log("3. SEC-5: chỉ xuất nội dung của chính người dùng, mạng theo quyền");
 {

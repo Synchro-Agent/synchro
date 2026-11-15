@@ -6,9 +6,12 @@
 //    (không chỉ kiểu) một tệp trong server/.
 // 4. ui/ giữ mã giao diện; app/ chỉ giữ tệp của Next (và app/_shell/). 5. shared/ không mang dấu phía nào và chỉ nhập mã trong shared/.
 // 6. ops/ và tools/: scripts/ chỉ còn tệp web chạy lúc chạy và lớp chuyển tiếp; deploy gọi ops/, harden giữ ops/ thuộc root.
+// 7. Mọi tệp bản trước (main trước H3) đọc theo đường dẫn lúc chạy vẫn còn đúng chỗ, đúng nội dung (bản cũ còn phục vụ trên cây mã mới lúc
+//    deploy xanh/lam và sau rollback).
 import fs from "node:fs";
 import path from "node:path";
-import { authStoreFiles, chatEngineFiles, runServiceFiles, walkSrc } from "../lib/srcroots.mjs";
+import { createHash } from "node:crypto";
+import { authStoreFiles, chatEngineFiles, isPrevCompat, PREV_RELEASE_COMPAT, runServiceFiles, walkSrc } from "../lib/srcroots.mjs";
 
 let pass = 0, fail = 0;
 const ok = (c, n, x = "") => { c ? pass++ : fail++; console.log(c ? "  ✓" : "  ✗", n, c ? "" : String(x).slice(0, 4000)); };
@@ -122,7 +125,7 @@ ok(!css.some((f) => f.startsWith("app/") && !FIRST_CSS.includes(f) && f !== "app
 // app/ chỉ giữ route, layout, page, route handler, tệp đặc biệt và ảnh metadata của Next, cùng đúng các tệp đã kể trong app/_shell/.
 const APP_OK = /^app\/(.+\/)?(page|layout|route|error|global-error|not-found|loading|template|default)\.tsx?$|^app\/manifest\.ts$|^app\/(favicon\.ico|icon\.svg|apple-icon\.png|(opengraph|twitter)-image\.(png|alt\.txt))$/;
 const SHELL_FILES = [...LAYOUT_SHELL, ...FIRST_CSS, "app/_shell/tokens.css"];
-const appFiles = walk("app", /./);
+const appFiles = walk("app", /./).filter((f) => !isPrevCompat(f)); // bản sao cho bản trước: mục 7
 const appExtra = appFiles.filter((f) => (f.startsWith(SHELL_DIR) ? !SHELL_FILES.includes(f) : !APP_OK.test(f)));
 ok(appFiles.length >= 140, `app/ có ${appFiles.length} tệp`);
 ok(!appExtra.length, "app/ chỉ giữ tệp của Next (route, layout, page, tệp đặc biệt, ảnh metadata) và app/_shell/", appExtra.join("\n"));
@@ -243,6 +246,56 @@ ok(pkg["dev:mock"] === "node tools/dev-mock.mjs" && pkg.qa === "node tools/qa.mj
     && !has(/new ReadableStream/).some((f) => /^app\/api\/(agent|runs)\//.test(f)), "luồng của lượt chỉ dựng ở server/runs/stream.ts; route chat và Code không tự dựng luồng");
   const wc = fs.readFileSync("ui/wsclient.ts", "utf8");
   ok(/accept: "text\/event-stream"/.test(wc) && /readCodeStream\(r,/.test(wc) && !/TextDecoder/.test(wc), "wsclient xin luồng SSE và đọc qua shared/runstream.ts (hiểu cả NDJSON của bản cũ)");
+}
+
+console.log("7. Tệp bản trước đọc theo đường dẫn lúc chạy còn đúng chỗ");
+// Bản đang chạy lúc deploy H3 (main trước H3) đọc các tệp này bằng fs theo process.cwd() (không qua bundle), lazy và nhớ theo tiến trình.
+// sync_code (ops/server-build.sh) chép cây mã mới vào thư mục app TRƯỚC khi bản mới qua kiểm tra sức khỏe, và rollback chỉ trả public/ và db/:
+// bản cũ chạy tiếp (hay được pm2 / watchdog khởi động lại) trên cây mới, thiếu tệp nào thì tính năng đó lỗi ENOENT.
+// Tệp chuyển đi trong H3 có bản sao ở đường dẫn cũ (PREV_RELEASE_COMPAT, tests/lib/srcroots.mjs), xóa ở lần phát hành sau.
+{
+  const PREV_READS = [
+    "app/deckpptx.ts",                                    // app/deckexport.ts: xuất PowerPoint (biên dịch rồi tiêm vào Chromium)
+    "app/design-engine/fonts/PlusJakartaSans-Regular.ttf", // app/design-engine/posters/render.tsx: phông poster
+    "app/design-engine/fonts/PlusJakartaSans-Bold.ttf",
+    "app/design-engine/fonts/PlusJakartaSans-ExtraBold.ttf",
+    "db/schema.sql",                                      // app/authstore.ts: lược đồ lúc mở cơ sở dữ liệu
+    "db/disposable-email-domains.txt",                    // app/turnstile.ts
+    "catalog/claude-directory.json",                      // app/claudedir.ts
+    "scripts/ocr.py", "scripts/pdf_extract.py",           // app/fileproc/extractors.ts, app/api/markitdown/route.ts
+    "scripts/extract-worker.mjs", "scripts/zipguard.mjs", // app/fileproc/sandbox.ts (worker nhập ./zipguard.mjs)
+    "extension/build.mjs", "workspace/browser-act.mjs",   // app/api/browser/ext/download/route.ts (extensionFiles đọc extension/, workspace/)
+  ];
+  const lost = PREV_READS.filter((f) => !fs.existsSync(f));
+  ok(!lost.length, `${PREV_READS.length} tệp bản trước đọc lúc chạy đều còn`, lost.join(", "));
+  // Nội dung đúng bản cũ (sha256 của main trước H3): bản cũ gọi window.__deck theo đúng giao diện của nó, không theo ui/deckpptx.ts sau này.
+  const PINNED = {
+    "app/deckpptx.ts": "40470f1c9526a1fa169460ea64220b78eb19c42549fe83ae69725574ca0164e4",
+    // Mã băm ghim trong tools/fetch-poster-fonts.sh.
+    "app/design-engine/fonts/PlusJakartaSans-Regular.ttf": "076831b98043f50f829b6c91db3be4a844641f1c95bccff5c886ed87c661a852",
+    "app/design-engine/fonts/PlusJakartaSans-Bold.ttf": "32971ad7976930539a11c79ce91ce84092df7f25c5be716b594601842f10a7ae",
+    "app/design-engine/fonts/PlusJakartaSans-ExtraBold.ttf": "d9e0ddb4a15a0054ad84b4ded3b4b9f354a0b7df426e21a1363d6933728da9d5",
+  };
+  const sha = (f) => createHash("sha256").update(fs.readFileSync(f)).digest("hex");
+  const drift = Object.entries(PINNED).filter(([f, h]) => !fs.existsSync(f) || sha(f) !== h).map(([f]) => f);
+  ok(!drift.length, "bản sao ở đường dẫn cũ đúng từng byte bản cũ đọc", drift.join(", "));
+  // Tệp thường, không phải liên kết: rsync --delete của deploy thấy cùng nội dung ở cùng đường dẫn thì không đụng tới (không có lúc vắng tệp),
+  // và không phụ thuộc cờ rsync của lệnh deploy ngoài repo (/root/deploy-<sha>.sh) có giữ liên kết hay không.
+  const links = PREV_RELEASE_COMPAT.flatMap((c) => [c, ...(fs.existsSync(c) && fs.lstatSync(c).isDirectory() ? fs.readdirSync(c).map((x) => `${c}/${x}`) : [])])
+    .filter((f) => !fs.existsSync(f) || fs.lstatSync(f).isSymbolicLink());
+  ok(!links.length, "bản sao là tệp thường trong repo, không phải liên kết", links.join(", "));
+  const fonts = fs.readdirSync("server/design-engine/fonts").sort();
+  ok(JSON.stringify(fs.readdirSync("app/design-engine/fonts").sort()) === JSON.stringify(fonts)
+    && fonts.every((f) => fs.readFileSync(`app/design-engine/fonts/${f}`).equals(fs.readFileSync(`server/design-engine/fonts/${f}`))),
+    "app/design-engine/fonts trùng server/design-engine/fonts (kể cả OFL.txt)");
+  // Bản sao không được thành mã nguồn: không tệp nào nhập nó (kể cả kiểu), bộ quét mã nguồn bỏ qua.
+  const importers = [];
+  for (const [f, s] of src) for (const m of s.matchAll(IMPORTS)) {
+    const spec = m[3] ?? m[4] ?? m[5];
+    if (isPrevCompat(P.normalize(P.join(P.dirname(f), spec)).replace(/\.ts$/, "") + ".ts")) importers.push(`${f} → ${spec}`);
+  }
+  ok(!importers.length, "không tệp nào nhập app/deckpptx.ts", importers.join("\n"));
+  ok(!ts.some(isPrevCompat) && ts.includes("ui/deckpptx.ts"), "bộ quét mã nguồn bỏ qua bản sao, vẫn thấy ui/deckpptx.ts");
 }
 
 /** Các vòng nhập (bỏ import type) giữa các tệp trong parts. */

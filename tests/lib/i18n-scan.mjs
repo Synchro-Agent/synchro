@@ -6,7 +6,7 @@ import { createRequire } from "node:module";
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
 import { loadTs } from "./ts.mjs";
-import { SRC_ROOTS } from "./srcroots.mjs";
+import { isPrevCompat, SRC_ROOTS } from "./srcroots.mjs";
 
 const ts = createRequire(path.join(process.cwd(), "package.json"))("typescript");
 export const VI = /[àáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđ]/i;
@@ -54,6 +54,7 @@ const DICT_CALL = /^(tr|trOn|tf|tfOn)$/;
 function walkDir(d, out = []) {
   for (const f of readdirSync(d)) {
     const p = path.join(d, f);
+    if (isPrevCompat(path.relative(process.cwd(), p).split(path.sep).join("/"))) continue; // bản sao cho bản trước (srcroots.mjs), không phải mã nguồn
     if (statSync(p).isDirectory()) walkDir(p, out);
     else if (/\.(tsx|ts)$/.test(f) && !/\.d\.ts$/.test(f)) out.push(p);
   }

@@ -7,6 +7,7 @@ import { createRequire } from "node:module";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
+import { isPrevCompat } from "./srcroots.mjs";
 
 const ts = createRequire(path.join(process.cwd(), "package.json"))("typescript");
 const P = path.posix;
@@ -28,7 +29,8 @@ export function resolveTsEntry(entry) {
     if (!hit) throw new Error(`loadTs: không thấy ${entry}`);
     return hit;
   }
-  const hits = LOOKUP.map((r) => find(`${r}/${e}`)).filter(Boolean);
+  // Bản sao cho bản trước (app/deckpptx.ts, srcroots.mjs) không phải mã nguồn: tên trần "deckpptx" vẫn chỉ ra ui/deckpptx.ts.
+  const hits = LOOKUP.map((r) => find(`${r}/${e}`)).filter((h) => h && !isPrevCompat(`${h}.ts`));
   if (hits.length !== 1) throw new Error(`loadTs: "${entry}" ${hits.length ? `trùng ở ${hits.join(", ")}` : `không có trong ${LOOKUP.join("/, ")}/`}`);
   return hits[0];
 }

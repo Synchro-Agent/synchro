@@ -6,6 +6,16 @@ import path from "node:path";
 
 export const SRC_ROOTS = ["app", "server", "ui", "shared"];
 
+// Bản sao giữ MỘT bản phát hành cho bản đang chạy trước H3 (cùng lý do với db/schema.sql và lớp chuyển tiếp scripts/*.sh): bản đó đọc hai
+// tệp này theo đường dẫn lúc chạy (deckexport.ts của bản cũ đọc process.cwd()/app/deckpptx.ts, posters/render.tsx của bản cũ đọc
+// process.cwd()/app/design-engine/fonts). Lúc deploy xanh/lam, mã mới đã chép vào thư mục app trong khi bản cũ còn phục vụ, và rollback chỉ
+// trả public/ và db/, nên thiếu hai đường dẫn này thì bản cũ lỗi ENOENT ở xuất PowerPoint và dựng poster. Chúng không phải mã nguồn: bộ quét,
+// findSrc và loadTs bỏ qua (mã thật ở ui/deckpptx.ts, server/design-engine/fonts). tests/api/paths-guard.test.mjs ghim nội dung đúng bản cũ.
+// Xóa ở lần phát hành sau, cùng db/schema.sql và các lớp chuyển tiếp.
+export const PREV_RELEASE_COMPAT = ["app/deckpptx.ts", "app/design-engine/fonts"];
+/** Đường dẫn (tương đối với gốc repo, dấu /) là một bản sao cho bản trước, hoặc nằm trong thư mục bản sao. */
+export const isPrevCompat = (p) => PREV_RELEASE_COMPAT.some((c) => p === c || p.startsWith(`${c}/`));
+
 /** Mọi tệp dưới các gốc mã nguồn (đường dẫn tương đối với gốc repo, dấu /) khớp re; bỏ node_modules. */
 export function walkSrc(re = /\.tsx?$/, cwd = process.cwd(), roots = SRC_ROOTS) {
   const out = [];
@@ -13,6 +23,7 @@ export function walkSrc(re = /\.tsx?$/, cwd = process.cwd(), roots = SRC_ROOTS) 
     for (const f of readdirSync(path.join(cwd, d))) {
       if (f === "node_modules") continue;
       const p = `${d}/${f}`;
+      if (isPrevCompat(p)) continue;
       if (statSync(path.join(cwd, p)).isDirectory()) walk(p);
       else if (re.test(f)) out.push(p);
     }
@@ -23,7 +34,7 @@ export function walkSrc(re = /\.tsx?$/, cwd = process.cwd(), roots = SRC_ROOTS) 
 
 /** Tìm tệp theo đường dẫn tính từ gốc mã nguồn cũ ("chatengine.ts", "ai/subs.ts") trong mọi gốc; không thấy hoặc thấy hai nơi thì báo lỗi. */
 export function findSrc(rel, cwd = process.cwd()) {
-  const hits = SRC_ROOTS.map((r) => `${r}/${rel}`).filter((p) => existsSync(path.join(cwd, p)));
+  const hits = SRC_ROOTS.map((r) => `${r}/${rel}`).filter((p) => !isPrevCompat(p) && existsSync(path.join(cwd, p)));
   if (hits.length !== 1) throw new Error(`findSrc: "${rel}" ${hits.length ? `trùng ở ${hits.join(", ")}` : `không có trong ${SRC_ROOTS.join("/, ")}/`}`);
   return hits[0];
 }

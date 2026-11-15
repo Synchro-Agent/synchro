@@ -175,6 +175,8 @@ for d in "$STATICS"/*/; do
 done
 
 # public/ và db/ của lần deploy đạt gần nhất: bản cũ vẫn phục vụ thì phải có lại tệp tĩnh và dữ liệu mẫu của nó.
+# Mã nguồn không được trả lại (bản cũ chạy tiếp trên cây mã mới): tệp nào bản trước đọc theo đường dẫn lúc chạy mà bản này chuyển đi thì giữ bản
+# sao ở đường dẫn cũ một bản phát hành (PREV_RELEASE_COMPAT trong tests/lib/srcroots.mjs, kiểm ở tests/api/paths-guard.test.mjs mục 7).
 restore_good() { for d in public db; do if [ -d "$GOOD/$d" ] && [ -d "$APP/$d" ]; then rsync -a --delete "$GOOD/$d/" "$APP/$d/" || true; fi; done; }
 deployed() {
   rm -rf "$SIDE/.synchro-failed-$NAME"
