@@ -1,7 +1,7 @@
 # Cloudflare Worker kiểm https://synchro.net.nz/api/health mỗi phút (Blueprint A6.4). Cài một lần, từ thư mục này (xem docs/van-hanh.md):
 #   npx wrangler login
 #   npx wrangler kv namespace create UPTIME        → chép "id" vào kv_namespaces bên dưới
-#   npx wrangler secret put GH_TOKEN               → dán token fine-grained của GitHub (chỉ repo synchro, quyền Actions: Read and write)
+#   npx wrangler secret put GH_TOKEN               → dán token fine-grained của GitHub (Resource owner Synchro-Agent, chỉ repo synchro, quyền Actions: Read and write)
 #   npx wrangler deploy
 name = "synchro-uptime"
 main = "worker.mjs"
@@ -18,7 +18,7 @@ id = "REPLACE_WITH_KV_NAMESPACE_ID"
 
 [vars]
 HEALTH_URL = "https://synchro.net.nz/api/health"
-GH_REPO = "nguyenhuulamtung/synchro"
+GH_REPO = "Synchro-Agent/synchro"
 GH_WORKFLOW = "uptime.yml"
 GH_REF = "main"
 # Số phút lỗi liền trước khi báo (mỗi phút đã tự thử lại một lần sau 15 giây).
