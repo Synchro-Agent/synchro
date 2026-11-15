@@ -40,8 +40,15 @@ jobs:
 
       # ESLint (next/core-web-vitals + jsx-a11y, eslint.config.mjs; gói dev cài bằng npm ci ở trên). Chặn deploy khi có lỗi (error);
       # cảnh báo (warn: trợ năng, deps của hook, biểu thức thừa…) chỉ ghi vào lint.log / ci.txt, không làm đỏ bước này.
+      # lint.log dài ~1.300 dòng vì hơn 500 cảnh báo, ci.txt chỉ giữ 150 dòng cuối: lỗi ở tệp xếp trước (app/, server/, phần lớn ui/…) bị cắt
+      # mất. Khi bước đỏ, chạy lại với --quiet (chỉ lỗi, ~20 giây) vào lint-errors.log; ci.txt in tệp này trước lint.log.
+      # set +e: shell mặc định là bash -e; nếu bước này đổi sang shell: bash (thêm pipefail), ống lệnh lỗi sẽ thoát ngay trước khi ghi lint-errors.log.
       - name: ESLint
-        run: npm run lint 2>&1 | tee lint.log; exit ${PIPESTATUS[0]}
+        run: |
+          set +e
+          npm run lint 2>&1 | tee lint.log; s=${PIPESTATUS[0]}
+          [ "$s" = 0 ] || npm run lint -- --quiet > lint-errors.log 2>&1
+          exit $s
 
       # Cùng một lệnh build với package.json và ops/server-build.sh (npm run build = next build).
       - name: Build production
@@ -93,7 +100,7 @@ jobs:
         run: |
           { echo "commit ${{ github.sha }} · ${{ job.status }} · $(date -u '+%Y-%m-%d %H:%M UTC')"
             [ -f tests.log ] && { echo; echo "━━ Các kiểm tra lỗi"; grep -n -B1 "✗" tests.log | cut -c1-600; }
-            for f in tsc.log lint.log build.log tests.log mock.log audit.log; do [ -f $f ] && { echo; echo "━━ $f"; tail -150 $f; }; done; } > ci.txt
+            for f in tsc.log lint-errors.log lint.log build.log tests.log mock.log audit.log; do [ -f $f ] && { echo; echo "━━ $f"; tail -150 $f; }; done; } > ci.txt
       - uses: actions/upload-artifact@v4
         if: always()
         with:

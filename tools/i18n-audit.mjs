@@ -6,6 +6,7 @@ import path from "node:path";
 import { createRequire } from "node:module";
 import { loadTs } from "../tests/lib/ts.mjs";
 import { SRC_ROOTS } from "../tests/lib/srcroots.mjs";
+import { decodeJsxEntities } from "../tests/lib/i18n-scan.mjs";
 
 const ts = createRequire(path.join(process.cwd(), "package.json"))("typescript");
 const { "i18n-dict": D0, "i18n-vi": V } = await loadTs(["i18n-dict", "i18n-vi"]);
@@ -67,7 +68,9 @@ for (const f of files) {
     return false;
   };
   const visit = (n) => {
-    if (ts.isJsxText(n)) check(n.getText(), n);
+    // Chữ JSX và giá trị chuỗi của thuộc tính JSX: React giải mã thực thể (&quot; &apos; &amp;…) nên so với từ điển bằng chữ đã giải mã.
+    if (ts.isJsxText(n)) check(decodeJsxEntities(n.getText()), n);
+    else if (ts.isStringLiteral(n) && ts.isJsxAttribute(n.parent) && !inSkippedAttr(n)) check(decodeJsxEntities(n.text), n);
     else if ((ts.isStringLiteral(n) || ts.isNoSubstitutionTemplateLiteral(n)) && !inSkippedAttr(n)) {
       // Chuỗi ngoài JSX chỉ xét khi là chữ tiếng Việt (gần như chắc chắn hiện cho người dùng) hoặc nằm trong JSX.
       const inJsx = !!ts.findAncestor(n, (p) => ts.isJsxElement(p) || ts.isJsxSelfClosingElement(p) || ts.isJsxFragment(p));
