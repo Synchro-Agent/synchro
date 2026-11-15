@@ -27,6 +27,14 @@ function formatTranscript(name: string, j: Sttt): string {
   return `${head}\n\n${lines.join("\n")}`;
 }
 
+/** Kiểm trước khi xin chỗ trong hàng convert (mỗi người một việc): hết hạn mức giọng nói thì báo đúng lý do ngay cho mọi tệp âm thanh,
+ *  không để tệp thứ hai nhận câu "Máy chủ đang đọc nhiều tệp cùng lúc" rồi phải bấm Thử lại mới thấy lý do thật. */
+export function audioPrecheck(uid?: string) {
+  const user = uid ? getUser(uid) : undefined;
+  if (!user || !hasKey()) return;
+  try { checkBudget(user, "stt"); } catch (e) { if (e instanceof SpeechErr) throw new FileError(e.message); throw e; }
+}
+
 export async function transcribeAudio(buf: Buffer, name: string, uid?: string): Promise<string> {
   if (!hasKey()) throw new FileError(`Chưa bật phiên âm giọng nói nên Synchro chưa đọc được tệp âm thanh / video "${name}". Hãy kết nối ElevenLabs trong Cài đặt rồi tải lại.`);
   if (buf.length > AUDIO_MAX) throw new FileError(`Tệp âm thanh / video "${name}" lớn hơn ${AUDIO_MAX / 1048576}MB nên chưa phiên âm được. Hãy cắt ngắn rồi tải lên lại.`);

@@ -24,7 +24,8 @@ export async function api<T = Record<string, unknown>>(path: string, init: Reque
   const r = await fetch(`/api/speech/${path}`, init).catch(() => { throw new SpeechError(NO_SERVER); });
   const j = (await r.json().catch(() => ({}))) as T & { error?: string; code?: string; credits?: Credits };
   if (!r.ok) {
-    if (j.code === "plan") void refreshPlan(false);
+    // budget: vừa chạm hạn mức (của riêng mình hoặc chung của máy chủ): đọc lại để số credit ở đầu trang về đúng, không còn hiện số cũ.
+    if (j.code === "plan" || j.code === "budget") void refreshPlan(false);
     throw new SpeechError(j.error ?? (r.status === 413 ? "Tệp quá lớn để tải lên (tối đa 40 MB). Dán liên kết thay vì tải lên." : `Lỗi ${r.status}`), j.code, r.status);
   }
   if (j.credits) setCredits(j.credits);

@@ -512,6 +512,12 @@ export async function subUsage(u: UserRow, cli: Cli, o: { fresh?: boolean; idle?
   const windows = (hit?.windows ?? [])
     .map((w) => project({ ...w, label: "label" in w ? (w as PlanWindow).label : label(w), kind: "kind" in w ? (w as PlanWindow).kind : kindOf(w.window) } as PlanWindow, now))
     .sort((a, b) => order(a) - order(b));
+  // Hãng đã báo hết hạn mức (lượt chat bị từ chối, planBlock) mà bảng hạn mức không có cửa sổ nào đang chạm (Grok không báo cửa sổ,
+  // Codex / Antigravity chưa đọc lại): thêm một dòng "Hạn mức gói" đã chạm kèm giờ hồi, để vòng mức dùng và Cài đặt → Usage nói đúng
+  // là gói đang bị chặn tới lúc nào thay vì chỉ ghi chú chung (H1.2).
+  const block = planBlock(cli, u.id);
+  if (block && block > now && !windows.some((w) => w.status === "rejected" || (w.usedPct ?? 0) >= 100))
+    windows.unshift({ window: "plan_limit", label: "Plan limit", kind: "session", usedPct: 100, resetsAt: block, status: "rejected" });
   const plan = hit?.plan ? hit.plan.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase()) : null;
   return { cli, name: SUB[cli].name, plan, windows, turnsToday: turnsToday(u.id, cli), credits: hit?.credits ?? null, at: hit?.at ?? null, setup: !!hit?.setup,
     note: hit?.setup ? "Antigravity is waiting for you to finish its first-run setup (color scheme, terms and data sharing) before it shows plan limits."

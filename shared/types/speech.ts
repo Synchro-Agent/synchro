@@ -6,7 +6,8 @@ export type Feat = "tts" | "dialogue" | "stt" | "live" | "agent" | "sfx" | "isol
 export type ModelOut = { id: string; name: string; desc: string; langs: { id: string; name: string }[]; max: number; rate: number; style: boolean; boost: boolean };
 export type Plan = {
   connected: boolean; readPlan: boolean; tier: string; tierName: string; status: string;
-  credits: { used: number; limit: number; resetAt: number | null };
+  /** shared: hạn mức giọng AI chung của máy chủ hôm nay đã hết (còn 0 dù hạn mức riêng còn). */
+  credits: { used: number; limit: number; resetAt: number | null; shared?: boolean };
   voices: { used: number; limit: number }; pro: { used: number; limit: number };
   features: Record<Feat, boolean>; locked: Partial<Record<Feat, string>>;
   /** Quyền khóa còn thiếu (tính năng đó bị ẩn); realtime: dùng được Eleven Realtime; library: dùng được giọng Thư viện qua API (gói trả phí). */

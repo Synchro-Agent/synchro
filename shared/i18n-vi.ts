@@ -793,7 +793,7 @@ RULES_VI.push(
 // Chữ tiếng Anh còn sót ở giao diện tiếng Việt (rà bằng tools/i18n-audit.mjs và rà trên giao diện).
 Object.assign(EN2VI, {
   "Your plan needs you to sign in again in Settings → Providers.": "Gói của bạn cần đăng nhập lại ở Cài đặt → Providers.",
-  "From your plan": "Từ gói của bạn", "Limit reached ·": "Đã chạm hạn mức ·", "Plan limits": "Hạn mức gói", "View usage details": "Xem chi tiết mức dùng",
+  "From your plan": "Từ gói của bạn", "Limit reached ·": "Đã chạm hạn mức ·", "Plan limits": "Hạn mức gói", "Plan limit": "Hạn mức gói", "View usage details": "Xem chi tiết mức dùng",
   "Antigravity is waiting for you to finish its first-run setup (color scheme, terms and data sharing). See Settings → Providers → Gemini.":
     "Antigravity đang chờ bạn hoàn tất bước làm quen lần đầu (bảng màu, điều khoản và chia sẻ dữ liệu). Xem Cài đặt → Providers → Gemini.",
   "Synchro could not read the plan's quota yet.": "Synchro chưa đọc được hạn mức của gói.",

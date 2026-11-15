@@ -33,7 +33,8 @@ import type { OutFile } from "../outputs";
 import { anthropicWebSearch } from "../../shared/modelrules";
 import { untested } from "../modelreg";
 import { chatOnce, HttpErr, toAnthropic, toOpenAI, toResponses, withPages } from "../llmcall";
-import { prewarmClaude, sessionPlain, subCli, subTurn } from "../ai/subs";
+import { prewarmClaude, sessionPlain, SUB, subCli, subTurn } from "../ai/subs";
+import { planResetMsg, sharedKeyMsg } from "../limitmsg";
 import { PROJECT_DOC_RULES, PROJECT_DOC_TOOL, projectDocsLong, projectIns } from "../projectdocs";
 import { REJECTED_RULE, rejectedBlock, stripAppliedNotes, withProjectIns, withRejected } from "../../shared/turnctx";
 import { IMAGE_RULES, imageTool } from "../ai/imagegen";
@@ -416,8 +417,10 @@ async function chatPostTurn(body: Parameters<typeof chatPost>[0], c: Who, scope:
   const out = new Set<string>();
   // Lý do đã chuyển model (để báo lại cho người dùng sau khi lượt xong, không chỉ trong dòng tiến trình lúc chạy).
   let switchedWhy = "";
+  // Model đầu hết hạn mức gói: hạn mức nào và bao giờ hồi (H1.2), nối sau câu "đã trả lời bằng …".
+  let resetNote = "";
   while ([409, 429, 500, 502, 503, 504, 529].includes(res.status) && !turnSignal()?.aborted && tried.length < 5) {
-    const j0 = (await res.clone().json().catch(() => ({}))) as { usageLimit?: boolean; partialWork?: boolean; quota?: string; planLimit?: string; rate?: boolean; stalled?: boolean; busy?: boolean };
+    const j0 = (await res.clone().json().catch(() => ({}))) as { usageLimit?: boolean; partialWork?: boolean; quota?: string; planLimit?: string; rate?: boolean; stalled?: boolean; busy?: boolean; resetsAt?: number | null };
     // Treo, lỗi phía hãng: nhớ vài phút. Mỗi tin nhắn tiếp theo từng chọn lại đúng model đang treo, chờ thêm 60-90 giây rồi mới chuyển.
     if ((j0.stalled || res.status === 504 || res.status >= 500) && !j0.busy && !j0.usageLimit && subCli(used)) noteStall(c.user.id, subCli(used)!);
     if (j0.usageLimit || j0.partialWork) break;
@@ -428,7 +431,11 @@ async function chatPostTurn(body: Parameters<typeof chatPost>[0], c: Who, scope:
     if (!next) break;
     const why = j0.quota || j0.planLimit ? "đã hết hạn mức" : j0.rate ? "đang giới hạn tốc độ" : res.status === 409 ? "cần đăng nhập lại" : j0.busy ? "đang chạy lượt khác" : j0.stalled || res.status === 504 ? "không phản hồi" : "đang gặp lỗi";
     progress("note", `${shown(used)} ${why}, chuyển sang ${shown(next)}`);
-    if (!switchedWhy) switchedWhy = `${shown(used)} ${why}`;
+    if (!switchedWhy) {
+      switchedWhy = `${shown(used)} ${why}`;
+      const cli = subCli(used);
+      if ((j0.quota || j0.planLimit) && cli && Number(j0.resetsAt) > Date.now()) resetNote = planResetMsg(j0.quota === "model" ? "model" : "plan", j0.quota === "model" ? shown(used) ?? used : SUB[cli].name, Number(j0.resetsAt));
+    }
     deltaStep();
     used = next; tried.push(next);
     res = await chatTurn({ ...body, model: next, effort }, c, scope, { auto: true });
@@ -441,8 +448,10 @@ async function chatPostTurn(body: Parameters<typeof chatPost>[0], c: Who, scope:
     if (now && !now.usable.length && now.plansOut.count > 1) { j.error = "Các gói đã kết nối đều đã hết hạn mức."; if (now.plansOut.resets) j.resetsAt = now.plansOut.resets; delete j.switchTo; }
   }
   // Tự động đã chuyển model trong lượt này: nói rõ ở câu trả lời (switched) và một lần trên thanh thông báo (notice).
-  const switched = res.status === 200 && used !== r.model && switchedWhy ? `${switchedWhy}, nên Synchro đã trả lời bằng ${shown(used)}.` : "";
-  return Response.json({ ...j, model: j.model ?? used, ...(switched ? { switched, ...(j.notice ? {} : { notice: switched }) } : {}), ...(plansOnly && res.status === 200 && !j.notice && !switched ? { notice: PLANS_ONLY_NOTE } : {}), ...(res.status !== 200 && tried.length > 1 ? { tried: tried.map(shown) } : {}), auto: { tier: r.tier, vendor: r.vendor, task: r.task, effort, why: r.why, ...(used !== r.model ? { fallback: used } : {}) } }, { status: res.status });
+  const switched = res.status === 200 && used !== r.model && switchedWhy ? `${switchedWhy}, nên Synchro đã trả lời bằng ${shown(used)}.${resetNote ? ` ${resetNote}` : ""}` : "";
+  // Tự động chọn model chạy bằng khóa API chung trong khi tài khoản đã kết nối gói (kể cả gói đang tạm hết hạn mức): một dòng nói lượt này tính vào hạn mức chi phí API (H1 bổ sung).
+  const keyNote = res.status === 200 && !subCli(used) && allowed.some((k) => !!subCli(k)) ? sharedKeyMsg(shown(used) ?? used) : "";
+  return Response.json({ ...j, model: j.model ?? used, ...(switched ? { switched, ...(j.notice ? {} : { notice: switched }) } : {}), ...(keyNote ? { keyNote, ...(j.notice || switched ? {} : { notice: keyNote }) } : {}), ...(plansOnly && res.status === 200 && !j.notice && !switched ? { notice: PLANS_ONLY_NOTE } : {}), ...(res.status !== 200 && tried.length > 1 ? { tried: tried.map(shown) } : {}), auto: { tier: r.tier, vendor: r.vendor, task: r.task, effort, why: r.why, ...(used !== r.model ? { fallback: used } : {}) } }, { status: res.status });
 }
 const PLANS_ONLY_NOTE = "Đã hết hạn mức API của bạn trên Synchro, nên Tự động đang dùng gói đã kết nối (Claude, ChatGPT, Gemini, Grok) thay vì khóa chat.";
 // Lỗi của gói mà còn model của gói khác dùng được: gợi ý sẵn để người dùng đổi bằng một lần bấm (máy chủ thật không có khóa API để đề nghị thay).

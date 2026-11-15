@@ -57,8 +57,21 @@ export const IMAGE_LIMIT_NOTE = "(Chỉ dẫn cho model, không nhắc lại ngu
 /** Kiểm một lời báo hạn mức có đủ ba phần không (dùng trong kiểm thử): nói hạn mức nào, khi nào hồi, làm gì trong lúc chờ. */
 export function limitParts(msg: string): { which: boolean; when: boolean; alt: boolean } {
   return {
-    which: /(phiên|tuần|hôm nay|mỗi giờ|mỗi ngày|session|week|today|per hour|per day|limit)/i.test(msg),
+    which: /(phiên|tuần|hôm nay|mỗi giờ|mỗi ngày|[Gg]ói \S+|session|week|today|per hour|per day|limit)/i.test(msg),
     when: /(sau (khoảng )?\d+ (phút|giờ|ngày)|ngày mai|in (about )?\d+ ?(min|minutes|h|hours|days?)|tomorrow|resets? (at|in))/i.test(msg),
     alt: /(Trong lúc chờ|vẫn dùng được|vẫn làm được|chọn Tự động|Cài đặt → Providers|In the meantime|still work|still available|choose Auto|Settings → Providers)/i.test(msg),
   };
+}
+
+// Gói subscription của người dùng (Claude, ChatGPT, Gemini, Grok) hết hạn mức giữa lượt, Tự động đã trả lời bằng model khác (chat/routing.ts):
+// câu "… đã hết hạn mức, nên Synchro đã trả lời bằng …" mới nói hãng và cách thay thế; thêm câu này để nói hạn mức nào (cả gói hay riêng model)
+// và bao giờ hồi (resetsAt của ai/subs.ts). Bản tiếng Anh: luật trong RULES_EN (i18n-dict.ts).
+export function planResetMsg(scope: "plan" | "model", name: string, resetAt: number, now = Date.now()): string {
+  return `${scope === "plan" ? `Hạn mức gói ${name}` : `Hạn mức riêng của ${name}`} hồi lại sau ${waitVi(resetAt - now)}. Trong lúc chờ, Tự động dùng các model khác bạn đã kết nối.`;
+}
+
+// Tự động chọn một model chạy bằng khóa API chung của Synchro trong khi người dùng có gói đã kết nối (Blueprint H1 bổ sung):
+// nói rõ lượt này tính vào hạn mức chi phí API của họ, không phải gói, để người dùng miễn phí không tưởng đang dùng gói của mình.
+export function sharedKeyMsg(model: string): string {
+  return `${model} chạy bằng khóa API chung của Synchro: lượt này tính vào hạn mức chi phí API của bạn (phiên 5 giờ và tuần, xem ở Cài đặt → Usage), không tính vào gói đã kết nối.`;
 }

@@ -3,7 +3,7 @@ import { Readable } from "node:stream";
 import { audit, can, current, findByEmail, getUser, isAdmin, isOwner, limit, sameOrigin, VERIFY_FIRST, verifyLocked, type UserRow } from "../../../../server/authstore";
 import {
   SpeechErr, addSpend, audioOf, checkBudget, deleteItem, effectsCatalog, el, elJson, getItem, itemFile, jsonBody, langName, library, listItems, mintRealtime, myVoices, need, plan, saveItem,
-  scribeToken, servedBy, sideRead, sideWrite, speechBudget, spender, spent, spentToday, updateItem, voiceOut, backfillVoiceOwners, defaultVoice, forgetVoiceOwner, isPrivateVoice, MAX_OWN_VOICES, ownedVoices, setVoiceOwner, voiceGen, voiceOpenTo, voiceOwner, VOICE_ORPHAN, VOICE_PURGE, VOICE_SHARED, type Feat, type Plan,
+  scribeToken, servedBy, sideRead, sideWrite, speechBudget, spender, spent, spentToday, speechSharedOut, updateItem, voiceOut, backfillVoiceOwners, defaultVoice, forgetVoiceOwner, isPrivateVoice, MAX_OWN_VOICES, ownedVoices, setVoiceOwner, voiceGen, voiceOpenTo, voiceOwner, VOICE_ORPHAN, VOICE_PURGE, VOICE_SHARED, type Feat, type Plan,
 } from "../../../../server/speechapi";
 import { estCredits, estMusicCredits } from "../../../../shared/speech/data";
 import { quickCall } from "../../../../server/ai/anymodel";
@@ -24,7 +24,8 @@ const nextUtcMidnight = () => { const d = new Date(); return Date.UTC(d.getUTCFu
 function userCredits(u: UserRow | null, p: Plan) {
   if (u && isOwner(u)) return { used: p.credits.used, limit: p.credits.limit, resetAt: p.credits.resetAt };
   const b = speechBudget(), cap = u && isAdmin(u) ? 0 : u?.email_verified ? b.user : b.unverified;
-  return { used: u ? spentToday(u.id) : 0, limit: cap, resetAt: nextUtcMidnight() };
+  // Mức chung đã cạn thì thao tác nào cũng bị chặn: báo cờ shared để giao diện hiện còn 0, không hiện số riêng còn nguyên (không lộ số dùng chung).
+  return { used: u ? spentToday(u.id) : 0, limit: cap, resetAt: nextUtcMidnight(), ...(cap > 0 && speechSharedOut() ? { shared: true } : {}) };
 }
 const viewer = () => { const uid = spender.getStore(); return (uid ? getUser(uid) : null) ?? null; };
 const ok = async (o: Record<string, unknown>) => Response.json({ ...o, credits: userCredits(viewer(), await plan()) });

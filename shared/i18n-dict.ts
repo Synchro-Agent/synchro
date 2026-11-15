@@ -994,7 +994,7 @@ Object.assign(VI2EN, {
   "Phiên 5 giờ bắt đầu từ tin nhắn đầu tiên. Hạn mức tuần đặt lại vào một giờ cố định mỗi tuần.": "The 5-hour session starts with your first message. Weekly limits reset at a fixed time each week.",
   "Hạn mức tùy gói của tài khoản ChatGPT: gói Plus có phiên 5 giờ cuốn chiếu và hạn mức tuần, gói Pro chỉ có hạn mức tuần.": "Limits depend on your ChatGPT plan. Plus has a rolling 5-hour window and a weekly limit; Pro only has a weekly limit.",
   "Hạn mức tùy gói của tài khoản Google và hồi theo chu kỳ. Model Gemini và model Claude/GPT tính riêng.": "Limits depend on your Google account's plan and refresh over time. Gemini and Claude/GPT models are counted separately.",
-  "Đã chạm giới hạn ·": "Limit reached ·", "Mức dùng": "Usage", "Giới hạn gói": "Plan limits", "Giới hạn sử dụng": "Usage limits",
+  "Đã chạm giới hạn ·": "Limit reached ·", "Mức dùng": "Usage", "Giới hạn gói": "Plan limits", "Hạn mức gói": "Plan limit", "Giới hạn sử dụng": "Usage limits",
   "Antigravity đang chờ bạn hoàn tất bước làm quen lần đầu (bảng màu, điều khoản, chia sẻ dữ liệu). Xem Cài đặt → Providers → Gemini.": "Antigravity is waiting for you to finish its first-run setup (color scheme, terms and data sharing). See Settings → Providers → Gemini.",
   "Synchro chưa đọc được hạn mức của gói.": "Synchro could not read the plan's quota yet.", "Gửi một tin nhắn bằng gói này để xem hạn mức.": "Send a message with this plan to see its limits.", "Xem chi tiết mức dùng": "View usage details",
   "(giá ước tính)": "(estimated price)", "Bắt đầu khi bạn gửi tin nhắn": "Starts when you send a message", "Giới hạn phiên": "Session limit", "Hằng tuần · mọi model": "Weekly · all models", "Không giới hạn": "Unlimited",
@@ -1866,6 +1866,12 @@ RULES_EN.push(
 // Lời báo hạn mức (limitmsg.ts, H1.2): hạn mức nào + bao giờ hồi + phần "trong lúc chờ" (bản dịch nằm trong VI2EN). Đặt ĐẦU danh sách:
 // luật chung hơn (vd. "Giọng …" của mục Speech) không được bắt trước câu dài này.
 RULES_EN.unshift(
+  // Tự động chuyển model vì gói hết hạn mức (limitmsg.ts planResetMsg nối sau câu "đã trả lời bằng"). Đứng trước luật chung của câu "đã trả lời bằng".
+  [/^(.+) đã hết hạn mức, nên Synchro đã trả lời bằng (.+?)\. Hạn mức (gói|riêng của) (.+?) hồi lại sau (.+?)\. Trong lúc chờ, Tự động dùng các model khác bạn đã kết nối\.$/,
+    (m) => `${m[1]} hit its limit, so Synchro answered with ${m[2]}. ${m[3] === "gói" ? `The ${m[4]} plan limit` : `The limit for ${m[4]}`} resets in ${limitDurEn(m[5])}. In the meantime, Auto uses your other connected models.`],
+  // Tự động chạy bằng khóa API chung (limitmsg.ts sharedKeyMsg).
+  [/^(.+) chạy bằng khóa API chung của Synchro: lượt này tính vào hạn mức chi phí API của bạn \(phiên 5 giờ và tuần, xem ở Cài đặt → Usage\), không tính vào gói đã kết nối\.$/,
+    (m) => `${m[1]} ran on Synchro's shared API key: this reply counts toward your API cost limit (5-hour session and week, see Settings → Usage), not your connected plans.`],
   [/^Tài khoản đã dùng hết hạn mức (\d+) ảnh AI mỗi giờ\. Hạn mức hồi lại sau khoảng (\d+) phút\. (.+)$/, (m) => `This account has used its limit of ${m[1]} AI images per hour. It resets in about ${m[2]} min. ${VI2EN[m[3]] ?? m[3]}`],
   [/^Bạn đã dùng hết giới hạn của phiên này \(phiên 5 giờ\)\. Phiên mới bắt đầu sau (.+?)\. (Trong lúc chờ.+)$/, (m) => `You've used this session's limit (5-hour session). A new session starts in ${limitDurEn(m[1])}. ${VI2EN[m[2]] ?? m[2]}`],
   [/^Bạn đã dùng hết giới hạn hằng tuần\. Giới hạn được đặt lại sau (.+?)\. (Trong lúc chờ.+)$/, (m) => `You've used your weekly limit. It resets in ${limitDurEn(m[1])}. ${VI2EN[m[2]] ?? m[2]}`],
