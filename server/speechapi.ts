@@ -62,6 +62,7 @@ const tierRank = (t: string) => {
 };
 export const TIER_NAME: Record<string, string> = { free: "Free", starter: "Starter", creator: "Creator", pro: "Pro", scale: "Scale", business: "Business", enterprise: "Enterprise" };
 // Định dạng tải xuống theo gói: MP3 192 kbps từ Creator, PCM / WAV 44,1 kHz trở lên từ Pro (theo mô tả output_format của API).
+// Nhãn viết kiểu Việt (44,1); giao diện tiếng Anh dịch qua từ điển sang dấu chấm thập phân (44.1).
 export const FORMATS: { id: string; label: string; min: string; ext: string; mime: string }[] = [
   { id: "mp3_44100_128", label: "MP3 44,1 kHz · 128 kbps", min: "free", ext: "mp3", mime: "audio/mpeg" },
   { id: "mp3_44100_192", label: "MP3 44,1 kHz · 192 kbps", min: "creator", ext: "mp3", mime: "audio/mpeg" },
@@ -378,13 +379,38 @@ export async function plan(o: { fresh?: boolean } = {}): Promise<Plan> {
   return st.busy;
 }
 /** Sau mỗi lần tạo: cộng credit đã dùng (ElevenLabs báo trong header) để thanh credit đúng ngay, không phải quét lại; tính vào hạn mức trong ngày của người đang gọi. est: ước lượng khi hãng không báo. */
+const headerCost = (r: Response) => Number(r.headers.get("character-cost") ?? r.headers.get("x-character-count") ?? 0) || 0;
+// Thanh credit là của gói ElevenLabs: lượt do nhà cung cấp dự phòng phục vụ không trừ vào đó (hạn mức trong ngày của người gọi vẫn tính).
+const fromMain = (r: Response) => { const by = servedBy(r); return !by || by === speechProviderList()[0]?.id; };
 export function spent(r: Response, est = 0) {
-  const n = Number(r.headers.get("character-cost") ?? r.headers.get("x-character-count") ?? 0);
-  const p = G().plan, by = servedBy(r);
-  // Thanh credit là của gói ElevenLabs: lượt do nhà cung cấp dự phòng phục vụ không trừ vào đó (hạn mức trong ngày của người gọi vẫn tính).
-  if (p && n > 0 && (!by || by === speechProviderList()[0]?.id)) p.credits.used += n;
+  const n = headerCost(r);
+  const p = G().plan;
+  if (p && n > 0 && fromMain(r)) p.credits.used += n;
   const uid = spender.getStore();
   if (uid) addSpend(uid, n > 0 ? n : est);
+  return n;
+}
+/** Số credit gói đã dùng ngay lúc này (đọc /v1/user/subscription); null nếu không đọc được (khóa thiếu quyền User, mạng…). */
+export async function usageNow(): Promise<number | null> {
+  try {
+    const n = (await elJson<Sub>("/v1/user/subscription", { timeout: 10_000 })).character_count;
+    return typeof n === "number" && Number.isFinite(n) ? n : null;
+  } catch { return null; }
+}
+/** Chi phí thật của công cụ mà ElevenLabs KHÔNG báo trong header (Nhạc, Nhạc cho video, Tách stem — bản thật trả cost 0, G6.5):
+ *  lấy độ tăng của số credit đã dùng trong gói quanh lần gọi (before đọc bằng usageNow() trước khi gọi). Header có số thì dùng header như spent().
+ *  Không đọc được gói, gói chưa kịp tăng, hoặc độ tăng lệch quá xa ước lượng (người khác dùng chung khóa cùng lúc): dùng ước lượng est.
+ *  Cập nhật luôn số credit của gói (thanh credit trên đầu trang) và hạn mức trong ngày của người gọi. */
+export async function spentMeasured(r: Response, before: number | null, est = 0): Promise<number> {
+  if (headerCost(r) > 0) return spent(r, est);
+  const main = fromMain(r);
+  const after = before !== null && main ? await usageNow() : null;
+  const delta = after !== null && before !== null ? after - before : 0;
+  const n = delta > 0 && (!(est > 0) || delta <= est * 4) ? delta : Math.max(0, Math.round(est));
+  const p = G().plan;
+  if (p && main) p.credits.used = after !== null && after >= p.credits.used ? after : p.credits.used + n;
+  const uid = spender.getStore();
+  if (uid) addSpend(uid, n);
   return n;
 }
 
