@@ -5,6 +5,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { loadTs } from "../lib/ts.mjs";
+import { readRunService } from "../lib/srcroots.mjs";
 
 let pass = 0, fail = 0;
 const ok = (c, n, x = "") => { c ? pass++ : fail++; console.log(c ? "  ✓" : "  ✗", n, c ? "" : String(typeof x === "string" ? x : JSON.stringify(x)).slice(0, 400)); };
@@ -110,7 +111,7 @@ console.log("Vai trò primary / secondary");
   const wrong = duties.filter((d) => head.includes(d) || !body.includes(d));
   ok(at > 0 && !wrong.length, "litestream, bộ hẹn giờ, chạy lại lượt, cài plugin… chỉ chạy trong primaryDuties", wrong);
   ok(/startRole\(\(\) => primaryDuties/.test(head) && head.includes("installShutdown("), "registerNode(): cài tắt êm ở mọi tiến trình, việc nền qua startRole");
-  const runs = fs.readFileSync(path.join(process.cwd(), "server/runs.ts"), "utf8");
+  const runs = fs.readFileSync(path.join(process.cwd(), "server/runs/store-sqlite.ts"), "utf8");
   ok(/status = 'running'"\)\.all\(\) as Row\[\]\)\.filter\(\(r\) => !live\.has\(r\.id\)\)/.test(runs), "resumeInterrupted bỏ qua lượt đang chạy trong chính tiến trình (đã phục vụ từ lúc còn là secondary)");
 }
 
@@ -200,7 +201,7 @@ console.log("Dừng / nhắn thêm qua cơ sở dữ liệu (tiến trình cũ �
   db.prepare("INSERT INTO runs (id,user_id,conv,kind,status,req,events,created_at,updated_at,cancel_req,partial) VALUES (?,?,?,?, 'running', ?, '[]', ?, ?, 1, ?)").run(p2, u.id, "c-p2", "bgrerun", "{}", Date.now(), Date.now(), "chữ dở");
   RN.resumeInterrupted(); await sleep(50);
   ok(JSON.parse(status(p2).result).text === "chữ dở" && JSON.parse(status(p2).result).cancelled === true && reran === 0, "NODE-1: lượt đã bấm Dừng mà bản cũ chưa kịp thấy: đóng kèm phần chữ đã viết, không trống", status(p2));
-  const fin = fs.readFileSync(path.join(process.cwd(), "server/runs.ts"), "utf8");
+  const fin = fs.readFileSync(path.join(process.cwd(), "server/runs/store-sqlite.ts"), "utf8");
   const fstart = fin.indexOf("function finish(");
   ok(/d\.transaction\(\(\) => \{\n\s+const remote = /.test(fin.slice(fstart, fstart + 1500)) && /\}\)\.immediate\(\);/.test(fin.slice(fstart, fstart + 1500)), "NODE-1: finish đọc hàng chờ nhắn thêm và đóng lượt trong một giao dịch IMMEDIATE");
 
@@ -225,9 +226,9 @@ console.log("Dừng / nhắn thêm qua cơ sở dữ liệu (tiến trình cũ �
   ok(AR.applyAgentStops() === 1 && run.ac.signal.aborted, "NODE-3: tiến trình đang chạy lượt Code nhận lệnh Dừng ghi từ tiến trình khác");
   await sleep(50);
   ok(db.prepare("SELECT ended FROM agent_owner WHERE uid = ? AND sid = ?").get(u.id, "s-new").ended > 0, "NODE-3: lượt xong thì đánh dấu đã kết thúc");
-  const wc = fs.readFileSync(path.join(process.cwd(), "ui/wsclient.ts"), "utf8"), ar = fs.readFileSync(path.join(process.cwd(), "app/api/agent/route.ts"), "utf8");
+  const wc = fs.readFileSync(path.join(process.cwd(), "ui/wsclient.ts"), "utf8"), ar = fs.readFileSync(path.join(process.cwd(), "app/api/agent/route.ts"), "utf8"), rs = readRunService();
   ok(/if \(r\.status === 202\) \{ const j = /.test(wc) && /return \{ running: true, node: j\.node \?\? null, elsewhere: true \}/.test(wc), "NODE-3: agentRunInfo hiểu 202 (đang chạy ở bản cũ): resumeAgent hiện bận + nút Dừng, watchAgentEnd hỏi tiếp");
-  ok(/r\.status === 202\) \{ if \(\+\+elsewhere > 45\) return false; await sleep\(2000, signal\); continue; \}/.test(wc) && /status: 202/.test(ar) && /stopAgentElsewhere\(c\.user\.id, sid\)/.test(ar), "NODE-3: trình duyệt chờ khi nhận 202; route trả 202 và chuyển Dừng sang tiến trình cũ");
+  ok(/r\.status === 202\) \{ if \(\+\+elsewhere > 45\) return false; await sleep\(2000, signal\); continue; \}/.test(wc) && /status: 202/.test(ar) && /RunService\.stopCode\(c\.user\.id, sid\)/.test(ar) && /stopCode: \(uid: string, sid: string\) => memory\.stopAgentRun\(uid, sid\) \|\| memory\.stopAgentElsewhere\(uid, sid\)/.test(rs), "NODE-3: trình duyệt chờ khi nhận 202; route trả 202 và chuyển Dừng sang tiến trình cũ");
 }
 
 // ---------------- Shell: nginx, màu sống, node_modules ----------------

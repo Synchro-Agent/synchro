@@ -12,12 +12,12 @@ export async function registerNode() {
   // Tắt êm (NEXT_MANUAL_SIG_HANDLE, ecosystem.config.cjs): SIGTERM → lượt mới nhận 503 + Retry-After, chờ tối đa 25 giây cho lượt đang chạy, dừng litestream, thoát.
   const { installShutdown, onDrain } = await import("./server/drain");
   const { releasePrimary, startRole } = await import("./server/role");
-  // Lượt chat (runs.ts) và lượt Code (agentruns.ts) đang chạy: bản đồ lượt sống dùng chung qua globalThis giữa các gói route.
+  // Lượt chat và lượt Code đang chạy (RunService, server/runs/): một bản đồ lượt sống dùng chung qua globalThis giữa các gói route.
   let busy = () => 0, describe = () => "0 lượt", partials = () => 0;
-  void Promise.all([import("./server/runs"), import("./server/agentruns")]).then(([r, a]) => {
-    busy = () => r.liveRunCount() + a.activeAgentCount();
-    partials = r.persistPartials;
-    describe = () => `${r.liveRunCount()} lượt chat, ${a.activeAgentCount()} lượt Code`;
+  void import("./server/runs/service").then(({ RunService: rs }) => {
+    busy = rs.busy;
+    partials = rs.persistPartials;
+    describe = rs.describe;
   }).catch((e) => console.error("[deploy]", e));
   installShutdown({
     busy: () => busy(),

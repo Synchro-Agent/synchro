@@ -2,9 +2,10 @@ import { current, getUser, limit, sameOrigin } from "../../../server/authstore";
 import { agentInbox, ModelError, type AgentEvent } from "../../../server/agentcore";
 import { effectivePerm, pickAgentModel, runAgentTurn, sessionMeta } from "../../../server/agentturn";
 import { getPrefs, patchSession, type TurnNode } from "../../../server/codestore";
-import { activeRun, agentElsewhere, latestRun, liveCount, MAX_LIVE_RUNS, runStream, startAgentRun, stopAgentElsewhere, stopAgentRun } from "../../../server/agentruns";
+import { liveCount, MAX_LIVE_RUNS } from "../../../server/runs/store-memory";
+import { RunService } from "../../../server/runs/service";
+import { turnsTotal, WAIT_NOTE } from "../../../server/runs/limits";
 import { sdir, wsAllowed } from "../../../server/workspace";
-import { turnsTotal, WAIT_NOTE } from "../../../server/runs";
 import { acquire, withSlot } from "../../../server/turngate";
 import { withUsage } from "../../../server/usage";
 import { MAX_FILES_PER_MESSAGE } from "../../../shared/fileproc/types";
@@ -16,7 +17,8 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 900;
 
-// Agent của Synchro Code: chạy vòng lặp model + công cụ trong workspace, trả sự kiện dạng NDJSON (mỗi dòng một JSON).
+// Agent của Synchro Code: chạy vòng lặp model + công cụ trong workspace, trả sự kiện theo định dạng luồng chung của RunService
+// (SSE, server/runs/stream.ts) khi trình duyệt xin text/event-stream; thẻ mở trước bản phát hành này nhận NDJSON kiểu cũ (mỗi dòng một JSON).
 // Gói subscription và khóa API dùng được như nhau: gói chạy CLI chính chủ với cùng bộ công cụ qua cầu nối MCP (runPlanAgent).
 // files: tệp gửi kèm tin nhắn mới nhất. perm: chế độ quyền của phiên ({ mode: "ask" | "edits" | "auto", allow: khóa "luôn cho phép" }); lượt dừng chờ người dùng duyệt qua /api/approve.
 export const POST = timed(async (req: Request) => {
@@ -39,11 +41,11 @@ export const POST = timed(async (req: Request) => {
   const p = effectivePerm(c.user.id, perm);
 
   // Một phiên chỉ chạy một lượt; lượt giờ không dừng theo kết nối nên phải chặn lượt thứ hai, và chặn một tài khoản giữ quá nhiều lượt nền.
-  if (activeRun(c.user.id, sid)) return Response.json({ error: "Phiên này đang có một lượt chạy.", running: true }, { status: 409 });
+  if (RunService.activeCode(c.user.id, sid)) return Response.json({ error: "Phiên này đang có một lượt chạy.", running: true }, { status: 409 });
   if (liveCount(c.user.id) >= MAX_LIVE_RUNS) return Response.json({ error: `Bạn đang có ${MAX_LIVE_RUNS} phiên Code chạy cùng lúc. Hãy chờ một phiên xong hoặc bấm Dừng.` }, { status: 429 });
   const node = cleanNode(rawNode);
 
-  const run = startAgentRun({ uid: c.user.id, sid, node, title: String(node?.user ?? "").replace(/\s+/g, " ").trim().slice(0, 40) || undefined }, (emit0, signal) =>
+  const run = RunService.startCode({ uid: c.user.id, sid, node, title: String(node?.user ?? "").replace(/\s+/g, " ").trim().slice(0, 40) || undefined }, (emit0, signal) =>
     // Mọi lời gọi model của lượt này được tính vào mức dùng của tài khoản (Synchro Code).
     withUsage(c.user.id, "code", async () => {
       // Tệp agent đã sửa trong lượt (để đánh giá phiên cuối lượt, kể cả thư mục chưa phải repo git).
@@ -82,22 +84,23 @@ export const POST = timed(async (req: Request) => {
         }
       } catch (e) { console.warn("[agent] đánh giá phiên", (e as Error).message); }
     }));
-  return runStream(run, 0, req.signal);
+  return RunService.streamCode(run, req, 0);
 });
 
-// Nối lại lượt của phiên (rời trang, tải lại, mất mạng giữa chừng). ?after=: chỉ sự kiện sau mốc này. ?json=1: chỉ hỏi trạng thái. 204: không có lượt nào.
+// Nối lại lượt của phiên (rời trang, tải lại, mất mạng giữa chừng). ?after= (hoặc Last-Event-ID): chỉ sự kiện sau mốc này. ?json=1: chỉ hỏi
+// trạng thái. 204: không có lượt nào.
 export const GET = timed(async (req: Request) => {
   const c = current(req);
   if (!c) return Response.json({ error: "Bạn cần đăng nhập." }, { status: 401 });
   const u = new URL(req.url);
   const sid = u.searchParams.get("sid") ?? "";
-  const run = latestRun(c.user.id, sid);
+  const run = RunService.latestCode(c.user.id, sid);
   // Lượt đang chạy nốt ở bản cũ (deploy xanh/lam, nginx đã chuyển sang bản này): bảo trình duyệt chờ rồi hỏi lại, không báo mất lượt.
-  const away = run ? null : agentElsewhere(c.user.id, sid);
+  const away = run ? null : RunService.codeElsewhere(c.user.id, sid);
   if (away) return Response.json({ elsewhere: true, running: true, node: away.node }, { status: 202, headers: { "Retry-After": "2", "Cache-Control": "no-store" } });
   if (!run) return new Response(null, { status: 204 });
   if (u.searchParams.get("json")) return Response.json({ running: !run.ended, node: run.node?.id ?? null, ended: run.ended || null });
-  return runStream(run, Number(u.searchParams.get("after")) || 0, req.signal);
+  return RunService.streamCode(run, req);
 });
 
 // Nút Dừng: cách duy nhất dừng lượt đang chạy.
@@ -106,7 +109,7 @@ export const DELETE = timed(async (req: Request) => {
   if (!c) return Response.json({ error: "Bạn cần đăng nhập." }, { status: 401 });
   try { sameOrigin(req); } catch { return Response.json({ error: "Yêu cầu không hợp lệ." }, { status: 403 }); }
   const sid = new URL(req.url).searchParams.get("sid") ?? "";
-  return Response.json({ ok: true, stopped: stopAgentRun(c.user.id, sid) || stopAgentElsewhere(c.user.id, sid) });
+  return Response.json({ ok: true, stopped: RunService.stopCode(c.user.id, sid) });
 });
 
 // Lượt do trình duyệt gửi kèm để máy chủ tự lưu khi không còn ai xem. Dữ liệu của chính người dùng, như khi đồng bộ phiên; quá lớn thì thôi, không phải lỗi.

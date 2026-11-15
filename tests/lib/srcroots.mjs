@@ -52,3 +52,15 @@ export function authStoreFiles(cwd = process.cwd()) {
 }
 /** Mã nguồn của phần tài khoản (mặt tiền + mọi phần), nối lại. */
 export const readAuthStore = (cwd = process.cwd()) => authStoreFiles(cwd).map((f) => readFileSync(path.join(cwd, f), "utf8")).join("\n");
+
+// Lượt chạy sau khi gộp (H3 bước 6c): RunService ở server/runs/ (kho SQLite, kho bộ nhớ, bản đồ lượt chung, điều khiển từ tiến trình khác,
+// định dạng luồng) cùng hai mặt tiền chuyển tiếp server/runs.ts, server/agentruns.ts. Thiếu một phần đã biết thì báo lỗi, không trả chuỗi rỗng.
+export const RUN_SERVICE_PARTS = ["types", "registry", "live", "limits", "remote", "stream", "store-sqlite", "store-memory", "service"].map((p) => `server/runs/${p}.ts`);
+export function runServiceFiles(cwd = process.cwd()) {
+  const all = ["server/runs.ts", "server/agentruns.ts", ...RUN_SERVICE_PARTS];
+  const missing = all.filter((f) => !existsSync(path.join(cwd, f)));
+  if (missing.length) throw new Error(`runServiceFiles: thiếu ${missing.join(", ")}`);
+  return all;
+}
+/** Mã nguồn của RunService (mặt tiền + mọi phần), nối lại. */
+export const readRunService = (cwd = process.cwd()) => runServiceFiles(cwd).map((f) => readFileSync(path.join(cwd, f), "utf8")).join("\n");

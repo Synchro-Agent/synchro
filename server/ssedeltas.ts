@@ -1,9 +1,9 @@
-// Gom chữ model đang viết (delta) cho luồng SSE của một lượt (app/api/runs/[id]/route.ts) khi trình duyệt nhận chậm.
+// Gom chữ model đang viết (delta) cho luồng SSE của một lượt (server/runs/stream.ts) khi trình duyệt nhận chậm.
 // Trình duyệt chậm (desiredSize âm): giữ các delta lại rồi gửi gộp thành một khung, thay vì dồn nhiều khung nhỏ vào hàng đợi của luồng.
 // Xả khi: có delta mới lúc luồng đã thông, trước mọi sự kiện khác (gọi flush, để chữ luôn tới trước bước), khi luồng báo đã đọc hết
 // (pull của ReadableStream gọi flush), và bằng hẹn giờ ngắn (R10): model đang dừng giữa chừng thì chữ đã giữ không kẹt tới nhịp đồng hồ 15 giây.
 import "server-only";
-import type { Delta } from "./runs";
+import type { Delta } from "./runs/types";
 
 export type DeltaGate = { push: (d: Delta) => void; flush: () => void; stop: () => void; readonly pending: number };
 

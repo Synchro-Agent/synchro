@@ -1,4 +1,4 @@
-// Chữ đang viết trên luồng SSE của một lượt (server/ssedeltas.ts, dùng ở app/api/runs/[id]/route.ts): trình duyệt chậm thì gom delta,
+// Chữ đang viết trên luồng SSE của một lượt (server/ssedeltas.ts, dùng ở server/runs/stream.ts cho app/api/runs/[id]/route.ts): trình duyệt chậm thì gom delta,
 // và (R10) luồng thông lại thì xả ngay dù model không viết thêm chữ nào: qua pull() của ReadableStream hoặc hẹn giờ ngắn. Không cần máy chủ.
 import fs from "node:fs";
 import { loadTs } from "../lib/ts.mjs";
@@ -67,10 +67,11 @@ console.log("4. R10 với ReadableStream thật: trình duyệt đọc hết hà
   rd.cancel();
 }
 
-console.log("5. Route dùng bộ gom này, có pull() và dừng hẹn giờ khi đóng");
+console.log("5. Luồng của lượt (RunService) dùng bộ gom này, có pull() và dừng hẹn giờ khi đóng; route đi qua luồng đó");
 {
-  const src = fs.readFileSync("app/api/runs/[id]/route.ts", "utf8");
-  ok(/deltaGate\(\{ desired: \(\) => ctl\.desiredSize/.test(src) && /pull\(\) \{ drained\(\); \}/.test(src) && /gate\.stop\(\)/.test(src), "route: deltaGate + pull() + gate.stop() trong end()");
+  const src = fs.readFileSync("server/runs/stream.ts", "utf8"), route = fs.readFileSync("app/api/runs/[id]/route.ts", "utf8");
+  ok(/deltaGate\(\{ desired: \(\) => ctl\.desiredSize/.test(src) && /pull\(\) \{ drained\(\); \}/.test(src) && /gate\.stop\(\)/.test(src), "stream.ts: deltaGate + pull() + gate.stop() trong end()");
+  ok(/return RunService\.stream\(id, req, url\);/.test(route) && fs.readFileSync("server/runs/service.ts", "utf8").includes("runResponse(sqlite.chatSource(id)"), "route: luồng SSE của lượt chat là runResponse của RunService");
 }
 
 console.log(`\n${pass} đạt, ${fail} lỗi`);

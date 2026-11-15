@@ -2,7 +2,7 @@
 // tự viết, bỏ khỏi lịch sử gửi model và bản chia sẻ công khai, lời nhắc hệ thống cấm trích lại. Hàm thuần và đọc mã nguồn, không cần máy chủ.
 import fs from "node:fs";
 import { loadTs } from "../lib/ts.mjs";
-import { readChatEngine } from "../lib/srcroots.mjs";
+import { readChatEngine, readRunService } from "../lib/srcroots.mjs";
 let pass = 0, fail = 0;
 const ok = (c, n, x = "") => { c ? pass++ : fail++; console.log(c ? "  ✓" : "  ✗", n, c ? "" : String(x).slice(0, 600)); };
 const { turnctx: T, sharesnap: S, history: H, "i18n-dict": D } = await loadTs(["turnctx", "sharesnap", "history", "i18n-dict"]);
@@ -80,7 +80,7 @@ ok(normal.client === "Xin chào bạn, hôm nay thế nào?" && normal.steps.eve
 ok(T.appliedDelta("Paris.", "Paris.").t === "" && !T.appliedDelta("Paris.", "Paris.").reset && T.appliedDelta("", "Paris.").t === "Paris.", "không có ghi chú: chỉ gửi phần nối thêm");
 
 console.log("5b. Máy chủ lọc luồng trực tiếp (lượt chat) và lời dẫn 'say'");
-const runsSrc = fs.readFileSync("server/runs.ts", "utf8");
+const runsSrc = readRunService();
 ok(/appliedDelta\(/.test(runsSrc) && /l\.kind === "chat"/.test(runsSrc), "runs.delta lọc dòng cũ trên luồng trực tiếp, chỉ lượt chat");
 ok(/l\.raw = "";\s*l\.applied = false/.test(runsSrc), "deltaStep đặt lại trạng thái lọc theo từng bước");
 ok(/stripAppliedNotes\(scrubServerPaths\(/.test(readChatEngine()), "sayOut lọc dòng cũ khỏi sự kiện 'say'");

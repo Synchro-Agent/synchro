@@ -2,6 +2,7 @@
 // Gọi API workspace / GitHub / agent từ trình duyệt cho Synchro Code.
 import { create } from "zustand";
 import type { AgentEvent, PlanItem } from "../shared/types/agent";
+import { readCodeStream } from "../shared/runstream";
 import { postTurn } from "./turnretry";
 
 export type { AgentEvent, PlanItem };
@@ -50,22 +51,9 @@ export function ghConnect(): Promise<string | null> {
 // fromStart: dòng này phát lại từ sự kiện đầu tiên. Nối lại sau khi mất mạng thì false: chỉ có sự kiện sau mốc đã nhận.
 export type RunHead = { t: "run"; node: Record<string, unknown> | null; running: boolean; count: number; s?: undefined; fromStart?: boolean };
 export type AgentLine = (AgentEvent & { s?: number }) | RunHead | { t: "end"; s?: number; stopped?: boolean };
-async function readLines(r: Response, on: (e: AgentLine) => void) {
-  const rd = r.body!.getReader();
-  const dec = new TextDecoder();
-  let buf = "";
-  for (;;) {
-    const { done, value } = await rd.read();
-    if (done) break;
-    buf += dec.decode(value, { stream: true });
-    let i;
-    while ((i = buf.indexOf("\n")) >= 0) {
-      const line = buf.slice(0, i).trim();
-      buf = buf.slice(i + 1);
-      if (line) { try { on(JSON.parse(line)); } catch {} }
-    }
-  }
-}
+// Luồng của lượt theo định dạng chung của RunService (SSE, server/runs/stream.ts); máy chủ bản trước (quay lui) trả NDJSON thì vẫn đọc được.
+const STREAM = { accept: "text/event-stream" };
+const readLines = (r: Response, on: (e: AgentLine) => void) => readCodeStream(r, (v) => on(v as AgentLine));
 const sleep = (ms: number, signal: AbortSignal) => new Promise<void>((ok) => { const t = setTimeout(ok, ms); signal.addEventListener("abort", () => { clearTimeout(t); ok(); }, { once: true }); });
 // Nối lại lượt đang chạy ở máy chủ, tự thử lại khi mất mạng. false: máy chủ không còn lượt này (vừa khởi động lại) hoặc nối không được quá lâu.
 async function follow(sid: string, on: (e: AgentLine) => void, signal: AbortSignal, st: { seq: number; ended: boolean }) {
@@ -73,7 +61,7 @@ async function follow(sid: string, on: (e: AgentLine) => void, signal: AbortSign
   let elsewhere = 0;
   for (let fails = 0; fails < 60 && !signal.aborted; ) {
     try {
-      const r = await fetch(`/api/agent?sid=${encodeURIComponent(sid)}&after=${st.seq}`, { signal, cache: "no-store" });
+      const r = await fetch(`/api/agent?sid=${encodeURIComponent(sid)}&after=${st.seq}`, { signal, cache: "no-store", headers: STREAM });
       if (r.status === 202) { if (++elsewhere > 45) return false; await sleep(2000, signal); continue; }
       if (r.status === 204 || r.status === 401) return false;
       if (r.ok && r.body) { fails = 0; await readLines(r, on); if (st.ended) return true; } else fails++;
@@ -84,12 +72,12 @@ async function follow(sid: string, on: (e: AgentLine) => void, signal: AbortSign
 }
 export const GONE = "Máy chủ vừa khởi động lại hoặc mất kết nối quá lâu nên không theo dõi tiếp được lượt này. Phần đã làm vẫn còn trong workspace.";
 
-// Chạy agent: đọc NDJSON từ /api/agent. Lượt chạy ở máy chủ độc lập với kết nối: signal chỉ ngừng nghe, muốn dừng lượt thì gọi stopAgent.
+// Chạy agent: đọc luồng của lượt từ /api/agent. Lượt chạy ở máy chủ độc lập với kết nối: signal chỉ ngừng nghe, muốn dừng lượt thì gọi stopAgent.
 export async function streamAgent(body: Record<string, unknown>, on: (e: AgentLine) => void, signal: AbortSignal) {
   const st = { seq: 0, ended: false, started: false };
   const seen = (e: AgentLine) => { if (e.s) st.seq = e.s; if (e.t === "run") st.started = true; if (e.t === "end") st.ended = true; on(e); };
   try {
-    const r = await postTurn("/api/agent", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body), signal });
+    const r = await postTurn("/api/agent", { method: "POST", headers: { "content-type": "application/json", ...STREAM }, body: JSON.stringify(body), signal });
     if (!r.ok || !r.body) { const j = await r.json().catch(() => ({})); throw new WsError((j as { error?: string }).error || `Lỗi ${r.status}`, r.status); }
     await readLines(r, seen);
   } catch (e) {

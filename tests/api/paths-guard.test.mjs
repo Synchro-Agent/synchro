@@ -8,7 +8,7 @@
 // 6. ops/ và tools/: scripts/ chỉ còn tệp web chạy lúc chạy và lớp chuyển tiếp; deploy gọi ops/, harden giữ ops/ thuộc root.
 import fs from "node:fs";
 import path from "node:path";
-import { authStoreFiles, chatEngineFiles, walkSrc } from "../lib/srcroots.mjs";
+import { authStoreFiles, chatEngineFiles, runServiceFiles, walkSrc } from "../lib/srcroots.mjs";
 
 let pass = 0, fail = 0;
 const ok = (c, n, x = "") => { c ? pass++ : fail++; console.log(c ? "  ✓" : "  ✗", n, c ? "" : String(x).slice(0, 4000)); };
@@ -214,8 +214,36 @@ ok(pkg["dev:mock"] === "node tools/dev-mock.mjs" && pkg.qa === "node tools/qa.mj
   ok(lines.reduce((a, b) => a + b, 0) > 1000, `các phần tài khoản còn đủ mã (${lines.join(" + ")} dòng)`);
   const cls = walkSrc(/\.tsx?$/).filter((f) => /^export class AuthError\b/m.test(fs.readFileSync(f, "utf8")));
   ok(cls.length === 1 && cls[0] === "server/auth/errors.ts", "AuthError khai báo đúng một nơi (server/auth/errors.ts)", cls.join(", "));
-  // Đồ thị nhập giữa các phần (bỏ import type): không có vòng.
-  const parts = files.slice(1), deps = new Map();
+  const cyc = cyclesOf(files.slice(1));
+  ok(!cyc.length, "các phần tài khoản không nhập vòng nhau", cyc.join("\n"));
+}
+
+// Bước 6c: runs.ts + agentruns.ts gộp thành RunService ở server/runs/ (một bản đồ lượt sống, một vòng điều khiển từ tiến trình khác,
+// một định dạng luồng SSE; NDJSON kiểu cũ chỉ còn cho thẻ mở trước bản phát hành này). Hai tệp cũ chỉ còn là mặt tiền chuyển tiếp.
+{
+  const files = runServiceFiles();
+  for (const fac of ["server/runs.ts", "server/agentruns.ts"]) {
+    const lines = fs.readFileSync(fac, "utf8").split("\n").filter((l) => l.trim() && !l.startsWith("//") && l !== 'import "server-only";');
+    const extra = lines.filter((l) => !/^export (type )?\{ [\w, ]+ \} from "\.\/runs\/[\w-]+";$/.test(l));
+    ok(lines.length >= 1 && !extra.length, `${fac} chỉ chuyển tiếp (export … from "./runs/…")`, extra.join("\n"));
+  }
+  const parts = files.slice(2), lines = parts.map((f) => fs.readFileSync(f, "utf8").split("\n").length);
+  ok(lines.reduce((a, b) => a + b, 0) > 700, `các phần của RunService còn đủ mã (${lines.join(" + ")} dòng)`);
+  const cyc = cyclesOf(parts);
+  ok(!cyc.length, "các phần của RunService không nhập vòng nhau", cyc.join("\n"));
+  const src = walkSrc(/\.tsx?$/).concat(["instrumentation-node.ts"]).map((f) => [f, fs.readFileSync(f, "utf8")]);
+  const has = (re) => src.filter(([, s]) => re.test(s)).map(([f]) => f);
+  ok(!has(/__synchroAgentRuns|__synchroRunLive\b|__synchroAgentStopPoll/).length, "không còn bản đồ lượt hay vòng hỏi riêng của từng hệ", has(/__synchroAgentRuns|__synchroRunLive\b|__synchroAgentStopPoll/).join(", "));
+  ok(has(/__synchroRuns \?\?=/).join() === "server/runs/registry.ts" && has(/__synchroRemotePoll = setInterval/).join() === "server/runs/remote.ts", "một bản đồ lượt sống (registry.ts), một vòng điều khiển từ tiến trình khác (remote.ts)");
+  ok(has(/text\/event-stream; charset|application\/x-ndjson/).filter((f) => /^(server\/runs|app\/api\/(agent|runs))/.test(f)).join() === "server/runs/stream.ts"
+    && !has(/new ReadableStream/).some((f) => /^app\/api\/(agent|runs)\//.test(f)), "luồng của lượt chỉ dựng ở server/runs/stream.ts; route chat và Code không tự dựng luồng");
+  const wc = fs.readFileSync("ui/wsclient.ts", "utf8");
+  ok(/accept: "text\/event-stream"/.test(wc) && /readCodeStream\(r,/.test(wc) && !/TextDecoder/.test(wc), "wsclient xin luồng SSE và đọc qua shared/runstream.ts (hiểu cả NDJSON của bản cũ)");
+}
+
+/** Các vòng nhập (bỏ import type) giữa các tệp trong parts. */
+function cyclesOf(parts) {
+  const deps = new Map();
   for (const f of parts) {
     const src = fs.readFileSync(f, "utf8"), out = [];
     for (const m of src.matchAll(/^import (?!type )[^"]*from "(\.{1,2}\/[\w/.-]+)";$/gm)) {
@@ -233,7 +261,7 @@ ok(pkg["dev:mock"] === "node tools/dev-mock.mjs" && pkg.qa === "node tools/qa.mj
     state.set(f, 2);
   };
   for (const f of parts) visit(f, []);
-  ok(!cyc.length, "các phần tài khoản không nhập vòng nhau", cyc.join("\n"));
+  return cyc;
 }
 
 console.log(`\n${pass} đạt, ${fail} lỗi`);
