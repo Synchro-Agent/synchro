@@ -1,17 +1,17 @@
 // B5 bước 8 (canh gác): CSS của app không còn khai báo chết chắc chắn (bị một khai báo cùng selector, cùng @media, luôn nạp cùng, luôn đứng
-// trên che hẳn). scripts/css-dedupe.mjs: dự án thật phải 0; bộ mẫu kiểm từng trường hợp phải giữ (dự phòng, thứ tự dev / prod khác nhau,
+// trên che hẳn). tools/css-dedupe.mjs: dự án thật phải 0; bộ mẫu kiểm từng trường hợp phải giữ (dự phòng, thứ tự dev / prod khác nhau,
 // tệp tải chậm, html body có thể là chính body…) và từng trường hợp được xóa.
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-const D = await import(path.resolve("scripts/css-dedupe.mjs"));
+const D = await import(path.resolve("tools/css-dedupe.mjs"));
 let pass = 0, fail = 0;
 const ok = (c, n, x = "") => { c ? pass++ : fail++; console.log(c ? "  ✓" : "  ✗", n, c ? "" : String(x).slice(0, 600)); };
 
 console.log("1. Dự án thật");
 const real = D.findDead(D.load(path.resolve(".")));
-ok(real.size === 0, "0 khai báo chết (chạy node scripts/css-dedupe.mjs --write để xóa)", [...real.keys()].slice(0, 10).map((d) => `${d.parent.selector} { ${d.prop}: ${d.value} } :${d.source?.start?.line}`).join("\n"));
+ok(real.size === 0, "0 khai báo chết (chạy node tools/css-dedupe.mjs --write để xóa)", [...real.keys()].slice(0, 10).map((d) => `${d.parent.selector} { ${d.prop}: ${d.value} } :${d.source?.start?.line}`).join("\n"));
 
 console.log("2. Bộ mẫu");
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "css-dedupe-"));

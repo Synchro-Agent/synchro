@@ -2,7 +2,7 @@
 // 1) gói khởi động (server/bootdata.ts) và /api/bootstrap trên cơ sở dữ liệu tạm: đủ phần, ETag theo người dùng, 304 khi khớp;
 // 2) lần hỏi đoạn chat bắt đầu sớm chỉ dùng khi đúng tài khoản và đúng mốc;
 // 3) mã nguồn: trang chủ là server component dựng sẵn gói, các kho được gieo, các lệnh hỏi đầu được hoãn, phần tải đầu không kéo
-//    router / artkit / speech/data / usageui; 4) ngân sách tải đầu (scripts/budget.mjs) đọc đúng bản build.
+//    router / artkit / speech/data / usageui; 4) ngân sách tải đầu (tools/budget.mjs) đọc đúng bản build.
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -85,8 +85,8 @@ try {
   for (const f of ["server/router.ts", "shared/artkit.ts", "shared/speech/data.ts", "ui/usageui.tsx", "ui/settings.tsx"]) ok(!first.has(f), `${f} không nằm trong phần tải đầu`);
   ok(first.has("ui/usagering.tsx") && first.has("shared/vendor.ts") === false, "vòng Mức dùng (usagering.tsx) có sẵn; vendor.ts chỉ theo trang Mức dùng");
 
-  console.log("4. Ngân sách tải đầu (scripts/budget.mjs)");
-  const B = await import(path.resolve("scripts/budget.mjs"));
+  console.log("4. Ngân sách tải đầu (tools/budget.mjs)");
+  const B = await import(path.resolve("tools/budget.mjs"));
   const dist = path.join(tmp, "dist");
   fs.mkdirSync(path.join(dist, "static/chunks/app"), { recursive: true }); fs.mkdirSync(path.join(dist, "static/css"), { recursive: true });
   const put = (f, s) => fs.writeFileSync(path.join(dist, f), s);

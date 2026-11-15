@@ -790,7 +790,7 @@ RULES_VI.push(
   [/^(\d)\s+Copy this prompt into a chat with your other AI provider$/, (m) => `${m[1]}  Chép câu lệnh này vào một đoạn chat với nhà cung cấp AI kia`],
   [/^(\d)\s+Paste results below to add to Synchro's memory$/, (m) => `${m[1]}  Dán kết quả vào bên dưới để thêm vào bộ nhớ của Synchro`],
 );
-// Chữ tiếng Anh còn sót ở giao diện tiếng Việt (rà bằng scripts/i18n-audit.mjs và rà trên giao diện).
+// Chữ tiếng Anh còn sót ở giao diện tiếng Việt (rà bằng tools/i18n-audit.mjs và rà trên giao diện).
 Object.assign(EN2VI, {
   "Your plan needs you to sign in again in Settings → Providers.": "Gói của bạn cần đăng nhập lại ở Cài đặt → Providers.",
   "From your plan": "Từ gói của bạn", "Limit reached ·": "Đã chạm hạn mức ·", "Plan limits": "Hạn mức gói", "View usage details": "Xem chi tiết mức dùng",

@@ -123,7 +123,7 @@ for (const v of VIEWS) {
   await until(`!!document.querySelector(".sy-settings .s-body")`, 8000);
   await ev(FREEZE);
   // Tên mục (nguồn tiếng Anh) hiện ra theo ngôn ngữ giao diện: so cả hai. "Time and focus" (h3 Quiet hours) không có trong danh sách mục
-  // của modals.tsx nên không mở được từ giao diện (#s=… lạ thì về General); chỗ đó do scripts/css-inline.mjs canh.
+  // của modals.tsx nên không mở được từ giao diện (#s=… lạ thì về General); chỗ đó do tools/css-inline.mjs canh.
   for (const [tab, vi] of [["General", "Chung"], ["Account", "Tài khoản"], ["Administrator", "Quản trị viên"]]) {
     const names = JSON.stringify([tab, vi]);
     await click(`[...document.querySelectorAll(".sy-settings .s-item")].find((e) => ${names}.some((t) => e.getAttribute("title") === t || e.textContent.trim() === t))`);

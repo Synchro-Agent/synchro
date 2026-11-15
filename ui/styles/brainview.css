@@ -1,6 +1,6 @@
 @layer properties, theme, base, components, utilities, syn, syn-over;
 @layer syn {
-/* Chuyển từ synchro-ds.css (B5 bước 10, scripts/css-move.mjs): luật chỉ trúng phần tử của màn này, giữ thứ tự cũ (đứng trước luật riêng của tệp). */
+/* Chuyển từ synchro-ds.css (B5 bước 10, tools/css-move.mjs): luật chỉ trúng phần tử của màn này, giữ thứ tự cũ (đứng trước luật riêng của tệp). */
 /* Thẻ trong các mục (Providers, Mức dùng, Quản trị, Connectors…): tấm phẳng, viền mảnh. Thẻ "bare" nằm trong thẻ khác: không viền, không đệm. */
 html body .sy-settings .bn-stats{grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:0;border-radius:var(--r-card);background:var(--ds-plate);box-shadow:inset 0 0 0 1px var(--ds-line);overflow:hidden}
 html body .sy-settings .bn-stats>span{flex-direction:column;gap:2px}
@@ -13,7 +13,7 @@ html body .sy-settings .bn-stats b{line-height:24px;color:var(--ds-ink);font-var
 
 .bw-bk{margin:0 0 6px;justify-content:flex-start}
 /* Hết phần chuyển từ synchro-ds.css. */
-/* Chuyển từ globals.css (B5 bước 10, scripts/css-move.mjs): luật chỉ trúng phần tử của màn này, giữ thứ tự cũ (đứng trước luật riêng của tệp). */
+/* Chuyển từ globals.css (B5 bước 10, tools/css-move.mjs): luật chỉ trúng phần tử của màn này, giữ thứ tự cũ (đứng trước luật riêng của tệp). */
 .bn-table tr:hover td{background:color-mix(in srgb,var(--text) 3%,transparent)}
 /* ô tìm nhanh và danh sách kết quả */
 .bw-find>svg{flex:none}
@@ -384,7 +384,7 @@ html body .sy-settings .bn-stats b{line-height:24px;color:var(--ds-ink);font-var
 }
 }
 @layer syn-over{
-/* Chuyển từ synchro-ds.css (B5 bước 10, scripts/css-move.mjs): luật chỉ trúng phần tử của màn này, giữ thứ tự cũ (đứng trước luật riêng của tệp). */
+/* Chuyển từ synchro-ds.css (B5 bước 10, tools/css-move.mjs): luật chỉ trúng phần tử của màn này, giữ thứ tự cũ (đứng trước luật riêng của tệp). */
 .sy-settings .bn-stats{display:grid;margin:14px 0}
 html body .sy-settings .bn-stats>span{display:flex;padding:12px 16px;border:0;border-radius:0;background:transparent;font-size:var(--fs-1);color:var(--ds-muted)}
 .sy-settings .bn-stats b{font-size:18px;font-weight:560}

@@ -1,6 +1,6 @@
 // Theo dõi vận hành ngay trong sản phẩm, không dùng dịch vụ ngoài: lỗi máy chủ, thư gửi lỗi, CLI bị từ chối đăng nhập, khởi động lại (chỉ chạy ở máy chủ).
 // Trang Cài đặt → Sức khỏe hệ thống đọc từ đây; lỗi đã làm sạch (opsredact.ts), giữ 30 ngày, không có nội dung chat.
-// Sao lưu và watchdog chạy bằng root ngoài tiến trình web nên ghi kết quả ở OPS_DIR (web chỉ đọc): scripts/backup.sh, scripts/watchdog.sh.
+// Sao lưu và watchdog chạy bằng root ngoài tiến trình web nên ghi kết quả ở OPS_DIR (web chỉ đọc): ops/backup.sh, ops/watchdog.sh.
 import "server-only";
 import fs from "node:fs";
 import path from "node:path";

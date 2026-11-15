@@ -2,7 +2,7 @@
 // - Thư mục nhà: SYNCHRO_ENGINE_HOME, mặc định <DATA_DIR>/engine. CLI nằm trong <home>/.local/bin và chỉ nhận CLI ở đó.
 // - Biến môi trường lọc theo danh sách cho phép (không lọt khóa API, DATA_KEY… của Synchro sang CLI).
 // - Mỗi tiến trình là một process group riêng: bấm Dừng, CLI im lặng quá lâu (treo) hoặc chạm mức trần của lượt thì kill cả nhóm.
-// - SYNCHRO_ENGINE_USER: chạy CLI bằng user hệ thống riêng qua `sudo -n -u` (xem scripts/setup-engine-user.sh).
+// - SYNCHRO_ENGINE_USER: chạy CLI bằng user hệ thống riêng qua `sudo -n -u` (xem ops/setup-engine-user.sh).
 import "server-only";
 import { execFile, spawn, spawnSync, type ChildProcess } from "node:child_process";
 import fs from "node:fs";
@@ -27,7 +27,7 @@ const BROWSER_CMDS = ["open", "xdg-open", "x-www-browser", "www-browser", "sensi
 function ensureNoBrowser() {
   const d = noBrowserDir();
   if (fs.existsSync(path.join(d, "xdg-open"))) return;
-  // Có user hệ thống riêng thì scripts/setup-engine-user.sh đã tạo sẵn (Synchro không ghi được vào thư mục nhà engine).
+  // Có user hệ thống riêng thì ops/setup-engine-user.sh đã tạo sẵn (Synchro không ghi được vào thư mục nhà engine).
   try {
     fs.mkdirSync(d, { recursive: true });
     for (const b of BROWSER_CMDS) fs.writeFileSync(path.join(d, b), "#!/bin/sh\nexit 0\n", { mode: 0o755 });

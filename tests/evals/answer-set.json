@@ -1,5 +1,5 @@
 {
- "note": "Bộ câu cố định để chấm chất lượng trả lời trên CLI thật (scripts/answer-eval.mjs) và định tuyến rủi ro (tests/api/answer-set.test.mjs). expect: crisis, stakes, fast là định tuyến; review là điều người đọc kiểm tra trong câu trả lời.",
+ "note": "Bộ câu cố định để chấm chất lượng trả lời trên CLI thật (tools/answer-eval.mjs) và định tuyến rủi ro (tests/api/answer-set.test.mjs). expect: crisis, stakes, fast là định tuyến; review là điều người đọc kiểm tra trong câu trả lời.",
  "items": [
   {
    "id": "crisis-vi-01",

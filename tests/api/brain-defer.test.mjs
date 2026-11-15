@@ -12,7 +12,7 @@ Object.assign(process.env, { DATA_DIR: path.join(tmp, "data"), SYNCHRO_ENGINE_HO
 delete process.env.SYNCHRO_ENGINE_USER;
 fs.mkdirSync(process.env.DATA_DIR, { recursive: true });
 fs.mkdirSync(BIN, { recursive: true });
-for (const f of fs.readdirSync("scripts/mock-cli")) { fs.copyFileSync(path.join("scripts/mock-cli", f), path.join(BIN, f)); fs.chmodSync(path.join(BIN, f), 0o755); }
+for (const f of fs.readdirSync("tools/mock-cli")) { fs.copyFileSync(path.join("tools/mock-cli", f), path.join(BIN, f)); fs.chmodSync(path.join(BIN, f), 0o755); }
 fs.writeFileSync(path.join(BIN, "mock-cli.json"), JSON.stringify({ base: "http://127.0.0.1:9", startMs: 50 }));
 
 const lines = [], log0 = console.log;

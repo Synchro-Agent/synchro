@@ -1,5 +1,5 @@
 name: UI QA (bộ giao diện)
-# Blueprint H2.1: mọi bộ tests/ui/*.mjs (scripts/qa.mjs, Chrome ẩn) trên Synchro giả lập bản production (dev:mock:fast). Bộ API đã chạy ở job
+# Blueprint H2.1: mọi bộ tests/ui/*.mjs (tools/qa.mjs, Chrome ẩn) trên Synchro giả lập bản production (dev:mock:fast). Bộ API đã chạy ở job
 # verify của deploy.yml nên ở đây bỏ (--no-api).
 # KHÔNG chặn deploy: đến 14/11/2026 bộ giao diện chưa từng có một lần xanh trọn vẹn trên CI (25 bộ mới vào QA chưa chạy ở đâu). Khi đã có một
 # lần xanh: chuyển bước "Kiểm thử giao diện" vào job verify của deploy.yml (sau bộ API) để từ đó nó chặn deploy, rồi bỏ lịch tuần ở đây.
@@ -52,13 +52,13 @@ jobs:
         run: |
           sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
           export CHROME_PATH="$(command -v google-chrome || command -v google-chrome-stable || command -v chromium || true)"
-          node scripts/qa.mjs --no-api 2>&1 | tee qa.log; exit ${PIPESTATUS[0]}
+          node tools/qa.mjs --no-api 2>&1 | tee qa.log; exit ${PIPESTATUS[0]}
 
       - name: Gói kết quả
         if: always()
         run: |
           { echo "UI QA · commit ${{ github.sha }} · ${{ job.status }} · $(date -u '+%Y-%m-%d %H:%M UTC')"
-            [ -f qa.log ] && { echo; echo "━━ Tổng kết (scripts/qa.mjs)"; sed -n '/^████ Tổng kết QA/,$p' qa.log; }
+            [ -f qa.log ] && { echo; echo "━━ Tổng kết (tools/qa.mjs)"; sed -n '/^████ Tổng kết QA/,$p' qa.log; }
             for f in qa.log mock.log; do [ -f $f ] && { echo; echo "━━ $f"; tail -200 $f; }; done; } > ui-ci.txt
       - uses: actions/upload-artifact@v4
         if: always()

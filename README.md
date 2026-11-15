@@ -42,10 +42,10 @@ Tài khoản lưu trong `data/synchro.db` (SQLite, không vào git, không bị 
 **Tạo tài khoản quản trị** (web không cho đăng ký bằng mật khẩu với email quản trị):
 
 ```bash
-node scripts/create-admin.mjs
+node ops/create-admin.mjs
 ```
 
-Trên VPS: `su - synchro -c "cd /var/www/synchro && node scripts/create-admin.mjs"`.
+Trên VPS: `su - synchro -c "cd /var/www/synchro && node ops/create-admin.mjs"`.
 
 **Bật đăng nhập Google / GitHub / Apple**: thêm biến vào `.env.production` (xem `.env.example`) rồi khởi động lại app. Redirect URI cần khai báo ở mỗi nhà cung cấp:
 
@@ -64,7 +64,7 @@ terminal thật, trình duyệt Chromium dùng chung giữa người dùng và a
 - `workspace/Dockerfile`: image `synchro-ws:1` (Node 22, Python 3, git, Chromium…), người dùng không có quyền root.
 - `workspace/agent.mjs`: dịch vụ `synchro-ws` (root, chỉ nghe 127.0.0.1:3555) quản lý container, chạy lệnh, PTY và CDP.
   Container bị chặn khỏi mạng nội bộ / máy chủ; tối đa `WS_MAX_RUNNING` (mặc định 4) container chạy cùng lúc, tự dừng sau 20 phút rảnh.
-- `workspace/setup.sh`: deploy gọi sau mỗi lần build — build lại image khi thay đổi, cài systemd, nginx (`/ws-agent/term`, `/ws-agent/screen`).
+- `ops/setup.sh`: deploy gọi sau mỗi lần build — build lại image khi thay đổi, cài systemd, nginx (`/ws-agent/term`, `/ws-agent/screen`).
 - `app/api/agent`: vòng lặp agent (model + công cụ bash, file, trình duyệt, danh sách việc), trả sự kiện NDJSON.
   Chưa có `LLM_API_KEY` thì chạy kịch bản mô phỏng.
 - Quyền: tài khoản cần tính năng **Synchro Code** và **Cloud sandbox** (quản trị viên bật/tắt trong tab Quản trị viên).
@@ -80,7 +80,7 @@ Ngoài trình duyệt riêng trong workspace, Synchro điều khiển được c
   (hướng dẫn trong app và trong `extension/README.md`), rồi ghép nối bằng mã 8 ký tự dùng một lần. Mỗi tài khoản ghép nối trình duyệt của mình; máy chủ chỉ giữ bản băm của khóa.
 - Đường đi: tiện ích xin vé (`/api/browser/ext/connect`) → WebSocket `/ws-agent/ext` của dịch vụ workspace (`workspace/ext-relay.mjs`, nginx mở thêm đường này)
   → máy chủ Next gửi lệnh `browser_*` qua HTTP `/ext`. Model chọn trình duyệt bằng tham số `browser` ("user" khi người dùng nói "Chrome của tôi"); không nói thì theo lựa chọn ở khung trình duyệt.
-- dev:mock: bản giải nén sẵn ở `data-mock/extension` (Load unpacked trong Chrome của bạn), hoặc tiện ích giả lập `node scripts/mock-extension.mjs --code <mã>`
+- dev:mock: bản giải nén sẵn ở `data-mock/extension` (Load unpacked trong Chrome của bạn), hoặc tiện ích giả lập `node tools/mock-extension.mjs --code <mã>`
   (đúng mã của tiện ích trên Chrome thật, cửa sổ riêng). Kiểm thử: `node tests/run-all.mjs ext browser`; `ext-lab` chạy mọi thao tác như người thật
   (gõ từng phím, chọn, chuột, cuộn, kéo thả, tải lên / về, hộp thoại, khung con, shadow DOM, tab, biểu mẫu…) trên trang `tests/fixtures/browser-lab.html`
   ở tiện ích giả lập, tiện ích thật trong Chrome thật (màn hình tỉ lệ 2) và trình duyệt của Synchro.

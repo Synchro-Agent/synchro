@@ -1,0 +1,16 @@
+{
+  "name": "synchro-3d-vendor",
+  "private": true,
+  "description": "Nguồn dựng public/vendor/synchro-3d-1.0.0.js (nền shader 3D, kính khúc xạ cho artifact). Dựng: node tools/build-vendor-3d.mjs",
+  "dependencies": {
+    "@react-three/drei": "9.122.0",
+    "@react-three/fiber": "8.18.0",
+    "@shadergradient/react": "2.4.20",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "three": "0.169.0"
+  },
+  "devDependencies": {
+    "esbuild": "0.25.12"
+  }
+}

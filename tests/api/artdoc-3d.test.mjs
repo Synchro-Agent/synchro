@@ -43,14 +43,14 @@ console.log("2. Tệp ghim, CSP");
   ok(f.length < 1_200_000, "gói 3D dưới 1,2 MB", f.length);
   const src = f.toString("utf8");
   ok(/window\.Synchro3D|\.Synchro3D=/.test(src) && !/ruucm\.github\.io[^"']*\.hdr["']\)/.test(src.replace(/envBasePath[^,]*,/g, "")), "gói đặt window.Synchro3D");
-  const pkg = JSON.parse(fs.readFileSync("scripts/vendor-3d/package.json", "utf8")), lock = JSON.parse(fs.readFileSync("scripts/vendor-3d/package-lock.json", "utf8"));
+  const pkg = JSON.parse(fs.readFileSync("tools/vendor-3d/package.json", "utf8")), lock = JSON.parse(fs.readFileSync("tools/vendor-3d/package-lock.json", "utf8"));
   const want = { three: "0.169.0", "@react-three/fiber": "8.18.0", "@react-three/drei": "9.122.0", "@shadergradient/react": "2.4.20", react: "18.3.1" };
   ok(Object.entries(want).every(([k, v]) => pkg.dependencies[k] === v && lock.packages[`node_modules/${k}`]?.version === v && /^sha512-/.test(lock.packages[`node_modules/${k}`]?.integrity ?? "")), "phiên bản ghim đúng (không ^ ~), lockfile có sha512");
   ok(pkg.devDependencies.esbuild === "0.25.12", "esbuild ghim trong lockfile riêng, không vào package.json của app");
   ok(!JSON.parse(fs.readFileSync("package.json", "utf8")).devDependencies?.esbuild && !JSON.parse(fs.readFileSync("package.json", "utf8")).dependencies?.three, "package.json của app không thêm gói");
   const cspNow = D.csp(O);
   ok(/connect-src 'none'/.test(cspNow) && /img-src data: blob:;/.test(cspNow) && !/ruucm|github\.io/.test(cspNow), "CSP không nới: không gọi mạng, không tải ảnh / HDR ngoài");
-  ok(/README/.test("README") && /synchro-3d-1\.0\.0\.js — dựng bằng node scripts\/build-vendor-3d\.mjs/.test(fs.readFileSync("public/vendor/README.md", "utf8")), "README vendor ghi rõ tệp đóng gói và cách dựng lại");
+  ok(/README/.test("README") && /synchro-3d-1\.0\.0\.js — dựng bằng node tools\/build-vendor-3d\.mjs/.test(fs.readFileSync("public/vendor/README.md", "utf8")), "README vendor ghi rõ tệp đóng gói và cách dựng lại");
 }
 
 console.log("3. Trang HTML / bản trình bày: bộ CSS");

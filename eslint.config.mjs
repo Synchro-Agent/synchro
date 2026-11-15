@@ -1,5 +1,5 @@
-// ESLint (H2.5): next/core-web-vitals (React, hooks, Next) + jsx-a11y (trợ năng). Chạy: npm run lint (scripts/lint.mjs).
-// Cần các gói dev (chưa cài trong repo, xem scripts/lint.mjs): eslint, eslint-config-next, @eslint/eslintrc, eslint-plugin-jsx-a11y.
+// ESLint (H2.5): next/core-web-vitals (React, hooks, Next) + jsx-a11y (trợ năng). Chạy: npm run lint (tools/lint.mjs).
+// Cần các gói dev (chưa cài trong repo, xem tools/lint.mjs): eslint, eslint-config-next, @eslint/eslintrc, eslint-plugin-jsx-a11y.
 // Trợ năng để mức "warn" ở lần bật đầu: mã hiện có chưa từng chạy qua bộ luật này, chặn ngay thì CI đỏ vì nợ cũ. Khi số cảnh báo
 // về 0 thì đổi sang "error" (một dòng ở A11Y_LEVEL) để từ đó không thêm lỗi mới.
 import { FlatCompat } from "@eslint/eslintrc";
@@ -16,7 +16,7 @@ export default [
     // (worktree của các phiên làm việc), nên bỏ mọi thư mục chấm (.claude, .tools, .mkvenv, .cache…: không thư mục nào chứa mã của app).
     ignores: [
       "node_modules/**", ".next/**", ".next-*/**", "out/**", "data/**", "data-mock/**", "workspace/**", "public/**", "catalog/**",
-      "**/.*/**","scripts/vendor-3d/**", "extension/dist/**", "next-env.d.ts",
+      "**/.*/**","tools/vendor-3d/**", "extension/dist/**", "next-env.d.ts",
     ],
   },
   ...compat.extends("next/core-web-vitals", "next/typescript"),
@@ -33,7 +33,7 @@ export default [
   },
   {
     // Kiểm thử và script Node: không phải mã React.
-    files: ["tests/**", "scripts/**", "extension/**"],
+    files: ["tests/**", "scripts/**", "tools/**", "ops/**", "extension/**"],
     rules: { "@typescript-eslint/no-require-imports": "off", "@typescript-eslint/no-unused-vars": "off" },
   },
 ];

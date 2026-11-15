@@ -7,7 +7,7 @@
 // cửa sổ đăng nhập bật lên tự đóng, quyền vị trí / thông báo, tab ở nền, mất kết nối giữa chừng (service worker bị tắt).
 // Trang thử: tests/fixtures/browser-lab.html (+ browser-lab-frame.html, browser-lab-popup.html).
 // Chạy cùng một chuỗi thao tác ở:
-//   ext-mock  tiện ích giả lập (scripts/mock-extension.mjs: mã của tiện ích trên Chrome thật qua lớp giả chrome.*);
+//   ext-mock  tiện ích giả lập (tools/mock-extension.mjs: mã của tiện ích trên Chrome thật qua lớp giả chrome.*);
 //   ext-real  tiện ích thật (Manifest V3) nạp vào Chrome thật bằng Extensions.loadUnpacked, màn hình độ phân giải cao (tỉ lệ 2) như Retina;
 //   synchro   trình duyệt của Synchro trong workspace (đối chiếu: hai nơi phải làm được như nhau).
 // Lệnh đi thẳng qua cầu nối như máy chủ Synchro gửi (/ext hoặc /browser của dịch vụ workspace). Chọn nơi chạy: LAB_TARGETS=ext-mock,synchro.
@@ -17,7 +17,7 @@ import os from "node:os";
 import path from "node:path";
 import { CDP, devJson } from "../../workspace/browser-core.mjs";
 import { writeExtension } from "../../extension/build.mjs";
-import { findChrome } from "../../scripts/mock-workspace.mjs";
+import { findChrome } from "../../tools/mock-workspace.mjs";
 
 const B = process.env.SYNCHRO_URL ?? "http://localhost:3200", MOCK = process.env.MOCK_URL ?? "http://127.0.0.1:4010";
 const WS = process.env.WS_AGENT_URL ?? "http://127.0.0.1:4012", WS_SECRET = process.env.WS_AGENT_SECRET ?? "mock-workspace-secret-for-dev-only-0123456789";
@@ -429,7 +429,7 @@ for (const target of TARGETS) {
     const code = (await api("POST", "/api/browser/ext", { op: "code" })).j.code;
     const prof = path.resolve("data-mock/ext-lab-mock");
     fs.rmSync(prof, { recursive: true, force: true });
-    const proc = spawn(process.execPath, ["scripts/mock-extension.mjs", "--server", B, "--code", code, "--headless", "--quiet", "--profile", prof], { stdio: ["ignore", "pipe", "inherit"] });
+    const proc = spawn(process.execPath, ["tools/mock-extension.mjs", "--server", B, "--code", code, "--headless", "--quiet", "--profile", prof], { stdio: ["ignore", "pipe", "inherit"] });
     let ready = null;
     await new Promise((res) => { let buf = ""; proc.stdout.on("data", (d) => { buf += d; const m = /\{"ready".*\}/.exec(buf); if (m && !ready) { ready = JSON.parse(m[0]); res(); } }); proc.on("exit", res); setTimeout(res, 30_000); });
     const ctl = (p, b) => fetch(`http://127.0.0.1:${ready.control}${p}`, { method: b ? "POST" : "GET", headers: { "content-type": "application/json" }, body: b ? JSON.stringify(b) : undefined }).then((r) => r.json());

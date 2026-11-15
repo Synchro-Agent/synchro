@@ -22,7 +22,7 @@ console.log("1. Phông của poster: tệp tĩnh, đủ chữ tiếng Việt, đ
 {
   const VN = "àáảãạăằắẳẵặâầấẩẫậèéẻẽẹêềếểễệìíỉĩịòóỏõọôồốổỗộơờớởỡợùúủũụưừứửữựỳýỷỹỵđ";
   const all = [...new Set([...VN, ...VN.toUpperCase()])];
-  const pins = Object.fromEntries([...fs.readFileSync("scripts/fetch-poster-fonts.sh", "utf8").matchAll(/^([0-9a-f]{64}) \S+ (\S+\.ttf)$/gm)].map((m) => [m[2], m[1]]));
+  const pins = Object.fromEntries([...fs.readFileSync("tools/fetch-poster-fonts.sh", "utf8").matchAll(/^([0-9a-f]{64}) \S+ (\S+\.ttf)$/gm)].map((m) => [m[2], m[1]]));
   for (const f of ["PlusJakartaSans-Regular.ttf", "PlusJakartaSans-Bold.ttf", "PlusJakartaSans-ExtraBold.ttf"]) {
     const b = fs.readFileSync(path.join("server/design-engine/fonts", f)), u16 = (o) => b.readUInt16BE(o), u32 = (o) => b.readUInt32BE(o), t = {};
     for (let i = 0; i < u16(4); i++) { const o = 12 + i * 16; t[b.toString("latin1", o, o + 4)] = u32(o + 8); }

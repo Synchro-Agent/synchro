@@ -1,4 +1,4 @@
-// Đầu mối trợ giúp đúng nơi người dùng sống: người Việt nói muốn tự tử từng chỉ nhận số 988 của Mỹ. Hàm thuần, cộng một lượt thật qua chatPost trên CLI giả lập. Chữ model viết ra phải chấm lại bằng scripts/answer-eval.mjs trên CLI thật.
+// Đầu mối trợ giúp đúng nơi người dùng sống: người Việt nói muốn tự tử từng chỉ nhận số 988 của Mỹ. Hàm thuần, cộng một lượt thật qua chatPost trên CLI giả lập. Chữ model viết ra phải chấm lại bằng tools/answer-eval.mjs trên CLI thật.
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -12,7 +12,7 @@ Object.assign(process.env, { DATA_DIR: path.join(tmp, "data"), SYNCHRO_ENGINE_HO
 delete process.env.SYNCHRO_ENGINE_USER;
 fs.mkdirSync(process.env.DATA_DIR, { recursive: true });
 fs.mkdirSync(BIN, { recursive: true });
-for (const f of ["claude", "mock-cli-common.cjs"]) { fs.copyFileSync(path.join("scripts/mock-cli", f), path.join(BIN, f)); fs.chmodSync(path.join(BIN, f), 0o755); }
+for (const f of ["claude", "mock-cli-common.cjs"]) { fs.copyFileSync(path.join("tools/mock-cli", f), path.join(BIN, f)); fs.chmodSync(path.join(BIN, f), 0o755); }
 fs.writeFileSync(path.join(BIN, "mock-cli.json"), JSON.stringify({ base: "http://127.0.0.1:9", startMs: 50 }));
 const log0 = console.log;
 console.log = (...a) => { const s = a.join(" "); if (!s.startsWith("[timing]") && !s.startsWith("[design]")) log0(...a); };

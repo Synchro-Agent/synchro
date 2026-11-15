@@ -1,4 +1,4 @@
-// Kiểm tra sức khỏe cho deploy (scripts/server-build.sh) và dịch vụ theo dõi ngoài: công khai nên chỉ trả cờ đúng / sai, không số liệu, đường dẫn hay lỗi chi tiết.
+// Kiểm tra sức khỏe cho deploy (ops/server-build.sh) và dịch vụ theo dõi ngoài: công khai nên chỉ trả cờ đúng / sai, không số liệu, đường dẫn hay lỗi chi tiết.
 // build: mã bản build (vốn đã công khai trong đường dẫn /_next/static/<mã>). 200 khi mọi thứ ổn, 503 khi có cờ false; deploy chỉ xét build và db
 // (đĩa gần đầy hay dịch vụ workspace tắt không phải lỗi của bản mới, trả bản cũ về cũng không hết).
 import fs from "node:fs";

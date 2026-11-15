@@ -76,16 +76,16 @@ console.log("6. W23-5 / G3.3: --memory-swap lớn hơn --memory cho cả workspa
 
 {
   // W23-5 / G3.3 bước 1: máy chủ phải có swap thật thì --memory-swap mới có tác dụng.
-  const sh = fs.readFileSync("scripts/setup-swap.sh", "utf8");
+  const sh = fs.readFileSync("ops/setup-swap.sh", "utf8");
   ok(/fallocate -l "\$\{SWAP_MB\}M"/.test(sh) && /mkswap "\$SWAP_FILE"/.test(sh) && /swapon "\$SWAP_FILE"/.test(sh) && /\/etc\/fstab/.test(sh) && /vm\.swappiness/.test(sh), "setup-swap.sh: fallocate, mkswap, swapon, fstab, swappiness");
   ok(/SWAP_MB="\$\{SWAP_MB:-4096\}"/.test(sh) && /-ge "\$SWAP_MB"/.test(sh) && /SWAP_MB \+ MIN_FREE_MB/.test(sh), "4 GB mặc định; đã đủ swap thì không đổi gì; kiểm đĩa trống trước khi tạo");
-  ok(/bash "\$(?:APP|SRC)\/scripts\/setup-swap\.sh"[^\n]*\|\| echo/.test(fs.readFileSync("scripts/server-build.sh", "utf8")), "server-build.sh gọi setup-swap.sh, lỗi không chặn deploy");
+  ok(/bash "\$(?:APP|SRC)\/ops\/setup-swap\.sh"[^\n]*\|\| echo/.test(fs.readFileSync("ops/server-build.sh", "utf8")), "server-build.sh gọi setup-swap.sh, lỗi không chặn deploy");
   ok(/setup-swap\.sh/.test(fs.readFileSync("docs/van-hanh.md", "utf8")), "docs/van-hanh.md có bước swap");
   ok(/readSwapMB\(\)/.test(src) && /máy chủ không có swap/.test(src), "dịch vụ workspace cảnh báo lúc khởi động khi máy không có swap");
   ok(process.platform === "linux" ? Number.isInteger(cap.readSwapMB()) : cap.readSwapMB() === null, "readSwapMB đọc SwapTotal (null ngoài Linux)", cap.readSwapMB());
   const { spawnSync } = await import("node:child_process");
   if (process.platform !== "linux") {
-    const r = spawnSync("bash", ["scripts/setup-swap.sh"], { encoding: "utf8" });
+    const r = spawnSync("bash", ["ops/setup-swap.sh"], { encoding: "utf8" });
     ok(r.status === 0 && /không phải Linux/.test(r.stdout), "ngoài Linux: setup-swap.sh bỏ qua, thoát 0", r.stdout + r.stderr);
   }
 }

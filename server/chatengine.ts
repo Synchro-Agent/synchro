@@ -337,7 +337,7 @@ Làm việc như một chuyên gia tận tâm, chịu trách nhiệm đến cùn
 // Đường nhanh: câu rõ ràng không cần công cụ (router.needsNoTools) đi với hướng dẫn rất ngắn, không cầu nối MCP, không mục lục skill. Đo trên máy chủ thật: một câu chào qua
 // Claude Haiku chờ 4,8 giây, trong đó 1,5 giây là đọc 69 KB hướng dẫn. Công cụ vẫn còn nguyên ở lượt sau; model thấy cần công cụ thì báo NEED_TOOLS và Synchro chạy lại lượt đầy đủ.
 const NEED_TOOLS = "[[CAN_CONG_CU]]";
-/** Đúng phần hướng dẫn chất lượng của lượt thật, cho scripts/answer-eval.mjs chấm câu trả lời trên CLI thật. */
+/** Đúng phần hướng dẫn chất lượng của lượt thật, cho tools/answer-eval.mjs chấm câu trả lời trên CLI thật. */
 export const answerRules = (fast: boolean) => (fast ? FAST_RULES : QUALITY_RULES);
 export { crisisHelp };
 const FAST_RULES = `<quick_reply>

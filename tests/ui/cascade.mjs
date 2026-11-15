@@ -4,7 +4,7 @@
 // CSS.forcePseudoState). Ảnh chụp không thấy được z-index, hover, focus; bản này thấy.
 // Dùng: node tests/ui/cascade.mjs dump <tệp.json>      (chụp bản đang chạy ở :3200)
 //       node tests/ui/cascade.mjs diff <trước.json> <sau.json>   (mã thoát 1 khi có thuộc tính khác)
-// Bản tĩnh không cần trình duyệt: scripts/css-cascade.mjs.
+// Bản tĩnh không cần trình duyệt: tools/css-cascade.mjs.
 import { spawn } from "node:child_process";
 import { mkdirSync, rmSync, writeFileSync, readFileSync } from "node:fs";
 import { createRequire } from "node:module";

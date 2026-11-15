@@ -39,9 +39,9 @@ console.log("1. Dockerfile: Typst, gói @preview, phông, WeasyPrint, docx đề
 
 console.log("2. setup.sh dựng lại image khi mẫu tài liệu đổi");
 {
-  const s = read("workspace/setup.sh");
+  const s = read("ops/setup.sh");
   ok(/find doc -type f -not -path 'doc\/docx\/node_modules\/\*'/.test(s) && /for f in \$REMOTION_FILES \$DOC_FILES/.test(s), "HASH gồm mọi tệp của workspace/doc");
-  const r = spawnSync("bash", ["-n", "workspace/setup.sh"]);
+  const r = spawnSync("bash", ["-n", "ops/setup.sh"]);
   ok(r.status === 0, "setup.sh đúng cú pháp", r.stderr);
 }
 

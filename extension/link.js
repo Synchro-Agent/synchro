@@ -1,4 +1,4 @@
-// Kết nối tiện ích ↔ máy chủ Synchro. Dùng chung cho tiện ích thật (background.js) và tiện ích giả lập (scripts/mock-extension.mjs).
+// Kết nối tiện ích ↔ máy chủ Synchro. Dùng chung cho tiện ích thật (background.js) và tiện ích giả lập (tools/mock-extension.mjs).
 // - Ghép nối: POST /api/browser/ext/pair { code, name, browser } → khóa riêng của trình duyệt này (lưu trong máy, máy chủ chỉ giữ bản băm).
 // - Kết nối: POST /api/browser/ext/connect (Authorization: Bearer khóa) → vé WebSocket một phút → WebSocket tới /ws-agent/ext.
 // - Lệnh: { t: "call", id, a, turn } → control.call() → { t: "res", id, r } hoặc { t: "res", id, error, status }; { t: "stop" }; { t: "release" }.

@@ -22,7 +22,7 @@ const real = (id) => (V.INLINE_LOGOS.includes(id) ? true : id in V.FILE_LOGOS &&
 const idOf = (pick) => ("id" in pick ? pick.id : null);
 
 console.log("1. Mọi model của API giả lập (đúng danh sách các hãng trả về) có logo của hãng");
-const src = fs.readFileSync(path.join(process.cwd(), "scripts", "mock-providers.mjs"), "utf8");
+const src = fs.readFileSync(path.join(process.cwd(), "tools", "mock-providers.mjs"), "utf8");
 const arr = (name) => Function(`return ${new RegExp(`const ${name} = (\\[[\\s\\S]*?\\]);\\n`).exec(src)[1]}`)();
 const lists = {
   anthropic: arr("ANTHROPIC").map((x) => x[0]), openai: arr("OPENAI"), google: arr("GOOGLE").map((x) => x[0]).filter((x) => x.startsWith("gemini")), xai: arr("XAI"), deepseek: arr("DEEPSEEK"),

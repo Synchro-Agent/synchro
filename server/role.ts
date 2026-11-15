@@ -3,7 +3,7 @@
 //   trừ khi một tiến trình khác còn sống đang giữ khóa primary của cùng thư mục dữ liệu (ví dụ ai đó lỡ bật thêm "npm start" cạnh production
 //   xanh/lam): khi đó chờ như secondary, không bao giờ có hai primary trên một cơ sở dữ liệu.
 // - Xanh/lam (ecosystem.config.cjs đặt SYNCHRO_ROLE=secondary, SYNCHRO_COLOR=blue|green): khởi động là secondary, chỉ phục vụ yêu cầu.
-//   Mỗi vài giây xem tệp màu đang sống (do scripts/server-build.sh ghi, dòng "<màu> <cổng>"): đã là màu của mình và tiến trình giữ khóa
+//   Mỗi vài giây xem tệp màu đang sống (do ops/server-build.sh ghi, dòng "<màu> <cổng>"): đã là màu của mình và tiến trình giữ khóa
 //   primary đã thoát thì nhận vai primary và chạy việc nền đúng một lần. Nhờ vậy litestream, bộ hẹn giờ, chạy lại lượt dở dang… không bao giờ
 //   chạy ở hai tiến trình, và resumeInterrupted chỉ chạy khi tiến trình cũ đã xong các lượt của nó.
 import "server-only";

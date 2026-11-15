@@ -915,7 +915,7 @@ RULES_EN.push(
   [/^Lần chạy code đang chờ máy chủ đủ bộ nhớ, vị trí (\d+) trong hàng$/, (m) => `The code run is waiting for server memory, position ${m[1]} in the queue`],
   [/^Lần chạy code đang xếp hàng ở vị trí (\d+) vì máy chủ đang bận$/, (m) => `The code run is queued at position ${m[1]} because the server is busy`],
 );
-// Giao diện tiếng Anh: chữ tiếng Việt còn thiếu bản dịch (rà bằng scripts/i18n-audit.mjs).
+// Giao diện tiếng Anh: chữ tiếng Việt còn thiếu bản dịch (rà bằng tools/i18n-audit.mjs).
 Object.assign(VI2EN, {
   // Chat, gói, phản biện
   "giờ": "h", "phút": "min", "Đã xóa phiên code": "Code session deleted", "Đã tắt chế độ ẩn danh": "Incognito mode turned off", "Cài thư viện": "Install library", "trình bày": "presentation",

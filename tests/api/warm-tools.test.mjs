@@ -18,7 +18,7 @@ process.env.DATA_DIR = path.join(tmp, "data"); process.env.SYNCHRO_ENGINE_HOME =
 process.env.SYNCHRO_CLAUDE_POOL_MAX = "4"; process.env.SYNCHRO_CODEX_SERVER_MAX = "3";
 delete process.env.SYNCHRO_ENGINE_USER; delete process.env.SYNCHRO_ENGINE_BWRAP; delete process.env.SYNCHRO_CODEX_SERVER;
 fs.mkdirSync(process.env.DATA_DIR, { recursive: true }); fs.mkdirSync(BIN, { recursive: true });
-for (const f of fs.readdirSync("scripts/mock-cli")) { fs.copyFileSync(path.join("scripts/mock-cli", f), path.join(BIN, f)); fs.chmodSync(path.join(BIN, f), 0o755); }
+for (const f of fs.readdirSync("tools/mock-cli")) { fs.copyFileSync(path.join("tools/mock-cli", f), path.join(BIN, f)); fs.chmodSync(path.join(BIN, f), 0o755); }
 // Thời gian khởi động giả lập của CLI: Claude Code ~1,7 giây đo trên máy chủ thật; Codex exec đọc cấu hình, đăng nhập, nối MCP.
 const START_MS = 1200;
 const cfg = (o = {}) => fs.writeFileSync(path.join(BIN, "mock-cli.json"), JSON.stringify({ base: "http://127.0.0.1:9", startMs: START_MS, codexStartMs: START_MS, ...o }));

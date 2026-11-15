@@ -27,7 +27,7 @@ console.log("1. Đường dẫn nhắc trong kiểm thử, script, CI, cấu hì
 const scanned = [
   ...walk("tests", /\.(mjs|cjs|js)$/), ...walk("scripts", /\.(mjs|cjs|js|sh|py)$/), ...walk("tools", /\.(mjs|cjs|js|sh|py)$/), ...walk("ops", /\.(mjs|cjs|js|sh|py)$/),
   ...walk(".github/workflows", /\.ya?ml$/),
-  ...["package.json", "eslint.config.mjs", "tsconfig.json", "next.config.ts", "instrumentation.ts", "instrumentation-node.ts", "ecosystem.config.cjs", "workspace/setup.sh", "ops/setup.sh"].filter((f) => fs.existsSync(f)),
+  ...["package.json", "eslint.config.mjs", "tsconfig.json", "next.config.ts", "instrumentation.ts", "instrumentation-node.ts", "ecosystem.config.cjs", "ops/setup.sh", "ops/setup.sh"].filter((f) => fs.existsSync(f)),
 ];
 const REF = /(?<![\w$.@/-])(app|server|ui|shared|scripts|ops|tools|db|workspace)\/[\w@\[\]./-]+\.(tsx?|mjs|cjs|css|sh|py|sql|json|txt)\b/g;
 // Có chủ ý không tồn tại: [tệp nhắc tới, đường dẫn]. Tệp giả do chính bài kiểm tạo (trong thư mục tạm), đường dẫn bên trong gói skill / video thử.
@@ -37,9 +37,9 @@ const ALLOW = [
   [/^tests\/api\/css-inline\.test\.mjs$/, /^app\/(a\.css|ui\.tsx)$/],     // CSS, tsx giả trong thư mục tạm
   [/^tests\/(api|ui)\/skill[\w-]*\.(test\.)?mjs$/, /^scripts\/[\w-]+\.py$/], // tệp bên trong một skill thử, không phải scripts/ của repo
   [/^tests\/api\/synchro-video\.test\.mjs$/, /^tools\/make\.py$/],          // tệp bên trong dự án video thử
-  // Dòng đầu của workspace/charts/synchro-charts.js do script này sinh ra: tệp đó nằm trong mã băm image sandbox (workspace/setup.sh), sửa chữ
+  // Dòng đầu của workspace/charts/synchro-charts.js do script này sinh ra: tệp đó nằm trong mã băm image sandbox (ops/setup.sh), sửa chữ
   // ở đây thì phải sinh lại và dựng lại image. Giữ nguyên cho tới lần sửa chú thích workspace/ (cùng lúc với các chú thích cũ khác trong workspace/).
-  [/^scripts\/gen-chart-presets\.mjs$/, /^app\/design-engine\/charts\/echarts-presets\.ts$/],
+  [/^tools\/gen-chart-presets\.mjs$/, /^(app\/design-engine\/charts\/echarts-presets\.ts|scripts\/gen-chart-presets\.mjs)$/],
 ];
 const missing = [];
 for (const f of scanned.filter((x) => x !== "tests/api/paths-guard.test.mjs")) {

@@ -3,7 +3,7 @@
 - **Trạng thái:** Đã chấp nhận. Đã làm bước 2–6 (engine, runtime, đăng nhập, ba engine, dự phòng API), tab Providers và vòng tròn usage. Công cụ của Synchro qua MCP còn để sau.
 - **Ngày:** 26/10/2026
 - **Phạm vi:** Cài đặt → Providers, bộ chọn model, lõi chat, vòng tròn usage
-- **Mã nguồn:** `server/ai/` (engine, selector, errors, cli_runtime, cli_auth, cli_engines, api_engine, subs), `app/api/engines/`, `ui/providersui.tsx`, `scripts/mock-cli/`, `scripts/setup-engine-user.sh`
+- **Mã nguồn:** `server/ai/` (engine, selector, errors, cli_runtime, cli_auth, cli_engines, api_engine, subs), `app/api/engines/`, `ui/providersui.tsx`, `tools/mock-cli/`, `ops/setup-engine-user.sh`
 
 ## Bối cảnh
 
@@ -65,7 +65,7 @@ Chính sách của các hãng (kiểm tra ngày 26/10/2026):
    - Đầu ra gửi về trình duyệt và ghi log đều đi qua `redact()`. Mã người dùng dán (terminal in lại) cũng được che.
    - Lệnh mở trình duyệt (`open`, `xdg-open`…) bị thay bằng lệnh giả: CLI trên máy chủ không bao giờ tự mở trình duyệt.
    - Mỗi tiến trình là một process group riêng. Bấm Dừng hoặc chạy quá 30 phút thì kill cả nhóm.
-   - `SYNCHRO_ENGINE_USER` chạy CLI bằng user hệ thống riêng qua `sudo -n -u <user> -- env -i …`, nên CLI không đọc được cơ sở dữ liệu hay khóa của Synchro. Root chạy `scripts/setup-engine-user.sh` một lần để tạo user và quy tắc sudo.
+   - `SYNCHRO_ENGINE_USER` chạy CLI bằng user hệ thống riêng qua `sudo -n -u <user> -- env -i …`, nên CLI không đọc được cơ sở dữ liệu hay khóa của Synchro. Root chạy `ops/setup-engine-user.sh` một lần để tạo user và quy tắc sudo.
 9. **Engine khóa API làm dự phòng** (`server/ai/api_engine.ts`):
    - Gói báo hết hạn mức trước khi kịp trả chữ nào: chuyển sang khóa API cùng hãng (claude → Anthropic, codex → OpenAI, agy → Google), nếu quản trị viên đã thêm khóa và người dùng còn hạn mức chi phí API.
    - Lỗi đăng nhập không chuyển sang API: Synchro nhắc người dùng đăng nhập lại.
@@ -86,7 +86,7 @@ Chính sách của các hãng (kiểm tra ngày 26/10/2026):
     | Gemini · gói | Pro, Ultra: hồi mỗi 5 giờ cho tới khi chạm hạn mức tuần; gói khác chỉ có hạn mức tuần. Hai nhóm quota: Gemini, và Claude/GPT ([Antigravity plans](https://antigravity.google/docs/plans), [Models](https://antigravity.google/docs/models)) | Bốn thanh: 2 nhóm × (5 giờ, tuần) |
     | Mọi hãng · API | Hạn mức chi phí của Synchro (phiên 5 giờ, tuần), hạn mức gọi do hãng báo, số dư đã nạp | Số dư = số tiền quản trị viên nhập trừ chi phí thật kể từ lúc nhập. Báo khi còn 20%, 5% và khi hết |
 
-12. **Mô phỏng:** `npm run dev:mock` chép CLI giả (`scripts/mock-cli`) vào `data-mock/engine`. Bản giả lập đủ đăng nhập, chạy lượt, resume, hạn mức theo đúng định dạng thật, và trang đăng nhập giả ở máy chủ mock. Bộ kiểm thử:
+12. **Mô phỏng:** `npm run dev:mock` chép CLI giả (`tools/mock-cli`) vào `data-mock/engine`. Bản giả lập đủ đăng nhập, chạy lượt, resume, hạn mức theo đúng định dạng thật, và trang đăng nhập giả ở máy chủ mock. Bộ kiểm thử:
     - `tests/api/engine.test.mjs`: tự chạy, không cần máy chủ.
     - `tests/api/providers.test.mjs`: chạy qua API web.
 
@@ -118,7 +118,7 @@ Chính sách của các hãng (kiểm tra ngày 26/10/2026):
 
 - Máy chủ MCP nội bộ để lượt chat bằng gói dùng được skill, connector, chạy code và artifact.
 - Kiểm định dạng bảng `/usage` của `agy` và cách đặt tên model của `agy models` bằng tài khoản thật.
-- Chạy `scripts/setup-engine-user.sh` trên VPS, rồi đặt `SYNCHRO_ENGINE_HOME` và `SYNCHRO_ENGINE_USER`.
+- Chạy `ops/setup-engine-user.sh` trên VPS, rồi đặt `SYNCHRO_ENGINE_HOME` và `SYNCHRO_ENGINE_USER`.
 
 ## Bổ sung 2026-10-31: Grok (xAI) và DeepSeek
 

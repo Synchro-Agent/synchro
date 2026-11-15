@@ -23,7 +23,7 @@ export const GET = handle(async (req: Request) => {
   for (const c of Object.values(counts)) c.closed = 0;
   const failedIn: Record<string, number> = {};
   for (const e of dirEntries()) { if (isClosed(e.id)) for (const c of e.cats) { if (counts[c]) counts[c].closed++; } else if (isFailed(e.id)) for (const c of e.cats) failedIn[c] = (failedIn[c] ?? 0) + 1; }
-  // Quản trị viên lấy danh sách để đưa vào catalog/license-blocked.json, lần chạy scripts/sync-claude-directory.mjs sau ghi hẳn vào danh mục.
+  // Quản trị viên lấy danh sách để đưa vào catalog/license-blocked.json, lần chạy tools/sync-claude-directory.mjs sau ghi hẳn vào danh mục.
   if (u_(req).searchParams.get("blocked") && isAdmin(user)) return Response.json(Object.fromEntries(blocked));
   const done: Record<string, number> = {};
   for (const e of dirEntries()) if (have.has(CD + e.id)) for (const c of e.cats) done[c] = (done[c] ?? 0) + 1;

@@ -4,7 +4,7 @@
 // tự tạo pull request theo tiền tố nhánh, tự sửa PR khi CI lỗi / có góp ý, tự lưu trữ phiên khi PR được gộp.
 import Database from "better-sqlite3";
 import path from "node:path";
-import { findChrome } from "../../scripts/mock-workspace.mjs";
+import { findChrome } from "../../tools/mock-workspace.mjs";
 
 const B = process.env.SYNCHRO_URL ?? "http://localhost:3200", M = process.env.MOCK_URL ?? "http://127.0.0.1:4010", GH = process.env.GH_URL ?? "http://127.0.0.1:4013";
 const DB = path.resolve(process.env.DATA_DIR ?? "data-mock", "synchro.db");

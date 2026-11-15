@@ -190,7 +190,7 @@ console.log("7. Ảnh gốc");
 {
   const U = await account("r");
   await signIn(U, ["claude", "agy"]);
-  const png = createRequire(path.join(process.cwd(), "package.json"))(path.join(process.cwd(), "scripts/mock-cli/mock-cli-common.cjs")).tinyPng(8, 8).toString("base64");
+  const png = createRequire(path.join(process.cwd(), "package.json"))(path.join(process.cwd(), "tools/mock-cli/mock-cli-common.cjs")).tinyPng(8, 8).toString("base64");
   const r = await run(U, { model: "sub-claude/haiku", messages: [{ role: "user", content: [{ type: "text", text: `Đổi nền ảnh này ${tool({ prompt: "đổi nền xanh", reference: "last" })}` }, { type: "image", media_type: "image/png", data: png }] }] });
   const lg = logOf(U, "agy").at(-1);
   ok(r.s === 200 && isImg(r.j.files?.[0]) && lg?.refOk, "ảnh người dùng gửi tới được Antigravity", { lg, f: r.j.files });

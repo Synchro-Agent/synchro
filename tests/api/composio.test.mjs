@@ -1,7 +1,7 @@
 // Composio của bạn trên Synchro giả lập (npm run dev:mock; SYNCHRO_URL / MOCK_URL đổi được cổng): mỗi tài khoản có sẵn Composio Connect, bấm
 // "Liên kết Composio" là đăng nhập OAuth (đăng ký động, PKCE S256) ở trang Composio, hoặc dán khóa ck_ ở Nâng cao. Mỗi người dùng tài khoản Composio
 // của chính mình; ứng dụng liên kết trên web Composio dùng được ngay; token tự làm mới; Ngắt liên kết về nút Liên kết. Token / khóa không ra trình duyệt.
-import { CK_KEYS } from "../../scripts/mock-composio.mjs";
+import { CK_KEYS } from "../../tools/mock-composio.mjs";
 const B = process.env.SYNCHRO_URL ?? "http://localhost:3200", M = process.env.MOCK_URL ?? "http://127.0.0.1:4010";
 let pass = 0, fail = 0;
 const ok = (c, n, x = "") => { c ? pass++ : fail++; console.log(c ? "  ✓" : "  ✗", n, c ? "" : String(typeof x === "string" ? x : JSON.stringify(x)).slice(0, 600)); };

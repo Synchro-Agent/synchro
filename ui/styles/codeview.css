@@ -1,9 +1,9 @@
 @layer properties, theme, base, components, utilities, syn, syn-over;
 @layer syn {
-/* Chuyển từ synchro-ds.css (B5 bước 10, scripts/css-move.mjs): luật chỉ trúng phần tử của màn này, giữ thứ tự cũ (đứng trước luật riêng của tệp). */
+/* Chuyển từ synchro-ds.css (B5 bước 10, tools/css-move.mjs): luật chỉ trúng phần tử của màn này, giữ thứ tự cũ (đứng trước luật riêng của tệp). */
 html body .cvg-head h2{font-size:var(--fs-3)}
 /* Hết phần chuyển từ synchro-ds.css. */
-/* Chuyển từ globals.css (B5 bước 10, scripts/css-move.mjs): luật chỉ trúng phần tử của màn này, giữ thứ tự cũ (đứng trước luật riêng của tệp). */
+/* Chuyển từ globals.css (B5 bước 10, tools/css-move.mjs): luật chỉ trúng phần tử của màn này, giữ thứ tự cũ (đứng trước luật riêng của tệp). */
 .cv-pill.pin>svg:first-child{color:var(--accent)}.cv-mode-item.picked{background:color-mix(in srgb,var(--accent) 10%,transparent)}
 .menu-item.cv-opt.is-sel{background:color-mix(in srgb,var(--accent) 10%,transparent)}
 html[data-theme="light"] body .cv-card{background:rgba(250,250,252,.82)}
@@ -578,7 +578,7 @@ html[data-tw="wide"] .cv-wrap {width:min(1160px,100%)
 }
 }
 @layer syn-over{
-/* Chuyển từ globals.css (B5 bước 10, scripts/css-move.mjs): luật chỉ trúng phần tử của màn này, giữ thứ tự cũ (đứng trước luật riêng của tệp). */
+/* Chuyển từ globals.css (B5 bước 10, tools/css-move.mjs): luật chỉ trúng phần tử của màn này, giữ thứ tự cũ (đứng trước luật riêng của tệp). */
 html body .cv-composer[data-drag]{box-shadow:0 0 0 .5px var(--gl-hair),var(--gl-shadow)}
 [data-theme="dark"] .bh-seg button.on{background:#3b3938;box-shadow:0 1px 4px rgba(0,0,0,.45),inset 0 0 0 .5px #55524f}
 /* Hết phần chuyển từ globals.css. */

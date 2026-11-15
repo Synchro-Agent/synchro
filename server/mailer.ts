@@ -1,5 +1,5 @@
 // Gửi email của Synchro (chỉ chạy ở máy chủ). Không cần dịch vụ ngoài: máy chủ tự nói chuyện với máy chủ thư của người nhận (bản ghi MX) và ký DKIM bằng khóa
-// riêng lưu trong thư mục dữ liệu; SPF, DKIM, DMARC khai báo ở DNS (node scripts/mail-dns.mjs in sẵn). Muốn đi qua dịch vụ gửi thư thì đặt SMTP_URL.
+// riêng lưu trong thư mục dữ liệu; SPF, DKIM, DMARC khai báo ở DNS (node ops/mail-dns.mjs in sẵn). Muốn đi qua dịch vụ gửi thư thì đặt SMTP_URL.
 // Gửi ở nền: người yêu cầu không phải chờ, và thời gian trả lời không lộ email có tài khoản hay không. Lỗi tạm (máy chủ thư bận, greylisting) thì thử lại.
 // MAIL_CAPTURE_DIR (chỉ bản giả lập): ghi ra tệp thay vì gửi. Thư gửi lỗi lần cuối hiện cho quản trị viên ở Cài đặt → Sức khỏe hệ thống (ops.ts) và nhật ký bảo mật.
 // Chỉ biết được lỗi trong lúc gửi (máy chủ thư từ chối thẳng): thư trả về sau đó đi tới no-reply@, nơi Synchro không có hộp thư nhận.

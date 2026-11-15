@@ -4,7 +4,7 @@ react 18.3.1, react-dom 18.3.1 (MIT) · @babel/standalone 7.29.11 (MIT) · recha
 echarts 6.1.0 (Apache-2.0, dist/echarts.min.js, sha512 khớp npm): biểu đồ của bộ thiết kế (data-sx-chart) và import "echarts" trong React; chỉ tải khi trang dùng
 
 Ngoại lệ duy nhất, tệp ĐÓNG GÓI chứ không chép nguyên bản (three 0.169.0 không có bản UMD chạy trong khung):
-synchro-3d-1.0.0.js — dựng bằng node scripts/build-vendor-3d.mjs từ đúng các gói ghim trong scripts/vendor-3d/package-lock.json (sha512 của npm) với esbuild 0.25.12;
+synchro-3d-1.0.0.js — dựng bằng node tools/build-vendor-3d.mjs từ đúng các gói ghim trong tools/vendor-3d/package-lock.json (sha512 của npm) với esbuild 0.25.12;
 dựng lại ra cùng từng byte (sha384 ghi trong app/artkit.ts, SYNCHRO_3D). Gồm three 0.169.0, @react-three/fiber 8.18.0, @react-three/drei 9.122.0
 (chỉ Environment, Float, Lightformer, MeshTransmissionMaterial được dùng), @shadergradient/react 2.4.20, đều MIT. React / ReactDOM lấy từ trang, không đóng gói lần hai.
 Chỉ tải khi artifact import three / @react-three/* / shadergradient hoặc có data-sx-shader. Không có bản CDN: khung không với tới Synchro thì nền 3D để lớp CSS dự phòng.

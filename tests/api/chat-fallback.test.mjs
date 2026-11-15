@@ -5,7 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { loadTs } from "../lib/ts.mjs";
 import http from "node:http";
-import { startMock } from "../../scripts/mock-providers.mjs";
+import { startMock } from "../../tools/mock-providers.mjs";
 
 let pass = 0, fail = 0;
 const ok = (c, n, x = "") => { c ? pass++ : fail++; console.log(c ? "  ✓" : "  ✗", n, c ? "" : String(x).slice(0, 700)); };
@@ -22,7 +22,7 @@ fs.mkdirSync(BIN, { recursive: true });
 const PORT = 4800 + Math.floor(Math.random() * 500);
 await startMock(PORT);
 const M = `http://127.0.0.1:${PORT}`;
-for (const f of fs.readdirSync("scripts/mock-cli")) { fs.copyFileSync(path.join("scripts/mock-cli", f), path.join(BIN, f)); fs.chmodSync(path.join(BIN, f), 0o755); }
+for (const f of fs.readdirSync("tools/mock-cli")) { fs.copyFileSync(path.join("tools/mock-cli", f), path.join(BIN, f)); fs.chmodSync(path.join(BIN, f), 0o755); }
 fs.writeFileSync(path.join(BIN, "mock-cli.json"), JSON.stringify({ base: M }));
 
 // Cầu nối MCP cần một địa chỉ HTTP: CLI giả lập gọi công cụ của Synchro như thật.

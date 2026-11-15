@@ -6,7 +6,7 @@
 // Home, Home không đăng ký danh sách đoạn chat: B2 bước 5–7). Biến môi trường:
 //   GATE_SIDEBAR=0  bỏ cổng Sidebar = 0 (vẫn in số đo).
 //   GATE_LT=1       chặn thêm tác vụ dài nhất ≤ LT_MAX ms (mặc định 50). Chỉ đáng tin trên bản production (dev:mock:fast); dev React chậm hơn nhiều.
-//                   scripts/qa.mjs (chạy trên dev:mock:fast) bật cổng này.
+//                   tools/qa.mjs (chạy trên dev:mock:fast) bật cổng này.
 //   GATE=0          chỉ in số đo, không chặn gì (kể cả Composer). OUT=<tệp.json> ghi số đo ra tệp để so trước / sau.
 // Số đo Sidebar, Home và tác vụ dài luôn được in dù cổng tắt.
 import { spawn } from "node:child_process";

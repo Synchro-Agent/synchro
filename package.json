@@ -7,10 +7,10 @@
   },
   "scripts": {
     "dev": "next dev --turbopack",
-    "dev:mock": "node scripts/dev-mock.mjs",
-    "dev:mock:fast": "node scripts/dev-mock.mjs --fast",
-    "qa": "node scripts/qa.mjs",
-    "lint": "node scripts/lint.mjs",
+    "dev:mock": "node tools/dev-mock.mjs",
+    "dev:mock:fast": "node tools/dev-mock.mjs --fast",
+    "qa": "node tools/qa.mjs",
+    "lint": "node tools/lint.mjs",
     "build": "next build",
     "start": "next start"
   },

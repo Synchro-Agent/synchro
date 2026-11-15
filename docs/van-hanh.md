@@ -15,7 +15,7 @@
 
 Quản trị viên xem ở **Cài đặt → Sức khỏe hệ thống**: lỗi máy chủ gần đây (đã bỏ email, token), người bị hãng từ chối đăng nhập gói AI, đĩa, thư gửi lỗi và nút gửi thử, tuổi và kết quả kiểm tra của bản sao lưu mới nhất, watchdog. Vấn đề nghiêm trọng (đĩa, thư, sao lưu, từ 3 người mất đăng nhập gói) còn được báo vào Hộp thư và email của quản trị viên, mỗi loại tối đa một lần mỗi ngày.
 
-`workspace/setup.sh` (deploy chạy mỗi lần) cài `synchro-watchdog.timer`: mỗi phút gọi `/api/health` ở máy chủ. Web không trả lời hoặc `db` sai 3 lần liên tiếp thì `pm2 restart`; tối thiểu 10 phút giữa hai lần, tối đa 3 lần mỗi giờ. Đang deploy thì bỏ qua (khóa `/run/synchro-deploy.lock`). Báo 503 vì đĩa hay dịch vụ workspace thì chỉ ghi lại, khởi động lại web không chữa được.
+`ops/setup.sh` (deploy chạy mỗi lần) cài `synchro-watchdog.timer`: mỗi phút gọi `/api/health` ở máy chủ. Web không trả lời hoặc `db` sai 3 lần liên tiếp thì `pm2 restart`; tối thiểu 10 phút giữa hai lần, tối đa 3 lần mỗi giờ. Đang deploy thì bỏ qua (khóa `/run/synchro-deploy.lock`). Báo 503 vì đĩa hay dịch vụ workspace thì chỉ ghi lại, khởi động lại web không chữa được.
 
 ```bash
 systemctl status synchro-watchdog.timer
@@ -26,13 +26,13 @@ Cấu hình ở `/etc/synchro-ops.env` (chỉ root đọc): `APP`, `PM2`, `PORT`
 
 Giới hạn lượt model (đặt trong `.env.production`): `SYNCHRO_TURNS_PER_ACCOUNT` (mặc định 4, quản trị viên gấp 3), `SYNCHRO_TURNS_ACCOUNT_TOTAL` (tổng mọi làn của một tài khoản, mặc định 6, thêm 2 chỗ cho việc phụ, không quá 60% cả máy), `SYNCHRO_TURN_QUEUE` (8), `SYNCHRO_TURNS_GLOBAL` (mặc định theo RAM: (tổng RAM − 2,5 GB) chia 400 MB mỗi CLI; 400 MB là ước lượng, dòng `[timing] mem` ghi RSS thật của các CLI ở `cli=` để đặt lại). Dịch vụ workspace tự tính trần riêng: `WS_MAX_RUNNING` = (tổng − 2,5 GB) × 0,5 / 1,5 GB, ít nhất 3; `WS_RUN_MAX` = (tổng − 2,5 GB) × 0,5 / 2 GB, ít nhất 2 và không dưới số container giữ sẵn (`SYNCHRO_WARM_POOL`); `WS_MEDIA_MAX` = (tổng − 2,5 GB) × 0,5 / 3,5 GB nhưng không quá `WS_RUN_MAX` — lần dựng video có hàng riêng, không chiếm chỗ chạy code chung (đặt tay thì theo), `SYNCHRO_MIN_FREE_RAM_MB` (300). Nới riêng một tài khoản bằng cài đặt `turns_limit:<id người dùng>`. Trang Sức khỏe hiện số lượt đang chạy, đang chờ, bị từ chối.
 
-Quyền sở hữu: `scripts/server-build.sh` để thư mục app, `scripts/`, `workspace/` thuộc root; dịch vụ workspace chạy từ `/opt/synchro-ws` (bản sao, chỉ root ghi). Web user ghi được `data/`, `.cache/`, `.next/`, `node_modules/`, `.mkvenv/`, `.env.production` và mã ứng dụng của chính nó, nên script chạy bằng root không được tin các tệp này (`backup.sh` đã làm vậy). Tiến trình đọc tệp tải lên (`scripts/extract-worker.mjs`) chạy ưu tiên thấp, giới hạn bộ nhớ (`SYNCHRO_PARSE_HEAP_MB`, 1024), thời gian (`SYNCHRO_PARSE_MS`), số việc cùng lúc (`SYNCHRO_PARSE_MAX`, 2), không có biến môi trường bí mật, và theo mô hình quyền của Node chỉ đọc được mã của chính nó.
+Quyền sở hữu: `ops/server-build.sh` để thư mục app, `scripts/`, `workspace/` thuộc root; dịch vụ workspace chạy từ `/opt/synchro-ws` (bản sao, chỉ root ghi). Web user ghi được `data/`, `.cache/`, `.next/`, `node_modules/`, `.mkvenv/`, `.env.production` và mã ứng dụng của chính nó, nên script chạy bằng root không được tin các tệp này (`backup.sh` đã làm vậy). Tiến trình đọc tệp tải lên (`scripts/extract-worker.mjs`) chạy ưu tiên thấp, giới hạn bộ nhớ (`SYNCHRO_PARSE_HEAP_MB`, 1024), thời gian (`SYNCHRO_PARSE_MS`), số việc cùng lúc (`SYNCHRO_PARSE_MAX`, 2), không có biến môi trường bí mật, và theo mô hình quyền của Node chỉ đọc được mã của chính nó.
 
 Người dùng mất cả ứng dụng tạo mã lẫn mã dự phòng (xác minh hai bước): sau khi xác nhận đúng chủ tài khoản, chạy trên máy chủ `sqlite3 data/synchro.db "DELETE FROM user_mfa WHERE user_id = '<id>'"`.
 
 ## Deploy và trả lại bản trước
 
-`scripts/server-build.sh` dựng bản mới ở thư mục riêng, tráo bản, khởi động lại, rồi gọi `/api/health` tối đa khoảng 90 giây. Đây là cách một tiến trình (staging, production trước khi chuyển); production sau khi chuyển dùng xanh/lam ở mục dưới.
+`ops/server-build.sh` dựng bản mới ở thư mục riêng, tráo bản, khởi động lại, rồi gọi `/api/health` tối đa khoảng 90 giây. Đây là cách một tiến trình (staging, production trước khi chuyển); production sau khi chuyển dùng xanh/lam ở mục dưới.
 
 - Không đạt (không đúng mã bản mới, `db` sai, hoặc trang chủ lỗi): tự trả bản trước về, khởi động lại, deploy báo lỗi. Bản lỗi giữ ở `.synchro-failed-<tên>` cạnh thư mục app để xem.
 - Bản trước giữ ở `.synchro-prev-<tên>` tới lần deploy sau. Trả lại bằng tay:
@@ -47,7 +47,7 @@ su - synchro -c "pm2 restart synchro --update-env"
 
 - Trả bản không hoàn nguyên dữ liệu: SQLite thay đổi theo kiểu thêm bảng / cột, bản cũ vẫn chạy được trên dữ liệu mới. Dữ liệu hỏng thì khôi phục từ bản sao lưu.
 - Chunk của các bản trước giữ ở `.synchro-statics-<tên>` và được chép vào bản mới: tab đang mở vẫn tải được trong ít nhất một ngày sau khi bản đó bị thay.
-- `workspace/setup.sh` chỉ khởi động lại dịch vụ workspace khi `workspace/*.mjs` hoặc tệp dịch vụ đổi. Khi khởi động lại, dịch vụ ngừng nhận lần chạy mới và chờ lần đang chạy xong tối đa 5 phút.
+- `ops/setup.sh` chỉ khởi động lại dịch vụ workspace khi `workspace/*.mjs` hoặc tệp dịch vụ đổi. Khi khởi động lại, dịch vụ ngừng nhận lần chạy mới và chờ lần đang chạy xong tối đa 5 phút.
 
 ## Deploy xanh/lam (production)
 
@@ -64,7 +64,7 @@ Production chạy hai màu trong cùng thư mục `/var/www/synchro` (chung `dat
 - Nhật ký: `/home/synchro/.pm2/logs/synchro-<màu>-out.log` (trước đây `synchro-out.log`); dòng `[role]` khi nhận vai primary, `[deploy]` khi tắt êm.
 - Ô **Lần khởi động lại web (24 giờ)** đếm lần một tiến trình nhận vai primary: mỗi deploy một lần, bản mới không đạt (chưa từng nhận lưu lượng) không tính.
 
-Mỗi lần deploy, `scripts/server-build.sh` (tự dùng xanh/lam khi `live-color` ghi đúng thư mục app; `BLUEGREEN=1` ép xanh/lam; `BLUEGREEN=0` chỉ dùng được khi app pm2 một tiến trình còn tồn tại, production đã chuyển thì bị từ chối, xem "Bỏ hẳn xanh/lam"):
+Mỗi lần deploy, `ops/server-build.sh` (tự dùng xanh/lam khi `live-color` ghi đúng thư mục app; `BLUEGREEN=1` ép xanh/lam; `BLUEGREEN=0` chỉ dùng được khi app pm2 một tiến trình còn tồn tại, production đã chuyển thì bị từ chối, xem "Bỏ hẳn xanh/lam"):
 
 1. Build ở thư mục tạm (hoặc dùng bản build của CI nếu khớp commit, băm `package-lock.json` và biến `NEXT_PUBLIC_`), node_modules ở `/var/www/.synchro-mods/<băm>/node_modules` (chỉ `npm ci` khi băm đổi).
 2. Đặt bản build vào thư mục của màu nghỉ kèm liên kết `.next-<màu>/node_modules` tới thư viện của nó, chép mã mới từ thư mục incoming (nếu deploy từ CI), bật màu nghỉ.
@@ -72,14 +72,14 @@ Mỗi lần deploy, `scripts/server-build.sh` (tự dùng xanh/lam khi `live-col
 4. Ghi tệp upstream, `nginx -t` (lỗi thì trả tệp cũ, dừng màu mới), `nginx -s reload`; kiểm tra qua nginx (`curl --resolve synchro.net.nz:443:127.0.0.1 https://synchro.net.nz/api/health`) thấy mã bản mới, không thì trả nginx về cổng cũ.
 5. Ghi `live-color`, `pm2 stop` màu cũ (tắt êm ở trên, tối đa 30 giây), `pm2 save`, dọn node_modules không còn dùng (giữ bản của màu vừa dừng).
 
-Lần sau đổi ngược về màu kia. Watchdog (`scripts/watchdog.sh`) đọc `live-color` để theo dõi và khởi động lại đúng màu (`pm2 restart synchro-<màu>`, không kèm `--update-env`), và vẫn bỏ qua khi đang có khóa deploy.
+Lần sau đổi ngược về màu kia. Watchdog (`ops/watchdog.sh`) đọc `live-color` để theo dõi và khởi động lại đúng màu (`pm2 restart synchro-<màu>`, không kèm `--update-env`), và vẫn bỏ qua khi đang có khóa deploy.
 
 ### Chuyển sang xanh/lam (một lần)
 
 Deploy bản có xanh/lam bằng cách cũ trước và chờ tới `build ok` (lần deploy đó vẫn là một tiến trình; tiến trình đó đã giữ khóa `data/.primary.pid` với màu `single`), rồi chạy bằng root:
 
 ```bash
-bash /var/www/synchro/scripts/bluegreen-migrate.sh /var/www/synchro synchro /etc/nginx/sites-enabled/synchro
+bash /var/www/synchro/ops/bluegreen-migrate.sh /var/www/synchro synchro /etc/nginx/sites-enabled/synchro
 ```
 
 Script chạy lại an toàn, theo thứ tự:
@@ -120,19 +120,19 @@ Bỏ hẳn xanh/lam (về một tiến trình): trả site nginx từ bản sao 
 
 ### Deploy từ CI
 
-`.github/workflows/deploy.yml` rsync mã vào `/var/www/synchro-incoming/` (không vào thẳng thư mục app), kèm `.synchro-artifact/` (bản build `.next-ci` của bước kiểm tra, `meta` ghi commit, băm package-lock, băm biến `NEXT_PUBLIC_`, băm tệp nén) và `.synchro-source-sha`, rồi chạy `SYNCHRO_INCOMING=/var/www/synchro-incoming bash /var/www/synchro-incoming/scripts/server-build.sh /var/www/synchro synchro pip`. `public`, `db`, `catalog`, `scripts`, `workspace`… chỉ được chép vào thư mục app ngay trước khi bật bản mới. Deploy cách lần đạt trước (`/var/lib/synchro-ops/last-deploy-synchro`) dưới 15 phút thì chờ; lần đẩy mới trong lúc chờ thay lần đang chờ, nên các lần đẩy liền nhau gộp thành một deploy. Deploy từ máy Mac (rsync thẳng vào thư mục app + `/root/deploy-<sha>.sh`) vẫn chạy như trước; khi rsync nhớ loại trừ `'.next-*'` và `node_modules` (nay là liên kết).
+`.github/workflows/deploy.yml` rsync mã vào `/var/www/synchro-incoming/` (không vào thẳng thư mục app), kèm `.synchro-artifact/` (bản build `.next-ci` của bước kiểm tra, `meta` ghi commit, băm package-lock, băm biến `NEXT_PUBLIC_`, băm tệp nén) và `.synchro-source-sha`, rồi chạy `SYNCHRO_INCOMING=/var/www/synchro-incoming bash /var/www/synchro-incoming/ops/server-build.sh /var/www/synchro synchro pip`. `public`, `db`, `catalog`, `scripts`, `workspace`… chỉ được chép vào thư mục app ngay trước khi bật bản mới. Deploy cách lần đạt trước (`/var/lib/synchro-ops/last-deploy-synchro`) dưới 15 phút thì chờ; lần đẩy mới trong lúc chờ thay lần đang chờ, nên các lần đẩy liền nhau gộp thành một deploy. Deploy từ máy Mac (rsync thẳng vào thư mục app + `/root/deploy-<sha>.sh`) vẫn chạy như trước; khi rsync nhớ loại trừ `'.next-*'` và `node_modules` (nay là liên kết).
 
 ### Kiểm thử trong CI (Blueprint H2)
 
 Job `verify` của `deploy.yml` (chặn deploy): `npm ci` → `npm audit` (chỉ báo) → `tsc --noEmit` → `npm run lint` (chỉ báo) → `npm run build` → `npm run dev:mock:fast` chạy nền (heap 4096 MB như bước build) → `node tests/run-all.mjs` (bộ API). Deploy chỉ chạy khi `verify` xanh.
 
-Bộ giao diện chạy ở workflow riêng `.github/workflows/ui-qa.yml`: `npm run dev:mock:fast` → `node scripts/qa.mjs --no-api` (Chrome ẩn), kết quả ở artifact `ui-qa-result` và `/var/www/ci-status/ui-<nhánh>.txt` trên VPS. Chưa chặn deploy vì chưa từng có một lần xanh trọn vẹn trên CI; mặc định chạy mỗi tuần (Chủ nhật 19:23 UTC) và khi bấm Actions → UI QA → Run workflow. Khi đã có một lần xanh: chuyển bước "Kiểm thử giao diện" vào job `verify` (sau bộ API) để nó chặn deploy.
+Bộ giao diện chạy ở workflow riêng `.github/workflows/ui-qa.yml`: `npm run dev:mock:fast` → `node tools/qa.mjs --no-api` (Chrome ẩn), kết quả ở artifact `ui-qa-result` và `/var/www/ci-status/ui-<nhánh>.txt` trên VPS. Chưa chặn deploy vì chưa từng có một lần xanh trọn vẹn trên CI; mặc định chạy mỗi tuần (Chủ nhật 19:23 UTC) và khi bấm Actions → UI QA → Run workflow. Khi đã có một lần xanh: chuyển bước "Kiểm thử giao diện" vào job `verify` (sau bộ API) để nó chặn deploy.
 
 Phút GitHub Actions (repo riêng tư, gói Free: 2.000 phút / tháng, mỗi job tính tối thiểu 1 phút; hết phút thì mọi workflow bị chặn tới kỳ sau, kể cả deploy): `verify` ≈ 40 phút mỗi lần đẩy main / staging; `ui-qa.yml` ≈ 60–90 phút mỗi lần (lịch tuần ≈ 320 phút / tháng); `uptime.yml` ≈ 120 phút / tháng. Tức còn chỗ cho khoảng 35 lần đẩy mỗi tháng; đẩy nhiều commit một lần thay vì từng commit. Biến repo `SYNCHRO_CI_UI = push` chạy bộ giao diện sau mỗi lần đẩy main — chỉ bật khi repo công khai (phút Actions miễn phí) hoặc gói trả phí.
 
-- Một lệnh build cho cả ba nơi: `npm run build` (= `next build`, webpack) ở `package.json`, CI và `scripts/server-build.sh`; mỗi nơi chỉ đặt riêng `NODE_OPTIONS` (bộ nhớ) và `NEXT_DIST_DIR`.
+- Một lệnh build cho cả ba nơi: `npm run build` (= `next build`, webpack) ở `package.json`, CI và `ops/server-build.sh`; mỗi nơi chỉ đặt riêng `NODE_OPTIONS` (bộ nhớ) và `NEXT_DIST_DIR`.
 - `package.json` có `"engines": { "node": "22.x" }`; CI đọc phiên bản Node từ đó (`node-version-file`). Máy chủ cũng phải chạy Node 22.
-- `scripts/qa.mjs` chạy mọi `tests/ui/*.mjs` (glob) trừ danh sách `SKIP` có lý do; `node scripts/qa.mjs --list` in danh sách. `tests/api/qa-plan.test.mjs` đỏ khi có tệp mới không chạy mà cũng không nằm trong `SKIP`.
+- `tools/qa.mjs` chạy mọi `tests/ui/*.mjs` (glob) trừ danh sách `SKIP` có lý do; `node tools/qa.mjs --list` in danh sách. `tests/api/qa-plan.test.mjs` đỏ khi có tệp mới không chạy mà cũng không nằm trong `SKIP`.
 - ESLint (`eslint.config.mjs`: `next/core-web-vitals` + `jsx-a11y`) cần cài gói dev một lần: `npm i -D eslint@^9.39.0 eslint-config-next@15.5.28 @eslint/eslintrc@^3.3.1 eslint-plugin-jsx-a11y@^6.10.2` (phiên bản `eslint-config-next` luôn bằng phiên bản `next`). Chưa cài thì `npm run lint` bỏ qua và thoát 0; `LINT_STRICT=1` để coi thiếu gói là lỗi. Luật trợ năng đang ở mức cảnh báo (`A11Y_LEVEL`); hết cảnh báo thì đổi thành `error` và bỏ `continue-on-error` của bước ESLint.
 - Bước giao diện (ui-qa.yml) trên Ubuntu 24.04 tắt `kernel.apparmor_restrict_unprivileged_userns` trên máy CI để Chrome mở được sandbox; `qa.mjs` tự tìm `google-chrome` trên Linux (`CHROME_PATH` để đổi). `dev:mock:fast` tự đặt heap 4096 MB cho bước build khi `NODE_OPTIONS` chưa đặt (`MOCK_BUILD_HEAP_MB` để đổi).
 
@@ -140,11 +140,11 @@ Quy tắc bảo vệ nhánh `main` (cài đặt của GitHub, không nằm trong
 
 ## Sao lưu
 
-`scripts/backup.sh` tạo bản sao cục bộ nhất quán, 7 bản ngày và 4 bản tuần. `workspace/setup.sh` tự thêm lịch nếu máy chưa có:
+`ops/backup.sh` tạo bản sao cục bộ nhất quán, 7 bản ngày và 4 bản tuần. `ops/setup.sh` tự thêm lịch nếu máy chưa có:
 
 ```
 # /etc/cron.d/synchro-backup
-0 3 * * * root bash /var/www/synchro/scripts/backup.sh /var/www/synchro /var/backups/synchro >> /var/log/synchro-backup.log 2>&1
+0 3 * * * root bash /var/www/synchro/ops/backup.sh /var/www/synchro /var/backups/synchro >> /var/log/synchro-backup.log 2>&1
 ```
 
 Sau mỗi bản, script mở lại chính bản vừa lưu và kiểm tra (`integrity_check`, số bảng, số tài khoản, có `secret.key` và khóa mở được một hộp đã mã hóa trong bản sao, đủ tệp tải lên, đọc lại tối đa 200 tệp ngẫu nhiên theo mã băm, `CHECK_FILES`), ghi vào `/var/lib/synchro-ops/backup-status.json`. Trang Sức khỏe hệ thống báo khi lỗi hoặc quá 36 giờ không có bản mới. Đây chưa phải diễn tập khôi phục: vẫn làm phần "Khôi phục" dưới đây mỗi quý.
@@ -156,16 +156,16 @@ Không có trong bản sao, tải / dựng lại được: `data/skills/_plugins
 Bản sao nằm cùng đĩa với dữ liệu, nên **không chống được hỏng đĩa hay mất máy chủ**. Muốn chống phải đẩy ra ngoài và mã hóa, vì bản sao chứa `data/secret.key` và tệp môi trường. Đặt lệnh trong `/etc/synchro-ops.env` (không đặt trong `.env.production`: lệnh này chạy bằng root):
 
 ```bash
-# Đang dùng (Blueprint A6.2, bật 13/11/2026): scripts/backup-offsite.sh nén tệp tải lên, tệp đã tạo, skill riêng, âm thanh Speech,
+# Đang dùng (Blueprint A6.2, bật 13/11/2026): ops/backup-offsite.sh nén tệp tải lên, tệp đã tạo, skill riêng, âm thanh Speech,
 # mã hóa bằng age với khóa CÔNG KHAI, đẩy lên cùng bucket R2 của sao lưu liên tục (thư mục "<thư mục>-files/") bằng rclone, giữ 14 bản.
-SYNCHRO_BACKUP_HOOK="/var/www/synchro/scripts/backup-offsite.sh"
+SYNCHRO_BACKUP_HOOK="/var/www/synchro/ops/backup-offsite.sh"
 SYNCHRO_AGE_RECIPIENT="age1…"     # khóa công khai; khóa riêng (AGE-SECRET-KEY-1…) chủ dịch vụ giữ ngoài máy chủ
 ```
 
 Lệnh nhận đường dẫn bản vừa tạo làm tham số đầu; lỗi thì bản cục bộ vẫn giữ và trang sức khỏe báo (dòng "Off-site copy").
-Khóa R2 lấy từ cài đặt sao lưu liên tục (Cài đặt → Sức khỏe hệ thống) qua `scripts/r2-creds.mjs` chạy bằng web user, chỉ đi qua biến môi trường của rclone.
+Khóa R2 lấy từ cài đặt sao lưu liên tục (Cài đặt → Sức khỏe hệ thống) qua `ops/r2-creds.mjs` chạy bằng web user, chỉ đi qua biến môi trường của rclone.
 Cơ sở dữ liệu không nằm trong gói này (Litestream đã đẩy liên tục, xem docs/backup-r2.md); `secret.key` cũng không: giữ một bản riêng cùng khóa age.
-Máy chủ cần `age` và `rclone` (workspace/setup.sh tự cài bằng apt).
+Máy chủ cần `age` và `rclone` (ops/setup.sh tự cài bằng apt).
 
 **Mở bản chụp tệp trên R2** (máy bất kỳ có khóa riêng):
 
@@ -173,7 +173,7 @@ Máy chủ cần `age` và `rclone` (workspace/setup.sh tự cài bằng apt).
 # Tải về bằng rclone (hoặc tải trên trang R2 của Cloudflare), rồi giải mã. Có lệnh age:
 age -d -i age-key.txt files-<STAMP>.tar.gz.age | tar -xz
 # Không có age, chỉ cần Node:
-node scripts/age-decrypt.mjs age-key.txt files-<STAMP>.tar.gz.age | tar -xz
+node ops/age-decrypt.mjs age-key.txt files-<STAMP>.tar.gz.age | tar -xz
 # Được: uploads/ (đặt lại vào <app>/.cache/files), data/outputs, data/skills, data/speech
 ```
 
@@ -209,13 +209,13 @@ Tài khoản xóa trước khi có `purgeUser` còn sót dữ liệu. Sau một 
 
 ```bash
 cd /var/www/synchro && set -a && . ./.env.production && set +a
-node scripts/purge-orphans.mjs            # chỉ liệt kê
-node scripts/purge-orphans.mjs --apply    # xóa, bằng root
+node ops/purge-orphans.mjs            # chỉ liệt kê
+node ops/purge-orphans.mjs --apply    # xóa, bằng root
 ```
 
 ## Nhật ký sudo không chứa lời nhắn
 
-Antigravity chỉ nhận prompt qua tham số `-p`, nên dòng lệnh `sudo -u synchro-cli … agy -p <prompt>` có nguyên lời nhắn của người dùng. `scripts/setup-engine-user.sh` đặt `Defaults:<user Synchro> !log_allowed` để sudo không chép lệnh được phép vào `auth.log` và journal (lệnh bị từ chối vẫn được ghi). Máy cài trước khi có dòng này phải chạy lại script một lần: script ghi đè đúng quy tắc sudo, không đụng tới dữ liệu. Kiểm tra: `sudo cat /etc/sudoers.d/synchro-cli` có dòng `Defaults:`.
+Antigravity chỉ nhận prompt qua tham số `-p`, nên dòng lệnh `sudo -u synchro-cli … agy -p <prompt>` có nguyên lời nhắn của người dùng. `ops/setup-engine-user.sh` đặt `Defaults:<user Synchro> !log_allowed` để sudo không chép lệnh được phép vào `auth.log` và journal (lệnh bị từ chối vẫn được ghi). Máy cài trước khi có dòng này phải chạy lại script một lần: script ghi đè đúng quy tắc sudo, không đụng tới dữ liệu. Kiểm tra: `sudo cat /etc/sudoers.d/synchro-cli` có dòng `Defaults:`.
 
 ## Cô lập CLI theo tài khoản
 
@@ -255,8 +255,8 @@ Thư mục đăng nhập (`logins/`, `engine-tokens/`) không bao giờ bị ch�
 
 ## Swap của máy chủ
 
-- `scripts/setup-swap.sh` (Blueprint G3.3) thêm 4 GB swap ở `/swapfile`: `fallocate` (không được thì `dd`), `chmod 600`, `mkswap`, `swapon`, một dòng trong `/etc/fstab` để bật lại sau khi khởi động máy, `vm.swappiness = 10` (ghi ở `/etc/sysctl.d/90-synchro-swap.conf`) để chỉ dùng swap khi RAM thật gần hết.
-- `scripts/server-build.sh` gọi script này mỗi lần deploy. Chạy lại không đổi gì khi máy đã có từ 4 GB swap; đĩa không còn đủ 4 GB + 3 GB trống (`SWAP_MIN_FREE_MB`) thì bỏ qua; lỗi không chặn deploy. Chạy tay: `sudo bash scripts/setup-swap.sh`; tùy chọn `SWAP_FILE`, `SWAP_MB`, `SWAP_SWAPPINESS`.
+- `ops/setup-swap.sh` (Blueprint G3.3) thêm 4 GB swap ở `/swapfile`: `fallocate` (không được thì `dd`), `chmod 600`, `mkswap`, `swapon`, một dòng trong `/etc/fstab` để bật lại sau khi khởi động máy, `vm.swappiness = 10` (ghi ở `/etc/sysctl.d/90-synchro-swap.conf`) để chỉ dùng swap khi RAM thật gần hết.
+- `ops/server-build.sh` gọi script này mỗi lần deploy. Chạy lại không đổi gì khi máy đã có từ 4 GB swap; đĩa không còn đủ 4 GB + 3 GB trống (`SWAP_MIN_FREE_MB`) thì bỏ qua; lỗi không chặn deploy. Chạy tay: `sudo bash ops/setup-swap.sh`; tùy chọn `SWAP_FILE`, `SWAP_MB`, `SWAP_SWAPPINESS`.
 - Container chạy code và workspace có `--memory-swap` = `--memory` + 1 GB (`WS_SWAP_EXTRA`, hoặc đặt hẳn `WS_RUN_MEMORY_SWAP` / `WS_MEMORY_SWAP`; `-1` = không giới hạn): vượt RAM chút ít thì tràn sang swap thay vì bị kill (mã 137). Không có swap trên máy chủ thì phần thêm này không có tác dụng; dịch vụ workspace ghi cảnh báo lúc khởi động. Kiểm tra: `swapon --show` và `free -m`.
 - Swap là đệm chống hết bộ nhớ, không tính vào trần số việc chạy cùng lúc (`WS_RUN_MAX`, `WS_MAX_RUNNING`, `SYNCHRO_TURNS_GLOBAL` vẫn tính theo RAM thật).
 

@@ -1,4 +1,4 @@
-// scripts/cli-contract.mjs chạy trọn trên CLI giả lập: bảng đủ dòng, CLI chưa đăng nhập thì skip, không lộ mã cầu nối hay token, không để lại tệp tạm, thoát sạch. Chỉ kiểm phần
+// tools/cli-contract.mjs chạy trọn trên CLI giả lập: bảng đủ dòng, CLI chưa đăng nhập thì skip, không lộ mã cầu nối hay token, không để lại tệp tạm, thoát sạch. Chỉ kiểm phần
 // khung của script (chấm ở phía máy chủ, cách ly dữ liệu): hành vi của CLI thật chỉ biết khi chạy script này trên máy chủ. Tự chạy được, không cần dev:mock.
 import fs from "node:fs";
 import os from "node:os";
@@ -10,13 +10,13 @@ const ok = (c, n, x = "") => { c ? pass++ : fail++; console.log(c ? "  ✓" : " 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "synchro-contract-test-"));
 const HOME = path.join(tmp, "engine"), BIN = path.join(HOME, ".local", "bin"), SCOPE = "user_contract";
 fs.mkdirSync(BIN, { recursive: true });
-for (const f of fs.readdirSync("scripts/mock-cli")) { fs.copyFileSync(path.join("scripts/mock-cli", f), path.join(BIN, f)); fs.chmodSync(path.join(BIN, f), 0o755); }
+for (const f of fs.readdirSync("tools/mock-cli")) { fs.copyFileSync(path.join("tools/mock-cli", f), path.join(BIN, f)); fs.chmodSync(path.join(BIN, f), 0o755); }
 fs.writeFileSync(path.join(BIN, "mock-cli.json"), JSON.stringify({ base: "http://127.0.0.1:9" }));
 const login = (cli, rel) => { const f = path.join(HOME, "logins", cli, SCOPE, rel); fs.mkdirSync(path.dirname(f), { recursive: true, mode: 0o700 }); fs.writeFileSync(f, "{}"); };
 login("claude", ".mock-login"); login("grok", ".grok/auth.json"); login("codex", "auth.json");
 // agy không đăng nhập: phải là skip.
 
-const run = (...args) => spawnSync(process.execPath, ["scripts/cli-contract.mjs", ...args], { encoding: "utf8", timeout: 240_000, env: { ...process.env, CONTRACT_MOCK: "1", DATA_DIR: path.join(tmp, "data"), SYNCHRO_ENGINE_HOME: HOME, DATA_KEY: "contract-test", SYNCHRO_ENGINE_USER: "" } });
+const run = (...args) => spawnSync(process.execPath, ["tools/cli-contract.mjs", ...args], { encoding: "utf8", timeout: 240_000, env: { ...process.env, CONTRACT_MOCK: "1", DATA_DIR: path.join(tmp, "data"), SYNCHRO_ENGINE_HOME: HOME, DATA_KEY: "contract-test", SYNCHRO_ENGINE_USER: "" } });
 try {
   console.log("1. Cách dùng");
   const u = run();

@@ -6,7 +6,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { loadTs } from "../lib/ts.mjs";
-import { MOCK_KEYS, startMock } from "../../scripts/mock-providers.mjs";
+import { MOCK_KEYS, startMock } from "../../tools/mock-providers.mjs";
 
 let pass = 0, fail = 0;
 const ok = (c, n, x = "") => { c ? pass++ : fail++; console.log(c ? "  ✓" : "  ✗", n, c ? "" : String(x).slice(0, 400)); };
@@ -158,7 +158,7 @@ try {
   }
 
   // Cài CLI giả lập như dev:mock (chép vào <home>/.local/bin, kèm địa chỉ máy chủ giả lập).
-  for (const f of fs.readdirSync("scripts/mock-cli")) { fs.copyFileSync(path.join("scripts/mock-cli", f), path.join(BIN, f)); fs.chmodSync(path.join(BIN, f), 0o755); }
+  for (const f of fs.readdirSync("tools/mock-cli")) { fs.copyFileSync(path.join("tools/mock-cli", f), path.join(BIN, f)); fs.chmodSync(path.join(BIN, f), 0o755); }
   fs.writeFileSync(path.join(BIN, "mock-cli.json"), JSON.stringify({ base: M }));
 
   // ------------------------------------------------------------------

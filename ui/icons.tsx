@@ -1,6 +1,6 @@
 // Icon của Synchro: Phosphor Regular (MIT) — outline, lưới 256, vẽ bằng currentColor, viền thêm 2 đơn vị (STROKE) để nét dày bằng bộ icon
 // cũ (~1,27px ở cỡ 18). Dữ liệu sinh từ @phosphor-icons/core bằng
-// scripts/phosphor-icons.mjs (ui/phosphor-data.ts); tên trong app giữ như cũ (I.Search, I.Plus…) nên mọi chỗ dùng không đổi.
+// tools/phosphor-icons.mjs (ui/phosphor-data.ts); tên trong app giữ như cũ (I.Search, I.Plus…) nên mọi chỗ dùng không đổi.
 // Chuyển động (ui/morph.tsx): icon đổi theo trạng thái dùng <I.M icon="…"> — cặp cùng dáng biến hình bằng morphicons, cặp khác dáng đổi
 // êm (icon cũ thu nhỏ, mờ đi; icon mới nở ra); icon ở thanh bên đổi khi rê chuột bằng <I.Hover icon={["…", "…"]}>.
 import React from "react";

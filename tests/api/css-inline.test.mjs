@@ -1,11 +1,11 @@
 // B5 bước 4 (canh gác): style nội dòng trong tsx không được thắng khai báo CSS từng mang !important (syn-over / bỏ chữ tại chỗ).
-// scripts/css-inline.mjs: dự án thật phải 0 cặp chưa giải thích, mục ALLOW nào cũng còn dùng; bộ mẫu nhỏ phải bắt đủ ba dạng mà vòng rà B5
+// tools/css-inline.mjs: dự án thật phải 0 cặp chưa giải thích, mục ALLOW nào cũng còn dùng; bộ mẫu nhỏ phải bắt đủ ba dạng mà vòng rà B5
 // tìm ra bằng tay (style điều kiện, style truyền qua prop của Menu, h3 margin nội dòng) và thôi báo khi CSS trả lại !important.
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-const G = await import(path.resolve("scripts/css-inline.mjs"));
+const G = await import(path.resolve("tools/css-inline.mjs"));
 let pass = 0, fail = 0;
 const ok = (c, n, x = "") => { c ? pass++ : fail++; console.log(c ? "  ✓" : "  ✗", n, c ? "" : String(x).slice(0, 600)); };
 

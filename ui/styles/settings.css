@@ -1,12 +1,12 @@
 @layer properties, theme, base, components, utilities, syn, syn-over;
 @layer syn {
-/* Chuyển từ synchro-ds.css (B5 bước 10, scripts/css-move.mjs): luật chỉ trúng phần tử của màn này, giữ thứ tự cũ (đứng trước luật riêng của tệp). */
+/* Chuyển từ synchro-ds.css (B5 bước 10, tools/css-move.mjs): luật chỉ trúng phần tử của màn này, giữ thứ tự cũ (đứng trước luật riêng của tệp). */
 @media (max-width:860px){
   html body .sy-settings .promo{flex-direction:column;align-items:stretch;gap:16px}
   .sy-settings .promo .term{min-width:0}
 }
 /* Hết phần chuyển từ synchro-ds.css. */
-/* Chuyển từ globals.css (B5 bước 10, scripts/css-move.mjs): luật chỉ trúng phần tử của màn này, giữ thứ tự cũ (đứng trước luật riêng của tệp). */
+/* Chuyển từ globals.css (B5 bước 10, tools/css-move.mjs): luật chỉ trúng phần tử của màn này, giữ thứ tự cũ (đứng trước luật riêng của tệp). */
 .api-vendor{font-size:var(--fs-1);color:var(--text-3)}
 .mono-s{font-family:var(--font-mono);font-size:var(--fs-1);color:var(--text-2)}.api-get:hover{text-decoration:underline}
 .mr-row:first-child{border-top:0}
@@ -330,7 +330,7 @@ html body .adm-perm-row .field.adm-num{width:112px;min-width:112px;flex:none;mar
 .adm-chev{transition:transform .2s}
 }
 @layer syn-over{
-/* Chuyển từ globals.css (B5 bước 10, scripts/css-move.mjs): luật chỉ trúng phần tử của màn này, giữ thứ tự cũ (đứng trước luật riêng của tệp). */
+/* Chuyển từ globals.css (B5 bước 10, tools/css-move.mjs): luật chỉ trúng phần tử của màn này, giữ thứ tự cũ (đứng trước luật riêng của tệp). */
 .adm-detail>td{border-top:0;padding:4px 0 14px}
 .cpo-sec{margin-top:26px}
 .ap-more{margin:10px 0 0}

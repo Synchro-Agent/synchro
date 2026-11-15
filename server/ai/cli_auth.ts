@@ -214,7 +214,7 @@ export async function warmStatuses() {
 /** pastedAt: độ dài đầu ra lúc dán mã (chỉ xét lỗi in ra sau đó); tokenSeen: lúc thấy đầu token. */
 type Pending = { cli: Cli; scope: string; proc: Proc; raw: string; st: LoginState; timer: NodeJS.Timeout; onChange: Set<() => void>; hide: string[]; pastedAt: number; tokenSeen: number };
 
-// Link đăng nhập của từng hãng; thêm trang đăng nhập giả lập ở máy cục bộ (scripts/mock-cli, chỉ có khi chạy dev:mock).
+// Link đăng nhập của từng hãng; thêm trang đăng nhập giả lập ở máy cục bộ (tools/mock-cli, chỉ có khi chạy dev:mock).
 const mock = (cli: Cli) => String.raw`|http:\/\/(?:127\.0\.0\.1|localhost):\d+\/mock-login\/${cli}\S*`;
 const URL_RE: Record<Cli, RegExp> = {
   claude: new RegExp(String.raw`https:\/\/(?:claude\.(?:ai|com)|platform\.claude\.com|console\.anthropic\.com)\/\S*oauth\S*` + mock("claude"), "g"),

@@ -149,7 +149,7 @@ console.log("4. Chạy lại cùng đường dẫn");
 }
 
 console.log("5. Quy tắc cho model khớp với thực tế");
-const rules = fs.readFileSync("server/coderun.ts", "utf8"), docker = fs.readFileSync("workspace/Dockerfile", "utf8"), setup = fs.readFileSync("workspace/setup.sh", "utf8"), engine = fs.readFileSync("server/chatengine.ts", "utf8");
+const rules = fs.readFileSync("server/coderun.ts", "utf8"), docker = fs.readFileSync("workspace/Dockerfile", "utf8"), setup = fs.readFileSync("ops/setup.sh", "utf8"), engine = fs.readFileSync("server/chatengine.ts", "utf8");
 ok(!/công thức \([^)]*XLOOKUP/.test(rules) && /không dùng hàm mới \(XLOOKUP/.test(rules), "không khuyên XLOOKUP (LibreOffice trong image không tính được)");
 ok(rules.includes('#,##0 "₫"') && !rules.includes('"#,##0 ₫"'), "định dạng tiền có ngoặc kép");
 ok(/\.last_outputs/.test(rules) && !/FontSize=22,Outline=2'"; /.test(rules) && /subfit\.py/.test(rules), "nói đúng nơi đọc tệp lần trước và cách làm phụ đề");

@@ -8,7 +8,7 @@ import crypto from "node:crypto";
 import { AuthError, db } from "./authstore";
 import { openSecret, sealSecret } from "./providers";
 
-// Địa chỉ GitHub: mặc định github.com; dev:mock trỏ vào GitHub giả lập (scripts/mock-github.mjs) để chạy thử đủ luồng repo / PR.
+// Địa chỉ GitHub: mặc định github.com; dev:mock trỏ vào GitHub giả lập (tools/mock-github.mjs) để chạy thử đủ luồng repo / PR.
 export const GH_WEB = (process.env.GITHUB_WEB_URL || "https://github.com").replace(/\/$/, "");
 export const GH_API = (process.env.GITHUB_API_URL || "https://api.github.com").replace(/\/$/, "");
 export const GH_GIT = (process.env.GITHUB_GIT_URL || GH_WEB).replace(/\/$/, "");

@@ -1,6 +1,6 @@
 // Composio của bạn trong lượt chat (npm run dev:mock; SYNCHRO_URL / MOCK_URL đổi được cổng): chưa liên kết thì model được dặn mời liên kết (nút trong khung chat),
 // đã liên kết thì có công cụ meta và lời dặn không chép Connect Link / không đưa vào "Sources"; thao tác ghi vẫn hỏi trước, đọc thì chạy luôn.
-import { CK_KEYS } from "../../scripts/mock-composio.mjs";
+import { CK_KEYS } from "../../tools/mock-composio.mjs";
 const B = process.env.SYNCHRO_URL ?? "http://localhost:3200", M = process.env.MOCK_URL ?? "http://127.0.0.1:4010";
 let pass = 0, fail = 0;
 const ok = (c, n, x = "") => { c ? pass++ : fail++; console.log(c ? "  ✓" : "  ✗", n, c ? "" : String(typeof x === "string" ? x : JSON.stringify(x)).slice(0, 500)); };

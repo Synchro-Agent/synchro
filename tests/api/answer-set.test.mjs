@@ -1,5 +1,5 @@
 // Bộ câu chấm chất lượng (tests/evals/answer-set.json) trên bộ định tuyến thật: câu nguy hiểm, sức khỏe, pháp lý, tài chính không được đi model rẻ nhất và đường nhanh; câu thường và câu trông giống rủi ro không bị đội giá.
-// Phần này không gọi model. Câu trả lời thật do người đọc chấm bằng scripts/answer-eval.mjs. Hàm thuần, không cần máy chủ.
+// Phần này không gọi model. Câu trả lời thật do người đọc chấm bằng tools/answer-eval.mjs. Hàm thuần, không cần máy chủ.
 import fs from "node:fs";
 import { spawnSync } from "node:child_process";
 import { loadTs } from "../lib/ts.mjs";
@@ -35,8 +35,8 @@ ok(/nói rõ đã thật sự kiểm tra gì/.test(full) && /chưa kiểm tra đ
 ok(/988/.test(full) && /1737/.test(full) && /Sức khỏe, pháp lý, tài chính/.test(full), "lượt đầy đủ: đầu mối khẩn cấp và câu hỏi rủi ro", full);
 for (const [t, n] of [[fast, "đường nhanh"], [full, "lượt đầy đủ"]]) ok(/không nêu 988/.test(t) && /múi giờ/.test(t), `${n}: chọn số theo nơi họ sống, người Việt không nhận số của Mỹ`, t);
 // Script chấm trên CLI thật tốn lượt của gói nên kiểm thử không chạy nó: chỉ kiểm tra cú pháp và các hàm nó gọi còn tồn tại.
-const script = new URL("../../scripts/answer-eval.mjs", import.meta.url).pathname;
-ok(spawnSync(process.execPath, ["--check", script]).status === 0, "scripts/answer-eval.mjs đúng cú pháp");
+const script = new URL("../../tools/answer-eval.mjs", import.meta.url).pathname;
+ok(spawnSync(process.execPath, ["--check", script]).status === 0, "tools/answer-eval.mjs đúng cú pháp");
 const has = (file, name) => new RegExp(`export (?:async )?(?:function\\*? |const )${name}\\b`).test(fs.readFileSync(findSrc(`${file}.ts`), "utf8"));
 for (const [f, n] of [["chatengine", "answerRules"], ["ai/cli_runtime", "removeSessionFiles"], ["ai/cli_runtime", "CLIS"], ["ai/cli_runtime", "engineHome"], ["ai/cli_runtime", "makeDir"], ["ai/cli_auth", "scopeDir"], ["ai/cli_auth", "engineEnv"], ["ai/cli_auth", "safeScope"], ["ai/cli_auth", "status"], ["ai/errors", "redact"], ["ai/selector", "engineFor"], ["router", "autoEffort"], ["router", "hasHighStakes"], ["router", "isCrisis"], ["router", "taskOf"]]) ok(has(f, n), `script dùng ${f}.${n}`);
 console.log(`${set.items.length} câu. Kết quả: ${pass} đạt, ${fail} lỗi`);

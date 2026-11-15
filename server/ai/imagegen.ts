@@ -1,7 +1,7 @@
 // Tạo ảnh bằng AI qua gói subscription của chính người dùng (không có khóa API nào): một lượt CLI ngắn, riêng, chỉ để tạo ảnh, rồi lấy tệp ra.
 // Thứ tự: Antigravity (đã chạy thật trên máy chủ), Grok, ChatGPT khi gói không phải Free. Gói chưa đăng nhập thì bỏ qua, gói lỗi thì thử gói kế tiếp.
 // Đo trên máy chủ thật (Antigravity CLI 1.5.0): khoảng 37 giây, JPEG 1024x1024 khoảng 440 KB ở $HOME/.gemini/antigravity-cli/brain/<conversation_id>/.
-// CHƯA kiểm chứng trên tài khoản thật (chạy `node scripts/cli-contract.mjs <account> --image` khi có tài khoản phù hợp):
+// CHƯA kiểm chứng trên tài khoản thật (chạy `node tools/cli-contract.mjs <account> --image` khi có tài khoản phù hợp):
 // - Grok 1.0.70 có công cụ image_gen nhưng tài khoản thử bị HTTP 403 spending-limit nên chưa biết ảnh lưu ở đâu: tìm theo đường dẫn trong kết quả công cụ, thư mục làm việc,
 //   rồi quét có giới hạn tệp mới trong thư mục đăng nhập của đúng tài khoản.
 // - Codex 0.164 ẩn công cụ image_gen với gói Free; vị trí $CODEX_HOME/generated_images/<thread_id>/ chỉ theo báo cáo công khai.

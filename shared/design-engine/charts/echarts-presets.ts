@@ -2,7 +2,7 @@
 // Model không viết option ECharts: chỉ ghi dữ liệu {type, labels, series…} (cùng dạng ChartSpec mà bộ xuất PowerPoint dựng lại thành biểu đồ gốc, deckpptx.ts).
 // Màu lấy từ biến --sx-… của khung chứa biểu đồ (đổi phong cách là biểu đồ đổi theo), luật data-ink của bộ thiết kế: một chuỗi nhấn, chuỗi khác trung tính, ghi số ngay trên cột
 // thay cho trục, bỏ lưới dọc và khung. Vẽ bằng SVG (renderer "svg") nên chụp PNG, PowerPoint và in đều nét.
-// Mã là chuỗi JS thuần chạy ở ba nơi: khung artifact (CHART_KIT_JS), sandbox run_code (workspace/charts/synchro-charts.js, sinh bằng scripts/gen-chart-presets.mjs) và kiểm thử.
+// Mã là chuỗi JS thuần chạy ở ba nơi: khung artifact (CHART_KIT_JS), sandbox run_code (workspace/charts/synchro-charts.js, sinh bằng tools/gen-chart-presets.mjs) và kiểm thử.
 // Không dấu ` và không chuỗi đóng thẻ script (nằm trong thẻ script của khung).
 
 /** Hàm sxChartOption(spec, tk) → option ECharts. tk: { ink, muted, accent, accent2, neutral, line, pos, neg, bg, font, motion }. */

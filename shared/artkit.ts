@@ -18,7 +18,7 @@ const VENDOR = "/vendor/";
 export const ECHARTS: [string, string, string] = ["echarts-6.1.0.min.js", "echarts@6.1.0/dist/echarts.min.js", "sha384-C2iskrW/uPW46KzOjrvJIQo4YkV8lkD+QS0CrDN18IIPIpT/g2USu8bTP3nvmIAD"];
 // Trang có biểu đồ ECharts (data-sx-chart chứa cấu hình JSON). Biểu đồ SVG điền sẵn của designcharts.ts cũng mang data-sx-chart="bar" (tên loại, đã vẽ xong) nên không nạp ECharts.
 const ECHARTS_ON = /data-sx-chart(?!=["'](?:bar|column|line|area|doughnut|donut|pie|waterfall|sankey|radar)["'])/;
-/** Gói 3D tự dựng (scripts/build-vendor-3d.mjs: three 0.169.0, @react-three/fiber 8.18.0, drei 9.122.0, @shadergradient/react 2.4.20): chỉ có ở /vendor của Synchro, không có bản CDN. */
+/** Gói 3D tự dựng (tools/build-vendor-3d.mjs: three 0.169.0, @react-three/fiber 8.18.0, drei 9.122.0, @shadergradient/react 2.4.20): chỉ có ở /vendor của Synchro, không có bản CDN. */
 export const SYNCHRO_3D: [string, string, string] = ["synchro-3d-1.0.0.js", "", "sha384-HmyfO5IR9ZCEqYGNwKGFjko0PIXroYlObNS9VE8cyS8cMOUXQ25uiSvJHEzMeVmJ"];
 const REACT_UMD: [string, string, string][] = [
   ["react-18.3.1.min.js", "react@18.3.1/umd/react.production.min.js", "sha384-DGyLxAyjq0f9SPpVevD6IgztCFlnMF6oW/XQGmfe+IsZ8TqEiDrcHkMLKI6fiB/Z"],

@@ -1,5 +1,5 @@
 // Deploy xanh/lam (A5): vai trò primary/secondary (server/role.ts), tắt êm khi nhận SIGTERM (server/drain.ts), và các hàm shell đổi upstream nginx,
-// màu sống, node_modules (scripts/bluegreen-lib.sh) với nginx / pm2 / curl giả trên PATH. Tự chạy được, không cần máy chủ.
+// màu sống, node_modules (ops/bluegreen-lib.sh) với nginx / pm2 / curl giả trên PATH. Tự chạy được, không cần máy chủ.
 import { execFileSync, spawn, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
@@ -231,7 +231,7 @@ console.log("Dừng / nhắn thêm qua cơ sở dữ liệu (tiến trình cũ �
 }
 
 // ---------------- Shell: nginx, màu sống, node_modules ----------------
-console.log("scripts/bluegreen-lib.sh với nginx / pm2 / curl giả");
+console.log("ops/bluegreen-lib.sh với nginx / pm2 / curl giả");
 const bin = path.join(tmp, "bin");
 fs.mkdirSync(bin);
 const log = path.join(tmp, "calls.log");
@@ -241,7 +241,7 @@ fake("nginx", `if [ "$1" = "-t" ]; then [ -n "\${FAKE_SIG_IN_T:-}" ] && kill -s 
 [ "$1 $2" = "-s reload" ] && sed -n 's/.*127\\.0\\.0\\.1:\\([0-9]*\\).*/\\1/p' "$BG_UPSTREAM" > "$BG_STATE_DIR/running"; exit 0`);
 fake("pm2", "exit 0");
 fake("curl", `case "$*" in *api/health*) printf '%s' "\${FAKE_HEALTH:-}" ;; esac; exit 0`);
-const lib = path.join(process.cwd(), "scripts", "bluegreen-lib.sh");
+const lib = path.join(process.cwd(), "ops", "bluegreen-lib.sh");
 const sh = (script, env = {}) => {
   const r = spawnSync("bash", ["-c", `set -u; . "${lib}"; ${script}`], { encoding: "utf8", env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, BG_WEB_USER: "", BG_STATE_DIR: tmp, BG_UPSTREAM: path.join(tmp, "nginx", "synchro-upstream.conf"), BG_TRIES: "2", BG_SLEEP: "0", ...env } });
   return { code: r.status, out: r.stdout.trim(), err: r.stderr.trim() };
@@ -318,7 +318,7 @@ const calls = () => { const s = fs.existsSync(log) ? fs.readFileSync(log, "utf8"
   calls();
   r = sh("bg_stop green; echo rc=$?");
   ok(/rc=1/.test(r.out) && running() === "3002" && !calls().includes("pm2 stop synchro-green"), "DEPLOY-1: trước khi dừng màu nào cũng nạp lại nginx nếu tệp khác màu sống; không dừng màu nginx đang chạy", { r, running: running() });
-  const sb = fs.readFileSync(path.join(process.cwd(), "scripts", "server-build.sh"), "utf8");
+  const sb = fs.readFileSync(path.join(process.cwd(), "ops", "server-build.sh"), "utf8");
   ok(sb.indexOf('BG=0; bg_enabled "$APP" && BG=1') > sb.indexOf("flock -w 900 9") && !/\[ "\$PM2" = "synchro" \] && PORT=3001/.test(sb) && /bg_pm2_has "\$PM2"/.test(sb), "DEPLOY-2: chọn cách deploy sau khi giữ khóa; production đã chuyển không đi đường một tiến trình nếu thiếu app pm2; không bao giờ đoán cổng 3001");
   {
     // DEPLOY-3: chỉ bỏ qua lỗi "tệp vừa bị xóa" của chown -R; lỗi khác (EPERM, ổ chỉ đọc…) làm dừng.
@@ -368,11 +368,11 @@ const calls = () => { const s = fs.existsSync(log) ? fs.readFileSync(log, "utf8"
   ok(fs.existsSync(b) && fs.existsSync(target) && !fs.existsSync(path.dirname(c)), "dọn: giữ bản mới và bản trước (trả lại được), xóa phần còn lại", fs.readdirSync(path.join(side, ".synchro-mods")));
 }
 // ---------------- bluegreen-migrate.sh với pm2 / nginx / curl giả ----------------
-console.log("scripts/bluegreen-migrate.sh với công cụ giả");
+console.log("ops/bluegreen-migrate.sh với công cụ giả");
 const mig = (name, o = {}) => {
   const H = path.join(tmp, `mig-${name}`), A = path.join(H, "www", "synchro"), mb = path.join(H, "bin"), P = path.join(H, "pm2");
-  for (const d of [path.join(A, ".next", "static"), path.join(A, "node_modules"), path.join(A, "data"), path.join(A, "scripts"), path.join(H, "nginx", "snippets"), path.join(H, "state"), mb, P]) fs.mkdirSync(d, { recursive: true });
-  for (const f of ["bluegreen-lib.sh", "bluegreen-migrate.sh"]) fs.copyFileSync(path.join(process.cwd(), "scripts", f), path.join(A, "scripts", f));
+  for (const d of [path.join(A, ".next", "static"), path.join(A, "node_modules"), path.join(A, "data"), path.join(A, "ops"), path.join(H, "nginx", "snippets"), path.join(H, "state"), mb, P]) fs.mkdirSync(d, { recursive: true });
+  for (const f of ["bluegreen-lib.sh", "bluegreen-migrate.sh"]) fs.copyFileSync(path.join(process.cwd(), "ops", f), path.join(A, "ops", f));
   fs.copyFileSync(path.join(process.cwd(), "ecosystem.config.cjs"), path.join(A, "ecosystem.config.cjs"));
   fs.writeFileSync(path.join(A, ".next", "BUILD_ID"), "BID1");
   if (o.newCode !== false) { fs.mkdirSync(path.join(A, ".next", "server", "chunks"), { recursive: true }); fs.writeFileSync(path.join(A, ".next", "server", "chunks", "r.js"), "process.env.SYNCHRO_PRIMARY_LOCK;process.env.NEXT_MANUAL_SIG_HANDLE"); }
@@ -416,7 +416,7 @@ case "$*" in *"-o /dev/null"*) exit 0 ;; esac; case "$url" in *api/health*) prin
   // green nhận vai khi màu sống = green và bản cũ đã dừng (như server/role.ts).
   sh("sleep", `[ -n "\${NO_PROMOTE:-}" ] && exit 0
 [ "$(awk '{print $1}' "${H}/state/live-color" 2>/dev/null)" = green ] && [ "$(cat "${P}/${o.oldName ?? "synchro"}" 2>/dev/null)" != online ] && echo "4242 green" > "${A}/data/.primary.pid"; exit 0`);
-  const run = (env = {}) => spawnSync("bash", [path.join(A, "scripts", "bluegreen-migrate.sh"), A, "synchro", path.join(H, "site")], { encoding: "utf8",
+  const run = (env = {}) => spawnSync("bash", [path.join(A, "ops", "bluegreen-migrate.sh"), A, "synchro", path.join(H, "site")], { encoding: "utf8",
     env: { ...process.env, PATH: `${mb}:${process.env.PATH}`, BG_STATE_DIR: path.join(H, "state"), BG_UPSTREAM: path.join(H, "nginx", "snippets", "synchro-upstream.conf"), BG_TRIES: "2", BG_SLEEP: "0", BG_WEB_USER: "", DATA_DIR: path.join(A, "data"), SYNCHRO_OPS_ENV: path.join(H, "ops.env"), ...o.env, ...env } });
   const r = run();
   const st = () => ({ live: fs.existsSync(path.join(H, "state", "live-color")) ? fs.readFileSync(path.join(H, "state", "live-color"), "utf8").split(" ")[0] : "", active: fs.readFileSync(path.join(H, "active"), "utf8").trim(),
@@ -464,7 +464,7 @@ case "$*" in *"-o /dev/null"*) exit 0 ;; esac; case "$url" in *api/health*) prin
 {
   // Mọi script shell đều đúng cú pháp.
   const bad = ["server-build.sh", "bluegreen-lib.sh", "bluegreen-migrate.sh", "watchdog.sh", "backup.sh"].filter((f) => {
-    try { execFileSync("bash", ["-n", path.join(process.cwd(), "scripts", f)], { stdio: "pipe" }); return false; } catch { return true; }
+    try { execFileSync("bash", ["-n", path.join(process.cwd(), "ops", f)], { stdio: "pipe" }); return false; } catch { return true; }
   });
   ok(!bad.length, "bash -n: server-build, bluegreen-lib, bluegreen-migrate, watchdog, backup", bad);
 }

@@ -1,11 +1,11 @@
 @layer properties, theme, base, components, utilities, syn, syn-over;
 @layer syn {
 
-/* Chuyển từ synchro-ds.css (B5 bước 10, scripts/css-move.mjs): luật chỉ trúng phần tử của màn này, giữ thứ tự cũ (đứng trước luật riêng của tệp). */
+/* Chuyển từ synchro-ds.css (B5 bước 10, tools/css-move.mjs): luật chỉ trúng phần tử của màn này, giữ thứ tự cũ (đứng trước luật riêng của tệp). */
 
 .bk-dim{opacity:.45;pointer-events:none}
 /* Hết phần chuyển từ synchro-ds.css. */
-/* Chuyển từ globals.css (B5 bước 10, scripts/css-move.mjs): luật chỉ trúng phần tử của màn này, giữ thứ tự cũ (đứng trước luật riêng của tệp). */
+/* Chuyển từ globals.css (B5 bước 10, tools/css-move.mjs): luật chỉ trúng phần tử của màn này, giữ thứ tự cũ (đứng trước luật riêng của tệp). */
 .tpl:hover{transform:translateY(-2px)}
 [data-theme="dark"] .tpl{--t1:#2A2B26;--t2:#1C1D1A;--ta:#B9B8AF;--tb:#5C5D56;--tp:rgba(238,236,229,.1)}
 [data-theme="dark"] .tpl .th{background:#1b1b1b;box-shadow:none}

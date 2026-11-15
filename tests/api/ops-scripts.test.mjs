@@ -31,7 +31,7 @@ db.exec("CREATE TABLE connectors (id TEXT, enc_auth TEXT)");
 db.prepare("INSERT INTO connectors VALUES ('c1', ?)").run(seal("k", "{}"));
 db.close();
 const env = { ...process.env, OPS_DIR: ops, MIN_FREE_MB: "1", NODE_PATH: path.join(root, "node_modules") };
-const backup = (extra = {}) => spawnSync("bash", [path.join(root, "scripts/backup.sh"), app, dest], { env: { ...env, ...extra }, encoding: "utf8", timeout: 120_000 });
+const backup = (extra = {}) => spawnSync("bash", [path.join(root, "ops/backup.sh"), app, dest], { env: { ...env, ...extra }, encoding: "utf8", timeout: 120_000 });
 let r = backup();
 ok(r.status === 0, "chạy xong", r.stderr + r.stdout);
 let st = json(path.join(ops, "backup-status.json"));
@@ -73,7 +73,7 @@ fs.rmSync(keyPath); fs.writeFileSync(keyPath, keyBak);
   r = backup({ PATH: `${fake}:${process.env.PATH}` });
   ok(r.status === 1 && /không phải tệp thật/.test(r.stderr) && fs.readdirSync(daily).sort().join() === before, "bản sao là liên kết cứng: cũng dừng", { status: r.status, err: r.stderr });
 }
-const src = fs.readFileSync(path.join(root, "scripts/backup.sh"), "utf8");
+const src = fs.readFileSync(path.join(root, "ops/backup.sh"), "utf8");
 ok(!/chown "\$WEB_USER"/.test(src) && !/^[^#]*> "\$WORK\//m.test(src.replace(/as_web sh -c .*/g, "")), "root không ghi, không đổi chủ gì trong thư mục của web user");
 ok(/\[ "\$\(owner_of "\$DATA"\)" = "\$WEB_USER" \]/.test(src) && !/WEB_USER="\$\(stat/.test(src), "web user không suy ra từ chủ thư mục, thư mục phải thuộc web user");
 db = new D(path.join(data, "synchro.db"));
@@ -113,7 +113,7 @@ await new Promise((ok) => srv.listen(0, "127.0.0.1", ok));
 const url = `http://127.0.0.1:${srv.address().port}/api/health`, marker = path.join(tmp, "restarted");
 const tick = (extra = {}) => new Promise((done) => {
   const { spawn } = R("node:child_process");
-  const c = spawn("bash", [path.join(root, "scripts/watchdog.sh")], { env: { ...process.env, OPS_DIR: wd, WATCHDOG_URL: url, WATCHDOG_RESTART_CMD: `echo x >> ${marker}`, DEPLOY_LOCK: path.join(tmp, "no-lock"), ...extra }, stdio: "ignore" });
+  const c = spawn("bash", [path.join(root, "ops/watchdog.sh")], { env: { ...process.env, OPS_DIR: wd, WATCHDOG_URL: url, WATCHDOG_RESTART_CMD: `echo x >> ${marker}`, DEPLOY_LOCK: path.join(tmp, "no-lock"), ...extra }, stdio: "ignore" });
   c.on("close", done);
 });
 const restarts = () => { try { return fs.readFileSync(marker, "utf8").trim().split("\n").length; } catch { return 0; } };

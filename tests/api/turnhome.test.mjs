@@ -17,7 +17,7 @@ delete process.env.SYNCHRO_CLI_TURN_HOME;
 process.env.SYNCHRO_AGY_TICK_MS = "60000";
 process.env.SYNCHRO_TURN_HOME_SYNC_MS = "300";
 fs.mkdirSync(BIN, { recursive: true }); fs.mkdirSync(path.join(DATA, "engine-tokens"), { recursive: true });
-for (const f of fs.readdirSync("scripts/mock-cli")) { fs.copyFileSync(path.join("scripts/mock-cli", f), path.join(BIN, f)); fs.chmodSync(path.join(BIN, f), 0o755); }
+for (const f of fs.readdirSync("tools/mock-cli")) { fs.copyFileSync(path.join("tools/mock-cli", f), path.join(BIN, f)); fs.chmodSync(path.join(BIN, f), 0o755); }
 const TOKSRV = path.join(tmp, "token-server.json"), GRACE = 1500;
 const cfg = (extra = {}) => fs.writeFileSync(path.join(BIN, "mock-cli.json"), JSON.stringify({ base: "http://127.0.0.1:9", tokenServer: TOKSRV, tokenGraceMs: GRACE, tokenTtlMs: 1, ...extra }));
 cfg();

@@ -6,7 +6,7 @@ import http from "node:http";
 import os from "node:os";
 import path from "node:path";
 import { loadTs } from "../lib/ts.mjs";
-import { solidPng } from "../../scripts/mock-png.mjs";
+import { solidPng } from "../../tools/mock-png.mjs";
 
 let pass = 0, fail = 0;
 const ok = (c, n, x = "") => { c ? pass++ : fail++; console.log(c ? "  ✓" : "  ✗", n, c ? "" : String(x).slice(0, 500)); };

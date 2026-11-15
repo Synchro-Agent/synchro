@@ -2,7 +2,7 @@
 // Quản trị viên dán Account ID, bucket, khóa truy cập R2 ở Cài đặt → Sức khỏe hệ thống → Sao lưu liên tục (docs/backup-r2.md).
 // Khóa bí mật mã hóa như khóa API (providers.ts), chỉ đưa cho tiến trình litestream qua biến môi trường; tệp cấu hình (quyền 0600) không chứa khóa.
 // Máy chủ tự chạy "litestream replicate" khi đã bật và có tệp chạy (workspace/setup.sh cài bản cố định, kiểm sha256), chạy lại khi đổi cấu hình
-// hoặc khi tiến trình chết, dừng khi máy chủ tắt. Bản sao lưu hằng đêm (scripts/backup.sh) vẫn chạy như cũ: đây là lớp thêm, mất máy vẫn còn dữ liệu.
+// hoặc khi tiến trình chết, dừng khi máy chủ tắt. Bản sao lưu hằng đêm (ops/backup.sh) vẫn chạy như cũ: đây là lớp thêm, mất máy vẫn còn dữ liệu.
 // "Kiểm tra khôi phục": khôi phục bản mới nhất trên R2 vào tệp tạm, chạy PRAGMA integrity_check và đếm dòng các bảng chính, so với dữ liệu đang chạy.
 import "server-only";
 import { spawn, execFile, type ChildProcess } from "node:child_process";

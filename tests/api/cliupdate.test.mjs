@@ -42,7 +42,7 @@ await owner("PATCH", `/api/admin/users/${adminId}`, { action: "set_role", role: 
 const release = (cli, ver, line, brk) => {
   const d = path.join(SRC, cli, ver);
   fs.mkdirSync(d, { recursive: true });
-  for (const f of [cli, "mock-cli-common.cjs"]) fs.copyFileSync(path.join("scripts", "mock-cli", f), path.join(d, f));
+  for (const f of [cli, "mock-cli-common.cjs"]) fs.copyFileSync(path.join("tools", "mock-cli", f), path.join(d, f));
   fs.copyFileSync(path.join(BIN, "mock-cli.json"), path.join(d, "mock-cli.json"));
   fs.writeFileSync(path.join(d, "mock-version"), line);
   if (brk) fs.writeFileSync(path.join(d, "mock-break"), brk);
@@ -66,7 +66,7 @@ const runNow = async (body = { action: "run" }) => {
 };
 const chat = (text) => owner("POST", "/api/llm", { model: "sub-claude/sonnet", messages: [{ role: "user", content: text }], skills: true });
 const resetBin = () => {
-  for (const f of fs.readdirSync(path.join("scripts", "mock-cli"))) { const d = path.join(BIN, f); fs.rmSync(d, { force: true }); fs.copyFileSync(path.join("scripts", "mock-cli", f), d); fs.chmodSync(d, 0o755); }
+  for (const f of fs.readdirSync(path.join("tools", "mock-cli"))) { const d = path.join(BIN, f); fs.rmSync(d, { force: true }); fs.copyFileSync(path.join("tools", "mock-cli", f), d); fs.chmodSync(d, 0o755); }
   for (const f of fs.readdirSync(BIN)) if (f.endsWith(".synchro-prev") || f.endsWith(".synchro-new")) fs.rmSync(path.join(BIN, f), { force: true });
   fs.rmSync(VERS, { recursive: true, force: true });
   fs.rmSync(SRC, { recursive: true, force: true });

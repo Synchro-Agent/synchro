@@ -38,18 +38,18 @@ jobs:
       - name: Kiểm tra kiểu (TypeScript)
         run: node node_modules/typescript/bin/tsc --noEmit -p . 2>&1 | tee tsc.log; exit ${PIPESTATUS[0]}
 
-      # ESLint (next/core-web-vitals + jsx-a11y, eslint.config.mjs). Gói ESLint chưa cài thì scripts/lint.mjs bỏ qua và in lệnh cài.
+      # ESLint (next/core-web-vitals + jsx-a11y, eslint.config.mjs). Gói ESLint chưa cài thì tools/lint.mjs bỏ qua và in lệnh cài.
       # Chưa chặn deploy (continue-on-error) cho tới khi mã cũ hết lỗi lint; kết quả nằm trong ci.txt.
       - name: ESLint
         continue-on-error: true
         run: npm run lint 2>&1 | tee lint.log; exit ${PIPESTATUS[0]}
 
-      # Cùng một lệnh build với package.json và scripts/server-build.sh (npm run build = next build).
+      # Cùng một lệnh build với package.json và ops/server-build.sh (npm run build = next build).
       - name: Build production
         run: NEXT_DIST_DIR=.next-ci NODE_OPTIONS=--max-old-space-size=4096 npm run build 2>&1 | tee build.log; exit ${PIPESTATUS[0]}
 
       # Bản build vừa dựng gửi kèm deploy: máy chủ bỏ bước build khi đúng commit, đúng băm package-lock và cùng biến NEXT_PUBLIC_
-      # (scripts/server-build.sh, from_artifact). Không khớp thì máy chủ tự build như cũ.
+      # (ops/server-build.sh, from_artifact). Không khớp thì máy chủ tự build như cũ.
       - name: Gói bản build cho máy chủ
         if: github.ref_name == 'main'
         run: |
@@ -85,7 +85,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: node tests/run-all.mjs 2>&1 | tee tests.log; exit ${PIPESTATUS[0]}
 
-      # H2.1: bộ giao diện (scripts/qa.mjs, Chrome ẩn) chạy ở workflow riêng .github/workflows/ui-qa.yml: chưa từng có một lần xanh trên CI và tốn
+      # H2.1: bộ giao diện (tools/qa.mjs, Chrome ẩn) chạy ở workflow riêng .github/workflows/ui-qa.yml: chưa từng có một lần xanh trên CI và tốn
       # 60–90 phút, nên chưa được chặn deploy. Khi đã có một lần chạy xanh trọn vẹn, chuyển bước đó về đây (sau bộ API) để nó chặn deploy.
 
       # Repo riêng tư: kết quả kiểm tra được xem bằng SSH trên VPS, kể cả khi lỗi. Job này đã chạy mã của gói npm (npm ci, dev:mock) nên không được chạm khóa SSH: chỉ gói kết quả, job report gửi đi.
@@ -178,7 +178,7 @@ jobs:
       - name: Build và chuyển bản
         run: |
           ssh -i ~/.ssh/id_deploy ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} \
-            'nohup bash -c "SYNCHRO_INCOMING=/var/www/synchro-incoming bash /var/www/synchro-incoming/scripts/server-build.sh /var/www/synchro synchro pip && bash /var/www/synchro/workspace/setup.sh" > /var/log/synchro-deploy.log 2>&1 & p=$!; tail -n +1 --pid=$p -f /var/log/synchro-deploy.log & t=$!; wait $p; c=$?; sleep 1; kill $t 2>/dev/null; exit $c'
+            'nohup bash -c "SYNCHRO_INCOMING=/var/www/synchro-incoming bash /var/www/synchro-incoming/ops/server-build.sh /var/www/synchro synchro pip && bash /var/www/synchro/ops/setup.sh" > /var/log/synchro-deploy.log 2>&1 & p=$!; tail -n +1 --pid=$p -f /var/log/synchro-deploy.log & t=$!; wait $p; c=$?; sleep 1; kill $t 2>/dev/null; exit $c'
 
   deploy-staging:
     needs: verify
@@ -207,4 +207,4 @@ jobs:
       - name: Build và khởi động lại staging
         run: |
           ssh -i ~/.ssh/id_deploy ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} \
-            'bash /var/www/synchro-staging/scripts/server-build.sh /var/www/synchro-staging synchro-staging'
+            'bash /var/www/synchro-staging/ops/server-build.sh /var/www/synchro-staging synchro-staging'

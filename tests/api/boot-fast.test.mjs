@@ -3,7 +3,7 @@
 // 2) cài đặt Code đi trong gói khởi động (đồng bộ phiên Code chạy ngay cả ở thiết bị mới), lần tải dự phòng không phụ thuộc số phiên;
 // 3) bộ đệm cachedJson tách theo tài khoản, đổi tài khoản / đăng xuất thì xóa;
 // 4) phim giới thiệu: nút Toàn màn hình (mới đổi sang 1080p), 1080p lỗi thì quay về 720p;
-// 5) /ts/*.wasm mang phiên bản trong URL, khớp gói npm; 6) scripts/budget.mjs: không đo bản build cũ, CSS ghi rõ chưa bắt buộc.
+// 5) /ts/*.wasm mang phiên bản trong URL, khớp gói npm; 6) tools/budget.mjs: không đo bản build cũ, CSS ghi rõ chưa bắt buộc.
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -89,7 +89,7 @@ try {
   for (const f of fs.readdirSync("public/ts").filter((x) => x.startsWith("tree-sitter-"))) ok(same(`public/ts/${f}`, `node_modules/tree-sitter-wasms/out/${f}`), `public/ts/${f} là đúng bản của tree-sitter-wasms`);
 
   console.log("6. Ngân sách tải đầu");
-  const B = await import(path.resolve("scripts/budget.mjs"));
+  const B = await import(path.resolve("tools/budget.mjs"));
   ok(B.ENFORCED.js === true && B.ENFORCED.css === false, "JS bắt buộc; CSS ghi rõ chưa bắt buộc tới B5", B.ENFORCED);
   const root = path.join(tmp, "repo");
   fs.mkdirSync(path.join(root, "app/api/x"), { recursive: true }); fs.mkdirSync(path.join(root, ".next"), { recursive: true });
@@ -107,7 +107,7 @@ try {
   fs.mkdirSync(path.join(root, ".next-mockfast"), { recursive: true });
   fs.writeFileSync(path.join(root, ".next-mockfast/app-build-manifest.json"), "{}"); at(path.join(root, ".next-mockfast/app-build-manifest.json"), -500);
   ok(B.pickBuild(root)?.dir.endsWith(".next"), "có hai bản build: đo bản mới hơn, không ưu tiên .next-mockfast cũ");
-  const qa = src("scripts/qa.mjs");
+  const qa = src("tools/qa.mjs");
   ok(/CSS 45 KB gzip \(CHƯA BẮT BUỘC tới B5/.test(qa) && /chưa đo: không có bản build hoặc bản build cũ hơn mã nguồn/.test(qa), "qa ghi rõ CSS chưa bắt buộc và lý do chưa đo");
 
   console.log("7. Phông chữ");

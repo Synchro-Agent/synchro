@@ -1,4 +1,4 @@
-// Danh mục skill của Claude (chỉ chạy ở máy chủ): catalog/claude-directory.json do scripts/sync-claude-directory.mjs tạo từ thư mục plugin
+// Danh mục skill của Claude (chỉ chạy ở máy chủ): catalog/claude-directory.json do tools/sync-claude-directory.mjs tạo từ thư mục plugin
 // công khai của Anthropic — ~3.100 thư viện, ~18.000 skill, chia theo đúng các mục ngành nghề của Claude. Mỗi thư viện ghim đúng commit
 // Anthropic đã duyệt. Tab Khám phá đọc theo trang (không gửi cả danh mục xuống trình duyệt); cài từng thư viện hoặc cài cả mục (plugjob.ts).
 // CLAUDE_DIR_FILE: dùng danh mục khác (kiểm thử).

@@ -1,12 +1,12 @@
-// Gọi lại kết hợp (BM25 + embedding + xếp lại) của bộ não và tài liệu lớn, với API embedding giả lập (scripts/mock-embed.mjs qua mock-providers):
+// Gọi lại kết hợp (BM25 + embedding + xếp lại) của bộ não và tài liệu lớn, với API embedding giả lập (tools/mock-embed.mjs qua mock-providers):
 // tìm được ghi chú cùng nghĩa khác chữ (tiếng Việt, tiếng Anh, chéo hai thứ tiếng) mà BM25 bỏ sót; không có khóa thì như cũ; hạn mức chi phí;
 // đổi model thì embed lại; quá ngân sách thời gian thì dùng BM25; vector trong RAM có trần và tự bỏ khi rảnh. Không cần máy chủ Synchro.
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { loadTs } from "../lib/ts.mjs";
-import { startMock } from "../../scripts/mock-providers.mjs";
-import { EMBED_LOG, fakeEmbed } from "../../scripts/mock-embed.mjs";
+import { startMock } from "../../tools/mock-providers.mjs";
+import { EMBED_LOG, fakeEmbed } from "../../tools/mock-embed.mjs";
 let pass = 0, fail = 0;
 const ok = (c, n, x = "") => { c ? pass++ : fail++; console.log(c ? "  ✓" : "  ✗", n, c ? "" : String(x).slice(0, 600)); };
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "synchro-hybrid-"));

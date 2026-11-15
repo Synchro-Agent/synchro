@@ -1,6 +1,6 @@
 // Lõi điều khiển của tiện ích Synchro: chạy thao tác browser_* trên Chrome / Edge / Brave của người dùng bằng chrome.debugger,
 // dùng đúng mã thao tác của trình duyệt Synchro (act.js = workspace/browser-act.mjs). Dùng chung cho tiện ích thật (background.js)
-// và tiện ích giả lập khi chạy dev:mock (scripts/mock-extension.mjs, với lớp giả chrome.* trên Chrome thật).
+// và tiện ích giả lập khi chạy dev:mock (tools/mock-extension.mjs, với lớp giả chrome.* trên Chrome thật).
 // - Phạm vi: "all" (mặc định, toàn quyền: mọi tab) hoặc "group" (chỉ nhóm tab "Synchro" mà Synchro tự mở và tab người dùng chia sẻ).
 //   Không bao giờ điều khiển tab của chính Synchro (trang chat) và trang hệ thống của trình duyệt.
 // - Tab Synchro mở nằm trong nhóm tab "Synchro"; mở trang mới thì dùng tab riêng, không đè lên tab người dùng đang xem.

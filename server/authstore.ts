@@ -18,7 +18,7 @@ export const SESSION_TTL = 30 * DAY;
 export const PW_MIN = 8;
 const PW_MAX = 200;
 const MAX_SESSIONS = 20;
-// Quản trị viên: email nằm trong danh sách này VÀ đã được xác minh (OAuth hoặc tạo bằng scripts/create-admin.mjs).
+// Quản trị viên: email nằm trong danh sách này VÀ đã được xác minh (OAuth hoặc tạo bằng ops/create-admin.mjs).
 const emailList = (v: string) => v.split(",").map((s) => s.trim().toLowerCase()).filter(Boolean);
 const ADMIN_LIST = emailList(process.env.ADMIN_EMAILS ?? "nguyenhuulamtung@gmail.com");
 export const ADMIN_EMAILS = new Set(ADMIN_LIST);

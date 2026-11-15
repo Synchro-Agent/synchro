@@ -24,7 +24,7 @@ console.log("1. ECharts: một bản 6.1.0 ở mọi nơi");
 
 console.log("2. Cấu hình biểu đồ trong sandbox giống khung artifact");
 {
-  const r = spawnSync(process.execPath, ["scripts/gen-chart-presets.mjs", "--check"], { encoding: "utf8" });
+  const r = spawnSync(process.execPath, ["tools/gen-chart-presets.mjs", "--check"], { encoding: "utf8" });
   ok(r.status === 0, "workspace/charts/synchro-charts.js khớp shared/design-engine/charts/echarts-presets.ts", r.stdout + r.stderr);
   const m = { exports: {} };
   new Function("module", "exports", read("workspace/charts/synchro-charts.js"))(m, m.exports);
@@ -43,7 +43,7 @@ console.log("2. Cấu hình biểu đồ trong sandbox giống khung artifact");
 
 console.log("3. Dockerfile và setup.sh");
 {
-  const d = read("workspace/Dockerfile"), s = read("workspace/setup.sh");
+  const d = read("workspace/Dockerfile"), s = read("ops/setup.sh");
   ok(/COPY charts\/package\.json charts\/package-lock\.json[\s\S]{0,200}npm ci --omit=dev/.test(d), "ECharts cài bằng npm ci theo lockfile");
   ok(/d2-v0\.9\.0-linux-amd64\.tar\.gz[\s\S]{0,200}5669ddc46b99e942cc96078f4a4e36d5e62103348f4c05179ede27802fdd87a9/.test(d), "D2 v0.9.0 linux-amd64 ghim mã băm của SHA256SUMS");
   ok(/d2 --version \| grep -qx v0\.9\.0/.test(d) && /synchro-chart c-\$t\.json/.test(d) && /d2 --layout=elk s\.d2/.test(d), "tự kiểm tra lúc build: 8 loại biểu đồ, PNG, require(\"echarts\"), D2 tiếng Việt");

@@ -1,8 +1,8 @@
-// B5 bước 0: công cụ so cascade tĩnh (scripts/css-cascade.mjs) và chỉ số CSS (scripts/css-metrics.mjs) tính đúng. Hàm thuần, không cần máy chủ.
+// B5 bước 0: công cụ so cascade tĩnh (tools/css-cascade.mjs) và chỉ số CSS (tools/css-metrics.mjs) tính đúng. Hàm thuần, không cần máy chủ.
 import path from "node:path";
 
-const C = await import(path.resolve("scripts/css-cascade.mjs"));
-const M = await import(path.resolve("scripts/css-metrics.mjs"));
+const C = await import(path.resolve("tools/css-cascade.mjs"));
+const M = await import(path.resolve("tools/css-metrics.mjs"));
 let pass = 0, fail = 0;
 const ok = (c, n, x = "") => { c ? pass++ : fail++; console.log(c ? "  ✓" : "  ✗", n, c ? "" : String(x).slice(0, 400)); };
 const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
@@ -39,7 +39,7 @@ ok(r1.flips.length === 0 && r1.lost.length === 0 && r1.pairs === 1, "lớp đún
 ok(r2.flips.length === 1, "lớp sai thứ tự: báo 1 cặp đổi", JSON.stringify(r2.flips));
 
 console.log("5. Chuyển !important sang lớp syn-over (css-unimportant.mjs) không đổi bên thắng");
-const U = await import(path.resolve("scripts/css-unimportant.mjs"));
+const U = await import(path.resolve("tools/css-unimportant.mjs"));
 const HEAD = "@layer base, syn, syn-over;\n";
 const src = `${HEAD}@layer syn {\n.x{color:red!important;margin:0}\n.a .x{color:teal!important}\n@media (max-width:760px){.y .x{color:blue!important}}\n.x.x.x{color:black}\n}\n`;
 const later = { name: "l.css", css: `${HEAD}@layer syn{.y.x.x.x{color:gray}}` };

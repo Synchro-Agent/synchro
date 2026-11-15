@@ -3,7 +3,7 @@
 // cho cửa sổ tiện ích, và config.js ghi sẵn
 // địa chỉ máy chủ. Dùng ở
 // - /api/browser/ext/download (nút "Tải tiện ích" trong Cài đặt → Khả năng → Trình duyệt của bạn) → tệp .zip;
-// - npm run dev:mock (ghi sẵn bản giải nén vào data-mock/extension để "Load unpacked") và tiện ích giả lập (scripts/mock-extension.mjs).
+// - npm run dev:mock (ghi sẵn bản giải nén vào data-mock/extension để "Load unpacked") và tiện ích giả lập (tools/mock-extension.mjs).
 // Chạy tay: node extension/build.mjs <địa chỉ Synchro> <thư mục ra>
 import fs from "node:fs";
 import path from "node:path";

@@ -1,4 +1,4 @@
-// Diễn tập khôi phục đầu cuối theo đúng các bước ở docs/van-hanh.md: tạo dữ liệu bằng mã thật, sao lưu bằng scripts/backup.sh, chép ra thư mục mới như máy mới,
+// Diễn tập khôi phục đầu cuối theo đúng các bước ở docs/van-hanh.md: tạo dữ liệu bằng mã thật, sao lưu bằng ops/backup.sh, chép ra thư mục mới như máy mới,
 // rồi mở bằng mã thật trong một tiến trình mới: tài khoản đăng nhập được, đoạn chat còn, token mã hóa giải được, tệp tải lên còn nguyên. Tự chạy được, không cần dev:mock.
 import { execFileSync, spawnSync } from "node:child_process";
 import crypto from "node:crypto";
@@ -24,7 +24,7 @@ AS.db().pragma("wal_checkpoint(TRUNCATE)");
 const body = Buffer.from("noi dung tep tai len"), id = crypto.createHash("sha1").update(body).digest("hex");
 fs.writeFileSync(path.join(app, ".cache", "files", `${id}.bin`), body);
 
-const r = spawnSync("bash", [path.join(root, "scripts/backup.sh"), app, dest], { env: { ...process.env, OPS_DIR: ops, MIN_FREE_MB: "1", NODE_PATH: path.join(root, "node_modules") }, encoding: "utf8", timeout: 120_000 });
+const r = spawnSync("bash", [path.join(root, "ops/backup.sh"), app, dest], { env: { ...process.env, OPS_DIR: ops, MIN_FREE_MB: "1", NODE_PATH: path.join(root, "node_modules") }, encoding: "utf8", timeout: 120_000 });
 ok(r.status === 0, "sao lưu chạy xong", r.stderr + r.stdout);
 const st = JSON.parse(fs.readFileSync(path.join(ops, "backup-status.json"), "utf8"));
 const B = path.join(dest, "daily", st.snapshot);

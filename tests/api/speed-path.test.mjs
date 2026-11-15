@@ -21,7 +21,7 @@ process.env.SYNCHRO_WARM_GAP_MS = "700";
 delete process.env.SYNCHRO_ENGINE_USER;
 fs.mkdirSync(process.env.DATA_DIR, { recursive: true });
 fs.mkdirSync(BIN, { recursive: true });
-const SRC = path.join(process.cwd(), "scripts", "mock-cli");
+const SRC = path.join(process.cwd(), "tools", "mock-cli");
 for (const f of ["claude", "mock-cli-common.cjs"]) fs.copyFileSync(path.join(SRC, f), path.join(BIN, f));
 fs.chmodSync(path.join(BIN, "claude"), 0o755);
 fs.writeFileSync(path.join(BIN, "mock-cli.json"), JSON.stringify({ base: "http://127.0.0.1:9", startMs: 200 }));

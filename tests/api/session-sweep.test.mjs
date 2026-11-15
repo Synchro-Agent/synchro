@@ -11,7 +11,7 @@ const tmp = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "synchro-sweep
 const HOME = path.join(tmp, "engine"), BIN = path.join(HOME, ".local", "bin"), DATA = path.join(tmp, "data");
 process.env.DATA_DIR = DATA; process.env.SYNCHRO_ENGINE_HOME = HOME; process.env.SYNCHRO_ENGINE_USER = ""; process.env.DATA_KEY = "sweep-test"; delete process.env.SYNCHRO_ENGINE_BWRAP;
 fs.mkdirSync(BIN, { recursive: true }); fs.mkdirSync(path.join(DATA, "engine-tokens"), { recursive: true });
-for (const f of fs.readdirSync("scripts/mock-cli")) { fs.copyFileSync(path.join("scripts/mock-cli", f), path.join(BIN, f)); fs.chmodSync(path.join(BIN, f), 0o755); }
+for (const f of fs.readdirSync("tools/mock-cli")) { fs.copyFileSync(path.join("tools/mock-cli", f), path.join(BIN, f)); fs.chmodSync(path.join(BIN, f), 0o755); }
 fs.writeFileSync(path.join(BIN, "mock-cli.json"), JSON.stringify({ base: "http://127.0.0.1:9" }));
 const { "ai/subs": S, "ai/cli_auth": A, authstore: AS } = await loadTs(["ai/subs", "ai/cli_auth", "authstore"]);
 const user = AS.createUser({ email: "sweep@synchro.test", name: "S", verified: true, passwordHash: "x" });

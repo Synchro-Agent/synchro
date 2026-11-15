@@ -1,6 +1,6 @@
 # Sao lưu liên tục lên Cloudflare R2
 
-Synchro chạy [Litestream](https://litestream.io) cạnh web: mọi thay đổi của cơ sở dữ liệu (`data/synchro.db`: tài khoản, phiên, bộ não, artifact, việc tự động…) được đẩy lên bucket R2 của bạn trong vòng vài giây. Mất cả máy chủ thì chỉ mất vài giây dữ liệu cuối. Bản sao lưu hằng đêm (`scripts/backup.sh`, 03:00) vẫn chạy như cũ; tệp tải lên và tệp do code tạo vẫn chỉ nằm trong bản sao lưu hằng đêm.
+Synchro chạy [Litestream](https://litestream.io) cạnh web: mọi thay đổi của cơ sở dữ liệu (`data/synchro.db`: tài khoản, phiên, bộ não, artifact, việc tự động…) được đẩy lên bucket R2 của bạn trong vòng vài giây. Mất cả máy chủ thì chỉ mất vài giây dữ liệu cuối. Bản sao lưu hằng đêm (`ops/backup.sh`, 03:00) vẫn chạy như cũ; tệp tải lên và tệp do code tạo vẫn chỉ nằm trong bản sao lưu hằng đêm.
 
 Chưa làm các bước dưới đây thì không gì thay đổi: Synchro không chạy Litestream, không gọi ra ngoài.
 
@@ -38,7 +38,7 @@ Khóa bí mật được mã hóa trong cơ sở dữ liệu như các khóa API
 
 ## Máy chủ
 
-- `workspace/setup.sh` (mỗi lần deploy đều chạy) cài Litestream **0.5.17** vào `/usr/local/bin/litestream`, tải từ bản phát hành chính thức trên GitHub và **kiểm sha256** trước khi cài; đã đúng bản thì không tải lại. Lỗi tải không làm hỏng deploy, trang Sức khỏe hệ thống báo "Máy chủ chưa cài litestream".
+- `ops/setup.sh` (mỗi lần deploy đều chạy) cài Litestream **0.5.17** vào `/usr/local/bin/litestream`, tải từ bản phát hành chính thức trên GitHub và **kiểm sha256** trước khi cài; đã đúng bản thì không tải lại. Lỗi tải không làm hỏng deploy, trang Sức khỏe hệ thống báo "Máy chủ chưa cài litestream".
 - Web tự chạy `litestream replicate` khi đã bật và có tệp chạy, chạy lại khi đổi cài đặt, tự chạy lại khi tiến trình chết (chờ lâu dần tới 5 phút), dừng khi web tắt. Lần khởi động sau dừng tiến trình mồ côi của lần trước (`data/litestream/replicate.pid`).
 - Trạng thái trên trang: lần đồng bộ gần nhất, số giao dịch còn chậm so với dữ liệu đang chạy, TXID mới nhất trên R2 / trên máy (Litestream 0.5 đánh số theo giao dịch thay cho "generation" của bản 0.3), lỗi gần đây của Litestream.
 

@@ -1,12 +1,12 @@
 // Chrome của người dùng (tiện ích Synchro): ghép nối bằng mã, lệnh browser_* của mọi model chạy qua tiện ích, phạm vi tab, Dừng ngay trong
-// Chrome, hết lượt thì thôi điều khiển, gỡ trình duyệt, tải tiện ích. Tiện ích giả lập (scripts/mock-extension.mjs) chạy đúng mã của tiện ích
+// Chrome, hết lượt thì thôi điều khiển, gỡ trình duyệt, tải tiện ích. Tiện ích giả lập (tools/mock-extension.mjs) chạy đúng mã của tiện ích
 // thật (bản .zip) trên Chrome thật của máy này, chạy ẩn. Máy không có Chrome thì chỉ kiểm phần máy chủ.
 import { spawn } from "node:child_process";
 import path from "node:path";
 import JSZip from "jszip";
 import fs from "node:fs";
 import { CDP, devJson } from "../../workspace/browser-core.mjs";
-import { findChrome } from "../../scripts/mock-workspace.mjs";
+import { findChrome } from "../../tools/mock-workspace.mjs";
 
 const B = process.env.SYNCHRO_URL ?? "http://localhost:3200", MOCK = process.env.MOCK_URL ?? "http://127.0.0.1:4010", PAGE = `${MOCK}/_fixture/browser-quiz`;
 let pass = 0, fail = 0;
@@ -74,7 +74,7 @@ if (!chrome) {
 } else {
   const PROFILE = path.resolve("data-mock/ext-test");
   fs.rmSync(PROFILE, { recursive: true, force: true });
-  const proc = spawn(process.execPath, ["scripts/mock-extension.mjs", "--server", B, "--code", code.code, "--headless", "--quiet", "--profile", PROFILE], { stdio: ["ignore", "pipe", "inherit"] });
+  const proc = spawn(process.execPath, ["tools/mock-extension.mjs", "--server", B, "--code", code.code, "--headless", "--quiet", "--profile", PROFILE], { stdio: ["ignore", "pipe", "inherit"] });
   const ready = await new Promise((res) => { let buf = ""; proc.stdout.on("data", (d) => { buf += d; const l = buf.split("\n").find((x) => x.startsWith("{")); if (l) res(JSON.parse(l)); }); proc.on("exit", () => res(null)); setTimeout(() => res(null), 30_000); });
   ok(!!ready?.control, "tiện ích giả lập bật Chrome thật và ghép nối xong", JSON.stringify(ready));
   const ctl = (p, body) => fetch(`http://127.0.0.1:${ready.control}${p}`, { method: body ? "POST" : "GET", body: body ? JSON.stringify(body) : undefined }).then((x) => x.json());

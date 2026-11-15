@@ -45,7 +45,7 @@ console.log("2. Dockerfile: tải về có mã băm, dựng sẵn, tự kiểm t
 
 console.log("3. setup.sh dựng lại image khi dự án Remotion đổi");
 {
-  const s = read("workspace/setup.sh");
+  const s = read("ops/setup.sh");
   ok(/find remotion -type f/.test(s) && /HASH=\$\( \{ cat "\$APP\/workspace\/Dockerfile"[\s\S]{0,400}for f in \$REMOTION_FILES/.test(s), "HASH gồm mọi tệp của workspace/remotion");
   ok(/-not -path 'remotion\/node_modules\/\*'/.test(s), "bỏ node_modules khỏi HASH");
   ok(s.includes('IMAGE=synchro-ws:1'), "tag image không đổi");

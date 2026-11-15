@@ -1,5 +1,5 @@
 // Tạo ảnh (server/ai/imagegen.ts) trên CLI giả lập, tự chạy được, không cần dev:mock: thứ tự gói, chuyển gói khi lỗi, bỏ qua gói Free, từ chối tệp không phải ảnh, trần dung lượng, dừng giữa
-// chừng, cách ly tài khoản, dọn sạch sau lượt, định tuyến, làm sạch đường dẫn máy chủ. Hành vi của CLI thật chỉ biết khi chạy `node scripts/cli-contract.mjs <account> --image` trên máy chủ.
+// chừng, cách ly tài khoản, dọn sạch sau lượt, định tuyến, làm sạch đường dẫn máy chủ. Hành vi của CLI thật chỉ biết khi chạy `node tools/cli-contract.mjs <account> --image` trên máy chủ.
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -13,7 +13,7 @@ const HOME = path.join(tmp, "engine"), BIN = path.join(HOME, ".local", "bin"), D
 process.env.DATA_DIR = DATA; process.env.SYNCHRO_ENGINE_HOME = HOME; process.env.SYNCHRO_ENGINE_USER = ""; process.env.DATA_KEY = "img-test"; delete process.env.SYNCHRO_ENGINE_BWRAP;
 process.env.SYNCHRO_IMAGE_TICK_MS = "200";
 fs.mkdirSync(BIN, { recursive: true }); fs.mkdirSync(path.join(DATA, "engine-tokens"), { recursive: true });
-for (const f of fs.readdirSync("scripts/mock-cli")) { fs.copyFileSync(path.join("scripts/mock-cli", f), path.join(BIN, f)); fs.chmodSync(path.join(BIN, f), 0o755); }
+for (const f of fs.readdirSync("tools/mock-cli")) { fs.copyFileSync(path.join("tools/mock-cli", f), path.join(BIN, f)); fs.chmodSync(path.join(BIN, f), 0o755); }
 fs.writeFileSync(path.join(BIN, "mock-cli.json"), JSON.stringify({ base: "http://127.0.0.1:9" }));
 
 const { "ai/imagegen": I, "ai/imagefiles": F, "ai/cli_auth": A, router: R } = await loadTs(["ai/imagegen", "ai/imagefiles", "ai/cli_auth", "router"]);
@@ -154,7 +154,7 @@ try {
     // Ảnh gốc: Grok không nhận, ChatGPT Free không có công cụ: thử lại không bao giờ được.
     const R0 = "u_refmix"; signIn(R0, ["grok", "codex"]);
     mode(R0, "codex", { plan: "free" });
-    const req = (await import("node:module")).createRequire(path.join(process.cwd(), "package.json"))(path.join(process.cwd(), "scripts/mock-cli/mock-cli-common.cjs"));
+    const req = (await import("node:module")).createRequire(path.join(process.cwd(), "package.json"))(path.join(process.cwd(), "tools/mock-cli/mock-cli-common.cjs"));
     const m = await gen(R0, { reference: { name: "goc.png", mime: "image/png", data: req.tinyPng(8, 8) } });
     ok(!m.ok && m.tried.map((x) => x.kind).join() === "noref,free" && m.providers && /Providers/.test(m.text) && !/thử lại sau ít phút/.test(m.text), "không gói nào làm được: chỉ tới Providers, không bảo thử lại sau", m.text);
   }
@@ -351,7 +351,7 @@ try {
 
   console.log("6d. Nhật ký hệ thống");
   {
-    const sh = fs.readFileSync("scripts/setup-engine-user.sh", "utf8");
+    const sh = fs.readFileSync("ops/setup-engine-user.sh", "utf8");
     ok(/Defaults:%s/.test(sh) && /!log_allowed/.test(sh) && /!syslog, !logfile/.test(sh), "quy tắc sudo không ghi dòng lệnh (có cả lời nhắn) vào auth.log");
   }
 
@@ -399,7 +399,7 @@ try {
 
   console.log("8. Ảnh gốc để sửa");
   {
-    const png = fs.readFileSync(path.join(BIN, "mock-cli-common.cjs")) && (await import("node:module")).createRequire(path.join(process.cwd(), "package.json"))(path.join(process.cwd(), "scripts/mock-cli/mock-cli-common.cjs"));
+    const png = fs.readFileSync(path.join(BIN, "mock-cli-common.cjs")) && (await import("node:module")).createRequire(path.join(process.cwd(), "package.json"))(path.join(process.cwd(), "tools/mock-cli/mock-cli-common.cjs"));
     const data = png.tinyPng(8, 8), reference = { name: "goc.png", mime: "image/png", data };
     const U = "u_ref"; signIn(U, ["agy"]);
     const r = await gen(U, { reference });
@@ -446,7 +446,7 @@ try {
     const env = A.engineEnv("agy", U), work = path.join(HOME, "work", U); fs.mkdirSync(work, { recursive: true });
     const conv = "11111111-2222-3333-4444-555555555555", dir = F.agyBrainDir(env.HOME, conv);
     fs.mkdirSync(dir, { recursive: true });
-    const req = (await import("node:module")).createRequire(path.join(process.cwd(), "package.json"))(path.join(process.cwd(), "scripts/mock-cli/mock-cli-common.cjs"));
+    const req = (await import("node:module")).createRequire(path.join(process.cwd(), "package.json"))(path.join(process.cwd(), "tools/mock-cli/mock-cli-common.cjs"));
     const old = path.join(dir, "cu.jpg"); fs.writeFileSync(old, req.TINY_JPEG); fs.utimesSync(old, new Date(Date.now() - 3600_000), new Date(Date.now() - 3600_000));
     const stamp = await F.nativeStamp(work);
     await new Promise((r) => setTimeout(r, 20));

@@ -1,7 +1,7 @@
 // Màn hình trực tiếp của trình duyệt Synchro (khung chat và Synchro Code): khung hình JPEG nhị phân, vẽ theo mật độ điểm ảnh của màn
 // hình người xem (Retina 2x — chữ nét) nhưng tọa độ vẫn theo điểm ảnh CSS của trang; giao diện cũ (không xin bin) vẫn nhận base64;
 // chữ có dấu (bộ gõ tiếng Việt gửi cả chữ khi ghép xong) vào đúng ô đang chọn. Máy không có Chrome thì bỏ qua.
-import { findChrome } from "../../scripts/mock-workspace.mjs";
+import { findChrome } from "../../tools/mock-workspace.mjs";
 
 const B = process.env.SYNCHRO_URL ?? "http://localhost:3200";
 let pass = 0, fail = 0;

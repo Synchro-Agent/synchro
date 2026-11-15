@@ -5,7 +5,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { spawn } from "node:child_process";
-import { findChrome } from "../../scripts/mock-workspace.mjs";
+import { findChrome } from "../../tools/mock-workspace.mjs";
 
 const B = process.env.SYNCHRO_URL ?? "http://localhost:3200", MOCK = process.env.MOCK_URL ?? "http://127.0.0.1:4010", PAGE = `${MOCK}/_fixture/browser-quiz`;
 let pass = 0, fail = 0;
@@ -181,7 +181,7 @@ else {
   const code = (await a("POST", "/api/browser/ext", { op: "code" })).j;
   const PROFILE = path.resolve("data-mock/ext-auto");
   fs.rmSync(PROFILE, { recursive: true, force: true });
-  const proc = spawn(process.execPath, ["scripts/mock-extension.mjs", "--server", B, "--code", code.code, "--headless", "--quiet", "--profile", PROFILE], { stdio: ["ignore", "pipe", "inherit"] });
+  const proc = spawn(process.execPath, ["tools/mock-extension.mjs", "--server", B, "--code", code.code, "--headless", "--quiet", "--profile", PROFILE], { stdio: ["ignore", "pipe", "inherit"] });
   try {
     it = await until(async () => (await itemsOf(cj.id)).find((x) => x.status === "done" || x.status === "error"), 60_000);
     const ev = it ? (await a("GET", `/api/runs/${it.run}?json=1`)).j?.run?.events ?? [] : [];

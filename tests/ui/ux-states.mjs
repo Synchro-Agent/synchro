@@ -63,7 +63,7 @@ const focusIs = (sel) => ev(`!!document.activeElement?.matches(${JSON.stringify(
 const COMPOSER = ".composer textarea";
 
 try {
-  // Trang chủ (model giả lập đã có, xem scripts/dev-mock.mjs).
+  // Trang chủ (model giả lập đã có, xem tools/dev-mock.mjs).
   await go(B);
   await until(`!!document.querySelector(${JSON.stringify(COMPOSER)})`);
   await sleep(600);

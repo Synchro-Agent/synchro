@@ -1,7 +1,7 @@
 // Dựng poster ở máy chủ bằng Satori (next/og, bản @vercel/og đi kèm Next: không thêm gói nào) → PNG.
 // Vì sao có cả đường này cạnh khung .sx-og + PNG 3x của artifact: không cần trình duyệt hay gói tạo ảnh nào (tài khoản miễn phí cũng có), model chỉ điền 5 trường nên
 // không tốn token viết HTML và không bao giờ vỡ bố cục, ảnh ra đúng từng điểm ảnh như nhau mỗi lần, và là tệp ảnh thật trong khung chat (tải về, dùng lại trong run_code, slide).
-// Phông: Plus Jakarta Sans tĩnh 400/700/800 có đủ dấu tiếng Việt, truyền thẳng vào Satori nên next/og không bao giờ tải phông dự phòng qua mạng (scripts/fetch-poster-fonts.sh ghim mã băm).
+// Phông: Plus Jakarta Sans tĩnh 400/700/800 có đủ dấu tiếng Việt, truyền thẳng vào Satori nên next/og không bao giờ tải phông dự phòng qua mạng (tools/fetch-poster-fonts.sh ghim mã băm).
 import "server-only";
 import fs from "node:fs";
 import path from "node:path";

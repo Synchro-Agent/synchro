@@ -20,7 +20,7 @@ import "./_shell/unbounded-preload.css";
 //   ui/i18n.tsx, ui/chunkguard.tsx. Đổi tên / chuyển các tệp app/_shell/ đi là đổi thứ tự (tests/api/paths-guard.test.mjs canh);
 // - CSS riêng của từng màn tải chậm (ui/styles/: codeview.css, speech.css, brainview.css, download.css, projects.css, settings.css,
 //   skills.css) nạp cùng màn đó, luôn sau bốn tệp trên. Luật chỉ được chuyển sang đó khi mọi selector neo vào tệp riêng của màn và không đổi
-//   bên thắng với luật chung đứng sau nó: scripts/css-move.mjs + css-move-verify.mjs; tests/api/css-split.test.mjs canh lớp đã tách.
+//   bên thắng với luật chung đứng sau nó: tools/css-move.mjs + css-move-verify.mjs; tests/api/css-split.test.mjs canh lớp đã tách.
 import "./_shell/globals.css";
 import "./_shell/glass.css";
 import "./_shell/synchro-ds.css";

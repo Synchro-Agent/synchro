@@ -1,5 +1,5 @@
 // Tạo ảnh bằng khóa Replicate của chủ máy chủ (server/ai/replicate.ts) trên Synchro giả lập (npm run dev:mock; SYNCHRO_URL, SYNCHRO_MOCK_URL). Chỉ gọi Replicate GIẢ LẬP
-// (scripts/mock-replicate.mjs), không bao giờ gọi API thật, không tốn tiền. Bài thử tự nối khóa giả rồi gỡ ra khi xong (kể cả khi lỗi), để các bộ khác vẫn thấy máy chủ chưa có khóa.
+// (tools/mock-replicate.mjs), không bao giờ gọi API thật, không tốn tiền. Bài thử tự nối khóa giả rồi gỡ ra khi xong (kể cả khi lỗi), để các bộ khác vẫn thấy máy chủ chưa có khóa.
 // Kiểm: chưa có khóa thì không đổi gì; kiểm tra khóa; FLUX 1.1 Pro Ultra (model chính thức, Prefer: wait, Cancel-After); hậu tố nhiếp ảnh chỉ cho ảnh sản phẩm;
 // IC-Light theo version với tên tham số đọc từ lược đồ (đổi bản thì đổi tên); chạy lâu thì hỏi lại; lỗi thì về gói của người dùng; Dừng thì hủy lượt trên Replicate;
 // hạn mức ảnh mỗi ngày; ảnh chỉ tải từ máy chủ của Replicate.
