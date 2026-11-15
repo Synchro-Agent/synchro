@@ -778,7 +778,9 @@ async function handler(req, res) {
     (HIST[res.__prov] ??= []).push(b); HIST[res.__prov].splice(0, HIST[res.__prov].length - 200);
     CALLS[res.__prov] = (CALLS[res.__prov] ?? 0) + 1;
   }
-  res.__slow = res.__prov && JSON.stringify(b.messages ?? b.input ?? "").includes("#streamslow");
+  // Bỏ tầng động (DYN) trước khi tìm: <brain_recall> nhắc lại ghi chú của các đoạn chat thử #streamslow trước đó, làm câu trả lời
+  // #longmd của render-perf chảy chậm 150 ms / mẩu (174 giây thay vì 10 giây) và đo nhầm cả các lần vẽ định kỳ.
+  res.__slow = res.__prov && JSON.stringify(b.messages ?? b.input ?? "").replace(DYN, "").includes("#streamslow");
   // Một hãng đang sập (kiểm thử chuyển model): POST /_debug/outage { provider, codes: [529, 503] } → mọi lời gọi tới hãng đó lần lượt trả các mã này
   // (529 overloaded_error của Anthropic, 503 của các hãng còn lại); codes rỗng thì hết sập. GET /_debug/outage: số lần đã trả từng mã.
   if (res.__prov && OUTAGE[res.__prov]?.codes.length) {
