@@ -92,7 +92,7 @@ export function CommandPalette({ chats, projects, codes, cmds, go, seed, onClose
 
   useEffect(() => {
     let live = true;
-    Promise.all([get("/api/artifacts?view=titles"), get("/api/apps"), cachedJson<any>("/api/skills"), cachedJson<any>("/api/plugins?view=lite"), get("/api/inbox?limit=100")]).then(([a, ap, sk, pl, ib]) => {
+    Promise.all([get("/api/artifacts?view=titles"), get("/api/apps"), cachedJson<{ skills?: Remote["skills"] }>("/api/skills"), cachedJson<{ plugins?: Remote["libs"] }>("/api/plugins?view=lite"), get("/api/inbox?limit=100")]).then(([a, ap, sk, pl, ib]) => {
       if (live) setRem({ arts: a.artifacts ?? [], apps: ap.apps ?? [], skills: sk.skills ?? [], libs: pl.plugins ?? [], inbox: ib.items ?? [] });
     });
     return () => { live = false; };

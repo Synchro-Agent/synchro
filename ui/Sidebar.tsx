@@ -268,6 +268,7 @@ export const Sidebar = memo(function Sidebar({ view, cur, curProj, codeCur, code
   return (
     <aside className="sidebar">
       <div className="side-top">
+        {/* eslint-disable-next-line @next/next/no-html-link-for-pages -- onClick chặn điều hướng và gọi goNew(); href chỉ để mở tab mới / chép liên kết */}
         <a className="side-brand" href="/" onClick={(e) => { e.preventDefault(); x().goNew(); }} aria-label="Synchro"><Wordmark height={17} /></a>
       </div>
       <button className="side-search" onClick={() => x().openSearch()}><I.Search size={15} /><span>Tìm đoạn chat, tệp, lệnh…</span><kbd>⌘K</kbd></button>

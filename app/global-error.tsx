@@ -28,6 +28,7 @@ export default function GlobalError({ error }: { error: Error & { digest?: strin
           <h1>{en ? "Synchro hit an error" : "Synchro gặp lỗi"}</h1>
           <p>{en ? "Your chats and what you were typing are still here. Reload the page to continue." : "Đoạn chat và phần bạn đang gõ vẫn còn. Tải lại trang để dùng tiếp."}</p>
           <button onClick={() => location.reload()}>{en ? "Reload page" : "Tải lại trang"}</button>
+          {/* eslint-disable-next-line @next/next/no-html-link-for-pages -- global-error tự dựng <html>, router của Next không còn: chỉ tải lại toàn trang mới chắc chắn */}
           <a href="/">{en ? "New chat" : "Đoạn chat mới"}</a>
         </main>
       </body>

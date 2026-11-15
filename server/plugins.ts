@@ -54,7 +54,7 @@ export function linkKey(raw: string): string | null {
   try { u = new URL(raw.trim()); } catch { return null; }
   if (!/^https?:$/.test(u.protocol)) return null;
   let host = u.host.toLowerCase().replace(/^www\./, "");
-  let segs = u.pathname.split("/").filter(Boolean).map((x) => { try { return decodeURIComponent(x); } catch { return x; } });
+  const segs = u.pathname.split("/").filter(Boolean).map((x) => { try { return decodeURIComponent(x); } catch { return x; } });
   let base: string[], rest: string[];
   if (host === "raw.githubusercontent.com") { host = "github.com"; base = segs.slice(0, 2); rest = segs.slice(3); }
   else if (host === "github.com") { base = segs.slice(0, 2); rest = segs[2] === "tree" || segs[2] === "blob" ? segs.slice(4) : []; }

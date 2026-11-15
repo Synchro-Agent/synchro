@@ -1122,7 +1122,7 @@ export default function Home({ boot }: { boot?: BootData | null }) {
   useEffect(() => { if (me) warmChoice(); }, [model, effortPick, me?.id]); // eslint-disable-line react-hooks/exhaustive-deps
   // Danh sách model đổi (quản trị viên thêm khóa, đổi quyền) → chọn lại model hợp lệ.
   // Lần đầu sau gói khởi động: danh sách model và khả năng đã gieo, không hỏi lại (bootSeeded); các lần sau như cũ.
-  useEffect(() => { if (me && !seededNow(me.id, "models")) refreshModels(); }, [me]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (me && !seededNow(me.id, "models")) refreshModels(); }, [me]);
   useEffect(() => { if (me && !seededNow(me.id, "caps")) loadCaps(); }, [me?.id]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (view === "code") setCpWant(true); }, [view]);
   // Cài đặt Code thường đã gieo từ gói khởi động (đồng bộ phiên chạy ngay, kể cả thiết bị mới chưa có phiên nào). Không có gói (dựng lỗi,

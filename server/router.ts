@@ -456,7 +456,8 @@ function read(q: RouteInput, depth = 0): Read {
   let s = 0;
   const add = (n: number, w: string) => { if (!n) return; s += n; why.push(w); };
   const sc = scores(ins, a);
-  let [task, strength] = pick(sc, ins);
+  const picked = pick(sc, ins), strength = picked[1];
+  let task = picked[0];
   const images = q.images ?? 0, docChars = q.docChars ?? 0, files = q.files ?? 0;
   // Xét cả phần sau dấu ":" (splitAsk coi là nội dung): "Câu hỏi: có nên uống 20 viên paracetamol" từng là hỏi đáp, nỗ lực thấp, đường nhanh.
   const typed = typedPart(q.text);

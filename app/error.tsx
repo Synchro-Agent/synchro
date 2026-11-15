@@ -14,6 +14,7 @@ export default function ErrorPage({ error }: { error: Error & { digest?: string 
       <p>Đoạn chat và phần bạn đang gõ vẫn còn. Tải lại trang để dùng tiếp.</p>
       <div className="err-acts">
         <button className="btn dark" onClick={() => location.reload()}>Tải lại trang</button>
+        {/* eslint-disable-next-line @next/next/no-html-link-for-pages -- tải lại toàn trang có chủ đích: trang vừa lỗi, không giữ trạng thái client cũ */}
         <a className="btn" href="/">Đoạn chat mới</a>
       </div>
     </main>

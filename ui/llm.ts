@@ -348,7 +348,8 @@ const TOP_K_HITS = 12;
 function docHeads(docs: NonNullable<Project["ctx"]>, budget = DOC_HEAD_BUDGET): string[] {
   const texts = docs.map((d) => ({ d, t: d.text ?? chunksOf(d).join("\n\n") })).filter((x) => x.t.trim());
   const out = new Map<(typeof texts)[number], string>();
-  let left = budget, rest = [...texts].sort((a, b) => a.t.length - b.t.length);
+  let left = budget;
+  const rest = [...texts].sort((a, b) => a.t.length - b.t.length);
   while (rest.length) {
     const x = rest.shift()!, share = Math.floor(left / (rest.length + 1)), head = x.t.slice(0, share);
     left -= head.length;

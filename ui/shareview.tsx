@@ -55,6 +55,7 @@ export function ShareView({ snap, at, token }: { snap: ShareSnap; at: number; to
   return (
     <main className="sh-page">
       <header className="sh-head">
+        {/* eslint-disable-next-line @next/next/no-html-link-for-pages -- trang chia sẻ công khai: về Synchro bằng tải toàn trang (khách chưa đăng nhập đi qua màn đăng nhập) */}
         <a href="/" className="brand-lock" aria-label="Synchro"><Lockup height={20} className="lk-hover" /></a>
         <span className="sh-tools"><span className="sh-tag">Bản chia sẻ chỉ đọc</span><LangSwitch inline /></span>
       </header>
@@ -75,6 +76,7 @@ export function ShareView({ snap, at, token }: { snap: ShareSnap; at: number; to
       </div>
       <footer className="sh-foot">
         <span>{tr("Nội dung do người chia sẻ chọn đăng và có thể chứa lỗi của AI.")}</span>
+        {/* eslint-disable-next-line @next/next/no-html-link-for-pages -- như trên */}
         <nav><ReportLink token={token} /><a href="/">Synchro</a><a href="/privacy">{tr("Quyền riêng tư")}</a><a href="/terms">{tr("Điều khoản sử dụng")}</a></nav>
       </footer></PublicFrames.Provider>}
     </main>

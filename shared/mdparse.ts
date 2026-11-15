@@ -194,7 +194,8 @@ function linkAt(s: string, i: number, open: boolean, memo: Map<number, number> =
   let dest = "";
   if (s[k] === "<") { const e = s.indexOf(">", k); if (e < 0) return open ? { label, partial: true } : null; dest = s.slice(k + 1, e); k = e + 1; }
   else {
-    let par = 0, a = k;
+    const a = k;
+    let par = 0;
     for (; k < s.length; k++) { const c = s[k]; if (c === "\\") { k++; continue; } if (/\s/.test(c)) break; if (c === "(") par++; if (c === ")") { if (!par) break; par--; } }
     dest = s.slice(a, k);
   }
