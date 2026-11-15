@@ -151,6 +151,16 @@ install_ops() {
     printf '0 3 * * * root bash %s/ops/backup.sh %s /var/backups/synchro >> /var/log/synchro-backup.log 2>&1\n' "$APP" "$APP" > /etc/cron.d/synchro-backup
     chmod 644 /etc/cron.d/synchro-backup
   fi
+  # H3 bước 5: script sao lưu chuyển từ scripts/ sang ops/ (scripts/backup.sh, scripts/backup-offsite.sh còn là lớp chuyển tiếp một bản
+  # phát hành). Lịch do bản cũ của tệp này ghi và hook chủ dịch vụ đặt theo tài liệu cũ: đổi đường dẫn tại chỗ; chạy lại không đổi gì.
+  local A_RE A_REP
+  A_RE=$(printf '%s' "$APP" | sed 's/[][\\.*^$#/]/\\&/g'); A_REP=$(printf '%s' "$APP" | sed 's/[&#\\]/\\&/g')
+  if grep -qsF "$APP/scripts/backup.sh" /etc/cron.d/synchro-backup; then
+    sed -i "s#$A_RE/scripts/backup\\.sh#$A_REP/ops/backup.sh#g" /etc/cron.d/synchro-backup
+  fi
+  if grep -qsF "$APP/scripts/backup-offsite.sh" "$ENVO"; then
+    sed -i "/^SYNCHRO_BACKUP_HOOK=/s#$A_RE/scripts/backup-offsite\\.sh#$A_REP/ops/backup-offsite.sh#g" "$ENVO"
+  fi
 }
 install_ops || echo "CẢNH BÁO: chưa cài được watchdog hoặc lịch sao lưu (trang Sức khỏe hệ thống sẽ báo)." >&2
 

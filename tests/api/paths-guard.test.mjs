@@ -5,6 +5,7 @@
 // 3. server/: mỗi tệp mở đầu bằng import "server-only" (gói giao diện nhập nhầm thì bản build báo lỗi); không tệp "use client" nào nhập
 //    (không chỉ kiểu) một tệp trong server/.
 // 4. ui/ giữ mã giao diện; app/ chỉ giữ tệp của Next (và app/_shell/). 5. shared/ không mang dấu phía nào và chỉ nhập mã trong shared/.
+// 6. ops/ và tools/: scripts/ chỉ còn tệp web chạy lúc chạy và lớp chuyển tiếp; deploy gọi ops/, harden giữ ops/ thuộc root.
 import fs from "node:fs";
 import path from "node:path";
 import { walkSrc } from "../lib/srcroots.mjs";
@@ -158,6 +159,38 @@ for (const f of [...src.keys()].filter((x) => x.startsWith("ui/"))) for (const m
   if (t.startsWith("server/") && !TYPE_FROM_SERVER.includes(t)) uiTypes.push(`${f} → ${t}`);
 }
 ok(!uiTypes.length, `ui/ chỉ lấy kiểu từ server/ ở ${TYPE_FROM_SERVER.join(", ")}; kiểu khác ở shared/types/`, uiTypes.join("\n"));
+
+console.log("6. ops/ (máy chủ, root chạy), tools/ (dev, kiểm thử, bộ sinh); scripts/ chỉ còn tệp web chạy lúc chạy và lớp chuyển tiếp");
+// Tệp web chạy lúc chạy (spawn / import theo đường dẫn, bản đang chạy của màu cũ vẫn gọi trong lúc chuyển màu) ở lại scripts/.
+const RUNTIME_SCRIPTS = ["extract-worker.mjs", "zipguard.mjs", "zipguard.d.mts", "ocr.py", "pdf_extract.py"];
+// Lớp chuyển tiếp một bản phát hành: lệnh ngoài repo còn gọi đường dẫn cũ (/root/deploy-<sha>.sh, cron, SYNCHRO_BACKUP_HOOK).
+const SHIMS = {
+  "scripts/server-build.sh": "ops/server-build.sh", "scripts/backup.sh": "ops/backup.sh", "scripts/backup-offsite.sh": "ops/backup-offsite.sh",
+  "scripts/watchdog.sh": "ops/watchdog.sh", "scripts/bluegreen-migrate.sh": "ops/bluegreen-migrate.sh", "scripts/create-admin.mjs": "ops/create-admin.mjs",
+  "workspace/setup.sh": "ops/setup.sh",
+};
+const inScripts = walk("scripts", /./);
+const strayScripts = inScripts.filter((f) => !RUNTIME_SCRIPTS.includes(P.basename(f)) && !SHIMS[f]);
+ok(!strayScripts.length, "scripts/ chỉ còn tệp web chạy lúc chạy và lớp chuyển tiếp", strayScripts.join(", "));
+ok(RUNTIME_SCRIPTS.every((f) => fs.existsSync(`scripts/${f}`)), "tệp web chạy lúc chạy còn ở scripts/", RUNTIME_SCRIPTS.filter((f) => !fs.existsSync(`scripts/${f}`)).join(", "));
+const badShims = Object.entries(SHIMS).filter(([s, t]) => {
+  if (!fs.existsSync(s) || !fs.existsSync(t)) return true;
+  const body = fs.readFileSync(s, "utf8").replace(/^\s*(#|\/\/)[^\n]*\n/gm, "").trim();
+  const want = t.endsWith(".mjs") ? `import "../${t}";` : `exec bash "$(dirname "\${BASH_SOURCE[0]}")/../${t}" "$@"`;
+  return body !== want || (fs.statSync(s).mode & 0o111) !== (fs.statSync(t).mode & 0o111);
+});
+ok(!badShims.length, "lớp chuyển tiếp chỉ chuyển sang ops/ (một dòng, cùng quyền chạy)", badShims.map(([s]) => s).join(", "));
+const deployYml = fs.readFileSync(".github/workflows/deploy.yml", "utf8");
+ok(/synchro-incoming\/ops\/server-build\.sh \/var\/www\/synchro synchro pip && bash \/var\/www\/synchro\/ops\/setup\.sh/.test(deployYml)
+  && /synchro-staging\/ops\/server-build\.sh/.test(deployYml), "deploy.yml gọi ops/server-build.sh và ops/setup.sh");
+const sbuild = fs.readFileSync("ops/server-build.sh", "utf8");
+ok(/for d in ops scripts workspace; do\n\s+if \[ -e "\$APP\/\$d" \]; then chown -R root:root "\$APP\/\$d"; chmod -R go-w "\$APP\/\$d"; fi/.test(sbuild),
+  "harden: ops/, scripts/, workspace/ thuộc root (root chạy ops/*), bỏ qua thư mục chưa chép");
+const setupSh = fs.readFileSync("ops/setup.sh", "utf8");
+ok(/"\$APP\/ops\/watchdog\.sh"/.test(setupSh) && /%s\/ops\/backup\.sh/.test(setupSh) && /scripts\/backup\\\\\.sh#\$A_REP\/ops\/backup\.sh/.test(setupSh)
+  && /SYNCHRO_BACKUP_HOOK=\/s#\$A_RE\/scripts\/backup-offsite/.test(setupSh), "ops/setup.sh cài watchdog, lịch sao lưu từ ops/ và sửa lịch / hook cũ tại chỗ");
+const pkg = JSON.parse(fs.readFileSync("package.json", "utf8")).scripts;
+ok(pkg["dev:mock"] === "node tools/dev-mock.mjs" && pkg.qa === "node tools/qa.mjs" && pkg.lint === "node tools/lint.mjs", "package.json chạy tools/");
 
 console.log(`\n${pass} đạt, ${fail} lỗi`);
 process.exit(fail ? 1 : 0);
