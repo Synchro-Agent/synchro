@@ -1,39 +1,139 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Synchro
 
-## Getting Started
+Synchro (https://synchro.net.nz) là một ứng dụng web để chat với mọi model AI, viết code, dùng giọng nói và tự động hoá công việc. Mỗi người dùng đăng nhập bằng tài khoản của chính mình, kể cả gói miễn phí của các hãng.
 
-First, run the development server:
+- **Chat**: nhiều model qua CLI của gói đăng ký (Claude, Codex, Antigravity, Grok) hoặc qua khóa API. Có artifact (tài liệu, bảng tính, slide, thiết kế, biểu đồ), skill, connector (MCP, Composio), bộ não ghi nhớ và tác vụ hẹn giờ.
+- **Synchro Code**: mỗi tài khoản có một workspace Linux riêng gồm terminal, trình duyệt, cây file và git, cùng một agent làm việc trong đó.
+- **Chrome của bạn**: tiện ích trình duyệt cho phép Synchro điều khiển Chrome / Edge / Brave của chính người dùng.
+- **Giọng nói**: nói chuyện trực tiếp, đọc to câu trả lời, gõ bằng giọng nói.
+
+Giao diện có tiếng Việt và tiếng Anh. Mã viết bằng Next.js 15 (app router) và React 19, dữ liệu nằm trong SQLite (`better-sqlite3`). Máy chủ là một VPS, chạy pm2 sau nginx.
+
+## Video giới thiệu
+
+Tài khoản mới xem một phim giới thiệu dài 43 giây (`ui/introfilm.tsx`). Phim nằm trong repo:
+
+| Tệp | Cỡ | Dùng khi |
+|---|---|---|
+| `public/intro/synchro-intro-720.mp4` | 3,9 MB | mặc định, màn rộng và màn hẹp |
+| `public/intro/synchro-intro.mp4` | 19 MB | chỉ khi xem toàn màn hình (1080p) |
+| `public/intro/synchro-intro-poster.jpg` | | ảnh chờ |
+
+Phim dựng bằng Remotion từ dự án riêng `synchro-intro-film`, dự án này không nằm trong repo. `next.config.ts` cho trình duyệt giữ `/intro/*` trong bộ nhớ đệm một tuần. Hai tệp mp4 chưa được chuyển ra R2 hay release asset. Khi chuyển, chỉ cần đổi `SRC_720` / `SRC_1080` trong `ui/introfilm.tsx` và đường dẫn trong `tests/ui/introfilm.mjs`.
+
+## Chạy ở máy
+
+Cần Node 22 (`"engines": { "node": "22.x" }`) và npm. Python 3 với các gói trong `requirements.txt` chỉ cần cho OCR và đọc PDF (`scripts/ocr.py`, `scripts/pdf_extract.py`).
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm ci
+npm run dev:mock        # http://localhost:3200, mọi hãng đều là bản giả lập, không cần khóa thật
+npm run dev:mock:fast   # như trên nhưng build bản production một lần rồi next start (nhanh hơn; sửa mã thì chạy lại)
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+`dev:mock` (`tools/dev-mock.mjs`):
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+- Mở các máy chủ giả lập: API của các hãng model ở cổng 4010 (`tools/mock-providers.mjs`), MCP / Composio ở 4011, workspace ở 4012, GitHub ở 4013. Ngoài ra còn CLI giả (`tools/mock-cli/`), tiện ích trình duyệt giả và các dịch vụ khác trong `tools/mock-*.mjs`.
+- Dữ liệu nằm riêng ở `data-mock/`, bản build ở `.next-mock/`. Xóa `data-mock/` là về trạng thái trắng.
+- Tài khoản quản trị thử nghiệm được in ra terminal, và chỉ tồn tại trong `data-mock/`.
+- Mỗi máy chỉ chạy một bản mock, vì các cổng cố định. Muốn dừng thì dừng đúng tiến trình mình đã bật.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+`npm run dev` chạy Next.js với Turbopack trên dữ liệu thật ở `data/`. Model thật cần biến môi trường: chép `.env.example` thành `.env.local` rồi bỏ comment các dòng cần dùng. Khi trống, `/api/llm` trả lời giả lập.
 
-## Learn More
+## Cấu trúc thư mục
 
-To learn more about Next.js, take a look at the following resources:
+| Thư mục | Nội dung |
+|---|---|
+| `app/` | Chỉ có tệp đặc biệt của Next.js: `layout.tsx`, `page.tsx`, `error.tsx`, `not-found.tsx`, `manifest.ts`, các trang con (`terms/`, `privacy/`, `share/`, `oauth/`…), ảnh metadata và 132 route API ở `app/api/**/route.ts`. Route chỉ đọc yêu cầu rồi gọi `server/`. `app/_shell/` là ranh giới client của layout và CSS tải đầu (`globals.css`, `tokens.css`, `synchro-ds.css`…). |
+| `server/` | Mã chỉ chạy ở máy chủ. Mỗi tệp mở đầu bằng `import "server-only";`. `chat/` gồm routing, tools, approvals, prompt. `runs/` là `RunService`: một bản đồ lượt đang chạy và một định dạng luồng SSE cho cả lượt chat lẫn lượt Code. `auth/` (người dùng, phiên, mật khẩu, OAuth), `db/` (kết nối, cài đặt), `ratelimit.ts`, `ai/` (CLI engine, chọn model, sinh ảnh), `fileproc/` (đọc tệp tải lên, sandbox), `design-engine/` (poster, font), `routes/`. `authstore.ts` và `chatengine.ts` chỉ còn là mặt tiền chuyển tiếp. |
+| `ui/` | Mã giao diện (`"use client"` và phần chỉ trình duyệt dùng): `home.tsx`, `Sidebar.tsx`, `Thread.tsx`, các tệp `*ui.tsx`, worker (`*.worker.ts`), `speech/`, `legal/`, `download/`. CSS tải chậm và CSS vendor nằm ở `ui/styles/`. |
+| `shared/` | Mã thuần, cả hai phía dùng chung: từ điển dịch (`i18n-*.ts`), `mdparse.ts`, catalog, dữ liệu thiết kế, kiểu dữ liệu (`shared/types/`). Không import `server/` và không import `ui/`. |
+| `db/` | `migrate.mjs` và `migrations/NNN_*.sql` / `*.columns.json`, áp dụng theo `PRAGMA user_version` khi mở cơ sở dữ liệu. Quy tắc nằm trong `db/migrations/README.md`: chỉ thêm, không sửa, không bỏ, vì bản cũ và bản mới dùng chung một cơ sở dữ liệu lúc deploy. `schema.sql` không còn được đọc và sẽ bị xóa ở lần phát hành sau. |
+| `ops/` | Script vận hành trên máy chủ, chạy bằng root: `server-build.sh` (deploy), `bluegreen-*.sh`, `setup.sh` (workspace, systemd, nginx, lịch sao lưu), `watchdog.sh`, `backup.sh`, `backup-offsite.sh`, `create-admin.mjs`, `uptime-worker/` (Cloudflare Worker). |
+| `scripts/` | Tệp mà máy chủ chạy lúc phục vụ: `extract-worker.mjs`, `ocr.py`, `pdf_extract.py`, `zipguard.mjs`. Các `*.sh` / `create-admin.mjs` còn ở đây chỉ là lớp chuyển tiếp sang `ops/`, giữ một bản phát hành rồi xóa. |
+| `tools/` | Công cụ dev: `dev-mock.mjs` và các `mock-*`, `qa.mjs`, `lint.mjs`, `budget.mjs`, các `css-*.mjs`, các bộ sinh (icon, vendor 3D, chart preset, danh mục skill Claude). |
+| `tests/` | `api/*.test.mjs` (bộ API), `ui/*.mjs` (bộ giao diện chạy bằng Chrome ẩn qua CDP), `lib/` (`ts.mjs` dịch TS cho test, `srcroots.mjs`, `cdp.mjs`…), `fixtures/`, `evals/`. |
+| `workspace/` | Dịch vụ workspace của Synchro Code: `Dockerfile`, `agent.mjs`, trình duyệt dùng chung (`browser-*.mjs`), mẫu tài liệu, Remotion, biểu đồ. |
+| `extension/` | Tiện ích trình duyệt "Chrome của bạn" (Manifest V3). `build.mjs` đóng gói tiện ích cho `/api/browser/ext/download`. |
+| `catalog/` | Danh mục skill Claude (`claude-directory.json`) và các lựa chọn thay thế. |
+| `public/` | Tệp tĩnh: vendor JS (`public/vendor/`, có README ghi giấy phép), tree-sitter wasm, logo connector, phim giới thiệu. |
+| `docs/` | `van-hanh.md` (vận hành, deploy, sao lưu, khôi phục), `backup-r2.md`, `adr/`, `score-rubric.md`. |
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Ranh giới giữa các thư mục do test kiểm, không chỉ dựa vào quy ước:
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- Tệp `"use client"` không được import (trừ `import type`) tệp nào trong `server/`.
+- Tệp trong `server/` phải mở đầu bằng `import "server-only"`.
+- `app/` chỉ chứa tệp đặc biệt của Next.js.
+- Mọi đường dẫn mà test, script, CI hay `package.json` nhắc tới đều phải có thật.
 
-## Deploy on Vercel
+Các điều trên nằm trong `tests/api/paths-guard.test.mjs`. Test đọc mã qua `tests/lib/srcroots.mjs` (`SRC_ROOTS = app, server, ui, shared`). `loadTs()` trong `tests/lib/ts.mjs` tìm mô-đun theo tên ở cả bốn gốc và báo lỗi khi không thấy hoặc thấy hai.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Kiểm thử
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```bash
+./node_modules/.bin/tsc --noEmit -p .   # kiểu
+npm run lint                            # ESLint (bỏ qua nếu chưa cài gói dev, xem docs/van-hanh.md)
+npm run build                           # next build (webpack), giống CI và máy chủ
+
+# cần npm run dev:mock hoặc dev:mock:fast đang chạy ở :3200
+node tests/run-all.mjs                  # toàn bộ bộ API
+node tests/run-all.mjs runs plugins     # chỉ các bộ có tên bắt đầu như vậy
+node tests/ui/audit.mjs                 # một bộ giao diện
+npm run qa                              # mọi thứ trước khi deploy: ngân sách tải đầu, chỉ số CSS, bộ API, mọi tests/ui/*.mjs
+node tools/qa.mjs --list                # danh sách bộ sẽ chạy
+```
+
+- `tests/run-all.mjs` tạm nâng hạn mức của tài khoản quản trị thử nghiệm rồi trả lại như cũ khi xong (mặc định `{"session":5,"weekly":40}`).
+- `tools/qa.mjs` chạy mọi tệp trong `tests/ui/` trừ danh sách `SKIP`, mỗi mục có lý do. `tests/api/qa-plan.test.mjs` báo đỏ khi có tệp mới không chạy mà cũng không nằm trong `SKIP`.
+- Nên chạy `npm run qa` trên `dev:mock:fast` được dựng từ đúng mã sẽ deploy. `tools/budget.mjs` từ chối đo bản build cũ hơn mã nguồn.
+
+## Deploy
+
+Đẩy lên `main` hoặc `staging` thì `.github/workflows/deploy.yml` chạy:
+
+1. Job `verify` chặn deploy: `npm ci` → `tsc --noEmit` → `npm run lint` (chỉ báo) → `npm run build` → `dev:mock:fast` → `node tests/run-all.mjs`.
+2. Job `deploy`, chỉ khi `verify` xanh: rsync mã cùng bản build `.next-ci` của bước kiểm tra vào `/var/www/synchro-incoming/`, rồi chạy `ops/server-build.sh`. Hai lần deploy đạt cách nhau ít nhất 15 phút. Các lần đẩy liền nhau được gộp thành một lần deploy.
+
+Bộ giao diện chạy ở workflow riêng `.github/workflows/ui-qa.yml` (mỗi tuần, hoặc bấm chạy tay) và chưa chặn deploy. `.github/workflows/uptime.yml` báo khi `/api/health` lỗi: ping mỗi phút do `ops/uptime-worker` làm.
+
+`ops/server-build.sh` (chạy bằng root, mỗi lúc một lần nhờ `flock`):
+
+- Build ở thư mục tạm, không có `data/`. Nếu bản build của CI khớp commit, khớp băm `package-lock.json` và khớp biến `NEXT_PUBLIC_` thì dùng luôn bản đó. `node_modules` chỉ cài lại khi `package-lock.json` đổi, cài vào `/var/www/.synchro-mods/<băm>/`.
+- Chunk của các bản trước được chép sang bản mới, để tab đang mở từ bản cũ vẫn tải được trong khoảng một ngày.
+- Lỗi ở bất kỳ bước nào trước khi chuyển bản thì web vẫn chạy bản cũ.
+
+### Xanh/lam
+
+Production chạy hai màu trong cùng thư mục `/var/www/synchro`, dùng chung `data/`:
+
+| Màu | Cổng | Thư mục build | pm2 |
+|---|---|---|---|
+| blue | 3000 | `.next-blue` | `synchro-blue` |
+| green | 3002 | `.next-green` | `synchro-green` |
+
+Cổng 3001 là staging. Mỗi lần deploy:
+
+1. Bản mới chạy ở màu đang nghỉ, cạnh bản cũ.
+2. `/api/health` ở cổng mới phải báo đúng mã bản mới và `db: true`.
+3. nginx được chuyển sang cổng mới (`/etc/nginx/snippets/synchro-upstream.conf`), rồi kiểm tra lại qua nginx. Màu đang sống được ghi vào `/var/lib/synchro-ops/live-color`.
+4. Bản cũ nhận SIGTERM và tắt êm (`server/drain.ts`):
+   - Các yêu cầu mới tới `/api/llm` và `/api/agent` nhận 503 kèm `Retry-After`, nên trình duyệt gửi lại tới bản mới.
+   - Bản cũ chạy nốt các lượt đang dở trong tối đa 25 giây.
+   - Lượt chat chưa xong được bản mới chạy lại. Lượt Code chỉ nằm trong bộ nhớ, nên dừng hẳn.
+
+Không có lúc nào nginx trỏ vào một cổng chưa sẵn sàng, nên không có lỗi 502. Bản mới không đạt kiểm tra sức khỏe thì chỉ bị dừng, vì nginx chưa từng trỏ sang nó.
+
+Chỉ một tiến trình giữ vai **primary** (`server/role.ts`, khóa `data/.primary.pid`). Primary chạy litestream, các bộ hẹn giờ và việc nền; tiến trình còn lại chỉ phục vụ yêu cầu.
+
+Màu nghỉ giữ bản build trước. Cách trả lại bản trước bằng tay, cách chuyển một lần từ chế độ một tiến trình (`ops/bluegreen-migrate.sh`) và cách bỏ hẳn xanh/lam đều nằm trong `docs/van-hanh.md`. Cơ sở dữ liệu chỉ thay đổi theo kiểu thêm (xem `db/migrations/README.md`), nên quay lại bản trước không cần hạ lược đồ.
+
+### Sao lưu
+
+- `ops/backup.sh` chạy hằng đêm lúc 03:00.
+- Litestream đẩy `data/synchro.db` lên Cloudflare R2 liên tục. Khóa R2 được nhập ở Cài đặt → Sức khỏe hệ thống, không nằm trong tệp môi trường. Xem `docs/backup-r2.md`.
+- `ops/backup-offsite.sh` mã hóa tệp tải lên, tệp đã tạo và skill bằng age, rồi đẩy lên cùng bucket R2.
+
+Cách khôi phục nằm trong `docs/van-hanh.md`.
 
 ## Tài khoản, đăng nhập và quản trị
 
