@@ -29,6 +29,7 @@ try {
   ok(film.includes('const SRC_720 = "/intro/synchro-intro-720.mp4", SRC_1080 = "/intro/synchro-intro.mp4";'), "ui/introfilm.tsx giữ nguyên hai URL /intro/…");
   ok(INTRO_FILES.length === 2 && INTRO_FILES.every((f) => film.includes(`"/intro/${f}"`)), "INTRO_FILES của tools/fetch-intro.mjs khớp URL của phim", INTRO_FILES);
   ok(/if \(v\.error && !v\.currentSrc\.endsWith\(SRC_1080\)\) \{ leave\(\); return; \}/.test(film), "bản 720p đã lỗi lúc tải trước (tệp thiếu): rời phim, không chờ mãi");
+  ok(/else if \(phaseRef\.current === "wait" \|\| phaseRef\.current === "play"\) leave\(\);/.test(film), "720p lỗi giữa lúc vòng mực nở / lúc hỏi Xem phim: không rời ngay (màn đăng nhập chưa gỡ, kẹt ở lời chào), để bước chờ rời");
 
   console.log("2. Bộ nhớ đệm và nginx");
   const nc = src("next.config.ts");
