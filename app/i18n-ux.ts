@@ -148,6 +148,8 @@ export const UX_VI2EN: Record<string, string> = {
   "{n} từ": "{n} words",
   "{n} đang dựng": "{n} building",
   "{n} mục": "{n} items",
+  "Mở {name}, {n} mục": "Open {name}, {n} item|Open {name}, {n} items",
+  "Đóng {name}, {n} mục": "Close {name}, {n} item|Close {name}, {n} items",
   "{n} người": "{n} users",
   "{n} ghi chú": "{n} notes",
   "{n} đang chờ": "{n} waiting",

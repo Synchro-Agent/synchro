@@ -7,7 +7,7 @@ import * as I from "./icons";
 import { Fade, Menu } from "./ui";
 import { useApp, type Chat, type Project } from "./store";
 import { extractText, PROJECT_CTX_LIMIT } from "./llm";
-import { tr, trc } from "./i18n";
+import { tf, tr, trc } from "./i18n";
 import { UploadModal } from "./modals";
 import { useFileMenu, saveBlob } from "./filemenu";
 import { ghConnect } from "./wsclient";
@@ -146,7 +146,7 @@ export function ProjectsPage({ projects, chats, onNew, onOpen, patch, onEdit, on
         onContextMenu={(e) => { if (bk.on) { e.preventDefault(); return; } e.preventDefault(); const r = e.currentTarget.getBoundingClientRect(); setCtxPos({ x: e.clientX - r.left, y: e.clientY - r.top }); setMenu(x.id); }}>
         <GlassFolder key={x.id + ":" + files.map((f) => f.name).join("|")} label={x.name} meta={`Cập nhật ${ago(projUpd(x, chats))}`}
           art={PRESETS[x.id % PRESETS.length]} seed={(x.id % 97) + 1} files={files} action="none" appear={false} width={132}
-          onActivate={() => onOpen(x.id)} />
+          onActivate={() => onOpen(x.id)} hitLabel={(o, n) => (o ? tf("Đóng {name}, {n} mục", { name: x.name, n }) : tf("Mở {name}, {n} mục", { name: x.name, n }))} />
         {bk.on && <BulkCheck on={bk.has(x)} />}
         <div className="pj-gname"><b data-notr>{x.name}{x.pinned && <span className="pj-pin"><I.Pin size={12} /></span>}</b><span>{`Cập nhật ${ago(projUpd(x, chats))}`}</span></div>
         <div onClick={(e) => e.stopPropagation()}>
@@ -349,7 +349,7 @@ export function ProjectPage({ proj, chats, composer, patch, onBack, onOpenChat, 
       <header className="pj-hero">
         <div className="pj-hero-f">
           <GlassFolder key={proj.id + ":" + ctx.map((c) => c.name).join("|")} label={proj.name} meta="" art={PRESETS[proj.id % PRESETS.length]} seed={(proj.id % 97) + 1}
-            files={ctx.map((c) => ({ name: c.name, meta: c.kind === "text" ? "TXT" : (c.name.split(".").pop() ?? "").toUpperCase() }))} action="none" appear={false} width={88} />
+            files={ctx.map((c) => ({ name: c.name, meta: c.kind === "text" ? "TXT" : (c.name.split(".").pop() ?? "").toUpperCase() }))} action="none" appear={false} width={88} hitLabel={(o, n) => (o ? tf("Đóng {name}, {n} mục", { name: proj.name, n }) : tf("Mở {name}, {n} mục", { name: proj.name, n }))} />
         </div>
         <div className="pj-hero-t">
           <h1 data-notr>{proj.name}</h1>

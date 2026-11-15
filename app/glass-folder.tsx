@@ -107,6 +107,8 @@ export type GlassFolderProps = {
   onActivate?: () => void
   /** Small element drawn after the label, e.g. a pin. */
   badge?: React.ReactNode
+  /** Accessible name of the front panel (open state, file count); defaults to English "Open <label>, N items". */
+  hitLabel?: (open: boolean, count: number) => string
 }
 
 // #region art
@@ -555,6 +557,7 @@ export default function GlassFolder({
   style,
   onActivate,
   badge,
+  hitLabel,
 }: GlassFolderProps) {
   const uid = React.useId().replace(/:/g, "")
   const rootRef = React.useRef<HTMLDivElement>(null)
@@ -766,7 +769,7 @@ export default function GlassFolder({
               type="button"
               className="gf-hit"
               aria-expanded={open}
-              aria-label={(open ? "Close " : "Open ") + label + ", " + count + (count === 1 ? " item" : " items")}
+              aria-label={hitLabel ? hitLabel(open, count) : (open ? "Close " : "Open ") + label + ", " + count + (count === 1 ? " item" : " items")}
               onClick={() => {
                 setMenuOpen(false)
                 if (onActivate) onActivate()
