@@ -61,6 +61,11 @@ function walkDir(d, out = []) {
   return out;
 }
 
+// Thực thể HTML trong chữ JSX: React giải mã khi hiển thị (ESLint react/no-unescaped-entities buộc viết &quot; &apos;…), khóa trong
+// shared/i18n-dict.ts là chữ đã giải mã. Dùng chung với tools/i18n-audit.mjs. &amp; giải mã sau cùng để "&amp;quot;" ra đúng "&quot;".
+export const decodeJsxEntities = (s) => s.replace(/&nbsp;/g, " ").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"')
+  .replace(/&apos;|&#39;/g, "'").replace(/&amp;/g, "&");
+
 // Chữ JSX như React hiển thị: bỏ khoảng trắng đầu / cuối từng dòng, nối các dòng bằng một dấu cách.
 const jsxText = (raw) => {
   const lines = raw.split(/\r\n|\n|\r/);
@@ -71,7 +76,7 @@ const jsxText = (raw) => {
     if (i < lines.length - 1) s = s.replace(/ +$/, "");
     if (s) keep.push(s);
   });
-  return keep.join(" ").replace(/&nbsp;/g, " ").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&apos;|&#39;/g, "'");
+  return decodeJsxEntities(keep.join(" "));
 };
 
 // Chuỗi trông như chữ cho người đọc (không phải lớp CSS, khóa, mã, đường dẫn…).

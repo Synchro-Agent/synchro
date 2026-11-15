@@ -386,7 +386,7 @@ export function VoicePicker({ value, onPick, onClose, say }: { value?: string; o
       onPick({ ...v, id: j.voiceId, mine: true }); say(`Đã thêm “${v.name}” vào Giọng của tôi`); onClose();
     } catch (e) { say((e as Error).message); } finally { setBusy(""); }
   };
-  const useId = async () => {
+  const applyVoiceId = async () => {
     const id = vid.trim();
     if (!/^[A-Za-z0-9]{16,40}$/.test(id)) { say("Voice ID không hợp lệ (16–40 ký tự chữ và số)"); return; }
     setBusy("id");
@@ -437,8 +437,8 @@ export function VoicePicker({ value, onPick, onClose, say }: { value?: string; o
           {plan?.library && <div className="sp-vp-foot">
             <label htmlFor="sp-vid">Hoặc dán Voice ID từ ElevenLabs</label>
             <div className="sp-vid">
-              <input id="sp-vid" value={vid} onChange={(e) => setVid(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") void useId(); }} placeholder="vd. JBFqnCBsd6RMkjVDRZzb" spellCheck={false} />
-              <button className="btn dark" onClick={useId} disabled={!vid.trim() || !!busy}>{busy === "id" ? <Spin /> : null}Dùng ID này</button>
+              <input id="sp-vid" value={vid} onChange={(e) => setVid(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") void applyVoiceId(); }} placeholder="vd. JBFqnCBsd6RMkjVDRZzb" spellCheck={false} />
+              <button className="btn dark" onClick={applyVoiceId} disabled={!vid.trim() || !!busy}>{busy === "id" ? <Spin /> : null}Dùng ID này</button>
             </div>
             <span className="sp-hint"><a href="https://elevenlabs.io/app/voice-library" target="_blank" rel="noreferrer">Mở Thư viện giọng ElevenLabs<I.External size={12} /></a> · chọn giọng, bấm “Copy voice ID”, dán vào đây.</span>
           </div>}

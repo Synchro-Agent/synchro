@@ -354,7 +354,7 @@ export function CodeView({ say, sid, title, model, modelPicker, sideOpen, onSide
     };
     const t = setInterval(tick, 5000);
     return () => { stop = true; clearInterval(t); };
-  }, [sid, cp?.sync]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [sid, cp?.sync]);
 
   // Tạo phiên ngay khi cần thư mục workspace (mở terminal, clone repo, gửi tin nhắn đầu tiên).
   const ensureSid = useCallback((t = "Phiên code mới") => {
@@ -454,7 +454,7 @@ export function CodeView({ say, sid, title, model, modelPicker, sideOpen, onSide
     setBusy(false);
     if (live) watchAgentEnd(live, () => onMetaRef.current?.(live, { running: false }));
   };
-  useEffect(() => () => { if (liveAgent.current) leaveAgent(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => () => { if (liveAgent.current) leaveAgent(); }, []);
   // Nút Dừng: lượt agent phải được dừng ở máy chủ, không chỉ ngừng nghe.
   const stopTurn = () => { const live = liveAgent.current; if (live) { void stopAgent(live); liveAgent.current = null; onMeta?.(live, { running: false }); } stopGen(); };
 
@@ -1343,7 +1343,7 @@ export function CodeView({ say, sid, title, model, modelPicker, sideOpen, onSide
                       </button>
                     );
                   })}
-                  {permNow.allow.length > 0 && <><hr /><button className="menu-item" onClick={() => { setPerm({ mode: permNow.mode, allow: [] }); setMenu(""); say("Đã bỏ các quyền \"luôn cho phép\" của phiên"); }}><I.Retry />Bỏ {permNow.allow.length} quyền "luôn cho phép"</button></>}
+                  {permNow.allow.length > 0 && <><hr /><button className="menu-item" onClick={() => { setPerm({ mode: permNow.mode, allow: [] }); setMenu(""); say("Đã bỏ các quyền \"luôn cho phép\" của phiên"); }}><I.Retry />Bỏ {permNow.allow.length} quyền &quot;luôn cho phép&quot;</button></>}
                 </Menu>
               </div>
               <div className="cv-sp" />
@@ -1451,8 +1451,8 @@ export function CodeView({ say, sid, title, model, modelPicker, sideOpen, onSide
                 {gt === "run" && <>
                   <div className="cvg-hero"><b>Code block &amp; chạy thử</b><span>Mỗi khối code đều có thanh công cụ riêng.</span></div>
                   <div className="cvg-grid2">
-                    <div className="cvg-card"><h4><I.Code size={16} />Tên tệp &amp; diff</h4><p>Tên tệp lấy từ dòng <code>// filepath:</code>. Có nút sao chép, tải xuống và <b>Chấp nhận / Từ chối</b> thay đổi.</p></div>
-                    <div className="cvg-card"><h4><I.Layers size={16} />Ghép code tự động</h4><p><code>// ... existing code ...</code> được tự ghép vào tệp gốc; <b>Bung đoạn code bị ẩn</b> để xem đầy đủ.</p></div>
+                    <div className="cvg-card"><h4><I.Code size={16} />Tên tệp &amp; diff</h4><p>Tên tệp lấy từ dòng <code>{"// filepath:"}</code>. Có nút sao chép, tải xuống và <b>Chấp nhận / Từ chối</b> thay đổi.</p></div>
+                    <div className="cvg-card"><h4><I.Layers size={16} />Ghép code tự động</h4><p><code>{"// ... existing code ..."}</code> được tự ghép vào tệp gốc; <b>Bung đoạn code bị ẩn</b> để xem đầy đủ.</p></div>
                     <div className="cvg-card"><h4><I.Check size={16} />Chạy ngay</h4><p><b>HTML/JS</b> trong khung xem trước · <b>Python</b> bằng Pyodide · <b>Node</b> bằng WebContainer · tùy chọn <b>sandbox server</b> (E2B).</p></div>
                     <div className="cvg-card"><h4><I.Alert size={16} />Auto-Fix</h4><p>Khi chạy lỗi, thanh <b>🔧 Auto-Fix</b> tự sửa và chạy lại tối đa 3 lần.</p></div>
                     <div className="cvg-card"><h4><I.Search size={16} />Bôi chọn code</h4><p>Bôi chọn để <b>Giải thích</b>, <b>Inline Edit</b> hoặc <b>Báo lỗi dòng này</b> (kèm số dòng).</p></div>

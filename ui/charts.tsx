@@ -79,7 +79,7 @@ export function ChartView({ spec }: { spec: ChartSpec }) {
       } else series.forEach((s) => { const v = num(r[s.name]); if (v !== null) { hi = Math.max(hi, v); lo = Math.min(lo, v); } });
     });
     return niceTicks(lo, hi);
-  }, [spec, series]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [spec, series]);
   const y0 = dom[0], y1 = dom[dom.length - 1];
   const sy = (v: number) => padT + ih - ((v - y0) / (y1 - y0 || 1)) * ih;
   const xDom = xNum ? niceTicks(Math.min(...spec.data.map((r) => num(r[spec.x])!)), Math.max(...spec.data.map((r) => num(r[spec.x])!)), 6) : [];

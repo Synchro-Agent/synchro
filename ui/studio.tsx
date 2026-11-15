@@ -93,7 +93,7 @@ export function Studio({ items, onCreate }: { items: Item[]; onCreate: (k: Studi
     if (hold || reduce || items.length < 2) return;
     const t = setTimeout(() => show(items[(items.findIndex((x) => x.k === act) + 1) % items.length].k), LOOP);
     return () => clearTimeout(t);
-  }, [act, hold, reduce, items, runs]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [act, hold, reduce, items, runs]);
   const cur = items.find((x) => x.k === act) ?? items[0];
   if (!cur) return null;
   const open = items.find((x) => x.k === shelf);

@@ -325,7 +325,7 @@ export const ChatThread = memo(function ChatThread({ busy, copied, speaking, mod
   const { setArtSel, setFileSel, setBrwFor, setArtFull } = usePanelUi.getState();
   const x = () => hx.current!;
   const say = hx.current!.say;
-  const arts = useMemo(() => artsOf(chat?.msgs, !!caps.art), [chat?.msgs, caps.art]); // eslint-disable-line react-hooks/exhaustive-deps
+  const arts = useMemo(() => artsOf(chat?.msgs, !!caps.art), [chat?.msgs, caps.art]);
   // Đoạn chat có artifact: tải sẵn khung xem để bấm thẻ là mở ngay.
   useEffect(() => { if (arts.map.size) ArtifactPanel.preload(); }, [arts.map.size]);
   const artVersions = artSel && chat && artSel.chat === chat.id ? arts.map.get(artSel.ident) ?? null : null;
@@ -420,7 +420,7 @@ export const ChatThread = memo(function ChatThread({ busy, copied, speaking, mod
   useEffect(() => {
     const el = threadRef.current;
     if (el) follow(el);
-  }, [chat?.msgs, busy]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [chat?.msgs, busy]);
   // Tin ngoài màn hình chỉ có chiều cao ước tính (content-visibility), vẽ thật mới đủ cao; ảnh, biểu đồ cũng nở sau. Đang đứng ở cuối thì giữ ở cuối.
   useEffect(() => {
     const el = threadRef.current, inner = el?.firstElementChild;
@@ -428,7 +428,7 @@ export const ChatThread = memo(function ChatThread({ busy, copied, speaking, mod
     const ro = new ResizeObserver(() => follow(el));
     ro.observe(inner);
     return () => ro.disconnect();
-  }, [chat?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [chat?.id]);
 
   // Những gì một dòng tin cần (luôn là bản mới nhất, đọc qua ref): đổi hàm không làm cả danh sách vẽ lại.
   const rowCx = useRef<RowCx | null>(null);

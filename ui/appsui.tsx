@@ -143,12 +143,14 @@ export function AppRunner({ id }: { id: string }) {
     if (location.hash === "#comments") setPanel(true);
   }, [id]);
   useEffect(() => { if (!toast) return; const t = setTimeout(() => setToast(""), 2600); return () => clearTimeout(t); }, [toast]);
+  // eslint-disable-next-line @next/next/no-html-link-for-pages -- rời trang ứng dụng độc lập về app chính: tải toàn trang có chủ đích
   if (err) return <div className="app-run"><div className="app-miss"><I.Rocket size={26} /><b>{tr("Không mở được ứng dụng")}</b><span>{err}</span><a className="btn" href="/">{tr("Về Synchro")}</a></div></div>;
   if (!app) return <div className="app-run"><div className="app-miss"><span className="art-spin" /></div></div>;
   const n = (live.comments ?? []).filter((c) => !c.resolved).length;
   return (
     <div className="app-run">
       <header className="app-bar">
+        {/* eslint-disable-next-line @next/next/no-html-link-for-pages -- như trên: trang ứng dụng độc lập, về app chính bằng tải toàn trang */}
         <a href="/" className="app-home" aria-label="Synchro">Synchro</a>
         <span className="app-sep" />
         <b data-notr>{app.title}</b>

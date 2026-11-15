@@ -137,7 +137,6 @@ const hostOf = (u: string) => { try { const x = new URL(u); return x.host || u; 
 // Biểu tượng trang trên tab (Chrome của Synchro đã tải); không tải được thì dùng quả địa cầu.
 function TabIcon({ src }: { src: string }) {
   const [ok, setOk] = useState(true);
-  // eslint-disable-next-line @next/next/no-img-element
   return ok ? <img className="bp-fav" src={src} width={14} height={14} alt="" referrerPolicy="no-referrer" onError={() => setOk(false)} /> : <I.Globe size={13} />;
 }
 
@@ -400,7 +399,7 @@ export function BrowserPane({ sid, ticket, visible, say, onClose, onExpand, expa
     if (!visible) { gen.current++; const s = ws.current; ws.current = null; s?.close(); vclose(); return; }
     connect();
     return () => { gen.current++; const s = ws.current; ws.current = null; s?.close(); vclose(); };
-  }, [visible, connect]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [visible, connect]);
 
   useEffect(() => {
     const el = view.current;

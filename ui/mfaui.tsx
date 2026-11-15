@@ -40,7 +40,7 @@ export function MfaRow({ Row, say }: { Row: (p: { t: React.ReactNode; d?: React.
         </>}
         {st.step === "codes" && <>
           <h2 style={{ fontSize: "var(--fs-4)" }}>Save your recovery codes</h2>
-          <p className="d">Each code works once if you lose your authenticator app. They are shown only now. Without them or the app, you can't sign in.</p>
+          <p className="d">Each code works once if you lose your authenticator app. They are shown only now. Without them or the app, you can&apos;t sign in.</p>
           <p className="mono" data-notr style={{ whiteSpace: "pre-wrap", userSelect: "all" }}>{st.codes.join("\n")}</p>
           <div className="modal-foot"><button className="btn" onClick={() => { void navigator.clipboard?.writeText(st.codes.join("\n")).then(() => say("Copied"), () => say("Couldn't copy")); }}>Copy</button><button className="btn dark" onClick={() => setSt(null)}>I saved them</button></div>
         </>}

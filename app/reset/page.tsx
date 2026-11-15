@@ -43,7 +43,7 @@ export default function ResetPassword() {
     if (!t) { setStage("ask"); return; }
     setToken(t);
     check(t);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
   // Kiểm tra trước: đường dẫn đã hết hạn thì nói ngay, không để người dùng gõ mật khẩu rồi mới biết.
   const check = (t: string) => {
     setStage("loading"); setErr("");
