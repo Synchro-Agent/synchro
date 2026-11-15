@@ -191,7 +191,9 @@ try {
   await sleep(300);
   await tb.ev(`(() => { const row = [...document.querySelectorAll(".chat-item")].find((e) => e.querySelector(".ct-t")?.textContent === ${JSON.stringify(T5b)}); [...row.parentElement.querySelectorAll(".menu-item")].find((b) => /^Ghim/.test(b.textContent.trim())).click(); return 1; })()`);
   await pin(T5a);
-  await sleep(1500);
+  // Hai tab ghi kho theo nhịp gom riêng: chờ tới 6 giây cho cả hai bản ghi về (trước đây ngủ cố định 1,5 giây, máy bận thì báo lỗi dù
+  // lúc in ra đã [true, true]). Điều cần kiểm là không mất bản sửa nào, không phải tốc độ ghi.
+  for (let t0 = Date.now(); Date.now() - t0 < 6000 && !(await pinnedIn(id5a) && await pinnedIn(id5b)); ) await sleep(250);
   ok(await pinnedIn(id5a) && await pinnedIn(id5b), "kho có cả hai chỉnh sửa", [await pinnedIn(id5a), await pinnedIn(id5b)]);
   // Tab B đóng, tab A tải lại: cả hai chỉnh sửa còn (tab A không ghi lại bản cũ của đoạn tab B đã sửa).
   await tb.close();

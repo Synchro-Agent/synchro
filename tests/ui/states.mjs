@@ -114,6 +114,10 @@ try {
   await ev(`(() => { const e = document.querySelector(".s-search input"); Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set.call(e, ""); e.dispatchEvent(new Event("input", { bubbles: true })); })()`);
   await click(`[...document.querySelectorAll(".s-item")].find((b) => /Account|Tài khoản/.test(b.textContent))`);
   await until(`[...document.querySelectorAll(".row .t")].some((t) => /^(Password|Mật khẩu)$/.test(t.textContent.trim()))`, 6000);
+  // Mục Tài khoản còn đang hiện dần (ds-in .36s) và các dòng tải sau (Cách đăng nhập, Synchro tự cập nhật hướng dẫn) đẩy dòng Mật khẩu xuống
+  // khoảng 110px: bấm theo tọa độ đo lúc đó thì trượt. Chờ vị trí nút đứng yên (hai lần đo cách 200 ms trùng nhau) rồi mới bấm.
+  const pwBtn = `[...document.querySelectorAll(".row")].find((r) => /^(Password|Mật khẩu)$/.test(r.querySelector(".t")?.textContent.trim()))?.querySelector("button")?.getBoundingClientRect().top`;
+  for (let i = 0, last = null; i < 25; i++) { const y = await ev(pwBtn); if (last !== null && Math.abs(y - last) < 0.5) break; last = y; await sleep(200); }
   await click(`[...document.querySelectorAll(".row")].find((r) => /^(Password|Mật khẩu)$/.test(r.querySelector(".t")?.textContent.trim())).querySelector("button")`);
   ok(await until(`!!document.querySelector(".pw-forgot .lnk")`, 3000), "hộp đổi mật khẩu có lối quên mật khẩu");
   await click(`document.querySelector(".pw-forgot .lnk")`);
