@@ -3,6 +3,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { loadTs } from "../lib/ts.mjs";
+import { SRC_ROOTS } from "../lib/srcroots.mjs";
 
 let pass = 0, fail = 0;
 const ok = (c, n, x = "") => { c ? pass++ : fail++; console.log(c ? "  ✓" : "  ✗", n, c ? "" : String(x)); };
@@ -20,7 +21,7 @@ ok(en("Đang chờ 1 giây rồi thử lại") === "Waiting 1 second, then retry
 ok(en("Đang dùng Audit: delete_page") === "Using Audit: delete_page", "nhãn công cụ connector", en("Đang dùng Audit: delete_page"));
 
 const tsx = [];
-(function walk(d) { for (const e of fs.readdirSync(d, { withFileTypes: true })) { const p = path.join(d, e.name); if (e.isDirectory()) walk(p); else if (p.endsWith(".tsx")) tsx.push(p); } })("app");
+for (const r of SRC_ROOTS.filter((r) => fs.existsSync(r))) (function walk(d) { for (const e of fs.readdirSync(d, { withFileTypes: true })) { const p = path.join(d, e.name); if (e.isDirectory()) walk(p); else if (p.endsWith(".tsx")) tsx.push(p); } })(r);
 const native = tsx.filter((f) => /(^|[^.\w])(window\.)?prompt\(/m.test(read(f)));
 ok(!native.length, "không còn hộp prompt() của trình duyệt", native);
 

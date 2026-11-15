@@ -10,6 +10,7 @@ import fs from "node:fs";
 import path from "node:path";
 import zlib from "node:zlib";
 import { fileURLToPath } from "node:url";
+import { SRC_ROOTS } from "../tests/lib/srcroots.mjs";
 
 export const BUDGET = { js: 350 * 1024, css: 45 * 1024 };
 // CSS 89 → 84 KB (B5 bước 10, 2026-11-15): đo 83,4 KB gzip trên bản build production (87,5 trước B5 vòng 2: xóa khai báo chết, chuyển luật
@@ -19,7 +20,7 @@ export const CEIL = { js: 350 * 1024, css: 84 * 1024 };
 export const ENFORCED = { js: true, css: false };
 
 // Mã nguồn quyết định bản build của trang chủ: bản build cũ hơn tệp nào trong này là đo nhầm bản cũ.
-const SRC = ["app", "next.config.ts", "package.json", "postcss.config.mjs", "tsconfig.json"];
+const SRC = [...SRC_ROOTS, "next.config.ts", "package.json", "postcss.config.mjs", "tsconfig.json"];
 /** Lúc sửa gần nhất (ms) của mã nguồn trong root (tệp .ts/.tsx/.css/.mjs/.json, bỏ app/api: không vào bản build của trình duyệt). */
 export function newestSource(root = ".") {
   let newest = 0, file = "";

@@ -12,6 +12,7 @@ import os from "node:os";
 import path from "node:path";
 import { PAIR_ALLOW, VI, extract, scan } from "../lib/i18n-scan.mjs";
 import { loadTs } from "../lib/ts.mjs";
+import { SRC_ROOTS } from "../lib/srcroots.mjs";
 
 const ts = createRequire(path.join(process.cwd(), "package.json"))("typescript");
 let pass = 0, fail = 0;
@@ -20,7 +21,7 @@ const own = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
 const rel = (f) => path.relative(process.cwd(), f).split(path.sep).join("/");
 const files = [];
 const walk = (d) => { for (const f of readdirSync(d)) { const p = path.join(d, f); if (statSync(p).isDirectory()) walk(p); else if (/\.tsx?$/.test(f) && !/\.d\.ts$/.test(f)) files.push(p); } };
-walk(path.join(process.cwd(), "app"));
+for (const r of SRC_ROOTS) if (statSync(path.join(process.cwd(), r), { throwIfNoEntry: false })) walk(path.join(process.cwd(), r));
 const parse = (f, src = readFileSync(f, "utf8")) => ts.createSourceFile(f, src, ts.ScriptTarget.Latest, true, f.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS);
 
 // Điều kiện "đang ở tiếng Anh": en(), isEn(), getLang() === "en", lang === "en", biến en.

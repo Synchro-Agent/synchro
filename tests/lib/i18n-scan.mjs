@@ -1,11 +1,12 @@
-// Quét chữ giao diện trong app/ để biết chuỗi nào chưa có bản dịch sang ngôn ngữ còn lại.
+// Quét chữ giao diện trong mã nguồn (app/, server/, ui/, shared/) để biết chuỗi nào chưa có bản dịch sang ngôn ngữ còn lại.
 // Giao diện dịch bằng từ điển (app/i18n-dict.ts): chữ gốc tiếng Việt cần mục trong VI2EN (hoặc luật RULES_EN), chữ gốc tiếng Anh cần
 // mục trong EN2VI (hoặc RULES_VI); chuỗi giữ nguyên ở cả hai ngôn ngữ (tên riêng, thuật ngữ) ghi trong SAME.
 // Dùng: node tests/lib/i18n-scan.mjs [--all]  — in các chuỗi thiếu bản dịch theo tệp.
 import { createRequire } from "node:module";
-import { readFileSync, readdirSync, statSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
 import { loadTs } from "./ts.mjs";
+import { SRC_ROOTS } from "./srcroots.mjs";
 
 const ts = createRequire(path.join(process.cwd(), "package.json"))("typescript");
 export const VI = /[àáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđ]/i;
@@ -228,7 +229,7 @@ export async function scan({ files, extra } = {}) {
   };
   const enOk = (t) => has(D.VI2EN, t) || rule(D.RULES_EN, t) || same.has(t);
   const viOk = (t) => has(D.EN2VI, t) || rule(D.RULES_VI, t) || same.has(t);
-  const all = walkDir(path.join(process.cwd(), "app"));
+  const all = SRC_ROOTS.filter((r) => existsSync(path.join(process.cwd(), r))).flatMap((r) => walkDir(path.join(process.cwd(), r)));
   const list = files ?? all.filter((f) => !/i18n(-dict|-vi)?\.ts$|speech[\\/]i18n\.ts$/.test(f));
   const missing = [];
   let total = 0;

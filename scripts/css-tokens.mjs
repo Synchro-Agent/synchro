@@ -9,6 +9,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
+import { SRC_ROOTS } from "../tests/lib/srcroots.mjs";
 
 const postcss = createRequire(import.meta.url)("postcss");
 export const FS = { 12: "--fs-1", 13: "--fs-2", 14: "--fs-3", 16: "--fs-4", 20: "--fs-5", 24: "--fs-6", 28: "--fs-7", 12.5: "--fs-label", 13.5: "--fs-chat" };
@@ -71,12 +72,12 @@ export function rewriteTsx(src) {
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const write = process.argv.includes("--write");
   let F = 0, Z = 0, TF = 0, TZ = 0;
-  for (const f of walk("app", /\.css$/)) {
+  for (const f of ["app", "ui"].filter((r) => fs.existsSync(r)).flatMap((r) => walk(r, /\.css$/))) {
     if (SKIP_CSS.has(f)) continue;
     const css = fs.readFileSync(f, "utf8"); const [next, nf, nz] = rewriteCss(css, f);
     if (nf || nz) { console.log(`${f}: font-size ${nf}, z-index ${nz}`); F += nf; Z += nz; if (write) fs.writeFileSync(f, next); }
   }
-  for (const f of walk("app", /\.tsx$/)) {
+  for (const f of SRC_ROOTS.filter((r) => fs.existsSync(r)).flatMap((r) => walk(r, /\.tsx$/))) {
     if (TSX_SKIP.has(f)) continue;
     const src = fs.readFileSync(f, "utf8"); const [next, nf, nz] = rewriteTsx(src);
     if (nf || nz) { console.log(`${f}: fontSize ${nf}, zIndex ${nz}`); TF += nf; TZ += nz; if (write) fs.writeFileSync(f, next); }

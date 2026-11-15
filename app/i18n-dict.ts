@@ -371,6 +371,7 @@ export const VI2EN: Record<string, string> = {
   "Mật khẩu này quá dễ đoán. Hãy chọn mật khẩu khác.": "This password is too easy to guess. Choose another one.",
   "Email không hợp lệ.": "Invalid email.",
   "Yêu cầu không hợp lệ.": "Invalid request.",
+  "Yêu cầu phải là application/json.": "The request must be application/json.",
   "Bạn đã thử quá nhiều lần. Vui lòng đợi vài phút rồi thử lại.": "Too many attempts. Please wait a few minutes and try again.",
   "Bạn cần đăng nhập.": "You need to sign in.",
   "Chỉ quản trị viên mới có quyền này.": "Only administrators can do this.",

@@ -15,6 +15,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { createRequire } from "node:module";
+import { SRC_ROOTS } from "../tests/lib/srcroots.mjs";
 import { subject, atoms, splitList, parseSelector } from "./css-cascade.mjs";
 
 const req = createRequire(import.meta.url);
@@ -73,7 +74,7 @@ export function cssTargets(root) {
   const postcss = req("postcss");
   const files = [];
   const walkDir = (d) => { for (const e of fs.readdirSync(d, { withFileTypes: true })) { const p = path.join(d, e.name); if (e.isDirectory()) { if (e.name !== "vendor") walkDir(p); } else if (e.name.endsWith(".css")) files.push(p); } };
-  walkDir(path.join(root, "app"));
+  for (const r of ["app", "ui"]) if (fs.existsSync(path.join(root, r))) walkDir(path.join(root, r));
   const former = new Set(FORMER.map(([f, s, p]) => `${f}|${norm(s)}|${p}`));
   const out = [], imp = [];
   for (const f of files) {
@@ -140,7 +141,7 @@ export function inlineStyles(root) {
   const ts = req(path.resolve(root, "node_modules/typescript"));
   const files = [];
   const walkDir = (d) => { for (const e of fs.readdirSync(d, { withFileTypes: true })) { const p = path.join(d, e.name); if (e.isDirectory()) { if (!["node_modules", ".next", "vendor"].includes(e.name) && !e.name.startsWith(".next")) walkDir(p); } else if (/\.tsx$/.test(e.name)) files.push(p); } };
-  walkDir(path.join(root, "app"));
+  for (const r of SRC_ROOTS) if (fs.existsSync(path.join(root, r))) walkDir(path.join(root, r));
   if (fs.existsSync(path.join(root, "components"))) walkDir(path.join(root, "components"));
   const parsed = files.map((f) => ({ f, rel: path.relative(root, f).split(path.sep).join("/"), sf: ts.createSourceFile(f, fs.readFileSync(f, "utf8"), ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX) }));
 

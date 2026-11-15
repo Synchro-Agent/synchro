@@ -5,13 +5,14 @@ import fs from "node:fs";
 import path from "node:path";
 import { createRequire } from "node:module";
 import { loadTs } from "../tests/lib/ts.mjs";
+import { SRC_ROOTS } from "../tests/lib/srcroots.mjs";
 
 const ts = createRequire(path.join(process.cwd(), "package.json"))("typescript");
 const { "i18n-dict": D0, "i18n-vi": V } = await loadTs(["i18n-dict", "i18n-vi"]);
 const D = { ...D0, EN2VI: V.EN2VI, RULES_VI: V.RULES_VI };
 const args = process.argv.slice(2);
 const out = args.includes("--json") ? args[args.indexOf("--json") + 1] : null;
-const only = args.includes("--files") ? args[args.indexOf("--files") + 1] : "app";
+const only = args.includes("--files") ? [args[args.indexOf("--files") + 1]] : SRC_ROOTS.filter((r) => fs.existsSync(r));
 
 const VI = /[ăâđêôơưàảãạáằẳẵặắầẩẫậấèẻẽẹéềểễệếìỉĩịíòỏõọóồổỗộốờởỡợớùủũụúừửữựứỳỷỹỵý]/i;
 const has = (map, t) => Object.prototype.hasOwnProperty.call(map, t);
@@ -25,13 +26,14 @@ const looksEn = (t) => /[A-Za-z]{2}/.test(t) && !VI.test(t) && /^[A-Z0-9"“(¿�
 const KEEP = /^(Synchro|Claude|ChatGPT|Gemini|OpenAI|Anthropic|Google|GitHub|ElevenLabs|Codex|Antigravity|Notion|Linear|Figma|Slack|MCP|API|URL|ID|OK|PDF|CSV|JSON|HTML|CSS|SVG|PNG|JPG|MP3|WAV|Opus|Python|Node|React|Next\.js|TypeScript|JavaScript|Markdown|Vercel|Stripe|Pro|Max|Free|Plus|Team|Enterprise|Business|Starter|Creator|Scale|Ultra|Eleven \w+.*|Scribe.*|Voice ID|Beta|Alpha|Auto|Fable|Opus|Sonnet|Haiku|Mythos|[A-Z]{1,4}|\d.*)$/;
 
 const files = [];
-(function walk(d) {
+function walk(d) {
   for (const e of fs.readdirSync(d, { withFileTypes: true })) {
     const p = path.join(d, e.name);
     if (e.isDirectory()) { if (!/node_modules|\.next/.test(p)) walk(p); }
-    else if (/\.tsx$/.test(e.name) || (/\.ts$/.test(e.name) && /app\/(speech\/(client|data)|store|wsclient|worklog)\.ts$/.test(p))) files.push(p);
+    else if (/\.tsx$/.test(e.name) || (/\.ts$/.test(e.name) && /(app|ui|shared)\/(speech\/(client|data)|store|wsclient|worklog)\.ts$/.test(p))) files.push(p);
   }
-})(only);
+}
+for (const d of only) walk(d);
 
 const miss = { vi: new Map(), en: new Map(), tpl: new Map() };
 const add = (kind, t, where) => { const m = miss[kind]; if (!m.has(t)) m.set(t, new Set()); m.get(t).add(where); };

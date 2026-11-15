@@ -2,6 +2,7 @@
 // bản dịch tiếng Anh không được sót chữ tiếng Việt, và các luật dịch chuỗi ghép cho ra đúng câu. Không cần máy chủ.
 import { scan } from "../lib/i18n-scan.mjs";
 import { loadTs } from "../lib/ts.mjs";
+import { SRC_ROOTS } from "../lib/srcroots.mjs";
 let pass = 0, fail = 0;
 const ok = (c, n, x = "") => { c ? pass++ : fail++; console.log(c ? "  ✓" : "  ✗", n, c ? "" : String(x).slice(0, 1500)); };
 
@@ -52,7 +53,7 @@ const { readFileSync: rf, readdirSync: rd, statSync: st } = await import("node:f
 const { default: P } = await import("node:path");
 const files = [];
 const walk = (d) => { for (const f of rd(d)) { const p = P.join(d, f); if (st(p).isDirectory()) walk(p); else if (/\.tsx?$/.test(f) && !/\.d\.ts$/.test(f)) files.push(p); } };
-walk(P.join(process.cwd(), "app"));
+for (const r of SRC_ROOTS) if (st(P.join(process.cwd(), r), { throwIfNoEntry: false })) walk(P.join(process.cwd(), r));
 const src = new Map(files.map((f) => [f, rf(f, "utf8")]));
 // Mọi khóa trần một hai từ mới đều phải có ngữ cảnh: bộ dịch trang áp VI2EN cho mọi nút chữ khớp nguyên văn (tiêu đề phiên "Đồ thị" thành "Graph",
 // chữ trong sơ đồ mermaid…). Khóa có {biến} là mẫu tf, không bao giờ hiện nguyên văn trên trang. Danh sách khóa trần có từ trước: tests/fixtures/i18n-bare-short-keys.json.

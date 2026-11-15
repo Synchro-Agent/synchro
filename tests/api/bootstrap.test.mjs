@@ -8,6 +8,7 @@ import os from "node:os";
 import path from "node:path";
 import zlib from "node:zlib";
 import { loadTs } from "../lib/ts.mjs";
+import { SRC_ROOTS } from "../lib/srcroots.mjs";
 
 let pass = 0, fail = 0;
 const ok = (c, n, x = "") => { c ? pass++ : fail++; console.log(c ? "  ✓" : "  ✗", n, c ? "" : String(typeof x === "string" ? x : JSON.stringify(x)).slice(0, 500)); };
@@ -76,7 +77,7 @@ try {
 
   // Phần tải đầu: các tệp import tĩnh từ layout + page + home (giống tests/api/css-split.test.mjs).
   const walk = (d) => fs.readdirSync(d, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? (e.name === "api" ? [] : walk(path.join(d, e.name))) : /\.tsx?$/.test(e.name) ? [path.join(d, e.name)] : []));
-  const all = Object.fromEntries(walk("app").map((f) => [f, src(f)]));
+  const all = Object.fromEntries(SRC_ROOTS.filter((r) => fs.existsSync(r)).flatMap(walk).map((f) => [f, src(f)]));
   const resolve = (from, spec) => { if (!spec.startsWith(".")) return null; const p = path.join(path.dirname(from), spec); return [`${p}.tsx`, `${p}.ts`, `${p}/index.ts`].find((x) => all[x] !== undefined) ?? null; };
   const imports = (f) => [...all[f].replace(/^import type .*$/gm, "").matchAll(/^(?:import|export)\s[^;'"]*?from\s+["']([^"']+)["']/gm)].map((m) => resolve(f, m[1])).filter(Boolean);
   const first = new Set(["app/home.tsx", "app/layout.tsx"]), q = [...first];

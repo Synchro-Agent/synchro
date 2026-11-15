@@ -10,6 +10,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
+import { SRC_ROOTS } from "../tests/lib/srcroots.mjs";
 import { splitList } from "./css-cascade.mjs";
 
 const postcss = createRequire(import.meta.url)("postcss");
@@ -30,7 +31,7 @@ const WIDTHS = new Set([480, 640, 760, 761, 860, 1100]);
 /** Đồ thị import tĩnh của app/ (bỏ import type, bỏ import() động: đó là ranh giới tải chậm). */
 export function graph(root = ".") {
   const walk = (d) => fs.readdirSync(d, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? (e.name === "api" ? [] : walk(path.join(d, e.name))) : /\.tsx?$/.test(e.name) ? [path.join(d, e.name)] : []));
-  const src = Object.fromEntries(walk(path.join(root, "app")).map((f) => [path.relative(root, f), fs.readFileSync(f, "utf8")]));
+  const src = Object.fromEntries(SRC_ROOTS.filter((r) => fs.existsSync(path.join(root, r))).flatMap((r) => walk(path.join(root, r))).map((f) => [path.relative(root, f), fs.readFileSync(f, "utf8")]));
   const resolve = (from, spec) => { if (!spec.startsWith(".")) return null; const b = path.join(path.dirname(from), spec); return [`${b}.tsx`, `${b}.ts`, `${b}/index.tsx`, `${b}/index.ts`].find((x) => src[x] !== undefined) ?? null; };
   const imports = (f) => [...src[f].replace(/^import type .*$/gm, "").matchAll(/^(?:import|export)\s[^;'"]*?from\s+["']([^"']+)["']/gm)].map((m) => resolve(f, m[1])).filter(Boolean);
   const reach = (roots) => { const out = new Set(roots), q = [...roots]; while (q.length) for (const n of imports(q.pop())) if (!out.has(n)) { out.add(n); q.push(n); } return out; };

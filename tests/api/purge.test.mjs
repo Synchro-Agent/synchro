@@ -4,6 +4,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { loadTs } from "../lib/ts.mjs";
+import { SRC_ROOTS } from "../lib/srcroots.mjs";
 
 let pass = 0, fail = 0;
 const ok = (c, n, x = "") => { c ? pass++ : fail++; console.log(c ? "  ✓" : "  ✗", n, c ? "" : String(x).slice(0, 600)); };
@@ -22,7 +23,7 @@ const d = AS.db();
 
 // Mọi bảng khai báo trong mã nguồn (kể cả bảng mô-đun chỉ tạo khi cần), kèm cột.
 const walk = (dir) => fs.readdirSync(dir, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? walk(path.join(dir, e.name)) : /\.(ts|tsx|sql)$/.test(e.name) ? [path.join(dir, e.name)] : []));
-for (const f of [...walk("app"), ...walk("db")]) {
+for (const f of [...SRC_ROOTS.filter((r) => fs.existsSync(r)).flatMap(walk), ...walk("db")]) {
   const s = fs.readFileSync(f, "utf8");
   for (const m of s.matchAll(/CREATE TABLE IF NOT EXISTS (\w+)\s*\(/g)) {
     let i = m.index + m[0].length, depth = 1;

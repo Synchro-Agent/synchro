@@ -1,6 +1,7 @@
 // Bảo mật tài khoản: đổi mật khẩu đăng xuất phiên khác, đường dẫn đặt lại mật khẩu, tệp tải lên có chủ, tiêu đề bảo mật, /api/health, xóa tài khoản qua API.
 import fs from "node:fs";
 import path from "node:path";
+import { SRC_ROOTS } from "../lib/srcroots.mjs";
 const B = process.env.SYNCHRO_URL ?? "http://localhost:3200";
 let pass = 0, fail = 0;
 const ok = (c, n, x = "") => { c ? pass++ : fail++; console.log(c ? "  ✓" : "  ✗", n, c ? "" : String(x).slice(0, 500)); };
@@ -108,7 +109,7 @@ ok((await relogin("POST", "/api/files/context", { ids: [gu.j.id], names: {}, que
 console.log("8. Nhật ký quản trị có nhãn cho mọi hành động");
 {
   const walk = (d) => fs.readdirSync(d, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? walk(path.join(d, e.name)) : /\.tsx?$/.test(e.name) ? [path.join(d, e.name)] : []));
-  const actions = new Set(walk("app").flatMap((f) => [...fs.readFileSync(f, "utf8").matchAll(/\baudit\("([a-z_]+)"/g)].map((m) => m[1])));
+  const actions = new Set(SRC_ROOTS.filter((r) => fs.existsSync(r)).flatMap(walk).flatMap((f) => [...fs.readFileSync(f, "utf8").matchAll(/\baudit\("([a-z_]+)"/g)].map((m) => m[1])));
   const ui = fs.readFileSync("app/adminui.tsx", "utf8");
   const missing = [...actions].filter((a) => !new RegExp(`\\b${a}: \\[`).test(ui));
   ok(actions.size > 15 && !missing.length, `${actions.size} hành động đều có nhãn`, missing.join());

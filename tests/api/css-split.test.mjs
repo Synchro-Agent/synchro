@@ -2,12 +2,13 @@
 // Hàm thuần, chỉ đọc mã nguồn. Vì sao chỉ tách một phần: xem chú thích ở app/layout.tsx.
 import fs from "node:fs";
 import path from "node:path";
+import { SRC_ROOTS } from "../lib/srcroots.mjs";
 
 let pass = 0, fail = 0;
 const ok = (c, n, x = "") => { c ? pass++ : fail++; console.log(c ? "  ✓" : "  ✗", n, c ? "" : String(x).slice(0, 600)); };
 
 const walk = (d) => fs.readdirSync(d, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? (e.name === "api" ? [] : walk(path.join(d, e.name))) : /\.tsx?$/.test(e.name) ? [path.join(d, e.name)] : []));
-const src = Object.fromEntries(walk("app").map((f) => [f, fs.readFileSync(f, "utf8")]));
+const src = Object.fromEntries(SRC_ROOTS.filter((r) => fs.existsSync(r)).flatMap(walk).map((f) => [f, fs.readFileSync(f, "utf8")]));
 const resolve = (from, spec) => { if (!spec.startsWith(".")) return null; const b = path.join(path.dirname(from), spec); return [`${b}.tsx`, `${b}.ts`].find((x) => src[x] !== undefined) ?? null; };
 const imports = (f) => [...src[f].replace(/^import type .*$/gm, "").matchAll(/^(?:import|export)\s[^;'"]*?from\s+["']([^"']+)["']/gm)].map((m) => resolve(f, m[1])).filter(Boolean);
 const reach = (roots) => { const out = new Set(roots), q = [...roots]; while (q.length) for (const n of imports(q.pop())) if (!out.has(n)) { out.add(n); q.push(n); } return out; };

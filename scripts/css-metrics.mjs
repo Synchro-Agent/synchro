@@ -12,6 +12,9 @@ import fs from "node:fs";
 import path from "node:path";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
+import { SRC_ROOTS } from "../tests/lib/srcroots.mjs";
+// CSS nằm ở app/ hoặc ui/ (H3); mã .tsx ở mọi gốc mã nguồn.
+const CSS_ROOTS = ["app", "ui"];
 
 const postcss = createRequire(import.meta.url)("postcss");
 
@@ -78,10 +81,10 @@ export function measureCss(css, file = "") {
 
 /** Chỉ số của cả dự án: theo tệp và tổng. */
 export function measureAll(root = ".") {
-  const files = walk(path.join(root, "app"), /\.css$/).sort();
+  const files = CSS_ROOTS.flatMap((r) => (fs.existsSync(path.join(root, r)) ? walk(path.join(root, r), /\.css$/) : [])).sort();
   const per = Object.fromEntries(files.map((f) => [path.relative(root, f), measureCss(fs.readFileSync(f, "utf8"), f)]));
   let inlineFontSize = 0, inlineZIndex = 0;
-  for (const f of walk(path.join(root, "app"), /\.tsx$/)) {
+  for (const f of SRC_ROOTS.flatMap((r) => (fs.existsSync(path.join(root, r)) ? walk(path.join(root, r), /\.tsx$/) : []))) {
     const s = fs.readFileSync(f, "utf8");
     // Giá trị là token ("var(--fs-…)" / "var(--z-…)" hay calc của nó) thì không tính (B5 bước 6a / 7a).
     inlineFontSize += (s.match(/\bfontSize\s*:(?!\s*["'`]var\(--fs-)/g) ?? []).length;

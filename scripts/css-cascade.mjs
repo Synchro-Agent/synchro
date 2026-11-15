@@ -17,6 +17,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { createRequire } from "node:module";
+import { SRC_ROOTS } from "../tests/lib/srcroots.mjs";
 
 const req = createRequire(import.meta.url);
 
@@ -261,7 +262,7 @@ export function cooccurrence(root, decls) {
   const byPrefix = (p) => [...known].filter((c) => c.startsWith(p) && c.length > p.length);
   const files = [];
   const walk = (d) => { for (const e of fs.readdirSync(d, { withFileTypes: true })) { if (e.name === "node_modules" || e.name.startsWith(".")) continue; const p = path.join(d, e.name); if (e.isDirectory()) walk(p); else if (/\.(tsx?|mjs)$/.test(e.name)) files.push(p); } };
-  walk(path.join(root, "app"));
+  for (const r of SRC_ROOTS) if (fs.existsSync(path.join(root, r))) walk(path.join(root, r));
   let all = "";
   for (const f of files) {
     const src = fs.readFileSync(f, "utf8"); all += src + "\n";
