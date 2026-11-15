@@ -80,7 +80,10 @@ try {
   ok(vi.length && vi.every(([a, d]) => /^Mức dùng/.test(a) && /^Mức dùng/.test(d)), "tiếng Việt: vòng Mức dùng ghi Mức dùng", vi);
   const pickLang = async (name) => {
     await click(`document.querySelector("button.user")`, "menu tài khoản");
-    await until(`!!document.querySelector(".usermenu .menu-item")`, 3000);
+    // until trả false (không ném) khi hết giờ: menu chưa mở thì bấm lại một lần (lượt chat của đoạn trước có thể vẫn đang chạy và vẽ lại trang).
+    if (!(await until(`!!document.querySelector(".usermenu .menu-item")`, 3000))) await click(`document.querySelector("button.user")`, "menu tài khoản (lần 2)");
+    // Chờ đúng mục Ngôn ngữ / Language: ngay sau khi đổi ngôn ngữ, chữ các mục có thể chưa dịch xong lúc menu vừa hiện.
+    await until(`[...document.querySelectorAll(".usermenu .menu-item")].some((e) => /Ngôn ngữ|Language/.test(e.textContent))`, 3000);
     await click(`[...document.querySelectorAll(".usermenu .menu-item")].find((e) => /Ngôn ngữ|Language/.test(e.textContent))`, "Ngôn ngữ");
     await until(`!!document.querySelector(".sy-langs button")`, 3000);
     await click(byText(".sy-langs button", name.slice(0, 2)), name);
@@ -94,7 +97,8 @@ try {
 
   console.log("Lời chào trang chủ 375px đổi chữ sau khi đã thu nhỏ");
   await size(375, 812, true);
-  await P("Page.reload", {});
+  // Về trang chủ (không tải lại: địa chỉ đang là #c= của đoạn chat ở phần trên, tải lại thì mở lại đoạn chat, không có lời chào).
+  await P("Page.navigate", { url: B + "/" });
   await until(`!!document.querySelector("h1.greeting .greet-t")`, 30000);
   await sleep(1200);
   // Chữ vượt khung: phần chữ (Range) tràn mép phải của h1 trừ padding.
@@ -104,12 +108,16 @@ try {
     const right = box.getBoundingClientRect().right - (parseFloat(getComputedStyle(box).paddingRight) || 0);
     return { over: Math.round(r.getBoundingClientRect().right - right), lines: r.getClientRects().length && Math.round(r.getBoundingClientRect().height / parseFloat(getComputedStyle(el).lineHeight)), fs: getComputedStyle(el).fontSize, text: el.textContent };
   })()`;
-  const setText = (s) => ev(`(() => { const el = document.querySelector("h1.greeting .greet-t"); const n = [...el.childNodes].find((x) => x.nodeType === 3); n.nodeValue = ${JSON.stringify(s)}; return 1; })()`);
+  // Đặt cả câu chào: nút chữ đầu nhận câu mới, các nút chữ sau (", " và tên gọi, chỉ có từ 5 giờ tới 18 giờ) để rỗng, không gỡ nút của React.
+  // Trước đây chỉ đổi nút đầu nên ban ngày tên gọi nối thêm vào câu thử dài, quá 60% cỡ chữ thì FitLine để xuống dòng (đúng thiết kế): lỗi theo giờ chạy.
+  const setText = (s) => ev(`(() => { const el = document.querySelector("h1.greeting .greet-t"), w = document.createTreeWalker(el, NodeFilter.SHOW_TEXT); let first = true, n; while ((n = w.nextNode())) { n.nodeValue = first ? ${JSON.stringify(s)} : ""; first = false; } return 1; })()`);
   await setText("Chào buổi tối, mọi thứ thế nào?");
   await sleep(400);
   const a = await ev(fit);
   ok(a.over <= 1 && a.lines === 1, "câu dài: thu nhỏ vừa một dòng", a);
-  await setText("Chào buổi tối, hôm nay mọi thứ của bạn thế nào rồi?");
+  // Câu dài hơn nhưng vẫn trong mức FitLine thu nhỏ được (≥ 60% cỡ chữ). Câu cũ "…hôm nay mọi thứ của bạn thế nào rồi?" cần 735px ở 26px
+  // trên khung 343px (47%): FitLine để xuống dòng đúng thiết kế (tên rất dài), phép thử không bao giờ đạt ở 375px.
+  await setText("Chào buổi tối, hôm nay bạn thế nào?");
   await sleep(400);
   const b = await ev(fit);
   ok(b.over <= 1 && b.lines === 1 && parseFloat(b.fs) < parseFloat(a.fs), "đổi sang câu dài hơn khi đã thu nhỏ: thu nhỏ thêm, không tràn mép phải", b);
