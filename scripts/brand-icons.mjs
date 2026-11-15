@@ -1,4 +1,4 @@
-// Biểu tượng của tiện ích Synchro, vẽ từ hình học của bộ nhận diện v4 "Lệch pha" (public/brand/*.svg; cùng số đo với app/brand.tsx):
+// Biểu tượng của tiện ích Synchro, vẽ từ hình học của bộ nhận diện v4 "Lệch pha" (public/brand/*.svg; cùng số đo với ui/brand.tsx):
 // hai nửa đĩa bán kính R = 350 lệch nhau R, mark cao 3R, khe R/6 — cỡ ≤ 32 px dùng khe R/4 cho khỏi dính.
 // - extension/icons/toolbar-{light,dark}-{16,24,32}.png: biểu tượng trên thanh công cụ, Carbon cho thanh sáng, Ivory cho thanh tối
 //   (background.js đổi theo theme).

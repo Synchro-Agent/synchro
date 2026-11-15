@@ -18,7 +18,7 @@ ok(H.hashStep("#s=Usage", "#c=17", null, false) === "replace", "Cài đặt mở
 ok(H.hashStep("#v=bogus", "", null, true) === "replace" && H.hashStep("", "#v=code", null, false) === "push", "R6: lần ghi đầu replace, sau đó push");
 ok(H.hashStep("#c=1", "#c=1", null, false) === "none", "đã khớp: không làm gì");
 
-const page = fs.readFileSync("app/home.tsx", "utf8"), mo = fs.readFileSync("app/modals.tsx", "utf8");
+const page = fs.readFileSync("ui/home.tsx", "utf8"), mo = fs.readFileSync("ui/modals.tsx", "utf8");
 ok(!/decodeURIComponent\(h\.slice\(3\)\)/.test(page), "page.tsx không còn giải mã #s= trần");
 ok(/<Settings initial=\{settingsTab\} onTab=\{setSettingsTab\}/.test(page) && !/<Settings key=\{settingsTab\}/.test(page), "Settings báo mục lên trang, không gắn lại khi đổi mục");
 ok(/const setTab = \(t: string\) => \{ setTabState\(t\); onTab\?\.\(t\); \}/.test(mo) && /useEffect\(\(\) => \{ setTabState\(initial\); \}, \[initial\]\)/.test(mo), "Settings: đổi mục gọi onTab, mở từ ngoài thì theo initial");

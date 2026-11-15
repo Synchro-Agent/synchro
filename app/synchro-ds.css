@@ -745,7 +745,7 @@ html body .adm-pager .icon-btn:disabled{opacity:.35;cursor:default;background:tr
 
 html body .topbar .title-wrap .sel{height:var(--ds-h)}
 
-/* ---------------------------------------------------------------- chọn hàng loạt (app/bulk.tsx)
+/* ---------------------------------------------------------------- chọn hàng loạt (ui/bulk.tsx)
    Nút "Chọn hàng loạt" là nút viên thuốc (đang bật: tấm mực). Ô chọn tròn 18px; mục đã chọn tô nhạt, thẻ có thêm viền mực.
    Thanh thao tác là viên thuốc màu mực nổi ở đáy khung cuộn của danh sách (đệm 4 + nút 32 tròn 16 = bo 20, đồng tâm). */
 html body .bk-btn.on:not(.auth-root *){background:var(--ds-inv);color:var(--ds-inv-fg)}

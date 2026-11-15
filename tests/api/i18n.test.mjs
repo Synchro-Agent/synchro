@@ -122,7 +122,7 @@ const viaChat = reach(P.join(process.cwd(), "server", "chatengine.ts")).get(P.jo
 ok(!viaChat, "chatengine.ts không nhập tĩnh từ điển VI→EN (i18n-dict.ts)", viaChat?.map((f) => P.relative(process.cwd(), f)).join(" → "));
 // Mẫu tf để trong bảng (khóa động, bộ quét không thấy): mọi giá trị phải là khóa có bản dịch giữ {biến}.
 const tbl = (file, name) => [...(rf(P.join(process.cwd(), file), "utf8").match(new RegExp(`const ${name}[^=]*= \\{([\\s\\S]*?)\\};`))?.[1] ?? "").matchAll(/:\s*"([^"]+)"/g)].map((m) => m[1]);
-for (const [file, name, v, min, what] of [["app/models.ts", "AUTO_PICK", "model", 16, "câu “Tự động chọn … cho việc …”"], ["app/healthui.tsx", "UNIT", "n", 15, "đơn vị số đếm ở Sức khỏe hệ thống"]]) {
+for (const [file, name, v, min, what] of [["ui/models.ts", "AUTO_PICK", "model", 16, "câu “Tự động chọn … cho việc …”"], ["ui/healthui.tsx", "UNIT", "n", 15, "đơn vị số đếm ở Sức khỏe hệ thống"]]) {
   const keys = tbl(file, name), bad = keys.filter((k) => !new RegExp(`\\{${v}\\}`).test(D.VI2EN[k] ?? "") || (!/\{n\}/.test(k) && D.VI2EN[k].includes("|")));
   ok(keys.length >= min && !bad.length, `${what} có bản dịch (${keys.length} mẫu)`, bad.join("; "));
 }

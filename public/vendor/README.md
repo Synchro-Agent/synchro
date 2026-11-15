@@ -15,4 +15,4 @@ jszip 3.10.1 (MIT, chọn MIT trong giấy phép kép MIT / GPL-3.0) · mammoth 
 pdfjs-dist 3.11.174 (Apache-2.0), bản legacy: xem trước PDF
 
 Thư viện của trang Synchro (không chạy trong artifact), tải khi cần:
-pptxgenjs 4.0.1 (MIT, bản pptxgen.bundle.js kèm JSZip): xuất bản trình bày thành PowerPoint (app/deckpptx.ts)
+pptxgenjs 4.0.1 (MIT, bản pptxgen.bundle.js kèm JSZip): xuất bản trình bày thành PowerPoint (ui/deckpptx.ts)

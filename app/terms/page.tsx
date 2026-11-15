@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { LegalDoc } from "../legal/doc";
+import { LegalDoc } from "../../ui/legal/doc";
 
 export const metadata: Metadata = { title: "Điều khoản sử dụng – Synchro" };
 

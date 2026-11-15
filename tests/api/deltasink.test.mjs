@@ -1,4 +1,4 @@
-// Bộ gộp chữ đang chảy (app/deltasink.ts, blueprint B2) và hai nơi dùng nó trong home.tsx. Tự chạy được, không cần dev:mock.
+// Bộ gộp chữ đang chảy (ui/deltasink.ts, blueprint B2) và hai nơi dùng nó trong home.tsx. Tự chạy được, không cần dev:mock.
 // 1. Hành vi: gộp theo khung hình, cách nhau ít nhất 45 ms, drop / mine / cancel; cancel() không xóa mẩu đang chờ (pending()).
 // 2. Lượt lỗi: cả lượt đang gửi lẫn lượt nối lại sau khi tải trang đều dùng sink.pending() làm chữ dự phòng. Tab nền không chạy
 //    requestAnimationFrame nên có khi chưa vẽ mẩu nào: bỏ pending() thì thẻ lỗi trống, mất cả câu đã chảy về.
@@ -68,8 +68,8 @@ console.log("── tab nền: requestAnimationFrame không chạy, lượt lỗ
 
 console.log("── home.tsx: cả hai nơi dùng deltaSink đều lấy pending() khi lượt lỗi");
 {
-  const src = fs.readFileSync("app/home.tsx", "utf8");
-  ok(/import \{ deltaSink \} from "\.\/deltasink";/.test(src) && !/function deltaSink\(/.test(src), "home.tsx dùng app/deltasink.ts (không có bản sao riêng)");
+  const src = fs.readFileSync("ui/home.tsx", "utf8");
+  ok(/import \{ deltaSink \} from "\.\/deltasink";/.test(src) && !/function deltaSink\(/.test(src), "home.tsx dùng ui/deltasink.ts (không có bản sao riêng)");
   const at = [...src.matchAll(/const sink = deltaSink\(/g)].map((m) => m.index);
   ok(at.length === 2, `đúng hai nơi dùng deltaSink (lượt đang gửi, lượt nối lại): ${at.length}`);
   const seg = (k) => src.slice(at[k], k + 1 < at.length ? at[k + 1] : at[k] + 12000);

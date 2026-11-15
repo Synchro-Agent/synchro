@@ -391,7 +391,7 @@ console.log("10. Chuyển dữ liệu cũ từ localStorage một lần, giữ k
 
 console.log("11. Đọc khóa cũ ở luồng phụ");
 {
-  // Chạy chính tệp app/chatmigrate.worker.ts với một "self" giả, rồi giả Worker của trình duyệt chuyển tin qua lại.
+  // Chạy chính tệp ui/chatmigrate.worker.ts với một "self" giả, rồi giả Worker của trình duyệt chuyển tin qua lại.
   const ctx = { onmessage: null, postMessage: null };
   globalThis.self = ctx;
   await loadTs(["chatmigrate.worker"]);

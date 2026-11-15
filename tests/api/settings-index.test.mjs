@@ -4,7 +4,7 @@ import { loadTs } from "../lib/ts.mjs";
 let pass = 0, fail = 0;
 const ok = (c, n, x = "") => { c ? pass++ : fail++; console.log(c ? "  ✓" : "  ✗", n, c ? "" : String(x)); };
 const { settingsindex: S } = await loadTs(["settingsindex"]);
-const src = readFileSync("app/settings.tsx", "utf8");
+const src = readFileSync("ui/settings.tsx", "utf8");
 const tabOf = { General: "General", Account: "Account", Privacy: "Privacy", Capabilities: "Capabilities", Memory: "Brain", CodeTab: "Synchro Code" };
 const fns = [...src.matchAll(/^(?:export )?function (\w+)\(/gm)];
 const missing = [];

@@ -1,6 +1,6 @@
 // Hằng số của mục Speech (ElevenLabs). Giọng, model, credit và tính năng đều lấy thật từ tài khoản ElevenLabs qua /api/speech;
 // tệp này chỉ giữ chữ giao diện: danh sách công cụ, hướng dẫn nhanh cho người mới, mẫu bắt đầu, thẻ cảm xúc, gợi ý.
-import type { Feat, Plan } from "./client";
+import type { Feat, Plan } from "../../ui/speech/client";
 
 export type SpeechTool = "home" | "tts" | "changer" | "voices" | "create" | "stt" | "dub" | "agent" | "music" | "sfx" | "isolate" | "dict" | "native" | "studio";
 export type ToolDef = { k: SpeechTool; label: string; desc: string; feats: Feat[]; color: string };

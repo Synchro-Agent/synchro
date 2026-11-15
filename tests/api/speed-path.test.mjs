@@ -241,7 +241,7 @@ try {
     ok(r.status === 200 && sk.skipped === true && sk.findings.length === 0, "hàng đầy: phản biện tự chạy bỏ qua, không báo lỗi", JSON.stringify(sk));
     await Promise.all(busy);
     fs.writeFileSync(path.join(BIN, "mock-cli.json"), JSON.stringify({ base: "http://127.0.0.1:9", startMs: 200 }));
-    const pg = fs.readFileSync("app/home.tsx", "utf8");
+    const pg = fs.readFileSync("ui/home.tsx", "utf8");
     ok(/x\.id !== id \|\| !t \? x : \{ \.\.\.x, titled: n/.test(pg), "đặt tên hỏng thì chưa đánh dấu là đã đặt, câu trả lời sau thử lại");
   }
 

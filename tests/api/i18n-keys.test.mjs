@@ -206,7 +206,7 @@ const { "i18n-dict": D, "i18n-vi": V } = await loadTs(["i18n-dict", "i18n-vi"]);
   const voice = files.filter((f) => /Voice \(ElevenLabs\)/.test(readFileSync(f, "utf8").replace(/\/\/.*$/gm, "")) && !/i18n/.test(f)).map(rel);
   ok(!voice.length, "chữ tiếng Anh gốc gọi ElevenLabs là “Speech (ElevenLabs)”", voice.join(", "));
   // Tên mục trên thanh bên, tiêu đề trang, bảng lệnh: Connectors, Speech, Kho kỹ năng / Skill.
-  const home = readFileSync(path.join(process.cwd(), "app", "home.tsx"), "utf8");
+  const home = readFileSync(path.join(process.cwd(), "ui", "home.tsx"), "utf8");
   ok(/id: "connectors", label: "Connectors"/.test(home) && /customize: "Kho kỹ năng"/.test(home) && /speech: "Speech"/.test(home) && /label: "Speech"/.test(home) && !/label: "(Kỹ năng|Kết nối|Giọng nói)"/.test(home),
     "thanh bên, tiêu đề trang và bảng lệnh: Connectors, Speech, Kho kỹ năng (nhãn ngắn Skill)");
   // Bảng lệnh ⌘K tìm theo nhãn + hay (palette.tsx score: mọi từ phải khớp). Nhãn đổi sang "Connectors" thì người gõ "kết nối" / "ket noi" vẫn phải thấy lệnh.

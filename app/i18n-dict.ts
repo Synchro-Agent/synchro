@@ -84,7 +84,7 @@ export const VI2EN: Record<string, string> = {
   "Synchro: chat với mọi model AI, viết code, giọng nói và tự động hoá công việc, tất cả đồng bộ một nhịp.": "Synchro: chat with any AI model, write code, use your voice and automate your work, all in sync.",
   "Chat với mọi model AI, viết code, giọng nói và tự động hoá công việc, tất cả đồng bộ một nhịp.": "Chat with any AI model, write code, use your voice and automate your work, all in sync.",
   "Đặt tên tự động": "Name automatically", "Chưa đặt được tên tự động. Thử lại sau.": "Couldn't name the chat automatically. Try again later.",
-  // Khung xem trước tệp (app/officeview.ts)
+  // Khung xem trước tệp (ui/officeview.ts)
   "Không tải được thư viện xem tệp. Kiểm tra kết nối mạng.": "Couldn't load the file viewer library. Check your connection.", "Không đọc được tệp: {n}": "Couldn't read the file: {n}", "Không đọc được tệp Word: {n}": "Couldn't read the Word file: {n}", "Không đọc được tệp PDF: {n}": "Couldn't read the PDF file: {n}", "Không đọc được tệp PowerPoint: {n}": "Couldn't read the PowerPoint file: {n}",
   "Tệp này lớn ({n} MB), mở xem trước có thể làm trình duyệt chậm vài chục giây. Tải tệp về để mở bằng Excel sẽ nhanh hơn.": "This file is large ({n} MB). Previewing it may slow your browser for tens of seconds. Downloading it and opening it in Excel will be faster.", "Vẫn mở xem trước": "Preview anyway",
   "Đang hiện {n} / {m} trang đầu. Tải tệp về để xem đủ.": "Showing the first {n} of {m} pages. Download the file to see them all.", "Trang tính này trống.": "This sheet is empty.", "Công thức chưa có giá trị tính sẵn; mở bằng Excel sẽ tự tính.": "This formula has no stored value; Excel will calculate it when you open the file.",
@@ -1650,7 +1650,7 @@ Object.assign(VI2EN, {
 });
 Object.assign(VI2EN, { "Đóng bảng đoạn chat": "Close chats panel", "Mở bảng đoạn chat": "Open chats panel" });
 
-// Chọn hàng loạt (app/bulk.tsx và các danh sách): nhãn, thao tác, câu xác nhận / thông báo có số lượng.
+// Chọn hàng loạt (ui/bulk.tsx và các danh sách): nhãn, thao tác, câu xác nhận / thông báo có số lượng.
 {
   const add = (m: Record<string, string>) => { for (const [k, v] of Object.entries(m)) if (!Object.prototype.hasOwnProperty.call(VI2EN, k)) VI2EN[k] = v; };
   add({

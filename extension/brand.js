@@ -1,4 +1,4 @@
-// Logo Synchro trong tiện ích — bộ nhận diện v4 "Lệch pha", cùng hình học với app/brand.tsx: hai nửa đĩa bán kính R = 350 lệch nhau R
+// Logo Synchro trong tiện ích — bộ nhận diện v4 "Lệch pha", cùng hình học với ui/brand.tsx: hai nửa đĩa bán kính R = 350 lệch nhau R
 // (đọc thành chữ S), mark cao 3R, khe R/6 (cỡ ≤ 32 px nới thành R/4 cho khỏi dính); chữ "synchro" là Unbounded đã chuyển nét.
 // Cửa sổ tiện ích dựng logo bằng DOM từ đây (vẽ bằng currentColor: Carbon / Ivory theo theme); dải "Synchro đang điều khiển tab này"
 // nhúng nửa đĩa cỡ nhỏ vào script chèn trang (overlay.js). Chuyển động (mk-*) viết trong popup.css và overlay.js, giống globals.css của app.

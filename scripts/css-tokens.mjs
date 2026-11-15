@@ -56,7 +56,7 @@ export function rewriteCss(css, from = "") {
   return [root.toString(), nf, nz];
 }
 
-const TSX_SKIP = new Set(["app/home.tsx", "app/codepanes.tsx", "app/codeview.tsx", "app/deckpptx.ts"]);
+const TSX_SKIP = new Set(["ui/home.tsx", "ui/codepanes.tsx", "ui/codeview.tsx", "ui/deckpptx.ts"]);
 /** Đổi fontSize / zIndex số trong style của một tệp tsx. */
 export function rewriteTsx(src) {
   let nf = 0, nz = 0;

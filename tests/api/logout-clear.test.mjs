@@ -52,7 +52,7 @@ try {
   localStorage.setItem("signedIn", "1");
   U.setUserScope(null);
 
-  // Kho đoạn chat IndexedDB theo tài khoản (app/chatidb.ts): xóa đúng cơ sở dữ liệu của A.
+  // Kho đoạn chat IndexedDB theo tài khoản (ui/chatidb.ts): xóa đúng cơ sở dữ liệu của A.
   const dropped = [];
   globalThis.indexedDB = { deleteDatabase: (name) => { dropped.push(name); return {}; } };
   const n = U.clearAccountData("A");

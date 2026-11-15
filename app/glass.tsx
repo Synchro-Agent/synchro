@@ -1,6 +1,6 @@
 "use client";
 import { useEffect } from "react";
-import { watch } from "./domwatch";
+import { watch } from "../ui/domwatch";
 
 /*
  * Liquid glass runtime.

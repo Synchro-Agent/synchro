@@ -3,11 +3,11 @@
 // Mã nằm sau dấu # nên không tới nhật ký của máy chủ hay nginx.
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { Lockup } from "../brand";
+import { Lockup } from "../../ui/brand";
 import { getLang, tr } from "../i18n";
-import { LangSwitch } from "../langswitch";
+import { LangSwitch } from "../../ui/langswitch";
 import { AlertCircle, Check, Eye, EyeOff, Mail } from "lucide-react";
-import { TurnstileBox, useTurnstileKey } from "../turnstilebox";
+import { TurnstileBox, useTurnstileKey } from "../../ui/turnstilebox";
 
 // Chỉ 400 mới nghĩa là đường dẫn hỏng. Mất mạng, 5xx, quá giới hạn thì đường dẫn vẫn tốt: không được báo hết hạn, không được bỏ mã khỏi địa chỉ.
 class PostError extends Error { constructor(m: string, public status: number) { super(m); } }

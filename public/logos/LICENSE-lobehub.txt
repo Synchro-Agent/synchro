@@ -1,4 +1,4 @@
-Applies to the @lobehub/icons-static-svg files in this folder and the lobehub-derived marks drawn in app/brands.tsx.
+Applies to the @lobehub/icons-static-svg files in this folder and the lobehub-derived marks drawn in ui/brands.tsx.
 
 MIT License
 

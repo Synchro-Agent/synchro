@@ -2,9 +2,9 @@
 // Xác minh email: /verify#<mã> trong thư. Mã nằm sau dấu # nên không tới nhật ký máy chủ; phải bấm nút để trình quét liên kết của hộp thư không xác minh hộ.
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Lockup } from "../brand";
+import { Lockup } from "../../ui/brand";
 import { tr } from "../i18n";
-import { LangSwitch } from "../langswitch";
+import { LangSwitch } from "../../ui/langswitch";
 import { AlertCircle, Check, Mail } from "lucide-react";
 
 // Chỉ 400 mới nghĩa là đường dẫn hỏng. Mất mạng, 5xx, quá giới hạn thì đường dẫn vẫn tốt: không được báo hết hạn, không được bỏ mã khỏi địa chỉ.

@@ -25,7 +25,7 @@ const check = (name, ok, extra = "") => { console.log(`${ok ? "✓" : "✗"} ${n
 
 // Mã dựng tệp PowerPoint thật (deckpptx.ts) chạy trong trang: dịch TypeScript, bỏ import / export, phông của bộ thiết kế truyền vào dạng JSON.
 const DECK_JS = (() => {
-  const src = readFileSync("app/deckpptx.ts", "utf8").replace(/^"use client";\n/, "").replace(/^import .*$/m, `const FONT_SPEC = ${JSON.stringify(designpresets.FONT_SPEC)};`);
+  const src = readFileSync("ui/deckpptx.ts", "utf8").replace(/^"use client";\n/, "").replace(/^import .*$/m, `const FONT_SPEC = ${JSON.stringify(designpresets.FONT_SPEC)};`);
   return ts.transpileModule(src, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext } }).outputText.replace(/^export /gm, "")
     + "\nwindow.__deck = { buildPptx, chartArgs, morphSlides };";
 })();

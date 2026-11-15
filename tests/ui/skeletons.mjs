@@ -1,4 +1,4 @@
-// Khung chờ đúng kích thước (app/skeleton.tsx) trong Chrome ẩn trên npm run dev:mock: giữ chậm đúng yêu cầu mạng làm phần đó chờ (phiên đăng
+// Khung chờ đúng kích thước (ui/skeleton.tsx) trong Chrome ẩn trên npm run dev:mock: giữ chậm đúng yêu cầu mạng làm phần đó chờ (phiên đăng
 // nhập, danh sách đoạn chat, nội dung đoạn chat, mã của khung artifact, mã trang cài đặt) 1,5 giây, đo khung chờ, thả ra rồi đo phần thật:
 // vị trí và cỡ phải khớp (lệch tối đa vài px), và đo CLS (tổng layout-shift của trình duyệt) từ lúc mở tới lúc xong.
 // - Mở app: thanh trái, thanh bên nổi, ô tìm, dòng đoạn chat, lời chào, ô soạn tin (máy tính và 375px); mở thẳng một đoạn chat: ô soạn tin dưới đáy.
@@ -70,7 +70,7 @@ const unhold = async () => { holdRe = null; for (const id of [...pend.keys()]) r
 // Giữ chậm tệp mã của trang (như mạng chậm) để đo màn chờ đó.
 const APP_JS = /\/_next\/static\/chunks\//;
 await P("Network.setCacheDisabled", { cacheDisabled: true });
-// Chuỗi chỉ có trong mã của khung artifact (app/artifactui.tsx) và của trang cài đặt (app/settings.tsx).
+// Chuỗi chỉ có trong mã của khung artifact (ui/artifactui.tsx) và của trang cài đặt (ui/settings.tsx).
 const ART_JS = { js: /art-dl-menu/ }, SETTINGS_JS = { js: /cap-domains/ };
 // CLS: mọi layout-shift không do người dùng vừa bấm (bấm bằng .click() trong trang nên mọi dịch chuyển đều tính).
 await P("Page.addScriptToEvaluateOnNewDocument", { source: `window.__cls = { v: 0, n: [] }; try { new PerformanceObserver((l) => { for (const e of l.getEntries()) if (!e.hadRecentInput) { __cls.v += e.value; __cls.n.push(Math.round(e.value * 1e4) / 1e4 + ":" + (e.sources || []).map((s) => s.node ? (s.node.className || s.node.nodeName) : "?").join("|").slice(0, 80)); } }).observe({ type: "layout-shift", buffered: true }); } catch {}` });
@@ -89,7 +89,7 @@ const local = [
 ];
 // Mở hẳn trang mới (đổi mỗi phần #… thì trình duyệt không tải lại).
 const go = async (url) => { await P("Page.navigate", { url: "about:blank" }); await sleep(150); await P("Page.navigate", { url }); };
-// Gieo như thiết bị có đúng các đoạn này: rời app (app đóng kho đoạn chat), xóa kho IndexedDB (app/chatidb.ts) và các khóa u:<uid>:*, rồi gieo
+// Gieo như thiết bị có đúng các đoạn này: rời app (app đóng kho đoạn chat), xóa kho IndexedDB (ui/chatidb.ts) và các khóa u:<uid>:*, rồi gieo
 // khóa cũ u:<uid>:chats (lần mở sau nhập vào kho). Không xóa kho thì đoạn đã về đủ từ máy chủ ở bước trước không còn là bản rút gọn.
 const seed = async (chats) => {
   await P("Page.navigate", { url: B + "/api/auth/me" });

@@ -225,7 +225,7 @@ console.log("Dừng / nhắn thêm qua cơ sở dữ liệu (tiến trình cũ �
   ok(AR.applyAgentStops() === 1 && run.ac.signal.aborted, "NODE-3: tiến trình đang chạy lượt Code nhận lệnh Dừng ghi từ tiến trình khác");
   await sleep(50);
   ok(db.prepare("SELECT ended FROM agent_owner WHERE uid = ? AND sid = ?").get(u.id, "s-new").ended > 0, "NODE-3: lượt xong thì đánh dấu đã kết thúc");
-  const wc = fs.readFileSync(path.join(process.cwd(), "app/wsclient.ts"), "utf8"), ar = fs.readFileSync(path.join(process.cwd(), "app/api/agent/route.ts"), "utf8");
+  const wc = fs.readFileSync(path.join(process.cwd(), "ui/wsclient.ts"), "utf8"), ar = fs.readFileSync(path.join(process.cwd(), "app/api/agent/route.ts"), "utf8");
   ok(/if \(r\.status === 202\) \{ const j = /.test(wc) && /return \{ running: true, node: j\.node \?\? null, elsewhere: true \}/.test(wc), "NODE-3: agentRunInfo hiểu 202 (đang chạy ở bản cũ): resumeAgent hiện bận + nút Dừng, watchAgentEnd hỏi tiếp");
   ok(/r\.status === 202\) \{ if \(\+\+elsewhere > 45\) return false; await sleep\(2000, signal\); continue; \}/.test(wc) && /status: 202/.test(ar) && /stopAgentElsewhere\(c\.user\.id, sid\)/.test(ar), "NODE-3: trình duyệt chờ khi nhận 202; route trả 202 và chuyển Dừng sang tiến trình cũ");
 }

@@ -46,7 +46,7 @@ ok(/monitorEventLoopDelay\(\{ resolution: 20 \}\)/.test(fs.readFileSync("server/
 console.log("3. Cài đặt → Sức khỏe hệ thống");
 const { "i18n-vi": V } = await loadTs(["i18n-vi"]);
 ok(V.EN2VI["Event-loop delay (p99)"] === "Độ trễ vòng lặp (p99)", "nhãn ô có bản tiếng Việt", V.EN2VI["Event-loop delay (p99)"]);
-ok(/\["Event-loop delay \(p99\)", `\$\{h\.loop\.p99/.test(fs.readFileSync("app/healthui.tsx", "utf8")), "trang sức khỏe có ô Event-loop delay (p99)");
+ok(/\["Event-loop delay \(p99\)", `\$\{h\.loop\.p99/.test(fs.readFileSync("ui/healthui.tsx", "utf8")), "trang sức khỏe có ô Event-loop delay (p99)");
 const B = process.env.SYNCHRO_URL ?? "http://localhost:3200";
 let cookie = process.env.SYNCHRO_ADMIN_COOKIE ?? "";
 if (!cookie) {

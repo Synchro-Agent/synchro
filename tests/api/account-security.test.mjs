@@ -110,7 +110,7 @@ console.log("8. Nhật ký quản trị có nhãn cho mọi hành động");
 {
   const walk = (d) => fs.readdirSync(d, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? walk(path.join(d, e.name)) : /\.tsx?$/.test(e.name) ? [path.join(d, e.name)] : []));
   const actions = new Set(SRC_ROOTS.filter((r) => fs.existsSync(r)).flatMap(walk).flatMap((f) => [...fs.readFileSync(f, "utf8").matchAll(/\baudit\("([a-z_]+)"/g)].map((m) => m[1])));
-  const ui = fs.readFileSync("app/adminui.tsx", "utf8");
+  const ui = fs.readFileSync("ui/adminui.tsx", "utf8");
   const missing = [...actions].filter((a) => !new RegExp(`\\b${a}: \\[`).test(ui));
   ok(actions.size > 15 && !missing.length, `${actions.size} hành động đều có nhãn`, missing.join());
 }

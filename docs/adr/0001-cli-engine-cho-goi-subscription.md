@@ -3,7 +3,7 @@
 - **Trạng thái:** Đã chấp nhận. Đã làm bước 2–6 (engine, runtime, đăng nhập, ba engine, dự phòng API), tab Providers và vòng tròn usage. Công cụ của Synchro qua MCP còn để sau.
 - **Ngày:** 26/10/2026
 - **Phạm vi:** Cài đặt → Providers, bộ chọn model, lõi chat, vòng tròn usage
-- **Mã nguồn:** `server/ai/` (engine, selector, errors, cli_runtime, cli_auth, cli_engines, api_engine, subs), `app/api/engines/`, `app/providersui.tsx`, `scripts/mock-cli/`, `scripts/setup-engine-user.sh`
+- **Mã nguồn:** `server/ai/` (engine, selector, errors, cli_runtime, cli_auth, cli_engines, api_engine, subs), `app/api/engines/`, `ui/providersui.tsx`, `scripts/mock-cli/`, `scripts/setup-engine-user.sh`
 
 ## Bối cảnh
 

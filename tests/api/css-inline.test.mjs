@@ -17,7 +17,7 @@ const stale = G.ALLOW.filter(([f, e, s]) => !real.some((c) => c.file === f && c.
 ok(stale.length === 0, "mục ALLOW nào cũng còn khớp một cặp (gỡ mục thừa khi mã đổi)", JSON.stringify(stale));
 const els = G.inlineStyles(path.resolve(".")).elements;
 ok(G.inlineStyles(path.resolve(".")).forwarders.get("Menu")?.base.includes("menu"), "nhận ra Menu chuyển style xuống thẻ .menu");
-ok(els.some((e) => e.file === "app/home.tsx" && e.cls.has("plus-menu") && e.props.has("bottom")), "thấy bottom nội dòng của menu + qua prop của Menu");
+ok(els.some((e) => e.file === "ui/home.tsx" && e.cls.has("plus-menu") && e.props.has("bottom")), "thấy bottom nội dòng của menu + qua prop của Menu");
 
 console.log("2. Bộ mẫu: ba dạng style nội dòng đè khai báo syn-over");
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "css-inline-"));

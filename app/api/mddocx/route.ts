@@ -4,7 +4,7 @@ import { blocksToDocx } from "../../../server/mddocx";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-// Tài liệu Markdown đã dựng (app/htmlblocks.ts) → tệp Word thật: { blocks, title } → .docx. Không lưu lại gì.
+// Tài liệu Markdown đã dựng (ui/htmlblocks.ts) → tệp Word thật: { blocks, title } → .docx. Không lưu lại gì.
 const MAX_BODY = 60 * 1024 * 1024;
 export const POST = handle(async (req: Request) => {
   sameOrigin(req);

@@ -1,4 +1,4 @@
-// Chiều cao ước tính của dòng tin ngoài màn hình (app/rowsize.ts): sát với chiều dài thật để cuộn ngược lên một đoạn chat cũ không giật. Không cần máy chủ.
+// Chiều cao ước tính của dòng tin ngoài màn hình (ui/rowsize.ts): sát với chiều dài thật để cuộn ngược lên một đoạn chat cũ không giật. Không cần máy chủ.
 import { loadTs } from "../lib/ts.mjs";
 let pass = 0, fail = 0;
 const ok = (c, n, x = "") => { c ? pass++ : fail++; console.log(c ? "  ✓" : "  ✗", n, c ? "" : String(x)); };

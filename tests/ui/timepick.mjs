@@ -1,5 +1,5 @@
 // Kiểm thử giao diện bằng Chrome ẩn (hồ sơ riêng) trên npm run dev:mock. Chạy tay: node tests/ui/timepick.mjs
-// Ô chọn giờ của việc tự động (app/timepick.tsx, thay <input type="time"> mặc định của Chrome): bảng chọn nổi trên hộp thoại, chọn giờ
+// Ô chọn giờ của việc tự động (ui/timepick.tsx, thay <input type="time"> mặc định của Chrome): bảng chọn nổi trên hộp thoại, chọn giờ
 // rồi phút thì điền HH:MM và đóng, gõ tay nhiều kiểu (1915, 7h30, 8 tối), gõ sai thì giữ giờ cũ, mốc nhanh, Esc đóng. Không lưu việc nào.
 import { spawn } from "node:child_process";
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";

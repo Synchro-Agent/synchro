@@ -1,7 +1,7 @@
 // Tài liệu Markdown → tệp Word thật (.docx, chỉ chạy ở máy chủ). Trước đây "Word" là HTML đổi tên .doc: Word mở được nhưng biểu mẫu nộp tệp có thể từ chối.
 import "server-only";
 import { AlignmentType, BorderStyle, Document, ExternalHyperlink, HeadingLevel, ImageRun, LevelFormat, Packer, Paragraph, ShadingType, Table, TableCell, TableRow, TextRun, WidthType } from "docx";
-import type { DocBlock, Run } from "../app/htmlblocks";
+import type { DocBlock, Run } from "../ui/htmlblocks";
 
 const FONT = "Calibri", MONO = "Consolas";
 // A4, lề 2,54 cm: vùng chữ 9026 twip (dùng chung cho độ rộng bảng, ảnh tối đa ~ 600 px).

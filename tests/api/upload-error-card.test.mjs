@@ -20,7 +20,7 @@ for (const want of [".pdf", ".docx", ".xlsx", ".pptx", ".csv", "image/*", "audio
   ok(T.UPLOAD_ACCEPT.includes(want), `accept gồm ${want}`, T.UPLOAD_ACCEPT);
 
 console.log("3. Thẻ tệp hiện lý do thành chữ (không chỉ ở title) và có nút Thử lại / Bỏ");
-const src = fs.readFileSync("app/fileicon.tsx", "utf8");
+const src = fs.readFileSync("ui/fileicon.tsx", "utf8");
 ok(/ft-err-box/.test(src) && /ft-err-msg/.test(src), "có khối lỗi riêng (.ft-err-box) với dòng chữ lý do (.ft-err-msg)");
 const i0 = src.indexOf("ft-err-box");
 const box = src.slice(i0, i0 + 500);
@@ -36,7 +36,7 @@ const crule = css.slice(ci, ci + 240);
 ok(ci >= 0 && /line-clamp:\s*2/.test(crule), ".ft-err-msg giới hạn 2 dòng", crule);
 
 console.log("5. filestate: hủy khi bỏ thẻ, hẹn giờ 120s, dedup theo tên|cỡ|lần sửa");
-const fsrc = fs.readFileSync("app/filestate.ts", "utf8");
+const fsrc = fs.readFileSync("ui/filestate.ts", "utf8");
 ok(/export function abortFile\(/.test(fsrc) && /\.abort\(\)/.test(fsrc), "có abortFile hủy XHR đang chạy");
 ok(/export function retryFile\(/.test(fsrc), "có retryFile để tải lại");
 ok(/x\.timeout\s*=\s*120_?000/.test(fsrc), "XHR có timeout 120000ms");

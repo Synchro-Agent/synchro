@@ -26,7 +26,7 @@ const route = fs.readFileSync("app/api/artimg/route.ts", "utf8");
 ok(/state = gen \? genImageState\(user\.user\.id, gen, img\.data\) : null/.test(route), "máy chủ nhận ra ảnh đang dựng nền");
 ok(/"cache-control": state \? "no-store" : "private, max-age=86400"/.test(route) && /state === "pending" \? \{ "x-synchro-pending": "1" \}/.test(route), "ảnh giữ chỗ: no-store và báo đang chờ");
 ok(/state === "failed" \? \{ "x-synchro-failed": "1" \}/.test(route), "ảnh nền dựng hỏng: báo hỏng để khung thôi hỏi lại");
-const ui = fs.readFileSync("app/artifactui.tsx", "utf8");
+const ui = fs.readFileSync("ui/artifactui.tsx", "utf8");
 ok(/r\.headers\.get\("x-synchro-pending"\) === "1"/.test(ui), "khung xem trước đọc cờ đang chờ");
 ok(/noteGenPending\(gen\)/.test(ui) && /noteGenSettled\(gen, r\.headers\.get\("x-synchro-failed"\) !== "1"\)/.test(ui), "khung xem trước báo khi ảnh nền vừa xong / hỏng");
 
@@ -41,7 +41,7 @@ ok(!A.noteGenSettled("anh-moi-1234", true) && fired.length === 1, "khung thứ h
 A.noteGenPending("anh-hong-1234");
 ok(A.noteGenSettled("anh-hong-1234", false) && fired[1]?.ok === false, "ảnh nền hỏng: báo hỏng", JSON.stringify(fired));
 delete globalThis.window;
-const page = fs.readFileSync("app/home.tsx", "utf8");
+const page = fs.readFileSync("ui/home.tsx", "utf8");
 ok(/window\.addEventListener\(GEN_IMG_EVENT, on\)/.test(page) && /tr\("Ảnh dựng nền đã xong và đã thay vào artifact\."\)/.test(page), "trang chat nghe sự kiện và báo một dòng");
 ok(/else if \(pendingImg\.has\(u\)\) setTimeout\(\(\) => \{ if \(imgCache\.get\(u\) === mine\) imgCache\.delete\(u\); \}/.test(ui), "ảnh giữ chỗ không nằm mãi trong imgCache");
 ok(/\$\{gen \? "&p=1" : ""\}/.test(ui), "địa chỉ mới cho ảnh đã dựng: bỏ qua bản giữ chỗ trình duyệt đã lưu 24 giờ");

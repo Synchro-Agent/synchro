@@ -100,10 +100,10 @@ ok(/đang tắt/.test(E.termDown({ available: true, running: false }, true)) && 
   ok(R.resetClock(far, "en") === "Thu 9:55 PM" && R.resetClock(far, "vi") === "T5 21:55", "thứ và giờ dùng chung", R.resetClock(far, "en"));
   const rd = (f) => fs.readFileSync(f, "utf8");
   // Thẻ hết hạn mức, thẻ lỗi lượt chat (đang ở home.tsx) tìm trong mọi tệp app/: tách home.tsx sang tệp khác không làm hỏng phép kiểm.
-  const usage = rd("app/usageui.tsx") + rd("app/usagering.tsx");
+  const usage = rd("ui/usageui.tsx") + rd("ui/usagering.tsx");
   ok(/return resetAt\(t, getLang\(\)\);/.test(usage) && anySource(/m\.notice\.at > Date\.now\(\) \? <p data-notr>\{resetAt\(m\.notice\.at, getLang\(\)\)\}<\/p>/), "bảng Mức dùng và thẻ hết hạn mức cùng gọi resetAt (tuyệt đối, một nguồn)");
   ok(!anySource(/weekday: "short", hour: "2-d/), "không còn nơi tự định dạng giờ đặt lại kiểu khác (Thu 09:55 PM)", filesMatching(/weekday: "short", hour: "2-d/).join(", "));
-  ok(/aria-label=\{tr\("Giao việc cho Synchro"\)\}/.test(rd("app/tasksui.tsx")), "ô Giao việc: aria-label dịch được (ô mang data-notr nên bộ dịch trang bỏ qua)");
+  ok(/aria-label=\{tr\("Giao việc cho Synchro"\)\}/.test(rd("ui/tasksui.tsx")), "ô Giao việc: aria-label dịch được (ô mang data-notr nên bộ dịch trang bỏ qua)");
   ok(anySource(/function ErrCard[^]*?useLangReady\(\);/), "thẻ lỗi lượt chat vẽ lại khi từ điển về");
   for (const [vi, want] of [["Câu trả lời chưa hoàn thành", "This reply didn't finish"], ["Quét skill rác", "Scan for junk skills"], ["Giao việc cho Synchro", "Give Synchro a job"], ["Không tải được thư viện chụp ảnh", "Couldn't load the screenshot library"], ["Gói subscription", "Subscription plan"], ["Hội thoại", "Dialogue"]])
     ok(en(vi) === want, `bản tiếng Anh: ${vi}`, en(vi));

@@ -17,7 +17,7 @@ export const GET = timed(async (req: Request, ctx: { params: Promise<{ id: strin
   if (!run) return Response.json({ error: "Không tìm thấy lượt trả lời này." }, { status: 404 });
   const url = new URL(req.url);
   // live: chữ đang viết, cho đoạn chat theo dõi bằng cách hỏi định kỳ (quá nhiều kết nối SSE cùng lúc, xem llm.ts).
-  // now: giờ máy chủ, để trình duyệt tính đồng hồ công cụ / đếm ngược theo giờ máy chủ dù đồng hồ máy người dùng lệch (app/clock.ts).
+  // now: giờ máy chủ, để trình duyệt tính đồng hồ công cụ / đếm ngược theo giờ máy chủ dù đồng hồ máy người dùng lệch (ui/clock.ts).
   if (url.searchParams.get("json")) return Response.json({ run, live: liveText(id), now: Date.now() });
   const after = Number(req.headers.get("last-event-id") ?? url.searchParams.get("after") ?? 0) || 0;
   const enc = new TextEncoder();
@@ -37,7 +37,7 @@ export const GET = timed(async (req: Request, ctx: { params: Promise<{ id: strin
       const ev = (e: RunEvent) => { if (e.seq <= sent) return; sent = e.seq; flushDeltas(); send(`id: ${e.seq}\nevent: step\ndata: ${JSON.stringify(e)}\n\n`); };
       const dl = gate.push;
       const done = (r: PublicRun) => { flushDeltas(); send(`event: done\ndata: ${JSON.stringify({ status: r.status, http: r.http, result: r.result })}\n\n`); end(); };
-      // Giờ máy chủ lúc mở luồng và mỗi 15 giây (thay cho dòng ping trống): đồng hồ trong khung chat theo giờ máy chủ (app/clock.ts).
+      // Giờ máy chủ lúc mở luồng và mỗi 15 giây (thay cho dòng ping trống): đồng hồ trong khung chat theo giờ máy chủ (ui/clock.ts).
       const clock = () => { flushDeltas(); send(`event: clock\ndata: {"now":${Date.now()}}\n\n`); };
       const ping = setInterval(clock, 15_000);
       // Đăng ký trước rồi mới đọc lại trạng thái, để không lỡ bước nào xảy ra ở giữa.

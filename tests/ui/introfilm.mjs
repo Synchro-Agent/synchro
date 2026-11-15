@@ -1,5 +1,5 @@
 // Kiểm thử giao diện bằng Chrome ẩn (hồ sơ riêng) trên npm run dev:mock. Chạy tay: node tests/ui/introfilm.mjs
-// Phim giới thiệu cho tài khoản mới (app/introfilm.tsx, chuyển cảnh app/handoff.ts): đăng ký bằng email → Kiểm tra email → Đăng nhập lần đầu → lời chào → vòng tròn kính quanh logo
+// Phim giới thiệu cho tài khoản mới (ui/introfilm.tsx, chuyển cảnh ui/handoff.ts): đăng ký bằng email → Kiểm tra email → Đăng nhập lần đầu → lời chào → vòng tròn kính quanh logo
 // hoá mực rồi nở ra phủ màn hình, logo thu về giữa thành chấm mở đầu của phim → phim phát có tiếng, phụ đề tiếng Việt, chấm của phim thế chỗ
 // bản sao → Bỏ qua (tài khoản 1) / hết phim (tài khoản 2) → logo bay về chỗ trong app, nền phim mở ra thành lỗ tròn, trang chủ lắp lại → vào app;
 // tải lại không phát lại; đăng xuất rồi đăng nhập lại (tài khoản 1): logo của lời chào bay về cạnh lời chào ở trang chủ, màn đăng nhập mở ra

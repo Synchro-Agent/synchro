@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Mark } from "./brand";
-import { LangSwitch } from "./langswitch";
+import { Mark } from "../ui/brand";
+import { LangSwitch } from "../ui/langswitch";
 
 // Trang 404 theo giao diện và ngôn ngữ người dùng đã chọn (layout đặt giao diện, I18n dịch chữ); luôn có đường về.
 export const metadata: Metadata = { title: "Không tìm thấy trang – Synchro" };

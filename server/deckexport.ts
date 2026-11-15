@@ -46,7 +46,7 @@ export async function deckBrowserJs(): Promise<string> {
   if (deckJsCache) return deckJsCache;
   const mod = (await import(/* webpackIgnore: true */ "typescript")) as unknown as { default?: Ts } & Ts;
   const ts: Ts = mod.default ?? mod;
-  const src = fs.readFileSync(path.join(process.cwd(), "app", "deckpptx.ts"), "utf8").replace(/^\s*"use client";?\s*/, "");
+  const src = fs.readFileSync(path.join(process.cwd(), "ui", "deckpptx.ts"), "utf8").replace(/^\s*"use client";?\s*/, "");
   const out = ts.transpileModule(src, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2019, removeComments: true } }).outputText;
   deckJsCache = `(function(){var exports={},module={exports:exports};\n${out}\n;window.__deck=module.exports;})();`;
   return deckJsCache;

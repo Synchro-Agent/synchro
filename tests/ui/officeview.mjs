@@ -148,7 +148,7 @@ function pdfBook(n) {
 const docs = new Map();
 const srv = http.createServer((q, r) => {
   const u = new URL(q.url, "http://x");
-  if (u.pathname === "/htmlblocks.mjs") { r.writeHead(200, { "content-type": "text/javascript", "access-control-allow-origin": "*" }); return r.end(R("typescript").transpileModule(fs.readFileSync("app/htmlblocks.ts", "utf8"), { compilerOptions: { module: 99, target: 9 } }).outputText); }
+  if (u.pathname === "/htmlblocks.mjs") { r.writeHead(200, { "content-type": "text/javascript", "access-control-allow-origin": "*" }); return r.end(R("typescript").transpileModule(fs.readFileSync("ui/htmlblocks.ts", "utf8"), { compilerOptions: { module: 99, target: 9 } }).outputText); }
   if (u.pathname.startsWith("/vendor/")) { const f = path.join(process.cwd(), "public", "vendor", path.basename(u.pathname)); if (fs.existsSync(f)) { r.writeHead(200, { "content-type": "text/javascript", "access-control-allow-origin": "*" }); return r.end(fs.readFileSync(f)); } r.writeHead(404); return r.end(); }
   r.writeHead(200, { "content-type": "text/html; charset=utf-8" }); r.end(docs.get(u.pathname) ?? "<!doctype html>");
 });

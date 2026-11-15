@@ -24,7 +24,7 @@ const chats = [
   { id: Bc, title: `Công thức nấu ăn ${R}`, msgs: [{ role: "user", text: "Nấu phở", time: Bc }, { role: "ai", text: "Cách nấu phở.", done: true, time: Bc + 1 }] },
   { id: C, title: `Bài tập toán ${R}`, msgs: [{ role: "user", text: "Giải bài", time: C }, { role: "ai", text: "Lời giải.", done: true, time: C + 1 }] },
 ];
-// Thẻ đã lưu ở thiết bị: dòng chỉ mục trong kho IndexedDB (app/chatidb.ts), không còn là khóa localStorage u:<uid>:chats.
+// Thẻ đã lưu ở thiết bị: dòng chỉ mục trong kho IndexedDB (ui/chatidb.ts), không còn là khóa localStorage u:<uid>:chats.
 const LS = idbRows(uid);
 const row = (title) => `[...document.querySelectorAll(".chat-wrap")].find((w) => w.querySelector(".ct-t")?.textContent === ${JSON.stringify(title)})`;
 const menuBox = `(() => { const m = [...document.querySelectorAll(".menu")].find((x) => !x.classList.contains("out") && x.querySelector(".tag-pick")); if (!m) return null; const r = m.getBoundingClientRect(); const own = getComputedStyle(m).backgroundColor, pre = getComputedStyle(m, "::before").backgroundColor; const bg = own === "rgba(0, 0, 0, 0)" || own === "transparent" ? pre : own; return { l: r.left, r: r.right, t: r.top, b: r.bottom, bg }; })()`;

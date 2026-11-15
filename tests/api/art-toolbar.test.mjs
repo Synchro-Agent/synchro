@@ -4,7 +4,7 @@ import fs from "node:fs";
 
 let pass = 0, fail = 0;
 const ok = (c, n, x = "") => { c ? pass++ : fail++; console.log(c ? "  ✓" : "  ✗", n, c ? "" : String(x).slice(0, 400)); };
-const ds = fs.readFileSync("app/synchro-ds.css", "utf8").replace(/\/\*[\s\S]*?\*\//g, ""), g = fs.readFileSync("app/globals.css", "utf8"), ui = fs.readFileSync("app/artifactui.tsx", "utf8");
+const ds = fs.readFileSync("app/synchro-ds.css", "utf8").replace(/\/\*[\s\S]*?\*\//g, ""), g = fs.readFileSync("app/globals.css", "utf8"), ui = fs.readFileSync("ui/artifactui.tsx", "utf8");
 
 const coarse = ds.match(/@media \(pointer:coarse\)\{([\s\S]*?)\n\}/)?.[1] ?? "";
 ok(/min-width:44px;min-height:44px/.test(coarse), "màn cảm ứng: vùng bấm 44px vẫn giữ");

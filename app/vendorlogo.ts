@@ -2,9 +2,9 @@
 // nhà cung cấp tương thích OpenAI tự thêm và model sổ model tự dò sau này. Thứ tự: dòng model nhận ra từ mã (claude, gpt, gemini, llama, qwen…),
 // rồi loại nhà cung cấp tích hợp sẵn, rồi tên miền API đã biết (openrouter.ai, api.groq.com…), rồi biểu tượng trang của tên miền API
 // (tải hộ qua /api/favicon?p=<mã nhà cung cấp>, trình duyệt không thấy địa chỉ API), cuối cùng là chữ cái đầu.
-// Ảnh nằm ở public/logos (giấy phép ghi trong public/logos/README.md); Claude, OpenAI, Gemini, Grok, DeepSeek, ElevenLabs vẽ trong app/brands.tsx.
+// Ảnh nằm ở public/logos (giấy phép ghi trong public/logos/README.md); Claude, OpenAI, Gemini, Grok, DeepSeek, ElevenLabs vẽ trong ui/brands.tsx.
 
-/** Logo vẽ sẵn trong app/brands.tsx. */
+/** Logo vẽ sẵn trong ui/brands.tsx. */
 export const INLINE_LOGOS = ["anthropic", "openai", "google", "xai", "deepseek", "elevenlabs"] as const;
 /** Logo tệp trong public/logos: "img" giữ màu thương hiệu (hiện đúng cả nền sáng lẫn tối), "mask" tô bằng color (không có thì currentColor, đổi theo giao diện). */
 export const FILE_LOGOS: Record<string, { mode: "img" | "mask"; color?: string; src?: string }> = {

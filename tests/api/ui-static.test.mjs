@@ -25,15 +25,15 @@ for (const r of SRC_ROOTS.filter((r) => fs.existsSync(r))) (function walk(d) { f
 const native = tsx.filter((f) => /(^|[^.\w])(window\.)?prompt\(/m.test(read(f)));
 ok(!native.length, "không còn hộp prompt() của trình duyệt", native);
 
-ok(/streaming=\{live && i === blocks\.length - 1\}/.test(read("app/agentui.tsx")), "Synchro Code: bước đang viết vẫn hiện chữ dần");
-ok(/streaming=\{!n\.done\}/.test(read("app/codeview.tsx")), "Synchro Code: câu trả lời đang viết vẫn hiện chữ dần");
-ok(/streaming=\{!art\.complete\}/.test(read("app/artifactui.tsx")), "Artifact đang viết vẫn hiện chữ dần");
+ok(/streaming=\{live && i === blocks\.length - 1\}/.test(read("ui/agentui.tsx")), "Synchro Code: bước đang viết vẫn hiện chữ dần");
+ok(/streaming=\{!n\.done\}/.test(read("ui/codeview.tsx")), "Synchro Code: câu trả lời đang viết vẫn hiện chữ dần");
+ok(/streaming=\{!art\.complete\}/.test(read("ui/artifactui.tsx")), "Artifact đang viết vẫn hiện chữ dần");
 
 // Thanh bên tách khỏi home.tsx sang Sidebar.tsx (blueprint B2): đọc cả hai.
-const page = read("app/home.tsx") + read("app/Sidebar.tsx");
+const page = read("ui/home.tsx") + read("ui/Sidebar.tsx");
 ok(/<button className="pj-tg"[^>]*aria-expanded=\{open\}/.test(page), "nút thu gọn dự án là nút thật, báo trạng thái mở");
 ok(!/<span className="pj-tg" role="button"/.test(page), "không còn nút lồng trong nút ở dòng dự án");
-const lb = read("app/filemenu.tsx");
+const lb = read("ui/filemenu.tsx");
 ok(/className="overlay ft-lightbox"/.test(lb) && /role="dialog" aria-modal="true" aria-label="Xem ảnh"/.test(lb), "hộp xem ảnh dùng cơ chế hộp thoại chung");
 
 // U8: khung xem Excel / CSV luôn có thanh cuộn ngang mảnh (cột F trở đi không bị cắt im lặng) và nút "Vừa chiều rộng" có bản tiếng Anh.
@@ -51,7 +51,7 @@ ok(/className="overlay ft-lightbox"/.test(lb) && /role="dialog" aria-modal="true
 
 // U11: chip nguồn — favicon hỏng / 1×1 thành chữ cái đầu trên nền trung tính; tối đa 6 chip, còn lại "+N nguồn".
 {
-  const c = read("app/cites.tsx"), css = read("app/synchro-ds.css");
+  const c = read("ui/cites.tsx"), css = read("app/synchro-ds.css");
   ok(/onLoad=\{\(e\) => \{ if \(e\.currentTarget\.naturalWidth < 2/.test(c) && /onError=\{\(\) => setBad\(true\)\}/.test(c), "favicon: ảnh lỗi hoặc ảnh 1×1 chuyển sang chữ cái đầu");
   ok(/export const SHOWN_SOURCES = 6;/.test(c) && /tr\(`\+\$\{more\} nguồn`\)/.test(c), "tối đa 6 chip nguồn, phần còn lại gom vào +N nguồn");
   ok(/\.msg-sources a\[hidden\]\{display:none\}/.test(css), "chip ẩn thật sự ẩn (hidden thắng display:inline-flex)");
@@ -61,7 +61,7 @@ ok(/className="overlay ft-lightbox"/.test(lb) && /role="dialog" aria-modal="true
 
 // U12: trang Speech không còn trống 2 giây chờ gói ElevenLabs — bố cục và khối giả hiện ngay, gói chỉ điền phần credit / công cụ.
 {
-  const v = read("app/speech/view.tsx"), p = read("app/speech/parts.tsx"), css = read("app/speech/speech.css");
+  const v = read("ui/speech/view.tsx"), p = read("ui/speech/parts.tsx"), css = read("app/speech/speech.css");
   ok(/const planFailed = usePlanFailed\(\);\s*const waiting = !plan && !planFailed;/.test(v), "Speech: biết lúc gói còn đang đọc (hook gọi vô điều kiện)");
   ok(/if \(!plan && !failed\) return \(\s*<div className="sp-home" aria-busy="true">/.test(v) && /\{recentList\}\s*<\/div>\s*\);\s*if \(!plan \|\| !plan\.connected\)/.test(v), "Speech: trang chính dựng ngay ô soạn, thẻ công cụ, mục Gần đây trong lúc chờ gói");
   ok(/waiting && <span className="sk-blk sp-credit-wait"/.test(v) && /waiting && \[[\d, ]+\]\.map\(\(w, i\) => <span key=\{i\} className="sk-blk sp-tab-wait"/.test(v), "Speech: chỗ credit và thanh công cụ có khối giả");
@@ -71,7 +71,7 @@ ok(/className="overlay ft-lightbox"/.test(lb) && /role="dialog" aria-modal="true
 
 // U13: sơ đồ Mermaid trong câu trả lời không cao hơn màn hình; có nút phóng to cả màn hình.
 {
-  const md = read("app/md.tsx"), css = read("app/globals.css");
+  const md = read("ui/md.tsx"), css = read("app/globals.css");
   ok(/if \(lang === "mermaid"\) return <MermaidCard code=\{code\} \/>;/.test(md), "sơ đồ Mermaid trong chat dùng khung có nút phóng to");
   ok(/\.viz-mm \.art-mermaid svg\{max-height:min\(70vh,520px\)\}/.test(css), "sơ đồ cao tối đa min(70vh, 520px)");
   ok(/aria-label=\{tr\("Phóng to sơ đồ"\)\}/.test(md) && /role="dialog" aria-modal="true" aria-label=\{tr\("Sơ đồ"\)\}/.test(md) && /e\.key === "Escape"/.test(md), "nút phóng to có tên, khung cả màn hình là hộp thoại có tên, Esc đóng");
@@ -103,7 +103,7 @@ ok(/className="overlay ft-lightbox"/.test(lb) && /role="dialog" aria-modal="true
     }
   }
   ok(!unnamed.length, "nút đóng chỉ có dấu × đều có aria-label", unnamed.join(", "));
-  const mo = read("app/modals.tsx");
+  const mo = read("ui/modals.tsx");
   ok(/role="alertdialog" aria-modal="true" aria-labelledby=\{`\$\{id\}-t`\} aria-describedby=\{`\$\{id\}-d`\}/.test(mo) && /<h2 id=\{`\$\{id\}-t`\}/.test(mo), "hộp xác nhận (Đăng xuất?) có tên và mô tả");
   // R13/INT-4: StrictMode gắn–gỡ–gắn lại cùng ref; cờ "đã đóng" phải đặt lại khi gắn, không thì Đăng xuất (xóa dữ liệu) kẹt ở "Đang lưu lên máy chủ…".
   const lo = mo.slice(mo.indexOf("export function LogoutConfirm"), mo.indexOf("export function LogoutConfirm") + 2000);

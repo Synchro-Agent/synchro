@@ -1,6 +1,6 @@
 // Kiểm thử giao diện bằng Chrome ẩn (hồ sơ riêng) trên npm run dev:mock. Chạy tay: node tests/ui/skillzip.mjs
 // Tải lên gói skill lớn (vd. "Download ZIP" cả repo, 143 MB) từng bị nginx chặn với "Lỗi 413": trình duyệt chỉ tải lên thư mục các skill
-// (app/skillzip.ts), gói vẫn quá lớn / không có SKILL.md thì báo rõ, không gửi; 413 không kèm lời giải thích thì báo "Tệp quá lớn…".
+// (ui/skillzip.ts), gói vẫn quá lớn / không có SKILL.md thì báo rõ, không gửi; 413 không kèm lời giải thích thì báo "Tệp quá lớn…".
 import { spawn } from "node:child_process";
 import crypto from "node:crypto";
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";

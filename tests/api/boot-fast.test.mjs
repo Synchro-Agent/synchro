@@ -45,17 +45,17 @@ try {
   ok(/o\.fast \? await within\(mp/.test(bd) && /studioSummaryCached/.test(bd), "bootOf fast: model có hạn, studio chỉ đọc bản đã tính");
 
   console.log("2. Cài đặt Code từ gói khởi động");
-  const home = src("app/home.tsx");
+  const home = src("ui/home.tsx");
   ok(/seedCodePrefs\(b\.codePrefs\)/.test(home), "home gieo cài đặt Code từ boot");
   ok(!/codeListRef\.current\.length\) return; const t = setTimeout\(\(\) => setCpWant/.test(home) && /if \(!me\) return; const t = setTimeout\(\(\) => setCpWant\(true\), 5000\)/.test(home), "lần tải dự phòng sau 5 giây không phụ thuộc máy đã có phiên Code hay chưa");
-  const cs = src("app/codesync.ts");
+  const cs = src("ui/codesync.ts");
   ok(/export function seedCodePrefs\(p: CodePrefs \| null \| undefined\) \{ if \(!p \|\| prefs\) return; prefs = p; emit\(\); \}/.test(cs), "seedCodePrefs không ghi đè bản đã tải");
 
   console.log("3. Bộ đệm cachedJson theo tài khoản");
   ok(/resetCodePrefs\(\); clearJsonCache\(\);/.test(home) && /setUserScope\(null\); reloadPrefs\(\); resetCodePrefs\(\); clearJsonCache\(\);/.test(home), "enterAccount và logout xóa bộ đệm cachedJson");
   const { jsoncache: ST, userscope: US } = await loadTs(["jsoncache", "userscope"]);
   const META = "/api/plugins?view=meta";
-  ok(/export const META = "\/api\/plugins\?view=meta"/.test(src("app/studios.ts")) && /from "\.\/jsoncache"/.test(src("app/studios.ts")), "studios.ts dùng bộ đệm của jsoncache.ts");
+  ok(/export const META = "\/api\/plugins\?view=meta"/.test(src("ui/studios.ts")) && /from "\.\/jsoncache"/.test(src("ui/studios.ts")), "studios.ts dùng bộ đệm của jsoncache.ts");
   const calls = [];
   globalThis.fetch = async (url) => { calls.push(String(url)); return new Response(JSON.stringify({ admin: false, from: "net" }), { status: 200, headers: { "content-type": "application/json" } }); };
   US.setUserScope("admin-a");
@@ -70,7 +70,7 @@ try {
   ok((await ST.cachedJson(META)).from === "net" && calls.length === 2, "clearJsonCache bỏ hết bản đệm");
 
   console.log("4. Phim giới thiệu");
-  const film = src("app/introfilm.tsx");
+  const film = src("ui/introfilm.tsx");
   ok(/requestFullscreen\(\)/.test(film) && /className=\{`intro-btn fs/.test(film), "có nút Toàn màn hình (requestFullscreen)");
   ok(/const fullScreen = \(\) => !!document\.fullscreenElement;/.test(film) && /document\.addEventListener\("fullscreenchange", fs\)/.test(film), "chỉ đổi 1080p khi trang vào toàn màn hình (không đoán theo kích thước khung: Chrome ẩn, PWA)");
   ok(/!!document\.fullscreenEnabled && screen\.width >= 1280/.test(film), "nút Toàn màn hình chỉ trên màn ≥ 1280px (điện thoại không thêm nút)");
@@ -79,7 +79,7 @@ try {
   ok(/\.intro-btn\.fs\{/.test(src("app/globals.css")), "nút Toàn màn hình có kiểu riêng (cạnh nút tiếng)");
 
   console.log("5. /ts mang phiên bản");
-  const heavy = src("app/heavy.ts");
+  const heavy = src("ui/heavy.ts");
   const rev = /export const TS_REV = "([^"]+)"/.exec(heavy)?.[1];
   const ver = (p) => JSON.parse(src(`node_modules/${p}/package.json`)).version;
   ok(rev === `${ver("web-tree-sitter")}-${ver("tree-sitter-wasms")}`, "TS_REV khớp phiên bản web-tree-sitter và tree-sitter-wasms đã cài", { rev, wts: ver("web-tree-sitter"), wasms: ver("tree-sitter-wasms") });

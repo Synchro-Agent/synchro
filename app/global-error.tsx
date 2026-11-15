@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { reportError } from "./errorreport";
+import { reportError } from "../ui/errorreport";
 
 // Lỗi ở chính khung trang (layout): không có CSS và bộ dịch của app nên tự mang kiểu và tự chọn ngôn ngữ.
 const CSS = `body{margin:0;min-height:100vh;display:grid;place-items:center;background:#EEECE5;color:#111210;font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}

@@ -397,8 +397,8 @@ const fmt = (d) => `${d.sheet}${d.line ? `:${d.line}` : ""} ${d.media.length && 
 // Kiểu chèn nội dòng không lớp của app (thẻ <style> trong tsx): luôn nạp sau tệp CSS.
 function injected(root) {
   const out = [];
-  const gf = fs.readFileSync(path.join(root, "app/glass-folder.tsx"), "utf8"); const m1 = /const GF_CSS = `([\s\S]*?)`;/.exec(gf); if (m1) out.push({ name: "glass-folder.tsx GF_CSS", css: m1[1] });
-  const au = fs.readFileSync(path.join(root, "app/auth.tsx"), "utf8"); const m2 = /<style>\{`([\s\S]*?)`\}<\/style>/.exec(au); if (m2) out.push({ name: "auth.tsx <style>", css: m2[1].replace(/\$\{[^}]*\}/g, "0") });
+  const gf = fs.readFileSync(path.join(root, "ui/glass-folder.tsx"), "utf8"); const m1 = /const GF_CSS = `([\s\S]*?)`;/.exec(gf); if (m1) out.push({ name: "glass-folder.tsx GF_CSS", css: m1[1] });
+  const au = fs.readFileSync(path.join(root, "ui/auth.tsx"), "utf8"); const m2 = /<style>\{`([\s\S]*?)`\}<\/style>/.exec(au); if (m2) out.push({ name: "auth.tsx <style>", css: m2[1].replace(/\$\{[^}]*\}/g, "0") });
   return out;
 }
 // Thư viện ngoài nạp chậm: qua tệp bọc app/vendor/*.css (B5, dịch như bản dựng để có lớp), hay thẳng tệp trong node_modules (không lớp).

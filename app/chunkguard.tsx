@@ -2,8 +2,8 @@
 // Tab mở từ bản cũ quá lâu (chunk cũ chỉ được giữ khoảng một ngày sau khi bản đó bị thay): mở Monaco, Mermaid… thì tải chunk lỗi 404.
 // Tải lại trang một lần để lấy bản mới, thay vì để trang vỡ. Lượt trả lời đang chạy vẫn chạy tiếp ở máy chủ. Một phút tối đa một lần: lỗi thật không thành vòng lặp.
 import { useEffect } from "react";
-import { reportError } from "./errorreport";
-import { installNetError } from "./session";
+import { reportError } from "../ui/errorreport";
+import { installNetError } from "../ui/session";
 
 const CHUNK = /ChunkLoadError|Loading (CSS )?chunk|dynamically imported module|Importing a module script failed/i;
 export function ChunkGuard() {

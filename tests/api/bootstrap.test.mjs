@@ -62,28 +62,28 @@ try {
   ok(!CS.earlyUsable(null, "a", 0), "không có lần hỏi sớm: không dùng");
 
   console.log("3. Mã nguồn trang chủ");
-  const page = src("app/page.tsx"), home = src("app/home.tsx");
+  const page = src("app/page.tsx"), home = src("ui/home.tsx");
   ok(!/^"use client"/.test(page) && /cookies\(\)/.test(page) && /bootFor\(/.test(page) && /<Home boot=\{boot\} \/>/.test(page), "app/page.tsx: server component đọc cookie, dựng gói, truyền <Home boot>");
-  ok(/^"use client"/.test(home) && /export default function Home\(\{ boot \}/.test(home), "app/home.tsx: thân trang (client) nhận boot");
+  ok(/^"use client"/.test(home) && /export default function Home\(\{ boot \}/.test(home), "ui/home.tsx: thân trang (client) nhận boot");
   ok(/seedModels\(b\.models\)/.test(home) && /seedCaps\(b\.caps\)/.test(home) && /seedMeta\(b\.studios\)/.test(home) && /seedInboxCount\(b\.inboxCount\)/.test(home), "gieo models, caps, studios, số mục Hộp thư từ boot");
-  // Hiệu ứng mở app tách sang app/homehooks.ts (blueprint B2 bước 8): Home gọi useBoot({ boot: bootRef.current … }) và usePageSetup(boot).
-  const hooks = src("app/homehooks.ts");
+  // Hiệu ứng mở app tách sang ui/homehooks.ts (blueprint B2 bước 8): Home gọi useBoot({ boot: bootRef.current … }) và usePageSetup(boot).
+  const hooks = src("ui/homehooks.ts");
   ok(/tries === undefined \? live\.current\.boot : null/.test(hooks) && /useBoot\(\{ boot: bootRef\.current/.test(home), "lần đầu dùng gói dựng sẵn, lần thử lại mới hỏi /api/auth/me");
   ok(/prefetchChats\(boot\.user\.id\)/.test(hooks) && /usePageSetup\(boot\)/.test(home), "hỏi /api/chats?since= ngay lúc hydrate");
   ok(/useCodePrefs\(cpWant\)/.test(home) && !/useCodePrefs\(\)/.test(home), "/api/code/prefs hoãn tới khi cần");
   ok(/const needBrw = view === "chat" \|\| brwFor !== null/.test(home) && !/if \(me\) fetch\("\/api\/browser"\)/.test(home), "/api/browser hoãn tới khi mở đoạn chat / khung trình duyệt");
-  for (const f of ["app/studios.ts", "app/ghadd.tsx", "app/skillsui.tsx"]) ok(!/fetch\("\/api\/plugins\?view=meta"\)/.test(src(f)) && /cachedJson<PluginsMeta>\(META\)/.test(src(f)), `${f}: view=meta qua cachedJson`);
-  ok(/export async function restyle|const restyle = async/.test(home) && /import\("\.\/artkit"\)/.test(home), "đổi phong cách: artkit tải khi bấm");
+  for (const f of ["ui/studios.ts", "ui/ghadd.tsx", "ui/skillsui.tsx"]) ok(!/fetch\("\/api\/plugins\?view=meta"\)/.test(src(f)) && /cachedJson<PluginsMeta>\(META\)/.test(src(f)), `${f}: view=meta qua cachedJson`);
+  ok(/export async function restyle|const restyle = async/.test(home) && /import\("(?:\.\.?\/)+(?:app\/|shared\/)?artkit"\)/.test(home), "đổi phong cách: artkit tải khi bấm");
 
   // Phần tải đầu: các tệp import tĩnh từ layout + page + home (giống tests/api/css-split.test.mjs).
   const walk = (d) => fs.readdirSync(d, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? (e.name === "api" ? [] : walk(path.join(d, e.name))) : /\.tsx?$/.test(e.name) ? [path.join(d, e.name)] : []));
   const all = Object.fromEntries(SRC_ROOTS.filter((r) => fs.existsSync(r)).flatMap(walk).map((f) => [f, src(f)]));
   const resolve = (from, spec) => { if (!spec.startsWith(".")) return null; const p = path.join(path.dirname(from), spec); return [`${p}.tsx`, `${p}.ts`, `${p}/index.ts`].find((x) => all[x] !== undefined) ?? null; };
   const imports = (f) => [...all[f].replace(/^import type .*$/gm, "").matchAll(/^(?:import|export)\s[^;'"]*?from\s+["']([^"']+)["']/gm)].map((m) => resolve(f, m[1])).filter(Boolean);
-  const first = new Set(["app/home.tsx", "app/layout.tsx"]), q = [...first];
+  const first = new Set(["ui/home.tsx", "app/layout.tsx"]), q = [...first];
   while (q.length) for (const n of imports(q.pop())) if (!first.has(n)) { first.add(n); q.push(n); }
-  for (const f of ["server/router.ts", "app/artkit.ts", "app/speech/data.ts", "app/usageui.tsx", "app/settings.tsx"]) ok(!first.has(f), `${f} không nằm trong phần tải đầu`);
-  ok(first.has("app/usagering.tsx") && first.has("app/vendor.ts") === false, "vòng Mức dùng (usagering.tsx) có sẵn; vendor.ts chỉ theo trang Mức dùng");
+  for (const f of ["server/router.ts", "app/artkit.ts", "app/speech/data.ts", "ui/usageui.tsx", "ui/settings.tsx"]) ok(!first.has(f), `${f} không nằm trong phần tải đầu`);
+  ok(first.has("ui/usagering.tsx") && first.has("app/vendor.ts") === false, "vòng Mức dùng (usagering.tsx) có sẵn; vendor.ts chỉ theo trang Mức dùng");
 
   console.log("4. Ngân sách tải đầu (scripts/budget.mjs)");
   const B = await import(path.resolve("scripts/budget.mjs"));

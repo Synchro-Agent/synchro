@@ -1,6 +1,6 @@
 // Số lần vẽ lại và tác vụ dài khi một câu trả lời dài (khoảng 2.000 từ) đang chảy về, máy giảm tốc CPU 4 lần (blueprint B2.8).
 // Kiểm thử giao diện bằng Chrome ẩn (hồ sơ riêng) trên npm run dev:mock. Chạy tay: node tests/ui/render-perf.mjs
-// Đếm bằng app/perfmark.ts (countRender trong Thanh bên, Ô soạn tin, Home): chỉ tính lúc chữ đang chảy, bỏ các lần vẽ lúc bắt đầu / kết thúc lượt.
+// Đếm bằng ui/perfmark.ts (countRender trong Thanh bên, Ô soạn tin, Home): chỉ tính lúc chữ đang chảy, bỏ các lần vẽ lúc bắt đầu / kết thúc lượt.
 // Chạy hai khổ: 1440×900 (thanh bên mở) và điện thoại 375×812 (ngăn kéo đóng).
 // Mặc định chặn: câu trả lời về đủ, Composer = 0 (Ô soạn tin không vẽ lại lúc chữ chảy, B2 bước 1–4) và Sidebar = 0 (Thanh bên tách khỏi
 // Home, Home không đăng ký danh sách đoạn chat: B2 bước 5–7). Biến môi trường:

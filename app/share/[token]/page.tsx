@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { publicShare, shareForView } from "../../../server/sharestore";
-import { ShareView } from "../../shareview";
+import { ShareView } from "../../../ui/shareview";
 
 export const dynamic = "force-dynamic";
 

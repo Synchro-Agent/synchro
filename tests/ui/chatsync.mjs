@@ -123,7 +123,7 @@ try {
   ok(items.some((x) => x.id === String(id) && !x.deleted && x.data.includes("OLD123")), "đoạn chat cũ đã lên máy chủ", JSON.stringify(items).slice(0, 300));
   ok(!items.some((x) => x.id === String(inc)), "đoạn chat ẩn danh không lên máy chủ");
   ok(await ev(`(localStorage.getItem("u:${uid}:chats") ?? "").includes("OLD123")`), "khóa cũ trong trình duyệt vẫn còn sau khi máy chủ đã nhận (giữ 7 ngày)");
-  // Khóa localStorage cũ đã được nhập vào kho IndexedDB của thiết bị (app/chatidb.ts); đoạn ẩn danh thì không.
+  // Khóa localStorage cũ đã được nhập vào kho IndexedDB của thiết bị (ui/chatidb.ts); đoạn ẩn danh thì không.
   const rows1 = await ev(idbRows(uid));
   ok(rows1.some((r) => r.id === id && (r.body ?? "").includes("OLD123")) && !rows1.some((r) => r.id === inc), "kho IndexedDB có thân đoạn chat cũ, không có đoạn ẩn danh", rows1.map((r) => r.id));
 

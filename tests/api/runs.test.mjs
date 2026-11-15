@@ -51,7 +51,7 @@ ok(b.steps.every((s) => s.seq > 1) && b.steps.length === a.steps.length - 1, `n�
 ok(b.done?.result?.text === a.done.result.text, "mở lại lượt đã xong vẫn nhận nguyên kết quả");
 const j = await call("GET", `/api/runs/${id}?json=1`);
 ok(j.j?.run?.status === "done", "trạng thái dạng JSON (dự phòng khi không mở được SSE)");
-// Giờ máy chủ cho đồng hồ công cụ / đếm ngược ở trình duyệt (app/clock.ts): đồng hồ máy người dùng lệch không làm sai số giây.
+// Giờ máy chủ cho đồng hồ công cụ / đếm ngược ở trình duyệt (ui/clock.ts): đồng hồ máy người dùng lệch không làm sai số giây.
 ok(typeof b.clocks[0] === "number" && Math.abs(b.clocks[0] - Date.now()) < 10_000 && typeof j.j?.now === "number" && Math.abs(j.j.now - Date.now()) < 10_000, "luồng SSE và trạng thái JSON kèm giờ máy chủ", JSON.stringify({ clocks: b.clocks, now: j.j?.now }));
 console.log("3. Bảo mật và danh sách");
 const other = await fetch(`${B}/api/runs/${id}?json=1`);

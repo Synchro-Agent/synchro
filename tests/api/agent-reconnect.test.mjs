@@ -48,7 +48,7 @@ globalThis.fetch = async () => Response.json({ error: "Bạn gửi quá nhiều 
 const err2 = await W.streamAgent({ sid: "9" }, () => {}, new AbortController().signal).then(() => null, (e) => e);
 ok(err2 && !W.alreadyRunning(err2) && err2.message === "Bạn gửi quá nhiều yêu cầu.", "429 vẫn là lỗi có lời báo", String(err2));
 ok(!W.alreadyRunning(new Error("x")) && !W.alreadyRunning(null), "lỗi mạng không phải đang có lượt");
-const view = readFileSync(new URL("../../app/codeview.tsx", import.meta.url), "utf8");
+const view = readFileSync(new URL("../../ui/codeview.tsx", import.meta.url), "utf8");
 const handler = /catch \(e\) \{\n\s*if \(alreadyRunning\(e\)[^\n]*\n/.exec(view)?.[0] ?? "";
 ok(/joinRun\(/.test(handler) && /return;/.test(handler), "codeview: 409 nối vào lượt và không chạy nhánh kết thúc lượt (endAgent báo running:false)", handler);
 
@@ -60,7 +60,7 @@ const folded = F.foldAgentEvent({ ai: "", steps: [] }, { t: "error", error: W.GO
 ok(folded.steps[0].text === "⚠️ " + W.GONE && F.localizeNote(folded.steps[0].text, t) === "⚠️ The server restarted", "lỗi lượt lưu chữ gốc, hiện theo ngôn ngữ", folded.steps);
 ok(F.localizeNote("⚠️ Một câu model tự viết", t) === "⚠️ Một câu model tự viết" && F.localizeNote(W.GONE, t) === W.GONE, "chữ không phải lời báo thì giữ nguyên");
 for (const s of [W.GONE, "Phiên này đang có một lượt chạy.", "Không có ai duyệt sau 30 phút nên lượt này đã dừng.", "Không kết nối được agent.", "Lỗi máy chủ", "Tài khoản của bạn đang chạy nhiều lượt cùng lúc. Lượt này đang xếp hàng và sẽ tự chạy khi có lượt xong.", "Máy chủ đang bận. Lượt này đang xếp hàng và sẽ tự chạy khi có chỗ."]) ok(dict.includes(`"${s}"`), "có bản tiếng Anh: " + s.slice(0, 40));
-const ui = readFileSync(new URL("../../app/agentui.tsx", import.meta.url), "utf8");
+const ui = readFileSync(new URL("../../ui/agentui.tsx", import.meta.url), "utf8");
 ok(/localizeNote\(b\.text, tr\)/.test(ui) && /tr\(b\.text\)/.test(ui), "AgentSteps dịch lời báo và ghi chú xếp hàng lúc vẽ");
 
 console.log(`\n${pass} đạt, ${fail} lỗi`);

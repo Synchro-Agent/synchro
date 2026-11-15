@@ -331,7 +331,7 @@ ok(tg?.model === "text-embedding-3-small" && tg.provider === "openai", "có khó
 {
   const plan = AU.db().prepare("EXPLAIN QUERY PLAN SELECT COUNT(*) AS n, MAX(at) AS m FROM vec_items WHERE scope = ? AND owner = ? AND model = ? AND dim > 0").all("brain", "x", "m").map((r) => r.detail).join(" | ");
   ok(/COVERING INDEX/.test(plan), "đếm vector dùng chỉ mục phủ", plan);
-  const src = fs.readFileSync(path.join(process.cwd(), "app", "healthui.tsx"), "utf8");
+  const src = fs.readFileSync(path.join(process.cwd(), "ui", "healthui.tsx"), "utf8");
   const unit = src.slice(src.indexOf("const UNIT"), src.indexOf("const cacheText"));
   const miss = Object.keys(V.vecStats()).filter((k) => !new RegExp(`\\b${k}:`).test(unit));
   ok(!miss.length, "mọi số liệu vector có tên dễ hiểu ở Sức khỏe hệ thống", miss.join(","));

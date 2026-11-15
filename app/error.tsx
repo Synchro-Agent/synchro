@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect } from "react";
-import { Mark } from "./brand";
-import { reportError } from "./errorreport";
+import { Mark } from "../ui/brand";
+import { reportError } from "../ui/errorreport";
 
 // Lỗi khi hiển thị một trang: thay màn hình trắng "Application error". Phần đang gõ đã nằm trong bản nháp (draft.ts), tải lại trang là có lại.
 export default function ErrorPage({ error }: { error: Error & { digest?: string } }) {

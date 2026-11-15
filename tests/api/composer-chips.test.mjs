@@ -1,4 +1,4 @@
-// Dải thẻ đính kèm ô soạn tin (app/composerchips.ts): số thẻ ẩn sau "+N". Không cần máy chủ.
+// Dải thẻ đính kèm ô soạn tin (ui/composerchips.ts): số thẻ ẩn sau "+N". Không cần máy chủ.
 import { loadTs } from "../lib/ts.mjs";
 let pass = 0, fail = 0;
 const ok = (c, n, x = "") => { c ? pass++ : fail++; console.log(c ? "  ✓" : "  ✗", n, c ? "" : String(x)); };
@@ -31,9 +31,9 @@ ok(C.edgeFade(box({ clientHeight: 266, scrollHeight: 266 }), "y") === "", "lư�
 
 // LIVE-2 / LIVE-3 / R12: "+N" và "Thu gọn" nằm ngoài khung cuộn; lưới cao đúng số hàng trọn vẹn; trạng thái trải lưới đặt lại theo từng tin.
 import fs from "node:fs";
-const css = fs.readFileSync("app/globals.css", "utf8"), home = fs.readFileSync("app/home.tsx", "utf8"), code = fs.readFileSync("app/codeview.tsx", "utf8");
-// Dải thẻ dùng chung (app/attachstrip.tsx) cho ô soạn tin thường và Synchro Code.
-const page = fs.readFileSync("app/attachstrip.tsx", "utf8");
+const css = fs.readFileSync("app/globals.css", "utf8"), home = fs.readFileSync("ui/home.tsx", "utf8"), code = fs.readFileSync("ui/codeview.tsx", "utf8");
+// Dải thẻ dùng chung (ui/attachstrip.tsx) cho ô soạn tin thường và Synchro Code.
+const page = fs.readFileSync("ui/attachstrip.tsx", "utf8");
 ok(/<AttachStrip cards=\{cards\} open=\{chipsOpen\} setOpen=\{setChipsOpen\}/.test(home) && /<AttachStrip className="cv-attach" open=\{stripOpen\} setOpen=\{setStripOpen\}/.test(code), "ô soạn thường và Synchro Code cùng dùng AttachStrip");
 ok(/if \(files\.length <= CHIP_LIMIT\) setStripOpen\(false\)/.test(code), "Synchro Code: còn ít tệp thì lần sau bắt đầu lại từ dải một hàng");
 ok(!/\.attach:not\(\.sent\):not\(\.attach-grid\)\{[^}]*mask-image/.test(css), "không còn lớp mờ hai mép luôn bật");

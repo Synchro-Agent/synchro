@@ -32,7 +32,7 @@
   --z-tip:2147483000;   /* chú thích nổi: luôn trên cùng */
 
   /* Mốc màn hình (px). Biến CSS không dùng được trong @media (và @custom-media chỉ được dịch ở bản build production), nên mốc ghi ở đây
-     làm tài liệu, khớp với app/breakpoints.ts; scripts/css-metrics.mjs báo mọi @media ngoài danh sách này (mediaWidth).
+     làm tài liệu, khớp với ui/breakpoints.ts; scripts/css-metrics.mjs báo mọi @media ngoài danh sách này (mediaWidth).
      xs 480 · sm 640 · drawer 760 / 761 (ngăn kéo điện thoại ↔ thanh bên, home.tsx matchMedia) · md 860 (thanh rail máy tính bảng, NARROW) · lg 1100 */
 
   /* Màu bổ sung cho thang trạng thái của sổ tay (--ds-ok / --ds-warn / --ds-bad ở synchro-ds.css), cặp sáng / tối đặt cạnh nhau:

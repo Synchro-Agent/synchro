@@ -1,4 +1,4 @@
-// Kho đoạn chat ở trình duyệt (app/chatstore.client.ts, blueprint B2) và chỗ giữ cho Ô soạn tin không vẽ lại lúc chữ chảy. Tự chạy được, không cần dev:mock.
+// Kho đoạn chat ở trình duyệt (ui/chatstore.client.ts, blueprint B2) và chỗ giữ cho Ô soạn tin không vẽ lại lúc chữ chảy. Tự chạy được, không cần dev:mock.
 // 1. Hàm đặt giá trị bỏ qua giá trị giống hệt (Object.is) nên không báo cho nơi đăng ký; setBusy giữ nguyên Set khi không đổi; reset về trạng thái đầu.
 // 2. Đọc mã home.tsx: giá trị AppCtx không phụ thuộc danh sách đoạn chat, prop của Composer không có hàm / phần tử dựng mới mỗi lần vẽ.
 //    Bài đo thật trên trình duyệt là tests/ui/render-perf.mjs (cần dev:mock); bài này là lưới chặn không cần máy chủ.
@@ -86,7 +86,7 @@ ok(typeof M.useChatState === "function" && typeof M.useChats === "function", "xu
 
 console.log("── home.tsx: Ô soạn tin và AppCtx không vẽ lại theo chữ chảy");
 {
-  const src = fs.readFileSync("app/home.tsx", "utf8");
+  const src = fs.readFileSync("ui/home.tsx", "utf8");
   ok(/const Composer = memo\(function Composer\(/.test(src), "Composer bọc memo");
   const api = src.match(/const api = useMemo\(\(\) => \(\{[\s\S]*?\}\), \[([^\]]*)\]\)/);
   ok(api && !/\bchats\b|\bchat\b|\bbusy\b|\bcur\b/.test(api[1]), "giá trị AppCtx (api) không phụ thuộc chats / chat / busy / cur", api?.[1]);

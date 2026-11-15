@@ -1,6 +1,6 @@
-// Bộ icon của Synchro: Phosphor Regular (MIT, @phosphor-icons/core) — outline, lưới 256; app/icons.tsx viền thêm 2 đơn vị cho dày bằng bộ icon cũ. Script này đọc SVG của các icon Synchro dùng
-// và ghi app/phosphor-data.ts (các phần tử SVG gốc, giữ nguyên toạ độ) để vẽ icon tĩnh sắc nét; icon cần biến hình được morphicons đọc từ
-// cùng dữ liệu (app/morph.tsx). Thêm / đổi icon: sửa NAMES rồi chạy lại: node scripts/phosphor-icons.mjs
+// Bộ icon của Synchro: Phosphor Regular (MIT, @phosphor-icons/core) — outline, lưới 256; ui/icons.tsx viền thêm 2 đơn vị cho dày bằng bộ icon cũ. Script này đọc SVG của các icon Synchro dùng
+// và ghi ui/phosphor-data.ts (các phần tử SVG gốc, giữ nguyên toạ độ) để vẽ icon tĩnh sắc nét; icon cần biến hình được morphicons đọc từ
+// cùng dữ liệu (ui/morph.tsx). Thêm / đổi icon: sửa NAMES rồi chạy lại: node scripts/phosphor-icons.mjs
 import fs from "node:fs";
 
 // Tên trong app (I.Search…) → tên Phosphor. Thêm cả icon đích của các chuyển động biến hình (thanh bên…).
@@ -37,7 +37,7 @@ export const NAMES = {
   Tag: "tag", BracesCode: "brackets-curly",
 };
 
-// Icon chỉ dùng theo tên Phosphor (bộ công cụ Speech: app/speech/toolicons.tsx, cặp icon biến hình khi rê chuột).
+// Icon chỉ dùng theo tên Phosphor (bộ công cụ Speech: ui/speech/toolicons.tsx, cặp icon biến hình khi rê chuột).
 export const EXTRA = [
   "text-aa", "speaker-high", "chats-circle", "chat-circle-dots", "headset", "robot", "waveform", "text-align-left", "magic-wand", "sparkle",
   "user-sound", "users", "speaker-simple-high", "funnel-simple", "user-switch", "arrows-clockwise", "globe-hemisphere-west", "translate",
@@ -70,11 +70,11 @@ export const NAMES = ${JSON.stringify(NAMES)} as const;
 export type IconName = keyof typeof NAMES;
 export const PH: Record<string, [string, Record<string, string>][]> = ${JSON.stringify(data)};
 `;
-fs.writeFileSync("app/phosphor-data.ts", out);
+fs.writeFileSync("ui/phosphor-data.ts", out);
 
 // Tiện ích Chrome (cửa sổ extension/popup.js, dải điều khiển trong trang extension/overlay.js): cùng bộ icon, chỉ những icon nó dùng.
 export const EXT = { arrow: "arrow-right", open: "arrow-square-out", leave: "sign-out", tab: "browser", tabs: "browsers", group: "folder-simple", alert: "warning-circle",
   globe: "globe-simple", link: "link-simple", pause: "pause", play: "play", stop: "stop", check: "check" };
 const ext = Object.fromEntries(Object.entries(EXT).map(([k, ph]) => [k, data[ph] ?? read(ph)]));
 fs.writeFileSync("extension/phosphor.js", `// Sinh bởi scripts/phosphor-icons.mjs từ @phosphor-icons/core (Phosphor Regular, MIT) — đừng sửa tay.\n// Icon của cửa sổ tiện ích: các phần tử SVG gốc trên lưới 256 (tô bằng currentColor, viền 2 đơn vị như app).\nexport const PH = ${JSON.stringify(ext)};\n`);
-console.log(`Đã ghi ${Object.keys(data).length} icon Phosphor Regular vào app/phosphor-data.ts (${(out.length / 1024).toFixed(0)} KB)`);
+console.log(`Đã ghi ${Object.keys(data).length} icon Phosphor Regular vào ui/phosphor-data.ts (${(out.length / 1024).toFixed(0)} KB)`);

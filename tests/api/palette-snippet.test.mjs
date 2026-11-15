@@ -14,7 +14,7 @@ const s3 = R.plainSnippet("**Kết quả**: xem [bảng](https://x.y/z) và\n```
 ok(s3 === "Kết quả: xem bảng và q xong", "bỏ khối mã, thẻ công cụ, ký hiệu Markdown, giữ chữ liên kết", s3);
 ok(R.plainSnippet("") === "", "chữ rỗng");
 
-const pal = fs.readFileSync("app/palette.tsx", "utf8");
+const pal = fs.readFileSync("ui/palette.tsx", "utf8");
 ok(/plainSnippet\(hit\)/.test(pal) && !/hit\.replace\(\/\\s\+\/g, " "\)\.slice\(0, 80\)/.test(pal), "⌘K dùng plainSnippet cho đoạn trích tin nhắn");
 
 // W1-08: tin AI cũ mở đầu bằng dòng "Đã áp dụng hướng dẫn của bạn: “…”" — ⌘K không trích lại hướng dẫn cá nhân, không tìm trúng chữ trong dòng đó;
@@ -26,7 +26,7 @@ ok(R.plainSnippet(shown) === "Báo cáo quý ba đã xong.", "đoạn trích b�
 ok(/const shownText = \(o: \{ text\?: string; role\?: string \}\) => \(o\.role === "user" \? o\.text \?\? "" : stripAppliedNotes\(o\.text \?\? ""\)\);/.test(pal), "⌘K lọc dòng ghi chú cũ trên tin AI");
 ok(/v = foldRaw\(shownText\(o\)\)/.test(pal), "⌘K tìm trên chữ đã lọc (gõ 'Đà Nẵng' không trúng dòng đã ẩn)");
 ok(/const hit = hitMsg && shownText\(hitMsg\);/.test(pal) && /plainSnippet\(hit\)/.test(pal), "đoạn trích lấy chữ đã lọc");
-const page = fs.readFileSync("app/home.tsx", "utf8");
+const page = fs.readFileSync("ui/home.tsx", "utf8");
 ok(/<VoiceMode[^\n]*reply=\{lastAi \? \{ text: lastAi\.failed \? tr\(chatError\(lastAi\.err\)\.text\) : stripAppliedNotes\(lastAi\.text\)/.test(page), "chế độ giọng nói không đọc dòng ghi chú cũ");
 
 console.log(`\n${pass} đạt, ${fail} hỏng`);

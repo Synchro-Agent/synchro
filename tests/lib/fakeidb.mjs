@@ -1,4 +1,4 @@
-// IndexedDB giả trong bộ nhớ cho kiểm thử không cần trình duyệt (dự án không có fake-indexeddb). Chỉ có phần app/chatidb.ts dùng:
+// IndexedDB giả trong bộ nhớ cho kiểm thử không cần trình duyệt (dự án không có fake-indexeddb). Chỉ có phần ui/chatidb.ts dùng:
 // open (onupgradeneeded / onsuccess / onerror), createObjectStore(keyPath), transaction → objectStore → put / get / getAll / delete / clear,
 // oncomplete / onabort, deleteDatabase (báo onversionchange cho kết nối đang mở, newVersion null). Giao dịch là nguyên khối: hủy thì không ghi gì.
 // upgrade(name): tab khác mở bản cơ sở dữ liệu mới hơn (báo onversionchange với newVersion là số cho kết nối đang mở).

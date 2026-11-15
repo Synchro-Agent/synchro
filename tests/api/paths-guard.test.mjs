@@ -33,7 +33,7 @@ const REF = /(?<![\w$.@/-])(app|server|ui|shared|scripts|ops|tools|db|workspace)
 const ALLOW = [
   [/./, /^(app|server|ui|shared)\/zz-/],                                   // tệp giả trong phép kiểm bộ quét
   [/^tests\/api\/boot-fast\.test\.mjs$/, /^app\/api\/x\/route\.ts$/],     // route giả
-  [/^tests\/api\/css-inline\.test\.mjs$/, /^app\/a\.css$/],               // CSS giả trong thư mục tạm
+  [/^tests\/api\/css-inline\.test\.mjs$/, /^app\/(a\.css|ui\.tsx)$/],     // CSS, tsx giả trong thư mục tạm
   [/^tests\/(api|ui)\/skill[\w-]*\.(test\.)?mjs$/, /^scripts\/[\w-]+\.py$/], // tệp bên trong một skill thử, không phải scripts/ của repo
   [/^tests\/api\/synchro-video\.test\.mjs$/, /^tools\/make\.py$/],          // tệp bên trong dự án video thử
 ];
@@ -84,6 +84,28 @@ for (const f of clients) {
   }
 }
 ok(!leaks.length, `không tệp "use client" nào nhập mã server/ (${clients.length} tệp)`, leaks.join("\n"));
+
+console.log("4. ui/ giữ mã giao diện");
+// Tệp "use client" chỉ nằm trong ui/, trừ các tệp đặc biệt của Next phải ở app/ (error, global-error, page…) và ba component client
+// layout.tsx nhập (LAYOUT_SHELL). Ba tệp này ở lại app/ cùng các tệp CSS tải đầu: bản build webpack xếp thứ tự tệp CSS tải đầu bằng một phép
+// sắp xếp theo tên đường dẫn trộn lẫn component client với tệp CSS (next flight-client-entry-plugin), chuyển chúng đi thì thứ tự <link>
+// của bản production đổi (glass.css + features.css thôi đứng trước globals.css) và bên thắng của cascade đổi theo.
+const NEXT_SPECIAL = /^app\/(.+\/)?(page|layout|error|global-error|not-found|loading|template|default)\.tsx$/;
+const LAYOUT_SHELL = ["app/glass.tsx", "app/i18n.tsx", "app/chunkguard.tsx"];
+const strays = clients.filter((f) => !f.startsWith("ui/") && !NEXT_SPECIAL.test(f) && !LAYOUT_SHELL.includes(f));
+ok(clients.filter((f) => f.startsWith("ui/")).length >= 120, `ui/ có ${clients.filter((f) => f.startsWith("ui/")).length} tệp "use client"`);
+ok(!strays.length, `không tệp "use client" nào ngoài ui/ (trừ tệp đặc biệt của Next trong app/)`, strays.join(", "));
+// Không tệp nào trong ui/ (kể cả tiện ích không mang "use client") nhập mã server/ ngoài kiểu.
+const uiLeaks = [];
+for (const f of [...src.keys()].filter((x) => x.startsWith("ui/"))) {
+  for (const m of src.get(f).matchAll(/(?:^|\n)\s*(?:import|export)\s+(?!type\b)([^;]*?)\s*from\s*["'](\.{1,2}\/[^"']+)["']|import\(\s*["'](\.{1,2}\/[^"']+)["']\s*\)/g)) {
+    const names = m[1]?.trim();
+    if (names && /^\{[^}]*\}$/.test(names) && names.slice(1, -1).split(",").every((x) => !x.trim() || /^type\s/.test(x.trim()))) continue;
+    const t = resolve(f, m[2] ?? m[3]);
+    if (t?.startsWith("server/")) uiLeaks.push(`${f} → ${t}`);
+  }
+}
+ok(!uiLeaks.length, "không tệp ui/ nào nhập mã server/", uiLeaks.join("\n"));
 
 console.log(`\n${pass} đạt, ${fail} lỗi`);
 process.exit(fail ? 1 : 0);

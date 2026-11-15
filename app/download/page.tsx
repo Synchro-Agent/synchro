@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { DownloadView } from "./view";
+import { DownloadView } from "../../ui/download/view";
 
 export const metadata: Metadata = { title: "Tải ứng dụng – Synchro", description: "Synchro cho macOS, Windows, iPhone và Android." };
 

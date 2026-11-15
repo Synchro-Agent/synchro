@@ -5,8 +5,8 @@
 /* Thang token của app (B5): một tệp, nạp cùng globals.css (không import riêng ở layout.tsx: thêm tệp CSS vào layout đổi cách webpack gom
    và xếp thứ tự các tệp CSS của bản build). */
 @import "./tokens.css";
-@source "./auth.tsx";
-@source "./shader-metal.tsx";
+@source "../ui/auth.tsx";
+@source "../ui/shader-metal.tsx";
 /* Thứ tự lớp cascade (B5): lớp của Tailwind trước, mọi CSS của app (kể cả katex / xterm và thẻ \3c style> của auth.tsx, glass-folder.tsx)
    trong một lớp syn. Câu lệnh lặp ở đầu mỗi tệp để thứ tự không phụ thuộc tệp nào được tải trước. Trong lớp syn, bên thắng vẫn theo
    specificity rồi thứ tự nạp như khi chưa có lớp. Lớp syn-over (khối ở cuối mỗi tệp) giữ các luật trước đây phải mang !important chỉ để
@@ -185,7 +185,7 @@ input,textarea{font:inherit;color:inherit;outline:0}
    --ink-glass: lớp kính màu mực cho các nút mang màu thương hiệu (nút "+" của Mới, nút gửi); --ink-glass-fg: biểu tượng trên đó. */
 :root{--logo-ink:#111210;--ink-glass:rgba(12,12,12,.84);--ink-glass-fg:#fff;--ink-glow:rgba(0,0,0,.24)}
 [data-theme="dark"]{--logo-ink:#EEECE5;--ink-glass:rgba(245,244,239,.9);--ink-glass-fg:#141413;--ink-glow:rgba(0,0,0,.5)}
-/* ---- Logo Synchro (app/brand.tsx): vẽ bằng currentColor, chuyển động theo bộ nhận diện v4 ----
+/* ---- Logo Synchro (ui/brand.tsx): vẽ bằng currentColor, chuyển động theo bộ nhận diện v4 ----
    mk: biểu tượng. mk-a / mk-b: nửa trái / phải, lệch nhau R = 350 (mỗi nửa R/2 = 175). Khớp pha = dịch mỗi nửa 175 về tâm thành vòng tròn.
    lk: lockup ngang (mark + chữ). Tâm xoay / thu phóng là tâm hình (fill-box) nên không phụ thuộc toạ độ của khung SVG. */
 .mk,.lk{display:inline-block;flex:none;vertical-align:middle;fill:currentColor;overflow:visible}
@@ -391,7 +391,7 @@ input,textarea{font:inherit;color:inherit;outline:0}
 .codeblock pre{margin:0;padding:12px 14px;overflow:auto;font-family:ui-monospace,Menlo,monospace;font-size:var(--fs-2);line-height:1.55;white-space:pre}
 /* Khối chữ thuần (log, kết quả chạy): xuống dòng để đọc hết, không có thanh cuộn thì chữ bị cắt ngang mép. */
 .codeblock pre.cb-wrap{white-space:pre-wrap;overflow-wrap:anywhere}
-/* Tô màu cú pháp (Shiki, app/highlight.tsx): mỗi chữ mang hai màu, chọn theo giao diện sáng / tối. */
+/* Tô màu cú pháp (Shiki, ui/highlight.tsx): mỗi chữ mang hai màu, chọn theo giao diện sáng / tối. */
 .codeblock pre.shiki span,.art-tl span{color:var(--shiki-light,inherit)}
 [data-theme="dark"] .codeblock pre.shiki span,[data-theme="dark"] .art-tl span{color:var(--shiki-dark,inherit)}
 .art-tl{font:inherit;background:none;padding:0;color:inherit}
@@ -1981,7 +1981,7 @@ b,strong{font-weight:560}
 .api-card-h{display:flex;align-items:center;gap:12px;min-width:0}
 .api-mark{width:34px;height:34px;border-radius:25%;flex:none;display:grid;place-items:center;background:var(--pill);color:var(--text);font-size:var(--fs-2);font-weight:460;letter-spacing:-.02em;box-shadow:inset 0 0 0 .5px var(--border-strong)}
 .api-mark svg{display:block}
-/* Logo model / hãng (app/brands.tsx LogoMark): ô cố định, không đổi cỡ khi ảnh tải xong. Chữ cái đầu khi không có logo nào. */
+/* Logo model / hãng (ui/brands.tsx LogoMark): ô cố định, không đổi cỡ khi ảnh tải xong. Chữ cái đầu khi không có logo nào. */
 .vlogo{display:inline-grid;place-items:center;flex:none;line-height:0}
 .vlogo>*{grid-area:1/1}
 .vmono{background:var(--pill);color:var(--text-2);font-weight:560;line-height:1;letter-spacing:0;box-shadow:inset 0 0 0 .5px var(--border-strong)}
@@ -3139,7 +3139,7 @@ html body .menu.art-style-menu{--gl-fill:var(--card);background:var(--card);min-
 .ss-hint{font-size:var(--fs-1);color:#c13c3c;margin-top:-6px}
 .tk-l textarea.field{height:auto;min-height:110px;padding:10px 12px;resize:vertical;font:inherit;font-size:var(--fs-3);line-height:1.5}
 .tk-sch{display:flex;gap:10px}
-/* Chọn giờ (app/timepick.tsx): ô nhập gõ được + đồng hồ; bảng kính hai cột Giờ / Phút, ô đang chọn màu mực, hàng mốc nhanh. */
+/* Chọn giờ (ui/timepick.tsx): ô nhập gõ được + đồng hồ; bảng kính hai cột Giờ / Phút, ô đang chọn màu mực, hàng mốc nhanh. */
 .field.tpk{display:flex;align-items:center;gap:6px;padding:0 5px 0 11px;height:38px;cursor:text}
 .tpk input{flex:1;min-width:0;height:100%;border:0;background:none;outline:none;padding:0;font:inherit;font-size:14.5px;font-variant-numeric:tabular-nums;letter-spacing:.01em;color:var(--text)}
 .tpk-ic{width:28px;height:28px;flex:none;display:grid;place-items:center;border-radius:25%;color:var(--text-3);transition:background .15s,color .15s}
@@ -3928,7 +3928,7 @@ html[data-tw="wide"]{--thread-w:1040px}
 .ft-lightbox .icon-btn{position:absolute;top:16px;right:16px;color:#fff;background:rgba(0,0,0,.4)}
 
 
-/* ===== Phim giới thiệu cho tài khoản mới (app/introfilm.tsx, chuyển cảnh: app/handoff.ts) =====
+/* ===== Phim giới thiệu cho tài khoản mới (ui/introfilm.tsx, chuyển cảnh: ui/handoff.ts) =====
    Vào: vòng tròn kính quanh logo của lời chào hoá mực rồi nở ra (clip-path) với vignette của khung đầu phim; bản sao logo (intro-seed) lướt
    về giữa thành chấm mở đầu của phim. Ra: logo của khung cuối bay về chỗ trong app, nền phim mở ra thành lỗ tròn (mask) quanh chỗ hạ cánh. */
 .intro{position:fixed;inset:0;z-index:calc(var(--z-full) + 200);color:#EEECE5;font-family:var(--font-sans);-webkit-font-smoothing:antialiased}
@@ -3973,7 +3973,7 @@ html[data-tw="wide"]{--thread-w:1040px}
 .intro-cap.over{bottom:max(30px,env(safe-area-inset-bottom))}
 .intro-cap.top{top:max(20px,env(safe-area-inset-top))}
 @keyframes introCap{from{opacity:0;filter:blur(4px)}to{opacity:1;filter:none}}
-/* Ra: phim mờ đi, logo của khung cuối ở lại rồi bay về chỗ trong app (WAAPI, app/handoff.ts); nền phim mở ra thành lỗ tròn. */
+/* Ra: phim mờ đi, logo của khung cuối ở lại rồi bay về chỗ trong app (WAAPI, ui/handoff.ts); nền phim mở ra thành lỗ tròn. */
 .intro[data-phase="out"] .intro-host{opacity:0;transition:opacity .45s cubic-bezier(.33,1,.68,1)}
 .intro-fly{position:absolute;inset:0;pointer-events:none;color:#EEECE5}
 .intro-fly>span{position:absolute;display:block;transform-origin:0 0;color:#EEECE5}
@@ -3989,7 +3989,7 @@ html[data-tw="wide"]{--thread-w:1040px}
 .intro-ask-a{display:flex;gap:10px;flex-wrap:wrap;justify-content:center}
 .intro-btn.pri{color:#111210;background:#EEECE5}
 .intro-btn.pri:hover{background:#fff;color:#111210}
-/* Logo hạ cánh (app/handoff.ts): logo thật của app ẩn tới khi bản sao bay tới — biểu tượng cạnh lời chào, và chữ "synchro" ở đầu thanh
+/* Logo hạ cánh (ui/handoff.ts): logo thật của app ẩn tới khi bản sao bay tới — biểu tượng cạnh lời chào, và chữ "synchro" ở đầu thanh
    bên khi ra từ phim. Trang chủ lắp lại bằng WAAPI nên gỡ lớp này không làm chạy lại hiệu ứng nào. */
 .app.app-reveal :is(.rm-logo,.side-toggle) svg,.app.reveal-film .side-brand .lk{opacity:0}
 
@@ -4005,7 +4005,7 @@ html[data-tw="wide"]{--thread-w:1040px}
 .auth-fly>span{position:absolute;left:0;top:0;display:block;visibility:hidden;transform-origin:0 0}
 .auth-fly svg{display:block}
 
-/* ===== Icon Phosphor Light (app/icons.tsx) và chuyển động biến hình (app/morph.tsx, morphicons) ===== */
+/* ===== Icon Phosphor Light (ui/icons.tsx) và chuyển động biến hình (ui/morph.tsx, morphicons) ===== */
 svg.ph{flex:none;display:block}
 /* Icon biến hình (lưới 24 của morphicons): viền thêm như icon tĩnh — 2 / 256 × 24 ≈ 0,19 đơn vị. */
 svg.mph path{stroke:currentColor;stroke-width:.19;stroke-linejoin:round}
@@ -4261,7 +4261,7 @@ main#main:focus{outline:0}
 html body .lat-bar .group{grid-auto-columns:auto;max-width:100%;min-width:0}
 @media (max-width:560px){.bk-grid{grid-template-columns:minmax(0,1fr)}.bk-foot{flex-wrap:wrap}html body .lat-bar .group{display:flex;flex:1 1 100%}html body .lat-bar .group>button{flex:1 1 auto;justify-content:center}.lat-bar .lat-sel,.lat-bar .lat-sel select{width:100%}}
 
-/* Thẻ (tag) của đoạn chat: khung Gắn thẻ trong menu, chip ở đầu trang chat, hàng lọc ở thanh bên (app/tagsui.tsx). */
+/* Thẻ (tag) của đoạn chat: khung Gắn thẻ trong menu, chip ở đầu trang chat, hàng lọc ở thanh bên (ui/tagsui.tsx). */
 .tag-pick{display:flex;flex-direction:column;gap:6px;min-width:0}
 .tag-pick-h{display:flex;align-items:center;gap:6px;padding:2px 2px 0;font-size:var(--fs-2)}
 .tag-pick-h .icon-btn{width:28px;height:28px}
@@ -4294,7 +4294,7 @@ html body .lat-bar .group{grid-auto-columns:auto;max-width:100%;min-width:0}
 /* Hàng có menu đang mở nằm trên các hàng sau: hàng mới hiện (gRowIn có transform) tạo lớp xếp chồng riêng và từng vẽ đè lên menu. */
 .chat-wrap:has(.menu:not(.out)){z-index:var(--z-pop)}
 
-/* Sửa tham số công cụ trước khi cho phép (app/argsedit.tsx): thẻ duyệt trong chat (AskCard) và thẻ duyệt của lượt chạy bằng khóa API (ApprovalCard). */
+/* Sửa tham số công cụ trước khi cho phép (ui/argsedit.tsx): thẻ duyệt trong chat (AskCard) và thẻ duyệt của lượt chạy bằng khóa API (ApprovalCard). */
 .args-ed{margin:8px 0 0;display:flex;flex-direction:column;gap:6px}
 .args-ed textarea{width:100%;min-height:96px;max-height:340px;resize:vertical;padding:10px 12px;border-radius:10px;border:1px solid var(--border-strong);background:var(--input);color:var(--text);font:var(--fs-1)/1.55 var(--font-mono,ui-monospace,Menlo,monospace);white-space:pre;overflow:auto;tab-size:2;box-sizing:border-box}
 .args-ed textarea:focus{outline:2px solid color-mix(in srgb,var(--text) 35%,transparent);outline-offset:1px}
@@ -4304,7 +4304,7 @@ html body .lat-bar .group{grid-auto-columns:auto;max-width:100%;min-width:0}
 .args-ok{margin:0;font-size:var(--fs-label);color:var(--text-3)}
 .ag-asked-ed{font-style:normal;color:var(--text-3)}
 
-/* ---- Khung chờ đúng kích thước (app/skeleton.tsx): chữ giả là khoảng trắng em mang chiều cao dòng thật, nền ánh chạy chậm. ---- */
+/* ---- Khung chờ đúng kích thước (ui/skeleton.tsx): chữ giả là khoảng trắng em mang chiều cao dòng thật, nền ánh chạy chậm. ---- */
 .sk-txt,.sk-blk,.sk-line::after{background:linear-gradient(90deg,var(--hover) 0%,var(--active) 50%,var(--hover) 100%);background-size:200% 100%;animation:skel 1.6s linear infinite}
 .sk-txt{border-radius:6px;-webkit-box-decoration-break:clone;box-decoration-break:clone;user-select:none;pointer-events:none}
 :where(.sk-blk){display:inline-block;flex:none;border-radius:8px}

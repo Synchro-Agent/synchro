@@ -1,5 +1,5 @@
 // Biểu thức chạy trong trang (Runtime.evaluate với awaitPromise) để đọc / sửa kho đoạn chat IndexedDB "synchro-chats:<uid>" của app
-// (app/chatidb.ts) trong kiểm thử giao diện. Không bao giờ tạo cơ sở dữ liệu: chưa có thì hủy bước nâng cấp (tạo cơ sở rỗng không có kho
+// (ui/chatidb.ts) trong kiểm thử giao diện. Không bao giờ tạo cơ sở dữ liệu: chưa có thì hủy bước nâng cấp (tạo cơ sở rỗng không có kho
 // sẽ làm app coi IndexedDB là hỏng và rơi về localStorage).
 // Xóa cả cơ sở dữ liệu (idbWipe) / gieo dữ liệu như thiết bị mới thì làm khi trang KHÔNG mở app (freshDevice bên dưới): app đang mở sẽ nhường
 // kết nối rồi chuyển sang localStorage và ghi lại danh sách đang có vào khóa cũ.

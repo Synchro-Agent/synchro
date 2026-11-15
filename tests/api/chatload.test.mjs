@@ -1,4 +1,4 @@
-// Nạp / lưu đoạn chat của trang qua kho IndexedDB (app/chatload.ts, blueprint B4 bước 5-6), phần không cần trình duyệt, trên IndexedDB giả:
+// Nạp / lưu đoạn chat của trang qua kho IndexedDB (ui/chatload.ts, blueprint B4 bước 5-6), phần không cần trình duyệt, trên IndexedDB giả:
 // chỉ đọc thân đoạn cần ngay, đọc dần phần còn lại, thân vừa đọc không ghi lại, sửa bản rút gọn trong lúc chờ được giữ, nhật ký lúc rời trang,
 // xóa đoạn chat (kể cả đoạn cuối cùng), kho bị xóa từ tab khác / lỗi đọc lúc mở thì dùng localStorage, thân mất thì nhờ chatsync lấy về.
 // Tự chạy được, không cần dev:mock.

@@ -1,6 +1,6 @@
 import type { NextConfig } from "next";
 
-// script-src của CSP thử (Report-Only). Cloudflare Turnstile (app/turnstilebox.tsx) chỉ chạy ở màn đăng nhập, đăng ký và quên mật khẩu, tức khi
+// script-src của CSP thử (Report-Only). Cloudflare Turnstile (ui/turnstilebox.tsx) chỉ chạy ở màn đăng nhập, đăng ký và quên mật khẩu, tức khi
 // chưa có cookie phiên: chỉ những trang đó mới cho thêm challenges.cloudflare.com (luật sau đè luật trước cùng tên header).
 const SCRIPT_SRC = "script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' blob: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://unpkg.com";
 const cspTrial = (extra = "") => `${SCRIPT_SRC}${extra}; object-src 'none'; base-uri 'self'; report-uri /api/csp-report`;
@@ -74,7 +74,7 @@ const nextConfig: NextConfig = {
       source: "/fonts/:path*", headers: [{ key: "Cache-Control", value: "public, max-age=31536000, immutable" }],
     }, ...["/brand/:path*", "/connectors/:path*", "/logos/:path*", "/ts/:path*", "/intro/:path*", "/icon-:size(\\d+).png", "/icon-maskable-:size(\\d+).png"].map((source) => ({
       // Biểu tượng, logo (cả /logos), bộ đọc cú pháp tree-sitter /ts, phim giới thiệu /intro: tên tệp không đổi khi nội dung đổi nên giữ một tuần,
-      // sau đó vẫn dùng bản cũ trong lúc tải bản mới (blueprint B3.6). /ts phải khớp phiên bản với phần JS của web-tree-sitter: app/heavy.ts
+      // sau đó vẫn dùng bản cũ trong lúc tải bản mới (blueprint B3.6). /ts phải khớp phiên bản với phần JS của web-tree-sitter: ui/heavy.ts
       // tải bằng URL có phiên bản (?v=TS_REV), nâng gói là đổi URL nên không dính bản .wasm cũ trong bộ đệm.
       source, headers: [{ key: "Cache-Control", value: "public, max-age=604800, stale-while-revalidate=2592000" }],
     }))];

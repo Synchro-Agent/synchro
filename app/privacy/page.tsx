@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { LegalDoc } from "../legal/doc";
+import { LegalDoc } from "../../ui/legal/doc";
 
 export const metadata: Metadata = { title: "Chính sách quyền riêng tư – Synchro" };
 
