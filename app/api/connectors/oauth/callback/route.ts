@@ -1,7 +1,7 @@
-import { finishAuth } from "../../../../connectors";
-import { randomToken } from "../../../../mcpauth";
-import { trOn } from "../../../../i18n-server";
-import { timed } from "../../../../servertiming";
+import { finishAuth } from "../../../../../server/connectors";
+import { randomToken } from "../../../../../server/mcpauth";
+import { trOn } from "../../../../../server/i18n-server";
+import { timed } from "../../../../../server/servertiming";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

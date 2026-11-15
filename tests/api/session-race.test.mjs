@@ -1,4 +1,4 @@
-// Dọn phiên Antigravity / Grok sau lượt (app/ai/cli_runtime.ts: watchSessions, cliRunning): lượt dọn của lượt khác không được xóa thư mục ảnh của lượt tạo ảnh
+// Dọn phiên Antigravity / Grok sau lượt (server/ai/cli_runtime.ts: watchSessions, cliRunning): lượt dọn của lượt khác không được xóa thư mục ảnh của lượt tạo ảnh
 // đang chờ đọc. Nguyên nhân bài replicate.test "402 hết số dư" lúc đạt lúc không: lượt nền (bộ não, bộ nhớ) chạy bằng Antigravity của cùng tài khoản, hay lượt tạo ảnh
 // trước đó, hoãn việc dọn tới khi không còn CLI nào chạy; đúng lúc CLI của lượt tạo ảnh mới thoát, việc dọn chạy và xóa brain/<mã>/ trước khi lượt đó kịp đọc ảnh.
 // Tệp thuần, không cần máy chủ: chạy trên thư mục tạm.

@@ -2,8 +2,8 @@
 // studio, số mục Hộp thư) ở máy chủ rồi truyền vào <Home boot>. Trang không còn hai tầng chờ (auth/me rồi bảy lệnh song song) trước khi dùng được.
 // Thân trang (client component) nằm ở app/home.tsx.
 import { cookies } from "next/headers";
-import { COOKIE } from "./authstore";
-import { bootFor, type BootData } from "./bootdata";
+import { COOKIE } from "../server/authstore";
+import { bootFor, type BootData } from "../server/bootdata";
 import Home from "./home";
 
 export const dynamic = "force-dynamic";

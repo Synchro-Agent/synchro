@@ -1,6 +1,6 @@
-import { AuthError, handle, requireUser, sameOrigin } from "../../../authstore";
-import { stopAgentRun } from "../../../agentruns";
-import { archiveIdle, deleteSession, getPrefs, getSession, listSessions, patchSession, putSession, SESSION_MAX } from "../../../codestore";
+import { AuthError, handle, requireUser, sameOrigin } from "../../../../server/authstore";
+import { stopAgentRun } from "../../../../server/agentruns";
+import { archiveIdle, deleteSession, getPrefs, getSession, listSessions, patchSession, putSession, SESSION_MAX } from "../../../../server/codestore";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

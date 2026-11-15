@@ -1,5 +1,5 @@
 // Không bao giờ chỉ "Mình sẽ…" rồi im lặng: model báo sẽ làm mà lượt dừng khi chưa dùng công cụ nào thì Synchro nhắc làm tiếp
-// (app/stall.ts), với mọi model — khóa API (Claude, GPT, Gemini), gói subscription (Claude Code, Codex, Antigravity) — ở chat và
+// (server/stall.ts), với mọi model — khóa API (Claude, GPT, Gemini), gói subscription (Claude Code, Codex, Antigravity) — ở chat và
 // Synchro Code; Antigravity 1.4.11 gọi công cụ MCP nạp khi cần qua CallMcpTool vẫn được phép, bị agy tự chặn thì báo rõ.
 // [mock:stall] trong câu hỏi: model giả lượt đầu chỉ báo "Mình sẽ mở trình duyệt và làm ngay." (không gọi công cụ).
 const B = process.env.SYNCHRO_URL ?? "http://localhost:3200", M = process.env.MOCK_URL ?? "http://127.0.0.1:4010", PAGE = `${M}/_fixture/browser-quiz`;

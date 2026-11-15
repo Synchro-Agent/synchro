@@ -34,7 +34,7 @@ export function loadCaps(force = false) {
   return inflight;
 }
 let retried = false;
-/** Gieo trạng thái từ gói khởi động dựng sẵn ở máy chủ (app/bootdata.ts) cho tài khoản hiện tại: không hỏi /api/caps lần đầu. */
+/** Gieo trạng thái từ gói khởi động dựng sẵn ở máy chủ (server/bootdata.ts) cho tài khoản hiện tại: không hỏi /api/caps lần đầu. */
 export function seedCaps(s: CapsState | null | undefined) {
   if (!s?.caps || userScope() === "anon") return false;
   loadedFor = userScope();

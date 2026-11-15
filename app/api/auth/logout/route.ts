@@ -1,5 +1,5 @@
-import { audit, clearSessionCookie, clientIp, current, db, handle, sameOrigin, withCookies } from "../../../authstore";
-import { dropLiveBridge } from "../../../mcpbridge";
+import { audit, clearSessionCookie, clientIp, current, db, handle, sameOrigin, withCookies } from "../../../../server/authstore";
+import { dropLiveBridge } from "../../../../server/mcpbridge";
 
 export const runtime = "nodejs";
 

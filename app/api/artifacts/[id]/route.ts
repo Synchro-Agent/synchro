@@ -1,5 +1,5 @@
-import { handle, requireUser, sameOrigin } from "../../../authstore";
-import { deleteArtifact, getArtifact } from "../../../artifactstore";
+import { handle, requireUser, sameOrigin } from "../../../../server/authstore";
+import { deleteArtifact, getArtifact } from "../../../../server/artifactstore";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

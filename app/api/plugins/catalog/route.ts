@@ -1,6 +1,6 @@
-import { AuthError, can, handle, isAdmin, requireUser, sameOrigin } from "../../../authstore";
-import { altsOf, CD, dirById, dirCounts, dirEntries, dirPage, dirSynced } from "../../../claudedir";
-import { blockedLibs, failedLibs, getJob, jobRunning, orgInstalled, startJob, stopJob } from "../../../plugjob";
+import { AuthError, can, handle, isAdmin, requireUser, sameOrigin } from "../../../../server/authstore";
+import { altsOf, CD, dirById, dirCounts, dirEntries, dirPage, dirSynced } from "../../../../server/claudedir";
+import { blockedLibs, failedLibs, getJob, jobRunning, orgInstalled, startJob, stopJob } from "../../../../server/plugjob";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

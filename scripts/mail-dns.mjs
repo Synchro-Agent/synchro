@@ -1,5 +1,5 @@
 // In các bản ghi DNS để thư của Synchro không vào spam: node scripts/mail-dns.mjs <IPv4 của máy chủ> (chạy ở máy chủ, trong thư mục app).
-// Không in khóa riêng; chỉ in khóa công khai suy ra từ data/mail-dkim.pem (chưa có thì tạo, giống app/mailer.ts).
+// Không in khóa riêng; chỉ in khóa công khai suy ra từ data/mail-dkim.pem (chưa có thì tạo, giống server/mailer.ts).
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";

@@ -1,5 +1,5 @@
-import { changePassword, getUser, handle, publicUser, requireUser, sameOrigin } from "../../../authstore";
-import { devicesOf, removeUserDevices } from "../../../browserext";
+import { changePassword, getUser, handle, publicUser, requireUser, sameOrigin } from "../../../../server/authstore";
+import { devicesOf, removeUserDevices } from "../../../../server/browserext";
 
 export const runtime = "nodejs";
 

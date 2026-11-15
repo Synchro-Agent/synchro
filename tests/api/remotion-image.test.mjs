@@ -1,5 +1,5 @@
 // Video Remotion trong image sandbox: ghim phiên bản và mã băm (workspace/Dockerfile, workspace/remotion/package*.json), setup.sh dựng lại image khi
-// dự án đổi, 4 mẫu không mang tài sản có bản quyền riêng, hướng dẫn cho model (app/coderun.ts, app/videokit.ts) và khối video theo lượt.
+// dự án đổi, 4 mẫu không mang tài sản có bản quyền riêng, hướng dẫn cho model (server/coderun.ts, server/videokit.ts) và khối video theo lượt.
 // Không cần máy chủ. Phần dựng thật: bước "synchro-video selftest" lúc build image.
 import fs from "node:fs";
 import path from "node:path";
@@ -83,7 +83,7 @@ console.log("5. Giấy phép");
 
 console.log("6. Hướng dẫn cho model");
 {
-  const rules = read("app/coderun.ts");
+  const rules = read("server/coderun.ts");
   ok(/synchro-video/.test(rules) && ["tiktok", "next-tailwind", "audiogram", "github-unwrapped"].every((id) => rules.includes(id)), "WS_TOOLS nêu synchro-video và 4 mẫu");
   ok(/synchro-video có chuẩn riêng \(60 khung\/giây, phông theo schema/.test(rules) && /Video tự dựng bằng ffmpeg đạt chuẩn: [^\n]*30 khung\/giây/.test(rules), "chuẩn 30 khung/giây, Noto Sans chỉ cho video tự dựng bằng ffmpeg, không mâu thuẫn với synchro-video 60 khung/giây");
   ok(/VIDEO_ROUTE[\s\S]*ffmpeg/.test(rules) && /runner\(\) === "workspace" \? VIDEO_ROUTE/.test(rules), "chỉ image workspace mới có hướng dẫn synchro-video; slideshow đơn giản vẫn ffmpeg");
@@ -112,7 +112,7 @@ console.log("6. Hướng dẫn cho model");
   ok(V.videoTurn({ typed: "làm video tiktok", code: true, workspace: false }) === "" && V.videoTurn({ typed: "làm video tiktok", code: false, workspace: true }) === "", "không có run_code / không phải image workspace: không có khối");
   ok(V.videoTurn({ typed: "làm video tiktok #novideokit", code: true, workspace: true }) === "", "#novideokit tắt khối");
   ok(Buffer.byteLength(V.VIDEO_KIT) < 6144, "khối dưới 6 KB", Buffer.byteLength(V.VIDEO_KIT));
-  const engine = read("app/chatengine.ts");
+  const engine = read("server/chatengine.ts");
   ok(/videoTurn\(\{ typed, code: caps\.code, workspace: runner\(\) === "workspace" \}\)/.test(engine), "chatengine đặt khối cạnh tin nhắn mới nhất (không vào lời nhắc hệ thống)");
 }
 

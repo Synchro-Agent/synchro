@@ -1,5 +1,5 @@
 import JSZip from "jszip";
-import { appUrl, handle } from "../../../../authstore";
+import { appUrl, handle } from "../../../../../server/authstore";
 import { extensionFiles } from "../../../../../extension/build.mjs";
 
 export const runtime = "nodejs";

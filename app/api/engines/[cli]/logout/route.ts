@@ -1,5 +1,5 @@
-import { logout, status } from "../../../../ai/cli_auth";
-import { forgetPlan } from "../../../../ai/subs";
+import { logout, status } from "../../../../../server/ai/cli_auth";
+import { forgetPlan } from "../../../../../server/ai/subs";
 import { engineRoute, noStore } from "../../shared";
 
 export const runtime = "nodejs";

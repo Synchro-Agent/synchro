@@ -1,11 +1,11 @@
-import { featureGate, handle, limit, requireUser, sameOrigin } from "../../authstore";
-import { OneShotErr, usableModels } from "../../ai/anymodel";
-import { getScan, scanCount, scanning, startScan, stopScan } from "../../skillscan";
+import { featureGate, handle, limit, requireUser, sameOrigin } from "../../../server/authstore";
+import { OneShotErr, usableModels } from "../../../server/ai/anymodel";
+import { getScan, scanCount, scanning, startScan, stopScan } from "../../../server/skillscan";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-// Kho kỹ năng → Quét skill rác (app/skillscan.ts). Đường dẫn riêng (không nằm dưới /api/skills/) để không lẫn với skill tên "scan".
+// Kho kỹ năng → Quét skill rác (server/skillscan.ts). Đường dẫn riêng (không nằm dưới /api/skills/) để không lẫn với skill tên "scan".
 // GET: lần quét đang chạy hoặc gần nhất, số skill sẽ quét, các model chọn được (?lite: chỉ lần quét, khi hỏi lại tiến độ).
 // POST { model?, lang }: bắt đầu quét. DELETE: dừng.
 export const GET = handle(async (req: Request) => {

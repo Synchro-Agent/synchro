@@ -1,13 +1,13 @@
-import { AuthError, handle, limit, requireUser } from "../../authstore";
-import { cachedIcon, iconResponse, publicHost, usableIcon } from "../../iconproxy";
-import { fetchIconBytes, siteIcon } from "../../connicons";
-import { providerSiteOf } from "../../providers";
-import { APP_SITES } from "../../connlogos";
+import { AuthError, handle, limit, requireUser } from "../../../server/authstore";
+import { cachedIcon, iconResponse, publicHost, usableIcon } from "../../../server/iconproxy";
+import { fetchIconBytes, siteIcon } from "../../../server/connicons";
+import { providerSiteOf } from "../../../server/providers";
+import { APP_SITES } from "../../../server/connlogos";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-// Ảnh nhỏ máy chủ tải hộ, qua bộ đệm (app/iconproxy.ts):
+// Ảnh nhỏ máy chủ tải hộ, qua bộ đệm (server/iconproxy.ts):
 //  ?d=<tên miền>   favicon của nguồn trích dẫn tìm web
 //  ?app=<slug>     logo ứng dụng trong Composio (Gmail, Slack…): logo chính thức ở logos.composio.dev, không có thì biểu tượng trang chủ theo bảng APP_SITES (slug → tên miền), không cần
 //                  khóa Composio nào (không còn khóa dự án dùng chung). Ứng dụng không có trong bảng: 404, giao diện hiện chữ cái đầu.

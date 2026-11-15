@@ -6,10 +6,11 @@
 //   • header Server-Timing (qua handle() → timed()), và AuthError → JSON lỗi.
 // Wrapper KHÔNG đọc thân yêu cầu: handler tự đọc req.json()/req.formData() như trước (ít thay đổi, một lần đọc).
 // Dùng cho route ghi; GET chỉ đọc vẫn dùng handle()/featureGate() như cũ.
+import "server-only";
 import {
   AuthError, current, featureGate, handle, isAdmin, limit as rateLimit, ownerOnly, sameOrigin,
   type SessionRow, type UserRow,
-} from "../app/authstore";
+} from "./authstore";
 import type { Feature } from "../app/catalog";
 
 export type RouteAuth = "user" | "admin" | "owner";

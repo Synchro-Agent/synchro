@@ -1,7 +1,7 @@
 import { createReadStream, statSync } from "node:fs";
 import { Readable } from "node:stream";
-import { handle, requireUser, sameOrigin } from "../../../authstore";
-import { fileBin, myFiles, releaseFile } from "../../../fileproc/owners";
+import { handle, requireUser, sameOrigin } from "../../../../server/authstore";
+import { fileBin, myFiles, releaseFile } from "../../../../server/fileproc/owners";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

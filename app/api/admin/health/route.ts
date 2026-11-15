@@ -1,13 +1,13 @@
 import fs from "node:fs";
 import path from "node:path";
-import { audit, clientIp, handle, limit, requireAdmin, sameOrigin, appUrl } from "../../../authstore";
-import { mailDnsStatus, sendMailNow } from "../../../mailer";
-import { testMail } from "../../../mailtpl";
-import { memReport } from "../../../memstat";
-import { loopReport } from "../../../loopdelay";
-import { opsProblems, opsSnapshot } from "../../../ops";
-import { agentAlive, wsConfigured } from "../../../workspace";
-import { latencySummary } from "../../../tracing";
+import { audit, clientIp, handle, limit, requireAdmin, sameOrigin, appUrl } from "../../../../server/authstore";
+import { mailDnsStatus, sendMailNow } from "../../../../server/mailer";
+import { testMail } from "../../../../server/mailtpl";
+import { memReport } from "../../../../server/memstat";
+import { loopReport } from "../../../../server/loopdelay";
+import { opsProblems, opsSnapshot } from "../../../../server/ops";
+import { agentAlive, wsConfigured } from "../../../../server/workspace";
+import { latencySummary } from "../../../../server/tracing";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

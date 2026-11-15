@@ -1,5 +1,5 @@
-import { handle, limit, requireUser, sameOrigin, verifyLocked } from "../../authstore";
-import { ART_LIMITS, artifactTitles, listArtifacts, removeConvArtifacts, saveArtifact, validArt } from "../../artifactstore";
+import { handle, limit, requireUser, sameOrigin, verifyLocked } from "../../../server/authstore";
+import { ART_LIMITS, artifactTitles, listArtifacts, removeConvArtifacts, saveArtifact, validArt } from "../../../server/artifactstore";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

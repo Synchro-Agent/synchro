@@ -1,7 +1,7 @@
 "use client";
 import "./settings.css";
 // Cài đặt → Providers → CLI updates (chỉ quản trị viên xem; bật / tắt, "Cập nhật ngay", trả về bản trước chỉ chủ sở hữu): bộ cập nhật CLI
-// của các gói (app/ai/cliupdate.ts). Mỗi CLI: bản đang chạy, kết quả lần cập nhật gần nhất, bản trước để trả lại, đang theo dõi lượt đầu.
+// của các gói (server/ai/cliupdate.ts). Mỗi CLI: bản đang chạy, kết quả lần cập nhật gần nhất, bản trước để trả lại, đang theo dõi lượt đầu.
 import { useCallback, useEffect, useRef, useState } from "react";
 import * as I from "./icons";
 import { useApp } from "./store";

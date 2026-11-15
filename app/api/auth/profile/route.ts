@@ -1,5 +1,5 @@
-import { handle, publicUser, requireUser, sameOrigin, updateProfile } from "../../../authstore";
-import { recordInstructions } from "../../../brain";
+import { handle, publicUser, requireUser, sameOrigin, updateProfile } from "../../../../server/authstore";
+import { recordInstructions } from "../../../../server/brain";
 
 export const runtime = "nodejs";
 

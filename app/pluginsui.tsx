@@ -8,7 +8,7 @@ import { useApp } from "./store";
 import { HUB_DISCOVER, HUB_SEARCH, PLUGINS_CHANGED, useStudios } from "./studios";
 export { HUB_DISCOVER, PLUGINS_CHANGED, useStudios };
 import { locale, tf, tr, untranslated } from "./i18n";
-import type { PluginSummary, PublicPlugin, Preview, Risk, SkillReport, Studio, StudioInfo, StudioMode } from "./plugins";
+import type { PluginSummary, PublicPlugin, Preview, Risk, SkillReport, Studio, StudioInfo, StudioMode } from "../server/plugins";
 import { PLUGIN_CATS, type DirPlugin } from "./plugindir";
 import { ClaudeDirectory } from "./claudedirui";
 import { GithubAdd } from "./ghadd";

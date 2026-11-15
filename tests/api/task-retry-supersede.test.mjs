@@ -46,7 +46,7 @@ console.log("2. Chạy lại bằng tay đánh dấu các lần lỗi trước c
   const changed = T.supersede("t4", "new4");
   ok(changed === 1 && retried("f4b") === 2 && retried("f4a") === 1, "chỉ lần chưa xử lý (retried 0) của việc đó đổi thành 2", JSON.stringify({ changed, a: retried("f4a"), b: retried("f4b") }));
   ok(retried("new4") === 0 && retried("f5") === 0, "lần mới và việc khác giữ nguyên");
-  const src = fs.readFileSync("app/tasks.ts", "utf8");
+  const src = fs.readFileSync("server/tasks.ts", "utf8");
   const rn = src.slice(src.indexOf("export async function runNow"), src.indexOf("export async function runApproved"));
   ok(/const run = launch\(r, \{ chrome \}\);[\s\S]*supersede\(r\.id, run\);/.test(rn), "runNow (POST /api/tasks/:id/run) gọi supersede sau khi chạy", rn.slice(0, 400));
 }

@@ -21,7 +21,7 @@ function tileColor(img: HTMLImageElement): string | null {
   return full >= n * 0.9 ? `rgb(${Math.round(r / full)}, ${Math.round(g / full)}, ${Math.round(b / full)})` : null;
 }
 
-// Logo connector (app/connlogos.ts quyết định ở máy chủ): logo có sẵn (public/connectors), logo Synchro tự tìm (data URI) hoặc ảnh tải hộ
+// Logo connector (server/connlogos.ts quyết định ở máy chủ): logo có sẵn (public/connectors), logo Synchro tự tìm (data URI) hoặc ảnh tải hộ
 // (/api/favicon?app=… của ứng dụng Composio), rồi biểu tượng trang của máy chủ MCP / máy chủ đăng nhập (site, /api/favicon?d=…), cuối cùng là chữ cái đầu.
 // Ảnh nào không tải được thì chuyển sang ảnh kế tiếp, không để ô ảnh vỡ. Mọi ảnh chỉ hiện trong <img> nên SVG có script cũng không chạy được.
 export function ConnLogo({ logo, color, icon, site, name, size = 36 }: { logo?: string; color?: string; icon?: string; site?: string; name: string; size?: number }) {

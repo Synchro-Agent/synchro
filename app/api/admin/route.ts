@@ -1,10 +1,10 @@
-import { adminAudit, adminStats, adminUsers, ADMIN_EMAILS, defaultPerms, handle, OWNER_EMAILS, requireAdmin, roleOf, signupOpen, verifyGateOn } from "../../authstore";
-import { providerFailures, providerStatus } from "../../oauth";
-import { speechBudget, spentToday } from "../../speechapi";
-import { turnstileAdmin } from "../../turnstile";
+import { adminAudit, adminStats, adminUsers, ADMIN_EMAILS, defaultPerms, handle, OWNER_EMAILS, requireAdmin, roleOf, signupOpen, verifyGateOn } from "../../../server/authstore";
+import { providerFailures, providerStatus } from "../../../server/oauth";
+import { speechBudget, spentToday } from "../../../server/speechapi";
+import { turnstileAdmin } from "../../../server/turnstile";
 
-import { repBudget, repToday } from "../../ai/replicate";
-import { serviceKey } from "../../providers";
+import { repBudget, repToday } from "../../../server/ai/replicate";
+import { serviceKey } from "../../../server/providers";
 
 /** Hạn mức ảnh Replicate (khóa của chủ máy chủ, tính tiền thật): hiện ở Quản trị viên cả khi chưa có khóa, kèm cờ chờ khóa. */
 const repSettings = () => ({ replicateBudget: repBudget(), replicateToday: repToday(), replicateKey: !!serviceKey("replicate") });

@@ -1,5 +1,5 @@
-import { AuthError, disconnectIdentity, getUser, handle, publicUser, requireUser, sameOrigin } from "../../../authstore";
-import { isProvider, start } from "../../../oauth";
+import { AuthError, disconnectIdentity, getUser, handle, publicUser, requireUser, sameOrigin } from "../../../../server/authstore";
+import { isProvider, start } from "../../../../server/oauth";
 
 export const runtime = "nodejs";
 

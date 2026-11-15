@@ -1,6 +1,6 @@
 // Kho đoạn chat ở trình duyệt (blueprint B2): danh sách đoạn chat, dự án, đoạn chat đang mở, các đoạn chat đang có câu trả lời chạy
 // và tin nhắn chờ gửi. Trước đây là useState của Home, nên mỗi mẩu chữ đang chảy dựng lại cả trang; nay từng phần chỉ đăng ký đúng thứ nó cần.
-// Khác app/chatstore.ts (kho SQLite ở máy chủ): "client-only" làm lỗi build ngay nếu tệp này lọt vào mã máy chủ, và ngược lại
+// Khác server/chatstore.ts (kho SQLite ở máy chủ): "client-only" làm lỗi build ngay nếu tệp này lọt vào mã máy chủ, và ngược lại
 // import nhầm "./chatstore" từ trình duyệt sẽ kéo cả sqlite vào gói tải.
 // Hàm đặt giá trị nhận giá trị hoặc hàm cập nhật như setState của React, nên mọi chỗ gọi cũ dùng nguyên được.
 // Không bao giờ ghi vào kho lúc đang vẽ (Home vẽ cả ở máy chủ): chỉ ghi trong hiệu ứng và hàm xử lý sự kiện.

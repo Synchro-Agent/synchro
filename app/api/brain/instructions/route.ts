@@ -1,6 +1,6 @@
-import { getUser, handle, requireUser, sameOrigin } from "../../../authstore";
-import { instructionsInfo, restoreInstructions } from "../../../brain";
-import { setMemCfg } from "../../../memory";
+import { getUser, handle, requireUser, sameOrigin } from "../../../../server/authstore";
+import { instructionsInfo, restoreInstructions } from "../../../../server/brain";
+import { setMemCfg } from "../../../../server/memory";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

@@ -1,5 +1,5 @@
-import { appUrl, clientIp, handle, normEmail, sameOrigin, signup } from "../../../authstore";
-import { checkDisposable, requireTurnstile } from "../../../turnstile";
+import { appUrl, clientIp, handle, normEmail, sameOrigin, signup } from "../../../../server/authstore";
+import { checkDisposable, requireTurnstile } from "../../../../server/turnstile";
 
 export const runtime = "nodejs";
 

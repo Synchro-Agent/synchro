@@ -1,6 +1,6 @@
 "use client";
 
-// Ô kiểm tra Cloudflare Turnstile (app/turnstile.ts) cho đăng ký, đăng nhập sau nhiều lần sai và xin đặt lại mật khẩu.
+// Ô kiểm tra Cloudflare Turnstile (server/turnstile.ts) cho đăng ký, đăng nhập sau nhiều lần sai và xin đặt lại mật khẩu.
 // Chỉ tải mã của Cloudflare khi quản trị viên đã bật (có khóa site). Chế độ "interaction-only": đa số người dùng không thấy gì, chỉ khi
 // Cloudflare cần hỏi thêm mới hiện ô, nằm trong khung nền đặc theo giao diện sáng / tối của Synchro.
 import { useEffect, useRef, useState } from "react";

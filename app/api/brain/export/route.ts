@@ -1,5 +1,5 @@
-import { handle, limit, requireUser } from "../../../authstore";
-import { exportBrain } from "../../../brain";
+import { handle, limit, requireUser } from "../../../../server/authstore";
+import { exportBrain } from "../../../../server/brain";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

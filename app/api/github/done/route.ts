@@ -1,4 +1,4 @@
-import { timed } from "../../../servertiming";
+import { timed } from "../../../../server/servertiming";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 

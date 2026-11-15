@@ -1,6 +1,6 @@
-import { handle, limit, requireUser, sameOrigin } from "../../authstore";
-import { brainGraph, brainLog, brainTable, queryNotes, tagCounts, wipeBrain } from "../../brain";
-import { memCfg } from "../../memory";
+import { handle, limit, requireUser, sameOrigin } from "../../../server/authstore";
+import { brainGraph, brainLog, brainTable, queryNotes, tagCounts, wipeBrain } from "../../../server/brain";
+import { memCfg } from "../../../server/memory";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

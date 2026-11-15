@@ -1,5 +1,5 @@
-import { handle, limit, requireUser, sameOrigin } from "../../authstore";
-import { scores, vote } from "../../feedback";
+import { handle, limit, requireUser, sameOrigin } from "../../../server/authstore";
+import { scores, vote } from "../../../server/feedback";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

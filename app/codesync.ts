@@ -1,7 +1,7 @@
 "use client";
 // Synchro Code ở trình duyệt: cài đặt (lưu ở máy chủ), đồng bộ phiên giữa các thiết bị, trả lời câu hỏi duyệt của lượt đang chạy.
 import { useSyncExternalStore } from "react";
-import type { CodePrefs } from "./codestore";
+import type { CodePrefs } from "../server/codestore";
 import { mergeData } from "./codemerge";
 import { TIMED_OUT, withDeadline } from "./chatsynccore";
 import { userScope } from "./userscope";
@@ -40,7 +40,7 @@ export async function saveCodePrefs(patch: Partial<CodePrefs>): Promise<string |
   prefs = await r.json(); emit();
   return null;
 }
-/** Gieo cài đặt từ gói khởi động dựng ở máy chủ (app/bootdata.ts codePrefs): không cần hỏi /api/code/prefs lúc mở trang. */
+/** Gieo cài đặt từ gói khởi động dựng ở máy chủ (server/bootdata.ts codePrefs): không cần hỏi /api/code/prefs lúc mở trang. */
 export function seedCodePrefs(p: CodePrefs | null | undefined) { if (!p || prefs) return; prefs = p; emit(); }
 /** Sau khi đổi tài khoản: tải lại cài đặt của tài khoản mới. */
 export function resetCodePrefs() { prefs = null; loading = null; emit(); }

@@ -44,7 +44,7 @@ process.on("exit", () => { agent.kill("SIGKILL"); fs.rmSync(tmp, { recursive: tr
 for (let i = 0; i < 50; i++) { await sleep(100); if (/nghe tại/.test(log)) break; }
 if (!/nghe tại/.test(log)) { console.log("  (bỏ qua: dịch vụ workspace không khởi động được trên máy này)", log.slice(-300)); process.exit(0); }
 
-// Giống app/workspace.ts: mỗi yêu cầu một kết nối, ngắt kết nối nghĩa là người dùng đã bấm Dừng.
+// Giống server/workspace.ts: mỗi yêu cầu một kết nối, ngắt kết nối nghĩa là người dùng đã bấm Dừng.
 const call = (body, signal) => new Promise((res, rej) => {
   const data = JSON.stringify(body);
   const req = http.request({ host: "127.0.0.1", port, path: "/run", method: "POST", agent: false, signal, headers: { authorization: `Bearer ${SECRET}`, "content-type": "application/json", "content-length": Buffer.byteLength(data) } }, (r) => {
@@ -88,7 +88,7 @@ console.log("3. W23-1: lần dựng video không giữ chỗ chạy chung (WS_RU
 
 console.log("4. W23-4: vị trí trong hàng tới Next NGAY TRONG LÚC chờ (NDJSON), không phải sau khi chạy xong");
 {
-  // app/coderun.ts + app/workspace.ts thật, nối tới dịch vụ workspace ở trên.
+  // server/coderun.ts + server/workspace.ts thật, nối tới dịch vụ workspace ở trên.
   process.env.DATA_DIR = path.join(tmp, "data"); process.env.DATA_KEY = "ws-queue-key"; fs.mkdirSync(process.env.DATA_DIR, { recursive: true });
   process.env.CODE_RUN = "workspace"; process.env.WS_AGENT_URL = `http://127.0.0.1:${port}`; process.env.WS_AGENT_SECRET = SECRET;
   const { loadTs } = await import("../lib/ts.mjs");

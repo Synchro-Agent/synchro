@@ -30,7 +30,7 @@ const env = { ...process.env, ...ghEnv, SYNCHRO_VERIFY_GATE_DEFAULT: "0", SYNCHR
 // kèm địa chỉ máy chủ giả lập (trang đăng nhập /mock-login/…).
 const ENGINE_BIN = path.join(DATA, "engine", ".local", "bin");
 fs.mkdirSync(ENGINE_BIN, { recursive: true });
-// Bộ cập nhật CLI (app/ai/cliupdate.ts) có thể đã đổi lối vào thành liên kết tới bản khác: xóa lối vào trước khi chép (chép đè qua liên kết sẽ ghi vào bản đó).
+// Bộ cập nhật CLI (server/ai/cliupdate.ts) có thể đã đổi lối vào thành liên kết tới bản khác: xóa lối vào trước khi chép (chép đè qua liên kết sẽ ghi vào bản đó).
 // Bản phát hành giả cho bộ cập nhật lấy từ data-mock/cli-releases (bài kiểm thử tự viết vào), không bao giờ từ npm hay script cài của hãng.
 for (const f of fs.readdirSync("scripts/mock-cli")) { const dst = path.join(ENGINE_BIN, f); fs.rmSync(dst, { force: true }); fs.copyFileSync(path.join("scripts/mock-cli", f), dst); fs.chmodSync(dst, 0o755); }
 fs.writeFileSync(path.join(ENGINE_BIN, "mock-cli.json"), JSON.stringify({ base: M }));

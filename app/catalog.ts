@@ -1,10 +1,10 @@
 // Danh mục model và tính năng dùng chung cho giao diện và máy chủ (phân quyền theo tài khoản).
-// Danh sách model thật lấy từ khóa API quản trị viên nhập ở Cài đặt → Providers (xem app/providers.ts),
+// Danh sách model thật lấy từ khóa API quản trị viên nhập ở Cài đặt → Providers (xem server/providers.ts),
 // mỗi model định danh bằng khóa "nhà cung cấp/mã model", ví dụ "anthropic/claude-opus-5-5".
 
 /** blockedUntil: riêng model này đang hết hạn mức tới lúc đó (các model khác của gói vẫn dùng được). isNew: hãng vừa ra mắt, Synchro đã thử đạt (nhãn "Mới" 14 ngày). */
 export type ModelInfo = { key: string; id: string; name: string; blockedUntil?: number; isNew?: boolean };
-// Gói subscription của người dùng trong một nhóm hãng (bộ chọn model gộp gói và khóa API theo hãng, xem app/ai/subs.ts):
+// Gói subscription của người dùng trong một nhóm hãng (bộ chọn model gộp gói và khóa API theo hãng, xem server/ai/subs.ts):
 // blockedUntil: gói đang hết hạn mức tới lúc nào; usingApiUntil: người dùng đã đồng ý dùng khóa API thay gói tới lúc nào.
 /** Gói tạo được ảnh bằng generate_image (ai/imagegen.ts): chip "Tạo ảnh" ở trang chủ, thẻ "chưa tạo được ảnh" trong khung chat. */
 export const IMAGE_PLANS = new Set<string>(["agy", "grok", "codex"]);

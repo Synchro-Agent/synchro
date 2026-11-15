@@ -1,5 +1,5 @@
-import { clearSessionCookie, deleteOwnAccount, handle, requireUser, sameOrigin, withCookies } from "../../../authstore";
-import { purgeUser } from "../../../purge";
+import { clearSessionCookie, deleteOwnAccount, handle, requireUser, sameOrigin, withCookies } from "../../../../server/authstore";
+import { purgeUser } from "../../../../server/purge";
 
 export const runtime = "nodejs";
 

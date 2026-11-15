@@ -1,4 +1,4 @@
-// Sơ đồ D2 (app/d2render.ts, /api/d2): dựng SVG trong sandbox run_code, không mạng, bố cục elk, nhớ theo mã băm, lỗi gọn không lộ đường dẫn máy chủ.
+// Sơ đồ D2 (server/d2render.ts, /api/d2): dựng SVG trong sandbox run_code, không mạng, bố cục elk, nhớ theo mã băm, lỗi gọn không lộ đường dẫn máy chủ.
 // Phần 1-2 không cần máy chủ: chạy bằng CODE_RUN=local (sandbox-exec của macOS). D2 thật nếu đặt SYNCHRO_D2_BIN=<đường dẫn d2 v0.9.0>
 // (bản macOS tải từ trang phát hành, kiểm SHA256SUMS), không thì một tệp d2 giả ghi lại tham số. Phần 3 chạy trên npm run dev:mock (SYNCHRO_URL),
 // bỏ qua khi máy chủ không chạy; máy chủ cần SYNCHRO_D2_BIN để vẽ được.
@@ -78,7 +78,7 @@ console.log("2. Lỗi gọn, giới hạn");
   const off = await D.renderD2("u-d2", "khong -> chay", false);
   ok("error" in off && /chưa có nơi chạy code/.test(off.error), "máy chủ không có nơi chạy code: báo rõ, không lỗi 500", off);
   process.env.CODE_RUN = "local";
-  const src = fs.readFileSync("app/d2render.ts", "utf8");
+  const src = fs.readFileSync("server/d2render.ts", "utf8");
   ok(/net: false/.test(src) && /timeout: 20/.test(src), "chạy không mạng, tối đa 20 giây");
 }
 

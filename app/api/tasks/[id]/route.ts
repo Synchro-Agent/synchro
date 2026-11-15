@@ -1,5 +1,5 @@
-import { handle, requireUser, sameOrigin } from "../../../authstore";
-import { deleteTask, TaskError, updateTask } from "../../../tasks";
+import { handle, requireUser, sameOrigin } from "../../../../server/authstore";
+import { deleteTask, TaskError, updateTask } from "../../../../server/tasks";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

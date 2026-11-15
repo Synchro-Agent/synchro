@@ -55,13 +55,13 @@ function mockTitle(prompt) {
 }
 const isTitleAsk = (prompt) => prompt.includes("Đoạn chat cần đặt tên:");
 /**
- * Bộ não tổng hợp (app/brain.ts): chưng cất một đoạn chat thành JSON ghi chú, hoặc tổng hợp trung tâm, như model thật.
+ * Bộ não tổng hợp (server/brain.ts): chưng cất một đoạn chat thành JSON ghi chú, hoặc tổng hợp trung tâm, như model thật.
  * Trả về null khi không phải lời gọi của bộ não.
  */
 // Bộ não (dev:mock): trả JSON đúng định dạng cho từng bước học / chăm sóc, suy ra từ chính dữ liệu được gửi (không bịa thêm).
 const fold = (x) => String(x).normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/gi, "d").toLowerCase().trim();
 const AREAS = [["Học tập", /ielts|thpt|toan|du hoc|tieng anh|on thi/], ["Lập trình", /lap trinh|python|javascript|cyber|code|bao mat/], ["Sức khỏe", /gym|tap luyen|suc khoe|chay bo/]];
-// Viết SKILL.md từ bản đọc toàn repo (app/skillgen.ts): như model thật — tên theo gợi ý, mô tả và hướng dẫn chỉ tới tệp có thật trong repo.
+// Viết SKILL.md từ bản đọc toàn repo (server/skillgen.ts): như model thật — tên theo gợi ý, mô tả và hướng dẫn chỉ tới tệp có thật trong repo.
 // Ghi số tệp đã thấy nội dung để kiểm thử biết bản đọc phủ hết repo.
 function mockSkillGen(prompt) {
   const i = prompt.indexOf("Viết SKILL.md cho repo dưới đây.");
@@ -74,7 +74,7 @@ function mockSkillGen(prompt) {
   return `---\nname: ${name}\ndescription: "Kiến thức từ repo ${source} (mock). Dùng khi người dùng hỏi về ${name} hoặc cần làm việc với repo này."\n---\n# ${name}\n\nSkill viết từ bản đọc toàn repo ${source}: đã thấy nội dung ${files.length} tệp văn bản trên tổng ${total} tệp. Khi người dùng hỏi về repo, mở đúng tệp liên quan trong references/ trước khi trả lời và trích tên tệp.\n\n## Quy trình\n1. Đọc references/repo-tree.md để biết cấu trúc.\n2. Mở tệp liên quan nhất.\n3. Trả lời dựa đúng nội dung tệp.\n\n## Tệp tham khảo\n${files.slice(0, 5).map((f) => "- references/" + f).join("\n")}\n`;
 }
 
-// Xếp skill vào Tài liệu / Trình bày / Thiết kế (app/skillstudio.ts): như model thật — đọc tên, mô tả, nội dung rồi trả một dòng JSON.
+// Xếp skill vào Tài liệu / Trình bày / Thiết kế (server/skillstudio.ts): như model thật — đọc tên, mô tả, nội dung rồi trả một dòng JSON.
 // Hiểu theo nghĩa chứ không chỉ khớp chữ: "pitch" / "thuyết trình" là Trình bày, "giao diện" / "logo" / "màu" là Thiết kế…
 function mockStudio(prompt) {
   const i = prompt.indexOf("Skill cần phân loại:");
@@ -88,7 +88,7 @@ function mockStudio(prompt) {
   return JSON.stringify({ docs, slides, design, why: code ? "(mock) Skill về việc khác, không thuộc mục nào." : `(mock) Thuộc ${[docs && "Tài liệu", slides && "Trình bày", design && "Thiết kế"].filter(Boolean).join(", ")}.` });
 }
 
-// Quét skill rác (app/skillscan.ts): như model thật — đọc từng skill trong lô rồi trả JSON đủ mọi số thứ tự.
+// Quét skill rác (server/skillscan.ts): như model thật — đọc từng skill trong lô rồi trả JSON đủ mọi số thứ tự.
 // Chữ mẫu / tên skill thử → rác; chỉ dặn điều model vốn đã làm → không có tác dụng; còn lại → ổn, kèm ngành nghề.
 // Tên có "noverdict" thì bỏ qua skill đó (kiểm thử mục "Chưa đọc được").
 function mockSkillScan(prompt) {
@@ -259,7 +259,7 @@ function mediaDesc(buf, hint = "") {
 }
 const mediaReply = (items) => `MEDIA: ${items.length ? items.join("; ") : "không có tệp nào"}`;
 
-// ---------------------------------------------------------------- tạo ảnh (app/ai/imagegen.ts)
+// ---------------------------------------------------------------- tạo ảnh (server/ai/imagegen.ts)
 // Lượt tạo ảnh ghi tệp ảnh thật, rất nhỏ, đúng chỗ CLI thật ghi. Chế độ lấy từ <thư mục đăng nhập>/mock-image.json ({ "mode": "…" }) hoặc mock-cli.json ({ "image": { "agy": "…" } }):
 // ok, quota (hết hạn mức), fail (lỗi khác), none (không có công cụ), text (nói xong mà không có tệp), bad (tệp không phải ảnh), big (quá cỡ), slow (chạy tới khi bị dừng), other (nói
 // đường dẫn otherPath của tài khoản khác), symlink (liên kết mềm tới otherPath). Mỗi lượt ghi cờ đã nhận vào mock-image-log.json để kiểm thử xem.
@@ -277,7 +277,7 @@ const imageMode = (dir, cli) => { const j = readJson(path.join(dir, "mock-image.
 function imageLog(dir, rec) { const f = path.join(dir, "mock-image-log.json"); writeJson(f, [...readJson(f, []), { at: Date.now(), ...rec }]); }
 function saveImage(file, kind = "jpg") { fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, kind === "png" ? tinyPng() : kind === "bad" ? "<html>không phải ảnh</html>" : kind === "big" ? Buffer.concat([TINY_JPEG, Buffer.alloc(3 * 1048576, 7)]) : TINY_JPEG); }
 
-// Bản phát hành giả cho bộ cập nhật CLI (app/ai/cliupdate.ts, nguồn SYNCHRO_CLI_UPDATE_SOURCE): tệp mock-version cạnh lệnh đổi dòng --version;
+// Bản phát hành giả cho bộ cập nhật CLI (server/ai/cliupdate.ts, nguồn SYNCHRO_CLI_UPDATE_SOURCE): tệp mock-version cạnh lệnh đổi dòng --version;
 // tệp mock-break làm hỏng bản đó: "smoke" mọi lệnh trừ --version đều lỗi (không qua kiểm tra trước khi dùng), "turn" lệnh xem đăng nhập vẫn chạy
 // nhưng lượt chat thật lỗi (qua kiểm tra, rồi tự trả về bản trước).
 // Máy chủ token giả lập (kiểm thử HOME riêng của lượt, Blueprint G1): chỉ chạy khi tệp đăng nhập là JSON có mock_oauth và mock-cli.json có tokenServer

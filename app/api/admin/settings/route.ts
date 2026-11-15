@@ -1,10 +1,10 @@
-import { audit, clientIp, defaultPerms, handle, ownerOnly, requireAdmin, sameOrigin, setSetting, setVerifyGate, signupOpen, verifyGateOn } from "../../../authstore";
+import { audit, clientIp, defaultPerms, handle, ownerOnly, requireAdmin, sameOrigin, setSetting, setVerifyGate, signupOpen, verifyGateOn } from "../../../../server/authstore";
 import { normPerms } from "../../../catalog";
-import { setSpeechBudget, speechBudget, spentToday } from "../../../speechapi";
-import { saveTurnstile, setBlockDisposable, turnstileAdmin } from "../../../turnstile";
+import { setSpeechBudget, speechBudget, spentToday } from "../../../../server/speechapi";
+import { saveTurnstile, setBlockDisposable, turnstileAdmin } from "../../../../server/turnstile";
 
-import { repBudget, repToday, setRepBudget } from "../../../ai/replicate";
-import { serviceKey } from "../../../providers";
+import { repBudget, repToday, setRepBudget } from "../../../../server/ai/replicate";
+import { serviceKey } from "../../../../server/providers";
 
 /** Hạn mức ảnh Replicate (khóa của chủ máy chủ, tính tiền thật): hiện ở Quản trị viên cả khi chưa có khóa, kèm cờ chờ khóa. */
 const repSettings = () => ({ replicateBudget: repBudget(), replicateToday: repToday(), replicateKey: !!serviceKey("replicate") });

@@ -1,5 +1,5 @@
-import { handle, requireUser, sameOrigin } from "../../authstore";
-import { capsState, setUserCaps } from "../../caps";
+import { handle, requireUser, sameOrigin } from "../../../server/authstore";
+import { capsState, setUserCaps } from "../../../server/caps";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

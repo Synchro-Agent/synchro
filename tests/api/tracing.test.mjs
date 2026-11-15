@@ -1,4 +1,4 @@
-// Đo độ trễ từng chặng (app/tracing.ts): span theo chặng trong ngữ cảnh lượt, vòng nhớ 500 lượt, tổng hợp p50 / p95 theo ngày trong SQLite,
+// Đo độ trễ từng chặng (server/tracing.ts): span theo chặng trong ngữ cảnh lượt, vòng nhớ 500 lượt, tổng hợp p50 / p95 theo ngày trong SQLite,
 // dòng log OTLP/JSON hợp lệ. Tự chạy được, không cần dev:mock. Phần chạy thật qua /api/llm nằm ở latency-trace.test.mjs.
 import fs from "node:fs";
 import os from "node:os";

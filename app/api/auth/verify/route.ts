@@ -1,5 +1,5 @@
-import { checkEmailChange, checkVerifyLink, confirmEmailChange, confirmVerify, denyVerify, handle, requireUser, resendVerify, sameOrigin } from "../../../authstore";
-import { purgeUser } from "../../../purge";
+import { checkEmailChange, checkVerifyLink, confirmEmailChange, confirmVerify, denyVerify, handle, requireUser, resendVerify, sameOrigin } from "../../../../server/authstore";
+import { purgeUser } from "../../../../server/purge";
 
 export const runtime = "nodejs";
 

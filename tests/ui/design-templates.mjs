@@ -22,7 +22,7 @@ rmSync(PROF, { recursive: true, force: true });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 let fails = 0;
 const check = (name, ok, extra = "") => { console.log(`${ok ? "✓" : "✗"} ${name}${extra ? " — " + extra : ""}`); if (!ok) fails++; };
-const PROBE = (() => { const m = /const PROBE = String\.raw`([\s\S]*?)`;\n/.exec(readFileSync("app/artcheck.ts", "utf8")); return m[1].replace("${DESIGN_PROBE}", artprobe.DESIGN_PROBE); })();
+const PROBE = (() => { const m = /const PROBE = String\.raw`([\s\S]*?)`;\n/.exec(readFileSync("server/artcheck.ts", "utf8")); return m[1].replace("${DESIGN_PROBE}", artprobe.DESIGN_PROBE); })();
 
 // Ảnh: khung artifact chỉ nhận data: (máy chủ nhúng ảnh https trước khi dựng); ở đây nhúng ảnh tự vẽ bằng sharp: ảnh phong cảnh và ảnh chủ thể nền trong suốt.
 const sharp = createRequire(path.join(process.cwd(), "package.json"))("sharp");

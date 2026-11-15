@@ -37,7 +37,7 @@ AU.db().prepare("DELETE FROM users WHERE id = ?").run(a.id);
 ok(!AU.db().prepare("SELECT 1 FROM conv_untrusted WHERE user_id = ?").get(a.id), "ON DELETE CASCADE dọn dấu của tài khoản");
 
 console.log("6. Vòng lặp chat: dựng Exec từ dấu của cuộc trò chuyện, load_skill skill danh mục thì ghi dấu");
-const src = fs.readFileSync(path.join(process.cwd(), "app", "chatengine.ts"), "utf8");
+const src = fs.readFileSync(path.join(process.cwd(), "server", "chatengine.ts"), "utf8");
 const seeds = src.match(/const xx?: Exec = \{[^\n]*\}/g) ?? [];
 ok(seeds.length === 2 && seeds.every((l) => l.includes("untrusted: convUntrusted(c.user.id, convId)")), "cả hai chỗ dựng Exec khởi tạo untrusted từ cuộc trò chuyện", seeds.length);
 ok(/if \(r\.used\.untrusted\) \{ x\.untrusted = true; markConvUntrusted\(x\.uid, x\.conv\); \}/.test(src), "load_skill skill chưa kiểm chứng ghi dấu cho cuộc trò chuyện");

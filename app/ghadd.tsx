@@ -9,7 +9,7 @@ import { tr } from "./i18n";
 import { useFitPlaceholder } from "./phfit";
 import { inspectGithub, SkillAddModal, type Found } from "./skillsui";
 import { PreviewModal } from "./pluginsui";
-import type { PublicPlugin } from "./plugins";
+import type { PublicPlugin } from "../server/plugins";
 import { cachedJson, META, type PluginsMeta } from "./studios";
 
 const isAdmin = () => cachedJson<PluginsMeta>(META).then((j) => !!j?.admin).catch(() => false);

@@ -270,7 +270,7 @@ try {
     ok(!fs.existsSync(mark), "codex: tiến trình bị dừng trước khi kết quả lệnh kịp về", "tiến trình mock vẫn chạy tiếp");
     const L = CE.CODEX_LOCAL;
     ok(L.test("command_execution") && L.test("file_change") && !L.test("mcp_tool_call") && !L.test("agent_message") && !L.test("web_search") && !L.test("reasoning"), "chỉ chặn công cụ chạy trên máy chủ, không chặn công cụ Synchro / tìm web / câu trả lời");
-    const src = fs.readFileSync("app/ai/cli_engines.ts", "utf8");
+    const src = fs.readFileSync("server/ai/cli_engines.ts", "utf8");
     ok(src.includes('"features.shell_tool=false"') && src.includes('"features.unified_exec=false"') && src.includes('"tools.view_image=false"'), "codex: gọi CLI với công cụ shell và xem tệp đã tắt");
   }
 
@@ -306,7 +306,7 @@ try {
     const auth = (() => { try { return JSON.parse(fs.readFileSync(path.join(base, "auth.json"), "utf8")); } catch { return {}; } })();
     ok(!r3.error && auth.refreshed > 0 && !fs.lstatSync(path.join(base, "auth.json")).isSymbolicLink() && fs.existsSync(path.join(base, "history.jsonl")) && !turns().length,
       "codex làm mới token (ghi tệp mới rồi đổi tên) / tạo tệp mới trong lượt: được đưa về thư mục đăng nhập", JSON.stringify({ r3, auth }));
-    ok(!CE.codexMcpToml("http://x/y").includes("-c") && /default_tools_approval_mode = "approve"/.test(CE.codexMcpToml("http://x/y")) && !fs.readFileSync("app/ai/cli_engines.ts", "utf8").includes("mcp_servers.synchro.url="), "mã nguồn: không còn -c mcp_servers.synchro.url=…");
+    ok(!CE.codexMcpToml("http://x/y").includes("-c") && /default_tools_approval_mode = "approve"/.test(CE.codexMcpToml("http://x/y")) && !fs.readFileSync("server/ai/cli_engines.ts", "utf8").includes("mcp_servers.synchro.url="), "mã nguồn: không còn -c mcp_servers.synchro.url=…");
     process.env.SYNCHRO_ENGINE_BWRAP = "1";
     const scope = R.isolate("/x/codex", ["exec"], { CODEX_HOME: path.join(base, `${R.CODEX_TURN_PREFIX}abc`), HOME, PATH: "/usr/bin" }, path.join(HOME, "work"));
     delete process.env.SYNCHRO_ENGINE_BWRAP;

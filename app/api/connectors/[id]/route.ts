@@ -1,5 +1,5 @@
-import { sameOrigin } from "../../../authstore";
-import { listConnectors, removeConnector, updateConnector } from "../../../connectors";
+import { sameOrigin } from "../../../../server/authstore";
+import { listConnectors, removeConnector, updateConnector } from "../../../../server/connectors";
 import { connectorUser, policyOf, route } from "../shared";
 
 export const runtime = "nodejs";

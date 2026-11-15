@@ -1,13 +1,13 @@
-import { limit, verifyLocked } from "../../authstore";
+import { limit, verifyLocked } from "../../../server/authstore";
 import { route } from "../../../server/route";
-import { overLimit, usageScope } from "../../usage";
-import { chatPost } from "../../chatengine";
-import { quickLimit, queueFull, startRun, turnsTotal, withStop } from "../../runs";
-import { acquire, noteRefused, runningOf, withSlot } from "../../turngate";
-import { subCli } from "../../ai/subs";
-import { AUTO } from "../../router";
-import { afterTurn } from "../../brain";
-import { drainingResponse } from "../../drain";
+import { overLimit, usageScope } from "../../../server/usage";
+import { chatPost } from "../../../server/chatengine";
+import { quickLimit, queueFull, startRun, turnsTotal, withStop } from "../../../server/runs";
+import { acquire, noteRefused, runningOf, withSlot } from "../../../server/turngate";
+import { subCli } from "../../../server/ai/subs";
+import { AUTO } from "../../../server/router";
+import { afterTurn } from "../../../server/brain";
+import { drainingResponse } from "../../../server/drain";
 
 // Cổng duy nhất tới model của chat. Phần xử lý nằm ở chatengine.ts.
 // async: true (lượt chat chính) → tạo lượt chạy bền ở nền và trả ngay { run }; trình duyệt theo dõi qua /api/runs/<id>.

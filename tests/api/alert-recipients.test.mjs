@@ -10,7 +10,7 @@ process.env.DATA_DIR = tmp; process.env.DATA_KEY = "alert-test";
 process.env.ADMIN_EMAILS = "ops@synchro.test"; process.env.OWNER_EMAILS = "chu@synchro.test";
 const { authstore: AU } = await loadTs(["authstore"]);
 ok(AU.ALERT_EMAILS.includes("chu@synchro.test") && AU.ALERT_EMAILS.includes("ops@synchro.test"), "người nhận cảnh báo gồm chủ sở hữu và quản trị viên ở cấu hình", JSON.stringify(AU.ALERT_EMAILS));
-for (const f of ["app/ops.ts", "app/sharestore.ts"]) {
+for (const f of ["server/ops.ts", "server/sharestore.ts"]) {
   const src = fs.readFileSync(path.join(process.cwd(), f), "utf8");
   ok(/ALERT_EMAILS/.test(src) && !/\bADMIN_EMAILS\b/.test(src), `${f} gửi tới ALERT_EMAILS`);
 }

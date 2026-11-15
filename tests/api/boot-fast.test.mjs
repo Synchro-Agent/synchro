@@ -41,7 +41,7 @@ try {
 
   const page = src("app/page.tsx");
   ok(/bootFor\([^)]*\)[^;]*\{ fast: true \}/.test(page) || /\{ fast: true \}\)/.test(page), "app/page.tsx dựng gói bằng fast (không chờ CLI / mạng / thư viện skill)");
-  const bd = src("app/bootdata.ts");
+  const bd = src("server/bootdata.ts");
   ok(/o\.fast \? await within\(mp/.test(bd) && /studioSummaryCached/.test(bd), "bootOf fast: model có hạn, studio chỉ đọc bản đã tính");
 
   console.log("2. Cài đặt Code từ gói khởi động");

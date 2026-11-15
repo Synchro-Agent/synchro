@@ -494,7 +494,7 @@ function Capabilities({ go }: { go: (t: string) => void }) {
   );
 }
 
-// Bộ nhớ lưu ở máy chủ (app/memory.ts): Synchro tự rút từ các cuộc trò chuyện và đưa vào mỗi lượt chat khi nút "Bộ nhớ" bật.
+// Bộ nhớ lưu ở máy chủ (server/memory.ts): Synchro tự rút từ các cuộc trò chuyện và đưa vào mỗi lượt chat khi nút "Bộ nhớ" bật.
 type MemItem = { id: string; content: string; createdAt: number; source: string };
 function Memory() {
   const app = useApp();

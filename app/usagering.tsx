@@ -12,7 +12,7 @@ import * as I from "./icons";
 export type Limit = { key: "session" | "weekly"; used: number; limit: number | null; pct: number; resetAt: number | null; active: boolean };
 export type Rate = { provider: string; limit: number; remaining: number; resetAt: number; pct: number };
 export type Credit = { provider: string; amount: number; since: number; spent: number; remaining: number; pct: number };
-// Hạn mức của gói subscription (model "sub-…"): cửa sổ phiên 5 giờ / tuần do CLI của hãng báo về (xem app/ai/subs.ts).
+// Hạn mức của gói subscription (model "sub-…"): cửa sổ phiên 5 giờ / tuần do CLI của hãng báo về (xem server/ai/subs.ts).
 export type PlanWindow = { window: string; usedPct?: number; resetsAt?: number; status?: string; label: string; kind: "session" | "weekly" | "other"; group?: string; idle?: boolean };
 export type SubUsage = { cli: "claude" | "codex" | "agy" | "grok"; name: string; plan: string | null; windows: PlanWindow[]; turnsToday: number; note: string | null; credits: string | null; at: number | null; setup?: boolean };
 /** Một hãng trong chế độ Tự động / Cài đặt → Usage: Synchro tự nhận đang chạy bằng gói đã đăng nhập (plan) hay khóa API. */

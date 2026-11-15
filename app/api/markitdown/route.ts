@@ -4,10 +4,10 @@ import { existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
-import { AuthError, limit } from "../../authstore";
+import { AuthError, limit } from "../../../server/authstore";
 import { route } from "../../../server/route";
-import { diskLow } from "../../diskfloor";
-import { lowPriority, parserEnv, withConvertSlot } from "../../fileproc/sandbox";
+import { diskLow } from "../../../server/diskfloor";
+import { lowPriority, parserEnv, withConvertSlot } from "../../../server/fileproc/sandbox";
 import { FileError } from "../../fileproc/types";
 
 export const runtime = "nodejs";

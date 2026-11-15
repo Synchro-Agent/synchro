@@ -16,7 +16,7 @@ const API_MODEL = "anthropic/claude-haiku-5-5";
 let pass = 0, fail = 0;
 const ok = (c, n, x = "") => { c ? pass++ : fail++; console.log(c ? "  ✓" : "  ✗", n, c ? "" : String(typeof x === "string" ? x : JSON.stringify(x)).slice(0, 700)); return c; };
 
-// Lời báo hạn mức đủ ba phần (cùng tiêu chí với app/limitmsg.ts limitParts, kiểm ở tests/api/limit-messages.test.mjs).
+// Lời báo hạn mức đủ ba phần (cùng tiêu chí với server/limitmsg.ts limitParts, kiểm ở tests/api/limit-messages.test.mjs).
 const parts = (msg = "") => ({
   which: /(phiên|tuần|hôm nay|mỗi giờ|mỗi ngày|Gói \S+|gói \S+|session|week|today|per hour|plan)/i.test(msg),
   when: /(sau (khoảng )?\d+ (phút|giờ|ngày)|ngày mai|in (about )?\d+ ?(min|h|days?)|tomorrow)/i.test(msg),

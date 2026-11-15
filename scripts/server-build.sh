@@ -224,7 +224,7 @@ if [ "$BG" = 1 ]; then
     bg_switch_upstream "$OLDPORT" || echo "CẢNH BÁO: không trả được nginx về cổng $OLDPORT, cần xem tay ngay." >&2
     fail "qua nginx (https://$BG_HOST) chưa thấy bản mới"
   fi
-  # Từ đây người dùng đã ở bản mới. Ghi màu sống trước khi dừng bản cũ: bản mới nhận vai primary ngay khi bản cũ thoát (app/role.ts).
+  # Từ đây người dùng đã ở bản mới. Ghi màu sống trước khi dừng bản cũ: bản mới nhận vai primary ngay khi bản cũ thoát (server/role.ts).
   bg_write_live "$NEW" "$NEWPORT" "$APP"
   SHARED=""
   echo "Dừng bản cũ $OLDPM2 (chạy nốt lượt đang dở, tối đa 25 giây)…"

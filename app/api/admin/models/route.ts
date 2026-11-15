@@ -1,6 +1,6 @@
-import { audit, clientIp, handle, isOwner, ownerOnly, requireAdmin, sameOrigin, type UserRow } from "../../../authstore";
-import { adminList } from "../../../providers";
-import { activate, autoSettings, discoverModels, forget, listRegistry, queueRetest, setAutoSettings, setHidden, setPinned } from "../../../modelreg";
+import { audit, clientIp, handle, isOwner, ownerOnly, requireAdmin, sameOrigin, type UserRow } from "../../../../server/authstore";
+import { adminList } from "../../../../server/providers";
+import { activate, autoSettings, discoverModels, forget, listRegistry, queueRetest, setAutoSettings, setHidden, setPinned } from "../../../../server/modelreg";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

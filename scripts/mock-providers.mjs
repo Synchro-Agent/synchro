@@ -431,7 +431,7 @@ function mockTitle(q) {
   const w = first.replace(/^(cho (tôi|mình|em) hỏi|giúp (tôi|mình|em)|làm ơn|hãy|please|can you|could you)\s+/i, "").split(" ").slice(0, 6).join(" ");
   return w[0].toUpperCase() + w.slice(1);
 }
-// Đánh giá phiên Synchro Code (app/agentturn.ts sessionMeta): trả về JSON như model thật.
+// Đánh giá phiên Synchro Code (server/agentturn.ts sessionMeta): trả về JSON như model thật.
 function mockMeta(q) {
   const reply = /\[Trợ lý trả lời cuối lượt\]\n([\s\S]*?)(\n\n\[|\n\nGit:|$)/.exec(q)?.[1]?.trim() ?? "";
   const edited = (/Tệp đã sửa trong lượt này: ([^\n]*)/.exec(q)?.[1] ?? "").split(", ").filter(Boolean).length;
@@ -441,7 +441,7 @@ function mockMeta(q) {
   const suggest = state === "review" ? (files ? "Commit các thay đổi này giúp mình" : "Push lên GitHub và mở pull request") : state === "blocked" ? "Làm tiếp đi" : "Viết kiểm thử cho phần vừa làm";
   return JSON.stringify({ state, reason, suggest });
 }
-// Lên kế hoạch việc tự động (app/automate.ts planAutomation): đọc lịch, giờ, trình duyệt từ lời giao việc như model thật, trả JSON.
+// Lên kế hoạch việc tự động (server/automate.ts planAutomation): đọc lịch, giờ, trình duyệt từ lời giao việc như model thật, trả JSON.
 function mockPlan(q) {
   const text = (/Việc cần tự động hóa:\n([\s\S]*?)\n\nBây giờ:/.exec(q)?.[1] ?? "").trim();
   const t = norm(text);

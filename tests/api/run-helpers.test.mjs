@@ -149,7 +149,7 @@ console.log("4. Chạy lại cùng đường dẫn");
 }
 
 console.log("5. Quy tắc cho model khớp với thực tế");
-const rules = fs.readFileSync("app/coderun.ts", "utf8"), docker = fs.readFileSync("workspace/Dockerfile", "utf8"), setup = fs.readFileSync("workspace/setup.sh", "utf8"), engine = fs.readFileSync("app/chatengine.ts", "utf8");
+const rules = fs.readFileSync("server/coderun.ts", "utf8"), docker = fs.readFileSync("workspace/Dockerfile", "utf8"), setup = fs.readFileSync("workspace/setup.sh", "utf8"), engine = fs.readFileSync("server/chatengine.ts", "utf8");
 ok(!/công thức \([^)]*XLOOKUP/.test(rules) && /không dùng hàm mới \(XLOOKUP/.test(rules), "không khuyên XLOOKUP (LibreOffice trong image không tính được)");
 ok(rules.includes('#,##0 "₫"') && !rules.includes('"#,##0 ₫"'), "định dạng tiền có ngoặc kép");
 ok(/\.last_outputs/.test(rules) && !/FontSize=22,Outline=2'"; /.test(rules) && /subfit\.py/.test(rules), "nói đúng nơi đọc tệp lần trước và cách làm phụ đề");
@@ -183,7 +183,7 @@ console.log("6. Log dài không che lỗi và trạng thái");
   const b = X.runBlocks({ open: '<run_result language="python" exit_code="0">', close: "</run_result>", tags, stdout: "bắt đầu\n" + "o".repeat(8000) + "\nxong", stderr: "e".repeat(8000) + "\nCẢNH BÁO cuối" });
   ok(b.content.indexOf("<files>") < b.content.indexOf("<stdout>"), "thẻ trạng thái đứng trước log");
   ok(["<files>", "<excel_recalc>", "<preview>", "bắt đầu", "xong", "CẢNH BÁO cuối"].every((k) => b.brief.includes(k)) && b.brief.length < 3500, "bản rút gọn giữ thẻ trạng thái, đầu và cuối stdout, cuối stderr", b.brief.length);
-  const R = fs.readFileSync("app/refs.ts", "utf8");
+  const R = fs.readFileSync("server/refs.ts", "utf8");
   ok(/summarize\(content, ref, brief\)/.test(R) && /r\.brief/.test(engine), "kết quả dài dùng bản rút gọn thay vì 30 dòng đầu");
   ok(X.plainSummary('<ref id="ref_1" chars="9">\n<run_result language="python" exit_code="0">\n<files>\noutputs/a.xlsx (1 KB) — đã gửi\n</files>') === "outputs/a.xlsx (1 KB) — đã gửi", "nhật ký làm việc không hiện thẻ nội bộ");
 }
@@ -202,7 +202,7 @@ console.log("7. Mạng cho giọng đọc");
   ok(/const typed = typedText\(/.test(engine) && /suggest(?:Semantic)?\(typed,/.test(engine) && !/suggest\(lastUserText/.test(engine), "gợi ý skill chỉ đọc chữ người dùng gõ, không đọc tệp đính kèm");
   ok(/fontEmbedCSS:fontCss/.test(fs.readFileSync("app/deckpptx.ts", "utf8")) && /sxPptx\(d\.id,d\.fontCss\)/.test(fs.readFileSync("app/artifactui.tsx", "utf8")), "xuất PowerPoint: ảnh nền dùng đúng phông web của slide");
   ok(/Đồ họa dựng bằng mã/.test(rules) && /dùng generate_image nếu có/.test(rules), "quy tắc đồ họa: làm kỹ, ảnh AI thì dùng generate_image");
-  ok(/RUN_PREVIEWS = 12/.test(agentSrc) && /PREVIEW_MAX = 12/.test(fs.readFileSync("app/runpreview.ts", "utf8")), "số ảnh tự xem khớp giữa workspace và quy tắc");
+  ok(/RUN_PREVIEWS = 12/.test(agentSrc) && /PREVIEW_MAX = 12/.test(fs.readFileSync("server/runpreview.ts", "utf8")), "số ảnh tự xem khớp giữa workspace và quy tắc");
 }
 
 console.log("8. Ảnh trong bản chia sẻ");

@@ -1,5 +1,5 @@
-import { adminAct, adminDelete, AuthError, db, getUser, handle, publicSession, requireAdmin, requireOwner, sameOrigin, sessionsOf } from "../../../../authstore";
-import { purgeUser } from "../../../../purge";
+import { adminAct, adminDelete, AuthError, db, getUser, handle, publicSession, requireAdmin, requireOwner, sameOrigin, sessionsOf } from "../../../../../server/authstore";
+import { purgeUser } from "../../../../../server/purge";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

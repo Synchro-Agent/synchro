@@ -1,6 +1,6 @@
-import { AppError } from "../../../../appstore";
-import { handle, limit, requireUser } from "../../../../authstore";
-import { mentionable } from "../../../../collab";
+import { AppError } from "../../../../../server/appstore";
+import { handle, limit, requireUser } from "../../../../../server/authstore";
+import { mentionable } from "../../../../../server/collab";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

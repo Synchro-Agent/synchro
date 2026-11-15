@@ -1,5 +1,5 @@
-import { AuthError, clientIp, handle, limit, requireAdmin, sameOrigin } from "../../../authstore";
-import { reportShare, shareReports, takeDownShare } from "../../../sharestore";
+import { AuthError, clientIp, handle, limit, requireAdmin, sameOrigin } from "../../../../server/authstore";
+import { reportShare, shareReports, takeDownShare } from "../../../../server/sharestore";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

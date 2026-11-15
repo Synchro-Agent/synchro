@@ -1,6 +1,6 @@
-import { handle, limit, requireUser, sameOrigin } from "../../../authstore";
-import { planAutomation } from "../../../automate";
-import { TaskError } from "../../../tasks";
+import { handle, limit, requireUser, sameOrigin } from "../../../../server/authstore";
+import { planAutomation } from "../../../../server/automate";
+import { TaskError } from "../../../../server/tasks";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

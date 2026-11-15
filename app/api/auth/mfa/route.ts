@@ -1,5 +1,5 @@
-import { AuthError, audit, clientIp, clearMfaCookie, createSession, handle, limit, mfaTicketUser, publicUser, requireUser, sameOrigin, stepUp, withCookies } from "../../../authstore";
-import { confirmMfa, disableMfa, mfaStatus, startMfa, verifyMfa } from "../../../mfa";
+import { AuthError, audit, clientIp, clearMfaCookie, createSession, handle, limit, mfaTicketUser, publicUser, requireUser, sameOrigin, stepUp, withCookies } from "../../../../server/authstore";
+import { confirmMfa, disableMfa, mfaStatus, startMfa, verifyMfa } from "../../../../server/mfa";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

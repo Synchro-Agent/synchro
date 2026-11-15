@@ -1,4 +1,4 @@
-// Chốt ô tổng phải là công thức (app/xlsxcheck.ts): tệp Excel dựng bằng SheetJS như tệp model tạo bằng openpyxl. Không cần máy chủ.
+// Chốt ô tổng phải là công thức (server/xlsxcheck.ts): tệp Excel dựng bằng SheetJS như tệp model tạo bằng openpyxl. Không cần máy chủ.
 import { createRequire } from "node:module";
 import path from "node:path";
 import { loadTs } from "../lib/ts.mjs";

@@ -5,8 +5,8 @@ import fs from "node:fs";
 let pass = 0, fail = 0;
 const ok = (c, n, x = "") => { c ? pass++ : fail++; console.log(c ? "  ✓" : "  ✗", n, c ? "" : String(x).slice(0, 400)); };
 const src = fs.readFileSync("app/api/models/route.ts", "utf8");
-// A3: danh sách model dựng ở app/modelslist.ts (dùng chung với /api/bootstrap); khởi động sẵn là prewarmLater() ở đó.
-const lib = fs.readFileSync("app/modelslist.ts", "utf8");
+// A3: danh sách model dựng ở server/modelslist.ts (dùng chung với /api/bootstrap); khởi động sẵn là prewarmLater() ở đó.
+const lib = fs.readFileSync("server/modelslist.ts", "utf8");
 
 console.log("1. prewarmChat chạy sau khi đã có câu trả lời");
 const resAt = src.indexOf("Response.json(await modelsFor("), callAt = src.indexOf("prewarmLater(c.user)");

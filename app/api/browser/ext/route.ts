@@ -1,6 +1,6 @@
-import { AuthError, can, handle, limit, requireUser, sameOrigin } from "../../../authstore";
-import { CHROME_LOCKED, extAllowed, extNotify, extOverview, newPairCode, removeDevice } from "../../../browserext";
-import { browserDefault, capsState } from "../../../caps";
+import { AuthError, can, handle, limit, requireUser, sameOrigin } from "../../../../server/authstore";
+import { CHROME_LOCKED, extAllowed, extNotify, extOverview, newPairCode, removeDevice } from "../../../../server/browserext";
+import { browserDefault, capsState } from "../../../../server/caps";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

@@ -1,5 +1,5 @@
-import { AuthError, handle, publicUser, requireUser, sameOrigin, stepUp, withCookies } from "../../../authstore";
-import { authenticationOptions, deletePasskey, listPasskeys, loginWithPasskey, reauthOptions, reauthWithPasskey, registerPasskey, registrationOptions, renamePasskey } from "../../../passkeys";
+import { AuthError, handle, publicUser, requireUser, sameOrigin, stepUp, withCookies } from "../../../../server/authstore";
+import { authenticationOptions, deletePasskey, listPasskeys, loginWithPasskey, reauthOptions, reauthWithPasskey, registerPasskey, registrationOptions, renamePasskey } from "../../../../server/passkeys";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

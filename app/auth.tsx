@@ -294,7 +294,7 @@ export const AuthComponent = ({ logo = <DefaultLogo />, brandName = "EaseMize", 
   const fullNameRef = useRef<HTMLInputElement>(null);
 
   const fail = (msg: string) => { setErrorMsg(msg); setStage("error"); };
-  // Turnstile (app/turnstile.ts): chỉ khi quản trị viên đã bật. Đăng ký luôn cần; đăng nhập chỉ sau khi máy chủ báo đã sai nhiều lần (captcha).
+  // Turnstile (server/turnstile.ts): chỉ khi quản trị viên đã bật. Đăng ký luôn cần; đăng nhập chỉ sau khi máy chủ báo đã sai nhiều lần (captcha).
   const tsKey = useTurnstileKey();
   const [needCaptcha, setNeedCaptcha] = useState(false);
   const tsTok = useRef("");
@@ -379,7 +379,7 @@ export const AuthComponent = ({ logo = <DefaultLogo />, brandName = "EaseMize", 
     }
   };
 
-  // Khóa truy cập (app/passkeys.ts): nút riêng, và gợi ý ngay trong ô email khi trình duyệt hỗ trợ (conditional UI). Khóa có xác minh người dùng
+  // Khóa truy cập (server/passkeys.ts): nút riêng, và gợi ý ngay trong ô email khi trình duyệt hỗ trợ (conditional UI). Khóa có xác minh người dùng
   // vào thẳng; tài khoản bật xác minh hai bước mà khóa không xác minh người dùng thì máy chủ trả mfa như sau mật khẩu (run lo phần đó).
   const [pkOk, setPkOk] = useState(false);
   useEffect(() => { setPkOk(passkeySupported()); }, []);

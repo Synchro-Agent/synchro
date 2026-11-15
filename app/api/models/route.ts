@@ -1,11 +1,11 @@
-import { current } from "../../authstore";
-import { modelsFor, prewarmLater } from "../../modelslist";
-import { timed } from "../../servertiming";
+import { current } from "../../../server/authstore";
+import { modelsFor, prewarmLater } from "../../../server/modelslist";
+import { timed } from "../../../server/servertiming";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-// Danh sách model cho bộ chọn model: chỉ những model quản trị viên cho hiện ở màn hình chính, kèm quyền của tài khoản (app/modelslist.ts).
+// Danh sách model cho bộ chọn model: chỉ những model quản trị viên cho hiện ở màn hình chính, kèm quyền của tài khoản (server/modelslist.ts).
 // Lần mở trang đầu đã nhận danh sách này trong lệnh khởi động (/api/bootstrap, trang chủ dựng sẵn ở máy chủ); route này cho các lần hỏi lại.
 export const GET = timed(async (req: Request) => {
   const c = current(req);

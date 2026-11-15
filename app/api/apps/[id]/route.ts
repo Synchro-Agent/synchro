@@ -1,5 +1,5 @@
-import { handle, requireUser, sameOrigin, VERIFY_FIRST, verifyLocked } from "../../../authstore";
-import { AppError, getApp, removeApp, updateApp } from "../../../appstore";
+import { handle, requireUser, sameOrigin, VERIFY_FIRST, verifyLocked } from "../../../../server/authstore";
+import { AppError, getApp, removeApp, updateApp } from "../../../../server/appstore";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

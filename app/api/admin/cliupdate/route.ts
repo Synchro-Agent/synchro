@@ -1,11 +1,11 @@
-import { audit, clientIp, handle, isOwner, ownerOnly, requireAdmin, sameOrigin } from "../../../authstore";
-import { CLIS, type Cli } from "../../../ai/cli_runtime";
-import { cliUpdateView, envOff, rollback, runUpdate, setAutoUpdate } from "../../../ai/cliupdate";
+import { audit, clientIp, handle, isOwner, ownerOnly, requireAdmin, sameOrigin } from "../../../../server/authstore";
+import { CLIS, type Cli } from "../../../../server/ai/cli_runtime";
+import { cliUpdateView, envOff, rollback, runUpdate, setAutoUpdate } from "../../../../server/ai/cliupdate";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-// Cài đặt → Providers → Cập nhật CLI (app/ai/cliupdate.ts). Quản trị viên xem; bật / tắt, "Cập nhật ngay" và trả về bản trước chỉ chủ sở hữu
+// Cài đặt → Providers → Cập nhật CLI (server/ai/cliupdate.ts). Quản trị viên xem; bật / tắt, "Cập nhật ngay" và trả về bản trước chỉ chủ sở hữu
 // (cài phần mềm lên máy chủ, đổi bản mọi người đang dùng).
 export const GET = handle(async (req) => { const { user } = requireAdmin(req); return Response.json({ ...(await cliUpdateView()), owner: isOwner(user) }); });
 

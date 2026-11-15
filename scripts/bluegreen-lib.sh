@@ -3,7 +3,7 @@
 #   blue  = cổng 3000, thư mục build .next-blue, pm2 synchro-blue
 #   green = cổng 3002, thư mục build .next-green, pm2 synchro-green   (3001 là staging, không bao giờ dùng ở đây)
 # Màu đang nhận lưu lượng ghi ở $BG_LIVE_FILE (root ghi, ai cũng đọc): một dòng "<màu> <cổng> <thư mục app>". Tiến trình web đọc màu ở đầu dòng
-# để biết khi nào được nhận vai primary (app/role.ts). nginx đọc cổng từ $BG_UPSTREAM (một dòng proxy_pass), đổi bằng bg_switch_upstream.
+# để biết khi nào được nhận vai primary (server/role.ts). nginx đọc cổng từ $BG_UPSTREAM (một dòng proxy_pass), đổi bằng bg_switch_upstream.
 
 BG_STATE_DIR="${BG_STATE_DIR:-/var/lib/synchro-ops}"
 BG_LIVE_FILE="${BG_LIVE_FILE:-$BG_STATE_DIR/live-color}"
@@ -44,7 +44,7 @@ bg_pm2_has() { bg_pm2 jlist 2>/dev/null | grep -q "\"name\":\"$1\""; }  # app pm
 bg_start() { # bg_start <app> <màu>: bật (hoặc bật lại) màu theo ecosystem.config.cjs, môi trường lấy lại từ tệp đó.
   bg_pm2 startOrRestart "$1/ecosystem.config.cjs" --only "$(bg_pm2_name "$2")" --update-env
 }
-# pm2 stop gửi SIGTERM rồi chờ tiến trình thoát (tối đa kill_timeout 30 giây): bản cũ chạy nốt lượt đang dở (app/drain.ts).
+# pm2 stop gửi SIGTERM rồi chờ tiến trình thoát (tối đa kill_timeout 30 giây): bản cũ chạy nốt lượt đang dở (server/drain.ts).
 # Không bao giờ dừng màu mà nginx đang trỏ tới (tệp upstream là nguồn sự thật): trả mã lỗi, người gọi quyết định.
 bg_stop() {
   bg_nginx_settle
@@ -80,7 +80,7 @@ bg_via_nginx() { # bg_via_nginx <mã bản>
 }
 
 # Màu sống phải khớp cổng nginx đang trỏ (deploy trước chết giữa lúc đổi nginx và lúc ghi màu: SIGKILL, mất ssh). Upstream là nguồn sự thật:
-# sửa tệp màu sống theo nó. Tiến trình của màu đó nhận vai primary khi màu cũ thoát (app/role.ts).
+# sửa tệp màu sống theo nó. Tiến trình của màu đó nhận vai primary khi màu cũ thoát (server/role.ts).
 bg_sync_live() { # bg_sync_live <app>
   local up c
   bg_nginx_settle

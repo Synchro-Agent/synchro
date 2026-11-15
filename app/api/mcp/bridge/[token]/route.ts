@@ -1,5 +1,5 @@
-import { bridgeRoute } from "../../../../mcpbridge";
-import { timed } from "../../../../servertiming";
+import { bridgeRoute } from "../../../../../server/mcpbridge";
+import { timed } from "../../../../../server/servertiming";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

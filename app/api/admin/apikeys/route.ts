@@ -1,6 +1,6 @@
-import { audit, clientIp, handle, isOwner, ownerOnly, requireAdmin, requireOwner, sameOrigin, type UserRow } from "../../../authstore";
-import { adminList, catalog, defaultModel, mainModels, pickDefault, refreshProvider, removeProvider, saveProvider, setDefaultModel, setMainModels, WorkspaceNeeded } from "../../../providers";
-import { credits, setCredit } from "../../../usage";
+import { audit, clientIp, handle, isOwner, ownerOnly, requireAdmin, requireOwner, sameOrigin, type UserRow } from "../../../../server/authstore";
+import { adminList, catalog, defaultModel, mainModels, pickDefault, refreshProvider, removeProvider, saveProvider, setDefaultModel, setMainModels, WorkspaceNeeded } from "../../../../server/providers";
+import { credits, setCredit } from "../../../../server/usage";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

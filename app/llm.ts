@@ -6,7 +6,7 @@
 import type { Project } from "./store";
 import type { ContentBlock } from "./fileproc/types";
 import type { Effort } from "./catalog";
-import type { TraceItem } from "./transpile";
+import type { TraceItem } from "../server/transpile";
 import type { CxCard } from "./cxactions";
 import { noteServerNow } from "./clock";
 import { postTurn } from "./turnretry";

@@ -1,6 +1,6 @@
-import { current, sameOrigin } from "../../../authstore";
-import { agentInbox } from "../../../agentcore";
-import { timed } from "../../../servertiming";
+import { current, sameOrigin } from "../../../../server/authstore";
+import { agentInbox } from "../../../../server/agentcore";
+import { timed } from "../../../../server/servertiming";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

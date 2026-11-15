@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# Tải lại phông tĩnh cho poster dựng ở máy chủ (app/design-engine/posters, Satori qua next/og): Satori chỉ đọc TTF / OTF / WOFF tĩnh, không đọc WOFF2
+# Tải lại phông tĩnh cho poster dựng ở máy chủ (server/design-engine/posters, Satori qua next/og): Satori chỉ đọc TTF / OTF / WOFF tĩnh, không đọc WOFF2
 # hay phông biến thiên (bản ghim trong workspace/Dockerfile là [wght], Satori chỉ lấy độ đậm mặc định). Google Fonts sinh bản tĩnh đủ bộ chữ (có tiếng Việt)
 # khi trình duyệt không nhận WOFF2. Mã băm ghim đúng từng byte: tệp đổi thì lệnh dừng, không lặng lẽ thay phông. Giấy phép SIL OFL 1.1 (OFL.txt cạnh tệp).
 set -euo pipefail
-cd "$(dirname "$0")/../app/design-engine/fonts"
+cd "$(dirname "$0")/../server/design-engine/fonts"
 base=https://fonts.gstatic.com/s/plusjakartasans/v12
 while read -r sum id name; do
   curl -fsSL -o "$name" "$base/$id.ttf"

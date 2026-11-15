@@ -1,5 +1,5 @@
-import { handle, requireUser, sameOrigin } from "../../../authstore";
-import { setTask } from "../../../brain";
+import { handle, requireUser, sameOrigin } from "../../../../server/authstore";
+import { setTask } from "../../../../server/brain";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

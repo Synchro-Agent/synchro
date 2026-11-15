@@ -7,7 +7,7 @@ import { Lockup } from "./brand";
 import { locale, tr, useLangReady } from "./i18n";
 import { LangSwitch } from "./langswitch";
 import { Markdown } from "./md";
-import type { ShareSeg, ShareSnap } from "./sharesnap";
+import type { ShareSeg, ShareSnap } from "../server/sharesnap";
 
 const noop = () => {};
 function ArtSeg({ s }: { s: Extract<ShareSeg, { k: "art" }> }) {

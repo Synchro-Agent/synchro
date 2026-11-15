@@ -43,7 +43,7 @@ export function useStudios(on = true) {
 /** Quyền và số skill của các studio (/api/plugins?view=meta). */
 export const META = "/api/plugins?view=meta";
 export type PluginsMeta = { admin?: boolean; canInstall?: boolean; plugins?: { studio: Studio | null; enabled: boolean; mine: { enabled: boolean }; name: string; skillCount: number }[]; studios?: Partial<Record<Studio, Lib>> };
-/** Gieo /api/plugins?view=meta từ gói khởi động dựng sẵn ở máy chủ (app/bootdata.ts): lần hỏi đầu của trang dùng bản này. */
+/** Gieo /api/plugins?view=meta từ gói khởi động dựng sẵn ở máy chủ (server/bootdata.ts): lần hỏi đầu của trang dùng bản này. */
 export function seedMeta(j: PluginsMeta | null | undefined) { if (j) seedJson(META, j); }
 
 // Bộ đệm JSON dùng chung (app/jsoncache.ts, tách riêng để kiểm thử không cần React): có thay đổi trong Kho kỹ năng thì bỏ bản đệm.

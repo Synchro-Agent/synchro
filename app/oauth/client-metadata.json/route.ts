@@ -1,4 +1,4 @@
-import { appUrl } from "../../authstore";
+import { appUrl } from "../../../server/authstore";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

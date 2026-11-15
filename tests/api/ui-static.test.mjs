@@ -12,7 +12,7 @@ const { "i18n-dict": D } = await loadTs(["i18n-dict"]);
 const en = (t) => D.VI2EN[t] ?? D.RULES_EN.map(([re, f]) => { const m = t.match(re); return m ? f(m) : null; }).find(Boolean);
 
 // Máy chủ ghi nhãn bằng tiếng Việt, giao diện dịch khi hiện (worklog.tsx): nhãn nào không có bản dịch thì giao diện tiếng Anh hiện nguyên tiếng Việt.
-const srcs = ["app/chatengine.ts", ...fs.readdirSync("app/ai").filter((f) => f.endsWith(".ts")).map((f) => `app/ai/${f}`)];
+const srcs = ["server/chatengine.ts", ...fs.readdirSync("server/ai").filter((f) => f.endsWith(".ts")).map((f) => `server/ai/${f}`)];
 const labels = new Set();
 for (const f of srcs) for (const m of read(f).matchAll(/[`"](Đang [^`"\n]{2,120})[`"]/g)) if (!/\$\{[^}]*["?(]/.test(m[1])) labels.add(m[1].replace(/\$\{[^}]*\}/g, "12").trim());
 ok(labels.size > 10, "tìm thấy các nhãn tiến trình", labels.size);

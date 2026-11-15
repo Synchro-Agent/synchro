@@ -1,4 +1,4 @@
-// Chữ đang viết trên luồng SSE của một lượt (app/ssedeltas.ts, dùng ở app/api/runs/[id]/route.ts): trình duyệt chậm thì gom delta,
+// Chữ đang viết trên luồng SSE của một lượt (server/ssedeltas.ts, dùng ở app/api/runs/[id]/route.ts): trình duyệt chậm thì gom delta,
 // và (R10) luồng thông lại thì xả ngay dù model không viết thêm chữ nào: qua pull() của ReadableStream hoặc hẹn giờ ngắn. Không cần máy chủ.
 import fs from "node:fs";
 import { loadTs } from "../lib/ts.mjs";

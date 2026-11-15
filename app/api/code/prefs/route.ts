@@ -1,5 +1,5 @@
-import { handle, requireUser, sameOrigin } from "../../../authstore";
-import { getPrefs, setPrefs } from "../../../codestore";
+import { handle, requireUser, sameOrigin } from "../../../../server/authstore";
+import { getPrefs, setPrefs } from "../../../../server/codestore";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

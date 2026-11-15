@@ -2,7 +2,7 @@
 // Khóa R2 của sao lưu liên tục (Cài đặt → Sức khỏe hệ thống) cho scripts/backup-offsite.sh. Chạy bằng web user, không bao giờ bằng root:
 //   runuser -u synchro -- node scripts/r2-creds.mjs <thư mục dữ liệu>
 // In 5 dòng (Account ID, bucket, Access Key ID, Secret Access Key, thư mục) ra stdout cho root đọc qua ống, không qua tham số dòng lệnh.
-// Mỗi dòng phải khớp đúng định dạng như app/litestream.ts kiểm khi lưu: root nhận dữ liệu từ web user nên không tin chuỗi lạ (xuống dòng, ký tự shell).
+// Mỗi dòng phải khớp đúng định dạng như server/litestream.ts kiểm khi lưu: root nhận dữ liệu từ web user nên không tin chuỗi lạ (xuống dòng, ký tự shell).
 // Chưa cấu hình hoặc chưa bật: thoát mã 3, không in gì.
 import fs from "node:fs";
 import path from "node:path";
@@ -15,7 +15,7 @@ const DATA = process.argv[2] || process.env.DATA_DIR || path.join(process.cwd(),
 const env = (() => { try { return fs.readFileSync(path.join(process.cwd(), ".env.production"), "utf8"); } catch { return ""; } })();
 const fromEnv = (k) => process.env[k] || (new RegExp(`^${k}=(.*)$`, "m").exec(env)?.[1] ?? "").trim().replace(/^["']|["']$/g, "");
 
-// Cùng cách giải mã với app/providers.ts (AES-256-GCM, khóa từ DATA_KEY hoặc data/secret.key).
+// Cùng cách giải mã với server/providers.ts (AES-256-GCM, khóa từ DATA_KEY hoặc data/secret.key).
 function master() {
   let raw = fromEnv("DATA_KEY");
   if (!raw) raw = fs.readFileSync(path.join(DATA, "secret.key"), "utf8").trim();

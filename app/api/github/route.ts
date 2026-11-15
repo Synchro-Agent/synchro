@@ -1,6 +1,6 @@
-import { can, handle, requireUser, sameOrigin } from "../../authstore";
-import { getLink, gh, removeLink } from "../../github";
-import { configured } from "../../oauth";
+import { can, handle, requireUser, sameOrigin } from "../../../server/authstore";
+import { getLink, gh, removeLink } from "../../../server/github";
+import { configured } from "../../../server/oauth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

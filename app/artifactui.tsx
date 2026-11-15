@@ -304,7 +304,7 @@ export async function svgToPng(svg: string): Promise<Blob> {
   } finally { URL.revokeObjectURL(url); }
 }
 const blobData = (b: Blob) => new Promise<string>((ok, no) => { const f = new FileReader(); f.onload = () => ok(String(f.result)); f.onerror = () => no(f.error); f.readAsDataURL(b); });
-// Tài liệu đã hiện → tệp Word thật (máy chủ dựng, app/mddocx.ts). Ảnh, sơ đồ đổi thành ảnh nhúng trước khi gửi; ảnh không lấy được thì giữ chú thích của ảnh.
+// Tài liệu đã hiện → tệp Word thật (máy chủ dựng, server/mddocx.ts). Ảnh, sơ đồ đổi thành ảnh nhúng trước khi gửi; ảnh không lấy được thì giữ chú thích của ảnh.
 async function docxFile(el: Element, title: string, md: string): Promise<Blob> {
   const blocks = htmlToBlocks(new DOMParser().parseFromString(cleanHtml(el, md), "text/html").body);
   await Promise.all(blocks.map(async (b) => {

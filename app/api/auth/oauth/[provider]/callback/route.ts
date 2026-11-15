@@ -1,9 +1,9 @@
 import { authErrorCode } from "../../../../../autherrors";
-import { connectIdentity, appUrl, audit, AuthError, clientIp, current, limit, oauthLogin } from "../../../../../authstore";
-import { afterClaim, noticeDropped } from "../../../../../claim";
-import { saveLink } from "../../../../../github";
-import { clearState, connectUser, finish, isProvider, purposeOf } from "../../../../../oauth";
-import { timed } from "../../../../../servertiming";
+import { connectIdentity, appUrl, audit, AuthError, clientIp, current, limit, oauthLogin } from "../../../../../../server/authstore";
+import { afterClaim, noticeDropped } from "../../../../../../server/claim";
+import { saveLink } from "../../../../../../server/github";
+import { clearState, connectUser, finish, isProvider, purposeOf } from "../../../../../../server/oauth";
+import { timed } from "../../../../../../server/servertiming";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

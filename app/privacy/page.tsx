@@ -3,7 +3,7 @@ import { LegalDoc } from "../legal/doc";
 
 export const metadata: Metadata = { title: "Chính sách quyền riêng tư – Synchro" };
 
-// Phải khớp với những gì máy chủ thật sự lưu: thêm loại dữ liệu mới thì thêm vào đây, và vào app/purge.ts nếu lưu ngoài bảng có cột user_id / owner.
+// Phải khớp với những gì máy chủ thật sự lưu: thêm loại dữ liệu mới thì thêm vào đây, và vào server/purge.ts nếu lưu ngoài bảng có cột user_id / owner.
 export default function Privacy() {
   return (
     <LegalDoc title="Chính sách quyền riêng tư" updated="06/11/2026">

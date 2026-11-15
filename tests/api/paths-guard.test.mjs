@@ -2,7 +2,8 @@
 // 1. Mọi đường dẫn tệp trong repo được nhắc nguyên văn trong bộ kiểm thử, script, CI, cấu hình đều có thật: kiểm thử đọc mã theo đường dẫn
 //    mà tệp đã chuyển đi thì không được lặng lẽ đọc rỗng.
 // 2. Bộ quét mã nguồn (tests/lib/srcroots.mjs) thấy đủ số tệp tối thiểu: thiếu một gốc thì phép kiểm quét mã không thể qua vì không đọc gì.
-// 3. server/: không tệp "use client" nào nhập (không chỉ kiểu) một tệp trong server/.
+// 3. server/: mỗi tệp mở đầu bằng import "server-only" (gói giao diện nhập nhầm thì bản build báo lỗi); không tệp "use client" nào nhập
+//    (không chỉ kiểu) một tệp trong server/.
 import fs from "node:fs";
 import path from "node:path";
 import { walkSrc } from "../lib/srcroots.mjs";
@@ -62,6 +63,13 @@ ok(ddl >= 36 || fs.existsSync("db/migrations"), `≥ 36 tệp có CREATE TABLE (
 
 console.log("3. server/ chỉ chạy ở máy chủ");
 const server = [...src.keys()].filter((f) => f.startsWith("server/") && !f.startsWith("server/bin/"));
+const noMark = server.filter((f) => {
+  // Dòng lệnh đầu tiên (bỏ chú thích đầu tệp) phải là import "server-only".
+  const body = src.get(f).replace(/^(\s*(\/\/[^\n]*|\/\*[\s\S]*?\*\/))*\s*/, "");
+  return !/^import\s+["']server-only["'];/.test(body);
+});
+ok(server.length >= 1, `server/ có ${server.length} tệp`);
+ok(!noMark.length, `mọi tệp server/ mở đầu bằng import "server-only"`, noMark.join(", "));
 const resolve = (from, spec) => {
   const b = P.normalize(P.join(P.dirname(from), spec));
   return [b, `${b}.ts`, `${b}.tsx`, `${b}/index.ts`, `${b}/index.tsx`].find((x) => src.has(x)) ?? null;

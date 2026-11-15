@@ -5,13 +5,14 @@ import { createRequire } from "node:module";
 import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { findSrc } from "../lib/srcroots.mjs";
 const B = "http://localhost:3200", LLM = "http://127.0.0.1:4010";
 let pass = 0, fail = 0;
 const ok = (c, n, x = "") => { c ? pass++ : fail++; console.log(c ? "  ✓" : "  ✗", n, c ? "" : String(x).slice(0, 400)); };
 const ts = createRequire(path.join(process.cwd(), "package.json"))("typescript");
 const dir = mkdtempSync(path.join(tmpdir(), "voice-"));
 const load = async (f) => {
-  const out = ts.transpileModule(readFileSync(`app/${f}.ts`, "utf8"), { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText.replace(/from "\.\/(\w+)"/g, 'from "./$1.mjs"');
+  const out = ts.transpileModule(readFileSync(findSrc(`${f}.ts`), "utf8"), { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText.replace(/from "\.\/(\w+)"/g, 'from "./$1.mjs"');
   writeFileSync(path.join(dir, `${f}.mjs`), out);
   return import(path.join(dir, `${f}.mjs`));
 };

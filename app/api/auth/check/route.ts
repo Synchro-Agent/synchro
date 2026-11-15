@@ -1,4 +1,4 @@
-import { handle, lookup, sameOrigin } from "../../../authstore";
+import { handle, lookup, sameOrigin } from "../../../../server/authstore";
 
 export const runtime = "nodejs";
 

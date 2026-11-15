@@ -470,7 +470,7 @@ export const RULES_EN: [RegExp, (m: RegExpMatchArray) => string][] = [
   [/^(.+) đã hết hạn mức\. Các model khác của gói (.+) vẫn dùng được\.$/, (m) => `${m[1]} has hit its limit. Other ${m[2]} plan models still work.`],
   [/^CLI (.+) chưa được cài trên máy chủ\.$/, (m) => `The ${m[1]} CLI isn't installed on the server.`],
   [/^CLI (.+) thoát với mã (.+)\.$/, (m) => `The ${m[1]} CLI exited with code ${m[2]}.`],
-  // Lỗi của app-server Codex giữa lượt (app/ai/codex_server.ts): lý do là chuỗi nội bộ ngắn.
+  // Lỗi của app-server Codex giữa lượt (server/ai/codex_server.ts): lý do là chuỗi nội bộ ngắn.
   [/^Codex dừng giữa lượt: ([\s\S]+)$/, (m) => `Codex stopped mid-reply: ${codexStopWhy(m[1])}`],
   [/^Không chuyển được (hướng dẫn|tin nhắn) cho (.+): ([\s\S]+)$/, (m) => `Couldn't pass the ${m[1] === "tin nhắn" ? "message" : "instructions"} to ${m[2]}: ${m[3]}`],
   [/^Claude từ chối đăng nhập \((.+?)\): ([\s\S]+)\. Đăng nhập lại trong Cài đặt → Providers\.$/, (m) => `Claude rejected the sign-in (${m[1]}): ${m[2] === "phiên đăng nhập không còn hợp lệ" ? "the session is no longer valid" : m[2]}. Sign in again in Settings → Providers.`],
@@ -483,9 +483,9 @@ export const RULES_EN: [RegExp, (m: RegExpMatchArray) => string][] = [
   [/^Đã tạo skill (.+) và thêm vào thư viện cho mọi người\.$/, (m) => `Created skill ${m[1]} and added it to the Library for everyone.`],
   [/^([\d.,]+) skill, gồm ([\d.,]+) skill Synchro tự nhận diện$/, (m) => `${m[1]} skills, including ${m[2]} Synchro detected automatically`],
   [/^Thư viện cho mọi người đã đủ (\d+) mục\.$/, (m) => `The Library for everyone already has ${m[1]} items.`],
-  // Antigravity vẫn tự chặn công cụ sau khi đã nhắc (app/chatengine.ts, app/agentcore.ts)
+  // Antigravity vẫn tự chặn công cụ sau khi đã nhắc (server/chatengine.ts, server/agentcore.ts)
   [/^Antigravity tự chặn công cụ \((.+)\) nên lượt này chưa làm được gì\. Hãy gửi lại yêu cầu hoặc chọn model khác( \(để Tự động thì Synchro tự chuyển model\))?\.$/, (m) => `Antigravity blocked its tools (${m[1]}), so this turn couldn't do anything. Send the request again or pick another model${m[2] ? " (on Auto, Synchro switches models for you)" : ""}.`],
-  // Skill tự viết từ repo không có SKILL.md (app/skillgen.ts) và tải repo git (app/repofetch.ts)
+  // Skill tự viết từ repo không có SKILL.md (server/skillgen.ts) và tải repo git (server/repofetch.ts)
   [/^Repo không có SKILL\.md: Synchro đã đọc toàn bộ (\d+) tệp của repo( và nhờ model viết SKILL\.md)?\. Hãy đọc lại nội dung bên dưới trước khi thêm$/, (m) => `This repository has no SKILL.md: Synchro read all ${m[1]} files in it${m[2] ? " and had a model write SKILL.md" : ""}. Review the content below before adding it`],
   [/^(\d+) tệp nhị phân \(ảnh, tệp nén…\) chỉ có tên trong references\/repo-tree\.md, không đóng gói$/, (m) => `${m[1]} binary files (images, archives…) are only listed in references/repo-tree.md, not bundled`],
   [/^(\d+) tệp văn bản quá lớn hoặc vượt giới hạn (\d+) tệp \/ (\d+)MB nên chỉ có tên trong references\/repo-tree\.md$/, (m) => `${m[1]} text files are too large or over the ${m[2]}-file / ${m[3]}MB limit, so they are only listed in references/repo-tree.md`],
@@ -743,7 +743,7 @@ Object.assign(VI2EN, {
 });
 Object.assign(VI2EN, { "Cài": "Install", "Gỡ": "Uninstall", "tệp": "files" });
 Object.assign(VI2EN, { "từ": "from" });
-// Nhập skill từ link repo git bất kỳ, skill tự viết từ repo không có SKILL.md (app/repofetch.ts, app/skillgen.ts)
+// Nhập skill từ link repo git bất kỳ, skill tự viết từ repo không có SKILL.md (server/repofetch.ts, server/skillgen.ts)
 Object.assign(VI2EN, {
   "Đọc repo quá lâu. Thử lại sau.": "Reading the repository took too long. Try again later.",
   "Link không hợp lệ. Hãy dán link repo git dạng https://…": "Invalid link. Paste a git repository link like https://…",
@@ -907,10 +907,10 @@ RULES_EN.push(
   [/^Đang chờ (\d+) giây rồi thử lại$/, (m) => `Waiting ${m[1]} seconds, then trying again`],
   [/^Máy chủ khởi động lại khi lượt này đang chạy\. Lượt đã bắt đầu: (.+)\. Synchro không tự chạy lại để tránh làm hai lần\. Hãy kiểm tra kết quả rồi nhắn tiếp nếu cần\.$/, (m) => `The server restarted while this reply was running. It had already started: ${m[1]}. Synchro won't rerun it automatically, to avoid doing the work twice. Check the result and send a follow-up if needed.`],
   [/^Chép lời: (.+)$/, (m) => `Transcription: ${m[1]}`],
-  // Lần chạy code phải xếp hàng (app/coderun.ts queueNote).
+  // Lần chạy code phải xếp hàng (server/coderun.ts queueNote).
   [/^Lần chạy code đã xếp hàng ở vị trí (\d+), chờ (\d+) giây$/, (m) => `The code run was queued at position ${m[1]}, waited ${m[2]} ${m[2] === "1" ? "second" : "seconds"}`],
   [/^Lần chạy code đã chờ (\d+) giây vì máy chủ đang bận$/, (m) => `The code run waited ${m[1]} ${m[1] === "1" ? "second" : "seconds"} because the server was busy`],
-  // Đang xếp hàng, báo trong lúc chờ (app/coderun.ts queueLiveNote, W23-4).
+  // Đang xếp hàng, báo trong lúc chờ (server/coderun.ts queueLiveNote, W23-4).
   [/^Lần dựng video đang xếp hàng ở vị trí (\d+), chờ video khác dựng xong$/, (m) => `The video render is queued at position ${m[1]}, waiting for another render to finish`],
   [/^Lần chạy code đang chờ máy chủ đủ bộ nhớ, vị trí (\d+) trong hàng$/, (m) => `The code run is waiting for server memory, position ${m[1]} in the queue`],
   [/^Lần chạy code đang xếp hàng ở vị trí (\d+) vì máy chủ đang bận$/, (m) => `The code run is queued at position ${m[1]} because the server is busy`],
@@ -1566,7 +1566,7 @@ addNew(VI2EN, {
 });
 addNew(VI2EN, { "Việc tự động không dùng được những khả năng đang tắt. Bấm để mở Cài đặt → Khả năng.": "Automations can't use capabilities that are turned off. Click to open Settings → Capabilities." });
 
-// Xuất skill / thư viện thành .zip (app/skillexport.ts).
+// Xuất skill / thư viện thành .zip (server/skillexport.ts).
 Object.assign(VI2EN, { "Đã xuất": "Exported", "Không xuất được skill này.": "Could not export this skill.", "Không có skill này.": "This skill does not exist.", "Không tìm thấy thư viện.": "Library not found." });
 Object.assign(VI2EN, {
   "Trang này mô tả những dữ liệu Synchro (synchro.net.nz) lưu khi bạn dùng dịch vụ, lưu ở đâu, trong bao lâu, gửi cho ai và cách bạn kiểm soát chúng.": "This page describes the data Synchro (synchro.net.nz) stores when you use the service, where it is kept, for how long, who it is sent to and how you control it.",

@@ -54,11 +54,11 @@ const q = R.inputOfChat(out);
 ok(q.text === "Tóm tắt các tệp này giúp mình", "chữ để chọn loại việc là câu người dùng gõ", q.text);
 
 console.log("6. lastUserText bỏ qua khối tệp bị từ chối (không lẫn vào recall / crisisHelp / connector / skill)");
-const eng = fs.readFileSync("app/chatengine.ts", "utf8");
+const eng = fs.readFileSync("server/chatengine.ts", "utf8");
 const i0 = eng.indexOf("function lastUserText");
 const fn = eng.slice(i0, i0 + 1400);
 ok(i0 >= 0 && fn.includes("startsWith(`<${REJECTED_TAG}>`)"), "lastUserText lọc khối <attachments_rejected> ra khỏi chữ người dùng gõ", fn);
-ok(/REJECTED_TAG\b/.test(eng.slice(0, eng.indexOf("from \"./turnctx\"") + 20)), "REJECTED_TAG được nhập từ turnctx");
+ok(/^import \{[^}]*\bREJECTED_TAG\b[^}]*\} from "(\.\.?\/)+(app\/|shared\/)?turnctx";$/m.test(eng), "REJECTED_TAG được nhập từ turnctx");
 
 console.log(`\n${pass}/${pass + fail} đạt`);
 process.exit(fail ? 1 : 0);

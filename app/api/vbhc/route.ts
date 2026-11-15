@@ -1,6 +1,6 @@
-import { handle, limit, requireUser, sameOrigin } from "../../authstore";
+import { handle, limit, requireUser, sameOrigin } from "../../../server/authstore";
 import { parseVbhc } from "../../vbhc";
-import { vbhcDocx } from "../../vbhcdocx";
+import { vbhcDocx } from "../../../server/vbhcdocx";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

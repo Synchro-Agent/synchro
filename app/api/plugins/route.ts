@@ -1,8 +1,8 @@
-import { AuthError, can, handle, isAdmin, limit, requireUser, sameOrigin } from "../../authstore";
-import { catalogInstalled, findLinkDup, installPlugin, linkDupMessage, listPlugins, listPluginsLite, parseRepo, PluginError, previewPlugin, studioOf, studioPage, studioSummary, type PluginDef } from "../../plugins";
+import { AuthError, can, handle, isAdmin, limit, requireUser, sameOrigin } from "../../../server/authstore";
+import { catalogInstalled, findLinkDup, installPlugin, linkDupMessage, listPlugins, listPluginsLite, parseRepo, PluginError, previewPlugin, studioOf, studioPage, studioSummary, type PluginDef } from "../../../server/plugins";
 import { PLUGIN_DIR } from "../../plugindir";
-import { closedReason, dirDef, dirEntry } from "../../claudedir";
-import { blockedLibs, clearFailed, clearRemoved, failedLibs, freeSlug, noteInstallError } from "../../plugjob";
+import { closedReason, dirDef, dirEntry } from "../../../server/claudedir";
+import { blockedLibs, clearFailed, clearRemoved, failedLibs, freeSlug, noteInstallError } from "../../../server/plugjob";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

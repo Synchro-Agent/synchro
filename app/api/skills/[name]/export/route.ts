@@ -1,13 +1,13 @@
-import { exportSkill, ExportError, zipResponse } from "../../../../skillexport";
-import { current, featureGate } from "../../../../authstore";
-import { timed } from "../../../../servertiming";
-import { trOn } from "../../../../i18n-server";
+import { exportSkill, ExportError, zipResponse } from "../../../../../server/skillexport";
+import { current, featureGate } from "../../../../../server/authstore";
+import { timed } from "../../../../../server/servertiming";
+import { trOn } from "../../../../../server/i18n-server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
 
-// Tải về skill thành tệp .zip: thư mục skill, mọi phiên bản cũ và toàn bộ thông tin (app/skillexport.ts). ?lang=en cho README tiếng Anh.
+// Tải về skill thành tệp .zip: thư mục skill, mọi phiên bản cũ và toàn bộ thông tin (server/skillexport.ts). ?lang=en cho README tiếng Anh.
 export const GET = timed(async (req: Request, { params }: { params: Promise<{ name: string }> }) => {
   const denied = featureGate(req, "skills"); if (denied) return denied;
   const lang = new URL(req.url).searchParams.get("lang") === "en" ? "en" : "vi";

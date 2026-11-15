@@ -12,7 +12,7 @@ import { saveBlob } from "./filemenu";
 import { capFiles } from "./filestate";
 import { useSideUi } from "./chatstore.client";
 import type { AuthUser, Providers } from "./auth";
-import type { BootData } from "./bootdata";
+import type { BootData } from "../server/bootdata";
 
 export type MeReply = { user: AuthUser | null; providers: Providers; signupOpen?: boolean; speechReady?: boolean };
 type SetState<T> = (v: T | ((o: T) => T)) => void;

@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import { Readable } from "node:stream";
-import { handle, requireUser } from "../../../authstore";
-import { genImageState, outputFile } from "../../../outputs";
+import { handle, requireUser } from "../../../../server/authstore";
+import { genImageState, outputFile } from "../../../../server/outputs";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

@@ -1,5 +1,5 @@
-import { AuthError, handle, limit, needDisk, requireUser, sameOrigin, VERIFY_FIRST, verifyLocked } from "../../authstore";
-import { listShares, putShare, revokeConvShare, revokeShare, shareOfConv } from "../../sharestore";
+import { AuthError, handle, limit, needDisk, requireUser, sameOrigin, VERIFY_FIRST, verifyLocked } from "../../../server/authstore";
+import { listShares, putShare, revokeConvShare, revokeShare, shareOfConv } from "../../../server/sharestore";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

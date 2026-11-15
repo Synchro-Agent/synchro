@@ -24,7 +24,7 @@ const check = (name, ok, extra = "") => { console.log(`${ok ? "✓" : "✗"} ${n
 
 // Mã PROBE thật của check_artifact: đọc từ artcheck.ts (tệp đó phụ thuộc cơ sở dữ liệu nên không nạp được ở đây).
 const PROBE = (() => {
-  const src = readFileSync("app/artcheck.ts", "utf8");
+  const src = readFileSync("server/artcheck.ts", "utf8");
   const m = /const PROBE = String\.raw`([\s\S]*?)`;\n/.exec(src);
   if (!m) throw new Error("không thấy PROBE trong artcheck.ts");
   return m[1].replace("${DESIGN_PROBE}", artprobe.DESIGN_PROBE);

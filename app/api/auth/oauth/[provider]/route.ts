@@ -1,7 +1,7 @@
 import { authErrorCode } from "../../../../autherrors";
-import { appUrl, AuthError } from "../../../../authstore";
-import { isProvider, start } from "../../../../oauth";
-import { timed } from "../../../../servertiming";
+import { appUrl, AuthError } from "../../../../../server/authstore";
+import { isProvider, start } from "../../../../../server/oauth";
+import { timed } from "../../../../../server/servertiming";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

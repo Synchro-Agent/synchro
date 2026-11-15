@@ -1,4 +1,4 @@
-// Tài liệu đã hiện trong khung xem (Markdown đã dựng) → danh sách khối đơn giản để máy chủ tạo tệp Word thật (app/mddocx.ts). Chạy ở trình duyệt.
+// Tài liệu đã hiện trong khung xem (Markdown đã dựng) → danh sách khối đơn giản để máy chủ tạo tệp Word thật (server/mddocx.ts). Chạy ở trình duyệt.
 export type Run = { t: string; b?: 1; i?: 1; u?: 1; s?: 1; code?: 1; href?: string; br?: 1 };
 export type DocBlock =
   | { k: "h"; level: number; runs: Run[] } | { k: "p"; runs: Run[] } | { k: "quote"; runs: Run[] }

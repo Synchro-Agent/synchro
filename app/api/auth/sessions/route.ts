@@ -1,4 +1,4 @@
-import { audit, clientIp, db, dropEmailChange, handle, publicSession, requireUser, sameOrigin, sessionsOf } from "../../../authstore";
+import { audit, clientIp, db, dropEmailChange, handle, publicSession, requireUser, sameOrigin, sessionsOf } from "../../../../server/authstore";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

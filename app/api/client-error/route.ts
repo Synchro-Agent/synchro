@@ -1,5 +1,5 @@
-import { clientIp, current, handle, limit, sameOrigin } from "../../authstore";
-import { recordOps } from "../../ops";
+import { clientIp, current, handle, limit, sameOrigin } from "../../../server/authstore";
+import { recordOps } from "../../../server/ops";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

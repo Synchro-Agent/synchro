@@ -44,7 +44,7 @@ process.on("exit", () => { agent.kill("SIGKILL"); fs.rmSync(tmp, { recursive: tr
 for (let i = 0; i < 50; i++) { await sleep(100); if (/nghe tại/.test(log)) break; }
 if (!/nghe tại/.test(log)) { console.log("  (bỏ qua: dịch vụ workspace không khởi động được trên máy này)", log.slice(-300)); process.exit(0); }
 
-// Giống app/workspace.ts: mỗi yêu cầu một kết nối, ngắt kết nối nghĩa là người dùng đã bấm Dừng.
+// Giống server/workspace.ts: mỗi yêu cầu một kết nối, ngắt kết nối nghĩa là người dùng đã bấm Dừng.
 const call = (body, signal) => new Promise((res, rej) => {
   const data = JSON.stringify(body);
   const req = http.request({ host: "127.0.0.1", port, path: "/run", method: "POST", agent: false, signal, headers: { authorization: `Bearer ${SECRET}`, "content-type": "application/json", "content-length": Buffer.byteLength(data) } }, (r) => {

@@ -1,5 +1,5 @@
 // A3 (một lệnh khởi động thay cho tám) và B3 (giảm tải lần đầu). Tự chạy được, không cần máy chủ:
-// 1) gói khởi động (app/bootdata.ts) và /api/bootstrap trên cơ sở dữ liệu tạm: đủ phần, ETag theo người dùng, 304 khi khớp;
+// 1) gói khởi động (server/bootdata.ts) và /api/bootstrap trên cơ sở dữ liệu tạm: đủ phần, ETag theo người dùng, 304 khi khớp;
 // 2) lần hỏi đoạn chat bắt đầu sớm chỉ dùng khi đúng tài khoản và đúng mốc;
 // 3) mã nguồn: trang chủ là server component dựng sẵn gói, các kho được gieo, các lệnh hỏi đầu được hoãn, phần tải đầu không kéo
 //    router / artkit / speech/data / usageui; 4) ngân sách tải đầu (scripts/budget.mjs) đọc đúng bản build.
@@ -82,7 +82,7 @@ try {
   const imports = (f) => [...all[f].replace(/^import type .*$/gm, "").matchAll(/^(?:import|export)\s[^;'"]*?from\s+["']([^"']+)["']/gm)].map((m) => resolve(f, m[1])).filter(Boolean);
   const first = new Set(["app/home.tsx", "app/layout.tsx"]), q = [...first];
   while (q.length) for (const n of imports(q.pop())) if (!first.has(n)) { first.add(n); q.push(n); }
-  for (const f of ["app/router.ts", "app/artkit.ts", "app/speech/data.ts", "app/usageui.tsx", "app/settings.tsx"]) ok(!first.has(f), `${f} không nằm trong phần tải đầu`);
+  for (const f of ["server/router.ts", "app/artkit.ts", "app/speech/data.ts", "app/usageui.tsx", "app/settings.tsx"]) ok(!first.has(f), `${f} không nằm trong phần tải đầu`);
   ok(first.has("app/usagering.tsx") && first.has("app/vendor.ts") === false, "vòng Mức dùng (usagering.tsx) có sẵn; vendor.ts chỉ theo trang Mức dùng");
 
   console.log("4. Ngân sách tải đầu (scripts/budget.mjs)");

@@ -1,5 +1,5 @@
-import { AuthError, handle, limit, requireUser, sameOrigin, VERIFY_FIRST, verifyLocked } from "../../authstore";
-import { createTask, listTasks, TaskError } from "../../tasks";
+import { AuthError, handle, limit, requireUser, sameOrigin, VERIFY_FIRST, verifyLocked } from "../../../server/authstore";
+import { createTask, listTasks, TaskError } from "../../../server/tasks";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

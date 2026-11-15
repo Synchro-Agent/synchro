@@ -1,6 +1,6 @@
-import { checkResetLink, handle, sameOrigin, redeemResetLink } from "../../../authstore";
-import { removeUserDevices } from "../../../browserext";
-import { afterClaim, noticeDropped } from "../../../claim";
+import { checkResetLink, handle, sameOrigin, redeemResetLink } from "../../../../server/authstore";
+import { removeUserDevices } from "../../../../server/browserext";
+import { afterClaim, noticeDropped } from "../../../../server/claim";
 
 export const runtime = "nodejs";
 

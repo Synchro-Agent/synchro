@@ -1,5 +1,5 @@
-import { handle, limit, requireUser, sameOrigin } from "../../../authstore";
-import { AppError, storeOp } from "../../../appstore";
+import { handle, limit, requireUser, sameOrigin } from "../../../../server/authstore";
+import { AppError, storeOp } from "../../../../server/appstore";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

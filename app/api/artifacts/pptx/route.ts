@@ -1,8 +1,8 @@
-import { featureGate, handle, limit, requireUser, sameOrigin } from "../../../authstore";
-import { deckFromText, exportDeckPptx, type DeckInput } from "../../../deckexport";
-import { getArtifactByIdent } from "../../../artifactstore";
-import { capsState } from "../../../caps";
-import { getRun } from "../../../runs";
+import { featureGate, handle, limit, requireUser, sameOrigin } from "../../../../server/authstore";
+import { deckFromText, exportDeckPptx, type DeckInput } from "../../../../server/deckexport";
+import { getArtifactByIdent } from "../../../../server/artifactstore";
+import { capsState } from "../../../../server/caps";
+import { getRun } from "../../../../server/runs";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

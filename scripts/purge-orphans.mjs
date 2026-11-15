@@ -1,4 +1,4 @@
-// Dọn một lần dữ liệu của các tài khoản ĐÃ XÓA trước khi có purgeUser (app/purge.ts): dòng SQLite có user_id / owner không còn trong bảng users, thư mục
+// Dọn một lần dữ liệu của các tài khoản ĐÃ XÓA trước khi có purgeUser (server/purge.ts): dòng SQLite có user_id / owner không còn trong bảng users, thư mục
 // trên đĩa, đăng nhập CLI. Mặc định chỉ liệt kê. Chạy tay trên máy chủ, SAU một bản sao lưu (scripts/backup.sh), xem kỹ danh sách rồi mới --apply:
 //   cd /var/www/synchro && set -a && . ./.env.production && set +a && node scripts/purge-orphans.mjs [--apply]
 // Thư mục đăng nhập CLI thuộc user riêng của engine nên --apply phải chạy bằng root.

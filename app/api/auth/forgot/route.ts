@@ -1,5 +1,5 @@
-import { appUrl, clientIp, current, handle, sameOrigin, requestPasswordReset } from "../../../authstore";
-import { requireTurnstile } from "../../../turnstile";
+import { appUrl, clientIp, current, handle, sameOrigin, requestPasswordReset } from "../../../../server/authstore";
+import { requireTurnstile } from "../../../../server/turnstile";
 
 export const runtime = "nodejs";
 

@@ -31,7 +31,7 @@ try {
   ok(A.stmtCacheSize() === mid, "gọi lặp lại không thêm câu lệnh mới");
   A.setSetting("x", "v1");
   ok(A.getSetting("x", "d") === "v1", "ghi rồi đọc lại cài đặt qua câu lệnh giữ sẵn");
-  const src = fs.readFileSync("app/authstore.ts", "utf8"), cur = src.slice(src.indexOf("export function current("), src.indexOf("export function sessionUser("));
+  const src = fs.readFileSync("server/authstore.ts", "utf8"), cur = src.slice(src.indexOf("export function current("), src.indexOf("export function sessionUser("));
   ok(cur.includes("stmt(") && !cur.includes("db().prepare("), "current() (mỗi yêu cầu) không còn db().prepare");
 
   console.log("3. Lỗi biên dịch không được giữ, trần số câu lệnh");

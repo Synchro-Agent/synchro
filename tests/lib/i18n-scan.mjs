@@ -32,11 +32,11 @@ export const PAIR_ALLOW = {
   "app/voiceflow.ts": "câu nói đáp theo ngôn ngữ người dùng vừa nói, không theo ngôn ngữ giao diện",
   "app/voicemode.tsx": "vlang là giá trị lưu (English / Vietnamese); câu báo chờ lâu nói theo ngôn ngữ của lượt nói",
   "app/speech/voices.tsx": "ngôn ngữ mặc định của bộ lọc giọng, không phải chữ",
-  "app/authstore.ts": "ngôn ngữ thư gửi đi theo yêu cầu / Accept-Language",
+  "server/authstore.ts": "ngôn ngữ thư gửi đi theo yêu cầu / Accept-Language",
   "app/api/skill-scan/route.ts": "chuẩn hóa tham số lang của yêu cầu",
   "app/api/admin/health/route.ts": "chuẩn hóa tham số lang của yêu cầu",
   "app/api/speech/[...op]/route.ts": "lời nhắc gửi model theo ngôn ngữ người dùng chọn",
-  "app/skillscan.ts": "lời nhắc gửi model (ngôn ngữ của field / why)",
+  "server/skillscan.ts": "lời nhắc gửi model (ngôn ngữ của field / why)",
   "app/resetfmt.ts": "hàm thuần nhận lang, kiểm thử chạy không cần từ điển (giữ nguyên chữ của main)",
   // Bảng hai cột không phải cặp ngôn ngữ (tệp#tên hằng): chỉ miễn đúng bảng đó.
   "app/introfilm.tsx#CAPS": "phụ đề tiếng Việt kèm dòng tiếng Anh gốc của phim, chỉ hiện ở giao diện tiếng Việt",

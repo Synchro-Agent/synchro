@@ -95,7 +95,7 @@ try {
     ok((await login("tat-xm@taken.test", "Mat-khau-moi-456")).s === 200, "yêu cầu xác minh tắt: đăng nhập ngay được, không ai bị kẹt ngoài");
   } finally { AS.setVerifyGate(true); }
   // Giới hạn chỉ riêng đường "email đã có" sẽ thành dấu hiệu dò (429 chỉ với email đã đăng ký): chỉ còn giới hạn chung theo IP.
-  const src = fs.readFileSync(path.join(process.cwd(), "app/authstore.ts"), "utf8");
+  const src = fs.readFileSync(path.join(process.cwd(), "server/authstore.ts"), "utf8");
   ok(!/limit\("signup-taken:"/.test(src) && /limit\("signup:" \+ ip/.test(src), "không có giới hạn riêng cho email đã có tài khoản, giới hạn chung theo IP còn nguyên");
 
   console.log("5. Phim giới thiệu: lần đăng nhập đầu, dù đăng ký từ hôm trước");

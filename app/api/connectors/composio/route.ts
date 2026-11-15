@@ -1,5 +1,5 @@
-import { limit, sameOrigin } from "../../../authstore";
-import { composioInfo, linkComposio, unlinkComposio } from "../../../connectors";
+import { limit, sameOrigin } from "../../../../server/authstore";
+import { composioInfo, linkComposio, unlinkComposio } from "../../../../server/connectors";
 import { connectorUser, policyOf, route } from "../shared";
 
 export const runtime = "nodejs";

@@ -1,7 +1,7 @@
-import { AuthError, can, handle, requireUser, sameOrigin } from "../../authstore";
-import { extAllowed, hasDevice } from "../../browserext";
-import { browserDefault, capsState } from "../../caps";
-import { agent, ticket } from "../../workspace";
+import { AuthError, can, handle, requireUser, sameOrigin } from "../../../server/authstore";
+import { extAllowed, hasDevice } from "../../../server/browserext";
+import { browserDefault, capsState } from "../../../server/caps";
+import { agent, ticket } from "../../../server/workspace";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

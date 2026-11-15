@@ -1,6 +1,6 @@
-import { AppError } from "../../../../appstore";
-import { handle, requireUser, sameOrigin } from "../../../../authstore";
-import { updateComment } from "../../../../collab";
+import { AppError } from "../../../../../server/appstore";
+import { handle, requireUser, sameOrigin } from "../../../../../server/authstore";
+import { updateComment } from "../../../../../server/collab";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

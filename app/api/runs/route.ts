@@ -1,6 +1,6 @@
-import { current } from "../../authstore";
-import { listRuns } from "../../runs";
-import { timed } from "../../servertiming";
+import { current } from "../../../server/authstore";
+import { listRuns } from "../../../server/runs";
+import { timed } from "../../../server/servertiming";
 
 export const dynamic = "force-dynamic";
 

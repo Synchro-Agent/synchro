@@ -1,7 +1,7 @@
-import { audit, AuthError, isAdmin } from "../../../../authstore";
-import { forget } from "../../../../ai/cli_auth";
-import { install } from "../../../../ai/cli_runtime";
-import { redact } from "../../../../ai/errors";
+import { audit, AuthError, isAdmin } from "../../../../../server/authstore";
+import { forget } from "../../../../../server/ai/cli_auth";
+import { install } from "../../../../../server/ai/cli_runtime";
+import { redact } from "../../../../../server/ai/errors";
 import { engineRoute, noStore } from "../../shared";
 
 export const runtime = "nodejs";

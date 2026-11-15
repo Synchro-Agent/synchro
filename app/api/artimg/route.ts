@@ -1,7 +1,7 @@
-import { handle, requireUser } from "../../authstore";
-import { fetchImage } from "../../artimg";
+import { handle, requireUser } from "../../../server/authstore";
+import { fetchImage } from "../../../server/artimg";
 import { genImageId } from "../../artdoc";
-import { genImageState } from "../../outputs";
+import { genImageState } from "../../../server/outputs";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

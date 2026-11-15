@@ -1,9 +1,9 @@
-import { can, current, limit, sameOrigin } from "../../../authstore";
-import { serviceKey } from "../../../providers";
-import { SpeechErr, addSpend, checkBudget, mintRealtime, plan } from "../../../speechapi";
-import { userContext } from "../../../memory";
-import { topRule } from "../../../brain";
-import { timed } from "../../../servertiming";
+import { can, current, limit, sameOrigin } from "../../../../server/authstore";
+import { serviceKey } from "../../../../server/providers";
+import { SpeechErr, addSpend, checkBudget, mintRealtime, plan } from "../../../../server/speechapi";
+import { userContext } from "../../../../server/memory";
+import { topRule } from "../../../../server/brain";
+import { timed } from "../../../../server/servertiming";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

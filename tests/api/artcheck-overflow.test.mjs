@@ -23,7 +23,7 @@ console.log("2. PROBE (chạy trong Chromium) có luật so mỗi slide + trả 
 // PROBE là chuỗi mã; kiểm tra nó mang đúng quy tắc scrollHeight/clientHeight và nhãn lỗi mới.
 const src = Object.values(A).map((v) => (typeof v === "string" ? v : "")).join("\n") + "\n" + A.ARTCHECK_RULES(true) + A.ARTCHECK_RULES(false) + JSON.stringify(A.CHECK_ARTIFACT_TOOL);
 // Chuỗi PROBE nằm trong CHECK_ARTIFACT nội bộ; đọc trực tiếp tệp nguồn để chắc chắn luật có mặt.
-const file = fs.readFileSync("app/artcheck.ts", "utf8");
+const file = fs.readFileSync("server/artcheck.ts", "utf8");
 ok(/root\.scrollHeight > root\.clientHeight \+ 4 \|\| root\.scrollWidth > root\.clientWidth \+ 4/.test(file), "PROBE so scrollHeight/scrollWidth với clientHeight/clientWidth mỗi slide", "");
 ok(/phần tử tràn khỏi slide/.test(file), "PROBE trả về phần tử tràn khỏi slide", "");
 ok(/slide tràn nội dung/.test(file), "PROBE báo slide tràn nội dung khi không tách được phần tử", "");
@@ -47,7 +47,7 @@ console.log("4. W23-17: bộ đếm vòng kiểm tra thật (mỗi artifact, m�
   ok(A.checkRoundGate({}, v("c")) === null, "lượt mới bắt đầu lại từ 0");
   const t2 = {};
   ok(A.checkRoundGate(t2, { ...v("p"), complete: false }) === null && A.checkRoundGate(t2, v("q")) === null && A.checkRoundGate(t2, v("r")) === null, "bản chưa viết xong không tính vòng");
-  const eng = fs.readFileSync("app/chatengine.ts", "utf8");
+  const eng = fs.readFileSync("server/chatengine.ts", "utf8");
   ok(/checkRoundGate\(x, a\)/.test(eng), "chatengine chặn check_artifact bằng bộ đếm của lượt");
 }
 

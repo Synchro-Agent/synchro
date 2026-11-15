@@ -1,4 +1,4 @@
-// Bộ nhớ đệm SVG của sơ đồ D2 trên máy chủ (app/d2render.ts): trần theo dung lượng (SYNCHRO_D2_MEM_MB, mặc định 48 MB), không chỉ theo số mục.
+// Bộ nhớ đệm SVG của sơ đồ D2 trên máy chủ (server/d2render.ts): trần theo dung lượng (SYNCHRO_D2_MEM_MB, mặc định 48 MB), không chỉ theo số mục.
 // Trước đây giữ 200 SVG mỗi cái tới 3 MB (có thể 600 MB+); Sức khỏe hệ thống có số liệu d2Svgs. Không cần máy chủ: SVG nạp từ thư mục đệm trên đĩa.
 import crypto from "node:crypto";
 import fs from "node:fs";

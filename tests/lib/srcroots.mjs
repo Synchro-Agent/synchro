@@ -20,3 +20,10 @@ export function walkSrc(re = /\.tsx?$/, cwd = process.cwd(), roots = SRC_ROOTS) 
   for (const r of roots) if (existsSync(path.join(cwd, r))) walk(r);
   return out;
 }
+
+/** Tìm tệp theo đường dẫn tính từ gốc mã nguồn cũ ("chatengine.ts", "ai/subs.ts") trong mọi gốc; không thấy hoặc thấy hai nơi thì báo lỗi. */
+export function findSrc(rel, cwd = process.cwd()) {
+  const hits = SRC_ROOTS.map((r) => `${r}/${rel}`).filter((p) => existsSync(path.join(cwd, p)));
+  if (hits.length !== 1) throw new Error(`findSrc: "${rel}" ${hits.length ? `trùng ở ${hits.join(", ")}` : `không có trong ${SRC_ROOTS.join("/, ")}/`}`);
+  return hits[0];
+}

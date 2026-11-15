@@ -1,6 +1,6 @@
 // Tài liệu PDF / Word theo mẫu (synchro-doc, workspace/doc): ghim phiên bản và mã băm trong Dockerfile, setup.sh dựng lại image khi mẫu đổi,
 // hợp đồng JSON (schema + ví dụ), phần thuần của synchro-doc (kiểm payload, tính tiền hóa đơn, thoát HTML / CSS, đường dẫn: test_synchro_doc.py),
-// hướng dẫn cho model (app/coderun.ts chỉ với image workspace, app/dockit.ts theo lượt, app/designkit.ts).
+// hướng dẫn cho model (server/coderun.ts chỉ với image workspace, server/dockit.ts theo lượt, server/designkit.ts).
 // Không cần máy chủ, Typst hay WeasyPrint. Phần dựng thật: workspace/doc/selftest.sh lúc build image.
 import fs from "node:fs";
 import { spawnSync } from "node:child_process";
@@ -78,12 +78,12 @@ console.log("4. Phần thuần của synchro-doc (python3 -I)");
 console.log("5. Hướng dẫn cho model");
 {
   const st0 = read(`${D}/selftest.sh`);
-  const rules = read("app/coderun.ts");
+  const rules = read("server/coderun.ts");
   ok(/WS_TOOLS = [^\n]*synchro-doc[^\n]*Typst 0\.15[^\n]*WeasyPrint 70/.test(rules), "WS_TOOLS nêu synchro-doc, Typst, WeasyPrint");
   ok(!/BASE_TOOLS = [^\n]*(?:synchro-doc|Typst|WeasyPrint)/.test(rules), "nơi chạy khác (E2B, máy giả lập) không quảng cáo synchro-doc");
   ok(/runner\(\) === "workspace" \? DOC_ROUTE : ""\}PDF dựng bằng reportlab/.test(rules), "DOC_ROUTE chỉ với image workspace, reportlab vẫn là đường dự phòng");
   ok(/DOC_ROUTE = "[^\n]*basic-report, ilm, charged-ieee[^\n]*invoice[^\n]*Không tự viết Typst/.test(rules), "DOC_ROUTE nêu 4 mẫu, cấm tự viết Typst cho các mẫu này");
-  const dk = read("app/designkit.ts");
+  const dk = read("server/designkit.ts");
   ok(/<doc_kit>[^`]*synchro-doc docx/.test(dk) && /Word bằng python-docx/.test(dk), "designkit: PDF theo mẫu dùng khối doc_kit, Word tự do vẫn python-docx");
   const { dockit: K } = await loadTs(["dockit"]);
   for (const [q, want] of [["Làm báo cáo PDF kết quả kinh doanh quý 3 có mục lục", "doc"], ["Viết đề xuất dự án chuyển đổi số, xuất file Word", "doc"], ["soạn bài nghiên cứu 2 cột kiểu IEEE về nhận dạng chữ viết tay", "doc"],
@@ -126,7 +126,7 @@ console.log("5. Hướng dẫn cho model");
   ok(/titlePage: true/.test(wm) && /PageNumber\.CURRENT/.test(wm) && /cm\(3\)/.test(wm) && /Times New Roman/.test(wm), "hợp đồng / biên bản / báo cáo: lề trái 3 cm, Times New Roman, số trang từ trang 2 (Nghị định 30)");
   ok(/def docx_pdf\(/.test(read(`${D}/synchro-doc.py`)) && /"--convert-to", "pdf"/.test(read(`${D}/synchro-doc.py`)), "synchro-doc docx --pdf dựng PDF bằng LibreOffice");
   ok(/for t in contract minutes official-report cv/.test(st0) && /"ĐẠI DIỆN BÊN A"/.test(st0), "selftest dựng 4 mẫu Word và kiểm chữ trong bản PDF");
-  const engine = read("app/chatengine.ts");
+  const engine = read("server/chatengine.ts");
   ok(/docTurn\(\{ typed, code: caps\.code, workspace: runner\(\) === "workspace", format: d\?\.format \}\)/.test(engine), "chatengine đặt khối cạnh tin nhắn mới nhất");
 }
 

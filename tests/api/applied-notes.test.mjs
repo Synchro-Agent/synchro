@@ -30,7 +30,7 @@ ok(T.stripAppliedNotes(body) === body && T.stripAppliedNotes("") === "", "không
 
 console.log("2. Lời nhắc hệ thống cấm trích lại hướng dẫn cá nhân");
 ok(/Không bao giờ trích lại/.test(T.NO_QUOTE_INS) && /Đã áp dụng hướng dẫn của bạn/.test(T.NO_QUOTE_INS), "câu cấm trích lại, nêu cả dòng kiểu cũ", T.NO_QUOTE_INS);
-const mem = fs.readFileSync("app/memory.ts", "utf8");
+const mem = fs.readFileSync("server/memory.ts", "utf8");
 ok(/<how_to_use>[\s\S]*\$\{NO_QUOTE_INS\}[\s\S]*<\/how_to_use>/.test(mem), "câu đó nằm trong phần cách dùng hướng dẫn cá nhân (userContext)");
 
 console.log("3. Câu trả lời không còn ghép nội dung hướng dẫn");
@@ -79,10 +79,10 @@ ok(normal.client === "Xin chào bạn, hôm nay thế nào?" && normal.steps.eve
 ok(T.appliedDelta("Paris.", "Paris.").t === "" && !T.appliedDelta("Paris.", "Paris.").reset && T.appliedDelta("", "Paris.").t === "Paris.", "không có ghi chú: chỉ gửi phần nối thêm");
 
 console.log("5b. Máy chủ lọc luồng trực tiếp (lượt chat) và lời dẫn 'say'");
-const runsSrc = fs.readFileSync("app/runs.ts", "utf8");
+const runsSrc = fs.readFileSync("server/runs.ts", "utf8");
 ok(/appliedDelta\(/.test(runsSrc) && /l\.kind === "chat"/.test(runsSrc), "runs.delta lọc dòng cũ trên luồng trực tiếp, chỉ lượt chat");
 ok(/l\.raw = "";\s*l\.applied = false/.test(runsSrc), "deltaStep đặt lại trạng thái lọc theo từng bước");
-ok(/stripAppliedNotes\(scrubServerPaths\(/.test(fs.readFileSync("app/chatengine.ts", "utf8")), "sayOut lọc dòng cũ khỏi sự kiện 'say'");
+ok(/stripAppliedNotes\(scrubServerPaths\(/.test(fs.readFileSync("server/chatengine.ts", "utf8")), "sayOut lọc dòng cũ khỏi sự kiện 'say'");
 
 console.log("6. Đoạn chat cũ: bỏ dòng khi vẽ và khi sao chép (W1-08)");
 ok(/const cleanAiMsg = \(m: Msg\): Msg => \{ if \(m\.role !== "ai"\) return m; const text = stripAppliedNotes\(m\.text\); return text === m\.text \? m : \{ \.\.\.m, text \}; \};/.test(page), "page.tsx: cleanAiMsg lọc tin AI, giữ nguyên đối tượng khi không đổi");

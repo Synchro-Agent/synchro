@@ -1,6 +1,6 @@
 "use client";
 import "./skills.css";
-// Kho kỹ năng → "Quét skill rác" (máy chủ: app/skillscan.ts). Nút ở thanh công cụ mở hộp thoại: chọn model (mặc định Synchro tự chọn)
+// Kho kỹ năng → "Quét skill rác" (máy chủ: server/skillscan.ts). Nút ở thanh công cụ mở hộp thoại: chọn model (mặc định Synchro tự chọn)
 // rồi quét; model đọc mọi skill ở nền, kết quả hiện dần theo tab Rác / Không có tác dụng / Ổn (kèm ngành nghề), mỗi skill một lý do.
 // Đóng hộp thoại hay chuyển trang thì việc quét vẫn chạy (nút có vòng xoay), quét xong khi còn ở Kho kỹ năng thì báo một dòng.
 // Tắt, bật lại hay xóa skill ngay trong bảng; thư viện cho mọi người chỉ quản trị viên đổi được. Không tự tắt hay xóa gì.
@@ -11,7 +11,7 @@ import * as I from "./icons";
 import { useApp, usePref } from "./store";
 import { getLang, locale } from "./i18n";
 import { SKILLS_CHANGED } from "./skillsui";
-import type { ScanItem, ScanJob, Verdict } from "./skillscan";
+import type { ScanItem, ScanJob, Verdict } from "../server/skillscan";
 
 type Group = { name: string; models: { key: string; name: string }[] };
 type Data = { job: ScanJob | null; count: number; models: Group[] };

@@ -1,6 +1,6 @@
 "use client";
 
-// Cài đặt → Tài khoản → Bảo mật: thêm, đổi tên, xóa khóa truy cập (app/passkeys.ts). Đăng nhập bằng khóa nằm ở trang đăng nhập (auth.tsx).
+// Cài đặt → Tài khoản → Bảo mật: thêm, đổi tên, xóa khóa truy cập (server/passkeys.ts). Đăng nhập bằng khóa nằm ở trang đăng nhập (auth.tsx).
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { call as api, ago, fmtDate } from "./adminui";

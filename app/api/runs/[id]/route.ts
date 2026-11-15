@@ -1,7 +1,7 @@
-import { current, sameOrigin } from "../../../authstore";
-import { cancelRun, getRun, liveText, pushInbox, watch, type Delta, type PublicRun, type RunEvent } from "../../../runs";
-import { timed } from "../../../servertiming";
-import { deltaGate } from "../../../ssedeltas";
+import { current, sameOrigin } from "../../../../server/authstore";
+import { cancelRun, getRun, liveText, pushInbox, watch, type Delta, type PublicRun, type RunEvent } from "../../../../server/runs";
+import { timed } from "../../../../server/servertiming";
+import { deltaGate } from "../../../../server/ssedeltas";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -28,7 +28,7 @@ export const GET = timed(async (req: Request, ctx: { params: Promise<{ id: strin
       let closed = false, ended = false, unwatch = () => {}, poll: ReturnType<typeof setInterval> | undefined, sent = after;
       const end = () => { if (ended) return; ended = closed = true; clearInterval(ping); clearInterval(poll); gate.stop(); unwatch(); try { ctl.close(); } catch {} };
       const send = (s: string) => { if (!closed) try { ctl.enqueue(enc.encode(s)); } catch { end(); } };
-      // Trình duyệt nhận chậm (ctl.desiredSize âm): gom các delta chữ của cùng một bước lại rồi gửi một khung (app/ssedeltas.ts). Phải xả trước
+      // Trình duyệt nhận chậm (ctl.desiredSize âm): gom các delta chữ của cùng một bước lại rồi gửi một khung (server/ssedeltas.ts). Phải xả trước
       // mọi sự kiện khác (step/done/clock) để giữ đúng thứ tự chữ rồi mới tới bước; luồng thông lại (pull, hẹn giờ ngắn) thì xả ngay (R10).
       const gate = deltaGate({ desired: () => ctl.desiredSize, send: (d: Delta) => send(`event: delta\ndata: ${JSON.stringify(d)}\n\n`) });
       const flushDeltas = gate.flush;

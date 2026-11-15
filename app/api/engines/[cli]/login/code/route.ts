@@ -1,5 +1,5 @@
-import { limit } from "../../../../../authstore";
-import { submitCode } from "../../../../../ai/cli_auth";
+import { limit } from "../../../../../../server/authstore";
+import { submitCode } from "../../../../../../server/ai/cli_auth";
 import { engineRoute, noStore } from "../../../shared";
 
 export const runtime = "nodejs";

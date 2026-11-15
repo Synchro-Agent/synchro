@@ -1,13 +1,13 @@
 import fs from "node:fs";
 import { Readable } from "node:stream";
-import { audit, can, current, findByEmail, getUser, isAdmin, isOwner, limit, sameOrigin, VERIFY_FIRST, verifyLocked, type UserRow } from "../../../authstore";
+import { audit, can, current, findByEmail, getUser, isAdmin, isOwner, limit, sameOrigin, VERIFY_FIRST, verifyLocked, type UserRow } from "../../../../server/authstore";
 import {
   SpeechErr, addSpend, audioOf, checkBudget, deleteItem, effectsCatalog, el, elJson, getItem, itemFile, jsonBody, langName, library, listItems, mintRealtime, myVoices, need, plan, saveItem,
   scribeToken, servedBy, sideRead, sideWrite, speechBudget, spender, spent, spentToday, updateItem, voiceOut, backfillVoiceOwners, defaultVoice, forgetVoiceOwner, isPrivateVoice, MAX_OWN_VOICES, ownedVoices, setVoiceOwner, voiceGen, voiceOpenTo, voiceOwner, VOICE_ORPHAN, VOICE_PURGE, VOICE_SHARED, type Feat, type Plan,
-} from "../../../speechapi";
+} from "../../../../server/speechapi";
 import { estCredits, estMusicCredits } from "../../../speech/data";
-import { quickCall } from "../../../ai/anymodel";
-import { timed } from "../../../servertiming";
+import { quickCall } from "../../../../server/ai/anymodel";
+import { timed } from "../../../../server/servertiming";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

@@ -67,7 +67,7 @@ const VIEW_OF_HASH: Record<string, View> = { projects: "projects", artifacts: "a
 import { AppCtx, useApp, VOICE_LANG, VOICE_RATE, initials, readPref, reloadPrefs, resetPrefs, usePref, type Chat, type Msg, type Project } from "./store";
 import { IMAGE_PLANS, allowsModel, clampEffort, effortCap, effortsFor, isEffort, legacyModel, type Effort } from "./catalog";
 import { AUTO, fitModel, modelName, modelsSettled, refreshModels, seedModels, useModels } from "./models";
-import type { BootData } from "./bootdata";
+import type { BootData } from "../server/bootdata";
 import { seedInboxCount } from "./inboxcount";
 import { useFitPlaceholder } from "./phfit";
 import type { ProviderInfo } from "./catalog";

@@ -1,4 +1,4 @@
-// Tạo ảnh (app/ai/imagegen.ts) trên CLI giả lập, tự chạy được, không cần dev:mock: thứ tự gói, chuyển gói khi lỗi, bỏ qua gói Free, từ chối tệp không phải ảnh, trần dung lượng, dừng giữa
+// Tạo ảnh (server/ai/imagegen.ts) trên CLI giả lập, tự chạy được, không cần dev:mock: thứ tự gói, chuyển gói khi lỗi, bỏ qua gói Free, từ chối tệp không phải ảnh, trần dung lượng, dừng giữa
 // chừng, cách ly tài khoản, dọn sạch sau lượt, định tuyến, làm sạch đường dẫn máy chủ. Hành vi của CLI thật chỉ biết khi chạy `node scripts/cli-contract.mjs <account> --image` trên máy chủ.
 import fs from "node:fs";
 import os from "node:os";

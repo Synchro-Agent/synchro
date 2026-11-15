@@ -1,6 +1,6 @@
-import { AuthError, handle, isAdmin, requireUser, sameOrigin } from "../../../authstore";
-import { markRemoved } from "../../../plugjob";
-import { addZipToPlugin, checkUpdate, getPlugin, listPlugins, pluginOwner, PluginError, removePlugin, removePluginSkills, setPlugin, setPref, updatePlugin, type StudioMode } from "../../../plugins";
+import { AuthError, handle, isAdmin, requireUser, sameOrigin } from "../../../../server/authstore";
+import { markRemoved } from "../../../../server/plugjob";
+import { addZipToPlugin, checkUpdate, getPlugin, listPlugins, pluginOwner, PluginError, removePlugin, removePluginSkills, setPlugin, setPref, updatePlugin, type StudioMode } from "../../../../server/plugins";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

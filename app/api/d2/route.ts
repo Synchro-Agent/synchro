@@ -1,6 +1,6 @@
-import { clientIp, current, handle, limit, sameOrigin } from "../../authstore";
-import { cachedD2, D2_MAX, renderD2 } from "../../d2render";
-import { shareOwnerWithCode } from "../../sharestore";
+import { clientIp, current, handle, limit, sameOrigin } from "../../../server/authstore";
+import { cachedD2, D2_MAX, renderD2 } from "../../../server/d2render";
+import { shareOwnerWithCode } from "../../../server/sharestore";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

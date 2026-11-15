@@ -1,6 +1,6 @@
-import { AuthError, can, handle } from "../../../../authstore";
-import { avatarOf, CHROME_LOCKED, deviceOf, extAllowed, touchDevice } from "../../../../browserext";
-import { ticket } from "../../../../workspace";
+import { AuthError, can, handle } from "../../../../../server/authstore";
+import { avatarOf, CHROME_LOCKED, deviceOf, extAllowed, touchDevice } from "../../../../../server/browserext";
+import { ticket } from "../../../../../server/workspace";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

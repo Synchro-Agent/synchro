@@ -1,5 +1,5 @@
-import { current, handle } from "../../../authstore";
-import { authPart } from "../../../bootdata";
+import { current, handle } from "../../../../server/authstore";
+import { authPart } from "../../../../server/bootdata";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

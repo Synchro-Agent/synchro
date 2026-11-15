@@ -5,7 +5,7 @@ import { allowsModel, equivalentModel, splitKey, vendorOf, type Effort, type Pro
 import { userScope } from "./userscope";
 
 // effort: mức nỗ lực cao nhất quản trị viên cho phép theo từng model ("*" là mọi model).
-// replaced: model hãng đã gỡ hoặc đã cũ → bản mới nhất cùng dòng (sổ model, app/modelreg.ts), kèm tên model cũ để báo người dùng.
+// replaced: model hãng đã gỡ hoặc đã cũ → bản mới nhất cùng dòng (sổ model, server/modelreg.ts), kèm tên model cũ để báo người dùng.
 // why: "gone" hãng đã gỡ, "old" dòng đã có bản mới hơn (vẫn chạy được nhưng không còn ở bộ chọn).
 export type Replaced = Record<string, { to: string; name: string; why?: "gone" | "old" }>;
 type State = { providers: ProviderInfo[]; sharedApi: boolean; default: string | null; allowed: string[]; effort: Record<string, Effort>; replaced: Replaced; loaded: boolean };
@@ -24,7 +24,7 @@ export const modelsSettled = () => tries >= RETRY_S.length;
 /** bg: lần hỏi lại nền của tab để mở lâu (máy chủ không khởi động sẵn tiến trình chat cho lần này). */
 type Payload = { providers?: ProviderInfo[]; sharedApi?: boolean; default?: string | null; allowed?: string[]; effort?: Record<string, Effort>; replaced?: Replaced };
 const put = (j: Payload) => { fetchedAt = Date.now(); state = { providers: j.providers ?? [], sharedApi: !!j.sharedApi, default: j.default ?? null, allowed: j.allowed ?? [], effort: j.effort ?? {}, replaced: j.replaced ?? {}, loaded: true }; subs.forEach((f) => f()); };
-/** Gieo danh sách model từ gói khởi động dựng sẵn ở máy chủ (app/bootdata.ts): bộ chọn model đúng ngay, không hỏi /api/models lần đầu.
+/** Gieo danh sách model từ gói khởi động dựng sẵn ở máy chủ (server/bootdata.ts): bộ chọn model đúng ngay, không hỏi /api/models lần đầu.
  *  Danh sách trống (máy chủ vừa khởi động lại, chưa có hãng nào) thì không gieo: trả false để trang tự hỏi lại như trước. */
 export function seedModels(j: Payload | null | undefined) {
   if (!j?.providers?.length) return false;

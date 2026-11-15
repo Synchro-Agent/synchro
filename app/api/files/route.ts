@@ -1,6 +1,6 @@
-import { processFile } from "../../fileproc";
+import { processFile } from "../../../server/fileproc";
 import { FileError } from "../../fileproc/types";
-import { AuthError, limit } from "../../authstore";
+import { AuthError, limit } from "../../../server/authstore";
 import { route } from "../../../server/route";
 
 export const runtime = "nodejs";

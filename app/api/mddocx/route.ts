@@ -1,5 +1,5 @@
-import { handle, limit, requireUser, sameOrigin } from "../../authstore";
-import { blocksToDocx } from "../../mddocx";
+import { handle, limit, requireUser, sameOrigin } from "../../../server/authstore";
+import { blocksToDocx } from "../../../server/mddocx";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

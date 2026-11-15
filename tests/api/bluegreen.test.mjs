@@ -1,4 +1,4 @@
-// Deploy xanh/lam (A5): vai trò primary/secondary (app/role.ts), tắt êm khi nhận SIGTERM (app/drain.ts), và các hàm shell đổi upstream nginx,
+// Deploy xanh/lam (A5): vai trò primary/secondary (server/role.ts), tắt êm khi nhận SIGTERM (server/drain.ts), và các hàm shell đổi upstream nginx,
 // màu sống, node_modules (scripts/bluegreen-lib.sh) với nginx / pm2 / curl giả trên PATH. Tự chạy được, không cần máy chủ.
 import { execFileSync, spawn, spawnSync } from "node:child_process";
 import fs from "node:fs";
@@ -106,11 +106,11 @@ console.log("Vai trò primary / secondary");
   { const entry = fs.readFileSync("instrumentation.ts", "utf8"); ok(/NEXT_RUNTIME === "nodejs"[\s\S]*import\("\.\/instrumentation-node"\)\)\.registerNode\(\)/.test(entry), "instrumentation.ts (điểm vào thật của Next) gọi registerNode() ở runtime Node"); }
   const at = src.indexOf("function primaryDuties");
   const head = src.slice(0, at), body = src.slice(at);
-  const duties = ["startOnBoot", "sweepOrphanClis", "resumeInterrupted", "startScheduler", "./app/brain", "recheckConnectors", "scheduleDiscovery", "startCliUpdates", "keepLinksAlive", "startPrWatch", "sweepEngineTemp", "ensurePluginTags", "ensureDefaultPlugins", "resumeJob", "retryVoicePurges", "noteBoot("];
+  const duties = ["startOnBoot", "sweepOrphanClis", "resumeInterrupted", "startScheduler", "./server/brain", "recheckConnectors", "scheduleDiscovery", "startCliUpdates", "keepLinksAlive", "startPrWatch", "sweepEngineTemp", "ensurePluginTags", "ensureDefaultPlugins", "resumeJob", "retryVoicePurges", "noteBoot("];
   const wrong = duties.filter((d) => head.includes(d) || !body.includes(d));
   ok(at > 0 && !wrong.length, "litestream, bộ hẹn giờ, chạy lại lượt, cài plugin… chỉ chạy trong primaryDuties", wrong);
   ok(/startRole\(\(\) => primaryDuties/.test(head) && head.includes("installShutdown("), "registerNode(): cài tắt êm ở mọi tiến trình, việc nền qua startRole");
-  const runs = fs.readFileSync(path.join(process.cwd(), "app/runs.ts"), "utf8");
+  const runs = fs.readFileSync(path.join(process.cwd(), "server/runs.ts"), "utf8");
   ok(/status = 'running'"\)\.all\(\) as Row\[\]\)\.filter\(\(r\) => !live\.has\(r\.id\)\)/.test(runs), "resumeInterrupted bỏ qua lượt đang chạy trong chính tiến trình (đã phục vụ từ lúc còn là secondary)");
 }
 
@@ -200,7 +200,7 @@ console.log("Dừng / nhắn thêm qua cơ sở dữ liệu (tiến trình cũ �
   db.prepare("INSERT INTO runs (id,user_id,conv,kind,status,req,events,created_at,updated_at,cancel_req,partial) VALUES (?,?,?,?, 'running', ?, '[]', ?, ?, 1, ?)").run(p2, u.id, "c-p2", "bgrerun", "{}", Date.now(), Date.now(), "chữ dở");
   RN.resumeInterrupted(); await sleep(50);
   ok(JSON.parse(status(p2).result).text === "chữ dở" && JSON.parse(status(p2).result).cancelled === true && reran === 0, "NODE-1: lượt đã bấm Dừng mà bản cũ chưa kịp thấy: đóng kèm phần chữ đã viết, không trống", status(p2));
-  const fin = fs.readFileSync(path.join(process.cwd(), "app/runs.ts"), "utf8");
+  const fin = fs.readFileSync(path.join(process.cwd(), "server/runs.ts"), "utf8");
   const fstart = fin.indexOf("function finish(");
   ok(/d\.transaction\(\(\) => \{\n\s+const remote = /.test(fin.slice(fstart, fstart + 1500)) && /\}\)\.immediate\(\);/.test(fin.slice(fstart, fstart + 1500)), "NODE-1: finish đọc hàng chờ nhắn thêm và đóng lượt trong một giao dịch IMMEDIATE");
 
@@ -413,7 +413,7 @@ case "$*" in *--resolve*|*"Host: "*) p=$(cat "${H}/active") ;; *) p=$(echo "$url
 case "$p" in 3000) n=${o.oldName ?? "synchro"}; d=.next ;; 3002) n=synchro-green; d=.next-green ;; *) exit 7 ;; esac
 [ "$(cat "${P}/$n" 2>/dev/null)" = online ] || exit 7
 case "$*" in *"-o /dev/null"*) exit 0 ;; esac; case "$url" in *api/health*) printf '{"ok":true,"build":"%s","db":true}' "$(cat "${A}/$d/BUILD_ID")" ;; *) echo html ;; esac`);
-  // green nhận vai khi màu sống = green và bản cũ đã dừng (như app/role.ts).
+  // green nhận vai khi màu sống = green và bản cũ đã dừng (như server/role.ts).
   sh("sleep", `[ -n "\${NO_PROMOTE:-}" ] && exit 0
 [ "$(awk '{print $1}' "${H}/state/live-color" 2>/dev/null)" = green ] && [ "$(cat "${P}/${o.oldName ?? "synchro"}" 2>/dev/null)" != online ] && echo "4242 green" > "${A}/data/.primary.pid"; exit 0`);
   const run = (env = {}) => spawnSync("bash", [path.join(A, "scripts", "bluegreen-migrate.sh"), A, "synchro", path.join(H, "site")], { encoding: "utf8",

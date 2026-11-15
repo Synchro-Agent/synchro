@@ -1,6 +1,6 @@
-import { clientIp, limit } from "../../authstore";
-import { opsEvent } from "../../ops";
-import { timed } from "../../servertiming";
+import { clientIp, limit } from "../../../server/authstore";
+import { opsEvent } from "../../../server/ops";
+import { timed } from "../../../server/servertiming";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

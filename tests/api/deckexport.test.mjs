@@ -60,7 +60,7 @@ console.log("3. SEC-5: chỉ xuất nội dung của chính người dùng, mạ
   ok(/featureGate\(req, "sandbox"\)/.test(route) && /caps\.code/.test(route), "route cần quyền sandbox + Chạy code của người dùng");
   ok(/getArtifactByIdent\(user\.id/.test(route) && /getRun\(body\.run, user\.id\)/.test(route), "nội dung nạp ở máy chủ, của đúng người dùng");
   ok(/net: caps\.net, web: caps\.web/.test(route), "mạng đi theo quyền net / web của người dùng");
-  const src = fs.readFileSync(path.join(process.cwd(), "app/deckexport.ts"), "utf8");
+  const src = fs.readFileSync(path.join(process.cwd(), "server/deckexport.ts"), "utf8");
   ok(/caps: \{ net: boolean; web: boolean \} = \{ net: false, web: false \}/.test(src) && !/net: true/.test(src), "exportDeckPptx mặc định tắt mạng, không còn net: true cứng");
   ok(/inflight\.has\(uid\)/.test(src), "mỗi người một lần xuất đang chạy");
 }

@@ -1,4 +1,4 @@
-// Bộ quy tắc thiết kế theo lượt (app/designkit.ts), phong cách (designpresets.ts), bộ CSS trong khung artifact (artkit.ts), quy tắc bảng tính và phông của sandbox.
+// Bộ quy tắc thiết kế theo lượt (server/designkit.ts), phong cách (designpresets.ts), bộ CSS trong khung artifact (artkit.ts), quy tắc bảng tính và phông của sandbox.
 // Phần 1-6 không cần máy chủ. Phần 7 chạy trên npm run dev:mock (đổi địa chỉ bằng SYNCHRO_URL, MOCK_LLM_URL): khối đi cạnh tin nhắn, phần đầu prompt giữ nguyên, trò chuyện thường không đổi.
 // Trình duyệt thật (phông, chuyển động, phép đo, xuất PowerPoint): tests/ui/design-kit.mjs.
 import { readFileSync } from "node:fs";
@@ -63,7 +63,7 @@ ok(/break-inside:avoid/.test(doc) && /orphans:3/.test(doc) && /A4/.test(doc), "t
 ok(/không đặt cho mọi p, li/.test(doc), "không ép 65ch cho mọi p, li như cẩm nang");
 const sheet = turn("tạo file excel ngân sách").block;
 for (const s of ["=SUM(", "0052CC", "0F172A", "0A192F", "showGridLines = False", "freeze_panes", '$#,##0;($#,##0);"-"', '#,##0 "₫";(#,##0 "₫");"-"', 'style="double"', 'style="thin"', "DataBarRule", "ColorScaleRule", "0.0%", "excel_totals"]) ok(sheet.includes(s), `bảng tính chuẩn tài chính: ${s}`);
-const coderun = readFileSync("app/coderun.ts", "utf8");
+const coderun = readFileSync("server/coderun.ts", "utf8");
 for (const s of ["0052CC", "0A192F", "showGridLines = False", "viền dưới double", "excel_totals", "DataBarRule", "ColorScaleRule", "conditional_format"]) ok(coderun.includes(s), `CODE_RULES: ${s}`);
 const g = turn("làm poster").block;
 ok(/không chữ chuyển màu/.test(g), "không chữ chuyển màu ở nội dung phải đọc");
@@ -219,7 +219,7 @@ const shas = [...dock.matchAll(/'([0-9a-f]{64}) ofl\//g)].map((m) => m[1]);
 // 9 phông của bộ thiết kế + Be Vietnam Pro ExtraBold / Black cho phụ đề video (Remotion).
 ok(shas.length === 11 && /google\/fonts\/[0-9a-f]{40}\//.test(dock) && /sha256sum -c/.test(dock) && /fc-cache/.test(dock), `phông ghim commit và mã băm (${shas.length} tệp)`);
 ok(/DM Mono/.test(JSON.stringify(FONT_SPEC)) === false, "không dùng phông thiếu dấu tiếng Việt (DM Mono)");
-const probe = readFileSync("app/artcheck.ts", "utf8");
+const probe = readFileSync("server/artcheck.ts", "utf8");
 ok(probe.includes("${DESIGN_PROBE}") && !/tự thu nhỏ/.test(probe), "check_artifact có phép đo mới, chỉ báo chứ không tự sửa");
 
 console.log("7. Lượt chat thật trên máy chủ giả lập");

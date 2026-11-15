@@ -6,7 +6,7 @@ import { tr } from "./i18n";
 export const INBOX_CHANGED = "synchro:inbox";
 
 type Count = { unread: number; pending: number; fresh: { run: string; title: string; proposals: number }[] };
-// Số đếm dựng sẵn ở máy chủ (gói khởi động, app/bootdata.ts): lần mở trang không hỏi /api/inbox?count=1, dùng một lần.
+// Số đếm dựng sẵn ở máy chủ (gói khởi động, server/bootdata.ts): lần mở trang không hỏi /api/inbox?count=1, dùng một lần.
 let seeded: Count | null = null;
 export function seedInboxCount(c: Count | null | undefined) { seeded = c ?? null; }
 

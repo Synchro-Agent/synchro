@@ -1,5 +1,5 @@
-import { handle, limit, requireUser, sameOrigin } from "../../authstore";
-import { POSTER_TEMPLATES, posterProps, renderPoster, type PosterTemplate } from "../../design-engine/posters/render";
+import { handle, limit, requireUser, sameOrigin } from "../../../server/authstore";
+import { POSTER_TEMPLATES, posterProps, renderPoster, type PosterTemplate } from "../../../server/design-engine/posters/render";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

@@ -1,6 +1,6 @@
-import { AuthError, can, handle, requireUser, sameOrigin } from "../../authstore";
-import { gitOp } from "../../codegit";
-import { agent, exec, fsop, requireWs, sdir, ticket, wsConfigured } from "../../workspace";
+import { AuthError, can, handle, requireUser, sameOrigin } from "../../../server/authstore";
+import { gitOp } from "../../../server/codegit";
+import { agent, exec, fsop, requireWs, sdir, ticket, wsConfigured } from "../../../server/workspace";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

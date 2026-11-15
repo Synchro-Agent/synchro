@@ -1,4 +1,4 @@
-import { getUser, handle, isAdmin, requireUser } from "../../../authstore";
+import { getUser, handle, isAdmin, requireUser } from "../../../../server/authstore";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

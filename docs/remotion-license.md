@@ -16,7 +16,7 @@ Free License cho phép dùng thương mại, tự động hóa và SaaS. FAQ cũ
 
 ## Điều phải giữ
 
-1. **Không dựng dự án Remotion người dùng tải lên.** FAQ viết: "it is not allowed to let users bring or upload their own Remotion code". Hướng dẫn cho model (`app/coderun.ts`, `app/videokit.ts`) bắt model từ chối việc này và đề nghị đưa nội dung vào props của mẫu có sẵn. `synchro-video` chỉ dựng 4 composition trong bundle đóng sẵn.
+1. **Không dựng dự án Remotion người dùng tải lên.** FAQ viết: "it is not allowed to let users bring or upload their own Remotion code". Hướng dẫn cho model (`server/coderun.ts`, `server/videokit.ts`) bắt model từ chối việc này và đề nghị đưa nội dung vào props của mẫu có sẵn. `synchro-video` chỉ dựng 4 composition trong bundle đóng sẵn.
 2. **Số người phải giữ ở mức 3 trở xuống.** Remotion tính cả freelancer và agency làm cùng dự án. Bản nháp Remotion 5.0 (PR #3750) tính cả người làm hợp đồng. Nếu số người vượt 3, phải mua Company License:
    - "Remotion for Creators": 25 USD một người một tháng.
    - "Remotion for Automators": 0,01 USD một lần dựng, tối thiểu 100 USD một tháng.

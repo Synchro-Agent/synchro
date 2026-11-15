@@ -93,7 +93,7 @@ export async function inspectGithub(url: string, onWait?: () => void): Promise<F
 // Tạo skill (quản trị viên): dùng cho riêng mình (Skill của bạn) hay cho mọi người (Thư viện cho mọi người; skill thành một thư viện
 // của tổ chức, mọi tài khoản dùng được). Dùng chung cho mọi cách tạo skill: dán link repo, tải lên, lưu cách làm, Synchro đề xuất.
 export type Scope = "me" | "org";
-// Tải về tệp .zip xuất skill / thư viện (app/skillexport.ts): giữ đúng tên tệp máy chủ đặt, README theo ngôn ngữ giao diện.
+// Tải về tệp .zip xuất skill / thư viện (server/skillexport.ts): giữ đúng tên tệp máy chủ đặt, README theo ngôn ngữ giao diện.
 export async function downloadExport(url: string, fallback: string): Promise<string> {
   const r = await apiFetch(`${url}?lang=${getLang()}`, { cache: "no-store" });
   if (!r.ok) { const j = await r.json().catch(() => ({})); throw new Error(j.error || statusText(r.status)); }

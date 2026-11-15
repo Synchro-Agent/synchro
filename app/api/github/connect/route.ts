@@ -1,6 +1,6 @@
-import { appUrl, AuthError, can, current } from "../../../authstore";
-import { start } from "../../../oauth";
-import { timed } from "../../../servertiming";
+import { appUrl, AuthError, can, current } from "../../../../server/authstore";
+import { start } from "../../../../server/oauth";
+import { timed } from "../../../../server/servertiming";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

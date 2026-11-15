@@ -1,7 +1,7 @@
 "use client";
 import "./settings.css";
 
-// Cài đặt → Quản trị viên → Đăng nhập: Cloudflare Turnstile (dán khóa để bật) và chặn email dùng một lần (app/turnstile.ts).
+// Cài đặt → Quản trị viên → Đăng nhập: Cloudflare Turnstile (dán khóa để bật) và chặn email dùng một lần (server/turnstile.ts).
 // Khóa bí mật không bao giờ quay lại trình duyệt: ô để trống nghĩa là giữ khóa đã lưu.
 import { useState } from "react";
 import * as I from "./icons";

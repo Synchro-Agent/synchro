@@ -1,6 +1,6 @@
-import { handle, limit, requireUser, sameOrigin } from "../../../authstore";
-import { brainGraph, distillPending, retryLearning } from "../../../brain";
-import { memCfg } from "../../../memory";
+import { handle, limit, requireUser, sameOrigin } from "../../../../server/authstore";
+import { brainGraph, distillPending, retryLearning } from "../../../../server/brain";
+import { memCfg } from "../../../../server/memory";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

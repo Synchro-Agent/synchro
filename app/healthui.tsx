@@ -1,15 +1,15 @@
 "use client";
 import "./settings.css";
 
-// Cài đặt → Sức khỏe hệ thống: quản trị viên thấy ngay máy chủ có ổn không mà không phải vào SSH. Không có nội dung chat. Số liệu từ /api/admin/health (app/ops.ts).
+// Cài đặt → Sức khỏe hệ thống: quản trị viên thấy ngay máy chủ có ổn không mà không phải vào SSH. Không có nội dung chat. Số liệu từ /api/admin/health (server/ops.ts).
 import { useCallback, useEffect, useState } from "react";
 import { call, ago, fmtDate } from "./adminui";
 import { useApp } from "./store";
 import { getLang, locale, tf, tr, trc } from "./i18n";
 import * as I from "./icons";
-import type { MemSample } from "./memstat";
-import type { LoopSample } from "./loopdelay";
-import type { BackupStatus, Problem, WatchdogState } from "./ops";
+import type { MemSample } from "../server/memstat";
+import type { LoopSample } from "../server/loopdelay";
+import type { BackupStatus, Problem, WatchdogState } from "../server/ops";
 import { ContinuousBackup } from "./backupui";
 import { LatencyTable, type Latency } from "./latencyui";
 import { SettingsSkeleton } from "./skeleton";
@@ -28,10 +28,10 @@ type Health = {
   backup: BackupStatus | null; watchdog: WatchdogState | null; wdEvents: { at: number; event: string; detail?: string }[];
   latency?: Latency;
   mem?: { now: MemSample; history: MemSample[]; caches: Record<string, Record<string, number>>; heapLimit: number };
-  // Độ trễ vòng lặp sự kiện (app/loopdelay.ts): mẫu 60 giây gần nhất; null khi bộ đo chưa bật.
+  // Độ trễ vòng lặp sự kiện (server/loopdelay.ts): mẫu 60 giây gần nhất; null khi bộ đo chưa bật.
   loop?: (LoopSample & { live: boolean }) | null;
 };
-// Bộ đệm lớn trong bộ nhớ máy chủ (app/memstat.ts): tên dễ hiểu cho quản trị viên.
+// Bộ đệm lớn trong bộ nhớ máy chủ (server/memstat.ts): tên dễ hiểu cho quản trị viên.
 const CACHE: Record<string, string> = { skillIndex: "Skill index", brainRecall: "Brain recall index", codeRuns: "Synchro Code runs kept", pluginZips: "Downloaded plugin packages", artImages: "Artifact images", d2Svgs: "D2 diagrams", approvals: "Replies waiting for approval", vectors: "Semantic search vectors" };
 // Đơn vị của từng số đếm trong bộ nhớ đệm: mẫu "{n} …" dịch bằng tf (MB, KB giữ nguyên).
 const UNIT: Record<string, string> = { skills: "{n} skill", words: "{n} từ", vocab: "{n} từ", building: "{n} đang dựng", n: "{n} mục", users: "{n} người", docs: "{n} ghi chú", pending: "{n} đang chờ", runs: "{n} lượt", sets: "{n} bộ đang nạp", vectors: "{n} vector", embedded: "{n} mục đã embed", calls: "{n} lần gọi API", skippedCap: "{n} lần dừng vì hạn mức", errors: "{n} lỗi", rejected: "{n} mục bị hãng từ chối", queryTimeouts: "{n} câu hỏi quá thời gian", queued: "{n} đang xếp hàng" };

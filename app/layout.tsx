@@ -1,7 +1,7 @@
 import GlassFX from "./glass";
 import { I18n } from "./i18n";
 import { ChunkGuard } from "./chunkguard";
-import { langScript } from "./langdetect";
+import { langScript } from "../server/langdetect";
 import type { Metadata, Viewport } from "next";
 // Unbounded của bộ nhận diện (tự lưu trên máy chủ, đủ dấu tiếng Việt): chỉ cho logo và tiêu đề; chữ thường là Be Vietnam Pro (globals.css).
 import "@fontsource-variable/unbounded/wght.css";

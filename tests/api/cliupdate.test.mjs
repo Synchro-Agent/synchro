@@ -1,4 +1,4 @@
-// Tự cập nhật CLI của các gói (app/ai/cliupdate.ts) trên Synchro giả lập (npm run dev:mock; SYNCHRO_URL). Bản phát hành giả viết vào
+// Tự cập nhật CLI của các gói (server/ai/cliupdate.ts) trên Synchro giả lập (npm run dev:mock; SYNCHRO_URL). Bản phát hành giả viết vào
 // data-mock/cli-releases (dev:mock đặt SYNCHRO_CLI_UPDATE_SOURCE tới đó): không gọi npm hay script cài của hãng, không tốn gì.
 // Kiểm: chỉ chủ sở hữu bật / tắt, cập nhật ngay, trả về bản trước; bản mới cài cạnh bản cũ, kiểm tra bằng đăng nhập sẵn có của quản trị viên
 // rồi mới đổi; bản không qua kiểm tra thì giữ bản cũ; lượt chat thật đầu tiên lỗi thì tự trả về bản trước và không cài lại bản đó;

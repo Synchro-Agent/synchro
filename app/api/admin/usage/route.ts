@@ -1,6 +1,6 @@
-import { adminRole, db, getUser, handle, isOwner, ownerOnly, requireAdmin, sameOrigin, type UserRow } from "../../../authstore";
-import { adminList, catalog, isService } from "../../../providers";
-import { adminUsage, getConfig, priceTable, setConfig, setOverride } from "../../../usage";
+import { adminRole, db, getUser, handle, isOwner, ownerOnly, requireAdmin, sameOrigin, type UserRow } from "../../../../server/authstore";
+import { adminList, catalog, isService } from "../../../../server/providers";
+import { adminUsage, getConfig, priceTable, setConfig, setOverride } from "../../../../server/usage";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

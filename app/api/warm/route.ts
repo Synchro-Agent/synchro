@@ -1,4 +1,4 @@
-import { handle, limit, requireUser, sameOrigin } from "../../authstore";
+import { handle, limit, requireUser, sameOrigin } from "../../../server/authstore";
 import { isEffort } from "../../catalog";
 
 export const runtime = "nodejs";
@@ -14,6 +14,6 @@ export const POST = handle(async (req: Request) => {
   const b = (await req.json().catch(() => ({}))) as { model?: unknown; effort?: unknown; memory?: unknown };
   // Giá trị lạ không được nằm lại trong lựa chọn đã biết của người dùng.
   const pick = { model: typeof b.model === "string" && b.model.length <= 128 ? b.model : undefined, effort: b.effort === "auto" || isEffort(b.effort) ? b.effort : undefined, memory: typeof b.memory === "boolean" ? b.memory : undefined };
-  void import("../../chatengine").then((m) => m.prewarmChat(user, pick)).catch(() => {});
+  void import("../../../server/chatengine").then((m) => m.prewarmChat(user, pick)).catch(() => {});
   return new Response(null, { status: 204 });
 });

@@ -1,8 +1,9 @@
 // Chữ về gói: chỉ Claude cần gói trả phí, ChatGPT, Gemini và Grok dùng được cả tài khoản miễn phí. Người dùng miễn phí không được đọc thấy mình phải trả tiền. Tự chạy được, chỉ đọc mã nguồn và từ điển.
 import { readFileSync } from "node:fs";
+import { findSrc } from "../lib/srcroots.mjs";
 let pass = 0, fail = 0;
 const ok = (c, n, x = "") => { c ? pass++ : fail++; console.log(c ? "  ✓" : "  ✗", n, c ? "" : String(x).slice(0, 300)); };
-const src = (f) => readFileSync(new URL("../../app/" + f, import.meta.url), "utf8");
+const src = (f) => readFileSync(findSrc(f), "utf8");
 
 const provider = src("providersui.tsx"), usage = src("usageui.tsx") + src("usagering.tsx"), subs = src("ai/subs.ts"), page = src("home.tsx"), img = src("ai/imagegen.ts"), vi = src("i18n-vi.ts"), ux = src("i18n-ux.ts");
 const header = /"(Use your own AI accounts\.[^"]+)"/.exec(provider)?.[1];

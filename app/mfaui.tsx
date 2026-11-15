@@ -1,6 +1,6 @@
 "use client";
 
-// Cài đặt → Tài khoản: bật, tắt xác minh hai bước (app/mfa.ts). Khóa hiện dạng chữ và liên kết otpauth: mọi ứng dụng tạo mã đều cho nhập tay, không cần thêm thư viện vẽ mã QR.
+// Cài đặt → Tài khoản: bật, tắt xác minh hai bước (server/mfa.ts). Khóa hiện dạng chữ và liên kết otpauth: mọi ứng dụng tạo mã đều cho nhập tay, không cần thêm thư viện vẽ mã QR.
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { call as api } from "./adminui";

@@ -1,7 +1,7 @@
-import { handle, requireAdmin, sameOrigin } from "../../../../authstore";
-import { chatOnce, HttpErr } from "../../../../llmcall";
-import { resolveModel } from "../../../../providers";
-import { withUsage } from "../../../../usage";
+import { handle, requireAdmin, sameOrigin } from "../../../../../server/authstore";
+import { chatOnce, HttpErr } from "../../../../../server/llmcall";
+import { resolveModel } from "../../../../../server/providers";
+import { withUsage } from "../../../../../server/usage";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

@@ -1,5 +1,5 @@
-import { limit, sameOrigin } from "../../../../authstore";
-import { connect, listConnectors } from "../../../../connectors";
+import { limit, sameOrigin } from "../../../../../server/authstore";
+import { connect, listConnectors } from "../../../../../server/connectors";
 import { connectorUser, policyOf, route } from "../../shared";
 
 export const runtime = "nodejs";

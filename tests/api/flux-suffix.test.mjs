@@ -1,4 +1,4 @@
-// Hậu tố nhiếp ảnh của FLUX (app/ai/replicate.ts): chủ dự án chốt chỉ nối cho ảnh chụp sản phẩm, không cho logo, tranh minh họa, hình vẽ;
+// Hậu tố nhiếp ảnh của FLUX (server/ai/replicate.ts): chủ dự án chốt chỉ nối cho ảnh chụp sản phẩm, không cho logo, tranh minh họa, hình vẽ;
 // chuỗi hậu tố phải đúng nguyên văn chủ dự án đưa (mục 6.4 của bản mô tả). Hàm thuần, không cần máy chủ, không gọi Replicate.
 import fs from "node:fs";
 import os from "node:os";
@@ -45,7 +45,7 @@ for (const p of ["iconic red sneakers on a concrete plinth", "bộ bút vẽ mà
 }
 
 console.log("5. Hướng dẫn công cụ cho model");
-const src = fs.readFileSync(path.join(process.cwd(), "app", "ai", "imagegen.ts"), "utf8");
+const src = fs.readFileSync(path.join(process.cwd(), "server", "ai", "imagegen.ts"), "utf8");
 ok(/product_shot: \{ type: "boolean", description: "[^"]*Không dùng cho logo, tranh, minh họa/.test(src), "product_shot nói rõ: không dùng cho logo, tranh, minh họa");
 
 fs.rmSync(tmp, { recursive: true, force: true });

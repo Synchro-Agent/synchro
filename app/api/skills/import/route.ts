@@ -1,8 +1,8 @@
-import { fetchGithubSkill, getSkill, LIMITS, NoSkillError, parseEntries, type Parsed, previewParsed, previewSkill, publicSkill, saveParsed, saveSkill, setSkillSource, skillErr } from "../../../skillstore";
-import { findLinkDup, linkDupMessage, linkKey, type LinkDup } from "../../../plugins";
-import { fetchGitRepo, RepoError } from "../../../repofetch";
-import { GEN, readRepo, skillFromRepo } from "../../../skillgen";
-import { limit } from "../../../authstore";
+import { fetchGithubSkill, getSkill, LIMITS, NoSkillError, parseEntries, type Parsed, previewParsed, previewSkill, publicSkill, saveParsed, saveSkill, setSkillSource, skillErr } from "../../../../server/skillstore";
+import { findLinkDup, linkDupMessage, linkKey, type LinkDup } from "../../../../server/plugins";
+import { fetchGitRepo, RepoError } from "../../../../server/repofetch";
+import { GEN, readRepo, skillFromRepo } from "../../../../server/skillgen";
+import { limit } from "../../../../server/authstore";
 import { route } from "../../../../server/route";
 
 export const runtime = "nodejs";

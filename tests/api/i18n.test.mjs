@@ -2,7 +2,7 @@
 // bản dịch tiếng Anh không được sót chữ tiếng Việt, và các luật dịch chuỗi ghép cho ra đúng câu. Không cần máy chủ.
 import { scan } from "../lib/i18n-scan.mjs";
 import { loadTs } from "../lib/ts.mjs";
-import { SRC_ROOTS } from "../lib/srcroots.mjs";
+import { SRC_ROOTS, findSrc } from "../lib/srcroots.mjs";
 let pass = 0, fail = 0;
 const ok = (c, n, x = "") => { c ? pass++ : fail++; console.log(c ? "  ✓" : "  ✗", n, c ? "" : String(x).slice(0, 1500)); };
 
@@ -66,7 +66,7 @@ const src = new Map(files.map((f) => [f, rf(f, "utf8")]));
 }
 // Chữ gốc tiếng Việt giữ như main, chỉ thêm ngữ cảnh: "Nhật ký" (Bộ não), "Bỏ qua" (phim giới thiệu), "Tắt" (CLI isolation).
 {
-  const code = (f) => src.get(P.join(process.cwd(), "app", f)) ?? "";
+  const code = (f) => src.get(P.join(process.cwd(), findSrc(f))) ?? "";
   ok(K("Nhật ký", "loại ghi chú") === "Daily note" && K("Nhật ký", "nhóm ghi chú") === "Daily notes" && code("brainui.tsx").includes('trc("Nhật ký", "loại ghi chú")') && code("brainui.tsx").includes('trc("Nhật ký", "nhóm ghi chú")') && !code("brainui.tsx").includes("Nhật ký ngày"),
     "Bộ não: nhóm và loại ghi chú vẫn là “Nhật ký” (Daily notes / Daily note)");
   ok(K("Bỏ qua", "phim giới thiệu") === "Skip" && code("introfilm.tsx").includes('trc("Bỏ qua", "phim giới thiệu")') && !code("introfilm.tsx").includes("Bỏ qua phim"), "phim giới thiệu: nút vẫn là “Bỏ qua” (Skip)");
@@ -97,7 +97,7 @@ const depsIn = (src) => (f, lazy = true) => [...src.get(f).matchAll(/(?:^|\n)\s*
   .filter((m) => (m[3] ? lazy : true) && (m[3] || !/^\{[^}]*\}$/.test(m[1].trim()) || !m[1].trim().slice(1, -1).split(",").every((x) => !x.trim() || /^type\s/.test(x.trim()))))
   .map((m) => { const b = P.resolve(P.dirname(f), m[2] ?? m[3]); return [b + ".ts", b + ".tsx", P.join(b, "index.ts")].find((x) => src.has(x)); }).filter(Boolean);
 const deps = depsIn(src);
-const srv = P.join(process.cwd(), "app", "i18n-server.ts");
+const srv = P.join(process.cwd(), "server", "i18n-server.ts");
 // Chuỗi nhập từ một tệp "use client" tới i18n-server.ts (nếu có).
 const clientLeak = (src) => {
   const dp = depsIn(src), client = new Map([...src.keys()].filter((f) => /^\s*["']use client["']/.test(src.get(f))).map((f) => [f, [f]]));
@@ -109,7 +109,7 @@ const leak = clientLeak(src);
 ok(users.length > 1 && !leak, `không tệp giao diện nào kéo theo i18n-server.ts (${users.length} tệp máy chủ nhập trực tiếp)`, leak?.map((f) => P.relative(process.cwd(), f)).join(" → "));
 // Phép chặn phải bắt được: tệp "use client" nhập gián tiếp i18n-server.ts qua một tệp thường.
 {
-  const a = P.join(process.cwd(), "app", "zz-thu-ui.tsx"), b = P.join(process.cwd(), "app", "zz-thu-helper.ts");
+  const a = P.join(P.dirname(srv), "zz-thu-ui.tsx"), b = P.join(P.dirname(srv), "zz-thu-helper.ts"); // tệp giả cạnh i18n-server.ts
   const fake = new Map([[a, `"use client";\nimport { helper } from "./zz-thu-helper";\n`], [b, `import { trOn } from "./i18n-server";\nexport const helper = trOn;\n`], [srv, src.get(srv)]]);
   const caught = clientLeak(fake);
   ok(caught?.length === 3 && caught[0] === a && caught[2] === srv, "phép chặn bắt được tệp giao diện kéo i18n-server.ts qua tệp trung gian", caught);
@@ -118,7 +118,7 @@ ok(users.length > 1 && !leak, `không tệp giao diện nào kéo theo i18n-serv
 }
 // Đường chat (chatengine.ts) không nhập tĩnh từ điển VI→EN: chỉ route cần dịch ở máy chủ (quét skill, xuất skill…) mới kéo nó vào, lúc được gọi.
 const reach = (start) => { const seen = new Map([[start, [start]]]); for (const q = [start]; q.length;) { const f = q.shift(); for (const d of deps(f, false)) if (!seen.has(d)) { seen.set(d, [...seen.get(f), d]); q.push(d); } } return seen; };
-const viaChat = reach(P.join(process.cwd(), "app", "chatengine.ts")).get(P.join(process.cwd(), "app", "i18n-dict.ts"));
+const viaChat = reach(P.join(process.cwd(), "server", "chatengine.ts")).get(P.join(process.cwd(), "app", "i18n-dict.ts"));
 ok(!viaChat, "chatengine.ts không nhập tĩnh từ điển VI→EN (i18n-dict.ts)", viaChat?.map((f) => P.relative(process.cwd(), f)).join(" → "));
 // Mẫu tf để trong bảng (khóa động, bộ quét không thấy): mọi giá trị phải là khóa có bản dịch giữ {biến}.
 const tbl = (file, name) => [...(rf(P.join(process.cwd(), file), "utf8").match(new RegExp(`const ${name}[^=]*= \\{([\\s\\S]*?)\\};`))?.[1] ?? "").matchAll(/:\s*"([^"]+)"/g)].map((m) => m[1]);

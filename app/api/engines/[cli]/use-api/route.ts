@@ -1,4 +1,4 @@
-import { setApiOptIn } from "../../../../ai/subs";
+import { setApiOptIn } from "../../../../../server/ai/subs";
 import { engineRoute, noStore } from "../../shared";
 
 export const runtime = "nodejs";

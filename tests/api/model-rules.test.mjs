@@ -1,6 +1,6 @@
 // Sổ model tự cập nhật: luật chung hiểu mã model của mọi hãng (app/modelrules.ts) — dòng model, số phiên bản so theo số, bản chụp có ngày,
 // model không dùng để nhắn tin, hạng model — trên danh sách giống API thật của từng hãng, kèm các mã lạ (-preview, -latest, -mini / -nano / -flash-lite).
-// Và chế độ Tự động (app/router.ts) chọn bản mới nhất của một dòng khi hãng ra model mới. Hàm thuần, không cần máy chủ.
+// Và chế độ Tự động (server/router.ts) chọn bản mới nhất của một dòng khi hãng ra model mới. Hàm thuần, không cần máy chủ.
 import { loadTs } from "../lib/ts.mjs";
 
 let pass = 0, fail = 0;

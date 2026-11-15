@@ -88,7 +88,7 @@ ok(!r.ok && lost.join() === "a1" && r.line === "Không dựng được ảnh meo
 lost.length = 0;
 r = B.settleBackground({ ids: ["a1"], names: ["meo.png"], files: [Buffer.from("x")], replace: () => { throw new Error("đĩa đầy"); }, failed: (id) => lost.push(id) });
 ok(!r.ok && lost.join() === "a1", "thay byte lỗi: đánh dấu hỏng, không ném lỗi");
-const eng = fs.readFileSync("app/chatengine.ts", "utf8");
+const eng = fs.readFileSync("server/chatengine.ts", "utf8");
 ok(/settleBackground\(\{ ids, names, files, failed: markGenFailed,/.test(eng) && /if \(rid && liveText\(rid\)\) \{ const seq = progress\("tool", r\.line\); if \(seq\) progress\("res"/.test(eng), "chatengine: lượt còn chạy thì dòng báo thành một bước trong nhật ký");
 ok(/void gen\.then\(\(res\) => settle\(res\.ok \? res\.files\.map\(\(f\) => f\.data\) : null\), \(\) => settle\(null\)\);/.test(eng), "chatengine: dựng hỏng / lỗi cũng báo, không im lặng");
 const { "i18n-dict": D } = await loadTs(["i18n-dict"]);

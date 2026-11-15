@@ -9,7 +9,7 @@
 // khoản, khóa lượt nằm trong tiến trình của web nên script này không biết lượt đang chạy ở web, và ngược lại.
 // Tùy chọn: --only=claude,grok   --quick (bỏ hai bài chờ lâu)   --slow-min=6   --hold-min=10   --model=claude:haiku,grok:grok-3   --verbose
 //   --image: tạo một ảnh thật bằng mỗi CLI đã đăng nhập (agy, grok, codex; Claude Code không có công cụ tạo ảnh). Mặc định tắt vì tốn hạn mức ảnh của gói.
-//            Đây là cách kiểm chứng những điều còn chưa biết: Grok lưu ảnh ở đâu, Codex gói trả phí có ghi vào generated_images/<thread_id>/ không (app/ai/imagegen.ts).
+//            Đây là cách kiểm chứng những điều còn chưa biết: Grok lưu ảnh ở đâu, Codex gói trả phí có ghi vào generated_images/<thread_id>/ không (server/ai/imagegen.ts).
 // Thời gian: CLI chạy song song, mỗi CLI tối đa khoảng 20 phút (hai bài chờ lâu). Mỗi CLI khoảng 8 lượt ngắn, thêm 3 lượt với Claude.
 //
 // Không đụng dữ liệu thật: DATA_DIR trỏ sang thư mục tạm, chỉ chép token đã mã hóa của đúng tài khoản này (và secret.key nếu có), xóa khi thoát. Cơ sở dữ liệu thật không được mở.

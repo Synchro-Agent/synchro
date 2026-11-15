@@ -1,4 +1,4 @@
-// Tệp và thư mục trong nhà engine (app/ai/cli_runtime.ts): khi có user riêng của engine, makeDir / writeEngineFile / listEngineDir / removeDir
+// Tệp và thư mục trong nhà engine (server/ai/cli_runtime.ts): khi có user riêng của engine, makeDir / writeEngineFile / listEngineDir / removeDir
 // gọi sudo bất đồng bộ (execFile), không còn spawnSync chặn cả máy chủ. Kết quả và lỗi giữ như trước.
 // Tự chạy được, không cần máy chủ: "sudo" giả trong PATH bỏ phần "-n -u <user> --" rồi chạy đúng lệnh còn lại.
 import fs from "node:fs";
@@ -14,7 +14,7 @@ const BIN = path.join(tmp, "bin"), LOG = path.join(tmp, "sudo.log");
 fs.mkdirSync(BIN, { recursive: true }); fs.mkdirSync(HOME, { recursive: true });
 fs.writeFileSync(path.join(BIN, "sudo"), `#!/bin/sh\necho "$@" >> "${LOG}"\n[ "$1" = "-n" ] && [ "$2" = "-u" ] && [ "$4" = "--" ] || exit 9\nshift 4\nexec "$@"\n`, { mode: 0o755 });
 process.env.PATH = `${BIN}:${process.env.PATH}`;
-const src = fs.readFileSync("app/ai/cli_runtime.ts", "utf8");
+const src = fs.readFileSync("server/ai/cli_runtime.ts", "utf8");
 process.env.DATA_DIR = path.join(tmp, "data"); fs.mkdirSync(process.env.DATA_DIR, { recursive: true });
 // Nạp chung một lần: cli_auth dùng đúng bản cli_runtime này (một bản nạp riêng sẽ đăng ký lại bộ đo RSS "cli" với danh sách CLI rỗng).
 const { "ai/cli_runtime": R, "ai/cli_auth": CA } = await loadTs(["ai/cli_runtime", "ai/cli_auth"]);
@@ -77,7 +77,7 @@ try {
   console.log("4. W23-19: thư mục đăng nhập tạo bất đồng bộ (cli_auth.ensureScopeDir), scopeDir chỉ tính đường dẫn");
   {
     process.env.SYNCHRO_ENGINE_USER = "synchro-engine";
-    const authSrc = fs.readFileSync("app/ai/cli_auth.ts", "utf8");
+    const authSrc = fs.readFileSync("server/ai/cli_auth.ts", "utf8");
     ok(!/makeDirSync/.test(src) && !/makeDirSync|spawnSync\(/.test(authSrc), "không còn makeDirSync / spawnSync cho thư mục đăng nhập");
     const d2 = path.join(HOME, "logins", "claude", "u1");
     ok(CA.scopeDir("claude", "u1") === d2 && !fs.existsSync(d2), "scopeDir chỉ trả đường dẫn, không tạo (không gọi sudo)");
@@ -95,7 +95,7 @@ try {
     ok(sudoCalls() - before === 3, "đã có: không gọi sudo lần nữa");
     const env = await CA.engineEnvReady("codex", "u1");
     ok(env.CODEX_HOME === path.join(HOME, "logins", "codex", "u1") && fs.existsSync(env.CODEX_HOME), "engineEnvReady: biến môi trường trỏ tới thư mục đã có", JSON.stringify(env));
-    const subs = fs.readFileSync("app/ai/subs.ts", "utf8");
+    const subs = fs.readFileSync("server/ai/subs.ts", "utf8");
     ok(!/engineEnv\(/.test(subs) && /engineEnvReady\(/.test(subs), "subs.ts chạy CLI bằng engineEnvReady (thư mục đã tạo trước khi chạy)");
   }
 

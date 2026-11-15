@@ -1,7 +1,7 @@
-import { handle, limit, requireUser, sameOrigin } from "../../../../authstore";
-import { overLimit } from "../../../../usage";
-import { runNow, TaskError } from "../../../../tasks";
-import { drainingResponse } from "../../../../drain";
+import { handle, limit, requireUser, sameOrigin } from "../../../../../server/authstore";
+import { overLimit } from "../../../../../server/usage";
+import { runNow, TaskError } from "../../../../../server/tasks";
+import { drainingResponse } from "../../../../../server/drain";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

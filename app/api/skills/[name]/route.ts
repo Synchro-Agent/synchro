@@ -1,10 +1,10 @@
-import { getSkill, publicSkill, readSkillRaw, removeSkill, restoreVersion, setEnabled, setProjectEnabled, SkillError, type Skill } from "../../../skillstore";
-import { setManual, userKey } from "../../../skillstudio";
-import { STUDIO_KINDS } from "../../../studiorules";
-import { dropPatches, hashText, listPatches, setPatch } from "../../../skillheal";
-import { current, featureGate } from "../../../authstore";
+import { getSkill, publicSkill, readSkillRaw, removeSkill, restoreVersion, setEnabled, setProjectEnabled, SkillError, type Skill } from "../../../../server/skillstore";
+import { setManual, userKey } from "../../../../server/skillstudio";
+import { STUDIO_KINDS } from "../../../../server/studiorules";
+import { dropPatches, hashText, listPatches, setPatch } from "../../../../server/skillheal";
+import { current, featureGate } from "../../../../server/authstore";
 import { route } from "../../../../server/route";
-import { timed } from "../../../servertiming";
+import { timed } from "../../../../server/servertiming";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

@@ -1,5 +1,5 @@
-import { AuthError, can, handle, requireUser, sameOrigin } from "../../../authstore";
-import { setStudioOverride, studioOf } from "../../../plugins";
+import { AuthError, can, handle, requireUser, sameOrigin } from "../../../../server/authstore";
+import { setStudioOverride, studioOf } from "../../../../server/plugins";
 
 export const runtime = "nodejs";
 

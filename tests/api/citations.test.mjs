@@ -1,4 +1,4 @@
-// Nguồn trích dẫn có favicon + số [n] (Connect Link của Composio không phải nguồn): máy chủ tải hộ ảnh qua bộ đệm (app/iconproxy.ts), chặn tên miền nội bộ,
+// Nguồn trích dẫn có favicon + số [n] (Connect Link của Composio không phải nguồn): máy chủ tải hộ ảnh qua bộ đệm (server/iconproxy.ts), chặn tên miền nội bộ,
 // một ảnh chỉ tải một lần dù nhiều yêu cầu cùng lúc, nhớ cả lần không tải được; số trích dẫn khớp đúng thứ tự nguồn của lượt.
 // Tự chạy được, không cần dev:mock: thư mục dữ liệu riêng, máy chủ ảnh giả lập chạy ngay trong tệp này.
 import fs from "node:fs";

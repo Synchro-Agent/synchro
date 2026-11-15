@@ -1,5 +1,5 @@
-import { AuthError, handle, requireUser, sameOrigin } from "../../authstore";
-import { answer } from "../../approvals";
+import { AuthError, handle, requireUser, sameOrigin } from "../../../server/authstore";
+import { answer } from "../../../server/approvals";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

@@ -3,7 +3,7 @@
 - **Trạng thái:** Đã chấp nhận. Đã làm bước 2–6 (engine, runtime, đăng nhập, ba engine, dự phòng API), tab Providers và vòng tròn usage. Công cụ của Synchro qua MCP còn để sau.
 - **Ngày:** 26/10/2026
 - **Phạm vi:** Cài đặt → Providers, bộ chọn model, lõi chat, vòng tròn usage
-- **Mã nguồn:** `app/ai/` (engine, selector, errors, cli_runtime, cli_auth, cli_engines, api_engine, subs), `app/api/engines/`, `app/providersui.tsx`, `scripts/mock-cli/`, `scripts/setup-engine-user.sh`
+- **Mã nguồn:** `server/ai/` (engine, selector, errors, cli_runtime, cli_auth, cli_engines, api_engine, subs), `app/api/engines/`, `app/providersui.tsx`, `scripts/mock-cli/`, `scripts/setup-engine-user.sh`
 
 ## Bối cảnh
 
@@ -45,7 +45,7 @@ Chính sách của các hãng (kiểm tra ngày 26/10/2026):
    - Token Claude nằm ở `<DATA_DIR>/engine-tokens/` (0600), ngoài thư mục của CLI.
    - Gói chỉ dùng cho đúng tài khoản đã đăng nhập.
    - Đăng xuất xóa hẳn thư mục đó và token.
-5. **Lớp Engine chung** (`app/ai/engine.ts`):
+5. **Lớp Engine chung** (`server/ai/engine.ts`):
    - `TurnRequest`: `prompt`, `system`, `model`, `sessionId`, `workdir`, `env`, `history`, `signal`.
    - Luồng sự kiện: `text`, `session`, `usage` (kèm `limits` của gói), `final` (kèm `via`), `error` (`code`: quota / auth / other / aborted / timeout).
    - `engineFor(provider)` chọn `claude`, `codex`, `agy`, `api:<hãng>` hoặc `echo`.
@@ -60,13 +60,13 @@ Chính sách của các hãng (kiểm tra ngày 26/10/2026):
 7. **Công cụ của Synchro qua MCP: chưa làm.** Hiện lượt chat bằng gói chỉ có văn bản; skill, connector, chạy code và artifact vẫn chạy bằng engine API.
    - Công cụ có sẵn của CLI bị tắt: `claude --tools ""`, Codex chạy sandbox chỉ đọc.
    - Bước sau: máy chủ MCP nội bộ, mỗi lượt một mã riêng, nối vào `claude --mcp-config --strict-mcp-config`, `codex -c mcp_servers…` và `mcp_config.json` của `agy`.
-8. **An toàn tiến trình** (`app/ai/cli_runtime.ts`):
+8. **An toàn tiến trình** (`server/ai/cli_runtime.ts`):
    - Biến môi trường chỉ giữ `LANG`, `TZ`, `HOME`, `PATH`, `CLAUDE_CONFIG_DIR`, `CLAUDE_CODE_OAUTH_TOKEN`, `CODEX_HOME`. Riêng khi chạy pty thì thêm `TERM`.
    - Đầu ra gửi về trình duyệt và ghi log đều đi qua `redact()`. Mã người dùng dán (terminal in lại) cũng được che.
    - Lệnh mở trình duyệt (`open`, `xdg-open`…) bị thay bằng lệnh giả: CLI trên máy chủ không bao giờ tự mở trình duyệt.
    - Mỗi tiến trình là một process group riêng. Bấm Dừng hoặc chạy quá 30 phút thì kill cả nhóm.
    - `SYNCHRO_ENGINE_USER` chạy CLI bằng user hệ thống riêng qua `sudo -n -u <user> -- env -i …`, nên CLI không đọc được cơ sở dữ liệu hay khóa của Synchro. Root chạy `scripts/setup-engine-user.sh` một lần để tạo user và quy tắc sudo.
-9. **Engine khóa API làm dự phòng** (`app/ai/api_engine.ts`):
+9. **Engine khóa API làm dự phòng** (`server/ai/api_engine.ts`):
    - Gói báo hết hạn mức trước khi kịp trả chữ nào: chuyển sang khóa API cùng hãng (claude → Anthropic, codex → OpenAI, agy → Google), nếu quản trị viên đã thêm khóa và người dùng còn hạn mức chi phí API.
    - Lỗi đăng nhập không chuyển sang API: Synchro nhắc người dùng đăng nhập lại.
    - Khóa API chỉ quản trị viên nhập và dùng chung toàn hệ thống. ElevenLabs chỉ dùng khóa API.

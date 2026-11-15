@@ -1,6 +1,6 @@
-import { storedFile } from "../../../fileproc";
-import { current, featureGate } from "../../../authstore";
-import { timed } from "../../../servertiming";
+import { storedFile } from "../../../../server/fileproc";
+import { current, featureGate } from "../../../../server/authstore";
+import { timed } from "../../../../server/servertiming";
 
 export const runtime = "nodejs";
 

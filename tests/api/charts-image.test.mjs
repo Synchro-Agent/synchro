@@ -50,7 +50,7 @@ console.log("3. Dockerfile và setup.sh");
   ok(/\/opt\/synchro\/charts\/node_modules/.test(d) && !/tala/i.test(d.replace(/TALA là phần mềm thương mại nên không dùng/g, "")), "require(\"echarts\") ở mọi thư mục; không dùng TALA");
   ok(/CHART_FILES=.*find charts -type f -not -path 'charts\/node_modules\/\*'/.test(s) && /\$REMOTION_FILES \$DOC_FILES \$CHART_FILES/.test(s), "setup.sh: đổi tệp biểu đồ thì dựng lại image");
   ok(/charts\/node_modules/.test(read("workspace/.dockerignore")), ".dockerignore bỏ node_modules của biểu đồ");
-  const c = read("app/coderun.ts");
+  const c = read("server/coderun.ts");
   ok(/synchro-chart spec\.json/.test(c) && /d2 --layout=elk/.test(c) && /openpyxl\.chart/.test(c), "hướng dẫn model: synchro-chart, ECharts SSR, biểu đồ gốc Office, D2");
 }
 console.log(`\n${pass} đạt, ${fail} lỗi`);

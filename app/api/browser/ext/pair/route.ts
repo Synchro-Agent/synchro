@@ -1,6 +1,6 @@
-import { AuthError, audit, clientIp, handle, limit } from "../../../../authstore";
-import { avatarOf, extAllowed, redeemPairCode } from "../../../../browserext";
-import { setUserCaps } from "../../../../caps";
+import { AuthError, audit, clientIp, handle, limit } from "../../../../../server/authstore";
+import { avatarOf, extAllowed, redeemPairCode } from "../../../../../server/browserext";
+import { setUserCaps } from "../../../../../server/caps";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

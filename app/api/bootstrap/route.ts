@@ -1,6 +1,6 @@
-import { current, handle } from "../../authstore";
-import { bootEtag, bootOf, etagMatch } from "../../bootdata";
-import { prewarmLater } from "../../modelslist";
+import { current, handle } from "../../../server/authstore";
+import { bootEtag, bootOf, etagMatch } from "../../../server/bootdata";
+import { prewarmLater } from "../../../server/modelslist";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

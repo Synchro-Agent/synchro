@@ -9,7 +9,7 @@
 # 3. Chép bản build đang chạy (.next) sang .next-green, bật synchro-green ở cổng 3002 (ecosystem.config.cjs), kiểm tra /api/health.
 #    Không đạt: dừng green, không đổi gì nữa.
 # 4. nginx chuyển sang 3002, kiểm tra qua nginx; dừng rồi xóa app pm2 cũ "synchro" (cổng 3000), ghi màu sống = green, pm2 save.
-#    green nhận vai primary khi tiến trình cũ đã thoát (app/role.ts).
+#    green nhận vai primary khi tiến trình cũ đã thoát (server/role.ts).
 # 5. /etc/synchro-ops.env: PM2/PORT của watchdog theo màu sống (watchdog cũng tự đọc tệp màu sống).
 # Sau đó mỗi lần deploy (scripts/server-build.sh) tự dùng xanh/lam: bản mới ở màu nghỉ (blue 3000 ⇄ green 3002), bản cũ thoát sau khi nginx chuyển.
 set -euo pipefail
@@ -24,7 +24,7 @@ if command -v flock >/dev/null 2>&1; then
 fi
 say() { echo "• $*"; }
 DATA="${DATA_DIR:-$APP/data}"
-# Bản build có mã xanh/lam (app/role.ts: khóa primary; app/drain.ts: tắt êm). Bản cũ hơn chạy ở green thì thành primary thứ hai ngay khi bật
+# Bản build có mã xanh/lam (server/role.ts: khóa primary; server/drain.ts: tắt êm). Bản cũ hơn chạy ở green thì thành primary thứ hai ngay khi bật
 # và không thoát khi nhận SIGTERM: không được chuyển.
 has_bg_code() { grep -rqs "SYNCHRO_PRIMARY_LOCK" "$1/server" && grep -rqs "NEXT_MANUAL_SIG_HANDLE" "$1/server"; }
 primary_color() { awk 'NR==1{print $2}' "$DATA/.primary.pid" 2>/dev/null || true; }
@@ -125,7 +125,7 @@ if [ "$RESUME" = 0 ]; then
   # Bản đang chạy phải chính là .next này (lần deploy kiểu cũ có thể đã lỗi rồi trả bản trước về) và phải có mã xanh/lam.
   RUNNING=$( { curl -sS --max-time 5 "http://127.0.0.1:$OLDPORT/api/health" 2>/dev/null || true; } | sed -n 's/.*"build":"\([^"]*\)".*/\1/p')
   [ "$RUNNING" = "$ID" ] || { echo "Bản đang chạy ở cổng $OLDPORT (${RUNNING:-không trả lời}) không phải $APP/.next ($ID): deploy lại bằng cách cũ cho đạt rồi chạy lại." >&2; exit 1; }
-  has_bg_code "$APP/.next" || { echo "Bản build đang chạy ($ID) chưa có mã xanh/lam (app/role.ts, app/drain.ts): deploy bản này bằng cách cũ cho đạt (build ok) rồi chạy lại." >&2; exit 1; }
+  has_bg_code "$APP/.next" || { echo "Bản build đang chạy ($ID) chưa có mã xanh/lam (server/role.ts, server/drain.ts): deploy bản này bằng cách cũ cho đạt (build ok) rồi chạy lại." >&2; exit 1; }
 fi
 if [ "$RESUME" = 1 ] && has_bg_code "$APP/.next-green" && bg_healthy 3002 "$(cat "$APP/.next-green/BUILD_ID" 2>/dev/null)"; then
   ID=$(cat "$APP/.next-green/BUILD_ID")
@@ -155,7 +155,7 @@ if ! bg_via_nginx "$ID"; then
   echo "CẢNH BÁO: chưa đọc được /api/health qua nginx (https://$BG_HOST, --resolve 127.0.0.1). Cả hai bản cùng mã $ID nên kiểm tra cổng:" >&2
 fi
 [ "$(bg_upstream_port)" = 3002 ] || { bg_switch_upstream "$OLDPORT" || true; bg_stop green; echo "nginx không trỏ 3002: trả về $OLDPORT." >&2; exit 1; }
-# Bản cũ chưa có tắt êm (app/drain.ts): nginx đã đưa lượt mới sang green, nên chờ tối đa 25 giây cho các lượt bắt đầu trước lúc chuyển
+# Bản cũ chưa có tắt êm (server/drain.ts): nginx đã đưa lượt mới sang green, nên chờ tối đa 25 giây cho các lượt bắt đầu trước lúc chuyển
 # chạy xong ở bản cũ (đọc bảng runs, cần sqlite3). Lượt còn dở sau đó được green chạy lại khi nhận vai primary.
 SWITCHED=$(( $(date +%s) * 1000 ))
 if command -v sqlite3 >/dev/null 2>&1 && [ -f "$APP/data/synchro.db" ]; then

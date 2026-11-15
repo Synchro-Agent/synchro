@@ -1,5 +1,5 @@
-import { handle, requireUser, sameOrigin } from "../../authstore";
-import { addMemory, clearMemory, deleteMemory, listMemory, memCfg, setMemCfg } from "../../memory";
+import { handle, requireUser, sameOrigin } from "../../../server/authstore";
+import { addMemory, clearMemory, deleteMemory, listMemory, memCfg, setMemCfg } from "../../../server/memory";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

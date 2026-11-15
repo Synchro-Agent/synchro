@@ -1,4 +1,4 @@
-// Đọc tệp văn phòng và tệp nén trong tiến trình riêng (app/fileproc/extractors.ts gọi): tệp người dùng tải lên là dữ liệu không tin được.
+// Đọc tệp văn phòng và tệp nén trong tiến trình riêng (server/fileproc/extractors.ts gọi): tệp người dùng tải lên là dữ liệu không tin được.
 // - Zip bomb hay bảng tính khổng lồ chỉ làm chết tiến trình này (giới hạn bộ nhớ, thời gian ở phía gọi), không kéo sập máy chủ web đang giữ luồng trả lời của mọi người.
 // - Lỗi prototype pollution của thư viện xlsx 0.18.5 mất theo tiến trình, không lọt vào máy chủ web.
 // Cách gọi: node scripts/extract-worker.mjs <docx|xlsx|csv|pptx|zip> <tên tệp>; nội dung tệp vào stdin, stdout là JSON { text } hoặc { error: "too_big" | "bad" }.
@@ -14,7 +14,7 @@ const XLSX_MAX_ROWS = 200;
 // Đủ cho hàng nghìn trang; phần trên mức này model cũng không đọc hết (tệp lớn đi qua RAG), mà JSON quá lớn làm nặng máy chủ web khi nhận về.
 const TEXT_MAX = 16_000_000;
 
-// CSV đến từ app/fileproc/extractors.ts đã được giải mã sẵn thành UTF-8 (decodeText dùng chung với tệp .txt): ở đây chỉ còn là lối dự phòng
+// CSV đến từ server/fileproc/extractors.ts đã được giải mã sẵn thành UTF-8 (decodeText dùng chung với tệp .txt): ở đây chỉ còn là lối dự phòng
 // cho tệp chữ trong .zip và cho ai gọi thẳng tiến trình này với byte gốc.
 function decodeText(buf) {
   if (buf[0] === 0xff && buf[1] === 0xfe) return new TextDecoder("utf-16le").decode(buf);

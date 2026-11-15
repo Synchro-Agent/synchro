@@ -12,7 +12,7 @@ import os from "node:os";
 import path from "node:path";
 import { PAIR_ALLOW, VI, extract, scan } from "../lib/i18n-scan.mjs";
 import { loadTs } from "../lib/ts.mjs";
-import { SRC_ROOTS } from "../lib/srcroots.mjs";
+import { SRC_ROOTS, findSrc } from "../lib/srcroots.mjs";
 
 const ts = createRequire(path.join(process.cwd(), "package.json"))("typescript");
 let pass = 0, fail = 0;
@@ -214,7 +214,7 @@ const { "i18n-dict": D, "i18n-vi": V } = await loadTs(["i18n-dict", "i18n-vi"]);
   ok(/\bket noi\b/.test(hay) && /\bconnectors\b/.test(hay), "lệnh Connectors trong bảng lệnh vẫn tìm được bằng “kết nối” / “ket noi”", hay);
   ok(D.VI2EN["Skill ‹tên mục›"] === "Skills" && D.VI2EN["Kho kỹ năng"] === "Skill Hub", "Skill → Skills, Kho kỹ năng → Skill Hub ở giao diện tiếng Anh");
   // "Hội thoại" là Dialogue (công cụ của Speech); lịch sử đoạn chat trong ngữ cảnh model là "Lịch sử hội thoại".
-  const src = (f) => readFileSync(path.join(process.cwd(), "app", f), "utf8");
+  const src = (f) => readFileSync(findSrc(f), "utf8");
   ok(D.VI2EN["Hội thoại"] === "Dialogue" && D.VI2EN["Lịch sử hội thoại"] === "Conversation" && /history: "Lịch sử hội thoại"/.test(src("mixer.tsx")) && /k: "Lịch sử hội thoại"/.test(src("codeview.tsx")),
     "“Hội thoại” (Dialogue) chỉ còn ở Speech; ngữ cảnh model ghi “Lịch sử hội thoại” (Conversation)");
 }

@@ -1,10 +1,10 @@
-import { audit, clientIp, handle, isOwner, limit, ownerOnly, requireAdmin, sameOrigin, type UserRow } from "../../../authstore";
-import { litestreamAdmin, restoreDrill, saveLitestream } from "../../../litestream";
+import { audit, clientIp, handle, isOwner, limit, ownerOnly, requireAdmin, sameOrigin, type UserRow } from "../../../../server/authstore";
+import { litestreamAdmin, restoreDrill, saveLitestream } from "../../../../server/litestream";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-// Cài đặt → Sức khỏe hệ thống → Sao lưu liên tục (app/litestream.ts). Quản trị viên xem trạng thái và chạy thử khôi phục; lưu / gỡ cấu hình R2
+// Cài đặt → Sức khỏe hệ thống → Sao lưu liên tục (server/litestream.ts). Quản trị viên xem trạng thái và chạy thử khôi phục; lưu / gỡ cấu hình R2
 // và bật / tắt chỉ chủ sở hữu, quản trị viên khác cũng không thấy Account ID và Access Key ID. Không bao giờ trả khóa bí mật.
 const view = async (u: UserRow) => {
   const s = await litestreamAdmin();

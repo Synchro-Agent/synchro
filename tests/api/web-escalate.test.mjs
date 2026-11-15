@@ -101,7 +101,7 @@ console.log("4. W23-6 / SEC-8 (D2.1): máy chủ tự mở trang trong trình du
 }
 {
   const fs = await import("node:fs");
-  const eng = fs.readFileSync("app/chatengine.ts", "utf8");
+  const eng = fs.readFileSync("server/chatengine.ts", "utf8");
   ok(/escalateSearch\(x, await searchWeb\(/.test(eng), "web_search đi qua escalateSearch (máy chủ tự mở trang)");
   ok(/checkUrl\(url\)/.test(eng) && /siteRule\(x\.uid/.test(eng), "trang tự mở phải qua checkUrl (chặn địa chỉ nội bộ) và quy tắc trang của người dùng");
   ok(/c\.name === "browser_text" && r\.stalled/.test(eng), "browser_text mỏng: máy chủ tự chờ rồi đọc lại");

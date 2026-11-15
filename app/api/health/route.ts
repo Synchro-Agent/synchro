@@ -3,9 +3,9 @@
 // (đĩa gần đầy hay dịch vụ workspace tắt không phải lỗi của bản mới, trả bản cũ về cũng không hết).
 import fs from "node:fs";
 import path from "node:path";
-import { DATA_DIR, setSetting } from "../../authstore";
-import { agentAlive, wsConfigured } from "../../workspace";
-import { timed } from "../../servertiming";
+import { DATA_DIR, setSetting } from "../../../server/authstore";
+import { agentAlive, wsConfigured } from "../../../server/workspace";
+import { timed } from "../../../server/servertiming";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

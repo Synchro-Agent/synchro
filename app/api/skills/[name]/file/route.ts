@@ -1,6 +1,6 @@
-import { getSkill, readSkillFile, SkillError } from "../../../../skillstore";
-import { current, featureGate } from "../../../../authstore";
-import { timed } from "../../../../servertiming";
+import { getSkill, readSkillFile, SkillError } from "../../../../../server/skillstore";
+import { current, featureGate } from "../../../../../server/authstore";
+import { timed } from "../../../../../server/servertiming";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

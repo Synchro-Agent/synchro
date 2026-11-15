@@ -1,4 +1,4 @@
-import { handle, requestEmailChange, requireUser, sameOrigin } from "../../../authstore";
+import { handle, requestEmailChange, requireUser, sameOrigin } from "../../../../server/authstore";
 
 export const runtime = "nodejs";
 

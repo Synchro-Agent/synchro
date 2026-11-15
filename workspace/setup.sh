@@ -154,7 +154,7 @@ install_ops() {
 }
 install_ops || echo "CẢNH BÁO: chưa cài được watchdog hoặc lịch sao lưu (trang Sức khỏe hệ thống sẽ báo)." >&2
 
-# 6. Litestream (sao lưu liên tục lên Cloudflare R2, app/litestream.ts; quản trị viên bật ở Cài đặt → Sức khỏe hệ thống, xem docs/backup-r2.md).
+# 6. Litestream (sao lưu liên tục lên Cloudflare R2, server/litestream.ts; quản trị viên bật ở Cài đặt → Sức khỏe hệ thống, xem docs/backup-r2.md).
 # Bản cố định, kiểm sha256 trước khi cài (checksums.txt của bản phát hành v0.5.17). Đã đúng bản thì không tải lại. Lỗi ở đây không làm hỏng deploy:
 # web vẫn chạy, chỉ là chưa sao lưu liên tục được (trang Sức khỏe hệ thống báo "Máy chủ chưa cài litestream").
 install_litestream() {

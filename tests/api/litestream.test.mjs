@@ -1,4 +1,4 @@
-// Sao lưu liên tục bằng Litestream (app/litestream.ts). Tự chạy được, không cần dev:mock.
+// Sao lưu liên tục bằng Litestream (server/litestream.ts). Tự chạy được, không cần dev:mock.
 // 1-3: cấu hình R2 và quản lý tiến trình với một litestream giả (shell script): tệp cấu hình 0600 không có khóa, khóa đi qua biến môi trường,
 //      chạy lại khi đổi cấu hình, tự chạy lại khi chết, dừng khi tắt; khóa bí mật mã hóa, không ra trình duyệt.
 // 4: có litestream thật (LITESTREAM_BIN hoặc trong PATH) thì chạy thật với bản sao dạng thư mục: ghi dữ liệu, chờ đồng bộ, "Kiểm tra khôi phục"

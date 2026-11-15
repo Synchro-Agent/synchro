@@ -1,4 +1,4 @@
-import { adminRevokeSession, handle, requireAdmin, sameOrigin } from "../../../../authstore";
+import { adminRevokeSession, handle, requireAdmin, sameOrigin } from "../../../../../server/authstore";
 
 export const runtime = "nodejs";
 type Ctx = { params: Promise<{ id: string }> };

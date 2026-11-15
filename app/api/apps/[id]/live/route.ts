@@ -1,8 +1,8 @@
-import { AppError } from "../../../../appstore";
-import { current } from "../../../../authstore";
-import { checkApp, join } from "../../../../collab";
-import type { LiveEvent } from "../../../../live";
-import { timed } from "../../../../servertiming";
+import { AppError } from "../../../../../server/appstore";
+import { current } from "../../../../../server/authstore";
+import { checkApp, join } from "../../../../../server/collab";
+import type { LiveEvent } from "../../../../../server/live";
+import { timed } from "../../../../../server/servertiming";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

@@ -1,5 +1,5 @@
 // Chế độ Tự động: nhận dạng loại việc và độ khó trên một bộ câu có nhãn (tiếng Việt và tiếng Anh), rồi kiểm tra model và mức nỗ lực.
-// Hàm thuần, không cần máy chủ: dịch app/router.ts bằng TypeScript rồi gọi trực tiếp.
+// Hàm thuần, không cần máy chủ: dịch server/router.ts bằng TypeScript rồi gọi trực tiếp.
 // Ca gốc: hỏi vài câu tiếng Anh mà bị chọn gemini-4-argon · nỗ lực "cao hơn" (extra) — câu hỏi ngôn ngữ không bao giờ cần mức đó.
 import { loadTs } from "../lib/ts.mjs";
 

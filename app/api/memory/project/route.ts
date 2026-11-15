@@ -1,7 +1,7 @@
-import { handle, limit, requireUser, sameOrigin } from "../../../authstore";
+import { handle, limit, requireUser, sameOrigin } from "../../../../server/authstore";
 import { splitArtifacts } from "../../../artifacts";
-import { OneShotErr, quickCall } from "../../../ai/anymodel";
-import { memCfg } from "../../../memory";
+import { OneShotErr, quickCall } from "../../../../server/ai/anymodel";
+import { memCfg } from "../../../../server/memory";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

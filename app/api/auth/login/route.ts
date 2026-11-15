@@ -1,5 +1,5 @@
-import { AuthError, appUrl, clientIp, handle, login, publicUser, sameOrigin, withCookies } from "../../../authstore";
-import { loginNeedsCaptcha, noteLoginFailure, requireTurnstile } from "../../../turnstile";
+import { AuthError, appUrl, clientIp, handle, login, publicUser, sameOrigin, withCookies } from "../../../../server/authstore";
+import { loginNeedsCaptcha, noteLoginFailure, requireTurnstile } from "../../../../server/turnstile";
 
 export const runtime = "nodejs";
 

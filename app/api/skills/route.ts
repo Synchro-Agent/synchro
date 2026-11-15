@@ -1,8 +1,8 @@
-import { ensureStudioTags, listSkills, previewSkill, publicSkill, saveSkill, skillErr, SkillError } from "../../skillstore";
-import { current, featureGate } from "../../authstore";
+import { ensureStudioTags, listSkills, previewSkill, publicSkill, saveSkill, skillErr, SkillError } from "../../../server/skillstore";
+import { current, featureGate } from "../../../server/authstore";
 import { route } from "../../../server/route";
-import { refining } from "../../skillstudio";
-import { timed } from "../../servertiming";
+import { refining } from "../../../server/skillstudio";
+import { timed } from "../../../server/servertiming";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

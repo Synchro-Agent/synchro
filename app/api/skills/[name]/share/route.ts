@@ -1,6 +1,6 @@
-import { isAdmin } from "../../../../authstore";
-import { getSkill, removeSkill, skillErr } from "../../../../skillstore";
-import { listPlugins, PluginError, publishSkill } from "../../../../plugins";
+import { isAdmin } from "../../../../../server/authstore";
+import { getSkill, removeSkill, skillErr } from "../../../../../server/skillstore";
+import { listPlugins, PluginError, publishSkill } from "../../../../../server/plugins";
 import { route } from "../../../../../server/route";
 
 export const runtime = "nodejs";

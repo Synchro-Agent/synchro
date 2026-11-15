@@ -1,6 +1,6 @@
 "use client";
 
-// Phần trình duyệt của khóa truy cập (app/passkeys.ts). Thư viện @simplewebauthn/browser chỉ tải khi cần (trang đăng nhập nhẹ như cũ).
+// Phần trình duyệt của khóa truy cập (server/passkeys.ts). Thư viện @simplewebauthn/browser chỉ tải khi cần (trang đăng nhập nhẹ như cũ).
 import type { AuthenticationResponseJSON } from "@simplewebauthn/browser";
 
 const lib = () => import("@simplewebauthn/browser");

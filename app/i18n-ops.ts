@@ -258,7 +258,7 @@ const ALERT_EN: Record<string, string> = {
   "Bản sao lưu mới nhất không qua kiểm tra toàn vẹn.": "The newest backup failed its integrity check.",
   "Từ 3 người trở lên bị hãng từ chối đăng nhập trong 24 giờ qua. Có thể CLI hoặc hãng vừa đổi gì đó.": "Three or more people were refused sign-in by a vendor in the last 24 hours. A CLI or vendor may have changed something.",
 };
-// Cập nhật CLI của các gói (app/ai/cliupdate.ts): kết quả từng CLI ở Cài đặt → Providers. Phần sau dấu hai chấm là đầu ra của CLI, giữ nguyên.
+// Cập nhật CLI của các gói (server/ai/cliupdate.ts): kết quả từng CLI ở Cài đặt → Providers. Phần sau dấu hai chấm là đầu ra của CLI, giữ nguyên.
 const CLIU_EN: Record<string, string> = {
   "Nguồn thử nghiệm không có bản phát hành.": "The test source has no release.",
   "Nguồn thử nghiệm không có bản này.": "The test source doesn't have this version.",
@@ -289,7 +289,7 @@ export const OPS_RULES_EN: Rule[] = [
   [/^([\s\S]+) Vẫn dùng bản đang chạy\.$/, (m) => `${cliuEn(m[1])} Still using the current version.`],
   ...Object.entries(CLIU_EN).map(([vi, en]): Rule => [new RegExp(`^${vi.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`), () => en]),
   ...CLIU_RULES,
-  // Thông báo trong Hộp thư: cảnh báo vận hành (app/ops.ts) và chủ email giành lại tài khoản (app/claim.ts).
+  // Thông báo trong Hộp thư: cảnh báo vận hành (server/ops.ts) và chủ email giành lại tài khoản (server/claim.ts).
   [/^(.+) Xem chi tiết ở Cài đặt → Sức khỏe hệ thống\.$/, (m) => `${ALERT_EN[m[1]] ?? m[1]} See Settings → System health.`],
   [/^(Mật khẩu cũ đã được gỡ vì email chưa từng được xác minh, nên có thể do người khác đặt\. Nếu vẫn muốn đăng nhập bằng email, hãy đặt mật khẩu mới trong Cài đặt → Tài khoản\. )?Các thiết bị khác đã được đăng xuất, tiện ích Chrome đã ghép nối được gỡ(, connector đã được tắt \(bật lại trong Cài đặt nếu đúng là của bạn\))?\. (Hướng dẫn tùy chỉnh và ký ức trong tài khoản đã được xóa vì chúng có thể do người khác đặt\.|Hãy kiểm tra hướng dẫn tùy chỉnh trong Cài đặt\.)$/, (m) => `${m[1] ? "The old password was removed because this email was never verified, so someone else may have set it. To sign in with email, set a new password in Settings → Account. " : ""}Other devices were signed out and the paired Chrome extension was removed${m[2] ? ", and connectors were turned off (turn them back on in Settings if they're yours)" : ""}. ${m[3].startsWith("Hướng") ? "Custom instructions and memories in this account were deleted because someone else may have set them." : "Check your custom instructions in Settings."}`],
   [/^Bạn đã dùng hết (\d+) MB dung lượng tệp tải lên\. Xóa bớt tệp cũ ở Cài đặt → Quyền riêng tư\.$/, (m) => `You've used all ${m[1]} MB of your upload space. Delete old files in Settings → Privacy.`],

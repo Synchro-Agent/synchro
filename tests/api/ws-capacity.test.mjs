@@ -43,7 +43,7 @@ ok(/MAX_RUNNING = ramSlots\("WS_MAX_RUNNING", 1536, 4, 3, 32\)/.test(src), "MAX_
   ok(/runQ\.running > 0 \|\| mediaQ\.running > 0 \|\| replying > 0/.test(src), "tắt dịch vụ chờ cả lần dựng video đang dở");
 }
 ok(!/ramSlots\([^)]*0\.[23],/.test(src), "không còn hệ số chia 0,3 / 0,2");
-ok(!/CLI_SHARE/.test(fs.readFileSync("app/turngate.ts", "utf8")), "turngate không còn CLI_SHARE");
+ok(!/CLI_SHARE/.test(fs.readFileSync("server/turngate.ts", "utf8")), "turngate không còn CLI_SHARE");
 
 console.log("5. INT-1: MEDIA_MAX theo cùng RAM thật, không quá RUN_MAX, đặt tay thì theo");
 {
@@ -129,18 +129,18 @@ console.log("7. W23-4 / G3.2: hàng chờ có vị trí cho RAM và chỗ worksp
   ok(/waitMem\(WS_FLOOR_MB/.test(src), "bật workspace cũng chờ RAM (trước docker run)");
   ok(/vị trí \$\{m\.pos\} trong hàng chờ bộ nhớ/.test(src), "hết giờ chờ RAM: lời báo có vị trí");
   ok(/\.\.\.\(queue \? \{ queue \} : \{\}\)/.test(src), "runOnce trả queue cho người gọi");
-  const cr = fs.readFileSync("app/coderun.ts", "utf8");
+  const cr = fs.readFileSync("server/coderun.ts", "utf8");
   ok(/queue\?: RunQueue/.test(cr) && /\.\.\.\(queue \? \{ queue \} : \{\}\)/.test(cr), "coderun chuyển queue sang RunOutput");
   ok(/RUN_QUEUE_ALLOW_SEC\) \* 1000/.test(cr), "coderun chờ đủ lâu cho hàng chờ của workspace (không bỏ ngang trước khi có vị trí)");
 }
 {
   // Người dùng thấy vị trí trong hàng ở dòng tiến trình của lượt chat, có bản tiếng Anh.
-  const ce = fs.readFileSync("app/chatengine.ts", "utf8");
+  const ce = fs.readFileSync("server/chatengine.ts", "utf8");
   ok(/queueReporter\(AsyncResource\.bind\(\(t: string\) => \{ progress\("note", t\); \}\)\)/.test(ce) && /onQueue: \(q\) => waitLine\.push\(q\)/.test(ce), "W23-4: run_code báo vị trí hàng chờ thành dòng tiến trình TRONG LÚC chờ (đúng lượt nhờ AsyncResource.bind)");
   ok(/if \(r\.queue && !waitLine\.shown\) progress\("note", queueNote\(r\.queue\)\)/.test(ce), "đã báo trong lúc chờ thì không báo lại sau khi chạy");
   const { loadTs } = await import("../lib/ts.mjs");
   const { "i18n-dict": { RULES_EN } } = await loadTs(["i18n-dict"]);
-  const cr = fs.readFileSync("app/coderun.ts", "utf8");
+  const cr = fs.readFileSync("server/coderun.ts", "utf8");
   const body = cr.match(/export function queueNote\(q: RunQueue\): string \{([\s\S]*?)\n\}/)?.[1] ?? "";
   const queueNote = new Function("q", body);
   const en = (t) => { for (const [re, f] of RULES_EN) { const m = t.match(re); if (m) return f(m); } return null; };

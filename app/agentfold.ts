@@ -1,6 +1,6 @@
 // Gộp sự kiện agent vào một lượt của phiên Code. Dùng chung ở trình duyệt (vẽ dần) và máy chủ (lưu lượt khi trình duyệt đã đi chỗ khác),
 // để hai bên ra cùng một kết quả. Không có tác dụng phụ nào ở đây.
-import type { AgentEvent } from "./agentcore";
+import type { AgentEvent } from "../server/agentcore";
 
 type Step = Record<string, unknown> & { k: string };
 export type FoldNode = { ai?: string; steps?: unknown[]; plan?: unknown; usage?: { input: number; output: number }; skills?: string[] };
