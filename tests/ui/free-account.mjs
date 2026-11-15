@@ -3,8 +3,14 @@
 // Đọc văn bản, Chép lời ở chế độ Tự động; ghi model được chọn, thời gian và lời báo khi chạm hạn mức. Mỗi việc phải ra kết quả, hoặc chạm
 // hạn mức với lời báo nói đủ: hạn mức nào, bao giờ hồi, cách thay thế (H1.2). Rồi cố ý chạm từng hạn mức: chi phí API của Synchro (cả
 // thẻ lỗi trên trang thật, máy tính và 390px), gói ChatGPT, credit giọng AI (Đọc văn bản, Chép lời) — và kiểm không vượt hạn mức của hãng.
+// Ma trận thật trên synchro.net.nz (synchro-work/h1-free-matrix.md, 2026-11-15) được dựng lại ở đây phần nào giả lập được: T2 bảy tệp có đáp án
+// cài sẵn (cả pdf, docx), T3 sáu tệp khó (wav, m4a, webp, zip hỏng, .xyz chữ, md), mức giọng AI chung của máy chủ đã cạn (Đọc văn bản, Chép lời,
+// hai tệp âm thanh cùng lúc trong chat, số credit ở đầu trang Speech), gói hết hạn mức giữa lượt Tự động (lời báo nói hạn mức gói nào, bao giờ hồi;
+// vòng mức dùng hiện gói đang bị chặn), Tự động chạy bằng khóa API chung khi đã có gói (một dòng báo tính vào hạn mức chi phí API), vùng
+// aria-live không giữ câu trả lời của trang trước.
 // Bảng kết quả in ra cuối và ghi JSON vào <tmp>/synchro-ui/free-account.json (OUT để đổi). Chạy tay: BASE=http://localhost:3200 node tests/ui/free-account.mjs
 import { mkdirSync, writeFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { openChrome, sleep, waitFor } from "../lib/cdp.mjs";
@@ -38,6 +44,7 @@ console.log(`Hồ sơ: ${u.email} · ${profile.role || "?"} · ${profile.verifie
 ok(profile.verified && !profile.verifyLocked, "tài khoản đã xác minh email như người dùng thật", profile);
 ok(!me0.isAdmin && profile.role !== "admin", "không phải quản trị viên (quyền mặc định của thành viên, không cấp thêm)", profile);
 const rows = [];
+let plansOn = false;
 const db = () => u.db();
 const setUsageOver = (on) => {
   const d = db();
@@ -63,6 +70,56 @@ const setSpeechSpent = (credits) => {
   } finally { d.close(); }
 };
 
+// Mức giọng AI chung của cả máy chủ hôm nay (dòng user_id "*" của speech_budget, server/speechapi.ts addSpend). Ma trận thật: mức chung cạn từ
+// 10:06 UTC trong khi tài khoản miễn phí chưa dùng credit nào. Giữ giá trị cũ để trả lại đúng như trước khi chạy.
+const DAY = () => new Date().toISOString().slice(0, 10);
+const sharedSpent = () => { const d = db(); try { return d.prepare("SELECT credits FROM speech_budget WHERE day = ? AND user_id = '*'").get(DAY())?.credits ?? null; } catch { return null; } finally { d.close(); } };
+const setSharedSpent = (credits) => {
+  const d = db();
+  try {
+    d.exec("CREATE TABLE IF NOT EXISTS speech_budget (day TEXT NOT NULL, user_id TEXT NOT NULL, credits INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (day, user_id))");
+    if (credits === null) d.prepare("DELETE FROM speech_budget WHERE day = ? AND user_id = '*'").run(DAY());
+    else d.prepare("INSERT INTO speech_budget (day, user_id, credits) VALUES (?, ?, ?) ON CONFLICT(day, user_id) DO UPDATE SET credits = excluded.credits").run(DAY(), "*", credits);
+  } finally { d.close(); }
+};
+const sharedBefore = sharedSpent();
+let sharedTouched = false;
+// Trong lúc chạy, mức chung bắt đầu từ 0 (mức chung của bản giả lập nhỏ, các lượt chạy trước cộng dồn credit thật sẽ chạm trần giữa chừng); xong trả lại số cũ.
+const sharedOut = (on) => { sharedTouched = true; setSharedSpent(on ? 100_000_000 : 0); };
+sharedOut(false);
+
+// Tải một tệp lên như khung soạn (POST /api/files).
+async function upload(name, data, type) {
+  const fd = new FormData(); fd.set("file", new Blob([data], { type }), name);
+  const r = await fetch(`${B}/api/files`, { method: "POST", headers: { origin: B, cookie: u.cookie }, body: fd });
+  const j = await r.json().catch(() => ({}));
+  return { name, s: r.status, j, why: String(j.error ?? j.note ?? "") };
+}
+// PDF một trang có một dòng chữ (đủ xref để trình đọc PDF mở như tệp thật).
+function pdfWith(text) {
+  const stream = `BT /F1 18 Tf 72 760 Td (${text}) Tj ET`;
+  const objs = ["<< /Type /Catalog /Pages 2 0 R >>", "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>",
+    `<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`, "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>"];
+  let out = "%PDF-1.4\n";
+  const offs = objs.map((o, i) => { const at = out.length; out += `${i + 1} 0 obj\n${o}\nendobj\n`; return at; });
+  const x = out.length;
+  out += `xref\n0 ${objs.length + 1}\n0000000000 65535 f \n${offs.map((o) => `${String(o).padStart(10, "0")} 00000 n \n`).join("")}trailer\n<< /Size ${objs.length + 1} /Root 1 0 R >>\nstartxref\n${x}\n%%EOF\n`;
+  return Buffer.from(out, "latin1");
+}
+// Word thật (thư viện docx của dự án): một đoạn có đáp án.
+async function docxWith(text) {
+  const { Document, Packer, Paragraph } = createRequire(path.join(process.cwd(), "package.json"))("docx");
+  return Packer.toBuffer(new Document({ sections: [{ children: [new Paragraph("Biên bản giao nhận"), new Paragraph(text)] }] }));
+}
+// Âm thanh giả: WAV / M4A đúng phần đầu tệp (máy giả lập ElevenLabs chép lời bất kỳ nội dung nào). seed: đổi nội dung để không trùng tệp đã đọc.
+const wav = (seed = "") => Buffer.concat([Buffer.from("RIFF\x24\x08\x00\x00WAVEfmt ", "latin1"), Buffer.from(`mock-audio-${seed}`)]);
+const m4a = (seed = "") => Buffer.concat([Buffer.from([0, 0, 0, 0x20]), Buffer.from("ftypM4A \x00\x00\x02\x00isomiso2", "latin1"), Buffer.from(`mock-m4a-${seed}`)]);
+const WEBP = "UklGRhoAAABXRUJQVlA4TA0AAAAvAAAAEAcQERGIiP4HAA==";
+// Lời báo hạn mức giọng AI chung của máy chủ (server/limitmsg.ts speechLimitMsg "all").
+const SHARED_VOICE = /hạn mức chung của cả máy chủ/;
+const BUSY = /đang đọc nhiều tệp cùng lúc/;
+
 // Lượt chạy bền như giao diện: nhận mã lượt rồi đọc tới khi xong.
 async function run(body, ms = 240_000) {
   const t0 = Date.now();
@@ -79,7 +136,11 @@ function record(id, ask, r, extra = {}) {
   const err = r.res?.error ?? (r.http >= 400 ? JSON.stringify(r.res).slice(0, 200) : "");
   const limit = r.http === 429 || (!!err && LIMIT.test(err)) ? String(r.res?.error ?? err) : "";
   const row = { id, ask, model: r.res?.model ?? extra.model ?? "", auto: r.res?.auto ? `${r.res.auto.tier ?? ""}/${r.res.auto.vendor ?? ""}` : "", seconds: Math.round(r.ms / 100) / 10, http: r.http, files: filesOf(r.res), notice: r.res?.notice ?? "", limit, error: limit ? "" : err };
+  row.keyNote = r.res?.keyNote ?? "";
   rows.push(row);
+  // Tự động chạy bằng khóa API chung trong khi tài khoản đã có gói (T10 trên máy thật: Claude Opus 5.5 không một lời báo): phải có dòng báo.
+  if (r.http === 200 && plansOn && r.res?.auto && row.model && !/^sub-/.test(row.model))
+    ok(/khóa API chung của Synchro/.test(row.keyNote) && /hạn mức chi phí API/.test(row.keyNote), `${id}: chạy bằng khóa API chung (${row.model}) có dòng báo tính vào hạn mức chi phí API`, row);
   const answered = r.http === 200 && !err && (String(r.res?.text ?? "").trim().length > 0 || row.files.length > 0 || extra.done === true);
   ok(answered || (!!limit && complete(limit)), `${id} ${ask}: ${answered ? `${row.model || "?"} · ${row.seconds}s${row.files.length ? ` · ${row.files.join(", ")}` : ""}` : limit ? `chạm hạn mức, lời báo đủ ý` : "không có kết quả"}`, row);
   return row;
@@ -131,6 +192,19 @@ try {
     ok(await t.ev(`document.documentElement.scrollWidth <= innerWidth + 1 && [...document.querySelectorAll(".msg-err")].every((e) => e.getBoundingClientRect().right <= innerWidth + 1)`), `${label}: thẻ lỗi nằm trọn màn hình, không cuộn ngang`);
     await t.shot(`free-limit-${w}`);
     await t.P("Fetch.disable");
+    if (w < 600) continue;
+    // Lỗi 13 của ma trận: vùng trạng thái cho trình đọc màn hình (aria-live) vẫn giữ câu trả lời của đoạn chat cũ sau khi sang trang khác.
+    // Lỗi 1: mức giọng AI chung đã cạn mà đầu trang Speech vẫn ghi "3.000 credit hôm nay".
+    const live = `(document.querySelector(".sr-only[role=status][data-notr]")?.textContent ?? "").trim()`;
+    const before = await waitFor(() => t.ev(live), 5_000, { every: 250 });
+    sharedOut(true);
+    await t.ev(`location.hash = "#v=speech"`);
+    const credit = await waitFor(() => t.ev(`(document.querySelector(".sp-credit-n")?.textContent ?? "").trim()`), 60_000, { every: 300 });
+    ok(!(await t.ev(live)), `${label}: sang Speech thì vùng aria-live không còn lời báo của đoạn chat trước`, { before, after: await t.ev(live) });
+    ok(/^0\b/.test(credit), `${label}: mức giọng AI chung đã cạn → đầu trang Speech hiện còn 0 credit, không hiện số riêng còn nguyên (${credit || "không hiện thẻ credit"})`, credit);
+    ok(/hạn mức chung|shared limit/.test(await t.ev(`document.querySelector(".sp-credit")?.title ?? ""`)), `${label}: chú thích thẻ credit nói hạn mức chung của máy chủ đã hết`);
+    await t.shot("free-speech-shared");
+    sharedOut(false);
   }
   t.close(); t = null;
   setUsageOver(false);
@@ -139,39 +213,68 @@ try {
   const plans = {};
   for (const cli of ["codex", "agy", "grok"]) plans[cli] = await loginPlan(cli);
   ok(plans.codex, "đăng nhập gói ChatGPT (giả lập)", plans);
+  plansOn = Object.values(plans).some(Boolean);
   ok(!(await u.api("GET", "/api/engines/claude/status?fresh=1")).j?.loggedIn, "không có gói Claude (đúng hồ sơ tài khoản miễn phí)");
 
   console.log("━━ 3. Ma trận T1–T8, Word, video, Đọc văn bản, Chép lời (chế độ Tự động)");
   const auto = (content) => ({ model: "auto", messages: [{ role: "user", content }] });
   record("T1", "2+2 bằng mấy", await run(auto("2+2 bằng mấy")));
   {
-    // T2: tải lên như giao diện (POST /api/files), rồi gửi chữ đã đọc + ảnh kèm câu hỏi.
+    // T2 (như máy thật): 7 tệp có đáp án cài sẵn, tải lên như giao diện (POST /api/files); phần chữ đọc được phải chứa đúng đáp án, rồi gửi chữ + ảnh kèm 6 câu hỏi.
     const PNG = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
-    const files = [["ghi-chu.md", "# Kho\nTồn kho bút: 120 cây", "text/markdown"], ["kho.csv", "mat_hang,so_luong,don_gia\nbut,120,5000\nvo,80,12000", "text/csv"],
-      ["cau-hinh.json", JSON.stringify({ cua_hang: "Synchro", mo_cua: "08:00" }), "application/json"], ["loi-nhan.txt", "Giao hàng trước thứ Sáu.", "text/plain"], ["mau.png", Buffer.from(PNG, "base64"), "image/png"]];
+    const files = [
+      ["kho.md", "# Kho\nMã kho: KHO-7319\nTồn kho bút: 120 cây", "text/markdown", /KHO-7319/],
+      ["tonkho.csv", "mat_hang,so_luong,don_gia\nbut,120,5000\nvo,30,8000", "text/csv", /vo\W+30\W+8\.?000/],
+      ["duan.json", JSON.stringify({ du_an: "Synchro", han_chot: "2026-12-24" }), "application/json", /2026-12-24/],
+      ["ghichu.txt", "Món bánh khách đặt: Bơ Sữa.", "text/plain", /Bơ Sữa/],
+      ["anh.png", Buffer.from(PNG, "base64"), "image/png", null],
+      // PDF ngắn đi thẳng tới model dưới dạng tài liệu (không có bản chữ trong preview): chỉ kiểm tải lên được.
+      ["hopdong.pdf", pdfWith("Hop dong so HD-5521"), "application/pdf", null],
+      ["bienban.docx", await docxWith("Người ký nhận: Trần Văn Bình"), "application/vnd.openxmlformats-officedocument.wordprocessingml.document", /Trần Văn Bình/],
+    ];
     const up = [];
-    for (const [name, data, type] of files) {
-      const fd = new FormData(); fd.set("file", new Blob([data], { type }), name);
-      const r = await fetch(`${B}/api/files`, { method: "POST", headers: { origin: B, cookie: u.cookie }, body: fd });
-      up.push({ name, s: r.status, j: await r.json().catch(() => ({})) });
-    }
-    ok(up.every((x) => x.s === 200), "T2: 5 tệp (md, csv, json, txt, png) tải lên được", up.map((x) => `${x.name}:${x.s}`).join(" "));
+    for (const [name, data, type, want] of files) up.push({ ...(await upload(name, data, type)), want });
+    ok(up.every((x) => x.s === 200), "T2: 7 tệp (md, csv, json, txt, png, pdf, docx) tải lên được", up.map((x) => `${x.name}:${x.s} ${x.why}`).join(" | "));
+    for (const x of up.filter((f) => f.want)) ok(x.want.test(x.j?.preview ?? ""), `T2: ${x.name} đọc ra đúng đáp án cài sẵn (${x.want.source})`, String(x.j?.preview ?? x.why).slice(0, 300));
     const content = [...up.filter((x) => x.j?.preview).map((x) => ({ type: "text", text: `Tệp ${x.name}:\n${x.j.preview}` })), { type: "image", media_type: "image/png", data: PNG },
-      { type: "text", text: "Đọc các tệp đính kèm: tổng tiền hàng trong kho.csv là bao nhiêu, cửa hàng mở cửa lúc mấy giờ?" }];
-    record("T2", "Đọc 5 tệp, câu hỏi có đáp án", await run({ model: "auto", messages: [{ role: "user", content }] }));
+      { type: "text", text: "Đọc các tệp đính kèm và trả lời: mã kho là gì; tiền vở trong tonkho.csv là bao nhiêu; hạn chót dự án; món bánh khách đặt; số hợp đồng; người ký nhận?" }];
+    record("T2", "Đọc 7 tệp, 6 câu hỏi có đáp án", await run({ model: "auto", messages: [{ role: "user", content }] }));
   }
   {
-    // T3: tệp khó (âm thanh, zip hỏng, đuôi lạ): mỗi tệp được đọc hoặc bị từ chối kèm lý do rõ, không im lặng.
-    const odd = [["ghi-am.wav", Buffer.from("RIFF0000WAVEfmt mock-audio"), "audio/wav"], ["hong.zip", Buffer.from("PK\x03\x04hong"), "application/zip"], ["du-lieu.xyz", Buffer.from([0, 1, 2, 3, 250, 251]), "application/octet-stream"]];
+    // T3 (như máy thật): 6 tệp khó — wav, m4a, webp, zip hỏng, .xyz là chữ, md. Mỗi tệp được đọc hoặc bị từ chối kèm lý do rõ, không im lặng.
+    const odd = [["tieng.wav", wav("t3"), "audio/wav"], ["ghiam.m4a", m4a("t3"), "audio/mp4"], ["hinh.webp", Buffer.from(WEBP, "base64"), "image/webp"],
+      ["hong.zip", Buffer.from("PK\x03\x04hong", "latin1"), "application/zip"], ["dulieu.xyz", Buffer.from("du lieu la: 12345\n"), "application/octet-stream"], ["sukien.md", "# Sự kiện\nMã: ONG-VANG-12", "text/markdown"]];
     const t0 = Date.now(), res = [];
-    for (const [name, data, type] of odd) {
-      const fd = new FormData(); fd.set("file", new Blob([data], { type }), name);
-      const r = await fetch(`${B}/api/files`, { method: "POST", headers: { origin: B, cookie: u.cookie }, body: fd });
-      const j = await r.json().catch(() => ({}));
-      res.push({ name, s: r.status, why: j.error ?? j.note ?? j.kind ?? "" });
-    }
-    ok(res.every((x) => x.s === 200 || (x.s === 422 && String(x.why).length > 15)), "T3: tệp khó được đọc hoặc bị từ chối kèm lý do", res);
-    rows.push({ id: "T3", ask: "Tệp khó: wav, zip hỏng, đuôi .xyz", model: "(tải lên)", seconds: Math.round((Date.now() - t0) / 100) / 10, http: 200, limit: "", files: [], notice: res.map((x) => `${x.name}: ${x.s} ${String(x.why).slice(0, 80)}`).join(" | ") });
+    for (const [name, data, type] of odd) res.push(await upload(name, data, type));
+    ok(res.every((x) => x.s === 200 || (x.s === 422 && x.why.length > 15)), "T3: tệp khó được đọc hoặc bị từ chối kèm lý do", res.map((x) => `${x.name}:${x.s} ${x.why}`));
+    const by = Object.fromEntries(res.map((x) => [x.name, x]));
+    ok(by["hinh.webp"].s === 200, "T3: ảnh webp tải lên được", by["hinh.webp"]);
+    ok(by["dulieu.xyz"].s === 200 && /12345/.test(by["dulieu.xyz"].j?.preview ?? ""), "T3: tệp đuôi lạ .xyz mà là chữ thì đọc như văn bản", by["dulieu.xyz"]);
+    ok(/ONG-VANG-12/.test(by["sukien.md"].j?.preview ?? ""), "T3: md đọc đúng", by["sukien.md"]);
+    ok(by["hong.zip"].s === 422 && /hỏng|không mở được|damaged/i.test(by["hong.zip"].why), "T3: zip hỏng bị từ chối, lý do nói tệp nén bị hỏng", by["hong.zip"]);
+    rows.push({ id: "T3", ask: "Tệp khó: wav, m4a, webp, zip hỏng, .xyz, md", model: "(tải lên)", seconds: Math.round((Date.now() - t0) / 100) / 10, http: 200, limit: "", files: [], notice: res.map((x) => `${x.name}: ${x.s} ${x.why.slice(0, 80)}`).join(" | ") });
+  }
+  {
+    // Lỗi 2 và 5 của ma trận: mức giọng AI chung của máy chủ đã cạn (tài khoản này chưa dùng credit nào). Hai tệp âm thanh chọn cùng lúc trong chat:
+    // CẢ HAI phải báo đúng lý do (hạn mức chung, giờ hồi, dùng micro của trình duyệt), không tệp nào nhận câu "máy chủ đang đọc nhiều tệp".
+    sharedOut(true);
+    const pair = await Promise.all([upload("cung-luc.wav", wav(`pair-${Date.now()}`), "audio/wav"), upload("cung-luc.m4a", m4a(`pair-${Date.now()}`), "audio/mp4")]);
+    for (const x of pair) ok(x.s === 422 && SHARED_VOICE.test(x.why) && complete(x.why) && /micro/.test(x.why) && !BUSY.test(x.why), `T3: ${x.name} gửi cùng lúc khi mức giọng chung đã cạn → báo đúng hạn mức (không phải "máy chủ bận")`, x.why || x.s);
+    const t0 = Date.now();
+    const tts = await u.api("POST", "/api/speech/tts", { text: "Xin chào đây là bài thử đọc văn bản tiếng Việt của Synchro nhé." });
+    const fd = new FormData(); fd.set("file", new Blob([wav("t13")], { type: "audio/wav" }), "clip3s.wav");
+    const r = await fetch(`${B}/api/speech/stt`, { method: "POST", headers: { origin: B, cookie: u.cookie }, body: fd });
+    const stt = await r.json().catch(() => ({}));
+    ok(tts.s === 429 && tts.j?.code === "budget" && SHARED_VOICE.test(tts.j?.error ?? "") && complete(tts.j.error), "T12: Đọc văn bản khi mức chung đã cạn: báo hạn mức chung, giờ hồi, giọng trình duyệt", tts.j);
+    ok(r.status === 429 && stt.code === "budget" && SHARED_VOICE.test(stt.error ?? "") && complete(stt.error) && /micro/.test(stt.error), "T13: Chép lời khi mức chung đã cạn: báo hạn mức chung, giờ hồi, micro của trình duyệt", stt);
+    // Lỗi 1: số credit ở đầu trang Speech chỉ tính hạn mức riêng ("3.000 credit hôm nay" trước và sau khi bị chặn).
+    const pl = (await u.api("GET", "/api/speech/plan")).j ?? {};
+    if (pl.connected && pl.credits?.limit > 0) ok(pl.credits.shared === true, "Speech: /api/speech/plan báo mức chung đã cạn (credits.shared) để đầu trang hiện còn 0", pl.credits);
+    rows.push({ id: "T12", ask: "Đọc văn bản khi mức giọng chung đã cạn", model: "Eleven v4", seconds: Math.round((Date.now() - t0) / 100) / 10, http: tts.s, limit: tts.j?.error ?? "" });
+    rows.push({ id: "T13", ask: "Chép lời khi mức giọng chung đã cạn", model: "Scribe v2", seconds: 0, http: r.status, limit: stt.error ?? "" });
+    sharedOut(false);
+    const pl2 = (await u.api("GET", "/api/speech/plan")).j ?? {};
+    ok(!pl2.credits?.shared, "Speech: mức chung còn thì không còn cờ shared", pl2.credits);
   }
   record("T4", "Markdown 14 thành phần", await run(auto("Viết một ví dụ Markdown có tiêu đề, danh sách 3 cấp, ô tích, bảng căn phải, code, công thức KaTeX, sơ đồ mermaid, trích dẫn, gạch ngang, chú thích.")));
   record("T5", "Excel bảng lương 5 người", await run(auto("Tạo file Excel bảng lương 5 người, có công thức và biểu đồ")));
@@ -191,6 +294,26 @@ try {
     const r = await fetch(`${B}/api/speech/stt`, { method: "POST", headers: { origin: B, cookie: u.cookie }, body: fd });
     const j = await r.json().catch(() => ({}));
     record("STT", "Speech → Chép lời tệp WAV", { http: r.status, res: r.status === 200 ? { model: j?.item?.meta?.model ?? "Scribe", text: j?.data?.text ?? "" } : j, ms: Date.now() - t0 });
+  }
+
+  console.log("━━ 3b. Gói hết hạn mức giữa lượt Tự động (T8 trên máy thật: \"Grok 4.7 hit its limit, so Synchro answered with GPT-5.6 Terra.\")");
+  {
+    // Lượt dò: Tự động chọn gói nào cho câu này, rồi gửi lại đúng câu đó kèm dấu [mock:quota:<cli>] để CHỈ gói đó báo hết hạn mức.
+    const ASK = "Tóm tắt ngắn gọn trong hai câu: Synchro là trợ lý AI làm việc cùng bạn.";
+    const probe = await run(auto(ASK));
+    const cli = /^sub-([a-z]+)\//.exec(probe.res?.model ?? "")?.[1];
+    if (ok(!!cli, `Tự động chọn model của gói cho câu dò (${probe.res?.model ?? probe.res?.error})`, probe.res)) {
+      const r = await run(auto(`${ASK} [mock:quota:${cli}]`));
+      const sw = r.res?.switched ?? "";
+      ok(r.http === 200 && !new RegExp(`^sub-${cli}/`).test(r.res?.model ?? ""), `gói ${cli} hết hạn mức: Tự động trả lời bằng gói khác (${r.res?.model ?? r.res?.error})`, r.res);
+      ok(/đã hết hạn mức, nên Synchro đã trả lời bằng/.test(sw) && complete(sw) && /Hạn mức (gói|riêng của) .+ hồi lại sau \d+/.test(sw), "lời báo dưới câu trả lời nói đủ: hạn mức gói nào, bao giờ hồi, đang dùng gì thay", sw);
+      rows.push({ id: "T8q", ask: `Gói ${cli} hết hạn mức giữa lượt Tự động`, model: r.res?.model ?? "", seconds: Math.round(r.ms / 100) / 10, http: r.http, notice: sw, limit: "" });
+      // Lỗi 3 (phần sau): vòng mức dùng và Cài đặt → Usage không hiện gói đang bị chặn dù máy chủ biết giờ hồi.
+      const us = (await u.api("GET", "/api/usage?all=1")).j ?? {};
+      const v = us.vendors?.find((x) => x.sub?.cli === cli || x.cli === cli);
+      const w = v?.sub?.windows?.find((x) => x.status === "rejected");
+      ok(!!w && Number(w.resetsAt) > Date.now(), `vòng mức dùng: gói ${cli} hiện đã chạm giới hạn kèm giờ hồi (${w ? new Date(w.resetsAt).toISOString() : "không có"})`, v ?? us);
+    }
   }
 
   console.log("━━ 4. Chạm từng hạn mức: lời báo đủ ý, không vượt hạn mức của hãng");
@@ -216,6 +339,18 @@ try {
     const blocked = e.quota === "plan" ? /^sub-codex\//.test(after.res?.model ?? "") : after.res?.model === cx;
     ok(!blocked, `sau khi gói ChatGPT hết hạn mức (${e.quota ?? "?"}), Tự động không gọi lại (không vượt hạn mức của hãng): ${after.res?.model ?? after.res?.error}`, after.res);
   }
+  {
+    // bp.md:275 / T10 trên máy thật: mọi gói đã kết nối tạm hết hạn mức (hoặc Tự động chọn model khóa API) → lượt chạy bằng khóa API chung của
+    // chủ máy chủ. Được chạy (còn hạn mức chi phí API) nhưng phải có một dòng báo lượt này tính vào hạn mức chi phí API, không phải gói.
+    const keys = (await u.api("GET", "/api/models")).j?.providers?.flatMap((p) => p.models ?? []).map((m) => m.key ?? m.id).filter(Boolean) ?? [];
+    for (const cli of ["codex", "agy", "grok"].filter((c) => plans[c])) {
+      const k = keys.find((x) => x.startsWith(`sub-${cli}/`) && (cli !== "agy" || /gemini/.test(x)));
+      if (k) await run({ model: k, messages: [{ role: "user", content: "Chào [mock:quota]" }] });
+    }
+    record("T10k", "Mọi gói tạm hết hạn mức, Tự động dùng khóa API chung", await run(auto("Viết một câu chào ngắn cho đội ngũ Synchro")));
+    const last = rows.at(-1);
+    ok(plansOn && !!last.model && !/^sub-/.test(last.model) && /khóa API chung/.test(last.keyNote), `Tự động sang khóa API chung (${last.model}) kèm dòng báo: ${last.keyNote.slice(0, 80)}`, last);
+  }
   setSpeechSpent(10_000_000);
   {
     const tts = await u.api("POST", "/api/speech/tts", { text: "Câu này không được đọc vì đã hết credit hôm nay." });
@@ -231,12 +366,12 @@ try {
   ok(false, "chạy hết kịch bản", e?.stack ?? String(e));
 } finally {
   try { t?.close(); } catch {}
-  try { setUsageOver(false); setSpeechSpent(null); } catch {}
+  try { setUsageOver(false); setSpeechSpent(null); if (sharedTouched) setSharedSpent(sharedBefore); } catch {}
   await u.remove();
 }
 
 console.log(`\n━━ Ma trận tài khoản miễn phí (giả lập) · ${profile.verified ? "đã xác minh" : "chưa xác minh"} · model ${JSON.stringify(profile.models)} · tính năng tắt: ${profile.featuresOff.join(", ") || "(không)"}`);
-for (const r of rows) console.log(`${String(r.id).padEnd(5)} ${String(r.ask).padEnd(46).slice(0, 46)} ${String(r.model || "-").padEnd(28).slice(0, 28)} ${String(r.seconds ?? "-").padStart(6)}s  ${r.limit ? `HẠN MỨC: ${String(r.limit).slice(0, 140)}` : r.error ? `LỖI: ${String(r.error).slice(0, 120)}` : r.notice ? String(r.notice).slice(0, 120) : "ok"}`);
+for (const r of rows) console.log(`${String(r.id).padEnd(5)} ${String(r.ask).padEnd(46).slice(0, 46)} ${String(r.model || "-").padEnd(28).slice(0, 28)} ${String(r.seconds ?? "-").padStart(6)}s  ${r.limit ? `HẠN MỨC: ${String(r.limit).slice(0, 140)}` : r.error ? `LỖI: ${String(r.error).slice(0, 120)}` : r.notice ? String(r.notice).slice(0, 120) : r.keyNote ? `KHÓA API CHUNG: ${String(r.keyNote).slice(0, 100)}` : "ok"}`);
 try { mkdirSync(path.dirname(OUT), { recursive: true }); writeFileSync(OUT, JSON.stringify({ at: new Date().toISOString(), base: B, profile, rows }, null, 2)); console.log(`\nBảng JSON: ${OUT}`); } catch {}
 console.log(`\n${pass}/${pass + fail} đạt`);
 await sleep(10);
