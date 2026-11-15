@@ -40,7 +40,7 @@ ok(next && next.max < 100, "sau mỗi lần ghi bộ đếm được đặt lạ
 console.log("2. Bật lúc máy chủ khởi động");
 const inst = fs.readFileSync("instrumentation-node.ts", "utf8");
 { const entry = fs.readFileSync("instrumentation.ts", "utf8"); ok(/NEXT_RUNTIME === "nodejs"[\s\S]*import\("\.\/instrumentation-node"\)\)\.registerNode\(\)/.test(entry), "instrumentation.ts (điểm vào thật của Next) gọi registerNode() ở runtime Node"); }
-ok(/import\("\.\/app\/loopdelay"\)\)\.startLoopMonitor\(/.test(inst), "instrumentation-node.ts gọi startLoopMonitor()");
+ok(/import\("\.\/server\/loopdelay"\)\)\.startLoopMonitor\(/.test(inst), "instrumentation-node.ts gọi startLoopMonitor()");
 ok(/monitorEventLoopDelay\(\{ resolution: 20 \}\)/.test(fs.readFileSync("server/loopdelay.ts", "utf8").replace("resolution: RESOLUTION", "resolution: 20")), "lấy mẫu mỗi 20 ms");
 
 console.log("3. Cài đặt → Sức khỏe hệ thống");
