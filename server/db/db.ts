@@ -6,6 +6,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { DISK_FULL, diskLow } from "../diskfloor";
 import { AuthError } from "../auth/errors";
+import { migrate } from "../../db/migrate.mjs";
 
 export const DATA_DIR = process.env.DATA_DIR ?? path.join(process.cwd(), "data");
 
@@ -22,15 +23,8 @@ export function db() {
   d.pragma("mmap_size = 268435456");
   d.pragma("foreign_keys = ON");
   d.pragma("busy_timeout = 5000");
-  d.exec(fs.readFileSync(path.join(process.cwd(), "db", "schema.sql"), "utf8"));
-  // Bảng tạo từ bản cũ chưa có các cột hồ sơ: thêm vào (CREATE IF NOT EXISTS không tự làm việc này).
-  const cols = new Set((d.prepare("PRAGMA table_info(users)").all() as { name: string }[]).map((c) => c.name));
-  for (const c of ["full_name", "nickname", "birth_date", "occupation", "perms", "instructions", "role"]) if (!cols.has(c)) d.exec(`ALTER TABLE users ADD COLUMN ${c} TEXT`);
-  const sk = new Set((d.prepare("PRAGMA table_info(skills)").all() as { name: string }[]).map((c) => c.name));
-  if (!sk.has("use_count")) d.exec("ALTER TABLE skills ADD COLUMN use_count INTEGER NOT NULL DEFAULT 0");
-  if (!sk.has("last_used_at")) d.exec("ALTER TABLE skills ADD COLUMN last_used_at INTEGER");
-  // Link repo đã dùng để thêm skill (khóa so trùng của plugins.linkKey): không cho thêm lại cùng một link.
-  if (!sk.has("source")) d.exec("ALTER TABLE skills ADD COLUMN source TEXT");
+  // Mọi bảng, chỉ mục, cột của mọi mô-đun: db/migrations/ theo PRAGMA user_version (db/migrate.mjs). Lỗi thì ném ra, không mở kết nối dở.
+  try { migrate(d); } catch (e) { d.close(); throw e; }
   // Mốc bật xác minh email: tài khoản tạo trước mốc này giữ nguyên quyền như cũ, không phải làm gì thêm.
   d.prepare("INSERT OR IGNORE INTO settings (key, value) VALUES ('verify_since', ?)").run(String(Date.now()));
   healAdminEmails(d);

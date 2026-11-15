@@ -12,16 +12,9 @@ export type ArtSummary = Omit<ArtRow, "versions"> & { count: number; preview: st
 // totalBytes / lockedBytes: tổng dung lượng một tài khoản (chưa xác minh email thì ít hơn): 500 artifact x 50 bản x 400 KB là tới 10 GB mỗi tài khoản.
 export const ART_LIMITS = { content: 400_000, versions: 50, perUser: 500, totalBytes: 500_000_000, lockedBytes: 100_000_000 };
 
-let ready = false;
+// Bảng artifacts: db/migrations/001_baseline.sql (bộ chạy migration tạo khi mở cơ sở dữ liệu).
 function init() {
-  const d = db();
-  if (!ready) {
-    d.exec(`CREATE TABLE IF NOT EXISTS artifacts (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, conv TEXT NOT NULL, ident TEXT NOT NULL, title TEXT NOT NULL,
-      type TEXT NOT NULL, lang TEXT, versions TEXT NOT NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, UNIQUE(user_id, conv, ident));
-      CREATE INDEX IF NOT EXISTS artifacts_user ON artifacts(user_id, updated_at)`);
-    ready = true;
-  }
-  return d;
+  return db();
 }
 
 type Raw = Omit<ArtRow, "versions"> & { versions: string };

@@ -8,16 +8,9 @@ import { addNotice } from "./tasks";
 import { enter, publish, type LiveEvent } from "./live";
 
 const fail = (m: string, status = 400): never => { throw new AppError(m, status); };
-let ready = false;
+// Bảng app_comments: db/migrations/001_baseline.sql (bộ chạy migration tạo khi mở cơ sở dữ liệu).
 function init() {
-  const d = db();
-  if (!ready) {
-    d.exec(`CREATE TABLE IF NOT EXISTS app_comments (id TEXT PRIMARY KEY, app TEXT NOT NULL, user_id TEXT NOT NULL, body TEXT NOT NULL,
-      mentions TEXT NOT NULL DEFAULT '[]', resolved INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL);
-      CREATE INDEX IF NOT EXISTS app_comments_app ON app_comments(app, created_at)`);
-    ready = true;
-  }
-  return d;
+  return db();
 }
 const nameOf = (u?: Pick<UserRow, "name" | "email" | "full_name" | "nickname"> | null) => (u ? u.nickname || u.full_name || u.name || u.email.split("@")[0] : "");
 

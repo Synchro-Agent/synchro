@@ -523,17 +523,9 @@ let ready = false;
 function sessDb() {
   const d = db();
   if (!ready) {
-    d.exec(`CREATE TABLE IF NOT EXISTS engine_sessions (user_id TEXT NOT NULL, conv TEXT NOT NULL, cli TEXT NOT NULL, session_id TEXT NOT NULL, turns INTEGER NOT NULL, updated_at INTEGER NOT NULL, PRIMARY KEY (user_id, conv, cli));
-      CREATE TABLE IF NOT EXISTS engine_turns (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id TEXT NOT NULL, cli TEXT NOT NULL, at INTEGER NOT NULL, via TEXT NOT NULL);
-      CREATE INDEX IF NOT EXISTS engine_turns_user ON engine_turns(user_id, cli, at);
-      CREATE TABLE IF NOT EXISTS engine_api_optin (user_id TEXT NOT NULL, cli TEXT NOT NULL, until INTEGER NOT NULL, PRIMARY KEY (user_id, cli));
-      CREATE TABLE IF NOT EXISTS engine_session_log (user_id TEXT NOT NULL, conv TEXT NOT NULL, cli TEXT NOT NULL, session_id TEXT NOT NULL, at INTEGER NOT NULL, PRIMARY KEY (user_id, conv, cli, session_id))`);
-    // Model của từng lượt (cho Cài đặt → Usage theo model); bảng cũ chưa có cột này.
-    if (!(d.prepare("PRAGMA table_info(engine_turns)").all() as { name: string }[]).some((c) => c.name === "model")) d.exec("ALTER TABLE engine_turns ADD COLUMN model TEXT");
-    // tooled: phiên đã có lời gọi công cụ (NULL với phiên cũ: chưa biết, coi như có). sys_parts: dấu của các đoạn hướng dẫn phiên đã nhận (Codex, Antigravity).
-    const cols = (d.prepare("PRAGMA table_info(engine_sessions)").all() as { name: string }[]).map((c) => c.name);
-    if (!cols.includes("tooled")) d.exec("ALTER TABLE engine_sessions ADD COLUMN tooled INTEGER");
-    if (!cols.includes("sys_parts")) d.exec("ALTER TABLE engine_sessions ADD COLUMN sys_parts TEXT");
+    // Bảng engine_sessions, engine_turns, engine_api_optin, engine_session_log: db/migrations/001_baseline.sql, 002_reconcile.columns.json (engine_turns.model: model của
+    // từng lượt cho Cài đặt → Usage theo model; engine_sessions.tooled: phiên đã có lời gọi công cụ, NULL với phiên cũ: chưa biết, coi như có;
+    // engine_sessions.sys_parts: dấu của các đoạn hướng dẫn phiên đã nhận, Codex, Antigravity). Lần đầu dùng trong tiến trình thì dọn dòng cũ.
     d.prepare("DELETE FROM engine_sessions WHERE updated_at < ?").run(Date.now() - 90 * 86_400_000);
     d.prepare("DELETE FROM engine_session_log WHERE at < ?").run(Date.now() - 90 * 86_400_000);
     d.prepare("DELETE FROM engine_turns WHERE at < ?").run(Date.now() - 30 * 86_400_000);

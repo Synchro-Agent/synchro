@@ -5,15 +5,9 @@
 import "server-only";
 import { db } from "./authstore";
 
-let ready = false;
+// Bảng conv_untrusted: db/migrations/001_baseline.sql (bộ chạy migration tạo khi mở cơ sở dữ liệu).
 function t() {
-  const d = db();
-  if (!ready) {
-    d.exec(`CREATE TABLE IF NOT EXISTS conv_untrusted (user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, conv TEXT NOT NULL, at INTEGER NOT NULL,
-      PRIMARY KEY (user_id, conv))`);
-    ready = true;
-  }
-  return d;
+  return db();
 }
 const okConv = (conv: string | undefined): conv is string => typeof conv === "string" && conv.length > 0 && conv.length <= 64;
 

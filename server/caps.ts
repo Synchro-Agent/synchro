@@ -7,14 +7,9 @@ import { CAP_KEYS, DEFAULT_CAPS, type Caps, type CapsState } from "../shared/cat
 import { runner } from "./coderun";
 import { wsConfigured } from "./workspace";
 
-let ready = false;
+// Bảng user_caps: db/migrations/001_baseline.sql (bộ chạy migration tạo khi mở cơ sở dữ liệu).
 function init() {
-  const d = db();
-  if (!ready) {
-    d.exec("CREATE TABLE IF NOT EXISTS user_caps (user_id TEXT PRIMARY KEY, caps TEXT NOT NULL, updated_at INTEGER NOT NULL)");
-    ready = true;
-  }
-  return d;
+  return db();
 }
 
 // Lựa chọn của người dùng (chưa tính quyền quản trị viên hay máy chủ).

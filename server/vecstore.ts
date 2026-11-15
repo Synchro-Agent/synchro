@@ -22,17 +22,9 @@ const dayCap = () => env("SYNCHRO_EMBED_DAY_USD", 0.05);
 const ramCap = () => env("SYNCHRO_VEC_RAM_MB", 96) * 1048576;
 const IDLE_MS = 20 * 60_000;
 
-let ready = false;
+// Bảng vec_items: db/migrations/001_baseline.sql (bộ chạy migration tạo khi mở cơ sở dữ liệu).
 function t() {
-  const d = db();
-  if (!ready) {
-    d.exec(`CREATE TABLE IF NOT EXISTS vec_items (scope TEXT NOT NULL, owner TEXT NOT NULL, item TEXT NOT NULL, user_id TEXT NOT NULL, model TEXT NOT NULL,
-        dim INTEGER NOT NULL, hash TEXT NOT NULL, src_at INTEGER NOT NULL, vec BLOB, at INTEGER NOT NULL, PRIMARY KEY (scope, item));
-      DROP INDEX IF EXISTS vec_items_owner;
-      CREATE INDEX IF NOT EXISTS vec_items_own ON vec_items(scope, owner, model, dim, at)`);
-    ready = true;
-  }
-  return d;
+  return db();
 }
 const hashOf = (s: string) => crypto.createHash("sha1").update(s).digest("base64url").slice(0, 22);
 const clean = (s: string, max: number) => s.replace(/\s+/g, " ").trim().slice(0, max);

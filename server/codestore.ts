@@ -17,16 +17,7 @@ let ready = false;
 function init() {
   const d = db();
   if (!ready) {
-    d.exec(`CREATE TABLE IF NOT EXISTS code_prefs (user_id TEXT PRIMARY KEY, json TEXT NOT NULL, updated_at INTEGER NOT NULL)`);
-    d.exec(`CREATE TABLE IF NOT EXISTS code_sessions (
-      user_id TEXT NOT NULL, id INTEGER NOT NULL, title TEXT NOT NULL, data TEXT, pinned INTEGER NOT NULL DEFAULT 0, archived INTEGER NOT NULL DEFAULT 0,
-      state TEXT, reason TEXT, suggest TEXT, running INTEGER NOT NULL DEFAULT 0, deleted INTEGER NOT NULL DEFAULT 0,
-      created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, touched_at INTEGER NOT NULL, PRIMARY KEY (user_id, id))`);
-    d.exec(`CREATE TABLE IF NOT EXISTS code_prs (
-      user_id TEXT NOT NULL, sid INTEGER NOT NULL, repo TEXT NOT NULL, number INTEGER NOT NULL, url TEXT, branch TEXT, base TEXT, head_sha TEXT,
-      state TEXT NOT NULL DEFAULT 'open', fixed_sha TEXT, seen_comment INTEGER NOT NULL DEFAULT 0, busy INTEGER NOT NULL DEFAULT 0, fixes INTEGER NOT NULL DEFAULT 0, ci_fixes INTEGER NOT NULL DEFAULT 0,
-      note TEXT, checked_at INTEGER, created_at INTEGER NOT NULL, PRIMARY KEY (user_id, repo, number))`);
-    d.exec("CREATE INDEX IF NOT EXISTS code_prs_state ON code_prs(state)");
+    // Bảng code_prefs, code_sessions, code_prs: db/migrations/001_baseline.sql.
     // Máy chủ khởi động lại giữa chừng: lượt chạy và việc tự sửa đang dở coi như đã dừng.
     d.exec("UPDATE code_sessions SET running = 0 WHERE running = 1");
     d.exec("UPDATE code_prs SET busy = 0 WHERE busy = 1");

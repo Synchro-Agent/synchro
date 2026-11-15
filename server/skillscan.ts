@@ -25,11 +25,9 @@ type Run = ScanJob & { ctl: AbortController };
 const BATCH = 20, PAR = 3, EXCERPT = 800, TIMEOUT = 150_000;
 const VERDICTS = ["junk", "useless", "ok"] as const;
 
-let ready = false;
+// Bảng skill_scans: db/migrations/001_baseline.sql (bộ chạy migration tạo khi mở cơ sở dữ liệu).
 function init() {
-  const d = db();
-  if (!ready) { d.exec(`CREATE TABLE IF NOT EXISTS skill_scans (user_id TEXT PRIMARY KEY, at INTEGER NOT NULL, data TEXT NOT NULL)`); ready = true; }
-  return d;
+  return db();
 }
 // Giữ qua lần nạp lại mã khi chạy dev (HMR), như các việc chạy nền khác.
 const G = globalThis as unknown as { __skillScans?: Map<string, Run> };

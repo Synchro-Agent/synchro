@@ -84,22 +84,7 @@ let ready = false;
 function table() {
   const d = db();
   if (!ready) {
-    d.exec(`CREATE TABLE IF NOT EXISTS connectors (
-      id TEXT PRIMARY KEY, user_id TEXT NOT NULL, name TEXT NOT NULL, url TEXT NOT NULL, dir TEXT, enabled INTEGER NOT NULL DEFAULT 1, era TEXT,
-      status TEXT NOT NULL DEFAULT 'needs_auth', error TEXT, server_name TEXT, enc_auth TEXT NOT NULL, tools TEXT NOT NULL DEFAULT '[]', perms TEXT NOT NULL DEFAULT '{}',
-      created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, checked_at INTEGER);
-    CREATE INDEX IF NOT EXISTS connectors_user ON connectors(user_id);
-    CREATE TABLE IF NOT EXISTS connector_auth (state TEXT PRIMARY KEY, user_id TEXT NOT NULL, connector_id TEXT NOT NULL, enc TEXT NOT NULL, created_at INTEGER NOT NULL);
-    CREATE TABLE IF NOT EXISTS connector_grants (user_id TEXT NOT NULL, conv TEXT NOT NULL, connector_id TEXT NOT NULL, tool TEXT NOT NULL, created_at INTEGER NOT NULL,
-      PRIMARY KEY (user_id, conv, connector_id, tool));`);
-    const cols = new Set((d.prepare("PRAGMA table_info(connectors)").all() as { name: string }[]).map((c) => c.name));
-    if (!cols.has("icon")) d.exec("ALTER TABLE connectors ADD COLUMN icon TEXT");
-    if (!cols.has("settings")) d.exec("ALTER TABLE connectors ADD COLUMN settings TEXT NOT NULL DEFAULT '{}'");
-    if (!cols.has("last_error")) d.exec("ALTER TABLE connectors ADD COLUMN last_error TEXT");
-    if (!cols.has("tools_total")) d.exec("ALTER TABLE connectors ADD COLUMN tools_total INTEGER");
-    if (!cols.has("perms_gone")) d.exec("ALTER TABLE connectors ADD COLUMN perms_gone TEXT");
-    if (!cols.has("empty_seen")) d.exec("ALTER TABLE connectors ADD COLUMN empty_seen INTEGER");
-    if (!cols.has("app_perms")) d.exec("ALTER TABLE connectors ADD COLUMN app_perms TEXT");
+    // Bảng connectors, connector_auth, connector_grants: db/migrations/001_baseline.sql, 002_reconcile.columns.json. Lần đầu dùng trong tiến trình thì sửa dữ liệu cũ.
     ready = true;
     migrateComposio();
     migrateAskOnly();

@@ -3,16 +3,9 @@
 import "server-only";
 import { db } from "./authstore";
 
-let ready = false;
+// Bảng skill_votes: db/migrations/001_baseline.sql (bộ chạy migration tạo khi mở cơ sở dữ liệu).
 function init() {
-  const d = db();
-  if (!ready) {
-    d.exec(`CREATE TABLE IF NOT EXISTS skill_votes (user_id TEXT NOT NULL, msg TEXT NOT NULL, skill TEXT NOT NULL, value INTEGER NOT NULL, at INTEGER NOT NULL,
-      PRIMARY KEY (user_id, msg, skill));
-      CREATE INDEX IF NOT EXISTS skill_votes_skill ON skill_votes(skill)`);
-    ready = true;
-  }
-  return d;
+  return db();
 }
 
 /** Ghi điểm: value 1 (hữu ích), -1 (không hữu ích), 0 (bỏ chấm). */

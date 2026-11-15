@@ -1,3 +1,5 @@
+-- KHÔNG CÒN ĐƯỢC ĐỌC (H3 bước 7): lược đồ nay ở db/migrations/ (001_baseline.sql chứa nguyên nội dung tệp này). Giữ thêm một bản phát hành
+-- cho bản cũ còn chạy song song khi deploy xanh/lam hoặc khi quay lại bản trước (bản cũ đọc tệp này lúc khởi động), rồi xóa. Không sửa.
 -- Schema tài khoản Synchro (SQLite). Chạy lại mỗi lần mở DB nên mọi lệnh phải idempotent.
 CREATE TABLE IF NOT EXISTS users (
   id             TEXT PRIMARY KEY,

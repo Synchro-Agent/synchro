@@ -6,17 +6,9 @@ import crypto from "node:crypto";
 import { AuthError, can, db, getUser } from "./authstore";
 import { agent, wsConfigured } from "./workspace";
 
-let ready = false;
+// Bảng browser_devices, browser_pair_codes: db/migrations/001_baseline.sql (bộ chạy migration tạo khi mở cơ sở dữ liệu).
 function init() {
-  const d = db();
-  if (!ready) {
-    d.exec(`CREATE TABLE IF NOT EXISTS browser_devices (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, token_hash TEXT NOT NULL UNIQUE, name TEXT NOT NULL,
-      browser TEXT, created_at INTEGER NOT NULL, last_seen INTEGER);
-      CREATE INDEX IF NOT EXISTS browser_devices_user ON browser_devices(user_id);
-      CREATE TABLE IF NOT EXISTS browser_pair_codes (code_hash TEXT PRIMARY KEY, user_id TEXT NOT NULL, expires_at INTEGER NOT NULL);`);
-    ready = true;
-  }
-  return d;
+  return db();
 }
 
 export type Device = { id: string; name: string; browser: string | null; createdAt: number; lastSeen: number | null };

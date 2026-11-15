@@ -11,16 +11,8 @@ import { NO_QUOTE_INS } from "../shared/turnctx";
 export type Mem = { id: string; content: string; createdAt: number; source: string };
 /** gen: học từ đoạn chat; sens: được ghi chi tiết nhạy cảm; autoIns: Synchro tự cập nhật "Hướng dẫn cho Synchro" từ bộ não. */
 export type MemCfg = { gen: boolean; sens: boolean; autoIns: boolean };
-let ready = false;
-const t = () => {
-  const d = db();
-  if (!ready) {
-    d.exec(`CREATE TABLE IF NOT EXISTS user_memory (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, content TEXT NOT NULL, source TEXT NOT NULL DEFAULT 'chat', created_at INTEGER NOT NULL);
-      CREATE INDEX IF NOT EXISTS user_memory_user ON user_memory(user_id, created_at);`);
-    ready = true;
-  }
-  return d;
-};
+// Bảng user_memory: db/migrations/001_baseline.sql (bộ chạy migration tạo khi mở cơ sở dữ liệu).
+const t = () => db();
 const MAX = 200;
 export const memCfg = (uid: string): MemCfg => { try { return { gen: true, sens: false, autoIns: true, ...(JSON.parse(getSetting(`mem:${uid}`, "{}")) as Partial<MemCfg>) }; } catch { return { gen: true, sens: false, autoIns: true }; } };
 export const setMemCfg = (uid: string, p: Partial<MemCfg>) => setSetting(`mem:${uid}`, JSON.stringify({ ...memCfg(uid), ...p }));

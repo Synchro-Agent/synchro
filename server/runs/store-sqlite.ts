@@ -28,33 +28,12 @@ let ready = false;
 function init() {
   const d = db();
   if (!ready) {
-    d.exec(`CREATE TABLE IF NOT EXISTS runs (
-      id TEXT PRIMARY KEY, user_id TEXT NOT NULL, conv TEXT, kind TEXT NOT NULL DEFAULT 'chat',
-      status TEXT NOT NULL, req TEXT, result TEXT, http INTEGER, events TEXT NOT NULL DEFAULT '[]',
-      created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, attempts INTEGER NOT NULL DEFAULT 1)`);
-    d.exec("CREATE INDEX IF NOT EXISTS runs_user ON runs(user_id, created_at)");
-    d.exec("CREATE INDEX IF NOT EXISTS runs_status ON runs(status)");
-    // Dọn lượt cũ (updated_at < …) và tìm lượt của một đoạn chat (user_id, conv): không quét cả bảng.
-    d.exec("CREATE INDEX IF NOT EXISTS runs_updated ON runs(updated_at)");
-    d.exec("CREATE INDEX IF NOT EXISTS runs_conv ON runs(user_id, conv)");
-    // Việc đã làm có tác động ra ngoài: bảng cũ chưa có cột này (thêm khi mở, không đụng dữ liệu cũ).
-    const cols = (d.prepare("PRAGMA table_info(runs)").all() as { name: string }[]).map((c) => c.name);
-    if (!cols.includes("effects")) d.exec("ALTER TABLE runs ADD COLUMN effects TEXT");
-    // Lượt của đoạn chat ẩn danh: không giữ yêu cầu, xóa ít phút sau khi xong. Máy chủ vừa khởi động thì mọi lượt ẩn danh đã xong đều đã quá hạn.
-    if (!cols.includes("ephemeral")) d.exec("ALTER TABLE runs ADD COLUMN ephemeral INTEGER");
-    // Dừng / nhắn thêm gửi tới tiến trình không chạy lượt đó (deploy xanh/lam: bản cũ đang chạy nốt, nginx đã đưa yêu cầu sang bản mới).
-    // Tiến trình đang chạy lượt đọc hai cột này mỗi 1,5 giây (applyRemote).
-    if (!cols.includes("cancel_req")) d.exec("ALTER TABLE runs ADD COLUMN cancel_req INTEGER");
-    if (!cols.includes("steer_req")) d.exec("ALTER TABLE runs ADD COLUMN steer_req TEXT");
-    // Chữ đã viết của lượt còn dở khi tiến trình tắt (persistPartials): lượt đã bấm Dừng được đóng kèm phần chữ này thay vì trống.
-    if (!cols.includes("partial")) d.exec("ALTER TABLE runs ADD COLUMN partial TEXT");
-    // Các bước của lượt ghi nối thêm (append-only): mỗi bước một dòng, không đọc-sửa-ghi lại cả danh sách mỗi lần (lượt 100 bước
-    // không còn chậm dần theo bình phương). Khóa chính (run_id, seq) vừa là số thứ tự bước vừa cho phép lấy MAX(seq) rất nhanh.
-    d.exec(`CREATE TABLE IF NOT EXISTS run_events (
-      run_id TEXT NOT NULL, seq INTEGER NOT NULL, at INTEGER NOT NULL, kind TEXT NOT NULL, text TEXT NOT NULL,
-      PRIMARY KEY (run_id, seq))`);
-    // Lượt bị xóa (dọn 7 ngày, xóa đoạn chat, lượt ẩn danh, xóa tài khoản): xóa luôn các dòng sự kiện của nó, mọi đường xóa đều qua trigger này.
-    d.exec("CREATE TRIGGER IF NOT EXISTS runs_drop_events AFTER DELETE ON runs BEGIN DELETE FROM run_events WHERE run_id = OLD.id; END");
+    // Bảng runs, run_events, trigger runs_drop_events: db/migrations/001_baseline.sql, 002_reconcile.columns.json. Chỉ mục runs_updated, runs_conv: dọn lượt cũ và tìm
+    // lượt của một đoạn chat không quét cả bảng. Cột effects: việc đã làm có tác động ra ngoài; ephemeral: lượt của đoạn chat ẩn danh, không
+    // giữ yêu cầu, xóa ít phút sau khi xong; cancel_req / steer_req: Dừng / nhắn thêm gửi tới tiến trình không chạy lượt đó (deploy xanh/lam),
+    // tiến trình đang chạy lượt đọc mỗi 1,5 giây (applyRemote); partial: chữ đã viết của lượt còn dở khi tiến trình tắt (persistPartials).
+    // run_events: mỗi bước một dòng, ghi nối thêm, khóa (run_id, seq). Trigger: lượt bị xóa thì xóa luôn sự kiện của nó, mọi đường xóa đều qua đây.
+    // Máy chủ vừa khởi động thì mọi lượt ẩn danh đã xong đều đã quá hạn.
     d.prepare("DELETE FROM runs WHERE ephemeral = 1 AND status != 'running'").run();
     d.prepare("DELETE FROM runs WHERE updated_at < ?").run(Date.now() - KEEP_MS);
     // Chuyển một lần các sự kiện cũ trong cột runs.events sang bảng run_events. Giữ cột cũ thêm một bản phát hành để quay lui được;

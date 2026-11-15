@@ -61,17 +61,10 @@ export function stopUserAgentRuns(uid: string) {
 // ---- Lượt Code đang chạy ở tiến trình khác (deploy xanh/lam) ----
 // Lượt Code chỉ nằm trong bộ nhớ của tiến trình chạy nó và không chạy lại được. Ghi ai đang chạy lượt nào vào cơ sở dữ liệu để tiến trình mới
 // (sau khi nginx chuyển) trả lời "đang chạy nốt ở bản cũ" thay vì "không còn lượt", và chuyển được lệnh Dừng tới tiến trình cũ.
-let ownReady = false;
+// Bảng agent_owner: db/migrations/001_baseline.sql, 002_reconcile.columns.json (boot, start, node: danh tính tiến trình, vì pid có thể bị dùng lại, và lượt nào
+// của phiên, trình duyệt mở lại phiên cần biết để hiện đang chạy).
 function own() {
-  const d = db();
-  if (!ownReady) {
-    d.exec("CREATE TABLE IF NOT EXISTS agent_owner (uid TEXT NOT NULL, sid TEXT NOT NULL, pid INTEGER NOT NULL, started INTEGER NOT NULL, ended INTEGER NOT NULL DEFAULT 0, stop INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (uid, sid))");
-    // Danh tính tiến trình (pid có thể bị dùng lại) và lượt nào của phiên (trình duyệt mở lại phiên cần biết để hiện đang chạy).
-    const cols = (d.prepare("PRAGMA table_info(agent_owner)").all() as { name: string }[]).map((c) => c.name);
-    for (const c of ["boot TEXT", "start TEXT", "node INTEGER"]) if (!cols.includes(c.split(" ")[0])) d.exec(`ALTER TABLE agent_owner ADD COLUMN ${c}`);
-    ownReady = true;
-  }
-  return d;
+  return db();
 }
 /** Lệnh Dừng do tiến trình khác ghi cho lượt Code của tiến trình này. Trả số lượt đã dừng. */
 export function applyAgentStops(): number {

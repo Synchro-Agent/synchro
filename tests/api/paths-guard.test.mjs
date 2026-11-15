@@ -64,7 +64,11 @@ const ddl = [...src].filter(([, s]) => /CREATE TABLE/.test(s)).length;
 ok(ts.length >= 500, `≥ 500 tệp .ts/.tsx (${ts.length})`);
 ok(css.length >= 15, `≥ 15 tệp .css (${css.length})`);
 ok(clients.length >= 128, `≥ 128 tệp "use client" (${clients.length})`);
-ok(ddl >= 36 || fs.existsSync("db/migrations"), `≥ 36 tệp có CREATE TABLE (${ddl})`);
+// H3 bước 7: lược đồ chỉ nằm ở db/migrations; mã nguồn không còn tự tạo bảng hay thêm cột.
+const migTables = fs.existsSync("db/migrations") ? fs.readdirSync("db/migrations").filter((f) => f.endsWith(".sql")).reduce((n, f) => n + (fs.readFileSync(`db/migrations/${f}`, "utf8").match(/CREATE TABLE IF NOT EXISTS/g) ?? []).length, 0) : 0;
+ok(migTables >= 80, `db/migrations khai ≥ 80 bảng (${migTables})`);
+const ddlSrc = [...src].filter(([, s]) => /\b(CREATE (TABLE|INDEX|UNIQUE INDEX|TRIGGER)|ALTER TABLE|DROP (TABLE|INDEX))\b/.test(s)).map(([f]) => f);
+ok(ddl === 0 && !ddlSrc.length, "mã nguồn không còn DDL (CREATE / ALTER / DROP chỉ ở db/migrations)", ddlSrc.join(", "));
 
 console.log("3. server/ chỉ chạy ở máy chủ");
 const server = [...src.keys()].filter((f) => f.startsWith("server/") && !f.startsWith("server/bin/"));

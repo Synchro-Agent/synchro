@@ -232,7 +232,8 @@ export function requestPasswordReset(req: Request, email0: unknown, lang?: unkno
 }
 // ---- đổi email ----
 const EMAIL_CHANGE_HOURS = 24;
-const emailChanges = () => { const d = db(); d.exec("CREATE TABLE IF NOT EXISTS email_changes (token_hash TEXT PRIMARY KEY, user_id TEXT NOT NULL, new_email TEXT NOT NULL, expires_at INTEGER NOT NULL)"); return d; };
+// Bảng email_changes: db/migrations/001_baseline.sql.
+const emailChanges = () => db();
 const BAD_EMAIL_CHANGE = "Đường dẫn đổi email không hợp lệ hoặc đã hết hạn. Hãy yêu cầu lại trong Cài đặt.";
 /** Đường dẫn đổi email đang chờ chỉ có mật khẩu lúc xin làm bằng chứng: mật khẩu, chủ tài khoản hay trạng thái tài khoản đổi thì nó phải mất hiệu lực, không kẻ đã lấy được mật khẩu vẫn chiếm được tài khoản sau khi nạn nhân đặt lại mật khẩu. */
 export const dropEmailChange = (uid: string) => { emailChanges().prepare("DELETE FROM email_changes WHERE user_id = ?").run(uid); };

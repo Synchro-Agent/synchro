@@ -13,17 +13,9 @@ export type PatchStatus = "active" | "pending" | "rejected" | "reverted";
 export type SkillPatch = { id: string; skill: string; path: string; status: PatchStatus; mutating: boolean; error: string; attempts: number; created_at: number; uses: number; stale: boolean; original?: string; content?: string };
 type Row = { id: string; user_id: string; skill_id: string; skill_name: string; path: string; base_hash: string; content: string; error: string; status: PatchStatus; mutating: number; attempts: number; created_at: number; uses: number };
 
-let ready = false;
+// Bảng skill_patches: db/migrations/001_baseline.sql (bộ chạy migration tạo khi mở cơ sở dữ liệu).
 function init() {
-  const d = db();
-  if (!ready) {
-    d.exec(`CREATE TABLE IF NOT EXISTS skill_patches (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, skill_id TEXT NOT NULL, skill_name TEXT NOT NULL, path TEXT NOT NULL,
-      base_hash TEXT NOT NULL, content TEXT NOT NULL, error TEXT NOT NULL, status TEXT NOT NULL, mutating INTEGER NOT NULL, attempts INTEGER NOT NULL,
-      created_at INTEGER NOT NULL, used_at INTEGER, uses INTEGER NOT NULL DEFAULT 0);
-      CREATE INDEX IF NOT EXISTS skill_patches_by ON skill_patches(user_id, skill_id, path, status)`);
-    ready = true;
-  }
-  return d;
+  return db();
 }
 export const hashText = (s: string) => crypto.createHash("sha256").update(s).digest("hex").slice(0, 32);
 

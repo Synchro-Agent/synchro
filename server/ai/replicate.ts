@@ -103,7 +103,7 @@ let tableDay = "";
 function bdb() {
   const d = db(), t = day();
   if (tableDay !== t) {
-    d.exec("CREATE TABLE IF NOT EXISTS replicate_budget (day TEXT NOT NULL, user_id TEXT NOT NULL, images INTEGER NOT NULL DEFAULT 0, usd REAL NOT NULL DEFAULT 0, PRIMARY KEY (day, user_id))");
+    // Bảng replicate_budget: db/migrations/001_baseline.sql. Mỗi ngày một lần: bỏ ngân sách quá 31 ngày.
     d.prepare("DELETE FROM replicate_budget WHERE day < ?").run(new Date(Date.now() - 31 * 86400_000).toISOString().slice(0, 10));
     tableDay = t;
   }

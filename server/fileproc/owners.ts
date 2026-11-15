@@ -11,17 +11,10 @@ const DIR = path.join(process.cwd(), ".cache", "files");
 // Hạn mức tệp tải lên của mỗi tài khoản: một người không lấp đầy đĩa của mọi người (tệp đã giới hạn 30 MB mỗi tệp, số tệp thì chưa).
 const QUOTA_MB = () => Number(process.env.SYNCHRO_UPLOAD_QUOTA_MB) || 2000;
 
-let ready = false;
+// Bảng file_owners: db/migrations/001_baseline.sql, 002_reconcile.columns.json (cột name: tên do chính người này đặt, cùng nội dung có thể mang tên khác ở
+// người khác; dòng cũ chưa có tên thì đọc khi cần).
 function table() {
-  const d = db();
-  if (!ready) {
-    d.exec(`CREATE TABLE IF NOT EXISTS file_owners (file_id TEXT NOT NULL, user_id TEXT NOT NULL, size INTEGER NOT NULL DEFAULT 0, at INTEGER NOT NULL, PRIMARY KEY (file_id, user_id));
-      CREATE INDEX IF NOT EXISTS file_owners_user ON file_owners(user_id)`);
-    // Tên do chính người này đặt: cùng nội dung có thể mang tên khác ở người khác. Dòng cũ chưa có tên thì đọc khi cần.
-    if (!(d.prepare("PRAGMA table_info(file_owners)").all() as { name: string }[]).some((c) => c.name === "name")) d.exec("ALTER TABLE file_owners ADD COLUMN name TEXT");
-    ready = true;
-  }
-  return d;
+  return db();
 }
 
 export function claimFile(uid: string, id: string, size: number, name?: string) {

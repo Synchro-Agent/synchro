@@ -16,15 +16,9 @@ export type StudioSrc = "rules" | "model" | "manual";
 export type StudioTag = { studios: StudioKind[]; src: StudioSrc; why: string };
 type Row = { key: string; studios: string; src: StudioSrc; sig: string; why: string | null; model_at: number | null; at: number };
 
-let ready = false;
+// Bảng skill_studios: db/migrations/001_baseline.sql (bộ chạy migration tạo khi mở cơ sở dữ liệu).
 function init() {
-  const d = db();
-  if (!ready) {
-    // key: "u:<id skill>" (skill của người dùng) hoặc "p:<id plugin>:<tên skill>". model_at: lần cuối đã nhờ model (kể cả khi lỗi), để không hỏi lại mãi.
-    d.exec(`CREATE TABLE IF NOT EXISTS skill_studios (key TEXT PRIMARY KEY, studios TEXT NOT NULL, src TEXT NOT NULL, sig TEXT NOT NULL, why TEXT, model_at INTEGER, at INTEGER NOT NULL)`);
-    ready = true;
-  }
-  return d;
+  return db();
 }
 /** Máy chủ mới chưa xếp skill nào thì chưa có bảng: bên đọc thẳng bảng (plugins.ts) gọi trước, không thì lượt chat đầu lỗi "no such table". */
 export const tagsTable = () => init();

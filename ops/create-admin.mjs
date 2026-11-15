@@ -6,6 +6,8 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import readline from "node:readline";
+import { fileURLToPath } from "node:url";
+import { migrate } from "../db/migrate.mjs";
 
 const DIR = process.env.DATA_DIR ?? path.join(process.cwd(), "data");
 // Chủ sở hữu (OWNER_EMAILS) cũng là quản trị viên.
@@ -40,7 +42,9 @@ fs.mkdirSync(DIR, { recursive: true });
 const db = new Database(path.join(DIR, "synchro.db"));
 db.pragma("journal_mode = WAL");
 db.pragma("foreign_keys = ON");
-db.exec(fs.readFileSync(path.join(process.cwd(), "db", "schema.sql"), "utf8"));
+db.pragma("busy_timeout = 5000");
+// Cùng bộ chạy migration với máy chủ: cơ sở dữ liệu mới thì tạo đủ bảng, cơ sở dữ liệu có sẵn thì chỉ thêm phần còn thiếu.
+migrate(db, { dir: fileURLToPath(new URL("../db/migrations/", import.meta.url)) });
 
 const now = Date.now();
 const u = db.prepare("SELECT id FROM users WHERE email = ?").get(email);

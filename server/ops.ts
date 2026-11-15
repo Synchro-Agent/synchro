@@ -18,10 +18,7 @@ let ready = false, writes = 0, windowAt = 0, inWindow = 0;
 function t() {
   const d = db();
   if (!ready) {
-    d.exec(`CREATE TABLE IF NOT EXISTS ops_events (id INTEGER PRIMARY KEY AUTOINCREMENT, at INTEGER NOT NULL, first_at INTEGER NOT NULL, kind TEXT NOT NULL, source TEXT NOT NULL,
-        detail TEXT NOT NULL, n INTEGER NOT NULL DEFAULT 1, user_id TEXT);
-      CREATE INDEX IF NOT EXISTS ops_kind_at ON ops_events(kind, at)`);
-    d.exec("CREATE TABLE IF NOT EXISTS ops_runs (hour INTEGER NOT NULL, engine TEXT NOT NULL, ok INTEGER NOT NULL DEFAULT 0, fail INTEGER NOT NULL DEFAULT 0, auth INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (hour, engine))");
+    // Bảng ops_events, ops_runs: db/migrations/001_baseline.sql.
     d.prepare("DELETE FROM ops_events WHERE at < ?").run(Date.now() - KEEP);
     ready = true;
   }

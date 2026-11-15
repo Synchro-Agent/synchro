@@ -35,23 +35,11 @@ const PROOT = () => path.join(ROOT, "_plugins");
 export class PluginError extends Error { constructor(m: string, public status = 400) { super(m); } }
 const fail = (m: string, status = 400): never => { throw new PluginError(m, status); };
 
-let ready = false;
+// Bảng plugins, plugin_skills, plugin_prefs, plugin_removed, skill_studio_user, plugin_meta: db/migrations/001_baseline.sql, 002_reconcile.columns.json.
+// Cột plugins.auto_tag cho "Không xếp mục": cột studio chỉ chứa mục thật, nơi khác coi studio có giá trị là studio thật. Dòng cũ studio NULL
+// trở thành Tự động nhận diện (mặc định 1), đúng việc chúng vẫn làm.
 function init() {
-  const d = db();
-  if (!ready) {
-    d.exec(`CREATE TABLE IF NOT EXISTS plugins (id TEXT PRIMARY KEY, owner TEXT NOT NULL, slug TEXT NOT NULL, catalog_id TEXT, name TEXT NOT NULL, description TEXT NOT NULL,
-        author TEXT, homepage TEXT, color TEXT, studio TEXT, everywhere INTEGER NOT NULL DEFAULT 0, enabled INTEGER NOT NULL DEFAULT 1, sources TEXT NOT NULL,
-        commits TEXT NOT NULL DEFAULT '{}', size INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, checked_at INTEGER, latest TEXT, UNIQUE(owner, slug));
-      CREATE TABLE IF NOT EXISTS plugin_skills (id TEXT PRIMARY KEY, plugin_id TEXT NOT NULL REFERENCES plugins(id) ON DELETE CASCADE, name TEXT NOT NULL, description TEXT NOT NULL,
-        body TEXT NOT NULL, storage_path TEXT NOT NULL, files TEXT NOT NULL, report TEXT NOT NULL, enabled INTEGER NOT NULL DEFAULT 1, use_count INTEGER NOT NULL DEFAULT 0,
-        last_used_at INTEGER, UNIQUE(plugin_id, name));
-      CREATE TABLE IF NOT EXISTS plugin_prefs (user_id TEXT NOT NULL, plugin_id TEXT NOT NULL REFERENCES plugins(id) ON DELETE CASCADE, enabled INTEGER, everywhere INTEGER, PRIMARY KEY (user_id, plugin_id));
-      CREATE TABLE IF NOT EXISTS plugin_removed (plugin_id TEXT NOT NULL REFERENCES plugins(id) ON DELETE CASCADE, name TEXT NOT NULL, at INTEGER NOT NULL, PRIMARY KEY (plugin_id, name))`);
-    // Cột riêng cho "Không xếp mục": cột studio chỉ chứa mục thật, nơi khác coi studio có giá trị là studio thật. Dòng cũ studio NULL trở thành Tự động nhận diện (mặc định 1), đúng việc chúng vẫn làm.
-    if (!(d.prepare("PRAGMA table_info(plugins)").all() as { name: string }[]).some((c) => c.name === "auto_tag")) d.exec("ALTER TABLE plugins ADD COLUMN auto_tag INTEGER NOT NULL DEFAULT 1");
-    ready = true;
-  }
-  return d;
+  return db();
 }
 
 // ---------------------------------------------------------------- chặn thêm skill trùng link
@@ -736,8 +724,7 @@ export const MINE_LABEL = "Kho kỹ năng của bạn";
 // plugins: tên các nguồn chọn lọc (không kể hàng nghìn thư viện của danh mục: catalogLibs là số thư viện đó).
 const AUTO_LIST = 30;
 // Bộ luật xếp nhầm thì mỗi người tự sửa được cho riêng mình: thêm hay bỏ từng skill ở từng mục, không đụng tới nhãn chung của thư viện dùng chung.
-let overReady = false;
-const overrideDb = () => { const d = init(); if (!overReady) { d.exec("CREATE TABLE IF NOT EXISTS skill_studio_user (user_id TEXT NOT NULL, studio TEXT NOT NULL, name TEXT NOT NULL, added INTEGER NOT NULL, at INTEGER NOT NULL, PRIMARY KEY (user_id, studio, name))"); overReady = true; } return d; };
+const overrideDb = () => init();
 const overridesOf = (uid: string, studio: Studio) => {
   const rows = overrideDb().prepare("SELECT name, added FROM skill_studio_user WHERE user_id = ? AND studio = ?").all(uid, studio) as { name: string; added: number }[];
   return { add: rows.filter((r) => r.added).map((r) => r.name), drop: new Set(rows.filter((r) => !r.added).map((r) => r.name)) };
@@ -855,7 +842,6 @@ export { isText };
 // Lỗi mạng thì thử lại ở lần khởi động sau. Tắt bằng SYNCHRO_DEFAULT_PLUGINS=0.
 export async function ensureDefaultPlugins() {
   const d = init();
-  d.exec("CREATE TABLE IF NOT EXISTS plugin_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)");
   const { PLUGIN_DIR } = await import("../shared/plugindir");
   const studios = PLUGIN_DIR.filter((p) => p.category === "studio");
   if (!d.prepare("SELECT 1 FROM plugin_meta WHERE key = 'defaults'").get()) {

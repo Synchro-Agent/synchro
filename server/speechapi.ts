@@ -418,7 +418,7 @@ let budgetReady = "";
 function budgetDb() {
   const d = db(), today = day();
   if (budgetReady !== today) {
-    d.exec("CREATE TABLE IF NOT EXISTS speech_budget (day TEXT NOT NULL, user_id TEXT NOT NULL, credits INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (day, user_id))");
+    // Bảng speech_budget: db/migrations/001_baseline.sql. Mỗi ngày một lần: bỏ ngân sách của các ngày đã qua.
     d.prepare("DELETE FROM speech_budget WHERE day < ?").run(new Date(Date.now() - 3 * 86400_000).toISOString().slice(0, 10));
     budgetReady = today;
   }
@@ -460,13 +460,9 @@ export const spender = new AsyncLocalStorage<string>();
 export const VOICE_SHARED = "*shared"; // quản trị viên đánh dấu cho mọi thành viên
 export const VOICE_PURGE = "*purge"; // chủ đã xóa tài khoản: chờ xóa trên ElevenLabs, lỗi thì lần sau thử lại
 export const VOICE_ORPHAN = "*orphan"; // chủ suy từ lịch sử đã xóa tài khoản: không chắc là giọng của họ nên không tự xóa, chỉ quản trị viên quyết
-let ownersReady = false;
+// Bảng speech_voice_owner: db/migrations/001_baseline.sql, 002_reconcile.columns.json. source = 'history': chủ suy từ lịch sử, không phải người được ghi nhận lúc tạo.
 function ownersDb() {
-  const d = db();
-  d.exec("CREATE TABLE IF NOT EXISTS speech_voice_owner (voice_id TEXT PRIMARY KEY, user_id TEXT NOT NULL, created_at INTEGER NOT NULL)");
-  // source = 'history': chủ suy từ lịch sử, không phải người được ghi nhận lúc tạo.
-  if (!ownersReady) { if (!(d.prepare("PRAGMA table_info(speech_voice_owner)").all() as { name: string }[]).some((c) => c.name === "source")) d.exec("ALTER TABLE speech_voice_owner ADD COLUMN source TEXT"); ownersReady = true; }
-  return d;
+  return db();
 }
 export const setVoiceOwner = (voice: string, uid: string, source: "history" | null = null) => { ownersDb().prepare("INSERT OR REPLACE INTO speech_voice_owner (voice_id, user_id, created_at, source) VALUES (?, ?, ?, ?)").run(voice, uid, Date.now(), source); };
 export const voiceOwner = (voice: string) => (ownersDb().prepare("SELECT user_id FROM speech_voice_owner WHERE voice_id = ?").get(voice) as { user_id: string } | undefined)?.user_id ?? null;
@@ -641,17 +637,8 @@ export async function library(o: { search?: string; language?: string; gender?: 
 
 // ---- sản phẩm của từng người ----
 export type Item = { id: string; kind: string; title: string; meta: Record<string, unknown>; mime: string | null; size: number; createdAt: number; url: string | null };
-let ready = false;
-const items = () => {
-  const d = db();
-  if (!ready) {
-    d.exec(`CREATE TABLE IF NOT EXISTS speech_items (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, kind TEXT NOT NULL, title TEXT NOT NULL, meta TEXT NOT NULL DEFAULT '{}',
-      file TEXT, mime TEXT, size INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL);
-      CREATE INDEX IF NOT EXISTS speech_items_user ON speech_items(user_id, created_at DESC);`);
-    ready = true;
-  }
-  return d;
-};
+// Bảng speech_items: db/migrations/001_baseline.sql.
+const items = () => db();
 type ItemRow = { id: string; user_id: string; kind: string; title: string; meta: string; file: string | null; mime: string | null; size: number; created_at: number };
 const KEEP = 300;
 const dirOf = (u: UserRow) => path.join(DATA_DIR, "speech", u.id.replace(/[^\w-]/g, ""));

@@ -29,11 +29,9 @@ const same = (a: string, b: string) => a.length === b.length && crypto.timingSaf
 const sha = (s: string) => crypto.createHash("sha256").update(s).digest("hex");
 
 type Row = { user_id: string; secret: string; enabled_at: number | null; last_step: number; recovery: string };
-let ready = false;
+// Bảng user_mfa: db/migrations/001_baseline.sql (bộ chạy migration tạo khi mở cơ sở dữ liệu).
 function t() {
-  const d = db();
-  if (!ready) { d.exec("CREATE TABLE IF NOT EXISTS user_mfa (user_id TEXT PRIMARY KEY, secret TEXT NOT NULL, enabled_at INTEGER, last_step INTEGER NOT NULL DEFAULT 0, recovery TEXT NOT NULL DEFAULT '[]')"); ready = true; }
-  return d;
+  return db();
 }
 const row = (uid: string) => t().prepare("SELECT * FROM user_mfa WHERE user_id = ?").get(uid) as Row | undefined;
 export const mfaStatus = (uid: string) => { const r = row(uid); return { enabled: !!r?.enabled_at, recoveryLeft: r?.enabled_at ? (JSON.parse(r.recovery) as string[]).length : 0 }; };

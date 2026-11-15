@@ -37,20 +37,9 @@ const BACKOFF = [3_600_000, 6 * 3_600_000, DAY];
 const PER_RUN = Number(process.env.SYNCHRO_MODEL_TEST_PER_RUN) || 8;
 const PER_DAY = Number(process.env.SYNCHRO_MODEL_TEST_PER_DAY) || 60;
 
-let ready = false;
+// Bảng model_registry: db/migrations/001_baseline.sql (bộ chạy migration tạo khi mở cơ sở dữ liệu).
 function table() {
-  const d = db();
-  if (!ready) {
-    d.exec(`CREATE TABLE IF NOT EXISTS model_registry (
-      key TEXT PRIMARY KEY, provider TEXT NOT NULL, kind TEXT NOT NULL, model_id TEXT NOT NULL, name TEXT NOT NULL, family TEXT NOT NULL, version TEXT NOT NULL DEFAULT '',
-      tier TEXT NOT NULL, created INTEGER, first_seen INTEGER NOT NULL, last_seen INTEGER NOT NULL, status TEXT NOT NULL, baseline INTEGER NOT NULL DEFAULT 0,
-      caps TEXT NOT NULL DEFAULT '{}', learned TEXT NOT NULL DEFAULT '{}', ctx INTEGER, max_out INTEGER, price TEXT, sources TEXT NOT NULL DEFAULT '{}',
-      test TEXT, attempts INTEGER NOT NULL DEFAULT 0, next_test INTEGER NOT NULL DEFAULT 0, pinned INTEGER NOT NULL DEFAULT 0, hidden INTEGER NOT NULL DEFAULT 0,
-      gone_at INTEGER, replaced_by TEXT, notified INTEGER NOT NULL DEFAULT 0);
-      CREATE INDEX IF NOT EXISTS model_registry_provider ON model_registry(provider)`);
-    ready = true;
-  }
-  return d;
+  return db();
 }
 
 // ---- bộ nhớ đệm dùng chung cho mọi route trong cùng tiến trình (mỗi route của Next được đóng gói riêng)

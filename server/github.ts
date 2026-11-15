@@ -34,17 +34,8 @@ const dec = (s: string) => (s.includes(".") ? openSecret(s) : decOld(s));
 
 type Row = { user_id: string; gh_id: string; login: string; token: string; scopes: string; created_at: number;
   refresh: string | null; expires_at: number | null; refresh_expires_at: number | null; checked_at: number | null; broken: number };
-let cols = false;
-const links = () => {
-  const d = db();
-  if (!cols) {
-    const have = new Set((d.prepare("PRAGMA table_info(github_links)").all() as { name: string }[]).map((c) => c.name));
-    for (const [c, t] of [["refresh", "TEXT"], ["expires_at", "INTEGER"], ["refresh_expires_at", "INTEGER"], ["checked_at", "INTEGER"], ["broken", "INTEGER NOT NULL DEFAULT 0"]])
-      if (!have.has(c)) d.exec(`ALTER TABLE github_links ADD COLUMN ${c} ${t}`);
-    cols = true;
-  }
-  return d;
-};
+// Cột refresh, expires_at, refresh_expires_at, checked_at, broken của github_links: db/migrations/001_baseline.sql, 002_reconcile.columns.json.
+const links = () => db();
 export type LinkIn = { id: string; login: string; token: string; scopes: string; refresh?: string; expiresIn?: number; refreshExpiresIn?: number };
 export function saveLink(uid: string, o: LinkIn) {
   const now = Date.now();

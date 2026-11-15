@@ -33,30 +33,10 @@ const CHROME_WAIT_MS = () => Number(process.env.SYNCHRO_CHROME_WAIT_MS) || 12 * 
 export class TaskError extends Error { constructor(m: string, public status = 400) { super(m); } }
 const fail = (m: string, status = 400): never => { throw new TaskError(m, status); };
 
-let ready = false;
+// Bảng tasks, task_runs (kể cả cột thêm sau: trình duyệt, nhớ kết quả cũ, chờ Chrome, số lần thử lại; loại lượt, ghi chú, đã xét thử lại),
+// notices, proposals: db/migrations/001_baseline.sql, 002_reconcile.columns.json (bộ chạy migration tạo khi mở cơ sở dữ liệu).
 function init() {
-  const d = db();
-  if (!ready) {
-    d.exec(`CREATE TABLE IF NOT EXISTS tasks (id TEXT PRIMARY KEY, owner TEXT NOT NULL, title TEXT NOT NULL, prompt TEXT NOT NULL, schedule TEXT NOT NULL,
-      model TEXT, enabled INTEGER NOT NULL DEFAULT 1, next_run_at INTEGER, last_run_at INTEGER, created_at INTEGER NOT NULL);
-      CREATE INDEX IF NOT EXISTS tasks_due ON tasks(enabled, next_run_at);
-      CREATE TABLE IF NOT EXISTS task_runs (run_id TEXT PRIMARY KEY, task_id TEXT NOT NULL, owner TEXT NOT NULL, title TEXT NOT NULL, at INTEGER NOT NULL, read INTEGER NOT NULL DEFAULT 0);
-      CREATE INDEX IF NOT EXISTS task_runs_owner ON task_runs(owner, at);
-      CREATE TABLE IF NOT EXISTS notices (id TEXT PRIMARY KEY, owner TEXT NOT NULL, title TEXT NOT NULL, text TEXT NOT NULL, link TEXT, at INTEGER NOT NULL, read INTEGER NOT NULL DEFAULT 0);
-      CREATE INDEX IF NOT EXISTS notices_owner ON notices(owner, at);
-      CREATE TABLE IF NOT EXISTS proposals (id TEXT PRIMARY KEY, owner TEXT NOT NULL, task_id TEXT, run_id TEXT, kind TEXT NOT NULL, key TEXT NOT NULL, title TEXT NOT NULL,
-        summary TEXT NOT NULL, payload TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'pending', result TEXT, at INTEGER NOT NULL, decided_at INTEGER);
-      CREATE INDEX IF NOT EXISTS proposals_owner ON proposals(owner, status, at)`);
-    // Cột thêm sau: trình duyệt, nhớ kết quả cũ, chờ Chrome, số lần thử lại; loại lượt (chạy theo lịch / làm việc đã duyệt), ghi chú, đã xét thử lại.
-    const add = (table: string, cols: [string, string][]) => {
-      const have = new Set((d.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]).map((c) => c.name));
-      for (const [c, def] of cols) if (!have.has(c)) d.exec(`ALTER TABLE ${table} ADD COLUMN ${c} ${def}`);
-    };
-    add("tasks", [["browser", "TEXT NOT NULL DEFAULT 'auto'"], ["memory", "INTEGER NOT NULL DEFAULT 1"], ["wait_since", "INTEGER"], ["retries", "INTEGER NOT NULL DEFAULT 0"], ["engine", "TEXT NOT NULL DEFAULT 'chat'"]]);
-    add("task_runs", [["kind", "TEXT NOT NULL DEFAULT 'run'"], ["note", "TEXT"], ["retried", "INTEGER NOT NULL DEFAULT 0"], ["result", "TEXT"]]);
-    ready = true;
-  }
-  return d;
+  return db();
 }
 
 // ---------------------------------------------------------------- giờ theo múi giờ người dùng

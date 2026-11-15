@@ -1,4 +1,4 @@
-// Xóa tài khoản: quét mọi bảng khai báo trong app/ và db/schema.sql có cột người dùng; tệp trên đĩa; đăng nhập CLI; tệp tải lên có chủ.
+// Xóa tài khoản: quét mọi bảng khai báo trong mã nguồn và db/ (migrations) có cột người dùng; tệp trên đĩa; đăng nhập CLI; tệp tải lên có chủ.
 // Tự chạy được, không cần máy chủ: thư mục dữ liệu và nhà engine riêng cho lượt kiểm thử, Synchro không gọi dịch vụ workspace.
 import fs from "node:fs";
 import os from "node:os";
@@ -48,6 +48,7 @@ for (const t of tables) {
     d.prepare(`INSERT INTO "${t}" (${info.map((c) => `"${c.name}"`).join(",")}) VALUES (${info.map(() => "?").join(",")})`).run(...vals);
   }
 }
+ok(tables.length >= 80, `cơ sở dữ liệu có đủ bảng (${tables.length})`);
 ok(withUser.length >= 30, `tìm thấy ${withUser.length} bảng có cột người dùng`, withUser.map((x) => x.t).join());
 for (const must of ["runs", "user_memory", "brain_notes", "brain_links", "brain_queue", "brain_state", "brain_log", "instructions_history", "code_sessions", "code_prefs", "code_prs", "engine_sessions", "engine_turns", "engine_api_optin", "tool_refs", "speech_items", "notices", "proposals", "task_runs", "skill_scans", "skill_patches", "artifacts", "apps", "connectors", "outputs", "file_owners"])
   ok(withUser.some((x) => x.t === must), `bảng ${must} nằm trong phần quét`);

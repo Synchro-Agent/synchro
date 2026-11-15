@@ -15,21 +15,9 @@ export const APP_LIMITS = { content: 400_000, perUser: 100, value: 100_000, keys
 export class AppError extends Error { constructor(m: string, public status = 400) { super(m); } }
 const fail = (m: string, status = 400): never => { throw new AppError(m, status); };
 
-let ready = false;
+// Bảng apps, app_data, app_visits: db/migrations/001_baseline.sql (bộ chạy migration tạo khi mở cơ sở dữ liệu).
 function init() {
-  const d = db();
-  if (!ready) {
-    d.exec(`CREATE TABLE IF NOT EXISTS apps (id TEXT PRIMARY KEY, owner TEXT NOT NULL, title TEXT NOT NULL, type TEXT NOT NULL, content TEXT NOT NULL,
-      visibility TEXT NOT NULL DEFAULT 'private', conv TEXT NOT NULL, ident TEXT NOT NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL,
-      opens INTEGER NOT NULL DEFAULT 0, UNIQUE(owner, conv, ident));
-      CREATE INDEX IF NOT EXISTS apps_owner ON apps(owner, updated_at);
-      CREATE TABLE IF NOT EXISTS app_data (ref TEXT NOT NULL, owner TEXT NOT NULL, key TEXT NOT NULL, value TEXT NOT NULL, size INTEGER NOT NULL,
-      updated_by TEXT NOT NULL, updated_at INTEGER NOT NULL, PRIMARY KEY (ref, owner, key));
-      CREATE TABLE IF NOT EXISTS app_visits (app TEXT NOT NULL, user_id TEXT NOT NULL, at INTEGER NOT NULL, PRIMARY KEY (app, user_id));
-      CREATE INDEX IF NOT EXISTS app_visits_user ON app_visits(user_id)`);
-    ready = true;
-  }
-  return d;
+  return db();
 }
 
 const pub = (r: AppRow, uid: string): PublicApp => {

@@ -10,18 +10,9 @@ import { inlineSnapImages, SHARE_LIMITS, snapshotOf, type ShareSnap } from "./sh
 export type ShareRow = { token: string; user_id: string; conv: string; title: string; snap: string; size: number; created_at: number; updated_at: number };
 export type ShareInfo = { token: string; conv: string; title: string; size: number; createdAt: number; updatedAt: number };
 
-let ready = false;
+// Bảng shares, share_reports: db/migrations/001_baseline.sql (bộ chạy migration tạo khi mở cơ sở dữ liệu).
 function t() {
-  const d = db();
-  if (!ready) {
-    // ON DELETE CASCADE: xóa tài khoản thì mọi liên kết của tài khoản đó mất theo.
-    d.exec(`CREATE TABLE IF NOT EXISTS shares (token TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, conv TEXT NOT NULL, title TEXT NOT NULL,
-        snap TEXT NOT NULL, size INTEGER NOT NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, UNIQUE(user_id, conv));
-      CREATE INDEX IF NOT EXISTS shares_user ON shares(user_id, updated_at);
-      CREATE TABLE IF NOT EXISTS share_reports (id INTEGER PRIMARY KEY AUTOINCREMENT, token TEXT NOT NULL, title TEXT NOT NULL, owner TEXT NOT NULL, reason TEXT NOT NULL, ip TEXT NOT NULL, created_at INTEGER NOT NULL)`);
-    ready = true;
-  }
-  return d;
+  return db();
 }
 const info = (r: ShareRow): ShareInfo => ({ token: r.token, conv: r.conv, title: r.title, size: r.size, createdAt: r.created_at, updatedAt: r.updated_at });
 const okConv = (conv: unknown) => { const c = String(conv ?? ""); if (!/^[\w-]{1,64}$/.test(c)) throw new AuthError("Đoạn chat không hợp lệ.", 400); return c; };

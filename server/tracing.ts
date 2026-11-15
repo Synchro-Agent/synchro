@@ -96,14 +96,9 @@ export function noteFirstToken() {
 
 // ---- kết thúc lượt: vòng nhớ, tổng hợp theo ngày, log OTel ----
 const day = (ms: number) => new Date(ms).toISOString().slice(0, 10);
-let ready = false;
+// Bảng trace_daily: db/migrations/001_baseline.sql (bộ chạy migration tạo khi mở cơ sở dữ liệu).
 function tbl() {
-  const d = db();
-  if (!ready) {
-    d.exec("CREATE TABLE IF NOT EXISTS trace_daily (day TEXT NOT NULL, stage TEXT NOT NULL, provider TEXT NOT NULL, n INTEGER NOT NULL, samples TEXT NOT NULL, PRIMARY KEY (day, stage, provider))");
-    ready = true;
-  }
-  return d;
+  return db();
 }
 const MAX_SAMPLES = 1000;
 /** Thời lượng (ms) của từng chặng trong một lượt: chặng lặp lại (tool) cộng dồn mỗi lần là một mẫu riêng. */

@@ -1,9 +1,10 @@
-// Chỉ mục cho các truy vấn chạy thường xuyên: mỗi mô-đun tạo chỉ mục của mình khi mở bảng (CREATE INDEX IF NOT EXISTS), và kế hoạch truy vấn
+// Chỉ mục cho các truy vấn chạy thường xuyên: db/migrations tạo khi mở cơ sở dữ liệu (CREATE INDEX IF NOT EXISTS), và kế hoạch truy vấn
 // dùng đúng chỉ mục đó thay vì quét cả bảng. Tự chạy được, không cần máy chủ.
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { loadTs } from "../lib/ts.mjs";
+import { listMigrations } from "../../db/migrate.mjs";
 
 let pass = 0, fail = 0;
 const ok = (c, n, x = "") => { c ? pass++ : fail++; console.log(c ? "  ✓" : "  ✗", n, c ? "" : String(typeof x === "string" ? x : JSON.stringify(x)).slice(0, 400)); };
@@ -36,10 +37,11 @@ try {
   const meta = plan("SELECT kind, id, upd, rev, deleted, size FROM user_items WHERE user_id = ? AND rev > ? ORDER BY rev LIMIT 2000", "u", 0);
   ok(/USING COVERING INDEX user_items_meta/.test(meta), "danh sách thay đổi đồng bộ chỉ đọc chỉ mục, không mở dòng có data", meta);
 
-  console.log("3. Mở lại không lỗi (IF NOT EXISTS)");
+  console.log("3. Chạy lại không lỗi (IF NOT EXISTS)");
   const n = d.prepare("SELECT COUNT(*) AS n FROM sqlite_master WHERE type = 'index'").get().n;
-  d.exec(fs.readFileSync("db/schema.sql", "utf8"));
-  ok(d.prepare("SELECT COUNT(*) AS n FROM sqlite_master WHERE type = 'index'").get().n === n, "chạy lại schema.sql không thêm chỉ mục trùng");
+  const sqls = listMigrations().filter((m) => m.kind === "sql");
+  for (const m of sqls) d.exec(fs.readFileSync(m.file, "utf8"));
+  ok(sqls.length >= 1 && d.prepare("SELECT COUNT(*) AS n FROM sqlite_master WHERE type = 'index'").get().n === n, `chạy lại ${sqls.length} tệp migration .sql không thêm chỉ mục trùng`);
 } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
 console.log(`\n${pass} đạt, ${fail} lỗi`);
 process.exit(fail ? 1 : 0);

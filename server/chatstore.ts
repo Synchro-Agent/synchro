@@ -13,19 +13,9 @@ export type ItemRow = { kind: string; id: string; upd: number; rev: number; dele
 export type PushItem = { kind: SyncKind; id: string; upd: number; data?: string; deleted?: boolean };
 export type PushResult = { kind: string; id: string; ok: boolean; upd: number; rev: number; deleted?: boolean; error?: "too_big" | "quota" | "bad" | "disk"; removed?: boolean };
 
-let ready = false;
+// Bảng user_items: db/migrations/001_baseline.sql (bộ chạy migration tạo khi mở cơ sở dữ liệu).
 function t() {
-  const d = db();
-  if (!ready) {
-    // ON DELETE CASCADE: xóa tài khoản thì mọi đoạn chat và dự án trên máy chủ mất theo.
-    d.exec(`CREATE TABLE IF NOT EXISTS user_items (user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, kind TEXT NOT NULL, id TEXT NOT NULL, upd INTEGER NOT NULL, rev INTEGER NOT NULL,
-        deleted INTEGER NOT NULL DEFAULT 0, data TEXT, size INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (user_id, kind, id));
-      CREATE INDEX IF NOT EXISTS user_items_rev ON user_items(user_id, rev);
-      -- Chỉ mục phủ cho danh sách thay đổi (changesSince): đọc kind, id, upd, deleted, size theo rev mà không mở từng dòng có data (tới vài MB).
-      CREATE INDEX IF NOT EXISTS user_items_meta ON user_items(user_id, rev, kind, id, upd, deleted, size)`);
-    ready = true;
-  }
-  return d;
+  return db();
 }
 /** Dựng sẵn bảng + chỉ mục phủ lúc khởi động (instrumentation), để lần /api/chats đầu sau deploy không phải dựng chỉ mục đồng bộ giữa lúc có tải. */
 export function ensureStore() { t(); }

@@ -33,9 +33,7 @@ let ready = false;
 function init() {
   const d = db();
   if (!ready) {
-    d.exec(`CREATE TABLE IF NOT EXISTS outputs (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, name TEXT NOT NULL, mime TEXT NOT NULL, size INTEGER NOT NULL, created_at INTEGER NOT NULL);
-      CREATE INDEX IF NOT EXISTS outputs_user ON outputs(user_id, created_at);
-      CREATE INDEX IF NOT EXISTS outputs_name ON outputs(user_id, name, created_at)`);
+    // Bảng outputs: db/migrations/001_baseline.sql. Lần đầu dùng trong tiến trình thì dọn tệp hết hạn.
     ready = true;
     sweep();
   }

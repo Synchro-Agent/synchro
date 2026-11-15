@@ -55,32 +55,10 @@ const WIKI: NoteKind[] = ["topic", "entity"];
 const PROFILE_CATS: Record<string, string> = { who: "Bạn là ai", work: "Công việc & chuyên môn", habit: "Thói quen & cách làm việc", interest: "Mối quan tâm", style: "Cách bạn muốn được trả lời" };
 
 // ---------------------------------------------------------------- lưu trữ
-let ready = false;
+// Bảng brain_notes, brain_links, brain_queue, brain_state (kể cả mốc chăm sóc định kỳ và lần học lỗi gần nhất), brain_log,
+// instructions_history: db/migrations/001_baseline.sql, 002_reconcile.columns.json (bộ chạy migration tạo khi mở cơ sở dữ liệu).
 function t() {
-  const d = db();
-  if (!ready) {
-    d.exec(`CREATE TABLE IF NOT EXISTS brain_notes (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, kind TEXT NOT NULL, title TEXT NOT NULL, tkey TEXT NOT NULL, conv TEXT,
-        body TEXT NOT NULL DEFAULT '', props TEXT NOT NULL DEFAULT '{}', created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, UNIQUE(user_id, tkey));
-      CREATE INDEX IF NOT EXISTS brain_notes_conv ON brain_notes(user_id, conv);
-      CREATE INDEX IF NOT EXISTS brain_notes_updated ON brain_notes(user_id, updated_at);
-      CREATE TABLE IF NOT EXISTS brain_links (user_id TEXT NOT NULL, src TEXT NOT NULL, dkey TEXT NOT NULL, dtitle TEXT NOT NULL, PRIMARY KEY (src, dkey));
-      CREATE INDEX IF NOT EXISTS brain_links_dst ON brain_links(user_id, dkey);
-      CREATE TABLE IF NOT EXISTS brain_queue (user_id TEXT NOT NULL, conv TEXT NOT NULL, feature TEXT NOT NULL, snapshot TEXT NOT NULL, updated_at INTEGER NOT NULL,
-        tries INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (user_id, conv));
-      CREATE TABLE IF NOT EXISTS brain_state (user_id TEXT PRIMARY KEY, dirty INTEGER NOT NULL DEFAULT 0, hub_at INTEGER NOT NULL DEFAULT 0);
-      CREATE TABLE IF NOT EXISTS brain_log (user_id TEXT NOT NULL, at INTEGER NOT NULL, text TEXT NOT NULL);
-      CREATE INDEX IF NOT EXISTS brain_log_user ON brain_log(user_id, at);
-      CREATE TABLE IF NOT EXISTS instructions_history (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, at INTEGER NOT NULL, source TEXT NOT NULL, text TEXT NOT NULL);
-      CREATE INDEX IF NOT EXISTS instructions_history_user ON instructions_history(user_id, at)`);
-    // Mốc của các việc chăm sóc định kỳ (thêm cột cho bảng đã có từ bản trước).
-    const cols = new Set((d.prepare("PRAGMA table_info(brain_state)").all() as { name: string }[]).map((c) => c.name));
-    for (const c of ["garden_at", "merge_at", "maps_at", "ins_at", "profile_dirty", "maps_n"]) if (!cols.has(c)) d.exec(`ALTER TABLE brain_state ADD COLUMN ${c} INTEGER NOT NULL DEFAULT 0`);
-    // Lần học lỗi gần nhất (cột chữ, thêm lười cho bảng đã có).
-    if (!cols.has("learn_err")) d.exec("ALTER TABLE brain_state ADD COLUMN learn_err TEXT");
-    if (!cols.has("learn_err_at")) d.exec("ALTER TABLE brain_state ADD COLUMN learn_err_at INTEGER NOT NULL DEFAULT 0");
-    ready = true;
-  }
-  return d;
+  return db();
 }
 type State = { learn_err: string | null; learn_err_at: number; dirty: number; hub_at: number; garden_at: number; merge_at: number; maps_at: number; ins_at: number; profile_dirty: number; maps_n: number };
 const state = (uid: string): State => {

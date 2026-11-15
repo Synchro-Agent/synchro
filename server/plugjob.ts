@@ -10,17 +10,9 @@ import { altsOf, CD, closedReason, dirDef, dirEntries, dirEntry, dirSynced, type
 export type JobFail = { id: string; name: string; reason: string; kind: "license" | "missing" | "network" | "other" };
 export type Job = { by: string; auto?: boolean; pass?: number; paused?: number | null; cat: string | null; started: number; finished: number | null; stopped: boolean; total: number; done: number; installed: number; skills: number; failed: JobFail[]; current: string[] };
 
-let ready = false;
+// Bảng plugin_jobs, plugin_catalog_*: db/migrations/001_baseline.sql (bộ chạy migration tạo khi mở cơ sở dữ liệu).
 function init() {
-  const d = db();
-  if (!ready) {
-    d.exec(`CREATE TABLE IF NOT EXISTS plugin_jobs (key TEXT PRIMARY KEY, value TEXT NOT NULL);
-      CREATE TABLE IF NOT EXISTS plugin_catalog_removed (catalog_id TEXT PRIMARY KEY, at INTEGER NOT NULL);
-      CREATE TABLE IF NOT EXISTS plugin_catalog_blocked (catalog_id TEXT PRIMARY KEY, name TEXT NOT NULL, reason TEXT NOT NULL, commit_sha TEXT NOT NULL DEFAULT '', at INTEGER NOT NULL);
-      CREATE TABLE IF NOT EXISTS plugin_catalog_failed (catalog_id TEXT PRIMARY KEY, name TEXT NOT NULL, reason TEXT NOT NULL, kind TEXT NOT NULL, commit_sha TEXT NOT NULL DEFAULT '', at INTEGER NOT NULL)`);
-    ready = true;
-  }
-  return d;
+  return db();
 }
 const G = globalThis as unknown as { __plugJob?: { job: Job; running: boolean } };
 const save = (j: Job) => init().prepare("INSERT OR REPLACE INTO plugin_jobs (key, value) VALUES ('catalog', ?)").run(JSON.stringify(j));
@@ -133,7 +125,6 @@ export function ensureCatalogDefaults() {
   const synced = dirSynced();
   if (!synced) return;
   const d = init();
-  d.exec("CREATE TABLE IF NOT EXISTS plugin_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)");
   const done = (d.prepare("SELECT value FROM plugin_meta WHERE key = 'catalog-synced'").get() as { value: string } | undefined)?.value;
   if (done === synced || jobRunning()) return;
   d.prepare("INSERT OR REPLACE INTO plugin_meta (key, value) VALUES ('catalog-synced', ?)").run(synced);

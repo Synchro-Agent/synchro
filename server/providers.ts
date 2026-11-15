@@ -33,11 +33,7 @@ let ready = false;
 function table() {
   const d = db();
   if (!ready) {
-    d.exec(`CREATE TABLE IF NOT EXISTS api_providers (
-      id TEXT PRIMARY KEY, kind TEXT NOT NULL, name TEXT NOT NULL, base_url TEXT, enc_key TEXT NOT NULL, key_hint TEXT NOT NULL,
-      models TEXT NOT NULL DEFAULT '[]', status TEXT NOT NULL DEFAULT 'ok', error TEXT, info TEXT, checked_at INTEGER, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL)`);
-    // Khóa Anthropic không gắn với workspace: mỗi lời gọi phải nêu workspace, nên lưu kèm khóa (không phải bí mật).
-    if (!(d.prepare("PRAGMA table_info(api_providers)").all() as { name: string }[]).some((c) => c.name === "workspace_id")) d.exec("ALTER TABLE api_providers ADD COLUMN workspace_id TEXT");
+    // Bảng api_providers (cột workspace_id: khóa Anthropic không gắn với workspace, mỗi lời gọi phải nêu workspace): db/migrations/001_baseline.sql, 002_reconcile.columns.json.
     // Khóa dự án Composio dùng chung đã bỏ (mỗi người tự liên kết Composio của mình): không giữ khóa cũ của quản trị viên trong cơ sở dữ liệu.
     d.prepare("DELETE FROM api_providers WHERE id = 'composio' OR kind = 'composio'").run();
     ready = true;

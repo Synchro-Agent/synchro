@@ -16,8 +16,7 @@ let ready = false;
 function init() {
   const d = db();
   if (!ready) {
-    d.exec(`CREATE TABLE IF NOT EXISTS tool_refs (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, conv TEXT, name TEXT NOT NULL, content TEXT NOT NULL, created_at INTEGER NOT NULL);
-      CREATE INDEX IF NOT EXISTS tool_refs_user ON tool_refs(user_id, created_at)`);
+    // Bảng tool_refs: db/migrations/001_baseline.sql.
     d.prepare("DELETE FROM tool_refs WHERE created_at < ?").run(Date.now() - KEEP_MS);
     ready = true;
   }
