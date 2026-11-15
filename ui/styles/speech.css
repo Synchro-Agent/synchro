@@ -314,11 +314,9 @@
 @media (max-width:600px){.sp-dline textarea {flex-basis:100%;order:3
 }}
 /* Dạng sóng của trình phát: 56 vạch tối thiểu 1px + khe 2px cần 166px, rộng hơn chỗ còn lại trên điện thoại khi đồng hồ có phần thập phân (“0:00.0 / 0:09.5”),
-   nên vạch tràn sang chạm chữ giờ. Cắt phần thừa để khe 10px trước đồng hồ luôn còn; điện thoại thu khe giữa các vạch còn 1px (111px, vừa chỗ). */
-.sp-player .sp-wave {overflow:hidden
+   nên vạch tràn sang chạm chữ giờ. Khe theo bề rộng (tối đa 2px, 1% khi hẹp: vừa từ 125px) và cắt phần thừa để khe 10px trước đồng hồ luôn còn. */
+.sp-player .sp-wave {overflow:hidden;gap:min(2px,1%)
 }
-@media (max-width:600px){.sp-player .sp-wave {gap:1px
-}}
 .modal .sp-search {display:flex;margin:0;font-size:inherit;font-weight:360
 }
 .vm-top {position:absolute;top:calc(22px + env(safe-area-inset-top));left:0;right:0;display:flex;justify-content:center
