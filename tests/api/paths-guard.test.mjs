@@ -8,7 +8,7 @@
 // 6. ops/ và tools/: scripts/ chỉ còn tệp web chạy lúc chạy và lớp chuyển tiếp; deploy gọi ops/, harden giữ ops/ thuộc root.
 import fs from "node:fs";
 import path from "node:path";
-import { chatEngineFiles, walkSrc } from "../lib/srcroots.mjs";
+import { authStoreFiles, chatEngineFiles, walkSrc } from "../lib/srcroots.mjs";
 
 let pass = 0, fail = 0;
 const ok = (c, n, x = "") => { c ? pass++ : fail++; console.log(c ? "  ✓" : "  ✗", n, c ? "" : String(x).slice(0, 4000)); };
@@ -201,6 +201,39 @@ ok(pkg["dev:mock"] === "node tools/dev-mock.mjs" && pkg.qa === "node tools/qa.mj
   ok(files.length >= 5 && !extra.length, "server/chatengine.ts chỉ chuyển tiếp (export … from), mã ở server/chat/", extra.join("\n"));
   const lines = files.slice(1).map((f) => fs.readFileSync(f, "utf8").split("\n").length);
   ok(lines.reduce((a, b) => a + b, 0) > 2000, `bốn phần ở server/chat/ còn đủ mã (${lines.join(" + ")} dòng)`);
+}
+
+// Bước 6b: authstore.ts tách thành server/db/{db,settings}.ts, server/ratelimit.ts, server/auth/*.ts; tệp cũ chỉ còn là mặt tiền chuyển tiếp.
+// Một lớp AuthError duy nhất (instanceof trong handle() phải khớp mọi nơi ném), các phần tài khoản không nhập vòng nhau.
+{
+  const files = authStoreFiles();
+  const facade = fs.readFileSync("server/authstore.ts", "utf8").split("\n").filter((l) => l.trim() && !l.startsWith("//") && l !== 'import "server-only";');
+  const extra = facade.filter((l) => !/^export (type )?\{ [\w, ]+ \} from "\.\.?\/[\w/]+";$/.test(l));
+  ok(files.length >= 12 && !extra.length, "server/authstore.ts chỉ chuyển tiếp (export … from), mã ở server/db/, server/ratelimit.ts, server/auth/", extra.join("\n"));
+  const lines = files.slice(1).map((f) => fs.readFileSync(f, "utf8").split("\n").length);
+  ok(lines.reduce((a, b) => a + b, 0) > 1000, `các phần tài khoản còn đủ mã (${lines.join(" + ")} dòng)`);
+  const cls = walkSrc(/\.tsx?$/).filter((f) => /^export class AuthError\b/m.test(fs.readFileSync(f, "utf8")));
+  ok(cls.length === 1 && cls[0] === "server/auth/errors.ts", "AuthError khai báo đúng một nơi (server/auth/errors.ts)", cls.join(", "));
+  // Đồ thị nhập giữa các phần (bỏ import type): không có vòng.
+  const parts = files.slice(1), deps = new Map();
+  for (const f of parts) {
+    const src = fs.readFileSync(f, "utf8"), out = [];
+    for (const m of src.matchAll(/^import (?!type )[^"]*from "(\.{1,2}\/[\w/.-]+)";$/gm)) {
+      const t = P.normalize(P.join(P.dirname(f), m[1])) + ".ts";
+      if (parts.includes(t)) out.push(t);
+    }
+    deps.set(f, out);
+  }
+  const cyc = [], state = new Map();
+  const visit = (f, stack) => {
+    if (state.get(f) === 2) return;
+    if (state.get(f) === 1) { cyc.push([...stack.slice(stack.indexOf(f)), f].join(" → ")); return; }
+    state.set(f, 1);
+    for (const t of deps.get(f)) visit(t, [...stack, f]);
+    state.set(f, 2);
+  };
+  for (const f of parts) visit(f, []);
+  ok(!cyc.length, "các phần tài khoản không nhập vòng nhau", cyc.join("\n"));
 }
 
 console.log(`\n${pass} đạt, ${fail} lỗi`);

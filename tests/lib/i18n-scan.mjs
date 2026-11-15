@@ -32,7 +32,7 @@ export const PAIR_ALLOW = {
   "ui/voiceflow.ts": "câu nói đáp theo ngôn ngữ người dùng vừa nói, không theo ngôn ngữ giao diện",
   "ui/voicemode.tsx": "vlang là giá trị lưu (English / Vietnamese); câu báo chờ lâu nói theo ngôn ngữ của lượt nói",
   "ui/speech/voices.tsx": "ngôn ngữ mặc định của bộ lọc giọng, không phải chữ",
-  "server/authstore.ts": "ngôn ngữ thư gửi đi theo yêu cầu / Accept-Language",
+  "server/auth/flows.ts": "ngôn ngữ thư gửi đi theo yêu cầu / Accept-Language",
   "app/api/skill-scan/route.ts": "chuẩn hóa tham số lang của yêu cầu",
   "app/api/admin/health/route.ts": "chuẩn hóa tham số lang của yêu cầu",
   "app/api/speech/[...op]/route.ts": "lời nhắc gửi model theo ngôn ngữ người dùng chọn",

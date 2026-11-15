@@ -1,4 +1,4 @@
-// Header Server-Timing (auth / work / total) trên mọi phản hồi của /api/* (server/servertiming.ts, handle() trong server/authstore.ts).
+// Header Server-Timing (auth / work / total) trên mọi phản hồi của /api/* (server/servertiming.ts, handle() trong server/auth/request.ts).
 // 1. Bộ bọc timed(): đúng định dạng, cộng dồn thời gian kiểm tra đăng nhập, không gắn hai lần khi bọc lồng, phản hồi có header bất biến.
 // 2. Mọi route trong app/api đều đi qua handle() / route() / engineRoute() / timed() (route mới quên bọc thì bộ này báo).
 // 3. Máy chủ thật: các API trang chính gọi khi mở trang đều mang Server-Timing. Chạy trên npm run dev:mock (đổi địa chỉ bằng SYNCHRO_URL).

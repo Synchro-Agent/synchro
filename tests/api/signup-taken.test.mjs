@@ -7,6 +7,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { loadTs } from "../lib/ts.mjs";
+import { readAuthStore } from "../lib/srcroots.mjs";
 
 let pass = 0, fail = 0;
 const ok = (c, n, x = "") => { c ? pass++ : fail++; console.log(c ? "  ✓" : "  ✗", n, c ? "" : String(typeof x === "string" ? x : JSON.stringify(x)).slice(0, 500)); };
@@ -95,7 +96,7 @@ try {
     ok((await login("tat-xm@taken.test", "Mat-khau-moi-456")).s === 200, "yêu cầu xác minh tắt: đăng nhập ngay được, không ai bị kẹt ngoài");
   } finally { AS.setVerifyGate(true); }
   // Giới hạn chỉ riêng đường "email đã có" sẽ thành dấu hiệu dò (429 chỉ với email đã đăng ký): chỉ còn giới hạn chung theo IP.
-  const src = fs.readFileSync(path.join(process.cwd(), "server/authstore.ts"), "utf8");
+  const src = readAuthStore();
   ok(!/limit\("signup-taken:"/.test(src) && /limit\("signup:" \+ ip/.test(src), "không có giới hạn riêng cho email đã có tài khoản, giới hạn chung theo IP còn nguyên");
 
   console.log("5. Phim giới thiệu: lần đăng nhập đầu, dù đăng ký từ hôm trước");

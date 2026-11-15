@@ -40,3 +40,15 @@ export function chatEngineFiles(cwd = process.cwd()) {
 }
 /** Mã nguồn của bộ xử lý chat (mặt tiền + mọi phần), nối lại. */
 export const readChatEngine = (cwd = process.cwd()) => chatEngineFiles(cwd).map((f) => readFileSync(path.join(cwd, f), "utf8")).join("\n");
+
+// Tài khoản sau khi tách (H3 bước 6b): mặt tiền server/authstore.ts (chỉ chuyển tiếp) và các phần ở server/db/, server/ratelimit.ts, server/auth/.
+// Thiếu một phần đã biết thì báo lỗi, không trả chuỗi rỗng.
+export const AUTH_STORE_PARTS = ["server/db/db.ts", "server/db/settings.ts", "server/ratelimit.ts", ...["config", "errors", "types", "passwords", "request", "users", "sessions", "flows", "admin"].map((p) => `server/auth/${p}.ts`)];
+export function authStoreFiles(cwd = process.cwd()) {
+  const all = ["server/authstore.ts", ...AUTH_STORE_PARTS];
+  const missing = all.filter((f) => !existsSync(path.join(cwd, f)));
+  if (missing.length) throw new Error(`authStoreFiles: thiếu ${missing.join(", ")}`);
+  return all;
+}
+/** Mã nguồn của phần tài khoản (mặt tiền + mọi phần), nối lại. */
+export const readAuthStore = (cwd = process.cwd()) => authStoreFiles(cwd).map((f) => readFileSync(path.join(cwd, f), "utf8")).join("\n");
