@@ -10,8 +10,8 @@ import { startCascade } from "../voicecall";
 import { PearlOrb } from "../pearlorb";
 import { tr, locale } from "../i18n";
 import { AGENT_MODELS, AGENT_TEMPLATES } from "../../shared/speech/data";
-import { LANGS, ago, api, del, fmtDur, post, useItems, usePlan, type Item, type Voice } from "./client";
-import { Field, ModelPick, Range, Select, Spin, Toggle, VoiceAvatar, VoicePicker } from "./parts";
+import { LANGS, ago, api, checkMic, del, fmtDur, langLabel, micError, post, useItems, usePlan, type Item, type Voice } from "./client";
+import { ErrBox, Field, ModelPick, Range, Select, Spin, Toggle, VoiceAvatar, VoicePicker } from "./parts";
 import { Head, Split } from "./shell";
 import type { ToolProps } from "./view";
 
@@ -34,6 +34,7 @@ export function AgentTool({ say, sub, setSub, voice: shared }: ToolProps) {
   const [heard, setHeard] = useState("");
   const [sec, setSec] = useState(0);
   const [muted, setMuted] = useState(false);
+  const [micErr, setMicErr] = useState("");
   const [pick, setPick] = useState(false);
   const [hist, setHist] = useItems(["call"]);
   const [open, setOpen] = useState<{ item: Item; lines: Line[] } | null>(null);
@@ -65,7 +66,10 @@ export function AgentTool({ say, sub, setSub, voice: shared }: ToolProps) {
     }
   };
   const start = async () => {
-    setLines([]); setSec(0); secRef.current = 0; setPhase("connecting");
+    setLines([]); setSec(0); secRef.current = 0; setPhase("connecting"); setMicErr("");
+    // Mở thử micro trước: trình duyệt chặn micro thì báo rõ cách cho phép ngay tại khung gọi, không để nút đứng im.
+    const bad = await checkMic();
+    if (bad) { setPhase("idle"); setMicErr(bad); say(bad); return; }
     try {
       const s = await post<{ value?: string; url: string; model: string; voice: string; cascade?: boolean }>("agent/session", { model: c.model, voice: voiceId, prompt: c.prompt, lang: c.lang, eagerness: c.eager < 34 ? "low" : c.eager < 67 ? "medium" : "high", interrupt: c.interrupt, maxMin: c.maxMin });
       const handlers: RtHandlers = {
@@ -82,7 +86,13 @@ export function AgentTool({ say, sub, setSub, voice: shared }: ToolProps) {
         if (voiceId && !s.voice) say("Giọng đã chọn chưa dùng được cho Realtime, agent dùng giọng mặc định");
         conn.current = await startRealtime({ url: s.url, model: s.model, secret: s.value, micLevel: micLv, outLevel: aiLv, muted: () => mutedRef.current, barge: () => c.interrupt, greet: c.first }, handlers);
       }
-    } catch (e) { setPhase("idle"); say((e as Error).message || "Không mở được micro: hãy cho phép Synchro dùng micro"); }
+    } catch (e) {
+      setPhase("idle");
+      const name = (e as { name?: string } | null)?.name ?? "";
+      const m = /^(NotAllowed|NotFound|NotReadable|Security|Overconstrained|Abort)Error$/.test(name) ? micError(e) : (e as Error).message || micError(e);
+      if (m === micError(e)) setMicErr(m);
+      say(m);
+    }
   };
   const view = async (it: Item) => {
     try { const j = await api<{ data: { lines: Line[] } }>(`items?id=${it.id}`); setOpen({ item: it, lines: j.data?.lines ?? [] }); } catch (e) { say((e as Error).message); }
@@ -141,7 +151,7 @@ export function AgentTool({ say, sub, setSub, voice: shared }: ToolProps) {
         <div className={`sp-call ${phase === "speak" ? "speak" : live ? "listen" : "idle"}`}>
           <div className="sp-agent-orb"><PearlOrb level={level} active={live} /></div>
           <b className="sp-call-n" data-notr>{c.name}</b>
-          <span className="sp-muted">{!live ? `${rt ? model.name : "Scribe + Synchro + ElevenLabs"} · giọng ${voiceName} · ${LANGS.find((x) => x[0] === c.lang)?.[1] ?? c.lang}` : phase === "connecting" ? "Đang kết nối…" : `${phase === "speak" ? "Đang nói" : phase === "think" ? "Đang nghĩ" : "Đang nghe"} · ${fmtDur(sec)}`}</span>
+          <span className="sp-muted">{!live ? `${rt ? model.name : "Scribe + Synchro + ElevenLabs"} · giọng ${voiceName} · ${LANGS.find((x) => x[0] === c.lang)?.[1] ?? langLabel(c.lang, c.lang)}` : phase === "connecting" ? "Đang kết nối…" : `${phase === "speak" ? "Đang nói" : phase === "think" ? "Đang nghĩ" : "Đang nghe"} · ${fmtDur(sec)}`}</span>
           <div className="sp-call-a">
             {!live ? (
               <button className="btn dark sp-go" onClick={start}><I.Mic size={15} />Gọi thử</button>
@@ -152,6 +162,7 @@ export function AgentTool({ say, sub, setSub, voice: shared }: ToolProps) {
               </>
             )}
           </div>
+          {!live && <ErrBox msg={micErr} />}
         </div>
         <div className="sp-ctrans" ref={scroll} aria-live="polite">
           {!lines.length && !caption && !heard && <div className="sp-empty">Bấm “Gọi thử” để nói chuyện với agent bằng micro. Lời thoại sẽ hiện ở đây.</div>}

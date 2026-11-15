@@ -8,7 +8,7 @@ import { LiquidOrb } from "../liquidorb";
 import { readBrowser, stopBrowserRead } from "../browserspeak";
 import { useApp, usePref, VOICE_RATE } from "../store";
 import { toSpeech, VI } from "../voiceflow";
-import { CAT_LABEL, LANGS, api, fmtDur, fmtNum, hueOf, on, post, refreshPlan, reloadVoices, useMyVoices, usePlan, usePlanFailed, type Voice } from "./client";
+import { CAT_LABEL, LANGS, api, fmtClock, fmtDur, fmtNum, hueOf, micError, on, post, refreshPlan, reloadVoices, useMyVoices, usePlan, usePlanFailed, type Voice } from "./client";
 import { AGES, CATEGORIES, GENDERS } from "../../shared/speech/data";
 
 // Mức hoạt động khi đang phát (âm tiết và quãng nghỉ), dùng chung cho các quả cầu.
@@ -104,7 +104,7 @@ export function Recorder({ onDone, say, label = "Ghi âm", max = 300 }: { onDone
         if (chunks.length) onDone(new File(chunks, `Ghi âm ${String(d.getHours()).padStart(2, "0")}-${String(d.getMinutes()).padStart(2, "0")}.${ext}`, { type: mime.split(";")[0] }));
       };
       r.start(250); setSec(0); setRec(r);
-    } catch { say("Không mở được micro: hãy cho phép Synchro dùng micro trong trình duyệt"); }
+    } catch (e) { say(micError(e)); }
   };
   return rec
     ? <button type="button" className="btn sp-recon" onClick={() => rec.stop()}><i className="sp-recdot" />Dừng · {fmtDur(sec)}</button>
@@ -195,7 +195,7 @@ export function Player({ src, title, label, dl, name, seekTo, onTime }: { src: s
         {title && <span className="sp-ptitle">{title}</span>}
         <Wave src={src} progress={dur ? t / dur : 0} onSeek={seek} />
       </div>
-      <span className="sp-time">{fmtDur(t)} / {fmtDur(dur)}</span>
+      <span className="sp-time">{fmtClock(t, dur)} / {fmtClock(dur, dur)}</span>
       {dl && <button className="icon-btn" aria-label="Tải xuống" title="Tải xuống" onClick={save}><I.Download size={17} /></button>}
     </div>
   );
@@ -224,7 +224,7 @@ export function Dock() {
       <span className="sp-dock-t" data-notr>{now.title}</span>
       <input className="sp-range sp-dock-r" type="range" min={0} max={1000} value={Math.round(p * 1000)} aria-label="Tua" style={{ "--p": `${p * 100}%` } as React.CSSProperties}
         onChange={(e) => { if (dur) a.currentTime = (Number(e.target.value) / 1000) * dur; }} />
-      <span className="sp-time">{fmtDur(a.currentTime)} / {fmtDur(dur)}</span>
+      <span className="sp-time">{fmtClock(a.currentTime, dur)} / {fmtClock(dur, dur)}</span>
       {now.dl && <button className="icon-btn" aria-label="Tải xuống" title="Tải xuống" onClick={() => saveUrl(now.dl!)}><I.Download size={16} /></button>}
       <button className="icon-btn" aria-label="Đóng trình phát" onClick={closeNowPlaying}><I.X size={16} /></button>
     </div>

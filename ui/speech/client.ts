@@ -1,8 +1,9 @@
 "use client";
 // Phía trình duyệt của Speech: gọi /api/speech, giữ gói ElevenLabs (credit, tính năng) dùng chung cho mọi công cụ và thanh bên.
-import { useEffect, useState, useSyncExternalStore } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { NO_SERVER } from "../apierr";
-import { locale } from "../i18n";
+import { locale, tf } from "../i18n";
+import { fmtClockOf, fmtDurOf, itemTitleKey, langLabelOf, micErrorOf } from "../../shared/speech/fmt";
 
 // Kiểu dùng chung với phía bên kia: shared/types/speech.ts.
 import type { Feat, ModelOut, Plan } from "../../shared/types/speech";
@@ -81,6 +82,29 @@ export function useItems(kinds: string[], dep = 0) {
   return [items, setItems] as const;
 }
 
+export const running = (x: Item) => ["dubbing", "converting"].includes(String(x.meta.status));
+// Hỏi lại trạng thái các dự án đang chạy: 5 giây sau khi gửi, rồi mỗi 10 giây tới khi xong. Vòng hỏi chạy theo đồng hồ riêng, không theo danh sách:
+// trước đây vòng sau chỉ được hẹn khi danh sách đổi, nên một lần hỏi lỗi hay chậm (lúc lồng tiếng xong máy chủ còn tải âm thanh về) là dừng hẳn,
+// danh sách đứng ở “Đang dịch và lồng tiếng…” dù ElevenLabs đã xong, phải mở lại trang mới thấy (G6.5).
+export function usePoll(items: Item[] | null, setItems: (f: (l: Item[] | null) => Item[] | null) => void, op: "dub" | "project" | "native", every = 10_000) {
+  const ref = useRef(items);
+  ref.current = items;
+  const has = (items ?? []).some(running);
+  useEffect(() => {
+    if (!has) return;
+    let dead = false, t: ReturnType<typeof setTimeout> | undefined;
+    const round = async () => {
+      for (const it of (ref.current ?? []).filter(running)) {
+        if (dead) return;
+        const j = await api<{ item: Item }>(`${op}?id=${it.id}`).catch(() => null);
+        if (j && !dead) setItems((l) => l?.map((x) => (x.id === it.id ? j.item : x)) ?? null);
+      }
+      if (!dead) t = setTimeout(round, every);
+    };
+    t = setTimeout(round, Math.min(5_000, every));
+    return () => { dead = true; clearTimeout(t); };
+  }, [has, setItems, op, every]);
+}
 // ---- danh mục hiệu ứng và từ điển phát âm (dùng chung giữa Đọc văn bản và trang Từ điển) ----
 let fxCat: Effects | null = null;
 export function useEffectsCatalog(enabled: boolean) {
@@ -100,7 +124,16 @@ export function useDicts(enabled: boolean) {
 
 // ---- định dạng ----
 export const fmtNum = (n: number) => Math.round(n).toLocaleString(locale());
-export const fmtDur = (s: number) => { s = Math.max(0, Math.round(s)); const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), x = s % 60; return h ? `${h}:${String(m).padStart(2, "0")}:${String(x).padStart(2, "0")}` : `${m}:${String(x).padStart(2, "0")}`; };
+export const fmtDur = fmtDurOf;
+/** Đồng hồ của trình phát (shared/speech/fmt.ts): bản dưới 10 giây có một chữ số thập phân, không còn “0:00 / 0:00”. */
+export const fmtClock = (t: number, total: number) => fmtClockOf(t, total, locale());
+/** Tên ngôn ngữ theo ngôn ngữ giao diện từ mã ISO (vi, en, vie…). */
+export const langLabel = (code: unknown, fallback = "") => langLabelOf(code, locale(), fallback);
+/** Tiêu đề hiển thị của một sản phẩm: tiêu đề do Synchro đặt dựng lại theo ngôn ngữ giao diện; tiêu đề từ nội dung người dùng giữ nguyên. */
+export function itemTitle(it: Item) {
+  const k = itemTitleKey(it);
+  return k ? tf(k[0], k[1]) : it.title;
+}
 export function ago(t: number) {
   const s = (Date.now() - t) / 1000;
   if (s < 60) return "Vừa xong";
@@ -108,6 +141,27 @@ export function ago(t: number) {
   if (s < 86400) return `${Math.floor(s / 3600)} giờ trước`;
   if (s < 7 * 86400) return `${Math.floor(s / 86400)} ngày trước`;
   return new Date(t).toLocaleDateString(locale());
+}
+// ---- micro ----
+/** Lời báo khi không mở được micro, theo lỗi của trình duyệt, kèm cách cho phép micro. */
+export const micError = (e: unknown): string => micErrorOf((e as { name?: string } | null)?.name ?? "");
+/** Mở thử micro trước khi gọi: null khi dùng được, không thì lời báo (micError). Quyền đã bị chặn, khung nhúng không có quyền micro,
+ *  hay trình duyệt không hỏi gì (lời hỏi bị ẩn, chờ mãi) đều thành lời báo rõ ràng thay vì nút đứng im. */
+export async function checkMic(waitMs = 20_000): Promise<string | null> {
+  if (typeof navigator === "undefined" || !navigator.mediaDevices?.getUserMedia) return micError({ name: "NoMic" });
+  try {
+    const st = await navigator.permissions?.query({ name: "microphone" as PermissionName });
+    if (st?.state === "denied") return micError({ name: "NotAllowedError" });
+  } catch {}
+  let late = false, timer: ReturnType<typeof setTimeout> | undefined;
+  const ask = navigator.mediaDevices.getUserMedia({ audio: true });
+  // Hết giờ chờ mà trình duyệt mới cho phép: tắt luôn micro vừa mở, không để đèn micro sáng.
+  ask.then((s) => { if (late) s.getTracks().forEach((t) => t.stop()); }, () => {});
+  try {
+    const stream = await Promise.race([ask, new Promise<never>((_, no) => { timer = setTimeout(() => { late = true; no({ name: "TimeoutError" }); }, waitMs); })]);
+    stream.getTracks().forEach((t) => t.stop());
+    return null;
+  } catch (e) { return micError(e); } finally { clearTimeout(timer); }
 }
 // Màu quả cầu của giọng: ổn định theo id, không phụ thuộc thứ tự.
 export const hueOf = (id: string) => { let h = 0; for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) % 360; return h; };

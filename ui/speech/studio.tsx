@@ -3,27 +3,20 @@
 // Các việc này chạy lâu ở ElevenLabs: tạo xong thì Synchro tự hỏi lại trạng thái tới khi có âm thanh.
 import { useEffect, useState } from "react";
 import * as I from "../icons";
+import { tr } from "../i18n";
 import { DUB_LANGS } from "../../shared/speech/data";
-import { LANGS, ago, api, del, on, post, postForm, useItems, useMyVoices, usePlan, type Item, type Voice } from "./client";
+import { LANGS, ago, del, fmtDur, langLabel, on, running, usePoll, post, postForm, useItems, useMyVoices, usePlan, type Item, type Voice } from "./client";
 import { Drop, ErrBox, Field, Player, Seg, Select, Spin, Tabs, Toggle, VoiceChip, VoicePicker } from "./parts";
 import { Head, Wide } from "./shell";
 import type { ToolProps } from "./view";
 
 type Tab = "podcast" | "book";
 
-// Hỏi lại trạng thái các dự án đang chạy mỗi 15 giây.
-function usePoll(items: Item[] | null, setItems: (f: (l: Item[] | null) => Item[] | null) => void, op: "dub" | "project") {
-  useEffect(() => {
-    const busy = (items ?? []).filter((x) => ["dubbing", "converting"].includes(String(x.meta.status)));
-    if (!busy.length) return;
-    const t = setTimeout(async () => {
-      for (const it of busy) {
-        const j = await api<{ item: Item }>(`${op}?id=${it.id}`).catch(() => null);
-        if (j) setItems((l) => l?.map((x) => (x.id === it.id ? j.item : x)) ?? null);
-      }
-    }, 15_000);
-    return () => clearTimeout(t);
-  }, [items, setItems, op]);
+/** Đồng hồ giây cho thanh tiến độ (chỉ chạy khi có dự án đang chạy). */
+function useNow(on: boolean) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => { if (!on) return; const t = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(t); }, [on]);
+  return now;
 }
 
 export function StudioTool({ say, sub, setSub }: ToolProps) {
@@ -45,6 +38,7 @@ export function DubTool({ say }: ToolProps) {
 
 function Projects({ items, setItems, say, kind }: { items: Item[] | null; setItems: (f: (l: Item[] | null) => Item[] | null) => void; say: (m: string) => void; kind: string }) {
   const list = (items ?? []).filter((x) => x.kind === kind);
+  const now = useNow(list.some(running));
   const remove = (it: Item) => del("items", it.id).then(() => setItems((l) => l?.filter((x) => x.id !== it.id) ?? null)).catch((e: Error) => say(e.message));
   return (
     <div className="sp-card">
@@ -55,13 +49,27 @@ function Projects({ items, setItems, say, kind }: { items: Item[] | null; setIte
         const st = String(d.meta.status);
         return (
           <div key={d.id} className="sp-proj">
-            <div className="sp-proj-t"><I.Film size={16} /><b data-notr>{d.title}</b>{d.meta.targetName ? <span className="sp-pill">{String(d.meta.targetName)}</span> : null}<span className="sp-muted">{ago(d.createdAt)}</span><button className="icon-btn" aria-label="Xóa" onClick={() => remove(d)}><I.Trash size={14} /></button></div>
+            <div className="sp-proj-t"><I.Film size={16} /><b data-notr>{d.title}</b>{d.meta.target ? <span className="sp-pill">{langLabel(d.meta.target, String(d.meta.targetName ?? ""))}</span> : null}<span className="sp-muted">{ago(d.createdAt)}</span><button className="icon-btn" aria-label="Xóa" onClick={() => remove(d)}><I.Trash size={14} /></button></div>
             {st === "failed" ? <div className="api-err in"><I.Alert size={14} /><span>{String(d.meta.error ?? "ElevenLabs không hoàn thành được dự án này.")}</span></div>
               : d.url ? <Player src={d.url} dl={d.url} />
-              : <div className="sp-progress ind"><i /><span>{kind === "dub" ? "Đang dịch và lồng tiếng" : "Đang tạo âm thanh"}… Synchro tự cập nhật khi xong.</span></div>}
+              : <Progress kind={kind} it={d} now={now} />}
           </div>
         );
       })}
+    </div>
+  );
+}
+
+// Tiến độ của dự án đang chạy: lồng tiếng có thời gian ElevenLabs dự kiến (expected_duration_sec) thì hiện thanh phần trăm và đã chạy / dự kiến
+// (giữ dưới 95% tới khi thật sự xong); không có dự kiến thì thanh chạy liên tục kèm thời gian đã chạy.
+function Progress({ kind, it, now }: { kind: string; it: Item; now: number }) {
+  const sec = Math.max(0, (now - it.createdAt) / 1000), exp = Number(it.meta.expected) || 0;
+  const pct = exp > 0 ? Math.min(95, Math.round((sec / exp) * 100)) : 0;
+  const label = kind === "dub" ? "Đang dịch và lồng tiếng" : "Đang tạo âm thanh";
+  return (
+    <div className={`sp-progress ${exp > 0 ? "det" : "ind"}`} role="progressbar" aria-label={label} aria-valuemin={0} aria-valuemax={100} {...(exp > 0 ? { "aria-valuenow": pct } : {})}>
+      <i style={exp > 0 ? { width: `${pct}%` } : undefined} />
+      <span title={tr("Synchro tự cập nhật khi xong.")}>{label}{exp > 0 ? ` · ${pct}% · ${fmtDur(sec)} / ~${fmtDur(exp)}` : "… Synchro tự cập nhật khi xong."}</span>
     </div>
   );
 }

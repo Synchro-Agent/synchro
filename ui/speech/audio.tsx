@@ -4,7 +4,7 @@ import { useState } from "react";
 import * as I from "../icons";
 import { tr } from "../i18n";
 import { MODEL_NOTE, MUSIC_CHIPS, MUSIC_DEFAULT_SEC, MUSIC_EX, MUSIC_MODELS, SFX_CATS, SFX_MODELS, estMusicCredits } from "../../shared/speech/data";
-import { ago, del, download, fmtNum, on, post, postForm, useItems, usePlan, type Item, type Voice } from "./client";
+import { ago, del, download, fmtNum, itemTitle, on, post, postForm, useItems, usePlan, type Item, type Voice } from "./client";
 import { Drop, ErrBox, Field, ModelPick, Player, Range, Recorder, Seg, Select, Spin, Tabs, Toggle, VoiceAvatar, VoicePicker } from "./parts";
 import { Chips, Head, Split, Wide } from "./shell";
 import type { ToolProps } from "./view";
@@ -48,8 +48,8 @@ export function Results({ items, kinds, say, setItems, empty, title = "Đã tạ
       {items && !list.length && <div className="sp-empty">{empty}</div>}
       {pg.items.map((it) => (
         <div key={it.id} className="sp-hrow" {...bulkRow(bk, it)}>
-          <div className="sp-hrow-t">{bk.on && <BulkCheck on={bk.has(it)} />}<b data-notr>{it.title}</b><span className="sp-muted">{it.meta.cost ? `${fmtNum(Number(it.meta.cost))} credit · ` : ""}{ago(it.createdAt)}</span><button className="icon-btn" style={{ marginLeft: "auto" }} aria-label="Xóa" onClick={() => remove(it)}><I.Trash size={14} /></button></div>
-          {it.url && it.mime?.startsWith("audio") ? <Player src={it.url} dl={it.url} label={it.title} />
+          <div className="sp-hrow-t">{bk.on && <BulkCheck on={bk.has(it)} />}<b data-notr>{itemTitle(it)}</b><span className="sp-muted">{it.meta.cost ? `${fmtNum(Number(it.meta.cost))} credit · ` : ""}{ago(it.createdAt)}</span><button className="icon-btn" style={{ marginLeft: "auto" }} aria-label="Xóa" onClick={() => remove(it)}><I.Trash size={14} /></button></div>
+          {it.url && it.mime?.startsWith("audio") ? <Player src={it.url} dl={it.url} label={itemTitle(it)} />
             : it.url ? <button className="btn" onClick={() => download(it.url!)}><I.Download size={14} />Tải tệp ZIP</button> : null}
         </div>
       ))}
