@@ -2,6 +2,7 @@
 // tự viết, bỏ khỏi lịch sử gửi model và bản chia sẻ công khai, lời nhắc hệ thống cấm trích lại. Hàm thuần và đọc mã nguồn, không cần máy chủ.
 import fs from "node:fs";
 import { loadTs } from "../lib/ts.mjs";
+import { readChatEngine } from "../lib/srcroots.mjs";
 let pass = 0, fail = 0;
 const ok = (c, n, x = "") => { c ? pass++ : fail++; console.log(c ? "  ✓" : "  ✗", n, c ? "" : String(x).slice(0, 600)); };
 const { turnctx: T, sharesnap: S, history: H, "i18n-dict": D } = await loadTs(["turnctx", "sharesnap", "history", "i18n-dict"]);
@@ -82,7 +83,7 @@ console.log("5b. Máy chủ lọc luồng trực tiếp (lượt chat) và lời
 const runsSrc = fs.readFileSync("server/runs.ts", "utf8");
 ok(/appliedDelta\(/.test(runsSrc) && /l\.kind === "chat"/.test(runsSrc), "runs.delta lọc dòng cũ trên luồng trực tiếp, chỉ lượt chat");
 ok(/l\.raw = "";\s*l\.applied = false/.test(runsSrc), "deltaStep đặt lại trạng thái lọc theo từng bước");
-ok(/stripAppliedNotes\(scrubServerPaths\(/.test(fs.readFileSync("server/chatengine.ts", "utf8")), "sayOut lọc dòng cũ khỏi sự kiện 'say'");
+ok(/stripAppliedNotes\(scrubServerPaths\(/.test(readChatEngine()), "sayOut lọc dòng cũ khỏi sự kiện 'say'");
 
 console.log("6. Đoạn chat cũ: bỏ dòng khi vẽ và khi sao chép (W1-08)");
 ok(/const cleanAiMsg = \(m: Msg\): Msg => \{ if \(m\.role !== "ai"\) return m; const text = stripAppliedNotes\(m\.text\); return text === m\.text \? m : \{ \.\.\.m, text \}; \};/.test(page), "page.tsx: cleanAiMsg lọc tin AI, giữ nguyên đối tượng khi không đổi");

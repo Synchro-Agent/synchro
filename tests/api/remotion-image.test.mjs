@@ -4,6 +4,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { loadTs } from "../lib/ts.mjs";
+import { readChatEngine } from "../lib/srcroots.mjs";
 
 let pass = 0, fail = 0;
 const ok = (c, n, x = "") => { c ? pass++ : fail++; console.log(c ? "  ✓" : "  ✗", n, c ? "" : String(x).slice(0, 400)); };
@@ -112,7 +113,7 @@ console.log("6. Hướng dẫn cho model");
   ok(V.videoTurn({ typed: "làm video tiktok", code: true, workspace: false }) === "" && V.videoTurn({ typed: "làm video tiktok", code: false, workspace: true }) === "", "không có run_code / không phải image workspace: không có khối");
   ok(V.videoTurn({ typed: "làm video tiktok #novideokit", code: true, workspace: true }) === "", "#novideokit tắt khối");
   ok(Buffer.byteLength(V.VIDEO_KIT) < 6144, "khối dưới 6 KB", Buffer.byteLength(V.VIDEO_KIT));
-  const engine = read("server/chatengine.ts");
+  const engine = readChatEngine();
   ok(/videoTurn\(\{ typed, code: caps\.code, workspace: runner\(\) === "workspace" \}\)/.test(engine), "chatengine đặt khối cạnh tin nhắn mới nhất (không vào lời nhắc hệ thống)");
 }
 

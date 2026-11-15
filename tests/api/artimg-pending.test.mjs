@@ -2,13 +2,14 @@
 // Hàm thuần và đọc mã nguồn, không cần máy chủ.
 import fs from "node:fs";
 import { loadTs } from "../lib/ts.mjs";
+import { readChatEngine } from "../lib/srcroots.mjs";
 
 let pass = 0, fail = 0;
 const ok = (c, n, x = "") => { c ? pass++ : fail++; console.log(c ? "  ✓" : "  ✗", n, c ? "" : String(x).slice(0, 400)); };
 const { artdoc: A } = await loadTs(["artdoc"]);
 
-// Đúng ảnh giữ chỗ của chatengine.ts (PLACEHOLDER_PNG).
-const engine = fs.readFileSync("server/chatengine.ts", "utf8");
+// Đúng ảnh giữ chỗ của bộ xử lý chat (PLACEHOLDER_PNG, server/chat/tools.ts).
+const engine = readChatEngine();
 const b64 = /const PLACEHOLDER_PNG = Buffer\.from\("([^"]+)", "base64"\)/.exec(engine)?.[1];
 ok(!!b64, "tìm thấy ảnh giữ chỗ trong chatengine.ts");
 ok(A.isPlaceholderPng(new Uint8Array(Buffer.from(b64 ?? "", "base64"))), "nhận ra ảnh giữ chỗ 1×1");

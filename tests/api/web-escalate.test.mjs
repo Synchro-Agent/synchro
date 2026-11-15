@@ -3,6 +3,7 @@
 // Mô tả (không chạy thật): truy vấn tỷ giá trả về một con số + thời điểm + liên kết nguồn nhờ lời dặn trong mô tả công cụ web.
 // Hàm thuần, không cần máy chủ.
 import { loadTs } from "../lib/ts.mjs";
+import { readChatEngine } from "../lib/srcroots.mjs";
 
 let pass = 0, fail = 0;
 const ok = (c, n, x = "") => { c ? pass++ : fail++; console.log(c ? "  ✓" : "  ✗", n, c ? "" : String(x).slice(0, 300)); };
@@ -101,7 +102,7 @@ console.log("4. W23-6 / SEC-8 (D2.1): máy chủ tự mở trang trong trình du
 }
 {
   const fs = await import("node:fs");
-  const eng = fs.readFileSync("server/chatengine.ts", "utf8");
+  const eng = readChatEngine();
   ok(/escalateSearch\(x, await searchWeb\(/.test(eng), "web_search đi qua escalateSearch (máy chủ tự mở trang)");
   ok(/checkUrl\(url\)/.test(eng) && /siteRule\(x\.uid/.test(eng), "trang tự mở phải qua checkUrl (chặn địa chỉ nội bộ) và quy tắc trang của người dùng");
   ok(/c\.name === "browser_text" && r\.stalled/.test(eng), "browser_text mỏng: máy chủ tự chờ rồi đọc lại");

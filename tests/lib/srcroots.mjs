@@ -1,7 +1,7 @@
 // Các gốc mã nguồn của ứng dụng (H3 — cấu trúc thư mục): app/ chỉ còn route, layout, page; mã máy chủ ở server/, giao diện ở ui/,
 // mã dùng chung ở shared/. Bộ kiểm thử và script quét mã nguồn đi qua đây thay vì chỉ app/, để một tệp chuyển thư mục vẫn được quét.
 // Gốc chưa có thì bỏ qua; tests/api/paths-guard.test.mjs kiểm số tệp tối thiểu nên bỏ sót cả một gốc không thể qua lặng lẽ.
-import { existsSync, readdirSync, statSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 
 export const SRC_ROOTS = ["app", "server", "ui", "shared"];
@@ -27,3 +27,16 @@ export function findSrc(rel, cwd = process.cwd()) {
   if (hits.length !== 1) throw new Error(`findSrc: "${rel}" ${hits.length ? `trùng ở ${hits.join(", ")}` : `không có trong ${SRC_ROOTS.join("/, ")}/`}`);
   return hits[0];
 }
+
+// Bộ xử lý chat sau khi tách (H3 bước 6a): mặt tiền server/chatengine.ts (chỉ chuyển tiếp) và các phần ở server/chat/. Kiểm thử dò chữ
+// trong mã của chatengine đọc qua đây để một hàm chuyển giữa các phần vẫn được tìm thấy; thiếu một phần đã biết thì báo lỗi, không trả chuỗi rỗng.
+export const CHAT_ENGINE_PARTS = ["prompt", "approvals", "tools", "routing"];
+export function chatEngineFiles(cwd = process.cwd()) {
+  if (!existsSync(path.join(cwd, "server/chatengine.ts"))) throw new Error("chatEngineFiles: không có server/chatengine.ts");
+  const parts = readdirSync(path.join(cwd, "server/chat")).filter((f) => f.endsWith(".ts")).sort();
+  const missing = CHAT_ENGINE_PARTS.filter((p) => !parts.includes(`${p}.ts`));
+  if (missing.length) throw new Error(`chatEngineFiles: thiếu server/chat/${missing.join(".ts, server/chat/")}.ts`);
+  return ["server/chatengine.ts", ...parts.map((f) => `server/chat/${f}`)];
+}
+/** Mã nguồn của bộ xử lý chat (mặt tiền + mọi phần), nối lại. */
+export const readChatEngine = (cwd = process.cwd()) => chatEngineFiles(cwd).map((f) => readFileSync(path.join(cwd, f), "utf8")).join("\n");

@@ -1,9 +1,10 @@
 // Bộ câu chấm chất lượng (tests/evals/answer-set.json) trên bộ định tuyến thật: câu nguy hiểm, sức khỏe, pháp lý, tài chính không được đi model rẻ nhất và đường nhanh; câu thường và câu trông giống rủi ro không bị đội giá.
 // Phần này không gọi model. Câu trả lời thật do người đọc chấm bằng tools/answer-eval.mjs. Hàm thuần, không cần máy chủ.
 import fs from "node:fs";
+import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { loadTs } from "../lib/ts.mjs";
-import { findSrc } from "../lib/srcroots.mjs";
+import { findSrc, readChatEngine } from "../lib/srcroots.mjs";
 
 let pass = 0, fail = 0;
 const ok = (c, n, x = "") => { c ? pass++ : fail++; if (!c) console.log("  ✗", n, String(x).slice(0, 300)); };
@@ -26,7 +27,7 @@ for (const it of set.items) {
   if (e.fast !== undefined) ok(R.needsNoTools(q) === e.fast, `${e.fast ? "đi đường nhanh" : "có công cụ"}: ${tag}`, `${r.task} điểm ${R.difficulty(q).score}`);
 }
 // Hướng dẫn gửi cho model: lớp an toàn thứ hai ở đường nhanh (bộ định tuyến có thể bỏ sót), nói thật về việc không có công cụ, trả lời đúng ngôn ngữ.
-const src = fs.readFileSync(new URL("../../server/chatengine.ts", import.meta.url), "utf8");
+const src = readChatEngine();
 const fast = /const FAST_RULES = `([\s\S]*?)`;/.exec(src)?.[1] ?? "", full = /const QUALITY_RULES = `([\s\S]*?)`;/.exec(src)?.[1] ?? "";
 ok(/An toàn đứng trước/.test(fast) && /tự làm hại/.test(fast) && /115/.test(fast) && /988/.test(fast) && /1737/.test(fast), "đường nhanh có dòng an toàn và đầu mối khẩn cấp", fast);
 ok(/đừng nói đã tìm, đã tra, đã chạy hay đã kiểm tra/.test(fast), "đường nhanh: không nhận là đã kiểm tra khi không có công cụ", fast);
@@ -37,7 +38,14 @@ for (const [t, n] of [[fast, "đường nhanh"], [full, "lượt đầy đủ"]]
 // Script chấm trên CLI thật tốn lượt của gói nên kiểm thử không chạy nó: chỉ kiểm tra cú pháp và các hàm nó gọi còn tồn tại.
 const script = new URL("../../tools/answer-eval.mjs", import.meta.url).pathname;
 ok(spawnSync(process.execPath, ["--check", script]).status === 0, "tools/answer-eval.mjs đúng cú pháp");
-const has = (file, name) => new RegExp(`export (?:async )?(?:function\\*? |const )${name}\\b`).test(fs.readFileSync(findSrc(`${file}.ts`), "utf8"));
+// Mặt tiền chỉ chuyển tiếp (chatengine.ts → chat/prompt.ts, H3 bước 6a): đi theo dòng export { … } from tới tệp khai báo thật.
+const hasIn = (p, name) => {
+  const src = fs.readFileSync(p, "utf8");
+  if (new RegExp(`export (?:async )?(?:function\\*? |const )${name}\\b`).test(src)) return true;
+  const via = new RegExp(`^export \\{[^}]*\\b${name}\\b[^}]*\\} from "(\\.\\.?/[^"]+)";$`, "m").exec(src)?.[1];
+  return !!via && hasIn(path.join(path.dirname(p), `${via}.ts`), name);
+};
+const has = (file, name) => hasIn(findSrc(`${file}.ts`), name);
 for (const [f, n] of [["chatengine", "answerRules"], ["ai/cli_runtime", "removeSessionFiles"], ["ai/cli_runtime", "CLIS"], ["ai/cli_runtime", "engineHome"], ["ai/cli_runtime", "makeDir"], ["ai/cli_auth", "scopeDir"], ["ai/cli_auth", "engineEnv"], ["ai/cli_auth", "safeScope"], ["ai/cli_auth", "status"], ["ai/errors", "redact"], ["ai/selector", "engineFor"], ["router", "autoEffort"], ["router", "hasHighStakes"], ["router", "isCrisis"], ["router", "taskOf"]]) ok(has(f, n), `script dùng ${f}.${n}`);
 console.log(`${set.items.length} câu. Kết quả: ${pass} đạt, ${fail} lỗi`);
 process.exit(fail ? 1 : 0);

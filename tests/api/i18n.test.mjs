@@ -118,7 +118,10 @@ ok(users.length > 1 && !leak, `không tệp giao diện nào kéo theo i18n-serv
 }
 // Đường chat (chatengine.ts) không nhập tĩnh từ điển VI→EN: chỉ route cần dịch ở máy chủ (quét skill, xuất skill…) mới kéo nó vào, lúc được gọi.
 const reach = (start) => { const seen = new Map([[start, [start]]]); for (const q = [start]; q.length;) { const f = q.shift(); for (const d of deps(f, false)) if (!seen.has(d)) { seen.set(d, [...seen.get(f), d]); q.push(d); } } return seen; };
-const viaChat = reach(P.join(process.cwd(), "server", "chatengine.ts")).get(P.join(process.cwd(), "shared", "i18n-dict.ts"));
+const chatReach = reach(P.join(process.cwd(), "server", "chatengine.ts"));
+// chatengine.ts chỉ chuyển tiếp sang server/chat/ (H3 bước 6a): phép dò phải đi tới được các phần, không thì phép kiểm dưới qua lặng lẽ.
+ok(["prompt", "approvals", "tools", "routing"].every((p) => chatReach.has(P.join(process.cwd(), "server", "chat", `${p}.ts`))), "phép dò nhập từ chatengine.ts đi tới cả bốn phần ở server/chat/");
+const viaChat = chatReach.get(P.join(process.cwd(), "shared", "i18n-dict.ts"));
 ok(!viaChat, "chatengine.ts không nhập tĩnh từ điển VI→EN (i18n-dict.ts)", viaChat?.map((f) => P.relative(process.cwd(), f)).join(" → "));
 // Mẫu tf để trong bảng (khóa động, bộ quét không thấy): mọi giá trị phải là khóa có bản dịch giữ {biến}.
 const tbl = (file, name) => [...(rf(P.join(process.cwd(), file), "utf8").match(new RegExp(`const ${name}[^=]*= \\{([\\s\\S]*?)\\};`))?.[1] ?? "").matchAll(/:\s*"([^"]+)"/g)].map((m) => m[1]);

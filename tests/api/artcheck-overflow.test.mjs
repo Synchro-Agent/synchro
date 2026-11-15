@@ -4,6 +4,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { loadTs } from "../lib/ts.mjs";
+import { readChatEngine } from "../lib/srcroots.mjs";
 
 let pass = 0, fail = 0;
 const ok = (c, n, x = "") => { c ? pass++ : fail++; console.log(c ? "  ✓" : "  ✗", n, c ? "" : String(x).slice(0, 400)); };
@@ -47,7 +48,7 @@ console.log("4. W23-17: bộ đếm vòng kiểm tra thật (mỗi artifact, m�
   ok(A.checkRoundGate({}, v("c")) === null, "lượt mới bắt đầu lại từ 0");
   const t2 = {};
   ok(A.checkRoundGate(t2, { ...v("p"), complete: false }) === null && A.checkRoundGate(t2, v("q")) === null && A.checkRoundGate(t2, v("r")) === null, "bản chưa viết xong không tính vòng");
-  const eng = fs.readFileSync("server/chatengine.ts", "utf8");
+  const eng = readChatEngine();
   ok(/checkRoundGate\(x, a\)/.test(eng), "chatengine chặn check_artifact bằng bộ đếm của lượt");
 }
 

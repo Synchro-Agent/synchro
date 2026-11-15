@@ -5,6 +5,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { loadTs } from "../lib/ts.mjs";
+import { readChatEngine } from "../lib/srcroots.mjs";
 
 let pass = 0, fail = 0;
 const ok = (c, n, x = "") => { c ? pass++ : fail++; console.log(c ? "  ✓" : "  ✗", n, c ? "" : String(x).slice(0, 700)); };
@@ -54,7 +55,7 @@ for (const [alt, label, must, mustNot] of [
   ok(must.test(msg) && !(mustNot && mustNot.test(msg)), `${label}: cách thay thế đúng chỗ`, msg);
   full(msg, `phiên (${alt})`);
 }
-const llm = fs.readFileSync("app/api/llm/route.ts", "utf8"), ceng = fs.readFileSync("server/chatengine.ts", "utf8");
+const llm = fs.readFileSync("app/api/llm/route.ts", "utf8"), ceng = readChatEngine();
 ok(/plansOnly = overLimit\(c\.user, "plans"\)/.test(llm) && /plansOnly: overLimit\(user, "plans"\)/.test(ceng), "/api/llm và lượt chạy nền: plansOnly dùng bản “plans”");
 ok(/overLimit\(user, "task"\)/.test(fs.readFileSync("app/api/tasks/[id]/run/route.ts", "utf8")) && /overLimit\(user, "task"\)/.test(fs.readFileSync("server/ai/anymodel.ts", "utf8")) && /overLimit\(user, "code"\)/.test(fs.readFileSync("server/agentturn.ts", "utf8")), "việc tự động, lời gọi phụ, Code: bản lời báo riêng");
 
@@ -78,7 +79,7 @@ console.log("3. Ảnh AI mỗi giờ");
 m = L.imageLimitMsg(40, 17 * 60_000 + 5);
 ok(/40 ảnh AI mỗi giờ/.test(m) && /khoảng 18 phút/.test(m) && /SVG/.test(m), "nói trần 40 ảnh mỗi giờ, còn 18 phút, gợi ý dựng minh họa không tốn ảnh", m);
 full(m, "ảnh");
-const ce = fs.readFileSync("server/chatengine.ts", "utf8");
+const ce = readChatEngine();
 ok(!/nhiều ảnh trong một giờ qua/.test(ce) && (ce.match(/imageLimitMsg\(IMAGE_HOUR_MAX\(\), wait\)\}\\n\\n\$\{IMAGE_LIMIT_NOTE\}/g) ?? []).length === 2, "cả hai chỗ chặn ảnh (poster, tạo ảnh) dùng lời báo mới, chỉ dẫn cho model tách riêng");
 // Câu người dùng đọc (thẻ công cụ) không ra lệnh cho model; chỉ dẫn cho model nằm riêng sau dòng trống, ngoài 140 ký tự thẻ công cụ hiện.
 ok(!/(hãy|dùng ảnh người dùng|use an image the user)/i.test(m) && !/the user/i.test(en(m) ?? ""), "lời báo ảnh viết cho người dùng, không phải lệnh cho model", `${m} | ${en(m)}`);

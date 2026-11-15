@@ -3,6 +3,7 @@
 // ở mọi lượt nhưng không mất quy tắc nào. Không cần máy chủ.
 import { readFileSync } from "node:fs";
 import { loadTs } from "../lib/ts.mjs";
+import { readChatEngine } from "../lib/srcroots.mjs";
 
 let pass = 0, fail = 0;
 const ok = (c, n, x = "") => { c ? pass++ : fail++; console.log(c ? "  ✓" : "  ✗", n, c ? "" : String(x).slice(0, 500)); };
@@ -91,7 +92,7 @@ ok(F.CHART_KIT.includes("biểu đồ gốc sửa được số liệu (sankey g
 ok(/Poster \/ banner \/ ảnh chia sẻ 1200×630 nhiều chữ/.test(F.imageKit(false, true)), "khối poster: có banner và nhiều chữ");
 ok(img.includes("Chỉ khi sửa / dựa trên ảnh có sẵn, ảnh mới hoàn toàn thì bỏ tham số này"), "reference: ảnh mới hoàn toàn thì bỏ tham số này");
 ok(/\.\.\.\(product \? \{\s*product_shot:[\s\S]*product_relight:[\s\S]*\} : \{\}\)/.test(img) && /imageTool = \(product = imageProduct\(\)\)/.test(img) && /imageProduct = \(\) => !!serviceKey\("replicate"\)/.test(img), "generate_image: product_shot / product_relight chỉ khi có khóa Replicate");
-ok(!/IMAGE_TOOL\b/.test(readFileSync("server/chatengine.ts", "utf8")) && (readFileSync("server/chatengine.ts", "utf8").match(/\[imageTool\(\)\]/g) ?? []).length === 2, "chatengine dùng imageTool() ở cả hai nơi ghép công cụ");
+ok(!/IMAGE_TOOL\b/.test(readChatEngine()) && (readChatEngine().match(/\[imageTool\(\)\]/g) ?? []).length === 2, "chatengine dùng imageTool() ở cả hai nơi ghép công cụ");
 ok(rules.length < 5600, `ARTIFACT_RULES ${rules.length} ký tự (r10 trước khi tách: 8118)`);
 
 console.log(`\nKết quả: ${pass} đạt, ${fail} lỗi`);

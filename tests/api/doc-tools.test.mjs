@@ -5,6 +5,7 @@
 import fs from "node:fs";
 import { spawnSync } from "node:child_process";
 import { loadTs } from "../lib/ts.mjs";
+import { readChatEngine } from "../lib/srcroots.mjs";
 
 let pass = 0, fail = 0;
 const ok = (c, n, x = "") => { c ? pass++ : fail++; console.log(c ? "  ✓" : "  ✗", n, c ? "" : String(x).slice(0, 600)); };
@@ -126,7 +127,7 @@ console.log("5. Hướng dẫn cho model");
   ok(/titlePage: true/.test(wm) && /PageNumber\.CURRENT/.test(wm) && /cm\(3\)/.test(wm) && /Times New Roman/.test(wm), "hợp đồng / biên bản / báo cáo: lề trái 3 cm, Times New Roman, số trang từ trang 2 (Nghị định 30)");
   ok(/def docx_pdf\(/.test(read(`${D}/synchro-doc.py`)) && /"--convert-to", "pdf"/.test(read(`${D}/synchro-doc.py`)), "synchro-doc docx --pdf dựng PDF bằng LibreOffice");
   ok(/for t in contract minutes official-report cv/.test(st0) && /"ĐẠI DIỆN BÊN A"/.test(st0), "selftest dựng 4 mẫu Word và kiểm chữ trong bản PDF");
-  const engine = read("server/chatengine.ts");
+  const engine = readChatEngine();
   ok(/docTurn\(\{ typed, code: caps\.code, workspace: runner\(\) === "workspace", format: d\?\.format \}\)/.test(engine), "chatengine đặt khối cạnh tin nhắn mới nhất");
 }
 

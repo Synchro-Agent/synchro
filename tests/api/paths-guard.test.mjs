@@ -8,7 +8,7 @@
 // 6. ops/ và tools/: scripts/ chỉ còn tệp web chạy lúc chạy và lớp chuyển tiếp; deploy gọi ops/, harden giữ ops/ thuộc root.
 import fs from "node:fs";
 import path from "node:path";
-import { walkSrc } from "../lib/srcroots.mjs";
+import { chatEngineFiles, walkSrc } from "../lib/srcroots.mjs";
 
 let pass = 0, fail = 0;
 const ok = (c, n, x = "") => { c ? pass++ : fail++; console.log(c ? "  ✓" : "  ✗", n, c ? "" : String(x).slice(0, 4000)); };
@@ -191,6 +191,17 @@ ok(/"\$APP\/ops\/watchdog\.sh"/.test(setupSh) && /%s\/ops\/backup\.sh/.test(setu
   && /SYNCHRO_BACKUP_HOOK=\/s#\$A_RE\/scripts\/backup-offsite/.test(setupSh), "ops/setup.sh cài watchdog, lịch sao lưu từ ops/ và sửa lịch / hook cũ tại chỗ");
 const pkg = JSON.parse(fs.readFileSync("package.json", "utf8")).scripts;
 ok(pkg["dev:mock"] === "node tools/dev-mock.mjs" && pkg.qa === "node tools/qa.mjs" && pkg.lint === "node tools/lint.mjs", "package.json chạy tools/");
+
+// Bước 6a: chatengine.ts tách thành server/chat/{prompt,approvals,tools,routing}.ts; tệp cũ chỉ còn là mặt tiền chuyển tiếp, nơi gọi không đổi.
+// Mã mới của bộ xử lý chat phải vào một phần ở server/chat/ (kiểm thử dò chữ đọc cả nhóm qua chatEngineFiles / readChatEngine).
+{
+  const files = chatEngineFiles();
+  const facade = fs.readFileSync("server/chatengine.ts", "utf8").split("\n").filter((l) => l.trim() && !l.startsWith("//") && l !== 'import "server-only";');
+  const extra = facade.filter((l) => !/^export (type )?\{ [\w, ]+ \} from "\.\.?\/[\w/]+";$/.test(l));
+  ok(files.length >= 5 && !extra.length, "server/chatengine.ts chỉ chuyển tiếp (export … from), mã ở server/chat/", extra.join("\n"));
+  const lines = files.slice(1).map((f) => fs.readFileSync(f, "utf8").split("\n").length);
+  ok(lines.reduce((a, b) => a + b, 0) > 2000, `bốn phần ở server/chat/ còn đủ mã (${lines.join(" + ")} dòng)`);
+}
 
 console.log(`\n${pass} đạt, ${fail} lỗi`);
 process.exit(fail ? 1 : 0);

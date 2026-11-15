@@ -135,7 +135,7 @@ console.log("7. W23-4 / G3.2: hàng chờ có vị trí cho RAM và chỗ worksp
 }
 {
   // Người dùng thấy vị trí trong hàng ở dòng tiến trình của lượt chat, có bản tiếng Anh.
-  const ce = fs.readFileSync("server/chatengine.ts", "utf8");
+  const ce = (await import("../lib/srcroots.mjs")).readChatEngine();
   ok(/queueReporter\(AsyncResource\.bind\(\(t: string\) => \{ progress\("note", t\); \}\)\)/.test(ce) && /onQueue: \(q\) => waitLine\.push\(q\)/.test(ce), "W23-4: run_code báo vị trí hàng chờ thành dòng tiến trình TRONG LÚC chờ (đúng lượt nhờ AsyncResource.bind)");
   ok(/if \(r\.queue && !waitLine\.shown\) progress\("note", queueNote\(r\.queue\)\)/.test(ce), "đã báo trong lúc chờ thì không báo lại sau khi chạy");
   const { loadTs } = await import("../lib/ts.mjs");
