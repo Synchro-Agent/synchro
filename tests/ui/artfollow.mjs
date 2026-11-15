@@ -88,7 +88,7 @@ try {
   await pickLang("En");
   ok(await until(`document.documentElement.lang === "en"`, 5000), "giao diện chuyển sang tiếng Anh");
   ok(await until(`(${ring}).every(([a, d]) => /^Usage/.test(a) && /^Usage/.test(d))`, 5000), "tiếng Anh: vòng Mức dùng đổi nhãn sang Usage (aria-label, data-tip)", await ev(ring));
-  await pickLang("Ti");
+  await pickLang("Vi");
   ok(await until(`document.documentElement.lang === "vi"`, 5000), "về tiếng Việt");
   ok(await until(`(${ring}).every(([a, d]) => /^Mức dùng/.test(a) && /^Mức dùng/.test(d))`, 5000), "về tiếng Việt: nhãn vòng Mức dùng về Mức dùng", await ev(ring));
 
