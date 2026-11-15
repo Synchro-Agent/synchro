@@ -72,7 +72,7 @@ Các điều trên nằm trong `tests/api/paths-guard.test.mjs`. Test đọc mã
 
 ```bash
 ./node_modules/.bin/tsc --noEmit -p .   # kiểu
-npm run lint                            # ESLint (bỏ qua nếu chưa cài gói dev, xem docs/van-hanh.md)
+npm run lint                            # ESLint cả repo; thoát khác 0 chỉ khi có lỗi (xem docs/van-hanh.md)
 npm run build                           # next build (webpack), giống CI và máy chủ
 
 # cần npm run dev:mock hoặc dev:mock:fast đang chạy ở :3200
@@ -91,7 +91,7 @@ node tools/qa.mjs --list                # danh sách bộ sẽ chạy
 
 Đẩy lên `main` hoặc `staging` thì `.github/workflows/deploy.yml` chạy:
 
-1. Job `verify` chặn deploy: `npm ci` → `tsc --noEmit` → `npm run lint` (chỉ báo) → `npm run build` → `dev:mock:fast` → `node tests/run-all.mjs`.
+1. Job `verify` chặn deploy: `npm ci` → `tsc --noEmit` → `npm run lint` (đỏ khi có lỗi) → `npm run build` → `dev:mock:fast` → `node tests/run-all.mjs`.
 2. Job `deploy`, chỉ khi `verify` xanh: rsync mã cùng bản build `.next-ci` của bước kiểm tra vào `/var/www/synchro-incoming/`, rồi chạy `ops/server-build.sh`. Hai lần deploy đạt cách nhau ít nhất 15 phút. Các lần đẩy liền nhau được gộp thành một lần deploy.
 
 Bộ giao diện chạy ở workflow riêng `.github/workflows/ui-qa.yml` (mỗi tuần, hoặc bấm chạy tay) và chưa chặn deploy. `.github/workflows/uptime.yml` báo khi `/api/health` lỗi: ping mỗi phút do `ops/uptime-worker` làm.

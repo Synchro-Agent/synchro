@@ -38,10 +38,9 @@ jobs:
       - name: Kiểm tra kiểu (TypeScript)
         run: node node_modules/typescript/bin/tsc --noEmit -p . 2>&1 | tee tsc.log; exit ${PIPESTATUS[0]}
 
-      # ESLint (next/core-web-vitals + jsx-a11y, eslint.config.mjs). Gói ESLint chưa cài thì tools/lint.mjs bỏ qua và in lệnh cài.
-      # Chưa chặn deploy (continue-on-error) cho tới khi mã cũ hết lỗi lint; kết quả nằm trong ci.txt.
+      # ESLint (next/core-web-vitals + jsx-a11y, eslint.config.mjs; gói dev cài bằng npm ci ở trên). Chặn deploy khi có lỗi (error);
+      # cảnh báo (warn: trợ năng, deps của hook, biểu thức thừa…) chỉ ghi vào lint.log / ci.txt, không làm đỏ bước này.
       - name: ESLint
-        continue-on-error: true
         run: npm run lint 2>&1 | tee lint.log; exit ${PIPESTATUS[0]}
 
       # Cùng một lệnh build với package.json và ops/server-build.sh (npm run build = next build).
