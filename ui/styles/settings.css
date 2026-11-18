@@ -149,6 +149,9 @@
 .adm-perm-pname{display:flex;flex-direction:column;gap:4px;width:96px}
 .adm-provall{font-size:var(--fs-1);color:var(--link);text-align:left;padding:0}
 .adm-provall:hover{text-decoration:underline}
+/* Điện thoại: tên hãng và nút Chọn hết / Xóa thành một hàng phía trên, thẻ model dùng cả bề ngang; cột tên 96px cũ chỉ còn ~130px cho thẻ nên
+   "Claude Sonnet 5.5", "Gemini 3.5 Flash-Lite" xuống hai dòng trong thẻ bo tròn (polish.mjs bước 2). */
+@media (max-width:640px){.adm-perm-prov{flex-direction:column;gap:6px}.adm-perm-pname{flex-direction:row;align-items:baseline;justify-content:space-between;width:100%}}
 .adm-msearch{height:30px}
 .adm-eff{grid-column:1/-1}
 .adm-eff-row{padding:6px 0}
