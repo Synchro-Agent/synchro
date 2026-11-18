@@ -157,6 +157,35 @@ try {
   const tools = fs.readFileSync("server/chat/tools.ts", "utf8"), card = fs.readFileSync("ui/connectorsui.tsx", "utf8");
   ok(/r\.signin \? x\.sess\?\.offline\.find\(\(o\) => o\.why === "link"\)/.test(tools) && /if \(link\) showReconnect\(x, link\)/.test(tools), "chat: chặn trang đăng nhập mà Composio chưa liên kết → tự hiện nút Liên kết Composio");
   ok(/openSettings\("Connectors"\)/.test(card) && /Mở Cài đặt → Connectors/.test(card), "thẻ Liên kết Composio có nút Mở Cài đặt → Connectors");
+
+  console.log("8. browser_batch: bước giữa lô dẫn tới trang đăng nhập thì dịch vụ workspace dừng lô ngay, không gõ tiếp trên trang đó");
+  calls.length = 0;
+  reply = () => ({ url: "https://example.com/", title: "Example", done: 1, total: 1, results: [] });
+  await B.runBrowserTool("u1", "browser_batch", { actions: [{ action: "click", ref: 1 }] }, { ...ctx(), pageKnown: true });
+  const sentStop = calls.find((c) => c.body.action === "batch")?.body.stopAt;
+  ok(Array.isArray(sentStop) && sentStop.length === G.SIGNIN_STOP.length && sentStop.some((g) => /google/.test(g.h)), "máy chủ gửi kèm stopAt (luật trang đăng nhập) cho lô thao tác", sentStop);
+  calls.length = 0;
+  await B.runBrowserTool("u1", "browser_batch", { actions: [{ action: "click", ref: 1 }], browser: "user" }, ctx());
+  ok(calls.length === 1 && calls[0].path === "/ext" && !("stopAt" in (calls[0].body.a ?? calls[0].body)), "Chrome của người dùng: không gửi stopAt", calls.map((c) => c.body));
+  // Luật gửi đi (nguồn regex) so khớp y như signInService.
+  const re = G.SIGNIN_STOP.map((g) => ({ h: new RegExp(g.h, "i"), p: g.p ? new RegExp(g.p, "i") : null }));
+  const viaStop = (u) => { try { const x = new URL(/^[a-z]+:/i.test(u) ? u : `https://${u}`); const h = x.hostname.toLowerCase(); return re.some((g) => g.h.test(h) && (!g.p || g.p.test(x.pathname))); } catch { return false; } };
+  const sample = [...yes.map((x) => x[0]), ...no.filter((u) => /^https?:/.test(u))];
+  ok(sample.every((u) => viaStop(u) === !!G.signInService(u)), "SIGNIN_STOP khớp đúng như signInService (trang đăng nhập / không phải)", sample.filter((u) => viaStop(u) !== !!G.signInService(u)));
+  // Chạy thật vòng lô của workspace/browser-act.mjs trên một phiên CDP giả: bước 2 (bấm) chuyển trang sang accounts.google.com.
+  const { createActor } = await import("../../workspace/browser-act.mjs");
+  const urls = ["https://example.com/", "https://accounts.google.com/v3/signin/identifier", "https://accounts.google.com/v3/signin/identifier"];
+  let step = 0;
+  // Mỗi lần đọc địa chỉ trang (sau mỗi bước) là trang tiếp theo trong urls: sau bước 1 vẫn example.com, sau bước 2 đã là trang đăng nhập.
+  const fakeC = { awake: true, logs: [], net: [], on() {}, send: async (m) => (m === "Runtime.evaluate" ? { result: { value: { url: urls[Math.min(step++, urls.length - 1)], title: "" } } } : {}) };
+  const states = new Map();
+  const A = createActor({ state: (u) => (states.has(u) ? states.get(u) : states.set(u, {}).get(u)), pages: async () => [], session: async () => fakeC, emit() {} });
+  const lot = async (stopAt) => { step = 0; return A.tool("u1", { action: "batch", stopAt, actions: [{ action: "console" }, { action: "console" }, { action: "console" }, { action: "console" }] }); };
+  const rStop = await lot(G.SIGNIN_STOP);
+  ok(rStop.done === 2 && rStop.results.length === 3 && /trang đăng nhập/.test(rStop.results[2].error ?? ""), "lô 4 bước: chạy 2 bước, dừng trước bước 3 vì trang đã sang accounts.google.com", rStop);
+  const rFree = await lot(undefined);
+  ok(rFree.done === 4 && !rFree.results.some((x) => x.error), "không có stopAt (Chrome của người dùng): chạy đủ lô như cũ", rFree);
+  ok((await A.tool("u1", { action: "batch", stopAt: [{ h: "(" }], actions: [{ action: "console" }, { action: "console" }] })).done === 2, "stopAt hỏng (regex sai): bỏ qua, không làm hỏng lô");
 } finally {
   srv.close();
   fs.rmSync(tmp, { recursive: true, force: true });

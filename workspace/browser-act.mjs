@@ -1019,6 +1019,10 @@ export function createActor(env) {
       const list = (Array.isArray(a.actions) ? a.actions : []).slice(0, 40);
       if (!list.length) throw new BrowserError(400, "Danh sách thao tác trống.");
       const results = [];
+      // stopAt (máy chủ gửi, server/signinguard.ts SIGNIN_STOP): [{ h, p }] nguồn regex tên miền / đường dẫn của trang đăng nhập bên thứ ba.
+      // Bước nào dẫn tới trang đó thì dừng lô ngay, không gõ / bấm tiếp trên trang đăng nhập.
+      const stops = (Array.isArray(a.stopAt) ? a.stopAt : []).slice(0, 64).flatMap((g) => { try { return [{ h: new RegExp(String(g.h), "i"), p: g.p ? new RegExp(String(g.p), "i") : null }]; } catch { return []; } });
+      const stopHere = (url) => { try { const x = new URL(String(url)); const h = x.hostname.toLowerCase().replace(/\.$/, ""); return /^https?:$/.test(x.protocol) && stops.some((g) => g.h.test(h) && (!g.p || g.p.test(x.pathname))); } catch { return false; } };
       for (const [i, x] of list.entries()) {
         if (!x || typeof x !== "object" || x.action === "batch") { results.push({ i: i + 1, error: "Thao tác không hợp lệ" }); break; }
         if (s.halt) { results.push({ i: i + 1, action: x.action, error: s.halt }); break; }
@@ -1027,6 +1031,10 @@ export function createActor(env) {
           const { image, tree, text, ...rest } = r ?? {};
           results.push({ i: i + 1, action: x.action, ...rest, ...(tree ? { tree } : {}), ...(text ? { text } : {}) });
           if (r?.error) break;
+          if (stops.length && i < list.length - 1) {
+            const at = typeof r?.url === "string" && r.url ? r.url : (await info(await env.session(u))).url;
+            if (stopHere(at)) { results.push({ i: i + 2, error: "Dừng: bước trước dẫn tới trang đăng nhập của bên thứ ba" }); break; }
+          }
         } catch (e) { results.push({ i: i + 1, action: x.action, error: e.message || String(e) }); break; }
       }
       const c = await env.session(u);

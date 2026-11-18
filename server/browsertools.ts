@@ -12,7 +12,7 @@ import { needsRenderEscalation } from "./ai/webescalate";
 import { processFile, storedFile } from "./fileproc";
 import { mimeOf, readOutput } from "./outputs";
 import { cancelRun, currentRun } from "./runs";
-import { signInRefusal, signInService, urlsOf } from "./signinguard";
+import { SIGNIN_STOP, signInRefusal, signInService, urlsOf } from "./signinguard";
 import { agent as wsAgent } from "./workspace";
 
 const obj = (properties: Record<string, unknown>, required: string[] = []) => ({ type: "object", properties, required });
@@ -331,6 +331,8 @@ export async function runBrowserTool(u: string, name: string, input: R, ctx?: Br
       if (signInService(at)) ctx.signin = at;
     }
     if (ctx?.signin && !SIGNIN_OK.has(action)) { const svc = signInService(ctx.signin) ?? "bên thứ ba"; return { content: signInRefusal(svc, ctx.signin, "present"), is_error: true, summary: "Đã chặn trang đăng nhập", signin: svc }; }
+    // Một bước giữa lô (bấm "Đăng nhập bằng Google"…) dẫn tới trang đăng nhập: dịch vụ workspace dừng lô ngay sau bước đó.
+    if (action === "batch") args.stopAt = SIGNIN_STOP;
   }
   // Tệp đính kèm trong chat cần tải lên trang (browser_upload, kể cả trong browser_batch).
   const bad = action === "upload" ? await attachFiles(args, ctx) : "";

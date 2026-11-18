@@ -50,6 +50,10 @@ export function signInService(url: unknown): string | null {
   return null;
 }
 
+/** Các luật ở dạng gửi được sang dịch vụ workspace (workspace/browser-act.mjs): browser_batch dừng ngay sau bước dẫn tới trang đăng nhập,
+ *  không chạy tiếp các bước gõ / bấm còn lại trên trang đó (máy chủ chỉ thấy trang sau khi cả lô đã chạy xong). Cùng cách so khớp như signInService. */
+export const SIGNIN_STOP = RULES.map((r) => ({ h: r.host.source, ...(r.path ? { p: r.path.source } : {}) }));
+
 /** Các địa chỉ mà một lời gọi công cụ trình duyệt sẽ mở (browser_navigate, browser_tabs op="new", và các bước đó trong browser_batch). */
 export function urlsOf(name: string, input: Record<string, unknown>): string[] {
   const one = (action: string, a: Record<string, unknown>) => (action === "navigate" || (action === "tabs" && a.op === "new")) && typeof a.url === "string" ? [a.url] : [];
