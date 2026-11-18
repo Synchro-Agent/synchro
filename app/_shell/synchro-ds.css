@@ -148,6 +148,34 @@ html body .menu-item.dd-opt[aria-disabled]{opacity:.45;cursor:default}
 .dd-none{padding:10px 12px;font-size:var(--fs-2);color:var(--ds-muted)}
 .dd-grp{padding:10px 12px 4px;font-size:var(--fs-1);font-weight:560;color:var(--ds-muted)}
 .dd-grp:first-child{padding-top:4px}
+/* Ô chọn màu của app (ui/colorpick.tsx, thay <input type="color"> gốc): nút viên thuốc có mẫu màu bo 25% và mã hex; khung nổi có bảng màu
+   8 cột (ô vuông bo 25%, ô đang chọn có dấu tích và vòng mực), ô mã hex và nút mở bảng màu của trình duyệt. */
+.cp{display:inline-flex;align-items:center;gap:9px;height:var(--ds-h);padding:0 11px 0 5px;border-radius:var(--r-pill);border:1px solid var(--ds-line-2);background:var(--ds-plate);
+  color:var(--ds-ink);font:inherit;font-size:var(--fs-2);cursor:pointer;transition:border-color var(--ds-fast),box-shadow var(--ds-fast)}
+.cp.sm{height:var(--ds-h-sm);padding:0 4px;gap:0}
+.cp.sm :is(.cp-l,svg){display:none}
+.cp:hover{border-color:color-mix(in srgb,var(--ds-ink) 32%,var(--ds-line-2))}
+.cp:focus-visible,.cp.open{outline:0;border-color:var(--ds-ink);box-shadow:0 0 0 3px color-mix(in srgb,var(--ds-ink) 10%,transparent)}
+.cp>svg{color:var(--ds-muted)}
+.cp-chip{flex:none;width:24px;height:24px;border-radius:var(--r-pill);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--ds-ink) 18%,transparent)}
+.cp.sm .cp-chip{width:20px;height:20px}
+.cp-chip.lg{width:30px;height:30px;border-radius:25%}
+.cp-l{display:flex;flex-direction:column;align-items:flex-start;line-height:1.15}
+.cp-l code{font:500 var(--fs-1)/1.2 var(--font-mono,ui-monospace,monospace);color:var(--ds-muted)}
+html body .menu.cp-pop{width:260px;max-width:calc(100vw - 16px);min-width:0;padding:10px;display:flex;flex-direction:column;gap:10px}
+.cp-grid{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:6px}
+.cp-sw{aspect-ratio:1;display:grid;place-items:center;border-radius:25%;border:0;cursor:pointer;color:#fff;mix-blend-mode:normal;
+  box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--ds-ink) 16%,transparent);transition:transform var(--ds-fast) var(--ds-ease),box-shadow var(--ds-fast)}
+.cp-sw:hover{transform:scale(1.08)}
+.cp-sw:focus-visible,.cp-sw[aria-pressed=true]{outline:0;box-shadow:0 0 0 2px var(--ds-plate),0 0 0 3.5px var(--ds-ink)}
+.cp-sw svg{filter:drop-shadow(0 0 1.5px rgba(0,0,0,.6))}
+.cp-row{display:flex;align-items:center;gap:8px}
+.cp-hex{flex:1;min-width:0;display:flex;align-items:center;gap:2px;height:32px;padding:0 10px;border-radius:var(--r-pill);background:var(--ds-sunken);box-shadow:inset 0 0 0 1px var(--ds-line-2);
+  font:500 var(--fs-2) var(--font-mono,ui-monospace,monospace);color:var(--ds-muted)}
+.cp-hex:focus-within{box-shadow:inset 0 0 0 1px var(--ds-ink)}
+.cp-hex input{flex:1;min-width:0;border:0;background:transparent;font:inherit;color:var(--ds-ink);text-transform:uppercase;padding:0}
+html body .btn.cp-more{height:32px;padding:0 10px;font-size:var(--fs-label);gap:5px}
+.cp-native{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none;border:0;padding:0}
 /* Hộp thoại */
 html body .modal:not(.auth-root *){border-radius:var(--r-panel)}
 .overlay:not(.auth-root *){background:rgba(17,18,16,.22)}

@@ -705,8 +705,6 @@
 }
 .sp-colors {display:flex;gap:16px;flex-wrap:wrap
 }
-.sp-colors label {display:flex;align-items:center;gap:8px;font-size:var(--fs-2);color:var(--text-2)
-}
 .sp-anprev {display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:var(--r-card);box-shadow:0 0 0 .5px var(--border-strong)
 }
 .sp-anprev>span:last-child {display:flex;flex-direction:column;gap:2px;min-width:0

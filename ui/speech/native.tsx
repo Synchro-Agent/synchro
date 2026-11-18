@@ -3,6 +3,7 @@
 // ElevenLabs chuyển thành giọng nói (vài phút) và trả mã nhúng; Synchro tự hỏi lại trạng thái tới khi sẵn sàng.
 import { useState } from "react";
 import * as I from "../icons";
+import { ColorField } from "../colorpick";
 import { MODEL_NOTE } from "../../shared/speech/data";
 import { ago, del, fmtNum, post, useItems, usePoll, usePlan, type Item, type Voice } from "./client";
 import { ErrBox, Field, Player, Select, Spin, VoiceAvatar, VoicePicker } from "./parts";
@@ -47,8 +48,8 @@ export function NativeTool({ say, voice: shared }: ToolProps) {
             <Select id="an-m" label="Model" value={model} options={[["", "Mặc định của ElevenLabs"], ...(plan?.tts ?? []).map((m) => [m.id, `${m.name}${MODEL_NOTE[m.id] ? ` · ${MODEL_NOTE[m.id]}` : ""}`] as [string, string])]} onChange={setModel} />
           </div>
           <div className="sp-colors">
-            <label><input type="color" value={fg} onChange={(e) => setFg(e.target.value)} />Màu chữ</label>
-            <label><input type="color" value={bg} onChange={(e) => setBg(e.target.value)} />Màu nền</label>
+            <ColorField label="Màu chữ" value={fg} onChange={setFg} />
+            <ColorField label="Màu nền" value={bg} onChange={setBg} />
           </div>
           <Field label="Xem trước trình phát">
             <div className="sp-anprev" style={{ color: fg, background: bg }}>

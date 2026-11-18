@@ -14,6 +14,7 @@ import { SideToggle } from "./brand";
 import { BulkBar, BulkButton, BulkCheck, bulkRow, each, useBulk, type BulkAct } from "./bulk";
 import { Pager } from "./pager";
 import * as I from "./icons";
+import { ColorField } from "./colorpick";
 import { type Chat, useApp, usePref } from "./store";
 import { locale, tf, tr, trc } from "./i18n";
 import { maxW } from "./breakpoints";
@@ -427,7 +428,7 @@ function GraphPanel({ gs, set, local, onAnimate, onClose }: { gs: GS; set: (p: P
       {sec("groups", trc("Nhóm", "đồ thị"), <>
         {gs.groups.map((g, i) => (
           <div key={i} className="bg-grp">
-            <input type="color" value={g.color} aria-label={trc("Màu nhóm", "nhóm màu đồ thị")} onChange={(e) => set({ groups: gs.groups.map((x, j) => (j === i ? { ...x, color: e.target.value } : x)) })} />
+            <ColorField size="sm" label={trc("Màu nhóm", "nhóm màu đồ thị")} value={g.color} onChange={(color) => set({ groups: gs.groups.map((x, j) => (j === i ? { ...x, color } : x)) })} />
             <input className="field" value={g.q} placeholder={tr("tag:thẻ, loai:chu-de, chữ…")} onChange={(e) => set({ groups: gs.groups.map((x, j) => (j === i ? { ...x, q: e.target.value } : x)) })} />
             <button className="icon-btn" aria-label={trc("Xóa nhóm", "nhóm màu đồ thị")} onClick={() => set({ groups: gs.groups.filter((_, j) => j !== i) })}><I.X size={12} /></button>
           </div>
