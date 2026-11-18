@@ -1,6 +1,8 @@
 // Bản dịch cho phần bảo mật, xác minh email, sức khỏe hệ thống, sao lưu và quản lý tệp (giữ riêng để các phần khác của từ điển không phải đụng tới).
 export const OPS_VI2EN: Record<string, string> = {
   "Máy chủ đang đọc nhiều tệp cùng lúc. Hãy thử lại sau ít phút.": "The server is reading many files right now. Try again in a few minutes.",
+  "Mở Cài đặt → Connectors": "Open Settings → Connectors",
+  "Đã chặn trang đăng nhập": "Sign-in page blocked",
   "Dung lượng sau khi giải nén quá lớn hoặc file nén bị hỏng": "The archive is too large once unpacked, or it is damaged",
   "Xóa cả artifact của đoạn chat này (nếu không, chúng vẫn ở trang Artifacts)": "Also delete this chat's artifacts (otherwise they stay on the Artifacts page)",
   "Xóa tệp này?": "Delete this file?",

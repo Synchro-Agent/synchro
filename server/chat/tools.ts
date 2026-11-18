@@ -677,6 +677,10 @@ async function runCall(x: Exec, c: Call, d?: Decision): Promise<Run> {
       return r;
     };
     const r = where === "synchro" ? await withBrowserLock(browserKey(x), browserStep) : await browserStep();
+    // Bị chặn vì là trang đăng nhập của bên thứ ba (signinguard.ts) mà Composio chưa liên kết: hiện luôn nút "Liên kết Composio" trong khung chat
+    // (kèm lối tới Cài đặt → Connectors), không chờ model nhớ gọi connector_reconnect.
+    const link = r.signin ? x.sess?.offline.find((o) => o.why === "link") : undefined;
+    if (link) showReconnect(x, link);
     x.gate.seen(r.url);
     if (["browser_read", "browser_text", "browser_screenshot", "browser_batch"].includes(c.name)) (x.heavy ??= []).push(c.id);
     return { content: r.content, is_error: r.is_error, ...(r.image ? { image: r.image } : {}), used: { kind: "search", name: c.name } };
