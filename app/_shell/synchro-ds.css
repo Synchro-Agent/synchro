@@ -180,8 +180,26 @@ html body .btn.cp-more{height:32px;padding:0 10px;font-size:var(--fs-label);gap:
 html body .modal:not(.auth-root *){border-radius:var(--r-panel)}
 .overlay:not(.auth-root *){background:rgba(17,18,16,.22)}
 html[data-theme="dark"] body .overlay:not(.auth-root *){background:rgba(0,0,0,.5)}
-/* Thanh cuộn mảnh */
-html body .app *{scrollbar-width:thin;scrollbar-color:color-mix(in srgb,var(--ds-ink) 18%,transparent) transparent}
+/* Thanh cuộn mảnh. Độ ưu tiên 0 (:where): trước đây "html body .app *" (0,1,2) thắng mọi scrollbar-width:none của dải tab / bộ chọn đoạn /
+   hàng thẻ (.sp-seg, .sp-utabs, .sp-catrow… chỉ 0,1,0), nên trên Windows (thanh cuộn cổ điển, không nổi) các dải đó hiện thanh cuộn có
+   mũi tên khi tràn vài px. macOS dùng thanh cuộn nổi nên không thấy. */
+:where(.app *){scrollbar-width:thin;scrollbar-color:color-mix(in srgb,var(--ds-ink) 18%,transparent) transparent}
+/* Dải cuộn ngang (tab, bộ chọn đoạn, hàng thẻ lọc): không bao giờ hiện thanh cuộn, không cuộn dọc vì tràn lẻ px (overflow-x:auto kéo
+   overflow-y thành auto: nút cao 28 trong rãnh 34 lệch nửa px là hiện thanh cuộn dọc có mũi tên), vẫn kéo / lăn ngang được khi thật sự
+   tràn; mép nào còn nội dung thì mờ dần (mặt nạ theo vị trí cuộn, chỉ khi trình duyệt có scroll-timeline). Lớp .hstrip cho dải mới. */
+:where(.hstrip,.sp-seg,.sp-utabs,.sp-tags,.sp-catrow,.sp-atabs,.sp-tabs,.ds-seg,.ds-tabs,.bp-tablist,.tag-filter,.scan-tabs,.tk-tabs .pl-seg){
+  overflow-x:auto;overflow-y:hidden;scrollbar-width:none;overscroll-behavior-x:contain;scroll-padding-inline:24px}
+:where(.hstrip,.sp-seg,.sp-utabs,.sp-tags,.sp-catrow,.sp-atabs,.sp-tabs,.ds-seg,.ds-tabs,.bp-tablist,.tag-filter,.scan-tabs,.tk-tabs .pl-seg)::-webkit-scrollbar{display:none}
+@property --fade-l{syntax:"<length>";inherits:false;initial-value:0px}
+@property --fade-r{syntax:"<length>";inherits:false;initial-value:0px}
+@keyframes stripFade{0%{--fade-l:0px;--fade-r:28px}12%,88%{--fade-l:28px;--fade-r:28px}100%{--fade-l:28px;--fade-r:0px}}
+/* Không tràn thì scroll-timeline không chạy: mặt nạ giữ --fade-l / --fade-r = 0, dải (kể cả rãnh của bộ chọn đoạn) hiện trọn. */
+@supports (animation-timeline:scroll()){
+  :where(.hstrip,.sp-seg,.sp-utabs,.sp-tags,.sp-catrow,.sp-atabs,.sp-tabs,.ds-seg,.ds-tabs,.bp-tablist,.tag-filter,.scan-tabs,.tk-tabs .pl-seg){
+    -webkit-mask-image:linear-gradient(90deg,transparent 0,#000 var(--fade-l),#000 calc(100% - var(--fade-r)),transparent 100%);
+    mask-image:linear-gradient(90deg,transparent 0,#000 var(--fade-l),#000 calc(100% - var(--fade-r)),transparent 100%);
+    animation:stripFade linear both;animation-timeline:scroll(self inline)}
+}
 
 /* ---------------------------------------------------------------- khung app: thanh điều hướng dọc + bảng đoạn chat */
 .shell-side{display:flex;flex:none;height:100%;position:relative;z-index:5}

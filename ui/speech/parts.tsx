@@ -6,6 +6,7 @@ import { tf, tr } from "../i18n";
 import * as I from "../icons";
 import { LiquidOrb } from "../liquidorb";
 import { Dropdown } from "../listbox";
+import { useStripActive } from "../strip";
 import { readBrowser, stopBrowserRead } from "../browserspeak";
 import { useApp, usePref, VOICE_RATE } from "../store";
 import { toSpeech, VI } from "../voiceflow";
@@ -17,8 +18,9 @@ const talking = () => { const t = performance.now() / 1000; return Math.max(0, M
 export const MAX_UPLOAD = 40 * 1024 * 1024;
 
 export function Seg<T extends string>({ items, value, onChange, label, small }: { items: { k: T; label: string }[]; value: T; onChange: (v: T) => void; label: string; small?: boolean }) {
+  const ref = useStripActive<HTMLDivElement>(value);
   return (
-    <div className={`sp-seg ${small ? "sm" : ""}`} role="tablist" aria-label={label}>
+    <div ref={ref} className={`sp-seg ${small ? "sm" : ""}`} role="tablist" aria-label={label}>
       {items.map((x) => <button key={x.k} role="tab" aria-selected={value === x.k} className={value === x.k ? "on" : ""} onClick={() => onChange(x.k)}>{x.label}</button>)}
     </div>
   );
@@ -261,8 +263,9 @@ export function ModelPick({ models, value, onChange, label = "Model" }: { models
 
 // Tab gạch chân cho các mục trong một trang.
 export function Tabs<T extends string>({ items, value, onChange, label }: { items: { k: T; label: string }[]; value: T; onChange: (v: T) => void; label: string }) {
+  const ref = useStripActive<HTMLDivElement>(value);
   return (
-    <div className="sp-utabs" role="tablist" aria-label={label}>
+    <div ref={ref} className="sp-utabs" role="tablist" aria-label={label}>
       {items.map((x) => <button key={x.k} role="tab" aria-selected={value === x.k} className={value === x.k ? "on" : ""} onClick={() => onChange(x.k)}>{x.label}</button>)}
     </div>
   );
