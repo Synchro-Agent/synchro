@@ -408,7 +408,7 @@ function GraphPanel({ gs, set, local, onAnimate, onClose }: { gs: GS; set: (p: P
     <label className="bg-row" key={k}><span>{t}</span><button role="switch" aria-checked={gs[k]} className={`bg-sw ${gs[k] ? "on" : ""}`} onClick={() => set({ [k]: !gs[k] })}><i /></button></label>
   );
   const sl = (k: "fade" | "size" | "thick" | "center" | "repel" | "link" | "dist" | "depth", t: string, min: number, max: number, st: number) => (
-    <label className="bg-row col" key={k}><span>{t}</span><input type="range" min={min} max={max} step={st} value={gs[k]} onChange={(e) => set({ [k]: Number(e.target.value) })} /></label>
+    <label className="bg-row col" key={k}><span>{t}</span><input type="range" min={min} max={max} step={st} value={gs[k]} style={{ "--p": `${((gs[k] - min) / (max - min)) * 100}%` } as React.CSSProperties} onChange={(e) => set({ [k]: Number(e.target.value) })} /></label>
   );
   return (
     <div className="bg-panel" role="dialog" aria-label={tr("Cài đặt đồ thị")}>

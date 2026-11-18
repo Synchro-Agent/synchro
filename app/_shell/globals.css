@@ -603,7 +603,7 @@ html[data-chat-font="System"] .ai-msg,html[data-chat-font="System"] .sk-ai{font-
 .crop-stage img{position:absolute;left:50%;top:50%;max-width:none;pointer-events:none}
 .crop-mask{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);border-radius:50%;box-shadow:0 0 0 999px rgba(0,0,0,.62);outline:1.5px solid rgba(255,255,255,.85);pointer-events:none}
 .crop-zoom{display:flex;align-items:center;gap:10px;margin:14px 40px 0;color:var(--text-3)}
-.crop-zoom input{flex:1;accent-color:var(--accent)}
+.crop-zoom input{flex:1}
 .crop-foot{display:flex;justify-content:space-between;padding:16px 20px 18px}
 
 .menu-scroll{max-height:264px;overflow:auto;margin:-2px;padding:2px;border-radius:inherit;overscroll-behavior:contain}
@@ -1755,7 +1755,7 @@ b,strong{font-weight:560}
 .sp-prev{display:flex;flex-direction:column;gap:10px}
 .sp-prev-c{display:flex;flex-direction:column;gap:7px;animation:rise .3s var(--ease) backwards}.sp-prev-h b{font-weight:460}.sp-prev-h .btn{height:28px}
 .sp-consent{display:flex;gap:9px;align-items:flex-start;font-size:var(--fs-label);line-height:1.5;color:var(--text-2);cursor:pointer}
-.sp-consent input{margin-top:3px;accent-color:var(--text)}
+.sp-consent input{margin-top:2px}
 .sp-tips{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:7px;font-size:var(--fs-2);color:var(--text-2);line-height:1.5}
 .sp-steps{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:4px}
 .sp-steps li{display:flex;gap:12px;padding:10px 4px;position:relative}
@@ -2736,7 +2736,7 @@ html body .scroll-down.gen{left:50%;translate:-50% 0;width:auto;padding:0 14px 0
 
 
 .pl-sk.off{opacity:.55}
-.pl-sk input{margin-top:3px;accent-color:var(--accent)}
+.pl-sk input{margin-top:2px}
 
 .pl-sk-t b{font-weight:480;font-size:var(--fs-chat);font-family:var(--font-mono)}
 .pl-sk-t>span{font-size:var(--fs-label);color:var(--text-2);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
@@ -3457,7 +3457,7 @@ button.tk-pill:hover{color:var(--text)}
 .sp-grp-h em{font-style:normal;color:var(--text-3);flex:1}
 .sp-fxrow-h .icon-btn{width:22px;height:22px}
 .sp-check{display:flex;align-items:center;gap:8px;font-size:var(--fs-2);cursor:pointer;min-height:26px}
-.sp-check input{accent-color:var(--text);width:15px;height:15px;flex:none}
+.sp-check input{flex:none}
 .sp-check>span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .sp-check em{font-style:normal;font-size:var(--fs-1);color:var(--text-3)}
 .sp-mcard b{display:flex;align-items:center;gap:6px}
