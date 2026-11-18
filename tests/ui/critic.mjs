@@ -149,6 +149,23 @@ try {
   const viLeft = await ev(`[...document.querySelectorAll(".cr-note")].map((n) => n.textContent).join(" ")`);
   ok(!/[ạảấầẩẫậắằẳẵặẹẻẽếềểễệịỉọỏốồổỗộớờởỡợụủứừửữựỳỵỷỹđ]/i.test(viLeft.replace(/Trà Một Chạm|Đặt lịch gặp/g, "")), "không còn chữ tiếng Việt trong ghi chú phản biện", viLeft);
   await shot("6-deck-notes-en");
+  // Synchro tự kiểm bộ slide lúc model định trả lời xong (<auto_check>): ở lượt trên model giả nhận lời nhắc và nói lý do giữ nguyên số.
+  const said1 = await ev(`[...document.querySelectorAll(".ai-msg")].map((e) => e.textContent).join(" ")`);
+  ok(/giữ cách đánh số này/.test(said1), "tự kiểm lúc trả lời xong: model nhận <auto_check> về đánh số lệch (ở đây chọn giữ nguyên, nói lý do)", said1.slice(0, 300));
+  // "#decknum fix": model sửa bằng bản patch ngay trong lượt → bộ slide giao cho người dùng đã đánh số đúng, phản biện chỉ còn ý kiến của model.
+  await click(byText(".nav-item", "New"), "new chat fix"); await sleep(600);
+  await ask("#decknum fix");
+  await until(`document.querySelectorAll(".art-card:not(.busy)").length > 0 && !document.querySelector(".thinking") && !!document.querySelector(".art-panel")`, 60000, "deck fix");
+  for (let i = 0; i < 80 && !/issue|Fine|OK/i.test(await ev(pill)); i++) await sleep(150);
+  const said2 = await ev(`[...document.querySelectorAll(".ai-msg")].map((e) => e.textContent).join(" ")`);
+  ok(/đã đánh số lại chân trang/.test(said2), "model sửa trong cùng lượt sau lời nhắc <auto_check>", said2.slice(0, 300));
+  await click(byText(".art-tabs button", "Code"), "code tab"); await sleep(500);
+  const fixed = await ev(`document.querySelector(".art-code")?.textContent ?? ""`);
+  ok(/01 \/ 04/.test(fixed) && /04 \/ 04/.test(fixed) && !/\/ 05/.test(fixed), "bản giao cho người dùng đã đánh số lại (01 / 04 … 04 / 04)", fixed.slice(0, 200));
+  const tFix = await ev(pill);
+  ok(/1\s*issue/i.test(tFix), `phản biện bản đã sửa: không còn lỗi đánh số, chỉ ý kiến của model: “${tFix}”`, tFix);
+  await click(byText(".art-tabs button", "Preview"), "preview tab"); await sleep(1500);
+  await shot("7-deck-autofixed-en");
 } catch (e) { ok(false, "lỗi khi chạy", e.stack); await shot("fail"); }
 await api("PATCH", "/api/caps", { crit: capsBefore.crit ?? true, art: capsBefore.art ?? true });
 const fails = results.filter((r) => !r[0]).length;
