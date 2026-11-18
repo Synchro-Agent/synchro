@@ -43,7 +43,7 @@ export const CHECK_ARTIFACT_TOOL = {
 export const ARTCHECK_RULES = (check: boolean) => `<self_check>
 Bạn chịu trách nhiệm về chất lượng sản phẩm mình giao, như một người làm nghề cẩn thận:
 ${check ? "- Sau khi viết hoặc sửa artifact dạng trang web, bản trình bày (slide), ứng dụng React hay SVG: gọi check_artifact, xem ảnh chụp và danh sách lỗi, sửa hết (chữ đè chữ, tràn khung, slide nào báo TRÀN trong dòng “Đo khung từng slide”, phần tử tràn khỏi slide, chữ bị cắt, ảnh hỏng, chữ quá nhỏ, tiêu đề rớt chữ, tương phản thấp, đánh số slide lệch nhau, lỗi script) rồi kiểm tra lại, tới khi sạch lỗi (tối đa 2 vòng kiểm tra - sửa) mới báo xong. Tự nhìn ảnh chụp: bố cục, căn lề, khoảng cách, độ tương phản phải chỉn chu như sản phẩm thật."
-    : "- Sau khi viết hoặc sửa artifact: đọc lại bằng read_artifact và tự rà bố cục (chữ đè chữ, tràn khung, chữ bị cắt, ảnh hỏng) trước khi báo xong."}
+    : "- Sau khi viết hoặc sửa artifact: đọc lại bằng read_artifact và tự rà bố cục (chữ đè chữ, tràn khung, chữ bị cắt, ảnh hỏng, đánh số slide báo trong <deck_numbering>) trước khi báo xong."}
 - Bản sửa (mode="patch") thêm, bớt hay đổi chỗ slide: đánh số lại MỌI nhãn số (số mục "01 ·", chân trang "02 / 06", mục lục) cho cùng một dãy, không chỉ vài chỗ.
 - Bố cục bền: dùng flex / grid và khoảng cách đều, không đặt chữ bằng position:absolute chồng lên nhau; slide 16:9 chừa lề, chữ dài thì giảm chữ hoặc chia slide thay vì để tràn; ảnh có kích thước và object-fit rõ ràng.
 - Người dùng báo sản phẩm có lỗi: không đổ cho công cụ hay nói "không làm được". Đọc lại bằng read_artifact${check ? ", tái hiện bằng check_artifact" : ""}, tìm nguyên nhân, sửa, kiểm tra lại, rồi báo ngắn gọn đã sửa gì và đã kiểm tra thế nào.
@@ -85,8 +85,12 @@ export function readArtifact(a: ArtVersion | null, input: Record<string, unknown
   let out = "", n = from;
   for (; n <= lines.length && out.length < 60_000; n++) out += `${String(n).padStart(4)} | ${lines[n - 1]}\n`;
   const more = n <= lines.length ? `\n[Còn ${lines.length - n + 1} dòng: gọi lại với offset=${n}]` : "";
+  // Bộ slide: báo luôn đánh số lệch nhau (đọc mã, không cần Chromium), để bản sửa mode="patch" đánh số lại một phần vẫn bị phát hiện
+  // cả khi máy chủ không có check_artifact.
+  const nums = a.complete && a.type === "html" && isDeck(a) ? numberingNote(numberingIssues(a.content)) : [];
+  const numTag = nums.length ? `\n<deck_numbering>\nĐánh số slide không nhất quán, sửa cho cùng một dãy trước khi báo xong:\n${nums.join("\n")}\n</deck_numbering>` : "";
   // Thẻ artifact_source (không phải <artifact>): model trích lại kết quả này thì không bị hiểu nhầm thành artifact mới.
-  return { content: `<artifact_source identifier="${a.ident}" type="${a.type}" title="${a.title}" version="${a.v}" lines="${lines.length}"${a.complete ? "" : ' complete="false"'}>\n${out}</artifact_source>${more}`, is_error: false };
+  return { content: `<artifact_source identifier="${a.ident}" type="${a.type}" title="${a.title}" version="${a.v}" lines="${lines.length}"${a.complete ? "" : ' complete="false"'}>\n${out}</artifact_source>${more}${numTag}`, is_error: false };
 }
 
 // Cầu nối thay thế ở máy kiểm tra: không có khung cha, window.synchro / storage trả về rỗng để artifact vẫn dựng được.

@@ -55,6 +55,20 @@ console.log("1. Đánh số slide (decknum)");
   ok(decknum.numberingIssues("<p>không phải bộ slide</p>").length === 0, "trang không phải bộ slide → không báo");
 }
 
+console.log("1b. read_artifact báo đánh số lệch (không cần Chromium)");
+{
+  process.env.DATA_DIR ??= fs.mkdtempSync(path.join(os.tmpdir(), "synchro-deckq-")); process.env.DATA_KEY ??= "deck-quality-test";
+  const { artcheck: A } = await loadTs(["artcheck"]);
+  const art = (content, complete = true) => ({ ident: "pitch", title: "Pitch", type: "html", lang: null, content, complete, v: 2 });
+  const bad = deck({ brows: ["", "01 · Vấn đề", "02 · Giải pháp", "03 · Kinh tế", "04 · Thị trường", "05 · Gọi vốn"], pages: ["", "02 / 06", "03 / 06", "04 / 06", "05 / 06", "06 / 06"] });
+  const r = A.readArtifact(art(bad), {});
+  ok(/<deck_numbering>/.test(r.content) && /Slide 2, 3, 4, 5, 6: đánh số slide không nhất quán/.test(r.content) && r.content.indexOf("<deck_numbering>") > r.content.indexOf("</artifact_source>"), "bộ slide đánh số lệch → read_artifact kèm <deck_numbering> sau mã nguồn", r.content.slice(-400));
+  const good = deck({ brows: ["", "02 · Vấn đề", "03 · Giải pháp", "04 · Kinh tế", "05 · Thị trường", "06 · Gọi vốn"], pages: ["", "02 / 06", "03 / 06", "04 / 06", "05 / 06", "06 / 06"] });
+  ok(!/<deck_numbering>/.test(A.readArtifact(art(good), {}).content), "đánh số đúng → không có thẻ");
+  ok(!/<deck_numbering>/.test(A.readArtifact(art(bad, false), {}).content), "bản chưa viết xong → không báo");
+  ok(/<deck_numbering>/.test(A.ARTCHECK_RULES(false)) && /đánh số lại MỌI nhãn số/.test(A.ARTCHECK_RULES(true)), "quy tắc self_check nhắc đánh số lại khi sửa bằng patch");
+}
+
 console.log("2. Số đo khung từng slide (deckfit)");
 {
   const fit = [1, 2, 3, 4, 5].map((n) => ({ slide: n, h: 720, w: 1280, vh: 720, vw: 1280 })).concat([{ slide: 6, h: 869, w: 1280, vh: 720, vw: 1280 }, { slide: 7, h: 726, w: 1280, vh: 720, vw: 1280 }]);
@@ -138,5 +152,6 @@ else {
   } finally { t.close(); }
 }
 
+if (/synchro-deckq-/.test(process.env.DATA_DIR ?? "")) fs.rmSync(process.env.DATA_DIR, { recursive: true, force: true });
 console.log(`\n${pass}/${pass + fail} đạt`);
 process.exit(fail ? 1 : 0);
