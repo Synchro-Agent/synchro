@@ -33,7 +33,13 @@
      hộp: 12 tấm nhóm / ô nhiều dòng / khối code · 16 thẻ / danh sách · 20 menu / popover · 24 ô soạn / hộp thoại / bảng bên.
      Lồng nhau thì đồng tâm: góc trong = góc ngoài − khoảng đệm (menu 20 = mục 32px tròn 16 + đệm 4). */
   --r-pill:999px; --r-key:5px; --r-plate:12px; --r-card:16px; --r-menu:20px; --r-panel:24px;
-  --ds-r:var(--r-pill); --ds-r-plate:var(--r-card); --ds-r-tile:25%; --ds-r-ctl:var(--r-pill); --ds-r-row:var(--r-pill);
+  --ds-r:var(--r-pill); --ds-r-plate:var(--r-card); --ds-r-tile:25%; --ds-r-ctl:var(--r-pill);
+  /* Hàng (mục menu, mục danh sách, dòng có nền khi rê / chọn): KHÔNG dùng --r-pill. 999px bị trình duyệt kẹp về nửa cạnh ngắn, nên hàng xuống
+     hai ba dòng (luật dự án ở Synchro Code, mô tả model) thành viên thuốc to, hai đầu cong ăn vào chữ. 16px = tròn đúng viên thuốc khi hàng
+     một dòng cao 32px (đồng tâm với menu bo 20, đệm 4), hàng cao hơn thì thành góc bo 16 bình thường. */
+  --r-row:16px; --ds-r-row:var(--r-row);
+  /* Ô nhiều dòng (textarea, ô soạn): góc của tấm, không bao giờ viên thuốc (luật chặn ở cuối tệp, lớp syn-over). */
+  --r-field:var(--r-plate);
   --ds-ease:cubic-bezier(.22,.8,.24,1);
   --ds-fast:.16s; --ds-mid:.28s; --ds-slow:.42s;
   --ds-lift:0 1px 2px rgba(17,18,16,.05),0 10px 28px -14px rgba(17,18,16,.22);
@@ -61,7 +67,7 @@ html body .btn:not(.auth-root *) svg{flex:none}
 html body .btn.dark:not(.auth-root *){background:var(--ds-inv);color:var(--ds-inv-fg)}
 .btn.dark:not(.auth-root *):hover:not(:disabled){background:color-mix(in srgb,var(--ds-inv) 86%,var(--bg))}
 html body .btn:not(.auth-root *):focus-visible,html body .icon-btn:focus-visible{outline:0}
-html body .icon-btn:not(.auth-root *){border-radius:var(--ds-r-row);color:var(--ds-ink-2)}
+html body .icon-btn:not(.auth-root *){border-radius:var(--r-pill);color:var(--ds-ink-2)}
 html body .icon-btn:not(.auth-root *):hover{background:var(--ds-hover);color:var(--ds-ink)}
 html body .icon-btn:not(.auth-root *):active{background:var(--ds-press)}
 /* Ô nhập: tấm nhạt, viền mảnh 1px, tiêu điểm là viền mực. */
@@ -130,7 +136,7 @@ html body .menu.dd-pop{display:flex;flex-direction:column;min-width:0;padding:4p
 .dd-search{flex:none;display:flex;align-items:center;gap:8px;height:34px;margin:0 0 4px;padding:0 12px;border-radius:var(--r-pill);background:var(--ds-sunken);color:var(--ds-faint);box-shadow:inset 0 0 0 1px var(--ds-line)}
 .dd-search input{flex:1;min-width:0;height:100%;border:0;background:transparent;font-size:var(--fs-2);color:var(--ds-ink)}
 .dd-search input::placeholder{color:var(--ds-faint)}
-.dd-list{position:relative;flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:var(--ds-line-2) transparent;border-radius:16px}
+.dd-list{position:relative;flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:var(--ds-line-2) transparent;border-radius:var(--r-row)}
 html body .menu-item.dd-opt{min-height:32px;padding-top:6px;padding-bottom:6px;cursor:pointer;user-select:none}
 html body .menu .menu-item.dd-opt.act{background:var(--row-hover,var(--ds-hover))}
 html body .menu-item.dd-opt.sel{font-weight:520}
@@ -1096,4 +1102,9 @@ html body .cm-find input{border:0;background:transparent;box-shadow:none;padding
 .cm-back{display:flex}
 }
 html body textarea.field:not(.auth-root *),html body .sy-settings textarea.field{border-radius:var(--r-card)}
+/* Chặn tận gốc: ô nhiều dòng không bao giờ mang bo viên thuốc. Đợt "một thang hình khối" (55dd84a6) đổi bán kính theo lớp (.sp-input, .field,
+   .sy-input…) sang --r-pill vì ô một dòng; biến thể nhiều dòng của cùng lớp (.sp-input.ta: Mô tả bản nhạc, Mô tả âm thanh, Nội dung bài viết)
+   thành viên thuốc to và cắt mất chữ gợi ý ở góc (textarea cuộn bên trong nên nội dung bị bo cắt). :where = độ ưu tiên 0: luật syn-over nào
+   đặt bán kính riêng cho textarea vẫn thắng, mọi luật của lớp syn thì thua. */
+:where(textarea){border-radius:var(--r-field)}
 }

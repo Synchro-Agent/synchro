@@ -102,7 +102,7 @@
 }
 .sp-tag:hover {background:var(--hover);color:var(--text)
 }
-.sp-exs .sp-tag {white-space:normal;height:auto;padding:4px 10px;text-align:left;line-height:1.35
+.sp-exs .sp-tag {white-space:normal;height:auto;padding:4px 10px;text-align:left;line-height:1.35;border-radius:var(--r-row)
 }
 .sp-or {display:flex;align-items:center;gap:10px;font-size:var(--fs-1);color:var(--text-3)
 }
@@ -685,11 +685,11 @@
 }
 .sp-two.dict {grid-template-columns:minmax(0,.8fr) minmax(0,1.2fr)
 }
-.sp-dict {display:flex;align-items:center;gap:8px;padding:4px;border-radius:var(--r-pill)
+.sp-dict {display:flex;align-items:center;gap:8px;padding:4px;border-radius:var(--r-card)
 }
 .sp-dict.on {background:color-mix(in srgb,var(--accent) 7%,transparent)
 }
-.sp-dict-t {flex:1;min-width:0;display:flex;align-items:center;gap:10px;padding:6px;border-radius:var(--r-pill);text-align:left;color:var(--text-2)
+.sp-dict-t {flex:1;min-width:0;display:flex;align-items:center;gap:10px;padding:6px;border-radius:var(--r-plate);text-align:left;color:var(--text-2)
 }
 .sp-dict-t:hover {background:var(--hover)
 }
