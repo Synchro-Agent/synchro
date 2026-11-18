@@ -50,7 +50,7 @@ const CONVS = {
   [`hc-a-${Date.now()}`]: ["Xin chào", "Giải thích định luật Ohm thật ngắn gọn", "Cho mình một ví dụ với pin 9V", "Mình là kỹ sư điện, thích câu trả lời ngắn, nhớ giúp mình nhé"],
   [`hc-b-${Date.now()}`]: ["Viết trang HTML đồng hồ đếm ngược 10 phút có nút bắt đầu", "Đổi màu nền sang xanh dương nhạt", "Thêm nút đặt lại", "Cảm ơn nhé"],
 };
-let turns = 0;
+let turns = 0, planTurns = 0;
 for (const [conv, asks] of Object.entries(CONVS)) {
   const msgs = [];
   for (const ask of asks) {
@@ -59,7 +59,7 @@ for (const [conv, asks] of Object.entries(CONVS)) {
     const reply = String(res?.text ?? "");
     ok(reply.length > 0 || !!res?.error, `“${ask}” → ${res?.model ?? "?"}${res?.error ? ` lỗi: ${res.error}` : ""}`, res);
     msgs.push({ role: "assistant", content: reply });
-    turns++;
+    turns++; if (/^sub-codex\//.test(String(res?.model ?? ""))) planTurns++;
     await afterReply(conv, msgs.slice(0, -1), reply);
     await sleep(GAP);
   }
@@ -80,12 +80,13 @@ const helperRows = rows.filter((r) => r.via === "warm" || r.via.startsWith("job:
 const helperLog = lines.filter((l) => /\bjob=/.test(l)).length;
 const usage = (await u.api("GET", "/api/usage?all=1")).j;
 const codex = usage?.vendors?.find((v) => v.cli === "codex")?.sub ?? usage?.sub;
-const report = { oldUi: OLD_UI, userTurns: turns, planRows: rows.length, byVia, helperRows, timingLines: lines.length, jobsFromLog: jobs, helperLog, helpersPerTurn: Math.round((Math.max(helperRows, helperLog) / turns) * 100) / 100, apiEvents: api, messagesToday: codex?.turnsToday ?? null, helpersToday: codex?.helpersToday ?? null };
+const report = { oldUi: OLD_UI, userTurns: turns, planUserTurns: planTurns, planRows: rows.length, byVia, helperRows, timingLines: lines.length, jobsFromLog: jobs, helperLog, helpersPerTurn: Math.round((Math.max(helperRows, helperLog) / turns) * 100) / 100, apiEvents: api, messagesToday: codex?.turnsToday ?? null, helpersToday: codex?.helpersToday ?? null };
 console.log(JSON.stringify(report, null, 1));
 if (OUT) fs.writeFileSync(OUT, JSON.stringify(report, null, 1));
 if (!OLD_UI && !process.env.MEASURE_ONLY) {
   ok(report.helpersPerTurn <= 2, `tối đa 2 việc phụ cho mỗi tin nhắn (đo được ${report.helpersPerTurn})`, report);
-  ok(codex?.turnsToday === turns, `"tin nhắn hôm nay" = ${turns} tin người dùng gửi (đo được ${codex?.turnsToday}, việc nền ${codex?.helpersToday})`, codex);
+  // Tự động gửi một số tin sang model khóa API: "tin nhắn hôm nay" của gói ChatGPT là số tin người dùng chạy bằng gói đó.
+  ok(codex?.turnsToday === planTurns && codex?.helpersToday === helperRows, `"tin nhắn hôm nay" của gói = ${planTurns} tin người dùng chạy bằng gói (đo được ${codex?.turnsToday}), việc nền đếm riêng (${codex?.helpersToday})`, codex);
 }
 await u.remove();
 console.log(`\n${pass}/${pass + fail} đạt`);
