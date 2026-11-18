@@ -323,6 +323,7 @@ for (const theme of THEMES) for (const size of SIZES) {
   await step0("bang-lenh", async () => { await key("k", "KeyK", 75, 4); await ready(); await check("bang-lenh"); await esc(); });
   await step0("menu-nguoi-dung", async () => { await side(); await click(`[...document.querySelectorAll(".rail .user")].find((e) => e.checkVisibility()) ?? document.querySelector(".rail .user")`, "user"); await ready(); await check("menu-nguoi-dung"); await esc(); });
   await step0("chat-artifact", async () => {
+    if (!(await ev(`location.origin === ${JSON.stringify(B)}`))) await home();
     await ev(`(async () => { const me = await (await fetch("/api/auth/me")).json(), m = await (await fetch("/api/models")).json(), k = m.providers.flatMap((p) => p.models).find((x) => !x.key.startsWith("sub-"))?.key; if (k) localStorage.setItem("u:" + me.user.id + ":model", k); })()`);
     await home();
     await click(`document.querySelector("textarea")`, "composer"); await P("Input.insertText", { text: "Làm trang web cho quán cà phê" }); await key("Enter", "Enter", 13);
