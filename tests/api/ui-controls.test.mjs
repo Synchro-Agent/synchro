@@ -72,8 +72,8 @@ ok(bare.length === 0, "popover chứa Dropdown / ColorField bỏ qua cú bấm t
   const C = await loadTs(["ui/clickaway"]).then((m) => m["ui/clickaway"]).catch((e) => (ok(false, "nạp ui/clickaway.ts", e.message), null));
   if (C) {
     // Phần tử giả tối thiểu: contains / closest như DOM.
-    const node = (parent, attrs = {}) => ({ parent, attrs, contains(t) { for (let x = t; x; x = x.parent) if (x === this) return true; return false; },
-      closest(sel) { const a = sel.replace(/^\[|\]$/g, ""); for (let x = this; x; x = x.parent) if (a in x.attrs) return x; return null; } });
+    const up = (x) => { const l = []; for (; x; x = x.parent) l.push(x); return l; };
+    const node = (parent, attrs = {}) => { const n = { parent, attrs }; n.contains = (t) => up(t).includes(n); n.closest = (sel) => up(n).find((x) => sel.replace(/^\[|\]$/g, "") in x.attrs) ?? null; return n; };
     const body = node(null), pop = node(body), inside = node(pop), list = node(body, { "data-floating": "" }), opt = node(list), other = node(body);
     ok(!C.isAway(pop, inside), "bấm trong popover: không đóng");
     ok(!C.isAway(pop, opt), "bấm vào mục của danh sách gắn ở <body> (data-floating): không đóng");
