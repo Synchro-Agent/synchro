@@ -281,7 +281,7 @@ export function UsageAdmin({ say, Toggle }: { say: (m: string) => void; Toggle: 
 
       <div className="adm-card-h" style={{ marginTop: 14 }}><b>Shared API key for regular accounts</b><span className="d">Regular accounts can run models on the server&apos;s API key when they have no plan of their own, or when Auto picks it. Every run counts toward the limits above. Models from a plan a person signs in to are never limited here. Administrators can use every model.</span></div>
       <div className="adm-perm-row"><div><div className="t">Allow the shared key</div><div className="d">Off: regular accounts use only the plans they sign in to, unless you allow someone below.</div></div><Toggle on={c.sharedKey !== false} label="Allow the shared key" set={(v) => patch({ config: { sharedKey: v } }, v ? "Regular accounts can use the shared key" : "Regular accounts can't use the shared key")} /></div>
-      <div className="adm-perm-row"><div><div className="t">Highest model on the shared key</div><div className="d">Top models such as Opus cost far more per message. A person can still use them through their own plan.</div></div>
+      <div className="adm-perm-row us-top"><div><div className="t">Highest model on the shared key</div><div className="d">Top models such as Opus cost far more per message. A person can still use them through their own plan.</div></div>
         <span className="api-sel"><select aria-label="Highest model on the shared key" value={c.sharedTop ?? "balanced"} onChange={(e) => patch({ config: { sharedTop: e.target.value } }, "Shared key models saved")}>
           {(["fast", "balanced", "strong"] as const).map((t) => <option key={t} value={t}>{TIER_LABEL[t]}</option>)}
         </select></span></div>

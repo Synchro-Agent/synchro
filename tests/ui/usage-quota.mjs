@@ -54,14 +54,22 @@ try {
   await t.P("Page.navigate", { url: `${B}/?uq=seed` });
   await t.until(`!!document.querySelector("textarea")`, 180_000);
   await t.ev(`localStorage.setItem(${JSON.stringify(`u:${u.uid}:model`)}, "auto")`);
+  // Vòng mức dùng nằm ở thanh dưới của đoạn chat đang mở: gửi một tin ở chế độ Tự động (bản giả lập trả lời bằng model khóa API nhanh) rồi mở lại đoạn chat đó.
+  await t.P("Page.navigate", { url: `${B}/?uq=chat` });
+  await t.until(`!!document.querySelector("textarea")`, 180_000);
+  const tb = await t.ev(`(() => { const r = document.querySelector("textarea").getBoundingClientRect(); return [r.x + r.width / 2, r.y + r.height / 2]; })()`);
+  await t.click(tb[0], tb[1]); await t.type("Xin chào"); await t.key("Enter", "Enter", 13);
+  ok(await t.until(`location.hash.startsWith("#c=") && !!document.querySelector(".dock .us-ring")`, 120_000), "gửi một tin: đoạn chat mở, có vòng mức dùng");
+  await t.until(`!document.querySelector(".msg .typing, .stop-btn, [aria-label='Dừng']")`, 120_000);
+  const chatHash = await t.ev("location.hash");
   for (const [w, h, label] of [[1280, 860, "máy tính"], [375, 812, "điện thoại"]]) {
     await t.size(w, h, w < 600);
     for (const th of ["light", "dark"]) {
-      await t.P("Page.navigate", { url: `${B}/?uq=${w}${th}` });
-      if (!ok(await t.until(`!!document.querySelector("textarea")`, 180_000), `${label} ${th}: trang chủ mở được`)) continue;
+      await t.P("Page.navigate", { url: `${B}/?uq=${w}${th}${chatHash}` });
+      if (!ok(await t.until(`!!document.querySelector(".dock .us-ring")`, 180_000), `${label} ${th}: đoạn chat mở được, có vòng mức dùng`)) { await t.shot(`chat-missing-${w}-${th}`); continue; }
       await t.theme(th);
       const ring = await waitFor(() => t.ev(`(() => { const b = document.querySelector(".dock .us-ring"); if (!b) return null; const a = b.querySelector("circle.api"); return a ? { label: b.getAttribute("aria-label"), dash: a.getAttribute("stroke-dasharray"), r: a.getAttribute("r") } : null; })()`), 30_000, { every: 400 });
-      if (!ok(!!ring && /khóa API chung 25%|shared API key 25%/.test(ring.label), `${label} ${th}: vòng mức dùng có vòng trong cho khóa API chung (25% của hạn mức phiên), nhãn đọc được`,
+      if (!ok(!!ring && /khóa API chung (2[5-9]|3\d)%|shared API key (2[5-9]|3\d)%/.test(ring.label), `${label} ${th}: vòng mức dùng có vòng trong cho khóa API chung (≈25% hạn mức phiên), nhãn đọc được`,
         await t.ev(`({ ring: document.querySelector(".dock .us-ring")?.outerHTML?.slice(0, 400) ?? null, model: localStorage.getItem(${JSON.stringify(`u:${u.uid}:model`)}) })`))) { await t.shot(`ring-missing-${w}-${th}`); continue; }
       ok(await t.ev(`(() => { const b = document.querySelector(".dock .us-ring"); const r = b?.getBoundingClientRect(); return !!r && r.right <= innerWidth + 1 && document.documentElement.scrollWidth <= innerWidth + 1; })()`), `${label} ${th}: vòng nằm trọn màn hình, không cuộn ngang`);
       await t.ev(`(() => { const b = document.querySelector(".dock .us-ring"); b.scrollIntoView({ block: "center" }); })()`);
