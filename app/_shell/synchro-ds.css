@@ -181,6 +181,8 @@ html body .menu:not(.auth-root *) hr{border-top:1px solid var(--ds-line);margin:
    8 cột (ô vuông bo 25%, ô đang chọn có dấu tích và vòng mực), ô mã hex và nút mở bảng màu của trình duyệt. */
 .cp{display:inline-flex;align-items:center;gap:9px;height:var(--ds-h);padding:0 11px 0 5px;border-radius:var(--r-pill);border:1px solid var(--ds-line-2);background:var(--ds-plate);
   color:var(--ds-ink);font:inherit;font-size:var(--fs-2);cursor:pointer;transition:border-color var(--ds-fast),box-shadow var(--ds-fast)}
+/* Cỡ md có hai dòng (tên + mã màu): bo góc tấm như ô chọn giọng hai dòng, không bo viên thuốc (góc tròn cắt chữ). Cỡ sm chỉ còn chấm màu: tròn. */
+.cp:not(.sm){border-radius:var(--r-plate)}
 .cp.sm{height:var(--ds-h-sm);padding:0 4px;gap:0}
 .cp.sm :is(.cp-l,svg){display:none}
 .cp:hover{border-color:color-mix(in srgb,var(--ds-ink) 32%,var(--ds-line-2))}

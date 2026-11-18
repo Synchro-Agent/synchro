@@ -104,6 +104,12 @@ const idle = () => until(`!document.querySelector(".ai-msg .thinking") && !docum
 try {
   await sleep(800);
   await click(byText(".nav-item", "Mới"), "new"); await sleep(800);
+  // Chọn hẳn một model khóa API (OpenAI giả lập): chế độ Tự động chọn gói Claude khi tài khoản thử đã đăng nhập CLI giả lập (một bộ kiểm
+  // thử khác để lại), mà CLI giả lập chỉ nhại lại tin nhắn, không tạo artifact; bài kiểm này đo bàn trộn chứ không đo định tuyến.
+  await click(`document.querySelector(".model-btn")`, "model"); await until(`!!document.querySelector(".model-menu .mprov")`, 10000, "model menu");
+  await click(`[...document.querySelectorAll(".model-menu .mprov")].find((b) => /OpenAI|ChatGPT|GPT/i.test(b.textContent))`, "OpenAI");
+  await until(`!!document.querySelector(".msub-models .menu-item:not(.locked)")`, 5000, "OpenAI models");
+  await click(`[...document.querySelectorAll(".msub-models .menu-item:not(.locked)")].find((b) => b.checkVisibility())`, "pick model"); await sleep(500);
   await sendMsg("tạo trang web giới thiệu quán cà phê");
   await until(`document.querySelectorAll(".art-card:not(.busy)").length >= 1`, 60000, "artifact"); await sleep(2500);
   for (const t of ["#rev 1", "#rev 2", "#rev 3"]) { await sendMsg(t); await sleep(1500); await until(`document.querySelectorAll(".art-card").length >= 2 && !document.querySelector(".art-card.busy")`, 60000, t); await sleep(1500); }

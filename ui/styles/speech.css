@@ -744,15 +744,17 @@
 }}
 @media (max-width:1100px){.sp-sheet-bg {position:fixed;inset:0;z-index:calc(var(--z-menu) + 5);background:var(--overlay);animation:fadeIn .2s both
 }}
-@media (max-width:768px){.sp-aside,.sp-aside.wide {top:auto;left:0;right:0;bottom:0;width:auto;max-height:84dvh;border-radius:var(--r-panel) var(--r-panel) 0 0;transform:translateY(100%);padding-bottom:calc(18px + env(safe-area-inset-bottom))
+/* Ngăn trượt từ dưới lên chỉ ở điện thoại (≤ 760px, cùng mốc ẩn thanh điều hướng). 761–768px thanh điều hướng còn hiện: ngăn rộng hết
+   màn nằm dưới thanh, chữ của thanh (Dự án, Artifacts…) đè lên Cài đặt; ở đó dùng ngăn bên phải như máy tính bảng. */
+@media (max-width:760px){.sp-aside,.sp-aside.wide {top:auto;left:0;right:0;bottom:0;width:auto;max-height:84dvh;border-radius:var(--r-panel) var(--r-panel) 0 0;transform:translateY(100%);padding-bottom:calc(18px + env(safe-area-inset-bottom))
 }}
-@media (max-width:768px){.sp-aside.open {transform:none
+@media (max-width:760px){.sp-aside.open {transform:none
 }}
-@media (max-width:768px){.sp-grab {display:flex;justify-content:center;width:100%;padding:8px 0 2px;position:sticky;top:0;z-index:4;background:var(--card)
+@media (max-width:760px){.sp-grab {display:flex;justify-content:center;width:100%;padding:8px 0 2px;position:sticky;top:0;z-index:4;background:var(--card)
 }}
-@media (max-width:768px){.sp-grab i {width:38px;height:4px;border-radius:9px;background:var(--border-strong)
+@media (max-width:760px){.sp-grab i {width:38px;height:4px;border-radius:9px;background:var(--border-strong)
 }}
-@media (max-width:768px){.sp-aside-h {top:18px
+@media (max-width:760px){.sp-aside-h {top:18px
 }}
 @media (max-width:768px){.sp-quick {grid-template-columns:minmax(0,1fr)
 }}

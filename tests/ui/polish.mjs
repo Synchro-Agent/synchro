@@ -203,7 +203,9 @@ const THUMBS = `(() => [...document.querySelectorAll("input[type=range]")].filte
   const b = el.getBoundingClientRect(); if (b.width < 24 || b.bottom < 14 || b.top > innerHeight - 14) return null;
   const min = el.min === "" ? 0 : +el.min, max = el.max === "" ? 100 : +el.max, p = max > min ? (+el.value - min) / (max - min) : 0;
   const nm = (el.getAttribute("aria-label") || el.id || String(el.className) || "range").slice(0, 30);
-  return { x: b.left + 8 + p * (b.width - 16), y: b.top + b.height / 2, name: nm };
+  const x = b.left + 8 + p * (b.width - 16), y = b.top + b.height / 2;
+  // Nút kéo bị khung khác che (danh sách đang mở ngay trên thanh trượt): không đo, điểm ảnh lúc đó là của khung che.
+  return document.elementFromPoint(x, y) === el ? { x, y, name: nm } : null;
 }).filter(Boolean))()`;
 const lum = ([r, g, b]) => { const f = (c) => { c /= 255; return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; }; return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b); };
 const ratio = (a, b) => { const x = lum(a), y = lum(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); };
@@ -396,6 +398,8 @@ for (const theme of THEMES) for (const size of SIZES) {
       await click(byText(".menu .menu-item", /Luật dự án|Project rules/), "rules").catch(() => {}); await ready(); await check("code-luat-du-an"); await esc(); await esc();
     }
   });
+  // Ô chọn đang hiện (ô ẩn trong ngăn trượt đang đóng ở 768px thì bấm vào là bấm vào khoảng trống, danh sách không bao giờ mở).
+  const VISDD = `[...document.querySelectorAll(".main .dd, main .dd")].find((e) => e.checkVisibility())`;
   await step0("speech", async () => {
     await go("speech"); await check("speech");
     // Tên từng công cụ lấy từ nút ở thanh bên (có cả khi thanh bên đang ẩn), dùng để bấm đúng nút của dải .sp-tabs và đối chiếu tiêu đề trang.
@@ -410,9 +414,17 @@ for (const theme of THEMES) for (const size of SIZES) {
         const head = await ev(`document.querySelector(".sp-crumb-cur")?.textContent.trim() ?? ""`);
         if (head !== label) throw new Error(`bấm ${t} nhưng trang đang là “${head || "Trang chủ Speech"}”, không phải “${label}”`);
         await check(t);
+        // ≤ 820px: bảng Cài đặt / Lịch sử của công cụ là ngăn trượt, mở bằng nút ở .sp-mbar (máy tính để bàn: bảng luôn hiện, đã đo cùng trang).
+        // Đo ngăn đầu tiên (Cài đặt) để các ô của nó cũng được soát ở cỡ máy tính bảng / điện thoại.
+        let sheet = false;
+        if (await ev(`!!document.querySelector(".sp-mbar .btn")?.checkVisibility()`)) {
+          await click(`document.querySelector(".sp-mbar .btn")`, "sheet"); await until(`!!document.querySelector(".sp-aside.open")`, 5000, "ngăn cài đặt"); await ready();
+          await check(t + "-cai-dat"); sheet = true;
+        }
         // Ô chọn đầu tiên mở ra (danh sách của Dropdown), ô màu (Audio Native): bấm nút .cp để mở bảng màu rồi mới đo (.cp-sw chỉ có trong bảng đang mở).
-        if (t === "sp-tts" && (await ev(`!!document.querySelector(".main .dd, main .dd")`))) { await click(`document.querySelector(".main .dd, main .dd")`, "dd"); await until(`!!document.querySelector(".dd-pop")`, 5000, "danh sách"); await ready(); await check(t + "-o-chon"); await esc(); }
+        if (t === "sp-tts" && (await ev(`!!${VISDD}`))) { await click(VISDD, "dd"); await until(`!!document.querySelector(".dd-pop")`, 5000, "danh sách"); await ready(); await check(t + "-o-chon"); await esc(); }
         if (await ev(`!!document.querySelector("main .cp, .main .cp")`)) { await click(`document.querySelector("main .cp, .main .cp")`, "color"); await until(`!!document.querySelector(".cp-pop .cp-sw")`, 5000, "bảng màu"); await ready(); await check(t + "-chon-mau"); await esc(); }
+        if (sheet) { await esc(); await until(`!document.querySelector(".sp-aside.open")`, 5000, "đóng ngăn"); }
       } catch (e) { note(`${tag}/${t}`, "không chạy được bước: " + e.message.split("\n")[0]); await esc().catch(() => {}); }
     }
   });
