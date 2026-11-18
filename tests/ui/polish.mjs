@@ -100,7 +100,12 @@ function POLISH() {
     if (el !== document.scrollingElement && !vis(el)) continue;
     const dx = el.scrollWidth - el.clientWidth, dy = el.scrollHeight - el.clientHeight;
     if (sy && dy > 0 && dy < 12) push("tiny", "khung cuộn dọc chỉ tràn " + dy + "px mà còn thanh cuộn (Windows hiện mũi tên vô ích): " + name(el));
-    else if (sx && dx > 0 && dx < 12) push("tiny", "khung cuộn ngang chỉ tràn " + dx + "px mà còn thanh cuộn (Windows hiện mũi tên vô ích): " + name(el));
+    else if (sx && dx > 0 && dx < 12) {
+      // Phần tử con thò ra mép phải xa nhất: chỉ ra chỗ cần sửa.
+      const R = el.getBoundingClientRect().left + el.clientLeft + el.clientWidth; let far = null, fr = R + 0.5;
+      for (const k of el.querySelectorAll("*")) { const r = k.getBoundingClientRect(); if (r.width > 0 && r.right > fr) { fr = r.right; far = k; } }
+      push("tiny", "khung cuộn ngang chỉ tràn " + dx + "px mà còn thanh cuộn (Windows hiện mũi tên vô ích): " + name(el) + (far ? " (thò ra: " + name(far).replace(/ “.*$/, "") + ")" : ""));
+    }
     else if (/scroll/.test(cs.overflowX + cs.overflowY)) push("tiny", "overflow:scroll luôn hiện thanh cuộn kể cả khi không tràn: " + name(el));
     else if (el.clientHeight < 48 && el.tagName !== "TEXTAREA" && el !== document.scrollingElement) push("strip", "dải thấp " + el.clientHeight + "px cuộn được mà không ẩn thanh cuộn (scrollbar-width " + cs.scrollbarWidth + "): " + name(el));
   }
@@ -271,7 +276,7 @@ for (const theme of THEMES) for (const size of SIZES) {
   };
   // Nút điều hướng đang hiện (ở 768px thanh bên đóng vẫn còn bản ẩn của cùng nút: bấm vào bản ẩn là bấm nhầm chỗ khác trên trang).
   const nav = (v) => `[...document.querySelectorAll('[data-nav="${v}"]')].find((e) => e.checkVisibility()) ?? document.querySelector('[data-nav="${v}"]')`;
-  const go = async (v) => { await esc(); await side(); await click(nav(v), v); await ready(); };
+  const go = async (v) => { if (!(await ev(`!!document.querySelector("[data-nav]")`))) await home(); await esc(); await side(); await click(nav(v), v); await ready(); };
   // Các tab của trang đang mở (không phải thanh bên): bấm lần lượt, đo từng tab.
   const tabs = async (label, sel = "main [role=tablist] [role=tab], .main [role=tablist] [role=tab]", max = 8) => {
     const n = Math.min(max, await ev(`[...document.querySelectorAll(${JSON.stringify(sel)})].filter((t) => t.checkVisibility()).length`));
