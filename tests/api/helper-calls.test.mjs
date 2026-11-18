@@ -47,8 +47,9 @@ const afterReply = async (conv, msgs, reply) => {
   }
 };
 const CONVS = {
-  [`hc-a-${Date.now()}`]: ["Xin chào", "Giải thích định luật Ohm thật ngắn gọn", "Cho mình một ví dụ với pin 9V", "Mình là kỹ sư điện, thích câu trả lời ngắn, nhớ giúp mình nhé"],
-  [`hc-b-${Date.now()}`]: ["Viết trang HTML đồng hồ đếm ngược 10 phút có nút bắt đầu", "Đổi màu nền sang xanh dương nhạt", "Thêm nút đặt lại", "Cảm ơn nhé"],
+  // Tin nhắn như người dùng thật hay gõ: phần lớn mở đầu bằng "mình muốn / tôi cần / em có" (yêu cầu, không phải tự mô tả), một câu tự giới thiệu.
+  [`hc-a-${Date.now()}`]: ["Xin chào", "Mình muốn hiểu định luật Ohm, giải thích thật ngắn gọn", "Tôi cần một ví dụ với pin 9V", "Mình là kỹ sư điện, thích câu trả lời ngắn, nhớ giúp mình nhé"],
+  [`hc-b-${Date.now()}`]: ["Mình cần trang HTML đồng hồ đếm ngược 10 phút có nút bắt đầu", "Em muốn đổi màu nền sang xanh dương nhạt", "Tôi cần thêm nút đặt lại", "Cảm ơn nhé"],
 };
 let turns = 0, planTurns = 0;
 for (const [conv, asks] of Object.entries(CONVS)) {
@@ -80,11 +81,16 @@ const helperRows = rows.filter((r) => r.via === "warm" || r.via.startsWith("job:
 const helperLog = lines.filter((l) => /\bjob=/.test(l)).length;
 const usage = (await u.api("GET", "/api/usage?all=1")).j;
 const codex = usage?.vendors?.find((v) => v.cli === "codex")?.sub ?? usage?.sub;
-const report = { oldUi: OLD_UI, userTurns: turns, planUserTurns: planTurns, planRows: rows.length, byVia, helperRows, timingLines: lines.length, jobsFromLog: jobs, helperLog, helpersPerTurn: Math.round((Math.max(helperRows, helperLog) / turns) * 100) / 100, apiEvents: api, messagesToday: codex?.turnsToday ?? null, helpersToday: codex?.helpersToday ?? null };
+// Việc phụ chạy bằng khóa API (feature "internal": đặt tên, rút bộ nhớ… trên khóa chung của máy chủ) cũng là việc phụ: tính vào tổng.
+const apiHelpers = api.filter((a) => a.feature === "internal").reduce((n, a) => n + a.n, 0);
+const report = { oldUi: OLD_UI, userTurns: turns, planUserTurns: planTurns, planRows: rows.length, byVia, helperRows, apiHelpers, timingLines: lines.length, jobsFromLog: jobs, helperLog,
+  helpersPerTurn: Math.round(((Math.max(helperRows, helperLog) + apiHelpers) / turns) * 100) / 100, apiEvents: api, messagesToday: codex?.turnsToday ?? null, helpersToday: codex?.helpersToday ?? null };
 console.log(JSON.stringify(report, null, 1));
 if (OUT) fs.writeFileSync(OUT, JSON.stringify(report, null, 1));
 if (!OLD_UI && !process.env.MEASURE_ONLY) {
-  ok(report.helpersPerTurn <= 2, `tối đa 2 việc phụ cho mỗi tin nhắn (đo được ${report.helpersPerTurn})`, report);
+  ok(report.helpersPerTurn <= 2, `tối đa 2 việc phụ cho mỗi tin nhắn, gồm cả việc phụ trên khóa API (đo được ${report.helpersPerTurn})`, report);
+  // Rút bộ nhớ cho câu không tự mô tả mình bỏ qua trên gói (bộ não chưng cất sau): không chuyển sang khóa API chung của máy chủ.
+  ok(!api.some((a) => a.feature === "internal" && a.n > 0), "không có việc phụ nào chạy bằng khóa API chung (tài khoản có gói)", api);
   // Tự động gửi một số tin sang model khóa API: "tin nhắn hôm nay" của gói ChatGPT là số tin người dùng chạy bằng gói đó.
   ok(codex?.turnsToday === planTurns && codex?.helpersToday === helperRows, `"tin nhắn hôm nay" của gói = ${planTurns} tin người dùng chạy bằng gói (đo được ${codex?.turnsToday}), việc nền đếm riêng (${codex?.helpersToday})`, codex);
 }

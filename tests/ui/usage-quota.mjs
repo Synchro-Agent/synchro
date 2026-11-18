@@ -2,6 +2,8 @@
 // 1. Tài khoản miễn phí (quyền mặc định) đăng nhập gói ChatGPT giả lập, đã có lượt dùng khóa API chung trong phiên: vòng mức dùng ở chế độ Tự động
 //    có vòng trong cho phần hạn mức chi phí khóa API chung (lỗi 4), nhãn đọc được; Cài đặt → Usage: "Hôm nay: N tin nhắn" chỉ đếm tin của người
 //    dùng, việc nền đếm riêng (lỗi 12).
+//    Hạn mức ngày đặt riêng: Cài đặt → Usage có dòng "Hôm nay · chi phí API" (không mượn chữ hằng tuần). Chỉ còn việc nền trên khóa API (rút bộ nhớ,
+//    embedding): không có vòng trong.
 // 2. Chủ sở hữu: Quản trị viên → Giới hạn sử dụng có hạn mức ngày, khóa API chung (cho / chặn, model cao nhất), và từng người có ô ngày + hai hộp
 //    chọn khóa chung; máy tính 1280 và điện thoại 375, sáng / tối; không tràn, không cuộn ngang.
 // Ảnh: SHOTS (mặc định <tmp>/synchro-ui/usage-quota). Chạy: node tests/ui/usage-quota.mjs (BASE, CDP_PORT).
@@ -92,6 +94,28 @@ try {
   ok(!!card && /Hôm nay: 2 tin nhắn|Today: 2 messages/.test(card) && new RegExp(`${now2?.helpersToday} (việc nền|background jobs?)`).test(card) && now2?.helpersToday >= 3,
     "Cài đặt → Usage: \"Hôm nay: 2 tin nhắn\" và số việc nền riêng", JSON.stringify({ card, now2: { turns: now2?.turnsToday, helpers: now2?.helpersToday } }));
   await t.shot("settings-usage");
+  // Hạn mức ngày (quản trị viên đặt riêng cho người này): thẻ "Giới hạn chi phí khóa API" có dòng "Hôm nay · chi phí API", đặt lại lúc 0 giờ UTC,
+  // không thêm một dòng "Hằng tuần" thứ hai.
+  ok((await admin.api("PATCH", "/api/admin/usage", { user: u.uid, override: { daily: 5 } })).s === 200, "quản trị viên đặt hạn mức ngày $5 cho người này");
+  await t.P("Page.reload", {});
+  await t.until(`!!document.querySelector("textarea")`, 120_000);
+  await t.ev(`location.hash = "#s=Usage"`);
+  const rows = await waitFor(() => t.ev(`(() => { const r = [...document.querySelectorAll(".us-big .us-big-t")].map((e) => e.innerText.replace(/\\s+/g, " ")); return r.length >= 3 ? r : null; })()`), 30_000, { every: 400 });
+  ok(!!rows && rows.some((x) => /^(Hôm nay · chi phí API|Today · API cost)/.test(x) && /0 giờ UTC|00:00 UTC/.test(x)) && rows.filter((x) => /Hằng tuần|Weekly/.test(x)).length === 1,
+    "Cài đặt → Usage: dòng hạn mức ngày có tên riêng, đặt lại lúc 0 giờ UTC; chỉ một dòng hằng tuần", rows);
+  await t.shot("settings-usage-daily");
+  await admin.api("PATCH", "/api/admin/usage", { user: u.uid, override: null });
+  // Vòng trong chỉ cho lượt của người dùng chạy bằng khóa API chung: chỉ còn việc nền trên khóa API (rút bộ nhớ, embedding) và lượt chat trên gói
+  // thì không hiện vòng trong (không còn "khóa API chung 0%" sau một lượt rút bộ nhớ).
+  { const d2 = db(); d2.prepare("UPDATE usage_events SET feature = 'internal' WHERE user_id = ?").run(u.uid); d2.close(); }
+  const lim = (await u.api("GET", "/api/usage?all=1")).j?.limits ?? [];
+  ok(lim.some((l) => l.used > 0) && lim.every((l) => !l.turn), "API: chỉ có việc nền trên khóa API: phần lượt người dùng = 0", lim);
+  await t.P("Page.navigate", { url: `${B}/?uq=bg${chatHash}` });
+  ok(await t.until(`!!document.querySelector(".dock .us-ring")`, 180_000), "mở lại đoạn chat: có vòng mức dùng");
+  await sleep(2500);
+  const bgRing = await t.ev(`(() => { const b = document.querySelector(".dock .us-ring"); return { inner: !!b?.querySelector("circle.api"), label: b?.getAttribute("aria-label") }; })()`);
+  ok(!bgRing.inner && !/khóa API chung|shared API key/.test(bgRing.label ?? ""), "chỉ có việc nền trên khóa API: không có vòng trong, nhãn không nhắc khóa API chung", bgRing);
+  await t.shot("ring-background-only");
   t.close(); t = null;
 
   console.log("━━ 2. Chủ sở hữu: Giới hạn sử dụng (hạn mức ngày, khóa API chung)");
