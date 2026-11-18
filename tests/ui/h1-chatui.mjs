@@ -14,6 +14,8 @@ import { idbDel } from "../lib/idbchats.mjs";
 const B = process.env.BASE ?? process.env.SYNCHRO_URL ?? "http://localhost:3200";
 const PORT = Number(process.env.CDP_PORT ?? 9371);
 const SHOTS = process.env.SHOTS;
+const MOCK = process.env.MOCK_URL ?? "http://127.0.0.1:4010";
+let codexIn = false;
 const ONLY = new Set(process.argv.slice(2).map((s) => s.toUpperCase()));
 const VIEW = {
   desktop: { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false },
@@ -176,10 +178,12 @@ try {
   });
 
   await run("B14", "khung xem bản trình bày: không chậm một slide, không ghi clipboard; khung hẹp không cắt slide", async () => {
-    for (const size of ["desktop", "mobile"]) {
+    // 390px trước: phần 1440px bấm Thử lại ở cuối, câu trả lời mới thay chỗ bản trình bày mẫu ở cuối đoạn chat.
+    for (const size of ["mobile", "desktop"]) {
       await open(size, `#c=${ids.deck}`);
       await click(`${lastAi}.querySelector(".art-card")`, "thẻ bản trình bày");
       ok(await until(`/Slide\\s*1\\s*\\/\\s*6/.test(document.querySelector(".art-panel .deck-count")?.textContent || "")`, 25000), `${size}: khung xem có 6 slide`);
+      ok((await ev(`document.querySelector(".art-panel .art-head-t b")?.textContent || ""`)).includes(`Deck kiểm thử ${R}`), `${size}: khung xem mở đúng bản trình bày mẫu`, await ev(`document.querySelector(".art-panel .art-head-t b")?.textContent`));
       await sleep(1500);
       // Khung lớn dựng đúng 1280×720 và thu nhỏ vừa khung xem (B14b).
       const fit = await ev(`(() => { const s = document.querySelector(".art-panel .deck-stage"), f = s?.querySelector("iframe.deck-frame"); if (!f) return null; const a = s.getBoundingClientRect(), b = f.getBoundingClientRect(); return { sw: a.width, sh: a.height, fw: b.width, fh: b.height, dl: b.left - a.left, dt: b.top - a.top, w: f.offsetWidth, h: f.offsetHeight }; })()`);
@@ -227,13 +231,29 @@ try {
         await shot(`B14-${size}-after`);
       } else {
         ok(await ev(NO_HSCROLL), "390px: không tràn ngang khi mở bản trình bày");
+        await click(`document.querySelector(".art-panel .deck-bar button[aria-label='Slide sau']")`, "Slide sau");
+        ok(await until(`/Slide\\s*2\\s*\\/\\s*6/.test(document.querySelector(".art-panel .deck-count")?.textContent || "")`, 8000), "390px: bấm “Slide sau”: Slide 2 / 6");
+        await sleep(600);
+        ok((await deckEval(`window.__sxIdx()`)) === 1, "390px: khung lớn cũng ở slide 2");
       }
     }
   });
 
   await run("B8", "danh sách việc cập nhật ngay trong lượt (update_plan dựng sẵn của Codex)", async () => {
-    const models = await fetch(`${B}/api/models`, { headers: { cookie } }).then((r) => r.json()).catch(() => null);
-    const cx = (models?.providers ?? []).flatMap((p) => p.models ?? []).map((m) => m.key ?? m.id).find((k) => /^sub-codex\//.test(k ?? ""));
+    const api = (method, path, body) => fetch(B + path, { method, headers: { cookie, origin: B, "content-type": "application/json" }, body: body ? JSON.stringify(body) : undefined }).then((r) => r.json()).catch(() => null);
+    const codexKey = async () => ((await api("GET", "/api/models"))?.providers ?? []).flatMap((p) => p.models ?? []).map((m) => m.key ?? m.id).find((k) => /^sub-codex\//.test(k ?? ""));
+    let cx = await codexKey();
+    // Tài khoản mock chưa đăng nhập gói ChatGPT: đăng nhập bằng trang đăng nhập giả lập (như tests/api/providers.test.mjs), xong lượt thì đăng xuất lại.
+    if (!cx) {
+      const st = await api("POST", "/api/engines/codex/login/start", {});
+      if (st?.userCode) {
+        await fetch(`${MOCK}/mock-login/codex/approve?code=${st.userCode}`).catch(() => {});
+        for (let k = 0; k < 30 && !(await api("GET", "/api/engines/codex/status?fresh=1"))?.loggedIn; k++) await sleep(500);
+        codexIn = true;
+        cx = await codexKey();
+      }
+    }
+    const models = { providers: cx ? [] : (await api("GET", "/api/models"))?.providers };
     if (!cx) { ok(false, "tài khoản mock có gói ChatGPT (sub-codex/…)", models?.providers?.map((p) => p.id)); return; }
     for (const size of ["desktop", "mobile"]) {
       await open(size);
@@ -248,7 +268,7 @@ try {
         const s = await ev(`(() => { const p = document.querySelector(".ai-msg .wl-plan"); const live = !!document.querySelector(".wl-status"); if (!p) return { live };
           const items = [...p.querySelectorAll(".wl-pi")]; const r = p.getBoundingClientRect();
           return { live, head: p.querySelector(".wl-plan-h span")?.textContent, spin: items.findIndex((x) => !!x.querySelector(".wl-spin")), right: r.right, vw: innerWidth }; })()`).catch(() => ({}));
-        if (s.head && s.live && seen.at(-1)?.head !== s.head) seen.push({ head: s.head, ms: Date.now() - t0 });
+        if (s.head && s.live && seen.at(-1)?.head !== s.head) { seen.push({ head: s.head, ms: Date.now() - t0 }); if (s.head === "1/3") await shot(`B8-${size}-live`); }
         if (s.head && s.live) { spinAt.add(s.spin); if (s.right > s.vw + 1) wide.push(s.right); }
         if (seen.length && !s.live) break;
         await sleep(100);
@@ -267,6 +287,7 @@ try {
   ok(!jsErr.length, "không có lỗi JavaScript trên trang", jsErr.slice(0, 5));
 } finally {
   await ev(`localStorage.removeItem("u:${uid}:model")`).catch(() => {});
+  if (codexIn) await fetch(`${B}/api/engines/codex/logout`, { method: "POST", headers: { cookie, origin: B } }).catch(() => {});
   await unseed().catch((e) => console.log(`  (cảnh báo: ${e.message})`));
   try { ws.close(); } catch {}
   chrome.kill();
