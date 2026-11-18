@@ -24,7 +24,10 @@ const USER_SLOW = "Các tệp trước của bạn đọc lâu quá nên tệp n
 type Pool = { running: number; queue: (() => void)[]; perUser: Map<string, number>; userQ?: Map<string, (() => void)[]> };
 const pools = ((globalThis as unknown as { __synchroParse?: Record<string, Pool> }).__synchroParse ??= {});
 const poolOf = (name: string) => (pools[name] ??= { running: 0, queue: [], perUser: new Map() });
-type Lim = { run: number; wait: number; user: number; userWait: number; waitMs: number };
+// userWait: số tệp chờ tối đa của một người; allWait: tổng số tệp đang chờ theo lượt riêng của mọi người trong hàng (mỗi tệp chờ giữ nguyên bộ
+// nhớ của nó tới 30 MB, nên có trần chung: quá thì báo máy chủ bận như trước).
+type Lim = { run: number; wait: number; user: number; userWait: number; allWait: number; waitMs: number };
+const userWaiting = (p: Pool) => { let n = 0; for (const q of p.userQ?.values() ?? []) n += q.length; return n; };
 
 /** Số việc đang chờ và đang chạy của một người trong một hàng (kiểm thử, theo dõi). */
 export const slotState = (name: string, uid: string) => { const p = poolOf(name); return { running: p.perUser.get(uid) ?? 0, waiting: p.userQ?.get(uid)?.length ?? 0, global: p.running, globalWaiting: p.queue.length }; };
@@ -36,6 +39,7 @@ async function withSlot<T>(name: string, lim: Lim, uid: string | undefined, fn: 
   if (who && (p.perUser.get(who) ?? 0) >= lim.user) {
     const uq = ((p.userQ ??= new Map()).get(who) ?? []);
     if (uq.length >= lim.userWait) throw new FileError(USER_FULL);
+    if (userWaiting(p) >= lim.allWait) throw new FileError(BUSY);
     p.userQ.set(who, uq);
     // Tới lượt thì chỗ của việc vừa xong được giao thẳng (perUser không giảm rồi tăng lại): không ai chen vào giữa.
     await new Promise<void>((ok, no) => {
@@ -59,11 +63,12 @@ async function withSlot<T>(name: string, lim: Lim, uid: string | undefined, fn: 
     else { const n = (p.perUser.get(who) ?? 1) - 1; if (n > 0) p.perUser.set(who, n); else p.perUser.delete(who); }
   }
 }
-export const withParseSlot = <T>(uid: string | undefined, fn: () => Promise<T>) => withSlot("parse", { run: MAX_RUN, wait: MAX_WAIT, user: MAX_USER, userWait: MAX_FILES_PER_MESSAGE, waitMs: WAIT_MS }, uid, fn);
+export const withParseSlot = <T>(uid: string | undefined, fn: () => Promise<T>) => withSlot("parse", { run: MAX_RUN, wait: MAX_WAIT, user: MAX_USER, userWait: MAX_FILES_PER_MESSAGE, allWait: MAX_WAIT, waitMs: WAIT_MS }, uid, fn);
 /** MarkItDown, OCR và phiên âm chạy tới hàng chục phút: hàng riêng, mỗi người một việc chạy cùng lúc (các tệp sau của họ xếp hàng, chờ tối đa
  *  CONVERT_WAIT_MS), để không chiếm chỗ của tệp đính kèm trong chat. */
 export const CONVERT_WAIT_MS = Number(process.env.SYNCHRO_CONVERT_WAIT_MS) || 10 * 60_000;
-export const withConvertSlot = <T>(uid: string | undefined, fn: () => Promise<T>) => withSlot("convert", { run: Number(process.env.SYNCHRO_CONVERT_MAX) || 2, wait: 6, user: 1, userWait: MAX_FILES_PER_MESSAGE, waitMs: CONVERT_WAIT_MS }, uid, fn);
+const CONVERT_ALL_WAIT = Number(process.env.SYNCHRO_CONVERT_ALL_WAIT) || 24;
+export const withConvertSlot = <T>(uid: string | undefined, fn: () => Promise<T>) => withSlot("convert", { run: Number(process.env.SYNCHRO_CONVERT_MAX) || 2, wait: 6, user: 1, userWait: MAX_FILES_PER_MESSAGE, allWait: CONVERT_ALL_WAIT, waitMs: CONVERT_WAIT_MS }, uid, fn);
 
 /** Nhường CPU cho web và các lượt chat. Không đặt được cũng không sao. */
 export function lowPriority(pid?: number) {

@@ -94,6 +94,21 @@ console.log("6. Hàng đọc tệp thường (parse): tệp thứ 5 của một 
   const rs = await Promise.all(jobs);
   ok(rs.join() === "0,1,2,3,4,5", "cả 6 tệp đều đọc xong", rs);
 }
+console.log("6b. Trần chung cho tệp chờ theo lượt riêng (mỗi tệp chờ giữ bộ nhớ tới 30 MB): quá thì báo máy chủ bận như trước");
+{
+  const g = gate(), jobs = [];
+  const add = (u, n) => { for (let i = 0; i < n; i++) jobs.push(S.withConvertSlot(u, async () => { await g.p; return "ok"; }).then((x) => x, (e) => e.message)); };
+  add("u8", 21); add("u9", 6);
+  await sleep(10);
+  const w = S.slotState("convert", "u8").waiting + S.slotState("convert", "u9").waiting;
+  ok(w === 24, "u8 chờ 20 tệp, u9 chờ 4 tệp: tổng 24", w);
+  g.open();
+  const rs = await Promise.all(jobs);
+  ok(rs.filter((x) => x === "ok").length === 25 && rs.filter((x) => /Máy chủ đang đọc nhiều tệp/.test(x)).length === 1, "tệp chờ thứ 25 bị từ chối bằng lời máy chủ bận, 25 tệp còn lại xong", rs.filter((x) => x !== "ok"));
+  const z = S.slotState("convert", "u9");
+  ok(z.running === 0 && z.waiting === 0 && z.global === 0, "không rò chỗ", z);
+}
+
 console.log("7. Lời hết giờ trên thẻ tệp có bản tiếng Anh");
 {
   const en = (t) => { for (const [re, f] of O.OPS_RULES_EN) { const m = t.match(re); if (m) return f(m); } return t; };
