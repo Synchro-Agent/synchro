@@ -70,21 +70,27 @@ const setSpeechSpent = (credits) => {
   } finally { d.close(); }
 };
 
-// Mức giọng AI chung của cả máy chủ hôm nay (dòng user_id "*" của speech_budget, server/speechapi.ts addSpend). Ma trận thật: mức chung cạn từ
-// 10:06 UTC trong khi tài khoản miễn phí chưa dùng credit nào. Giữ giá trị cũ để trả lại đúng như trước khi chạy.
+// Mức giọng AI chung của cả máy chủ hôm nay. Ma trận thật: mức chung cạn từ 10:06 UTC trong khi tài khoản miễn phí chưa dùng credit nào.
+// Từ w9-integ 152c6509, mức chung (server/speechapi.ts spentToday) là tổng các dòng theo tài khoản KHÔNG phải quản trị viên của speech_budget;
+// dòng user_id "*" không còn dùng để chặn. Nên làm cạn / làm trống mức chung bằng các dòng theo tài khoản: một dòng SHARED_ROW (không phải tài
+// khoản thật, nên được cộng như tài khoản thường), tạm bỏ dòng của các tài khoản khác. Dòng của chính tài khoản thử (setSpeechSpent) để nguyên.
+// Giữ các dòng cũ để trả lại đúng như trước khi chạy.
 const DAY = () => new Date().toISOString().slice(0, 10);
-const sharedSpent = () => { const d = db(); try { return d.prepare("SELECT credits FROM speech_budget WHERE day = ? AND user_id = '*'").get(DAY())?.credits ?? null; } catch { return null; } finally { d.close(); } };
-const setSharedSpent = (credits) => {
+const SHARED_ROW = "free-matrix-shared";
+const otherRows = () => { const d = db(); try { return d.prepare("SELECT user_id, credits FROM speech_budget WHERE day = ? AND user_id NOT IN ('*', ?)").all(DAY(), u.uid); } catch { return []; } finally { d.close(); } };
+const putShared = (rows) => {
   const d = db();
   try {
     d.exec("CREATE TABLE IF NOT EXISTS speech_budget (day TEXT NOT NULL, user_id TEXT NOT NULL, credits INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (day, user_id))");
-    if (credits === null) d.prepare("DELETE FROM speech_budget WHERE day = ? AND user_id = '*'").run(DAY());
-    else d.prepare("INSERT INTO speech_budget (day, user_id, credits) VALUES (?, ?, ?) ON CONFLICT(day, user_id) DO UPDATE SET credits = excluded.credits").run(DAY(), "*", credits);
+    d.prepare("DELETE FROM speech_budget WHERE day = ? AND user_id NOT IN ('*', ?)").run(DAY(), u.uid);
+    const ins = d.prepare("INSERT INTO speech_budget (day, user_id, credits) VALUES (?, ?, ?) ON CONFLICT(day, user_id) DO UPDATE SET credits = excluded.credits");
+    for (const r of rows) ins.run(DAY(), r.user_id, r.credits);
   } finally { d.close(); }
 };
-const sharedBefore = sharedSpent();
+const setSharedSpent = (credits) => putShared(credits ? [{ user_id: SHARED_ROW, credits }] : []);
+const sharedBefore = otherRows();
 let sharedTouched = false;
-// Trong lúc chạy, mức chung bắt đầu từ 0 (mức chung của bản giả lập nhỏ, các lượt chạy trước cộng dồn credit thật sẽ chạm trần giữa chừng); xong trả lại số cũ.
+// Trong lúc chạy, mức chung bắt đầu từ 0 (mức chung của bản giả lập nhỏ, các lượt chạy trước cộng dồn credit thật sẽ chạm trần giữa chừng); xong trả lại như cũ.
 const sharedOut = (on) => { sharedTouched = true; setSharedSpent(on ? 100_000_000 : 0); };
 sharedOut(false);
 
@@ -483,7 +489,7 @@ try {
   ok(false, "chạy hết kịch bản", e?.stack ?? String(e));
 } finally {
   try { t?.close(); } catch {}
-  try { setUsageOver(false); setSpeechSpent(null); if (sharedTouched) setSharedSpent(sharedBefore); } catch {}
+  try { setUsageOver(false); setSpeechSpent(null); if (sharedTouched) putShared(sharedBefore); } catch {}
   await u.remove();
 }
 
