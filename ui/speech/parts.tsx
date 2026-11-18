@@ -1,6 +1,7 @@
 "use client";
 // Thành phần dùng chung của mục Speech: tab, thanh trượt, công tắc, chọn, vùng thả tệp, ghi âm, dạng sóng, trình phát, bộ chọn giọng.
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { isAway } from "../clickaway";
 import { createPortal } from "react-dom";
 import { tf, tr } from "../i18n";
 import * as I from "../icons";
@@ -236,7 +237,7 @@ export function ModelPick({ models, value, onChange, label = "Model" }: { models
   const box = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!open) return;
-    const h = (e: MouseEvent) => { if (!box.current?.contains(e.target as Node)) setOpen(false); };
+    const h = (e: MouseEvent) => { if (isAway(box.current, e.target)) setOpen(false); };
     document.addEventListener("mousedown", h);
     return () => document.removeEventListener("mousedown", h);
   }, [open]);

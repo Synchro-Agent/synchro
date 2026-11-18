@@ -3,6 +3,7 @@ import "./styles/projects.css";
 
 import GlassFolder from "./glass-folder";
 import { useEffect, useRef, useState } from "react";
+import { isAway } from "./clickaway";
 import * as I from "./icons";
 import { Fade, Menu } from "./ui";
 import { useApp, type Chat, type Project } from "./store";
@@ -64,7 +65,7 @@ export function ago(ts: number) {
 function useAway(close: () => void) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    const h = (e: MouseEvent) => ref.current && !ref.current.contains(e.target as Node) && close();
+    const h = (e: MouseEvent) => ref.current && isAway(ref.current, e.target) && close();
     document.addEventListener("mousedown", h);
     return () => document.removeEventListener("mousedown", h);
   });

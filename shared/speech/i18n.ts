@@ -674,7 +674,7 @@ Object.assign(SPEECH_VI2EN, {
   // Từ điển phát âm
   "Từ trong văn bản": "Word in text", "Đọc là": "Say as", "Kiểu quy tắc": "Rule type", "Đọc thay bằng": "Alias", "Phiên âm IPA": "IPA phoneme", "Xóa quy tắc": "Delete rule", "Thêm quy tắc": "Add rule", "Ví dụ": "Examples",
   "“Đọc thay bằng” chạy với mọi model. Phiên âm IPA chính xác hơn nhưng chỉ một số model tiếng Anh (Flash v2, Turbo v2, English v1) hỗ trợ.": "Alias works with every model. IPA is more precise but only some English models (Flash v2, Turbo v2, English v1) support it.",
-  "Lưu quy tắc": "Save rules", "Chọn một từ điển để sửa quy tắc": "Pick a dictionary to edit its rules", "Hoặc bấm “Tạo từ điển” để bắt đầu.": "Or press “Create dictionary” to start.",
+  "Lưu quy tắc": "Save rules", "Đang mở từ điển…": "Opening dictionary…", "Chọn một từ điển để sửa quy tắc": "Pick a dictionary to edit its rules", "Hoặc bấm “Tạo từ điển” để bắt đầu.": "Or press “Create dictionary” to start.",
   "Đã tạo từ điển và bật trong Đọc văn bản": "Dictionary created and turned on in Text to Speech", "Đọc văn bản dùng tối đa 3 từ điển cùng lúc": "Text to Speech uses up to 3 dictionaries at once",
   "Tạo từ điển": "Create dictionary", "Từ điển của bạn": "Your dictionaries", "Chưa có từ điển nào. Tạo từ điển đầu tiên ở bên cạnh.": "No dictionaries yet. Create your first one alongside.",
   "Dùng khi đọc": "Use when reading", "Bật công tắc để Đọc văn bản dùng từ điển (tối đa 3).": "Turn a dictionary on to use it in Text to Speech (up to 3).", "Từ điển mới": "New dictionary", "Tên từ điển": "Dictionary name", "Ví dụ: Tên sản phẩm công ty": "E.g. Company product names", "Mô tả": "Description",

@@ -2,6 +2,7 @@
 // Đọc văn bản theo bố cục ElevenLabs: khung soạn (một giọng hoặc thêm người nói thành hội thoại), mẫu “Bắt đầu với”, thanh tạo ở đáy
 // (credit, số ký tự, bảng thẻ cảm xúc), thẻ kết quả; bảng bên: giọng, model, thanh trượt, ngôn ngữ, hiệu ứng âm thanh, từ điển phát âm, định dạng.
 import { useEffect, useRef, useState } from "react";
+import { isAway } from "../clickaway";
 import * as I from "../icons";
 import { Dropdown } from "../listbox";
 import { usePref } from "../store";
@@ -284,7 +285,7 @@ function TagPicker({ onPick, onClose }: { onPick: (t: string) => void; onClose: 
   const [q, setQ] = useState("");
   const box = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    const h = (e: MouseEvent) => { if (!box.current?.contains(e.target as Node) && !(e.target as HTMLElement).closest(".sp-tagwrap")) onClose(); };
+    const h = (e: MouseEvent) => { if (isAway(box.current, e.target) && !(e.target as HTMLElement).closest?.(".sp-tagwrap")) onClose(); };
     const k = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
     document.addEventListener("mousedown", h); window.addEventListener("keydown", k);
     return () => { document.removeEventListener("mousedown", h); window.removeEventListener("keydown", k); };

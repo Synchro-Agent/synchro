@@ -69,7 +69,7 @@ export function ColorField({ value, onChange, label, presets = PRESETS, size = "
         <I.Chevron size={13} />
       </button>
       {open && typeof document !== "undefined" && createPortal(
-        <div ref={pop} className="menu cp-pop" role="dialog" aria-label={tr(label)} style={{ position: "fixed", zIndex: "var(--z-top)", ...pos }}>
+        <div ref={pop} className="menu cp-pop" data-floating role="dialog" aria-label={tr(label)} style={{ position: "fixed", zIndex: "var(--z-top)", ...pos }}>
           <div className="cp-grid">
             {presets.map((c, i) => (
               <button key={c} type="button" className="cp-sw" style={{ "--c": c } as React.CSSProperties} aria-label={c.toUpperCase()} aria-pressed={c === cur} data-tip={c.toUpperCase()}

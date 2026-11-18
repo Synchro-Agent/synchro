@@ -26,6 +26,8 @@ export function DictTool({ say, voice }: ToolProps) {
   const [last, setLast] = usePref("spDictOpen", "");
   const [edit, setEdit] = useState<{ id: string | null; name: string; desc: string; rows: Row[] } | null>(null);
   const [busy, setBusy] = useState("");
+  // Mở từ điển tự động bị lỗi (mạng, từ điển đã bị xóa ở nơi khác): chỉ lúc đó mới hiện "Chọn một từ điển…".
+  const [openFail, setOpenFail] = useState(false);
   const [err, setErr] = useState("");
   const [test, setTest] = useState<Item | null>(null);
   // Có từ điển mà chưa mở cái nào: mở lại từ điển dùng lần trước (hoặc cái đầu tiên), trình sửa không bao giờ trống khi đã có từ điển.
@@ -39,9 +41,9 @@ export function DictTool({ say, voice }: ToolProps) {
     // Bấm lại từ điển đang mở: giữ nguyên trình sửa (và phần đang sửa dở), không tải lại.
     if (edit?.id === d.id || busy === d.id) return;
     setLast(d.id);
-    setBusy(d.id); setErr(""); setTest(null);
+    setBusy(d.id); setErr(""); setTest(null); setOpenFail(false);
     try { const j = await api<{ dict: Dict }>(`dicts?id=${encodeURIComponent(d.id)}`); setEdit({ id: d.id, name: d.name, desc: d.desc, rows: (j.dict.rules ?? []).map((r) => row(r)).concat(row()) }); }
-    catch (e) { say((e as Error).message); } finally { setBusy(""); }
+    catch (e) { setOpenFail(true); say((e as Error).message); } finally { setBusy(""); }
   };
   const rules = () => (edit?.rows ?? []).filter((r) => r.word.trim() && r.say.trim()).map(({ word, type, say: s, alphabet, cs }) => ({ word: word.trim(), type, say: s.trim(), alphabet, cs }));
   const save = async () => {
@@ -134,8 +136,17 @@ export function DictTool({ say, voice }: ToolProps) {
             <ErrBox msg={err} />
             {test && <Player title="Nghe thử với từ điển" label={test.title} src={test.url} dl={test.url} />}
           </div>
-        ) : (
+        ) : openFail ? (
           <div className="sp-card sp-detect"><span className="sp-tic big"><I.Book size={24} /></span><b>Chọn một từ điển để sửa quy tắc</b><p>Hoặc bấm “Tạo từ điển” để bắt đầu.</p></div>
+        ) : (
+          // Danh sách đang tải hoặc đang tự mở từ điển dùng lần trước (khoảng 300 ms): khung giả đúng hình trình sửa, không hiện
+          // "Chọn một từ điển…" (câu đó sai khi đã có từ điển và trình sửa sắp hiện, thẻ còn đổi bố cục khi trình sửa tới).
+          <div className="sp-card sp-dict-wait" aria-busy="true">
+            <span className="sr-only" role="status">{tr("Đang mở từ điển…")}</span>
+            <span className="sk-blk sp-wait-l1" aria-hidden />
+            {[0, 1, 2].map((i) => <span key={i} className="sk-blk sp-dict-wait-row" aria-hidden />)}
+            <span className="sk-blk sp-wait-go" aria-hidden />
+          </div>
         )}
       </div>
     </Wide>

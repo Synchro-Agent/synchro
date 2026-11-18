@@ -5,6 +5,7 @@ import "./styles/settings.css";
 // phần riêng cho người tự thêm connector bằng địa chỉ máy chủ MCP, đăng nhập OAuth trong cửa sổ bật lên,
 // bật/tắt từng connector và đặt quyền từng công cụ (luôn cho phép / hỏi trước / chặn). Kèm thẻ duyệt công cụ dùng trong chat.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { isAway } from "./clickaway";
 import { apiFetch, NO_SERVER } from "./apierr";
 import * as I from "./icons";
 import { Dropdown } from "./listbox";
@@ -308,7 +309,7 @@ function ConnectorCard({ c, policy, open, busy, waiting, stale, onDismissScope, 
   const mref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!menu) return;
-    const f = (e: MouseEvent) => { if (!mref.current?.contains(e.target as Node)) setMenu(false); };
+    const f = (e: MouseEvent) => { if (isAway(mref.current, e.target)) setMenu(false); };
     document.addEventListener("mousedown", f);
     return () => document.removeEventListener("mousedown", f);
   }, [menu]);

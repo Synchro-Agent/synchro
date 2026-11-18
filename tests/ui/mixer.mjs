@@ -124,7 +124,25 @@ try {
   const after = await ev(`Number((document.querySelector(".cx-h span b")?.textContent ?? "0").replace(/[^0-9]/g, ""))`);
   ok(after < before, `tắt artifact: tổng giảm ${before} → ${after}`);
   await click(`${artRow}.querySelector(".toggle")`, "toggle back"); await sleep(1200);
-  await click(byText(".cx-hist .btn", "Nén lịch sử"), "compact"); 
+  // Ô chọn "Gửi": danh sách của Dropdown gắn vào <body> (ngoài khung bàn trộn). Bấm chuột thật vào "12 tin gần nhất" phải đổi giá trị
+  // và giữ bàn trộn mở (trước đây cú mousedown vào danh sách bị coi là bấm ra ngoài, đóng cả bàn trộn, giá trị vẫn "Toàn bộ").
+  const sendDd = `document.querySelector(".cx-hist .dd")`;
+  await click(sendDd, "open Gửi"); await until(`!!document.querySelector(".dd-pop .dd-opt")`, 5000, "Gửi list");
+  await click(byText(".dd-pop .dd-opt", "12 tin gần nhất"), "pick 12");
+  await sleep(500);
+  ok(await ev(`!!document.querySelector(".cx-pop") && !document.querySelector(".dd-pop")`), "chọn trong danh sách Gửi: danh sách đóng, bàn trộn vẫn mở");
+  ok(await ev(`${sendDd}?.dataset.value === "12"`), "Gửi đổi sang 12 tin gần nhất bằng chuột", await ev(`${sendDd}?.textContent`));
+  await click(`document.querySelector(".cx-pill")`, "close mixer"); await sleep(400);
+  await click(`document.querySelector(".cx-pill")`, "reopen mixer"); await until(`!!document.querySelector(".cx-hist .dd")`, 15000, "mixer reopened");
+  ok(await ev(`${sendDd}.dataset.value === "12" && /12 tin gần nhất/.test(${sendDd}.textContent)`), "mở lại bàn trộn: Gửi vẫn là 12 tin gần nhất", await ev(`${sendDd}?.textContent`));
+  // Bấm ra ngoài cả bàn trộn lẫn danh sách thì vẫn đóng như cũ.
+  await click(sendDd, "open Gửi again"); await until(`!!document.querySelector(".dd-pop")`, 5000, "Gửi list again");
+  await click(byText(".dd-pop .dd-opt", "Toàn bộ"), "pick all"); await sleep(400);
+  ok(await ev(`${sendDd}?.dataset.value === "0"`), "đổi lại Toàn bộ");
+  await click(`document.querySelector("h1, .thread, main")`, "click outside"); await sleep(400);
+  ok(await ev(`!document.querySelector(".cx-pop")`), "bấm ra ngoài: bàn trộn đóng");
+  await click(`document.querySelector(".cx-pill")`, "reopen for compact"); await until(`!!document.querySelector(".cx-hist .btn")`, 15000, "mixer for compact");
+  await click(byText(".cx-hist .btn", "Nén lịch sử"), "compact");
   await until(`!!document.querySelector(".cx-mark")`, 30000, "compact mark");
   ok(true, "nén lịch sử: luồng tin hiện vạch đã nén");
   ok(await ev(`!!${byText(".cx-hist .lnk", "Bỏ nén")}`), "có nút bỏ nén");

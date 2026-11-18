@@ -2,6 +2,7 @@
 import "./styles/skills.css";
 // Kho kỹ năng (gộp Skills và Plugins; ở thanh bên, Tùy chỉnh và Cài đặt) và trang Tùy chỉnh có hai mục Kho kỹ năng / Connectors.
 import { useCallback, useEffect, useRef, useState } from "react";
+import { isAway } from "./clickaway";
 import { apiFetch, statusText } from "./apierr";
 import * as I from "./icons";
 import { Dropdown } from "./listbox";
@@ -214,7 +215,7 @@ function RowMenu({ p, manage, onOpen, onAct }: { p: PluginSummary; manage: boole
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!open) return;
-    const h = (e: MouseEvent) => { if (!ref.current?.contains(e.target as Node)) setOpen(false); };
+    const h = (e: MouseEvent) => { if (isAway(ref.current, e.target)) setOpen(false); };
     document.addEventListener("mousedown", h); return () => document.removeEventListener("mousedown", h);
   }, [open]);
   const on = p.enabled && p.mine.enabled;
@@ -291,7 +292,7 @@ export function SkillHub() {
   useEffect(() => { window.addEventListener(PLUGINS_CHANGED, load); return () => window.removeEventListener(PLUGINS_CHANGED, load); }, [load]);
   useEffect(() => {
     if (!addMenu) return;
-    const h = (e: MouseEvent) => { if (!addRef.current?.contains(e.target as Node)) setAddMenu(false); };
+    const h = (e: MouseEvent) => { if (isAway(addRef.current, e.target)) setAddMenu(false); };
     document.addEventListener("mousedown", h); return () => document.removeEventListener("mousedown", h);
   }, [addMenu]);
   if (err) return <div className="empty" style={{ marginTop: 40 }}><I.Alert size={28} /><span>{err}</span><button className="btn" onClick={load}>Try again</button></div>;

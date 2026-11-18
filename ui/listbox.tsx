@@ -20,6 +20,10 @@ const toOpt = <V extends string | number>(o: DdIn<V>): DdOpt<V> =>
 /** Bỏ dấu, chữ thường: "viet" tìm ra "Tiếng Việt". */
 export const fold = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").replace(/Đ/g, "D").toLowerCase();
 const M = 8, GAP = 4, MAX_H = 360;
+/** Ô tìm tự nhận tiêu điểm khi mở danh sách? Bàn phím: có. Chạm (touch), hay không rõ cách mở trên máy có con trỏ thô: không (không bật
+ *  bàn phím ảo; người dùng chạm vào ô tìm khi cần). Chuột / bút: có. */
+export const autoFocusSearch = (via: string, coarse = typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches) =>
+  via === "key" || via === "mouse" || via === "pen" ? true : via === "touch" ? false : !coarse;
 
 export function Dropdown<V extends string | number>({ value, options, onChange, id, label, className = "", size = "md", search, placeholder = "", disabled, minWidth = 180, notr, align = "start", block }: {
   value: V; options: readonly DdIn<V>[]; onChange: (v: V) => void;
@@ -45,6 +49,10 @@ export function Dropdown<V extends string | number>({ value, options, onChange, 
   const [pos, setPos] = useState<React.CSSProperties>({ visibility: "hidden" });
   const btn = useRef<HTMLButtonElement>(null), pop = useRef<HTMLDivElement>(null), list = useRef<HTMLDivElement>(null), inp = useRef<HTMLInputElement>(null);
   const typed = useRef({ s: "", t: 0 });
+  // Cách mở danh sách: bàn phím, hay loại con trỏ của cú bấm vào nút (mouse / pen / touch). Ô tìm chỉ tự nhận tiêu điểm khi mở bằng bàn phím
+  // hoặc chuột: chạm trên điện thoại mà tự focus thì bàn phím ảo bật lên che gần hết danh sách (luật của ui/a11y.ts), và trên iOS cú cuộn
+  // theo tiêu điểm còn đẩy nút ra khỏi màn hình làm danh sách tự đóng.
+  const via = useRef("");
   const lid = useId().replace(/:/g, "");
   const searchable = search ?? opts.length > 10;
   const cur = opts.find((o) => o.value === value);
@@ -117,7 +125,7 @@ export function Dropdown<V extends string | number>({ value, options, onChange, 
     addEventListener("resize", re);
     addEventListener("scroll", re, true);
     addEventListener("keydown", key, true);
-    if (searchable) requestAnimationFrame(() => inp.current?.focus({ preventScroll: true }));
+    if (searchable && autoFocusSearch(via.current)) requestAnimationFrame(() => inp.current?.focus({ preventScroll: true }));
     return () => { document.removeEventListener("mousedown", away, true); removeEventListener("resize", re); removeEventListener("scroll", re, true); removeEventListener("keydown", key, true); };
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
   // Mục đang sáng luôn trong tầm nhìn (mở ra thì mục đang chọn nằm giữa khung).
@@ -157,12 +165,14 @@ export function Dropdown<V extends string | number>({ value, options, onChange, 
       <button ref={btn} type="button" id={id} role="combobox" className={`dd ${size}${block ? " block" : ""}${open ? " open" : ""} ${className}`} disabled={disabled}
         aria-haspopup="listbox" aria-expanded={open} aria-controls={open ? lid : undefined} aria-activedescendant={open && !searchable && act >= 0 ? optId(act) : undefined}
         aria-label={label ? `${tr(label)}: ${valText}` : undefined} data-value={String(value)}
-        onClick={() => (open ? close() : show())} onKeyDown={onKey}>
+        onPointerDown={(e) => { via.current = e.pointerType; }}
+        onClick={(e) => { if (e.detail === 0) via.current = "key"; if (open) close(); else show(); }}
+        onKeyDown={(e) => { if (!open) via.current = "key"; onKey(e); }}>
         <span className="dd-v" data-notr={cur?.notr || notr || undefined}>{cur ? cur.label : placeholder}</span>
         <I.Chevron size={size === "sm" ? 12 : 14} />
       </button>
       {open && typeof document !== "undefined" && createPortal(
-        <div ref={pop} className={`menu dd-pop ${size}`} style={{ position: "fixed", zIndex: "var(--z-top)", ...pos }}>
+        <div ref={pop} className={`menu dd-pop ${size}`} data-floating style={{ position: "fixed", zIndex: "var(--z-top)", ...pos }}>
           {searchable && (
             <div className="dd-search">
               <I.Search size={14} />

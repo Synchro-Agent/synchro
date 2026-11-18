@@ -3,6 +3,7 @@
 // ảnh, âm thanh / video xem trực tiếp; PDF, Word, Excel / CSV, PowerPoint dựng trong khung cô lập (officeview.ts);
 // văn bản, Markdown, JSON, mã nguồn đọc thẳng; trang HTML và SVG chạy trong khung artifact. Luôn có nút tải về.
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { isAway } from "./clickaway";
 import * as I from "./icons";
 import { locale, tr } from "./i18n";
 import { Markdown } from "./md";
@@ -110,7 +111,7 @@ export function ProductSwitcher({ items, active }: { items: Product[]; active: s
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!open) return;
-    const h = (e: MouseEvent) => { if (!ref.current?.contains(e.target as Node)) setOpen(false); };
+    const h = (e: MouseEvent) => { if (isAway(ref.current, e.target)) setOpen(false); };
     document.addEventListener("mousedown", h); return () => document.removeEventListener("mousedown", h);
   }, [open]);
   if (items.length < 2) return null;

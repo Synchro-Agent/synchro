@@ -3,6 +3,7 @@
 // Ba tầng giống cách Synchro xếp prompt để dùng bộ đệm: cố định (hướng dẫn, skill, tài liệu ghim) → lịch sử → thay đổi mỗi lượt.
 // Tắt / bật khối ở tầng cuối không làm đổi phần đầu nên không mất bộ đệm. Ngữ cảnh quá lớn thì nén lịch sử thành tóm tắt.
 import { useEffect, useMemo, useRef, useState } from "react";
+import { isAway } from "./clickaway";
 import * as I from "./icons";
 import { Dropdown } from "./listbox";
 import { locale, tr } from "./i18n";
@@ -60,7 +61,7 @@ export function ContextMixer({ chat, studio, recentSkills, busy, onChange, say }
   }, [key, busy]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!open) return;
-    const h = (e: MouseEvent) => { if (!ref.current?.contains(e.target as Node)) setOpen(false); };
+    const h = (e: MouseEvent) => { if (isAway(ref.current, e.target)) setOpen(false); };
     const k = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
     document.addEventListener("mousedown", h); document.addEventListener("keydown", k);
     return () => { document.removeEventListener("mousedown", h); document.removeEventListener("keydown", k); };

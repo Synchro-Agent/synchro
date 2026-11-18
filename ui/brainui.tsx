@@ -8,6 +8,7 @@
 // - Bảng, Hoạt động: việc dang dở, đoạn chat, chủ đề, tên riêng; những gì bộ não vừa tự học.
 import "./styles/brainview.css";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { isAway } from "./clickaway";
 import { apiFetch, statusText } from "./apierr";
 import { rowKeys } from "./a11y";
 import { SideToggle } from "./brand";
@@ -581,7 +582,7 @@ function NoteView({ title, sub, exists, onOpen, onChanged, onLoaded }: { title: 
   // Menu "…": đóng khi bấm ra ngoài hoặc Esc.
   useEffect(() => {
     if (!more) return;
-    const h = (e: MouseEvent) => { if (!moreRef.current?.contains(e.target as Node)) setMore(false); };
+    const h = (e: MouseEvent) => { if (isAway(moreRef.current, e.target)) setMore(false); };
     const k = (e: KeyboardEvent) => e.key === "Escape" && setMore(false);
     document.addEventListener("mousedown", h); document.addEventListener("keydown", k);
     return () => { document.removeEventListener("mousedown", h); document.removeEventListener("keydown", k); };
@@ -879,7 +880,7 @@ export function BrainWorkspace({ initial, onInitial, sideOpen = true, onSide }: 
   useEffect(() => { findRef.current?.querySelector(".bw-find-it.on")?.scrollIntoView({ block: "nearest" }); }, [sel]);
   useEffect(() => {
     if (!findOpen) return;
-    const h = (e: MouseEvent) => { if (!findRef.current?.contains(e.target as Node)) setFindOpen(false); };
+    const h = (e: MouseEvent) => { if (isAway(findRef.current, e.target)) setFindOpen(false); };
     document.addEventListener("mousedown", h);
     return () => document.removeEventListener("mousedown", h);
   }, [findOpen]);

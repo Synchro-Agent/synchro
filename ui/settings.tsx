@@ -2,6 +2,7 @@
 import "./styles/settings.css";
 
 import { createContext, useContext, useEffect, useRef, useState } from "react";
+import { isAway } from "./clickaway";
 import { apiFetch, statusText } from "./apierr";
 import { rowKeys } from "./a11y";
 import { createPortal } from "react-dom";
@@ -43,7 +44,7 @@ const voiceLabel = (v: Voice | undefined) => (v ? `${v.name}${v.lang ? ` · ${v.
 function useAway(close: () => void) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    const h = (e: MouseEvent) => ref.current && !ref.current.contains(e.target as Node) && close();
+    const h = (e: MouseEvent) => ref.current && isAway(ref.current, e.target) && close();
     document.addEventListener("mousedown", h);
     return () => document.removeEventListener("mousedown", h);
   });

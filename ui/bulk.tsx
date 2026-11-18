@@ -4,6 +4,7 @@
 // (Shift + bấm chọn cả dải), ⌘A / Ctrl+A chọn tất cả, Esc thoát. Thanh thao tác dính ở đáy danh sách: số đã chọn, Chọn tất cả,
 // các thao tác của danh sách đó (Xóa luôn hỏi xác nhận) và nút đóng.
 import { useEffect, useMemo, useRef, useState } from "react";
+import { isAway } from "./clickaway";
 import * as I from "./icons";
 import { useApp } from "./store";
 
@@ -108,7 +109,7 @@ export function BulkBar<T>({ b, acts, noun = "mục", compact }: { b: Bulk<T>; a
   const bar = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!pick) return;
-    const h = (e: MouseEvent) => { if (!bar.current?.contains(e.target as Node)) setPick(null); };
+    const h = (e: MouseEvent) => { if (isAway(bar.current, e.target)) setPick(null); };
     document.addEventListener("mousedown", h); return () => document.removeEventListener("mousedown", h);
   }, [pick]);
   if (!b.on) return null;
