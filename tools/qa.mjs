@@ -17,6 +17,8 @@ const SUITES = [
   ["Chỉ số CSS chỉ giảm: !important, html body, cỡ chữ cứng, z-index, mốc @media, hex giao diện tối", "tools/css-metrics.mjs"],
   ["Toàn bộ bộ kiểm API", "tests/run-all.mjs"],
   ["Soát giao diện toàn trang (sáng/tối × 390/768/1440px)", "tests/ui/audit.mjs"],
+  // Bộ chặn lỗi hoàn thiện (chủ dự án báo 2026-11-18): ô chọn / ô màu gốc, bo viên thuốc trên chữ nhiều dòng, thanh cuộn thừa, chữ bị cắt, dải cuộn cắt mép, bố cục tự rung.
+  ["Độ hoàn thiện: ô chọn gốc, bo viên thuốc, thanh cuộn thừa, chữ bị cắt, dải cuộn cắt mép, bố cục tự rung (sáng/tối × 390/768/1440px)", "tests/ui/polish.mjs"],
   ["Một ca cho mỗi lỗi U2–U14 (390/768/1440px), giao diện sáng", "tests/ui/u-bugs.mjs", { THEME: "light" }],
   ["Một ca cho mỗi lỗi U2–U14 (390/768/1440px), giao diện tối", "tests/ui/u-bugs.mjs", { THEME: "dark" }],
   ["Menu, bảng nổi, gợi ý, vòng Mức dùng", "tests/ui/popovers.mjs"],
