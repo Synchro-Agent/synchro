@@ -217,7 +217,8 @@ export type ChatFile = { name: string; mime: string; data: Buffer };
 // scope: phiên dùng trình duyệt ("code:<id>", "chat:<id>"); cookies: cách giữ cookie / đăng nhập của trình duyệt Synchro
 // (Cài đặt → Synchro Code → Trình duyệt: luôn giữ, đến khi trình duyệt tắt, riêng từng phiên).
 // signin: trang đang mở trong trình duyệt của Synchro là trang đăng nhập bên thứ ba (thấy qua một lần đọc trang): chặn thao tác gõ / bấm trên đó.
-export type BrowserCtx = { def?: BrowserTarget; target?: BrowserTarget; used?: boolean; synchro?: boolean; user?: boolean; turn?: string; scope?: string; cookies?: "keep" | "until-stop" | "session"; files?: () => Promise<ChatFile[]>; signin?: string };
+// pageKnown: lượt này đã biết trang đang mở (từ một kết quả có địa chỉ trang, hoặc lần xem tab trước thao tác gõ / bấm đầu tiên).
+export type BrowserCtx = { def?: BrowserTarget; target?: BrowserTarget; used?: boolean; synchro?: boolean; user?: boolean; turn?: string; scope?: string; cookies?: "keep" | "until-stop" | "session"; files?: () => Promise<ChatFile[]>; signin?: string; pageKnown?: boolean };
 
 /** Tệp của đoạn chat cho browser_upload: tệp người dùng đính kèm (ảnh, PDF giữ nguyên trong tin nhắn; tệp khác lấy bản gốc theo id trong <file … id>)
  *  và tệp Synchro tạo ra (outs của lượt, liên kết /api/outputs/… trong các câu trả lời trước). Tệp mới hơn đứng trước khi trùng tên. */
@@ -299,6 +300,12 @@ const NOT_LINKED = "Chrome của người dùng chưa kết nối với Synchro 
 // trang đăng nhập (rời trang đó: mở trang khác — địa chỉ đã kiểm ở trên —, đổi / đóng tab, xem tệp đã tải).
 const LOOK_ONLY = new Set(["read", "text", "find", "screenshot", "console", "wait", "scroll"]);
 const SIGNIN_OK = new Set(["navigate", "tabs", "downloads", "screenshot", "wait", "console"]);
+// Địa chỉ trang đang mở trong một kết quả của trình duyệt: url, hoặc tab đang chọn trong danh sách tab (browser_tabs op="list" / "close" chỉ trả tabs).
+const pageOf = (r: R | null | undefined): string => {
+  if (typeof r?.url === "string" && r.url) return r.url;
+  const t = Array.isArray(r?.tabs) ? (r.tabs as R[]).find((x) => x?.active) : undefined;
+  return typeof t?.url === "string" ? t.url : "";
+};
 /** Chạy một công cụ trình duyệt cho người dùng u: trình duyệt trong workspace của họ, hoặc Chrome của họ qua tiện ích Synchro. */
 const PAUSE_MAX = 15 * 60_000;
 export async function runBrowserTool(u: string, name: string, input: R, ctx?: BrowserCtx): Promise<BrowserOut> {
@@ -316,6 +323,13 @@ export async function runBrowserTool(u: string, name: string, input: R, ctx?: Br
       if (svc) return { content: signInRefusal(svc, url, "blocked"), is_error: true, summary: "Đã chặn trang đăng nhập", signin: svc };
     }
     // Trang đang mở là trang đăng nhập (người dùng tự mở, hoặc trang tự chuyển tới): không gõ / bấm trên đó; mở trang khác thì được.
+    // Lượt mới chưa biết trang đang mở (trình duyệt giữ trang giữa các lượt, người dùng có thể đã tự mở trang đăng nhập): xem tab đang chọn một lần
+    // trước thao tác gõ / bấm đầu tiên, để không gõ / bấm lên trang đó rồi mới biết.
+    if (ctx && !ctx.signin && !ctx.pageKnown && !SIGNIN_OK.has(action) && !LOOK_ONLY.has(action)) {
+      const at = pageOf(await wsAgent<R>("/browser", { u, action: "tabs", op: "list", ...(ctx.scope ? { scope: ctx.scope } : {}), ...(ctx.cookies ? { cookies: ctx.cookies } : {}) }, 30_000).catch(() => null));
+      ctx.pageKnown = true;
+      if (signInService(at)) ctx.signin = at;
+    }
     if (ctx?.signin && !SIGNIN_OK.has(action)) { const svc = signInService(ctx.signin) ?? "bên thứ ba"; return { content: signInRefusal(svc, ctx.signin, "present"), is_error: true, summary: "Đã chặn trang đăng nhập", signin: svc }; }
   }
   // Tệp đính kèm trong chat cần tải lên trang (browser_upload, kể cả trong browser_batch).
@@ -336,8 +350,9 @@ export async function runBrowserTool(u: string, name: string, input: R, ctx?: Br
     if (r?.paused === true) return { content: "Người dùng đã tạm dừng Synchro trên Chrome hơn 15 phút nên thao tác này chưa chạy. Hỏi người dùng có muốn làm tiếp không.", is_error: true, summary: "Đang tạm dừng trên Chrome" };
     if (name === "browser_downloads" && typeof r.data === "string") return await downloaded(r, u);
     if (target === "synchro") {
-      const at = typeof r.url === "string" ? r.url : "", svc = signInService(at);
-      if (ctx) ctx.signin = svc ? at : undefined;
+      const at = pageOf(r), svc = signInService(at);
+      // Kết quả không kèm địa chỉ trang (vài thao tác chỉ trả giá trị): giữ nguyên điều đã biết về trang đang mở.
+      if (ctx && at) { ctx.signin = svc ? at : undefined; ctx.pageKnown = true; }
       // Danh sách tab / tệp đã tải không lộ gì của trang đăng nhập: trả bình thường (model cần nó để rời trang đó).
       if (svc && action !== "tabs" && action !== "downloads") {
         // Thao tác của model (mở trang, bấm, gõ, quay lại…) dẫn tới trang đăng nhập: đóng trang đó (về trang trắng). Chỉ đọc / xem tab thì không

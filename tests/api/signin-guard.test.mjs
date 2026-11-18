@@ -91,8 +91,31 @@ try {
   ok(calls.length === 2 && calls[1].body.action === "navigate" && calls[1].body.url === "about:blank" && calls[1].body.scope === "chat:1", "đóng trang đăng nhập (về about:blank, cùng phiên trình duyệt)", calls.map((c) => c.body));
   ok(!c3.signin && r3.url === "about:blank", "sau khi đóng: lượt không còn coi trang đang mở là trang đăng nhập", { signin: c3.signin, url: r3.url });
   calls.length = 0;
+  const SIGNIN = { url: "https://accounts.google.com/v3/signin/identifier?continue=https://docs.google.com/", title: "Đăng nhập – Tài khoản Google", tree: "[1] textbox Email" };
+  const tabsAt = (url) => ({ tabs: [{ i: 1, id: "t1", title: "x", url, active: true }] });
+  reply = (_p, b) => (b.action === "tabs" ? tabsAt("https://example.com/") : SIGNIN);
   const r3b = await B.runBrowserTool("u1", "browser_click", { ref: 3 }, ctx());
-  ok(r3b.is_error && calls.length === 2 && calls[1].body.url === "about:blank", "bấm nút \"Đăng nhập bằng Google\" dẫn tới trang đăng nhập: cũng đóng", calls.map((c) => c.body));
+  ok(r3b.is_error && calls.length === 3 && calls[0].body.action === "tabs" && calls[1].body.action === "click" && calls[2].body.url === "about:blank", "bấm nút \"Đăng nhập bằng Google\" dẫn tới trang đăng nhập: cũng đóng", calls.map((c) => c.body));
+
+  console.log("3b. Lượt mới, trình duyệt còn đang ở trang đăng nhập: xem tab trước thao tác gõ / bấm đầu tiên, chặn trước khi chạm vào trang");
+  calls.length = 0;
+  reply = (_p, b) => (b.action === "tabs" ? tabsAt(SIGNIN.url) : SIGNIN);
+  const c3b = ctx();
+  const r3c = await B.runBrowserTool("u1", "browser_type", { ref: 1, text: "someone@example.com" }, c3b);
+  ok(r3c.is_error && r3c.signin === "Google" && calls.length === 1 && calls[0].body.action === "tabs" && calls[0].body.scope === "chat:1", "gõ đầu lượt trên trang đăng nhập còn mở: chỉ xem tab, không gõ, không đóng trang", { r3c, calls: calls.map((c) => c.body) });
+  await B.runBrowserTool("u1", "browser_click", { ref: 2 }, c3b);
+  ok(calls.length === 1, "thao tác sau trong cùng lượt: không xem tab lại, vẫn chặn", calls.length);
+  calls.length = 0;
+  reply = (_p, b) => (b.action === "tabs" ? tabsAt("https://example.com/") : { url: "https://example.com/", title: "Example" });
+  const c3c = ctx();
+  const r3d = await B.runBrowserTool("u1", "browser_click", { ref: 1 }, c3c);
+  await B.runBrowserTool("u1", "browser_click", { ref: 2 }, c3c);
+  ok(!r3d.is_error && calls.filter((c) => c.body.action === "tabs").length === 1 && calls.length === 3, "trang thường: xem tab đúng một lần mỗi lượt, rồi bấm bình thường", calls.map((c) => c.body.action));
+  calls.length = 0;
+  await B.runBrowserTool("u1", "browser_read", {}, ctx());
+  await B.runBrowserTool("u1", "browser_navigate", { url: "https://example.com" }, ctx());
+  ok(calls.every((c) => c.body.action !== "tabs"), "đọc trang / mở trang: không cần xem tab trước", calls.map((c) => c.body.action));
+  reply = () => SIGNIN;
 
   console.log("4. Trang đăng nhập đang mở sẵn (người dùng tự mở): không đọc, không gõ, không đóng");
   calls.length = 0;
@@ -106,6 +129,10 @@ try {
     ok(r.is_error && r.signin === "Google", `${name} trên trang đăng nhập: chặn`, r);
   }
   ok(calls.length === 0, "không thao tác nào tới được trình duyệt", calls.length);
+  reply = () => ({ logs: ["x"] });
+  await B.runBrowserTool("u1", "browser_console", {}, c4);
+  const r4k = await B.runBrowserTool("u1", "browser_type", { ref: 1, text: "x" }, c4);
+  ok(r4k.is_error && r4k.signin === "Google", "thao tác không trả địa chỉ trang (xem console) không xóa dấu trang đăng nhập: gõ vẫn bị chặn", r4k);
   reply = () => ({ tabs: [{ i: 1, id: "t1", title: "Đăng nhập", url: "https://accounts.google.com/", active: true }], url: "https://accounts.google.com/", title: "Đăng nhập" });
   const r4t = await B.runBrowserTool("u1", "browser_tabs", { op: "list" }, c4);
   ok(!r4t.is_error && /Các tab/.test(r4t.content), "xem danh sách tab vẫn được (để rời trang đăng nhập)", r4t);
