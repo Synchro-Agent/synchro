@@ -3,6 +3,7 @@
 // GPT-6 Luna của một tài khoản miễn phí là việc phụ và hạn mức tuần ChatGPT Free lên 48% sau chừng 10 việc. Mô-đun này quyết định việc phụ
 // nào còn được chạy trên gói hôm nay, để việc phụ không bao giờ tiêu hết gói trước lượt của chính người dùng. Thuần (không đọc cơ sở dữ liệu)
 // để kiểm thử không cần máy chủ; số đếm và cửa sổ hạn mức do ai/subs.ts đưa vào.
+import "server-only";
 
 /** Lượt của gói ghi ở engine_turns.via: việc phụ ghi "job:<tên>", lượt làm ấm phiên ghi "warm"; còn lại là lượt của người dùng. */
 export const JOB_VIA = "job:";
