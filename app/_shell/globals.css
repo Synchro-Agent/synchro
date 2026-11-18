@@ -432,7 +432,7 @@ input,textarea{font:inherit;color:inherit;outline:0}
 :focus-visible{outline:2px solid var(--toggle-on);outline-offset:2px;}
 input:focus-visible,textarea:focus-visible{outline:none}
 @keyframes shim{from{background-position:200% 0}to{background-position:-200% 0}}
-.scroll-down{position:absolute;left:50%;bottom:150px;transform:translateX(-50%);width:34px;height:34px;border-radius:50%;background:var(--card);box-shadow:var(--shadow);display:flex;align-items:center;justify-content:center;animation:pop .2s var(--ease) backwards;z-index:5}
+.scroll-down{position:absolute;left:calc(50% - 17px);bottom:150px;width:34px;height:34px;border-radius:50%;background:var(--card);box-shadow:var(--shadow);display:flex;align-items:center;justify-content:center;animation:pop .2s var(--ease) backwards;z-index:5}
 .chip-s{padding:4px 10px;border-radius:999px;background:var(--hover);font-size:var(--fs-2)}
 .dock .composer{width:min(var(--thread-w,768px),calc(100% - 48px))}
 html[data-chat-font="System"] .ai-msg,html[data-chat-font="System"] .user-msg,html[data-chat-font="System"] .sk-ai,html[data-chat-font="System"] .sk-user{font-family:system-ui,-apple-system,sans-serif}
@@ -4203,7 +4203,7 @@ main#main:focus{outline:0}
 .rp .field{width:100%}
 .rp-pw{position:relative}
 .rp-pw .field{padding-right:40px;margin:0}
-.rp-pw .icon-btn{position:absolute;right:4px;top:50%;transform:translateY(-50%);width:30px;height:30px}
+.rp-pw .icon-btn{position:absolute;right:4px;top:calc(50% - 15px);width:30px;height:30px}
 .rp-hint{margin:6px 0 14px;font-size:var(--fs-label);line-height:1.5;color:var(--text-3)}
 .rp-hint .lnk{font-size:inherit}
 .rp-err{margin:10px 0 0}
