@@ -48,7 +48,7 @@ export function Toggle({ checked, onChange, label, hint }: { checked: boolean; o
 
 type Opt = string | [string, string];
 export function Select({ id, label, value, options, onChange, inline }: { id: string; label: string; value: string; options: Opt[]; onChange: (v: string) => void; inline?: boolean }) {
-  const sel = <Dropdown id={id} value={value} options={options} onChange={onChange} block={!inline} minWidth={inline ? 160 : 200} align={inline ? "end" : "start"} className="sp-dd" />;
+  const sel = <Dropdown id={id} size={inline ? "sm" : "md"} value={value} options={options} onChange={onChange} block={!inline} minWidth={inline ? 160 : 200} align={inline ? "end" : "start"} className="sp-dd" />;
   if (inline) return <div className="sp-line"><label htmlFor={id}>{label}</label>{sel}</div>;
   return <div className="sp-fld"><label htmlFor={id} className="sp-fl"><span>{label}</span></label>{sel}</div>;
 }
