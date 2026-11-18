@@ -150,14 +150,14 @@ function POLISH() {
     el.scrollTo({ left: s0, behavior: "instant" });
   }
 
-  // 7. Chữ gợi ý bắt đầu trong góc bo của ô nhập (bị góc bo cắt).
+  // 7. Chữ gợi ý bắt đầu trong góc bo của ô nhập (bị góc bo cắt, hay cách đường cong dưới 2px).
   for (const inp of document.querySelectorAll("input[placeholder]:not([type=checkbox]):not([type=radio]):not([type=range]), textarea[placeholder]")) {
     if (!inp.placeholder || inp.value || !vis(inp)) continue;
     const cs = gcs(inp), b = inp.getBoundingClientRect(), r = Math.min(radius(cs, b), b.height / 2, b.width / 2); if (r < 4) continue;
     const fs = parseFloat(cs.fontSize), x = parseFloat(cs.paddingLeft) + parseFloat(cs.borderLeftWidth);
     const lh = parseFloat(cs.lineHeight) || fs * 1.3;
     const y = inp.tagName === "TEXTAREA" ? parseFloat(cs.paddingTop) + parseFloat(cs.borderTopWidth) + Math.max(0, (lh - fs) / 2) : b.height / 2 - fs * 0.55;
-    if (x < r && y < r && Math.hypot(r - x, r - y) > r + 0.5) push("ph", "chữ gợi ý nằm trong góc bo (bo " + Math.round(r) + "px, chữ cách mép " + Math.round(x) + "px/" + Math.round(y) + "px): " + name(inp) + " “" + inp.placeholder.slice(0, 30) + "”");
+    if (x < r && y < r && Math.hypot(r - x, r - y) > r - 2) push("ph", "chữ gợi ý nằm trong góc bo (bo " + Math.round(r) + "px, chữ cách mép " + Math.round(x) + "px/" + Math.round(y) + "px): " + name(inp) + " “" + inp.placeholder.slice(0, 30) + "”");
   }
   for (const [k, n] of Object.entries(count)) if (n > CAP) out.push("… còn " + (n - CAP) + " lỗi loại " + k);
   return out;
