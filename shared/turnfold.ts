@@ -61,3 +61,23 @@ export function foldFix(original: string, before: string[], reply: string): { te
   const tail = [note, ...kept].filter(Boolean).join("\n\n");
   return { text: tail ? `${text.trimEnd()}\n\n${tail}` : text, before: arts };
 }
+
+/** H1 lỗi 9: model viết trọn bộ slide giữa lượt (trước khi gọi check_artifact), rồi câu trả lời cuối chỉ có bản sửa mode="patch". Ghép hai thứ đó
+ *  thành hai thẻ "Phiên bản 1" (bấm thẻ nào cũng mở bản cũ). Bản sửa trong câu trả lời cuối mà bản đầy đủ nằm trong artifact viết giữa lượt
+ *  thì áp thẳng vào bản đó và bỏ khỏi câu trả lời: người dùng thấy một thẻ, đúng bản đã sửa. Áp không được thì giữ nguyên như cũ. */
+export function foldPatches(arts: string[], text: string): { arts: string[]; text: string } {
+  const out = [...arts];
+  let t = text;
+  for (const b of blocks(text)) {
+    if (!b.art.patch || !b.art.complete) continue;
+    // Bản cuối cùng cùng identifier trong phần viết giữa lượt phải là bản đầy đủ (đã có bản sửa giữa lượt thì áp chồng lên bản đó sẽ sai thứ tự: để nguyên).
+    let at = -1, hit: Hit | undefined;
+    for (let i = out.length - 1; i >= 0 && !hit; i--) { hit = blocks(out[i]).filter((h) => h.art.ident === b.art.ident).pop(); if (hit) at = i; }
+    if (!hit || hit.art.patch || !hit.art.complete) continue;
+    const r = applyPatches(hit.art.content, parsePatches(b.art.content));
+    if (!r.ok) continue;
+    out[at] = out[at].slice(0, hit.at) + `${openTag(hit.raw)}\n${r.content}\n</artifact>` + out[at].slice(hit.end);
+    t = t.replace(b.raw, "");
+  }
+  return { arts: out, text: t === text ? text : t.replace(/\n{3,}/g, "\n\n").trim() };
+}

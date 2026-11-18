@@ -20,7 +20,7 @@ import { BRIDGE_CALL_MAX, destructiveLike, TOOL_BUDGET } from "../mcp";
 import { AUTO_CHECK, autoDeckCheck, checkArtifact, checkRoundGate, findArtifact, readArtifact } from "../artcheck";
 import { artState, resolveArt, type ArtVersion } from "../../shared/vfs";
 import { hasArtifacts, splitArtifacts } from "../../shared/artifacts";
-import { foldFix } from "../../shared/turnfold";
+import { foldFix, foldPatches } from "../../shared/turnfold";
 import { typedText } from "../router";
 import { recordPluginUse } from "../plugins";
 import { markConvUntrusted } from "../convtrust";
@@ -317,7 +317,11 @@ export function settleGate(x: Exec | null | undefined, text: string, stop = fals
   return r.text;
 }
 // Câu trả lời cuối đã viết lại trọn một artifact thì bỏ các bản cùng identifier viết giữa lượt (bản sửa mode="patch" thì vẫn cần bản gốc).
-export const withTurnArts =(x: Exec | null | undefined, text: string) => {
+export const withTurnArts = (x: Exec | null | undefined, text0: string) => {
+  // Bản sửa ở câu trả lời cuối cho bộ slide viết giữa lượt: gộp thành một thẻ (H1 lỗi 9).
+  const fp = x?.turnArts?.length ? foldPatches(x.turnArts, text0) : null;
+  if (x && fp) x.turnArts = fp.arts;
+  const text = fp ? fp.text : text0;
   const full = new Set(splitArtifacts(text).flatMap((g) => (g.kind === "art" && !g.art.patch ? [g.art.ident] : [])));
   const fresh = (x?.turnArts ?? []).filter((b) => !text.includes(b) && !splitArtifacts(b).some((g) => g.kind === "art" && full.has(g.art.ident)));
   return fresh.length ? `${fresh.join("\n\n")}\n\n${text}` : text;

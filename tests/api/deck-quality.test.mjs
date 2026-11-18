@@ -135,6 +135,15 @@ console.log("1d. Gộp phần sửa sau <auto_check> vào câu trả lời gốc
   const rewrite = foldFix(orig, [], full("<p>01 · A</p>\n<p>02 · B</p>"));
   ok(arts(rewrite.text) === 1 && /02 · B/.test(rewrite.text) && /mỗi mục một ý chính\.$/.test(rewrite.text.trim()), "viết lại trọn bộ slide → thay đúng chỗ bản cũ", rewrite.text);
   ok(foldFix(orig, [], `Đang sửa\n\n<artifact identifier="d" mode="patch">\n<<<<<<< SEARCH\n<p>04`).text === orig, "bản sửa viết dở (dừng giữa chừng) → bỏ, giao câu gốc");
+  // H1 lỗi 9 ngoài đường tự kiểm: bộ slide viết trọn giữa lượt, câu trả lời cuối chỉ có bản sửa → một thẻ (withTurnArts dùng foldPatches).
+  const fp = turnfold.foldPatches([full("<p>04 · B</p>")], `Mình đã sửa slide 2:\n\n${patch("<p>04 · B</p>", "<p>02 · B</p>")}`);
+  ok(fp.text === "Mình đã sửa slide 2:" && fp.arts.length === 1 && /02 · B/.test(fp.arts[0]) && !/mode="patch"/.test(fp.arts[0]), "bản đầy đủ giữa lượt + bản sửa cuối lượt → một thẻ đã sửa, giữ lời", JSON.stringify(fp));
+  const chain = turnfold.foldPatches([full("<p>A</p>"), patch("<p>A</p>", "<p>B</p>")], patch("<p>B</p>", "<p>C</p>"));
+  ok(/mode="patch"/.test(chain.text), "giữa lượt đã có bản sửa → không áp chồng sai thứ tự, để nguyên", JSON.stringify(chain));
+  const nofit = turnfold.foldPatches([full("<p>A</p>")], patch("<p>Z</p>", "<p>C</p>"));
+  ok(/mode="patch"/.test(nofit.text) && nofit.arts[0] === full("<p>A</p>"), "bản sửa không áp được → để nguyên như cũ", JSON.stringify(nofit));
+  const tools = fs.readFileSync("server/chat/tools.ts", "utf8");
+  ok(/const fp = x\?\.turnArts\?\.length \? foldPatches\(x\.turnArts, text0\) : null;/.test(tools), "withTurnArts gộp bản sửa cuối lượt vào bộ slide viết giữa lượt");
   const other = foldFix(orig, [], `Thêm phụ lục.\n\n${full("<p>x</p>", "phu-luc")}`);
   ok(arts(other.text) === 2 && /identifier="phu-luc"/.test(other.text), "artifact khác identifier → thêm sau câu trả lời gốc", other.text);
 }
