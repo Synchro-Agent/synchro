@@ -357,3 +357,15 @@ Object.assign(FX_VI2EN, {
   "Hoàn tác": "Undo",
 });
 Object.assign(FX_EN2VI, { "Change": "Đổi" });
+// Hội đồng phản biện: lỗi Synchro tự đo trên bộ slide (app/api/critic/route.ts deckFindings).
+Object.assign(FX_VI2EN, {
+  "Slide {n} tràn khung khi trình chiếu": "Slide {n} overflows its frame when presented",
+  "Đo thật ở {vw}×{vh}: slide {n} cao {h}px, thừa {over}px so với khung, phần dưới bị cắt khi trình chiếu. Rút chữ, giảm khoảng trống hoặc tách thành hai slide.": "Measured at {vw}×{vh}: slide {n} is {h}px tall, {over}px taller than the frame, so its bottom is cut off when presented. Shorten the text, reduce the spacing, or split it into two slides.",
+  "Đo thật ở {vw}×{vh}: slide {n} rộng {w}px, thừa {over}px so với khung, phần bên phải bị cắt khi trình chiếu. Rút chữ hoặc chia lại cột.": "Measured at {vw}×{vh}: slide {n} is {w}px wide, {over}px wider than the frame, so its right side is cut off when presented. Shorten the text or rearrange the columns.",
+  "Đánh số slide không nhất quán": "Inconsistent slide numbering",
+  "Số trang không theo thứ tự slide ở slide {slides}.": "Page numbers don't follow the slide order on slide {slides}.",
+  "Tổng số trang ghi trên các slide không đồng nhất (slide {slides}).": "The total page count differs between slides (slide {slides}).",
+  "Chân trang ghi tổng {of} trang nhưng bộ slide có {total} slide.": "The footer says {of} pages, but the deck has {total} slides.",
+  "Nhãn mục nhảy cóc hoặc trùng số ở slide {slides}.": "Section labels skip or repeat a number on slide {slides}.",
+  "Nhãn mục ({brows}) và số trang ({pages}) lệch nhau trên slide {slides}: đánh số lại cho cùng một dãy hoặc bỏ một trong hai loại số.": "Section labels ({brows}) don't match the page numbers ({pages}) on slide {slides}: renumber them as one sequence or drop one of the two.",
+});

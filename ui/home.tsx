@@ -1577,7 +1577,7 @@ export default function Home({ boot }: { boot?: BootData | null }) {
     // Giữ kết quả của 30 phiên bản gần nhất trong đoạn chat.
     const put = (e: CriticEntry) => setChats((cs) => cs.map((c) => (c.id !== id ? c : { ...c, critic: Object.fromEntries([...Object.entries(c.critic ?? {}).filter(([k]) => k !== key).sort((x, y) => y[1].at - x[1].at).slice(0, 29), [key, e]]) })));
     put({ status: "run", findings: [], by: [], at: Date.now() });
-    fetch("/api/critic", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ title: a.title, type: a.type, lang: a.lang, content: a.content, model: gen, question: question.slice(0, 1500), auto }) })
+    fetch("/api/critic", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ title: a.title, type: a.type, lang: a.lang, content: a.content, model: gen, question: question.slice(0, 1500), auto, ui: getLang() }) })
       .then(async (r) => {
         const j = await r.json().catch(() => ({}));
         // Máy chủ bỏ qua lần tự chạy này: không có kết quả nào để hiện, càng không phải dấu "Ổn".

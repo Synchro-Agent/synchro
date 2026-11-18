@@ -12,6 +12,9 @@ import { inlineImages } from "./artimg";
 import { splitArtifacts, type ArtType } from "../shared/artifacts";
 import { execRun, runner } from "./coderun";
 import { artState, cleanBase, type ArtVersion } from "../shared/vfs";
+import { fitSummary, type SlideFit } from "../shared/deckfit";
+import { numberingIssues, type NumIssue } from "../shared/decknum";
+import { hashOf } from "../shared/critic";
 
 export const READ_ARTIFACT_TOOL = {
   name: "read_artifact",
@@ -27,7 +30,7 @@ export const READ_ARTIFACT_TOOL = {
 
 export const CHECK_ARTIFACT_TOOL = {
   name: "check_artifact",
-  description: "Kiểm tra hiển thị thật của artifact (trang web, bản trình bày, ứng dụng React, SVG): Synchro dựng artifact trong Chromium đúng như khung xem trước, chụp từng slide / trang (máy tính và điện thoại) và đo lỗi: chữ đè chữ, phần tử tràn khỏi slide, thẻ hoặc màn hình, chữ bị cắt, ảnh không tải được, chữ quá nhỏ, tiêu đề rớt một chữ, tương phản thấp (WCAG), trang tràn ngang, lỗi JavaScript. Trả về ảnh ghép các slide / trang và danh sách lỗi theo vị trí. Gọi sau khi viết xong hoặc sửa artifact, sửa hết lỗi rồi kiểm tra lại trước khi báo xong.",
+  description: "Kiểm tra hiển thị thật của artifact (trang web, bản trình bày, ứng dụng React, SVG): Synchro dựng artifact trong Chromium đúng như khung xem trước, chụp từng slide / trang (máy tính và điện thoại) và đo lỗi: chữ đè chữ, phần tử tràn khỏi slide, thẻ hoặc màn hình, chữ bị cắt, ảnh không tải được, chữ quá nhỏ, tiêu đề rớt một chữ, tương phản thấp (WCAG), trang tràn ngang, lỗi JavaScript; với bản trình bày còn đo khung từng slide ở 1280×720 (slide nào cao / rộng hơn khung, thừa bao nhiêu px) và đánh số slide không nhất quán. Trả về ảnh ghép các slide / trang và danh sách lỗi theo vị trí. Gọi sau khi viết xong hoặc sửa artifact, sửa hết lỗi rồi kiểm tra lại trước khi báo xong.",
   input_schema: {
     type: "object",
     properties: {
@@ -39,8 +42,9 @@ export const CHECK_ARTIFACT_TOOL = {
 
 export const ARTCHECK_RULES = (check: boolean) => `<self_check>
 Bạn chịu trách nhiệm về chất lượng sản phẩm mình giao, như một người làm nghề cẩn thận:
-${check ? "- Sau khi viết hoặc sửa artifact dạng trang web, bản trình bày (slide), ứng dụng React hay SVG: gọi check_artifact, xem ảnh chụp và danh sách lỗi, sửa hết (chữ đè chữ, tràn khung, phần tử tràn khỏi slide, chữ bị cắt, ảnh hỏng, chữ quá nhỏ, tiêu đề rớt chữ, tương phản thấp, lỗi script) rồi kiểm tra lại, tới khi sạch lỗi (tối đa 2 vòng kiểm tra - sửa) mới báo xong. Tự nhìn ảnh chụp: bố cục, căn lề, khoảng cách, độ tương phản phải chỉn chu như sản phẩm thật."
+${check ? "- Sau khi viết hoặc sửa artifact dạng trang web, bản trình bày (slide), ứng dụng React hay SVG: gọi check_artifact, xem ảnh chụp và danh sách lỗi, sửa hết (chữ đè chữ, tràn khung, slide nào báo TRÀN trong dòng “Đo khung từng slide”, phần tử tràn khỏi slide, chữ bị cắt, ảnh hỏng, chữ quá nhỏ, tiêu đề rớt chữ, tương phản thấp, đánh số slide lệch nhau, lỗi script) rồi kiểm tra lại, tới khi sạch lỗi (tối đa 2 vòng kiểm tra - sửa) mới báo xong. Tự nhìn ảnh chụp: bố cục, căn lề, khoảng cách, độ tương phản phải chỉn chu như sản phẩm thật."
     : "- Sau khi viết hoặc sửa artifact: đọc lại bằng read_artifact và tự rà bố cục (chữ đè chữ, tràn khung, chữ bị cắt, ảnh hỏng) trước khi báo xong."}
+- Bản sửa (mode="patch") thêm, bớt hay đổi chỗ slide: đánh số lại MỌI nhãn số (số mục "01 ·", chân trang "02 / 06", mục lục) cho cùng một dãy, không chỉ vài chỗ.
 - Bố cục bền: dùng flex / grid và khoảng cách đều, không đặt chữ bằng position:absolute chồng lên nhau; slide 16:9 chừa lề, chữ dài thì giảm chữ hoặc chia slide thay vì để tràn; ảnh có kích thước và object-fit rõ ràng.
 - Người dùng báo sản phẩm có lỗi: không đổ cho công cụ hay nói "không làm được". Đọc lại bằng read_artifact${check ? ", tái hiện bằng check_artifact" : ""}, tìm nguyên nhân, sửa, kiểm tra lại, rồi báo ngắn gọn đã sửa gì và đã kiểm tra thế nào.
 - Không khẳng định đã xong hay đã sửa khi chưa kiểm tra. Còn điều chưa làm được thì nói rõ là gì, đã thử những cách nào, và giao bản tốt nhất có thể.
@@ -114,9 +118,14 @@ const PROBE = String.raw`(root, deck) => {
     const w = Math.min(a.r.right, b.r.right) - Math.max(a.r.left, b.r.left), h = Math.min(a.r.bottom, b.r.bottom) - Math.max(a.r.top, b.r.top);
     if (w > 4 && h > 4 && w * h > 0.25 * Math.min(a.r.width * a.r.height, b.r.width * b.r.height)) add("chữ đè chữ", "“" + say(a.el) + "” chồng lên “" + say(b.el) + "”");
   }
+  // Khung của một slide là cửa sổ 1280×720: slide cao theo nội dung (min-height:100vh rồi dài ra 869px, H1 T8) vẫn có scrollHeight = clientHeight
+  // và mọi chữ vẫn nằm trong hộp của slide, nhưng người xem chỉ thấy 720px đầu. Đo theo khung đó, không theo hộp của slide.
+  const F = { left: R.left, top: R.top, right: Math.min(R.right, R.left + innerWidth), bottom: Math.min(R.bottom, R.top + innerHeight) };
   // Chữ / ảnh ra ngoài vùng (slide hoặc chiều ngang màn hình): bị cắt hoặc phải cuộn ngang.
-  const W = deck ? R : { left: 0, right: innerWidth, top: -1e9, bottom: 1e9 };
-  for (const { el, r } of boxes) if (r.right > W.right + 3 || r.left < W.left - 3 || (deck && (r.bottom > W.bottom + 3 || r.top < W.top - 3))) { if (!clipped(el, r)) add(deck ? "chữ tràn ra ngoài slide" : "chữ tràn ra ngoài màn hình", "“" + say(el) + "”"); }
+  const W = deck ? F : { left: 0, right: innerWidth, top: -1e9, bottom: 1e9 };
+  // Slide cao hơn khung: phần dưới báo một lần ở mục "phần tử tràn khỏi slide" bên dưới, không liệt kê từng dòng chữ.
+  const tallSlide = deck && R.height > innerHeight + 4;
+  for (const { el, r } of boxes) if (r.right > W.right + 3 || r.left < W.left - 3 || (deck && !tallSlide && (r.bottom > W.bottom + 3 || r.top < W.top - 3))) { if (!clipped(el, r)) add(deck ? "chữ tràn ra ngoài slide" : "chữ tràn ra ngoài màn hình", "“" + say(el) + "”"); }
   // Khung cắt mất chữ (overflow hidden mà nội dung dài hơn), trừ cắt có chủ ý bằng dấu … hay line-clamp.
   for (const el of root.querySelectorAll("*")) {
     if (!vis(el)) continue; const cs = getComputedStyle(el);
@@ -132,15 +141,17 @@ const PROBE = String.raw`(root, deck) => {
   }
   // Slide tràn nội dung: so chiều cao / rộng thật của slide với khung (scrollHeight vs clientHeight). Bắt được cả khi khung slide cắt mất (overflow hidden)
   // mà vẫn còn phần tử thò ra — khó thấy bằng mắt trên ảnh chụp. Trả về các phần tử ngoài cùng tràn ra để model biết chỗ nào phải thu gọn hoặc chia slide.
-  if (deck && (root.scrollHeight > root.clientHeight + 4 || root.scrollWidth > root.clientWidth + 4)) {
+  const tallH = Math.max(root.scrollHeight, R.height), tallW = Math.max(root.scrollWidth, R.width);
+  if (deck && (root.scrollHeight > root.clientHeight + 4 || root.scrollWidth > root.clientWidth + 4 || R.height > innerHeight + 4 || R.width > innerWidth + 4)) {
     const over = [];
     for (const el of root.querySelectorAll("*")) {
       if (!vis(el) || el.closest("script,style,noscript,[aria-hidden=true]")) continue;
       const r = el.getBoundingClientRect();
-      if (r.width > 4 && r.height > 4 && (r.bottom > R.bottom + 2 || r.right > R.right + 2 || r.top < R.top - 2 || r.left < R.left - 2) && !clipped(el, r)) over.push({ el, r });
+      if (r.width > 4 && r.height > 4 && (r.bottom > F.bottom + 2 || r.right > F.right + 2 || r.top < F.top - 2 || r.left < F.left - 2) && !clipped(el, r)) over.push({ el, r });
     }
     const outer = over.filter(({ el }) => !over.some((o) => o.el !== el && o.el.contains(el)));
-    const extent = "slide " + Math.round(root.scrollHeight) + "×" + Math.round(root.scrollWidth) + "px > khung " + root.clientHeight + "×" + root.clientWidth + "px";
+    const frameH = Math.min(root.clientHeight, innerHeight), frameW = Math.min(root.clientWidth, innerWidth);
+    const extent = "slide " + Math.round(tallH) + "×" + Math.round(tallW) + "px > khung " + frameH + "×" + frameW + "px";
     if (outer.length) for (const { el } of outer.slice(0, 6)) add("phần tử tràn khỏi slide", "“" + say(el) + "” (" + extent + ")");
     else add("slide tràn nội dung", "nội dung vượt khung (" + extent + "); thu gọn chữ hoặc chia slide");
   }
@@ -160,7 +171,7 @@ const PROBE = ${PROBE};
     // Trang có nền shader / cảnh 3D: Chromium không còn tự rơi về WebGL phần mềm (từ khoảng bản 137), phải bật SwiftShader thì mới đo, chụp được canvas WebGL.
     // Chỉ cho trang của chính người dùng, chạy trong container sandbox.
     args: ["--no-sandbox", "--disable-dev-shm-usage", "--font-render-hinting=none", "--hide-scrollbars", ...(/synchro-3d|data-sx-shader/.test(html) ? ["--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--ignore-gpu-blocklist"] : []), ...(px ? ["--proxy-server=" + px.protocol + "//" + px.host] : [])] });
-  const report = { slides: 0, views: [], issues: [], errors: [] };
+  const report = { slides: 0, views: [], issues: [], errors: [], fit: [] };
   const shots = [];
   const open = async (w, h, mobile) => {
     const page = await browser.newPage();
@@ -186,6 +197,9 @@ const PROBE = ${PROBE};
       await new Promise((r) => setTimeout(r, 650));
       const found = await page.evaluate((src) => { const el = window.__sxCur && window.__sxCur(); return el ? (0, eval)("(" + src + ")")(el, true) : []; }, PROBE.toString());
       for (const f of found) report.issues.push({ where: "Slide " + (i + 1), ...f });
+      // Số đo khung của từng slide (cao / rộng thật so với cửa sổ 1280×720) để báo từng slide vừa hay tràn, kể cả khi slide tự dài ra theo nội dung.
+      const fit = await page.evaluate(() => { const el = window.__sxCur && window.__sxCur(); if (!el) return null; const r = el.getBoundingClientRect(); return { h: Math.round(Math.max(r.height, el.scrollHeight)), w: Math.round(Math.max(r.width, el.scrollWidth)), vh: innerHeight, vw: innerWidth }; }).catch(() => null);
+      if (fit) report.fit.push({ slide: i + 1, ...fit });
       await shot(page, "Slide " + (i + 1));
     }
     report.views.push("1280×720");
@@ -234,6 +248,32 @@ export function checkRoundGate(turn: object, a: ArtVersion): string | null {
   return null;
 }
 
+// Số đo bố cục của từng bản bộ slide (theo mã băm nội dung), để hội đồng phản biện dùng lại số đo thật của check_artifact thay vì đoán từ mã nguồn.
+// Trong bộ nhớ của tiến trình: mất khi khởi động lại thì phản biện tự đo lại (measureDeck).
+export type DeckLayout = { at: number; fit: SlideFit[]; issues: { where: string; kind: string; detail: string }[] };
+const layouts = new Map<string, DeckLayout>();
+const LAYOUT_TTL = 2 * 3600_000, LAYOUT_MAX = 300;
+export function rememberLayout(content: string, l: Omit<DeckLayout, "at">) {
+  const k = hashOf(content) + ":" + content.length;
+  layouts.delete(k); layouts.set(k, { at: Date.now(), ...l });
+  for (const key of layouts.keys()) { if (layouts.size <= LAYOUT_MAX) break; layouts.delete(key); }
+}
+export function layoutOf(content: string): DeckLayout | null {
+  const k = hashOf(content) + ":" + content.length, l = layouts.get(k);
+  if (!l || Date.now() - l.at > LAYOUT_TTL) { layouts.delete(k); return null; }
+  return l;
+}
+/** Lỗi đánh số slide dạng dòng cho model (rỗng nếu không có). */
+export const numberingNote = (issues: NumIssue[]) => issues.map((x) => `- Slide ${x.slides.length > 1 ? x.slides.join(", ") : x.slides[0]}: đánh số slide không nhất quán — ${x.prompt}`);
+
+/** Đo bố cục bộ slide cho hội đồng phản biện: dùng số đo sẵn của check_artifact nếu có, chưa có thì dựng một lần (chỉ khi có Chromium). */
+export async function measureDeck(uid: string, a: { ident: string; title: string; content: string }, origin: string): Promise<DeckLayout | null> {
+  const have = layoutOf(a.content);
+  if (have || runner() !== "workspace") return have;
+  const r = await checkArtifact(uid, { ident: a.ident, title: a.title, type: "html", lang: null, content: a.content, complete: true, v: 1 }, {}, origin).catch(() => null);
+  return r && !r.is_error ? layoutOf(a.content) : null;
+}
+
 export async function checkArtifact(uid: string, a: ArtVersion | null, input: Record<string, unknown>, origin: string): Promise<{ content: string; is_error: boolean; image?: string }> {
   if (!a) return notFound(typeof input.identifier === "string" ? input.identifier : undefined);
   const kinds: ArtType[] = ["html", "react", "svg"];
@@ -254,9 +294,14 @@ export async function checkArtifact(uid: string, a: ArtVersion | null, input: Re
   }
   const rep = r.files.find((f) => f.path === "report.json"), sheet = r.files.find((f) => f.path === "sheet.jpg");
   if (!rep) return { content: `Chưa kiểm tra được hiển thị (trình kiểm tra lỗi): ${(r.stderr || r.stdout).slice(-600)}`, is_error: true };
-  const j = JSON.parse(rep.data.toString("utf8")) as { slides: number; views: string[]; issues: { where: string; kind: string; detail: string }[]; errors: string[] };
-  const head = deck ? `Bản trình bày "${a.title}" (phiên bản ${a.v}): ${j.slides} slide, dựng ở 1280×720${slide ? `, chụp to slide ${slide}` : ""}.` : `"${a.title}" (phiên bản ${a.v}) dựng ở ${j.views.join(" và ")}.`;
-  const issues = j.issues.length ? `\nLỗi hiển thị cần sửa (${j.issues.length}):\n${j.issues.map((x) => `- ${x.where}: ${x.kind} — ${x.detail}`).join("\n")}` : "\nKhông đo thấy lỗi (chữ đè, tràn, cắt, ảnh hỏng, chữ quá nhỏ, tiêu đề rớt chữ, tương phản).";
+  const j = JSON.parse(rep.data.toString("utf8")) as { slides: number; views: string[]; issues: { where: string; kind: string; detail: string }[]; errors: string[]; fit?: SlideFit[] };
+  const fit = Array.isArray(j.fit) ? j.fit : [];
+  // Cả bộ (không chỉ chụp to một slide): lưu số đo cho hội đồng phản biện của đúng bản này.
+  if (deck && !slide) rememberLayout(a.content, { fit, issues: j.issues });
+  const nums = deck ? numberingNote(numberingIssues(a.content)) : [];
+  const head = deck ? `Bản trình bày "${a.title}" (phiên bản ${a.v}): ${j.slides} slide, dựng ở 1280×720${slide ? `, chụp to slide ${slide}` : ""}.${fit.length ? `\n${fitSummary(fit)}` : ""}` : `"${a.title}" (phiên bản ${a.v}) dựng ở ${j.views.join(" và ")}.`;
+  const all = [...j.issues.map((x) => `- ${x.where}: ${x.kind} — ${x.detail}`), ...nums];
+  const issues = all.length ? `\nLỗi hiển thị cần sửa (${all.length}):\n${all.join("\n")}` : "\nKhông đo thấy lỗi (chữ đè, tràn, cắt, ảnh hỏng, chữ quá nhỏ, tiêu đề rớt chữ, tương phản, đánh số slide).";
   const errs = j.errors.length ? `\nLỗi khi chạy trang:\n${j.errors.map((e) => `- ${e}`).join("\n")}` : "";
   const tail = "\nẢnh ghép đi kèm: tự xem thêm bố cục, căn lề, khoảng cách, độ tương phản và chỗ nào trông chưa chỉn chu.";
   return { content: head + issues + errs + tail, is_error: false, ...(sheet ? { image: sheet.data.toString("base64") } : {}) };
