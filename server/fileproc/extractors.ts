@@ -292,9 +292,12 @@ class BadPdf extends Error {}
 const pyBin = () => process.env.PYTHON_BIN || path.join(process.cwd(), ".mkvenv", "bin", "python");
 /** OCR một trang PDF scan bằng scripts/ocr.py (RapidOCR). Chỉ chạy khi bật SYNCHRO_OCR=1 (mặc định tắt: giữ nguyên hành vi cũ, không spawn vô ích khi máy chủ chưa cài OCR). */
 async function ocrPage(imgPath: string, uid?: string): Promise<string> {
-  const job = run(pyBin(), [path.join(process.cwd(), "scripts", "ocr.py"), imgPath], { maxBuffer: 16 * 1024 * 1024, timeout: 120_000, killSignal: "SIGKILL", env: parserEnv() });
-  lowPriority(job.child.pid);
-  return withConvertSlot(uid, async () => (await job).stdout.trim());
+  // Tiến trình OCR chỉ mở khi tới lượt: mở trước rồi mới xếp hàng thì hàng convert không giới hạn được gì (mọi trang chạy cùng lúc).
+  return withConvertSlot(uid, async () => {
+    const job = run(pyBin(), [path.join(process.cwd(), "scripts", "ocr.py"), imgPath], { maxBuffer: 16 * 1024 * 1024, timeout: 120_000, killSignal: "SIGKILL", env: parserEnv() });
+    lowPriority(job.child.pid);
+    return (await job).stdout.trim();
+  });
 }
 
 async function pdfFallback(buf: Buffer, uid?: string): Promise<{ total: number; text: string; images: string[] }> {

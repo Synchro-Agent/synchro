@@ -9,7 +9,9 @@ import type { Rejected } from "../shared/turnctx";
  * Trạng thái một tệp đính kèm. lines: số dòng (tệp chữ / code, hiện "N dòng" như Claude); pdf: thumb là ảnh trang đầu;
  * folder: cả một thư mục (tải lên dạng .zip, giữ nguyên cấu trúc), count là số tệp bên trong.
  */
-export type FileStatus = { state: "uploading" | "ready" | "error"; pct: number; id?: string; error?: string; thumb?: string; large?: boolean; tokens?: number; lines?: number; pdf?: boolean; folder?: boolean; count?: number };
+// note: tệp âm thanh / video đã tải lên xong, máy chủ đang chép lời ("Đang chép lời…") hoặc tệp đang chờ tệp ghi âm trước của chính người dùng
+// ("Đang chờ tệp trước…": máy chủ chép lời lần lượt từng tệp của một người, server/fileproc/sandbox.ts withConvertSlot).
+export type FileStatus = { state: "uploading" | "ready" | "error"; pct: number; id?: string; error?: string; thumb?: string; large?: boolean; tokens?: number; lines?: number; pdf?: boolean; folder?: boolean; count?: number; note?: string };
 type Meta = Pick<FileStatus, "thumb" | "lines" | "pdf" | "folder" | "count">;
 
 const text = new Map<string, string>();
@@ -27,6 +29,16 @@ const meta = new Map<string, Meta>();
 // Thông tin phụ (ảnh thu nhỏ, số dòng, thư mục) có thể tới sau khi đã bắt đầu tải lên: luôn ghép vào trạng thái hiện tại.
 const set = (n: string, s: FileStatus) => { status.set(n, { ...s, ...meta.get(n) }); emit(); };
 const addMeta = (n: string, m: Meta) => { meta.set(n, { ...meta.get(n), ...m }); const cur = status.get(n); if (cur) set(n, cur); };
+
+// Tệp âm thanh / video: máy chủ chép lời (tới vài phút mỗi tệp, lần lượt từng tệp của một người) nên chờ lâu hơn tệp thường. avOrder: các tệp
+// đã tải lên xong và đang chờ máy chủ trả lời, theo thứ tự gửi; tệp đầu là tệp đang chép lời, các tệp sau đang chờ tới lượt.
+const AV_RE = /\.(mp3|wav|m4a|aac|ogg|oga|opus|flac|webm|mp4|m4v|mov|mkv|avi|aiff?|wma)$/i;
+export const isAv = (f: { name: string; type?: string }) => /^(audio|video)\//.test(f.type ?? "") || AV_RE.test(f.name);
+export const AV_TIMEOUT_MS = 16 * 60_000;
+const avOrder: string[] = [];
+const AV_NOW = "Đang chép lời…", AV_WAIT = "Đang chờ tệp trước…";
+const avNotes = () => avOrder.forEach((k, i) => { const cur = status.get(k); if (cur?.state === "uploading") set(k, { ...cur, note: i ? AV_WAIT : AV_NOW }); });
+const avDone = (k: string) => { const i = avOrder.indexOf(k); if (i >= 0) { avOrder.splice(i, 1); avNotes(); } };
 
 export const docText = (n: string) => text.get(n);
 export const saveDoc = (n: string, t: string) => { text.set(n, t); };
@@ -91,10 +103,13 @@ export function ingestFile(f: File, onError?: (m: string) => void, o: { raw?: bo
   pending.set(key, new Promise<void>((resolve) => {
     const x = new XMLHttpRequest();
     xhrs.set(key, x);
-    const done = () => { xhrs.delete(key); resolve(); };
-    x.timeout = 120_000;
+    const av = !o.folder && isAv(f);
+    const done = () => { xhrs.delete(key); if (av) avDone(key); resolve(); };
+    x.timeout = av ? AV_TIMEOUT_MS : 120_000;
     x.open("POST", o.raw ? "/api/files?raw=1" : "/api/files");
-    x.upload.onprogress = (e) => e.lengthComputable && set(key, { state: "uploading", pct: Math.round((e.loaded / e.total) * 90) });
+    x.upload.onprogress = (e) => e.lengthComputable && set(key, { state: "uploading", pct: Math.round((e.loaded / e.total) * 90), ...(status.get(key)?.note ? { note: status.get(key)!.note } : {}) });
+    // Gửi xong phần thân: từ đây là máy chủ chép lời (hoặc chờ tệp trước của chính bạn), hiện rõ trên thẻ thay vì thanh tiến trình đứng ở 90%.
+    if (av) x.upload.onload = () => { if (!avOrder.includes(key) && xhrs.get(key) === x) { avOrder.push(key); avNotes(); } };
     x.onload = () => {
       let j: { id?: string; error?: string; preview?: string; large?: boolean; tokens?: number; note?: string } = {};
       try { j = JSON.parse(x.responseText); } catch { /* ignore */ }
@@ -108,7 +123,7 @@ export function ingestFile(f: File, onError?: (m: string) => void, o: { raw?: bo
     };
     x.onerror = () => { const m = `Không tải được "${key}" lên server`; set(key, { state: "error", pct: 0, error: m }); onError?.(m); done(); };
     // Tải lên quá lâu (mạng chập chờn, tệp lớn): dừng để thẻ tệp không treo ở trạng thái đang tải mãi.
-    x.ontimeout = () => { const m = `Tải "${key}" lên quá lâu (quá 2 phút). Hãy thử lại.`; set(key, { state: "error", pct: 0, error: m }); onError?.(m); done(); };
+    x.ontimeout = () => { const m = av ? `Máy chủ đọc "${key}" quá lâu (quá ${AV_TIMEOUT_MS / 60_000} phút). Hãy thử lại.` : `Tải "${key}" lên quá lâu (quá 2 phút). Hãy thử lại.`; set(key, { state: "error", pct: 0, error: m }); onError?.(m); done(); };
     x.onabort = () => { done(); };
     const fd = new FormData(); fd.append("file", f);
     x.send(fd);
@@ -123,6 +138,7 @@ export function abortFile(name: string) {
   const x = xhrs.get(name);
   if (x) { xhrs.delete(name); try { x.abort(); } catch { /* đã dừng */ } }
   pending.delete(name);
+  avDone(name);
   if (status.get(name)?.state === "ready") return;
   const u = meta.get(name)?.thumb;
   if (u?.startsWith("blob:")) try { URL.revokeObjectURL(u); } catch { /* ignore */ }

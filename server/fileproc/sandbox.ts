@@ -6,7 +6,7 @@ import { spawn } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { FileError } from "../../shared/fileproc/types";
+import { FileError, MAX_FILES_PER_MESSAGE } from "../../shared/fileproc/types";
 
 const MAX_RUN = Number(process.env.SYNCHRO_PARSE_MAX) || 2;
 const MAX_WAIT = 30, MAX_USER = 4, WAIT_MS = 90_000;
@@ -14,34 +14,56 @@ const HEAP_MB = Number(process.env.SYNCHRO_PARSE_HEAP_MB) || 1024;
 const RUN_MS = Number(process.env.SYNCHRO_PARSE_MS) || 120_000;
 const OUT_MAX = 128 * 1048576;
 const BUSY = "Máy chủ đang đọc nhiều tệp cùng lúc. Hãy thử lại sau ít phút.";
+// Một người gửi nhiều tệp cùng lúc (hai tệp ghi âm trong một tin nhắn, PDF scan nhiều trang): xếp hàng theo lượt của chính họ thay vì báo bận.
+// Có giới hạn: số tệp chờ mỗi người và thời gian chờ; quá thì nói đúng lý do (tệp trước của họ còn đang đọc), không phải "máy chủ đang bận".
+const USER_FULL = "Bạn đang có nhiều tệp chờ đọc cùng lúc. Synchro đọc lần lượt từng tệp; hãy gửi lại tệp này khi các tệp trước đọc xong.";
+const USER_SLOW = "Các tệp trước của bạn đọc lâu quá nên tệp này chưa tới lượt. Hãy bấm Thử lại khi chúng đọc xong.";
 
 // Giữ ở globalThis: mỗi route của Next có thể nạp module riêng, đếm riêng thì giới hạn không còn ý nghĩa.
-type Pool = { running: number; queue: (() => void)[]; perUser: Map<string, number> };
+// userQ: người đã dùng hết số việc chạy cùng lúc của mình thì chờ ở đây (theo thứ tự gửi); xong một việc thì chỗ đó chuyển thẳng cho người chờ đầu.
+type Pool = { running: number; queue: (() => void)[]; perUser: Map<string, number>; userQ?: Map<string, (() => void)[]> };
 const pools = ((globalThis as unknown as { __synchroParse?: Record<string, Pool> }).__synchroParse ??= {});
 const poolOf = (name: string) => (pools[name] ??= { running: 0, queue: [], perUser: new Map() });
+type Lim = { run: number; wait: number; user: number; userWait: number; waitMs: number };
 
-/** Chờ tới lượt rồi chạy fn. Hàng đợi đầy, một người gửi quá nhiều hay chờ quá lâu thì báo bận thay vì giữ kết nối mãi. */
-async function withSlot<T>(name: string, lim: { run: number; wait: number; user: number }, uid: string | undefined, fn: () => Promise<T>): Promise<T> {
+/** Số việc đang chờ và đang chạy của một người trong một hàng (kiểm thử, theo dõi). */
+export const slotState = (name: string, uid: string) => { const p = poolOf(name); return { running: p.perUser.get(uid) ?? 0, waiting: p.userQ?.get(uid)?.length ?? 0, global: p.running, globalWaiting: p.queue.length }; };
+
+/** Chờ tới lượt rồi chạy fn. Hàng chung đầy hay chờ quá lâu thì báo bận; một người gửi nhiều hơn số việc chạy cùng lúc của mình thì chờ lượt của họ. */
+async function withSlot<T>(name: string, lim: Lim, uid: string | undefined, fn: () => Promise<T>): Promise<T> {
   const p = poolOf(name), who = uid ?? "";
-  const mine = p.perUser.get(who) ?? 0;
-  if (p.queue.length >= lim.wait || (who && mine >= lim.user)) throw new FileError(BUSY);
-  p.perUser.set(who, mine + 1);
+  if (p.queue.length >= lim.wait) throw new FileError(BUSY);
+  if (who && (p.perUser.get(who) ?? 0) >= lim.user) {
+    const uq = ((p.userQ ??= new Map()).get(who) ?? []);
+    if (uq.length >= lim.userWait) throw new FileError(USER_FULL);
+    p.userQ.set(who, uq);
+    // Tới lượt thì chỗ của việc vừa xong được giao thẳng (perUser không giảm rồi tăng lại): không ai chen vào giữa.
+    await new Promise<void>((ok, no) => {
+      const go = () => { clearTimeout(t); ok(); };
+      const t = setTimeout(() => { const i = uq.indexOf(go); if (i >= 0) uq.splice(i, 1); if (!uq.length) p.userQ?.delete(who); no(new FileError(USER_SLOW)); }, lim.waitMs);
+      uq.push(go);
+    });
+  } else p.perUser.set(who, (p.perUser.get(who) ?? 0) + 1);
   try {
     if (p.running >= lim.run) await new Promise<void>((ok, no) => {
       const go = () => { clearTimeout(t); ok(); };
-      const t = setTimeout(() => { const i = p.queue.indexOf(go); if (i >= 0) p.queue.splice(i, 1); no(new FileError(BUSY)); }, WAIT_MS);
+      const t = setTimeout(() => { const i = p.queue.indexOf(go); if (i >= 0) p.queue.splice(i, 1); no(new FileError(BUSY)); }, lim.waitMs);
       p.queue.push(go);
     });
     p.running++;
     try { return await fn(); } finally { p.running--; p.queue.shift()?.(); }
   } finally {
-    const n = (p.perUser.get(who) ?? 1) - 1;
-    if (n > 0) p.perUser.set(who, n); else p.perUser.delete(who);
+    const uq = p.userQ?.get(who), next = uq?.shift();
+    if (uq && !uq.length) p.userQ?.delete(who);
+    if (next) next();
+    else { const n = (p.perUser.get(who) ?? 1) - 1; if (n > 0) p.perUser.set(who, n); else p.perUser.delete(who); }
   }
 }
-export const withParseSlot = <T>(uid: string | undefined, fn: () => Promise<T>) => withSlot("parse", { run: MAX_RUN, wait: MAX_WAIT, user: MAX_USER }, uid, fn);
-/** MarkItDown và OCR chạy tới hàng chục phút: hàng riêng, mỗi người một việc, để không chiếm chỗ của tệp đính kèm trong chat. */
-export const withConvertSlot = <T>(uid: string | undefined, fn: () => Promise<T>) => withSlot("convert", { run: Number(process.env.SYNCHRO_CONVERT_MAX) || 2, wait: 6, user: 1 }, uid, fn);
+export const withParseSlot = <T>(uid: string | undefined, fn: () => Promise<T>) => withSlot("parse", { run: MAX_RUN, wait: MAX_WAIT, user: MAX_USER, userWait: MAX_FILES_PER_MESSAGE, waitMs: WAIT_MS }, uid, fn);
+/** MarkItDown, OCR và phiên âm chạy tới hàng chục phút: hàng riêng, mỗi người một việc chạy cùng lúc (các tệp sau của họ xếp hàng, chờ tối đa
+ *  CONVERT_WAIT_MS), để không chiếm chỗ của tệp đính kèm trong chat. */
+export const CONVERT_WAIT_MS = Number(process.env.SYNCHRO_CONVERT_WAIT_MS) || 10 * 60_000;
+export const withConvertSlot = <T>(uid: string | undefined, fn: () => Promise<T>) => withSlot("convert", { run: Number(process.env.SYNCHRO_CONVERT_MAX) || 2, wait: 6, user: 1, userWait: MAX_FILES_PER_MESSAGE, waitMs: CONVERT_WAIT_MS }, uid, fn);
 
 /** Nhường CPU cho web và các lượt chat. Không đặt được cũng không sao. */
 export function lowPriority(pid?: number) {

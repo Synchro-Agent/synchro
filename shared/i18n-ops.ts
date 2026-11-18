@@ -1,6 +1,9 @@
 // Bản dịch cho phần bảo mật, xác minh email, sức khỏe hệ thống, sao lưu và quản lý tệp (giữ riêng để các phần khác của từ điển không phải đụng tới).
 export const OPS_VI2EN: Record<string, string> = {
   "Máy chủ đang đọc nhiều tệp cùng lúc. Hãy thử lại sau ít phút.": "The server is reading many files right now. Try again in a few minutes.",
+  "Bạn đang có nhiều tệp chờ đọc cùng lúc. Synchro đọc lần lượt từng tệp; hãy gửi lại tệp này khi các tệp trước đọc xong.": "You have many files waiting to be read. Synchro reads them one at a time; send this file again once the earlier ones are done.",
+  "Các tệp trước của bạn đọc lâu quá nên tệp này chưa tới lượt. Hãy bấm Thử lại khi chúng đọc xong.": "Your earlier files are taking too long, so this file hasn't had its turn yet. Click Retry once they are done.",
+  "Đang chờ tệp trước…": "Waiting for the previous file…",
   "Mở Cài đặt → Connectors": "Open Settings → Connectors",
   "Đã chặn trang đăng nhập": "Sign-in page blocked",
   "Dung lượng sau khi giải nén quá lớn hoặc file nén bị hỏng": "The archive is too large once unpacked, or it is damaged",
