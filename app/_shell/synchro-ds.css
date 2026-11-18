@@ -1179,4 +1179,7 @@ html body textarea.field:not(.auth-root *),html body .sy-settings textarea.field
    thành viên thuốc to và cắt mất chữ gợi ý ở góc (textarea cuộn bên trong nên nội dung bị bo cắt). :where = độ ưu tiên 0: luật syn-over nào
    đặt bán kính riêng cho textarea vẫn thắng, mọi luật của lớp syn thì thua. */
 :where(textarea){border-radius:var(--r-field)}
+/* Ô soạn không viền, không nền (khung bên ngoài mới là ô): bo góc chỉ cắt chữ gợi ý ở góc trên trái (textarea cuộn bên trong, nội dung bị
+   góc bo cắt) mà không vẽ gì. tests/ui/polish.mjs bước 7 bắt lỗi này. */
+:where(.composer, .tk-comp, .sp-compose, .sp-editor) > :where(textarea){border-radius:0}
 }
