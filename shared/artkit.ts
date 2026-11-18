@@ -162,6 +162,8 @@ h1,h2,h3,h4,.sx-title,.sx-h2,.sx-h3,.sx-eyebrow{break-after:avoid-page}p,li{orph
 //     #F8FAFC hoặc #0F172A, chọn màu cho tỉ lệ cao hơn. Chữ chuyển màu (background-clip:text) bỏ qua. Slide đang ẩn được vá khi hiện ra (data-sx-on).
 // Slide vừa hiện được vá SAU lần vẽ đầu (rAF rồi setTimeout) và chỉ một lần (data-sx-fitok, bỏ khi reset): vá trong rAF chặn lần vẽ, bấm chuyển slide nhanh thì
 // khung lớn đứng ở slide cũ ~1,5 giây trong khi nhãn "Slide n / N" đã sang slide mới (lỗi 14 của ma trận H1).
+// Vá khi phông web chưa tải xong (document.fonts.status khác "loaded") là đo bằng phông dự phòng: slide đó chỉ ghi data-sx-fitpre, không ghi xong.
+// Phông tải xong (fonts.ready, loadingdone): slide đang hiện được vá lại từ đầu ngay (reset rồi vá), slide đang ẩn đã vá thì vá lại từ đầu lần hiện ra tới.
 // Viết bằng JS thuần, không dấu ` và không chuỗi đóng thẻ script.
 export const FIT_JS = String.raw`(function(){var cv;
 function norm(c){if(/^rgba?\(/.test(c))return c;try{cv=cv||document.createElement("canvas").getContext("2d",{willReadFrequently:true});cv.clearRect(0,0,1,1);cv.fillStyle="rgba(0,0,0,0)";cv.fillStyle=c;cv.fillRect(0,0,1,1);var d=cv.getImageData(0,0,1,1).data;return"rgba("+d[0]+","+d[1]+","+d[2]+","+d[3]/255+")"}catch(e){return""}}
@@ -180,23 +182,32 @@ function over(e){return!!e&&(e.scrollHeight>e.clientHeight+1||e.scrollWidth>e.cl
 var BOX="[data-sx-box],.sx-card,.sx-slide,section.slide,[data-slide],.sx-poster,.sx-tpl-box";
 function vis(e){return e.getClientRects().length>0}
 function bad(f){if(over(f))return true;var bs=f.querySelectorAll(BOX);for(var i=0;i<bs.length;i++)if(vis(bs[i])&&over(bs[i]))return true;return false}
-// Cả khung (slide, poster, thẻ đứng riêng) co cùng tỉ lệ: mỗi bước mọi ô chữ nhỏ đi khoảng 3% (1px với chữ 32px), ô nào chạm 11 thì dừng ở 11.
+// Cả khung (slide, poster, thẻ đứng riêng) co cùng tỉ lệ: mỗi bậc mọi ô chữ nhỏ đi khoảng 3% (1px với chữ 32px), ô nào chạm 11 thì dừng ở 11.
 // Co theo tỉ lệ giữ thứ bậc tiêu đề / số / thân; co riêng ô lớn nhất từng làm số KPI teo lại trong khi thủ phạm là đoạn văn dài.
+// Tìm bậc lớn nhất vừa khung bằng chia đôi (~5 lần dàn trang thay vì tới 24): cùng kết quả với dò từng bậc vì chữ nhỏ đi thì khung không tràn thêm.
+// Mỗi lần dàn trang ở slide nhiều ô chữ tốn hàng chục ms, nên đây là phần lớn thời gian chữ chưa vá hiện trên slide vừa chuyển tới (lỗi 14 của ma trận H1).
 function fitFrame(f){if(!vis(f)||!bad(f))return;var ns=[].slice.call(f.querySelectorAll("[data-node-id],[data-sx-fit]")).filter(vis);if(!ns.length)return;
-var uu=unit(f),o=ns.map(function(e){return parseFloat(getComputedStyle(e).fontSize)/uu});
-for(var sc=.97;sc>.25&&bad(f);sc-=.03){var moved=false;for(var i=0;i<ns.length;i++){var n=Math.max(11,Math.round(o[i]*sc*2)/2);if(n<o[i]){keep(ns[i],"data-sx-fs0",ns[i].style.fontSize);ns[i].style.fontSize="calc("+n+"*var(--sx-u))";ns[i].setAttribute("data-sx-fitted",String(n));moved=true}}if(!moved)break}}
-// Ô tự có khung cố định (overflow khác visible) đứng ngoài khung lớn: co chính nó.
-function fitSelf(el){var cs=getComputedStyle(el);if(!vis(el)||cs.overflow==="visible"||!over(el))return;var uu=unit(el),n=Math.round(parseFloat(cs.fontSize)/uu),k=0;while(n>11&&k++<120&&over(el)){n-=1;keep(el,"data-sx-fs0",el.style.fontSize);el.style.fontSize="calc("+n+"*var(--sx-u))"}el.setAttribute("data-sx-fitted",String(n))}
+var uu=unit(f),o=ns.map(function(e){return parseFloat(getComputedStyle(e).fontSize)/uu}),pre=ns.map(function(e){return[e.style.fontSize,e.getAttribute("data-sx-fitted")]});
+function at(s){var sc=.97;for(var j=1;j<s;j++)sc-=.03;for(var i=0;i<ns.length;i++){var n=Math.max(11,Math.round(o[i]*sc*2)/2);if(n<o[i]){keep(ns[i],"data-sx-fs0",pre[i][0]);ns[i].style.fontSize="calc("+n+"*var(--sx-u))";ns[i].setAttribute("data-sx-fitted",String(n))}
+else{ns[i].style.fontSize=pre[i][0];if(pre[i][1]===null)ns[i].removeAttribute("data-sx-fitted");else ns[i].setAttribute("data-sx-fitted",pre[i][1])}}}
+var lo=1,hi=24;while(lo<hi){var m=(lo+hi)>>1;at(m);if(bad(f))lo=m+1;else hi=m}at(lo)}
+// Ô tự có khung cố định (overflow khác visible) đứng ngoài khung lớn: co chính nó, cỡ lớn nhất còn vừa (chia đôi, thấp nhất 11).
+function fitSelf(el){var cs=getComputedStyle(el);if(!vis(el)||cs.overflow==="visible"||!over(el))return;var uu=unit(el),n=Math.round(parseFloat(cs.fontSize)/uu);
+if(n>11){keep(el,"data-sx-fs0",el.style.fontSize);var lo=11,hi=n-1;while(lo<hi){var m=(lo+hi+1)>>1;el.style.fontSize="calc("+m+"*var(--sx-u))";if(over(el))hi=m-1;else lo=m}n=lo;el.style.fontSize="calc("+n+"*var(--sx-u))"}el.setAttribute("data-sx-fitted",String(n))}
 function top(e){var t=null;for(var b=e.closest(BOX);b;b=b.parentElement&&b.parentElement.closest(BOX))t=b;return t}
 function run(root){root=root||document;var a=root.querySelectorAll("[data-node-id],[data-sx-fit]"),fr=[];for(var i=0;i<a.length;i++){try{fitSelf(a[i])}catch(e){}var t=top(a[i]);if(t&&fr.indexOf(t)<0)fr.push(t)}
 fr.forEach(function(f){try{fitFrame(f)}catch(e){}});
 var c=root.querySelectorAll("[data-node-id],.sx-heat,[data-sx-autoink]");for(var j=0;j<c.length;j++)try{if(vis(c[j]))ink(c[j])}catch(e){}}
 // Bỏ mọi chỗ đã vá (màu chữ, cỡ chữ) về như trang gốc: đổi phong cách thử (data-sx-preset) thì vá lại từ đầu, không giữ màu / cỡ hợp với phong cách cũ.
-function reset(root){root=root||document;var ok=root.querySelectorAll("[data-sx-fitok]");for(var q=0;q<ok.length;q++)ok[q].removeAttribute("data-sx-fitok");var a=root.querySelectorAll("[data-sx-inked]");for(var i=0;i<a.length;i++){if(a[i].hasAttribute("data-sx-ink0"))a[i].style.color=a[i].getAttribute("data-sx-ink0");a[i].removeAttribute("data-sx-ink0");a[i].removeAttribute("data-sx-inked")}
+function reset(root){root=root||document;var ok=root.querySelectorAll("[data-sx-fitok],[data-sx-fitpre]");for(var q=0;q<ok.length;q++){ok[q].removeAttribute("data-sx-fitok");ok[q].removeAttribute("data-sx-fitpre")}var a=root.querySelectorAll("[data-sx-inked]");for(var i=0;i<a.length;i++){if(a[i].hasAttribute("data-sx-ink0"))a[i].style.color=a[i].getAttribute("data-sx-ink0");a[i].removeAttribute("data-sx-ink0");a[i].removeAttribute("data-sx-inked")}
 var f=root.querySelectorAll("[data-sx-fitted]");for(var j=0;j<f.length;j++){if(f[j].hasAttribute("data-sx-fs0"))f[j].style.fontSize=f[j].getAttribute("data-sx-fs0");f[j].removeAttribute("data-sx-fs0");f[j].removeAttribute("data-sx-fitted")}}
 window.__sxFit=run;window.__sxReset=reset;
-function go(){requestAnimationFrame(function(){run()});try{document.fonts.ready.then(function(){run()});document.fonts.addEventListener("loadingdone",function(){run()})}catch(e){}
-try{new MutationObserver(function(ms){ms.forEach(function(m){var t=m.target;if(t.hasAttribute&&t.hasAttribute("data-sx-on")&&!t.hasAttribute("data-sx-fitok"))requestAnimationFrame(function(){setTimeout(function(){if(!t.hasAttribute("data-sx-on"))return;run(t);t.setAttribute("data-sx-fitok","")},0)})})}).observe(document.body,{subtree:true,attributes:true,attributeFilter:["data-sx-on"]})}catch(e){}}
+function fontsOk(){try{return document.fonts.status==="loaded"}catch(e){return true}}
+// Vá một slide vừa hiện: đã vá bằng phông dự phòng thì trả về như gốc rồi vá lại; ghi xong (data-sx-fitok) chỉ khi phông đã tải.
+function fitSlide(t){if(t.hasAttribute("data-sx-fitpre"))reset(t);run(t);t.removeAttribute("data-sx-fitpre");t.setAttribute(fontsOk()?"data-sx-fitok":"data-sx-fitpre","")}
+function refont(){var a=document.querySelectorAll("[data-sx-fitok],[data-sx-fitpre]");for(var i=0;i<a.length;i++){var t=a[i];try{if(vis(t)){t.setAttribute("data-sx-fitpre","");fitSlide(t)}else{t.removeAttribute("data-sx-fitok");t.setAttribute("data-sx-fitpre","")}}catch(e){}}run()}
+function go(){requestAnimationFrame(function(){run()});try{document.fonts.ready.then(refont);document.fonts.addEventListener("loadingdone",refont)}catch(e){}
+try{new MutationObserver(function(ms){ms.forEach(function(m){var t=m.target;if(t.hasAttribute&&t.hasAttribute("data-sx-on")&&!t.hasAttribute("data-sx-fitok"))requestAnimationFrame(function(){setTimeout(function(){if(!t.hasAttribute("data-sx-on")||t.hasAttribute("data-sx-fitok"))return;fitSlide(t)},0)})})}).observe(document.body,{subtree:true,attributes:true,attributeFilter:["data-sx-on"]})}catch(e){}}
 if(document.readyState==="loading")addEventListener("DOMContentLoaded",go);else go()})();`;
 
 /** Đường dẫn Google Fonts chỉ gồm các phông trang dùng: khung cho phép fonts.googleapis.com và fonts.gstatic.com (csp ở artdoc.ts). */
