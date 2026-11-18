@@ -200,6 +200,9 @@ console.log("5. Antigravity: đăng nhập qua terminal giả");
   const pre = (await member("GET", "/api/usage?provider=sub-agy&fresh=1")).j;
   const { existsSync, mkdirSync, writeFileSync } = await import("node:fs");
   ok(pre.sub?.setup && !existsSync(`${agyDir}/onboarding-input.log`), "chưa làm quen: vòng tròn báo cần hoàn tất, Synchro không bấm thay", JSON.stringify(pre.sub));
+  // Lỗi 11 của ma trận H1: Gemini vừa trả lời nhiều lượt mà vẫn báo "đang chờ bước làm quen". Đã chạy được (ranAt) thì giao diện nói đúng: chat chạy, chỉ chưa đọc được bảng hạn mức.
+  const est = (await member("GET", "/api/engines/agy/status")).j;
+  ok(pre.sub?.ranAt > 0 && pre.sub.turnsToday >= 1 && /Gemini is working normally/.test(pre.sub.note ?? "") && est?.setup && est.ran > 0, "lỗi 11: Gemini đã chạy được → trạng thái ghi đang chạy bình thường, không còn \"chờ bước làm quen\"", JSON.stringify({ sub: pre.sub, ran: est?.ran }));
   mkdirSync(`${agyDir}/cache`, { recursive: true }); writeFileSync(`${agyDir}/cache/onboarding.json`, JSON.stringify({ onboardingComplete: true }));
   const us = (await member("GET", "/api/usage?provider=sub-agy&fresh=1")).j;
   ok(us.sub?.windows.some((w) => w.group === "Gemini models" && w.kind === "session") && us.sub.windows.some((w) => w.group === "Claude and GPT models" && w.kind === "weekly"), "vòng tròn của gói Gemini: hai nhóm model × phiên 5 giờ / tuần", JSON.stringify(us.sub));
