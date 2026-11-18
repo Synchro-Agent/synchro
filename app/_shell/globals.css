@@ -2346,6 +2346,7 @@ b,strong{font-weight:560}
 .wl-link .btn{display:inline-flex;align-items:center;gap:6px;text-decoration:none}
 .md-cxlink{display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 12px;margin:2px 0;border-radius:9px;font-size:var(--fs-2);vertical-align:middle;max-width:100%}
 .md-cxlink .cn-logo{flex:none}
+.md-file{display:inline-flex;align-items:baseline;gap:4px;max-width:100%;overflow-wrap:anywhere}.md-file svg{flex:none;align-self:center}
 /* Danh mục connector */
 
 
