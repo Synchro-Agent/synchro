@@ -94,13 +94,15 @@ export function Dropdown<V extends string | number>({ value, options, onChange, 
     const want = Math.min(inner, MAX_H), below = H - r.bottom - GAP - M, above = r.top - GAP - M;
     const down = below >= want || below >= above;
     const h = Math.max(96, Math.min(want, down ? below : above));
-    setPos(down ? { left, width: w, top: r.bottom + GAP, maxHeight: h } : { left, width: w, bottom: H - r.top + GAP, maxHeight: h });
+    const next: React.CSSProperties = down ? { left, width: w, top: r.bottom + GAP, maxHeight: h } : { left, width: w, bottom: H - r.top + GAP, maxHeight: h };
+    setPos((old) => (JSON.stringify(old) === JSON.stringify(next) ? old : next));
   };
   useLayoutEffect(() => { if (open) place(); }, [open, shown.length]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!open) return;
     const away = (e: MouseEvent) => { const t = e.target as Node; if (!btn.current?.contains(t) && !pop.current?.contains(t)) close(false); };
-    const re = () => place();
+    // Cuộn chính danh sách thì không đặt lại chỗ (không giật mục đang sáng về tầm nhìn khi người dùng lăn chuột).
+    const re = (e?: Event) => { if (e?.type === "scroll" && pop.current?.contains(e.target as Node)) return; place(); };
     // Esc / Tab bắt ở pha capture của window: hộp thoại chứa ô chọn không đóng theo, tiêu điểm không rơi xuống cuối trang (danh sách nằm ở cuối <body>).
     const key = (e: KeyboardEvent) => {
       if (e.key === "Escape") { e.preventDefault(); e.stopImmediatePropagation(); close(); }
