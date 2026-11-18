@@ -53,5 +53,73 @@ ok(/fold\(/.test(lb) && /\\u0300-\\u036f/.test(lb), "tìm bỏ dấu tiếng Vi�
 const L = await import(path.resolve("ui/listbox.tsx")).catch(() => null);
 if (L?.fold) ok(L.fold("Tiếng Việt") === "tieng viet" && L.fold("Đà Nẵng") === "da nang", "fold bỏ dấu đúng");
 
+console.log("6. Khung nổi gắn vào <body> và popover đóng khi bấm ra ngoài");
+// Danh sách Dropdown / bảng màu / chọn giờ nằm ở cuối <body>, ngoài DOM của popover mở ra nó: popover nào chứa các ô này mà coi cú bấm vào
+// danh sách là "bấm ra ngoài" thì tự đóng trước khi cú bấm tới mục (ô Gửi của bàn trộn ngữ cảnh từng không đổi được bằng chuột).
+for (const [f, cls] of [["ui/listbox.tsx", "dd-pop"], ["ui/colorpick.tsx", "cp-pop"], ["ui/timepick.tsx", "tpk-pop"]]) {
+  const s = code(f);
+  ok(new RegExp(`${cls}[^>]*data-floating`).test(s), `${f}: khung nổi .${cls} mang data-floating`);
+}
+const ca = fs.readFileSync("ui/clickaway.ts", "utf8");
+ok(/export const FLOATING = "data-floating"/.test(ca) && /export const inFloating/.test(ca) && /export const isAway/.test(ca), "ui/clickaway.ts có FLOATING, inFloating, isAway");
+// Tệp có ô chọn / ô màu / ô giờ mà có trình nghe mousedown của document so ref.contains(target) trơn (không qua isAway / inFloating).
+const hosts = src.filter((f) => /<(Dropdown|ColorField|TimePick)\b/.test(code(f)) && !/ui[\\/](listbox|colorpick|timepick)\.tsx$/.test(f));
+const bare = hosts.filter((f) => { const s = code(f); return /addEventListener\("mousedown"/.test(s) && /\.contains\(e\.target as (Node|HTMLElement)\)\)\s*(set|on|close|f\.)/.test(s); });
+ok(hosts.length > 5, `tìm được các tệp dùng Dropdown / ColorField (${hosts.length})`);
+ok(bare.length === 0, "popover chứa Dropdown / ColorField bỏ qua cú bấm trong khung nổi (isAway / inFloating)", bare.join(", "));
+{
+  const { loadTs } = await import("../lib/ts.mjs");
+  const C = await loadTs(["ui/clickaway"]).then((m) => m["ui/clickaway"]).catch((e) => (ok(false, "nạp ui/clickaway.ts", e.message), null));
+  if (C) {
+    // Phần tử giả tối thiểu: contains / closest như DOM.
+    const node = (parent, attrs = {}) => ({ parent, attrs, contains(t) { for (let x = t; x; x = x.parent) if (x === this) return true; return false; },
+      closest(sel) { const a = sel.replace(/^\[|\]$/g, ""); for (let x = this; x; x = x.parent) if (a in x.attrs) return x; return null; } });
+    const body = node(null), pop = node(body), inside = node(pop), list = node(body, { "data-floating": "" }), opt = node(list), other = node(body);
+    ok(!C.isAway(pop, inside), "bấm trong popover: không đóng");
+    ok(!C.isAway(pop, opt), "bấm vào mục của danh sách gắn ở <body> (data-floating): không đóng");
+    ok(C.isAway(pop, other), "bấm ra ngoài cả hai: đóng");
+    ok(C.isAway(null, other), "popover chưa gắn (null): tính là ngoài");
+    ok(C.inFloating(opt) && !C.inFloating(other) && !C.inFloating(null), "inFloating đúng");
+  }
+}
+
+console.log("7. Nút kéo thanh trượt tách khỏi nền ở cả hai chế độ");
+{
+  const block = (sel) => ds.slice(ds.indexOf(sel + "{")).split("}")[0];
+  const root = block(":root"), dark = block('[data-theme="dark"]');
+  const v = (b, n) => b.match(new RegExp(`--${n}:([^;]+);`))?.[1].trim();
+  ok(/background:var\(--ds-thumb\)/.test(ds) && !/slider-thumb\{[^}]*background:var\(--ds-plate\)/.test(ds), "nút kéo dùng --ds-thumb, không dùng --ds-plate (trùng màu bảng ở chế độ tối)");
+  ok(!!v(dark, "ds-thumb") && v(dark, "ds-thumb") !== v(dark, "ds-plate"), "chế độ tối có --ds-thumb riêng, khác --ds-plate", v(dark, "ds-thumb"));
+  const hex = (h) => { const m = /^#([0-9a-f]{6})$/i.exec(h ?? ""); return m ? [0, 2, 4].map((i) => parseInt(m[1].slice(i, i + 2), 16)) : null; };
+  const lum = ([r, g, b]) => { const f = (c) => { c /= 255; return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; }; return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b); };
+  const cr = (a, b) => (Math.max(lum(a), lum(b)) + 0.05) / (Math.min(lum(a), lum(b)) + 0.05);
+  const t = hex(v(dark, "ds-thumb")), p = hex(v(dark, "ds-plate"));
+  ok(t && p && cr(t, p) >= 3, `chế độ tối: nút kéo / tấm tương phản ≥ 3:1 (${t && p ? cr(t, p).toFixed(1) : "?"}:1)`);
+  ok(/--ds-thumb-ring:/.test(root) && /--ds-thumb-ring:/.test(dark), "viền nút kéo (--ds-thumb-ring) có ở cả hai chế độ");
+  const sp = fs.readFileSync("ui/styles/speech.css", "utf8");
+  ok(!/\.sp-range::-webkit-slider-thumb \{[^}]*background:var\(--card\)/.test(sp), "thanh trượt Speech (.sp-range) không dùng --card cho nút kéo");
+}
+
+console.log("8. Dropdown mở bằng chạm không tự focus ô tìm (không bật bàn phím ảo)");
+{
+  ok(/export const autoFocusSearch/.test(lb) && /autoFocusSearch\(via\.current\)/.test(lb) && /onPointerDown=\{\(e\) => \{ via\.current = e\.pointerType/.test(lb), "ô tìm chỉ tự focus theo autoFocusSearch(cách mở)");
+  const m = lb.match(/export const autoFocusSearch = [\s\S]*?=>\s*(via === "key"[^;]+);/);
+  const f = m && new Function("via", "coarse", `return ${m[1]};`);
+  if (f) {
+    ok(f("key", true) === true, "mở bằng bàn phím (kể cả máy cảm ứng): focus ô tìm");
+    ok(f("mouse", false) === true && f("pen", true) === true, "mở bằng chuột / bút: focus ô tìm");
+    ok(f("touch", false) === false && f("touch", true) === false, "mở bằng chạm: không focus ô tìm");
+    ok(f("", true) === false && f("", false) === true, "không rõ cách mở: theo (pointer: coarse)");
+  } else ok(false, "đọc được autoFocusSearch");
+}
+
+console.log("9. Từ điển phát âm: không nháy \"Chọn một từ điển…\" khi đang tự mở từ điển");
+{
+  const dc = code("ui/speech/dict.tsx");
+  ok(/openFail \? \(\s*<div className="sp-card sp-detect">/.test(dc), "câu \"Chọn một từ điển…\" chỉ hiện khi tự mở bị lỗi (openFail)");
+  ok(/sp-dict-wait" aria-busy="true"/.test(dc), "lúc chờ: khung giả của trình sửa (aria-busy)");
+  ok(/catch \(e\) \{ setOpenFail\(true\)/.test(dc), "tải từ điển lỗi thì đặt openFail");
+}
+
 console.log(`\n${pass} đạt, ${fail} lỗi`);
 process.exit(fail ? 1 : 0);

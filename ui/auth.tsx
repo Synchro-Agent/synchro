@@ -260,6 +260,18 @@ function PlanNote() {
   return need ? <p className="auth-note">Synchro runs on your own AI account. ChatGPT, Gemini and Grok work on a free plan; Claude needs Pro or Max. You connect it after signing up.</p> : null;
 }
 
+// Chẩn đoán mục 6 (màn Giới thiệu về bạn cuộn tới lui mỗi ~0,5 giây suốt 9 giây trên máy Windows của chủ dự án; Chrome ẩn ở DPR 1 / 1,25,
+// thanh cuộn cổ điển, đổi cỡ cửa sổ liên tục đều không tái hiện): đếm số lần màn được gắn, số lần hiệu ứng đặt tiêu điểm chạy, ghi mỗi lần
+// authStep / stage / mode đổi (60 dòng gần nhất, kèm mốc thời gian). Không gửi đi đâu; đọc trong DevTools: window.__authDiag. Gặp lại hiện
+// tượng thì log cho biết màn bị gắn lại (mount / unmount) hay stage bị đổi qua lại, và từ đó tìm thứ gây ra.
+type AuthDiag = { mounts: number; focusRuns: number; log: string[] };
+const authDiag = (): AuthDiag | null => {
+  if (typeof window === "undefined") return null;
+  const w = window as unknown as { __authDiag?: AuthDiag };
+  return (w.__authDiag ??= { mounts: 0, focusRuns: 0, log: [] });
+};
+const diagLog = (s: string) => { const d = authDiag(); if (!d) return; d.log.push(`${Math.round(performance.now())} ${s}`); if (d.log.length > 60) d.log.shift(); };
+
 export const AuthComponent = ({ logo = <DefaultLogo />, brandName = "EaseMize", providers, mode = "auth", user = null, leaving = false, onReveal, toFilm = false, onDone, onLeft, onSignOut, notice, again, signupOpen = true }: AuthComponentProps) => {
   const [isLogin, setIsLogin] = useState(false);
   const [email, setEmail] = useState("");
@@ -294,6 +306,8 @@ export const AuthComponent = ({ logo = <DefaultLogo />, brandName = "EaseMize", 
   const fullNameRef = useRef<HTMLInputElement>(null);
 
   const fail = (msg: string) => { setErrorMsg(msg); setStage("error"); };
+  useEffect(() => { const d = authDiag(); if (d) d.mounts++; diagLog("mount"); return () => diagLog("unmount"); }, []);
+  useEffect(() => { diagLog(`step=${authStep} stage=${stage} mode=${mode}`); }, [authStep, stage, mode]);
   // Turnstile (server/turnstile.ts): chỉ khi quản trị viên đã bật. Đăng ký luôn cần; đăng nhập chỉ sau khi máy chủ báo đã sai nhiều lần (captcha).
   const tsKey = useTurnstileKey();
   const [needCaptcha, setNeedCaptcha] = useState(false);
@@ -454,6 +468,7 @@ export const AuthComponent = ({ logo = <DefaultLogo />, brandName = "EaseMize", 
   }, []);
 
   useEffect(() => {
+    const d = authDiag(); if (d) d.focusRuns++;
     if (stage !== "form") return;
     const ms = Math.round((OUT + 2 * STEP + DUR * 0.6) * 1000);
     const el = authStep === "password" ? passwordInputRef.current : authStep === "confirmPassword" ? confirmPasswordInputRef.current : authStep === "profile" && !fullName ? fullNameRef.current : null;

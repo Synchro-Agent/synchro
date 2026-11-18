@@ -8,7 +8,9 @@
 //  4. chữ bị khung overflow:hidden / clip cắt ngang mà không có dấu …, line-clamp hay lớp mờ;
 //  5. dải cuộn ngang: mục cắt ngang ở mép mà mép đó không có lớp mờ, mục đầu / cuối bị cắt khi cuộn hết cỡ, mục đang chọn nằm khuất;
 //  6. bố cục tự thay đổi trong 2 giây không ai chạm vào (đo vị trí / cỡ mọi phần tử và vị trí cuộn 6 lần): màn Giới thiệu về bạn từng cuộn tới lui;
-//  7. chữ gợi ý (placeholder) bắt đầu trong phần góc bo của ô nhập nên bị góc bo cắt.
+//  7. chữ gợi ý (placeholder) bắt đầu trong phần góc bo của ô nhập nên bị góc bo cắt;
+//  8. nút kéo của thanh trượt không tách khỏi nền (đo điểm ảnh trên ảnh chụp: tương phản cao nhất giữa nút kéo và nền quanh nó dưới 3:1;
+//     từng sót ở chế độ tối: nút kéo màu tấm trùng màu bảng, trông như lỗ hổng trên rãnh).
 // Giao diện sáng chạy bằng tiếng Việt, tối bằng tiếng Anh (nhãn tiếng Anh thường dài hơn: hai ngôn ngữ đều được đo mà không gấp đôi thời gian).
 // Lỗi được phép bỏ qua chỉ khi nằm trong ALLOW kèm lý do viết rõ. Ảnh chụp từng trạng thái ở <tmp>/synchro-ui/polish/.
 import { settle, waitFor } from "../lib/wait.mjs";
@@ -39,6 +41,7 @@ const ALLOW = [
 ];
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const sharp = createRequire(process.cwd() + "/package.json")("sharp");
 const email = "admin@synchro.test", password = "synchro-mock-123";
 let cookie = "";
 const api = async (method, p, body, ck = cookie) => {
@@ -195,6 +198,29 @@ async function STAB(total, n) {
   return out;
 }
 
+// 8. Thanh trượt đang hiện: vị trí tâm nút kéo (theo giá trị) và hai điểm nền ngay trên / dưới nút (ngoài nút và ngoài rãnh).
+const THUMBS = `(() => [...document.querySelectorAll("input[type=range]")].filter((el) => el.checkVisibility?.({ checkOpacity: true, checkVisibilityCSS: true }) && !el.closest(".auth-root,[inert]")).slice(0, 6).map((el) => {
+  const b = el.getBoundingClientRect(); if (b.width < 24 || b.bottom < 14 || b.top > innerHeight - 14) return null;
+  const min = el.min === "" ? 0 : +el.min, max = el.max === "" ? 100 : +el.max, p = max > min ? (+el.value - min) / (max - min) : 0;
+  const nm = (el.getAttribute("aria-label") || el.id || String(el.className) || "range").slice(0, 30);
+  return { x: b.left + 8 + p * (b.width - 16), y: b.top + b.height / 2, name: nm };
+}).filter(Boolean))()`;
+const lum = ([r, g, b]) => { const f = (c) => { c /= 255; return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; }; return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b); };
+const ratio = (a, b) => { const x = lum(a), y = lum(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); };
+async function thumbContrast(png, thumbs, cssW) {
+  const { data, info } = await sharp(png).removeAlpha().raw().toBuffer({ resolveWithObject: true });
+  const k = info.width / cssW, px = (x, y) => { const X = Math.round(x * k), Y = Math.round(y * k); if (X < 0 || Y < 0 || X >= info.width || Y >= info.height) return null; const i = (Y * info.width + X) * 3; return [data[i], data[i + 1], data[i + 2]]; };
+  const out = [];
+  for (const t of thumbs) {
+    const bg = [px(t.x, t.y - 13), px(t.x, t.y + 13)].filter(Boolean); if (!bg.length) continue;
+    // Tương phản cao nhất của một điểm trong nút kéo (cả viền) với nền, lấy nền cho kết quả thấp hơn (điểm nền kia có thể trúng chữ).
+    let best = Infinity;
+    for (const g of bg) { let m = 1; for (let dy = -9; dy <= 9; dy += 0.5) for (let dx = -9; dx <= 9; dx += 0.5) { if (dx * dx + dy * dy > 81) continue; const c = px(t.x + dx, t.y + dy); if (c) m = Math.max(m, ratio(c, g)); } best = Math.min(best, m); }
+    if (best < 3) out.push(`nút kéo thanh trượt không tách khỏi nền (tương phản ${best.toFixed(2)}:1, cần ≥ 3:1): input “${t.name}”`);
+  }
+  return out;
+}
+
 // ───────────────────────────── chạy
 const problems = [], allowed = [];
 const note = (where, what) => { const s = `${where}: ${what}`; const a = ALLOW.find((x) => x.re.test(s)); if (a) allowed.push(`${s}  — được phép: ${a.why}`); else { problems.push(s); console.log(`    ✗ ${what}`); } };
@@ -268,8 +294,11 @@ for (const theme of THEMES) for (const size of SIZES) {
     // Đo độ đứng yên trước (2 giây), rồi mới đo phần còn lại: bước 5 cuộn thử các dải ngang rồi trả lại chỗ cũ.
     for (const p of await ev(`(${STAB})(2000, 6)`).catch((e) => ["không đo được độ đứng yên: " + e.message.split("\n")[0]])) note(where, p);
     for (const p of await ev(`(${POLISH})()`).catch((e) => ["không đo được: " + e.message.split("\n")[0]])) note(where, p);
+    const thumbs = await ev(THUMBS).catch(() => []);
     const { data } = await P("Page.captureScreenshot", { format: "png" });
-    writeFileSync(`${OUT}${tag}-${String(++step).padStart(2, "0")}-${name}.png`, Buffer.from(data, "base64"));
+    const png = Buffer.from(data, "base64");
+    if (thumbs.length) for (const p of await thumbContrast(png, thumbs, VIEW[size].width).catch((e) => ["không đo được thanh trượt: " + e.message])) note(where, p);
+    writeFileSync(`${OUT}${tag}-${String(++step).padStart(2, "0")}-${name}.png`, png);
     console.log("  ·", name);
   };
   const want = (name) => !ONLY.length || ONLY.some((o) => name.includes(o));
@@ -369,15 +398,22 @@ for (const theme of THEMES) for (const size of SIZES) {
   });
   await step0("speech", async () => {
     await go("speech"); await check("speech");
-    const tools = await ev(`[...document.querySelectorAll('[data-nav^="sp-"]')].map((b) => b.dataset.nav).filter((k) => k !== "sp-home")`);
-    for (const t of tools) {
+    // Tên từng công cụ lấy từ nút ở thanh bên (có cả khi thanh bên đang ẩn), dùng để bấm đúng nút của dải .sp-tabs và đối chiếu tiêu đề trang.
+    const tools = await ev(`[...new Map([...document.querySelectorAll('[data-nav^="sp-"]')].filter((b) => b.dataset.nav !== "sp-home").map((b) => [b.dataset.nav, b.textContent.trim()])).entries()]`);
+    for (const [t, label] of tools) {
       try {
-        await side(); await click(nav(t), t); await ready(600);
+        // ≤ 820px (máy tính bảng, điện thoại): thanh bên đóng, trang Speech có dải .sp-tabs. Bấm nút của dải: ở 768px nút thanh bên chỉ còn
+        // bản ẩn, bấm vào đó là bấm nhầm (từng đo 28 trạng thái Speech ở máy tính bảng mà ảnh chỉ là Trang chủ Speech / hộp chọn giọng).
+        if (await ev(`!!document.querySelector(".sp-tabs")?.checkVisibility()`)) await click(`[...document.querySelectorAll(".sp-tabs button")].find((b) => b.textContent.trim() === ${JSON.stringify(label)})`, t);
+        else { await side(); await click(nav(t), t); }
+        await ready(600);
+        const head = await ev(`document.querySelector(".sp-crumb-cur")?.textContent.trim() ?? ""`);
+        if (head !== label) throw new Error(`bấm ${t} nhưng trang đang là “${head || "Trang chủ Speech"}”, không phải “${label}”`);
         await check(t);
-        // Ô chọn đầu tiên mở ra (danh sách của Dropdown), ô màu (Audio Native).
-        if (t === "sp-tts" && (await ev(`!!document.querySelector(".main .dd, main .dd")`))) { await click(`document.querySelector(".main .dd, main .dd")`, "dd"); await ready(); await check(t + "-o-chon"); await esc(); }
-        if (await ev(`!!document.querySelector(".cp-sw")`)) { await click(`document.querySelector(".cp-sw")`, "color"); await ready(); await check(t + "-chon-mau"); await esc(); }
-      } catch (e) { note(`${tag}/${t}`, "không chạy được bước: " + e.message.split("\n")[0]); }
+        // Ô chọn đầu tiên mở ra (danh sách của Dropdown), ô màu (Audio Native): bấm nút .cp để mở bảng màu rồi mới đo (.cp-sw chỉ có trong bảng đang mở).
+        if (t === "sp-tts" && (await ev(`!!document.querySelector(".main .dd, main .dd")`))) { await click(`document.querySelector(".main .dd, main .dd")`, "dd"); await until(`!!document.querySelector(".dd-pop")`, 5000, "danh sách"); await ready(); await check(t + "-o-chon"); await esc(); }
+        if (await ev(`!!document.querySelector("main .cp, .main .cp")`)) { await click(`document.querySelector("main .cp, .main .cp")`, "color"); await until(`!!document.querySelector(".cp-pop .cp-sw")`, 5000, "bảng màu"); await ready(); await check(t + "-chon-mau"); await esc(); }
+      } catch (e) { note(`${tag}/${t}`, "không chạy được bước: " + e.message.split("\n")[0]); await esc().catch(() => {}); }
     }
   });
   await step0("skill", async () => {

@@ -27,7 +27,7 @@
   --ds-inv:#111210;             /* tấm mực (mục đang chọn, nút chính) */
   --ds-inv-fg:#EEECE5;
   /* Nút kéo của thanh trượt: tấm sáng có viền ở cả hai chế độ. Ở chế độ tối tấm (--ds-plate) trùng màu bảng nên nút kéo thành lỗ hổng trên rãnh. */
-  --ds-thumb:#FBFAF6; --ds-thumb-ring:rgba(17,18,16,.28);
+  --ds-thumb:#FBFAF6; --ds-thumb-ring:rgba(17,18,16,.5);
   --ds-ok:#2A7048; --ds-warn:#8F5208; --ds-bad:#B8412F; /* tối thiểu 4,5:1 trên nền Ivory */
   --ds-h:34px; --ds-h-sm:28px; --ds-h-lg:44px;
   /* Hình khối — một thang duy nhất, tròn ra tròn, vuông ra vuông (không góc "lưng chừng"):

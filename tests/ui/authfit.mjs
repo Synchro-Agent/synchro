@@ -110,6 +110,37 @@ try {
       say(!reach, `${s.w}×${s.h}: cuộn tới cuối, nút chính nằm trọn trong màn hình${reach ? " — " + reach : ""}`);
     }
   }
+  // Mục 6: Giới thiệu về bạn trên máy Windows của chủ dự án cuộn tới lui mỗi ~0,5 giây. Điều kiện gần Windows nhất có thể: DPR 1,25, thanh
+  // cuộn cổ điển (không ẩn), cửa sổ thấp, đổi cỡ cửa sổ 12 lần trong 6 giây. Đọc window.__authDiag (ui/auth.tsx): màn không được gắn lại,
+  // hiệu ứng đặt tiêu điểm không chạy lại, stage / bước không đổi, khung không tự cuộn.
+  {
+    console.log("━━ Giới thiệu về bạn, giả lập Windows (DPR 1,25, thanh cuộn cổ điển, đổi cỡ cửa sổ)");
+    await P("Emulation.setScrollbarsHidden", { hidden: false }).catch(() => {});
+    for (const [w, h] of [[800, 470], [480, 284]]) {
+      await P("Emulation.setDeviceMetricsOverride", { width: w, height: h, deviceScaleFactor: 1.25, mobile: false });
+      await P("Page.navigate", { url: B + "/" });
+      if (!(await until(`!!document.querySelector("input[autocomplete=bday]")`))) { say(false, `${w}×${h}: không mở được màn`); continue; }
+      await sleep(2600);
+      const t0 = await ev(`performance.now()`);
+      const d0 = await ev(`JSON.stringify(window.__authDiag ?? null)`).then(JSON.parse);
+      if (!d0) { say(false, `${w}×${h}: không có window.__authDiag`); continue; }
+      const tops = [];
+      for (let i = 0; i < 12; i++) {
+        const dw = i % 3 === 0 ? 0 : i % 3 === 1 ? 16 : -16;
+        await P("Emulation.setDeviceMetricsOverride", { width: w + dw, height: h + Math.round(dw / 2), deviceScaleFactor: 1.25, mobile: false });
+        await sleep(500);
+        tops.push(await ev(`document.querySelector(".auth-scroll")?.scrollTop ?? -1`));
+      }
+      await P("Emulation.setDeviceMetricsOverride", { width: w, height: h, deviceScaleFactor: 1.25, mobile: false });
+      const d1 = await ev(`JSON.stringify(window.__authDiag)`).then(JSON.parse);
+      const fresh = d1.log.filter((l) => parseInt(l, 10) > t0);
+      say(d1.mounts === d0.mounts, `${w}×${h}: màn không bị gắn lại khi đổi cỡ (gắn ${d0.mounts} → ${d1.mounts})`);
+      say(d1.focusRuns === d0.focusRuns, `${w}×${h}: hiệu ứng đặt tiêu điểm không chạy lại (${d0.focusRuns} → ${d1.focusRuns})`);
+      say(!fresh.length, `${w}×${h}: không đổi bước / stage${fresh.length ? " — " + fresh.join(" | ") : ""}`);
+      say(new Set(tops).size === 1, `${w}×${h}: khung không tự cuộn (scrollTop ${[...new Set(tops)].join(", ")})`);
+      console.log(`    nhật ký __authDiag: ${d1.log.join(" | ")}`);
+    }
+  }
 } finally {
   chrome.kill();
 }
