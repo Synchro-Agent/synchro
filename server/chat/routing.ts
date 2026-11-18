@@ -50,7 +50,7 @@ import { getPrefs as codePrefs } from "../codestore";
 import { BROWSER_RULES, BROWSER_TOOLS, chatFiles, releaseBrowser } from "../browsertools";
 import { useProfile, lastUserText, DEFAULT_SYSTEM, FAST_RULES, contextOf, estimate, pinnedBlock, artifactMessages, QUALITY_RULES, BRIDGE_CLIS, brainOn, CLI_TOOLS_NOTE, NARRATE_RULES, holdNeedTools, withRecall, designOf, nowBlock, crisisBlock, ARTIFACT_SYSTEM, NEED_TOOLS, useMemory } from "./prompt";
 import { sweep, pending, unparkApproval, type Decision, needsAsk, applyEdit } from "./approvals";
-import { type Lib, fold, execute, reply, toolLoop, type Exec, connTools, PLAN_TOOL, announceOffline, bridgeCall, connProxy, CONN_CALL, live, keepImages, sayOut, deckGate, withTurnArts, usedLibs, GEMINI_WEB_TOOL, WEB_DESC, mockAdapter, anthropicAdapter, citeOf, responsesAdapter, openaiAdapter, healPatch, isAbort } from "./tools";
+import { type Lib, fold, execute, reply, toolLoop, type Exec, connTools, PLAN_TOOL, announceOffline, bridgeCall, connProxy, CONN_CALL, live, keepImages, sayOut, deckGate, holdAnswer, settleGate, withTurnArts, usedLibs, GEMINI_WEB_TOOL, WEB_DESC, mockAdapter, anthropicAdapter, citeOf, responsesAdapter, openaiAdapter, healPatch, isAbort } from "./tools";
 
 // Gợi ý định tuyến cho lượt này: skill hợp nhất với yêu cầu (tìm trong toàn bộ kho, cả skill bên trong thư viện)
 // và skill các lượt trước đã dùng. Model đọc thẳng skill bằng tên, không phải mở thư viện trước; không hợp thì bỏ qua.
@@ -651,15 +651,18 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
         else if (bridge?.pendingJobs().length) next = `Còn công cụ chưa lấy kết quả (${bridge.pendingJobs().map((p) => `${p.name}: job_id ${p.id}`).join("; ")}). Gọi wait_for_result với từng job_id tới khi có kết quả thật rồi mới trả lời tiếp; đừng báo thất bại khi chưa có kết quả.`;
         else if (bridge && !bridged && nudged < MAX_NUDGE && stalled(said)) { nudged++; next = NUDGE; }
         // Bộ slide trong câu trả lời: Synchro tự kiểm bản cuối (tràn khung 1280×720, đánh số lệch), có lỗi thì CLI sửa trước khi giao (một lần mỗi lượt).
-        else if (x && !x.deckGated && (gate = await deckGate(x, said))) next = gate;
+        // Câu trả lời đã viết được giữ cho người dùng (không đưa vào nhật ký); cuối lượt gộp phần sửa vào đó (settleGate).
+        else if (x && !x.deckGated && (gate = await deckGate(x, said))) { holdAnswer(x, said); next = gate; }
         else break;
-        sayOut(x, said);
+        if (x?.held?.text !== said) sayOut(x, said);
         hist = [...hist, { role: "assistant", content: said }, { role: "user", content: next }];
         r = await tryOnce(hist);
         // Tin nhắn thêm trong lúc đi đường nhanh mà cần công cụ: chạy lượt đầy đủ với cả tin nhắn đó.
         if (needFull()) { deltaStep(); return chatTurn({ ...body, messages: hist, noFast: true }, c, scope, o); }
       }
       if (r.status !== 200 && good && r.status !== 499) {
+        // Lượt sửa theo lời nhắc <auto_check> lỗi: câu trả lời tốt gần nhất chính là câu đang giữ, giao nguyên câu đó.
+        if (x?.held && String((good.json as J).text ?? "") === x.held.text) settleGate(x, "", true);
         const g = good.json as J;
         r = { status: 200, json: { ...(good.json as Record<string, unknown>), denied: undefined, text: `${String(g.text ?? "").trim()}\n\n_(${String((r.json as J).error ?? "Lượt làm tiếp bị lỗi").slice(0, 300)})_` } };
       }
@@ -676,10 +679,10 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
       if (x && r.status === 200) recordUse(c.user.id, names);
       // Lỗi giữa chừng (hết hạn mức, treo…): phần đã viết, tệp đã tạo, dấu vết công cụ không bị bỏ; partialWork: đã làm việc không chạy lại được.
       if (r.status !== 200) {
-        const partial = am ? "" : scrubServerPaths(liveNow() || String((r.json as J).text ?? ""));
+        const partial = am ? "" : scrubServerPaths(x?.held ? settleGate(x, "", true) : liveNow() || String((r.json as J).text ?? ""));
         return Response.json({ ...(r.json as Record<string, unknown>), ...sources, ...(partial.trim() ? { text: withTurnArts(x, partial) } : { text: undefined }), ...(x?.outs.length || natOuts.length ? { files: x?.outs ?? natOuts } : {}), ...(x?.trace.length ? { trace: x.trace } : {}), ...(usedAll.length ? { skills: usedAll, libs: usedLibs(x!, names) } : {}), ...(x?.effects?.length ? { partialWork: true } : {}) }, { status: r.status });
       }
-      return Response.json({ ...(r.json as Record<string, unknown>), ...sources, text: withTurnArts(x, String((r.json as J).text ?? "")), skills: usedAll, files: x!.outs, libs: usedLibs(x!, names), ...(x!.trace.length ? { trace: x!.trace } : {}) });
+      return Response.json({ ...(r.json as Record<string, unknown>), ...sources, text: withTurnArts(x, scrubServerPaths(settleGate(x, String((r.json as J).text ?? ""), !!(r.json as J).cancelled))), skills: usedAll, files: x!.outs, libs: usedLibs(x!, names), ...(x!.trace.length ? { trace: x!.trace } : {}) });
     } finally { bridge?.close(); sess?.close(); if (x) releaseBrowser(c.user.id, x.bctx); }
   }
   if (!model) return Response.json({ error: "Synchro chưa được kết nối với model nào. Quản trị viên cần nhập khóa API ở Cài đặt → Providers." }, { status: 503 });

@@ -20,6 +20,7 @@ import { BRIDGE_CALL_MAX, destructiveLike, TOOL_BUDGET } from "../mcp";
 import { AUTO_CHECK, autoDeckCheck, checkArtifact, checkRoundGate, findArtifact, readArtifact } from "../artcheck";
 import { artState, resolveArt, type ArtVersion } from "../../shared/vfs";
 import { hasArtifacts, splitArtifacts } from "../../shared/artifacts";
+import { foldFix } from "../../shared/turnfold";
 import { typedText } from "../router";
 import { recordPluginUse } from "../plugins";
 import { markConvUntrusted } from "../convtrust";
@@ -168,7 +169,7 @@ export type Lib = { key: string; label: string };
 // art: lịch sử để read_artifact / check_artifact dựng lại bản hiện tại của artifact (cùng phần đã nén ở artBase).
 // turnArts: artifact model viết giữa lượt (trong lời dẫn trước công cụ), xem sayOut.
 // image: công cụ generate_image đang bật; msgs: lịch sử của lượt, để tìm ảnh gốc người dùng nhờ sửa.
-export type Exec = { project?: unknown; image?: boolean; msgs?: unknown; effects?: string[]; toolSync?: boolean; list: Skl; scripts: boolean; sess: ConnectorSession | null; uid: string; code: boolean; net: boolean; web?: boolean; art?: { messages: { role: string; content: unknown }[]; base: unknown }; turnArts?: string[]; outs: OutFile[]; outPaths?: Map<string, string>; libs?: Record<string, Lib[]>; studio?: Lib; prefer?: Record<string, string>; trace: TraceItem[]; conv?: string; heal?: Target; search?: Target; browse?: boolean; bctx?: BrowserCtx; shown?: string; heavy?: string[]; gate?: Gate; task?: TaskCtx | null; asking?: Promise<void>; awaiting?: number; denied?: Map<string, string>; connCards?: Set<string>; calls?: Map<string, { at: number; cancel?: AbortSignal }>; park?: () => void; inputsSent?: Set<string>; madeImgs?: string[]; webs?: Map<string, { title: string; url: string }>; edited?: Set<string>; rendered?: Set<string>; roundBrowser?: boolean; untrusted?: boolean; deckGated?: boolean };
+export type Exec = { project?: unknown; image?: boolean; msgs?: unknown; effects?: string[]; toolSync?: boolean; list: Skl; scripts: boolean; sess: ConnectorSession | null; uid: string; code: boolean; net: boolean; web?: boolean; art?: { messages: { role: string; content: unknown }[]; base: unknown }; turnArts?: string[]; outs: OutFile[]; outPaths?: Map<string, string>; libs?: Record<string, Lib[]>; studio?: Lib; prefer?: Record<string, string>; trace: TraceItem[]; conv?: string; heal?: Target; search?: Target; browse?: boolean; bctx?: BrowserCtx; shown?: string; heavy?: string[]; gate?: Gate; task?: TaskCtx | null; asking?: Promise<void>; awaiting?: number; denied?: Map<string, string>; connCards?: Set<string>; calls?: Map<string, { at: number; cancel?: AbortSignal }>; park?: () => void; inputsSent?: Set<string>; madeImgs?: string[]; webs?: Map<string, { title: string; url: string }>; edited?: Set<string>; rendered?: Set<string>; roundBrowser?: boolean; untrusted?: boolean; deckGated?: boolean; held?: { text: string; at: number } };
 // Nguồn web của lượt, đánh số theo thứ tự gặp (số [n] trong câu trả lời trỏ đúng chip thứ n). Tối đa 20 nguồn.
 const WEB_MAX = 20;
 export const citeOf = (x: Exec): Citer => (url, title = "") => {
@@ -292,6 +293,28 @@ export async function deckGate(x: Exec, text: string): Promise<string | null> {
     if (row) rows.push(row);
   }
   return rows.length ? AUTO_CHECK(rows) : null;
+}
+/** Lời nhắc <auto_check> đã gửi: giữ câu trả lời model vừa viết cho người dùng (không đưa vào nhật ký "say"), để cuối lượt ghép phần sửa vào đó
+ *  (settleGate). at: số artifact viết giữa lượt trước lời nhắc. */
+export function holdAnswer(x: Exec, text: string) {
+  x.held = { text, at: x.turnArts?.length ?? 0 };
+}
+/** Chữ của lượt để read_artifact / check_artifact tìm artifact: artifact viết giữa lượt, câu trả lời đang giữ (đúng thứ tự), rồi phần đang viết. */
+export function turnLive(x: Exec, tail: string): string {
+  const t = x.turnArts ?? [], h = x.held;
+  return (h ? [...t.slice(0, h.at), h.text, ...t.slice(h.at), tail] : [...t, tail]).join("\n\n");
+}
+/** Cuối lượt có câu trả lời đang giữ: câu trả lời người dùng nhận là câu gốc, bản sửa của model gộp vào artifact trong đó (shared/turnfold.ts).
+ *  stop: dừng giữa chừng / lỗi khi đang sửa → giao câu gốc, bỏ phần sửa dở. */
+export function settleGate(x: Exec | null | undefined, text: string, stop = false): string {
+  const h = x?.held;
+  if (!x || !h) return text;
+  x.held = undefined;
+  const all = x.turnArts ?? [], before = all.slice(0, h.at), after = all.slice(h.at);
+  if (stop || text.trim() === h.text.trim()) { x.turnArts = before; return h.text; }
+  const r = foldFix(h.text, before, [...after, text].join("\n\n"));
+  x.turnArts = r.before;
+  return r.text;
 }
 // Câu trả lời cuối đã viết lại trọn một artifact thì bỏ các bản cùng identifier viết giữa lượt (bản sửa mode="patch" thì vẫn cần bản gốc).
 export const withTurnArts =(x: Exec | null | undefined, text: string) => {
@@ -662,7 +685,7 @@ async function runCall(x: Exec, c: Call, d?: Decision): Promise<Run> {
   if (c.name === IMAGE_TOOL_NAME && x.image && !x.sess?.get(c.name)) return runImage(x, c);
   if (c.name === PROJECT_DOC_TOOL.name && x.project !== undefined && !x.sess?.get(c.name)) return { ...readProjectFile(x.uid, x.project, c.input ?? {}), used: { kind: "search", name: c.name } };
   if ((c.name === "read_artifact" || c.name === "check_artifact") && x.art && !x.sess?.get(c.name)) {
-    const a = findArtifact({ uid: x.uid, conv: x.conv, messages: x.art.messages, base: x.art.base, live: [...(x.turnArts ?? []), liveNow()].join("\n\n") }, typeof c.input?.identifier === "string" ? c.input.identifier : undefined);
+    const a = findArtifact({ uid: x.uid, conv: x.conv, messages: x.art.messages, base: x.art.base, live: turnLive(x, liveNow()) }, typeof c.input?.identifier === "string" ? c.input.identifier : undefined);
     const used = { kind: "search" as const, name: c.name };
     if (c.name === "read_artifact") return { ...readArtifact(a, c.input ?? {}), used };
     const enough = a ? checkRoundGate(x, a) : null;
@@ -841,7 +864,7 @@ export async function toolLoop(ad: Adapter, m: unknown[], x: Exec, used: ToolRun
     if (!isAbort(e)) throw e;
     // Dừng giữa chừng: giữ phần đã viết, lượt kết thúc bình thường (không phải lỗi).
     x.sess?.close();
-    return { text: liveNow(), used, cancelled: true };
+    return { text: settleGate(x, liveNow(), true), used, cancelled: true };
   } finally {
     // Hết lượt: thôi điều khiển Chrome của người dùng (gỡ dải "Synchro đang điều khiển").
     releaseBrowser(uid, x.bctx);
@@ -877,7 +900,8 @@ async function loop(ad: Adapter, m: unknown[], x: Exec, used: ToolRun["used"][],
     try { r = await ad.step(m, i === steps - 1); }
     catch (e) {
       // Người dùng nhắn thêm khi model đang viết: giữ phần đã viết trong nhật ký, ghép tin mới rồi gọi lại model ngay.
-      if (!steered()) throw e;
+      // Lỗi khi model đang sửa theo lời nhắc <auto_check>: vẫn giao câu trả lời đã viết xong trước đó.
+      if (!steered()) { if (x.held && !isAbort(e)) return { text: settleGate(x, "", true), used }; throw e; }
       sayOut(x, liveNow());
       takeFollowups(m);
       continue;
@@ -889,11 +913,12 @@ async function loop(ad: Adapter, m: unknown[], x: Exec, used: ToolRun["used"][],
       if (i < steps - 1 && inboxWaiting()) { sayOut(x, r.text); takeFollowups(m); continue; }
       if (!acted && nudged < MAX_NUDGE && i < steps - 1 && stalled(r.text)) { nudged++; sayOut(x, r.text); m.push({ role: "user", content: NUDGE }); continue; }
       // Bộ slide trong câu trả lời: tự kiểm bản cuối (tràn khung 1280×720, đánh số lệch), có lỗi thì cho model sửa trước khi giao.
+      // Câu trả lời đã viết được giữ cho người dùng; lượt sau lời nhắc chỉ để sửa, cuối lượt gộp lại (settleGate).
       if (i < steps - 1 && x.art && !x.deckGated) {
         const g = await deckGate(x, r.text);
-        if (g) { sayOut(x, r.text); m.push({ role: "user", content: g }); continue; }
+        if (g) { holdAnswer(x, r.text); m.push({ role: "user", content: g }); continue; }
       }
-      return { text: r.text, used };
+      return { text: settleGate(x, r.text), used };
     }
     acted = true;
     r.calls = r.calls.map((c) => unwrapConn(x, c));
@@ -924,6 +949,8 @@ async function loop(ad: Adapter, m: unknown[], x: Exec, used: ToolRun["used"][],
     }
     await execute(ad, m, x, r.calls, used, {});
   }
+  // Hết bước khi đang sửa theo lời nhắc <auto_check>: giao câu trả lời đã viết xong trước đó.
+  if (x.held) return { text: settleGate(x, "", true), used };
   return { text: "Đã đạt giới hạn số bước gọi công cụ trong một lượt. Hãy hỏi lại cụ thể hơn để Synchro làm tiếp.", used };
 }
 

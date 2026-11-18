@@ -129,7 +129,7 @@ try {
   ok(await ev(`!!document.querySelector(".art-code > div.cr-low") && /Gợi ý/.test(document.querySelector(".cr-note").textContent)`), "mức Gợi ý hiện màu riêng");
   await shot("4-low");
 
-  // W10 nhóm C: giao diện tiếng Anh, bộ slide đánh số lại dở dang (nhãn mục 01–04, chân trang 02 / 05 – 05 / 05).
+  // W10 nhóm C: giao diện tiếng Anh, bộ slide đánh số lại dở dang (bỏ mục 03, nhãn mục còn 01, 02, 04, 05).
   // Phản biện viết bằng tiếng Anh; Synchro tự báo đánh số lệch (không phải ý kiến model) bên cạnh ý kiến của model.
   await api("PATCH", "/api/caps", { crit: true });
   await P("Page.addScriptToEvaluateOnNewDocument", { source: `try { localStorage.setItem("p:uilang", '"en"'); } catch {}` });
@@ -144,24 +144,28 @@ try {
   await click(`document.querySelector(".art-panel .cr-pill.has")`, "pill deck"); await sleep(800);
   const notes = await ev(`[...document.querySelectorAll(".cr-note")].map((n) => ({ t: n.querySelector(".cr-h b")?.textContent, by: n.querySelector(".cr-by")?.textContent, d: n.querySelector("p")?.textContent, fix: !!n.querySelector(".btn") }))`);
   const num = notes.find((n) => n.t === "Inconsistent slide numbering");
-  ok(!!num && num.by === "Synchro" && /Section labels \(01–04\) don't match the page numbers \(02–05 \/ 05\)/.test(num.d) && !num.fix, "ghi chú tiếng Anh của Synchro: đánh số lệch, không có nút áp dụng sửa", JSON.stringify(notes));
+  ok(!!num && num.by === "Synchro" && /Section labels skip a number or go backwards on slide 4, 5 \(in order they should read 03, 04\)/.test(num.d) && !num.fix, "ghi chú tiếng Anh của Synchro: nhãn mục nhảy cóc, không có nút áp dụng sửa", JSON.stringify(notes));
   ok(notes.some((n) => n.t === "The call-to-action button goes nowhere"), "ý kiến của model phản biện cũng bằng tiếng Anh", JSON.stringify(notes.map((n) => n.t)));
   const viLeft = await ev(`[...document.querySelectorAll(".cr-note")].map((n) => n.textContent).join(" ")`);
   ok(!/[ạảấầẩẫậắằẳẵặẹẻẽếềểễệịỉọỏốồổỗộớờởỡợụủứừửữựỳỵỷỹđ]/i.test(viLeft.replace(/Trà Một Chạm|Đặt lịch gặp/g, "")), "không còn chữ tiếng Việt trong ghi chú phản biện", viLeft);
   await shot("6-deck-notes-en");
-  // Synchro tự kiểm bộ slide lúc model định trả lời xong (<auto_check>): ở lượt trên model giả nhận lời nhắc và nói lý do giữ nguyên số.
+  // Synchro tự kiểm bộ slide lúc model định trả lời xong (<auto_check>): ở lượt trên model giả nhận lời nhắc và giữ nguyên (<keep/>).
+  // Người dùng nhận đúng câu trả lời đã viết, không có lời đáp cho lời nhắc ẩn, một thẻ artifact.
   const said1 = await ev(`[...document.querySelectorAll(".ai-msg")].map((e) => e.textContent).join(" ")`);
-  ok(/giữ cách đánh số này/.test(said1), "tự kiểm lúc trả lời xong: model nhận <auto_check> về đánh số lệch (ở đây chọn giữ nguyên, nói lý do)", said1.slice(0, 300));
+  ok(/Đây là bộ slide gọi vốn/.test(said1) && !/keep|auto_check|tự kiểm|Synchro báo/i.test(said1), "giữ nguyên sau lời nhắc ẩn: câu trả lời là câu đã viết, không nhắc tới bước tự kiểm", said1.slice(0, 300));
+  ok(await ev(`document.querySelectorAll(".ai-msg .art-card").length`) === 1, "một thẻ artifact", await ev(`document.querySelectorAll(".ai-msg .art-card").length`));
   // "#decknum fix": model sửa bằng bản patch ngay trong lượt → bộ slide giao cho người dùng đã đánh số đúng, phản biện chỉ còn ý kiến của model.
   await click(byText(".nav-item", "New"), "new chat fix"); await sleep(600);
   await ask("#decknum fix");
   await until(`document.querySelectorAll(".art-card:not(.busy)").length > 0 && !document.querySelector(".thinking") && !!document.querySelector(".art-panel")`, 60000, "deck fix");
   for (let i = 0; i < 80 && !/issue|Fine|OK/i.test(await ev(pill)); i++) await sleep(150);
   const said2 = await ev(`[...document.querySelectorAll(".ai-msg")].map((e) => e.textContent).join(" ")`);
-  ok(/đã đánh số lại chân trang/.test(said2), "model sửa trong cùng lượt sau lời nhắc <auto_check>", said2.slice(0, 300));
+  ok(/Đây là bộ slide gọi vốn/.test(said2) && /chỉnh lại nhãn mục cho liền mạch/.test(said2) && !/Synchro báo|auto_check/.test(said2), "sửa trong cùng lượt: giữ câu trả lời gốc, thêm một câu đã chỉnh gì", said2.slice(0, 300));
+  const cards = await ev(`[...document.querySelectorAll(".ai-msg .art-card")].map((c) => c.textContent)`);
+  ok(cards.length === 1, "H1 lỗi 9: bản đầy đủ và bản sửa gộp thành MỘT thẻ (không còn hai thẻ cùng ghi Version 1)", JSON.stringify(cards));
   await click(byText(".art-tabs button", "Code"), "code tab"); await sleep(500);
   const fixed = await ev(`document.querySelector(".art-code")?.textContent ?? ""`);
-  ok(/01 \/ 04/.test(fixed) && /04 \/ 04/.test(fixed) && !/\/ 05/.test(fixed), "bản giao cho người dùng đã đánh số lại (01 / 04 … 04 / 04)", fixed.slice(0, 200));
+  ok(/03 · Kinh tế/.test(fixed) && /04 · Gọi vốn/.test(fixed) && !/05 · Gọi vốn/.test(fixed), "bản giao cho người dùng đã đánh số lại nhãn mục (03, 04)", fixed.slice(0, 200));
   const tFix = await ev(pill);
   ok(/1\s*issue/i.test(tFix), `phản biện bản đã sửa: không còn lỗi đánh số, chỉ ý kiến của model: “${tFix}”`, tFix);
   await click(byText(".art-tabs button", "Preview"), "preview tab"); await sleep(1500);

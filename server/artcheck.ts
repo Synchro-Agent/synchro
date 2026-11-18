@@ -15,6 +15,7 @@ import { artState, cleanBase, type ArtVersion } from "../shared/vfs";
 import { fitSummary, overflowing, type SlideFit } from "../shared/deckfit";
 import { numberingIssues, type NumIssue } from "../shared/decknum";
 import { hashOf } from "../shared/critic";
+import { KEEP } from "../shared/turnfold";
 
 export const READ_ARTIFACT_TOOL = {
   name: "read_artifact",
@@ -158,8 +159,11 @@ const PROBE = String.raw`(root, deck) => {
     const outer = over.filter(({ el }) => !over.some((o) => o.el !== el && o.el.contains(el)));
     const frameH = Math.round(Math.min(root.clientHeight * sy, innerHeight)), frameW = Math.round(Math.min(root.clientWidth * sx, innerWidth));
     const extent = "slide " + Math.round(tallH) + "×" + Math.round(tallW) + "px > khung " + frameH + "×" + frameW + "px";
+    // Không thấy phần tử nào thò ra mà slide tự cắt (overflow hidden / clip): phần cuộn thừa chỉ là hình trang trí (aria-hidden) hay phần đã bị cắt có chủ ý,
+    // người xem không mất gì (review W10: hình tròn trang trí thò mép phải từng bị báo "slide tràn nội dung" ở mọi slide).
+    const rcs = getComputedStyle(root);
     if (outer.length) for (const { el } of outer.slice(0, 6)) add("phần tử tràn khỏi slide", "“" + say(el) + "” (" + extent + ")");
-    else add("slide tràn nội dung", "nội dung vượt khung (" + extent + "); thu gọn chữ hoặc chia slide");
+    else if (!/(hidden|clip)/.test(rcs.overflowX + rcs.overflowY)) add("slide tràn nội dung", "nội dung vượt khung (" + extent + "); thu gọn chữ hoặc chia slide");
   }
   if (deck && !boxes.length && !root.querySelector("img,svg,canvas,video")) add("slide trống", "không có chữ hay hình");
   if (!deck && document.documentElement.scrollWidth > innerWidth + 2) add("trang tràn ngang", "rộng " + document.documentElement.scrollWidth + "px trên màn " + innerWidth + "px");
@@ -310,7 +314,9 @@ export async function autoDeckCheck(uid: string, turn: object, a: ArtVersion, or
 export const AUTO_CHECK = (rows: string[]) => `<auto_check>
 Synchro đã tự kiểm bản cuối của bộ slide trước khi giao cho người dùng và thấy lỗi:
 ${rows.join("\n\n")}
-Sửa đúng các slide nêu trên (bản sửa mode="patch" được; slide tràn thì rút chữ, giảm khoảng trống hoặc tách slide; đánh số thì đánh số lại MỌI nhãn số cho cùng một dãy), rồi trả lời lại ngắn gọn đã sửa gì. Nếu cố ý giữ nguyên thì nói rõ lý do với người dùng.
+Người dùng không thấy tin nhắn này. Câu trả lời bạn vừa viết được giữ nguyên và giao cho họ; lần trả lời này chỉ để sửa bộ slide:
+- Sửa được: trả về artifact cùng identifier, sửa đúng các slide nêu trên (bản sửa mode="patch" được; slide tràn thì rút chữ, giảm khoảng trống hoặc tách slide; đánh số thì đánh số lại MỌI nhãn số cho cùng một dãy), kèm nhiều nhất một câu cho người dùng nói đã chỉnh gì trong bộ slide. Không nhắc tới bước tự kiểm, lời nhắc này hay Synchro.
+- Cách hiện tại là cố ý (vd. bìa không đánh số mục): chỉ trả lời đúng ${KEEP}, không viết gì thêm.
 </auto_check>`;
 
 /** Đo bố cục bộ slide cho hội đồng phản biện: dùng số đo sẵn của check_artifact nếu có, chưa có thì dựng một lần (chỉ khi có Chromium). */

@@ -330,7 +330,8 @@ const QUYET_DINH = JSON.stringify({
   ],
   quyenHan: "", chucVu: "CHỦ TỊCH", nguoiKy: "Trần Thị Bình", noiNhan: ["Như Điều 3;", "TT Tỉnh ủy, TT HĐND tỉnh (để b/c);", "Lưu: VT, KGVX."],
 }, null, 2);
-// Bộ slide đánh số lại dở dang sau một bản sửa (H1 T8): nhãn mục 01–04 nhưng chân trang 02 / 05 – 05 / 05, và một nút CTA trỏ tới # để
+// Bộ slide đánh số lại dở dang sau một bản sửa (H1 T8): bỏ mục 03 mà nhãn mục còn 01, 02, 04, 05 (chân trang 02 / 05 – 05 / 05 đã đánh lại).
+// Bìa không đánh số mục nên nhãn chênh số trang một đơn vị: đó là thiết kế, không phải lỗi. Thêm một nút CTA trỏ tới # để
 // hội đồng phản biện (model giả) có thêm một ý kiến của chính nó. Dùng cho tests/ui/critic.mjs ("#decknum").
 const DECKNUM = `<!doctype html>
 <html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -345,8 +346,8 @@ a.cta{align-self:flex-start;background:#b23a12;color:#fff;padding:12px 22px;bord
 <section class="slide"><h1>Trà Một Chạm</h1><p>Giao trà sữa bằng xe điện trong 18 phút.</p></section>
 <section class="slide"><p class="k">01 · Vấn đề</p><h2>Khách chờ quá lâu</h2><p>Đơn giờ cao điểm trễ trung bình 41 phút.</p><div class="foot"><span>Trà Một Chạm</span><span>02 / 05</span></div></section>
 <section class="slide"><p class="k">02 · Giải pháp</p><h2>Micro-hub trong ngõ</h2><p>Mỗi hub phục vụ bán kính 1,5 km.</p><div class="foot"><span>Trà Một Chạm</span><span>03 / 05</span></div></section>
-<section class="slide"><p class="k">03 · Kinh tế đơn vị</p><h2>Lãi 6.000 ₫ mỗi đơn</h2><p>Giá 32.000 ₫, chi phí 26.000 ₫.</p><div class="foot"><span>Trà Một Chạm</span><span>04 / 05</span></div></section>
-<section class="slide"><p class="k">04 · Gọi vốn</p><h2>3 tỷ cho 3 hub</h2>
+<section class="slide"><p class="k">04 · Kinh tế đơn vị</p><h2>Lãi 6.000 ₫ mỗi đơn</h2><p>Giá 32.000 ₫, chi phí 26.000 ₫.</p><div class="foot"><span>Trà Một Chạm</span><span>04 / 05</span></div></section>
+<section class="slide"><p class="k">05 · Gọi vốn</p><h2>3 tỷ cho 3 hub</h2>
 <a class="cta" href="#">Đặt lịch gặp</a>
 <div class="foot"><span>Trà Một Chạm</span><span>05 / 05</span></div></section>
 </body></html>`;
@@ -736,15 +737,14 @@ function voiceBrief(q) {
   return `${first}${rich ? " Chi tiết mình để trong khung chat." : ""}`.trim() || "Xong rồi.";
 }
 
-// Synchro tự kiểm bộ slide lúc model định trả lời xong (server/artcheck.ts AUTO_CHECK). "#decknum fix": sửa như model thật — đánh số lại
-// chân trang cho cùng một dãy với nhãn mục bằng bản sửa SEARCH/REPLACE. "#decknum" thường: giữ nguyên và nói lý do (tests/ui/critic.mjs
-// cần bộ slide còn lệch số để thử phản biện).
+// Synchro tự kiểm bộ slide lúc model định trả lời xong (server/artcheck.ts AUTO_CHECK). Câu trả lời đã viết được giữ cho người dùng; lần trả lời
+// này chỉ để sửa. "#decknum fix": sửa như model thật — đánh số lại nhãn mục sau chỗ nhảy cóc bằng bản sửa SEARCH/REPLACE, kèm một câu cho người dùng.
+// "#decknum" thường: giữ nguyên (<keep/>), tests/ui/critic.mjs cần bộ slide còn lệch số để thử phản biện.
 function autoCheckReply(msgs) {
   const prev = lastArtifact(msgs, "");
-  if (!prev) return "Mình đã xem kết quả tự kiểm.";
-  if (!JSON.stringify(msgs ?? []).includes("#decknum fix")) return "Mình giữ cách đánh số này: bìa không đánh số mục nên nhãn mục bắt đầu từ 01 ở trang 02.";
-  const blocks = [...prev.body.matchAll(/^.*<span>(\d\d) \/ (\d\d)<\/span>.*$/gm)].map(([line, n, of]) => `<<<<<<< SEARCH\n${line}\n=======\n${line.replace(`${n} / ${of}`, `${String(+n - 1).padStart(2, "0")} / ${String(+of - 1).padStart(2, "0")}`)}\n>>>>>>> REPLACE`);
-  return `Synchro báo đánh số slide lệch: mình đã đánh số lại chân trang cho khớp nhãn mục (bìa không đánh số).\n\n<artifact identifier="${prev.ident}" mode="patch">\n${blocks.join("\n")}\n</artifact>`;
+  if (!prev || !JSON.stringify(msgs ?? []).includes("#decknum fix")) return "<keep/>";
+  const blocks = [...prev.body.matchAll(/^.*<p class="k">(\d\d) · .*$/gm)].filter(([, n]) => +n >= 4).map(([line, n]) => `<<<<<<< SEARCH\n${line}\n=======\n${line.replace(`>${n} · `, `>${String(+n - 1).padStart(2, "0")} · `)}\n>>>>>>> REPLACE`);
+  return `Mình đã chỉnh lại nhãn mục cho liền mạch 01–04.\n\n<artifact identifier="${prev.ident}" mode="patch">\n${blocks.join("\n")}\n</artifact>`;
 }
 
 // Hội đồng phản biện: như model thật, đọc mã có số dòng và trả JSON lỗi theo dòng kèm bản sửa (bọc trong khối ```json).
