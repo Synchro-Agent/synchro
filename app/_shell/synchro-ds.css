@@ -1138,7 +1138,8 @@ html body .sy-settings .s-body h3 .muted{color:var(--ds-faint)}
 .sy-settings .s-body .row .d{color:var(--ds-muted)}
 .sy-settings .sel{padding:0 11px 0 13px;border-radius:var(--r-pill)}
 html body .sy-settings .sel:hover{background:var(--ds-hover)}
-html body .sy-settings .field,html body .sy-settings .textarea{border:1px solid var(--ds-line-2);border-radius:var(--r-pill);background:var(--ds-plate)}
+html body .sy-settings .field,html body .sy-settings .textarea{border:1px solid var(--ds-line-2);background:var(--ds-plate)}
+html body .sy-settings .field{border-radius:var(--r-pill)}
 html body .sy-settings .textarea{border-radius:var(--r-plate)}
 html body .sy-settings .field:focus,html body .sy-settings .textarea:focus{border-color:var(--ds-ink);box-shadow:0 0 0 3px color-mix(in srgb,var(--ds-ink) 10%,transparent)}
 html body .field:disabled:not(.auth-root *),html body .sy-settings .field:disabled{background:transparent;border-style:dashed;color:var(--ds-faint)}

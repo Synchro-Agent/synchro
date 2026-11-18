@@ -18,7 +18,7 @@ export type DdIn<V extends string | number = string> = V | readonly [V, string] 
 const toOpt = <V extends string | number>(o: DdIn<V>): DdOpt<V> =>
   Array.isArray(o) ? { value: o[0] as V, label: o[1] as string } : typeof o === "object" ? (o as DdOpt<V>) : { value: o as V, label: String(o) };
 /** Bỏ dấu, chữ thường: "viet" tìm ra "Tiếng Việt". */
-export const fold = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/đ/g, "d").replace(/Đ/g, "D").toLowerCase();
+export const fold = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").replace(/Đ/g, "D").toLowerCase();
 const M = 8, GAP = 4, MAX_H = 360;
 
 export function Dropdown<V extends string | number>({ value, options, onChange, id, label, className = "", size = "md", search, placeholder = "", disabled, minWidth = 180, notr, align = "start", block }: {
