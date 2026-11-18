@@ -275,6 +275,8 @@
 .us-p-x .us-p-l{width:132px}
 .us-p-x .api-sel{max-width:100%}
 .us-p-x .api-sel select{max-width:100%}
+/* Hai hộp chọn khóa chung: tên trường là nhãn nhỏ phía trên (như ô phiên / tuần / ngày), trong hộp chỉ còn giá trị ngắn. */
+.us-p-x .us-p-sel{width:auto;max-width:100%;min-width:0}
 /* Ô tiền ở hạn mức mặc định: đủ chỗ cho "Không giới hạn" khi để trống (112px cắt mất chữ cuối). */
 .adm-perm-row .us-money{width:132px}
 @media (max-width:640px){
@@ -284,8 +286,8 @@
   /* Dòng của từng người: phiên và tuần chia đôi bề ngang (cột thứ hai 64px từng cắt ô tuần), hai hộp chọn khóa chung mỗi hộp một dòng. */
   .us-p-m{grid-column:2}
   .adm-perm-row .us-money{width:112px}
-  .us-p-x .api-sel{flex:1 1 100%}
-  .us-p-x .api-sel select{width:100%}
+  .us-p-x .us-p-sel{flex:1 1 100%}
+  .us-p-x .us-p-sel .api-sel,.us-p-x .us-p-sel select{width:100%}
 }
 .us-prices{display:flex;flex-direction:column;margin-top:4px}
 .us-pr{display:grid;grid-template-columns:minmax(0,1fr) 96px 96px 96px 28px;gap:8px;align-items:center;padding:6px 0;font-size:var(--fs-2)}

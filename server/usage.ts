@@ -234,7 +234,9 @@ export function setCredit(provider: string, o: { amount?: number | null; add?: n
 }
 
 // ---------------------------------------------------------------- trạng thái để hiện vòng tròn và để chặn khi hết hạn mức
-export type Limit = { key: "session" | "weekly" | "daily"; used: number; limit: number | null; pct: number; resetAt: number | null; active: boolean };
+/** turn: phần chi phí của chính lượt người dùng (chat, code, artifact…) trong cửa sổ này, không gồm việc nền (BACKGROUND_FEATURES): vòng trong
+ *  "khóa API chung" chỉ hiện khi có lượt người dùng thật sự chạy bằng khóa API, không phải khi chỉ có rút bộ nhớ / embedding chạy nền. */
+export type Limit = { key: "session" | "weekly" | "daily"; used: number; turn: number; limit: number | null; pct: number; resetAt: number | null; active: boolean };
 export type UsageState = { limits: Limit[]; rate: (RateInfo & { pct: number }) | null; admin: boolean; plan: string; credit: Credit | null };
 
 function limitsFor(u: UserRow, cfg: UsageConfig, ov: Override) {
@@ -245,6 +247,10 @@ function limitsFor(u: UserRow, cfg: UsageConfig, ov: Override) {
 /** 0 giờ UTC hôm nay: hạn mức theo ngày tính từ đây (cùng mốc với credit giọng AI). */
 const utcDay = (now: number) => nextUtcDay(now) - 86_400_000;
 const sumSince = (uid: string, since: number) => (init().prepare("SELECT COALESCE(SUM(cost), 0) AS c FROM usage_events WHERE user_id = ? AND at >= ?").get(uid, since) as { c: number }).c;
+/** Việc nền người dùng không gửi (đặt tên, rút bộ nhớ, chưng cất: "internal"; tìm theo nghĩa: "embed"; xếp lại kết quả gọi lại; thử khóa). */
+export const BACKGROUND_FEATURES = ["internal", "embed", "brain-rerank", "test"] as const;
+const turnSince = (uid: string, since: number) => (init().prepare(`SELECT COALESCE(SUM(cost), 0) AS c FROM usage_events WHERE user_id = ? AND at >= ? AND feature NOT IN (${BACKGROUND_FEATURES.map(() => "?").join(", ")})`)
+  .get(uid, since, ...BACKGROUND_FEATURES) as { c: number }).c;
 
 export function usageState(u: UserRow, provider?: string): UsageState {
   const now = Date.now();
@@ -255,13 +261,14 @@ export function usageState(u: UserRow, provider?: string): UsageState {
   const wUsed = w.weekStart !== null ? sumSince(u.id, w.weekStart) : 0;
   // Hạn mức theo ngày chỉ hiện khi đã đặt (không đặt thì không thêm một dòng "Không giới hạn" vào vòng tròn).
   const dUsed = lim.daily !== null ? sumSince(u.id, utcDay(now)) : 0;
-  const mk = (key: Limit["key"], used: number, limit: number | null, resetAt: number | null, active: boolean): Limit =>
-    ({ key, used: Math.round(used * 10000) / 10000, limit, pct: limit ? Math.min(100, (used / limit) * 100) : 0, resetAt, active });
+  const r4 = (v: number) => Math.round(v * 10000) / 10000;
+  const mk = (key: Limit["key"], used: number, since: number | null, limit: number | null, resetAt: number | null, active: boolean): Limit =>
+    ({ key, used: r4(used), turn: since !== null && used > 0 ? r4(turnSince(u.id, since)) : 0, limit, pct: limit ? Math.min(100, (used / limit) * 100) : 0, resetAt, active });
   const r = provider ? rates.get(provider) : undefined;
   const rate = r && now - r.at < 10 * 60_000 && r.resetAt > now ? { ...r, pct: Math.min(100, Math.max(0, (1 - r.remaining / r.limit) * 100)) } : null;
   return {
-    limits: [mk("session", sUsed, lim.session, w.sessionStart ? w.sessionStart + SESSION_MS : null, !!w.sessionStart), mk("weekly", wUsed, lim.weekly, w.weekStart !== null ? w.weekStart + WEEK_MS : null, w.weekStart !== null),
-      ...(lim.daily !== null ? [mk("daily", dUsed, lim.daily, nextUtcDay(now), true)] : [])],
+    limits: [mk("session", sUsed, w.sessionStart || null, lim.session, w.sessionStart ? w.sessionStart + SESSION_MS : null, !!w.sessionStart), mk("weekly", wUsed, w.weekStart, lim.weekly, w.weekStart !== null ? w.weekStart + WEEK_MS : null, w.weekStart !== null),
+      ...(lim.daily !== null ? [mk("daily", dUsed, utcDay(now), lim.daily, nextUtcDay(now), true)] : [])],
     rate, admin: isAdmin(u), plan: "API", credit: provider ? creditOf(provider) : null,
   };
 }

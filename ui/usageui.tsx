@@ -16,6 +16,13 @@ import { Bar, CreditBar, ModeTag, PLAN_NOTE, PlanRow, RateRow, VENDOR_COLOR, has
 export * from "./usagering";
 
 // ---------------------------------------------------------------- Cài đặt → Usage
+// Thẻ "Giới hạn chi phí khóa API": tên và cách đặt lại của từng hạn mức (hạn mức ngày theo 0 giờ UTC, cùng mốc với server/usage.ts).
+const LIMIT_TITLE: Record<Limit["key"], string> = { session: "Phiên hiện tại", weekly: "Hằng tuần · mọi model", daily: "Hôm nay · chi phí API" };
+const LIMIT_DESC: Record<Limit["key"], string> = {
+  session: "Bắt đầu từ tin nhắn đầu tiên, kéo dài 5 giờ. Chỉ tính các lượt chạy bằng khóa API.",
+  weekly: "Đặt lại vào cùng giờ mỗi tuần.",
+  daily: "Đặt lại lúc 0 giờ UTC. Chỉ tính các lượt chạy bằng khóa API.",
+};
 type Details = {
   byModel: { model: string; calls: number; input: number; output: number; cacheRead: number; cacheWrite: number; cost: number; price: { in: number; out: number; cache: number; src: string } }[];
   byPlan: { model: string; cli: SubUsage["cli"]; name: string; turns: number; last: number }[];
@@ -174,7 +181,7 @@ export function UsageSettings({ go }: { go?: (t: string) => void }) {
           <div className="us-card">
             {st.limits.map((l) => (
               <div key={l.key} className="us-big">
-                <div className="us-big-t"><b>{l.key === "session" ? tr("Phiên hiện tại") : tr("Hằng tuần · mọi model")}</b><span>{l.key === "session" ? tr("Bắt đầu từ tin nhắn đầu tiên, kéo dài 5 giờ. Chỉ tính các lượt chạy bằng khóa API.") : tr("Đặt lại vào cùng giờ mỗi tuần.")}</span></div>
+                <div className="us-big-t"><b>{tr(LIMIT_TITLE[l.key])}</b><span>{tr(LIMIT_DESC[l.key])}</span></div>
                 <div className="us-big-v">{l.limit === null ? <><b>{money(l.used)}</b><span>{tr("Không giới hạn")}</span></> : <><b>{Math.round(l.pct)}%</b><span>{tf("{used} trên {limit}", { used: money(l.used), limit: money(l.limit) })}</span></>}</div>
                 <Bar pct={l.pct} unlimited={l.limit === null} />
                 <div className="us-big-r">{resetText(l.resetAt, l.active)}</div>
@@ -248,9 +255,11 @@ function Money({ value, onSave, placeholder = "No limit", label, disabled }: { v
 }
 
 // Hạng model cao nhất tài khoản thường được chạy trên khóa API chung (server/auth/sharedkey.ts). Mặc định tới hạng cân bằng: không Opus.
-const TIER_LABEL: Record<Tier, string> = { fast: "Fast models only (Haiku, Luna, Flash)", balanced: "Up to balanced (Sonnet, Sol, Pro), no Opus", strong: "All, including Opus and the top models" };
-const TOP_DEFAULT: Record<Tier, string> = { fast: "Models: default (fast only)", balanced: "Models: default (up to balanced)", strong: "Models: default (all)" };
-const TOP_OPT: Record<Tier, string> = { fast: "Models: fast only", balanced: "Models: up to balanced", strong: "Models: all" };
+// Chữ trong hộp chọn ngắn để màn hình điện thoại không cắt đúng phần quan trọng (cho dùng hay chặn, tới hạng nào); tên trường đứng riêng ở nhãn nhỏ
+// phía trên, ví dụ model của từng hạng nằm ở phần mô tả.
+const TIER_LABEL: Record<Tier, string> = { fast: "Fast models only", balanced: "Up to balanced (no Opus)", strong: "All, including Opus" };
+const TOP_DEFAULT: Record<Tier, string> = { fast: "Default (fast only)", balanced: "Default (up to balanced)", strong: "Default (all)" };
+const TOP_OPT: Record<Tier, string> = { fast: "Fast only", balanced: "Up to balanced", strong: "All models" };
 /** Bỏ một khóa khỏi hạn mức riêng (chọn lại "mặc định"). */
 const without = (o: Override, k: keyof Override): Override => Object.fromEntries(Object.entries(o).filter(([x]) => x !== k)) as Override;
 
@@ -281,7 +290,7 @@ export function UsageAdmin({ say, Toggle }: { say: (m: string) => void; Toggle: 
 
       <div className="adm-card-h" style={{ marginTop: 14 }}><b>Shared API key for regular accounts</b><span className="d">Regular accounts can run models on the server&apos;s API key when they have no plan of their own, or when Auto picks it. Every run counts toward the limits above. Models from a plan a person signs in to are never limited here. Administrators can use every model.</span></div>
       <div className="adm-perm-row"><div><div className="t">Allow the shared key</div><div className="d">Off: regular accounts use only the plans they sign in to, unless you allow someone below.</div></div><Toggle on={c.sharedKey !== false} label="Allow the shared key" set={(v) => patch({ config: { sharedKey: v } }, v ? "Regular accounts can use the shared key" : "Regular accounts can't use the shared key")} /></div>
-      <div className="adm-perm-row us-top"><div><div className="t">Highest model on the shared key</div><div className="d">Top models such as Opus cost far more per message. A person can still use them through their own plan.</div></div>
+      <div className="adm-perm-row us-top"><div><div className="t">Highest model on the shared key</div><div className="d">Fast: Haiku, Luna, Flash. Balanced: Sonnet, Sol, Pro. Top models such as Opus cost far more per message; a person can still use them through their own plan.</div></div>
         <span className="api-sel"><select aria-label="Highest model on the shared key" value={c.sharedTop ?? "balanced"} onChange={(e) => patch({ config: { sharedTop: e.target.value } }, "Shared key models saved")}>
           {(["fast", "balanced", "strong"] as const).map((t) => <option key={t} value={t}>{TIER_LABEL[t]}</option>)}
         </select></span></div>
@@ -302,12 +311,12 @@ export function UsageAdmin({ say, Toggle }: { say: (m: string) => void; Toggle: 
               <div className="us-p-x">
                 <div className="us-p-l"><small>Day {u.effective.daily == null ? "∞" : `${Math.round(u.limits.find((l) => l.key === "daily")?.pct ?? 0)}%`}</small><Money label="Day" disabled={u.admin && !owner} value={"daily" in u.override ? u.override.daily : undefined} placeholder={u.effective.daily == null ? "Default: none" : `${u.effective.daily} (default)`} onSave={(v) => patch({ user: u.id, override: { ...u.override, daily: v } }, "Limit saved")} /></div>
                 {!u.admin && u.shared && <>
-                  <span className="api-sel"><select aria-label="Shared key for this person" value={"shared" in u.override ? (u.override.shared ? "on" : "off") : ""} onChange={(e) => patch({ user: u.id, override: e.target.value ? { ...u.override, shared: e.target.value === "on" } : without(u.override, "shared") }, "Shared key access saved")}>
-                    <option value="">{c.sharedKey !== false ? "Shared key: default (allowed)" : "Shared key: default (blocked)"}</option><option value="on">Shared key: allowed</option><option value="off">Shared key: blocked</option>
-                  </select></span>
-                  <span className="api-sel"><select aria-label="Highest shared-key model for this person" value={u.override.top ?? ""} onChange={(e) => patch({ user: u.id, override: e.target.value ? { ...u.override, top: e.target.value as Tier } : without(u.override, "top") }, "Shared key models saved")}>
+                  <label className="us-p-l us-p-sel"><small>Shared key</small><span className="api-sel"><select aria-label="Shared key for this person" value={"shared" in u.override ? (u.override.shared ? "on" : "off") : ""} onChange={(e) => patch({ user: u.id, override: e.target.value ? { ...u.override, shared: e.target.value === "on" } : without(u.override, "shared") }, "Shared key access saved")}>
+                    <option value="">{c.sharedKey !== false ? "Default (allowed)" : "Default (blocked)"}</option><option value="on">Allowed</option><option value="off">Blocked</option>
+                  </select></span></label>
+                  <label className="us-p-l us-p-sel"><small>Highest model</small><span className="api-sel"><select aria-label="Highest shared-key model for this person" value={u.override.top ?? ""} onChange={(e) => patch({ user: u.id, override: e.target.value ? { ...u.override, top: e.target.value as Tier } : without(u.override, "top") }, "Shared key models saved")}>
                     <option value="">{TOP_DEFAULT[c.sharedTop ?? "balanced"]}</option>{(["fast", "balanced", "strong"] as const).map((t) => <option key={t} value={t}>{TOP_OPT[t]}</option>)}
-                  </select></span>
+                  </select></span></label>
                 </>}
               </div>
             </div>

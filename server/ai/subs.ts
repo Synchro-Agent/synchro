@@ -22,7 +22,7 @@ import type { Attachment, RateWindow, TurnRequest, WebSource } from "./engine";
 import { friendlyError, redact, retryAfterMs } from "./errors";
 import { agyNativeImages, nativeStamp, removeFile, type ImgFile } from "./imagefiles";
 import { stallOf, waitText, watchLimits, type WatchState } from "./watchdog";
-import { helperVerdict, JOB_VIA } from "./helperquota";
+import { helperVerdict, JOB_VIA, THROTTLED_JOBS } from "./helperquota";
 import { codexServerRpc, prestartCodexServer } from "./codex_server";
 import { dropLiveBridge } from "../mcpbridge";
 
@@ -481,6 +481,12 @@ const turnsToday = (uid: string, cli: Cli) =>
   (sessDb().prepare(`SELECT COUNT(*) AS n FROM engine_turns WHERE user_id = ? AND cli = ? AND at >= ? AND ${USER_TURN}`).get(uid, cli, dayStart()) as { n: number }).n;
 const helpersToday = (uid: string, cli: Cli) =>
   (sessDb().prepare(`SELECT COUNT(*) AS n FROM engine_turns WHERE user_id = ? AND cli = ? AND at >= ? AND NOT (${USER_TURN})`).get(uid, cli, dayStart()) as { n: number }).n;
+// Ngân sách việc phụ chỉ tính việc tự động (THROTTLED_JOBS) và lượt làm ấm: việc người dùng tự bấm (quét skill, phản biện tay, nén ngữ cảnh,
+// đọc to…) và lượt làm tiếp trong cùng một tin nhắn (CONT_JOB) vẫn hiện trong "việc nền" nhưng không tiêu ngân sách của việc tự động: một lần
+// quét skill nhiều đợt không được làm tên đoạn chat và bộ nhớ dừng cả ngày.
+const THROTTLED_VIA = `via = 'warm' OR via IN (${[...THROTTLED_JOBS].map((j) => `'${JOB_VIA}${j}'`).join(", ")})`;
+const throttledToday = (uid: string, cli: Cli) =>
+  (sessDb().prepare(`SELECT COUNT(*) AS n FROM engine_turns WHERE user_id = ? AND cli = ? AND at >= ? AND (${THROTTLED_VIA})`).get(uid, cli, dayStart()) as { n: number }).n;
 /** Lượt của chính người dùng hôm nay trên mọi gói (ngân sách việc phụ tính theo đây). */
 const userTurnsAll = (uid: string) =>
   (sessDb().prepare(`SELECT COUNT(*) AS n FROM engine_turns WHERE user_id = ? AND at >= ? AND ${USER_TURN}`).get(uid, dayStart()) as { n: number }).n;
@@ -492,7 +498,7 @@ const lastRun = (uid: string, cli: Cli) => (sessDb().prepare("SELECT MAX(at) AS 
 /** Việc phụ tự động (helperquota.ts THROTTLED_JOBS) còn chạy được trên gói này hôm nay không: chưa gần chạm hạn mức, chưa hết ngân sách việc phụ. */
 export function helperRoom(uid: string, cli: Cli, now = Date.now()) {
   const windows = (g.limits.get(`${cli}:${uid}`)?.windows ?? []).map((w) => project({ ...w, label: "", kind: "kind" in w ? (w as PlanWindow).kind : kindOf(w.window) } as PlanWindow, now));
-  return helperVerdict({ helpers: helpersToday(uid, cli), userTurns: userTurnsAll(uid), windows, blockedUntil: planBlock(cli, uid) }, now);
+  return helperVerdict({ helpers: throttledToday(uid, cli), userTurns: userTurnsAll(uid), windows, blockedUntil: planBlock(cli, uid) }, now);
 }
 
 const label = (w: RateWindow) => WINDOW_NAME[w.window] ?? w.window.replace(/_/g, " ");

@@ -44,6 +44,7 @@ import { clearStall, noteStall, stalledModels, usableModels } from "../ai/anymod
 import { learnFromTurn } from "../memory";
 import { afterTurn, BRAIN_RULES, BRAIN_TOOLS, brainRecallHybrid, topRule, warmRecall } from "../brain";
 import { DENIED_NUDGE, MAX_NUDGE, NUDGE, stalled } from "../stall";
+import { CONT_JOB } from "../ai/helperquota";
 import { TASK_TOOL, taskBrowser, taskOf, taskRules } from "../tasktools";
 import { resolveTool } from "../connproxy";
 import { getPrefs as codePrefs } from "../codestore";
@@ -578,7 +579,10 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
       // Antigravity trả cả câu trả lời một lần nên làm sạch được ngay; CLI khác làm sạch ở câu trả lời cuối (đường dẫn có thể bị cắt giữa hai đoạn chữ).
       const say = say0 && cli === "agy" ? (t: string) => say0(scrubServerPaths(t)) : say0;
       const turnMsgs = am ?? withRecall(withRecall(messages, await recallOf(body, c.user, convId)), [route, fast || !pc ? "" : designOf(body, { art: !!pc.art, code: !!pc.code, image: BRIDGE_CLIS.has(subCli(model)!) && feature !== "code" }, can(c.user, "skills") ? studioOf(body.studio) : null, convId), nowBlock(body), crisisBlock(body)].filter(Boolean).join("\n\n"));
+      // cont: lượt làm tiếp trong cùng tin nhắn (nhắc làm tiếp, chờ kết quả công cụ): ghi "job:cont", không đếm thành tin nhắn mới (helperquota.ts CONT_JOB).
+      let cont = false;
       const turn = (msgs: unknown, fresh = false) => subTurn({
+        job: cont ? CONT_JOB : undefined,
         user: c.user, model, system: am ? ARTIFACT_SYSTEM : [system || (planSys || toolSys ? "Bạn là một trợ lý AI hữu ích." : ""), planSys, toolSys, contextOf(body, c.user), pinnedBlock(body.pinned)].filter(Boolean).join("\n\n"),
         ephemeral: body.incognito === true, messages: msgs, conv: am ? undefined : convId, effort: isEffort(wanted) ? wanted : wanted === "auto" ? autoEffort(routeInput(body)) : undefined, signal: turnSignal(), onDelta: say, onToolUse: am ? undefined : toolUseSeen,
         older: typeof body.olderDigest === "string" ? body.olderDigest.slice(0, 8000) : undefined, fast, awaitingUser: () => !!x?.awaiting, mcp: bridge ? { url: bridge.url, alive: bridge.alive, onPark: bridge.onPark, live: bridge.live } : undefined, web: !fast && body.web === true, fresh,
@@ -652,6 +656,8 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
         else break;
         sayOut(x, said);
         hist = [...hist, { role: "assistant", content: said }, { role: "user", content: next }];
+        // Tin người dùng nhắn thêm là lượt của họ; nhắc làm tiếp / chờ kết quả công cụ thì không.
+        cont = !more.length;
         r = await tryOnce(hist);
         // Tin nhắn thêm trong lúc đi đường nhanh mà cần công cụ: chạy lượt đầy đủ với cả tin nhắn đó.
         if (needFull()) { deltaStep(); return chatTurn({ ...body, messages: hist, noFast: true }, c, scope, o); }

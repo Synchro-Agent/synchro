@@ -125,6 +125,7 @@ export const OPS_VI2EN: Record<string, string> = {
   "{n} lần gọi": "{n} call|{n} calls",
   // Hạn mức theo ngày, vòng trong cho khóa API chung, việc nền trên gói, trạng thái Gemini đã chạy được (gói w10-quota).
   "Hôm nay · chi phí API": "Today · API cost",
+  "Đặt lại lúc 0 giờ UTC. Chỉ tính các lượt chạy bằng khóa API.": "Resets at 00:00 UTC. Only API key calls count.",
   "khóa API chung {pct}%": "shared API key {pct}%",
   "{n} việc nền": "{n} background job|{n} background jobs",
   "Đặt tên đoạn chat, ghi nhớ, phản biện tự động… chạy trên gói của bạn và tính vào hạn mức của hãng. Synchro giới hạn việc nền mỗi ngày và dừng hẳn khi gói gần chạm giới hạn.": "Chat titles, memory, automatic reviews and similar jobs run on your plan and count toward the provider's limits. Synchro caps background jobs each day and stops them entirely when the plan is close to its limit.",

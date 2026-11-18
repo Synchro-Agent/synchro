@@ -33,9 +33,16 @@ ok(H.THROTTLED_JOBS.has("title") && H.THROTTLED_JOBS.has("brain") && H.THROTTLED
 ok(H.isUserVia("codex") && H.isUserVia("sub-codex") && !H.isUserVia("job:title") && !H.isUserVia("warm"), "engine_turns.via: job:… và warm không phải tin nhắn của người dùng");
 
 console.log("2. Rút bộ nhớ ngay trên gói chỉ khi câu tự nói về mình (factLike)");
-for (const s of ["Tên mình là Lâm Tùng, mình thích nhạc lo-fi", "Mình là học sinh lớp 12", "Gọi mình là Tùng nhé", "Trả lời ngắn gọn thôi", "My name is Ann", "I prefer short answers", "Nhớ giúp mình: mình dị ứng tôm"])
+for (const s of ["Tên mình là Lâm Tùng, mình thích nhạc lo-fi", "Mình là học sinh lớp 12", "Gọi mình là Tùng nhé", "Trả lời ngắn gọn thôi", "My name is Ann", "I prefer short answers",
+  "Nhớ giúp mình: mình dị ứng tôm", "Mình là kỹ sư điện, thích câu trả lời ngắn, nhớ giúp mình nhé", "Tôi là giáo viên tiểu học", "Mình sống ở Đà Nẵng", "Tôi làm việc ở một công ty logistics",
+  "Từ giờ trở đi xưng hô anh em nhé", "I'm a nurse, keep it short", "I work as a data analyst", "Call me Sam", "From now on, answer in Vietnamese", "Remember that I'm vegetarian"])
   ok(H.factLike(s), `có: ${s}`);
-for (const s of ["2+2 bằng mấy", "Tỷ giá USD hôm nay", "Viết hàm sắp xếp mảng bằng Python", "Translate this to English: hello", "Làm slide gọi vốn 6 trang"])
+// Yêu cầu thường ngày mở đầu bằng ngôi thứ nhất (muốn / cần / có / đang / làm / dùng, I'm / I use) không phải câu tự mô tả: để bộ não chưng cất sau.
+for (const s of ["2+2 bằng mấy", "Tỷ giá USD hôm nay", "Viết hàm sắp xếp mảng bằng Python", "Translate this to English: hello", "Làm slide gọi vốn 6 trang",
+  "Mình muốn làm slide giới thiệu sản phẩm", "Tôi cần viết email xin nghỉ phép", "Em có bài toán này, giải giúp em", "Mình cần code python đọc file CSV", "tôi đang học react, giải thích useEffect",
+  "Tôi muốn hỏi về thời tiết Hà Nội", "I'm trying to fix this bug", "I use Next.js, how do I add auth", "Mình đang làm luận văn về AI", "Tôi có một file excel cần lọc", "Em làm bài tập này thế nào",
+  "Mình dùng Windows 11, sao không cài được Node", "Cách ghi nhớ từ vựng tiếng Anh nhanh", "Tôi là ai trong câu chuyện này?", "Mình thích bài này, viết thêm một đoạn", "I'm a bit confused about closures",
+  "I like this, make it longer", "Đếm ngược từ giờ đến Tết còn bao lâu", "Giải thích định luật Ohm thật ngắn gọn", "Cho mình một ví dụ với pin 9V"])
   ok(!H.factLike(s), `không: ${s}`);
 
 console.log("3. Khóa API chung cho tài khoản thường (auth/sharedkey.ts, canModel)");
@@ -95,8 +102,38 @@ put("codex", 5, Date.now() - 3 * 86_400_000);
 ok(JSON.stringify(S.todayCounts(free.id, "codex")) === JSON.stringify({ turns: 3, helpers: 4 }), "3 tin nhắn hôm nay (lượt hôm trước không tính), 4 việc phụ", JSON.stringify(S.todayCounts(free.id, "codex")));
 const room = S.helperRoom(free.id, "codex");
 ok(room.ok && room.cap === 10, "3 tin nhắn: được tới 4 + 2×3 = 10 việc phụ", JSON.stringify(room));
+// Việc người dùng tự bấm (quét skill nhiều đợt, phản biện tay) và lượt làm tiếp trong cùng tin nhắn: hiện trong "việc nền", không tiêu ngân sách việc tự động.
+put("job:skill-scan", 20); put("job:critic", 2); put("job:cont", 3);
+ok(JSON.stringify(S.todayCounts(free.id, "codex")) === JSON.stringify({ turns: 3, helpers: 29 }), "quét skill, phản biện tay, lượt làm tiếp: đếm vào việc nền (29), không thành tin nhắn", JSON.stringify(S.todayCounts(free.id, "codex")));
+ok(S.helperRoom(free.id, "codex").ok, "20 đợt quét skill người dùng tự bấm không làm việc tự động (đặt tên, bộ nhớ) dừng cả ngày", JSON.stringify(S.helperRoom(free.id, "codex")));
 put("job:brain", 6);
-ok(!S.helperRoom(free.id, "codex").ok, "đủ 10 việc phụ: dừng tới khi người dùng nhắn thêm");
+ok(!S.helperRoom(free.id, "codex").ok, "đủ 10 việc phụ tự động: dừng tới khi người dùng nhắn thêm");
+ok(H.CONT_JOB === "cont" && !H.THROTTLED_JOBS.has(H.CONT_JOB) && !H.isUserVia(`job:${H.CONT_JOB}`), "lượt làm tiếp (nhắc làm tiếp, chờ kết quả công cụ) ghi job:cont: không phải tin nhắn mới, không chịu ngân sách");
+const src = (f) => fs.readFileSync(path.join(process.cwd(), f), "utf8");
+for (const f of ["server/chat/routing.ts", "server/agentcore.ts"])
+  ok(/job: cont \? CONT_JOB : undefined/.test(src(f)) && /cont = !more\.length;/.test(src(f)), `${f}: lượt làm tiếp gắn job:cont, tin nhắn thêm của người dùng (<user_followup>) vẫn là lượt của người dùng`);
+
+console.log("6. Rút bộ nhớ không đáng một lượt gói không chuyển sang khóa API chung (anymodel.ts quickCall planOk)");
+const am = src("server/ai/anymodel.ts");
+ok(/if \(o\.planOk === false && subCli\(model\)\) throw new OneShotErr\(NO_CHEAP, 503\);/.test(am) && !/planOk[\s\S]{0,400}tierOf\(k\) === "fast"/.test(am), "planOk: false trên gói: bỏ (để bộ não chưng cất sau), không chọn model khóa API thay");
+ok(/planOk: factLike\(question\)/.test(src("server/memory.ts")), "memory.ts: chỉ rút ngay trên gói khi câu tự mô tả mình");
+
+console.log("7. Vòng trong \"khóa API chung\": chỉ tính lượt của người dùng, không tính việc nền (usage.ts Limit.turn)");
+const bg = AS.createUser({ email: "bg@quota.test", name: "Bg", verified: true });
+U.withUsage(bg.id, "internal", () => U.recordUsage("openai/gpt-6-luna", { prompt_tokens: 2000, completion_tokens: 200 }));
+U.withUsage(bg.id, "embed", () => U.recordUsage("openai/text-embedding-3-small", { prompt_tokens: 500, completion_tokens: 0 }));
+let ls = U.usageState(bg).limits;
+ok(ls.some((l) => l.used > 0) && ls.every((l) => l.turn === 0), "chỉ có rút bộ nhớ và embedding trên khóa API: đã dùng > 0 nhưng phần lượt người dùng = 0 (không hiện vòng trong)", JSON.stringify(ls));
+U.withUsage(bg.id, "chat", () => U.recordUsage(SONNET, { input_tokens: 2000, output_tokens: 500 }));
+ls = U.usageState(bg).limits;
+ok(ls.filter((l) => l.active).every((l) => l.turn > 0 && l.turn <= l.used), "một lượt chat chạy bằng khóa API: phần lượt người dùng > 0", JSON.stringify(ls));
+U.setOverride(bg.id, { daily: 5 });
+const dl = U.usageState(bg).limits.find((l) => l.key === "daily");
+ok(!!dl && dl.turn > 0 && dl.limit === 5, "hạn mức ngày riêng: có dòng daily kèm phần lượt người dùng", JSON.stringify(dl));
+const ui = src("ui/usageui.tsx");
+ok(/daily: "Hôm nay · chi phí API"/.test(ui) && /daily: "Đặt lại lúc 0 giờ UTC\./.test(ui) && !/l\.key === "session" \? tr\("Phiên hiện tại"\) : tr\("Hằng tuần · mọi model"\)/.test(ui),
+  "Cài đặt → Usage: dòng hạn mức ngày có tên và cách đặt lại riêng (không còn mượn chữ hằng tuần)");
+ok(D.OPS_VI2EN?.["Đặt lại lúc 0 giờ UTC. Chỉ tính các lượt chạy bằng khóa API."] || en("Đặt lại lúc 0 giờ UTC. Chỉ tính các lượt chạy bằng khóa API."), "có bản tiếng Anh");
 
 console.log(`\n${pass}/${pass + fail} đạt`);
 fs.rmSync(tmp, { recursive: true, force: true });

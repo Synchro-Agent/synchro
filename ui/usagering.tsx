@@ -9,7 +9,8 @@ import { getLang, tf, tr, trc } from "./i18n";
 import { resetAt } from "./resetfmt";
 import * as I from "./icons";
 
-export type Limit = { key: "session" | "weekly" | "daily"; used: number; limit: number | null; pct: number; resetAt: number | null; active: boolean };
+/** turn: phần chi phí của lượt người dùng (chat, code…) trong cửa sổ, không gồm việc nền như rút bộ nhớ, embedding (server/usage.ts). */
+export type Limit = { key: "session" | "weekly" | "daily"; used: number; turn?: number; limit: number | null; pct: number; resetAt: number | null; active: boolean };
 export type Rate = { provider: string; limit: number; remaining: number; resetAt: number; pct: number };
 export type Credit = { provider: string; amount: number; since: number; spent: number; remaining: number; pct: number };
 // Hạn mức của gói subscription (model "sub-…"): cửa sổ phiên 5 giờ / tuần do CLI của hãng báo về (xem server/ai/subs.ts).
@@ -243,9 +244,11 @@ export function UsageRing({ model, extra, onDetails, up = true }: { model?: stri
   const pct = auto ? Math.max(0, ...live.map(vendorPct), ...(hasApi(st) ? limited.map((l) => l.pct) : []))
     : sub ? Math.max(0, ...sub.windows.map((w) => (w.status === "rejected" ? 100 : w.usedPct ?? 0)))
     : Math.max(0, ...limited.map((l) => l.pct), st?.rate?.pct ?? 0, st?.credit?.pct ?? 0);
-  // Tự động có gói và đã chạy bằng khóa API chung trong phiên / tuần / ngày đang tính: vòng trong nhỏ cho phần hạn mức chi phí API đã dùng,
-  // để người đang nhìn % của gói vẫn thấy lượt vừa tiêu hạn mức API (lỗi 4 của ma trận H1: vòng hiện 48% ChatGPT, 22% API chỉ thấy khi mở ra).
-  const apiPct = auto && hasApi(st) && live.some((v) => v.mode === "plan") ? Math.max(0, ...limited.filter((l) => l.active && l.used > 0).map((l) => l.pct)) : 0;
+  // Tự động có gói và một lượt chat / code của người dùng đã chạy bằng khóa API chung trong phiên / tuần / ngày đang tính: vòng trong nhỏ cho phần
+  // hạn mức chi phí API đã dùng, để người đang nhìn % của gói vẫn thấy lượt vừa tiêu hạn mức API (lỗi 4 của ma trận H1). Chỉ có việc nền trên
+  // khóa API (embedding, rút bộ nhớ) thì không hiện, và phần trăm làm tròn còn 0 cũng không hiện ("khóa API chung 0%" chỉ gây hiểu lầm).
+  const apiRaw = auto && hasApi(st) && live.some((v) => v.mode === "plan") ? Math.max(0, ...limited.filter((l) => l.active && (l.turn ?? 0) > 0).map((l) => l.pct)) : 0;
+  const apiPct = Math.round(apiRaw) >= 1 ? apiRaw : 0;
   const r = 6.4, c = 2 * Math.PI * r, ri = 3.4, ci = 2 * Math.PI * ri;
   const label = st ? `${tr("Mức dùng")}: ${Math.round(pct)}%${apiPct > 0 ? ` · ${tf("khóa API chung {pct}%", { pct: Math.round(apiPct) })}` : ""}` : tr("Mức dùng");
   const head = auto ? tr("Mức dùng · Tự động chọn hãng")

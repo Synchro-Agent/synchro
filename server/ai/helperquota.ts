@@ -15,6 +15,13 @@ export const isUserVia = (via: string) => via !== "warm" && !via.startsWith(JOB_
  */
 export const THROTTLED_JOBS = new Set(["title", "memory", "project-memory", "brain", "meta", "critic-auto", "skill-studio"]);
 
+/**
+ * Lượt làm tiếp trong cùng một tin nhắn của người dùng (nhắc làm tiếp khi model mới báo "Mình sẽ…", nhắc dùng công cụ được phép, chờ kết quả
+ * công cụ wait_for_result): một lượt thật của gói nhưng không phải tin nhắn mới, nên ghi "job:cont" (không đếm vào "tin nhắn hôm nay").
+ * Tin nhắn người dùng gửi thêm khi đang làm (<user_followup>) vẫn là lượt của người dùng.
+ */
+export const CONT_JOB = "cont";
+
 /** Cấu hình (biến môi trường): dừng việc phụ khi một cửa sổ của gói đã dùng tới STOP_PCT; mỗi ngày tối đa BASE + PER_TURN × số lượt của người dùng, trần MAX. */
 export const helperCfg = () => ({
   stopPct: num(process.env.SYNCHRO_HELPER_STOP_PCT, 70),
@@ -43,8 +50,20 @@ export function helperVerdict(x: HelperInput, now = Date.now(), cfg = helperCfg(
   return { ok: true, cap };
 }
 
-// Câu người dùng tự nói về mình (tên, nghề, thói quen, cách muốn được trả lời): đáng rút bộ nhớ ngay trong lượt. Câu khác để lần chưng cất
-// đoạn chat của bộ não (gom cả đoạn, một lời gọi) rút sau, không tốn thêm một lượt gói cho mỗi tin nhắn.
-const FACT_VI = /(?<![\p{L}\p{N}])(?:tên (?:tôi|mình|em|tớ|anh|chị)|(?:tôi|mình|em|tớ) (?:là|tên|đang|hay|thường|thích|muốn|cần|làm|học|sống|ở|không thích|ghét|ưu tiên|dùng|có)|gọi (?:tôi|mình|em|tớ) là|nghề|công việc của|xưng hô|trả lời (?:ngắn|dài|bằng|chi tiết)|nhớ giúp|ghi nhớ|đừng bao giờ|luôn luôn)(?![\p{L}\p{N}])/iu;
-const FACT_EN = /\b(?:my name|call me|i am|i'm|i work|i study|i live|i prefer|i like|i love|i hate|i usually|i always|i never|i use|remember (?:that|this)|always answer|never answer|keep (?:answers|replies) (?:short|brief))\b/i;
+// Câu người dùng tự mô tả mình (tên, nghề, nơi sống, sở thích, cách muốn được trả lời) hoặc dặn nhớ: đáng rút bộ nhớ ngay trong lượt. Câu khác,
+// kể cả yêu cầu mở đầu bằng ngôi thứ nhất ("Mình muốn làm slide…", "Tôi cần viết email…", "Em có bài toán…", "I'm trying to…", "I use Next.js,
+// how do I…"), để lần chưng cất đoạn chat của bộ não (gom cả đoạn, một lời gọi) rút sau, không tốn thêm một lượt gói cho mỗi tin nhắn.
+// Không có các động từ chung muốn / cần / có / đang / làm / dùng, "I'm" / "I use": gần như mọi yêu cầu đều mở đầu như vậy.
+const ME = "(?:tôi|mình|em|tớ)", END = "(?![\\p{L}\\p{N}])";
+const FACT_VI = new RegExp(`(?<![\\p{L}\\p{N}])(?:${[
+  `tên (?:của )?${ME}${END}`, `${ME} tên là${END}`, `gọi ${ME} là${END}`, `xưng hô${END}`,
+  // "Mình là kỹ sư điện", "Tôi là giáo viên": tự giới thiệu (không gồm "tôi là ai", "mình là gì").
+  `${ME} là (?!(?:ai|gì)${END})`,
+  `${ME} (?:làm nghề|làm việc (?:ở|tại|cho|bên)|sống (?:ở|tại)|ở (?:Hà Nội|Sài Gòn|TP|thành phố|Đà Nẵng|Huế|Cần Thơ|Hải Phòng)|học lớp|học (?:ở|tại) trường|là sinh viên|(?:bị )?dị ứng|ăn chay)${END}`,
+  `nghề (?:nghiệp )?của ${ME}${END}`, `công việc của ${ME}${END}`,
+  // Sở thích của chính người dùng, không phải khen câu trả lời vừa rồi ("mình thích bài này").
+  `${ME} (?:rất |cũng |không )?(?:thích|ghét|ưu tiên|quen dùng)${END}(?! (?:câu|bài|cái|đoạn|ý|kết quả|phần|bản) (?:này|đó|trên|vừa|kia))`,
+  `trả lời (?:ngắn|gọn|chi tiết|bằng tiếng)${END}`, `luôn trả lời${END}`, `từ (?:giờ|nay) trở đi${END}`, `từ (?:giờ|nay|lần sau),? (?:hãy |cứ |nhớ |luôn |đừng )`, `nhớ giúp${END}`, `nhớ (?:rằng|là) ${ME}${END}`, `(?:hãy )?ghi nhớ (?:giúp|rằng|là|điều này|nhé)${END}`, `đừng bao giờ${END}`, `luôn luôn${END}`,
+].join("|")})`, "iu");
+const FACT_EN = /\b(?:my name(?:'s| is)|call me|i am an? (?!bit\b|little\b|lot\b)|i'm an? (?!bit\b|little\b|lot\b)|i work (?:as|at|for|in)|i live in|i'm from|i am from|i (?:really )?(?:prefer|like|love|hate|enjoy) (?!this\b|that\b|it\b|the\b)|i'm allergic|i am allergic|i'm vegetarian|remember (?:that|this|my)|from now on|always (?:answer|reply|respond|write)|never (?:answer|reply|respond)|keep (?:answers|replies|it) (?:short|brief))/i;
 export const factLike = (text: string) => FACT_VI.test(text) || FACT_EN.test(text);
