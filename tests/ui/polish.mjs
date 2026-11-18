@@ -187,7 +187,7 @@ async function STAB(total, n) {
 
 // ───────────────────────────── chạy
 const problems = [], allowed = [];
-const note = (where, what) => { const s = `${where}: ${what}`; const a = ALLOW.find((x) => x.re.test(s)); if (a) allowed.push(`${s}  — được phép: ${a.why}`); else problems.push(s); };
+const note = (where, what) => { const s = `${where}: ${what}`; const a = ALLOW.find((x) => x.re.test(s)); if (a) allowed.push(`${s}  — được phép: ${a.why}`); else { problems.push(s); console.log(`    ✗ ${what}`); } };
 let states = 0;
 
 for (const theme of THEMES) for (const size of SIZES) {
@@ -269,7 +269,9 @@ for (const theme of THEMES) for (const size of SIZES) {
     if (tablet) return;
     if (await ev(`!!document.querySelector(".sidebar.closed, .shell-side.closed")`)) { await click(`document.querySelector("[aria-label='Mở thanh bên'], [aria-label='Open sidebar']")`, "burger").catch(() => {}); await sleep(500); }
   };
-  const go = async (v) => { await side(); await click(`document.querySelector('[data-nav="${v}"]')`, v); await ready(); };
+  // Nút điều hướng đang hiện (ở 768px thanh bên đóng vẫn còn bản ẩn của cùng nút: bấm vào bản ẩn là bấm nhầm chỗ khác trên trang).
+  const nav = (v) => `[...document.querySelectorAll('[data-nav="${v}"]')].find((e) => e.checkVisibility()) ?? document.querySelector('[data-nav="${v}"]')`;
+  const go = async (v) => { await esc(); await side(); await click(nav(v), v); await ready(); };
   // Các tab của trang đang mở (không phải thanh bên): bấm lần lượt, đo từng tab.
   const tabs = async (label, sel = "main [role=tablist] [role=tab], .main [role=tablist] [role=tab]", max = 8) => {
     const n = Math.min(max, await ev(`[...document.querySelectorAll(${JSON.stringify(sel)})].filter((t) => t.checkVisibility()).length`));
@@ -359,7 +361,7 @@ for (const theme of THEMES) for (const size of SIZES) {
     const tools = await ev(`[...document.querySelectorAll('[data-nav^="sp-"]')].map((b) => b.dataset.nav).filter((k) => k !== "sp-home")`);
     for (const t of tools) {
       try {
-        await side(); await click(`document.querySelector('[data-nav="${t}"]')`, t); await ready(600);
+        await side(); await click(nav(t), t); await ready(600);
         await check(t);
         // Ô chọn đầu tiên mở ra (danh sách của Dropdown), ô màu (Audio Native).
         if (t === "sp-tts" && (await ev(`!!document.querySelector(".main .dd, main .dd")`))) { await click(`document.querySelector(".main .dd, main .dd")`, "dd"); await ready(); await check(t + "-o-chon"); await esc(); }
