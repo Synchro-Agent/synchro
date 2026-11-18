@@ -111,6 +111,14 @@ for (const [id, body] of add) {
   const r = await call("POST", "/api/admin/apikeys", body);
   if (r.status !== 200) console.error(`Không nối được ${id}:`, r.j?.error);
 }
+// Khóa API chung cho tài khoản thường: máy chủ thật mặc định chỉ tới hạng cân bằng (không Opus, server/auth/sharedkey.ts). Tài khoản thử của
+// bản giả lập (bộ kiểm thử cấp "mọi model") từ trước tới nay chạy được cả Opus: lần chạy đầu quản trị viên giả lập cho tới hạng mạnh, sau đó giữ lựa
+// chọn của bạn (Quản trị viên → Giới hạn sử dụng). Mặc định thật được kiểm ở tests/api/helper-quota.test.mjs; tests/ui/usage-quota.mjs tự đặt và trả lại.
+const TOP_SEEDED = path.join(DATA, ".sharedtop-seeded");
+if (!fs.existsSync(TOP_SEEDED)) {
+  const r = await call("PATCH", "/api/admin/usage", { config: { sharedTop: "strong" } });
+  if (r.status === 200) fs.writeFileSync(TOP_SEEDED, new Date().toISOString()); else console.error("Không đặt được model cao nhất trên khóa chung:", r.j?.error);
+}
 // Connector giả lập kết nối sẵn như đang dùng thật: Mock Notes (đăng nhập OAuth, tự bấm "Cho phép"), Mock Status (giao thức 2026),
 // Mock Echo (SSE đời cũ) và DeepWiki thật (nếu có mạng). Máy chủ giả lập lưu token trong bộ nhớ nên mỗi lần chạy đều kết nối lại.
 const MC = `http://127.0.0.1:${MCP_PORT}`;

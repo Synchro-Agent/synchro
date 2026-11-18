@@ -177,7 +177,9 @@ console.log("5. Antigravity: đăng nhập qua terminal giả");
   ok(at.s === 200 && /\[đã dùng update_plan: Đã cập nhật/.test(at.j?.text ?? "") && !/bị từ chối/.test(at.j.text), "Gemini qua gói gọi thẳng công cụ của Synchro (cầu nối đánh dấu nạp sẵn, không bị agy từ chối)", JSON.stringify(at.j));
   const { readFileSync } = await import("node:fs");
   const cfg = `${process.cwd()}/data-mock/engine/logins/agy/${uid}/.gemini/config`;
-  ok(!JSON.parse(readFileSync(`${cfg}/mcp_config.json`, "utf8")).mcpServers?.synchro && /"matcher":"mcp_synchro_\.\*\|CallMcpTool"/.test(readFileSync(`${cfg}/hooks.json`, "utf8")), "xong lượt: gỡ cầu nối khỏi cấu hình agy; hook chỉ cho phép công cụ MCP (của Synchro)");
+  // Gỡ cầu nối có thể xóa luôn tệp cấu hình MCP khi không còn máy chủ nào: thiếu tệp nghĩa là không còn cầu nối (không làm bộ kiểm dừng giữa chừng).
+  const rd = (f) => { try { return readFileSync(f, "utf8"); } catch { return ""; } };
+  ok(!JSON.parse(rd(`${cfg}/mcp_config.json`) || "{}").mcpServers?.synchro && /"matcher":"mcp_synchro_\.\*\|CallMcpTool"/.test(rd(`${cfg}/hooks.json`)), "xong lượt: gỡ cầu nối khỏi cấu hình agy; hook chỉ cho phép công cụ MCP (của Synchro)");
   // agy 1.4.11: công cụ MCP nạp khi cần được gọi qua tên chung CallMcpTool — vẫn được phép, không dừng sau câu dẫn.
   const od = await member("POST", "/api/llm", { model: "sub-agy/gemini-3.8-flash", messages: [{ role: "user", content: 'Ghi việc [mock:ondemand] #tool=update_plan #args={"items":[{"content":"Buoc hai","status":"in_progress"}]}' }], skills: true });
   ok(od.s === 200 && /\[đã dùng update_plan qua CallMcpTool: Đã cập nhật/.test(od.j?.text ?? ""), "agy gọi công cụ qua CallMcpTool (nạp khi cần) vẫn chạy", JSON.stringify(od.j));

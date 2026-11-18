@@ -32,7 +32,7 @@ const CHECK = `(() => {
 
 const u = await tempUser(B, "usage-quota", { name: "Usage Quota", fullPerms: false, verified: true });
 const admin = await adminClient(B);
-let t = null;
+let t = null, restoreTop = null;
 try {
   console.log("━━ 1. Tài khoản miễn phí: vòng mức dùng có phần khóa API chung, tin nhắn hôm nay chỉ đếm tin của người dùng");
   const st = await u.api("POST", "/api/engines/codex/login/start", {});
@@ -50,6 +50,10 @@ try {
 
   t = await openChrome({ base: B, port: Number(process.env.CDP_PORT ?? 9376), name: "usage-quota", shots: SHOTS });
   await t.P("Network.setCookie", { name: "synchro_session", value: u.cookie.split("=")[1], url: B });
+  // Chế độ Tự động như tài khoản miễn phí trên production (bản giả lập có model mặc định riêng): lựa chọn model lưu ở u:<uid>:model.
+  await t.P("Page.navigate", { url: `${B}/?uq=seed` });
+  await t.until(`!!document.querySelector("textarea")`, 180_000);
+  await t.ev(`localStorage.setItem(${JSON.stringify(`u:${u.uid}:model`)}, "auto")`);
   for (const [w, h, label] of [[1280, 860, "máy tính"], [375, 812, "điện thoại"]]) {
     await t.size(w, h, w < 600);
     for (const th of ["light", "dark"]) {
@@ -57,7 +61,8 @@ try {
       if (!ok(await t.until(`!!document.querySelector("textarea")`, 180_000), `${label} ${th}: trang chủ mở được`)) continue;
       await t.theme(th);
       const ring = await waitFor(() => t.ev(`(() => { const b = document.querySelector(".dock .us-ring"); if (!b) return null; const a = b.querySelector("circle.api"); return a ? { label: b.getAttribute("aria-label"), dash: a.getAttribute("stroke-dasharray"), r: a.getAttribute("r") } : null; })()`), 30_000, { every: 400 });
-      ok(!!ring && /khóa API chung 25%|shared API key 25%/.test(ring.label), `${label} ${th}: vòng mức dùng có vòng trong cho khóa API chung (25% của hạn mức phiên), nhãn đọc được`, ring);
+      if (!ok(!!ring && /khóa API chung 25%|shared API key 25%/.test(ring.label), `${label} ${th}: vòng mức dùng có vòng trong cho khóa API chung (25% của hạn mức phiên), nhãn đọc được`,
+        await t.ev(`({ ring: document.querySelector(".dock .us-ring")?.outerHTML?.slice(0, 400) ?? null, model: localStorage.getItem(${JSON.stringify(`u:${u.uid}:model`)}) })`))) { await t.shot(`ring-missing-${w}-${th}`); continue; }
       ok(await t.ev(`(() => { const b = document.querySelector(".dock .us-ring"); const r = b?.getBoundingClientRect(); return !!r && r.right <= innerWidth + 1 && document.documentElement.scrollWidth <= innerWidth + 1; })()`), `${label} ${th}: vòng nằm trọn màn hình, không cuộn ngang`);
       await t.ev(`(() => { const b = document.querySelector(".dock .us-ring"); b.scrollIntoView({ block: "center" }); })()`);
       await sleep(300);
@@ -79,8 +84,15 @@ try {
   t.close(); t = null;
 
   console.log("━━ 2. Chủ sở hữu: Giới hạn sử dụng (hạn mức ngày, khóa API chung)");
+  // Bản giả lập cho tới hạng mạnh (tools/dev-mock.mjs); đặt về mặc định của máy chủ thật trong lúc kiểm rồi trả lại như cũ.
+  const prev = (await admin.api("GET", "/api/admin/usage")).j?.config ?? {};
+  restoreTop = () => admin.api("PATCH", "/api/admin/usage", { config: { sharedTop: prev.sharedTop ?? "balanced", sharedKey: prev.sharedKey !== false } });
+  await admin.api("PATCH", "/api/admin/usage", { config: { sharedTop: "balanced", sharedKey: true } });
   const a = await admin.api("GET", "/api/admin/usage");
-  ok(a.s === 200 && a.j?.config?.sharedTop === "balanced" && a.j.config.sharedKey === true, "mặc định: khóa chung cho dùng, tới hạng cân bằng (không Opus)", a.j?.config);
+  ok(a.s === 200 && a.j?.config?.sharedTop === "balanced" && a.j.config.sharedKey === true, "khóa chung cho dùng, tới hạng cân bằng (không Opus)", a.j?.config);
+  const ms = (await u.api("GET", "/api/models")).j;
+  const keys = (ms?.providers ?? []).flatMap((p) => p.models.map((m) => m.key));
+  ok(!keys.includes("anthropic/claude-opus-5-5") && keys.some((k) => /sonnet/.test(k)), "bộ chọn model của tài khoản thường: không có Opus trên khóa chung, vẫn có Sonnet", keys.filter((k) => /anthropic/.test(k)));
   ok(a.j?.users?.find((x) => x.id === u.uid)?.shared?.top === "balanced", "từng người có quy tắc khóa chung đang áp", a.j?.users?.find((x) => x.id === u.uid));
   t = await openChrome({ base: B, port: Number(process.env.CDP_PORT ?? 9376) + 1, name: "usage-quota-admin", shots: SHOTS });
   await t.P("Network.setCookie", { name: "synchro_session", value: admin.cookie().split("=")[1], url: B });
@@ -111,6 +123,7 @@ try {
   ok(false, "chạy hết bộ kiểm", e.stack ?? String(e));
 } finally {
   t?.close();
+  await restoreTop?.();
   await u.remove();
 }
 console.log(`\nẢnh: ${SHOTS}\n${pass}/${pass + fail} đạt`);
