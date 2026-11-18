@@ -1187,6 +1187,9 @@ table{font-variant-numeric:tabular-nums}h1,h2,h3{text-wrap:balance}
    overflow:hidden, nên tiêu đề lấn lên đè logo, thấp hơn nữa thì mất cả nút Tiếp tục. Lớp cuộn chừa chỗ cho logo; margin auto căn giữa
    khi đủ chỗ, thiếu chỗ thì bắt đầu ngay dưới logo và cuộn được. */
 .auth-scroll{position:absolute;inset:0;z-index:10;display:flex;flex-direction:column;align-items:center;overflow-x:hidden;overflow-y:auto;padding:64px 0 24px;scrollbar-width:none}
+/* Màn thấp: nội dung cuộn mờ dần dưới dải logo cố định (đỉnh 16px + logo, tới 56px) thay vì chữ đè lên logo; chưa cuộn thì đệm trên 64px
+   giữ mọi chữ ngoài vùng mờ. overflow-anchor:none: các dòng hiện dần / form co giãn không kéo theo vị trí cuộn (cuộn tới lui trên Windows). */
+.auth-scroll{overflow-anchor:none;-webkit-mask-image:linear-gradient(180deg,transparent 0,transparent 52px,#000 76px,#000 calc(100% - 12px),transparent);mask-image:linear-gradient(180deg,transparent 0,transparent 52px,#000 76px,#000 calc(100% - 12px),transparent)}
 .auth-scroll>*{margin-top:auto;margin-bottom:auto}
 
 /* ---- Đăng nhập: trạng thái đang xử lý / thành công / lỗi ---- */

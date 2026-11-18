@@ -458,7 +458,9 @@ export const AuthComponent = ({ logo = <DefaultLogo />, brandName = "EaseMize", 
     const ms = Math.round((OUT + 2 * STEP + DUR * 0.6) * 1000);
     const el = authStep === "password" ? passwordInputRef.current : authStep === "confirmPassword" ? confirmPasswordInputRef.current : authStep === "profile" && !fullName ? fullNameRef.current : null;
     if (!el) return;
-    const t = setTimeout(() => el.focus(), ms);
+    // preventScroll: ở cửa sổ thấp, đặt tiêu điểm vào ô (Họ tên ở cuối khung) từng cuộn cả màn lên, tiêu đề "Giới thiệu về bạn" chui xuống
+    // dưới logo cố định ngay khi vừa mở; người dùng thấy đầu trang trước, tự cuộn khi cần.
+    const t = setTimeout(() => el.focus({ preventScroll: true }), ms);
     return () => clearTimeout(t);
   }, [authStep, stage]); // eslint-disable-line react-hooks/exhaustive-deps
 
