@@ -352,5 +352,6 @@ html body .sy-settings :is(.api-card:not(.bare),.us-card,.inset,.promo,.dcard,.a
 .sy-settings .adm-bar .s-search{margin:0}
 }
 /* Phiên đăng nhập ở điện thoại: bỏ cột Tạo lúc (còn Cập nhật) để bảng vừa khung cài đặt; nhãn Đang dùng giữ một dòng (.new-tag nowrap) đẩy bảng
-   rộng hơn khung và hiện thanh cuộn ngang (polish.mjs bước 3). */
-@media (max-width:640px){.tbl-ses :is(th,td):nth-child(3){display:none}}
+   rộng hơn khung và hiện thanh cuộn ngang (polish.mjs bước 3). Địa chỉ IP (IPv6 rất dài) và ngày tiếng Anh được ngắt ở bất kỳ đâu để bảng
+   không bao giờ rộng hơn khung. */
+@media (max-width:640px){.tbl-ses :is(th,td):nth-child(3){display:none}.tbl-ses td{overflow-wrap:anywhere}.tbl-ses td:last-child{padding-right:0}.tbl-ses .btn{padding-inline:10px}}
