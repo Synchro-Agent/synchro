@@ -32,6 +32,10 @@ const LANG = { light: "vi", dark: "en" };
 
 // Lỗi được phép: mỗi dòng một mẫu (so với "bước: nội dung lỗi") và lý do. Không thêm dòng nào khi chưa viết được lý do cụ thể.
 const ALLOW = [
+  { re: /\/artifacts[^:]*: bố cục tự nhảy \d+px khi không ai chạm: button\.btn\.dark$/,
+    why: "khối Tạo mới ở Artifacts tự chuyển Tài liệu → Trang trình bày → Thiết kế (có thanh tiến độ dưới thẻ đang chọn, dừng khi rê chuột); nút cuối khối đổi nhãn theo thẻ (Tạo tài liệu / Tạo trang trình bày) nên nút canh phải dịch ngang. Chiều cao trang không đổi (đo 6232px suốt 12 giây ở 390px), không phải bố cục rung" },
+  { re: /\/artifacts-tab\d: khung cuộn dọc chỉ tràn \d+px mà còn thanh cuộn .*: div\.page\.ds-page/,
+    why: "đây là khung cuộn của cả trang, phần tràn là đúng lề dưới 72px của trang ở tab Ứng dụng còn trống, cửa sổ cao đúng 900px (đo: nội dung kết thúc ở 834px, tràn 7px không đổi trong 14 giây). Trang nào cũng dài hơn cửa sổ vài px ở một chiều cao cửa sổ nào đó; không phải lỗi bố cục như khung con tràn lẻ px ở mọi cỡ" },
 ];
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -316,7 +320,7 @@ for (const theme of THEMES) for (const size of SIZES) {
   await step0("trang-chu", async () => { await home(); await check("trang-chu"); });
   await step0("menu-model", async () => { await click(`document.querySelector(".model-btn")`, "model"); await ready(); await check("menu-model"); await esc(); });
   await step0("bang-lenh", async () => { await key("k", "KeyK", 75, 4); await ready(); await check("bang-lenh"); await esc(); });
-  await step0("menu-nguoi-dung", async () => { await side(); await click(`document.querySelector(".rail .user")`, "user"); await ready(); await check("menu-nguoi-dung"); await esc(); });
+  await step0("menu-nguoi-dung", async () => { await side(); await click(`[...document.querySelectorAll(".rail .user")].find((e) => e.checkVisibility()) ?? document.querySelector(".rail .user")`, "user"); await ready(); await check("menu-nguoi-dung"); await esc(); });
   await step0("chat-artifact", async () => {
     await ev(`(async () => { const me = await (await fetch("/api/auth/me")).json(), m = await (await fetch("/api/models")).json(), k = m.providers.flatMap((p) => p.models).find((x) => !x.key.startsWith("sub-"))?.key; if (k) localStorage.setItem("u:" + me.user.id + ":model", k); })()`);
     await home();
@@ -383,7 +387,8 @@ for (const theme of THEMES) for (const size of SIZES) {
     if (await ev(`!!document.querySelector(".pl-scan")`)) { await click(`document.querySelector(".pl-scan")`, "scan"); await until(`!!document.querySelector(".scan-modal .modal-foot")`, 15000, "scan").catch(() => {}); await ready(); await check("skill-quet"); await esc(); }
   });
   await step0("cai-dat", async () => {
-    await side(); await click(`document.querySelector(".rail .user")`, "user"); await ready();
+    if (!(await ev(`!!document.querySelector("[data-nav]")`))) await home();
+    await esc(); await side(); await click(`[...document.querySelectorAll(".rail .user")].find((e) => e.checkVisibility()) ?? document.querySelector(".rail .user")`, "user"); await ready();
     await click(byText(".menu-item", /^(Cài đặt|Settings)/), "settings"); await until(`!!document.querySelector(".modal.settings .s-item")`, 15000, "settings"); await ready();
     const n = await ev(`document.querySelectorAll(".modal.settings .s-item").length`);
     for (let i = 0; i < n; i++) {
