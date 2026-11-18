@@ -1,6 +1,7 @@
 // Lỗi 5 (ma trận tài khoản miễn phí): hai tệp ghi âm trong một tin nhắn không đọc cùng lúc được (hàng "convert" mỗi người một việc) và tệp thứ hai
 // bị báo "Máy chủ đang đọc nhiều tệp cùng lúc". Nay tệp sau của cùng người xếp hàng chờ lượt của họ: có giới hạn số tệp chờ và thời gian chờ,
 // quá thì nói đúng lý do. Người khác không phải chờ hàng của người này. Không cần máy chủ web.
+import fs from "node:fs";
 import { loadTs } from "../lib/ts.mjs";
 
 let pass = 0, fail = 0;
@@ -92,6 +93,14 @@ console.log("6. Hàng đọc tệp thường (parse): tệp thứ 5 của một 
   g.open();
   const rs = await Promise.all(jobs);
   ok(rs.join() === "0,1,2,3,4,5", "cả 6 tệp đều đọc xong", rs);
+}
+console.log("7. Lời hết giờ trên thẻ tệp có bản tiếng Anh");
+{
+  const en = (t) => { for (const [re, f] of O.OPS_RULES_EN) { const m = t.match(re); if (m) return f(m); } return t; };
+  ok(en('Máy chủ đọc "phong-van.m4a" quá lâu (quá 16 phút). Hãy thử lại.') === 'The server took too long to read "phong-van.m4a" (over 16 minutes). Try again.', "tệp ghi âm chờ chép lời quá lâu");
+  ok(en('Tải "bao-cao.pdf" lên quá lâu (quá 2 phút). Hãy thử lại.') === 'Uploading "bao-cao.pdf" took too long (over 2 minutes). Try again.', "tệp thường tải lên quá lâu");
+  const fsrc = fs.readFileSync("ui/filestate.ts", "utf8");
+  ok(fsrc.includes('`Máy chủ đọc "${key}" quá lâu (quá ${AV_TIMEOUT_MS / 60_000} phút). Hãy thử lại.`') && fsrc.includes('`Tải "${key}" lên quá lâu (quá 2 phút). Hãy thử lại.`'), "câu trong ui/filestate.ts khớp đúng luật dịch");
 }
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

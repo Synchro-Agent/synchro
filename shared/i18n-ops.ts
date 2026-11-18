@@ -300,6 +300,9 @@ export const OPS_RULES_EN: Rule[] = [
   [/^Bạn đã dùng hết (\d+) MB dung lượng tệp tải lên\. Xóa bớt tệp cũ ở Cài đặt → Quyền riêng tư\.$/, (m) => `You've used all ${m[1]} MB of your upload space. Delete old files in Settings → Privacy.`],
   [/^"(.+)" quá lớn hoặc quá phức tạp để đọc\. Hãy chia nhỏ tệp rồi tải lên lại\.$/, (m) => `"${m[1]}" is too large or too complex to read. Split it into smaller files and upload again.`],
   [/^"(.+)" giải nén ra quá lớn \(trên 200 MB\) nên Synchro không đọc\. Hãy chia nhỏ tệp rồi tải lên lại\.$/, (m) => `"${m[1]}" unpacks to more than 200 MB, so Synchro didn't read it. Split it into smaller files and upload again.`],
+  // Thẻ tệp hết giờ chờ (ui/filestate.ts): tệp thường tải lên quá 2 phút; tệp ghi âm / video chờ máy chủ chép lời quá AV_TIMEOUT_MS.
+  [/^Tải "(.+)" lên quá lâu \(quá 2 phút\)\. Hãy thử lại\.$/, (m) => `Uploading "${m[1]}" took too long (over 2 minutes). Try again.`],
+  [/^Máy chủ đọc "(.+)" quá lâu \(quá (\d+) phút\)\. Hãy thử lại\.$/, (m) => `The server took too long to read "${m[1]}" (over ${m[2]} minutes). Try again.`],
   [/^"(.+)" bị hỏng hoặc không đúng định dạng, không mở được\.$/, (m) => `"${m[1]}" is damaged or not in the expected format, so it couldn't be opened.`],
 ];
 export const OPS_RULES_VI: Rule[] = [];
