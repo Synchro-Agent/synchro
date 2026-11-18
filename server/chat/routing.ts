@@ -50,6 +50,7 @@ import { getPrefs as codePrefs } from "../codestore";
 import { BROWSER_RULES, BROWSER_TOOLS, chatFiles, releaseBrowser } from "../browsertools";
 import { useProfile, lastUserText, DEFAULT_SYSTEM, FAST_RULES, contextOf, estimate, pinnedBlock, artifactMessages, QUALITY_RULES, BRIDGE_CLIS, brainOn, CLI_TOOLS_NOTE, NARRATE_RULES, holdNeedTools, withRecall, designOf, nowBlock, crisisBlock, ARTIFACT_SYSTEM, NEED_TOOLS, useMemory } from "./prompt";
 import { sweep, pending, unparkApproval, type Decision, needsAsk, applyEdit } from "./approvals";
+import { notePlan } from "./planmerge";
 import { type Lib, fold, execute, reply, toolLoop, type Exec, connTools, PLAN_TOOL, announceOffline, bridgeCall, connProxy, CONN_CALL, live, keepImages, sayOut, withTurnArts, usedLibs, GEMINI_WEB_TOOL, WEB_DESC, mockAdapter, anthropicAdapter, citeOf, responsesAdapter, openaiAdapter, healPatch, isAbort } from "./tools";
 
 // Gợi ý định tuyến cho lượt này: skill hợp nhất với yêu cầu (tìm trong toàn bộ kho, cả skill bên trong thư viện)
@@ -590,8 +591,8 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
         // Connect Link của Composio không phải nguồn: không vào hàng chip "Nguồn" dù CLI báo nó là link trong câu trả lời.
         onSources: am ? undefined : (items) => { for (const s of items) if (webs.size < 12 && !webs.has(s.url) && notConnectLink(s.url)) webs.set(s.url, s); },
         // Codex có update_plan dựng sẵn bên cạnh update_plan của Synchro: model dùng cái nào thì danh sách việc trong khung chat cũng cập nhật (lỗi 8 của ma trận H1:
-        // "Tasks 0/3" đứng yên tới cuối lượt dù model đã xong bước 1).
-        onPlan: am ? undefined : (items) => { progress("plan", JSON.stringify(items)); },
+        // "Tasks 0/3" đứng yên tới cuối lượt dù model đã xong bước 1). Một danh sách mỗi lượt: notePlan (tools.ts) ưu tiên danh sách của Synchro.
+        onPlan: am ? undefined : (items) => { const shown = notePlan(x, "native", items); if (shown) progress("plan", JSON.stringify(shown)); },
       });
       // Bấm Dừng: CLI trả về mọi chữ đã viết trong lượt, kể cả các câu dẫn đã nằm trong nhật ký làm việc (ghép lại thành một đoạn dài
       // không dấu cách, trông như câu trả lời cụt rồi dừng). Câu trả lời chỉ giữ phần của bước đang viết dở, như lượt chạy bằng khóa API.

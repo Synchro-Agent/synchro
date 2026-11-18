@@ -18,7 +18,7 @@ delete process.env.SYNCHRO_ENGINE_USER; delete process.env.SYNCHRO_ENGINE_BWRAP;
 fs.mkdirSync(process.env.DATA_DIR, { recursive: true }); fs.mkdirSync(BIN, { recursive: true });
 for (const f of fs.readdirSync("tools/mock-cli")) { fs.copyFileSync(path.join("tools/mock-cli", f), path.join(BIN, f)); fs.chmodSync(path.join(BIN, f), 0o755); }
 fs.writeFileSync(path.join(BIN, "mock-cli.json"), JSON.stringify({ base: "http://127.0.0.1:9" }));
-const { "ai/engine": EN, "ai/cli_engines": CE, "ai/codex_server": CS } = await loadTs(["ai/engine", "ai/cli_engines", "ai/codex_server"]);
+const { "ai/engine": EN, "ai/cli_engines": CE, "ai/codex_server": CS, "chat/planmerge": PM } = await loadTs(["ai/engine", "ai/cli_engines", "ai/codex_server", "chat/planmerge"]);
 const warn0 = console.warn; console.warn = () => {};
 
 try {
@@ -51,6 +51,22 @@ try {
     const gaps = r.plans.slice(1).map((p, i) => p.at - r.plans[i].at);
     ok(r.final && r.final.at - r.plans[0].at >= 4000 && gaps.every((g) => g >= 1000), `${name}: tới ngay lúc model cập nhật`, { first: r.plans[0]?.at, final: r.final?.at, gaps });
   };
+
+  console.log("1b. Một danh sách việc mỗi lượt khi model dùng cả hai update_plan");
+  const L = (...st) => st.map((x, i) => ({ content: `Việc ${i + 1}`, status: x }));
+  const N3 = (...st) => st.map((x, i) => ({ content: `native ${i + 1}`, status: x }));
+  { const x = {};
+    ok(J(PM.notePlan(x, "native", N3("in_progress", "pending", "pending"))) === J(N3("in_progress", "pending", "pending")), "chỉ có danh sách dựng sẵn: hiện như thường");
+    ok(J(PM.notePlan(x, "synchro", L("in_progress", "pending", "pending"))) === J(L("in_progress", "pending", "pending")) && x.plan.src === "synchro", "update_plan của Synchro: thay danh sách, thành nguồn chính");
+    ok(J(PM.notePlan(x, "native", N3("completed", "in_progress", "pending"))) === J(L("completed", "in_progress", "pending")), "dựng sẵn cùng số việc: cập nhật trạng thái, giữ chữ của Synchro (không nhảy sang danh sách khác)");
+    ok(PM.notePlan(x, "native", N3("completed", "in_progress", "pending")) === null, "dựng sẵn không đổi trạng thái: không gửi lại");
+    ok(PM.notePlan(x, "native", [...N3("completed", "completed", "in_progress"), { content: "native 4", status: "pending" }]) === null && J(x.plan.items) === J(L("completed", "in_progress", "pending")), "dựng sẵn khác số việc: bỏ qua, danh sách trên thanh việc giữ nguyên");
+    ok(J(PM.notePlan(x, "synchro", L("completed", "completed", "completed"))) === J(L("completed", "completed", "completed")), "Synchro gửi lại: luôn hiện đúng như gửi");
+    ok(J(PM.notePlan(x, "synchro", [])) === "[]", "Synchro gửi danh sách rỗng: vẫn gửi (như trước)"); }
+  ok(J(PM.notePlan(undefined, "native", N3("pending"))) === J(N3("pending")) && PM.notePlan(undefined, "native", []) === null, "lượt không có cầu nối MCP: danh sách dựng sẵn hiện như thường");
+
+  const promptSrc = fs.readFileSync("server/chat/prompt.ts", "utf8");
+  ok(/cli === "codex" \? CODEX_PLAN_NOTE/.test(promptSrc) && /CODEX_PLAN_NOTE = "[^"]*update_plan của máy chủ synchro[^"]*xong mỗi bước/.test(promptSrc), "prompt của Codex: dặn dùng update_plan của synchro và gọi lại khi xong mỗi bước");
 
   console.log("2. codex exec (mục todo_list)");
   process.env.SYNCHRO_CODEX_SERVER = "0";
