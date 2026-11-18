@@ -340,6 +340,11 @@ input,textarea{font:inherit;color:inherit;outline:0}
 
 .lnk{text-decoration:underline;cursor:pointer;color:inherit}
 .toast{position:fixed;right:24px;bottom:24px;display:flex;gap:8px;align-items:center;background:var(--card);box-shadow:var(--shadow);border-radius:var(--r-menu);padding:10px 14px;font-size:var(--fs-2);z-index:var(--z-toast);max-width:min(560px,calc(100vw - 48px));animation:pop .2s backwards}
+/* Thông báo chỉ để đọc: không chặn cú bấm vào nút nằm dưới nó. Điện thoại / máy tính bảng: hiện ở trên (dưới thanh trên) thay vì góc dưới,
+   nơi nó phủ đúng nút +, micro, chọn model của khối soạn tin vài giây sau mỗi câu trả lời (vd. "GPT-6 Luna chạy bằng khóa API chung…";
+   tests/ui/popovers.mjs: không mở được menu + / micro / model). Trang Tải ứng dụng giữ thông báo ở đáy (.dl-toast, không có khối soạn tin). */
+.toast{pointer-events:none}
+@media (max-width:860px){.toast:not(.dl-toast){top:calc(64px + env(safe-area-inset-top));bottom:auto;left:16px;right:16px;margin-inline:auto;width:max-content;max-width:calc(100vw - 32px)}}
 .btn.danger{background:#c6422f;color:#fff;border-color:transparent}.btn.danger:hover{background:#b23a29}.menu-item.del:hover{background:#c6422f;color:#fff}
 .chat-wrap{position:relative}.chat-wrap .dots{position:absolute;right:4px;top:4px;width:24px;height:24px;border-radius:var(--r-pill);opacity:0;color:var(--text-2)}
 .chat-wrap:hover .dots,.chat-wrap:focus-within .dots,.chat-wrap .dots:focus-visible,.chat-wrap .dots[aria-expanded="true"]{opacity:1}
