@@ -329,6 +329,9 @@ input,textarea{font:inherit;color:inherit;outline:0}
 /* Núm của công tắc đang bật mang màu nền đối nghịch (Ivory trên rãnh Carbon, Carbon trên rãnh Ivory ở giao diện tối). */
 .toggle.on::after,.sp-tg.on::after,.cn-switch.on i,.cv-sw.on i{background:var(--on-accent)}
 .textarea{width:100%;min-height:96px;border:.5px solid var(--border-strong);border-radius:var(--r-plate);background:var(--input);padding:10px;resize:vertical;font-size:var(--fs-3)}
+/* Ô cao theo nội dung (tới 60% màn hình) thay vì giữ 96px: nội dung chỉ dài hơn ô vài px không còn hiện thanh cuộn có mũi tên trên Windows
+   (Hướng dẫn cho Synchro, Nhập bộ nhớ, Luật tech stack; polish.mjs bước 3). Trình duyệt chưa hỗ trợ field-sizing giữ ô 96px như cũ. */
+.textarea{field-sizing:content;max-height:60vh}
 .textarea:focus{border-color:var(--text-2);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 14%,transparent)}
 .mono{font-family:var(--font-mono);font-size:var(--fs-1);background:var(--hover);padding:4px 8px;border-radius:var(--r-key)}
 .s-title{font-size:18px;font-weight:560;margin:0 0 4px}
