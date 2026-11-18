@@ -330,6 +330,26 @@ const QUYET_DINH = JSON.stringify({
   ],
   quyenHan: "", chucVu: "CHỦ TỊCH", nguoiKy: "Trần Thị Bình", noiNhan: ["Như Điều 3;", "TT Tỉnh ủy, TT HĐND tỉnh (để b/c);", "Lưu: VT, KGVX."],
 }, null, 2);
+// Bộ slide đánh số lại dở dang sau một bản sửa (H1 T8): nhãn mục 01–04 nhưng chân trang 02 / 05 – 05 / 05, và một nút CTA trỏ tới # để
+// hội đồng phản biện (model giả) có thêm một ý kiến của chính nó. Dùng cho tests/ui/critic.mjs ("#decknum").
+const DECKNUM = `<!doctype html>
+<html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+*{box-sizing:border-box}body{margin:0;font:22px/1.45 system-ui,sans-serif;color:#1d1d1b}
+.slide{width:100vw;height:100vh;padding:8vh 8vw;display:flex;flex-direction:column;justify-content:center;gap:16px;position:relative;background:#fbf7f0}
+.k{font:600 14px/1 system-ui;letter-spacing:.12em;color:#b23a12;margin:0}
+h1,h2{margin:0;font-size:52px;line-height:1.1}
+.foot{position:absolute;left:8vw;right:8vw;bottom:5vh;display:flex;justify-content:space-between;font-size:14px;color:#555}
+a.cta{align-self:flex-start;background:#b23a12;color:#fff;padding:12px 22px;border-radius:999px;text-decoration:none}
+</style></head><body>
+<section class="slide"><h1>Trà Một Chạm</h1><p>Giao trà sữa bằng xe điện trong 18 phút.</p></section>
+<section class="slide"><p class="k">01 · Vấn đề</p><h2>Khách chờ quá lâu</h2><p>Đơn giờ cao điểm trễ trung bình 41 phút.</p><div class="foot"><span>Trà Một Chạm</span><span>02 / 05</span></div></section>
+<section class="slide"><p class="k">02 · Giải pháp</p><h2>Micro-hub trong ngõ</h2><p>Mỗi hub phục vụ bán kính 1,5 km.</p><div class="foot"><span>Trà Một Chạm</span><span>03 / 05</span></div></section>
+<section class="slide"><p class="k">03 · Kinh tế đơn vị</p><h2>Lãi 6.000 ₫ mỗi đơn</h2><p>Giá 32.000 ₫, chi phí 26.000 ₫.</p><div class="foot"><span>Trà Một Chạm</span><span>04 / 05</span></div></section>
+<section class="slide"><p class="k">04 · Gọi vốn</p><h2>3 tỷ cho 3 hub</h2>
+<a class="cta" href="#">Đặt lịch gặp</a>
+<div class="foot"><span>Trà Một Chạm</span><span>05 / 05</span></div></section>
+</body></html>`;
 const art = (ident, type, title, content, extra = "") => `<artifact identifier="${ident}" type="${type}" title="${title}"${extra}>\n${content}\n</artifact>`;
 
 // Bản hiện tại của artifact: Synchro gửi ở <current_artifacts> (các bản cũ trong lịch sử chỉ còn thẻ tham chiếu).
@@ -410,6 +430,7 @@ function artifactReply(t, sys, msgs) {
     return `Đã cập nhật **${prev.title}** sang tông xanh lá. Bạn có thể dùng mũi tên phiên bản ở khung bên phải để so với bản trước.\n\n${edited(sys, prev, body)}`;
   }
   if (has(t, /\b(bang tin nhom|ghi chu nhom|ghi chu chung)\b/)) return `Mình đã làm bảng tin nhóm, ghi chú được lưu lại và dùng chung cho mọi người (window.storage). Bấm nút tên lửa trên khung xem trước để xuất bản thành ứng dụng cho cả tổ chức.\n\n${art("bang-tin-nhom", "text/html", "Bảng tin nhóm", NOTES)}`;
+  if (has(t, /#decknum/)) return `Đây là bộ slide gọi vốn:\n\n${art("pitch-tra", "text/html", "Gọi vốn Trà Một Chạm", DECKNUM)}`;
   if (has(t, /#artbug/)) return `Đây là bộ đếm đơn giản:\n\n${art("bo-dem", "application/vnd.react", "Bộ đếm", BUGGY)}`;
   if (has(t, /\b(dich|translat|tro ly|chatbot)\b/) && has(t, /\b(app|ung dung|cong cu)\b/))
     return ai ? `Mình đã làm ứng dụng dịch dùng model AI ngay bên trong artifact. Nhập câu, chọn ngôn ngữ rồi bấm **Dịch**:\n\n${art("tro-ly-dich", "application/vnd.react", "Trợ lý dịch", TRANSLATOR)}`
@@ -716,13 +737,15 @@ function voiceBrief(q) {
 }
 
 // Hội đồng phản biện: như model thật, đọc mã có số dòng và trả JSON lỗi theo dòng kèm bản sửa (bọc trong khối ```json).
-function criticReply(q) {
+function criticReply(q, sys = "") {
+  // Như model thật: viết title / detail theo ngôn ngữ giao diện mà lời nhắc yêu cầu (app/api/critic/route.ts WRITE_IN).
+  const en = /Write title and detail in English/.test(sys);
   const out = [];
   for (const [, n, l] of String(q).matchAll(/^\s*(\d+) \| (.*)$/gm)) {
     const line = Number(n);
-    if (/=\s*undefined;/.test(l)) out.push({ line_start: line, line_end: line, severity: "high", title: "Biến chưa có giá trị nên đọc .length sẽ lỗi", detail: "Biến được gán undefined rồi đọc thuộc tính ngay khi hiển thị, ứng dụng sẽ báo lỗi và không chạy.", suggested_fix: l.replace(/=\s*undefined;/, "= [];") });
-    else if (/<input\b/.test(l) && !/aria-label/.test(l)) out.push({ line_start: line, line_end: line, severity: "low", title: "Ô nhập thiếu nhãn cho trình đọc màn hình", detail: "Ô nhập chỉ có chữ gợi ý, trình đọc màn hình không đọc được ô này dùng để làm gì.", suggested_fix: l.replace("<input", '<input aria-label="Việc mới"') });
-    else if (/class="cta" href="#"/.test(l)) out.push({ line_start: line, line_end: line, severity: "medium", title: "Nút “Đặt bàn ngay” chưa dẫn tới đâu", detail: "Liên kết trỏ tới # nên bấm vào chỉ nhảy lên đầu trang, khách không đặt bàn được.", suggested_fix: l.replace('href="#"', 'href="tel:0900000000"') });
+    if (/=\s*undefined;/.test(l)) out.push({ line_start: line, line_end: line, severity: "high", title: en ? "The variable has no value, so reading .length fails" : "Biến chưa có giá trị nên đọc .length sẽ lỗi", detail: en ? "The variable is set to undefined and a property is read right away when rendering, so the app throws and does not run." : "Biến được gán undefined rồi đọc thuộc tính ngay khi hiển thị, ứng dụng sẽ báo lỗi và không chạy.", suggested_fix: l.replace(/=\s*undefined;/, "= [];") });
+    else if (/<input\b/.test(l) && !/aria-label/.test(l)) out.push({ line_start: line, line_end: line, severity: "low", title: en ? "The input has no label for screen readers" : "Ô nhập thiếu nhãn cho trình đọc màn hình", detail: en ? "The input only has placeholder text, so a screen reader cannot tell what it is for." : "Ô nhập chỉ có chữ gợi ý, trình đọc màn hình không đọc được ô này dùng để làm gì.", suggested_fix: l.replace("<input", '<input aria-label="Việc mới"') });
+    else if (/class="cta" href="#"/.test(l)) out.push({ line_start: line, line_end: line, severity: "medium", title: en ? "The call-to-action button goes nowhere" : "Nút “Đặt bàn ngay” chưa dẫn tới đâu", detail: en ? "The link points to #, so clicking it only jumps to the top of the page." : "Liên kết trỏ tới # nên bấm vào chỉ nhảy lên đầu trang, khách không đặt bàn được.", suggested_fix: l.replace('href="#"', 'href="tel:0900000000"') });
   }
   return "```json\n" + JSON.stringify({ findings: out }, null, 1) + "\n```";
 }
@@ -748,7 +771,7 @@ export function capsReply(sys, q, msgs, toolNames) {
   // Chỉ đọc trên cùng dòng lệnh: phần ghép thêm phía sau tin nhắn (ghi chú nhớ lại từ bộ não…) không phải tham số.
   const sr = /#skillrun[ \t]+(\S+)[ \t]+(\S+)([^\n]*)/.exec(String(q));
   if (sr && toolNames.includes("run_skill_script")) return { tool: { name: "run_skill_script", args: { name: sr[1], path: sr[2], args: sr[3].trim() ? sr[3].trim().split(/\s+/) : [] } } };
-  if (s.includes("<critic_review>")) return { text: criticReply(q) };
+  if (s.includes("<critic_review>")) return { text: criticReply(q, s) };
   if (s.includes("<voice_brief>")) return { text: voiceBrief(q) };
   if (s.includes("<artifacts>") && String(q).includes("<point_edit>")) { const pe = pointEdit(String(q), msgs, s); if (pe) return { text: pe }; }
   if (s.includes("(artifact) gọi tới")) return { text: artifactAi(q) };

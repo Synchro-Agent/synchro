@@ -128,6 +128,27 @@ try {
   await click(`document.querySelector(".art-panel .cr-pill.has")`, "pill todo"); await sleep(600);
   ok(await ev(`!!document.querySelector(".art-code > div.cr-low") && /Gợi ý/.test(document.querySelector(".cr-note").textContent)`), "mức Gợi ý hiện màu riêng");
   await shot("4-low");
+
+  // W10 nhóm C: giao diện tiếng Anh, bộ slide đánh số lại dở dang (nhãn mục 01–04, chân trang 02 / 05 – 05 / 05).
+  // Phản biện viết bằng tiếng Anh; Synchro tự báo đánh số lệch (không phải ý kiến model) bên cạnh ý kiến của model.
+  await api("PATCH", "/api/caps", { crit: true });
+  await P("Page.addScriptToEvaluateOnNewDocument", { source: `try { localStorage.setItem("p:uilang", '"en"'); } catch {}` });
+  await P("Page.reload"); await until(`!!document.querySelector("textarea")`, 30000, "reload en"); await sleep(1200);
+  await click(byText(".nav-item", "New"), "new chat en"); await sleep(600);
+  await ask("#decknum");
+  await until(`document.querySelectorAll(".art-card:not(.busy)").length > 0 && !document.querySelector(".thinking") && !!document.querySelector(".art-panel")`, 60000, "deck");
+  for (let i = 0; i < 80 && !/issue/i.test(await ev(pill)); i++) await sleep(150);
+  const tEn = await ev(pill);
+  ok(/2\s*issues?/i.test(tEn), `bộ slide, giao diện tiếng Anh: phản biện báo 2 vấn đề: “${tEn}”`, tEn);
+  await shot("5-deck-pill-en");
+  await click(`document.querySelector(".art-panel .cr-pill.has")`, "pill deck"); await sleep(800);
+  const notes = await ev(`[...document.querySelectorAll(".cr-note")].map((n) => ({ t: n.querySelector(".cr-h b")?.textContent, by: n.querySelector(".cr-by")?.textContent, d: n.querySelector("p")?.textContent, fix: !!n.querySelector(".btn") }))`);
+  const num = notes.find((n) => n.t === "Inconsistent slide numbering");
+  ok(!!num && num.by === "Synchro" && /Section labels \(01–04\) don't match the page numbers \(02–05 \/ 05\)/.test(num.d) && !num.fix, "ghi chú tiếng Anh của Synchro: đánh số lệch, không có nút áp dụng sửa", JSON.stringify(notes));
+  ok(notes.some((n) => n.t === "The call-to-action button goes nowhere"), "ý kiến của model phản biện cũng bằng tiếng Anh", JSON.stringify(notes.map((n) => n.t)));
+  const viLeft = await ev(`[...document.querySelectorAll(".cr-note")].map((n) => n.textContent).join(" ")`);
+  ok(!/[ạảấầẩẫậắằẳẵặẹẻẽếềểễệịỉọỏốồổỗộớờởỡợụủứừửữựỳỵỷỹđ]/i.test(viLeft.replace(/Trà Một Chạm|Đặt lịch gặp/g, "")), "không còn chữ tiếng Việt trong ghi chú phản biện", viLeft);
+  await shot("6-deck-notes-en");
 } catch (e) { ok(false, "lỗi khi chạy", e.stack); await shot("fail"); }
 await api("PATCH", "/api/caps", { crit: capsBefore.crit ?? true, art: capsBefore.art ?? true });
 const fails = results.filter((r) => !r[0]).length;
