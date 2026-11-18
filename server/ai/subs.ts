@@ -18,7 +18,7 @@ import { classifyTurn, noteCliOutcome } from "./cliupdate";
 import { clearRelogin, engineEnvReady, ensureScopeDir, everLoggedIn, loginTime, markRelogin, needsRelogin, safeScope, scopeDir, status } from "./cli_auth";
 import { prettyGrok } from "../providers";
 import { CLIS, type Cli, engineHome, find, listEngineDir, makeDir, removeDir, removeSessionFiles, spawnCli, stripAnsi, watchSessions, writeEngineFile } from "./cli_runtime";
-import type { Attachment, RateWindow, TurnRequest, WebSource } from "./engine";
+import type { Attachment, PlanStep, RateWindow, TurnRequest, WebSource } from "./engine";
 import { friendlyError, redact, retryAfterMs } from "./errors";
 import { agyNativeImages, nativeStamp, removeFile, type ImgFile } from "./imagefiles";
 import { stallOf, waitText, watchLimits, type WatchState } from "./watchdog";
@@ -660,7 +660,7 @@ async function removeConvAttachments(uid: string, conv: string) {
  *  onStatus: dòng trạng thái (đang chờ, CLI đang thử lại); onSearch, onSources: CLI đang tìm web và nguồn tìm được. */
 /** ephemeral (đoạn chat ẩn danh): không nối tiếp phiên, không nhớ phiên, xóa lịch sử CLI ghi trên đĩa ngay khi xong lượt. */
 /** onNativeImages: ảnh Antigravity tự tạo trong lượt (image-generator của nó, không qua generate_image): chuyển ra đây để giao thành tệp, người dùng không mở được đường dẫn trên máy chủ. */
-export type SubTurn = { maxWaitMs?: number; onAttDir?: (dir: string) => void; onNativeImages?: (files: ImgFile[]) => void; ephemeral?: boolean; onSession?: (id: string) => void; user: UserRow; model: string; system: string; messages: unknown; conv?: string; effort?: string; /** Lượt không công cụ (đường nhanh): được dùng tiến trình khởi động sẵn. */ fast?: boolean; /** Tên việc phụ, ghi vào [timing]; không có là lượt của người dùng. */ job?: string; /** Việc không ai đứng chờ: xếp hàng sau các việc khác (BG_MAX). */ bg?: boolean; /** Trích ngắn các tin cũ mà trình duyệt không gửi nguyên văn. */ older?: string; awaitingUser?: () => boolean; signal?: AbortSignal; onDelta?: (t: string) => void; onToolUse?: () => void; mcp?: { url: string; alive?: () => number; onPark?: (f: () => void) => void; live?: { url: string; key: string } }; web?: boolean; fresh?: boolean; total?: number; lockMs?: number; onStatus?: (t: string) => void; onSearch?: (q: { query?: string; url?: string }) => void; onSources?: (s: WebSource[]) => void };
+export type SubTurn = { maxWaitMs?: number; onAttDir?: (dir: string) => void; onNativeImages?: (files: ImgFile[]) => void; ephemeral?: boolean; onSession?: (id: string) => void; user: UserRow; model: string; system: string; messages: unknown; conv?: string; effort?: string; /** Lượt không công cụ (đường nhanh): được dùng tiến trình khởi động sẵn. */ fast?: boolean; /** Tên việc phụ, ghi vào [timing]; không có là lượt của người dùng. */ job?: string; /** Việc không ai đứng chờ: xếp hàng sau các việc khác (BG_MAX). */ bg?: boolean; /** Trích ngắn các tin cũ mà trình duyệt không gửi nguyên văn. */ older?: string; awaitingUser?: () => boolean; signal?: AbortSignal; onDelta?: (t: string) => void; onToolUse?: () => void; mcp?: { url: string; alive?: () => number; onPark?: (f: () => void) => void; live?: { url: string; key: string } }; web?: boolean; fresh?: boolean; total?: number; lockMs?: number; onStatus?: (t: string) => void; onSearch?: (q: { query?: string; url?: string }) => void; onSources?: (s: WebSource[]) => void; /** Danh sách việc model cập nhật bằng công cụ dựng sẵn của CLI. */ onPlan?: (items: PlanStep[]) => void };
 export type SubResult = { status: number; json: Json };
 
 // ---------------------------------------------------------------- phiên ấm (Claude Code)
@@ -855,6 +855,7 @@ async function runTurn(o: SubTurn): Promise<SubResult> {
     else if (e.kind === "pool") poolState = e.state;
     else if (e.kind === "search") { searched = true; ws.last = Date.now(); o.onSearch?.({ query: e.query, url: e.url }); }
     else if (e.kind === "sources") addSources(e.items);
+    else if (e.kind === "plan") { ws.last = Date.now(); o.onPlan?.(e.items); }
     else if (e.kind === "tooluse") { ws.last = Date.now(); o.onToolUse?.(); }
     else if (e.kind === "session") {
       session = e.id;

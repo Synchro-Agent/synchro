@@ -64,6 +64,17 @@ async function chatTurn(o, E) {
   }
   await C.sleep(150);
   E.completed({ id: "item_0", type: "reasoning", text: "**Chào hỏi**" });
+  // [mock:nativeplan]: như GPT qua Codex dùng update_plan DỰNG SẴN của Codex (không phải update_plan của Synchro): 3 việc, mỗi 1,5 giây xong một việc
+  // (exec: mục todo_list item.started / item.updated / item.completed; app-server: turn/plan/updated). Synchro phải cập nhật danh sách việc ngay trong lượt.
+  if (prompt.includes("[mock:nativeplan]") && !C.isTitleAsk(prompt)) {
+    const steps = ["Đọc yêu cầu", "Dựng bảng lương", "Kiểm tra công thức"];
+    for (let k = 0; k <= steps.length; k++) {
+      if (k) await C.sleep(1500);
+      E.plan(steps.map((t, j) => [t, j < k]), k === 0 ? "started" : k === steps.length ? "completed" : "updated");
+    }
+    await E.message("item_1", "Đã xong cả 3 việc theo danh sách.");
+    return E.done({ input_tokens: prompt.length, cached_input_tokens: 0, output_tokens: 10 });
+  }
   // [mock:slowcodex]: model nghĩ 2 giây rồi mới viết (thử bấm Dừng giữa lượt).
   if (prompt.includes("[mock:slowcodex]")) await C.sleep(2000);
   // Như codex thật với cầu nối MCP: lời dẫn, mcp_tool_call, rồi câu trả lời. Công cụ MCP chỉ chạy khi máy chủ được duyệt sẵn (default_tools_approval_mode="approve").
@@ -157,6 +168,7 @@ const appLog = (method, extra = {}) => { try { fs.appendFileSync(path.join(dir, 
           },
           done: (u) => { if (stopped()) return finish({ status: "interrupted" }); note("thread/tokenUsage/updated", { ...at, tokenUsage: { last: { inputTokens: u.input_tokens, cachedInputTokens: u.cached_input_tokens, outputTokens: u.output_tokens } } }); finish({ status: "completed" }); },
           failed: (message) => { note("error", { ...at, error: { message }, willRetry: false }); finish({ status: "failed", error: { message } }); },
+          plan: (items) => { const k = items.findIndex((x) => !x[1]); note("turn/plan/updated", { ...at, explanation: null, plan: items.map(([step, done], j) => ({ step, status: done ? "completed" : j === k ? "inProgress" : "pending" })) }); },
         };
         note("turn/started", { ...at, turn: { id: turnId, status: "inProgress" } });
         const c = t.config;
@@ -231,6 +243,7 @@ const appLog = (method, extra = {}) => { try { fs.appendFileSync(path.join(dir, 
       message: async (id, text) => C.out({ type: "item.completed", item: { id, type: "agent_message", text } }),
       done: (usage) => C.out({ type: "turn.completed", usage }),
       failed: (message) => { C.out({ type: "turn.failed", error: { message } }); process.exit(1); },
+      plan: (items, phase) => C.out({ type: `item.${phase}`, item: { id: "item_p", type: "todo_list", items: items.map(([text, completed]) => ({ text, completed })) } }),
     };
     // Nhật ký chung với app-server (kiểm thử: không có lượt nào chạy trên bản thread cũ trong bộ nhớ của app-server sau khi exec đã ghi thêm vào phiên).
     appLog("exec", { thread: tid });

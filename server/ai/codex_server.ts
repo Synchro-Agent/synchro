@@ -12,7 +12,7 @@
 import "server-only";
 import fs from "node:fs";
 import os from "node:os";
-import type { Event, TurnRequest } from "./engine";
+import { cliPlan, type Event, type TurnRequest } from "./engine";
 import { find, makeDir, spawnCli, type Proc } from "./cli_runtime";
 import { classify, redact } from "./errors";
 import { registerIdle, warmRoom } from "../turngate";
@@ -274,6 +274,8 @@ export async function* codexServerTurn(req: TurnRequest, prompt: string, cwd: st
           const qy = str(item.query) || str(obj(item.action).query), url = str(obj(item.action).url);
           if ((qy || url) && !asked.has(qy || url)) { asked.add(qy || url); yield { kind: "search", query: qy || undefined, url: url || undefined }; if (url) yield { kind: "sources", items: [{ title: "", url }] }; }
         }
+        // Danh sách việc dựng sẵn của Codex (update_plan): app-server báo turn/plan/updated mỗi lần model cập nhật.
+        if (method === "turn/plan/updated" || (/^item\/(started|updated|completed)$/.test(method) && itype === "todoList")) { const items = cliPlan(method === "turn/plan/updated" ? p.plan : item.items); if (items) yield { kind: "plan", items }; }
         if (method === "item/agentMessage/delta" && typeof p.delta === "string" && p.delta) {
           yield { kind: "text", text: (!partial && parts.length ? "\n\n" : "") + p.delta };
           partial += p.delta;

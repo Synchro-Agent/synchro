@@ -76,7 +76,26 @@ export type Event =
   /** CLI đang tìm hoặc đọc web bằng công cụ dựng sẵn. */
   | { kind: "search"; query?: string; url?: string }
   /** Nguồn web CLI vừa nhận được. */
-  | { kind: "sources"; items: WebSource[] };
+  | { kind: "sources"; items: WebSource[] }
+  /** Danh sách việc model cập nhật bằng công cụ dựng sẵn của CLI (update_plan của Codex): hiện như danh sách việc của Synchro. */
+  | { kind: "plan"; items: PlanStep[] };
+
+export type PlanStep = { content: string; status: "pending" | "in_progress" | "completed" };
+/** Danh sách việc dựng sẵn của Codex → danh sách việc của Synchro. exec --json: mục todo_list { items: [{ text, completed }] } (việc đầu chưa xong là
+ *  việc đang làm); app-server: turn/plan/updated { plan: [{ step, status: pending | inProgress | completed }] }. Không đọc được thì null. */
+export function cliPlan(raw: unknown): PlanStep[] | null {
+  if (!Array.isArray(raw) || !raw.length) return null;
+  const rows = raw.slice(0, 12).map((x) => (x && typeof x === "object" ? x as Record<string, unknown> : {}));
+  const text = (r: Record<string, unknown>) => String(r.step ?? r.text ?? r.content ?? "").replace(/\s+/g, " ").trim().slice(0, 120);
+  if (rows.some((r) => typeof r.status === "string")) {
+    const st = (v: unknown): PlanStep["status"] => (v === "completed" ? "completed" : v === "inProgress" || v === "in_progress" ? "in_progress" : "pending");
+    const out = rows.map((r) => ({ content: text(r), status: st(r.status) })).filter((r) => r.content);
+    return out.length ? out : null;
+  }
+  let open = false;
+  const out = rows.map((r) => { const done = r.completed === true; const s: PlanStep["status"] = done ? "completed" : open ? "pending" : "in_progress"; if (!done) open = true; return { content: text(r), status: s }; }).filter((r) => r.content);
+  return out.length ? out : null;
+}
 
 export type WebSource = { title: string; url: string };
 

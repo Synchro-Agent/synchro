@@ -589,6 +589,9 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
         onSearch: am ? undefined : (q) => { const seq = progress("tool", q.url ? `Đang đọc trang ${q.url.slice(0, 120)}` : q.query ? `Đang tìm trên web: ${q.query.slice(0, 120)}` : "Đang tìm trên web"); if (seq) progress("res", JSON.stringify({ ref: seq, ok: true })); },
         // Connect Link của Composio không phải nguồn: không vào hàng chip "Nguồn" dù CLI báo nó là link trong câu trả lời.
         onSources: am ? undefined : (items) => { for (const s of items) if (webs.size < 12 && !webs.has(s.url) && notConnectLink(s.url)) webs.set(s.url, s); },
+        // Codex có update_plan dựng sẵn bên cạnh update_plan của Synchro: model dùng cái nào thì danh sách việc trong khung chat cũng cập nhật (lỗi 8 của ma trận H1:
+        // "Tasks 0/3" đứng yên tới cuối lượt dù model đã xong bước 1).
+        onPlan: am ? undefined : (items) => { progress("plan", JSON.stringify(items)); },
       });
       // Bấm Dừng: CLI trả về mọi chữ đã viết trong lượt, kể cả các câu dẫn đã nằm trong nhật ký làm việc (ghép lại thành một đoạn dài
       // không dấu cách, trông như câu trả lời cụt rồi dừng). Câu trả lời chỉ giữ phần của bước đang viết dở, như lượt chạy bằng khóa API.
