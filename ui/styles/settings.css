@@ -283,6 +283,7 @@
   .adm-perm-row.us-top .api-sel,.adm-perm-row.us-top .api-sel select{width:100%;max-width:100%}
   /* Dòng của từng người: phiên và tuần chia đôi bề ngang (cột thứ hai 64px từng cắt ô tuần), hai hộp chọn khóa chung mỗi hộp một dòng. */
   .us-p-m{grid-column:2}
+  .adm-perm-row .us-money{width:112px}
   .us-p-x .api-sel{flex:1 1 100%}
   .us-p-x .api-sel select{width:100%}
 }

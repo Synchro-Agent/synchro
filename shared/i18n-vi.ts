@@ -823,6 +823,8 @@ Object.assign(EN2VI, {
 });
 RULES_VI.push(
   [/^Default: (\$[\d.,]+)$/, (m) => `Mặc định: ${m[1]}`],
+  // Ô tiền của từng người (Quản trị → Giới hạn sử dụng): số trước, ngay sau ký hiệu $ của ô, để màn hình hẹp có cắt thì chỉ mất chữ "mặc định".
+  [/^([\d.,]+) \(default\)$/, (m) => `${m[1]} (mặc định)`],
   [/^Add a file to (.+)$/, (m) => `Thêm tệp vào ${viOf(m[1])}`],
   [/^More options for (.+)$/, (m) => `Tùy chọn khác cho ${viOf(m[1])}`],
 );

@@ -87,7 +87,10 @@ try {
   await t.until(`!!document.querySelector("textarea")`, 120_000);
   await t.ev(`location.hash = "#s=Usage"`);
   const card = await waitFor(() => t.ev(`(() => { const c = [...document.querySelectorAll(".us-vc-f")].map((e) => e.innerText).find((x) => /việc nền|background job/.test(x)); return c || null; })()`), 30_000, { every: 400 });
-  ok(!!card && /2 tin nhắn|2 messages/.test(card) && /3 việc nền|3 background jobs/.test(card), "Cài đặt → Usage: \"Hôm nay: 2 tin nhắn\" và \"3 việc nền\" riêng", card);
+  // Tin "Xin chào" ở trên đi bằng khóa API (không thêm tin nhắn của gói) nhưng có thể thêm việc nền (đặt tên đoạn chat): so với số máy chủ đang báo.
+  const now2 = (await u.api("GET", "/api/usage?all=1")).j?.vendors?.find((v) => v.cli === "codex")?.sub;
+  ok(!!card && /Hôm nay: 2 tin nhắn|Today: 2 messages/.test(card) && new RegExp(`${now2?.helpersToday} (việc nền|background jobs?)`).test(card) && now2?.helpersToday >= 3,
+    "Cài đặt → Usage: \"Hôm nay: 2 tin nhắn\" và số việc nền riêng", JSON.stringify({ card, now2: { turns: now2?.turnsToday, helpers: now2?.helpersToday } }));
   await t.shot("settings-usage");
   t.close(); t = null;
 
