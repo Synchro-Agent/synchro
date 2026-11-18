@@ -677,7 +677,7 @@ Object.assign(SPEECH_VI2EN, {
   "Lưu quy tắc": "Save rules", "Chọn một từ điển để sửa quy tắc": "Pick a dictionary to edit its rules", "Hoặc bấm “Tạo từ điển” để bắt đầu.": "Or press “Create dictionary” to start.",
   "Đã tạo từ điển và bật trong Đọc văn bản": "Dictionary created and turned on in Text to Speech", "Đọc văn bản dùng tối đa 3 từ điển cùng lúc": "Text to Speech uses up to 3 dictionaries at once",
   "Tạo từ điển": "Create dictionary", "Từ điển của bạn": "Your dictionaries", "Chưa có từ điển nào. Tạo từ điển đầu tiên ở bên cạnh.": "No dictionaries yet. Create your first one alongside.",
-  "Dùng khi đọc": "Use when reading", "Từ điển mới": "New dictionary", "Tên từ điển": "Dictionary name", "Ví dụ: Tên sản phẩm công ty": "E.g. Company product names", "Mô tả": "Description",
+  "Dùng khi đọc": "Use when reading", "Bật công tắc để Đọc văn bản dùng từ điển (tối đa 3).": "Turn a dictionary on to use it in Text to Speech (up to 3).", "Từ điển mới": "New dictionary", "Tên từ điển": "Dictionary name", "Ví dụ: Tên sản phẩm công ty": "E.g. Company product names", "Mô tả": "Description",
   "Đã lưu quy tắc": "Rules saved", "Đã lưu trữ từ điển": "Dictionary archived", "Lưu trữ": "Archive", "Nghe thử": "Preview", "Nghe thử với từ điển": "Preview with dictionary", "Tải lại": "Reload",
 
   // Audio Native

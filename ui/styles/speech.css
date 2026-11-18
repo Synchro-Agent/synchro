@@ -683,7 +683,7 @@
 }
 .sp-classifier:hover {background:var(--hover);color:var(--text)
 }
-.sp-two.dict {grid-template-columns:minmax(0,.8fr) minmax(0,1.2fr)
+.sp-two.dict {grid-template-columns:minmax(280px,340px) minmax(0,1fr)
 }
 .sp-dict {display:flex;align-items:center;gap:8px;padding:4px;border-radius:var(--r-card)
 }
@@ -694,6 +694,13 @@
 .sp-dict-t:hover {background:var(--hover)
 }
 .sp-dict-a {display:flex;align-items:center;gap:6px;flex:none
+}
+.sp-dict-t b {display:block
+}
+.sp-dict-hint {margin:-6px 0 0;font-size:var(--fs-1);color:var(--text-3);line-height:1.45
+}
+/* Chưa có trình sửa (đang tải từ điển đầu tiên): khung trống lấp đầy cột bên phải, không co lại giữa cột. */
+.sp-two.dict>.sp-detect {max-width:none;margin:0;min-height:220px;justify-content:center
 }
 .sp-rules {display:flex;flex-direction:column;gap:6px
 }

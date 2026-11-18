@@ -22,13 +22,23 @@ export function DictTool({ say, voice }: ToolProps) {
   const app = useApp();
   const list = useDicts(true);
   const [sel, setSel] = usePref<DictSel[]>("spDicts", []);
+  // Từ điển đang mở: nhớ qua các lần chuyển công cụ (rời sang Tách giọng rồi quay lại từng mất trình sửa, chỉ còn "Chọn một từ điển…").
+  const [last, setLast] = usePref("spDictOpen", "");
   const [edit, setEdit] = useState<{ id: string | null; name: string; desc: string; rows: Row[] } | null>(null);
   const [busy, setBusy] = useState("");
   const [err, setErr] = useState("");
   const [test, setTest] = useState<Item | null>(null);
-  useEffect(() => { if (list && !list.length && !edit) setEdit({ id: null, name: "", desc: "", rows: [row(), row()] }); }, [list]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Có từ điển mà chưa mở cái nào: mở lại từ điển dùng lần trước (hoặc cái đầu tiên), trình sửa không bao giờ trống khi đã có từ điển.
+  useEffect(() => {
+    if (!list || edit) return;
+    if (!list.length) { setEdit({ id: null, name: "", desc: "", rows: [row(), row()] }); return; }
+    void open(list.find((d) => d.id === last) ?? list[0]);
+  }, [list]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const open = async (d: Dict) => {
+    // Bấm lại từ điển đang mở: giữ nguyên trình sửa (và phần đang sửa dở), không tải lại.
+    if (edit?.id === d.id || busy === d.id) return;
+    setLast(d.id);
     setBusy(d.id); setErr(""); setTest(null);
     try { const j = await api<{ dict: Dict }>(`dicts?id=${encodeURIComponent(d.id)}`); setEdit({ id: d.id, name: d.name, desc: d.desc, rows: (j.dict.rules ?? []).map((r) => row(r)).concat(row()) }); }
     catch (e) { say((e as Error).message); } finally { setBusy(""); }
@@ -80,13 +90,14 @@ export function DictTool({ say, voice }: ToolProps) {
           <div className="sp-card-h">Từ điển của bạn<button className="icon-btn" aria-label="Tải lại" title="Tải lại" onClick={() => void reloadDicts()}><I.Retry size={14} /></button></div>
           {list === null && <div className="sp-empty"><Spin /></div>}
           {list?.length === 0 && <div className="sp-empty">Chưa có từ điển nào. Tạo từ điển đầu tiên ở bên cạnh.</div>}
+          {!!list?.length && <p className="sp-dict-hint">Bật công tắc để Đọc văn bản dùng từ điển (tối đa 3).</p>}
           {list?.map((d) => {
-            const onIt = sel.some((s) => s.id === d.id);
+            const onIt = sel.some((s) => s.id === d.id), cur = edit?.id === d.id;
             return (
-              <div key={d.id} className={`sp-dict ${edit?.id === d.id ? "on" : ""}`}>
-                <button className="sp-dict-t" onClick={() => open(d)}><I.Book size={16} /><span><b data-notr>{d.name}</b><small>{tf("{n} quy tắc", { n: d.count })}{d.desc ? ` · ${d.desc}` : ""}</small></span>{busy === d.id && <Spin />}</button>
+              <div key={d.id} className={`sp-dict ${cur ? "on" : ""}`}>
+                <button className="sp-dict-t" aria-current={cur || undefined} title={d.name} onClick={() => open(d)}><I.Book size={16} /><span><b data-notr>{d.name}</b><small>{tf("{n} quy tắc", { n: d.count })}{d.desc ? <> · <span data-notr>{d.desc}</span></> : null}</small></span>{busy === d.id && <Spin />}</button>
                 <div className="sp-dict-a">
-                  <label className="sp-check sm"><input type="checkbox" checked={onIt} onChange={() => flip(d)} /><span>Dùng khi đọc</span></label>
+                  <button role="switch" aria-checked={onIt} aria-label={`${tr("Dùng khi đọc")}: ${d.name}`} data-tip="Dùng khi đọc" className={`sp-tg ${onIt ? "on" : ""}`} onClick={() => flip(d)} />
                   <button className="icon-btn" aria-label={`Lưu trữ ${d.name}`} title="Lưu trữ" onClick={() => archive(d)}><I.Trash size={14} /></button>
                 </div>
               </div>
