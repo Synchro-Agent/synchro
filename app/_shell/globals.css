@@ -3477,7 +3477,8 @@ button.tk-pill:hover{color:var(--text)}
 .sp-classifier>span{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
 .sp-classifier b{font-size:var(--fs-2);font-weight:460;color:var(--text)}.sp-classifier small{font-size:var(--fs-1);color:var(--text-3)}
 /* từ điển phát âm */
-.sp-dict-t>span{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+/* .sp-dict-n, không phải mọi span con: vòng chờ (span.sp-spin) từng bị giãn flex:1 thành hai vạch trắng dài và đẩy tên dài thành "Thử phát âm …". */
+.sp-dict-n{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
 .sp-dict-t b{font-size:var(--fs-chat);font-weight:460;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .sp-dict-t small{font-size:var(--fs-1);color:var(--text-3)}
 .sp-rule .icon-btn{width:28px;height:28px;color:var(--text-3)}

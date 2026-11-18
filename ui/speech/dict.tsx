@@ -95,7 +95,7 @@ export function DictTool({ say, voice }: ToolProps) {
             const onIt = sel.some((s) => s.id === d.id), cur = edit?.id === d.id;
             return (
               <div key={d.id} className={`sp-dict ${cur ? "on" : ""}`}>
-                <button className="sp-dict-t" aria-current={cur || undefined} title={d.name} onClick={() => open(d)}><I.Book size={16} /><span><b data-notr>{d.name}</b><small>{tf("{n} quy tắc", { n: d.count })}{d.desc ? <> · <span data-notr>{d.desc}</span></> : null}</small></span>{busy === d.id && <Spin />}</button>
+                <button className="sp-dict-t" aria-current={cur || undefined} title={d.name} onClick={() => open(d)}><I.Book size={16} /><span className="sp-dict-n"><b data-notr>{d.name}</b><small>{tf("{n} quy tắc", { n: d.count })}{d.desc ? <> · <span data-notr>{d.desc}</span></> : null}</small></span>{busy === d.id && <Spin />}</button>
                 <div className="sp-dict-a">
                   <button role="switch" aria-checked={onIt} aria-label={`${tr("Dùng khi đọc")}: ${d.name}`} data-tip="Dùng khi đọc" className={`sp-tg ${onIt ? "on" : ""}`} onClick={() => flip(d)} />
                   <button className="icon-btn" aria-label={`Lưu trữ ${d.name}`} title="Lưu trữ" onClick={() => archive(d)}><I.Trash size={14} /></button>
