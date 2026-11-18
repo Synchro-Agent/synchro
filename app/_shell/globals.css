@@ -3446,7 +3446,9 @@ button.tk-pill:hover{color:var(--text)}
 @container (max-width:559px){
   .sp-guide:not(.more) .sp-guide-col.side{display:none}
   .sp-guide-more{display:inline-flex}
-  .sp-guide-x{font-size:0;gap:0;width:28px;padding:0;justify-content:center}
+  /* Nặng hơn luật chung của .btn (html body :is(.btn):not(.auth-root *): đệm 14px, cỡ chữ 13px) — trước đây thua nên ở 390px nút vẫn hiện
+     đủ chữ "Ẩn hướng dẫn" và tràn khỏi thẻ hướng dẫn 16px. */
+  .sp-guide .sp-guide-h .btn.sp-guide-x{font-size:0;gap:0;width:28px;padding:0;justify-content:center}
 }
 .sp-mbar .btn{display:inline-flex;align-items:center;gap:6px;height:32px}
 .sp-editor>textarea{min-height:260px}
