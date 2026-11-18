@@ -12,7 +12,7 @@ import { inlineImages } from "./artimg";
 import { splitArtifacts, type ArtType } from "../shared/artifacts";
 import { execRun, runner } from "./coderun";
 import { artState, cleanBase, type ArtVersion } from "../shared/vfs";
-import { fitSummary, type SlideFit } from "../shared/deckfit";
+import { fitSummary, overflowing, type SlideFit } from "../shared/deckfit";
 import { numberingIssues, type NumIssue } from "../shared/decknum";
 import { hashOf } from "../shared/critic";
 
@@ -269,6 +269,35 @@ export function layoutOf(content: string): DeckLayout | null {
 }
 /** Lỗi đánh số slide dạng dòng cho model (rỗng nếu không có). */
 export const numberingNote = (issues: NumIssue[]) => issues.map((x) => `- Slide ${x.slides.length > 1 ? x.slides.join(", ") : x.slides[0]}: đánh số slide không nhất quán — ${x.prompt}`);
+
+/** Bản này của artifact đã được check_artifact kiểm tra trong lượt `turn` (model đã thấy kết quả). */
+export function checkedInTurn(turn: object, a: ArtVersion): boolean {
+  return rounds.get(turn)?.get(a.ident)?.last === fingerprint(a.content);
+}
+
+// Tự kiểm bộ slide lúc model định trả lời xong (W10 nhóm C, H1 T8): model không gọi check_artifact, hoặc gọi trên bản cũ rồi sửa tiếp,
+// thì slide tràn khung 1280×720 và đánh số lệch sau bản sửa tới thẳng người dùng. Synchro tự đo bản cuối (đánh số: đọc mã, luôn có;
+// khung từng slide: dựng trong Chromium khi máy chủ có workspace) và trả lời nhắc cho model sửa trước khi giao. null: không có gì phải sửa.
+// Bản đã kiểm tra trong lượt thì bỏ qua (model đã thấy kết quả), không tính thêm vòng khi đã đủ MAX_CHECK_ROUNDS.
+export async function autoDeckCheck(uid: string, turn: object, a: ArtVersion, origin: string): Promise<string | null> {
+  if (!a.complete || a.type !== "html" || !isDeck(a) || checkedInTurn(turn, a)) return null;
+  const nums = numberingNote(numberingIssues(a.content));
+  let fit: SlideFit[] = layoutOf(a.content)?.fit ?? [];
+  if (!fit.length && runner() === "workspace" && !checkRoundGate(turn, a)) {
+    await checkArtifact(uid, a, {}, origin).catch(() => null);
+    fit = layoutOf(a.content)?.fit ?? [];
+  }
+  const bad = overflowing(fit);
+  if (!bad.length && !nums.length) return null;
+  const rows = [...(bad.length ? [fitSummary(fit)] : []), ...(nums.length ? ["Đánh số slide không nhất quán:", ...nums] : [])];
+  return `Bộ slide "${a.title}" (identifier "${a.ident}", phiên bản ${a.v}):\n${rows.join("\n")}`;
+}
+/** Lời nhắc gửi model khi tự kiểm thấy lỗi (một lần mỗi lượt). */
+export const AUTO_CHECK = (rows: string[]) => `<auto_check>
+Synchro đã tự kiểm bản cuối của bộ slide trước khi giao cho người dùng và thấy lỗi:
+${rows.join("\n\n")}
+Sửa đúng các slide nêu trên (bản sửa mode="patch" được; slide tràn thì rút chữ, giảm khoảng trống hoặc tách slide; đánh số thì đánh số lại MỌI nhãn số cho cùng một dãy), rồi trả lời lại ngắn gọn đã sửa gì. Nếu cố ý giữ nguyên thì nói rõ lý do với người dùng.
+</auto_check>`;
 
 /** Đo bố cục bộ slide cho hội đồng phản biện: dùng số đo sẵn của check_artifact nếu có, chưa có thì dựng một lần (chỉ khi có Chromium). */
 export async function measureDeck(uid: string, a: { ident: string; title: string; content: string }, origin: string): Promise<DeckLayout | null> {

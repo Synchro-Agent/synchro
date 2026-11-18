@@ -67,6 +67,29 @@ console.log("1b. read_artifact báo đánh số lệch (không cần Chromium)")
   ok(!/<deck_numbering>/.test(A.readArtifact(art(good), {}).content), "đánh số đúng → không có thẻ");
   ok(!/<deck_numbering>/.test(A.readArtifact(art(bad, false), {}).content), "bản chưa viết xong → không báo");
   ok(/<deck_numbering>/.test(A.ARTCHECK_RULES(false)) && /đánh số lại MỌI nhãn số/.test(A.ARTCHECK_RULES(true)), "quy tắc self_check nhắc đánh số lại khi sửa bằng patch");
+
+  console.log("1c. Tự kiểm bộ slide lúc model định trả lời xong (autoDeckCheck / <auto_check>)");
+  delete process.env.CODE_RUN; // máy kiểm thử: không có workspace, chỉ phần đánh số (đọc mã)
+  const turn = {};
+  const row = await A.autoDeckCheck("u1", turn, art(bad), "http://x");
+  ok(/Bộ slide "Pitch" \(identifier "pitch", phiên bản 2\)/.test(row ?? "") && /Đánh số slide không nhất quán:\n- Slide 2, 3, 4, 5, 6/.test(row ?? ""), "bộ slide đánh số lệch → một mục nêu tên, phiên bản và slide lệch", row);
+  ok(await A.autoDeckCheck("u1", {}, art(good), "http://x") === null, "bộ slide sạch lỗi → không nhắc (không tốn thêm một bước của model)");
+  ok(await A.autoDeckCheck("u1", {}, art(bad, false), "http://x") === null && await A.autoDeckCheck("u1", {}, { ...art(bad), type: "react" }, "http://x") === null, "chưa viết xong / không phải bộ slide → bỏ qua");
+  const seen = {};
+  A.checkRoundGate(seen, art(bad));
+  ok(A.checkedInTurn(seen, art(bad)) && await A.autoDeckCheck("u1", seen, art(bad), "http://x") === null, "bản này đã check_artifact trong lượt (model đã thấy kết quả) → không nhắc lại");
+  ok(!A.checkedInTurn(seen, art(good)), "bản khác (đã sửa) thì chưa tính là đã kiểm");
+  // Số đo khung có sẵn (check_artifact đo trước đó trong tiến trình): slide tràn được nêu trong lời nhắc.
+  const tall = deck({ brows: [], pages: [], total: 3 }) + "<!-- tall -->";
+  A.rememberLayout(tall, { fit: [1, 2, 3].map((n) => ({ slide: n, h: n === 3 ? 869 : 720, w: 1280, vh: 720, vw: 1280 })), issues: [] });
+  const r2 = await A.autoDeckCheck("u1", {}, art(tall), "http://x");
+  ok(/slide 3 TRÀN — cao 869px \(thừa 149px so với khung 720px\)/.test(r2 ?? "") && /vừa khung: slide 1–2/.test(r2 ?? ""), "slide tràn khung 1280×720 → nêu đúng slide và số px thừa", r2);
+  const msg = A.AUTO_CHECK([row]);
+  ok(/^<auto_check>/.test(msg) && /mode="patch"/.test(msg) && /đánh số lại MỌI nhãn số/.test(msg) && /cố ý giữ nguyên thì nói rõ lý do/.test(msg), "lời nhắc <auto_check>: sửa đúng slide, được dùng bản patch, hoặc nói lý do giữ nguyên");
+  const tools = fs.readFileSync("server/chat/tools.ts", "utf8"), routing = fs.readFileSync("server/chat/routing.ts", "utf8");
+  ok(/if \(i < steps - 1 && x\.art && !x\.deckGated\) \{\n\s+const g = await deckGate\(x, r\.text\);\n\s+if \(g\) \{ sayOut\(x, r\.text\); m\.push\(\{ role: "user", content: g \}\); continue; \}/.test(tools), "vòng công cụ (khóa API): câu trả lời cuối có bộ slide lỗi → nhắc model sửa, giữ lời đã viết");
+  ok(/else if \(x && !x\.deckGated && \(gate = await deckGate\(x, said\)\)\) next = gate;/.test(routing), "lượt của gói CLI (cầu nối): cũng tự kiểm bộ slide trước khi giao");
+  ok(/x\.deckGated = true;/.test(tools) && /\[\.\.\.\(x\.turnArts \?\? \[\]\), text\]/.test(tools), "một lần mỗi lượt; xét cả bộ slide viết giữa lượt");
 }
 
 console.log("2. Số đo khung từng slide (deckfit)");

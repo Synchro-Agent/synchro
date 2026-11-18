@@ -17,7 +17,7 @@ import type { TraceItem } from "../transpile";
 import { maybeRef, readRef } from "../refs";
 import { normalizeSchema, resolveRefs } from "../../shared/connschema";
 import { BRIDGE_CALL_MAX, destructiveLike, TOOL_BUDGET } from "../mcp";
-import { checkArtifact, checkRoundGate, findArtifact, readArtifact } from "../artcheck";
+import { AUTO_CHECK, autoDeckCheck, checkArtifact, checkRoundGate, findArtifact, readArtifact } from "../artcheck";
 import { artState, resolveArt, type ArtVersion } from "../../shared/vfs";
 import { hasArtifacts, splitArtifacts } from "../../shared/artifacts";
 import { typedText } from "../router";
@@ -37,7 +37,7 @@ import { ASPECTS, generateImages, HOUR_MAX as IMAGE_HOUR_MAX, IMAGE_TOOL_NAME, i
 import { IMAGE_LIMIT_NOTE, imageLimitMsg } from "../limitmsg";
 import { IMG_BUDGET_MS, placeholderNote, settleBackground } from "../ai/imgbudget";
 import { POSTER_TEMPLATES, posterProps, type PosterTemplate } from "../design-engine/posters/props";
-import { genImageUrl } from "../../shared/artdoc";
+import { genImageUrl, isDeck } from "../../shared/artdoc";
 import { IMAGE_MAX_MB, imageKind, type ImgFile, scrubServerPaths } from "../ai/imagefiles";
 import { escalateText, searchNeedsEscalation, withBrowserLock } from "../ai/webescalate";
 import { checkUrl } from "../safefetch";
@@ -168,7 +168,7 @@ export type Lib = { key: string; label: string };
 // art: lịch sử để read_artifact / check_artifact dựng lại bản hiện tại của artifact (cùng phần đã nén ở artBase).
 // turnArts: artifact model viết giữa lượt (trong lời dẫn trước công cụ), xem sayOut.
 // image: công cụ generate_image đang bật; msgs: lịch sử của lượt, để tìm ảnh gốc người dùng nhờ sửa.
-export type Exec = { project?: unknown; image?: boolean; msgs?: unknown; effects?: string[]; toolSync?: boolean; list: Skl; scripts: boolean; sess: ConnectorSession | null; uid: string; code: boolean; net: boolean; web?: boolean; art?: { messages: { role: string; content: unknown }[]; base: unknown }; turnArts?: string[]; outs: OutFile[]; outPaths?: Map<string, string>; libs?: Record<string, Lib[]>; studio?: Lib; prefer?: Record<string, string>; trace: TraceItem[]; conv?: string; heal?: Target; search?: Target; browse?: boolean; bctx?: BrowserCtx; shown?: string; heavy?: string[]; gate?: Gate; task?: TaskCtx | null; asking?: Promise<void>; awaiting?: number; denied?: Map<string, string>; connCards?: Set<string>; calls?: Map<string, { at: number; cancel?: AbortSignal }>; park?: () => void; inputsSent?: Set<string>; madeImgs?: string[]; webs?: Map<string, { title: string; url: string }>; edited?: Set<string>; rendered?: Set<string>; roundBrowser?: boolean; untrusted?: boolean };
+export type Exec = { project?: unknown; image?: boolean; msgs?: unknown; effects?: string[]; toolSync?: boolean; list: Skl; scripts: boolean; sess: ConnectorSession | null; uid: string; code: boolean; net: boolean; web?: boolean; art?: { messages: { role: string; content: unknown }[]; base: unknown }; turnArts?: string[]; outs: OutFile[]; outPaths?: Map<string, string>; libs?: Record<string, Lib[]>; studio?: Lib; prefer?: Record<string, string>; trace: TraceItem[]; conv?: string; heal?: Target; search?: Target; browse?: boolean; bctx?: BrowserCtx; shown?: string; heavy?: string[]; gate?: Gate; task?: TaskCtx | null; asking?: Promise<void>; awaiting?: number; denied?: Map<string, string>; connCards?: Set<string>; calls?: Map<string, { at: number; cancel?: AbortSignal }>; park?: () => void; inputsSent?: Set<string>; madeImgs?: string[]; webs?: Map<string, { title: string; url: string }>; edited?: Set<string>; rendered?: Set<string>; roundBrowser?: boolean; untrusted?: boolean; deckGated?: boolean };
 // Nguồn web của lượt, đánh số theo thứ tự gặp (số [n] trong câu trả lời trỏ đúng chip thứ n). Tối đa 20 nguồn.
 const WEB_MAX = 20;
 export const citeOf = (x: Exec): Citer => (url, title = "") => {
@@ -274,8 +274,27 @@ export function sayOut(x: Exec | null | undefined, text: string) {
   }).trim();
   if (t) progress("say", t);
 }
+/** Model định trả lời xong mà câu trả lời có bộ slide: tự kiểm bản cuối (artcheck.ts autoDeckCheck), thấy lỗi thì trả lời nhắc <auto_check>
+ *  để model sửa trước khi giao. Một lần mỗi lượt (không lặp vô hạn, không tốn thêm hạn mức của gói khi bộ slide đã sạch lỗi). */
+export async function deckGate(x: Exec, text: string): Promise<string | null> {
+  // Cả artifact viết giữa lượt (lời dẫn trước khi gọi công cụ, giữ ở turnArts): câu trả lời cuối có thể chỉ còn lời tóm tắt.
+  const live = [...(x.turnArts ?? []), text].join("\n\n");
+  if (!x.art || x.deckGated || runSignal()?.aborted || !hasArtifacts(live)) return null;
+  const idents = [...new Set(splitArtifacts(live).flatMap((g) => (g.kind === "art" ? [g.art.ident] : [])))].slice(-2);
+  if (!idents.length) return null;
+  x.deckGated = true;
+  const rows: string[] = [];
+  for (const id of idents) {
+    const a = findArtifact({ uid: x.uid, conv: x.conv, messages: x.art.messages, base: x.art.base, live }, id);
+    if (!a || a.type !== "html" || !isDeck(a)) continue;
+    progress("step", "Đang kiểm tra hiển thị artifact");
+    const row = await autoDeckCheck(x.uid, x, a, process.env.APP_URL || "https://synchro.net.nz").catch(() => null);
+    if (row) rows.push(row);
+  }
+  return rows.length ? AUTO_CHECK(rows) : null;
+}
 // Câu trả lời cuối đã viết lại trọn một artifact thì bỏ các bản cùng identifier viết giữa lượt (bản sửa mode="patch" thì vẫn cần bản gốc).
-export const withTurnArts = (x: Exec | null | undefined, text: string) => {
+export const withTurnArts =(x: Exec | null | undefined, text: string) => {
   const full = new Set(splitArtifacts(text).flatMap((g) => (g.kind === "art" && !g.art.patch ? [g.art.ident] : [])));
   const fresh = (x?.turnArts ?? []).filter((b) => !text.includes(b) && !splitArtifacts(b).some((g) => g.kind === "art" && full.has(g.art.ident)));
   return fresh.length ? `${fresh.join("\n\n")}\n\n${text}` : text;
@@ -869,6 +888,11 @@ async function loop(ad: Adapter, m: unknown[], x: Exec, used: ToolRun["used"][],
       // Tin nhắn thêm tới khi model đã viết xong câu trả lời: làm tiếp trong cùng lượt với tin mới, không chờ lượt sau.
       if (i < steps - 1 && inboxWaiting()) { sayOut(x, r.text); takeFollowups(m); continue; }
       if (!acted && nudged < MAX_NUDGE && i < steps - 1 && stalled(r.text)) { nudged++; sayOut(x, r.text); m.push({ role: "user", content: NUDGE }); continue; }
+      // Bộ slide trong câu trả lời: tự kiểm bản cuối (tràn khung 1280×720, đánh số lệch), có lỗi thì cho model sửa trước khi giao.
+      if (i < steps - 1 && x.art && !x.deckGated) {
+        const g = await deckGate(x, r.text);
+        if (g) { sayOut(x, r.text); m.push({ role: "user", content: g }); continue; }
+      }
       return { text: r.text, used };
     }
     acted = true;

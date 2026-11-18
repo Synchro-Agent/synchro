@@ -736,6 +736,17 @@ function voiceBrief(q) {
   return `${first}${rich ? " Chi tiết mình để trong khung chat." : ""}`.trim() || "Xong rồi.";
 }
 
+// Synchro tự kiểm bộ slide lúc model định trả lời xong (server/artcheck.ts AUTO_CHECK). "#decknum fix": sửa như model thật — đánh số lại
+// chân trang cho cùng một dãy với nhãn mục bằng bản sửa SEARCH/REPLACE. "#decknum" thường: giữ nguyên và nói lý do (tests/ui/critic.mjs
+// cần bộ slide còn lệch số để thử phản biện).
+function autoCheckReply(msgs) {
+  const prev = lastArtifact(msgs, "");
+  if (!prev) return "Mình đã xem kết quả tự kiểm.";
+  if (!JSON.stringify(msgs ?? []).includes("#decknum fix")) return "Mình giữ cách đánh số này: bìa không đánh số mục nên nhãn mục bắt đầu từ 01 ở trang 02.";
+  const blocks = [...prev.body.matchAll(/^.*<span>(\d\d) \/ (\d\d)<\/span>.*$/gm)].map(([line, n, of]) => `<<<<<<< SEARCH\n${line}\n=======\n${line.replace(`${n} / ${of}`, `${String(+n - 1).padStart(2, "0")} / ${String(+of - 1).padStart(2, "0")}`)}\n>>>>>>> REPLACE`);
+  return `Synchro báo đánh số slide lệch: mình đã đánh số lại chân trang cho khớp nhãn mục (bìa không đánh số).\n\n<artifact identifier="${prev.ident}" mode="patch">\n${blocks.join("\n")}\n</artifact>`;
+}
+
 // Hội đồng phản biện: như model thật, đọc mã có số dòng và trả JSON lỗi theo dòng kèm bản sửa (bọc trong khối ```json).
 function criticReply(q, sys = "") {
   // Như model thật: viết title / detail theo ngôn ngữ giao diện mà lời nhắc yêu cầu (app/api/critic/route.ts WRITE_IN).
@@ -772,6 +783,7 @@ export function capsReply(sys, q, msgs, toolNames) {
   const sr = /#skillrun[ \t]+(\S+)[ \t]+(\S+)([^\n]*)/.exec(String(q));
   if (sr && toolNames.includes("run_skill_script")) return { tool: { name: "run_skill_script", args: { name: sr[1], path: sr[2], args: sr[3].trim() ? sr[3].trim().split(/\s+/) : [] } } };
   if (s.includes("<critic_review>")) return { text: criticReply(q, s) };
+  if (String(q).includes("<auto_check>")) return { text: autoCheckReply(msgs) };
   if (s.includes("<voice_brief>")) return { text: voiceBrief(q) };
   if (s.includes("<artifacts>") && String(q).includes("<point_edit>")) { const pe = pointEdit(String(q), msgs, s); if (pe) return { text: pe }; }
   if (s.includes("(artifact) gọi tới")) return { text: artifactAi(q) };
