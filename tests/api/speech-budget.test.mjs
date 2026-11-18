@@ -56,6 +56,19 @@ const alerts = AS.db().prepare("SELECT detail FROM audit WHERE action = 'speech_
 ok(alerts.length === 1 && /\d+ \/ \d+/.test(alerts[0].detail), "nhật ký quản trị báo một lần khi gần hết mức chung", JSON.stringify(alerts));
 S.addSpend(owner.id, 5);
 ok(AS.db().prepare("SELECT COUNT(*) AS n FROM audit WHERE action = 'speech_budget_alert'").get().n === 1, "không báo lại trong ngày");
+{
+  // 15/11/2026: quản trị viên thử ~4.000 credit làm cạn mức chung, mọi tài khoản thường bị chặn tới hết ngày. Credit của quản trị viên không tính vào mức chung.
+  const admin = AS.createUser({ email: "admin2@sp.test", name: "Admin", verified: true });
+  AS.db().prepare("UPDATE users SET role = 'admin' WHERE id = ?").run(admin.id);
+  const before = S.spentToday();
+  S.addSpend(admin.id, 50_000);
+  ok(S.spentToday() === before, "credit của quản trị viên không cộng vào mức chung", `${before} → ${S.spentToday()}`);
+  ok(S.spentToday(admin.id) === 50_000, "vẫn ghi riêng cho quản trị viên");
+  S.setSpeechBudget({ global: before + 10 });
+  ok(code(verified2()) === null, "tài khoản thường còn dùng được dù quản trị viên đã dùng nhiều");
+  S.setSpeechBudget({ global: S.spentToday() + 100 });
+  function verified2() { return AS.createUser({ email: `n${Date.now()}@sp.test`, name: "N", verified: true }); }
+}
 
 console.log("4. Tính credit theo người gọi");
 S.setSpeechBudget({ global: null, user: 1000 });

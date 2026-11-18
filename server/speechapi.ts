@@ -475,7 +475,16 @@ function budgetDb() {
   return d;
 }
 const ALL_USERS = "*";
-export const spentToday = (uid = ALL_USERS) => (budgetDb().prepare("SELECT credits FROM speech_budget WHERE day = ? AND user_id = ?").get(day(), uid) as { credits: number } | undefined)?.credits ?? 0;
+/** Credit đã dùng hôm nay của một tài khoản; không truyền uid = mức chung của cả máy chủ.
+ * Mức chung chỉ cộng tài khoản KHÔNG phải quản trị viên: quản trị viên không bị chặn và hay thử nhiều (15/11/2026 một lượt thử ~4.000 credit
+ * của quản trị viên đã làm cạn mức chung, mọi tài khoản thường bị chặn giọng AI tới hết ngày). Tính lại từ các dòng theo tài khoản nên
+ * dòng "*" cũ (đã cộng cả quản trị viên) không còn được dùng để chặn. */
+export const spentToday = (uid = ALL_USERS) => {
+  const d = budgetDb();
+  if (uid !== ALL_USERS) return (d.prepare("SELECT credits FROM speech_budget WHERE day = ? AND user_id = ?").get(day(), uid) as { credits: number } | undefined)?.credits ?? 0;
+  const rows = d.prepare("SELECT user_id, credits FROM speech_budget WHERE day = ? AND user_id != ?").all(day(), ALL_USERS) as { user_id: string; credits: number }[];
+  return rows.reduce((n, r) => { const u = getUser(r.user_id); return u && isAdmin(u) ? n : n + r.credits; }, 0);
+};
 const ALERT_AT = 0.8;
 let alerted = "";
 export function addSpend(uid: string, n: number) {
