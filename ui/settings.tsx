@@ -298,7 +298,7 @@ function Account() {
       <MfaRow Row={Row} say={app.say} />
       <PasskeyRows Row={Row} onChange={() => void api<{ user: AuthUser }>("GET", "/api/auth/me").then((r) => r.user && app.setMe(r.user)).catch(() => {})} />
       <H>Active sessions</H>
-      <table className="tbl">
+      <table className="tbl tbl-ses">
         <thead><tr><th>Device</th><th>Location</th><th>Created</th><th>Updated</th><th /></tr></thead>
         <tbody>
           {pgSes.items.map((s) => (

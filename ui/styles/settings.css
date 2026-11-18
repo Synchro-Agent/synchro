@@ -351,3 +351,6 @@ html body .sy-settings :is(.api-card:not(.bare),.us-card,.inset,.promo,.dcard,.a
 .sy-settings .pv-tag.ok{color:var(--ds-ink)}
 .sy-settings .adm-bar .s-search{margin:0}
 }
+/* Phiên đăng nhập ở điện thoại: bỏ cột Tạo lúc (còn Cập nhật) để bảng vừa khung cài đặt; nhãn Đang dùng giữ một dòng (.new-tag nowrap) đẩy bảng
+   rộng hơn khung và hiện thanh cuộn ngang (polish.mjs bước 3). */
+@media (max-width:640px){.tbl-ses :is(th,td):nth-child(3){display:none}}
