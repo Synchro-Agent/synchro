@@ -4,6 +4,7 @@ export const OPS_VI2EN: Record<string, string> = {
   "Bạn đang có nhiều tệp chờ đọc cùng lúc. Synchro đọc lần lượt từng tệp; hãy gửi lại tệp này khi các tệp trước đọc xong.": "You have many files waiting to be read. Synchro reads them one at a time; send this file again once the earlier ones are done.",
   "Các tệp trước của bạn đọc lâu quá nên tệp này chưa tới lượt. Hãy bấm Thử lại khi chúng đọc xong.": "Your earlier files are taking too long, so this file hasn't had its turn yet. Click Retry once they are done.",
   "Đang chờ tệp trước…": "Waiting for the previous file…",
+  "Đã hủy đọc tệp vì người gửi không còn chờ.": "Stopped reading the file because the sender is no longer waiting.",
   "Mở Cài đặt → Connectors": "Open Settings → Connectors",
   "Đã chặn trang đăng nhập": "Sign-in page blocked",
   "Dung lượng sau khi giải nén quá lớn hoặc file nén bị hỏng": "The archive is too large once unpacked, or it is damaged",
@@ -302,6 +303,7 @@ export const OPS_RULES_EN: Rule[] = [
   [/^"(.+)" giải nén ra quá lớn \(trên 200 MB\) nên Synchro không đọc\. Hãy chia nhỏ tệp rồi tải lên lại\.$/, (m) => `"${m[1]}" unpacks to more than 200 MB, so Synchro didn't read it. Split it into smaller files and upload again.`],
   // Thẻ tệp hết giờ chờ (ui/filestate.ts): tệp thường tải lên quá 2 phút; tệp ghi âm / video chờ máy chủ chép lời quá AV_TIMEOUT_MS.
   [/^Tải "(.+)" lên quá lâu \(quá 2 phút\)\. Hãy thử lại\.$/, (m) => `Uploading "${m[1]}" took too long (over 2 minutes). Try again.`],
+  [/^Đã hủy chép lời "(.+)" vì người gửi không còn chờ\.$/, (m) => `Stopped transcribing "${m[1]}" because the sender is no longer waiting.`],
   [/^Máy chủ đọc "(.+)" quá lâu \(quá (\d+) phút\)\. Hãy thử lại\.$/, (m) => `The server took too long to read "${m[1]}" (over ${m[2]} minutes). Try again.`],
   [/^"(.+)" bị hỏng hoặc không đúng định dạng, không mở được\.$/, (m) => `"${m[1]}" is damaged or not in the expected format, so it couldn't be opened.`],
 ];

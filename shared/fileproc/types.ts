@@ -28,5 +28,6 @@ export class FileError extends Error {}
 export type Extractor = {
   name: string;
   match: (kind: string) => boolean;
-  run: (buf: Buffer, ctx: { name: string; kind: string; uid?: string }) => Promise<ContentBlock[]>;
+  // signal: yêu cầu tải lên của người gửi (đóng tab, gỡ thẻ tệp, hết giờ chờ thì hủy): việc chờ lượt dài (chép lời, OCR) rời hàng, không chạy nữa.
+  run: (buf: Buffer, ctx: { name: string; kind: string; uid?: string; signal?: AbortSignal }) => Promise<ContentBlock[]>;
 };

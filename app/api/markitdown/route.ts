@@ -55,7 +55,7 @@ export const POST = route({ feature: "files" }, async ({ req, user }) => {
       } finally {
         await rm(dir, { recursive: true, force: true });
       }
-    });
+    }, { signal: req.signal });
   } catch (e) {
     if (e instanceof FileError) return Response.json({ error: e.message }, { status: 429 });
     const msg = String((e as { stderr?: string; message?: string }).stderr || (e as Error).message || e);
