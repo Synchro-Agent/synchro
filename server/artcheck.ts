@@ -145,7 +145,9 @@ const PROBE = String.raw`(root, deck) => {
   }
   // Slide tràn nội dung: so chiều cao / rộng thật của slide với khung (scrollHeight vs clientHeight). Bắt được cả khi khung slide cắt mất (overflow hidden)
   // mà vẫn còn phần tử thò ra — khó thấy bằng mắt trên ảnh chụp. Trả về các phần tử ngoài cùng tràn ra để model biết chỗ nào phải thu gọn hoặc chia slide.
-  const tallH = Math.max(root.scrollHeight, R.height), tallW = Math.max(root.scrollWidth, R.width);
+  // Một hệ tọa độ: slide thu nhỏ bằng transform (khung 1920×1080 co về 1280×720) có scrollHeight theo cỡ chưa co, nhân với tỉ lệ co để so với khung.
+  const sx = root.offsetWidth ? R.width / root.offsetWidth : 1, sy = root.offsetHeight ? R.height / root.offsetHeight : 1;
+  const tallH = Math.max(root.scrollHeight * sy, R.height), tallW = Math.max(root.scrollWidth * sx, R.width);
   if (deck && (root.scrollHeight > root.clientHeight + 4 || root.scrollWidth > root.clientWidth + 4 || R.height > innerHeight + 4 || R.width > innerWidth + 4)) {
     const over = [];
     for (const el of root.querySelectorAll("*")) {
@@ -154,7 +156,7 @@ const PROBE = String.raw`(root, deck) => {
       if (r.width > 4 && r.height > 4 && (r.bottom > F.bottom + 2 || r.right > F.right + 2 || r.top < F.top - 2 || r.left < F.left - 2) && !clipped(el, r)) over.push({ el, r });
     }
     const outer = over.filter(({ el }) => !over.some((o) => o.el !== el && o.el.contains(el)));
-    const frameH = Math.min(root.clientHeight, innerHeight), frameW = Math.min(root.clientWidth, innerWidth);
+    const frameH = Math.round(Math.min(root.clientHeight * sy, innerHeight)), frameW = Math.round(Math.min(root.clientWidth * sx, innerWidth));
     const extent = "slide " + Math.round(tallH) + "×" + Math.round(tallW) + "px > khung " + frameH + "×" + frameW + "px";
     if (outer.length) for (const { el } of outer.slice(0, 6)) add("phần tử tràn khỏi slide", "“" + say(el) + "” (" + extent + ")");
     else add("slide tràn nội dung", "nội dung vượt khung (" + extent + "); thu gọn chữ hoặc chia slide");
@@ -165,10 +167,22 @@ const PROBE = String.raw`(root, deck) => {
   return out;
 }`;
 
+// Số đo khung của một slide (chạy trong Chromium): cao / rộng thật so với cửa sổ 1280×720, kể cả khi slide tự dài ra theo nội dung (H1 T8).
+// Một hệ tọa độ (review W10): hộp đã co theo transform (getBoundingClientRect) và scrollHeight / scrollWidth chưa co nhân với tỉ lệ co, không lấy
+// max của hai cỡ khác hệ (khung 1920×1080 co về 1280×720 từng bị báo "TRÀN 1080px" ở mọi slide). Slide tự cắt (overflow hidden / clip, vd. hình
+// trang trí thò ra mép) thì người xem chỉ thấy đúng hộp của slide: lấy hộp, không lấy phần cuộn bị cắt.
+const FIT = String.raw`(el) => {
+  const r = el.getBoundingClientRect(), cs = getComputedStyle(el);
+  const sx = el.offsetWidth ? r.width / el.offsetWidth : 1, sy = el.offsetHeight ? r.height / el.offsetHeight : 1;
+  const clipX = /hidden|clip/.test(cs.overflowX), clipY = /hidden|clip/.test(cs.overflowY);
+  return { h: Math.round(clipY ? r.height : Math.max(r.height, el.scrollHeight * sy)), w: Math.round(clipX ? r.width : Math.max(r.width, el.scrollWidth * sx)), vh: innerHeight, vw: innerWidth };
+}`;
+
 // Script chạy trong container: dựng trang, đi từng slide / từng cỡ màn hình, đo lỗi, chụp ảnh, ghép ảnh.
 const CHECK_JS = String.raw`const fs = require("fs"), puppeteer = require("puppeteer-core");
 const cfg = JSON.parse(fs.readFileSync("check.json", "utf8")), html = fs.readFileSync("page.html", "utf8");
 const PROBE = ${PROBE};
+const FIT = ${FIT};
 (async () => {
   const px = process.env.HTTPS_PROXY ? new URL(process.env.HTTPS_PROXY) : null;
   const browser = await puppeteer.launch({ executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || "/usr/bin/chromium", headless: true,
@@ -201,8 +215,8 @@ const PROBE = ${PROBE};
       await new Promise((r) => setTimeout(r, 650));
       const found = await page.evaluate((src) => { const el = window.__sxCur && window.__sxCur(); return el ? (0, eval)("(" + src + ")")(el, true) : []; }, PROBE.toString());
       for (const f of found) report.issues.push({ where: "Slide " + (i + 1), ...f });
-      // Số đo khung của từng slide (cao / rộng thật so với cửa sổ 1280×720) để báo từng slide vừa hay tràn, kể cả khi slide tự dài ra theo nội dung.
-      const fit = await page.evaluate(() => { const el = window.__sxCur && window.__sxCur(); if (!el) return null; const r = el.getBoundingClientRect(); return { h: Math.round(Math.max(r.height, el.scrollHeight)), w: Math.round(Math.max(r.width, el.scrollWidth)), vh: innerHeight, vw: innerWidth }; }).catch(() => null);
+      // Số đo khung của từng slide (FIT) để báo từng slide vừa hay tràn.
+      const fit = await page.evaluate((src) => { const el = window.__sxCur && window.__sxCur(); return el ? (0, eval)("(" + src + ")")(el) : null; }, FIT.toString()).catch(() => null);
       if (fit) report.fit.push({ slide: i + 1, ...fit });
       await shot(page, "Slide " + (i + 1));
     }
@@ -279,12 +293,12 @@ export function checkedInTurn(turn: object, a: ArtVersion): boolean {
 // thì slide tràn khung 1280×720 và đánh số lệch sau bản sửa tới thẳng người dùng. Synchro tự đo bản cuối (đánh số: đọc mã, luôn có;
 // khung từng slide: dựng trong Chromium khi máy chủ có workspace) và trả lời nhắc cho model sửa trước khi giao. null: không có gì phải sửa.
 // Bản đã kiểm tra trong lượt thì bỏ qua (model đã thấy kết quả), không tính thêm vòng khi đã đủ MAX_CHECK_ROUNDS.
-export async function autoDeckCheck(uid: string, turn: object, a: ArtVersion, origin: string): Promise<string | null> {
+export async function autoDeckCheck(uid: string, turn: object, a: ArtVersion, origin: string, signal?: AbortSignal): Promise<string | null> {
   if (!a.complete || a.type !== "html" || !isDeck(a) || checkedInTurn(turn, a)) return null;
   const nums = numberingNote(numberingIssues(a.content));
   let fit: SlideFit[] = layoutOf(a.content)?.fit ?? [];
   if (!fit.length && runner() === "workspace" && !checkRoundGate(turn, a)) {
-    await checkArtifact(uid, a, {}, origin).catch(() => null);
+    await checkArtifact(uid, a, {}, origin, signal).catch(() => null);
     fit = layoutOf(a.content)?.fit ?? [];
   }
   const bad = overflowing(fit);
@@ -300,14 +314,15 @@ Sửa đúng các slide nêu trên (bản sửa mode="patch" được; slide tr�
 </auto_check>`;
 
 /** Đo bố cục bộ slide cho hội đồng phản biện: dùng số đo sẵn của check_artifact nếu có, chưa có thì dựng một lần (chỉ khi có Chromium). */
-export async function measureDeck(uid: string, a: { ident: string; title: string; content: string }, origin: string): Promise<DeckLayout | null> {
+// signal: hủy cả lượt dựng (rời hàng chờ của workspace / dừng container) khi người gọi không chờ nữa.
+export async function measureDeck(uid: string, a: { ident: string; title: string; content: string }, origin: string, signal?: AbortSignal): Promise<DeckLayout | null> {
   const have = layoutOf(a.content);
-  if (have || runner() !== "workspace") return have;
-  const r = await checkArtifact(uid, { ident: a.ident, title: a.title, type: "html", lang: null, content: a.content, complete: true, v: 1 }, {}, origin).catch(() => null);
+  if (have || runner() !== "workspace" || signal?.aborted) return have;
+  const r = await checkArtifact(uid, { ident: a.ident, title: a.title, type: "html", lang: null, content: a.content, complete: true, v: 1 }, {}, origin, signal).catch(() => null);
   return r && !r.is_error ? layoutOf(a.content) : null;
 }
 
-export async function checkArtifact(uid: string, a: ArtVersion | null, input: Record<string, unknown>, origin: string): Promise<{ content: string; is_error: boolean; image?: string }> {
+export async function checkArtifact(uid: string, a: ArtVersion | null, input: Record<string, unknown>, origin: string, signal?: AbortSignal): Promise<{ content: string; is_error: boolean; image?: string }> {
   if (!a) return notFound(typeof input.identifier === "string" ? input.identifier : undefined);
   const kinds: ArtType[] = ["html", "react", "svg"];
   if (!kinds.includes(a.type)) return { content: `Artifact "${a.ident}" là ${a.type}: check_artifact kiểm tra hiển thị trang web, bản trình bày, ứng dụng React và SVG. Với loại này, đọc lại bằng read_artifact.`, is_error: true };
@@ -319,7 +334,7 @@ export async function checkArtifact(uid: string, a: ArtVersion | null, input: Re
   const doc = buildDocCore(a.type, await inlineImages(a.content, uid), origin, "check", false, CHECK_BRIDGE, deck ? { fixed: null } : undefined, a.title);
   let r;
   try {
-    r = await execRun({ uid, net: true, web: true, timeout: 150, argv: ["node", "check.js"], files: [
+    r = await execRun({ uid, net: true, web: true, timeout: 150, signal, argv: ["node", "check.js"], files: [
       { path: "page.html", data: Buffer.from(doc) }, { path: "check.js", data: Buffer.from(CHECK_JS) }, { path: "check.json", data: Buffer.from(JSON.stringify({ deck, slide })) },
     ] });
   } catch (e) {

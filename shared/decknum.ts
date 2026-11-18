@@ -1,11 +1,14 @@
-// Đánh số slide nhất quán (H1 T8): bản sửa mode="patch" từng đánh số lại chỉ một phần, bộ slide còn nhãn mục "01 · Vấn đề" … "05 · …"
-// trong khi chân trang ghi "02 / 06" … "06 / 06". Đọc thẳng mã HTML của bộ slide (không cần dựng trang) nên dùng được cả ở check_artifact
-// lẫn hội đồng phản biện. Tệp thuần, không phụ thuộc gì: tests/api/deck-quality.test.mjs.
+// Đánh số slide nhất quán (H1 T8): bản sửa mode="patch" thêm / bớt slide mà chỉ đánh số lại một phần (nhãn mục nhảy cóc "02 → 04", số trang
+// sai thứ tự, tổng "/ 07" lẫn "/ 06"). Đọc thẳng mã HTML của bộ slide (không cần dựng trang) nên dùng được cả ở check_artifact lẫn hội đồng
+// phản biện. Tệp thuần, không phụ thuộc gì: tests/api/deck-quality.test.mjs.
 //
 // Chỉ báo khi chắc: slide liệt kê nhiều số (mục lục, các bước 01 02 03) thì bỏ qua slide đó; cần ít nhất 3 slide có số mới xét một dãy.
+// Không báo các cách trình bày có chủ ý (review W10): bìa không đánh số nên nhãn mục "01 · Vấn đề" nằm ở trang "02 / 06" (chênh cố định),
+// một mục trải trên nhiều slide liền nhau (cùng nhãn "02"), slide không có nhãn mục xen giữa.
 
 export type DeckSlide = { index: number; line: number; text: string[] };
-// kind: order (số trang sai thứ tự), total (tổng không đồng nhất), count (tổng khác số slide thật), brow (nhãn mục nhảy cóc / trùng), mixed (nhãn mục lệch số trang).
+// kind: order (số trang sai thứ tự), total (tổng không đồng nhất), count (tổng khác số slide thật), brow (nhãn mục nhảy cóc / đi lùi),
+// mixed (nhãn mục vượt lên trước số trang: mục đã sang số sau mà trang chưa đổi tương ứng).
 // prompt: câu tiếng Việt đầy đủ cho model (không hiện cho người dùng); vars: giá trị để nơi hiện cho người dùng tự dựng câu theo ngôn ngữ giao diện.
 export type NumIssue = { kind: "order" | "total" | "count" | "brow" | "mixed"; slides: number[]; line: number; prompt: string; vars: Record<string, string | number> };
 
@@ -34,12 +37,15 @@ const PAGE = /^(?:(?:slide|trang|page)\s*)?(\d{1,2})\s*(?:\/|of|trên)\s*(\d{1,2
 // Nhãn mục: "01 · Vấn đề", "03. Thị trường", "12 — Kết luận", hoặc số đứng riêng có số 0 đầu ("01").
 const EYEBROW = /^(?:(\d{2})\s*[·•.\-–—|:]\s*\p{L}.*|(0\d))$/u;
 
-/** Số mục và số trang của từng slide (slide có từ 2 số trở lên cùng loại thì bỏ qua: mục lục, các bước). */
+/** Số mục và số trang của từng slide (slide có từ 2 số trở lên cùng loại thì bỏ qua: mục lục, các bước; amb đánh dấu slide đó).
+ *  Bộ slide đã dùng nhãn kiểu "02 · Tên mục" (từ 2 slide) thì số đứng riêng ("05" của một chỉ số KPI) không tính là nhãn mục. */
 export function slideNumbers(slides: DeckSlide[]) {
-  return slides.map((s) => {
+  const raw = slides.map((s) => s.text.filter((t) => !PAGE.test(t)).map((t) => EYEBROW.exec(t)).filter((m): m is RegExpExecArray => !!m));
+  const named = raw.filter((ms) => ms.some((m) => m[1] !== undefined)).length >= 2;
+  return slides.map((s, k) => {
     const pages = s.text.map((t) => PAGE.exec(t)).filter((m): m is RegExpExecArray => !!m).map((m) => ({ n: +m[1], of: +m[2] })).filter((p) => p.of >= 2 && p.n >= 0 && p.n <= p.of);
-    const brows = s.text.filter((t) => !PAGE.test(t)).map((t) => EYEBROW.exec(t)).filter((m): m is RegExpExecArray => !!m).map((m) => +(m[1] ?? m[2]));
-    return { index: s.index, line: s.line, page: pages.length === 1 ? pages[0] : null, brow: brows.length === 1 ? brows[0] : null };
+    const brows = raw[k].filter((m) => !named || m[1] !== undefined).map((m) => +(m[1] ?? m[2]));
+    return { index: s.index, line: s.line, page: pages.length === 1 ? pages[0] : null, brow: brows.length === 1 ? brows[0] : null, amb: brows.length > 1 };
   });
 }
 
@@ -48,7 +54,7 @@ const range = (xs: number[], f: (n: number) => string = String) => (xs.length > 
 /** Độ lệch xuất hiện nhiều nhất (số in trên slide trừ vị trí slide). */
 const majority = (xs: number[]) => { const c = new Map<number, number>(); for (const x of xs) c.set(x, (c.get(x) ?? 0) + 1); return [...c.entries()].sort((a, b) => b[1] - a[1] || Math.abs(a[0]) - Math.abs(b[0]))[0][0]; };
 
-/** Lỗi đánh số của bộ slide: số trang sai vị trí / sai tổng, nhãn mục nhảy cóc hay trùng, nhãn mục và số trang trên cùng slide lệch nhau. */
+/** Lỗi đánh số của bộ slide: số trang sai vị trí / sai tổng, nhãn mục nhảy cóc hay đi lùi, nhãn mục vượt lên trước số trang. */
 export function numberingIssues(html: string): NumIssue[] {
   const slides = deckSlides(html);
   if (slides.length < 3) return [];
@@ -65,17 +71,38 @@ export function numberingIssues(html: string): NumIssue[] {
     const expect = total + off;
     if (ofs !== expect && !wrongOf.length) out.push({ kind: "count", vars: { of: ofs, total }, slides: paged.map((x) => x.index), line: paged[0].line, prompt: `chân trang ghi tổng “/ ${fmt2(ofs)}” nhưng bộ slide có ${total} slide (theo cách đánh số này, tổng phải là ${fmt2(expect)})` });
   }
+  // Nhãn mục: một mục được trải trên nhiều slide liền nhau (cùng nhãn "02 · Thị trường" ở slide 3 và 4) là cách trình bày thường gặp, không phải lỗi.
+  // Chỉ báo khi dãy nhãn nhảy cóc (02 rồi 04) hoặc đi lùi (03 rồi 02); số gợi ý là nhãn trước cộng một, không bao giờ dưới 01.
   const browed = nums.filter((x) => x.brow !== null);
+  const flagged = new Set<number>();
   if (browed.length >= 3) {
-    const off = majority(browed.map((x) => x.brow! - x.index));
-    const bad = browed.filter((x) => x.brow! - x.index !== off);
-    if (bad.length) out.push({ kind: "brow", vars: { slides: range(bad.map((x) => x.index)) }, slides: bad.map((x) => x.index), line: bad[0].line, prompt: `nhãn mục nhảy cóc hoặc trùng số: ${bad.map((x) => `slide ${x.index} ghi “${fmt2(x.brow!)}”, theo thứ tự phải là “${fmt2(x.index + off)}”`).join("; ")}` });
+    const bad: { index: number; line: number; got: number; want: number }[] = [];
+    // prev: nhãn đúng ra của slide trước (nhãn sai thì tính như đã sửa thành số gợi ý), để bỏ một mục giữa chừng thì báo mọi nhãn phía sau phải lùi một số.
+    let prev = browed[0].brow!;
+    for (let k = 1; k < browed.length; k++) {
+      const cur = browed[k].brow!;
+      // Giữa hai nhãn có slide nhiều số (mục lục, các bước): không biết mục nào nằm ở đó, không so.
+      if (nums.some((x) => x.amb && x.index > browed[k - 1].index && x.index < browed[k].index)) { prev = cur; continue; }
+      if (cur === prev || cur === prev + 1) { prev = cur; continue; }
+      const want = Math.max(1, prev + 1);
+      bad.push({ index: browed[k].index, line: browed[k].line, got: cur, want });
+      prev = want;
+    }
+    if (bad.length) {
+      for (const b of bad) flagged.add(b.index);
+      out.push({ kind: "brow", vars: { slides: range(bad.map((x) => x.index)), want: bad.map((x) => fmt2(x.want)).join(", ") }, slides: bad.map((x) => x.index), line: bad[0].line,
+        prompt: `nhãn mục nhảy cóc hoặc đi lùi: ${bad.map((x) => `slide ${x.index} ghi “${fmt2(x.got)}”, theo thứ tự phải là “${fmt2(x.want)}”`).join("; ")}` });
+    }
   }
-  // Cùng một slide mang hai số khác nhau (nhãn mục "01" mà chân trang "02 / 06"): người xem không biết đang ở trang nào.
-  const both = nums.filter((x) => x.page && x.brow !== null && x.page.n !== x.brow);
-  if (both.length >= 2 || (both.length === 1 && nums.filter((x) => x.page && x.brow !== null).length === 1)) {
-    const brows = range(both.map((x) => x.brow!), fmt2), pages = `${range(both.map((x) => x.page!.n), fmt2)} / ${fmt2(both[0].page!.of)}`;
-    out.push({ kind: "mixed", vars: { slides: range(both.map((x) => x.index)), brows, pages }, slides: both.map((x) => x.index), line: both[0].line, prompt: `nhãn mục và số trang lệch nhau trên slide ${range(both.map((x) => x.index))}: nhãn mục ${brows} nhưng chân trang ${pages}. Đánh số lại cho khớp (cùng một dãy) hoặc bỏ một trong hai loại số` });
+  // Nhãn mục và số trang trên cùng slide: chênh nhau một khoảng cố định (bìa không đánh số mục: "01 · Vấn đề" ở trang "02 / 06") là thiết kế
+  // có chủ ý, không báo. Mục trải nhiều slide hay slide không nhãn thì khoảng chênh tăng dần, cũng đúng. Chỉ báo khi khoảng chênh GIẢM
+  // (nhãn mục đã tăng nhanh hơn số trang, kiểu bản sửa đánh số lại một nửa) hoặc số mục lớn hơn số trang, ở slide chưa bị báo theo kiểu khác.
+  const both = nums.filter((x) => x.page && x.brow !== null);
+  const off = (x: (typeof both)[number]) => x.page!.n - x.brow!;
+  const ahead = both.filter((x, k) => !flagged.has(x.index) && (off(x) < 0 || (k > 0 && off(x) < off(both[k - 1]))));
+  if (ahead.length && !out.some((x) => x.kind === "order")) {
+    const brows = range(ahead.map((x) => x.brow!), fmt2), pages = `${range(ahead.map((x) => x.page!.n), fmt2)} / ${fmt2(ahead[0].page!.of)}`;
+    out.push({ kind: "mixed", vars: { slides: range(ahead.map((x) => x.index)), brows, pages }, slides: ahead.map((x) => x.index), line: ahead[0].line, prompt: `nhãn mục và số trang lệch nhau trên slide ${range(ahead.map((x) => x.index))}: nhãn mục ${brows} nhưng chân trang ${pages} (nhãn mục đã sang số sau mà số trang chưa theo). Đánh số lại cho cùng một dãy` });
   }
   return out;
 }

@@ -36,6 +36,15 @@ console.log("1. Word: tiêu đề / đoạn lặp (docxcheck)");
   const heads = await docx(P("1. Phạm vi hợp tác", { style: "Heading1" }) + P("Nội dung A") + P("1. Phạm vi hợp tác", { style: "Heading1" }) + P("Nội dung B"));
   const h = await D.docxIssues(heads);
   ok(h.length === 1 && h[0].kind === "tiêu đề trùng" && h[0].at.join() === "1,3", "cùng một tiêu đề (Heading) xuất hiện hai lần cách nhau → báo", JSON.stringify(h));
+  // Review W10: dàn ý lặp tiêu đề con dưới các mục cha khác nhau là bình thường.
+  const outline = await docx(P("Phương án A", { style: "Heading1" }) + P("Ưu điểm", { style: "Heading2" }) + P("Rẻ hơn.") + P("Nhược điểm", { style: "Heading2" }) + P("Chậm hơn.")
+    + P("Phương án B", { style: "Heading1" }) + P("Ưu điểm", { style: "Heading2" }) + P("Nhanh.") + P("Nhược điểm", { style: "Heading2" }) + P("Đắt."));
+  ok((await D.docxIssues(outline)).length === 0, "“Ưu điểm / Nhược điểm” dưới Phương án A rồi Phương án B → không báo", JSON.stringify(await D.docxIssues(outline)));
+  const sameParent = await docx(P("Phương án A", { style: "Heading1" }) + P("Ưu điểm", { style: "Heading2" }) + P("Rẻ hơn.") + P("Ưu điểm", { style: "Heading2" }) + P("Nhanh."));
+  const sp = await D.docxIssues(sameParent);
+  ok(sp.length === 1 && sp[0].kind === "tiêu đề trùng" && sp[0].at.join() === "2,4", "tiêu đề con lặp dưới cùng một mục cha → báo", JSON.stringify(sp));
+  const bold = await docx(P("Mục 1", { style: "Heading1" }) + P("Ghi chú quan trọng", { b: true, sz: 14 }) + P("a") + P("Mục 2", { style: "Heading1" }) + P("Ghi chú quan trọng", { b: true, sz: 14 }) + P("b"));
+  ok((await D.docxIssues(bold)).length === 0, "chữ đậm 14 pt (tiêu đề con không có kiểu) lặp dưới hai mục khác nhau → không báo", JSON.stringify(await D.docxIssues(bold)));
   ok((await D.docxIssues(await docx(P("Có") + P("Có") + P("—") + P("—")))).length === 0, "đoạn ngắn (< 4 chữ cái) lặp như “Có”, “—” → không báo");
   ok((await D.docxIssues(Buffer.from("không phải zip"))).length === 0 && (await D.docxNote([{ path: "outputs/x.docx", data: Buffer.from("x") }])) === "", "tệp hỏng → bỏ qua im lặng");
   ok(D.stripTables("<a/><w:tbl><w:tbl>x</w:tbl>y</w:tbl><b/>").startsWith("<a/><w:p>") && D.stripTables("<a/><w:tbl><w:tbl>x</w:tbl>y</w:tbl><b/>").endsWith("<b/>"), "bỏ cả bảng lồng nhau");

@@ -82,21 +82,32 @@ export function fixPatch(content: string, f: Finding): string | null {
 
 // Lỗi số liệu báo nhầm (H1 T8: "tổng các thành phần không khớp giá trị đơn hàng" trong khi 11+7+5+3+6 = 32 đúng bằng 32k): model phản biện phải ghi
 // phép tính vào math, máy chủ tự tính lại. Tính ra khớp với số sản phẩm ghi thì bỏ mục đó; nêu lỗi số liệu mà không kèm phép tính thì hạ xuống Gợi ý.
-const NUM_CLAIM = /không khớp|không bằng|sai lệch|lệch số|tính sai|tính nhầm|cộng sai|cộng nhầm|sai số liệu|số liệu sai|tổng (?:\S+ ){0,4}(?:sai|lệch)|doesn[’']?t (?:add up|match|sum)|do(?:es)? not (?:add up|match|sum)|mismatch|miscalculat|wrong (?:sum|total)|incorrect (?:sum|total|calculation)|arithmetic/i;
+// Chỉ coi là "nêu lỗi số liệu" khi câu nói về tổng / phép tính VÀ có con số: "Type mismatch", "không khớp kiểu", "selector doesn't match"
+// của phản biện code không phải lỗi số liệu (review W10: các mục high đó từng bị hạ xuống Gợi ý).
+const NUM_CLAIM = /tổng (?:\S+ ){0,5}(?:sai|lệch|không khớp|không bằng|không đúng)|(?:sai|lệch|không khớp|không bằng|không đúng) (?:\S+ ){0,3}(?:tổng|phép tính|số liệu)|không cộng (?:ra|lại)|tính sai|tính nhầm|cộng sai|cộng nhầm|sai số liệu|số liệu (?:sai|không khớp|lệch)|doesn[’']?t (?:add up|sum)|do(?:es)? not (?:add up|sum)|miscalculat|wrong (?:sum|total)|incorrect (?:sum|total|calculation)|(?:sum|total|subtotal)s? (?:\S+ ){0,4}(?:mismatch|(?:doesn[’']?t|does not|do not) match|is wrong|is off|is incorrect)/i;
+const NUMBERS = /\d/;
+/** Câu nói có phải là nêu lỗi số liệu (tổng / phép tính sai, kèm con số). */
+export const numericClaim = (text: string) => NUM_CLAIM.test(text) && NUMBERS.test(text);
 
-/** Số viết kiểu Việt ("32.000", "1,5") hay kiểu Anh ("25,910.00", "1.5"), có thể kèm đơn vị (k, tr, %, đ, $). null: không đọc được. */
-export function parseNum(raw: string): number | null {
+/** Số viết kiểu Việt ("32.000", "1,5") hay kiểu Anh ("25,910.00", "1.5"), có thể kèm đơn vị (k, tr, %, đ, $), và số chữ số thập phân đang ghi. null: không đọc được. */
+function readNum(raw: string): { n: number; dec: number } | null {
   let t = raw.trim().replace(/[\s\u00a0]/g, "").replace(/^[$€£₫]|(?:k|K|m|M|tr|tỷ|tỉ|%|đ|₫|vnd|VND|usd|USD|\$)$/g, "");
   if (!/^[+-]?\d[\d.,]*$/.test(t)) return null;
+  let dec = 0;
   const dot = t.lastIndexOf("."), com = t.lastIndexOf(",");
-  if (dot >= 0 && com >= 0) t = dot > com ? t.replace(/,/g, "") : t.replace(/\./g, "").replace(",", ".");
+  if (dot >= 0 && com >= 0) { dec = t.length - Math.max(dot, com) - 1; t = dot > com ? t.replace(/,/g, "") : t.replace(/\./g, "").replace(",", "."); }
   else if (dot >= 0 || com >= 0) {
     const sep = dot >= 0 ? "." : ",", parts = t.split(sep);
     // Nhiều dấu, hoặc một dấu theo sau đúng 3 chữ số: dấu phân cách hàng nghìn. Còn lại: dấu thập phân.
-    t = parts.length > 2 || (parts[1].length === 3 && !/^[+-]?0$/.test(parts[0])) ? parts.join("") : parts.join(".");
+    const thousands = parts.length > 2 || (parts[1].length === 3 && !/^[+-]?0$/.test(parts[0]));
+    if (!thousands) dec = parts[1].length;
+    t = thousands ? parts.join("") : parts.join(".");
   }
   const n = Number(t);
-  return Number.isFinite(n) ? n : null;
+  return Number.isFinite(n) ? { n, dec } : null;
+}
+export function parseNum(raw: string): number | null {
+  return readNum(raw)?.n ?? null;
 }
 
 /** Tính phép tính đơn giản (+ − × ÷ và ngoặc) trên các số như parseNum đọc. null: không phải phép tính đọc được. */
@@ -117,15 +128,18 @@ export function evalExpr(expr: string): number | null {
   return v !== null && i === toks.length && toks.some((t) => /[-+*/]/.test(t)) ? v : null;
 }
 
-/** Bỏ lỗi số liệu mà chính phép tính kèm theo cho thấy là khớp; lỗi số liệu không kèm phép tính đọc được thì hạ xuống "low". */
-export function checkMath(list: Finding[]): Finding[] {
+/** Bỏ lỗi số liệu mà chính phép tính kèm theo cho thấy là khớp; lỗi số liệu không kèm phép tính đọc được thì hạ xuống "low".
+ *  Khớp nghĩa là bằng nhau ở đúng độ chính xác của số đang ghi (nửa đơn vị của chữ số cuối: "33%" khớp 33,33; "1025" không khớp 1020),
+ *  không dùng dung sai tương đối: 25.800 với 25.910 là lỗi thật dù chỉ lệch 0,42%.
+ *  downgrade: false cho phản biện code / ứng dụng (chỉ tự tính lại mục có kèm math, không hạ mức theo câu chữ). */
+export function checkMath(list: Finding[], opt: { downgrade?: boolean } = {}): Finding[] {
   const out: Finding[] = [];
   for (const f of list) {
-    const claim = NUM_CLAIM.test(`${f.title} ${f.detail}`);
+    const claim = opt.downgrade !== false && numericClaim(`${f.title} ${f.detail}`);
     if (!claim && !f.math) { out.push(f); continue; }
-    const got = f.math ? evalExpr(f.math.expr) : null, shown = f.math ? parseNum(f.math.shown) : null;
+    const got = f.math ? evalExpr(f.math.expr) : null, shown = f.math ? readNum(f.math.shown) : null;
     if (got !== null && shown !== null) {
-      if (Math.abs(got - shown) <= Math.max(0.005 * Math.abs(shown), 1e-9)) continue; // tự tính lại thấy khớp: báo nhầm
+      if (Math.abs(got - shown.n) <= 0.5 * 10 ** -shown.dec + 1e-9 * Math.max(1, Math.abs(shown.n))) continue; // tự tính lại thấy khớp: báo nhầm
       out.push(f); continue;
     }
     out.push(claim ? { ...f, severity: "low" } : f);

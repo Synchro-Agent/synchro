@@ -288,7 +288,7 @@ export async function deckGate(x: Exec, text: string): Promise<string | null> {
     const a = findArtifact({ uid: x.uid, conv: x.conv, messages: x.art.messages, base: x.art.base, live }, id);
     if (!a || a.type !== "html" || !isDeck(a)) continue;
     progress("step", "Đang kiểm tra hiển thị artifact");
-    const row = await autoDeckCheck(x.uid, x, a, process.env.APP_URL || "https://synchro.net.nz").catch(() => null);
+    const row = await autoDeckCheck(x.uid, x, a, process.env.APP_URL || "https://synchro.net.nz", runSignal()).catch(() => null);
     if (row) rows.push(row);
   }
   return rows.length ? AUTO_CHECK(rows) : null;
@@ -667,7 +667,7 @@ async function runCall(x: Exec, c: Call, d?: Decision): Promise<Run> {
     if (c.name === "read_artifact") return { ...readArtifact(a, c.input ?? {}), used };
     const enough = a ? checkRoundGate(x, a) : null;
     if (enough) return { content: enough, is_error: false, used };
-    const r = await checkArtifact(x.uid, a, c.input ?? {}, process.env.APP_URL || "https://synchro.net.nz");
+    const r = await checkArtifact(x.uid, a, c.input ?? {}, process.env.APP_URL || "https://synchro.net.nz", runSignal());
     if (r.image) (x.heavy ??= []).push(c.id);
     return { ...r, used };
   }

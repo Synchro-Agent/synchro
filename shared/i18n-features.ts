@@ -366,6 +366,8 @@ Object.assign(FX_VI2EN, {
   "Số trang không theo thứ tự slide ở slide {slides}.": "Page numbers don't follow the slide order on slide {slides}.",
   "Tổng số trang ghi trên các slide không đồng nhất (slide {slides}).": "The total page count differs between slides (slide {slides}).",
   "Chân trang ghi tổng {of} trang nhưng bộ slide có {total} slide.": "The footer says {of} pages, but the deck has {total} slides.",
-  "Nhãn mục nhảy cóc hoặc trùng số ở slide {slides}.": "Section labels skip or repeat a number on slide {slides}.",
-  "Nhãn mục ({brows}) và số trang ({pages}) lệch nhau trên slide {slides}: đánh số lại cho cùng một dãy hoặc bỏ một trong hai loại số.": "Section labels ({brows}) don't match the page numbers ({pages}) on slide {slides}: renumber them as one sequence or drop one of the two.",
+  "Nhãn mục nhảy cóc hoặc đi lùi ở slide {slides} (theo thứ tự phải là {want}).": "Section labels skip a number or go backwards on slide {slides} (in order they should read {want}).",
+  "Nhãn mục ({brows}) đã vượt lên trước số trang ({pages}) trên slide {slides}: đánh số lại cho cùng một dãy.": "Section labels ({brows}) run ahead of the page numbers ({pages}) on slide {slides}: renumber them as one sequence.",
+  "{count} slide tràn khung khi trình chiếu": "{count} slides overflow their frame when presented",
+  "Đo thật ở {vw}×{vh}: slide {slides} cao hoặc rộng hơn khung, phần thừa bị cắt khi trình chiếu. Rút chữ, giảm khoảng trống hoặc tách slide.": "Measured at {vw}×{vh}: slides {slides} are taller or wider than the frame, so the extra part is cut off when presented. Shorten the text, reduce the spacing, or split the slides.",
 });

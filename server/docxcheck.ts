@@ -1,7 +1,7 @@
 // Tự kiểm tệp Word model tạo bằng run_code (H1 T9): tiêu đề "THƯ MỜI HỢP TÁC" nằm hai đoạn liền nhau trong thân tài liệu — đoạn đầu chữ 9 pt căn phải
 // (dòng đầu trang bị đặt nhầm vào thân), đoạn sau là tiêu đề 17 pt căn giữa. Ảnh xem trước nhỏ khó thấy, đọc XML thì chắc.
 // Đọc thẳng word/document.xml (không cần LibreOffice), báo đoạn lặp liền nhau và tiêu đề trùng chữ trong <docx_check> để model sửa trước khi giao.
-// Chỉ báo, không sửa tệp. Tệp hỏng, không phải docx: bỏ qua im lặng. Tệp thuần ngoài JSZip: tests/api/docx-check.test.mjs.
+// Chỉ báo, không sửa tệp. Tệp hỏng, không phải docx: bỏ qua im lặng. Tệp thuần ngoài JSZip: tests/api/output-selfcheck.test.mjs.
 import "server-only";
 import JSZip from "jszip";
 import { readCapped, ZipTooBig } from "../scripts/zipguard.mjs";
@@ -9,7 +9,8 @@ import { readCapped, ZipTooBig } from "../scripts/zipguard.mjs";
 const decode = (s: string) => s.replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&#(\d+);/g, (_, n: string) => String.fromCodePoint(+n)).replace(/&amp;/g, "&");
 const norm = (s: string) => s.normalize("NFC").replace(/\s+/g, " ").trim().toLowerCase();
 
-export type DocxPara = { text: string; heading: boolean };
+// level: cấp tiêu đề (0 Title, 1 Heading1 / Subtitle / chữ đậm ≥ 16 pt, 2… Heading2…, chữ đậm 14–15 pt là 2); không phải tiêu đề thì không có.
+export type DocxPara = { text: string; heading: boolean; level?: number };
 export type DocxDup = { text: string; at: number[]; kind: "liền nhau" | "tiêu đề trùng" };
 
 /** Bỏ các bảng (kể cả bảng lồng) khỏi XML: ô bảng cạnh nhau hay lặp chữ có chủ ý (hai cột ký "(Ký, ghi rõ họ tên)"), không phải đoạn văn liền nhau.
@@ -53,15 +54,18 @@ export function docxParas(doc: string): DocxPara[] {
     if (text.trim()) {
       const style = /<w:pStyle w:val="([^"]*)"/.exec(p)?.[1] ?? "";
       const sz = Math.max(0, ...[...p.matchAll(/<w:sz w:val="(\d+)"/g)].map((m) => +m[1])) / 2;
-      const heading = /^(title|heading|tieude|tiêuđề|subtitle)/i.test(style.replace(/\s/g, "")) || (/<w:b(?:\s|\/)/.test(p) && sz >= 14);
-      out.push({ text: text.replace(/\s+/g, " ").trim(), heading });
+      const st = style.replace(/\s/g, ""), styled = /^(title|heading|tieude|tiêuđề|subtitle)/i.test(st), heading = styled || (/<w:b(?:\s|\/)/.test(p) && sz >= 14);
+      const level = !heading ? undefined : /^title/i.test(st) ? 0 : /^subtitle/i.test(st) ? 1 : styled ? Math.max(1, +(/\d/.exec(st)?.[0] ?? 1)) : sz >= 16 ? 1 : 2;
+      out.push({ text: text.replace(/\s+/g, " ").trim(), heading, ...(level === undefined ? {} : { level }) });
     }
     i = xml.indexOf("<w:p", end);
   }
   return out;
 }
 
-/** Đoạn lặp: hai đoạn liền nhau cùng chữ (≥ 4 chữ cái), hoặc cùng một tiêu đề xuất hiện hai lần ở bất kỳ đâu. Cột ký, bảng điền tên… lặp có chủ ý nên chỉ xét đoạn ≥ 4 chữ cái. */
+/** Đoạn lặp: hai đoạn liền nhau cùng chữ (≥ 4 chữ cái), hoặc cùng một tiêu đề lặp lại ở cùng chỗ trong dàn ý: tiêu đề cấp cao nhất (Title / Heading 1)
+ *  lặp ở bất kỳ đâu, tiêu đề cấp dưới lặp dưới cùng một tiêu đề cha. "Ưu điểm / Nhược điểm" dưới "Phương án A" rồi lại dưới "Phương án B" là dàn ý
+ *  bình thường, không báo (review W10). Cột ký, bảng điền tên… lặp có chủ ý nên chỉ xét đoạn ≥ 4 chữ cái. */
 export function docxDuplicates(paras: DocxPara[]): DocxDup[] {
   const out: DocxDup[] = [];
   const letters = (s: string) => (s.match(/\p{L}/gu) ?? []).length;
@@ -70,8 +74,19 @@ export function docxDuplicates(paras: DocxPara[]): DocxDup[] {
     if (a === b && letters(a) >= 4 && !out.some((d) => d.at.includes(i))) out.push({ text: paras[i].text, at: [i, i + 1], kind: "liền nhau" });
   }
   const seen = new Map<string, number[]>();
-  paras.forEach((p, i) => { if (p.heading && letters(p.text) >= 4) { const k = norm(p.text); seen.set(k, [...(seen.get(k) ?? []), i + 1]); } });
-  for (const [k, at] of seen) if (at.length > 1 && !out.some((d) => norm(d.text) === k)) out.push({ text: paras[at[0] - 1].text, at, kind: "tiêu đề trùng" });
+  // Đường dẫn tiêu đề đang mở theo cấp: tiêu đề cấp n đóng mọi cấp ≥ n.
+  const path: { level: number; text: string }[] = [];
+  paras.forEach((p, i) => {
+    if (!p.heading) return;
+    const level = p.level ?? 1;
+    while (path.length && path[path.length - 1].level >= level) path.pop();
+    const parent = level <= 1 ? "" : path.map((h) => h.text).join(" › ");
+    path.push({ level, text: norm(p.text) });
+    if (letters(p.text) < 4) return;
+    const k = `${parent}\u0000${norm(p.text)}`;
+    seen.set(k, [...(seen.get(k) ?? []), i + 1]);
+  });
+  for (const [k, at] of seen) if (at.length > 1 && !out.some((d) => norm(d.text) === k.slice(k.indexOf("\u0000") + 1))) out.push({ text: paras[at[0] - 1].text, at, kind: "tiêu đề trùng" });
   return out.slice(0, 8);
 }
 
