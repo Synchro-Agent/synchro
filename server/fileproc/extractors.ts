@@ -8,7 +8,7 @@ import sharp, { type Metadata } from "sharp";
 import jschardet from "jschardet";
 import { parseInWorker, withParseSlot, withConvertSlot, lowPriority, parserEnv } from "./sandbox";
 import { sniffUtf16, utf16LooksText } from "./detect";
-import { transcribeAudio } from "./transcribe";
+import { audioPrecheck, transcribeAudio } from "./transcribe";
 import { type ContentBlock, type Extractor, FileError, IMAGE_MAX_BYTES, IMAGE_MAX_EDGE } from "../../shared/fileproc/types";
 
 const run = promisify(execFile);
@@ -231,7 +231,7 @@ const imageExtractor: Extractor = {
 const audioExtractor: Extractor = {
   name: "audio",
   match: (k) => k === "audio",
-  async run(buf, { name, uid }) { return [{ type: "text", text: await withConvertSlot(uid, () => transcribeAudio(buf, name, uid)) }]; },
+  async run(buf, { name, uid }) { audioPrecheck(uid); return [{ type: "text", text: await withConvertSlot(uid, () => transcribeAudio(buf, name, uid)) }]; },
 };
 
 // ---- 1c. Office cũ (.doc/.xls/.ppt): chuyển bằng LibreOffice headless (chỉ khi máy chủ có cài, SYNCHRO_SOFFICE_BIN) rồi đi tiếp đường docx/xlsx/pptx ----

@@ -78,7 +78,8 @@ export const fmtOf = (id: string) => FORMATS.find((f) => f.id === id) ?? FORMATS
 export type ModelOut = { id: string; name: string; desc: string; langs: { id: string; name: string }[]; max: number; rate: number; style: boolean; boost: boolean };
 export type Plan = {
   connected: boolean; readPlan: boolean; tier: string; tierName: string; status: string;
-  credits: { used: number; limit: number; resetAt: number | null };
+  /** shared: hạn mức chung của cả máy chủ hôm nay đã hết (chỉ gửi cho tài khoản không phải chủ, không kèm số dùng chung): còn 0 dù hạn mức riêng còn. */
+  credits: { used: number; limit: number; resetAt: number | null; shared?: boolean };
   voices: { used: number; limit: number }; pro: { used: number; limit: number };
   features: Record<Feat, boolean>; locked: Partial<Record<Feat, string>>;
   /** Quyền khóa còn thiếu theo tính năng (tính năng đó bị ẩn); realtime: phiên trò chuyện Eleven Realtime dùng được (cần convai_write). */
@@ -490,6 +491,8 @@ export function addSpend(uid: string, n: number) {
     console.warn(`[speech] đã dùng ${now} / ${lim} credit ElevenLabs hôm nay`);
   }
 }
+/** Hạn mức giọng AI chung của cả máy chủ hôm nay đã hết (checkBudget sẽ chặn mọi tài khoản không phải quản trị viên). */
+export const speechSharedOut = () => spentToday() >= globalLimit();
 /** Trước một thao tác tốn credit: báo lỗi có mã budget khi đã hết hạn mức (nơi gọi chuyển sang giọng của trình duyệt).
  * use: lời báo gợi ý cách thay thế đúng với việc đang làm (đọc / trò chuyện → giọng trình duyệt; chép lời tệp → micro của trình duyệt; còn lại → chờ hồi). */
 export function checkBudget(u: UserRow, use: SpeechUse = "voice") {

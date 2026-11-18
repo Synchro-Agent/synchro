@@ -66,7 +66,7 @@ export function TTS({ say, sub, setSub, go, draft, auto, voice: shared, setVoice
   const chars = mode === "single" ? text.length : lines.reduce((n, l) => n + l.text.length, 0);
   // Ước tính theo bảng giá thật của model đang chọn (shared/speech/data.ts creditRate: Eleven v4 0,4, Flash / Turbo 0,5 credit mỗi ký tự).
   const cost = mode === "single" ? estCredits(m, text) : lines.reduce((n, l) => n + estCredits(m, l.text), 0);
-  const left = plan ? Math.max(0, plan.credits.limit - plan.credits.used) : Infinity;
+  const left = plan ? (plan.credits.shared ? 0 : Math.max(0, plan.credits.limit - plan.credits.used)) : Infinity;
   const max = m?.max ?? 5000;
   const empty = chars === 0;
 

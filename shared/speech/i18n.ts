@@ -399,6 +399,8 @@ SPEECH_RULES_EN.push(
 
 // Bố cục mới của Speech (hướng dẫn nhanh, mẫu bắt đầu, công cụ tách riêng, hiệu ứng, từ điển phát âm, Audio Native).
 Object.assign(SPEECH_VI2EN, {
+  // Hạn mức chung của máy chủ hôm nay đã hết (credits.shared, ui/speech/view.tsx).
+  "Giọng AI đã hết hạn mức chung của cả máy chủ hôm nay · đặt lại lúc nửa đêm (giờ UTC)": "The AI voice has reached the server's shared limit for today · resets at midnight (UTC)",
   // danh sách công cụ, nhóm
   "Biến chữ thành giọng nói tự nhiên, một hoặc nhiều người nói": "Turn text into natural speech, with one or many speakers",
   "Bạn nói, AI đổi thành giọng khác mà vẫn giữ cảm xúc": "You speak, AI turns it into another voice and keeps the emotion",

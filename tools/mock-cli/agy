@@ -4,7 +4,7 @@
 // - lần mở tương tác đầu tiên sau đăng nhập hiện màn hình làm quen (bảng màu, điều khoản, chia sẻ dữ liệu) — mọi phím gõ vào
 //   màn hình đó được ghi lại để kiểm thử chắc chắn Synchro không bấm thay người dùng;
 // - `models` in "mã<TAB>Tên" sau dòng "Fetching available models...", gồm biến thể effort và cả model Claude / GPT;
-// - --output-format json [--model] [--effort] [--conversation <id>] -p <prompt>. Trong prompt: [mock:quota] → hết hạn mức.
+// - --output-format json [--model] [--effort] [--conversation <id>] -p <prompt>. Trong prompt: [mock:quota] → hết hạn mức ([mock:quota:agy]: chỉ Antigravity hết).
 //   --effort với model Claude / GPT (không phải gemini-…) → lỗi "--effort is not supported for model" như agy thật.
 // - `mcp add|remove|list` ghi ~/.gemini/config/mcp_config.json đúng định dạng của agy ({ mcpServers: { tên: { serverUrl, headers, disabled } } });
 //   ở chế độ -p, công cụ MCP cần duyệt bị tự từ chối trừ khi hook PreToolUse trong ~/.gemini/config/hooks.json trả "allow" (tài liệu của agy).
@@ -118,7 +118,7 @@ async function agyImage(prompt, conv) {
       await C.sleep(Number(/\[mock:keepsession=(\d+)\]/.exec(prompt)?.[1] ?? 1500));
       return console.log(JSON.stringify({ conversation_id: conv, status: "SUCCESS", response: "ok", error: "", duration_seconds: 1, num_turns: 1, usage: usage0 }));
     }
-    if (prompt.includes("[mock:quota]")) { console.log(JSON.stringify({ conversation_id: conv, status: "ERROR", response: "", error: "RESOURCE_EXHAUSTED: You have exhausted your capacity on this model. Your quota will reset after 3h12m.", duration_seconds: 0.2, num_turns: 0, usage: usage0 })); process.exit(1); }
+    if (prompt.includes("[mock:quota]") || prompt.includes("[mock:quota:agy]")) { console.log(JSON.stringify({ conversation_id: conv, status: "ERROR", response: "", error: "RESOURCE_EXHAUSTED: You have exhausted your capacity on this model. Your quota will reset after 3h12m.", duration_seconds: 0.2, num_turns: 0, usage: usage0 })); process.exit(1); }
     // Như agy 1.4.11 thật (nhật ký trên VPS 2026-10-30): model Claude / GPT qua Antigravity không nhận --effort, lượt dừng ngay.
     {
       const m = C.flag(a, "--model"), e = C.flag(a, "--effort");

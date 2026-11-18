@@ -85,6 +85,31 @@ ok(!/nhiều ảnh trong một giờ qua/.test(ce) && (ce.match(/imageLimitMsg\(
 ok(!/(hãy|dùng ảnh người dùng|use an image the user)/i.test(m) && !/the user/i.test(en(m) ?? ""), "lời báo ảnh viết cho người dùng, không phải lệnh cho model", `${m} | ${en(m)}`);
 ok(/đừng gọi lại công cụ tạo ảnh/.test(L.IMAGE_LIMIT_NOTE) && /ảnh người dùng đã tải lên/.test(L.IMAGE_LIMIT_NOTE), "chỉ dẫn cho model: không gọi lại trước giờ hồi, dựng bằng SVG / ảnh đã tải lên", L.IMAGE_LIMIT_NOTE);
 
+console.log("3b. Gói của người dùng hết hạn mức giữa lượt Tự động; Tự động chạy bằng khóa API chung (ma trận H1.1: T8, T10)");
+{
+  // Câu báo dưới câu trả lời khi Tự động đã chuyển model (chat/routing.ts): "… đã hết hạn mức, nên Synchro đã trả lời bằng …" + planResetMsg.
+  const plan = `Grok 4.7 đã hết hạn mức, nên Synchro đã trả lời bằng GPT-5.6 Terra. ${L.planResetMsg("plan", "Grok", now + 23 * 60_000, now)}`;
+  ok(/Hạn mức gói Grok hồi lại sau 23 phút/.test(plan), "cả gói: nói gói nào và còn 23 phút", plan);
+  full(plan, "gói hết hạn mức, Tự động đã chuyển model");
+  ok(/^Grok 4\.7 hit its limit, so Synchro answered with GPT-5\.6 Terra\. The Grok plan limit resets in 23 min\./.test(en(plan) ?? ""), "bản tiếng Anh giữ tên model, tên gói và giờ hồi", en(plan));
+  const one = `Claude Opus 5.5 đã hết hạn mức, nên Synchro đã trả lời bằng Claude Sonnet 5. ${L.planResetMsg("model", "Claude Opus 5.5", now + 2 * 86_400_000, now)}`;
+  ok(/Hạn mức riêng của Claude Opus 5\.5 hồi lại sau 2 ngày/.test(one) && /The limit for Claude Opus 5\.5 resets in 2 days/.test(en(one) ?? ""), "riêng một model: nói model nào, bản tiếng Anh đúng", `${one} | ${en(one)}`);
+  // Câu cũ (không có giờ hồi: hãng không báo) vẫn dịch bằng luật chung, không bị luật mới bắt nhầm.
+  ok(en("Grok 4.7 đã hết hạn mức, nên Synchro đã trả lời bằng GPT-5.6 Terra.") === "Grok 4.7 hit its limit, so Synchro answered with GPT-5.6 Terra.", "câu không có giờ hồi: luật cũ");
+  const key = L.sharedKeyMsg("Claude Opus 5.5");
+  ok(/khóa API chung/.test(key) && /hạn mức chi phí API/.test(key) && /Cài đặt → Usage/.test(key), "khóa API chung: nói tính vào hạn mức chi phí API, chỗ xem mức dùng", key);
+  ok(en(key) === "Claude Opus 5.5 ran on Synchro's shared API key: this reply counts toward your API cost limit (5-hour session and week, see Settings → Usage), not your connected plans.", "khóa API chung: bản tiếng Anh", en(key));
+  const ce0 = readChatEngine();
+  ok(/planResetMsg\(/.test(ce0) && /sharedKeyMsg\(/.test(ce0) && /keyNote/.test(ce0), "chat/routing.ts dùng planResetMsg (giờ hồi gói) và sharedKeyMsg (keyNote)");
+}
+// Mức giọng AI chung của máy chủ đã cạn (ma trận H1.1 lỗi 1): cờ cho đầu trang Speech biết còn 0 dù hạn mức riêng còn.
+{
+  const w = AS.createUser({ email: "shared@limits.test", name: "W", verified: true });
+  ok(S.speechSharedOut() === false, "mức chung còn: speechSharedOut = false");
+  S.addSpend(w.id, 10_000_000);
+  ok(S.speechSharedOut() === true, "mức chung đã cạn: speechSharedOut = true");
+}
+
 console.log("4. Thẻ lỗi trong chat hiện nguyên lời báo");
 // chatError (thẻ lỗi dưới câu trả lời) thay câu dài trên 400 ký tự bằng "Lượt này gặp lỗi ở máy chủ": lời báo hạn mức phải ngắn hơn để người dùng đọc được.
 const { chaterror: CE } = await loadTs(["chaterror"]);

@@ -41,7 +41,8 @@ export function SpeechView({ say, tool: raw, setTool, sideOpen, onSide }: { say:
   const tools = TOOLS.filter((t) => toolOn(plan, t.k));
   const cur = toolDef(tool);
   const p: ToolProps = { say, sub: subs[tool] ?? "", setSub: (s) => setSubs((o) => ({ ...o, [tool]: s })), go, draft, auto, voice, setVoice, admin };
-  const c = plan?.credits, left = c ? Math.max(0, c.limit - c.used) : 0;
+  // shared: hạn mức chung của máy chủ hôm nay đã hết, mọi thao tác bị chặn dù hạn mức riêng còn: hiện còn 0.
+  const c = plan?.credits, left = c && !c.shared ? Math.max(0, c.limit - c.used) : 0;
   const ready = !!plan?.connected && toolOn(plan, tool);
   return (
     <div className="sp">
@@ -59,7 +60,7 @@ export function SpeechView({ say, tool: raw, setTool, sideOpen, onSide }: { say:
                 <span className="sp-credit-bar"><i style={{ width: `${Math.min(100, (left / c.limit) * 100)}%` }} /></span>
               </button>
             ) : (
-              <button className="sp-credit" title={`Hạn mức giọng AI của bạn hôm nay: còn ${fmtNum(left)} / ${fmtNum(c.limit)} credit${c.resetAt ? ` · đặt lại lúc nửa đêm (giờ UTC)` : ""}`} onClick={() => { void refreshPlan(true); }}>
+              <button className="sp-credit" title={c.shared ? "Giọng AI đã hết hạn mức chung của cả máy chủ hôm nay · đặt lại lúc nửa đêm (giờ UTC)" : `Hạn mức giọng AI của bạn hôm nay: còn ${fmtNum(left)} / ${fmtNum(c.limit)} credit${c.resetAt ? ` · đặt lại lúc nửa đêm (giờ UTC)` : ""}`} onClick={() => { void refreshPlan(true); }}>
                 <b>Giọng AI</b><span className="sp-credit-n">{fmtNum(left)} credit hôm nay</span>
                 <span className="sp-credit-bar"><i style={{ width: `${Math.min(100, (left / c.limit) * 100)}%` }} /></span>
               </button>

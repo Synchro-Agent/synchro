@@ -1327,6 +1327,8 @@ export default function Home({ boot }: { boot?: BootData | null }) {
   const needSeen = useRef<ReadonlySet<number>>(new Set());
   // Lời báo cho trình đọc màn hình: câu trả lời xong, cần duyệt. Nằm ngoài chữ đang chảy nên không đọc từng chữ.
   const [sayAt, setSayAt] = useState("");
+  // Đổi đoạn chat / trang: bỏ lời báo của đoạn trước, để vùng trạng thái không còn giữ câu trả lời cũ (trình đọc màn hình đọc lại khi duyệt trang).
+  useEffect(() => { setSayAt(""); }, [cur, view]);
   useEffect(() => {
     const fresh = [...needYou].filter((id) => !needSeen.current.has(id));
     needSeen.current = needYou;
@@ -1475,7 +1477,8 @@ export default function Home({ boot }: { boot?: BootData | null }) {
           ...(pr && !pr.stub ? { pjFull: true } : {}) } });
       webs = meta.webs ?? [];
       // Tự động đã chuyển sang model khác vì model đầu lỗi / quá tải: giữ lời báo dưới câu trả lời (thanh thông báo chỉ hiện một lúc).
-      if (meta.switched) notice = { text: meta.switched };
+      // Tự động chạy bằng khóa API chung (có gói mà không dùng gói): giữ dòng nói lượt này tính vào hạn mức chi phí API.
+      if (meta.switched || meta.keyNote) notice = { text: (meta.switched ?? meta.keyNote)! };
       const used = meta.skills ?? [];
       libs = meta.libs ?? [];
       // Skill nằm trong thư viện đã hiện ở chip thư viện; mục "studio-…" / "lib-…" chỉ là mục lục, không hiện riêng.

@@ -107,6 +107,8 @@ export function RateRow({ r }: { r: Rate }) {
 const WIN: Record<string, string> = {
   five_hour: "Phiên hiện tại", seven_day: "Hằng tuần · mọi model", seven_day_opus: "Hằng tuần · Opus",
   seven_day_sonnet: "Hằng tuần · Sonnet", seven_day_overage_included: "Hằng tuần · giới hạn theo model", overage: "Tín dụng sử dụng",
+  // Dòng máy chủ thêm khi hãng báo hết hạn mức mà không có cửa sổ cụ thể (ai/subs.ts subUsage).
+  plan_limit: "Hạn mức gói",
 };
 // Nhóm hạn mức của gói Google (tên hãng trả về bằng tiếng Anh). "model Gemini" ngắn, dễ trùng: dịch theo ngữ cảnh.
 const groupName = (g: string) => (g === "Gemini models" ? trc("model Gemini", "nhóm hạn mức") : g === "Claude and GPT models" ? tr("model Claude và GPT") : g);

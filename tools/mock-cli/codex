@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Codex CLI giả lập (dev:mock): login status|--device-auth, logout, exec [resume <id>] --json -, app-server (JSON-RPC: model/list, account/*, thread/start|resume, turn/start|interrupt).
-// Trong prompt: [mock:quota] → hết hạn mức gói ChatGPT.
+// Trong prompt: [mock:quota] → hết hạn mức gói ChatGPT ([mock:quota:codex]: chỉ ChatGPT hết, model dự phòng của hãng khác vẫn trả lời).
 const C = require(require("path").join(__dirname, "mock-cli-common.cjs"));
 const { fs, path } = C;
 const a = process.argv.slice(2);
@@ -40,7 +40,7 @@ async function chatTurn(o, E) {
     await E.message("item_1", o.nativeOn ? `Saved ${f}` : "NATIVE_OFF");
     return E.done({ input_tokens: 1, cached_input_tokens: 0, output_tokens: 1 });
   }
-  if (prompt.includes("[mock:quota]")) return E.failed("You've hit your usage limit. Upgrade to Pro or try again in 2 hours 14 minutes.");
+  if (prompt.includes("[mock:quota]") || prompt.includes("[mock:quota:codex]")) return E.failed("You've hit your usage limit. Upgrade to Pro or try again in 2 hours 14 minutes.");
   const turn = C.bumpSession(dir, o.tid);
   const st = C.stallTurn(dir, o.tid, prompt);
   if (st.stall) { await E.message("item_1", C.STALL_TEXT); return E.done({ input_tokens: prompt.length, cached_input_tokens: 0, output_tokens: 10 }); }
