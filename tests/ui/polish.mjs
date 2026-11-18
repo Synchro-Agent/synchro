@@ -274,6 +274,8 @@ for (const theme of THEMES) for (const size of SIZES) {
   const tabs = async (label, sel = "main [role=tablist] [role=tab], .main [role=tablist] [role=tab]", max = 8) => {
     const n = Math.min(max, await ev(`[...document.querySelectorAll(${JSON.stringify(sel)})].filter((t) => t.checkVisibility()).length`));
     for (let i = 1; i < n; i++) {
+      // Tab mở ra có thể thay dải nút (vd. Skill → Connectors không còn dải lọc của Kho kỹ năng): hết nút thì dừng, không tính lỗi.
+      if (!(await ev(`!![...document.querySelectorAll(${JSON.stringify(sel)})].filter((t) => t.checkVisibility())[${i}]`))) break;
       await click(`[...document.querySelectorAll(${JSON.stringify(sel)})].filter((t) => t.checkVisibility())[${i}]`, `${label} tab ${i}`); await ready();
       await check(`${label}-tab${i}`);
     }
@@ -306,7 +308,6 @@ for (const theme of THEMES) for (const size of SIZES) {
   // ── Trang chủ, menu, bảng lệnh, đoạn chat có artifact.
   await step0("trang-chu", async () => { await home(); await check("trang-chu"); });
   await step0("menu-model", async () => { await click(`document.querySelector(".model-btn")`, "model"); await ready(); await check("menu-model"); await esc(); });
-  await step0("muc-dung", async () => { await click(`document.querySelector(".us-ring")`, "usage"); await ready(); await check("muc-dung"); await esc(); });
   await step0("bang-lenh", async () => { await key("k", "KeyK", 75, 4); await ready(); await check("bang-lenh"); await esc(); });
   await step0("menu-nguoi-dung", async () => { await side(); await click(`document.querySelector(".rail .user")`, "user"); await ready(); await check("menu-nguoi-dung"); await esc(); });
   await step0("chat-artifact", async () => {
@@ -317,6 +318,8 @@ for (const theme of THEMES) for (const size of SIZES) {
     await until(`!document.querySelector(".thinking") && !document.querySelector(".art-card.busy") && !document.querySelector(".msg-stop, .stop-btn, [aria-label='Dừng'], [aria-label='Stop']")`, 90000, "reply");
     await ready(600); await check("chat-artifact");
   });
+  // Vòng Mức dùng nằm ở thanh dưới của đoạn chat (trang chủ trống không có).
+  await step0("muc-dung", async () => { await click(`document.querySelector(".dock .us-ring")`, "usage"); await ready(); await check("muc-dung"); await esc(); });
 
   // ── Các trang trên thanh điều hướng và các tab của từng trang.
   await step0("artifacts", async () => { await go("artifacts"); await check("artifacts"); await tabs("artifacts"); });
@@ -366,7 +369,8 @@ for (const theme of THEMES) for (const size of SIZES) {
   });
   await step0("skill", async () => {
     await go("customize"); await until(`!!document.querySelector(".pl-row2, .pl-dcard, .hub-yours")`, 15000, "hub").catch(() => {}); await ready(); await check("skill");
-    await tabs("skill", ".hub-seg button, .main [role=tablist] [role=tab]");
+    await tabs("skill-loc", ".hub-seg button");
+    await tabs("skill", ".main [role=tablist] [role=tab], main [role=tablist] [role=tab]");
     await go("customize");
     if (await ev(`!!document.querySelector(".hub-yours .pl-row2")`)) { await click(`document.querySelector(".hub-yours .pl-row2")`, "library"); await ready(); await check("skill-thu-vien"); await esc(); }
     if (await ev(`!!document.querySelector(".pl-scan")`)) { await click(`document.querySelector(".pl-scan")`, "scan"); await until(`!!document.querySelector(".scan-modal .modal-foot")`, 15000, "scan").catch(() => {}); await ready(); await check("skill-quet"); await esc(); }
