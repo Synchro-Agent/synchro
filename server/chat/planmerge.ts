@@ -1,3 +1,4 @@
+import "server-only";
 // Danh sách việc của một lượt khi model có hai công cụ update_plan (lỗi 8 của ma trận H1). Không phụ thuộc gì, kiểm thử chạy thẳng (tests/api/codex-plan.test.mjs).
 // Một danh sách việc mỗi lượt dù có hai nguồn: GPT qua Codex có update_plan DỰNG SẴN của Codex (sự kiện "plan" của engine, routing.ts) bên cạnh
 // update_plan của Synchro (MCP). Mỗi lần gọi thay cả danh sách, nên model dùng cả hai với hai danh sách khác nhau thì thanh việc nhảy qua lại giữa hai danh sách.
