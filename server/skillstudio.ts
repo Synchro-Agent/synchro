@@ -9,7 +9,7 @@
 import "server-only";
 import crypto from "node:crypto";
 import { db, getUser, type UserRow } from "./authstore";
-import { oneShot, pickModel } from "./ai/anymodel";
+import { NO_CHEAP, OneShotErr, quickCall } from "./ai/anymodel";
 import { parseStudios, ruleStudios, STUDIO_KINDS, STUDIO_SYSTEM, studioAsk, type StudioKind } from "./studiorules";
 
 export type StudioSrc = "rules" | "model" | "manual";
@@ -156,16 +156,21 @@ async function ask(uid: string, key: string, s: { name: string; description: str
   if (!cur || cur.src !== "rules" || cur.sig !== sig || cur.model_at) return;
   const user: UserRow | undefined = getUser(uid);
   if (!user) return;
-  const pick = await pickModel(user, { text: "phân loại ngắn", attachments: 0, turns: 1, studio: false }).catch(() => null);
-  if (!pick) return; // chưa có model: giữ bộ luật, lần lưu / mở Kho kỹ năng sau thử lại
+  // Việc nền không ai chờ: model rẻ nhất (quickCall, như đặt tên đoạn chat), không phải model bộ định tuyến chọn; trên gói của người dùng thì chịu
+  // ngân sách việc phụ của hôm nay (ai/helperquota.ts). Chưa tới lượt (NO_CHEAP) thì bỏ dấu đã hỏi để lần lưu / mở Kho kỹ năng sau thử lại.
   d.prepare("UPDATE skill_studios SET model_at = ? WHERE key = ?").run(Date.now(), key);
-  const raw = await oneShot(user, pick.model, STUDIO_SYSTEM, [{ role: "user", content: studioAsk(s.name, s.description, s.body) }], { maxTokens: 300, feature: "skill-studio", signal: AbortSignal.timeout(90_000) });
+  let raw: string, model: string;
+  try { ({ text: raw, model } = await quickCall(user, STUDIO_SYSTEM, studioAsk(s.name, s.description, s.body), { maxTokens: 300, job: "skill-studio", bg: true, signal: AbortSignal.timeout(90_000) })); }
+  catch (e) {
+    if (e instanceof OneShotErr && (e.message === NO_CHEAP || e.status === 503)) { d.prepare("UPDATE skill_studios SET model_at = NULL WHERE key = ?").run(key); return; }
+    throw e;
+  }
   const r = parseStudios(raw);
   if (!r) return;
   // Trong lúc chờ model, người dùng có thể đã tự chọn mục hoặc lưu phiên bản mới: chỉ ghi khi vẫn là kết quả bộ luật của đúng nội dung này.
   const studios = JSON.stringify(r.studios);
   const done = d.prepare("UPDATE skill_studios SET studios = ?, src = 'model', why = ?, at = ? WHERE key = ? AND src = 'rules' AND sig = ?")
-    .run(studios, r.why || `model ${pick.model}`, Date.now(), key, sig).changes;
+    .run(studios, r.why || `model ${model}`, Date.now(), key, sig).changes;
   // Mỗi lần báo là cả máy chủ dựng lại bộ đệm skill (~70 ms với 18.000 skill): model chỉ xác nhận lại mục cũ thì không báo.
   if (done && studios !== cur.studios) bump();
 }

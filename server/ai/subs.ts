@@ -505,6 +505,8 @@ const NOTE: Record<Cli, string> = {
 
 /** Antigravity đang chờ người dùng hoàn tất bước làm quen (đã thấy ở lần đọc hạn mức gần nhất). */
 export const agySetupPending = (uid: string) => !!g.limits.get(`agy:${uid}`)?.setup;
+/** Lần gần nhất gói này chạy xong một lượt (mọi loại), hoặc null (Cài đặt → Providers: Gemini đã chạy được thì nói đúng như vậy). */
+export const lastPlanRun = (uid: string, cli: Cli) => lastRun(uid, cli);
 
 /** fresh: bỏ qua bộ nhớ (người dùng bấm làm mới). idle: lượt hỏi định kỳ của giao diện: đã có số thì không mở CLI. */
 export async function subUsage(u: UserRow, cli: Cli, o: { fresh?: boolean; idle?: boolean } = {}): Promise<SubUsage> {
@@ -518,7 +520,9 @@ export async function subUsage(u: UserRow, cli: Cli, o: { fresh?: boolean; idle?
     const c = codexWindows(rl);
     saveLimits(cli, u.id, c.windows, { plan: (typeof acc?.account?.planType === "string" ? acc.account.planType : undefined) ?? c.plan, credits: c.credits });
     hit = g.limits.get(k);
-  } else if (cli === "agy" && (o.fresh || age > (hit?.setup ? 20_000 : 5 * 60_000))) {
+  // Còn màn hình làm quen mà Gemini chưa chạy được lượt nào: đọc lại sau 20 giây (người dùng có thể vừa xong bước đó). Đã chạy được rồi thì
+  // bước làm quen không chặn gì: đọc thưa như thường (mỗi lần đọc là mở cả CLI trong terminal giả).
+  } else if (cli === "agy" && (o.fresh || age > (hit?.setup && !lastRun(u.id, cli) ? 20_000 : 5 * 60_000))) {
     const r = await agyUsage(u.id).catch(() => ({ windows: [] as PlanWindow[], setup: false }));
     saveLimits(cli, u.id, r.windows, { setup: r.setup });
     hit = g.limits.get(k);
@@ -541,7 +545,7 @@ export async function subUsage(u: UserRow, cli: Cli, o: { fresh?: boolean; idle?
   const plan = hit?.plan ? hit.plan.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase()) : null;
   const ranAt = lastRun(u.id, cli);
   return { cli, name: SUB[cli].name, plan, windows, ...(({ turns, helpers }) => ({ turnsToday: turns, helpersToday: helpers }))(todayCounts(u.id, cli)), credits: hit?.credits ?? null, at: hit?.at ?? null, setup: !!hit?.setup, ranAt,
-    note: hit?.setup ? (ranAt ? "Gemini is working. Synchro can't read the plan limits yet because Antigravity's own screen still asks for its first-run choices (color scheme, terms and data sharing)."
+    note: hit?.setup ? (ranAt ? "Gemini is working normally. Synchro can't show its plan limits yet because Antigravity's limits panel isn't available on this account; chat isn't affected, and if the plan hits its limit Synchro still notices and tells you."
       : "Antigravity is waiting for you to finish its first-run setup (color scheme, terms and data sharing) before it shows plan limits.")
       : windows.length || cli === "grok" ? NOTE[cli] : cli === "agy" ? `${NOTE.agy} Synchro could not read the quota panel yet.` : `Send a message with this plan to see its limits. ${NOTE[cli]}` };
 }

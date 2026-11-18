@@ -615,7 +615,7 @@ Object.assign(EN2VI, {
   "Shared key: default (allowed)": "Khóa chung: mặc định (cho dùng)", "Shared key: default (blocked)": "Khóa chung: mặc định (chặn)", "Shared key: allowed": "Khóa chung: cho dùng", "Shared key: blocked": "Khóa chung: chặn",
   "Models: default (fast only)": "Model: mặc định (chỉ nhanh)", "Models: default (up to balanced)": "Model: mặc định (tới cân bằng)", "Models: default (all)": "Model: mặc định (tất cả)",
   "Models: fast only": "Model: chỉ nhanh", "Models: up to balanced": "Model: tới cân bằng", "Models: all": "Model: tất cả",
-  "Gemini is working. Synchro can't read the plan limits yet because Antigravity's own screen still asks for its first-run choices (color scheme, terms and data sharing).": "Gemini đang chạy được. Synchro chưa đọc được hạn mức của gói vì màn hình riêng của Antigravity còn chờ các lựa chọn lần đầu (bảng màu, điều khoản, chia sẻ dữ liệu).",
+  "Gemini is working normally. Synchro can't show its plan limits yet because Antigravity's limits panel isn't available on this account; chat isn't affected, and if the plan hits its limit Synchro still notices and tells you.": "Gemini đang chạy bình thường. Synchro chưa hiện được hạn mức của gói vì bảng hạn mức của Antigravity chưa dùng được trên tài khoản này; chat không bị ảnh hưởng, và khi gói chạm giới hạn Synchro vẫn nhận ra và báo cho bạn.",
 });
 
 // Plugins và trang Tùy chỉnh.

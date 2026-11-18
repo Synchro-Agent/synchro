@@ -194,7 +194,7 @@ export const hasApi = (st: UsageState | null) => !!st?.vendors?.some((v) => v.mo
 /** Antigravity còn màn hình làm quen lần đầu nên chưa đọc được bảng hạn mức. Gemini đã chạy được (ranAt) thì nói đúng như vậy: chat vẫn chạy, chỉ thiếu số hạn mức
  *  (lỗi 11 của ma trận H1: "đang chờ bước làm quen" trong khi Gemini vừa trả lời 3 lần). */
 export const setupNote = (sub: SubUsage, short = false) => sub.ranAt
-  ? tr("Gemini đang chạy bình thường. Synchro chưa đọc được hạn mức của gói vì màn hình làm quen lần đầu của Antigravity (bảng màu, điều khoản) chưa xong; xong bước đó ở Cài đặt → Providers → Gemini thì hạn mức sẽ hiện.")
+  ? (short ? tr("Gemini đang chạy bình thường. Synchro chưa đọc được hạn mức của gói này.") : tr("Gemini đang chạy bình thường. Synchro chưa đọc được bảng hạn mức của Antigravity trên tài khoản này nên chưa hiện phần trăm đã dùng; chat không bị ảnh hưởng, và khi gói chạm giới hạn Synchro vẫn nhận ra và báo cho bạn."))
   : short ? tr("Antigravity đang chờ bạn hoàn tất bước làm quen lần đầu.") : tr("Antigravity đang chờ bạn hoàn tất bước làm quen lần đầu (bảng màu, điều khoản, chia sẻ dữ liệu). Xem Cài đặt → Providers → Gemini.");
 
 /** Huy hiệu cách hãng đang chạy: gói đã đăng nhập, khóa API, hoặc chưa kết nối. */
