@@ -104,7 +104,7 @@ console.log("6b. Trần chung cho tệp chờ theo lượt riêng (mỗi tệp c
   ok(w === 24, "u8 chờ 20 tệp, u9 chờ 4 tệp: tổng 24", w);
   g.open();
   const rs = await Promise.all(jobs);
-  ok(rs.filter((x) => x === "ok").length === 25 && rs.filter((x) => /Máy chủ đang đọc nhiều tệp/.test(x)).length === 1, "tệp chờ thứ 25 bị từ chối bằng lời máy chủ bận, 25 tệp còn lại xong", rs.filter((x) => x !== "ok"));
+  ok(rs.filter((x) => x === "ok").length === 26 && rs.filter((x) => /Máy chủ đang đọc nhiều tệp/.test(x)).length === 1, "tệp chờ thứ 25 (của u9) bị từ chối bằng lời máy chủ bận, 26 tệp còn lại xong", rs.filter((x) => x !== "ok"));
   const z = S.slotState("convert", "u9");
   ok(z.running === 0 && z.waiting === 0 && z.global === 0, "không rò chỗ", z);
 }
