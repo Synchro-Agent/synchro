@@ -510,7 +510,7 @@ html[data-chat-font="System"] .ai-msg,html[data-chat-font="System"] .sk-ai{font-
 .ta.sl .h{left:calc(50% - 50px);top:calc(50% - 20px);width:50px;height:10px;border-radius:5px;background:var(--ta)}
 .ta.sl .p1{left:calc(50% - 50px);top:calc(50% - 2px);width:38px}.ta.sl .p2{left:calc(50% - 50px);top:calc(50% + 9px);width:26px}
 .ta.sl .img{width:24px;height:22px;border-radius:6px;background:var(--tb);right:calc(50% - 50px);top:calc(50% - 4px)}
-.new-tag{font-size:var(--fs-1);font-weight:360;padding:2px 7px;border-radius:var(--r-pill);background:#dbe5f7;color:#2c5aa8}
+.new-tag{font-size:var(--fs-1);font-weight:360;white-space:nowrap;padding:2px 7px;border-radius:var(--r-pill);background:#dbe5f7;color:#2c5aa8}
 [data-theme="dark"] .new-tag{background:color-mix(in srgb,var(--accent) 12%,transparent);color:var(--accent)}
 [data-theme="dark"] .ta.sl:before{background:rgba(220,180,110,.12)}
 
