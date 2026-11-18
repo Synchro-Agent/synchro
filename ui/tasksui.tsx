@@ -19,6 +19,7 @@ import { allowsModel } from "../shared/catalog";
 import { useApp } from "./store";
 import { ScopeChoice, useIsAdmin, type Scope } from "./skillsui";
 import { TimePick } from "./timepick";
+import { Dropdown } from "./listbox";
 import { BulkBar, BulkButton, BulkCheck, bulkRow, each, useBulk, type BulkAct } from "./bulk";
 import { PageBar, usePage } from "./pager";
 
@@ -38,6 +39,7 @@ const api = async <T,>(method: string, url: string, body?: unknown): Promise<T> 
   if (!r.ok) throw new Error(j.error || statusText(r.status));
   return j as T;
 };
+const KINDS: [Schedule["kind"], string][] = [["once", "Một lần, chạy ngay"], ["hourly", "Mỗi vài giờ"], ["daily", "Mỗi ngày"], ["weekdays", "Thứ Hai – thứ Sáu"], ["weekly", "Mỗi tuần"]];
 const DAYS = ["Chủ nhật", "Thứ Hai", "Thứ Ba", "Thứ Tư", "Thứ Năm", "Thứ Sáu", "Thứ Bảy"];
 export const scheduleText = (s: Schedule) => s.kind === "once" ? tr("Một lần") : s.kind === "hourly" ? (s.every && s.every > 1 ? `${tr("Mỗi")} ${s.every} ${tr("giờ")}` : tr("Mỗi giờ"))
   : s.kind === "daily" ? `${tr("Mỗi ngày lúc")} ${s.time}` : s.kind === "weekdays" ? `${tr("Thứ Hai – thứ Sáu lúc")} ${s.time}` : `${tr(DAYS[s.weekday ?? 1])} ${tr("hằng tuần lúc")} ${s.time}`;
@@ -95,11 +97,11 @@ function ModelPick({ value, onChange }: { value: string; onChange: (k: string) =
   const m = useModels();
   const groups = m.providers.map((p) => ({ name: p.name, models: p.models.filter((x) => allowsModel(m.allowed, x.key)) })).filter((g) => g.models.length);
   return (
-    <select className="field" aria-label="Model" value={value} onChange={(e) => onChange(e.target.value)}>
-      <option value={AUTO}>{tr("Tự động: chọn model hợp với việc, lỗi thì chuyển model khác")}</option>
-      {groups.map((g) => <optgroup key={g.name} label={g.name}>{g.models.map((x) => <option key={x.key} value={x.key}>{x.name}</option>)}</optgroup>)}
-      {value !== AUTO && !groups.some((g) => g.models.some((x) => x.key === value)) && <option value={value}>{modelName(value)}</option>}
-    </select>
+    <Dropdown block label="Model" value={value} onChange={onChange} options={[
+      { value: AUTO, label: "Tự động: chọn model hợp với việc, lỗi thì chuyển model khác" },
+      ...groups.flatMap((g) => g.models.map((x) => ({ value: x.key, label: x.name, group: g.name, notr: true }))),
+      ...(value !== AUTO && !groups.some((g) => g.models.some((x) => x.key === value)) ? [{ value, label: modelName(value), notr: true }] : []),
+    ]} />
   );
 }
 
@@ -139,11 +141,9 @@ function TaskEditor({ init, plan, onClose, onSaved, say }: { init?: Task | null;
         <p className="d">{init ? tr("Đổi lịch, trình duyệt hay hướng dẫn; lần chạy tới dùng ngay bản mới.") : tr("Xem lại và sửa nếu cần. Synchro chạy việc này trên máy chủ theo lịch, kể cả khi bạn tắt máy.")}</p>
         <label className="tk-l">{tr("Tên")}<input className="field" value={title} maxLength={120} onChange={(e) => setTitle(e.target.value)} placeholder={tr("Ví dụ: Giá cổ phiếu mỗi sáng")} data-notr /></label>
         <div className="tk-sch">
-          <label className="tk-l">{tr("Lịch chạy")}<select className="field" value={kind} onChange={(e) => setKind(e.target.value as Schedule["kind"])}>
-            <option value="once">{tr("Một lần, chạy ngay")}</option><option value="hourly">{tr("Mỗi vài giờ")}</option><option value="daily">{tr("Mỗi ngày")}</option><option value="weekdays">{tr("Thứ Hai – thứ Sáu")}</option><option value="weekly">{tr("Mỗi tuần")}</option>
-          </select></label>
-          {kind === "hourly" && <label className="tk-l">{tr("Cách nhau")}<select className="field" value={every} onChange={(e) => setEvery(Number(e.target.value))}>{[1, 2, 3, 4, 6, 8, 12].map((n) => <option key={n} value={n}>{n} {tr("giờ")}</option>)}</select></label>}
-          {kind === "weekly" && <label className="tk-l">{tr("Vào")}<select className="field" value={weekday} onChange={(e) => setWeekday(Number(e.target.value))}>{DAYS.map((d, i) => <option key={i} value={i}>{tr(d)}</option>)}</select></label>}
+          <div className="tk-l">{tr("Lịch chạy")}<Dropdown<Schedule["kind"]> block label="Lịch chạy" className="tk-kind" value={kind} onChange={setKind} options={KINDS} /></div>
+          {kind === "hourly" && <div className="tk-l">{tr("Cách nhau")}<Dropdown<number> block label="Cách nhau" className="tk-every" value={every} onChange={setEvery} options={[1, 2, 3, 4, 6, 8, 12].map((n) => ({ value: n, label: `${n} ${tr("giờ")}`, notr: true }))} /></div>}
+          {kind === "weekly" && <div className="tk-l">{tr("Vào")}<Dropdown<number> block label="Vào" className="tk-day" value={weekday} onChange={setWeekday} options={DAYS.map((d, i) => [i, d] as const)} /></div>}
           {(kind === "daily" || kind === "weekdays" || kind === "weekly") && <div className="tk-l">{tr("Lúc")}<TimePick value={time} onChange={setTime} /></div>}
         </div>
         <p className="tk-tz">{tr("Giờ theo múi giờ")} <span data-notr>{tz()}</span></p>
@@ -415,7 +415,7 @@ export function InboxPage({ say, onOpenChat }: { say: (m: string) => void; model
           <button role="tab" aria-selected={tab === "jobs"} className={tab === "jobs" ? "on" : ""} onClick={() => setTab("jobs")}>{tr("Việc tự động")}{(tasks?.length ?? 0) > 0 && <i className="tk-count">{tasks!.length}</i>}</button>
         </div>
         <span style={{ flex: 1 }} />
-        {tab === "results" && (tasks?.length ?? 0) > 1 && <select className="field tk-filter" value={filter} onChange={(e) => setFilter(e.target.value)} aria-label="Lọc theo việc"><option value="">{tr("Mọi việc")}</option>{tasks!.map((t) => <option key={t.id} value={t.id} data-notr>{t.title}</option>)}</select>}
+        {tab === "results" && (tasks?.length ?? 0) > 1 && <Dropdown className="tk-filter" label="Lọc theo việc" align="end" minWidth={220} value={filter} onChange={setFilter} options={[{ value: "", label: "Mọi việc" }, ...tasks!.map((t) => ({ value: t.id, label: t.title, notr: true }))]} />}
         {tab === "results" && unread > 0 && !bkR.on && <button className="btn" onClick={() => read("all")}>{tr("Đánh dấu đã đọc hết")}</button>}
         {tab === "results" && <BulkButton b={bkR} />}
         {tab === "jobs" && <BulkButton b={bkJ} />}

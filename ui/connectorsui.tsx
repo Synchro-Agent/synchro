@@ -7,6 +7,7 @@ import "./styles/settings.css";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { apiFetch, NO_SERVER } from "./apierr";
 import * as I from "./icons";
+import { Dropdown } from "./listbox";
 import { useApp } from "./store";
 import { ConnLogo } from "./connlogo";
 import { ArgsEditor, readArgs } from "./argsedit";
@@ -223,12 +224,8 @@ export function ReconnectLink({ c, onDone, onManage, say }: { c: Conn; onDone: (
 function PermSelect({ value, onChange, label, mixed, locked, only }: { value: Perm; onChange: (p: Perm) => void; label: string; mixed?: boolean; locked?: string; only?: Perm[] }) {
   if (locked) return <span className="cn-locked" title={locked}><I.Lock size={12} />Blocked</span>;
   return (
-    <span className={`api-sel cn-perm ${value}`}>
-      <select aria-label={label} value={mixed ? "" : value} onChange={(e) => e.target.value && onChange(e.target.value as Perm)}>
-        {mixed && <option value="">Custom</option>}
-        {(only ?? (["allow", "chat", "ask", "block"] as Perm[])).map((p) => <option key={p} value={p}>{PERM_LABEL[p]}</option>)}
-      </select><I.Chevron size={13} />
-    </span>
+    <Dropdown<Perm | ""> size="sm" label={label} className={`cn-perm ${mixed ? "" : value}`} align="end" minWidth={170} value={mixed ? "" : value} onChange={(v) => v && onChange(v)}
+      options={[...(mixed ? [{ value: "" as const, label: "Custom", disabled: true }] : []), ...(only ?? (["allow", "chat", "ask", "block"] as Perm[])).map((p) => ({ value: p, label: PERM_LABEL[p] }))]} />
   );
 }
 
@@ -248,9 +245,8 @@ function ConnSettings({ c, policy, onSettings }: { c: Conn; policy: Policy; onSe
       </div>
       <div className="cn-set-row">
         <div><b>New tools</b><div className="d">Permission for tools the server adds later.</div></div>
-        <span className="api-sel cn-perm"><select aria-label="Permission for new tools" value={st.newTools} onChange={(e) => onSettings({ newTools: e.target.value as Settings["newTools"] })}>
-          <option value="auto">Automatic (read-only: allow, others: ask)</option><option value="ask">Ask every time</option><option value="block">Blocked</option>
-        </select><I.Chevron size={13} /></span>
+        <Dropdown<Settings["newTools"]> size="sm" label="Permission for new tools" className="cn-perm" align="end" minWidth={250} value={st.newTools} onChange={(newTools) => onSettings({ newTools })}
+          options={[["auto", "Automatic (read-only: allow, others: ask)"], ["ask", "Ask every time"], ["block", "Blocked"]]} />
       </div>
       <div className="cn-set-row">
         <div><b>Tools that delete data</b><div className="d">{policy.destructive ? "Let Synchro use tools the server marks as able to delete data." : LOCK_NOTE.admin}</div></div>
@@ -258,9 +254,8 @@ function ConnSettings({ c, policy, onSettings }: { c: Conn; policy: Policy; onSe
       </div>
       <div className="cn-set-row">
         <div><b>Calls per message</b><div className="d">Most times Synchro may call this connector while answering one message.</div></div>
-        <span className="api-sel cn-perm"><select aria-label="Calls per message" value={st.maxCalls} onChange={(e) => onSettings({ maxCalls: Number(e.target.value) })}>
-          {[0, 3, 5, 10, 20, 50].map((n) => <option key={n} value={n}>{n === 0 ? "No limit" : n}</option>)}
-        </select><I.Chevron size={13} /></span>
+        <Dropdown<number> size="sm" label="Calls per message" className="cn-perm" align="end" minWidth={150} value={st.maxCalls} onChange={(maxCalls) => onSettings({ maxCalls })}
+          options={[0, 3, 5, 10, 20, 50].map((n) => (n === 0 ? [0, "No limit"] as const : { value: n, label: String(n), notr: true }))} />
       </div>
     </div>
   );

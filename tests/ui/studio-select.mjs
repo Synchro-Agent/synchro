@@ -76,10 +76,12 @@ const openHub = async () => {
   await click(byText(".nav-item", "Skill"), "hub"); await until(`!!document.querySelector(".pl-top")`, 20000, "Kho kỹ năng");
   await sleep(500);
 };
-const SEL = `document.querySelector(".pl-modal select.pl-sel")`;
+// Ô Studio là ô chọn của app (ui/listbox.tsx): bấm nút rồi bấm mục; giá trị đang chọn ở data-value của nút.
+const SEL = `document.querySelector(".pl-modal .dd.pl-sel")`;
+const pickDd = async (btn, v) => { await ev(`(${btn}).click(), 1`); await until(`!!document.querySelector('.dd-pop [role=option][data-value=${JSON.stringify(String(v))}]')`, 5000, "mục " + v); await ev(`document.querySelector('.dd-pop [role=option][data-value=${JSON.stringify(String(v))}]').click(), 1`); };
 const setMode = async (v) => {
-  await ev(`(() => { const s = ${SEL}; const set = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value").set; set.call(s, ${JSON.stringify("")} + ${JSON.stringify(v)}); s.dispatchEvent(new Event("change", { bubbles: true })); return 1; })()`);
-  await until(`${SEL}.value === ${JSON.stringify(v)}`, 5000, "chọn " + v);
+  await pickDd(SEL, v);
+  await until(`${SEL}.dataset.value === ${JSON.stringify(v)}`, 5000, "chọn " + v);
   await sleep(500);
 };
 const rowText = () => ev(`${SEL}.closest(".pl-row").innerText`);

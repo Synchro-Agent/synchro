@@ -76,6 +76,8 @@ var HOOK; await P("Page.addScriptToEvaluateOnNewDocument", { runImmediately: tru
 
 const ev = async (expr) => { const r = await P("Runtime.evaluate", { expression: expr, awaitPromise: true, returnByValue: true }); if (r.exceptionDetails) throw new Error(r.exceptionDetails.exception?.description ?? r.exceptionDetails.text); return r.result.value; };
 const until = async (expr, ms = 30000, what = expr) => { const t = Date.now(); while (Date.now() - t < ms) { if (await ev(expr).catch(() => false)) return; await sleep(300); } throw new Error("timeout: " + what); };
+// Ô chọn của app (ui/listbox.tsx): bấm nút, chờ danh sách, bấm mục có data-value cần chọn.
+const pickDd = async (btn, v) => { await ev(`(${btn}).click(), 1`); await until(`!!document.querySelector('.dd-pop [role=option][data-value=${JSON.stringify(String(v))}]')`, 5000, "mục " + v); await ev(`document.querySelector('.dd-pop [role=option][data-value=${JSON.stringify(String(v))}]').click(), 1`); };
 // Bấm chuột thật vào giữa phần tử.
 const click = async (expr, what) => {
   const r = await ev(`(() => { const el = ${expr}; if (!el) return null; el.scrollIntoView({ block: "center" }); const b = el.getBoundingClientRect(); return [b.x + b.width / 2, b.y + b.height / 2]; })()`);
@@ -111,7 +113,7 @@ try {
   // Tên cố định để các bước sau tìm đúng kết quả "Bản tin buổi sáng" (model lên kế hoạch tự đặt tên khác).
   await ev(`(() => { const i = document.querySelector(".tk-modal input.field"); Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set.call(i, "Bản tin buổi sáng"); i.dispatchEvent(new Event("input", { bubbles: true })); return 1; })()`);
   await shot("1-form");
-  await ev(`(() => { const s = document.querySelector(".tk-modal select"); Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value").set.call(s, "once"); s.dispatchEvent(new Event("change", { bubbles: true })); return 1; })()`);
+  await pickDd(`document.querySelector(".tk-modal .tk-kind")`, "once");
   await sleep(200);
   await click(`document.querySelector(".tk-modal .modal-foot .btn.dark")`, "save");
   await until(`!document.querySelector(".tk-modal")`, 10000, "form closed");

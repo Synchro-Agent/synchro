@@ -1594,9 +1594,6 @@ b,strong{font-weight:560}
 .sp-line>span{display:flex;flex-direction:column;gap:1px;min-width:0}
 .sp-line small{font-size:var(--fs-1);color:var(--text-3)}
 .sp-tg{position:relative;width:32px;height:19px;border-radius:var(--r-pill);background:var(--sp-line);flex:none;transition:background .2s}
-.sp-sel{position:relative;display:flex;align-items:center;min-width:0}
-.sp-sel select{appearance:none;-webkit-appearance:none;width:100%;height:34px;padding:0 30px 0 11px;border-radius:var(--r-pill);border:.5px solid var(--border-strong);background:var(--input);color:var(--text);font:inherit;font-size:var(--fs-2);cursor:pointer}
-.sp-sel svg{position:absolute;right:10px;pointer-events:none;color:var(--text-3)}
 .sp-input{width:100%;height:34px;padding:0 11px;border-radius:var(--r-pill);border:.5px solid var(--border-strong);background:var(--input);color:var(--text);font:inherit;font-size:var(--fs-2);outline:none;transition:box-shadow .15s,border-color .15s}
 .sp-drop{width:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:28px 16px;border-radius:var(--sp-r);border:1px dashed var(--sp-line);background:color-mix(in srgb,var(--text) 2%,transparent);text-align:center;transition:background .15s,border-color .15s}
 .sp-drop b{font-weight:460;font-size:var(--fs-chat);max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -2032,8 +2029,6 @@ b,strong{font-weight:560}
 .api-test-row{display:flex;gap:8px;align-items:center}
 .api-test-row .field{margin:0;flex:1;min-width:0;height:34px}
 .api-sel{position:relative;display:inline-flex;align-items:center;flex:none}
-.api-sel select{appearance:none;-webkit-appearance:none;height:34px;max-width:240px;padding:0 28px 0 10px;border-radius:var(--r-pill);border:.5px solid var(--border-strong);background:var(--input);color:var(--text);font:inherit;font-size:var(--fs-2);cursor:pointer;text-overflow:ellipsis}
-.api-sel svg{position:absolute;right:9px;pointer-events:none;color:var(--text-3)}
 .api-reply{border-radius:var(--r-plate);background:var(--hover);padding:10px 12px;animation:fadeIn .25s both}
 .api-reply-h{display:flex;align-items:center;gap:8px;margin-bottom:6px}
 .api-reply-h .d{font-size:var(--fs-1);color:var(--text-3)}
@@ -2091,7 +2086,7 @@ b,strong{font-weight:560}
   .api-badge{order:3;margin-left:46px}
   .api-btns{order:4;margin-left:auto}
   .api-test-row{flex-wrap:wrap}
-  .api-sel,.api-sel select{max-width:none;width:100%}
+  .dd.api-sel{max-width:none;width:100%}
 }
 
 /* Cài đặt → Providers: đăng nhập gói subscription, số dư API đã nạp */
@@ -2311,7 +2306,7 @@ b,strong{font-weight:560}
 
 
 
-.cn-perm select{height:30px;font-size:var(--fs-label);min-width:150px}
+.dd.cn-perm{min-width:150px;max-width:260px}
 
 
 
@@ -2380,7 +2375,7 @@ b,strong{font-weight:560}
 .cn-warn svg{flex:none;margin-top:2px;color:#d99a1b}
 @media (max-width:640px){
   
-  .cn-perm select{min-width:0;max-width:150px}
+  .dd.cn-perm{min-width:0;max-width:150px}
   
   
   
@@ -3178,7 +3173,7 @@ button.tk-pill:hover{color:var(--text)}
 .tk-tabs .pl-seg button{display:inline-flex;align-items:center;white-space:nowrap;flex:none}
 .tk-badge.warn{background:var(--tk-warn)}
 .tk-count{font-style:normal;margin-left:6px;font-size:var(--fs-1);color:var(--text-3)}
-.tk-filter.field{width:auto;max-width:170px;height:32px;margin:0;padding:0 8px;font-size:var(--fs-2)}
+.dd.tk-filter{max-width:200px}
 .tk-feed{display:flex;flex-direction:column;gap:14px}
 .tk-day{margin:4px 10px 4px;font-size:var(--fs-1);font-weight:560;letter-spacing:.02em;color:var(--text-3)}
 .tk-dot.waiting{opacity:.55}
@@ -3248,7 +3243,7 @@ button.tk-pill:hover{color:var(--text)}
   .tk-tabs .pl-seg button{padding:0 10px}
   .tk-row .tk-chip{display:none}
   .tk-rerun.btn.sm{width:32px;padding:0;justify-content:center;margin-right:8px}
-  .tk-filter.field{max-width:100%;flex:1}
+  .dd.tk-filter{max-width:100%;flex:1}
   .tk-prop,.tk-job{padding:12px}
 }
 /* Màn cảm ứng: nút Chạy lại trên dòng là vùng bấm 44×44 (như nút biểu tượng của synchro-ds.css). */
@@ -3295,9 +3290,7 @@ button.tk-pill:hover{color:var(--text)}
 .cx-chip.add:hover{background:var(--hover);color:var(--text)}
 .cx-note{font-size:var(--fs-1);color:var(--text-3);line-height:1.45;margin:4px 0 0}
 .cx-hist{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:8px;font-size:var(--fs-1);color:var(--text-2)}
-.cx-hist label{display:inline-flex;align-items:center;gap:6px}
-.cx-hist select{height:28px;border-radius:var(--r-pill);border:.5px solid var(--border-strong);background:var(--input,var(--card));color:var(--text);font:inherit;font-size:var(--fs-1);padding:0 6px;outline:none}
-.cx-hist select:focus-visible{box-shadow:0 0 0 2px color-mix(in srgb,var(--accent) 30%,transparent)}
+.cx-hist-l{display:inline-flex;align-items:center;gap:6px}
 .cx-hist .btn{height:30px;font-size:var(--fs-label);gap:6px}
 .cx-mark{display:flex;align-items:center;gap:8px;margin:14px 0 18px;padding:8px 12px;border-radius:25%;font-size:var(--fs-label);color:var(--text-3);background:var(--hover)}
 .cx-mark svg{flex:none;color:var(--accent)}

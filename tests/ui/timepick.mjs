@@ -46,6 +46,8 @@ await P("Network.setCookie", { name: "synchro_session", value: cookie.split("=")
 
 const ev = async (expr) => { const r = await P("Runtime.evaluate", { expression: expr, awaitPromise: true, returnByValue: true }); if (r.exceptionDetails) throw new Error(r.exceptionDetails.exception?.description ?? r.exceptionDetails.text); return r.result.value; };
 const until = async (expr, ms = 30000, what = expr) => { const t = Date.now(); while (Date.now() - t < ms) { if (await ev(expr).catch(() => false)) return; await sleep(200); } throw new Error("timeout: " + what); };
+// Ô chọn của app (ui/listbox.tsx): bấm nút, chờ danh sách, bấm mục có data-value cần chọn.
+const pickDd = async (btn, v) => { await ev(`(${btn}).click(), 1`); await until(`!!document.querySelector('.dd-pop [role=option][data-value=${JSON.stringify(String(v))}]')`, 5000, "mục " + v); await ev(`document.querySelector('.dd-pop [role=option][data-value=${JSON.stringify(String(v))}]').click(), 1`); };
 const click = async (expr, what) => {
   const r = await ev(`(() => { const el = ${expr}; if (!el) return null; el.scrollIntoView({ block: "center" }); const b = el.getBoundingClientRect(); return [b.x + b.width / 2, b.y + b.height / 2]; })()`);
   if (!r) throw new Error("not found: " + what);
@@ -76,7 +78,7 @@ try {
   await ev(`${edit}.click(), 1`);
   await until(`!!document.querySelector(".modal.tk-modal")`, 10000, "modal");
   await sleep(400);
-  await ev(`(() => { const s = document.querySelector(".tk-modal select"); Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value").set.call(s, "daily"); s.dispatchEvent(new Event("change", { bubbles: true })); return 1; })()`);
+  await pickDd(`document.querySelector(".tk-modal .tk-kind")`, "daily");
   await until(`!!document.querySelector(".field.tpk input")`, 5000, "time picker");
   ok(!(await ev(`!!document.querySelector('.tk-modal input[type=time]')`)), "không còn ô chọn giờ mặc định của Chrome");
 

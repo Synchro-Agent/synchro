@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { tf, tr } from "../i18n";
 import * as I from "../icons";
 import { LiquidOrb } from "../liquidorb";
+import { Dropdown } from "../listbox";
 import { readBrowser, stopBrowserRead } from "../browserspeak";
 import { useApp, usePref, VOICE_RATE } from "../store";
 import { toSpeech, VI } from "../voiceflow";
@@ -45,12 +46,7 @@ export function Toggle({ checked, onChange, label, hint }: { checked: boolean; o
 
 type Opt = string | [string, string];
 export function Select({ id, label, value, options, onChange, inline }: { id: string; label: string; value: string; options: Opt[]; onChange: (v: string) => void; inline?: boolean }) {
-  const sel = (
-    <span className="sp-sel">
-      <select id={id} value={value} onChange={(e) => onChange(e.target.value)}>{options.map((o) => { const [v, l] = Array.isArray(o) ? o : [o, o]; return <option key={v} value={v}>{l}</option>; })}</select>
-      <I.Chevron size={13} />
-    </span>
-  );
+  const sel = <Dropdown id={id} value={value} options={options} onChange={onChange} block={!inline} minWidth={inline ? 160 : 200} align={inline ? "end" : "start"} className="sp-dd" />;
   if (inline) return <div className="sp-line"><label htmlFor={id}>{label}</label>{sel}</div>;
   return <div className="sp-fld"><label htmlFor={id} className="sp-fl"><span>{label}</span></label>{sel}</div>;
 }

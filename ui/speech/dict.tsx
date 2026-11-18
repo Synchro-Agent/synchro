@@ -3,6 +3,7 @@
 // bật trong Đọc văn bản để AI đọc đúng tên riêng, thương hiệu, từ viết tắt.
 import { useEffect, useState } from "react";
 import * as I from "../icons";
+import { Dropdown } from "../listbox";
 import { useApp, usePref } from "../store";
 import { tf, tr } from "../i18n";
 import { api, post, reloadDicts, setDicts, useDicts, type Dict, type Item, type Rule } from "./client";
@@ -13,6 +14,7 @@ import type { ToolProps } from "./view";
 type Row = Rule & { key: number };
 type DictSel = { id: string; version: string; name: string };
 const EXAMPLES: [string, string][] = [["AI", "ây ai"], ["Synchro", "xin-crô"], ["TP.HCM", "thành phố Hồ Chí Minh"], ["kg", "ki lô gam"], ["ElevenLabs", "e-le-vần-láp"], ["CEO", "xi i âu"]];
+const RULE_TYPES: [Rule["type"], string][] = [["alias", "Đọc thay bằng"], ["phoneme", "Phiên âm IPA"]];
 let seq = 1;
 const row = (r?: Partial<Rule>): Row => ({ key: seq++, word: "", type: "alias", say: "", alphabet: "ipa", cs: false, ...r });
 
@@ -105,7 +107,7 @@ export function DictTool({ say, voice }: ToolProps) {
               {edit.rows.map((r) => (
                 <div key={r.key} className="sp-rule">
                   <input className="sp-input" value={r.word} maxLength={100} aria-label="Từ trong văn bản" placeholder="AI" onChange={(e) => setRow(r.key, { word: e.target.value })} />
-                  <span className="sp-sel sm"><select aria-label="Kiểu quy tắc" value={r.type} onChange={(e) => setRow(r.key, { type: e.target.value as Rule["type"] })}><option value="alias">Đọc thay bằng</option><option value="phoneme">Phiên âm IPA</option></select><I.Chevron size={12} /></span>
+                  <Dropdown<Rule["type"]> size="sm" block label="Kiểu quy tắc" className="sp-rtype" minWidth={160} value={r.type} onChange={(type) => setRow(r.key, { type })} options={RULE_TYPES} />
                   <input className="sp-input" value={r.say} maxLength={200} aria-label="Đọc là" placeholder={r.type === "alias" ? "ây ai" : "/eɪ aɪ/"} onChange={(e) => setRow(r.key, { say: e.target.value })} />
                   <button className="icon-btn" aria-label="Xóa quy tắc" onClick={() => setEdit({ ...edit, rows: edit.rows.filter((x) => x.key !== r.key) })}><I.X size={14} /></button>
                 </div>

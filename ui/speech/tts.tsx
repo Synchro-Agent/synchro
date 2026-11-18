@@ -3,6 +3,7 @@
 // (credit, số ký tự, bảng thẻ cảm xúc), thẻ kết quả; bảng bên: giọng, model, thanh trượt, ngôn ngữ, hiệu ứng âm thanh, từ điển phát âm, định dạng.
 import { useEffect, useRef, useState } from "react";
 import * as I from "../icons";
+import { Dropdown } from "../listbox";
 import { usePref } from "../store";
 import { tf, tr } from "../i18n";
 import { DISTANCES, FX_VI, MODEL_NOTE, RECOMMENDED, STARTERS, TAG_GROUPS, creditRate, estCredits, stripTags, tagsOk } from "../../shared/speech/data";
@@ -240,11 +241,8 @@ export function TTS({ say, sub, setSub, go, draft, auto, voice: shared, setVoice
           <div className="sp-dlg">
             {lines.map((l) => (
               <div key={l.id} className="sp-dline">
-                <span className="sp-sel sm">
-                  <select aria-label="Người nói" value={l.sp} onChange={(e) => setLines((ls) => ls.map((x) => (x.id === l.id ? { ...x, sp: Number(e.target.value) } : x)))}>
-                    {speakers.map((v, i) => <option key={i} value={i}>{v?.name ?? `Người ${i + 1}`}</option>)}
-                  </select><I.Chevron size={12} />
-                </span>
+                <Dropdown size="sm" label="Người nói" className="sp-dspk" minWidth={170} value={l.sp} onChange={(sp) => setLines((ls) => ls.map((x) => (x.id === l.id ? { ...x, sp } : x)))}
+                  options={speakers.map((v, i) => ({ value: i, label: v?.name ?? `Người ${i + 1}`, notr: !!v }))} />
                 <VoiceAvatar v={speakers[l.sp] ?? null} size={20} />
                 <textarea rows={1} value={l.text} aria-label="Lời thoại" onFocus={() => { focusLine.current = l.id; }} onChange={(e) => setLines((ls) => ls.map((x) => (x.id === l.id ? { ...x, text: e.target.value } : x)))} placeholder="Lời thoại…" />
                 <button className="icon-btn" aria-label="Xóa dòng" onClick={() => setLines((ls) => ls.filter((x) => x.id !== l.id))}><I.Trash size={15} /></button>

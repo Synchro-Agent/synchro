@@ -112,6 +112,36 @@ html .menu-item:not(:where(.auth-root *)){padding:0 12px}
 html body .menu-item:not(.auth-root *)>svg:first-child{width:16px;height:16px;flex:none;color:var(--ds-ink-2)}
 html body .menu-item:not(.auth-root *) .sc{font-size:var(--fs-1);color:var(--ds-faint)}
 html body .menu:not(.auth-root *) hr{border-top:1px solid var(--ds-line);margin:6px 6px;opacity:.8}
+/* Ô chọn của app (ui/listbox.tsx, thay <select> gốc): nút viên thuốc một dòng, mũi tên căn giữa theo chiều dọc bằng flex (mũi tên vẽ tuyệt đối
+   trước đây nằm lệch lên góc trên bên phải trên Windows); danh sách là khung .menu nổi, mục cao 32px, mục đang sáng (bàn phím / rê chuột) và
+   mục đang chọn (dấu tích) phân biệt rõ. */
+.dd{display:inline-flex;align-items:center;gap:8px;min-width:0;max-width:100%;height:var(--ds-h);padding:0 11px 0 13px;border-radius:var(--r-pill);
+  border:1px solid var(--ds-line-2);background:var(--ds-plate);color:var(--ds-ink);font:inherit;font-size:var(--fs-2);line-height:1;text-align:left;cursor:pointer;
+  transition:border-color var(--ds-fast),box-shadow var(--ds-fast),background-color var(--ds-fast)}
+.dd.block{display:flex;width:100%}
+.dd.sm{height:var(--ds-h-sm);padding:0 9px 0 11px;font-size:var(--fs-label);gap:6px}
+.dd:hover:not(:disabled){border-color:color-mix(in srgb,var(--ds-ink) 32%,var(--ds-line-2))}
+.dd:focus-visible,.dd.open{outline:0;border-color:var(--ds-ink);box-shadow:0 0 0 3px color-mix(in srgb,var(--ds-ink) 10%,transparent)}
+.dd:disabled{opacity:.5;cursor:default}
+.dd-v{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dd>svg{flex:none;color:var(--ds-muted);transition:transform var(--ds-mid) var(--ds-ease)}
+.dd.open>svg{transform:rotate(180deg)}
+html body .menu.dd-pop{display:flex;flex-direction:column;min-width:0;padding:4px;overflow:hidden;transform-origin:top center}
+.dd-search{flex:none;display:flex;align-items:center;gap:8px;height:34px;margin:0 0 4px;padding:0 12px;border-radius:var(--r-pill);background:var(--ds-sunken);color:var(--ds-faint);box-shadow:inset 0 0 0 1px var(--ds-line)}
+.dd-search input{flex:1;min-width:0;height:100%;border:0;background:transparent;font-size:var(--fs-2);color:var(--ds-ink)}
+.dd-search input::placeholder{color:var(--ds-faint)}
+.dd-list{position:relative;flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:var(--ds-line-2) transparent;border-radius:16px}
+html body .menu-item.dd-opt{min-height:32px;padding-top:6px;padding-bottom:6px;cursor:pointer;user-select:none}
+html body .menu .menu-item.dd-opt.act{background:var(--row-hover,var(--ds-hover))}
+html body .menu-item.dd-opt.sel{font-weight:520}
+html body .menu-item.dd-opt[aria-disabled]{opacity:.45;cursor:default}
+.dd-pop.sm .dd-opt{font-size:var(--fs-label)}
+.dd-ot{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px;line-height:1.35;overflow-wrap:anywhere}
+.dd-ot small{font-size:var(--fs-1);font-weight:400;color:var(--ds-muted)}
+.dd-opt .ck{flex:none;display:grid;place-items:center;color:var(--ds-ink)}
+.dd-none{padding:10px 12px;font-size:var(--fs-2);color:var(--ds-muted)}
+.dd-grp{padding:10px 12px 4px;font-size:var(--fs-1);font-weight:560;color:var(--ds-muted)}
+.dd-grp:first-child{padding-top:4px}
 /* Hộp thoại */
 html body .modal:not(.auth-root *){border-radius:var(--r-panel)}
 .overlay:not(.auth-root *){background:rgba(17,18,16,.22)}
@@ -973,15 +1003,12 @@ html body .scan-modal .scan-tabs>button{display:inline-flex;align-items:center;g
 }
 
 /* Ô nhập nhiều dòng không bo kiểu viên thuốc: bán kính 999px cắt mất chữ ở bốn góc (ô Hướng dẫn của việc tự động). */
-/* Ô chọn bo tròn: tự vẽ mũi tên, cách viền phải 13px, chừa chỗ cho chữ. Mũi tên mặc định của trình duyệt luôn nằm sát viền (chừa thêm
-   padding cũng không dời được), rơi vào phần bo: ô chọn model của việc tự động và của Quét skill rác, ô lọc Hộp thư / Bộ não,
-   ô "Gửi … tin gần nhất" của bảng ngữ cảnh, ô Studio của thư viện. */
-select.field:not(.auth-root *),.tk-page select.tk-filter.field,.cx-hist select,.sy-settings select.field,select.pl-sel{
-  -webkit-appearance:none;appearance:none;cursor:pointer;text-overflow:ellipsis}
-/* Mũi tên dạng nét (như mũi tên mặc định của các ô chọn khác), màu chữ phụ của từng giao diện. */
+/* Lưới an toàn: app không còn <select> gốc (ui/listbox.tsx; tests/api/ui-controls.test.mjs chặn thêm mới). <select> nào lọt vào sau này
+   vẫn có mũi tên tự vẽ căn giữa theo chiều dọc, cách viền phải 12px, không dùng mũi tên mặc định nằm sát phần bo. */
+:where(select:not(.auth-root *)){-webkit-appearance:none;appearance:none;cursor:pointer;text-overflow:ellipsis;padding-right:32px;
+  background-image:var(--sel-arrow);background-position:right 12px center;background-size:12px 12px;background-repeat:no-repeat}
 :root{--sel-arrow:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' fill='none'%3E%3Cpath d='M3 4.5l3 3 3-3' stroke='%235F6058' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")}
 [data-theme="dark"]{--sel-arrow:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' fill='none'%3E%3Cpath d='M3 4.5l3 3 3-3' stroke='%239C9D95' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")}
-html body .cx-hist select{padding-left:10px}
 
 /* Màn cảm ứng (pointer: coarse): vùng bấm tối thiểu 44×44 cho nút biểu tượng, mục menu, mục điều hướng (WCAG 2.5.5).
    Tiền tố html body … :not(.auth-root *) cùng dạng các luật phía trên (vd. .menu-item min-height:32px) và đứng sau nên thắng; trang đăng nhập cũng áp dụng. */
@@ -1069,5 +1096,4 @@ html body .cm-find input{border:0;background:transparent;box-shadow:none;padding
 .cm-back{display:flex}
 }
 html body textarea.field:not(.auth-root *),html body .sy-settings textarea.field{border-radius:var(--r-card)}
-html body select.field:not(.auth-root *),html body .tk-page select.tk-filter.field,.cx-hist select,html body .sy-settings select.field,select.pl-sel{padding-right:34px;background-image:var(--sel-arrow);background-position:right 13px center;background-size:12px 12px;background-repeat:no-repeat}
 }
