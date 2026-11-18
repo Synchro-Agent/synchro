@@ -3743,7 +3743,7 @@ button.bn-box:disabled{cursor:default}
 .bg-sw i{position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.2);transition:transform .15s}
 .bg-sw.on{background:var(--bn-accent)}
 .bg-sw.on i{transform:translateX(12px)}
-.bg-grp{display:grid;grid-template-columns:auto 1fr 26px;gap:6px;align-items:center}
+.bg-grp{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:6px;align-items:center}
 .bg-grp .field{margin:0;height:28px;font-size:var(--fs-1)}
 /* Cài đặt → Bộ não */
 .bn-auto>span{display:flex;flex-direction:column;gap:3px;flex:1}
