@@ -39,7 +39,8 @@ console.log("5. filestate: hủy khi bỏ thẻ, hẹn giờ 120s, dedup theo t�
 const fsrc = fs.readFileSync("ui/filestate.ts", "utf8");
 ok(/export function abortFile\(/.test(fsrc) && /\.abort\(\)/.test(fsrc), "có abortFile hủy XHR đang chạy");
 ok(/export function retryFile\(/.test(fsrc), "có retryFile để tải lại");
-ok(/x\.timeout\s*=\s*120_?000/.test(fsrc), "XHR có timeout 120000ms");
+ok(/x\.timeout\s*=\s*(?:av \? AV_TIMEOUT_MS : )?120_?000/.test(fsrc), "XHR có timeout 120000ms (tệp ghi âm / video: AV_TIMEOUT_MS, chờ máy chủ chép lời)");
+ok(/AV_TIMEOUT_MS = 16 \* 60_000/.test(fsrc), "tệp ghi âm / video chờ tối đa 16 phút (lâu hơn hàng chờ chép lời 10 phút + một lần chép lời)");
 ok(/x\.ontimeout\s*=/.test(fsrc), "có xử lý ontimeout");
 ok(/export const fileKey\s*=\s*\(f: File\)\s*=>\s*`\$\{f\.name\}\|\$\{f\.size\}\|\$\{f\.lastModified\}`/.test(fsrc), "fileKey = tên|cỡ|lần sửa cuối");
 ok(fsrc.indexOf("f.size > MAX_FILE_BYTES") >= 0 && fsrc.indexOf("f.size > MAX_FILE_BYTES") < fsrc.indexOf("pdfThumb(f).then"), "kiểm tra 30MB đứng TRƯỚC khi dựng ảnh thu nhỏ PDF");

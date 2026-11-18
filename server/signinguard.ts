@@ -5,6 +5,8 @@
 // chính người dùng (browser="user", tài khoản họ đã đăng nhập sẵn, họ xem trên máy mình). Người dùng tự gõ địa chỉ ở thanh địa chỉ của
 // khung trình duyệt thì không bị chặn: chỉ thao tác của model đi qua đây (browsertools.ts runBrowserTool).
 
+import "server-only";
+
 type Rule = { host: RegExp; path?: RegExp; name: string };
 // Đuôi tên miền quốc gia của Google / Zoho / Amazon (accounts.google.com.vn, accounts.google.co.uk…), không nhận đuôi dài tùy ý
 // (accounts.google.com.evil.example là trang của người khác).
