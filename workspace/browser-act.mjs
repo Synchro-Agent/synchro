@@ -698,6 +698,10 @@ export function createActor(env) {
     return out;
   };
 
+  // Thao tác chạm vào trang (gõ, bấm, chạy mã, cấp quyền…): không làm khi trang đang mở là trang đăng nhập của bên thứ ba (stopAt).
+  // Không gồm hộp thoại (đọc địa chỉ trang lúc hộp thoại còn mở thì treo tới hết giờ) và các thao tác chỉ xem / rời trang.
+  const SIGNIN_GUARDED = new Set(["click", "hover", "type", "key", "select", "drag", "upload", "eval", "permission"]);
+  const SIGNIN_HALT = "Dừng: trang đang mở là trang đăng nhập của bên thứ ba";
   // Một thao tác của model. Kết quả luôn có url, title của trang lúc xong; thêm hộp thoại đã xử lý, tệp đã tải, tab mới nếu có.
   async function act(u, a) {
     if (!DEBUG) return act0(u, a);
@@ -1015,25 +1019,35 @@ export function createActor(env) {
     s.acting++;
     emit(u, { t: "agent", kind: "start" });
     try {
-      if (a.action !== "batch") return await act(u, a);
+      // stopAt (máy chủ gửi với mọi thao tác trên trình duyệt của Synchro, server/signinguard.ts SIGNIN_STOP): [{ h, p }] nguồn regex tên miền /
+      // đường dẫn của trang đăng nhập bên thứ ba. Kiểm ngay tại đây, trước khi gõ / bấm: trang có thể đã tự chuyển sang trang đăng nhập mà máy chủ
+      // không thấy (browser_eval đặt location.href, chuỗi chuyển hướng xong sau khi thao tác trước đã trả kết quả).
+      const stops = (Array.isArray(a.stopAt) ? a.stopAt : []).slice(0, 64).flatMap((g) => { try { return [{ h: new RegExp(String(g.h), "i"), p: g.p ? new RegExp(String(g.p), "i") : null }]; } catch { return []; } });
+      const stopHere = (url) => { try { const x = new URL(String(url)); const h = x.hostname.toLowerCase().replace(/\.$/, ""); return /^https?:$/.test(x.protocol) && stops.some((g) => g.h.test(h) && (!g.p || g.p.test(x.pathname))); } catch { return false; } };
+      // Trang đang mở là trang đăng nhập thì trả địa chỉ trang (kèm cờ signin), không làm thao tác: máy chủ đóng trang đó và báo model.
+      const guard = async (x) => {
+        if (!stops.length || !SIGNIN_GUARDED.has(x?.action)) return null;
+        const pg = await info(await env.session(u));
+        return stopHere(pg.url) ? { ...pg, signin: true, error: SIGNIN_HALT } : null;
+      };
+      if (a.action !== "batch") return (await guard(a)) ?? (await act(u, a));
       const list = (Array.isArray(a.actions) ? a.actions : []).slice(0, 40);
       if (!list.length) throw new BrowserError(400, "Danh sách thao tác trống.");
       const results = [];
-      // stopAt (máy chủ gửi, server/signinguard.ts SIGNIN_STOP): [{ h, p }] nguồn regex tên miền / đường dẫn của trang đăng nhập bên thứ ba.
-      // Bước nào dẫn tới trang đó thì dừng lô ngay, không gõ / bấm tiếp trên trang đăng nhập.
-      const stops = (Array.isArray(a.stopAt) ? a.stopAt : []).slice(0, 64).flatMap((g) => { try { return [{ h: new RegExp(String(g.h), "i"), p: g.p ? new RegExp(String(g.p), "i") : null }]; } catch { return []; } });
-      const stopHere = (url) => { try { const x = new URL(String(url)); const h = x.hostname.toLowerCase().replace(/\.$/, ""); return /^https?:$/.test(x.protocol) && stops.some((g) => g.h.test(h) && (!g.p || g.p.test(x.pathname))); } catch { return false; } };
       for (const [i, x] of list.entries()) {
         if (!x || typeof x !== "object" || x.action === "batch") { results.push({ i: i + 1, error: "Thao tác không hợp lệ" }); break; }
         if (s.halt) { results.push({ i: i + 1, action: x.action, error: s.halt }); break; }
         try {
+          const g = await guard(x);
+          if (g) { results.push({ i: i + 1, action: x.action, error: SIGNIN_HALT }); break; }
           const r = await act(u, x);
           const { image, tree, text, ...rest } = r ?? {};
           results.push({ i: i + 1, action: x.action, ...rest, ...(tree ? { tree } : {}), ...(text ? { text } : {}) });
           if (r?.error) break;
-          if (stops.length && i < list.length - 1) {
+          // Bước sau là thao tác gõ / bấm thì guard() kiểm ngay trước nó; bước chỉ xem (đọc, chụp trang) thì dừng ở đây để không đọc trang đăng nhập.
+          if (stops.length && i < list.length - 1 && !SIGNIN_GUARDED.has(list[i + 1]?.action)) {
             const at = typeof r?.url === "string" && r.url ? r.url : (await info(await env.session(u))).url;
-            if (stopHere(at)) { results.push({ i: i + 2, error: "Dừng: bước trước dẫn tới trang đăng nhập của bên thứ ba" }); break; }
+            if (stopHere(at)) { results.push({ i: i + 2, error: SIGNIN_HALT }); break; }
           }
         } catch (e) { results.push({ i: i + 1, action: x.action, error: e.message || String(e) }); break; }
       }

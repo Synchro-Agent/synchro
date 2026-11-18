@@ -57,7 +57,8 @@ export type Call = { id: string; name: string; input: Record<string, unknown> };
 type Step = { text: string; calls: Call[]; assistant: unknown; pause?: boolean };
 // image: ảnh JPEG (base64) đi kèm kết quả công cụ, ví dụ ảnh chụp trình duyệt; mỗi hãng nhận theo cách riêng.
 // mime: loại ảnh khi không phải JPEG (ảnh do connector trả về). more: các ảnh sau ảnh đầu của cùng kết quả.
-type Run = ToolRun & { image?: string; mime?: string; more?: { data: string; mime: string }[] };
+// sum: dòng tóm tắt cố định cho bước công cụ trong khung chat (thay cho đoạn đầu kết quả), ví dụ "Đã chặn trang đăng nhập".
+type Run = ToolRun & { image?: string; mime?: string; more?: { data: string; mime: string }[]; sum?: string };
 export type Adapter = { step: (msgs: unknown[], noTools: boolean) => Promise<Step>; results: (calls: Call[], res: Run[]) => unknown[] };
 // Ảnh chụp trình duyệt cho model dùng Chat Completions / Responses: tin nhắn công cụ chỉ nhận chữ, nên ảnh đi kèm một tin người dùng ngay sau.
 const SHOT = (id: string) => `Ảnh chụp màn hình trình duyệt (kết quả công cụ ${id}).`;
@@ -683,7 +684,8 @@ async function runCall(x: Exec, c: Call, d?: Decision): Promise<Run> {
     if (link) showReconnect(x, link);
     x.gate.seen(r.url);
     if (["browser_read", "browser_text", "browser_screenshot", "browser_batch"].includes(c.name)) (x.heavy ??= []).push(c.id);
-    return { content: r.content, is_error: r.is_error, ...(r.image ? { image: r.image } : {}), used: { kind: "search", name: c.name } };
+    // Bước công cụ trong khung chat ghi rõ "Đã chặn trang đăng nhập" (nhãn bước vẫn là "Đang mở accounts.google.com" lúc bắt đầu).
+    return { content: r.content, is_error: r.is_error, ...(r.image ? { image: r.image } : {}), ...(r.signin ? { sum: r.summary } : {}), used: { kind: "search", name: c.name } };
   }
   if (c.name === CONN_FIND && x.sess && !x.sess.get(c.name)) return { content: findConnTools(x.sess, String(c.input?.query ?? ""), String(c.input?.connector ?? ""), String(c.input?.tool ?? ""), Math.max(0, Number(c.input?.offset) || 0)), is_error: false, used: { kind: "search", name: c.name } };
   if (c.name === CONN_CALL && x.sess && !x.sess.get(c.name)) {
@@ -808,7 +810,7 @@ export async function execute(ad: Adapter, m: unknown[], x: Exec, calls: Call[],
   used.push(...res.filter((r) => (!r.is_error || r.used.kind === "code") && r.used.kind !== "search").map((r) => r.used));
   // Kết quả từng công cụ (thành công / lỗi, tóm tắt ngắn) để dòng công cụ trong khung chat hiện đúng.
   // Công cụ của connector (đọc lẫn ghi): kèm tham số đã gửi (che khóa bí mật) để người dùng biết model vừa làm gì. Tóm tắt bỏ thẻ <ref> nội bộ.
-  res.forEach((r, i) => { if (seqs[i]) progress("res", JSON.stringify({ ref: seqs[i], ok: !r.is_error, name: kindOf(x, calls[i]).slice(0, 160), sum: plainSummary(String(r.content ?? "")).slice(0, 140), ...(x.sess?.get(calls[i].name) && d[calls[i].id] !== "deny" ? { args: argLine(calls[i].input) } : {}) })); });
+  res.forEach((r, i) => { if (seqs[i]) progress("res", JSON.stringify({ ref: seqs[i], ok: !r.is_error, name: kindOf(x, calls[i]).slice(0, 160), sum: (r.sum ?? plainSummary(String(r.content ?? ""))).slice(0, 140), ...(x.sess?.get(calls[i].name) && d[calls[i].id] !== "deny" ? { args: argLine(calls[i].input) } : {}) })); });
   m.push(...ad.results(calls, res));
   // Người dùng nhắn thêm trong lúc công cụ chạy: ghép vào ngay bước kế tiếp, không ngắt việc.
   const more = takeInbox();

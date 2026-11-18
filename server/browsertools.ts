@@ -125,6 +125,9 @@ const join = (...xs: string[]) => xs.filter(Boolean).join("\n");
 
 /** Câu mô tả bước đang làm (hiện trong nhật ký làm việc của câu trả lời). */
 export function describeBrowser(name: string, a: R, where: BrowserTarget = "synchro"): string {
+  // Trang đăng nhập của bên thứ ba bị chặn trước khi mở (runBrowserTool): nhãn bước nói đúng việc, không ghi "Đang mở accounts.google.com".
+  const login = where === "synchro" ? urlsOf(name, a).find((x) => signInService(x)) : undefined;
+  if (login) return `Đang chặn trang đăng nhập ${q(host(/^[a-z][a-z0-9+.-]*:/i.test(login) ? login : `https://${login}`), 80)}`;
   if (name === "browser_navigate" && where === "user" && !["back", "forward", "reload"].includes(String(a.url))) return `Đang mở ${q(host(a.url), 80)} trên Chrome của bạn`;
   const ref = a.ref != null ? `phần tử [${a.ref}]` : a.x != null ? `vị trí ${a.x}, ${a.y}` : "";
   switch (name) {
@@ -218,7 +221,9 @@ export type ChatFile = { name: string; mime: string; data: Buffer };
 // (Cài đặt → Synchro Code → Trình duyệt: luôn giữ, đến khi trình duyệt tắt, riêng từng phiên).
 // signin: trang đang mở trong trình duyệt của Synchro là trang đăng nhập bên thứ ba (thấy qua một lần đọc trang): chặn thao tác gõ / bấm trên đó.
 // pageKnown: lượt này đã biết trang đang mở (từ một kết quả có địa chỉ trang, hoặc lần xem tab trước thao tác gõ / bấm đầu tiên).
-export type BrowserCtx = { def?: BrowserTarget; target?: BrowserTarget; used?: boolean; synchro?: boolean; user?: boolean; turn?: string; scope?: string; cookies?: "keep" | "until-stop" | "session"; files?: () => Promise<ChatFile[]>; signin?: string; pageKnown?: boolean };
+// moved: thao tác vừa rồi của model không trả địa chỉ trang (browser_eval, hộp thoại…) nên có thể đã đưa trình duyệt sang trang khác mà máy chủ
+// không thấy; gặp trang đăng nhập ở lần xem kế tiếp thì coi là do model mở và đóng trang đó (không phải trang người dùng tự mở đầu lượt).
+export type BrowserCtx = { def?: BrowserTarget; target?: BrowserTarget; used?: boolean; synchro?: boolean; user?: boolean; turn?: string; scope?: string; cookies?: "keep" | "until-stop" | "session"; files?: () => Promise<ChatFile[]>; signin?: string; pageKnown?: boolean; moved?: boolean };
 
 /** Tệp của đoạn chat cho browser_upload: tệp người dùng đính kèm (ảnh, PDF giữ nguyên trong tin nhắn; tệp khác lấy bản gốc theo id trong <file … id>)
  *  và tệp Synchro tạo ra (outs của lượt, liên kết /api/outputs/… trong các câu trả lời trước). Tệp mới hơn đứng trước khi trùng tên. */
@@ -300,12 +305,27 @@ const NOT_LINKED = "Chrome của người dùng chưa kết nối với Synchro 
 // trang đăng nhập (rời trang đó: mở trang khác — địa chỉ đã kiểm ở trên —, đổi / đóng tab, xem tệp đã tải).
 const LOOK_ONLY = new Set(["read", "text", "find", "screenshot", "console", "wait", "scroll"]);
 const SIGNIN_OK = new Set(["navigate", "tabs", "downloads", "screenshot", "wait", "console"]);
+// browser_batch khi trang đang mở là trang đăng nhập: được nếu bước đầu rời trang đó (mở trang khác — địa chỉ đã kiểm —, mở / chuyển tab);
+// các bước sau do dịch vụ workspace canh (stopAt: không gõ / bấm trên trang đăng nhập).
+const leavesFirst = (args: R) => {
+  const x = Array.isArray(args.actions) ? (args.actions[0] as R | undefined) : undefined;
+  if (!x || typeof x !== "object") return false;
+  if (x.action === "navigate") return typeof x.url === "string" && !!x.url.trim() && !/^(back|forward|reload)$/i.test(x.url.trim());
+  return x.action === "tabs" && (x.op === "new" || x.op === "switch");
+};
+const tabOp = (args: R) => String(args.op ?? args.tab_action ?? "list");
 // Địa chỉ trang đang mở trong một kết quả của trình duyệt: url, hoặc tab đang chọn trong danh sách tab (browser_tabs op="list" / "close" chỉ trả tabs).
 const pageOf = (r: R | null | undefined): string => {
   if (typeof r?.url === "string" && r.url) return r.url;
   const t = Array.isArray(r?.tabs) ? (r.tabs as R[]).find((x) => x?.active) : undefined;
   return typeof t?.url === "string" ? t.url : "";
 };
+/** Đóng trang đăng nhập mà thao tác của model dẫn tới (về trang trắng, cùng phiên trình duyệt) rồi báo model. */
+async function closeSignIn(u: string, ctx: BrowserCtx | undefined, svc: string, at: string, how: "closed" | "stopped" = "closed"): Promise<BrowserOut> {
+  await wsAgent("/browser", { u, action: "navigate", url: "about:blank", ...(ctx?.scope ? { scope: ctx.scope } : {}), ...(ctx?.cookies ? { cookies: ctx.cookies } : {}) }, 30_000).catch(() => {});
+  if (ctx) { ctx.signin = undefined; ctx.pageKnown = true; ctx.moved = false; }
+  return { content: signInRefusal(svc, at, how), is_error: true, summary: "Đã chặn trang đăng nhập", signin: svc, url: "about:blank" };
+}
 /** Chạy một công cụ trình duyệt cho người dùng u: trình duyệt trong workspace của họ, hoặc Chrome của họ qua tiện ích Synchro. */
 const PAUSE_MAX = 15 * 60_000;
 export async function runBrowserTool(u: string, name: string, input: R, ctx?: BrowserCtx): Promise<BrowserOut> {
@@ -328,11 +348,16 @@ export async function runBrowserTool(u: string, name: string, input: R, ctx?: Br
     if (ctx && !ctx.signin && !ctx.pageKnown && !SIGNIN_OK.has(action) && !LOOK_ONLY.has(action)) {
       const at = pageOf(await wsAgent<R>("/browser", { u, action: "tabs", op: "list", ...(ctx.scope ? { scope: ctx.scope } : {}), ...(ctx.cookies ? { cookies: ctx.cookies } : {}) }, 30_000).catch(() => null));
       ctx.pageKnown = true;
-      if (signInService(at)) ctx.signin = at;
+      const svc = signInService(at);
+      // Thao tác trước của model (browser_eval…) đã đưa trình duyệt tới trang đăng nhập: đóng trang đó, không để mở trong trình duyệt dùng chung.
+      if (svc && ctx.moved) { ctx.moved = false; return await closeSignIn(u, ctx, svc, at); }
+      ctx.moved = false;
+      if (svc) ctx.signin = at;
     }
-    if (ctx?.signin && !SIGNIN_OK.has(action)) { const svc = signInService(ctx.signin) ?? "bên thứ ba"; return { content: signInRefusal(svc, ctx.signin, "present"), is_error: true, summary: "Đã chặn trang đăng nhập", signin: svc }; }
-    // Một bước giữa lô (bấm "Đăng nhập bằng Google"…) dẫn tới trang đăng nhập: dịch vụ workspace dừng lô ngay sau bước đó.
-    if (action === "batch") args.stopAt = SIGNIN_STOP;
+    if (ctx?.signin && !SIGNIN_OK.has(action) && !(action === "batch" && leavesFirst(args))) { const svc = signInService(ctx.signin) ?? "bên thứ ba"; return { content: signInRefusal(svc, ctx.signin, "present"), is_error: true, summary: "Đã chặn trang đăng nhập", signin: svc }; }
+    // Dịch vụ workspace kiểm lại ngay trước mỗi thao tác gõ / bấm (kể cả từng bước trong lô) và dừng lô sau bước dẫn tới trang đăng nhập:
+    // máy chủ chỉ thấy trang sau khi thao tác đã xong, trang có thể tự chuyển sau đó.
+    args.stopAt = SIGNIN_STOP;
   }
   // Tệp đính kèm trong chat cần tải lên trang (browser_upload, kể cả trong browser_batch).
   const bad = action === "upload" ? await attachFiles(args, ctx) : "";
@@ -353,18 +378,19 @@ export async function runBrowserTool(u: string, name: string, input: R, ctx?: Br
     if (name === "browser_downloads" && typeof r.data === "string") return await downloaded(r, u);
     if (target === "synchro") {
       const at = pageOf(r), svc = signInService(at);
-      // Kết quả không kèm địa chỉ trang (vài thao tác chỉ trả giá trị): giữ nguyên điều đã biết về trang đang mở.
-      if (ctx && at) { ctx.signin = svc ? at : undefined; ctx.pageKnown = true; }
-      // Danh sách tab / tệp đã tải không lộ gì của trang đăng nhập: trả bình thường (model cần nó để rời trang đó).
-      if (svc && action !== "tabs" && action !== "downloads") {
-        // Thao tác của model (mở trang, bấm, gõ, quay lại…) dẫn tới trang đăng nhập: đóng trang đó (về trang trắng). Chỉ đọc / xem tab thì không
-        // đóng (có thể người dùng đang tự đăng nhập), nhưng cũng không trả nội dung trang cho model.
-        const look = LOOK_ONLY.has(action);
-        if (!look) {
-          await wsAgent("/browser", { u, action: "navigate", url: "about:blank", ...(ctx?.scope ? { scope: ctx.scope } : {}), ...(ctx?.cookies ? { cookies: ctx.cookies } : {}) }, 30_000).catch(() => {});
-          if (ctx) ctx.signin = undefined;
-        }
-        return { content: signInRefusal(svc, at, look ? "present" : "closed"), is_error: true, summary: "Đã chặn trang đăng nhập", signin: svc, url: look ? at : "about:blank" };
+      const moved = !!ctx?.moved;
+      if (ctx && at) { ctx.signin = svc ? at : undefined; ctx.pageKnown = true; ctx.moved = false; }
+      // Kết quả không kèm địa chỉ trang (browser_eval, hộp thoại…): thao tác có thể đã chuyển trang mà máy chủ không thấy. Thao tác gõ / bấm kế
+      // tiếp xem lại tab đang mở (dịch vụ workspace cũng tự kiểm trước khi gõ / bấm).
+      else if (ctx && !LOOK_ONLY.has(action) && action !== "tabs" && action !== "downloads") { ctx.pageKnown = false; ctx.moved = true; }
+      // Danh sách / chuyển / đóng tab, tệp đã tải không lộ gì của trang đăng nhập: trả bình thường (model cần nó để rời trang đó).
+      // Mở tab mới thì như mở trang: tab mới dẫn (qua chuyển hướng) tới trang đăng nhập thì đóng.
+      if (svc && !(action === "tabs" && tabOp(args) !== "new") && action !== "downloads") {
+        // Thao tác của model (mở trang, bấm, gõ, quay lại, chạy mã…) dẫn tới trang đăng nhập: đóng trang đó (về trang trắng). Chỉ đọc / xem thì
+        // không đóng (có thể người dùng đang tự đăng nhập), trừ khi thao tác trước của model vừa chuyển trang mà máy chủ không thấy; cũng không
+        // trả nội dung trang cho model.
+        if (LOOK_ONLY.has(action) && !moved) return { content: signInRefusal(svc, at, "present"), is_error: true, summary: "Đã chặn trang đăng nhập", signin: svc, url: at };
+        return await closeSignIn(u, ctx, svc, at, r.signin === true ? "stopped" : "closed");
       }
     }
     return { ...format(name, r), url: typeof r.url === "string" ? r.url : undefined };

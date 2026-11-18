@@ -186,6 +186,102 @@ try {
   const rFree = await lot(undefined);
   ok(rFree.done === 4 && !rFree.results.some((x) => x.error), "không có stopAt (Chrome của người dùng): chạy đủ lô như cũ", rFree);
   ok((await A.tool("u1", { action: "batch", stopAt: [{ h: "(" }], actions: [{ action: "console" }, { action: "console" }] })).done === 2, "stopAt hỏng (regex sai): bỏ qua, không làm hỏng lô");
+
+  console.log("9. Chuyển trang mà máy chủ không thấy (browser_eval đặt location.href, chuyển hướng xong muộn): không gõ / bấm trên trang đăng nhập");
+  const OAUTH = "https://accounts.google.com/o/oauth2/v2/auth?client_id=x";
+  calls.length = 0;
+  let page = "https://example.com/";
+  reply = (_p, b) => {
+    if (b.action === "eval") { page = OAUTH; return { value: "null" }; }
+    if (b.action === "tabs") return tabsAt(page);
+    return { url: page, title: page === OAUTH ? "Đăng nhập – Tài khoản Google" : "Example", tree: "[1] button Cho phép" };
+  };
+  const c9 = { ...ctx(), pageKnown: true };
+  const e9 = await B.runBrowserTool("u1", "browser_eval", { expression: `location.href=${JSON.stringify(OAUTH)}` }, c9);
+  ok(!e9.is_error && c9.moved && !c9.pageKnown, "eval không trả địa chỉ trang: lượt đánh dấu cần xem lại trang trước thao tác kế tiếp", { e9, c9 });
+  const k9 = await B.runBrowserTool("u1", "browser_click", { ref: 1 }, c9);
+  ok(k9.is_error && k9.signin === "Google" && /đã đóng trang đó/.test(k9.content), "bấm sau eval: chặn và đóng trang đăng nhập (do thao tác của model)", k9);
+  ok(!calls.some((c) => c.body.action === "click") && calls.some((c) => c.body.url === "about:blank"), "trình duyệt không nhận lệnh bấm; trang được đưa về about:blank", calls.map((c) => `${c.body.action} ${c.body.url ?? ""}`));
+  ok(calls.filter((c) => c.body.action !== "navigate").every((c) => Array.isArray(c.body.stopAt) || c.body.action === "tabs"), "mọi thao tác trên trình duyệt của Synchro gửi kèm stopAt", calls.map((c) => [c.body.action, !!c.body.stopAt]));
+  // eval rồi chỉ đọc trang: cũng đóng (model gây ra), không trả nội dung.
+  calls.length = 0; page = "https://example.com/";
+  const c9b = { ...ctx(), pageKnown: true };
+  await B.runBrowserTool("u1", "browser_eval", { expression: "go()" }, c9b);
+  const r9b = await B.runBrowserTool("u1", "browser_read", {}, c9b);
+  ok(r9b.is_error && r9b.signin === "Google" && !/Cho phép/.test(r9b.content) && calls.some((c) => c.body.url === "about:blank"), "đọc trang sau eval: không lộ trang, đóng trang đăng nhập", { r9b, calls: calls.map((c) => c.body.action) });
+  // Chuyển hướng xong muộn (sau khi bấm đã trả kết quả): máy chủ còn tưởng trang thường, dịch vụ workspace từ chối bấm và trả địa chỉ trang.
+  calls.length = 0;
+  reply = (_p, b) => (b.action === "click" ? { url: OAUTH, title: "Đăng nhập", signin: true, error: "Dừng: trang đang mở là trang đăng nhập của bên thứ ba" } : { url: "https://example.com/" });
+  const r9c = await B.runBrowserTool("u1", "browser_click", { ref: 1 }, { ...ctx(), pageKnown: true });
+  ok(r9c.is_error && r9c.signin === "Google" && /chưa chạy/.test(r9c.content) && calls.some((c) => c.body.url === "about:blank"), "workspace từ chối bấm trên trang đăng nhập: máy chủ báo thao tác chưa chạy và đóng trang", { r9c, calls: calls.map((c) => c.body.action) });
+
+  console.log("9b. Dịch vụ workspace (workspace/browser-act.mjs) tự kiểm trước mỗi thao tác gõ / bấm");
+  {
+    const sent = [];
+    let at = "https://example.com/";
+    const fc = { awake: true, logs: [], net: [], on() {}, once: async () => {}, send: async (m, p) => { sent.push(m); if (m === "Runtime.evaluate") return { result: { value: /location\.href/.test(p?.expression ?? "") ? { url: at, title: "" } : null } }; return {}; } };
+    const st2 = new Map();
+    const A2 = createActor({ state: (u) => (st2.has(u) ? st2.get(u) : st2.set(u, {}).get(u)), pages: async () => [], session: async () => fc, emit() {} });
+    at = OAUTH;
+    for (const action of ["click", "type", "key", "eval", "hover", "upload", "permission"]) {
+      sent.length = 0;
+      const r = await A2.tool("u1", { action, ref: 1, text: "x", key: "Enter", expression: "1", stopAt: G.SIGNIN_STOP });
+      ok(r.signin === true && r.url === OAUTH && sent.every((m) => m === "Runtime.evaluate") && sent.length === 1, `${action} trên trang đăng nhập: không làm, trả địa chỉ trang`, { r, sent });
+    }
+    sent.length = 0;
+    const rb = await A2.tool("u1", { action: "batch", stopAt: G.SIGNIN_STOP, actions: [{ action: "type", ref: 1, text: "x" }] });
+    ok(rb.done === 0 && /trang đăng nhập/.test(rb.results[0]?.error ?? "") && !sent.includes("Input.dispatchKeyEvent") && !sent.includes("Input.insertText"), "lô bắt đầu bằng gõ trên trang đăng nhập: dừng trước bước 1", { rb, sent });
+    const rn = await A2.tool("u1", { action: "console", stopAt: G.SIGNIN_STOP });
+    ok(!rn.signin && Array.isArray(rn.logs), "thao tác chỉ xem (console) không bị chặn ở workspace", rn);
+    at = "https://example.com/";
+    const rok = await A2.tool("u1", { action: "eval", expression: "1", stopAt: G.SIGNIN_STOP });
+    ok(!rok.signin && "value" in rok, "trang thường: eval chạy bình thường", rok);
+    const rno = await A2.tool("u1", { action: "eval", expression: "1" });
+    ok(!rno.signin && "value" in rno, "không có stopAt (Chrome của người dùng): không kiểm", rno);
+  }
+
+  console.log("10. browser_tabs op=\"new\" tới trang chuyển hướng sang trang đăng nhập: đóng như mở trang");
+  calls.length = 0;
+  reply = (_p, b) => (b.action === "tabs" && b.op === "new" ? { url: "https://accounts.google.com/v3/signin/identifier", title: "Sign in - Google Accounts", tabs: [{ i: 2, id: "t2", url: "https://accounts.google.com/v3/signin/identifier", active: true }] } : { url: "about:blank" });
+  const c10 = ctx();
+  const r10 = await B.runBrowserTool("u1", "browser_tabs", { op: "new", url: "https://www.google.com/accounts" }, c10);
+  ok(r10.is_error && r10.signin === "Google" && !/Sign in - Google/.test(r10.content) && calls.some((c) => c.body.action === "navigate" && c.body.url === "about:blank"), "tab mới dẫn tới accounts.google.com: báo chặn (có signin → nút Liên kết Composio), đóng trang", { r10, calls: calls.map((c) => c.body) });
+  calls.length = 0;
+  reply = () => ({ url: "https://accounts.google.com/", title: "Đăng nhập", tabs: [{ i: 1, id: "t1", url: "https://accounts.google.com/", active: true }] });
+  const r10b = await B.runBrowserTool("u1", "browser_tabs", { op: "switch", id: "t1" }, ctx());
+  ok(!r10b.is_error && !calls.some((c) => c.body.url === "about:blank"), "chuyển sang tab đăng nhập có sẵn (người dùng mở): không đóng", { r10b, calls: calls.map((c) => c.body) });
+
+  console.log("11. Trang đăng nhập đang mở sẵn (myaccount.google.com sau khi người dùng tự đăng nhập): lô bắt đầu bằng rời trang vẫn chạy");
+  calls.length = 0;
+  reply = () => ({ url: "https://example.com/", title: "Example", done: 2, total: 2, results: [] });
+  const c11 = { ...ctx(), signin: "https://myaccount.google.com/", pageKnown: true };
+  const r11 = await B.runBrowserTool("u1", "browser_batch", { actions: [{ action: "navigate", url: "https://example.com" }, { action: "type", ref: 1, text: "xin chào" }] }, c11);
+  const sent11 = calls.find((c) => c.body.action === "batch");
+  ok(!r11.is_error && sent11 && Array.isArray(sent11.body.stopAt), "lô [mở example.com, gõ]: chạy, kèm stopAt cho các bước sau", { r11, calls: calls.map((c) => c.body.action) });
+  ok(!c11.signin, "rời trang xong: hết dấu trang đăng nhập", c11.signin);
+  for (const first of [{ action: "tabs", op: "new", url: "https://example.com" }, { action: "tabs", op: "switch", id: "t2" }]) {
+    calls.length = 0;
+    const r = await B.runBrowserTool("u1", "browser_batch", { actions: [first, { action: "click", ref: 1 }] }, { ...ctx(), signin: "https://myaccount.google.com/", pageKnown: true });
+    ok(!r.is_error && calls.some((c) => c.body.action === "batch"), `lô bắt đầu bằng tabs op=${first.op}: chạy`, { r, calls: calls.map((c) => c.body.action) });
+  }
+  for (const first of [{ action: "type", ref: 1, text: "x" }, { action: "navigate", url: "back" }, { action: "navigate", url: "https://accounts.google.com/" }]) {
+    calls.length = 0;
+    const r = await B.runBrowserTool("u1", "browser_batch", { actions: [first, { action: "click", ref: 1 }] }, { ...ctx(), signin: "https://myaccount.google.com/", pageKnown: true });
+    ok(r.is_error && r.signin && calls.length === 0, `lô bắt đầu bằng ${first.action} ${first.url ?? ""}: vẫn chặn`, { r, calls: calls.length });
+  }
+  const present = await B.runBrowserTool("u1", "browser_click", { ref: 1 }, { ...ctx(), signin: "https://myaccount.google.com/", pageKnown: true });
+  ok(/rời trang này trước bằng browser_navigate/.test(present.content) && !/Đừng thử lại bằng địa chỉ khác/.test(present.content), "lời từ chối khi trang đăng nhập đang mở: bảo rời trang bằng browser_navigate để làm tiếp, không cấm thử địa chỉ khác", present.content);
+  ok(/Đừng thử lại bằng địa chỉ khác/.test(blocked.content), "lời từ chối khi model tự mở trang đăng nhập: vẫn dặn không thử địa chỉ khác", blocked.content);
+
+  console.log("12. Bước công cụ trong khung chat nói đúng việc");
+  ok(B.describeBrowser("browser_navigate", { url: "https://accounts.google.com/v3/signin" }) === "Đang chặn trang đăng nhập accounts.google.com", "nhãn bước: Đang chặn trang đăng nhập accounts.google.com", B.describeBrowser("browser_navigate", { url: "https://accounts.google.com/v3/signin" }));
+  ok(B.describeBrowser("browser_navigate", { url: "accounts.google.com" }) === "Đang chặn trang đăng nhập accounts.google.com", "nhãn bước khi địa chỉ không có https://");
+  ok(B.describeBrowser("browser_navigate", { url: "https://accounts.google.com/" }, "user") === "Đang mở accounts.google.com trên Chrome của bạn", "Chrome của người dùng: nhãn như cũ");
+  ok(B.describeBrowser("browser_navigate", { url: "https://example.com/" }) === "Đang mở example.com", "trang thường: nhãn như cũ");
+  ok(/\.\.\.\(r\.signin \? \{ sum: r\.summary \} : \{\}\)/.test(tools) && /sum: \(r\.sum \?\? plainSummary/.test(tools), "chat: dòng kết quả của bước dùng tóm tắt \"Đã chặn trang đăng nhập\"");
+  const { "shared/i18n-dict": D } = await loadTs(["shared/i18n-dict"]);
+  const en = (t) => { for (const [re, f] of D.RULES_EN) { const m = t.match(re); if (m) return f(m); } return t; };
+  ok(en("Đang chặn trang đăng nhập accounts.google.com") === "Blocking the sign-in page accounts.google.com", "nhãn bước có bản tiếng Anh", en("Đang chặn trang đăng nhập accounts.google.com"));
 } finally {
   srv.close();
   fs.rmSync(tmp, { recursive: true, force: true });

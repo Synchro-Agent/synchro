@@ -62,13 +62,19 @@ export function urlsOf(name: string, input: Record<string, unknown>): string[] {
 }
 
 /** Lời dặn cho model khi chặn. how: "blocked" (chưa mở), "closed" (vừa tới trang đăng nhập do thao tác của model, Synchro đã đóng),
+ *  "stopped" (thao tác gõ / bấm chưa chạy vì trang đã tự chuyển sang trang đăng nhập, Synchro đã đóng trang đó),
  *  "present" (trang đang mở sẵn là trang đăng nhập, có thể do người dùng tự mở: không đọc, không thao tác, không đóng). */
-export function signInRefusal(service: string, url: string, how: "blocked" | "closed" | "present") {
+export function signInRefusal(service: string, url: string, how: "blocked" | "closed" | "stopped" | "present") {
   const u = url.slice(0, 160);
   const head = how === "blocked" ? `Không mở ${u}: đây là trang đăng nhập ${service}.`
     : how === "closed" ? `Thao tác vừa rồi dẫn tới trang đăng nhập ${service} (${u}) nên Synchro đã đóng trang đó.`
+    : how === "stopped" ? `Thao tác này chưa chạy: trang đang mở đã chuyển sang trang đăng nhập ${service} (${u}) nên Synchro đã đóng trang đó.`
     : `Trang đang mở (${u}) là trang đăng nhập ${service}: Synchro không đọc hay thao tác trên trang này.`;
-  return `${head} Trình duyệt của Synchro chạy trên máy chủ nên không dùng để đăng nhập tài khoản ${service} hay dịch vụ bên thứ ba khác; đừng thử lại bằng địa chỉ khác, nút "Đăng nhập bằng ${service}" hay browser_eval.
+  // Trang đăng nhập đang mở sẵn (thường do người dùng tự đăng nhập rồi để đó): việc không cần tài khoản đó vẫn làm tiếp được sau khi rời trang.
+  const leave = how === "present"
+    ? `Việc đang làm không cần tài khoản ${service} (mở trang khác, tìm thông tin…): rời trang này trước bằng browser_navigate tới trang cần dùng (hoặc browser_tabs op="new"), rồi làm tiếp như thường; đừng tìm cách đăng nhập ở đây, kể cả bằng nút "Đăng nhập bằng ${service}" hay browser_eval.`
+    : `Đừng thử lại bằng địa chỉ khác, nút "Đăng nhập bằng ${service}" hay browser_eval.`;
+  return `${head} Trình duyệt của Synchro chạy trên máy chủ nên không dùng để đăng nhập tài khoản ${service} hay dịch vụ bên thứ ba khác. ${leave}
 Việc cần dữ liệu trong tài khoản của người dùng (Google Docs / Drive / Gmail / Lịch, Outlook, GitHub, Slack, Notion…):
 - Đã có connector cho dịch vụ đó: dùng công cụ của connector.
 - Chưa có: nói ngắn gọn với người dùng rằng cần kết nối dịch vụ này trong Cài đặt → Connectors (liên kết Composio để dùng Google Docs, Gmail, Drive… và hơn 1000 ứng dụng); nếu có công cụ connector_reconnect thì gọi nó với connector "Composio" để hiện nút liên kết ngay trong khung chat. Kết nối xong thì người dùng nhắc lại yêu cầu.
