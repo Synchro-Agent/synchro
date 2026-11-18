@@ -386,6 +386,27 @@ function StyleSwitch({ current, send, onKeep, say }: { current: string; send: ()
 
 // Bản trình bày: khung 16:9, chuyển slide, ảnh thu nhỏ từng slide, trình chiếu toàn màn hình.
 const DECK_W = 1280, DECK_H = 720;
+// Slide dựng đúng cỡ 1280×720 (như ảnh thu nhỏ, bản xuất PowerPoint và bộ kiểm tra hiển thị) rồi thu nhỏ cho vừa khung chứa (translate + scale, giữa khung):
+// dựng theo cỡ thật của khung hẹp (~525×295, cột so sánh ~259 px) thì bản trình bày viết cho 1280×720 bị cắt phần dưới hoặc chảy thành trang dọc,
+// dưới 800px còn đổi sang bố cục điện thoại. Dùng cho khung lớn của DeckView (cả khi trình chiếu toàn màn hình) và hai cột "So sánh với bản trước".
+function useDeckFit(box: React.RefObject<HTMLElement | null>): React.CSSProperties {
+  const [fit, setFit] = useState({ k: 0, x: 0, y: 0 });
+  useLayoutEffect(() => {
+    const el = box.current;
+    if (!el) return;
+    const f = () => { const W = el.clientWidth, H = el.clientHeight; if (!W || !H) return; const k = Math.min(W / DECK_W, H / DECK_H); setFit({ k, x: (W - DECK_W * k) / 2, y: (H - DECK_H * k) / 2 }); };
+    f();
+    const ro = new ResizeObserver(f); ro.observe(el);
+    return () => ro.disconnect();
+  }, [box]);
+  return { transform: `translate(${fit.x}px, ${fit.y}px) scale(${fit.k})`, visibility: fit.k ? undefined : "hidden" };
+}
+// Một slide đứng yên (fixed) trong khung 16:9 thu nhỏ: cột "So sánh với bản trước" khi phiên bản là bản trình bày.
+function DeckFitFrame({ art, ai, slide = 0 }: { art: ArtVersion; ai: boolean; slide?: number }) {
+  const box = useRef<HTMLDivElement>(null);
+  const style = useDeckFit(box);
+  return <div className="deck-fit" ref={box}><ArtifactFrame type="html" content={art.content} ai={ai} title={art.title} className="deck-frame" deck={{ fixed: slide }} style={style} /></div>;
+}
 function DeckView({ art, ai, onError, onMsg, ctl, store, loc }: { art: ArtVersion; ai: boolean; onError: (m: string) => void; onMsg: (d: FrameMsg) => void; ctl: (s: FrameSend) => void; store?: StoreRef; loc?: boolean }) {
   const [st, setSt] = useState({ n: 0, cur: 0 });
   const [full, setFull] = useState(false);
@@ -398,17 +419,7 @@ function DeckView({ art, ai, onError, onMsg, ctl, store, loc }: { art: ArtVersio
   const want = useRef<{ i: number; at: number } | null>(null);
   const go = (i: number) => { const t = Math.max(0, Math.min(i, st.n - 1)); want.current = { i: t, at: Date.now() }; send.current?.({ t: "go", i: t }); };
   const step = (d: number) => go((want.current && Date.now() - want.current.at < 1500 ? want.current.i : st.cur) + d);
-  // Khung lớn dựng slide đúng cỡ 1280×720 (như ảnh thu nhỏ, bản xuất PowerPoint và bộ kiểm tra hiển thị) rồi thu nhỏ cho vừa khung xem:
-  // dựng theo cỡ thật của khung hẹp (~525×295) thì bản trình bày viết cho 1280×720 bị cắt mất phần dưới, dưới 800px còn đổi sang bố cục điện thoại.
-  const [fit, setFit] = useState({ k: 0, x: 0, y: 0 });
-  useLayoutEffect(() => {
-    const el = stage.current;
-    if (!el) return;
-    const f = () => { const W = el.clientWidth, H = el.clientHeight; if (!W || !H) return; const k = Math.min(W / DECK_W, H / DECK_H); setFit({ k, x: (W - DECK_W * k) / 2, y: (H - DECK_H * k) / 2 }); };
-    f();
-    const ro = new ResizeObserver(f); ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
+  const fit = useDeckFit(stage);
   useEffect(() => {
     const f = () => { const on = document.fullscreenElement === stage.current; setFull(on); send.current?.({ t: "present", on }); if (on) setTimeout(() => frame.current?.focus(), 50); };
     document.addEventListener("fullscreenchange", f); return () => document.removeEventListener("fullscreenchange", f);
@@ -426,7 +437,7 @@ function DeckView({ art, ai, onError, onMsg, ctl, store, loc }: { art: ArtVersio
     <div className="deck">
       <div className="deck-stage" ref={stage}>
         <ArtifactFrame type="html" content={art.content} ai={ai} title={art.title} className="deck-frame" deck={{ fixed: null }} onError={onError} store={store} loc={loc}
-          style={{ transform: `translate(${fit.x}px, ${fit.y}px) scale(${fit.k})`, visibility: fit.k ? undefined : "hidden" }}
+          style={fit}
           onMsg={(d) => { if (d.t === "slides") { const cur = Number(d.cur) || 0; if (want.current?.i === cur) want.current = null; setSt({ n: Number(d.n) || 0, cur }); } else onMsg(d); }}
           ctl={(s, el) => { send.current = s; frame.current = el; ctl(s); }} />
         {full && st.n > 1 && <div className="deck-hud">{st.cur + 1} / {st.n}</div>}
@@ -521,7 +532,8 @@ function CompareView({ a, b, ai, na, nb }: { a: ArtVersion; b: ArtVersion; ai: b
           {[[a, na], [b, nb]].map(([v, n]) => (
             <div key={n as number} className="cmp-col">
               <div className="cmp-h">{tr("Phiên bản")} {n as number}{n === nb ? ` · ${tr("đang xem")}` : ""}</div>
-              <ArtifactFrame type={(v as ArtVersion).type} content={(v as ArtVersion).content} ai={ai} title={(v as ArtVersion).title} className="art-frame" deck={isDeck(v as ArtVersion) ? { fixed: 0 } : undefined} />
+              {isDeck(v as ArtVersion) ? <DeckFitFrame art={v as ArtVersion} ai={ai} />
+                : <ArtifactFrame type={(v as ArtVersion).type} content={(v as ArtVersion).content} ai={ai} title={(v as ArtVersion).title} className="art-frame" />}
             </div>
           ))}
         </div>
