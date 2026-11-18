@@ -2870,9 +2870,9 @@ html body .menu.art-style-menu{--gl-fill:var(--card);background:var(--card);min-
 .deck{display:flex;flex-direction:column;gap:10px;padding:14px;height:100%;box-sizing:border-box;overflow:auto}
 .deck-stage{position:relative;width:100%;aspect-ratio:16/9;border-radius:var(--r-card);overflow:hidden;background:#000;flex:none;box-shadow:0 1px 2px rgba(0,0,0,.08),0 8px 28px rgba(0,0,0,.12)}
 .art-panel.full .deck-stage{width:min(100%,calc((100vh - 270px) * 16 / 9));margin:0 auto}
-.deck-frame{width:100%;height:100%;border:0;display:block;background:#fff}
+/* Khung lớn dựng đúng 1280×720 rồi thu nhỏ vừa khung (DeckView tính translate + scale theo cỡ khung). */
+.deck-frame{position:absolute;left:0;top:0;width:1280px;height:720px;border:0;display:block;background:#fff;transform-origin:0 0}
 .deck-stage:fullscreen{border-radius:0;aspect-ratio:auto;width:100vw;height:100vh;display:grid;place-items:center;box-shadow:none}
-.deck-stage:fullscreen .deck-frame{width:min(100vw,177.78vh);height:min(56.25vw,100vh)}
 .deck-hud{position:absolute;right:18px;bottom:14px;padding:4px 10px;border-radius:999px;background:#161714;color:#fff;font-size:var(--fs-2);font-variant-numeric:tabular-nums;pointer-events:none}
 .deck-bar{display:flex;align-items:center;gap:4px;flex:none}
 .art-panel.full .deck-bar,.art-panel.full .deck-thumbs{width:min(100%,calc((100vh - 270px) * 16 / 9));margin:0 auto}

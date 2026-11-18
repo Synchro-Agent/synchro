@@ -160,6 +160,8 @@ h1,h2,h3,h4,.sx-title,.sx-h2,.sx-h3,.sx-eyebrow{break-after:avoid-page}p,li{orph
 //     cùng tỉ lệ, mỗi bước ~3% (1px ở chữ 32px), thấp nhất 11 (px ở thang 1280 của slide), ghi bằng calc(N*var(--sx-u)) nên vẫn co giãn theo khung và bộ xuất PowerPoint đọc đúng cỡ;
 // (2) chữ của các khối đó, ô nhiệt .sx-heat và phần tử data-sx-autoink có tương phản dưới 4.5:1 với nền thật phía sau (cộng dồn các lớp nền trong suốt): đổi sang
 //     #F8FAFC hoặc #0F172A, chọn màu cho tỉ lệ cao hơn. Chữ chuyển màu (background-clip:text) bỏ qua. Slide đang ẩn được vá khi hiện ra (data-sx-on).
+// Slide vừa hiện được vá SAU lần vẽ đầu (rAF rồi setTimeout) và chỉ một lần (data-sx-fitok, bỏ khi reset): vá trong rAF chặn lần vẽ, bấm chuyển slide nhanh thì
+// khung lớn đứng ở slide cũ ~1,5 giây trong khi nhãn "Slide n / N" đã sang slide mới (lỗi 14 của ma trận H1).
 // Viết bằng JS thuần, không dấu ` và không chuỗi đóng thẻ script.
 export const FIT_JS = String.raw`(function(){var cv;
 function norm(c){if(/^rgba?\(/.test(c))return c;try{cv=cv||document.createElement("canvas").getContext("2d",{willReadFrequently:true});cv.clearRect(0,0,1,1);cv.fillStyle="rgba(0,0,0,0)";cv.fillStyle=c;cv.fillRect(0,0,1,1);var d=cv.getImageData(0,0,1,1).data;return"rgba("+d[0]+","+d[1]+","+d[2]+","+d[3]/255+")"}catch(e){return""}}
@@ -190,11 +192,11 @@ function run(root){root=root||document;var a=root.querySelectorAll("[data-node-i
 fr.forEach(function(f){try{fitFrame(f)}catch(e){}});
 var c=root.querySelectorAll("[data-node-id],.sx-heat,[data-sx-autoink]");for(var j=0;j<c.length;j++)try{if(vis(c[j]))ink(c[j])}catch(e){}}
 // Bỏ mọi chỗ đã vá (màu chữ, cỡ chữ) về như trang gốc: đổi phong cách thử (data-sx-preset) thì vá lại từ đầu, không giữ màu / cỡ hợp với phong cách cũ.
-function reset(root){root=root||document;var a=root.querySelectorAll("[data-sx-inked]");for(var i=0;i<a.length;i++){if(a[i].hasAttribute("data-sx-ink0"))a[i].style.color=a[i].getAttribute("data-sx-ink0");a[i].removeAttribute("data-sx-ink0");a[i].removeAttribute("data-sx-inked")}
+function reset(root){root=root||document;var ok=root.querySelectorAll("[data-sx-fitok]");for(var q=0;q<ok.length;q++)ok[q].removeAttribute("data-sx-fitok");var a=root.querySelectorAll("[data-sx-inked]");for(var i=0;i<a.length;i++){if(a[i].hasAttribute("data-sx-ink0"))a[i].style.color=a[i].getAttribute("data-sx-ink0");a[i].removeAttribute("data-sx-ink0");a[i].removeAttribute("data-sx-inked")}
 var f=root.querySelectorAll("[data-sx-fitted]");for(var j=0;j<f.length;j++){if(f[j].hasAttribute("data-sx-fs0"))f[j].style.fontSize=f[j].getAttribute("data-sx-fs0");f[j].removeAttribute("data-sx-fs0");f[j].removeAttribute("data-sx-fitted")}}
 window.__sxFit=run;window.__sxReset=reset;
 function go(){requestAnimationFrame(function(){run()});try{document.fonts.ready.then(function(){run()});document.fonts.addEventListener("loadingdone",function(){run()})}catch(e){}
-try{new MutationObserver(function(ms){ms.forEach(function(m){if(m.target.hasAttribute&&m.target.hasAttribute("data-sx-on"))requestAnimationFrame(function(){run(m.target)})})}).observe(document.body,{subtree:true,attributes:true,attributeFilter:["data-sx-on"]})}catch(e){}}
+try{new MutationObserver(function(ms){ms.forEach(function(m){var t=m.target;if(t.hasAttribute&&t.hasAttribute("data-sx-on")&&!t.hasAttribute("data-sx-fitok"))requestAnimationFrame(function(){setTimeout(function(){if(!t.hasAttribute("data-sx-on"))return;run(t);t.setAttribute("data-sx-fitok","")},0)})})}).observe(document.body,{subtree:true,attributes:true,attributeFilter:["data-sx-on"]})}catch(e){}}
 if(document.readyState==="loading")addEventListener("DOMContentLoaded",go);else go()})();`;
 
 /** Đường dẫn Google Fonts chỉ gồm các phông trang dùng: khung cho phép fonts.googleapis.com và fonts.gstatic.com (csp ở artdoc.ts). */

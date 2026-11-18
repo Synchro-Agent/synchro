@@ -385,6 +385,7 @@ function StyleSwitch({ current, send, onKeep, say }: { current: string; send: ()
 }
 
 // Bản trình bày: khung 16:9, chuyển slide, ảnh thu nhỏ từng slide, trình chiếu toàn màn hình.
+const DECK_W = 1280, DECK_H = 720;
 function DeckView({ art, ai, onError, onMsg, ctl, store, loc }: { art: ArtVersion; ai: boolean; onError: (m: string) => void; onMsg: (d: FrameMsg) => void; ctl: (s: FrameSend) => void; store?: StoreRef; loc?: boolean }) {
   const [st, setSt] = useState({ n: 0, cur: 0 });
   const [full, setFull] = useState(false);
@@ -392,7 +393,22 @@ function DeckView({ art, ai, onError, onMsg, ctl, store, loc }: { art: ArtVersio
   const frame = useRef<HTMLIFrameElement | null>(null);
   const stage = useRef<HTMLDivElement>(null);
   const thumbs = useRef<HTMLDivElement>(null);
-  const go = (i: number) => send.current?.({ t: "go", i: Math.max(0, Math.min(i, st.n - 1)) });
+  // Slide vừa yêu cầu mà khung chưa báo lại: bấm mũi tên nhanh thì mỗi lần bấm đi tiếp từ slide đã yêu cầu, không đứng lại ở slide khung báo lần trước.
+  // Chỉ tin trong 1,5 giây (khung không báo lại, vd. bản trình bày đổi số slide, thì thôi chờ).
+  const want = useRef<{ i: number; at: number } | null>(null);
+  const go = (i: number) => { const t = Math.max(0, Math.min(i, st.n - 1)); want.current = { i: t, at: Date.now() }; send.current?.({ t: "go", i: t }); };
+  const step = (d: number) => go((want.current && Date.now() - want.current.at < 1500 ? want.current.i : st.cur) + d);
+  // Khung lớn dựng slide đúng cỡ 1280×720 (như ảnh thu nhỏ, bản xuất PowerPoint và bộ kiểm tra hiển thị) rồi thu nhỏ cho vừa khung xem:
+  // dựng theo cỡ thật của khung hẹp (~525×295) thì bản trình bày viết cho 1280×720 bị cắt mất phần dưới, dưới 800px còn đổi sang bố cục điện thoại.
+  const [fit, setFit] = useState({ k: 0, x: 0, y: 0 });
+  useLayoutEffect(() => {
+    const el = stage.current;
+    if (!el) return;
+    const f = () => { const W = el.clientWidth, H = el.clientHeight; if (!W || !H) return; const k = Math.min(W / DECK_W, H / DECK_H); setFit({ k, x: (W - DECK_W * k) / 2, y: (H - DECK_H * k) / 2 }); };
+    f();
+    const ro = new ResizeObserver(f); ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
   useEffect(() => {
     const f = () => { const on = document.fullscreenElement === stage.current; setFull(on); send.current?.({ t: "present", on }); if (on) setTimeout(() => frame.current?.focus(), 50); };
     document.addEventListener("fullscreenchange", f); return () => document.removeEventListener("fullscreenchange", f);
@@ -400,8 +416,8 @@ function DeckView({ art, ai, onError, onMsg, ctl, store, loc }: { art: ArtVersio
   useEffect(() => {
     if (!full) return;
     const k = (e: KeyboardEvent) => {
-      if (["ArrowRight", "ArrowDown", "PageDown", " "].includes(e.key)) { e.preventDefault(); go(st.cur + 1); }
-      else if (["ArrowLeft", "ArrowUp", "PageUp"].includes(e.key)) { e.preventDefault(); go(st.cur - 1); }
+      if (["ArrowRight", "ArrowDown", "PageDown", " "].includes(e.key)) { e.preventDefault(); step(1); }
+      else if (["ArrowLeft", "ArrowUp", "PageUp"].includes(e.key)) { e.preventDefault(); step(-1); }
     };
     addEventListener("keydown", k); return () => removeEventListener("keydown", k);
   }, [full, st]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -410,15 +426,16 @@ function DeckView({ art, ai, onError, onMsg, ctl, store, loc }: { art: ArtVersio
     <div className="deck">
       <div className="deck-stage" ref={stage}>
         <ArtifactFrame type="html" content={art.content} ai={ai} title={art.title} className="deck-frame" deck={{ fixed: null }} onError={onError} store={store} loc={loc}
-          onMsg={(d) => { if (d.t === "slides") setSt({ n: Number(d.n) || 0, cur: Number(d.cur) || 0 }); else onMsg(d); }}
+          style={{ transform: `translate(${fit.x}px, ${fit.y}px) scale(${fit.k})`, visibility: fit.k ? undefined : "hidden" }}
+          onMsg={(d) => { if (d.t === "slides") { const cur = Number(d.cur) || 0; if (want.current?.i === cur) want.current = null; setSt({ n: Number(d.n) || 0, cur }); } else onMsg(d); }}
           ctl={(s, el) => { send.current = s; frame.current = el; ctl(s); }} />
         {full && st.n > 1 && <div className="deck-hud">{st.cur + 1} / {st.n}</div>}
       </div>
       {st.n > 1 && <>
         <div className="deck-bar">
-          <button className="icon-btn" disabled={st.cur <= 0} onClick={() => go(st.cur - 1)} aria-label="Slide trước"><span className="flip"><I.ChevronR size={16} /></span></button>
+          <button type="button" className="icon-btn" disabled={st.cur <= 0} onClick={() => step(-1)} aria-label="Slide trước"><span className="flip"><I.ChevronR size={16} /></span></button>
           <span className="deck-count">{tr("Slide")} {st.cur + 1} / {st.n}</span>
-          <button className="icon-btn" disabled={st.cur >= st.n - 1} onClick={() => go(st.cur + 1)} aria-label="Slide sau"><I.ChevronR size={16} /></button>
+          <button type="button" className="icon-btn" disabled={st.cur >= st.n - 1} onClick={() => step(1)} aria-label="Slide sau"><I.ChevronR size={16} /></button>
           <span style={{ flex: 1 }} />
           <button className="btn deck-play" onClick={() => stage.current?.requestFullscreen?.().catch(() => {})}><I.Play size={13} />{tr("Trình chiếu")}</button>
         </div>
