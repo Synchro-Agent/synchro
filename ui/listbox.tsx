@@ -83,10 +83,14 @@ export function Dropdown<V extends string | number>({ value, options, onChange, 
   };
 
   // Đặt chỗ: dưới nút nếu đủ chỗ (hoặc phía dưới rộng hơn phía trên), không thì lật lên; luôn cách mép màn hình 8px.
-  const place = () => {
+  // first: lần đặt đầu tiên khi vừa mở. Nút đang nằm ngoài màn hình (mở bằng bàn phím / mã sau khi cuộn khung) thì cuộn nút vào tầm nhìn
+  // trước; về sau trang cuộn làm nút ra khỏi màn hình thì đóng danh sách (như ô chọn của hệ điều hành).
+  const place = (first = false) => {
     const b = btn.current, p = pop.current;
     if (!b || !p) return;
-    const r = b.getBoundingClientRect(), W = innerWidth, H = innerHeight;
+    let r = b.getBoundingClientRect();
+    const W = innerWidth, H = innerHeight;
+    if (first && (r.top < 0 || r.bottom > H)) { b.scrollIntoView({ block: "nearest" }); r = b.getBoundingClientRect(); }
     if (r.bottom < 0 || r.top > H) { close(false); return; }
     const w = Math.min(Math.max(r.width, minWidth), W - 2 * M);
     const left = Math.min(Math.max(M, align === "end" ? r.right - w : r.left), W - M - w);
@@ -97,7 +101,8 @@ export function Dropdown<V extends string | number>({ value, options, onChange, 
     const next: React.CSSProperties = down ? { left, width: w, top: r.bottom + GAP, maxHeight: h } : { left, width: w, bottom: H - r.top + GAP, maxHeight: h };
     setPos((old) => (JSON.stringify(old) === JSON.stringify(next) ? old : next));
   };
-  useLayoutEffect(() => { if (open) place(); }, [open, shown.length]); // eslint-disable-line react-hooks/exhaustive-deps
+  const placed = useRef(false);
+  useLayoutEffect(() => { if (!open) { placed.current = false; return; } place(!placed.current); placed.current = true; }, [open, shown.length]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!open) return;
     const away = (e: MouseEvent) => { const t = e.target as Node; if (!btn.current?.contains(t) && !pop.current?.contains(t)) close(false); };

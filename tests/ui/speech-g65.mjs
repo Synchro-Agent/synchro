@@ -132,7 +132,10 @@ try {
   await sleep(500);
   const cost = await text(".sp-cost");
   ok(/≈\s*28 credits/.test(cost), `Eleven v4, 71 ký tự: “${cost}” (bản thật tốn 28; trước đây ≈71)`, cost);
-  const fmts = await ev(`[...document.querySelectorAll("#tts-fmt option")].map((o) => o.textContent)`);
+  // Ô chọn của app (ui/listbox.tsx): mở danh sách rồi đọc các mục, đóng lại bằng Esc.
+  await ev(`document.querySelector("#tts-fmt").click(), 1`); await until(`document.querySelectorAll(".dd-pop [role=option]").length > 0`, 5000, "danh sách định dạng");
+  const fmts = await ev(`[...document.querySelectorAll(".dd-pop [role=option]")].map((o) => o.textContent)`);
+  await ev(`document.querySelector("#tts-fmt").click(), 1`); await sleep(200);
   ok(fmts.some((x) => /44\.1 kHz/.test(x)) && !fmts.some((x) => /44,1/.test(x)), "định dạng tải xuống: “MP3 44.1 kHz”", fmts);
   ok(!(await viLeft()).length, "không còn chữ Việt ở Đọc văn bản", await viLeft());
 

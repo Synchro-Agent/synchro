@@ -157,7 +157,10 @@ try {
   const { j: g } = await api("GET", "/api/skill-scan");
   const startText = await ev(`document.querySelector(".scan-modal .modal-foot .btn.dark").textContent`);
   check("hộp thoại giải thích ba loại và đếm đúng số skill sẽ quét", startText.includes(`Quét ${g.count} skill`) && g.count >= 6 && (await ev(`document.querySelectorAll(".scan-kinds li").length`)) === 3, `${startText} · máy chủ: ${g.count}`);
-  const opts = await ev(`[...document.querySelectorAll("#scan-model option")].map((o) => o.value)`);
+  // Ô chọn model là ô chọn của app (ui/listbox.tsx): mở danh sách để đọc các mục, giá trị đang chọn ở data-value của nút.
+  await ev(`document.querySelector("#scan-model").click(), 1`); await until(`document.querySelectorAll(".dd-pop [role=option]").length > 0`, 5000, "danh sách model");
+  const opts = await ev(`[...document.querySelectorAll(".dd-pop [role=option]")].map((o) => o.dataset.value)`);
+  await ev(`document.querySelector("#scan-model").click(), 1`); await sleep(200);
   check("chọn được model (Tự động + model dùng được)", opts[0] === "" && opts.length > 1, `${opts.length} lựa chọn`);
   check("hộp thoại nằm trên mọi lớp", await ev(onTop(".scan-modal")));
   lay = await ev(LAYOUT(".scan-modal"));
@@ -165,9 +168,10 @@ try {
   await shot("intro");
   // Chọn model đầu tiên trong danh sách như người dùng.
   const chosen = opts[1];
-  await ev(`(() => { const s = document.querySelector("#scan-model"); s.value = ${JSON.stringify(chosen)}; s.dispatchEvent(new Event("change", { bubbles: true })); })()`);
+  await ev(`document.querySelector("#scan-model").click(), 1`); await until(`!!document.querySelector('.dd-pop [role=option][data-value=${JSON.stringify(chosen)}]')`, 5000, "mục model");
+  await ev(`document.querySelector('.dd-pop [role=option][data-value=${JSON.stringify(chosen)}]').click(), 1`);
   await sleep(200);
-  check("model đã chọn được giữ", (await ev(`document.querySelector("#scan-model").value`)) === chosen, chosen);
+  check("model đã chọn được giữ", (await ev(`document.querySelector("#scan-model").dataset.value`)) === chosen, chosen);
 
   const t0 = Date.now();
   await click(`document.querySelector(".scan-modal .modal-foot .btn.dark")`, "start");
@@ -259,7 +263,7 @@ try {
 
   // Quét lại rồi đóng hộp thoại: vẫn chạy ở nền, nút có vòng xoay, xong thì báo một dòng.
   await click(byText(".scan-modal .modal-foot .btn", "Quét lại"), "rescan"); await until(`!!document.querySelector(".scan-modal .scan-kinds")`, 5000, "intro");
-  check("Quét lại giữ model đã chọn lần trước", (await ev(`document.querySelector("#scan-model").value`)) === chosen);
+  check("Quét lại giữ model đã chọn lần trước", (await ev(`document.querySelector("#scan-model").dataset.value`)) === chosen);
   await click(`document.querySelector(".scan-modal .modal-foot .btn.dark")`, "start 2"); await until(`!!document.querySelector(".scan-modal .scan-stat")`, 15000, "chạy lần 2");
   await key("Escape", "Escape", 27);
   await until(`!!document.querySelector(".pl-scan.busy .art-spin")`, 5000, "vòng xoay ở nút");

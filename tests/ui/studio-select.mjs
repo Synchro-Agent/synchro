@@ -96,10 +96,12 @@ try {
   await until(`!!${SEL}`, 10000, "hộp chi tiết plugin");
   await until(`!!document.querySelector(".pl-det")`, 10000, "dòng đã nhận diện");
 
-  const opts = await ev(`[...${SEL}.options].map((o) => [o.value, o.textContent])`);
+  await ev(`${SEL}.click(), 1`); await until(`document.querySelectorAll(".dd-pop [role=option]").length > 0`, 5000, "danh sách Studio");
+  const opts = await ev(`[...document.querySelectorAll(".dd-pop [role=option]")].map((o) => [o.dataset.value, o.textContent])`);
+  await ev(`${SEL}.click(), 1`); await sleep(200);
   check("đủ 5 lựa chọn đúng thứ tự", opts.map((o) => o[0]).join() === "auto,none,design,slides,docs", opts.map((o) => o[0]).join());
   check("tên tiếng Việt", opts.map((o) => o[1]).join() === "Tự động nhận diện,Không,Thiết kế,Trình bày,Tài liệu", opts.map((o) => o[1]).join());
-  check("mặc định là Tự động nhận diện", await ev(`${SEL}.value`) === "auto");
+  check("mặc định là Tự động nhận diện", await ev(`${SEL}.dataset.value`) === "auto");
   let t = await rowText();
   check("mô tả theo chế độ", t.includes("Synchro tự xếp từng skill"));
   check("cho biết đã xếp gì", t.includes(`${DESIGN} skill ở Thiết kế, ${DOCS} skill ở Tài liệu`));
