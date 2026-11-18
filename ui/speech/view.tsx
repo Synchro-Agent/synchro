@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { SideToggle } from "../brand";
 import * as I from "../icons";
 import { useApp } from "../store";
+import { useStripActive } from "../strip";
 import { GROUPS, STARTERS, TOOLS, estCredits, normTool, toolDef, toolOn, type SpeechTool } from "../../shared/speech/data";
 import { KIND_LABEL, KIND_TOOL, ago, defaultVoice, fmtNum, itemTitle, refreshPlan, useItems, useMyVoices, usePlan, usePlanFailed, type Voice } from "./client";
 import { Dock, NotReady, Player, VoiceChip, VoicePicker } from "./parts";
@@ -44,6 +45,8 @@ export function SpeechView({ say, tool: raw, setTool, sideOpen, onSide }: { say:
   // shared: hạn mức chung của máy chủ hôm nay đã hết, mọi thao tác bị chặn dù hạn mức riêng còn: hiện còn 0.
   const c = plan?.credits, left = c && !c.shared ? Math.max(0, c.limit - c.used) : 0;
   const ready = !!plan?.connected && toolOn(plan, tool);
+  // Công cụ đổi từ thanh bên hay thẻ ở Trang chính: dải tab (cuộn ngang ở điện thoại) cuộn tới tab đang chọn, kể cả khi danh sách tab mới tải xong.
+  const tabsRef = useStripActive<HTMLElement>(`${tool}:${tools.length}`);
   return (
     <div className="sp">
       <div className="sp-bar">
@@ -70,7 +73,7 @@ export function SpeechView({ say, tool: raw, setTool, sideOpen, onSide }: { say:
           {waiting && <span className="sk-blk sp-credit-wait" aria-hidden />}
         </div>
       </div>
-      <nav className="sp-tabs" aria-label="Công cụ Speech">
+      <nav ref={tabsRef} className="sp-tabs" aria-label="Công cụ Speech">
         {tools.map((t) => { const Ic = TOOL_ICON[t.k]; return <button key={t.k} className={tool === t.k ? "on" : ""} onClick={() => setTool(t.k)}><Ic size={15} />{t.label}</button>; })}
         {waiting && [64, 88, 72, 96, 60, 80].map((w, i) => <span key={i} className="sk-blk sp-tab-wait" style={{ width: w }} aria-hidden />)}
       </nav>
