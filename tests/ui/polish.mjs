@@ -106,7 +106,8 @@ function POLISH() {
     if (sy && dy > 0 && dy < 12) push("tiny", "khung cuộn dọc chỉ tràn " + dy + "px mà còn thanh cuộn (Windows hiện mũi tên vô ích): " + name(el));
     else if (sx && dx > 0 && dx < 12) {
       // Phần tử con thò ra mép phải xa nhất: chỉ ra chỗ cần sửa.
-      const R = el.getBoundingClientRect().left + el.clientLeft + el.clientWidth; let far = null, fr = R + 0.5;
+      // So với mép trong của lề phải: phần tử con lấn vào lề phải cũng làm khung tràn (Chrome cộng lề phải sau nội dung tràn).
+      const R = el.getBoundingClientRect().left + el.clientLeft + el.clientWidth - (parseFloat(cs.paddingRight) || 0); let far = null, fr = R + 0.5;
       for (const k of el.querySelectorAll("*")) { const r = k.getBoundingClientRect(); if (r.width > 0 && r.right > fr) { fr = r.right; far = k; } }
       push("tiny", "khung cuộn ngang chỉ tràn " + dx + "px mà còn thanh cuộn (Windows hiện mũi tên vô ích): " + name(el) + (far ? " (thò ra: " + name(far).replace(/ “.*$/, "") + ")" : ""));
     }
