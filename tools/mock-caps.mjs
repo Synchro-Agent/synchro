@@ -891,6 +891,7 @@ function routeStep(S, M, q, toolNames) {
 }
 export function studioStep(sys, msgsJson, q, toolNames) {
   if (String(q ?? "").includes("<point_edit>")) return null; // sửa đúng một phần tử: làm luôn, không đọc skill
+  if (String(q ?? "").includes("<auto_check>")) return null; // Synchro tự kiểm bộ slide và nhắc sửa: sửa luôn bộ đã viết, không mở thư viện Trình bày làm bộ mới
   if (/#(rev\s*\d+|badpatch|skillrun|longmd\b)/.test(String(q ?? ""))) return null; // lệnh thử: sửa artifact (SEARCH/REPLACE), chạy script skill, câu dài cho bài đo vẽ lại
   if (/#tool=|#media/.test(String(q ?? "")) || /^(Đoạn chat cần (chưng cất|đặt tên):|Hồ sơ:|Trang cần biên soạn:|Các tên trong bộ não:|Các chủ đề cần xếp bản đồ:|Những điều đã biết về người dùng:|Bản người dùng tự viết:|Các skill cần thẩm định:)/.test(String(q ?? ""))) return null; // ép gọi đúng một công cụ / chỉ mô tả tệp nhận được: không mở thư viện skill trước
   const S = String(sys ?? ""), M = String(msgsJson ?? "");

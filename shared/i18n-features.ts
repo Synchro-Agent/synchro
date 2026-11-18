@@ -363,6 +363,10 @@ Object.assign(FX_VI2EN, {
   "Đo thật ở {vw}×{vh}: slide {n} cao {h}px, thừa {over}px so với khung, phần dưới bị cắt khi trình chiếu. Rút chữ, giảm khoảng trống hoặc tách thành hai slide.": "Measured at {vw}×{vh}: slide {n} is {h}px tall, {over}px taller than the frame, so its bottom is cut off when presented. Shorten the text, reduce the spacing, or split it into two slides.",
   "Đo thật ở {vw}×{vh}: slide {n} rộng {w}px, thừa {over}px so với khung, phần bên phải bị cắt khi trình chiếu. Rút chữ hoặc chia lại cột.": "Measured at {vw}×{vh}: slide {n} is {w}px wide, {over}px wider than the frame, so its right side is cut off when presented. Shorten the text or rearrange the columns.",
   "Đánh số slide không nhất quán": "Inconsistent slide numbering",
+  // Mức của ghi chú phản biện (shared/critic.ts SEV_LABEL, ui/criticui.tsx): giao diện tiếng Anh từng hiện "Nên sửa".
+  "Nghiêm trọng ‹mức phản biện›": "Critical",
+  "Nên sửa ‹mức phản biện›": "Should fix",
+  "Gợi ý ‹mức phản biện›": "Suggestion",
   "Số trang không theo thứ tự slide ở slide {slides}.": "Page numbers don't follow the slide order on slide {slides}.",
   "Tổng số trang ghi trên các slide không đồng nhất (slide {slides}).": "The total page count differs between slides (slide {slides}).",
   "Chân trang ghi tổng {of} trang nhưng bộ slide có {total} slide.": "The footer says {of} pages, but the deck has {total} slides.",

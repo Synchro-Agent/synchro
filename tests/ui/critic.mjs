@@ -144,6 +144,7 @@ try {
   await click(`document.querySelector(".art-panel .cr-pill.has")`, "pill deck"); await sleep(800);
   const notes = await ev(`[...document.querySelectorAll(".cr-note")].map((n) => ({ t: n.querySelector(".cr-h b")?.textContent, by: n.querySelector(".cr-by")?.textContent, d: n.querySelector("p")?.textContent, fix: !!n.querySelector(".btn") }))`);
   const num = notes.find((n) => n.t === "Inconsistent slide numbering");
+  ok((await ev(`[...document.querySelectorAll(".cr-note .cr-h em")].map((e) => e.textContent).join()`)) === "Should fix,Should fix", "mức của ghi chú bằng tiếng Anh (“Should fix”, không còn “Nên sửa”)", await ev(`[...document.querySelectorAll(".cr-note .cr-h em")].map((e) => e.textContent).join()`));
   ok(!!num && num.by === "Synchro" && /Section labels skip a number or go backwards on slide 4, 5 \(in order they should read 03, 04\)/.test(num.d) && !num.fix, "ghi chú tiếng Anh của Synchro: nhãn mục nhảy cóc, không có nút áp dụng sửa", JSON.stringify(notes));
   ok(notes.some((n) => n.t === "The call-to-action button goes nowhere"), "ý kiến của model phản biện cũng bằng tiếng Anh", JSON.stringify(notes.map((n) => n.t)));
   const viLeft = await ev(`[...document.querySelectorAll(".cr-note")].map((n) => n.textContent).join(" ")`);
