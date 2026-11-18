@@ -192,6 +192,31 @@ try {
     ok(await t.ev(`document.documentElement.scrollWidth <= innerWidth + 1 && [...document.querySelectorAll(".msg-err")].every((e) => e.getBoundingClientRect().right <= innerWidth + 1)`), `${label}: thẻ lỗi nằm trọn màn hình, không cuộn ngang`);
     await t.shot(`free-limit-${w}`);
     await t.P("Fetch.disable");
+
+    // Lỗi 5 trên giao diện: hai tệp ghi âm đính kèm cùng lúc ở ô soạn. Thẻ tệp đầu "Đang chép lời…", thẻ sau "Đang chờ tệp trước…" (không báo
+    // máy chủ bận), rồi cả hai xong. Máy giả lập chép lời tệp có chữ "slow-stt" mất 2 giây. Xem cả ở bề ngang điện thoại (390px).
+    for (const [w, h, tag] of [[1280, 860, "desktop"], [390, 844, "phone"]]) {
+      await t.size(w, h);
+      await t.P("Page.navigate", { url: `${B}/?b5=${tag}` });
+      if (!(await t.until(`!!document.querySelector("input[type=file][multiple]")`, 60_000))) { ok(false, `B5 (giao diện ${tag}): ô soạn có chỗ đính kèm`); continue; }
+      const dir = path.join(tmpdir(), "synchro-ui"); mkdirSync(dir, { recursive: true });
+      const seed = `slow-stt-ui-${tag}-${Date.now()}`;
+      const fa = path.join(dir, `ghi-am-1-${tag}.wav`), fb = path.join(dir, `ghi-am-2-${tag}.m4a`);
+      writeFileSync(fa, wav(seed)); writeFileSync(fb, m4a(seed));
+      const inp = await t.P("Runtime.evaluate", { expression: `document.querySelector("input[type=file][multiple]")` });
+      await t.P("DOM.setFileInputFiles", { files: [fa, fb], objectId: inp.result.objectId });
+      const cards = `[...document.querySelectorAll(".ft")].map((c) => ({ name: c.querySelector(".ft-name")?.textContent ?? "", sub: c.querySelector(".ft-sub")?.textContent ?? "", err: c.classList.contains("ft-err"), msg: c.querySelector(".ft-err-msg")?.textContent ?? "", busy: !!c.querySelector(".ft-prog") }))`;
+      const seen = new Set();
+      const waitNote = await waitFor(async () => { const cs = await t.ev(cards); for (const c of cs ?? []) if (c.sub) seen.add(c.sub); return seen.has("Đang chờ tệp trước…") && seen.has("Đang chép lời…") ? cs : null; }, 20_000, { every: 100 });
+      if (waitNote) await t.shot(`free-b5-queue-${tag}`);
+      ok(!!waitNote, `B5 (giao diện ${tag}): thẻ tệp hiện "Đang chép lời…" và "Đang chờ tệp trước…" trong lúc xếp hàng`, [...seen]);
+      const done = await waitFor(async () => { const cs = await t.ev(cards); return cs?.length >= 2 && cs.every((c) => !c.busy) ? cs : null; }, 60_000, { every: 300 });
+      ok(!!done && done.every((c) => !c.err), `B5 (giao diện ${tag}): cả hai tệp ghi âm chép lời xong, không thẻ nào báo lỗi`, done);
+      const wide = await t.ev(`document.documentElement.scrollWidth > innerWidth + 1`);
+      ok(!wide, `B5 (giao diện ${tag}): không cuộn ngang`);
+      await t.shot(`free-b5-done-${tag}`);
+    }
+    await t.size(1280, 860);
     if (w < 600) continue;
     // Lỗi 13 của ma trận: vùng trạng thái cho trình đọc màn hình (aria-live) vẫn giữ câu trả lời của đoạn chat cũ sau khi sang trang khác.
     // Lỗi 1: mức giọng AI chung đã cạn mà đầu trang Speech vẫn ghi "3.000 credit hôm nay".
