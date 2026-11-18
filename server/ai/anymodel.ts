@@ -96,10 +96,15 @@ export async function oneShot(user: UserRow, key: string, system: string, messag
 export async function quickCall(user: UserRow, system: string, content: string, o: { maxTokens?: number; signal?: AbortSignal; job?: string; bg?: boolean; maxWaitMs?: number; planOk?: boolean } = {}) {
   const { allowed, usable } = await usableModels(user);
   const list = usable.length ? usable : allowed;
-  const model = sideModel(list, { avoid: stalledModels(user.id, list) });
+  let model = sideModel(list, { avoid: stalledModels(user.id, list) });
   if (!model) throw new OneShotErr("Synchro chưa được kết nối với model nào (chưa đăng nhập gói hoặc chưa có khóa API).", 503);
-  // planOk: false — việc này đáng một lượt khóa API (rẻ, tính theo token) nhưng không đáng một lượt của gói người dùng lúc này (memory.ts).
-  if (o.planOk === false && subCli(model)) throw new OneShotErr(NO_CHEAP, 503);
+  // planOk: false — việc này đáng một lượt khóa API (rẻ, tính theo token) nhưng không đáng một lượt của gói người dùng lúc này (memory.ts):
+  // model rẻ nhất là của gói thì dùng model khóa API hạng nhanh rẻ nhất (tính vào hạn mức chi phí API của chính người đó); không có thì để lần sau.
+  if (o.planOk === false && subCli(model)) {
+    const api = list.filter((k) => !subCli(k) && tierOf(k) === "fast");
+    model = api.length ? sideModel(api) : null;
+    if (!model) throw new OneShotErr(NO_CHEAP, 503);
+  }
   if (o.bg && (billsCredit(model) || (tierOf(model) === "strong" && (hasCheapSide(allowed) || !strongBudget(user.id))))) throw new OneShotErr(NO_CHEAP, 503);
   // Hàng việc nền đầy hoặc chờ quá lâu cũng chỉ là "chưa tới lượt": không được tính là một lần học thất bại.
   const text = await oneShot(user, model, system, [{ role: "user", content }], o).catch((e) => { throw o.bg && e instanceof OneShotErr && e.message === BUSY ? new OneShotErr(NO_CHEAP, 503) : e; });
