@@ -9,7 +9,7 @@ export { getSetting, setSetting, signupOpen, audit } from "./db/settings";
 export { limit } from "./ratelimit";
 export { hashPassword, checkPassword, normEmail } from "./auth/passwords";
 export { clientIp, appUrl, allowedOriginHosts, sameOrigin, readCookie, cookie, handle, withCookies } from "./auth/request";
-export { getUser, findByEmail, isOwner, isAdmin, roleOf, adminRole, OWNER_ONLY, ownerOnly, createUser, publicUser, defaultPerms, basePerms, permsOf, can, canModel, cleanProfile, setInstructions, forgetProfile, updateProfile, VERIFY_FIRST, verifyGateOn, setVerifyGate, needsVerify, verifyLocked } from "./auth/users";
+export { getUser, findByEmail, isOwner, isAdmin, roleOf, adminRole, OWNER_ONLY, ownerOnly, createUser, publicUser, defaultPerms, basePerms, permsOf, can, canModel, modelDeniedMsg, cleanProfile, setInstructions, forgetProfile, updateProfile, VERIFY_FIRST, verifyGateOn, setVerifyGate, needsVerify, verifyLocked } from "./auth/users";
 export type { Role, PublicUser } from "./auth/users";
 export { featureGate, passkeySignIn, mfaTicketUser, clearMfaCookie, createSession, clearSessionCookie, markReauth, recentlyReauthed, requireRecentReauth, reauthPassword, stepUp, sweepSessions, current, sessionUser, requireUser, requireAdmin, requireOwner, device, publicSession, sessionsOf, authGate } from "./auth/sessions";
 export { lookup, login, signup, resendVerify, checkVerifyLink, confirmVerify, onAccountGone, denyVerify, oauthLogin, connectIdentity, disconnectIdentity, changePassword, requestPasswordReset, dropEmailChange, requestEmailChange, checkEmailChange, confirmEmailChange, hasSecondFactors, checkResetLink, createResetLink, redeemResetLink, deleteOwnAccount } from "./auth/flows";

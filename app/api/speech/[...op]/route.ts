@@ -704,7 +704,7 @@ async function script(u: UserRow, b: Record<string, unknown>) {
       ? "Write one natural English paragraph of 110 to 150 words for someone to read aloud while recording a voice sample. Use varied sentence lengths, one question, one exclamation, a number, and everyday words with a wide range of sounds. Output only the paragraph: no title, no quotes, no markdown, no brackets."
       : "Viết một đoạn văn tiếng Việt tự nhiên dài 110 đến 150 từ để người dùng đọc to khi ghi âm mẫu giọng. Câu dài ngắn xen kẽ, có một câu hỏi, một câu cảm thán, một con số viết bằng chữ, dùng từ ngữ đời thường có đủ các thanh điệu và vần. Chỉ trả về đoạn văn: không tiêu đề, không dấu ngoặc kép bao quanh, không markdown, không ngoặc vuông.";
     try {
-      const { text } = await quickCall(u, system, lang === "en" ? `Topic: ${topic}` : `Chủ đề: ${topic}`, { maxTokens: 600 });
+      const { text } = await quickCall(u, system, lang === "en" ? `Topic: ${topic}` : `Chủ đề: ${topic}`, { maxTokens: 600, job: "speech-script" });
       // Chỉ nhận một đoạn văn thuần: có định dạng Markdown, danh sách hay nhiều đoạn thì dùng đoạn có sẵn.
       if (/\*\*|^#|\n\s*(?:\d+[.)]|[-*•])\s|\n\s*\n/m.test(text.trim())) throw new Error("not a paragraph");
       const t = text.replace(/^[\s"“”'#*]+|[\s"“”'*]+$/g, "").replace(/\[[^\]]*\]/g, "").replace(/\s+/g, " ").trim();

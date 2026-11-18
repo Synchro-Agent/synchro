@@ -9,7 +9,9 @@ import { adminRole, db, getSetting, isAdmin, setSetting, type UserRow } from "./
 import { vendorOf } from "./router";
 import { familyKey, parseId, versionCmp } from "../shared/modelrules";
 import { providerPriceOf } from "./modelreg";
-import { usageLimitMsg, type UsageAlt } from "./limitmsg";
+import { nextUtcDay, usageLimitMsg, type UsageAlt } from "./limitmsg";
+import { DEFAULT_SHARED, sharedRule, TIERS } from "./auth/sharedkey";
+import type { Tier } from "../shared/modelrules";
 
 export const SESSION_MS = 5 * 3600_000;
 export const WEEK_MS = 7 * 86_400_000;
@@ -53,10 +55,12 @@ const DEFAULT_PRICES: [RegExp, Omit<Price, "src">, Price["src"], string?][] = [
 ];
 
 // ---------------------------------------------------------------- cấu hình của quản trị viên
-// session / weekly: hạn mức USD mặc định cho mọi người (null = không giới hạn). admins: có áp hạn mức cho quản trị viên không.
-export type UsageConfig = { session: number | null; weekly: number | null; admins: boolean; prices: Record<string, { in: number; out: number; cache: number }> };
-const DEFAULT_CONFIG: UsageConfig = { session: 2, weekly: 20, admins: false, prices: {} };
-type Override = { session?: number | null; weekly?: number | null };
+// session / weekly / daily: hạn mức USD mặc định cho mọi người (null = không giới hạn; daily: theo ngày UTC). admins: có áp hạn mức cho quản trị viên không.
+// sharedKey / sharedTop: tài khoản thường có được dùng khóa API chung không, và tới hạng model nào (auth/sharedkey.ts; mặc định tới hạng cân bằng, không Opus).
+export type UsageConfig = { session: number | null; weekly: number | null; daily: number | null; admins: boolean; sharedKey: boolean; sharedTop: Tier; prices: Record<string, { in: number; out: number; cache: number }> };
+const DEFAULT_CONFIG: UsageConfig = { session: 2, weekly: 20, daily: null, admins: false, sharedKey: DEFAULT_SHARED.shared, sharedTop: DEFAULT_SHARED.top, prices: {} };
+type Override = { session?: number | null; weekly?: number | null; daily?: number | null; shared?: boolean; top?: Tier };
+const isTier = (v: unknown): v is Tier => typeof v === "string" && (TIERS as string[]).includes(v);
 
 let ready = false;
 function init() {
@@ -81,7 +85,10 @@ export function setConfig(patch: Partial<UsageConfig>): UsageConfig {
   const c = getConfig();
   if ("session" in patch) c.session = patch.session === null ? null : num(patch.session) ?? c.session;
   if ("weekly" in patch) c.weekly = patch.weekly === null ? null : num(patch.weekly) ?? c.weekly;
+  if ("daily" in patch) c.daily = patch.daily === null ? null : num(patch.daily) ?? c.daily;
   if (typeof patch.admins === "boolean") c.admins = patch.admins;
+  if (typeof patch.sharedKey === "boolean") c.sharedKey = patch.sharedKey;
+  if (isTier(patch.sharedTop)) c.sharedTop = patch.sharedTop;
   if (patch.prices && typeof patch.prices === "object") {
     for (const [k, v] of Object.entries(patch.prices)) {
       if (!/^[a-z0-9-]+\/[\w.:-]{1,120}$/.test(k)) continue;
@@ -227,14 +234,16 @@ export function setCredit(provider: string, o: { amount?: number | null; add?: n
 }
 
 // ---------------------------------------------------------------- trạng thái để hiện vòng tròn và để chặn khi hết hạn mức
-export type Limit = { key: "session" | "weekly"; used: number; limit: number | null; pct: number; resetAt: number | null; active: boolean };
+export type Limit = { key: "session" | "weekly" | "daily"; used: number; limit: number | null; pct: number; resetAt: number | null; active: boolean };
 export type UsageState = { limits: Limit[]; rate: (RateInfo & { pct: number }) | null; admin: boolean; plan: string; credit: Credit | null };
 
 function limitsFor(u: UserRow, cfg: UsageConfig, ov: Override) {
   const exempt = isAdmin(u) && !cfg.admins;
-  const pick = (k: "session" | "weekly") => (k in ov ? ov[k] ?? null : exempt ? null : cfg[k]);
-  return { session: pick("session"), weekly: pick("weekly") };
+  const pick = (k: "session" | "weekly" | "daily") => (k in ov ? ov[k] ?? null : exempt ? null : cfg[k] ?? null);
+  return { session: pick("session"), weekly: pick("weekly"), daily: pick("daily") };
 }
+/** 0 giờ UTC hôm nay: hạn mức theo ngày tính từ đây (cùng mốc với credit giọng AI). */
+const utcDay = (now: number) => nextUtcDay(now) - 86_400_000;
 const sumSince = (uid: string, since: number) => (init().prepare("SELECT COALESCE(SUM(cost), 0) AS c FROM usage_events WHERE user_id = ? AND at >= ?").get(uid, since) as { c: number }).c;
 
 export function usageState(u: UserRow, provider?: string): UsageState {
@@ -244,12 +253,15 @@ export function usageState(u: UserRow, provider?: string): UsageState {
   const lim = limitsFor(u, cfg, w.override);
   const sUsed = w.sessionStart ? sumSince(u.id, w.sessionStart) : 0;
   const wUsed = w.weekStart !== null ? sumSince(u.id, w.weekStart) : 0;
+  // Hạn mức theo ngày chỉ hiện khi đã đặt (không đặt thì không thêm một dòng "Không giới hạn" vào vòng tròn).
+  const dUsed = lim.daily !== null ? sumSince(u.id, utcDay(now)) : 0;
   const mk = (key: Limit["key"], used: number, limit: number | null, resetAt: number | null, active: boolean): Limit =>
     ({ key, used: Math.round(used * 10000) / 10000, limit, pct: limit ? Math.min(100, (used / limit) * 100) : 0, resetAt, active });
   const r = provider ? rates.get(provider) : undefined;
   const rate = r && now - r.at < 10 * 60_000 && r.resetAt > now ? { ...r, pct: Math.min(100, Math.max(0, (1 - r.remaining / r.limit) * 100)) } : null;
   return {
-    limits: [mk("session", sUsed, lim.session, w.sessionStart ? w.sessionStart + SESSION_MS : null, !!w.sessionStart), mk("weekly", wUsed, lim.weekly, w.weekStart !== null ? w.weekStart + WEEK_MS : null, w.weekStart !== null)],
+    limits: [mk("session", sUsed, lim.session, w.sessionStart ? w.sessionStart + SESSION_MS : null, !!w.sessionStart), mk("weekly", wUsed, lim.weekly, w.weekStart !== null ? w.weekStart + WEEK_MS : null, w.weekStart !== null),
+      ...(lim.daily !== null ? [mk("daily", dUsed, lim.daily, nextUtcDay(now), true)] : [])],
     rate, admin: isAdmin(u), plan: "API", credit: provider ? creditOf(provider) : null,
   };
 }
@@ -266,7 +278,10 @@ export function overLimit(u: UserRow, alt: UsageAlt = "pick"): string | null {
 // ---------------------------------------------------------------- dành cho quản trị viên
 export function setOverride(uid: string, ov: Override | null) {
   const clean: Override = {};
-  if (ov) for (const k of ["session", "weekly"] as const) if (k in ov) clean[k] = ov[k] === null ? null : num(ov[k]) ?? undefined;
+  if (ov) for (const k of ["session", "weekly", "daily"] as const) if (k in ov) clean[k] = ov[k] === null ? null : num(ov[k]) ?? undefined;
+  // Khóa chung: cho / chặn riêng người này, hạng model cao nhất riêng (auth/sharedkey.ts đọc lại đúng các khóa này).
+  if (ov && typeof ov.shared === "boolean") clean.shared = ov.shared;
+  if (ov && isTier(ov.top)) clean.top = ov.top;
   init().prepare("INSERT INTO usage_users (user_id, override) VALUES (?, ?) ON CONFLICT(user_id) DO UPDATE SET override = excluded.override")
     .run(uid, ov ? JSON.stringify(Object.fromEntries(Object.entries(clean).filter(([, v]) => v !== undefined))) : null);
 }
@@ -277,7 +292,8 @@ export function adminUsage(users: UserRow[]) {
     const w = windows(u.id, now);
     const st = usageState(u);
     const tot = init().prepare("SELECT COALESCE(SUM(cost),0) AS c, COALESCE(SUM(input+cache_read+cache_write),0) AS i, COALESCE(SUM(output),0) AS o FROM usage_events WHERE user_id = ? AND at >= ?").get(u.id, now - 30 * 86_400_000) as { c: number; i: number; o: number };
-    return { id: u.id, email: u.email, name: u.name, admin: adminRole(u), override: w.override, limits: st.limits, month: { cost: tot.c, input: tot.i, output: tot.o }, effective: limitsFor(u, cfg, w.override) };
+    // shared: quy tắc khóa API chung đang áp cho người này (quản trị viên luôn dùng được mọi model nên null).
+    return { id: u.id, email: u.email, name: u.name, admin: adminRole(u), override: w.override, limits: st.limits, month: { cost: tot.c, input: tot.i, output: tot.o }, effective: limitsFor(u, cfg, w.override), shared: adminRole(u) ? null : sharedRule(u.id) };
   });
 }
 export function removeUserUsage(uid: string) {

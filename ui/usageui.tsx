@@ -12,7 +12,7 @@ import * as I from "./icons";
 import { PageBar, usePage } from "./pager";
 import { BrandLogo, ModelLogo } from "./brands";
 import { vendorOf } from "../shared/vendor";
-import { Bar, CreditBar, ModeTag, PLAN_NOTE, PlanRow, RateRow, VENDOR_COLOR, hasApi, kTok, money, noWindows, refreshUsage, resetText, useUsage, type Limit, type SubUsage, type VendorUsage } from "./usagering";
+import { Bar, CreditBar, ModeTag, PLAN_NOTE, PlanRow, RateRow, VENDOR_COLOR, hasApi, kTok, money, noWindows, refreshUsage, resetText, setupNote, useUsage, type Limit, type SubUsage, type VendorUsage } from "./usagering";
 export * from "./usagering";
 
 // ---------------------------------------------------------------- Cài đặt → Usage
@@ -51,7 +51,7 @@ function VendorCard({ v, turns, cost, go }: { v: VendorUsage; turns: number; cos
           onClick={() => { setBusy(true); refreshUsage(true); setTimeout(() => setBusy(false), 2500); }}>{busy ? <span className="art-spin sm" /> : <I.Retry size={14} />}</button>}
       </div>
       {v.mode === "plan" && (wins.length ? wins.map((w) => <PlanRow key={w.window} w={w} />)
-        : <p className="us-note">{v.sub?.setup ? tr("Antigravity đang chờ bạn hoàn tất bước làm quen lần đầu (Cài đặt → Providers → Gemini).") : v.cli === "agy" || v.cli === "grok" ? noWindows(v.cli, "Synchro chưa đọc được hạn mức của gói này. Bấm nút đọc lại ở góc thẻ để thử lại.") : tr("Gửi một tin nhắn bằng gói này để Synchro đọc hạn mức.")}</p>)}
+        : <p className="us-note">{v.sub?.setup ? setupNote(v.sub) : v.cli === "agy" || v.cli === "grok" ? noWindows(v.cli, "Synchro chưa đọc được hạn mức của gói này. Bấm nút đọc lại ở góc thẻ để thử lại.") : tr("Gửi một tin nhắn bằng gói này để Synchro đọc hạn mức.")}</p>)}
       {v.mode === "api" && <>
         {v.rate && <RateRow r={v.rate} />}
         {v.credit && <CreditBar c={v.credit} />}
@@ -62,6 +62,8 @@ function VendorCard({ v, turns, cost, go }: { v: VendorUsage; turns: number; cos
       ) : (
         <div className="us-vc-f">
           {v.mode === "plan" && v.sub && <span>{tf("Hôm nay: {n} tin nhắn", { n: num(v.sub.turnsToday) })}</span>}
+          {/* Việc phụ chạy trên gói (đặt tên, ghi nhớ, phản biện tự động): tính vào hạn mức của hãng nhưng không phải tin nhắn của người dùng (lỗi 12 của ma trận H1). */}
+          {v.mode === "plan" && !!v.sub?.helpersToday && <span data-tip={tr("Đặt tên đoạn chat, ghi nhớ, phản biện tự động… chạy trên gói của bạn và tính vào hạn mức của hãng. Synchro giới hạn việc nền mỗi ngày và dừng hẳn khi gói gần chạm giới hạn.")}>{tf("{n} việc nền", { n: num(v.sub.helpersToday) })}</span>}
           <span>{tf("30 ngày: {n} lượt", { n: num(turns) })}</span>
           {v.mode === "api" && <span>{tf("Chi phí 30 ngày: {cost}", { cost: money(cost) })}</span>}
         </div>
@@ -222,9 +224,12 @@ export function UsageSettings({ go }: { go?: (t: string) => void }) {
 }
 
 // ---------------------------------------------------------------- Quản trị viên → Usage limits
+type Tier = "fast" | "balanced" | "strong";
+type Override = { session?: number | null; weekly?: number | null; daily?: number | null; shared?: boolean; top?: Tier };
 type AdminData = { apiKeys?: boolean; owner?: boolean;
-  config: { session: number | null; weekly: number | null; admins: boolean; prices: Record<string, { in: number; out: number; cache: number }> };
-  users: { id: string; email: string; name: string; admin: boolean; override: { session?: number | null; weekly?: number | null }; limits: Limit[]; month: { cost: number; input: number; output: number }; effective: { session: number | null; weekly: number | null } }[];
+  config: { session: number | null; weekly: number | null; daily?: number | null; admins: boolean; sharedKey?: boolean; sharedTop?: Tier; prices: Record<string, { in: number; out: number; cache: number }> };
+  users: { id: string; email: string; name: string; admin: boolean; override: Override; limits: Limit[]; month: { cost: number; input: number; output: number };
+    effective: { session: number | null; weekly: number | null; daily?: number | null }; shared?: { shared: boolean; top: Tier } | null }[];
   prices: { model: string; in: number; out: number; cache: number; src: "official" | "estimate" | "custom" }[];
 };
 async function adm(method: string, body?: unknown): Promise<AdminData> {
@@ -241,6 +246,13 @@ function Money({ value, onSave, placeholder = "No limit", label, disabled }: { v
   const save = () => { const n = v.trim() === "" ? null : Number(v.replace(",", ".")); if (n === null || (isFinite(n) && n >= 0)) { if (n !== (value ?? null)) onSave(n); } else setV(value == null ? "" : String(value)); };
   return <span className={`us-money ${disabled ? "off" : ""}`}><i>$</i><input inputMode="decimal" aria-label={label} disabled={disabled} value={v} placeholder={placeholder} onChange={(e) => setV(e.target.value)} onBlur={save} onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()} /></span>;
 }
+
+// Hạng model cao nhất tài khoản thường được chạy trên khóa API chung (server/auth/sharedkey.ts). Mặc định tới hạng cân bằng: không Opus.
+const TIER_LABEL: Record<Tier, string> = { fast: "Fast models only (Haiku, Luna, Flash)", balanced: "Up to balanced (Sonnet, Sol, Pro), no Opus", strong: "All, including Opus and the top models" };
+const TOP_DEFAULT: Record<Tier, string> = { fast: "Models: default (fast only)", balanced: "Models: default (up to balanced)", strong: "Models: default (all)" };
+const TOP_OPT: Record<Tier, string> = { fast: "Models: fast only", balanced: "Models: up to balanced", strong: "Models: all" };
+/** Bỏ một khóa khỏi hạn mức riêng (chọn lại "mặc định"). */
+const without = (o: Override, k: keyof Override): Override => Object.fromEntries(Object.entries(o).filter(([x]) => x !== k)) as Override;
 
 export function UsageAdmin({ say, Toggle }: { say: (m: string) => void; Toggle: (p: { on: boolean; set: (v: boolean) => void; label?: string; disabled?: boolean }) => React.ReactElement }) {
   const [d, setD] = useState<AdminData | null>(null);
@@ -264,7 +276,15 @@ export function UsageAdmin({ say, Toggle }: { say: (m: string) => void; Toggle: 
       <div className="adm-card-h"><b>Default limits</b><span className="d">API cost each person can use. Leave empty for no limit. When a limit is reached, chats pause until it resets.</span></div>
       <div className="adm-perm-row"><div><div className="t">Per session (5 hours)</div><div className="d">Starts with a person&apos;s first message.</div></div><Money label="Per session (5 hours)" disabled={!owner && c.admins} value={c.session} onSave={(v) => patch({ config: { session: v } }, "Session limit saved")} /></div>
       <div className="adm-perm-row"><div><div className="t">Per week</div><div className="d">Resets at the same time every week.</div></div><Money label="Per week" disabled={!owner && c.admins} value={c.weekly} onSave={(v) => patch({ config: { weekly: v } }, "Weekly limit saved")} /></div>
+      <div className="adm-perm-row"><div><div className="t">Per day</div><div className="d">Resets at 00:00 UTC. Caps how much one person can spend in a day.</div></div><Money label="Per day" disabled={!owner && c.admins} value={c.daily ?? null} onSave={(v) => patch({ config: { daily: v } }, "Daily limit saved")} /></div>
       <div className="adm-perm-row"><div><div className="t">Apply to administrators</div><div className="d">Off: administrators have no limit unless you set one for them below.</div></div><Toggle on={c.admins} disabled={!owner} label="Apply to administrators" set={(v) => owner && patch({ config: { admins: v } }, v ? "Limits now apply to administrators" : "Administrators have no limit")} /></div>
+
+      <div className="adm-card-h" style={{ marginTop: 14 }}><b>Shared API key for regular accounts</b><span className="d">Regular accounts can run models on the server&apos;s API key when they have no plan of their own, or when Auto picks it. Every run counts toward the limits above. Models from a plan a person signs in to are never limited here. Administrators can use every model.</span></div>
+      <div className="adm-perm-row"><div><div className="t">Allow the shared key</div><div className="d">Off: regular accounts use only the plans they sign in to, unless you allow someone below.</div></div><Toggle on={c.sharedKey !== false} label="Allow the shared key" set={(v) => patch({ config: { sharedKey: v } }, v ? "Regular accounts can use the shared key" : "Regular accounts can't use the shared key")} /></div>
+      <div className="adm-perm-row"><div><div className="t">Highest model on the shared key</div><div className="d">Top models such as Opus cost far more per message. A person can still use them through their own plan.</div></div>
+        <span className="api-sel"><select aria-label="Highest model on the shared key" value={c.sharedTop ?? "balanced"} onChange={(e) => patch({ config: { sharedTop: e.target.value } }, "Shared key models saved")}>
+          {(["fast", "balanced", "strong"] as const).map((t) => <option key={t} value={t}>{TIER_LABEL[t]}</option>)}
+        </select></span></div>
 
       <div className="adm-card-h" style={{ marginTop: 14 }}><b>People</b><span className="d">Cost in the last 30 days and limits for each account. A custom limit replaces the default.</span></div>
       {d.users.length > 10 && <div className="s-search us-ppl-s"><I.Search size={14} /><input placeholder="Search by name or email" value={pq} onChange={(e) => setPq(e.target.value)} /></div>}
@@ -279,6 +299,17 @@ export function UsageAdmin({ say, Toggle }: { say: (m: string) => void; Toggle: 
               <div className="us-p-l"><small>Session {u.effective.session === null ? "∞" : `${Math.round(s.pct)}%`}</small><Money label="Session" disabled={u.admin && !owner} value={"session" in u.override ? u.override.session : undefined} placeholder={u.effective.session === null ? "Default: none" : `Default: $${u.effective.session}`} onSave={(v) => patch({ user: u.id, override: { ...u.override, session: v } }, "Limit saved")} /></div>
               <div className="us-p-l"><small>Week {u.effective.weekly === null ? "∞" : `${Math.round(w.pct)}%`}</small><Money label="Week" disabled={u.admin && !owner} value={"weekly" in u.override ? u.override.weekly : undefined} placeholder={u.effective.weekly === null ? "Default: none" : `Default: $${u.effective.weekly}`} onSave={(v) => patch({ user: u.id, override: { ...u.override, weekly: v } }, "Limit saved")} /></div>
               {Object.keys(u.override).length > 0 && (owner || !u.admin) && <button className="icon-btn" aria-label="Use default limits" data-tip="Use default limits" onClick={() => patch({ user: u.id, override: null }, "Using default limits")}><I.Retry size={14} /></button>}
+              <div className="us-p-x">
+                <div className="us-p-l"><small>Day {u.effective.daily == null ? "∞" : `${Math.round(u.limits.find((l) => l.key === "daily")?.pct ?? 0)}%`}</small><Money label="Day" disabled={u.admin && !owner} value={"daily" in u.override ? u.override.daily : undefined} placeholder={u.effective.daily == null ? "Default: none" : `Default: $${u.effective.daily}`} onSave={(v) => patch({ user: u.id, override: { ...u.override, daily: v } }, "Limit saved")} /></div>
+                {!u.admin && u.shared && <>
+                  <span className="api-sel"><select aria-label="Shared key for this person" value={"shared" in u.override ? (u.override.shared ? "on" : "off") : ""} onChange={(e) => patch({ user: u.id, override: e.target.value ? { ...u.override, shared: e.target.value === "on" } : without(u.override, "shared") }, "Shared key access saved")}>
+                    <option value="">{c.sharedKey !== false ? "Shared key: default (allowed)" : "Shared key: default (blocked)"}</option><option value="on">Shared key: allowed</option><option value="off">Shared key: blocked</option>
+                  </select></span>
+                  <span className="api-sel"><select aria-label="Highest shared-key model for this person" value={u.override.top ?? ""} onChange={(e) => patch({ user: u.id, override: e.target.value ? { ...u.override, top: e.target.value as Tier } : without(u.override, "top") }, "Shared key models saved")}>
+                    <option value="">{TOP_DEFAULT[c.sharedTop ?? "balanced"]}</option>{(["fast", "balanced", "strong"] as const).map((t) => <option key={t} value={t}>{TOP_OPT[t]}</option>)}
+                  </select></span>
+                </>}
+              </div>
             </div>
           );
         })}

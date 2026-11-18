@@ -600,6 +600,23 @@ Object.assign(EN2VI, {
   "Administrators have no limit": "Quản trị viên không bị giới hạn", "Limit saved": "Đã lưu hạn mức", "Using default limits": "Đang dùng hạn mức mặc định", "Price saved": "Đã lưu giá", "Price reset": "Đã đặt lại giá",
 });
 EN2VI["Usage limits"] = "Giới hạn sử dụng";
+// Hạn mức theo ngày và khóa API chung cho tài khoản thường (Quản trị → Giới hạn sử dụng, server/auth/sharedkey.ts).
+Object.assign(EN2VI, {
+  "Per day": "Mỗi ngày", "Resets at 00:00 UTC. Caps how much one person can spend in a day.": "Đặt lại lúc 0 giờ UTC. Giới hạn số tiền một người dùng được trong một ngày.",
+  "Daily limit saved": "Đã lưu hạn mức ngày", "Day": "Ngày",
+  "Shared API key for regular accounts": "Khóa API chung cho tài khoản thường",
+  "Regular accounts can run models on the server's API key when they have no plan of their own, or when Auto picks it. Every run counts toward the limits above. Models from a plan a person signs in to are never limited here. Administrators can use every model.": "Tài khoản thường chạy được model trên khóa API của máy chủ khi họ chưa có gói riêng, hoặc khi Tự động chọn nó. Mỗi lượt tính vào hạn mức ở trên. Model của gói người đó tự đăng nhập không bao giờ bị giới hạn ở đây. Quản trị viên dùng được mọi model.",
+  "Allow the shared key": "Cho dùng khóa chung", "Off: regular accounts use only the plans they sign in to, unless you allow someone below.": "Tắt: tài khoản thường chỉ dùng gói họ tự đăng nhập, trừ người bạn cho phép bên dưới.",
+  "Regular accounts can use the shared key": "Tài khoản thường dùng được khóa chung", "Regular accounts can't use the shared key": "Tài khoản thường không dùng được khóa chung",
+  "Highest model on the shared key": "Model cao nhất trên khóa chung", "Top models such as Opus cost far more per message. A person can still use them through their own plan.": "Model hàng đầu như Opus tốn hơn nhiều cho mỗi tin nhắn. Người dùng vẫn dùng được chúng qua gói của chính họ.",
+  "Fast models only (Haiku, Luna, Flash)": "Chỉ model nhanh (Haiku, Luna, Flash)", "Up to balanced (Sonnet, Sol, Pro), no Opus": "Tới hạng cân bằng (Sonnet, Sol, Pro), không Opus", "All, including Opus and the top models": "Tất cả, kể cả Opus và model hàng đầu",
+  "Shared key models saved": "Đã lưu model trên khóa chung", "Shared key access saved": "Đã lưu quyền dùng khóa chung",
+  "Shared key for this person": "Khóa chung cho người này", "Highest shared-key model for this person": "Model cao nhất trên khóa chung cho người này",
+  "Shared key: default (allowed)": "Khóa chung: mặc định (cho dùng)", "Shared key: default (blocked)": "Khóa chung: mặc định (chặn)", "Shared key: allowed": "Khóa chung: cho dùng", "Shared key: blocked": "Khóa chung: chặn",
+  "Models: default (fast only)": "Model: mặc định (chỉ nhanh)", "Models: default (up to balanced)": "Model: mặc định (tới cân bằng)", "Models: default (all)": "Model: mặc định (tất cả)",
+  "Models: fast only": "Model: chỉ nhanh", "Models: up to balanced": "Model: tới cân bằng", "Models: all": "Model: tất cả",
+  "Gemini is working. Synchro can't read the plan limits yet because Antigravity's own screen still asks for its first-run choices (color scheme, terms and data sharing).": "Gemini đang chạy được. Synchro chưa đọc được hạn mức của gói vì màn hình riêng của Antigravity còn chờ các lựa chọn lần đầu (bảng màu, điều khoản, chia sẻ dữ liệu).",
+});
 
 // Plugins và trang Tùy chỉnh.
 Object.assign(EN2VI, {

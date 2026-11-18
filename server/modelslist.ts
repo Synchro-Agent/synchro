@@ -1,7 +1,8 @@
 // Danh sách model cho bộ chọn model (dùng chung cho /api/models và lệnh khởi động /api/bootstrap, trang chủ dựng sẵn ở máy chủ).
 // Chỉ những model quản trị viên cho hiện ở màn hình chính, kèm quyền của tài khoản.
 import "server-only";
-import { permsOf, type UserRow } from "./authstore";
+import { isAdmin, permsOf, type UserRow } from "./authstore";
+import { sharedKeyBlock } from "./auth/sharedkey";
 import { ALL } from "../shared/catalog";
 import { catalog, defaultModel, mainModels } from "./providers";
 import { mergedProviders } from "./ai/subs";
@@ -11,7 +12,9 @@ export async function modelsFor(user: UserRow) {
   const cat = await catalog();
   // Model quản trị viên chọn cho màn hình chính mà đã cũ hoặc bị hãng gỡ: bản mới nhất cùng dòng giữ chỗ của nó (bộ chọn model không trống dần).
   const main = withReplacements(mainModels());
-  const providers = cat.map((p) => ({ ...p, models: main.includes(ALL) ? p.models : p.models.filter((m) => main.includes(m.key)) })).filter((p) => p.models.length);
+  // Quy tắc khóa API chung cho tài khoản thường (auth/sharedkey.ts): model bị chặn trên khóa chung không hiện ở bộ chọn (Opus, Fable… khi quản trị viên chỉ cho tới hạng cân bằng).
+  const admin = isAdmin(user);
+  const providers = cat.map((p) => ({ ...p, models: (main.includes(ALL) ? p.models : p.models.filter((m) => main.includes(m.key))).filter((m) => !sharedKeyBlock(user.id, admin, m.key)) })).filter((p) => p.models.length);
   const perms = permsOf(user);
   // Gộp theo hãng: nhóm Claude / ChatGPT / Gemini hiện model của gói người dùng đã đăng nhập (Cài đặt → Providers), hoặc model của
   // khóa API dùng chung khi chưa đăng nhập gói hay người dùng đã đồng ý dùng API thay gói. Model của gói luôn dùng được với chính họ.
@@ -25,7 +28,7 @@ export async function modelsFor(user: UserRow) {
   // replaced: model đã ngừng / đã cũ → bản mới nhất cùng dòng; người đã chọn tay model cũ được chuyển sang và báo một lần (models.ts fitModel).
   const shown = new Set(merged.flatMap((p) => p.models.map((m) => m.key)));
   const replaced = Object.fromEntries(Object.entries(replacements()).filter(([, r]) => shown.has(r.to)));
-  return { providers: merged, replaced, sharedApi: providers.length > 0, default: d && cat.some((p) => p.models.some((m) => m.key === d)) ? d : null, allowed: perms.models.includes(ALL) ? perms.models : [...withReplacements(perms.models), ...subKeys], effort: perms.effort ?? {} };
+  return { providers: merged, replaced, sharedApi: providers.length > 0, default: d && cat.some((p) => p.models.some((m) => m.key === d)) && !sharedKeyBlock(user.id, admin, d) ? d : null, allowed: perms.models.includes(ALL) ? perms.models : [...withReplacements(perms.models), ...subKeys], effort: perms.effort ?? {} };
 }
 export type ModelsPayload = Awaited<ReturnType<typeof modelsFor>>;
 

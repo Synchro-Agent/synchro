@@ -123,6 +123,12 @@ export const OPS_VI2EN: Record<string, string> = {
   "Gói {plan} · {n} lượt": "{plan} plan · {n} call|{plan} plan · {n} calls",
   "Khóa API dùng trước đây: {n} lần gọi · {cost}": "Earlier API key use: {n} call · {cost}|Earlier API key use: {n} calls · {cost}",
   "{n} lần gọi": "{n} call|{n} calls",
+  // Hạn mức theo ngày, vòng trong cho khóa API chung, việc nền trên gói, trạng thái Gemini đã chạy được (gói w10-quota).
+  "Hôm nay · chi phí API": "Today · API cost",
+  "khóa API chung {pct}%": "shared API key {pct}%",
+  "{n} việc nền": "{n} background job|{n} background jobs",
+  "Đặt tên đoạn chat, ghi nhớ, phản biện tự động… chạy trên gói của bạn và tính vào hạn mức của hãng. Synchro giới hạn việc nền mỗi ngày và dừng hẳn khi gói gần chạm giới hạn.": "Chat titles, memory, automatic reviews and similar jobs run on your plan and count toward the provider's limits. Synchro caps background jobs each day and stops them entirely when the plan is close to its limit.",
+  "Gemini đang chạy bình thường. Synchro chưa đọc được hạn mức của gói vì màn hình làm quen lần đầu của Antigravity (bảng màu, điều khoản) chưa xong; xong bước đó ở Cài đặt → Providers → Gemini thì hạn mức sẽ hiện.": "Gemini is working normally. Synchro can't read the plan limits yet because Antigravity's first-run screen (color scheme, terms) isn't finished; finish it in Settings → Providers → Gemini and the limits will show.",
   "API {name} · token mỗi phút": "{name} API · tokens per minute",
   "Đặt lại sau {secs}s": "Resets in {secs}s",
   "Hạn mức tùy gói của tài khoản Grok và hồi dần theo thời gian; hết hạn mức thì Synchro hỏi bạn trước khi dùng khóa API.": "Limits depend on your Grok plan and refresh over time. When you hit one, Synchro asks before using an API key.",

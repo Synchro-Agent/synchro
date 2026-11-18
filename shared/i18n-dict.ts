@@ -595,6 +595,9 @@ Object.assign(VI2EN, {
   "Mở Cài đặt → Providers": "Open Settings → Providers",
   "Quản trị viên chưa cho phép tài khoản của bạn dùng model này": "The administrator hasn't allowed your account to use this model",
   "Quản trị viên chưa cho phép tài khoản của bạn dùng model này.": "The administrator hasn't allowed your account to use this model.",
+  // Quy tắc khóa API chung cho tài khoản thường (server/auth/sharedkey.ts).
+  "Quản trị viên chưa cho tài khoản của bạn dùng khóa API chung của máy chủ. Model của gói bạn tự đăng nhập (Cài đặt → Providers) vẫn dùng được.": "The administrator hasn't allowed your account to use the server's shared API key. Models from a plan you sign in to yourself (Settings → Providers) still work.",
+  "Model này chỉ chạy được bằng gói bạn tự đăng nhập: trên khóa API chung của máy chủ, quản trị viên chưa cho tài khoản thường dùng model hạng này. Hãy chọn Tự động hoặc một model nhẹ hơn.": "This model only runs on a plan you sign in to yourself: on the server's shared API key, the administrator hasn't allowed regular accounts to use models of this tier. Choose Auto or a lighter model.",
   "Synchro chưa được kết nối với model nào. Quản trị viên cần nhập khóa API ở Cài đặt → Providers.": "Synchro isn't connected to any model yet. An administrator needs to add an API key in Settings → Providers.",
   "Model này không còn dùng được (khóa API của nhà cung cấp đã bị gỡ). Hãy chọn model khác.": "This model is no longer available (the provider's API key was removed). Please choose another model.",
   "Tương thích OpenAI": "OpenAI-compatible", "Biến môi trường máy chủ": "Server environment", "Máy chủ (biến môi trường)": "Server (environment)", "Synchro (thử nghiệm)": "Synchro (test)",
@@ -1875,6 +1878,7 @@ RULES_EN.unshift(
   [/^Tài khoản đã dùng hết hạn mức (\d+) ảnh AI mỗi giờ\. Hạn mức hồi lại sau khoảng (\d+) phút\. (.+)$/, (m) => `This account has used its limit of ${m[1]} AI images per hour. It resets in about ${m[2]} min. ${VI2EN[m[3]] ?? m[3]}`],
   [/^Bạn đã dùng hết giới hạn của phiên này \(phiên 5 giờ\)\. Phiên mới bắt đầu sau (.+?)\. (Trong lúc chờ.+)$/, (m) => `You've used this session's limit (5-hour session). A new session starts in ${limitDurEn(m[1])}. ${VI2EN[m[2]] ?? m[2]}`],
   [/^Bạn đã dùng hết giới hạn hằng tuần\. Giới hạn được đặt lại sau (.+?)\. (Trong lúc chờ.+)$/, (m) => `You've used your weekly limit. It resets in ${limitDurEn(m[1])}. ${VI2EN[m[2]] ?? m[2]}`],
+  [/^Bạn đã dùng hết giới hạn chi phí API của hôm nay\. Giới hạn hồi lại sau (.+?) \(0 giờ UTC\)\. (Trong lúc chờ.+)$/, (m) => `You've used today's API cost limit. It resets in ${limitDurEn(m[1])} (00:00 UTC). ${VI2EN[m[2]] ?? m[2]}`],
   [/^(?:Giọng AI đã hết hạn mức chung của cả máy chủ hôm nay|Bạn đã dùng hết hạn mức giọng AI của hôm nay \((\d+) credit\))\. Hạn mức hồi lại sau (.+?) \(0 giờ UTC\)\. (.+)$/,
     (m) => `${m[1] ? `You've used today's AI voice limit (${m[1]} credits).` : "The AI voice has reached the server's shared limit for today."} It resets in ${limitDurEn(m[2])} (00:00 UTC). ${VI2EN[m[3]] ?? m[3]}`],
 );

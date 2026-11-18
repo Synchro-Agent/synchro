@@ -22,6 +22,7 @@ import type { Attachment, RateWindow, TurnRequest, WebSource } from "./engine";
 import { friendlyError, redact, retryAfterMs } from "./errors";
 import { agyNativeImages, nativeStamp, removeFile, type ImgFile } from "./imagefiles";
 import { stallOf, waitText, watchLimits, type WatchState } from "./watchdog";
+import { helperVerdict, JOB_VIA } from "./helperquota";
 import { codexServerRpc, prestartCodexServer } from "./codex_server";
 import { dropLiveBridge } from "../mcpbridge";
 
@@ -270,7 +271,9 @@ export const forgetAllSubModels = (cli: Cli) => { for (const k of [...g.models.k
 export type WindowKind = "session" | "weekly" | "other";
 export type PlanWindow = RateWindow & { label: string; kind: WindowKind; group?: string; idle?: boolean };
 /** setup: CLI đang chờ người dùng hoàn tất bước làm quen (agy) nên chưa đọc được hạn mức. */
-export type SubUsage = { cli: Cli; name: string; plan: string | null; windows: PlanWindow[]; turnsToday: number; note: string | null; credits: string | null; at: number | null; setup?: boolean };
+/** turnsToday: tin nhắn của chính người dùng hôm nay; helpersToday: việc phụ chạy trên gói hôm nay (đặt tên, ghi nhớ, phản biện tự động…).
+ *  ranAt: lần gần nhất gói chạy được một lượt (agy đã chạy được thì "chờ bước làm quen" chỉ còn là chuyện chưa đọc được bảng hạn mức). */
+export type SubUsage = { cli: Cli; name: string; plan: string | null; windows: PlanWindow[]; turnsToday: number; helpersToday: number; note: string | null; credits: string | null; at: number | null; setup?: boolean; ranAt?: number | null };
 
 const WINDOW_NAME: Record<string, string> = {
   five_hour: "Current session", seven_day: "Weekly · all models", seven_day_opus: "Weekly · Opus", seven_day_sonnet: "Weekly · Sonnet",
@@ -470,10 +473,27 @@ export function forgetPlan(cli: Cli, uid: string) {
   sessDb().prepare("DELETE FROM engine_api_optin WHERE user_id = ? AND cli = ?").run(uid, cli);
 }
 
-const turnsToday = (uid: string, cli: Cli) => {
-  const since = new Date(); since.setHours(0, 0, 0, 0);
-  return (sessDb().prepare("SELECT COUNT(*) AS n FROM engine_turns WHERE user_id = ? AND cli = ? AND at >= ?").get(uid, cli, since.getTime()) as { n: number }).n;
-};
+// "Tin nhắn hôm nay" chỉ đếm lượt của chính người dùng (lỗi 12 của ma trận H1: 61 "tin nhắn" sau 9 tin người dùng gửi, phần còn lại là việc phụ).
+// Việc phụ ghi via = "job:<tên>", lượt làm ấm phiên ghi "warm" (helperquota.ts); đếm riêng thành helpersToday.
+const dayStart = () => { const since = new Date(); since.setHours(0, 0, 0, 0); return since.getTime(); };
+const USER_TURN = "via <> 'warm' AND via NOT LIKE 'job:%'";
+const turnsToday = (uid: string, cli: Cli) =>
+  (sessDb().prepare(`SELECT COUNT(*) AS n FROM engine_turns WHERE user_id = ? AND cli = ? AND at >= ? AND ${USER_TURN}`).get(uid, cli, dayStart()) as { n: number }).n;
+const helpersToday = (uid: string, cli: Cli) =>
+  (sessDb().prepare(`SELECT COUNT(*) AS n FROM engine_turns WHERE user_id = ? AND cli = ? AND at >= ? AND NOT (${USER_TURN})`).get(uid, cli, dayStart()) as { n: number }).n;
+/** Lượt của chính người dùng hôm nay trên mọi gói (ngân sách việc phụ tính theo đây). */
+const userTurnsAll = (uid: string) =>
+  (sessDb().prepare(`SELECT COUNT(*) AS n FROM engine_turns WHERE user_id = ? AND at >= ? AND ${USER_TURN}`).get(uid, dayStart()) as { n: number }).n;
+/** Hôm nay trên gói này: tin nhắn của người dùng và việc phụ (Cài đặt → Usage, kiểm thử helper-quota). */
+export const todayCounts = (uid: string, cli: Cli) => ({ turns: turnsToday(uid, cli), helpers: helpersToday(uid, cli) });
+/** Lượt gần nhất chạy xong bằng gói này (mọi loại), hoặc null: Gemini đã chạy được thì không còn là "đang chờ bước làm quen". */
+const lastRun = (uid: string, cli: Cli) => (sessDb().prepare("SELECT MAX(at) AS at FROM engine_turns WHERE user_id = ? AND cli = ?").get(uid, cli) as { at: number | null }).at ?? null;
+
+/** Việc phụ tự động (helperquota.ts THROTTLED_JOBS) còn chạy được trên gói này hôm nay không: chưa gần chạm hạn mức, chưa hết ngân sách việc phụ. */
+export function helperRoom(uid: string, cli: Cli, now = Date.now()) {
+  const windows = (g.limits.get(`${cli}:${uid}`)?.windows ?? []).map((w) => project({ ...w, label: "", kind: "kind" in w ? (w as PlanWindow).kind : kindOf(w.window) } as PlanWindow, now));
+  return helperVerdict({ helpers: helpersToday(uid, cli), userTurns: userTurnsAll(uid), windows, blockedUntil: planBlock(cli, uid) }, now);
+}
 
 const label = (w: RateWindow) => WINDOW_NAME[w.window] ?? w.window.replace(/_/g, " ");
 const NOTE: Record<Cli, string> = {
@@ -519,8 +539,10 @@ export async function subUsage(u: UserRow, cli: Cli, o: { fresh?: boolean; idle?
   if (block && block > now && !windows.some((w) => w.status === "rejected" || (w.usedPct ?? 0) >= 100))
     windows.unshift({ window: "plan_limit", label: "Plan limit", kind: "session", usedPct: 100, resetsAt: block, status: "rejected" });
   const plan = hit?.plan ? hit.plan.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase()) : null;
-  return { cli, name: SUB[cli].name, plan, windows, turnsToday: turnsToday(u.id, cli), credits: hit?.credits ?? null, at: hit?.at ?? null, setup: !!hit?.setup,
-    note: hit?.setup ? "Antigravity is waiting for you to finish its first-run setup (color scheme, terms and data sharing) before it shows plan limits."
+  const ranAt = lastRun(u.id, cli);
+  return { cli, name: SUB[cli].name, plan, windows, ...(({ turns, helpers }) => ({ turnsToday: turns, helpersToday: helpers }))(todayCounts(u.id, cli)), credits: hit?.credits ?? null, at: hit?.at ?? null, setup: !!hit?.setup, ranAt,
+    note: hit?.setup ? (ranAt ? "Gemini is working. Synchro can't read the plan limits yet because Antigravity's own screen still asks for its first-run choices (color scheme, terms and data sharing)."
+      : "Antigravity is waiting for you to finish its first-run setup (color scheme, terms and data sharing) before it shows plan limits.")
       : windows.length || cli === "grok" ? NOTE[cli] : cli === "agy" ? `${NOTE.agy} Synchro could not read the quota panel yet.` : `Send a message with this plan to see its limits. ${NOTE[cli]}` };
 }
 
@@ -683,6 +705,8 @@ async function primeWarm(key: string, base: TurnRequest, uid: string) {
   if (priming.has(key)) return;
   // Gói sắp chạm giới hạn: không tiêu thêm lượt để làm ấm.
   if ((g.limits.get(`claude:${uid}`)?.windows ?? []).some((w) => (w.usedPct ?? 0) >= 80)) return;
+  // Lượt làm ấm cũng là một lượt của gói (ghi "warm"): chung ngân sách việc phụ của hôm nay (helperquota.ts).
+  if (!helperRoom(uid, "claude").ok) return;
   priming.add(key);
   try {
     let id: string | null = null, ok = false;
@@ -925,7 +949,8 @@ async function runTurn(o: SubTurn): Promise<SubResult> {
   clearRelogin(cli, o.user.id);
   // Câu trả lời ghi link mà CLI không báo nguồn có cấu trúc (Antigravity, Codex): lấy nguồn từ chính câu trả lời.
   if (o.web && (searched || cli === "agy") && !seenSrc.size) addSources(linksIn(final ?? text));
-  d.prepare("INSERT INTO engine_turns (user_id, cli, at, via, model) VALUES (?, ?, ?, ?, ?)").run(o.user.id, cli, Date.now(), via ?? cli, o.model);
+  // Việc phụ ghi "job:<tên>" để "tin nhắn hôm nay" chỉ đếm lượt của người dùng và ngân sách việc phụ đếm đúng (helperquota.ts).
+  d.prepare("INSERT INTO engine_turns (user_id, cli, at, via, model) VALUES (?, ?, ?, ?, ?)").run(o.user.id, cli, Date.now(), o.job ? `${JOB_VIA}${o.job}` : via ?? cli, o.model);
   if (conv && session) {
     // Phiên nối tiếp giữ dấu "đã gọi công cụ" (phiên cũ chưa có dấu: coi như có); phiên mới tính từ lượt này.
     const tooled = searched || (o.mcp?.alive?.() ?? 0) > T0 || (resume ? prev?.tooled !== 0 : false);

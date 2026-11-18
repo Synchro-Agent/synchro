@@ -3,7 +3,7 @@ import "server-only";
 // (gói CLI, khóa API, đường nhanh, đổi model khi lỗi), khởi động sẵn (prewarmChat), chọn skill / studio / thư viện cho lượt (skillSet).
 import { enabledSkills, recordUse, type Skill } from "../skillstore";
 import { skillsPrompt, skillTools, type ToolRun } from "../skillruntime";
-import { can, canModel, limit, permsOf, type UserRow } from "../authstore";
+import { can, canModel, limit, modelDeniedMsg, permsOf, type UserRow } from "../authstore";
 import { clampEffort, connPolicy, effortCap, isEffort, legacyModel } from "../../shared/catalog";
 import { catalog, mainModels, pickDefault, resolveModel } from "../providers";
 import { ConnectorSession, connectorsPrompt, listConnectors } from "../connectors";
@@ -680,7 +680,7 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
     } finally { bridge?.close(); sess?.close(); if (x) releaseBrowser(c.user.id, x.bctx); }
   }
   if (!model) return Response.json({ error: "Synchro chưa được kết nối với model nào. Quản trị viên cần nhập khóa API ở Cài đặt → Providers." }, { status: 503 });
-  if (!canModel(c.user, model)) return Response.json({ error: "Quản trị viên chưa cho phép tài khoản của bạn dùng model này." }, { status: 403 });
+  if (!canModel(c.user, model)) return Response.json({ error: modelDeniedMsg(c.user, model) }, { status: 403 });
   if (untested(model)) return Response.json({ error: "Model này mới ra và Synchro chưa thử xong nên chưa dùng được. Hãy chọn model khác." }, { status: 400 });
   const t = await resolveModel(model);
   if (!t) return Response.json({ error: "Model này không còn dùng được (khóa API của nhà cung cấp đã bị gỡ). Hãy chọn model khác." }, { status: 400 });

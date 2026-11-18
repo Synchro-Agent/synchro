@@ -9,12 +9,13 @@ import { getLang, tf, tr, trc } from "./i18n";
 import { resetAt } from "./resetfmt";
 import * as I from "./icons";
 
-export type Limit = { key: "session" | "weekly"; used: number; limit: number | null; pct: number; resetAt: number | null; active: boolean };
+export type Limit = { key: "session" | "weekly" | "daily"; used: number; limit: number | null; pct: number; resetAt: number | null; active: boolean };
 export type Rate = { provider: string; limit: number; remaining: number; resetAt: number; pct: number };
 export type Credit = { provider: string; amount: number; since: number; spent: number; remaining: number; pct: number };
 // Hạn mức của gói subscription (model "sub-…"): cửa sổ phiên 5 giờ / tuần do CLI của hãng báo về (xem server/ai/subs.ts).
 export type PlanWindow = { window: string; usedPct?: number; resetsAt?: number; status?: string; label: string; kind: "session" | "weekly" | "other"; group?: string; idle?: boolean };
-export type SubUsage = { cli: "claude" | "codex" | "agy" | "grok"; name: string; plan: string | null; windows: PlanWindow[]; turnsToday: number; note: string | null; credits: string | null; at: number | null; setup?: boolean };
+/** turnsToday: tin nhắn của chính người dùng hôm nay; helpersToday: việc phụ (đặt tên, ghi nhớ, phản biện tự động…) đã chạy trên gói hôm nay. ranAt: lần gần nhất gói chạy được. */
+export type SubUsage = { cli: "claude" | "codex" | "agy" | "grok"; name: string; plan: string | null; windows: PlanWindow[]; turnsToday: number; helpersToday?: number; note: string | null; credits: string | null; at: number | null; setup?: boolean; ranAt?: number | null };
 /** Một hãng trong chế độ Tự động / Cài đặt → Usage: Synchro tự nhận đang chạy bằng gói đã đăng nhập (plan) hay khóa API. */
 /** cli: null khi hãng không có gói đăng nhập (DeepSeek chỉ có khóa API). */
 export type VendorUsage = { vendor: "anthropic" | "openai" | "google" | "xai" | "deepseek"; cli: SubUsage["cli"] | null; name: string; models: number; mode: "plan" | "api" | "none"; provider: string | null;
@@ -61,7 +62,7 @@ export function resetText(t: number | null, active = true) {
   return resetAt(t, getLang());
 }
 const level = (p: number) => (p >= 90 ? "hot" : p >= 70 ? "warn" : "");
-const LABEL = { session: "Giới hạn phiên", weekly: "Hằng tuần · mọi model" } as const;
+const LABEL = { session: "Giới hạn phiên", weekly: "Hằng tuần · mọi model", daily: "Hôm nay · chi phí API" } as const;
 
 // Biểu tượng mức dùng: giọt nước trong vòng tròn (giống Claude).
 export function UsageIcon({ size = 16 }: { size?: number }) {
@@ -190,6 +191,11 @@ const planName = (sub?: SubUsage) => (sub?.plan ? tf("Gói {plan}", { plan: sub.
 const vendorPct = (v: VendorUsage) => v.mode === "plan" ? Math.max(0, ...(v.sub?.windows ?? []).map((w) => (w.status === "rejected" ? 100 : w.usedPct ?? 0)))
   : v.mode === "api" ? Math.max(0, v.rate?.pct ?? 0, v.credit?.pct ?? 0) : 0;
 export const hasApi = (st: UsageState | null) => !!st?.vendors?.some((v) => v.mode === "api");
+/** Antigravity còn màn hình làm quen lần đầu nên chưa đọc được bảng hạn mức. Gemini đã chạy được (ranAt) thì nói đúng như vậy: chat vẫn chạy, chỉ thiếu số hạn mức
+ *  (lỗi 11 của ma trận H1: "đang chờ bước làm quen" trong khi Gemini vừa trả lời 3 lần). */
+export const setupNote = (sub: SubUsage, short = false) => sub.ranAt
+  ? tr("Gemini đang chạy bình thường. Synchro chưa đọc được hạn mức của gói vì màn hình làm quen lần đầu của Antigravity (bảng màu, điều khoản) chưa xong; xong bước đó ở Cài đặt → Providers → Gemini thì hạn mức sẽ hiện.")
+  : short ? tr("Antigravity đang chờ bạn hoàn tất bước làm quen lần đầu.") : tr("Antigravity đang chờ bạn hoàn tất bước làm quen lần đầu (bảng màu, điều khoản, chia sẻ dữ liệu). Xem Cài đặt → Providers → Gemini.");
 
 /** Huy hiệu cách hãng đang chạy: gói đã đăng nhập, khóa API, hoặc chưa kết nối. */
 export function ModeTag({ v }: { v: VendorUsage }) {
@@ -205,7 +211,7 @@ function VendorBlock({ v }: { v: VendorUsage }) {
     <div className="us-v">
       <div className="us-v-h"><i style={{ background: VENDOR_COLOR[v.vendor] }} /><b data-notr>{v.name}</b><ModeTag v={v} /></div>
       {v.mode === "plan" ? (wins.length ? wins.filter((w) => w.kind !== "other").map((w) => <PlanRow key={w.window} w={w} />)
-        : <p className="us-note">{v.sub?.setup ? tr("Antigravity đang chờ bạn hoàn tất bước làm quen lần đầu.") : noWindows(v.cli, "Synchro chưa đọc được hạn mức của gói này.")}</p>)
+        : <p className="us-note">{v.sub?.setup ? setupNote(v.sub, true) : noWindows(v.cli, "Synchro chưa đọc được hạn mức của gói này.")}</p>)
         : <>
           {v.rate && <RateRow r={v.rate} />}
           {v.credit && <CreditBar c={v.credit} />}
@@ -237,14 +243,17 @@ export function UsageRing({ model, extra, onDetails, up = true }: { model?: stri
   const pct = auto ? Math.max(0, ...live.map(vendorPct), ...(hasApi(st) ? limited.map((l) => l.pct) : []))
     : sub ? Math.max(0, ...sub.windows.map((w) => (w.status === "rejected" ? 100 : w.usedPct ?? 0)))
     : Math.max(0, ...limited.map((l) => l.pct), st?.rate?.pct ?? 0, st?.credit?.pct ?? 0);
-  const r = 6.4, c = 2 * Math.PI * r;
-  const label = st ? `${tr("Mức dùng")}: ${Math.round(pct)}%` : tr("Mức dùng");
+  // Tự động có gói và đã chạy bằng khóa API chung trong phiên / tuần / ngày đang tính: vòng trong nhỏ cho phần hạn mức chi phí API đã dùng,
+  // để người đang nhìn % của gói vẫn thấy lượt vừa tiêu hạn mức API (lỗi 4 của ma trận H1: vòng hiện 48% ChatGPT, 22% API chỉ thấy khi mở ra).
+  const apiPct = auto && hasApi(st) && live.some((v) => v.mode === "plan") ? Math.max(0, ...limited.filter((l) => l.active && l.used > 0).map((l) => l.pct)) : 0;
+  const r = 6.4, c = 2 * Math.PI * r, ri = 3.4, ci = 2 * Math.PI * ri;
+  const label = st ? `${tr("Mức dùng")}: ${Math.round(pct)}%${apiPct > 0 ? ` · ${tf("khóa API chung {pct}%", { pct: Math.round(apiPct) })}` : ""}` : tr("Mức dùng");
   const head = auto ? tr("Mức dùng · Tự động chọn hãng")
     : sub ? `${tr("Giới hạn gói")} · ${sub.name}${sub.plan ? ` ${sub.plan}` : ""}` : `${tr("Giới hạn sử dụng")} · ${trc("Khóa API", "mức dùng")}`;
   return (
     <div className="us-wrap">
       <button className={`us-ring ${level(pct)} ${open ? "on" : ""}`} onClick={() => setOpen(!open)} aria-label={label} data-tip={label} aria-expanded={open}>
-        <svg width="18" height="18" viewBox="0 0 16 16"><circle cx="8" cy="8" r={r} fill="none" strokeWidth="1.8" className="bg" /><circle cx="8" cy="8" r={r} fill="none" strokeWidth="1.8" className="fg" strokeDasharray={`${(c * Math.max(pct, 0.01)) / 100} ${c}`} transform="rotate(-90 8 8)" strokeLinecap="round" /></svg>{st && <span className="us-ring-n">{Math.round(pct)}%</span>}
+        <svg width="18" height="18" viewBox="0 0 16 16"><circle cx="8" cy="8" r={r} fill="none" strokeWidth="1.8" className="bg" /><circle cx="8" cy="8" r={r} fill="none" strokeWidth="1.8" className="fg" strokeDasharray={`${(c * Math.max(pct, 0.01)) / 100} ${c}`} transform="rotate(-90 8 8)" strokeLinecap="round" />{apiPct > 0 && <circle cx="8" cy="8" r={ri} fill="none" strokeWidth="1.6" className={`api ${level(apiPct)}`} strokeDasharray={`${(ci * Math.max(apiPct, 4)) / 100} ${ci}`} transform="rotate(-90 8 8)" strokeLinecap="round" />}</svg>{st && <span className="us-ring-n">{Math.round(pct)}%</span>}
       </button>
       <Menu open={open} role="dialog" className={`us-pop ${up ? "up" : "down"}`}>
         <div className="menu-scroll gl-scroll">
@@ -258,7 +267,7 @@ export function UsageRing({ model, extra, onDetails, up = true }: { model?: stri
         ) : sub ? (
           <>
             {sub.windows.map((w) => <PlanRow key={w.window} w={w} />)}
-            {sub.setup && <p className="us-note">{tr("Antigravity đang chờ bạn hoàn tất bước làm quen lần đầu (bảng màu, điều khoản, chia sẻ dữ liệu). Xem Cài đặt → Providers → Gemini.")}</p>}
+            {sub.setup && <p className="us-note">{setupNote(sub)}</p>}
             {!sub.windows.length && !sub.setup && <p className="us-note">{noWindows(sub.cli, "Synchro chưa đọc được hạn mức của gói.")}{sub.turnsToday ? ` ${tf("Hôm nay: {n} tin nhắn.", { n: sub.turnsToday })}` : ""}</p>}
             {sub.credits && <p className="us-note" data-notr>{sub.credits}</p>}
             <p className="us-note">{tr(PLAN_NOTE[sub.cli])}</p>

@@ -24,10 +24,11 @@ export const USAGE_ALT_TASK = "Trong lúc chờ, chat bằng model của gói b�
 const USAGE_ALTS: Record<UsageAlt, string> = { pick: USAGE_ALT, plans: USAGE_ALT_PLANS, code: USAGE_ALT_CODE, task: USAGE_ALT_TASK };
 
 /** Hết hạn mức chi phí API của Synchro (usage.ts): phiên 5 giờ hoặc tuần. alt: chỗ người dùng gặp lời báo (xem UsageAlt). */
-export function usageLimitMsg(key: "session" | "weekly", resetAt: number, now = Date.now(), alt: UsageAlt = "pick"): string {
+export function usageLimitMsg(key: "session" | "weekly" | "daily", resetAt: number, now = Date.now(), alt: UsageAlt = "pick"): string {
   const t = waitVi(resetAt - now), tail = USAGE_ALTS[alt];
   return key === "session"
     ? `Bạn đã dùng hết giới hạn của phiên này (phiên 5 giờ). Phiên mới bắt đầu sau ${t}. ${tail}`
+    : key === "daily" ? `Bạn đã dùng hết giới hạn chi phí API của hôm nay. Giới hạn hồi lại sau ${t} (0 giờ UTC). ${tail}`
     : `Bạn đã dùng hết giới hạn hằng tuần. Giới hạn được đặt lại sau ${t}. ${tail}`;
 }
 
