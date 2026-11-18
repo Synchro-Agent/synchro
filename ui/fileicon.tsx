@@ -45,7 +45,7 @@ export function FileCard({ name, onRemove, onContextMenu, onOpen, folder, count,
         {img || pdf ? <img src={thumb} alt="" draggable={false} /> : (
           <span className="ft-body">
             <span className="ft-name"><bdi data-notr>{name}</bdi></span>
-            {dir ? n !== undefined && <span className="ft-sub">{n} tệp</span> : st?.state === "uploading" && st.note ? <span className="ft-sub ft-note">{tr(st.note)}</span> : st?.lines ? <span className="ft-sub">{st.lines} dòng</span> : null}
+            {dir ? n !== undefined && <span className="ft-sub">{n} tệp</span> : st?.state === "uploading" && st.note ? <span className="ft-sub ft-note" title={tr(st.note)}>{tr(st.note)}</span> : st?.lines ? <span className="ft-sub">{st.lines} dòng</span> : null}
             <span className="ft-ext" data-notr>{dir ? <I.Folder size={12} /> : (ext || "file").toUpperCase().slice(0, 6)}</span>
           </span>
         )}
