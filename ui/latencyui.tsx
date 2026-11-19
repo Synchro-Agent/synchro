@@ -5,6 +5,7 @@ import "./styles/settings.css";
 import { useState } from "react";
 import { fmtDate } from "./adminui";
 import { locale, tf, tr, trc } from "./i18n";
+import { Dropdown } from "./listbox";
 
 type Row = { stage: string; provider: string; n: number; p50: number | null; p95: number | null };
 export type Latency = { stages: string[]; turns: number; recent: Row[]; daily: Row[]; week: Row[]; last: { at: number; provider: string | null; model: string | null; status: number | null; totalMs: number; slowest: [string, number] | null; stages?: Record<string, number> }[] };
@@ -35,7 +36,7 @@ export function LatencyTable({ data }: { data: Latency }) {
   return <>
     <div className="lat-bar">
       <div className="group" role="group" aria-label="Period">{(Object.keys(PERIODS) as (keyof typeof PERIODS)[]).map((k) => <button key={k} className={period === k ? "on" : ""} aria-pressed={period === k} onClick={() => setPeriod(k)}>{PERIODS[k]}</button>)}</div>
-      <span className="api-sel lat-sel"><select aria-label="Provider" value={pick} onChange={(e) => setProv(e.target.value)} data-notr>{provs.map((p) => <option key={p} value={p}>{p === "all" ? trc("Mọi hãng", "độ trễ") : provName(p)}</option>)}</select></span>
+      <Dropdown label="Provider" className="lat-sel" align="end" notr value={pick} onChange={setProv} options={provs.map((p) => [p, p === "all" ? trc("Mọi hãng", "độ trễ") : provName(p)] as const)} />
     </div>
     {!byStage.size ? <div className="d" style={{ padding: "8px 0" }}>No replies measured in this period yet.</div> : (
       <div className="lat-wrap"><table className="tbl lat-tbl">

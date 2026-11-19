@@ -2,6 +2,7 @@
 import "./styles/skills.css";
 // Ứng dụng nội bộ: nút Xuất bản trên khung artifact, danh sách ứng dụng (trang Artifacts → Ứng dụng) và trang chạy ứng dụng /apps/<id>.
 import { useEffect, useRef, useState } from "react";
+import { isAway } from "./clickaway";
 import { apiFetch, statusText } from "./apierr";
 import * as I from "./icons";
 import { locale, tr } from "./i18n";
@@ -30,7 +31,7 @@ export function PublishButton({ conv, art, say }: { conv: string; art: ArtVersio
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!open) return;
-    const h = (e: MouseEvent) => { if (!ref.current?.contains(e.target as Node)) setOpen(false); };
+    const h = (e: MouseEvent) => { if (isAway(ref.current, e.target)) setOpen(false); };
     document.addEventListener("mousedown", h); return () => document.removeEventListener("mousedown", h);
   }, [open]);
   // Đã xuất bản artifact này chưa: cùng đoạn chat + identifier thì cập nhật đúng ứng dụng cũ (giữ nguyên địa chỉ).

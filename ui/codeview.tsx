@@ -2,6 +2,7 @@
 
 import "./styles/codeview.css";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { isAway } from "./clickaway";
 import { MODES, PRESETS } from "./codeconst";
 export { MODES, PRESETS };
 import * as I from "./icons";
@@ -115,7 +116,7 @@ function useClickAway(fn: () => void) {
   const ref = useRef<HTMLDivElement>(null);
   const f = useRef(fn); f.current = fn;
   useEffect(() => {
-    const h = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as HTMLElement)) f.current(); };
+    const h = (e: MouseEvent) => { if (ref.current && isAway(ref.current, e.target)) f.current(); };
     document.addEventListener("mousedown", h);
     return () => document.removeEventListener("mousedown", h);
   }, []);

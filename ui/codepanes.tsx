@@ -4,6 +4,7 @@
 import { tr } from "./i18n";
 import { termDown } from "./apierr";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { isAway } from "./clickaway";
 import dynamic from "next/dynamic";
 import "./styles/vendor/xterm.css";
 import * as I from "./icons";
@@ -444,7 +445,7 @@ export function BrowserPane({ sid, ticket, visible, say, onClose, onExpand, expa
   }, [isNew, visible, active]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!menu) return;
-    const h = (e: MouseEvent) => { if (!menuRef.current?.contains(e.target as Node)) setMenu(false); };
+    const h = (e: MouseEvent) => { if (isAway(menuRef.current, e.target)) setMenu(false); };
     document.addEventListener("mousedown", h);
     return () => document.removeEventListener("mousedown", h);
   }, [menu]);

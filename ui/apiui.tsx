@@ -3,6 +3,7 @@
 // Khóa gửi lên máy chủ một lần khi lưu; máy chủ kiểm tra với API của hãng, mã hóa rồi lưu, và chỉ trả về dạng che (sk-ant…a1b2).
 import { useEffect, useMemo, useState } from "react";
 import * as I from "./icons";
+import { Dropdown } from "./listbox";
 import { useApp } from "./store";
 import { call, ago } from "./adminui";
 import { refreshModels } from "./models";
@@ -65,10 +66,7 @@ function KeyForm({ p, busy, err, ws, onCancel, onSave }: { p: ApiProvider; busy:
             <>
               <label className="api-lbl" htmlFor={`api-ws-${p.id}`}>Workspace<span className="d"> · only for keys not tied to one workspace</span></label>
               {ws.list.length > 0
-                ? <select id={`api-ws-${p.id}`} className="field" value={wid} onChange={(e) => setWid(e.target.value)}>
-                    <option value="">Choose a workspace</option>
-                    {ws.list.map((w) => <option key={w.id} value={w.id} data-notr>{w.name}</option>)}
-                  </select>
+                ? <Dropdown id={`api-ws-${p.id}`} block className="api-ws" value={wid} onChange={setWid} options={[{ value: "", label: "Choose a workspace" }, ...ws.list.map((w) => ({ value: w.id, label: w.name, notr: true }))]} />
                 : <input id={`api-ws-${p.id}`} className="field" data-notr spellCheck={false} autoComplete="off" placeholder="wrkspc_…" value={wid} onChange={(e) => setWid(e.target.value)} />}
               {ws.need && !ws.list.length && <a className="api-get" href="https://platform.claude.com/settings/workspaces" target="_blank" rel="noreferrer">Find the ID in Claude Console<I.External size={12} /></a>}
             </>
@@ -213,9 +211,7 @@ export function TestBox({ catalog }: { catalog: ProviderInfo[] }) {
   return (
     <div className="api-test">
       <div className="api-test-row">
-        <span className="api-sel"><select aria-label="Model" value={model} onChange={(e) => setModel(e.target.value)} data-notr>
-          {catalog.map((p) => <optgroup key={p.id} label={p.name}>{p.models.map((m) => <option key={m.key} value={m.key}>{m.name}</option>)}</optgroup>)}
-        </select><I.Chevron size={13} /></span>
+        <Dropdown label="Model" className="api-sel" minWidth={240} notr value={model} onChange={setModel} options={catalog.flatMap((p) => p.models.map((m) => ({ value: m.key, label: m.name, group: p.name })))} />
         <input className="field" placeholder="Message (optional)" value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && !busy && model) send(); }} />
         <button className="btn dark" onClick={send} disabled={busy || !model}>{busy ? <><span className="api-spin" />Sending…</> : "Send test"}</button>
       </div>

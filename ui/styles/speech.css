@@ -48,9 +48,9 @@
 }
 .sp-fl {display:flex;justify-content:space-between;gap:8px;font-size:var(--fs-label);color:var(--text-2);font-weight:460
 }
-.sp-range::-webkit-slider-thumb {-webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:var(--card);box-shadow:0 1px 3px rgba(0,0,0,.25),0 0 0 .5px rgba(0,0,0,.2);cursor:pointer
+.sp-range::-webkit-slider-thumb {-webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:var(--ds-thumb);box-shadow:0 0 0 1px var(--ds-thumb-ring),0 1px 3px rgba(0,0,0,.3);cursor:pointer
 }
-.sp-range::-moz-range-thumb {width:16px;height:16px;border:0;border-radius:50%;background:var(--card);box-shadow:0 1px 3px rgba(0,0,0,.25)
+.sp-range::-moz-range-thumb {width:16px;height:16px;border:0;border-radius:50%;background:var(--ds-thumb);box-shadow:0 0 0 1px var(--ds-thumb-ring),0 1px 3px rgba(0,0,0,.3)
 }
 .sp-range:focus-visible::-webkit-slider-thumb {box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 35%,transparent)
 }
@@ -62,15 +62,19 @@
 }
 .sp-tg.on::after {transform:translateX(13px)
 }
-.sp-line .sp-sel select {width:auto;min-width:120px
+.sp-line .dd {flex:none;min-width:120px;max-width:min(60%,260px)
 }
-.sp-sel.sm select {height:28px;font-size:var(--fs-label);padding:0 26px 0 9px
+/* Bộ chọn đoạn trong một ô của biểu mẫu (Tách thành: "6 phần: giọng, trống, bass…", Kiểu podcast): nhãn dài thì xuống hàng, mỗi hàng giãn
+   đều, thay vì tràn rồi phải cuộn ngang trong cột bên hẹp. Rãnh bo 16 (đồng tâm với nút bo 14 + đệm 3), một hàng vẫn gần như viên thuốc. */
+.sp-fld>.sp-seg {flex-wrap:wrap;border-radius:var(--r-card);align-self:flex-start
 }
-.sp-sel.sm svg {right:8px
+.sp-fld>.sp-seg>button {flex:1 1 auto;height:auto;min-height:28px;padding-top:4px;padding-bottom:4px;white-space:normal;line-height:1.3;text-align:center
+}
+.sp-fld>.sp-seg.sm>button {min-height:24px;padding-top:2px;padding-bottom:2px
 }
 .sp-input.ta {height:auto;padding:9px 11px;resize:vertical;line-height:1.5
 }
-.sp-input:focus,.sp-sel select:focus-visible {border-color:color-mix(in srgb,var(--accent) 60%,var(--border-strong));box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 16%,transparent)
+.sp-input:focus {border-color:color-mix(in srgb,var(--accent) 60%,var(--border-strong));box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 16%,transparent)
 }
 .sp-drop:hover,.sp-drop.over {background:var(--sp-soft);border-color:var(--text-3)
 }
@@ -106,7 +110,7 @@
 }
 .sp-tag:hover {background:var(--hover);color:var(--text)
 }
-.sp-exs .sp-tag {white-space:normal;height:auto;padding:4px 10px;text-align:left;line-height:1.35
+.sp-exs .sp-tag {white-space:normal;height:auto;padding:4px 10px;text-align:left;line-height:1.35;border-radius:var(--r-row)
 }
 .sp-or {display:flex;align-items:center;gap:10px;font-size:var(--fs-1);color:var(--text-3)
 }
@@ -134,7 +138,7 @@
 }
 .sp-dline {display:flex;align-items:flex-start;gap:8px;padding:8px;border-radius:var(--r-plate);background:var(--input);box-shadow:0 0 0 .5px var(--border-strong)
 }
-.sp-dline .sp-sel {flex:none;width:110px
+.sp-dline .sp-dspk {flex:none;width:118px
 }
 .sp-dline .sp-av {margin-top:4px
 }
@@ -687,17 +691,24 @@
 }
 .sp-classifier:hover {background:var(--hover);color:var(--text)
 }
-.sp-two.dict {grid-template-columns:minmax(0,.8fr) minmax(0,1.2fr)
+.sp-two.dict {grid-template-columns:minmax(280px,340px) minmax(0,1fr)
 }
-.sp-dict {display:flex;align-items:center;gap:8px;padding:4px;border-radius:var(--r-pill)
+.sp-dict {display:flex;align-items:center;gap:8px;padding:4px;border-radius:var(--r-card)
 }
 .sp-dict.on {background:color-mix(in srgb,var(--accent) 7%,transparent)
 }
-.sp-dict-t {flex:1;min-width:0;display:flex;align-items:center;gap:10px;padding:6px;border-radius:var(--r-pill);text-align:left;color:var(--text-2)
+.sp-dict-t {flex:1;min-width:0;display:flex;align-items:center;gap:10px;padding:6px;border-radius:var(--r-plate);text-align:left;color:var(--text-2)
 }
 .sp-dict-t:hover {background:var(--hover)
 }
 .sp-dict-a {display:flex;align-items:center;gap:6px;flex:none
+}
+.sp-dict-t b {display:block
+}
+.sp-dict-hint {margin:-6px 0 0;font-size:var(--fs-1);color:var(--text-3);line-height:1.45
+}
+/* Chưa có trình sửa (đang tải từ điển đầu tiên): khung trống lấp đầy cột bên phải, không co lại giữa cột. */
+.sp-two.dict>.sp-detect {max-width:none;margin:0;min-height:220px;justify-content:center
 }
 .sp-rules {display:flex;flex-direction:column;gap:6px
 }
@@ -705,11 +716,9 @@
 }
 .sp-rule.head {font-size:var(--fs-1);color:var(--text-3)
 }
-.sp-rule .sp-sel select {width:100%
+.sp-rule .sp-rtype {width:100%
 }
 .sp-colors {display:flex;gap:16px;flex-wrap:wrap
-}
-.sp-colors label {display:flex;align-items:center;gap:8px;font-size:var(--fs-2);color:var(--text-2)
 }
 .sp-anprev {display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:var(--r-card);box-shadow:0 0 0 .5px var(--border-strong)
 }
@@ -735,15 +744,17 @@
 }}
 @media (max-width:1100px){.sp-sheet-bg {position:fixed;inset:0;z-index:calc(var(--z-menu) + 5);background:var(--overlay);animation:fadeIn .2s both
 }}
-@media (max-width:768px){.sp-aside,.sp-aside.wide {top:auto;left:0;right:0;bottom:0;width:auto;max-height:84dvh;border-radius:var(--r-panel) var(--r-panel) 0 0;transform:translateY(100%);padding-bottom:calc(18px + env(safe-area-inset-bottom))
+/* Ngăn trượt từ dưới lên chỉ ở điện thoại (≤ 760px, cùng mốc ẩn thanh điều hướng). 761–768px thanh điều hướng còn hiện: ngăn rộng hết
+   màn nằm dưới thanh, chữ của thanh (Dự án, Artifacts…) đè lên Cài đặt; ở đó dùng ngăn bên phải như máy tính bảng. */
+@media (max-width:760px){.sp-aside,.sp-aside.wide {top:auto;left:0;right:0;bottom:0;width:auto;max-height:84dvh;border-radius:var(--r-panel) var(--r-panel) 0 0;transform:translateY(100%);padding-bottom:calc(18px + env(safe-area-inset-bottom))
 }}
-@media (max-width:768px){.sp-aside.open {transform:none
+@media (max-width:760px){.sp-aside.open {transform:none
 }}
-@media (max-width:768px){.sp-grab {display:flex;justify-content:center;width:100%;padding:8px 0 2px;position:sticky;top:0;z-index:4;background:var(--card)
+@media (max-width:760px){.sp-grab {display:flex;justify-content:center;width:100%;padding:8px 0 2px;position:sticky;top:0;z-index:4;background:var(--card)
 }}
-@media (max-width:768px){.sp-grab i {width:38px;height:4px;border-radius:9px;background:var(--border-strong)
+@media (max-width:760px){.sp-grab i {width:38px;height:4px;border-radius:9px;background:var(--border-strong)
 }}
-@media (max-width:768px){.sp-aside-h {top:18px
+@media (max-width:760px){.sp-aside-h {top:18px
 }}
 @media (max-width:768px){.sp-quick {grid-template-columns:minmax(0,1fr)
 }}
@@ -751,7 +762,7 @@
 }}
 @media (max-width:768px){.sp-rule {grid-template-columns:minmax(0,1fr) minmax(0,1fr) 28px
 }}
-@media (max-width:768px){.sp-rule .sp-sel {grid-column:1/-1;grid-row:2
+@media (max-width:768px){.sp-rule .sp-rtype {grid-column:1/-1;grid-row:2
 }}
 @media (max-width:768px){.sp-rule.head {display:none
 }}
@@ -825,6 +836,13 @@
 .sp-wait-l2 {width:68%;height:14px
 }
 .sp-wait-box {width:100%;height:160px;border-radius:10px
+}
+/* Trình sửa từ điển đang mở (dict.tsx): tiêu đề, ba hàng quy tắc, nút Lưu. */
+.sp-dict-wait {display:flex;flex-direction:column;gap:10px
+}
+.sp-dict-wait .sk-blk {display:block
+}
+.sp-dict-wait-row {width:100%;height:34px;border-radius:var(--r-pill)
 }
 @media (max-width:600px){.sp-credit-wait {width:96px
 }}

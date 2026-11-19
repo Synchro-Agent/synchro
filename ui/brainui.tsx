@@ -8,12 +8,14 @@
 // - Bảng, Hoạt động: việc dang dở, đoạn chat, chủ đề, tên riêng; những gì bộ não vừa tự học.
 import "./styles/brainview.css";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { isAway } from "./clickaway";
 import { apiFetch, statusText } from "./apierr";
 import { rowKeys } from "./a11y";
 import { SideToggle } from "./brand";
 import { BulkBar, BulkButton, BulkCheck, bulkRow, each, useBulk, type BulkAct } from "./bulk";
 import { Pager } from "./pager";
 import * as I from "./icons";
+import { ColorField } from "./colorpick";
 import { type Chat, useApp, usePref } from "./store";
 import { locale, tf, tr, trc } from "./i18n";
 import { maxW } from "./breakpoints";
@@ -407,7 +409,7 @@ function GraphPanel({ gs, set, local, onAnimate, onClose }: { gs: GS; set: (p: P
     <label className="bg-row" key={k}><span>{t}</span><button role="switch" aria-checked={gs[k]} className={`bg-sw ${gs[k] ? "on" : ""}`} onClick={() => set({ [k]: !gs[k] })}><i /></button></label>
   );
   const sl = (k: "fade" | "size" | "thick" | "center" | "repel" | "link" | "dist" | "depth", t: string, min: number, max: number, st: number) => (
-    <label className="bg-row col" key={k}><span>{t}</span><input type="range" min={min} max={max} step={st} value={gs[k]} onChange={(e) => set({ [k]: Number(e.target.value) })} /></label>
+    <label className="bg-row col" key={k}><span>{t}</span><input type="range" min={min} max={max} step={st} value={gs[k]} style={{ "--p": `${((gs[k] - min) / (max - min)) * 100}%` } as React.CSSProperties} onChange={(e) => set({ [k]: Number(e.target.value) })} /></label>
   );
   return (
     <div className="bg-panel" role="dialog" aria-label={tr("Cài đặt đồ thị")}>
@@ -427,7 +429,7 @@ function GraphPanel({ gs, set, local, onAnimate, onClose }: { gs: GS; set: (p: P
       {sec("groups", trc("Nhóm", "đồ thị"), <>
         {gs.groups.map((g, i) => (
           <div key={i} className="bg-grp">
-            <input type="color" value={g.color} aria-label={trc("Màu nhóm", "nhóm màu đồ thị")} onChange={(e) => set({ groups: gs.groups.map((x, j) => (j === i ? { ...x, color: e.target.value } : x)) })} />
+            <ColorField size="sm" label={trc("Màu nhóm", "nhóm màu đồ thị")} value={g.color} onChange={(color) => set({ groups: gs.groups.map((x, j) => (j === i ? { ...x, color } : x)) })} />
             <input className="field" value={g.q} placeholder={tr("tag:thẻ, loai:chu-de, chữ…")} onChange={(e) => set({ groups: gs.groups.map((x, j) => (j === i ? { ...x, q: e.target.value } : x)) })} />
             <button className="icon-btn" aria-label={trc("Xóa nhóm", "nhóm màu đồ thị")} onClick={() => set({ groups: gs.groups.filter((_, j) => j !== i) })}><I.X size={12} /></button>
           </div>
@@ -580,7 +582,7 @@ function NoteView({ title, sub, exists, onOpen, onChanged, onLoaded }: { title: 
   // Menu "…": đóng khi bấm ra ngoài hoặc Esc.
   useEffect(() => {
     if (!more) return;
-    const h = (e: MouseEvent) => { if (!moreRef.current?.contains(e.target as Node)) setMore(false); };
+    const h = (e: MouseEvent) => { if (isAway(moreRef.current, e.target)) setMore(false); };
     const k = (e: KeyboardEvent) => e.key === "Escape" && setMore(false);
     document.addEventListener("mousedown", h); document.addEventListener("keydown", k);
     return () => { document.removeEventListener("mousedown", h); document.removeEventListener("keydown", k); };
@@ -878,7 +880,7 @@ export function BrainWorkspace({ initial, onInitial, sideOpen = true, onSide }: 
   useEffect(() => { findRef.current?.querySelector(".bw-find-it.on")?.scrollIntoView({ block: "nearest" }); }, [sel]);
   useEffect(() => {
     if (!findOpen) return;
-    const h = (e: MouseEvent) => { if (!findRef.current?.contains(e.target as Node)) setFindOpen(false); };
+    const h = (e: MouseEvent) => { if (isAway(findRef.current, e.target)) setFindOpen(false); };
     document.addEventListener("mousedown", h);
     return () => document.removeEventListener("mousedown", h);
   }, [findOpen]);

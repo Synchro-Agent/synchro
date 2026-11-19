@@ -2,6 +2,7 @@
 // Giao diện Artifact: thẻ trong tin nhắn, khung xem bên cạnh cuộc trò chuyện (xem trước / mã / phiên bản),
 // khung chạy cô lập (iframe sandbox, không cùng nguồn gốc với Synchro, CSP chặn gọi mạng) và trang Artifacts.
 import { createContext, Fragment, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { isAway } from "./clickaway";
 import * as I from "./icons";
 import { isEn, locale, tr } from "./i18n";
 import { Markdown } from "./md";
@@ -328,7 +329,7 @@ function DownloadMenu({ items, say, note }: { items: DlItem[]; say: (m: string) 
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!open) return;
-    const h = (e: MouseEvent) => { if (!ref.current?.contains(e.target as Node)) setOpen(false); };
+    const h = (e: MouseEvent) => { if (isAway(ref.current, e.target)) setOpen(false); };
     document.addEventListener("mousedown", h); return () => document.removeEventListener("mousedown", h);
   }, [open]);
   const run = async (it: DlItem) => {
@@ -356,7 +357,7 @@ function StyleSwitch({ current, send, onKeep, say }: { current: string; send: ()
   useEffect(() => { setTrial(""); }, [current]);
   useEffect(() => {
     if (!open) return;
-    const h = (e: MouseEvent) => { if (!ref.current?.contains(e.target as Node)) setOpen(false); };
+    const h = (e: MouseEvent) => { if (isAway(ref.current, e.target)) setOpen(false); };
     document.addEventListener("mousedown", h); return () => document.removeEventListener("mousedown", h);
   }, [open]);
   const apply = (id: string) => { send()?.({ t: "preset", id, font: kitFontUrl(`data-sx-preset="${id}"`) }); setTrial(id === current ? "" : id); };

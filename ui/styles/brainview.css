@@ -18,7 +18,7 @@ html body .sy-settings .bn-stats b{line-height:24px;color:var(--ds-ink);font-var
 /* ô tìm nhanh và danh sách kết quả */
 .bw-find>svg{flex:none}
 .bg-row.col{flex-direction:column;align-items:stretch;gap:3px}
-.bg-row input[type=range]{width:100%;accent-color:var(--bn-accent)}
+.bg-row input[type=range]{width:100%}
 .bg-b .btn.sm{align-self:flex-start}
 /* Hết phần chuyển từ globals.css. */
 /* Mục Bộ não: tách khỏi globals.css để trang chat không phải tải trước. Tệp này nạp sau mọi tệp chung, nên chỉ chứa quy tắc không tranh chấp với quy tắc chung đứng sau nó trong globals.css (cùng độ ưu tiên, cùng thuộc tính); quy tắc tranh chấp vẫn ở globals.css. */

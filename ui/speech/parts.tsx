@@ -1,10 +1,13 @@
 "use client";
 // Thành phần dùng chung của mục Speech: tab, thanh trượt, công tắc, chọn, vùng thả tệp, ghi âm, dạng sóng, trình phát, bộ chọn giọng.
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { isAway } from "../clickaway";
 import { createPortal } from "react-dom";
 import { tf, tr } from "../i18n";
 import * as I from "../icons";
 import { LiquidOrb } from "../liquidorb";
+import { Dropdown } from "../listbox";
+import { useStripActive } from "../strip";
 import { readBrowser, stopBrowserRead } from "../browserspeak";
 import { useApp, usePref, VOICE_RATE } from "../store";
 import { toSpeech, VI } from "../voiceflow";
@@ -16,8 +19,9 @@ const talking = () => { const t = performance.now() / 1000; return Math.max(0, M
 export const MAX_UPLOAD = 40 * 1024 * 1024;
 
 export function Seg<T extends string>({ items, value, onChange, label, small }: { items: { k: T; label: string }[]; value: T; onChange: (v: T) => void; label: string; small?: boolean }) {
+  const ref = useStripActive<HTMLDivElement>(value);
   return (
-    <div className={`sp-seg ${small ? "sm" : ""}`} role="tablist" aria-label={label}>
+    <div ref={ref} className={`sp-seg ${small ? "sm" : ""}`} role="tablist" aria-label={label}>
       {items.map((x) => <button key={x.k} role="tab" aria-selected={value === x.k} className={value === x.k ? "on" : ""} onClick={() => onChange(x.k)}>{x.label}</button>)}
     </div>
   );
@@ -45,12 +49,7 @@ export function Toggle({ checked, onChange, label, hint }: { checked: boolean; o
 
 type Opt = string | [string, string];
 export function Select({ id, label, value, options, onChange, inline }: { id: string; label: string; value: string; options: Opt[]; onChange: (v: string) => void; inline?: boolean }) {
-  const sel = (
-    <span className="sp-sel">
-      <select id={id} value={value} onChange={(e) => onChange(e.target.value)}>{options.map((o) => { const [v, l] = Array.isArray(o) ? o : [o, o]; return <option key={v} value={v}>{l}</option>; })}</select>
-      <I.Chevron size={13} />
-    </span>
-  );
+  const sel = <Dropdown id={id} size={inline ? "sm" : "md"} value={value} options={options} onChange={onChange} block={!inline} minWidth={inline ? 160 : 200} align={inline ? "end" : "start"} className="sp-dd" />;
   if (inline) return <div className="sp-line"><label htmlFor={id}>{label}</label>{sel}</div>;
   return <div className="sp-fld"><label htmlFor={id} className="sp-fl"><span>{label}</span></label>{sel}</div>;
 }
@@ -238,7 +237,7 @@ export function ModelPick({ models, value, onChange, label = "Model" }: { models
   const box = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!open) return;
-    const h = (e: MouseEvent) => { if (!box.current?.contains(e.target as Node)) setOpen(false); };
+    const h = (e: MouseEvent) => { if (isAway(box.current, e.target)) setOpen(false); };
     document.addEventListener("mousedown", h);
     return () => document.removeEventListener("mousedown", h);
   }, [open]);
@@ -265,8 +264,9 @@ export function ModelPick({ models, value, onChange, label = "Model" }: { models
 
 // Tab gạch chân cho các mục trong một trang.
 export function Tabs<T extends string>({ items, value, onChange, label }: { items: { k: T; label: string }[]; value: T; onChange: (v: T) => void; label: string }) {
+  const ref = useStripActive<HTMLDivElement>(value);
   return (
-    <div className="sp-utabs" role="tablist" aria-label={label}>
+    <div ref={ref} className="sp-utabs" role="tablist" aria-label={label}>
       {items.map((x) => <button key={x.k} role="tab" aria-selected={value === x.k} className={value === x.k ? "on" : ""} onClick={() => onChange(x.k)}>{x.label}</button>)}
     </div>
   );

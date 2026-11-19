@@ -99,7 +99,7 @@ export function TimePick({ value, onChange }: { value: string; onChange: (v: str
         }} />
       <button type="button" className="tpk-ic" tabIndex={-1} aria-label={tr("Chọn giờ")} onMouseDown={(e) => e.preventDefault()} onClick={() => { if (open) setOpen(false); else { inp.current?.focus(); setOpen(true); } }}><I.Clock size={15} /></button>
       {open && pos && createPortal(
-        <div ref={pop} className="menu tpk-pop" style={pos} role="dialog" aria-label={tr("Chọn giờ")} onMouseDown={(e) => { if ((e.target as HTMLElement).tagName !== "BUTTON") e.preventDefault(); }}>
+        <div ref={pop} className="menu tpk-pop" data-floating style={pos} role="dialog" aria-label={tr("Chọn giờ")} onMouseDown={(e) => { if ((e.target as HTMLElement).tagName !== "BUTTON") e.preventDefault(); }}>
           <div className="tpk-cols">
             <div className="tpk-cw"><span className="tpk-cap">{tr("Giờ")}</span>
               <div className="tpk-col" role="listbox" aria-label={tr("Giờ")} onKeyDown={(e) => colKey(e, (i) => set(i, m), 24)}>

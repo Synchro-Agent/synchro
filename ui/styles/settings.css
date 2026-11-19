@@ -53,7 +53,7 @@
 .bk-errs{margin-top:6px}
 .bk-drill.bad{box-shadow:0 0 0 1px #c6422f}
 .bk-tbl{margin:6px 0}
-.lat-sel select{min-width:140px}
+.dd.lat-sel{min-width:140px}
 .lat-wrap{max-width:100%;overflow-x:auto}
 .lat-tbl{width:100%}
 .lat-tbl .num{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
@@ -149,12 +149,15 @@
 .adm-perm-pname{display:flex;flex-direction:column;gap:4px;width:96px}
 .adm-provall{font-size:var(--fs-1);color:var(--link);text-align:left;padding:0}
 .adm-provall:hover{text-decoration:underline}
+/* Điện thoại: tên hãng và nút Chọn hết / Xóa thành một hàng phía trên, thẻ model dùng cả bề ngang; cột tên 96px cũ chỉ còn ~130px cho thẻ nên
+   "Claude Sonnet 5.5", "Gemini 3.5 Flash-Lite" xuống hai dòng trong thẻ bo tròn (polish.mjs bước 2). */
+@media (max-width:640px){.adm-perm-prov{flex-direction:column;gap:6px}.adm-perm-pname{flex-direction:row;align-items:baseline;justify-content:space-between;width:100%}}
 .adm-msearch{height:30px}
 .adm-eff{grid-column:1/-1}
 .adm-eff-row{padding:6px 0}
-.adm-eff-row .api-sel select{min-width:200px}
+.adm-eff-row .adm-effsel{min-width:200px;max-width:260px}
 .adm-eff-name{display:flex;align-items:center;gap:8px;font-size:var(--fs-2);min-width:0}
-@media (max-width:640px){.adm-eff-row .api-sel select{min-width:0;max-width:170px}}
+@media (max-width:640px){.adm-eff-row .adm-effsel{min-width:0;max-width:170px}}
 .cn-bar{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 14px}
 .cn-list{display:flex;flex-direction:column;gap:8px}
 .cn-card{border:.5px solid var(--border);border-radius:var(--r-card);background:var(--card);transition:box-shadow .2s,border-color .2s}
@@ -190,10 +193,10 @@
 .cn-tool-n{display:flex;align-items:baseline;gap:8px;font-size:var(--fs-2);min-width:0}
 .cn-tool-n .mono-s{color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .cn-tool-d{font-size:var(--fs-1);color:var(--text-3);margin-top:2px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
-.cn-perm.allow select{color:#1b7a45}
-.cn-perm.block select{color:#b23a29}
-[data-theme="dark"] .cn-perm.allow select{color:var(--ds-ok)}
-[data-theme="dark"] .cn-perm.block select{color:var(--ds-bad)}
+.dd.cn-perm.allow .dd-v{color:#1b7a45}
+.dd.cn-perm.block .dd-v{color:#b23a29}
+[data-theme="dark"] .dd.cn-perm.allow .dd-v{color:var(--ds-ok)}
+[data-theme="dark"] .dd.cn-perm.block .dd-v{color:var(--ds-bad)}
 .cn-foot{margin-top:12px;font-family:var(--font-mono);font-size:var(--fs-1);color:var(--text-3);word-break:break-all}
 .cn-empty-tools{margin:14px 0 4px;font-size:var(--fs-2)}
 .cn-empty{display:flex;flex-direction:column;align-items:center;text-align:center;gap:8px;padding:32px 20px;border:1px dashed var(--border-strong);border-radius:var(--r-card)}
@@ -228,7 +231,7 @@
 .cn-set{margin-top:12px;padding:4px 12px;border-radius:var(--r-plate);background:var(--hover)}
 .cn-set-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:9px 0;border-top:.5px solid var(--border)}
 .cn-set-row:first-child{border-top:0}
-.cn-set .cn-perm select{background:var(--card)}
+.cn-set .dd.cn-perm{background:var(--card)}
 .cn-pills{display:flex;gap:6px;flex:none}
 .cn-switch:disabled{opacity:.45;cursor:default}
 .cn-locked{display:inline-flex;align-items:center;gap:5px;height:30px;padding:0 10px;border-radius:var(--r-pill);font-size:var(--fs-label);color:var(--text-3);background:var(--hover);flex:none;cursor:help}
@@ -348,3 +351,7 @@ html body .sy-settings :is(.api-card:not(.bare),.us-card,.inset,.promo,.dcard,.a
 .sy-settings .pv-tag.ok{color:var(--ds-ink)}
 .sy-settings .adm-bar .s-search{margin:0}
 }
+/* Phiên đăng nhập ở điện thoại: bỏ cột Tạo lúc (còn Cập nhật) để bảng vừa khung cài đặt; nhãn Đang dùng giữ một dòng (.new-tag nowrap) đẩy bảng
+   rộng hơn khung và hiện thanh cuộn ngang (polish.mjs bước 3). Địa chỉ IP (IPv6 rất dài) và ngày tiếng Anh được ngắt ở bất kỳ đâu để bảng
+   không bao giờ rộng hơn khung. */
+@media (max-width:640px){.tbl-ses :is(th,td):nth-child(3){display:none}.tbl-ses td{overflow-wrap:anywhere}.tbl-ses td:last-child{padding-right:0}.tbl-ses .btn{padding-inline:10px}}

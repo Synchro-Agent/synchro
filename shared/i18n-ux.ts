@@ -9,6 +9,8 @@ export const UX_VI2EN: Record<string, string> = {
   "Liên kết Composio": "Link Composio",
   "Chưa liên kết": "Not linked",
   "Cần liên kết lại": "Needs relinking",
+  // Ô chọn màu của app (ui/colorpick.tsx)
+  "Mã màu ‹ô chọn màu›": "Color code", "Màu khác… ‹ô chọn màu›": "More colors…",
   // Trang lỗi, 404, khung lỗi
   "Synchro gặp lỗi khi hiển thị trang này": "Synchro hit an error showing this page",
   "Đoạn chat và phần bạn đang gõ vẫn còn. Tải lại trang để dùng tiếp.": "Your chats and what you were typing are still here. Reload the page to continue.",

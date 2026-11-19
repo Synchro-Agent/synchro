@@ -9,6 +9,7 @@ import { Fade } from "./ui";
 import { useApp } from "./store";
 import { getLang, tr, locale } from "./i18n";
 import * as I from "./icons";
+import { Dropdown } from "./listbox";
 import { UsageAdmin, UsageIcon } from "./usageui";
 import type { AuthUser, Providers } from "./auth";
 import { ALL, allowsModel, effortsFor, FEATURES, FULL_CONN, type ConnPolicy, type Effort, type Perms, type ProviderInfo } from "../shared/catalog";
@@ -134,19 +135,15 @@ function EffortLimits({ catalog, models, value, onChange }: { catalog: ProviderI
     <>
       <div className="adm-perm-row adm-eff-row" style={{ borderTop: 0, paddingTop: 0 }}>
         <div><div className="t">All models</div><div className="d">Highest level this person can pick. Higher effort gives more thorough answers but uses more tokens.</div></div>
-        <span className="api-sel"><select aria-label="Effort limit for all models" value={all} onChange={(e) => set(ALL, e.target.value as Effort)}>
-          {(["max", "extra", "high", "medium", "low"] as Effort[]).map((k) => <option key={k} value={k}>{LEVEL[k]}</option>)}
-        </select><I.Chevron size={13} /></span>
+        <Dropdown<Effort> label="Effort limit for all models" className="adm-effsel" align="end" minWidth={220} value={all} onChange={(v) => set(ALL, v)} options={(["max", "extra", "high", "medium", "low"] as Effort[]).map((k) => [k, LEVEL[k]] as const)} />
       </div>
       {shown.map((p) => p.models.map((m) => {
         const levels = effortsFor(p.kind).slice().reverse();
         return (
           <div key={m.key} className="adm-perm-row adm-eff-row">
             <div className="adm-eff-name"><ModelLogo k={m.key} name={m.name} size={15} /><span data-notr>{m.name}</span></div>
-            <span className="api-sel"><select aria-label={`Effort limit for ${m.name}`} value={cur[m.key] ?? ""} onChange={(e) => set(m.key, e.target.value as Effort | "")}>
-              <option value="">{`Same as all models (${LEVEL[all].replace(/ \(.+\)$/, "")})`}</option>
-              {levels.map((k) => <option key={k} value={k}>{k === levels[0] && k !== "max" ? `${LEVEL[k]} (model max)` : LEVEL[k]}</option>)}
-            </select><I.Chevron size={13} /></span>
+            <Dropdown<Effort | ""> label={`Effort limit for ${m.name}`} className="adm-effsel" align="end" minWidth={220} value={cur[m.key] ?? ""} onChange={(v) => set(m.key, v)}
+              options={[["", `Same as all models (${LEVEL[all].replace(/ \(.+\)$/, "")})`] as const, ...levels.map((k) => [k, k === levels[0] && k !== "max" ? `${LEVEL[k]} (model max)` : LEVEL[k]] as const)]} />
           </div>
         );
       }))}
@@ -370,10 +367,8 @@ export function AdminPanel({ Toggle }: { Toggle: ToggleT }) {
               return (
                 <div className="adm-perm-row">
                   <div><div className="t">Default model</div><div className="d">Used for new chats and when someone&apos;s chosen model is no longer available.</div></div>
-                  <span className="api-sel"><select aria-label="Default model" value={api.default ?? ""} onChange={(e) => saveDefault(e.target.value)} data-notr>
-                    <option value="">{`${tr("Automatic")}${api.effectiveDefault ? ` (${api.catalog.flatMap((p) => p.models).find((m) => m.key === api.effectiveDefault)?.name ?? ""})` : ""}`}</option>
-                    {shown.map((p) => <optgroup key={p.id} label={p.name}>{p.models.map((m) => <option key={m.key} value={m.key}>{m.name}</option>)}</optgroup>)}
-                  </select><I.Chevron size={13} /></span>
+                  <Dropdown label="Default model" className="adm-def" align="end" minWidth={240} notr value={api.default ?? ""} onChange={saveDefault}
+                    options={[{ value: "", label: `${tr("Automatic")}${api.effectiveDefault ? ` (${api.catalog.flatMap((p) => p.models).find((m) => m.key === api.effectiveDefault)?.name ?? ""})` : ""}` }, ...shown.flatMap((p) => p.models.map((m) => ({ value: m.key, label: m.name, group: p.name })))]} />
                 </div>
               );
             })()}

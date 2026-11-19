@@ -2,6 +2,7 @@
 // Đổi giọng, Tiếng động, Nhạc (tạo nhạc, nhạc cho video, tách stem) và Lọc tạp âm: mỗi công cụ một trang có hướng dẫn, chạy ElevenLabs thật.
 import { useState } from "react";
 import * as I from "../icons";
+import { useStripActive } from "../strip";
 import { tf, tr } from "../i18n";
 import { MODEL_NOTE, MUSIC_CHIPS, MUSIC_DEFAULT_SEC, MUSIC_EX, MUSIC_MODELS, SFX_CATS, SFX_MODELS, estMusicCredits } from "../../shared/speech/data";
 import { ago, del, download, fmtNum, itemTitle, on, post, postForm, useItems, usePlan, type Item, type Voice } from "./client";
@@ -136,6 +137,7 @@ export function ChangerTool({ say, voice: shared }: ToolProps) {
 export function SfxTool({ say }: ToolProps) {
   const [p, setP] = useState("");
   const [cat, setCat] = useState(0);
+  const catRow = useStripActive<HTMLDivElement>(cat);
   const [model, setModel] = useState(SFX_MODELS[0].id);
   const [auto, setAuto] = useState(true);
   const [dur, setDur] = useState(5);
@@ -155,7 +157,7 @@ export function SfxTool({ say }: ToolProps) {
       <div className="sp-two">
         <div className="sp-card">
           <Field label="Mô tả âm thanh" hint={`${p.length}/450`} htmlFor="sfx-p"><textarea id="sfx-p" className="sp-input ta" rows={4} maxLength={450} value={p} onChange={(e) => setP(e.target.value)} placeholder="Tả cụ thể: nguồn âm, không gian, khoảng cách, nhịp… Ví dụ: “Heavy rain on a tin roof with distant thunder”" /></Field>
-          <div className="sp-catrow" role="tablist" aria-label="Danh mục gợi ý">{SFX_CATS.map((c, i) => <button key={c.label} role="tab" aria-selected={cat === i} className={`sp-fpill ${cat === i ? "on" : ""}`} onClick={() => setCat(i)}>{c.label}</button>)}</div>
+          <div ref={catRow} className="sp-catrow" role="tablist" aria-label="Danh mục gợi ý">{SFX_CATS.map((c, i) => <button key={c.label} role="tab" aria-selected={cat === i} className={`sp-fpill ${cat === i ? "on" : ""}`} onClick={() => setCat(i)}>{c.label}</button>)}</div>
           <div className="sp-exs">{SFX_CATS[cat].items.map(([vi, en]) => <button key={en} className="sp-tag" onClick={() => setP(en)}>{vi}</button>)}</div>
           <Field label="Model"><ModelPick value={model} onChange={setModel} models={SFX_MODELS} /></Field>
           <Toggle checked={auto} onChange={setAuto} label="Tự chọn độ dài" hint="AI chọn độ dài hợp với mô tả" />

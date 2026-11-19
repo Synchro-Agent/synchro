@@ -3,6 +3,7 @@
 // tuần và hạn mức API của nhà cung cấp; dữ liệu dùng chung (useUsage), biểu tượng Mức dùng. Trang Cài đặt → Usage và phần quản trị nằm ở
 // usageui.tsx, chỉ tải khi mở Cài đặt.
 import { useCallback, useEffect, useState } from "react";
+import { inFloating } from "./clickaway";
 import { Menu } from "./ui";
 import { useApp } from "./store";
 import { getLang, tf, tr, trc } from "./i18n";
@@ -223,7 +224,7 @@ export function UsageRing({ model, extra, onDetails, up = true }: { model?: stri
   const [open, setOpen] = useState(false);
   useEffect(() => {
     if (!open) return;
-    const h = (e: MouseEvent) => { if (!(e.target as HTMLElement).closest?.(".us-wrap")) setOpen(false); };
+    const h = (e: MouseEvent) => { if (!(e.target as HTMLElement).closest?.(".us-wrap") && !inFloating(e.target)) setOpen(false); };
     const k = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
     document.addEventListener("mousedown", h); document.addEventListener("keydown", k);
     return () => { document.removeEventListener("mousedown", h); document.removeEventListener("keydown", k); };

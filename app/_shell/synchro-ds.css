@@ -26,6 +26,8 @@
   --ds-faint:#666760;            /* 4,5:1 trên nền Ivory */
   --ds-inv:#111210;             /* tấm mực (mục đang chọn, nút chính) */
   --ds-inv-fg:#EEECE5;
+  /* Nút kéo của thanh trượt: tấm sáng có viền ở cả hai chế độ. Ở chế độ tối tấm (--ds-plate) trùng màu bảng nên nút kéo thành lỗ hổng trên rãnh. */
+  --ds-thumb:#FBFAF6; --ds-thumb-ring:rgba(17,18,16,.5);
   --ds-ok:#2A7048; --ds-warn:#8F5208; --ds-bad:#B8412F; /* tối thiểu 4,5:1 trên nền Ivory */
   --ds-h:34px; --ds-h-sm:28px; --ds-h-lg:44px;
   /* Hình khối — một thang duy nhất, tròn ra tròn, vuông ra vuông (không góc "lưng chừng"):
@@ -33,7 +35,13 @@
      hộp: 12 tấm nhóm / ô nhiều dòng / khối code · 16 thẻ / danh sách · 20 menu / popover · 24 ô soạn / hộp thoại / bảng bên.
      Lồng nhau thì đồng tâm: góc trong = góc ngoài − khoảng đệm (menu 20 = mục 32px tròn 16 + đệm 4). */
   --r-pill:999px; --r-key:5px; --r-plate:12px; --r-card:16px; --r-menu:20px; --r-panel:24px;
-  --ds-r:var(--r-pill); --ds-r-plate:var(--r-card); --ds-r-tile:25%; --ds-r-ctl:var(--r-pill); --ds-r-row:var(--r-pill);
+  --ds-r:var(--r-pill); --ds-r-plate:var(--r-card); --ds-r-tile:25%; --ds-r-ctl:var(--r-pill);
+  /* Hàng (mục menu, mục danh sách, dòng có nền khi rê / chọn): KHÔNG dùng --r-pill. 999px bị trình duyệt kẹp về nửa cạnh ngắn, nên hàng xuống
+     hai ba dòng (luật dự án ở Synchro Code, mô tả model) thành viên thuốc to, hai đầu cong ăn vào chữ. 16px = tròn đúng viên thuốc khi hàng
+     một dòng cao 32px (đồng tâm với menu bo 20, đệm 4), hàng cao hơn thì thành góc bo 16 bình thường. */
+  --r-row:16px; --ds-r-row:var(--r-row);
+  /* Ô nhiều dòng (textarea, ô soạn): góc của tấm, không bao giờ viên thuốc (luật chặn ở cuối tệp, lớp syn-over). */
+  --r-field:var(--r-plate);
   --ds-ease:cubic-bezier(.22,.8,.24,1);
   --ds-fast:.16s; --ds-mid:.28s; --ds-slow:.42s;
   --ds-lift:0 1px 2px rgba(17,18,16,.05),0 10px 28px -14px rgba(17,18,16,.22);
@@ -45,6 +53,7 @@
   --ds-line:#2A2B26; --ds-line-2:#363731;
   --ds-ink:#EEECE5; --ds-ink-2:#CFCEC6; --ds-muted:#9C9D95; --ds-faint:#8E8F88;
   --ds-inv:#EEECE5; --ds-inv-fg:#111210;
+  --ds-thumb:#EEECE5; --ds-thumb-ring:rgba(0,0,0,.6);
   --ds-ok:#6FBF8E; --ds-warn:#E0A256; --ds-bad:#F08472;
   --ds-lift:0 1px 2px rgba(0,0,0,.4),0 12px 30px -14px rgba(0,0,0,.7);
 }
@@ -61,7 +70,7 @@ html body .btn:not(.auth-root *) svg{flex:none}
 html body .btn.dark:not(.auth-root *){background:var(--ds-inv);color:var(--ds-inv-fg)}
 .btn.dark:not(.auth-root *):hover:not(:disabled){background:color-mix(in srgb,var(--ds-inv) 86%,var(--bg))}
 html body .btn:not(.auth-root *):focus-visible,html body .icon-btn:focus-visible{outline:0}
-html body .icon-btn:not(.auth-root *){border-radius:var(--ds-r-row);color:var(--ds-ink-2)}
+html body .icon-btn:not(.auth-root *){border-radius:var(--r-pill);color:var(--ds-ink-2)}
 html body .icon-btn:not(.auth-root *):hover{background:var(--ds-hover);color:var(--ds-ink)}
 html body .icon-btn:not(.auth-root *):active{background:var(--ds-press)}
 /* Ô nhập: tấm nhạt, viền mảnh 1px, tiêu điểm là viền mực. */
@@ -82,6 +91,32 @@ html[data-theme=dark] body .toggle:not(.on):not(.auth-root *)::after{background:
 .toggle.sm:not(.auth-root *)::after{top:3px;left:3px;width:12px;height:12px}
 .toggle.sm.on:not(.auth-root *)::after{transform:translateX(14px)}
 .toggle:not(.auth-root *):disabled{opacity:.45}
+/* Ô đánh dấu, nút radio, thanh trượt gốc: cùng một kiểu trên mọi trình duyệt (Windows vẽ ô vuông xanh / thanh trượt xanh của hệ điều hành).
+   :where = độ ưu tiên 0: kích thước / lề riêng của từng chỗ (.sp-check input, .ss-rule input…) vẫn thắng. Ô chọn: vuông bo 5 (thang phím
+   tắt), đánh dấu là tấm mực có dấu tích giấy; radio: tròn, chấm giữa; thanh trượt: rãnh 4px tròn, phần đã kéo màu mực theo --p (nếu chỗ
+   dùng đặt), núm tròn 16px nền tấm. */
+:where(input[type=checkbox],input[type=radio]):not(:where(.auth-root *)){-webkit-appearance:none;appearance:none;flex:none;width:16px;height:16px;margin:0;
+  display:inline-grid;place-content:center;vertical-align:-3px;border-radius:var(--r-key);background:var(--ds-plate);cursor:pointer;
+  box-shadow:inset 0 0 0 1.5px color-mix(in srgb,var(--ds-ink) 34%,var(--ds-line-2));transition:background-color var(--ds-fast),box-shadow var(--ds-fast)}
+:where(input[type=radio]):not(:where(.auth-root *)){border-radius:50%}
+:where(input[type=checkbox],input[type=radio]):not(:where(.auth-root *))::before{content:"";width:10px;height:10px;background:var(--ds-inv-fg);transform:scale(0);transition:transform var(--ds-fast) var(--ds-ease)}
+:where(input[type=checkbox]):not(:where(.auth-root *))::before{-webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 10'%3E%3Cpath d='M1.6 5.2l2.2 2.2 4.6-4.8' fill='none' stroke='%23000' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/contain no-repeat;
+  mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 10'%3E%3Cpath d='M1.6 5.2l2.2 2.2 4.6-4.8' fill='none' stroke='%23000' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/contain no-repeat}
+:where(input[type=radio]):not(:where(.auth-root *))::before{width:6px;height:6px;border-radius:50%}
+:where(input[type=checkbox]:checked,input[type=checkbox]:indeterminate,input[type=radio]:checked):not(:where(.auth-root *)){background:var(--ds-inv);box-shadow:inset 0 0 0 1.5px var(--ds-inv)}
+:where(input[type=checkbox]:checked,input[type=radio]:checked):not(:where(.auth-root *))::before{transform:scale(1)}
+:where(input[type=checkbox]:indeterminate):not(:where(.auth-root *))::before{transform:scale(1);height:2px;border-radius:1px;-webkit-mask:none;mask:none}
+:where(input[type=checkbox],input[type=radio]):not(:where(.auth-root *)):hover:not(:disabled){box-shadow:inset 0 0 0 1.5px var(--ds-ink)}
+:where(input[type=checkbox],input[type=radio]):not(:where(.auth-root *)):focus-visible{outline:0;box-shadow:inset 0 0 0 1.5px var(--ds-ink),var(--ds-ring)}
+:where(input[type=checkbox],input[type=radio]):not(:where(.auth-root *)):disabled{opacity:.45;cursor:default}
+:where(input[type=range]):not(:where(.auth-root *)){-webkit-appearance:none;appearance:none;height:4px;margin:8px 0;border-radius:var(--r-pill);cursor:pointer;
+  background:linear-gradient(90deg,var(--ds-ink) var(--p,0%),var(--ds-line-2) var(--p,0%));accent-color:var(--ds-ink)}
+:where(input[type=range]):not(:where(.auth-root *))::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:var(--ds-thumb);
+  box-shadow:0 0 0 1px var(--ds-thumb-ring),0 1px 3px rgba(0,0,0,.3);transition:transform var(--ds-fast) var(--ds-ease)}
+:where(input[type=range]):not(:where(.auth-root *))::-moz-range-thumb{width:16px;height:16px;border:0;border-radius:50%;background:var(--ds-thumb);box-shadow:0 0 0 1px var(--ds-thumb-ring),0 1px 3px rgba(0,0,0,.3)}
+:where(input[type=range]):not(:where(.auth-root *)):active::-webkit-slider-thumb{transform:scale(1.12)}
+:where(input[type=range]):not(:where(.auth-root *)):focus-visible{outline:0}
+:where(input[type=range]):not(:where(.auth-root *)):focus-visible::-webkit-slider-thumb{box-shadow:0 0 0 1px var(--ds-thumb-ring),0 0 0 4px color-mix(in srgb,var(--ds-ink) 28%,transparent),0 1px 3px rgba(0,0,0,.3)}
 /* Bộ chọn đoạn (Cài đặt, Kho kỹ năng…): rãnh trũng, mục chọn là tấm mực. */
 html body :is(.group,.pl-seg):not(.auth-root *){display:inline-flex;align-items:center;gap:2px;height:var(--ds-h);padding:3px;border-radius:var(--ds-r);box-shadow:inset 0 0 0 1px var(--ds-line)}
 html body :is(.group,.pl-seg):not(.auth-root *)>button{height:28px!important;padding:0 13px;font-size:var(--fs-2);font-weight:460;
@@ -112,12 +147,90 @@ html .menu-item:not(:where(.auth-root *)){padding:0 12px}
 html body .menu-item:not(.auth-root *)>svg:first-child{width:16px;height:16px;flex:none;color:var(--ds-ink-2)}
 html body .menu-item:not(.auth-root *) .sc{font-size:var(--fs-1);color:var(--ds-faint)}
 html body .menu:not(.auth-root *) hr{border-top:1px solid var(--ds-line);margin:6px 6px;opacity:.8}
+/* Ô chọn của app (ui/listbox.tsx, thay <select> gốc): nút viên thuốc một dòng, mũi tên căn giữa theo chiều dọc bằng flex (mũi tên vẽ tuyệt đối
+   trước đây nằm lệch lên góc trên bên phải trên Windows); danh sách là khung .menu nổi, mục cao 32px, mục đang sáng (bàn phím / rê chuột) và
+   mục đang chọn (dấu tích) phân biệt rõ. */
+.dd{display:inline-flex;align-items:center;gap:8px;min-width:0;max-width:100%;height:var(--ds-h);padding:0 11px 0 13px;border-radius:var(--r-pill);
+  border:1px solid var(--ds-line-2);background:var(--ds-plate);color:var(--ds-ink);font:inherit;font-size:var(--fs-2);line-height:1;text-align:left;cursor:pointer;
+  transition:border-color var(--ds-fast),box-shadow var(--ds-fast),background-color var(--ds-fast)}
+.dd.block{display:flex;width:100%}
+.dd.sm{height:var(--ds-h-sm);padding:0 9px 0 11px;font-size:var(--fs-label);gap:6px}
+.dd:hover:not(:disabled){border-color:color-mix(in srgb,var(--ds-ink) 32%,var(--ds-line-2))}
+.dd:focus-visible,.dd.open{outline:0;border-color:var(--ds-ink);box-shadow:0 0 0 3px color-mix(in srgb,var(--ds-ink) 10%,transparent)}
+.dd:disabled{opacity:.5;cursor:default}
+.dd-v{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dd>svg{flex:none;color:var(--ds-muted);transition:transform var(--ds-mid) var(--ds-ease)}
+.dd.open>svg{transform:rotate(180deg)}
+.menu.dd-pop{display:flex;flex-direction:column;min-width:0;padding:4px;overflow:hidden;transform-origin:top center}
+.dd-search{flex:none;display:flex;align-items:center;gap:8px;height:34px;margin:0 0 4px;padding:0 12px;border-radius:var(--r-pill);background:var(--ds-sunken);color:var(--ds-faint);box-shadow:inset 0 0 0 1px var(--ds-line)}
+.dd-search input{flex:1;min-width:0;height:100%;border:0;background:transparent;font-size:var(--fs-2);color:var(--ds-ink)}
+.dd-search input::placeholder{color:var(--ds-faint)}
+.dd-list{position:relative;flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:var(--ds-line-2) transparent;border-radius:var(--r-row)}
+.dd-list .menu-item.dd-opt{min-height:32px;padding-top:6px;padding-bottom:6px;cursor:pointer;user-select:none}
+.dd-list .menu-item.dd-opt.act{background:var(--row-hover,var(--ds-hover))}
+.dd-list .menu-item.dd-opt.sel{font-weight:520}
+.dd-list .menu-item.dd-opt[aria-disabled]{opacity:.45;cursor:default}
+.dd-pop.sm .dd-opt{font-size:var(--fs-label)}
+.dd-ot{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px;line-height:1.35;overflow-wrap:anywhere}
+.dd-ot small{font-size:var(--fs-1);font-weight:400;color:var(--ds-muted)}
+.dd-opt .ck{flex:none;display:grid;place-items:center;color:var(--ds-ink)}
+.dd-none{padding:10px 12px;font-size:var(--fs-2);color:var(--ds-muted)}
+.dd-grp{padding:10px 12px 4px;font-size:var(--fs-1);font-weight:560;color:var(--ds-muted)}
+.dd-grp:first-child{padding-top:4px}
+/* Ô chọn màu của app (ui/colorpick.tsx, thay <input type="color"> gốc): nút viên thuốc có mẫu màu bo 25% và mã hex; khung nổi có bảng màu
+   8 cột (ô vuông bo 25%, ô đang chọn có dấu tích và vòng mực), ô mã hex và nút mở bảng màu của trình duyệt. */
+.cp{display:inline-flex;align-items:center;gap:9px;height:var(--ds-h);padding:0 11px 0 5px;border-radius:var(--r-pill);border:1px solid var(--ds-line-2);background:var(--ds-plate);
+  color:var(--ds-ink);font:inherit;font-size:var(--fs-2);cursor:pointer;transition:border-color var(--ds-fast),box-shadow var(--ds-fast)}
+/* Cỡ md có hai dòng (tên + mã màu): bo góc tấm như ô chọn giọng hai dòng, không bo viên thuốc (góc tròn cắt chữ). Cỡ sm chỉ còn chấm màu: tròn. */
+.cp:not(.sm){border-radius:var(--r-plate)}
+.cp.sm{height:var(--ds-h-sm);padding:0 4px;gap:0}
+.cp.sm :is(.cp-l,svg){display:none}
+.cp:hover{border-color:color-mix(in srgb,var(--ds-ink) 32%,var(--ds-line-2))}
+.cp:focus-visible,.cp.open{outline:0;border-color:var(--ds-ink);box-shadow:0 0 0 3px color-mix(in srgb,var(--ds-ink) 10%,transparent)}
+.cp>svg{color:var(--ds-muted)}
+.cp-chip{flex:none;width:24px;height:24px;border-radius:var(--r-pill);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--ds-ink) 18%,transparent)}
+.cp.sm .cp-chip{width:20px;height:20px}
+.cp-chip.lg{width:30px;height:30px;border-radius:25%}
+.cp-l{display:flex;flex-direction:column;align-items:flex-start;line-height:1.15}
+.cp-l code{font:500 var(--fs-1)/1.2 var(--font-mono,ui-monospace,monospace);color:var(--ds-muted)}
+.menu.cp-pop{width:260px;max-width:calc(100vw - 16px);min-width:0;padding:10px;display:flex;flex-direction:column;gap:10px}
+.cp-grid{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:6px}
+.cp-sw{aspect-ratio:1;display:grid;place-items:center;border-radius:25%;border:0;background:var(--c);cursor:pointer;color:#fff;mix-blend-mode:normal;
+  box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--ds-ink) 16%,transparent);transition:transform var(--ds-fast) var(--ds-ease),box-shadow var(--ds-fast)}
+.cp-sw:hover{transform:scale(1.08)}
+.cp-sw:focus-visible,.cp-sw[aria-pressed=true]{outline:0;box-shadow:0 0 0 2px var(--ds-plate),0 0 0 3.5px var(--ds-ink)}
+.cp-sw svg{filter:drop-shadow(0 0 1.5px rgba(0,0,0,.6))}
+.cp-row{display:flex;align-items:center;gap:8px}
+.cp-hex{flex:1;min-width:0;display:flex;align-items:center;gap:2px;height:32px;padding:0 10px;border-radius:var(--r-pill);background:var(--ds-sunken);box-shadow:inset 0 0 0 1px var(--ds-line-2);
+  font:500 var(--fs-2) var(--font-mono,ui-monospace,monospace);color:var(--ds-muted)}
+.cp-hex:focus-within{box-shadow:inset 0 0 0 1px var(--ds-ink)}
+.cp-hex input{flex:1;min-width:0;border:0;background:transparent;font:inherit;color:var(--ds-ink);text-transform:uppercase;padding:0}
+.cp-pop .cp-row .btn.cp-more{height:32px;padding:0 10px;font-size:var(--fs-label);gap:5px}
+.cp-native{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none;border:0;padding:0}
 /* Hộp thoại */
 html body .modal:not(.auth-root *){border-radius:var(--r-panel)}
 .overlay:not(.auth-root *){background:rgba(17,18,16,.22)}
 html[data-theme="dark"] body .overlay:not(.auth-root *){background:rgba(0,0,0,.5)}
-/* Thanh cuộn mảnh */
-html body .app *{scrollbar-width:thin;scrollbar-color:color-mix(in srgb,var(--ds-ink) 18%,transparent) transparent}
+/* Thanh cuộn mảnh. Độ ưu tiên 0 (:where): trước đây "html body .app *" (0,1,2) thắng mọi scrollbar-width:none của dải tab / bộ chọn đoạn /
+   hàng thẻ (.sp-seg, .sp-utabs, .sp-catrow… chỉ 0,1,0), nên trên Windows (thanh cuộn cổ điển, không nổi) các dải đó hiện thanh cuộn có
+   mũi tên khi tràn vài px. macOS dùng thanh cuộn nổi nên không thấy. */
+:where(.app *){scrollbar-width:thin;scrollbar-color:color-mix(in srgb,var(--ds-ink) 18%,transparent) transparent}
+/* Dải cuộn ngang (tab, bộ chọn đoạn, hàng thẻ lọc): không bao giờ hiện thanh cuộn, không cuộn dọc vì tràn lẻ px (overflow-x:auto kéo
+   overflow-y thành auto: nút cao 28 trong rãnh 34 lệch nửa px là hiện thanh cuộn dọc có mũi tên), vẫn kéo / lăn ngang được khi thật sự
+   tràn; mép nào còn nội dung thì mờ dần (mặt nạ theo vị trí cuộn, chỉ khi trình duyệt có scroll-timeline). Lớp .hstrip cho dải mới. */
+:where(.hstrip,.sp-seg,.sp-utabs,.sp-tags,.sp-catrow,.sp-atabs,.sp-tabs,.ds-seg,.ds-tabs,.bp-tablist,.tag-filter,.scan-tabs,.tk-tabs .pl-seg){
+  overflow-x:auto;overflow-y:hidden;scrollbar-width:none;overscroll-behavior-x:contain;scroll-padding-inline:24px}
+:where(.hstrip,.sp-seg,.sp-utabs,.sp-tags,.sp-catrow,.sp-atabs,.sp-tabs,.ds-seg,.ds-tabs,.bp-tablist,.tag-filter,.scan-tabs,.tk-tabs .pl-seg)::-webkit-scrollbar{display:none}
+@property --fade-l{syntax:"<length>";inherits:false;initial-value:0px}
+@property --fade-r{syntax:"<length>";inherits:false;initial-value:0px}
+@keyframes stripFade{0%{--fade-l:0px;--fade-r:28px}12%,88%{--fade-l:28px;--fade-r:28px}100%{--fade-l:28px;--fade-r:0px}}
+/* Không tràn thì scroll-timeline không chạy: mặt nạ giữ --fade-l / --fade-r = 0, dải (kể cả rãnh của bộ chọn đoạn) hiện trọn. */
+@supports (animation-timeline:scroll()){
+  :where(.hstrip,.sp-seg,.sp-utabs,.sp-tags,.sp-catrow,.sp-atabs,.sp-tabs,.ds-seg,.ds-tabs,.bp-tablist,.tag-filter,.scan-tabs,.tk-tabs .pl-seg){
+    -webkit-mask-image:linear-gradient(90deg,transparent 0,#000 var(--fade-l),#000 calc(100% - var(--fade-r)),transparent 100%);
+    mask-image:linear-gradient(90deg,transparent 0,#000 var(--fade-l),#000 calc(100% - var(--fade-r)),transparent 100%);
+    animation:stripFade linear both;animation-timeline:scroll(self inline)}
+}
 
 /* ---------------------------------------------------------------- khung app: thanh điều hướng dọc + bảng đoạn chat */
 .shell-side{display:flex;flex:none;height:100%;position:relative;z-index:5}
@@ -973,15 +1086,12 @@ html body .scan-modal .scan-tabs>button{display:inline-flex;align-items:center;g
 }
 
 /* Ô nhập nhiều dòng không bo kiểu viên thuốc: bán kính 999px cắt mất chữ ở bốn góc (ô Hướng dẫn của việc tự động). */
-/* Ô chọn bo tròn: tự vẽ mũi tên, cách viền phải 13px, chừa chỗ cho chữ. Mũi tên mặc định của trình duyệt luôn nằm sát viền (chừa thêm
-   padding cũng không dời được), rơi vào phần bo: ô chọn model của việc tự động và của Quét skill rác, ô lọc Hộp thư / Bộ não,
-   ô "Gửi … tin gần nhất" của bảng ngữ cảnh, ô Studio của thư viện. */
-select.field:not(.auth-root *),.tk-page select.tk-filter.field,.cx-hist select,.sy-settings select.field,select.pl-sel{
-  -webkit-appearance:none;appearance:none;cursor:pointer;text-overflow:ellipsis}
-/* Mũi tên dạng nét (như mũi tên mặc định của các ô chọn khác), màu chữ phụ của từng giao diện. */
+/* Lưới an toàn: app không còn <select> gốc (ui/listbox.tsx; tests/api/ui-controls.test.mjs chặn thêm mới). <select> nào lọt vào sau này
+   vẫn có mũi tên tự vẽ căn giữa theo chiều dọc, cách viền phải 12px, không dùng mũi tên mặc định nằm sát phần bo. */
+:where(select:not(.auth-root *)){-webkit-appearance:none;appearance:none;cursor:pointer;text-overflow:ellipsis;padding-right:32px;
+  background-image:var(--sel-arrow);background-position:right 12px center;background-size:12px 12px;background-repeat:no-repeat}
 :root{--sel-arrow:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' fill='none'%3E%3Cpath d='M3 4.5l3 3 3-3' stroke='%235F6058' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")}
 [data-theme="dark"]{--sel-arrow:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' fill='none'%3E%3Cpath d='M3 4.5l3 3 3-3' stroke='%239C9D95' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")}
-html body .cx-hist select{padding-left:10px}
 
 /* Màn cảm ứng (pointer: coarse): vùng bấm tối thiểu 44×44 cho nút biểu tượng, mục menu, mục điều hướng (WCAG 2.5.5).
    Tiền tố html body … :not(.auth-root *) cùng dạng các luật phía trên (vd. .menu-item min-height:32px) và đứng sau nên thắng; trang đăng nhập cũng áp dụng. */
@@ -1033,7 +1143,7 @@ html body .sy-settings .s-body h3 .muted{color:var(--ds-faint)}
 .sy-settings .s-body .row .d{color:var(--ds-muted)}
 .sy-settings .sel{padding:0 11px 0 13px;border-radius:var(--r-pill)}
 html body .sy-settings .sel:hover{background:var(--ds-hover)}
-html body .sy-settings .field,html body .sy-settings .textarea{border:1px solid var(--ds-line-2);border-radius:var(--r-pill);background:var(--ds-plate)}
+html body .sy-settings .field,html body .sy-settings .textarea{border:1px solid var(--ds-line-2);background:var(--ds-plate)}
 html body .sy-settings .textarea{border-radius:var(--r-plate)}
 html body .sy-settings .field:focus,html body .sy-settings .textarea:focus{border-color:var(--ds-ink);box-shadow:0 0 0 3px color-mix(in srgb,var(--ds-ink) 10%,transparent)}
 html body .field:disabled:not(.auth-root *),html body .sy-settings .field:disabled{background:transparent;border-style:dashed;color:var(--ds-faint)}
@@ -1069,5 +1179,12 @@ html body .cm-find input{border:0;background:transparent;box-shadow:none;padding
 .cm-back{display:flex}
 }
 html body textarea.field:not(.auth-root *),html body .sy-settings textarea.field{border-radius:var(--r-card)}
-html body select.field:not(.auth-root *),html body .tk-page select.tk-filter.field,.cx-hist select,html body .sy-settings select.field,select.pl-sel{padding-right:34px;background-image:var(--sel-arrow);background-position:right 13px center;background-size:12px 12px;background-repeat:no-repeat}
+/* Chặn tận gốc: ô nhiều dòng không bao giờ mang bo viên thuốc. Đợt "một thang hình khối" (55dd84a6) đổi bán kính theo lớp (.sp-input, .field,
+   .sy-input…) sang --r-pill vì ô một dòng; biến thể nhiều dòng của cùng lớp (.sp-input.ta: Mô tả bản nhạc, Mô tả âm thanh, Nội dung bài viết)
+   thành viên thuốc to và cắt mất chữ gợi ý ở góc (textarea cuộn bên trong nên nội dung bị bo cắt). :where = độ ưu tiên 0: luật syn-over nào
+   đặt bán kính riêng cho textarea vẫn thắng, mọi luật của lớp syn thì thua. */
+:where(textarea){border-radius:var(--r-field)}
+/* Ô soạn không viền, không nền (khung bên ngoài mới là ô): bo góc chỉ cắt chữ gợi ý ở góc trên trái (textarea cuộn bên trong, nội dung bị
+   góc bo cắt) mà không vẽ gì. tests/ui/polish.mjs bước 7 bắt lỗi này. */
+:where(.composer, .tk-comp, .sp-compose, .sp-editor) > :where(textarea){border-radius:0}
 }

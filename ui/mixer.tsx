@@ -3,7 +3,9 @@
 // Ba tầng giống cách Synchro xếp prompt để dùng bộ đệm: cố định (hướng dẫn, skill, tài liệu ghim) → lịch sử → thay đổi mỗi lượt.
 // Tắt / bật khối ở tầng cuối không làm đổi phần đầu nên không mất bộ đệm. Ngữ cảnh quá lớn thì nén lịch sử thành tóm tắt.
 import { useEffect, useMemo, useRef, useState } from "react";
+import { isAway } from "./clickaway";
 import * as I from "./icons";
+import { Dropdown } from "./listbox";
 import { locale, tr } from "./i18n";
 import { compactHistory, estimateContext, type CtxBlock } from "./llm";
 import { chatHistory, mixExtra } from "./history";
@@ -59,7 +61,7 @@ export function ContextMixer({ chat, studio, recentSkills, busy, onChange, say }
   }, [key, busy]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!open) return;
-    const h = (e: MouseEvent) => { if (!ref.current?.contains(e.target as Node)) setOpen(false); };
+    const h = (e: MouseEvent) => { if (isAway(ref.current, e.target)) setOpen(false); };
     const k = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
     document.addEventListener("mousedown", h); document.addEventListener("keydown", k);
     return () => { document.removeEventListener("mousedown", h); document.removeEventListener("keydown", k); };
@@ -129,11 +131,9 @@ export function ContextMixer({ chat, studio, recentSkills, busy, onChange, say }
               )}
               {tier === "history" && (
                 <div className="cx-hist">
-                  <label>{tr("Gửi")}
-                    <select value={mix.recent ?? 0} onChange={(e) => setMix({ recent: Number(e.target.value) || undefined })}>
-                      <option value={0}>{tr("Toàn bộ")}</option><option value={12}>{tr("12 tin gần nhất")}</option><option value={6}>{tr("6 tin gần nhất")}</option>
-                    </select>
-                  </label>
+                  <span className="cx-hist-l">{tr("Gửi")}
+                    <Dropdown<number> size="sm" label="Gửi" minWidth={170} value={mix.recent ?? 0} onChange={(v) => setMix({ recent: v || undefined })} options={[[0, "Toàn bộ"], [12, "12 tin gần nhất"], [6, "6 tin gần nhất"]]} />
+                  </span>
                   {chat.compact && <button className="lnk" onClick={() => onChange({ compact: undefined })}>{tr("Bỏ nén")}</button>}
                   <span style={{ flex: 1 }} />
                   <button className={`btn ${hot ? "dark" : ""}`} disabled={!!work || histCount <= KEEP} onClick={compact} title={tr("Tóm tắt các lượt cũ (giữ 4 tin gần nhất)")}>{work === "compact" ? <span className="art-spin sm" /> : <I.Sparkle size={13} />}{tr("Nén lịch sử")}</button>
