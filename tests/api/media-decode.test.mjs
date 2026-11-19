@@ -1,11 +1,12 @@
-// Đọc ảnh HEIC và tệp Office cũ, không cần máy chủ:
+// Đọc ảnh HEIC, tệp Office cũ và trạng thái của chúng ở trang Sức khỏe hệ thống, không cần máy chủ:
 // - Bộ giải HEIC (server/fileproc/heic.ts): chọn công cụ, tham số, trần thời gian, trần điểm ảnh, lỗi rõ cho người
 //   dùng, bằng công cụ giả (tệp shell) nên chạy được ở mọi máy; giải thật ảnh mẫu khi máy có bộ giải (heif-dec,
 //   heif-convert, sips), không có thì bỏ qua và nói rõ.
 // - Office cũ: tệp .doc thật (tests/fixtures/media/legacy.doc) qua detectKind → LibreOffice (giả) → trình đọc .docx.
+// - Trang Sức khỏe hệ thống (server/fileproc/mediacaps.ts): trạng thái ok / off / missing / broken của ba bộ đọc.
 import path from "node:path";
 import os from "node:os";
-import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync } from "node:fs";
 import { createRequire } from "node:module";
 import { loadTs } from "../lib/ts.mjs";
 
@@ -29,10 +30,12 @@ const errOf = async (p) => {
 };
 const msg = (e) => e?.message ?? "";
 
-const mods = await loadTs(["server/fileproc/heic", "server/fileproc/extractors", "server/fileproc/detect"]);
+const mods = await loadTs(["server/fileproc/heic", "server/fileproc/extractors", "server/fileproc/detect",
+  "server/fileproc/mediacaps"]);
 const H = mods["server/fileproc/heic"];
 const E = mods["server/fileproc/extractors"];
 const D = mods["server/fileproc/detect"];
+const M = mods["server/fileproc/mediacaps"];
 
 const FIX = path.join(process.cwd(), "tests", "fixtures", "media");
 const HEIC = readFileSync(path.join(FIX, "tiny.heic"));
@@ -164,6 +167,32 @@ ok(/--headless .*--convert-to docx --outdir \S+ \S+in\.doc$/.test(lastCall()),
 process.env.SYNCHRO_SOFFICE_BIN = path.join(tmp, "khong-co-soffice");
 const miss = await errOf(E.pickExtractor("legacy-office", "cu.doc").run(DOC, ctx("cu.doc", "legacy-office")));
 ok(/máy chủ chưa chuyển được/.test(msg(miss)), "đặt biến mà chưa cài LibreOffice → lý do rõ, không treo", msg(miss));
+
+console.log("7. Sức khỏe hệ thống: đo ba bộ đọc tệp");
+const fakePy = script("python", `case "$2" in *rapidocr*) echo "rapidocr-onnxruntime 1.3.24"; exit 0 ;; esac; exit 1`);
+process.env.SYNCHRO_HEIF_BIN = fakeDec;
+process.env.SYNCHRO_SOFFICE_BIN = soffice;
+process.env.SYNCHRO_OCR = "1";
+process.env.PYTHON_BIN = fakePy;
+let c = await M.mediaCaps(0);
+const js = (x) => JSON.stringify(x);
+ok(c.heic.state === "ok" && c.heic.version === "heif-dec", "HEIC: giải được ảnh mẫu → ok (heif-dec)", js(c.heic));
+ok(c.office.state === "ok" && /LibreOffice 7\.6/.test(c.office.version ?? ""), "Office: soffice --version → ok",
+  js(c.office));
+ok(c.ocr.state === "ok" && /rapidocr/.test(c.ocr.version ?? ""), "OCR: nạp được thư viện → ok", js(c.ocr));
+process.env.SYNCHRO_HEIF_BIN = broken;
+process.env.SYNCHRO_SOFFICE_BIN = path.join(tmp, "khong-co-soffice");
+process.env.PYTHON_BIN = script("python-hong", "echo 'ModuleNotFoundError: rapidocr_onnxruntime' >&2; exit 1");
+c = await M.mediaCaps(0);
+ok(c.heic.state === "broken", "HEIC: công cụ có mà giải hỏng → broken", js(c.heic));
+ok(c.office.state === "missing" && c.office.on, "Office: đặt biến mà không có chương trình → missing", js(c.office));
+ok(c.ocr.state === "broken", "OCR: thiếu thư viện → broken", js(c.ocr));
+delete process.env.SYNCHRO_SOFFICE_BIN;
+delete process.env.SYNCHRO_OCR;
+c = await M.mediaCaps(0);
+ok(c.office.state === "off" && c.ocr.state === "off", "chưa đặt SYNCHRO_SOFFICE_BIN / SYNCHRO_OCR → off",
+  js([c.office, c.ocr]));
+ok(existsSync(path.join(process.cwd(), "scripts", "media-probe.heic")), "ảnh mẫu của phép đo có trong scripts/");
 
 rmSync(tmp, { recursive: true, force: true });
 console.log(`\n${fail ? "✗" : "✓"} ${pass}/${pass + fail} đạt, ${fail} lỗi`);

@@ -8,6 +8,7 @@ import { loopReport } from "../../../../server/loopdelay";
 import { opsProblems, opsSnapshot } from "../../../../server/ops";
 import { agentAlive, wsConfigured } from "../../../../server/workspace";
 import { latencySummary } from "../../../../server/tracing";
+import { mediaCaps } from "../../../../server/fileproc/mediacaps";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -18,10 +19,19 @@ const build = (() => { try { return fs.readFileSync(path.join(process.cwd(), pro
 export const GET = handle(async (req) => {
   requireAdmin(req);
   const snap = opsSnapshot();
-  const [agent, dns] = await Promise.all([wsConfigured() ? agentAlive() : Promise.resolve(null), mailDnsStatus()]);
+  // Khả năng đọc tệp đo lại tối đa mỗi phút: vừa cài xong bấm Làm mới là thấy, mà mở trang liên tục không chạy
+  // soffice liên tục.
+  const [agent, dns, media] = await Promise.all([
+    wsConfigured() ? agentAlive() : Promise.resolve(null),
+    mailDnsStatus(),
+    mediaCaps(60_000),
+  ]);
   // Độ trễ từng chặng của lượt chat: 500 lượt gần nhất, hôm nay và 7 ngày (p50 / p95 theo hãng).
   const today = latencySummary(1), latency = { ...today, week: latencySummary(7).daily };
-  return Response.json({ ...snap, problems: opsProblems(snap), agent, dns, build, uptimeSec: Math.round(process.uptime()), latency, mem: memReport(), loop: loopReport() });
+  const problems = opsProblems({ ...snap, media });
+  const uptimeSec = Math.round(process.uptime());
+  const mem = memReport(), loop = loopReport();
+  return Response.json({ ...snap, problems, media, agent, dns, build, uptimeSec, latency, mem, loop });
 });
 
 // { action: "mail_test", lang }: gửi thử tới chính email của quản trị viên và chờ kết quả (không cho nhập địa chỉ khác: nút này không phải công cụ gửi thư).
