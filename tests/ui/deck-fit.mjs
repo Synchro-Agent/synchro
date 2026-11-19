@@ -4,8 +4,10 @@
 //  1. Chuyển slide: slide mới được vẽ trong ≤ 250 ms sau lệnh chuyển, dù lần vá tốn ≥ 300 ms (bộ vá cũ chạy trong rAF, trước lần vẽ: hỏng ở đây).
 //  2. Sau lần vẽ đó, cỡ chữ / màu chữ đã vá xong trong thời gian ngắn (đo "cú nhảy" từ lần vẽ đầu tới lúc vá xong) và chỉ một lần mỗi slide.
 //  3. Phông web tải xong sau khi slide đã được vá bằng phông dự phòng: slide đang hiện vá lại ngay, slide đã rời đi vá lại (từ cỡ gốc) lần hiện ra tới.
+//  4. Tiêu đề dài ở khung 1280×720: chỉ tiêu đề có data-sx-fit, đoạn văn làm tràn. Tiêu đề không co dưới 28px,
+//     không nhỏ hơn dòng mô tả; co tới sàn mà vẫn tràn thì slide mang data-sx-fitover (bộ kiểm tra báo tràn cho model).
 // Chạy: node tests/ui/deck-fit.mjs. So với bộ vá khác: FIT_FROM=<tệp artkit.ts> (lấy FIT_JS trong tệp đó). SHOTS=<thư mục>: ảnh slide.
-import { spawn } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -16,7 +18,7 @@ const PORT = Number(process.env.CDP_PORT ?? 9397);
 const SHOTS = process.env.SHOTS;
 let pass = 0, fail = 0;
 const ok = (c, n, x = "") => { c ? pass++ : fail++; console.log(c ? "  ✓" : "  ✗", n, c ? "" : String(typeof x === "string" ? x : JSON.stringify(x)).slice(0, 700)); };
-const { artdoc: D, artkit: A } = await loadTs(["artdoc", "artkit"]);
+const { artdoc: D, artkit: A, deckfit: DF } = await loadTs(["artdoc", "artkit", "deckfit"]);
 
 // ---------------------------------------------------------------- bản trình bày mẫu
 // Ô chữ tự có khung cố định (overflow:hidden, cao 34px) mà chữ 64px: fitSelf co từng 1px tới khi vừa, mỗi bước một lần dàn trang.
@@ -51,6 +53,40 @@ const dir = path.join(tmpdir(), "synchro-ui", "deck-fit");
 rmSync(dir, { recursive: true, force: true }); mkdirSync(dir, { recursive: true });
 const file = path.join(dir, "deck.html");
 writeFileSync(file, doc);
+
+// Bản trình bày tiêu đề dài (phần 4): slide của bộ thiết kế (.sx-slide, cỡ theo --sx-u), tiêu đề .sx-display 80px có
+// data-sx-fit. Slide 1: chín đoạn văn 20px làm tràn mà không ô nào co được ngoài tiêu đề, dòng mô tả 26px (đúng cảnh bộ
+// slide của tài khoản miễn phí: tiêu đề bị co còn nhỏ hơn dòng mô tả). Slide 2: tràn ít, co tiêu đề một chút là vừa.
+// Slide 3: tiêu đề tự có khung cố định (overflow hidden) quá thấp, co tới sàn vẫn không vừa.
+const LONG = "Kế hoạch mở rộng chuỗi trà sữa giao bằng xe điện ra mười hai quận nội thành Hà Nội trong năm 2027";
+const PARA = "Mỗi micro-hub phục vụ bán kính ba ki-lô-mét, giao trong mười tám phút, chi phí giảm dần theo mật độ.";
+const big = (n) => `style="font-size:calc(${n}*var(--sx-u))"`;
+const titleDeck = `<!doctype html><html><head><meta charset="utf-8"></head><body data-sx-preset="swiss-grid">
+<section class="slide sx-slide"><h1 class="sx-display" data-sx-fit>${LONG}</h1>
+<p class="sx-text" ${big(26)}>Dòng mô tả của slide: vì sao năm 2027 là thời điểm mở rộng.</p>
+${Array.from({ length: 9 }, () => `<p class="sx-text">${PARA}</p>`).join("\n")}</section>
+<section class="slide sx-slide"><h1 class="sx-display" data-sx-fit>${LONG} và mười quận ngoại thành lân cận</h1>
+<p class="sx-text" ${big(32)}>${PARA}</p><p class="sx-text" ${big(32)}>${PARA}</p></section>
+<section class="slide sx-slide">
+<h2 class="sx-title" data-sx-fit style="height:calc(40*var(--sx-u));overflow:hidden">${LONG}</h2>
+<p class="sx-text">${PARA}</p></section></body></html>`;
+const titleFile = path.join(dir, "title.html");
+const titleDoc = D.buildDocCore("html", titleDeck, "http://127.0.0.1:9", "deckfit", false, "", { fixed: null }, "Deck");
+writeFileSync(titleFile, titleDoc);
+// Bộ tự vá của bản đang chạy trước khi có sàn tiêu đề (f6c835c5), để thấy lại đúng lỗi trên cùng trang.
+let before = null;
+try {
+  const git = { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] };
+  const src = execFileSync("git", ["show", "f6c835c5:shared/artkit.ts"], git);
+  const old = /export const FIT_JS = String\.raw`([\s\S]*?)`;/.exec(src)?.[1];
+  if (old) {
+    before = path.join(dir, "title-before.html");
+    writeFileSync(before, titleDoc.split(A.FIT_JS).join(old));
+  }
+} catch (e) {
+  // Bản sao không có lịch sử git (gói nguồn): phần so sánh chỉ để thấy lại lỗi, bỏ qua được.
+  console.log("  (không đọc được bộ vá f6c835c5:", String(e.message).split("\n")[0], ")");
+}
 if (SHOTS) mkdirSync(SHOTS, { recursive: true });
 
 // ---------------------------------------------------------------- Chrome
@@ -150,6 +186,46 @@ try {
   const ovf = await ev(`(() => { const s = window.__sxAll()[4]; return [...s.querySelectorAll("[data-node-id]")].filter((e) => getComputedStyle(e).overflow !== "visible" && (e.scrollHeight > e.clientHeight + 1)).length; })()`);
   ok(ovf === 0, "slide 5 sau khi vá lại: không ô chữ có khung cố định nào còn tràn", ovf);
   await shot("deck-fit-slide5");
+
+  console.log("4. Tiêu đề dài ở khung 1280×720: sàn 28px, không nhỏ hơn chữ thân, co hết vẫn tràn thì báo");
+  const openTitle = async (f) => {
+    await P("Page.navigate", { url: "file://" + f });
+    return until(`typeof window.__sxGo === "function" && window.__sxAll().length === 3`);
+  };
+  // Cỡ chữ đo ở khung rộng 1280 bằng đúng hàm đo của bộ kiểm tra hiển thị (TYPE_JS), cùng cờ báo tràn của bộ tự co.
+  const typeOf = async (k) => {
+    await ev(`window.__sxGo(${k})`);
+    await until(fitDone(k), 8000);
+    await sleep(150);
+    return ev(`(() => { const s = window.__sxCur(), t = s.querySelector("h1,h2");
+      return { ...(${DF.TYPE_JS})(s), px: parseFloat(getComputedStyle(t).fontSize),
+        over: s.hasAttribute("data-sx-fitover"), titleOver: t.hasAttribute("data-sx-fitover") }; })()`);
+  };
+  ok(await openTitle(titleFile), "trang tiêu đề dài mở được, 3 slide");
+  const t1 = await typeOf(0);
+  console.log("    slide 1:", JSON.stringify(t1));
+  ok(t1.title >= DF.TITLE_FLOOR, `tiêu đề không co dưới ${DF.TITLE_FLOOR}px (còn ${t1.title}px)`, t1);
+  ok(t1.title >= t1.lead && t1.title >= t1.body, `tiêu đề không nhỏ hơn mô tả ${t1.lead}px, chữ thân ${t1.body}px`, t1);
+  ok(t1.over, "co tới sàn mà đoạn văn vẫn tràn: slide mang data-sx-fitover (bộ kiểm tra báo tràn cho model)", t1);
+  const weak1 = DF.weakType([{ slide: 1, h: 720, w: 1280, vh: 720, vw: 1280, ...t1 }]);
+  ok(!weak1.length, "thứ bậc cỡ chữ sau khi co vẫn đạt", t1);
+  await shot("deck-fit-title1");
+  const t2 = await typeOf(1);
+  console.log("    slide 2:", JSON.stringify(t2));
+  ok(t2.title < 80 && t2.title >= t2.lead, `tràn ít: tiêu đề co còn ${t2.title}px, không dưới mô tả ${t2.lead}px`, t2);
+  ok(!t2.over, "co vừa khung: không báo tràn", t2);
+  const t3 = await typeOf(2);
+  console.log("    slide 3:", JSON.stringify(t3));
+  ok(t3.title >= DF.TITLE_FLOOR && t3.titleOver, `tiêu đề tự có khung quá thấp: dừng ở ${t3.title}px và báo tràn`, t3);
+  await ev(`window.__sxReset(window.__sxCur())`);
+  const cleared = await ev(`document.querySelectorAll("[data-sx-fitover]").length`);
+  ok(cleared === 0, "trả về như gốc (đổi phong cách) thì bỏ cả cờ báo tràn", cleared);
+  if (before) {
+    ok(await openTitle(before), "cùng trang với bộ vá f6c835c5");
+    const b1 = await typeOf(0);
+    console.log("    f6c835c5, slide 1:", JSON.stringify(b1));
+    ok(b1.title < b1.lead, `tái hiện lỗi: bộ vá f6c835c5 co tiêu đề còn ${b1.title}px, nhỏ hơn mô tả ${b1.lead}px`, b1);
+  }
   ok(!errs.length, "không có lỗi JavaScript trong trang", errs.slice(0, 5));
 } finally {
   try { ws.close(); } catch {}

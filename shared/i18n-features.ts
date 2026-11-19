@@ -373,5 +373,13 @@ Object.assign(FX_VI2EN, {
   "Nhãn mục nhảy cóc hoặc đi lùi ở slide {slides} (theo thứ tự phải là {want}).": "Section labels skip a number or go backwards on slide {slides} (in order they should read {want}).",
   "Nhãn mục ({brows}) đã vượt lên trước số trang ({pages}) trên slide {slides}: đánh số lại cho cùng một dãy.": "Section labels ({brows}) run ahead of the page numbers ({pages}) on slide {slides}: renumber them as one sequence.",
   "{count} slide tràn khung khi trình chiếu": "{count} slides overflow their frame when presented",
+  "Đo thật ở {vw}×{vh}: slide {n} vẫn tràn khi chữ đã co tới sàn (tiêu đề {min}px). Rút chữ hoặc tách slide.":
+    "Measured at {vw}×{vh}: slide {n} still overflows with its text shrunk to the minimum (title {min}px). "
+    + "Cut text or split the slide.",
+  "Tiêu đề không nổi hơn chữ thân": "Title doesn't stand out from the body text",
+  "slide {n}: tiêu đề {t}px, chữ thân {b}px": "slide {n}: title {t}px, body text {b}px",
+  "Đo thật ở {vw}×{vh}: {rows}. Tiêu đề cần lớn ít nhất 1,4 lần chữ thân: tăng cỡ tiêu đề hoặc rút chữ thân.":
+    "Measured at {vw}×{vh}: {rows}. A title should be at least 1.4 times the body text: "
+    + "enlarge the title or cut the body text.",
   "Đo thật ở {vw}×{vh}: slide {slides} cao hoặc rộng hơn khung, phần thừa bị cắt khi trình chiếu. Rút chữ, giảm khoảng trống hoặc tách slide.": "Measured at {vw}×{vh}: slides {slides} are taller or wider than the frame, so the extra part is cut off when presented. Shorten the text, reduce the spacing, or split the slides.",
 });

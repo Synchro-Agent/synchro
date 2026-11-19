@@ -3,7 +3,7 @@
 import "server-only";
 import type { Finding } from "../shared/critic";
 import { deckSlides, type NumIssue } from "../shared/decknum";
-import { overflowing, overText } from "../shared/deckfit";
+import { overflowing, overText, TITLE_FLOOR, typeBody, weakType } from "../shared/deckfit";
 import type { Lang } from "../shared/i18n-core";
 import type { DeckLayout } from "./artcheck";
 import { tfOn, trOn } from "./i18n-server";
@@ -21,6 +21,14 @@ export function deckFindings(content: string, lay: DeckLayout | null, nums: NumI
       detail: tfOn("Đo thật ở {vw}×{vh}: slide {slides} cao hoặc rộng hơn khung, phần thừa bị cắt khi trình chiếu. Rút chữ, giảm khoảng trống hoặc tách slide.", { vw: v.vw, vh: v.vh, slides: bad.map((f) => f.slide).join(", ") }, lang) });
   } else for (const f of bad) {
     const tall = f.h > f.vh + 4, line = lineOf(f.slide);
+    // Slide tự cắt phần thừa: cao / rộng đo được bằng khung, chỉ bộ tự co biết nội dung còn tràn.
+    if (!tall && f.w <= f.vw + 4) {
+      out.push({ line_start: line, line_end: line, severity: "high", by: ["Synchro"], suggested_fix: "",
+        title: tfOn("Slide {n} tràn khung khi trình chiếu", { n: f.slide }, lang), detail: tfOn(
+          "Đo thật ở {vw}×{vh}: slide {n} vẫn tràn khi chữ đã co tới sàn (tiêu đề {min}px). Rút chữ hoặc tách slide.",
+          { vw: f.vw, vh: f.vh, n: f.slide, min: TITLE_FLOOR }, lang) });
+      continue;
+    }
     out.push({ line_start: line, line_end: line, severity: "high", by: ["Synchro"], suggested_fix: "", title: tfOn("Slide {n} tràn khung khi trình chiếu", { n: f.slide }, lang),
       detail: tall ? tfOn("Đo thật ở {vw}×{vh}: slide {n} cao {h}px, thừa {over}px so với khung, phần dưới bị cắt khi trình chiếu. Rút chữ, giảm khoảng trống hoặc tách thành hai slide.", { vw: f.vw, vh: f.vh, n: f.slide, h: f.h, over: f.h - f.vh }, lang)
         : tfOn("Đo thật ở {vw}×{vh}: slide {n} rộng {w}px, thừa {over}px so với khung, phần bên phải bị cắt khi trình chiếu. Rút chữ hoặc chia lại cột.", { vw: f.vw, vh: f.vh, n: f.slide, w: f.w, over: f.w - f.vw }, lang) });
@@ -37,6 +45,20 @@ export function deckFindings(content: string, lay: DeckLayout | null, nums: NumI
     if (same) same.detail += ` ${detail}`;
     else out.push({ line_start: x.line, line_end: x.line, severity: "medium", by: ["Synchro"], suggested_fix: "", title: trOn("Đánh số slide không nhất quán", lang), detail });
   }
+  // Thứ bậc cỡ chữ: tiêu đề nhỏ hơn 1,4 lần chữ thân hay nhỏ hơn dòng mô tả thì người xem không thấy ngay ý chính,
+  // nhất là ở ảnh thu nhỏ. Là lỗi đo được nên khung xem không được gắn nhãn "Ổn" cho bộ slide như vậy. Thêm sau phần
+  // đánh số: ghi chú đánh số gộp vào mục "Nên sửa" của Synchro ở cùng dòng, không được gộp nhầm vào mục này.
+  const weak = lay ? weakType(lay.fit) : [];
+  if (weak.length) {
+    const line = lineOf(weak[0].slide), v = weak[0];
+    const rows = weak.map((f) =>
+      tfOn("slide {n}: tiêu đề {t}px, chữ thân {b}px", { n: f.slide, t: f.title ?? 0, b: typeBody(f) }, lang));
+    out.push({ line_start: line, line_end: line, severity: "medium", by: ["Synchro"], suggested_fix: "",
+      title: trOn("Tiêu đề không nổi hơn chữ thân", lang),
+      detail: tfOn(
+        "Đo thật ở {vw}×{vh}: {rows}. Tiêu đề cần lớn ít nhất 1,4 lần chữ thân: tăng cỡ tiêu đề hoặc rút chữ thân.",
+        { vw: v.vw, vh: v.vh, rows: rows.join("; ") }, lang) });
+  }
   return out;
 }
 // Số đo cho model phản biện: để không đoán lỗi tràn từ mã nguồn (từng báo "biểu đồ cột tràn ngang" trên slide vừa khung).
@@ -46,6 +68,11 @@ export function deckFacts(lay: DeckLayout | null, nums: NumIssue[]): string {
     const bad = overflowing(lay.fit);
     rows.push(bad.length ? `Synchro đã dựng từng slide ở ${lay.fit[0].vw}×${lay.fit[0].vh} và đo: ${bad.map((f) => `slide ${f.slide} ${overText(f)}`).join("; ")}; các slide khác vừa khung. Các lỗi tràn này Synchro tự báo, bạn không cần nêu lại.`
       : `Synchro đã dựng từng slide ở ${lay.fit[0].vw}×${lay.fit[0].vh} và đo: cả ${lay.fit.length} slide đều vừa khung, không phần tử nào tràn. Không nêu lỗi tràn khung / tràn ngang / bị cắt.`);
+  }
+  const weak = lay ? weakType(lay.fit) : [];
+  if (weak.length) {
+    const sizes = weak.map((f) => `slide ${f.slide} tiêu đề ${f.title}px, chữ thân ${typeBody(f)}px`).join("; ");
+    rows.push(`Synchro đã đo cỡ chữ: ${sizes} (tiêu đề dưới 1,4 lần chữ thân). Synchro tự báo, bạn không cần nêu lại.`);
   }
   if (nums.length) rows.push(`Synchro đã báo lỗi đánh số slide: ${nums.map((x) => x.prompt).join("; ")}. Không nêu lại.`);
   return rows.length ? `\n<measured>\n${rows.join("\n")}\n</measured>` : "";
