@@ -24,7 +24,7 @@ const CHECK = `(() => {
   const out = [], vw = document.documentElement.clientWidth;
   if (document.documentElement.scrollWidth > vw + 1) out.push("trang cuộn ngang " + document.documentElement.scrollWidth + " > " + vw);
   const body = document.querySelector(".modal.settings .s-body") || document.body, bb = body.getBoundingClientRect();
-  for (const el of body.querySelectorAll("button,input,select,.adm-perm-row,.us-p,.us-p-x,.us-p-l,.api-sel,small")) {
+  for (const el of body.querySelectorAll("button,input,.dd,.adm-perm-row,.us-p,.us-p-x,.us-p-l,small")) {
     const r = el.getBoundingClientRect();
     if (!r.width || !r.height || r.bottom < 0 || r.top > innerHeight) continue;
     if (r.right > Math.min(vw, bb.right) + 1.5 || r.left < Math.max(0, bb.left) - 1.5) out.push("tràn: " + (el.className || el.tagName) + " [" + (el.textContent || el.getAttribute("aria-label") || "").trim().slice(0, 40) + "]");
@@ -145,7 +145,7 @@ try {
       let probs = await t.ev(CHECK);
       ok(!probs.length, `${label} ${th}: hạn mức mặc định + khóa chung không tràn`, probs.join(" | "));
       await t.shot(`admin-limits-${w}-${th}`);
-      const row = await t.ev(`(() => { const sel = document.querySelector(".us-p-x select[aria-label]"); const p = sel?.closest(".us-p") ?? sel?.closest(".us-ppl > *"); if (!p) return null; p.scrollIntoView({ block: "center" }); return { selects: p.querySelectorAll(".us-p-x select").length, day: !!p.querySelector(".us-p-x input") }; })()`);
+      const row = await t.ev(`(() => { const sel = document.querySelector(".us-p-x .dd[aria-label]"); const p = sel?.closest(".us-p") ?? sel?.closest(".us-ppl > *"); if (!p) return null; p.scrollIntoView({ block: "center" }); return { selects: p.querySelectorAll(".us-p-x .dd").length, day: !!p.querySelector(".us-p-x input") }; })()`);
       ok(!!row && row.selects === 2 && row.day, `${label} ${th}: mỗi người có ô hạn mức ngày và hai hộp chọn khóa chung`, row);
       await sleep(400);
       probs = await t.ev(CHECK);

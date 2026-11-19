@@ -10,6 +10,7 @@ import { rowKeys } from "./a11y";
 import { isEn, locale, tf, tr, trc } from "./i18n";
 import * as I from "./icons";
 import { PageBar, usePage } from "./pager";
+import { Dropdown } from "./listbox";
 import { BrandLogo, ModelLogo } from "./brands";
 import { vendorOf } from "../shared/vendor";
 import { Bar, CreditBar, ModeTag, PLAN_NOTE, PlanRow, RateRow, VENDOR_COLOR, hasApi, kTok, money, noWindows, refreshUsage, resetText, setupNote, useUsage, type Limit, type SubUsage, type VendorUsage } from "./usagering";
@@ -291,9 +292,8 @@ export function UsageAdmin({ say, Toggle }: { say: (m: string) => void; Toggle: 
       <div className="adm-card-h" style={{ marginTop: 14 }}><b>Shared API key for regular accounts</b><span className="d">Regular accounts can run models on the server&apos;s API key when they have no plan of their own, or when Auto picks it. Every run counts toward the limits above. Models from a plan a person signs in to are never limited here. Administrators can use every model.</span></div>
       <div className="adm-perm-row"><div><div className="t">Allow the shared key</div><div className="d">Off: regular accounts use only the plans they sign in to, unless you allow someone below.</div></div><Toggle on={c.sharedKey !== false} label="Allow the shared key" set={(v) => patch({ config: { sharedKey: v } }, v ? "Regular accounts can use the shared key" : "Regular accounts can't use the shared key")} /></div>
       <div className="adm-perm-row us-top"><div><div className="t">Highest model on the shared key</div><div className="d">Fast: Haiku, Luna, Flash. Balanced: Sonnet, Sol, Pro. Top models such as Opus cost far more per message; a person can still use them through their own plan.</div></div>
-        <span className="api-sel"><select aria-label="Highest model on the shared key" value={c.sharedTop ?? "balanced"} onChange={(e) => patch({ config: { sharedTop: e.target.value } }, "Shared key models saved")}>
-          {(["fast", "balanced", "strong"] as const).map((t) => <option key={t} value={t}>{TIER_LABEL[t]}</option>)}
-        </select></span></div>
+        <Dropdown<Tier> label="Highest model on the shared key" className="us-sel" align="end" minWidth={220} value={c.sharedTop ?? "balanced"} onChange={(v) => patch({ config: { sharedTop: v } }, "Shared key models saved")}
+          options={(["fast", "balanced", "strong"] as const).map((t) => [t, TIER_LABEL[t]] as const)} /></div>
 
       <div className="adm-card-h" style={{ marginTop: 14 }}><b>People</b><span className="d">Cost in the last 30 days and limits for each account. A custom limit replaces the default.</span></div>
       {d.users.length > 10 && <div className="s-search us-ppl-s"><I.Search size={14} /><input placeholder="Search by name or email" value={pq} onChange={(e) => setPq(e.target.value)} /></div>}
@@ -311,12 +311,12 @@ export function UsageAdmin({ say, Toggle }: { say: (m: string) => void; Toggle: 
               <div className="us-p-x">
                 <div className="us-p-l"><small>Day {u.effective.daily == null ? "∞" : `${Math.round(u.limits.find((l) => l.key === "daily")?.pct ?? 0)}%`}</small><Money label="Day" disabled={u.admin && !owner} value={"daily" in u.override ? u.override.daily : undefined} placeholder={u.effective.daily == null ? "Default: none" : `${u.effective.daily} (default)`} onSave={(v) => patch({ user: u.id, override: { ...u.override, daily: v } }, "Limit saved")} /></div>
                 {!u.admin && u.shared && <>
-                  <label className="us-p-l us-p-sel"><small>Shared key</small><span className="api-sel"><select aria-label="Shared key for this person" value={"shared" in u.override ? (u.override.shared ? "on" : "off") : ""} onChange={(e) => patch({ user: u.id, override: e.target.value ? { ...u.override, shared: e.target.value === "on" } : without(u.override, "shared") }, "Shared key access saved")}>
-                    <option value="">{c.sharedKey !== false ? "Default (allowed)" : "Default (blocked)"}</option><option value="on">Allowed</option><option value="off">Blocked</option>
-                  </select></span></label>
-                  <label className="us-p-l us-p-sel"><small>Highest model</small><span className="api-sel"><select aria-label="Highest shared-key model for this person" value={u.override.top ?? ""} onChange={(e) => patch({ user: u.id, override: e.target.value ? { ...u.override, top: e.target.value as Tier } : without(u.override, "top") }, "Shared key models saved")}>
-                    <option value="">{TOP_DEFAULT[c.sharedTop ?? "balanced"]}</option>{(["fast", "balanced", "strong"] as const).map((t) => <option key={t} value={t}>{TOP_OPT[t]}</option>)}
-                  </select></span></label>
+                  <div className="us-p-l us-p-sel"><small>Shared key</small><Dropdown<"" | "on" | "off"> label="Shared key for this person" className="us-sel" minWidth={200} value={"shared" in u.override ? (u.override.shared ? "on" : "off") : ""}
+                    onChange={(v) => patch({ user: u.id, override: v ? { ...u.override, shared: v === "on" } : without(u.override, "shared") }, "Shared key access saved")}
+                    options={[["", c.sharedKey !== false ? "Default (allowed)" : "Default (blocked)"], ["on", "Allowed"], ["off", "Blocked"]]} /></div>
+                  <div className="us-p-l us-p-sel"><small>Highest model</small><Dropdown<"" | Tier> label="Highest shared-key model for this person" className="us-sel" minWidth={200} value={u.override.top ?? ""}
+                    onChange={(v) => patch({ user: u.id, override: v ? { ...u.override, top: v } : without(u.override, "top") }, "Shared key models saved")}
+                    options={[["", TOP_DEFAULT[c.sharedTop ?? "balanced"]], ...(["fast", "balanced", "strong"] as const).map((t) => [t, TOP_OPT[t]] as const)]} /></div>
                 </>}
               </div>
             </div>
