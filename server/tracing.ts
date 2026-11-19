@@ -133,6 +133,14 @@ export function toOtlp(t: Trace) {
   const kids = t.spans.filter((s) => s.stage !== "total").map((s) => ({ traceId: t.traceId, spanId: hex(8), parentSpanId: t.rootId, name: s.name, kind: 1, startTimeUnixNano: ns(s.start), endTimeUnixNano: ns(s.end), attributes: attrList({ ...(s.stage ? { "synchro.stage": s.stage } : {}), ...s.attrs }) }));
   return { resourceSpans: [{ resource: { attributes: attrList({ "service.name": "synchro" }) }, scopeSpans: [{ scope: { name: "synchro.chat", version: "1" }, spans: [root, ...kids] }] }] };
 }
+// Bản sửa artifact của lượt (chat/tools.ts notePatches): khối áp được / không áp được, số lần viết lại trọn sau bản
+// sửa hỏng, kết quả lần nhắc gửi lại. Đọc thẳng trên dòng [timing] để biết bản sửa có áp ngay lần đầu không.
+function patchPart(a: Record<string, Attr>): string {
+  if (a["synchro.patch.ok"] === undefined) return "";
+  const heal = a["synchro.patch.heal"] !== undefined ? ` patch_heal=${a["synchro.patch.heal"]}` : "";
+  const counts = `patch_ok=${a["synchro.patch.ok"]} patch_failed=${a["synchro.patch.failed"]}`;
+  return ` ${counts} patch_rewrite=${a["synchro.patch.rewrites"]}${heal}`;
+}
 export function endTrace(t: Trace, status: number) {
   if (t.end) return;
   t.end = Date.now(); t.status = status;
@@ -141,7 +149,8 @@ export function endTrace(t: Trace, status: number) {
   try { aggregate(t); } catch (e) { console.error("[timing] không ghi được tổng hợp:", (e as Error).message); }
   const parts = new Map<string, number>();
   for (const [s, ms] of stageDurations(t)) parts.set(s, (parts.get(s) ?? 0) + ms);
-  console.log(`[timing] ${t.kind} ${t.provider ?? "-"} ${status} ${[...parts].map(([k, v]) => `${k}=${v}ms`).join(" ")}`);
+  const stages = [...parts].map(([k, v]) => `${k}=${v}ms`).join(" ");
+  console.log(`[timing] ${t.kind} ${t.provider ?? "-"} ${status} ${stages}${patchPart(t.attrs)}`);
   if (process.env.SYNCHRO_OTEL_LOG !== "0") console.log(`[otel] ${JSON.stringify(toOtlp(t))}`);
 }
 

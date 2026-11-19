@@ -1,6 +1,7 @@
 // Lõi hội thoại (Giai đoạn 1): truyền chữ theo thời gian thực, nút Dừng hủy lượt ở máy chủ, chuẩn lịch sử của Synchro
 // (đổi qua lại 3 hãng giữa chừng có gọi công cụ và sửa artifact 10 lần mà không lỗi 400, prompt không quá 15k token),
-// kết quả công cụ lớn lưu theo tham chiếu (read_ref), bản sửa artifact SEARCH/REPLACE và bước tự vá khi SEARCH không khớp.
+// kết quả công cụ lớn lưu theo tham chiếu (read_ref), bản sửa artifact SEARCH/REPLACE và bước gửi lại khối hỏng
+// khi SEARCH không khớp.
 // Chạy trên npm run dev:mock (web 3200, LLM giả 4010, MCP giả 4011).
 const B = "http://localhost:3200", LLM = "http://127.0.0.1:4010", MCP = "http://127.0.0.1:4011";
 let pass = 0, fail = 0;
@@ -150,7 +151,9 @@ hist.push({ role: "user", content: "#badpatch sửa nhỏ" });
 run = await start({ model: MODELS[0], messages: hist });
 f = await follow(run);
 a = applyArt(cur, f.done?.result?.text ?? "");
-ok(f.done?.http === 200 && a.kind === "full" && a.cur.includes("<!-- healed -->"), "SEARCH không khớp → Synchro nhắc model, nhận lại bản đầy đủ đúng", (f.done?.result?.text ?? "").slice(0, 200));
+ok(f.done?.http === 200 && a.kind === "patch" && !a.bad && a.n === 1 && a.cur.includes("<!-- healed -->"),
+  "SEARCH không khớp → Synchro báo khối hỏng, model gửi lại đúng khối đó, ghép thành một bản sửa áp được",
+  (f.done?.result?.text ?? "").slice(0, 300));
 hist.pop();
 
 console.log("6. Lịch sử hỏng do trình duyệt vẫn được sửa trước khi gửi");

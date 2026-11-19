@@ -16,10 +16,14 @@ import { fitSummary, overflowing, type SlideFit } from "../shared/deckfit";
 import { numberingIssues, type NumIssue } from "../shared/decknum";
 import { hashOf } from "../shared/critic";
 import { KEEP } from "../shared/turnfold";
+import { withinCheckBudget } from "./checkbudget";
 
 export const READ_ARTIFACT_TOOL = {
   name: "read_artifact",
-  description: "Đọc bản hiện tại (mới nhất, đã áp mọi bản sửa) của một artifact trong đoạn chat này, kèm số dòng — kể cả artifact vừa viết trong lượt này hay đã bị lược khỏi lịch sử. Dùng trước khi sửa, khi người dùng báo lỗi, hoặc khi cần xem lại sản phẩm đã giao.",
+  description: "Đọc bản hiện tại (mới nhất, đã áp mọi khối sửa khớp) của một artifact trong đoạn chat này, kèm số"
+    + " dòng — kể cả artifact vừa viết trong lượt này hay đã bị lược khỏi lịch sử. Bản sửa mode=\"patch\" gần nhất"
+    + " có khối không khớp thì kết quả có <patch_failed> nêu khối nào và chỗ gần giống nhất: chỉ gửi lại các khối"
+    + " đó. Dùng trước khi sửa, khi người dùng báo lỗi, hoặc khi cần xem lại sản phẩm đã giao.",
   input_schema: {
     type: "object",
     properties: {
@@ -36,7 +40,11 @@ export const CHECK_ARTIFACT_TOOL = {
     type: "object",
     properties: {
       identifier: { type: "string", description: "identifier của artifact (bỏ trống: artifact mới nhất)" },
-      slide: { type: "number", description: "Chỉ chụp to một slide (đánh số từ 1) để xem kỹ; bỏ trống: kiểm tra mọi slide, trả ảnh ghép" },
+      slide: {
+        type: "number",
+        description: "Chỉ chụp to một slide (đánh số từ 1) để xem kỹ một chỗ cụ thể; bỏ trống: kiểm tra mọi slide, trả"
+          + " ảnh ghép. Ảnh ghép đã có mọi slide: đừng chụp to lần lượt từng slide (tự kiểm tối đa 2 phút mỗi lượt).",
+      },
     },
   },
 };
@@ -302,7 +310,9 @@ export async function autoDeckCheck(uid: string, turn: object, a: ArtVersion, or
   const nums = numberingNote(numberingIssues(a.content));
   let fit: SlideFit[] = layoutOf(a.content)?.fit ?? [];
   if (!fit.length && runner() === "workspace" && !checkRoundGate(turn, a)) {
-    await checkArtifact(uid, a, {}, origin, signal).catch(() => null);
+    // checkArtifact tự đổi lỗi thành kết quả; lỗi ném ra chỉ làm thiếu số đo khung, phần đánh số (đọc mã) vẫn báo
+    // được.
+    await withinCheckBudget(turn, signal, (s) => checkArtifact(uid, a, {}, origin, s)).catch(() => null);
     fit = layoutOf(a.content)?.fit ?? [];
   }
   const bad = overflowing(fit);

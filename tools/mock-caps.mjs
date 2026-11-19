@@ -385,11 +385,55 @@ function patchOf(a, b) {
 const wantsPatch = (sys) => String(sys ?? "").includes('mode="patch"');
 // Artifact sửa: bản patch nếu Synchro yêu cầu (và có bản hiện tại), không thì viết lại toàn bộ như trước.
 const edited = (sys, prev, body) => (wantsPatch(sys) && prev.fromCurrent ? `<artifact identifier="${prev.ident}" mode="patch">\n${patchOf(prev.body, body)}\n</artifact>` : art(prev.ident, prev.type, prev.title, body));
+// #messy N: bản sửa hai khối viết lệch mẫu như model thật hay viết (theo N chia 8): CRLF, thụt lề sai, chép cả số
+// dòng của read_artifact, dấu kiểu Cline, dấu thừa khoảng trắng / 6 ký tự, khối cuối thiếu dòng đóng, thêm dòng trống,
+// và khối thứ hai chép sai một chữ. Khối 1 thêm dấu "messy N" vào cuối dòng có </title> (không có thì dòng đầu),
+// khối 2 chèn thẻ meta trước dòng có </head>.
+function messyEdit(body, n) {
+  const L = body.split("\n");
+  const i = Math.max(0, L.findIndex((l) => l.includes("</title>"))), j = L.findIndex((l) => l.includes("</head>"));
+  const head = L[j < 0 ? L.length - 1 : j], s1 = L[i];
+  const r2 = `<meta name="messy" content="${n}">\n${head}`;
+  return { s1, r1: `${s1}<!-- messy ${n} -->`, s2: head, r2, line: i + 1 };
+}
+const mblk = (s, r) => `<<<<<<< SEARCH\n${s}\n=======\n${r}\n>>>>>>> REPLACE`;
+function messyPatch(prev, n) {
+  const e = messyEdit(prev.body, n);
+  const num = (t) => t.split("\n").map((l, k) => `${String(e.line + k).padStart(4)} | ${l}`).join("\n");
+  const std = () => `${mblk(e.s1, e.r1)}\n${mblk(e.s2, e.r2)}`;
+  const blocks = [
+    () => std().replace(/\n/g, "\r\n"),
+    () => `${mblk(`  ${e.s1.trim()}   `, e.r1.trim())}\n${mblk(e.s2, e.r2)}`,
+    () => `${mblk(num(e.s1), num(e.r1))}\n${mblk(e.s2, e.r2)}`,
+    () => std().replace(/<<<<<<< SEARCH/g, "------- SEARCH").replace(/>>>>>>> REPLACE/g, "+++++++ REPLACE"),
+    () => std().replace(/<<<<<<< SEARCH/g, "<<<<<< SEARCH  ").replace(/=======/g, "====== "),
+    () => std().replace(/\n>>>>>>> REPLACE$/, ""),
+    () => `${mblk(`\n${e.s1}\n`, e.r1)}\n${mblk(e.s2, e.r2)}`,
+    () => `${mblk(e.s1, e.r1)}\n${mblk(e.s2.replace(/head/, "haed"), e.r2)}`,
+  ][n % 8]();
+  return `Đã sửa lần ${n}.\n\n<artifact identifier="${prev.ident}" mode="patch">\n${blocks}\n</artifact>`;
+}
+// Lời nhắc <patch_failed> của Synchro: như model thật, gửi lại đúng khối hỏng chép từ bản hiện tại (#messy: khối 2;
+// #badpatch: sửa dòng tiêu đề).
+function patchHealReply(prev, msgs) {
+  const text = (c) => (typeof c === "string" ? c
+    : Array.isArray(c) ? c.map((b) => (typeof b?.text === "string" ? b.text : "")).join("") : "");
+  const asked = [...(msgs ?? [])].reverse().map((m) => text(m.content))
+    .find((t) => /#messy\s*\d+|#badpatch/.test(t)) ?? "";
+  const n = /#messy\s*(\d+)/.exec(asked)?.[1];
+  const title = prev.body.split("\n").find((l) => l.includes("</title>")) ?? "";
+  const e = n ? messyEdit(prev.body, n) : null;
+  const fix = e ? mblk(e.s2, e.r2) : mblk(title, title.replace("</title>", "</title><!-- healed -->"));
+  return `<artifact identifier="${prev.ident}" mode="patch">\n${fix}\n</artifact>`;
+}
 /** #rev N: sửa nhỏ, xác định được (dùng để thử sửa artifact nhiều lần liên tiếp, kể cả sau khi gọi công cụ). */
 export function revReply(sys, q, msgs) {
-  // #badpatch: bản sửa có SEARCH không khớp (thử bước tự vá); Synchro nhắc lại thì viết lại toàn bộ như model thật.
+  // #badpatch: bản sửa có SEARCH không khớp (thử bước tự vá); Synchro báo khối hỏng thì gửi lại đúng khối đó như
+  // model thật.
   const prev0 = lastArtifact(msgs, sys);
-  if (prev0 && /ban sua artifact chua ap duoc|bản sửa artifact chưa áp được/.test(String(q))) return `Mình viết lại toàn bộ cho chắc:\n\n${art(prev0.ident, prev0.type, prev0.title, prev0.body.replace(/<\/title>/, "</title><!-- healed -->"))}`;
+  if (prev0 && /<patch_failed/.test(String(q))) return patchHealReply(prev0, msgs);
+  const messy = /#messy\s*(\d+)/.exec(String(q))?.[1];
+  if (prev0 && messy && wantsPatch(sys) && prev0.fromCurrent) return messyPatch(prev0, +messy);
   if (prev0 && /#badpatch/.test(String(q)) && wantsPatch(sys)) return `Đã sửa.\n\n<artifact identifier="${prev0.ident}" mode="patch">\n<<<<<<< SEARCH\ndòng này không có trong tệp\n=======\nthay thế\n>>>>>>> REPLACE\n</artifact>`;
   const n = /#rev\s*(\d+)/.exec(String(q))?.[1];
   const prev = n && lastArtifact(msgs, sys);
@@ -892,6 +936,8 @@ function routeStep(S, M, q, toolNames) {
 export function studioStep(sys, msgsJson, q, toolNames) {
   if (String(q ?? "").includes("<point_edit>")) return null; // sửa đúng một phần tử: làm luôn, không đọc skill
   if (String(q ?? "").includes("<auto_check>")) return null; // Synchro tự kiểm bộ slide và nhắc sửa: sửa luôn bộ đã viết, không mở thư viện Trình bày làm bộ mới
+  // Bản sửa lệch mẫu (#messy) và lời nhắc gửi lại khối hỏng: sửa artifact đang có, không mở thư viện.
+  if (/#messy\s*\d+|<patch_failed/.test(String(q ?? ""))) return null;
   if (/#(rev\s*\d+|badpatch|skillrun|longmd\b)/.test(String(q ?? ""))) return null; // lệnh thử: sửa artifact (SEARCH/REPLACE), chạy script skill, câu dài cho bài đo vẽ lại
   if (/#tool=|#media/.test(String(q ?? "")) || /^(Đoạn chat cần (chưng cất|đặt tên):|Hồ sơ:|Trang cần biên soạn:|Các tên trong bộ não:|Các chủ đề cần xếp bản đồ:|Những điều đã biết về người dùng:|Bản người dùng tự viết:|Các skill cần thẩm định:)/.test(String(q ?? ""))) return null; // ép gọi đúng một công cụ / chỉ mô tả tệp nhận được: không mở thư viện skill trước
   const S = String(sys ?? ""), M = String(msgsJson ?? "");

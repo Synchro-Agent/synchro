@@ -391,6 +391,9 @@ function wantTool(q, list, model) {
   for (const tool of tools) {
     // Công cụ bộ não (brain_*) chỉ chọn khi ép bằng #tool=, để không tranh với công cụ connector trong các bài kiểm thử khác.
     if (SKILL_TOOLS.includes(tool.name) || tool.name.startsWith("brain_") || tool.name.startsWith("browser_") || tool.name === "generate_image") continue;
+    // read_artifact / check_artifact: mô tả nói về bản sửa (sửa, patch) nên thắng công cụ connector ở câu "liệt kê … rồi
+    // sửa trang"; model thật chỉ gọi chúng khi cần đọc lại artifact, bài kiểm thử gọi bằng #tool=.
+    if (tool.name === "read_artifact" || tool.name === "check_artifact") continue;
     const tn = norm(`${tool.name} ${tool.description ?? ""}`).replace(/[_-]/g, " ");
     let score = 0;
     for (const [re, keys] of INTENTS) if (re.test(t) && keys.some((k) => tn.includes(k))) score += 2;

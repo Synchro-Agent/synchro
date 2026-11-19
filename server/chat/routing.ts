@@ -17,7 +17,7 @@ import { expandFileRefs } from "../fileproc";
 import { READ_REF_TOOL } from "../refs";
 import { validateArgs } from "../../shared/connschema";
 import { ARTCHECK_RULES, CHECK_ARTIFACT_TOOL, READ_ARTIFACT_TOOL } from "../artcheck";
-import { cleanBase } from "../../shared/vfs";
+import { cleanBase, type ArtState } from "../../shared/vfs";
 import { ARTIFACT_RULES, ASK_RULES, VIZ_RULES } from "../../shared/artifacts";
 import { AUTO, autoEffort, effortLabel, inputOfChat, needsNoTools, typedText, routeModel, taskLabel, taskOf as routeTask, type RouteInput } from "../router";
 import { everywhereSkills, libraryPlugins, pluginCacheGen, STUDIOS, studioOf, studioSkills, type Studio } from "../plugins";
@@ -52,7 +52,12 @@ import { BROWSER_RULES, BROWSER_TOOLS, chatFiles, releaseBrowser } from "../brow
 import { useProfile, lastUserText, DEFAULT_SYSTEM, FAST_RULES, contextOf, estimate, pinnedBlock, artifactMessages, QUALITY_RULES, BRIDGE_CLIS, brainOn, CLI_TOOLS_NOTE, NARRATE_RULES, holdNeedTools, withRecall, designOf, nowBlock, crisisBlock, ARTIFACT_SYSTEM, NEED_TOOLS, useMemory } from "./prompt";
 import { sweep, pending, unparkApproval, type Decision, needsAsk, applyEdit } from "./approvals";
 import { notePlan } from "./planmerge";
-import { type Lib, fold, execute, reply, toolLoop, type Exec, connTools, PLAN_TOOL, announceOffline, bridgeCall, connProxy, CONN_CALL, live, keepImages, sayOut, deckGate, holdAnswer, settleGate, withTurnArts, usedLibs, GEMINI_WEB_TOOL, WEB_DESC, mockAdapter, anthropicAdapter, citeOf, responsesAdapter, openaiAdapter, healPatch, isAbort } from "./tools";
+import {
+  type Lib, fold, execute, reply, toolLoop, type Exec, connTools, PLAN_TOOL, announceOffline, bridgeCall, connProxy,
+  CONN_CALL, live, keepImages, sayOut, deckGate, holdAnswer, settleGate, withTurnArts, usedLibs, GEMINI_WEB_TOOL,
+  WEB_DESC, mockAdapter, anthropicAdapter, citeOf, responsesAdapter, openaiAdapter, healPatch, isAbort, patchHealAsk,
+  patchHealMerge, priorArts,
+} from "./tools";
 
 // Gợi ý định tuyến cho lượt này: skill hợp nhất với yêu cầu (tìm trong toàn bộ kho, cả skill bên trong thư viện)
 // và skill các lượt trước đã dùng. Model đọc thẳng skill bằng tên, không phải mở thư viện trước; không hợp thì bỏ qua.
@@ -646,6 +651,11 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
       // Lượt của CLI xong mà còn tin nhắn thêm chưa đọc: làm tiếp ngay trong cùng phiên của CLI (không chờ lượt sau). Gói mới báo
       // "Mình sẽ…" mà chưa gọi công cụ nào của Synchro: nhắc làm tiếp (stall.ts). agy tự chặn công cụ: nhắc dùng công cụ được phép.
       let gate: string | null = null;
+      // Bản sửa artifact còn khối không khớp khi CLI định trả lời xong: nhắc gửi lại đúng các khối đó (một lần), rồi
+      // ghép vào câu trả lời. healing: câu trả lời đang chờ ghép; câu đó vẫn là câu người dùng nhận.
+      let priorSt: ArtState | undefined;
+      const art = x?.art, prior = art ? () => (priorSt ??= priorArts(art.messages, cleanBase(art.base))) : null;
+      let healing: string | null = null, healAsked = false;
       for (let k = 0, nudged = 0, nd = 0; k < 6 && !am && r.status === 200; k++) {
         good = r;
         const j = r.json as J;
@@ -660,13 +670,24 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
         else if (bridge && !bridged && nudged < MAX_NUDGE && stalled(said)) { nudged++; next = NUDGE; }
         // Bộ slide trong câu trả lời: Synchro tự kiểm bản cuối (tràn khung 1280×720, đánh số lệch), có lỗi thì CLI sửa trước khi giao (một lần mỗi lượt).
         // Câu trả lời đã viết được giữ cho người dùng (không đưa vào nhật ký); cuối lượt gộp phần sửa vào đó (settleGate).
+        else if (x && prior && !x.held && !healAsked && (gate = patchHealAsk(prior, x, said))) {
+          healAsked = true;
+          healing = said;
+          next = gate;
+        }
         else if (x && !x.deckGated && (gate = await deckGate(x, said))) { holdAnswer(x, said); next = gate; }
         else break;
-        if (x?.held?.text !== said) sayOut(x, said);
+        if (healing === null && x?.held?.text !== said) sayOut(x, said);
         hist = [...hist, { role: "assistant", content: said }, { role: "user", content: next }];
         // Tin người dùng nhắn thêm là lượt của họ; nhắc làm tiếp / chờ kết quả công cụ thì không.
         cont = !more.length;
         r = await tryOnce(hist);
+        if (healing !== null && prior && r.status === 200) {
+          const j = r.json as J;
+          const text = j.cancelled ? healing : patchHealMerge(prior, x, healing, String(j.text ?? ""));
+          r = { ...r, json: { ...(r.json as Record<string, unknown>), text } };
+        }
+        healing = null;
         // Tin nhắn thêm trong lúc đi đường nhanh mà cần công cụ: chạy lượt đầy đủ với cả tin nhắn đó.
         if (needFull()) { deltaStep(); return chatTurn({ ...body, messages: hist, noFast: true }, c, scope, o); }
       }
@@ -776,7 +797,7 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
         : t.kind === "openai" ? msgs.map((m) => ({ ...m, content: toResponses(m.content) })) : msgs.map((m) => ({ ...m, content: toOpenAI(withPages(m.content)) }));
       // Kiểm tra bản sửa trên lịch sử gốc (bản đã rút gọn không còn nội dung artifact cũ).
       const raw = (Array.isArray(messages) ? messages : []) as { role: string; content: unknown }[];
-      const out = await healPatch(ad, m0, raw, await toolLoop(ad, m0, x, [], c.user.id, model), base);
+      const out = await healPatch(ad, m0, x, raw, await toolLoop(ad, m0, x, [], c.user.id, model), base);
       return reply(c, model, out, x);
     }
     if (body.estimate === true) return estimate([system, capSys], [], pinned, prep);
