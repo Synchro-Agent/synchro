@@ -21,15 +21,21 @@ const MIME: Record<string, ArtType> = {
 };
 export const ART_LABEL: Record<ArtType, string> = { html: "Trang web", react: "Ứng dụng", svg: "Hình SVG", markdown: "Tài liệu", code: "Mã nguồn", mermaid: "Sơ đồ", d2: "Sơ đồ D2", vbhc: "Văn bản hành chính" };
 // Bộ slide đang viết dở mới có phần đầu (CSS, trang bìa) nên isDeck chưa nhận ra: khung xem trước từng ghi "Trang web"
-// suốt lúc dựng. Dấu hiệu sớm: thẻ section là slide, lớp deck, hoặc luật CSS cho .slide ở phần <style> đầu tệp.
-const DECK_HINT = /<section\b[^>]*(?:class=["'][^"']*\bslide\b|data-slide)|class=["'][^"']*\bdeck\b|\.slide\s*[{,]/i;
+// suốt lúc dựng. Dấu hiệu sớm: thẻ section là slide, lớp deck, hoặc luật CSS cho .slide có khổ trang chiếu (1280x720,
+// 16:9, cả màn hình). Chỉ có luật .slide thì chưa đủ: carousel lời khen / dự án của landing page cũng có ".slide {".
+const DECK_TAG = new RegExp("<section\\b[^>]*(?:class=[\"'][^\"']*\\bslide\\b|data-slide)"
+  + "|class=[\"'][^\"']*\\bdeck\\b|\\.deck(?![\\w-])[^{}]*\\{", "i");
+const SLIDE_SIZE = new RegExp("\\.slide(?![\\w-])[^{}]*\\{[^}]*(?:\\b1280px|\\b720px"
+  + "|aspect-ratio\\s*:\\s*16\\s*\\/\\s*9"
+  + "|width\\s*:\\s*100vw[^}]*height\\s*:\\s*100vh|height\\s*:\\s*100vh[^}]*width\\s*:\\s*100vw)", "i");
+const deckHint = (html: string) => DECK_TAG.test(html) || SLIDE_SIZE.test(html);
 /**
  * Tên loại hiện trên khung / thẻ artifact (chữ gốc tiếng Việt, dịch khi hiện): bộ slide là "Bản trình bày", kể cả khi
  * đang viết.
  */
 export function artKindLabel(a: { type: ArtType; content: string; complete?: boolean }): string {
   const building = a.complete === false && a.type === "html";
-  if (isDeck(a) || (building && DECK_HINT.test(a.content))) return "Bản trình bày";
+  if (isDeck(a) || (building && deckHint(a.content))) return "Bản trình bày";
   // Mới có phần đầu tệp, chưa tới <body>: chưa biết là trang web hay bộ slide, không đoán.
   if (building && !/<body\b/i.test(a.content)) return "Đang tạo…";
   return ART_LABEL[a.type];

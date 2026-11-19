@@ -51,59 +51,74 @@ export function stripRole(text: string): string {
   for (let i = 0; i < 3 && ROLE_RE.test(s); i++) s = s.replace(ROLE_RE, "");
   return s.trim() ? s.trim() : text;
 }
-// Loại sản phẩm người dùng nhờ làm, dạng viết như trong tên ("Bộ slide Sương Sớm", "Dashboard chuỗi cửa hàng cà phê").
-const PRODUCTS: [RegExp, string][] = [
-  [word("bộ slide|bản trình bày|pitch deck|slide deck|slides?"), "Bộ slide"],
-  [word("landing page"), "Landing page"],
-  [word("dashboard|bảng điều khiển"), "Dashboard"],
-  [word("poster|áp phích"), "Poster"],
-  [word("brand sheet|bộ nhận diện(?: thương hiệu)?"), "Bộ nhận diện"],
-  [word("logo"), "Logo"],
-  [word("infographic"), "Infographic"],
-  [word("hồ sơ gọi vốn"), "Hồ sơ gọi vốn"],
-  [word("báo cáo|report"), "Báo cáo"],
-  [word("website|trang web"), "Trang web"],
-  [word("ứng dụng|web app"), "Ứng dụng"],
-  [word("kế hoạch"), "Kế hoạch"],
-  [word("email"), "Email"],
-  [word("video"), "Video"],
-  [word("ảnh|hình ảnh"), "Ảnh"],
-];
-// Đầu cụm "cho …" / "về …" không mang nghĩa chủ đề: "cho chủ chuỗi 5 cửa hàng" → "chuỗi cửa hàng".
-const FILLER = /^(?:(?:chủ|khách hàng|người dùng|người|một|các|những|team|đội|the|a|an)\s+)+/iu;
+// Sản phẩm người dùng nhờ làm. Tên giữ đúng chữ người dùng viết ("bộ slide", "slide deck", "landing page"): đoạn chat
+// tiếng Anh không bị gắn chữ tiếng Việt. "ảnh hưởng" là một từ, chữ "ảnh" trong đó không phải ảnh.
+const PRODUCT = word([
+  "bộ slide", "bản trình bày", "pitch deck", "slide deck", "slides?", "landing page", "dashboard", "bảng điều khiển",
+  "poster", "áp phích", "brand sheet", "bộ nhận diện(?: thương hiệu)?", "logo", "infographic", "hồ sơ gọi vốn",
+  "báo cáo", "report", "website", "trang web", "ứng dụng", "web app", "kế hoạch", "email", "video", "hình ảnh",
+  "ảnh(?!\\s+hưởng)",
+].join("|"));
+// Sản phẩm phải nằm ở phần yêu cầu đầu tin; nhắc tới ở đoạn sau ("… rồi làm báo cáo") thì không phải thứ cần làm.
+const PRODUCT_WITHIN = 120;
+// Brief từ chừng này ký tự (không kể câu đóng vai) mới đặt tên theo sản phẩm; câu nhờ ngắn giữ nguyên câu đầu.
+const LONG_BRIEF = 200;
+// Chữ ngay sau tên sản phẩm chỉ nói khổ, số trang, định dạng: không phải chủ đề.
+const SIZE_WORD = /^(?:\d\S*|[a-z]\d+|trang|slides?|pages?|web|html|một|mới|hoàn|chỉnh|khổ|dọc|ngang|a|an|the|new)$/iu;
+// Chữ nối mở đầu đối tượng / mục đích của sản phẩm ("cho …", "về …", "for …").
+const LINK = "cho|về|for|about|of|để|to|with|với|ở|in";
+const LINK_AT = word(LINK);
+// Đầu cụm "cho …" không mang nghĩa chủ đề: "cho chủ chuỗi 5 cửa hàng" → "chuỗi 5 cửa hàng".
+const FILLER = /^(?:(?:chủ|một|các|những|team|đội|the|a|an|our|my|your|their|this|these)\s+)+/iu;
 const POLITE = /^(?:(?:hãy|làm ơn|vui lòng|giúp (?:tôi|mình|em)|bạn có thể|bạn hãy|please|can you|could you)\s+)+/iu;
-const ABOUT = new RegExp(`${word("cho|về|for|about|of").source}\\s+([^.,;:!?\\n"“”]+)`, "iu");
 const QUOTED = /[“"«]([^”"»\n]{2,48})[”"»]/u;
+const STOP = /[.,;:!?\n"“”«»]/u;
 const capFirst = (s: string) => (s ? s.charAt(0).toLocaleUpperCase("vi") + s.slice(1) : s);
-/** Cắt theo từ: tối đa words từ và max ký tự. */
-function fitWords(s: string, words: number, max: number) {
+const words = (s: string) => s.split(/\s+/).filter(Boolean);
+/** Cắt theo từ, tối đa max ký tự. */
+function fitWords(s: string, max: number) {
   let out = "";
-  for (const w of s.split(/\s+/).filter(Boolean).slice(0, words)) {
+  for (const w of words(s)) {
     if ((out ? out.length + 1 : 0) + w.length > max) break;
     out = out ? `${out} ${w}` : w;
   }
   return out;
 }
+/** Phần trước chữ nối hay dấu câu đầu tiên. */
+const untilLink = (s: string) => {
+  const head = s.split(STOP)[0];
+  const at = LINK_AT.exec(head);
+  return at ? head.slice(0, at.index) : head;
+};
 /**
- * Tên đoạn chat đoán từ tin đầu, không gọi model: loại sản phẩm + tên riêng trong ngoặc kép ("Bộ slide Sương Sớm") hoặc
- * + đối tượng sau "cho / về" ("Dashboard chuỗi cửa hàng cà phê"); không thấy sản phẩm thì câu đầu đã bỏ phần đóng vai
- * và lời mời ("Hãy …"). Rỗng khi không còn chữ nào.
+ * Tên theo sản phẩm của brief: tên riêng trong ngoặc kép ("Bộ slide Sương Sớm"), chữ người dùng viết ngay sau sản phẩm
+ * ("Kế hoạch du lịch Đà Lạt"), hoặc đối tượng sau "cho / về" ("Dashboard chuỗi 5 cửa hàng cà phê"). Phần nào chỉ còn
+ * một chữ ("cho sếp", "for my class") thì không đủ nghĩa: rỗng để dùng câu đầu.
+ */
+function productTitle(flat: string): string {
+  const m = PRODUCT.exec(flat);
+  if (!m || m.index > PRODUCT_WITHIN) return "";
+  const after = flat.slice(m.index + m[0].length);
+  const own = words(untilLink(after)).filter((w) => !SIZE_WORD.test(w));
+  const link = new RegExp(`^[^.,;:!?\\n"“”«»]*?${LINK_AT.source}\\s+`, "iu").exec(after);
+  const about = link ? words(untilLink(after.slice(link[0].length)).replace(FILLER, "")) : [];
+  const quoted = QUOTED.exec(after)?.[1].trim();
+  const tail = quoted || (own.length >= 2 ? own.join(" ") : about.length >= 2 ? about.join(" ") : "");
+  return tail ? fitWords(`${capFirst(m[0])} ${tail}`, 48) : "";
+}
+/**
+ * Tên đoạn chat đoán từ tin đầu, không gọi model. Tin mở bằng câu đóng vai hoặc brief dài: theo sản phẩm
+ * (productTitle). Còn lại, và khi không tìm được tên sản phẩm đủ nghĩa: câu đầu (bỏ lời mời "Hãy …"), tối đa 48
+ * ký tự. Rỗng khi không còn chữ nào.
  */
 export function topicTitle(text: string): string {
-  const plain = text.replace(/#(?:tool|args)=\S+/g, " ").replace(/[*_`#>~|]+/g, " ");
-  const body = stripRole(plain).replace(/\s+/g, " ").trim();
+  const plain = text.replace(/#(?:tool|args)=\S+/g, " ").replace(/[*_`#>~|]+/g, " ").replace(/\s+/g, " ").trim();
+  const body = stripRole(plain);
   const flat = body.replace(/\([^)]{0,200}\)/g, " ").replace(/\s+/g, " ");
-  // Sản phẩm nhắc tới sớm nhất trong tin là thứ cần làm ("bộ slide … có biểu đồ" là bộ slide, không phải biểu đồ).
-  const hits = PRODUCTS.map(([re, name]) => ({ m: re.exec(flat), name })).filter((x) => x.m);
-  const hit = hits.sort((a, b) => a.m!.index - b.m!.index)[0];
-  if (hit) {
-    const after = flat.slice(hit.m!.index + hit.m![0].length);
-    const quoted = QUOTED.exec(after) ?? QUOTED.exec(flat);
-    const about = ABOUT.exec(after)?.[1]?.replace(FILLER, "").replace(/(?<![\p{L}])\d+\s+/gu, "");
-    const tail = quoted?.[1].trim() || about?.trim() || "";
-    const t = fitWords(`${hit.name} ${tail}`.trim(), 8, 48);
-    if (t.length > hit.name.length) return t;
-  }
-  const first = /^(.{8,80}?)[.!?…:](\s|$)/u.exec(body)?.[1] ?? body;
-  return capFirst(fitWords(first.replace(POLITE, "").replace(/[.?!:;,]+$/, ""), 8, 48));
+  const brief = body !== plain || body.length >= LONG_BRIEF;
+  const named = brief ? productTitle(flat) : "";
+  if (named) return named;
+  const first = (/^(.{8,60}?)[.!?…](\s|$)/u.exec(body)?.[1] ?? body).replace(POLITE, "").replace(/[.?!:;,]+$/, "");
+  const cut = first.length > 48 ? `${first.slice(0, 48).replace(/\s+\S*$/, "")}…` : first;
+  return capFirst(cut);
 }

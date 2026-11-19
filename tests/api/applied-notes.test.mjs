@@ -98,6 +98,12 @@ ok(said === "Mình dựng xong bộ slide.\n\nGiờ mình kiểm tra hiển th�
   "dòng giữa lời dẫn: bỏ, không thừa dòng trống", JSON.stringify(said));
 ok(T.stripAppliedNotes(WROTE) === "", "lời dẫn chỉ có chỗ giữ: rỗng (nhật ký không hiện ô trống)");
 ok(T.stripAppliedNotes("Xong (Đã viết artifact, xem ở câu trả lời).") === "Xong.", "dạng không tên, nằm giữa câu");
+const headNote = T.stripAppliedNotes(`${WROTE}\n\nGiờ mình kiểm tra.`);
+ok(headNote === "Giờ mình kiểm tra.", "chỗ giữ ở đầu: không để dòng trống", JSON.stringify(headNote));
+// Bỏ chỗ giữ không đụng phần còn lại: ngắt dòng Markdown (hai dấu cách cuối dòng) và thụt đầu dòng giữ nguyên.
+const md = "  - mục một  \n  - mục hai  \nDòng cuối";
+ok(T.stripAppliedNotes(`${md}\n\n${WROTE}`) === md, "giữ ngắt dòng Markdown và thụt đầu dòng",
+  JSON.stringify(T.stripAppliedNotes(`${md}\n\n${WROTE}`)));
 const keepNote = "Bạn xem ở câu trả lời trước nhé.";
 ok(T.stripAppliedNotes(keepNote) === keepNote, "câu bình thường có chữ \"xem ở câu trả lời\": giữ nguyên");
 const aiOld = { role: "ai", text: "", parts: [{ k: "say", text: `Đã dựng.\n\n${WROTE}` }], done: true, time: 1 };

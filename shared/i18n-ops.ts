@@ -137,7 +137,10 @@ export const OPS_VI2EN: Record<string, string> = {
   "khóa API {name}": "{name} API key",
   "gói {name}": "{name} plan",
   "hết mọi nguồn": "no source left",
-  "Lượt kế tiếp chạy bằng {src}, đã dùng {pct}%.": "The next turn runs on the {src}, {pct}% used.",
+  "Câu chat thường kế tiếp chạy bằng {src}, đã dùng {pct}%.":
+    "Your next plain chat message runs on the {src}, {pct}% used.",
+  "Bộ slide, code hay việc nhiều bước có thể chạy bằng model khác.":
+    "Slide decks, code or multi-step tasks may run on a different model.",
   "Mọi gói và khóa API đều đã chạm giới hạn. Lượt kế tiếp chạy được khi một nguồn hồi lại.":
     "Every plan and API key has hit its limit. The next turn can run once one of them resets.",
   "{n} việc nền": "{n} background job|{n} background jobs",

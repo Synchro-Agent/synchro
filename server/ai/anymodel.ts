@@ -46,6 +46,10 @@ export async function pickModel(user: UserRow, q: RouteInput, o: { exclude?: (k:
  * Model chế độ Tự động sẽ chọn cho một câu chat thường ở lượt kế tiếp (vòng mức dùng hiện phần trăm của đúng nguồn đó).
  * Cùng các bước với lượt chat thật: model dùng được, bỏ khóa API khi đã chạm hạn mức chi phí (lượt thật khi đó chỉ chạy
  * trên gói), tránh CLI vừa treo. null: không còn nguồn nào chạy được lượt kế tiếp. Không gọi hãng nào.
+ * Lượt thật chọn theo chính tin nhắn (bộ slide, code có thể sang hạng / hãng khác) nên bảng mức dùng ghi rõ đây là câu
+ * chat thường. Lượt thật hết model dùng được thì vẫn thử model đang bị chặn (allowed): hạn mức có thể vừa hồi mà
+ * Synchro chưa biết, không thì hãng trả lỗi hạn mức. Synchro không biết nguồn nào chạy được nên vòng tròn báo "hết mọi
+ * nguồn".
  */
 export async function nextAutoModel(user: UserRow): Promise<string | null> {
   const { usable } = await usableModels(user);

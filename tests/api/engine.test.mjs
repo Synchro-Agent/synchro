@@ -559,7 +559,6 @@ try {
       const ticks = ev2.filter((e) => e.kind === "status" && e.tick === true).map((e) => e.text ?? "");
       const withKnown = /^Antigravity vẫn đang viết, đã \d+ giây · bước 2\/3: Dựng 8 slide$/;
       ok(ticks.length > 0 && ticks.every((t) => withKnown.test(t)),
-        
         "agy: dòng chờ kèm tiến độ đã biết", JSON.stringify(ticks));
     }
     // Tệp tạm của lượt bị giết: dọn tệp cũ, không đụng tệp mới hay tệp khác.

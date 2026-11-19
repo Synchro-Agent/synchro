@@ -205,7 +205,10 @@ export const setupNote = (sub: SubUsage, short = false) => sub.ranAt
   ? (short ? tr("Gemini đang chạy bình thường. Synchro chưa đọc được hạn mức của gói này.") : tr("Gemini đang chạy bình thường. Synchro chưa đọc được bảng hạn mức của Antigravity trên tài khoản này nên chưa hiện phần trăm đã dùng; chat không bị ảnh hưởng, và khi gói chạm giới hạn Synchro vẫn nhận ra và báo cho bạn."))
   : short ? tr("Antigravity đang chờ bạn hoàn tất bước làm quen lần đầu.") : tr("Antigravity đang chờ bạn hoàn tất bước làm quen lần đầu (bảng màu, điều khoản, chia sẻ dữ liệu). Xem Cài đặt → Providers → Gemini.");
 
-const NEXT_NOTE = "Lượt kế tiếp chạy bằng {src}, đã dùng {pct}%.";
+// Máy chủ chọn nguồn cho một câu chat thường; bộ slide, code, việc nhiều công cụ được chọn theo chính tin đó nên có thể
+// chạy bằng model (và nguồn) khác: nói rõ để người dùng không hiểu vòng tròn là mọi lượt.
+const NEXT_NOTE = "Câu chat thường kế tiếp chạy bằng {src}, đã dùng {pct}%.";
+const NEXT_OTHER = "Bộ slide, code hay việc nhiều bước có thể chạy bằng model khác.";
 const NO_SOURCE = "Mọi gói và khóa API đều đã chạm giới hạn. Lượt kế tiếp chạy được khi một nguồn hồi lại.";
 /** Tên nguồn chạy lượt kế tiếp: "khóa API Claude", "gói Gemini · model Claude và GPT". */
 function sourceName(n: NextSource, v?: VendorUsage) {
@@ -293,7 +296,7 @@ export function UsageRing({ model, extra, onDetails, up = true }: { model?: stri
         <div className="us-h"><span>{head}</span><UsageIcon size={15} /></div>
         {!st ? <div className="us-empty"><span className="art-spin sm" /></div> : auto ? (
           <>
-            {next && <p className="us-note us-next">{tf(NEXT_NOTE, { src, pct: Math.round(pct) })}</p>}
+            {next && <p className="us-note us-next">{tf(NEXT_NOTE, { src, pct: Math.round(pct) })} {tr(NEXT_OTHER)}</p>}
             {empty && live.length > 0 && <p className="us-note us-next">{tr(NO_SOURCE)}</p>}
             {live.map((v) => <VendorBlock key={v.vendor} v={v} />)}
             {hasApi(st) && limited.length > 0 && <div className="us-v"><div className="us-v-h"><b>{tr("Giới hạn chung của khóa API")}</b></div>{limited.map((l) => <LimitRow key={l.key} l={l} />)}</div>}

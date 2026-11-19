@@ -21,9 +21,10 @@ Chỉ trả về tên, không giải thích, không gì khác.
 </chat_title>`;
 
 // Sản phẩm chỉ giữ tên, code chỉ giữ chỗ: đủ để biết đoạn chat nói về gì. Câu đóng vai đầu brief ("Bạn là nhà thiết kế
-// …") không nói gì về chủ đề mà chiếm chỗ trong 1500 ký tự gửi model: bỏ trước.
-function brief(m: { role: string; text: string }) {
-  const text = m.role === "assistant" ? m.text : stripRole(m.text);
+// …") không nói gì về chủ đề mà chiếm chỗ trong 1500 ký tự gửi model: bỏ trước. Tên tạm (localTitle) cần giữ câu đó:
+// topicTitle chỉ đặt theo sản phẩm khi tin mở bằng câu đóng vai.
+function brief(m: { role: string; text: string }, keepRole = false) {
+  const text = m.role === "assistant" || keepRole ? m.text : stripRole(m.text);
   const segs = splitArtifacts(text);
   const parts = segs.map((sg) => (sg.kind === "text" ? sg.text : `[sản phẩm "${sg.art.title}"]`)).join("");
   return parts.replace(/```[\s\S]*?(```|$)/g, "[khối code]").replace(/#(?:tool|args)=\S+/g, "").trim().slice(0, 1500);
@@ -34,9 +35,10 @@ export const POST = handle(async (req: Request) => {
   const { user } = requireUser(req);
   limit("title:" + user.id, 120, 60 * 60_000);
   const b = await req.json().catch(() => ({}));
-  const msgs = (Array.isArray(b.messages) ? b.messages : []).slice(0, 6)
-    .filter((m: unknown): m is { role: string; text: string } => !!m && typeof (m as { text?: unknown }).text === "string")
-    .map((m: { role: string; text: string }) => `[${m.role === "assistant" ? "Trợ lý" : "Người dùng"}]\n${brief(m)}`);
+  type Msg = { role: string; text: string };
+  const rows: Msg[] = (Array.isArray(b.messages) ? b.messages : []).slice(0, 6)
+    .filter((m: unknown): m is Msg => !!m && typeof (m as { text?: unknown }).text === "string");
+  const msgs = rows.map((m) => `[${m.role === "assistant" ? "Trợ lý" : "Người dùng"}]\n${brief(m)}`);
   if (!msgs.length || !msgs[0].trim()) return Response.json({ error: "Chưa có nội dung để đặt tên." }, { status: 400 });
   try {
     const { text, model } = await quickCall(user, TITLE, `Đoạn chat cần đặt tên:\n\n${msgs.join("\n\n")}`, { maxTokens: 40, job: "title" });
@@ -47,19 +49,22 @@ export const POST = handle(async (req: Request) => {
   } catch (e) {
     // Gói của người dùng sắp chạm giới hạn hoặc đã hết phần việc phụ của hôm nay (ai/helperquota.ts): đặt tên từ chính câu đầu, không tốn lượt nào.
     // Trả tên (không phải lỗi) để trình duyệt không gọi lại sau mỗi câu trả lời.
-    if (e instanceof OneShotErr && e.message === NO_CHEAP) { const t = localTitle(msgs[0]); if (t) return Response.json({ title: t, local: true }); }
+    if (e instanceof OneShotErr && e.message === NO_CHEAP) {
+      const t = localTitle(brief(rows[0], true));
+      if (t) return Response.json({ title: t, local: true });
+    }
     if (e instanceof OneShotErr) return Response.json({ error: e.message }, { status: e.status });
     throw e;
   }
 });
 
 /**
- * Tên tạm từ câu đầu của người dùng (không gọi model): bỏ nhãn vai, khối code, lời chào đầu câu, câu đóng vai; sản phẩm
- * thì đặt theo sản phẩm (topicTitle); tối đa 48 ký tự.
+ * Tên tạm từ tin đầu của người dùng (không gọi model): bỏ khối code, lời chào đầu câu; brief mở bằng câu đóng vai thì
+ * đặt theo sản phẩm, còn lại theo câu đầu (topicTitle); tối đa 48 ký tự.
  */
 function localTitle(first: string) {
   const greet = /^(?:(?:xin )?chào|hi|hello|hey)[\s,!.]+/i;
-  const role = /^\[[^\]]*\]\s*/, holders = /\[(?:khối code|sản phẩm[^\]]*)\]/g;
-  const t = first.replace(role, "").replace(holders, " ").trim().replace(greet, "");
+  const holders = /\[(?:khối code|sản phẩm[^\]]*)\]/g;
+  const t = first.replace(holders, " ").trim().replace(greet, "");
   return clean(topicTitle(t));
 }
