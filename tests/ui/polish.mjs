@@ -34,10 +34,10 @@ const LANG = { light: "vi", dark: "en" };
 
 // Lỗi được phép: mỗi dòng một mẫu (so với "bước: nội dung lỗi") và lý do. Không thêm dòng nào khi chưa viết được lý do cụ thể.
 const ALLOW = [
-  { re: /\/artifacts[^:]*: bố cục tự nhảy \d+px khi không ai chạm: button\.btn\.dark$/,
-    why: "khối Tạo mới ở Artifacts tự chuyển Tài liệu → Trang trình bày → Thiết kế (có thanh tiến độ dưới thẻ đang chọn, dừng khi rê chuột); nút cuối khối đổi nhãn theo thẻ (Tạo tài liệu / Tạo trang trình bày) nên nút canh phải dịch ngang. Chiều cao trang không đổi (đo 6232px suốt 12 giây ở 390px), không phải bố cục rung" },
-  { re: /\/artifacts-tab\d: khung cuộn dọc chỉ tràn \d+px mà còn thanh cuộn .*: div\.page\.ds-page/,
-    why: "đây là khung cuộn của cả trang, phần tràn là đúng lề dưới 72px của trang ở tab Ứng dụng còn trống, cửa sổ cao đúng 900px (đo: nội dung kết thúc ở 834px, tràn 7px không đổi trong 14 giây). Trang nào cũng dài hơn cửa sổ vài px ở một chiều cao cửa sổ nào đó; không phải lỗi bố cục như khung con tràn lẻ px ở mọi cỡ" },
+  { re: /\/artifacts[^:]*: bố cục tự nhảy \d+px khi không ai chạm: (button\.btn\.dark|button\.st-cap\.st-capb|span\.st-capt)$/,
+    why: "khối Tạo mới ở Artifacts tự chuyển Tài liệu → Trang trình bày → Thiết kế (có thanh tiến độ dưới thẻ đang chọn, dừng khi rê chuột); nút cuối khối đổi nhãn theo thẻ (Tạo tài liệu / Tạo trang trình bày) nên nút canh phải dịch ngang; dòng số skill bên trái (Tài liệu “6 skill, gồm 1 skill Synchro tự nhận diện”, Thiết kế “33 skill…”) cũng đổi chữ theo thẻ nên rộng / hẹp theo (đo 140px ở 390px). Chiều cao trang không đổi (đo 6232px suốt 12 giây ở 390px), không phải bố cục rung" },
+  { re: /: khung cuộn dọc chỉ tràn \d+px mà còn thanh cuộn .*: div\.(page\.ds-page|sp-body) /,
+    why: "đây là khung cuộn của cả trang, phần tràn là đúng lề dưới 72px của trang ở tab Ứng dụng còn trống, cửa sổ cao đúng 900px (đo: nội dung kết thúc ở 834px, tràn 7px không đổi trong 14 giây). Trang nào cũng dài hơn cửa sổ vài px ở một chiều cao cửa sổ nào đó; không phải lỗi bố cục như khung con tràn lẻ px ở mọi cỡ. Cùng lý do cho khung cuộn cả trang của mọi trang (div.page.ds-page) và của công cụ Speech (div.sp-body): đo trên w10-integ, Skill Hub tiếng Anh ở 1440×900 và Lọc tạp âm có một bản đã lọc ở 768×1024 dài hơn cửa sổ 10px, tùy độ dài chữ và số mục trong lịch sử" },
 ];
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
