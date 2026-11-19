@@ -232,6 +232,8 @@ try {
   say(await pageA.until(`!document.querySelector(".ct-need")`, 15000), "hết chờ thì mất dấu ở cột bên");
 } finally {
   await wipe().catch(() => {});
+  // Đăng xuất gói Claude của phần thẻ duyệt: còn đăng nhập thì Tự động của các bộ chạy sau chọn Claude Code giả lập (chỉ nhại tin nhắn).
+  await api("POST", "/api/engines/claude/logout").catch(() => {});
   chrome.kill();
 }
 console.log(fails ? `\n${fails} lỗi` : "\nTất cả đạt");

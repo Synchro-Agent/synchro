@@ -220,6 +220,8 @@ try {
   await until(`!document.querySelector(".ai-streaming")`, 30000);
   await api("DELETE", `/api/connectors/${nt.j.connector.id}`);
   await ev(`localStorage.removeItem("u:${uid}:model"); 1`);
+  // Đăng xuất gói Claude vừa đăng nhập: còn đăng nhập thì Tự động của các bộ chạy sau chọn Claude Code giả lập (chỉ nhại tin nhắn).
+  await api("POST", "/api/engines/claude/logout");
 
   console.log("━━ Ô nhập, nút đều có tên cho trình đọc màn hình");
   // Chữ giữ chỗ cũng được tính là tên (trình duyệt dùng nó khi không có gì khác); ô không có cả chữ giữ chỗ thì trình đọc màn hình chỉ đọc "ô nhập".

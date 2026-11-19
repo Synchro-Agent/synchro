@@ -28,6 +28,10 @@ const api = async (p, body) => {
   return r.status;
 };
 await api("/api/auth/login", { email, password });
+// Câu "#longmd" chỉ model khóa API giả lập trả lời dài. Bộ khác đăng nhập gói Claude cho quản trị viên mà không đăng xuất (tests/ui/states.mjs,
+// tests/ui/connector-login.mjs, tests/api/approve-edit.test.mjs) thì Tự động chọn Claude Code giả lập, CLI đó chỉ nhại tin nhắn: bài đo hết giờ
+// chờ chữ (đo trên w10-integ, 0/2). Bắt đầu như máy chủ mới, chưa đăng nhập gói (như tests/ui/critic.mjs).
+await api("/api/engines/claude/logout", {});
 { const R = createRequire(process.cwd() + "/package.json");
   const db = new (R("better-sqlite3"))(process.cwd() + "/data-mock/synchro.db"); db.pragma("busy_timeout = 5000");
   db.prepare("DELETE FROM usage_events WHERE user_id = (SELECT id FROM users WHERE email = ?)").run(email); db.close(); }
