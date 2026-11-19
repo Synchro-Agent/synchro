@@ -217,6 +217,16 @@ try {
   const t3 = await typeOf(2);
   console.log("    slide 3:", JSON.stringify(t3));
   ok(t3.title >= DF.TITLE_FLOOR && t3.titleOver, `tiêu đề tự có khung quá thấp: dừng ở ${t3.title}px và báo tràn`, t3);
+  // Khung xem trong trang chat hẹp hơn 1280 (577px): --sx-u của slide nhỏ hơn 1px của trang. Bộ vá phải co đúng
+  // như ở 1280, không co thêm theo tỉ lệ thu nhỏ của khung.
+  await P("Emulation.setDeviceMetricsOverride", { width: 577, height: 325, deviceScaleFactor: 1, mobile: false });
+  ok(await openTitle(titleFile), "khung xem hẹp 577×325: trang mở được");
+  const n1 = await typeOf(0);
+  console.log("    577×325, slide 1:", JSON.stringify(n1));
+  ok(n1.title === t1.title && n1.over, `khung hẹp: tiêu đề ${n1.title}px ở khung 1280, như ở 1280×720`, { n1, t1 });
+  await P("Emulation.setDeviceMetricsOverride", { width: 1280, height: 720, deviceScaleFactor: 1, mobile: false });
+  ok(await openTitle(titleFile), "trở lại 1280×720");
+  await typeOf(2);
   await ev(`window.__sxReset(window.__sxCur())`);
   const cleared = await ev(`document.querySelectorAll("[data-sx-fitover]").length`);
   ok(cleared === 0, "trả về như gốc (đổi phong cách) thì bỏ cả cờ báo tràn", cleared);

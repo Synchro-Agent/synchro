@@ -508,6 +508,8 @@ function reply(provider, id, msgs, maxTokens, effort, sys = "") {
   { const g = /#artgen=([\w-]+)/.exec(q); if (g) return { text: `Trang có ảnh đã tạo.\n<artifact identifier="anh-tao" type="text/html" title="Ảnh đã tạo">\n<!doctype html><html><body style="margin:0"><img id="tao" src="https://image.synchro.invalid/${g[1]}.png" style="width:96px;height:96px"></body></html>\n</artifact>`, q }; }
   // "#sxkit": sơ đồ ```d2 và bản trình bày nền shader 3D + biểu đồ ECharts (mock-cli-common.cjs sxKit) — xem tận mắt trên trang thật.
   if (q.includes("#sxkit")) return { text: CLI.sxKit(), q };
+  // "#deck4": bộ slide 4 trang chỉ tiêu đề có data-sx-fit (mock-cli-common.cjs deck4), xem ảnh thu nhỏ của bộ tự co.
+  if (q.includes("#deck4")) return { text: CLI.deck4(), q };
   // "#longmd": câu trả lời Markdown dài (khoảng 2.000 từ: tiêu đề, danh sách, bảng, hai khối code) cho bài đo số lần vẽ lúc chữ chảy
   // (tests/ui/render-perf.mjs, blueprint B2). Tên khác #longtext của CLI giả lập (tools/mock-cli/agy) để không bắt nhầm.
   if (/#longmd\b/.test(q)) return { text: longMd(), q };

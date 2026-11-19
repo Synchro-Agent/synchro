@@ -202,7 +202,9 @@ sxTypeEls(s).b.forEach(function(b){m=Math.max(m,px(b,uu))});return Math.ceil(m)}
 // slide tự cắt phần thừa (overflow hidden) nên số đo cao / rộng không thấy được lỗi này.
 function fitFrame(f){f.removeAttribute("data-sx-fitover");if(!vis(f)||!bad(f))return;
 var ns=[].slice.call(f.querySelectorAll("[data-node-id],[data-sx-fit]")).filter(vis);if(!ns.length)return;
-var uu=unit(f),o=ns.map(function(e){return px(e,uu)});
+// Đơn vị đo bên trong khung (ô chữ đầu tiên): --sx-u của slide khác của trang (1px) khi khung hẹp hơn 1280, đo ngoài
+// khung thì cỡ gốc tính sai đơn vị và chữ bị co thêm đúng tỉ lệ thu nhỏ của khung (khung xem, ảnh thu nhỏ).
+var uu=unit(ns[0]),o=ns.map(function(e){return px(e,uu)});
 var pre=ns.map(function(e){return[e.style.fontSize,e.getAttribute("data-sx-fitted")]});
 var ty=f.matches(SLIDE)?sxTypeEls(f):null,tf=ty?tfloor(f,uu):11;
 var ti=ns.map(function(e){var t=ty&&e.closest(ty.T);return!!t&&f.contains(t)});
