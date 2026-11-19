@@ -1,4 +1,5 @@
 "use client";
+import "./styles/colorpick.css";
 // Ô chọn màu của app (thay <input type="color"> gốc). Ô gốc hiện một chấm tròn trơn và mở bảng màu của hệ điều hành (Windows: hộp thoại
 // "Color" cũ); ở đây là nút mẫu màu bo góc kèm mã hex, bấm mở khung .menu của app: bảng màu gợi ý, ô nhập mã hex, và nút "Màu khác…"
 // mở bảng màu của trình duyệt cho ai cần chọn tự do. Bàn phím: ← → ↑ ↓ đi trong bảng màu, Enter / Space chọn, Esc đóng.

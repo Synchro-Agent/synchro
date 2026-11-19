@@ -1,5 +1,10 @@
 @layer properties, theme, base, components, utilities, syn, syn-over;
 @layer syn {
+/* Chuyển từ globals.css (B5 bước 10, tools/css-move.mjs): luật chỉ trúng phần tử của màn này, giữ thứ tự cũ (đứng trước luật riêng của tệp). */
+button.bn-box:disabled{cursor:default}
+.bn-crumb svg{flex:none;opacity:.55}
+.bn-tools .btn.sm{margin-right:6px}
+/* Hết phần chuyển từ globals.css. */
 /* Chuyển từ synchro-ds.css (B5 bước 10, tools/css-move.mjs): luật chỉ trúng phần tử của màn này, giữ thứ tự cũ (đứng trước luật riêng của tệp). */
 /* Thẻ trong các mục (Providers, Mức dùng, Quản trị, Connectors…): tấm phẳng, viền mảnh. Thẻ "bare" nằm trong thẻ khác: không viền, không đệm. */
 html body .sy-settings .bn-stats{grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:0;border-radius:var(--r-card);background:var(--ds-plate);box-shadow:inset 0 0 0 1px var(--ds-line);overflow:hidden}

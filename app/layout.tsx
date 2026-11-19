@@ -21,6 +21,8 @@ import "./_shell/unbounded-preload.css";
 // - CSS riêng của từng màn tải chậm (ui/styles/: codeview.css, speech.css, brainview.css, download.css, projects.css, settings.css,
 //   skills.css) nạp cùng màn đó, luôn sau bốn tệp trên. Luật chỉ được chuyển sang đó khi mọi selector neo vào tệp riêng của màn và không đổi
 //   bên thắng với luật chung đứng sau nó: tools/css-move.mjs + css-move-verify.mjs; tests/api/css-split.test.mjs canh lớp đã tách.
+//   Thành phần dùng chung chỉ màn tải chậm vẽ có tệp riêng nạp cùng thành phần (ui/colorpick.tsx → colorpick.css, ui/pearlorb.tsx →
+//   pearlorb.css): có thể nạp trước hay sau CSS riêng của màn, nên css-cascade kiểm cả hai thứ tự (CSS_LAZY_ORDER=first).
 import "./_shell/globals.css";
 import "./_shell/glass.css";
 import "./_shell/synchro-ds.css";

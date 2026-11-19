@@ -1,5 +1,8 @@
 @layer properties, theme, base, components, utilities, syn, syn-over;
 @layer syn {
+/* Chuyển từ globals.css (B5 bước 10, tools/css-move.mjs): luật chỉ trúng phần tử của màn này, giữ thứ tự cũ (đứng trước luật riêng của tệp). */
+.mr-row.off .mr-name b{color:var(--text-2)}.api-credit-f .us-money input{width:100%}.us-money.off input{cursor:not-allowed}
+/* Hết phần chuyển từ globals.css. */
 /* Chuyển từ synchro-ds.css (B5 bước 10, tools/css-move.mjs): luật chỉ trúng phần tử của màn này, giữ thứ tự cũ (đứng trước luật riêng của tệp). */
 @media (max-width:860px){
   html body .sy-settings .promo{flex-direction:column;align-items:stretch;gap:16px}

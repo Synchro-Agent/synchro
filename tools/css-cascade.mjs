@@ -410,7 +410,12 @@ async function vendor(root, compile) {
   }
   return out;
 }
-const LAZY = ["ui/styles/codeview.css", "ui/styles/speech.css", "ui/styles/brainview.css", "ui/styles/download.css", "ui/styles/projects.css", "ui/styles/settings.css", "ui/styles/skills.css"];
+// CSS riêng của thành phần dùng chung giữa các màn tải chậm (ô chọn màu ui/colorpick.tsx, quả cầu ui/pearlorb.tsx): nạp cùng thành phần, có
+// thể trước hay sau CSS riêng của màn. Mặc định xếp sau; CSS_LAZY_ORDER=first xếp trước, để kiểm cả hai thứ tự. Bản gốc chưa có tệp nào
+// (so với bản trước khi tách) thì bỏ qua tệp đó.
+const SCREENS = ["ui/styles/codeview.css", "ui/styles/speech.css", "ui/styles/brainview.css", "ui/styles/download.css", "ui/styles/projects.css", "ui/styles/settings.css", "ui/styles/skills.css"];
+const COMPONENTS = ["ui/styles/colorpick.css", "ui/styles/pearlorb.css"];
+const LAZY = process.env.CSS_LAZY_ORDER === "first" ? [...COMPONENTS, ...SCREENS] : [...SCREENS, ...COMPONENTS];
 /** Bản mã nguồn: dịch globals.css qua Tailwind như bản dựng, rồi xếp theo thứ tự nạp. */
 export async function loadSource(root, order = "dev") {
   const postcss = req("postcss");
@@ -423,7 +428,7 @@ export async function loadSource(root, order = "dev") {
   // app/_shell/tokens.css (B5) vào cùng globals.css qua @import (Tailwind dịch thẳng vào g.css), không phải tệp riêng.
   const first = order === "prod" ? [s("app/_shell/glass.css"), s("app/_shell/features.css"), { name: "globals.css", css: g.css }, font, s("app/_shell/synchro-ds.css")]
     : [font, { name: "globals.css", css: g.css }, s("app/_shell/glass.css"), s("app/_shell/synchro-ds.css"), s("app/_shell/features.css")];
-  return [...first, ...LAZY.map(s), ...(await vendor(root, compile)), ...injected(root)];
+  return [...first, ...LAZY.filter((p) => fs.existsSync(path.join(root, p))).map(s), ...(await vendor(root, compile)), ...injected(root)];
 }
 /** Bản build: tệp CSS tải đầu theo thứ tự <link> của trang tĩnh, rồi các tệp còn lại (tải chậm). */
 export function loadBuild(dir, root) {

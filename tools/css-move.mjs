@@ -14,8 +14,13 @@ import { SRC_ROOTS } from "../tests/lib/srcroots.mjs";
 import { splitList } from "./css-cascade.mjs";
 
 const postcss = createRequire(import.meta.url)("postcss");
-// Màn tải chậm và lối vào của chúng (cùng danh sách với tests/api/css-split.test.mjs).
+// Màn tải chậm và lối vào của chúng (cùng danh sách với tests/api/css-split.test.mjs). Tệp của thành phần dùng chung đứng đầu: luật neo vào
+// cả thành phần lẫn màn chứa nó thì về tệp của thành phần (hẹp hơn).
 export const SHEETS = [
+  // Ô chọn màu dùng chung (ui/colorpick.tsx, chỉ màn Bộ não và Audio Native dùng): tệp CSS riêng nạp cùng thành phần, ít lớp nên min thấp; tiền tố cp- (chữ "cp" trơn trùng tên biến, lệnh cp của shell).
+  { css: "ui/styles/colorpick.css", entries: ["ui/colorpick.tsx"], prefix: /^cp-/, min: 10 },
+  // Quả cầu ngọc trai (ui/pearlorb.tsx, chỉ màn Speech dùng): tệp CSS riêng nạp cùng thành phần.
+  { css: "ui/styles/pearlorb.css", entries: ["ui/pearlorb.tsx"], prefix: /^pearl-/, min: 3 },
   { css: "ui/styles/speech.css", entries: ["ui/speech/view.tsx", "ui/voicemode.tsx"], prefix: /^(sp|vm)(-|$)/ },
   { css: "ui/styles/codeview.css", entries: ["ui/codeview.tsx", "ui/browserhub.tsx"], prefix: /^(cvg?|bp|ctxp|ext)(-|$)/ },
   { css: "ui/styles/brainview.css", entries: ["ui/brainui.tsx"], prefix: /^(bw|bn)(-|$)/ },

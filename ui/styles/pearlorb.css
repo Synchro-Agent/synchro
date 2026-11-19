@@ -1,0 +1,27 @@
+@layer properties, theme, base, components, utilities, syn, syn-over;
+@layer syn {
+/* Chuyển từ globals.css (w10, ngân sách CSS tải đầu): quả cầu chỉ có ở ui/pearlorb.tsx (màn Speech: chép lời trực tiếp, agent), tệp này nạp
+   cùng thành phần đó, sau mọi tệp CSS tải đầu. tools/css-cascade.mjs (dev / prod, tệp này trước / sau CSS riêng của các màn) báo 74 cặp có
+   thể đổi bên thắng; đã soát từng cặp: bên kia cần một lớp (hoặc cha .boot-nav / .dock / .intro-ui / td, tổ tiên .sp-grab / .sp-mlangs…)
+   mà phần tử của quả cầu không bao giờ có, nên không cặp nào trúng cùng phần tử. Keyframes pearl* chỉ luật ở đây dùng. */
+/* ===== Quả cầu ngọc trai (Speech) ===== */
+.pearl{--lv:0;--spd:1;position:relative;width:100%;height:100%;border-radius:50%}
+.pearl-core{position:absolute;inset:0;border-radius:50%;overflow:hidden;isolation:isolate;
+  background:radial-gradient(120% 120% at 32% 26%,#f8f9fe 0%,#e8eaf3 42%,#d6dae9 100%);
+  box-shadow:inset 0 0 0 1.5px rgba(255,255,255,.9),inset -16px -20px 40px rgba(104,120,178,.2),inset 12px 14px 32px rgba(255,255,255,.55),0 22px 54px -16px rgba(96,126,228,.5);
+  scale:calc(1 + var(--lv) * .045);transition:scale .2s}
+.pearl-core i{position:absolute;border-radius:50%;filter:blur(16px);scale:calc(1 + var(--lv) * .55)}
+.pearl-core .p1{width:66%;height:66%;left:-8%;bottom:-10%;background:radial-gradient(circle,#ecc58e 0%,rgba(236,197,142,.62) 40%,rgba(236,197,142,0) 72%);animation:pearlA calc(15s * var(--spd)) ease-in-out infinite}
+.pearl-core .p2{width:72%;height:72%;right:-14%;top:26%;background:radial-gradient(circle,#859ced 0%,rgba(133,156,237,.62) 42%,rgba(133,156,237,0) 72%);animation:pearlB calc(18s * var(--spd)) ease-in-out infinite}
+.pearl-core .p3{width:58%;height:58%;left:30%;top:-12%;background:radial-gradient(circle,#cdd2fb 0%,rgba(205,210,251,0) 70%);animation:pearlC calc(13s * var(--spd)) ease-in-out infinite}
+.pearl-core .p4{width:52%;height:52%;left:22%;top:38%;background:radial-gradient(circle,#b7bdd6 0%,rgba(183,189,214,0) 70%);opacity:.75;animation:pearlD calc(21s * var(--spd)) ease-in-out infinite}
+.pearl-shine{position:absolute;left:13%;top:9%;width:48%;height:42%;border-radius:50%;pointer-events:none;
+  background:radial-gradient(circle at 46% 46%,rgba(255,255,255,.98) 0%,rgba(255,255,255,.55) 32%,rgba(255,255,255,0) 66%);filter:blur(3px);animation:pearlShine 10s ease-in-out infinite}
+@media (prefers-reduced-motion:reduce){.pearl-core i,.pearl-shine{animation:none}
+}
+@keyframes pearlA{0%,100%{translate:0 0}33%{translate:20% -12%}66%{translate:-6% -24%}}
+@keyframes pearlB{0%,100%{translate:0 0}40%{translate:-28% 10%}72%{translate:-10% -18%}}
+@keyframes pearlC{0%,100%{translate:0 0}50%{translate:-22% 32%}}
+@keyframes pearlD{0%,100%{translate:0 0}30%{translate:18% 14%}62%{translate:-16% 6%}}
+@keyframes pearlShine{0%,100%{translate:0 0;opacity:1}50%{translate:5% 4%;opacity:.85}}
+}

@@ -1,5 +1,11 @@
 @layer properties, theme, base, components, utilities, syn, syn-over;
 @layer syn {
+/* Chuyển từ globals.css (B5 bước 10, tools/css-move.mjs): luật chỉ trúng phần tử của màn này, giữ thứ tự cũ (đứng trước luật riêng của tệp). */
+.tpl .tl{display:flex;align-items:center;gap:6px;white-space:nowrap}
+.sp-progress.ind i{animation:sp-ind 1.4s ease-in-out infinite}
+.sp-head-a>.btn,.sp-head-a>.sp-back{margin-bottom:10px}
+
+/* Hết phần chuyển từ globals.css. */
 
 /* Chuyển từ synchro-ds.css (B5 bước 10, tools/css-move.mjs): luật chỉ trúng phần tử của màn này, giữ thứ tự cũ (đứng trước luật riêng của tệp). */
 
@@ -848,6 +854,9 @@
 }}
 }
 @layer syn-over{
+/* Chuyển từ globals.css (B5 bước 10, tools/css-move.mjs): luật chỉ trúng phần tử của màn này, giữ thứ tự cũ (đứng trước luật riêng của tệp). */
+.sp-progress.ind i{width:35%}
+/* Hết phần chuyển từ globals.css. */
 /* B5: khai báo trước đây mang !important chỉ để thắng thứ tự. Lớp syn-over đứng sau syn nên các luật này thắng mọi luật thường của syn bất kể specificity; giữa chúng với nhau vẫn theo specificity rồi thứ tự. Sửa một luật ở trên thì tìm cùng selector ở đây. */
 .sp-nav{display:flex}
 .sp-pf-t{display:none}

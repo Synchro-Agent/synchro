@@ -126,7 +126,8 @@ console.log("10. Ngăn Cài đặt của Speech và nút màu hai dòng");
   const sp = fs.readFileSync("ui/styles/speech.css", "utf8");
   // 761–768px thanh điều hướng còn hiện: ngăn trượt từ dưới lên rộng hết màn thì chữ của thanh đè lên ngăn (ảnh polish.mjs ở 768px).
   ok(/@media \(max-width:760px\)\{\.sp-aside,\.sp-aside\.wide \{top:auto;left:0;right:0/.test(sp) && !/@media \(max-width:768px\)\{\.sp-aside,\.sp-aside\.wide \{top:auto/.test(sp), "ngăn Cài đặt trượt từ dưới lên chỉ ở ≤ 760px (cùng mốc ẩn thanh điều hướng)");
-  ok(/\.cp:not\(\.sm\)\{border-radius:var\(--r-plate\)\}/.test(ds), "nút màu cỡ md (tên + mã màu, hai dòng) bo góc tấm, không bo viên thuốc");
+  // Luật của ô chọn màu ở ui/styles/colorpick.css (nạp cùng ui/colorpick.tsx, ngoài CSS tải đầu).
+  ok(/\.cp:not\(\.sm\)\{border-radius:var\(--r-plate\)\}/.test(fs.readFileSync("ui/styles/colorpick.css", "utf8")), "nút màu cỡ md (tên + mã màu, hai dòng) bo góc tấm, không bo viên thuốc");
 }
 
 console.log(`\n${pass} đạt, ${fail} lỗi`);

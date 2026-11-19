@@ -1,5 +1,13 @@
 @layer properties, theme, base, components, utilities, syn, syn-over;
 @layer syn {
+/* Chuyển từ globals.css (B5 bước 10, tools/css-move.mjs): luật chỉ trúng phần tử của màn này, giữ thứ tự cũ (đứng trước luật riêng của tệp). */
+.sr h4{display:flex;align-items:center;justify-content:space-between;margin:0 0 8px;font-size:var(--fs-label);font-weight:560}
+.bp-addr-w input{flex:1;width:100%}
+.bh-seg button:disabled{opacity:.45;cursor:default}
+.ext-dev>div>span{font-size:var(--fs-label);color:var(--text-3);line-height:1.45}
+/* Session rail: pull request của phiên */
+.sr-pr+.sr-pr{margin-top:6px}
+/* Hết phần chuyển từ globals.css. */
 /* Chuyển từ synchro-ds.css (B5 bước 10, tools/css-move.mjs): luật chỉ trúng phần tử của màn này, giữ thứ tự cũ (đứng trước luật riêng của tệp). */
 html body .cvg-head h2{font-size:var(--fs-3)}
 /* Hết phần chuyển từ synchro-ds.css. */
@@ -578,6 +586,9 @@ html[data-tw="wide"] .cv-wrap {width:min(1160px,100%)
 }
 }
 @layer syn-over{
+/* Chuyển từ globals.css (B5 bước 10, tools/css-move.mjs): luật chỉ trúng phần tử của màn này, giữ thứ tự cũ (đứng trước luật riêng của tệp). */
+.bp-addr-w input{margin:0}
+/* Hết phần chuyển từ globals.css. */
 /* Chuyển từ globals.css (B5 bước 10, tools/css-move.mjs): luật chỉ trúng phần tử của màn này, giữ thứ tự cũ (đứng trước luật riêng của tệp). */
 html body .cv-composer[data-drag]{box-shadow:0 0 0 .5px var(--gl-hair),var(--gl-shadow)}
 [data-theme="dark"] .bh-seg button.on{background:#3b3938;box-shadow:0 1px 4px rgba(0,0,0,.45),inset 0 0 0 .5px #55524f}

@@ -177,36 +177,6 @@ html body .menu:not(.auth-root *) hr{border-top:1px solid var(--ds-line);margin:
 .dd-none{padding:10px 12px;font-size:var(--fs-2);color:var(--ds-muted)}
 .dd-grp{padding:10px 12px 4px;font-size:var(--fs-1);font-weight:560;color:var(--ds-muted)}
 .dd-grp:first-child{padding-top:4px}
-/* Ô chọn màu của app (ui/colorpick.tsx, thay <input type="color"> gốc): nút viên thuốc có mẫu màu bo 25% và mã hex; khung nổi có bảng màu
-   8 cột (ô vuông bo 25%, ô đang chọn có dấu tích và vòng mực), ô mã hex và nút mở bảng màu của trình duyệt. */
-.cp{display:inline-flex;align-items:center;gap:9px;height:var(--ds-h);padding:0 11px 0 5px;border-radius:var(--r-pill);border:1px solid var(--ds-line-2);background:var(--ds-plate);
-  color:var(--ds-ink);font:inherit;font-size:var(--fs-2);cursor:pointer;transition:border-color var(--ds-fast),box-shadow var(--ds-fast)}
-/* Cỡ md có hai dòng (tên + mã màu): bo góc tấm như ô chọn giọng hai dòng, không bo viên thuốc (góc tròn cắt chữ). Cỡ sm chỉ còn chấm màu: tròn. */
-.cp:not(.sm){border-radius:var(--r-plate)}
-.cp.sm{height:var(--ds-h-sm);padding:0 4px;gap:0}
-.cp.sm :is(.cp-l,svg){display:none}
-.cp:hover{border-color:color-mix(in srgb,var(--ds-ink) 32%,var(--ds-line-2))}
-.cp:focus-visible,.cp.open{outline:0;border-color:var(--ds-ink);box-shadow:0 0 0 3px color-mix(in srgb,var(--ds-ink) 10%,transparent)}
-.cp>svg{color:var(--ds-muted)}
-.cp-chip{flex:none;width:24px;height:24px;border-radius:var(--r-pill);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--ds-ink) 18%,transparent)}
-.cp.sm .cp-chip{width:20px;height:20px}
-.cp-chip.lg{width:30px;height:30px;border-radius:25%}
-.cp-l{display:flex;flex-direction:column;align-items:flex-start;line-height:1.15}
-.cp-l code{font:500 var(--fs-1)/1.2 var(--font-mono,ui-monospace,monospace);color:var(--ds-muted)}
-.menu.cp-pop{width:260px;max-width:calc(100vw - 16px);min-width:0;padding:10px;display:flex;flex-direction:column;gap:10px}
-.cp-grid{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:6px}
-.cp-sw{aspect-ratio:1;display:grid;place-items:center;border-radius:25%;border:0;background:var(--c);cursor:pointer;color:#fff;mix-blend-mode:normal;
-  box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--ds-ink) 16%,transparent);transition:transform var(--ds-fast) var(--ds-ease),box-shadow var(--ds-fast)}
-.cp-sw:hover{transform:scale(1.08)}
-.cp-sw:focus-visible,.cp-sw[aria-pressed=true]{outline:0;box-shadow:0 0 0 2px var(--ds-plate),0 0 0 3.5px var(--ds-ink)}
-.cp-sw svg{filter:drop-shadow(0 0 1.5px rgba(0,0,0,.6))}
-.cp-row{display:flex;align-items:center;gap:8px}
-.cp-hex{flex:1;min-width:0;display:flex;align-items:center;gap:2px;height:32px;padding:0 10px;border-radius:var(--r-pill);background:var(--ds-sunken);box-shadow:inset 0 0 0 1px var(--ds-line-2);
-  font:500 var(--fs-2) var(--font-mono,ui-monospace,monospace);color:var(--ds-muted)}
-.cp-hex:focus-within{box-shadow:inset 0 0 0 1px var(--ds-ink)}
-.cp-hex input{flex:1;min-width:0;border:0;background:transparent;font:inherit;color:var(--ds-ink);text-transform:uppercase;padding:0}
-.cp-pop .cp-row .btn.cp-more{height:32px;padding:0 10px;font-size:var(--fs-label);gap:5px}
-.cp-native{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none;border:0;padding:0}
 /* Hộp thoại */
 html body .modal:not(.auth-root *){border-radius:var(--r-panel)}
 .overlay:not(.auth-root *){background:rgba(17,18,16,.22)}
@@ -629,7 +599,6 @@ html body .tk-page .tk-t b{color:var(--ds-ink);font-size:var(--fs-chat)}
 html body .pl-top .pl-search:focus-within{box-shadow:inset 0 0 0 1px var(--ds-ink);background:var(--ds-plate)}
 /* Ô dán link repo: một viên thuốc 44px, nút Thêm nằm gọn bên trong (lề 4px đều bốn phía). */
 html body .sk-gh{height:40px;margin:0;padding:0 4px 0 15px;gap:10px;border:0;border-radius:var(--r-pill);background:var(--ds-plate);box-shadow:inset 0 0 0 1px var(--ds-line-2);color:var(--ds-muted)}
-html body .gh-hint{margin:8px 16px 0;font-size:var(--fs-label);line-height:18px;color:var(--ds-muted)}
 
 
 
@@ -1050,21 +1019,16 @@ html[data-motion="reduced"] .chat-item .ct-run::after{animation:none}
 /* Tiến độ xuất PowerPoint: nhãn nổi ngay dưới nút Tải về (không chen vào hàng nút, các nút không xô lệch khi nó hiện / ẩn). */
 .art-dl-note{position:absolute;top:calc(100% + 6px);right:0;z-index:calc(var(--z-menu) + 1);padding:3px 9px;border-radius:var(--r-pill);background:var(--ds-inv);color:var(--ds-inv-fg);
   font-size:var(--fs-1);white-space:nowrap;font-variant-numeric:tabular-nums;box-shadow:var(--ds-lift);pointer-events:none}
-html body .scan-modal>.d{margin:0 0 14px;color:var(--ds-muted);line-height:1.55}
 .scan-kinds{list-style:none;margin:0 0 14px;padding:0;display:grid;gap:8px}
-.scan-kinds li{display:grid;grid-template-columns:140px minmax(0,1fr);gap:12px;padding:10px 14px;border-radius:var(--r-card);box-shadow:inset 0 0 0 1px var(--ds-line);font-size:var(--fs-2);line-height:1.5}
 .scan-kinds span{color:var(--ds-muted)}
 .scan-pick{display:flex;align-items:center;gap:12px;margin:0 0 12px}
-.scan-pick label{font-size:var(--fs-2);font-weight:520;flex:none}
 
 .scan-note{display:flex;gap:8px;align-items:flex-start;margin:0;font-size:var(--fs-label);line-height:1.5;color:var(--ds-muted)}
 .scan-note svg{flex:none;margin-top:2px}
 .scan-stat{display:flex;align-items:center;gap:8px;min-height:22px;margin:0 0 8px;font-size:var(--fs-2);color:var(--ds-muted);font-variant-numeric:tabular-nums}
 .scan-bar{flex:none;height:4px;margin:0 0 12px;border-radius:2px;background:var(--ds-sunken);overflow:hidden}
-.scan-bar i{display:block;height:100%;border-radius:inherit;background:var(--ds-ink);transition:width .4s ease}
 html body .scan-modal .scan-tabs>button{display:inline-flex;align-items:center;gap:6px;white-space:nowrap;flex:none}
 .scan-tools{flex:none;display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin:0 0 8px}
-.scan-tools .btn i{font-style:normal;opacity:.75;font-variant-numeric:tabular-nums}
 .scan-lock{display:inline-flex;align-items:center;gap:6px;font-size:var(--fs-label);color:var(--ds-muted)}
 /* Cột nút cố định độ rộng (Tắt / Bật lại + Xóa) để cột lý do thẳng hàng ở mọi hàng; chữ canh theo dòng đầu, nút canh giữa hàng. */
 .scan-row{display:grid;grid-template-columns:minmax(0,.9fr) minmax(0,1.7fr) 112px;gap:14px;align-items:start;padding:11px 14px;border-top:1px solid var(--ds-line)}
@@ -1077,7 +1041,6 @@ html body .scan-modal .scan-tabs>button{display:inline-flex;align-items:center;g
 .scan-bg{margin-right:auto;font-size:var(--fs-label);color:var(--ds-muted)}
 @media (max-width:640px){
   html body .scan-modal .scan-tabs>button{flex:1 1 auto;justify-content:center;gap:4px;padding:0 6px;font-size:var(--fs-label)}
-  .scan-kinds li{grid-template-columns:1fr;gap:2px}
   .scan-pick{flex-wrap:wrap;gap:6px}
   
   .scan-row{grid-template-columns:minmax(0,1fr) auto;row-gap:6px}
