@@ -114,9 +114,11 @@ ok(/className="overlay ft-lightbox"/.test(lb) && /role="dialog" aria-modal="true
 {
   // Thông báo (.toast): glass.css kéo mọi khung kính về --z-sticky bằng độ ưu tiên html body …; thông báo phải giữ --z-toast (không bị bảng
   // artifact che trên máy tính bảng) và cho bấm xuyên qua (không chặn nút micro / chọn model của khối soạn tin ngay dưới nó).
-  const glass = fs.readFileSync("app/_shell/glass.css", "utf8");
-  const zi = glass.indexOf("html body .toast{z-index:var(--z-toast);pointer-events:none}");
-  ok(zi > glass.indexOf("html body :is(.menu,.model-menu,.usermenu,.model-sub,.modal,.toast,.sidebar"), "thông báo giữ tầng --z-toast và cho bấm xuyên qua (đứng sau luật kéo khung kính về --z-sticky)");
+  const glass = fs.readFileSync("app/_shell/glass.css", "utf8"), gcss = fs.readFileSync("app/_shell/globals.css", "utf8");
+  const zRule = glass.split("\n").find((l) => /\{isolation:isolate;z-index:var\(--z-sticky\)\}/.test(l)) ?? "";
+  ok(!!zRule && !/\.toast/.test(zRule), "luật kéo khung kính về --z-sticky không gồm .toast", zRule);
+  const toast = gcss.match(/\n\.toast\{[^}]*\}/)?.[0] ?? "";
+  ok(/z-index:var\(--z-toast\)/.test(toast) && /pointer-events:none/.test(toast), "thông báo giữ tầng --z-toast và cho bấm xuyên qua", toast);
 }
 
 console.log(`\n${pass} đạt, ${fail} hỏng`);
