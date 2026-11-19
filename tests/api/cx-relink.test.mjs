@@ -68,6 +68,16 @@ try {
   console.log("3. Khóa mới bị từ chối: không đổi gì");
   ok(await C.linkComposio(req, uid, pol, { key: "ck_bad key" }).then(() => false, () => true), "khóa sai dạng bị từ chối");
   ok(known().schema && known().account === "old@x.com", "khóa bị từ chối: cache vẫn nguyên", JSON.stringify(known()));
+
+  console.log("4. Ứng dụng đã nối cho bộ định tuyến: toolkit Composio báo đang kết nối, mất khi ngắt liên kết");
+  const doc = { toolkit: "googledocs", status: "active", connected_account_id: "ca_docs", email: "a@x.com" };
+  const docs = { googledocs: doc };
+  X.cxLearn(uid, "COMPOSIO_MANAGE_CONNECTIONS", JSON.stringify({ data: { results: docs } }));
+  const apps = C.connectedApps(uid);
+  ok(apps.includes("Gmail") && apps.includes("Google Docs"), "Gmail và Google Docs đang kết nối", JSON.stringify(apps));
+  C.unlinkComposio(uid, pol);
+  const left = C.connectedApps(uid);
+  ok(!left.length, "ngắt liên kết Composio: không còn ứng dụng nào", JSON.stringify(left));
 } finally {
   server.close();
   fs.rmSync(tmp, { recursive: true, force: true });

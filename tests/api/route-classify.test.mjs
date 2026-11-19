@@ -566,5 +566,115 @@ console.log("17. Nhật ký định tuyến (D1.6): bật sẵn, console.log [ro
   ok(logs.length === 3 && JSON.parse(logs[1].slice(8)).rerun === true && JSON.parse(logs[2].slice(8)).rerun === true, "W23-14: lấy mẫu 0 vẫn ghi lượt làm lại (bị chê, hoặc bấm Chạy lại bằng model khác), bỏ lượt thường", JSON.stringify(logs));
   ok(!logs.some((x) => /"task":"chat"/.test(x)) && JSON.parse(logs[0].slice(8)).task === "lookup", "W23-14: routeModel không có o.log (khởi động sẵn, việc phụ) không ghi [route]", JSON.stringify(logs));
 }
+console.log("18. Connector: ứng dụng đã nối, chữ connector / Composio thắng mọi nhãn; đường nhanh nhận ra lời từ chối");
+{
+  const { "chat/needtools": NT } = await loadTs(["chat/needtools"]);
+  // Hai mươi bốn cách nói của cùng một yêu cầu "tạo Google Docs", cả gõ không dấu và năm thứ tiếng khác. Câu đầu là câu
+  // từng bị xếp "học ngôn ngữ", đi đường nhanh không công cụ nên không bao giờ tới được thẻ duyệt.
+  const DOCS = [
+    "Dùng connector Google Docs: tạo một tài liệu mới tên Kế hoạch quý 4",
+    "Dùng connector Google Docs: tạo một tài liệu mới tên \"Biên bản họp\"",
+    "Tạo Google Docs tên Biên bản họp", "Tạo một Google Doc mới tên Kế hoạch",
+    "Mở Google Docs tạo tài liệu tên Kế hoạch",
+    "Create a new Google Doc called Q4 plan", "Make a Google Doc titled Meeting notes",
+    "Qua Composio tạo một tài liệu Google Docs tên Ghi chú", "dung connector google docs tao tai lieu moi ten ke hoach",
+    "Hãy dùng Google Docs để tạo tài liệu \"Báo cáo tuần\"", "Tạo tài liệu mới trên Google Docs: Báo cáo tuần",
+    "Trong Google Docs, tạo tài liệu tên Báo cáo", "Viết biên bản họp rồi lưu vào Google Docs",
+    "Google Docs: tạo tài liệu mới tên Đề xuất", "Tạo file Google Docs mới tên Hợp đồng mẫu",
+    "Use the Google Docs connector to create a document named Roadmap",
+    "Nhờ bạn tạo giúp mình 1 doc trên Google Docs tên là Kế hoạch học tập",
+    "Soạn một tài liệu Google Docs tiêu đề Quy trình onboarding", "Mình cần một Google Doc mới, tên Kế hoạch marketing",
+    "Crée un nouveau document Google Docs nommé Plan", "Erstelle ein neues Google Docs Dokument namens Plan",
+    "Crea un documento nuevo en Google Docs llamado Plan", "Google ドキュメントで「計画」という新しいドキュメントを作成して",
+    "Tạo tài liệu tên Kế hoạch bằng connector",
+  ];
+  const H = ["anthropic/claude-haiku-5-5", "anthropic/claude-sonnet-5-5", "anthropic/claude-opus-5-5"];
+  for (const apps of [undefined, ["Google Docs", "Gmail"]]) {
+    const bad = DOCS.filter((t) => R.taskOf(q(t, { apps })) !== "act" || R.needsNoTools(q(t, { apps })));
+    ok(DOCS.length >= 20 && !bad.length, `${DOCS.length} cách nói "tạo Google Docs" đều là thao tác có công cụ`
+      + ` (${apps ? "đã nối Google Docs" : "chưa truyền ứng dụng"})`, bad.join(" | "));
+    const fast = DOCS.map((t) => R.routeModel(q(t, { apps }), H)).filter((r) => r.model === H[0] && r.effort === "low");
+    ok(!fast.length, "không câu nào về Haiku nỗ lực thấp", JSON.stringify(fast));
+  }
+  // Ứng dụng người dùng tự nối (không có trong danh mục chung): nêu tên là thao tác; chưa nối thì vẫn là câu thường.
+  const kho = { apps: ["Kho hàng", "Gmail"] };
+  ok(R.taskOf(q("Thêm sản phẩm áo thun vào kho hang", kho)) === "act", "connector tự thêm \"Kho hàng\": là act");
+  ok(R.taskOf(q("Thêm sản phẩm áo thun vào kho hàng")) !== "act", "chưa nối \"Kho hàng\": không phải act");
+  ok(R.needsNoTools(q("Thủ đô của Pháp là gì?", kho)), "câu không nhắc ứng dụng nào vẫn đi đường nhanh");
+  const notion = { apps: ["Notion"] };
+  ok(!R.needsNoTools(q("Notion của mình có gì mới?", notion)), "nhắc ứng dụng đã nối: không đi đường nhanh");
+  ok(R.taskOf(q("So sánh Notion và Trello rồi tạo kế hoạch")) === "analyze", "chưa nối Notion: vẫn là phân tích");
+  const pasted = R.inputOfChat([{ role: "user", content: "Tạo trang Kho hàng mới" }], { apps: ["Kho hàng"] });
+  ok(pasted.apps?.[0] === "Kho hàng" && R.taskOf(pasted) === "act", "inputOfChat chuyển ứng dụng cho bộ phân loại");
+  // Hỏi về connector, báo sự cố, nhờ viết code: không phải nhờ thao tác.
+  for (const [t, not] of [["connector là gì", "act"], ["Cách cài MCP server cho Claude Desktop", "act"],
+    ["Composio bị lỗi 401, sửa sao?", "act"], ["Viết code Python kết nối MCP server", "act"]]) {
+    ok(R.taskOf(q(t)) !== not, `“${t}” không phải thao tác`, R.taskOf(q(t)));
+  }
+  // Lời chỉ định connector thắng cả tạo sản phẩm: "Dùng connector Canva tạo poster" phải gọi Canva, không tự dựng.
+  ok(R.taskOf(q("Dùng connector Canva tạo poster đêm nhạc jazz")) === "act", "connector thắng cả tạo sản phẩm");
+  // Đường nhanh: dấu NEED_TOOLS ở bất cứ đâu, hoặc lời "không có công cụ" ở đầu câu trả lời, thì chạy lại lượt đầy đủ.
+  const need = [
+    "[[CAN_CONG_CU]]", "Mình cần dùng connector để làm việc này.\n[[CAN_CONG_CU]]",
+    "Xin lỗi, mình không có công cụ Google Docs ở đây nên chưa tạo được tài liệu.",
+    "Hiện tại tôi không có quyền truy cập vào Google Docs của bạn.",
+    "Mình không thể trực tiếp tạo tài liệu trên Google Docs.",
+    "I don't have access to your Google Docs account.", "I can't create files in Google Drive from here.",
+  ];
+  const fine = [
+    "Thủ đô của Pháp là Paris.", "Mình không chắc lắm, nhưng theo mình biết thì câu đó đúng ngữ pháp.",
+    "Bạn không thể dùng thì hiện tại hoàn thành với 'yesterday'.",
+    "I can't recommend one over the other; both work well.",
+    `${"Đây là bài viết đầy đủ. ".repeat(80)}Mình không có công cụ nào khác để thêm.`,
+  ];
+  ok(need.every((t) => NT.fastNeedsTools(t)), "lời báo cần công cụ / không có công cụ: chạy lại lượt đầy đủ",
+    need.filter((t) => !NT.fastNeedsTools(t)).join(" | "));
+  ok(!fine.some((t) => NT.fastNeedsTools(t)), "câu trả lời thường không bị chạy lại",
+    fine.filter((t) => NT.fastNeedsTools(t)).join(" | "));
+}
+console.log("19. Brief thiết kế dài mở đầu bằng câu đóng vai: tạo sản phẩm, model mạnh nhất, nỗ lực từ cao");
+{
+  const { readFileSync } = await import("node:fs");
+  const raw = readFileSync(new URL("../fixtures/design-briefs.txt", import.meta.url), "utf8");
+  const briefs = raw.split(/^## /m).slice(1).map((b) => {
+    const [name, ...rest] = b.split("\n");
+    return { name, text: rest.join(" ").replace(/\s+/g, " ").trim() };
+  });
+  ok(briefs.length === 7, "đủ 7 brief", briefs.length);
+  const all = ["anthropic/claude-haiku-5-5", "anthropic/claude-sonnet-5-5", "anthropic/claude-opus-5-5"];
+  // Cùng brief khi câu đóng vai nằm riêng một đoạn và phần yêu cầu là đoạn dài (cách dán từ tài liệu).
+  const split = (t) => t.replace(/^([^.]{10,300}\.)\s+/, "$1\n\n");
+  for (const b of briefs) {
+    for (const [how, text] of [["liền", b.text], ["tách đoạn", split(b.text)]]) {
+      const x = q(text), r = R.routeModel(x, all);
+      ok(R.taskOf(x) === "build", `${b.name} (${how}): tạo sản phẩm`, `${R.taskOf(x)} ${R.difficulty(x).why}`);
+      const high = (e) => RANK.indexOf(e) >= RANK.indexOf("high");
+      ok(r.model === all[2] && high(r.effort), `${b.name} (${how}): Opus, nỗ lực từ cao`, `${r.model} ${r.effort}`);
+      ok(high(R.autoEffort(x)), `${b.name} (${how}): nỗ lực Tự động từ cao`, R.autoEffort(x));
+    }
+  }
+  // Model mạnh nhất CỦA TÀI KHOẢN: chỉ có Haiku và Sonnet thì là Sonnet, không phải model rẻ nhất vừa đạt mức.
+  const small = R.routeModel(q(briefs[1].text), all.slice(0, 2));
+  ok(small?.model === all[1], "tài khoản không có Opus: brief thiết kế đi Sonnet", small?.model);
+  const en = "You are a senior product designer. Design a SaaS analytics dashboard (1440x900) with sidebar, KPI cards,"
+    + " line chart, bar chart, sortable table, empty and loading states, light and dark themes, WCAG AA, working"
+    + " filters, 8px grid, tabular numbers right aligned, tooltips on charts. Self-check every requirement and"
+    + " report gaps.";
+  ok(R.taskOf(q(en)) === "build" && R.routeModel(q(en), all).model === all[2], "brief tiếng Anh: tạo sản phẩm, Opus");
+  // Câu đóng vai chỉ bị bỏ khi phía sau còn lời nhờ; nhờ viết, dịch, phân tích về chủ đề thiết kế không thành brief.
+  const req = " Yêu cầu: bố cục rõ ràng, phông chữ có dấu tiếng Việt, màu sắc hài hòa, có số liệu minh họa, ghi"
+    + " nguồn đầy đủ, kiểm tra lại từng phần, không dùng emoji, trình bày chuyên nghiệp, có kết luận và đề xuất"
+    + " cụ thể cho từng nhóm khách hàng, đối chiếu với năm trước, nêu rủi ro và cách giảm rủi ro, kèm lịch thực"
+    + " hiện theo quý.";
+  const keep = [
+    ["Bạn là ai?", "chat"], ["Bạn là giáo viên tiếng Anh. Sửa ngữ pháp câu này: I has a dog", "language"],
+    ["Dịch đoạn sau sang tiếng Anh: Thiết kế poster cần bố cục rõ ràng." + req, "translate"],
+    ["Phân tích ưu nhược điểm của landing page này." + req, "analyze"],
+    ["Hãy xây dựng chiến lược marketing cho quán cà phê." + req, "analyze"],
+  ];
+  for (const [t, want] of keep) ok(R.taskOf(q(t)) === want, `“${t.slice(0, 50)}…” vẫn là ${want}`, R.taskOf(q(t)));
+  const wrong = R.routeModel(q("You are wrong. Try again", { turns: 3, prevAsk: "Làm trang web bán giày" }), all);
+  ok(wrong?.why.includes("bạn chưa hài lòng với câu trả lời trước"), "“You are wrong.” vẫn là lời chê", wrong?.why);
+}
 console.log(`\nKết quả: ${pass} đạt, ${fail} lỗi`);
 process.exit(fail ? 1 : 0);

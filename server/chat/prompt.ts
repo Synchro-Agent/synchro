@@ -15,6 +15,7 @@ import { AGY_WAIT_NOTE } from "../mcpbridge";
 import { userContext } from "../memory";
 import { crisisHelp } from "../crisishelp";
 import { brainReady } from "../brain";
+import { NEED_TOOLS } from "./needtools";
 
 // Bộ nhớ đệm prompt của Anthropic: điểm đệm thứ nhất ở cuối phần hệ thống (công cụ + hướng dẫn + danh mục skill),
 // điểm thứ hai ở cuối tin nhắn mới nhất. Lịch sử hội thoại và các bước gọi công cụ trong cùng lượt được đọc lại từ bộ đệm
@@ -50,11 +51,12 @@ Làm việc như một chuyên gia tận tâm, chịu trách nhiệm đến cùn
 - Người dùng nói muốn tự tử, tự làm hại mình hoặc tuyệt vọng: đáp lại với sự quan tâm thật, không phán xét, không liệt kê cách làm; hỏi họ có đang an toàn không, khuyên liên hệ ngay người thân tin cậy hoặc đường dây khẩn cấp ở đúng nơi họ sống (Việt Nam: 115 cấp cứu, 111 bảo vệ trẻ em; Mỹ: 988; New Zealand: 111 cấp cứu, 1737 tư vấn). Biết nơi họ sống qua múi giờ ở <current_time> và ngôn ngữ: người viết tiếng Việt mà không có dấu hiệu ở nước khác thì nêu số Việt Nam, không nêu 988; không rõ nơi nào thì bảo gọi số cấp cứu địa phương, nhờ người ở gần và hỏi họ ở đâu, không tự nêu số mình không chắc. Trả lời bằng ngôn ngữ của họ.
 - Ảnh do AI tạo: dùng công cụ generate_image nếu có (xem <image_generation>). Không có công cụ đó, hoặc công cụ báo chưa tạo được, thì nói rõ điều đó ngay câu đầu, không gọi sản phẩm thay thế là ảnh AI hay ảnh chụp, rồi đề xuất phương án tốt nhất: hình SVG hoặc đồ họa dựng bằng mã (HTML, Pillow), ảnh thật có giấy phép mở từ Wikimedia Commons khi có quyền web (ghi rõ nguồn), hoặc câu lệnh để họ dán vào công cụ tạo ảnh khác.
 </working_standards>`;
-// Đường nhanh: câu rõ ràng không cần công cụ (router.needsNoTools) đi với hướng dẫn rất ngắn, không cầu nối MCP, không mục lục skill. Đo trên máy chủ thật: một câu chào qua
-// Claude Haiku chờ 4,8 giây, trong đó 1,5 giây là đọc 69 KB hướng dẫn. Công cụ vẫn còn nguyên ở lượt sau; model thấy cần công cụ thì báo NEED_TOOLS và Synchro chạy lại lượt đầy đủ.
-export const NEED_TOOLS = "[[CAN_CONG_CU]]";
 /** Đúng phần hướng dẫn chất lượng của lượt thật, cho tools/answer-eval.mjs chấm câu trả lời trên CLI thật. */
 export const answerRules = (fast: boolean) => (fast ? FAST_RULES : QUALITY_RULES);
+// Đường nhanh: câu rõ ràng không cần công cụ (router.needsNoTools) đi với hướng dẫn rất ngắn, không cầu nối MCP,
+// không mục lục skill. Đo trên máy chủ thật: một câu chào qua Claude Haiku chờ 4,8 giây, trong đó 1,5 giây là đọc
+// 69 KB hướng dẫn. Công cụ vẫn còn nguyên ở lượt sau; model thấy cần công cụ thì báo NEED_TOOLS và Synchro chạy lại
+// lượt đầy đủ (chat/needtools.ts).
 export const FAST_RULES = `<quick_reply>
 Đây là câu trò chuyện, câu hỏi ngắn hoặc việc viết ngắn: trả lời ngay, tự nhiên, bằng đúng ngôn ngữ người dùng đang viết (hỏi tiếng Anh thì trả lời tiếng Anh, dù hướng dẫn này viết bằng tiếng Việt; gõ không dấu thì trả lời có dấu). Câu hỏi thì ngắn gọn; nhờ viết (email, thư, thơ, caption…) thì viết đủ, chỉn chu, đưa bài viết ra ngay, không kể lại yêu cầu. Trung thực: không bịa số liệu, nguồn hay khả năng; chưa chắc thì nói rõ. Lượt này không có công cụ nên đừng nói đã tìm, đã tra, đã chạy hay đã kiểm tra. Giờ hiện tại nằm trong khối <current_time> của tin nhắn mới nhất.
 Lượt này chưa nạp công cụ, nhưng Synchro có đủ: tìm web, chạy code, tạo tệp và artifact, tạo ảnh bằng AI, skill, connector, trình duyệt. Nếu câu trả lời tốt thật sự cần một trong số đó, hoặc cần thông tin mới hơn những gì bạn biết, đừng giải thích và đừng xin lỗi: chỉ trả lời đúng một dòng ${NEED_TOOLS} rồi dừng.
@@ -181,17 +183,6 @@ export function withRecall(messages: unknown, recall: string): unknown {
   return out;
 }
 export const DEFAULT_SYSTEM = "Bạn là một trợ lý AI hữu ích.";
-/** Giữ chữ đầu của đường nhanh tới khi chắc đó không phải NEED_TOOLS (dấu hiệu này không được hiện cho người dùng). */
-export function holdNeedTools(out?: (t: string) => void) {
-  let buf = "", open = false;
-  return (t: string) => {
-    if (open) { out?.(t); return; }
-    buf += t;
-    const s = buf.trimStart();
-    if (NEED_TOOLS.startsWith(s) || s.startsWith(NEED_TOOLS)) return;
-    open = true; out?.(buf);
-  };
-}
 export const useMemory = (body: Record<string, any>, _u: UserRow) => !!body.skills && body.feature !== "code" && body.feature !== "artifact" && body.memory !== false && !body.incognito; // eslint-disable-line @typescript-eslint/no-explicit-any
 // Giờ hiện tại đặt cạnh tin nhắn mới nhất (như gợi ý định tuyến skill): hướng dẫn hệ thống giữ nguyên để đọc từ bộ đệm, phiên nối tiếp vẫn biết đúng giờ.
 export function nowBlock(body: Record<string, any>): string { // eslint-disable-line @typescript-eslint/no-explicit-any

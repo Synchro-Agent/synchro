@@ -137,6 +137,19 @@ const loginFile = path.join(dir, ".mock-login");
         mcpNote = ` [công cụ Synchro: ${r.tools.length}]`;
       }
     }
+    // Đường nhanh (hướng dẫn có dấu [[CAN_CONG_CU]]): "latemarker" viết một câu rồi mới tới dấu; "notoolreply" trả lời
+    // kiểu model nhanh không theo hướng dẫn ("mình không có công cụ…"). Synchro phải chạy lại cả hai ở lượt đầy đủ.
+    const fastSys = /\[\[CAN_CONG_CU\]\]/.test(SYS ?? "");
+    const late = !fastSys ? null : /latemarker/.test(prompt) ? "Việc này cần connector.\n[[CAN_CONG_CU]]"
+      : /notoolreply/.test(prompt) ? "Mình không có công cụ Google Docs ở đây nên chưa tạo được tài liệu." : null;
+    if (late) {
+      await delta(late);
+      const message = { role: "assistant", content: [{ type: "text", text: late }] };
+      C.out({ type: "assistant", message, session_id: sid });
+      const usage = { input_tokens: prompt.length, output_tokens: 20 };
+      result({ subtype: "success", is_error: false, result: late, usage });
+      return;
+    }
     const web = (C.flag(a, "--tools") ?? "").includes("WebSearch") ? " [tìm web]" : "";
     // Cho kiểm thử biết Synchro có gửi kèm hướng dẫn artifact (--append-system-prompt) hay không.
     const text = /#pid/.test(prompt) ? `PID ${process.pid} lượt ${turn} hệ thống ${(SYS ?? "").length} ký tự` : /\[\[CAN_CONG_CU\]\]/.test(SYS ?? "") && /needtools/.test(prompt) ? "[[CAN_CONG_CU]]" : /#media/.test(prompt) && !C.isTitleAsk(prompt) && !C.mockBrain(prompt) ? C.mediaReply(media) : C.mockBrain(prompt) ?? (C.isTitleAsk(prompt) ? C.mockTitle(prompt) : /#prefs/.test(prompt) ? C.prefsEcho(`${SYS ?? ""}\n${prompt}`) : /#toprule/.test(prompt) ? C.ruleEcho(SYS ?? "") : /#pjins/.test(prompt) ? C.pjEcho(SYS ?? "") : C.reply("Claude", prompt, turn) + mcpNote + web + (/<artifacts>/.test(SYS ?? "") ? " [có hướng dẫn artifact]" : "") + (C.flag(a, "--effort") ? ` [effort ${C.flag(a, "--effort")}]` : ""));

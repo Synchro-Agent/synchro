@@ -175,6 +175,15 @@ try {
     fs.writeFileSync(path.join(BIN, ".keep"), "");
     r = await post([u1, { role: "assistant", content: "x" }, u2, { role: "assistant", content: a3 }, u3], { conv: `${conv}-m` });
     ok(r.s === 200 && !/CAN_CONG_CU/.test(r.j.text) && /công cụ Synchro: \d+/.test(r.j.text), "model báo cần công cụ: chạy lại lượt đầy đủ, người dùng không thấy dấu hiệu", JSON.stringify(r.j).slice(0, 300));
+    // Model nhanh viết vài chữ rồi mới tới dấu, hoặc tự nói "không có công cụ" thay cho dấu: vẫn chạy lại lượt đầy đủ.
+    for (const [word, name] of [["latemarker", "dấu nằm sau một câu"], ["notoolreply", "lời “không có công cụ”"]]) {
+      const u = { role: "user", content: `Thủ đô của Úc là gì? ${word}` };
+      const hist = [u1, { role: "assistant", content: "x" }, u2, { role: "assistant", content: a3 }, u];
+      r = await post(hist, { conv: `${conv}-${word}` });
+      const shown = /CAN_CONG_CU|không có công cụ Google Docs/.test(r.j.text ?? "");
+      ok(r.s === 200 && !shown && /công cụ Synchro: \d+/.test(r.j.text), `${name}: chạy lại lượt đầy đủ`,
+        JSON.stringify(r.j).slice(0, 300));
+    }
     // CLI vừa treo: nhớ theo tài khoản và theo CLI, xong tốt thì quên.
     {
       const models = ["sub-claude/haiku", "sub-grok/grok-4.7"];
