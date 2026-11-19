@@ -98,6 +98,12 @@ async function chatTurn(o, E) {
   const missing = o.images.find((f) => !fs.existsSync(f));
   if (missing) return E.failed(`Failed to read image ${missing}: No such file or directory`);
   const eff = o.effort;
+  // "#pjins": phần dự án phiên này đang có, nhớ theo phiên như lịch sử của Codex thật.
+  if (/#pjins/.test(prompt) && !C.isTitleAsk(prompt) && !C.mockBrain(prompt)) {
+    const pj = C.pjSession(dir, o.tid, prompt);
+    await E.message("item_1", pj);
+    return E.done({ input_tokens: prompt.length, cached_input_tokens: 0, output_tokens: pj.length });
+  }
   const text = /#media/.test(prompt) && !C.isTitleAsk(prompt) && !C.mockBrain(prompt) ? C.mediaReply(o.images.map((f) => `${C.mediaDesc(fs.readFileSync(f))} (--image)`)) : C.mockBrain(prompt) ?? (C.isTitleAsk(prompt) ? C.mockTitle(prompt) : /#prefs/.test(prompt) ? C.prefsEcho(prompt) : C.reply("Codex (ChatGPT)", prompt, turn) + note + (eff ? ` [effort ${eff}]` : ""));
   await E.message("item_1", text);
   return E.done({ input_tokens: prompt.length, cached_input_tokens: 0, output_tokens: text.length });

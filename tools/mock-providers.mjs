@@ -513,6 +513,14 @@ function reply(provider, id, msgs, maxTokens, effort, sys = "") {
   if (/#longmd\b/.test(q)) return { text: longMd(), q };
   // "#prefs": nhắc lại khối <user_preferences> (Hướng dẫn cho Synchro) có trong system prompt — kiểm thử hướng dẫn tới được model.
   if (q.includes("#prefs")) { const m = /<user_preferences>([\s\S]*?)<\/user_preferences>/.exec(`${sys}\n${JSON.stringify(msgs ?? [])}`); return { text: m ? `PREFS: ${m[1].replace(/\\n/g, "\n").trim().replace(/\s+/g, " ")}` : "PREFS: none", q }; }
+  // "#pjins": nhắc lại phần dự án trong lời nhắc hệ thống, như CLI giả lập. Đường tương thích OpenAI
+  // (Gemini, DeepSeek…) không truyền sys riêng: lời nhắc hệ thống nằm trong tin role "system".
+  if (q.includes("#pjins")) {
+    const inMsgs = (msgs ?? []).filter((m) => m.role === "system" || m.role === "developer");
+    const text = (m) => (typeof m.content === "string" ? m.content
+      : (m.content ?? []).map((c) => c.text ?? "").join("\n"));
+    return { text: CLI.pjEcho(sys || inMsgs.map(text).join("\n\n")), q };
+  }
   const vi = /[ăâđêôơưàáạảãèéẹẻẽìíịỉĩòóọỏõùúụủũỳýỵỷỹ]/i.test(q) || !q;
   const name = displayName(provider, id), vendor = VENDOR[provider];
   const short = q.length > 160 ? q.slice(0, 160) + "…" : q;

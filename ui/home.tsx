@@ -10,7 +10,7 @@ import { FileCard } from "./fileicon";
 import { useFileMenu, saveDoc, saveBlob, fileContext } from "./filemenu";
 import { capFiles, getStatus, abortFile } from "./filestate";
 import { UPLOAD_ACCEPT } from "../shared/fileproc/types";
-import { stripAppliedNotes, type Rejected } from "../shared/turnctx";
+import { projectBrief, stripAppliedNotes, type Rejected } from "../shared/turnctx";
 import { Boundary, Fade, Menu, Thinking } from "./ui";
 import { chatError, GENERIC_ERR } from "../shared/chaterror";
 import { armDraft, saveDraft, takeDraft } from "./draft";
@@ -1535,7 +1535,7 @@ export default function Home({ boot }: { boot?: BootData | null }) {
     // (lượt chạy bền qua waitRun/pollRun), nên KHÔNG xét "streamed" — nếu không chip cá nhân không bao giờ hiện; chỉ cần lượt xong và không bị Dừng.
     // Không bao giờ ghép nội dung hướng dẫn vào chữ câu trả lời: dòng ghi chú kèm 90 ký tự đầu của hướng dẫn từng lộ hướng dẫn cá nhân trong lịch sử, bản chia sẻ, bản xuất.
     const insApplied = !cancelled && !!ins.trim();
-    const pjApplied = !cancelled && !!pr && !!(pr.ins?.trim() || pr.mem?.length || getRelevantContext(pr, text).length);
+    const pjApplied = !cancelled && !!pr && !!(projectBrief(pr) || pr.mem?.[0] || getRelevantContext(pr, text).length);
     // Câu trả lời đã đầy đủ thì hiện ngay (trước đây câu không truyền theo thời gian thực phải chờ 1,6 giây rồi mới gõ dần từng chữ).
     patch(id, (m) => [...m.slice(0, -1), { ...workOf(m[m.length - 1]), role: "ai", text: reply, done: true, ...(insApplied ? { insApplied } : {}), ...(pjApplied ? { pjApplied } : {}), time: Date.now(), dur: Date.now() - t0, skills: usedSk.length ? usedSk : undefined, libs: libs.length ? libs : undefined, tools: usedTl.length ? usedTl : undefined, outs: outs?.length ? outs : undefined, ...(notice ? { notice } : {}), via: via ?? undefined, viaTask: via ? viaTask : undefined, webs: webs?.length ? webs : undefined, trace: trace?.length ? trace : undefined, stopped: cancelled || undefined }]);
     finishReply(id, reply, pr, history, via);

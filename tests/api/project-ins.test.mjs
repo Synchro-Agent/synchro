@@ -1,5 +1,6 @@
 // Hướng dẫn của dự án luôn tới được model: dự án có hướng dẫn "luôn kết thúc bằng từ KIWI-PROJ", câu hỏi ngắn → lời nhắc hệ thống CLI nhận được có hướng dẫn đó
 // ở mọi đường đi (Tự động, chọn tay model, ép đường đầy đủ; trình duyệt có hay không có dữ liệu dự án), không lặp, không lấy bản cũ khi trình duyệt đã xóa.
+// Ô "Mục tiêu và bối cảnh" của hộp thoại tạo dự án cũng tới được model, không chỉ thẻ Hướng dẫn.
 // Dùng CLI giả lập ("#pjins" nhắc lại phần hướng dẫn dự án nó nhận được). Tự chạy được, không cần dev:mock.
 import fs from "node:fs";
 import os from "node:os";
@@ -44,6 +45,13 @@ try {
   ok(T.withProjectIns(SYS, INS, { clientFull: true, base: SYS }) === SYS, "trình duyệt có đủ dữ liệu dự án mà không có hướng dẫn (vừa xóa): không lấy bản máy chủ có thể còn cũ");
   ok(T.withProjectIns(SYS, "   ", { base: SYS }) === SYS && T.withProjectIns(SYS, "", {}) === SYS, "dự án không có hướng dẫn: giữ nguyên");
   ok(T.withProjectIns(SYS, "x".repeat(50_000), { base: SYS }).length < SYS.length + T.PROJECT_INS_MAX + 200, "hướng dẫn quá dài bị cắt");
+  const GOAL = "Luôn kết thúc câu trả lời bằng từ KIWI-PROJ";
+  ok(T.projectBrief({ desc: ` ${GOAL} `, ins: "" }).endsWith(GOAL),
+    "chỉ có mục tiêu (ô của hộp thoại tạo dự án): vẫn là phần model đọc");
+  const both = T.projectBrief({ desc: GOAL, ins: INS });
+  ok(both.includes(GOAL) && both.includes(INS) && !/\n\s*\n/.test(both),
+    "mục tiêu và hướng dẫn: cùng một khối, không cách dòng trống", both);
+  ok(T.projectBrief({ desc: "  ", ins: 5 }) === "" && T.projectBrief(null) === "", "không có cả hai: rỗng");
 
   console.log("2. Lời nhắc CLI nhận được ở mọi đường đi");
   const user = AU.createUser({ email: `pjins${Date.now()}@synchro.test`, name: "Pj", verified: true });
@@ -74,12 +82,14 @@ try {
   ok(r.s === 200 && r.text === "PJINS: none", "đoạn chat không thuộc dự án: không có hướng dẫn dự án", r.text);
   r = await turn({ project: 8 });
   ok(r.s === 200 && r.text === "PJINS: none", "dự án khác (chưa đồng bộ): không lấy nhầm hướng dẫn", r.text);
+  // Dự án tạo bằng hộp thoại chỉ có ô "Mục tiêu và bối cảnh" (trường desc), thẻ Hướng dẫn để trống.
+  const goalOnly = JSON.stringify({ id: 9, name: "Kiwi 2", desc: GOAL, ins: "" });
+  CS.pushItems(user.id, [{ kind: "project", id: "9", upd: Date.now(), data: goalOnly }]);
+  r = await turn({ project: 9 });
+  ok(once(r), "dự án chỉ có mục tiêu, trình duyệt chỉ có bản rút gọn: máy chủ thêm mục tiêu", r.text);
 
-  console.log("3. Trình duyệt gửi đúng dự án ở câu đầu của đoạn chat mới");
-  const pg = fs.readFileSync("ui/home.tsx", "utf8");
-  const send = pg.slice(pg.indexOf("const send = (t: string"), pg.indexOf("const runTurn = ("));
-  ok(/const np = nextProj \?\? \(view === "project" \? curProj \?\? undefined : undefined\);\s*pid = np;/.test(send) && !/const pid = view === "project"/.test(send), "đoạn chat mới (cả khi chọn dự án ở khung soạn trang chủ): lượt đầu mang đúng dự án vừa gán", send.slice(0, 200));
-  ok(/pr && !pr\.stub \? \{ pjFull: true \}/.test(pg), "báo cho máy chủ khi trình duyệt có đủ dữ liệu dự án");
+  // Trình duyệt gửi đúng dự án ở câu đầu của đoạn chat mới và tự ghép mục tiêu dự án:
+  // tests/ui/project-ins.mjs kiểm trên trang thật, đi đúng đường người dùng.
 
   console.log("\n" + (fail ? `${pass}/${pass + fail} đạt` : `${pass}/${pass} đạt`));
 } finally {

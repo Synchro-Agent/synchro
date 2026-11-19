@@ -10,7 +10,7 @@ import type { TraceItem } from "../shared/types/trace";
 import type { CxCard } from "../shared/cxactions";
 import { noteServerNow } from "./clock";
 import { postTurn } from "./turnretry";
-import { PROJECT_INS_HEAD } from "../shared/turnctx";
+import { PROJECT_INS_HEAD, projectBrief } from "../shared/turnctx";
 
 export const CHUNK_SIZE = 1500;
 export const SMALL_DOC_LIMIT = 12000;
@@ -385,7 +385,8 @@ export function getRelevantContext(p: Project, query: string): string[] {
 
 export function buildSystemPrompt(p: Project, userMessage: string): string {
   const parts = ["Bạn là một trợ lý AI hữu ích."];
-  if (p.ins?.trim()) parts.push(`${PROJECT_INS_HEAD}\n${p.ins}`);
+  const brief = projectBrief(p);
+  if (brief) parts.push(`${PROJECT_INS_HEAD}\n${brief}`);
   const mem = p.mem ?? [];
   if (mem.length) parts.push("## Bộ nhớ dự án (những điều đã biết từ các cuộc chat trước)\n" + mem.map((m) => `- ${m.content}`).join("\n"));
   // Luôn nói dự án có những tệp nào: model biết "tài liệu này" là gì, không hỏi lại người dùng đang nói tới tệp nào.
