@@ -385,9 +385,13 @@ try {
     // bp.md:275 / T10 trên máy thật: mọi gói đã kết nối tạm hết hạn mức (hoặc Tự động chọn model khóa API) → lượt chạy bằng khóa API chung của
     // chủ máy chủ. Được chạy (còn hạn mức chi phí API) nhưng phải có một dòng báo lượt này tính vào hạn mức chi phí API, không phải gói.
     const keys = (await u.api("GET", "/api/models")).j?.providers?.flatMap((p) => p.models ?? []).map((m) => m.key ?? m.id).filter(Boolean) ?? [];
+    // Gói Google (Antigravity) có hai hạn mức riêng: nhóm Gemini và nhóm Claude / GPT-OSS (server/ai/subs.ts agyOtherBlock). Chỉ làm cạn nhóm
+    // Gemini thì sub-agy/gpt-oss-120b vẫn dùng được, Tự động chọn nó là đúng (không vượt hạn mức của hãng) nhưng chưa phải "mọi gói đã hết":
+    // đo trên w10-integ, T10k khi lỗi khi đạt tùy Tự động xếp model nào trước. Làm cạn cả hai nhóm.
     for (const cli of ["codex", "agy", "grok"].filter((c) => plans[c])) {
-      const k = keys.find((x) => x.startsWith(`sub-${cli}/`) && (cli !== "agy" || /gemini/.test(x)));
-      if (k) await run({ model: k, messages: [{ role: "user", content: "Chào [mock:quota]" }] });
+      const ks = cli === "agy" ? [keys.find((x) => x.startsWith("sub-agy/") && /gemini/.test(x)), keys.find((x) => x.startsWith("sub-agy/") && !/gemini/.test(x))]
+        : [keys.find((x) => x.startsWith(`sub-${cli}/`))];
+      for (const k of ks.filter(Boolean)) await run({ model: k, messages: [{ role: "user", content: "Chào [mock:quota]" }] });
     }
     record("T10k", "Mọi gói tạm hết hạn mức, Tự động dùng khóa API chung", await run(auto("Viết một câu chào ngắn cho đội ngũ Synchro")));
     const last = rows.at(-1);

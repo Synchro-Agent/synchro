@@ -230,10 +230,15 @@ try {
         await ev(`(() => { window.__clip = []; window.__lbl = []; const bar = document.querySelector(".art-panel .deck-bar"); new MutationObserver(() => window.__lbl.push({ t: bar.querySelector(".deck-count")?.textContent || "", at: Date.now() })).observe(bar, { subtree: true, childList: true, characterData: true }); return 1; })()`);
         const next = `document.querySelector(".art-panel .deck-bar button[aria-label='Slide sau']")`;
         const nx = await pos(next);
+        // CPU chậm 2 lần cho ba lần bấm này: bộ vá co chữ bằng chia đôi nhanh hơn ~2,5 lần, máy rảnh vá một slide ~205 ms (đo trên w10-integ),
+        // dưới mức 300 ms để bộ vá cũ (chạy trước lần vẽ) chắc chắn làm hỏng cổng ≤ 250 ms bên dưới.
+        const throttle = (rate) => Promise.all([P("Emulation.setCPUThrottlingRate", { rate }), ...[...frames.keys()].map((sid) => send("Emulation.setCPUThrottlingRate", { rate }, sid).catch(() => {}))]);
+        await throttle(2);
         for (let k = 0; k < 3; k++) { await mouse(nx[0], nx[1]); await sleep(60); }
         ok(await until(`/Slide\\s*4\\s*\\/\\s*6/.test(document.querySelector(".art-panel .deck-count")?.textContent || "")`, 8000), "bấm “Slide sau” 3 lần liền: nhãn tới Slide 4 / 6", await ev(`document.querySelector(".art-panel .deck-count")?.textContent`));
         await sleep(3000);
         const st = await deckEval(`({ idx: window.__sxIdx(), lg: window.__lg.map((e) => ({ i: e.i, lag: e.lag, fit: e.fitAt ? e.fitAt - e.at0 : null })) })`);
+        await throttle(1);
         ok(st?.idx === 3, "khung lớn cũng ở slide 4 (khớp nhãn)", st);
         const worst = Math.max(...(st?.lg ?? []).map((e) => e.lag ?? 99999));
         ok(st?.lg?.length >= 3 && worst <= 250, `slide mới hiện ra trong ≤ 250 ms sau lệnh chuyển (chậm nhất ${worst} ms; trước đây bộ tự vá chạy trước lần vẽ)`, st);

@@ -96,12 +96,16 @@ try {
   await ev(PROBE);
 
   console.log("1. Chuyển slide: slide mới vẽ ngay, không chờ bộ vá");
+  // CPU chậm 2 lần cho phần đo này: bộ vá co chữ bằng chia đôi (896590ea) nhanh hơn ~2,5 lần, máy rảnh vá một slide chỉ ~210 ms (đo trên
+  // w10-integ), dưới mức 300 ms để bộ vá cũ (chạy trước lần vẽ) chắc chắn làm hỏng cổng vẽ ≤ 250 ms. Chậm 2 lần: ~420 ms, đo vẫn có nghĩa.
+  await P("Emulation.setCPUThrottlingRate", { rate: 2 });
   for (const k of [1, 2, 3]) {
     await ev(`window.__sxGo(${k})`);
     await until(`window.__log.at(-1).paint != null && window.__log.at(-1).fit != null`, 8000);
     await sleep(150);
   }
   const log = await ev(`window.__log.map((e) => ({ i: e.i, paint: Math.round(e.paint), fit: Math.round(e.fit), shown: e.shown }))`);
+  await P("Emulation.setCPUThrottlingRate", { rate: 1 });
   console.log("   ", JSON.stringify(log));
   const heavy = Math.min(...log.map((e) => e.fit - (e.paint > e.fit ? 0 : e.paint)));
   ok(log.every((e) => e.fit >= 300 || e.paint >= 300), "bản trình bày mẫu đủ nặng: mỗi lần vá một slide tốn ≥ 300 ms (bộ vá cũ, chạy trước lần vẽ, sẽ chậm theo)", { log, heavy });
