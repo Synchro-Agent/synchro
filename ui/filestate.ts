@@ -4,6 +4,7 @@ import type { ContentBlock } from "../shared/fileproc/types";
 import { serverExtract } from "./llm";
 import { MAX_ATTACH_BYTES, MAX_FILE_BYTES, MAX_FILES_PER_MESSAGE } from "../shared/fileproc/types";
 import type { Rejected } from "../shared/turnctx";
+import { distinctName } from "../shared/fileproc/names";
 
 /**
  * Trạng thái một tệp đính kèm. lines: số dòng (tệp chữ / code, hiện "N dòng" như Claude); pdf: thumb là ảnh trang đầu;
@@ -132,6 +133,31 @@ export function ingestFile(f: File, onError?: (m: string) => void, o: { raw?: bo
 
 export const saveBlob = (n: string, b: Blob, onError?: (m: string) => void) => { if (b instanceof File) ingestFile(b, onError); else blobs.set(n, b); };
 
+/**
+ * Tên thẻ cho các tệp sắp thêm vào tin đang soạn (cur). Trạng thái tải lên, mã tệp gửi cho model và tên chép vào
+ * workspace đều theo tên thẻ, nên tệp khác nội dung trùng tên với một thẻ đang có (hay với tệp khác trong cùng lần
+ * thêm) nhận tên "x (2).pdf" thay vì đè lên thẻ kia. Kéo lại đúng tệp đã có (cùng tên, cỡ, lần sửa) thì trả lại
+ * đúng thẻ đó.
+ */
+export function attachKeys(list: readonly File[], cur: readonly string[]): string[] {
+  const used = new Map<string, string>(cur.map((k) => [k, sigs.get(k) ?? k]));
+  return list.map((f) => {
+    const sig = fileKey(f);
+    const key = distinctName(f.name, (c) => used.has(c) && used.get(c) !== sig);
+    used.set(key, sig);
+    return key;
+  });
+}
+
+type Say = (m: string) => void;
+/** Thêm tệp vào tin đang soạn dưới tên thẻ riêng (attachKeys); trả danh sách thẻ mới và tên thẻ của từng tệp. */
+export function attachFiles(cur: readonly string[], list: readonly File[], say?: Say, o: { raw?: boolean } = {}) {
+  const keys = attachKeys(list, cur);
+  list.forEach((f, i) => ingestFile(f, say, { ...o, key: keys[i] }));
+  const fresh = keys.filter((k, i) => !cur.includes(k) && keys.indexOf(k) === i);
+  return { files: capFiles([...cur], fresh, say), keys };
+}
+
 /** Người dùng bỏ một thẻ tệp: hủy lần tải lên đang chạy (nếu có) và quên trạng thái, để kéo lại đúng tệp đó sẽ tải lại từ đầu.
  * Tệp đã tải xong (ready) thì giữ nguyên dữ liệu: nó có thể đang được dùng ở một tin đã gửi. */
 export function abortFile(name: string) {
@@ -152,7 +178,8 @@ export function retryFile(name: string, onError?: (m: string) => void) {
   if (!(f instanceof File)) return;
   const m = meta.get(name);
   status.delete(name); sigs.delete(name);
-  ingestFile(f, onError, m?.folder ? { key: name, folder: true, count: m.count } : undefined);
+  // Giữ đúng tên thẻ: thẻ có thể mang tên "x (2).pdf" khác tên gốc của tệp (attachKeys).
+  ingestFile(f, onError, m?.folder ? { key: name, folder: true, count: m.count } : { key: name });
 }
 
 export type MsgContent = string | ContentBlock[];

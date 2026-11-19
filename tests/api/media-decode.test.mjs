@@ -1,9 +1,10 @@
-// Đọc ảnh HEIC, tệp Office cũ và trạng thái của chúng ở trang Sức khỏe hệ thống, không cần máy chủ:
+// Đọc ảnh HEIC, tệp Office cũ và hai tệp cùng tên trong một tin, không cần máy chủ:
 // - Bộ giải HEIC (server/fileproc/heic.ts): chọn công cụ, tham số, trần thời gian, trần điểm ảnh, lỗi rõ cho người
 //   dùng, bằng công cụ giả (tệp shell) nên chạy được ở mọi máy; giải thật ảnh mẫu khi máy có bộ giải (heif-dec,
 //   heif-convert, sips), không có thì bỏ qua và nói rõ.
 // - Office cũ: tệp .doc thật (tests/fixtures/media/legacy.doc) qua detectKind → LibreOffice (giả) → trình đọc .docx.
 // - Trang Sức khỏe hệ thống (server/fileproc/mediacaps.ts): trạng thái ok / off / missing / broken của ba bộ đọc.
+// - Tên thẻ tệp đính kèm (ui/filestate.ts attachKeys / attachFiles, shared/fileproc/names.ts).
 import path from "node:path";
 import os from "node:os";
 import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync } from "node:fs";
@@ -31,11 +32,13 @@ const errOf = async (p) => {
 const msg = (e) => e?.message ?? "";
 
 const mods = await loadTs(["server/fileproc/heic", "server/fileproc/extractors", "server/fileproc/detect",
-  "server/fileproc/mediacaps"]);
+  "server/fileproc/mediacaps", "shared/fileproc/names", "ui/filestate"]);
 const H = mods["server/fileproc/heic"];
 const E = mods["server/fileproc/extractors"];
 const D = mods["server/fileproc/detect"];
 const M = mods["server/fileproc/mediacaps"];
+const N = mods["shared/fileproc/names"];
+const F = mods["ui/filestate"];
 
 const FIX = path.join(process.cwd(), "tests", "fixtures", "media");
 const HEIC = readFileSync(path.join(FIX, "tiny.heic"));
@@ -193,6 +196,28 @@ c = await M.mediaCaps(0);
 ok(c.office.state === "off" && c.ocr.state === "off", "chưa đặt SYNCHRO_SOFFICE_BIN / SYNCHRO_OCR → off",
   js([c.office, c.ocr]));
 ok(existsSync(path.join(process.cwd(), "scripts", "media-probe.heic")), "ảnh mẫu của phép đo có trong scripts/");
+
+console.log("8. Tên riêng cho tệp trùng tên trong một tin");
+ok(N.nthName("báo cáo.pdf", 2) === "báo cáo (2).pdf", "“x (n).đuôi”");
+ok(N.nthName(".env", 3) === ".env (3)" && N.nthName("README", 2) === "README (2)", "tệp ẩn, tệp không đuôi: số ở cuối");
+const dn = N.distinctNames([["a.txt", "1"], ["a.txt", "2"], ["a.txt", "1"], ["a.txt", "3"]], (x) => x[0], (x) => x[1]);
+ok(dn.join("|") === "a.txt|a (2).txt|a.txt|a (3).txt", "khác nội dung → số mới; trùng nội dung → chung tên", dn);
+// Trình duyệt: XMLHttpRequest giả không bao giờ xong (chỉ cần trạng thái "đang tải"), đủ để kiểm khóa thẻ.
+globalThis.XMLHttpRequest = class { upload = {}; open() {} send() {} abort() {} };
+const t1 = new File(["DAUHIEU_MOT"], "ghi chu.txt", { lastModified: 1 });
+const t2 = new File(["DAUHIEU_HAI dài hơn"], "ghi chu.txt", { lastModified: 2 });
+const a = F.attachFiles([], [t1, t2]);
+ok(a.files.join("|") === "ghi chu.txt|ghi chu (2).txt", "hai tệp cùng tên khác nội dung, cùng lần thêm → hai thẻ",
+  a.files);
+ok(F.getBlob("ghi chu.txt") === t1 && F.getBlob("ghi chu (2).txt") === t2, "mỗi thẻ giữ đúng tệp của nó");
+const up = (k) => F.getStatus(k)?.state === "uploading";
+ok(up("ghi chu.txt") && up("ghi chu (2).txt"), "cả hai cùng được tải lên");
+const again = F.attachFiles(a.files, [t2]);
+ok(again.files.join("|") === a.files.join("|") && again.keys[0] === "ghi chu (2).txt",
+  "kéo lại đúng tệp thứ hai → giữ thẻ cũ, không thêm", again);
+const t3 = new File(["DAUHIEU_BA"], "ghi chu.txt", { lastModified: 3 });
+ok(F.attachKeys([t3], a.files)[0] === "ghi chu (3).txt", "tệp thứ ba cùng tên → “ghi chu (3).txt”");
+ok(F.attachKeys([t3], [])[0] === "ghi chu.txt", "tin mới (không còn thẻ nào) → dùng lại tên gốc");
 
 rmSync(tmp, { recursive: true, force: true });
 console.log(`\n${fail ? "✗" : "✓"} ${pass}/${pass + fail} đạt, ${fail} lỗi`);

@@ -24,7 +24,7 @@ import { FileCard } from "./fileicon";
 import { CHIP_LIMIT } from "./composerchips";
 import { AttachStrip } from "./attachstrip";
 import { useFileMenu, saveDoc } from "./filemenu";
-import { capFiles, fileContext, getStatus, ingestFile, readyFiles } from "./filestate";
+import { attachFiles, capFiles, fileContext, getStatus, ingestFile, readyFiles } from "./filestate";
 import { AgentSteps, GitHubButton, StatusLine, stripPhases, TaskCard, TVIEW_LABEL, type AStep, type OnAnswer, type TView } from "./agentui";
 import { answerAsk, codePrefsNow, getServerSession, mergeSession, pushSession, sessionBase, setSessionBase, useCodePrefs, type SessionState } from "./codesync";
 import { STYLE_DESC, STYLE_LABEL, STYLE_SYS, isStyle, type CodeStyle } from "../shared/codestyle";
@@ -194,6 +194,9 @@ export function CodeView({ say, sid, title, model, modelPicker, sideOpen, onSide
   const [atts, setAtts] = useState<Att[]>([]);
   // Tệp / thư mục / .zip đính kèm tin nhắn đang soạn (thẻ giống Claude), gửi đi cùng tin nhắn rồi dọn khỏi khung soạn.
   const [files, setFiles] = useState<string[]>([]);
+  // Danh sách thẻ mới nhất cho addFiles: một lần chọn thư mục gọi addFiles nhiều lần trước khi React vẽ lại.
+  const filesNow = useRef(files);
+  filesNow.current = files;
   // Dải tệp đính kèm (U2, ui/attachstrip.tsx): quá CHIP_LIMIT tệp thì "+N" ở mép phải, bấm trải lưới. Còn ≤ CHIP_LIMIT tệp (đã gửi, gỡ bớt)
   // thì lần đính kèm sau lại bắt đầu từ dải một hàng.
   const [stripOpen, setStripOpen] = useState(false);
@@ -755,8 +758,9 @@ export function CodeView({ say, sid, title, model, modelPicker, sideOpen, onSide
   const addFiles = (list: File[]) => {
     const ok = list.filter((f) => f.name !== ".DS_Store");
     if (!ok.length) return;
-    ok.forEach((f) => ingestFile(f, say, { raw: true }));
-    setFiles((cur) => capFiles(cur.filter((n) => !ok.some((f) => f.name === n)), ok.map((f) => f.name), say));
+    const next = attachFiles(filesNow.current, ok, say, { raw: true }).files;
+    filesNow.current = next;
+    setFiles(next);
   };
   // Cả thư mục tải lên nguyên khối: nén ngay trong trình duyệt (giữ cấu trúc), hiện là một thẻ thư mục, chép nguyên vào workspace khi gửi.
   const addFolder = async (name: string, list: { path: string; file: File }[]) => {

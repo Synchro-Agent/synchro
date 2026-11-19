@@ -10,6 +10,7 @@ import { checkQuota, claimFile, mayUse } from "./owners";
 import { minCos, queueEmbed, registerVecSource, rrf, sweepVecs, vecHash, vecQuery } from "../vecstore";
 import { onTick } from "../tasks";
 import { db } from "../authstore";
+import { distinctName } from "../../shared/fileproc/names";
 
 const DIR = path.join(process.cwd(), ".cache", "files");
 
@@ -149,12 +150,16 @@ export async function pickChunks(id: string, uid: string, chunks: string[], quer
 // Ghép các file thành block cho messages[].content. Nội dung trích ra là DỮ LIỆU, bọc trong <file name="...">.
 export async function buildContext(ids: string[], names: Record<string, string>, query: string, uid: string): Promise<ContentBlock[]> {
   const out: ContentBlock[] = [];
+  // Hai tệp khác nội dung cùng tên trong một tin: tên thứ hai thành "x (2).pdf", để model, run_code (inputs/<tên>) và
+  // browser_upload phân biệt được hai tệp thay vì tệp sau che mất tệp trước.
+  const shown = new Map<string, string>();
   for (const id of ids) {
     if (!safeId(id) || !mayUse(uid, id)) continue;
     let rec: Stored;
     try { rec = JSON.parse(await readFile(path.join(DIR, id + ".json"), "utf8")); } catch { continue; }
     if (stale(rec)) rec = await refresh(rec, uid);
-    const name = names[id] ?? rec.name;
+    const name = distinctName(names[id] ?? rec.name, (c) => shown.has(c) && shown.get(c) !== id);
+    shown.set(name, id);
     const label = `[File: ${name}]`;
     if (rec.large) {
       // File lớn: chỉ đưa các đoạn liên quan nhất tới câu hỏi (RAG).
@@ -189,9 +194,13 @@ export async function expandFileRefs(messages: unknown, query: string, uid: stri
   for (const i of [...at].reverse()) {
     const m = messages[i] as { content: Ref[] };
     const blocks: unknown[] = [];
+    // Cùng lý do như buildContext: hai tệp khác nhau cùng tên trong một tin không được mang chung một tên.
+    const shown = new Map<string, string>();
     for (const b of m.content) {
       if (b?.type !== "file_ref") { blocks.push(b); continue; }
-      const id = typeof b.id === "string" ? b.id : "", name = String(b.name ?? "tệp").slice(0, 200);
+      const id = typeof b.id === "string" ? b.id : "";
+      const name = distinctName(String(b.name ?? "tệp").slice(0, 200), (c) => shown.has(c) && shown.get(c) !== id);
+      shown.set(name, id);
       const got = id ? await buildContext([id], { [id]: name }, query, uid) : [];
       if (!got.length) { blocks.push({ type: "text", text: `[Tệp đã gửi ở lượt trước: ${name} (không còn trên máy chủ)]` }); continue; }
       for (const x of got) {

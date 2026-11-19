@@ -9,8 +9,7 @@ import { loadMe, watchSession } from "./session";
 import { installTips } from "./tips";
 import { installFloatFit } from "./floatfit";
 import { installA11y } from "./a11y";
-import { saveBlob } from "./filemenu";
-import { capFiles } from "./filestate";
+import { attachFiles } from "./filestate";
 import { useSideUi } from "./chatstore.client";
 import type { AuthUser, Providers } from "./auth";
 import type { BootData } from "../server/bootdata";
@@ -159,10 +158,12 @@ export function useShortcuts(o: {
 }
 
 /** Kéo thả tệp vào bất cứ đâu trên trang: hiện lớp "Thả tệp vào đây", thả thì thêm vào ô soạn tin (trừ khi đang ở trình chỉnh ảnh đại diện). */
-export function useDragDrop(say: (m: string) => void, setFiles: SetState<string[]>, closeUpload: () => void) {
+export function useDragDrop(
+  say: (m: string) => void, files: string[], setFiles: SetState<string[]>, closeUpload: () => void,
+) {
   const [drag, setDrag] = useState(false);
-  const live = useRef({ setFiles, closeUpload });
-  live.current = { setFiles, closeUpload };
+  const live = useRef({ files, setFiles, closeUpload });
+  live.current = { files, setFiles, closeUpload };
   useEffect(() => {
     let n = 0;
     const over = (e: DragEvent) => { if (document.querySelector("[data-av]")) return; if (e.dataTransfer?.types.includes("Files")) { e.preventDefault(); n++; setDrag(true); } };
@@ -170,8 +171,11 @@ export function useDragDrop(say: (m: string) => void, setFiles: SetState<string[
     const drop = (e: DragEvent) => {
       e.preventDefault(); n = 0; setDrag(false);
       if (document.querySelector("[data-av]")) return;
-      const fl = Array.from(e.dataTransfer?.files ?? []); fl.forEach((x) => saveBlob(x.name, x, say)); const f = fl.map((x) => x.name);
-      if (f.length) { live.current.setFiles((o) => capFiles(o, f, say)); live.current.closeUpload(); say(`Đã thêm ${f.length} tệp`); }
+      const fl = Array.from(e.dataTransfer?.files ?? []);
+      if (!fl.length) return;
+      live.current.setFiles(attachFiles(live.current.files, fl, say).files);
+      live.current.closeUpload();
+      say(`Đã thêm ${fl.length} tệp`);
     };
     const prevent = (e: DragEvent) => e.preventDefault();
     window.addEventListener("dragenter", over); window.addEventListener("dragleave", leave);

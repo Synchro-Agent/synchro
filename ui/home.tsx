@@ -7,8 +7,8 @@ import { Avatar } from "./avatar";
 import { getLang, locale, tf, tr, trc, useLangReady, useLangVer } from "./i18n";
 import { resetClock } from "./resetfmt";
 import { FileCard } from "./fileicon";
-import { useFileMenu, saveDoc, saveBlob, fileContext } from "./filemenu";
-import { capFiles, getStatus, abortFile } from "./filestate";
+import { useFileMenu, saveDoc, fileContext } from "./filemenu";
+import { attachFiles, attachKeys, getStatus, abortFile } from "./filestate";
 import { UPLOAD_ACCEPT } from "../shared/fileproc/types";
 import { stripAppliedNotes, type Rejected } from "../shared/turnctx";
 import { Boundary, Fade, Menu, Thinking } from "./ui";
@@ -589,12 +589,11 @@ const Composer = memo(function Composer(p: {
     e.preventDefault();
     const d = new Date(), stamp = `${String(d.getHours()).padStart(2, "0")}.${String(d.getMinutes()).padStart(2, "0")}.${String(d.getSeconds()).padStart(2, "0")}`;
     const named = fl.map((f, i) => (f.name && f.name !== "image.png" ? f : new File([f], `Ảnh dán ${stamp}${fl.length > 1 ? `-${i + 1}` : ""}.${(f.type.split("/")[1] || "png").replace("jpeg", "jpg")}`, { type: f.type })));
-    named.forEach((x) => saveBlob(x.name, x, say));
-    setFiles(capFiles(files, named.map((x) => x.name), say));
+    setFiles(attachFiles(files, named, say).files);
   };
   const pick = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const fl = Array.from(e.target.files ?? []); fl.forEach((x) => saveBlob(x.name, x, say)); const n = fl.map((f) => f.name);
-    if (n.length) setFiles(capFiles(files, n, say));
+    const fl = Array.from(e.target.files ?? []);
+    if (fl.length) setFiles(attachFiles(files, fl, say).files);
     e.target.value = "";
   };
   const [projOpen, setProjOpen] = useState(false);
@@ -614,8 +613,7 @@ const Composer = memo(function Composer(p: {
       const blob = await new Promise<Blob | null>((ok) => c.toBlob(ok, "image/png"));
       if (!blob) return say("Không chụp được màn hình");
       const d = new Date(), name = `Ảnh chụp màn hình ${String(d.getHours()).padStart(2, "0")}.${String(d.getMinutes()).padStart(2, "0")}.${String(d.getSeconds()).padStart(2, "0")}.png`;
-      saveBlob(name, new File([blob], name, { type: "image/png" }), say);
-      setFiles(capFiles(files, [name], say));
+      setFiles(attachFiles(files, [new File([blob], name, { type: "image/png" })], say).files);
       say("Đã đính kèm ảnh chụp màn hình");
     } catch (e) { if ((e as Error).name !== "NotAllowedError") say("Không chụp được màn hình"); }
   };
@@ -1891,7 +1889,7 @@ export default function Home({ boot }: { boot?: BootData | null }) {
   useEffect(() => { const h = (e: Event) => { const t = (e as CustomEvent<string>).detail; if (t) sendRef.current(t); }; window.addEventListener(ASK_EVENT, h); return () => window.removeEventListener(ASK_EVENT, h); }, []);
 
   // Kéo thả tệp vào trang (homehooks.ts useDragDrop).
-  const drag = useDragDrop(say, setFiles, () => setModal((m) => (m === "upload" ? null : m)));
+  const drag = useDragDrop(say, files, setFiles, () => setModal((m) => (m === "upload" ? null : m)));
 
   // Mục trên thanh điều hướng: gọi như một hàm trả về JSX (không phải component định nghĩa lại mỗi lần vẽ), nên bấm vào không dựng lại
   // cả mục; biểu tượng cố định, không đổi hình khi rê / bấm. tip: tên đầy đủ khi nhãn ngắn hơn tên trang.
@@ -2263,7 +2261,23 @@ export default function Home({ boot }: { boot?: BootData | null }) {
       <Fade show={!!(modal === "search")}><PaletteFor projects={projects} codes={codeList} cmds={paletteCmds} go={paletteGo} seed={palSeed} onClose={() => setModal(null)} /></Fade>
       <Fade show={!!(modal === "share" && meta)}>{meta ? <ShareFor onClose={() => setModal(null)} say={say} /> : <></>}</Fade>
       {fm.node}
-      <Fade show={!!(modal === "upload")}><UploadModal say={say} onConverted={(f, md) => { saveDoc(f.name, md); saveBlob(f.name, f, say); setFiles((o) => capFiles(o, [f.name], say)); setModal(null); say(`Đã chuyển thành ${f.name}`); }} onClose={() => setModal(null)} onFiles={(f) => { f.forEach((x) => saveBlob(x.name, x, say)); setFiles((o) => [...o, ...f.map((x) => x.name)]); setModal(null); say(`Đã thêm ${f.length} tệp`); }} /></Fade>
+      <Fade show={!!(modal === "upload")}>
+        <UploadModal
+          say={say}
+          onConverted={(f, md) => {
+            saveDoc(attachKeys([f], files)[0], md);
+            setFiles(attachFiles(files, [f], say).files);
+            setModal(null);
+            say(`Đã chuyển thành ${f.name}`);
+          }}
+          onClose={() => setModal(null)}
+          onFiles={(f) => {
+            setFiles(attachFiles(files, f, say).files);
+            setModal(null);
+            say(`Đã thêm ${f.length} tệp`);
+          }}
+        />
+      </Fade>
       <Fade show={!!(modal === "upgrade")}><UpgradeModal onClose={() => setModal(null)} say={say} /></Fade>
       <Fade show={!!(modal === "keys")}><ShortcutsModal onClose={() => setModal(null)} /></Fade>
       <Fade show={!!(modal === "logout")}><LogoutConfirm localOnly={modal === "logout" && !cpPage?.sync ? ls.keys().filter((k) => k.startsWith("codeS:")).length : 0}
