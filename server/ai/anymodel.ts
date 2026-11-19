@@ -5,7 +5,7 @@ import "server-only";
 import { canModel, type UserRow } from "../authstore";
 import { ALL } from "../../shared/catalog";
 import { catalog, mainModels, resolveModel } from "../providers";
-import { billsCredit, hasCheapSide, routeModel, sideModel, tierOf, type RouteInput } from "../router";
+import { billsCredit, hasCheapSide, inputOfChat, routeModel, sideModel, tierOf, type RouteInput } from "../router";
 import { chatOnce, HttpErr } from "../llmcall";
 import { overLimit, withUsage } from "../usage";
 import { agyOtherBlock, BUSY, helperRoom, isGeminiId, mergedProviders, subCli, subTurn } from "./subs";
@@ -40,6 +40,19 @@ export async function pickModel(user: UserRow, q: RouteInput, o: { exclude?: (k:
   const { allowed, usable } = await usableModels(user);
   const list = (usable.length ? usable : allowed).filter((k) => !o.exclude?.(k));
   return routeModel(q, list);
+}
+
+/**
+ * Model chế độ Tự động sẽ chọn cho một câu chat thường ở lượt kế tiếp (vòng mức dùng hiện phần trăm của đúng nguồn đó).
+ * Cùng các bước với lượt chat thật: model dùng được, bỏ khóa API khi đã chạm hạn mức chi phí (lượt thật khi đó chỉ chạy
+ * trên gói), tránh CLI vừa treo. null: không còn nguồn nào chạy được lượt kế tiếp. Không gọi hãng nào.
+ */
+export async function nextAutoModel(user: UserRow): Promise<string | null> {
+  const { usable } = await usableModels(user);
+  const capped = !!overLimit(user);
+  const pool = usable.filter((k) => !capped || !!subCli(k));
+  if (!pool.length) return null;
+  return routeModel(inputOfChat([]), pool, { avoid: stalledModels(user.id, pool) })?.model ?? null;
 }
 
 export class OneShotErr extends Error { constructor(m: string, public status: number) { super(m); } }
