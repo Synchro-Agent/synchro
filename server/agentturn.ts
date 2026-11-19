@@ -2,7 +2,7 @@
 // chọn model, dựng lời nhắc hệ thống, chạy vòng lặp công cụ qua chốt chặn (chế độ quyền, trang web được phép), rồi đánh giá phiên.
 import "server-only";
 import { askedBack, AUTO, autoEffort, routeModel } from "./router";
-import { can, canModel, permsOf, type UserRow } from "./authstore";
+import { can, canModel, modelDeniedMsg, permsOf, type UserRow } from "./authstore";
 import { agentSystem, agentTools, anthropicAgent, mockAgent, openaiAgent, responsesAgent, runAgent, runPlanAgent, type AgentEvent, type ExtraTool } from "./agentcore";
 import { clampEffort, effortCap, isEffort, legacyModel } from "../shared/catalog";
 import { catalog, mainModels, pickDefault, resolveModel } from "./providers";
@@ -41,7 +41,7 @@ export async function pickAgentModel(user: UserRow, picked: unknown, messages: M
   const model = chosen || pickDefault(await catalog(), mainModels());
   if (!model) return { error: "Synchro chưa được kết nối với model nào. Đăng nhập gói ở Cài đặt → Providers, hoặc quản trị viên nhập khóa API.", status: 503 };
   const plan = !!subCli(model);
-  if (!plan && !canModel(user, model)) return { error: "Quản trị viên chưa cho phép tài khoản của bạn dùng model này.", status: 403 };
+  if (!plan && !canModel(user, model)) return { error: modelDeniedMsg(user, model), status: 403 };
   const target = plan ? null : await resolveModel(model);
   if (!plan && !target) return { error: "Model này không còn dùng được (khóa API của nhà cung cấp đã bị gỡ). Hãy chọn model khác.", status: 400 };
   // Nỗ lực "Tự động": theo độ khó của việc (code luôn ít nhất mức vừa).

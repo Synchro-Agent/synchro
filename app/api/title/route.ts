@@ -1,6 +1,6 @@
 import { handle, limit, requireUser, sameOrigin } from "../../../server/authstore";
 import { splitArtifacts } from "../../../shared/artifacts";
-import { OneShotErr, quickCall } from "../../../server/ai/anymodel";
+import { NO_CHEAP, OneShotErr, quickCall } from "../../../server/ai/anymodel";
 import { cleanTitle as clean } from "../../../shared/names";
 
 export const runtime = "nodejs";
@@ -35,7 +35,18 @@ export const POST = handle(async (req: Request) => {
     if (!title || title.length > 80 || words > 12) return Response.json({ error: "Model không trả về tên hợp lệ." }, { status: 422 });
     return Response.json({ title: title.length > 60 ? `${title.slice(0, 59).replace(/\s+\S*$/, "")}…` : title, model });
   } catch (e) {
+    // Gói của người dùng sắp chạm giới hạn hoặc đã hết phần việc phụ của hôm nay (ai/helperquota.ts): đặt tên từ chính câu đầu, không tốn lượt nào.
+    // Trả tên (không phải lỗi) để trình duyệt không gọi lại sau mỗi câu trả lời.
+    if (e instanceof OneShotErr && e.message === NO_CHEAP) { const t = localTitle(msgs[0]); if (t) return Response.json({ title: t, local: true }); }
     if (e instanceof OneShotErr) return Response.json({ error: e.message }, { status: e.status });
     throw e;
   }
 });
+
+/** Tên tạm từ câu đầu của người dùng: bỏ nhãn vai, khối code, lời chào đầu câu; tối đa 6 từ / 48 ký tự. */
+function localTitle(first: string) {
+  const t = clean(first.replace(/^\[[^\]]*\]\s*/, "").replace(/\[(?:khối code|sản phẩm[^\]]*)\]/g, " ").replace(/^(?:(?:xin )?chào|hi|hello|hey)[\s,!.]+/i, ""));
+  const w = t.replace(/[.?!:;,]+$/, "").split(/\s+/).filter(Boolean).slice(0, 6).join(" ");
+  const s = w.length > 48 ? `${w.slice(0, 47).replace(/\s+\S*$/, "")}…` : w;
+  return s ? s[0].toUpperCase() + s.slice(1) : "";
+}

@@ -2,7 +2,7 @@ import { handle, limit, requireUser, sameOrigin } from "../../../server/authstor
 import { pickCritics, vendorOf } from "../../../server/router";
 import { mergeFindings, numbered, parseFindings, type Finding } from "../../../shared/critic";
 import { isDeck } from "../../../shared/artdoc";
-import { OneShotErr, oneShot, stalledModels, usableModels } from "../../../server/ai/anymodel";
+import { NO_CHEAP, OneShotErr, oneShot, stalledModels, usableModels } from "../../../server/ai/anymodel";
 import { BUSY } from "../../../server/ai/subs";
 
 export const runtime = "nodejs";
@@ -55,8 +55,9 @@ export const POST = handle(async (req: Request) => {
   const ok = runs.flatMap((r) => (r.status === "fulfilled" ? [r.value] : []));
   if (!ok.length) {
     const e = (runs[0] as PromiseRejectedResult).reason;
-    // Tự chạy mà hàng việc nền đang đầy: không ai bấm nên không hiện lỗi, bỏ qua lần này, người dùng vẫn bấm Phản biện được.
-    if (auto && e instanceof OneShotErr && e.message === BUSY) return Response.json({ skipped: true, findings: [], by: [] });
+    // Tự chạy mà hàng việc nền đang đầy, hoặc gói sắp chạm giới hạn / hết phần việc phụ của hôm nay (ai/helperquota.ts): không ai bấm nên
+    // không hiện lỗi, bỏ qua lần này, người dùng vẫn bấm Phản biện được.
+    if (auto && e instanceof OneShotErr && (e.message === BUSY || e.message === NO_CHEAP)) return Response.json({ skipped: true, findings: [], by: [] });
     if (e instanceof OneShotErr) return Response.json({ error: e.message }, { status: e.status });
     return Response.json({ error: "Hội đồng phản biện chưa trả lời được. Hãy thử lại." }, { status: 502 });
   }

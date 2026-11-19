@@ -273,6 +273,25 @@
 .us-p-m{display:flex;flex-direction:column;align-items:flex-end}
 .us-p-l{display:flex;flex-direction:column;gap:3px}
 .us-p-l .us-money{width:100%}
+/* Dòng thứ hai của mỗi người: hạn mức theo ngày, quyền dùng khóa API chung, hạng model cao nhất trên khóa chung (chiếm trọn bề ngang, tự xuống dòng trên điện thoại). */
+.us-p-x{grid-column:1/-1;display:flex;flex-wrap:wrap;align-items:flex-end;gap:8px 10px}
+.us-p-x .us-p-l{width:132px}
+.us-p-x .api-sel{max-width:100%}
+.us-p-x .api-sel select{max-width:100%}
+/* Hai hộp chọn khóa chung: tên trường là nhãn nhỏ phía trên (như ô phiên / tuần / ngày), trong hộp chỉ còn giá trị ngắn. */
+.us-p-x .us-p-sel{width:auto;max-width:100%;min-width:0}
+/* Ô tiền ở hạn mức mặc định: đủ chỗ cho "Không giới hạn" khi để trống (112px cắt mất chữ cuối). */
+.adm-perm-row .us-money{width:132px}
+@media (max-width:640px){
+  /* Điện thoại: hộp chọn model cao nhất xuống dòng dưới phần mô tả, chiếm trọn bề ngang (đứng cạnh nhau thì mô tả bị ép còn một chữ mỗi dòng). */
+  .adm-perm-row.us-top{flex-wrap:wrap}
+  .adm-perm-row.us-top .api-sel,.adm-perm-row.us-top .api-sel select{width:100%;max-width:100%}
+  /* Dòng của từng người: phiên và tuần chia đôi bề ngang (cột thứ hai 64px từng cắt ô tuần), hai hộp chọn khóa chung mỗi hộp một dòng. */
+  .us-p-m{grid-column:2}
+  .adm-perm-row .us-money{width:112px}
+  .us-p-x .us-p-sel{flex:1 1 100%}
+  .us-p-x .us-p-sel .api-sel,.us-p-x .us-p-sel select{width:100%}
+}
 .us-prices{display:flex;flex-direction:column;margin-top:4px}
 .us-pr{display:grid;grid-template-columns:minmax(0,1fr) 96px 96px 96px 28px;gap:8px;align-items:center;padding:6px 0;font-size:var(--fs-2)}
 .us-pr+.us-pr:not(.h){border-top:.5px solid var(--border)}
@@ -280,7 +299,7 @@
 .us-src{font-style:normal;font-size:var(--fs-1);padding:1px 6px;border-radius:999px;margin-left:4px;background:var(--hover);color:var(--text-3)}
 .us-src.official{background:color-mix(in srgb,#1baf7a 14%,transparent);color:#138a5f}
 .us-src.custom{background:color-mix(in srgb,var(--accent) 12%,transparent);color:var(--accent)}
-@media (max-width:640px){.us-p{grid-template-columns:minmax(0,1fr) 64px;}}
+@media (max-width:640px){.us-p{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}}
 @media (max-width:640px){.us-p-l{grid-column:span 1}}
 @media (max-width:640px){.us-pr{grid-template-columns:minmax(0,1fr) 72px 72px 72px 24px}}
 .us-page .us-card{margin-bottom:0}

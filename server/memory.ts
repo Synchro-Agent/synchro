@@ -5,6 +5,7 @@ import "server-only";
 import crypto from "node:crypto";
 import { db, getSetting, setSetting, type UserRow } from "./authstore";
 import { quickCall } from "./ai/anymodel";
+import { factLike } from "./ai/helperquota";
 import { brainCore } from "./brain";
 import { NO_QUOTE_INS } from "../shared/turnctx";
 
@@ -75,12 +76,13 @@ Viết mỗi mục thành một câu ngắn ở ngôi thứ ba, cùng ngôn ng�
 Trả về DUY NHẤT một mảng JSON các chuỗi (tối đa 3 mục), hoặc [] nếu không có gì đáng nhớ.`;
 
 /** Rút bộ nhớ từ lượt vừa xong (chạy nền, không làm chậm câu trả lời) bằng model nhanh nhất đang dùng được: gói subscription
- *  hoặc khóa API như nhau (gói thì chạy một lượt ngắn của CLI chính chủ). */
+ *  hoặc khóa API như nhau (gói thì chạy một lượt ngắn của CLI chính chủ). Trên gói, mỗi lần rút là một lượt tính vào hạn mức của chính
+ *  người dùng: chỉ rút ngay khi câu có vẻ tự nói về mình (factLike); câu khác để lần chưng cất đoạn chat của bộ não gom lại sau. */
 export async function learnFromTurn(user: UserRow, question: string, answer: string) {
   const cfg = memCfg(user.id);
   if (!cfg.gen || question.trim().length < 8) return 0;
   const existing = listMemory(user.id).map((m) => `- ${m.content}`).join("\n") || "(trống)";
-  const text = await quickCall(user, EXTRACT(cfg.sens), `Bộ nhớ hiện có:\n${existing}\n\nHội thoại mới nhất:\n[người dùng] ${question.slice(0, 4000)}\n[trợ lý] ${answer.slice(0, 3000)}`, { maxTokens: 400, job: "memory", bg: true }).then((r) => r.text).catch(() => "");
+  const text = await quickCall(user, EXTRACT(cfg.sens), `Bộ nhớ hiện có:\n${existing}\n\nHội thoại mới nhất:\n[người dùng] ${question.slice(0, 4000)}\n[trợ lý] ${answer.slice(0, 3000)}`, { maxTokens: 400, job: "memory", bg: true, planOk: factLike(question) }).then((r) => r.text).catch(() => "");
   const json = /\[[\s\S]*\]/.exec(text)?.[0];
   if (!json) return 0;
   try {

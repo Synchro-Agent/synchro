@@ -600,6 +600,24 @@ Object.assign(EN2VI, {
   "Administrators have no limit": "Quản trị viên không bị giới hạn", "Limit saved": "Đã lưu hạn mức", "Using default limits": "Đang dùng hạn mức mặc định", "Price saved": "Đã lưu giá", "Price reset": "Đã đặt lại giá",
 });
 EN2VI["Usage limits"] = "Giới hạn sử dụng";
+// Hạn mức theo ngày và khóa API chung cho tài khoản thường (Quản trị → Giới hạn sử dụng, server/auth/sharedkey.ts).
+Object.assign(EN2VI, {
+  "Per day": "Mỗi ngày", "Resets at 00:00 UTC. Caps how much one person can spend in a day.": "Đặt lại lúc 0 giờ UTC. Giới hạn số tiền một người dùng được trong một ngày.",
+  "Daily limit saved": "Đã lưu hạn mức ngày", "Day": "Ngày",
+  "Shared API key for regular accounts": "Khóa API chung cho tài khoản thường",
+  "Regular accounts can run models on the server's API key when they have no plan of their own, or when Auto picks it. Every run counts toward the limits above. Models from a plan a person signs in to are never limited here. Administrators can use every model.": "Tài khoản thường chạy được model trên khóa API của máy chủ khi họ chưa có gói riêng, hoặc khi Tự động chọn nó. Mỗi lượt tính vào hạn mức ở trên. Model của gói người đó tự đăng nhập không bao giờ bị giới hạn ở đây. Quản trị viên dùng được mọi model.",
+  "Allow the shared key": "Cho dùng khóa chung", "Off: regular accounts use only the plans they sign in to, unless you allow someone below.": "Tắt: tài khoản thường chỉ dùng gói họ tự đăng nhập, trừ người bạn cho phép bên dưới.",
+  "Regular accounts can use the shared key": "Tài khoản thường dùng được khóa chung", "Regular accounts can't use the shared key": "Tài khoản thường không dùng được khóa chung",
+  "Highest model on the shared key": "Model cao nhất trên khóa chung", "Fast: Haiku, Luna, Flash. Balanced: Sonnet, Sol, Pro. Top models such as Opus cost far more per message; a person can still use them through their own plan.": "Nhanh: Haiku, Luna, Flash. Cân bằng: Sonnet, Sol, Pro. Model hàng đầu như Opus tốn hơn nhiều cho mỗi tin nhắn; người dùng vẫn dùng được chúng qua gói của chính họ.",
+  "Fast models only": "Chỉ model nhanh", "Up to balanced (no Opus)": "Tới cân bằng (không Opus)", "All, including Opus": "Tất cả, kể cả Opus",
+  "Shared key models saved": "Đã lưu model trên khóa chung", "Shared key access saved": "Đã lưu quyền dùng khóa chung",
+  "Shared key for this person": "Khóa chung cho người này", "Highest shared-key model for this person": "Model cao nhất trên khóa chung cho người này",
+  "Shared key": "Khóa chung", "Highest model": "Model cao nhất",
+  "Default (allowed)": "Mặc định (cho dùng)", "Default (blocked)": "Mặc định (chặn)", "Allowed": "Cho dùng",
+  "Default (fast only)": "Mặc định (chỉ nhanh)", "Default (up to balanced)": "Mặc định (tới cân bằng)", "Default (all)": "Mặc định (tất cả)",
+  "Fast only": "Chỉ nhanh", "Up to balanced": "Tới cân bằng",
+  "Gemini is working normally. Synchro can't show its plan limits yet because Antigravity's limits panel isn't available on this account; chat isn't affected, and if the plan hits its limit Synchro still notices and tells you.": "Gemini đang chạy bình thường. Synchro chưa hiện được hạn mức của gói vì bảng hạn mức của Antigravity chưa dùng được trên tài khoản này; chat không bị ảnh hưởng, và khi gói chạm giới hạn Synchro vẫn nhận ra và báo cho bạn.",
+});
 
 // Plugins và trang Tùy chỉnh.
 Object.assign(EN2VI, {
@@ -806,6 +824,8 @@ Object.assign(EN2VI, {
 });
 RULES_VI.push(
   [/^Default: (\$[\d.,]+)$/, (m) => `Mặc định: ${m[1]}`],
+  // Ô tiền của từng người (Quản trị → Giới hạn sử dụng): số trước, ngay sau ký hiệu $ của ô, để màn hình hẹp có cắt thì chỉ mất chữ "mặc định".
+  [/^([\d.,]+) \(default\)$/, (m) => `${m[1]} (mặc định)`],
   [/^Add a file to (.+)$/, (m) => `Thêm tệp vào ${viOf(m[1])}`],
   [/^More options for (.+)$/, (m) => `Tùy chọn khác cho ${viOf(m[1])}`],
 );

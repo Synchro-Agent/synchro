@@ -7,6 +7,7 @@ import { audit, getSetting, setSetting } from "../db/settings";
 import { limit } from "../ratelimit";
 import { MIN, OWNER_EMAILS, reservedEmail } from "./config";
 import { AuthError } from "./errors";
+import { SHARED_BLOCKED_MSG, SHARED_TIER_MSG, sharedKeyBlock } from "./sharedkey";
 import { clientIp } from "./request";
 import type { UserRow } from "./types";
 
@@ -73,7 +74,10 @@ export const can = (u: UserRow, f: Feature) => permsOf(u).features[f];
 // Quyền dùng một model đi theo bản thay thế của nó (sổ model, server/modelreg.ts: model đã cũ hoặc bị hãng gỡ nhường chỗ cho bản mới nhất cùng dòng),
 // để người chỉ được dùng một model vẫn chat được khi hãng ra bản mới. Sổ model tự đăng ký hàm này khi nạp (không nhập vòng hai module).
 const viaReplacement = (allowed: string[], model: string) => ((globalThis as { __synchroModelAllow?: (a: string[], k: string) => boolean }).__synchroModelAllow?.(allowed, model) ?? false);
-export const canModel = (u: UserRow, model: string) => { const m = permsOf(u).models; return allowsModel(m, model) || viaReplacement(m, model); };
+// Model khóa API còn phải qua quy tắc khóa chung của quản trị viên (sharedkey.ts: cho / chặn dùng khóa chung, hạng cao nhất cho tài khoản thường).
+/** Lời báo khi canModel từ chối: nói đúng lý do (chặn khóa chung, hạng model vượt mức cho tài khoản thường, hay quyền model của tài khoản). */
+export const modelDeniedMsg = (u: UserRow, model: string) => { const b = sharedKeyBlock(u.id, isAdmin(u), model); return b === "blocked" ? SHARED_BLOCKED_MSG : b === "tier" ? SHARED_TIER_MSG : "Quản trị viên chưa cho phép tài khoản của bạn dùng model này."; };
+export const canModel = (u: UserRow, model: string) => { const m = permsOf(u).models; return (allowsModel(m, model) || viaReplacement(m, model)) && !sharedKeyBlock(u.id, isAdmin(u), model); };
 
 
 // ---- hồ sơ cá nhân ----
