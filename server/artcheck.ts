@@ -12,7 +12,9 @@ import { inlineImages } from "./artimg";
 import { splitArtifacts, type ArtType } from "../shared/artifacts";
 import { execRun, runner } from "./coderun";
 import { artState, cleanBase, type ArtVersion } from "../shared/vfs";
-import { fitSummary, overflowing, TYPE_JS, typeNote, weakType, type SlideFit } from "../shared/deckfit";
+import { fitSummary, overflowing, TITLE_FLOOR, TYPE_JS, TYPE_RATIO } from "../shared/deckfit";
+import { typeNote, viNum, weakType } from "../shared/deckfit";
+import type { SlideFit } from "../shared/deckfit";
 import { numberingIssues, type NumIssue } from "../shared/decknum";
 import { hashOf } from "../shared/critic";
 import { KEEP } from "../shared/turnfold";
@@ -229,7 +231,12 @@ const TYPE = ${TYPE_JS};
       const type = await page.evaluate((src) => {
         const el = window.__sxCur && window.__sxCur();
         return el ? (0, eval)("(" + src + ")")(el) : null;
-      }, TYPE.toString()).catch(() => null);
+      }, TYPE.toString()).catch((e) => {
+        // Trang lỗi hay chuyển slide giữa chừng: slide này không có số đo cỡ chữ, mục thứ bậc bỏ qua nó (weakType
+        // cần cả tiêu đề lẫn chữ thân); số đo khung vẫn ghi, ảnh chụp vẫn chụp.
+        console.error("type probe:", String(e).slice(0, 200));
+        return null;
+      });
       if (fit) report.fit.push({ slide: i + 1, ...fit, ...type });
       await shot(page, "Slide " + (i + 1));
     }
@@ -315,7 +322,11 @@ export async function autoDeckCheck(uid: string, turn: object, a: ArtVersion, or
     fit = layoutOf(a.content)?.fit ?? [];
   }
   const bad = overflowing(fit), weak = weakType(fit);
-  if (!bad.length && !nums.length && !weak.length) return null;
+  // Thứ bậc cỡ chữ yếu một mình không mở thêm lượt sửa: lượt đó là một lượt đầy đủ của cùng model, có khi trên khóa
+  // API dùng chung của Synchro hay hạn mức nhỏ của tài khoản miễn phí, tốn cho việc người dùng không yêu cầu. Lỗi này
+  // vẫn tới model qua check_artifact và tới người dùng qua mục phản biện, nhãn khung xem; có lượt sửa vì tràn hay
+  // đánh số thì nhắc kèm.
+  if (!bad.length && !nums.length) return null;
   const rows = [
     ...(bad.length ? [fitSummary(fit)] : []),
     ...(nums.length ? ["Đánh số slide không nhất quán:", ...nums] : []),
@@ -323,13 +334,15 @@ export async function autoDeckCheck(uid: string, turn: object, a: ArtVersion, or
   ];
   return `Bộ slide "${a.title}" (identifier "${a.ident}", phiên bản ${a.v}):\n${rows.join("\n")}`;
 }
+const WEAK_FIX = "- Tiêu đề không nổi hơn chữ thân: tăng cỡ tiêu đề, rút chữ thân hoặc tách slide (bộ tự co không thu"
+  + ` tiêu đề dưới ${TITLE_FLOOR}px và dưới ${viNum(TYPE_RATIO)} lần chữ thân).`;
 /** Lời nhắc gửi model khi tự kiểm thấy lỗi (một lần mỗi lượt). */
 export const AUTO_CHECK = (rows: string[]) => `<auto_check>
 Synchro đã tự kiểm bản cuối của bộ slide trước khi giao cho người dùng và thấy lỗi:
 ${rows.join("\n\n")}
 Người dùng không thấy tin nhắn này. Câu trả lời bạn vừa viết được giữ nguyên và giao cho họ; lần trả lời này chỉ để sửa bộ slide:
 - Sửa được: trả về artifact cùng identifier, sửa đúng các slide nêu trên (bản sửa mode="patch" được; slide tràn thì rút chữ, giảm khoảng trống hoặc tách slide; đánh số thì đánh số lại MỌI nhãn số cho cùng một dãy), kèm nhiều nhất một câu cho người dùng nói đã chỉnh gì trong bộ slide. Không nhắc tới bước tự kiểm, lời nhắc này hay Synchro.
-- Tiêu đề không nổi hơn chữ thân: tăng cỡ tiêu đề, rút chữ thân hoặc tách slide (bộ tự co không thu tiêu đề dưới 28px).
+${WEAK_FIX}
 - Cách hiện tại là cố ý (vd. bìa không đánh số mục): chỉ trả lời đúng ${KEEP}, không viết gì thêm.
 </auto_check>`;
 

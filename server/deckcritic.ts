@@ -3,7 +3,7 @@
 import "server-only";
 import type { Finding } from "../shared/critic";
 import { deckSlides, type NumIssue } from "../shared/decknum";
-import { overflowing, overText, TITLE_FLOOR, typeBody, weakType } from "../shared/deckfit";
+import { LEAD_RATIO, overflowing, overText, TYPE_RATIO, typeWhy, viNum, weakType } from "../shared/deckfit";
 import type { Lang } from "../shared/i18n-core";
 import type { DeckLayout } from "./artcheck";
 import { tfOn, trOn } from "./i18n-server";
@@ -23,10 +23,11 @@ export function deckFindings(content: string, lay: DeckLayout | null, nums: NumI
     const tall = f.h > f.vh + 4, line = lineOf(f.slide);
     // Slide tự cắt phần thừa: cao / rộng đo được bằng khung, chỉ bộ tự co biết nội dung còn tràn.
     if (!tall && f.w <= f.vw + 4) {
+      const why = "Đo thật ở {vw}×{vh}: nội dung slide {n} tràn và bị khung cắt mất; co chữ cũng không vừa nên Synchro"
+        + " giữ nguyên cỡ chữ. Rút chữ hoặc tách slide.";
       out.push({ line_start: line, line_end: line, severity: "high", by: ["Synchro"], suggested_fix: "",
-        title: tfOn("Slide {n} tràn khung khi trình chiếu", { n: f.slide }, lang), detail: tfOn(
-          "Đo thật ở {vw}×{vh}: slide {n} vẫn tràn khi chữ đã co tới sàn (tiêu đề {min}px). Rút chữ hoặc tách slide.",
-          { vw: f.vw, vh: f.vh, n: f.slide, min: TITLE_FLOOR }, lang) });
+        title: tfOn("Slide {n} tràn khung khi trình chiếu", { n: f.slide }, lang),
+        detail: tfOn(why, { vw: f.vw, vh: f.vh, n: f.slide }, lang) });
       continue;
     }
     out.push({ line_start: line, line_end: line, severity: "high", by: ["Synchro"], suggested_fix: "", title: tfOn("Slide {n} tràn khung khi trình chiếu", { n: f.slide }, lang),
@@ -45,19 +46,23 @@ export function deckFindings(content: string, lay: DeckLayout | null, nums: NumI
     if (same) same.detail += ` ${detail}`;
     else out.push({ line_start: x.line, line_end: x.line, severity: "medium", by: ["Synchro"], suggested_fix: "", title: trOn("Đánh số slide không nhất quán", lang), detail });
   }
-  // Thứ bậc cỡ chữ: tiêu đề nhỏ hơn 1,4 lần chữ thân hay nhỏ hơn dòng mô tả thì người xem không thấy ngay ý chính,
+  // Thứ bậc cỡ chữ: tiêu đề dưới 1,4 lần chữ thân hay dưới 1,2 lần dòng mô tả thì người xem không thấy ngay ý chính,
   // nhất là ở ảnh thu nhỏ. Là lỗi đo được nên khung xem không được gắn nhãn "Ổn" cho bộ slide như vậy. Thêm sau phần
   // đánh số: ghi chú đánh số gộp vào mục "Nên sửa" của Synchro ở cùng dòng, không được gộp nhầm vào mục này.
   const weak = lay ? weakType(lay.fit) : [];
   if (weak.length) {
     const line = lineOf(weak[0].slide), v = weak[0];
-    const rows = weak.map((f) =>
-      tfOn("slide {n}: tiêu đề {t}px, chữ thân {b}px", { n: f.slide, t: f.title ?? 0, b: typeBody(f) }, lang));
+    const rows = weak.map((f) => {
+      const w = typeWhy(f);
+      const row = w.lead ? "slide {n}: tiêu đề {t}px, dòng mô tả {b}px" : "slide {n}: tiêu đề {t}px, chữ thân {b}px";
+      return tfOn(row, { n: f.slide, t: f.title ?? 0, b: w.size }, lang);
+    });
+    const n = (x: number) => lang === "en" ? String(x) : viNum(x);
+    const rule = "Đo thật ở {vw}×{vh}: {rows}. Tiêu đề cần lớn ít nhất {r} lần chữ thân và {l} lần dòng mô tả:"
+      + " tăng cỡ tiêu đề hoặc rút chữ thân.";
     out.push({ line_start: line, line_end: line, severity: "medium", by: ["Synchro"], suggested_fix: "",
       title: trOn("Tiêu đề không nổi hơn chữ thân", lang),
-      detail: tfOn(
-        "Đo thật ở {vw}×{vh}: {rows}. Tiêu đề cần lớn ít nhất 1,4 lần chữ thân: tăng cỡ tiêu đề hoặc rút chữ thân.",
-        { vw: v.vw, vh: v.vh, rows: rows.join("; ") }, lang) });
+      detail: tfOn(rule, { vw: v.vw, vh: v.vh, rows: rows.join("; "), r: n(TYPE_RATIO), l: n(LEAD_RATIO) }, lang) });
   }
   return out;
 }
@@ -71,8 +76,12 @@ export function deckFacts(lay: DeckLayout | null, nums: NumIssue[]): string {
   }
   const weak = lay ? weakType(lay.fit) : [];
   if (weak.length) {
-    const sizes = weak.map((f) => `slide ${f.slide} tiêu đề ${f.title}px, chữ thân ${typeBody(f)}px`).join("; ");
-    rows.push(`Synchro đã đo cỡ chữ: ${sizes} (tiêu đề dưới 1,4 lần chữ thân). Synchro tự báo, bạn không cần nêu lại.`);
+    const sizes = weak.map((f) => {
+      const w = typeWhy(f);
+      return `slide ${f.slide} tiêu đề ${f.title}px, ${w.lead ? "dòng mô tả" : "chữ thân"} ${w.size}px`;
+    }).join("; ");
+    const rule = `tiêu đề dưới ${viNum(TYPE_RATIO)} lần chữ thân hoặc dưới ${viNum(LEAD_RATIO)} lần dòng mô tả`;
+    rows.push(`Synchro đã đo cỡ chữ: ${sizes} (${rule}). Synchro tự báo, bạn không cần nêu lại.`);
   }
   if (nums.length) rows.push(`Synchro đã báo lỗi đánh số slide: ${nums.map((x) => x.prompt).join("; ")}. Không nêu lại.`);
   return rows.length ? `\n<measured>\n${rows.join("\n")}\n</measured>` : "";

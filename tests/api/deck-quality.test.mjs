@@ -99,6 +99,20 @@ console.log("1b. read_artifact báo đánh số lệch (không cần Chromium)")
   A.rememberLayout(tall, { fit: [1, 2, 3].map((n) => ({ slide: n, h: n === 3 ? 869 : 720, w: 1280, vh: 720, vw: 1280 })), issues: [] });
   const r2 = await A.autoDeckCheck("u1", {}, art(tall), "http://x");
   ok(/slide 3 TRÀN — cao 869px \(thừa 149px so với khung 720px\)/.test(r2 ?? "") && /vừa khung: slide 1–2/.test(r2 ?? ""), "slide tràn khung 1280×720 → nêu đúng slide và số px thừa", r2);
+  // Chỉ thứ bậc cỡ chữ yếu: không mở thêm lượt sửa (tốn khóa dùng chung / hạn mức miễn phí cho việc không ai yêu
+  // cầu); có slide tràn thì lời nhắc kèm luôn thứ bậc yếu.
+  const sized3 = (h, title) => [1, 2, 3].map((n) => ({ slide: n, h: n === 3 ? h : 720, w: 1280, vh: 720, vw: 1280,
+    title, body: 20, lead: 20 }));
+  const weakOnly = deck({ brows: [], pages: [], total: 3 }) + "<!-- weak -->";
+  A.rememberLayout(weakOnly, { fit: sized3(720, 22), issues: [] });
+  ok(await A.autoDeckCheck("u1", {}, art(weakOnly), "http://x") === null,
+    "chỉ thứ bậc cỡ chữ yếu → không mở thêm lượt sửa");
+  const weakTall = deck({ brows: [], pages: [], total: 3 }) + "<!-- weak tall -->";
+  A.rememberLayout(weakTall, { fit: sized3(869, 22), issues: [] });
+  const r3 = await A.autoDeckCheck("u1", {}, art(weakTall), "http://x") ?? "";
+  const weakRow = /Tiêu đề không nổi hơn chữ thân:\n- Slide 1: thứ bậc cỡ chữ yếu — tiêu đề 22px/;
+  ok(/slide 3 TRÀN/.test(r3) && weakRow.test(r3),
+    "có slide tràn → lời nhắc kèm thứ bậc cỡ chữ yếu", r3);
   const msg = A.AUTO_CHECK([row]);
   ok(/^<auto_check>/.test(msg) && /mode="patch"/.test(msg) && /đánh số lại MỌI nhãn số/.test(msg), "lời nhắc <auto_check>: sửa đúng slide, được dùng bản patch");
   ok(/Người dùng không thấy tin nhắn này/.test(msg) && /Câu trả lời bạn vừa viết được giữ nguyên/.test(msg) && /Không nhắc tới bước tự kiểm/.test(msg) && msg.includes("chỉ trả lời đúng <keep/>"), "lời nhắc nói câu trả lời gốc được giữ, không nhắc tới bước tự kiểm, giữ nguyên thì trả lời <keep/>", msg);
@@ -230,26 +244,47 @@ console.log("4. Phản biện theo ngôn ngữ giao diện, kèm số đo của 
   const tf0 = tf[0] ?? {};
   ok(tf.length === 1 && tf0.severity === "medium" && tf0.by[0] === "Synchro"
     && tf0.title === "Title doesn't stand out from the body text"
-    && /slide 1: title 11px, body text 26px; slide 3: title 26px, body text 20px/.test(tf0.detail)
-    && /at least 1\.4 times/.test(tf0.detail),
+    && /slide 1: title 11px, description 26px; slide 3: title 26px, body text 20px/.test(tf0.detail)
+    && /at least 1\.4 times the body text and 1\.2 times the description/.test(tf0.detail),
   "tiêu đề dưới 1,4 lần chữ thân / nhỏ hơn mô tả → mục phản biện của Synchro (tiếng Anh)", JSON.stringify(tf));
   ok(tf0.line_start === deckSlidesLine(html, 1), "mục thứ bậc cỡ chữ chỉ vào dòng của slide đầu tiên bị lỗi",
     JSON.stringify(tf0));
   const tv = DC.deckFindings(html, typeLay, [], "vi")[0] ?? {};
-  ok(tv.title === "Tiêu đề không nổi hơn chữ thân" && /slide 1: tiêu đề 11px, chữ thân 26px/.test(tv.detail),
+  ok(tv.title === "Tiêu đề không nổi hơn chữ thân" && /slide 1: tiêu đề 11px, dòng mô tả 26px/.test(tv.detail)
+    && /ít nhất 1,4 lần chữ thân và 1,2 lần dòng mô tả/.test(tv.detail),
     "bản tiếng Việt", JSON.stringify(tv));
   // Không lỗi nào thì danh sách rỗng, khung xem mới hiện "Ổn"; có lỗi thứ bậc thì không.
   const good = sized([{ title: 44, body: 20, lead: 26 }, { title: 56, body: 18 }, { title: 28, body: 20 }]);
   const fine = DC.deckFindings(html, good, [], "vi");
   ok(fine.length === 0, "tiêu đề 1,4 lần chữ thân trở lên, không nhỏ hơn mô tả: không có mục nào (nhãn Ổn)",
     JSON.stringify(fine));
+  // Tiêu đề bằng dòng mô tả (lỗi ở bìa bộ slide của tài khoản miễn phí) là thứ bậc yếu dù đạt 1,4 lần chữ thân;
+  // tiêu đề lớn hơn dòng mô tả một bậc của thang 1,333 thì đạt.
+  const leads = sized([
+    { title: 28, body: 20, lead: 28 }, { title: 32, body: 18, lead: 32 }, { title: 36, body: 20, lead: 27 },
+  ]);
+  const lw = deckfit.weakType(leads.fit).map((f) => f.slide).join();
+  ok(lw === "1,2", "tiêu đề bằng dòng mô tả → thứ bậc yếu; lớn hơn một bậc thang 1,333 → đạt", lw);
+  // Sàn tiêu đề của bộ tự co (sxTitleMin, cùng mã chạy trong trang) không bao giờ tạo ra lỗi thứ bậc cỡ chữ: cỡ đo
+  // được làm tròn, chữ thân lớn nhất có thể lẻ nửa px sau khi co.
+  const titleMin = new Function(`${deckfit.TYPE_ELS_JS};return sxTitleMin`)();
+  const made = [];
+  for (let b = 11; b <= 40; b += 0.25) {
+    const t = titleMin(b), r = Math.round(b);
+    made.push({ slide: made.length + 1, ...frame, title: t, body: Math.round(b * 0.8), lead: r });
+    made.push({ slide: made.length + 1, ...frame, title: t, body: r, lead: r });
+  }
+  const selfWeak = deckfit.weakType(made);
+  ok(!selfWeak.length, "tiêu đề ở sàn bộ tự co (1,4 lần chữ thân lớn nhất) luôn đạt mục thứ bậc",
+    JSON.stringify(selfWeak[0]));
   const blind = DC.deckFindings(html, sized([{ title: 0, body: 20 }, { title: 30 }]), [], "vi");
   ok(blind.length === 0, "slide không đo được tiêu đề / chữ thân: không kết luận", JSON.stringify(blind));
   const facts = DC.deckFacts(typeLay, []);
-  ok(/Synchro đã đo cỡ chữ: slide 1 tiêu đề 11px, chữ thân 26px; slide 3 tiêu đề 26px, chữ thân 20px/.test(facts),
+  ok(/Synchro đã đo cỡ chữ: slide 1 tiêu đề 11px, dòng mô tả 26px; slide 3 tiêu đề 26px, chữ thân 20px/.test(facts),
     "số đo cỡ chữ đưa cho model phản biện", facts);
   const note = deckfit.typeNote(typeLay.fit);
-  ok(note.length === 2 && /Slide 1: thứ bậc cỡ chữ yếu — tiêu đề 11px, chữ thân 26px; tiêu đề cần lớn/.test(note[0]),
+  ok(note.length === 2 && /Slide 1: thứ bậc cỡ chữ yếu — tiêu đề 11px, dòng mô tả 26px; tiêu đề cần lớn ít nhất 1,2 lần/
+    .test(note[0]) && /Slide 3: .*chữ thân 20px; tiêu đề cần lớn ít nhất 1,4 lần chữ thân/.test(note[1]),
     "check_artifact báo model slide có thứ bậc yếu", note.join(" | "));
   // Bộ tự co không co vừa (slide tự cắt phần thừa nên cao / rộng bằng khung): vẫn là slide tràn với model, phản biện.
   const stuckLay = { at: 0, issues: [], fit: [{ slide: 1, ...frame }, { slide: 2, ...frame, over: true }] };
@@ -257,10 +292,11 @@ console.log("4. Phản biện theo ngôn ngữ giao diện, kèm số đo của 
     "slide có cờ over là slide tràn dù cao / rộng bằng khung");
   const sf = DC.deckFindings(html, stuckLay, [], "en");
   ok(sf.length === 1 && sf[0].severity === "high" && sf[0].title === "Slide 2 overflows its frame when presented"
-    && /slide 2 still overflows with its text shrunk to the minimum \(title 28px\)/.test(sf[0].detail),
-  "tràn sau khi co tới sàn → mục Nghiêm trọng", JSON.stringify(sf));
+    && /content of slide 2 overflows and is cut off by the frame; shrinking the text does not make it fit, so Synchro/
+      .test(sf[0].detail),
+  "co không vừa (bộ tự co giữ nguyên cỡ, ghi cờ) → mục Nghiêm trọng", JSON.stringify(sf));
   const sum = deckfit.fitSummary(stuckLay.fit);
-  ok(/slide 2 TRÀN — nội dung vẫn tràn khi Synchro đã co chữ tới cỡ tối thiểu \(tiêu đề không dưới 28px\)/.test(sum),
+  ok(/slide 2 TRÀN — nội dung tràn và bị khung cắt mất; co chữ cũng không vừa nên Synchro giữ nguyên cỡ chữ/.test(sum),
     "dòng đo khung cho model nêu slide tràn sau khi co", sum);
   ok(!DC.contradicts(stuckLay, { title: "Slide 2 bị tràn", detail: "" }),
     "có slide tràn sau khi co: ý kiến 'tràn' của model phản biện không bị bỏ");

@@ -9,7 +9,7 @@ import { chartKitJs } from "./design-engine/charts/echarts-presets";
 import { CHART_CSS } from "./designcharts";
 import { DOC_TPL_CSS } from "./designdocs";
 import { SLIDE_TPL_CSS } from "./designtemplates";
-import { TITLE_FLOOR, TITLE_SEL, TYPE_ELS_JS } from "./deckfit";
+import { TITLE_FLOOR, TITLE_SEL, TYPE_ELS_JS, TYPE_RATIO } from "./deckfit";
 
 // Không đụng data-sx-loc, data-sx-on… của Synchro (đứng sau dấu "-"), chỉ nhận lớp thật, biến thật, và thuộc tính preset.
 // Tên lớp trong master-microcraft.css / visual-fx.css của chủ dự án (typo-…, fx-…, anim-stagger-card) cũng nhận: đều là tên riêng, trang cũ không tình cờ dùng.
@@ -185,58 +185,124 @@ function vis(e){return e.getClientRects().length>0}
 function bad(f,t){if(over(f,t))return true;var bs=f.querySelectorAll(BOX);
 for(var i=0;i<bs.length;i++)if(vis(bs[i])&&over(bs[i],t))return true;return false}
 ${TYPE_ELS_JS}
-// Sàn của tiêu đề slide: ${TITLE_FLOOR}px ở khung rộng 1280 và không nhỏ hơn chữ thân. Ô data-sx-fit hay chỉ có ở
-// tiêu đề (model được dặn đánh dấu tiêu đề, KPI); đoạn văn dài làm tràn thì cả khung co mà chỉ tiêu đề nhỏ đi,
-// từng còn ~14px, nhỏ hơn cả dòng mô tả.
+// Sàn của tiêu đề slide: ${TITLE_FLOOR}px ở khung rộng 1280 và ${TYPE_RATIO} lần chữ thân lớn nhất (sxTitleMin, cùng
+// tỉ lệ bộ kiểm tra thứ bậc cỡ chữ dùng). Ô data-sx-fit hay chỉ có ở tiêu đề (model được dặn đánh dấu tiêu đề, KPI);
+// đoạn văn dài làm tràn thì cả khung co mà chỉ tiêu đề nhỏ đi, từng còn ~14px, nhỏ hơn cả dòng mô tả.
 var SLIDE=".sx-slide,section.slide,[data-slide]",TT="${TITLE_SEL}";
 function tfloor(s,uu){return ${TITLE_FLOOR}*s.offsetWidth/uu/1280}
 function px(e,uu){return parseFloat(getComputedStyle(e).fontSize)/uu}
-function selfFloor(el,uu){var s=el.closest(SLIDE),t=el.closest(TT);if(!s||!t||!s.contains(t))return 11;
-var m=tfloor(s,uu);
-sxTypeEls(s).b.forEach(function(b){m=Math.max(m,px(b,uu))});return Math.ceil(m)}
+function selfFloor(el,uu){
+var s=el.closest(SLIDE),t=el.closest(TT);
+if(!s||!t||!s.contains(t))return 11;
+var bm=0;
+sxTypeEls(s).b.forEach(function(b){bm=Math.max(bm,px(b,uu))});
+return Math.max(Math.ceil(tfloor(s,uu)),sxTitleMin(bm))}
 // Cả khung (slide, poster, thẻ đứng riêng) co cùng tỉ lệ: mỗi bậc mọi ô chữ nhỏ đi khoảng 3% (1px với chữ 32px), ô nào chạm 11 thì dừng ở 11.
 // Co theo tỉ lệ giữ thứ bậc tiêu đề / số / thân; co riêng ô lớn nhất từng làm số KPI teo lại trong khi thủ phạm là đoạn văn dài.
 // Tìm bậc lớn nhất vừa khung bằng chia đôi (~5 lần dàn trang thay vì tới 24): cùng kết quả với dò từng bậc vì chữ nhỏ đi thì khung không tràn thêm.
 // Mỗi lần dàn trang ở slide nhiều ô chữ tốn hàng chục ms, nên đây là phần lớn thời gian chữ chưa vá hiện trên slide vừa chuyển tới (lỗi 14 của ma trận H1).
-// Co hết bậc mà vẫn tràn: ghi data-sx-fitover lên khung, bộ kiểm tra hiển thị báo slide tràn để model sửa bố cục;
-// slide tự cắt phần thừa (overflow hidden) nên số đo cao / rộng không thấy được lỗi này.
-function fitFrame(f){f.removeAttribute("data-sx-fitover");if(!vis(f)||!bad(f))return;
-var ns=[].slice.call(f.querySelectorAll("[data-node-id],[data-sx-fit]")).filter(vis);if(!ns.length)return;
+// Co hết bậc mà vẫn tràn: trả mọi ô về cỡ trước khi co và ghi data-sx-fitover lên khung. Giữ chữ đã co mà khung vẫn
+// tràn thì không sửa được gì, chỉ làm tiêu đề, KPI, chú thích nhỏ hơn cả chữ thân không co được (đoạn văn không đánh
+// dấu); cờ báo để bộ kiểm tra hiển thị nói slide tràn và model sửa bố cục, vì slide tự cắt phần thừa (overflow hidden)
+// nên số đo cao / rộng không thấy được lỗi này. Khung không có ô nào co được cũng ghi cờ như vậy.
+function fitFrame(f){
+f.removeAttribute("data-sx-fitover");
+if(!vis(f)||!bad(f))return;
+var ns=[].slice.call(f.querySelectorAll("[data-node-id],[data-sx-fit]")).filter(vis);
+if(!ns.length){
+if(bad(f,4))f.setAttribute("data-sx-fitover","");
+return}
 // Đơn vị đo bên trong khung (ô chữ đầu tiên): --sx-u của slide khác của trang (1px) khi khung hẹp hơn 1280, đo ngoài
 // khung thì cỡ gốc tính sai đơn vị và chữ bị co thêm đúng tỉ lệ thu nhỏ của khung (khung xem, ảnh thu nhỏ).
-var uu=unit(ns[0]),o=ns.map(function(e){return px(e,uu)});
+var uu=unit(ns[0]);
+var o=ns.map(function(e){return px(e,uu)});
 var pre=ns.map(function(e){return[e.style.fontSize,e.getAttribute("data-sx-fitted")]});
-var ty=f.matches(SLIDE)?sxTypeEls(f):null,tf=ty?tfloor(f,uu):11;
-var ti=ns.map(function(e){var t=ty&&e.closest(ty.T);return!!t&&f.contains(t)});
+var ty=f.matches(SLIDE)?sxTypeEls(f):null;
+var tf=ty?Math.ceil(tfloor(f,uu)):11;
+var ti=ns.map(function(e){
+var t=ty&&e.closest(ty.T);
+return!!t&&f.contains(t)});
 var bd=ty?ty.b.map(function(e){return{k:ns.indexOf(e),v:px(e,uu)}}):[];
-function at(s){var sc=1-.03*s,nn=o.map(function(v){return Math.max(11,Math.round(v*sc*2)/2)}),bm=0;
+function put(i,n){
+keep(ns[i],"data-sx-fs0",pre[i][0]);
+ns[i].style.fontSize="calc("+n+"*var(--sx-u))";
+ns[i].setAttribute("data-sx-fitted",String(n))}
+function back(i){
+ns[i].style.fontSize=pre[i][0];
+if(pre[i][1]!==null){
+ns[i].setAttribute("data-sx-fitted",pre[i][1]);
+return}
+ns[i].removeAttribute("data-sx-fitted");
+ns[i].removeAttribute("data-sx-fs0")}
+function at(s){
+var sc=1-.03*s;
+var nn=o.map(function(v){return Math.max(11,Math.round(v*sc*2)/2)});
+var bm=0;
 bd.forEach(function(b){bm=Math.max(bm,b.k<0?b.v:Math.min(nn[b.k],o[b.k]))});
-for(var i=0;i<ns.length;i++){var e=ns[i],n=ti[i]?Math.max(tf,bm,nn[i]):nn[i];
-if(n<o[i]){keep(e,"data-sx-fs0",pre[i][0]);e.style.fontSize="calc("+n+"*var(--sx-u))";
-e.setAttribute("data-sx-fitted",String(n))}
-else{e.style.fontSize=pre[i][0];
-if(pre[i][1]===null)e.removeAttribute("data-sx-fitted");else e.setAttribute("data-sx-fitted",pre[i][1])}}}
-var lo=1,hi=24;while(lo<hi){var m=(lo+hi)>>1;at(m);if(bad(f))lo=m+1;else hi=m}
-at(lo);if(bad(f,4))f.setAttribute("data-sx-fitover","")}
+var tm=Math.max(tf,sxTitleMin(bm));
+for(var i=0;i<ns.length;i++){
+var n=ti[i]?Math.max(tm,nn[i]):nn[i];
+if(n<o[i])put(i,n);
+else back(i)}}
+var lo=1,hi=24;
+while(lo<hi){
+var m=(lo+hi)>>1;
+at(m);
+if(bad(f))lo=m+1;
+else hi=m}
+at(lo);
+// Bậc dưới 24 đã đo là vừa trong vòng chia đôi; đo lại thì thêm một lần dàn trang mỗi slide, lần dàn trang đó
+// là phần lớn thời gian chữ chưa vá hiện trên slide vừa chuyển tới.
+if(lo<24||!bad(f,4))return;
+for(var i=0;i<ns.length;i++)back(i);
+f.setAttribute("data-sx-fitover","")}
 // Ô tự có khung cố định (overflow khác visible) đứng ngoài khung lớn: co chính nó, cỡ lớn nhất còn vừa (chia đôi,
-// thấp nhất 11; tiêu đề slide thấp nhất là sàn của tiêu đề). Chạm sàn mà vẫn tràn: ghi data-sx-fitover.
-function fitSelf(el){var cs=getComputedStyle(el);el.removeAttribute("data-sx-fitover");
+// thấp nhất 11; tiêu đề slide thấp nhất là sàn của tiêu đề). Ở sàn mà vẫn tràn: giữ cỡ gốc và ghi data-sx-fitover,
+// cùng lý do với fitFrame.
+function fitSelf(el){
+var cs=getComputedStyle(el);
+el.removeAttribute("data-sx-fitover");
 if(!vis(el)||cs.overflow==="visible"||!over(el))return;
-var uu=unit(el),n=Math.round(parseFloat(cs.fontSize)/uu),fl=selfFloor(el,uu);
-if(n>fl){keep(el,"data-sx-fs0",el.style.fontSize);var lo=fl,hi=n-1;
-while(lo<hi){var m=(lo+hi+1)>>1;el.style.fontSize="calc("+m+"*var(--sx-u))";if(over(el))hi=m-1;else lo=m}
-n=lo;el.style.fontSize="calc("+n+"*var(--sx-u))"}
-el.setAttribute("data-sx-fitted",String(n));if(over(el,4))el.setAttribute("data-sx-fitover","")}
+var uu=unit(el),n=Math.round(parseFloat(cs.fontSize)/uu),fl=selfFloor(el,uu),p0=el.style.fontSize;
+function size(m){el.style.fontSize="calc("+m+"*var(--sx-u))"}
+var lo=fl,hi=n-1;
+while(lo<hi){
+var m=(lo+hi+1)>>1;
+size(m);
+if(over(el))hi=m-1;
+else lo=m}
+if(n>fl)size(lo);
+else lo=n;
+// Bậc trên sàn đã đo là vừa trong vòng chia đôi; chỉ sàn (hay cỡ gốc đã ở sàn) chưa đo. Đo sàn trước vòng chia đôi
+// thì mỗi ô thêm một lần dàn trang, slide nhiều ô chữ chậm hẳn.
+if(lo<=fl&&over(el,4)){
+el.style.fontSize=p0;
+el.setAttribute("data-sx-fitover","");
+return}
+if(n>fl)keep(el,"data-sx-fs0",p0);
+el.setAttribute("data-sx-fitted",String(lo))}
 function top(e){var t=null;for(var b=e.closest(BOX);b;b=b.parentElement&&b.parentElement.closest(BOX))t=b;return t}
+// Slide không có ô nào co được cũng qua fitFrame để được ghi cờ tràn: model hay bỏ data-sx-fit, và slide của bộ thiết
+// kế tự cắt phần thừa nên không có cờ thì bộ kiểm tra hiển thị coi slide đó là vừa.
+function frames(root,fr){
+var sl=[].slice.call(root.querySelectorAll(SLIDE));
+if(root.matches&&root.matches(SLIDE))sl.push(root);
+sl.forEach(function(s){
+var t=top(s);
+if(t&&fr.indexOf(t)<0)fr.push(t)})}
 function run(root){root=root||document;var a=root.querySelectorAll("[data-node-id],[data-sx-fit]"),fr=[];for(var i=0;i<a.length;i++){try{fitSelf(a[i])}catch(e){}var t=top(a[i]);if(t&&fr.indexOf(t)<0)fr.push(t)}
+frames(root,fr);
 fr.forEach(function(f){try{fitFrame(f)}catch(e){}});
 var c=root.querySelectorAll("[data-node-id],.sx-heat,[data-sx-autoink]");for(var j=0;j<c.length;j++)try{if(vis(c[j]))ink(c[j])}catch(e){}}
 // Bỏ mọi chỗ đã vá (màu chữ, cỡ chữ) về như trang gốc: đổi phong cách thử (data-sx-preset) thì vá lại từ đầu, không giữ màu / cỡ hợp với phong cách cũ.
 function reset(root){root=root||document;var ok=root.querySelectorAll("[data-sx-fitok],[data-sx-fitpre]");for(var q=0;q<ok.length;q++){ok[q].removeAttribute("data-sx-fitok");ok[q].removeAttribute("data-sx-fitpre")}var a=root.querySelectorAll("[data-sx-inked]");for(var i=0;i<a.length;i++){if(a[i].hasAttribute("data-sx-ink0"))a[i].style.color=a[i].getAttribute("data-sx-ink0");a[i].removeAttribute("data-sx-ink0");a[i].removeAttribute("data-sx-inked")}
 var f=root.querySelectorAll("[data-sx-fitted]");
-for(var j=0;j<f.length;j++){if(f[j].hasAttribute("data-sx-fs0"))f[j].style.fontSize=f[j].getAttribute("data-sx-fs0");
-f[j].removeAttribute("data-sx-fs0");f[j].removeAttribute("data-sx-fitted")}
-var v=root.querySelectorAll("[data-sx-fitover]");for(var k=0;k<v.length;k++)v[k].removeAttribute("data-sx-fitover");
+for(var j=0;j<f.length;j++){
+if(f[j].hasAttribute("data-sx-fs0"))f[j].style.fontSize=f[j].getAttribute("data-sx-fs0");
+f[j].removeAttribute("data-sx-fs0");
+f[j].removeAttribute("data-sx-fitted")}
+var v=root.querySelectorAll("[data-sx-fitover]");
+for(var k=0;k<v.length;k++)v[k].removeAttribute("data-sx-fitover");
 if(root.removeAttribute)root.removeAttribute("data-sx-fitover")}
 window.__sxFit=run;window.__sxReset=reset;
 function fontsOk(){try{return document.fonts.status==="loaded"}catch(e){return true}}
