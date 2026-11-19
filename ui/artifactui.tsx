@@ -727,7 +727,7 @@ Yêu cầu: ${req.trim()}`);
           <pre className="art-code">{lines.map((l, i) => {
             const n = i + 1, on = findings.filter((f) => n >= f.line_start && n <= f.line_end), end = findings.filter((f) => f.line_end === n);
             const cls = [hlLoc && n >= hlLoc.start && n <= hlLoc.end ? "hl" : "", on.length ? `cr cr-${on[0].severity}` : ""].filter(Boolean).join(" ");
-            return <Fragment key={i}><div className={cls || undefined}><span>{n}</span>{toks?.[i] ? (toks[i].length ? <code className="art-tl"><TokLine toks={toks[i]} /></code> : " ") : l || " "}</div>{end.map((f) => <CriticNote key={f.title} f={f} canFix={!!onApplyFix && !!fixPatch(art.content, f)}
+            return <Fragment key={i}><div className={cls || undefined}><span>{n}</span>{toks?.[i] ? (toks[i].length ? <code className="art-tl"><TokLine toks={toks[i]} /></code> : " ") : l || " "}</div>{end.map((f, k) => <CriticNote key={`${f.title}:${f.line_start}:${k}`} f={f} canFix={!!onApplyFix && !!fixPatch(art.content, f)}
               onFix={() => onApplyFix?.(art, f)} onSkip={() => setSkip((x) => new Set(x).add(`${ver}:${f.line_start}:${f.title}`))} />)}</Fragment>;
           })}{!art.complete && <div className="art-caret"><span />▍</div>}</pre>
         ) : deck ? (

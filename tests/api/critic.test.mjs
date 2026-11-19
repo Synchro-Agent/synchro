@@ -82,5 +82,29 @@ await api("POST", "/api/admin/apikeys", { action: "main", main: mainBefore });
 r = await api("GET", "/api/caps");
 ok(r.j?.caps?.crit === true, "Cài đặt → Khả năng: Hội đồng phản biện bật sẵn", JSON.stringify(r.j?.caps));
 
+console.log("4. Bộ slide: Synchro tự báo đánh số lệch, phản biện theo ngôn ngữ giao diện (W10 nhóm C)");
+// Bộ slide giả: bỏ mục 03 mà nhãn mục còn 01, 02, 04, 05 (chân trang 02 / 05 – 05 / 05 đúng; bìa không đánh số mục là thiết kế, không phải lỗi).
+{
+  const src = (await import("node:fs")).readFileSync("tools/mock-caps.mjs", "utf8");
+  const DECK = /const DECKNUM = `([\s\S]*?)`;/.exec(src)[1];
+  await api("POST", "/api/admin/apikeys", { action: "main", main: oneEach });
+  r = await api("POST", "/api/critic", { title: "Gọi vốn", type: "html", content: DECK, model: "anthropic/claude-fable-5-1", ui: "en" });
+  const own = r.j?.findings?.find((x) => x.by?.includes("Synchro"));
+  ok(r.s === 200 && own?.title === "Inconsistent slide numbering" && /Section labels skip a number or go backwards on slide 4, 5 \(in order they should read 03, 04\)/.test(own.detail) && own.line_start === 14 && own.suggested_fix === "", "giao diện tiếng Anh: Synchro tự báo nhãn mục nhảy cóc bằng tiếng Anh, đúng dòng slide 4", JSON.stringify(r.j));
+  const model = r.j?.findings?.find((x) => !x.by?.includes("Synchro"));
+  ok(model?.title === "The call-to-action button goes nowhere" && r.j.by.includes("Synchro"), "ý kiến của model phản biện cũng bằng tiếng Anh; danh sách người phản biện có Synchro", JSON.stringify(r.j?.findings?.map((x) => x.title)));
+  const L2 = await fetch(`${LLM}/_debug/last`).then((x) => x.json());
+  const sys = JSON.stringify([L2.openai, L2.google]);
+  ok(/Write title and detail in English/.test(sys) && !/\{LANG\}/.test(sys) && /Synchro đã báo lỗi đánh số slide/.test(sys), "lời nhắc: viết tiếng Anh, kèm lỗi đánh số Synchro đã báo để model không nêu lại", sys.slice(0, 300));
+  r = await api("POST", "/api/critic", { title: "Gọi vốn", type: "html", content: DECK, model: "anthropic/claude-fable-5-1" });
+  const vi = r.j?.findings?.find((x) => x.by?.includes("Synchro"));
+  ok(vi?.title === "Đánh số slide không nhất quán" && /Nhãn mục nhảy cóc hoặc đi lùi ở slide 4, 5 \(theo thứ tự phải là 03, 04\)/.test(vi.detail) && r.j.findings.some((x) => /Đặt bàn ngay/.test(x.title)), "không gửi ui (bản cũ) hay giao diện tiếng Việt: tiếng Việt", JSON.stringify(r.j?.findings?.map((x) => x.title)));
+  // Đánh số lại nhãn mục 01–04 (bìa không đánh số mục, chân trang giữ 02 / 05 – 05 / 05): Synchro không báo gì.
+  const fixedDeck = DECK.replace(/>(0[45]) · /g, (m, n) => `>${String(+n - 1).padStart(2, "0")} · `);
+  r = await api("POST", "/api/critic", { title: "Gọi vốn", type: "html", content: fixedDeck, model: "anthropic/claude-fable-5-1", ui: "en" });
+  ok(r.s === 200 && !r.j.findings.some((x) => x.by?.includes("Synchro")) && !r.j.by.includes("Synchro"), "đánh số lại đúng một dãy → Synchro không báo", JSON.stringify(r.j));
+  await api("POST", "/api/admin/apikeys", { action: "main", main: mainBefore });
+}
+
 console.log(`\nKết quả: ${pass} đạt, ${fail} lỗi`);
 process.exit(fail ? 1 : 0);

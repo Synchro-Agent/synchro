@@ -36,6 +36,7 @@ export const PAIR_ALLOW = {
   "app/api/skill-scan/route.ts": "chuẩn hóa tham số lang của yêu cầu",
   "app/api/admin/health/route.ts": "chuẩn hóa tham số lang của yêu cầu",
   "app/api/speech/[...op]/route.ts": "lời nhắc gửi model theo ngôn ngữ người dùng chọn",
+  "app/api/critic/route.ts": "chuẩn hóa tham số ui (ngôn ngữ giao diện) và lời nhắc gửi model phản biện viết theo ngôn ngữ đó",
   "server/skillscan.ts": "lời nhắc gửi model (ngôn ngữ của field / why)",
   "ui/resetfmt.ts": "hàm thuần nhận lang, kiểm thử chạy không cần từ điển (giữ nguyên chữ của main)",
   // Bảng hai cột không phải cặp ngôn ngữ (tệp#tên hằng): chỉ miễn đúng bảng đó.

@@ -18,9 +18,10 @@ import type { TraceItem } from "../transpile";
 import { maybeRef, readRef } from "../refs";
 import { normalizeSchema, resolveRefs } from "../../shared/connschema";
 import { BRIDGE_CALL_MAX, destructiveLike, TOOL_BUDGET } from "../mcp";
-import { checkArtifact, checkRoundGate, findArtifact, readArtifact } from "../artcheck";
+import { AUTO_CHECK, autoDeckCheck, checkArtifact, checkRoundGate, findArtifact, readArtifact } from "../artcheck";
 import { artState, resolveArt, type ArtVersion } from "../../shared/vfs";
 import { hasArtifacts, splitArtifacts } from "../../shared/artifacts";
+import { foldFix, foldPatches } from "../../shared/turnfold";
 import { typedText } from "../router";
 import { recordPluginUse } from "../plugins";
 import { markConvUntrusted } from "../convtrust";
@@ -29,6 +30,8 @@ import { plainSummary, runBlocks } from "../../shared/runtext";
 import { markGenFailed, OUTPUT_QUOTA_MB, outputByName, outputRoom, outputsFull, readOutput, removeOutput, replaceOutput, saveOutputs, type OutFile } from "../outputs";
 import { mergeOuts, previewNote, previewOf } from "../runpreview";
 import { totalsNote } from "../xlsxcheck";
+import { docxNote } from "../docxcheck";
+import { videoMotionNote } from "../videomotion";
 import { type ABlock, type Citer, anthropicCall, blocksText, searchResults, effortParams, HttpErr, openaiCall, outCap, respInput, respParse, respTools, responsesCall } from "../llmcall";
 import { PROJECT_DOC_TOOL, readProjectFile } from "../projectdocs";
 import { stripAppliedNotes } from "../../shared/turnctx";
@@ -36,7 +39,7 @@ import { ASPECTS, generateImages, HOUR_MAX as IMAGE_HOUR_MAX, IMAGE_TOOL_NAME, i
 import { IMAGE_LIMIT_NOTE, imageLimitMsg } from "../limitmsg";
 import { IMG_BUDGET_MS, placeholderNote, settleBackground } from "../ai/imgbudget";
 import { POSTER_TEMPLATES, posterProps, type PosterTemplate } from "../design-engine/posters/props";
-import { genImageUrl } from "../../shared/artdoc";
+import { genImageUrl, isDeck } from "../../shared/artdoc";
 import { IMAGE_MAX_MB, imageKind, type ImgFile, scrubServerPaths } from "../ai/imagefiles";
 import { escalateText, searchNeedsEscalation, withBrowserLock } from "../ai/webescalate";
 import { checkUrl } from "../safefetch";
@@ -167,7 +170,7 @@ export type Lib = { key: string; label: string };
 // art: lịch sử để read_artifact / check_artifact dựng lại bản hiện tại của artifact (cùng phần đã nén ở artBase).
 // turnArts: artifact model viết giữa lượt (trong lời dẫn trước công cụ), xem sayOut.
 // image: công cụ generate_image đang bật; msgs: lịch sử của lượt, để tìm ảnh gốc người dùng nhờ sửa.
-export type Exec = { project?: unknown; image?: boolean; msgs?: unknown; effects?: string[]; toolSync?: boolean; list: Skl; scripts: boolean; sess: ConnectorSession | null; uid: string; code: boolean; net: boolean; web?: boolean; art?: { messages: { role: string; content: unknown }[]; base: unknown }; turnArts?: string[]; outs: OutFile[]; outPaths?: Map<string, string>; libs?: Record<string, Lib[]>; studio?: Lib; prefer?: Record<string, string>; trace: TraceItem[]; conv?: string; heal?: Target; search?: Target; browse?: boolean; bctx?: BrowserCtx; shown?: string; heavy?: string[]; gate?: Gate; task?: TaskCtx | null; asking?: Promise<void>; awaiting?: number; denied?: Map<string, string>; connCards?: Set<string>; calls?: Map<string, { at: number; cancel?: AbortSignal }>; park?: () => void; inputsSent?: Set<string>; madeImgs?: string[]; webs?: Map<string, { title: string; url: string }>; edited?: Set<string>; rendered?: Set<string>; roundBrowser?: boolean; untrusted?: boolean; plan?: PlanState };
+export type Exec = { project?: unknown; image?: boolean; msgs?: unknown; effects?: string[]; toolSync?: boolean; list: Skl; scripts: boolean; sess: ConnectorSession | null; uid: string; code: boolean; net: boolean; web?: boolean; art?: { messages: { role: string; content: unknown }[]; base: unknown }; turnArts?: string[]; outs: OutFile[]; outPaths?: Map<string, string>; libs?: Record<string, Lib[]>; studio?: Lib; prefer?: Record<string, string>; trace: TraceItem[]; conv?: string; heal?: Target; search?: Target; browse?: boolean; bctx?: BrowserCtx; shown?: string; heavy?: string[]; gate?: Gate; task?: TaskCtx | null; asking?: Promise<void>; awaiting?: number; denied?: Map<string, string>; connCards?: Set<string>; calls?: Map<string, { at: number; cancel?: AbortSignal }>; park?: () => void; inputsSent?: Set<string>; madeImgs?: string[]; webs?: Map<string, { title: string; url: string }>; edited?: Set<string>; rendered?: Set<string>; roundBrowser?: boolean; untrusted?: boolean; plan?: PlanState; deckGated?: boolean; held?: { text: string; at: number } };
 // Nguồn web của lượt, đánh số theo thứ tự gặp (số [n] trong câu trả lời trỏ đúng chip thứ n). Tối đa 20 nguồn.
 const WEB_MAX = 20;
 export const citeOf = (x: Exec): Citer => (url, title = "") => {
@@ -237,6 +240,9 @@ async function runCode(x: Exec, input: Record<string, unknown>): Promise<Run> {
     const pv = await previewOf(r.files);
     // Chốt ô tổng: tổng / tổng phụ / chênh lệch ghi cứng thành số trong tệp Excel vừa tạo thì báo để model sửa thành công thức.
     const totals = r.exit === 0 ? await totalsNote(r.files).catch(() => "") : "";
+    // Tự kiểm sau lần chạy thành công: tiêu đề / đoạn lặp trong tệp Word (H1 T9), chuyển động thật của video (H1 T10: video tả là động nhưng đứng yên từ giây 2).
+    const docx = r.exit === 0 ? await docxNote(r.files).catch(() => "") : "";
+    const motion = r.exit === 0 && !r.timedOut ? await videoMotionNote(x.uid, r.files, runSignal()).catch(() => "") : "";
     const files = saved.length ? `\n<files>\n${saved.map((f) => `outputs/${f.name} (${fmtSize(f.size)}) — đã gửi cho người dùng`).join("\n")}\n</files>` : "";
     const hold = held.length ? (r.exit === 0 && !r.timedOut ? `\n<not_delivered>\nMáy chủ sắp hết dung lượng đĩa nên các tệp này CHƯA tới người dùng: ${held.join(", ")}. Hãy nói rõ điều này với người dùng và đề nghị thử lại sau; đừng nói là đã gửi tệp.\n</not_delivered>` : `\n<not_delivered>\n${r.timedOut ? "Lần chạy quá giờ" : "Lần chạy lỗi"} nên các tệp này CHƯA tới người dùng, có thể dở dang: ${held.join(", ")}. Chúng nằm ở .last_outputs/. Sửa rồi chạy lại; tệp nào dùng được thì chép sang outputs/ ở lần chạy sau.\n</not_delivered>`) : "";
     // Tệp vượt giới hạn dung lượng: chỉ thẻ này báo được, người dùng không có thẻ tệp nào để biết là thiếu. Tệp _preview/ chỉ để model xem, không cần báo.
@@ -244,7 +250,7 @@ async function runCode(x: Exec, input: Record<string, unknown>): Promise<Run> {
     if (r.exit === 0 && !r.timedOut) noteSkipped(x, over);
     const skip = over.length ? `\n<not_delivered>\nCác tệp này KHÔNG tới người dùng và không có thẻ tải về: ${over.join("; ")}. Giới hạn ${RUN_LIMITS.fileSize / 1048576} MB mỗi tệp, ${RUN_LIMITS.total / 1048576} MB mỗi lần chạy. Nén lại (video: -crf cao hơn, hạ bitrate âm thanh) hoặc chia nhỏ rồi chạy lại; không làm được thì phải nói rõ với người dùng là tệp chưa giao được (thẻ tệp hiện "chưa giao được").\n</not_delivered>` : "";
     // Thẻ trạng thái đứng trước log: log dài cỡ nào model vẫn thấy đã giao tệp gì, ô Excel nào lỗi, đã xem ảnh nào.
-    return { ...runBlocks({ open: `<run_result language="${lang}" exit_code="${r.exit}">`, close: "</run_result>", tags: `${inputsNote(inp)}${files}${hold}${skip}${recalcNote(r.recalc)}${totals}${previewNote(pv)}`, stdout: r.stdout, stderr: r.stderr }), is_error: r.exit !== 0, used, ...(pv ? { image: pv.image } : {}) };
+    return { ...runBlocks({ open: `<run_result language="${lang}" exit_code="${r.exit}">`, close: "</run_result>", tags: `${inputsNote(inp)}${files}${hold}${skip}${recalcNote(r.recalc)}${totals}${docx}${motion}${previewNote(pv)}`, stdout: r.stdout, stderr: r.stderr }), is_error: r.exit !== 0, used, ...(pv ? { image: pv.image } : {}) };
   } catch (e) {
     return { content: `Không chạy được code: ${(e as Error).message}`, is_error: true, used };
   }
@@ -270,8 +276,53 @@ export function sayOut(x: Exec | null | undefined, text: string) {
   }).trim();
   if (t) progress("say", t);
 }
+/** Model định trả lời xong mà câu trả lời có bộ slide: tự kiểm bản cuối (artcheck.ts autoDeckCheck), thấy lỗi thì trả lời nhắc <auto_check>
+ *  để model sửa trước khi giao. Một lần mỗi lượt (không lặp vô hạn, không tốn thêm hạn mức của gói khi bộ slide đã sạch lỗi). */
+export async function deckGate(x: Exec, text: string): Promise<string | null> {
+  // Cả artifact viết giữa lượt (lời dẫn trước khi gọi công cụ, giữ ở turnArts): câu trả lời cuối có thể chỉ còn lời tóm tắt.
+  const live = [...(x.turnArts ?? []), text].join("\n\n");
+  if (!x.art || x.deckGated || runSignal()?.aborted || !hasArtifacts(live)) return null;
+  const idents = [...new Set(splitArtifacts(live).flatMap((g) => (g.kind === "art" ? [g.art.ident] : [])))].slice(-2);
+  if (!idents.length) return null;
+  x.deckGated = true;
+  const rows: string[] = [];
+  for (const id of idents) {
+    const a = findArtifact({ uid: x.uid, conv: x.conv, messages: x.art.messages, base: x.art.base, live }, id);
+    if (!a || a.type !== "html" || !isDeck(a)) continue;
+    progress("step", "Đang kiểm tra hiển thị artifact");
+    const row = await autoDeckCheck(x.uid, x, a, process.env.APP_URL || "https://synchro.net.nz", runSignal()).catch(() => null);
+    if (row) rows.push(row);
+  }
+  return rows.length ? AUTO_CHECK(rows) : null;
+}
+/** Lời nhắc <auto_check> đã gửi: giữ câu trả lời model vừa viết cho người dùng (không đưa vào nhật ký "say"), để cuối lượt ghép phần sửa vào đó
+ *  (settleGate). at: số artifact viết giữa lượt trước lời nhắc. */
+export function holdAnswer(x: Exec, text: string) {
+  x.held = { text, at: x.turnArts?.length ?? 0 };
+}
+/** Chữ của lượt để read_artifact / check_artifact tìm artifact: artifact viết giữa lượt, câu trả lời đang giữ (đúng thứ tự), rồi phần đang viết. */
+export function turnLive(x: Exec, tail: string): string {
+  const t = x.turnArts ?? [], h = x.held;
+  return (h ? [...t.slice(0, h.at), h.text, ...t.slice(h.at), tail] : [...t, tail]).join("\n\n");
+}
+/** Cuối lượt có câu trả lời đang giữ: câu trả lời người dùng nhận là câu gốc, bản sửa của model gộp vào artifact trong đó (shared/turnfold.ts).
+ *  stop: dừng giữa chừng / lỗi khi đang sửa → giao câu gốc, bỏ phần sửa dở. */
+export function settleGate(x: Exec | null | undefined, text: string, stop = false): string {
+  const h = x?.held;
+  if (!x || !h) return text;
+  x.held = undefined;
+  const all = x.turnArts ?? [], before = all.slice(0, h.at), after = all.slice(h.at);
+  if (stop || text.trim() === h.text.trim()) { x.turnArts = before; return h.text; }
+  const r = foldFix(h.text, before, [...after, text].join("\n\n"));
+  x.turnArts = r.before;
+  return r.text;
+}
 // Câu trả lời cuối đã viết lại trọn một artifact thì bỏ các bản cùng identifier viết giữa lượt (bản sửa mode="patch" thì vẫn cần bản gốc).
-export const withTurnArts = (x: Exec | null | undefined, text: string) => {
+export const withTurnArts = (x: Exec | null | undefined, text0: string) => {
+  // Bản sửa ở câu trả lời cuối cho bộ slide viết giữa lượt: gộp thành một thẻ (H1 lỗi 9).
+  const fp = x?.turnArts?.length ? foldPatches(x.turnArts, text0) : null;
+  if (x && fp) x.turnArts = fp.arts;
+  const text = fp ? fp.text : text0;
   const full = new Set(splitArtifacts(text).flatMap((g) => (g.kind === "art" && !g.art.patch ? [g.art.ident] : [])));
   const fresh = (x?.turnArts ?? []).filter((b) => !text.includes(b) && !splitArtifacts(b).some((g) => g.kind === "art" && full.has(g.art.ident)));
   return fresh.length ? `${fresh.join("\n\n")}\n\n${text}` : text;
@@ -640,12 +691,12 @@ async function runCall(x: Exec, c: Call, d?: Decision): Promise<Run> {
   if (c.name === IMAGE_TOOL_NAME && x.image && !x.sess?.get(c.name)) return runImage(x, c);
   if (c.name === PROJECT_DOC_TOOL.name && x.project !== undefined && !x.sess?.get(c.name)) return { ...readProjectFile(x.uid, x.project, c.input ?? {}), used: { kind: "search", name: c.name } };
   if ((c.name === "read_artifact" || c.name === "check_artifact") && x.art && !x.sess?.get(c.name)) {
-    const a = findArtifact({ uid: x.uid, conv: x.conv, messages: x.art.messages, base: x.art.base, live: [...(x.turnArts ?? []), liveNow()].join("\n\n") }, typeof c.input?.identifier === "string" ? c.input.identifier : undefined);
+    const a = findArtifact({ uid: x.uid, conv: x.conv, messages: x.art.messages, base: x.art.base, live: turnLive(x, liveNow()) }, typeof c.input?.identifier === "string" ? c.input.identifier : undefined);
     const used = { kind: "search" as const, name: c.name };
     if (c.name === "read_artifact") return { ...readArtifact(a, c.input ?? {}), used };
     const enough = a ? checkRoundGate(x, a) : null;
     if (enough) return { content: enough, is_error: false, used };
-    const r = await checkArtifact(x.uid, a, c.input ?? {}, process.env.APP_URL || "https://synchro.net.nz");
+    const r = await checkArtifact(x.uid, a, c.input ?? {}, process.env.APP_URL || "https://synchro.net.nz", runSignal());
     if (r.image) (x.heavy ??= []).push(c.id);
     return { ...r, used };
   }
@@ -819,7 +870,7 @@ export async function toolLoop(ad: Adapter, m: unknown[], x: Exec, used: ToolRun
     if (!isAbort(e)) throw e;
     // Dừng giữa chừng: giữ phần đã viết, lượt kết thúc bình thường (không phải lỗi).
     x.sess?.close();
-    return { text: liveNow(), used, cancelled: true };
+    return { text: settleGate(x, liveNow(), true), used, cancelled: true };
   } finally {
     // Hết lượt: thôi điều khiển Chrome của người dùng (gỡ dải "Synchro đang điều khiển").
     releaseBrowser(uid, x.bctx);
@@ -855,7 +906,8 @@ async function loop(ad: Adapter, m: unknown[], x: Exec, used: ToolRun["used"][],
     try { r = await ad.step(m, i === steps - 1); }
     catch (e) {
       // Người dùng nhắn thêm khi model đang viết: giữ phần đã viết trong nhật ký, ghép tin mới rồi gọi lại model ngay.
-      if (!steered()) throw e;
+      // Lỗi khi model đang sửa theo lời nhắc <auto_check>: vẫn giao câu trả lời đã viết xong trước đó.
+      if (!steered()) { if (x.held && !isAbort(e)) return { text: settleGate(x, "", true), used }; throw e; }
       sayOut(x, liveNow());
       takeFollowups(m);
       continue;
@@ -866,7 +918,13 @@ async function loop(ad: Adapter, m: unknown[], x: Exec, used: ToolRun["used"][],
       // Tin nhắn thêm tới khi model đã viết xong câu trả lời: làm tiếp trong cùng lượt với tin mới, không chờ lượt sau.
       if (i < steps - 1 && inboxWaiting()) { sayOut(x, r.text); takeFollowups(m); continue; }
       if (!acted && nudged < MAX_NUDGE && i < steps - 1 && stalled(r.text)) { nudged++; sayOut(x, r.text); m.push({ role: "user", content: NUDGE }); continue; }
-      return { text: r.text, used };
+      // Bộ slide trong câu trả lời: tự kiểm bản cuối (tràn khung 1280×720, đánh số lệch), có lỗi thì cho model sửa trước khi giao.
+      // Câu trả lời đã viết được giữ cho người dùng; lượt sau lời nhắc chỉ để sửa, cuối lượt gộp lại (settleGate).
+      if (i < steps - 1 && x.art && !x.deckGated) {
+        const g = await deckGate(x, r.text);
+        if (g) { holdAnswer(x, r.text); m.push({ role: "user", content: g }); continue; }
+      }
+      return { text: settleGate(x, r.text), used };
     }
     acted = true;
     r.calls = r.calls.map((c) => unwrapConn(x, c));
@@ -897,6 +955,8 @@ async function loop(ad: Adapter, m: unknown[], x: Exec, used: ToolRun["used"][],
     }
     await execute(ad, m, x, r.calls, used, {});
   }
+  // Hết bước khi đang sửa theo lời nhắc <auto_check>: giao câu trả lời đã viết xong trước đó.
+  if (x.held) return { text: settleGate(x, "", true), used };
   return { text: "Đã đạt giới hạn số bước gọi công cụ trong một lượt. Hãy hỏi lại cụ thể hơn để Synchro làm tiếp.", used };
 }
 

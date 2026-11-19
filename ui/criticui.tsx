@@ -2,7 +2,7 @@
 // Hội đồng phản biện trong khung artifact: nhãn trạng thái ở đầu khung và ghi chú ngay dưới các dòng có vấn đề (chế độ Mã).
 import { useState } from "react";
 import * as I from "./icons";
-import { tr } from "./i18n";
+import { tr, trc } from "./i18n";
 import { SEV_LABEL, type CriticEntry, type Finding } from "../shared/critic";
 import { modelName } from "./models";
 
@@ -27,7 +27,7 @@ export function CriticNote({ f, canFix, onFix, onSkip }: { f: Finding; canFix: b
   return (
     <div className={`cr-note ${f.severity}`} role="note">
       <div className="cr-h">
-        <em>{tr(SEV_LABEL[f.severity])}</em><b>{f.title}</b>
+        <em>{trc(SEV_LABEL[f.severity], "mức phản biện")}</em><b>{f.title}</b>
         {f.by?.length ? <span className="cr-by" data-notr>{f.by.map(short).join(" · ")}</span> : null}
       </div>
       {f.detail && <p>{f.detail}</p>}
