@@ -708,7 +708,8 @@ export class AntigravityEngine implements Engine {
     // Print mode không có sự kiện giữa chừng: nói trước để người dùng không tưởng là treo.
     yield { kind: "status", text: "Antigravity đang viết, chữ sẽ hiện một lần khi xong (thường 5 đến 10 giây)" };
     // agy in một object JSON duy nhất khi xong lượt (có thể trải nhiều dòng).
-    // Không có chữ dần, không có sự kiện: ít nhất nói đã chờ bao lâu. Đang chạy công cụ thì nhật ký làm việc đã nói rồi.
+    // Không có chữ dần, không có sự kiện: nói đã chờ bao lâu, kèm điều Synchro đã biết (req.pulse: bước đang làm,
+    // artifact đã nhận). Đang chạy công cụ thì nhật ký làm việc đã nói rồi.
     let out = "";
     const it = p.lines[Symbol.asyncIterator](), T0 = Date.now();
     for (let nx = it.next(); ;) {
@@ -716,7 +717,12 @@ export class AntigravityEngine implements Engine {
       const r = await Promise.race([nx, new Promise<null>((ok) => { tk = setTimeout(() => ok(null), AGY_TICK_MS); })]);
       clearTimeout(tk);
       if (r === null) {
-        if (Date.now() - (req.alive?.() ?? 0) > AGY_TICK_MS) yield { kind: "status", tick: true, text: `Antigravity vẫn đang viết, đã ${Math.round((Date.now() - T0) / 1000)} giây` };
+        if (Date.now() - (req.alive?.() ?? 0) > AGY_TICK_MS) {
+          const known = req.pulse?.() ?? "";
+          const secs = Math.round((Date.now() - T0) / 1000);
+          const text = `Antigravity vẫn đang viết, đã ${secs} giây${known ? ` · ${known}` : ""}`;
+          yield { kind: "status", tick: true, text };
+        }
         continue;
       }
       if (r.done) break;

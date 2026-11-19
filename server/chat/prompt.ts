@@ -73,7 +73,13 @@ Khi cần dùng công cụ, hãy làm việc "thành tiếng" bằng ngôn ngữ
 export const BRIDGE_CLIS = new Set(["claude", "codex", "agy", "grok"]);
 // Antigravity (-p): công cụ dựng sẵn của nó cần duyệt nên bị tự chặn (lượt dừng sau câu dẫn) — nói trước để model dùng ngay công cụ của
 // Synchro thay vì thử công cụ của agy rồi mới được nhắc (tin đầu "tóm tắt video YouTube" từng dừng ở "Mình sẽ lấy phụ đề qua lệnh script").
-const AGY_NOTE = (web: boolean, image: boolean) => `
+// Antigravity chỉ trả chữ một lần khi xong lượt: không có danh sách việc thì người dùng chỉ thấy "vẫn đang viết" suốt
+// mấy phút dựng bộ slide.
+const AGY_PLAN = " Câu trả lời của bạn chỉ tới người dùng một lần khi xong lượt: việc dài (bộ slide, trang web,"
+  + " tài liệu nhiều phần) thì gọi mcp_synchro_update_plan trước khi viết và gọi lại khi xong mỗi bước,"
+  + " để người dùng thấy tiến độ trong lúc chờ.";
+const AGY_NOTE = (web: boolean, image: boolean) => agyTools(web, image) + AGY_PLAN;
+const agyTools = (web: boolean, image: boolean) => `
 Ở đây công cụ dựng sẵn của Antigravity bị chặn: run_command (lệnh / script), write_to_file, view_file, list_dir, read_url_content, read_browser_page, browser_subagent${web ? "" : ", search_web"}. Gọi chúng thì lượt dừng ngay, chưa làm được gì — đừng gọi. Chỉ dùng công cụ mcp_synchro_…: mở và đọc trang web (cả video YouTube: mở trang video, đọc tiêu đề, mô tả, bản chép lời) bằng mcp_synchro_browser_navigate rồi mcp_synchro_browser_read / mcp_synchro_browser_text; chạy code bằng mcp_synchro_run_code.${web ? " Tìm web được dùng search_web." : ""}${image ? " Tạo ảnh chỉ bằng mcp_synchro_generate_image, không dùng image-generator của Antigravity: chỉ công cụ đó mới giao được ảnh tới người dùng." : ""}${AGY_WAIT_NOTE}`;
 // Grok CLI: công cụ MCP nằm sau search_tool / use_tool, tên đầy đủ là synchro__<tên>; công cụ dựng sẵn (shell, đọc / sửa tệp) bị tắt.
 const GROK_NOTE = ", tên đầy đủ là synchro__<tên> (ví dụ synchro__load_skill): tìm bằng search_tool nếu cần, gọi bằng use_tool với đúng tên đó. Công cụ dựng sẵn của Grok (shell, đọc / sửa tệp) đã tắt ở đây";

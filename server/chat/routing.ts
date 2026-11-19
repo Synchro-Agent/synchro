@@ -37,6 +37,7 @@ import { prewarmClaude, sessionPlain, SUB, subCli, subTurn } from "../ai/subs";
 import { planResetMsg, sharedKeyMsg } from "../limitmsg";
 import { PROJECT_DOC_RULES, PROJECT_DOC_TOOL, projectDocsLong, projectIns } from "../projectdocs";
 import { REJECTED_RULE, rejectedBlock, stripAppliedNotes, withProjectIns, withRejected } from "../../shared/turnctx";
+import { turnPulse } from "../../shared/turnpulse";
 import { IMAGE_RULES, imageTool } from "../ai/imagegen";
 import { scrubServerPaths } from "../ai/imagefiles";
 import { BRIDGE_HOLD, openBridge } from "../mcpbridge";
@@ -597,6 +598,9 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
         // Codex có update_plan dựng sẵn bên cạnh update_plan của Synchro: model dùng cái nào thì danh sách việc trong khung chat cũng cập nhật (lỗi 8 của ma trận H1:
         // "Tasks 0/3" đứng yên tới cuối lượt dù model đã xong bước 1). Một danh sách mỗi lượt: notePlan (tools.ts) ưu tiên danh sách của Synchro.
         onPlan: am ? undefined : (items) => { const shown = notePlan(x, "native", items); if (shown) progress("plan", JSON.stringify(shown)); },
+        // Antigravity không gửi chữ dần: dòng "vẫn đang viết" kèm bước đang làm và artifact đã nhận (bản đang giữ chờ
+        // sửa).
+        pulse: am ? undefined : () => turnPulse(x?.plan?.items, [...(x?.turnArts ?? []), x?.held?.text ?? ""]),
       });
       // Bấm Dừng: CLI trả về mọi chữ đã viết trong lượt, kể cả các câu dẫn đã nằm trong nhật ký làm việc (ghép lại thành một đoạn dài
       // không dấu cách, trông như câu trả lời cụt rồi dừng). Câu trả lời chỉ giữ phần của bước đang viết dở, như lượt chạy bằng khóa API.

@@ -24,7 +24,9 @@ import type { ApprovalAnswer, ApprovalCall, LibUse, OutFile } from "./llm";
 import type { Chat, Msg } from "./store";
 import { AUTO, autoPickKey, modelName } from "./models";
 import { useCaps } from "./capsclient";
-import { ART_LABEL, artifactsAsCode, hasArtifacts, PUBLISHABLE, splitArtifacts, type ArtBlock } from "../shared/artifacts";
+import {
+  artKindLabel, artifactsAsCode, hasArtifacts, PUBLISHABLE, splitArtifacts, type ArtBlock,
+} from "../shared/artifacts";
 import { ArtPanelSkeleton, ThreadSkeleton } from "./skeleton";
 import { resolveArt, type ArtVersion } from "../shared/vfs";
 import { criticKey, type Finding } from "../shared/critic";
@@ -42,7 +44,11 @@ const PublishButton = lazyView(() => import("./appsui").then((m) => m.PublishBut
 const BrowserHub = lazyView(() => import("./browserhub").then((m) => m.BrowserHub));
 // Khung xem tệp / artifact đang tải phần mã: khung chờ cùng chỗ, cùng bề rộng, có sẵn tên (cột chat không co giãn hai lần).
 const FilePanel = lazyView(() => import("./filepreview").then((m) => m.FilePanel), (p) => <ArtPanelSkeleton title={p.file.name} expanded={p.expanded} acts={3} />);
-const ArtifactPanel = lazyView(() => import("./artifactui").then((m) => m.ArtifactPanel), (p) => { const a = p.versions[p.index] ?? p.versions.at(-1); return <ArtPanelSkeleton title={a?.title} sub={a ? tr(ART_LABEL[a.type]) : undefined} tabs={!!a && a.type !== "code"} expanded={p.expanded} acts={6} />; });
+const ArtifactPanel = lazyView(() => import("./artifactui").then((m) => m.ArtifactPanel), (p) => {
+  const a = p.versions[p.index] ?? p.versions.at(-1);
+  const sub = a ? tr(artKindLabel(a)) : undefined;
+  return <ArtPanelSkeleton title={a?.title} sub={sub} tabs={!!a && a.type !== "code"} expanded={p.expanded} acts={6} />;
+});
 const ProductSwitcher = lazyView(() => import("./filepreview").then((m) => m.ProductSwitcher), null);
 const ApprovalCard = lazyView(() => import("./connectorsui").then((m) => m.ApprovalCard), null);
 const SaveSkillChip = lazyView(() => import("./saveskill").then((m) => m.SaveSkillChip), null);
