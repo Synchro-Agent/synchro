@@ -238,7 +238,9 @@ export const EN2VI: Record<string, string> = {
   "Remove administrator?": "Bỏ quyền quản trị viên?", "They keep their account and data, and lose access to Administrator.": "Họ giữ tài khoản và dữ liệu, chỉ không vào được phần Quản trị nữa.",
   "Administrator removed": "Đã bỏ quyền quản trị viên", "Remove administrator": "Bỏ quyền quản trị viên",
   "Make this person an administrator?": "Cấp quyền quản trị viên cho người này?",
-  "They will be able to manage people, access, models and settings. API keys, billing and permanent deletion stay with you.": "Họ sẽ quản lý được người dùng, quyền, model và cài đặt. Khóa API, chi phí và xóa vĩnh viễn vẫn do bạn giữ.",
+  "They will be able to manage people, access, models and settings.":
+    "Họ sẽ quản lý được người dùng, quyền, model và cài đặt.",
+  "API keys, billing and permanent deletion stay with you.": "Khóa API, chi phí và xóa vĩnh viễn vẫn do bạn giữ.",
   "Make administrator": "Cấp quyền quản trị viên", "Administrator added": "Đã thêm quản trị viên",
   "Only the Owner can add or remove administrators.": "Chỉ chủ sở hữu mới thêm hoặc bỏ được quản trị viên.",
   "Only the Owner can change another administrator's account.": "Chỉ chủ sở hữu mới thao tác được trên tài khoản của quản trị viên khác.",
@@ -250,7 +252,10 @@ export const EN2VI: Record<string, string> = {
   "Checked": "Kiểm tra", "Previous": "Bản trước", "First chats on this version:": "Các lượt đầu với bản này:", "Roll back": "Trả về bản trước",
   "CLI update finished. Results are below and in your Inbox": "Đã cập nhật CLI xong. Kết quả ở dưới và trong Hộp thư",
   "Roll back to the previous version?": "Trả về bản trước?",
-  "Everyone goes back to the version that ran before the last update. Plan sign-ins stay as they are. Weekly updates skip this version from now on.": "Mọi người quay lại bản chạy trước lần cập nhật gần nhất. Đăng nhập gói giữ nguyên. Từ nay việc cập nhật hằng tuần bỏ qua bản này.",
+  "Everyone goes back to the version that ran before the last update.":
+    "Mọi người quay lại bản chạy trước lần cập nhật gần nhất.",
+  "Plan sign-ins stay as they are.": "Đăng nhập gói giữ nguyên.",
+  "Weekly updates skip this version from now on.": "Từ nay việc cập nhật hằng tuần bỏ qua bản này.",
   "Update plan CLIs every week": "Cập nhật CLI của các gói hằng tuần",
   "Around 04:00 server time, Synchro installs the newest Claude Code, Codex, Antigravity and Grok CLI next to the current ones and checks each new version with an administrator's existing sign-in (no chat, no plan usage). It switches only if the check passes and keeps the previous version. If the first real chats fail, Synchro switches back on its own. Plan sign-ins are never touched.": "Khoảng 04:00 giờ máy chủ, Synchro cài bản mới nhất của Claude Code, Codex, Antigravity và Grok CLI cạnh bản đang chạy rồi kiểm tra từng bản mới bằng đăng nhập sẵn có của quản trị viên (không chat, không tốn hạn mức gói). Chỉ đổi sang bản mới khi đạt kiểm tra, và giữ bản trước. Nếu các lượt chat thật đầu tiên lỗi, Synchro tự trả về bản trước. Đăng nhập gói không bao giờ bị đụng tới.",
   "Installing and checking new versions…": "Đang cài và kiểm tra bản mới…", "Last run": "Lần chạy gần nhất", "Not run yet.": "Chưa chạy lần nào.", "Next run": "Lần tới",

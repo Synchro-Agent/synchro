@@ -14,7 +14,8 @@ export function chatHistory(msgs: Msg[], compact?: Chat["compact"]): LLMMsg[] {
   const from = compact ? Math.min(Math.max(0, compact.upto), msgs.length) : 0;
   // Câu trả lời bị tách vì người dùng nhắn thêm giữa chừng: phần trước chỉ có lời dẫn (nằm trong nhật ký làm việc).
   // Câu trả lời cũ còn dòng "Đã áp dụng hướng dẫn của bạn: “…”": không gửi lại cho model (model thấy thì bắt chước, trích lại hướng dẫn cá nhân).
-  const said = (m: Msg) => (m.role === "ai" ? stripAppliedNotes(m.text) : m.text) || (m.parts ?? []).map((p) => (p.k === "say" ? p.text : "")).filter(Boolean).join("\n\n");
+  const sayParts = (m: Msg) => (m.parts ?? []).map((p) => (p.k === "say" ? p.text : "")).filter(Boolean).join("\n\n");
+  const said = (m: Msg) => (m.role === "ai" ? stripAppliedNotes(m.text) : m.text) || stripAppliedNotes(sayParts(m));
   // Tin chỉ là lời báo lỗi (hết hạn mức, treo…) không phải câu trả lời của model: không gửi lại. Có giữ được phần đã viết thì ghi rõ là chưa xong.
   // Lượt bị ngắt (hết hạn mức…) trước khi viết được chữ nào nhưng đã chạy công cụ: lời báo lỗi vẫn không gửi, chỉ gửi dấu vết công cụ kèm ghi chú
   // "bị ngắt" để lượt "Thử lại / Tiếp tục" làm tiếp từ những gì đã tra cứu thay vì làm lại từ đầu.

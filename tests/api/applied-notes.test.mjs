@@ -91,5 +91,21 @@ ok(/MsgRow\(\{ m: raw,/.test(page) && /const m = useMemo\(\(\) => cleanAiMsg\(ra
 const legacy = `Thủ đô của Pháp là Paris.\n\n_Đã áp dụng hướng dẫn của bạn: “${SECRET}”_`;
 ok(T.stripAppliedNotes(legacy) === "Thủ đô của Pháp là Paris." && T.stripAppliedNotes(body) === body, "tin cũ được lọc, tin sạch giữ nguyên chuỗi");
 
+console.log("7. Chỗ giữ artifact trong lời dẫn \"(Đã viết …, xem ở câu trả lời)\" không hiện, không gửi lại model");
+const WROTE = "_(Đã viết “Mộc — Hồ sơ gọi vốn 2026”, xem ở câu trả lời)_";
+const said = T.stripAppliedNotes(`Mình dựng xong bộ slide.\n\n${WROTE}\n\nGiờ mình kiểm tra hiển thị.`);
+ok(said === "Mình dựng xong bộ slide.\n\nGiờ mình kiểm tra hiển thị.",
+  "dòng giữa lời dẫn: bỏ, không thừa dòng trống", JSON.stringify(said));
+ok(T.stripAppliedNotes(WROTE) === "", "lời dẫn chỉ có chỗ giữ: rỗng (nhật ký không hiện ô trống)");
+ok(T.stripAppliedNotes("Xong (Đã viết artifact, xem ở câu trả lời).") === "Xong.", "dạng không tên, nằm giữa câu");
+const keepNote = "Bạn xem ở câu trả lời trước nhé.";
+ok(T.stripAppliedNotes(keepNote) === keepNote, "câu bình thường có chữ \"xem ở câu trả lời\": giữ nguyên");
+const aiOld = { role: "ai", text: "", parts: [{ k: "say", text: `Đã dựng.\n\n${WROTE}` }], done: true, time: 1 };
+const h2 = H.chatHistory([
+  { role: "user", text: "Làm slide", time: 0 }, aiOld, { role: "user", text: "Sửa trang 2", time: 2 },
+]);
+ok(!JSON.stringify(h2).includes("xem ở câu trả lời") && JSON.stringify(h2).includes("Đã dựng."),
+  "lịch sử gửi model từ lời dẫn cũ: bỏ chỗ giữ", JSON.stringify(h2));
+
 console.log(`\n${pass}/${pass + fail} đạt`);
 process.exit(fail ? 1 : 0);

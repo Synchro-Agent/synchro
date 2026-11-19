@@ -51,12 +51,11 @@ import { Sidebar, useTagsAll, type SideActs } from "./Sidebar";
 import { ChatThread, openLastProduct, stickToBottom, useLiveArtFollow, type BrwState, type ThreadActs } from "./Thread";
 
 
-// Tên tạm khi vừa tạo đoạn chat (trước khi model đặt tên theo nội dung): câu đầu của tin nhắn, bỏ ký hiệu Markdown và tham số công cụ.
+// Tên tạm khi vừa tạo đoạn chat (trước khi model đặt tên theo nội dung): theo sản phẩm / chủ đề của tin đầu, bỏ câu
+// đóng vai ("Bạn là nhà thiết kế …"), ký hiệu Markdown và tham số công cụ (topicTitle); liên kết chỉ giữ tên miền.
 const roughTitle = (t: string) => {
-  const s = t.replace(/#(?:tool|args)=\S+/g, "").replace(/https?:\/\/(?:www\.)?([^/\s]+)\S*/g, "$1").replace(/[*_`#>~|[\]]+/g, " ").replace(/\s+/g, " ").trim();
-  const first = /^(.{8,60}?)[.!?…](\s|$)/.exec(s)?.[1] ?? s;
-  const cut = first.length > 48 ? `${first.slice(0, 48).replace(/\s+\S*$/, "")}…` : first;
-  return cut ? cut[0].toUpperCase() + cut.slice(1) : t.slice(0, 40);
+  const s = t.replace(/https?:\/\/(?:www\.)?([^/\s]+)\S*/g, "$1").replace(/[[\]]+/g, " ");
+  return topicTitle(s) || t.slice(0, 40);
 };
 // Tin đầu chỉ là lời chào / quá ngắn: tên đặt lúc đầu chưa nói được gì, đặt lại khi đoạn chat đã rõ chủ đề (tin thứ ba).
 const vagueMsg = (t: string) => t.trim().split(/\s+/).length <= 3 || /^(xin )?ch[àa]o|^(hi|hello|hey|alo|test)\b/i.test(t.trim());
@@ -75,7 +74,7 @@ import { useInboxCount } from "./inboxcount";
 import { adoptLegacyData, clearAccountData, ls, setUserScope, userScope } from "./userscope";
 import { useChatSync, useSyncStatus } from "./chatsync";
 import { chatsForExport, closeChats, hydrateAll, loadChats, wipeChats, writeJournal } from "./chatload";
-import { shortName } from "../shared/names";
+import { shortName, topicTitle } from "../shared/names";
 import { loadCaps, seedCaps, useCaps } from "./capsclient";
 import { hasArtifacts, splitArtifacts, type ArtBlock } from "../shared/artifacts";
 import { BootSkeleton } from "./skeleton";
@@ -529,7 +528,11 @@ const Composer = memo(function Composer(p: {
     const fire = () => { onSend(v.trim() || "Xem tệp đính kèm", files, picks.length ? picks : undefined); setV(""); setPicks([]); setAt(null); setChipsOpen(false); };
     // Có thẻ tệp báo lỗi: hỏi trước khi gửi, vì các tệp đó sẽ không gửi được (model chỉ được báo tên và lý do).
     const bad = files.filter((f) => getStatus(f)?.state === "error").length;
-    if (bad) { app.confirm(tr("Không gửi được một số tệp"), `${bad} ${tr("tệp không đọc được sẽ không được gửi. Gửi phần còn lại?")}`, tr("Gửi phần còn lại"), fire); return; }
+    if (bad) {
+      const why = `${bad} ${tr("tệp không đọc được sẽ không được gửi. Gửi phần còn lại?")}`;
+      app.confirm(tr("Không gửi được một số tệp"), why, tr("Gửi phần còn lại"), fire, { safe: true });
+      return;
+    }
     fire();
   };
   const keys = (e: React.KeyboardEvent) => {
@@ -860,7 +863,8 @@ export default function Home({ boot }: { boot?: BootData | null }) {
   const [breakM] = usePref("breakM", "–");
   const [qdays] = usePref<number[]>("qdays", []);
   const [qtimes] = usePref<Record<number, [string, string]>>("qtimes", {});
-  const [gc, setGc] = useState<{ title: string; text: string; ok: string; fn: () => void } | null>(null);
+  type Gc = { title: string; text: string; ok: string; fn: () => void; safe?: boolean };
+  const [gc, setGc] = useState<Gc | null>(null);
   const [view, setView] = useState<View>("new");
   const [open, setOpen] = useState(true);
   const openRef = useRef(open);
@@ -1552,6 +1556,7 @@ export default function Home({ boot }: { boot?: BootData | null }) {
         ? tf("Chuyển sang khóa API {name} dùng chung ({api}) cho tới khi gói hồi lại ({at})? Tin nhắn vừa rồi sẽ được gửi lại bằng khóa API. Chọn Hủy để giữ nguyên gói.", { name, api: apiName, at })
         : tf("Chuyển sang khóa API {name} dùng chung ({api}) cho tới khi gói dùng lại được? Tin nhắn vừa rồi sẽ được gửi lại bằng khóa API. Chọn Hủy để giữ nguyên gói.", { name, api: apiName }),
       ok: trc("Dùng khóa API", "gói hết hạn mức"),
+      safe: true,
       fn: async () => {
         await fetch(`/api/engines/${cli}/use-api`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ on: true }) }).catch(() => null);
         await refreshModels();
@@ -2033,7 +2038,8 @@ export default function Home({ boot }: { boot?: BootData | null }) {
     goCode: () => { setModal(null); setCodeCur(null); setView("code"); },
     close: () => setModal(null),
     ask: (t: string) => { setModal(null); setTimeout(() => { goNewRef.current(); setPrefill((p) => ({ t: tr(t), n: p.n + 1 })); }, 180); },
-    confirm: (title: string, text: string, ok: string, fn: () => void) => setGc({ title, text, ok, fn }),
+    confirm: (title: string, text: string, ok: string, fn: () => void, o?: { safe?: boolean }) =>
+      setGc({ title, text, ok, fn, safe: o?.safe }),
     wipe, me: me ?? null, setMe, logout: logoutEv,
   }), [me]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -2273,7 +2279,10 @@ export default function Home({ boot }: { boot?: BootData | null }) {
       <Fade show={!!(delProj !== null)}><Confirm title="Xóa dự án?" text="Dự án sẽ bị xóa. Các đoạn chat bên trong vẫn được giữ lại." ok="Xóa" onCancel={() => setDelProj(null)} onOk={() => { setProjects((ps) => ps.filter((x) => x.id !== delProj)); if (delProj !== null) chatSync.forget("project", [delProj]); setChats((cs) => cs.map((c) => (c.project === delProj ? { ...c, project: undefined } : c))); setDelProj(null); say("Đã xóa dự án"); }} /></Fade>
       <Fade show={!!(modal === "proj")}><ProjectModal onClose={() => setModal(null)} onCreate={(n, d) => { const id = Date.now(); setProjects([{ id, name: n, desc: d, upd: id, pinned: true }, ...projects]); setModal(null); setCurProj(id); setView("project"); say("Đã tạo dự án"); }} /></Fade>
       <Fade show={editProj !== null}><ProjectModal title="Chỉnh sửa dự án" ok="Lưu" init={projects.find((x) => x.id === editProj)} onClose={() => setEditProj(null)} onCreate={(n, d) => { if (editProj !== null) patchProj(editProj, { name: n, desc: d }); setEditProj(null); say("Đã cập nhật dự án"); }} /></Fade>
-      <Fade show={!!gc}><Confirm title={gc?.title ?? ""} text={gc?.text ?? ""} ok={gc?.ok ?? ""} onCancel={() => setGc(null)} onOk={() => { gc?.fn(); setGc(null); }} /></Fade>
+      <Fade show={!!gc}>
+        <Confirm title={gc?.title ?? ""} text={gc?.text ?? ""} ok={gc?.ok ?? ""} safe={gc?.safe}
+          onCancel={() => setGc(null)} onOk={() => { gc?.fn(); setGc(null); }} />
+      </Fade>
     </div>
     </AppCtx.Provider>
     {authEl}

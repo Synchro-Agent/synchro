@@ -16,7 +16,13 @@ import { Boundary } from "./ui";
 // Hộp xác nhận (Đăng xuất?, Xóa…?): tên và mô tả gắn thẳng vào hộp (alertdialog + aria-labelledby / describedby), trình đọc màn hình đọc
 // "Đăng xuất?" cùng câu hỏi ngay khi hộp mở, không phụ thuộc lúc cơ chế hộp thoại chung (a11y.ts) kịp gắn tên.
 // busy: đang chạy việc không thể bỏ giữa chừng (đẩy dữ liệu lên máy chủ trước khi xóa) — khóa nút Hủy và việc bấm ra nền để không đóng hộp giữa lúc chờ.
-export function Confirm({ title, text, ok, onCancel, onOk, children, busy }: { title: string; text: string; ok: string; onCancel: () => void; onOk: () => void; children?: React.ReactNode; busy?: boolean }) {
+// safe: hành động bình thường (gửi tiếp, cài, khôi phục): nút chính thường; màu đỏ chỉ để báo hành động xóa / gỡ / thu
+// hồi.
+type ConfirmProps = {
+  title: string; text: string; ok: string; onCancel: () => void; onOk: () => void;
+  children?: React.ReactNode; busy?: boolean; safe?: boolean;
+};
+export function Confirm({ title, text, ok, onCancel, onOk, children, busy, safe }: ConfirmProps) {
   const id = useId();
   return (
     <div className="overlay cf-top" onMouseDown={(e) => { if (e.target === e.currentTarget && !busy) onCancel(); }}>
@@ -24,7 +30,10 @@ export function Confirm({ title, text, ok, onCancel, onOk, children, busy }: { t
         <h2 id={`${id}-t`} style={{ fontSize: 15, margin: "0 0 6px" }}>{title}</h2>
         <p id={`${id}-d`} style={{ margin: "0 0 20px", fontSize: "var(--fs-3)" }}>{text}</p>
         {children}
-        <div className="modal-foot"><button className="btn" disabled={busy} onClick={onCancel}>Hủy</button><button className="btn danger" onClick={onOk}>{ok}</button></div>
+        <div className="modal-foot">
+          <button className="btn" disabled={busy} onClick={onCancel}>Hủy</button>
+          <button className={safe ? "btn dark" : "btn danger"} onClick={onOk}>{ok}</button>
+        </div>
       </div>
     </div>
   );
