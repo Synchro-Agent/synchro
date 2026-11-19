@@ -177,7 +177,9 @@ console.log("5. Antigravity: đăng nhập qua terminal giả");
   ok(at.s === 200 && /\[đã dùng update_plan: Đã cập nhật/.test(at.j?.text ?? "") && !/bị từ chối/.test(at.j.text), "Gemini qua gói gọi thẳng công cụ của Synchro (cầu nối đánh dấu nạp sẵn, không bị agy từ chối)", JSON.stringify(at.j));
   const { readFileSync } = await import("node:fs");
   const cfg = `${process.cwd()}/data-mock/engine/logins/agy/${uid}/.gemini/config`;
-  ok(!JSON.parse(readFileSync(`${cfg}/mcp_config.json`, "utf8")).mcpServers?.synchro && /"matcher":"mcp_synchro_\.\*\|CallMcpTool"/.test(readFileSync(`${cfg}/hooks.json`, "utf8")), "xong lượt: gỡ cầu nối khỏi cấu hình agy; hook chỉ cho phép công cụ MCP (của Synchro)");
+  // Gỡ cầu nối có thể xóa luôn tệp cấu hình MCP khi không còn máy chủ nào: thiếu tệp nghĩa là không còn cầu nối (không làm bộ kiểm dừng giữa chừng).
+  const rd = (f) => { try { return readFileSync(f, "utf8"); } catch { return ""; } };
+  ok(!JSON.parse(rd(`${cfg}/mcp_config.json`) || "{}").mcpServers?.synchro && /"matcher":"mcp_synchro_\.\*\|CallMcpTool"/.test(rd(`${cfg}/hooks.json`)), "xong lượt: gỡ cầu nối khỏi cấu hình agy; hook chỉ cho phép công cụ MCP (của Synchro)");
   // agy 1.4.11: công cụ MCP nạp khi cần được gọi qua tên chung CallMcpTool — vẫn được phép, không dừng sau câu dẫn.
   const od = await member("POST", "/api/llm", { model: "sub-agy/gemini-3.8-flash", messages: [{ role: "user", content: 'Ghi việc [mock:ondemand] #tool=update_plan #args={"items":[{"content":"Buoc hai","status":"in_progress"}]}' }], skills: true });
   ok(od.s === 200 && /\[đã dùng update_plan qua CallMcpTool: Đã cập nhật/.test(od.j?.text ?? ""), "agy gọi công cụ qua CallMcpTool (nạp khi cần) vẫn chạy", JSON.stringify(od.j));
@@ -200,6 +202,9 @@ console.log("5. Antigravity: đăng nhập qua terminal giả");
   const pre = (await member("GET", "/api/usage?provider=sub-agy&fresh=1")).j;
   const { existsSync, mkdirSync, writeFileSync } = await import("node:fs");
   ok(pre.sub?.setup && !existsSync(`${agyDir}/onboarding-input.log`), "chưa làm quen: vòng tròn báo cần hoàn tất, Synchro không bấm thay", JSON.stringify(pre.sub));
+  // Lỗi 11 của ma trận H1: Gemini vừa trả lời nhiều lượt mà vẫn báo "đang chờ bước làm quen". Đã chạy được (ranAt) thì giao diện nói đúng: chat chạy, chỉ chưa đọc được bảng hạn mức.
+  const est = (await member("GET", "/api/engines/agy/status")).j;
+  ok(pre.sub?.ranAt > 0 && pre.sub.turnsToday >= 1 && /Gemini is working normally/.test(pre.sub.note ?? "") && est?.setup && est.ran > 0, "lỗi 11: Gemini đã chạy được → trạng thái ghi đang chạy bình thường, không còn \"chờ bước làm quen\"", JSON.stringify({ sub: pre.sub, ran: est?.ran }));
   mkdirSync(`${agyDir}/cache`, { recursive: true }); writeFileSync(`${agyDir}/cache/onboarding.json`, JSON.stringify({ onboardingComplete: true }));
   const us = (await member("GET", "/api/usage?provider=sub-agy&fresh=1")).j;
   ok(us.sub?.windows.some((w) => w.group === "Gemini models" && w.kind === "session") && us.sub.windows.some((w) => w.group === "Claude and GPT models" && w.kind === "weekly"), "vòng tròn của gói Gemini: hai nhóm model × phiên 5 giờ / tuần", JSON.stringify(us.sub));

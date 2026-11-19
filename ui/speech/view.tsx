@@ -6,8 +6,9 @@ import { useEffect, useState } from "react";
 import { SideToggle } from "../brand";
 import * as I from "../icons";
 import { useApp } from "../store";
+import { useStripActive } from "../strip";
 import { GROUPS, STARTERS, TOOLS, estCredits, normTool, toolDef, toolOn, type SpeechTool } from "../../shared/speech/data";
-import { KIND_LABEL, KIND_TOOL, ago, defaultVoice, fmtNum, refreshPlan, useItems, useMyVoices, usePlan, usePlanFailed, type Voice } from "./client";
+import { KIND_LABEL, KIND_TOOL, ago, defaultVoice, fmtNum, itemTitle, refreshPlan, useItems, useMyVoices, usePlan, usePlanFailed, type Voice } from "./client";
 import { Dock, NotReady, Player, VoiceChip, VoicePicker } from "./parts";
 import { TOOL_ICON } from "./toolicons";
 import { TTS } from "./tts";
@@ -41,8 +42,11 @@ export function SpeechView({ say, tool: raw, setTool, sideOpen, onSide }: { say:
   const tools = TOOLS.filter((t) => toolOn(plan, t.k));
   const cur = toolDef(tool);
   const p: ToolProps = { say, sub: subs[tool] ?? "", setSub: (s) => setSubs((o) => ({ ...o, [tool]: s })), go, draft, auto, voice, setVoice, admin };
-  const c = plan?.credits, left = c ? Math.max(0, c.limit - c.used) : 0;
+  // shared: hạn mức chung của máy chủ hôm nay đã hết, mọi thao tác bị chặn dù hạn mức riêng còn: hiện còn 0.
+  const c = plan?.credits, left = c && !c.shared ? Math.max(0, c.limit - c.used) : 0;
   const ready = !!plan?.connected && toolOn(plan, tool);
+  // Công cụ đổi từ thanh bên hay thẻ ở Trang chính: dải tab (cuộn ngang ở điện thoại) cuộn tới tab đang chọn, kể cả khi danh sách tab mới tải xong.
+  const tabsRef = useStripActive<HTMLElement>(`${tool}:${tools.length}`);
   return (
     <div className="sp">
       <div className="sp-bar">
@@ -59,7 +63,7 @@ export function SpeechView({ say, tool: raw, setTool, sideOpen, onSide }: { say:
                 <span className="sp-credit-bar"><i style={{ width: `${Math.min(100, (left / c.limit) * 100)}%` }} /></span>
               </button>
             ) : (
-              <button className="sp-credit" title={`Hạn mức giọng AI của bạn hôm nay: còn ${fmtNum(left)} / ${fmtNum(c.limit)} credit${c.resetAt ? ` · đặt lại lúc nửa đêm (giờ UTC)` : ""}`} onClick={() => { void refreshPlan(true); }}>
+              <button className="sp-credit" title={c.shared ? "Giọng AI đã hết hạn mức chung của cả máy chủ hôm nay · đặt lại lúc nửa đêm (giờ UTC)" : `Hạn mức giọng AI của bạn hôm nay: còn ${fmtNum(left)} / ${fmtNum(c.limit)} credit${c.resetAt ? ` · đặt lại lúc nửa đêm (giờ UTC)` : ""}`} onClick={() => { void refreshPlan(true); }}>
                 <b>Giọng AI</b><span className="sp-credit-n">{fmtNum(left)} credit hôm nay</span>
                 <span className="sp-credit-bar"><i style={{ width: `${Math.min(100, (left / c.limit) * 100)}%` }} /></span>
               </button>
@@ -69,7 +73,7 @@ export function SpeechView({ say, tool: raw, setTool, sideOpen, onSide }: { say:
           {waiting && <span className="sk-blk sp-credit-wait" aria-hidden />}
         </div>
       </div>
-      <nav className="sp-tabs" aria-label="Công cụ Speech">
+      <nav ref={tabsRef} className="sp-tabs" aria-label="Công cụ Speech">
         {tools.map((t) => { const Ic = TOOL_ICON[t.k]; return <button key={t.k} className={tool === t.k ? "on" : ""} onClick={() => setTool(t.k)}><Ic size={15} />{t.label}</button>; })}
         {waiting && [64, 88, 72, 96, 60, 80].map((w, i) => <span key={i} className="sk-blk sp-tab-wait" style={{ width: w }} aria-hidden />)}
       </nav>
@@ -122,8 +126,8 @@ function Home({ go, onDraft, say, voice, setVoice, admin }: ToolProps & { onDraf
         {recent?.length === 0 && <div className="sp-empty">Âm thanh và bản chép lời bạn tạo sẽ nằm ở đây.</div>}
         {recent?.slice(0, 8).map((r) => (
           <div key={r.id} className="sp-rrow">
-            <div className="sp-rmeta"><b data-notr>{r.title}</b><span>{KIND_LABEL[r.kind] ?? r.kind}{r.meta.voiceName ? ` · ${r.meta.voiceName}` : ""} · {ago(r.createdAt)}</span></div>
-            {r.url && r.mime?.startsWith("audio") ? <Player src={r.url} dl={r.url} label={r.title} /> : <button className="btn" onClick={() => go(normTool(KIND_TOOL[r.kind] ?? "home"), r.kind === "align" ? "align" : undefined)}>Mở</button>}
+            <div className="sp-rmeta"><b data-notr>{itemTitle(r)}</b><span>{KIND_LABEL[r.kind] ?? r.kind}{r.meta.voiceName ? ` · ${r.meta.voiceName}` : ""} · {ago(r.createdAt)}</span></div>
+            {r.url && r.mime?.startsWith("audio") ? <Player src={r.url} dl={r.url} label={itemTitle(r)} /> : <button className="btn" onClick={() => go(normTool(KIND_TOOL[r.kind] ?? "home"), r.kind === "align" ? "align" : undefined)}>Mở</button>}
           </div>
         ))}
       </div>

@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, memo, useEffect, useMemo, useState } from "react";
+import { createContext, Fragment, memo, useContext, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { unredact, filepathOf, autoMerge, hasHidden, splitMeta, parsePackages, checkPkg, findCron, cronInfo, type Pkg } from "./devtools";
 import * as I from "./icons";
@@ -32,6 +32,20 @@ function MdImage({ src, alt }: { src: string; alt: string }) {
   if (kind === "link") { let host = src; try { host = new URL(src).hostname; } catch {} return <a className="md-img-link" href={src} target="_blank" rel="noopener noreferrer" title={tr("Mở ảnh ở tab mới")}><I.Image size={14} /><span>{alt || tr("Ảnh")}</span><em data-notr>{host}</em></a>; }
   return <span>{alt}</span>;
 }
+// Tệp model đã giao trong tin nhắn (thẻ tệp dưới câu trả lời): link sandbox:/outputs/<tên> trong câu trả lời nối tới đúng tệp đó.
+export type OutRef = { id: string; name: string; skipped?: boolean };
+export const OutsCtx = createContext<OutRef[] | null>(null);
+const normName = (s: string) => s.normalize("NFC").toLowerCase().replace(/[\s_]+/g, "-");
+export function findOut(outs: OutRef[] | null | undefined, name: string): OutRef | undefined {
+  const list = (outs ?? []).filter((f) => !f.skipped);
+  return list.find((f) => f.name === name) ?? list.find((f) => normName(f.name) === normName(name));
+}
+/** Link tới tệp trong sandbox của model: có thẻ tệp cùng tên thì thành link tải đúng tệp đó, chưa có (đang viết, tệp không giao được) thì chỉ hiện chữ. */
+function OutLink({ name, children }: { name: string; children: React.ReactNode }) {
+  const f = findOut(useContext(OutsCtx), name);
+  if (!f) return <>{children}</>;
+  return <a className="md-file" href={`/api/outputs/${f.id}`} download={f.name} title={`${tr("Tải về")} ${f.name}`}><I.Download size={13} />{children}</a>;
+}
 function inl(ns: Inl[], w?: boolean): React.ReactNode[] {
   return ns.map((n, i) => {
     // Số trích dẫn [n] của câu trả lời có tìm web: thành nút trỏ tới nguồn (chỉ khi câu trả lời có danh sách nguồn, xem cites.tsx).
@@ -47,6 +61,7 @@ function inl(ns: Inl[], w?: boolean): React.ReactNode[] {
       case "a": if (isConnectUrl(n.href, cxLocal())) { const name = connectName(inlineText(n.c)); return <a key={i} className="btn dark md-cxlink" href={n.href} target="_blank" rel="noopener noreferrer" data-notr>{cxSlug(name) ? <ConnLogo icon={`/api/favicon?app=${cxSlug(name)}`} name={name} size={18} /> : <I.SetPlug size={13} />}{name ? tr(`Kết nối ${name}`) : tr("Mở trang kết nối")}<I.External size={12} /></a>; }
         return <a key={i} href={n.href} {...(/^mailto:/i.test(n.href) ? {} : { target: "_blank", rel: "noopener noreferrer" })}>{inl(n.c, w)}</a>;
       case "span": return <Fragment key={i}>{inl(n.c, w)}</Fragment>;
+      case "file": return <OutLink key={i} name={n.name}>{inl(n.c, w)}</OutLink>;
       default: { const T = n.t; return <T key={i}>{inl(n.c, w)}</T>; }
     }
   });

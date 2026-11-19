@@ -86,7 +86,9 @@ harden() {
   if [ -d "$APP/workspace/data" ]; then chown -R synchro:synchro "$APP/workspace/data"; fi
 }
 # Thư mục chỉ có lúc chạy, không bao giờ chép đè hay xóa khi đồng bộ mã.
-EXCL=(--exclude /data --exclude /.next --exclude '/.next-*' --exclude /node_modules --exclude /.git --exclude /workspace/data --exclude /.mkvenv --exclude /.cache --exclude '/.env*' --exclude /.synchro-artifact --exclude '/.node_modules.new.*')
+# /public/intro/*.mp4: phim giới thiệu không còn trong git (Blueprint H3.9), nginx phục vụ từ /var/www/synchro-media/intro/ ngoài thư mục app.
+# Bản sao cũ trong thư mục app (từ trước H3.9) không bị rsync --delete xóa, nên dù nginx chưa đổi, phim vẫn còn.
+EXCL=(--exclude '/public/intro/*.mp4' --exclude /data --exclude /.next --exclude '/.next-*' --exclude /node_modules --exclude /.git --exclude /workspace/data --exclude /.mkvenv --exclude /.cache --exclude '/.env*' --exclude /.synchro-artifact --exclude '/.node_modules.new.*')
 sync_code() { # mã mới từ $SRC sang thư mục app (chỉ khi deploy từ thư mục incoming)
   [ "$SRC" = "$APP" ] && return 0
   rsync -a --delete "${EXCL[@]}" "$SRC/" "$APP/"

@@ -36,7 +36,12 @@ const safeId = (id: string) => /^[a-f0-9]{40}$/.test(id);
 // Hàm duy nhất: process_file(file) -> ContentBlock[]
 // File gốc lưu ở .cache/files/<id>.bin, kết quả trích lưu ở <id>.json để khỏi trích lại.
 // raw (Synchro Code): nhận mọi loại tệp; tệp không trích được nội dung vẫn được lưu kèm một dòng ghi chú cho model.
-export async function processFile(buf: Buffer, name: string, uid: string, o: { raw?: boolean } = {}): Promise<Stored> {
+// Các lần đọc đang chạy theo nội dung tệp: cùng một tệp gửi lại khi lần trước chưa xong (bấm Thử lại sau khi khung soạn hết giờ chờ, tệp ghi âm
+// đang chép lời) thì chờ lần đó xong rồi lấy kết quả đã lưu, không đọc / chép lời lần nữa (chép lời tốn credit giọng nói).
+const inflight = ((globalThis as unknown as { __synchroFileInflight?: Map<string, Promise<void>> }).__synchroFileInflight ??= new Map());
+
+// signal: yêu cầu tải lên của người gửi; người gửi bỏ đi thì các việc còn đang chờ lượt (chép lời, OCR, Office cũ) rời hàng và không chạy.
+export async function processFile(buf: Buffer, name: string, uid: string, o: { raw?: boolean; signal?: AbortSignal } = {}): Promise<Stored> {
   if (buf.length === 0 && !o.raw) throw new FileError(`"${name}" là tệp rỗng.`);
   if (buf.length > MAX_FILE_BYTES) throw new FileError(`"${name}" vượt quá giới hạn ${MAX_FILE_BYTES / 1024 / 1024}MB.`);
   checkQuota(uid, buf.length);
@@ -50,10 +55,18 @@ export async function processFile(buf: Buffer, name: string, uid: string, o: { r
     claimFile(uid, id, buf.length, name);
     return { ...hit, name };
   } catch (e) { if (e instanceof FileError) throw e; /* chưa có cache */ }
+  const cur = inflight.get(id);
+  if (cur) { await cur; return processFile(buf, name, uid, o); }
+  let done!: () => void;
+  inflight.set(id, new Promise<void>((r) => (done = r)));
+  try { return await extractAndStore(buf, name, uid, id, o); } finally { inflight.delete(id); done(); }
+}
+
+async function extractAndStore(buf: Buffer, name: string, uid: string, id: string, o: { raw?: boolean; signal?: AbortSignal }): Promise<Stored> {
   let kind = "binary", blocks: ContentBlock[] = [];
   try {
     kind = await detectKind(buf, name);
-    blocks = await pickExtractor(kind, name).run(buf, { name, kind, uid });
+    blocks = await pickExtractor(kind, name).run(buf, { name, kind, uid, signal: o.signal });
     const textLen = blocks.reduce((a, b) => a + (b.type === "text" ? b.text.length : b.type === "document" ? (b.fallbackText?.length ?? 0) : 0), 0);
     if (!blocks.length || (kind !== "application/pdf" && !kind.startsWith("image/") && textLen === 0)) throw new FileError(`Không trích được nội dung từ "${name}".`);
   } catch (e) {

@@ -1122,7 +1122,7 @@ export default function Home({ boot }: { boot?: BootData | null }) {
   useEffect(() => { if (me) warmChoice(); }, [model, effortPick, me?.id]); // eslint-disable-line react-hooks/exhaustive-deps
   // Danh sách model đổi (quản trị viên thêm khóa, đổi quyền) → chọn lại model hợp lệ.
   // Lần đầu sau gói khởi động: danh sách model và khả năng đã gieo, không hỏi lại (bootSeeded); các lần sau như cũ.
-  useEffect(() => { if (me && !seededNow(me.id, "models")) refreshModels(); }, [me]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (me && !seededNow(me.id, "models")) refreshModels(); }, [me]);
   useEffect(() => { if (me && !seededNow(me.id, "caps")) loadCaps(); }, [me?.id]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (view === "code") setCpWant(true); }, [view]);
   // Cài đặt Code thường đã gieo từ gói khởi động (đồng bộ phiên chạy ngay, kể cả thiết bị mới chưa có phiên nào). Không có gói (dựng lỗi,
@@ -1327,6 +1327,8 @@ export default function Home({ boot }: { boot?: BootData | null }) {
   const needSeen = useRef<ReadonlySet<number>>(new Set());
   // Lời báo cho trình đọc màn hình: câu trả lời xong, cần duyệt. Nằm ngoài chữ đang chảy nên không đọc từng chữ.
   const [sayAt, setSayAt] = useState("");
+  // Đổi đoạn chat / trang: bỏ lời báo của đoạn trước, để vùng trạng thái không còn giữ câu trả lời cũ (trình đọc màn hình đọc lại khi duyệt trang).
+  useEffect(() => { setSayAt(""); }, [cur, view]);
   useEffect(() => {
     const fresh = [...needYou].filter((id) => !needSeen.current.has(id));
     needSeen.current = needYou;
@@ -1475,7 +1477,8 @@ export default function Home({ boot }: { boot?: BootData | null }) {
           ...(pr && !pr.stub ? { pjFull: true } : {}) } });
       webs = meta.webs ?? [];
       // Tự động đã chuyển sang model khác vì model đầu lỗi / quá tải: giữ lời báo dưới câu trả lời (thanh thông báo chỉ hiện một lúc).
-      if (meta.switched) notice = { text: meta.switched };
+      // Tự động chạy bằng khóa API chung (có gói mà không dùng gói): giữ dòng nói lượt này tính vào hạn mức chi phí API.
+      if (meta.switched || meta.keyNote) notice = { text: (meta.switched ?? meta.keyNote)! };
       const used = meta.skills ?? [];
       libs = meta.libs ?? [];
       // Skill nằm trong thư viện đã hiện ở chip thư viện; mục "studio-…" / "lib-…" chỉ là mục lục, không hiện riêng.
@@ -1560,21 +1563,26 @@ export default function Home({ boot }: { boot?: BootData | null }) {
   // Câu trả lời đã hiện xong: lưu artifact (bản đầy đủ, đã áp các bản sửa), thông báo, rút trí nhớ dự án.
   // Artifact trong câu trả lời vừa xong: lưu bản đầy đủ (đã áp các bản sửa) lên máy chủ, rồi nhờ hội đồng phản biện đọc lại
   // các sản phẩm quan trọng ở nền (code, trang web, ứng dụng React) bằng model của hãng khác.
-  const afterArtifacts = (id: number, reply: string, gen = "", question = "") => {
+  const afterArtifacts = (id: number, reply: string, gen = "", question = "", byUser = false) => {
     const c = chatsRef.current.find((x) => x.id === id);
     if (!capsRef.current.art || !hasArtifacts(reply) || !c || c.inc) return;
     const st = new Map<string, ArtVersion>();
     for (const m of c.msgs) if (m.role === "ai" && m.text !== reply) for (const sg of splitArtifacts(m.text)) if (sg.kind === "art") st.set(sg.art.ident, resolveArt(st.get(sg.art.ident), sg.art));
     const full = splitArtifacts(reply).flatMap((sg): ArtBlock[] => { if (sg.kind !== "art") return []; const r = resolveArt(st.get(sg.art.ident), sg.art); st.set(sg.art.ident, r); return r.fix?.failed.length ? [] : [{ ident: r.ident, title: r.title, type: r.type, lang: r.lang, content: r.content, complete: r.complete }]; });
     if (full.length) saveArtifacts(String(id), full).then(() => setArtRefresh((n) => n + 1));
-    if (capsRef.current.crit) for (const a of full) if (important(a)) runCritic(id, a, gen, question, true);
+    // Phản biện tự động chạy trên gói của người dùng (mỗi lần một lượt tính vào hạn mức): một lần cho mỗi artifact được viết lại trọn trong câu
+    // trả lời này, bản cuối cùng của nó. Bản sửa nhỏ model tự viết (mode="patch") không tự phản biện lại; người dùng vẫn bấm được.
+    // byUser: người dùng vừa bấm "Áp dụng sửa" / đổi phong cách: phản biện lại để xác nhận bản sửa.
+    const whole = new Set(splitArtifacts(reply).flatMap((sg) => (sg.kind === "art" && (byUser || !sg.art.patch) ? [sg.art.ident] : [])));
+    const last = new Map(full.filter((a) => whole.has(a.ident)).map((a) => [a.ident, a]));
+    if (capsRef.current.crit) for (const a of last.values()) if (important(a)) runCritic(id, a, gen, question, true);
   };
   const runCritic = (id: number, a: ArtBlock, gen = "", question = "", auto = false) => {
     const key = criticKey(a.ident, a.content);
     // Giữ kết quả của 30 phiên bản gần nhất trong đoạn chat.
     const put = (e: CriticEntry) => setChats((cs) => cs.map((c) => (c.id !== id ? c : { ...c, critic: Object.fromEntries([...Object.entries(c.critic ?? {}).filter(([k]) => k !== key).sort((x, y) => y[1].at - x[1].at).slice(0, 29), [key, e]]) })));
     put({ status: "run", findings: [], by: [], at: Date.now() });
-    fetch("/api/critic", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ title: a.title, type: a.type, lang: a.lang, content: a.content, model: gen, question: question.slice(0, 1500), auto }) })
+    fetch("/api/critic", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ title: a.title, type: a.type, lang: a.lang, content: a.content, model: gen, question: question.slice(0, 1500), auto, ui: getLang() }) })
       .then(async (r) => {
         const j = await r.json().catch(() => ({}));
         // Máy chủ bỏ qua lần tự chạy này: không có kết quả nào để hiện, càng không phải dấu "Ổn".
@@ -1594,7 +1602,7 @@ export default function Home({ boot }: { boot?: BootData | null }) {
     patch(id, (m) => [...m, { role: "user", text: `${tr("Áp dụng sửa")} “${f.title}” (${a.title}, ${where})`, time: now }, { role: "ai", text: ai, done: true, time: now }]);
     setArtSel({ chat: id, ident: a.ident, v: 0, follow: true });
     say(tr("Đã áp dụng bản sửa, tạo phiên bản mới"));
-    setTimeout(() => afterArtifacts(id, ai), 0);
+    setTimeout(() => afterArtifacts(id, ai, "", "", true), 0);
   };
   // Đổi phong cách artifact không gọi model: một cặp tin (yêu cầu + bản sửa data-sx-preset) thành phiên bản mới, lượt sau model thấy phong cách mới trong lịch sử.
   // Bộ thiết kế (artkit, designpresets: hơn 100 KB) chỉ tải khi bấm đổi phong cách, không nằm trong phần tải đầu (blueprint B3.2).
@@ -1606,7 +1614,7 @@ export default function Home({ boot }: { boot?: BootData | null }) {
     const ai = `${tr("Đã đổi phong cách sang")} ${label}.\n\n<artifact identifier="${a.ident}" mode="patch">\n${p}\n</artifact>`;
     patch(id, (m) => [...m, { role: "user", text: `${tr("Đổi phong cách")} “${a.title}” → ${label}`, time: now }, { role: "ai", text: ai, done: true, time: now }]);
     setArtSel({ chat: id, ident: a.ident, v: 0, follow: true });
-    setTimeout(() => afterArtifacts(id, ai), 0);
+    setTimeout(() => afterArtifacts(id, ai, "", "", true), 0);
   };
   // Tự đặt tên đoạn chat theo nội dung (như Claude): sau câu trả lời đầu tiên; tin đầu chỉ là lời chào thì đặt lại sau tin thứ ba.
   // Người dùng đã tự đổi tên thì giữ nguyên; force: người dùng bấm "Đặt tên tự động".

@@ -2,10 +2,12 @@
 // Đọc văn bản theo bố cục ElevenLabs: khung soạn (một giọng hoặc thêm người nói thành hội thoại), mẫu “Bắt đầu với”, thanh tạo ở đáy
 // (credit, số ký tự, bảng thẻ cảm xúc), thẻ kết quả; bảng bên: giọng, model, thanh trượt, ngôn ngữ, hiệu ứng âm thanh, từ điển phát âm, định dạng.
 import { useEffect, useRef, useState } from "react";
+import { isAway } from "../clickaway";
 import * as I from "../icons";
+import { Dropdown } from "../listbox";
 import { usePref } from "../store";
-import { tr } from "../i18n";
-import { DISTANCES, FX_VI, MODEL_NOTE, RECOMMENDED, STARTERS, TAG_GROUPS, estCredits, stripTags, tagsOk } from "../../shared/speech/data";
+import { tf, tr } from "../i18n";
+import { DISTANCES, FX_VI, MODEL_NOTE, RECOMMENDED, STARTERS, TAG_GROUPS, creditRate, estCredits, stripTags, tagsOk } from "../../shared/speech/data";
 import { ago, del, fmtNum, on, post, useDicts, useEffectsCatalog, useItems, useMyVoices, usePlan, type Item, type Voice } from "./client";
 import { ErrBox, Field, ModelPick, Player, Range, Seg, Select, Spin, Toggle, VoiceAvatar, VoiceChip, VoicePicker } from "./parts";
 import { Group, Head, Split } from "./shell";
@@ -64,9 +66,9 @@ export function TTS({ say, sub, setSub, go, draft, auto, voice: shared, setVoice
   // Hội thoại: hai người nói mặc định là hai giọng đầu tiên của tài khoản.
   useEffect(() => { if (mine?.length && !speakers.length) setSpeakers([mine[0], mine[1] ?? mine[0]]); }, [mine]); // eslint-disable-line react-hooks/exhaustive-deps
   const chars = mode === "single" ? text.length : lines.reduce((n, l) => n + l.text.length, 0);
-  // Ước tính theo bảng giá thật: bỏ thẻ cảm xúc không bị tính tiền, nhân hệ số giá của model đang chọn.
+  // Ước tính theo bảng giá thật của model đang chọn (shared/speech/data.ts creditRate: Eleven v4 0,4, Flash / Turbo 0,5 credit mỗi ký tự).
   const cost = mode === "single" ? estCredits(m, text) : lines.reduce((n, l) => n + estCredits(m, l.text), 0);
-  const left = plan ? Math.max(0, plan.credits.limit - plan.credits.used) : Infinity;
+  const left = plan ? (plan.credits.shared ? 0 : Math.max(0, plan.credits.limit - plan.credits.used)) : Infinity;
   const max = m?.max ?? 5000;
   const empty = chars === 0;
 
@@ -145,7 +147,7 @@ export function TTS({ say, sub, setSub, go, draft, auto, voice: shared, setVoice
       <div className="sp-bottom-l">
         {plan && Number.isFinite(left) && <span className="sp-muted"><b className="sp-num">{fmtNum(left)}</b> credit còn lại</span>}
         <span className="sp-muted"><b className="sp-num">{fmtNum(chars)}</b> / {fmtNum(max)} ký tự</span>
-        {chars > 0 && <span className={`sp-cost ${cost > left ? "bad" : ""}`}>≈ {fmtNum(cost)} credit{m && m.rate < 1 && " · nửa giá"}{cost > left ? " · vượt số credit còn lại" : ""}</span>}
+        {chars > 0 && <span className={`sp-cost ${cost > left ? "bad" : ""}`}>≈ {fmtNum(cost)} credit{m && creditRate(m) === 0.5 && " · nửa giá"}{cost > left ? " · vượt số credit còn lại" : ""}</span>}
         {!empty && <button className="sp-link" onClick={() => (mode === "single" ? setText("") : setLines([{ id: Date.now(), sp: 0, text: "" }, { id: Date.now() + 1, sp: 1, text: "" }]))}>Xóa hết</button>}
       </div>
       <div className="sp-bottom-r">
@@ -240,11 +242,8 @@ export function TTS({ say, sub, setSub, go, draft, auto, voice: shared, setVoice
           <div className="sp-dlg">
             {lines.map((l) => (
               <div key={l.id} className="sp-dline">
-                <span className="sp-sel sm">
-                  <select aria-label="Người nói" value={l.sp} onChange={(e) => setLines((ls) => ls.map((x) => (x.id === l.id ? { ...x, sp: Number(e.target.value) } : x)))}>
-                    {speakers.map((v, i) => <option key={i} value={i}>{v?.name ?? `Người ${i + 1}`}</option>)}
-                  </select><I.Chevron size={12} />
-                </span>
+                <Dropdown size="sm" label="Người nói" className="sp-dspk" minWidth={170} value={l.sp} onChange={(sp) => setLines((ls) => ls.map((x) => (x.id === l.id ? { ...x, sp } : x)))}
+                  options={speakers.map((v, i) => ({ value: i, label: v?.name ?? `Người ${i + 1}`, notr: !!v }))} />
                 <VoiceAvatar v={speakers[l.sp] ?? null} size={20} />
                 <textarea rows={1} value={l.text} aria-label="Lời thoại" onFocus={() => { focusLine.current = l.id; }} onChange={(e) => setLines((ls) => ls.map((x) => (x.id === l.id ? { ...x, text: e.target.value } : x)))} placeholder="Lời thoại…" />
                 <button className="icon-btn" aria-label="Xóa dòng" onClick={() => setLines((ls) => ls.filter((x) => x.id !== l.id))}><I.Trash size={15} /></button>
@@ -286,7 +285,7 @@ function TagPicker({ onPick, onClose }: { onPick: (t: string) => void; onClose: 
   const [q, setQ] = useState("");
   const box = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    const h = (e: MouseEvent) => { if (!box.current?.contains(e.target as Node) && !(e.target as HTMLElement).closest(".sp-tagwrap")) onClose(); };
+    const h = (e: MouseEvent) => { if (isAway(box.current, e.target) && !(e.target as HTMLElement).closest?.(".sp-tagwrap")) onClose(); };
     const k = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
     document.addEventListener("mousedown", h); window.addEventListener("keydown", k);
     return () => { document.removeEventListener("mousedown", h); window.removeEventListener("keydown", k); };
@@ -361,7 +360,7 @@ function DictBox({ sel, setSel, go }: { sel: DictSel[]; setSel: (s: DictSel[]) =
       {list === null && <div className="sp-muted"><Spin /> Đang tải…</div>}
       {list?.length === 0 && <p className="sp-hint">Chưa có từ điển nào. Tạo từ điển để AI đọc đúng tên riêng, từ viết tắt.</p>}
       {list?.map((d) => (
-        <label key={d.id} className="sp-check"><input type="checkbox" checked={sel.some((x) => x.id === d.id)} disabled={!sel.some((x) => x.id === d.id) && sel.length >= 3} onChange={() => flip(d)} /><span data-notr>{d.name}</span><em>{d.count} quy tắc</em></label>
+        <label key={d.id} className="sp-check"><input type="checkbox" checked={sel.some((x) => x.id === d.id)} disabled={!sel.some((x) => x.id === d.id) && sel.length >= 3} onChange={() => flip(d)} /><span data-notr>{d.name}</span><em>{tf("{n} quy tắc", { n: d.count })}</em></label>
       ))}
     </Group>
   );

@@ -35,7 +35,7 @@ type ProfileFact = Fact & { cat: string };
 type Props = {
   tags?: string[]; date?: number; turns?: number; models?: Record<string, number>; skills?: string[]; connectors?: string[];
   gist?: string; points?: string[]; decisions?: string[]; tasks?: string[]; topics?: string[]; entities?: string[]; related?: string[];
-  importance?: number; distilledAt?: number; userNote?: string; overview?: string; focus?: string[]; desc?: string; auto?: boolean;
+  importance?: number; distilledAt?: number; /** Số tin của người dùng lúc chưng cất gần nhất. */ distilledTurns?: number; userNote?: string; overview?: string; focus?: string[]; desc?: string; auto?: boolean;
   /** Tên khác của ghi chú: liên kết và chỗ nhắc tên đều nhận. */ aliases?: string[];
   /** Việc đã xong (Bảng → Việc dang dở). */ done?: string[]; pinned?: boolean; day?: string;
   /** Trang chủ đề / tên riêng: tóm lược, các điều đã biết, loại tên riêng, bản đồ chứa nó, cần biên soạn lại. */
@@ -331,8 +331,13 @@ export function afterTurn(user: UserRow, body: Record<string, unknown>, json: Re
   if (!snap.some((m) => m.r === "u")) return;
   const feature = body.feature === "code" ? "code" : "chat";
   const d = t(), now = Date.now();
+  const cur = byConv(user.id, conv);
+  // Đoạn chat đã chưng cất rồi: mỗi tin nhắn sau từng làm cả đoạn (tới 40 tin) được chưng cất lại sau 45 giây, kéo theo một vòng chăm sóc,
+  // mỗi lần là vài lượt tính vào gói của người dùng. Giờ đợi gom: chưng cất lại khi có thêm REDISTILL_TURNS tin, hoặc khi đoạn chat đã ngừng REDISTILL_MS.
+  const done = cur ? parse(cur).props : null, users = snap.filter((m) => m.r === "u").length;
+  const due = done?.distilledAt && users - (done.distilledTurns ?? 0) < REDISTILL_TURNS ? now + REDISTILL_MS : now;
   d.prepare(`INSERT INTO brain_queue (user_id, conv, feature, snapshot, updated_at, tries) VALUES (?, ?, ?, ?, ?, 0)
-    ON CONFLICT(user_id, conv) DO UPDATE SET snapshot = excluded.snapshot, updated_at = excluded.updated_at, feature = excluded.feature, tries = 0`).run(user.id, conv, feature, JSON.stringify(snap), now);
+    ON CONFLICT(user_id, conv) DO UPDATE SET snapshot = excluded.snapshot, updated_at = excluded.updated_at, feature = excluded.feature, tries = 0`).run(user.id, conv, feature, JSON.stringify(snap), due);
   ensureBase(user);
   // Ghi chú nhánh có ngay (tên tạm từ câu đầu), nối tới bán cầu, skill, connector của lượt này.
   const model = String(json.model ?? body.model ?? "");
@@ -340,7 +345,6 @@ export function afterTurn(user: UserRow, body: Record<string, unknown>, json: Re
   const skills = used.filter((u) => u.kind === "skill" && u.name).map((u) => u.name!.slice(0, 60));
   // "<connector>: <công cụ>", hoặc "<ứng dụng> · <thao tác>" với Composio.
   const connectors = used.filter((u) => u.kind === "tool" && /: | · /.test(u.name ?? "")).map((u) => u.name!.split(/: | · /)[0].slice(0, 60));
-  const cur = byConv(user.id, conv);
   const p: Props = cur ? parse(cur).props : { date: now, tags: [feature] };
   if (model) { p.models = { ...(p.models ?? {}), [model]: (p.models?.[model] ?? 0) + 1 }; bumpModel(user.id, model); }
   p.skills = [...new Set([...(p.skills ?? []), ...skills])];
@@ -427,7 +431,7 @@ async function distillOne(row: { user_id: string; conv: string; feature: string;
   p.gist = typeof j.gist === "string" ? j.gist.replace(/[[\]]/g, "").trim().slice(0, 600) : p.gist;
   p.points = strs(j.points, 5); p.decisions = strs(j.decisions, 5); p.tasks = strs(j.tasks, 5);
   p.importance = Math.max(1, Math.min(5, Math.round(Number(j.importance) || 3)));
-  p.distilledAt = Date.now();
+  p.distilledAt = Date.now(); p.distilledTurns = snap.filter((m) => m.r === "u").length;
   const title = typeof j.title === "string" && cleanName(j.title) ? freeTitle(uid, cleanName(j.title), cur?.id, p.date) : cur?.title ?? freeTitle(uid, "Đoạn chat");
   // Một đoạn chat cập nhật nhiều trang: chủ đề, tên riêng (kèm điều đã biết, nguồn là đoạn chat này) và hồ sơ Về bạn.
   const touched: string[] = [];
@@ -737,6 +741,9 @@ async function consolidate(uid: string) {
 }
 
 const IDLE = Number(process.env.SYNCHRO_BRAIN_IDLE_MS) || 45_000;
+// Chưng cất lại một đoạn chat đã chưng cất: khi có thêm chừng này tin của người dùng, hoặc đoạn chat đã ngừng chừng này lâu (afterTurn).
+const REDISTILL_TURNS = Number(process.env.SYNCHRO_BRAIN_REDISTILL_TURNS) || 4;
+const REDISTILL_MS = Number(process.env.SYNCHRO_BRAIN_REDISTILL_MS) || 20 * 60_000;
 // Sau chừng này lần lỗi thì thôi tự thử (đỡ tốn lượt của gói) nhưng vẫn giữ đoạn chat trong hàng chờ, hiện ở Bộ não để người dùng bấm Học lại.
 const MAX_TRIES = 3;
 // Việc chưa chạy được lúc này (chỉ còn model mạnh, hàng việc nền đang đầy): lùi cả hàng của người đó chừng này. Giữ nguyên chỗ cũ thì ba đoạn chat cũ nhất chiếm hết LIMIT của mọi nhịp, không ai khác được học.

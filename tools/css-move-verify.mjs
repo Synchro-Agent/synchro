@@ -1,13 +1,14 @@
 // B5 bước 10: vòng chuyển + kiểm cho tools/css-move.mjs. Chuyển luật, so cascade tĩnh (tools/css-cascade.mjs --raw-key, thứ tự dev và
 // prod) với bản gốc, ghi mọi luật đã chuyển có selector dính một cặp đổi bên thắng vào tệp KEEP, khôi phục tệp CSS rồi chạy lại tới khi 0 cặp.
 // Mặc định bảo thủ hoàn toàn (mọi cặp css-cascade coi là có thể trùng phần tử đều tính). APART=1: bỏ cặp mà hai bên chắc chắn khác phần tử
-// theo các giả định ghi ở hàm apart (chưa dùng cho lần chuyển của B5).
+// theo các giả định ghi ở hàm apart (chưa dùng cho lần chuyển của B5; lần giảm CSS của w10 dùng APART=1, chạy riêng từng tệp đích rồi gộp,
+// và soát tay các cặp bị bỏ). Mỗi vòng so bốn thứ tự: dev / prod × CSS riêng của thành phần (colorpick, pearlorb) trước / sau CSS của màn.
 // Dùng: node tools/css-move-verify.mjs <thư mục mã nguồn gốc (có app/ và node_modules)> <keep.json> [tệp nguồn, mặc định app/_shell/globals.css]
 // Cần cây làm việc sạch ở các tệp CSS (lệnh này git checkout chúng mỗi vòng).
 import fs from "node:fs"; import { execSync } from "node:child_process";
 const W = process.cwd(); const T = (await import("node:os")).tmpdir();
 const BASE = process.argv[2]; const KEEP = process.argv[3]; const FROM = process.argv[4] ?? "app/_shell/globals.css";
-const files = ["app/_shell/globals.css", "app/_shell/synchro-ds.css", "app/_shell/glass.css", "app/_shell/features.css", "ui/styles/speech.css", "ui/styles/codeview.css", "ui/styles/brainview.css", "ui/styles/download.css", "ui/styles/projects.css", "ui/styles/settings.css", "ui/styles/skills.css"];
+const files = ["app/_shell/globals.css", "app/_shell/synchro-ds.css", "app/_shell/glass.css", "app/_shell/features.css", "ui/styles/speech.css", "ui/styles/codeview.css", "ui/styles/brainview.css", "ui/styles/download.css", "ui/styles/projects.css", "ui/styles/settings.css", "ui/styles/skills.css", "ui/styles/colorpick.css", "ui/styles/pearlorb.css"];
 const M = await import(W + "/tools/css-move.mjs");
 const { splitList } = await import(W + "/tools/css-cascade.mjs");
 const C = await import(W + "/tools/css-cascade.mjs");
@@ -46,8 +47,8 @@ for (let it = 0; it < 12; it++) {
   execSync(`git checkout -- ${files.join(" ")}`);
   const r = M.move(".", { from: FROM, keep, write: true });
   const flips = [];
-  for (const o of ["dev", "prod"]) {
-    fs.rmSync(`${T}/mv-${o}.json`, { force: true }); try { execSync(`node tools/css-cascade.mjs src:${BASE} src:${W} --order ${o} --raw-key --json ${T}/mv-${o}.json --max 1`, { stdio: "ignore" }); } catch {} const J = JSON.parse(fs.readFileSync(`${T}/mv-${o}.json`, "utf8")); const real = J.flips.filter((f) => { const m = f.sides.filter((x) => x.changed), o = f.sides.filter((x) => !x.changed); if (!process.env.APART || m.length !== 1 || o.length !== 1) return true; return !apartC(m[0], o[0]); }); dropped += J.flips.length - real.length; flips.push(...real); console.log(`  ${o}: mất ${J.lost.length}, thừa ${J.extra.length}, đổi ${J.flips.length}, cặp ${J.pairs}`);
+  for (const [o, lo] of [["dev", "last"], ["prod", "last"], ["dev", "first"], ["prod", "first"]]) {
+    fs.rmSync(`${T}/mv-${o}.json`, { force: true }); try { execSync(`node tools/css-cascade.mjs src:${BASE} src:${W} --order ${o} --raw-key --json ${T}/mv-${o}.json --max 1`, { stdio: "ignore", env: { ...process.env, CSS_LAZY_ORDER: lo } }); } catch {} const J = JSON.parse(fs.readFileSync(`${T}/mv-${o}.json`, "utf8")); const real = J.flips.filter((f) => { const m = f.sides.filter((x) => x.changed), o = f.sides.filter((x) => !x.changed); if (!process.env.APART || m.length !== 1 || o.length !== 1) return true; return !apartC(m[0], o[0]); }); dropped += J.flips.length - real.length; flips.push(...real); console.log(`  ${o}: mất ${J.lost.length}, thừa ${J.extra.length}, đổi ${J.flips.length}, cặp ${J.pairs}`);
   }
   // Luật đã chuyển nào có selector trùng selector của một bên trong cặp đổi → giữ lại.
   const sels = new Set(flips.flatMap((f) => f.sides.map((s) => s.sel.replace(/\s+/g, " ").trim())));

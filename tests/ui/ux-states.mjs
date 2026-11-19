@@ -110,12 +110,12 @@ try {
   await until(`!!document.querySelector(".settings")`, 10000, "mở Cài đặt");
   await sleep(400);
   ok((await ev(`document.querySelector(".settings").getAttribute("role")`)) === "dialog" && (await ev(`document.querySelector(".settings").getAttribute("aria-modal")`)) === "true", "hộp thoại có vai trò dialog");
-  const sel = `[...document.querySelectorAll(".settings .row")].find((r) => /Chat font|Phông chữ/i.test(r.textContent))?.querySelector(".sel")`;
+  const sel = `[...document.querySelectorAll(".settings .row")].find((r) => /Chat font|Phông chữ/i.test(r.textContent))?.querySelector(".dd")`;
   // Thân Cài đặt nạp chậm (khung chờ trước, B3.4 tách thêm settings.css): chờ hàng Phông chữ thật thay vì chỉ 400ms.
   await until(`!!${sel}`, 15000, "hàng Phông chữ (Cài đặt nạp chậm)");
-  await click(sel, "dropdown phông chữ"); await until(`!!document.querySelector(".settings .menu")`, 3000);
+  await click(sel, "dropdown phông chữ"); await until(`!!document.querySelector(".dd-pop")`, 3000);
   await key("Escape"); await sleep(250);
-  ok(await ev(`!!document.querySelector(".settings") && !document.querySelector(".settings .menu:not(.out)")`), "Esc đóng dropdown, Cài đặt vẫn mở");
+  ok(await ev(`!!document.querySelector(".settings") && !document.querySelector(".dd-pop")`), "Esc đóng dropdown, Cài đặt vẫn mở");
   ok(await ev(`[...document.querySelectorAll(".settings [role=switch]")].every((b) => b.getAttribute("aria-label"))`), "mọi công tắc đang hiện có tên");
   await key("Tab"); await key("Tab");
   ok(await ev(`!!document.activeElement.closest(".overlay")`), "Tab không ra khỏi hộp thoại");

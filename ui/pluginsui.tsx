@@ -2,8 +2,10 @@
 import "./styles/skills.css";
 // Kho kỹ năng (gộp Skills và Plugins; ở thanh bên, Tùy chỉnh và Cài đặt) và trang Tùy chỉnh có hai mục Kho kỹ năng / Connectors.
 import { useCallback, useEffect, useRef, useState } from "react";
+import { isAway } from "./clickaway";
 import { apiFetch, statusText } from "./apierr";
 import * as I from "./icons";
+import { Dropdown } from "./listbox";
 import { useApp } from "./store";
 import { HUB_DISCOVER, HUB_SEARCH, PLUGINS_CHANGED, useStudios } from "./studios";
 export { HUB_DISCOVER, PLUGINS_CHANGED, useStudios };
@@ -174,7 +176,7 @@ function Detail({ p: sum, admin, onClose, onChange: up }: { p: PluginSummary; ad
           <div className="pl-row"><div><b>List every skill directly</b><span>Off: Synchro opens this library on its own when a request needs it. On: each skill is listed in every chat, which uses more context.</span></div>
             <button className={`toggle ${p.mine.everywhere ? "on" : ""}`} role="switch" aria-checked={p.mine.everywhere} aria-label="List every skill directly" onClick={() => patch(p.scope === "org" ? { mine: { everywhere: !p.mine.everywhere } } : { everywhere: !p.everywhere })} /></div>
           {manage && <div className="pl-row pl-row-sel"><div><b>Studio button</b><span>{MODE_TEXT[mode === "auto" || mode === "none" ? mode : "named"]}</span>{mode === "auto" && full?.detected && <span className="pl-det" data-notr>{detectedText(full.detected)}</span>}</div>
-            <select className="pl-sel" aria-label="Studio button" value={mode} onChange={(e) => patch({ studio: e.target.value })}><option value="auto">Auto-detect</option><option value="none">None</option><option value="design">Design</option><option value="slides">Slides</option><option value="docs">Docs</option></select></div>}
+            <Dropdown label="Studio button" className="pl-sel" align="end" minWidth={170} value={mode} onChange={(studio) => patch({ studio })} options={[["auto", "Auto-detect"], ["none", "None"], ["design", "Design"], ["slides", "Slides"], ["docs", "Docs"]]} /></div>}
         </div>
         <div className="pl-src">
           {Object.entries(p.commits).map(([r, c]) => <a key={r} href={`https://github.com/${r}/tree/${c}`} target="_blank" rel="noreferrer" data-notr><I.GitHub size={13} />{r}<em>{c.slice(0, 7)}</em></a>)}
@@ -213,7 +215,7 @@ function RowMenu({ p, manage, onOpen, onAct }: { p: PluginSummary; manage: boole
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!open) return;
-    const h = (e: MouseEvent) => { if (!ref.current?.contains(e.target as Node)) setOpen(false); };
+    const h = (e: MouseEvent) => { if (isAway(ref.current, e.target)) setOpen(false); };
     document.addEventListener("mousedown", h); return () => document.removeEventListener("mousedown", h);
   }, [open]);
   const on = p.enabled && p.mine.enabled;
@@ -290,7 +292,7 @@ export function SkillHub() {
   useEffect(() => { window.addEventListener(PLUGINS_CHANGED, load); return () => window.removeEventListener(PLUGINS_CHANGED, load); }, [load]);
   useEffect(() => {
     if (!addMenu) return;
-    const h = (e: MouseEvent) => { if (!addRef.current?.contains(e.target as Node)) setAddMenu(false); };
+    const h = (e: MouseEvent) => { if (isAway(addRef.current, e.target)) setAddMenu(false); };
     document.addEventListener("mousedown", h); return () => document.removeEventListener("mousedown", h);
   }, [addMenu]);
   if (err) return <div className="empty" style={{ marginTop: 40 }}><I.Alert size={28} /><span>{err}</span><button className="btn" onClick={load}>Try again</button></div>;

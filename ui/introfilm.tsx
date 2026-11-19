@@ -156,8 +156,10 @@ export function IntroFilm({ uid, onCovered, onReveal, onDone }: { uid: string; o
     };
     raf = requestAnimationFrame(tick);
     const ended = () => leave(true);
-    // Bản 1080p tải lỗi giữa chừng: quay về bản 720p ở đúng chỗ đang phát, không kết thúc phim. Bản 720p lỗi thì mới rời phim.
-    const failed = () => { if (v.currentSrc.endsWith(SRC_1080)) swapSrc(v, SRC_720); else leave(); };
+    // Bản 1080p tải lỗi giữa chừng: quay về bản 720p ở đúng chỗ đang phát, không kết thúc phim. Bản 720p lỗi thì mới rời phim, nhưng chỉ
+    // khi đã ở bước chờ / phát: lỗi tới giữa lúc vòng mực đang nở (hay lúc hỏi Xem phim) mà rời ngay thì màn đăng nhập chưa được gỡ
+    // (onCovered chưa chạy), người dùng kẹt ở lời chào. Khi đó bước chờ thấy v.error và rời phim (effect của phase "wait").
+    const failed = () => { if (v.currentSrc.endsWith(SRC_1080)) swapSrc(v, SRC_720); else if (phaseRef.current === "wait" || phaseRef.current === "play") leave(); };
     v.addEventListener("ended", ended); v.addEventListener("error", failed);
     const vis = () => { if (leaving.current) return; if (document.hidden) v.pause(); else if (!pausedRef.current && phaseRef.current === "play") v.play().catch(() => {}); };
     document.addEventListener("visibilitychange", vis);
@@ -222,6 +224,9 @@ export function IntroFilm({ uid, onCovered, onReveal, onDone }: { uid: string; o
   useEffect(() => {
     if (phase !== "wait") return;
     const v = video.current!;
+    // Bản 720p đã lỗi từ lúc tải trước (tệp phim thiếu trên máy chủ: sự kiện "error" xảy ra trước khi gắn thẻ video): không có gì để chờ,
+    // rời phim vào thẳng app thay vì quay chấm chờ mãi.
+    if (v.error && !v.currentSrc.endsWith(SRC_1080)) { leave(); return; }
     let off = false, spin: Animation | null = null;
     const slow = setTimeout(() => {
       const r = seedOn ? seed.current?.querySelector(".mk-r") : null;

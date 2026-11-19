@@ -12,11 +12,13 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 const SUITES = [
   // B3.7: ngân sách tải đầu của trang chủ (JS ≤ 350 KB, CSS ≤ 45 KB gzip) đọc từ bản build của dev:mock:fast; vượt trần chống tăng lại là lỗi.
   // Mã thoát 2: chưa đo được (không có bản build, hay bản build cũ hơn mã nguồn) — không báo đạt khi chưa đo đúng bản sẽ deploy.
-  ["Ngân sách tải đầu: JS 350 KB gzip (bắt buộc), CSS 45 KB gzip (CHƯA BẮT BUỘC tới B5, chặn ở trần 84 KB)", "tools/budget.mjs"],
+  ["Ngân sách tải đầu: JS 350 KB gzip (bắt buộc), CSS 45 KB gzip (CHƯA BẮT BUỘC tới B5, chặn ở trần 83,6 KB)", "tools/budget.mjs"],
   // B5: chỉ số CSS (!important, tiền tố html body, cỡ chữ / z-index cứng, mốc @media lạ, hex ở giao diện tối) chỉ được giảm, không cần máy chủ.
   ["Chỉ số CSS chỉ giảm: !important, html body, cỡ chữ cứng, z-index, mốc @media, hex giao diện tối", "tools/css-metrics.mjs"],
   ["Toàn bộ bộ kiểm API", "tests/run-all.mjs"],
   ["Soát giao diện toàn trang (sáng/tối × 390/768/1440px)", "tests/ui/audit.mjs"],
+  // Bộ chặn lỗi hoàn thiện (chủ dự án báo 2026-11-18): ô chọn / ô màu gốc, bo viên thuốc trên chữ nhiều dòng, thanh cuộn thừa, chữ bị cắt, dải cuộn cắt mép, bố cục tự rung.
+  ["Độ hoàn thiện: ô chọn gốc, bo viên thuốc, thanh cuộn thừa, chữ bị cắt, dải cuộn cắt mép, bố cục tự rung (sáng/tối × 390/768/1440px)", "tests/ui/polish.mjs"],
   ["Một ca cho mỗi lỗi U2–U14 (390/768/1440px), giao diện sáng", "tests/ui/u-bugs.mjs", { THEME: "light" }],
   ["Một ca cho mỗi lỗi U2–U14 (390/768/1440px), giao diện tối", "tests/ui/u-bugs.mjs", { THEME: "dark" }],
   ["Menu, bảng nổi, gợi ý, vòng Mức dùng", "tests/ui/popovers.mjs"],
@@ -106,10 +108,13 @@ for (const [name, file, env] of suites) {
   const { code, out } = await run(file, env);
   const issues = /━━ Vấn đề \((\d+)\)/.exec(out);
   const ok = code === 0 && (!issues || issues[1] === "0");
-  res.push({ name, ok, s: Math.round((Date.now() - t) / 1000), note: issues ? `${issues[1]} vấn đề` : code === 2 && file === "tools/budget.mjs" ? "chưa đo: không có bản build hoặc bản build cũ hơn mã nguồn" : code ? `mã thoát ${code}` : "" });
+  // Bộ thiếu điều kiện để chạy (vd. tests/ui/introfilm.mjs khi máy giả lập không có tệp phim) in "BỎ QUA: <lý do>" và thoát 0: không tính lỗi, nhưng tổng kết ghi rõ.
+  const skip = code === 0 && /^BỎ QUA: (.*)$/m.exec(out)?.[1];
+  res.push({ name, ok, skip, s: Math.round((Date.now() - t) / 1000), note: issues ? `${issues[1]} vấn đề` : code === 2 && file === "tools/budget.mjs" ? "chưa đo: không có bản build hoặc bản build cũ hơn mã nguồn" : code ? `mã thoát ${code}` : "" });
 }
 console.log("\n████ Tổng kết QA");
-for (const r of res) console.log(`${r.ok ? "✓" : "✗"} ${r.name} (${r.s}s)${r.ok ? "" : ` — ${r.note}`}`);
+for (const r of res) console.log(`${r.skip ? "○" : r.ok ? "✓" : "✗"} ${r.name} (${r.s}s)${r.skip ? ` — bỏ qua: ${r.skip}` : r.ok ? "" : ` — ${r.note}`}`);
 const bad = res.filter((r) => !r.ok).length;
-console.log(bad ? `\n${bad} bộ chưa đạt: không deploy.` : "\nTất cả đạt.");
+const skipped = res.filter((r) => r.skip).length;
+console.log(bad ? `\n${bad} bộ chưa đạt: không deploy.` : skipped ? `\nTất cả đạt, ${skipped} bộ bỏ qua (xem lý do ở trên).` : "\nTất cả đạt.");
 process.exitCode = bad ? 1 : 0;

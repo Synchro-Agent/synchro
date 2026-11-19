@@ -1,5 +1,6 @@
-// ESLint (H2.5): next/core-web-vitals (React, hooks, Next) + jsx-a11y (trợ năng). Chạy: npm run lint (tools/lint.mjs).
-// Cần các gói dev (chưa cài trong repo, xem tools/lint.mjs): eslint, eslint-config-next, @eslint/eslintrc, eslint-plugin-jsx-a11y.
+// ESLint (H2.5): next/core-web-vitals (React, hooks, Next) + jsx-a11y (trợ năng). Chạy: npm run lint (tools/lint.mjs), CI chạy ở job verify
+// và chỉ đỏ khi có lỗi (error); cảnh báo (warn) không chặn. Gói dev trong package.json: eslint, eslint-config-next (cùng số phiên bản với
+// next), @eslint/eslintrc, eslint-plugin-jsx-a11y.
 // Trợ năng để mức "warn" ở lần bật đầu: mã hiện có chưa từng chạy qua bộ luật này, chặn ngay thì CI đỏ vì nợ cũ. Khi số cảnh báo
 // về 0 thì đổi sang "error" (một dòng ở A11Y_LEVEL) để từ đó không thêm lỗi mới.
 import { FlatCompat } from "@eslint/eslintrc";
@@ -32,8 +33,15 @@ export default [
     },
   },
   {
-    // Kiểm thử và script Node: không phải mã React.
-    files: ["tests/**", "scripts/**", "tools/**", "ops/**", "extension/**"],
+    // Kiểm thử và script Node: không phải mã React. ecosystem.config.cjs là cấu hình pm2 (CommonJS, phải dùng require).
+    files: ["tests/**", "scripts/**", "tools/**", "ops/**", "extension/**", "**/*.cjs"],
     rules: { "@typescript-eslint/no-require-imports": "off", "@typescript-eslint/no-unused-vars": "off" },
+  },
+  {
+    // Mã chỉ chạy trên Node (máy chủ, công cụ, kiểm thử) không có React hook: các hàm tên use… ở đây là hàm thường (useProfile, useMemory,
+    // useSite trong server/, use() trong tools/css-inline.mjs). rules-of-hooks đoán hook theo tên nên báo nhầm (12 chỗ lúc bật). Chỉ tắt cho
+    // tệp .ts / .mjs; .tsx dưới server/ (poster dựng bằng React) vẫn được kiểm.
+    files: ["server/**/*.ts", "tools/**/*.{js,mjs,ts}", "ops/**", "scripts/**", "tests/**"],
+    rules: { "react-hooks/rules-of-hooks": "off" },
   },
 ];

@@ -19,7 +19,7 @@ import { resetClock } from "./resetfmt";
 
 type Cli = "claude" | "codex" | "agy" | "grok";
 type Login = { state: "starting" | "open_url" | "verifying" | "done" | "error"; method: string | null; url?: string; userCode?: string; needsCode: boolean; message?: string; startedAt: number };
-export type EngineStatus = { plan?: string | null; cli: Cli; installed: boolean; version: string | null; loggedIn: boolean; method: string | null; relogin?: boolean; detail?: string; login: Login | null; blockedUntil?: number | null; usingApiUntil?: number | null; apiModel?: string | null; setup?: boolean };
+export type EngineStatus = { plan?: string | null; cli: Cli; installed: boolean; version: string | null; loggedIn: boolean; method: string | null; relogin?: boolean; detail?: string; login: Login | null; blockedUntil?: number | null; usingApiUntil?: number | null; apiModel?: string | null; setup?: boolean; ran?: number | null };
 
 // cli: null khi hãng không có gói đăng nhập (DeepSeek chỉ có khóa API).
 // plan: tài khoản cần có. Chỉ Claude Code đòi gói trả phí; ChatGPT, Gemini, Grok dùng được tài khoản miễn phí.
@@ -120,7 +120,7 @@ function PlanPane({ v, admin, plan }: { v: PlanVendor; admin: boolean; plan: Ret
     catch (e) { app.say((e as Error).message); } finally { setBusy(""); }
   });
   // Dùng khóa API thay gói (chỉ khi người dùng bấm) hoặc quay lại gói.
-  const useApi = async (on: boolean) => {
+  const switchToApi = async (on: boolean) => {
     setBusy("mode");
     try { await call("POST", `${base}/use-api`, { on }); await load(true); await refreshModels(); app.say(on ? `${v.name} now uses the shared API key until your plan resets` : `${v.name} is back on your plan`); }
     catch (e) { app.say((e as Error).message); } finally { setBusy(""); }
@@ -147,14 +147,18 @@ function PlanPane({ v, admin, plan }: { v: PlanVendor; admin: boolean; plan: Ret
       {st && !st.installed && !admin && <p className="pv-note">{`An administrator needs to install ${v.via} on the server first.`}</p>}
       {busy === "install" && <p className="pv-note">{`Downloading the official ${v.via}. This can take a minute.`}</p>}
       {err && <div className="api-err in" role="alert"><I.Alert size={14} /><span>{err}</span></div>}
-      {st?.loggedIn && !login && st.setup && (
+      {/* Gemini đã chạy được (ran): màn hình làm quen của Antigravity chỉ còn chặn việc đọc bảng hạn mức, không chặn chat (lỗi 11 của ma trận H1). */}
+      {st?.loggedIn && !login && st.setup && st.ran && (
+        <div className="pv-mode"><span>Gemini is working normally. Synchro can&apos;t show its plan limits yet because Antigravity&apos;s limits panel isn&apos;t available on this account; chat isn&apos;t affected, and if the plan hits its limit Synchro still notices and tells you.</span></div>
+      )}
+      {st?.loggedIn && !login && st.setup && !st.ran && (
         <div className="pv-mode warn"><span>Antigravity is waiting for you to finish its first-run setup: pick a color scheme, then accept its terms and choose whether Google may use your interactions. Synchro never answers these for you. Until then, chat works but plan limits can&apos;t be read.</span></div>
       )}
       {st?.loggedIn && !login && st.usingApiUntil && (
-        <div className="pv-mode"><span>{`Using the shared API key instead of your plan until ${when(st.usingApiUntil)}.`}</span><button className="btn" onClick={() => useApi(false)} disabled={!!busy}>Back to my plan</button></div>
+        <div className="pv-mode"><span>{`Using the shared API key instead of your plan until ${when(st.usingApiUntil)}.`}</span><button className="btn" onClick={() => switchToApi(false)} disabled={!!busy}>Back to my plan</button></div>
       )}
       {st?.loggedIn && !login && !st.usingApiUntil && st.blockedUntil && (
-        <div className="pv-mode warn"><span>{`Your plan hit its limit. It resets ${when(st.blockedUntil)}.`}</span>{hasApi && <button className="btn" onClick={() => useApi(true)} disabled={!!busy}>Use the shared API key</button>}</div>
+        <div className="pv-mode warn"><span>{`Your plan hit its limit. It resets ${when(st.blockedUntil)}.`}</span>{hasApi && <button className="btn" onClick={() => switchToApi(true)} disabled={!!busy}>Use the shared API key</button>}</div>
       )}
       {login && (
         <div className="api-form pv-flow">

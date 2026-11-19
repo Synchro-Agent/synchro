@@ -11,15 +11,21 @@ Giao diện có tiếng Việt và tiếng Anh. Mã viết bằng Next.js 15 (ap
 
 ## Video giới thiệu
 
-Tài khoản mới xem một phim giới thiệu dài 43 giây (`ui/introfilm.tsx`). Phim nằm trong repo:
+Tài khoản mới xem một phim giới thiệu dài 43 giây (`ui/introfilm.tsx`). Trình duyệt luôn tải ở cùng các URL:
 
-| Tệp | Cỡ | Dùng khi |
-|---|---|---|
-| `public/intro/synchro-intro-720.mp4` | 3,9 MB | mặc định, màn rộng và màn hẹp |
-| `public/intro/synchro-intro.mp4` | 19 MB | chỉ khi xem toàn màn hình (1080p) |
-| `public/intro/synchro-intro-poster.jpg` | | ảnh chờ |
+| URL | Cỡ | Dùng khi | Nằm ở đâu |
+|---|---|---|---|
+| `/intro/synchro-intro-720.mp4` | 3,9 MB | mặc định, màn rộng và màn hẹp | ngoài git |
+| `/intro/synchro-intro.mp4` | 19 MB | chỉ khi xem toàn màn hình (1080p) | ngoài git |
+| `/intro/synchro-intro-poster.jpg` | 0,1 MB | ảnh chờ | trong git (`public/intro/`) |
 
-Phim dựng bằng Remotion từ dự án riêng `synchro-intro-film`, dự án này không nằm trong repo. `next.config.ts` cho trình duyệt giữ `/intro/*` trong bộ nhớ đệm một tuần. Hai tệp mp4 chưa được chuyển ra R2 hay release asset. Khi chuyển, chỉ cần đổi `SRC_720` / `SRC_1080` trong `ui/introfilm.tsx` và đường dẫn trong `tests/ui/introfilm.mjs`.
+Hai tệp mp4 không nằm trong git (Blueprint H3.9, `.gitignore`: `/public/intro/*.mp4`):
+
+- **Production**: nginx phục vụ `/intro/` từ `/var/www/synchro-media/intro/`, nằm ngoài thư mục app `/var/www/synchro`. Deploy (rsync `--delete` vào thư mục app) không đụng được tới phim. Cách cài khối `location` của nginx và cách thay phim nằm ở `docs/van-hanh.md`, mục "Phim giới thiệu".
+- **Máy dev, `dev:mock`, CI**: `node tools/fetch-intro.mjs` lấy tệp còn thiếu vào `public/intro/`. Nó lấy từ lịch sử git trước (commit cuối còn tệp, không cần mạng), không có thì tải từ `https://synchro.net.nz/intro/…` và kiểm tra đúng là mp4. `dev:mock` tự chạy bước này trước khi bật Next. `SYNCHRO_INTRO_FETCH=0` để bỏ qua; job `verify` của CI đặt biến này vì bộ API không cần phim. `ui-qa.yml` tải phim trước khi build.
+- Thiếu phim thì app tự bỏ qua phim và vào thẳng trang chủ. `tests/ui/introfilm.mjs` in `BỎ QUA: …` kèm lý do, và tổng kết của `tools/qa.mjs` ghi bộ đó là bỏ qua (○), không tính là lỗi.
+
+Phim dựng bằng Remotion từ dự án riêng `synchro-intro-film`, dự án này không nằm trong repo. `next.config.ts` (khi Next phục vụ, tức máy dev) và khối nginx (production) cùng cho trình duyệt giữ `/intro/*` trong bộ nhớ đệm một tuần. Tên tệp không đổi khi nội dung đổi, nên người đã xem có thể thấy bản cũ tới một tuần.
 
 ## Chạy ở máy
 
@@ -72,7 +78,7 @@ Các điều trên nằm trong `tests/api/paths-guard.test.mjs`. Test đọc mã
 
 ```bash
 ./node_modules/.bin/tsc --noEmit -p .   # kiểu
-npm run lint                            # ESLint (bỏ qua nếu chưa cài gói dev, xem docs/van-hanh.md)
+npm run lint                            # ESLint cả repo; thoát khác 0 chỉ khi có lỗi (xem docs/van-hanh.md)
 npm run build                           # next build (webpack), giống CI và máy chủ
 
 # cần npm run dev:mock hoặc dev:mock:fast đang chạy ở :3200
@@ -91,7 +97,7 @@ node tools/qa.mjs --list                # danh sách bộ sẽ chạy
 
 Đẩy lên `main` hoặc `staging` thì `.github/workflows/deploy.yml` chạy:
 
-1. Job `verify` chặn deploy: `npm ci` → `tsc --noEmit` → `npm run lint` (chỉ báo) → `npm run build` → `dev:mock:fast` → `node tests/run-all.mjs`.
+1. Job `verify` chặn deploy: `npm ci` → `tsc --noEmit` → `npm run lint` (đỏ khi có lỗi) → `npm run build` → `dev:mock:fast` → `node tests/run-all.mjs`.
 2. Job `deploy`, chỉ khi `verify` xanh: rsync mã cùng bản build `.next-ci` của bước kiểm tra vào `/var/www/synchro-incoming/`, rồi chạy `ops/server-build.sh`. Hai lần deploy đạt cách nhau ít nhất 15 phút. Các lần đẩy liền nhau được gộp thành một lần deploy.
 
 Bộ giao diện chạy ở workflow riêng `.github/workflows/ui-qa.yml` (mỗi tuần, hoặc bấm chạy tay) và chưa chặn deploy. `.github/workflows/uptime.yml` báo khi `/api/health` lỗi: ping mỗi phút do `ops/uptime-worker` làm.

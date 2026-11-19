@@ -2,6 +2,7 @@
 // Hiệu ứng của trang chủ tách khỏi home.tsx (blueprint B2 bước 8): mở app (gói khởi động / hỏi tài khoản, tự thử lại), phím tắt toàn trang,
 // kéo thả tệp. Chuyển nguyên mã, phần của Home (hàm đặt state, ref) truyền vào; thứ tự chạy theo chỗ gọi trong Home như trước.
 import { useCallback, useEffect, useRef, useState } from "react";
+import { inFloating } from "./clickaway";
 import { chatFont, usePref } from "./store";
 import { prefetchChats } from "./chatsync";
 import { loadMe, watchSession } from "./session";
@@ -100,6 +101,7 @@ export function useShortcuts(o: {
   useEffect(() => {
     const h = (e: MouseEvent) => {
       const t = e.target as HTMLElement, x = live.current;
+      if (inFloating(t)) return;
       if (x.userRef.current && !x.userRef.current.contains(t)) x.closeUserMenu();
       const ui = useSideUi.getState();
       if (!t.closest(".chat-wrap")) { ui.setChatMenu(null); ui.setCodeMenu(null); ui.setPickProj(false); if (!t.closest(".title-wrap")) ui.setPickTag(false); }

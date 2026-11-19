@@ -1,4 +1,5 @@
 "use client";
+import "./styles/pearlorb.css";
 // Quả cầu ngọc trai của mục Speech: nền trắng ngà có ánh sáng ở góc trên, các mảng màu pastel (đào, xanh dừa cạn, tím nhạt)
 // trôi chậm bên trong. Khi đang gọi các mảng trôi nhanh hơn, và phồng lên theo âm lượng (level 0..1).
 import { useEffect, useRef } from "react";

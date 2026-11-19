@@ -52,7 +52,6 @@ export const ALLOW = [
   ["ui/brainui.tsx", "div.bn-graph.mini", ".bw-graph .bn-graph", "trong .bw-graph BrainGraph nhận height=\"100%\": style nội dòng cùng giá trị với CSS"],
   ["ui/modals.tsx", "input", ".bp-addr-w input", "ô đánh dấu của hộp xác nhận Đăng xuất, không nằm trong thanh địa chỉ trình duyệt (.bp-addr-w)"],
   ["ui/settings.tsx", "input.field", ".bp-addr-w input", "ô của Cài đặt (Select tìm kiếm, ô hồ sơ), không nằm trong thanh địa chỉ trình duyệt (.bp-addr-w)"],
-  ["ui/settings.tsx", "input.field", "html body .cm-find input", "ô tìm trong menu Select của Cài đặt, không nằm trong .cm-find (menu + và thẻ)"],
   ["ui/speech/view.tsx", "i", ".sp-progress.ind i", "vạch credit trong .sp-credit-bar, không phải thanh tiến độ .sp-progress"],
   ["ui/brainui.tsx", "h3", "html body .sy-settings .s-body h3", "tiêu đề đầu trang .bn: trong Cài đặt bị ẩn (.sy-settings .bn>h3:first-child { display:none }), ngoài Cài đặt style nội dòng vẫn áp như trước"],
   ["ui/brainui.tsx", "h3", ".sy-settings .sy-sbody-h+*>h3:first-child", "như trên: tiêu đề đầu trang .bn bị ẩn trong Cài đặt"],
@@ -63,7 +62,6 @@ export const ALLOW = [
   ["ui/home.tsx", "label", ".sy-fieldrow label", "nhãn ô đánh dấu trong hộp Confirm (.modal.sm), không có .sy-fieldrow (chỉ ở hộp Dự án của modals.tsx)"],
   ["ui/settings.tsx", "input.field", ".sy-settings .s-body .row>.field", "≤860px cỡ ô do flex:1 1 100% (luật syn cùng chỗ) quyết định, width không dùng tới: width: 280 nội dòng thắng cũng không đổi bề rộng (tests/ui/inline-over.mjs đo)"],
   ["ui/filemenu.tsx", "div.fm-menu.menu", ".pj-compose :is(.model-menu,.mic-wrap .menu)", "menu tệp mở theo tọa độ chuột, không nằm trong .mic-wrap"],
-  ["ui/settings.tsx", "div.down.menu.out", ".pj-compose :is(.model-menu,.mic-wrap .menu)", "menu của Select trong Cài đặt, không nằm trong ô soạn tin dự án"],
 ];
 
 const norm = (s) => s.replace(/\s+/g, " ").trim();

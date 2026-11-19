@@ -4,7 +4,8 @@
 import type { ArtType } from "./artifacts";
 
 export type Severity = "high" | "medium" | "low";
-export type Finding = { line_start: number; line_end: number; severity: Severity; title: string; detail: string; suggested_fix: string; by?: string[] };
+// math: lỗi số liệu kèm phép tính để máy chủ tự tính lại (expr: phép tính từ các số trong sản phẩm, shown: kết quả sản phẩm đang ghi).
+export type Finding = { line_start: number; line_end: number; severity: Severity; title: string; detail: string; suggested_fix: string; by?: string[]; math?: { expr: string; shown: string } };
 export type CriticEntry = { status: "run" | "done" | "error"; findings: Finding[]; by: string[]; at: number; error?: string; applied?: number[] };
 
 const SEV: Severity[] = ["high", "medium", "low"];
@@ -43,7 +44,9 @@ export function parseFindings(text: string, lines: number, max = 8): Finding[] |
     const title = String(x?.title ?? "").trim().slice(0, 160);
     if (!Number.isFinite(a) || a < 1 || a > lines || !title) continue;
     const severity = SEV.includes(x?.severity as Severity) ? (x.severity as Severity) : "medium";
-    out.push({ line_start: a, line_end: Math.max(a, Math.min(lines, Number.isFinite(b) ? b : a)), severity, title, detail: String(x?.detail ?? "").trim().slice(0, 600), suggested_fix: typeof x?.suggested_fix === "string" ? x.suggested_fix.replace(/\n$/, "") : "" });
+    const m = x?.math as { expr?: unknown; shown?: unknown } | undefined;
+    const math = m && typeof m === "object" && typeof m.expr === "string" && (typeof m.shown === "string" || typeof m.shown === "number") ? { expr: m.expr.slice(0, 300), shown: String(m.shown).slice(0, 60) } : undefined;
+    out.push({ line_start: a, line_end: Math.max(a, Math.min(lines, Number.isFinite(b) ? b : a)), severity, title, detail: String(x?.detail ?? "").trim().slice(0, 600), suggested_fix: typeof x?.suggested_fix === "string" ? x.suggested_fix.replace(/\n$/, "") : "", ...(math ? { math } : {}) });
   }
   return out.sort((p, q) => SEV.indexOf(p.severity) - SEV.indexOf(q.severity) || p.line_start - q.line_start).slice(0, max);
 }
@@ -75,4 +78,71 @@ export function fixPatch(content: string, f: Finding): string | null {
   if (!unique()) return null;
   const before = L.slice(a, f.line_start - 1), after = L.slice(f.line_end, b);
   return `<<<<<<< SEARCH\n${L.slice(a, b).join("\n")}\n=======\n${[...before, f.suggested_fix, ...after].join("\n")}\n>>>>>>> REPLACE`;
+}
+
+// Lỗi số liệu báo nhầm (H1 T8: "tổng các thành phần không khớp giá trị đơn hàng" trong khi 11+7+5+3+6 = 32 đúng bằng 32k): model phản biện phải ghi
+// phép tính vào math, máy chủ tự tính lại. Tính ra khớp với số sản phẩm ghi thì bỏ mục đó; nêu lỗi số liệu mà không kèm phép tính thì hạ xuống Gợi ý.
+// Chỉ coi là "nêu lỗi số liệu" khi câu nói về tổng / phép tính VÀ có con số: "Type mismatch", "không khớp kiểu", "selector doesn't match"
+// của phản biện code không phải lỗi số liệu (review W10: các mục high đó từng bị hạ xuống Gợi ý).
+const NUM_CLAIM = /tổng (?:\S+ ){0,5}(?:sai|lệch|không khớp|không bằng|không đúng)|(?:sai|lệch|không khớp|không bằng|không đúng) (?:\S+ ){0,3}(?:tổng|phép tính|số liệu)|không cộng (?:ra|lại)|tính sai|tính nhầm|cộng sai|cộng nhầm|sai số liệu|số liệu (?:sai|không khớp|lệch)|doesn[’']?t (?:add up|sum)|do(?:es)? not (?:add up|sum)|miscalculat|wrong (?:sum|total)|incorrect (?:sum|total|calculation)|(?:sum|total|subtotal)s? (?:\S+ ){0,4}(?:mismatch|(?:doesn[’']?t|does not|do not) match|is wrong|is off|is incorrect)/i;
+const NUMBERS = /\d/;
+/** Câu nói có phải là nêu lỗi số liệu (tổng / phép tính sai, kèm con số). */
+export const numericClaim = (text: string) => NUM_CLAIM.test(text) && NUMBERS.test(text);
+
+/** Số viết kiểu Việt ("32.000", "1,5") hay kiểu Anh ("25,910.00", "1.5"), có thể kèm đơn vị (k, tr, %, đ, $), và số chữ số thập phân đang ghi. null: không đọc được. */
+function readNum(raw: string): { n: number; dec: number } | null {
+  let t = raw.trim().replace(/[\s\u00a0]/g, "").replace(/^[$€£₫]|(?:k|K|m|M|tr|tỷ|tỉ|%|đ|₫|vnd|VND|usd|USD|\$)$/g, "");
+  if (!/^[+-]?\d[\d.,]*$/.test(t)) return null;
+  let dec = 0;
+  const dot = t.lastIndexOf("."), com = t.lastIndexOf(",");
+  if (dot >= 0 && com >= 0) { dec = t.length - Math.max(dot, com) - 1; t = dot > com ? t.replace(/,/g, "") : t.replace(/\./g, "").replace(",", "."); }
+  else if (dot >= 0 || com >= 0) {
+    const sep = dot >= 0 ? "." : ",", parts = t.split(sep);
+    // Nhiều dấu, hoặc một dấu theo sau đúng 3 chữ số: dấu phân cách hàng nghìn. Còn lại: dấu thập phân.
+    const thousands = parts.length > 2 || (parts[1].length === 3 && !/^[+-]?0$/.test(parts[0]));
+    if (!thousands) dec = parts[1].length;
+    t = thousands ? parts.join("") : parts.join(".");
+  }
+  const n = Number(t);
+  return Number.isFinite(n) ? { n, dec } : null;
+}
+export function parseNum(raw: string): number | null {
+  return readNum(raw)?.n ?? null;
+}
+
+/** Tính phép tính đơn giản (+ − × ÷ và ngoặc) trên các số như parseNum đọc. null: không phải phép tính đọc được. */
+export function evalExpr(expr: string): number | null {
+  const src = expr.replace(/[−–]/g, "-").replace(/[×x·]/g, "*").replace(/÷/g, "/").replace(/=.*$/, "");
+  const toks = src.match(/\d[\d.,]*(?:\s?(?:k|K|m|M|tr|tỷ|tỉ|%|đ|₫))?|[-+*/()]|\S/g) ?? [];
+  let i = 0;
+  const peek = () => toks[i], next = () => toks[i++];
+  const atom = (): number | null => {
+    const t = next();
+    if (t === "(") { const v = sum(); return next() === ")" ? v : null; }
+    if (t === "-") { const v = atom(); return v === null ? null : -v; }
+    return t === undefined ? null : parseNum(t);
+  };
+  const prod = (): number | null => { let v = atom(); while (v !== null && (peek() === "*" || peek() === "/")) { const op = next(), w = atom(); v = w === null ? null : op === "*" ? v * w : w === 0 ? null : v / w; } return v; };
+  const sum = (): number | null => { let v = prod(); while (v !== null && (peek() === "+" || peek() === "-")) { const op = next(), w = prod(); v = w === null ? null : op === "+" ? v + w : v - w; } return v; };
+  const v = sum();
+  return v !== null && i === toks.length && toks.some((t) => /[-+*/]/.test(t)) ? v : null;
+}
+
+/** Bỏ lỗi số liệu mà chính phép tính kèm theo cho thấy là khớp; lỗi số liệu không kèm phép tính đọc được thì hạ xuống "low".
+ *  Khớp nghĩa là bằng nhau ở đúng độ chính xác của số đang ghi (nửa đơn vị của chữ số cuối: "33%" khớp 33,33; "1025" không khớp 1020),
+ *  không dùng dung sai tương đối: 25.800 với 25.910 là lỗi thật dù chỉ lệch 0,42%.
+ *  downgrade: false cho phản biện code / ứng dụng (chỉ tự tính lại mục có kèm math, không hạ mức theo câu chữ). */
+export function checkMath(list: Finding[], opt: { downgrade?: boolean } = {}): Finding[] {
+  const out: Finding[] = [];
+  for (const f of list) {
+    const claim = opt.downgrade !== false && numericClaim(`${f.title} ${f.detail}`);
+    if (!claim && !f.math) { out.push(f); continue; }
+    const got = f.math ? evalExpr(f.math.expr) : null, shown = f.math ? readNum(f.math.shown) : null;
+    if (got !== null && shown !== null) {
+      if (Math.abs(got - shown.n) <= 0.5 * 10 ** -shown.dec + 1e-9 * Math.max(1, Math.abs(shown.n))) continue; // tự tính lại thấy khớp: báo nhầm
+      out.push(f); continue;
+    }
+    out.push(claim ? { ...f, severity: "low" } : f);
+  }
+  return out;
 }

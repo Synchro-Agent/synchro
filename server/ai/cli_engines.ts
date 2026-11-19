@@ -5,7 +5,7 @@ import "server-only";
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
-import type { Attachment, Engine, ErrorCode, Event, RateWindow, TurnRequest, Usage, WebSource } from "./engine";
+import { type Attachment, cliPlan, type Engine, type ErrorCode, type Event, type RateWindow, type TurnRequest, type Usage, type WebSource } from "./engine";
 import { type Cli, cliRunning, CODEX_TURN_PREFIX, engineHome, find, IDLE_MS, makeDir, MAX_TURN_MS, type Proc, sessionSeen, spawnCli, stripAnsi, turnHomeBase, writeEngineFile, type Exit } from "./cli_runtime";
 import { classify, redact } from "./errors";
 import { forgetSession, poolStrike, prestart, takeProcess, type PoolSpec } from "./cli_pool";
@@ -497,6 +497,8 @@ export class CodexEngine implements Engine {
         const url = typeof o.item.action?.url === "string" ? o.item.action.url : undefined;
         if ((q || url) && !asked.has(q ?? url!)) { asked.add(q ?? url!); yield { kind: "search", query: q, url }; if (url) yield { kind: "sources", items: [{ title: "", url }] }; }
       }
+      // Danh sách việc dựng sẵn của Codex (update_plan): mục todo_list báo lúc bắt đầu và mỗi lần model cập nhật (item.updated).
+      if (/^item\.(started|updated|completed)$/.test(String(o.type)) && o.item?.type === "todo_list") { const items = cliPlan(o.item.items); if (items) yield { kind: "plan", items }; }
       if (o.type === "thread.started" && typeof o.thread_id === "string") yield { kind: "session", id: o.thread_id };
       else if (o.type === "item.started" && /mcp_tool_call|web_search/.test(String(o.item?.type ?? ""))) tools = true;
       // Bản Codex nào báo chữ dần (item.updated) thì hiện dần; chỉ phần chưa hiện mới gửi đi, mục xong không lặp lại chữ.

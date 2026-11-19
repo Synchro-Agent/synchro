@@ -2,10 +2,12 @@
 import "./styles/settings.css";
 
 import { createContext, useContext, useEffect, useRef, useState } from "react";
+import { isAway } from "./clickaway";
 import { apiFetch, statusText } from "./apierr";
 import { rowKeys } from "./a11y";
 import { createPortal } from "react-dom";
 import { Fade, Menu } from "./ui";
+import { Dropdown } from "./listbox";
 import { AvatarButton } from "./avatar";
 import { chatFont, usePref, useApp, initials, resetPrefs } from "./store";
 import { useChats } from "./chatstore.client";
@@ -42,7 +44,7 @@ const voiceLabel = (v: Voice | undefined) => (v ? `${v.name}${v.lang ? ` · ${v.
 function useAway(close: () => void) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    const h = (e: MouseEvent) => ref.current && !ref.current.contains(e.target as Node) && close();
+    const h = (e: MouseEvent) => ref.current && isAway(ref.current, e.target) && close();
     document.addEventListener("mousedown", h);
     return () => document.removeEventListener("mousedown", h);
   });
@@ -57,26 +59,10 @@ export function Toggle({ on, set, disabled, label }: { on: boolean; set: (v: boo
 }
 
 // label: chữ hiện cho từng giá trị (giá trị lưu giữ nguyên, ví dụ "Past month"; chữ hiện đi qua tr). Mặc định hiện chính giá trị.
+// Dùng ô chọn chung của app (listbox.tsx): danh sách nổi gắn vào <body> nên không bị thân Cài đặt cắt, có bàn phím ↑ ↓ / gõ chữ / Esc.
 export function Select({ value, options, onChange, search, width = 160, label = (o: string) => o }: { value: string; options: string[]; onChange: (v: string) => void; search?: boolean; width?: number; label?: (o: string) => string }) {
-  const [open, setOpen] = useState(false);
-  const [q, setQ] = useState("");
-  const ref = useAway(() => setOpen(false));
   const rowName = useContext(RowName);
-  const list = options.filter((o) => o.toLowerCase().includes(q.toLowerCase()) || label(o).toLowerCase().includes(q.toLowerCase()));
-  return (
-    <div ref={ref} style={{ position: "relative" }}>
-      <button className="sel" aria-haspopup="menu" aria-expanded={open} aria-label={rowName ? `${tr(rowName)}: ${tr(value)}` : undefined} onClick={() => { setOpen(!open); setQ(""); }}>{label(value)}<I.Chevron size={14} /></button>
-        <Menu open={!!(open)} className="down" style={{ top: 36, right: 0, width, minWidth: width }}>
-          <div className="menu-scroll">
-          {search && <input className="field" style={{ marginBottom: 6, padding: "5px 8px" }} autoFocus placeholder="Search" value={q} onChange={(e) => setQ(e.target.value)} />}
-          {list.length === 0 && <div className="muted" style={{ padding: "6px 10px", fontSize: "var(--fs-2)" }}>No results</div>}
-          {list.map((o) => (
-            <button key={o} className="menu-item" style={{ height: 30 }} onClick={() => { onChange(o); setOpen(false); }}>{label(o)}{o === value && <span className="ck"><I.Check size={16} /></span>}</button>
-          ))}
-        </div>
-        </Menu>
-    </div>
-  );
+  return <Dropdown className="s-dd" align="end" minWidth={width} search={search ?? false} label={rowName} value={value} placeholder={label(value)} onChange={onChange} options={options.map((o) => ({ value: o, label: label(o) }))} />;
 }
 
 function Seg({ value, options, onChange }: { value: string; options: string[]; onChange: (v: string) => void }) {
@@ -313,7 +299,7 @@ function Account() {
       <MfaRow Row={Row} say={app.say} />
       <PasskeyRows Row={Row} onChange={() => void api<{ user: AuthUser }>("GET", "/api/auth/me").then((r) => r.user && app.setMe(r.user)).catch(() => {})} />
       <H>Active sessions</H>
-      <table className="tbl">
+      <table className="tbl tbl-ses">
         <thead><tr><th>Device</th><th>Location</th><th>Created</th><th>Updated</th><th /></tr></thead>
         <tbody>
           {pgSes.items.map((s) => (
@@ -691,7 +677,7 @@ function CodeTab() {
         <H>Pull requests</H>
         <Row t="Branch prefix" d="Added to the branches Synchro creates, for example synchro/fix-login." top><input className="field" aria-label="Branch prefix" style={{ width: 180, margin: 0 }} defaultValue={cp.branchPrefix} key={cp.branchPrefix} placeholder="synchro" onBlur={(e) => e.target.value !== cp.branchPrefix && save({ branchPrefix: e.target.value })} onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()} /></Row>
         <Row t="Create pull requests automatically" d="When you push from a Code session, Synchro opens a pull request without asking. Pushing from the default branch first moves the work to a new branch with your prefix."><Toggle on={cp.autoPr} set={(v) => save({ autoPr: v })} /></Row>
-        <Row t="Auto-fix pull requests" d={<>Synchro watches the pull requests it opened. When CI fails or someone leaves a comment, it works on the fix in the same session, pushes to the branch, and replies on the pull request.{!cp.allowBypass && <span className="cap-note warn">Turn on Allow auto mode above: fixes run while you're away, with nobody to approve them.</span>}</>}><Toggle on={cp.autoFix} set={(v) => save({ autoFix: v })} /></Row>
+        <Row t="Auto-fix pull requests" d={<>Synchro watches the pull requests it opened. When CI fails or someone leaves a comment, it works on the fix in the same session, pushes to the branch, and replies on the pull request.{!cp.allowBypass && <span className="cap-note warn">Turn on Allow auto mode above: fixes run while you&apos;re away, with nobody to approve them.</span>}</>}><Toggle on={cp.autoFix} set={(v) => save({ autoFix: v })} /></Row>
         <Row t="Archive after merge or close" d="When a pull request is merged or closed, archive its session. After a merge Synchro also deletes the branch on GitHub and the session's workspace folder, unless something there isn't pushed yet."><Toggle on={cp.autoArchivePr} set={(v) => save({ autoArchivePr: v })} /></Row>
       </> : <Row t="Loading…" top />}
       <H>Safety and context</H>

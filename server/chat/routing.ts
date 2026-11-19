@@ -3,7 +3,7 @@ import "server-only";
 // (gói CLI, khóa API, đường nhanh, đổi model khi lỗi), khởi động sẵn (prewarmChat), chọn skill / studio / thư viện cho lượt (skillSet).
 import { enabledSkills, recordUse, type Skill } from "../skillstore";
 import { skillsPrompt, skillTools, type ToolRun } from "../skillruntime";
-import { can, canModel, limit, permsOf, type UserRow } from "../authstore";
+import { can, canModel, limit, modelDeniedMsg, permsOf, type UserRow } from "../authstore";
 import { clampEffort, connPolicy, effortCap, isEffort, legacyModel } from "../../shared/catalog";
 import { catalog, mainModels, pickDefault, resolveModel } from "../providers";
 import { ConnectorSession, connectorsPrompt, listConnectors } from "../connectors";
@@ -33,7 +33,8 @@ import type { OutFile } from "../outputs";
 import { anthropicWebSearch } from "../../shared/modelrules";
 import { untested } from "../modelreg";
 import { chatOnce, HttpErr, toAnthropic, toOpenAI, toResponses, withPages } from "../llmcall";
-import { prewarmClaude, sessionPlain, subCli, subTurn } from "../ai/subs";
+import { prewarmClaude, sessionPlain, SUB, subCli, subTurn } from "../ai/subs";
+import { planResetMsg, sharedKeyMsg } from "../limitmsg";
 import { PROJECT_DOC_RULES, PROJECT_DOC_TOOL, projectDocsLong, projectIns } from "../projectdocs";
 import { REJECTED_RULE, rejectedBlock, stripAppliedNotes, withProjectIns, withRejected } from "../../shared/turnctx";
 import { IMAGE_RULES, imageTool } from "../ai/imagegen";
@@ -43,13 +44,15 @@ import { clearStall, noteStall, stalledModels, usableModels } from "../ai/anymod
 import { learnFromTurn } from "../memory";
 import { afterTurn, BRAIN_RULES, BRAIN_TOOLS, brainRecallHybrid, topRule, warmRecall } from "../brain";
 import { DENIED_NUDGE, MAX_NUDGE, NUDGE, stalled } from "../stall";
+import { CONT_JOB } from "../ai/helperquota";
 import { TASK_TOOL, taskBrowser, taskOf, taskRules } from "../tasktools";
 import { resolveTool } from "../connproxy";
 import { getPrefs as codePrefs } from "../codestore";
 import { BROWSER_RULES, BROWSER_TOOLS, chatFiles, releaseBrowser } from "../browsertools";
 import { useProfile, lastUserText, DEFAULT_SYSTEM, FAST_RULES, contextOf, estimate, pinnedBlock, artifactMessages, QUALITY_RULES, BRIDGE_CLIS, brainOn, CLI_TOOLS_NOTE, NARRATE_RULES, holdNeedTools, withRecall, designOf, nowBlock, crisisBlock, ARTIFACT_SYSTEM, NEED_TOOLS, useMemory } from "./prompt";
 import { sweep, pending, unparkApproval, type Decision, needsAsk, applyEdit } from "./approvals";
-import { type Lib, fold, execute, reply, toolLoop, type Exec, connTools, PLAN_TOOL, announceOffline, bridgeCall, connProxy, CONN_CALL, live, keepImages, sayOut, withTurnArts, usedLibs, GEMINI_WEB_TOOL, WEB_DESC, mockAdapter, anthropicAdapter, citeOf, responsesAdapter, openaiAdapter, healPatch, isAbort } from "./tools";
+import { notePlan } from "./planmerge";
+import { type Lib, fold, execute, reply, toolLoop, type Exec, connTools, PLAN_TOOL, announceOffline, bridgeCall, connProxy, CONN_CALL, live, keepImages, sayOut, deckGate, holdAnswer, settleGate, withTurnArts, usedLibs, GEMINI_WEB_TOOL, WEB_DESC, mockAdapter, anthropicAdapter, citeOf, responsesAdapter, openaiAdapter, healPatch, isAbort } from "./tools";
 
 // Gợi ý định tuyến cho lượt này: skill hợp nhất với yêu cầu (tìm trong toàn bộ kho, cả skill bên trong thư viện)
 // và skill các lượt trước đã dùng. Model đọc thẳng skill bằng tên, không phải mở thư viện trước; không hợp thì bỏ qua.
@@ -416,8 +419,10 @@ async function chatPostTurn(body: Parameters<typeof chatPost>[0], c: Who, scope:
   const out = new Set<string>();
   // Lý do đã chuyển model (để báo lại cho người dùng sau khi lượt xong, không chỉ trong dòng tiến trình lúc chạy).
   let switchedWhy = "";
+  // Model đầu hết hạn mức gói: hạn mức nào và bao giờ hồi (H1.2), nối sau câu "đã trả lời bằng …".
+  let resetNote = "";
   while ([409, 429, 500, 502, 503, 504, 529].includes(res.status) && !turnSignal()?.aborted && tried.length < 5) {
-    const j0 = (await res.clone().json().catch(() => ({}))) as { usageLimit?: boolean; partialWork?: boolean; quota?: string; planLimit?: string; rate?: boolean; stalled?: boolean; busy?: boolean };
+    const j0 = (await res.clone().json().catch(() => ({}))) as { usageLimit?: boolean; partialWork?: boolean; quota?: string; planLimit?: string; rate?: boolean; stalled?: boolean; busy?: boolean; resetsAt?: number | null };
     // Treo, lỗi phía hãng: nhớ vài phút. Mỗi tin nhắn tiếp theo từng chọn lại đúng model đang treo, chờ thêm 60-90 giây rồi mới chuyển.
     if ((j0.stalled || res.status === 504 || res.status >= 500) && !j0.busy && !j0.usageLimit && subCli(used)) noteStall(c.user.id, subCli(used)!);
     if (j0.usageLimit || j0.partialWork) break;
@@ -428,7 +433,11 @@ async function chatPostTurn(body: Parameters<typeof chatPost>[0], c: Who, scope:
     if (!next) break;
     const why = j0.quota || j0.planLimit ? "đã hết hạn mức" : j0.rate ? "đang giới hạn tốc độ" : res.status === 409 ? "cần đăng nhập lại" : j0.busy ? "đang chạy lượt khác" : j0.stalled || res.status === 504 ? "không phản hồi" : "đang gặp lỗi";
     progress("note", `${shown(used)} ${why}, chuyển sang ${shown(next)}`);
-    if (!switchedWhy) switchedWhy = `${shown(used)} ${why}`;
+    if (!switchedWhy) {
+      switchedWhy = `${shown(used)} ${why}`;
+      const cli = subCli(used);
+      if ((j0.quota || j0.planLimit) && cli && Number(j0.resetsAt) > Date.now()) resetNote = planResetMsg(j0.quota === "model" ? "model" : "plan", j0.quota === "model" ? shown(used) ?? used : SUB[cli].name, Number(j0.resetsAt));
+    }
     deltaStep();
     used = next; tried.push(next);
     res = await chatTurn({ ...body, model: next, effort }, c, scope, { auto: true });
@@ -441,8 +450,10 @@ async function chatPostTurn(body: Parameters<typeof chatPost>[0], c: Who, scope:
     if (now && !now.usable.length && now.plansOut.count > 1) { j.error = "Các gói đã kết nối đều đã hết hạn mức."; if (now.plansOut.resets) j.resetsAt = now.plansOut.resets; delete j.switchTo; }
   }
   // Tự động đã chuyển model trong lượt này: nói rõ ở câu trả lời (switched) và một lần trên thanh thông báo (notice).
-  const switched = res.status === 200 && used !== r.model && switchedWhy ? `${switchedWhy}, nên Synchro đã trả lời bằng ${shown(used)}.` : "";
-  return Response.json({ ...j, model: j.model ?? used, ...(switched ? { switched, ...(j.notice ? {} : { notice: switched }) } : {}), ...(plansOnly && res.status === 200 && !j.notice && !switched ? { notice: PLANS_ONLY_NOTE } : {}), ...(res.status !== 200 && tried.length > 1 ? { tried: tried.map(shown) } : {}), auto: { tier: r.tier, vendor: r.vendor, task: r.task, effort, why: r.why, ...(used !== r.model ? { fallback: used } : {}) } }, { status: res.status });
+  const switched = res.status === 200 && used !== r.model && switchedWhy ? `${switchedWhy}, nên Synchro đã trả lời bằng ${shown(used)}.${resetNote ? ` ${resetNote}` : ""}` : "";
+  // Tự động chọn model chạy bằng khóa API chung trong khi tài khoản đã kết nối gói (kể cả gói đang tạm hết hạn mức): một dòng nói lượt này tính vào hạn mức chi phí API (H1 bổ sung).
+  const keyNote = res.status === 200 && !subCli(used) && allowed.some((k) => !!subCli(k)) ? sharedKeyMsg(shown(used) ?? used) : "";
+  return Response.json({ ...j, model: j.model ?? used, ...(switched ? { switched, ...(j.notice ? {} : { notice: switched }) } : {}), ...(keyNote ? { keyNote, ...(j.notice || switched ? {} : { notice: keyNote }) } : {}), ...(plansOnly && res.status === 200 && !j.notice && !switched ? { notice: PLANS_ONLY_NOTE } : {}), ...(res.status !== 200 && tried.length > 1 ? { tried: tried.map(shown) } : {}), auto: { tier: r.tier, vendor: r.vendor, task: r.task, effort, why: r.why, ...(used !== r.model ? { fallback: used } : {}) } }, { status: res.status });
 }
 const PLANS_ONLY_NOTE = "Đã hết hạn mức API của bạn trên Synchro, nên Tự động đang dùng gói đã kết nối (Claude, ChatGPT, Gemini, Grok) thay vì khóa chat.";
 // Lỗi của gói mà còn model của gói khác dùng được: gợi ý sẵn để người dùng đổi bằng một lần bấm (máy chủ thật không có khóa API để đề nghị thay).
@@ -569,7 +580,10 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
       // Antigravity trả cả câu trả lời một lần nên làm sạch được ngay; CLI khác làm sạch ở câu trả lời cuối (đường dẫn có thể bị cắt giữa hai đoạn chữ).
       const say = say0 && cli === "agy" ? (t: string) => say0(scrubServerPaths(t)) : say0;
       const turnMsgs = am ?? withRecall(withRecall(messages, await recallOf(body, c.user, convId)), [route, fast || !pc ? "" : designOf(body, { art: !!pc.art, code: !!pc.code, image: BRIDGE_CLIS.has(subCli(model)!) && feature !== "code" }, can(c.user, "skills") ? studioOf(body.studio) : null, convId), nowBlock(body), crisisBlock(body)].filter(Boolean).join("\n\n"));
+      // cont: lượt làm tiếp trong cùng tin nhắn (nhắc làm tiếp, chờ kết quả công cụ): ghi "job:cont", không đếm thành tin nhắn mới (helperquota.ts CONT_JOB).
+      let cont = false;
       const turn = (msgs: unknown, fresh = false) => subTurn({
+        job: cont ? CONT_JOB : undefined,
         user: c.user, model, system: am ? ARTIFACT_SYSTEM : [system || (planSys || toolSys ? "Bạn là một trợ lý AI hữu ích." : ""), planSys, toolSys, contextOf(body, c.user), pinnedBlock(body.pinned)].filter(Boolean).join("\n\n"),
         ephemeral: body.incognito === true, messages: msgs, conv: am ? undefined : convId, effort: isEffort(wanted) ? wanted : wanted === "auto" ? autoEffort(routeInput(body)) : undefined, signal: turnSignal(), onDelta: say, onToolUse: am ? undefined : toolUseSeen,
         older: typeof body.olderDigest === "string" ? body.olderDigest.slice(0, 8000) : undefined, fast, awaitingUser: () => !!x?.awaiting, mcp: bridge ? { url: bridge.url, alive: bridge.alive, onPark: bridge.onPark, live: bridge.live } : undefined, web: !fast && body.web === true, fresh,
@@ -580,6 +594,9 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
         onSearch: am ? undefined : (q) => { const seq = progress("tool", q.url ? `Đang đọc trang ${q.url.slice(0, 120)}` : q.query ? `Đang tìm trên web: ${q.query.slice(0, 120)}` : "Đang tìm trên web"); if (seq) progress("res", JSON.stringify({ ref: seq, ok: true })); },
         // Connect Link của Composio không phải nguồn: không vào hàng chip "Nguồn" dù CLI báo nó là link trong câu trả lời.
         onSources: am ? undefined : (items) => { for (const s of items) if (webs.size < 12 && !webs.has(s.url) && notConnectLink(s.url)) webs.set(s.url, s); },
+        // Codex có update_plan dựng sẵn bên cạnh update_plan của Synchro: model dùng cái nào thì danh sách việc trong khung chat cũng cập nhật (lỗi 8 của ma trận H1:
+        // "Tasks 0/3" đứng yên tới cuối lượt dù model đã xong bước 1). Một danh sách mỗi lượt: notePlan (tools.ts) ưu tiên danh sách của Synchro.
+        onPlan: am ? undefined : (items) => { const shown = notePlan(x, "native", items); if (shown) progress("plan", JSON.stringify(shown)); },
       });
       // Bấm Dừng: CLI trả về mọi chữ đã viết trong lượt, kể cả các câu dẫn đã nằm trong nhật ký làm việc (ghép lại thành một đoạn dài
       // không dấu cách, trông như câu trả lời cụt rồi dừng). Câu trả lời chỉ giữ phần của bước đang viết dở, như lượt chạy bằng khóa API.
@@ -628,6 +645,7 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
       let good: typeof r | null = null;
       // Lượt của CLI xong mà còn tin nhắn thêm chưa đọc: làm tiếp ngay trong cùng phiên của CLI (không chờ lượt sau). Gói mới báo
       // "Mình sẽ…" mà chưa gọi công cụ nào của Synchro: nhắc làm tiếp (stall.ts). agy tự chặn công cụ: nhắc dùng công cụ được phép.
+      let gate: string | null = null;
       for (let k = 0, nudged = 0, nd = 0; k < 6 && !am && r.status === 200; k++) {
         good = r;
         const j = r.json as J;
@@ -640,14 +658,21 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
         else if (j.denied?.length && nd < MAX_NUDGE) { nd++; next = DENIED_NUDGE(j.denied); }
         else if (bridge?.pendingJobs().length) next = `Còn công cụ chưa lấy kết quả (${bridge.pendingJobs().map((p) => `${p.name}: job_id ${p.id}`).join("; ")}). Gọi wait_for_result với từng job_id tới khi có kết quả thật rồi mới trả lời tiếp; đừng báo thất bại khi chưa có kết quả.`;
         else if (bridge && !bridged && nudged < MAX_NUDGE && stalled(said)) { nudged++; next = NUDGE; }
+        // Bộ slide trong câu trả lời: Synchro tự kiểm bản cuối (tràn khung 1280×720, đánh số lệch), có lỗi thì CLI sửa trước khi giao (một lần mỗi lượt).
+        // Câu trả lời đã viết được giữ cho người dùng (không đưa vào nhật ký); cuối lượt gộp phần sửa vào đó (settleGate).
+        else if (x && !x.deckGated && (gate = await deckGate(x, said))) { holdAnswer(x, said); next = gate; }
         else break;
-        sayOut(x, said);
+        if (x?.held?.text !== said) sayOut(x, said);
         hist = [...hist, { role: "assistant", content: said }, { role: "user", content: next }];
+        // Tin người dùng nhắn thêm là lượt của họ; nhắc làm tiếp / chờ kết quả công cụ thì không.
+        cont = !more.length;
         r = await tryOnce(hist);
         // Tin nhắn thêm trong lúc đi đường nhanh mà cần công cụ: chạy lượt đầy đủ với cả tin nhắn đó.
         if (needFull()) { deltaStep(); return chatTurn({ ...body, messages: hist, noFast: true }, c, scope, o); }
       }
       if (r.status !== 200 && good && r.status !== 499) {
+        // Lượt sửa theo lời nhắc <auto_check> lỗi: câu trả lời tốt gần nhất chính là câu đang giữ, giao nguyên câu đó.
+        if (x?.held && String((good.json as J).text ?? "") === x.held.text) settleGate(x, "", true);
         const g = good.json as J;
         r = { status: 200, json: { ...(good.json as Record<string, unknown>), denied: undefined, text: `${String(g.text ?? "").trim()}\n\n_(${String((r.json as J).error ?? "Lượt làm tiếp bị lỗi").slice(0, 300)})_` } };
       }
@@ -664,14 +689,14 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
       if (x && r.status === 200) recordUse(c.user.id, names);
       // Lỗi giữa chừng (hết hạn mức, treo…): phần đã viết, tệp đã tạo, dấu vết công cụ không bị bỏ; partialWork: đã làm việc không chạy lại được.
       if (r.status !== 200) {
-        const partial = am ? "" : scrubServerPaths(liveNow() || String((r.json as J).text ?? ""));
+        const partial = am ? "" : scrubServerPaths(x?.held ? settleGate(x, "", true) : liveNow() || String((r.json as J).text ?? ""));
         return Response.json({ ...(r.json as Record<string, unknown>), ...sources, ...(partial.trim() ? { text: withTurnArts(x, partial) } : { text: undefined }), ...(x?.outs.length || natOuts.length ? { files: x?.outs ?? natOuts } : {}), ...(x?.trace.length ? { trace: x.trace } : {}), ...(usedAll.length ? { skills: usedAll, libs: usedLibs(x!, names) } : {}), ...(x?.effects?.length ? { partialWork: true } : {}) }, { status: r.status });
       }
-      return Response.json({ ...(r.json as Record<string, unknown>), ...sources, text: withTurnArts(x, String((r.json as J).text ?? "")), skills: usedAll, files: x!.outs, libs: usedLibs(x!, names), ...(x!.trace.length ? { trace: x!.trace } : {}) });
+      return Response.json({ ...(r.json as Record<string, unknown>), ...sources, text: withTurnArts(x, scrubServerPaths(settleGate(x, String((r.json as J).text ?? ""), !!(r.json as J).cancelled))), skills: usedAll, files: x!.outs, libs: usedLibs(x!, names), ...(x!.trace.length ? { trace: x!.trace } : {}) });
     } finally { bridge?.close(); sess?.close(); if (x) releaseBrowser(c.user.id, x.bctx); }
   }
   if (!model) return Response.json({ error: "Synchro chưa được kết nối với model nào. Quản trị viên cần nhập khóa API ở Cài đặt → Providers." }, { status: 503 });
-  if (!canModel(c.user, model)) return Response.json({ error: "Quản trị viên chưa cho phép tài khoản của bạn dùng model này." }, { status: 403 });
+  if (!canModel(c.user, model)) return Response.json({ error: modelDeniedMsg(c.user, model) }, { status: 403 });
   if (untested(model)) return Response.json({ error: "Model này mới ra và Synchro chưa thử xong nên chưa dùng được. Hãy chọn model khác." }, { status: 400 });
   const t = await resolveModel(model);
   if (!t) return Response.json({ error: "Model này không còn dùng được (khóa API của nhà cung cấp đã bị gỡ). Hãy chọn model khác." }, { status: 400 });

@@ -8,6 +8,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { apiFetch, statusText } from "./apierr";
 import { createPortal } from "react-dom";
 import * as I from "./icons";
+import { Dropdown } from "./listbox";
 import { useApp, usePref } from "./store";
 import { getLang, locale } from "./i18n";
 import { SKILLS_CHANGED } from "./skillsui";
@@ -171,10 +172,7 @@ function ScanModal({ d, setD, reload, onClose }: { d: Data | null; setD: (f: (x:
             </ul>
             <div className="scan-pick">
               <label htmlFor="scan-model">Model</label>
-              <select id="scan-model" className="pl-sel" value={pick} onChange={(e) => setModel(e.target.value)}>
-                <option value="">Auto (Synchro chooses)</option>
-                {d.models.map((g) => <optgroup key={g.name} label={g.name} data-notr>{g.models.map((m) => <option key={m.key} value={m.key} data-notr>{m.name}</option>)}</optgroup>)}
-              </select>
+              <Dropdown id="scan-model" className="scan-dd" minWidth={240} value={pick} onChange={setModel} options={[{ value: "", label: "Auto (Synchro chooses)" }, ...d.models.flatMap((g) => g.models.map((m) => ({ value: m.key, label: m.name, group: g.name, notr: true })))]} />
             </div>
             <p className="scan-note"><I.InfoCircle size={14} /><span>The model reads each skill&apos;s name, description and the start of its instructions. Nothing is turned off or deleted unless you choose to.</span></p>
           </>

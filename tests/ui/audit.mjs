@@ -217,6 +217,23 @@ const CHECK = `(() => {
       const w = cv.measureText(inp.placeholder).width, avail = inp.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
       if (w > avail + 2) out.push("chữ gợi ý bị cắt (" + Math.round(w) + " > " + Math.round(avail) + "px): “" + inp.placeholder.slice(0, 50) + "”");
     } }
+  // <select> gốc: trên Windows mở danh sách của hệ điều hành (nền trắng, dòng chọn xanh); app dùng Dropdown (ui/listbox.tsx).
+  { const ns = [...document.querySelectorAll("select")].filter((x) => vis(x) && !x.closest("iframe")); if (ns.length) out.push("còn <select> gốc: " + ns.slice(0, 3).map(name).join(", ")); }
+  // Bo viên thuốc trên phần tử nhiều dòng: ô nhập nhiều dòng, hàng đang chọn / đang sáng (Luật dự án của Code từng là viên thuốc to cắt chữ).
+  { let k = 0;
+    for (const el of document.querySelectorAll("textarea, .menu-item.is-sel, .menu-item.on, .menu-item.act, [role=option][aria-selected=true], [role=tab][aria-selected=true], .on:is(button,li,a)")) {
+      if (k > 4 || !vis(el)) continue; const b = el.getBoundingClientRect(); if (b.height <= 44 || b.bottom < 0 || b.top > H || !b.width) continue;
+      const cs = getComputedStyle(el), rad = parseFloat(cs.borderTopLeftRadius) || 0, painted = el.tagName === "TEXTAREA" ? (parseFloat(cs.borderTopWidth) > 0 || cs.boxShadow !== "none" || alpha(cs.backgroundColor) > 0.02) : alpha(cs.backgroundColor) > 0.02 || cs.boxShadow !== "none";
+      if (painted && rad >= Math.min(b.height, b.width) / 2 - 2) { out.push("bo viên thuốc trên phần tử nhiều dòng (" + Math.round(b.height) + "px cao, bo " + Math.round(rad) + "): " + name(el)); k++; }
+    } }
+  // Dải tab / bộ chọn đoạn / hàng thẻ cuộn ngang mà vẫn hiện thanh cuộn (Windows: thanh cổ điển có mũi tên) hay cuộn dọc vì tràn lẻ px.
+  { let k = 0;
+    for (const el of document.querySelectorAll("[role=tablist], [role=group], .sp-seg, .sp-utabs, .sp-catrow, .sp-tags, .ds-seg, .ds-tabs, .pl-seg, .group, .hstrip")) {
+      if (k > 4 || !vis(el)) continue; const cs = getComputedStyle(el);
+      const sx = /(auto|scroll)/.test(cs.overflowX), sy = /(auto|scroll)/.test(cs.overflowY);
+      if ((sx || sy) && cs.scrollbarWidth !== "none") { out.push("dải cuộn còn thanh cuộn (scrollbar-width " + cs.scrollbarWidth + "): " + name(el)); k++; continue; }
+      if (sy && el.scrollHeight > el.clientHeight && el.clientHeight < 60) { out.push("dải cuộn dọc vì tràn " + (el.scrollHeight - el.clientHeight) + "px: " + name(el)); k++; }
+    } }
   for (const s of document.querySelectorAll("select")) {
     if (!vis(s)) continue; const b = s.getBoundingClientRect(); if (!b.width || b.bottom < 0 || b.top > H) continue;
     // Mũi tên mặc định của trình duyệt (appearance khác none) luôn nằm sát viền phải dù chừa padding bao nhiêu.

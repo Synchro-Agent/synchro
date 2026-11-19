@@ -13,8 +13,9 @@ export const POST = route({ feature: "files" }, async ({ req, user }) => {
   const uid = user.id;
   try {
     limit("upload:" + uid, 300, 3_600_000);
+    // signal: người gửi gỡ thẻ tệp, đóng tab hay khung soạn hết giờ chờ thì tệp đang chờ lượt (chép lời…) rời hàng, không tốn credit nữa.
     // ?raw=1 (Synchro Code): nhận mọi loại tệp, tệp không đọc được chữ vẫn được giữ để chép nguyên vào workspace.
-    const r = await processFile(Buffer.from(await f.arrayBuffer()), f.name, uid, { raw: new URL(req.url).searchParams.get("raw") === "1" });
+    const r = await processFile(Buffer.from(await f.arrayBuffer()), f.name, uid, { raw: new URL(req.url).searchParams.get("raw") === "1", signal: req.signal });
     const text = r.blocks.map((b) => (b.type === "text" ? b.text : b.type === "document" ? b.fallbackText ?? "" : "")).filter(Boolean).join("\n\n");
     return Response.json({ id: r.id, name: f.name, kind: r.kind, tokens: r.tokens, large: r.large, ...(r.note ? { note: r.note } : {}), preview: r.raw ? "" : text.slice(0, 200_000), images: r.blocks.filter((b) => b.type === "image").length, ...(r.raw ? { raw: true } : {}) });
   } catch (e) {

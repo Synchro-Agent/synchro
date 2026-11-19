@@ -25,6 +25,10 @@ const SHEETS = [
   { css: "ui/styles/settings.css", entries: ["ui/settings.tsx", "ui/adminui.tsx", "ui/healthui.tsx", "ui/backupui.tsx", "ui/botadmin.tsx", "ui/usageui.tsx", "ui/latencyui.tsx", "ui/cliupdateui.tsx", "ui/modelregui.tsx", "ui/providersui.tsx", "ui/connectorsui.tsx"],
     prefix: /^(perm-|cap-(?!ext$)|adm-(?!(pager|pg|pg-n|pg-b)$)|pv-(?!open$)|cn-(?!(logo|mono|link)$)|us-(?!(note|wrap|ring|ring-n|pop|h|row|row-t|bar|empty|more|v|v-h|tag|money|ctx|sub)$))/ },
   { css: "ui/styles/skills.css", entries: ["ui/pluginsui.tsx", "ui/skillsui.tsx", "ui/skillscanui.tsx", "ui/claudedirui.tsx", "ui/studio.tsx", "ui/appsui.tsx", "ui/tasksui.tsx"], prefix: /^pl-/ },
+  // Ô chọn màu dùng chung (ui/colorpick.tsx, chỉ màn Bộ não và Audio Native dùng): tệp CSS riêng nạp cùng thành phần, ít lớp nên min thấp; tiền tố cp- (chữ "cp" trơn trùng tên biến, lệnh cp của shell).
+  { css: "ui/styles/colorpick.css", entries: ["ui/colorpick.tsx"], prefix: /^cp-/, min: 10 },
+  // Quả cầu ngọc trai (ui/pearlorb.tsx, chỉ màn Speech dùng): tệp CSS riêng nạp cùng thành phần.
+  { css: "ui/styles/pearlorb.css", entries: ["ui/pearlorb.tsx"], prefix: /^pearl-/, min: 3 },
 ];
 const classes = (css) => new Set([...css.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\{[^{}]*\}/g, "{}").matchAll(/\.(-?[A-Za-z_][\w-]*)/g)].map((m) => m[1]));
 // Lớp xuất hiện như một chữ riêng trong chuỗi của tệp (kể cả chuỗi ghép `sp-${x}`).
@@ -32,7 +36,7 @@ const mentions = (f, c) => new RegExp(`["'\`\\s]${c.replace(/-/g, "\\-")}["'\`\\
 
 for (const s of SHEETS) {
   const css = fs.readFileSync(s.css, "utf8"), cl = classes(css);
-  ok(cl.size > 20, `${s.css}: có nội dung`, cl.size);
+  ok(cl.size > (s.min ?? 20), `${s.css}: có nội dung`, cl.size);
   for (const e of s.entries) ok(new RegExp(`^import "[^"]*${path.basename(s.css).replace(".", "\\.")}";$`, "m").test(src[e]), `${e} nạp ${path.basename(s.css)}`);
   ok(!s.entries.some((e) => first.has(e)), `${s.css}: lối vào không nằm trong phần tải đầu`, s.entries.filter((e) => first.has(e)));
   const own = [...cl].filter((c) => s.prefix.test(c));

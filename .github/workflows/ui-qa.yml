@@ -34,6 +34,12 @@ jobs:
       - name: Cài gói
         run: npm ci
 
+      # Phim giới thiệu không nằm trong git (Blueprint H3.9) và bản checkout nông không có lịch sử: tải hai tệp mp4 từ synchro.net.nz vào
+      # public/intro/ trước khi build. Lỗi không chặn: tests/ui/introfilm.mjs khi đó in "BỎ QUA: …" và tổng kết QA ghi bộ đó là bỏ qua.
+      - name: Tải phim giới thiệu
+        continue-on-error: true
+        run: node tools/fetch-intro.mjs
+
       # Build production của bản giả lập: cùng mức heap 4096 MB như bước build của deploy.yml (mặc định của Node dễ hết bộ nhớ trên máy 2 nhân).
       - name: Khởi động Synchro giả lập (dev:mock:fast)
         id: mock

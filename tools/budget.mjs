@@ -16,7 +16,11 @@ export const BUDGET = { js: 350 * 1024, css: 45 * 1024 };
 // CSS 89 → 84 KB (B5 bước 10, 2026-11-15): đo 83,4 KB gzip trên bản build production (87,5 trước B5 vòng 2: xóa khai báo chết, chuyển luật
 // chỉ trúng màn tải chậm sang CSS của màn đó). Phần còn lại tới 45 KB cần tách tiếp theo màn (art-, sk-, cx-…, ~145 KB nguồn neo vào màn tải
 // chậm nhưng css-cascade tĩnh chưa chứng minh được giữ nguyên bên thắng) — chưa bắt buộc.
-export const CEIL = { js: 350 * 1024, css: 84 * 1024 };
+// CSS 84 → 83,6 KB (w10, 2026-11-19): phần đánh bóng w10 (.dd, ô chọn màu, ô đánh dấu, dải cuộn) đẩy lên 85,1 KB; đo lại 83,3 KB gzip
+// (85 312 byte) trên bản build production sau khi: tách ô chọn màu (ui/styles/colorpick.css) và quả cầu Speech (ui/styles/pearlorb.css)
+// thành CSS nạp cùng thành phần, xóa luật của lớp không còn ở đâu dùng (proj-card, sk-drop, sk-warn, cpo-err, cn-cats…, ops-log), chuyển
+// 42 luật chỉ trúng màn tải chậm (css-move-verify APART=1, từng tệp đích). Không đổi bên thắng (css-cascade dev / prod, hai thứ tự tệp thành phần).
+export const CEIL = { js: 350 * 1024, css: 83.6 * 1024 };
 export const ENFORCED = { js: true, css: false };
 
 // Mã nguồn quyết định bản build của trang chủ: bản build cũ hơn tệp nào trong này là đo nhầm bản cũ.

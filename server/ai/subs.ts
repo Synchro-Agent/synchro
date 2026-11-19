@@ -18,10 +18,11 @@ import { classifyTurn, noteCliOutcome } from "./cliupdate";
 import { clearRelogin, engineEnvReady, ensureScopeDir, everLoggedIn, loginTime, markRelogin, needsRelogin, safeScope, scopeDir, status } from "./cli_auth";
 import { prettyGrok } from "../providers";
 import { CLIS, type Cli, engineHome, find, listEngineDir, makeDir, removeDir, removeSessionFiles, spawnCli, stripAnsi, watchSessions, writeEngineFile } from "./cli_runtime";
-import type { Attachment, RateWindow, TurnRequest, WebSource } from "./engine";
+import type { Attachment, PlanStep, RateWindow, TurnRequest, WebSource } from "./engine";
 import { friendlyError, redact, retryAfterMs } from "./errors";
 import { agyNativeImages, nativeStamp, removeFile, type ImgFile } from "./imagefiles";
 import { stallOf, waitText, watchLimits, type WatchState } from "./watchdog";
+import { helperVerdict, JOB_VIA, THROTTLED_JOBS } from "./helperquota";
 import { codexServerRpc, prestartCodexServer } from "./codex_server";
 import { dropLiveBridge } from "../mcpbridge";
 
@@ -270,7 +271,9 @@ export const forgetAllSubModels = (cli: Cli) => { for (const k of [...g.models.k
 export type WindowKind = "session" | "weekly" | "other";
 export type PlanWindow = RateWindow & { label: string; kind: WindowKind; group?: string; idle?: boolean };
 /** setup: CLI đang chờ người dùng hoàn tất bước làm quen (agy) nên chưa đọc được hạn mức. */
-export type SubUsage = { cli: Cli; name: string; plan: string | null; windows: PlanWindow[]; turnsToday: number; note: string | null; credits: string | null; at: number | null; setup?: boolean };
+/** turnsToday: tin nhắn của chính người dùng hôm nay; helpersToday: việc phụ chạy trên gói hôm nay (đặt tên, ghi nhớ, phản biện tự động…).
+ *  ranAt: lần gần nhất gói chạy được một lượt (agy đã chạy được thì "chờ bước làm quen" chỉ còn là chuyện chưa đọc được bảng hạn mức). */
+export type SubUsage = { cli: Cli; name: string; plan: string | null; windows: PlanWindow[]; turnsToday: number; helpersToday: number; note: string | null; credits: string | null; at: number | null; setup?: boolean; ranAt?: number | null };
 
 const WINDOW_NAME: Record<string, string> = {
   five_hour: "Current session", seven_day: "Weekly · all models", seven_day_opus: "Weekly · Opus", seven_day_sonnet: "Weekly · Sonnet",
@@ -470,10 +473,33 @@ export function forgetPlan(cli: Cli, uid: string) {
   sessDb().prepare("DELETE FROM engine_api_optin WHERE user_id = ? AND cli = ?").run(uid, cli);
 }
 
-const turnsToday = (uid: string, cli: Cli) => {
-  const since = new Date(); since.setHours(0, 0, 0, 0);
-  return (sessDb().prepare("SELECT COUNT(*) AS n FROM engine_turns WHERE user_id = ? AND cli = ? AND at >= ?").get(uid, cli, since.getTime()) as { n: number }).n;
-};
+// "Tin nhắn hôm nay" chỉ đếm lượt của chính người dùng (lỗi 12 của ma trận H1: 61 "tin nhắn" sau 9 tin người dùng gửi, phần còn lại là việc phụ).
+// Việc phụ ghi via = "job:<tên>", lượt làm ấm phiên ghi "warm" (helperquota.ts); đếm riêng thành helpersToday.
+const dayStart = () => { const since = new Date(); since.setHours(0, 0, 0, 0); return since.getTime(); };
+const USER_TURN = "via <> 'warm' AND via NOT LIKE 'job:%'";
+const turnsToday = (uid: string, cli: Cli) =>
+  (sessDb().prepare(`SELECT COUNT(*) AS n FROM engine_turns WHERE user_id = ? AND cli = ? AND at >= ? AND ${USER_TURN}`).get(uid, cli, dayStart()) as { n: number }).n;
+const helpersToday = (uid: string, cli: Cli) =>
+  (sessDb().prepare(`SELECT COUNT(*) AS n FROM engine_turns WHERE user_id = ? AND cli = ? AND at >= ? AND NOT (${USER_TURN})`).get(uid, cli, dayStart()) as { n: number }).n;
+// Ngân sách việc phụ chỉ tính việc tự động (THROTTLED_JOBS) và lượt làm ấm: việc người dùng tự bấm (quét skill, phản biện tay, nén ngữ cảnh,
+// đọc to…) và lượt làm tiếp trong cùng một tin nhắn (CONT_JOB) vẫn hiện trong "việc nền" nhưng không tiêu ngân sách của việc tự động: một lần
+// quét skill nhiều đợt không được làm tên đoạn chat và bộ nhớ dừng cả ngày.
+const THROTTLED_VIA = `via = 'warm' OR via IN (${[...THROTTLED_JOBS].map((j) => `'${JOB_VIA}${j}'`).join(", ")})`;
+const throttledToday = (uid: string, cli: Cli) =>
+  (sessDb().prepare(`SELECT COUNT(*) AS n FROM engine_turns WHERE user_id = ? AND cli = ? AND at >= ? AND (${THROTTLED_VIA})`).get(uid, cli, dayStart()) as { n: number }).n;
+/** Lượt của chính người dùng hôm nay trên mọi gói (ngân sách việc phụ tính theo đây). */
+const userTurnsAll = (uid: string) =>
+  (sessDb().prepare(`SELECT COUNT(*) AS n FROM engine_turns WHERE user_id = ? AND at >= ? AND ${USER_TURN}`).get(uid, dayStart()) as { n: number }).n;
+/** Hôm nay trên gói này: tin nhắn của người dùng và việc phụ (Cài đặt → Usage, kiểm thử helper-quota). */
+export const todayCounts = (uid: string, cli: Cli) => ({ turns: turnsToday(uid, cli), helpers: helpersToday(uid, cli) });
+/** Lượt gần nhất chạy xong bằng gói này (mọi loại), hoặc null: Gemini đã chạy được thì không còn là "đang chờ bước làm quen". */
+const lastRun = (uid: string, cli: Cli) => (sessDb().prepare("SELECT MAX(at) AS at FROM engine_turns WHERE user_id = ? AND cli = ?").get(uid, cli) as { at: number | null }).at ?? null;
+
+/** Việc phụ tự động (helperquota.ts THROTTLED_JOBS) còn chạy được trên gói này hôm nay không: chưa gần chạm hạn mức, chưa hết ngân sách việc phụ. */
+export function helperRoom(uid: string, cli: Cli, now = Date.now()) {
+  const windows = (g.limits.get(`${cli}:${uid}`)?.windows ?? []).map((w) => project({ ...w, label: "", kind: "kind" in w ? (w as PlanWindow).kind : kindOf(w.window) } as PlanWindow, now));
+  return helperVerdict({ helpers: throttledToday(uid, cli), userTurns: userTurnsAll(uid), windows, blockedUntil: planBlock(cli, uid) }, now);
+}
 
 const label = (w: RateWindow) => WINDOW_NAME[w.window] ?? w.window.replace(/_/g, " ");
 const NOTE: Record<Cli, string> = {
@@ -485,6 +511,8 @@ const NOTE: Record<Cli, string> = {
 
 /** Antigravity đang chờ người dùng hoàn tất bước làm quen (đã thấy ở lần đọc hạn mức gần nhất). */
 export const agySetupPending = (uid: string) => !!g.limits.get(`agy:${uid}`)?.setup;
+/** Lần gần nhất gói này chạy xong một lượt (mọi loại), hoặc null (Cài đặt → Providers: Gemini đã chạy được thì nói đúng như vậy). */
+export const lastPlanRun = (uid: string, cli: Cli) => lastRun(uid, cli);
 
 /** fresh: bỏ qua bộ nhớ (người dùng bấm làm mới). idle: lượt hỏi định kỳ của giao diện: đã có số thì không mở CLI. */
 export async function subUsage(u: UserRow, cli: Cli, o: { fresh?: boolean; idle?: boolean } = {}): Promise<SubUsage> {
@@ -498,7 +526,9 @@ export async function subUsage(u: UserRow, cli: Cli, o: { fresh?: boolean; idle?
     const c = codexWindows(rl);
     saveLimits(cli, u.id, c.windows, { plan: (typeof acc?.account?.planType === "string" ? acc.account.planType : undefined) ?? c.plan, credits: c.credits });
     hit = g.limits.get(k);
-  } else if (cli === "agy" && (o.fresh || age > (hit?.setup ? 20_000 : 5 * 60_000))) {
+  // Còn màn hình làm quen mà Gemini chưa chạy được lượt nào: đọc lại sau 20 giây (người dùng có thể vừa xong bước đó). Đã chạy được rồi thì
+  // bước làm quen không chặn gì: đọc thưa như thường (mỗi lần đọc là mở cả CLI trong terminal giả).
+  } else if (cli === "agy" && (o.fresh || age > (hit?.setup && !lastRun(u.id, cli) ? 20_000 : 5 * 60_000))) {
     const r = await agyUsage(u.id).catch(() => ({ windows: [] as PlanWindow[], setup: false }));
     saveLimits(cli, u.id, r.windows, { setup: r.setup });
     hit = g.limits.get(k);
@@ -512,9 +542,17 @@ export async function subUsage(u: UserRow, cli: Cli, o: { fresh?: boolean; idle?
   const windows = (hit?.windows ?? [])
     .map((w) => project({ ...w, label: "label" in w ? (w as PlanWindow).label : label(w), kind: "kind" in w ? (w as PlanWindow).kind : kindOf(w.window) } as PlanWindow, now))
     .sort((a, b) => order(a) - order(b));
+  // Hãng đã báo hết hạn mức (lượt chat bị từ chối, planBlock) mà bảng hạn mức không có cửa sổ nào đang chạm (Grok không báo cửa sổ,
+  // Codex / Antigravity chưa đọc lại): thêm một dòng "Hạn mức gói" đã chạm kèm giờ hồi, để vòng mức dùng và Cài đặt → Usage nói đúng
+  // là gói đang bị chặn tới lúc nào thay vì chỉ ghi chú chung (H1.2).
+  const block = planBlock(cli, u.id);
+  if (block && block > now && !windows.some((w) => w.status === "rejected" || (w.usedPct ?? 0) >= 100))
+    windows.unshift({ window: "plan_limit", label: "Plan limit", kind: "session", usedPct: 100, resetsAt: block, status: "rejected" });
   const plan = hit?.plan ? hit.plan.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase()) : null;
-  return { cli, name: SUB[cli].name, plan, windows, turnsToday: turnsToday(u.id, cli), credits: hit?.credits ?? null, at: hit?.at ?? null, setup: !!hit?.setup,
-    note: hit?.setup ? "Antigravity is waiting for you to finish its first-run setup (color scheme, terms and data sharing) before it shows plan limits."
+  const ranAt = lastRun(u.id, cli);
+  return { cli, name: SUB[cli].name, plan, windows, ...(({ turns, helpers }) => ({ turnsToday: turns, helpersToday: helpers }))(todayCounts(u.id, cli)), credits: hit?.credits ?? null, at: hit?.at ?? null, setup: !!hit?.setup, ranAt,
+    note: hit?.setup ? (ranAt ? "Gemini is working normally. Synchro can't show its plan limits yet because Antigravity's limits panel isn't available on this account; chat isn't affected, and if the plan hits its limit Synchro still notices and tells you."
+      : "Antigravity is waiting for you to finish its first-run setup (color scheme, terms and data sharing) before it shows plan limits.")
       : windows.length || cli === "grok" ? NOTE[cli] : cli === "agy" ? `${NOTE.agy} Synchro could not read the quota panel yet.` : `Send a message with this plan to see its limits. ${NOTE[cli]}` };
 }
 
@@ -654,7 +692,7 @@ async function removeConvAttachments(uid: string, conv: string) {
  *  onStatus: dòng trạng thái (đang chờ, CLI đang thử lại); onSearch, onSources: CLI đang tìm web và nguồn tìm được. */
 /** ephemeral (đoạn chat ẩn danh): không nối tiếp phiên, không nhớ phiên, xóa lịch sử CLI ghi trên đĩa ngay khi xong lượt. */
 /** onNativeImages: ảnh Antigravity tự tạo trong lượt (image-generator của nó, không qua generate_image): chuyển ra đây để giao thành tệp, người dùng không mở được đường dẫn trên máy chủ. */
-export type SubTurn = { maxWaitMs?: number; onAttDir?: (dir: string) => void; onNativeImages?: (files: ImgFile[]) => void; ephemeral?: boolean; onSession?: (id: string) => void; user: UserRow; model: string; system: string; messages: unknown; conv?: string; effort?: string; /** Lượt không công cụ (đường nhanh): được dùng tiến trình khởi động sẵn. */ fast?: boolean; /** Tên việc phụ, ghi vào [timing]; không có là lượt của người dùng. */ job?: string; /** Việc không ai đứng chờ: xếp hàng sau các việc khác (BG_MAX). */ bg?: boolean; /** Trích ngắn các tin cũ mà trình duyệt không gửi nguyên văn. */ older?: string; awaitingUser?: () => boolean; signal?: AbortSignal; onDelta?: (t: string) => void; onToolUse?: () => void; mcp?: { url: string; alive?: () => number; onPark?: (f: () => void) => void; live?: { url: string; key: string } }; web?: boolean; fresh?: boolean; total?: number; lockMs?: number; onStatus?: (t: string) => void; onSearch?: (q: { query?: string; url?: string }) => void; onSources?: (s: WebSource[]) => void };
+export type SubTurn = { maxWaitMs?: number; onAttDir?: (dir: string) => void; onNativeImages?: (files: ImgFile[]) => void; ephemeral?: boolean; onSession?: (id: string) => void; user: UserRow; model: string; system: string; messages: unknown; conv?: string; effort?: string; /** Lượt không công cụ (đường nhanh): được dùng tiến trình khởi động sẵn. */ fast?: boolean; /** Tên việc phụ, ghi vào [timing]; không có là lượt của người dùng. */ job?: string; /** Việc không ai đứng chờ: xếp hàng sau các việc khác (BG_MAX). */ bg?: boolean; /** Trích ngắn các tin cũ mà trình duyệt không gửi nguyên văn. */ older?: string; awaitingUser?: () => boolean; signal?: AbortSignal; onDelta?: (t: string) => void; onToolUse?: () => void; mcp?: { url: string; alive?: () => number; onPark?: (f: () => void) => void; live?: { url: string; key: string } }; web?: boolean; fresh?: boolean; total?: number; lockMs?: number; onStatus?: (t: string) => void; onSearch?: (q: { query?: string; url?: string }) => void; onSources?: (s: WebSource[]) => void; /** Danh sách việc model cập nhật bằng công cụ dựng sẵn của CLI. */ onPlan?: (items: PlanStep[]) => void };
 export type SubResult = { status: number; json: Json };
 
 // ---------------------------------------------------------------- phiên ấm (Claude Code)
@@ -677,6 +715,8 @@ async function primeWarm(key: string, base: TurnRequest, uid: string) {
   if (priming.has(key)) return;
   // Gói sắp chạm giới hạn: không tiêu thêm lượt để làm ấm.
   if ((g.limits.get(`claude:${uid}`)?.windows ?? []).some((w) => (w.usedPct ?? 0) >= 80)) return;
+  // Lượt làm ấm cũng là một lượt của gói (ghi "warm"): chung ngân sách việc phụ của hôm nay (helperquota.ts).
+  if (!helperRoom(uid, "claude").ok) return;
   priming.add(key);
   try {
     let id: string | null = null, ok = false;
@@ -849,6 +889,7 @@ async function runTurn(o: SubTurn): Promise<SubResult> {
     else if (e.kind === "pool") poolState = e.state;
     else if (e.kind === "search") { searched = true; ws.last = Date.now(); o.onSearch?.({ query: e.query, url: e.url }); }
     else if (e.kind === "sources") addSources(e.items);
+    else if (e.kind === "plan") { ws.last = Date.now(); o.onPlan?.(e.items); }
     else if (e.kind === "tooluse") { ws.last = Date.now(); o.onToolUse?.(); }
     else if (e.kind === "session") {
       session = e.id;
@@ -919,7 +960,8 @@ async function runTurn(o: SubTurn): Promise<SubResult> {
   clearRelogin(cli, o.user.id);
   // Câu trả lời ghi link mà CLI không báo nguồn có cấu trúc (Antigravity, Codex): lấy nguồn từ chính câu trả lời.
   if (o.web && (searched || cli === "agy") && !seenSrc.size) addSources(linksIn(final ?? text));
-  d.prepare("INSERT INTO engine_turns (user_id, cli, at, via, model) VALUES (?, ?, ?, ?, ?)").run(o.user.id, cli, Date.now(), via ?? cli, o.model);
+  // Việc phụ ghi "job:<tên>" để "tin nhắn hôm nay" chỉ đếm lượt của người dùng và ngân sách việc phụ đếm đúng (helperquota.ts).
+  d.prepare("INSERT INTO engine_turns (user_id, cli, at, via, model) VALUES (?, ?, ?, ?, ?)").run(o.user.id, cli, Date.now(), o.job ? `${JOB_VIA}${o.job}` : via ?? cli, o.model);
   if (conv && session) {
     // Phiên nối tiếp giữ dấu "đã gọi công cụ" (phiên cũ chưa có dấu: coi như có); phiên mới tính từ lượt này.
     const tooled = searched || (o.mcp?.alive?.() ?? 0) > T0 || (resume ? prev?.tooled !== 0 : false);

@@ -595,6 +595,9 @@ Object.assign(VI2EN, {
   "Mở Cài đặt → Providers": "Open Settings → Providers",
   "Quản trị viên chưa cho phép tài khoản của bạn dùng model này": "The administrator hasn't allowed your account to use this model",
   "Quản trị viên chưa cho phép tài khoản của bạn dùng model này.": "The administrator hasn't allowed your account to use this model.",
+  // Quy tắc khóa API chung cho tài khoản thường (server/auth/sharedkey.ts).
+  "Quản trị viên chưa cho tài khoản của bạn dùng khóa API chung của máy chủ. Model của gói bạn tự đăng nhập (Cài đặt → Providers) vẫn dùng được.": "The administrator hasn't allowed your account to use the server's shared API key. Models from a plan you sign in to yourself (Settings → Providers) still work.",
+  "Model này chỉ chạy được bằng gói bạn tự đăng nhập: trên khóa API chung của máy chủ, quản trị viên chưa cho tài khoản thường dùng model hạng này. Hãy chọn Tự động hoặc một model nhẹ hơn.": "This model only runs on a plan you sign in to yourself: on the server's shared API key, the administrator hasn't allowed regular accounts to use models of this tier. Choose Auto or a lighter model.",
   "Synchro chưa được kết nối với model nào. Quản trị viên cần nhập khóa API ở Cài đặt → Providers.": "Synchro isn't connected to any model yet. An administrator needs to add an API key in Settings → Providers.",
   "Model này không còn dùng được (khóa API của nhà cung cấp đã bị gỡ). Hãy chọn model khác.": "This model is no longer available (the provider's API key was removed). Please choose another model.",
   "Tương thích OpenAI": "OpenAI-compatible", "Biến môi trường máy chủ": "Server environment", "Máy chủ (biến môi trường)": "Server (environment)", "Synchro (thử nghiệm)": "Synchro (test)",
@@ -994,7 +997,7 @@ Object.assign(VI2EN, {
   "Phiên 5 giờ bắt đầu từ tin nhắn đầu tiên. Hạn mức tuần đặt lại vào một giờ cố định mỗi tuần.": "The 5-hour session starts with your first message. Weekly limits reset at a fixed time each week.",
   "Hạn mức tùy gói của tài khoản ChatGPT: gói Plus có phiên 5 giờ cuốn chiếu và hạn mức tuần, gói Pro chỉ có hạn mức tuần.": "Limits depend on your ChatGPT plan. Plus has a rolling 5-hour window and a weekly limit; Pro only has a weekly limit.",
   "Hạn mức tùy gói của tài khoản Google và hồi theo chu kỳ. Model Gemini và model Claude/GPT tính riêng.": "Limits depend on your Google account's plan and refresh over time. Gemini and Claude/GPT models are counted separately.",
-  "Đã chạm giới hạn ·": "Limit reached ·", "Mức dùng": "Usage", "Giới hạn gói": "Plan limits", "Giới hạn sử dụng": "Usage limits",
+  "Đã chạm giới hạn ·": "Limit reached ·", "Mức dùng": "Usage", "Giới hạn gói": "Plan limits", "Hạn mức gói": "Plan limit", "Giới hạn sử dụng": "Usage limits",
   "Antigravity đang chờ bạn hoàn tất bước làm quen lần đầu (bảng màu, điều khoản, chia sẻ dữ liệu). Xem Cài đặt → Providers → Gemini.": "Antigravity is waiting for you to finish its first-run setup (color scheme, terms and data sharing). See Settings → Providers → Gemini.",
   "Synchro chưa đọc được hạn mức của gói.": "Synchro could not read the plan's quota yet.", "Gửi một tin nhắn bằng gói này để xem hạn mức.": "Send a message with this plan to see its limits.", "Xem chi tiết mức dùng": "View usage details",
   "(giá ước tính)": "(estimated price)", "Bắt đầu khi bạn gửi tin nhắn": "Starts when you send a message", "Giới hạn phiên": "Session limit", "Hằng tuần · mọi model": "Weekly · all models", "Không giới hạn": "Unlimited",
@@ -1844,7 +1847,7 @@ RULES_EN.push(
   [/^Đang đọc ghi chú (.*) trong bộ não$/, (m) => `Reading note ${m[1]} in the Brain`], [/^Đang ghi vào bộ não: (.*)$/, (m) => `Writing to the Brain: ${m[1]}`], [/^Đang tìm công cụ connector: (.*)$/, (m) => `Looking for a connector tool: ${m[1]}`],
   [/^Đang tìm “(.*)” trên trang$/, (m) => `Finding “${m[1]}” on the page`], [/^Đang bấm phần tử \[(.*)\]$/, (m) => `Clicking element [${m[1]}]`], [/^Đang bấm vị trí (.*)$/, (m) => `Clicking at ${m[1]}`], [/^Đang rê chuột lên phần tử \[(.*)\]$/, (m) => `Hovering over element [${m[1]}]`], [/^Đang rê chuột lên vị trí (.*)$/, (m) => `Hovering at ${m[1]}`],
   [/^Đang gõ “(.*)”$/, (m) => `Typing “${m[1]}”`], [/^Đang nhấn (.+)$/, (m) => `Pressing ${m[1]}`], [/^Đang chọn “(.*)”$/, (m) => `Selecting “${m[1]}”`], [/^Đang tải tệp (.*) lên trang$/, (m) => `Uploading ${m[1]} to the page`], [/^Đang đọc tệp (.*) vừa tải về$/, (m) => `Reading downloaded file ${m[1]}`],
-  [/^Đang chặn quyền (.*) cho trang$/, (m) => `Blocking the ${m[1]} permission for the page`], [/^Đang cho trang quyền (.*)$/, (m) => `Granting the page the ${m[1]} permission`], [/^Đang chờ trang hiện “(.*)”$/, (m) => `Waiting for the page to show “${m[1]}”`], [/^Đang làm (\d*) ?thao tác trên trang$/, (m) => `Doing ${m[1]} actions on the page`.replace("  ", " ")], [/^Đang mở (\S+)$/, (m) => `Opening ${m[1]}`],
+  [/^Đang chặn trang đăng nhập (\S+)$/, (m) => `Blocking the sign-in page ${m[1]}`], [/^Đang chặn quyền (.*) cho trang$/, (m) => `Blocking the ${m[1]} permission for the page`], [/^Đang cho trang quyền (.*)$/, (m) => `Granting the page the ${m[1]} permission`], [/^Đang chờ trang hiện “(.*)”$/, (m) => `Waiting for the page to show “${m[1]}”`], [/^Đang làm (\d*) ?thao tác trên trang$/, (m) => `Doing ${m[1]} actions on the page`.replace("  ", " ")], [/^Đang mở (\S+)$/, (m) => `Opening ${m[1]}`],
   // Ảnh dựng nền về giữa lượt (chatengine.ts placeholderImage → imgbudget.ts settleBackground): nhãn không có chữ "Đang" ở đầu.
   [/^(?:Đang )?Ảnh (.+) đã xong, đã thay vào artifact; không dựng được (.+)$/, (m) => `Image ${m[1]} is ready and now in the artifact; couldn't make ${m[2]}`],
   [/^(?:Đang )?Ảnh (.+) đã xong, đã thay vào artifact$/, (m) => `Image ${m[1]} is ready and now in the artifact`],
@@ -1866,9 +1869,16 @@ RULES_EN.push(
 // Lời báo hạn mức (limitmsg.ts, H1.2): hạn mức nào + bao giờ hồi + phần "trong lúc chờ" (bản dịch nằm trong VI2EN). Đặt ĐẦU danh sách:
 // luật chung hơn (vd. "Giọng …" của mục Speech) không được bắt trước câu dài này.
 RULES_EN.unshift(
+  // Tự động chuyển model vì gói hết hạn mức (limitmsg.ts planResetMsg nối sau câu "đã trả lời bằng"). Đứng trước luật chung của câu "đã trả lời bằng".
+  [/^(.+) đã hết hạn mức, nên Synchro đã trả lời bằng (.+?)\. Hạn mức (gói|riêng của) (.+?) hồi lại sau (.+?)\. Trong lúc chờ, Tự động dùng các model khác bạn đã kết nối\.$/,
+    (m) => `${m[1]} hit its limit, so Synchro answered with ${m[2]}. ${m[3] === "gói" ? `The ${m[4]} plan limit` : `The limit for ${m[4]}`} resets in ${limitDurEn(m[5])}. In the meantime, Auto uses your other connected models.`],
+  // Tự động chạy bằng khóa API chung (limitmsg.ts sharedKeyMsg).
+  [/^(.+) chạy bằng khóa API chung của Synchro: lượt này tính vào hạn mức chi phí API của bạn \(phiên 5 giờ và tuần, xem ở Cài đặt → Usage\), không tính vào gói đã kết nối\.$/,
+    (m) => `${m[1]} ran on Synchro's shared API key: this reply counts toward your API cost limit (5-hour session and week, see Settings → Usage), not your connected plans.`],
   [/^Tài khoản đã dùng hết hạn mức (\d+) ảnh AI mỗi giờ\. Hạn mức hồi lại sau khoảng (\d+) phút\. (.+)$/, (m) => `This account has used its limit of ${m[1]} AI images per hour. It resets in about ${m[2]} min. ${VI2EN[m[3]] ?? m[3]}`],
   [/^Bạn đã dùng hết giới hạn của phiên này \(phiên 5 giờ\)\. Phiên mới bắt đầu sau (.+?)\. (Trong lúc chờ.+)$/, (m) => `You've used this session's limit (5-hour session). A new session starts in ${limitDurEn(m[1])}. ${VI2EN[m[2]] ?? m[2]}`],
   [/^Bạn đã dùng hết giới hạn hằng tuần\. Giới hạn được đặt lại sau (.+?)\. (Trong lúc chờ.+)$/, (m) => `You've used your weekly limit. It resets in ${limitDurEn(m[1])}. ${VI2EN[m[2]] ?? m[2]}`],
+  [/^Bạn đã dùng hết giới hạn chi phí API của hôm nay\. Giới hạn hồi lại sau (.+?) \(0 giờ UTC\)\. (Trong lúc chờ.+)$/, (m) => `You've used today's API cost limit. It resets in ${limitDurEn(m[1])} (00:00 UTC). ${VI2EN[m[2]] ?? m[2]}`],
   [/^(?:Giọng AI đã hết hạn mức chung của cả máy chủ hôm nay|Bạn đã dùng hết hạn mức giọng AI của hôm nay \((\d+) credit\))\. Hạn mức hồi lại sau (.+?) \(0 giờ UTC\)\. (.+)$/,
     (m) => `${m[1] ? `You've used today's AI voice limit (${m[1]} credits).` : "The AI voice has reached the server's shared limit for today."} It resets in ${limitDurEn(m[2])} (00:00 UTC). ${VI2EN[m[3]] ?? m[3]}`],
 );

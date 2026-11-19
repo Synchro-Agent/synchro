@@ -76,10 +76,12 @@ const openHub = async () => {
   await click(byText(".nav-item", "Skill"), "hub"); await until(`!!document.querySelector(".pl-top")`, 20000, "Kho kỹ năng");
   await sleep(500);
 };
-const SEL = `document.querySelector(".pl-modal select.pl-sel")`;
+// Ô Studio là ô chọn của app (ui/listbox.tsx): bấm nút rồi bấm mục; giá trị đang chọn ở data-value của nút.
+const SEL = `document.querySelector(".pl-modal .dd.pl-sel")`;
+const pickDd = async (btn, v) => { await ev(`(${btn}).click(), 1`); await until(`!!document.querySelector('.dd-pop [role=option][data-value=${JSON.stringify(String(v))}]')`, 5000, "mục " + v); await ev(`document.querySelector('.dd-pop [role=option][data-value=${JSON.stringify(String(v))}]').click(), 1`); };
 const setMode = async (v) => {
-  await ev(`(() => { const s = ${SEL}; const set = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value").set; set.call(s, ${JSON.stringify("")} + ${JSON.stringify(v)}); s.dispatchEvent(new Event("change", { bubbles: true })); return 1; })()`);
-  await until(`${SEL}.value === ${JSON.stringify(v)}`, 5000, "chọn " + v);
+  await pickDd(SEL, v);
+  await until(`${SEL}.dataset.value === ${JSON.stringify(v)}`, 5000, "chọn " + v);
   await sleep(500);
 };
 const rowText = () => ev(`${SEL}.closest(".pl-row").innerText`);
@@ -94,10 +96,12 @@ try {
   await until(`!!${SEL}`, 10000, "hộp chi tiết plugin");
   await until(`!!document.querySelector(".pl-det")`, 10000, "dòng đã nhận diện");
 
-  const opts = await ev(`[...${SEL}.options].map((o) => [o.value, o.textContent])`);
+  await ev(`${SEL}.click(), 1`); await until(`document.querySelectorAll(".dd-pop [role=option]").length > 0`, 5000, "danh sách Studio");
+  const opts = await ev(`[...document.querySelectorAll(".dd-pop [role=option]")].map((o) => [o.dataset.value, o.textContent])`);
+  await ev(`${SEL}.click(), 1`); await sleep(200);
   check("đủ 5 lựa chọn đúng thứ tự", opts.map((o) => o[0]).join() === "auto,none,design,slides,docs", opts.map((o) => o[0]).join());
   check("tên tiếng Việt", opts.map((o) => o[1]).join() === "Tự động nhận diện,Không,Thiết kế,Trình bày,Tài liệu", opts.map((o) => o[1]).join());
-  check("mặc định là Tự động nhận diện", await ev(`${SEL}.value`) === "auto");
+  check("mặc định là Tự động nhận diện", await ev(`${SEL}.dataset.value`) === "auto");
   let t = await rowText();
   check("mô tả theo chế độ", t.includes("Synchro tự xếp từng skill"));
   check("cho biết đã xếp gì", t.includes(`${DESIGN} skill ở Thiết kế, ${DOCS} skill ở Tài liệu`));

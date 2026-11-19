@@ -88,14 +88,15 @@ try {
     }
     await type(card, "sk-ant-mock-org-two-0001");
     await click(`[...document.querySelectorAll(".api-form button")].find((b) => /Verify and save|Kiểm tra và lưu/.test(b.textContent))`, "lưu");
-    await until(`!!document.querySelector(".api-form select")`, 15000, "ô chọn workspace");
-    const r = await ev(`(() => { const f = document.querySelector(".api-form"), sel = f.querySelector("select"), err = f.querySelector(".api-err"), fb = f.getBoundingClientRect(), sb = sel.getBoundingClientRect(), eb = err.getBoundingClientRect(); return { opts: [...sel.options].map((o) => o.textContent), err: err.textContent, inForm: sb.left >= fb.left - 1 && sb.right <= fb.right + 1 && eb.left >= fb.left - 1 && eb.right <= fb.right + 1, h: sb.height, w: sb.width, key: f.querySelector('input[type="password"],input[type="text"]').value.length, gap: eb.top - sb.bottom }; })()`);
+    await until(`!!document.querySelector(".api-form .dd")`, 15000, "ô chọn workspace");
+    await ev(`document.querySelector(".api-form .dd").click(), 1`); await until(`!!document.querySelector(".dd-pop [role=option]")`, 5000, "danh sách workspace");
+    const r = await ev(`(() => { const f = document.querySelector(".api-form"), sel = f.querySelector(".dd"), err = f.querySelector(".api-err"), fb = f.getBoundingClientRect(), sb = sel.getBoundingClientRect(), eb = err.getBoundingClientRect(); return { opts: [...document.querySelectorAll(".dd-pop [role=option]")].map((o) => o.textContent), err: err.textContent, inForm: sb.left >= fb.left - 1 && sb.right <= fb.right + 1 && eb.left >= fb.left - 1 && eb.right <= fb.right + 1, h: sb.height, w: sb.width, key: f.querySelector('input[type="password"],input[type="text"]').value.length, gap: eb.top - sb.bottom }; })()`);
     ok(r.opts.join() === "Chọn workspace,Default,Team" || r.opts.join() === "Choose a workspace,Default,Team", `${theme}: ô chọn hiện đúng workspace`, JSON.stringify(r));
     ok(!/anthropic-workspace-id|Error 400|Lỗi 400/.test(r.err), `${theme}: thông báo dễ hiểu, không lộ lỗi kỹ thuật`, r.err);
     ok(r.inForm && r.h >= 32 && r.w > 200 && r.gap >= 0, `${theme}: ô chọn và thông báo nằm gọn trong form`, JSON.stringify(r));
     ok(r.key > 0, `${theme}: khóa vừa dán không bị xóa, chỉ cần chọn rồi lưu`, JSON.stringify(r));
     await sleep(300); await shot(`${theme}-chon`);
-    await ev(`(() => { const s = document.querySelector(".api-form select"); const set = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value").set; set.call(s, "wrkspc_01Team000000"); s.dispatchEvent(new Event("change", { bubbles: true })); })()`);
+    await ev(`document.querySelector('.dd-pop [role=option][data-value="wrkspc_01Team000000"]').click(), 1`);
     await click(`[...document.querySelectorAll(".api-form button")].find((b) => /Verify and save|Kiểm tra và lưu/.test(b.textContent))`, "lưu lần 2");
     await until(`!document.querySelector(".api-form")`, 15000, "form đóng sau khi lưu");
     const p = (await api("GET", "/api/admin/apikeys")).j.providers.find((x) => x.id === "anthropic");

@@ -93,7 +93,7 @@ export function Studio({ items, onCreate }: { items: Item[]; onCreate: (k: Studi
     if (hold || reduce || items.length < 2) return;
     const t = setTimeout(() => show(items[(items.findIndex((x) => x.k === act) + 1) % items.length].k), LOOP);
     return () => clearTimeout(t);
-  }, [act, hold, reduce, items, runs]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [act, hold, reduce, items, runs]);
   const cur = items.find((x) => x.k === act) ?? items[0];
   if (!cur) return null;
   const open = items.find((x) => x.k === shelf);
@@ -114,7 +114,7 @@ export function Studio({ items, onCreate }: { items: Item[]; onCreate: (k: Studi
       <div className="st-stage">
         {items.map((t) => <div key={`${t.k}-${runs[t.k]}`} className={`st-layer ${act === t.k ? "on" : ""}`}><StudioScene k={t.k} /></div>)}
         <div className="st-foot">
-          {cur.lib ? <button className="st-cap st-capb" onClick={() => setShelf(cur.k)} title="Xem và tìm skill của mục này"><I.Plugins size={13} /><span>{`${countText(cur.lib)}`}</span></button> : <span className="st-cap" />}
+          {cur.lib ? <button className="st-cap st-capb" onClick={() => setShelf(cur.k)} title="Xem và tìm skill của mục này"><I.Plugins size={13} /><span className="st-capt">{`${countText(cur.lib)}`}</span></button> : <span className="st-cap" />}
           <button className="btn dark st-go" onClick={() => onCreate(cur.k)}>{GO[cur.k]}<I.ArrowRight size={15} /></button>
         </div>
       </div>

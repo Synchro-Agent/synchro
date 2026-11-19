@@ -1,14 +1,17 @@
 "use client";
 // Thành phần dùng chung của mục Speech: tab, thanh trượt, công tắc, chọn, vùng thả tệp, ghi âm, dạng sóng, trình phát, bộ chọn giọng.
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { isAway } from "../clickaway";
 import { createPortal } from "react-dom";
-import { tr } from "../i18n";
+import { tf, tr } from "../i18n";
 import * as I from "../icons";
 import { LiquidOrb } from "../liquidorb";
+import { Dropdown } from "../listbox";
+import { useStripActive } from "../strip";
 import { readBrowser, stopBrowserRead } from "../browserspeak";
 import { useApp, usePref, VOICE_RATE } from "../store";
 import { toSpeech, VI } from "../voiceflow";
-import { CAT_LABEL, LANGS, api, fmtDur, fmtNum, hueOf, on, post, refreshPlan, reloadVoices, useMyVoices, usePlan, usePlanFailed, type Voice } from "./client";
+import { CAT_LABEL, LANGS, api, fmtClock, fmtDur, fmtNum, hueOf, micError, on, post, refreshPlan, reloadVoices, useMyVoices, usePlan, usePlanFailed, type Voice } from "./client";
 import { AGES, CATEGORIES, GENDERS } from "../../shared/speech/data";
 
 // Mức hoạt động khi đang phát (âm tiết và quãng nghỉ), dùng chung cho các quả cầu.
@@ -16,8 +19,9 @@ const talking = () => { const t = performance.now() / 1000; return Math.max(0, M
 export const MAX_UPLOAD = 40 * 1024 * 1024;
 
 export function Seg<T extends string>({ items, value, onChange, label, small }: { items: { k: T; label: string }[]; value: T; onChange: (v: T) => void; label: string; small?: boolean }) {
+  const ref = useStripActive<HTMLDivElement>(value);
   return (
-    <div className={`sp-seg ${small ? "sm" : ""}`} role="tablist" aria-label={label}>
+    <div ref={ref} className={`sp-seg ${small ? "sm" : ""}`} role="tablist" aria-label={label}>
       {items.map((x) => <button key={x.k} role="tab" aria-selected={value === x.k} className={value === x.k ? "on" : ""} onClick={() => onChange(x.k)}>{x.label}</button>)}
     </div>
   );
@@ -45,12 +49,7 @@ export function Toggle({ checked, onChange, label, hint }: { checked: boolean; o
 
 type Opt = string | [string, string];
 export function Select({ id, label, value, options, onChange, inline }: { id: string; label: string; value: string; options: Opt[]; onChange: (v: string) => void; inline?: boolean }) {
-  const sel = (
-    <span className="sp-sel">
-      <select id={id} value={value} onChange={(e) => onChange(e.target.value)}>{options.map((o) => { const [v, l] = Array.isArray(o) ? o : [o, o]; return <option key={v} value={v}>{l}</option>; })}</select>
-      <I.Chevron size={13} />
-    </span>
-  );
+  const sel = <Dropdown id={id} size={inline ? "sm" : "md"} value={value} options={options} onChange={onChange} block={!inline} minWidth={inline ? 160 : 200} align={inline ? "end" : "start"} className="sp-dd" />;
   if (inline) return <div className="sp-line"><label htmlFor={id}>{label}</label>{sel}</div>;
   return <div className="sp-fld"><label htmlFor={id} className="sp-fl"><span>{label}</span></label>{sel}</div>;
 }
@@ -101,10 +100,10 @@ export function Recorder({ onDone, say, label = "Ghi âm", max = 300 }: { onDone
         setRec(null);
         const mime = r.mimeType || "audio/webm", ext = /mp4/.test(mime) ? "m4a" : "webm";
         const d = new Date();
-        if (chunks.length) onDone(new File(chunks, `Ghi âm ${String(d.getHours()).padStart(2, "0")}-${String(d.getMinutes()).padStart(2, "0")}.${ext}`, { type: mime.split(";")[0] }));
+        if (chunks.length) onDone(new File(chunks, `${tf("Ghi âm {time}", { time: `${String(d.getHours()).padStart(2, "0")}-${String(d.getMinutes()).padStart(2, "0")}` })}.${ext}`, { type: mime.split(";")[0] }));
       };
       r.start(250); setSec(0); setRec(r);
-    } catch { say("Không mở được micro: hãy cho phép Synchro dùng micro trong trình duyệt"); }
+    } catch (e) { say(micError(e)); }
   };
   return rec
     ? <button type="button" className="btn sp-recon" onClick={() => rec.stop()}><i className="sp-recdot" />Dừng · {fmtDur(sec)}</button>
@@ -195,7 +194,7 @@ export function Player({ src, title, label, dl, name, seekTo, onTime }: { src: s
         {title && <span className="sp-ptitle">{title}</span>}
         <Wave src={src} progress={dur ? t / dur : 0} onSeek={seek} />
       </div>
-      <span className="sp-time">{fmtDur(t)} / {fmtDur(dur)}</span>
+      <span className="sp-time">{fmtClock(t, dur)} / {fmtClock(dur, dur)}</span>
       {dl && <button className="icon-btn" aria-label="Tải xuống" title="Tải xuống" onClick={save}><I.Download size={17} /></button>}
     </div>
   );
@@ -224,7 +223,7 @@ export function Dock() {
       <span className="sp-dock-t" data-notr>{now.title}</span>
       <input className="sp-range sp-dock-r" type="range" min={0} max={1000} value={Math.round(p * 1000)} aria-label="Tua" style={{ "--p": `${p * 100}%` } as React.CSSProperties}
         onChange={(e) => { if (dur) a.currentTime = (Number(e.target.value) / 1000) * dur; }} />
-      <span className="sp-time">{fmtDur(a.currentTime)} / {fmtDur(dur)}</span>
+      <span className="sp-time">{fmtClock(a.currentTime, dur)} / {fmtClock(dur, dur)}</span>
       {now.dl && <button className="icon-btn" aria-label="Tải xuống" title="Tải xuống" onClick={() => saveUrl(now.dl!)}><I.Download size={16} /></button>}
       <button className="icon-btn" aria-label="Đóng trình phát" onClick={closeNowPlaying}><I.X size={16} /></button>
     </div>
@@ -238,7 +237,7 @@ export function ModelPick({ models, value, onChange, label = "Model" }: { models
   const box = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!open) return;
-    const h = (e: MouseEvent) => { if (!box.current?.contains(e.target as Node)) setOpen(false); };
+    const h = (e: MouseEvent) => { if (isAway(box.current, e.target)) setOpen(false); };
     document.addEventListener("mousedown", h);
     return () => document.removeEventListener("mousedown", h);
   }, [open]);
@@ -265,8 +264,9 @@ export function ModelPick({ models, value, onChange, label = "Model" }: { models
 
 // Tab gạch chân cho các mục trong một trang.
 export function Tabs<T extends string>({ items, value, onChange, label }: { items: { k: T; label: string }[]; value: T; onChange: (v: T) => void; label: string }) {
+  const ref = useStripActive<HTMLDivElement>(value);
   return (
-    <div className="sp-utabs" role="tablist" aria-label={label}>
+    <div ref={ref} className="sp-utabs" role="tablist" aria-label={label}>
       {items.map((x) => <button key={x.k} role="tab" aria-selected={value === x.k} className={value === x.k ? "on" : ""} onClick={() => onChange(x.k)}>{x.label}</button>)}
     </div>
   );
@@ -386,7 +386,7 @@ export function VoicePicker({ value, onPick, onClose, say }: { value?: string; o
       onPick({ ...v, id: j.voiceId, mine: true }); say(`Đã thêm “${v.name}” vào Giọng của tôi`); onClose();
     } catch (e) { say((e as Error).message); } finally { setBusy(""); }
   };
-  const useId = async () => {
+  const applyVoiceId = async () => {
     const id = vid.trim();
     if (!/^[A-Za-z0-9]{16,40}$/.test(id)) { say("Voice ID không hợp lệ (16–40 ký tự chữ và số)"); return; }
     setBusy("id");
@@ -437,8 +437,8 @@ export function VoicePicker({ value, onPick, onClose, say }: { value?: string; o
           {plan?.library && <div className="sp-vp-foot">
             <label htmlFor="sp-vid">Hoặc dán Voice ID từ ElevenLabs</label>
             <div className="sp-vid">
-              <input id="sp-vid" value={vid} onChange={(e) => setVid(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") void useId(); }} placeholder="vd. JBFqnCBsd6RMkjVDRZzb" spellCheck={false} />
-              <button className="btn dark" onClick={useId} disabled={!vid.trim() || !!busy}>{busy === "id" ? <Spin /> : null}Dùng ID này</button>
+              <input id="sp-vid" value={vid} onChange={(e) => setVid(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") void applyVoiceId(); }} placeholder="vd. JBFqnCBsd6RMkjVDRZzb" spellCheck={false} />
+              <button className="btn dark" onClick={applyVoiceId} disabled={!vid.trim() || !!busy}>{busy === "id" ? <Spin /> : null}Dùng ID này</button>
             </div>
             <span className="sp-hint"><a href="https://elevenlabs.io/app/voice-library" target="_blank" rel="noreferrer">Mở Thư viện giọng ElevenLabs<I.External size={12} /></a> · chọn giọng, bấm “Copy voice ID”, dán vào đây.</span>
           </div>}

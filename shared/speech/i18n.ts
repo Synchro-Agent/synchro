@@ -399,6 +399,8 @@ SPEECH_RULES_EN.push(
 
 // Bố cục mới của Speech (hướng dẫn nhanh, mẫu bắt đầu, công cụ tách riêng, hiệu ứng, từ điển phát âm, Audio Native).
 Object.assign(SPEECH_VI2EN, {
+  // Hạn mức chung của máy chủ hôm nay đã hết (credits.shared, ui/speech/view.tsx).
+  "Giọng AI đã hết hạn mức chung của cả máy chủ hôm nay · đặt lại lúc nửa đêm (giờ UTC)": "The AI voice has reached the server's shared limit for today · resets at midnight (UTC)",
   // danh sách công cụ, nhóm
   "Biến chữ thành giọng nói tự nhiên, một hoặc nhiều người nói": "Turn text into natural speech, with one or many speakers",
   "Bạn nói, AI đổi thành giọng khác mà vẫn giữ cảm xúc": "You speak, AI turns it into another voice and keeps the emotion",
@@ -672,10 +674,10 @@ Object.assign(SPEECH_VI2EN, {
   // Từ điển phát âm
   "Từ trong văn bản": "Word in text", "Đọc là": "Say as", "Kiểu quy tắc": "Rule type", "Đọc thay bằng": "Alias", "Phiên âm IPA": "IPA phoneme", "Xóa quy tắc": "Delete rule", "Thêm quy tắc": "Add rule", "Ví dụ": "Examples",
   "“Đọc thay bằng” chạy với mọi model. Phiên âm IPA chính xác hơn nhưng chỉ một số model tiếng Anh (Flash v2, Turbo v2, English v1) hỗ trợ.": "Alias works with every model. IPA is more precise but only some English models (Flash v2, Turbo v2, English v1) support it.",
-  "Lưu quy tắc": "Save rules", "Chọn một từ điển để sửa quy tắc": "Pick a dictionary to edit its rules", "Hoặc bấm “Tạo từ điển” để bắt đầu.": "Or press “Create dictionary” to start.",
+  "Lưu quy tắc": "Save rules", "Đang mở từ điển…": "Opening dictionary…", "Chọn một từ điển để sửa quy tắc": "Pick a dictionary to edit its rules", "Hoặc bấm “Tạo từ điển” để bắt đầu.": "Or press “Create dictionary” to start.",
   "Đã tạo từ điển và bật trong Đọc văn bản": "Dictionary created and turned on in Text to Speech", "Đọc văn bản dùng tối đa 3 từ điển cùng lúc": "Text to Speech uses up to 3 dictionaries at once",
   "Tạo từ điển": "Create dictionary", "Từ điển của bạn": "Your dictionaries", "Chưa có từ điển nào. Tạo từ điển đầu tiên ở bên cạnh.": "No dictionaries yet. Create your first one alongside.",
-  "Dùng khi đọc": "Use when reading", "Từ điển mới": "New dictionary", "Tên từ điển": "Dictionary name", "Ví dụ: Tên sản phẩm công ty": "E.g. Company product names", "Mô tả": "Description",
+  "Dùng khi đọc": "Use when reading", "Bật công tắc để Đọc văn bản dùng từ điển (tối đa 3).": "Turn a dictionary on to use it in Text to Speech (up to 3).", "Từ điển mới": "New dictionary", "Tên từ điển": "Dictionary name", "Ví dụ: Tên sản phẩm công ty": "E.g. Company product names", "Mô tả": "Description",
   "Đã lưu quy tắc": "Rules saved", "Đã lưu trữ từ điển": "Dictionary archived", "Lưu trữ": "Archive", "Nghe thử": "Preview", "Nghe thử với từ điển": "Preview with dictionary", "Tải lại": "Reload",
 
   // Audio Native
@@ -697,6 +699,21 @@ Object.assign(SPEECH_VI2EN, {
   "Tiếng Mã Lai": "Malay", "Tiếng Philippines": "Filipino", "Tiếng Tamil": "Tamil", "Tiếng Ukraina": "Ukrainian", "Tiếng Ba Lan": "Polish", "Tiếng Hà Lan": "Dutch", "Tiếng Thổ Nhĩ Kỳ": "Turkish",
   "Tiếng Ả Rập": "Arabic", "Tiếng Thụy Điển": "Swedish", "Tiếng Đan Mạch": "Danish", "Tiếng Phần Lan": "Finnish", "Tiếng Na Uy": "Norwegian", "Tiếng Séc": "Czech", "Tiếng Slovakia": "Slovak",
   "Tiếng Hungary": "Hungarian", "Tiếng Romania": "Romanian", "Tiếng Bulgaria": "Bulgarian", "Tiếng Croatia": "Croatian", "Tiếng Hy Lạp": "Greek",
+
+  // G6.5: tiêu đề do Synchro đặt dựng theo ngôn ngữ giao diện, số nhiều, định dạng tải xuống (dấu chấm thập phân), hướng dẫn Tạo giọng theo gói, micro, tiến độ
+  "Tách {n} stem · {name}": "{n} stem · {name}|{n} stems · {name}", "Nhạc cho {name}": "Music for {name}", "{n} quy tắc": "{n} rule|{n} rules", "{n} bản": "{n} item|{n} items",
+  "≈ {n} credit · ước tính theo thời lượng": "≈ {n} credit · estimated by length", "Ghi âm {time}": "Recording {time}",
+  "MP3 44,1 kHz · 128 kbps": "MP3 44.1 kHz · 128 kbps", "MP3 44,1 kHz · 192 kbps": "MP3 44.1 kHz · 192 kbps", "WAV 44,1 kHz": "WAV 44.1 kHz",
+  "nhân bản nhanh từ vài phút ghi âm": "instant cloning from a few minutes of audio", "nhân bản chuyên sâu giống thật nhất": "professional cloning for the most lifelike result",
+  "thiết kế giọng từ một câu mô tả": "voice design from a description", "remix một giọng sẵn có": "remixing an existing voice", "{a} hoặc {b}": "{a} or {b}",
+  "Tạo giọng của riêng bạn bằng cách {list}.": "Make your own voice with {list}.", "Tạo giọng của riêng bạn theo hai cách: {list}.": "Make your own voice two ways: {list}.",
+  "Tạo giọng của riêng bạn theo ba cách: {list}.": "Make your own voice three ways: {list}.",
+  "Không tìm thấy micro trên máy này. Cắm micro hoặc tai nghe có micro rồi thử lại.": "No microphone was found on this device. Plug in a microphone or a headset with a mic, then try again.",
+  "Micro đang bị ứng dụng khác dùng. Đóng ứng dụng đó rồi thử lại.": "Another app is using the microphone. Close that app, then try again.",
+  "Trình duyệt chưa cho phép micro. Bấm Cho phép khi trình duyệt hỏi, hoặc bật micro cho trang này trong phần cài đặt trang web, rồi thử lại.": "The browser hasn't allowed the microphone. Click Allow when the browser asks, or turn on the microphone for this page in the site settings, then try again.",
+  "Trình duyệt này không cho trang dùng micro. Hãy mở Synchro bằng Chrome, Edge, Safari hoặc Firefox bản mới (qua https).": "This browser doesn't let pages use the microphone. Open Synchro in an up-to-date Chrome, Edge, Safari or Firefox (over https).",
+  "Trình duyệt đang chặn micro. Bấm biểu tượng ổ khóa hoặc micro cạnh thanh địa chỉ, chọn Cho phép micro cho trang này, rồi thử lại.": "The browser is blocking the microphone. Click the lock or microphone icon next to the address bar, allow the microphone for this page, then try again.",
+  "Synchro tự cập nhật khi xong.": "Synchro updates it when done.",
 });
 SPEECH_RULES_EN.push(
   [/^(.+) là gì\?$/, (m) => `What is ${SPEECH_VI2EN[m[1]] ?? m[1]}?`],
@@ -710,8 +727,8 @@ SPEECH_RULES_EN.push(
   [/^(\d)\/3 đang bật$/, (m) => `${m[1]}/3 on`],
   [/^Đọc tự nhiên như khi nói chuyện, nơi yên tĩnh, micro cách miệng khoảng một gang tay\. Mỗi đoạn khoảng một phút(?: · đã ghi (\d+) đoạn)?\.$/, (m) => `Read naturally, as if talking, somewhere quiet, with the mic about a hand's width away. Each passage takes about a minute${m[1] ? ` · ${m[1]} recorded` : ""}.`],
   [/^Giọng trong tài khoản ElevenLabs( và thư viện cộng đồng)?\.(?: Đã dùng (\d+)\/(\d+) chỗ lưu giọng\.)?$/, (m) => `Voices in your ElevenLabs account${m[1] ? " and the community library" : ""}.${m[2] ? ` ${m[2]}/${m[3]} voice slots used.` : ""}`],
-  [/^(\d+) bản$/, (m) => `${m[1]} items`],
-  [/^(\d+) quy tắc$/, (m) => `${m[1]} rules`],
+  [/^(\d+) bản$/, (m) => `${m[1]} ${m[1] === "1" ? "item" : "items"}`],
+  [/^(\d+) quy tắc$/, (m) => `${m[1]} ${m[1] === "1" ? "rule" : "rules"}`],
   [/^(.+) · tính theo thời lượng âm thanh$/, (m) => `${m[1]} · billed by audio duration`],
   [/^(\d+) phút (?:(\d+) giây)?$/, (m) => `${m[1]} min${m[2] ? ` ${m[2]} s` : ""}`],
   [/^([\d,]+) giây$/, (m) => `${m[1].replace(",", ".")} s`],

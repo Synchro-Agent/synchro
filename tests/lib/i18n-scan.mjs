@@ -36,6 +36,7 @@ export const PAIR_ALLOW = {
   "app/api/skill-scan/route.ts": "chuẩn hóa tham số lang của yêu cầu",
   "app/api/admin/health/route.ts": "chuẩn hóa tham số lang của yêu cầu",
   "app/api/speech/[...op]/route.ts": "lời nhắc gửi model theo ngôn ngữ người dùng chọn",
+  "app/api/critic/route.ts": "chuẩn hóa tham số ui (ngôn ngữ giao diện) và lời nhắc gửi model phản biện viết theo ngôn ngữ đó",
   "server/skillscan.ts": "lời nhắc gửi model (ngôn ngữ của field / why)",
   "ui/resetfmt.ts": "hàm thuần nhận lang, kiểm thử chạy không cần từ điển (giữ nguyên chữ của main)",
   // Bảng hai cột không phải cặp ngôn ngữ (tệp#tên hằng): chỉ miễn đúng bảng đó.
@@ -61,6 +62,11 @@ function walkDir(d, out = []) {
   return out;
 }
 
+// Thực thể HTML trong chữ JSX: React giải mã khi hiển thị (ESLint react/no-unescaped-entities buộc viết &quot; &apos;…), khóa trong
+// shared/i18n-dict.ts là chữ đã giải mã. Dùng chung với tools/i18n-audit.mjs. &amp; giải mã sau cùng để "&amp;quot;" ra đúng "&quot;".
+export const decodeJsxEntities = (s) => s.replace(/&nbsp;/g, " ").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"')
+  .replace(/&apos;|&#39;/g, "'").replace(/&amp;/g, "&");
+
 // Chữ JSX như React hiển thị: bỏ khoảng trắng đầu / cuối từng dòng, nối các dòng bằng một dấu cách.
 const jsxText = (raw) => {
   const lines = raw.split(/\r\n|\n|\r/);
@@ -71,7 +77,7 @@ const jsxText = (raw) => {
     if (i < lines.length - 1) s = s.replace(/ +$/, "");
     if (s) keep.push(s);
   });
-  return keep.join(" ").replace(/&nbsp;/g, " ").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&apos;|&#39;/g, "'");
+  return decodeJsxEntities(keep.join(" "));
 };
 
 // Chuỗi trông như chữ cho người đọc (không phải lớp CSS, khóa, mã, đường dẫn…).

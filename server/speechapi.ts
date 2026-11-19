@@ -62,6 +62,7 @@ const tierRank = (t: string) => {
 };
 export const TIER_NAME: Record<string, string> = { free: "Free", starter: "Starter", creator: "Creator", pro: "Pro", scale: "Scale", business: "Business", enterprise: "Enterprise" };
 // Định dạng tải xuống theo gói: MP3 192 kbps từ Creator, PCM / WAV 44,1 kHz trở lên từ Pro (theo mô tả output_format của API).
+// Nhãn viết kiểu Việt (44,1); giao diện tiếng Anh dịch qua từ điển sang dấu chấm thập phân (44.1).
 export const FORMATS: { id: string; label: string; min: string; ext: string; mime: string }[] = [
   { id: "mp3_44100_128", label: "MP3 44,1 kHz · 128 kbps", min: "free", ext: "mp3", mime: "audio/mpeg" },
   { id: "mp3_44100_192", label: "MP3 44,1 kHz · 192 kbps", min: "creator", ext: "mp3", mime: "audio/mpeg" },
@@ -77,7 +78,8 @@ export const fmtOf = (id: string) => FORMATS.find((f) => f.id === id) ?? FORMATS
 export type ModelOut = { id: string; name: string; desc: string; langs: { id: string; name: string }[]; max: number; rate: number; style: boolean; boost: boolean };
 export type Plan = {
   connected: boolean; readPlan: boolean; tier: string; tierName: string; status: string;
-  credits: { used: number; limit: number; resetAt: number | null };
+  /** shared: hạn mức chung của cả máy chủ hôm nay đã hết (chỉ gửi cho tài khoản không phải chủ, không kèm số dùng chung): còn 0 dù hạn mức riêng còn. */
+  credits: { used: number; limit: number; resetAt: number | null; shared?: boolean };
   voices: { used: number; limit: number }; pro: { used: number; limit: number };
   features: Record<Feat, boolean>; locked: Partial<Record<Feat, string>>;
   /** Quyền khóa còn thiếu theo tính năng (tính năng đó bị ẩn); realtime: phiên trò chuyện Eleven Realtime dùng được (cần convai_write). */
@@ -378,14 +380,62 @@ export async function plan(o: { fresh?: boolean } = {}): Promise<Plan> {
   return st.busy;
 }
 /** Sau mỗi lần tạo: cộng credit đã dùng (ElevenLabs báo trong header) để thanh credit đúng ngay, không phải quét lại; tính vào hạn mức trong ngày của người đang gọi. est: ước lượng khi hãng không báo. */
+const headerCost = (r: Response) => Number(r.headers.get("character-cost") ?? r.headers.get("x-character-count") ?? 0) || 0;
+// Thanh credit là của gói ElevenLabs: lượt do nhà cung cấp dự phòng phục vụ không trừ vào đó (hạn mức trong ngày của người gọi vẫn tính).
+const fromMain = (r: Response) => { const by = servedBy(r); return !by || by === speechProviderList()[0]?.id; };
 export function spent(r: Response, est = 0) {
-  const n = Number(r.headers.get("character-cost") ?? r.headers.get("x-character-count") ?? 0);
-  const p = G().plan, by = servedBy(r);
-  // Thanh credit là của gói ElevenLabs: lượt do nhà cung cấp dự phòng phục vụ không trừ vào đó (hạn mức trong ngày của người gọi vẫn tính).
-  if (p && n > 0 && (!by || by === speechProviderList()[0]?.id)) p.credits.used += n;
+  const n = headerCost(r);
+  const p = G().plan;
+  if (p && n > 0 && fromMain(r)) p.credits.used += n;
   const uid = spender.getStore();
   if (uid) addSpend(uid, n > 0 ? n : est);
   return n;
+}
+/** Số credit gói đã dùng ngay lúc này (đọc /v1/user/subscription); null nếu không đọc được (khóa thiếu quyền User, mạng…). */
+export async function usageNow(): Promise<number | null> {
+  try {
+    const n = (await elJson<Sub>("/v1/user/subscription", { timeout: 10_000 })).character_count;
+    return typeof n === "number" && Number.isFinite(n) ? n : null;
+  } catch { return null; }
+}
+/** Chi phí thật của công cụ mà ElevenLabs KHÔNG báo trong header (Nhạc, Nhạc cho video, Tách stem — bản thật trả cost 0, G6.5):
+ *  lấy độ tăng của số credit đã dùng trong gói quanh lần gọi (before đọc bằng usageNow() trước khi gọi). Header có số thì dùng header như spent().
+ *  Khóa ElevenLabs dùng chung cho mọi người: một lần Nhạc kéo dài vài phút, việc của người khác trong lúc đó cũng làm gói tăng. Vì vậy độ tăng chỉ
+ *  được nhận khi không vượt cap × ước lượng est (cap theo độ chắc của bảng giá: Nhạc đã đo trên bản thật nên cap nhỏ); vượt thì ghi ước lượng.
+ *  Không đọc được gói hoặc gói chưa kịp tăng (độ tăng 0): ghi ước lượng (không bao giờ 0 khi có ước lượng). Số ghi vào mục cũng là số tính vào hạn mức
+ *  trong ngày của người gọi, nên việc của người khác không tính quá cap × est cho họ. cap = Infinity: giá chưa đo (Nhạc cho video) — nhận mọi độ tăng.
+ *  Mỗi lần độ tăng bị bỏ, và mọi lần đo khi opt.log (công cụ chưa đo giá trên bản thật), đều ghi log [speech-cost] để chủ máy chủ thấy giá thật trên bản chạy.
+ *  Cập nhật luôn số credit của gói (thanh credit trên đầu trang) theo số đọc được sau lần gọi. */
+export async function spentMeasured(r: Response, before: number | null, est = 0, opt: { tool?: string; cap?: number; sec?: number; log?: boolean } = {}): Promise<number> {
+  if (headerCost(r) > 0) return spent(r, est);
+  const main = fromMain(r);
+  const after = before !== null && main ? await usageNow() : null;
+  const delta = after !== null && before !== null ? after - before : 0;
+  const cap = opt.cap ?? 4, e = Math.max(0, Math.round(est));
+  const take = delta > 0 && (!(e > 0) || delta <= e * cap);
+  const n = take ? delta : e;
+  if (delta > 0 && (!take || opt.log)) console.warn(`[speech-cost] ${opt.tool ?? "?"}: gói tăng ${delta} credit, ước lượng ${e}${opt.sec ? ` (${Math.round(opt.sec * 10) / 10} giây)` : ""} → ${take ? "ghi số đo" : `bỏ số đo (quá ${cap}× ước lượng), ghi ước lượng`}`);
+  const p = G().plan;
+  if (p && main) p.credits.used = after !== null && after >= p.credits.used ? after : p.credits.used + n;
+  const uid = spender.getStore();
+  if (uid) addSpend(uid, n);
+  return n;
+}
+/** Thời lượng ước chừng (giây) của tệp người dùng tải lên, để ước lượng credit của công cụ tính theo thời lượng (Tách stem): WAV đọc đúng từ header,
+ *  định dạng khác coi như MP3 128 kbps (tệp nén mạnh hơn thì ước lượng thấp hơn thật, tệp không nén thì cao hơn — chỉ dùng làm mốc và dự phòng). */
+export function audioSecOf(buf: Buffer): number {
+  if (buf.length >= 44 && buf.toString("latin1", 0, 4) === "RIFF" && buf.toString("latin1", 8, 12) === "WAVE") {
+    for (let o = 12; o + 8 <= buf.length;) {
+      const id = buf.toString("latin1", o, o + 4), size = buf.readUInt32LE(o + 4);
+      if (id === "fmt " && o + 20 <= buf.length) { const rate = buf.readUInt32LE(o + 16); if (rate > 0) { const data = findChunk(buf, "data"); return (data ?? buf.length - 44) / rate; } }
+      o += 8 + size + (size & 1);
+    }
+  }
+  return (buf.length * 8) / 128_000;
+}
+function findChunk(buf: Buffer, want: string): number | null {
+  for (let o = 12; o + 8 <= buf.length;) { const id = buf.toString("latin1", o, o + 4), size = buf.readUInt32LE(o + 4); if (id === want) return Math.min(size, buf.length - o - 8); o += 8 + size + (size & 1); }
+  return null;
 }
 
 // ---- hạn mức credit trong ngày ----
@@ -425,7 +475,16 @@ function budgetDb() {
   return d;
 }
 const ALL_USERS = "*";
-export const spentToday = (uid = ALL_USERS) => (budgetDb().prepare("SELECT credits FROM speech_budget WHERE day = ? AND user_id = ?").get(day(), uid) as { credits: number } | undefined)?.credits ?? 0;
+/** Credit đã dùng hôm nay của một tài khoản; không truyền uid = mức chung của cả máy chủ.
+ * Mức chung chỉ cộng tài khoản KHÔNG phải quản trị viên: quản trị viên không bị chặn và hay thử nhiều (15/11/2026 một lượt thử ~4.000 credit
+ * của quản trị viên đã làm cạn mức chung, mọi tài khoản thường bị chặn giọng AI tới hết ngày). Tính lại từ các dòng theo tài khoản nên
+ * dòng "*" cũ (đã cộng cả quản trị viên) không còn được dùng để chặn. */
+export const spentToday = (uid = ALL_USERS) => {
+  const d = budgetDb();
+  if (uid !== ALL_USERS) return (d.prepare("SELECT credits FROM speech_budget WHERE day = ? AND user_id = ?").get(day(), uid) as { credits: number } | undefined)?.credits ?? 0;
+  const rows = d.prepare("SELECT user_id, credits FROM speech_budget WHERE day = ? AND user_id != ?").all(day(), ALL_USERS) as { user_id: string; credits: number }[];
+  return rows.reduce((n, r) => { const u = getUser(r.user_id); return u && isAdmin(u) ? n : n + r.credits; }, 0);
+};
 const ALERT_AT = 0.8;
 let alerted = "";
 export function addSpend(uid: string, n: number) {
@@ -441,6 +500,8 @@ export function addSpend(uid: string, n: number) {
     console.warn(`[speech] đã dùng ${now} / ${lim} credit ElevenLabs hôm nay`);
   }
 }
+/** Hạn mức giọng AI chung của cả máy chủ hôm nay đã hết (checkBudget sẽ chặn mọi tài khoản không phải quản trị viên). */
+export const speechSharedOut = () => spentToday() >= globalLimit();
 /** Trước một thao tác tốn credit: báo lỗi có mã budget khi đã hết hạn mức (nơi gọi chuyển sang giọng của trình duyệt).
  * use: lời báo gợi ý cách thay thế đúng với việc đang làm (đọc / trò chuyện → giọng trình duyệt; chép lời tệp → micro của trình duyệt; còn lại → chờ hồi). */
 export function checkBudget(u: UserRow, use: SpeechUse = "voice") {

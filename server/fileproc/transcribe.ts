@@ -27,13 +27,24 @@ function formatTranscript(name: string, j: Sttt): string {
   return `${head}\n\n${lines.join("\n")}`;
 }
 
-export async function transcribeAudio(buf: Buffer, name: string, uid?: string): Promise<string> {
+/** Kiểm trước khi xin chỗ trong hàng convert (mỗi người một việc): hết hạn mức giọng nói thì báo đúng lý do ngay cho mọi tệp âm thanh,
+ *  không để tệp thứ hai nhận câu "Máy chủ đang đọc nhiều tệp cùng lúc" rồi phải bấm Thử lại mới thấy lý do thật. */
+export function audioPrecheck(uid?: string) {
+  const user = uid ? getUser(uid) : undefined;
+  if (!user || !hasKey()) return;
+  try { checkBudget(user, "stt"); } catch (e) { if (e instanceof SpeechErr) throw new FileError(e.message); throw e; }
+}
+
+export async function transcribeAudio(buf: Buffer, name: string, uid?: string, signal?: AbortSignal): Promise<string> {
   if (!hasKey()) throw new FileError(`Chưa bật phiên âm giọng nói nên Synchro chưa đọc được tệp âm thanh / video "${name}". Hãy kết nối ElevenLabs trong Cài đặt rồi tải lại.`);
   if (buf.length > AUDIO_MAX) throw new FileError(`Tệp âm thanh / video "${name}" lớn hơn ${AUDIO_MAX / 1048576}MB nên chưa phiên âm được. Hãy cắt ngắn rồi tải lên lại.`);
   const user = uid ? getUser(uid) : undefined;
   try {
     await need("stt");
     if (user) checkBudget(user, "stt"); // hết hạn mức giọng nói trong ngày → SpeechErr mã budget (gợi ý micro của trình duyệt)
+    // Người gửi đã bỏ tệp trong lúc chờ khóa / hạn mức: không gửi đi chép lời (tốn credit). Đã gửi rồi thì để chép xong và lưu, lần Thử lại
+    // của cùng tệp dùng lại kết quả đó (processFile gộp các lần đọc cùng nội dung đang chạy) thay vì chép lời lần nữa.
+    if (signal?.aborted) throw new FileError(`Đã hủy chép lời "${name}" vì người gửi không còn chờ.`);
     const fd = new FormData();
     fd.set("model_id", "scribe_v2");
     fd.set("file", new Blob([new Uint8Array(buf)]), name.slice(0, 200) || "audio");

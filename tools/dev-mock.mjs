@@ -12,6 +12,7 @@ import { startMockMcp } from "./mock-mcp.mjs";
 import { startMockWs } from "./mock-workspace.mjs";
 import { startMockGithub } from "./mock-github.mjs";
 import { writeExtension } from "../extension/build.mjs";
+import { fetchIntro } from "./fetch-intro.mjs";
 
 const PORT = Number(process.env.PORT ?? 3200), MOCK_PORT = Number(process.env.MOCK_PORT ?? 4010), MCP_PORT = Number(process.env.MCP_PORT ?? 4011), WS_PORT = Number(process.env.WS_PORT ?? 4012), GH_PORT = Number(process.env.GH_PORT ?? 4013);
 // Workspace giả lập cho Synchro Code (khóa chỉ dùng trên máy này).
@@ -45,6 +46,15 @@ const EXT_DIR = writeExtension(process.cwd(), B, path.join(DATA, "extension"));
 if (!fs.existsSync(path.join(DATA, "synchro.db"))) {
   const r = spawnSync(process.execPath, ["ops/create-admin.mjs", ADMIN.email], { env, input: `${ADMIN.password}\n${ADMIN.password}\n`, encoding: "utf8" });
   if (r.status !== 0) { console.error(r.stderr || r.stdout); process.exit(1); }
+}
+
+// Phim giới thiệu không nằm trong git (Blueprint H3.9): thiếu ở public/intro/ thì lấy một lần (lịch sử git, rồi tải từ synchro.net.nz) trước khi
+// bật Next (next start chỉ đọc danh sách tệp public lúc khởi động). Không lấy được thì vẫn chạy: app tự bỏ phim, tests/ui/introfilm.mjs bỏ qua.
+// SYNCHRO_INTRO_FETCH=0 (job verify của CI, chỉ chạy bộ API) hoặc SYNCHRO_MOCK_OFFLINE: không tải mạng.
+if (process.env.SYNCHRO_INTRO_FETCH !== "0") {
+  const { got, missing } = await fetchIntro({ net: !process.env.SYNCHRO_MOCK_OFFLINE });
+  for (const [f, src] of got) console.log(`Phim giới thiệu: đã lấy ${f} (${src}).`);
+  for (const [f, why] of missing) console.warn(`Phim giới thiệu: thiếu ${f} (${why}); phim sẽ không phát, node tools/fetch-intro.mjs để lấy lại.`);
 }
 
 // --fast (npm run dev:mock:fast): dựng bản production một lần rồi chạy `next start` — trang mở gần như tức thì, không biên dịch lại
@@ -100,6 +110,14 @@ for (const [id, body] of add) {
   if (has(id)) continue;
   const r = await call("POST", "/api/admin/apikeys", body);
   if (r.status !== 200) console.error(`Không nối được ${id}:`, r.j?.error);
+}
+// Khóa API chung cho tài khoản thường: máy chủ thật mặc định chỉ tới hạng cân bằng (không Opus, server/auth/sharedkey.ts). Tài khoản thử của
+// bản giả lập (bộ kiểm thử cấp "mọi model") từ trước tới nay chạy được cả Opus: lần chạy đầu quản trị viên giả lập cho tới hạng mạnh, sau đó giữ lựa
+// chọn của bạn (Quản trị viên → Giới hạn sử dụng). Mặc định thật được kiểm ở tests/api/helper-quota.test.mjs; tests/ui/usage-quota.mjs tự đặt và trả lại.
+const TOP_SEEDED = path.join(DATA, ".sharedtop-seeded");
+if (!fs.existsSync(TOP_SEEDED)) {
+  const r = await call("PATCH", "/api/admin/usage", { config: { sharedTop: "strong" } });
+  if (r.status === 200) fs.writeFileSync(TOP_SEEDED, new Date().toISOString()); else console.error("Không đặt được model cao nhất trên khóa chung:", r.j?.error);
 }
 // Connector giả lập kết nối sẵn như đang dùng thật: Mock Notes (đăng nhập OAuth, tự bấm "Cho phép"), Mock Status (giao thức 2026),
 // Mock Echo (SSE đời cũ) và DeepWiki thật (nếu có mạng). Máy chủ giả lập lưu token trong bộ nhớ nên mỗi lần chạy đều kết nối lại.

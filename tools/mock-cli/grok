@@ -6,7 +6,7 @@
 // - mcp add --transport http <tên> <url> | remove <tên> | list: ghi [mcp_servers.<tên>] url = "…" trong $GROK_HOME/config.toml.
 // - --prompt-file <tệp> --output-format streaming-json [-m] [--effort] [--resume <id>] [--rules] [--tools] [--deny]…: mỗi dòng một sự kiện
 //   (text, thought, tool_call, tool_call_update, end, error). Công cụ MCP gọi qua use_tool với tên synchro__<tên>.
-// Trong prompt: [mock:quota] → hết hạn mức gói; [mock:noeffort] → model không nhận --effort; [mock:slowgrok] → mở đầu bằng 6 giây chỉ có thought;
+// Trong prompt: [mock:quota] → hết hạn mức gói ([mock:quota:grok]: chỉ Grok hết, model dự phòng của hãng khác vẫn trả lời); [mock:noeffort] → model không nhận --effort; [mock:slowgrok] → mở đầu bằng 6 giây chỉ có thought;
 // [mock:holdgrok] → giữ lượt 8 giây (thử hàng đợi của tài khoản); #grokargs → trả lại các cờ đã nhận
 // (kiểm thử công cụ dựng sẵn đã tắt); #web → tìm web khi --tools có web_search; #media → mô tả tệp đính kèm @… nhận được.
 const C = require(require("path").join(__dirname, "mock-cli-common.cjs"));
@@ -103,7 +103,7 @@ async function grokImage(prompt) {
     if (!li()) return fail("Not authenticated. Run `grok login` to sign in, or set XAI_API_KEY.");
     { const oe = C.oauthTurn(authFile); if (oe) return fail(oe); }
     if (C.isImageTurn(prompt)) return grokImage(prompt);
-    if (prompt.includes("[mock:quota]")) return fail("Rate limit exceeded: you've reached your SuperGrok usage limit. Try again in 2 hours.");
+    if (prompt.includes("[mock:quota]") || prompt.includes("[mock:quota:grok]")) return fail("Rate limit exceeded: you've reached your SuperGrok usage limit. Try again in 2 hours.");
     const model = C.flag(a, "-m") ?? C.flag(a, "--model") ?? MODELS[0], effort = C.flag(a, "--effort");
     if (!MODELS.includes(model)) return fail(`Unknown model '${model}'. Run \`grok models\` to see available models.`);
     if (effort && prompt.includes("[mock:noeffort]")) return fail(`Model '${model}' does not support --effort ${effort}.`);

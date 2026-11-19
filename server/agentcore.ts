@@ -14,6 +14,7 @@ import { BROWSER_TOOLS, isBrowserTool, runBrowserTool, type BrowserCtx } from ".
 import type { Gate } from "./agentgate";
 import type { Ask } from "./approvals";
 import { DENIED_NUDGE, MAX_NUDGE, NUDGE, stalled } from "./stall";
+import { CONT_JOB } from "./ai/helperquota";
 
 export const AGENT_MAX_STEPS = 40;
 // Kiểu dùng chung với phía bên kia: shared/types/agent.ts.
@@ -449,7 +450,10 @@ export async function runPlanAgent(o: {
     },
   });
   try {
+    // cont: lượt làm tiếp trong cùng tin nhắn (nhắc làm tiếp, chờ kết quả công cụ): ghi "job:cont", không đếm thành tin nhắn mới (helperquota.ts CONT_JOB).
+    let cont = false;
     const once = (messages: { role: string; content: unknown }[], fresh = false) => subTurn({
+      job: cont ? CONT_JOB : undefined,
       user: o.user, model: o.model, system: `${o.system}\n\n${PLAN_NOTE(cli)}`, messages, conv: o.conv, effort: o.effort,
       signal: o.signal, onDelta: (t) => { pending += t; }, mcp: { url: bridge.url, alive: bridge.alive, live: bridge.live }, fresh,
     });
@@ -480,6 +484,8 @@ export async function runPlanAgent(o: {
       if (!pending.trim()) pending = said;
       flush();
       hist = [...hist, { role: "assistant", content: said }, { role: "user", content: next }];
+      // Tin người dùng nhắn thêm là lượt của họ; nhắc làm tiếp / chờ kết quả công cụ thì không.
+      cont = !more.length;
       r = await tryOnce(hist);
     }
     // Lượt làm tiếp lỗi: giữ phần đã trả lời, kèm lý do ngắn.

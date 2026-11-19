@@ -3,8 +3,9 @@
 // bật trong Đọc văn bản để AI đọc đúng tên riêng, thương hiệu, từ viết tắt.
 import { useEffect, useState } from "react";
 import * as I from "../icons";
+import { Dropdown } from "../listbox";
 import { useApp, usePref } from "../store";
-import { tr } from "../i18n";
+import { tf, tr } from "../i18n";
 import { api, post, reloadDicts, setDicts, useDicts, type Dict, type Item, type Rule } from "./client";
 import { ErrBox, Field, Player, Spin } from "./parts";
 import { Head, Wide } from "./shell";
@@ -13,6 +14,7 @@ import type { ToolProps } from "./view";
 type Row = Rule & { key: number };
 type DictSel = { id: string; version: string; name: string };
 const EXAMPLES: [string, string][] = [["AI", "ây ai"], ["Synchro", "xin-crô"], ["TP.HCM", "thành phố Hồ Chí Minh"], ["kg", "ki lô gam"], ["ElevenLabs", "e-le-vần-láp"], ["CEO", "xi i âu"]];
+const RULE_TYPES: [Rule["type"], string][] = [["alias", "Đọc thay bằng"], ["phoneme", "Phiên âm IPA"]];
 let seq = 1;
 const row = (r?: Partial<Rule>): Row => ({ key: seq++, word: "", type: "alias", say: "", alphabet: "ipa", cs: false, ...r });
 
@@ -20,16 +22,28 @@ export function DictTool({ say, voice }: ToolProps) {
   const app = useApp();
   const list = useDicts(true);
   const [sel, setSel] = usePref<DictSel[]>("spDicts", []);
+  // Từ điển đang mở: nhớ qua các lần chuyển công cụ (rời sang Tách giọng rồi quay lại từng mất trình sửa, chỉ còn "Chọn một từ điển…").
+  const [last, setLast] = usePref("spDictOpen", "");
   const [edit, setEdit] = useState<{ id: string | null; name: string; desc: string; rows: Row[] } | null>(null);
   const [busy, setBusy] = useState("");
+  // Mở từ điển tự động bị lỗi (mạng, từ điển đã bị xóa ở nơi khác): chỉ lúc đó mới hiện "Chọn một từ điển…".
+  const [openFail, setOpenFail] = useState(false);
   const [err, setErr] = useState("");
   const [test, setTest] = useState<Item | null>(null);
-  useEffect(() => { if (list && !list.length && !edit) setEdit({ id: null, name: "", desc: "", rows: [row(), row()] }); }, [list]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Có từ điển mà chưa mở cái nào: mở lại từ điển dùng lần trước (hoặc cái đầu tiên), trình sửa không bao giờ trống khi đã có từ điển.
+  useEffect(() => {
+    if (!list || edit) return;
+    if (!list.length) { setEdit({ id: null, name: "", desc: "", rows: [row(), row()] }); return; }
+    void open(list.find((d) => d.id === last) ?? list[0]);
+  }, [list]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const open = async (d: Dict) => {
-    setBusy(d.id); setErr(""); setTest(null);
+    // Bấm lại từ điển đang mở: giữ nguyên trình sửa (và phần đang sửa dở), không tải lại.
+    if (edit?.id === d.id || busy === d.id) return;
+    setLast(d.id);
+    setBusy(d.id); setErr(""); setTest(null); setOpenFail(false);
     try { const j = await api<{ dict: Dict }>(`dicts?id=${encodeURIComponent(d.id)}`); setEdit({ id: d.id, name: d.name, desc: d.desc, rows: (j.dict.rules ?? []).map((r) => row(r)).concat(row()) }); }
-    catch (e) { say((e as Error).message); } finally { setBusy(""); }
+    catch (e) { setOpenFail(true); say((e as Error).message); } finally { setBusy(""); }
   };
   const rules = () => (edit?.rows ?? []).filter((r) => r.word.trim() && r.say.trim()).map(({ word, type, say: s, alphabet, cs }) => ({ word: word.trim(), type, say: s.trim(), alphabet, cs }));
   const save = async () => {
@@ -78,13 +92,14 @@ export function DictTool({ say, voice }: ToolProps) {
           <div className="sp-card-h">Từ điển của bạn<button className="icon-btn" aria-label="Tải lại" title="Tải lại" onClick={() => void reloadDicts()}><I.Retry size={14} /></button></div>
           {list === null && <div className="sp-empty"><Spin /></div>}
           {list?.length === 0 && <div className="sp-empty">Chưa có từ điển nào. Tạo từ điển đầu tiên ở bên cạnh.</div>}
+          {!!list?.length && <p className="sp-dict-hint">Bật công tắc để Đọc văn bản dùng từ điển (tối đa 3).</p>}
           {list?.map((d) => {
-            const onIt = sel.some((s) => s.id === d.id);
+            const onIt = sel.some((s) => s.id === d.id), cur = edit?.id === d.id;
             return (
-              <div key={d.id} className={`sp-dict ${edit?.id === d.id ? "on" : ""}`}>
-                <button className="sp-dict-t" onClick={() => open(d)}><I.Book size={16} /><span><b data-notr>{d.name}</b><small>{d.count} quy tắc{d.desc ? ` · ${d.desc}` : ""}</small></span>{busy === d.id && <Spin />}</button>
+              <div key={d.id} className={`sp-dict ${cur ? "on" : ""}`}>
+                <button className="sp-dict-t" aria-current={cur || undefined} title={d.name} onClick={() => open(d)}><I.Book size={16} /><span className="sp-dict-n"><b data-notr>{d.name}</b><small>{tf("{n} quy tắc", { n: d.count })}{d.desc ? <> · <span data-notr>{d.desc}</span></> : null}</small></span>{busy === d.id && <Spin />}</button>
                 <div className="sp-dict-a">
-                  <label className="sp-check sm"><input type="checkbox" checked={onIt} onChange={() => flip(d)} /><span>Dùng khi đọc</span></label>
+                  <button role="switch" aria-checked={onIt} aria-label={`${tr("Dùng khi đọc")}: ${d.name}`} data-tip="Dùng khi đọc" className={`sp-tg ${onIt ? "on" : ""}`} onClick={() => flip(d)} />
                   <button className="icon-btn" aria-label={`Lưu trữ ${d.name}`} title="Lưu trữ" onClick={() => archive(d)}><I.Trash size={14} /></button>
                 </div>
               </div>
@@ -105,7 +120,7 @@ export function DictTool({ say, voice }: ToolProps) {
               {edit.rows.map((r) => (
                 <div key={r.key} className="sp-rule">
                   <input className="sp-input" value={r.word} maxLength={100} aria-label="Từ trong văn bản" placeholder="AI" onChange={(e) => setRow(r.key, { word: e.target.value })} />
-                  <span className="sp-sel sm"><select aria-label="Kiểu quy tắc" value={r.type} onChange={(e) => setRow(r.key, { type: e.target.value as Rule["type"] })}><option value="alias">Đọc thay bằng</option><option value="phoneme">Phiên âm IPA</option></select><I.Chevron size={12} /></span>
+                  <Dropdown<Rule["type"]> size="sm" block label="Kiểu quy tắc" className="sp-rtype" minWidth={160} value={r.type} onChange={(type) => setRow(r.key, { type })} options={RULE_TYPES} />
                   <input className="sp-input" value={r.say} maxLength={200} aria-label="Đọc là" placeholder={r.type === "alias" ? "ây ai" : "/eɪ aɪ/"} onChange={(e) => setRow(r.key, { say: e.target.value })} />
                   <button className="icon-btn" aria-label="Xóa quy tắc" onClick={() => setEdit({ ...edit, rows: edit.rows.filter((x) => x.key !== r.key) })}><I.X size={14} /></button>
                 </div>
@@ -121,8 +136,17 @@ export function DictTool({ say, voice }: ToolProps) {
             <ErrBox msg={err} />
             {test && <Player title="Nghe thử với từ điển" label={test.title} src={test.url} dl={test.url} />}
           </div>
-        ) : (
+        ) : openFail ? (
           <div className="sp-card sp-detect"><span className="sp-tic big"><I.Book size={24} /></span><b>Chọn một từ điển để sửa quy tắc</b><p>Hoặc bấm “Tạo từ điển” để bắt đầu.</p></div>
+        ) : (
+          // Danh sách đang tải hoặc đang tự mở từ điển dùng lần trước (khoảng 300 ms): khung giả đúng hình trình sửa, không hiện
+          // "Chọn một từ điển…" (câu đó sai khi đã có từ điển và trình sửa sắp hiện, thẻ còn đổi bố cục khi trình sửa tới).
+          <div className="sp-card sp-dict-wait" aria-busy="true">
+            <span className="sr-only" role="status">{tr("Đang mở từ điển…")}</span>
+            <span className="sk-blk sp-wait-l1" aria-hidden />
+            {[0, 1, 2].map((i) => <span key={i} className="sk-blk sp-dict-wait-row" aria-hidden />)}
+            <span className="sk-blk sp-wait-go" aria-hidden />
+          </div>
         )}
       </div>
     </Wide>
