@@ -32,6 +32,8 @@ async function refresh(rec: Stored, uid: string): Promise<Stored> {
 }
 
 const safeId = (id: string) => /^[a-f0-9]{40}$/.test(id);
+const NEEDS_TOOL = new Set(["image/heic", "legacy-office"]);
+const NEEDS_TOOL_EXT = /\.(heic|heif|doc|xls|ppt)$/i;
 
 // Hàm duy nhất: process_file(file) -> ContentBlock[]
 // File gốc lưu ở .cache/files/<id>.bin, kết quả trích lưu ở <id>.json để khỏi trích lại.
@@ -50,11 +52,14 @@ export async function processFile(buf: Buffer, name: string, uid: string, o: { r
   try {
     let hit = JSON.parse(await readFile(path.join(DIR, id + ".json"), "utf8")) as Stored;
     if (stale(hit)) hit = await refresh(hit, uid);
+    // Không đọc được chỉ vì máy chủ thiếu chương trình (HEIC, Office cũ): đọc lại, máy có thể vừa cài thêm. Office cũ
+    // lưu khi chưa bật LibreOffice mang loại "binary", nên xét cả đuôi tệp.
+    if (hit.raw && (NEEDS_TOOL.has(hit.kind) || NEEDS_TOOL_EXT.test(hit.name))) throw new Error("retry");
     if (hit.raw && !o.raw) throw new FileError(hit.err ?? `Không trích được nội dung từ "${name}".`);
     // Có đúng nội dung tệp trong tay nên được là chủ, không lộ gì thêm.
     claimFile(uid, id, buf.length, name);
     return { ...hit, name };
-  } catch (e) { if (e instanceof FileError) throw e; /* chưa có cache */ }
+  } catch (e) { if (e instanceof FileError) throw e; /* chưa có cache, hoặc cần đọc lại */ }
   const cur = inflight.get(id);
   if (cur) { await cur; return processFile(buf, name, uid, o); }
   let done!: () => void;

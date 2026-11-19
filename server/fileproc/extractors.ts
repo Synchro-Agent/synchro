@@ -6,7 +6,8 @@ import { mkdtemp, mkdir, writeFile, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import sharp, { type Metadata } from "sharp";
 import jschardet from "jschardet";
-import { parseInWorker, withParseSlot, withConvertSlot, lowPriority, parserEnv } from "./sandbox";
+import { parseInWorker, withParseSlot, withConvertSlot, lowPriority, parserEnv, pyBin } from "./sandbox";
+import { heicToPng, which } from "./heic";
 import { sniffUtf16, utf16LooksText } from "./detect";
 import { audioPrecheck, transcribeAudio } from "./transcribe";
 import { type ContentBlock, type Extractor, FileError, IMAGE_MAX_BYTES, IMAGE_MAX_EDGE } from "../../shared/fileproc/types";
@@ -193,31 +194,41 @@ export function looksVietnamese1258(buf: Buffer, detSays1258 = false): boolean {
   return lex >= 2 && ownValid >= 1 && valid >= 0.7 * (valid + ownBad) && ownValid >= 0.7 * (ownValid + ownBad);
 }
 
-// ---- 1. Ảnh: gửi thẳng, KHÔNG OCR; tự xoay theo EXIF (ảnh dọc chụp điện thoại lên đúng chiều), resize nếu cạnh dài > 1568px, HEIC/GIF → PNG ----
+// ---- 1. Ảnh: gửi thẳng, KHÔNG OCR; tự xoay theo EXIF (ảnh dọc chụp điện thoại lên đúng chiều), thu nhỏ nếu cạnh
+// dài > 1568px. HEIC giải sang PNG trước (server/fileproc/heic.ts) rồi đi tiếp như ảnh PNG; GIF động chỉ lấy khung
+// đầu, ép sang PNG.
 // failOn:"error" để ảnh hỏng báo lỗi rõ thay vì ra dữ liệu rác; limitInputPixels chặn ảnh khổng lồ.
 const openImage = (b: Buffer) => sharp(b, { limitInputPixels: IMAGE_MAX_PIXELS, failOn: "error" });
 const imageExtractor: Extractor = {
   name: "image",
   match: (k) => k.startsWith("image/"),
-  async run(buf, { kind, name }) {
+  async run(buf, { kind, name, uid, signal }) {
+    if (kind === "image/heic") {
+      // Giải HEIC tốn CPU và có thể gọi tiến trình ngoài: xếp hàng convert như Office cũ, mỗi người một ảnh một lúc.
+      const png = await withConvertSlot(uid, () => heicToPng(buf, name, { maxPixels: IMAGE_MAX_PIXELS }), { signal });
+      buf = png.data;
+      kind = "image/png";
+    }
     let meta: Metadata;
     try { meta = await openImage(buf).metadata(); }
     catch { throw new FileError(`Ảnh "${name}" quá lớn hoặc bị hỏng nên không xử lý được (giới hạn ~40 triệu điểm ảnh).`); }
     const w = meta.width ?? 0, hgt = meta.height ?? 0;
     if (w * hgt > IMAGE_MAX_PIXELS) throw new FileError(`Ảnh "${name}" quá lớn (${w}×${hgt} điểm ảnh). Giới hạn ~40 triệu điểm ảnh — hãy thu nhỏ rồi tải lại.`);
-    const heic = kind === "image/heic", gif = kind === "image/gif";
+    const gif = kind === "image/gif";
     const needRotate = (meta.orientation ?? 1) > 1;       // có cờ xoay EXIF: phải nắn lại để ảnh lên đúng chiều
     const big = Math.max(w, hgt) > IMAGE_MAX_EDGE;
     // Ảnh thường, nhỏ, không cần xoay / đổi định dạng: gửi nguyên bản cho model.
-    if (!heic && !gif && !needRotate && !big && buf.length <= IMAGE_MAX_BYTES) return [{ type: "image", media_type: kind, data: buf.toString("base64") }];
+    if (!gif && !needRotate && !big && buf.length <= IMAGE_MAX_BYTES) {
+      return [{ type: "image", media_type: kind, data: buf.toString("base64") }];
+    }
     let pipe = openImage(buf).rotate();                   // rotate() không tham số = tự xoay theo EXIF rồi gỡ cờ
     if (big) pipe = pipe.resize({ width: IMAGE_MAX_EDGE, height: IMAGE_MAX_EDGE, fit: "inside" });
-    // HEIC (model không nhận) và GIF động (chỉ cần khung đầu): ép sang PNG.
+    // GIF động: chỉ cần khung đầu, ép sang PNG.
     let out: Buffer, mt: string;
     try {
-      if (heic || gif) { out = await pipe.png().toBuffer(); mt = "image/png"; }
+      if (gif) { out = await pipe.png().toBuffer(); mt = "image/png"; }
       else { out = await pipe.toBuffer(); mt = kind; }
-    } catch { throw new FileError(heic ? `Không đọc được ảnh HEIC "${name}" (máy chủ chưa hỗ trợ giải mã HEIC). Hãy lưu sang JPEG / PNG rồi tải lại.` : `Ảnh "${name}" bị hỏng, không xử lý được.`); }
+    } catch { throw new FileError(`Ảnh "${name}" bị hỏng, không xử lý được.`); }
     // Ảnh chụp màn hình PNG vẫn nặng sau khi thu nhỏ: nén JPEG chất lượng cao (nền trắng cho phần trong suốt) để 20 ảnh vẫn gửi được một lần.
     if (out.length > IMAGE_MAX_BYTES) {
       const jpg = await openImage(out).flatten({ background: "#ffffff" }).jpeg({ quality: 88, chromaSubsampling: "4:4:4" }).toBuffer();
@@ -237,8 +248,15 @@ const audioExtractor: Extractor = {
 
 // ---- 1c. Office cũ (.doc/.xls/.ppt): chuyển bằng LibreOffice headless (chỉ khi máy chủ có cài, SYNCHRO_SOFFICE_BIN) rồi đi tiếp đường docx/xlsx/pptx ----
 async function convertLegacyOffice(buf: Buffer, name: string): Promise<{ buf: Buffer; kind: string }> {
-  const bin = process.env.SYNCHRO_SOFFICE_BIN;
-  if (!bin) throw new FileError(`"${name}" là định dạng Office cũ (.doc/.xls/.ppt). Hãy lưu lại thành .docx/.xlsx/.pptx rồi tải lên.`);
+  const want = process.env.SYNCHRO_SOFFICE_BIN;
+  const bin = want ? which(want) : null;
+  if (!bin) {
+    // Biến đã đặt (ecosystem.config.cjs) mà máy chưa cài LibreOffice: ghi log cho người vận hành.
+    if (want) console.warn(`[office] SYNCHRO_SOFFICE_BIN=${want} không chạy được (chạy ops/install-media-deps.sh)`);
+    throw new FileError(
+      `"${name}" là tệp Office đời cũ mà máy chủ chưa chuyển được. Hãy lưu thành .docx/.xlsx/.pptx.`,
+    );
+  }
   // Đoán loại từ các luồng OLE để chọn đúng đuôi nguồn và đích; LibreOffice tự nhận bộ lọc nhập theo nội dung.
   const s = buf.subarray(0, 65_536).toString("latin1");
   const [srcExt, target] = /Workbook|\bBook\b/.test(s) ? ["xls", "xlsx"] : /PowerPoint Document/.test(s) ? ["ppt", "pptx"] : ["doc", "docx"];
@@ -255,6 +273,9 @@ async function convertLegacyOffice(buf: Buffer, name: string): Promise<{ buf: Bu
     return { buf: out, kind: target };
   } catch (e) {
     if (e instanceof FileError) throw e;
+    const err = e as Error & { killed?: boolean; stderr?: string };
+    const why = String(err.stderr || err.message).trim().slice(0, 300);
+    console.warn(`[office] chuyển .${srcExt} lỗi${err.killed ? " (quá giờ)" : ""}:`, why);
     throw new FileError(`Không chuyển được tệp Office cũ "${name}". Hãy lưu lại thành .docx/.xlsx/.pptx rồi tải lên.`);
   } finally { await rm(dir, { recursive: true, force: true }); }
 }
@@ -290,7 +311,6 @@ const textBlocks = (fb: { text: string; images: string[] }) => {
 };
 
 class BadPdf extends Error {}
-const pyBin = () => process.env.PYTHON_BIN || path.join(process.cwd(), ".mkvenv", "bin", "python");
 /** OCR một trang PDF scan bằng scripts/ocr.py (RapidOCR). Chỉ chạy khi bật SYNCHRO_OCR=1 (mặc định tắt: giữ nguyên hành vi cũ, không spawn vô ích khi máy chủ chưa cài OCR). */
 async function ocrPage(imgPath: string, uid?: string, signal?: AbortSignal): Promise<string> {
   // Tiến trình OCR chỉ mở khi tới lượt: mở trước rồi mới xếp hàng thì hàng convert không giới hạn được gì (mọi trang chạy cùng lúc).

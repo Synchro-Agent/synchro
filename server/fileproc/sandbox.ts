@@ -90,6 +90,9 @@ export function lowPriority(pid?: number) {
   try { if (pid) os.setPriority(pid, 10); } catch { /* không có quyền */ }
 }
 
+/** Python của các script đọc PDF / OCR: PYTHON_BIN, không đặt thì .mkvenv của app (ops/server-build.sh cài gói). */
+export const pyBin = () => process.env.PYTHON_BIN || path.join(process.cwd(), ".mkvenv", "bin", "python");
+
 /** Môi trường tối thiểu cho tiến trình đọc tệp: không có khóa OAuth, WS_AGENT_SECRET hay đường dẫn dữ liệu. */
 export const parserEnv = () => ({ PATH: process.env.PATH ?? "", LANG: process.env.LANG ?? "C.UTF-8", NODE_ENV: "production", HOME: os.tmpdir(), TMPDIR: os.tmpdir() } as NodeJS.ProcessEnv);
 
