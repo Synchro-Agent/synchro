@@ -437,7 +437,10 @@ export function keepImages(uid: string, files: ImgFile[], outs: OutFile[]) {
 }
 // 1×1 PNG xám: ảnh giữ chỗ cho ảnh đang dựng ở chế độ nền (G4). Model đặt địa chỉ ảnh vào slide / artifact ngay; byte thật thay vào đúng id khi dựng xong.
 const PLACEHOLDER_PNG = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGN49uwZAAVoArMCxcTLAAAAAElFTkSuQmCC", "base64");
-const ASPECT_DIMS: Record<string, [number, number]> = { "1:1": [1024, 1024], "16:9": [1280, 720], "9:16": [720, 1280], "4:3": [1024, 768], "3:4": [768, 1024] };
+const ASPECT_DIMS: Record<string, [number, number]> = {
+  "1:1": [1024, 1024], "16:9": [1280, 720], "9:16": [720, 1280], "4:3": [1024, 768], "3:4": [768, 1024],
+  "4:5": [896, 1120], "5:4": [1120, 896], "2:3": [832, 1248], "3:2": [1248, 832],
+};
 /** Đặt tên ảnh theo lời người dùng (model hay viết prompt tiếng Anh), không trùng tên tệp đã có trong lượt. Dùng cho cả ảnh thật và ảnh giữ chỗ. */
 function renameImages(x: Exec, files: ImgFile[]): ImgFile[] {
   const asked = requestSlug(typedText((Array.isArray(x.msgs) ? (x.msgs as { role?: string; content?: unknown }[]) : []).filter((m) => m?.role === "user").at(-1)));

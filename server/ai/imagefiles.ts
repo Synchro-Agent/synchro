@@ -90,6 +90,50 @@ export async function gatherImages(paths: string[], c: FileCtx, o: { max?: numbe
   return { files, bad, big };
 }
 
+type Sized = { f: ImgFile; w: number; h: number };
+/** Giao đúng `count` ảnh đúng tỉ lệ xin (aspect "W:H"). Gói tạo ảnh (nhất là CLI) có khi để lại cả bản phụ (bản thu
+ *  nhỏ, bản cắt thử) hoặc không theo tỉ lệ xin; khi đó model tự cắt lại bằng run_code và người dùng nhận hai tệp gần
+ *  giống nhau. Chọn ảnh gần tỉ lệ nhất rồi lớn nhất; ảnh lệch quá 2% thì cắt giữa về đúng tỉ lệ. */
+export async function fitAspect(files: ImgFile[], aspect: string | undefined, count: number) {
+  const [aw, ah] = (aspect ?? "").split(":").map(Number);
+  const want = aw > 0 && ah > 0 ? aw / ah : 0;
+  const sharp = await import("sharp").then((m) => m.default, (e) => {
+    console.error("[image] không nạp được sharp, giữ nguyên ảnh:", (e as Error).message);
+    return null;
+  });
+  const dims = async (f: ImgFile): Promise<Sized | null> => {
+    // Ảnh hỏng không đọc được cỡ thì xếp cuối và giữ nguyên, không làm hỏng cả lượt tạo ảnh.
+    const m = await sharp?.(f.data).metadata().catch(() => null);
+    return m?.width && m.height ? { f, w: m.width, h: m.height } : null;
+  };
+  const sized = await Promise.all(files.map(async (f) => ({ f, d: await dims(f) })));
+  const off = (d: Sized | null) => (want && d ? Math.abs(d.w / d.h - want) / want : d ? 0 : 1);
+  const area = (d: Sized | null) => (d ? d.w * d.h : 0);
+  const rank = (a: (typeof sized)[number], b: (typeof sized)[number]) => off(a.d) - off(b.d) || area(b.d) - area(a.d);
+  const pick = files.length > count ? [...sized].sort(rank).slice(0, count) : sized;
+  const notes: string[] = [];
+  const out: ImgFile[] = [];
+  for (const { f, d } of pick) {
+    if (!sharp || !d || !want || off(d) <= 0.02) { out.push(f); continue; }
+    const wide = d.w / d.h > want;
+    const cw = wide ? Math.round(d.h * want) : d.w, ch = wide ? d.h : Math.round(d.w / want);
+    const box = { left: Math.floor((d.w - cw) / 2), top: Math.floor((d.h - ch) / 2), width: cw, height: ch };
+    const img = sharp(f.data).extract(box);
+    const enc = f.mime === "image/png" ? img.png() : f.mime === "image/webp" ? img.webp({ quality: 92 })
+      : img.jpeg({ quality: 92 });
+    const data = await enc.toBuffer().catch((e) => {
+      console.error("[image] không cắt được ảnh về tỉ lệ xin:", (e as Error).message);
+      return null;
+    });
+    out.push(data ? { ...f, data } : f);
+    if (data) {
+      notes.push(`Ảnh ${d.w}×${d.h} đã được cắt giữa về đúng tỉ lệ ${aspect} (${cw}×${ch}); không cần tạo thêm bản`
+        + " cắt khác.");
+    }
+  }
+  return { files: out, notes };
+}
+
 /** Xóa tệp tạm bằng chính user của engine. */
 export async function removeFile(file: string, c: Pick<FileCtx, "env" | "cwd">) {
   await spawnCli("/bin/sh", ["-c", 'rm -f -- "$1"', "sh", file], { env: c.env, cwd: c.cwd, stdin: "" }).done;
