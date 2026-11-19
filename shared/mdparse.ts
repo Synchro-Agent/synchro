@@ -8,6 +8,8 @@ export type Inl =
   | { t: "strong" | "em" | "del" | "u" | "sub" | "sup" | "kbd" | "mark" | "span"; c: Inl[] }
   | { t: "code"; v: string }
   | { t: "a"; href: string; c: Inl[] }
+  /** Link tới tệp trong sandbox của model (sandbox:/outputs/x.xlsx, /mnt/data/x.xlsx…): name là tên tệp; khung chat nối với thẻ tệp cùng tên dưới tin nhắn. */
+  | { t: "file"; name: string; c: Inl[] }
   | { t: "img"; src: string; alt: string }
   | { t: "math"; v: string; display?: boolean }
   | { t: "fn"; id: string }
@@ -207,6 +209,16 @@ function linkAt(s: string, i: number, open: boolean, memo: Map<number, number> =
 
 // http(s) và thư là link thật. Còn lại (sandbox:/…, outputs/…, javascript:…) chỉ hiện chữ: tệp đã có thẻ tải ngay dưới tin nhắn.
 export const safeHref = (u: string) => (/^https?:\/\//i.test(u) || /^mailto:/i.test(u) ? u : /^www\.[^\s.]+\.[^\s]+/i.test(u) ? "https://" + u : null);
+// Đường dẫn tệp trong sandbox của model (model vẫn hay viết dù đã dặn không): sandbox:/outputs/x.xlsx, sandbox:/mnt/data/x.xlsx, /outputs/x.xlsx, outputs/x.xlsx.
+// Trả về tên tệp (đã giải mã %20…) để khung chat nối với thẻ tệp cùng tên; không phải đường dẫn tệp thì null (javascript:, ../ hay thư mục trống).
+const SANDBOX_FILE = /^(?:sandbox:)?\/?(?:mnt\/data|mnt\/user-data\/outputs|home\/[\w.-]+\/outputs|workspace\/outputs|outputs)\/((?:[^/?#\s]+\/)*)([^/?#\s]+)$/i;
+export function sandboxFile(u: string): string | null {
+  const m = SANDBOX_FILE.exec(u.trim());
+  if (!m) return null;
+  let name = m[2];
+  try { name = decodeURIComponent(name); } catch {}
+  return name && name !== "." && name !== ".." && name.length <= 200 ? name : null;
+}
 
 export function parseInline(s: string, opts: { open?: boolean; noLink?: boolean } = {}): Inl[] {
   const ts: Tok[] = [];
@@ -249,8 +261,8 @@ export function parseInline(s: string, opts: { open?: boolean; noLink?: boolean 
       if (r) {
         const label = parseInline(s.slice(r.label[0], r.label[1]), { noLink: true });
         if ("partial" in r) { push({ t: "span", c: label }); i = s.length; continue; }
-        const href = safeHref(r.dest);
-        push(href ? { t: "a", href, c: label } : { t: "span", c: label }); i = r.end; continue;
+        const href = safeHref(r.dest), file = href ? null : sandboxFile(r.dest);
+        push(href ? { t: "a", href, c: label } : file ? { t: "file", name: file, c: label } : { t: "span", c: label }); i = r.end; continue;
       }
       buf += c; i++; continue;
     }

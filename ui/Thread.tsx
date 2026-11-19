@@ -19,7 +19,7 @@ import { lazyView } from "./lazy";
 import { answerAsk } from "./codesync";
 import { ConnCards, PlanCard, stepsOf, WorkParts, WorkStatus, WorkSummary } from "./worklog";
 import { CiteCtx, SourceChips } from "./cites";
-import { Markdown } from "./md";
+import { Markdown, OutsCtx } from "./md";
 import type { ApprovalAnswer, ApprovalCall, LibUse, OutFile } from "./llm";
 import type { Chat, Msg } from "./store";
 import { AUTO, autoPickKey, modelName } from "./models";
@@ -111,15 +111,19 @@ type ArtScan = { map: Map<string, (ArtVersion & { msg: number })[]>; at: Record<
 const ART_EMPTY: ArtScan = { map: new Map(), at: {} };
 // Kết quả tách artifact theo từng tin: tin đã xong không đổi nên không tách lại mỗi khung hình.
 const artSegs = new WeakMap<Msg, ReturnType<typeof splitArtifacts>>();
+/** Các đoạn chữ / artifact của một tin (dùng chung bộ nhớ đệm với bảng artifact). */
+function artSegsOf(m: Msg) {
+  let segs = artSegs.get(m);
+  if (!segs) { segs = splitArtifacts(m.text); artSegs.set(m, segs); }
+  return segs;
+}
 function scanArts(msgs: Msg[], from: number, base: ArtScan): ArtScan {
   const map: ArtScan["map"] = new Map(), at = { ...base.at };
   for (const [k, v] of base.map) map.set(k, [...v]);
   for (let i = from; i < msgs.length; i++) {
     const m = msgs[i];
     if (m.role !== "ai" || !hasArtifacts(m.text)) continue;
-    let segs = artSegs.get(m);
-    if (!segs) { segs = splitArtifacts(m.text); artSegs.set(m, segs); }
-    for (const sg of segs) if (sg.kind === "art") {
+    for (const sg of artSegsOf(m)) if (sg.kind === "art") {
       const l = map.get(sg.art.ident) ?? [];
       l.push({ ...resolveArt(l[l.length - 1], sg.art), msg: i });
       map.set(sg.art.ident, l);
@@ -242,14 +246,17 @@ const MsgRow = memo(function MsgRow({ m: raw, i, last, busy, mark, art, inl, fil
       </div>
     ) : (
       <div style={est}>
-        <CiteCtx.Provider value={cites}><div className={`ai-msg${m.done ? "" : " ai-streaming"}`}>{m.tools?.length ? <div className="skill-used">{m.tools.map((n) => <span key={n} className="skill-chip tool-chip"><I.SetPlug size={13} /><span>{tr("Đã dùng")}</span><span data-notr>{toolChip(n)}</span></span>)}</div> : null}{m.libs?.length ? <LibChips libs={m.libs} onOpen={() => cx.current!.openPlugins()} /> : null}{m.skills?.length ? <div className="skill-used">{m.skills.map((n) => <span key={n} className="skill-chip"><I.Scroll size={13} />{tr("Đang dùng skill")}: {n}</span>)}</div> : null}{m.done ? <WorkSummary parts={m.parts} plan={m.plan} ms={m.dur} stopped={m.stopped} failed={m.failed || !!m.notice?.partial} render={(t) => <Markdown text={t} say={say} />} /> : m.parts?.length ? <WorkParts parts={m.parts} live onAnswer={answerAsk} render={(t) => <Markdown text={t} say={say} />} /> : null}{m.text ? (art && hasArtifacts(m.text) ? splitArtifacts(m.text).map((sg, k) => sg.kind === "text" ? <Markdown key={k} text={sg.text} say={say} viz={inl} live={m.done && last && !busy} streaming={!m.done} /> : (() => {
-          const pos = arts.at[i]?.find((x) => x.ident === sg.art.ident && arts.map.get(x.ident)?.[x.v]?.msg === i);
+        <CiteCtx.Provider value={cites}><OutsCtx.Provider value={m.outs ?? null}><div className={`ai-msg${m.done ? "" : " ai-streaming"}`}>{m.tools?.length ? <div className="skill-used">{m.tools.map((n) => <span key={n} className="skill-chip tool-chip"><I.SetPlug size={13} /><span>{tr("Đã dùng")}</span><span data-notr>{toolChip(n)}</span></span>)}</div> : null}{m.libs?.length ? <LibChips libs={m.libs} onOpen={() => cx.current!.openPlugins()} /> : null}{m.skills?.length ? <div className="skill-used">{m.skills.map((n) => <span key={n} className="skill-chip"><I.Scroll size={13} />{tr("Đang dùng skill")}: {n}</span>)}</div> : null}{m.done ? <WorkSummary parts={m.parts} plan={m.plan} ms={m.dur} stopped={m.stopped} failed={m.failed || !!m.notice?.partial} render={(t) => <Markdown text={t} say={say} />} /> : m.parts?.length ? <WorkParts parts={m.parts} live onAnswer={answerAsk} render={(t) => <Markdown text={t} say={say} />} /> : null}{m.text ? (art && hasArtifacts(m.text) ? artSegsOf(m).map((sg, k, segs) => sg.kind === "text" ? <Markdown key={k} text={sg.text} say={say} viz={inl} live={m.done && last && !busy} streaming={!m.done} /> : (() => {
+          // Một thẻ cho mỗi artifact trong một tin: bản đầy đủ rồi bản sửa (mode="patch") cùng identifier trong cùng câu trả lời là hai phiên bản
+          // của một artifact. Thẻ đứng ở chỗ artifact xuất hiện lần đầu, ghi phiên bản cuối cùng tin này tạo ra và mở đúng phiên bản đó.
+          if (segs.findIndex((x) => x.kind === "art" && x.art.ident === sg.art.ident) !== k) return null;
+          const pos = arts.at[i]?.filter((x) => x.ident === sg.art.ident && arts.map.get(x.ident)?.[x.v]?.msg === i).at(-1);
           const total = arts.map.get(sg.art.ident)?.length ?? 1;
           const v = pos?.v ?? 0;
           const active = c.artOpen && c.artIdent === sg.art.ident && c.artIndex === v;
           const full = arts.map.get(sg.art.ident)?.[v];
           return <ArtifactCard key={k} art={full ?? sg.art} version={v + 1} total={total} active={active} fix={full?.fix} onRedo={last && !busy ? () => cx.current!.send(`${tr("Bản sửa")} “${full?.title ?? sg.art.ident}” ${tr("không áp được. Hãy viết lại toàn bộ artifact này (không dùng mode=\"patch\"), giữ các thay đổi tôi vừa yêu cầu.")}`) : undefined} onOpen={() => cx.current!.openArt({ chat: chatId, ident: sg.art.ident, v, follow: false })} />;
-        })()) : <Markdown text={hasArtifacts(m.text) ? artifactsAsCode(m.text) : m.text} say={say} viz={inl} live={m.done && last && !busy} streaming={!m.done} />) : null}{m.failed ? <ErrCard raw={m.err} onRetry={last && !busy ? () => cx.current!.retry() : undefined} onProviders={() => cx.current!.openProviders()} /> : null}{m.done && last ? <ConnCards parts={m.parts} text={m.text} /> : null}{!m.done && m.plan?.length ? <PlanCard plan={m.plan} live /> : null}{!m.done ? <WorkStatus label={m.parts?.some((p) => p.k === "ask" && p.state === "wait") ? tr("Đang chờ bạn duyệt") : m.prog} since={m.time} steps={stepsOf(m.parts)} /> : null}{m.outs?.length ? <OutputFiles files={m.outs} onOpen={(f) => cx.current!.openFile(f)} active={fileActive} /> : null}</div></CiteCtx.Provider>
+        })()) : <Markdown text={hasArtifacts(m.text) ? artifactsAsCode(m.text) : m.text} say={say} viz={inl} live={m.done && last && !busy} streaming={!m.done} />) : null}{m.failed ? <ErrCard raw={m.err} onRetry={last && !busy ? () => cx.current!.retry() : undefined} onProviders={() => cx.current!.openProviders()} /> : null}{m.done && last ? <ConnCards parts={m.parts} text={m.text} /> : null}{!m.done && m.plan?.length ? <PlanCard plan={m.plan} live /> : null}{!m.done ? <WorkStatus label={m.parts?.some((p) => p.k === "ask" && p.state === "wait") ? tr("Đang chờ bạn duyệt") : m.prog} since={m.time} steps={stepsOf(m.parts)} /> : null}{m.outs?.length ? <OutputFiles files={m.outs} onOpen={(f) => cx.current!.openFile(f)} active={fileActive} /> : null}</div></OutsCtx.Provider></CiteCtx.Provider>
         {m.done && m.stopped && <div className="msg-stopped"><I.Stop size={11} />{tr("Đã dừng · giữ lại phần đã viết")}</div>}
         {m.done && !m.failed && (m.pjApplied || m.insApplied) ? <div className="msg-applied">{m.pjApplied && <span className="skill-chip"><I.Folder size={13} />{tr("Đã áp dụng ngữ cảnh dự án")}</span>}{m.insApplied && <span className="skill-chip"><I.User size={13} />{tr("Đã áp dụng hướng dẫn cá nhân")}</span>}</div> : null}
         {m.done && m.webs?.length ? <SourceChips webs={m.webs} id={citeId} /> : null}
