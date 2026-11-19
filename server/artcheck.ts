@@ -16,7 +16,7 @@ import { fitSummary, overflowing, type SlideFit } from "../shared/deckfit";
 import { numberingIssues, type NumIssue } from "../shared/decknum";
 import { hashOf } from "../shared/critic";
 import { KEEP } from "../shared/turnfold";
-import { withinCheckBudget } from "./checkbudget";
+import { withinAutoCheck } from "./checkbudget";
 
 export const READ_ARTIFACT_TOOL = {
   name: "read_artifact",
@@ -296,6 +296,14 @@ export function layoutOf(content: string): DeckLayout | null {
 /** Lỗi đánh số slide dạng dòng cho model (rỗng nếu không có). */
 export const numberingNote = (issues: NumIssue[]) => issues.map((x) => `- Slide ${x.slides.length > 1 ? x.slides.join(", ") : x.slides[0]}: đánh số slide không nhất quán — ${x.prompt}`);
 
+/** Lần kiểm của model bị cắt giữa chừng (hết giờ tự kiểm): model chưa thấy kết quả nên bản này chưa tính là đã kiểm,
+ *  cũng không tính một vòng; lần tự đo trước khi giao (autoDeckCheck) vẫn đo nó. */
+export function forgetCheck(turn: object, a: ArtVersion) {
+  const r = rounds.get(turn)?.get(a.ident);
+  if (!r || r.last !== fingerprint(a.content)) return;
+  r.n--;
+  r.last = "";
+}
 /** Bản này của artifact đã được check_artifact kiểm tra trong lượt `turn` (model đã thấy kết quả). */
 export function checkedInTurn(turn: object, a: ArtVersion): boolean {
   return rounds.get(turn)?.get(a.ident)?.last === fingerprint(a.content);
@@ -305,15 +313,23 @@ export function checkedInTurn(turn: object, a: ArtVersion): boolean {
 // thì slide tràn khung 1280×720 và đánh số lệch sau bản sửa tới thẳng người dùng. Synchro tự đo bản cuối (đánh số: đọc mã, luôn có;
 // khung từng slide: dựng trong Chromium khi máy chủ có workspace) và trả lời nhắc cho model sửa trước khi giao. null: không có gì phải sửa.
 // Bản đã kiểm tra trong lượt thì bỏ qua (model đã thấy kết quả), không tính thêm vòng khi đã đủ MAX_CHECK_ROUNDS.
-export async function autoDeckCheck(uid: string, turn: object, a: ArtVersion, origin: string, signal?: AbortSignal): Promise<string | null> {
+export async function autoDeckCheck(
+  uid: string, turn: object, a: ArtVersion, origin: string, signal?: AbortSignal,
+): Promise<string | null> {
   if (!a.complete || a.type !== "html" || !isDeck(a) || checkedInTurn(turn, a)) return null;
   const nums = numberingNote(numberingIssues(a.content));
   let fit: SlideFit[] = layoutOf(a.content)?.fit ?? [];
-  if (!fit.length && runner() === "workspace" && !checkRoundGate(turn, a)) {
-    // checkArtifact tự đổi lỗi thành kết quả; lỗi ném ra chỉ làm thiếu số đo khung, phần đánh số (đọc mã) vẫn báo
-    // được.
-    await withinCheckBudget(turn, signal, (s) => checkArtifact(uid, a, {}, origin, s)).catch(() => null);
+  // Không xét số vòng kiểm của model (checkRoundGate): đây là lần đo của Synchro, một lần mỗi lượt (deckGate), có
+  // phần thời gian riêng. Model đã dùng đủ 2 vòng rồi sửa thêm thì bản sửa cuối càng cần được đo.
+  if (!fit.length && runner() === "workspace") {
+    // Phần ngân sách riêng (checkbudget.ts AUTO_CHECK_MS): model đã dùng hết 2 phút tự kiểm thì bản sửa cuối vẫn
+    // được đo. checkArtifact tự đổi lỗi thành kết quả; lỗi ném ra chỉ làm thiếu số đo khung, phần đánh số (đọc mã)
+    // vẫn báo được, và dòng log dưới đây cho biết bản giao chưa được đo.
+    await withinAutoCheck(turn, signal, (s) => checkArtifact(uid, a, {}, origin, s)).catch((e) => {
+      console.warn(`[artcheck] không đo được bộ slide trước khi giao: ${(e as Error).message}`);
+    });
     fit = layoutOf(a.content)?.fit ?? [];
+    if (!fit.length && !signal?.aborted) console.warn(`[artcheck] bộ slide "${a.ident}" v${a.v} chưa đo được khung`);
   }
   const bad = overflowing(fit);
   if (!bad.length && !nums.length) return null;

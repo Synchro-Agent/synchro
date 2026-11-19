@@ -5,48 +5,71 @@
 import { ART_TYPES, splitArtifacts, type ArtBlock } from "./artifacts";
 import { expandTemplates } from "./designtemplates";
 
-export type Patch = { search: string; replace: string };
+// unclear: không tách được SEARCH với REPLACE (thiếu dòng ngăn, hoặc nhiều dòng 5–9 dấu "=" mà không dòng nào đúng 7
+// dấu); báo hỏng chứ không đoán, vì đoán sai là áp một bản sửa sai mà vẫn báo thành công.
+export type Patch = { search: string; replace: string; unclear?: boolean };
 // misses: khối không áp được (số thứ tự từ 1 trong bản sửa, và SEARCH của nó), để báo cho model đúng khối nào
-// cần gửi lại.
-export type PatchMiss = { block: number; search: string };
+// cần gửi lại. why: lý do khác "SEARCH không khớp" (vd. không tách được SEARCH / REPLACE).
+export type PatchMiss = { block: number; search: string; why?: string };
 export type PatchResult = { ok: boolean; content: string; applied: number; failed: string[]; misses: PatchMiss[] };
 
 // Dấu khối nằm trên dòng riêng. Model hay viết lệch so với mẫu: CRLF, khoảng trắng cuối dòng dấu, 5–9 ký tự thay vì
 // đúng 7, kiểu của Cline (------- SEARCH / +++++++ REPLACE). Đọc lệch như thế thành "không có khối nào" thì bản sửa
 // không đổi gì mà cũng không báo lỗi.
 const OPEN = /^[ \t]*(?:<{5,9}|-{5,9})[ \t]*SEARCH[ \t]*$/i;
-const MID = /^[ \t]*={5,9}[ \t]*$/;
 const CLOSE = /^[ \t]*(?:>{5,9}|\+{5,9})[ \t]*REPLACE[ \t]*$/i;
-// Số dòng mà read_artifact đặt trước mỗi dòng ("  12 | "): model đôi khi chép cả vào SEARCH.
-const NUMBERED = /^\s*\d+ \| ?/;
+// Dòng ngăn đúng mẫu (7 dấu "=") luôn được ưu tiên: dòng gạch chân tiêu đề Markdown / RST ("Tiêu đề" rồi "=====")
+// có thể nằm trong SEARCH hay REPLACE. Dòng 5–9 dấu chỉ là dòng ngăn khi khối không có dòng nào đúng mẫu và chỉ có một
+// dòng như thế.
+const MID = /^[ \t]*={7}[ \t]*$/;
+const MID_LOOSE = /^[ \t]*={5,9}[ \t]*$/;
+const UNCLEAR = "(không tách được SEARCH và REPLACE: thiếu dòng =======, hoặc có nhiều dòng \"=\" gần giống mà"
+  + " không dòng nào đúng 7 dấu)";
 
-function block(s: string[], r: string[]): Patch {
-  const filled = s.filter((l) => l.trim());
-  if (!filled.length || !filled.every((l) => NUMBERED.test(l))) return { search: s.join("\n"), replace: r.join("\n") };
-  const strip = (l: string) => l.replace(NUMBERED, "");
-  return { search: s.map(strip).join("\n"), replace: r.map(strip).join("\n") };
+// Chỗ của dòng ngăn trong các dòng của một khối; -1: không có; null: không rõ (nhiều dòng gần đúng mẫu).
+function divider(lines: string[]): number | null {
+  const exact = lines.findIndex((l) => MID.test(l));
+  if (exact !== -1) return exact;
+  const loose = lines.flatMap((l, i) => (MID_LOOSE.test(l) ? [i] : []));
+  if (loose.length > 1) return null;
+  return loose.length ? loose[0] : -1;
 }
+function block(lines: string[]): Patch {
+  const k = divider(lines);
+  if (k === null || k === -1) {
+    const first = lines.findIndex((l) => MID_LOOSE.test(l));
+    return { search: (first === -1 ? lines : lines.slice(0, first)).join("\n"), replace: "", unclear: true };
+  }
+  return { search: lines.slice(0, k).join("\n"), replace: lines.slice(k + 1).join("\n") };
+}
+const hasDivider = (lines: string[]) => lines.some((l) => MID_LOOSE.test(l));
 
 /** Các khối SEARCH/REPLACE của một bản sửa. complete: bản sửa đã đóng thẻ, khối cuối thiếu dòng REPLACE vẫn được
  *  nhận (đang viết dở thì khối đó chưa xong, chờ). */
 export function parsePatches(body: string, complete = true): Patch[] {
   const out: Patch[] = [];
-  let state = 0, s: string[] = [], r: string[] = [];
+  let open = false, cur: string[] = [];
   for (const line of body.replace(/\r\n?/g, "\n").split("\n")) {
-    if (state === 0) {
-      if (OPEN.test(line)) { state = 1; s = []; }
+    if (!open) {
+      open = OPEN.test(line);
+      cur = [];
       continue;
     }
-    if (state === 1) {
-      if (MID.test(line)) { state = 2; r = []; } else s.push(line);
+    if (CLOSE.test(line)) {
+      out.push(block(cur));
+      open = false;
       continue;
     }
-    if (CLOSE.test(line)) { out.push(block(s, r)); state = 0; continue; }
-    // Khối mới mở khi khối trước chưa có dòng REPLACE: model quên dòng đóng, khối trước kết thúc ở đây.
-    if (OPEN.test(line)) { out.push(block(s, r)); state = 1; s = []; continue; }
-    r.push(line);
+    // Khối mới mở khi khối trước đã có dòng ngăn mà chưa có dòng REPLACE: model quên dòng đóng, khối trước kết thúc
+    // ở đây.
+    if (OPEN.test(line) && hasDivider(cur)) {
+      out.push(block(cur));
+      cur = [];
+      continue;
+    }
+    cur.push(line);
   }
-  if (state === 2 && complete) out.push(block(s, r));
+  if (open && complete && hasDivider(cur)) out.push(block(cur));
   return out;
 }
 /** Viết lại các khối thành nội dung của một bản sửa mode="patch". */
@@ -78,38 +101,59 @@ function sparseFind(lines: string[], want: string[]): [number, number] | null {
   }
   return null;
 }
+// Thay một lần SEARCH bằng REPLACE trong content: nguyên văn trước, rồi bỏ qua thụt lề, rồi bỏ qua dòng trống. null:
+// không có chỗ nào khớp.
+function place(content: string, search: string, replace: string): string | null {
+  const at = content.indexOf(search);
+  if (at !== -1) return content.slice(0, at) + replace + content.slice(at + search.length);
+  const lines = content.split("\n"), want = search.split("\n");
+  while (want.length && !want[want.length - 1].trim()) want.pop();
+  while (want.length && !want[0].trim()) want.shift();
+  const i = want.length ? looseFind(lines, want) : -1;
+  const span: [number, number] | null = i !== -1 ? [i, i + want.length] : sparseFind(lines, want);
+  if (!span) return null;
+  // Giữ thụt lề của bản gốc cho phần thay thế khi model viết lệch thụt lề.
+  const pad = /^\s*/.exec(lines[span[0]])![0], wpad = /^\s*/.exec(want[0])![0];
+  const shift = (l: string) =>
+    (wpad && l.startsWith(wpad) ? pad + l.slice(wpad.length) : !wpad && pad && l ? pad + l : l);
+  lines.splice(span[0], span[1] - span[0], ...replace.split("\n").map(shift));
+  return lines.join("\n");
+}
+
+// Số dòng mà read_artifact đặt trước mỗi dòng ("  12 | "): model đôi khi chép cả vào SEARCH. Chỉ bỏ khi SEARCH
+// nguyên văn không khớp: nội dung có dòng thật sự bắt đầu như thế (bảng GFM không có "|" đầu dòng, "2024 | 10") phải
+// áp đúng như viết.
+const NUMBERED = /^\s*\d+ \| ?/;
+function unnumbered(p: Patch): Patch | null {
+  const lines = p.search.split("\n"), filled = lines.filter((l) => l.trim());
+  if (!filled.length || !filled.every((l) => NUMBERED.test(l))) return null;
+  const strip = (t: string) => t.split("\n").map((l) => l.replace(NUMBERED, "")).join("\n");
+  return { search: strip(p.search), replace: strip(p.replace) };
+}
 
 /** Áp lần lượt các khối SEARCH/REPLACE vào nội dung gốc. SEARCH rỗng = thêm vào cuối. */
 export function applyPatches(base: string, patches: Patch[]): PatchResult {
   let content = base, applied = 0;
   const failed: string[] = [], misses: PatchMiss[] = [];
   patches.forEach((p, n) => {
+    if (p.unclear) {
+      failed.push(UNCLEAR);
+      misses.push({ block: n + 1, search: p.search, why: UNCLEAR });
+      return;
+    }
     if (!p.search.trim()) {
       content = content.replace(/\n?$/, "\n") + p.replace;
       applied++;
       return;
     }
-    const at = content.indexOf(p.search);
-    if (at !== -1) {
-      content = content.slice(0, at) + p.replace + content.slice(at + p.search.length);
-      applied++;
-      return;
-    }
-    const lines = content.split("\n"), want = p.search.split("\n");
-    while (want.length && !want[want.length - 1].trim()) want.pop();
-    while (want.length && !want[0].trim()) want.shift();
-    const i = want.length ? looseFind(lines, want) : -1;
-    const span: [number, number] | null = i !== -1 ? [i, i + want.length] : sparseFind(lines, want);
-    if (!span) {
-      failed.push(want[0]?.trim().slice(0, 120) ?? "");
+    const bare = unnumbered(p);
+    const next = place(content, p.search, p.replace) ?? (bare ? place(content, bare.search, bare.replace) : null);
+    if (next === null) {
+      failed.push(p.search.split("\n").find((l) => l.trim())?.trim().slice(0, 120) ?? "");
       misses.push({ block: n + 1, search: p.search });
       return;
     }
-    // Giữ thụt lề của bản gốc cho phần thay thế khi model viết lệch thụt lề.
-    const pad = /^\s*/.exec(lines[span[0]])![0], wpad = /^\s*/.exec(want[0])![0];
-    const rep = p.replace.split("\n").map((l) => (wpad && l.startsWith(wpad) ? pad + l.slice(wpad.length) : !wpad && pad && l ? pad + l : l));
-    lines.splice(span[0], span[1] - span[0], ...rep);
-    content = lines.join("\n");
+    content = next;
     applied++;
   });
   return { ok: failed.length === 0 && applied > 0, content, applied, failed, misses };
@@ -138,12 +182,16 @@ export function nearest(content: string, search: string): { from: number; lines:
   for (let i = 0; i < lines.length; i++) {
     let sum = 0;
     for (let k = 0; k < wp.length && i + k < lines.length; k++) sum += dice(lp[i + k], wp[k]);
-    if (sum / wp.length > score) { score = sum / wp.length; best = i; }
+    if (sum / wp.length <= score) continue;
+    score = sum / wp.length;
+    best = i;
   }
   if (best < 0 || score < 0.35) return null;
-  // Đoạn gần giống cùng một dòng trước và một dòng sau: ít nhất 3 dòng ngữ cảnh.
-  const from = Math.max(0, best - 1), to = Math.min(lines.length, best + Math.min(want.length, 6) + 1);
-  return { from: from + 1, lines: lines.slice(from, to) };
+  // Đoạn gần giống cùng một dòng trước và một dòng sau, ít nhất 3 dòng ngữ cảnh: chỗ đó ở đầu / cuối tệp thì dời
+  // khung vào trong chứ không cắt bớt.
+  const size = Math.min(lines.length, Math.max(3, Math.min(want.length, 6) + 2));
+  const from = Math.max(0, Math.min(best - 1, lines.length - size));
+  return { from: from + 1, lines: lines.slice(from, from + size) };
 }
 
 // fix: kết quả áp bản sửa (patch) của phiên bản này.

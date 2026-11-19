@@ -134,12 +134,15 @@ export function toOtlp(t: Trace) {
   return { resourceSpans: [{ resource: { attributes: attrList({ "service.name": "synchro" }) }, scopeSpans: [{ scope: { name: "synchro.chat", version: "1" }, spans: [root, ...kids] }] }] };
 }
 // Bản sửa artifact của lượt (chat/tools.ts notePatches): khối áp được / không áp được, số lần viết lại trọn sau bản
-// sửa hỏng, kết quả lần nhắc gửi lại. Đọc thẳng trên dòng [timing] để biết bản sửa có áp ngay lần đầu không.
+// sửa hỏng, số khối hỏng trước lần nhắc gửi lại và kết quả lần nhắc đó. Đọc thẳng trên dòng [timing] để biết bản sửa
+// có áp ngay lần đầu không.
 function patchPart(a: Record<string, Attr>): string {
   if (a["synchro.patch.ok"] === undefined) return "";
+  const first = a["synchro.patch.failed_first"];
   const heal = a["synchro.patch.heal"] !== undefined ? ` patch_heal=${a["synchro.patch.heal"]}` : "";
   const counts = `patch_ok=${a["synchro.patch.ok"]} patch_failed=${a["synchro.patch.failed"]}`;
-  return ` ${counts} patch_rewrite=${a["synchro.patch.rewrites"]}${heal}`;
+  const before = first !== undefined ? ` patch_failed_first=${first}` : "";
+  return ` ${counts} patch_rewrite=${a["synchro.patch.rewrites"]}${before}${heal}`;
 }
 export function endTrace(t: Trace, status: number) {
   if (t.end) return;

@@ -682,12 +682,17 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
         // Tin người dùng nhắn thêm là lượt của họ; nhắc làm tiếp / chờ kết quả công cụ thì không.
         cont = !more.length;
         r = await tryOnce(hist);
-        if (healing !== null && prior && r.status === 200) {
-          const j = r.json as J;
-          const text = j.cancelled ? healing : patchHealMerge(prior, x, healing, String(j.text ?? ""));
-          r = { ...r, json: { ...(r.json as Record<string, unknown>), text } };
+        if (healing !== null && prior) {
+          const j = r.json as J, healed = r.status === 200 && !j.cancelled;
+          if (!healed && x) x.patchHeal = "fail";
+          // Lần gửi lại là bước ẩn: lỗi (hết hạn mức, CLI hỏng…) hay bị Dừng thì giao đúng câu trả lời gốc, không kèm
+          // ghi chú lỗi của bước người dùng không thấy; trình duyệt hiện bản sửa hỏng kèm nút viết lại toàn bộ.
+          const text = healed ? patchHealMerge(prior, x, healing, String(j.text ?? "")) : healing;
+          const back = { ...(good.json as Record<string, unknown>), ...(j.cancelled ? { cancelled: true } : {}), text };
+          r = healed ? { ...r, json: { ...(r.json as Record<string, unknown>), text } } : { status: 200, json: back };
+          healing = null;
+          if (!healed) break;
         }
-        healing = null;
         // Tin nhắn thêm trong lúc đi đường nhanh mà cần công cụ: chạy lượt đầy đủ với cả tin nhắn đó.
         if (needFull()) { deltaStep(); return chatTurn({ ...body, messages: hist, noFast: true }, c, scope, o); }
       }

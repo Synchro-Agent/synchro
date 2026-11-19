@@ -18,8 +18,10 @@ import type { TraceItem } from "../transpile";
 import { maybeRef, readRef } from "../refs";
 import { normalizeSchema, resolveRefs } from "../../shared/connschema";
 import { BRIDGE_CALL_MAX, destructiveLike, TOOL_BUDGET } from "../mcp";
-import { AUTO_CHECK, autoDeckCheck, checkArtifact, checkRoundGate, findArtifact, readArtifact } from "../artcheck";
-import { SELF_CHECK_SPENT, withinCheckBudget } from "../checkbudget";
+import {
+  AUTO_CHECK, autoDeckCheck, checkArtifact, checkedInTurn, checkRoundGate, findArtifact, forgetCheck, readArtifact,
+} from "../artcheck";
+import { checkSpent, SELF_CHECK_MS, SELF_CHECK_SPENT, withinCheckBudget } from "../checkbudget";
 import { artState, cleanBase, type ArtState, type ArtVersion } from "../../shared/vfs";
 import { applySwaps, dropSeen, failingPatches, HEAL_ASK, healFold, patchReport, patchStats }
   from "../../shared/patchheal";
@@ -174,7 +176,8 @@ export type Lib = { key: string; label: string };
 // art: lịch sử để read_artifact / check_artifact dựng lại bản hiện tại của artifact (cùng phần đã nén ở artBase).
 // turnArts: artifact model viết giữa lượt (trong lời dẫn trước công cụ), xem sayOut.
 // image: công cụ generate_image đang bật; msgs: lịch sử của lượt, để tìm ảnh gốc người dùng nhờ sửa.
-// patchHeal: kết quả lần nhắc gửi lại các khối sửa artifact không khớp (healPatch), ghi vào dòng [timing].
+// patchHeal: kết quả lần nhắc gửi lại các khối sửa artifact không khớp (healPatch), ghi vào dòng [timing];
+// patchFailedFirst: số khối không áp được trước lần nhắc đó (sau khi ghép thì không còn thấy).
 export type Exec = {
   project?: unknown; image?: boolean; msgs?: unknown; effects?: string[]; toolSync?: boolean; list: Skl;
   scripts: boolean; sess: ConnectorSession | null; uid: string; code: boolean; net: boolean; web?: boolean;
@@ -185,7 +188,7 @@ export type Exec = {
   denied?: Map<string, string>; connCards?: Set<string>; calls?: Map<string, { at: number; cancel?: AbortSignal }>;
   park?: () => void; inputsSent?: Set<string>; madeImgs?: string[]; webs?: Map<string, { title: string; url: string }>;
   edited?: Set<string>; rendered?: Set<string>; roundBrowser?: boolean; untrusted?: boolean; plan?: PlanState;
-  deckGated?: boolean; held?: { text: string; at: number }; patchHeal?: "ok" | "fail";
+  deckGated?: boolean; held?: { text: string; at: number }; patchHeal?: "ok" | "fail"; patchFailedFirst?: number;
 };
 // Nguồn web của lượt, đánh số theo thứ tự gặp (số [n] trong câu trả lời trỏ đúng chip thứ n). Tối đa 20 nguồn.
 const WEB_MAX = 20;
@@ -354,7 +357,8 @@ export const withTurnArts = (x: Exec | null | undefined, text0: string) => {
   return fresh.length ? `${fresh.join("\n\n")}\n\n${text}` : text;
 };
 // Số khối sửa áp được / không áp được và số lần viết lại trọn sau bản sửa hỏng của lượt, ghi vào dòng [timing]
-// (tracing.ts): đo được bản sửa có áp ngay lần đầu không mà không cần đọc lại đoạn chat.
+// (tracing.ts): đo được bản sửa có áp ngay lần đầu không mà không cần đọc lại đoạn chat. Chữ ở đây đã ghép lần gửi
+// lại, nên số khối hỏng lần đầu lấy từ patchFailedFirst.
 function notePatches(x: Exec | null | undefined, text: string) {
   const t = currentTrace();
   if (!t || !x?.art || !/mode\s*=\s*["']patch/i.test([...(x.turnArts ?? []), text].join("\n"))) return;
@@ -362,6 +366,7 @@ function notePatches(x: Exec | null | undefined, text: string) {
   t.attrs["synchro.patch.ok"] = st.ok;
   t.attrs["synchro.patch.failed"] = st.failed;
   t.attrs["synchro.patch.rewrites"] = st.rewrites;
+  if (x.patchFailedFirst !== undefined) t.attrs["synchro.patch.failed_first"] = x.patchFailedFirst;
   if (x.patchHeal) t.attrs["synchro.patch.heal"] = x.patchHeal;
 }
 /** Một lời gọi công cụ từ CLI qua cầu nối: giữ lời dẫn trước đó, ghi công cụ và kết quả vào nhật ký, ghép tin nhắn thêm vào kết quả. */
@@ -738,11 +743,19 @@ async function runCall(x: Exec, c: Call, d?: Decision): Promise<Run> {
     const fail = a ? patchReport(a) : "";
     const note = <T extends { content: string }>(r: T): T => (fail ? { ...r, content: `${r.content}\n${fail}` } : r);
     if (c.name === "read_artifact") return { ...note(readArtifact(a, c.input ?? {})), used };
+    const spent = { content: note({ content: SELF_CHECK_SPENT }).content, is_error: false, used };
+    // Hết giờ tự kiểm thì từ chối trước khi đếm vòng: lần bị từ chối không phải một vòng model đã thấy kết quả.
+    if (checkSpent(x) >= SELF_CHECK_MS) return spent;
+    const seen = !!a && checkedInTurn(x, a);
     const enough = a ? checkRoundGate(x, a) : null;
     if (enough) return { content: enough, is_error: false, used };
     const origin = process.env.APP_URL || "https://synchro.net.nz";
     const r = await withinCheckBudget(x, runSignal(), (s) => checkArtifact(x.uid, a, c.input ?? {}, origin, s));
-    if (!r) return { content: note({ content: SELF_CHECK_SPENT }).content, is_error: false, used };
+    if (!r) {
+      // Lần này vừa mở một vòng mới cho bản này mà bị cắt: trả vòng đó lại (autoDeckCheck vẫn đo bản này).
+      if (a && !seen) forgetCheck(x, a);
+      return spent;
+    }
     if (r.image) (x.heavy ??= []).push(c.id);
     return { ...note(r), used };
   }
@@ -1119,8 +1132,10 @@ const turnTexts = (x: Exec | null | undefined, text: string) =>
 /** Lời nhắc sửa lại bản sửa hỏng cho câu trả lời text; null khi mọi bản sửa đều áp được. */
 export function patchHealAsk(prior: () => ArtState, x: Exec | null | undefined, text: string): string | null {
   if (!/mode\s*=\s*["']patch/i.test([...(x?.turnArts ?? []), text].join("\n"))) return null;
-  const bad = failingPatches(prior(), turnTexts(x, text));
-  return bad.length ? HEAL_ASK(bad.map((b) => patchReport(b.r))) : null;
+  const texts = turnTexts(x, text), bad = failingPatches(prior(), texts);
+  if (!bad.length) return null;
+  if (x) x.patchFailedFirst = patchStats(prior(), texts).failed;
+  return HEAL_ASK(bad.map((b) => patchReport(b.r)));
 }
 /** Ghép lần gửi lại vào câu trả lời và vào artifact viết giữa lượt. Khối của lần gửi lại mà CLI đã tách vào turnArts
  *  (gọi công cụ trong lúc sửa) được bỏ: nó đã nằm trong bản sửa ghép. */

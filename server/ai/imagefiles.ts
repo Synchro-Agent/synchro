@@ -114,7 +114,10 @@ export async function fitAspect(files: ImgFile[], aspect: string | undefined, co
   const notes: string[] = [];
   const out: ImgFile[] = [];
   for (const { f, d } of pick) {
-    if (!sharp || !d || !want || off(d) <= 0.02) { out.push(f); continue; }
+    if (!sharp || !d || !want || off(d) <= 0.02) {
+      out.push(f);
+      continue;
+    }
     const wide = d.w / d.h > want;
     const cw = wide ? Math.round(d.h * want) : d.w, ch = wide ? d.h : Math.round(d.w / want);
     const box = { left: Math.floor((d.w - cw) / 2), top: Math.floor((d.h - ch) / 2), width: cw, height: ch };

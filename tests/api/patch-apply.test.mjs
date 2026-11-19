@@ -1,6 +1,6 @@
 // Bản sửa artifact (mode="patch") áp được ngay lần đầu với cách model thật hay viết, báo đúng khối hỏng khi không
 // khớp, ghép lần gửi lại vào bản sửa gốc; giới hạn 2 phút cho bước tự kiểm hiển thị.
-// Không cần máy chủ: hàm thuần (vfs, patchheal, checkbudget) qua loadTs.
+// Không cần máy chủ: hàm thuần (vfs, patchheal, checkbudget, artcheck) qua loadTs.
 import { loadTs } from "../lib/ts.mjs";
 
 let pass = 0, fail = 0;
@@ -9,7 +9,8 @@ const ok = (c, n, x = "") => {
   else fail++;
   console.log(c ? "  ✓" : "  ✗", n, c ? "" : String(typeof x === "string" ? x : JSON.stringify(x)).slice(0, 900));
 };
-const { vfs: V, patchheal: H, checkbudget: CB } = await loadTs(["vfs", "patchheal", "checkbudget"]);
+const mods = ["vfs", "patchheal", "checkbudget", "artcheck"];
+const { vfs: V, patchheal: H, checkbudget: CB, artcheck: A } = await loadTs(mods);
 
 // Bộ slide 6 trang thụt lề như model viết, đủ dài để SEARCH phải chọn đúng chỗ.
 const slide = (n, title, body) => `  <section class="slide" data-n="${n}">
@@ -170,12 +171,16 @@ console.log("4. Gửi lại đúng khối hỏng rồi ghép vào bản sửa g�
   ok(stats.ok === 1 && stats.failed === 1 && stats.rewrites === 1, "viết lại cả tệp sau bản sửa hỏng được đếm", stats);
 }
 
-console.log("5. Tự kiểm hiển thị tối đa theo ngân sách của lượt");
+console.log("5. Tự kiểm hiển thị tối đa theo đồng hồ của lượt, tính cả thời gian model giữa các lần kiểm");
 {
   const wait = (ms) => (s) => new Promise((res) => {
     const t = setTimeout(() => res("xong"), ms);
-    s.addEventListener("abort", () => { clearTimeout(t); res("bị cắt"); }, { once: true });
+    s.addEventListener("abort", () => {
+      clearTimeout(t);
+      res("bị cắt");
+    }, { once: true });
   });
+  const pause = (ms) => new Promise((r) => setTimeout(r, ms));
   const turn = {}, run = (f, signal, t = turn) => CB.withinCheckBudget(t, signal, f, 400);
   const t0 = Date.now();
   ok((await run(wait(150))) === "xong", "lần kiểm đầu trong ngân sách: có kết quả");
@@ -183,10 +188,57 @@ console.log("5. Tự kiểm hiển thị tối đa theo ngân sách của lượ
   const t1 = Date.now();
   ok((await run(wait(50))) === null && Date.now() - t1 < 20, "hết ngân sách: không chạy thêm lần kiểm nào");
   ok(CB.checkSpent(turn) >= 400 && CB.checkSpent({}) === 0, "ngân sách tính riêng cho từng lượt", CB.checkSpent(turn));
+  // Kiểu "tự kiểm từng trang": mỗi lần dựng nhanh, phần lớn thời gian là model đọc ảnh rồi viết giữa hai lần gọi.
+  const slow = {}, calls = [];
+  for (let k = 0; k < 8; k++) {
+    calls.push(await CB.withinCheckBudget(slow, undefined, wait(20), 400));
+    await pause(120);
+  }
+  const done = calls.filter((c) => c === "xong").length;
+  ok(done >= 2 && done <= 4 && calls.at(-1) === null, "8 lần kiểm cách nhau bởi thời gian model: dừng sau ngân sách",
+    `${done} ${calls}`);
   const stop = new AbortController();
   setTimeout(() => stop.abort(), 50);
   ok((await run(wait(1000), stop.signal, {})) === "bị cắt", "người dùng bấm Dừng: trả kết quả của lần kiểm");
   ok(CB.SELF_CHECK_MS === 120_000 && /2 phút/.test(CB.SELF_CHECK_SPENT), "mặc định 2 phút mỗi lượt");
+  const auto = await CB.withinAutoCheck(slow, undefined, wait(20));
+  ok(auto === "xong" && CB.AUTO_CHECK_MS === 30_000, "model đã dùng hết giờ: lần tự đo trước khi giao vẫn chạy (30 giây)");
+  ok((await CB.withinAutoCheck(slow, undefined, wait(20))) === "xong", "lần tự đo không làm hụt giờ của model");
+  // Lần kiểm của model bị cắt giữa chừng: model chưa thấy kết quả, bản đó chưa tính là đã kiểm.
+  const deck = { ident: "d", title: "D", type: "html", lang: null, content: DECK, complete: true, v: 1 };
+  const cut = {};
+  A.checkRoundGate(cut, deck);
+  const before = A.checkedInTurn(cut, deck);
+  A.forgetCheck(cut, deck);
+  ok(before && !A.checkedInTurn(cut, deck), "lần kiểm bị cắt được trả lại: bản đó vẫn được tự đo trước khi giao");
+  const v2 = { ...deck, content: `${DECK}<!-- 2 -->`, v: 2 }, v3 = { ...deck, content: `${DECK}<!-- 3 -->`, v: 3 };
+  ok(!A.checkRoundGate(cut, deck) && !A.checkRoundGate(cut, v2) && !!A.checkRoundGate(cut, v3),
+    "vòng bị cắt không tính: vẫn còn đủ 2 vòng");
+}
+
+console.log("6. Trường hợp không được đoán: dòng gạch chân, nội dung có số kiểu read_artifact, ngữ cảnh ở đầu tệp");
+{
+  const md = "Tiêu đề\n=====\n\nĐoạn thân.";
+  const art = (body) => `${tag("md", 'type="text/markdown" title="Ghi chú"')}\n${body}\n</artifact>`;
+  const mdPatch = (b) => `${tag("md", 'mode="patch"')}\n${b}\n</artifact>`;
+  const exact = V.artState([art(md), mdPatch(blk("Tiêu đề\n=====", "Tiêu đề mới\n====="))]).get("md");
+  ok(!exact.fix.failed.length && exact.content === "Tiêu đề mới\n=====\n\nĐoạn thân.",
+    "gạch chân Markdown trong SEARCH / REPLACE, dòng ngăn đúng 7 dấu: áp đúng", exact.content);
+  const loose = blk("Tiêu đề\n=====", "Tiêu đề mới\n=====").replace("\n=======\n", "\n======\n");
+  const amb = V.artState([art(md), mdPatch(loose)]).get("md");
+  ok(amb.fix.failed.length === 1 && amb.content === md && /không tách được SEARCH và REPLACE/.test(H.patchReport(amb)),
+    "gạch chân cùng dòng ngăn 6 dấu: báo hỏng, không đoán, nội dung giữ nguyên", `${amb.content} ${H.patchReport(amb)}`);
+  const noMid = V.parsePatches("<<<<<<< SEARCH\nmột dòng\n>>>>>>> REPLACE");
+  ok(noMid.length === 1 && noMid[0].unclear, "khối thiếu dòng ngăn: báo hỏng chứ không coi cả khối là SEARCH");
+  const table = "Năm | Số\n--- | ---\n2024 | 10\n2025 | 12\n";
+  const tp = V.applyPatches(table, V.parsePatches(blk("2024 | 10\n2025 | 12", "2024 | 10\n2025 | 14")));
+  ok(tp.ok && tp.content === "Năm | Số\n--- | ---\n2024 | 10\n2025 | 14\n",
+    "dòng thật sự bắt đầu bằng \"số | \" (bảng GFM): áp nguyên văn, REPLACE không bị cắt", tp);
+  const lines = DECK.split("\n");
+  const first = V.nearest(DECK, "<!doctype htm>"), last = V.nearest(DECK, "</htm>");
+  ok(first?.from === 1 && first.lines.length === 3, "chỗ gần giống ở dòng đầu: vẫn 3 dòng ngữ cảnh", first);
+  ok(last?.lines.length === 3 && last.from + 2 === lines.length && last.lines[2] === "</html>",
+    "chỗ gần giống ở dòng cuối: vẫn 3 dòng ngữ cảnh", last);
 }
 
 console.log(`\n${pass} đạt, ${fail} lỗi`);

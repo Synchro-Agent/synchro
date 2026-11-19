@@ -4,7 +4,9 @@
 // khối đó.
 // Hàm thuần, dùng chung cho máy chủ và kiểm thử.
 import { splitArtifacts, type ArtBlock } from "./artifacts";
-import { applyPatches, nearest, parsePatches, patchBody, resolveArt, type ArtState, type ArtVersion } from "./vfs";
+import {
+  applyPatches, nearest, parsePatches, patchBody, resolveArt, type ArtState, type ArtVersion, type PatchMiss,
+} from "./vfs";
 
 const BLOCK = /<artifact\b[^>]*>[\s\S]*?(?:<\/artifact>|$)/gi;
 // raw: nguyên văn thẻ artifact trong chữ của lượt; prev: bản ngay trước nó; r: bản sau khi áp.
@@ -60,8 +62,11 @@ export function failingPatches(prior: ArtState, texts: string[]): TurnArt[] {
 
 const NO_PREV = "(chưa có bản trước để sửa)";
 const clip = (l: string) => (l.length > 200 ? `${l.slice(0, 200)}…` : l);
-function missRow(a: ArtVersion, block: number, total: number, search: string): string {
+function missRow(a: ArtVersion, total: number, m: PatchMiss): string {
+  const { block, search } = m;
   const first = search.split("\n").find((l) => l.trim())?.trim() ?? "";
+  const why = m.why?.replace(/^\((.*)\)$/, "$1");
+  if (why) return `- Khối ${block}/${total}: ${why}. SEARCH bắt đầu bằng: ${clip(first)}`;
   const near = nearest(a.content, search);
   const head = `- Khối ${block}/${total}: SEARCH không khớp với bản hiện tại (đã bỏ qua khác biệt thụt lề,`
     + ` khoảng trắng đầu / cuối dòng và dòng trống). SEARCH bắt đầu bằng: ${clip(first)}`;
@@ -82,7 +87,7 @@ export function patchReport(a: ArtVersion): string {
   }
   const total = f.total ?? f.applied + f.failed.length;
   const rows = f.misses?.length
-    ? f.misses.map((m) => missRow(a, m.block, total, m.search))
+    ? f.misses.map((m) => missRow(a, total, m))
     : f.failed.map((x) => `- ${x}`);
   const head = `Bản sửa mode="patch" gần nhất của "${a.ident}" áp được ${f.applied}/${total} khối; các khối dưới đây`
     + ` CHƯA áp nên phiên bản ${a.v} chưa có chúng:`;
