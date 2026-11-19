@@ -125,11 +125,10 @@ html body button.send.send{--gl-fill:var(--ink-glass);color:var(--ink-glass-fg)}
   :is(.send,.scroll-down,.chip,.btn,.topbar .icon-btn,.dock .composer)[data-press]{scale:1}
 }
 
-html body :is(.menu,.model-menu,.usermenu,.model-sub,.modal,.toast,.sidebar,.dock .composer,.hero .composer){isolation:isolate;z-index:var(--z-sticky)}
+/* .toast không nằm trong luật này: nó giữ tầng --z-toast của globals.css (luật này từng kéo nó về --z-sticky nên bảng artifact che nửa thông báo
+   trên máy tính bảng); isolation của nó đặt ở globals.css. */
+html body :is(.menu,.model-menu,.usermenu,.model-sub,.modal,.sidebar,.dock .composer,.hero .composer){isolation:isolate;z-index:var(--z-sticky)}
 html body .sidebar{z-index:5}html body :is(.dock .composer,.hero .composer){z-index:6}
-/* Thông báo nằm trên mọi lớp (--z-toast, như ghi chú ở Toast trong ui/home.tsx): luật kính phía trên hạ nó về --z-sticky nên khung artifact
-   (cả điện thoại lẫn máy tính) che mất thông báo hiện ra sau câu trả lời. .toast.toast: luật đó mang độ ưu tiên của .dock .composer trong :is().  */
-html body .toast.toast{z-index:var(--z-toast)}
 .tk .tk-comp{isolation:isolate}
 
 /* ---- enter/exit: never animate opacity on an ancestor of a backdrop-filter ---- */

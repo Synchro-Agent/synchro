@@ -241,6 +241,9 @@ export async function elevenHandler(req, res, p, b, raw, valid, elevenNo) {
     const f = await formOf(req, raw);
     if (!f.get("file") && !f.get("source_url")) return err(res, 422, "invalid", "Either file or source_url must be provided.");
     if (!["scribe_v2", "scribe_v2_turbo", "scribe_v2_medical", "scribe_v1"].includes(String(f.get("model_id")))) return err(res, 422, "invalid", `model_id: unknown ${f.get("model_id")}`);
+    // Tệp có chữ "slow-stt" chép lời mất 2 giây như tệp thật dài: bài thử xếp hàng hai tệp ghi âm của một người (tests/ui/free-account.mjs, lỗi 5).
+    const file = f.get("file");
+    if (file && typeof file.text === "function" && (await file.text()).includes("slow-stt")) await new Promise((r) => setTimeout(r, 2000));
     EL.last.stt = { model_id: f.get("model_id"), detect_speaker_roles: f.get("detect_speaker_roles"), use_speaker_library: f.get("use_speaker_library"), transcript_edit: f.get("transcript_edit") };
     const lines = [[0, "Xin chào, cảm ơn chị Hà đã dành thời gian cho buổi phỏng vấn hôm nay."], [1, "Dạ không có gì, tôi rất vui được chia sẻ về dự án ở Đà Nẵng."], [0, "Dự án bắt đầu từ khi nào ạ?"], [1, "Chúng tôi bắt đầu từ tháng 3 năm 2025."]];
     let at = 0;

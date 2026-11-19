@@ -339,11 +339,11 @@ input,textarea{font:inherit;color:inherit;outline:0}
 
 
 .lnk{text-decoration:underline;cursor:pointer;color:inherit}
-.toast{position:fixed;right:24px;bottom:24px;display:flex;gap:8px;align-items:center;background:var(--card);box-shadow:var(--shadow);border-radius:var(--r-menu);padding:10px 14px;font-size:var(--fs-2);z-index:var(--z-toast);max-width:min(560px,calc(100vw - 48px));animation:pop .2s backwards}
-/* Thông báo chỉ để đọc: không chặn cú bấm vào nút nằm dưới nó. Điện thoại / máy tính bảng: hiện ở trên (dưới thanh trên) thay vì góc dưới,
-   nơi nó phủ đúng nút +, micro, chọn model của khối soạn tin vài giây sau mỗi câu trả lời (vd. "GPT-6 Luna chạy bằng khóa API chung…";
-   tests/ui/popovers.mjs: không mở được menu + / micro / model). Trang Tải ứng dụng giữ thông báo ở đáy (.dl-toast, không có khối soạn tin). */
-.toast{pointer-events:none}
+/* Thông báo chỉ để đọc: pointer-events:none để không chặn cú bấm vào nút nằm dưới nó; isolation + --z-toast giữ nó trên bảng artifact (luật kính
+   của glass.css không còn kéo .toast về --z-sticky). Điện thoại / máy tính bảng: hiện ở trên (dưới thanh trên) thay vì góc dưới, nơi nó phủ đúng
+   nút +, micro, chọn model của khối soạn tin vài giây sau mỗi câu trả lời (vd. "GPT-6 Luna chạy bằng khóa API chung…"; tests/ui/popovers.mjs).
+   Trang Tải ứng dụng giữ thông báo ở đáy (.dl-toast, không có khối soạn tin). */
+.toast{position:fixed;right:24px;bottom:24px;isolation:isolate;pointer-events:none;display:flex;gap:8px;align-items:center;background:var(--card);box-shadow:var(--shadow);border-radius:var(--r-menu);padding:10px 14px;font-size:var(--fs-2);z-index:var(--z-toast);max-width:min(560px,calc(100vw - 48px));animation:pop .2s backwards}
 @media (max-width:860px){.toast:not(.dl-toast){top:calc(64px + env(safe-area-inset-top));bottom:auto;left:16px;right:16px;margin-inline:auto;width:max-content;max-width:calc(100vw - 32px)}}
 .btn.danger{background:#c6422f;color:#fff;border-color:transparent}.btn.danger:hover{background:#b23a29}.menu-item.del:hover{background:#c6422f;color:#fff}
 .chat-wrap{position:relative}.chat-wrap .dots{position:absolute;right:4px;top:4px;width:24px;height:24px;border-radius:var(--r-pill);opacity:0;color:var(--text-2)}
@@ -3913,6 +3913,9 @@ html[data-tw="wide"]{--thread-w:1040px}
 .ft-body{position:absolute;inset:12px;display:flex;flex-direction:column;min-width:0}
 .ft-name{font-size:var(--fs-2);line-height:17px;color:var(--text);overflow:hidden;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow-wrap:anywhere}
 .ft-sub{font-size:var(--fs-1);line-height:17px;color:var(--ft-mute);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* Trạng thái chờ của tệp ghi âm ("Đang chờ tệp trước…" / "Waiting for the previous file…"): xuống tối đa 2 dòng thay vì bị cắt; tên tệp nhường còn 2 dòng. */
+.ft-sub.ft-note{white-space:normal;display:-webkit-box;-webkit-line-clamp:2;line-clamp:2;-webkit-box-orient:vertical;overflow-wrap:anywhere}
+.ft-body:has(.ft-note) .ft-name{-webkit-line-clamp:2;line-clamp:2}
 .ft-ext{margin-top:auto;align-self:flex-start;display:inline-flex;align-items:center;height:18px;padding:0 6px;border-radius:var(--r-pill);border:1.5px solid var(--ft-pill);font-size:var(--fs-1);line-height:14px;font-weight:540;color:var(--ft-mute);letter-spacing:.01em;box-sizing:border-box}
 .ft-tag{position:absolute;left:10px;bottom:8px;height:18px;padding:0 5px;border-radius:var(--r-pill);background:var(--ft-tag);font-size:var(--fs-1);line-height:18px;font-weight:435;color:var(--ft-mute);text-transform:uppercase;box-shadow:0 0 0 .5px var(--ft-ring)}
 .ft-x{position:absolute;top:-8px;right:-8px;z-index:2;width:20px;height:20px;padding:0;border:0;border-radius:50%;display:grid;place-items:center;background:var(--ft-x);color:var(--ft-mute);box-shadow:0 0 0 .5px var(--ft-ring),0 1px 2px rgba(0,0,0,.08);opacity:0;transition:opacity .15s;cursor:pointer}

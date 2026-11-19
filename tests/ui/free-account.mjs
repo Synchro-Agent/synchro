@@ -70,21 +70,27 @@ const setSpeechSpent = (credits) => {
   } finally { d.close(); }
 };
 
-// Mức giọng AI chung của cả máy chủ hôm nay (dòng user_id "*" của speech_budget, server/speechapi.ts addSpend). Ma trận thật: mức chung cạn từ
-// 10:06 UTC trong khi tài khoản miễn phí chưa dùng credit nào. Giữ giá trị cũ để trả lại đúng như trước khi chạy.
+// Mức giọng AI chung của cả máy chủ hôm nay. Ma trận thật: mức chung cạn từ 10:06 UTC trong khi tài khoản miễn phí chưa dùng credit nào.
+// Từ w9-integ 152c6509, mức chung (server/speechapi.ts spentToday) là tổng các dòng theo tài khoản KHÔNG phải quản trị viên của speech_budget;
+// dòng user_id "*" không còn dùng để chặn. Nên làm cạn / làm trống mức chung bằng các dòng theo tài khoản: một dòng SHARED_ROW (không phải tài
+// khoản thật, nên được cộng như tài khoản thường), tạm bỏ dòng của các tài khoản khác. Dòng của chính tài khoản thử (setSpeechSpent) để nguyên.
+// Giữ các dòng cũ để trả lại đúng như trước khi chạy.
 const DAY = () => new Date().toISOString().slice(0, 10);
-const sharedSpent = () => { const d = db(); try { return d.prepare("SELECT credits FROM speech_budget WHERE day = ? AND user_id = '*'").get(DAY())?.credits ?? null; } catch { return null; } finally { d.close(); } };
-const setSharedSpent = (credits) => {
+const SHARED_ROW = "free-matrix-shared";
+const otherRows = () => { const d = db(); try { return d.prepare("SELECT user_id, credits FROM speech_budget WHERE day = ? AND user_id NOT IN ('*', ?)").all(DAY(), u.uid); } catch { return []; } finally { d.close(); } };
+const putShared = (rows) => {
   const d = db();
   try {
     d.exec("CREATE TABLE IF NOT EXISTS speech_budget (day TEXT NOT NULL, user_id TEXT NOT NULL, credits INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (day, user_id))");
-    if (credits === null) d.prepare("DELETE FROM speech_budget WHERE day = ? AND user_id = '*'").run(DAY());
-    else d.prepare("INSERT INTO speech_budget (day, user_id, credits) VALUES (?, ?, ?) ON CONFLICT(day, user_id) DO UPDATE SET credits = excluded.credits").run(DAY(), "*", credits);
+    d.prepare("DELETE FROM speech_budget WHERE day = ? AND user_id NOT IN ('*', ?)").run(DAY(), u.uid);
+    const ins = d.prepare("INSERT INTO speech_budget (day, user_id, credits) VALUES (?, ?, ?) ON CONFLICT(day, user_id) DO UPDATE SET credits = excluded.credits");
+    for (const r of rows) ins.run(DAY(), r.user_id, r.credits);
   } finally { d.close(); }
 };
-const sharedBefore = sharedSpent();
+const setSharedSpent = (credits) => putShared(credits ? [{ user_id: SHARED_ROW, credits }] : []);
+const sharedBefore = otherRows();
 let sharedTouched = false;
-// Trong lúc chạy, mức chung bắt đầu từ 0 (mức chung của bản giả lập nhỏ, các lượt chạy trước cộng dồn credit thật sẽ chạm trần giữa chừng); xong trả lại số cũ.
+// Trong lúc chạy, mức chung bắt đầu từ 0 (mức chung của bản giả lập nhỏ, các lượt chạy trước cộng dồn credit thật sẽ chạm trần giữa chừng); xong trả lại như cũ.
 const sharedOut = (on) => { sharedTouched = true; setSharedSpent(on ? 100_000_000 : 0); };
 sharedOut(false);
 
@@ -128,7 +134,7 @@ async function run(body, ms = 240_000) {
   if (!id) return { http: r0.s, res: r0.j ?? {}, ms: Date.now() - t0 };
   let rn = null;
   await waitFor(async () => { rn = (await u.api("GET", `/api/runs/${id}?json=1`)).j?.run; return rn && !["running", "queued", "pending"].includes(rn.status); }, ms, { every: 500 });
-  return { http: rn?.http ?? 0, res: rn?.result ?? {}, status: rn?.status, ms: Date.now() - t0 };
+  return { http: rn?.http ?? 0, res: rn?.result ?? {}, status: rn?.status, events: rn?.events ?? [], ms: Date.now() - t0 };
 }
 const filesOf = (res) => (res?.files ?? res?.outputs ?? []).map((f) => f?.name).filter(Boolean);
 // Một dòng của ma trận: ra kết quả, hoặc chạm hạn mức với lời báo đủ ý. Không có kết quả mà cũng không phải lời báo hạn mức là lỗi.
@@ -192,6 +198,31 @@ try {
     ok(await t.ev(`document.documentElement.scrollWidth <= innerWidth + 1 && [...document.querySelectorAll(".msg-err")].every((e) => e.getBoundingClientRect().right <= innerWidth + 1)`), `${label}: thẻ lỗi nằm trọn màn hình, không cuộn ngang`);
     await t.shot(`free-limit-${w}`);
     await t.P("Fetch.disable");
+
+    // Lỗi 5 trên giao diện: hai tệp ghi âm đính kèm cùng lúc ở ô soạn. Thẻ tệp đầu "Đang chép lời…", thẻ sau "Đang chờ tệp trước…" (không báo
+    // máy chủ bận), rồi cả hai xong. Máy giả lập chép lời tệp có chữ "slow-stt" mất 2 giây. Xem cả ở bề ngang điện thoại (390px).
+    for (const [w, h, tag] of [[1280, 860, "desktop"], [390, 844, "phone"]]) {
+      await t.size(w, h);
+      await t.P("Page.navigate", { url: `${B}/?b5=${tag}` });
+      if (!(await t.until(`!!document.querySelector("input[type=file][multiple]")`, 60_000))) { ok(false, `B5 (giao diện ${tag}): ô soạn có chỗ đính kèm`); continue; }
+      const dir = path.join(tmpdir(), "synchro-ui"); mkdirSync(dir, { recursive: true });
+      const seed = `slow-stt-ui-${tag}-${Date.now()}`;
+      const fa = path.join(dir, `ghi-am-1-${tag}.wav`), fb = path.join(dir, `ghi-am-2-${tag}.m4a`);
+      writeFileSync(fa, wav(seed)); writeFileSync(fb, m4a(seed));
+      const inp = await t.P("Runtime.evaluate", { expression: `document.querySelector("input[type=file][multiple]")` });
+      await t.P("DOM.setFileInputFiles", { files: [fa, fb], objectId: inp.result.objectId });
+      const cards = `[...document.querySelectorAll(".ft")].map((c) => ({ name: c.querySelector(".ft-name")?.textContent ?? "", sub: c.querySelector(".ft-sub")?.textContent ?? "", err: c.classList.contains("ft-err"), msg: c.querySelector(".ft-err-msg")?.textContent ?? "", busy: !!c.querySelector(".ft-prog") }))`;
+      const seen = new Set();
+      const waitNote = await waitFor(async () => { const cs = await t.ev(cards); for (const c of cs ?? []) if (c.sub) seen.add(c.sub); return seen.has("Đang chờ tệp trước…") && seen.has("Đang chép lời…") ? cs : null; }, 20_000, { every: 100 });
+      if (waitNote) await t.shot(`free-b5-queue-${tag}`);
+      ok(!!waitNote, `B5 (giao diện ${tag}): thẻ tệp hiện "Đang chép lời…" và "Đang chờ tệp trước…" trong lúc xếp hàng`, [...seen]);
+      const done = await waitFor(async () => { const cs = await t.ev(cards); return cs?.length >= 2 && cs.every((c) => !c.busy) ? cs : null; }, 60_000, { every: 300 });
+      ok(!!done && done.every((c) => !c.err), `B5 (giao diện ${tag}): cả hai tệp ghi âm chép lời xong, không thẻ nào báo lỗi`, done);
+      const wide = await t.ev(`document.documentElement.scrollWidth > innerWidth + 1`);
+      ok(!wide, `B5 (giao diện ${tag}): không cuộn ngang`);
+      await t.shot(`free-b5-done-${tag}`);
+    }
+    await t.size(1280, 860);
     if (w < 600) continue;
     // Lỗi 13 của ma trận: vùng trạng thái cho trình đọc màn hình (aria-live) vẫn giữ câu trả lời của đoạn chat cũ sau khi sang trang khác.
     // Lỗi 1: mức giọng AI chung đã cạn mà đầu trang Speech vẫn ghi "3.000 credit hôm nay".
@@ -275,6 +306,17 @@ try {
     sharedOut(false);
     const pl2 = (await u.api("GET", "/api/speech/plan")).j ?? {};
     ok(!pl2.credits?.shared, "Speech: mức chung còn thì không còn cờ shared", pl2.credits);
+  }
+  {
+    // Lỗi 5, phần xếp hàng: hai tệp ghi âm trong một tin nhắn khi còn hạn mức. Máy chủ chép lời mỗi người một tệp một lúc; tệp thứ hai phải CHỜ
+    // tới lượt rồi đọc xong, không bị báo "máy chủ đang đọc nhiều tệp" (máy giả lập ElevenLabs chép lời tệp có chữ "slow-stt" mất 2 giây).
+    const seed = `slow-stt-${Date.now()}`, t0 = Date.now();
+    const timed = async (name, data, type) => { const r = await upload(name, data, type); return { ...r, at: Date.now() - t0 }; };
+    const pair = await Promise.all([timed("hang-doi.wav", wav(seed), "audio/wav"), timed("hang-doi.m4a", m4a(seed), "audio/mp4")]);
+    for (const x of pair) ok(x.s === 200 && /Đà Nẵng|phỏng vấn/.test(x.j?.preview ?? "") && !BUSY.test(x.why), `Lỗi 5: ${x.name} gửi cùng lúc với tệp kia → xếp hàng rồi chép lời xong (${x.at} ms)`, `${x.s} ${x.why}`);
+    const [a, b] = pair.map((x) => x.at).sort((m, n) => m - n);
+    ok(b - a >= 1500, `Lỗi 5: hai tệp chép lời lần lượt, không chạy chồng (xong lúc ${a} ms và ${b} ms)`, pair.map((x) => x.at));
+    rows.push({ id: "B5", ask: "Hai tệp ghi âm cùng lúc (còn hạn mức): xếp hàng", model: "Scribe v2", seconds: Math.round(b / 100) / 10, http: Math.max(...pair.map((x) => x.s)), limit: "", files: [], notice: pair.map((x) => `${x.name}: ${x.s} @${x.at}ms`).join(" | ") });
   }
   record("T4", "Markdown 14 thành phần", await run(auto("Viết một ví dụ Markdown có tiêu đề, danh sách 3 cấp, ô tích, bảng căn phải, code, công thức KaTeX, sơ đồ mermaid, trích dẫn, gạch ngang, chú thích.")));
   record("T5", "Excel bảng lương 5 người", await run(auto("Tạo file Excel bảng lương 5 người, có công thức và biểu đồ")));
@@ -362,11 +404,98 @@ try {
     rows.push({ id: "L3", ask: "Hết credit giọng AI (Đọc văn bản / Chép lời)", model: "ElevenLabs", seconds: 0, http: tts.s, limit: `${tts.j?.error ?? ""} || ${j.error ?? ""}` });
   }
   setSpeechSpent(null);
+
+  console.log("━━ 5. T11 tạo Google Docs khi chưa có connector; T14 đổi giao diện sáng / tối bằng ⌘K ở Speech và Artifacts");
+  {
+    // T11 (bp.md:177): chưa có connector (Composio chưa liên kết). Giả lập đúng cách model thật đã làm ở T7: mở trang đăng nhập Google trong trình
+    // duyệt của Synchro. Synchro phải chặn trước khi mở, lời dặn trỏ tới Cài đặt → Connectors, và khung chat hiện nút "Liên kết Composio".
+    const ASK11 = `Tạo một Google Docs mới tên Kế hoạch quý 1 (${Date.now().toString(36)})`;
+    const TOOL11 = ` #tool=browser_navigate #args={"url":"https://accounts.google.com/v3/signin/identifier?continue=https://docs.google.com/document/create"}`;
+    const cx = (await u.api("GET", "/api/connectors")).j ?? {};
+    ok(!(cx.connectors ?? []).some((c) => c.status === "ok") && cx.composio?.state !== "linked", "T11: tài khoản chưa có connector nào (Composio chưa liên kết)", { n: cx.connectors?.length, composio: cx.composio?.state });
+    const r11 = await run({ model: API_MODEL, messages: [{ role: "user", content: ASK11 + TOOL11 }] });
+    const ev11 = JSON.stringify(r11.events ?? []);
+    const conn = (r11.events ?? []).filter((e) => e.kind === "conn").map((e) => { try { return JSON.parse(e.text); } catch { return {}; } });
+    const hist = await fetch(`${M}/_debug/hist`).then((x) => x.json()).catch(() => ({}));
+    const sent = [...(hist.anthropic ?? [])].reverse().find((x) => JSON.stringify(x.messages ?? []).includes(ASK11) && JSON.stringify(x.messages ?? []).includes("tool_result"));
+    const toolOut = JSON.stringify(sent?.messages ?? []);
+    ok(/Không mở https:\/\/accounts\.google\.com/.test(toolOut) && /Cài đặt → Connectors/.test(toolOut), "T11: trình duyệt của Synchro không mở trang đăng nhập Google; kết quả công cụ trỏ model tới Cài đặt → Connectors (Composio)", toolOut.slice(0, 600) || ev11.slice(0, 400));
+    ok(conn.some((c) => c.link === true && /Composio/.test(c.name ?? "")), "T11: khung chat tự hiện nút Liên kết Composio (không chờ model nhớ gọi connector_reconnect)", ev11.slice(0, 500));
+    ok(/Đã chặn trang đăng nhập/.test(ev11), "T11: bước công cụ ghi rõ đã chặn trang đăng nhập", ev11.slice(0, 500));
+    rows.push({ id: "T11", ask: "Tạo Google Docs mới khi chưa có connector", model: r11.res?.model ?? API_MODEL, seconds: Math.round(r11.ms / 100) / 10, http: r11.http, limit: "", files: [], notice: conn.length ? "nút Liên kết Composio + Cài đặt → Connectors" : "KHÔNG có nút liên kết" });
+
+    t = await openChrome({ base: B, port: Number(process.env.CDP_PORT ?? 9371), name: "free-account-t11", shots: process.env.SHOTS });
+    await t.P("Network.setCookie", { name: "synchro_session", value: u.cookie.split("=")[1], url: B });
+    await t.size(1280, 860);
+    // Giao diện để Tự động; lượt gửi đi bằng model khóa API để mock ép đúng lời gọi công cụ như ở trên.
+    t.on("Fetch.requestPaused", (p) => {
+      let post = p.request?.postData;
+      if (p.request?.method === "POST" && post) try { const b = JSON.parse(post); b.model = API_MODEL; post = JSON.stringify(b); } catch {}
+      t.P("Fetch.continueRequest", { requestId: p.requestId, ...(post ? { postData: Buffer.from(post).toString("base64") } : {}) }).catch(() => {});
+    });
+    await t.P("Fetch.enable", { patterns: [{ urlPattern: "*/api/llm*", requestStage: "Request" }] });
+    await t.P("Page.navigate", { url: `${B}/?t11=1` });
+    if (ok(await t.until(`!!document.querySelector("textarea")`, 180_000), "T11 (giao diện): trang chủ mở được")) {
+      const box = await t.ev(`(() => { const r = document.querySelector("textarea").getBoundingClientRect(); return [r.x + r.width / 2, r.y + r.height / 2]; })()`);
+      await t.click(box[0], box[1]);
+      await t.type(`${ASK11} UI${TOOL11}`);
+      await t.key("Enter", "Enter", 13);
+      const card = await waitFor(() => t.ev(`(() => { const c = [...document.querySelectorAll(".cn-rc")].at(-1); return c ? [...c.querySelectorAll("button")].map((b) => b.textContent.trim()) : null; })()`), 180_000, { every: 300 });
+      ok(Array.isArray(card) && card.includes("Liên kết Composio") && card.includes("Mở Cài đặt → Connectors"), "T11 (giao diện): thẻ trong khung chat có nút Liên kết Composio và Mở Cài đặt → Connectors", card);
+      await t.shot("free-t11-card");
+      await t.ev(`[...document.querySelectorAll(".cn-rc button")].find((b) => b.textContent.trim() === "Mở Cài đặt → Connectors")?.click()`);
+      ok(await t.until(`!!document.querySelector(".modal.settings .s-item.on[title=Connectors]")`, 15_000), "T11 (giao diện): bấm nút thì mở Cài đặt đúng mục Connectors");
+      await t.shot("free-t11-settings");
+      await t.key("Escape", "Escape", 27);
+    }
+    await t.P("Fetch.disable");
+
+    // T14 (bp.md:179): đổi giao diện bằng ⌘K ("Chuyển sang giao diện tối / sáng") ở Speech và Artifacts. Giao diện lưu ở trình duyệt (localStorage
+    // "theme"), không phải tùy chọn đồng bộ của tài khoản. Trang phải đổi màu thật (nền, chữ đủ tương phản), không cuộn ngang; xong trả về sáng.
+    // Màu có thể ở dạng rgb()/rgba() (0–255) hoặc color(srgb r g b / a) (0–1, nền pha màu nhạt như .sp-pill 5%). Nền trong mờ (alpha < 0.5) không
+    // phải nền thật của chữ: đi tiếp lên phần tử cha. (Bản cũ đọc color(srgb 0.07 0.07 0.06 / 0.05) như rgb(0,0,0) đặc nên báo nhầm "Eleven v4"
+    // trên Speech sáng là thiếu tương phản: chữ rgb(72,73,65) trên nền gần trắng.)
+    const rgba = `((c) => { const n = (c.match(/[\\d.]+/g) ?? [0, 0, 0]).map(Number); const k = /^color\\(srgb/.test(c) ? 255 : 1; return { r: n[0] * k, g: n[1] * k, b: n[2] * k, a: /^(rgba|color)\\(/.test(c) && n.length > 3 ? n[3] : 1 }; })`;
+    const lum = `((c) => { const x = ${rgba}(c); const f = (v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; }; return 0.2126 * f(x.r) + 0.7152 * f(x.g) + 0.0722 * f(x.b); })`;
+    const look = `(() => { const L = ${lum}, A = ${rgba}; const bgOf = (e) => { for (; e; e = e.parentElement) { const c = getComputedStyle(e).backgroundColor; if (c && A(c).a >= 0.5) return c; } return getComputedStyle(document.body).backgroundColor; };
+      const main = document.querySelector("main, .main") ?? document.body, bg = L(bgOf(main));
+      const texts = [...main.querySelectorAll("h1,h2,h3,p,button,span,label")].filter((e) => e.childElementCount === 0 && e.textContent.trim() && e.getBoundingClientRect().width > 0).slice(0, 60);
+      const ratio = (a, b) => (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+      const low = texts.filter((e) => ratio(L(getComputedStyle(e).color), L(bgOf(e))) < 3).map((e) => e.textContent.trim().slice(0, 30));
+      return { theme: document.documentElement.dataset.theme, bg, n: texts.length, low, wide: document.documentElement.scrollWidth > innerWidth + 1 }; })()`;
+    const palette = async (q) => {
+      for (const mod of [4, 2]) { await t.key("k", "KeyK", 75, mod); if (await t.until(`!!document.querySelector(".pal input")`, 3000)) break; }
+      await t.ev(`(() => { const i = document.querySelector(".pal input"); const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set; set.call(i, ${JSON.stringify(q)}); i.dispatchEvent(new Event("input", { bubbles: true })); })()`);
+      await sleep(400);
+      const rows = await t.ev(`[...document.querySelectorAll(".pal .s-row")].map((r) => r.textContent.trim())`);
+      await t.key("Enter", "Enter", 13);
+      await t.until(`!document.querySelector(".pal input")`, 3000);
+      return rows;
+    };
+    for (const [view, hash] of [["Speech", "#v=speech"], ["Artifacts", "#v=artifacts"]]) {
+      await t.ev(`location.hash = ${JSON.stringify(hash)}`);
+      await sleep(1500);
+      const before = await t.ev(look);
+      ok(!!before && !before.low.length, `T14: ${view} ở giao diện ${before?.theme === "dark" ? "tối" : "sáng"} lúc mở: chữ đủ tương phản (${before?.n ?? 0} chữ)`, before);
+      const want = before.theme === "dark" ? "light" : "dark";
+      const rows14 = await palette(want === "dark" ? "giao dien toi" : "giao dien sang");
+      // Chờ hiệu ứng đổi màu xong (đo giữa chừng ra màu lưng chừng) rồi mới đo.
+      const after = await waitFor(async () => { const x = await t.ev(look); return x.theme === want ? (await sleep(600), await t.ev(look)) : null; }, 5_000, { every: 200 });
+      ok(!!after && (want === "dark" ? after.bg < 0.1 : after.bg > 0.6), `T14: ${view}: ⌘K "${rows14?.[0] ?? "?"}" đổi sang ${want === "dark" ? "tối" : "sáng"}, nền đổi theo (độ sáng ${before.bg.toFixed(2)} → ${after?.bg?.toFixed(2)})`, { before, after, rows14 });
+      ok(!!after && !after.low.length && !after.wide, `T14: ${view} ở giao diện ${want === "dark" ? "tối" : "sáng"}: chữ đủ tương phản (${after?.n ?? 0} chữ), không cuộn ngang`, after);
+      await t.shot(`free-t14-${view.toLowerCase()}-${want}`);
+      const back = await palette(want === "dark" ? "giao dien sang" : "giao dien toi");
+      const again = await waitFor(async () => { const x = await t.ev(look); return x.theme === before.theme ? (await sleep(600), await t.ev(look)) : null; }, 5_000, { every: 200 });
+      ok(!!again && !again.low.length, `T14: ${view}: ⌘K đổi lại ${before.theme === "dark" ? "tối" : "sáng"} được, chữ vẫn đủ tương phản`, { again, back });
+    }
+    rows.push({ id: "T14", ask: "Đổi sáng / tối bằng ⌘K ở Speech và Artifacts", model: "-", seconds: 0, http: 200, limit: "", files: [], notice: "localStorage theme, không đổi tùy chọn tài khoản" });
+    t.close(); t = null;
+  }
 } catch (e) {
   ok(false, "chạy hết kịch bản", e?.stack ?? String(e));
 } finally {
   try { t?.close(); } catch {}
-  try { setUsageOver(false); setSpeechSpent(null); if (sharedTouched) setSharedSpent(sharedBefore); } catch {}
+  try { setUsageOver(false); setSpeechSpent(null); if (sharedTouched) putShared(sharedBefore); } catch {}
   await u.remove();
 }
 

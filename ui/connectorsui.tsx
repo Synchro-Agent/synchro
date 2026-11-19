@@ -168,6 +168,7 @@ export function ReconnectCard({ c, done }: { c: { id: string; name: string; logo
   const [token, setToken] = useState("");
   const [info, setInfo] = useState<Conn | null | undefined>(undefined);
   const f = useLoginFlow((m) => { setState(m.ok ? "ok" : "idle"); if (!m.ok) setErr(m.message); });
+  const { openSettings } = useApp();
   useEffect(() => {
     let live = true;
     const load = () => { connList().then((d) => { if (live && d) setInfo(allConns(d).find((x) => x.id === c.id) ?? null); }); };
@@ -202,7 +203,9 @@ export function ReconnectCard({ c, done }: { c: { id: string; name: string; logo
         <input type="password" autoComplete="off" spellCheck={false} aria-label={tr("Token mới")} placeholder={tr("Token mới")} value={token} onChange={(e) => setToken(e.target.value)} />
         <button type="submit" className="btn dark" disabled={state === "busy" || !token.trim()}>{state === "busy" ? <span className="api-spin" /> : null}{tr("Lưu token")}</button>
       </form>}
-      {state !== "ok" && !isToken && !f.blocked && <div className="ag-ask-a"><button className="btn dark" disabled={state === "busy"} onClick={waiting ? f.reopen : go}>{state === "busy" ? <span className="api-spin" /> : null}{tr(waiting ? "Mở lại cửa sổ đăng nhập" : err ? "Thử lại" : c.link ? "Liên kết Composio" : "Kết nối lại")}</button></div>}
+      {state !== "ok" && !isToken && !f.blocked && <div className="ag-ask-a"><button className="btn dark" disabled={state === "busy"} onClick={waiting ? f.reopen : go}>{state === "busy" ? <span className="api-spin" /> : null}{tr(waiting ? "Mở lại cửa sổ đăng nhập" : err ? "Thử lại" : c.link ? "Liên kết Composio" : "Kết nối lại")}</button>
+        {/* Chưa liên kết Composio (thường gặp khi hỏi Google Docs, Gmail… mà chưa có connector): lối thẳng tới Cài đặt → Connectors để xem và quản lý mọi connector. */}
+        {c.link && !waiting && openSettings && <button type="button" className="btn" onClick={() => openSettings("Connectors")}>{tr("Mở Cài đặt → Connectors")}</button>}</div>}
     </div>
   );
 }

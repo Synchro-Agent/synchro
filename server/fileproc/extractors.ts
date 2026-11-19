@@ -231,7 +231,8 @@ const imageExtractor: Extractor = {
 const audioExtractor: Extractor = {
   name: "audio",
   match: (k) => k === "audio",
-  async run(buf, { name, uid }) { audioPrecheck(uid); return [{ type: "text", text: await withConvertSlot(uid, () => transcribeAudio(buf, name, uid)) }]; },
+  // long: tệp ghi âm chờ lượt tới CONVERT_WAIT_MS (khung soạn chờ 16 phút); signal: người gửi bỏ tệp thì rời hàng, không chép lời (tốn credit giọng nói).
+  async run(buf, { name, uid, signal }) { audioPrecheck(uid); return [{ type: "text", text: await withConvertSlot(uid, () => transcribeAudio(buf, name, uid, signal), { long: true, signal }) }]; },
 };
 
 // ---- 1c. Office cũ (.doc/.xls/.ppt): chuyển bằng LibreOffice headless (chỉ khi máy chủ có cài, SYNCHRO_SOFFICE_BIN) rồi đi tiếp đường docx/xlsx/pptx ----
@@ -261,7 +262,7 @@ const legacyOfficeExtractor: Extractor = {
   name: "legacy-office",
   match: (k) => k === "legacy-office",
   async run(buf, ctx) {
-    const conv = await withConvertSlot(ctx.uid, () => convertLegacyOffice(buf, ctx.name));
+    const conv = await withConvertSlot(ctx.uid, () => convertLegacyOffice(buf, ctx.name), { signal: ctx.signal });
     return [{ type: "text", text: await parseInWorker(conv.kind, conv.buf, ctx.name, ctx.uid) }];
   },
 };
@@ -270,15 +271,15 @@ const legacyOfficeExtractor: Extractor = {
 const pdfExtractor: Extractor = {
   name: "pdf",
   match: (k) => k === "application/pdf",
-  async run(buf, { name, uid }) {
+  async run(buf, { name, uid, signal }) {
     if (PDF_NATIVE) {
       // Provider hỗ trợ PDF trực tiếp: gửi nguyên văn bản gốc, kèm text dự phòng cho nhánh khác. Không có Python để đọc thử thì vẫn gửi như cũ.
-      const fb = await withParseSlot(uid, () => pdfFallback(buf, uid)).catch((e) => { if (e instanceof BadPdf) throw new FileError(`Không đọc được "${name}": tệp PDF bị hỏng hoặc đang đặt mật khẩu.`); return null; });
+      const fb = await withParseSlot(uid, () => pdfFallback(buf, uid, signal), signal).catch((e) => { if (e instanceof BadPdf) throw new FileError(`Không đọc được "${name}": tệp PDF bị hỏng hoặc đang đặt mật khẩu.`); return null; });
       // Dài quá giới hạn số trang của API (lỗi cả lượt, có thể cả các lượt sau của phiên): gửi phần chữ, các lượt hỏi về tệp vẫn tìm được đoạn liên quan.
       if (!fb || fb.total <= PDF_NATIVE_PAGES) return [{ type: "document", media_type: "application/pdf", data: buf.toString("base64"), name, fallbackText: fb?.text, fallbackImages: fb?.images }];
       return textBlocks(fb);
     }
-    return textBlocks(await withParseSlot(uid, () => pdfFallback(buf, uid)).catch((e) => { if (e instanceof BadPdf) throw new FileError(`Không đọc được "${name}": tệp PDF bị hỏng hoặc đang đặt mật khẩu.`); throw e; }));
+    return textBlocks(await withParseSlot(uid, () => pdfFallback(buf, uid, signal), signal).catch((e) => { if (e instanceof BadPdf) throw new FileError(`Không đọc được "${name}": tệp PDF bị hỏng hoặc đang đặt mật khẩu.`); throw e; }));
   },
 };
 const textBlocks = (fb: { text: string; images: string[] }) => {
@@ -291,13 +292,16 @@ const textBlocks = (fb: { text: string; images: string[] }) => {
 class BadPdf extends Error {}
 const pyBin = () => process.env.PYTHON_BIN || path.join(process.cwd(), ".mkvenv", "bin", "python");
 /** OCR một trang PDF scan bằng scripts/ocr.py (RapidOCR). Chỉ chạy khi bật SYNCHRO_OCR=1 (mặc định tắt: giữ nguyên hành vi cũ, không spawn vô ích khi máy chủ chưa cài OCR). */
-async function ocrPage(imgPath: string, uid?: string): Promise<string> {
-  const job = run(pyBin(), [path.join(process.cwd(), "scripts", "ocr.py"), imgPath], { maxBuffer: 16 * 1024 * 1024, timeout: 120_000, killSignal: "SIGKILL", env: parserEnv() });
-  lowPriority(job.child.pid);
-  return withConvertSlot(uid, async () => (await job).stdout.trim());
+async function ocrPage(imgPath: string, uid?: string, signal?: AbortSignal): Promise<string> {
+  // Tiến trình OCR chỉ mở khi tới lượt: mở trước rồi mới xếp hàng thì hàng convert không giới hạn được gì (mọi trang chạy cùng lúc).
+  return withConvertSlot(uid, async () => {
+    const job = run(pyBin(), [path.join(process.cwd(), "scripts", "ocr.py"), imgPath], { maxBuffer: 16 * 1024 * 1024, timeout: 120_000, killSignal: "SIGKILL", env: parserEnv() });
+    lowPriority(job.child.pid);
+    return (await job).stdout.trim();
+  }, { signal });
 }
 
-async function pdfFallback(buf: Buffer, uid?: string): Promise<{ total: number; text: string; images: string[] }> {
+async function pdfFallback(buf: Buffer, uid?: string, signal?: AbortSignal): Promise<{ total: number; text: string; images: string[] }> {
   const dir = await mkdtemp(path.join(tmpdir(), "pdf-"));
   const imgDir = path.join(dir, "img");
   try {
@@ -315,7 +319,7 @@ async function pdfFallback(buf: Buffer, uid?: string): Promise<{ total: number; 
     if (process.env.SYNCHRO_OCR === "1") {
       for (let i = 0; i < texts.length; i++) {
         if (texts[i].replace(/\s+/g, "").length >= 20 || !j.images[i]) continue;
-        const got = await ocrPage(path.join(imgDir, j.images[i]), uid).catch(() => "");
+        const got = await ocrPage(path.join(imgDir, j.images[i]), uid, signal).catch(() => "");
         if (got.trim()) texts[i] = got;
       }
     }
