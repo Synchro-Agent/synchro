@@ -127,6 +127,10 @@ html body button.send.send{--gl-fill:var(--ink-glass);color:var(--ink-glass-fg)}
 
 html body :is(.menu,.model-menu,.usermenu,.model-sub,.modal,.toast,.sidebar,.dock .composer,.hero .composer){isolation:isolate;z-index:var(--z-sticky)}
 html body .sidebar{z-index:5}html body :is(.dock .composer,.hero .composer){z-index:6}
+/* Thông báo (.toast) giữ tầng của nó (--z-toast): luật trên (độ ưu tiên html body …) từng kéo nó xuống --z-sticky, nên trên máy tính bảng bảng
+   artifact (z sticky + 5) che mất nửa thông báo. Thông báo chỉ là chữ, không bấm: cho bấm xuyên qua để nó không chặn nút micro / chọn model của
+   khối soạn tin nằm ngay dưới trên máy tính bảng / điện thoại (tests/ui/popovers.mjs, khi lượt Tự động chạy bằng khóa API chung hiện thông báo). */
+html body .toast{z-index:var(--z-toast);pointer-events:none}
 .tk .tk-comp{isolation:isolate}
 
 /* ---- enter/exit: never animate opacity on an ancestor of a backdrop-filter ---- */

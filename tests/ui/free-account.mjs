@@ -452,8 +452,12 @@ try {
 
     // T14 (bp.md:179): đổi giao diện bằng ⌘K ("Chuyển sang giao diện tối / sáng") ở Speech và Artifacts. Giao diện lưu ở trình duyệt (localStorage
     // "theme"), không phải tùy chọn đồng bộ của tài khoản. Trang phải đổi màu thật (nền, chữ đủ tương phản), không cuộn ngang; xong trả về sáng.
-    const lum = `((c) => { const m = c.match(/[\\d.]+/g) ?? [0, 0, 0]; const f = (v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; }; return 0.2126 * f(+m[0]) + 0.7152 * f(+m[1]) + 0.0722 * f(+m[2]); })`;
-    const look = `(() => { const L = ${lum}; const bgOf = (e) => { for (; e; e = e.parentElement) { const c = getComputedStyle(e).backgroundColor; if (c && !/rgba\\(0, 0, 0, 0\\)|transparent/.test(c)) return c; } return getComputedStyle(document.body).backgroundColor; };
+    // Màu có thể ở dạng rgb()/rgba() (0–255) hoặc color(srgb r g b / a) (0–1, nền pha màu nhạt như .sp-pill 5%). Nền trong mờ (alpha < 0.5) không
+    // phải nền thật của chữ: đi tiếp lên phần tử cha. (Bản cũ đọc color(srgb 0.07 0.07 0.06 / 0.05) như rgb(0,0,0) đặc nên báo nhầm "Eleven v4"
+    // trên Speech sáng là thiếu tương phản: chữ rgb(72,73,65) trên nền gần trắng.)
+    const rgba = `((c) => { const n = (c.match(/[\\d.]+/g) ?? [0, 0, 0]).map(Number); const k = /^color\\(srgb/.test(c) ? 255 : 1; return { r: n[0] * k, g: n[1] * k, b: n[2] * k, a: /^(rgba|color)\\(/.test(c) && n.length > 3 ? n[3] : 1 }; })`;
+    const lum = `((c) => { const x = ${rgba}(c); const f = (v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; }; return 0.2126 * f(x.r) + 0.7152 * f(x.g) + 0.0722 * f(x.b); })`;
+    const look = `(() => { const L = ${lum}, A = ${rgba}; const bgOf = (e) => { for (; e; e = e.parentElement) { const c = getComputedStyle(e).backgroundColor; if (c && A(c).a >= 0.5) return c; } return getComputedStyle(document.body).backgroundColor; };
       const main = document.querySelector("main, .main") ?? document.body, bg = L(bgOf(main));
       const texts = [...main.querySelectorAll("h1,h2,h3,p,button,span,label")].filter((e) => e.childElementCount === 0 && e.textContent.trim() && e.getBoundingClientRect().width > 0).slice(0, 60);
       const ratio = (a, b) => (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
@@ -472,14 +476,16 @@ try {
       await t.ev(`location.hash = ${JSON.stringify(hash)}`);
       await sleep(1500);
       const before = await t.ev(look);
+      ok(!!before && !before.low.length, `T14: ${view} ở giao diện ${before?.theme === "dark" ? "tối" : "sáng"} lúc mở: chữ đủ tương phản (${before?.n ?? 0} chữ)`, before);
       const want = before.theme === "dark" ? "light" : "dark";
       const rows14 = await palette(want === "dark" ? "giao dien toi" : "giao dien sang");
-      const after = await waitFor(async () => { const x = await t.ev(look); return x.theme === want ? x : null; }, 5_000, { every: 200 });
+      // Chờ hiệu ứng đổi màu xong (đo giữa chừng ra màu lưng chừng) rồi mới đo.
+      const after = await waitFor(async () => { const x = await t.ev(look); return x.theme === want ? (await sleep(600), await t.ev(look)) : null; }, 5_000, { every: 200 });
       ok(!!after && (want === "dark" ? after.bg < 0.1 : after.bg > 0.6), `T14: ${view}: ⌘K "${rows14?.[0] ?? "?"}" đổi sang ${want === "dark" ? "tối" : "sáng"}, nền đổi theo (độ sáng ${before.bg.toFixed(2)} → ${after?.bg?.toFixed(2)})`, { before, after, rows14 });
       ok(!!after && !after.low.length && !after.wide, `T14: ${view} ở giao diện ${want === "dark" ? "tối" : "sáng"}: chữ đủ tương phản (${after?.n ?? 0} chữ), không cuộn ngang`, after);
       await t.shot(`free-t14-${view.toLowerCase()}-${want}`);
       const back = await palette(want === "dark" ? "giao dien sang" : "giao dien toi");
-      const again = await waitFor(async () => { const x = await t.ev(look); return x.theme === before.theme ? x : null; }, 5_000, { every: 200 });
+      const again = await waitFor(async () => { const x = await t.ev(look); return x.theme === before.theme ? (await sleep(600), await t.ev(look)) : null; }, 5_000, { every: 200 });
       ok(!!again && !again.low.length, `T14: ${view}: ⌘K đổi lại ${before.theme === "dark" ? "tối" : "sáng"} được, chữ vẫn đủ tương phản`, { again, back });
     }
     rows.push({ id: "T14", ask: "Đổi sáng / tối bằng ⌘K ở Speech và Artifacts", model: "-", seconds: 0, http: 200, limit: "", files: [], notice: "localStorage theme, không đổi tùy chọn tài khoản" });
