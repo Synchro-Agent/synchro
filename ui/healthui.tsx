@@ -9,7 +9,7 @@ import { getLang, locale, tf, tr, trc } from "./i18n";
 import * as I from "./icons";
 import type { MemSample } from "../shared/types/health";
 import type { LoopSample } from "../shared/types/health";
-import type { BackupStatus, Problem, WatchdogState } from "../shared/types/health";
+import type { BackupStatus, MediaCap, MediaCaps, Problem, WatchdogState } from "../shared/types/health";
 import { ContinuousBackup } from "./backupui";
 import { LatencyTable, type Latency } from "./latencyui";
 import { SettingsSkeleton } from "./skeleton";
@@ -23,6 +23,7 @@ type Health = {
   storage: { dbMB: number; uploadsMB: number; outputsMB: number };
   mail: { sent24: number; sent7: number; failed24: number; failed7: number; lastOkAt: number | null; lastFailAt: number | null; smtp: boolean; failures: { at: number; source: string; detail: string; n: number }[] };
   dns: { domain: string; spf: boolean; dkim: boolean; dmarc: boolean } | null;
+  media?: MediaCaps | null;
   cli: { source: string; users24: number; users7: number; n24: number; n7: number; last: number }[]; cliRecent: { at: number; source: string; n: number; email: string | null }[];
   csp: { at: number; source: string; detail: string; n: number }[];
   backup: BackupStatus | null; watchdog: WatchdogState | null; wdEvents: { at: number; event: string; detail?: string }[];
@@ -54,8 +55,41 @@ const mailKind = (k: string): string => {
 };
 const WD: Record<string, string> = { restart: "Đã khởi động lại web", restart_failed: "Khởi động lại không thành công", gave_up: "Dừng tự khởi động lại: lặp lại quá nhiều, cần xử lý tay", down: "Web không trả lời", recovered: "Web trả lời lại", degraded: "Web trả lời nhưng báo có phần lỗi (đĩa hoặc dịch vụ workspace)", installed: "Đã cài watchdog" };
 
+// Lý do một bộ đọc tệp chưa chạy, viết cho người vận hành (mã media_<loại>:<trạng thái> từ server/ops.ts).
+function mediaProblem(code: string) {
+  const [kind, st] = code.slice(6).split(":");
+  const what = mediaRows().find((r) => r.k === kind)?.t ?? kind;
+  if (st === "off") return tf("{what} chưa bật nên đang bị từ chối.", { what });
+  if (st === "missing") {
+    return tf(
+      "{what} bị từ chối: máy chủ chưa cài chương trình cần thiết. Chạy sudo bash ops/install-media-deps.sh.",
+      { what },
+    );
+  }
+  return tf(
+    "{what} bị từ chối: chương trình đã cài nhưng chạy thử thất bại. Xem nhật ký máy chủ, dòng [media].",
+    { what },
+  );
+}
+
+// Ba bộ đọc tệp cần chương trình ngoài; dựng lúc vẽ để tr() theo đúng ngôn ngữ đang chọn.
+const mediaRows = (): { k: "heic" | "office" | "ocr"; t: string; d: string }[] => [
+  { k: "heic", t: tr("Ảnh HEIC (iPhone)"), d: tr("Giải ảnh HEIC sang PNG để model xem được.") },
+  {
+    k: "office",
+    t: tr("Tệp Office đời cũ (.doc, .xls, .ppt)"),
+    d: tr("Chuyển bằng LibreOffice (SYNCHRO_SOFFICE_BIN) rồi đọc như .docx, .xlsx, .pptx."),
+  },
+  {
+    k: "ocr",
+    t: tr("Chữ trong PDF scan (OCR)"),
+    d: tr("Trang PDF không có lớp chữ được đọc bằng RapidOCR (SYNCHRO_OCR=1)."),
+  },
+];
+
 function problemText(p: Problem) {
   const n = (p.n ?? 0).toLocaleString(locale());
+  if (p.code.startsWith("media_")) return mediaProblem(p.code);
   if (p.code.startsWith("engine_fail:")) return tf("{engine}: {n} lượt lỗi trong một giờ qua, nhiều hơn số lượt thành công.", { engine: p.code.slice(12), n });
   switch (p.code) {
     case "disk_crit": return tf("Đĩa chỉ còn {free} trống: tệp tải lên mới bị từ chối, và cơ sở dữ liệu sẽ ngừng ghi nếu đầy hẳn.", { free: gb(p.n ?? 0) });
@@ -74,6 +108,19 @@ function problemText(p: Problem) {
     case "errors_many": return tf("{n} lỗi máy chủ trong 24 giờ qua.", { n });
     default: return p.code;
   }
+}
+
+function MediaRow({ t, d, cap }: { t: string; d: string; cap: MediaCap }) {
+  const label = cap.state === "ok" ? cap.version || trc("Đọc được", "bộ đọc tệp")
+    : cap.state === "off" ? tr("Chưa bật")
+      : cap.state === "missing" ? trc("Chưa cài", "bộ đọc tệp")
+        : tr("Chạy thử lỗi");
+  return (
+    <div className="row">
+      <div><div className="t">{t}</div><div className="d">{d}</div></div>
+      <span className={`s-badge ${cap.state === "ok" ? "ok" : ""}`} data-notr>{label}</span>
+    </div>
+  );
 }
 
 function Kv({ k, v, bad, wrap }: { k: string; v: React.ReactNode; bad?: boolean; wrap?: boolean }) {
@@ -149,6 +196,14 @@ export function HealthPanel({ Toggle }: { Toggle: (p: { on: boolean; set: (v: bo
         </div>
       ))}
       {h.agent !== null && <div className="row"><div><div className="t">Workspace service</div><div className="d">Runs code and Synchro Code workspaces.</div></div><span className={`s-badge ${h.agent ? "ok" : ""}`}>{h.agent ? "Running" : "Not answering"}</span></div>}
+      {h.media && <>
+        <h3 className="sec" data-notr>{tr("Đọc tệp đặc biệt")}</h3>
+        <p className="d adm-privacy" data-notr>
+          <I.Alert size={14} />
+          {tr("Cần chương trình cài trên máy chủ: sudo bash ops/install-media-deps.sh, rồi bấm Làm mới.")}
+        </p>
+        {mediaRows().map((r) => <MediaRow key={r.k} t={r.t} d={r.d} cap={h.media![r.k]} />)}
+      </>}
 
       {h.mem && (() => {
         const m = h.mem, first = m.history[0], hours = first ? (m.now.at - first.at) / 3_600_000 : 0, grew = first ? m.now.heapUsed - first.heapUsed : 0;

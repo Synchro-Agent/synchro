@@ -391,6 +391,9 @@ function wantTool(q, list, model) {
   for (const tool of tools) {
     // Công cụ bộ não (brain_*) chỉ chọn khi ép bằng #tool=, để không tranh với công cụ connector trong các bài kiểm thử khác.
     if (SKILL_TOOLS.includes(tool.name) || tool.name.startsWith("brain_") || tool.name.startsWith("browser_") || tool.name === "generate_image") continue;
+    // read_artifact / check_artifact: mô tả nói về bản sửa (sửa, patch) nên thắng công cụ connector ở câu "liệt kê …
+    // rồi sửa trang"; model thật chỉ gọi chúng khi cần đọc lại artifact, bài kiểm thử gọi bằng #tool=.
+    if (tool.name === "read_artifact" || tool.name === "check_artifact") continue;
     const tn = norm(`${tool.name} ${tool.description ?? ""}`).replace(/[_-]/g, " ");
     let score = 0;
     for (const [re, keys] of INTENTS) if (re.test(t) && keys.some((k) => tn.includes(k))) score += 2;
@@ -508,11 +511,21 @@ function reply(provider, id, msgs, maxTokens, effort, sys = "") {
   { const g = /#artgen=([\w-]+)/.exec(q); if (g) return { text: `Trang có ảnh đã tạo.\n<artifact identifier="anh-tao" type="text/html" title="Ảnh đã tạo">\n<!doctype html><html><body style="margin:0"><img id="tao" src="https://image.synchro.invalid/${g[1]}.png" style="width:96px;height:96px"></body></html>\n</artifact>`, q }; }
   // "#sxkit": sơ đồ ```d2 và bản trình bày nền shader 3D + biểu đồ ECharts (mock-cli-common.cjs sxKit) — xem tận mắt trên trang thật.
   if (q.includes("#sxkit")) return { text: CLI.sxKit(), q };
+  // "#deck4": bộ slide 4 trang chỉ tiêu đề có data-sx-fit (mock-cli-common.cjs deck4), xem ảnh thu nhỏ của bộ tự co.
+  if (q.includes("#deck4")) return { text: CLI.deck4(), q };
   // "#longmd": câu trả lời Markdown dài (khoảng 2.000 từ: tiêu đề, danh sách, bảng, hai khối code) cho bài đo số lần vẽ lúc chữ chảy
   // (tests/ui/render-perf.mjs, blueprint B2). Tên khác #longtext của CLI giả lập (tools/mock-cli/agy) để không bắt nhầm.
   if (/#longmd\b/.test(q)) return { text: longMd(), q };
   // "#prefs": nhắc lại khối <user_preferences> (Hướng dẫn cho Synchro) có trong system prompt — kiểm thử hướng dẫn tới được model.
   if (q.includes("#prefs")) { const m = /<user_preferences>([\s\S]*?)<\/user_preferences>/.exec(`${sys}\n${JSON.stringify(msgs ?? [])}`); return { text: m ? `PREFS: ${m[1].replace(/\\n/g, "\n").trim().replace(/\s+/g, " ")}` : "PREFS: none", q }; }
+  // "#pjins": nhắc lại phần dự án trong lời nhắc hệ thống, như CLI giả lập. Đường tương thích OpenAI
+  // (Gemini, DeepSeek…) không truyền sys riêng: lời nhắc hệ thống nằm trong tin role "system".
+  if (q.includes("#pjins")) {
+    const inMsgs = (msgs ?? []).filter((m) => m.role === "system" || m.role === "developer");
+    const text = (m) => (typeof m.content === "string" ? m.content
+      : (m.content ?? []).map((c) => c.text ?? "").join("\n"));
+    return { text: CLI.pjEcho(sys || inMsgs.map(text).join("\n\n")), q };
+  }
   const vi = /[ăâđêôơưàáạảãèéẹẻẽìíịỉĩòóọỏõùúụủũỳýỵỷỹ]/i.test(q) || !q;
   const name = displayName(provider, id), vendor = VENDOR[provider];
   const short = q.length > 160 ? q.slice(0, 160) + "…" : q;

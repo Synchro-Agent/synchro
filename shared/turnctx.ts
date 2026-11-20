@@ -65,10 +65,24 @@ export const NO_QUOTE_INS = "Không bao giờ trích lại, nhắc lại hay tó
 // Dòng cũ có nội dung hướng dẫn trong ngoặc kép; dòng dự án chỉ liệt kê loại ngữ cảnh (hướng dẫn, bộ nhớ, tài liệu). Có thể in nghiêng / đậm bằng _ hoặc *.
 const INS_NOTE = /^[ \t]*[_*]{0,2}[ \t]*(?:Đã áp dụng hướng dẫn(?: cá nhân)?(?: của bạn)?|Applied your (?:personal )?instructions|Personal instructions applied)[ \t]*:[ \t]*[“"«„].*$/gimu;
 const PJ_NOTE = /^[ \t]*[_*]{0,2}[ \t]*(?:Đã áp dụng ngữ cảnh dự án|Project context applied)[ \t]*:[ \t]*(?:(?:hướng dẫn|bộ nhớ|tài liệu|instructions|memory|documents)[ \t]*,?[ \t]*)+[_*]{0,2}[ \t]*$/gimu;
-/** Bỏ các dòng "đã áp dụng hướng dẫn / ngữ cảnh dự án" kiểu cũ khỏi chữ câu trả lời. Không có dòng nào thì trả nguyên chữ (giữ đúng khoảng trắng). */
+// Lời dẫn giữa lượt của các đoạn chat đã lưu còn chỗ giữ artifact "(Đã viết “…”, xem ở câu trả lời)": artifact đã nằm
+// trong câu trả lời, dòng này chỉ là ghi chú nội bộ (người dùng thấy nó lặp giữa câu trả lời bộ slide), và model có thể
+// bắt chước nó từ lịch sử.
+// Chỉ bỏ khoảng trắng của chính dòng / chỗ giữ đó: phần còn lại của câu trả lời giữ nguyên (hai dấu cách cuối dòng là
+// ngắt dòng của Markdown, thụt đầu dòng là danh sách / code).
+const WROTE_SRC = String.raw`[_*]{0,2}\(Đã viết (?:“[^”\n]*”|"[^"\n]*"|artifact), xem ở câu trả lời\)[_*]{0,2}`;
+// Chỗ giữ mở đầu câu trả lời: bỏ luôn các dòng trống theo sau, không để câu trả lời bắt đầu bằng dòng trống.
+const WROTE_HEAD = new RegExp(`^(?:[ \\t]*${WROTE_SRC}[ \\t]*(?:\\n|$)\\n*)+`, "u");
+const WROTE_LINE = new RegExp(`^[ \\t]*${WROTE_SRC}[ \\t]*(?:\\n|$)`, "gmu");
+const WROTE_INLINE = new RegExp(`[ \\t]*${WROTE_SRC}`, "gu");
+/**
+ * Bỏ các dòng ghi chú nội bộ khỏi chữ câu trả lời: "đã áp dụng hướng dẫn / ngữ cảnh dự án" model từng viết và chỗ giữ
+ * artifact "(Đã viết …, xem ở câu trả lời)". Không có dòng nào thì trả nguyên chữ (giữ đúng khoảng trắng).
+ */
 export function stripAppliedNotes(text: string): string {
-  if (typeof text !== "string" || !/áp dụng|applied/i.test(text)) return text;
-  const out = text.replace(INS_NOTE, "").replace(PJ_NOTE, "");
+  if (typeof text !== "string" || !/áp dụng|applied|xem ở câu trả lời/i.test(text)) return text;
+  const notes = text.replace(INS_NOTE, "").replace(PJ_NOTE, "");
+  const out = notes.replace(WROTE_HEAD, "").replace(WROTE_LINE, "").replace(WROTE_INLINE, "");
   return out === text ? text : out.replace(/\n{3,}/g, "\n\n").trimEnd();
 }
 // Luồng trực tiếp (SSE delta): chữ model viết tới từng mẩu, bản cuối mới được lọc — dòng ghi chú kiểu cũ có thể lộ trên màn hình trước khi bản cuối thay.
@@ -85,6 +99,19 @@ export function appliedDelta(shown: string, raw: string): { text: string; t: str
 // bị bỏ qua ở câu hỏi ngắn). Máy chủ bù bằng bản dự án đã đồng bộ, trước khi chọn đường đi của lượt (đường nhanh hay đầy đủ, gói hay khóa API).
 export const PROJECT_INS_HEAD = "## Hướng dẫn của dự án (hãy luôn tuân theo)";
 export const PROJECT_INS_MAX = 20_000;
+const PROJECT_GOAL_LABEL = "Mục tiêu và bối cảnh của dự án:";
+/**
+ * Phần dự án model phải đọc: ô "Mục tiêu và bối cảnh" của hộp thoại tạo / sửa dự án (trường desc)
+ * và thẻ Hướng dẫn (trường ins). Hộp thoại hứa "Synchro đọc phần này trước mỗi đoạn chat trong dự án",
+ * nên dự án chỉ ghi mục tiêu ("luôn kết thúc bằng KIWI-PROJ") cũng phải tới model như hướng dẫn.
+ * Hai phần nằm liền nhau, không cách dòng trống: Codex và Antigravity gửi lại hướng dẫn theo từng đoạn
+ * cách bởi dòng trống khi nối tiếp phiên, nên cả khối luôn đi cùng tiêu đề dự án.
+ */
+export function projectBrief(p: { desc?: unknown; ins?: unknown } | null | undefined): string {
+  const goal = typeof p?.desc === "string" ? p.desc.trim() : "";
+  const ins = typeof p?.ins === "string" ? p.ins.trim() : "";
+  return [goal ? `${PROJECT_GOAL_LABEL} ${goal}` : "", ins].filter(Boolean).join("\n");
+}
 /**
  * Lời nhắc hệ thống có hướng dẫn dự án. clientFull: trình duyệt có đủ dữ liệu dự án (không phải stub) nên lời nhắc của nó là bản đúng nhất —
  * dự án ở đó không có hướng dẫn thì không lấy bản máy chủ có thể còn cũ (người dùng vừa xóa hướng dẫn). base: lời nhắc mặc định khi trình duyệt không gửi.

@@ -151,6 +151,11 @@ export function cxAccount(user: string | undefined, kit: string, now = Date.now(
   const e = user ? learned.get(user)?.accounts.get(kit) : undefined;
   return e && live(e.at, now) && e.label ? e.label : undefined;
 }
+/** Toolkit đang có tài khoản kết nối mà Composio báo trong 24 giờ qua (Synchro không tự liệt kê ứng dụng). */
+export function cxLinkedKits(user: string, now = Date.now()): string[] {
+  const b = learned.get(user);
+  return b ? [...b.accounts].filter(([, e]) => live(e.at, now)).map(([kit]) => kit) : [];
+}
 
 const KIT_RE = /^[a-z0-9][a-z0-9_]{1,59}$/;
 const SLUG_RE = /^[A-Z][A-Z0-9]*(_[A-Z0-9]+)+$/;

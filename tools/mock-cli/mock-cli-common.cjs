@@ -198,6 +198,17 @@ function pjEcho(sys) {
   const parts = sys.split("## Hướng dẫn của dự án (hãy luôn tuân theo)\n");
   return parts.length > 1 ? `PJINS x${parts.length - 1}: ${parts[1].split(/\n\s*\n/)[0].trim().replace(/\s+/g, " ").slice(0, 300)}` : "PJINS: none";
 }
+// "#pjins" của CLI chỉ nhận hướng dẫn ở lượt mở phiên (Codex, Antigravity): lượt nối tiếp Synchro chỉ gửi phần
+// hướng dẫn mới, phần cũ nằm trong lịch sử phiên của CLI thật. Giả lập nhớ phần dự án theo phiên để lượt
+// nối tiếp nhắc lại đúng thứ phiên đang có.
+function pjSession(dir, id, prompt) {
+  const f = path.join(dir, "mock-pjins.json"), s = readJson(f, {});
+  const now = pjEcho(prompt);
+  if (now === "PJINS: none") return s[id] ?? now;
+  s[id] = now;
+  writeJson(f, s);
+  return now;
+}
 // "#sxkit": câu trả lời có sơ đồ ```d2 và bản trình bày dùng bộ CSS: nền shader 3D (data-sx-shader), biểu đồ ECharts (data-sx-chart), khối kính khúc xạ.
 // Dùng chung cho CLI giả lập và khóa API giả lập (mock-providers.mjs) để xem các tính năng đồ họa trên trang thật.
 function sxKit() {
@@ -208,13 +219,53 @@ function sxKit() {
 <section class="slide sx-slide"><h2 class="sx-title">Kính khúc xạ</h2><div data-sx-shader="glass" style="height:calc(440*var(--sx-u))"></div></section>
 </body></html>\n</artifact>`;
 }
+// "#deck4": bộ slide 4 trang như bộ của tài khoản miễn phí từng gặp: chỉ tiêu đề có data-sx-fit, bìa có dòng
+// mô tả lớn và nhiều đoạn văn làm tràn, nên bộ tự co chỉ thu được tiêu đề (từng còn nhỏ hơn dòng mô tả).
+function deck4() {
+  const para = "Mỗi micro-hub phục vụ bán kính ba ki-lô-mét, giao trong mười tám phút, chi phí giảm theo mật độ.";
+  const body = (n) => Array.from({ length: n }, () => `<p class="sx-text">${para}</p>`).join("");
+  const slide = (k, title, n) => `<section class="slide sx-slide"><p class="sx-eyebrow">0${k} / 04</p>`
+    + `<h2 class="sx-title" data-sx-fit>${title}</h2>${body(n)}</section>`;
+  return `Bộ slide 4 trang đã xong.\n<artifact identifier="tra-xe-dien" type="text/html" title="Trà sữa xe điện">
+<!doctype html><html><head><meta charset="utf-8"></head><body data-sx-preset="swiss-grid">
+<section class="slide sx-slide"><h1 class="sx-display" data-sx-fit>Trà Một Chạm: giao trà sữa bằng xe điện
+trong mười tám phút khắp nội thành Hà Nội năm 2027</h1>
+<p class="sx-kicker" style="font-size:calc(28*var(--sx-u))">Bộ slide gọi vốn vòng hạt giống,
+trình bày cho nhà đầu tư thiên thần.</p>${body(8)}</section>
+${slide(2, "Khách hàng chờ trà sữa quá lâu vào giờ cao điểm", 3)}
+${slide(3, "Mạng micro-hub và xe điện rút thời gian giao xuống mười tám phút", 9)}
+${slide(4, "Gọi vốn 3 tỷ đồng để mở 12 micro-hub", 2)}
+</body></html>
+</artifact>`;
+}
 function reply(name, prompt, turn) {
   if (prompt.includes("#sxkit")) return sxKit();
+  if (prompt.includes("#deck4")) return deck4();
   if (isTitleAsk(prompt)) return mockTitle(prompt);
   if (prompt.includes("#nowcheck")) return `NOW: ${/<current_time>([^<]*)<\/current_time>/.exec(prompt)?.[1] ?? "-"}`;
   // Dòng giờ hiện tại Synchro ghép vào cuối tin nhắn: không phải câu người dùng gõ.
   const last = prompt.replace(/<current_time>[^<]*<\/current_time>/g, "").trim().split("\n").filter(Boolean).pop() ?? "";
   return `Chào bạn! Mình là ${name} chạy qua CLI giả lập (lượt ${turn} của hội thoại). Bạn vừa nói: "${last.slice(0, 120)}".`;
+}
+// "#clipatch <kiểu>": bản sửa artifact "cli-doc" có một khối chép sai chữ (như model thật), để thử bước Synchro nhắc
+// gửi lại khối hỏng trên đường CLI. Lời nhắc <patch_failed> của Synchro trích dòng đầu của SEARCH hỏng, nên kiểu đi
+// theo lời nhắc: "healerror" → lần gửi lại lỗi phía hãng, "healslow" → lần gửi lại chờ 4 giây (thử bấm Dừng), còn
+// lại gửi lại đúng khối. Mỗi lời nhắc ghi một dòng vào mock-heal.log cạnh CLI giả lập (kiểm thử đếm số lần nhắc).
+function cliPatch(prompt) {
+  const pblk = (s, r) => `<<<<<<< SEARCH\n${s}\n=======\n${r}\n>>>>>>> REPLACE`;
+  const wrap = (b) => `<artifact identifier="cli-doc" mode="patch">\n${b}\n</artifact>`;
+  if (prompt.includes('<patch_failed identifier="cli-doc"')) {
+    fs.appendFileSync(path.join(__dirname, "mock-heal.log"), "heal\n");
+    const kind = /<h1>Chao ban<\/h1><!--(\w+)-->/.exec(prompt)?.[1] ?? "ok";
+    if (kind === "healerror") return { error: "API Error: 500 Internal server error" };
+    const text = wrap(pblk("<h1>Chào bạn</h1>", "<h1>Xin chào bạn</h1>"));
+    return { waitMs: kind === "healslow" ? 4000 : 0, text };
+  }
+  const m = /#clipatch (\w+)/.exec(prompt);
+  if (!m) return null;
+  const blocks = `${pblk("<title>Bản gốc</title>", "<title>Bản mới</title>")}\n`
+    + pblk(`<h1>Chao ban</h1><!--${m[1]}-->`, "<h1>Xin chào bạn</h1>");
+  return { waitMs: 0, text: `Đã đổi tiêu đề và lời chào.\n\n${wrap(blocks)}` };
 }
 /** Tổng số lượt đã chat (mọi phiên) trong thư mục cấu hình: dùng để giả lập phần trăm hạn mức đã dùng. */
 const totalTurns = (dir) => Object.values(readJson(path.join(dir, "mock-sessions.json"), {})).reduce((x, y) => x + y, 0);
@@ -322,3 +373,6 @@ function gate(a) {
   if (m === "smoke" || (m === "turn" && !status)) { console.error("mock: broken build (segmentation fault)"); process.exit(3); }
 }
 module.exports = { oauthTurn, version, gate, sxKit, TINY_JPEG, tinyPng, isImageTurn, imageCount, imageMode, imageLog, saveImage, stallTurn, STALL_TEXT, mediaDesc, mediaReply, mcp, isTitleAsk, mockTitle, mockBrain, prefsEcho, ruleEcho, pjEcho, toolAsk, cfg, sleep, out, uuid, readStdin, readLine, flag, bumpSession, bumpUsage, totalTurns, reply, chunks, fs, path, crypto };
+module.exports.pjSession = pjSession;
+module.exports.cliPatch = cliPatch;
+module.exports.deck4 = deck4;

@@ -7,6 +7,9 @@
 //   để lượt chạy xong trong lúc chờ.
 // - SYNCHRO_ROLE=secondary: bật lên chỉ phục vụ yêu cầu; nhận vai primary (việc nền, litestream) khi tệp màu sống chỉ tới màu này và bản cũ
 //   đã thoát (server/role.ts).
+// - SYNCHRO_SOFFICE_BIN, SYNCHRO_OCR: đọc tệp Office cũ (.doc/.xls/.ppt) bằng LibreOffice và OCR trang PDF scan.
+//   Chương trình cài bằng ops/install-media-deps.sh; chưa cài thì tệp đó bị từ chối kèm lý do, trang Sức khỏe hệ
+//   thống báo thiếu.
 const path = require("node:path");
 const APP = __dirname;
 const COLORS = { blue: 3000, green: 3002 };
@@ -37,6 +40,8 @@ module.exports = {
       SYNCHRO_ROLE: "secondary",
       SYNCHRO_COLOR: color,
       SYNCHRO_LIVE_FILE: "/var/lib/synchro-ops/live-color",
+      SYNCHRO_SOFFICE_BIN: "/usr/bin/soffice",
+      SYNCHRO_OCR: "1",
     },
   })),
 };

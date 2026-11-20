@@ -16,12 +16,17 @@ import type { Event } from "./engine";
 import { engineEnvReady, everLoggedIn, markRelogin, safeScope, scopeDir, status } from "./cli_auth";
 import { type Cli, cliRunning, engineHome, type Exit, find, makeDir, removeDir, removeSessionFiles, spawnCli, stripAnsi, watchSessions, writeEngineFile } from "./cli_runtime";
 import { classify, redact } from "./errors";
-import { agyBrainDir, gatherImages, IMAGE_MAX_MB, imageKind, type ImgFile, listImageFiles, namedPaths, removeNewFiles, scrubServerPaths, type FileCtx } from "./imagefiles";
+import {
+  agyBrainDir, fitAspect, gatherImages, IMAGE_MAX_MB, imageKind, type ImgFile, listImageFiles, namedPaths,
+  removeNewFiles, scrubServerPaths, type FileCtx,
+} from "./imagefiles";
 import { serviceKey } from "../providers";
 import { replicateImages, RepError, repRoom, reserveRep } from "./replicate";
 import { codexRpc } from "./subs";
 
-export const ASPECTS = ["1:1", "16:9", "9:16", "4:3", "3:4"] as const;
+// 4:5 / 2:3 là khổ ảnh tạp chí, quảng cáo: thiếu chúng thì model xin 3:4 hoặc 1:1 rồi tự cắt lại bằng run_code,
+// người dùng nhận hai tệp gần giống nhau. Gói nào không nhận đúng tỉ lệ thì fitAspect cắt lại ở máy chủ.
+export const ASPECTS = ["1:1", "16:9", "9:16", "4:3", "3:4", "4:5", "5:4", "2:3", "3:2"] as const;
 // replicate: khóa API Replicate của chủ máy chủ (server/ai/replicate.ts), không phải CLI. Có khóa và tài khoản còn hạn mức ảnh hôm nay thì thử trước, lỗi hay hết thì về gói của người đó.
 export type ImgCli = "agy" | "grok" | "codex" | "replicate";
 /** Thứ tự thử các gói: gói đã kiểm chứng trước. */
@@ -339,14 +344,35 @@ export function imageName(prompt: string, i: number, n: number, ext: string) {
   return `${slug}${n > 1 ? `-${i + 1}` : ""}.${ext}`;
 }
 const IMG_ASK_WORDS = /^(?:(?:hãy|làm ơn|giúp|giùm|hộ|bạn|mình|tôi|em|cho|vẽ|tạo|làm|sinh|thiết kế|một|1|tấm|bức|cái|ảnh|hình ảnh|hình|tranh|về|please|can|could|you|draw|create|make|generate|design|paint|me|us|a|an|the|image|picture|photo|illustration|of)\s+)+/i;
+// Tiếng chỉ loại ảnh, mục đích hay chất lượng, không nói ảnh vẽ gì.
+const SLUG_GENERIC = new Set([
+  "anh chup san pham cho quang cao tap chi phong cach kieu chat luong cao do phan giai sieu thuc te dep nghe thuat",
+  "minh hoa hinh tranh photo shot product style ad ads advert advertising magazine for high quality realistic",
+  "editorial commercial studio",
+].join(" ").split(" "));
+function generic(slug: string) {
+  const w = slug.split("-");
+  return w.filter((x) => SLUG_GENERIC.has(x)).length >= w.length * 0.8;
+}
+const SLUG_STOP = new Set(
+  "tren duoi voi ben canh khong trong giua tai o va bang on with in at under next beside and against".split(" "),
+);
 /** Tên ảnh theo lời người dùng: model thường viết prompt bằng tiếng Anh, người Việt xin "con mèo đội mũ" mà nhận a-fluffy-orange-cat-wearing-a-tiny-top-hat.png.
  *  Lời nhờ không còn gì để đặt tên ("làm tiếp đi"), hoặc không viết bằng chữ Latin: giữ tên theo mô tả ảnh. */
 export function requestSlug(request: string): string {
   const line = request.replace(/<([a-z_]+)\b[^>]*>[\s\S]*?<\/\1>/g, " ").split(/[\n.!?]/).map((l) => l.trim()).find(Boolean) ?? "";
-  const slug = slugOf(line.replace(/\s#\S.*$/, "").replace(IMG_ASK_WORDS, ""));
-  if (slug.length < 4 || slug.split("-").length < 2) return "";
-  if (slug.length <= 40) return slug;
-  return slug.slice(0, 41).replace(/-[^-]*$/, "");
+  // Lời nhờ dài thường mở bằng loại ảnh ("Tạo ảnh: ảnh chụp sản phẩm cho quảng cáo tạp chí, một lọ mật ong…"): tên
+  // lấy vế đầu tiên nói về chủ thể, không lấy vế chỉ toàn từ chung chung (từng ra
+  // "anh-anh-chup-san-pham-cho-quang-cao-tap.jpg").
+  const parts = line.replace(/\s#\S.*$/, "").split(/[,:;–—]/)
+    .map((p) => slugOf(p.trim().replace(IMG_ASK_WORDS, "")));
+  const slug = parts.find((p) => p.length >= 4 && p.split("-").length >= 2 && !generic(p)) ?? "";
+  if (!slug) return "";
+  const w = slug.split("-");
+  if (w.length <= 6) return slug.length <= 40 ? slug : slug.slice(0, 41).replace(/-[^-]*$/, "");
+  // Chủ thể dài: dừng ở giới từ đầu tiên (trên, với, bên…), tối đa 6 tiếng.
+  const cut = w.findIndex((x, i) => i >= 2 && SLUG_STOP.has(x));
+  return w.slice(0, Math.min(cut > 0 ? cut : w.length, 6)).join("-");
 }
 
 // ---------------------------------------------------------------- chọn gói, báo lỗi thật
@@ -408,7 +434,8 @@ export async function generateImages(q: ImgReq): Promise<ImgOk | ImgErr> {
     if (r.files?.length) {
       const notes = [...(r.notes ?? [])];
       if (r.files.length < count) notes.push(`Chỉ tạo được ${r.files.length}/${count} ảnh.`);
-      return { ok: true, files: r.files, cli, notes, tried };
+      const fit = await fitAspect(r.files, q.aspect, count);
+      return { ok: true, files: fit.files, cli, notes: [...notes, ...fit.notes], tried };
     }
     const f: ImgFail = { cli, kind: r.fail?.kind ?? "nofile", detail: r.fail?.detail };
     tried.push(f);

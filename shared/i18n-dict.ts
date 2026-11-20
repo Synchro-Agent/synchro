@@ -570,7 +570,19 @@ RULES_EN.push(
   [/^Thư viện "(.+)" chưa ghim commit cụ thể nên không cài \(không cài theo nhánh HEAD\)\. Chạy lại đồng bộ danh mục để ghim commit, rồi thử lại\.$/, (m) => `The library "${m[1]}" isn't pinned to a specific commit, so it wasn't installed (Synchro never installs from a moving HEAD). Re-run the catalog sync to pin a commit, then try again.`],
   [/^Ảnh "(.+)" quá lớn hoặc bị hỏng nên không xử lý được \(giới hạn ~40 triệu điểm ảnh\)\.$/, (m) => `The image "${m[1]}" is too large or damaged to process (limit about 40 million pixels).`],
   [/^Ảnh "(.+)" quá lớn \((.+)×(.+) điểm ảnh\)\. Giới hạn ~40 triệu điểm ảnh — hãy thu nhỏ rồi tải lại\.$/, (m) => `The image "${m[1]}" is too large (${m[2]}×${m[3]} pixels). The limit is about 40 million pixels. Shrink it and upload again.`],
-  [/^Không đọc được ảnh HEIC "(.+)" \(máy chủ chưa hỗ trợ giải mã HEIC\)\. Hãy lưu sang JPEG \/ PNG rồi tải lại\.$/, (m) => `Couldn't read the HEIC image "${m[1]}" (this server can't decode HEIC yet). Save it as JPEG / PNG and upload again.`],
+  [/^Ảnh HEIC "(.+)" bị hỏng, không đọc được\.$/, (m) => `The HEIC image "${m[1]}" is damaged and can't be read.`],
+  [/^Không đọc được ảnh HEIC "(.+)": máy chủ chưa cài bộ giải mã\. Hãy lưu sang JPEG \/ PNG rồi tải lại\.$/,
+    (m) => `Couldn't read the HEIC image "${m[1]}": no HEIC decoder on the server. Save as JPEG / PNG and re-upload.`],
+  [/^Giải mã ảnh HEIC "(.+)" quá lâu \(quá (\d+) giây\)\. Hãy lưu sang JPEG \/ PNG rồi tải lại\.$/,
+    (m) => `Decoding the HEIC image "${m[1]}" took over ${m[2]} seconds. Save it as JPEG / PNG and upload again.`],
+  [/^Không đọc được ảnh HEIC "(.+)" \(tệp có thể bị hỏng\)\. Hãy lưu sang JPEG \/ PNG rồi tải lại\.$/,
+    (m) => `Couldn't read the HEIC image "${m[1]}" (the file may be damaged). Save it as JPEG / PNG and upload again.`],
+  [/^Ảnh "(.+)" quá lớn sau khi giải mã\.$/, (m) => `The image "${m[1]}" is too large once decoded.`],
+  [/^Đã có thẻ "(.+)" khác nội dung nên tệp mới thành "(.+)"\. Nếu "\1" là bản trước khi sửa, hãy bỏ thẻ đó\.$/,
+    (m) => `A different "${m[1]}" is already attached, so the new file was added as "${m[2]}". `
+      + `If "${m[1]}" is the version before your edit, remove it.`],
+  [/^"(.*)" là tệp Office đời cũ mà máy chủ chưa chuyển được\. Hãy lưu thành \.docx\/\.xlsx\/\.pptx\.$/,
+    (m) => `"${m[1]}" is a legacy Office file this server can't convert yet. Save it as .docx/.xlsx/.pptx.`],
   [/^Ảnh "(.+)" bị hỏng, không xử lý được\.$/, (m) => `The image "${m[1]}" is damaged and can't be processed.`],
   [/^Không chuyển được tệp Office cũ "(.+)"\. Hãy lưu lại thành \.docx\/\.xlsx\/\.pptx rồi tải lên\.$/, (m) => `Couldn't convert the old Office file "${m[1]}". Save it as .docx/.xlsx/.pptx and upload it.`],
   [/^Chưa bật phiên âm giọng nói nên Synchro chưa đọc được tệp âm thanh \/ video "(.+)"\. Hãy kết nối ElevenLabs trong Cài đặt rồi tải lại\.$/, (m) => `Speech transcription isn't set up, so Synchro can't read the audio / video file "${m[1]}" yet. Connect ElevenLabs in Settings and upload it again.`],
@@ -1796,10 +1808,19 @@ RULES_EN.unshift(
   [/^Đã kết nối (.+)$/, (m) => `Connected ${m[1]}`],
   [/^Kết nối tới (\S+) bị ngắt giữa chừng\.$/, (m) => `The connection to ${m[1]} dropped partway through.`],
 );
+// Phần tiến độ đã biết sau dòng "vẫn đang viết" (shared/turnpulse.ts).
+// Tên bước và tên artifact là chữ model viết, giữ nguyên.
+const pulseEn = (t: string) => t
+  .replace(/ · bước (\d+)\/(\d+): /g, " · step $1/$2: ").replace(/ · xong (\d+)\/(\d+) việc/g, " · $1/$2 tasks done")
+  .replace(/ · đã nhận “(.+)”, ([\d.]+) ký tự$/,
+    (_, a: string, n: string) => ` · received “${a}”, ${commas(n)} characters`)
+  .replace(/ · đã nhận ([\d.]+) ký tự artifact$/, (_, n: string) => ` · received ${commas(n)} artifact characters`);
+const commas = (n: string) => n.replace(/\./g, ",");
 // Lỗi và trạng thái của engine CLI: câu Việt do máy chủ viết (cli_engines.ts, subs.ts). Người dùng tiếng Anh từng đọc nguyên văn tiếng Việt khi hết đăng nhập.
 RULES_EN.unshift(
   [/^Đoạn chat dài: (.+) đọc nguyên văn (\d+) tin gần nhất, (\d+) tin cũ hơn chỉ có phần trích ngắn hoặc không có\. Điều quan trọng ở đó nên nhắc lại$/, (m) => `Long chat: ${m[1]} reads the latest ${m[2]} messages in full, and the ${m[3]} older ones only as short excerpts, or not at all. Repeat anything important from them`],
-  [/^Antigravity vẫn đang viết, đã (\d+) giây$/, (m) => `Antigravity is still writing, ${m[1]} seconds so far`],
+  [/^Antigravity vẫn đang viết, đã (\d+) giây((?: · .+)?)$/,
+    (m) => `Antigravity is still writing, ${m[1]} seconds so far${pulseEn(m[2])}`],
   [/^\(PDF dạng ảnh (\d+) trang: chỉ có ảnh của (\d+) trang đầu\. Hãy nói rõ điều này với người dùng\.\)$/, (m) => `(Image-only PDF with ${m[1]} pages: only the first ${m[2]} pages are available as images. Tell the user this.)`],
   [/^Không đọc được "(.+)": tệp PDF bị hỏng hoặc đang đặt mật khẩu\.$/, (m) => `Couldn't read "${m[1]}": the PDF is damaged or password protected.`],
   [/^"(.+)" quá dài để gửi nguyên tệp nên model sẽ đọc phần chữ, không thấy hình và bố cục\.$/, (m) => `"${m[1]}" is too long to send as a whole file, so the model will read its text but won't see images or layout.`],

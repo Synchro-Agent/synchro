@@ -4,6 +4,7 @@
 // Cùng identifier trong một cuộc trò chuyện là các phiên bản của cùng một artifact.
 // Tệp này dùng chung cho trình duyệt (tách artifact khỏi câu trả lời) và máy chủ (hướng dẫn cho model).
 import { expandTemplates } from "./designtemplates";
+import { isDeck } from "./artgen";
 
 export const ART_TYPES = ["html", "react", "svg", "markdown", "code", "mermaid", "d2", "vbhc"] as const;
 export type ArtType = (typeof ART_TYPES)[number];
@@ -19,6 +20,26 @@ const MIME: Record<string, ArtType> = {
   "application/vnd.synchro.vbhc+json": "vbhc", vbhc: "vbhc",
 };
 export const ART_LABEL: Record<ArtType, string> = { html: "Trang web", react: "Ứng dụng", svg: "Hình SVG", markdown: "Tài liệu", code: "Mã nguồn", mermaid: "Sơ đồ", d2: "Sơ đồ D2", vbhc: "Văn bản hành chính" };
+// Bộ slide đang viết dở mới có phần đầu (CSS, trang bìa) nên isDeck chưa nhận ra: khung xem trước từng ghi "Trang web"
+// suốt lúc dựng. Dấu hiệu sớm: thẻ section là slide, lớp deck, hoặc luật CSS cho .slide có khổ trang chiếu (1280x720,
+// 16:9, cả màn hình). Chỉ có luật .slide thì chưa đủ: carousel lời khen / dự án của landing page cũng có ".slide {".
+const DECK_TAG = new RegExp("<section\\b[^>]*(?:class=[\"'][^\"']*\\bslide\\b|data-slide)"
+  + "|class=[\"'][^\"']*\\bdeck\\b|\\.deck(?![\\w-])[^{}]*\\{", "i");
+const SLIDE_SIZE = new RegExp("\\.slide(?![\\w-])[^{}]*\\{[^}]*(?:\\b1280px|\\b720px"
+  + "|aspect-ratio\\s*:\\s*16\\s*\\/\\s*9"
+  + "|width\\s*:\\s*100vw[^}]*height\\s*:\\s*100vh|height\\s*:\\s*100vh[^}]*width\\s*:\\s*100vw)", "i");
+const deckHint = (html: string) => DECK_TAG.test(html) || SLIDE_SIZE.test(html);
+/**
+ * Tên loại hiện trên khung / thẻ artifact (chữ gốc tiếng Việt, dịch khi hiện): bộ slide là "Bản trình bày", kể cả khi
+ * đang viết.
+ */
+export function artKindLabel(a: { type: ArtType; content: string; complete?: boolean }): string {
+  const building = a.complete === false && a.type === "html";
+  if (isDeck(a) || (building && deckHint(a.content))) return "Bản trình bày";
+  // Mới có phần đầu tệp, chưa tới <body>: chưa biết là trang web hay bộ slide, không đoán.
+  if (building && !/<body\b/i.test(a.content)) return "Đang tạo…";
+  return ART_LABEL[a.type];
+}
 export const ART_EXT: Record<ArtType, string> = { html: "html", react: "jsx", svg: "svg", markdown: "md", code: "txt", mermaid: "mmd", d2: "d2", vbhc: "json" };
 const LANG_EXT: Record<string, string> = { python: "py", py: "py", javascript: "js", js: "js", typescript: "ts", ts: "ts", tsx: "tsx", jsx: "jsx", bash: "sh", sh: "sh", shell: "sh", go: "go", rust: "rs", java: "java", c: "c", cpp: "cpp", "c++": "cpp", csharp: "cs", cs: "cs", ruby: "rb", php: "php", swift: "swift", kotlin: "kt", sql: "sql", css: "css", json: "json", yaml: "yml", html: "html" };
 export const artFileName = (a: { title: string; type: ArtType; lang: string | null }) => {
@@ -91,6 +112,8 @@ Sửa artifact đã có (bản hiện tại nằm trong <current_artifacts> ở 
 (các dòng thay thế)
 >>>>>>> REPLACE
 Ví dụ: <artifact identifier="todo-app" mode="patch">…các khối…</artifact>. Mỗi khối càng ngắn càng tốt; SEARCH rỗng là thêm vào cuối tệp. Chỉ viết lại toàn bộ (không có mode) khi thay đổi quá nửa nội dung hoặc đổi kiểu artifact. Thẻ artifact tự đóng có version="…" trong lịch sử chỉ là chỗ đánh dấu phiên bản cũ; có patch_failed nghĩa là bản sửa đó không áp được, hãy sửa lại dựa trên bản hiện tại. Mỗi câu trả lời chỉ nên có một artifact. Không đặt câu trả lời ngắn, đoạn code nhỏ, hay giải thích vào artifact.
+SEARCH chép dòng có thật (không "...", không số dòng "12 | "); thụt lề, khoảng trắng đầu/cuối và dòng trống được bỏ qua.
+Gặp <patch_failed> (read_artifact / check_artifact báo): chỉ gửi lại các khối nêu trong đó, không viết lại cả tệp.
 Bên ngoài artifact chỉ viết vài câu ngắn giới thiệu hoặc hướng dẫn dùng; đừng lặp lại nội dung artifact.${ai ? `
 Artifact gọi được model AI: await window.synchro.complete(prompt) trả về chuỗi câu trả lời (prompt là chuỗi, hoặc mảng [{role:"user"|"assistant", content}] cho hội thoại nhiều lượt). Dùng cho ứng dụng có AI bên trong (dịch, tóm tắt, trò chuyện, gợi ý…). Mỗi lần gọi không nhớ lần trước: muốn giữ ngữ cảnh thì gửi cả lịch sử. Khi cần dữ liệu có cấu trúc, yêu cầu model trả JSON và JSON.parse kết quả (bọc try/catch). Luôn hiện trạng thái đang chờ và xử lý lỗi.` : `
 Artifact KHÔNG gọi được model AI (người dùng đang tắt "Artifact dùng AI"). Nếu người dùng muốn ứng dụng có AI bên trong, hãy làm phần giao diện và nói họ bật Cài đặt → Khả năng → Artifact dùng AI.`}

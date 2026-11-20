@@ -92,7 +92,11 @@ console.log("6. /api/health");
 const h = await fetch(`${B}/api/health`);
 const hj = await h.json();
 ok((h.status === 200 || h.status === 503) && typeof hj.ok === "boolean" && hj.db === true && hj.build, "trả trạng thái, không cần đăng nhập", JSON.stringify(hj));
-ok(Object.keys(hj).every((k) => ["ok", "build", "db", "disk", "agent", "backup"].includes(k)), "chỉ có cờ trạng thái, không số liệu hay đường dẫn", JSON.stringify(hj));
+const flagKeys = ["ok", "build", "db", "disk", "agent", "backup", "media"];
+ok(Object.keys(hj).every((k) => flagKeys.includes(k)), "chỉ có cờ trạng thái, không số liệu hay đường dẫn", JSON.stringify(hj));
+// media (đọc HEIC / Office cũ / OCR) là null trước lần đo đầu, sau đó chỉ gồm cờ đúng / sai.
+const media = hj.media ?? {};
+ok(Object.values(media).every((v) => typeof v === "boolean"), "media chỉ có cờ đúng / sai", JSON.stringify(hj.media));
 ok(!/\/|synchro\.db|@/.test(JSON.stringify(hj)), "không lộ đường dẫn, email", JSON.stringify(hj));
 
 console.log("7. Xóa tài khoản qua API");

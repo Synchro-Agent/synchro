@@ -15,7 +15,11 @@ import { catalogLine } from "./connproxy";
 import { coerceArgs } from "../shared/connschema";
 import { authorizeRejected, authorizeUrl, checkIssuer, discover, exchangeCode, metadataHint, parseWww, randomToken, refreshTokens, registerClient, TokenRejected, type AsMeta, type OAuthClient, type Tokens } from "./mcpauth";
 import { checkUrl, FetchBlocked, TempFail } from "./safefetch";
-import { annotate, appName, askOnlyTool, COMPOSIO, COMPOSIO_COLOR, COMPOSIO_LINK_PROMPT, COMPOSIO_NAME, COMPOSIO_PROMPT, CONNECT_URL, EXEC_TOOL, cxKnownPrompt, cxLearn, execPlan, invalidateSchemaCache, isMetaRead, isSchemaRead, KEY_HEADER, keyOk, MANAGE_URL, maskKey, PROXY_TOOL, schemaCacheLookup, schemaCachePut, strictCall } from "./composio";
+import {
+  annotate, appName, askOnlyTool, COMPOSIO, COMPOSIO_COLOR, cxLinkedKits, COMPOSIO_LINK_PROMPT, COMPOSIO_NAME,
+  COMPOSIO_PROMPT, CONNECT_URL, EXEC_TOOL, cxKnownPrompt, cxLearn, execPlan, invalidateSchemaCache, isMetaRead,
+  isSchemaRead, KEY_HEADER, keyOk, MANAGE_URL, maskKey, PROXY_TOOL, schemaCacheLookup, schemaCachePut, strictCall,
+} from "./composio";
 
 export type Perm = "allow" | "chat" | "ask" | "block";
 export const PERMS: Perm[] = ["allow", "chat", "ask", "block"];
@@ -235,6 +239,29 @@ export function composioInfo(uid: string, pol: ConnPolicy = FULL_CONN): Composio
   const a = getAuth(r);
   const on = linkedAuth(a);
   return { state: on ? "linked" : "unlinked", ...(on ? { via: a.mode === "token" ? "key" as const : "oauth" as const } : {}), ...(on && a.mode === "token" && a.key ? { keyHint: maskKey(a.key.value) } : {}), manageUrl: MANAGE_URL, connector: publicOf(r, pol) };
+}
+/**
+ * Tên các ứng dụng người dùng đang nối, cho bộ định tuyến ở mỗi lượt: connector tự thêm đang bật (cả khi mất đăng
+ * nhập: lượt đầy đủ mới có nút kết nối lại), và khi Composio đã liên kết thì ứng dụng đã đặt quyền cùng toolkit
+ * Composio vừa báo là đang kết nối. Bỏ connector quản trị viên không cho tài khoản này dùng và ứng dụng người dùng
+ * đặt "Chặn": lượt có công cụ cũng không gọi được chúng, nêu tên thì không có lý do rời đường nhanh.
+ */
+export function connectedApps(uid: string, pol: ConnPolicy = FULL_CONN): string[] {
+  const rows = table().prepare("SELECT * FROM connectors WHERE user_id = ? AND enabled = 1").all(uid) as Row[];
+  const out = new Set<string>();
+  for (const r of rows) {
+    if (!allowsDir(pol, r.dir)) continue;
+    if (r.dir !== COMPOSIO) {
+      out.add(r.name);
+      continue;
+    }
+    if (!linkedAuth(getAuth(r))) continue;
+    const ap = appPermsOf(r);
+    for (const kit of new Set([...Object.keys(ap), ...cxLinkedKits(uid)])) {
+      if (!appPrefixes(kit).some((x) => ap[x] === "block")) out.add(appName(kit));
+    }
+  }
+  return [...out];
 }
 const KEY_BAD = "Composio từ chối khóa này. Hãy kiểm tra lại khóa ck_ ở Composio → Settings → Sessions & API Key.";
 /** "Liên kết Composio": key (khóa ck_ ở mục Nâng cao) được thử với Composio trước khi lưu; không có key thì đăng nhập OAuth trong cửa sổ bật lên (authorizeUrl). */

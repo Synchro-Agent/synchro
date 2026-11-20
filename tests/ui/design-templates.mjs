@@ -130,7 +130,9 @@ for (const style of ["linear-dark", "editorial-serif"]) {
 }
 {
   // Thử phong cách khác (khung xem đổi data-sx-preset rồi vá lại): màu và cỡ chữ đã vá cho phong cách cũ phải bỏ đi, kết quả giống trang dựng mới bằng phong cách mới.
-  const page = (preset) => `<html data-sx-preset="${preset}"><body><section class="slide sx-slide" data-sx-preset="${preset}" style="background:var(--sx-bg)"><h2 class="sx-title" data-node-id="x.t" style="color:#475569">Chữ xám đậm</h2><div class="sx-card" data-sx-fit style="height:calc(60*var(--sx-u));overflow:hidden;font-size:calc(30*var(--sx-u))">${"Đoạn chữ dài trong thẻ thấp. ".repeat(12)}</div></section></body></html>`;
+  // Thẻ thấp vừa đủ để chữ phải co nhưng vẫn co vừa trên 11px: thẻ thấp tới mức co hết bậc vẫn tràn thì bộ tự co
+  // trả cỡ gốc và chỉ ghi data-sx-fitover, ca đó do tests/ui/deck-fit.mjs kiểm.
+  const page = (preset) => `<html data-sx-preset="${preset}"><body><section class="slide sx-slide" data-sx-preset="${preset}" style="background:var(--sx-bg)"><h2 class="sx-title" data-node-id="x.t" style="color:#475569">Chữ xám đậm</h2><div class="sx-card" data-sx-fit style="height:calc(120*var(--sx-u));overflow:hidden;font-size:calc(30*var(--sx-u))">${"Đoạn chữ dài trong thẻ thấp. ".repeat(12)}</div></section></body></html>`;
   const state = `(() => { const h = document.querySelector("h2"), c = document.querySelector(".sx-card"); return { color: getComputedStyle(h).color, inline: h.style.color, inked: h.hasAttribute("data-sx-inked"), fs: c.style.fontSize, fitted: c.getAttribute("data-sx-fitted") }; })()`;
   await open(page("midnight-tech"), false); await sleep(300);
   const dark = await ev(state);

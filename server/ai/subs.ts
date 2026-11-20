@@ -692,7 +692,27 @@ async function removeConvAttachments(uid: string, conv: string) {
  *  onStatus: dòng trạng thái (đang chờ, CLI đang thử lại); onSearch, onSources: CLI đang tìm web và nguồn tìm được. */
 /** ephemeral (đoạn chat ẩn danh): không nối tiếp phiên, không nhớ phiên, xóa lịch sử CLI ghi trên đĩa ngay khi xong lượt. */
 /** onNativeImages: ảnh Antigravity tự tạo trong lượt (image-generator của nó, không qua generate_image): chuyển ra đây để giao thành tệp, người dùng không mở được đường dẫn trên máy chủ. */
-export type SubTurn = { maxWaitMs?: number; onAttDir?: (dir: string) => void; onNativeImages?: (files: ImgFile[]) => void; ephemeral?: boolean; onSession?: (id: string) => void; user: UserRow; model: string; system: string; messages: unknown; conv?: string; effort?: string; /** Lượt không công cụ (đường nhanh): được dùng tiến trình khởi động sẵn. */ fast?: boolean; /** Tên việc phụ, ghi vào [timing]; không có là lượt của người dùng. */ job?: string; /** Việc không ai đứng chờ: xếp hàng sau các việc khác (BG_MAX). */ bg?: boolean; /** Trích ngắn các tin cũ mà trình duyệt không gửi nguyên văn. */ older?: string; awaitingUser?: () => boolean; signal?: AbortSignal; onDelta?: (t: string) => void; onToolUse?: () => void; mcp?: { url: string; alive?: () => number; onPark?: (f: () => void) => void; live?: { url: string; key: string } }; web?: boolean; fresh?: boolean; total?: number; lockMs?: number; onStatus?: (t: string) => void; onSearch?: (q: { query?: string; url?: string }) => void; onSources?: (s: WebSource[]) => void; /** Danh sách việc model cập nhật bằng công cụ dựng sẵn của CLI. */ onPlan?: (items: PlanStep[]) => void };
+export type SubTurn = {
+  maxWaitMs?: number; onAttDir?: (dir: string) => void; onNativeImages?: (files: ImgFile[]) => void;
+  ephemeral?: boolean; onSession?: (id: string) => void; user: UserRow; model: string; system: string;
+  messages: unknown; conv?: string; effort?: string;
+  /** Lượt không công cụ (đường nhanh): được dùng tiến trình khởi động sẵn. */
+  fast?: boolean;
+  /** Tên việc phụ, ghi vào [timing]; không có là lượt của người dùng. */
+  job?: string;
+  /** Việc không ai đứng chờ: xếp hàng sau các việc khác (BG_MAX). */
+  bg?: boolean;
+  /** Trích ngắn các tin cũ mà trình duyệt không gửi nguyên văn. */
+  older?: string; awaitingUser?: () => boolean; signal?: AbortSignal; onDelta?: (t: string) => void;
+  onToolUse?: () => void;
+  mcp?: { url: string; alive?: () => number; onPark?: (f: () => void) => void; live?: { url: string; key: string } };
+  web?: boolean; fresh?: boolean; total?: number; lockMs?: number; onStatus?: (t: string) => void;
+  onSearch?: (q: { query?: string; url?: string }) => void; onSources?: (s: WebSource[]) => void;
+  /** Danh sách việc model cập nhật bằng công cụ dựng sẵn của CLI. */
+  onPlan?: (items: PlanStep[]) => void;
+  /** Tiến độ đã biết của lượt (TurnRequest.pulse). */
+  pulse?: () => string;
+};
 export type SubResult = { status: number; json: Json };
 
 // ---------------------------------------------------------------- phiên ấm (Claude Code)
@@ -865,6 +885,7 @@ async function runTurn(o: SubTurn): Promise<SubResult> {
     sysUpdate: sysNew.length ? `<system_update>\nHướng dẫn của Synchro có phần mới cho lượt này. Áp dụng cùng với hướng dẫn đã nhận:\n\n${sysNew.join("\n\n")}\n</system_update>` : undefined,
     prompt, attachments: col.atts.length ? col.atts : undefined, system: o.system || undefined, model: run.model, effort: run.effort, sessionId: resume ?? fork, fork: !!fork, workdir: work, env: await engineEnvReady(cli, o.user.id), signal: o.signal ? AbortSignal.any([o.signal, wd.signal]) : wd.signal, mcp: o.mcp && { url: o.mcp.url, onPark: o.mcp.onPark, live: o.mcp.live }, alive: o.mcp?.alive, web: o.web, lockMs: o.lockMs, awaitingUser: o.awaitingUser,
     history: msgs.slice(0, -1).map((m) => ({ role: m.role === "assistant" ? "assistant" : "user", content: textOf(m.content) })),
+    pulse: o.pulse,
   };
   const natStamp = cli === "agy" && o.onNativeImages ? await nativeStamp(work) : null;
   // Không tự chuyển sang khóa API khi gói hết hạn mức: trả về để trình duyệt hỏi người dùng (xem planLimit bên dưới).

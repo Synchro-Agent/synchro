@@ -10,7 +10,7 @@ import { artifactComplete, type OutFile } from "./llm";
 import { parseVbhc, vbhcHtml } from "../shared/vbhc";
 import { ArtIcon } from "./artifactcard";
 import { Menu } from "./ui";
-import { ART_LABEL, artFileName, type ArtBlock, type ArtType } from "../shared/artifacts";
+import { ART_LABEL, artFileName, artKindLabel, type ArtBlock, type ArtType } from "../shared/artifacts";
 import { TokLine, useHighlight } from "./highlight";
 import { instrumentHtml, LOC_ATTR, parseLoc, snippet } from "../shared/srcloc";
 import { fixPatch, hashOf, important, type CriticEntry, type Finding } from "../shared/critic";
@@ -685,7 +685,10 @@ Yêu cầu: ${req.trim()}`);
     <aside className={`art-panel ${expanded ? "full" : ""}`} aria-label={art.title}>
       <header className="art-head">
         <span className="art-head-ic"><ArtIcon type={art.type} /></span>
-        <div className="art-head-t"><b title={art.title} data-notr>{art.title}</b><span>{deck ? tr("Bản trình bày") : tr(ART_LABEL[art.type])}{art.type === "code" && art.lang ? ` · ${art.lang}` : ""}</span></div>
+        <div className="art-head-t">
+          <b title={art.title} data-notr>{art.title}</b>
+          <span>{tr(artKindLabel(art))}{art.type === "code" && art.lang ? ` · ${art.lang}` : ""}</span>
+        </div>
         {switcher}
         {versions.length > 1 && (
           <div className="art-ver">

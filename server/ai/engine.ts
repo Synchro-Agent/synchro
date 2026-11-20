@@ -36,6 +36,11 @@ export type TurnRequest = {
   /** Lúc gần nhất lượt còn hoạt động ngoài đầu ra của CLI (đang / vừa chạy công cụ qua cầu nối MCP): CLI in kết quả một lần lúc xong
    *  (Antigravity) không bị coi là treo khi đang làm việc bằng công cụ. */
   alive?: () => number;
+  /**
+   * Điều Synchro đã biết về lượt đang chạy (bước đang làm trong danh sách việc, artifact đã nhận): CLI chỉ in chữ một
+   * lần lúc xong (Antigravity) thì dòng "vẫn đang viết" kèm thêm phần này thay vì chỉ đếm giây. Rỗng khi chưa biết gì.
+   */
+  pulse?: () => string;
   /** Người dùng bật "Tìm kiếm trên web": bật công cụ tìm web dựng sẵn của CLI. */
   web?: boolean;
   /** Chờ lượt khác của cùng tài khoản (Antigravity, Grok chạy lần lượt) tối đa bao lâu; chế độ Tự động chờ ngắn rồi chuyển model. */

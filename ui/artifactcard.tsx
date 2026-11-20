@@ -3,11 +3,11 @@
 import { useEffect, useRef, useState } from "react";
 import * as I from "./icons";
 import { tr } from "./i18n";
-import { isDeck, noteGenPending, noteGenSettled, pendingRetryMs } from "../shared/artgen";
+import { noteGenPending, noteGenSettled, pendingRetryMs } from "../shared/artgen";
 import type { OutFile } from "./llm";
 import { FILE_KIND as KIND, fileKind, fmtSize } from "./fileicon";
 import { genVerdict, imgVerdict } from "./outimg";
-import { ART_LABEL, type ArtBlock, type ArtType } from "../shared/artifacts";
+import { artKindLabel, type ArtBlock, type ArtType } from "../shared/artifacts";
 
 // ---------------------------------------------------------------- biểu tượng theo loại
 export function ArtIcon({ type, size = 18 }: { type: ArtType; size?: number }) {
@@ -30,7 +30,12 @@ export function ArtifactCard({ art, version, total, active, onOpen, fix, onRedo 
         <span className="art-card-ic"><ArtIcon type={art.type} size={20} />{!art.complete && <span className="art-spin sm" />}</span>
         <span className="art-card-txt">
           <b>{art.title}</b>
-          <span>{tr(!art.complete ? (fix ? "Đang sửa…" : "Đang tạo…") : isDeck(art) ? "Bản trình bày" : ART_LABEL[art.type])}{total > 1 && <> · {tr("Phiên bản")} {version}</>}{fix && art.complete && !bad && <> · {tr("Đã sửa")} {fix.applied} {tr("chỗ")}</>}{art.complete && !bad && <> · <em>{tr(active ? "Đang mở" : "Nhấn để mở")}</em></>}{bad && <> · <em className="art-bad">{tr("Bản sửa chưa khớp")} {fix!.failed.length} {tr("chỗ")}</em></>}</span>
+          <span>{tr(!art.complete ? (fix ? "Đang sửa…" : "Đang tạo…") : artKindLabel(art))}
+            {total > 1 && <> · {tr("Phiên bản")} {version}</>}
+            {fix && art.complete && !bad && <> · {tr("Đã sửa")} {fix.applied} {tr("chỗ")}</>}
+            {art.complete && !bad && <> · <em>{tr(active ? "Đang mở" : "Nhấn để mở")}</em></>}
+            {bad && <> · <em className="art-bad">{tr("Bản sửa chưa khớp")} {fix!.failed.length} {tr("chỗ")}</em>
+            </>}</span>
         </span>
       </button>
       {bad && onRedo && <button className="lnk art-redo" onClick={onRedo}>{tr("Nhờ viết lại toàn bộ")}</button>}

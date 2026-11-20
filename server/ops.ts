@@ -72,7 +72,7 @@ const fileMB = (f: string) => { try { return Math.round(fs.statSync(f).size / 10
 const sum = (sql: string, ...a: unknown[]) => { try { return (db().prepare(sql).get(...a) as { n: number | null }).n ?? 0; } catch { return 0; } };
 
 // Kiểu dùng chung với phía bên kia: shared/types/health.ts.
-import type { BackupStatus, WatchdogState, Problem } from "../shared/types/health";
+import type { BackupStatus, MediaCaps, WatchdogState, Problem } from "../shared/types/health";
 export type { BackupStatus, WatchdogState, Problem } from "../shared/types/health";
 type WatchdogEvent = { at: number; event: string; detail?: string };
 
@@ -81,7 +81,9 @@ const WATCHDOG_STALE_MS = 5 * 60_000;
 const DISK_WARN_MB = 5000, DISK_CRIT_MB = 2000;
 
 /** Những gì quản trị viên cần xử lý. Mã để giao diện viết thành câu theo ngôn ngữ; cũng là khóa để cảnh báo không lặp lại. */
-export function opsProblems(r: Pick<ReturnType<typeof opsSnapshot>, "disks" | "mail" | "cli" | "backup" | "watchdog" | "errors24"> & { engineHour?: EngineRuns[] }): Problem[] {
+type ProblemInput = Pick<ReturnType<typeof opsSnapshot>, "disks" | "mail" | "cli" | "backup" | "watchdog" | "errors24">
+  & { engineHour?: EngineRuns[]; media?: MediaCaps | null };
+export function opsProblems(r: ProblemInput): Problem[] {
   const out: Problem[] = [];
   const low = Math.min(...r.disks.map((x) => x.freeMB), Infinity);
   if (low < DISK_CRIT_MB) out.push({ code: "disk_crit", level: "crit", n: low }); else if (low < DISK_WARN_MB) out.push({ code: "disk_low", level: "warn", n: low });
@@ -99,6 +101,12 @@ export function opsProblems(r: Pick<ReturnType<typeof opsSnapshot>, "disks" | "m
   if (users >= 3) out.push({ code: "cli_auth", level: "crit", n: users });
   if (r.errors24 >= 200) out.push({ code: "errors_many", level: "warn", n: r.errors24 });
   for (const e of r.engineHour ?? []) if (e.fail >= 5 && e.fail >= e.ok) out.push({ code: `engine_fail:${e.engine}`, level: "warn", n: e.fail });
+  // Bộ đọc tệp cần chương trình cài thêm: chỉ "nên xem" (không gửi thư cảnh báo), vì thiếu chỉ làm một số loại tệp
+  // bị từ chối.
+  for (const k of ["heic", "office", "ocr"] as const) {
+    const st = r.media?.[k].state;
+    if (st && st !== "ok") out.push({ code: `media_${k}:${st}`, level: "warn" });
+  }
   return out;
 }
 

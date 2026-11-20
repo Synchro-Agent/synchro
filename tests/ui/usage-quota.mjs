@@ -70,9 +70,31 @@ try {
       await t.P("Page.navigate", { url: `${B}/?uq=${w}${th}${chatHash}` });
       if (!ok(await t.until(`!!document.querySelector(".dock .us-ring")`, 180_000), `${label} ${th}: đoạn chat mở được, có vòng mức dùng`)) { await t.shot(`chat-missing-${w}-${th}`); continue; }
       await t.theme(th);
-      const ring = await waitFor(() => t.ev(`(() => { const b = document.querySelector(".dock .us-ring"); if (!b) return null; const a = b.querySelector("circle.api"); return a ? { label: b.getAttribute("aria-label"), dash: a.getAttribute("stroke-dasharray"), r: a.getAttribute("r") } : null; })()`), 30_000, { every: 400 });
-      if (!ok(!!ring && /khóa API chung (2[5-9]|3\d)%|shared API key (2[5-9]|3\d)%/.test(ring.label), `${label} ${th}: vòng mức dùng có vòng trong cho khóa API chung (≈25% hạn mức phiên), nhãn đọc được`,
-        await t.ev(`({ ring: document.querySelector(".dock .us-ring")?.outerHTML?.slice(0, 400) ?? null, model: localStorage.getItem(${JSON.stringify(`u:${u.uid}:model`)}) })`))) { await t.shot(`ring-missing-${w}-${th}`); continue; }
+      // Vòng tròn theo nguồn sẽ chạy lượt kế tiếp (next của /api/usage): lượt kế tiếp chạy trên gói thì vòng trong
+      // cho phần khóa API chung đã dùng; chạy bằng khóa API thì vòng ngoài chính là phần đó, kèm tên nguồn, không
+      // thêm vòng trong.
+      const nx = (await u.api("GET", "/api/usage?all=1")).j?.next;
+      const RING = `(() => {
+        const b = document.querySelector(".dock .us-ring");
+        if (!b) return null;
+        const a = b.querySelector("circle.api");
+        const dash = a?.getAttribute("stroke-dasharray") ?? null;
+        return { label: b.getAttribute("aria-label"), cls: b.className, inner: !!a, dash };
+      })()`;
+      const API25 = /khóa API chung (2[5-9]|3\d)%|shared API key (2[5-9]|3\d)%/;
+      const OUTER25 = /^(Mức dùng|Usage): (2[5-9]|3\d)% · (khóa API|.+ API key)/;
+      const want = (r) => !!r
+        && (nx?.mode === "plan" ? r.inner && API25.test(r.label) : !r.inner && OUTER25.test(r.label));
+      const ring = await waitFor(async () => {
+        const r = await t.ev(RING);
+        return want(r) ? r : null;
+      }, 30_000, { every: 400 });
+      const dump = { next: nx, ring: await t.ev(RING) };
+      const what = `vòng mức dùng theo nguồn kế tiếp (${nx?.mode}), phần khóa API chung ≈25%, nhãn có tên nguồn`;
+      if (!ok(!!ring, `${label} ${th}: ${what}`, dump)) {
+        await t.shot(`ring-missing-${w}-${th}`);
+        continue;
+      }
       ok(await t.ev(`(() => { const b = document.querySelector(".dock .us-ring"); const r = b?.getBoundingClientRect(); return !!r && r.right <= innerWidth + 1 && document.documentElement.scrollWidth <= innerWidth + 1; })()`), `${label} ${th}: vòng nằm trọn màn hình, không cuộn ngang`);
       await t.ev(`(() => { const b = document.querySelector(".dock .us-ring"); b.scrollIntoView({ block: "center" }); })()`);
       await sleep(300);
@@ -116,6 +138,50 @@ try {
   const bgRing = await t.ev(`(() => { const b = document.querySelector(".dock .us-ring"); return { inner: !!b?.querySelector("circle.api"), label: b?.getAttribute("aria-label") }; })()`);
   ok(!bgRing.inner && !/khóa API chung|shared API key/.test(bgRing.label ?? ""), "chỉ có việc nền trên khóa API: không có vòng trong, nhãn không nhắc khóa API chung", bgRing);
   await t.shot("ring-background-only");
+
+  console.log("━━ 1b. Gói hết hạn mức, khóa API chung còn chạy: vòng tròn theo khóa API, không đỏ;"
+    + " hết mọi nguồn mới đỏ");
+  {
+    const keys = ((await u.api("GET", "/api/models")).j?.providers ?? []).flatMap((p) => p.models.map((m) => m.key));
+    const codex = keys.find((k) => k.startsWith("sub-codex/"));
+    ok(!!codex, "có model của gói ChatGPT giả lập", keys);
+    const conv = `uq-quota-${Date.now().toString(36)}`;
+    const r0 = await u.api("POST", "/api/llm", { async: true, system: "", conv, model: codex,
+      messages: [{ role: "user", content: "Chào [mock:quota]" }] });
+    const run = typeof r0.j?.run === "string" ? r0.j.run : r0.j?.run?.id ?? r0.j?.id;
+    const runState = async () => (await u.api("GET", `/api/runs/${run}?json=1`)).j?.run?.status;
+    const settled = async () => !["running", "queued", "pending"].includes(await runState());
+    if (run) await waitFor(settled, 120_000, { every: 500 });
+    const us1 = (await u.api("GET", "/api/usage?all=1")).j;
+    const cx1 = us1?.vendors?.find((v) => v.cli === "codex")?.sub;
+    ok(cx1?.windows?.some((x) => x.status === "rejected") && us1?.next?.mode === "api" && us1.next.pct < 70,
+      "gói ChatGPT đã hết: lượt kế tiếp chạy bằng khóa API, phần trăm của khóa API (không phải 100)",
+      { next: us1?.next, win: cx1?.windows });
+    await t.P("Page.navigate", { url: `${B}/?uq=out${chatHash}` });
+    ok(await t.until(`!!document.querySelector(".dock .us-ring")`, 180_000), "mở lại đoạn chat: có vòng mức dùng");
+    const out = await waitFor(() => t.ev(`(() => { const b = document.querySelector(".dock .us-ring");
+      const l = b?.getAttribute("aria-label") ?? "";
+      return /khóa API|API key/.test(l) ? { label: l, cls: b.className } : null; })()`), 30_000, { every: 400 });
+    ok(!!out && !/\bhot\b/.test(out.cls) && !/100%/.test(out.label),
+      "vòng tròn không đỏ, nhãn không ghi 100% khi khóa API chung còn chạy", out);
+    await t.shot("ring-plan-out");
+    // Hết cả hạn mức chi phí của khóa API: không còn nguồn nào, vòng tròn mới đỏ.
+    const low = await admin.api("PATCH", "/api/admin/usage", { user: u.uid, override: { session: 0.01 } });
+    ok(low.s === 200, "quản trị viên hạ hạn mức phiên xuống $0.01");
+    const us2 = (await u.api("GET", "/api/usage?all=1")).j;
+    ok(us2?.next === null, "hết gói và hết hạn mức khóa API: next = null", us2?.next);
+    await t.P("Page.navigate", { url: `${B}/?uq=none${chatHash}` });
+    await t.until(`!!document.querySelector(".dock .us-ring")`, 180_000);
+    const none = await waitFor(() => t.ev(`(() => { const b = document.querySelector(".dock .us-ring");
+      if (!b || !/\\bhot\\b/.test(b.className)) return null;
+      return { label: b.getAttribute("aria-label"), cls: b.className }; })()`), 30_000, { every: 400 });
+    ok(!!none && /hết mọi nguồn|no source left/.test(none.label), "hết mọi nguồn: vòng tròn đỏ, nhãn nói rõ", none);
+    await t.ev(`document.querySelector(".dock .us-ring")?.click()`);
+    await sleep(500);
+    ok(await t.ev(`!!document.querySelector(".us-pop .us-next")`), "bảng mức dùng có dòng nói nguồn của lượt kế tiếp");
+    await t.shot("ring-no-source");
+    await admin.api("PATCH", "/api/admin/usage", { user: u.uid, override: null });
+  }
   t.close(); t = null;
 
   console.log("━━ 2. Chủ sở hữu: Giới hạn sử dụng (hạn mức ngày, khóa API chung)");

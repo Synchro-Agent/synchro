@@ -12,6 +12,7 @@ import { refreshModels, useModels } from "./models";
 import { serverNow } from "./clock";
 import { ConnLogo } from "./connlogo";
 import { toolErrNote } from "./worktone";
+import { stripAppliedNotes } from "../shared/turnctx";
 // Thẻ kết nối lại chỉ cần khi connector mất đăng nhập: không kéo cả màn hình Connectors vào phần tải đầu của trang chat.
 const ReconnectCard = lazyView(() => import("./connectorsui").then((m) => m.ReconnectCard), null);
 
@@ -42,7 +43,10 @@ export function applyEvent(w: Work, ev: RunEv): Work {
   if (w.seq && ev.seq <= w.seq) return w;
   const parts = [...(w.parts ?? [])];
   let plan = w.plan;
-  if (ev.kind === "say") parts.push({ k: "say", text: ev.text });
+  if (ev.kind === "say") {
+    const text = stripAppliedNotes(ev.text);
+    if (text.trim()) parts.push({ k: "say", text });
+  }
   else if (ev.kind === "tool") {
     const last = parts[parts.length - 1];
     const item: ToolItem = { seq: ev.seq, label: ev.text.replace(/^Đang /, ""), ...(ev.at ? { at: ev.at } : {}) };
@@ -202,7 +206,10 @@ function RateCard({ r }: { r: RatePart }) {
 // failed / stopped: lượt đã kết thúc bằng lỗi / bị dừng (chỉ khi live = false): quyết định lỗi công cụ hiện đỏ hay là bước đã thử lại (worktone.ts).
 export function WorkParts({ parts, live, render, onAnswer, failed, stopped }: { parts: Part[]; live: boolean; render: (text: string) => React.ReactNode; onAnswer?: OnAnswer; failed?: boolean; stopped?: boolean }) {
   const allTools = parts.flatMap((p) => (p.k === "tools" ? p.items : []));
-  return <>{parts.map((p, i) => (p.k === "say" ? <div key={i} className="wl-say">{render(p.text)}</div>
+  // Lời dẫn đã lưu trong đoạn chat cũ có thể còn ghi chú nội bộ (stripAppliedNotes): lọc cả lúc hiện.
+  const shown = parts.map((p) => (p.k === "say" ? { ...p, text: stripAppliedNotes(p.text) } : p));
+  const say = (text: string, i: number) => (text.trim() ? <div key={i} className="wl-say">{render(text)}</div> : null);
+  return <>{shown.map((p, i) => (p.k === "say" ? say(p.text, i)
     : p.k === "ask" ? <AskCard key={p.id} a={!live && p.state === "wait" ? { ...p, state: "gone" } : p} onAnswer={live ? onAnswer : undefined} />
     : p.k === "conn" ? (live ? <ReconnectCard key={p.id} c={p} /> : null)
     : p.k === "plans" ? (live ? <PlansCard key={i} why={p.why} tried={p.tried} /> : null)

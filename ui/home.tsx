@@ -7,10 +7,10 @@ import { Avatar } from "./avatar";
 import { getLang, locale, tf, tr, trc, useLangReady, useLangVer } from "./i18n";
 import { resetClock } from "./resetfmt";
 import { FileCard } from "./fileicon";
-import { useFileMenu, saveDoc, saveBlob, fileContext } from "./filemenu";
-import { capFiles, getStatus, abortFile } from "./filestate";
+import { useFileMenu, saveDoc, fileContext } from "./filemenu";
+import { addKeys, attachFiles, getStatus, abortFile } from "./filestate";
 import { UPLOAD_ACCEPT } from "../shared/fileproc/types";
-import { stripAppliedNotes, type Rejected } from "../shared/turnctx";
+import { projectBrief, stripAppliedNotes, type Rejected } from "../shared/turnctx";
 import { Boundary, Fade, Menu, Thinking } from "./ui";
 import { chatError, GENERIC_ERR } from "../shared/chaterror";
 import { armDraft, saveDraft, takeDraft } from "./draft";
@@ -51,12 +51,11 @@ import { Sidebar, useTagsAll, type SideActs } from "./Sidebar";
 import { ChatThread, openLastProduct, stickToBottom, useLiveArtFollow, type BrwState, type ThreadActs } from "./Thread";
 
 
-// Tên tạm khi vừa tạo đoạn chat (trước khi model đặt tên theo nội dung): câu đầu của tin nhắn, bỏ ký hiệu Markdown và tham số công cụ.
+// Tên tạm khi vừa tạo đoạn chat (trước khi model đặt tên theo nội dung): theo sản phẩm / chủ đề của tin đầu, bỏ câu
+// đóng vai ("Bạn là nhà thiết kế …"), ký hiệu Markdown và tham số công cụ (topicTitle); liên kết chỉ giữ tên miền.
 const roughTitle = (t: string) => {
-  const s = t.replace(/#(?:tool|args)=\S+/g, "").replace(/https?:\/\/(?:www\.)?([^/\s]+)\S*/g, "$1").replace(/[*_`#>~|[\]]+/g, " ").replace(/\s+/g, " ").trim();
-  const first = /^(.{8,60}?)[.!?…](\s|$)/.exec(s)?.[1] ?? s;
-  const cut = first.length > 48 ? `${first.slice(0, 48).replace(/\s+\S*$/, "")}…` : first;
-  return cut ? cut[0].toUpperCase() + cut.slice(1) : t.slice(0, 40);
+  const s = t.replace(/https?:\/\/(?:www\.)?([^/\s]+)\S*/g, "$1").replace(/[[\]]+/g, " ");
+  return topicTitle(s) || t.slice(0, 40);
 };
 // Tin đầu chỉ là lời chào / quá ngắn: tên đặt lúc đầu chưa nói được gì, đặt lại khi đoạn chat đã rõ chủ đề (tin thứ ba).
 const vagueMsg = (t: string) => t.trim().split(/\s+/).length <= 3 || /^(xin )?ch[àa]o|^(hi|hello|hey|alo|test)\b/i.test(t.trim());
@@ -75,7 +74,7 @@ import { useInboxCount } from "./inboxcount";
 import { adoptLegacyData, clearAccountData, ls, setUserScope, userScope } from "./userscope";
 import { useChatSync, useSyncStatus } from "./chatsync";
 import { chatsForExport, closeChats, hydrateAll, loadChats, wipeChats, writeJournal } from "./chatload";
-import { shortName } from "../shared/names";
+import { shortName, topicTitle } from "../shared/names";
 import { loadCaps, seedCaps, useCaps } from "./capsclient";
 import { hasArtifacts, splitArtifacts, type ArtBlock } from "../shared/artifacts";
 import { BootSkeleton } from "./skeleton";
@@ -529,7 +528,11 @@ const Composer = memo(function Composer(p: {
     const fire = () => { onSend(v.trim() || "Xem tệp đính kèm", files, picks.length ? picks : undefined); setV(""); setPicks([]); setAt(null); setChipsOpen(false); };
     // Có thẻ tệp báo lỗi: hỏi trước khi gửi, vì các tệp đó sẽ không gửi được (model chỉ được báo tên và lý do).
     const bad = files.filter((f) => getStatus(f)?.state === "error").length;
-    if (bad) { app.confirm(tr("Không gửi được một số tệp"), `${bad} ${tr("tệp không đọc được sẽ không được gửi. Gửi phần còn lại?")}`, tr("Gửi phần còn lại"), fire); return; }
+    if (bad) {
+      const why = `${bad} ${tr("tệp không đọc được sẽ không được gửi. Gửi phần còn lại?")}`;
+      app.confirm(tr("Không gửi được một số tệp"), why, tr("Gửi phần còn lại"), fire, { safe: true });
+      return;
+    }
     fire();
   };
   const keys = (e: React.KeyboardEvent) => {
@@ -582,6 +585,13 @@ const Composer = memo(function Composer(p: {
     recRef.current = r;
     try { r.start(); } catch { setRec(false); say("Không mở được nhận dạng giọng nói, hãy thử lại"); }
   };
+  // Thêm tệp vào tin đang soạn; trả lời báo tên thẻ khác tên tệp (đã báo cho người dùng) để người gọi khỏi báo đè.
+  const attach = (list: File[]) => {
+    const r = attachFiles(files, list, say);
+    setFiles(addKeys(files, r.keys, say));
+    if (r.note) say(r.note);
+    return r.note;
+  };
   // Dán ảnh / tệp từ bộ nhớ tạm (⌘V) như Claude, ChatGPT: thành tệp đính kèm; ảnh dán không tên thì đặt tên theo giờ.
   const paste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
     const fl = Array.from(e.clipboardData?.files ?? []);
@@ -589,12 +599,11 @@ const Composer = memo(function Composer(p: {
     e.preventDefault();
     const d = new Date(), stamp = `${String(d.getHours()).padStart(2, "0")}.${String(d.getMinutes()).padStart(2, "0")}.${String(d.getSeconds()).padStart(2, "0")}`;
     const named = fl.map((f, i) => (f.name && f.name !== "image.png" ? f : new File([f], `Ảnh dán ${stamp}${fl.length > 1 ? `-${i + 1}` : ""}.${(f.type.split("/")[1] || "png").replace("jpeg", "jpg")}`, { type: f.type })));
-    named.forEach((x) => saveBlob(x.name, x, say));
-    setFiles(capFiles(files, named.map((x) => x.name), say));
+    attach(named);
   };
   const pick = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const fl = Array.from(e.target.files ?? []); fl.forEach((x) => saveBlob(x.name, x, say)); const n = fl.map((f) => f.name);
-    if (n.length) setFiles(capFiles(files, n, say));
+    const fl = Array.from(e.target.files ?? []);
+    if (fl.length) attach(fl);
     e.target.value = "";
   };
   const [projOpen, setProjOpen] = useState(false);
@@ -614,9 +623,8 @@ const Composer = memo(function Composer(p: {
       const blob = await new Promise<Blob | null>((ok) => c.toBlob(ok, "image/png"));
       if (!blob) return say("Không chụp được màn hình");
       const d = new Date(), name = `Ảnh chụp màn hình ${String(d.getHours()).padStart(2, "0")}.${String(d.getMinutes()).padStart(2, "0")}.${String(d.getSeconds()).padStart(2, "0")}.png`;
-      saveBlob(name, new File([blob], name, { type: "image/png" }), say);
-      setFiles(capFiles(files, [name], say));
-      say("Đã đính kèm ảnh chụp màn hình");
+      const note = attach([new File([blob], name, { type: "image/png" })]);
+      if (!note) say("Đã đính kèm ảnh chụp màn hình");
     } catch (e) { if ((e as Error).name !== "NotAllowedError") say("Không chụp được màn hình"); }
   };
 
@@ -860,7 +868,8 @@ export default function Home({ boot }: { boot?: BootData | null }) {
   const [breakM] = usePref("breakM", "–");
   const [qdays] = usePref<number[]>("qdays", []);
   const [qtimes] = usePref<Record<number, [string, string]>>("qtimes", {});
-  const [gc, setGc] = useState<{ title: string; text: string; ok: string; fn: () => void } | null>(null);
+  type Gc = { title: string; text: string; ok: string; fn: () => void; safe?: boolean };
+  const [gc, setGc] = useState<Gc | null>(null);
   const [view, setView] = useState<View>("new");
   const [open, setOpen] = useState(true);
   const openRef = useRef(open);
@@ -1535,7 +1544,7 @@ export default function Home({ boot }: { boot?: BootData | null }) {
     // (lượt chạy bền qua waitRun/pollRun), nên KHÔNG xét "streamed" — nếu không chip cá nhân không bao giờ hiện; chỉ cần lượt xong và không bị Dừng.
     // Không bao giờ ghép nội dung hướng dẫn vào chữ câu trả lời: dòng ghi chú kèm 90 ký tự đầu của hướng dẫn từng lộ hướng dẫn cá nhân trong lịch sử, bản chia sẻ, bản xuất.
     const insApplied = !cancelled && !!ins.trim();
-    const pjApplied = !cancelled && !!pr && !!(pr.ins?.trim() || pr.mem?.length || getRelevantContext(pr, text).length);
+    const pjApplied = !cancelled && !!pr && !!(projectBrief(pr) || pr.mem?.[0] || getRelevantContext(pr, text).length);
     // Câu trả lời đã đầy đủ thì hiện ngay (trước đây câu không truyền theo thời gian thực phải chờ 1,6 giây rồi mới gõ dần từng chữ).
     patch(id, (m) => [...m.slice(0, -1), { ...workOf(m[m.length - 1]), role: "ai", text: reply, done: true, ...(insApplied ? { insApplied } : {}), ...(pjApplied ? { pjApplied } : {}), time: Date.now(), dur: Date.now() - t0, skills: usedSk.length ? usedSk : undefined, libs: libs.length ? libs : undefined, tools: usedTl.length ? usedTl : undefined, outs: outs?.length ? outs : undefined, ...(notice ? { notice } : {}), via: via ?? undefined, viaTask: via ? viaTask : undefined, webs: webs?.length ? webs : undefined, trace: trace?.length ? trace : undefined, stopped: cancelled || undefined }]);
     finishReply(id, reply, pr, history, via);
@@ -1552,6 +1561,7 @@ export default function Home({ boot }: { boot?: BootData | null }) {
         ? tf("Chuyển sang khóa API {name} dùng chung ({api}) cho tới khi gói hồi lại ({at})? Tin nhắn vừa rồi sẽ được gửi lại bằng khóa API. Chọn Hủy để giữ nguyên gói.", { name, api: apiName, at })
         : tf("Chuyển sang khóa API {name} dùng chung ({api}) cho tới khi gói dùng lại được? Tin nhắn vừa rồi sẽ được gửi lại bằng khóa API. Chọn Hủy để giữ nguyên gói.", { name, api: apiName }),
       ok: trc("Dùng khóa API", "gói hết hạn mức"),
+      safe: true,
       fn: async () => {
         await fetch(`/api/engines/${cli}/use-api`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ on: true }) }).catch(() => null);
         await refreshModels();
@@ -1891,7 +1901,7 @@ export default function Home({ boot }: { boot?: BootData | null }) {
   useEffect(() => { const h = (e: Event) => { const t = (e as CustomEvent<string>).detail; if (t) sendRef.current(t); }; window.addEventListener(ASK_EVENT, h); return () => window.removeEventListener(ASK_EVENT, h); }, []);
 
   // Kéo thả tệp vào trang (homehooks.ts useDragDrop).
-  const drag = useDragDrop(say, setFiles, () => setModal((m) => (m === "upload" ? null : m)));
+  const drag = useDragDrop(say, files, setFiles, () => setModal((m) => (m === "upload" ? null : m)));
 
   // Mục trên thanh điều hướng: gọi như một hàm trả về JSX (không phải component định nghĩa lại mỗi lần vẽ), nên bấm vào không dựng lại
   // cả mục; biểu tượng cố định, không đổi hình khi rê / bấm. tip: tên đầy đủ khi nhãn ngắn hơn tên trang.
@@ -2033,7 +2043,8 @@ export default function Home({ boot }: { boot?: BootData | null }) {
     goCode: () => { setModal(null); setCodeCur(null); setView("code"); },
     close: () => setModal(null),
     ask: (t: string) => { setModal(null); setTimeout(() => { goNewRef.current(); setPrefill((p) => ({ t: tr(t), n: p.n + 1 })); }, 180); },
-    confirm: (title: string, text: string, ok: string, fn: () => void) => setGc({ title, text, ok, fn }),
+    confirm: (title: string, text: string, ok: string, fn: () => void, o?: { safe?: boolean }) =>
+      setGc({ title, text, ok, fn, safe: o?.safe }),
     wipe, me: me ?? null, setMe, logout: logoutEv,
   }), [me]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -2263,7 +2274,25 @@ export default function Home({ boot }: { boot?: BootData | null }) {
       <Fade show={!!(modal === "search")}><PaletteFor projects={projects} codes={codeList} cmds={paletteCmds} go={paletteGo} seed={palSeed} onClose={() => setModal(null)} /></Fade>
       <Fade show={!!(modal === "share" && meta)}>{meta ? <ShareFor onClose={() => setModal(null)} say={say} /> : <></>}</Fade>
       {fm.node}
-      <Fade show={!!(modal === "upload")}><UploadModal say={say} onConverted={(f, md) => { saveDoc(f.name, md); saveBlob(f.name, f, say); setFiles((o) => capFiles(o, [f.name], say)); setModal(null); say(`Đã chuyển thành ${f.name}`); }} onClose={() => setModal(null)} onFiles={(f) => { f.forEach((x) => saveBlob(x.name, x, say)); setFiles((o) => [...o, ...f.map((x) => x.name)]); setModal(null); say(`Đã thêm ${f.length} tệp`); }} /></Fade>
+      <Fade show={!!(modal === "upload")}>
+        <UploadModal
+          say={say}
+          onConverted={(f, md) => {
+            const r = attachFiles(files, [f], say);
+            saveDoc(r.keys[0], md);
+            setFiles((o) => addKeys(o, r.keys, say));
+            setModal(null);
+            say(r.note ?? `Đã chuyển thành ${f.name}`);
+          }}
+          onClose={() => setModal(null)}
+          onFiles={(f) => {
+            const r = attachFiles(files, f, say);
+            setFiles((o) => addKeys(o, r.keys, say));
+            setModal(null);
+            say(r.note ?? `Đã thêm ${f.length} tệp`);
+          }}
+        />
+      </Fade>
       <Fade show={!!(modal === "upgrade")}><UpgradeModal onClose={() => setModal(null)} say={say} /></Fade>
       <Fade show={!!(modal === "keys")}><ShortcutsModal onClose={() => setModal(null)} /></Fade>
       <Fade show={!!(modal === "logout")}><LogoutConfirm localOnly={modal === "logout" && !cpPage?.sync ? ls.keys().filter((k) => k.startsWith("codeS:")).length : 0}
@@ -2273,7 +2302,10 @@ export default function Home({ boot }: { boot?: BootData | null }) {
       <Fade show={!!(delProj !== null)}><Confirm title="Xóa dự án?" text="Dự án sẽ bị xóa. Các đoạn chat bên trong vẫn được giữ lại." ok="Xóa" onCancel={() => setDelProj(null)} onOk={() => { setProjects((ps) => ps.filter((x) => x.id !== delProj)); if (delProj !== null) chatSync.forget("project", [delProj]); setChats((cs) => cs.map((c) => (c.project === delProj ? { ...c, project: undefined } : c))); setDelProj(null); say("Đã xóa dự án"); }} /></Fade>
       <Fade show={!!(modal === "proj")}><ProjectModal onClose={() => setModal(null)} onCreate={(n, d) => { const id = Date.now(); setProjects([{ id, name: n, desc: d, upd: id, pinned: true }, ...projects]); setModal(null); setCurProj(id); setView("project"); say("Đã tạo dự án"); }} /></Fade>
       <Fade show={editProj !== null}><ProjectModal title="Chỉnh sửa dự án" ok="Lưu" init={projects.find((x) => x.id === editProj)} onClose={() => setEditProj(null)} onCreate={(n, d) => { if (editProj !== null) patchProj(editProj, { name: n, desc: d }); setEditProj(null); say("Đã cập nhật dự án"); }} /></Fade>
-      <Fade show={!!gc}><Confirm title={gc?.title ?? ""} text={gc?.text ?? ""} ok={gc?.ok ?? ""} onCancel={() => setGc(null)} onOk={() => { gc?.fn(); setGc(null); }} /></Fade>
+      <Fade show={!!gc}>
+        <Confirm title={gc?.title ?? ""} text={gc?.text ?? ""} ok={gc?.ok ?? ""} safe={gc?.safe}
+          onCancel={() => setGc(null)} onOk={() => { gc?.fn(); setGc(null); }} />
+      </Fade>
     </div>
     </AppCtx.Provider>
     {authEl}
