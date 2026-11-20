@@ -1,0 +1,61 @@
+# Bảy brief thiết kế (đề của chủ dự án): mỗi brief mở đầu bằng dòng "## tên", các dòng sau nối lại bằng dấu cách.
+# Dùng trong tests/api/route-classify.test.mjs: cả bảy phải được xếp "tạo sản phẩm".
+
+## Slide
+Bạn là giám đốc sáng tạo của một studio thiết kế trình bày hàng đầu. Hãy thiết kế bộ slide 8 trang ra mắt thương hiệu
+trà thủ công "Sương Sớm" (trà shan tuyết Hà Giang, bán online cho khách 25-40 tuổi ở thành phố), dùng để trình bày
+trước nhà đầu tư. Yêu cầu nghề: khung 16:9 (1280x720), hệ lưới 12 cột, lề an toàn tối thiểu 64px, mọi phần tử bám
+lưới; tối đa 2 họ phông (một serif cho tiêu đề, một sans cho thân) hỗ trợ đủ dấu tiếng Việt; thang cỡ chữ theo tỉ lệ
+1.333 và thứ bậc rõ, chữ thân không dưới 18px; bảng màu 60-30-10 với đúng một màu nhấn, tương phản từ 4.5:1; mỗi slide
+một ý chính, tiêu đề là câu khẳng định dưới 12 từ, thân dưới 40 từ; không lặp một bố cục quá 2 lần. Nội dung: bìa, vấn
+đề, giải pháp, một trang số liệu lớn, một biểu đồ thị trường có ghi nguồn, timeline 4 mốc, trích dẫn khách hàng, kêu
+gọi đầu tư. Minh họa SVG, không ảnh AI, không emoji. Đánh số trang, không tràn khung. Xong thì tự kiểm từng trang và
+nói rõ chỗ chưa đạt.
+
+## Landing page
+Bạn là nhà thiết kế web cấp cao từng đoạt giải Awwwards. Hãy thiết kế và dựng một landing page hoàn chỉnh (một tệp
+HTML) cho studio kiến trúc nội thất "Nếp" ở Hà Nội, khách hàng là gia đình trẻ muốn cải tạo căn hộ. Các phần: thanh
+điều hướng dính, hero có một thông điệp mạnh và một nút kêu gọi chính, 3 dịch vụ, lưới 6 dự án (khối màu/SVG trừu
+tượng), quy trình 4 bước, 2 lời chứng thực, bảng giá 3 gói có gói nổi bật, form liên hệ có kiểm tra dữ liệu, chân
+trang. Yêu cầu nghề: tối giản ấm, có cá tính riêng; hệ khoảng cách 8px; tối đa 2 họ phông; bảng màu trung tính cộng
+một màu nhấn; dòng chữ thân 45-75 ký tự; responsive ở 375, 768 và 1440px; trạng thái hover, focus, active; chuyển động
+tinh tế khi cuộn, tôn trọng prefers-reduced-motion; WCAG AA; HTML ngữ nghĩa. Không ảnh AI, không emoji, không lorem
+ipsum. Xong thì tự kiểm ở cả ba chiều rộng và báo chỗ chưa đạt.
+
+## Poster
+Bạn là nhà thiết kế đồ họa chuyên poster sự kiện âm nhạc. Hãy thiết kế một poster khổ A3 dọc cho đêm nhạc jazz "Hà Nội
+Sau Mưa", 20:00 thứ Bảy 12/12/2026 tại Nhà hát Lớn Hà Nội, nghệ sĩ Trần Mạnh Tuấn Quartet, vé từ 350.000đ, đặt vé tại
+hanoisaumua.vn. Yêu cầu nghề: poster typographic, chữ là hình ảnh chính; một ý tưởng thị giác rõ gợi mưa và nhịp jazz
+(không saxophone sáo mòn); bố cục trên lưới; thứ bậc thông tin 3 tầng đọc được ở 3 khoảng cách; tối đa 3 màu, 2 họ
+phông; lề an toàn 10mm; không ảnh AI, không emoji. Xuất PNG độ phân giải cao. Xong thì tự phê bình như giám khảo.
+
+## Bộ nhận diện
+Bạn là nhà thiết kế nhận diện thương hiệu 15 năm kinh nghiệm. Hãy thiết kế một brand sheet (một trang ngang 1600x1000)
+cho tiệm bánh mì thủ công "Lò Ấm" ở Sài Gòn. Gồm: logo chính bằng SVG tự dựng, phiên bản một màu và âm bản, vùng an
+toàn, kích thước tối thiểu; bảng 5 màu có HEX và vai trò; hệ chữ 2 phông kèm mẫu; một họa tiết; 3 ứng dụng mô phỏng
+(túi giấy, tem tròn, biển hiệu); 2 ví dụ dùng sai. Yêu cầu nghề: biểu tượng nhận ra ở 24px, dựng từ hình học có chủ ý,
+không hình ổ bánh hay lúa mì; dấu tiếng Việt trong logo cân đối; cả trang trên lưới. Giải thích ý tưởng và tự chấm
+theo 5 tiêu chí: đơn giản, dễ nhớ, phù hợp, linh hoạt, bền thời gian.
+
+## Dashboard
+Bạn là nhà thiết kế sản phẩm (UI/UX) cấp cao. Hãy thiết kế và dựng màn hình dashboard web (1440x900, một tệp HTML chạy
+được) cho chủ chuỗi 5 cửa hàng cà phê. Gồm: thanh bên, thanh trên có bộ chọn thời gian và cửa hàng, 4 thẻ chỉ số có so
+sánh kỳ trước, biểu đồ đường 30 ngày, biểu đồ cột 5 cửa hàng, bảng 8 món bán chạy có sắp xếp, cảnh báo tồn kho. Yêu
+cầu nghề: thứ bậc thị giác rõ trong 3 giây; lưới 8px; chữ số đều cột, căn phải; tiền Việt đúng định dạng; màu có nghĩa
+và không chỉ dựa vào màu; biểu đồ có trục, nhãn, tooltip; trạng thái trống và đang tải; giao diện sáng và tối; bộ lọc
+hoạt động thật; WCAG AA. Xong thì tự kiểm từng yêu cầu.
+
+## Báo cáo A4
+Bạn là nhà thiết kế dàn trang của một tạp chí kinh doanh. Hãy dàn trang một báo cáo 3 trang A4 dọc, xuất PDF, tiêu đề
+"Thị trường cà phê đặc sản Việt Nam 2026". Trang 1: bìa trong, đoạn dẫn, 3 con số. Trang 2: bài 2 cột khoảng 350 từ,
+một trích dẫn nổi, một biểu đồ cột có nguồn. Trang 3: bảng 5 vùng trồng, khung thông tin bên lề, kết luận và nguồn.
+Yêu cầu nghề: lưới 12 cột, lề 20mm, đường cơ sở nhất quán; chữ thân 10-11pt, giãn dòng 1.4-1.5; không dòng cụt; tiêu
+đề chạy và số trang; 2 họ phông; số căn phải; một màu nhấn; số liệu minh họa phải ghi rõ. Xong thì mở PDF kiểm từng
+trang.
+
+## Ảnh AI
+Tạo ảnh: ảnh chụp sản phẩm cho quảng cáo tạp chí, một lọ mật ong rừng thủy tinh không nhãn trên mặt đá travertine sáng
+màu, bên cạnh là que lấy mật bằng gỗ và vài nhánh hoa cà phê trắng. Ánh sáng cửa sổ buổi sáng chiếu xéo từ trái, bóng
+mềm và dài, mật ong ánh hổ phách xuyên sáng. Góc ngang tầm mắt chếch 15 độ, ống 85mm, f/4, nền tường vôi be mờ nhẹ.
+Quy tắc một phần ba, chừa khoảng trống bên phải để đặt chữ. Tông ấm, tự nhiên. Tỉ lệ 4:5. Không chữ, logo, nhãn hay
+bàn tay.

@@ -6,7 +6,7 @@ import { skillsPrompt, skillTools, type ToolRun } from "../skillruntime";
 import { can, canModel, limit, modelDeniedMsg, permsOf, type UserRow } from "../authstore";
 import { clampEffort, connPolicy, effortCap, isEffort, legacyModel } from "../../shared/catalog";
 import { catalog, mainModels, pickDefault, resolveModel } from "../providers";
-import { ConnectorSession, connectorsPrompt, listConnectors } from "../connectors";
+import { ConnectorSession, connectedApps, connectorsPrompt } from "../connectors";
 import { notConnectLink } from "../composio";
 import { browserDefault, capsState, skillsOn } from "../caps";
 import { overLimit, usageScope } from "../usage";
@@ -49,10 +49,19 @@ import { TASK_TOOL, taskBrowser, taskOf, taskRules } from "../tasktools";
 import { resolveTool } from "../connproxy";
 import { getPrefs as codePrefs } from "../codestore";
 import { BROWSER_RULES, BROWSER_TOOLS, chatFiles, releaseBrowser } from "../browsertools";
-import { useProfile, lastUserText, DEFAULT_SYSTEM, FAST_RULES, contextOf, estimate, pinnedBlock, artifactMessages, QUALITY_RULES, BRIDGE_CLIS, brainOn, CLI_TOOLS_NOTE, NARRATE_RULES, holdNeedTools, withRecall, designOf, nowBlock, crisisBlock, ARTIFACT_SYSTEM, NEED_TOOLS, useMemory } from "./prompt";
+import { fastNeedsTools, holdNeedTools } from "./needtools";
+import {
+  useProfile, lastUserText, DEFAULT_SYSTEM, FAST_RULES, contextOf, estimate, pinnedBlock, artifactMessages,
+  QUALITY_RULES, BRIDGE_CLIS, brainOn, CLI_TOOLS_NOTE, NARRATE_RULES, withRecall, designOf, nowBlock, crisisBlock,
+  ARTIFACT_SYSTEM, useMemory,
+} from "./prompt";
 import { sweep, pending, unparkApproval, type Decision, needsAsk, applyEdit } from "./approvals";
 import { notePlan } from "./planmerge";
-import { type Lib, fold, execute, reply, toolLoop, type Exec, connTools, PLAN_TOOL, announceOffline, bridgeCall, connProxy, CONN_CALL, live, keepImages, sayOut, deckGate, holdAnswer, settleGate, withTurnArts, usedLibs, GEMINI_WEB_TOOL, WEB_DESC, mockAdapter, anthropicAdapter, citeOf, responsesAdapter, openaiAdapter, healPatch, isAbort } from "./tools";
+import {
+  type Lib, execute, reply, toolLoop, type Exec, connTools, PLAN_TOOL, announceOffline, bridgeCall, connProxy,
+  CONN_CALL, live, keepImages, sayOut, deckGate, holdAnswer, settleGate, withTurnArts, usedLibs, GEMINI_WEB_TOOL,
+  WEB_DESC, mockAdapter, anthropicAdapter, citeOf, responsesAdapter, openaiAdapter, healPatch, isAbort,
+} from "./tools";
 
 // Gợi ý định tuyến cho lượt này: skill hợp nhất với yêu cầu (tìm trong toàn bộ kho, cả skill bên trong thư viện)
 // và skill các lượt trước đã dùng. Model đọc thẳng skill bằng tên, không phải mở thư viện trước; không hợp thì bỏ qua.
@@ -285,7 +294,8 @@ type Who = { user: UserRow };
 // Câu chào, cảm ơn không có gì để nhớ lại. Đo riêng để biết phần chuẩn bị của lượt nằm ở đâu.
 // Kết hợp từ khóa và nghĩa (embedding bằng khóa OpenAI / Gemini sẵn có), có ngân sách thời gian; không có khóa thì như trước, chỉ từ khóa.
 const recallOf = async (body: Record<string, any>, u: UserRow, conv?: string) => { // eslint-disable-line @typescript-eslint/no-explicit-any
-  if (!useProfile(body) || body.memory === false || body.incognito || routeTask(routeInput(body)) === "chat") return "";
+  if (!useProfile(body) || body.memory === false || body.incognito) return "";
+  if (routeTask(routeInput(body, u)) === "chat") return "";
   const t0 = Date.now();
   const out = await span("brain recall", "retrieval", () => brainRecallHybrid(u, lastUserText(body.messages), conv, { trace: (tr) => { if (tr.ms > 20 || tr.mode === "hybrid") console.log(`[timing] chat recall=${tr.ms}ms mode=${tr.mode}${tr.vecMs !== undefined ? ` vec=${tr.vecMs}ms` : ""}${tr.reranked ? ` rerank=${tr.reranked}` : ""} hits=${tr.ids.length}`); } })).catch(() => "");
   if (Date.now() - t0 > 20) console.log(`[timing] chat recall total=${Date.now() - t0}ms`);
@@ -295,18 +305,14 @@ const recallOf = async (body: Record<string, any>, u: UserRow, conv?: string) =>
 async function fastTurn(body: Record<string, any>, user: UserRow, cli: NonNullable<ReturnType<typeof subCli>>, conv?: string): Promise<boolean> { // eslint-disable-line @typescript-eslint/no-explicit-any
   if (process.env.SYNCHRO_FAST_CHAT === "0" || body.noFast || !body.skills || body.feature === "code" || body.feature === "artifact" || body.project || body.studio || taskOf(body)) return false;
   if ((body.system && body.system !== DEFAULT_SYSTEM) || (Array.isArray(body.pinned) && body.pinned.length) || (Array.isArray(body.pickedSkills) && body.pickedSkills.length)) return false;
-  return needsNoTools(routeInput(body)) && !mentionsConnector(user.id, body.messages) && !/\bref_[\w-]{6,}/.test(JSON.stringify(body.messages ?? "")) && sessionPlain(user.id, conv, cli) && !(await hasOwnSkill(user, body.messages));
+  return needsNoTools(routeInput(body, user)) && !/\bref_[\w-]{6,}/.test(JSON.stringify(body.messages ?? ""))
+    && sessionPlain(user.id, conv, cli) && !(await hasOwnSkill(user, body.messages));
 }
 // Đường nhanh không có mục lục skill: người dùng cài skill giọng văn thương hiệu mà "viết email xin nghỉ phép" vẫn đi đường nhanh thì model không biết có skill đó, skill bị bỏ qua đúng ở việc nó được viết ra. Chỉ xét skill người dùng tự bật, không xét kho danh mục dùng chung (kho lớn thì câu nào cũng khớp).
 async function hasOwnSkill(user: UserRow, messages: unknown) {
   if (!can(user, "skills") || !skillsOn(user)) return false;
   const text = lastUserText(messages), own = [...await enabledSkills(user.id, null), ...everywhereSkills(user.id)];
   return !!text && ownSkillFits(text, own);
-}
-// Câu ngắn nhắc tên connector của chính người dùng ("Notion của mình có gì mới?") là việc cần connector, dù trông như câu hỏi nhỏ: đường nhanh không có công cụ, cũng không có nút kết nối lại khi connector mất đăng nhập.
-function mentionsConnector(uid: string, messages: unknown) {
-  const text = fold(lastUserText(messages));
-  return !!text && listConnectors(uid).some((c) => { const n = fold(c.name); return n.length >= 3 && text.includes(n); });
 }
 // Lựa chọn của người dùng ở bộ chọn: model, nỗ lực, nút Bộ nhớ. Từng chỉ khởi động sẵn theo Tự động và bộ nhớ bật, nên ai chọn tay Sonnet, đổi nỗ lực hay tắt Bộ nhớ thì tiến trình đợi sẵn không bao giờ khớp (khóa của hồ gồm cả model, nỗ lực, hướng dẫn).
 export type WarmPick = { model?: unknown; effort?: unknown; memory?: unknown };
@@ -395,7 +401,7 @@ async function chatPostTurn(body: Parameters<typeof chatPost>[0], c: Who, scope:
   const blocked = new Set(allowed.filter((k) => !usable.includes(k)));
   // Tên model như ở bộ chọn model ("Claude Sonnet 4.5"), không phải mã thô ("claude-sonnet-4-5-20250929").
   const shown = (k: string) => groups.flatMap((g) => g.models).find((m) => m.key === k)?.name ?? k.split("/").pop();
-  const q = routeInput(body);
+  const q = routeInput(body, c.user);
   // avoidModel: người dùng bấm "Chạy lại bằng model khác" dưới câu trả lời của chế độ Tự động: vẫn Tự động, chỉ tránh model vừa trả lời.
   const pool = usable.length ? usable : allowed;
   const skip = typeof body.avoidModel === "string" && pool.includes(body.avoidModel) ? [body.avoidModel] : [];
@@ -469,13 +475,27 @@ async function withSwitch(res: Response, body: Record<string, any>, user: UserRo
   const list = cli
     ? usable.filter((k) => !tried.includes(k) && !!subCli(k) && (j.quota === "model" || subCli(k) !== cli))
     : usable.filter((k) => !tried.includes(k) && !subCli(k) && vendor(k) !== vendor(tried[tried.length - 1]));
-  const next = routeModel(routeInput(body), list);
+  const next = routeModel(routeInput(body, user), list);
   if (!next) return res;
   return Response.json({ ...j, switchTo: { model: next.model, name: groups.flatMap((g) => g.models).find((m) => m.key === next.model)?.name ?? next.model.split("/").pop() } }, { status: res.status });
 }
 // Thông tin của yêu cầu mới nhất cho bộ định tuyến (router.inputOfChat).
-function routeInput(body: Record<string, any>): RouteInput { // eslint-disable-line @typescript-eslint/no-explicit-any
-  return inputOfChat(body.messages, { studio: !!studioOf(body.studio), prev: typeof body.prevModel === "string" ? body.prevModel : null });
+// Ứng dụng người dùng đang nối đi kèm mỗi lượt: nêu tên một ứng dụng đã nối là việc dùng công cụ, kể cả ứng dụng
+// không có trong danh mục chung của bộ định tuyến (connector tự thêm, toolkit Composio ít gặp). Một lượt hỏi bộ định
+// tuyến nhiều lần (nhớ lại, đường nhanh, chọn model, nỗ lực, đổi model khi lỗi): giữ một RouteInput cho mỗi body để
+// chỉ đọc bảng connector một lần và bộ nhớ kết quả phân loại của router (theo đối tượng RouteInput) dùng lại được.
+type RouteMemo = { msgs: unknown; prev: unknown; studio: unknown; uid: string; q: RouteInput };
+const routeMemo = new WeakMap<object, RouteMemo>();
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function routeInput(body: Record<string, any>, user: UserRow): RouteInput {
+  const m = routeMemo.get(body);
+  const same = m && m.msgs === body.messages && m.prev === body.prevModel && m.studio === body.studio;
+  if (same && m.uid === user.id) return m.q;
+  const prev = typeof body.prevModel === "string" ? body.prevModel : null;
+  const apps = can(user, "connectors") ? connectedApps(user.id, connPolicy(permsOf(user))) : [];
+  const q = inputOfChat(body.messages, { studio: !!studioOf(body.studio), prev, apps });
+  routeMemo.set(body, { msgs: body.messages, prev: body.prevModel, studio: body.studio, uid: user.id, q });
+  return q;
 }
 
 /** o.auto: chế độ Tự động còn model khác để chuyển: không chờ lâu khi tài khoản đang bận lượt khác. */
@@ -585,7 +605,9 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
       const turn = (msgs: unknown, fresh = false) => subTurn({
         job: cont ? CONT_JOB : undefined,
         user: c.user, model, system: am ? ARTIFACT_SYSTEM : [system || (planSys || toolSys ? "Bạn là một trợ lý AI hữu ích." : ""), planSys, toolSys, contextOf(body, c.user), pinnedBlock(body.pinned)].filter(Boolean).join("\n\n"),
-        ephemeral: body.incognito === true, messages: msgs, conv: am ? undefined : convId, effort: isEffort(wanted) ? wanted : wanted === "auto" ? autoEffort(routeInput(body)) : undefined, signal: turnSignal(), onDelta: say, onToolUse: am ? undefined : toolUseSeen,
+        ephemeral: body.incognito === true, messages: msgs, conv: am ? undefined : convId,
+        effort: isEffort(wanted) ? wanted : wanted === "auto" ? autoEffort(routeInput(body, c.user)) : undefined,
+        signal: turnSignal(), onDelta: say, onToolUse: am ? undefined : toolUseSeen,
         older: typeof body.olderDigest === "string" ? body.olderDigest.slice(0, 8000) : undefined, fast, awaitingUser: () => !!x?.awaiting, mcp: bridge ? { url: bridge.url, alive: bridge.alive, onPark: bridge.onPark, live: bridge.live } : undefined, web: !fast && body.web === true, fresh,
         total: Array.isArray(msgs) ? msgs.length + cut : undefined, lockMs: o.auto ? 10_000 : undefined,
         onStatus: am ? undefined : (t) => { progress("step", t); },
@@ -638,8 +660,12 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
       type J = { text?: unknown; denied?: string[]; error?: unknown; cancelled?: boolean };
       let hist = turnMsgs as unknown[];
       let r = await tryOnce(hist);
-      // Đường nhanh không đủ: model báo cần công cụ, hoặc CLI lỗi (kể cả phiên cũ không nhận lượt không công cụ). Chưa có chữ nào tới người dùng: chạy lượt đầy đủ.
-      const needFull = () => fast && !turnSignal()?.aborted && ((r.status === 200 && String((r.json as J).text ?? "").trim().startsWith(NEED_TOOLS)) || (r.status >= 500 && r.status !== 504 && !(r.json as { noRetry?: boolean }).noRetry));
+      // Đường nhanh không đủ: model báo cần công cụ (dấu NEED_TOOLS hay lời "không có công cụ"), hoặc CLI lỗi (kể cả
+      // phiên cũ không nhận lượt không công cụ). Chữ đã hiện trước đó (lời từ chối, câu đứng trước dấu) được
+      // deltaStep() xóa trước khi chạy lượt đầy đủ; bản thân dấu thì holdNeedTools không cho hiện.
+      const needFull = () => fast && !turnSignal()?.aborted
+        && ((r.status === 200 && fastNeedsTools(String((r.json as J).text ?? "")))
+          || (r.status >= 500 && r.status !== 504 && !(r.json as { noRetry?: boolean }).noRetry));
       if (needFull()) { deltaStep(); return chatTurn({ ...body, noFast: true }, c, scope, o); }
       // good: câu trả lời tốt gần nhất — lượt nhắc / tin nhắn thêm sau đó có lỗi thì vẫn giữ phần đã trả lời.
       let good: typeof r | null = null;
@@ -702,7 +728,7 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
   if (!t) return Response.json({ error: "Model này không còn dùng được (khóa API của nhà cung cấp đã bị gỡ). Hãy chọn model khác." }, { status: 400 });
   // Mức nỗ lực người dùng chọn, hạ xuống giới hạn quản trị viên đặt cho model này (quản trị viên không bị giới hạn).
   // "auto": mức nỗ lực theo độ khó của yêu cầu (việc dễ trả lời nhanh, việc khó suy nghĩ kỹ).
-  const want = wanted === "auto" ? autoEffort(routeInput(body)) : wanted;
+  const want = wanted === "auto" ? autoEffort(routeInput(body, c.user)) : wanted;
   const effort = isEffort(want) ? clampEffort(want, effortCap(permsOf(c.user).effort, model), t.kind) : undefined;
   if (feature === "artifact") {
     if (!capsState(c.user).caps.ai) return Response.json({ error: "Artifact dùng AI đang tắt. Bật trong Cài đặt → Khả năng." }, { status: 403 });
