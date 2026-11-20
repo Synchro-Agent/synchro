@@ -1,8 +1,10 @@
-// Ảnh HEIC / HEIF (ảnh chụp iPhone) → PNG cho model. Bản sharp dựng sẵn trên npm chỉ giải được AVIF: bộ giải HEVC
-// (libde265) không được đóng gói vì bằng sáng chế, nên ảnh iPhone từng bị từ chối. Thứ tự thử:
-// 1. sharp, khi bản sharp đang chạy khai nhận .heic (sharp dựng với libvips của hệ thống có libheif + libde265).
+// Ảnh HEIC / HEIF (ảnh chụp iPhone) → PNG cho model. Bản sharp dựng sẵn trên npm chỉ giải được AV1 (AVIF): bộ giải
+// HEVC (libde265) không được đóng gói vì bằng sáng chế, nên ảnh iPhone từng bị từ chối. Thứ tự thử:
+// 1. sharp, luôn thử trước: rẻ, giải được AVIF (kể cả tệp AVIF khai nhãn chính mif1 nên được nhận là image/heic) và
+//    giải được HEVC khi sharp dựng với libvips của hệ thống có libheif + libde265.
 // 2. Công cụ dòng lệnh của libheif cài trên máy chủ (ops/install-media-deps.sh), hoặc sips có sẵn trên macOS.
-// Mọi lần gọi công cụ ngoài đều có trần thời gian, ưu tiên thấp, môi trường không có khóa bí mật, thư mục tạm riêng.
+// Mọi lần gọi công cụ ngoài đều có trần thời gian, trần bộ nhớ (prlimit, khi máy có), ưu tiên thấp, môi trường không
+// có khóa bí mật, thư mục tạm riêng.
 import "server-only";
 import fs from "node:fs";
 import path from "node:path";
@@ -18,6 +20,10 @@ const run = promisify(execFile);
 export const HEIC_TIMEOUT_MS = 60_000;
 // Trần cỡ PNG đọc lại vào bộ nhớ: 40 triệu điểm ảnh RGBA không nén cùng phần đầu PNG vẫn dưới mức này.
 const OUT_MAX_BYTES = 200 * 1048576;
+// Trần bộ nhớ ảo của công cụ ngoài. Trần 40 triệu điểm ảnh tin kích thước tệp tự khai (hộp ispe); tệp cố ý khai sai
+// thì libheif có thể cấp phát tới vài GB trước khi trần thời gian kịp dừng nó, đủ đẩy một VPS nhỏ vào OOM. Ảnh 40
+// triệu điểm ảnh giải hết khoảng 500 MB (YUV, RGBA, nén PNG), nên 1,5 GB còn dư.
+const MEM_MB = Number(process.env.SYNCHRO_HEIF_MEM_MB) || 1536;
 
 /** Một công cụ giải HEIC ngoài: đường dẫn tuyệt đối và cách dựng tham số (tệp vào, tệp PNG ra). */
 export type HeifTool = { bin: string; args: (src: string, out: string) => string[] };
@@ -62,7 +68,7 @@ export function heifTools(env: NodeJS.ProcessEnv = process.env, platform: string
   return found.map(toolOf);
 }
 
-/** sharp đang chạy có nhận .heic không: bản dựng sẵn trên npm chỉ khai .avif cho bộ đọc heif. */
+/** sharp đang chạy có nhận .heic không: bản dựng sẵn trên npm chỉ khai .avif cho bộ đọc heif (trang Sức khỏe). */
 export function sharpHasHevc(): boolean {
   return !!sharp.format.heif?.input?.fileSuffix?.includes(".heic");
 }
@@ -114,12 +120,30 @@ async function outputOf(dir: string): Promise<string | null> {
   return names.length ? path.join(dir, names[0]) : null;
 }
 
-export type HeicOptions = { tools?: HeifTool[]; timeoutMs?: number; maxPixels?: number; sharp?: boolean };
+/**
+ * Lệnh chạy công cụ dưới trần bộ nhớ: prlimit (util-linux, có sẵn trên Ubuntu) đặt RLIMIT_AS rồi exec chính công cụ,
+ * nên vẫn một tiến trình (trần thời gian và SIGKILL áp đúng vào nó). Máy không có prlimit (macOS, nơi chỉ chạy sips khi
+ * phát triển) thì chạy thẳng.
+ */
+function cappedCommand(tool: HeifTool, src: string, out: string): [string, string[]] {
+  const args = tool.args(src, out);
+  const prlimit = which("prlimit");
+  if (!prlimit) return [tool.bin, args];
+  return [prlimit, [`--as=${MEM_MB * 1048576}`, "--", tool.bin, ...args]];
+}
+
+export type HeicOptions = { timeoutMs?: number; maxPixels?: number };
 export type HeicResult = { data: Buffer; via: string };
 let warnedMissing = false;
 
-/** Giải một ảnh HEIC / HEIF thành PNG. Lỗi nào người dùng cũng nhận một FileError nói rõ lý do và cách tự xử lý. */
-export async function heicToPng(buf: Buffer, name: string, o: HeicOptions = {}): Promise<HeicResult> {
+/**
+ * Giải một ảnh HEIC / HEIF thành PNG. tools: công cụ ngoài theo thứ tự ưu tiên, người gọi lấy từ heifTools() (tìm lại
+ * mỗi lần để cài thêm không cần khởi động lại web). Lỗi nào người dùng cũng nhận một FileError nói rõ lý do và cách
+ * tự xử lý.
+ */
+export async function heicToPng(
+  buf: Buffer, name: string, tools: HeifTool[], o: HeicOptions = {},
+): Promise<HeicResult> {
   const maxPixels = o.maxPixels ?? 40_000_000;
   const size = heifSize(buf);
   if (!size) throw new FileError(`Ảnh HEIC "${name}" bị hỏng, không đọc được.`);
@@ -129,18 +153,18 @@ export async function heicToPng(buf: Buffer, name: string, o: HeicOptions = {}):
       `Ảnh "${name}" quá lớn (${w}×${h} điểm ảnh). Giới hạn ~40 triệu điểm ảnh — hãy thu nhỏ rồi tải lại.`,
     );
   }
-  if (o.sharp ?? sharpHasHevc()) {
-    try {
-      const data = await sharp(buf, { limitInputPixels: maxPixels, failOn: "error" }).png().toBuffer();
-      return { data, via: "sharp" };
-    } catch (e) {
-      // libvips có libheif nhưng thiếu plugin giải HEVC (hay gặp trên Ubuntu 24.04): còn công cụ ngoài để thử.
-      console.warn("[heic] sharp không giải được, thử công cụ ngoài:", (e as Error).message.slice(0, 200));
-    }
+  let sharpWhy = "";
+  try {
+    const data = await sharp(buf, { limitInputPixels: maxPixels, failOn: "error" }).png().toBuffer();
+    return { data, via: "sharp" };
+  } catch (e) {
+    // Với sharp trên npm, ảnh HEVC (mọi ảnh iPhone) luôn rơi vào đây: không phải lỗi, còn công cụ ngoài để thử. Lý do
+    // chỉ ghi vào nhật ký khi không còn cách nào khác.
+    sharpWhy = (e as Error).message.split("\n")[0].slice(0, 200);
   }
-  const tool = (o.tools ?? heifTools())[0];
+  const tool = tools[0];
   if (!tool) {
-    if (!warnedMissing) console.warn("[heic] máy chủ chưa có bộ giải HEIC (chạy ops/install-media-deps.sh)");
+    if (!warnedMissing) console.warn("[heic] chưa có bộ giải HEIC (chạy ops/install-media-deps.sh):", sharpWhy);
     warnedMissing = true;
     throw new FileError(
       `Không đọc được ảnh HEIC "${name}": máy chủ chưa cài bộ giải mã. Hãy lưu sang JPEG / PNG rồi tải lại.`,
@@ -151,15 +175,25 @@ export async function heicToPng(buf: Buffer, name: string, o: HeicOptions = {}):
   try {
     const src = path.join(dir, "in.heic");
     await writeFile(src, buf);
-    const job = run(tool.bin, tool.args(src, path.join(dir, "out.png")),
-      { timeout, killSignal: "SIGKILL", maxBuffer: 1048576, env: { ...parserEnv(), HOME: dir, TMPDIR: dir } });
+    const [cmd, args] = cappedCommand(tool, src, path.join(dir, "out.png"));
+    // MALLOC_ARENA_MAX: glibc giữ sẵn 64 MB bộ nhớ ảo cho mỗi luồng giải mã; dưới RLIMIT_AS thì ảnh thường cũng
+    // có thể hết chỗ.
+    const env = { ...parserEnv(), HOME: dir, TMPDIR: dir, MALLOC_ARENA_MAX: "2" };
+    const job = run(cmd, args, { timeout, killSignal: "SIGKILL", maxBuffer: 1048576, env });
     lowPriority(job.child.pid);
     await job;
     const out = await outputOf(dir);
     // Thông điệp này chỉ vào nhật ký (nhánh catch bên dưới), người dùng nhận FileError "tệp có thể bị hỏng".
     if (!out) throw new Error("decoder wrote no PNG");
     if ((await stat(out)).size > OUT_MAX_BYTES) throw new FileError(`Ảnh "${name}" quá lớn sau khi giải mã.`);
-    return { data: await readFile(out), via: path.basename(tool.bin) };
+    const data = await readFile(out);
+    // Ảnh ra lớn hơn mọi kích thước tệp tự khai: tệp khai sai để lách trần điểm ảnh ở trên, không đưa tiếp cho sharp.
+    const got = await sharp(data, { limitInputPixels: false }).metadata();
+    if ((got.width ?? 0) * (got.height ?? 0) > w * h) {
+      console.warn(`[heic] ${name}: giải ra ${got.width}×${got.height}, tệp khai ${w}×${h}`);
+      throw new FileError(`Ảnh "${name}" quá lớn sau khi giải mã.`);
+    }
+    return { data, via: path.basename(tool.bin) };
   } catch (e) {
     if (e instanceof FileError) throw e;
     const err = e as Error & { killed?: boolean; signal?: string; stderr?: string };

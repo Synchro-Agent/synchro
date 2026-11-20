@@ -8,29 +8,35 @@ import { loopReport } from "../../../../server/loopdelay";
 import { opsProblems, opsSnapshot } from "../../../../server/ops";
 import { agentAlive, wsConfigured } from "../../../../server/workspace";
 import { latencySummary } from "../../../../server/tracing";
-import { mediaCaps } from "../../../../server/fileproc/mediacaps";
+import { setTimeout as delay } from "node:timers/promises";
+import { mediaCaps, mediaCapsNow } from "../../../../server/fileproc/mediacaps";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const build = (() => { try { return fs.readFileSync(path.join(process.cwd(), process.env.NEXT_DIST_DIR || ".next", "BUILD_ID"), "utf8").trim(); } catch { return "dev"; } })();
 
+async function firstMedia() {
+  // Lỗi đo đã ghi nhật ký trong mediaCapsNow; ở đây chỉ cần "chưa có kết quả", trang hiện phần còn lại như thường.
+  const caps = mediaCaps(60_000).catch(() => null);
+  return Promise.race([caps, delay(8000, null)]);
+}
+
 // Cài đặt → Sức khỏe hệ thống. Chỉ quản trị viên; không có nội dung chat.
 export const GET = handle(async (req) => {
   requireAdmin(req);
   const snap = opsSnapshot();
-  // Khả năng đọc tệp đo lại tối đa mỗi phút: vừa cài xong bấm Làm mới là thấy, mà mở trang liên tục không chạy
-  // soffice liên tục.
-  const [agent, dns, media] = await Promise.all([
-    wsConfigured() ? agentAlive() : Promise.resolve(null),
-    mailDnsStatus(),
-    mediaCaps(60_000),
-  ]);
+  const [agent, dns] = await Promise.all([wsConfigured() ? agentAlive() : Promise.resolve(null), mailDnsStatus()]);
+  // Khả năng đọc tệp: trả ngay kết quả gần nhất, cũ hơn một phút thì đo lại ở nền (vừa cài xong, bấm Làm mới vài giây
+  // sau là thấy). Một lần đo mở soffice và Python, vài giây tới cả phút nếu chương trình treo, nên trang không chờ
+  // nó; chỉ lần đầu sau khi web khởi động mới chờ, tối đa 8 giây.
+  const media = mediaCapsNow(60_000) ?? await firstMedia();
   // Độ trễ từng chặng của lượt chat: 500 lượt gần nhất, hôm nay và 7 ngày (p50 / p95 theo hãng).
   const today = latencySummary(1), latency = { ...today, week: latencySummary(7).daily };
   const problems = opsProblems({ ...snap, media });
   const uptimeSec = Math.round(process.uptime());
-  const mem = memReport(), loop = loopReport();
+  const mem = memReport();
+  const loop = loopReport();
   return Response.json({ ...snap, problems, media, agent, dns, build, uptimeSec, latency, mem, loop });
 });
 

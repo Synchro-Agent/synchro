@@ -23,7 +23,7 @@ type Health = {
   storage: { dbMB: number; uploadsMB: number; outputsMB: number };
   mail: { sent24: number; sent7: number; failed24: number; failed7: number; lastOkAt: number | null; lastFailAt: number | null; smtp: boolean; failures: { at: number; source: string; detail: string; n: number }[] };
   dns: { domain: string; spf: boolean; dkim: boolean; dmarc: boolean } | null;
-  media?: MediaCaps;
+  media?: MediaCaps | null;
   cli: { source: string; users24: number; users7: number; n24: number; n7: number; last: number }[]; cliRecent: { at: number; source: string; n: number; email: string | null }[];
   csp: { at: number; source: string; detail: string; n: number }[];
   backup: BackupStatus | null; watchdog: WatchdogState | null; wdEvents: { at: number; event: string; detail?: string }[];

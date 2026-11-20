@@ -17,9 +17,10 @@
 # - Đĩa: LibreOffice -nogui (writer, calc, impress và thư viện kèm) khoảng 300-400 MB; libheif + libde265 dưới 5 MB;
 #   libgl1 / GLib vài chục MB (thường đã có). Gói Python OCR trong .mkvenv khoảng 250 MB (đã có trong requirements.txt).
 # - Bộ nhớ, chỉ trong lúc đọc tệp (không có tiến trình thường trú): giải HEIC khoảng 4 byte mỗi điểm ảnh, ảnh iPhone
-#   12 MP khoảng 100-150 MB trong dưới 1 giây, trần 40 triệu điểm ảnh. Một lần soffice chuyển tệp khoảng 150-300 MB
-#   trong 2-10 giây. Một trang OCR khoảng 300-500 MB. Cả ba đi chung hàng "convert" của web: tối đa
-#   SYNCHRO_CONVERT_MAX (mặc định 2) việc cùng lúc trên cả máy, mỗi người một việc, nên đỉnh thêm vào khoảng 1 GB.
+#   12 MP khoảng 100-150 MB trong dưới 1 giây, trần 40 triệu điểm ảnh và 1,5 GB bộ nhớ ảo (prlimit). Một lần soffice
+#   chuyển tệp khoảng 150-300 MB trong 2-10 giây. Một tiến trình OCR (mọi trang scan của một tệp) khoảng 300-500 MB.
+#   Office cũ và OCR đi hàng "convert" của web: tối đa SYNCHRO_CONVERT_MAX (mặc định 2) việc cùng lúc trên cả máy, mỗi
+#   người một việc; ảnh HEIC đi hàng đọc tệp thường (2 việc). Đỉnh thêm vào khoảng 1 GB.
 set -euo pipefail
 
 APP="${1:-/var/www/synchro}"
@@ -43,6 +44,9 @@ GLIB=$(first_known libglib2.0-0t64 libglib2.0-0)
 if [ -n "$GLIB" ]; then WANT+=("$GLIB"); fi
 # 24.04 trở đi: thiếu plugin này thì heif-dec có mà không giải được ảnh iPhone (trang Sức khỏe báo "Chạy thử lỗi").
 if known libheif-plugin-libde265; then WANT+=(libheif-plugin-libde265); fi
+# Ảnh HEIF mã AV1 web đã giải bằng sharp trước khi gọi heif-dec; plugin này để chính heif-dec (và phần tự kiểm bên
+# dưới khi người vận hành thử tay) cũng giải được, vì --no-install-recommends không kéo nó theo.
+if known libheif-plugin-dav1d; then WANT+=(libheif-plugin-dav1d); fi
 for app in writer calc impress; do
   if known "libreoffice-$app-nogui"; then WANT+=("libreoffice-$app-nogui"); else WANT+=("libreoffice-$app"); fi
 done

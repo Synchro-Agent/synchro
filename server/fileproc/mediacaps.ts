@@ -2,6 +2,9 @@
 // bằng LibreOffice, OCR trang PDF scan bằng Python. Thiếu chương trình thì tệp bị từ chối mà máy chủ vẫn chạy bình
 // thường, nên trang Sức khỏe hệ thống và /api/health đo thật từng thứ (giải một ảnh HEIC mẫu, hỏi phiên bản
 // LibreOffice, nạp thư viện OCR) để người vận hành thấy ngay khi thiếu.
+// Một lần đo mở lần lượt ba tiến trình (soffice khoảng 150-300 MB, Python nạp onnxruntime khoảng 200-300 MB, vài
+// giây mỗi cái), nên đo trong hàng convert như các lần đọc tệp thật (tính vào cùng đỉnh bộ nhớ), tối đa mỗi phút một
+// lần, và không trang nào phải chờ nó: luôn trả kết quả gần nhất, đo lại ở nền.
 import "server-only";
 import path from "node:path";
 import { execFile } from "node:child_process";
@@ -10,7 +13,7 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import sharp from "sharp";
 import { heicToPng, heifTools, sharpHasHevc, which } from "./heic";
-import { lowPriority, parserEnv, pyBin } from "./sandbox";
+import { lowPriority, parserEnv, pyBin, withConvertSlot } from "./sandbox";
 import type { MediaCap, MediaCaps } from "../../shared/types/health";
 
 const run = promisify(execFile);
@@ -30,7 +33,7 @@ async function probeHeic(): Promise<MediaCap> {
     return { state: "broken", on: true };
   }
   try {
-    const out = await heicToPng(sample, "media-probe.heic");
+    const out = await heicToPng(sample, "media-probe.heic", heifTools());
     const m = await sharp(out.data).metadata();
     if (m.width === 64 && m.height === 48) return { state: "ok", on: true, version: out.via };
     console.warn("[media] ảnh HEIC mẫu giải ra sai kích thước:", m.width, m.height);
@@ -89,20 +92,32 @@ type Store = { last: MediaCaps | null; running: Promise<MediaCaps> | null };
 // trang quản trị.
 const g = globalThis as { __synchroMediaCaps?: Store };
 const store: Store = (g.__synchroMediaCaps ??= { last: null, running: null });
+// Hàng convert đang bận (hai người chép lời) thì lần đo chờ ngắn rồi bỏ, giữ kết quả cũ, lần gọi sau đo lại.
+const PROBE_WAIT_MS = 20_000;
+
+async function probeAll(): Promise<MediaCaps> {
+  const heic = await probeHeic();
+  const office = await probeOffice();
+  const ocr = await probeOcr();
+  return { at: Date.now(), heic, office, ocr };
+}
 
 /** Đo lại khi kết quả cũ hơn maxAgeMs; nhiều người gọi cùng lúc dùng chung một lần đo. */
 export function mediaCaps(maxAgeMs = TTL_MS): Promise<MediaCaps> {
   if (store.last && Date.now() - store.last.at < maxAgeMs) return Promise.resolve(store.last);
-  store.running ??= Promise.all([probeHeic(), probeOffice(), probeOcr()])
-    .then(([heic, office, ocr]) => (store.last = { at: Date.now(), heic, office, ocr }))
+  store.running ??= withConvertSlot(undefined, probeAll, { waitMs: PROBE_WAIT_MS })
+    .then((caps) => (store.last = caps))
     .finally(() => { store.running = null; });
   return store.running;
 }
 
-/** Kết quả đo gần nhất, không chờ (/api/health phải trả lời nhanh); quá hạn thì đo lại ở nền. null: chưa đo lần nào. */
-export function mediaCapsNow(): MediaCaps | null {
-  if (!store.last || Date.now() - store.last.at >= TTL_MS) {
-    mediaCaps().catch((e) => console.error("[media] đo khả năng đọc tệp lỗi:", e));
+/**
+ * Kết quả đo gần nhất, không chờ; cũ hơn maxAgeMs thì đo lại ở nền cho lần gọi sau. null: chưa đo xong lần nào (vài
+ * giây đầu sau khi web khởi động).
+ */
+export function mediaCapsNow(maxAgeMs = TTL_MS): MediaCaps | null {
+  if (!store.last || Date.now() - store.last.at >= maxAgeMs) {
+    mediaCaps(maxAgeMs).catch((e) => console.error("[media] đo khả năng đọc tệp lỗi:", (e as Error).message));
   }
   return store.last;
 }

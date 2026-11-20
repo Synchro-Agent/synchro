@@ -7,7 +7,7 @@ import { tmpdir } from "node:os";
 import sharp, { type Metadata } from "sharp";
 import jschardet from "jschardet";
 import { parseInWorker, withParseSlot, withConvertSlot, lowPriority, parserEnv, pyBin } from "./sandbox";
-import { heicToPng, which } from "./heic";
+import { heicToPng, heifTools, which } from "./heic";
 import { sniffUtf16, utf16LooksText } from "./detect";
 import { audioPrecheck, transcribeAudio } from "./transcribe";
 import { type ContentBlock, type Extractor, FileError, IMAGE_MAX_BYTES, IMAGE_MAX_EDGE } from "../../shared/fileproc/types";
@@ -204,8 +204,10 @@ const imageExtractor: Extractor = {
   match: (k) => k.startsWith("image/"),
   async run(buf, { kind, name, uid, signal }) {
     if (kind === "image/heic") {
-      // Giải HEIC tốn CPU và có thể gọi tiến trình ngoài: xếp hàng convert như Office cũ, mỗi người một ảnh một lúc.
-      const png = await withConvertSlot(uid, () => heicToPng(buf, name, { maxPixels: IMAGE_MAX_PIXELS }), { signal });
+      // Giải một ảnh mất 1-3 giây (trần 60 giây): xếp hàng đọc tệp thường như docx / PDF. Hàng convert dành cho việc
+      // dài (chép lời, OCR, Office cũ) nên ảnh iPhone, loại tải lên hay gặp nhất, không phải chờ sau chúng.
+      const decode = () => heicToPng(buf, name, heifTools(), { maxPixels: IMAGE_MAX_PIXELS });
+      const png = await withParseSlot(uid, decode, signal);
       buf = png.data;
       kind = "image/png";
     }
@@ -289,18 +291,27 @@ const legacyOfficeExtractor: Extractor = {
 };
 
 // ---- 2. PDF ----
+const badPdf = (name: string) => new FileError(`Không đọc được "${name}": tệp PDF bị hỏng hoặc đang đặt mật khẩu.`);
 const pdfExtractor: Extractor = {
   name: "pdf",
   match: (k) => k === "application/pdf",
   async run(buf, { name, uid, signal }) {
     if (PDF_NATIVE) {
       // Provider hỗ trợ PDF trực tiếp: gửi nguyên văn bản gốc, kèm text dự phòng cho nhánh khác. Không có Python để đọc thử thì vẫn gửi như cũ.
-      const fb = await withParseSlot(uid, () => pdfFallback(buf, uid, signal), signal).catch((e) => { if (e instanceof BadPdf) throw new FileError(`Không đọc được "${name}": tệp PDF bị hỏng hoặc đang đặt mật khẩu.`); return null; });
+      const fb = await pdfFallback(buf, uid, signal).catch((e) => {
+        if (e instanceof BadPdf) throw badPdf(name);
+        // Không có Python hay pdf_extract.py lỗi: vẫn gửi nguyên PDF cho provider, chỉ thiếu phần chữ dự phòng.
+        console.warn("[pdf] không đọc thử được:", (e as Error).message.slice(0, 200));
+        return null;
+      });
       // Dài quá giới hạn số trang của API (lỗi cả lượt, có thể cả các lượt sau của phiên): gửi phần chữ, các lượt hỏi về tệp vẫn tìm được đoạn liên quan.
       if (!fb || fb.total <= PDF_NATIVE_PAGES) return [{ type: "document", media_type: "application/pdf", data: buf.toString("base64"), name, fallbackText: fb?.text, fallbackImages: fb?.images }];
       return textBlocks(fb);
     }
-    return textBlocks(await withParseSlot(uid, () => pdfFallback(buf, uid, signal), signal).catch((e) => { if (e instanceof BadPdf) throw new FileError(`Không đọc được "${name}": tệp PDF bị hỏng hoặc đang đặt mật khẩu.`); throw e; }));
+    const fb = await pdfFallback(buf, uid, signal).catch((e) => {
+      throw e instanceof BadPdf ? badPdf(name) : e;
+    });
+    return textBlocks(fb);
   },
 };
 const textBlocks = (fb: { text: string; images: string[] }) => {
@@ -311,37 +322,82 @@ const textBlocks = (fb: { text: string; images: string[] }) => {
 };
 
 class BadPdf extends Error {}
-/** OCR một trang PDF scan bằng scripts/ocr.py (RapidOCR). Chỉ chạy khi bật SYNCHRO_OCR=1 (mặc định tắt: giữ nguyên hành vi cũ, không spawn vô ích khi máy chủ chưa cài OCR). */
-async function ocrPage(imgPath: string, uid?: string, signal?: AbortSignal): Promise<string> {
-  // Tiến trình OCR chỉ mở khi tới lượt: mở trước rồi mới xếp hàng thì hàng convert không giới hạn được gì (mọi trang chạy cùng lúc).
-  return withConvertSlot(uid, async () => {
-    const job = run(pyBin(), [path.join(process.cwd(), "scripts", "ocr.py"), imgPath], { maxBuffer: 16 * 1024 * 1024, timeout: 120_000, killSignal: "SIGKILL", env: parserEnv() });
-    lowPriority(job.child.pid);
-    return (await job).stdout.trim();
-  }, { signal });
+// OCR chỉ là phần thêm cho PDF scan (thiếu thì model vẫn có ảnh trang): chờ hàng convert không quá OCR_WAIT_MS, chạy
+// không quá OCR_BUDGET_MS cho cả tệp, nên một tệp scan chỉ đọc lâu thêm tối đa 1 phút, bao nhiêu trang cũng vậy.
+const OCR_WAIT_MS = 15_000;
+const OCR_BUDGET_MS = Number(process.env.SYNCHRO_OCR_BUDGET_MS) || 45_000;
+
+/**
+ * OCR các trang scan của một PDF bằng scripts/ocr.py (RapidOCR), trả chữ theo đúng thứ tự ảnh, "" cho trang chưa OCR
+ * được. Một tiến trình cho cả tệp: mỗi tiến trình nạp lại mô hình onnxruntime mất vài giây và vài trăm MB. Hết
+ * ngân sách thời gian thì giữ các trang đã xong (ocr.py in từng trang ngay khi xong).
+ */
+async function ocrPages(imgs: string[], uid?: string, signal?: AbortSignal): Promise<string[]> {
+  const out = imgs.map(() => "");
+  const take = (stdout: string) => stdout.split("\n").forEach((line, i) => {
+    if (i >= out.length || !line.trim()) return;
+    try {
+      out[i] = String((JSON.parse(line) as { text?: string }).text ?? "");
+    } catch {
+      // Dòng cuối bị cắt dở khi tiến trình bị dừng ở trần thời gian: trang đó coi như chưa OCR.
+    }
+  });
+  const script = path.join(process.cwd(), "scripts", "ocr.py");
+  try {
+    // Tiến trình OCR chỉ mở khi tới lượt: mở trước rồi mới xếp hàng thì hàng convert không giới hạn được gì.
+    await withConvertSlot(uid, async () => {
+      const env = parserEnv();
+      const opts = { maxBuffer: 16 * 1024 * 1024, timeout: OCR_BUDGET_MS, killSignal: "SIGKILL" as const, env };
+      const job = run(pyBin(), [script, "--each", ...imgs], opts);
+      lowPriority(job.child.pid);
+      try {
+        take((await job).stdout);
+      } catch (e) {
+        const err = e as Error & { stdout?: string; killed?: boolean };
+        take(String(err.stdout ?? ""));
+        if (!err.killed) throw e;
+        const done = out.filter((t) => t.trim()).length;
+        console.warn(`[ocr] hết ${OCR_BUDGET_MS / 1000} giây, OCR được ${done}/${imgs.length} trang`);
+      }
+    }, { signal, waitMs: OCR_WAIT_MS });
+  } catch (e) {
+    // Hàng convert bận, người gửi bỏ đi hay Python lỗi: các trang còn lại chỉ gửi ảnh, như khi chưa bật OCR.
+    console.warn("[ocr] bỏ qua OCR:", String((e as { stderr?: string }).stderr || (e as Error).message).slice(-200));
+  }
+  return out;
 }
 
-async function pdfFallback(buf: Buffer, uid?: string, signal?: AbortSignal): Promise<{ total: number; text: string; images: string[] }> {
+/**
+ * Đọc PDF bằng scripts/pdf_extract.py: chữ từng trang và ảnh của PDF_MAX_PAGES trang đầu. Chỉ phần này giữ chỗ trong
+ * hàng đọc tệp; OCR chạy sau khi đã trả chỗ, để PDF scan nhiều trang không làm docx / xlsx của người khác phải chờ.
+ */
+type PdfRead = { total: number; text: string; images: string[] };
+async function pdfFallback(buf: Buffer, uid?: string, signal?: AbortSignal): Promise<PdfRead> {
   const dir = await mkdtemp(path.join(tmpdir(), "pdf-"));
   const imgDir = path.join(dir, "img");
   try {
-    const src = path.join(dir, "in.pdf");
-    await mkdir(imgDir, { recursive: true });
-    await writeFile(src, buf);
-    // Môi trường tối thiểu (không khóa bí mật) + SIGKILL khi quá giờ: PDF độc hại không giữ được tiến trình hay đọc trộm biến môi trường.
-    const job = run(pyBin(), [path.join(process.cwd(), "scripts", "pdf_extract.py"), src, String(PDF_MAX_PAGES), "1.3", String(PDF_TEXT_PAGES), imgDir], { maxBuffer: 16 * 1024 * 1024, timeout: 120_000, killSignal: "SIGKILL", env: parserEnv() });
-    lowPriority(job.child.pid);
-    const { stdout } = await job;
-    const j = JSON.parse(stdout) as { bad?: string; total: number; texts: string[]; images: string[] };
+    const j = await withParseSlot(uid, async () => {
+      const src = path.join(dir, "in.pdf");
+      await mkdir(imgDir, { recursive: true });
+      await writeFile(src, buf);
+      // Môi trường tối thiểu (không khóa bí mật) + SIGKILL khi quá giờ: PDF độc hại không giữ được tiến trình hay đọc
+      // trộm biến môi trường.
+      const script = path.join(process.cwd(), "scripts", "pdf_extract.py");
+      const args = [script, src, String(PDF_MAX_PAGES), "1.3", String(PDF_TEXT_PAGES), imgDir];
+      const env = parserEnv();
+      const job = run(pyBin(), args, { maxBuffer: 16 * 1024 * 1024, timeout: 120_000, killSignal: "SIGKILL", env });
+      lowPriority(job.child.pid);
+      const { stdout } = await job;
+      return JSON.parse(stdout) as { bad?: string; total: number; texts: string[]; images: string[] };
+    }, signal);
     if (j.bad) throw new BadPdf(j.bad);
-    // Quyết định theo TỪNG trang: trang có dưới 20 ký tự chữ là trang scan → OCR riêng trang đó (khi đã bật OCR và có ảnh trang).
+    // Quyết định theo TỪNG trang: trang có dưới 20 ký tự chữ là trang scan → OCR trang đó (khi đã bật OCR và có ảnh
+    // trang).
     const texts = [...j.texts];
     if (process.env.SYNCHRO_OCR === "1") {
-      for (let i = 0; i < texts.length; i++) {
-        if (texts[i].replace(/\s+/g, "").length >= 20 || !j.images[i]) continue;
-        const got = await ocrPage(path.join(imgDir, j.images[i]), uid, signal).catch(() => "");
-        if (got.trim()) texts[i] = got;
-      }
+      const scan = texts.flatMap((t, i) => (t.replace(/\s+/g, "").length < 20 && j.images[i] ? [i] : []));
+      const got = scan.length ? await ocrPages(scan.map((i) => path.join(imgDir, j.images[i])), uid, signal) : [];
+      scan.forEach((p, k) => { if (got[k].trim()) texts[p] = got[k]; });
     }
     const chars = texts.join("").replace(/\s+/g, "").length;
     const scanned = chars < 20 * Math.max(1, texts.length);

@@ -1,10 +1,13 @@
 // Đọc ảnh HEIC, tệp Office cũ và hai tệp cùng tên trong một tin, không cần máy chủ:
-// - Bộ giải HEIC (server/fileproc/heic.ts): chọn công cụ, tham số, trần thời gian, trần điểm ảnh, lỗi rõ cho người
+// - Bộ giải HEIC (server/fileproc/heic.ts): sharp trước (AVIF khai nhãn mif1 không cần công cụ ngoài), chọn công cụ,
+//   tham số, trần thời gian, trần điểm ảnh, trần bộ nhớ (prlimit), ảnh giải ra lớn hơn tệp khai, lỗi rõ cho người
 //   dùng, bằng công cụ giả (tệp shell) nên chạy được ở mọi máy; giải thật ảnh mẫu khi máy có bộ giải (heif-dec,
-//   heif-convert, sips), không có thì bỏ qua và nói rõ.
+//   heif-convert, sips), không có thì bỏ qua và nói rõ. Giải HEIC đi hàng đọc tệp thường, không đi hàng convert.
+// - OCR PDF scan: một tiến trình ocr.py cho mọi trang scan, chạy sau khi đã trả chỗ hàng đọc tệp, dừng ở ngân sách
+//   thời gian mà vẫn giữ các trang đã xong (Python giả).
 // - Office cũ: tệp .doc thật (tests/fixtures/media/legacy.doc) qua detectKind → LibreOffice (giả) → trình đọc .docx.
 // - Trang Sức khỏe hệ thống (server/fileproc/mediacaps.ts): trạng thái ok / off / missing / broken của ba bộ đọc.
-// - Tên thẻ tệp đính kèm (ui/filestate.ts attachKeys / attachFiles, shared/fileproc/names.ts).
+// - Tên thẻ tệp đính kèm (ui/filestate.ts attachKeys / attachFiles / addKeys, shared/fileproc/names.ts).
 import path from "node:path";
 import os from "node:os";
 import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync } from "node:fs";
@@ -31,16 +34,20 @@ const errOf = async (p) => {
 };
 const msg = (e) => e?.message ?? "";
 
-const mods = await loadTs(["server/fileproc/heic", "server/fileproc/extractors", "server/fileproc/detect",
-  "server/fileproc/mediacaps", "shared/fileproc/names", "ui/filestate"]);
+// Ngân sách OCR đọc lúc nạp mô-đun: đặt nhỏ để kiểm phần dừng giữa chừng trong vài giây.
+process.env.SYNCHRO_OCR_BUDGET_MS = "2500";
+const mods = await loadTs(["server/fileproc/sandbox", "server/fileproc/heic", "server/fileproc/extractors",
+  "server/fileproc/detect", "server/fileproc/mediacaps", "shared/fileproc/names", "ui/filestate"]);
 const H = mods["server/fileproc/heic"];
 const E = mods["server/fileproc/extractors"];
 const D = mods["server/fileproc/detect"];
 const M = mods["server/fileproc/mediacaps"];
 const N = mods["shared/fileproc/names"];
 const F = mods["ui/filestate"];
+const S = mods["server/fileproc/sandbox"];
 
 const FIX = path.join(process.cwd(), "tests", "fixtures", "media");
+const R0PATH = process.env.PATH;
 const HEIC = readFileSync(path.join(FIX, "tiny.heic"));
 const DOC = readFileSync(path.join(FIX, "legacy.doc"));
 const tmp = mkdtempSync(path.join(os.tmpdir(), "synchro-media-"));
@@ -90,43 +97,90 @@ if (process.platform === "darwin") {
 }
 
 console.log("3. Giải HEIC bằng công cụ ngoài (giả)");
-const got = await H.heicToPng(HEIC, "anh.heic", { tools: [tool(fakeDec)], sharp: false });
-const gm = await sharp(got.data).metadata();
-ok(gm.format === "png" && gm.width === 64 && got.via === "heif-dec", "trả PNG công cụ ghi ra, via = tên công cụ",
-  `${gm.format} ${gm.width} ${got.via}`);
-ok(/in\.heic \S+out\.png$/.test(lastCall()), "gọi công cụ với (tệp vào, tệp PNG ra) trong thư mục tạm", lastCall());
-const sleeper = script("heif-slow", "sleep 5");
-const t0 = Date.now();
-const slow = await errOf(H.heicToPng(HEIC, "cham.heic", { tools: [tool(sleeper)], sharp: false, timeoutMs: 400 }));
-const took = Date.now() - t0;
-ok(/quá lâu/.test(msg(slow)) && took < 3000, `công cụ treo bị dừng ở trần thời gian (${took} ms), báo "quá lâu"`,
-  msg(slow));
+// sharp trên npm không giải được HEVC nên ảnh mẫu luôn đi tiếp sang công cụ; sharp dựng với libheif + libde265 của
+// hệ thống thì giải luôn, phần này không còn gì để kiểm.
+const sharpHevc = H.sharpHasHevc();
+if (sharpHevc) console.log("  - sharp của máy này giải được HEVC: các bước dùng công cụ giả được bỏ qua");
 const broken = script("heif-broken", "echo 'Error decoding image' >&2; exit 1");
-const bad = await errOf(H.heicToPng(HEIC, "hong.heic", { tools: [tool(broken)], sharp: false }));
-ok(/tệp có thể bị hỏng/.test(msg(bad)), "công cụ báo lỗi → lý do “tệp có thể bị hỏng”", msg(bad));
-const none = await errOf(H.heicToPng(HEIC, "a.heic", { tools: [], sharp: false }));
-ok(/chưa cài bộ giải mã\./.test(msg(none)), "không có công cụ → “chưa cài bộ giải mã”", msg(none));
+const got = sharpHevc ? null : await H.heicToPng(HEIC, "anh.heic", [tool(fakeDec)]);
+if (got) {
+  const gm = await sharp(got.data).metadata();
+  ok(gm.format === "png" && gm.width === 64 && got.via === "heif-dec", "trả PNG công cụ ghi ra, via = tên công cụ",
+    `${gm.format} ${gm.width} ${got.via}`);
+  ok(/in\.heic \S+out\.png$/.test(lastCall()), "gọi công cụ với (tệp vào, tệp PNG ra) trong thư mục tạm", lastCall());
+  const sleeper = script("heif-slow", "sleep 5");
+  const t0 = Date.now();
+  const slow = await errOf(H.heicToPng(HEIC, "cham.heic", [tool(sleeper)], { timeoutMs: 400 }));
+  const took = Date.now() - t0;
+  ok(/quá lâu/.test(msg(slow)) && took < 3000, `công cụ treo bị dừng ở trần thời gian (${took} ms), báo "quá lâu"`,
+    msg(slow));
+  const bad = await errOf(H.heicToPng(HEIC, "hong.heic", [tool(broken)]));
+  ok(/tệp có thể bị hỏng/.test(msg(bad)), "công cụ báo lỗi → lý do “tệp có thể bị hỏng”", msg(bad));
+  const none = await errOf(H.heicToPng(HEIC, "a.heic", []));
+  ok(/chưa cài bộ giải mã\./.test(msg(none)), "không có công cụ → “chưa cài bộ giải mã”", msg(none));
+  // Tệp khai 64×48 mà công cụ ra ảnh 400×300: tệp khai sai để lách trần điểm ảnh, không được đưa tiếp.
+  const bigPng = path.join(tmp, "big.png");
+  writeFileSync(bigPng, await sharp({ create: { ...blue, width: 400, height: 300 } }).png().toBuffer());
+  const liar = script("heif-liar", `for a; do last="$a"; done; cp "${bigPng}" "$last"`);
+  const lied = await errOf(H.heicToPng(HEIC, "khai-sai.heic", [tool(liar)]));
+  ok(/quá lớn sau khi giải mã/.test(msg(lied)), "ảnh giải ra lớn hơn kích thước tệp khai → từ chối", msg(lied));
+  // Trần bộ nhớ: máy có prlimit thì công cụ chạy dưới prlimit --as=…; prlimit giả ghi lại tham số rồi exec công cụ.
+  const plDir = mkdtempSync(path.join(tmp, "pl-"));
+  const plLog = path.join(tmp, "prlimit.log");
+  const pl = `echo "$@" >> "${plLog}"; while [ "$1" != "--" ]; do shift; done; shift; exec "$@"`;
+  script(path.relative(tmp, path.join(plDir, "prlimit")), pl);
+  const oldPath = process.env.PATH;
+  process.env.PATH = `${plDir}${path.delimiter}${oldPath}`;
+  const capped = await H.heicToPng(HEIC, "tran.heic", [tool(fakeDec)]).finally(() => { process.env.PATH = oldPath; });
+  const plArgs = readFileSync(plLog, "utf8").trim();
+  ok(capped.via === "heif-dec" && /^--as=1610612736 -- \S+heif-dec \S+in\.heic \S+out\.png$/.test(plArgs),
+    "chạy công cụ qua prlimit --as=1,5 GB, vẫn ra PNG", plArgs);
+}
 const before = readFileSync(calls, "utf8").length;
-const huge = await errOf(H.heicToPng(HEIC, "to.heic", { tools: [tool(fakeDec)], sharp: false, maxPixels: 1000 }));
+const huge = await errOf(H.heicToPng(HEIC, "to.heic", [tool(fakeDec)], { maxPixels: 1000 }));
 ok(/quá lớn \(64×48 điểm ảnh\)/.test(msg(huge)) && readFileSync(calls, "utf8").length === before,
   "vượt trần điểm ảnh → từ chối, KHÔNG gọi công cụ", msg(huge));
 const rac = Buffer.from("ftypheic rác");
-const junk = await errOf(H.heicToPng(rac, "rac.heic", { tools: [tool(fakeDec)], sharp: false }));
+const junk = await errOf(H.heicToPng(rac, "rac.heic", [tool(fakeDec)]));
 ok(/bị hỏng, không đọc được/.test(msg(junk)), "tệp không có hộp ispe → “bị hỏng”", msg(junk));
 
-console.log("4. Đường tải lên: HEIC → PNG cho model");
-process.env.SYNCHRO_HEIF_BIN = fakeDec;
-const blocks = await E.pickExtractor("image/heic", "IMG_0001.HEIC").run(HEIC, ctx("IMG_0001.HEIC", "image/heic"));
+console.log("3b. AVIF khai nhãn chính mif1: detectKind gọi là HEIC, sharp giải được, không cần công cụ ngoài");
+const avif = await sharp({ create: { ...blue, width: 40, height: 30 } }).avif().toBuffer();
+const mif1 = Buffer.from(avif);
+mif1.write("mif1", 8, "latin1");
+ok(await D.detectKind(mif1, "anh.heif") === "image/heic", "nhãn mif1 → image/heic", mif1.subarray(4, 12).toString());
+const viaSharp = await H.heicToPng(mif1, "anh.heif", []);
+const vm = await sharp(viaSharp.data).metadata();
+ok(viaSharp.via === "sharp" && vm.width === 40 && vm.height === 30, "không có công cụ nào: sharp giải ra PNG 40×30",
+  `${viaSharp.via} ${vm.width}×${vm.height}`);
+
+console.log("4. Đường tải lên: HEIC → PNG cho model, trong hàng đọc tệp thường");
+// Công cụ giả chậm 0,6 giây để nhìn được ảnh đang giữ chỗ ở hàng nào.
+const slowDec = script("heif-dec-slow", `sleep 0.6; for a; do last="$a"; done; cp "${png64}" "$last"`);
+process.env.SYNCHRO_HEIF_BIN = sharpHevc ? fakeDec : slowDec;
+const run4 = E.pickExtractor("image/heic", "IMG_0001.HEIC").run(HEIC, ctx("IMG_0001.HEIC", "image/heic"));
+await new Promise((r) => setTimeout(r, 250));
+const held = { parse: S.slotState("parse", "u1").running, convert: S.slotState("convert", "u1").running };
+const blocks = await run4;
 ok(blocks.length === 1 && blocks[0].type === "image" && blocks[0].media_type === "image/png", "khối ảnh PNG",
   JSON.stringify(blocks[0]).slice(0, 80));
+if (!sharpHevc) {
+  ok(held.parse === 1 && held.convert === 0, "đang giải: giữ chỗ hàng đọc tệp, không chiếm hàng convert",
+    JSON.stringify(held));
+}
+process.env.PATH = path.join(tmp, "khong-co");
 delete process.env.SYNCHRO_HEIF_BIN;
+const av = await E.pickExtractor("image/heic", "anh.heif").run(mif1, ctx("anh.heif", "image/heic"))
+  .finally(() => { process.env.PATH = R0PATH; });
+ok(av[0]?.type === "image" && av[0].media_type === "image/png", "AVIF mif1 tải lên khi máy không có công cụ → PNG",
+  JSON.stringify(av[0]).slice(0, 80));
 
 console.log("5. Giải HEIC thật (bộ giải cài trên máy này)");
 if (!H.heifTools().length && !H.sharpHasHevc()) {
   console.log("  - BỎ QUA: máy này không có heif-dec / heif-convert / sips, sharp không có bộ giải HEVC"
     + " (cài libheif-examples để chạy phần này)");
 } else {
-  const r = await H.heicToPng(HEIC, "that.heic");
+  const r = await H.heicToPng(HEIC, "that.heic", H.heifTools());
   const { data, info } = await sharp(r.data).raw().toBuffer({ resolveWithObject: true });
   const at = (x, y) => {
     const i = (y * info.width + x) * info.channels;
@@ -171,6 +225,57 @@ process.env.SYNCHRO_SOFFICE_BIN = path.join(tmp, "khong-co-soffice");
 const miss = await errOf(E.pickExtractor("legacy-office", "cu.doc").run(DOC, ctx("cu.doc", "legacy-office")));
 ok(/máy chủ chưa chuyển được/.test(msg(miss)), "đặt biến mà chưa cài LibreOffice → lý do rõ, không treo", msg(miss));
 
+console.log("6b. OCR PDF scan: một tiến trình cho cả tệp, ngoài hàng đọc tệp, có ngân sách thời gian");
+// Python giả: pdf_extract.py ghi ảnh 3 trang (trang 1, 2 không có chữ: trang scan), ocr.py --each in từng trang một
+// dòng JSON; trang có tệp "<ảnh>.slow" bên cạnh thì ngủ 5 giây trước khi in (vượt ngân sách 2,5 giây của bài này).
+const ocrLog = path.join(tmp, "ocr.log");
+const LONG = "chữ thật của trang ba, đủ dài để không bị coi là trang scan";
+const pyOcr = script("python-ocr", [
+  `case "$1" in`,
+  `  *pdf_extract.py) d="$6"; for i in 1 2 3; do cp "${png64}" "$d/p$i.jpg"; done`,
+  `    echo '{"total":3,"texts":["","","${LONG}"],"images":["p1.jpg","p2.jpg","p3.jpg"]}' ;;`,
+  `  *ocr.py) echo "$@" >> "${ocrLog}"; shift 2`,
+  `    for p; do [ -f "$p.slow" ] && sleep 5; echo '{"text": "DAUHIEU_OCR '"$(basename "$p")"' đã đọc chữ"}'; done ;;`,
+  `esac`,
+].join("\n"));
+process.env.PYTHON_BIN = pyOcr;
+process.env.SYNCHRO_OCR = "1";
+const pdfBuf = Buffer.from("%PDF-1.4 giả");
+const textOf = (b) => b.map((x) => x.text ?? x.fallbackText ?? "").join("\n");
+const peak = { parse: 0, convert: 0, both: false };
+const watch = setInterval(() => {
+  peak.parse = Math.max(peak.parse, S.slotState("parse", "u-ocr").running);
+  if (S.slotState("convert", "u-ocr").running) peak.convert++;
+  if (S.slotState("convert", "u-ocr").running && S.slotState("parse", "u-ocr").running) peak.both = true;
+}, 5);
+const pdfCtx = { name: "scan.pdf", kind: "application/pdf", uid: "u-ocr" };
+const pdf1 = await E.pickExtractor("application/pdf", "scan.pdf").run(pdfBuf, pdfCtx);
+clearInterval(watch);
+const t1Text = textOf(pdf1);
+ok(/Trang 1 ---\nDAUHIEU_OCR p1\.jpg/.test(t1Text) && /Trang 2 ---\nDAUHIEU_OCR p2\.jpg/.test(t1Text)
+  && t1Text.includes(LONG), "trang scan thay bằng chữ OCR, trang có chữ giữ nguyên", t1Text.slice(0, 300));
+const ocrCalls = readFileSync(ocrLog, "utf8").trim().split("\n");
+ok(ocrCalls.length === 1 && /--each \S+p1\.jpg \S+p2\.jpg$/.test(ocrCalls[0]),
+  "một lần gọi ocr.py --each cho cả hai trang scan", ocrCalls);
+ok(peak.parse === 1 && peak.convert > 0 && !peak.both, "OCR chạy sau khi đã trả chỗ hàng đọc tệp",
+  JSON.stringify(peak));
+// Ngân sách: trang 2 chậm quá ngân sách → bị dừng, trang 1 đã xong vẫn được giữ, trang 2 chỉ còn ảnh.
+const slowPdf = script("python-ocr-slow", [
+  `case "$1" in *pdf_extract.py) touch "$6/p2.jpg.slow" ;; esac`,
+  `exec "${pyOcr}" "$@"`,
+].join("\n"));
+process.env.PYTHON_BIN = slowPdf;
+const tStart2 = Date.now();
+const pdf2 = await E.pickExtractor("application/pdf", "scan.pdf").run(pdfBuf, pdfCtx);
+const took2 = Date.now() - tStart2;
+const t2Text = textOf(pdf2);
+ok(took2 < 4500 && /DAUHIEU_OCR p1\.jpg/.test(t2Text) && !/DAUHIEU_OCR p2\.jpg/.test(t2Text),
+  `hết ngân sách 2,5 giây (${took2} ms): giữ trang đã OCR xong, bỏ trang dở`, t2Text.slice(0, 300));
+ok(pdf2.some((b) => b.type === "image") || (pdf2[0]?.fallbackImages?.length ?? 0) === 3, "ảnh trang vẫn gửi kèm",
+  JSON.stringify(pdf2).slice(0, 120));
+delete process.env.SYNCHRO_OCR;
+delete process.env.PYTHON_BIN;
+
 console.log("7. Sức khỏe hệ thống: đo ba bộ đọc tệp");
 const fakePy = script("python", `case "$2" in *rapidocr*) echo "rapidocr-onnxruntime 1.3.24"; exit 0 ;; esac; exit 1`);
 process.env.SYNCHRO_HEIF_BIN = fakeDec;
@@ -207,16 +312,28 @@ globalThis.XMLHttpRequest = class { upload = {}; open() {} send() {} abort() {} 
 const t1 = new File(["DAUHIEU_MOT"], "ghi chu.txt", { lastModified: 1 });
 const t2 = new File(["DAUHIEU_HAI dài hơn"], "ghi chu.txt", { lastModified: 2 });
 const a = F.attachFiles([], [t1, t2]);
+a.files = F.addKeys([], a.keys);
 ok(a.files.join("|") === "ghi chu.txt|ghi chu (2).txt", "hai tệp cùng tên khác nội dung, cùng lần thêm → hai thẻ",
   a.files);
+ok(a.note === undefined, "cùng lần thêm, chưa có thẻ nào trước: không báo", a.note);
 ok(F.getBlob("ghi chu.txt") === t1 && F.getBlob("ghi chu (2).txt") === t2, "mỗi thẻ giữ đúng tệp của nó");
 const up = (k) => F.getStatus(k)?.state === "uploading";
 ok(up("ghi chu.txt") && up("ghi chu (2).txt"), "cả hai cùng được tải lên");
 const again = F.attachFiles(a.files, [t2]);
-ok(again.files.join("|") === a.files.join("|") && again.keys[0] === "ghi chu (2).txt",
+ok(F.addKeys(a.files, again.keys).join("|") === a.files.join("|") && again.keys[0] === "ghi chu (2).txt",
   "kéo lại đúng tệp thứ hai → giữ thẻ cũ, không thêm", again);
+ok(again.note === undefined, "kéo lại đúng tệp đã có: không báo", again.note);
 const t3 = new File(["DAUHIEU_BA"], "ghi chu.txt", { lastModified: 3 });
 ok(F.attachKeys([t3], a.files)[0] === "ghi chu (3).txt", "tệp thứ ba cùng tên → “ghi chu (3).txt”");
+// Sửa tệp rồi kéo lại theo thói quen: thẻ cũ vẫn còn (không đè), người dùng được báo để bỏ thẻ bản trước khi sửa.
+const edited = F.attachFiles(a.files, [t3]);
+const noteRe = /Đã có thẻ "ghi chu\.txt" khác nội dung nên tệp mới thành "ghi chu \(3\)\.txt"/;
+ok(edited.keys[0] === "ghi chu (3).txt" && noteRe.test(edited.note ?? ""),
+  "bản sửa cùng tên: thêm thẻ mới và báo bỏ thẻ bản trước khi sửa", edited.note);
+// addKeys dùng trong setState dạng hàm: danh sách mới nhất có thẻ thư mục "src" mà lần đặt tên chưa thấy, vẫn giữ.
+const fresh = F.attachFiles([], [new File(["x"], "README.md", { lastModified: 9 })]);
+ok(F.addKeys(["src"], fresh.keys).join("|") === "src|README.md", "thêm thẻ vào danh sách mới nhất: thẻ thư mục còn",
+  F.addKeys(["src"], fresh.keys));
 ok(F.attachKeys([t3], [])[0] === "ghi chu.txt", "tin mới (không còn thẻ nào) → dùng lại tên gốc");
 
 rmSync(tmp, { recursive: true, force: true });

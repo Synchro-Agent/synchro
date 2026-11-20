@@ -23,6 +23,14 @@ def para(ls):
         prev = y
     return "\n".join(txt)
 
+if sys.argv[1] == "--each":
+    # Mỗi ảnh trang một dòng JSON, in ngay khi xong: máy chủ dừng tiến trình ở trần thời gian của cả tệp và vẫn giữ
+    # được các trang đã xong (server/fileproc/extractors.ts ocrPages).
+    import json
+    for p in sys.argv[2:]:
+        print(json.dumps({"text": para(lines(Image.open(p)))}, ensure_ascii=False), flush=True)
+    sys.exit(0)
+
 path = sys.argv[1]
 pages = []
 if path.lower().endswith(".pdf"):
