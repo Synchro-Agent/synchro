@@ -49,9 +49,13 @@ ok((await D.deckBrowserJs()) === js, "biên dịch được nhớ lại, không 
 
 console.log("3. SEC-5: chỉ xuất nội dung của chính người dùng, mạng theo quyền");
 {
-  const text = `Xong.\n<artifact identifier="q3-deck" type="text/html" title="Báo cáo Q3">${DECK}</artifact>\n<artifact identifier="q3-deck" mode="patch">x</artifact>`;
+  const text = `Xong.\n<artifact identifier="q3-deck" type="text/html" title="Báo cáo Q3">${DECK}</artifact>`;
   const d = D.deckFromText(text, "Q3-Deck");
-  ok(d && d.type === "html" && d.content === DECK && d.title === "Báo cáo Q3" && d.complete === true, "lấy đúng bản đầy đủ trong kết quả lượt (bỏ bản vá)", JSON.stringify(d)?.slice(0, 200));
+  const same = d && d.type === "html" && d.content === DECK && d.title === "Báo cáo Q3" && d.complete === true;
+  ok(same, "lấy đúng bản đầy đủ trong kết quả lượt", JSON.stringify(d)?.slice(0, 200));
+  // Bản vá không đọc được khối nào là bản vá hỏng (khung xem báo lỗi), không phải bản vá rỗng.
+  const unread = `${text}\n<artifact identifier="q3-deck" mode="patch">x</artifact>`;
+  ok(D.deckFromText(unread, "q3-deck") === null, "bản vá không đọc được khối nào → null như bản vá áp không được");
   ok(D.deckFromText(text, "khac") === null, "identifier không có → null");
   // W23-11: bản vá sau bản đầy đủ được áp (xuất đúng bản người dùng đang thấy, không phải bản cũ); vá hỏng / vá mà không có bản đầy đủ → null.
   const patched = `<artifact identifier="q3-deck" type="text/html" title="Báo cáo Q3">${DECK}</artifact>\nSửa:\n<artifact identifier="q3-deck" mode="patch">\n<<<<<<< SEARCH\n<h1>Hai</h1>\n=======\n<h1>Hai (đã sửa)</h1>\n>>>>>>> REPLACE\n</artifact>`;

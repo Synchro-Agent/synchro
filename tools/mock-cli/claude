@@ -150,6 +150,20 @@ const loginFile = path.join(dir, ".mock-login");
       result({ subtype: "success", is_error: false, result: late, usage });
       return;
     }
+    // #clipatch: bản sửa artifact có khối hỏng và lần gửi lại khối đó (mock-cli-common.cjs cliPatch).
+    const cp = C.cliPatch(prompt);
+    if (cp?.error) {
+      result({ subtype: "success", is_error: true, result: cp.error });
+      process.exit(1);
+    }
+    if (cp) {
+      await C.sleep(cp.waitMs);
+      await delta(cp.text);
+      const message = { role: "assistant", content: [{ type: "text", text: cp.text }] };
+      C.out({ type: "assistant", message, session_id: sid });
+      result({ subtype: "success", is_error: false, result: cp.text, usage: { input_tokens: 1, output_tokens: 1 } });
+      return;
+    }
     const web = (C.flag(a, "--tools") ?? "").includes("WebSearch") ? " [tìm web]" : "";
     // Cho kiểm thử biết Synchro có gửi kèm hướng dẫn artifact (--append-system-prompt) hay không.
     const text = /#pid/.test(prompt) ? `PID ${process.pid} lượt ${turn} hệ thống ${(SYS ?? "").length} ký tự` : /\[\[CAN_CONG_CU\]\]/.test(SYS ?? "") && /needtools/.test(prompt) ? "[[CAN_CONG_CU]]" : /#media/.test(prompt) && !C.isTitleAsk(prompt) && !C.mockBrain(prompt) ? C.mediaReply(media) : C.mockBrain(prompt) ?? (C.isTitleAsk(prompt) ? C.mockTitle(prompt) : /#prefs/.test(prompt) ? C.prefsEcho(`${SYS ?? ""}\n${prompt}`) : /#toprule/.test(prompt) ? C.ruleEcho(SYS ?? "") : /#pjins/.test(prompt) ? C.pjEcho(SYS ?? "") : C.reply("Claude", prompt, turn) + mcpNote + web + (/<artifacts>/.test(SYS ?? "") ? " [có hướng dẫn artifact]" : "") + (C.flag(a, "--effort") ? ` [effort ${C.flag(a, "--effort")}]` : ""));

@@ -227,6 +227,26 @@ function reply(name, prompt, turn) {
   const last = prompt.replace(/<current_time>[^<]*<\/current_time>/g, "").trim().split("\n").filter(Boolean).pop() ?? "";
   return `Chào bạn! Mình là ${name} chạy qua CLI giả lập (lượt ${turn} của hội thoại). Bạn vừa nói: "${last.slice(0, 120)}".`;
 }
+// "#clipatch <kiểu>": bản sửa artifact "cli-doc" có một khối chép sai chữ (như model thật), để thử bước Synchro nhắc
+// gửi lại khối hỏng trên đường CLI. Lời nhắc <patch_failed> của Synchro trích dòng đầu của SEARCH hỏng, nên kiểu đi
+// theo lời nhắc: "healerror" → lần gửi lại lỗi phía hãng, "healslow" → lần gửi lại chờ 4 giây (thử bấm Dừng), còn
+// lại gửi lại đúng khối. Mỗi lời nhắc ghi một dòng vào mock-heal.log cạnh CLI giả lập (kiểm thử đếm số lần nhắc).
+function cliPatch(prompt) {
+  const pblk = (s, r) => `<<<<<<< SEARCH\n${s}\n=======\n${r}\n>>>>>>> REPLACE`;
+  const wrap = (b) => `<artifact identifier="cli-doc" mode="patch">\n${b}\n</artifact>`;
+  if (prompt.includes('<patch_failed identifier="cli-doc"')) {
+    fs.appendFileSync(path.join(__dirname, "mock-heal.log"), "heal\n");
+    const kind = /<h1>Chao ban<\/h1><!--(\w+)-->/.exec(prompt)?.[1] ?? "ok";
+    if (kind === "healerror") return { error: "API Error: 500 Internal server error" };
+    const text = wrap(pblk("<h1>Chào bạn</h1>", "<h1>Xin chào bạn</h1>"));
+    return { waitMs: kind === "healslow" ? 4000 : 0, text };
+  }
+  const m = /#clipatch (\w+)/.exec(prompt);
+  if (!m) return null;
+  const blocks = `${pblk("<title>Bản gốc</title>", "<title>Bản mới</title>")}\n`
+    + pblk(`<h1>Chao ban</h1><!--${m[1]}-->`, "<h1>Xin chào bạn</h1>");
+  return { waitMs: 0, text: `Đã đổi tiêu đề và lời chào.\n\n${wrap(blocks)}` };
+}
 /** Tổng số lượt đã chat (mọi phiên) trong thư mục cấu hình: dùng để giả lập phần trăm hạn mức đã dùng. */
 const totalTurns = (dir) => Object.values(readJson(path.join(dir, "mock-sessions.json"), {})).reduce((x, y) => x + y, 0);
 const chunks = (t, n = 12) => Array.from({ length: Math.ceil(t.length / n) }, (_, i) => t.slice(i * n, i * n + n));
@@ -334,3 +354,4 @@ function gate(a) {
 }
 module.exports = { oauthTurn, version, gate, sxKit, TINY_JPEG, tinyPng, isImageTurn, imageCount, imageMode, imageLog, saveImage, stallTurn, STALL_TEXT, mediaDesc, mediaReply, mcp, isTitleAsk, mockTitle, mockBrain, prefsEcho, ruleEcho, pjEcho, toolAsk, cfg, sleep, out, uuid, readStdin, readLine, flag, bumpSession, bumpUsage, totalTurns, reply, chunks, fs, path, crypto };
 module.exports.pjSession = pjSession;
+module.exports.cliPatch = cliPatch;

@@ -12,14 +12,19 @@ import { ConnectorSession, RECONNECT_TOOL, type ChatTool, type OfflineConn } fro
 import { connectLinks, cxCard } from "../composio";
 import { appLogo } from "../connlogos";
 import { randomToken } from "../mcpauth";
-import { span } from "../tracing";
+import { currentTrace, span } from "../tracing";
 import { awaitToolUse, currentRun, delta, deltaStep, inboxWaiting, liveNow, liveText, markEffect, progress, runSignal, steered, stepSignal, takeInbox } from "../runs";
 import type { TraceItem } from "../transpile";
 import { maybeRef, readRef } from "../refs";
 import { normalizeSchema, resolveRefs } from "../../shared/connschema";
 import { BRIDGE_CALL_MAX, destructiveLike, TOOL_BUDGET } from "../mcp";
-import { AUTO_CHECK, autoDeckCheck, checkArtifact, checkRoundGate, findArtifact, readArtifact } from "../artcheck";
-import { artState, resolveArt, type ArtVersion } from "../../shared/vfs";
+import {
+  AUTO_CHECK, autoDeckCheck, checkArtifact, checkedInTurn, checkRoundGate, findArtifact, forgetCheck, readArtifact,
+} from "../artcheck";
+import { checkSpent, SELF_CHECK_MS, SELF_CHECK_SPENT, withinCheckBudget } from "../checkbudget";
+import { artState, cleanBase, type ArtState, type ArtVersion } from "../../shared/vfs";
+import { applySwaps, dropSeen, failingPatches, HEAL_ASK, healFold, patchReport, patchStats }
+  from "../../shared/patchheal";
 import { hasArtifacts, splitArtifacts } from "../../shared/artifacts";
 import { foldFix, foldPatches } from "../../shared/turnfold";
 import { typedText } from "../router";
@@ -171,7 +176,20 @@ export type Lib = { key: string; label: string };
 // art: lịch sử để read_artifact / check_artifact dựng lại bản hiện tại của artifact (cùng phần đã nén ở artBase).
 // turnArts: artifact model viết giữa lượt (trong lời dẫn trước công cụ), xem sayOut.
 // image: công cụ generate_image đang bật; msgs: lịch sử của lượt, để tìm ảnh gốc người dùng nhờ sửa.
-export type Exec = { project?: unknown; image?: boolean; msgs?: unknown; effects?: string[]; toolSync?: boolean; list: Skl; scripts: boolean; sess: ConnectorSession | null; uid: string; code: boolean; net: boolean; web?: boolean; art?: { messages: { role: string; content: unknown }[]; base: unknown }; turnArts?: string[]; outs: OutFile[]; outPaths?: Map<string, string>; libs?: Record<string, Lib[]>; studio?: Lib; prefer?: Record<string, string>; trace: TraceItem[]; conv?: string; heal?: Target; search?: Target; browse?: boolean; bctx?: BrowserCtx; shown?: string; heavy?: string[]; gate?: Gate; task?: TaskCtx | null; asking?: Promise<void>; awaiting?: number; denied?: Map<string, string>; connCards?: Set<string>; calls?: Map<string, { at: number; cancel?: AbortSignal }>; park?: () => void; inputsSent?: Set<string>; madeImgs?: string[]; webs?: Map<string, { title: string; url: string }>; edited?: Set<string>; rendered?: Set<string>; roundBrowser?: boolean; untrusted?: boolean; plan?: PlanState; deckGated?: boolean; held?: { text: string; at: number } };
+// patchHeal: kết quả lần nhắc gửi lại các khối sửa artifact không khớp (healPatch), ghi vào dòng [timing];
+// patchFailedFirst: số khối không áp được trước lần nhắc đó (sau khi ghép thì không còn thấy).
+export type Exec = {
+  project?: unknown; image?: boolean; msgs?: unknown; effects?: string[]; toolSync?: boolean; list: Skl;
+  scripts: boolean; sess: ConnectorSession | null; uid: string; code: boolean; net: boolean; web?: boolean;
+  art?: { messages: { role: string; content: unknown }[]; base: unknown }; turnArts?: string[]; outs: OutFile[];
+  outPaths?: Map<string, string>; libs?: Record<string, Lib[]>; studio?: Lib; prefer?: Record<string, string>;
+  trace: TraceItem[]; conv?: string; heal?: Target; search?: Target; browse?: boolean; bctx?: BrowserCtx;
+  shown?: string; heavy?: string[]; gate?: Gate; task?: TaskCtx | null; asking?: Promise<void>; awaiting?: number;
+  denied?: Map<string, string>; connCards?: Set<string>; calls?: Map<string, { at: number; cancel?: AbortSignal }>;
+  park?: () => void; inputsSent?: Set<string>; madeImgs?: string[]; webs?: Map<string, { title: string; url: string }>;
+  edited?: Set<string>; rendered?: Set<string>; roundBrowser?: boolean; untrusted?: boolean; plan?: PlanState;
+  deckGated?: boolean; held?: { text: string; at: number }; patchHeal?: "ok" | "fail"; patchFailedFirst?: number;
+};
 // Nguồn web của lượt, đánh số theo thứ tự gặp (số [n] trong câu trả lời trỏ đúng chip thứ n). Tối đa 20 nguồn.
 const WEB_MAX = 20;
 export const citeOf = (x: Exec): Citer => (url, title = "") => {
@@ -271,7 +289,10 @@ export function sayOut(x: Exec | null | undefined, text: string) {
   // Lời dẫn (say) cũng là chữ model viết: bỏ dòng ghi chú "Đã áp dụng …" kiểu cũ như câu trả lời cuối, để không lộ hướng dẫn cá nhân qua sự kiện 'say'.
   let t = stripAppliedNotes(scrubServerPaths(text.trim()));
   if (x && hasArtifacts(t)) t = t.replace(ART_BLOCK, (b) => {
-    (x.turnArts ??= []).push(b);
+    // Câu trả lời cuối của CLI lặp lại các khối đã tách ở lời gọi công cụ trước: giữ một bản, không thì bản sửa bị
+    // áp hai lần.
+    const arts = (x.turnArts ??= []);
+    if (!arts.includes(b)) arts.push(b);
     const title = /\btitle\s*=\s*"([^"]*)"/i.exec(b)?.[1];
     return `_(Đã viết ${title ? `“${title}”` : "artifact"}, xem ở câu trả lời)_`;
   }).trim();
@@ -281,7 +302,7 @@ export function sayOut(x: Exec | null | undefined, text: string) {
  *  để model sửa trước khi giao. Một lần mỗi lượt (không lặp vô hạn, không tốn thêm hạn mức của gói khi bộ slide đã sạch lỗi). */
 export async function deckGate(x: Exec, text: string): Promise<string | null> {
   // Cả artifact viết giữa lượt (lời dẫn trước khi gọi công cụ, giữ ở turnArts): câu trả lời cuối có thể chỉ còn lời tóm tắt.
-  const live = [...(x.turnArts ?? []), text].join("\n\n");
+  const live = [...(x.turnArts ?? []), unseen(x, text)].join("\n\n");
   if (!x.art || x.deckGated || runSignal()?.aborted || !hasArtifacts(live)) return null;
   const idents = [...new Set(splitArtifacts(live).flatMap((g) => (g.kind === "art" ? [g.art.ident] : [])))].slice(-2);
   if (!idents.length) return null;
@@ -301,10 +322,16 @@ export async function deckGate(x: Exec, text: string): Promise<string | null> {
 export function holdAnswer(x: Exec, text: string) {
   x.held = { text, at: x.turnArts?.length ?? 0 };
 }
+// Chữ qua đúng bộ lọc của sayOut rồi bỏ các khối artifact đã giữ ở turnArts (shared/patchheal.ts dropSeen).
+function unseen(x: Exec, text: string): string {
+  if (!x.turnArts?.length) return text;
+  return dropSeen(x.turnArts, stripAppliedNotes(scrubServerPaths(text.trim())));
+}
 /** Chữ của lượt để read_artifact / check_artifact tìm artifact: artifact viết giữa lượt, câu trả lời đang giữ (đúng thứ tự), rồi phần đang viết. */
 export function turnLive(x: Exec, tail: string): string {
   const t = x.turnArts ?? [], h = x.held;
-  return (h ? [...t.slice(0, h.at), h.text, ...t.slice(h.at), tail] : [...t, tail]).join("\n\n");
+  const rest = (s: string) => unseen(x, s);
+  return (h ? [...t.slice(0, h.at), rest(h.text), ...t.slice(h.at), rest(tail)] : [...t, rest(tail)]).join("\n\n");
 }
 /** Cuối lượt có câu trả lời đang giữ: câu trả lời người dùng nhận là câu gốc, bản sửa của model gộp vào artifact trong đó (shared/turnfold.ts).
  *  stop: dừng giữa chừng / lỗi khi đang sửa → giao câu gốc, bỏ phần sửa dở. */
@@ -320,6 +347,7 @@ export function settleGate(x: Exec | null | undefined, text: string, stop = fals
 }
 // Câu trả lời cuối đã viết lại trọn một artifact thì bỏ các bản cùng identifier viết giữa lượt (bản sửa mode="patch" thì vẫn cần bản gốc).
 export const withTurnArts = (x: Exec | null | undefined, text0: string) => {
+  notePatches(x, text0);
   // Bản sửa ở câu trả lời cuối cho bộ slide viết giữa lượt: gộp thành một thẻ (H1 lỗi 9).
   const fp = x?.turnArts?.length ? foldPatches(x.turnArts, text0) : null;
   if (x && fp) x.turnArts = fp.arts;
@@ -328,6 +356,19 @@ export const withTurnArts = (x: Exec | null | undefined, text0: string) => {
   const fresh = (x?.turnArts ?? []).filter((b) => !text.includes(b) && !splitArtifacts(b).some((g) => g.kind === "art" && full.has(g.art.ident)));
   return fresh.length ? `${fresh.join("\n\n")}\n\n${text}` : text;
 };
+// Số khối sửa áp được / không áp được và số lần viết lại trọn sau bản sửa hỏng của lượt, ghi vào dòng [timing]
+// (tracing.ts): đo được bản sửa có áp ngay lần đầu không mà không cần đọc lại đoạn chat. Chữ ở đây đã ghép lần gửi
+// lại, nên số khối hỏng lần đầu lấy từ patchFailedFirst.
+function notePatches(x: Exec | null | undefined, text: string) {
+  const t = currentTrace();
+  if (!t || !x?.art || !/mode\s*=\s*["']patch/i.test([...(x.turnArts ?? []), text].join("\n"))) return;
+  const st = patchStats(priorArts(x.art.messages, cleanBase(x.art.base)), turnTexts(x, text));
+  t.attrs["synchro.patch.ok"] = st.ok;
+  t.attrs["synchro.patch.failed"] = st.failed;
+  t.attrs["synchro.patch.rewrites"] = st.rewrites;
+  if (x.patchFailedFirst !== undefined) t.attrs["synchro.patch.failed_first"] = x.patchFailedFirst;
+  if (x.patchHeal) t.attrs["synchro.patch.heal"] = x.patchHeal;
+}
 /** Một lời gọi công cụ từ CLI qua cầu nối: giữ lời dẫn trước đó, ghi công cụ và kết quả vào nhật ký, ghép tin nhắn thêm vào kết quả. */
 export async function bridgeCall(x: Exec, name: string, input: Record<string, unknown>, usedAll: ToolRun["used"][], cancel?: AbortSignal) {
   // Claude Code: chờ luồng đầu ra tới lời gọi này để đoạn chữ ngay trước đó (vd. bản sửa artifact) đã nằm trong liveNow().
@@ -401,7 +442,10 @@ export function keepImages(uid: string, files: ImgFile[], outs: OutFile[]) {
 }
 // 1×1 PNG xám: ảnh giữ chỗ cho ảnh đang dựng ở chế độ nền (G4). Model đặt địa chỉ ảnh vào slide / artifact ngay; byte thật thay vào đúng id khi dựng xong.
 const PLACEHOLDER_PNG = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGN49uwZAAVoArMCxcTLAAAAAElFTkSuQmCC", "base64");
-const ASPECT_DIMS: Record<string, [number, number]> = { "1:1": [1024, 1024], "16:9": [1280, 720], "9:16": [720, 1280], "4:3": [1024, 768], "3:4": [768, 1024] };
+const ASPECT_DIMS: Record<string, [number, number]> = {
+  "1:1": [1024, 1024], "16:9": [1280, 720], "9:16": [720, 1280], "4:3": [1024, 768], "3:4": [768, 1024],
+  "4:5": [896, 1120], "5:4": [1120, 896], "2:3": [832, 1248], "3:2": [1248, 832],
+};
 /** Đặt tên ảnh theo lời người dùng (model hay viết prompt tiếng Anh), không trùng tên tệp đã có trong lượt. Dùng cho cả ảnh thật và ảnh giữ chỗ. */
 function renameImages(x: Exec, files: ImgFile[]): ImgFile[] {
   const asked = requestSlug(typedText((Array.isArray(x.msgs) ? (x.msgs as { role?: string; content?: unknown }[]) : []).filter((m) => m?.role === "user").at(-1)));
@@ -694,12 +738,26 @@ async function runCall(x: Exec, c: Call, d?: Decision): Promise<Run> {
   if ((c.name === "read_artifact" || c.name === "check_artifact") && x.art && !x.sess?.get(c.name)) {
     const a = findArtifact({ uid: x.uid, conv: x.conv, messages: x.art.messages, base: x.art.base, live: turnLive(x, liveNow()) }, typeof c.input?.identifier === "string" ? c.input.identifier : undefined);
     const used = { kind: "search" as const, name: c.name };
-    if (c.name === "read_artifact") return { ...readArtifact(a, c.input ?? {}), used };
+    // Bản sửa gần nhất có khối không áp được: nói rõ khối nào và chỗ gần giống nhất ngay trong kết quả. Chỉ thấy bản
+    // hiện tại chưa đổi thì model viết lại cả tệp.
+    const fail = a ? patchReport(a) : "";
+    const note = <T extends { content: string }>(r: T): T => (fail ? { ...r, content: `${r.content}\n${fail}` } : r);
+    if (c.name === "read_artifact") return { ...note(readArtifact(a, c.input ?? {})), used };
+    const spent = { content: note({ content: SELF_CHECK_SPENT }).content, is_error: false, used };
+    // Hết giờ tự kiểm thì từ chối trước khi đếm vòng: lần bị từ chối không phải một vòng model đã thấy kết quả.
+    if (checkSpent(x) >= SELF_CHECK_MS) return spent;
+    const seen = !!a && checkedInTurn(x, a);
     const enough = a ? checkRoundGate(x, a) : null;
     if (enough) return { content: enough, is_error: false, used };
-    const r = await checkArtifact(x.uid, a, c.input ?? {}, process.env.APP_URL || "https://synchro.net.nz", runSignal());
+    const origin = process.env.APP_URL || "https://synchro.net.nz";
+    const r = await withinCheckBudget(x, runSignal(), (s) => checkArtifact(x.uid, a, c.input ?? {}, origin, s));
+    if (!r) {
+      // Lần này vừa mở một vòng mới cho bản này mà bị cắt: trả vòng đó lại (autoDeckCheck vẫn đo bản này).
+      if (a && !seen) forgetCheck(x, a);
+      return spent;
+    }
     if (r.image) (x.heavy ??= []).push(c.id);
-    return { ...r, used };
+    return { ...note(r), used };
   }
   if (x.browse && isBrowserTool(c.name) && !x.sess?.get(c.name)) {
     // Lần đầu dùng trình duyệt trong lượt (hoặc đổi sang trình duyệt kia): mở khung trình duyệt cạnh khung chat để người dùng xem
@@ -1057,29 +1115,54 @@ export function reply(c: { user: { id: string } }, model: string, out: Out, x: E
   return Response.json({ model, text: withTurnArts(x, out.text), skills: out.used, files: x.outs, libs: usedLibs(x, usedNames), ...(x.trace.length ? { trace: x.trace } : {}), ...(out.cancelled ? { cancelled: true } : {}), ...(x.webs?.size ? { webSources: [...x.webs.values()] } : {}) });
 }
 
-// Bản sửa artifact (mode="patch") phải áp được vào bản hiện tại. Không khớp thì nhắc model sửa lại đúng một lần (tự vá),
-// còn sai nữa thì giữ câu trả lời; trình duyệt hiện bản sửa lỗi kèm nút yêu cầu viết lại toàn bộ.
-function patchProblems(history: { role: string; content: unknown }[], text: string, base: ArtVersion[]): string[] {
-  if (!/mode\s*=\s*["']patch/i.test(text)) return [];
-  const st = artState(history.filter((h) => h.role === "assistant" || h.role === "ai").map((h) => (typeof h.content === "string" ? h.content : "")), base);
-  const out: string[] = [];
-  for (const sg of splitArtifacts(text)) if (sg.kind === "art" && sg.art.patch) {
-    const r = resolveArt(st.get(sg.art.ident), sg.art);
-    if (r.fix?.failed.length) out.push(`${sg.art.ident}: ${r.fix.failed.map((f) => `"${f}"`).join(", ")}`);
-    st.set(sg.art.ident, r);
-  }
-  return out;
+// Bản sửa artifact (mode="patch") phải áp được vào bản hiện tại. Còn khối không khớp khi model định trả lời xong thì
+// nhắc đúng một lần, nêu từng khối hỏng và chỗ gần giống nhất, chỉ xin gửi lại các khối đó rồi ghép vào bản sửa gốc
+// (shared/patchheal.ts). Gửi lại vẫn không khớp thì giữ câu trả lời; trình duyệt hiện bản sửa lỗi kèm nút yêu cầu viết
+// lại toàn bộ.
+type Hist = { role: string; content: unknown }[];
+const assistantTexts = (history: Hist) => history
+  .filter((h) => h.role === "assistant" || h.role === "ai")
+  .map((h) => (typeof h.content === "string" ? h.content : ""));
+/** Trạng thái artifact trước lượt này: lịch sử đoạn chat cùng phần đã nén trình duyệt gửi kèm. */
+export const priorArts = (history: Hist, base: ArtVersion[]): ArtState =>
+  artState(assistantTexts(history), base);
+/** Chữ của lượt theo thứ tự: artifact viết giữa lượt (trừ khối câu trả lời đã có), rồi câu trả lời. */
+const turnTexts = (x: Exec | null | undefined, text: string) =>
+  [...(x?.turnArts ?? []).filter((b) => !text.includes(b)), text];
+/** Lời nhắc sửa lại bản sửa hỏng cho câu trả lời text; null khi mọi bản sửa đều áp được. */
+export function patchHealAsk(prior: () => ArtState, x: Exec | null | undefined, text: string): string | null {
+  if (!/mode\s*=\s*["']patch/i.test([...(x?.turnArts ?? []), text].join("\n"))) return null;
+  const texts = turnTexts(x, text), bad = failingPatches(prior(), texts);
+  if (!bad.length) return null;
+  if (x) x.patchFailedFirst = patchStats(prior(), texts).failed;
+  return HEAL_ASK(bad.map((b) => patchReport(b.r)));
 }
-export async function healPatch(ad: Adapter, m: unknown[], history: { role: string; content: unknown }[], out: Out, base: ArtVersion[] = []): Promise<Out> {
+/** Ghép lần gửi lại vào câu trả lời và vào artifact viết giữa lượt. Khối của lần gửi lại mà CLI đã tách vào turnArts
+ *  (gọi công cụ trong lúc sửa) được bỏ: nó đã nằm trong bản sửa ghép. */
+export function patchHealMerge(prior: () => ArtState, x: Exec | null | undefined, text: string, reply: string): string {
+  const swaps = healFold(prior(), turnTexts(x, text), reply);
+  if (x?.turnArts) x.turnArts = x.turnArts.filter((b) => !reply.includes(b)).map((b) => applySwaps(b, swaps));
+  if (x) x.patchHeal = swaps.length ? "ok" : "fail";
+  return applySwaps(text, swaps);
+}
+export async function healPatch(
+  ad: Adapter, m: unknown[], x: Exec | null, history: Hist, out: Out, base: ArtVersion[] = [],
+): Promise<Out> {
   if ("approval" in out || out.cancelled) return out;
-  const bad = patchProblems(history, out.text, base);
-  if (!bad.length) return out;
+  let st: ArtState | undefined;
+  const prior = () => (st ??= priorArts(history, base));
+  const ask = patchHealAsk(prior, x, out.text);
+  if (!ask) return out;
   progress("step", "Đang sửa lại bản sửa artifact cho khớp");
   deltaStep();
-  m.push({ role: "user", content: `Hệ thống: bản sửa artifact chưa áp được vì khối SEARCH không khớp nguyên văn với bản hiện tại trong <current_artifacts> (${bad.join("; ")}). Hãy viết lại TOÀN BỘ câu trả lời, với bản sửa có SEARCH chép đúng từng ký tự từ bản hiện tại (hoặc viết lại toàn bộ artifact nếu khó).` });
+  m.push({ role: "user", content: ask });
   try {
     const r = await ad.step(m, true);
     m.push(r.assistant);
-    return r.text.trim() ? { ...out, text: r.text } : out;
-  } catch (e) { if (isAbort(e)) return { ...out, cancelled: true }; throw e; }
+    return { ...out, text: patchHealMerge(prior, x, out.text, r.text) };
+  } catch (e) {
+    if (isAbort(e)) return { ...out, cancelled: true };
+    throw e;
+  }
 }
+
