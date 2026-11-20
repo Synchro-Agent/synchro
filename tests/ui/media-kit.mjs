@@ -79,6 +79,17 @@ const open = async (content, { deck = false, type = "html" } = {}) => {
   const done = new Promise((r) => { const h = (e) => { const m = JSON.parse(e.data); if (m.method === "Page.loadEventFired" && m.sessionId === S) { ws.removeEventListener("message", h); r(); } }; ws.addEventListener("message", h); });
   await P("Page.navigate", { url });
   await done;
+  // Phông của bộ nạp sau sự kiện load (kitHead) rồi đổi phông, dàn lại trang: chờ tệp face.css xong rồi mới chờ phông,
+  // để các phép đo, ảnh chụp bên dưới không rơi vào lúc trang đang dàn lại.
+  await ev(`new Promise((ok) => {
+    let n = 0;
+    const t = setInterval(() => {
+      const ls = [...document.querySelectorAll("link[data-sx-font]")];
+      if (!(ls.every((l) => l.sheet) || ++n > 80)) return;
+      clearInterval(t);
+      ok(1);
+    }, 25);
+  })`);
   await ev(`document.fonts.ready.then(() => 1)`);
   await sleep(150);
 };
