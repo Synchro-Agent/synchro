@@ -3,7 +3,10 @@
 // báo rồi đưa vào khung dưới dạng data:. Chỉ tải phần font có ký tự trang dùng (chia theo unicode-range); lỗi hay quá
 // giờ thì trả chuỗi rỗng, ảnh vẫn xuất được bằng font dự phòng.
 // Nguồn phông: face.css của bộ Synchro (/kitfonts/v1/<id>/face.css, đường dẫn tệp tương đối) khi có, không thì Google
-// Fonts.
+// Fonts. Chữ của artifact do model viết, có thể chịu ảnh hưởng của trang web lạ, mà việc tải chạy trên trang Synchro
+// chứ không trong khung cô lập: chỉ tải face.css cùng origin với Synchro và tệp phông của origin đó hoặc
+// fonts.gstatic.com, để một địa chỉ lạ trong artifact không biến lần xuất ảnh thành lời gọi tới máy khác hay mạng nội
+// bộ.
 import { KIT_FONTS } from "../shared/designrefs";
 import { kitFaceUrl } from "../shared/kitfonts";
 import { kitFontIds, usesKit } from "../shared/artkit";
@@ -36,8 +39,23 @@ const b64 = (buf: ArrayBuffer) => {
   return btoa(s);
 };
 
-export async function fontEmbedCss(content: string, get: typeof fetch = fetch, ms = 6000): Promise<string> {
-  const kit = [...new Set(content.match(KIT_SHEET) ?? [])].slice(0, MAX_KIT_SHEETS);
+const GSTATIC = "https://fonts.gstatic.com";
+const here = () => (typeof location === "undefined" ? "" : location.origin);
+const originOf = (u: string, base?: string) => {
+  try {
+    const x = new URL(u, base);
+    return { href: x.href, origin: x.origin };
+  } catch {
+    // Địa chỉ hỏng trong CSS: coi như không có, mặt đó hay tệp CSS đó bị bỏ, phần còn lại vẫn nhúng được.
+    return null;
+  }
+};
+
+export async function fontEmbedCss(
+  content: string, get: typeof fetch = fetch, ms = 6000, origin = here(),
+): Promise<string> {
+  const own = (u: string) => !!origin && originOf(u)?.origin === origin;
+  const kit = [...new Set((content.match(KIT_SHEET) ?? []).filter(own))].slice(0, MAX_KIT_SHEETS);
   // Bộ Synchro đã có đủ phông của trang: không tải thêm bản Google của cùng họ (hai mặt trùng tên, mặt sau thắng).
   const google = kit.length ? [] : [...new Set((content.match(SHEET) ?? []).map((u) => u.replace(/&amp;/g, "&")))];
   const urls = [...kit, ...google.slice(0, MAX_SHEETS)];
@@ -53,16 +71,12 @@ export async function fontEmbedCss(content: string, get: typeof fetch = fetch, m
     const faces = [...inline.map((f) => ({ f, base: "" })), ...sheetFaces]
       .filter((x) => inRange(x.f, chars)).slice(0, MAX_FONTS);
     const out = await Promise.all(faces.map(async ({ f, base }) => {
-      const m = /url\(\s*["']?([^"')\s]+)["']?\s*\)/.exec(f);
-      if (!m) return "";
-      let src = "";
-      try {
-        src = new URL(m[1], base || undefined).href;
-      } catch {
-        // Địa chỉ phông hỏng trong CSS: bỏ mặt đó, các mặt khác vẫn nhúng được.
-        return "";
-      }
-      if (!/^https?:/.test(src)) return "";
+      // Mặt đầu tiên trỏ tới Synchro hoặc fonts.gstatic.com; url() tới máy khác bị bỏ qua, không tải.
+      const refs = [...f.matchAll(/url\(\s*["']?([^"')\s]+)["']?\s*\)/g)];
+      const pick = refs.map((m) => ({ m, at: originOf(m[1], base || undefined) }))
+        .find((x) => x.at && (x.at.origin === GSTATIC || (!!origin && x.at.origin === origin)));
+      if (!pick?.at) return "";
+      const src = pick.at.href;
       // Một tệp phông không tải được chỉ thiếu đúng mặt đó: ảnh vẫn xuất, chữ đó dùng phông dự phòng.
       const r = await get(src, { signal }).catch(() => null);
       if (!r?.ok) return "";
@@ -70,7 +84,9 @@ export async function fontEmbedCss(content: string, get: typeof fetch = fetch, m
       if (!data) return "";
       const woff2 = /\.woff2(?:[?#]|$)/.test(src) || /format\(\s*["']woff2/.test(f);
       const fmt = woff2 ? "woff2" : /\.woff(?:[?#]|$)/.test(src) ? "woff" : "ttf";
-      return f.replace(m[0], `url(data:font/${fmt};base64,${b64(data)})`);
+      // Thay cả mô tả src: các url() khác trong cùng mặt (máy lạ) không được đi theo vào ảnh hay tệp SVG tải về.
+      const kind = fmt === "ttf" ? "truetype" : fmt;
+      return f.replace(/src\s*:[^;}]*/i, `src: url(data:font/${fmt};base64,${b64(data)}) format("${kind}")`);
     }));
     return out.filter(Boolean).join("\n");
   } catch (e) {
@@ -108,6 +124,6 @@ export async function svgDownload(svg: string, origin: string, get: typeof fetch
   }
   const ids = svgKitFonts(out);
   const sheets = ids.map((id) => `<!-- ${kitFaceUrl(origin, id)} -->`).join("");
-  const faces = ids.length ? await fontEmbedCss(`${out}${sheets}`, get) : "";
+  const faces = ids.length ? await fontEmbedCss(`${out}${sheets}`, get, 6000, origin) : "";
   return svgExport(out, faces);
 }

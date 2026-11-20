@@ -96,7 +96,7 @@ console.log("3. Xuất ảnh, SVG nhúng phông của Synchro");
   const withLink = AK.withKitFontLink(page, origin);
   ok(withLink.includes(`${origin}/kitfonts/v1/playfair-display/face.css`) && withLink.includes("fonts.googleapis.com"),
     "trang có preset: ghi face.css của Synchro và địa chỉ Google dự phòng", withLink.slice(-300));
-  const css = await AF.fontEmbedCss(withLink, get);
+  const css = await AF.fontEmbedCss(withLink, get, 6000, origin);
   const faces = css.match(/@font-face/g) ?? [];
   const inlined = (css.match(/url\(data:font\/woff2;base64,d09GMg/g) ?? []).length;
   ok(faces.length >= 3 && !/url\(\.\//.test(css) && inlined === faces.length,
@@ -108,10 +108,34 @@ console.log("3. Xuất ảnh, SVG nhúng phông của Synchro");
     "đúng hai họ phông của preset (tiêu đề, thân) có ký tự trang dùng");
   asked.length = 0;
   const latin = `<html data-sx-preset="editorial-serif"><body>Lo Am</body></html>`;
-  await AF.fontEmbedCss(AK.withKitFontLink(latin, origin), get);
+  await AF.fontEmbedCss(AK.withKitFontLink(latin, origin), get, 6000, origin);
   const woff = asked.filter((u) => u.endsWith(".woff2"));
   ok(woff.some((u) => u.endsWith("-latin.woff2")) && !woff.some((u) => u.endsWith("-vietnamese.woff2")),
     "trang không có chữ có dấu: không tải bộ tiếng Việt (chia theo unicode-range)", woff);
+  // Địa chỉ phông trong chữ artifact do model viết: face.css ở máy khác, url() của mặt trỏ tới máy lạ hay mạng nội bộ
+  // không được tải từ trang Synchro, và không làm mất đường Google dự phòng.
+  const foreign = [];
+  const spy = async (u) => {
+    foreign.push(String(u));
+    if (String(u).startsWith("https://fonts.googleapis.com/")) {
+      const face = "@font-face{font-family:'Inter';src:url(http://10.0.0.5/x.woff2) format('woff2'),"
+        + "url(https://fonts.gstatic.com/s/inter/a.woff2) format('woff2')}";
+      return { ok: true, text: async () => face };
+    }
+    return { ok: true, text: async () => "", arrayBuffer: async () => new Uint8Array([119, 79, 70, 50]).buffer };
+  };
+  const evil = `${page}\n<!-- https://evil.example/kitfonts/v1/inter/face.css`
+    + ` https://fonts.googleapis.com/css2?family=Inter -->`
+    + `<style>@font-face{font-family:'X';src:url(http://127.0.0.1:8080/beacon) format('woff2'),`
+    + `url(https://fonts.gstatic.com/s/x.woff2)}</style>`;
+  const evilCss = await AF.fontEmbedCss(evil, spy, 6000, origin);
+  const hosts = [...new Set(foreign.map((u) => new URL(u).host))].sort();
+  ok(hosts.join() === "fonts.googleapis.com,fonts.gstatic.com", "chỉ gọi Google Fonts, không gọi máy lạ", foreign);
+  ok(!/10\.0\.0\.5|127\.0\.0\.1|evil/.test(evilCss) && (evilCss.match(/@font-face/g) ?? []).length === 2,
+    "mặt phông giữ được, url() lạ bị bỏ khỏi CSS nhúng", evilCss.slice(0, 300));
+  foreign.length = 0;
+  await AF.fontEmbedCss(withLink, spy, 6000, "");
+  ok(!foreign.some((u) => u.includes("/kitfonts/")), "không biết origin của Synchro: không tải face.css nào", foreign);
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 200">`
     + `<text x="10" y="60" font-family="Fraunces" font-size="48">Lò Ấm</text></svg>`;
   ok(AF.svgKitFonts(svg).join() === "fraunces", "SVG: nhận phông viết thẳng trong font-family", AF.svgKitFonts(svg));
