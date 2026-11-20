@@ -1,0 +1,123 @@
+{
+  "v": 1,
+  "id": "email-030",
+  "domain": "email",
+  "title": "Thư ra mắt sản phẩm nền đen: ảnh xe đạp trắng đen, chữ trắng đậm, một từ màu cam",
+  "moods": [
+    "dark-cinematic",
+    "energetic",
+    "minimal-mono"
+  ],
+  "industries": [
+    "sports",
+    "ecommerce"
+  ],
+  "audience": [
+    "consumer",
+    "youth"
+  ],
+  "source_url": "https://designmodo.com/postcards/",
+  "source_host": "designmodo.com",
+  "source_kind": "public-image",
+  "captured_at": "2026-11-20",
+  "image": {
+    "file": "email/email-030.webp",
+    "width": 656,
+    "height": 820,
+    "bytes": 31674,
+    "layout": "single"
+  },
+  "tokens": {
+    "theme": "dark",
+    "colors": [
+      {
+        "hex": "#030304",
+        "role": "bg",
+        "share": 0.911
+      },
+      {
+        "hex": "#fcfdfd",
+        "role": "ink",
+        "share": 0.017
+      },
+      {
+        "hex": "#49494b",
+        "role": "muted",
+        "share": 0.008
+      },
+      {
+        "hex": "#ff5a1f",
+        "role": "accent",
+        "share": 0
+      }
+    ],
+    "fonts": {
+      "head": {
+        "kit": "archivo",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 400
+      },
+      "body": {
+        "kit": "inter",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 400
+      },
+      "mono": null
+    },
+    "type": {
+      "basePx": 14,
+      "ratio": 1.333,
+      "sizes": [
+        30,
+        18,
+        14,
+        12
+      ],
+      "headLine": 1.15,
+      "bodyLine": 1.6,
+      "headCase": "none"
+    },
+    "tracking": {
+      "display": -0.02,
+      "heading": 0,
+      "body": 0,
+      "label": 0.02
+    },
+    "radius": {
+      "outer": 8,
+      "inner": 999,
+      "pill": true
+    },
+    "shadow": {
+      "level": 0,
+      "css": "none"
+    },
+    "spacing": {
+      "unit": 8,
+      "section": 40,
+      "gutter": 24,
+      "density": "balanced"
+    },
+    "layout": {
+      "columns": 1,
+      "maxWidth": 600,
+      "align": "center",
+      "emptyShare": 0.2
+    },
+    "imagery": {
+      "kind": "photo",
+      "share": 0.45,
+      "light": "hard top light, deep shadows",
+      "lens": "50mm product shot, three-quarter view",
+      "grade": "high-contrast black and white",
+      "subject": "a road bicycle on a black background"
+    }
+  },
+  "measured": [
+    "theme"
+  ],
+  "why": "Nền đen #030304 phủ toàn thư, tiêu đề trắng 30 px đậm căn giữa với đúng một từ tô cam #ff5a1f. Ảnh sản phẩm trắng đen tương phản cao chiếm 45% chiều cao màn đầu, ánh sáng gắt từ trên. Nhãn nhỏ bo tròn xám phía trên tiêu đề, menu chữ 12 px góc phải. Mượn cách chỉ tô màu một từ khoá trên nền đen và ảnh sản phẩm đơn sắc; không chép ảnh hay chữ.",
+  "licence": "Ảnh chụp thu nhỏ của trang công khai, chỉ để model tham khảo nguyên tắc. Không chép logo, chữ, ảnh hay phông độc quyền của trang."
+}

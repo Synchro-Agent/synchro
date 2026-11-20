@@ -1,0 +1,133 @@
+{
+  "v": 1,
+  "id": "dashboard-027",
+  "domain": "dashboard",
+  "title": "Hồ sơ dữ liệu thành phố: ảnh đô thị tối và chỉ số chữ lớn",
+  "moods": [
+    "dark-cinematic",
+    "editorial",
+    "data-dense"
+  ],
+  "industries": [
+    "nonprofit-gov",
+    "real-estate-interior"
+  ],
+  "audience": [
+    "public"
+  ],
+  "source_url": "https://datausa.io/profile/geo/new-york-ny",
+  "source_host": "datausa.io",
+  "source_kind": "public-page",
+  "captured_at": "2026-11-20",
+  "image": {
+    "file": "dashboard/dashboard-027.webp",
+    "width": 1280,
+    "height": 1600,
+    "bytes": 89700,
+    "layout": "single"
+  },
+  "tokens": {
+    "theme": "dark",
+    "colors": [
+      {
+        "hex": "#141b2e",
+        "role": "bg",
+        "share": 0.475
+      },
+      {
+        "hex": "#ffffff",
+        "role": "ink",
+        "share": 0
+      },
+      {
+        "hex": "#9196a1",
+        "role": "muted",
+        "share": 0.151
+      },
+      {
+        "hex": "#879bf5",
+        "role": "accent",
+        "share": 0.003
+      },
+      {
+        "hex": "#1f2840",
+        "role": "surface",
+        "share": 0
+      }
+    ],
+    "fonts": {
+      "head": {
+        "kit": "inter",
+        "seen": "Palanquin",
+        "seenLicence": "unknown",
+        "weight": 600
+      },
+      "body": {
+        "kit": "inter",
+        "seen": "Palanquin",
+        "seenLicence": "unknown",
+        "weight": 400
+      },
+      "mono": null
+    },
+    "type": {
+      "basePx": 16,
+      "ratio": 1.316,
+      "sizes": [
+        48,
+        42,
+        17
+      ],
+      "headLine": 1.1,
+      "bodyLine": 1.29,
+      "headCase": "upper"
+    },
+    "tracking": {
+      "display": 0.02,
+      "heading": 0.02,
+      "body": 0,
+      "label": 0
+    },
+    "radius": {
+      "outer": 4,
+      "inner": 4,
+      "pill": true
+    },
+    "shadow": {
+      "level": 0,
+      "css": "none"
+    },
+    "spacing": {
+      "unit": 4,
+      "section": 60,
+      "gutter": 60,
+      "density": "balanced"
+    },
+    "layout": {
+      "columns": 4,
+      "maxWidth": 1000,
+      "align": "left",
+      "emptyShare": 0.07
+    },
+    "imagery": {
+      "kind": "photo",
+      "share": 0.5,
+      "light": "dusk city light, cool haze",
+      "lens": "telephoto skyline, eye level",
+      "grade": "navy overlay, desaturated",
+      "subject": "city skyline at dusk"
+    }
+  },
+  "measured": [
+    "theme",
+    "fonts",
+    "type",
+    "tracking",
+    "radius",
+    "shadow",
+    "spacing",
+    "layout"
+  ],
+  "why": "Ảnh đường chân trời thành phố phủ lớp xanh đen #141b2e, tên địa danh chữ hoa giãn 0,02em căn giữa và 6 chỉ số trắng 42 px xếp hàng. Bên dưới là phần chữ hai cột trên nền trắng như báo cáo. Không bóng, bo 4 px. Mượn cách mở đầu bảng số liệu bằng ảnh địa điểm và chỉ số chữ lớn; không chép ảnh hay số liệu.",
+  "licence": "Ảnh chụp thu nhỏ của trang công khai, chỉ để model tham khảo nguyên tắc. Không chép logo, chữ, ảnh hay phông độc quyền của trang."
+}

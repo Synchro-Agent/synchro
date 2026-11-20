@@ -1,0 +1,127 @@
+{
+  "v": 1,
+  "id": "slide-030",
+  "domain": "slide",
+  "title": "Bộ slide tổng kết năm: nền lưới giấy, ảnh cắt dán đen trắng, sticker màu",
+  "moods": [
+    "playful",
+    "retro-print",
+    "editorial"
+  ],
+  "industries": [
+    "media-publishing",
+    "general"
+  ],
+  "audience": [
+    "youth",
+    "internal"
+  ],
+  "source_url": "https://www.slidescarnival.com/template/a-year-in-breakdowns-presentation/337981",
+  "source_host": "slidescarnival.com",
+  "source_kind": "public-image",
+  "captured_at": "2026-11-20",
+  "image": {
+    "file": "slide/slide-030.webp",
+    "width": 1280,
+    "height": 720,
+    "bytes": 89174,
+    "layout": "grid4"
+  },
+  "tokens": {
+    "theme": "light",
+    "colors": [
+      {
+        "hex": "#f2f4ef",
+        "role": "bg",
+        "share": 0.455
+      },
+      {
+        "hex": "#070606",
+        "role": "ink",
+        "share": 0.031
+      },
+      {
+        "hex": "#1d1d20",
+        "role": "muted",
+        "share": 0.117
+      },
+      {
+        "hex": "#e04b8f",
+        "role": "accent",
+        "share": 0
+      },
+      {
+        "hex": "#f8f070",
+        "role": "accent2",
+        "share": 0
+      }
+    ],
+    "fonts": {
+      "head": {
+        "kit": "fraunces",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 400
+      },
+      "body": {
+        "kit": "space-grotesk",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 400
+      },
+      "mono": null
+    },
+    "type": {
+      "basePx": 13,
+      "ratio": 1.414,
+      "sizes": [
+        40,
+        24,
+        13
+      ],
+      "headLine": 1.05,
+      "bodyLine": 1.4,
+      "headCase": "upper"
+    },
+    "tracking": {
+      "display": -0.01,
+      "heading": 0,
+      "body": 0,
+      "label": 0.04
+    },
+    "radius": {
+      "outer": 0,
+      "inner": 0,
+      "pill": false
+    },
+    "shadow": {
+      "level": 2,
+      "css": "4px 4px 0 #070606"
+    },
+    "spacing": {
+      "unit": 8,
+      "section": 32,
+      "gutter": 16,
+      "density": "dense"
+    },
+    "layout": {
+      "columns": 2,
+      "maxWidth": 1280,
+      "align": "asymmetric",
+      "emptyShare": 0.2
+    },
+    "imagery": {
+      "kind": "mixed",
+      "share": 0.5,
+      "light": "flat scan light on paper collage",
+      "lens": "flat collage, torn paper edges",
+      "grade": "black and white photos with candy yellow and pink",
+      "subject": "portraits cut out and stuck on grid paper"
+    }
+  },
+  "measured": [
+    "theme"
+  ],
+  "why": "Nền giấy kẻ ô #f2f4ef, ảnh chân dung đen trắng cắt viền răng cưa xen sticker vàng #f8f070 và hồng. Tiêu đề chữ có chân đậm nghiêng 40 px trên dải đen, mục lục đánh số chữ hoa xếp dọc. Mỗi slide một mảng màu pastel khác nhau giữ cùng bộ chữ. Mượn cách cắt dán ảnh đen trắng với sticker nhỏ trên nền giấy lưới; không chép ảnh hay chữ.",
+  "licence": "Ảnh chụp thu nhỏ của trang công khai, chỉ để model tham khảo nguyên tắc. Không chép logo, chữ, ảnh hay phông độc quyền của trang."
+}

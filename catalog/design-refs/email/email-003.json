@@ -1,0 +1,124 @@
+{
+  "v": 1,
+  "id": "email-003",
+  "domain": "email",
+  "title": "Thư chuỗi hòa nhạc ngoài trời: vàng chanh trên nền nâu đen, chữ in cổ điển",
+  "moods": [
+    "retro-print",
+    "dark-cinematic",
+    "energetic"
+  ],
+  "industries": [
+    "events",
+    "culture-music"
+  ],
+  "audience": [
+    "youth",
+    "consumer"
+  ],
+  "source_url": "https://reallygoodemails.com/emails/autocamp-sounds-outside-concert-series",
+  "source_host": "reallygoodemails.com",
+  "source_kind": "public-image",
+  "captured_at": "2026-11-20",
+  "image": {
+    "file": "email/email-003.webp",
+    "width": 680,
+    "height": 1600,
+    "bytes": 89438,
+    "layout": "single"
+  },
+  "tokens": {
+    "theme": "dark",
+    "colors": [
+      {
+        "hex": "#2a261b",
+        "role": "bg",
+        "share": 0.514
+      },
+      {
+        "hex": "#fffffe",
+        "role": "ink",
+        "share": 0.145
+      },
+      {
+        "hex": "#605f5d",
+        "role": "muted",
+        "share": 0.026
+      },
+      {
+        "hex": "#fafd5b",
+        "role": "accent",
+        "share": 0.156
+      }
+    ],
+    "fonts": {
+      "head": {
+        "kit": "fraunces",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 400
+      },
+      "body": {
+        "kit": "inter",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 400
+      },
+      "mono": null
+    },
+    "type": {
+      "basePx": 15,
+      "ratio": 1.414,
+      "sizes": [
+        44,
+        22,
+        15,
+        12
+      ],
+      "headLine": 1.05,
+      "bodyLine": 1.5,
+      "headCase": "upper"
+    },
+    "tracking": {
+      "display": 0,
+      "heading": 0,
+      "body": 0,
+      "label": 0
+    },
+    "radius": {
+      "outer": 0,
+      "inner": 0,
+      "pill": false
+    },
+    "shadow": {
+      "level": 0,
+      "css": "none"
+    },
+    "spacing": {
+      "unit": 8,
+      "section": 40,
+      "gutter": 16,
+      "density": "balanced"
+    },
+    "layout": {
+      "columns": 1,
+      "maxWidth": 600,
+      "align": "center",
+      "emptyShare": 0.1
+    },
+    "imagery": {
+      "kind": "photo",
+      "share": 0,
+      "light": "hard daylight portraits, high contrast",
+      "lens": "50mm portrait cutouts",
+      "grade": "black and white photos on brown-black with lime yellow",
+      "subject": "musicians' portraits cut out like a gig flyer"
+    }
+  },
+  "measured": [
+    "theme",
+    "colors"
+  ],
+  "why": "Nền nâu đen #2a261b, tiêu đề chữ có chân cổ điển trên khối vàng chanh #fafd5b như tờ rơi hòa nhạc in lụa. Ảnh nghệ sĩ đen trắng cắt nền xếp so le, tên nghệ sĩ in hoa vàng kèm ngày giờ. Hai màu chính cộng trắng, không bo góc. Mượn cặp vàng chanh và nâu đen cho thư sự kiện âm nhạc; không chép tên nghệ sĩ hay ảnh.",
+  "licence": "Ảnh chụp thu nhỏ của trang công khai, chỉ để model tham khảo nguyên tắc. Không chép logo, chữ, ảnh hay phông độc quyền của trang."
+}

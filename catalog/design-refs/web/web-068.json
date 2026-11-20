@@ -1,0 +1,140 @@
+{
+  "v": 1,
+  "id": "web-068",
+  "domain": "web",
+  "title": "Tạp chí sáng tạo: lưới bài với minh họa đen trắng và màu",
+  "moods": [
+    "editorial",
+    "playful",
+    "clean-light"
+  ],
+  "industries": [
+    "media-publishing"
+  ],
+  "audience": [
+    "youth",
+    "b2b"
+  ],
+  "source_url": "https://www.itsnicethat.com/",
+  "source_host": "itsnicethat.com",
+  "source_kind": "public-page",
+  "captured_at": "2026-11-20",
+  "image": {
+    "file": "web/web-068.webp",
+    "width": 1280,
+    "height": 1600,
+    "bytes": 89706,
+    "layout": "single"
+  },
+  "tokens": {
+    "theme": "light",
+    "colors": [
+      {
+        "hex": "#ffffff",
+        "role": "bg",
+        "share": 0.885
+      },
+      {
+        "hex": "#f4f4f4",
+        "role": "surface",
+        "share": 0.024
+      },
+      {
+        "hex": "#ffedd1",
+        "role": "raised",
+        "share": 0.059
+      },
+      {
+        "hex": "#2b2b2b",
+        "role": "ink",
+        "share": 0.008
+      },
+      {
+        "hex": "#676767",
+        "role": "muted",
+        "share": 0
+      },
+      {
+        "hex": "#6219ff",
+        "role": "accent",
+        "share": 0
+      }
+    ],
+    "fonts": {
+      "head": {
+        "kit": "space-grotesk",
+        "seen": "LabilVariable",
+        "seenLicence": "unknown",
+        "weight": 400
+      },
+      "body": {
+        "kit": "space-grotesk",
+        "seen": "LabilVariable",
+        "seenLicence": "unknown",
+        "weight": 400
+      },
+      "mono": null
+    },
+    "type": {
+      "basePx": 18,
+      "ratio": 1.305,
+      "sizes": [
+        40,
+        18,
+        15,
+        13,
+        11
+      ],
+      "headLine": 1.2,
+      "bodyLine": 1.28,
+      "headCase": "none"
+    },
+    "tracking": {
+      "display": 0.025,
+      "heading": 0.025,
+      "body": 0.056,
+      "label": 0
+    },
+    "radius": {
+      "outer": 0,
+      "inner": 0,
+      "pill": true
+    },
+    "shadow": {
+      "level": 2,
+      "css": "rgba(0, 0, 0, 0.08) 0px -11px 15px 0px, rgba(0, 0, 0, 0.08) 0px 24px 38px 0px, rgba(0, 0, 0, 0.08) 0px 9px 46px 0px, rgba(0, 0, 0, 0.08) 0px 11px 15px 0px"
+    },
+    "spacing": {
+      "unit": 8,
+      "section": 40,
+      "gutter": 8,
+      "density": "dense"
+    },
+    "layout": {
+      "columns": 4,
+      "maxWidth": 1200,
+      "align": "asymmetric",
+      "emptyShare": 0.46
+    },
+    "imagery": {
+      "kind": "illustration",
+      "share": 0.03,
+      "light": "flat printed ink, no modelling",
+      "lens": "flat",
+      "grade": "black ink with electric blue accents",
+      "subject": "editorial illustrations and posters"
+    }
+  },
+  "measured": [
+    "theme",
+    "colors",
+    "type",
+    "tracking",
+    "radius",
+    "shadow",
+    "spacing",
+    "layout"
+  ],
+  "why": "Nền trắng, lưới 4 cột thẻ bài lệch nhịp, mỗi thẻ một minh họa khác phong cách: in lụa xanh, ảnh đen trắng, nét vẽ. Chữ grotesk 18 px giãn nhẹ 0,025em, nút viên thuốc tím #6219ff. Gần nửa màn đầu là khoảng trắng giữ các hình không chen nhau. Mượn cách cho minh họa nhiều phong cách cùng sống trên một lưới trung tính; không chép minh họa.",
+  "licence": "Ảnh chụp thu nhỏ của trang công khai, chỉ để model tham khảo nguyên tắc. Không chép logo, chữ, ảnh hay phông độc quyền của trang."
+}

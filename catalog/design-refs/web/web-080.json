@@ -1,0 +1,147 @@
+{
+  "v": 1,
+  "id": "web-080",
+  "domain": "web",
+  "title": "Khu du lịch Việt: băng lễ hội đỏ vàng, chữ có chân trang trọng",
+  "moods": [
+    "bold-color",
+    "energetic",
+    "warm-craft"
+  ],
+  "industries": [
+    "hospitality-travel",
+    "events"
+  ],
+  "audience": [
+    "families",
+    "consumer"
+  ],
+  "source_url": "https://www.sunworld.vn/",
+  "source_host": "sunworld.vn",
+  "source_kind": "public-page",
+  "captured_at": "2026-11-20",
+  "image": {
+    "file": "web/web-080.webp",
+    "width": 1280,
+    "height": 1600,
+    "bytes": 89206,
+    "layout": "single"
+  },
+  "tokens": {
+    "theme": "light",
+    "colors": [
+      {
+        "hex": "#ffffff",
+        "role": "bg",
+        "share": 0.183
+      },
+      {
+        "hex": "#f7f7f8",
+        "role": "surface",
+        "share": 0
+      },
+      {
+        "hex": "#000000",
+        "role": "ink",
+        "share": 0
+      },
+      {
+        "hex": "#666666",
+        "role": "muted",
+        "share": 0
+      },
+      {
+        "hex": "#c8102e",
+        "role": "accent",
+        "share": 0
+      },
+      {
+        "hex": "#e5e5e5",
+        "role": "line",
+        "share": 0
+      },
+      {
+        "hex": "#d9a441",
+        "role": "accent2",
+        "share": 0
+      }
+    ],
+    "fonts": {
+      "head": {
+        "kit": "playfair-display",
+        "seen": "Be Vietnam Pro",
+        "seenLicence": "open",
+        "weight": 700
+      },
+      "body": {
+        "kit": "be-vietnam-pro",
+        "seen": "Be Vietnam Pro",
+        "seenLicence": "open",
+        "weight": 400
+      },
+      "mono": null
+    },
+    "type": {
+      "basePx": 15,
+      "ratio": 1.245,
+      "sizes": [
+        36,
+        24,
+        20,
+        18,
+        16,
+        14,
+        12
+      ],
+      "headLine": 1.25,
+      "bodyLine": 1.6,
+      "headCase": "none"
+    },
+    "tracking": {
+      "display": -0.017,
+      "heading": -0.017,
+      "body": 0,
+      "label": -0.003
+    },
+    "radius": {
+      "outer": 20,
+      "inner": 8,
+      "pill": true
+    },
+    "shadow": {
+      "level": 2,
+      "css": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0.06) 0px 16px 32px 0px"
+    },
+    "spacing": {
+      "unit": 4,
+      "section": 240,
+      "gutter": 10,
+      "density": "airy"
+    },
+    "layout": {
+      "columns": 2,
+      "maxWidth": 1228,
+      "align": "left",
+      "emptyShare": 0.05
+    },
+    "imagery": {
+      "kind": "photo",
+      "share": 0.92,
+      "light": "festive warm stage light, rich reds",
+      "lens": "wide 24mm group scene",
+      "grade": "deep crimson, gold highlights",
+      "subject": "performers in traditional dress with paper fans"
+    }
+  },
+  "measured": [
+    "theme",
+    "type",
+    "tracking",
+    "radius",
+    "shadow",
+    "spacing",
+    "layout"
+  ],
+  "why": "Băng ảnh lễ hội nền đỏ thẫm #770a06 với tiêu đề chữ có chân vàng kim, dải quạt giấy và áo dài tạo chiều sâu. Bên dưới là các thẻ điểm đến bo 20 px với ảnh và một khung đặt vé trắng bo 8 px. Chữ thân Be Vietnam Pro 15 px, bóng bậc 2. Mượn bảng đỏ thẫm vàng kim cho chủ đề lễ hội Việt mà không sến; không chép ảnh, hoa văn hay tên chương trình.",
+  "licence": "Ảnh chụp thu nhỏ của trang công khai, chỉ để model tham khảo nguyên tắc. Không chép logo, chữ, ảnh hay phông độc quyền của trang."
+}

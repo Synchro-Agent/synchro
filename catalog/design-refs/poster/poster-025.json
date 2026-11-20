@@ -1,0 +1,122 @@
+{
+  "v": 1,
+  "id": "poster-025",
+  "domain": "poster",
+  "title": "Poster chữ mảnh trên nền xám than: biểu tượng nét và tiêu đề bốn dòng",
+  "moods": [
+    "minimal-mono",
+    "swiss-precise"
+  ],
+  "industries": [
+    "education",
+    "nonprofit-gov"
+  ],
+  "audience": [
+    "public",
+    "students"
+  ],
+  "source_url": "https://www.posterfortomorrow.org/en/blog/project/the_right_to_education",
+  "source_host": "posterfortomorrow.org",
+  "source_kind": "public-image",
+  "captured_at": "2026-11-20",
+  "image": {
+    "file": "poster/poster-025.webp",
+    "width": 500,
+    "height": 566,
+    "bytes": 25916,
+    "layout": "single"
+  },
+  "tokens": {
+    "theme": "dark",
+    "colors": [
+      {
+        "hex": "#49494b",
+        "role": "bg",
+        "share": 0.933
+      },
+      {
+        "hex": "#fcfcfd",
+        "role": "ink",
+        "share": 0.012
+      },
+      {
+        "hex": "#979799",
+        "role": "muted",
+        "share": 0.008
+      },
+      {
+        "hex": "#a84c61",
+        "role": "accent",
+        "share": 0.009
+      }
+    ],
+    "fonts": {
+      "head": {
+        "kit": "inter",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 400
+      },
+      "body": {
+        "kit": "inter",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 400
+      },
+      "mono": null
+    },
+    "type": {
+      "basePx": 16,
+      "ratio": 1.618,
+      "sizes": [
+        64,
+        20,
+        16
+      ],
+      "headLine": 1,
+      "bodyLine": 1.3,
+      "headCase": "none"
+    },
+    "tracking": {
+      "display": -0.01,
+      "heading": 0,
+      "body": 0,
+      "label": 0
+    },
+    "radius": {
+      "outer": 0,
+      "inner": 0,
+      "pill": false
+    },
+    "shadow": {
+      "level": 0,
+      "css": "none"
+    },
+    "spacing": {
+      "unit": 8,
+      "section": 64,
+      "gutter": 24,
+      "density": "balanced"
+    },
+    "layout": {
+      "columns": 2,
+      "maxWidth": 500,
+      "align": "left",
+      "emptyShare": 0.35
+    },
+    "imagery": {
+      "kind": "type-only",
+      "share": 0,
+      "light": "",
+      "lens": "",
+      "grade": "",
+      "subject": ""
+    }
+  },
+  "measured": [
+    "theme",
+    "colors"
+  ],
+  "why": "Nền xám than #49494b, tiêu đề chữ sans mảnh trắng bốn dòng, mỗi dòng một từ, cột biểu tượng nét đơn bên trái. Đoạn mô tả màu hồng đất #a84c61 nhỏ bên dưới, căn trái theo cùng một trục. Không hình chụp, không khung. Mượn trục căn trái chặt và chữ mảnh cỡ lớn trên nền tối trung tính; không chép biểu tượng hay chữ.",
+  "licence": "Ảnh chụp thu nhỏ của trang công khai, chỉ để model tham khảo nguyên tắc. Không chép logo, chữ, ảnh hay phông độc quyền của trang."
+}

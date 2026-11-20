@@ -1,0 +1,117 @@
+{
+  "v": 1,
+  "id": "slide-029",
+  "domain": "slide",
+  "title": "Bộ slide quảng cáo in: cắt dán ảnh cũ nhuộm màu, chữ hoa đỏ cam lệch",
+  "moods": [
+    "retro-print",
+    "playful",
+    "bold-color"
+  ],
+  "industries": [
+    "media-publishing",
+    "culture-music"
+  ],
+  "audience": [
+    "youth",
+    "b2b"
+  ],
+  "source_url": "https://www.slidescarnival.com/template/print-media-advertising-slides/328486",
+  "source_host": "slidescarnival.com",
+  "source_kind": "public-image",
+  "captured_at": "2026-11-20",
+  "image": {
+    "file": "slide/slide-029.webp",
+    "width": 1280,
+    "height": 720,
+    "bytes": 87524,
+    "layout": "grid4"
+  },
+  "tokens": {
+    "theme": "light",
+    "colors": [
+      {
+        "hex": "#f9ef92",
+        "role": "bg",
+        "share": 0.142
+      },
+      {
+        "hex": "#0d5228",
+        "role": "ink",
+        "share": 0.08
+      },
+      {
+        "hex": "#bc4a33",
+        "role": "accent",
+        "share": 0
+      }
+    ],
+    "fonts": {
+      "head": {
+        "kit": "playfair-display",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 400
+      },
+      "body": {
+        "kit": "jetbrains-mono",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 400
+      },
+      "mono": null
+    },
+    "type": {
+      "basePx": 12,
+      "ratio": 1.414,
+      "sizes": [
+        48,
+        24,
+        12
+      ],
+      "headLine": 1,
+      "bodyLine": 1.4,
+      "headCase": "upper"
+    },
+    "tracking": {
+      "display": 0,
+      "heading": 0,
+      "body": 0,
+      "label": 0.04
+    },
+    "radius": {
+      "outer": 0,
+      "inner": 0,
+      "pill": false
+    },
+    "shadow": {
+      "level": 0,
+      "css": "none"
+    },
+    "spacing": {
+      "unit": 8,
+      "section": 32,
+      "gutter": 16,
+      "density": "dense"
+    },
+    "layout": {
+      "columns": 2,
+      "maxWidth": 1280,
+      "align": "asymmetric",
+      "emptyShare": 0.15
+    },
+    "imagery": {
+      "kind": "photo",
+      "share": 0.6,
+      "light": "vintage flash and studio light",
+      "lens": "mid-century print reproduction, halftone",
+      "grade": "duotone green, brick red and lemon tints",
+      "subject": "retro photos of people, typewriters and cameras"
+    }
+  },
+  "measured": [
+    "theme"
+  ],
+  "why": "Ảnh cũ cắt dán được nhuộm một màu xanh lục, đỏ gạch #bc4a33 hoặc vàng #f9ef92 làm nền mỗi slide. Tiêu đề chữ hoa có chân đậm 48 px, xen ký tự khác màu như chữ cắt báo. Chữ máy chữ nhỏ 12 px ghi chú, lề hẹp. Mượn cách nhuộm ảnh cũ một màu làm nền chữ; không chép ảnh hay chữ.",
+  "licence": "Ảnh chụp thu nhỏ của trang công khai, chỉ để model tham khảo nguyên tắc. Không chép logo, chữ, ảnh hay phông độc quyền của trang."
+}

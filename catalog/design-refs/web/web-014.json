@@ -1,0 +1,148 @@
+{
+  "v": 1,
+  "id": "web-014",
+  "domain": "web",
+  "title": "Không gian làm việc: tiêu đề giữa, ảnh giao diện trên nền sơn dầu",
+  "moods": [
+    "clean-light",
+    "organic"
+  ],
+  "industries": [
+    "tech-saas",
+    "ai"
+  ],
+  "audience": [
+    "b2b",
+    "consumer"
+  ],
+  "source_url": "https://www.notion.com/",
+  "source_host": "notion.com",
+  "source_kind": "public-page",
+  "captured_at": "2026-11-20",
+  "image": {
+    "file": "web/web-014.webp",
+    "width": 1280,
+    "height": 1600,
+    "bytes": 84916,
+    "layout": "single"
+  },
+  "tokens": {
+    "theme": "light",
+    "colors": [
+      {
+        "hex": "#ffffff",
+        "role": "bg",
+        "share": 0.742
+      },
+      {
+        "hex": "#f6f5f4",
+        "role": "surface",
+        "share": 0
+      },
+      {
+        "hex": "#f9f8f7",
+        "role": "raised",
+        "share": 0
+      },
+      {
+        "hex": "#0d0d0d",
+        "role": "ink",
+        "share": 0.031
+      },
+      {
+        "hex": "#2c2c2b",
+        "role": "muted",
+        "share": 0
+      },
+      {
+        "hex": "#264a72",
+        "role": "accent",
+        "share": 0
+      },
+      {
+        "hex": "#f0efed",
+        "role": "line",
+        "share": 0
+      }
+    ],
+    "fonts": {
+      "head": {
+        "kit": "archivo",
+        "seen": "Die Grotesk",
+        "seenLicence": "unknown",
+        "weight": 500
+      },
+      "body": {
+        "kit": "archivo",
+        "seen": "Die Grotesk",
+        "seenLicence": "unknown",
+        "weight": 500
+      },
+      "mono": null
+    },
+    "type": {
+      "basePx": 16,
+      "ratio": 1.308,
+      "sizes": [
+        80,
+        54,
+        40,
+        32,
+        18,
+        16,
+        14,
+        12
+      ],
+      "headLine": 1,
+      "bodyLine": 1.5,
+      "headCase": "none"
+    },
+    "tracking": {
+      "display": 0,
+      "heading": 0,
+      "body": 0,
+      "label": 0
+    },
+    "radius": {
+      "outer": 8,
+      "inner": 16,
+      "pill": true
+    },
+    "shadow": {
+      "level": 1,
+      "css": "rgba(0, 0, 0, 0.016) 0px 0.7px 1.462px 0px, rgba(0, 0, 0, 0.03) 0px 3px 9px 0px"
+    },
+    "spacing": {
+      "unit": 8,
+      "section": 160,
+      "gutter": 8,
+      "density": "airy"
+    },
+    "layout": {
+      "columns": 2,
+      "maxWidth": 1040,
+      "align": "center",
+      "emptyShare": 0.3
+    },
+    "imagery": {
+      "kind": "mixed",
+      "share": 0.38,
+      "light": "soft diffuse daylight, painterly",
+      "lens": "flat, straight-on",
+      "grade": "deep greens with red and white strokes",
+      "subject": "oil painting texture framing an app window"
+    }
+  },
+  "measured": [
+    "theme",
+    "fonts",
+    "type",
+    "tracking",
+    "radius",
+    "shadow",
+    "spacing",
+    "layout"
+  ],
+  "why": "Tiêu đề 80 px căn giữa trên nền trắng, khoảng thoáng 160 px giữa các phần. Ảnh giao diện đặt trên một nền tranh sơn dầu xanh lục và đỏ, làm cho phần mềm trông ấm và gần gũi. Nút đen bo tròn hẳn, chữ thân 16 px. Mượn cách đặt ảnh sản phẩm lên một tấm tranh có chất liệu thật; không chép tranh hay giao diện.",
+  "licence": "Ảnh chụp thu nhỏ của trang công khai, chỉ để model tham khảo nguyên tắc. Không chép logo, chữ, ảnh hay phông độc quyền của trang."
+}

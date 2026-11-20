@@ -1,0 +1,135 @@
+{
+  "v": 1,
+  "id": "web-047",
+  "domain": "web",
+  "title": "Ngân hàng số Việt: minh họa heo đất, cam và tím vui tươi",
+  "moods": [
+    "playful",
+    "bold-color"
+  ],
+  "industries": [
+    "finance"
+  ],
+  "audience": [
+    "youth",
+    "consumer"
+  ],
+  "source_url": "https://timo.vn/",
+  "source_host": "timo.vn",
+  "source_kind": "public-page",
+  "captured_at": "2026-11-20",
+  "image": {
+    "file": "web/web-047.webp",
+    "width": 1280,
+    "height": 1600,
+    "bytes": 89844,
+    "layout": "single"
+  },
+  "tokens": {
+    "theme": "light",
+    "colors": [
+      {
+        "hex": "#ffffff",
+        "role": "bg",
+        "share": 0.145
+      },
+      {
+        "hex": "#f1faff",
+        "role": "surface",
+        "share": 0
+      },
+      {
+        "hex": "#101820",
+        "role": "ink",
+        "share": 0.113
+      },
+      {
+        "hex": "#563d82",
+        "role": "accent",
+        "share": 0
+      },
+      {
+        "hex": "#ff8a00",
+        "role": "accent2",
+        "share": 0
+      }
+    ],
+    "fonts": {
+      "head": {
+        "kit": "be-vietnam-pro",
+        "seen": "Open Sans",
+        "seenLicence": "open",
+        "weight": 700
+      },
+      "body": {
+        "kit": "be-vietnam-pro",
+        "seen": "Open Sans",
+        "seenLicence": "open",
+        "weight": 700
+      },
+      "mono": null
+    },
+    "type": {
+      "basePx": 16,
+      "ratio": 1.316,
+      "sizes": [
+        48,
+        36,
+        24,
+        20,
+        16,
+        14,
+        12
+      ],
+      "headLine": 1,
+      "bodyLine": 1,
+      "headCase": "none"
+    },
+    "tracking": {
+      "display": 0.006,
+      "heading": 0.012,
+      "body": 0.019,
+      "label": 0.023
+    },
+    "radius": {
+      "outer": 24,
+      "inner": 8,
+      "pill": false
+    },
+    "shadow": {
+      "level": 1,
+      "css": "rgba(0, 0, 0, 0.1) 0px 1px 3px 0px, rgba(0, 0, 0, 0.02) 0px 2px 1px 0px, rgba(0, 0, 0, 0.04) 0px 1px 1px 0px"
+    },
+    "spacing": {
+      "unit": 8,
+      "section": 640,
+      "gutter": 32,
+      "density": "airy"
+    },
+    "layout": {
+      "columns": 3,
+      "maxWidth": 1200,
+      "align": "center",
+      "emptyShare": 0.03
+    },
+    "imagery": {
+      "kind": "3d",
+      "share": 0.88,
+      "light": "bright soft studio light",
+      "lens": "3/4 view, slight top-down",
+      "grade": "saturated orange, pink and purple",
+      "subject": "cute piggy banks and coins"
+    }
+  },
+  "measured": [
+    "theme",
+    "type",
+    "tracking",
+    "radius",
+    "shadow",
+    "spacing",
+    "layout"
+  ],
+  "why": "Màn đầu cam #ff8a00 với minh họa 3D heo đất và con số lãi suất 8,2% cỡ rất lớn, rồi một băng tím đậm #563d82 chứa chữ trắng căn giữa. Thẻ bo 24 px, minh họa 3D nhỏ trong từng thẻ. Thứ bậc rõ: một con số, một câu, một nút. Mượn cách biến một con số thành hình chính và dùng minh họa 3D thân thiện cho tài chính; không chép nhân vật hay khẩu hiệu.",
+  "licence": "Ảnh chụp thu nhỏ của trang công khai, chỉ để model tham khảo nguyên tắc. Không chép logo, chữ, ảnh hay phông độc quyền của trang."
+}

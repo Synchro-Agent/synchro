@@ -1,0 +1,158 @@
+{
+  "v": 1,
+  "id": "dashboard-031",
+  "domain": "dashboard",
+  "title": "Bảng giá chứng khoán Việt nền tím đen: lưới số dày đặc",
+  "moods": [
+    "dark-cinematic",
+    "data-dense",
+    "energetic"
+  ],
+  "industries": [
+    "finance"
+  ],
+  "audience": [
+    "consumer",
+    "investors"
+  ],
+  "source_url": "https://iboard.ssi.com.vn/",
+  "source_host": "iboard.ssi.com.vn",
+  "source_kind": "public-page",
+  "captured_at": "2026-11-20",
+  "image": {
+    "file": "dashboard/dashboard-031.webp",
+    "width": 1120,
+    "height": 700,
+    "bytes": 89086,
+    "layout": "single"
+  },
+  "tokens": {
+    "theme": "dark",
+    "colors": [
+      {
+        "hex": "#1c1a29",
+        "role": "bg",
+        "share": 0.654
+      },
+      {
+        "hex": "#2a263c",
+        "role": "surface",
+        "share": 0
+      },
+      {
+        "hex": "#363645",
+        "role": "raised",
+        "share": 0.015
+      },
+      {
+        "hex": "#dfe1e3",
+        "role": "ink",
+        "share": 0.006
+      },
+      {
+        "hex": "#c1c1c1",
+        "role": "muted",
+        "share": 0.009
+      },
+      {
+        "hex": "#f5c400",
+        "role": "accent",
+        "share": 0
+      },
+      {
+        "hex": "#0bdf39",
+        "role": "accent2",
+        "share": 0
+      },
+      {
+        "hex": "#3d3950",
+        "role": "line",
+        "share": 0
+      },
+      {
+        "hex": "#0bdf39",
+        "role": "pos",
+        "share": 0
+      },
+      {
+        "hex": "#d32f2f",
+        "role": "neg",
+        "share": 0
+      }
+    ],
+    "fonts": {
+      "head": {
+        "kit": "inter",
+        "seen": "Roboto",
+        "seenLicence": "open",
+        "weight": 500
+      },
+      "body": {
+        "kit": "inter",
+        "seen": "Roboto",
+        "seenLicence": "open",
+        "weight": 400
+      },
+      "mono": null
+    },
+    "type": {
+      "basePx": 11,
+      "ratio": 1.273,
+      "sizes": [
+        14,
+        12,
+        10
+      ],
+      "headLine": 1.43,
+      "bodyLine": 1.27,
+      "headCase": "none"
+    },
+    "tracking": {
+      "display": 0,
+      "heading": 0,
+      "body": 0,
+      "label": 0
+    },
+    "radius": {
+      "outer": 2,
+      "inner": 0,
+      "pill": false
+    },
+    "shadow": {
+      "level": 0,
+      "css": "none"
+    },
+    "spacing": {
+      "unit": 4,
+      "section": 64,
+      "gutter": 24,
+      "density": "balanced"
+    },
+    "layout": {
+      "columns": 4,
+      "maxWidth": 1280,
+      "align": "left",
+      "emptyShare": 0.05
+    },
+    "imagery": {
+      "kind": "data",
+      "share": 0.9,
+      "light": "",
+      "lens": "",
+      "grade": "",
+      "subject": ""
+    }
+  },
+  "measured": [
+    "theme",
+    "fonts",
+    "type",
+    "tracking",
+    "radius",
+    "shadow",
+    "spacing",
+    "layout"
+  ],
+  "why": "Bảng giá nền tím đen #1c1a29 với hàng trăm ô số 11-12 px, màu chữ mang nghĩa: xanh lá tăng, đỏ giảm, vàng tham chiếu, tím trần, xanh lơ sàn. Đường kẻ #3d3950 mảnh, không bo, không bóng; mật độ là chủ ý. Biểu đồ chỉ số nhỏ xếp hàng phía trên. Mượn quy ước màu có nghĩa và chữ số đều cột cho dữ liệu tài chính; không chép mã hay giá.",
+  "licence": "Ảnh chụp thu nhỏ của trang công khai, chỉ để model tham khảo nguyên tắc. Không chép logo, chữ, ảnh hay phông độc quyền của trang."
+}

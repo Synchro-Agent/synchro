@@ -1,0 +1,122 @@
+{
+  "v": 1,
+  "id": "slide-032",
+  "domain": "slide",
+  "title": "Bộ slide cắt dán tạp chí nền tím: chữ cắt báo nhiều kiểu, ảnh máy chữ",
+  "moods": [
+    "retro-print",
+    "playful",
+    "editorial"
+  ],
+  "industries": [
+    "education",
+    "media-publishing"
+  ],
+  "audience": [
+    "students",
+    "youth"
+  ],
+  "source_url": "https://slidesmania.com/mixed-media-magazine-cutout-presentation/",
+  "source_host": "slidesmania.com",
+  "source_kind": "public-image",
+  "captured_at": "2026-11-20",
+  "image": {
+    "file": "slide/slide-032.webp",
+    "width": 1280,
+    "height": 720,
+    "bytes": 84230,
+    "layout": "single"
+  },
+  "tokens": {
+    "theme": "light",
+    "colors": [
+      {
+        "hex": "#d7cdce",
+        "role": "bg",
+        "share": 0.321
+      },
+      {
+        "hex": "#29282a",
+        "role": "ink",
+        "share": 0.053
+      },
+      {
+        "hex": "#686767",
+        "role": "muted",
+        "share": 0.018
+      },
+      {
+        "hex": "#3f1268",
+        "role": "accent",
+        "share": 0.255
+      }
+    ],
+    "fonts": {
+      "head": {
+        "kit": "anton",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 400
+      },
+      "body": {
+        "kit": "jetbrains-mono",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 400
+      },
+      "mono": null
+    },
+    "type": {
+      "basePx": 13,
+      "ratio": 1.414,
+      "sizes": [
+        48,
+        24,
+        13
+      ],
+      "headLine": 1,
+      "bodyLine": 1.45,
+      "headCase": "none"
+    },
+    "tracking": {
+      "display": 0,
+      "heading": 0,
+      "body": 0,
+      "label": 0.02
+    },
+    "radius": {
+      "outer": 0,
+      "inner": 0,
+      "pill": false
+    },
+    "shadow": {
+      "level": 1,
+      "css": "2px 3px 8px rgba(0,0,0,0.25)"
+    },
+    "spacing": {
+      "unit": 8,
+      "section": 32,
+      "gutter": 16,
+      "density": "balanced"
+    },
+    "layout": {
+      "columns": 2,
+      "maxWidth": 1280,
+      "align": "asymmetric",
+      "emptyShare": 0.2
+    },
+    "imagery": {
+      "kind": "mixed",
+      "share": 0.4,
+      "light": "flat scan light, paper texture",
+      "lens": "flat collage, slightly rotated cut-outs",
+      "grade": "violet, lilac and black and white",
+      "subject": "a typewriter, polaroids and taped paper scraps"
+    }
+  },
+  "measured": [
+    "theme"
+  ],
+  "why": "Nền tím đậm #3f1268 với khung giấy trắng nghiêng, tiêu đề ghép từ chữ cắt báo nhiều phông cỡ 48 px. Ảnh đen trắng máy chữ và polaroid dán băng keo, mỗi slide một mảng tím nhạt #d7cdce. Chữ thân kiểu máy chữ 13 px. Mượn tiêu đề ghép chữ cắt báo và ảnh dán băng keo; không chép ảnh hay chữ.",
+  "licence": "Ảnh chụp thu nhỏ của trang công khai, chỉ để model tham khảo nguyên tắc. Không chép logo, chữ, ảnh hay phông độc quyền của trang."
+}

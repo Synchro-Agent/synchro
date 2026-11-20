@@ -1,0 +1,118 @@
+{
+  "v": 1,
+  "id": "poster-019",
+  "domain": "poster",
+  "title": "Ảnh chiến dịch lễ hội âm nhạc: hàng người áo blouse trắng trong hành lang",
+  "moods": [
+    "editorial",
+    "minimal-mono",
+    "energetic"
+  ],
+  "industries": [
+    "culture-music",
+    "events"
+  ],
+  "audience": [
+    "youth"
+  ],
+  "source_url": "https://www.sonar.es/",
+  "source_host": "sonar.es",
+  "source_kind": "public-image",
+  "captured_at": "2026-11-20",
+  "image": {
+    "file": "poster/poster-019.webp",
+    "width": 1200,
+    "height": 600,
+    "bytes": 85922,
+    "layout": "single"
+  },
+  "tokens": {
+    "theme": "light",
+    "colors": [
+      {
+        "hex": "#95a5a1",
+        "role": "bg",
+        "share": 0.202
+      },
+      {
+        "hex": "#2d2b2b",
+        "role": "ink",
+        "share": 0.061
+      },
+      {
+        "hex": "#5b686a",
+        "role": "muted",
+        "share": 0.098
+      },
+      {
+        "hex": "#2d2b2b",
+        "role": "accent",
+        "share": 0
+      }
+    ],
+    "fonts": {
+      "head": {
+        "kit": "inter",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 400
+      },
+      "body": {
+        "kit": "inter",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 400
+      },
+      "mono": null
+    },
+    "type": {
+      "basePx": 16,
+      "ratio": 1.25,
+      "sizes": [],
+      "headLine": 1.1,
+      "bodyLine": 1.5,
+      "headCase": "none"
+    },
+    "tracking": {
+      "display": 0,
+      "heading": 0,
+      "body": 0,
+      "label": 0
+    },
+    "radius": {
+      "outer": 0,
+      "inner": 0,
+      "pill": false
+    },
+    "shadow": {
+      "level": 0,
+      "css": "none"
+    },
+    "spacing": {
+      "unit": 8,
+      "section": 64,
+      "gutter": 24,
+      "density": "balanced"
+    },
+    "layout": {
+      "columns": 1,
+      "maxWidth": 1200,
+      "align": "center",
+      "emptyShare": 0.1
+    },
+    "imagery": {
+      "kind": "photo",
+      "share": 0,
+      "light": "flat fluorescent overhead light",
+      "lens": "24mm one-point perspective, centered",
+      "grade": "cool grey-green, desaturated",
+      "subject": "a line of people in white lab coats in a corridor"
+    }
+  },
+  "measured": [
+    "theme",
+    "colors"
+  ],
+  "why": "Ảnh khổ ngang 2:1: một hàng người mặc áo blouse trắng đứng nghiêm trong hành lang bệnh viện xanh xám #95a5a1, phối cảnh một điểm tụ. Cảm giác lạ và hài hước khô đến từ chính cảnh dựng, không cần chữ. Màu lạnh, đèn huỳnh quang phẳng. Mượn ý tưởng ảnh dàn dựng một cảnh lạ làm hình chiến dịch sự kiện; không chép ảnh hay con người.",
+  "licence": "Ảnh chụp thu nhỏ của trang công khai, chỉ để model tham khảo nguyên tắc. Không chép logo, chữ, ảnh hay phông độc quyền của trang."
+}

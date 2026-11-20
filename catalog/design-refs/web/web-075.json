@@ -1,0 +1,133 @@
+{
+  "v": 1,
+  "id": "web-075",
+  "domain": "web",
+  "title": "Robot hình người: ảnh đen trắng điện ảnh, chữ hoa nhỏ",
+  "moods": [
+    "dark-cinematic",
+    "tech",
+    "luxury"
+  ],
+  "industries": [
+    "ai",
+    "industrial-b2b"
+  ],
+  "audience": [
+    "investors",
+    "premium"
+  ],
+  "source_url": "https://www.figure.ai/",
+  "source_host": "figure.ai",
+  "source_kind": "public-page",
+  "captured_at": "2026-11-20",
+  "image": {
+    "file": "web/web-075.webp",
+    "width": 1280,
+    "height": 1600,
+    "bytes": 83836,
+    "layout": "single"
+  },
+  "tokens": {
+    "theme": "dark",
+    "colors": [
+      {
+        "hex": "#0a0a0a",
+        "role": "bg",
+        "share": 0
+      },
+      {
+        "hex": "#ffffff",
+        "role": "ink",
+        "share": 0
+      },
+      {
+        "hex": "#a0a8b0",
+        "role": "muted",
+        "share": 0.244
+      },
+      {
+        "hex": "#d9dde1",
+        "role": "accent",
+        "share": 0
+      },
+      {
+        "hex": "#3a3a3a",
+        "role": "line",
+        "share": 0
+      }
+    ],
+    "fonts": {
+      "head": {
+        "kit": "space-grotesk",
+        "seen": "pp-neue-machina-plain",
+        "seenLicence": "unknown",
+        "weight": 400
+      },
+      "body": {
+        "kit": "inter",
+        "seen": "neue-haas-grot-text",
+        "seenLicence": "unknown",
+        "weight": 400
+      },
+      "mono": null
+    },
+    "type": {
+      "basePx": 17,
+      "ratio": 1.283,
+      "sizes": [
+        28,
+        17,
+        14
+      ],
+      "headLine": 1.11,
+      "bodyLine": 1.6,
+      "headCase": "upper"
+    },
+    "tracking": {
+      "display": 0,
+      "heading": 0,
+      "body": -0.01,
+      "label": 0
+    },
+    "radius": {
+      "outer": 0,
+      "inner": 12,
+      "pill": false
+    },
+    "shadow": {
+      "level": 0,
+      "css": "none"
+    },
+    "spacing": {
+      "unit": 4,
+      "section": 60,
+      "gutter": 20,
+      "density": "balanced"
+    },
+    "layout": {
+      "columns": 3,
+      "maxWidth": 450,
+      "align": "asymmetric",
+      "emptyShare": 0
+    },
+    "imagery": {
+      "kind": "photo",
+      "share": 1,
+      "light": "soft directional window light, deep blacks",
+      "lens": "85mm close-up and 24mm corridor perspective",
+      "grade": "monochrome silver, high contrast",
+      "subject": "humanoid robot hand and robot walking down a corridor"
+    }
+  },
+  "measured": [
+    "theme",
+    "type",
+    "tracking",
+    "radius",
+    "shadow",
+    "spacing",
+    "layout"
+  ],
+  "why": "Ảnh đen trắng cận cảnh bàn tay robot và hành lang dài chiếm toàn khung, chữ hoa nhỏ 28 px đặt góc trái dưới như phụ đề phim. Không màu nhấn, chỉ đen, trắng và xám bạc #a0a8b0; nút viền mảnh bo 12 px. Mỗi phần là một cảnh toàn màn hình, chữ không bao giờ tranh chỗ với hình. Mượn cách kể chuyện công nghệ bằng ảnh đen trắng điện ảnh; không chép ảnh robot.",
+  "licence": "Ảnh chụp thu nhỏ của trang công khai, chỉ để model tham khảo nguyên tắc. Không chép logo, chữ, ảnh hay phông độc quyền của trang."
+}

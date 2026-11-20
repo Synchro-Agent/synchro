@@ -1,0 +1,129 @@
+{
+  "v": 1,
+  "id": "slide-003",
+  "domain": "slide",
+  "title": "Báo cáo kinh tế số Đông Nam Á: bìa 3D đẳng cự xanh, số liệu trong vòng tròn",
+  "moods": [
+    "bold-color",
+    "data-dense",
+    "tech"
+  ],
+  "industries": [
+    "tech-saas",
+    "finance"
+  ],
+  "audience": [
+    "investors",
+    "b2b"
+  ],
+  "source_url": "https://economysea.withgoogle.com/",
+  "source_host": "economysea.withgoogle.com",
+  "source_kind": "public-image",
+  "captured_at": "2026-11-20",
+  "image": {
+    "file": "slide/slide-003.webp",
+    "width": 1280,
+    "height": 720,
+    "bytes": 89328,
+    "layout": "grid4"
+  },
+  "tokens": {
+    "theme": "light",
+    "colors": [
+      {
+        "hex": "#fdfeff",
+        "role": "bg",
+        "share": 0.476
+      },
+      {
+        "hex": "#0b2a4a",
+        "role": "ink",
+        "share": 0
+      },
+      {
+        "hex": "#136bc6",
+        "role": "accent",
+        "share": 0
+      },
+      {
+        "hex": "#5b6b7c",
+        "role": "muted",
+        "share": 0
+      },
+      {
+        "hex": "#f5b400",
+        "role": "accent2",
+        "share": 0
+      }
+    ],
+    "fonts": {
+      "head": {
+        "kit": "plus-jakarta-sans",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 400
+      },
+      "body": {
+        "kit": "inter",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 400
+      },
+      "mono": null
+    },
+    "type": {
+      "basePx": 14,
+      "ratio": 1.414,
+      "sizes": [
+        56,
+        28,
+        20,
+        14,
+        11
+      ],
+      "headLine": 1.15,
+      "bodyLine": 1.4,
+      "headCase": "none"
+    },
+    "tracking": {
+      "display": 0,
+      "heading": 0,
+      "body": 0,
+      "label": 0
+    },
+    "radius": {
+      "outer": 12,
+      "inner": 999,
+      "pill": true
+    },
+    "shadow": {
+      "level": 0,
+      "css": "none"
+    },
+    "spacing": {
+      "unit": 8,
+      "section": 40,
+      "gutter": 16,
+      "density": "dense"
+    },
+    "layout": {
+      "columns": 12,
+      "maxWidth": 1280,
+      "align": "left",
+      "emptyShare": 0.2
+    },
+    "imagery": {
+      "kind": "3d",
+      "share": 0,
+      "light": "bright soft daylight on isometric scene",
+      "lens": "isometric 3D",
+      "grade": "cyan to blue gradient with warm yellow accents",
+      "subject": "an isometric island economy with buildings and a plane"
+    }
+  },
+  "measured": [
+    "theme"
+  ],
+  "why": "Bìa là minh họa 3D đẳng cự nhiều tầng trên nền xanh lam chuyển xanh ngọc, các trang trong trắng với số liệu lớn đặt trong vòng tròn xanh #1491c5 và biểu đồ cột xanh đậm. Tiêu đề trang 20 px xanh #136bc6, chú thích nhỏ dày. Một họ màu xanh cho toàn bộ dữ liệu. Mượn cách mở đầu bằng minh họa 3D và đóng gói số liệu trong hình tròn; không chép minh họa hay số.",
+  "licence": "Ảnh chụp thu nhỏ của trang công khai, chỉ để model tham khảo nguyên tắc. Không chép logo, chữ, ảnh hay phông độc quyền của trang."
+}

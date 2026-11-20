@@ -1,0 +1,127 @@
+{
+  "v": 1,
+  "id": "slide-026",
+  "domain": "slide",
+  "title": "Bộ slide hồ sơ dự án: nền vàng chanh, chữ hẹp đen in đậm, ảnh phố đêm",
+  "moods": [
+    "bold-color",
+    "energetic",
+    "editorial"
+  ],
+  "industries": [
+    "real-estate-interior",
+    "culture-music"
+  ],
+  "audience": [
+    "b2b",
+    "youth"
+  ],
+  "source_url": "https://slidesgo.com/theme/forsaken-places-portfolio",
+  "source_host": "slidesgo.com",
+  "source_kind": "public-image",
+  "captured_at": "2026-11-20",
+  "image": {
+    "file": "slide/slide-026.webp",
+    "width": 1280,
+    "height": 720,
+    "bytes": 87680,
+    "layout": "grid4"
+  },
+  "tokens": {
+    "theme": "light",
+    "colors": [
+      {
+        "hex": "#f1c332",
+        "role": "bg",
+        "share": 0.476
+      },
+      {
+        "hex": "#12120f",
+        "role": "ink",
+        "share": 0.165
+      },
+      {
+        "hex": "#383736",
+        "role": "muted",
+        "share": 0.123
+      },
+      {
+        "hex": "#12120f",
+        "role": "accent",
+        "share": 0
+      },
+      {
+        "hex": "#4a6d8c",
+        "role": "accent2",
+        "share": 0
+      }
+    ],
+    "fonts": {
+      "head": {
+        "kit": "oswald",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 400
+      },
+      "body": {
+        "kit": "inter",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 400
+      },
+      "mono": null
+    },
+    "type": {
+      "basePx": 14,
+      "ratio": 1.414,
+      "sizes": [
+        56,
+        28,
+        14
+      ],
+      "headLine": 0.95,
+      "bodyLine": 1.4,
+      "headCase": "upper"
+    },
+    "tracking": {
+      "display": -0.01,
+      "heading": 0.01,
+      "body": 0,
+      "label": 0.06
+    },
+    "radius": {
+      "outer": 0,
+      "inner": 0,
+      "pill": false
+    },
+    "shadow": {
+      "level": 0,
+      "css": "none"
+    },
+    "spacing": {
+      "unit": 8,
+      "section": 40,
+      "gutter": 24,
+      "density": "balanced"
+    },
+    "layout": {
+      "columns": 3,
+      "maxWidth": 1280,
+      "align": "center",
+      "emptyShare": 0.3
+    },
+    "imagery": {
+      "kind": "photo",
+      "share": 0.35,
+      "light": "night city light, sodium and neon",
+      "lens": "28mm street, wet asphalt",
+      "grade": "cool blue-grey night with warm yellow lamps",
+      "subject": "a rainy city street at night"
+    }
+  },
+  "measured": [
+    "theme"
+  ],
+  "why": "Nền vàng #f1c332 phủ nửa bộ, tiêu đề chữ hoa hẹp đen 56 px đậm, mốc năm chạy ngang như dòng thời gian. Xen các slide ảnh đường phố đêm tông lạnh làm khoảng nghỉ, chữ đặt trên dải vàng. Bảng liên hệ dùng biểu tượng tròn đen nhỏ. Mượn cặp vàng đậm với đen và ảnh tối xen kẽ để tạo nhịp; không chép ảnh hay chữ.",
+  "licence": "Ảnh chụp thu nhỏ của trang công khai, chỉ để model tham khảo nguyên tắc. Không chép logo, chữ, ảnh hay phông độc quyền của trang."
+}

@@ -1,0 +1,120 @@
+{
+  "v": 1,
+  "id": "poster-031",
+  "domain": "poster",
+  "title": "Poster đỏ tối giản: hai khối isometric, hình người nhỏ và chữ hoa trắng lớn",
+  "moods": [
+    "bold-color",
+    "minimal-mono",
+    "swiss-precise"
+  ],
+  "industries": [
+    "nonprofit-gov",
+    "culture-music"
+  ],
+  "audience": [
+    "public",
+    "youth"
+  ],
+  "source_url": "https://www.posterheroes.org/digital-archive/",
+  "source_host": "posterheroes.org",
+  "source_kind": "public-image",
+  "captured_at": "2026-11-20",
+  "image": {
+    "file": "poster/poster-031.webp",
+    "width": 771,
+    "height": 1080,
+    "bytes": 28134,
+    "layout": "single"
+  },
+  "tokens": {
+    "theme": "dark",
+    "colors": [
+      {
+        "hex": "#f90025",
+        "role": "bg",
+        "share": 0.861
+      },
+      {
+        "hex": "#ffffff",
+        "role": "ink",
+        "share": 0
+      },
+      {
+        "hex": "#1a1a1a",
+        "role": "accent",
+        "share": 0
+      },
+      {
+        "hex": "#ffaeff",
+        "role": "accent2",
+        "share": 0.038
+      }
+    ],
+    "fonts": {
+      "head": {
+        "kit": "archivo",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 400
+      },
+      "body": {
+        "kit": "inter",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 400
+      },
+      "mono": null
+    },
+    "type": {
+      "basePx": 16,
+      "ratio": 1.6,
+      "sizes": [
+        64,
+        28,
+        16
+      ],
+      "headLine": 1,
+      "bodyLine": 1.3,
+      "headCase": "upper"
+    },
+    "tracking": {
+      "display": 0,
+      "heading": 0.01,
+      "body": 0,
+      "label": 0.04
+    },
+    "radius": {
+      "outer": 0,
+      "inner": 0,
+      "pill": false
+    },
+    "shadow": {
+      "level": 0,
+      "css": "none"
+    },
+    "spacing": {
+      "unit": 8,
+      "section": 56,
+      "gutter": 24,
+      "density": "airy"
+    },
+    "layout": {
+      "columns": 1,
+      "maxWidth": 770,
+      "align": "center",
+      "emptyShare": 0.45
+    },
+    "imagery": {
+      "kind": "illustration",
+      "share": 0.35,
+      "light": "flat fills, isometric, no shading",
+      "lens": "isometric 30 degree",
+      "grade": "red, black and candy pink",
+      "subject": "two isometric boxes with tiny human silhouettes"
+    }
+  },
+  "measured": [],
+  "why": "Nền đỏ #f90025 phủ 86% khung, hai hình hộp isometric đen và hồng #ffaeff xếp dọc, mỗi hộp có một bóng người. Hai mốc năm viết chữ hoa trắng 28 px phía trên mỗi hình, khẩu hiệu cuối cùng 64 px đậm ở đáy. Ba màu đỏ, đen, hồng, không chi tiết thừa. Mượn cách so sánh hai thời điểm bằng hai hình lặp cùng cỡ; không chép hình hay khẩu hiệu.",
+  "licence": "Ảnh chụp thu nhỏ của trang công khai, chỉ để model tham khảo nguyên tắc. Không chép logo, chữ, ảnh hay phông độc quyền của trang."
+}

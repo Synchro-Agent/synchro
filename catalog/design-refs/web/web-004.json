@@ -1,0 +1,151 @@
+{
+  "v": 1,
+  "id": "web-004",
+  "domain": "web",
+  "title": "Công cụ máy tính: sọc đỏ 3D chéo trên nền đen sâu",
+  "moods": [
+    "dark-cinematic",
+    "energetic",
+    "tech"
+  ],
+  "industries": [
+    "tech-saas"
+  ],
+  "audience": [
+    "developers",
+    "consumer"
+  ],
+  "source_url": "https://www.raycast.com/",
+  "source_host": "raycast.com",
+  "source_kind": "public-page",
+  "captured_at": "2026-11-20",
+  "image": {
+    "file": "web/web-004.webp",
+    "width": 1280,
+    "height": 1600,
+    "bytes": 86376,
+    "layout": "single"
+  },
+  "tokens": {
+    "theme": "dark",
+    "colors": [
+      {
+        "hex": "#07080a",
+        "role": "bg",
+        "share": 0.705
+      },
+      {
+        "hex": "#040406",
+        "role": "surface",
+        "share": 0
+      },
+      {
+        "hex": "#161a1f",
+        "role": "raised",
+        "share": 0.024
+      },
+      {
+        "hex": "#ffffff",
+        "role": "ink",
+        "share": 0.013
+      },
+      {
+        "hex": "#9c9c9d",
+        "role": "muted",
+        "share": 0
+      },
+      {
+        "hex": "#d9182c",
+        "role": "accent",
+        "share": 0.179
+      },
+      {
+        "hex": "#1a1b1d",
+        "role": "line",
+        "share": 0
+      }
+    ],
+    "fonts": {
+      "head": {
+        "kit": "inter",
+        "seen": "Inter",
+        "seenLicence": "open",
+        "weight": 600
+      },
+      "body": {
+        "kit": "inter",
+        "seen": "Inter",
+        "seenLicence": "open",
+        "weight": 400
+      },
+      "mono": {
+        "kit": "jetbrains-mono",
+        "seen": "GeistMono",
+        "seenLicence": "open",
+        "weight": 400
+      }
+    },
+    "type": {
+      "basePx": 18,
+      "ratio": 1.373,
+      "sizes": [
+        64,
+        20,
+        18,
+        16,
+        14,
+        12
+      ],
+      "headLine": 1.1,
+      "bodyLine": 1.2,
+      "headCase": "none"
+    },
+    "tracking": {
+      "display": 0,
+      "heading": 0.01,
+      "body": 0.011,
+      "label": 0
+    },
+    "radius": {
+      "outer": 16,
+      "inner": 8,
+      "pill": true
+    },
+    "shadow": {
+      "level": 1,
+      "css": "rgba(255, 255, 255, 0.03) 0px 0px 40px 20px, rgba(255, 255, 255, 0.3) 0px 0.5px 0px 0px inset"
+    },
+    "spacing": {
+      "unit": 8,
+      "section": 224,
+      "gutter": 16,
+      "density": "airy"
+    },
+    "layout": {
+      "columns": 5,
+      "maxWidth": 1200,
+      "align": "center",
+      "emptyShare": 0.05
+    },
+    "imagery": {
+      "kind": "3d",
+      "share": 0.95,
+      "light": "hard red rim light from upper left, deep shadows",
+      "lens": "wide 24mm, low angle diagonal",
+      "grade": "saturated crimson on pure black",
+      "subject": "glossy diagonal bars in motion"
+    }
+  },
+  "measured": [
+    "theme",
+    "colors",
+    "type",
+    "tracking",
+    "radius",
+    "shadow",
+    "spacing",
+    "layout"
+  ],
+  "why": "Nền đen #07080a với các sọc đỏ #d9182c dựng 3D chéo 30 độ chiếm gần trọn màn đầu, tiêu đề trắng 64 px đặt giữa ngay trên hình. Chỉ một màu nhấn đỏ, chữ phụ xám #9c9c9d, khoảng cách các phần tới 224 px nên mỗi phần đứng riêng như một cảnh. Nút bo 8 px, thẻ bo 16 px, bóng rất nhẹ. Mượn cách dùng một hình 3D một màu làm điểm nhìn duy nhất; không chép hình sọc hay biểu tượng ứng dụng.",
+  "licence": "Ảnh chụp thu nhỏ của trang công khai, chỉ để model tham khảo nguyên tắc. Không chép logo, chữ, ảnh hay phông độc quyền của trang."
+}

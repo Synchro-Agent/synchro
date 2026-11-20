@@ -1,0 +1,121 @@
+{
+  "v": 1,
+  "id": "poster-018",
+  "domain": "poster",
+  "title": "Poster ảo thuật cổ: chân dung giữa, chữ hoa đậm vàng trên nền xanh",
+  "moods": [
+    "retro-print",
+    "energetic"
+  ],
+  "industries": [
+    "events",
+    "culture-music"
+  ],
+  "audience": [
+    "public"
+  ],
+  "source_url": "https://posterhouse.org/exhibitions/",
+  "source_host": "posterhouse.org",
+  "source_kind": "public-image",
+  "captured_at": "2026-11-20",
+  "image": {
+    "file": "poster/poster-018.webp",
+    "width": 643,
+    "height": 1024,
+    "bytes": 87330,
+    "layout": "single"
+  },
+  "tokens": {
+    "theme": "light",
+    "colors": [
+      {
+        "hex": "#6dbe50",
+        "role": "bg",
+        "share": 0.235
+      },
+      {
+        "hex": "#8c441b",
+        "role": "ink",
+        "share": 0.092
+      },
+      {
+        "hex": "#6dbe50",
+        "role": "accent",
+        "share": 0
+      },
+      {
+        "hex": "#8c441b",
+        "role": "accent2",
+        "share": 0
+      }
+    ],
+    "fonts": {
+      "head": {
+        "kit": "anton",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 400
+      },
+      "body": {
+        "kit": "source-serif-4",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 400
+      },
+      "mono": null
+    },
+    "type": {
+      "basePx": 18,
+      "ratio": 1.5,
+      "sizes": [
+        80,
+        32,
+        18
+      ],
+      "headLine": 0.95,
+      "bodyLine": 1.2,
+      "headCase": "upper"
+    },
+    "tracking": {
+      "display": 0,
+      "heading": 0,
+      "body": 0,
+      "label": 0
+    },
+    "radius": {
+      "outer": 0,
+      "inner": 0,
+      "pill": false
+    },
+    "shadow": {
+      "level": 0,
+      "css": "none"
+    },
+    "spacing": {
+      "unit": 8,
+      "section": 64,
+      "gutter": 24,
+      "density": "balanced"
+    },
+    "layout": {
+      "columns": 1,
+      "maxWidth": 640,
+      "align": "asymmetric",
+      "emptyShare": 0.1
+    },
+    "imagery": {
+      "kind": "illustration",
+      "share": 0,
+      "light": "theatrical glow behind the head",
+      "lens": "seated full figure, eye level",
+      "grade": "green, mustard, rust",
+      "subject": "a magician seated with a glowing aura"
+    }
+  },
+  "measured": [
+    "theme",
+    "colors"
+  ],
+  "why": "Nhân vật ngồi giữa khung nền xanh lá #6dbe50 với quầng sáng quanh đầu, tên chương trình chữ hoa đậm vàng cam đặt chéo ở góc trên trái. Chữ phụ nâu đỏ #8c441b nhỏ hơn, xếp so le như poster rạp xiếc. Bố cục chéo tạo chuyển động trên hình tĩnh. Mượn cách đặt tiêu đề chéo và quầng sáng làm điểm nhìn; không chép nhân vật hay tên.",
+  "licence": "Ảnh chụp thu nhỏ của trang công khai, chỉ để model tham khảo nguyên tắc. Không chép logo, chữ, ảnh hay phông độc quyền của trang."
+}

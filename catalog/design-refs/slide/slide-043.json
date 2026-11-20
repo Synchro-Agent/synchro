@@ -1,0 +1,122 @@
+{
+  "v": 1,
+  "id": "slide-043",
+  "domain": "slide",
+  "title": "Bộ slide khoa học nền xanh đêm: ảnh phi hành gia nhuộm xanh, chữ mảnh, chấm cam",
+  "moods": [
+    "dark-cinematic",
+    "tech",
+    "editorial"
+  ],
+  "industries": [
+    "education",
+    "media-publishing"
+  ],
+  "audience": [
+    "students",
+    "public"
+  ],
+  "source_url": "https://visme.co/templates/presentations/",
+  "source_host": "visme.co",
+  "source_kind": "public-image",
+  "captured_at": "2026-11-20",
+  "image": {
+    "file": "slide/slide-043.webp",
+    "width": 1280,
+    "height": 720,
+    "bytes": 88618,
+    "layout": "grid4"
+  },
+  "tokens": {
+    "theme": "dark",
+    "colors": [
+      {
+        "hex": "#152036",
+        "role": "bg",
+        "share": 0.498
+      },
+      {
+        "hex": "#f3f4f8",
+        "role": "ink",
+        "share": 0
+      },
+      {
+        "hex": "#fd693c",
+        "role": "accent",
+        "share": 0
+      },
+      {
+        "hex": "#3636d6",
+        "role": "accent2",
+        "share": 0
+      }
+    ],
+    "fonts": {
+      "head": {
+        "kit": "montserrat",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 400
+      },
+      "body": {
+        "kit": "inter",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 400
+      },
+      "mono": null
+    },
+    "type": {
+      "basePx": 13,
+      "ratio": 1.414,
+      "sizes": [
+        40,
+        20,
+        13
+      ],
+      "headLine": 1.1,
+      "bodyLine": 1.45,
+      "headCase": "upper"
+    },
+    "tracking": {
+      "display": 0.02,
+      "heading": 0.02,
+      "body": 0,
+      "label": 0.08
+    },
+    "radius": {
+      "outer": 0,
+      "inner": 0,
+      "pill": false
+    },
+    "shadow": {
+      "level": 0,
+      "css": "none"
+    },
+    "spacing": {
+      "unit": 8,
+      "section": 48,
+      "gutter": 24,
+      "density": "airy"
+    },
+    "layout": {
+      "columns": 2,
+      "maxWidth": 1280,
+      "align": "left",
+      "emptyShare": 0.35
+    },
+    "imagery": {
+      "kind": "photo",
+      "share": 0.5,
+      "light": "harsh sunlight on the lunar surface, deep shadows",
+      "lens": "archival 35mm, wide",
+      "grade": "duotone electric blue and navy",
+      "subject": "an astronaut standing on the moon"
+    }
+  },
+  "measured": [
+    "theme"
+  ],
+  "why": "Nền xanh đêm #152036, ảnh phi hành gia nhuộm một màu xanh lam #3636d6 phủ nửa slide. Tiêu đề chữ mảnh hoa 40 px trắng, nhãn và số mục màu cam #fd693c, đường kẻ mảnh cam. Một hình tròn xanh sáng làm mặt trăng, trích dẫn chữ thường 20 px. Mượn cách nhuộm ảnh tư liệu một màu và nhấn bằng một màu nóng; không chép ảnh hay chữ.",
+  "licence": "Ảnh chụp thu nhỏ của trang công khai, chỉ để model tham khảo nguyên tắc. Không chép logo, chữ, ảnh hay phông độc quyền của trang."
+}

@@ -1,0 +1,142 @@
+{
+  "v": 1,
+  "id": "web-007",
+  "domain": "web",
+  "title": "Dịch vụ email cho lập trình viên: chữ có chân trên nền đen tuyền",
+  "moods": [
+    "dark-cinematic",
+    "minimal-mono",
+    "editorial"
+  ],
+  "industries": [
+    "tech-saas"
+  ],
+  "audience": [
+    "developers"
+  ],
+  "source_url": "https://resend.com/",
+  "source_host": "resend.com",
+  "source_kind": "public-page",
+  "captured_at": "2026-11-20",
+  "image": {
+    "file": "web/web-007.webp",
+    "width": 1280,
+    "height": 1600,
+    "bytes": 38582,
+    "layout": "single"
+  },
+  "tokens": {
+    "theme": "dark",
+    "colors": [
+      {
+        "hex": "#000000",
+        "role": "bg",
+        "share": 0.936
+      },
+      {
+        "hex": "#0b0e14",
+        "role": "surface",
+        "share": 0.035
+      },
+      {
+        "hex": "#ffffff",
+        "role": "ink",
+        "share": 0.005
+      },
+      {
+        "hex": "#a1a4a5",
+        "role": "muted",
+        "share": 0.003
+      },
+      {
+        "hex": "#e6e6e6",
+        "role": "accent",
+        "share": 0
+      },
+      {
+        "hex": "#282c30",
+        "role": "line",
+        "share": 0.006
+      }
+    ],
+    "fonts": {
+      "head": {
+        "kit": "playfair-display",
+        "seen": "domaine",
+        "seenLicence": "proprietary",
+        "weight": 400
+      },
+      "body": {
+        "kit": "inter",
+        "seen": "Inter Website",
+        "seenLicence": "open",
+        "weight": 400
+      },
+      "mono": {
+        "kit": "jetbrains-mono",
+        "seen": "Commit Mono Website",
+        "seenLicence": "unknown",
+        "weight": 400
+      }
+    },
+    "type": {
+      "basePx": 18,
+      "ratio": 1.322,
+      "sizes": [
+        96,
+        56,
+        18,
+        16,
+        14
+      ],
+      "headLine": 1,
+      "bodyLine": 1.5,
+      "headCase": "none"
+    },
+    "tracking": {
+      "display": -0.01,
+      "heading": -0.01,
+      "body": 0,
+      "label": 0
+    },
+    "radius": {
+      "outer": 0,
+      "inner": 16,
+      "pill": true
+    },
+    "shadow": {
+      "level": 1,
+      "css": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0.1) 0px 1px 3px 0px, rgba(0, 0, 0, 0.1) 0px 1px 2"
+    },
+    "spacing": {
+      "unit": 4,
+      "section": 96,
+      "gutter": 16,
+      "density": "airy"
+    },
+    "layout": {
+      "columns": 6,
+      "maxWidth": 540,
+      "align": "asymmetric",
+      "emptyShare": 0.6
+    },
+    "imagery": {
+      "kind": "type-only",
+      "share": 0.05,
+      "light": "",
+      "lens": "",
+      "grade": "",
+      "subject": ""
+    }
+  },
+  "measured": [
+    "theme",
+    "type",
+    "tracking",
+    "radius",
+    "shadow",
+    "spacing"
+  ],
+  "why": "Tiêu đề chữ có chân mảnh cỡ 96 px trên nền đen tuyền #000000, đặt lệch trái với hơn 60% màn đầu để trống có chủ đích. Toàn trang chỉ có trắng và hai bậc xám, nút bo tròn hẳn, không dùng màu nhấn. Chữ thân 18 px, khoảng cách phần 96 px, nhịp chậm và sang. Mượn sự tương phản giữa chữ có chân thanh lịch và nền tối cho sản phẩm kỹ thuật; không chép câu chữ hay khối 3D của trang.",
+  "licence": "Ảnh chụp thu nhỏ của trang công khai, chỉ để model tham khảo nguyên tắc. Không chép logo, chữ, ảnh hay phông độc quyền của trang."
+}

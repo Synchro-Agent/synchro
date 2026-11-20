@@ -1,0 +1,154 @@
+{
+  "v": 1,
+  "id": "web-001",
+  "domain": "web",
+  "title": "Công cụ quản lý sản phẩm nền đen, ảnh giao diện làm hình chính",
+  "moods": [
+    "dark-cinematic",
+    "tech",
+    "minimal-mono"
+  ],
+  "industries": [
+    "tech-saas",
+    "ai"
+  ],
+  "audience": [
+    "developers",
+    "b2b"
+  ],
+  "source_url": "https://linear.app/",
+  "source_host": "linear.app",
+  "source_kind": "public-page",
+  "captured_at": "2026-11-20",
+  "image": {
+    "file": "web/web-001.webp",
+    "width": 1280,
+    "height": 1600,
+    "bytes": 89210,
+    "layout": "single"
+  },
+  "tokens": {
+    "theme": "dark",
+    "colors": [
+      {
+        "hex": "#08090a",
+        "role": "bg",
+        "share": 0.945
+      },
+      {
+        "hex": "#101112",
+        "role": "surface",
+        "share": 0
+      },
+      {
+        "hex": "#161718",
+        "role": "raised",
+        "share": 0
+      },
+      {
+        "hex": "#f7f8f8",
+        "role": "ink",
+        "share": 0.02
+      },
+      {
+        "hex": "#8a8f98",
+        "role": "muted",
+        "share": 0.004
+      },
+      {
+        "hex": "#d0d6e0",
+        "role": "accent",
+        "share": 0
+      },
+      {
+        "hex": "#1c1d1e",
+        "role": "line",
+        "share": 0.015
+      }
+    ],
+    "fonts": {
+      "head": {
+        "kit": "inter",
+        "seen": "Inter Variable",
+        "seenLicence": "open",
+        "weight": 510
+      },
+      "body": {
+        "kit": "inter",
+        "seen": "Inter Variable",
+        "seenLicence": "open",
+        "weight": 400
+      },
+      "mono": {
+        "kit": "jetbrains-mono",
+        "seen": "Berkeley Mono",
+        "seenLicence": "unknown",
+        "weight": 400
+      }
+    },
+    "type": {
+      "basePx": 15,
+      "ratio": 1.337,
+      "sizes": [
+        64,
+        48,
+        40,
+        24,
+        20,
+        16,
+        14,
+        12
+      ],
+      "headLine": 1,
+      "bodyLine": 1.6,
+      "headCase": "none"
+    },
+    "tracking": {
+      "display": -0.022,
+      "heading": -0.012,
+      "body": -0.011,
+      "label": 0
+    },
+    "radius": {
+      "outer": 8,
+      "inner": 4,
+      "pill": true
+    },
+    "shadow": {
+      "level": 2,
+      "css": "rgba(0, 0, 0, 0.25) 0px 2px 32px 0px"
+    },
+    "spacing": {
+      "unit": 4,
+      "section": 72,
+      "gutter": 8,
+      "density": "balanced"
+    },
+    "layout": {
+      "columns": 2,
+      "maxWidth": 1260,
+      "align": "left",
+      "emptyShare": 0.32
+    },
+    "imagery": {
+      "kind": "photo",
+      "share": 0.48,
+      "light": "soft screen glow on near-black, gentle top vignette",
+      "lens": "flat orthographic UI capture, slight perspective",
+      "grade": "neutral graphite greys, cool highlights",
+      "subject": "product interface panels with lists and comments"
+    }
+  },
+  "measured": [
+    "theme",
+    "fonts",
+    "type",
+    "tracking",
+    "radius",
+    "shadow",
+    "spacing",
+    "layout"
+  ],
+  "why": "Tiêu đề 64 px siết −0,022em, đặt lệch trái trên nền gần đen #08090a, không có màu nhấn nào cạnh tranh với chữ. Hình chủ đạo là ảnh chụp chính giao diện sản phẩm, rộng hơn 1200 px, viền mảnh 1 px và bóng mờ 32 px tách khỏi nền. Chữ thân xám #8a8f98 cỡ 15 px để tiêu đề trắng nổi bật hơn hẳn. Mượn nguyên tắc một sắc độ nền, chữ trắng và ảnh sản phẩm thật; không chép giao diện hay chữ của trang.",
+  "licence": "Ảnh chụp thu nhỏ của trang công khai, chỉ để model tham khảo nguyên tắc. Không chép logo, chữ, ảnh hay phông độc quyền của trang."
+}

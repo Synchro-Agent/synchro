@@ -1,0 +1,123 @@
+{
+  "v": 1,
+  "id": "slide-001",
+  "domain": "slide",
+  "title": "Bộ slide phân tích công nghệ: bìa đỏ san hô, biểu đồ tối giản nền trắng",
+  "moods": [
+    "minimal-mono",
+    "editorial",
+    "data-dense"
+  ],
+  "industries": [
+    "tech-saas",
+    "consulting"
+  ],
+  "audience": [
+    "investors",
+    "b2b"
+  ],
+  "source_url": "https://www.ben-evans.com/s/2020-Benedict-Evans-Shoulders-of-Giants.pdf",
+  "source_host": "ben-evans.com",
+  "source_kind": "public-image",
+  "captured_at": "2026-11-20",
+  "image": {
+    "file": "slide/slide-001.webp",
+    "width": 1280,
+    "height": 720,
+    "bytes": 45014,
+    "layout": "grid4"
+  },
+  "tokens": {
+    "theme": "light",
+    "colors": [
+      {
+        "hex": "#f7f7f7",
+        "role": "bg",
+        "share": 0.707
+      },
+      {
+        "hex": "#333333",
+        "role": "ink",
+        "share": 0
+      },
+      {
+        "hex": "#8a8a8a",
+        "role": "muted",
+        "share": 0
+      },
+      {
+        "hex": "#eb4b43",
+        "role": "accent",
+        "share": 0.256
+      }
+    ],
+    "fonts": {
+      "head": {
+        "kit": "source-serif-4",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 400
+      },
+      "body": {
+        "kit": "inter",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 400
+      },
+      "mono": null
+    },
+    "type": {
+      "basePx": 18,
+      "ratio": 1.333,
+      "sizes": [
+        40,
+        28,
+        18,
+        12
+      ],
+      "headLine": 1.2,
+      "bodyLine": 1.4,
+      "headCase": "none"
+    },
+    "tracking": {
+      "display": 0,
+      "heading": 0,
+      "body": 0,
+      "label": 0
+    },
+    "radius": {
+      "outer": 0,
+      "inner": 0,
+      "pill": false
+    },
+    "shadow": {
+      "level": 0,
+      "css": "none"
+    },
+    "spacing": {
+      "unit": 8,
+      "section": 64,
+      "gutter": 24,
+      "density": "airy"
+    },
+    "layout": {
+      "columns": 12,
+      "maxWidth": 1280,
+      "align": "left",
+      "emptyShare": 0.5
+    },
+    "imagery": {
+      "kind": "data",
+      "share": 0.35,
+      "light": "",
+      "lens": "",
+      "grade": "",
+      "subject": ""
+    }
+  },
+  "measured": [
+    "theme"
+  ],
+  "why": "Bìa nền đỏ san hô #eb4b43 với tiêu đề chữ có chân trắng nhỏ đặt trái trên, các trang trong nền xám rất nhạt #f7f7f7. Mỗi trang một câu khẳng định ở trên và một biểu đồ cột một màu đỏ, chú thích nguồn chữ 10 px ở chân. Rất nhiều khoảng trống, không trang trí. Mượn kỷ luật một ý mỗi trang, tiêu đề là câu khẳng định và một màu nhấn duy nhất cho dữ liệu; không chép biểu đồ hay số.",
+  "licence": "Ảnh chụp thu nhỏ của trang công khai, chỉ để model tham khảo nguyên tắc. Không chép logo, chữ, ảnh hay phông độc quyền của trang."
+}

@@ -1,0 +1,143 @@
+{
+  "v": 1,
+  "id": "web-069",
+  "domain": "web",
+  "title": "Bài báo dữ liệu: lưới thẻ màu đậm, chữ có chân mềm",
+  "moods": [
+    "playful",
+    "bold-color",
+    "data-dense"
+  ],
+  "industries": [
+    "media-publishing"
+  ],
+  "audience": [
+    "public",
+    "youth"
+  ],
+  "source_url": "https://pudding.cool/",
+  "source_host": "pudding.cool",
+  "source_kind": "public-page",
+  "captured_at": "2026-11-20",
+  "image": {
+    "file": "web/web-069.webp",
+    "width": 1280,
+    "height": 1600,
+    "bytes": 89862,
+    "layout": "single"
+  },
+  "tokens": {
+    "theme": "light",
+    "colors": [
+      {
+        "hex": "#ffffff",
+        "role": "bg",
+        "share": 0.629
+      },
+      {
+        "hex": "#262626",
+        "role": "ink",
+        "share": 0.077
+      },
+      {
+        "hex": "#6d6d6d",
+        "role": "muted",
+        "share": 0
+      },
+      {
+        "hex": "#d63f3f",
+        "role": "accent",
+        "share": 0
+      },
+      {
+        "hex": "#df20df",
+        "role": "accent2",
+        "share": 0
+      },
+      {
+        "hex": "#262626",
+        "role": "line",
+        "share": 0
+      }
+    ],
+    "fonts": {
+      "head": {
+        "kit": "fraunces",
+        "seen": "Gooper SemiCondensed",
+        "seenLicence": "unknown",
+        "weight": 700
+      },
+      "body": {
+        "kit": "inter",
+        "seen": "Atlas Grotesk",
+        "seenLicence": "unknown",
+        "weight": 400
+      },
+      "mono": {
+        "kit": "jetbrains-mono",
+        "seen": "Atlas Typewriter",
+        "seenLicence": "unknown",
+        "weight": 400
+      }
+    },
+    "type": {
+      "basePx": 16,
+      "ratio": 1.414,
+      "sizes": [
+        32,
+        22,
+        16,
+        14
+      ],
+      "headLine": 1,
+      "bodyLine": 1.4,
+      "headCase": "none"
+    },
+    "tracking": {
+      "display": -0.02,
+      "heading": -0.02,
+      "body": 0,
+      "label": 0
+    },
+    "radius": {
+      "outer": 0,
+      "inner": 6,
+      "pill": true
+    },
+    "shadow": {
+      "level": 1,
+      "css": "rgba(0, 0, 0, 0.3) 0px 2px 1px 0px"
+    },
+    "spacing": {
+      "unit": 8,
+      "section": 64,
+      "gutter": 32,
+      "density": "balanced"
+    },
+    "layout": {
+      "columns": 2,
+      "maxWidth": 1247,
+      "align": "left",
+      "emptyShare": 0.36
+    },
+    "imagery": {
+      "kind": "data",
+      "share": 0.4,
+      "light": "",
+      "lens": "",
+      "grade": "",
+      "subject": ""
+    }
+  },
+  "measured": [
+    "theme",
+    "type",
+    "tracking",
+    "radius",
+    "shadow",
+    "spacing",
+    "layout"
+  ],
+  "why": "Lưới thẻ bài nền màu đậm khác nhau: đỏ, hồng tím, vàng nghệ, mỗi thẻ một hình dữ liệu tối giản. Tiêu đề chữ có chân mềm đậm 32 px, chữ thân grotesk 16 px, nền trắng. Khoảng cách cột 32 px, bo 6 px nhỏ. Mượn cách dùng ô màu bão hòa cho từng câu chuyện dữ liệu; không chép biểu đồ hay tiêu đề.",
+  "licence": "Ảnh chụp thu nhỏ của trang công khai, chỉ để model tham khảo nguyên tắc. Không chép logo, chữ, ảnh hay phông độc quyền của trang."
+}

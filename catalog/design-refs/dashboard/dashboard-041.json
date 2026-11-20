@@ -1,0 +1,164 @@
+{
+  "v": 1,
+  "id": "dashboard-041",
+  "domain": "dashboard",
+  "title": "Bảng dữ liệu tài chính phi tập trung: nền than, chữ đơn cách",
+  "moods": [
+    "dark-cinematic",
+    "data-dense",
+    "tech"
+  ],
+  "industries": [
+    "finance",
+    "tech-saas"
+  ],
+  "audience": [
+    "investors",
+    "developers"
+  ],
+  "source_url": "https://defillama.com/",
+  "source_host": "defillama.com",
+  "source_kind": "public-page",
+  "captured_at": "2026-11-20",
+  "image": {
+    "file": "dashboard/dashboard-041.webp",
+    "width": 1280,
+    "height": 1600,
+    "bytes": 89154,
+    "layout": "single"
+  },
+  "tokens": {
+    "theme": "dark",
+    "colors": [
+      {
+        "hex": "#131516",
+        "role": "bg",
+        "share": 0.869
+      },
+      {
+        "hex": "#090b0c",
+        "role": "surface",
+        "share": 0
+      },
+      {
+        "hex": "#181a1b",
+        "role": "raised",
+        "share": 0.029
+      },
+      {
+        "hex": "#ffffff",
+        "role": "ink",
+        "share": 0.006
+      },
+      {
+        "hex": "#c6c6c6",
+        "role": "muted",
+        "share": 0
+      },
+      {
+        "hex": "#4f8fea",
+        "role": "accent",
+        "share": 0
+      },
+      {
+        "hex": "#fde0a9",
+        "role": "accent2",
+        "share": 0
+      },
+      {
+        "hex": "#17191a",
+        "role": "line",
+        "share": 0
+      },
+      {
+        "hex": "#12b167",
+        "role": "pos",
+        "share": 0
+      },
+      {
+        "hex": "#ff686f",
+        "role": "neg",
+        "share": 0
+      }
+    ],
+    "fonts": {
+      "head": {
+        "kit": "jetbrains-mono",
+        "seen": "JetBrains Mono",
+        "seenLicence": "open",
+        "weight": 700
+      },
+      "body": {
+        "kit": "inter",
+        "seen": "Inter var",
+        "seenLicence": "open",
+        "weight": 400
+      },
+      "mono": {
+        "kit": "jetbrains-mono",
+        "seen": "JetBrains Mono",
+        "seenLicence": "open",
+        "weight": 400
+      }
+    },
+    "type": {
+      "basePx": 14,
+      "ratio": 1.309,
+      "sizes": [
+        24,
+        18,
+        14,
+        12
+      ],
+      "headLine": 1.33,
+      "bodyLine": 1.29,
+      "headCase": "none"
+    },
+    "tracking": {
+      "display": 0,
+      "heading": 0,
+      "body": 0,
+      "label": 0.005
+    },
+    "radius": {
+      "outer": 8,
+      "inner": 0,
+      "pill": true
+    },
+    "shadow": {
+      "level": 3,
+      "css": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(30, 27, 75, 0.5) 0px 10px 30px 0px"
+    },
+    "spacing": {
+      "unit": 4,
+      "section": 64,
+      "gutter": 8,
+      "density": "balanced"
+    },
+    "layout": {
+      "columns": 5,
+      "maxWidth": 640,
+      "align": "asymmetric",
+      "emptyShare": 0.3
+    },
+    "imagery": {
+      "kind": "data",
+      "share": 0.6,
+      "light": "",
+      "lens": "",
+      "grade": "",
+      "subject": ""
+    }
+  },
+  "measured": [
+    "theme",
+    "type",
+    "tracking",
+    "radius",
+    "shadow",
+    "spacing",
+    "layout"
+  ],
+  "why": "Nền than #131516, con số chính chữ đơn cách 24 px, biểu đồ đường xanh lam chiếm trung tâm cùng các ô biểu đồ nhỏ xếp lưới 5 cột. Xanh lá #12b167 tăng, đỏ hồng #ff686f giảm, nhấn vàng kem #fde0a9 rất ít. Bảng xếp hạng dài với cột số căn phải. Mượn chữ đơn cách cho số và lưới ô nhỏ dày đặc trên nền tối; không chép số liệu.",
+  "licence": "Ảnh chụp thu nhỏ của trang công khai, chỉ để model tham khảo nguyên tắc. Không chép logo, chữ, ảnh hay phông độc quyền của trang."
+}

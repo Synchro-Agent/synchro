@@ -1,0 +1,121 @@
+{
+  "v": 1,
+  "id": "email-031",
+  "domain": "email",
+  "title": "Thư đồ uống nền xanh rêu: tiêu đề kem lớn, hai ảnh ly matcha cạnh nhau",
+  "moods": [
+    "organic",
+    "warm-craft",
+    "clean-light"
+  ],
+  "industries": [
+    "food-beverage"
+  ],
+  "audience": [
+    "consumer"
+  ],
+  "source_url": "https://designmodo.com/postcards/",
+  "source_host": "designmodo.com",
+  "source_kind": "public-image",
+  "captured_at": "2026-11-20",
+  "image": {
+    "file": "email/email-031.webp",
+    "width": 656,
+    "height": 820,
+    "bytes": 49586,
+    "layout": "single"
+  },
+  "tokens": {
+    "theme": "dark",
+    "colors": [
+      {
+        "hex": "#275c50",
+        "role": "bg",
+        "share": 0.547
+      },
+      {
+        "hex": "#f6faf8",
+        "role": "ink",
+        "share": 0.048
+      },
+      {
+        "hex": "#c2cdad",
+        "role": "muted",
+        "share": 0.127
+      },
+      {
+        "hex": "#efe6c8",
+        "role": "accent",
+        "share": 0
+      }
+    ],
+    "fonts": {
+      "head": {
+        "kit": "be-vietnam-pro",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 400
+      },
+      "body": {
+        "kit": "inter",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 400
+      },
+      "mono": null
+    },
+    "type": {
+      "basePx": 14,
+      "ratio": 1.333,
+      "sizes": [
+        36,
+        20,
+        14,
+        12
+      ],
+      "headLine": 1.15,
+      "bodyLine": 1.6,
+      "headCase": "none"
+    },
+    "tracking": {
+      "display": -0.01,
+      "heading": 0,
+      "body": 0,
+      "label": 0.02
+    },
+    "radius": {
+      "outer": 8,
+      "inner": 999,
+      "pill": true
+    },
+    "shadow": {
+      "level": 0,
+      "css": "none"
+    },
+    "spacing": {
+      "unit": 8,
+      "section": 40,
+      "gutter": 24,
+      "density": "balanced"
+    },
+    "layout": {
+      "columns": 2,
+      "maxWidth": 600,
+      "align": "center",
+      "emptyShare": 0.15
+    },
+    "imagery": {
+      "kind": "photo",
+      "share": 0.35,
+      "light": "bright soft daylight from a window",
+      "lens": "50mm overhead and 45 degree food shots",
+      "grade": "fresh matcha green, white ceramics, pale wood",
+      "subject": "iced matcha latte and a ceramic bowl"
+    }
+  },
+  "measured": [
+    "theme"
+  ],
+  "why": "Nền xanh rêu #275c50 đặc, tiêu đề kem 36 px ba dòng căn giữa, dòng cao 1,15. Hai ảnh sản phẩm sáng tông xanh và trắng đặt cạnh nhau bo 8 px, chiếm 35% chiều cao. Nút kem bo tròn hoàn toàn chữ xanh, đoạn văn 14 px màu xanh nhạt #c2cdad. Mượn cách dùng một màu thương hiệu đặc làm nền cả thư và ảnh sáng làm điểm thở; không chép ảnh hay chữ.",
+  "licence": "Ảnh chụp thu nhỏ của trang công khai, chỉ để model tham khảo nguyên tắc. Không chép logo, chữ, ảnh hay phông độc quyền của trang."
+}

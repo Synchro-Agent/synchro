@@ -1,0 +1,135 @@
+{
+  "v": 1,
+  "id": "doc-009",
+  "domain": "doc",
+  "title": "Hệ thiết kế doanh nghiệp: nền xanh trời, chữ có chân lớn, lưới vuông",
+  "moods": [
+    "swiss-precise",
+    "clean-light",
+    "tech"
+  ],
+  "industries": [
+    "industrial-b2b",
+    "tech-saas"
+  ],
+  "audience": [
+    "developers",
+    "b2b"
+  ],
+  "source_url": "https://carbondesignsystem.com/",
+  "source_host": "carbondesignsystem.com",
+  "source_kind": "public-page",
+  "captured_at": "2026-11-20",
+  "image": {
+    "file": "doc/doc-009.webp",
+    "width": 1280,
+    "height": 1600,
+    "bytes": 75564,
+    "layout": "single"
+  },
+  "tokens": {
+    "theme": "light",
+    "colors": [
+      {
+        "hex": "#bae6ff",
+        "role": "bg",
+        "share": 0.606
+      },
+      {
+        "hex": "#161616",
+        "role": "ink",
+        "share": 0
+      },
+      {
+        "hex": "#525252",
+        "role": "muted",
+        "share": 0
+      },
+      {
+        "hex": "#bae6ff",
+        "role": "accent",
+        "share": 0
+      },
+      {
+        "hex": "#002d9c",
+        "role": "line",
+        "share": 0.012
+      }
+    ],
+    "fonts": {
+      "head": {
+        "kit": "source-serif-4",
+        "seen": "IBM Plex Sans",
+        "seenLicence": "open",
+        "weight": 400
+      },
+      "body": {
+        "kit": "ibm-plex-sans",
+        "seen": "IBM Plex Sans",
+        "seenLicence": "open",
+        "weight": 400
+      },
+      "mono": null
+    },
+    "type": {
+      "basePx": 20,
+      "ratio": 1.265,
+      "sizes": [
+        32,
+        20,
+        16,
+        14
+      ],
+      "headLine": 1.4,
+      "bodyLine": 1.4,
+      "headCase": "none"
+    },
+    "tracking": {
+      "display": 0,
+      "heading": 0,
+      "body": 0,
+      "label": 0
+    },
+    "radius": {
+      "outer": 0,
+      "inner": 0,
+      "pill": false
+    },
+    "shadow": {
+      "level": 1,
+      "css": "rgb(224, 224, 224) 1px 0px 0px 0px"
+    },
+    "spacing": {
+      "unit": 8,
+      "section": 64,
+      "gutter": 16,
+      "density": "balanced"
+    },
+    "layout": {
+      "columns": 3,
+      "maxWidth": 530,
+      "align": "asymmetric",
+      "emptyShare": 0.03
+    },
+    "imagery": {
+      "kind": "illustration",
+      "share": 0.3,
+      "light": "flat vector rendering, no shadows",
+      "lens": "flat UI and isometric",
+      "grade": "sky blue and deep blue",
+      "subject": "interface illustrations in square tiles"
+    }
+  },
+  "measured": [
+    "theme",
+    "colors",
+    "type",
+    "tracking",
+    "radius",
+    "shadow",
+    "spacing",
+    "layout"
+  ],
+  "why": "Mảng nền xanh trời #bae6ff với tiêu đề chữ có chân mảnh rất lớn, ảnh minh họa giao diện đặt trong lưới ô vuông không bo góc. Viền xanh đậm #002d9c 1 px, chữ thân 20 px. Lưới vuông và góc vuông tuyệt đối tạo cảm giác kỹ thuật chính xác. Mượn lưới ô vuông không bo và cặp chữ có chân với sans kỹ thuật; không chép minh họa.",
+  "licence": "Ảnh chụp thu nhỏ của trang công khai, chỉ để model tham khảo nguyên tắc. Không chép logo, chữ, ảnh hay phông độc quyền của trang."
+}

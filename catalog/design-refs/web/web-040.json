@@ -1,0 +1,140 @@
+{
+  "v": 1,
+  "id": "web-040",
+  "domain": "web",
+  "title": "Chuỗi cà phê hoài cổ: chữ cổ điển, xanh rêu và đỏ trên nền giấy",
+  "moods": [
+    "retro-print",
+    "warm-craft"
+  ],
+  "industries": [
+    "food-beverage",
+    "hospitality-travel"
+  ],
+  "audience": [
+    "youth",
+    "consumer"
+  ],
+  "source_url": "https://congcaphe.com/",
+  "source_host": "congcaphe.com",
+  "source_kind": "public-page",
+  "captured_at": "2026-11-20",
+  "image": {
+    "file": "web/web-040.webp",
+    "width": 1280,
+    "height": 1600,
+    "bytes": 87644,
+    "layout": "single"
+  },
+  "tokens": {
+    "theme": "light",
+    "colors": [
+      {
+        "hex": "#e9e4d6",
+        "role": "bg",
+        "share": 0.482
+      },
+      {
+        "hex": "#fdf0d1",
+        "role": "surface",
+        "share": 0
+      },
+      {
+        "hex": "#2f3a1c",
+        "role": "ink",
+        "share": 0
+      },
+      {
+        "hex": "#696969",
+        "role": "muted",
+        "share": 0.021
+      },
+      {
+        "hex": "#af181c",
+        "role": "accent",
+        "share": 0
+      },
+      {
+        "hex": "#4c5b29",
+        "role": "accent2",
+        "share": 0
+      }
+    ],
+    "fonts": {
+      "head": {
+        "kit": "fraunces",
+        "seen": "BeauLuloClean-OneBold",
+        "seenLicence": "unknown",
+        "weight": 700
+      },
+      "body": {
+        "kit": "be-vietnam-pro",
+        "seen": "BeauLuloClean-OneBold",
+        "seenLicence": "unknown",
+        "weight": 700
+      },
+      "mono": null
+    },
+    "type": {
+      "basePx": 18,
+      "ratio": 1.248,
+      "sizes": [
+        35,
+        24,
+        20,
+        18,
+        16,
+        14
+      ],
+      "headLine": 1.7,
+      "bodyLine": 1.7,
+      "headCase": "upper"
+    },
+    "tracking": {
+      "display": 0,
+      "heading": 0,
+      "body": 0,
+      "label": 0
+    },
+    "radius": {
+      "outer": 0,
+      "inner": 0,
+      "pill": false
+    },
+    "shadow": {
+      "level": 0,
+      "css": "none"
+    },
+    "spacing": {
+      "unit": 4,
+      "section": 60,
+      "gutter": 24,
+      "density": "balanced"
+    },
+    "layout": {
+      "columns": 5,
+      "maxWidth": 1140,
+      "align": "asymmetric",
+      "emptyShare": 0.08
+    },
+    "imagery": {
+      "kind": "photo",
+      "share": 0.88,
+      "light": "even studio light, cutout on flat colour",
+      "lens": "straight-on product, 85mm",
+      "grade": "olive green, brick red, aged paper",
+      "subject": "coffee filter and drinks as cutouts"
+    }
+  },
+  "measured": [
+    "theme",
+    "type",
+    "tracking",
+    "radius",
+    "shadow",
+    "spacing",
+    "layout"
+  ],
+  "why": "Nền giấy ngà #e9e4d6 với khối xanh rêu #4c5b29 và nhấn đỏ #af181c, tiêu đề phông hoài cổ có nét tròn, nhãn chữ hoa nhỏ. Ảnh phin cà phê cắt nền đặt lệch phải, hàng sản phẩm chụp thẳng xếp đều 5 cột. Không bo góc, không bóng, như tờ thực đơn in. Mượn bảng màu xanh rêu đỏ gạch và kiểu chữ hoài cổ; không chép hình phin hay thực đơn.",
+  "licence": "Ảnh chụp thu nhỏ của trang công khai, chỉ để model tham khảo nguyên tắc. Không chép logo, chữ, ảnh hay phông độc quyền của trang."
+}

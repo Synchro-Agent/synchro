@@ -1,0 +1,123 @@
+{
+  "v": 1,
+  "id": "poster-029",
+  "domain": "poster",
+  "title": "Poster văn hoá màu chói: chữ K khổng lồ đỏ trên nền vàng, chữ dọc tím hồng",
+  "moods": [
+    "bold-color",
+    "playful",
+    "energetic"
+  ],
+  "industries": [
+    "culture-music",
+    "events"
+  ],
+  "audience": [
+    "youth",
+    "public"
+  ],
+  "source_url": "https://100-beste-plakate.de/plakate/filter/jahr:2025/",
+  "source_host": "100-beste-plakate.de",
+  "source_kind": "public-image",
+  "captured_at": "2026-11-20",
+  "image": {
+    "file": "poster/poster-029.webp",
+    "width": 1118,
+    "height": 1600,
+    "bytes": 89492,
+    "layout": "single"
+  },
+  "tokens": {
+    "theme": "light",
+    "colors": [
+      {
+        "hex": "#ffff00",
+        "role": "bg",
+        "share": 0
+      },
+      {
+        "hex": "#1a1a1a",
+        "role": "ink",
+        "share": 0
+      },
+      {
+        "hex": "#fe0000",
+        "role": "accent",
+        "share": 0
+      },
+      {
+        "hex": "#00ee91",
+        "role": "accent2",
+        "share": 0.198
+      }
+    ],
+    "fonts": {
+      "head": {
+        "kit": "unbounded",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 400
+      },
+      "body": {
+        "kit": "archivo",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 400
+      },
+      "mono": null
+    },
+    "type": {
+      "basePx": 14,
+      "ratio": 2,
+      "sizes": [
+        400,
+        72,
+        20,
+        12
+      ],
+      "headLine": 0.85,
+      "bodyLine": 1.2,
+      "headCase": "upper"
+    },
+    "tracking": {
+      "display": -0.02,
+      "heading": 0,
+      "body": 0,
+      "label": 0.02
+    },
+    "radius": {
+      "outer": 40,
+      "inner": 0,
+      "pill": false
+    },
+    "shadow": {
+      "level": 0,
+      "css": "none"
+    },
+    "spacing": {
+      "unit": 8,
+      "section": 16,
+      "gutter": 12,
+      "density": "dense"
+    },
+    "layout": {
+      "columns": 2,
+      "maxWidth": 1120,
+      "align": "asymmetric",
+      "emptyShare": 0.05
+    },
+    "imagery": {
+      "kind": "illustration",
+      "share": 0.7,
+      "light": "flat fills, no lighting",
+      "lens": "flat 2D bubble lettering",
+      "grade": "pure red, lemon yellow, mint green and violet",
+      "subject": "a giant inflated letter shape"
+    }
+  },
+  "measured": [
+    "theme"
+  ],
+  "why": "Một chữ K tròn phồng cao gần 70% khung, đỏ #fe0000 viền xanh ngọc #00ee91, đặt trên nền vàng chanh. Chữ CULTURE chạy dọc mép phải bằng chữ hoa tím hồng, lịch chương trình in nhỏ trong dải xanh ở đáy. Bốn màu thuần đặt sát nhau, không chuyển sắc. Mượn cách phóng một chữ cái thành hình chủ đạo và chữ dọc làm khung; không chép chữ hay biểu trưng.",
+  "licence": "Ảnh chụp thu nhỏ của trang công khai, chỉ để model tham khảo nguyên tắc. Không chép logo, chữ, ảnh hay phông độc quyền của trang."
+}

@@ -1,0 +1,146 @@
+{
+  "v": 1,
+  "id": "web-057",
+  "domain": "web",
+  "title": "Ngân hàng số: ảnh tay cầm điện thoại, chữ đậm trên ảnh",
+  "moods": [
+    "bold-color",
+    "clean-light",
+    "energetic"
+  ],
+  "industries": [
+    "finance"
+  ],
+  "audience": [
+    "consumer",
+    "youth"
+  ],
+  "source_url": "https://monzo.com/",
+  "source_host": "monzo.com",
+  "source_kind": "public-page",
+  "captured_at": "2026-11-20",
+  "image": {
+    "file": "web/web-057.webp",
+    "width": 1280,
+    "height": 1600,
+    "bytes": 89834,
+    "layout": "single"
+  },
+  "tokens": {
+    "theme": "light",
+    "colors": [
+      {
+        "hex": "#ffffff",
+        "role": "bg",
+        "share": 0.177
+      },
+      {
+        "hex": "#f2f8f3",
+        "role": "surface",
+        "share": 0
+      },
+      {
+        "hex": "#091723",
+        "role": "ink",
+        "share": 0
+      },
+      {
+        "hex": "#6b747b",
+        "role": "muted",
+        "share": 0
+      },
+      {
+        "hex": "#ff4f40",
+        "role": "accent",
+        "share": 0
+      },
+      {
+        "hex": "#091723",
+        "role": "line",
+        "share": 0
+      },
+      {
+        "hex": "#14233c",
+        "role": "accent2",
+        "share": 0
+      }
+    ],
+    "fonts": {
+      "head": {
+        "kit": "inter",
+        "seen": "MonzoSansDisplay",
+        "seenLicence": "unknown",
+        "weight": 800
+      },
+      "body": {
+        "kit": "inter",
+        "seen": "MonzoSansText",
+        "seenLicence": "unknown",
+        "weight": 600
+      },
+      "mono": null
+    },
+    "type": {
+      "basePx": 16,
+      "ratio": 1.251,
+      "sizes": [
+        49,
+        39,
+        31,
+        25,
+        20,
+        16,
+        13
+      ],
+      "headLine": 1.2,
+      "bodyLine": 1.38,
+      "headCase": "none"
+    },
+    "tracking": {
+      "display": 0,
+      "heading": 0,
+      "body": 0,
+      "label": 0
+    },
+    "radius": {
+      "outer": 24,
+      "inner": 12,
+      "pill": true
+    },
+    "shadow": {
+      "level": 0,
+      "css": "none"
+    },
+    "spacing": {
+      "unit": 8,
+      "section": 64,
+      "gutter": 16,
+      "density": "balanced"
+    },
+    "layout": {
+      "columns": 6,
+      "maxWidth": 1230,
+      "align": "left",
+      "emptyShare": 0.05
+    },
+    "imagery": {
+      "kind": "photo",
+      "share": 0.92,
+      "light": "bright natural daylight, crisp",
+      "lens": "50mm close-up, slight top-down",
+      "grade": "vivid reds and fresh greens",
+      "subject": "hand holding a phone above fruit at a market"
+    }
+  },
+  "measured": [
+    "theme",
+    "fonts",
+    "type",
+    "tracking",
+    "shadow",
+    "spacing",
+    "layout"
+  ],
+  "why": "Ảnh bàn tay cầm điện thoại cạnh trái cây đỏ chiếm khung bo 24 px, tiêu đề trắng đậm 800 cỡ 49 px đặt trái ngay trên ảnh. Bên dưới là hàng thẻ ảnh màu sắc bo góc, nền trắng sạch. Không bóng, nhịp 64 px. Mượn cách đặt chữ đậm thẳng lên ảnh đời thường giàu màu; không chép ảnh hay giao diện ứng dụng.",
+  "licence": "Ảnh chụp thu nhỏ của trang công khai, chỉ để model tham khảo nguyên tắc. Không chép logo, chữ, ảnh hay phông độc quyền của trang."
+}

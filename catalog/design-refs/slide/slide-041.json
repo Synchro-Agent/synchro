@@ -1,0 +1,122 @@
+{
+  "v": 1,
+  "id": "slide-041",
+  "domain": "slide",
+  "title": "Báo cáo xu hướng đời sống: trang trắng gần trống, số chương khổng lồ, dải xanh ngọc",
+  "moods": [
+    "minimal-mono",
+    "editorial",
+    "swiss-precise"
+  ],
+  "industries": [
+    "consulting",
+    "general"
+  ],
+  "audience": [
+    "b2b",
+    "investors"
+  ],
+  "source_url": "https://www.accenture.com/content/dam/accenture/final/accenture-com/document-fy27/q1/LifeTrends-FY27-Report.pdf",
+  "source_host": "accenture.com",
+  "source_kind": "public-image",
+  "captured_at": "2026-11-20",
+  "image": {
+    "file": "slide/slide-041.webp",
+    "width": 1280,
+    "height": 720,
+    "bytes": 81582,
+    "layout": "grid4"
+  },
+  "tokens": {
+    "theme": "light",
+    "colors": [
+      {
+        "hex": "#fcfcfc",
+        "role": "bg",
+        "share": 0.776
+      },
+      {
+        "hex": "#020202",
+        "role": "ink",
+        "share": 0.039
+      },
+      {
+        "hex": "#1d1c1d",
+        "role": "muted",
+        "share": 0.019
+      },
+      {
+        "hex": "#07909f",
+        "role": "accent",
+        "share": 0.018
+      }
+    ],
+    "fonts": {
+      "head": {
+        "kit": "inter",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 400
+      },
+      "body": {
+        "kit": "inter",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 400
+      },
+      "mono": null
+    },
+    "type": {
+      "basePx": 12,
+      "ratio": 1.414,
+      "sizes": [
+        240,
+        32,
+        12
+      ],
+      "headLine": 0.9,
+      "bodyLine": 1.45,
+      "headCase": "none"
+    },
+    "tracking": {
+      "display": -0.04,
+      "heading": -0.01,
+      "body": 0,
+      "label": 0.02
+    },
+    "radius": {
+      "outer": 0,
+      "inner": 0,
+      "pill": false
+    },
+    "shadow": {
+      "level": 0,
+      "css": "none"
+    },
+    "spacing": {
+      "unit": 8,
+      "section": 64,
+      "gutter": 24,
+      "density": "airy"
+    },
+    "layout": {
+      "columns": 4,
+      "maxWidth": 1280,
+      "align": "left",
+      "emptyShare": 0.7
+    },
+    "imagery": {
+      "kind": "photo",
+      "share": 0.15,
+      "light": "soft diffuse light with motion blur",
+      "lens": "long exposure portrait, blurred",
+      "grade": "cool blue-grey, desaturated",
+      "subject": "a blurred person in motion"
+    }
+  },
+  "measured": [
+    "theme"
+  ],
+  "why": "Trang trắng #fcfcfc để trống gần 70%, số chương đen khổng lồ cao 240 px cắt mép phải. Tiêu đề mục 32 px đen, đoạn dẫn 12 px cột hẹp, một dải dọc xanh ngọc #07909f làm dấu. Ảnh mờ chuyển động đặt sát mép, chiếm khoảng 15% trang. Mượn khoảng trắng lớn và con số chương cắt mép làm điểm nhấn; không chép chữ hay ảnh.",
+  "licence": "Ảnh chụp thu nhỏ của trang công khai, chỉ để model tham khảo nguyên tắc. Không chép logo, chữ, ảnh hay phông độc quyền của trang."
+}

@@ -1,0 +1,150 @@
+{
+  "v": 1,
+  "id": "doc-026",
+  "domain": "doc",
+  "title": "Tài liệu kỹ thuật ba cột: thanh mục lục trái, liên kết xanh gạch chân, chữ đen rõ",
+  "moods": [
+    "clean-light",
+    "swiss-precise",
+    "tech"
+  ],
+  "industries": [
+    "education",
+    "tech-saas"
+  ],
+  "audience": [
+    "developers",
+    "students"
+  ],
+  "source_url": "https://developer.mozilla.org/en-US/docs/Web/CSS",
+  "source_host": "developer.mozilla.org",
+  "source_kind": "public-page",
+  "captured_at": "2026-11-20",
+  "image": {
+    "file": "doc/doc-026.webp",
+    "width": 1120,
+    "height": 1400,
+    "bytes": 89932,
+    "layout": "single"
+  },
+  "tokens": {
+    "theme": "light",
+    "colors": [
+      {
+        "hex": "#ffffff",
+        "role": "bg",
+        "share": 0.748
+      },
+      {
+        "hex": "#f7f7f8",
+        "role": "surface",
+        "share": 0
+      },
+      {
+        "hex": "#ecf4fe",
+        "role": "raised",
+        "share": 0.086
+      },
+      {
+        "hex": "#000000",
+        "role": "ink",
+        "share": 0.024
+      },
+      {
+        "hex": "#aeada8",
+        "role": "muted",
+        "share": 0.023
+      },
+      {
+        "hex": "#044c9f",
+        "role": "accent",
+        "share": 0.006
+      },
+      {
+        "hex": "#c3c7cb",
+        "role": "line",
+        "share": 0.025
+      }
+    ],
+    "fonts": {
+      "head": {
+        "kit": "inter",
+        "seen": "Inter",
+        "seenLicence": "open",
+        "weight": 400
+      },
+      "body": {
+        "kit": "inter",
+        "seen": "Inter",
+        "seenLicence": "open",
+        "weight": 400
+      },
+      "mono": {
+        "kit": "jetbrains-mono",
+        "seen": "JetBrains Mono",
+        "seenLicence": "open",
+        "weight": 400
+      }
+    },
+    "type": {
+      "basePx": 16,
+      "ratio": 1.357,
+      "sizes": [
+        40,
+        32,
+        24,
+        16
+      ],
+      "headLine": 1.25,
+      "bodyLine": 1,
+      "headCase": "none"
+    },
+    "tracking": {
+      "display": 0,
+      "heading": 0,
+      "body": 0,
+      "label": 0
+    },
+    "radius": {
+      "outer": 0,
+      "inner": 0,
+      "pill": false
+    },
+    "shadow": {
+      "level": 1,
+      "css": "rgb(195, 199, 203) -2px 0px 0px 0px"
+    },
+    "spacing": {
+      "unit": 8,
+      "section": 64,
+      "gutter": 16,
+      "density": "balanced"
+    },
+    "layout": {
+      "columns": 1,
+      "maxWidth": 1187,
+      "align": "center",
+      "emptyShare": 0.39
+    },
+    "imagery": {
+      "kind": "type-only",
+      "share": 0,
+      "light": "",
+      "lens": "",
+      "grade": "",
+      "subject": ""
+    }
+  },
+  "measured": [
+    "theme",
+    "fonts",
+    "type",
+    "tracking",
+    "radius",
+    "shadow",
+    "spacing",
+    "layout"
+  ],
+  "why": "Bố cục ba cột: mục lục trái 220 px, thân bài giữa 680 px, mục lục trang phải 160 px. Tiêu đề 32 px đen, chữ thân 16 px dòng 1,6, liên kết xanh #044c9f gạch chân. Không bóng, không ảnh, chỉ đường kẻ #c3c7cb mảnh tách thanh điều hướng. Mượn sự đọc dễ của tài liệu dài với ba cột cố định; không chép nội dung.",
+  "licence": "Ảnh chụp thu nhỏ của trang công khai, chỉ để model tham khảo nguyên tắc. Không chép logo, chữ, ảnh hay phông độc quyền của trang."
+}

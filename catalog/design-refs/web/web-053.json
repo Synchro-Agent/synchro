@@ -1,0 +1,147 @@
+{
+  "v": 1,
+  "id": "web-053",
+  "domain": "web",
+  "title": "Ứng dụng sức khỏe tinh thần: mảng cam tròn và nhân vật đơn giản",
+  "moods": [
+    "playful",
+    "bold-color",
+    "clean-light"
+  ],
+  "industries": [
+    "health-wellness"
+  ],
+  "audience": [
+    "consumer",
+    "youth"
+  ],
+  "source_url": "https://www.headspace.com/",
+  "source_host": "headspace.com",
+  "source_kind": "public-page",
+  "captured_at": "2026-11-20",
+  "image": {
+    "file": "web/web-053.webp",
+    "width": 1280,
+    "height": 1600,
+    "bytes": 88306,
+    "layout": "single"
+  },
+  "tokens": {
+    "theme": "light",
+    "colors": [
+      {
+        "hex": "#ffffff",
+        "role": "bg",
+        "share": 0.249
+      },
+      {
+        "hex": "#f9f4f2",
+        "role": "surface",
+        "share": 0
+      },
+      {
+        "hex": "#2d2c2b",
+        "role": "ink",
+        "share": 0
+      },
+      {
+        "hex": "#44423f",
+        "role": "muted",
+        "share": 0
+      },
+      {
+        "hex": "#ff7a1a",
+        "role": "accent",
+        "share": 0
+      },
+      {
+        "hex": "#0061ef",
+        "role": "accent2",
+        "share": 0.014
+      },
+      {
+        "hex": "#e2ded9",
+        "role": "line",
+        "share": 0
+      }
+    ],
+    "fonts": {
+      "head": {
+        "kit": "plus-jakarta-sans",
+        "seen": "Headspace Apercu",
+        "seenLicence": "proprietary",
+        "weight": 700
+      },
+      "body": {
+        "kit": "plus-jakarta-sans",
+        "seen": "Headspace Apercu",
+        "seenLicence": "proprietary",
+        "weight": 400
+      },
+      "mono": null
+    },
+    "type": {
+      "basePx": 16,
+      "ratio": 1.232,
+      "sizes": [
+        56,
+        48,
+        40,
+        24,
+        20,
+        18,
+        16,
+        14
+      ],
+      "headLine": 1,
+      "bodyLine": 1.15,
+      "headCase": "none"
+    },
+    "tracking": {
+      "display": -0.03,
+      "heading": -0.03,
+      "body": 0,
+      "label": -0.01
+    },
+    "radius": {
+      "outer": 8,
+      "inner": 5,
+      "pill": true
+    },
+    "shadow": {
+      "level": 1,
+      "css": "rgba(65, 61, 69, 0.2) 0px 2px 0px 0px"
+    },
+    "spacing": {
+      "unit": 8,
+      "section": 96,
+      "gutter": 16,
+      "density": "airy"
+    },
+    "layout": {
+      "columns": 5,
+      "maxWidth": 1120,
+      "align": "asymmetric",
+      "emptyShare": 0.07
+    },
+    "imagery": {
+      "kind": "illustration",
+      "share": 0.8,
+      "light": "flat even fill, no shadows",
+      "lens": "flat 2D",
+      "grade": "warm orange, sunny yellow, bright blue",
+      "subject": "round blob shapes with simple smiling faces"
+    }
+  },
+  "measured": [
+    "theme",
+    "type",
+    "tracking",
+    "radius",
+    "shadow",
+    "spacing",
+    "layout"
+  ],
+  "why": "Mảng cam #ff7a1a tròn lớn với con số 50% làm hình chính, tiêu đề đậm 56 px siết −0,03em trên nền trắng. Nhấn vàng #ffce00 và xanh dương #0061ef dùng cho thẻ và minh họa nhân vật mặt cười đơn giản. Thẻ bo 8 px, nút bo tròn, khoảng thoáng 96 px. Mượn hình khối tròn lớn và nhân vật tối giản để làm nhẹ chủ đề sức khỏe; không chép nhân vật hay chữ.",
+  "licence": "Ảnh chụp thu nhỏ của trang công khai, chỉ để model tham khảo nguyên tắc. Không chép logo, chữ, ảnh hay phông độc quyền của trang."
+}

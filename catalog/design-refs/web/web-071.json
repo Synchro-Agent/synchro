@@ -1,0 +1,148 @@
+{
+  "v": 1,
+  "id": "web-071",
+  "domain": "web",
+  "title": "Giày trẻ Việt: ảnh đường phố, chữ nghiêng đậm như áp phích",
+  "moods": [
+    "energetic",
+    "bold-color",
+    "playful"
+  ],
+  "industries": [
+    "fashion-beauty",
+    "ecommerce"
+  ],
+  "audience": [
+    "youth"
+  ],
+  "source_url": "https://www.bitis.com.vn/",
+  "source_host": "bitis.com.vn",
+  "source_kind": "public-page",
+  "captured_at": "2026-11-20",
+  "image": {
+    "file": "web/web-071.webp",
+    "width": 1280,
+    "height": 1600,
+    "bytes": 88972,
+    "layout": "single"
+  },
+  "tokens": {
+    "theme": "light",
+    "colors": [
+      {
+        "hex": "#f7f7f7",
+        "role": "bg",
+        "share": 0
+      },
+      {
+        "hex": "#f3f3f3",
+        "role": "surface",
+        "share": 0
+      },
+      {
+        "hex": "#ffffff",
+        "role": "raised",
+        "share": 0.17
+      },
+      {
+        "hex": "#000000",
+        "role": "ink",
+        "share": 0.054
+      },
+      {
+        "hex": "#201d19",
+        "role": "muted",
+        "share": 0.057
+      },
+      {
+        "hex": "#e1251b",
+        "role": "accent",
+        "share": 0
+      },
+      {
+        "hex": "#f2c878",
+        "role": "accent2",
+        "share": 0
+      },
+      {
+        "hex": "#ffffff",
+        "role": "line",
+        "share": 0
+      }
+    ],
+    "fonts": {
+      "head": {
+        "kit": "anton",
+        "seen": "Inter",
+        "seenLicence": "open",
+        "weight": 700
+      },
+      "body": {
+        "kit": "inter",
+        "seen": "Inter",
+        "seenLicence": "open",
+        "weight": 400
+      },
+      "mono": null
+    },
+    "type": {
+      "basePx": 12,
+      "ratio": 1.344,
+      "sizes": [
+        128,
+        24,
+        16,
+        13
+      ],
+      "headLine": 1.4,
+      "bodyLine": 1.4,
+      "headCase": "upper"
+    },
+    "tracking": {
+      "display": 0.08,
+      "heading": 0.02,
+      "body": 0,
+      "label": 0.019
+    },
+    "radius": {
+      "outer": 4,
+      "inner": 0,
+      "pill": true
+    },
+    "shadow": {
+      "level": 2,
+      "css": "rgba(0, 0, 0, 0.28) 0px 6px 20px 0px"
+    },
+    "spacing": {
+      "unit": 4,
+      "section": 48,
+      "gutter": 12,
+      "density": "dense"
+    },
+    "layout": {
+      "columns": 5,
+      "maxWidth": 480,
+      "align": "asymmetric",
+      "emptyShare": 0.09
+    },
+    "imagery": {
+      "kind": "photo",
+      "share": 0.84,
+      "light": "bright midday sun, hard shadows",
+      "lens": "35mm street, eye level",
+      "grade": "warm saturated colours",
+      "subject": "young friends walking on a city street"
+    }
+  },
+  "measured": [
+    "theme",
+    "type",
+    "tracking",
+    "radius",
+    "shadow",
+    "spacing",
+    "layout"
+  ],
+  "why": "Ảnh nhóm bạn trẻ trên phố Việt phủ ngang màn đầu, các ô sản phẩm bên dưới có chữ nghiêng đậm in hoa như áp phích. Nhấn đỏ hồng #f94b60 và vàng #f2c878, băng giảm giá đỏ đen ở cuối. Bo 4 px nhỏ, mật độ dày, nhịp 48 px. Mượn năng lượng chữ nghiêng đậm và ảnh đời thường của giới trẻ; không chép tên dòng sản phẩm hay ảnh.",
+  "licence": "Ảnh chụp thu nhỏ của trang công khai, chỉ để model tham khảo nguyên tắc. Không chép logo, chữ, ảnh hay phông độc quyền của trang."
+}

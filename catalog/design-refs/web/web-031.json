@@ -1,0 +1,148 @@
+{
+  "v": 1,
+  "id": "web-031",
+  "domain": "web",
+  "title": "Công cụ chuyển động: chữ hoa rộng trên nền đen, thẻ viền mảnh",
+  "moods": [
+    "dark-cinematic",
+    "tech",
+    "energetic"
+  ],
+  "industries": [
+    "tech-saas"
+  ],
+  "audience": [
+    "developers"
+  ],
+  "source_url": "https://rive.app/",
+  "source_host": "rive.app",
+  "source_kind": "public-page",
+  "captured_at": "2026-11-20",
+  "image": {
+    "file": "web/web-031.webp",
+    "width": 1280,
+    "height": 1600,
+    "bytes": 88062,
+    "layout": "single"
+  },
+  "tokens": {
+    "theme": "dark",
+    "colors": [
+      {
+        "hex": "#000000",
+        "role": "bg",
+        "share": 0.614
+      },
+      {
+        "hex": "#0e0e0e",
+        "role": "surface",
+        "share": 0.17
+      },
+      {
+        "hex": "#1a1a1a",
+        "role": "raised",
+        "share": 0.02
+      },
+      {
+        "hex": "#ffffff",
+        "role": "ink",
+        "share": 0.026
+      },
+      {
+        "hex": "#c3c3c3",
+        "role": "muted",
+        "share": 0.014
+      },
+      {
+        "hex": "#6d3cff",
+        "role": "accent",
+        "share": 0
+      },
+      {
+        "hex": "#4a4a4a",
+        "role": "line",
+        "share": 0
+      }
+    ],
+    "fonts": {
+      "head": {
+        "kit": "unbounded",
+        "seen": "Orbitron",
+        "seenLicence": "unknown",
+        "weight": 900
+      },
+      "body": {
+        "kit": "inter",
+        "seen": "Inter",
+        "seenLicence": "open",
+        "weight": 400
+      },
+      "mono": {
+        "kit": "jetbrains-mono",
+        "seen": "PragmataPro VF Variable Regular",
+        "seenLicence": "unknown",
+        "weight": 500
+      }
+    },
+    "type": {
+      "basePx": 16,
+      "ratio": 1.316,
+      "sizes": [
+        48,
+        24,
+        16,
+        14,
+        12
+      ],
+      "headLine": 1.02,
+      "bodyLine": 1.55,
+      "headCase": "upper"
+    },
+    "tracking": {
+      "display": -0.03,
+      "heading": -0.005,
+      "body": 0,
+      "label": 0.084
+    },
+    "radius": {
+      "outer": 0,
+      "inner": 4,
+      "pill": false
+    },
+    "shadow": {
+      "level": 0,
+      "css": "none"
+    },
+    "spacing": {
+      "unit": 4,
+      "section": 100,
+      "gutter": 10,
+      "density": "airy"
+    },
+    "layout": {
+      "columns": 4,
+      "maxWidth": 1200,
+      "align": "left",
+      "emptyShare": 0.15
+    },
+    "imagery": {
+      "kind": "3d",
+      "share": 0.8,
+      "light": "violet rim light, dark falloff",
+      "lens": "35mm, tilted perspective",
+      "grade": "violet glow on black",
+      "subject": "floating phone with glowing interface"
+    }
+  },
+  "measured": [
+    "theme",
+    "type",
+    "tracking",
+    "radius",
+    "shadow",
+    "spacing",
+    "layout"
+  ],
+  "why": "Tiêu đề chữ hoa rộng nặng 900, siết −0,03em, đặt trái trên nền đen #000000 cạnh ảnh điện thoại phát sáng tím. Nhãn chữ hoa nhỏ giãn 0,084em, thẻ viền mảnh không bo, chia 4 cột. Một vệt sáng tím #6d3cff làm điểm nhấn duy nhất. Mượn kiểu chữ rộng công nghệ và nhãn giãn rộng; không chép giao diện hay hình điện thoại.",
+  "licence": "Ảnh chụp thu nhỏ của trang công khai, chỉ để model tham khảo nguyên tắc. Không chép logo, chữ, ảnh hay phông độc quyền của trang."
+}

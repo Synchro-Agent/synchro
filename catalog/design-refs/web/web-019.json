@@ -1,0 +1,128 @@
+{
+  "v": 1,
+  "id": "web-019",
+  "domain": "web",
+  "title": "Thiết bị âm nhạc: một sản phẩm dưới đèn rọi trên nền đen",
+  "moods": [
+    "dark-cinematic",
+    "minimal-mono",
+    "luxury"
+  ],
+  "industries": [
+    "culture-music",
+    "ecommerce"
+  ],
+  "audience": [
+    "premium",
+    "consumer"
+  ],
+  "source_url": "https://teenage.engineering/",
+  "source_host": "teenage.engineering",
+  "source_kind": "public-page",
+  "captured_at": "2026-11-20",
+  "image": {
+    "file": "web/web-019.webp",
+    "width": 1280,
+    "height": 1600,
+    "bytes": 85922,
+    "layout": "single"
+  },
+  "tokens": {
+    "theme": "dark",
+    "colors": [
+      {
+        "hex": "#000000",
+        "role": "bg",
+        "share": 0.629
+      },
+      {
+        "hex": "#f1f2f2",
+        "role": "ink",
+        "share": 0.016
+      },
+      {
+        "hex": "#4b4a49",
+        "role": "muted",
+        "share": 0.036
+      },
+      {
+        "hex": "#f5a000",
+        "role": "accent",
+        "share": 0
+      }
+    ],
+    "fonts": {
+      "head": {
+        "kit": "space-grotesk",
+        "seen": "TechnoType",
+        "seenLicence": "unknown",
+        "weight": 400
+      },
+      "body": {
+        "kit": "space-grotesk",
+        "seen": "te-20",
+        "seenLicence": "unknown",
+        "weight": 100
+      },
+      "mono": null
+    },
+    "type": {
+      "basePx": 20,
+      "ratio": 1.323,
+      "sizes": [
+        35,
+        20,
+        9
+      ],
+      "headLine": 1.11,
+      "bodyLine": 1.5,
+      "headCase": "none"
+    },
+    "tracking": {
+      "display": -0.022,
+      "heading": -0.022,
+      "body": 0,
+      "label": 0
+    },
+    "radius": {
+      "outer": 0,
+      "inner": 0,
+      "pill": false
+    },
+    "shadow": {
+      "level": 0,
+      "css": "none"
+    },
+    "spacing": {
+      "unit": 4,
+      "section": 64,
+      "gutter": 24,
+      "density": "balanced"
+    },
+    "layout": {
+      "columns": 4,
+      "maxWidth": 884,
+      "align": "center",
+      "emptyShare": 0
+    },
+    "imagery": {
+      "kind": "photo",
+      "share": 1,
+      "light": "single hard top spotlight, pool of light on floor",
+      "lens": "50mm, eye level, centered",
+      "grade": "neutral greys, deep blacks",
+      "subject": "a single machine on a black studio floor"
+    }
+  },
+  "measured": [
+    "theme",
+    "type",
+    "tracking",
+    "radius",
+    "shadow",
+    "spacing",
+    "layout"
+  ],
+  "why": "Một sản phẩm duy nhất chụp dưới đèn rọi từ trên xuống, nền đen #000000 chiếm hơn 60% khung, giá và nút nhỏ đặt ngay dưới chân sản phẩm. Chữ rất nhỏ, đơn sắc, không bo góc, không bóng; mọi chú ý dồn vào vật thể. Thanh điều hướng là các biểu tượng vẽ nét mảnh. Mượn cách trình bày một vật thể như trong phòng trưng bày; không chép sản phẩm hay biểu tượng.",
+  "licence": "Ảnh chụp thu nhỏ của trang công khai, chỉ để model tham khảo nguyên tắc. Không chép logo, chữ, ảnh hay phông độc quyền của trang."
+}

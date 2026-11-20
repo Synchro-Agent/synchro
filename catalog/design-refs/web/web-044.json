@@ -1,0 +1,142 @@
+{
+  "v": 1,
+  "id": "web-044",
+  "domain": "web",
+  "title": "Ứng dụng học nói tiếng Anh: nền xanh đêm, chữ trắng căn giữa",
+  "moods": [
+    "dark-cinematic",
+    "tech",
+    "playful"
+  ],
+  "industries": [
+    "education",
+    "ai"
+  ],
+  "audience": [
+    "students",
+    "youth"
+  ],
+  "source_url": "https://elsaspeak.com/en/",
+  "source_host": "elsaspeak.com",
+  "source_kind": "public-page",
+  "captured_at": "2026-11-20",
+  "image": {
+    "file": "web/web-044.webp",
+    "width": 1280,
+    "height": 800,
+    "bytes": 56746,
+    "layout": "single"
+  },
+  "tokens": {
+    "theme": "dark",
+    "colors": [
+      {
+        "hex": "#050024",
+        "role": "bg",
+        "share": 0.933
+      },
+      {
+        "hex": "#ffffff",
+        "role": "ink",
+        "share": 0.014
+      },
+      {
+        "hex": "#b3b3b3",
+        "role": "muted",
+        "share": 0.007
+      },
+      {
+        "hex": "#674fde",
+        "role": "accent",
+        "share": 0
+      },
+      {
+        "hex": "#33d0ff",
+        "role": "accent2",
+        "share": 0
+      },
+      {
+        "hex": "#322066",
+        "role": "line",
+        "share": 0.007
+      }
+    ],
+    "fonts": {
+      "head": {
+        "kit": "inter",
+        "seen": "SF Pro Display",
+        "seenLicence": "proprietary",
+        "weight": 700
+      },
+      "body": {
+        "kit": "inter",
+        "seen": "SF Pro Display",
+        "seenLicence": "proprietary",
+        "weight": 400
+      },
+      "mono": null
+    },
+    "type": {
+      "basePx": 14,
+      "ratio": 1.266,
+      "sizes": [
+        36,
+        20,
+        18,
+        16,
+        14
+      ],
+      "headLine": 1.17,
+      "bodyLine": 1.57,
+      "headCase": "none"
+    },
+    "tracking": {
+      "display": -0.009,
+      "heading": -0.009,
+      "body": 0,
+      "label": 0.072
+    },
+    "radius": {
+      "outer": 16,
+      "inner": 10,
+      "pill": true
+    },
+    "shadow": {
+      "level": 1,
+      "css": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0.1) 0px 4px 6px -1px, rgba(0, 0, 0, 0.1) 0px 2px "
+    },
+    "spacing": {
+      "unit": 8,
+      "section": 80,
+      "gutter": 16,
+      "density": "balanced"
+    },
+    "layout": {
+      "columns": 3,
+      "maxWidth": 520,
+      "align": "center",
+      "emptyShare": 0.5
+    },
+    "imagery": {
+      "kind": "illustration",
+      "share": 0.26,
+      "light": "soft glow on deep navy",
+      "lens": "flat",
+      "grade": "indigo and cyan on navy",
+      "subject": "phone frame with speech practice cards"
+    }
+  },
+  "measured": [
+    "theme",
+    "colors",
+    "fonts",
+    "type",
+    "tracking",
+    "radius",
+    "shadow",
+    "spacing",
+    "layout"
+  ],
+  "why": "Nền xanh tím đêm #050024 phủ toàn trang, tiêu đề trắng 36 px căn giữa, nút tím #674fde bo tròn hẳn. Nhấn phụ xanh lơ #33d0ff cho biểu tượng và nhãn, chữ nhãn giãn 0,072em. Một nửa màn đầu để trống quanh khung minh họa điện thoại. Mượn sắc nền tối có màu thay cho đen tuyền; không chép biểu tượng hay giao diện ứng dụng.",
+  "licence": "Ảnh chụp thu nhỏ của trang công khai, chỉ để model tham khảo nguyên tắc. Không chép logo, chữ, ảnh hay phông độc quyền của trang."
+}

@@ -1,0 +1,122 @@
+{
+  "v": 1,
+  "id": "slide-040",
+  "domain": "slide",
+  "title": "Báo cáo xu hướng mạng xã hội nền đen: mảng xanh ngọc chéo, ảnh nhóm bạn, đỏ hồng nóng",
+  "moods": [
+    "energetic",
+    "bold-color",
+    "dark-cinematic"
+  ],
+  "industries": [
+    "media-publishing",
+    "tech-saas"
+  ],
+  "audience": [
+    "youth",
+    "b2b"
+  ],
+  "source_url": "https://ads.tiktok.com/business/library/TikTok_Whats_Next_2025_Trend_Report.pdf",
+  "source_host": "ads.tiktok.com",
+  "source_kind": "public-image",
+  "captured_at": "2026-11-20",
+  "image": {
+    "file": "slide/slide-040.webp",
+    "width": 1280,
+    "height": 720,
+    "bytes": 89292,
+    "layout": "grid4"
+  },
+  "tokens": {
+    "theme": "dark",
+    "colors": [
+      {
+        "hex": "#000000",
+        "role": "bg",
+        "share": 0.321
+      },
+      {
+        "hex": "#ffffff",
+        "role": "ink",
+        "share": 0
+      },
+      {
+        "hex": "#fe2b54",
+        "role": "accent",
+        "share": 0.149
+      },
+      {
+        "hex": "#25f4ee",
+        "role": "accent2",
+        "share": 0.101
+      }
+    ],
+    "fonts": {
+      "head": {
+        "kit": "plus-jakarta-sans",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 400
+      },
+      "body": {
+        "kit": "inter",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 400
+      },
+      "mono": null
+    },
+    "type": {
+      "basePx": 11,
+      "ratio": 1.414,
+      "sizes": [
+        48,
+        24,
+        11
+      ],
+      "headLine": 0.95,
+      "bodyLine": 1.4,
+      "headCase": "none"
+    },
+    "tracking": {
+      "display": -0.02,
+      "heading": 0,
+      "body": 0,
+      "label": 0.02
+    },
+    "radius": {
+      "outer": 8,
+      "inner": 4,
+      "pill": false
+    },
+    "shadow": {
+      "level": 0,
+      "css": "none"
+    },
+    "spacing": {
+      "unit": 8,
+      "section": 32,
+      "gutter": 16,
+      "density": "dense"
+    },
+    "layout": {
+      "columns": 3,
+      "maxWidth": 1280,
+      "align": "asymmetric",
+      "emptyShare": 0.15
+    },
+    "imagery": {
+      "kind": "photo",
+      "share": 0.45,
+      "light": "bright natural daylight, candid",
+      "lens": "35mm group selfie framing",
+      "grade": "saturated teal and hot pink accents",
+      "subject": "a group of laughing young friends"
+    }
+  },
+  "measured": [
+    "theme"
+  ],
+  "why": "Nền đen với mảng xanh ngọc #25f4ee cắt chéo, ảnh nhóm bạn trẻ cười chiếm nửa phải bìa. Tiêu đề trắng đậm 48 px, trang chương nền đỏ hồng #fe2b54 với hình 3D nhiều mảnh. Bảng phương pháp nền tối, cột màu theo nhóm. Mượn cặp màu xanh ngọc và đỏ hồng trên nền đen với cắt chéo động; không chép ảnh hay chữ.",
+  "licence": "Ảnh chụp thu nhỏ của trang công khai, chỉ để model tham khảo nguyên tắc. Không chép logo, chữ, ảnh hay phông độc quyền của trang."
+}

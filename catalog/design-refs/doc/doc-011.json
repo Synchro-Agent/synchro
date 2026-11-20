@@ -1,0 +1,127 @@
+{
+  "v": 1,
+  "id": "doc-011",
+  "domain": "doc",
+  "title": "Báo cáo quỹ từ thiện: ảnh tư liệu gia đình lớn, chữ sans hẹp đậm",
+  "moods": [
+    "editorial",
+    "organic",
+    "warm-craft"
+  ],
+  "industries": [
+    "nonprofit-gov",
+    "health-wellness"
+  ],
+  "audience": [
+    "public"
+  ],
+  "source_url": "https://www.gatesfoundation.org/goalkeepers/report/2024-report/",
+  "source_host": "gatesfoundation.org",
+  "source_kind": "public-page",
+  "captured_at": "2026-11-20",
+  "image": {
+    "file": "doc/doc-011.webp",
+    "width": 1280,
+    "height": 800,
+    "bytes": 88276,
+    "layout": "single"
+  },
+  "tokens": {
+    "theme": "light",
+    "colors": [
+      {
+        "hex": "#f5f3ee",
+        "role": "bg",
+        "share": 0.098
+      },
+      {
+        "hex": "#21272d",
+        "role": "ink",
+        "share": 0.071
+      },
+      {
+        "hex": "#dfb893",
+        "role": "accent",
+        "share": 0.142
+      },
+      {
+        "hex": "#ce034b",
+        "role": "accent2",
+        "share": 0.024
+      }
+    ],
+    "fonts": {
+      "head": {
+        "kit": "archivo",
+        "seen": "Noto Sans Semi-Condensed",
+        "seenLicence": "open",
+        "weight": 900
+      },
+      "body": {
+        "kit": "ibm-plex-sans",
+        "seen": "Noto Sans Semi-Condensed",
+        "seenLicence": "open",
+        "weight": 900
+      },
+      "mono": null
+    },
+    "type": {
+      "basePx": 21,
+      "ratio": 1.25,
+      "sizes": [
+        21,
+        14
+      ],
+      "headLine": 1.45,
+      "bodyLine": 1.45,
+      "headCase": "none"
+    },
+    "tracking": {
+      "display": 0,
+      "heading": 0,
+      "body": 0,
+      "label": 0
+    },
+    "radius": {
+      "outer": 0,
+      "inner": 0,
+      "pill": false
+    },
+    "shadow": {
+      "level": 0,
+      "css": "none"
+    },
+    "spacing": {
+      "unit": 4,
+      "section": 50,
+      "gutter": 24,
+      "density": "dense"
+    },
+    "layout": {
+      "columns": 2,
+      "maxWidth": 1200,
+      "align": "left",
+      "emptyShare": 0.95
+    },
+    "imagery": {
+      "kind": "photo",
+      "share": 0,
+      "light": "warm late-afternoon sun, natural",
+      "lens": "35mm documentary, eye level",
+      "grade": "warm earth tones, ochre and maroon",
+      "subject": "a mother and children sitting outdoors"
+    }
+  },
+  "measured": [
+    "theme",
+    "colors",
+    "type",
+    "tracking",
+    "radius",
+    "shadow",
+    "spacing",
+    "layout"
+  ],
+  "why": "Ảnh tư liệu một gia đình ngồi ngoài trời ánh nắng chiếm gần trọn màn đầu, nền giấy ngà #f5f3ee, tiêu đề sans hẹp đậm 900. Nhấn đỏ son #ce034b rất ít cho nhãn và liên kết. Ảnh thật, người thật mang câu chuyện trước số liệu. Mượn cách mở báo cáo bằng một ảnh con người lớn trước khi vào số; không chép ảnh.",
+  "licence": "Ảnh chụp thu nhỏ của trang công khai, chỉ để model tham khảo nguyên tắc. Không chép logo, chữ, ảnh hay phông độc quyền của trang."
+}

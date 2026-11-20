@@ -1,0 +1,135 @@
+{
+  "v": 1,
+  "id": "web-008",
+  "domain": "web",
+  "title": "Nền tảng cơ sở dữ liệu: lưới thẻ tính năng với hình vẽ nét mảnh",
+  "moods": [
+    "clean-light",
+    "tech",
+    "swiss-precise"
+  ],
+  "industries": [
+    "tech-saas"
+  ],
+  "audience": [
+    "developers"
+  ],
+  "source_url": "https://supabase.com/",
+  "source_host": "supabase.com",
+  "source_kind": "public-page",
+  "captured_at": "2026-11-20",
+  "image": {
+    "file": "web/web-008.webp",
+    "width": 1280,
+    "height": 1600,
+    "bytes": 89122,
+    "layout": "single"
+  },
+  "tokens": {
+    "theme": "light",
+    "colors": [
+      {
+        "hex": "#fdfdfd",
+        "role": "bg",
+        "share": 0.938
+      },
+      {
+        "hex": "#030303",
+        "role": "ink",
+        "share": 0.005
+      },
+      {
+        "hex": "#696969",
+        "role": "muted",
+        "share": 0.004
+      },
+      {
+        "hex": "#0e7e4e",
+        "role": "accent",
+        "share": 0.01
+      },
+      {
+        "hex": "#eaeaea",
+        "role": "line",
+        "share": 0.023
+      }
+    ],
+    "fonts": {
+      "head": {
+        "kit": "plus-jakarta-sans",
+        "seen": "Manrope",
+        "seenLicence": "open",
+        "weight": 500
+      },
+      "body": {
+        "kit": "inter",
+        "seen": "Inter",
+        "seenLicence": "open",
+        "weight": 500
+      },
+      "mono": null
+    },
+    "type": {
+      "basePx": 14,
+      "ratio": 1.346,
+      "sizes": [
+        46,
+        34,
+        22,
+        16,
+        14,
+        12
+      ],
+      "headLine": 1,
+      "bodyLine": 1.14,
+      "headCase": "none"
+    },
+    "tracking": {
+      "display": 0,
+      "heading": -0.003,
+      "body": 0,
+      "label": 0
+    },
+    "radius": {
+      "outer": 16,
+      "inner": 11,
+      "pill": true
+    },
+    "shadow": {
+      "level": 1,
+      "css": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0.04) 0px 1px 3px 0px, rgba(0, 0, 0, 0.027) 0px 1p"
+    },
+    "spacing": {
+      "unit": 8,
+      "section": 64,
+      "gutter": 8,
+      "density": "balanced"
+    },
+    "layout": {
+      "columns": 6,
+      "maxWidth": 1088,
+      "align": "left",
+      "emptyShare": 0.44
+    },
+    "imagery": {
+      "kind": "illustration",
+      "share": 0.29,
+      "light": "no lighting, flat vector line art",
+      "lens": "flat line drawing, isometric touches",
+      "grade": "grey hairlines on white with green accent",
+      "subject": "technical line drawings of database features"
+    }
+  },
+  "measured": [
+    "theme",
+    "colors",
+    "type",
+    "tracking",
+    "radius",
+    "shadow",
+    "spacing",
+    "layout"
+  ],
+  "why": "Nền trắng #fdfdfd, tiêu đề 46 px hai dòng với dòng sau màu xanh lục #0e7e4e, đặt trái cạnh đoạn mô tả. Bên dưới là lưới thẻ tính năng 3 cột bo 16 px, mỗi thẻ một hình vẽ nét mảnh xám như bản vẽ kỹ thuật. Bóng rất nhẹ, viền #eaeaea 1 px, gần nửa màn đầu là khoảng trắng. Mượn cách minh họa tính năng bằng nét vẽ một màu thay cho ảnh; không chép hình vẽ hay tên tính năng.",
+  "licence": "Ảnh chụp thu nhỏ của trang công khai, chỉ để model tham khảo nguyên tắc. Không chép logo, chữ, ảnh hay phông độc quyền của trang."
+}

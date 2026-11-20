@@ -1,0 +1,125 @@
+{
+  "v": 1,
+  "id": "poster-003",
+  "domain": "poster",
+  "title": "Poster jazz chữ chồng lớp: tên nghệ sĩ đỏ đè lên nhau trên nền xanh",
+  "moods": [
+    "bold-color",
+    "energetic",
+    "swiss-precise"
+  ],
+  "industries": [
+    "culture-music",
+    "events"
+  ],
+  "audience": [
+    "youth",
+    "public"
+  ],
+  "source_url": "https://www.emuseum.ch/objects/8249/david-murray--octofunk--funk-jazz--jazz-live-in-willisau",
+  "source_host": "emuseum.ch",
+  "source_kind": "public-image",
+  "captured_at": "2026-11-20",
+  "image": {
+    "file": "poster/poster-003.webp",
+    "width": 563,
+    "height": 817,
+    "bytes": 81006,
+    "layout": "single"
+  },
+  "tokens": {
+    "theme": "dark",
+    "colors": [
+      {
+        "hex": "#a32d16",
+        "role": "bg",
+        "share": 0.439
+      },
+      {
+        "hex": "#5d915c",
+        "role": "ink",
+        "share": 0.369
+      },
+      {
+        "hex": "#a32d16",
+        "role": "accent",
+        "share": 0
+      },
+      {
+        "hex": "#5d915c",
+        "role": "accent2",
+        "share": 0
+      }
+    ],
+    "fonts": {
+      "head": {
+        "kit": "archivo",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 400
+      },
+      "body": {
+        "kit": "archivo",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 400
+      },
+      "mono": null
+    },
+    "type": {
+      "basePx": 24,
+      "ratio": 1.618,
+      "sizes": [
+        180,
+        110,
+        64,
+        40,
+        24
+      ],
+      "headLine": 0.85,
+      "bodyLine": 1,
+      "headCase": "none"
+    },
+    "tracking": {
+      "display": -0.04,
+      "heading": -0.03,
+      "body": 0,
+      "label": 0
+    },
+    "radius": {
+      "outer": 0,
+      "inner": 0,
+      "pill": false
+    },
+    "shadow": {
+      "level": 0,
+      "css": "none"
+    },
+    "spacing": {
+      "unit": 8,
+      "section": 64,
+      "gutter": 24,
+      "density": "balanced"
+    },
+    "layout": {
+      "columns": 1,
+      "maxWidth": 560,
+      "align": "asymmetric",
+      "emptyShare": 0.02
+    },
+    "imagery": {
+      "kind": "type-only",
+      "share": 0,
+      "light": "",
+      "lens": "",
+      "grade": "",
+      "subject": ""
+    }
+  },
+  "measured": [
+    "theme",
+    "colors"
+  ],
+  "why": "Toàn bộ poster là chữ: tên nghệ sĩ, ngày và địa điểm đỏ #a32d16 cỡ rất lớn chồng lên nhau trên nền xanh ô liu #5d915c, nhịp lệch như nhịp jazz. Không hình, không khung; độ to nhỏ và độ chồng tạo thứ bậc. Chữ grotesk nặng, siết chặt, dòng sát 0,85. Mượn ý tưởng dùng chính chữ làm hình và nhịp điệu; không chép tên hay bố cục chữ của tác phẩm.",
+  "licence": "Ảnh chụp thu nhỏ của trang công khai, chỉ để model tham khảo nguyên tắc. Không chép logo, chữ, ảnh hay phông độc quyền của trang."
+}

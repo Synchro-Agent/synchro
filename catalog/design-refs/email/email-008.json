@@ -1,0 +1,123 @@
+{
+  "v": 1,
+  "id": "email-008",
+  "domain": "email",
+  "title": "Bản tin công nghệ: thẻ trắng bo tròn, ảnh máy tính tông lạnh",
+  "moods": [
+    "clean-light",
+    "tech"
+  ],
+  "industries": [
+    "media-publishing",
+    "tech-saas"
+  ],
+  "audience": [
+    "consumer",
+    "developers"
+  ],
+  "source_url": "https://mjml.io/templates",
+  "source_host": "mjml.io",
+  "source_kind": "public-image",
+  "captured_at": "2026-11-20",
+  "image": {
+    "file": "email/email-008.webp",
+    "width": 700,
+    "height": 1600,
+    "bytes": 89196,
+    "layout": "single"
+  },
+  "tokens": {
+    "theme": "light",
+    "colors": [
+      {
+        "hex": "#f7f7f7",
+        "role": "bg",
+        "share": 0.563
+      },
+      {
+        "hex": "#040404",
+        "role": "ink",
+        "share": 0.079
+      },
+      {
+        "hex": "#141a24",
+        "role": "muted",
+        "share": 0.176
+      },
+      {
+        "hex": "#45d7fd",
+        "role": "accent",
+        "share": 0.023
+      }
+    ],
+    "fonts": {
+      "head": {
+        "kit": "inter",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 400
+      },
+      "body": {
+        "kit": "inter",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 400
+      },
+      "mono": null
+    },
+    "type": {
+      "basePx": 15,
+      "ratio": 1.25,
+      "sizes": [
+        26,
+        20,
+        15,
+        12
+      ],
+      "headLine": 1.2,
+      "bodyLine": 1.6,
+      "headCase": "none"
+    },
+    "tracking": {
+      "display": 0,
+      "heading": 0,
+      "body": 0,
+      "label": 0
+    },
+    "radius": {
+      "outer": 12,
+      "inner": 8,
+      "pill": true
+    },
+    "shadow": {
+      "level": 1,
+      "css": "0 1px 3px rgba(0,0,0,.08)"
+    },
+    "spacing": {
+      "unit": 8,
+      "section": 32,
+      "gutter": 16,
+      "density": "balanced"
+    },
+    "layout": {
+      "columns": 2,
+      "maxWidth": 600,
+      "align": "left",
+      "emptyShare": 0.15
+    },
+    "imagery": {
+      "kind": "photo",
+      "share": 0,
+      "light": "cool soft studio light",
+      "lens": "50mm product, 3/4 view",
+      "grade": "cool blues and greys",
+      "subject": "laptop and gadgets on desks"
+    }
+  },
+  "measured": [
+    "theme",
+    "colors"
+  ],
+  "why": "Băng đầu xanh đen với đường cong xanh lơ #45d7fd, rồi các thẻ trắng bo góc trên nền #f7f7f7, mỗi thẻ một ảnh sản phẩm tông lạnh, tiêu đề 20 px và nút đen bo tròn. Lưới hai cột ở cuối cho tin phụ. Màu nhấn xanh lơ dùng rất ít. Mượn cấu trúc bản tin dạng thẻ dễ quét; không chép ảnh hay tên mục.",
+  "licence": "Ảnh chụp thu nhỏ của trang công khai, chỉ để model tham khảo nguyên tắc. Không chép logo, chữ, ảnh hay phông độc quyền của trang."
+}

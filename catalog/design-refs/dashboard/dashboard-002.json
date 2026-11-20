@@ -1,0 +1,141 @@
+{
+  "v": 1,
+  "id": "dashboard-002",
+  "domain": "dashboard",
+  "title": "Bảng công việc nền đen: bảng dài nhãn trạng thái gọn",
+  "moods": [
+    "dark-cinematic",
+    "data-dense",
+    "minimal-mono"
+  ],
+  "industries": [
+    "tech-saas"
+  ],
+  "audience": [
+    "developers",
+    "internal"
+  ],
+  "source_url": "https://ui.shadcn.com/examples/tasks",
+  "source_host": "ui.shadcn.com",
+  "source_kind": "public-page",
+  "captured_at": "2026-11-20",
+  "image": {
+    "file": "dashboard/dashboard-002.webp",
+    "width": 1280,
+    "height": 1600,
+    "bytes": 89754,
+    "layout": "single"
+  },
+  "tokens": {
+    "theme": "dark",
+    "colors": [
+      {
+        "hex": "#0a0a0a",
+        "role": "bg",
+        "share": 0.937
+      },
+      {
+        "hex": "#262626",
+        "role": "surface",
+        "share": 0
+      },
+      {
+        "hex": "#ffffff",
+        "role": "ink",
+        "share": 0.006
+      },
+      {
+        "hex": "#a3a3a3",
+        "role": "muted",
+        "share": 0
+      },
+      {
+        "hex": "#e5e5e5",
+        "role": "accent",
+        "share": 0
+      },
+      {
+        "hex": "#222323",
+        "role": "line",
+        "share": 0.017
+      }
+    ],
+    "fonts": {
+      "head": {
+        "kit": "inter",
+        "seen": "Geist",
+        "seenLicence": "open",
+        "weight": 600
+      },
+      "body": {
+        "kit": "inter",
+        "seen": "Geist",
+        "seenLicence": "open",
+        "weight": 500
+      },
+      "mono": null
+    },
+    "type": {
+      "basePx": 14,
+      "ratio": 1.361,
+      "sizes": [
+        48,
+        24,
+        18,
+        16,
+        14,
+        12
+      ],
+      "headLine": 1.1,
+      "bodyLine": 1.43,
+      "headCase": "none"
+    },
+    "tracking": {
+      "display": -0.05,
+      "heading": -0.025,
+      "body": 0,
+      "label": 0
+    },
+    "radius": {
+      "outer": 14,
+      "inner": 8,
+      "pill": true
+    },
+    "shadow": {
+      "level": 1,
+      "css": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0.05) 0px 1px 2px 0px"
+    },
+    "spacing": {
+      "unit": 8,
+      "section": 80,
+      "gutter": 8,
+      "density": "balanced"
+    },
+    "layout": {
+      "columns": 2,
+      "maxWidth": 1260,
+      "align": "center",
+      "emptyShare": 0.6
+    },
+    "imagery": {
+      "kind": "data",
+      "share": 0.5,
+      "light": "",
+      "lens": "",
+      "grade": "",
+      "subject": ""
+    }
+  },
+  "measured": [
+    "theme",
+    "fonts",
+    "type",
+    "tracking",
+    "radius",
+    "shadow",
+    "spacing",
+    "layout"
+  ],
+  "why": "Nền gần đen #0a0a0a, bảng 10 cột hàng cao 40 px, nhãn trạng thái và mức ưu tiên là chữ nhỏ có biểu tượng, không dùng nền màu. Thanh lọc và nút bo 8 px viền #262626 mảnh. Chữ thân 14 px, tiêu đề 24 px siết −0,025em. Mượn cách làm bảng dày đặc mà vẫn yên tĩnh trên nền tối; không chép dữ liệu.",
+  "licence": "Ảnh chụp thu nhỏ của trang công khai, chỉ để model tham khảo nguyên tắc. Không chép logo, chữ, ảnh hay phông độc quyền của trang."
+}

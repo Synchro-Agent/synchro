@@ -1,0 +1,122 @@
+{
+  "v": 1,
+  "id": "poster-040",
+  "domain": "poster",
+  "title": "Poster triển lãm chữ: nét cọ đen phóng khoáng trên nền trắng, đường tròn mảnh",
+  "moods": [
+    "minimal-mono",
+    "editorial",
+    "energetic"
+  ],
+  "industries": [
+    "culture-music",
+    "events"
+  ],
+  "audience": [
+    "public",
+    "students"
+  ],
+  "source_url": "https://www.muis.ee/museaalView/1635488",
+  "source_host": "muis.ee",
+  "source_kind": "cc0",
+  "captured_at": "2026-11-20",
+  "image": {
+    "file": "poster/poster-040.webp",
+    "width": 400,
+    "height": 595,
+    "bytes": 37634,
+    "layout": "single"
+  },
+  "tokens": {
+    "theme": "light",
+    "colors": [
+      {
+        "hex": "#f9faf3",
+        "role": "bg",
+        "share": 0.833
+      },
+      {
+        "hex": "#0b0c13",
+        "role": "ink",
+        "share": 0.095
+      },
+      {
+        "hex": "#212124",
+        "role": "muted",
+        "share": 0.017
+      },
+      {
+        "hex": "#0b0c13",
+        "role": "accent",
+        "share": 0
+      }
+    ],
+    "fonts": {
+      "head": {
+        "kit": "bricolage-grotesque",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 400
+      },
+      "body": {
+        "kit": "ibm-plex-sans",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 400
+      },
+      "mono": null
+    },
+    "type": {
+      "basePx": 9,
+      "ratio": 2,
+      "sizes": [
+        200,
+        14,
+        9
+      ],
+      "headLine": 0.9,
+      "bodyLine": 1.3,
+      "headCase": "none"
+    },
+    "tracking": {
+      "display": 0,
+      "heading": 0,
+      "body": 0,
+      "label": 0.04
+    },
+    "radius": {
+      "outer": 0,
+      "inner": 0,
+      "pill": false
+    },
+    "shadow": {
+      "level": 0,
+      "css": "none"
+    },
+    "spacing": {
+      "unit": 8,
+      "section": 24,
+      "gutter": 16,
+      "density": "airy"
+    },
+    "layout": {
+      "columns": 1,
+      "maxWidth": 400,
+      "align": "asymmetric",
+      "emptyShare": 0.45
+    },
+    "imagery": {
+      "kind": "illustration",
+      "share": 0.55,
+      "light": "flat ink on paper, no lighting",
+      "lens": "flat 2D brush lettering",
+      "grade": "black ink on off-white",
+      "subject": "expressive brush calligraphy with ink splatter"
+    }
+  },
+  "measured": [
+    "theme"
+  ],
+  "why": "Nền trắng ngà #f9faf3, tên triển lãm viết bằng nét cọ đen văng mực cao gần 60% khung, đặt chéo. Một vòng tròn kẻ mảnh và các dòng chữ nhỏ 9 px ở đỉnh và đáy tạo khung tĩnh. Chỉ đen trên trắng, không màu nhấn. Mượn tương phản giữa nét cọ tự do và khung chữ nhỏ chính xác; không chép chữ hay hình.",
+  "licence": "Ảnh chụp thu nhỏ của trang công khai, chỉ để model tham khảo nguyên tắc. Không chép logo, chữ, ảnh hay phông độc quyền của trang."
+}

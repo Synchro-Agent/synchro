@@ -1,0 +1,149 @@
+{
+  "v": 1,
+  "id": "doc-015",
+  "domain": "doc",
+  "title": "Báo điện tử Việt: thanh đỏ đậm, tin xếp lưới với ảnh vuông",
+  "moods": [
+    "energetic",
+    "data-dense",
+    "editorial"
+  ],
+  "industries": [
+    "media-publishing"
+  ],
+  "audience": [
+    "public"
+  ],
+  "source_url": "https://tuoitre.vn/",
+  "source_host": "tuoitre.vn",
+  "source_kind": "public-page",
+  "captured_at": "2026-11-20",
+  "image": {
+    "file": "doc/doc-015.webp",
+    "width": 1280,
+    "height": 1600,
+    "bytes": 88532,
+    "layout": "single"
+  },
+  "tokens": {
+    "theme": "light",
+    "colors": [
+      {
+        "hex": "#ffffff",
+        "role": "bg",
+        "share": 0
+      },
+      {
+        "hex": "#fafafc",
+        "role": "surface",
+        "share": 0.695
+      },
+      {
+        "hex": "#f7f7f7",
+        "role": "raised",
+        "share": 0
+      },
+      {
+        "hex": "#222222",
+        "role": "ink",
+        "share": 0.023
+      },
+      {
+        "hex": "#565656",
+        "role": "muted",
+        "share": 0
+      },
+      {
+        "hex": "#d80811",
+        "role": "accent",
+        "share": 0.089
+      },
+      {
+        "hex": "#5580df",
+        "role": "accent2",
+        "share": 0
+      },
+      {
+        "hex": "#d9d9d9",
+        "role": "line",
+        "share": 0.038
+      }
+    ],
+    "fonts": {
+      "head": {
+        "kit": "be-vietnam-pro",
+        "seen": "Roboto",
+        "seenLicence": "open",
+        "weight": 700
+      },
+      "body": {
+        "kit": "be-vietnam-pro",
+        "seen": "Roboto",
+        "seenLicence": "open",
+        "weight": 400
+      },
+      "mono": null
+    },
+    "type": {
+      "basePx": 16,
+      "ratio": 1.173,
+      "sizes": [
+        22,
+        18,
+        16,
+        14,
+        12
+      ],
+      "headLine": 1.27,
+      "bodyLine": 1.38,
+      "headCase": "none"
+    },
+    "tracking": {
+      "display": 0,
+      "heading": 0,
+      "body": 0,
+      "label": 0
+    },
+    "radius": {
+      "outer": 0,
+      "inner": 4,
+      "pill": true
+    },
+    "shadow": {
+      "level": 1,
+      "css": "rgba(0, 0, 0, 0.05) 0px 4px 20px 0px"
+    },
+    "spacing": {
+      "unit": 8,
+      "section": 64,
+      "gutter": 24,
+      "density": "balanced"
+    },
+    "layout": {
+      "columns": 2,
+      "maxWidth": 1162,
+      "align": "left",
+      "emptyShare": 0.54
+    },
+    "imagery": {
+      "kind": "photo",
+      "share": 0.19,
+      "light": "natural news photography",
+      "lens": "mixed news crops",
+      "grade": "natural colours",
+      "subject": "news photos"
+    }
+  },
+  "measured": [
+    "theme",
+    "colors",
+    "type",
+    "tracking",
+    "radius",
+    "shadow",
+    "spacing",
+    "layout"
+  ],
+  "why": "Thanh điều hướng đỏ #d80811 đậm, bên dưới lưới tin hai cột ảnh vuông kèm tiêu đề đậm 18-22 px. Nền xám rất nhạt #fafafc, viền #d9d9d9 tách khối. Màu đỏ là nhận diện duy nhất, mọi thứ khác trung tính. Mượn cách dùng một thanh màu mạnh để định danh trang tin; không chép bài hay ảnh.",
+  "licence": "Ảnh chụp thu nhỏ của trang công khai, chỉ để model tham khảo nguyên tắc. Không chép logo, chữ, ảnh hay phông độc quyền của trang."
+}

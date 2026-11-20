@@ -1,0 +1,123 @@
+{
+  "v": 1,
+  "id": "email-026",
+  "domain": "email",
+  "title": "Thư thời trang dạng tạp chí: ảnh đường phố cao, chữ có chân lớn giữa thư",
+  "moods": [
+    "editorial",
+    "minimal-mono",
+    "clean-light"
+  ],
+  "industries": [
+    "fashion-beauty",
+    "ecommerce"
+  ],
+  "audience": [
+    "youth",
+    "consumer"
+  ],
+  "source_url": "https://tabular.email/templates",
+  "source_host": "tabular.email",
+  "source_kind": "public-image",
+  "captured_at": "2026-11-20",
+  "image": {
+    "file": "email/email-026.webp",
+    "width": 680,
+    "height": 1600,
+    "bytes": 75398,
+    "layout": "single"
+  },
+  "tokens": {
+    "theme": "light",
+    "colors": [
+      {
+        "hex": "#faf9f7",
+        "role": "bg",
+        "share": 0.417
+      },
+      {
+        "hex": "#020101",
+        "role": "ink",
+        "share": 0.023
+      },
+      {
+        "hex": "#6b6b6b",
+        "role": "muted",
+        "share": 0
+      },
+      {
+        "hex": "#1a1a1a",
+        "role": "accent",
+        "share": 0
+      }
+    ],
+    "fonts": {
+      "head": {
+        "kit": "playfair-display",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 400
+      },
+      "body": {
+        "kit": "inter",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 400
+      },
+      "mono": null
+    },
+    "type": {
+      "basePx": 15,
+      "ratio": 1.333,
+      "sizes": [
+        48,
+        22,
+        15,
+        11
+      ],
+      "headLine": 1.15,
+      "bodyLine": 1.6,
+      "headCase": "none"
+    },
+    "tracking": {
+      "display": -0.01,
+      "heading": 0,
+      "body": 0,
+      "label": 0.08
+    },
+    "radius": {
+      "outer": 0,
+      "inner": 0,
+      "pill": false
+    },
+    "shadow": {
+      "level": 0,
+      "css": "none"
+    },
+    "spacing": {
+      "unit": 8,
+      "section": 48,
+      "gutter": 24,
+      "density": "airy"
+    },
+    "layout": {
+      "columns": 1,
+      "maxWidth": 600,
+      "align": "center",
+      "emptyShare": 0.3
+    },
+    "imagery": {
+      "kind": "photo",
+      "share": 0.55,
+      "light": "overcast city daylight, soft shadows",
+      "lens": "35mm street portrait, slightly low angle",
+      "grade": "cool desaturated greys with muted denim blue",
+      "subject": "a person in streetwear in front of tall buildings"
+    }
+  },
+  "measured": [
+    "theme"
+  ],
+  "why": "Đầu thư là menu chữ hoa nhỏ giãn 0,08em, rồi tên bộ sưu tập chữ có chân 48 px căn giữa. Ảnh đường phố dọc chiếm gần trọn bề ngang 600 px, tông xám lạnh. Nền ngà #faf9f7, chữ đen tuyền, nút đen chữ trắng vuông góc. Mượn nhịp tạp chí: chữ có chân lớn, ảnh dọc, menu chữ hoa nhỏ; không chép ảnh hay tên.",
+  "licence": "Ảnh chụp thu nhỏ của trang công khai, chỉ để model tham khảo nguyên tắc. Không chép logo, chữ, ảnh hay phông độc quyền của trang."
+}

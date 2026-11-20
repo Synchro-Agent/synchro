@@ -1,0 +1,122 @@
+{
+  "v": 1,
+  "id": "slide-037",
+  "domain": "slide",
+  "title": "Báo cáo khảo sát người tiêu dùng: trang trắng, khối cam chéo, số lớn cam",
+  "moods": [
+    "clean-light",
+    "data-dense",
+    "swiss-precise"
+  ],
+  "industries": [
+    "consulting",
+    "ecommerce"
+  ],
+  "audience": [
+    "b2b",
+    "investors"
+  ],
+  "source_url": "https://www.pwc.com/vn/en/publications/2025/voice-of-consumer-2025.pdf",
+  "source_host": "pwc.com",
+  "source_kind": "public-image",
+  "captured_at": "2026-11-20",
+  "image": {
+    "file": "slide/slide-037.webp",
+    "width": 1280,
+    "height": 720,
+    "bytes": 89232,
+    "layout": "grid4"
+  },
+  "tokens": {
+    "theme": "light",
+    "colors": [
+      {
+        "hex": "#fffefe",
+        "role": "bg",
+        "share": 0.452
+      },
+      {
+        "hex": "#1f1f1f",
+        "role": "ink",
+        "share": 0
+      },
+      {
+        "hex": "#e0590f",
+        "role": "accent",
+        "share": 0
+      },
+      {
+        "hex": "#fef3ec",
+        "role": "surface",
+        "share": 0
+      }
+    ],
+    "fonts": {
+      "head": {
+        "kit": "source-serif-4",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 400
+      },
+      "body": {
+        "kit": "inter",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 400
+      },
+      "mono": null
+    },
+    "type": {
+      "basePx": 10,
+      "ratio": 1.414,
+      "sizes": [
+        32,
+        18,
+        10
+      ],
+      "headLine": 1.15,
+      "bodyLine": 1.45,
+      "headCase": "none"
+    },
+    "tracking": {
+      "display": 0,
+      "heading": 0,
+      "body": 0,
+      "label": 0.02
+    },
+    "radius": {
+      "outer": 0,
+      "inner": 0,
+      "pill": false
+    },
+    "shadow": {
+      "level": 0,
+      "css": "none"
+    },
+    "spacing": {
+      "unit": 8,
+      "section": 32,
+      "gutter": 16,
+      "density": "dense"
+    },
+    "layout": {
+      "columns": 2,
+      "maxWidth": 1280,
+      "align": "left",
+      "emptyShare": 0.3
+    },
+    "imagery": {
+      "kind": "data",
+      "share": 0.35,
+      "light": "",
+      "lens": "",
+      "grade": "",
+      "subject": ""
+    }
+  },
+  "measured": [
+    "theme"
+  ],
+  "why": "Bìa trắng với tiêu đề chữ có chân 28 px và ba khối cam #e0590f hình bình hành xếp chéo. Trang trong: số phần trăm cam 32 px làm mốc, biểu đồ thanh ngang cam, chữ thân 10 px hai cột. Biểu đồ vòng cam và bảng nhỏ kẻ mảnh, nền kem rất nhạt #fef3ec cho khối điểm chính. Mượn cách dùng một màu cam duy nhất cho mọi số liệu trên trang trắng; không chép số hay chữ.",
+  "licence": "Ảnh chụp thu nhỏ của trang công khai, chỉ để model tham khảo nguyên tắc. Không chép logo, chữ, ảnh hay phông độc quyền của trang."
+}

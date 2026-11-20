@@ -1,0 +1,145 @@
+{
+  "v": 1,
+  "id": "doc-023",
+  "domain": "doc",
+  "title": "Trang bài dữ liệu: lưới thẻ ảnh màu chói, tiêu đề chữ đậm hẹp",
+  "moods": [
+    "playful",
+    "bold-color",
+    "editorial"
+  ],
+  "industries": [
+    "media-publishing",
+    "education"
+  ],
+  "audience": [
+    "public",
+    "youth"
+  ],
+  "source_url": "https://pudding.cool/",
+  "source_host": "pudding.cool",
+  "source_kind": "public-page",
+  "captured_at": "2026-11-20",
+  "image": {
+    "file": "doc/doc-023.webp",
+    "width": 1280,
+    "height": 1600,
+    "bytes": 89698,
+    "layout": "single"
+  },
+  "tokens": {
+    "theme": "light",
+    "colors": [
+      {
+        "hex": "#ffffff",
+        "role": "bg",
+        "share": 0.629
+      },
+      {
+        "hex": "#262626",
+        "role": "ink",
+        "share": 0.076
+      },
+      {
+        "hex": "#6d6d6d",
+        "role": "muted",
+        "share": 0
+      },
+      {
+        "hex": "#df20df",
+        "role": "accent",
+        "share": 0
+      },
+      {
+        "hex": "#d5992a",
+        "role": "accent2",
+        "share": 0
+      },
+      {
+        "hex": "#e2e2e2",
+        "role": "line",
+        "share": 0
+      }
+    ],
+    "fonts": {
+      "head": {
+        "kit": "oswald",
+        "seen": "Gooper SemiCondensed",
+        "seenLicence": "unknown",
+        "weight": 700
+      },
+      "body": {
+        "kit": "space-grotesk",
+        "seen": "Atlas Grotesk",
+        "seenLicence": "unknown",
+        "weight": 400
+      },
+      "mono": {
+        "kit": "jetbrains-mono",
+        "seen": "Atlas Typewriter",
+        "seenLicence": "unknown",
+        "weight": 400
+      }
+    },
+    "type": {
+      "basePx": 16,
+      "ratio": 1.414,
+      "sizes": [
+        32,
+        22,
+        16,
+        14
+      ],
+      "headLine": 1,
+      "bodyLine": 1.4,
+      "headCase": "none"
+    },
+    "tracking": {
+      "display": -0.02,
+      "heading": -0.02,
+      "body": 0,
+      "label": 0
+    },
+    "radius": {
+      "outer": 0,
+      "inner": 6,
+      "pill": true
+    },
+    "shadow": {
+      "level": 1,
+      "css": "rgba(0, 0, 0, 0.3) 0px 2px 1px 0px"
+    },
+    "spacing": {
+      "unit": 8,
+      "section": 64,
+      "gutter": 32,
+      "density": "balanced"
+    },
+    "layout": {
+      "columns": 2,
+      "maxWidth": 1247,
+      "align": "left",
+      "emptyShare": 0.36
+    },
+    "imagery": {
+      "kind": "illustration",
+      "share": 0.55,
+      "light": "flat digital colour, no lighting",
+      "lens": "square editorial data graphics",
+      "grade": "hot pink, red, mustard and violet",
+      "subject": "data visualisation covers for essays"
+    }
+  },
+  "measured": [
+    "theme",
+    "fonts",
+    "type",
+    "tracking",
+    "radius",
+    "shadow",
+    "spacing",
+    "layout"
+  ],
+  "why": "Lưới ba cột thẻ bài, mỗi thẻ là một hình dữ liệu vuông nền màu chói: đỏ, vàng, tím đậm. Tên bài chữ đậm hẹp 18 px chữ thường ngay dưới hình, mô tả 13 px xám #6d6d6d. Nền trắng, nhãn số thứ tự nhỏ góc trên mỗi thẻ. Mượn cách để mỗi bài có một hình dữ liệu riêng màu mạnh như bìa sách; không chép hình hay chữ.",
+  "licence": "Ảnh chụp thu nhỏ của trang công khai, chỉ để model tham khảo nguyên tắc. Không chép logo, chữ, ảnh hay phông độc quyền của trang."
+}

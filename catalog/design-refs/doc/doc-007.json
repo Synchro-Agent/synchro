@@ -1,0 +1,134 @@
+{
+  "v": 1,
+  "id": "doc-007",
+  "domain": "doc",
+  "title": "Bản tuyên ngôn làm việc: cột chữ hẹp trên nền đen, tiêu đề có chân",
+  "moods": [
+    "dark-cinematic",
+    "editorial",
+    "minimal-mono"
+  ],
+  "industries": [
+    "tech-saas",
+    "consulting"
+  ],
+  "audience": [
+    "b2b"
+  ],
+  "source_url": "https://linear.app/method/introduction",
+  "source_host": "linear.app",
+  "source_kind": "public-page",
+  "captured_at": "2026-11-20",
+  "image": {
+    "file": "doc/doc-007.webp",
+    "width": 1280,
+    "height": 1600,
+    "bytes": 88524,
+    "layout": "single"
+  },
+  "tokens": {
+    "theme": "dark",
+    "colors": [
+      {
+        "hex": "#08090a",
+        "role": "bg",
+        "share": 0.957
+      },
+      {
+        "hex": "#f7f8f8",
+        "role": "ink",
+        "share": 0.012
+      },
+      {
+        "hex": "#d0d6e0",
+        "role": "muted",
+        "share": 0.005
+      },
+      {
+        "hex": "#f7f8f8",
+        "role": "accent",
+        "share": 0
+      },
+      {
+        "hex": "#e5e5e6",
+        "role": "line",
+        "share": 0
+      }
+    ],
+    "fonts": {
+      "head": {
+        "kit": "fraunces",
+        "seen": "Tiempos Headline",
+        "seenLicence": "proprietary",
+        "weight": 400
+      },
+      "body": {
+        "kit": "inter",
+        "seen": "Inter Variable",
+        "seenLicence": "open",
+        "weight": 400
+      },
+      "mono": null
+    },
+    "type": {
+      "basePx": 17,
+      "ratio": 1.335,
+      "sizes": [
+        72,
+        24,
+        17,
+        14
+      ],
+      "headLine": 1,
+      "bodyLine": 1.6,
+      "headCase": "none"
+    },
+    "tracking": {
+      "display": -0.022,
+      "heading": -0.012,
+      "body": 0,
+      "label": 0
+    },
+    "radius": {
+      "outer": 0,
+      "inner": 0,
+      "pill": true
+    },
+    "shadow": {
+      "level": 1,
+      "css": "rgba(0, 0, 0, 0) 0px 8px 2px 0px, rgba(0, 0, 0, 0.01) 0px 5px 2px 0px, rgba(0, 0, 0, 0.04) 0px 3px 2px 0px, rgba(0, 0, 0, 0.07) 0px 1px 1px 0px, rgba(0, 0, 0, 0.08) 0px 0px 1px 0px"
+    },
+    "spacing": {
+      "unit": 8,
+      "section": 72,
+      "gutter": 8,
+      "density": "balanced"
+    },
+    "layout": {
+      "columns": 1,
+      "maxWidth": 740,
+      "align": "center",
+      "emptyShare": 0.71
+    },
+    "imagery": {
+      "kind": "type-only",
+      "share": 0,
+      "light": "",
+      "lens": "",
+      "grade": "",
+      "subject": ""
+    }
+  },
+  "measured": [
+    "theme",
+    "colors",
+    "type",
+    "tracking",
+    "radius",
+    "shadow",
+    "spacing",
+    "layout"
+  ],
+  "why": "Một cột chữ rộng 740 px giữa nền đen #08090a, tiêu đề chữ có chân 72 px, mỗi nguyên tắc là một đoạn ngắn với tiêu đề nhỏ đậm. Chữ thân 17 px dòng 1,6, không hình, không màu nhấn. Cảm giác đọc một bài luận được dàn trang cẩn thận. Mượn cột chữ hẹp và nhịp tiêu đề nhỏ cho tài liệu dài; không chép nội dung.",
+  "licence": "Ảnh chụp thu nhỏ của trang công khai, chỉ để model tham khảo nguyên tắc. Không chép logo, chữ, ảnh hay phông độc quyền của trang."
+}

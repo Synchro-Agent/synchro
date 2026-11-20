@@ -1,0 +1,151 @@
+{
+  "v": 1,
+  "id": "web-009",
+  "domain": "web",
+  "title": "Nền tảng triển khai: bầu trời đêm tím và ảnh giao diện",
+  "moods": [
+    "dark-cinematic",
+    "tech"
+  ],
+  "industries": [
+    "tech-saas"
+  ],
+  "audience": [
+    "developers"
+  ],
+  "source_url": "https://railway.com/",
+  "source_host": "railway.com",
+  "source_kind": "public-page",
+  "captured_at": "2026-11-20",
+  "image": {
+    "file": "web/web-009.webp",
+    "width": 1280,
+    "height": 1600,
+    "bytes": 89044,
+    "layout": "single"
+  },
+  "tokens": {
+    "theme": "dark",
+    "colors": [
+      {
+        "hex": "#13111c",
+        "role": "bg",
+        "share": 0
+      },
+      {
+        "hex": "#0d0c14",
+        "role": "surface",
+        "share": 0.354
+      },
+      {
+        "hex": "#291839",
+        "role": "raised",
+        "share": 0
+      },
+      {
+        "hex": "#ffffff",
+        "role": "ink",
+        "share": 0.014
+      },
+      {
+        "hex": "#d0cfd2",
+        "role": "muted",
+        "share": 0.003
+      },
+      {
+        "hex": "#8b5cf6",
+        "role": "accent",
+        "share": 0
+      },
+      {
+        "hex": "#2b2933",
+        "role": "line",
+        "share": 0.602
+      }
+    ],
+    "fonts": {
+      "head": {
+        "kit": "source-serif-4",
+        "seen": "IBM Plex Serif",
+        "seenLicence": "open",
+        "weight": 500
+      },
+      "body": {
+        "kit": "inter",
+        "seen": "Inter",
+        "seenLicence": "open",
+        "weight": 500
+      },
+      "mono": {
+        "kit": "jetbrains-mono",
+        "seen": "JetBrains Mono",
+        "seenLicence": "open",
+        "weight": 400
+      }
+    },
+    "type": {
+      "basePx": 14,
+      "ratio": 1.252,
+      "sizes": [
+        54,
+        40,
+        36,
+        20,
+        18,
+        16,
+        14,
+        12
+      ],
+      "headLine": 1.12,
+      "bodyLine": 1.63,
+      "headCase": "none"
+    },
+    "tracking": {
+      "display": -0.036,
+      "heading": -0.005,
+      "body": 0,
+      "label": 0.006
+    },
+    "radius": {
+      "outer": 8,
+      "inner": 8,
+      "pill": false
+    },
+    "shadow": {
+      "level": 3,
+      "css": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(62, 45, 45, 0.24) 0px 100px 191px 0px, rgba(62, 45, 45, 0.165) 0px 36.5016px 69.7181px 0px, rgba(62, 45, 45, 0.133) 0px 17.7209"
+    },
+    "spacing": {
+      "unit": 8,
+      "section": 128,
+      "gutter": 8,
+      "density": "airy"
+    },
+    "layout": {
+      "columns": 3,
+      "maxWidth": 1250,
+      "align": "center",
+      "emptyShare": 0.03
+    },
+    "imagery": {
+      "kind": "mixed",
+      "share": 0.92,
+      "light": "dim violet night sky haze",
+      "lens": "wide establishing, centered",
+      "grade": "deep violet and indigo, low saturation",
+      "subject": "night sky backdrop behind a dark app canvas"
+    }
+  },
+  "measured": [
+    "theme",
+    "fonts",
+    "type",
+    "tracking",
+    "radius",
+    "shadow",
+    "spacing",
+    "layout"
+  ],
+  "why": "Nền tím đêm #13111c phủ ảnh bầu trời mờ, tiêu đề chữ có chân 54 px siết −0,036em đặt giữa, rồi một ảnh giao diện tối lớn ngay dưới. Nút nhấn tím #8b5cf6 bo 8 px là điểm màu duy nhất. Bóng sâu bậc 3 tách khung giao diện khỏi nền, các phần cách nhau 128 px. Mượn cách pha chữ có chân với giao diện kỹ thuật và một màu nhấn tím; không chép giao diện hay tên dự án hiển thị.",
+  "licence": "Ảnh chụp thu nhỏ của trang công khai, chỉ để model tham khảo nguyên tắc. Không chép logo, chữ, ảnh hay phông độc quyền của trang."
+}

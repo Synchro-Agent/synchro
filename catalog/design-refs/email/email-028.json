@@ -1,0 +1,127 @@
+{
+  "v": 1,
+  "id": "email-028",
+  "domain": "email",
+  "title": "Thư khuyến mãi mùa đông: thẻ trắng nổi trên nền than, ảnh chân dung ấm",
+  "moods": [
+    "dark-cinematic",
+    "minimal-mono",
+    "editorial"
+  ],
+  "industries": [
+    "ecommerce",
+    "general"
+  ],
+  "audience": [
+    "consumer"
+  ],
+  "source_url": "https://tabular.email/templates",
+  "source_host": "tabular.email",
+  "source_kind": "public-image",
+  "captured_at": "2026-11-20",
+  "image": {
+    "file": "email/email-028.webp",
+    "width": 680,
+    "height": 1131,
+    "bytes": 58536,
+    "layout": "single"
+  },
+  "tokens": {
+    "theme": "dark",
+    "colors": [
+      {
+        "hex": "#232323",
+        "role": "bg",
+        "share": 0.362
+      },
+      {
+        "hex": "#f8f8f8",
+        "role": "ink",
+        "share": 0.349
+      },
+      {
+        "hex": "#8c8c8c",
+        "role": "muted",
+        "share": 0
+      },
+      {
+        "hex": "#111111",
+        "role": "accent",
+        "share": 0
+      },
+      {
+        "hex": "#ffffff",
+        "role": "surface",
+        "share": 0
+      }
+    ],
+    "fonts": {
+      "head": {
+        "kit": "plus-jakarta-sans",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 400
+      },
+      "body": {
+        "kit": "inter",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 400
+      },
+      "mono": null
+    },
+    "type": {
+      "basePx": 14,
+      "ratio": 1.333,
+      "sizes": [
+        26,
+        18,
+        14,
+        11
+      ],
+      "headLine": 1.15,
+      "bodyLine": 1.6,
+      "headCase": "none"
+    },
+    "tracking": {
+      "display": -0.01,
+      "heading": 0,
+      "body": 0,
+      "label": 0.1
+    },
+    "radius": {
+      "outer": 8,
+      "inner": 999,
+      "pill": true
+    },
+    "shadow": {
+      "level": 0,
+      "css": "none"
+    },
+    "spacing": {
+      "unit": 8,
+      "section": 40,
+      "gutter": 24,
+      "density": "balanced"
+    },
+    "layout": {
+      "columns": 1,
+      "maxWidth": 520,
+      "align": "center",
+      "emptyShare": 0.3
+    },
+    "imagery": {
+      "kind": "photo",
+      "share": 0.35,
+      "light": "soft window light from the left, warm",
+      "lens": "85mm portrait, f/2, eye level",
+      "grade": "warm skin tones, cream background",
+      "subject": "a smiling woman in a light sweater"
+    }
+  },
+  "measured": [
+    "theme"
+  ],
+  "why": "Nền than #232323, thư là một thẻ trắng rộng 520 px nổi ở giữa với ảnh chân dung ấm chiếm nửa trên thẻ. Nhãn mục chữ hoa nhỏ giãn 0,1em, tiêu đề 26 px đậm, nút đen bo tròn hoàn toàn. Chân thư xám trên nền tối, biểu tượng nhỏ đơn sắc. Mượn tương phản thẻ sáng trên nền tối để dồn mắt vào một ưu đãi; không chép ảnh hay câu chữ.",
+  "licence": "Ảnh chụp thu nhỏ của trang công khai, chỉ để model tham khảo nguyên tắc. Không chép logo, chữ, ảnh hay phông độc quyền của trang."
+}

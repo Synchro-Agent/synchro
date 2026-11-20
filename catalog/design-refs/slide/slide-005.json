@@ -1,0 +1,127 @@
+{
+  "v": 1,
+  "id": "slide-005",
+  "domain": "slide",
+  "title": "Báo cáo đầu tư Việt Nam: trang trắng chữ đỏ, biểu đồ và ô thông điệp",
+  "moods": [
+    "data-dense",
+    "clean-light",
+    "swiss-precise"
+  ],
+  "industries": [
+    "finance",
+    "consulting"
+  ],
+  "audience": [
+    "investors"
+  ],
+  "source_url": "https://doventures.vc/en/insights/reports/vietnam-innovation-and-private-capital-report-2026",
+  "source_host": "doventures.vc",
+  "source_kind": "public-image",
+  "captured_at": "2026-11-20",
+  "image": {
+    "file": "slide/slide-005.webp",
+    "width": 1280,
+    "height": 720,
+    "bytes": 89946,
+    "layout": "grid4"
+  },
+  "tokens": {
+    "theme": "light",
+    "colors": [
+      {
+        "hex": "#ffffff",
+        "role": "bg",
+        "share": 0.904
+      },
+      {
+        "hex": "#2b2b2b",
+        "role": "ink",
+        "share": 0
+      },
+      {
+        "hex": "#7f7f7f",
+        "role": "muted",
+        "share": 0.007
+      },
+      {
+        "hex": "#9e2621",
+        "role": "accent",
+        "share": 0
+      },
+      {
+        "hex": "#bf7c77",
+        "role": "accent2",
+        "share": 0
+      }
+    ],
+    "fonts": {
+      "head": {
+        "kit": "inter",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 400
+      },
+      "body": {
+        "kit": "inter",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 400
+      },
+      "mono": null
+    },
+    "type": {
+      "basePx": 13,
+      "ratio": 1.25,
+      "sizes": [
+        24,
+        18,
+        13,
+        10
+      ],
+      "headLine": 1.2,
+      "bodyLine": 1.35,
+      "headCase": "none"
+    },
+    "tracking": {
+      "display": 0,
+      "heading": 0,
+      "body": 0,
+      "label": 0
+    },
+    "radius": {
+      "outer": 0,
+      "inner": 0,
+      "pill": false
+    },
+    "shadow": {
+      "level": 0,
+      "css": "none"
+    },
+    "spacing": {
+      "unit": 4,
+      "section": 32,
+      "gutter": 16,
+      "density": "dense"
+    },
+    "layout": {
+      "columns": 12,
+      "maxWidth": 1280,
+      "align": "left",
+      "emptyShare": 0.15
+    },
+    "imagery": {
+      "kind": "data",
+      "share": 0.4,
+      "light": "",
+      "lens": "",
+      "grade": "",
+      "subject": ""
+    }
+  },
+  "measured": [
+    "theme"
+  ],
+  "why": "Trang trắng, tiêu đề đỏ sẫm #9e2621 đặt trái, nội dung chia ô thông điệp có biểu tượng nét đỏ và biểu đồ đường, cột màu đỏ xám. Chữ thân nhỏ 12-14 px, mật độ cao như báo cáo nghiên cứu. Màu đỏ duy nhất gắn kết toàn bộ. Mượn cách trình bày một kết luận chính mỗi trang kèm bằng chứng số liệu; tránh mật độ chữ quá dày khi trình chiếu, không chép số liệu.",
+  "licence": "Ảnh chụp thu nhỏ của trang công khai, chỉ để model tham khảo nguyên tắc. Không chép logo, chữ, ảnh hay phông độc quyền của trang."
+}

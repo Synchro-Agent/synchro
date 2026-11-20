@@ -1,0 +1,122 @@
+{
+  "v": 1,
+  "id": "email-017",
+  "domain": "email",
+  "title": "Thư du lịch dịp lễ tình nhân: ảnh hồng phấn và lưới điểm đến",
+  "moods": [
+    "playful",
+    "clean-light",
+    "organic"
+  ],
+  "industries": [
+    "hospitality-travel"
+  ],
+  "audience": [
+    "consumer"
+  ],
+  "source_url": "https://stripo.email/templates/promo-email-template-check-out-the-summer-collection-for-fashion-industry/",
+  "source_host": "stripo.email",
+  "source_kind": "public-image",
+  "captured_at": "2026-11-20",
+  "image": {
+    "file": "email/email-017.webp",
+    "width": 500,
+    "height": 1090,
+    "bytes": 60932,
+    "layout": "single"
+  },
+  "tokens": {
+    "theme": "light",
+    "colors": [
+      {
+        "hex": "#f7f7f7",
+        "role": "bg",
+        "share": 0.537
+      },
+      {
+        "hex": "#484646",
+        "role": "ink",
+        "share": 0.028
+      },
+      {
+        "hex": "#f6b0c4",
+        "role": "accent",
+        "share": 0.122
+      },
+      {
+        "hex": "#aac6f1",
+        "role": "accent2",
+        "share": 0.011
+      }
+    ],
+    "fonts": {
+      "head": {
+        "kit": "playfair-display",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 400
+      },
+      "body": {
+        "kit": "inter",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 400
+      },
+      "mono": null
+    },
+    "type": {
+      "basePx": 14,
+      "ratio": 1.333,
+      "sizes": [
+        30,
+        18,
+        14,
+        12
+      ],
+      "headLine": 1.15,
+      "bodyLine": 1.5,
+      "headCase": "none"
+    },
+    "tracking": {
+      "display": 0,
+      "heading": 0,
+      "body": 0,
+      "label": 0
+    },
+    "radius": {
+      "outer": 4,
+      "inner": 4,
+      "pill": false
+    },
+    "shadow": {
+      "level": 0,
+      "css": "none"
+    },
+    "spacing": {
+      "unit": 8,
+      "section": 32,
+      "gutter": 16,
+      "density": "balanced"
+    },
+    "layout": {
+      "columns": 2,
+      "maxWidth": 600,
+      "align": "center",
+      "emptyShare": 0.15
+    },
+    "imagery": {
+      "kind": "photo",
+      "share": 0,
+      "light": "soft pastel daylight",
+      "lens": "50mm lifestyle and landscape",
+      "grade": "blush pink, snow white, sky blue",
+      "subject": "heart balloon and travel destinations"
+    }
+  },
+  "measured": [
+    "theme",
+    "colors"
+  ],
+  "why": "Ảnh đầu thư nền hồng phấn #f6b0c4 với bóng bay và tiêu đề chữ viết tay đỏ, tiếp theo là lưới hai cột ảnh điểm đến tuyết và biển kèm giá. Nền #f7f7f7, chữ xám than #484646, nhấn xanh nhạt #aac6f1. Mỗi ô ảnh một nút nhỏ. Mượn lưới hai cột ảnh và giá cho thư du lịch; không chép ảnh hay khẩu hiệu.",
+  "licence": "Ảnh chụp thu nhỏ của trang công khai, chỉ để model tham khảo nguyên tắc. Không chép logo, chữ, ảnh hay phông độc quyền của trang."
+}

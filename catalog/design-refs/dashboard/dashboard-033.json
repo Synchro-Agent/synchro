@@ -1,0 +1,162 @@
+{
+  "v": 1,
+  "id": "dashboard-033",
+  "domain": "dashboard",
+  "title": "Cổng tin tài chính Việt: chỉ số, tin và biểu đồ trên một trang",
+  "moods": [
+    "data-dense",
+    "clean-light",
+    "energetic"
+  ],
+  "industries": [
+    "finance",
+    "media-publishing"
+  ],
+  "audience": [
+    "consumer",
+    "investors"
+  ],
+  "source_url": "https://24hmoney.vn/",
+  "source_host": "24hmoney.vn",
+  "source_kind": "public-page",
+  "captured_at": "2026-11-20",
+  "image": {
+    "file": "dashboard/dashboard-033.webp",
+    "width": 960,
+    "height": 1200,
+    "bytes": 89856,
+    "layout": "single"
+  },
+  "tokens": {
+    "theme": "light",
+    "colors": [
+      {
+        "hex": "#ffffff",
+        "role": "bg",
+        "share": 0.8
+      },
+      {
+        "hex": "#f5f6f6",
+        "role": "surface",
+        "share": 0
+      },
+      {
+        "hex": "#f2f4f4",
+        "role": "raised",
+        "share": 0
+      },
+      {
+        "hex": "#000000",
+        "role": "ink",
+        "share": 0
+      },
+      {
+        "hex": "#1a1a1a",
+        "role": "muted",
+        "share": 0.009
+      },
+      {
+        "hex": "#ff2a4e",
+        "role": "accent",
+        "share": 0
+      },
+      {
+        "hex": "#60d140",
+        "role": "accent2",
+        "share": 0
+      },
+      {
+        "hex": "#cad5df",
+        "role": "line",
+        "share": 0.027
+      },
+      {
+        "hex": "#60d140",
+        "role": "pos",
+        "share": 0
+      },
+      {
+        "hex": "#f8443b",
+        "role": "neg",
+        "share": 0
+      }
+    ],
+    "fonts": {
+      "head": {
+        "kit": "inter",
+        "seen": "Inter",
+        "seenLicence": "open",
+        "weight": 600
+      },
+      "body": {
+        "kit": "inter",
+        "seen": "Inter",
+        "seenLicence": "open",
+        "weight": 600
+      },
+      "mono": null
+    },
+    "type": {
+      "basePx": 16,
+      "ratio": 1.125,
+      "sizes": [
+        18,
+        16,
+        14,
+        12,
+        10
+      ],
+      "headLine": 1.33,
+      "bodyLine": 1.31,
+      "headCase": "none"
+    },
+    "tracking": {
+      "display": 0,
+      "heading": 0,
+      "body": 0,
+      "label": 0
+    },
+    "radius": {
+      "outer": 12,
+      "inner": 8,
+      "pill": true
+    },
+    "shadow": {
+      "level": 1,
+      "css": "rgba(160, 181, 202, 0.2) 0px 0px 12px 0px"
+    },
+    "spacing": {
+      "unit": 4,
+      "section": 50,
+      "gutter": 8,
+      "density": "dense"
+    },
+    "layout": {
+      "columns": 3,
+      "maxWidth": 1280,
+      "align": "left",
+      "emptyShare": 0.14
+    },
+    "imagery": {
+      "kind": "mixed",
+      "share": 0.5,
+      "light": "even daylight news photography",
+      "lens": "small 35mm news thumbnails",
+      "grade": "neutral natural colour",
+      "subject": "small news thumbnails"
+    }
+  },
+  "measured": [
+    "theme",
+    "colors",
+    "fonts",
+    "type",
+    "tracking",
+    "radius",
+    "shadow",
+    "spacing",
+    "layout"
+  ],
+  "why": "Ba cột dày đặc: chỉ số thị trường với số xanh đỏ, dòng tin có ảnh nhỏ, và biểu đồ giá vàng ở giữa. Thẻ bo 12 px, chữ 14-16 px, viền #cad5df mảnh. Đỏ #ff2a4e và xanh #60d140 chỉ dùng cho tăng giảm và nhãn nóng. Mượn cách trộn số liệu với tin tức theo cột rõ ràng; không chép tin hay số.",
+  "licence": "Ảnh chụp thu nhỏ của trang công khai, chỉ để model tham khảo nguyên tắc. Không chép logo, chữ, ảnh hay phông độc quyền của trang."
+}

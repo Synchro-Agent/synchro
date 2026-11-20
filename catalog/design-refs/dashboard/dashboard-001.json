@@ -1,0 +1,157 @@
+{
+  "v": 1,
+  "id": "dashboard-001",
+  "domain": "dashboard",
+  "title": "Bảng tổng quan doanh thu đơn sắc: thẻ chỉ số và biểu đồ vùng xám",
+  "moods": [
+    "minimal-mono",
+    "clean-light",
+    "data-dense"
+  ],
+  "industries": [
+    "tech-saas",
+    "general"
+  ],
+  "audience": [
+    "b2b",
+    "internal"
+  ],
+  "source_url": "https://ui.shadcn.com/examples/dashboard",
+  "source_host": "ui.shadcn.com",
+  "source_kind": "public-page",
+  "captured_at": "2026-11-20",
+  "image": {
+    "file": "dashboard/dashboard-001.webp",
+    "width": 1280,
+    "height": 1600,
+    "bytes": 88766,
+    "layout": "single"
+  },
+  "tokens": {
+    "theme": "light",
+    "colors": [
+      {
+        "hex": "#ffffff",
+        "role": "bg",
+        "share": 0.948
+      },
+      {
+        "hex": "#fafafa",
+        "role": "surface",
+        "share": 0
+      },
+      {
+        "hex": "#f5f5f5",
+        "role": "raised",
+        "share": 0
+      },
+      {
+        "hex": "#000000",
+        "role": "ink",
+        "share": 0.022
+      },
+      {
+        "hex": "#737373",
+        "role": "muted",
+        "share": 0.004
+      },
+      {
+        "hex": "#171717",
+        "role": "accent",
+        "share": 0
+      },
+      {
+        "hex": "#e5e5e5",
+        "role": "line",
+        "share": 0.01
+      },
+      {
+        "hex": "#737373",
+        "role": "accent2",
+        "share": 0
+      }
+    ],
+    "fonts": {
+      "head": {
+        "kit": "inter",
+        "seen": "Geist",
+        "seenLicence": "open",
+        "weight": 600
+      },
+      "body": {
+        "kit": "inter",
+        "seen": "Geist",
+        "seenLicence": "open",
+        "weight": 500
+      },
+      "mono": {
+        "kit": "jetbrains-mono",
+        "seen": "Geist Mono",
+        "seenLicence": "open",
+        "weight": 500
+      }
+    },
+    "type": {
+      "basePx": 14,
+      "ratio": 1.361,
+      "sizes": [
+        48,
+        30,
+        18,
+        16,
+        14,
+        12
+      ],
+      "headLine": 1.1,
+      "bodyLine": 1.43,
+      "headCase": "none"
+    },
+    "tracking": {
+      "display": -0.05,
+      "heading": 0,
+      "body": 0,
+      "label": 0
+    },
+    "radius": {
+      "outer": 14,
+      "inner": 8,
+      "pill": true
+    },
+    "shadow": {
+      "level": 1,
+      "css": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0.1) 0px 1px 3px 0px, rgba(0, 0, 0, 0.1) 0px 1px 2"
+    },
+    "spacing": {
+      "unit": 8,
+      "section": 80,
+      "gutter": 8,
+      "density": "balanced"
+    },
+    "layout": {
+      "columns": 2,
+      "maxWidth": 1260,
+      "align": "center",
+      "emptyShare": 0.5
+    },
+    "imagery": {
+      "kind": "data",
+      "share": 0.4,
+      "light": "",
+      "lens": "",
+      "grade": "",
+      "subject": ""
+    }
+  },
+  "measured": [
+    "theme",
+    "fonts",
+    "type",
+    "tracking",
+    "radius",
+    "shadow",
+    "spacing",
+    "layout"
+  ],
+  "why": "Bảng trắng hoàn toàn đơn sắc: 4 thẻ chỉ số bo 14 px viền #e5e5e5, con số 24 px đậm, chênh lệch so kỳ trước ghi bằng chữ kèm mũi tên. Biểu đồ vùng xám nhiều tầng thay cho màu, thứ bậc dựa vào cỡ chữ và độ đậm. Lưới 8 px, khoảng cách thẻ 16 px, bóng bậc 1. Mượn sự kỷ luật đơn sắc để con số tự nổi; không chép số liệu hay nhãn.",
+  "licence": "Ảnh chụp thu nhỏ của trang công khai, chỉ để model tham khảo nguyên tắc. Không chép logo, chữ, ảnh hay phông độc quyền của trang."
+}

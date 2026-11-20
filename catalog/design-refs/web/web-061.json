@@ -1,0 +1,122 @@
+{
+  "v": 1,
+  "id": "web-061",
+  "domain": "web",
+  "title": "Âm thanh cao cấp: chân dung tĩnh lặng, chữ nhỏ tinh tế",
+  "moods": [
+    "luxury",
+    "minimal-mono",
+    "editorial"
+  ],
+  "industries": [
+    "ecommerce",
+    "culture-music"
+  ],
+  "audience": [
+    "premium"
+  ],
+  "source_url": "https://www.bang-olufsen.com/en/int",
+  "source_host": "bang-olufsen.com",
+  "source_kind": "public-page",
+  "captured_at": "2026-11-20",
+  "image": {
+    "file": "web/web-061.webp",
+    "width": 1280,
+    "height": 800,
+    "bytes": 80036,
+    "layout": "single"
+  },
+  "tokens": {
+    "theme": "light",
+    "colors": [
+      {
+        "hex": "#fafafa",
+        "role": "bg",
+        "share": 0
+      },
+      {
+        "hex": "#11110d",
+        "role": "ink",
+        "share": 0.289
+      },
+      {
+        "hex": "#6b665c",
+        "role": "muted",
+        "share": 0
+      },
+      {
+        "hex": "#8a7b66",
+        "role": "accent",
+        "share": 0
+      }
+    ],
+    "fonts": {
+      "head": {
+        "kit": "inter",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 400
+      },
+      "body": {
+        "kit": "inter",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 400
+      },
+      "mono": null
+    },
+    "type": {
+      "basePx": 16,
+      "ratio": 1.25,
+      "sizes": [
+        40,
+        20,
+        16,
+        12
+      ],
+      "headLine": 1.1,
+      "bodyLine": 1.5,
+      "headCase": "none"
+    },
+    "tracking": {
+      "display": 0,
+      "heading": 0,
+      "body": 0,
+      "label": 0
+    },
+    "radius": {
+      "outer": 0,
+      "inner": 0,
+      "pill": false
+    },
+    "shadow": {
+      "level": 0,
+      "css": "none"
+    },
+    "spacing": {
+      "unit": 8,
+      "section": 64,
+      "gutter": 24,
+      "density": "balanced"
+    },
+    "layout": {
+      "columns": 1,
+      "maxWidth": 1280,
+      "align": "left",
+      "emptyShare": 0.15
+    },
+    "imagery": {
+      "kind": "photo",
+      "share": 0,
+      "light": "soft window light from left, low contrast",
+      "lens": "85mm portrait, shallow depth",
+      "grade": "warm beige and taupe, muted",
+      "subject": "person resting with headphones on a sofa"
+    }
+  },
+  "measured": [
+    "theme"
+  ],
+  "why": "Ảnh chân dung người đeo tai nghe ánh sáng dịu phủ toàn khung, chữ trắng rất nhỏ đặt góc trái dưới cùng nút viền mảnh. Bảng màu trầm be, nâu và xám, không màu nhấn. Toàn bộ sự sang trọng đến từ ảnh và khoảng lặng, chữ thân 16 px. Mượn cách để ảnh lớn và chữ nhỏ tạo cảm giác cao cấp; không chép ảnh hay tên sản phẩm.",
+  "licence": "Ảnh chụp thu nhỏ của trang công khai, chỉ để model tham khảo nguyên tắc. Không chép logo, chữ, ảnh hay phông độc quyền của trang."
+}

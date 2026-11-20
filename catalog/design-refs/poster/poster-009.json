@@ -1,0 +1,116 @@
+{
+  "v": 1,
+  "id": "poster-009",
+  "domain": "poster",
+  "title": "Tranh màu nước Việt Nam: người gặt lúa trên cánh đồng vàng",
+  "moods": [
+    "organic",
+    "warm-craft"
+  ],
+  "industries": [
+    "culture-music",
+    "crafts-artisan"
+  ],
+  "audience": [
+    "public"
+  ],
+  "source_url": "https://dogmacollection.com/content/feature/221/artworks-1294-nguyen-thu-untitled-artwork-1966/",
+  "source_host": "dogmacollection.com",
+  "source_kind": "public-image",
+  "captured_at": "2026-11-20",
+  "image": {
+    "file": "poster/poster-009.webp",
+    "width": 1280,
+    "height": 920,
+    "bytes": 89614,
+    "layout": "single"
+  },
+  "tokens": {
+    "theme": "light",
+    "colors": [
+      {
+        "hex": "#c8c0a5",
+        "role": "bg",
+        "share": 0.348
+      },
+      {
+        "hex": "#856f42",
+        "role": "ink",
+        "share": 0.004
+      },
+      {
+        "hex": "#b7a86e",
+        "role": "accent",
+        "share": 0.331
+      }
+    ],
+    "fonts": {
+      "head": {
+        "kit": "cormorant-garamond",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 400
+      },
+      "body": {
+        "kit": "be-vietnam-pro",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 400
+      },
+      "mono": null
+    },
+    "type": {
+      "basePx": 18,
+      "ratio": 1.333,
+      "sizes": [
+        48,
+        24,
+        18
+      ],
+      "headLine": 1.1,
+      "bodyLine": 1.4,
+      "headCase": "none"
+    },
+    "tracking": {
+      "display": 0,
+      "heading": 0,
+      "body": 0,
+      "label": 0
+    },
+    "radius": {
+      "outer": 0,
+      "inner": 0,
+      "pill": false
+    },
+    "shadow": {
+      "level": 0,
+      "css": "none"
+    },
+    "spacing": {
+      "unit": 8,
+      "section": 64,
+      "gutter": 24,
+      "density": "balanced"
+    },
+    "layout": {
+      "columns": 1,
+      "maxWidth": 1280,
+      "align": "left",
+      "emptyShare": 0.3
+    },
+    "imagery": {
+      "kind": "illustration",
+      "share": 0,
+      "light": "hazy midday sun, soft",
+      "lens": "wide landscape, eye level",
+      "grade": "straw yellow, earth brown, muted grey-green",
+      "subject": "farmers harvesting rice by village houses"
+    }
+  },
+  "measured": [
+    "theme",
+    "colors"
+  ],
+  "why": "Bức tranh ngang với cánh đồng lúa vàng #c8c0a5 chiếm hai phần ba, người gặt và bóng nhà phía xa vẽ bằng mảng màu nước loang. Khoảng trời nhạt phía trên để trống, rất hợp đặt chữ. Bảng màu vàng rơm, nâu đất #856f42 và xanh xám dịu. Mượn bảng màu rơm rạ và khoảng trời trống để đặt tiêu đề; không chép tranh.",
+  "licence": "Ảnh chụp thu nhỏ của trang công khai, chỉ để model tham khảo nguyên tắc. Không chép logo, chữ, ảnh hay phông độc quyền của trang."
+}

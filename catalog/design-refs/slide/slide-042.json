@@ -1,0 +1,122 @@
+{
+  "v": 1,
+  "id": "slide-042",
+  "domain": "slide",
+  "title": "Báo cáo xu hướng công nghệ: hình 3D vàng bóng, ảnh nhiệt chuyển sắc, trang trắng ngà",
+  "moods": [
+    "tech",
+    "bold-color",
+    "clean-light"
+  ],
+  "industries": [
+    "tech-saas",
+    "consulting"
+  ],
+  "audience": [
+    "b2b",
+    "investors"
+  ],
+  "source_url": "https://www.deloitte.com/content/dam/insights/articles/2024/us187540_tech-trends-2025/DI_Tech-trends-2025.pdf",
+  "source_host": "deloitte.com",
+  "source_kind": "public-image",
+  "captured_at": "2026-11-20",
+  "image": {
+    "file": "slide/slide-042.webp",
+    "width": 1280,
+    "height": 720,
+    "bytes": 89828,
+    "layout": "grid4"
+  },
+  "tokens": {
+    "theme": "light",
+    "colors": [
+      {
+        "hex": "#dfe4e6",
+        "role": "bg",
+        "share": 0.226
+      },
+      {
+        "hex": "#252626",
+        "role": "ink",
+        "share": 0.077
+      },
+      {
+        "hex": "#6a4ff0",
+        "role": "accent",
+        "share": 0
+      },
+      {
+        "hex": "#03c8c9",
+        "role": "accent2",
+        "share": 0.018
+      }
+    ],
+    "fonts": {
+      "head": {
+        "kit": "ibm-plex-sans",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 400
+      },
+      "body": {
+        "kit": "ibm-plex-sans",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 400
+      },
+      "mono": null
+    },
+    "type": {
+      "basePx": 11,
+      "ratio": 1.414,
+      "sizes": [
+        28,
+        18,
+        11
+      ],
+      "headLine": 1.1,
+      "bodyLine": 1.45,
+      "headCase": "none"
+    },
+    "tracking": {
+      "display": -0.01,
+      "heading": 0,
+      "body": 0,
+      "label": 0.02
+    },
+    "radius": {
+      "outer": 0,
+      "inner": 0,
+      "pill": false
+    },
+    "shadow": {
+      "level": 0,
+      "css": "none"
+    },
+    "spacing": {
+      "unit": 8,
+      "section": 40,
+      "gutter": 24,
+      "density": "balanced"
+    },
+    "layout": {
+      "columns": 2,
+      "maxWidth": 1280,
+      "align": "left",
+      "emptyShare": 0.35
+    },
+    "imagery": {
+      "kind": "3d",
+      "share": 0.5,
+      "light": "glossy studio light with gold reflections",
+      "lens": "macro render, low angle",
+      "grade": "gold, iridescent blue, violet and orange",
+      "subject": "glossy golden 3D shapes and thermal gradients"
+    }
+  },
+  "measured": [
+    "theme"
+  ],
+  "why": "Bìa nền xám lạnh #dfe4e6 với vật thể 3D vàng bóng đặt dưới tiêu đề đen đậm 28 px. Trang chương dùng ảnh nhiệt chuyển sắc xanh, tím, cam phủ toàn trang, chữ trắng nhỏ. Trang tóm tắt trắng, tiêu đề có chấm xanh lục làm dấu, chữ thân 11 px hai cột. Mượn cách xen trang ảnh chuyển sắc mạnh giữa các trang chữ rất tĩnh; không chép hình hay chữ.",
+  "licence": "Ảnh chụp thu nhỏ của trang công khai, chỉ để model tham khảo nguyên tắc. Không chép logo, chữ, ảnh hay phông độc quyền của trang."
+}

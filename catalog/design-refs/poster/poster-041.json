@@ -1,0 +1,121 @@
+{
+  "v": 1,
+  "id": "poster-041",
+  "domain": "poster",
+  "title": "Poster triển lãm nền đen: ảnh người đội mũ bê giá vẽ, ba vệt màu nhỏ góc phải",
+  "moods": [
+    "dark-cinematic",
+    "editorial",
+    "retro-print"
+  ],
+  "industries": [
+    "culture-music",
+    "events"
+  ],
+  "audience": [
+    "public"
+  ],
+  "source_url": "https://www.muis.ee/museaalView/1614064",
+  "source_host": "muis.ee",
+  "source_kind": "cc0",
+  "captured_at": "2026-11-20",
+  "image": {
+    "file": "poster/poster-041.webp",
+    "width": 400,
+    "height": 597,
+    "bytes": 50806,
+    "layout": "single"
+  },
+  "tokens": {
+    "theme": "dark",
+    "colors": [
+      {
+        "hex": "#0b0a12",
+        "role": "bg",
+        "share": 0.403
+      },
+      {
+        "hex": "#f4f5f2",
+        "role": "ink",
+        "share": 0.038
+      },
+      {
+        "hex": "#d8432f",
+        "role": "accent",
+        "share": 0
+      },
+      {
+        "hex": "#3a7bd5",
+        "role": "accent2",
+        "share": 0
+      }
+    ],
+    "fonts": {
+      "head": {
+        "kit": "oswald",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 400
+      },
+      "body": {
+        "kit": "ibm-plex-sans",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 400
+      },
+      "mono": null
+    },
+    "type": {
+      "basePx": 9,
+      "ratio": 2,
+      "sizes": [
+        24,
+        14,
+        9
+      ],
+      "headLine": 1,
+      "bodyLine": 1.3,
+      "headCase": "upper"
+    },
+    "tracking": {
+      "display": 0.02,
+      "heading": 0.02,
+      "body": 0,
+      "label": 0.04
+    },
+    "radius": {
+      "outer": 0,
+      "inner": 0,
+      "pill": false
+    },
+    "shadow": {
+      "level": 0,
+      "css": "none"
+    },
+    "spacing": {
+      "unit": 8,
+      "section": 24,
+      "gutter": 16,
+      "density": "balanced"
+    },
+    "layout": {
+      "columns": 1,
+      "maxWidth": 400,
+      "align": "center",
+      "emptyShare": 0.15
+    },
+    "imagery": {
+      "kind": "photo",
+      "share": 0.7,
+      "light": "hard side light, deep black background",
+      "lens": "50mm staged portrait, waist up",
+      "grade": "warm skin and wood tones on black",
+      "subject": "a man in a hat carrying paper rolls and an easel"
+    }
+  },
+  "measured": [
+    "theme"
+  ],
+  "why": "Nền đen #0b0a12, ảnh người đội mũ ôm cuộn giấy và giá vẽ gỗ chiếm 70% khung, ánh sáng gắt một phía. Tên triển lãm chữ hoa trắng hẹp 24 px đặt giữa, ba vệt cọ xanh, đỏ, vàng nhỏ làm dấu hiệu ở góc phải dưới. Thông tin in nhỏ 9 px căn trái ở chân. Mượn ảnh dàn dựng trên nền đen và một dấu hiệu ba màu nhỏ; không chép ảnh hay chữ.",
+  "licence": "Ảnh chụp thu nhỏ của trang công khai, chỉ để model tham khảo nguyên tắc. Không chép logo, chữ, ảnh hay phông độc quyền của trang."
+}

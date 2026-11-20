@@ -1,0 +1,127 @@
+{
+  "v": 1,
+  "id": "slide-027",
+  "domain": "slide",
+  "title": "Bộ slide công nghệ nền xanh đêm: sóng hạt chuyển cam, số lớn căn giữa",
+  "moods": [
+    "dark-cinematic",
+    "tech",
+    "data-dense"
+  ],
+  "industries": [
+    "tech-saas",
+    "ai"
+  ],
+  "audience": [
+    "b2b",
+    "investors"
+  ],
+  "source_url": "https://slidesgo.com/theme/futuristic-background",
+  "source_host": "slidesgo.com",
+  "source_kind": "public-image",
+  "captured_at": "2026-11-20",
+  "image": {
+    "file": "slide/slide-027.webp",
+    "width": 1280,
+    "height": 720,
+    "bytes": 89420,
+    "layout": "grid4"
+  },
+  "tokens": {
+    "theme": "dark",
+    "colors": [
+      {
+        "hex": "#021633",
+        "role": "bg",
+        "share": 0.826
+      },
+      {
+        "hex": "#fafdfc",
+        "role": "ink",
+        "share": 0.009
+      },
+      {
+        "hex": "#f9ac44",
+        "role": "accent",
+        "share": 0
+      },
+      {
+        "hex": "#2f7dd1",
+        "role": "accent2",
+        "share": 0
+      },
+      {
+        "hex": "#8ea3c0",
+        "role": "muted",
+        "share": 0
+      }
+    ],
+    "fonts": {
+      "head": {
+        "kit": "montserrat",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 400
+      },
+      "body": {
+        "kit": "inter",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 400
+      },
+      "mono": null
+    },
+    "type": {
+      "basePx": 13,
+      "ratio": 1.414,
+      "sizes": [
+        56,
+        28,
+        13
+      ],
+      "headLine": 1.05,
+      "bodyLine": 1.4,
+      "headCase": "upper"
+    },
+    "tracking": {
+      "display": 0.02,
+      "heading": 0.04,
+      "body": 0,
+      "label": 0.08
+    },
+    "radius": {
+      "outer": 0,
+      "inner": 0,
+      "pill": false
+    },
+    "shadow": {
+      "level": 0,
+      "css": "none"
+    },
+    "spacing": {
+      "unit": 8,
+      "section": 48,
+      "gutter": 24,
+      "density": "airy"
+    },
+    "layout": {
+      "columns": 3,
+      "maxWidth": 1280,
+      "align": "center",
+      "emptyShare": 0.55
+    },
+    "imagery": {
+      "kind": "illustration",
+      "share": 0.35,
+      "light": "glowing particles on deep navy",
+      "lens": "abstract particle wave, flat",
+      "grade": "orange to electric blue gradient on navy",
+      "subject": "flowing waves of glowing dots"
+    }
+  },
+  "measured": [
+    "theme"
+  ],
+  "why": "Nền xanh đêm #021633 với dải hạt sáng uốn sóng chuyển từ cam #f9ac44 sang xanh ở mép slide. Con số 300,000 trắng 56 px căn giữa, chú thích 14 px xám xanh ngay dưới. Slide ba cột dùng biểu tượng tròn cam nhỏ, chữ trắng 13 px. Mượn cách để hạt sáng chuyển sắc làm khung, chừa giữa cho một con số; không chép hình hay chữ.",
+  "licence": "Ảnh chụp thu nhỏ của trang công khai, chỉ để model tham khảo nguyên tắc. Không chép logo, chữ, ảnh hay phông độc quyền của trang."
+}

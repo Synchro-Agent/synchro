@@ -1,0 +1,132 @@
+{
+  "v": 1,
+  "id": "doc-004",
+  "domain": "doc",
+  "title": "Cẩm nang dịch vụ công: chữ lớn rõ ràng, liên kết xanh, hai cột",
+  "moods": [
+    "clean-light",
+    "swiss-precise"
+  ],
+  "industries": [
+    "nonprofit-gov"
+  ],
+  "audience": [
+    "public"
+  ],
+  "source_url": "https://www.gov.uk/service-manual/design",
+  "source_host": "gov.uk",
+  "source_kind": "public-page",
+  "captured_at": "2026-11-20",
+  "image": {
+    "file": "doc/doc-004.webp",
+    "width": 1280,
+    "height": 1600,
+    "bytes": 89548,
+    "layout": "single"
+  },
+  "tokens": {
+    "theme": "light",
+    "colors": [
+      {
+        "hex": "#ffffff",
+        "role": "bg",
+        "share": 0.864
+      },
+      {
+        "hex": "#f4f8fb",
+        "role": "surface",
+        "share": 0.003
+      },
+      {
+        "hex": "#0b0c0c",
+        "role": "ink",
+        "share": 0.009
+      },
+      {
+        "hex": "#1d70b8",
+        "role": "accent",
+        "share": 0.098
+      },
+      {
+        "hex": "#1d70b8",
+        "role": "line",
+        "share": 0
+      }
+    ],
+    "fonts": {
+      "head": {
+        "kit": "inter",
+        "seen": "GDS Transport",
+        "seenLicence": "unknown",
+        "weight": 700
+      },
+      "body": {
+        "kit": "inter",
+        "seen": "GDS Transport",
+        "seenLicence": "unknown",
+        "weight": 400
+      },
+      "mono": null
+    },
+    "type": {
+      "basePx": 19,
+      "ratio": 1.362,
+      "sizes": [
+        48,
+        24,
+        19,
+        16
+      ],
+      "headLine": 1.04,
+      "bodyLine": 1.32,
+      "headCase": "none"
+    },
+    "tracking": {
+      "display": 0,
+      "heading": 0,
+      "body": 0,
+      "label": 0
+    },
+    "radius": {
+      "outer": 0,
+      "inner": 0,
+      "pill": false
+    },
+    "shadow": {
+      "level": 2,
+      "css": "rgb(11, 12, 12) 0px 3px 0px 0px"
+    },
+    "spacing": {
+      "unit": 8,
+      "section": 40,
+      "gutter": 24,
+      "density": "dense"
+    },
+    "layout": {
+      "columns": 2,
+      "maxWidth": 960,
+      "align": "left",
+      "emptyShare": 0.55
+    },
+    "imagery": {
+      "kind": "type-only",
+      "share": 0,
+      "light": "",
+      "lens": "",
+      "grade": "",
+      "subject": ""
+    }
+  },
+  "measured": [
+    "theme",
+    "colors",
+    "type",
+    "tracking",
+    "radius",
+    "shadow",
+    "spacing",
+    "layout"
+  ],
+  "why": "Tiêu đề 48 px đậm, chữ thân 19 px rất dễ đọc, liên kết xanh #1d70b8 gạch chân, bố cục hai cột nội dung và điều hướng. Không bo góc, không màu trang trí, viền và khoảng cách làm toàn bộ việc phân cấp. Mượn sự rõ ràng: cỡ thân lớn, liên kết nhận ra ngay, mỗi mục một tiêu đề ngắn; không chép nội dung.",
+  "licence": "Ảnh chụp thu nhỏ của trang công khai, chỉ để model tham khảo nguyên tắc. Không chép logo, chữ, ảnh hay phông độc quyền của trang."
+}

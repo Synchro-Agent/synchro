@@ -1,0 +1,121 @@
+{
+  "v": 1,
+  "id": "poster-008",
+  "domain": "poster",
+  "title": "Tranh cổ động Việt Nam: đôi trai gái miền núi, chữ hoa dưới chân",
+  "moods": [
+    "retro-print",
+    "warm-craft",
+    "organic"
+  ],
+  "industries": [
+    "nonprofit-gov",
+    "culture-music"
+  ],
+  "audience": [
+    "public"
+  ],
+  "source_url": "https://dogmacollection.com/content/feature/221/artworks-1058-duong-anh-lua-mi-ngo-au-mach-hoa/",
+  "source_host": "dogmacollection.com",
+  "source_kind": "public-image",
+  "captured_at": "2026-11-20",
+  "image": {
+    "file": "poster/poster-008.webp",
+    "width": 1280,
+    "height": 910,
+    "bytes": 89200,
+    "layout": "single"
+  },
+  "tokens": {
+    "theme": "light",
+    "colors": [
+      {
+        "hex": "#dbb98f",
+        "role": "bg",
+        "share": 0.191
+      },
+      {
+        "hex": "#111a1d",
+        "role": "ink",
+        "share": 0.155
+      },
+      {
+        "hex": "#244237",
+        "role": "muted",
+        "share": 0.142
+      },
+      {
+        "hex": "#cea877",
+        "role": "accent",
+        "share": 0.243
+      }
+    ],
+    "fonts": {
+      "head": {
+        "kit": "be-vietnam-pro",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 400
+      },
+      "body": {
+        "kit": "be-vietnam-pro",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 400
+      },
+      "mono": null
+    },
+    "type": {
+      "basePx": 18,
+      "ratio": 1.333,
+      "sizes": [
+        32,
+        18
+      ],
+      "headLine": 1.1,
+      "bodyLine": 1.3,
+      "headCase": "upper"
+    },
+    "tracking": {
+      "display": 0,
+      "heading": 0,
+      "body": 0,
+      "label": 0
+    },
+    "radius": {
+      "outer": 0,
+      "inner": 0,
+      "pill": false
+    },
+    "shadow": {
+      "level": 0,
+      "css": "none"
+    },
+    "spacing": {
+      "unit": 8,
+      "section": 64,
+      "gutter": 24,
+      "density": "balanced"
+    },
+    "layout": {
+      "columns": 1,
+      "maxWidth": 1280,
+      "align": "asymmetric",
+      "emptyShare": 0.05
+    },
+    "imagery": {
+      "kind": "illustration",
+      "share": 0,
+      "light": "flat even light, printmaking",
+      "lens": "medium shot, slight low angle",
+      "grade": "sand beige, moss green, brick red",
+      "subject": "a highland couple in front of rice terraces"
+    }
+  },
+  "measured": [
+    "theme",
+    "colors"
+  ],
+  "why": "Khổ ngang, hai nhân vật dân tộc chiếm nửa phải, ruộng bậc thang vẽ nét mềm phía sau, một dòng chữ hoa tiếng Việt chạy dọc chân tranh. Bảng màu đất: be #dbb98f, xanh rêu #244237 và đỏ gạch nhỏ, nét in như khắc gỗ. Chữ là một dải duy nhất, hình kể toàn bộ câu chuyện. Mượn bảng màu đất và kiểu chữ hoa một dòng của tranh cổ động; không chép nhân vật hay khẩu hiệu.",
+  "licence": "Ảnh chụp thu nhỏ của trang công khai, chỉ để model tham khảo nguyên tắc. Không chép logo, chữ, ảnh hay phông độc quyền của trang."
+}

@@ -1,0 +1,132 @@
+{
+  "v": 1,
+  "id": "email-029",
+  "domain": "email",
+  "title": "Thư dịch vụ phần mềm nền tím đêm: tiêu đề lớn căn giữa, thẻ danh sách viền mảnh",
+  "moods": [
+    "dark-cinematic",
+    "tech",
+    "clean-light"
+  ],
+  "industries": [
+    "tech-saas"
+  ],
+  "audience": [
+    "b2b",
+    "consumer"
+  ],
+  "source_url": "https://designmodo.com/postcards/",
+  "source_host": "designmodo.com",
+  "source_kind": "public-image",
+  "captured_at": "2026-11-20",
+  "image": {
+    "file": "email/email-029.webp",
+    "width": 656,
+    "height": 820,
+    "bytes": 39322,
+    "layout": "single"
+  },
+  "tokens": {
+    "theme": "dark",
+    "colors": [
+      {
+        "hex": "#1e1b2a",
+        "role": "bg",
+        "share": 0.45
+      },
+      {
+        "hex": "#fcfcfe",
+        "role": "ink",
+        "share": 0.028
+      },
+      {
+        "hex": "#8b7cf6",
+        "role": "accent",
+        "share": 0
+      },
+      {
+        "hex": "#4fb3d9",
+        "role": "accent2",
+        "share": 0
+      },
+      {
+        "hex": "#2a2638",
+        "role": "surface",
+        "share": 0
+      },
+      {
+        "hex": "#b9b6c8",
+        "role": "muted",
+        "share": 0
+      }
+    ],
+    "fonts": {
+      "head": {
+        "kit": "plus-jakarta-sans",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 400
+      },
+      "body": {
+        "kit": "inter",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 400
+      },
+      "mono": null
+    },
+    "type": {
+      "basePx": 14,
+      "ratio": 1.333,
+      "sizes": [
+        36,
+        22,
+        14,
+        12
+      ],
+      "headLine": 1.15,
+      "bodyLine": 1.6,
+      "headCase": "none"
+    },
+    "tracking": {
+      "display": -0.02,
+      "heading": -0.01,
+      "body": 0,
+      "label": 0.02
+    },
+    "radius": {
+      "outer": 16,
+      "inner": 999,
+      "pill": true
+    },
+    "shadow": {
+      "level": 1,
+      "css": "0 8px 24px rgba(0,0,0,0.3)"
+    },
+    "spacing": {
+      "unit": 8,
+      "section": 40,
+      "gutter": 24,
+      "density": "balanced"
+    },
+    "layout": {
+      "columns": 1,
+      "maxWidth": 600,
+      "align": "center",
+      "emptyShare": 0.35
+    },
+    "imagery": {
+      "kind": "type-only",
+      "share": 0,
+      "light": "",
+      "lens": "",
+      "grade": "",
+      "subject": ""
+    }
+  },
+  "measured": [
+    "theme"
+  ],
+  "why": "Nền tím đêm #1e1b2a chuyển nhẹ sang xanh, tiêu đề trắng 36 px căn giữa, nút viền tím bo tròn 999 px. Bên dưới là một thẻ nền #2a2638 bo 16 px với danh sách dấu tích, chữ 14 px xám sáng. Không ảnh, chỉ ánh chuyển sắc mờ làm chiều sâu. Mượn bố cục thư sản phẩm tối giản với một thẻ nổi chứa lợi ích; không chép câu chữ.",
+  "licence": "Ảnh chụp thu nhỏ của trang công khai, chỉ để model tham khảo nguyên tắc. Không chép logo, chữ, ảnh hay phông độc quyền của trang."
+}

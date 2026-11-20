@@ -1,0 +1,121 @@
+{
+  "v": 1,
+  "id": "slide-044",
+  "domain": "slide",
+  "title": "Bộ slide nội thất: ảnh phòng sang trọng tông gỗ, chữ có chân mảnh, nhãn viền bo",
+  "moods": [
+    "luxury",
+    "minimal-mono",
+    "warm-craft"
+  ],
+  "industries": [
+    "real-estate-interior"
+  ],
+  "audience": [
+    "premium",
+    "b2b"
+  ],
+  "source_url": "https://visme.co/templates/presentations/",
+  "source_host": "visme.co",
+  "source_kind": "public-image",
+  "captured_at": "2026-11-20",
+  "image": {
+    "file": "slide/slide-044.webp",
+    "width": 1280,
+    "height": 720,
+    "bytes": 87138,
+    "layout": "grid4"
+  },
+  "tokens": {
+    "theme": "light",
+    "colors": [
+      {
+        "hex": "#fffffe",
+        "role": "bg",
+        "share": 0.575
+      },
+      {
+        "hex": "#3d2a1e",
+        "role": "ink",
+        "share": 0.023
+      },
+      {
+        "hex": "#938b84",
+        "role": "muted",
+        "share": 0.022
+      },
+      {
+        "hex": "#81503a",
+        "role": "accent",
+        "share": 0.01
+      }
+    ],
+    "fonts": {
+      "head": {
+        "kit": "cormorant-garamond",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 400
+      },
+      "body": {
+        "kit": "inter",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 400
+      },
+      "mono": null
+    },
+    "type": {
+      "basePx": 12,
+      "ratio": 1.414,
+      "sizes": [
+        36,
+        20,
+        12
+      ],
+      "headLine": 1.1,
+      "bodyLine": 1.5,
+      "headCase": "none"
+    },
+    "tracking": {
+      "display": 0,
+      "heading": 0,
+      "body": 0,
+      "label": 0.06
+    },
+    "radius": {
+      "outer": 999,
+      "inner": 999,
+      "pill": true
+    },
+    "shadow": {
+      "level": 0,
+      "css": "none"
+    },
+    "spacing": {
+      "unit": 8,
+      "section": 48,
+      "gutter": 24,
+      "density": "airy"
+    },
+    "layout": {
+      "columns": 2,
+      "maxWidth": 1280,
+      "align": "left",
+      "emptyShare": 0.45
+    },
+    "imagery": {
+      "kind": "photo",
+      "share": 0.5,
+      "light": "warm interior light, soft lamps and daylight",
+      "lens": "24mm interior, eye level",
+      "grade": "warm walnut, beige and brass",
+      "subject": "a luxury living room and a person working at a desk"
+    }
+  },
+  "measured": [
+    "theme"
+  ],
+  "why": "Nền trắng, ảnh nội thất tông gỗ ấm chiếm một nửa slide theo chiều dọc, tiêu đề chữ có chân mảnh 36 px. Nhãn mục là chữ trong viền bo tròn mảnh màu nâu #81503a, mục lục xoay dọc 90 độ. Biểu tượng nét mảnh nâu trong ba cột tổng quan. Mượn bố cục nửa ảnh nửa chữ với chữ có chân mảnh và màu gỗ; không chép ảnh hay chữ.",
+  "licence": "Ảnh chụp thu nhỏ của trang công khai, chỉ để model tham khảo nguyên tắc. Không chép logo, chữ, ảnh hay phông độc quyền của trang."
+}
