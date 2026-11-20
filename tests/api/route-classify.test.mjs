@@ -739,5 +739,25 @@ console.log("19. Brief thiết kế dài mở đầu bằng câu đóng vai: t�
   const wrong = R.routeModel(q("You are wrong. Try again", { turns: 3, prevAsk: "Làm trang web bán giày" }), all);
   ok(wrong?.why.includes("bạn chưa hài lòng với câu trả lời trước"), "“You are wrong.” vẫn là lời chê", wrong?.why);
 }
+console.log("20. Việc thiết kế ưu tiên model nhìn được ảnh (xem ảnh mẫu tham chiếu, tự xem bản dựng)");
+{
+  const { readFileSync } = await import("node:fs");
+  const brief = readFileSync(new URL("../fixtures/design-briefs.txt", import.meta.url), "utf8").split(/^## /m)[1]
+    .split("\n").slice(1).join(" ").replace(/\s+/g, " ").trim();
+  // Hạng theo tên (shared/modelrules.ts): "astra" là model mạnh nhất (frontier), "opus" mạnh, "gpt-6.1" cân bằng.
+  const strongSees = "sub-claude/opus", balancedSees = "sub-codex/gpt-6.1";
+  const sees = () => true;
+  ok(R.tierOf(strongSees) === "strong" && R.tierOf(balancedSees) === "balanced", "hạng của các model thử như mong đợi",
+    [R.tierOf(strongSees), R.tierOf(balancedSees)]);
+  const frontier = "openai/gpt-6.1-astra";
+  const r1 = R.routeModel(q(brief), [frontier, strongSees], { sees: (k) => k === strongSees });
+  ok(r1?.model === strongSees, "model mạnh có mắt thắng model mạnh nhất chỉ đọc chữ", r1?.model);
+  const r2 = R.routeModel(q(brief), [frontier, strongSees]);
+  ok(r2?.model === frontier, "không biết ai có mắt (sees bỏ trống): như trước, model mạnh nhất thắng", r2?.model);
+  const r3 = R.routeModel(q(brief), ["sub-claude/opus", "sub-codex/gpt-6.1"], { sees: (k) => k !== "sub-claude/opus" });
+  ok(r3?.model === "sub-claude/opus", "model mạnh chỉ đọc chữ vẫn thắng model cân bằng có mắt", r3?.model);
+  const chat = R.routeModel(q("Xin chào"), ["sub-claude/haiku", "sub-claude/opus"], { sees });
+  ok(chat?.model === "sub-claude/haiku", "việc không phải thiết kế: mắt không đổi lựa chọn", chat?.model);
+}
 console.log(`\nKết quả: ${pass} đạt, ${fail} lỗi`);
 process.exit(fail ? 1 : 0);

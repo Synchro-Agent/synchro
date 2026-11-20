@@ -73,3 +73,73 @@ export const DESIGN_PROBE = String.raw`(root, deck, boxes, add, say) => {
     if (b.height > 8 && (r.bottom > b.bottom + 3 || r.right > b.right + 3)) add("chữ tràn khỏi thẻ", "“" + say(el) + "” thò ra ngoài khung chứa: rút chữ, cho thẻ cao hơn hoặc chia slide, đừng thu nhỏ dưới thang chữ");
   }
 }`;
+
+// Số đo cho vòng so với mẫu (server/designcritic.ts), ở khung nhìn đầu (slide bìa, màn đầu của trang): phông đã tải
+// thật chưa, có hình chủ đạo không, phần khung có nội dung. Đo trên lưới 32×18 ô: hình chồng nhau không bị cộng hai
+// lần.
+// Phông "đã tải" là có FontFace cùng tên ở trạng thái loaded; document.fonts.check() một mình trả true cả khi họ phông
+// không hề được khai báo (máy rơi về Arial mà vẫn báo đạt).
+export const DESIGN_FACTS = String.raw`(root) => {
+  const vw = innerWidth, vh = innerHeight, R = root.getBoundingClientRect();
+  const F = { left: Math.max(0, R.left), top: Math.max(0, R.top), right: Math.min(vw, R.right) };
+  F.bottom = Math.min(vh, R.bottom);
+  const W = Math.max(1, F.right - F.left), H = Math.max(1, F.bottom - F.top), GX = 32, GY = 18;
+  const mark = (cells, r) => {
+    for (let i = 0; i < GX; i++) for (let j = 0; j < GY; j++) {
+      const x = F.left + (i + 0.5) * W / GX, y = F.top + (j + 0.5) * H / GY;
+      if (x >= r.left && x <= r.right && y >= r.top && y <= r.bottom) cells.add(i * GY + j);
+    }
+  };
+  const vis = (el) => {
+    const cs = getComputedStyle(el);
+    return cs.display !== "none" && cs.visibility !== "hidden" && +cs.opacity > 0.05;
+  };
+  const media = new Set(), content = new Set(), fams = new Set();
+  const GENERIC = new RegExp("^(serif|sans-serif|monospace|system-ui|-apple-system|blinkmacsystemfont|cursive"
+    + "|fantasy|ui-[a-z-]+|inherit|initial)$", "i");
+  for (const el of root.querySelectorAll("*")) {
+    if (!vis(el) || el.closest("script,style,noscript")) continue;
+    const r = el.getBoundingClientRect();
+    const off = r.bottom < F.top || r.top > F.bottom || r.right < F.left || r.left > F.right;
+    if (r.width < 2 || r.height < 2 || off) continue;
+    const cs = getComputedStyle(el), tag = el.tagName.toLowerCase();
+    const big = r.width * r.height > 0.04 * W * H;
+    const bg = cs.backgroundImage !== "none" && /url\(/.test(cs.backgroundImage);
+    const pic = /^(img|video|canvas|picture)$/.test(tag) || (tag === "svg" && big) || bg;
+    if (pic) {
+      mark(media, r);
+      mark(content, r);
+      continue;
+    }
+    const text = [...el.childNodes].some((n) => n.nodeType === 3 && n.nodeValue.trim());
+    if (text) {
+      mark(content, r);
+      const f = cs.fontFamily.split(",")[0].replace(/["']/g, "").trim();
+      if (f && !GENERIC.test(f) && fams.size < 12) fams.add(f);
+    }
+  }
+  const faces = [...document.fonts];
+  const fonts = [...fams].map((family) => {
+    const face = faces.some((x) => x.family.replace(/["']/g, "") === family && x.status === "loaded");
+    let ok = false;
+    try {
+      ok = document.fonts.check('16px "' + family + '"', "Aaưệ");
+    } catch (e) {
+      // Tên họ phông lạ làm check() ném lỗi cú pháp: coi như chưa tải, mục phông vẫn báo được.
+      ok = false;
+    }
+    return { family, loaded: face && ok, declared: faces.some((x) => x.family.replace(/["']/g, "") === family) };
+  });
+  const n = GX * GY, heroEl = root.querySelector("[data-sx-hero]");
+  const heroR = heroEl ? heroEl.getBoundingClientRect() : null;
+  const span = (a0, a1, b0, b1) => Math.max(0, Math.min(a1, b1) - Math.max(a0, b0));
+  const heroW = heroR ? span(heroR.left, heroR.right, F.left, F.right) : 0;
+  const heroShare = heroR ? heroW * span(heroR.top, heroR.bottom, F.top, F.bottom) / (W * H) : 0;
+  const shader = !!root.querySelector("[data-sx-shader],canvas[data-sx-gl]");
+  return {
+    fonts,
+    hero: { marked: !!heroEl && heroShare > 0.05, share: Math.round(heroShare * 100) / 100, shader },
+    media: Math.round(media.size / n * 100) / 100,
+    content: Math.round(content.size / n * 100) / 100,
+  };
+}`;

@@ -20,7 +20,9 @@ import { normalizeSchema, resolveRefs } from "../../shared/connschema";
 import { BRIDGE_CALL_MAX, destructiveLike, TOOL_BUDGET } from "../mcp";
 import {
   AUTO_CHECK, autoDeckCheck, checkArtifact, checkedInTurn, checkRoundGate, findArtifact, forgetCheck, readArtifact,
+  type CheckResult,
 } from "../artcheck";
+import { hashOf } from "../../shared/critic";
 import { checkSpent, SELF_CHECK_MS, SELF_CHECK_SPENT, withinCheckBudget } from "../checkbudget";
 import { artState, cleanBase, type ArtState, type ArtVersion } from "../../shared/vfs";
 import { applySwaps, dropSeen, failingPatches, HEAL_ASK, healFold, patchReport, patchStats }
@@ -38,6 +40,16 @@ import { totalsNote } from "../xlsxcheck";
 import { docxNote } from "../docxcheck";
 import { videoMotionNote } from "../videomotion";
 import { type ABlock, type Citer, anthropicCall, blocksText, searchResults, effortParams, HttpErr, openaiCall, outCap, respInput, respParse, respTools, responsesCall } from "../llmcall";
+import { toAnthropic, toOpenAI, toResponses } from "../llmcall";
+import type { UserRow } from "../authstore";
+import type { StyleTurn } from "../../shared/designrefs";
+import {
+  compareSheet, critiqueDesign, DESIGN_REVIEW, GATE_MS, hardOnly, MAX_ROUNDS, measuredDiffs, needsFix, pickDesignCritic,
+  type Diff,
+} from "../designcritic";
+import { subCli } from "../ai/subs";
+import { turnImages } from "../designrefs";
+import type { DesignOut } from "./prompt";
 import { PROJECT_DOC_TOOL, readProjectFile } from "../projectdocs";
 import { stripAppliedNotes } from "../../shared/turnctx";
 import { ASPECTS, generateImages, HOUR_MAX as IMAGE_HOUR_MAX, IMAGE_TOOL_NAME, imageBudget, imageName, IMG_NAME, requestSlug, type ImgErr, type ImgOk } from "../ai/imagegen";
@@ -68,7 +80,12 @@ type Step = { text: string; calls: Call[]; assistant: unknown; pause?: boolean }
 // mime: loại ảnh khi không phải JPEG (ảnh do connector trả về). more: các ảnh sau ảnh đầu của cùng kết quả.
 // sum: dòng tóm tắt cố định cho bước công cụ trong khung chat (thay cho đoạn đầu kết quả), ví dụ "Đã chặn trang đăng nhập".
 type Run = ToolRun & { image?: string; mime?: string; more?: { data: string; mime: string }[]; sum?: string };
-export type Adapter = { step: (msgs: unknown[], noTools: boolean) => Promise<Step>; results: (calls: Call[], res: Run[]) => unknown[] };
+// user: tin nhắn của Synchro gửi model giữa lượt (lời nhắc kèm ảnh) theo đúng dạng của hãng; không có thì gửi chữ.
+type UserBlock = { type: "text"; text: string } | { type: "image"; media_type: string; data: string };
+export type Adapter = {
+  step: (msgs: unknown[], noTools: boolean) => Promise<Step>; results: (calls: Call[], res: Run[]) => unknown[];
+  user?: (blocks: UserBlock[]) => unknown;
+};
 // Ảnh chụp trình duyệt cho model dùng Chat Completions / Responses: tin nhắn công cụ chỉ nhận chữ, nên ảnh đi kèm một tin người dùng ngay sau.
 const SHOT = (id: string) => `Ảnh chụp màn hình trình duyệt (kết quả công cụ ${id}).`;
 const shotMsgs = (calls: Call[], res: Run[]) => res.flatMap((r, i) => r.image ? [{ role: "user", content: [{ type: "text", text: SHOT(calls[i].id) }, { type: "image_url", image_url: { url: `data:${r.mime ?? "image/jpeg"};base64,${r.image}` } }, ...(r.more ?? []).map((m) => ({ type: "image_url", image_url: { url: `data:${m.mime};base64,${m.data}` } }))] }] : []);
@@ -103,6 +120,7 @@ export const anthropicAdapter = (t: Target, system: string, skillSys: string, ma
   },
   results: (calls, res) => [{ role: "user", content: calls.map((c, i) => ({ type: "tool_result", tool_use_id: c.id, is_error: res[i].is_error,
     content: res[i].image ? [{ type: "text", text: res[i].content }, { type: "image", source: { type: "base64", media_type: res[i].mime ?? "image/jpeg", data: res[i].image } }, ...(res[i].more ?? []).map((m) => ({ type: "image", source: { type: "base64", media_type: m.mime, data: m.data } }))] : res[i].content })) }],
+  user: (blocks) => ({ role: "user", content: toAnthropic(blocks) }),
 });
 
 export const openaiAdapter = (t: Target, system: string, max_tokens: number, tools: { name: string; description: string; input_schema: unknown }[], effort?: Effort): Adapter => ({
@@ -121,6 +139,7 @@ export const openaiAdapter = (t: Target, system: string, max_tokens: number, too
     return { text: m.content ?? "", calls, assistant: m };
   },
   results: (calls, res) => [...calls.map((c, i) => ({ role: "tool", tool_call_id: c.id, content: res[i].content })), ...shotMsgs(calls, res)],
+  user: (blocks) => ({ role: "user", content: toOpenAI(blocks) }),
 });
 
 // OpenAI qua API Responses: lượt trả lời của model giữ nguyên dạng mục (items) để gửi lại ở bước sau.
@@ -139,6 +158,7 @@ export const responsesAdapter = (t: Target, system: string, max_tokens: number, 
     return { text: r.text, calls: r.calls, assistant: { items: r.items } };
   },
   results: (calls, res) => [...calls.map((c, i) => ({ type: "function_call_output", call_id: c.id, output: res[i].content })), ...shotMsgs(calls, res)],
+  user: (blocks) => ({ role: "user", content: toResponses(blocks) }),
 });
 
 // Model giả lập (LLM_PROVIDER=mock) để thử vòng lặp khi chưa có API key.
@@ -189,6 +209,16 @@ export type Exec = {
   park?: () => void; inputsSent?: Set<string>; madeImgs?: string[]; webs?: Map<string, { title: string; url: string }>;
   edited?: Set<string>; rendered?: Set<string>; roundBrowser?: boolean; untrusted?: boolean; plan?: PlanState;
   deckGated?: boolean; held?: { text: string; at: number }; patchHeal?: "ok" | "fail"; patchFailedFirst?: number;
+  /** Lượt làm sản phẩm thiết kế mới: mẫu tham chiếu và số vòng so với mẫu (designGate). */
+  design?: DesignState;
+};
+// user, model: người dùng và model dựng (người chấm phải khác model này). shared: model dựng chạy trên khóa API của
+// máy chủ (không phải gói của người dùng): chỉ sửa lỗi cứng, một vòng, không gọi người chấm. rounds: số vòng đã nhắc
+// theo identifier của artifact; started: lúc vòng đầu bắt đầu (cả vòng ≤ GATE_MS); last: dấu bản đã đo gần nhất.
+export type DesignState = {
+  user: UserRow; model: string; conv?: string; turn: StyleTurn | null; format: string; typed: string;
+  hero: "web" | "slide" | "poster" | null; forbid: boolean; shared: boolean;
+  rounds: Map<string, number>; started?: number; last?: string;
 };
 // Nguồn web của lượt, đánh số theo thứ tự gặp (số [n] trong câu trả lời trỏ đúng chip thứ n). Tối đa 20 nguồn.
 const WEB_MAX = 20;
@@ -348,6 +378,105 @@ export function settleGate(x: Exec | null | undefined, text: string, stop = fals
   const r = foldFix(h.text, before, [...after, text].join("\n\n"));
   x.turnArts = r.before;
   return r.text;
+}
+/** Trạng thái vòng so với mẫu cho lượt làm sản phẩm thiết kế mới (designOf trả gate). */
+export function designState(user: UserRow, model: string, dz: DesignOut, conv?: string): DesignState {
+  const g = dz.gate!;
+  return {
+    user, model, conv, turn: dz.turn, format: g.format, typed: g.typed, hero: g.hero, forbid: g.forbid,
+    shared: !subCli(model), rounds: new Map(),
+  };
+}
+const GATE_TYPES = new Set(["html", "react", "svg"]);
+const b64 = (b: Buffer): UserBlock => ({ type: "image", media_type: "image/jpeg", data: b.toString("base64") });
+/** Ảnh mẫu cho bảng so sánh (cỡ nhỏ: bảng chỉ có ô 790 px). Lỗi thì bảng chỉ còn bản dựng. */
+async function refShots(d: DesignState): Promise<{ label: string; jpeg: Buffer }[]> {
+  if (!d.turn) return [];
+  try {
+    const shots = await turnImages(d.turn, [800, 800, 800]);
+    // Nhãn vẽ trên bảng so sánh, cho model đọc (không phải chữ giao diện).
+    const labelPrompt = (k: number, title: string) => `Mẫu ${k + 1}: ${title}`;
+    return shots.map((s, k) => ({ label: labelPrompt(k, s.label), jpeg: s.jpeg }));
+  } catch (e) {
+    console.warn(`[designgate] không lấy được ảnh mẫu cho bảng so sánh: ${(e as Error).message}`);
+    return [];
+  }
+}
+/**
+ * Model định trả lời xong mà lượt này làm sản phẩm thiết kế: Synchro dựng bản cuối, đo so với bộ token trộn, đặt ảnh
+ * cạnh mẫu, nhờ người chấm khác hãng (nếu có) rồi trả lời nhắc <design_review> kèm bảng so sánh khi còn phải sửa. Tối
+ * đa MAX_ROUNDS vòng mỗi artifact (khóa dùng chung: 1 vòng, chỉ lỗi cứng), cả vòng trong GATE_MS. null: giao như hiện
+ * tại.
+ */
+export async function designGate(x: Exec, text: string): Promise<{ text: string; blocks: UserBlock[] } | null> {
+  const d = x.design;
+  if (!d || !x.art || runSignal()?.aborted || runner() !== "workspace") return null;
+  const now = Date.now();
+  d.started ??= now;
+  const left = GATE_MS - (now - d.started);
+  if (left < 20_000) return null;
+  const live = turnLive(x, text);
+  if (!hasArtifacts(live)) return null;
+  const ident = splitArtifacts(live).flatMap((g) => (g.kind === "art" ? [g.art.ident] : [])).pop();
+  const a = findArtifact({ uid: x.uid, conv: x.conv, messages: x.art.messages, base: x.art.base, live }, ident);
+  if (!a || !a.complete || !GATE_TYPES.has(a.type)) return null;
+  const n = d.rounds.get(a.ident) ?? 0, max = d.shared ? 1 : MAX_ROUNDS;
+  const fp = `${a.ident}:${hashOf(a.content)}:${a.content.length}`;
+  // Bản không đổi sau lời nhắc (model trả <keep/> hay chỉ nói lý do): không đo lại, không nhắc lại.
+  if (n >= max || d.last === fp) return null;
+  d.last = fp;
+  progress("step", `So với mẫu tham chiếu (vòng ${n + 1}/${max})`);
+  const sig = runSignal();
+  const signal = AbortSignal.any([AbortSignal.timeout(left), ...(sig ? [sig] : [])]);
+  const origin = process.env.APP_URL || "https://synchro.net.nz";
+  const r = await checkArtifact(x.uid, a, {}, origin, signal).catch((e) => {
+    console.warn(`[designgate] không dựng được "${a.ident}" để so với mẫu: ${(e as Error).message}`);
+    return null;
+  });
+  if (!r || r.is_error || signal.aborted) return null;
+  const deck = a.type === "html" && isDeck(a);
+  const facts = r.design?.facts ?? null, probe = r.design?.probe ?? null;
+  const measured = measuredDiffs(probe, facts, d.turn?.mix ?? null, { hero: !!d.hero, deck });
+  let diffs: Diff[] = d.shared ? hardOnly(measured) : measured;
+  const views = (r.views ?? []).map((v) => Buffer.from(v, "base64"));
+  const refs = d.shared ? [] : await refShots(d);
+  const sheet = views.length ? await compareSheet(views, refs) : null;
+  let keep: string[] = [], self = true;
+  if (!d.shared && d.turn && sheet && !signal.aborted) {
+    const critic = await pickDesignCritic(d.user, d.model).catch((e) => {
+      console.warn(`[designgate] không chọn được người chấm: ${(e as Error).message}`);
+      return null;
+    });
+    if (critic) {
+      progress("step", `Người chấm thiết kế · ${critic.split("/").pop()}`);
+      const c = await critiqueDesign(d.user, critic, { brief: d.typed, sheet, diffs, refs: d.turn.refs, signal });
+      if (c) {
+        diffs = [...c.brief, ...diffs, ...c.quality, ...c.impact];
+        keep = c.keep;
+        self = false;
+      }
+    }
+  }
+  console.log(`[designgate] ${a.ident} vòng ${n + 1}/${max}: ${diffs.length} chênh lệch${self ? " (tự chấm)" : ""}`);
+  if (!needsFix(diffs)) return null;
+  d.rounds.set(a.ident, n + 1);
+  progress("step", `Chênh lệch còn lại · ${diffs.length}`);
+  const mix = d.turn?.mix.id ?? null;
+  const review = DESIGN_REVIEW({ round: n + 1, max, diffs, keep, self, refs: refs.length > 0, mix });
+  const img = sheet ?? views[0];
+  return { text: review, blocks: [{ type: "text", text: review }, ...(img ? [b64(img)] : [])] };
+}
+/** check_artifact trong lượt có mẫu tham chiếu: ảnh trả về là bảng so với mẫu, kèm chênh lệch Synchro đo được. */
+async function withCompare(x: Exec, r: CheckResult, deck: boolean): Promise<CheckResult> {
+  const d = x.design;
+  if (!d?.turn || !r.views?.length || r.is_error) return r;
+  const sheet = await compareSheet(r.views.map((v) => Buffer.from(v, "base64")), await refShots(d));
+  const diffs = measuredDiffs(r.design?.probe ?? null, r.design?.facts ?? null, d.turn.mix, { hero: !!d.hero, deck });
+  const rows = diffs.map((f) => `- ${f.where} · ${f.property}: ${f.measured} → ${f.target}. ${f.fix}`);
+  const note = rows.length ? `\nSo với khối token trộn của lượt này:\n${rows.join("\n")}` : "";
+  const what = "\nẢnh đi kèm là bảng so với mẫu: trái là bản dựng, phải là mẫu tham chiếu (chỉ để so nguyên tắc).";
+  const content = `${r.content}${note}${sheet ? what : ""}`;
+  return { ...r, content, ...(sheet ? { image: sheet.toString("base64") } : {}) };
 }
 // Câu trả lời cuối đã viết lại trọn một artifact thì bỏ các bản cùng identifier viết giữa lượt (bản sửa mode="patch" thì vẫn cần bản gốc).
 export const withTurnArts = (x: Exec | null | undefined, text0: string) => {
@@ -760,8 +889,9 @@ async function runCall(x: Exec, c: Call, d?: Decision): Promise<Run> {
       if (a && !seen) forgetCheck(x, a);
       return spent;
     }
-    if (r.image) (x.heavy ??= []).push(c.id);
-    return { ...note(r), used };
+    const shown = await withCompare(x, r, !!a && a.type === "html" && isDeck(a));
+    if (shown.image) (x.heavy ??= []).push(c.id);
+    return { ...note(shown), used };
   }
   if (x.browse && isBrowserTool(c.name) && !x.sess?.get(c.name)) {
     // Lần đầu dùng trình duyệt trong lượt (hoặc đổi sang trình duyệt kia): mở khung trình duyệt cạnh khung chat để người dùng xem
@@ -988,6 +1118,20 @@ async function loop(ad: Adapter, m: unknown[], x: Exec, used: ToolRun["used"][],
       if (!acted && nudged < MAX_NUDGE && i < steps - 1 && stalled(r.text)) { nudged++; sayOut(x, r.text); m.push({ role: "user", content: NUDGE }); continue; }
       // Bộ slide trong câu trả lời: tự kiểm bản cuối (tràn khung 1280×720, đánh số lệch), có lỗi thì cho model sửa trước khi giao.
       // Câu trả lời đã viết được giữ cho người dùng; lượt sau lời nhắc chỉ để sửa, cuối lượt gộp lại (settleGate).
+      // Sản phẩm thiết kế: tự kiểm bộ slide trước (một lần), rồi so với mẫu tham chiếu. Câu trả lời đầu tiên được giữ
+      // cho người dùng; lần sửa sau đó (đã có câu giữ) chỉ đóng góp artifact, nên tách artifact vào turnArts để bản
+      // sửa không mất khi gộp (settleGate).
+      if (i < steps - 1 && x.design && x.art) {
+        const g = x.deckGated ? null : await deckGate(x, r.text);
+        const dg = g ? null : await designGate(x, r.text);
+        if (g || dg) {
+          if (x.held) sayOut(x, r.text);
+          else holdAnswer(x, r.text);
+          const review = dg && ad.user ? ad.user(dg.blocks) : { role: "user", content: dg?.text ?? "" };
+          m.push(g ? { role: "user", content: g } : review);
+          continue;
+        }
+      }
       if (i < steps - 1 && x.art && !x.deckGated) {
         const g = await deckGate(x, r.text);
         if (g) { holdAnswer(x, r.text); m.push({ role: "user", content: g }); continue; }

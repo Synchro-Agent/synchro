@@ -5,7 +5,13 @@ import type { UserRow } from "../authstore";
 import { prepareHistory } from "../transpile";
 import { isAck, typedText } from "../router";
 import { runner } from "../coderun";
-import { designTurn, historyTexts } from "../designkit";
+import {
+  designBytes, designRefsBlock, designTurn, DESIGN_TEXT_MAX, forbidsAiImage, heroDomain, heroRule, historyTexts,
+  KIT_FONT_RULE, type DesignFormat, type DesignTurn,
+} from "../designkit";
+import { styleForTurn, turnImages } from "../designrefs";
+import type { DesignStyleSel, StyleTurn } from "../../shared/designrefs";
+import { progress } from "../runs";
 import { videoTurn } from "../videokit";
 import { docTurn } from "../dockit";
 import { featTurn } from "../featkit";
@@ -156,12 +162,45 @@ export function estimate(sys: string[], skills: string[], pinned: string, prep: 
 // Quy tắc thiết kế theo việc đang làm (designkit.ts): đi cạnh tin nhắn mới nhất như skill_routing, không vào hướng dẫn hệ thống. Không có với Synchro Code, lệnh nội bộ, artifact có AI.
 // Hướng dẫn riêng của tính năng (featkit.ts: biểu đồ, 3D, Morph, văn bản hành chính, ảnh sản phẩm / poster) cũng đi ở đây, cả trong Synchro Code
 // (ARTIFACT_RULES vẫn có ở đó), chỉ khi lượt này cần: lời nhắc hệ thống giữ quy tắc chung, đứng yên giữa các lượt cho bộ đệm prompt.
-export function designOf(body: Record<string, any>, caps: { art: boolean; code: boolean; image: boolean } | null, studio: string | null, conv?: string): string { // eslint-disable-line @typescript-eslint/no-explicit-any
-  if (!caps || !body.skills || body.feature === "artifact") return "";
-  const typed = typedText((Array.isArray(body.messages) ? (body.messages as { role?: string; content?: unknown }[]) : []).filter((m) => m?.role === "user").pop());
+// Sản phẩm mới (không phải sửa tiếp) có thêm 3 mẫu tham chiếu (server/designrefs.ts): model có mắt nhận ảnh mẫu ở cuối
+// tin nhắn mới nhất của lượt này (không vào lịch sử đã lưu), model chỉ đọc chữ nhận số đo và lời giải thích.
+export type DesignImage = { type: "text"; text: string } | { type: "image"; media_type: string; data: string };
+export type DesignOut = {
+  text: string; turn: StyleTurn | null; images: DesignImage[];
+  /** Lượt làm sản phẩm thiết kế mới: thông tin cho vòng so với mẫu (tools.ts designGate). */
+  gate: { format: DesignFormat; hero: ReturnType<typeof heroDomain>; forbid: boolean; typed: string } | null;
+};
+export type DesignCtx = { uid: string; sees: boolean; agy: boolean; signal?: AbortSignal };
+// Ảnh mẫu: mẫu chính rộng 1280 để thấy chi tiết chữ, hai mẫu phụ 800 (đủ xem bố cục, đỡ token).
+const REF_WIDTHS = [1280, 800, 800];
+const NO_DESIGN: DesignOut = { text: "", turn: null, images: [], gate: null };
+type Body = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
+type Caps = { art: boolean; code: boolean; image: boolean };
+type Msg = { role?: string; content?: unknown };
+export async function designOf(
+  body: Body, caps: Caps | null, studio: string | null, conv?: string, ctx?: DesignCtx,
+): Promise<DesignOut> {
+  if (!caps || !body.skills || body.feature === "artifact") return NO_DESIGN;
+  const msgs = Array.isArray(body.messages) ? (body.messages as Msg[]) : [];
+  const lastUser = msgs.filter((m) => m?.role === "user").pop();
+  const typed = typedText(lastUser);
   const prior = historyTexts(body.messages, body.artBase), product = body.feature !== "code";
   const d = product ? designTurn({ typed, studio, art: caps.art, code: caps.code, ack: isAck(typed), seed: conv, prior }) : null;
   if (d) console.log(`[design] ${d.format} ${d.domain} ${d.own ? "own-brand" : d.preset}${d.compact ? " follow-up" : ""} ${d.bytes}B`);
+  const fresh = d && !d.compact && d.format !== "sheet" && caps.art ? d : null;
+  const forbid = forbidsAiImage(typed);
+  const turn = fresh && ctx ? await styleOf(body, fresh, typed, lastUser, conv, ctx) : null;
+  const hero = fresh ? heroDomain(fresh.format, typed, turn?.facets.domain) : null;
+  const heroText = heroRule({ image: caps.image, forbid, domain: hero, mix: turn?.mix ?? null });
+  const refs = turn ? designRefsBlock(turn, { sees: !!ctx?.sees, agy: !!ctx?.agy, hero: heroText }) : "";
+  const extra = fresh && !refs
+    ? ["<design_rules>", KIT_FONT_RULE, heroText, "</design_rules>"].filter(Boolean).join("\n") : "";
+  const design = [d?.block ?? "", refs, extra].filter(Boolean).join("\n\n");
+  if (refs) console.log(`[design] refs ${turn!.refs.map((r) => r.id).join(",")} mix ${turn!.mix.id}`
+    + ` ${designBytes(refs)}B`);
+  const bytes = designBytes(design);
+  if (bytes > DESIGN_TEXT_MAX) console.warn(`[design] khối thiết kế ${bytes}B vượt ${DESIGN_TEXT_MAX}B`);
+  const images = turn && ctx?.sees ? await refImages(turn, ctx.signal) : [];
   // Nhờ dựng video: thêm khối synchro-video (4 mẫu Remotion trong sandbox), chỉ khi run_code chạy trên image workspace.
   const v = product ? videoTurn({ typed, code: caps.code, workspace: runner() === "workspace" }) : "";
   if (v) console.log(`[video] synchro-video ${Buffer.byteLength(v)}B`);
@@ -170,7 +209,61 @@ export function designOf(body: Record<string, any>, caps: { art: boolean; code: 
   if (k) console.log(`[doc] synchro-doc ${Buffer.byteLength(k)}B`);
   const f = featTurn({ typed, art: caps.art, image: caps.image, product: caps.image && imageProduct(), format: d && !d.compact ? d.format : null, prior });
   if (f.parts.length) console.log(`[featkit] ${f.parts.join(",")} ${Buffer.byteLength(f.block)}B`);
-  return [d?.block ?? "", v, k, f.block].filter(Boolean).join("\n\n");
+  const gate = fresh ? { format: fresh.format, hero, forbid, typed } : null;
+  return { text: [design, v, k, f.block].filter(Boolean).join("\n\n"), turn, images, gate };
+}
+// Kiểu người dùng chọn ở khung soạn (body.designStyle): "phong cách của tôi" hoặc "làm theo kiểu này".
+function styleSel(v: unknown): DesignStyleSel | null {
+  const o = v && typeof v === "object" ? (v as { kind?: unknown; id?: unknown }) : null;
+  if (!o || typeof o.id !== "string" || (o.kind !== "mine" && o.kind !== "follow")) return null;
+  return { kind: o.kind, id: o.id };
+}
+type Img = { type?: string; media_type?: string; data?: string };
+// Mẫu cho lượt này. Lỗi của bộ chọn mẫu không được làm hỏng lượt: không có mẫu thì lượt chạy như khi chưa có thư viện.
+async function styleOf(body: Body, d: DesignTurn, typed: string, lastUser: Msg | undefined, conv: string | undefined,
+  ctx: DesignCtx): Promise<StyleTurn | null> {
+  const blocks = Array.isArray(lastUser?.content) ? (lastUser.content as Img[]) : [];
+  const own = blocks.filter((b) => b?.type === "image" && typeof b.data === "string"
+    && typeof b.media_type === "string");
+  const images = own.slice(0, 4).map((b) => ({ media_type: b.media_type!, data: b.data! }));
+  const format = d.format as "slide" | "doc" | "graphic", sel = styleSel(body.designStyle);
+  try {
+    const t = await styleForTurn({
+      uid: ctx.uid, conv, typed, format, seed: conv, ownBrand: d.own, sel, images,
+      incognito: body.incognito === true, signal: ctx.signal, onStatus: (s) => { progress("step", s); },
+    });
+    if (t?.refs.length) progress("step", `Tham khảo mẫu · ${t.refs.map((r) => r.title).join(" · ")}`);
+    return t?.refs.length ? t : null;
+  } catch (e) {
+    console.warn(`[design] không chọn được mẫu tham chiếu: ${(e as Error).message}`);
+    return null;
+  }
+}
+// Nhãn đứng ngay trước ảnh mẫu: textOf (subs.ts) đánh số ảnh ngay sau nhãn, model không lẫn mẫu với ảnh người dùng gửi.
+const refPrompt = (k: number, title: string) => `Mẫu tham chiếu ${k + 1} (không phải ảnh người dùng gửi): ${title}`;
+async function refImages(t: StyleTurn, signal?: AbortSignal): Promise<DesignImage[]> {
+  try {
+    const shots = await turnImages(t, REF_WIDTHS);
+    if (signal?.aborted) return [];
+    return shots.flatMap((s, k) => [
+      { type: "text" as const, text: refPrompt(k, s.label) },
+      { type: "image" as const, media_type: "image/jpeg", data: s.jpeg.toString("base64") },
+    ]);
+  } catch (e) {
+    console.warn(`[design] không lấy được ảnh mẫu: ${(e as Error).message}`);
+    return [];
+  }
+}
+/** Ảnh mẫu nối vào cuối tin nhắn người dùng mới nhất của lượt này (bản sao, không đụng lịch sử gốc). */
+export function withDesignImages(messages: unknown, images: DesignImage[]): unknown {
+  if (!images.length || !Array.isArray(messages) || !messages.length) return messages;
+  const out = [...messages] as { role?: string; content?: unknown }[];
+  const i = out.map((m) => m?.role).lastIndexOf("user");
+  if (i < 0) return messages;
+  const c = out[i].content;
+  const blocks = typeof c === "string" ? [{ type: "text", text: c }] : Array.isArray(c) ? c : [];
+  out[i] = { ...out[i], content: [...blocks, ...images] };
+  return out;
 }
 // Bộ nhớ chỉ dùng cho lượt chat chính (không cho Code, artifact, lệnh nội bộ), khi nút "Bộ nhớ" bật và không ở chế độ ẩn danh.
 // Những gì Synchro biết về người dùng (tên, phần tự giới thiệu / hướng dẫn ở Cài đặt → Tài khoản, bộ nhớ khi bật): mọi lượt người dùng

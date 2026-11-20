@@ -231,6 +231,103 @@ ok(/DM Mono/.test(JSON.stringify(FONT_SPEC)) === false, "không dùng phông thi
 const probe = readFileSync("server/artcheck.ts", "utf8");
 ok(probe.includes("${DESIGN_PROBE}") && !/tự thu nhỏ/.test(probe), "check_artifact có phép đo mới, chỉ báo chứ không tự sửa");
 
+console.log("6b. Mẫu tham chiếu, bộ phông, hình chủ đạo");
+{
+  const RF = (await loadTs(["shared/designrefs"]))["shared/designrefs"];
+  const briefs = readFileSync("tests/fixtures/design-briefs.txt", "utf8").split(/^## /m).slice(1).map((b) => {
+    const [name, ...rest] = b.split("\n");
+    return { name, text: rest.join(" ").replace(/\s+/g, " ").trim() };
+  });
+  const noAi = briefs.filter((b) => K.forbidsAiImage(b.text)).map((b) => b.name);
+  ok(noAi.join() === "Slide,Landing page,Poster", "đúng 3 brief của chủ dự án ghi \"không ảnh AI\"", noAi);
+  const asks = ["không dùng ảnh AI", "Không ảnh do AI tạo nhé", "no AI images please", "without AI-generated images"];
+  for (const t of asks) ok(K.forbidsAiImage(t), `nhận "${t}"`);
+  ok(!K.forbidsAiImage("Tạo ảnh AI cho bìa") && !K.forbidsAiImage("làm poster có ảnh"),
+    "xin ảnh AI không bị coi là cấm");
+  const hero = Object.fromEntries(briefs.map((b) => [b.name, K.heroDomain(K.formatOf(b.text) ?? "doc", b.text)]));
+  ok(hero.Slide === "slide" && hero["Landing page"] === "web" && hero.Poster === "poster",
+    "slide, trang web, poster cần hình chủ đạo", hero);
+  ok(!hero.Dashboard && !hero["Bộ nhận diện"] && !hero["Báo cáo A4"],
+    "dashboard, bộ nhận diện, báo cáo không bắt buộc", hero);
+  ok(K.heroAspect("poster") === "2:3" && K.heroAspect("web") === "16:9",
+    "tỉ lệ ảnh hero: poster 2:3, web và slide 16:9");
+  const words = ["#0e0f0c", "#d9a441", "#2f6b3a"].map(K.colourWord);
+  ok(words[0] === "near-black" && /amber|orange/.test(words[1]) && words[2].includes("green"),
+    "tên màu tiếng Anh cho câu lệnh ảnh", words);
+  const tokens = {
+    theme: "dark",
+    colors: [{ hex: "#0e0f0c", role: "bg", share: 0.6 }, { hex: "#1a1c17", role: "surface", share: 0.2 },
+      { hex: "#f4efe6", role: "ink", share: 0.15 }, { hex: "#d9a441", role: "accent", share: 0.05 }],
+    fonts: { head: { kit: "fraunces", seen: "Proprietary Serif", seenLicence: "proprietary", weight: 600 },
+      body: { kit: "inter", seen: "Inter", seenLicence: "open", weight: 400 }, mono: null },
+    type: { basePx: 18, ratio: 1.333, sizes: [18, 24, 32, 42, 56, 96], headLine: 1.1, bodyLine: 1.55,
+      headCase: "none" },
+    tracking: { display: -0.03, heading: -0.01, body: 0, label: 0.08 }, radius: { outer: 12, inner: 6, pill: false },
+    shadow: { level: 1, css: "0 1px 2px rgba(0,0,0,.3)" },
+    spacing: { unit: 8, section: 96, gutter: 24, density: "airy" },
+    layout: { columns: 12, maxWidth: 1200, align: "left", emptyShare: 0.3 },
+    imagery: { kind: "photo", share: 0.5, light: "low raking window light from left", lens: "85mm, f/4, eye level",
+      grade: "warm amber highlights, deep green shadows", subject: "tea leaves on dark stone" },
+  };
+  const ref = (i, roles) => ({ id: `web-00${i}`, source: "catalog", label: `Mẫu ${i}`, roles, domain: "web",
+    title: `Trang đêm tối số ${i}`, why: "Tiêu đề 96 px siết −0,03em đặt lệch trái. ".repeat(6), tokens });
+  const css = `<style data-sx-mix="m-3f9a01c2" data-sx-fonts="fraunces,inter,jetbrains-mono">`
+    + `[data-sx-preset="midnight-tech"][data-sx-mix="m-3f9a01c2"]{--sx-bg:#0e0f0c}</style>`;
+  const facets = { domain: "web", industries: ["food-beverage"], moods: ["dark-cinematic"], audience: ["consumer"],
+    theme: "dark", brand: null };
+  const st = { mix: { id: "m-3f9a01c2", preset: "midnight-tech", domain: "web", tokens, css, brand: null },
+    refs: [ref(1, ["palette", "layout"]), ref(2, ["type"]), ref(3, ["shape"])], facets, note: null };
+  const prompt = K.heroPrompt(st.mix, "A glass jar of wild honey");
+  const want = ["low raking window light from left", "85mm", "warm amber highlights", "near-black", "left third",
+    "Low-key"];
+  ok(prompt.startsWith("A glass jar of wild honey.") && want.every((w) => prompt.includes(w))
+    && prompt.endsWith("No text, no letters, no logos, no watermark."),
+  "câu lệnh ảnh theo ánh sáng, ống kính, màu của mẫu", prompt);
+  const rule = K.heroRule({ image: true, forbid: false, domain: "web", mix: st.mix });
+  const template = prompt.replace("A glass jar of wild honey", "<subject from the brief>");
+  ok(["generate_image", "16:9", "data-sx-hero", template].every((w) => rule.includes(w)),
+    "có công cụ ảnh, đề không cấm: hero bằng generate_image với câu lệnh mẫu", rule);
+  const noAiRule = K.heroRule({ image: true, forbid: true, domain: "poster", mix: st.mix });
+  ok(!noAiRule.includes("Tạo bằng generate_image") && noAiRule.includes("images.unsplash.com")
+    && noAiRule.includes("data-sx-shader"), "đề cấm ảnh AI: ảnh thật, nền shader, SVG", noAiRule);
+  ok(K.heroRule({ image: true, forbid: false, domain: null, mix: null }) === "",
+    "định dạng không cần hình: không có luật");
+  for (const [sees, agy] of [[true, false], [true, true], [false, false]]) {
+    const b = K.designRefsBlock(st, { sees, agy, hero: rule });
+    const tag = `${sees ? "có mắt" : "chỉ đọc chữ"}${agy ? ", Antigravity" : ""}`;
+    const framed = b.startsWith('<design_refs mix="m-3f9a01c2"') && b.endsWith("</design_refs>");
+    ok(K.designBytes(b) <= K.REFS_BUDGET && framed,
+      `${tag}: khối mẫu ≤ 3 KB`, K.designBytes(b));
+    ok([css, 'data-sx-mix="m-3f9a01c2"', "Mẫu 1 (bảng màu, bố cục)", "Mẫu 3 (hình khối)"].every((w) => b.includes(w)),
+      `${tag}: dán khối CSS trộn, nêu vai từng mẫu`);
+    ok(["2 câu định hướng mỹ thuật", "không chép", "Fraunces"].every((w) => b.includes(w))
+      && !b.includes("Proprietary Serif"),
+    `${tag}: luật dùng mẫu, phông trong bộ, không lộ phông độc quyền của trang nguồn`);
+    ok(sees === b.includes('nhãn "Mẫu tham chiếu k"') && agy === b.includes("Mở và xem cả 3 ảnh mẫu"),
+      `${tag}: lời về ảnh mẫu đúng loại model`);
+  }
+  const mail = { ...st, mix: { ...st.mix, domain: "email" } };
+  const email = K.designRefsBlock(mail, { sees: false, agy: false, hero: "" });
+  ok(!email.includes("<style data-sx-mix") && email.includes("bg #0e0f0c"), "email: mã màu thẳng thay cho biến CSS");
+  ok(RF.KIT_FONTS.every((f) => K.KIT_FONT_RULE.includes(f.family) && FONT_SPEC[f.family]?.stack === RF.fontStack(f.id)),
+    "luật phông nêu đủ 17 phông của bộ; FONT_SPEC có đủ, cùng chuỗi dự phòng");
+  const mixed = `<artifact identifier="nep" type="text/html"><html data-sx-preset="midnight-tech"`
+    + ` data-sx-mix="m-3f9a01c2">${css}<body>x</body></html></artifact>`;
+  ok(priorDesign([mixed])?.mix === "m-3f9a01c2", "lượt sau đọc được khối token trộn của bản trước");
+  const follow = turn("Làm tiêu đề to hơn", { prior: [mixed] });
+  ok(follow?.compact && ['mix="m-3f9a01c2"', '<style data-sx-mix="m-3f9a01c2">'].every((w) => follow.block.includes(w)),
+    "sửa tiếp: khối rút gọn giữ khối token trộn", follow?.block);
+  ok(!turn("Làm tiêu đề to hơn", { prior: [deckMsg] }).block.includes("data-sx-mix"),
+    "bản trước không có token trộn: khối như trước");
+  const link = A.kitHead(`<html data-sx-preset="midnight-tech" data-sx-mix="m-1" data-sx-fonts="fraunces,inter">`,
+    "https://o");
+  const faces = ["https://o/kitfonts/v1/fraunces/face.css", "https://o/kitfonts/v1/plus-jakarta-sans/face.css"];
+  ok(faces.every((w) => link.includes(w)) && link.includes("fonts.googleapis.com/css2?"),
+    "khung nạp face.css của Synchro cho phông preset và data-sx-fonts, Google chỉ là đường dự phòng");
+  ok(!A.kitHead(`<div class="sx-card">x</div>`, "").includes("/kitfonts/"),
+    "không có địa chỉ Synchro: chỉ Google Fonts");
+}
+
 console.log("7. Lượt chat thật trên máy chủ giả lập");
 const B = process.env.SYNCHRO_URL ?? "http://localhost:3200", LLM = process.env.MOCK_LLM_URL ?? "http://127.0.0.1:4010";
 const up = await fetch(`${B}/api/models`, { signal: AbortSignal.timeout(4000) }).then((r) => r.status < 500, () => false);
