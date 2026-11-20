@@ -47,19 +47,19 @@ const textOf = (fin) => String(fin?.result?.text ?? fin?.result?.json?.text ?? J
 const R = Date.now() % 100000;
 
 await api("POST", "/api/auth/login", { email: "admin@synchro.test", password: "synchro-mock-123" });
-await api("POST", "/api/engines/claude/login/start", {});
-await api("POST", "/api/engines/claude/login/code", { code: await code("claude") });
-const plan = async () => (await api("GET", "/api/engines/claude/status?fresh=1")).j?.loggedIn;
-ok(await until(plan, 15_000, 500), "đăng nhập gói Claude giả lập");
-await api("DELETE", "/api/connectors/composio");
-const linked = await api("POST", "/api/connectors/composio", { key: "ck_mock_alice_00000001" });
-ok(linked.s === 200, "liên kết Composio bằng khóa ck_ của tài khoản giả lập", linked);
-await fetch(`${M}/composio/_debug`, {
-  method: "POST", headers: { "content-type": "application/json" },
-  body: JSON.stringify({ link: { account: "alice", slug: "googledocs" } }),
-});
-
 try {
+  await api("POST", "/api/engines/claude/login/start", {});
+  await api("POST", "/api/engines/claude/login/code", { code: await code("claude") });
+  const plan = async () => (await api("GET", "/api/engines/claude/status?fresh=1")).j?.loggedIn;
+  ok(await until(plan, 15_000, 500), "đăng nhập gói Claude giả lập");
+  await api("DELETE", "/api/connectors/composio");
+  const linked = await api("POST", "/api/connectors/composio", { key: "ck_mock_alice_00000001" });
+  ok(linked.s === 200, "liên kết Composio bằng khóa ck_ của tài khoản giả lập", linked);
+  await fetch(`${M}/composio/_debug`, {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ link: { account: "alice", slug: "googledocs" } }),
+  });
+
   console.log("1. Năm cách nói “tạo Google Docs” ở chế độ Tự động: lượt đầy đủ, có công cụ");
   const asks = [
     `Dùng connector Google Docs: tạo một tài liệu mới tên Kế hoạch quý ${R}`,
@@ -93,6 +93,8 @@ try {
   await finished(r.j?.run);
 } finally {
   await api("DELETE", "/api/connectors/composio");
+  // Còn đăng nhập gói Claude thì Tự động của các bộ chạy sau chọn Claude Code giả lập (chỉ nhại tin nhắn).
+  await api("POST", "/api/engines/claude/logout");
 }
 console.log(`\n${pass}/${pass + fail} đạt`);
 process.exit(fail ? 1 : 0);

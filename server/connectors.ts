@@ -243,18 +243,23 @@ export function composioInfo(uid: string, pol: ConnPolicy = FULL_CONN): Composio
 /**
  * Tên các ứng dụng người dùng đang nối, cho bộ định tuyến ở mỗi lượt: connector tự thêm đang bật (cả khi mất đăng
  * nhập: lượt đầy đủ mới có nút kết nối lại), và khi Composio đã liên kết thì ứng dụng đã đặt quyền cùng toolkit
- * Composio vừa báo là đang kết nối.
+ * Composio vừa báo là đang kết nối. Bỏ connector quản trị viên không cho tài khoản này dùng và ứng dụng người dùng
+ * đặt "Chặn": lượt có công cụ cũng không gọi được chúng, nêu tên thì không có lý do rời đường nhanh.
  */
-export function connectedApps(uid: string): string[] {
+export function connectedApps(uid: string, pol: ConnPolicy = FULL_CONN): string[] {
   const rows = table().prepare("SELECT * FROM connectors WHERE user_id = ? AND enabled = 1").all(uid) as Row[];
   const out = new Set<string>();
   for (const r of rows) {
+    if (!allowsDir(pol, r.dir)) continue;
     if (r.dir !== COMPOSIO) {
       out.add(r.name);
       continue;
     }
     if (!linkedAuth(getAuth(r))) continue;
-    for (const kit of [...Object.keys(appPermsOf(r)), ...cxLinkedKits(uid)]) out.add(appName(kit));
+    const ap = appPermsOf(r);
+    for (const kit of new Set([...Object.keys(ap), ...cxLinkedKits(uid)])) {
+      if (!appPrefixes(kit).some((x) => ap[x] === "block")) out.add(appName(kit));
+    }
   }
   return [...out];
 }

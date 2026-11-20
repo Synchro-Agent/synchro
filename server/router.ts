@@ -128,36 +128,69 @@ const GOOGLE_APP = new RegExp("google\\s*(?:docs?|sheets?|slides?|drive|ドキ�
   + "|文档|表格|幻灯片|문서|스프레드시트)", "i");
 const appKey = (s: string) => fold(s).toLowerCase().replace(/\s+/g, " ").trim();
 const reEsc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-const appsMemo = new Map<string, RegExp>();
-// Tên ứng dụng người dùng đã nối, so trên chữ bỏ dấu, viết thường: "Google Docs" khớp "google doc", "googledocs";
-// connector tự thêm tên "Kho hàng" khớp "kho hang". Tên ngắn hơn 3 ký tự bỏ qua vì khớp nhầm gần như mọi câu.
-function appsRe(apps: string[] | undefined): RegExp | null {
-  const keys = [...new Set((apps ?? []).map(appKey).filter((k) => k.length >= 3))].sort();
-  if (!keys.length) return null;
-  const id = keys.join("\n");
-  let re = appsMemo.get(id);
-  if (!re) {
-    // Số nhiều tùy ý ("Google Doc" / "Google Docs"); tên quá ngắn giữ nguyên chữ s cuối để "News" không khớp "new".
-    const stem = (k: string) => (k.length > 4 ? k.replace(/s$/, "") : k);
-    const alt = keys.map((k) => reEsc(stem(k)).replace(/ /g, "\\s*")).join("|");
-    re = new RegExp(`(?<![\\p{L}\\p{N}])(?:${alt})s?(?![\\p{L}\\p{N}])`, "iu");
-    if (appsMemo.size > 500) appsMemo.clear();
-    appsMemo.set(id, re);
-  }
+type AppsRe = { any: RegExp | null; proper: RegExp | null; near: RegExp | null };
+const appsMemo = new Map<string, AppsRe>();
+const NOWB = "(?<![\\p{L}\\p{N}])", NOWE = "(?![\\p{L}\\p{N}])";
+// Từ đứng ngay trước tên ứng dụng viết thường cho thấy câu đang nói tới ứng dụng đó ("lưu vào memory", "gửi qua
+// gmail", "mở notion"). So trên chữ bỏ dấu, viết thường như appKey.
+const appNear = () => `(?:qua|via|trong|tren|vao|tu|bang|dung|su dung|use|using|${fold(OP_VERB)})`;
+/**
+ * Tên ứng dụng người dùng đã nối. Tên nhiều chữ, có số hay viết hoa giữa chữ ("Google Docs", "Kho hàng", "GitHub")
+ * khớp ở mọi cách viết, so trên chữ bỏ dấu: "google doc", "googledocs", "kho hang". Tên một chữ thường gặp như từ điển
+ * ("Time", "Memory", "Fetch", "Notion") chỉ khớp khi viết hoa như tên riêng, hoặc viết thường ngay sau động từ thao tác
+ * hay giới từ chỉ nơi chốn: "how much time I need" không phải lời nhờ dùng connector Time. Tên ngắn hơn 3 ký tự bỏ
+ * qua vì khớp nhầm gần như mọi câu.
+ */
+function appsRe(apps: string[] | undefined): AppsRe | null {
+  const names = [...new Set((apps ?? []).filter((n) => appKey(n).length >= 3))].sort();
+  if (!names.length) return null;
+  const id = names.join("\n");
+  const hit = appsMemo.get(id);
+  if (hit) return hit;
+  // Số nhiều tùy ý ("Google Doc" / "Google Docs"); tên quá ngắn giữ nguyên chữ s cuối để "News" không khớp "new".
+  const stem = (k: string) => (k.length > 4 ? k.replace(/s$/, "") : k);
+  const plain = (n: string) => /^\p{L}+$/u.test(n.trim()) && !/\p{Lu}/u.test(n.trim().slice(1));
+  const alt = (ks: string[]) => ks.map((k) => reEsc(stem(k)).replace(/ /g, "\\s*")).join("|");
+  const strong = names.filter((n) => !plain(n)).map(appKey), weak = names.filter(plain).map(appKey);
+  const cap = (k: string) => k[0].toUpperCase() + k.slice(1);
+  const proper = weak.flatMap((k) => [cap(k), k.toUpperCase()]);
+  const re: AppsRe = {
+    any: strong.length ? new RegExp(`${NOWB}(?:${alt(strong)})s?${NOWE}`, "iu") : null,
+    proper: weak.length ? new RegExp(`${NOWB}(?:${alt(proper)})(?:s|S)?${NOWE}`, "u") : null,
+    near: weak.length
+      ? new RegExp(`${NOWB}${appNear()}\\s+(?:the\\s+|my\\s+|app\\s+)?(?:${alt(weak)})s?${NOWE}`, "iu")
+      : null,
+  };
+  if (appsMemo.size > 500) appsMemo.clear();
+  appsMemo.set(id, re);
   return re;
 }
-/** Câu có nêu connector, Composio hay một ứng dụng người dùng đã nối không. */
+/** Câu (chữ gốc, còn hoa thường) có nêu một ứng dụng người dùng đã nối không. */
+const namesApp = (text: string, apps?: string[]) => {
+  const re = appsRe(apps);
+  if (!re) return false;
+  const key = appKey(text);
+  return !!re.any?.test(key) || !!re.proper?.test(fold(text)) || !!re.near?.test(key);
+};
+// Câu hỏi về connector, MCP, Composio ("MCP là gì?", "Composio có miễn phí không?", "Show me what MCP is"): hỏi đáp,
+// đi đường nhanh được. Có động từ ghi ("Composio tạo trang Notion được không?") thì vẫn là lời nhờ thao tác.
+const DEFINE = W("là gì|là cái gì|nghĩa là gì|là sao|what(?:'s| is| are)|what \\p{L}+ (?:is|are|means?|does)"
+  + "|explain|giải thích|miễn phí không|how (?:does|do|to|can)");
+const WRITE_VERB = W(ACTION_VERB);
+const infoAsk = (ins: string) => !WRITE_VERB.test(ins)
+  && (DEFINE.test(ins) || HOWTO.test(ins) || (/\?\s*$/.test(ins) && !OP_ANY.test(ins)));
+/** Câu có nêu ứng dụng người dùng đã nối, hay nhờ làm gì đó qua connector, Composio, MCP. */
 export const namesConnector = (text: string, apps?: string[]) =>
-  CONNECTOR_WORD.test(text) || !!appsRe(apps)?.test(appKey(text));
+  namesApp(text, apps) || (CONNECTOR_WORD.test(text) && !infoAsk(text.toLowerCase()));
 // Lời nhờ thao tác qua connector: "word" khi câu nói thẳng "connector / Composio", "app" khi nêu ứng dụng người dùng
-// đã nối, "foreign" khi câu viết bằng thứ tiếng khác nêu một ứng dụng trong danh mục. Hỏi cách làm, báo sự cố, nhờ
-// viết code thì không.
-function connectorAsk(ins: string, apps?: string[]): "word" | "app" | "foreign" | null {
+// đã nối, "foreign" khi câu viết bằng thứ tiếng khác nêu một ứng dụng trong danh mục. Hỏi cách làm, hỏi connector là
+// gì, báo sự cố, nhờ viết code thì không. raw: chỉ thị còn nguyên hoa thường, để nhận tên riêng.
+function connectorAsk(ins: string, raw: string, apps?: string[]): "word" | "app" | "foreign" | null {
   if (HOWTO.test(ins) || BUG_REPORT.test(ins) || CODE_REQ.test(ins)) return null;
   const verb = OP_ANY.test(ins) || FOREIGN_ACT.test(ins) || /(?:^|\s)(?:dùng|sử dụng|use|using)\s/iu.test(ins);
   if (!verb) return null;
-  if (CONNECTOR_WORD.test(ins)) return "word";
-  if (appsRe(apps)?.test(appKey(ins))) return "app";
+  if (CONNECTOR_WORD.test(ins) && !infoAsk(ins)) return "word";
+  if (namesApp(raw, apps)) return "app";
   const foreign = NON_LATIN.test(ins) || !STOPWORD.test(fold(ins));
   return foreign && (CATALOG_RE.test(ins) || GOOGLE_APP.test(ins)) && FOREIGN_ACT.test(ins) ? "foreign" : null;
 }
@@ -489,11 +522,23 @@ const LIGHT = new Set<Task>(["chat", "qa", "language", "translate", "summarize",
 const HEAVY_PREV = new Set<Task>(["build", "code", "debug", "act", "write", "analyze", "data"]);
 
 const BUG_CTX = W("web|website|webapp|web app|app|ứng dụng|phần mềm|trang(?: web| này| chủ| bị| không)|màn hình|crash|crashes|lỗi \\d{3}|\\d{3} error|loi \\d{3}");
-// Brief thiết kế: một từ của nhóm sản phẩm thiết kế cùng phần yêu cầu dài hơn 400 ký tự. Lời nhờ viết, dịch, tóm
-// tắt, phân tích về chủ đề thiết kế, câu hỏi tại sao / làm sao và lời nhờ sửa code không tính.
-const ASK_WHY = /^\s*(?:tại sao|vì sao|làm sao|làm thế nào|có nên|why|how (?:do|does|can|should|to))(?![\p{L}\p{N}])/iu;
-const designAsk = (ins: string, a: Ask) =>
-  ins.length > 400 && !a.code && !a.trace && DESIGN_KW.test(ins) && !IMG_OTHER.test(ins) && !ASK_WHY.test(ins);
+// Brief thiết kế: lời nhờ mở đầu bằng việc dựng một sản phẩm thiết kế (isBrief: "Hãy thiết kế bộ slide…", "Design a
+// dashboard…"), kèm danh sách yêu cầu dài hơn 400 ký tự (gạch đầu dòng, đánh số, hay nhiều yêu cầu ngăn bằng dấu phẩy,
+// chấm phẩy). Brief như vậy đi model mạnh nhất, nỗ lực cao, nên luật chặt: câu báo lỗi giao diện, câu xin ý tưởng hay
+// lời khuyên, câu hỏi, lời nhờ viết nội dung cho bài thuyết trình đều không mở đầu như vậy và giữ nhãn của chúng.
+const LEAD_NOT_BRIEF = W("làm sao|làm thế nào|thế nào|như thế nào|là gì|có nên|nên chọn|nên dùng|nên đổi|tại sao|vì sao"
+  + "|ý tưởng|gợi ý|tư vấn|lời khuyên|góp ý|nhận xét|đánh giá|how|what|why|should|ideas?|suggest|suggestions"
+  + "|advice|advise|recommend|feedback|review|critique");
+const WRITE_OBJ = new RegExp(`^\\s*(?:(?:hãy|giúp (?:tôi|mình|em)|please|can you|could you)\\s+)?\\p{L}+\\s+`
+  + "(?:(?:một|bản|cái|a|an|the)\\s+)?(?:dàn ý|kịch bản|nội dung|outline|script|content)(?![\\p{L}\\p{N}])", "iu");
+const REQ_ITEM = /^\s*(?:[-*•]|\d+[.)])\s/gm;
+const reqItems = (s: string) => (s.match(/[,;]/g)?.length ?? 0) + (s.match(REQ_ITEM)?.length ?? 0);
+function designAsk(ins: string, a: Ask): boolean {
+  if (ins.length <= 400 || a.code || a.trace || !isBrief(ins) || WRITE_OBJ.test(ins)) return false;
+  const lead = ins.split(/(?<=[.?!])\s+|\n/)[0] ?? "";
+  if (lead.includes("?") || BUG_REPORT.test(lead) || LEAD_NOT_BRIEF.test(lead)) return false;
+  return reqItems(ins) >= 6;
+}
 // Điểm thắng mọi nhãn đang có, tối thiểu 5 (mức của một tín hiệu rõ): pick() cần ít nhất 2 mới đổi loại việc.
 const top = (m: Map<Task, number>) => Math.max(4, ...m.values());
 function scores(ins: string, a: Ask, apps?: string[]): Map<Task, number> {
@@ -548,7 +593,7 @@ function scores(ins: string, a: Ask, apps?: string[]): Map<Task, number> {
   // ("Dùng connector Canva tạo poster"). Riêng tên ứng dụng (người dùng không nói "connector") nhường câu nghiêng
   // hẳn về phân tích hay viết (tín hiệu ≥ 5).
   if (designAsk(ins, a)) out.set("build", top(out) + 1);
-  const conn = connectorAsk(ins, apps);
+  const conn = connectorAsk(ins, a.ins, apps);
   const essay = Math.max(out.get("analyze") ?? 0, out.get("write") ?? 0) >= 5;
   if (conn && (conn !== "app" || !essay)) out.set("act", top(out) + 1);
   return out;
@@ -790,7 +835,9 @@ function routeLog(task: Task, score: number, rerun: boolean, model: string) {
 }
 export function routeModel(q: RouteInput, allowed: string[], o: { avoid?: string[]; log?: { rerun?: boolean } } = {}): Route | null {
   if (!allowed.length) return null;
-  const { task, score, why, retry, think, follow, long, design } = readOf(q);
+  const r = readOf(q), { task, score, retry, think, follow, long, design } = r;
+  // Bản sao: kết quả phân loại được nhớ theo RouteInput và máy chủ hỏi lại cùng đối tượng nhiều lần trong một lượt.
+  const why = [...r.why];
   const needQ = need(score, task);
   const wait = task === "vision" || task === "longdoc" || long ? 0 : LAG_COST;
   const price = (p: Profile) => p.cost + lag(p.key) * wait;
@@ -810,10 +857,14 @@ export function routeModel(q: RouteInput, allowed: string[], o: { avoid?: string
   const reach = pool.filter((x) => x.q >= needQ);
   const ok = reach.some(steady) ? reach.filter(steady) : reach;
   // Sản phẩm thiết kế: model mạnh nhất của tài khoản, không phải model rẻ nhất vừa đạt mức (brief chi tiết từng
-  // được giao cho Haiku, Sonnet).
+  // được giao cho Haiku, Sonnet). "Mạnh nhất" xét theo hạng; trong cùng hạng, gói subscription đã trả tiền đứng trước
+  // khóa API (khóa API có thể là khóa dùng chung của máy chủ), rồi mới tới thế mạnh của hãng.
   const best = (xs: typeof pool) => xs.sort((a, b) => b.q - a.q || price(a.p) - price(b.p) || a.i - b.i);
+  const level = (p: Profile) => BASE[p.frontier ? "frontier" : p.tier];
+  const strongest = (xs: typeof pool) =>
+    xs.sort((a, b) => level(b.p) - level(a.p) || Number(b.p.sub) - Number(a.p.sub) || b.q - a.q || a.i - b.i);
   const rank = design
-    ? best(pool.some(steady) ? pool.filter(steady) : pool)
+    ? strongest(pool.some(steady) ? pool.filter(steady) : pool)
     : ok.length
       ? ok.sort((a, b) => price(a.p) - price(b.p) || b.q - a.q || lag(a.p.key) - lag(b.p.key) || a.i - b.i)
       : best(pool);

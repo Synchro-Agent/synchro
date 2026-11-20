@@ -75,6 +75,15 @@ try {
   X.cxLearn(uid, "COMPOSIO_MANAGE_CONNECTIONS", JSON.stringify({ data: { results: docs } }));
   const apps = C.connectedApps(uid);
   ok(apps.includes("Gmail") && apps.includes("Google Docs"), "Gmail và Google Docs đang kết nối", JSON.stringify(apps));
+  // Đổi quyền ứng dụng bỏ cache của Composio, nên báo lại kết nối như lượt sau sẽ thấy.
+  C.updateConnector(uid, C.composioInfo(uid, pol).connector.id, { apps: { googledocs: "block" } }, pol);
+  learnOld();
+  X.cxLearn(uid, "COMPOSIO_MANAGE_CONNECTIONS", JSON.stringify({ data: { results: docs } }));
+  const blocked = C.connectedApps(uid);
+  ok(blocked.includes("Gmail") && !blocked.includes("Google Docs"), "ứng dụng đặt Chặn: không còn trong danh sách",
+    JSON.stringify(blocked));
+  const noCx = C.connectedApps(uid, { custom: true, allowed: [], destructive: true });
+  ok(!noCx.length, "quản trị viên không cho dùng Composio: không ứng dụng nào", JSON.stringify(noCx));
   C.unlinkComposio(uid, pol);
   const left = C.connectedApps(uid);
   ok(!left.length, "ngắt liên kết Composio: không còn ứng dụng nào", JSON.stringify(left));

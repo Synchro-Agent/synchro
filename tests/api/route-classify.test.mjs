@@ -626,11 +626,48 @@ console.log("18. Connector: ứng dụng đã nối, chữ connector / Composio 
     "Bạn không thể dùng thì hiện tại hoàn thành với 'yesterday'.",
     "I can't recommend one over the other; both work well.",
     `${"Đây là bài viết đầy đủ. ".repeat(80)}Mình không có công cụ nào khác để thêm.`,
+    // Bản dịch, câu sửa ngữ pháp, thư người dùng nhờ viết: câu ở ngôi thứ nhất nhưng là nội dung, không phải lời
+    // từ chối.
+    "Here is the translation: \"I cannot access the building after 10pm.\"", "Câu đúng là: I can't open the door.",
+    "Kính gửi anh Nam,\nTôi không thể gửi hàng đúng hẹn vì kho bị ngập. Mong anh thông cảm.",
+    "Bản dịch: Tôi không có quyền truy cập vào hệ thống của công ty sau giờ làm.",
+    "Tôi không thể gửi hàng đúng hẹn vì kho bị ngập, mong anh thông cảm.",
   ];
   ok(need.every((t) => NT.fastNeedsTools(t)), "lời báo cần công cụ / không có công cụ: chạy lại lượt đầy đủ",
     need.filter((t) => !NT.fastNeedsTools(t)).join(" | "));
   ok(!fine.some((t) => NT.fastNeedsTools(t)), "câu trả lời thường không bị chạy lại",
     fine.filter((t) => NT.fastNeedsTools(t)).join(" | "));
+  ok(NT.fastNeedsTools("Xin lỗi!\nMình không có công cụ Google Docs trong lượt này."),
+    "câu xin lỗi đứng riêng rồi mới tới lời từ chối: vẫn chạy lại");
+  // Dấu NEED_TOOLS không tới người dùng dù đứng đầu, sau vài câu, hay bị cắt giữa hai đoạn chữ.
+  const stream = (parts) => {
+    let shown = "";
+    const say = NT.holdNeedTools((t) => { shown += t; });
+    for (const x of parts) say(x);
+    return shown;
+  };
+  ok(stream(["[[CAN_", "CONG_CU]]"]) === "", "dấu đứng đầu: không hiện gì");
+  ok(stream(["\n ", "[[CAN_CONG_CU]]"]) === "", "khoảng trắng rồi tới dấu: không hiện gì");
+  const mid = stream(["Mình cần dùng connector.", "\n[[CAN", "_CONG_CU]]"]);
+  ok(mid === "Mình cần dùng connector.\n", "câu trước dấu hiện, dấu thì không", JSON.stringify(mid));
+  const link = stream(["Xem [tài liệu", "](https://x.vn) nhé"]);
+  ok(link === "Xem [tài liệu](https://x.vn) nhé", "ngoặc vuông thường vẫn hiện đủ", JSON.stringify(link));
+  // Hỏi connector, MCP, Composio là gì: câu hỏi, vẫn đi đường nhanh, không phải thao tác.
+  for (const t of ["MCP là gì?", "Connector trong Synchro là gì vậy?", "Composio có miễn phí không?",
+    "Show me what MCP is"]) {
+    ok(R.needsNoTools(q(t)) && R.taskOf(q(t)) !== "act", `“${t}”: hỏi đáp, đường nhanh`, R.taskOf(q(t)));
+  }
+  ok(!R.needsNoTools(q("Dùng connector gửi báo cáo này cho sếp")), "nhờ làm qua connector: không đi đường nhanh");
+  // Connector có tên là từ thường gặp (máy chủ MCP Time, Memory, Fetch): chỉ khớp khi viết như tên riêng hoặc ngay
+  // sau động từ thao tác, giới từ chỉ nơi chốn.
+  const mcp = { apps: ["Time", "Memory", "Fetch"] };
+  const spanish = q("Show me how much time I need to learn Spanish", mcp);
+  ok(R.needsNoTools(spanish) && R.taskOf(spanish) !== "act", "“how much time”: không phải connector Time",
+    R.taskOf(spanish));
+  for (const t of ["Fetch the latest note from Memory", "Lưu ghi chú này vào memory", "Mở Time xem giờ Tokyo"]) {
+    const x = q(t, mcp);
+    ok(R.taskOf(x) === "act" && !R.needsNoTools(x), `“${t}”: thao tác qua connector`, R.taskOf(x));
+  }
 }
 console.log("19. Brief thiết kế dài mở đầu bằng câu đóng vai: tạo sản phẩm, model mạnh nhất, nỗ lực từ cao");
 {
@@ -673,6 +710,32 @@ console.log("19. Brief thiết kế dài mở đầu bằng câu đóng vai: t�
     ["Hãy xây dựng chiến lược marketing cho quán cà phê." + req, "analyze"],
   ];
   for (const [t, want] of keep) ok(R.taskOf(q(t)) === want, `“${t.slice(0, 50)}…” vẫn là ${want}`, R.taskOf(q(t)));
+  // Câu dài có từ thiết kế nhưng không phải lời nhờ dựng sản phẩm: báo lỗi giao diện, xin lời khuyên, xin ý tưởng,
+  // tâm sự. Không được đẩy lên model mạnh nhất (có thể là khóa API dùng chung) như brief thiết kế.
+  const detail = " Chi tiết: mình đã thử đổi màu nền, đổi phông chữ, chỉnh khoảng cách giữa các khối, thêm hình minh"
+    + " họa, bớt chữ ở phần đầu, làm lại phần chân trang, đổi vị trí nút kêu gọi, thêm phần đánh giá của khách hàng,"
+    + " bỏ bớt hiệu ứng chuyển động, kiểm tra trên nhiều trình duyệt khác nhau nhưng vẫn chưa ưng ý lắm.";
+  const notBrief = [
+    "Trang dashboard của mình bị vỡ layout trên điện thoại, các thẻ chồng lên nhau.",
+    "Logo công ty mình đang dùng font Arial, khách nói trông rẻ tiền, mình nên đổi sang font nào?",
+    "Cho mình ý tưởng nội dung cho bài thuyết trình về sản phẩm mới.",
+    "Mình là sinh viên ngành thiết kế, đang bị stress vì deadline đồ án, làm sao để cân bằng?",
+    "Thiết kế trang chủ của mình bị lỗi trên Safari, các nút không bấm được.",
+  ];
+  for (const t of notBrief) {
+    const x = q(t + detail), why = R.difficulty(x).why ?? [];
+    ok(R.taskOf(x) !== "build" && !String(why).includes("sản phẩm thiết kế"), `“${t.slice(0, 40)}…”: không phải brief`,
+      `${R.taskOf(x)} ${why}`);
+  }
+  // Nhờ viết nội dung cho slide vẫn có thể là tạo sản phẩm (luật tạo slide), nhưng không phải brief thiết kế.
+  const content = q("Tạo nội dung cho bài thuyết trình 10 slide về thị trường cà phê." + detail);
+  ok(!String(R.difficulty(content).why).includes("sản phẩm thiết kế"), "nhờ viết nội dung slide: không phải brief",
+    R.difficulty(content).why);
+  // Cùng hạng mạnh nhất: gói subscription đứng trước khóa API.
+  const tier = R.tierOf("sub-claude/opus") === R.tierOf("anthropic/claude-opus-5-5");
+  const viaPlan = R.routeModel(q(briefs[0].text), ["anthropic/claude-opus-5-5", "sub-claude/opus"]);
+  ok(tier && viaPlan?.model === "sub-claude/opus", "brief thiết kế: gói Claude trước khóa API cùng hạng",
+    viaPlan?.model);
   const wrong = R.routeModel(q("You are wrong. Try again", { turns: 3, prevAsk: "Làm trang web bán giày" }), all);
   ok(wrong?.why.includes("bạn chưa hài lòng với câu trả lời trước"), "“You are wrong.” vẫn là lời chê", wrong?.why);
 }
