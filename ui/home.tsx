@@ -8,7 +8,7 @@ import { getLang, locale, tf, tr, trc, useLangReady, useLangVer } from "./i18n";
 import { resetClock } from "./resetfmt";
 import { FileCard } from "./fileicon";
 import { useFileMenu, saveDoc, fileContext } from "./filemenu";
-import { attachFiles, attachKeys, getStatus, abortFile } from "./filestate";
+import { addKeys, attachFiles, getStatus, abortFile } from "./filestate";
 import { UPLOAD_ACCEPT } from "../shared/fileproc/types";
 import { stripAppliedNotes, type Rejected } from "../shared/turnctx";
 import { Boundary, Fade, Menu, Thinking } from "./ui";
@@ -582,6 +582,13 @@ const Composer = memo(function Composer(p: {
     recRef.current = r;
     try { r.start(); } catch { setRec(false); say("Không mở được nhận dạng giọng nói, hãy thử lại"); }
   };
+  // Thêm tệp vào tin đang soạn; trả lời báo tên thẻ khác tên tệp (đã báo cho người dùng) để người gọi khỏi báo đè.
+  const attach = (list: File[]) => {
+    const r = attachFiles(files, list, say);
+    setFiles(addKeys(files, r.keys, say));
+    if (r.note) say(r.note);
+    return r.note;
+  };
   // Dán ảnh / tệp từ bộ nhớ tạm (⌘V) như Claude, ChatGPT: thành tệp đính kèm; ảnh dán không tên thì đặt tên theo giờ.
   const paste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
     const fl = Array.from(e.clipboardData?.files ?? []);
@@ -589,11 +596,11 @@ const Composer = memo(function Composer(p: {
     e.preventDefault();
     const d = new Date(), stamp = `${String(d.getHours()).padStart(2, "0")}.${String(d.getMinutes()).padStart(2, "0")}.${String(d.getSeconds()).padStart(2, "0")}`;
     const named = fl.map((f, i) => (f.name && f.name !== "image.png" ? f : new File([f], `Ảnh dán ${stamp}${fl.length > 1 ? `-${i + 1}` : ""}.${(f.type.split("/")[1] || "png").replace("jpeg", "jpg")}`, { type: f.type })));
-    setFiles(attachFiles(files, named, say).files);
+    attach(named);
   };
   const pick = (e: React.ChangeEvent<HTMLInputElement>) => {
     const fl = Array.from(e.target.files ?? []);
-    if (fl.length) setFiles(attachFiles(files, fl, say).files);
+    if (fl.length) attach(fl);
     e.target.value = "";
   };
   const [projOpen, setProjOpen] = useState(false);
@@ -613,8 +620,8 @@ const Composer = memo(function Composer(p: {
       const blob = await new Promise<Blob | null>((ok) => c.toBlob(ok, "image/png"));
       if (!blob) return say("Không chụp được màn hình");
       const d = new Date(), name = `Ảnh chụp màn hình ${String(d.getHours()).padStart(2, "0")}.${String(d.getMinutes()).padStart(2, "0")}.${String(d.getSeconds()).padStart(2, "0")}.png`;
-      setFiles(attachFiles(files, [new File([blob], name, { type: "image/png" })], say).files);
-      say("Đã đính kèm ảnh chụp màn hình");
+      const note = attach([new File([blob], name, { type: "image/png" })]);
+      if (!note) say("Đã đính kèm ảnh chụp màn hình");
     } catch (e) { if ((e as Error).name !== "NotAllowedError") say("Không chụp được màn hình"); }
   };
 
@@ -2265,16 +2272,18 @@ export default function Home({ boot }: { boot?: BootData | null }) {
         <UploadModal
           say={say}
           onConverted={(f, md) => {
-            saveDoc(attachKeys([f], files)[0], md);
-            setFiles(attachFiles(files, [f], say).files);
+            const r = attachFiles(files, [f], say);
+            saveDoc(r.keys[0], md);
+            setFiles((o) => addKeys(o, r.keys, say));
             setModal(null);
-            say(`Đã chuyển thành ${f.name}`);
+            say(r.note ?? `Đã chuyển thành ${f.name}`);
           }}
           onClose={() => setModal(null)}
           onFiles={(f) => {
-            setFiles(attachFiles(files, f, say).files);
+            const r = attachFiles(files, f, say);
+            setFiles((o) => addKeys(o, r.keys, say));
             setModal(null);
-            say(`Đã thêm ${f.length} tệp`);
+            say(r.note ?? `Đã thêm ${f.length} tệp`);
           }}
         />
       </Fade>

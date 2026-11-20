@@ -150,12 +150,30 @@ export function attachKeys(list: readonly File[], cur: readonly string[]): strin
 }
 
 type Say = (m: string) => void;
-/** Thêm tệp vào tin đang soạn dưới tên thẻ riêng (attachKeys); trả danh sách thẻ mới và tên thẻ của từng tệp. */
+
+/** Thêm các tên thẻ mới (keys) vào danh sách thẻ cur, bỏ tên đã có, giữ trong giới hạn số tệp mỗi tin. */
+export function addKeys(cur: readonly string[], keys: readonly string[], say?: Say): string[] {
+  const fresh = keys.filter((k, i) => !cur.includes(k) && keys.indexOf(k) === i);
+  return capFiles([...cur], fresh, say);
+}
+
+/**
+ * Bắt đầu tải các tệp lên dưới tên thẻ riêng (attachKeys, tính theo danh sách thẻ cur) và trả tên thẻ của từng tệp.
+ * Người gọi tự thêm keys vào danh sách thẻ bằng addKeys, nên dùng được trong setState dạng hàm khi danh sách có thể
+ * vừa đổi mà React chưa vẽ lại (Synchro Code thả cùng lúc tệp lẻ và thư mục). note: lời báo khi một tệp mới phải
+ * mang tên khác vì đã có thẻ cùng tên khác nội dung, thường là người dùng sửa tệp rồi kéo lại: thẻ cũ vẫn ở đó và
+ * model sẽ nhận cả hai bản, nên nói rõ để họ bỏ thẻ cũ nếu muốn.
+ */
 export function attachFiles(cur: readonly string[], list: readonly File[], say?: Say, o: { raw?: boolean } = {}) {
   const keys = attachKeys(list, cur);
   list.forEach((f, i) => ingestFile(f, say, { ...o, key: keys[i] }));
-  const fresh = keys.filter((k, i) => !cur.includes(k) && keys.indexOf(k) === i);
-  return { files: capFiles([...cur], fresh, say), keys };
+  // Chỉ thẻ mới thêm: kéo lại đúng tệp đã mang tên "x (2).txt" thì trả lại thẻ đó, không có gì để báo.
+  const i = list.findIndex((f, k) => keys[k] !== f.name && !cur.includes(keys[k]) && cur.includes(f.name));
+  if (i < 0) return { keys, note: undefined };
+  const old = list[i].name;
+  const note = `Đã có thẻ "${old}" khác nội dung nên tệp mới thành "${keys[i]}". `
+    + `Nếu "${old}" là bản trước khi sửa, hãy bỏ thẻ đó.`;
+  return { keys, note };
 }
 
 /** Người dùng bỏ một thẻ tệp: hủy lần tải lên đang chạy (nếu có) và quên trạng thái, để kéo lại đúng tệp đó sẽ tải lại từ đầu.

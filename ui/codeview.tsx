@@ -24,7 +24,7 @@ import { FileCard } from "./fileicon";
 import { CHIP_LIMIT } from "./composerchips";
 import { AttachStrip } from "./attachstrip";
 import { useFileMenu, saveDoc } from "./filemenu";
-import { attachFiles, capFiles, fileContext, getStatus, ingestFile, readyFiles } from "./filestate";
+import { addKeys, attachFiles, capFiles, fileContext, getStatus, ingestFile, readyFiles } from "./filestate";
 import { AgentSteps, GitHubButton, StatusLine, stripPhases, TaskCard, TVIEW_LABEL, type AStep, type OnAnswer, type TView } from "./agentui";
 import { answerAsk, codePrefsNow, getServerSession, mergeSession, pushSession, sessionBase, setSessionBase, useCodePrefs, type SessionState } from "./codesync";
 import { STYLE_DESC, STYLE_LABEL, STYLE_SYS, isStyle, type CodeStyle } from "../shared/codestyle";
@@ -194,7 +194,8 @@ export function CodeView({ say, sid, title, model, modelPicker, sideOpen, onSide
   const [atts, setAtts] = useState<Att[]>([]);
   // Tệp / thư mục / .zip đính kèm tin nhắn đang soạn (thẻ giống Claude), gửi đi cùng tin nhắn rồi dọn khỏi khung soạn.
   const [files, setFiles] = useState<string[]>([]);
-  // Danh sách thẻ mới nhất cho addFiles: một lần chọn thư mục gọi addFiles nhiều lần trước khi React vẽ lại.
+  // Danh sách thẻ mới nhất để đặt tên thẻ (attachKeys): một lần chọn / thả gọi addFiles, addFolder nhiều lần trước
+  // khi React vẽ lại.
   const filesNow = useRef(files);
   filesNow.current = files;
   // Dải tệp đính kèm (U2, ui/attachstrip.tsx): quá CHIP_LIMIT tệp thì "+N" ở mép phải, bấm trải lưới. Còn ≤ CHIP_LIMIT tệp (đã gửi, gỡ bớt)
@@ -758,9 +759,12 @@ export function CodeView({ say, sid, title, model, modelPicker, sideOpen, onSide
   const addFiles = (list: File[]) => {
     const ok = list.filter((f) => f.name !== ".DS_Store");
     if (!ok.length) return;
-    const next = attachFiles(filesNow.current, ok, say, { raw: true }).files;
-    filesNow.current = next;
-    setFiles(next);
+    const r = attachFiles(filesNow.current, ok, say, { raw: true });
+    filesNow.current = addKeys(filesNow.current, r.keys);
+    // Dạng hàm: thả cùng lúc tệp lẻ và thư mục thì addFolder đã xếp một lần cập nhật (sau các lần await của nó) mà
+    // React chưa vẽ lại; ghi đè bằng một giá trị tính sẵn sẽ làm mất thẻ thư mục.
+    setFiles((cur) => addKeys(cur, r.keys, say));
+    if (r.note) say(r.note);
   };
   // Cả thư mục tải lên nguyên khối: nén ngay trong trình duyệt (giữ cấu trúc), hiện là một thẻ thư mục, chép nguyên vào workspace khi gửi.
   const addFolder = async (name: string, list: { path: string; file: File }[]) => {
@@ -771,6 +775,7 @@ export function CodeView({ say, sid, title, model, modelPicker, sideOpen, onSide
       for (const { path: p, file } of list) z.file(p.split("/").slice(1).join("/") || file.name, file);
       const blob = await z.generateAsync({ type: "blob", compression: "DEFLATE", compressionOptions: { level: 6 } });
       ingestFile(new File([blob], `${name}.zip`, { type: "application/zip" }), say, { raw: true, key: name, folder: true, count: list.length });
+      filesNow.current = [...filesNow.current.filter((n) => n !== name), name];
       setFiles((cur) => capFiles(cur.filter((n) => n !== name), [name], say));
     } catch { say(`Không nén được thư mục "${name}"`); }
   };

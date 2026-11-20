@@ -578,6 +578,9 @@ RULES_EN.push(
   [/^Không đọc được ảnh HEIC "(.+)" \(tệp có thể bị hỏng\)\. Hãy lưu sang JPEG \/ PNG rồi tải lại\.$/,
     (m) => `Couldn't read the HEIC image "${m[1]}" (the file may be damaged). Save it as JPEG / PNG and upload again.`],
   [/^Ảnh "(.+)" quá lớn sau khi giải mã\.$/, (m) => `The image "${m[1]}" is too large once decoded.`],
+  [/^Đã có thẻ "(.+)" khác nội dung nên tệp mới thành "(.+)"\. Nếu "\1" là bản trước khi sửa, hãy bỏ thẻ đó\.$/,
+    (m) => `A different "${m[1]}" is already attached, so the new file was added as "${m[2]}". `
+      + `If "${m[1]}" is the version before your edit, remove it.`],
   [/^"(.*)" là tệp Office đời cũ mà máy chủ chưa chuyển được\. Hãy lưu thành \.docx\/\.xlsx\/\.pptx\.$/,
     (m) => `"${m[1]}" is a legacy Office file this server can't convert yet. Save it as .docx/.xlsx/.pptx.`],
   [/^Ảnh "(.+)" bị hỏng, không xử lý được\.$/, (m) => `The image "${m[1]}" is damaged and can't be processed.`],

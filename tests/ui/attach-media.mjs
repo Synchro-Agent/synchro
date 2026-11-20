@@ -4,6 +4,8 @@
 // - Ảnh HEIC (iPhone): máy có bộ giải (heif-dec / heif-convert, hay sips trên macOS) thì thẻ sẵn sàng và model nhận
 //   ảnh PNG; máy không có thì thẻ báo lỗi kèm lý do "chưa cài bộ giải mã" (không treo, không lỗi chung chung).
 // - Cài đặt → Sức khỏe hệ thống → Đọc tệp đặc biệt: đủ ba dòng, không tràn ở 1280px và 375px.
+// - Synchro Code: thả cùng lúc một tệp lẻ và một thư mục (tệp đứng trước) thì còn đủ cả hai thẻ. Thư mục được nén
+//   (await) nên thẻ thư mục được xếp cập nhật ngay trước thẻ tệp lẻ, khi React chưa vẽ lại.
 // Chạy tay: node tests/ui/attach-media.mjs   (BASE=… đổi máy, SHOTS=<thư mục> chụp ảnh, CDP_PORT đổi cổng Chrome)
 import { mkdirSync, writeFileSync, copyFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -156,6 +158,35 @@ try {
     console.log("   ", rows.rows.map((r) => `${r.t}: ${r.badge}`).join(" · "));
     await shot(`3-suc-khoe-${w}`);
   }
+
+  console.log("4. Synchro Code: thả cùng lúc tệp lẻ và thư mục");
+  await size(1440, 900);
+  await P("Page.navigate", { url: B + "/" });
+  const codeNav = `[...document.querySelectorAll(".nav-item")].find((e) => e.textContent.trim().startsWith("Code"))`;
+  await until(`!!${codeNav}`, 60000);
+  await click(codeNav, "Code");
+  ok(await until(`!!document.querySelector(".cv-dock textarea")`, 30000), "mở được Synchro Code");
+  // Trình duyệt không cho dựng DataTransfer có thư mục bằng script: thả một sự kiện drop mang các mục giả theo đúng
+  // giao diện FileSystemEntry mà ui/codeview.tsx đọc (webkitGetAsEntry, file, createReader / readEntries).
+  await ev(`(() => {
+    const file = (name, text) => ({ isFile: true, isDirectory: false, name,
+      file: (ok) => ok(new File([text], name, { type: "text/plain", lastModified: 5 })) });
+    const dir = (name, kids) => ({ isFile: false, isDirectory: true, name, createReader: () => {
+      let left = kids;
+      return { readEntries: (ok) => { ok(left); left = []; } };
+    } });
+    const entries = [file("README-${tag}.md", "# đọc tôi"), dir("src-${tag}", [file("main.js", "console.log(1)")])];
+    const dt = { items: entries.map((en) => ({ webkitGetAsEntry: () => en })), files: [], types: ["Files"] };
+    const drop = new Event("drop", { bubbles: true, cancelable: true });
+    Object.defineProperty(drop, "dataTransfer", { value: dt });
+    document.querySelector(".cv").dispatchEvent(drop);
+  })()`);
+  const CV_CHIPS = `[...document.querySelectorAll(".cv-attach .ft-name")].map((e) => e.textContent.trim())`;
+  const two = `(() => { const c = ${CV_CHIPS}; return c.includes("src-${tag}") && c.includes("README-${tag}.md"); })()`;
+  ok(await until(two, 20000), "còn đủ thẻ thư mục và thẻ tệp lẻ", await ev(CV_CHIPS));
+  await sleep(800);
+  ok((await ev(CV_CHIPS)).length === 2, "đúng hai thẻ, không thêm, không mất sau khi vẽ lại", await ev(CV_CHIPS));
+  await shot("4-code-tha-thu-muc");
 } catch (e) {
   ok(false, "chạy được tới cuối", e.message.split("\n")[0]);
   // Lỗi chính đã ghi ở dòng trên; ảnh chụp lúc lỗi chỉ để xem thêm, chụp hỏng (trang đã đóng) không đổi kết quả.
