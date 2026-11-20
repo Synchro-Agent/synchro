@@ -1,0 +1,189 @@
+{
+ "url": "https://example.test/dark",
+ "vw": 1280,
+ "vh": 800,
+ "scrollH": 2600,
+ "pageBg": "#0b0d12",
+ "texts": [
+  {
+   "tag": "h1",
+   "size": 56,
+   "weight": 600,
+   "family": "\"Inter Variable\", system-ui, sans-serif",
+   "tracking": -0.022,
+   "line": 1.05,
+   "upper": false,
+   "color": "#f5f7fa",
+   "bg": "#0b0d12",
+   "chars": 42,
+   "x": 220,
+   "y": 200,
+   "w": 840,
+   "h": 130
+  },
+  {
+   "tag": "p",
+   "size": 16,
+   "weight": 400,
+   "family": "\"Inter Variable\", system-ui, sans-serif",
+   "tracking": 0,
+   "line": 1.6,
+   "upper": false,
+   "color": "#8a93a6",
+   "bg": "#0b0d12",
+   "chars": 380,
+   "x": 340,
+   "y": 360,
+   "w": 600,
+   "h": 80
+  },
+  {
+   "tag": "p",
+   "size": 13,
+   "weight": 400,
+   "family": "\"Inter Variable\", system-ui, sans-serif",
+   "tracking": 0,
+   "line": 1.5,
+   "upper": false,
+   "color": "#c8cfdb",
+   "bg": "#121620",
+   "chars": 900,
+   "x": 200,
+   "y": 560,
+   "w": 880,
+   "h": 240
+  },
+  {
+   "tag": "span",
+   "size": 12,
+   "weight": 500,
+   "family": "\"JetBrains Mono\", monospace",
+   "tracking": 0.04,
+   "line": 1.4,
+   "upper": true,
+   "color": "#7c8cff",
+   "bg": "#0b0d12",
+   "chars": 40,
+   "x": 200,
+   "y": 520,
+   "w": 300,
+   "h": 16
+  },
+  {
+   "tag": "span",
+   "size": 13,
+   "weight": 500,
+   "family": "\"Inter Variable\", system-ui, sans-serif",
+   "tracking": 0,
+   "line": 1.4,
+   "upper": false,
+   "color": "#34d399",
+   "bg": "#121620",
+   "chars": 20,
+   "x": 300,
+   "y": 600,
+   "w": 60,
+   "h": 18
+  },
+  {
+   "tag": "span",
+   "size": 13,
+   "weight": 500,
+   "family": "\"Inter Variable\", system-ui, sans-serif",
+   "tracking": 0,
+   "line": 1.4,
+   "upper": false,
+   "color": "#fb7185",
+   "bg": "#121620",
+   "chars": 20,
+   "x": 400,
+   "y": 600,
+   "w": 60,
+   "h": 18
+  },
+  {
+   "tag": "a",
+   "size": 14,
+   "weight": 600,
+   "family": "\"Inter Variable\", system-ui, sans-serif",
+   "tracking": 0,
+   "line": 1.2,
+   "upper": false,
+   "color": "#0b0d12",
+   "bg": "#7c8cff",
+   "chars": 10,
+   "x": 560,
+   "y": 460,
+   "w": 160,
+   "h": 40
+  }
+ ],
+ "boxes": [
+  {
+   "x": 560,
+   "y": 460,
+   "w": 160,
+   "h": 40,
+   "radius": 8,
+   "shadow": "",
+   "bg": "#7c8cff",
+   "border": ""
+  },
+  {
+   "x": 200,
+   "y": 540,
+   "w": 880,
+   "h": 300,
+   "radius": 12,
+   "shadow": "rgba(0, 0, 0, 0.5) 0px 20px 40px -15px",
+   "bg": "#121620",
+   "border": "1px #232838"
+  },
+  {
+   "x": 220,
+   "y": 560,
+   "w": 260,
+   "h": 120,
+   "radius": 8,
+   "shadow": "",
+   "bg": "#171b26",
+   "border": "1px #232838"
+  }
+ ],
+ "media": [
+  {
+   "x": 200,
+   "y": 540,
+   "w": 880,
+   "h": 300,
+   "kind": "canvas",
+   "hero": true
+  }
+ ],
+ "gaps": [
+  8,
+  8,
+  16,
+  24,
+  12
+ ],
+ "paddings": [
+  128,
+  96,
+  16,
+  16,
+  8
+ ],
+ "maxWidth": 1080,
+ "columns": 1,
+ "fonts": [
+  {
+   "family": "Inter Variable",
+   "loaded": true
+  },
+  {
+   "family": "JetBrains Mono",
+   "loaded": false
+  }
+ ]
+}
