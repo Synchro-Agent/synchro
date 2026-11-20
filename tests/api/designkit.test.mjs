@@ -174,7 +174,9 @@ for (const v of ["--text-kpi", "--bg-canvas", "--bg-surface", "--text-primary", 
 ok(/--sx-fs-kpi:60/.test(css) && /letter-spacing:\.1em/.test(css), "thang 1.333 của trang đọc tới KPI 60px, nhãn in hoa giãn 0.1em");
 ok(/\.sx-heat\{/.test(css) && /\.anim-stagger-card\{animation|anim-stagger-card\{animation/.test(css.replace(/\.sx-rise,\.sx-fade,\.sx-pop,/, "")) && /var\(--stagger-index,0\)/.test(css), "ô nhiệt, thẻ xuất hiện lệch nhịp theo --stagger-index");
 ok(/\.sx-draw,\.anim-stagger-card\{animation:none!important\}/.test(reduced + "}") || /anim-stagger-card\{animation:none/.test(css), "thẻ lệch nhịp cũng tắt khi prefers-reduced-motion");
-ok(A.kitHead(`<div class="sx-card" data-sx-fit>x</div>`).includes("__sxFit") && /n>11/.test(A.FIT_JS) && /4\.5/.test(A.FIT_JS) && /F8FAFC/.test(A.FIT_JS) && /0F172A/.test(A.FIT_JS) && !/`|<\/script/i.test(A.FIT_JS), "tự vá sau khi vẽ: co chữ tới 11px, đổi màu chữ dưới 4.5:1, chạy được trong thẻ script");
+ok(A.kitHead(`<div class="sx-card" data-sx-fit>x</div>`).includes("__sxFit") && /4\.5/.test(A.FIT_JS)
+  && /F8FAFC/.test(A.FIT_JS) && /0F172A/.test(A.FIT_JS) && !/`|<\/script/i.test(A.FIT_JS),
+"tự vá sau khi vẽ: đổi màu chữ dưới 4.5:1, chạy được trong thẻ script (cỡ chữ khi co: tests/ui/deck-fit.mjs)");
 ok(!/stroke-dasharray:1000/.test(css) && /pathLength|stroke-dasharray:1/.test(css), "vẽ nét theo pathLength, không dùng số 1000 cố định");
 ok(/@media print/.test(css) && /break-after:avoid-page/.test(css) && /orphans:3/.test(css) && /thead\{display:table-header-group\}/.test(css), "có luật in");
 ok(!/\bli\b[^{}]*\{[^}]*max-width/.test(css) && !/\bp\b[^{}]*\{[^}]*max-width/.test(css), "không đặt max-width cho mọi p, li");

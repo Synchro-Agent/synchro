@@ -4,6 +4,10 @@
 //  - công cụ run_code: viết code Python tạo tệp (Excel, Word, PowerPoint, PDF, CSV, ảnh), tính toán, cài gói.
 // Không có hướng dẫn nào khớp thì trả về null để model giả trả lời bình thường.
 
+import { createRequire } from "node:module";
+// Bộ slide mẫu dùng chung với CLI giả lập ("#deck4": chỉ tiêu đề có data-sx-fit, đoạn văn làm tràn).
+const CLI = createRequire(import.meta.url)("./mock-cli/mock-cli-common.cjs");
+
 const norm = (s) => String(s ?? "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d");
 const has = (t, re) => re.test(t);
 
@@ -908,6 +912,7 @@ function libStep(S, M, t, toolNames) {
 }
 // Sản phẩm mẫu theo loại thư viện: Trình bày → bản trình chiếu, Tài liệu → tài liệu, Thiết kế → logo hoặc landing page.
 function product(st, used, q) {
+  if (st === "slides" && String(q).includes("#deck4")) return { text: `${used}\n\n${CLI.deck4()}` };
   if (st === "slides") return { text: `${used}\n\n${art("bao-cao-quy-3", "text/html", "Báo cáo quý III", DECK)}\n\nQuyết định chính: một ý mỗi slide, số liệu lớn làm điểm nhấn, nền tối tương phản cao. Xem từng slide, trình chiếu toàn màn hình hoặc tải PDF / PowerPoint ngay trong khung xem trước.` };
   if (st === "docs") return { text: `${used}\n\n${art("de-xuat-plugins", "text/markdown", "Đề xuất triển khai Plugins", DOC)}\n\nQuyết định chính: tóm tắt một câu ở đầu, bảng phân công rõ người chịu trách nhiệm, kết thúc bằng hạn chót. Cần bản Word hoặc PDF thì nói mình nhé.` };
   if (st === "design" && /\b(logo|svg|bieu tuong)\b/.test(norm(q))) return { text: `${used}\n\n${art("logo", "image/svg+xml", "Logo Synchro", LOGO)}\n\nQuyết định chính: hai nét cong lồng nhau thể hiện "đồng bộ", gradient xanh sang tím, góc bo lớn để dùng tốt làm icon ứng dụng.` };

@@ -219,8 +219,28 @@ function sxKit() {
 <section class="slide sx-slide"><h2 class="sx-title">Kính khúc xạ</h2><div data-sx-shader="glass" style="height:calc(440*var(--sx-u))"></div></section>
 </body></html>\n</artifact>`;
 }
+// "#deck4": bộ slide 4 trang như bộ của tài khoản miễn phí từng gặp: chỉ tiêu đề có data-sx-fit, bìa có dòng
+// mô tả lớn và nhiều đoạn văn làm tràn, nên bộ tự co chỉ thu được tiêu đề (từng còn nhỏ hơn dòng mô tả).
+function deck4() {
+  const para = "Mỗi micro-hub phục vụ bán kính ba ki-lô-mét, giao trong mười tám phút, chi phí giảm theo mật độ.";
+  const body = (n) => Array.from({ length: n }, () => `<p class="sx-text">${para}</p>`).join("");
+  const slide = (k, title, n) => `<section class="slide sx-slide"><p class="sx-eyebrow">0${k} / 04</p>`
+    + `<h2 class="sx-title" data-sx-fit>${title}</h2>${body(n)}</section>`;
+  return `Bộ slide 4 trang đã xong.\n<artifact identifier="tra-xe-dien" type="text/html" title="Trà sữa xe điện">
+<!doctype html><html><head><meta charset="utf-8"></head><body data-sx-preset="swiss-grid">
+<section class="slide sx-slide"><h1 class="sx-display" data-sx-fit>Trà Một Chạm: giao trà sữa bằng xe điện
+trong mười tám phút khắp nội thành Hà Nội năm 2027</h1>
+<p class="sx-kicker" style="font-size:calc(28*var(--sx-u))">Bộ slide gọi vốn vòng hạt giống,
+trình bày cho nhà đầu tư thiên thần.</p>${body(8)}</section>
+${slide(2, "Khách hàng chờ trà sữa quá lâu vào giờ cao điểm", 3)}
+${slide(3, "Mạng micro-hub và xe điện rút thời gian giao xuống mười tám phút", 9)}
+${slide(4, "Gọi vốn 3 tỷ đồng để mở 12 micro-hub", 2)}
+</body></html>
+</artifact>`;
+}
 function reply(name, prompt, turn) {
   if (prompt.includes("#sxkit")) return sxKit();
+  if (prompt.includes("#deck4")) return deck4();
   if (isTitleAsk(prompt)) return mockTitle(prompt);
   if (prompt.includes("#nowcheck")) return `NOW: ${/<current_time>([^<]*)<\/current_time>/.exec(prompt)?.[1] ?? "-"}`;
   // Dòng giờ hiện tại Synchro ghép vào cuối tin nhắn: không phải câu người dùng gõ.
@@ -355,3 +375,4 @@ function gate(a) {
 module.exports = { oauthTurn, version, gate, sxKit, TINY_JPEG, tinyPng, isImageTurn, imageCount, imageMode, imageLog, saveImage, stallTurn, STALL_TEXT, mediaDesc, mediaReply, mcp, isTitleAsk, mockTitle, mockBrain, prefsEcho, ruleEcho, pjEcho, toolAsk, cfg, sleep, out, uuid, readStdin, readLine, flag, bumpSession, bumpUsage, totalTurns, reply, chunks, fs, path, crypto };
 module.exports.pjSession = pjSession;
 module.exports.cliPatch = cliPatch;
+module.exports.deck4 = deck4;

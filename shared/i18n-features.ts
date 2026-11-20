@@ -373,5 +373,16 @@ Object.assign(FX_VI2EN, {
   "Nhãn mục nhảy cóc hoặc đi lùi ở slide {slides} (theo thứ tự phải là {want}).": "Section labels skip a number or go backwards on slide {slides} (in order they should read {want}).",
   "Nhãn mục ({brows}) đã vượt lên trước số trang ({pages}) trên slide {slides}: đánh số lại cho cùng một dãy.": "Section labels ({brows}) run ahead of the page numbers ({pages}) on slide {slides}: renumber them as one sequence.",
   "{count} slide tràn khung khi trình chiếu": "{count} slides overflow their frame when presented",
+  ["Đo thật ở {vw}×{vh}: nội dung slide {n} tràn và bị khung cắt mất; co chữ cũng không vừa nên Synchro"
+    + " giữ nguyên cỡ chữ. Rút chữ hoặc tách slide."]:
+    "Measured at {vw}×{vh}: the content of slide {n} overflows and is cut off by the frame; shrinking the text"
+    + " does not make it fit, so Synchro keeps the original sizes. Cut text or split the slide.",
+  "Tiêu đề không nổi hơn chữ thân": "Title doesn't stand out from the body text",
+  "slide {n}: tiêu đề {t}px, chữ thân {b}px": "slide {n}: title {t}px, body text {b}px",
+  "slide {n}: tiêu đề {t}px, dòng mô tả {b}px": "slide {n}: title {t}px, description {b}px",
+  ["Đo thật ở {vw}×{vh}: {rows}. Tiêu đề cần lớn ít nhất {r} lần chữ thân và {l} lần dòng mô tả:"
+    + " tăng cỡ tiêu đề hoặc rút chữ thân."]:
+    "Measured at {vw}×{vh}: {rows}. A title should be at least {r} times the body text and {l} times the"
+    + " description: enlarge the title or cut the body text.",
   "Đo thật ở {vw}×{vh}: slide {slides} cao hoặc rộng hơn khung, phần thừa bị cắt khi trình chiếu. Rút chữ, giảm khoảng trống hoặc tách slide.": "Measured at {vw}×{vh}: slides {slides} are taller or wider than the frame, so the extra part is cut off when presented. Shorten the text, reduce the spacing, or split the slides.",
 });

@@ -12,7 +12,9 @@ import { inlineImages } from "./artimg";
 import { splitArtifacts, type ArtType } from "../shared/artifacts";
 import { execRun, runner } from "./coderun";
 import { artState, cleanBase, type ArtVersion } from "../shared/vfs";
-import { fitSummary, overflowing, type SlideFit } from "../shared/deckfit";
+import { fitSummary, overflowing, TITLE_FLOOR, TYPE_JS, TYPE_RATIO } from "../shared/deckfit";
+import { typeNote, viNum, weakType } from "../shared/deckfit";
+import type { SlideFit } from "../shared/deckfit";
 import { numberingIssues, type NumIssue } from "../shared/decknum";
 import { hashOf } from "../shared/critic";
 import { KEEP } from "../shared/turnfold";
@@ -187,7 +189,10 @@ const FIT = String.raw`(el) => {
   const r = el.getBoundingClientRect(), cs = getComputedStyle(el);
   const sx = el.offsetWidth ? r.width / el.offsetWidth : 1, sy = el.offsetHeight ? r.height / el.offsetHeight : 1;
   const clipX = /hidden|clip/.test(cs.overflowX), clipY = /hidden|clip/.test(cs.overflowY);
-  return { h: Math.round(clipY ? r.height : Math.max(r.height, el.scrollHeight * sy)), w: Math.round(clipX ? r.width : Math.max(r.width, el.scrollWidth * sx)), vh: innerHeight, vw: innerWidth };
+  const over = !!(el.matches("[data-sx-fitover]") || el.querySelector("[data-sx-fitover]"));
+  const h = Math.round(clipY ? r.height : Math.max(r.height, el.scrollHeight * sy));
+  const w = Math.round(clipX ? r.width : Math.max(r.width, el.scrollWidth * sx));
+  return { h, w, vh: innerHeight, vw: innerWidth, over };
 }`;
 
 // Script chạy trong container: dựng trang, đi từng slide / từng cỡ màn hình, đo lỗi, chụp ảnh, ghép ảnh.
@@ -195,6 +200,7 @@ const CHECK_JS = String.raw`const fs = require("fs"), puppeteer = require("puppe
 const cfg = JSON.parse(fs.readFileSync("check.json", "utf8")), html = fs.readFileSync("page.html", "utf8");
 const PROBE = ${PROBE};
 const FIT = ${FIT};
+const TYPE = ${TYPE_JS};
 (async () => {
   const px = process.env.HTTPS_PROXY ? new URL(process.env.HTTPS_PROXY) : null;
   const browser = await puppeteer.launch({ executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || "/usr/bin/chromium", headless: true,
@@ -229,7 +235,17 @@ const FIT = ${FIT};
       for (const f of found) report.issues.push({ where: "Slide " + (i + 1), ...f });
       // Số đo khung của từng slide (FIT) để báo từng slide vừa hay tràn.
       const fit = await page.evaluate((src) => { const el = window.__sxCur && window.__sxCur(); return el ? (0, eval)("(" + src + ")")(el) : null; }, FIT.toString()).catch(() => null);
-      if (fit) report.fit.push({ slide: i + 1, ...fit });
+      // Cỡ tiêu đề và chữ thân sau bộ tự co, cho mục kiểm thứ bậc cỡ chữ.
+      const type = await page.evaluate((src) => {
+        const el = window.__sxCur && window.__sxCur();
+        return el ? (0, eval)("(" + src + ")")(el) : null;
+      }, TYPE.toString()).catch((e) => {
+        // Trang lỗi hay chuyển slide giữa chừng: slide này không có số đo cỡ chữ, mục thứ bậc bỏ qua nó (weakType
+        // cần cả tiêu đề lẫn chữ thân); số đo khung vẫn ghi, ảnh chụp vẫn chụp.
+        console.error("type probe:", String(e).slice(0, 200));
+        return null;
+      });
+      if (fit) report.fit.push({ slide: i + 1, ...fit, ...type });
       await shot(page, "Slide " + (i + 1));
     }
     report.views.push("1280×720");
@@ -331,17 +347,28 @@ export async function autoDeckCheck(
     fit = layoutOf(a.content)?.fit ?? [];
     if (!fit.length && !signal?.aborted) console.warn(`[artcheck] bộ slide "${a.ident}" v${a.v} chưa đo được khung`);
   }
-  const bad = overflowing(fit);
+  const bad = overflowing(fit), weak = weakType(fit);
+  // Thứ bậc cỡ chữ yếu một mình không mở thêm lượt sửa: lượt đó là một lượt đầy đủ của cùng model, có khi trên khóa
+  // API dùng chung của Synchro hay hạn mức nhỏ của tài khoản miễn phí, tốn cho việc người dùng không yêu cầu. Lỗi này
+  // vẫn tới model qua check_artifact và tới người dùng qua mục phản biện, nhãn khung xem; có lượt sửa vì tràn hay
+  // đánh số thì nhắc kèm.
   if (!bad.length && !nums.length) return null;
-  const rows = [...(bad.length ? [fitSummary(fit)] : []), ...(nums.length ? ["Đánh số slide không nhất quán:", ...nums] : [])];
+  const rows = [
+    ...(bad.length ? [fitSummary(fit)] : []),
+    ...(nums.length ? ["Đánh số slide không nhất quán:", ...nums] : []),
+    ...(weak.length ? ["Tiêu đề không nổi hơn chữ thân:", ...typeNote(fit)] : []),
+  ];
   return `Bộ slide "${a.title}" (identifier "${a.ident}", phiên bản ${a.v}):\n${rows.join("\n")}`;
 }
+const WEAK_FIX = "- Tiêu đề không nổi hơn chữ thân: tăng cỡ tiêu đề, rút chữ thân hoặc tách slide (bộ tự co không thu"
+  + ` tiêu đề dưới ${TITLE_FLOOR}px và dưới ${viNum(TYPE_RATIO)} lần chữ thân).`;
 /** Lời nhắc gửi model khi tự kiểm thấy lỗi (một lần mỗi lượt). */
 export const AUTO_CHECK = (rows: string[]) => `<auto_check>
 Synchro đã tự kiểm bản cuối của bộ slide trước khi giao cho người dùng và thấy lỗi:
 ${rows.join("\n\n")}
 Người dùng không thấy tin nhắn này. Câu trả lời bạn vừa viết được giữ nguyên và giao cho họ; lần trả lời này chỉ để sửa bộ slide:
 - Sửa được: trả về artifact cùng identifier, sửa đúng các slide nêu trên (bản sửa mode="patch" được; slide tràn thì rút chữ, giảm khoảng trống hoặc tách slide; đánh số thì đánh số lại MỌI nhãn số cho cùng một dãy), kèm nhiều nhất một câu cho người dùng nói đã chỉnh gì trong bộ slide. Không nhắc tới bước tự kiểm, lời nhắc này hay Synchro.
+${WEAK_FIX}
 - Cách hiện tại là cố ý (vd. bìa không đánh số mục): chỉ trả lời đúng ${KEEP}, không viết gì thêm.
 </auto_check>`;
 
@@ -381,6 +408,7 @@ export async function checkArtifact(uid: string, a: ArtVersion | null, input: Re
   const nums = deck ? numberingNote(numberingIssues(a.content)) : [];
   const head = deck ? `Bản trình bày "${a.title}" (phiên bản ${a.v}): ${j.slides} slide, dựng ở 1280×720${slide ? `, chụp to slide ${slide}` : ""}.${fit.length ? `\n${fitSummary(fit)}` : ""}` : `"${a.title}" (phiên bản ${a.v}) dựng ở ${j.views.join(" và ")}.`;
   const all = [...j.issues.map((x) => `- ${x.where}: ${x.kind} — ${x.detail}`), ...nums];
+  if (deck) all.push(...typeNote(fit));
   const issues = all.length ? `\nLỗi hiển thị cần sửa (${all.length}):\n${all.join("\n")}` : "\nKhông đo thấy lỗi (chữ đè, tràn, cắt, ảnh hỏng, chữ quá nhỏ, tiêu đề rớt chữ, tương phản, đánh số slide).";
   const errs = j.errors.length ? `\nLỗi khi chạy trang:\n${j.errors.map((e) => `- ${e}`).join("\n")}` : "";
   const tail = "\nẢnh ghép đi kèm: tự xem thêm bố cục, căn lề, khoảng cách, độ tương phản và chỗ nào trông chưa chỉn chu.";
