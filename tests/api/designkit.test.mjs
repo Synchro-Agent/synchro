@@ -210,7 +210,14 @@ ok(/<!\[CDATA\[[^]*--sx-accent:#0052CC[^]*\]\]>/.test(D.svgExport(svgKit)), "t�
   const o = X.boxOptions({ x: 64, y: 100, w: 800, h: 264, al: "left", lh: 88, one: false, runs: [] }, 1280, 720);
   ok(o.lineSpacing === 66 && !("lineSpacingMultiple" in o), "PowerPoint: bước dòng bằng điểm (88px ở khổ 1280 là 66pt), không ghi bội số của line-height", JSON.stringify(o));
 }
-ok(/font-src https:\/\/fonts\.gstatic\.com/.test(built) && /style-src 'unsafe-inline' https:\/\/fonts\.googleapis\.com/.test(built), "CSP của khung cho phép đúng hai địa chỉ phông");
+{
+  const fontSrc = /font-src https:\/\/o\/kitfonts\/ https:\/\/fonts\.gstatic\.com/.test(built);
+  const styleSrc = /style-src 'unsafe-inline' https:\/\/o\/kitfonts\/ https:\/\/fonts\.googleapis\.com/.test(built);
+  ok(fontSrc && styleSrc, "CSP của khung cho phép bộ phông của Synchro, Google Fonts chỉ còn cho artifact cũ");
+  const bare = D.buildDocCore("html", kitPage, "", "c", false, "");
+  ok(/style-src 'unsafe-inline' https:\/\/fonts\.googleapis\.com/.test(bare),
+    "không có địa chỉ Synchro: CSP như trước");
+}
 const url = A.kitFontUrl(kitPage);
 ok(url.includes("Playfair+Display") && url.includes("Be+Vietnam+Pro") && url.includes("JetBrains+Mono") && !url.includes("Inter"), "chỉ tải phông của phong cách trang dùng", url);
 ok(D.htmlExport(kitPage).includes("data-sx-kit") && D.deckExport(kitPage).includes("data-sx-kit"), "tệp HTML tải về kèm bộ CSS, mở một mình vẫn đúng");

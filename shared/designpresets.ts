@@ -4,6 +4,9 @@
 // Thông số theo bảng 8 phong cách của chủ dự án (nền, bề mặt, nhấn, bo ngoài / trong, viền, bóng, cặp phông, dùng cho gì). Màu nhấn nào của bảng đó làm chữ
 // không đạt 4.5:1 thì chữ dùng màu sẫm / sáng hơn gần nhất (accent, accent2), màu gốc giữ ở vivid / vivid2 cho phần không phải chữ đọc: cột biểu đồ được nhấn,
 // quầng cực quang, mảng màu lớn. Các cặp lệch: chàm #6366F1 trên #08090E 4.45, đỏ cam #FF3B00 trên giấy 3.24, lục #10B981 trên trắng 2.54, cam #FF5722 3.11, hồng #EC4899 3.15.
+import { fontStack, KIT_FONTS, type KitFontId } from "./designrefs";
+import { KIT_FONT_CSS2 } from "./kitfonts";
+
 export type PresetColors = { bg: string; surface: string; raised: string; ink: string; muted: string; accent: string; accent2: string; line: string; neutral: string; pos: string; neg: string };
 export type Preset = PresetColors & {
   id: string;
@@ -21,15 +24,13 @@ export type Preset = PresetColors & {
 };
 
 // Phông có đủ dấu tiếng Việt, đã đo trên chính tệp phông (bảng cmap) và dựng thử trong Chrome: tests/ui/design-kit.mjs.
+// Đúng bộ KIT_FONTS của Synchro (tự phục vụ ở /kitfonts/v1/, tools/fetch-kit-fonts.mjs): preset và bộ token trộn chỉ
+// dùng tên trong bảng này. css: phần css2 của Google Fonts, chỉ còn là đường dự phòng khi trang không có địa chỉ
+// Synchro.
 // Không có DM Mono của cẩm nang gốc: bản Google Fonts không có bộ tiếng Việt (ư, ơ, ệ, ẫ rơi về phông khác).
-export const FONT_SPEC: Record<string, { css: string; stack: string }> = {
-  "Be Vietnam Pro": { css: "Be+Vietnam+Pro:wght@400;500;600;700", stack: `"Be Vietnam Pro","Noto Sans",system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif` },
-  Inter: { css: "Inter:wght@400;500;600;700;800", stack: `"Inter","Noto Sans",system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif` },
-  "Plus Jakarta Sans": { css: "Plus+Jakarta+Sans:wght@500;600;700;800", stack: `"Plus Jakarta Sans","Noto Sans",system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif` },
-  "Playfair Display": { css: "Playfair+Display:wght@500;600;700;800", stack: `"Playfair Display","Noto Serif",Georgia,"Times New Roman",serif` },
-  "Space Grotesk": { css: "Space+Grotesk:wght@500;600;700", stack: `"Space Grotesk","Noto Sans",system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif` },
-  "JetBrains Mono": { css: "JetBrains+Mono:wght@500;600", stack: `"JetBrains Mono","Noto Sans Mono",ui-monospace,Menlo,Consolas,monospace` },
-};
+export const FONT_SPEC: Record<string, { id: KitFontId; css: string; stack: string }> = Object.fromEntries(
+  KIT_FONTS.map((f) => [f.family, { id: f.id, css: KIT_FONT_CSS2[f.id], stack: fontStack(f.id) }]),
+);
 
 const POS = "#0F7B4F", NEG = "#B42318", POS_D = "#34D399", NEG_D = "#FB7185";
 export const PRESETS: Preset[] = [
