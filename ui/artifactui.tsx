@@ -28,6 +28,7 @@ export type ArtVersion = ArtBlock & { at?: number };
 import { buildDocCore, deckExport, externalImageUrls, genImageId, H2I, htmlExport, isDeck, libUrls, noteGenPending, noteGenSettled, pendingRetryMs, svgExport, swapUrls } from "../shared/artdoc";
 import { kitFontUrl, presetIn, withKitFontLink } from "../shared/artkit";
 import { PRESETS, presetOf } from "../shared/designpresets";
+import { SaveStyleItem } from "./designstyleui";
 export { deckExport, H2I, isDeck, libUrls };
 
 // Cầu nối trong artifact: window.synchro.complete (và window.claude.complete cho artifact viết theo Claude),
@@ -350,7 +351,14 @@ function DownloadMenu({ items, say, note }: { items: DlItem[]; say: (m: string) 
 
 // Đổi phong cách không tốn lượt model: bấm một phong cách thì khung đổi ngay (chỉ thay data-sx-preset, bộ CSS có sẵn 8 bộ biến);
 // "Giữ" thành phiên bản mới của artifact (onKeep, cùng đường với áp dụng bản sửa của hội đồng phản biện), "Bỏ" về phong cách cũ.
-function StyleSwitch({ current, send, onKeep, say }: { current: string; send: () => FrameSend | null; onKeep?: (id: string) => void; say: (m: string) => void }) {
+// save: artifact đã lưu trên máy chủ (có đoạn chat) thì có thêm "Lưu làm phong cách của tôi" ở cuối menu.
+function StyleSwitch({ current, send, onKeep, say, save }: {
+  current: string;
+  send: () => FrameSend | null;
+  onKeep?: (id: string) => void;
+  say: (m: string) => void;
+  save?: { conv: string; ident: string; title: string; content: string };
+}) {
   const [open, setOpen] = useState(false);
   const [trial, setTrial] = useState("");
   const ref = useRef<HTMLDivElement>(null);
@@ -380,6 +388,7 @@ function StyleSwitch({ current, send, onKeep, say }: { current: string; send: ()
             <button className="btn" onClick={() => apply(current)}>{tr("Bỏ")}</button>
           </div>
         )}
+        {save && <SaveStyleItem {...save} preset={trial || current} say={say} />}
       </Menu>
     </div>
   );
@@ -704,7 +713,8 @@ Yêu cầu: ${req.trim()}`);
               (trước đây nút Chỉ và sửa nhảy ngang 61px ngay dưới con trỏ). */}
           {criticOf && art.complete && !compare && <CriticPill entry={crit} findings={findings} can={important(art) && !!onCritic}
             onRun={() => onCritic?.(art)} onShow={() => { setTab("code"); setTimeout(() => body.current?.querySelector(".cr-note")?.scrollIntoView({ block: "center", behavior: "smooth" }), 60); }} />}
-          {stylable && <StyleSwitch key={`${art.ident}-${ver}-${reload}`} current={stylable} send={() => send.current} onKeep={onRestyle && index === versions.length - 1 ? (id) => onRestyle(art, id) : undefined} say={say} />}
+          {stylable && <StyleSwitch key={`${art.ident}-${ver}-${reload}`} current={stylable} send={() => send.current} onKeep={onRestyle && index === versions.length - 1 ? (id) => onRestyle(art, id) : undefined} say={say}
+            save={conv ? { conv, ident: art.ident, title: art.title, content: art.content } : undefined} />}
           {canPick && <button className={`icon-btn ${picking ? "on" : ""}`} onClick={togglePick} aria-label="Chỉ và sửa" data-tip="Chỉ vào phần muốn sửa (hoặc giữ Alt rồi bấm)" aria-pressed={picking}><I.Pointer size={15} /></button>}
           {runnable && art.type !== "markdown" && art.type !== "mermaid" && art.type !== "d2" && !showCode && <button className="icon-btn" onClick={() => setReload((x) => x + 1)} aria-label="Chạy lại" data-tip="Chạy lại"><I.Retry size={15} /></button>}
           <button className="icon-btn" onClick={copy} aria-label="Sao chép" data-tip="Sao chép">{copied ? <I.M icon="Check" size={15} /> : <I.M icon="Copy" size={15} />}</button>
