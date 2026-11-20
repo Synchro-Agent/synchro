@@ -52,6 +52,12 @@ ws.addEventListener("message", (e) => {
     if (u.startsWith(`${ORIGIN}/vendor/`)) { const f = path.join("public/vendor", path.basename(new URL(u).pathname)); vendorLoads.push(path.basename(f)); if (existsSync(f)) return answer(S, requestId, readFileSync(f), "application/javascript"); }
     // Phông Google: không có mạng thì trả CSS rỗng (chữ dùng phông dự phòng), không tính là lỗi.
     if (u.startsWith("https://fonts.googleapis.com/")) return answer(S, requestId, "", "text/css");
+    // Bộ phông của Synchro (/kitfonts/v1/): khung nạp từ chính Synchro, trả đúng tệp trong public/.
+    if (u.startsWith(`${ORIGIN}/kitfonts/v1/`)) {
+      const f = path.join("public", new URL(u).pathname);
+      const type = f.endsWith(".css") ? "text/css" : "font/woff2";
+      if (!f.includes("..") && existsSync(f)) return answer(S, requestId, readFileSync(f), type);
+    }
     if (u.endsWith("/favicon.ico")) return send("Fetch.failRequest", { requestId, errorReason: "BlockedByClient" }, S);
     stray.push(u.slice(0, 120));
     send("Fetch.failRequest", { requestId, errorReason: "BlockedByClient" }, S);
@@ -86,7 +92,13 @@ const pngInfo = (data, up = 0) => ev(`new Promise((ok) => { const im = new Image
 
 // ---------------------------------------------------------------- 1. ảnh chia sẻ, PNG 3x
 console.log("1. Khung ảnh chia sẻ .sx-og 1200×630 và PNG 3x");
-const OG = `<html data-sx-preset="midnight-tech"><body><div class="sx-og sx-aurora"><div class="sx-row sx-between"><span class="sx-badge">Báo cáo quý</span><span class="sx-small">Synchro Research</span></div><div class="sx-row sx-between" style="align-items:flex-end"><h1 class="sx-display" style="max-width:calc(700*var(--sx-u))">Tự động hóa đưa biên ròng lên mức kỷ lục</h1><div class="sx-card"><p class="sx-kpi sx-up">+14,2%</p><p class="sx-small">Biên lợi nhuận ròng</p></div></div></div></body></html>`;
+// Bài thử nạp phông thật của bộ Synchro (Plus Jakarta Sans 800 rộng hơn phông dự phòng): tiêu đề hai dòng, vừa khung.
+const OG = `<html data-sx-preset="midnight-tech"><body><div class="sx-og sx-aurora"><div class="sx-row sx-between">`
+  + `<span class="sx-badge">Báo cáo quý</span><span class="sx-small">Synchro Research</span></div>`
+  + `<div class="sx-row sx-between" style="align-items:flex-end">`
+  + `<h1 class="sx-display" style="max-width:calc(700*var(--sx-u))">Tự động hóa đưa biên ròng lên kỷ lục</h1>`
+  + `<div class="sx-card"><p class="sx-kpi sx-up">+14,2%</p>`
+  + `<p class="sx-small">Biên lợi nhuận ròng</p></div></div></div></body></html>`;
 for (const [w, h] of [[1280, 800], [1920, 700], [640, 900], [390, 844]]) {
   await view(w, h); await open(OG);
   const g = await ev(`(() => { const s = document.querySelector(".sx-og"), b = s.getBoundingClientRect(), d = document.documentElement; return { w: b.width, h: b.height, l: b.left, t: b.top, cw: d.clientWidth, ch: d.clientHeight, sw: d.scrollWidth, sh: d.scrollHeight, over: s.scrollHeight > s.clientHeight + 1 }; })()`);

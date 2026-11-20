@@ -316,6 +316,58 @@ check("chữ tràn khỏi thẻ, dù vẫn nằm trong slide", kinds(r).includes
   check("mọi phong cách, sáng và tối: chữ trên thẻ, nhãn, hộp ghi chú, bề mặt nhuộm đạt WCAG", !bad.length, bad.join(" | "));
 }
 
+// ---------------------------------------------------------------- số đo khung đầu cho vòng so với mẫu
+// Đúng mã DESIGN_FACTS mà check_artifact chạy trong sandbox, rồi đúng hàm quyết định của vòng so với mẫu: thiếu hình
+// chủ đạo hay phông chưa tải phải đòi sửa; trang đủ hình, phông của bộ đã tải thì không.
+console.log("3b. Số đo khung đầu (DESIGN_FACTS) và quyết định sửa của vòng so với mẫu");
+{
+  process.env.DATA_DIR ??= path.join(os.tmpdir(), `synchro-ui/design-kit-data-${CDP}`);
+  process.env.DATA_KEY ??= "design-kit-ui";
+  mkdirSync(process.env.DATA_DIR, { recursive: true });
+  const { "server/designcritic": C } = await loadTs(["server/designcritic"]);
+  const facts = () => ev(`(${artprobe.DESIGN_FACTS})(document.body)`);
+  const decide = (f) => C.measuredDiffs(null, f, null, { hero: true, deck: false });
+  const tag = (ds) => ds.map((d) => `${d.property}:${d.severity}`).sort().join(",");
+  const pic = `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="16" height="9">`
+    + `<rect width="16" height="9" fill="#2f6b3a"/></svg>`)}`;
+  const head = `<html data-sx-preset="midnight-tech" data-sx-fonts="fraunces,inter"><body style="margin:0">`;
+  const title = `<h1 style="font-family:'Fraunces';font-size:72px;margin:24px">Trà xanh hái tay mỗi sáng</h1>`;
+  const body = `<p style="font-family:'Inter';margin:24px">Đồi chè Thái Nguyên, sấy than củi.</p>`;
+  const heroImg = `<img data-sx-hero src="${pic}" style="display:block;width:100%;height:420px;object-fit:cover">`;
+  await view(1280, 800);
+  await open(`${head}${heroImg}${title}${body}</body></html>`);
+  const good = await facts();
+  const fontsOk = good.fonts.length === 2 && good.fonts.every((f) => f.loaded && f.declared);
+  check("trang có hình chủ đạo, phông của bộ: đủ phông đã tải, không đòi sửa",
+    fontsOk && good.hero.marked && !C.needsFix(decide(good)), JSON.stringify({ good, d: decide(good) }));
+  await open(`${head}${title}${body}</body></html>`);
+  const bare = await facts();
+  // Trang chỉ còn hai dòng chữ nên cũng trống quá trần: chỉ cần có lỗi cao về hình.
+  const bareTag = tag(decide(bare));
+  check("thiếu hình chủ đạo: lỗi cao về hình, đòi sửa",
+    bareTag.split(",").includes("image:high") && C.needsFix(decide(bare)), bareTag);
+  // Anton có trong bộ nhưng trang không khai báo: không có FontFace nào, máy rơi về phông khác mà check() vẫn đúng.
+  const anton = `<h2 style="font-family:'Anton';font-size:48px;margin:24px">Mùa thu hoạch</h2>`;
+  await open(`${head}${heroImg}${title}${anton}${body}</body></html>`);
+  const lost = await facts();
+  const lostTag = tag(decide(lost));
+  check("phông trong bộ chưa tải: một lỗi cao về phông, đòi sửa",
+    lostTag === "font:high" && C.needsFix(decide(lost)), JSON.stringify({ fonts: lost.fonts, d: lostTag }));
+  // Mạng treo khi tải phông: bộ đo không được treo theo, chỉ chờ có hạn rồi báo chưa tải.
+  hangFonts = true;
+  const t0 = Date.now();
+  const url = `${ORIGIN}/doc/${++docN}`;
+  pages.set(url, buildDocCore("html", `${head}${heroImg}${title}${body}</body></html>`, ORIGIN, "t", false, ""));
+  await P("Page.navigate", { url });
+  await sleep(400);
+  const hung = await facts();
+  const ms = Date.now() - t0;
+  hangFonts = false;
+  const unloaded = hung.fonts.some((f) => !f.loaded);
+  check("phông treo mạng: bộ đo trả kết quả trong 8 giây, báo phông chưa tải",
+    ms < 8000 && unloaded && C.needsFix(decide(hung)), `${ms} ms ${JSON.stringify(hung.fonts)}`);
+}
+
 // ---------------------------------------------------------------- PowerPoint
 console.log("4. Xuất PowerPoint: bộ đo chạy được trên slide dùng bộ CSS");
 const DECK = (SAMPLES && existsSync(path.join(SAMPLES, "1-slide-tai-chinh.html"))) ? readFileSync(path.join(SAMPLES, "1-slide-tai-chinh.html"), "utf8") : `<html data-sx-preset="exec-navy"><body><section class="slide sx-slide"><p class="sx-eyebrow">Nhãn</p><h2 class="sx-title sx-rise">Biên lợi nhuận lên 14,2%</h2><p class="sx-badge">Mới</p></section><section class="slide sx-slide"><p class="sx-kpi sx-accent sx-fade">+3,1 đ.p.</p></section></body></html>`;

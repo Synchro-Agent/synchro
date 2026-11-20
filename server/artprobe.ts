@@ -79,7 +79,7 @@ export const DESIGN_PROBE = String.raw`(root, deck, boxes, add, say) => {
 // lần.
 // Phông "đã tải" là có FontFace cùng tên ở trạng thái loaded; document.fonts.check() một mình trả true cả khi họ phông
 // không hề được khai báo (máy rơi về Arial mà vẫn báo đạt).
-export const DESIGN_FACTS = String.raw`(root) => {
+export const DESIGN_FACTS = String.raw`async (root) => {
   const vw = innerWidth, vh = innerHeight, R = root.getBoundingClientRect();
   const F = { left: Math.max(0, R.left), top: Math.max(0, R.top), right: Math.min(vw, R.right) };
   F.bottom = Math.min(vh, R.bottom);
@@ -118,6 +118,15 @@ export const DESIGN_FACTS = String.raw`(root) => {
       if (f && !GENERIC.test(f) && fams.size < 12) fams.add(f);
     }
   }
+  // Bộ CSS nạp face.css sau sự kiện load và phông chỉ tải khi chữ cần: document.fonts.ready có thể xong trước đó. Chờ
+  // thẻ link của phông rồi nạp từng họ (tối đa 4 giây), để không báo nhầm "chưa tải" và tốn một vòng sửa.
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  const pending = () => [...document.querySelectorAll("link[data-sx-font]")].some((l) => !l.sheet);
+  for (let i = 0; i < 40 && pending(); i++) await wait(50);
+  // Một họ tải lỗi không chặn họ khác: kết quả từng họ được đo ngay bên dưới.
+  const loadOne = (f) => document.fonts.load('16px "' + f + '"', "Aaưệ").catch(() => null);
+  const loadAll = Promise.all([...fams].map(loadOne));
+  await Promise.race([loadAll, wait(4000)]);
   const faces = [...document.fonts];
   const fonts = [...fams].map((family) => {
     const face = faces.some((x) => x.family.replace(/["']/g, "") === family && x.status === "loaded");
