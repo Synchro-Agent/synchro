@@ -713,7 +713,8 @@ Yêu cầu: ${req.trim()}`);
               (trước đây nút Chỉ và sửa nhảy ngang 61px ngay dưới con trỏ). */}
           {criticOf && art.complete && !compare && <CriticPill entry={crit} findings={findings} can={important(art) && !!onCritic}
             onRun={() => onCritic?.(art)} onShow={() => { setTab("code"); setTimeout(() => body.current?.querySelector(".cr-note")?.scrollIntoView({ block: "center", behavior: "smooth" }), 60); }} />}
-          {stylable && <StyleSwitch key={`${art.ident}-${ver}-${reload}`} current={stylable} send={() => send.current} onKeep={onRestyle && index === versions.length - 1 ? (id) => onRestyle(art, id) : undefined} say={say}
+          {stylable && <StyleSwitch key={`${art.ident}-${ver}-${reload}`} current={stylable} send={() => send.current}
+            onKeep={onRestyle && index === versions.length - 1 ? (id) => onRestyle(art, id) : undefined} say={say}
             save={conv ? { conv, ident: art.ident, title: art.title, content: art.content } : undefined} />}
           {canPick && <button className={`icon-btn ${picking ? "on" : ""}`} onClick={togglePick} aria-label="Chỉ và sửa" data-tip="Chỉ vào phần muốn sửa (hoặc giữ Alt rồi bấm)" aria-pressed={picking}><I.Pointer size={15} /></button>}
           {runnable && art.type !== "markdown" && art.type !== "mermaid" && art.type !== "d2" && !showCode && <button className="icon-btn" onClick={() => setReload((x) => x + 1)} aria-label="Chạy lại" data-tip="Chạy lại"><I.Retry size={15} /></button>}

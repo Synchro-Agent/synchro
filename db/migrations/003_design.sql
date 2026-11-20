@@ -1,6 +1,7 @@
 -- Thư viện mẫu thiết kế (server/designrefs.ts, server/designstyles.ts).
 -- design_history: bản trộn của từng sản phẩm thiết kế (mẫu đã dùng, khóa bảng màu, cặp phông, token).
--- Sản phẩm sau đọc nó để không lặp lại 3 sản phẩm gần nhất; "Lưu làm phong cách của tôi" tìm lại token theo mã bản trộn.
+-- Sản phẩm sau đọc nó để không lặp lại 3 sản phẩm gần nhất; "Lưu làm phong cách của tôi" tìm lại token theo mã
+-- bản trộn.
 -- Giữ 50 dòng mới nhất mỗi người.
 CREATE TABLE IF NOT EXISTS design_history (id INTEGER PRIMARY KEY, user_id TEXT NOT NULL, conv TEXT,
   mix_id TEXT NOT NULL, domain TEXT NOT NULL, brand TEXT, ref_ids TEXT NOT NULL, palette_key TEXT NOT NULL,

@@ -1,7 +1,7 @@
 // Thư viện mẫu tổng hợp cho kiểm thử bộ chọn mẫu khi chưa có thư viện thật (catalog/design-refs): 54 mẫu qua 6 mảng, đủ
 // nền sáng / tối, đủ tâm trạng, ngành, 7 trang nguồn mỗi mảng, bảng màu và cặp phông khác nhau. Sinh tất định (không
-// ngẫu
-// nhiên) để kết quả chọn mẫu lặp lại được. writeCatalog() ghi ra thư mục đúng cấu trúc thư viện thật, kèm ảnh WebP nhỏ.
+// ngẫu nhiên) để kết quả chọn mẫu lặp lại được. writeCatalog() ghi ra thư mục đúng cấu trúc thư viện thật, kèm ảnh WebP
+// nhỏ.
 import fs from "node:fs";
 import path from "node:path";
 

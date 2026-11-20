@@ -1,9 +1,7 @@
 "use client";
 // "Làm theo kiểu này" và "Phong cách của tôi" ở ô soạn tin: bảng chọn (dán liên kết, dùng ảnh đính kèm, phong cách đã
-// lưu),
-// chip "Kiểu: …" gắn với đoạn chat, và mục "Lưu làm phong cách của tôi" trong menu Phong cách của artifact.
-// Chip giữ theo từng đoạn chat trên trình duyệt này và đi kèm mọi lượt gửi của đoạn chat đó (body.designStyle) tới khi
-// bỏ.
+// lưu), chip "Kiểu: …" gắn với đoạn chat, và mục "Lưu làm phong cách của tôi" trong menu Phong cách của artifact. Chip
+// giữ theo từng đoạn chat trên trình duyệt này và đi kèm mọi lượt gửi của đoạn chat đó (body.designStyle) tới khi bỏ.
 import "./styles/designstyle.css";
 import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
@@ -358,8 +356,7 @@ export function DesignStylePop({ open, onClose, onPick, files, brief, say, ancho
 
 /**
  * Mục cuối menu Phong cách của artifact: lưu phong cách đang hiện (bản trộn của sản phẩm, hoặc phong cách vừa thử)
- * thành
- * "Phong cách của tôi" để dùng lại cho sản phẩm sau.
+ * thành "Phong cách của tôi" để dùng lại cho sản phẩm sau.
  */
 export function SaveStyleItem({ conv, ident, title, content, preset, say }: {
   conv: string;

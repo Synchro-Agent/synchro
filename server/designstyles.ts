@@ -1,7 +1,6 @@
 // Phong cách người dùng đưa vào Synchro: "follow" là phong cách đọc từ liên kết hay ảnh họ gửi (hết hạn sau 30 ngày nếu
-// không
-// lưu), "mine" là "Phong cách của tôi" đã lưu (tối đa 20 mỗi người, dùng lại cho sản phẩm sau qua chip "Kiểu: …").
-// Token ở bảng design_styles; ảnh WebP (ảnh người dùng gửi hoặc ảnh chụp trang họ đưa, tối đa 150 KB) ở
+// không lưu), "mine" là "Phong cách của tôi" đã lưu (tối đa 20 mỗi người, dùng lại cho sản phẩm sau qua chip "Kiểu:
+// …"). Token ở bảng design_styles; ảnh WebP (ảnh người dùng gửi hoặc ảnh chụp trang họ đưa, tối đa 150 KB) ở
 // DATA_DIR/design-styles/<uid>/<id>.webp, chỉ chủ tài khoản xem được. Xóa tài khoản thì xóa cả thư mục
 // (server/purge.ts).
 import "server-only";

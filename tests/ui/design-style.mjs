@@ -1,13 +1,11 @@
-// "Làm theo kiểu này" và "Phong cách của tôi" trên npm run dev:mock (Chrome ẩn, BASE=… đổi máy, SHOTS=<thư mục> chụp
-// ảnh):
-// - Menu + có mục "Làm theo kiểu này…"; bảng chọn nằm trọn trong màn hình, không bị lớp nào che, ở 1440 và 375 px, sáng
-// và
-//   tối; điện thoại là tấm phủ cả chiều ngang ở đáy (cách mép 8px như mọi khung nổi).
-// - Dán liên kết khi máy không đọc được trang: báo lỗi trong bảng, không tràn. Dùng ảnh đính kèm: thành chip hoặc báo
-// lỗi.
-// - Chọn phong cách đã lưu: chip "Kiểu: …" trong ô soạn tin, đi kèm lượt gửi (body.designStyle), còn sau khi tải lại
-// trang,
-//   bỏ chip thì lượt sau không còn. Đổi tên, xóa trong bảng. Esc đóng bảng.
+// "Làm theo kiểu này" và "Phong cách của tôi" trên npm run dev:mock (Chrome ẩn, BASE=… đổi máy, SHOTS=<thư mục>
+// chụp ảnh):
+// - Menu + có mục "Làm theo kiểu này…"; bảng chọn nằm trọn trong màn hình, không bị lớp nào che, ở 1440 và 375 px,
+//   sáng và tối; điện thoại là tấm phủ cả chiều ngang ở đáy (cách mép 8px như mọi khung nổi).
+// - Dán liên kết khi máy không đọc được trang: báo lỗi trong bảng, không tràn. Dùng ảnh đính kèm: thành chip hoặc
+//   báo lỗi.
+// - Chọn phong cách đã lưu: chip "Kiểu: …" trong ô soạn tin, đi kèm lượt gửi (body.designStyle), còn sau khi tải
+//   lại trang, bỏ chip thì lượt sau không còn. Đổi tên, xóa trong bảng. Esc đóng bảng.
 // - Menu Phong cách của artifact có "Lưu làm phong cách của tôi": lưu xong có trong danh sách.
 import { mkdirSync, writeFileSync } from "node:fs";
 import os from "node:os";
@@ -72,7 +70,8 @@ const openPop = async () => {
   // Menu + mở bằng hiệu ứng trượt: đợi đứng yên rồi mới lấy toạ độ mục cần bấm.
   await sleep(350);
   await click(byText(".plus-menu .menu-item", "Làm theo kiểu này"), "mục Làm theo kiểu này");
-  return until(`!!${POP}?.querySelector(".sty-list .sty-row, .sty-list .sty-empty")`, 8000);
+  // Mock chạy chế độ dev dịch /api/design-styles ở lần gọi đầu (có khi quá 10 giây): chờ đủ lâu cho lần đó.
+  return until(`!!${POP}?.querySelector(".sty-list .sty-row, .sty-list .sty-empty")`, 25000);
 };
 // Bảng nằm trọn trong màn hình, không bị phần tử khác che (dò lưới điểm), trang không cuộn ngang.
 const GEOM = `(() => {
@@ -196,7 +195,8 @@ try {
         ok(await until(`document.activeElement?.matches(".sty-rename input")`, 2000), "ô đổi tên nhận con trỏ ngay");
         await t.type("Thô mộc mới");
         await click(byText(".sty-rename button", "Lưu"), "lưu tên");
-        ok(await until(`!!${byText(".sty-row", "Thô mộc mới")}`, 4000), "đổi tên xong hiện tên mới");
+        // PATCH /api/design-styles/[id] cũng được dịch ở lần gọi đầu trên mock dev.
+        ok(await until(`!!${byText(".sty-row", "Thô mộc mới")}`, 20000), "đổi tên xong hiện tên mới");
         NAME = "Thô mộc mới";
         await shot(`${tag}-4-doi-ten`);
         await seed("Để xóa", "soft-bento");
@@ -208,7 +208,7 @@ try {
         await click(`${byText(".sty-row", "Để xóa")}?.querySelector('[aria-label^="Xóa"]')`, "xóa");
         await until(`!!${byText(".overlay button, [role=dialog] button", "Xóa")}`, 3000);
         await click(byText(".overlay button, [role=dialog] button", "Xóa"), "xác nhận xóa");
-        ok(await until(`!${byText(".sty-row", "Để xóa")}`, 4000), "xóa: phong cách biến khỏi danh sách");
+        ok(await until(`!${byText(".sty-row", "Để xóa")}`, 20000), "xóa: phong cách biến khỏi danh sách");
         await t.key("Escape", "Escape", 27);
         const png = path.join(SHOTS, "mau.png");
         const { data } = await P("Page.captureScreenshot", { format: "png", clip: { x: 0, y: 0, width: 400, height: 300,

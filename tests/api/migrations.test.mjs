@@ -40,7 +40,8 @@ const diff = (a, b) => {
   return out;
 };
 const v0 = () => { const d = new Database(":memory:"); d.exec(FIXTURE); return d; };
-// Lược đồ mã cũ (001, 002) cộng các bảng mới mà các tệp sau 002 tạo: đó là lược đồ mọi cơ sở dữ liệu phải có sau khi migrate.
+// Lược đồ của mã đã phát hành (001, 002) cộng các bảng mới mà các tệp sau 002 tạo: đó là lược đồ mọi cơ sở dữ liệu
+// phải có sau khi migrate.
 const ADDED = list.filter((m) => m.n > 2);
 const full = () => {
   const d = v0();
@@ -119,10 +120,14 @@ try {
     const logs = [];
     const r = migrate(d, { log: (s) => logs.push(s) });
     const old = r.applied.filter((a) => !ADDED.some((m) => m.name === a.name));
-    ok(r.to === LATEST && r.applied.length === list.length && old.every((a) => a.changed === 0), "mọi tệp của mã cũ đã có sẵn: chỉ ghi số phiên bản", r);
+    ok(r.to === LATEST && r.applied.length === list.length && old.every((a) => a.changed === 0),
+      "mọi tệp của mã đã phát hành có sẵn: chỉ ghi số phiên bản", r);
     ok(ADDED.every((m) => r.applied.find((a) => a.name === m.name)?.changed > 0), "tệp mới tạo bảng của nó", r);
-    const newNames = new Set(ADDED.flatMap((m) => (m.kind === "sql" ? sqlTargets(fs.readFileSync(m.file, "utf8")).create.map((k) => k.split(":")[1]) : [])));
-    const sqlAfter = d.prepare("SELECT type, name, sql FROM sqlite_master ORDER BY name").all().filter((x) => !newNames.has(x.name.replace(/^sqlite_autoindex_(\w+)_\d+$/, "$1")));
+    const targets = (m) => sqlTargets(fs.readFileSync(m.file, "utf8")).create.map((k) => k.split(":")[1]);
+    const newNames = new Set(ADDED.flatMap((m) => (m.kind === "sql" ? targets(m) : [])));
+    const tableOf = (name) => name.replace(/^sqlite_autoindex_(\w+)_\d+$/, "$1");
+    const sqlAfter = d.prepare("SELECT type, name, sql FROM sqlite_master ORDER BY name").all()
+      .filter((x) => !newNames.has(tableOf(x.name)));
     ok(JSON.stringify(sqlAfter) === JSON.stringify(sqlBefore), "sqlite_master của các bảng có sẵn không đổi một ký tự");
     const after = Object.fromEntries(Object.entries(snapshot(d)).filter(([k]) => !newNames.has(k)));
     ok(JSON.stringify(after) === JSON.stringify(before), "dữ liệu mọi bảng y nguyên");

@@ -1,11 +1,8 @@
 // "Làm theo kiểu này": đọc phong cách từ một trang người dùng dán liên kết, từ ảnh chụp họ gửi, hoặc từ một artifact
-// của chính
-// họ, thành token Synchro dùng được (màu, phông trong bộ của Synchro, thang chữ, hình khối) và lưu thành phong cách
-// "follow".
-// Trang lạ chỉ được mở trong Chromium của sandbox workspace (mạng của sandbox chặn sẵn địa chỉ nội bộ), không bao giờ
-// trên máy
-// chủ. Ảnh chụp chỉ đi vào ngữ cảnh của model và ô xem trước của chính người đó; logo, chữ của trang không được đưa vào
-// sản phẩm.
+// của chính họ, thành token Synchro dùng được (màu, phông trong bộ của Synchro, thang chữ, hình khối) và lưu thành
+// phong cách "follow". Trang lạ chỉ được mở trong Chromium của sandbox workspace (mạng của sandbox chặn sẵn địa chỉ nội
+// bộ), không bao giờ trên máy chủ. Ảnh chụp chỉ đi vào ngữ cảnh của model và ô xem trước của chính người đó; logo, chữ
+// của trang không được đưa vào sản phẩm.
 import "server-only";
 import type { BriefFacets, Probe, RefTokens, TurnImageIn } from "../shared/designrefs";
 import { kitFont, luminance } from "../shared/designrefs";
@@ -224,8 +221,7 @@ export type ArtifactSource = {
 };
 /**
  * Token của một artifact: bản trộn đã ghi (data-sx-mix), không có thì phong cách có sẵn (data-sx-preset), không có nữa
- * thì
- * màu đọc từ ảnh PNG trình duyệt gửi kèm. Không có gì cả: báo lỗi cần ảnh (StyleError 422).
+ * thì màu đọc từ ảnh PNG trình duyệt gửi kèm. Không có gì cả: báo lỗi cần ảnh (StyleError 422).
  */
 export async function artifactTokens(
   uid: string,

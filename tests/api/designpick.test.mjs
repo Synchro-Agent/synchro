@@ -1,9 +1,7 @@
 // Bộ chọn mẫu tham chiếu (shared/designpick.ts): đọc đề, chọn 3 mẫu, luật không lặp, trộn token, sửa tương phản, khối
-// CSS.
-// Nghiệm thu của chủ dự án: 7 đề ở mục 7 chạy liên tiếp cho một người ra 7 bảng màu và 7 cặp phông khác nhau, poster
-// jazz
-// nền tối, dashboard không dùng chữ có chân cho tiêu đề. Chạy trên thư viện tổng hợp và trên thư viện thật nếu đã có.
-// Không cần máy chủ.
+// CSS. Nghiệm thu của chủ dự án: 7 đề ở mục 7 chạy liên tiếp cho một người ra 7 bảng màu và 7 cặp phông khác nhau,
+// poster jazz nền tối, dashboard không dùng chữ có chân cho tiêu đề. Chạy trên thư viện tổng hợp và trên thư viện thật
+// nếu đã có. Không cần máy chủ.
 import fs from "node:fs";
 import path from "node:path";
 import { loadTs } from "../lib/ts.mjs";
@@ -59,6 +57,14 @@ ok(P.followAsk("lam poster giong trang https://x.vn", false)?.url === "https://x
 ok(P.followAsk("làm poster cho https://x.vn", true) === null,
   "liên kết không kèm lời \"theo kiểu\": không phải đọc phong cách");
 ok(P.followAsk("theo phong cách tối giản", false) === null, "không có liên kết, không có ảnh: không đọc gì");
+
+console.log("2b. Loại phông tiêu đề đề bài đòi");
+ok(P.briefHeadCat(briefs[0].text) === "serif", "slide trà: \"một serif cho tiêu đề, một sans cho thân\" → serif");
+ok(briefs.slice(1).every((b) => P.briefHeadCat(b.text) === null), "6 đề còn lại không đòi loại phông",
+  briefs.map((b) => P.briefHeadCat(b.text)));
+ok(P.briefHeadCat("Poster, tiêu đề dùng chữ không chân đậm") === "sans", "tiêu đề không chân → sans");
+ok(P.briefHeadCat("landing page with serif headlines") === "serif", "tiếng Anh: serif headlines");
+ok(P.briefHeadCat("thân bài dùng serif, sans cho thân") === null, "phông thân không phải phông tiêu đề");
 
 console.log("3. Chọn 3 mẫu");
 const pick = (f, history = [], seed = "c1", rows = cat.rows) => P.pickRefs({ facets: f, rows, history, seed });
@@ -208,9 +214,10 @@ function sevenBriefs(rows, getRef, label) {
   const history = [];
   const out = [];
   for (const [k, f] of F.entries()) {
-    const p = P.pickRefs({ facets: f, rows, history, seed: `conv-${k}` });
+    const headCat = P.briefHeadCat(briefs[k].text);
+    const p = P.pickRefs({ facets: f, rows, history, seed: `conv-${k}`, headCat });
     const ps = p.map((x) => ({ tokens: getRef(x.row.id).tokens, roles: x.roles, moods: x.row.moods }));
-    const m = P.buildMix(ps, f.domain, false, f.brand, { facets: f, history });
+    const m = P.buildMix(ps, f.domain, false, f.brand, { facets: f, history, headCat });
     const k2 = P.mixKeys(m.tokens);
     history.unshift({ refIds: p.map((x) => x.row.id), ...k2, brand: f.brand });
     out.push({ ...k2, theme: m.tokens.theme, head: m.tokens.fonts.head.kit, preset: m.preset });
@@ -219,6 +226,7 @@ function sevenBriefs(rows, getRef, label) {
   ok(new Set(out.map((o) => o.fontPair)).size === 7, `${label}: 7 cặp phông khác nhau`, out.map((o) => o.fontPair));
   ok(out[2].theme === "dark", `${label}: poster jazz nền tối`, out[2]);
   ok(R.kitFont(out[4].head).cat !== "serif", `${label}: dashboard không dùng tiêu đề có chân`, out[4]);
+  ok(R.kitFont(out[0].head).cat === "serif", `${label}: slide trà theo lời đề, tiêu đề có chân`, out[0]);
   console.log(`     ${out.map((o, i) => `${i + 1}:${o.paletteKey}/${o.fontPair}/${o.preset}`).join("  ")}`);
 }
 console.log("7. Nghiệm thu 7 đề");

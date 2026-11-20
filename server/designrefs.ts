@@ -1,10 +1,8 @@
 // Mẫu tham chiếu cho một lượt thiết kế: chọn 3 mẫu theo đề bài, trộn token, trả ảnh mẫu cho model dựng và người chấm.
 // Thư viện mẫu là tệp trong repo (catalog/design-refs, index.json + một JSON và một ảnh WebP mỗi mẫu), đọc một lần rồi
-// giữ
-// trong bộ nhớ theo thời điểm sửa của index.json. Lịch sử sản phẩm của từng người ở bảng design_history.
-// Ảnh chụp trang mẫu chỉ đi vào ngữ cảnh của model, không bao giờ hiện cho người dùng; khối chữ gửi model không có địa
-// chỉ
-// trang nguồn, nên model không thể "làm giống hệt <hãng>".
+// giữ trong bộ nhớ theo thời điểm sửa của index.json. Lịch sử sản phẩm của từng người ở bảng design_history. Ảnh chụp
+// trang mẫu chỉ đi vào ngữ cảnh của model, không bao giờ hiện cho người dùng; khối chữ gửi model không có địa chỉ trang
+// nguồn, nên model không thể "làm giống hệt <hãng>".
 import "server-only";
 import fs from "node:fs";
 import path from "node:path";
@@ -12,7 +10,8 @@ import type {
   BriefFacets, DesignRef, MixRole, RefIndex, RefIndexRow, RefTokens, StyleMix, StyleTurn, StyleTurnInput, TurnRef,
 } from "../shared/designrefs";
 import {
-  bestRef, briefFacets, buildMix, followAsk, mixKeys, pickRefs, validTokens, type HistoryRow, type MixPart,
+  bestRef, briefFacets, briefHeadCat, buildMix, followAsk, mixKeys, pickRefs, validTokens, type HistoryRow,
+  type MixPart,
 } from "../shared/designpick";
 import { db } from "./db/db";
 import { getStyle, styleImageFile, type StoredStyle } from "./designstyles";
@@ -156,15 +155,14 @@ const styleTurnRef = (s: StoredStyle, domain: StyleMix["domain"]): TurnRef => ({
 
 /**
  * Bộ phong cách cho một sản phẩm thiết kế mới: phong cách người dùng chọn (chip "Kiểu: …"), phong cách đọc từ liên kết
- * /
- * ảnh họ gửi kèm lời "theo kiểu này", hoặc 3 mẫu thư viện hợp đề. Không có gì để dùng (bảng tính, chưa có thư viện) thì
- * null
- * và lượt chạy như trước. Ghi sản phẩm vào lịch sử trừ khi đang ẩn danh.
+ * hay ảnh họ gửi kèm lời "theo kiểu này", hoặc 3 mẫu thư viện hợp đề. Không có gì để dùng (bảng tính, chưa có thư viện)
+ * thì null và lượt chạy như trước. Ghi sản phẩm vào lịch sử trừ khi đang ẩn danh.
  */
 export async function styleForTurn(i: StyleTurnInput): Promise<StyleTurn | null> {
   const facets = briefFacets(i.typed, i.format);
   if (!facets) return null;
   const seed = i.seed ?? i.conv ?? i.uid;
+  const headCat = briefHeadCat(i.typed);
   const rows = refRows();
   let note: string | null = null;
   let own: StoredStyle | null = null;
@@ -196,14 +194,14 @@ export async function styleForTurn(i: StyleTurnInput): Promise<StyleTurn | null>
     if (extraRef) refs.push(catalogTurnRef(extraRef, ["layout"], 2));
     parts = [{ tokens: own.tokens, roles: ["palette", "type", "shape", "layout"], moods: facets.moods }];
   } else {
-    const picks = pickRefs({ facets, rows, history, seed });
+    const picks = pickRefs({ facets, rows, history, seed, headCat });
     const full = (picks ?? []).map((p) => ({ p, ref: getRef(p.row.id) })).filter((x) => x.ref);
     if (!full.length) return null;
     refs = full.map((x, k) => catalogTurnRef(x.ref!, x.p.roles, k + 1));
     parts = full.map((x) => ({ tokens: x.ref!.tokens, roles: x.p.roles, moods: x.ref!.moods }));
   }
   // Phong cách riêng của người dùng được lặp lại có chủ đích: không đổi phông theo lịch sử.
-  const avoid = own ? undefined : { facets, history };
+  const avoid = own ? undefined : { facets, history, headCat };
   const mix = buildMix(parts, facets.domain, i.ownBrand && !own, facets.brand, avoid);
   const turn: StyleTurn = { mix, refs, facets, note };
   if (!i.incognito) {

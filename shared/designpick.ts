@@ -1,10 +1,8 @@
-// Chọn 3 mẫu tham chiếu cho một đề thiết kế và trộn token của chúng thành một bộ phong cách riêng cho sản phẩm.
-// Hàm thuần: không đọc cơ sở dữ liệu, tệp hay mạng (server/designrefs.ts nạp thư viện mẫu và lịch sử rồi gọi vào đây),
-// nên
-// cùng một đề, cùng hạt giống và cùng lịch sử luôn ra cùng kết quả, và kiểm thử chạy không cần máy chủ.
-// Mỗi sản phẩm trộn từ 2-3 mẫu (màu của mẫu này, chữ của mẫu kia, hình khối của mẫu thứ ba): không sản phẩm nào là bản
-// sao
-// của một trang nguồn.
+// Chọn 3 mẫu tham chiếu cho một đề thiết kế và trộn token của chúng thành một bộ phong cách riêng cho sản phẩm. Hàm
+// thuần: không đọc cơ sở dữ liệu, tệp hay mạng (server/designrefs.ts nạp thư viện mẫu và lịch sử rồi gọi vào đây), nên
+// cùng một đề, cùng hạt giống và cùng lịch sử luôn ra cùng kết quả, và kiểm thử chạy không cần máy chủ. Mỗi sản phẩm
+// trộn từ 2-3 mẫu (màu của mẫu này, chữ của mẫu kia, hình khối của mẫu thứ ba): không sản phẩm nào là bản sao của một
+// trang nguồn.
 import {
   contrastRatio, fontPairKey, fontStack, isHex, kitFont, luminance, MIX_ATTR, MIX_FONTS_ATTR, paletteKey,
   type BriefFacets, type ColorRole, type KitFontId, type MixRole, type PaletteColor, type RefAudience,
@@ -14,8 +12,8 @@ import {
 
 // ---------------------------------------------------------------- đọc đề bài
 const fold = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/đ/gi, "d").toLowerCase();
-// Chữ có dấu chỉ khớp đúng dấu đó hoặc bản không dấu: "trà" nhận "tra" nhưng không nhận "trả lời", "ấm" không nhận "âm
-// nhạc".
+// Chữ có dấu chỉ khớp đúng dấu đó hoặc bản không dấu: "trà" nhận "tra" nhưng không nhận "trả lời", "ấm" không nhận
+// "âm nhạc".
 const accented = (src: string) => src.normalize("NFC").replace(/\p{L}/gu, (c) => {
   const f = fold(c);
   return f === c.toLowerCase() ? c : `[${c}${f}]`;
@@ -222,6 +220,28 @@ export function followAsk(typed: string, hasImage: boolean): { url: string } | {
   return hasImage ? { image: true } : null;
 }
 
+// Đề nghề thường ghi thẳng loại phông tiêu đề ("một serif cho tiêu đề, một sans cho thân"); bản trộn trái lời đề thì
+// vai "đúng brief" của người chấm bắt lỗi ngay, nên chọn mẫu chữ phải nghe theo trước.
+const SERIF_HEAD = words("serif cho tiêu đề|tiêu đề (?:dùng |bằng |là )?(?:phông |chữ )?(?:serif|có chân)"
+  + "|chữ có chân cho tiêu đề|serif (?:heading|headline|title)s?|(?:heading|headline|title)s? in (?:a )?serif");
+const SANS_HEAD = words("sans(?:-serif)? cho tiêu đề|tiêu đề (?:dùng |bằng |là )?(?:phông |chữ )?(?:sans|không chân)"
+  + "|chữ không chân cho tiêu đề|sans(?:-serif)? (?:heading|headline|title)s?"
+  + "|(?:heading|headline|title)s? in (?:a )?sans(?:-serif)?");
+/** Loại phông tiêu đề đề bài đòi ("serif cho tiêu đề", "tiêu đề không chân"…), không nói thì null. */
+export function briefHeadCat(typed: string): "serif" | "sans" | null {
+  const t = lower(typed);
+  const strict = isAccented(typed);
+  const serif = has(t, SERIF_HEAD, strict);
+  const sans = has(t, SANS_HEAD, strict);
+  return serif === sans ? null : serif ? "serif" : "sans";
+}
+/** Phông tiêu đề có đúng loại đề đòi không: "sans" nhận mọi phông không chân (sans, display), không nhận mono. */
+export const headCatOk = (kit: string, want: "serif" | "sans" | null | undefined) => {
+  if (!want) return true;
+  const cat = kitFont(kit)?.cat;
+  return want === "serif" ? cat === "serif" : cat === "sans" || cat === "display";
+};
+
 // ---------------------------------------------------------------- chọn mẫu
 const hash = (s: string) => {
   let h = 5381;
@@ -240,7 +260,13 @@ export function scoreRef(r: RefIndexRow, f: BriefFacets, seed: string): number {
 
 /** Một sản phẩm trước đây của người dùng: mẫu đã dùng, khóa bảng màu và cặp phông của bản trộn. */
 export type HistoryRow = { refIds: string[]; paletteKey: string; fontPair: string; brand: string | null };
-export type PickInput = { facets: BriefFacets; rows: RefIndexRow[]; history: HistoryRow[]; seed: string };
+export type PickInput = {
+  facets: BriefFacets;
+  rows: RefIndexRow[];
+  history: HistoryRow[];
+  seed: string;
+  headCat?: "serif" | "sans" | null;
+};
 export type Picked = { row: RefIndexRow; roles: MixRole[] };
 
 // Ít mẫu cùng mảng thì mượn mảng gần nhất: email gần web nhất, tài liệu gần slide.
@@ -281,8 +307,7 @@ const effectivePair = (r: RefIndexRow, domain: RefDomain) => {
 /**
  * Chọn 3 mẫu: mẫu chính hợp đề nhất (cho màu, bố cục, nền), mẫu thứ hai khác trang nguồn và cặp phông chưa dùng gần đây
  * (cho chữ), mẫu thứ ba từ trang nguồn thứ ba (cho hình khối). Web, slide, poster mà hai mẫu đầu không có ảnh thật thì
- * mẫu
- * thứ ba phải có. Không đủ mẫu thỏa mọi điều kiện thì nới dần (trang nguồn, rồi lịch sử), không bao giờ trả về mẫu
+ * mẫu thứ ba phải có. Không đủ mẫu thỏa mọi điều kiện thì nới dần (trang nguồn, rồi lịch sử), không bao giờ trả về mẫu
  * trùng.
  */
 export function pickRefs(i: PickInput): Picked[] | null {
@@ -319,7 +344,9 @@ export function pickRefs(i: PickInput): Picked[] | null {
   const notP = (r: RefIndexRow) => r.id !== primary.id;
   const typeOk = (r: RefIndexRow) => f.domain !== "dashboard" || !headIsSerif(r.fontPair);
   const pairOf = (r: RefIndexRow) => effectivePair(r, f.domain);
-  const second = best(score, [
+  // Mẫu chữ có loại phông tiêu đề đúng lời đề được ưu tiên hơn hẳn độ hợp ngành, tâm trạng.
+  const typeScore = (r: RefIndexRow) => score(r) + (i.headCat && headCatOk(fontIds(pairOf(r))[0], i.headCat) ? 8 : 0);
+  const second = best(typeScore, [
     (r) => notP(r) && typeOk(r) && fresh(r) && r.host !== primary.host && !wideFont.has(pairOf(r)),
     (r) => notP(r) && typeOk(r) && fresh(r) && r.host !== primary.host && !usedFont.has(pairOf(r)),
     (r) => notP(r) && typeOk(r) && fresh(r) && !usedFont.has(pairOf(r)),
@@ -400,9 +427,8 @@ const colorOf = (colors: RefColor[], role: ColorRole) => colors.find((c) => c.ro
 
 /**
  * Bảng màu đủ vai cho bộ CSS: chữ và chữ phụ đạt 4.5:1 trên nền (đẩy độ sáng), màu nhấn làm chữ không đạt thì giữ màu
- * gốc ở
- * vivid cho mảng màu, biểu đồ, và dùng bản sẫm / sáng hơn cho chữ (như các phong cách có sẵn); vai thiếu pha từ nền và
- * chữ.
+ * gốc ở vivid cho mảng màu, biểu đồ, và dùng bản sẫm / sáng hơn cho chữ (như các phong cách có sẵn); vai thiếu pha từ
+ * nền và chữ.
  */
 export function mixPalette(colors: RefColor[], theme: "light" | "dark"): MixPalette {
   const bg = colorOf(colors, "bg") ?? (theme === "dark" ? "#0e0f12" : "#ffffff");
@@ -462,10 +488,8 @@ export type MixPart = { tokens: RefTokens; roles: MixRole[]; moods?: readonly Re
 
 /**
  * Trộn token: màu, bố cục, nền từ mẫu giữ vai palette; phông, thang chữ, giãn chữ từ mẫu vai type; bo góc, bóng, khoảng
- * cách
- * từ mẫu vai shape; ảnh lấy theo mẫu đầu tiên (chính, hình khối, chữ) có ảnh thật. ownBrand: người dùng có màu thương
- * hiệu
- * riêng, bỏ màu của mẫu (khối quy tắc bảo model dùng màu thương hiệu).
+ * cách từ mẫu vai shape; ảnh lấy theo mẫu đầu tiên (chính, hình khối, chữ) có ảnh thật. ownBrand: người dùng có màu
+ * thương hiệu riêng, bỏ màu của mẫu (khối quy tắc bảo model dùng màu thương hiệu).
  */
 export function mixTokens(parts: MixPart[], domain: RefDomain, ownBrand: boolean): RefTokens {
   const by = (role: MixRole) => (parts.find((p) => p.roles.includes(role)) ?? parts[0]);
@@ -559,10 +583,10 @@ export function buildMix(
   domain: RefDomain,
   ownBrand: boolean,
   brand: string | null,
-  avoid?: { facets: BriefFacets; history: HistoryRow[] },
+  avoid?: { facets: BriefFacets; history: HistoryRow[]; headCat?: "serif" | "sans" | null },
 ): StyleMix {
   const mixed = mixTokens(parts, domain, ownBrand);
-  const tokens = avoid ? freshFonts(mixed, avoid.facets, avoid.history) : mixed;
+  const tokens = avoid ? freshFonts(mixed, avoid.facets, avoid.history, avoid.headCat) : mixed;
   const preset = basePreset(tokens);
   const id = mixIdOf(tokens, preset);
   return { id, preset, domain, tokens, css: mixCss(tokens, preset, id), brand };
@@ -570,16 +594,24 @@ export function buildMix(
 /**
  * Mẫu chữ trùng cặp phông của sản phẩm gần đây (thư viện ít cặp phông, nhiều mẫu đo ra cùng một phông) thì đổi sang cặp
  * phông theo tâm trạng của đề chưa dùng gần đây: một người làm nhiều sản phẩm liên tiếp không thấy cùng một cặp chữ.
- * Thang chữ, giãn chữ vẫn của mẫu chữ; cùng thương hiệu thì giữ nguyên.
+ * Thang chữ, giãn chữ vẫn của mẫu chữ; cùng thương hiệu thì giữ nguyên. Đề đòi loại phông tiêu đề (headCat) mà mẫu
+ * chữ không có thì cũng đổi sang cặp phông theo tâm trạng có tiêu đề đúng loại.
  */
-export function freshFonts(t: RefTokens, f: BriefFacets, history: HistoryRow[]): RefTokens {
+export function freshFonts(
+  t: RefTokens,
+  f: BriefFacets,
+  history: HistoryRow[],
+  headCat?: "serif" | "sans" | null,
+): RefTokens {
   const hist = history.filter((h) => !sameBrand(h.brand, f.brand));
   const wide = new Set(hist.slice(0, WIDE).map((h) => h.fontPair));
   const recent = new Set(hist.slice(0, RECENT).map((h) => h.fontPair));
-  if (!wide.has(fontPairKey(t))) return t;
+  // Dashboard không bao giờ dùng tiêu đề có chân, kể cả khi đề đòi: bảng số đọc nhanh quan trọng hơn.
+  const want = f.domain === "dashboard" && headCat === "serif" ? null : headCat;
+  if (!wide.has(fontPairKey(t)) && headCatOk(t.fonts.head.kit, want)) return t;
   const order = [...f.moods, ...(Object.keys(MOOD_FONTS) as RefMood[])];
   const serifOk = (h: KitFontId) => f.domain !== "dashboard" || kitFont(h)?.cat !== "serif";
-  const pairs = order.map((m) => MOOD_FONTS[m]).filter(([h]) => serifOk(h));
+  const pairs = order.map((m) => MOOD_FONTS[m]).filter(([h]) => serifOk(h) && headCatOk(h, want));
   const pick = pairs.find(([h, b]) => !wide.has(`${h}+${b}`)) ?? pairs.find(([h, b]) => !recent.has(`${h}+${b}`));
   if (!pick) return t;
   const head = kitRef(pick[0], t.fonts.head.weight);

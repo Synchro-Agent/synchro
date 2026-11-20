@@ -105,7 +105,10 @@ ok(!picks.table.length, "không còn bảng [vi, en] / { vi, en } ngoài PAIR_AL
 }
 
 console.log("4. Không có khóa trùng khác bản dịch giữa các tệp từ điển");
-const DICT_FILES = ["i18n-dict.ts", "i18n-vi.ts", "i18n-ux.ts", "i18n-ops.ts", "i18n-models.ts", "i18n-auth.ts", "i18n-features.ts", "i18n-design.ts", "speech/i18n.ts", "cxactions.ts"].map((f) => path.join(process.cwd(), findSrc(f)));
+const DICT_FILES = [
+  "i18n-dict.ts", "i18n-vi.ts", "i18n-ux.ts", "i18n-ops.ts", "i18n-models.ts", "i18n-auth.ts", "i18n-features.ts",
+  "i18n-design.ts", "speech/i18n.ts", "cxactions.ts",
+].map((f) => path.join(process.cwd(), findSrc(f)));
 /** Mọi mục khóa → [{ bản dịch, chỗ }] theo chiều (VI2EN / EN2VI theo tên bảng: VI2EN, UX_VI2EN, Object.assign(FX_EN2VI, {…})…). */
 function dictEntries(list) {
   const seen = { VI2EN: new Map(), EN2VI: new Map() };
