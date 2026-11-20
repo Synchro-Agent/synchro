@@ -552,6 +552,14 @@ try {
       fs.writeFileSync(path.join(agyDir, "cache", "onboarding.json"), JSON.stringify({ onboardingComplete: true }));
       const ev = await all(S.engineFor("agy").runTurn({ prompt: "chào", env: A.engineEnv("agy", "user_A") }));
       ok(ev.some((e) => e.kind === "status" && e.tick === true && /vẫn đang viết, đã \d+ giây/.test(e.text ?? "")), "agy: báo thời gian đã chờ", JSON.stringify(ev));
+      // Synchro đã biết bước đang làm / artifact đã nhận (pulse): dòng chờ kèm phần đó thay vì chỉ đếm giây.
+      const known = "bước 2/3: Dựng 8 slide";
+      const env2 = A.engineEnv("agy", "user_A");
+      const ev2 = await all(S.engineFor("agy").runTurn({ prompt: "chào", env: env2, pulse: () => known }));
+      const ticks = ev2.filter((e) => e.kind === "status" && e.tick === true).map((e) => e.text ?? "");
+      const withKnown = /^Antigravity vẫn đang viết, đã \d+ giây · bước 2\/3: Dựng 8 slide$/;
+      ok(ticks.length > 0 && ticks.every((t) => withKnown.test(t)),
+        "agy: dòng chờ kèm tiến độ đã biết", JSON.stringify(ticks));
     }
     // Tệp tạm của lượt bị giết: dọn tệp cũ, không đụng tệp mới hay tệp khác.
     {

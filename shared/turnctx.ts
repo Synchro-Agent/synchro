@@ -65,10 +65,24 @@ export const NO_QUOTE_INS = "Không bao giờ trích lại, nhắc lại hay tó
 // Dòng cũ có nội dung hướng dẫn trong ngoặc kép; dòng dự án chỉ liệt kê loại ngữ cảnh (hướng dẫn, bộ nhớ, tài liệu). Có thể in nghiêng / đậm bằng _ hoặc *.
 const INS_NOTE = /^[ \t]*[_*]{0,2}[ \t]*(?:Đã áp dụng hướng dẫn(?: cá nhân)?(?: của bạn)?|Applied your (?:personal )?instructions|Personal instructions applied)[ \t]*:[ \t]*[“"«„].*$/gimu;
 const PJ_NOTE = /^[ \t]*[_*]{0,2}[ \t]*(?:Đã áp dụng ngữ cảnh dự án|Project context applied)[ \t]*:[ \t]*(?:(?:hướng dẫn|bộ nhớ|tài liệu|instructions|memory|documents)[ \t]*,?[ \t]*)+[_*]{0,2}[ \t]*$/gimu;
-/** Bỏ các dòng "đã áp dụng hướng dẫn / ngữ cảnh dự án" kiểu cũ khỏi chữ câu trả lời. Không có dòng nào thì trả nguyên chữ (giữ đúng khoảng trắng). */
+// Lời dẫn giữa lượt của các đoạn chat đã lưu còn chỗ giữ artifact "(Đã viết “…”, xem ở câu trả lời)": artifact đã nằm
+// trong câu trả lời, dòng này chỉ là ghi chú nội bộ (người dùng thấy nó lặp giữa câu trả lời bộ slide), và model có thể
+// bắt chước nó từ lịch sử.
+// Chỉ bỏ khoảng trắng của chính dòng / chỗ giữ đó: phần còn lại của câu trả lời giữ nguyên (hai dấu cách cuối dòng là
+// ngắt dòng của Markdown, thụt đầu dòng là danh sách / code).
+const WROTE_SRC = String.raw`[_*]{0,2}\(Đã viết (?:“[^”\n]*”|"[^"\n]*"|artifact), xem ở câu trả lời\)[_*]{0,2}`;
+// Chỗ giữ mở đầu câu trả lời: bỏ luôn các dòng trống theo sau, không để câu trả lời bắt đầu bằng dòng trống.
+const WROTE_HEAD = new RegExp(`^(?:[ \\t]*${WROTE_SRC}[ \\t]*(?:\\n|$)\\n*)+`, "u");
+const WROTE_LINE = new RegExp(`^[ \\t]*${WROTE_SRC}[ \\t]*(?:\\n|$)`, "gmu");
+const WROTE_INLINE = new RegExp(`[ \\t]*${WROTE_SRC}`, "gu");
+/**
+ * Bỏ các dòng ghi chú nội bộ khỏi chữ câu trả lời: "đã áp dụng hướng dẫn / ngữ cảnh dự án" model từng viết và chỗ giữ
+ * artifact "(Đã viết …, xem ở câu trả lời)". Không có dòng nào thì trả nguyên chữ (giữ đúng khoảng trắng).
+ */
 export function stripAppliedNotes(text: string): string {
-  if (typeof text !== "string" || !/áp dụng|applied/i.test(text)) return text;
-  const out = text.replace(INS_NOTE, "").replace(PJ_NOTE, "");
+  if (typeof text !== "string" || !/áp dụng|applied|xem ở câu trả lời/i.test(text)) return text;
+  const notes = text.replace(INS_NOTE, "").replace(PJ_NOTE, "");
+  const out = notes.replace(WROTE_HEAD, "").replace(WROTE_LINE, "").replace(WROTE_INLINE, "");
   return out === text ? text : out.replace(/\n{3,}/g, "\n\n").trimEnd();
 }
 // Luồng trực tiếp (SSE delta): chữ model viết tới từng mẩu, bản cuối mới được lọc — dòng ghi chú kiểu cũ có thể lộ trên màn hình trước khi bản cuối thay.

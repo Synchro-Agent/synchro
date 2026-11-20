@@ -86,7 +86,12 @@ export function ClaudeDirectory({ q, onOpen, onChanged }: { q: string; onOpen: (
   const askAll = (c: string | null) => {
     const left = c ? missing(c) : missingAll;
     const label = c ? tr(CAT.get(c)?.label ?? c) : tr("the whole directory");
-    app.confirm(`${tr("Install")} ${n(left)} ${tr("libraries")}?`, `${tr("Every library of")} ${label} ${tr("that is not installed yet goes into Libraries for everyone. It runs on the server in the background: you can close this page. Libraries whose license does not allow copying are skipped and listed.")}`, "Install", () => void job("install-all", c));
+    // Một chuỗi nguyên để từ điển dịch tìm được đúng khóa.
+    const why = tr("that is not installed yet goes into Libraries for everyone. It runs on the server in the "
+      + "background: you can close this page. Libraries whose license does not allow copying are skipped and listed.");
+    const title = `${tr("Install")} ${n(left)} ${tr("libraries")}?`;
+    const run = () => void job("install-all", c);
+    app.confirm(title, `${tr("Every library of")} ${label} ${why}`, "Install", run, { safe: true });
   };
 
   if (err && !d) return <div className="empty" style={{ marginTop: 24 }}><I.Alert size={22} /><span>{err}</span><button className="btn" onClick={load}>Try again</button></div>;

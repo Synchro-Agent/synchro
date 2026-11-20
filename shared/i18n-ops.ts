@@ -133,6 +133,16 @@ export const OPS_VI2EN: Record<string, string> = {
   "Hôm nay · chi phí API": "Today · API cost",
   "Đặt lại lúc 0 giờ UTC. Chỉ tính các lượt chạy bằng khóa API.": "Resets at 00:00 UTC. Only API key calls count.",
   "khóa API chung {pct}%": "shared API key {pct}%",
+  // Vòng mức dùng theo nguồn sẽ chạy lượt kế tiếp (ui/usagering.tsx).
+  "khóa API {name}": "{name} API key",
+  "gói {name}": "{name} plan",
+  "hết mọi nguồn": "no source left",
+  "Câu chat thường kế tiếp chạy bằng {src}, đã dùng {pct}%.":
+    "Your next plain chat message runs on the {src}, {pct}% used.",
+  "Bộ slide, code hay việc nhiều bước có thể chạy bằng model khác.":
+    "Slide decks, code or multi-step tasks may run on a different model.",
+  "Mọi gói và khóa API đều đã chạm giới hạn. Lượt kế tiếp chạy được khi một nguồn hồi lại.":
+    "Every plan and API key has hit its limit. The next turn can run once one of them resets.",
   "{n} việc nền": "{n} background job|{n} background jobs",
   "Đặt tên đoạn chat, ghi nhớ, phản biện tự động… chạy trên gói của bạn và tính vào hạn mức của hãng. Synchro giới hạn việc nền mỗi ngày và dừng hẳn khi gói gần chạm giới hạn.": "Chat titles, memory, automatic reviews and similar jobs run on your plan and count toward the provider's limits. Synchro caps background jobs each day and stops them entirely when the plan is close to its limit.",
   "Gemini đang chạy bình thường. Synchro chưa đọc được hạn mức của gói này.": "Gemini is working normally. Synchro can't read this plan's limits yet.",

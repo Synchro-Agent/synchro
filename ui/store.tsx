@@ -90,7 +90,7 @@ export type AppApi = {
   openSettings?: (tab?: string) => void;
   goCode: () => void;
   ask: (text: string) => void;
-  confirm: (title: string, text: string, ok: string, fn: () => void) => void;
+  confirm: (title: string, text: string, ok: string, fn: () => void, o?: { safe?: boolean }) => void;
   exportData: () => void;
   wipe: (what: "all" | "chats") => void;
   close: () => void;

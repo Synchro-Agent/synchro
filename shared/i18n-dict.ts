@@ -1796,10 +1796,19 @@ RULES_EN.unshift(
   [/^Đã kết nối (.+)$/, (m) => `Connected ${m[1]}`],
   [/^Kết nối tới (\S+) bị ngắt giữa chừng\.$/, (m) => `The connection to ${m[1]} dropped partway through.`],
 );
+// Phần tiến độ đã biết sau dòng "vẫn đang viết" (shared/turnpulse.ts).
+// Tên bước và tên artifact là chữ model viết, giữ nguyên.
+const pulseEn = (t: string) => t
+  .replace(/ · bước (\d+)\/(\d+): /g, " · step $1/$2: ").replace(/ · xong (\d+)\/(\d+) việc/g, " · $1/$2 tasks done")
+  .replace(/ · đã nhận “(.+)”, ([\d.]+) ký tự$/,
+    (_, a: string, n: string) => ` · received “${a}”, ${commas(n)} characters`)
+  .replace(/ · đã nhận ([\d.]+) ký tự artifact$/, (_, n: string) => ` · received ${commas(n)} artifact characters`);
+const commas = (n: string) => n.replace(/\./g, ",");
 // Lỗi và trạng thái của engine CLI: câu Việt do máy chủ viết (cli_engines.ts, subs.ts). Người dùng tiếng Anh từng đọc nguyên văn tiếng Việt khi hết đăng nhập.
 RULES_EN.unshift(
   [/^Đoạn chat dài: (.+) đọc nguyên văn (\d+) tin gần nhất, (\d+) tin cũ hơn chỉ có phần trích ngắn hoặc không có\. Điều quan trọng ở đó nên nhắc lại$/, (m) => `Long chat: ${m[1]} reads the latest ${m[2]} messages in full, and the ${m[3]} older ones only as short excerpts, or not at all. Repeat anything important from them`],
-  [/^Antigravity vẫn đang viết, đã (\d+) giây$/, (m) => `Antigravity is still writing, ${m[1]} seconds so far`],
+  [/^Antigravity vẫn đang viết, đã (\d+) giây((?: · .+)?)$/,
+    (m) => `Antigravity is still writing, ${m[1]} seconds so far${pulseEn(m[2])}`],
   [/^\(PDF dạng ảnh (\d+) trang: chỉ có ảnh của (\d+) trang đầu\. Hãy nói rõ điều này với người dùng\.\)$/, (m) => `(Image-only PDF with ${m[1]} pages: only the first ${m[2]} pages are available as images. Tell the user this.)`],
   [/^Không đọc được "(.+)": tệp PDF bị hỏng hoặc đang đặt mật khẩu\.$/, (m) => `Couldn't read "${m[1]}": the PDF is damaged or password protected.`],
   [/^"(.+)" quá dài để gửi nguyên tệp nên model sẽ đọc phần chữ, không thấy hình và bố cục\.$/, (m) => `"${m[1]}" is too long to send as a whole file, so the model will read its text but won't see images or layout.`],

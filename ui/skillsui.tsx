@@ -257,7 +257,7 @@ export function SkillsPanel({ q, Toggle }: { q: string; Toggle: ComponentType<{ 
   const open = async (n: string) => { setFileView(null); try { setDetail((await api(`/api/skills/${n}`)).skill); } catch (e) { setErr((e as Error).message); } };
   const restore = (n: string, v: number) => app.confirm(`Restore v${v}?`, "The model will use this version from now on. Newer versions stay saved and can be restored later.", "Restore version", async () => {
     try { await api(`/api/skills/${n}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ restore: v }) }); app.say(`Đã khôi phục ${n} về v${v}`); await load(); open(n); } catch (e) { setErr((e as Error).message); }
-  });
+  }, { safe: true });
   const [exporting, setExporting] = useState(false);
   const exportZip = async (n: string) => {
     setExporting(true);

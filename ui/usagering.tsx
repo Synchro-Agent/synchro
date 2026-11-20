@@ -9,6 +9,7 @@ import { useApp } from "./store";
 import { getLang, tf, tr, trc } from "./i18n";
 import { resetAt } from "./resetfmt";
 import * as I from "./icons";
+import type { NextSource } from "../shared/usagenext";
 
 /** turn: phần chi phí của lượt người dùng (chat, code…) trong cửa sổ, không gồm việc nền như rút bộ nhớ, embedding (server/usage.ts). */
 export type Limit = { key: "session" | "weekly" | "daily"; used: number; turn?: number; limit: number | null; pct: number; resetAt: number | null; active: boolean };
@@ -22,7 +23,12 @@ export type SubUsage = { cli: "claude" | "codex" | "agy" | "grok"; name: string;
 /** cli: null khi hãng không có gói đăng nhập (DeepSeek chỉ có khóa API). */
 export type VendorUsage = { vendor: "anthropic" | "openai" | "google" | "xai" | "deepseek"; cli: SubUsage["cli"] | null; name: string; models: number; mode: "plan" | "api" | "none"; provider: string | null;
   sub?: SubUsage; rate?: Rate | null; credit?: Credit | null; usingApiUntil?: number | null };
-export type UsageState = { limits: Limit[]; rate: Rate | null; admin: boolean; plan: string; credit?: Credit | null; sub?: SubUsage; vendors?: VendorUsage[] };
+// next: nguồn chế độ Tự động sẽ dùng cho lượt kế tiếp (null: hết mọi nguồn; không có: máy chủ không tính được).
+export type UsageState = {
+  limits: Limit[]; rate: Rate | null; admin: boolean; plan: string; credit?: Credit | null; sub?: SubUsage;
+  vendors?: VendorUsage[];
+  next?: NextSource | null;
+};
 const PROVIDER: Record<string, string> = { anthropic: "Anthropic", openai: "OpenAI", google: "Google", xai: "xAI", deepseek: "DeepSeek" };
 
 // ---------------------------------------------------------------- dữ liệu dùng chung
@@ -199,6 +205,17 @@ export const setupNote = (sub: SubUsage, short = false) => sub.ranAt
   ? (short ? tr("Gemini đang chạy bình thường. Synchro chưa đọc được hạn mức của gói này.") : tr("Gemini đang chạy bình thường. Synchro chưa đọc được bảng hạn mức của Antigravity trên tài khoản này nên chưa hiện phần trăm đã dùng; chat không bị ảnh hưởng, và khi gói chạm giới hạn Synchro vẫn nhận ra và báo cho bạn."))
   : short ? tr("Antigravity đang chờ bạn hoàn tất bước làm quen lần đầu.") : tr("Antigravity đang chờ bạn hoàn tất bước làm quen lần đầu (bảng màu, điều khoản, chia sẻ dữ liệu). Xem Cài đặt → Providers → Gemini.");
 
+// Máy chủ chọn nguồn cho một câu chat thường; bộ slide, code, việc nhiều công cụ được chọn theo chính tin đó nên có thể
+// chạy bằng model (và nguồn) khác: nói rõ để người dùng không hiểu vòng tròn là mọi lượt.
+const NEXT_NOTE = "Câu chat thường kế tiếp chạy bằng {src}, đã dùng {pct}%.";
+const NEXT_OTHER = "Bộ slide, code hay việc nhiều bước có thể chạy bằng model khác.";
+const NO_SOURCE = "Mọi gói và khóa API đều đã chạm giới hạn. Lượt kế tiếp chạy được khi một nguồn hồi lại.";
+/** Tên nguồn chạy lượt kế tiếp: "khóa API Claude", "gói Gemini · model Claude và GPT". */
+function sourceName(n: NextSource, v?: VendorUsage) {
+  const name = v?.name ?? PROVIDER[n.vendor] ?? n.vendor;
+  if (n.mode === "api") return tf("khóa API {name}", { name });
+  return `${tf("gói {name}", { name })}${n.group ? ` · ${groupName(n.group)}` : ""}`;
+}
 /** Huy hiệu cách hãng đang chạy: gói đã đăng nhập, khóa API, hoặc chưa kết nối. */
 export function ModeTag({ v }: { v: VendorUsage }) {
   if (v.mode === "plan") return <span className="us-tag plan">{planName(v.sub)}</span>;
@@ -241,22 +258,37 @@ export function UsageRing({ model, extra, onDetails, up = true }: { model?: stri
   const limited = st?.limits.filter((l) => l.limit !== null) ?? [];
   const live = st?.vendors?.filter((v) => v.mode !== "none") ?? [];
   // Gói subscription: vòng tròn theo cửa sổ đang gần chạm nhất của gói. Khóa API: hạn mức chi phí của Synchro, hạn mức gọi và số dư đã nạp.
-  // Tự động: hãng gần chạm giới hạn nhất (cùng hạn mức chi phí chung nếu có hãng chạy bằng khóa API).
-  const pct = auto ? Math.max(0, ...live.map(vendorPct), ...(hasApi(st) ? limited.map((l) => l.pct) : []))
+  // Tự động: nguồn sẽ chạy lượt kế tiếp (máy chủ chọn bằng đúng cách chọn model của lượt chat), không phải hãng gần
+  // chạm nhất: gói Gemini đã hết mà khóa API chung còn chạy thì vòng tròn hiện phần của khóa API, không "100%" đỏ. Chỉ
+  // đỏ khi không còn nguồn nào. Máy chủ không tính được nguồn kế tiếp (next vắng mặt): hãng gần chạm giới hạn nhất.
+  const next = auto ? st?.next : undefined;
+  const empty = auto && st?.next === null && live.length > 0;
+  const nextV = next ? st?.vendors?.find((v) => v.vendor === next.vendor) : undefined;
+  const pct = next ? next.pct : empty ? 100
+    : auto ? Math.max(0, ...live.map(vendorPct), ...(hasApi(st) ? limited.map((l) => l.pct) : []))
     : sub ? Math.max(0, ...sub.windows.map((w) => (w.status === "rejected" ? 100 : w.usedPct ?? 0)))
     : Math.max(0, ...limited.map((l) => l.pct), st?.rate?.pct ?? 0, st?.credit?.pct ?? 0);
   // Tự động có gói và một lượt chat / code của người dùng đã chạy bằng khóa API chung trong phiên / tuần / ngày đang tính: vòng trong nhỏ cho phần
   // hạn mức chi phí API đã dùng, để người đang nhìn % của gói vẫn thấy lượt vừa tiêu hạn mức API (lỗi 4 của ma trận H1). Chỉ có việc nền trên
   // khóa API (embedding, rút bộ nhớ) thì không hiện, và phần trăm làm tròn còn 0 cũng không hiện ("khóa API chung 0%" chỉ gây hiểu lầm).
-  const apiRaw = auto && hasApi(st) && live.some((v) => v.mode === "plan") ? Math.max(0, ...limited.filter((l) => l.active && (l.turn ?? 0) > 0).map((l) => l.pct)) : 0;
+  // Lượt kế tiếp chạy bằng khóa API thì vòng ngoài đã là phần của khóa API: không thêm vòng trong.
+  const turnApi = limited.filter((l) => l.active && (l.turn ?? 0) > 0).map((l) => l.pct);
+  const inner = auto && hasApi(st) && live.some((v) => v.mode === "plan") && next?.mode !== "api";
+  const apiRaw = inner ? Math.max(0, ...turnApi) : 0;
   const apiPct = Math.round(apiRaw) >= 1 ? apiRaw : 0;
   const r = 6.4, c = 2 * Math.PI * r, ri = 3.4, ci = 2 * Math.PI * ri;
-  const label = st ? `${tr("Mức dùng")}: ${Math.round(pct)}%${apiPct > 0 ? ` · ${tf("khóa API chung {pct}%", { pct: Math.round(apiPct) })}` : ""}` : tr("Mức dùng");
+  const src = next ? sourceName(next, nextV) : "";
+  const apiNote = apiPct > 0 ? ` · ${tf("khóa API chung {pct}%", { pct: Math.round(apiPct) })}` : "";
+  const label = !st ? tr("Mức dùng") : empty ? `${tr("Mức dùng")}: ${tr("hết mọi nguồn")}`
+    : `${tr("Mức dùng")}: ${Math.round(pct)}%${src ? ` · ${src}` : ""}${apiNote}`;
+  // Tự động có nguồn kế tiếp: đỏ chỉ khi hết mọi nguồn, nguồn kế tiếp gần chạm thì màu cảnh báo.
+  const tone = auto && st?.next !== undefined ? (empty ? "hot" : pct >= 70 ? "warn" : "") : level(pct);
   const head = auto ? tr("Mức dùng · Tự động chọn hãng")
     : sub ? `${tr("Giới hạn gói")} · ${sub.name}${sub.plan ? ` ${sub.plan}` : ""}` : `${tr("Giới hạn sử dụng")} · ${trc("Khóa API", "mức dùng")}`;
   return (
     <div className="us-wrap">
-      <button className={`us-ring ${level(pct)} ${open ? "on" : ""}`} onClick={() => setOpen(!open)} aria-label={label} data-tip={label} aria-expanded={open}>
+      <button className={`us-ring ${tone} ${open ? "on" : ""}`} onClick={() => setOpen(!open)}
+        aria-label={label} data-tip={label} aria-expanded={open}>
         <svg width="18" height="18" viewBox="0 0 16 16"><circle cx="8" cy="8" r={r} fill="none" strokeWidth="1.8" className="bg" /><circle cx="8" cy="8" r={r} fill="none" strokeWidth="1.8" className="fg" strokeDasharray={`${(c * Math.max(pct, 0.01)) / 100} ${c}`} transform="rotate(-90 8 8)" strokeLinecap="round" />{apiPct > 0 && <circle cx="8" cy="8" r={ri} fill="none" strokeWidth="1.6" className={`api ${level(apiPct)}`} strokeDasharray={`${(ci * Math.max(apiPct, 4)) / 100} ${ci}`} transform="rotate(-90 8 8)" strokeLinecap="round" />}</svg>{st && <span className="us-ring-n">{Math.round(pct)}%</span>}
       </button>
       <Menu open={open} role="dialog" className={`us-pop ${up ? "up" : "down"}`}>
@@ -264,6 +296,8 @@ export function UsageRing({ model, extra, onDetails, up = true }: { model?: stri
         <div className="us-h"><span>{head}</span><UsageIcon size={15} /></div>
         {!st ? <div className="us-empty"><span className="art-spin sm" /></div> : auto ? (
           <>
+            {next && <p className="us-note us-next">{tf(NEXT_NOTE, { src, pct: Math.round(pct) })} {tr(NEXT_OTHER)}</p>}
+            {empty && live.length > 0 && <p className="us-note us-next">{tr(NO_SOURCE)}</p>}
             {live.map((v) => <VendorBlock key={v.vendor} v={v} />)}
             {hasApi(st) && limited.length > 0 && <div className="us-v"><div className="us-v-h"><b>{tr("Giới hạn chung của khóa API")}</b></div>{limited.map((l) => <LimitRow key={l.key} l={l} />)}</div>}
             {!live.length && <p className="us-note">{tr("Chưa kết nối hãng AI nào. Đăng nhập gói hoặc thêm khóa API ở Cài đặt → Providers.")}</p>}

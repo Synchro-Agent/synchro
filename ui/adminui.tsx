@@ -285,6 +285,14 @@ export function AdminPanel({ Toggle }: { Toggle: ToggleT }) {
     setBusy(true);
     try { await fn(); app.say(ok); await load(); if (open) loadDetail(open); } catch (e) { app.say((e as Error).message); } finally { setBusy(false); }
   };
+  // Cấp quyền quản trị không xóa gì và gỡ lại được: nút chính thường, màu đỏ chỉ để báo xóa / gỡ / thu hồi.
+  const makeAdmin = (id: string) => {
+    const grant = () => call("PATCH", `/api/admin/users/${id}`, { action: "set_role", role: "admin" });
+    const why = `${tr("They will be able to manage people, access, models and settings.")} ${
+      tr("API keys, billing and permanent deletion stay with you.")}`;
+    app.confirm("Make this person an administrator?", why, "Make administrator",
+      () => act(grant, "Administrator added"), { safe: true });
+  };
 
   // Chọn hàng loạt người dùng: tạm khóa, mở khóa, đăng xuất mọi nơi, xóa tài khoản (bỏ qua tài khoản chủ và chính bạn).
   const qq = q.trim().toLowerCase();
@@ -477,7 +485,8 @@ export function AdminPanel({ Toggle }: { Toggle: ToggleT }) {
                         : u.id === app.me?.id ? null
                         : owner ? (u.role === "admin"
                           ? <button className="btn" disabled={busy} onClick={() => app.confirm("Remove administrator?", "They keep their account and data, and lose access to Administrator.", "Remove", () => act(() => call("PATCH", `/api/admin/users/${u.id}`, { action: "set_role", role: "member" }), "Administrator removed"))}>Remove administrator</button>
-                          : <button className="btn" disabled={busy || !u.verified || u.status !== "active"} onClick={() => app.confirm("Make this person an administrator?", "They will be able to manage people, access, models and settings. API keys, billing and permanent deletion stay with you.", "Make administrator", () => act(() => call("PATCH", `/api/admin/users/${u.id}`, { action: "set_role", role: "admin" }), "Administrator added"))}>Make administrator</button>)
+                          : <button className="btn" disabled={busy || !u.verified || u.status !== "active"}
+                            onClick={() => makeAdmin(u.id)}>Make administrator</button>)
                         : <p className="d" style={{ margin: 0 }}>Only the Owner can add or remove administrators.</p>}
                     </div>
                     {u.protected ? <p className="d" style={{ margin: "12px 0 0" }}>{u.role === "admin" && !u.roleFixed ? "Only the Owner can change another administrator's account." : "Owner accounts can't be suspended or deleted from here."}</p> : (

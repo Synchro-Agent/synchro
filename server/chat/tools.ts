@@ -284,18 +284,22 @@ export const PLAN_TOOL = {
 // Artifact model viết giữa lượt (trước khi gọi công cụ — vd. viết bộ slide rồi check_artifact): lời dẫn chỉ giữ 4000 ký tự, không dựng
 // artifact và không thuộc câu trả lời cuối, nên bộ slide từng hiện thành mã CSS thô rồi mất hẳn, check_artifact cũng không thấy.
 // Tách artifact khỏi lời dẫn, giữ trong lượt (read_artifact / check_artifact đọc được), rồi đặt vào đầu câu trả lời cuối.
+// Lời dẫn không giữ chỗ nào cho artifact: thẻ artifact đã có trong câu trả lời, một dòng "đã viết …" ở đây chỉ là ghi
+// chú nội bộ lặp lại.
 const ART_BLOCK = /<artifact\b[^>]*>[\s\S]*?(?:<\/artifact>|$)/gi;
 export function sayOut(x: Exec | null | undefined, text: string) {
   // Lời dẫn (say) cũng là chữ model viết: bỏ dòng ghi chú "Đã áp dụng …" kiểu cũ như câu trả lời cuối, để không lộ hướng dẫn cá nhân qua sự kiện 'say'.
   let t = stripAppliedNotes(scrubServerPaths(text.trim()));
-  if (x && hasArtifacts(t)) t = t.replace(ART_BLOCK, (b) => {
-    // Câu trả lời cuối của CLI lặp lại các khối đã tách ở lời gọi công cụ trước: giữ một bản, không thì bản sửa bị
-    // áp hai lần.
-    const arts = (x.turnArts ??= []);
-    if (!arts.includes(b)) arts.push(b);
-    const title = /\btitle\s*=\s*"([^"]*)"/i.exec(b)?.[1];
-    return `_(Đã viết ${title ? `“${title}”` : "artifact"}, xem ở câu trả lời)_`;
-  }).trim();
+  if (x && hasArtifacts(t)) {
+    t = t.replace(ART_BLOCK, (b) => {
+      // Câu trả lời cuối của CLI lặp lại các khối đã tách ở lời gọi công cụ trước: giữ một bản, không thì bản sửa bị
+      // áp hai lần.
+      const arts = (x.turnArts ??= []);
+      if (!arts.includes(b)) arts.push(b);
+      return "";
+    });
+    t = t.replace(/\n{3,}/g, "\n\n").trim();
+  }
   if (t) progress("say", t);
 }
 /** Model định trả lời xong mà câu trả lời có bộ slide: tự kiểm bản cuối (artcheck.ts autoDeckCheck), thấy lỗi thì trả lời nhắc <auto_check>

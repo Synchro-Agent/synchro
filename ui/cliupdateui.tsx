@@ -7,6 +7,7 @@ import * as I from "./icons";
 import { useApp } from "./store";
 import { call, ago, fmtDate } from "./adminui";
 import { refreshModels } from "./models";
+import { tr } from "./i18n";
 
 type Outcome = "updated" | "same" | "failed" | "smoke_failed" | "skipped" | "rolled_back" | "not_installed";
 type Result = { cli: string; outcome: Outcome; from: string | null; to: string | null; detail: string; at: number };
@@ -60,7 +61,13 @@ export function CliUpdates() {
     setBusy(true);
     try { setV(await call<View>("POST", "/api/admin/cliupdate", body)); } catch (e) { app.say((e as Error).message); } finally { setBusy(false); }
   };
-  const back = (cli: string) => app.confirm("Roll back to the previous version?", "Everyone goes back to the version that ran before the last update. Plan sign-ins stay as they are. Weekly updates skip this version from now on.", "Roll back", () => void post({ action: "rollback", cli }));
+  // Quay về bản trước không xóa gì và cập nhật lại được: nút chính thường, màu đỏ chỉ để báo xóa / gỡ / thu hồi.
+  const backWhy = [
+    "Everyone goes back to the version that ran before the last update.", "Plan sign-ins stay as they are.",
+    "Weekly updates skip this version from now on.",
+  ].map((x) => tr(x)).join(" ");
+  const back = (cli: string) => app.confirm("Roll back to the previous version?", backWhy, "Roll back",
+    () => void post({ action: "rollback", cli }), { safe: true });
   if (err) return <div className="api-err" role="alert"><I.Alert size={14} /><span>{err}</span></div>;
   if (!v) return <p className="pv-note">Loading…</p>;
   const lock = !v.owner || v.envOff;
