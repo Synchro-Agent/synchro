@@ -85,6 +85,19 @@ export function appliedDelta(shown: string, raw: string): { text: string; t: str
 // bị bỏ qua ở câu hỏi ngắn). Máy chủ bù bằng bản dự án đã đồng bộ, trước khi chọn đường đi của lượt (đường nhanh hay đầy đủ, gói hay khóa API).
 export const PROJECT_INS_HEAD = "## Hướng dẫn của dự án (hãy luôn tuân theo)";
 export const PROJECT_INS_MAX = 20_000;
+const PROJECT_GOAL_LABEL = "Mục tiêu và bối cảnh của dự án:";
+/**
+ * Phần dự án model phải đọc: ô "Mục tiêu và bối cảnh" của hộp thoại tạo / sửa dự án (trường desc)
+ * và thẻ Hướng dẫn (trường ins). Hộp thoại hứa "Synchro đọc phần này trước mỗi đoạn chat trong dự án",
+ * nên dự án chỉ ghi mục tiêu ("luôn kết thúc bằng KIWI-PROJ") cũng phải tới model như hướng dẫn.
+ * Hai phần nằm liền nhau, không cách dòng trống: Codex và Antigravity gửi lại hướng dẫn theo từng đoạn
+ * cách bởi dòng trống khi nối tiếp phiên, nên cả khối luôn đi cùng tiêu đề dự án.
+ */
+export function projectBrief(p: { desc?: unknown; ins?: unknown } | null | undefined): string {
+  const goal = typeof p?.desc === "string" ? p.desc.trim() : "";
+  const ins = typeof p?.ins === "string" ? p.ins.trim() : "";
+  return [goal ? `${PROJECT_GOAL_LABEL} ${goal}` : "", ins].filter(Boolean).join("\n");
+}
 /**
  * Lời nhắc hệ thống có hướng dẫn dự án. clientFull: trình duyệt có đủ dữ liệu dự án (không phải stub) nên lời nhắc của nó là bản đúng nhất —
  * dự án ở đó không có hướng dẫn thì không lấy bản máy chủ có thể còn cũ (người dùng vừa xóa hướng dẫn). base: lời nhắc mặc định khi trình duyệt không gửi.

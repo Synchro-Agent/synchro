@@ -198,6 +198,17 @@ function pjEcho(sys) {
   const parts = sys.split("## Hướng dẫn của dự án (hãy luôn tuân theo)\n");
   return parts.length > 1 ? `PJINS x${parts.length - 1}: ${parts[1].split(/\n\s*\n/)[0].trim().replace(/\s+/g, " ").slice(0, 300)}` : "PJINS: none";
 }
+// "#pjins" của CLI chỉ nhận hướng dẫn ở lượt mở phiên (Codex, Antigravity): lượt nối tiếp Synchro chỉ gửi phần
+// hướng dẫn mới, phần cũ nằm trong lịch sử phiên của CLI thật. Giả lập nhớ phần dự án theo phiên để lượt
+// nối tiếp nhắc lại đúng thứ phiên đang có.
+function pjSession(dir, id, prompt) {
+  const f = path.join(dir, "mock-pjins.json"), s = readJson(f, {});
+  const now = pjEcho(prompt);
+  if (now === "PJINS: none") return s[id] ?? now;
+  s[id] = now;
+  writeJson(f, s);
+  return now;
+}
 // "#sxkit": câu trả lời có sơ đồ ```d2 và bản trình bày dùng bộ CSS: nền shader 3D (data-sx-shader), biểu đồ ECharts (data-sx-chart), khối kính khúc xạ.
 // Dùng chung cho CLI giả lập và khóa API giả lập (mock-providers.mjs) để xem các tính năng đồ họa trên trang thật.
 function sxKit() {
@@ -322,3 +333,4 @@ function gate(a) {
   if (m === "smoke" || (m === "turn" && !status)) { console.error("mock: broken build (segmentation fault)"); process.exit(3); }
 }
 module.exports = { oauthTurn, version, gate, sxKit, TINY_JPEG, tinyPng, isImageTurn, imageCount, imageMode, imageLog, saveImage, stallTurn, STALL_TEXT, mediaDesc, mediaReply, mcp, isTitleAsk, mockTitle, mockBrain, prefsEcho, ruleEcho, pjEcho, toolAsk, cfg, sleep, out, uuid, readStdin, readLine, flag, bumpSession, bumpUsage, totalTurns, reply, chunks, fs, path, crypto };
+module.exports.pjSession = pjSession;

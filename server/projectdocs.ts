@@ -2,6 +2,7 @@
 // Dữ liệu lấy từ bản dự án đã đồng bộ lên máy chủ của chính người dùng; dự án chưa đồng bộ thì không có công cụ, model vẫn nói rõ chỉ đọc được một phần.
 import "server-only";
 import { itemsByKey } from "./chatstore";
+import { projectBrief } from "../shared/turnctx";
 
 type Doc = { name?: string; text?: string; chunks?: string[] };
 const PAGE = 30_000, HITS = 12, WINDOW = 700;
@@ -17,12 +18,18 @@ export function projectDocs(uid: string, project: unknown): { name: string; text
     return (p.ctx ?? []).map((d) => ({ name: String(d.name ?? ""), text: d.text ?? (d.chunks ?? []).join("\n\n") })).filter((d) => d.name && d.text);
   } catch { return []; }
 }
-/** Hướng dẫn của dự án trong bản đã đồng bộ lên máy chủ (rỗng khi dự án chưa đồng bộ hay không có hướng dẫn). */
+/** Mục tiêu và hướng dẫn của dự án trong bản đã đồng bộ lên máy chủ (rỗng khi chưa đồng bộ hay không có cả hai). */
 export function projectIns(uid: string, project: unknown): string {
   if (project === undefined || project === null || project === "") return "";
   const row = itemsByKey(uid, [`project:${String(project)}`])[0];
   if (!row?.data || row.deleted) return "";
-  try { const p = JSON.parse(row.data) as { ins?: unknown }; return typeof p.ins === "string" ? p.ins.trim() : ""; } catch { return ""; }
+  try {
+    return projectBrief(JSON.parse(row.data) as { desc?: unknown; ins?: unknown });
+  } catch (e) {
+    // Bản đồng bộ hỏng: lượt vẫn chạy bằng lời nhắc trình duyệt gửi, chỉ thiếu phần bù của máy chủ.
+    console.warn(`[project] bản dự án ${String(project)} không đọc được: ${(e as Error).message}`);
+    return "";
+  }
 }
 export const projectDocsLong =(uid: string, project: unknown) => projectDocs(uid, project).reduce((n, d) => n + d.text.length, 0) > FULL_IN_PROMPT;
 

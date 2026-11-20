@@ -197,6 +197,12 @@ async function agyImage(prompt, conv) {
       C.saveImage(f);
       return console.log(JSON.stringify({ conversation_id: conv, status: "SUCCESS", response: `Mình đã tạo ảnh: ![táo](${f}) và [tải ảnh](file://${f}). Lưu tại ${f}`, error: "", duration_seconds: 37, num_turns: 1, usage: { input_tokens: 1, output_tokens: 1 } }));
     }
+    // "#pjins": phần dự án hội thoại này đang có, nhớ theo hội thoại như agy thật.
+    if (/#pjins/.test(prompt) && !C.isTitleAsk(prompt) && !C.mockBrain(prompt)) {
+      const response = C.pjSession(cli, conv, prompt);
+      const out = { conversation_id: conv, status: "SUCCESS", response, error: "", duration_seconds: 0.4 };
+      return console.log(JSON.stringify({ ...out, num_turns: 1, usage: usage0 }));
+    }
     const text = /#media/.test(prompt) && !C.isTitleAsk(prompt) && !C.mockBrain(prompt) ? C.mediaReply(seen) : C.mockBrain(prompt) ?? (C.isTitleAsk(prompt) ? C.mockTitle(prompt) : /#prefs/.test(prompt) ? C.prefsEcho(prompt) : C.reply("Gemini (Antigravity)", prompt, turn) + note + (model ? ` [model ${model}]` : "") + (effort ? ` [effort ${effort}]` : ""));
     await C.sleep(200);
     // #longtext: câu dài có đường dẫn máy chủ, để kiểm tra chữ hiện từng phần.

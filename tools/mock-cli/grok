@@ -153,6 +153,8 @@ async function grokImage(prompt) {
       note += " [tìm web]";
     }
     const both = `${rules}\n\n${prompt}`;
+    // "#pjins": Grok nhận lời nhắc hệ thống (--rules) ở mọi lượt, kể cả lượt nối tiếp.
+    if (/#pjins/.test(prompt) && !C.isTitleAsk(prompt) && !C.mockBrain(prompt)) return end(C.pjEcho(both));
     const text = /#media/.test(prompt) && !C.isTitleAsk(prompt) && !C.mockBrain(prompt) ? C.mediaReply(refs.map((f) => `${C.mediaDesc(fs.readFileSync(path.resolve(process.cwd(), f)))} (@file)`))
       : C.mockBrain(prompt) ?? (C.isTitleAsk(prompt) ? C.mockTitle(prompt) : /#prefs/.test(prompt) ? C.prefsEcho(both) : /#toprule/.test(prompt) ? C.ruleEcho(rules) : C.reply("Grok", prompt, turn) + note + (effort ? ` [effort ${effort}]` : ""));
     return end(text);
