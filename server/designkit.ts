@@ -218,8 +218,11 @@ function tplGuide(p: DesignPick): string | undefined {
   if (p.format !== "graphic" || !p.kind) return TPL_GUIDE[p.format];
   return p.kind === "email" ? EMAIL_TPL_GUIDE : POSTER_TPL_GUIDE;
 }
+/** menu false: bỏ thực đơn mẫu điền sẵn; budget: trần riêng thay DESIGN_BUDGET (phần thiết kế còn khối mẫu đi kèm). */
+export type BlockOpts = { menu?: boolean; budget?: number };
 /** Ghép khối quy tắc đầy đủ; phần sau bị bỏ nếu vượt trần (phần trên quan trọng hơn). */
-export function designBlock(p: DesignPick, caps: { art: boolean; code: boolean }): string {
+export function designBlock(p: DesignPick, caps: { art: boolean; code: boolean }, o: BlockOpts = {}): string {
+  const budget = Math.min(DESIGN_BUDGET, o.budget ?? DESIGN_BUDGET);
   const open = `<design_kit format="${p.format}" domain="${p.domain}"${p.own ? "" : ` preset="${p.preset}"`}>\nSố đo cho sản phẩm của lượt này (artifact hoặc tệp), áp dụng im lặng, không kể lại. Yêu cầu riêng của người dùng luôn ưu tiên. Chỉ trả lời thường trong chat thì bỏ qua khối này.`, close = "</design_kit>";
   const sheetOnly = p.format === "sheet" && caps.code;
   const parts = [
@@ -227,7 +230,8 @@ export function designBlock(p: DesignPick, caps: { art: boolean; code: boolean }
     sheetOnly ? "" : presetLine(p.preset, p.own, p.mix),
     sheetOnly ? "" : CORE,
     // Thực đơn mẫu điền sẵn của đúng định dạng này (không nạp thực đơn của định dạng khác), đứng trước bộ CSS vì là cách nên dùng.
-    caps.art && !sheetOnly ? (tplGuide(p) ?? "").replace("<phong cách>", p.own ? DEFAULT_TPL_STYLE : p.preset) : "",
+    caps.art && !sheetOnly && o.menu !== false
+      ? (tplGuide(p) ?? "").replace("<phong cách>", p.own ? DEFAULT_TPL_STYLE : p.preset) : "",
     caps.art && !sheetOnly && p.format !== "sheet" ? CHART_RULE : "",
     caps.art && !sheetOnly ? KIT(p.own ? "" : p.preset) : "",
     caps.code && FILE_RULES[p.format] ? FILE_RULES[p.format]! : "",
@@ -238,7 +242,7 @@ export function designBlock(p: DesignPick, caps: { art: boolean; code: boolean }
   ].filter(Boolean);
   let out = open;
   for (const part of parts) {
-    const x = (Array.isArray(part) ? part : [part]).find((y) => designBytes(`${out}\n${y}\n${close}`) <= DESIGN_BUDGET);
+    const x = (Array.isArray(part) ? part : [part]).find((y) => designBytes(`${out}\n${y}\n${close}`) <= budget);
     if (x) out += `\n${x}`;
   }
   return `${out}\n${close}`;
@@ -333,10 +337,26 @@ export function designTurn(i: { typed: string; studio?: string | null; art: bool
   return { format, domain, preset, own, block, compact: false, bytes: designBytes(block) };
 }
 /** Khối quy tắc của lượt sau khi đã chọn mẫu tham chiếu: preset nền của bộ trộn, màu và phông theo khối trộn. */
-export function mixedTurn(d: DesignTurn, mix: StyleMix, caps: { art: boolean; code: boolean }): DesignTurn {
+export function mixedTurn(
+  d: DesignTurn, mix: StyleMix, caps: { art: boolean; code: boolean }, o: BlockOpts = {},
+): DesignTurn {
   const pick = { format: d.format, domain: d.domain, preset: mix.preset, own: d.own, mix: mix.id, kind: mix.domain };
-  const block = designBlock(pick, caps);
+  const block = designBlock(pick, caps, o);
   return { ...d, preset: mix.preset, mix: mix.id, kind: mix.domain, block, bytes: designBytes(block) };
+}
+/**
+ * Khối quy tắc vừa với khối mẫu trong trần DESIGN_TEXT_MAX. Model chỉ đọc chữ luôn giữ lời giải thích của mẫu nên
+ * khối mẫu có thể dài hơn 3 KB: khi đó bỏ thực đơn mẫu điền sẵn trước (model vẫn có bộ lớp sx-… và luật định dạng),
+ * còn chưa vừa thì cắt các phần cuối theo trần còn lại.
+ */
+export function fitMixed(
+  d: DesignTurn, mix: StyleMix, caps: { art: boolean; code: boolean }, refs: string,
+): DesignTurn {
+  const room = DESIGN_TEXT_MAX - (refs ? designBytes(refs) + 2 : 0);
+  const full = mixedTurn(d, mix, caps);
+  if (full.bytes <= room) return full;
+  const lean = mixedTurn(d, mix, caps, { menu: false });
+  return lean.bytes <= room ? lean : mixedTurn(d, mix, caps, { menu: false, budget: room });
 }
 
 /** Văn bản của các artifact trước trong đoạn chat, để biết lượt này là làm mới hay sửa tiếp. */
@@ -359,23 +379,40 @@ export const REFS_BUDGET = 3072;
 /** Trần cả phần thiết kế của một lượt (khối quy tắc + khối mẫu). */
 export const DESIGN_TEXT_MAX = 12288;
 
-// "không ảnh AI", "không dùng ảnh AI", "không ảnh do AI tạo", "no AI images", "without AI images".
-const NO_AI = new RegExp("\\b(?:khong (?:dung |can |co )?anh (?:do )?ai(?: tao)?"
-  + "|(?:no|without) ai[- ]?(?:generated )?images?)\\b");
+// Cách nói "không ảnh AI": "không (dùng | sử dụng) (ảnh | hình ảnh | hình) (do | tạo bằng) AI", "đừng / tránh /
+// cấm dùng ảnh AI", "no AI-generated imagery", "without generative AI images". "Đừng" đổi thành "không" trước khi bỏ
+// dấu, vì bỏ dấu thì "đừng" trùng "dùng" và "dùng ảnh AI" (xin ảnh AI) sẽ bị đọc thành cấm.
+const NO_AI = new RegExp("\\b(?:khong|ko|tranh|cam)(?: (?:dung|su dung|can|co|xai))? (?:hinh anh|anh|hinh)"
+  + "(?: (?:do|tao bang|sinh bang|tao boi|bang))? ai\\b"
+  + "|\\b(?:no|without|avoid|never use|do not use|don'?t use)(?: any)?"
+  + " (?:generative ai|ai(?:[- ]?(?:generated|generative))?) (?:images?|imagery|visuals?|pictures?|photos?)\\b");
 /** Đề bài cấm ảnh do AI tạo: hình chủ đạo đi đường ảnh thật, nền shader hoặc minh họa SVG. */
-export const forbidsAiImage = (typed: string) => NO_AI.test(fold(typed));
+export const forbidsAiImage = (typed: string) => {
+  const t = fold(typed.normalize("NFC").toLowerCase().replace(/đừng/g, "không"));
+  return NO_AI.test(t.replace(/\bdung dung\b/g, "khong dung"));
+};
 
 // Web, slide, poster cần một hình chủ đạo ở khung nhìn đầu; dashboard, email, tài liệu, bộ nhận diện (logo, brand
-// sheet: hình chính là chính logo) thì không bắt buộc.
-const NO_HERO = new RegExp("\\b(?:dashboard|bang dieu khien|email|thu html|newsletter|ban tin"
-  + "|bo nhan dien|nhan dien thuong hieu|brand ?sheet|brand identity|logo)\\b");
+// sheet: hình chính là chính logo) thì không bắt buộc. Email, logo chỉ là sản phẩm khi là thứ được yêu cầu làm
+// ("thiết kế email", "làm logo", đề mở đầu bằng "Logo cho…"): landing page có ô nhận email hay logo trên thanh điều
+// hướng vẫn cần hình chủ đạo. Đề nhắc landing page / trang web thì luôn là trang web. Không xét "dựng", "vẽ": bỏ dấu
+// thì trùng "dùng", "về" ("poster dùng logo nhà tài trợ" vẫn là poster).
+const NO_HERO = /\b(?:dashboard|bang dieu khien)\b/;
+const IDENTITY = /\b(?:bo nhan dien|nhan dien thuong hieu|brand ?sheet|brand identity)\b/;
+const MADE_THING = new RegExp("(?:^|\\b(?:thiet ke|lam|tao|viet|soan|design|make|create|write|build))"
+  + "(?: (?:giup|giup toi|cho toi|cho minh|minh|toi|mot|1|cai|mau|bo|chiec|an?|me|us))*"
+  + " ?(?:email|e-mail|thu html|newsletter|ban tin|logo)\\b|\\b(?:email|newsletter) marketing\\b");
+const WEB_PAGE = /\b(?:landing ?page|trang web|website|web ?site|trang dich|trang chu|trang gioi thieu)\b/;
 export type HeroDomain = "web" | "slide" | "poster";
 export function heroDomain(format: DesignFormat, typed: string, domain?: RefDomain | null): HeroDomain | null {
   if (domain === "web" || domain === "slide" || domain === "poster") return domain;
   if (domain) return null;
   if (format === "slide") return "slide";
-  if (format !== "graphic" || NO_HERO.test(fold(typed))) return null;
-  return /\b(?:poster|banner|flyer|to roi|thumbnail|anh bia|the mang xa hoi)\b/.test(fold(typed)) ? "poster" : "web";
+  if (format !== "graphic") return null;
+  const t = fold(typed).trim();
+  if (NO_HERO.test(t)) return null;
+  if (!WEB_PAGE.test(t) && (IDENTITY.test(t) || MADE_THING.test(t))) return null;
+  return /\b(?:poster|banner|flyer|to roi|thumbnail|anh bia|the mang xa hoi)\b/.test(t) ? "poster" : "web";
 }
 /** Tỉ lệ ảnh của hình chủ đạo: trang web, slide 16:9; poster 2:3 (gần A3 1:1,41 nhất trong các tỉ lệ của công cụ
  *  ảnh). */

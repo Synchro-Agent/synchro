@@ -240,15 +240,29 @@ console.log("6b. Mẫu tham chiếu, bộ phông, hình chủ đạo");
   });
   const noAi = briefs.filter((b) => K.forbidsAiImage(b.text)).map((b) => b.name);
   ok(noAi.join() === "Slide,Landing page,Poster", "đúng 3 brief của chủ dự án ghi \"không ảnh AI\"", noAi);
-  const asks = ["không dùng ảnh AI", "Không ảnh do AI tạo nhé", "no AI images please", "without AI-generated images"];
+  const asks = ["không dùng ảnh AI", "Không ảnh do AI tạo nhé", "no AI images please", "without AI-generated images",
+    "Không dùng hình ảnh AI", "không sử dụng ảnh AI", "đừng dùng ảnh AI", "tránh ảnh AI", "không dùng ảnh tạo bằng AI",
+    "cấm dùng hình AI", "dung dung anh AI", "ko dùng ảnh AI", "No AI-generated imagery", "no generative AI images",
+    "avoid AI images", "Don't use AI-generated visuals"];
   for (const t of asks) ok(K.forbidsAiImage(t), `nhận "${t}"`);
-  ok(!K.forbidsAiImage("Tạo ảnh AI cho bìa") && !K.forbidsAiImage("làm poster có ảnh"),
-    "xin ảnh AI không bị coi là cấm");
+  const wants = ["Tạo ảnh AI cho bìa", "làm poster có ảnh", "dùng ảnh AI cho hero", "Dùng hình ảnh AI minh họa",
+    "use AI images for the hero", "AI-generated imagery is fine"];
+  for (const t of wants) ok(!K.forbidsAiImage(t), `xin hoặc cho phép ảnh AI không bị coi là cấm: "${t}"`);
   const hero = Object.fromEntries(briefs.map((b) => [b.name, K.heroDomain(K.formatOf(b.text) ?? "doc", b.text)]));
   ok(hero.Slide === "slide" && hero["Landing page"] === "web" && hero.Poster === "poster",
     "slide, trang web, poster cần hình chủ đạo", hero);
   ok(!hero.Dashboard && !hero["Bộ nhận diện"] && !hero["Báo cáo A4"],
     "dashboard, bộ nhận diện, báo cáo không bắt buộc", hero);
+  const webs = ["Thiết kế landing page cho studio, form đăng ký nhận email",
+    "Landing page cho quán cà phê, logo ở góc trái", "Trang web giới thiệu sản phẩm, có ô đăng ký bản tin",
+    "Thiết kế website và logo cho tiệm bánh"];
+  for (const t of webs) ok(K.heroDomain("graphic", t) === "web", `trang web có email / logo vẫn cần hero: "${t}"`);
+  ok(K.heroDomain("graphic", "Poster sự kiện, dùng logo nhà tài trợ, liên hệ email abc@x.vn") === "poster",
+    "poster nhắc logo, email vẫn là poster");
+  const made = ["Thiết kế email chào mừng khách mới", "Làm giúp mình một logo cho tiệm trà", "Logo cho quán phở",
+    "Soạn bản tin tháng 11 cho khách", "Email marketing ra mắt bộ sưu tập", "Design a newsletter for our studio",
+    "Dashboard doanh thu"];
+  for (const t of made) ok(K.heroDomain("graphic", t) === null, `email, logo, dashboard là sản phẩm: "${t}"`);
   ok(K.heroAspect("poster") === "2:3" && K.heroAspect("web") === "16:9",
     "tỉ lệ ảnh hero: poster 2:3, web và slide 16:9");
   const words = ["#0e0f0c", "#d9a441", "#2f6b3a"].map(K.colourWord);
@@ -312,6 +326,27 @@ console.log("6b. Mẫu tham chiếu, bộ phông, hình chủ đạo");
   const tight = K.designRefsBlock(st, { sees: false, agy: false, hero: rule, room: 0 });
   ok(K.designBytes(roomy) > K.designBytes(tight) && K.designBytes(roomy) <= 8000,
     "còn chỗ trong trần 12 KB: lời giải thích dài hơn", `${K.designBytes(tight)} → ${K.designBytes(roomy)}`);
+  // Trần 12 KB của cả phần thiết kế, với khối CSS trộn cỡ thật (đủ biến, bóng nhiều lớp) và model chỉ đọc chữ (luôn giữ
+  // lời giải thích của mẫu): bỏ thực đơn mẫu điền sẵn trước, giữ luật định dạng và bộ lớp sx-….
+  const vars = Array.from({ length: 25 }, (_, i) => `--sx-v${i}:#0e0f0c`).join(";");
+  const bigCss = `<style data-sx-mix="m-3f9a01c2" data-sx-fonts="fraunces,inter,jetbrains-mono">`
+    + `[data-sx-preset="midnight-tech"][data-sx-mix="m-3f9a01c2"]{${vars};`
+    + `--sx-shadow:${"0 2px 4px rgba(0,0,0,0),".repeat(4)}0 1px 2px rgba(0,0,0,.2)}</style>`;
+  const big = { ...st, mix: { ...st.mix, css: bigCss } };
+  for (const sees of [false, true]) {
+    const deck = turn("Làm bộ slide 8 trang ra mắt trà Sương Sớm");
+    const heroR = K.heroRule({ image: true, forbid: false, domain: "slide", mix: big.mix });
+    const room = K.DESIGN_TEXT_MAX - K.mixedTurn(deck, big.mix, full).bytes;
+    const refsB = K.designRefsBlock(big, { sees, agy: false, hero: heroR, room });
+    const fit = K.fitMixed(deck, big.mix, full, refsB);
+    const total = K.designBytes([fit.block, refsB].join("\n\n"));
+    ok(total <= K.DESIGN_TEXT_MAX && fit.block.includes("Bộ CSS sẵn trong khung artifact")
+      && fit.block.includes('<section class="slide">'), `${sees ? "có mắt" : "chỉ đọc chữ"}: cả phần thiết kế ≤ 12 KB,`
+      + " giữ luật slide và bộ lớp sx-…", { total, kit: fit.bytes, refs: K.designBytes(refsB) });
+  }
+  const small = K.designRefsBlock(st, { sees: true, agy: false, hero: "", room: 3072 });
+  ok(K.fitMixed(turn("Làm bộ slide 8 trang"), st.mix, full, small).block.includes("Mẫu điền sẵn"),
+    "còn chỗ: giữ thực đơn mẫu điền sẵn");
   const plain = turn("Làm landing page cho tiệm trà ô long, tông tối");
   const withMix = K.mixedTurn(plain, { ...st.mix, preset: "aurora-glass" }, { art: true, code: true });
   const kitPreset = /data-sx-preset="([\w-]+)"/.exec(withMix.block)?.[1];
@@ -340,6 +375,20 @@ console.log("6b. Mẫu tham chiếu, bộ phông, hình chủ đạo");
     "khung nạp face.css của Synchro cho phông preset và data-sx-fonts, Google chỉ là đường dự phòng");
   ok(!A.kitHead(`<div class="sx-card">x</div>`, "").includes("/kitfonts/"),
     "không có địa chỉ Synchro: chỉ Google Fonts");
+}
+{
+  // Bàn trộn ngữ cảnh chỉ ước lượng: không được chọn mẫu (chọn mẫu ghi lịch sử thiết kế). Bộ chọn mẫu là nơi duy nhất
+  // đọc ctx.uid, nên đếm số lần đọc là biết nó có chạy không.
+  const PR = (await loadTs(["chat/prompt"]))["chat/prompt"];
+  let picks = 0;
+  const ctx = { get uid() { picks++; return "u1"; }, sees: false, agy: false };
+  const caps = { art: true, code: false, image: false };
+  const msgs = [{ role: "user", content: "Thiết kế landing page cho quán cà phê Nếp ở Hà Nội" }];
+  const est = await PR.designOf({ skills: true, messages: msgs, estimate: true }, caps, null, "c1", ctx);
+  ok(picks === 0 && est.text.includes("<design") && !est.turn, "ước lượng của bàn trộn: có khối chữ, không chọn mẫu",
+    { picks, n: est.text.length });
+  await PR.designOf({ skills: true, messages: msgs }, caps, null, "c1", ctx);
+  ok(picks === 1, "lượt thật vẫn chọn mẫu", picks);
 }
 
 console.log("7. Lượt chat thật trên máy chủ giả lập");

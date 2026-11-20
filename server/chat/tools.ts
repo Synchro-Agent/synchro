@@ -45,7 +45,7 @@ import type { UserRow } from "../authstore";
 import type { StyleTurn } from "../../shared/designrefs";
 import {
   compareSheet, critiqueDesign, DESIGN_REVIEW, GATE_MS, hardOnly, MAX_ROUNDS, measuredDiffs, needsFix, pickDesignCritic,
-  type Diff,
+  type Diff, withSheet,
 } from "../designcritic";
 import { subCli } from "../ai/subs";
 import { turnImages } from "../designrefs";
@@ -464,17 +464,13 @@ export async function designGate(x: Exec, text: string): Promise<{ text: string;
   const img = sheet ?? views[0];
   return { text: review, blocks: [{ type: "text", text: review }, ...(img ? [b64(img)] : [])] };
 }
-/** check_artifact trong lượt có mẫu tham chiếu: ảnh trả về là bảng so với mẫu, kèm chênh lệch Synchro đo được. */
-async function withCompare(x: Exec, r: CheckResult, deck: boolean): Promise<CheckResult> {
+/** check_artifact trong lượt có mẫu tham chiếu: thêm bảng so với mẫu và chênh lệch Synchro đo được. */
+async function withCompare(x: Exec, r: CheckResult, deck: boolean): Promise<CheckResult & Pick<Run, "more">> {
   const d = x.design;
   if (!d?.turn || !r.views?.length || r.is_error) return r;
   const sheet = await compareSheet(r.views.map((v) => Buffer.from(v, "base64")), await refShots(d));
   const diffs = measuredDiffs(r.design?.probe ?? null, r.design?.facts ?? null, d.turn.mix, { hero: !!d.hero, deck });
-  const rows = diffs.map((f) => `- ${f.where} · ${f.property}: ${f.measured} → ${f.target}. ${f.fix}`);
-  const note = rows.length ? `\nSo với khối token trộn của lượt này:\n${rows.join("\n")}` : "";
-  const what = "\nẢnh đi kèm là bảng so với mẫu: trái là bản dựng, phải là mẫu tham chiếu (chỉ để so nguyên tắc).";
-  const content = `${r.content}${note}${sheet ? what : ""}`;
-  return { ...r, content, ...(sheet ? { image: sheet.toString("base64") } : {}) };
+  return withSheet(r, sheet, diffs);
 }
 // Câu trả lời cuối đã viết lại trọn một artifact thì bỏ các bản cùng identifier viết giữa lượt (bản sửa mode="patch" thì vẫn cần bản gốc).
 export const withTurnArts = (x: Exec | null | undefined, text0: string) => {

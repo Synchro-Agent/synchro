@@ -464,8 +464,8 @@ export const IMAGE_TOOL_NAME = "generate_image";
 // khi có khóa. Cùng cấu hình máy chủ thì định nghĩa giống hệt nhau giữa các lượt (bộ đệm prompt).
 const imageToolOf = (product: boolean) => ({
   name: IMAGE_TOOL_NAME,
-  // Câu cũ "không dùng cho slide" bị model đọc thành "slide thì không có hình": mọi bộ slide, trang web, poster ra
-  // chữ trên nền trơn. Ảnh AI là phần hình của sản phẩm; chữ, biểu đồ, sơ đồ vẫn dựng bằng code.
+  // Mô tả phải nói rõ ảnh AI là phần hình của slide, trang web, poster; nếu không, model hiểu là slide không có hình
+  // và ra chữ trên nền trơn. Chữ, biểu đồ, sơ đồ vẫn dựng bằng code.
   description: "Tạo ảnh bằng AI (ảnh chụp như thật, tranh, minh họa, logo, ảnh sản phẩm, ảnh đại diện, và hình chủ đạo"
     + " cho slide, trang web, poster: ảnh bìa, hero, ảnh poster), khoảng 40 giây; ảnh tự hiện thành thẻ trong chat."
     + " Chữ, biểu đồ, sơ đồ và thứ cần chữ chính xác trong sản phẩm vẫn dựng bằng code, đặt trên hoặc cạnh ảnh.",

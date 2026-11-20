@@ -28,7 +28,8 @@ ok(v({ helpers: 29, userTurns: 100 }).ok && !v({ helpers: 30, userTurns: 100 }).
 ok(v({ windows: [{ usedPct: 69 }] }).ok && v({ windows: [{ usedPct: 70 }] }).why === "near-limit", "một cửa sổ của gói đã dùng 70%: dừng việc phụ, phần còn lại cho tin nhắn của người dùng");
 ok(v({ windows: [{ usedPct: 10, status: "rejected" }] }).why === "near-limit", "cửa sổ bị hãng từ chối: dừng");
 ok(v({ blockedUntil: 2_000 }).why === "blocked" && v({ blockedUntil: 500 }).ok, "gói đang bị chặn (hãng báo hết hạn mức): dừng; mốc đã qua thì chạy lại");
-ok(H.THROTTLED_JOBS.has("title") && H.THROTTLED_JOBS.has("brain") && H.THROTTLED_JOBS.has("critic-auto") && H.THROTTLED_JOBS.has("memory") && !H.THROTTLED_JOBS.has("critic") && !H.THROTTLED_JOBS.has("compact"),
+ok(["title", "brain", "critic-auto", "memory", "design-critic"].every((j) => H.THROTTLED_JOBS.has(j))
+  && !H.THROTTLED_JOBS.has("critic") && !H.THROTTLED_JOBS.has("compact"),
   "việc tự động chịu ngân sách; việc người dùng bấm (phản biện tay, nén ngữ cảnh) thì không");
 ok(H.isUserVia("codex") && H.isUserVia("sub-codex") && !H.isUserVia("job:title") && !H.isUserVia("warm"), "engine_turns.via: job:… và warm không phải tin nhắn của người dùng");
 

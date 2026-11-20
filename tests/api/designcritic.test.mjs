@@ -189,6 +189,20 @@ console.log("7. Bảng so sánh");
   ok(px[0] > 180 && px[1] > 130 && px[2] < 110, "ô phải hàng trên là mẫu chính", [...px]);
   ok((await C.compareSheet([], refs)) === null, "không có ảnh bản dựng: không có bảng");
   ok(!!(await C.compareSheet(views.slice(0, 1), [])), "không có mẫu: vẫn có bảng của bản dựng");
+  // check_artifact của bộ 8 slide: ảnh chính là bảng tiếp xúc mọi slide và khung điện thoại, không bị bảng so với mẫu
+  // (chỉ 2 khung đầu) thay mất.
+  const contact = "Q09OVEFDVA==";
+  const diff = { where: "Khung đầu", property: "image", measured: "0%", target: "25%", fix: "Thêm ảnh.",
+    severity: "high" };
+  const both = C.withSheet({ content: "8 slide, 390 px", is_error: false, image: contact }, sheet, [diff]);
+  ok(both.image === contact && both.more?.length === 1 && both.more[0].mime === "image/jpeg"
+    && both.more[0].data === sheet.toString("base64") && /Ảnh thứ hai là bảng so với mẫu/.test(both.content)
+    && both.content.includes("image: 0% → 25%"), "giữ bảng tiếp xúc làm ảnh chính, bảng so với mẫu là ảnh thứ hai",
+  { image: both.image, more: both.more?.length, content: both.content });
+  const bare = C.withSheet({ content: "svg", is_error: false }, sheet, []);
+  ok(bare.image === sheet.toString("base64") && !bare.more, "kết quả không có ảnh: bảng so với mẫu là ảnh duy nhất");
+  const none = C.withSheet({ content: "x", is_error: false, image: contact }, null, []);
+  ok(none.image === contact && !none.more && none.content === "x", "không dựng được bảng: kết quả giữ nguyên");
 }
 
 console.log(`\n${pass} đạt, ${fail} lỗi`);

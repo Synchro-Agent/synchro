@@ -6,7 +6,7 @@ import { prepareHistory } from "../transpile";
 import { isAck, typedText } from "../router";
 import { runner } from "../coderun";
 import {
-  designBytes, designRefsBlock, designTurn, DESIGN_TEXT_MAX, mixedTurn, forbidsAiImage, heroDomain, heroRule,
+  designBytes, designRefsBlock, designTurn, DESIGN_TEXT_MAX, fitMixed, mixedTurn, forbidsAiImage, heroDomain, heroRule,
   historyTexts, KIT_FONT_RULE, type DesignFormat, type DesignTurn,
 } from "../designkit";
 import { styleForTurn, turnImages } from "../designrefs";
@@ -189,14 +189,17 @@ export async function designOf(
   if (d) console.log(`[design] ${d.format} ${d.domain} ${d.own ? "own-brand" : d.preset}${d.compact ? " follow-up" : ""} ${d.bytes}B`);
   const fresh = d && !d.compact && d.format !== "sheet" && caps.art ? d : null;
   const forbid = forbidsAiImage(typed);
-  const turn = fresh && ctx ? await styleOf(body, fresh, typed, lastUser, conv, ctx) : null;
+  // Bàn trộn ngữ cảnh chỉ ước lượng (body.estimate): không chọn mẫu. Chọn mẫu ghi lịch sử thiết kế (để lượt sau không
+  // lặp mẫu) và có thể dựng ảnh; mỗi lần mở bàn trộn sẽ thêm một lượt ma, làm lệch lựa chọn của lượt thật.
+  const turn = fresh && ctx && body.estimate !== true ? await styleOf(body, fresh, typed, lastUser, conv, ctx) : null;
   const hero = fresh ? heroDomain(fresh.format, typed, turn?.facets.domain) : null;
   const heroText = heroRule({ image: caps.image, forbid, domain: hero, mix: turn?.mix ?? null });
   // Có mẫu: khối quy tắc dựng lại theo preset nền của bộ trộn (một preset duy nhất cho cả hai khối).
-  const kit = turn && fresh ? mixedTurn(fresh, turn.mix, caps) : d;
-  const room = DESIGN_TEXT_MAX - designBytes(kit?.block ?? "");
+  const kit0 = turn && fresh ? mixedTurn(fresh, turn.mix, caps) : d;
+  const room = DESIGN_TEXT_MAX - designBytes(kit0?.block ?? "");
   const sees = !!ctx?.sees;
   const refs = turn ? designRefsBlock(turn, { sees, agy: !!ctx?.agy, hero: heroText, room }) : "";
+  const kit = turn && fresh ? fitMixed(fresh, turn.mix, caps, refs) : kit0;
   const extra = fresh && !refs
     ? ["<design_rules>", KIT_FONT_RULE, heroText, "</design_rules>"].filter(Boolean).join("\n") : "";
   const design = [kit?.block ?? "", refs, extra].filter(Boolean).join("\n\n");

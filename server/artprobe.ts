@@ -94,7 +94,10 @@ export const DESIGN_FACTS = String.raw`async (root) => {
     const cs = getComputedStyle(el);
     return cs.display !== "none" && cs.visibility !== "hidden" && +cs.opacity > 0.05;
   };
-  const media = new Set(), content = new Set(), fams = new Set();
+  // Hình chủ đạo chỉ tính khi bên trong khối data-sx-hero có hình thật phủ đủ khung đầu: một khối tô màu gắn nhãn
+  // hero là đúng kiểu "thay hình bằng khối màu" mà vòng sửa phải bắt. Nền shader cũng phải đủ lớn trong khung đầu.
+  const heroEl = root.querySelector("[data-sx-hero]");
+  const media = new Set(), content = new Set(), fams = new Set(), heroMedia = new Set(), shaderCells = new Set();
   const GENERIC = new RegExp("^(serif|sans-serif|monospace|system-ui|-apple-system|blinkmacsystemfont|cursive"
     + "|fantasy|ui-[a-z-]+|inherit|initial)$", "i");
   for (const el of root.querySelectorAll("*")) {
@@ -102,6 +105,7 @@ export const DESIGN_FACTS = String.raw`async (root) => {
     const r = el.getBoundingClientRect();
     const off = r.bottom < F.top || r.top > F.bottom || r.right < F.left || r.left > F.right;
     if (r.width < 2 || r.height < 2 || off) continue;
+    if (el.matches("[data-sx-shader],canvas[data-sx-gl]")) mark(shaderCells, r);
     const cs = getComputedStyle(el), tag = el.tagName.toLowerCase();
     const big = r.width * r.height > 0.04 * W * H;
     const bg = cs.backgroundImage !== "none" && /url\(/.test(cs.backgroundImage);
@@ -109,6 +113,7 @@ export const DESIGN_FACTS = String.raw`async (root) => {
     if (pic) {
       mark(media, r);
       mark(content, r);
+      if (heroEl && heroEl.contains(el)) mark(heroMedia, r);
       continue;
     }
     const text = [...el.childNodes].some((n) => n.nodeType === 3 && n.nodeValue.trim());
@@ -139,15 +144,16 @@ export const DESIGN_FACTS = String.raw`async (root) => {
     }
     return { family, loaded: face && ok, declared: faces.some((x) => x.family.replace(/["']/g, "") === family) };
   });
-  const n = GX * GY, heroEl = root.querySelector("[data-sx-hero]");
+  const n = GX * GY;
   const heroR = heroEl ? heroEl.getBoundingClientRect() : null;
   const span = (a0, a1, b0, b1) => Math.max(0, Math.min(a1, b1) - Math.max(a0, b0));
   const heroW = heroR ? span(heroR.left, heroR.right, F.left, F.right) : 0;
   const heroShare = heroR ? heroW * span(heroR.top, heroR.bottom, F.top, F.bottom) / (W * H) : 0;
-  const shader = !!root.querySelector("[data-sx-shader],canvas[data-sx-gl]");
+  const shader = shaderCells.size / n >= 0.25;
+  const marked = !!heroEl && heroMedia.size / n >= 0.25;
   return {
     fonts,
-    hero: { marked: !!heroEl && heroShare > 0.05, share: Math.round(heroShare * 100) / 100, shader },
+    hero: { marked, share: Math.round(heroShare * 100) / 100, shader },
     media: Math.round(media.size / n * 100) / 100,
     content: Math.round(content.size / n * 100) / 100,
   };

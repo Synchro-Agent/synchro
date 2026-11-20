@@ -190,6 +190,25 @@ export async function compareSheet(views: Buffer[], refs: { label: string; jpeg:
     .composite([...layers, { input: svg, left: 0, top: 0 }]).jpeg({ quality: 78 }).toBuffer();
 }
 
+export type SheetImg = { data: string; mime: string };
+/**
+ * Kết quả check_artifact của lượt có mẫu: ảnh chính vẫn là bảng tiếp xúc đầy đủ (mọi slide, khung điện thoại 390 px)
+ * để model kiểm từng trang; bảng so với mẫu chỉ có hai khung đầu nên đi kèm làm ảnh thứ hai. Kết quả không có ảnh thì
+ * bảng so với mẫu là ảnh duy nhất.
+ */
+export function withSheet<T extends { content: string; image?: string }>(
+  r: T, sheet: Buffer | null, diffs: Diff[],
+): T & { more?: SheetImg[] } {
+  const rows = diffs.map((f) => `- ${f.where} · ${f.property}: ${f.measured} → ${f.target}. ${f.fix}`);
+  const note = rows.length ? `\nSo với khối token trộn của lượt này:\n${rows.join("\n")}` : "";
+  if (!sheet) return { ...r, content: `${r.content}${note}` };
+  const data = sheet.toString("base64");
+  const which = r.image ? "Ảnh thứ hai" : "Ảnh đi kèm";
+  const what = `\n${which} là bảng so với mẫu: trái là bản dựng, phải là mẫu tham chiếu (chỉ để so nguyên tắc).`;
+  const content = `${r.content}${note}${what}`;
+  return r.image ? { ...r, content, more: [{ data, mime: "image/jpeg" }] } : { ...r, content, image: data };
+}
+
 // ---------------------------------------------------------------- người chấm
 const LEVEL = (k: string) => (isFrontier(k) ? 3 : tierOf(k) === "strong" ? 2 : tierOf(k) === "balanced" ? 1 : 0);
 /**

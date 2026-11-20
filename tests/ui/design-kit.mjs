@@ -346,6 +346,29 @@ console.log("3b. Số đo khung đầu (DESIGN_FACTS) và quyết định sửa 
   const bareTag = tag(decide(bare));
   check("thiếu hình chủ đạo: lỗi cao về hình, đòi sửa",
     bareTag.split(",").includes("image:high") && C.needsFix(decide(bare)), bareTag);
+  // Khối tô màu gắn data-sx-hero mà không có hình bên trong vẫn là thiếu hình chủ đạo.
+  const fill = `<section data-sx-hero style="height:520px;background:#2f6b3a">${title}</section>`;
+  await open(`${head}${fill}${body}</body></html>`);
+  const flat = await facts();
+  check("data-sx-hero chỉ là khối màu: không tính là hình chủ đạo, lỗi cao về hình",
+    !flat.hero.marked && tag(decide(flat)).split(",").includes("image:high"), JSON.stringify(flat.hero));
+  // Hình nằm trong khối hero (khối hero là khung chứa, không phải chính thẻ img) thì đạt.
+  const inner = heroImg.replace(" data-sx-hero", "");
+  await open(`${head}<section data-sx-hero>${inner}${title}</section>${body}</body></html>`);
+  const wrapped = await facts();
+  check("khung chứa data-sx-hero có ảnh lớn bên trong: tính là hình chủ đạo", wrapped.hero.marked,
+    JSON.stringify(wrapped.hero));
+  // Nền shader nhỏ hoặc nằm dưới khung đầu không thay được hình chủ đạo; nền phủ cả khung đầu thì thay được.
+  const tiny = `<div data-sx-shader="silk" style="width:120px;height:80px"></div>`;
+  const below = `<div style="height:900px"></div><div data-sx-shader="silk" style="height:600px"></div>`;
+  await open(`${head}${title}${tiny}${body}${below}</body></html>`);
+  const small = await facts();
+  check("nền shader nhỏ hoặc dưới khung đầu: không tính, lỗi cao về hình",
+    !small.hero.shader && tag(decide(small)).split(",").includes("image:high"), JSON.stringify(small.hero));
+  await open(`${head}<div data-sx-shader="silk" style="height:640px">${title}</div>${body}</body></html>`);
+  const full = await facts();
+  check("nền shader phủ khung đầu: tính là hình chủ đạo", full.hero.shader && !tag(decide(full)).includes("image"),
+    JSON.stringify(full.hero));
   // Anton có trong bộ nhưng trang không khai báo: không có FontFace nào, máy rơi về phông khác mà check() vẫn đúng.
   const anton = `<h2 style="font-family:'Anton';font-size:48px;margin:24px">Mùa thu hoạch</h2>`;
   await open(`${head}${heroImg}${title}${anton}${body}</body></html>`);
