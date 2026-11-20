@@ -296,8 +296,10 @@ console.log("6b. Mẫu tham chiếu, bộ phông, hình chủ đạo");
     const b = K.designRefsBlock(st, { sees, agy, hero: rule });
     const tag = `${sees ? "có mắt" : "chỉ đọc chữ"}${agy ? ", Antigravity" : ""}`;
     const framed = b.startsWith('<design_refs mix="m-3f9a01c2"') && b.endsWith("</design_refs>");
-    ok(K.designBytes(b) <= K.REFS_BUDGET && framed,
-      `${tag}: khối mẫu ≤ 3 KB`, K.designBytes(b));
+    // Model chỉ đọc chữ không có ảnh: luôn giữ lời giải thích của mẫu (ít nhất 140 ký tự), dù khối vượt 3 KB.
+    const why = b.split("\n").filter((l) => /^Mẫu \d \(/.test(l) && l.includes("Tiêu đề 96 px siết")).length;
+    const fits = sees ? K.designBytes(b) <= K.REFS_BUDGET : why === 3;
+    ok(fits && framed, `${tag}: ${sees ? "khối mẫu ≤ 3 KB" : "giữ lời giải thích của cả 3 mẫu"}`, K.designBytes(b));
     ok([css, 'data-sx-mix="m-3f9a01c2"', "Mẫu 1 (bảng màu, bố cục)", "Mẫu 3 (hình khối)"].every((w) => b.includes(w)),
       `${tag}: dán khối CSS trộn, nêu vai từng mẫu`);
     ok(["2 câu định hướng mỹ thuật", "không chép", "Fraunces"].every((w) => b.includes(w))
@@ -306,6 +308,18 @@ console.log("6b. Mẫu tham chiếu, bộ phông, hình chủ đạo");
     ok(sees === b.includes('nhãn "Mẫu tham chiếu k"') && agy === b.includes("Mở và xem cả 3 ảnh mẫu"),
       `${tag}: lời về ảnh mẫu đúng loại model`);
   }
+  const roomy = K.designRefsBlock(st, { sees: false, agy: false, hero: rule, room: 8000 });
+  const tight = K.designRefsBlock(st, { sees: false, agy: false, hero: rule, room: 0 });
+  ok(K.designBytes(roomy) > K.designBytes(tight) && K.designBytes(roomy) <= 8000,
+    "còn chỗ trong trần 12 KB: lời giải thích dài hơn", `${K.designBytes(tight)} → ${K.designBytes(roomy)}`);
+  const plain = turn("Làm landing page cho tiệm trà ô long, tông tối");
+  const withMix = K.mixedTurn(plain, { ...st.mix, preset: "aurora-glass" }, { art: true, code: true });
+  const kitPreset = /data-sx-preset="([\w-]+)"/.exec(withMix.block)?.[1];
+  const noPresetHint = !/Phong cách gợi ý/.test(withMix.block) && !/Phông có sẵn trong sandbox/.test(withMix.block);
+  ok(withMix.preset === "aurora-glass" && kitPreset === "aurora-glass" && noPresetHint
+    && withMix.block.includes('<design_refs data-sx-mix="m-3f9a01c2">'),
+  "có mẫu: khối quy tắc theo preset nền của bộ trộn, không gợi ý màu, phông preset khác", withMix.block.slice(0, 400));
+  ok(withMix.bytes < plain.bytes, "khối quy tắc có mẫu gọn hơn", `${plain.bytes} → ${withMix.bytes}`);
   const mail = { ...st, mix: { ...st.mix, domain: "email" } };
   const email = K.designRefsBlock(mail, { sees: false, agy: false, hero: "" });
   ok(!email.includes("<style data-sx-mix") && email.includes("bg #0e0f0c"), "email: mã màu thẳng thay cho biến CSS");

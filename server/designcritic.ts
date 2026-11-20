@@ -173,8 +173,17 @@ export async function compareSheet(views: Buffer[], refs: { label: string; jpeg:
       .jpeg({ quality: 82 }).toBuffer();
     return { input, left: Math.round(c.x), top: Math.round(c.y + LABEL) };
   }));
-  const labels = cells
-    .map((c) => `<text x="${Math.round(c.x)}" y="${Math.round(c.y + 19)}">${xml(c.label)}</text>`).join("");
+  // Chữ 16 px đậm rộng chừng 9 px mỗi ký tự: nhãn dài cắt cho vừa ô, không chờm sang ảnh bên cạnh. Ghi chú trong
+  // ngoặc (dành cho model ở tin nhắn) bỏ trước, để ô nhỏ vẫn còn tên mẫu.
+  const fit = (label: string, w: number) => {
+    const max = Math.max(8, Math.floor(w / 9));
+    const short = label.length > max ? label.replace(/\s*\([^)]*\)/, "") : label;
+    return short.length > max ? `${short.slice(0, max - 1)}…` : short;
+  };
+  const labels = cells.map((c) => {
+    const text = xml(fit(c.label, c.w));
+    return `<text x="${Math.round(c.x)}" y="${Math.round(c.y + 19)}">${text}</text>`;
+  }).join("");
   const svg = Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}">`
     + `<style>text{font:600 16px "Noto Sans",DejaVu Sans,Arial,sans-serif;fill:#1b1b1b}</style>${labels}</svg>`);
   return sharp({ create: { width: W, height: H, channels: 3, background: "#d9d9d9" } })

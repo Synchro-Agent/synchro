@@ -393,10 +393,8 @@ const b64 = (b: Buffer): UserBlock => ({ type: "image", media_type: "image/jpeg"
 async function refShots(d: DesignState): Promise<{ label: string; jpeg: Buffer }[]> {
   if (!d.turn) return [];
   try {
-    const shots = await turnImages(d.turn, [800, 800, 800]);
-    // Nhãn vẽ trên bảng so sánh, cho model đọc (không phải chữ giao diện).
-    const labelPrompt = (k: number, title: string) => `Mẫu ${k + 1}: ${title}`;
-    return shots.map((s, k) => ({ label: labelPrompt(k, s.label), jpeg: s.jpeg }));
+    // Nhãn của turnImages đã là trọn câu cho model đọc (số thứ tự mẫu, mẫu người dùng gửi): vẽ nguyên lên bảng.
+    return await turnImages(d.turn, [800, 800, 800]);
   } catch (e) {
     console.warn(`[designgate] không lấy được ảnh mẫu cho bảng so sánh: ${(e as Error).message}`);
     return [];

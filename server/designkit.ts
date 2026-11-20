@@ -196,29 +196,45 @@ export const KIT_FONT_RULE = "Phông: chỉ dùng phông trong bộ của Synchr
   + `${KIT_FONTS.map((f) => f.family).join(", ")}. Không nạp phông nào khác (không <link> Google Fonts, không`
   + " @import).";
 
-function presetLine(id: string, own: boolean) {
+function presetLine(id: string, own: boolean, mix?: string) {
   if (own) return `Người dùng đã có bản sắc riêng (thương hiệu, bảng màu, mẫu): theo đúng bản sắc đó, chỉ giữ các số đo; không áp preset màu.`;
+  // Lượt có mẫu tham chiếu: màu, phông, hình khối nằm trong khối CSS trộn; nêu thêm màu, phông của preset là hai
+  // chỉ dẫn trái nhau (model từng trộn cả hai).
+  if (mix) {
+    return `Màu, phông, bo góc, bóng: theo khối <design_refs ${MIX_ATTR}="${mix}"> bên dưới, preset nền ${id}; không`
+      + " dùng màu, phông của preset nào khác. Người dùng nói khác thì theo họ. Không bắt chước thương hiệu có thật.";
+  }
   const p = presetOf(id)!;
   return `Phong cách gợi ý: ${p.id} (${p.looks}; phông ${p.head}${p.body !== p.head ? ` + ${p.body}` : ""}; nền ${p.bg}, chữ ${p.ink}, nhấn ${p.accent}; bo ${p.r}/${p.ri}px; hợp ${p.best}). Người dùng hoặc nội dung nói khác thì theo họ. Preset khác: ${PRESETS.filter((x) => x.id !== id).map((x) => x.id).join(", ")}. Không bắt chước thương hiệu có thật.`;
 }
 
-export type DesignPick = { format: DesignFormat; domain: DesignDomain; preset: string; own: boolean };
+// mix: mã khối token trộn của lượt (có mẫu tham chiếu): khối quy tắc không gợi ý màu, phông của preset nữa.
+// kind: loại sản phẩm đồ họa bộ chọn mẫu đã nhận ra (trang web, poster, email): chỉ nêu thực đơn mẫu của loại đó.
+export type DesignPick = {
+  format: DesignFormat; domain: DesignDomain; preset: string; own: boolean; mix?: string; kind?: RefDomain;
+};
+/** Thực đơn mẫu điền sẵn của định dạng; đồ họa đã biết là email hay không thì bỏ thực đơn của loại kia. */
+function tplGuide(p: DesignPick): string | undefined {
+  if (p.format !== "graphic" || !p.kind) return TPL_GUIDE[p.format];
+  return p.kind === "email" ? EMAIL_TPL_GUIDE : POSTER_TPL_GUIDE;
+}
 /** Ghép khối quy tắc đầy đủ; phần sau bị bỏ nếu vượt trần (phần trên quan trọng hơn). */
 export function designBlock(p: DesignPick, caps: { art: boolean; code: boolean }): string {
   const open = `<design_kit format="${p.format}" domain="${p.domain}"${p.own ? "" : ` preset="${p.preset}"`}>\nSố đo cho sản phẩm của lượt này (artifact hoặc tệp), áp dụng im lặng, không kể lại. Yêu cầu riêng của người dùng luôn ưu tiên. Chỉ trả lời thường trong chat thì bỏ qua khối này.`, close = "</design_kit>";
   const sheetOnly = p.format === "sheet" && caps.code;
   const parts = [
     FORMAT_RULES[p.format],
-    sheetOnly ? "" : presetLine(p.preset, p.own),
+    sheetOnly ? "" : presetLine(p.preset, p.own, p.mix),
     sheetOnly ? "" : CORE,
     // Thực đơn mẫu điền sẵn của đúng định dạng này (không nạp thực đơn của định dạng khác), đứng trước bộ CSS vì là cách nên dùng.
-    caps.art && !sheetOnly && TPL_GUIDE[p.format] ? TPL_GUIDE[p.format]!.replace("<phong cách>", p.own ? DEFAULT_TPL_STYLE : p.preset) : "",
+    caps.art && !sheetOnly ? (tplGuide(p) ?? "").replace("<phong cách>", p.own ? DEFAULT_TPL_STYLE : p.preset) : "",
     caps.art && !sheetOnly && p.format !== "sheet" ? CHART_RULE : "",
     caps.art && !sheetOnly ? KIT(p.own ? "" : p.preset) : "",
     caps.code && FILE_RULES[p.format] ? FILE_RULES[p.format]! : "",
     // Mảng: lấy phần đầu tiên còn vừa trần.
     caps.art && !sheetOnly ? [FX_RULE, `${FX_SHORT} Biểu đồ ECharts: <div class="sx-chart" data-sx-chart='{…}'>.`, FX_SHORT] : "",
-    caps.code && (p.format === "doc" || p.format === "graphic" || p.format === "slide") ? WS_FONTS : "",
+    // Có khối mẫu tham chiếu thì luật phông của khối đó đã nêu đúng bộ này (sandbox cũng có đủ): không nêu hai lần.
+    caps.code && !p.mix && (p.format === "doc" || p.format === "graphic" || p.format === "slide") ? WS_FONTS : "",
   ].filter(Boolean);
   let out = open;
   for (const part of parts) {
@@ -316,6 +332,12 @@ export function designTurn(i: { typed: string; studio?: string | null; art: bool
   const block = designBlock({ format, domain, preset, own }, { art: i.art, code: i.code });
   return { format, domain, preset, own, block, compact: false, bytes: designBytes(block) };
 }
+/** Khối quy tắc của lượt sau khi đã chọn mẫu tham chiếu: preset nền của bộ trộn, màu và phông theo khối trộn. */
+export function mixedTurn(d: DesignTurn, mix: StyleMix, caps: { art: boolean; code: boolean }): DesignTurn {
+  const pick = { format: d.format, domain: d.domain, preset: mix.preset, own: d.own, mix: mix.id, kind: mix.domain };
+  const block = designBlock(pick, caps);
+  return { ...d, preset: mix.preset, mix: mix.id, kind: mix.domain, block, bytes: designBytes(block) };
+}
 
 /** Văn bản của các artifact trước trong đoạn chat, để biết lượt này là làm mới hay sửa tiếp. */
 export function historyTexts(messages: unknown, base?: unknown): string[] {
@@ -408,9 +430,9 @@ export function heroRule(h: HeroCaps): string {
   const prompt = h.mix ? ` Câu lệnh mẫu (tiếng Anh, thay chủ thể): "${heroPrompt(h.mix)}"` : "";
   const how = ai
     ? ` Tạo bằng generate_image (aspect_ratio ${heroAspect(h.domain)}) rồi đặt đúng địa chỉ công cụ trả về.${prompt}`
-      + " Công cụ báo lỗi hay hết lượt thì dùng ảnh https thật, nền shader hoặc minh họa SVG như dưới."
-    : " Đề bài không dùng ảnh AI (hoặc không có công cụ ảnh):";
-  const other = " Thứ tự thay thế: ảnh https thật từ images.unsplash.com hoặc upload.wikimedia.org (ghi nguồn);"
+      + " Công cụ báo lỗi hay hết lượt thì theo thứ tự:"
+    : " Đề bài không dùng ảnh AI (hoặc không có công cụ ảnh), theo thứ tự:";
+  const other = " ảnh https thật từ images.unsplash.com hoặc upload.wikimedia.org (ghi nguồn);"
     + ` nền 3D của bộ (<div class="sx-shader" data-sx-shader="silk">); minh họa SVG dựng có chủ đích.`;
   return `${head}${how}${other}`;
 }
@@ -438,8 +460,12 @@ function tokenLine(r: TurnRef): string {
 // Khung đầu đọc được ở email: mail client bỏ biến CSS, nên email nhận mã màu thẳng thay cho khối CSS.
 const emailHex = (mix: StyleMix) => mix.tokens.colors.map((c) => `${c.role} ${c.hex}`).join(", ");
 
-export type RefsOpts = { sees: boolean; agy: boolean; hero: string };
-/** Khối <design_refs> (≤ REFS_BUDGET byte): vai từng mẫu, khối CSS trộn để dán, luật dùng mẫu và hình chủ đạo. */
+// room: chỗ còn lại trong trần cả phần thiết kế (DESIGN_TEXT_MAX trừ khối quy tắc); khối mẫu có ít nhất REFS_BUDGET.
+export type RefsOpts = { sees: boolean; agy: boolean; hero: string; room?: number };
+/**
+ * Khối <design_refs>: vai từng mẫu, khối CSS trộn để dán, luật dùng mẫu và hình chủ đạo. Lời giải thích của mẫu cắt
+ * dần cho vừa chỗ; model chỉ đọc chữ luôn giữ ít nhất 140 ký tự mỗi mẫu vì nó không có ảnh để nhìn.
+ */
 export function designRefsBlock(turn: StyleTurn, o: RefsOpts): string {
   const m = turn.mix;
   const open = `<design_refs mix="${m.id}" preset="${m.preset}">`, close = "</design_refs>";
@@ -461,15 +487,17 @@ export function designRefsBlock(turn: StyleTurn, o: RefsOpts): string {
   ].filter(Boolean);
   const head = [open, `Mẫu tham chiếu Synchro chọn cho đề này (mỗi mẫu một vai). ${look}`];
   const tail = [paste, ...rules.map((r) => `- ${r}`), close];
-  // Phần dài nhất là lời giải thích của từng mẫu: cắt dần tới khi cả khối vừa trần.
-  for (const why of [420, 260, 140, 0]) {
+  // Phần dài nhất là lời giải thích của từng mẫu: cắt dần tới khi cả khối vừa chỗ.
+  const room = Math.max(REFS_BUDGET, o.room ?? REFS_BUDGET);
+  const steps = o.sees ? [420, 260, 140, 0] : [420, 260, 140];
+  for (const why of steps) {
     const lines = turn.refs.map((r, i) => {
       const roles = r.roles.map((x) => ROLE_VI[x] ?? x).join(", ");
       const say = why && r.why ? ` ${r.why.length > why ? `${r.why.slice(0, why).trimEnd()}…` : r.why}` : "";
       return `Mẫu ${i + 1} (${roles}): ${r.title}.${say} Số đo: ${tokenLine(r)}.`;
     });
     const out = [...head, ...lines, ...tail].join("\n");
-    if (designBytes(out) <= REFS_BUDGET || !why) return out;
+    if (designBytes(out) <= room || why === steps[steps.length - 1]) return out;
   }
   return "";
 }

@@ -6,8 +6,8 @@ import { prepareHistory } from "../transpile";
 import { isAck, typedText } from "../router";
 import { runner } from "../coderun";
 import {
-  designBytes, designRefsBlock, designTurn, DESIGN_TEXT_MAX, forbidsAiImage, heroDomain, heroRule, historyTexts,
-  KIT_FONT_RULE, type DesignFormat, type DesignTurn,
+  designBytes, designRefsBlock, designTurn, DESIGN_TEXT_MAX, mixedTurn, forbidsAiImage, heroDomain, heroRule,
+  historyTexts, KIT_FONT_RULE, type DesignFormat, type DesignTurn,
 } from "../designkit";
 import { styleForTurn, turnImages } from "../designrefs";
 import type { DesignStyleSel, StyleTurn } from "../../shared/designrefs";
@@ -192,12 +192,16 @@ export async function designOf(
   const turn = fresh && ctx ? await styleOf(body, fresh, typed, lastUser, conv, ctx) : null;
   const hero = fresh ? heroDomain(fresh.format, typed, turn?.facets.domain) : null;
   const heroText = heroRule({ image: caps.image, forbid, domain: hero, mix: turn?.mix ?? null });
-  const refs = turn ? designRefsBlock(turn, { sees: !!ctx?.sees, agy: !!ctx?.agy, hero: heroText }) : "";
+  // Có mẫu: khối quy tắc dựng lại theo preset nền của bộ trộn (một preset duy nhất cho cả hai khối).
+  const kit = turn && fresh ? mixedTurn(fresh, turn.mix, caps) : d;
+  const room = DESIGN_TEXT_MAX - designBytes(kit?.block ?? "");
+  const sees = !!ctx?.sees;
+  const refs = turn ? designRefsBlock(turn, { sees, agy: !!ctx?.agy, hero: heroText, room }) : "";
   const extra = fresh && !refs
     ? ["<design_rules>", KIT_FONT_RULE, heroText, "</design_rules>"].filter(Boolean).join("\n") : "";
-  const design = [d?.block ?? "", refs, extra].filter(Boolean).join("\n\n");
+  const design = [kit?.block ?? "", refs, extra].filter(Boolean).join("\n\n");
   if (refs) console.log(`[design] refs ${turn!.refs.map((r) => r.id).join(",")} mix ${turn!.mix.id}`
-    + ` ${designBytes(refs)}B`);
+    + ` preset ${turn!.mix.preset} ${designBytes(refs)}B`);
   const bytes = designBytes(design);
   if (bytes > DESIGN_TEXT_MAX) console.warn(`[design] khối thiết kế ${bytes}B vượt ${DESIGN_TEXT_MAX}B`);
   const images = turn && ctx?.sees ? await refImages(turn, ctx.signal) : [];
@@ -239,14 +243,14 @@ async function styleOf(body: Body, d: DesignTurn, typed: string, lastUser: Msg |
     return null;
   }
 }
-// Nhãn đứng ngay trước ảnh mẫu: textOf (subs.ts) đánh số ảnh ngay sau nhãn, model không lẫn mẫu với ảnh người dùng gửi.
-const refPrompt = (k: number, title: string) => `Mẫu tham chiếu ${k + 1} (không phải ảnh người dùng gửi): ${title}`;
 async function refImages(t: StyleTurn, signal?: AbortSignal): Promise<DesignImage[]> {
   try {
     const shots = await turnImages(t, REF_WIDTHS);
     if (signal?.aborted) return [];
-    return shots.flatMap((s, k) => [
-      { type: "text" as const, text: refPrompt(k, s.label) },
+    // Nhãn của turnImages là trọn câu ("Mẫu tham chiếu k (không phải ảnh người dùng gửi): …", hay "Mẫu người dùng
+    // gửi: …") đứng ngay trước ảnh: textOf (subs.ts) đánh số ảnh ngay sau nhãn, model không lẫn mẫu với ảnh người dùng.
+    return shots.flatMap((s) => [
+      { type: "text" as const, text: s.label },
       { type: "image" as const, media_type: "image/jpeg", data: s.jpeg.toString("base64") },
     ]);
   } catch (e) {
