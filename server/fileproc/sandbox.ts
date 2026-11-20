@@ -82,13 +82,23 @@ export const withParseSlot = <T>(uid: string | undefined, fn: () => Promise<T>, 
  *  dưới 16 phút. */
 export const CONVERT_WAIT_MS = Number(process.env.SYNCHRO_CONVERT_WAIT_MS) || 10 * 60_000;
 const CONVERT_ALL_WAIT = Number(process.env.SYNCHRO_CONVERT_ALL_WAIT) || 24;
-export const withConvertSlot = <T>(uid: string | undefined, fn: () => Promise<T>, o: { long?: boolean; signal?: AbortSignal } = {}) =>
-  withSlot("convert", { run: Number(process.env.SYNCHRO_CONVERT_MAX) || 2, wait: 6, user: 1, userWait: MAX_FILES_PER_MESSAGE, allWait: CONVERT_ALL_WAIT, waitMs: o.long ? CONVERT_WAIT_MS : WAIT_MS }, uid, fn, o.signal);
+// waitMs: việc chỉ là phần thêm (OCR, đo khả năng đọc tệp) chờ ngắn hơn rồi bỏ qua, thay vì giữ người gửi chờ đủ
+// WAIT_MS.
+type ConvertOpts = { long?: boolean; signal?: AbortSignal; waitMs?: number };
+export const withConvertSlot = <T>(uid: string | undefined, fn: () => Promise<T>, o: ConvertOpts = {}) => {
+  const run = Number(process.env.SYNCHRO_CONVERT_MAX) || 2;
+  const waitMs = o.waitMs ?? (o.long ? CONVERT_WAIT_MS : WAIT_MS);
+  const lim = { run, wait: 6, user: 1, userWait: MAX_FILES_PER_MESSAGE, allWait: CONVERT_ALL_WAIT, waitMs };
+  return withSlot("convert", lim, uid, fn, o.signal);
+};
 
 /** Nhường CPU cho web và các lượt chat. Không đặt được cũng không sao. */
 export function lowPriority(pid?: number) {
   try { if (pid) os.setPriority(pid, 10); } catch { /* không có quyền */ }
 }
+
+/** Python của các script đọc PDF / OCR: PYTHON_BIN, không đặt thì .mkvenv của app (ops/server-build.sh cài gói). */
+export const pyBin = () => process.env.PYTHON_BIN || path.join(process.cwd(), ".mkvenv", "bin", "python");
 
 /** Môi trường tối thiểu cho tiến trình đọc tệp: không có khóa OAuth, WS_AGENT_SECRET hay đường dẫn dữ liệu. */
 export const parserEnv = () => ({ PATH: process.env.PATH ?? "", LANG: process.env.LANG ?? "C.UTF-8", NODE_ENV: "production", HOME: os.tmpdir(), TMPDIR: os.tmpdir() } as NodeJS.ProcessEnv);

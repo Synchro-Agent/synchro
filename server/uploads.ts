@@ -5,6 +5,7 @@ import crypto from "node:crypto";
 import { storedFile } from "./fileproc";
 import { AuthError } from "./authstore";
 import { exec, putFile } from "./workspace";
+import { distinctName } from "../shared/fileproc/names";
 
 export const UPLOADS = ".synchro/uploads";
 export type Upload = { id: string; name: string; folder?: boolean };
@@ -37,9 +38,12 @@ export async function placeUploads(u: string, d: string, list: Upload[]) {
   const lines: string[] = [], errors: string[] = [];
   if (!list.length) return { lines, errors };
   await exec(u, d, { cmd: `mkdir -p ${UPLOADS} && ${EXCLUDE_SYNCHRO}`, timeout: 20 });
+  // Tên đã dùng trong lần chép này (tên → id tệp): hai tệp khác nhau cùng tên nằm cạnh nhau, không ghi đè nhau.
+  const placed = new Map<string, string>();
   for (const f of list) {
     const s = await storedFile(f.id, u);
-    const name = safe(f.name);
+    const name = distinctName(safe(f.name), (c) => placed.has(c) && placed.get(c) !== f.id);
+    placed.set(name, f.id);
     if (!s) { errors.push(`"${f.name}" không còn trên máy chủ, hãy tải lên lại.`); continue; }
     try {
       if (f.folder) {

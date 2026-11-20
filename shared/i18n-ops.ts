@@ -1,5 +1,25 @@
 // Bản dịch cho phần bảo mật, xác minh email, sức khỏe hệ thống, sao lưu và quản lý tệp (giữ riêng để các phần khác của từ điển không phải đụng tới).
 export const OPS_VI2EN: Record<string, string> = {
+  // Cài đặt → Sức khỏe hệ thống: các bộ đọc tệp cần chương trình cài trên máy chủ (server/fileproc/mediacaps.ts).
+  "Đọc tệp đặc biệt": "Special file readers",
+  "Cần chương trình cài trên máy chủ: sudo bash ops/install-media-deps.sh, rồi bấm Làm mới.":
+    "These need programs installed on the server: sudo bash ops/install-media-deps.sh, then press Refresh.",
+  "Ảnh HEIC (iPhone)": "HEIC photos (iPhone)",
+  "Giải ảnh HEIC sang PNG để model xem được.": "Decodes HEIC photos to PNG so models can see them.",
+  "Tệp Office đời cũ (.doc, .xls, .ppt)": "Legacy Office files (.doc, .xls, .ppt)",
+  "Chuyển bằng LibreOffice (SYNCHRO_SOFFICE_BIN) rồi đọc như .docx, .xlsx, .pptx.":
+    "Converted with LibreOffice (SYNCHRO_SOFFICE_BIN), then read like .docx, .xlsx, .pptx.",
+  "Chữ trong PDF scan (OCR)": "Text in scanned PDFs (OCR)",
+  "Trang PDF không có lớp chữ được đọc bằng RapidOCR (SYNCHRO_OCR=1).":
+    "PDF pages without a text layer are read with RapidOCR (SYNCHRO_OCR=1).",
+  "Đọc được ‹bộ đọc tệp›": "Working",
+  "Chưa cài ‹bộ đọc tệp›": "Not installed",
+  "Chạy thử lỗi": "Self-test failed",
+  "{what} chưa bật nên đang bị từ chối.": "{what}: not enabled, so these files are refused.",
+  "{what} bị từ chối: máy chủ chưa cài chương trình cần thiết. Chạy sudo bash ops/install-media-deps.sh.":
+    "{what} are refused: the server is missing the program they need. Run sudo bash ops/install-media-deps.sh.",
+  "{what} bị từ chối: chương trình đã cài nhưng chạy thử thất bại. Xem nhật ký máy chủ, dòng [media].":
+    "{what} are refused: the program is installed but its self-test failed. Check the server log for [media] lines.",
   "Máy chủ đang đọc nhiều tệp cùng lúc. Hãy thử lại sau ít phút.": "The server is reading many files right now. Try again in a few minutes.",
   "Bạn đang có nhiều tệp chờ đọc cùng lúc. Synchro đọc lần lượt từng tệp; hãy gửi lại tệp này khi các tệp trước đọc xong.": "You have many files waiting to be read. Synchro reads them one at a time; send this file again once the earlier ones are done.",
   "Các tệp trước của bạn đọc lâu quá nên tệp này chưa tới lượt. Hãy bấm Thử lại khi chúng đọc xong.": "Your earlier files are taking too long, so this file hasn't had its turn yet. Click Retry once they are done.",

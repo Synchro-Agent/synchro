@@ -169,7 +169,10 @@ ok(!uiTypes.length, `ui/ chỉ lấy kiểu từ server/ ở ${TYPE_FROM_SERVER.
 
 console.log("6. ops/ (máy chủ, root chạy), tools/ (dev, kiểm thử, bộ sinh); scripts/ chỉ còn tệp web chạy lúc chạy và lớp chuyển tiếp");
 // Tệp web chạy lúc chạy (spawn / import theo đường dẫn, bản đang chạy của màu cũ vẫn gọi trong lúc chuyển màu) ở lại scripts/.
-const RUNTIME_SCRIPTS = ["extract-worker.mjs", "zipguard.mjs", "zipguard.d.mts", "ocr.py", "pdf_extract.py"];
+// media-probe.heic: ảnh mẫu server/fileproc/mediacaps.ts giải thử để trang Sức khỏe biết máy giải được HEIC.
+const RUNTIME_SCRIPTS = [
+  "extract-worker.mjs", "zipguard.mjs", "zipguard.d.mts", "ocr.py", "pdf_extract.py", "media-probe.heic",
+];
 // Lớp chuyển tiếp một bản phát hành: lệnh ngoài repo còn gọi đường dẫn cũ (/root/deploy-<sha>.sh, cron, SYNCHRO_BACKUP_HOOK).
 const SHIMS = {
   "scripts/server-build.sh": "ops/server-build.sh", "scripts/backup.sh": "ops/backup.sh", "scripts/backup-offsite.sh": "ops/backup-offsite.sh",

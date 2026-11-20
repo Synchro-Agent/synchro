@@ -2,9 +2,13 @@
 
 ## Kiểm tra sức khỏe
 
-`GET /api/health` (công khai): `{ ok, build, db, disk, agent }`, 200 khi ổn, 503 khi có cờ `false`. Chỉ có cờ đúng / sai.
+`GET /api/health` (công khai): `{ ok, build, db, disk, agent, media }`, 200 khi ổn, 503 khi có cờ `false`. Chỉ có
+cờ đúng / sai.
 
 - `db`: ghi được SQLite. `disk`: còn trên 1 GB trống. `agent`: dịch vụ workspace trả lời (`null` nếu máy không bật workspace).
+- `media`: `{ heic, office, ocr }`, đọc được ảnh HEIC, tệp Office cũ, chữ trong PDF scan (`null` trong vài giây đầu,
+  khi chưa đo xong). Không tính vào `ok`: thiếu thì chỉ các loại tệp đó bị từ chối, web không 503 và watchdog không
+  khởi động lại vì nó. Xem mục "Đọc tệp đặc biệt" bên dưới.
 - Theo dõi ngoài (Blueprint A6.4) — ping mỗi phút từ Cloudflare, báo qua GitHub:
   - `ops/uptime-worker/` là một Cloudflare Worker có lịch `* * * * *` (gói Workers Free, cùng tài khoản Cloudflare đang giữ synchro.net.nz). Mỗi phút gọi `/api/health`; lỗi thì 15 giây sau gọi lại. Lỗi 3 phút liền (`FAILS_TO_ALERT`) thì Worker kích `.github/workflows/uptime.yml` (workflow_dispatch, lý do "down: …"); workflow kiểm lại từ máy của GitHub, lỗi thật thì job đỏ và GitHub gửi email "Run failed". Hồi lại thì Worker kích lần nữa ("up: …", job xanh). Trạng thái nằm trong KV `UPTIME`, chỉ ghi khi đổi. Kiểm thử: `node tests/api/uptime-worker.test.mjs`.
   - Cài một lần (chủ sở hữu): (1) GitHub → Settings (tài khoản) → Developer settings → Fine-grained tokens → Generate: chỉ repo `synchro`, quyền **Actions: Read and write** (không cấp Contents), hạn 1 năm. (2) Trong `ops/uptime-worker/`: `npx wrangler login` → `npx wrangler kv namespace create UPTIME` (chép `id` vào `wrangler.toml`) → `npx wrangler secret put GH_TOKEN` (dán token) → `npx wrangler deploy`. (3) GitHub → Settings (tài khoản) → Notifications → Actions → "Send notifications for failed workflows only" + Email. Thử: tab Actions → Uptime → Run workflow phải xanh; xem nhật ký Worker bằng `npx wrangler tail`.
@@ -352,6 +356,40 @@ Thư mục đăng nhập (`logins/`, `engine-tokens/`) không bao giờ bị ch�
 - Đây là kiểm tra định kỳ, không phải hạn mức của hệ thống tệp: một lệnh `dd` nhanh vẫn ghi được vài GB trong một phút. Muốn chặn cứng cần đặt `/srv/synchro-ws` trên phân vùng riêng có project quota (XFS / ext4).
 - Tệp tải lên: 2 GB mỗi tài khoản (`SYNCHRO_UPLOAD_QUOTA_MB`), 300 tệp mỗi giờ; đĩa dưới 2 GB trống (`SYNCHRO_MIN_FREE_MB`) thì từ chối tệp mới. Người dùng tự xóa tệp ở Cài đặt → Quyền riêng tư.
 - Tệp do code tạo: 5 GB mỗi tài khoản (`SYNCHRO_OUTPUT_QUOTA_MB`), vượt thì từ chối tệp mới và báo trong tin nhắn, không xóa tệp cũ; đĩa dưới mức trên thì không lưu tệp mới và báo cho model. Tệp quá 30 ngày được dọn mỗi ngày.
+
+## Đọc tệp đặc biệt (HEIC, Office cũ, OCR)
+
+Ba loại tệp cần chương trình cài trên máy chủ, cài một lần bằng root: `sudo bash ops/install-media-deps.sh` (chạy
+lại không đổi gì; in phiên bản và tự kiểm cả ba ở cuối).
+
+- Ảnh HEIC (iPhone): web thử sharp trước (giải được AVIF và mọi ảnh HEIF mã AV1); sharp trên npm không có bộ giải
+  HEVC nên ảnh iPhone đi tiếp sang `heif-dec` / `heif-convert` (gói `libheif-examples`, Ubuntu 24.04 thêm
+  `libheif-plugin-libde265`). Đặt `SYNCHRO_HEIF_BIN` để chỉ công cụ khác. Mỗi ảnh tối đa 60 giây, 40 triệu điểm ảnh
+  (đọc từ đầu tệp, trước khi giải mã; ảnh giải ra lớn hơn kích thước tệp khai thì bị từ chối) và 1,5 GB bộ nhớ ảo qua
+  `prlimit --as` (`SYNCHRO_HEIF_MEM_MB`). Giải ảnh đi hàng đọc tệp thường (cùng docx / PDF, 1-3 giây mỗi ảnh), không
+  chờ sau chép lời.
+- Office cũ `.doc` / `.xls` / `.ppt`: LibreOffice `-nogui`, web gọi `SYNCHRO_SOFFICE_BIN` (đặt sẵn `/usr/bin/soffice`
+  trong `ecosystem.config.cjs`), tối đa 180 giây mỗi tệp, rồi đọc như `.docx` / `.xlsx` / `.pptx`.
+- OCR trang PDF scan: `SYNCHRO_OCR=1` (đặt sẵn trong `ecosystem.config.cjs`), Python trong `.mkvenv` với gói của
+  `requirements.txt` (deploy có tham số `pip`) cộng `libgl1`, GLib của hệ thống. Mọi trang scan của một tệp OCR trong
+  một tiến trình (nạp mô hình một lần), sau khi tệp đã trả chỗ trong hàng đọc tệp, nên PDF scan không làm docx / xlsx
+  của người khác phải chờ. Mỗi tệp chờ hàng "convert" tối đa 15 giây và OCR tối đa 45 giây
+  (`SYNCHRO_OCR_BUDGET_MS`), quá thì các trang còn lại chỉ gửi ảnh trang như khi chưa bật OCR; nhật ký ghi
+  `[ocr] hết 45 giây, OCR được a/b trang`. Thời gian OCR mỗi trang chưa đo trên máy chủ thật: sau khi bật, xem dòng
+  này để chỉnh ngân sách.
+
+Office cũ, OCR và chép lời đi hàng "convert" (`SYNCHRO_CONVERT_MAX`, mặc định 2 việc cùng lúc trên cả máy, mỗi người
+một việc). Cả ba công cụ chạy ưu tiên thấp, không có biến môi trường bí mật. Ước lượng (chưa đo trên máy chủ thật):
+đĩa thêm khoảng 300-400 MB cho LibreOffice, dưới 5 MB cho libheif; bộ nhớ chỉ trong lúc đọc tệp, khoảng 100-150 MB
+cho một ảnh iPhone 12 MP, 150-300 MB cho một lần soffice, 300-500 MB cho một tiến trình OCR, nên đỉnh thêm vào khoảng
+1 GB (hai việc convert cùng lúc cộng hai ảnh HEIC).
+
+Kiểm tra: **Cài đặt → Sức khỏe hệ thống → Đọc tệp đặc biệt**. Một lần đo giải ảnh HEIC mẫu
+`scripts/media-probe.heic`, chạy `soffice --version` rồi nạp thư viện OCR, lần lượt, trong hàng "convert" (nên tính
+vào cùng đỉnh bộ nhớ ở trên; hàng bận quá 20 giây thì bỏ lần đo, giữ kết quả cũ). Trang luôn hiện kết quả gần nhất
+ngay, cũ hơn 1 phút thì đo lại ở nền: vừa cài xong, bấm Làm mới vài giây sau là thấy. `/api/health` đo lại tối đa
+10 phút một lần. Thiếu thì có dòng "Nên xem" ở đầu trang; nhật ký máy chủ có dòng `[media]`, `[heic]`, `[office]`,
+`[ocr]` kèm lý do.
 
 ## Swap của máy chủ
 
