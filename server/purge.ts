@@ -8,6 +8,7 @@ import { opsEvent } from "./ops";
 import { removeUserSkillFiles } from "./skillstore";
 import { removeUserDevices } from "./browserext";
 import { removeUserOutputs } from "./outputs";
+import { removeUserStyles } from "./designstyles";
 import { removeUserApps } from "./appstore";
 import { removeUserPlugins } from "./plugins";
 import { dropTag, userKey } from "./skillstudio";
@@ -73,6 +74,8 @@ export async function purgeUser(uid: string) {
   });
   await step("devices", () => removeUserDevices(uid));
   await step("outputs", () => removeUserOutputs(uid));
+  // Ảnh "Làm theo kiểu này" và "Phong cách của tôi" nằm trên đĩa; các dòng của chúng bị xóa ở purgeRows theo user_id.
+  await step("design styles", () => removeUserStyles(uid));
   await step("apps", () => removeUserApps(uid));
   await step("plugins", () => removeUserPlugins(uid));
   await step("speech", () => removeUserSpeech(uid));

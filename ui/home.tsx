@@ -34,6 +34,7 @@ import { TagChips, TagPicker } from "./tagsui";
 import type { PaletteCmd, PaletteGo } from "./palette";
 import { CHIP_LIMIT } from "./composerchips";
 import { AttachStrip } from "./attachstrip";
+import { adoptNewChip, DesignChipCard, DesignStylePop, designStyleFor, useDesignChip } from "./designstyleui";
 import { ASK_EVENT } from "./askcard";
 import { fit as fitFloat } from "./floatfit";
 import { steerRun } from "./llm";
@@ -405,6 +406,8 @@ const Composer = memo(function Composer(p: {
   onSteer?: (text: string, later: boolean) => void;
   /** Đổi giá trị (bấm Mới, mở đoạn chat, chọn chế độ…) thì đưa con trỏ vào ô nhập. */
   focusKey?: string;
+  /** Đoạn chat đang soạn ("new" khi chưa tạo): chip "Kiểu: …" gắn theo đoạn chat này. */
+  chatKey?: string;
 }) {
   countRender("Composer");
   // memo chặn lần vẽ lại của Home khi từ điển ngôn ngữ vừa tải xong: tự theo dõi để chữ tr() đổi ngôn ngữ.
@@ -428,10 +431,19 @@ const Composer = memo(function Composer(p: {
   // Menu + → Kho kỹ năng / Connectors: menu con bên phải (điện thoại: thay chỗ menu chính, có nút quay lại).
   const [sub, setSub] = useState<null | "skills" | "conn" | "access">(null);
   const [picks, setPicks] = useState<{ id: string; label: string }[]>([]);
+  // "Làm theo kiểu này": bảng chọn phong cách và chip của đoạn chat (gửi kèm mọi lượt tới khi bỏ).
+  const [dsOpen, setDsOpen] = useState(false);
+  const [dchip, setDchip] = useDesignChip(p.chatKey ?? "new");
+  const closeDs = useCallback(() => setDsOpen(false), []);
+  const openDs = () => {
+    setMenu(false);
+    setSub(null);
+    setDsOpen(true);
+  };
   // Dải thẻ đính kèm: quá CHIP_LIMIT thẻ thì gộp phần dư vào "+N"; bấm "+N" trải ra lưới nhiều hàng (xem ui/composerchips.ts).
   const [chipsOpen, setChipsOpen] = useState(false);
   // Lưới đã trải chỉ dành cho bộ thẻ đang soạn: còn ≤ CHIP_LIMIT thẻ (đã gửi, đã gỡ bớt) thì lần đính kèm sau lại bắt đầu từ dải một hàng.
-  const chipCount = picks.length + files.length;
+  const chipCount = picks.length + files.length + (dchip ? 1 : 0);
   useEffect(() => { if (chipCount <= CHIP_LIMIT) setChipsOpen(false); }, [chipCount]);
   const [skl, setSkl] = useState<{ id: string; label: string; lib?: boolean; cat?: boolean }[] | null>(null);
   const [skq, setSkq] = useState("");
@@ -635,6 +647,7 @@ const Composer = memo(function Composer(p: {
         <Menu open={!!(menu)} className="plus-menu" style={{ bottom: 40, left: 0, width: 264 }}>
           {perms?.features.files !== false && <button className="menu-item" onClick={() => { setMenu(false); openUpload(); }}><I.Clip />Tải lên hoặc thêm tệp<span className="sc">⌘U</span></button>}
           {perms?.features.files !== false && <button className="menu-item" onClick={shot}><I.Camera />Chụp ảnh màn hình</button>}
+          <button className="menu-item" aria-haspopup="dialog" onClick={openDs}><I.Palette />Làm theo kiểu này…</button>
           {p.onProject && perms?.features.projects !== false && (p.projects?.length ? (
             <>
               <button className="menu-item" aria-expanded={projOpen} onClick={() => setProjOpen(!projOpen)}><I.Layers />Thêm vào dự án<span className="sc">{projOpen ? <I.M icon="Chevron" size={16} /> : <I.M icon="ChevronR" size={16} />}</span></button>
@@ -708,6 +721,8 @@ const Composer = memo(function Composer(p: {
             </div>
           )}
         </Menu>
+        <DesignStylePop open={dsOpen} onClose={closeDs} onPick={setDchip} files={files} brief={v} say={say}
+          anchor={ref} />
     </div>
   );
 
@@ -720,6 +735,7 @@ const Composer = memo(function Composer(p: {
   const modelPicker = <ModelPicker model={model} setModel={setModel} />;
   // Thẻ = chip skill đã chọn + tệp đính kèm, theo đúng thứ tự đó. Quá CHIP_LIMIT thẻ: dải một hàng chỉ hiện CHIP_LIMIT thẻ rồi "+N".
   const cards = [
+    ...(dchip ? [<DesignChipCard key="sty-chip" chip={dchip} onRemove={() => setDchip(null)} />] : []),
     ...picks.map((k) => <span key={"pk-" + k.id} className="pick-chip">{k.id.startsWith("lib-") ? <I.Plugins size={14} /> : <I.Scroll size={14} />}<span className="cv-ell" data-notr>{k.label}</span><button className="icon-btn" aria-label={`Bỏ skill ${k.label}`} onClick={() => setPicks(picks.filter((x) => x.id !== k.id))}><I.X size={12} /></button></span>),
     ...files.map((f, i) => <FileCard key={"fc-" + f + i} name={f} onOpen={() => fm.show(f)} onContextMenu={(e) => fm.open(e, f)} onRemove={() => { abortFile(f); setFiles(files.filter((_, j) => j !== i)); }} />),
   ];
@@ -1482,6 +1498,8 @@ export default function Home({ boot }: { boot?: BootData | null }) {
         extra: { ...mixExtra(chatsRef.current.find((c) => c.id === id)), web: readPref("webSearch", true), memory: readPref("chatMemory", true), incognito: !!chatsRef.current.find((c) => c.id === id)?.inc, prevModel: [...(chatsRef.current.find((c) => c.id === id)?.msgs ?? [])].reverse().find((m) => m.role === "ai" && m.done && m.via)?.via,
           // histTotal: số tin thật trước khi cắt còn HISTORY_LIMIT (để nối tiếp phiên CLI); tz: múi giờ của người dùng cho dòng giờ hiện tại.
           histTotal: hist?.length ?? 1, ...(hist && hist.length > HISTORY_LIMIT ? { olderDigest: olderDigest(hist.slice(0, -HISTORY_LIMIT)) } : {}), tz: Intl.DateTimeFormat().resolvedOptions().timeZone, ...(avoid ? { avoidModel: avoid } : {}), ...(rejected?.length ? { rejected } : {}),
+          // Chip "Kiểu: …" của đoạn chat: máy chủ dùng phong cách đó làm mẫu cho sản phẩm thiết kế.
+          designStyle: designStyleFor(id),
           // pjFull: trình duyệt có đủ dữ liệu dự án nên lời nhắc trên là bản đúng; dự án chỉ là bản rút gọn (stub) thì máy chủ tự thêm hướng dẫn dự án.
           ...(pr && !pr.stub ? { pjFull: true } : {}) } });
       webs = meta.webs ?? [];
@@ -1743,6 +1761,8 @@ export default function Home({ boot }: { boot?: BootData | null }) {
       const np = nextProj ?? (view === "project" ? curProj ?? undefined : undefined);
       pid = np;
       setChats((cs) => [{ id: nid, title: roughTitle(t), msgs, inc: incog || undefined, project: np, studio: tp ? STUDIO_OF[tp.k] : undefined }, ...cs]);
+      // Chip "Kiểu: …" đặt ở ô soạn của trang chủ thuộc về đoạn chat vừa tạo này, không về đoạn chat nào mở sau.
+      adoptNewChip(nid);
       setNextProj(undefined);
       setCur(id);
       setView("chat");
@@ -1982,8 +2002,14 @@ export default function Home({ boot }: { boot?: BootData | null }) {
   const focusKey = `${view}:${cur}:${focusN}:${tplMode}`;
   const project = view === "chat" && meta ? meta.project : nextProj ?? (view === "project" ? curProj ?? undefined : undefined);
   // Cùng một đối tượng khi các giá trị không đổi: khối soạn tin ở đáy đoạn chat là phần tử đã memo (dock), khung đoạn chat (memo) nhận lại đúng nó.
-  const composerProps = useMemo(() => ({ focusKey, onSend, busy, onSteer: onSteerE, onStop, say, prefill, files, setFiles, model, setModel,
-    goCustom: goCustomE, goConnectors, openUpload, onVoice, projects: projPick, project, onProject }), [focusKey, busy, prefill, files, model, projPick, project]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Cùng điều kiện với send(): ngoài màn đoạn chat, lượt gửi luôn tạo đoạn chat mới, nên chip thuộc khóa "new".
+  const chatKey = view !== "chat" || cur === null ? "new" : String(cur);
+  const composerProps = useMemo(() => ({
+    focusKey, onSend, busy, onSteer: onSteerE, onStop, say, prefill, files, setFiles, model, setModel,
+    goCustom: goCustomE, goConnectors, openUpload, onVoice, projects: projPick, project, onProject, chatKey,
+    // Các hàm là useEvent (ổn định), không cần nằm trong danh sách phụ thuộc.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), [focusKey, busy, prefill, files, model, projPick, project, chatKey]);
   // Bàn trộn ngữ cảnh trong ô soạn tin ở đoạn chat: phần tử chỉ dựng lại khi đổi đoạn chat hay bắt đầu / xong lượt; DockMixer tự đọc đoạn chat từ kho.
   const chatId = meta?.id;
   const dockMixer = useMemo(() => (chatId === undefined ? null : <DockMixer chatId={chatId} busy={busy} say={say} />), [chatId, busy, say]);

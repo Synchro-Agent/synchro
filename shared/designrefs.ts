@@ -140,6 +140,12 @@ export type RefIndexRow = {
   paletteKey: string;
   fontPair: string;
   imagery: RefTokens["imagery"]["kind"];
+  // Điền khi máy chủ nạp thư viện (đọc từ JSON của mẫu), index.json không cần có: bộ chọn dùng để tránh bảng màu kem
+  // nâu và hình đề cấm.
+  bg?: string;
+  accent?: string;
+  ink?: string;
+  subject?: string;
 };
 export type RefIndex = { v: 1; built_at: string; refs: RefIndexRow[] };
 
@@ -216,6 +222,12 @@ export type BriefFacets = {
   audience: RefAudience[];
   theme: "light" | "dark" | null;
   brand: string | null;
+  /** Tâm trạng lấy theo mặc định của ngành (đề không tả): chỉ là đoán, nhẹ ký hơn lời đề. */
+  moodGuess?: boolean;
+  /** Đề tự đòi tông ấm (ấm, kem, nâu, đồng): bảng màu kem nâu lúc đó là đúng đề, không phạt. */
+  warmOk?: boolean;
+  /** Hình đề cấm ("không hình ổ bánh hay lúa mì"): mẫu có chủ thể đó bị bỏ. */
+  avoid?: string[];
 };
 export type StyleTurn = { mix: StyleMix; refs: TurnRef[]; facets: BriefFacets; note: string | null };
 export type DesignStyleSel = { kind: "mine" | "follow"; id: string };

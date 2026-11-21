@@ -1,0 +1,54 @@
+@layer properties, theme, base, components, utilities, syn, syn-over;
+@layer syn {
+/* ------------------------------------------------ "Làm theo kiểu này" ở ô soạn tin (ui/designstyleui.tsx)
+   Máy tính: bảng nổi phía trên nút + như menu +. Dưới 768px: tấm phủ cả chiều ngang ở đáy màn hình, cách mép 8px
+   như mọi khung nổi (ui/floatfit.ts giữ khung nổi cách mép 8px), cuộn được bên trong. */
+.sty-anchor{display:contents}
+.menu.sty-pop{position:fixed;top:auto;width:368px;max-height:min(560px,calc(100vh - 140px));overflow-y:auto;
+  padding:12px;display:flex;flex-direction:column;gap:10px;white-space:normal;cursor:default;scrollbar-width:thin}
+.sty-head{display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:28px}
+.sty-head b{font-size:var(--fs-3);font-weight:600;color:var(--ds-ink)}
+.sty-note{margin:0;font-size:var(--fs-1);line-height:1.45;color:var(--ds-muted)}
+.sty-url{display:flex;align-items:center;gap:8px;height:40px;padding:0 4px 0 12px;border-radius:var(--r-pill);
+  background:var(--ds-sunken);box-shadow:inset 0 0 0 1px var(--ds-line);color:var(--ds-faint)}
+.sty-url>svg{flex:none}
+.sty-url input{flex:1;min-width:0;height:100%;outline:0;font-size:var(--fs-2);color:var(--ds-ink);
+  background:transparent}
+.sty-url .btn.dark{height:32px;padding:0 14px;border-radius:var(--r-pill);flex:none}
+.menu .menu-item.sty-img{height:auto;min-height:48px;padding-top:7px;padding-bottom:7px;white-space:normal}
+.menu .menu-item.sty-img:disabled{opacity:.55;cursor:default}
+.sty-t{display:flex;flex-direction:column;min-width:0;gap:1px}
+.sty-t b{font-weight:520;color:var(--ds-ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sty-t em{font-style:normal;font-size:var(--fs-1);color:var(--ds-muted);overflow:hidden;text-overflow:ellipsis;
+  white-space:nowrap}
+.sty-busy{display:flex;align-items:center;gap:8px;font-size:var(--fs-label);color:var(--ds-ink-2)}
+.sty-err{font-size:var(--fs-label);line-height:1.45;color:var(--ds-bad)}
+.sty-sec{padding:4px 2px 0;font-size:var(--fs-1);font-weight:560;color:var(--ds-muted)}
+.sty-list{display:flex;flex-direction:column;gap:2px;min-height:36px}
+.sty-empty{padding:6px 2px;font-size:var(--fs-label);line-height:1.45;color:var(--ds-muted)}
+.sty-row{display:flex;align-items:center;gap:4px;min-height:44px;border-radius:var(--r-menu)}
+.sty-row:hover{background:var(--ds-hover)}
+.sty-row .sty-use{flex:1;min-width:0;display:flex;align-items:center;gap:10px;height:44px;padding:0 8px;text-align:left;
+  border-radius:var(--r-menu);background:transparent;color:var(--ds-ink)}
+.sty-row .sty-use:focus-visible{outline:2px solid var(--ds-ink);outline-offset:-2px}
+.sty-row .icon-btn{width:30px;height:30px;flex:none}
+.sty-row .btn.sty-keep{height:28px;padding:0 10px;flex:none}
+.sty-sw{display:inline-flex;flex:none;padding:3px;gap:2px;border-radius:7px;box-shadow:inset 0 0 0 1px var(--ds-line)}
+.sty-sw i{display:block;width:8px;height:20px;border-radius:2px}
+.sty-rename,.sty-savef{display:flex;align-items:center;gap:6px;width:100%;padding:4px}
+.sty-pop .sty-rename .field,.art-style-menu .sty-savef .field{flex:1;min-width:0;height:34px;margin:0}
+.sty-pop .sty-rename .btn,.art-style-menu .sty-savef .btn{height:34px;padding:0 12px;flex:none}
+/* Chip "Kiểu: …" trong dải thẻ của ô soạn tin. */
+.sty-chip .cv-ell{max-width:180px}
+.menu .menu-item.sty-save{border-top:1px solid var(--ds-line);border-radius:0 0 var(--r-menu) var(--r-menu);
+  margin-top:4px}
+/* Biểu tượng chiếm đúng bề rộng ô màu (30px) của các phong cách phía trên: chữ thẳng cột với tên phong cách. */
+.menu .menu-item.sty-save>svg{margin-inline:7px;flex:none}
+
+@media (max-width:767px){
+  .menu.sty-pop{left:8px;right:8px;bottom:calc(8px + env(safe-area-inset-bottom));width:auto;max-height:82vh;
+    border-radius:16px;padding:14px 16px}
+  .sty-row .icon-btn{width:36px;height:36px}
+  .sty-row .sty-use{height:48px}
+}
+}

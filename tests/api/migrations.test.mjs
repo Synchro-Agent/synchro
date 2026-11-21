@@ -40,7 +40,15 @@ const diff = (a, b) => {
   return out;
 };
 const v0 = () => { const d = new Database(":memory:"); d.exec(FIXTURE); return d; };
-const want = shape(v0());
+// Lược đồ của mã đã phát hành (001, 002) cộng các bảng mới mà các tệp sau 002 tạo: đó là lược đồ mọi cơ sở dữ liệu
+// phải có sau khi migrate.
+const ADDED = list.filter((m) => m.n > 2);
+const full = () => {
+  const d = v0();
+  for (const m of ADDED) if (m.kind === "sql") d.exec(fs.readFileSync(m.file, "utf8"));
+  return d;
+};
+const want = shape(full());
 const countOf = (sh, t) => Object.keys(sh).filter((k) => k.startsWith(`${t}:`)).length;
 
 // Mỗi bảng vài dòng: giá trị theo kiểu cột, cột khóa ngoại tới users trỏ đúng tài khoản có thật.
@@ -111,9 +119,18 @@ try {
     const before = snapshot(d), sqlBefore = d.prepare("SELECT type, name, sql FROM sqlite_master ORDER BY name").all();
     const logs = [];
     const r = migrate(d, { log: (s) => logs.push(s) });
-    ok(r.to === LATEST && r.applied.length === list.length && r.applied.every((a) => a.changed === 0), "mọi tệp đã có sẵn: chỉ ghi số phiên bản", r);
-    ok(JSON.stringify(d.prepare("SELECT type, name, sql FROM sqlite_master ORDER BY name").all()) === JSON.stringify(sqlBefore), "sqlite_master không đổi một ký tự");
-    ok(JSON.stringify(snapshot(d)) === JSON.stringify(before), "dữ liệu mọi bảng y nguyên");
+    const old = r.applied.filter((a) => !ADDED.some((m) => m.name === a.name));
+    ok(r.to === LATEST && r.applied.length === list.length && old.every((a) => a.changed === 0),
+      "mọi tệp của mã đã phát hành có sẵn: chỉ ghi số phiên bản", r);
+    ok(ADDED.every((m) => r.applied.find((a) => a.name === m.name)?.changed > 0), "tệp mới tạo bảng của nó", r);
+    const targets = (m) => sqlTargets(fs.readFileSync(m.file, "utf8")).create.map((k) => k.split(":")[1]);
+    const newNames = new Set(ADDED.flatMap((m) => (m.kind === "sql" ? targets(m) : [])));
+    const tableOf = (name) => name.replace(/^sqlite_autoindex_(\w+)_\d+$/, "$1");
+    const sqlAfter = d.prepare("SELECT type, name, sql FROM sqlite_master ORDER BY name").all()
+      .filter((x) => !newNames.has(tableOf(x.name)));
+    ok(JSON.stringify(sqlAfter) === JSON.stringify(sqlBefore), "sqlite_master của các bảng có sẵn không đổi một ký tự");
+    const after = Object.fromEntries(Object.entries(snapshot(d)).filter(([k]) => !newNames.has(k)));
+    ok(JSON.stringify(after) === JSON.stringify(before), "dữ liệu mọi bảng y nguyên");
     ok(logs.length === 1 && /chỉ ghi số phiên bản/.test(logs[0]), "ghi nhật ký một dòng vì đây là cơ sở dữ liệu có sẵn", logs);
     d.close();
   }
@@ -135,7 +152,7 @@ try {
     const r = migrate(d, quiet);
     ok(r.to === LATEST && r.applied.every((a) => a.changed > 0), "cả hai tệp đều chạy", r);
     ok(r.applied.find((a) => a.name.endsWith(".columns.json"))?.changed === added.length, `thêm lại đủ ${added.length} cột`, r);
-    const dd = diff(shape(d, { order: false }), shape(v0(), { order: false }));
+    const dd = diff(shape(d, { order: false }), shape(full(), { order: false }));
     ok(!dd.length, "mọi bảng, cột (kiểu, NOT NULL, mặc định), chỉ mục, trigger như lược đồ mới; chỉ mục cũ vec_items_owner đã bỏ", dd.join("\n"));
     const after = snapshot(d, kept);
     ok(JSON.stringify(after) === JSON.stringify(before), "dữ liệu có sẵn y nguyên", Object.keys(before).filter((k) => before[k] !== after[k]).map((k) => `${k}: ${before[k].slice(0, 150)} → ${after[k]?.slice(0, 150)}`).join("\n"));
