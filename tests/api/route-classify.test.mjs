@@ -756,6 +756,12 @@ console.log("20. Việc thiết kế ưu tiên model nhìn được ảnh (xem �
   ok(r2?.model === frontier, "không biết ai có mắt (sees bỏ trống): như trước, model mạnh nhất thắng", r2?.model);
   const r3 = R.routeModel(q(brief), ["sub-claude/opus", "sub-codex/gpt-6.1"], { sees: (k) => k !== "sub-claude/opus" });
   ok(r3?.model === "sub-claude/opus", "model mạnh chỉ đọc chữ vẫn thắng model cân bằng có mắt", r3?.model);
+  // Mọi gói subscription đều nhìn được ảnh (server/visioncaps.ts), nên điểm cộng có mắt không đẩy khóa API của máy
+  // chủ lên trên gói của người dùng cùng hạng.
+  const r4 = R.routeModel(q(brief), ["anthropic/claude-opus-5-5", "sub-claude/opus"], { sees });
+  ok(r4?.model === "sub-claude/opus", "cùng hạng, cả hai có mắt: gói của người dùng trước khóa API", r4?.model);
+  const r5 = R.routeModel(q(brief), ["openai/gpt-6.1", "sub-claude/opus"], { sees: (k) => k.startsWith("sub-") });
+  ok(r5?.model === "sub-claude/opus", "khóa API cân bằng có mắt không vượt gói mạnh của người dùng", r5?.model);
   const chat = R.routeModel(q("Xin chào"), ["sub-claude/haiku", "sub-claude/opus"], { sees });
   ok(chat?.model === "sub-claude/haiku", "việc không phải thiết kế: mắt không đổi lựa chọn", chat?.model);
 }
