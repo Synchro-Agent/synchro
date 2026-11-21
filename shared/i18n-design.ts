@@ -28,6 +28,9 @@ export const DESIGN_VI2EN: Record<string, string> = {
   "Hãy dán một liên kết bắt đầu bằng http:// hoặc https://": "Paste a link that starts with http:// or https://",
   "Đã lưu {name} vào Phong cách của tôi": "Saved {name} to My styles",
   "Lưu làm phong cách của tôi": "Save as my style",
+  // Tên mặc định của phong cách người dùng không đặt tên: dựng ở giao diện theo ngôn ngữ người xem.
+  "Ảnh gửi ngày {d}": "Image sent on {d}",
+  "Phong cách mới": "New style",
   // Lỗi của /api/design-styles và lý do không đọc được phong cách (server/designfollow.ts).
   "Không đọc được phong cách": "Couldn't read the style",
   "Không tìm thấy artifact này.": "Couldn't find this artifact.",
@@ -50,7 +53,8 @@ export const DESIGN_VI2EN: Record<string, string> = {
   "máy chủ này chưa mở được trang web để đọc phong cách; hãy gửi ảnh chụp màn hình trang đó":
     "this server can't open web pages to read a style yet; send a screenshot of the page instead",
   "chưa mở được trang {host}": "{host} couldn't be opened",
-  "chưa đọc được trang {host}: {why}": "{host} couldn't be read: {why}",
+  "trang {host} trả mã lỗi {code}": "{host} answered with error {code}",
+  "trang {host} tải quá lâu": "{host} took too long to load",
   "không đọc được màu của trang {host}; hãy gửi ảnh chụp màn hình thay thế":
     "no colours could be read from {host}; send a screenshot instead",
 };

@@ -1,8 +1,8 @@
 // Phong cách người dùng đưa vào Synchro: "follow" là phong cách đọc từ liên kết hay ảnh họ gửi (hết hạn sau 30 ngày nếu
-// không lưu), "mine" là "Phong cách của tôi" đã lưu (tối đa 20 mỗi người, dùng lại cho sản phẩm sau qua chip "Kiểu:
-// …"). Token ở bảng design_styles; ảnh WebP (ảnh người dùng gửi hoặc ảnh chụp trang họ đưa, tối đa 150 KB) ở
-// DATA_DIR/design-styles/<uid>/<id>.webp, chỉ chủ tài khoản xem được. Xóa tài khoản thì xóa cả thư mục
-// (server/purge.ts).
+// không lưu, giữ 30 cái mới nhất mỗi người), "mine" là "Phong cách của tôi" đã lưu (tối đa 20 mỗi người, dùng lại cho
+// sản phẩm sau qua chip "Kiểu: …"). Token ở bảng design_styles; ảnh WebP (ảnh người dùng gửi hoặc ảnh chụp trang họ
+// đưa, tối đa 150 KB) ở DATA_DIR/design-styles/<uid>/<id>.webp, chỉ chủ tài khoản xem được. Xóa tài khoản thì xóa cả
+// thư mục (server/purge.ts).
 import "server-only";
 import crypto from "node:crypto";
 import fs from "node:fs";
@@ -12,11 +12,14 @@ import { kitFont } from "../shared/designrefs";
 import { mixPalette, validTokens } from "../shared/designpick";
 import { DATA_DIR, db, needDisk } from "./db/db";
 
-export const STYLE_LIMITS = { mine: 20, followDays: 30, imageMaxBytes: 150_000, nameMax: 60 } as const;
+// follow: mỗi lượt "theo kiểu này" tạo một phong cách mới kèm ảnh, nên giữ số lượng có hạn (30 × 150 KB mỗi người)
+// thay vì chỉ dựa vào hạn 30 ngày và giới hạn 20 lần mỗi giờ.
+export const STYLE_LIMITS = { mine: 20, follow: 30, followDays: 30, imageMaxBytes: 150_000, nameMax: 60 } as const;
 export type StyleKind = "follow" | "mine";
 export type StoredStyle = {
   id: string;
   kind: StyleKind;
+  /** Tên người dùng đặt; rỗng thì giao diện gọi tên theo nguồn (tên trang, ngày gửi ảnh) bằng ngôn ngữ người xem. */
   name: string;
   source: string;
   sourceUrl: string | null;
@@ -119,6 +122,17 @@ function sweep(uid: string) {
   for (const g of gone) removeImage(uid, g.image);
   if (gone.length) db().prepare(`DELETE FROM design_styles ${where}`).run(uid, now);
 }
+/** Giữ keep phong cách "follow" mới nhất của một người, bỏ phần còn lại (dòng và ảnh). */
+function trimFollow(uid: string, keep: number) {
+  const sql = "SELECT id, image FROM design_styles WHERE user_id = ? AND kind = 'follow' "
+    + "ORDER BY updated_at DESC, rowid DESC LIMIT -1 OFFSET ?";
+  const old = db().prepare(sql).all(uid, keep) as { id: string; image: string | null }[];
+  const del = db().prepare("DELETE FROM design_styles WHERE id = ? AND user_id = ?");
+  for (const o of old) {
+    del.run(o.id, uid);
+    removeImage(uid, o.image);
+  }
+}
 function removeImage(uid: string, image: string | null) {
   if (!image) return;
   try {
@@ -183,11 +197,15 @@ export type NewStyle = {
   tokens: RefTokens;
   image?: Buffer | null;
 };
-/** Lưu một phong cách mới; "mine" quá 20 thì báo, không tự xóa cái cũ. */
+/**
+ * Lưu một phong cách mới; "mine" quá 20 thì báo, không tự xóa cái cũ (người dùng đã chọn giữ). "follow" quá 30 thì bỏ
+ * cái cũ nhất: đó là phong cách đọc tạm cho từng lượt, người dùng chưa chọn giữ.
+ */
 export async function addStyle(uid: string, s: NewStyle): Promise<StoredStyle> {
   needDisk();
   sweep(uid);
   if (s.kind === "mine" && mineCount(uid) >= STYLE_LIMITS.mine) throw new StyleError(fullMsg, 409);
+  if (s.kind === "follow") trimFollow(uid, STYLE_LIMITS.follow - 1);
   const id = `ds-${crypto.randomBytes(8).toString("hex")}`;
   let image: string | null = null;
   if (s.image?.length) {
@@ -200,7 +218,7 @@ export async function addStyle(uid: string, s: NewStyle): Promise<StoredStyle> {
   const expires = s.kind === "follow" ? now + STYLE_LIMITS.followDays * 86_400_000 : null;
   const sql = "INSERT INTO design_styles (id, user_id, kind, name, source, source_url, tokens, image, created_at, "
     + "updated_at, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
-  const name = cleanName(s.name, "Phong cách mới");
+  const name = cleanName(s.name, "");
   const tokens = JSON.stringify(s.tokens);
   db().prepare(sql).run(id, uid, s.kind, name, s.source, s.sourceUrl ?? null, tokens, image, now, now, expires);
   return getStyle(uid, id)!;

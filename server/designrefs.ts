@@ -4,6 +4,7 @@
 // trang mẫu chỉ đi vào ngữ cảnh của model, không bao giờ hiện cho người dùng; khối chữ gửi model không có địa chỉ trang
 // nguồn, nên model không thể "làm giống hệt <hãng>".
 import "server-only";
+import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import type {
@@ -15,14 +16,20 @@ import {
 } from "../shared/designpick";
 import { db } from "./db/db";
 import { getStyle, styleImageFile, type StoredStyle } from "./designstyles";
-import { FollowError, followStyle } from "./designfollow";
+import { FollowError, followStyle, readFollow, type FollowRead } from "./designfollow";
 
 /** Thư mục thư viện mẫu; DESIGN_REFS_DIR đổi chỗ (máy chủ đặt thư viện ngoài repo, bộ kiểm thử dùng thư viện nhỏ). */
 export const refsDir = () => process.env.DESIGN_REFS_DIR ?? path.join(process.cwd(), "catalog", "design-refs");
 const HISTORY_KEEP = 50;
 const HISTORY_READ = 10;
 
-type Cache = { dir: string; mtime: number; index: RefIndex | null; refs: Map<string, DesignRef | null> };
+type Cache = {
+  dir: string;
+  mtime: number;
+  index: RefIndex | null;
+  refs: Map<string, DesignRef | null>;
+  rows: RefIndexRow[] | null;
+};
 let cache: Cache | null = null;
 function catalog(): Cache {
   const dir = refsDir();
@@ -43,11 +50,24 @@ function catalog(): Cache {
       console.error("[designrefs] index.json hỏng", e);
     }
   }
-  cache = { dir, mtime, index, refs: new Map() };
+  cache = { dir, mtime, index, refs: new Map(), rows: null };
   return cache;
 }
-/** Bảng tóm tắt thư viện mẫu (rỗng khi chưa có thư viện). */
-export const refRows = (): RefIndexRow[] => catalog().index?.refs ?? [];
+/**
+ * Bảng tóm tắt thư viện mẫu (rỗng khi chưa có thư viện), kèm màu nền, nhấn, chữ và chủ thể ảnh đọc từ JSON của từng
+ * mẫu: bộ chọn cần chúng để tránh bảng màu kem nâu và hình đề cấm. Đọc một lần mỗi lần index.json đổi.
+ */
+export function refRows(): RefIndexRow[] {
+  const c = catalog();
+  if (c.rows) return c.rows;
+  const color = (t: RefTokens, role: string) => t.colors.find((x) => x.role === role)?.hex;
+  c.rows = (c.index?.refs ?? []).map((r) => {
+    const t = getRef(r.id)?.tokens;
+    if (!t) return r;
+    return { ...r, bg: color(t, "bg"), accent: color(t, "accent"), ink: color(t, "ink"), subject: t.imagery.subject };
+  });
+  return c.rows;
+}
 
 const REF_ID = /^(web|slide|poster|email|dashboard|doc)-\d{3}$/;
 /** Một mẫu đầy đủ (token, lý do, ảnh) theo mã; mã lạ hoặc tệp hỏng thì null. */
@@ -125,10 +145,17 @@ export function followBase(facets: BriefFacets, seed: string): RefTokens | null 
 
 // ---------------------------------------------------------------- lượt thiết kế
 // Nhãn và tiêu đề mẫu là chữ trong lời nhắc gửi model dựng (khối <design_refs>, nhãn ảnh), không hiện trên giao diện.
+// Như mẫu thư viện, lời nhắc không bao giờ có tên trang nguồn: phong cách đọc từ liên kết không mang tên (tên mặc định
+// của nó là tên máy), và tên người dùng tự đặt bỏ mọi chữ dạng tên miền, để model không "làm giống <hãng>".
 const promptLabel = (k: number) => `Mẫu ${k}`;
-const promptTitle = (s: StoredStyle) => (s.kind === "mine"
-  ? `Phong cách của người dùng: ${s.name}`
-  : `Phong cách người dùng gửi: ${s.name}`);
+const DOMAIN_LIKE = /(?:[\p{L}\p{N}-]+\.)+\p{L}{2,}/gu;
+const SOURCE_WORD: Record<string, string> = { url: "trang web", image: "ảnh", artifact: "artifact" };
+const promptTitle = (s: StoredStyle) => {
+  const who = s.kind === "mine" ? "Phong cách của người dùng" : "Phong cách người dùng gửi";
+  const from = SOURCE_WORD[s.source] ?? "khác";
+  const name = s.source === "url" ? "" : s.name.replace(DOMAIN_LIKE, "").replace(/\s+/g, " ").trim();
+  return name ? `${who} (${from}): ${name}` : `${who} (${from})`;
+};
 const catalogTurnRef = (ref: DesignRef, roles: MixRole[], k: number): TurnRef => ({
   id: ref.id,
   source: "catalog",
@@ -153,10 +180,30 @@ const styleTurnRef = (s: StoredStyle, domain: StyleMix["domain"]): TurnRef => ({
   tokens: s.tokens,
 });
 
+/** Ảnh của phong cách chỉ sống trong một lượt (lượt ẩn danh): không ghi đĩa, mất cùng lượt. */
+const turnOnly = new WeakMap<StyleTurn, Map<string, Buffer>>();
+/** Phong cách đọc trong lượt ẩn danh: dùng cho lượt này rồi bỏ, không có dòng design_styles nào. */
+const inMemory = (r: FollowRead): StoredStyle => {
+  const now = Date.now();
+  return {
+    id: `ds-${crypto.randomBytes(8).toString("hex")}`,
+    kind: "follow",
+    name: r.name,
+    source: r.source,
+    sourceUrl: r.sourceUrl,
+    tokens: r.tokens,
+    image: null,
+    createdAt: now,
+    updatedAt: now,
+    expiresAt: now,
+  };
+};
+
 /**
  * Bộ phong cách cho một sản phẩm thiết kế mới: phong cách người dùng chọn (chip "Kiểu: …"), phong cách đọc từ liên kết
  * hay ảnh họ gửi kèm lời "theo kiểu này", hoặc 3 mẫu thư viện hợp đề. Không có gì để dùng (bảng tính, chưa có thư viện)
- * thì null và lượt chạy như trước. Ghi sản phẩm vào lịch sử trừ khi đang ẩn danh.
+ * thì null và lượt chạy như trước. Ghi sản phẩm vào lịch sử và lưu phong cách đọc được trừ khi đang ẩn danh: lượt ẩn
+ * danh đọc phong cách trong bộ nhớ, ảnh chỉ đi vào ngữ cảnh của lượt đó.
  */
 export async function styleForTurn(i: StyleTurnInput): Promise<StyleTurn | null> {
   const facets = briefFacets(i.typed, i.format);
@@ -171,14 +218,25 @@ export async function styleForTurn(i: StyleTurnInput): Promise<StyleTurn | null>
     if (!own) note = "Phong cách người dùng chọn không còn (đã xóa hoặc hết hạn): dùng mẫu trong thư viện.";
   }
   const ask = own ? null : followAsk(i.typed, i.images.length > 0);
+  let shot: Buffer | null = null;
   if (ask) {
     try {
       const src = "url" in ask ? { url: ask.url } : { image: i.images[0] };
-      const base = followBase(facets, seed);
-      own = await followStyle({ uid: i.uid, facets, base, ...src, signal: i.signal, onStatus: i.onStatus });
+      const input = { uid: i.uid, facets, base: followBase(facets, seed), ...src, signal: i.signal,
+        onStatus: i.onStatus };
+      if (i.incognito) {
+        const r = await readFollow(input);
+        own = inMemory(r);
+        shot = r.image;
+      } else {
+        own = await followStyle(input);
+      }
     } catch (e) {
+      // Lý do gửi model là câu mẫu cố định của FollowError (không tên trang, không chữ của trang); lỗi khác chỉ vào
+      // nhật ký máy chủ.
       if (!(e instanceof FollowError)) console.error("[designrefs] đọc phong cách người dùng gửi", e);
-      note = `Không đọc được phong cách người dùng gửi (${(e as Error).message}). Đã dùng mẫu trong thư viện; `
+      const why = e instanceof FollowError ? e.forModel() : "lỗi máy chủ";
+      note = `Không đọc được phong cách người dùng gửi (${why}). Đã dùng mẫu trong thư viện; `
         + "nói rõ điều này với người dùng.";
     }
   }
@@ -204,6 +262,7 @@ export async function styleForTurn(i: StyleTurnInput): Promise<StyleTurn | null>
   const avoid = own ? undefined : { facets, history, headCat };
   const mix = buildMix(parts, facets.domain, i.ownBrand && !own, facets.brand, avoid);
   const turn: StyleTurn = { mix, refs, facets, note };
+  if (shot && own) turnOnly.set(turn, new Map([[own.id, shot]]));
   if (!i.incognito) {
     try {
       recordDesign(i.uid, i.conv, turn);
@@ -217,6 +276,11 @@ export async function styleForTurn(i: StyleTurnInput): Promise<StyleTurn | null>
 // ---------------------------------------------------------------- ảnh mẫu cho model
 const JPEG_CACHE_MAX = 48;
 const jpegCache = new Map<string, Buffer>();
+async function jpegFrom(src: Buffer, width: number): Promise<Buffer> {
+  const sharp = (await import("sharp")).default;
+  return sharp(src).resize({ width, withoutEnlargement: true }).flatten({ background: "#ffffff" })
+    .jpeg({ quality: 78 }).toBuffer();
+}
 async function jpegOf(file: string, width: number): Promise<Buffer | null> {
   let key = "";
   try {
@@ -227,19 +291,15 @@ async function jpegOf(file: string, width: number): Promise<Buffer | null> {
   }
   const hit = jpegCache.get(key);
   if (hit) return hit;
-  const sharp = (await import("sharp")).default;
   // Đọc tệp ra bộ nhớ trước: libvips giữ ảnh đã giải mã theo tên tệp, tệp thay nội dung sẽ ra ảnh cũ.
-  const src = await fs.promises.readFile(file);
-  const buf = await sharp(src).resize({ width, withoutEnlargement: true }).flatten({ background: "#ffffff" })
-    .jpeg({ quality: 78 }).toBuffer();
+  const buf = await jpegFrom(await fs.promises.readFile(file), width);
   if (jpegCache.size >= JPEG_CACHE_MAX) jpegCache.delete(jpegCache.keys().next().value!);
   jpegCache.set(key, buf);
   return buf;
 }
 const imageLabel = (r: TurnRef, k: number) => {
   if (r.source === "follow") return "Mẫu người dùng gửi: làm theo phong cách này";
-  const name = r.title.replace(/^[^:]*:\s*/, "");
-  if (r.source === "mine") return `Phong cách người dùng đã lưu (${name}): làm theo phong cách này`;
+  if (r.source === "mine") return `${r.title}. Làm theo phong cách này`;
   return `Mẫu tham chiếu ${k} (không phải ảnh người dùng gửi): ${r.title}`;
 };
 /** Ảnh JPEG của từng mẫu trong lượt (theo thứ tự refs), chiều rộng theo widths; mẫu không có ảnh thì bỏ qua. */
@@ -247,12 +307,13 @@ export async function turnImages(t: StyleTurn, widths: number[]): Promise<{ labe
   const out: { label: string; jpeg: Buffer }[] = [];
   for (let k = 0; k < t.refs.length; k++) {
     const r = t.refs[k];
+    const mem = turnOnly.get(t)?.get(r.id);
     const ref = r.source === "catalog" ? getRef(r.id) : null;
-    const file = ref ? refImage(ref) : r.source === "catalog" ? null : styleImageFile(r.id);
-    if (!file) continue;
+    const file = mem ? null : ref ? refImage(ref) : r.source === "catalog" ? null : styleImageFile(r.id);
+    if (!file && !mem) continue;
     const width = widths[k] ?? widths[widths.length - 1] ?? 800;
     try {
-      const jpeg = await jpegOf(file, width);
+      const jpeg = mem ? await jpegFrom(mem, width) : await jpegOf(file!, width);
       if (jpeg) out.push({ label: imageLabel(r, k + 1), jpeg });
     } catch (e) {
       console.error(`[designrefs] không đổi được ảnh mẫu ${r.id} sang JPEG`, e);

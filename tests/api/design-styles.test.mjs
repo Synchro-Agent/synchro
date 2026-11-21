@@ -182,7 +182,8 @@ try {
   ok(nourl instanceof DF.FollowError && /ảnh chụp màn hình/.test(nourl.message),
     "không có sandbox: đề nghị gửi ảnh chụp", nourl);
   for (const u of ["file:///etc/passwd", "http://127.0.0.1:3200/", "http://localhost/", "http://192.168.1.2/",
-    "https://u:p@x.vn/"]) {
+    "https://u:p@x.vn/", "http://100.64.0.1/", "http://0.0.0.1/", "http://[::1]/", "http://[::ffff:7f00:1]/",
+    "http://intranet/", "http://x.localhost/"]) {
     let e1 = null;
     try {
       DF.cleanUrl(u);
@@ -193,15 +194,64 @@ try {
   }
   ok(DF.cleanUrl("https://Example.com/a#b") === "https://example.com/a", "liên kết công khai: bỏ phần #");
 
+  console.log("4b. Lời nhắc không có tên trang, ẩn danh không lưu, giới hạn phong cách đọc tạm");
+  const C = AS.createUser({ email: "c@dstyles.test", name: "C", verified: true });
+  const fromSite = await DS.addStyle(C.id, { kind: "follow", name: "", source: "url",
+    sourceUrl: "https://stripe.com/pricing", tokens: t1.mix.tokens });
+  ok(fromSite.name === "" && DS.publicStyle(fromSite).host === "stripe.com",
+    "không đặt tên: lưu tên rỗng, giao diện gọi theo tên trang", DS.publicStyle(fromSite));
+  const ts = await turn(C.id, briefs[1], { sel: { kind: "follow", id: fromSite.id }, incognito: true });
+  ok(ts.refs[0].source === "follow" && !/stripe/i.test(JSON.stringify(ts.refs)),
+    "phong cách đọc từ liên kết: tiêu đề và token gửi model không có tên trang", ts.refs[0].title);
+  ok(ts.refs[0].title === "Phong cách người dùng gửi (trang web)", "tiêu đề trung tính", ts.refs[0].title);
+  const named = await DS.addStyle(C.id, { kind: "mine", name: "Giống apple.com và Linear.app", source: "image",
+    tokens: t1.mix.tokens });
+  const tn = await turn(C.id, briefs[1], { sel: { kind: "mine", id: named.id }, incognito: true });
+  ok(!/apple\.com|linear\.app/i.test(tn.refs[0].title), "tên tự đặt: bỏ chữ dạng tên miền", tn.refs[0].title);
+  const fe = new DF.FollowError("trang {host} tải quá lâu", { host: "stripe.com" });
+  ok(fe.message.includes("stripe.com") && !fe.forModel().includes("stripe"), "lý do cho model không nêu tên trang",
+    fe.forModel());
+  const rowsC = () => AS.db().prepare("SELECT COUNT(*) AS n FROM design_styles WHERE user_id = ?").get(C.id).n;
+  const dirC = path.join(process.env.DATA_DIR, "design-styles", C.id);
+  const filesC = () => (fs.existsSync(dirC) ? fs.readdirSync(dirC).length : 0);
+  const [n0C, f0, h0] = [rowsC(), filesC(), histN(C.id)];
+  const ti = await turn(C.id, { text: `${briefs[2].text} Làm theo phong cách ảnh này.`, format: "graphic" },
+    { images: [{ media_type: "image/png", data: shot.toString("base64") }], incognito: true });
+  ok(rowsC() === n0C && filesC() === f0 && histN(C.id) === h0,
+    "ẩn danh + \"theo phong cách ảnh này\": không thêm dòng design_styles, tệp ảnh hay lịch sử",
+    [rowsC(), n0C, filesC(), f0]);
+  if (real) {
+    ok(ti.refs[0].source === "follow", "ẩn danh vẫn làm theo ảnh người dùng gửi trong lượt đó", ti.refs);
+    const ii = await DR.turnImages(ti, [640, 800]);
+    ok(ii[0]?.label === "Mẫu người dùng gửi: làm theo phong cách này" && ii[0].jpeg.length > 0,
+      "ảnh của lượt ẩn danh đi thẳng vào ngữ cảnh model", ii[0]?.label);
+  } else {
+    ok(ti.refs[0].source === "catalog" && /Không đọc được phong cách/.test(ti.note ?? ""),
+      "ẩn danh, chưa có bộ đọc điểm ảnh: dùng thư viện, ghi chú cho model", ti.note);
+  }
+  const first = await DS.addStyle(C.id, { kind: "follow", name: "đầu", source: "image", tokens: toks, image: shot });
+  const firstFile = DS.styleImageFile(first.id);
+  for (let k = 0; k < DS.STYLE_LIMITS.follow; k++) {
+    await DS.addStyle(C.id, { kind: "follow", name: `F${k}`, source: "image", tokens: toks });
+  }
+  const follows = AS.db().prepare("SELECT COUNT(*) AS n FROM design_styles WHERE user_id = ? AND kind = 'follow'")
+    .get(C.id).n;
+  ok(follows === DS.STYLE_LIMITS.follow, `giữ ${DS.STYLE_LIMITS.follow} phong cách đọc tạm mới nhất`, follows);
+  ok(DS.getStyle(C.id, first.id) === null && !fs.existsSync(firstFile), "cái cũ nhất bị bỏ cùng ảnh");
+  ok(DS.getStyle(C.id, named.id)?.kind === "mine", "phong cách đã lưu không bị đụng tới");
+
   console.log("5. Lưu từ artifact");
   const content = `<html data-sx-preset="${t2.mix.preset}" data-sx-mix="${t2.mix.id}"><body>x</body></html>`;
   ART.saveArtifact(A.id, "c9", { ident: "deck", title: "Bộ trà", type: "html", content });
   const facetsG = P.briefFacets("", "graphic");
   const fromMix = await DF.artifactTokens(A.id, { content }, DR.mixRecord, facetsG);
   ok(JSON.stringify(fromMix) === JSON.stringify(t2.mix.tokens), "artifact có bản trộn: đúng token đã ghi");
-  const shown = await DF.artifactTokens(A.id, { content, preset: "neo-brutalist" }, DR.mixRecord, facetsG);
-  ok(shown.colors.find((c) => c.role === "bg").hex === "#fffdf5" && shown.fonts.head.kit === "space-grotesk",
-    "đang thử phong cách khác: lấy phong cách đang hiện", shown.fonts);
+  // Phong cách đang thử phải khác lớp nền của bản trộn, không thì artifactTokens trả đúng bản trộn.
+  const trial = t2.mix.preset === "neo-brutalist" ? "midnight-tech" : "neo-brutalist";
+  const want = trial === "neo-brutalist" ? ["#fffdf5", "space-grotesk"] : ["#08090e", "plus-jakarta-sans"];
+  const shown = await DF.artifactTokens(A.id, { content, preset: trial }, DR.mixRecord, facetsG);
+  ok(shown.colors.find((c) => c.role === "bg").hex === want[0] && shown.fonts.head.kit === want[1],
+    "đang thử phong cách khác: lấy phong cách đang hiện", [trial, shown.fonts]);
   let need = null;
   try {
     await DF.artifactTokens(A.id, { content: "<div>trống</div>" }, DR.mixRecord, facetsG);

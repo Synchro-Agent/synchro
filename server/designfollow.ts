@@ -4,23 +4,32 @@
 // bộ), không bao giờ trên máy chủ. Ảnh chụp chỉ đi vào ngữ cảnh của model và ô xem trước của chính người đó; logo, chữ
 // của trang không được đưa vào sản phẩm.
 import "server-only";
+import { isIP } from "node:net";
 import type { BriefFacets, Probe, RefTokens, TurnImageIn } from "../shared/designrefs";
 import { kitFont, luminance } from "../shared/designrefs";
 import { HIDE_MARKS, paletteFromPixels, TOKEN_PROBE, tokensFromProbe } from "../shared/designextract";
 import { followTokens, NEUTRAL_TOKENS, rolesFromPalette } from "../shared/designpick";
 import { FONT_SPEC, presetOf, type Preset } from "../shared/designpresets";
 import { execRun, runner } from "./coderun";
+import { isPrivate } from "./safefetch";
 import { limit } from "./ratelimit";
 import { AuthError } from "./auth/errors";
 import { addStyle, StyleError, type StoredStyle } from "./designstyles";
 
 /**
- * Lỗi nói được cho người dùng (và cho model, để model báo lại đúng lý do). tpl là câu mẫu có chỗ trống {host},
- * {n}: giao diện dịch câu mẫu rồi mới điền, nên bản tiếng Anh không lẫn tiếng Việt.
+ * Lỗi nói được cho người dùng (và cho model, để model báo lại đúng lý do). tpl là một câu mẫu cố định có chỗ trống
+ * {host}, {n}, {code}: giao diện dịch câu mẫu rồi mới điền, nên bản tiếng Anh không lẫn tiếng Việt. Giá trị điền chỉ là
+ * tên máy người dùng đã gõ hoặc con số, không bao giờ là chữ của trang lạ hay của sandbox.
  */
+const fill = (tpl: string, vars: Record<string, string | number>) =>
+  tpl.replace(/\{(\w+)\}/g, (_, k: string) => String(vars[k] ?? ""));
 export class FollowError extends Error {
   constructor(public tpl: string, public vars: Record<string, string | number> = {}) {
-    super(tpl.replace(/\{(\w+)\}/g, (_, k: string) => String(vars[k] ?? "")));
+    super(fill(tpl, vars));
+  }
+  /** Câu cho model: không nêu tên trang (model không được "làm giống <hãng>"), chỉ lý do. */
+  forModel(): string {
+    return fill(this.tpl, { ...this.vars, host: "đó" });
   }
 }
 const PER_HOUR = 20;
@@ -52,19 +61,40 @@ export type FollowInput = {
   base: RefTokens | null;
   url?: string;
   image?: TurnImageIn;
+  /** Tên người dùng đặt; không đặt thì để trống, giao diện tự gọi tên theo nguồn bằng ngôn ngữ của người xem. */
   name?: string;
   signal?: AbortSignal;
   onStatus?: (text: string) => void;
 };
+/** Phong cách vừa đọc, chưa lưu: lượt ẩn danh dùng thẳng trong bộ nhớ, lượt thường lưu bằng followStyle. */
+export type FollowRead = {
+  name: string;
+  source: "url" | "image";
+  sourceUrl: string | null;
+  tokens: RefTokens;
+  image: Buffer;
+};
 
+/** Đọc phong cách từ liên kết hoặc ảnh, không ghi gì xuống đĩa hay cơ sở dữ liệu. */
+export async function readFollow(i: FollowInput): Promise<FollowRead> {
+  const r = i.url ? await fromUrl(i) : i.image ? await fromImage(i, i.image) : null;
+  if (!r) throw new FollowError("không có liên kết hay ảnh để đọc phong cách");
+  return { ...r, tokens: unseen(r.tokens) };
+}
 /** Đọc phong cách từ liên kết hoặc ảnh và lưu thành phong cách "follow" (hết hạn sau 30 ngày nếu không lưu). */
 export async function followStyle(i: FollowInput): Promise<StoredStyle> {
-  if (i.url) return fromUrl(i);
-  if (i.image) return fromImage(i, i.image);
-  throw new FollowError("không có liên kết hay ảnh để đọc phong cách");
+  const r = await readFollow(i);
+  return addStyle(i.uid, { kind: "follow", ...r });
 }
+// Tên phông trang nguồn tự khai (font-family) là chữ của trang lạ và có thể là phông độc quyền: token chỉ giữ phông
+// trong bộ của Synchro (kit), bỏ tên đã thấy trước khi lưu hay đưa vào lời nhắc.
+const unseen = (t: RefTokens): RefTokens => {
+  const clear = <F extends { seen: string; seenLicence: string }>(f: F): F => ({ ...f, seen: "", seenLicence: "open" });
+  const fonts = { head: clear(t.fonts.head), body: clear(t.fonts.body), mono: t.fonts.mono && clear(t.fonts.mono) };
+  return { ...t, fonts };
+};
 
-async function fromImage(i: FollowInput, img: TurnImageIn): Promise<StoredStyle> {
+async function fromImage(i: FollowInput, img: TurnImageIn): Promise<FollowRead> {
   if (!IMAGE_TYPES.has(img.media_type)) throw new FollowError("ảnh phải là PNG, JPEG, WebP hoặc GIF");
   const buf = Buffer.from(img.data, "base64");
   if (!buf.length || buf.length > IMAGE_MAX) throw new FollowError("ảnh trống hoặc lớn hơn 12 MB");
@@ -78,14 +108,15 @@ async function fromImage(i: FollowInput, img: TurnImageIn): Promise<StoredStyle>
   }
   if (!colors) throw new FollowError("không đọc được màu từ ảnh này");
   const tokens = followTokens(colors, {}, i.base, i.facets);
-  const d = new Date();
-  const name = i.name ?? `Ảnh gửi ngày ${d.getDate()}/${d.getMonth() + 1}`;
-  return addStyle(i.uid, { kind: "follow", name, source: "image", tokens, image: buf });
+  return { name: i.name ?? "", source: "image", sourceUrl: null, tokens, image: buf };
 }
 
 // Chạy trong container: mở trang, ẩn logo / hộp cookie, chờ phông và ảnh lười tải, chụp 1280 × tối đa 1600, đo token.
-// UA chung, không mang thông tin người dùng; một trang, một lần mở.
-const FOLLOW_JS = String.raw`const fs = require("fs"), puppeteer = require("puppeteer-core");
+// UA chung, không mang thông tin người dùng; một trang, một lần mở. Lỗi chỉ ra một mã cố định (status, timeout, open):
+// lời nhắn lỗi do trang tự đặt (getter ném lỗi tùy ý) chỉ nằm ở detail để máy chủ ghi nhật ký, không tới model hay
+// giao diện.
+const FOLLOW_JS = String.raw`const fs = require("fs");
+const puppeteer = require("puppeteer-core");
 const cfg = JSON.parse(fs.readFileSync("follow.json", "utf8"));
 const HIDE = ${HIDE_MARKS};
 const PROBE = ${TOKEN_PROBE};
@@ -94,7 +125,7 @@ const PROBE = ${TOKEN_PROBE};
   const browser = await puppeteer.launch({ executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || "/usr/bin/chromium",
     headless: true, args: ["--no-sandbox", "--disable-dev-shm-usage", "--hide-scrollbars",
       ...(px ? ["--proxy-server=" + px.protocol + "//" + px.host] : [])] });
-  const out = { ok: false, error: "", probe: null, hidden: 0, height: 0 };
+  const out = { ok: false, reason: "", status: 0, detail: "", probe: null, hidden: 0, height: 0 };
   try {
     const page = await browser.newPage();
     if (px && px.username) await page.authenticate({ username: decodeURIComponent(px.username),
@@ -102,32 +133,45 @@ const PROBE = ${TOKEN_PROBE};
     await page.setUserAgent("Mozilla/5.0 (compatible; SynchroRefCapture/1.0)");
     await page.setViewport({ width: 1280, height: 800, deviceScaleFactor: 1 });
     const res = await page.goto(cfg.url, { waitUntil: "networkidle2", timeout: 30000 });
-    if (res && res.status() >= 400) throw new Error("trang trả mã " + res.status());
+    if (res && res.status() >= 400) {
+      out.status = res.status();
+      throw new Error("http " + res.status());
+    }
+    // Cuộn xuống để ảnh lười tải hiện ra. Trang chặn cuộn (script lỗi, khung cố định) thì vẫn chụp phần đầu trang.
     await page.evaluate(() => window.scrollTo(0, 1600)).catch(() => {});
     await new Promise((r) => setTimeout(r, 800));
+    // Về đầu trang không được thì ảnh chụp lệch xuống một đoạn, màu và chữ vẫn đọc được.
     await page.evaluate(() => window.scrollTo(0, 0)).catch(() => {});
+    // Không ẩn được logo (trang chặn eval): vẫn chụp; ảnh chỉ vào ngữ cảnh model kèm lời dặn không chép logo.
     out.hidden = await page.evaluate((src) => (0, eval)("(" + src + ")")(), HIDE.toString()).catch(() => 0);
+    // Phông chưa tải xong thì chụp với phông dự phòng: màu và bố cục vẫn đúng, phông lấy theo bộ của Synchro.
     await page.evaluate(() => document.fonts && document.fonts.ready).catch(() => {});
     await new Promise((r) => setTimeout(r, 2500));
-    out.height = await page.evaluate(() => Math.min(1600, document.documentElement.scrollHeight));
+    // Trang tự đặt scrollHeight ném lỗi hay trả giá trị lạ: chụp đúng một khung nhìn.
+    const tall = await page.evaluate(() => Math.min(1600, document.documentElement.scrollHeight)).catch(() => 800);
+    out.height = Number.isFinite(tall) ? tall : 800;
     const clip = { x: 0, y: 0, width: 1280, height: Math.max(400, out.height) };
     const shot = await page.screenshot({ type: "png", clip });
     fs.mkdirSync("outputs", { recursive: true });
     fs.writeFileSync("outputs/shot.png", Buffer.from(shot));
     const probe = (src) => (0, eval)("(" + src + ")")(document.body);
+    // Đo token hỏng trên trang này: máy chủ đọc màu từ điểm ảnh của ảnh chụp thay cho số đo.
     out.probe = await page.evaluate(probe, PROBE.toString()).catch(() => null);
     out.ok = true;
   } catch (e) {
-    out.error = String((e && e.message) || e).slice(0, 300);
+    out.reason = out.status ? "status" : e && e.name === "TimeoutError" ? "timeout" : "open";
+    out.detail = String((e && e.message) || e).slice(0, 300);
   }
   fs.mkdirSync("outputs", { recursive: true });
   fs.writeFileSync("outputs/report.json", JSON.stringify(out));
   await browser.close();
 })();`;
 
-const PRIVATE_HOST = new RegExp("^(?:localhost|.*\\.local|.*\\.internal|0\\.0\\.0\\.0|127\\.|10\\.|192\\.168\\."
-  + "|169\\.254\\.|172\\.(?:1[6-9]|2\\d|3[01])\\.|\\[)", "i");
-/** Liên kết người dùng dán: chỉ http(s) tới máy công khai (sandbox còn chặn lần nữa ở tầng mạng). */
+const LOCAL_NAME = /^(?:localhost|.*\.localhost|.*\.local|.*\.internal)$/i;
+/**
+ * Liên kết người dùng dán: chỉ http(s) tới máy công khai. Địa chỉ IP dùng đúng bộ kiểm địa chỉ nội bộ của safefetch;
+ * tên miền trỏ vào mạng trong và chuyển hướng sang địa chỉ nội bộ do tường lửa của sandbox chặn.
+ */
 export function cleanUrl(raw: string): string {
   let u: URL;
   try {
@@ -136,12 +180,25 @@ export function cleanUrl(raw: string): string {
     throw new FollowError("liên kết không hợp lệ");
   }
   if (u.protocol !== "https:" && u.protocol !== "http:") throw new FollowError("chỉ đọc được liên kết http hoặc https");
-  if (PRIVATE_HOST.test(u.hostname) || u.username || u.password) throw new FollowError("chỉ đọc được trang công khai");
+  const host = u.hostname.replace(/^\[|\]$/g, "");
+  const inside = isIP(host) ? isPrivate(host) : LOCAL_NAME.test(host) || !host.includes(".");
+  if (inside || u.username || u.password) throw new FollowError("chỉ đọc được trang công khai");
   u.hash = "";
   return u.toString();
 }
 
-async function fromUrl(i: FollowInput): Promise<StoredStyle> {
+type Report = { ok: boolean; reason: string; status: number; detail: string; probe: Probe | null };
+/** Lỗi trang về một câu mẫu cố định; mã HTTP chỉ nhận số hợp lệ. */
+function pageError(host: string, j: Report | null, timedOut: boolean): FollowError {
+  const code = j?.status ?? 0;
+  if (j?.reason === "status" && Number.isInteger(code) && code >= 400 && code <= 599) {
+    return new FollowError("trang {host} trả mã lỗi {code}", { host, code });
+  }
+  if (j?.reason === "timeout" || timedOut) return new FollowError("trang {host} tải quá lâu", { host });
+  return new FollowError("chưa mở được trang {host}", { host });
+}
+
+async function fromUrl(i: FollowInput): Promise<FollowRead> {
   const url = cleanUrl(i.url!);
   if (runner() !== "workspace") {
     throw new FollowError("máy chủ này chưa mở được trang web để đọc phong cách; hãy gửi ảnh chụp màn hình trang đó");
@@ -163,15 +220,17 @@ async function fromUrl(i: FollowInput): Promise<StoredStyle> {
   }
   const rep = r.files.find((f) => f.path === "report.json");
   const shot = r.files.find((f) => f.path === "shot.png");
-  let j: { ok: boolean; error: string; probe: Probe | null } | null = null;
+  let j: Report | null = null;
   try {
     j = rep ? JSON.parse(rep.data.toString("utf8")) : null;
   } catch (e) {
     console.error("[designfollow] báo cáo hỏng", e);
   }
   if (!j?.ok || !shot) {
-    const why = j?.error || (r.timedOut ? "trang tải quá lâu" : (r.stderr || r.stdout).slice(-200));
-    throw new FollowError("chưa đọc được trang {host}: {why}", { host, why });
+    // Chữ lỗi của trang và đuôi stderr chỉ vào nhật ký máy chủ; người dùng và model nhận lý do cố định.
+    const tail = (r.stderr || r.stdout || "").slice(-300);
+    console.error("[designfollow] không đọc được trang", host, j?.reason, j?.detail ?? "", tail);
+    throw pageError(host, j, r.timedOut);
   }
   const palette = await pixelsOf(shot.data);
   const measured = j.probe ? tokensFromProbe(j.probe, palette) : { tokens: {}, measured: [] };
@@ -182,8 +241,7 @@ async function fromUrl(i: FollowInput): Promise<StoredStyle> {
   const noColor = "không đọc được màu của trang {host}; hãy gửi ảnh chụp màn hình thay thế";
   if (!colors) throw new FollowError(noColor, { host });
   const tokens = followTokens(colors, { ...measured.tokens, colors }, i.base, i.facets);
-  const name = i.name ?? host;
-  return addStyle(i.uid, { kind: "follow", name, source: "url", sourceUrl: url, tokens, image: shot.data });
+  return { name: i.name ?? "", source: "url", sourceUrl: url, tokens, image: shot.data };
 }
 
 // ---------------------------------------------------------------- từ artifact của chính người dùng
