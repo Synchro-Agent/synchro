@@ -224,6 +224,16 @@ export const FX_VI2EN: Record<string, string> = {
   "Đã học lúc {time}": "Learned at {time}",
   "Lần học gần nhất: {time}, {date}. Synchro tự học sau mỗi đoạn chat.": "Last learned {time}, {date}. Synchro learns after every chat.",
   "{n} kết quả": "{n} result|{n} results",
+  // Vòng thiết kế theo mẫu tham chiếu (server/chat/prompt.ts designOf, server/chat/tools.ts designGate): dòng nhật ký
+  // làm việc; phần sau " · " là tên mẫu, tên model hay con số, giữ nguyên.
+  "Tham khảo mẫu": "References",
+  "So với mẫu tham chiếu (vòng 1/2)": "Comparing with the references (round 1/2)",
+  "So với mẫu tham chiếu (vòng 2/2)": "Comparing with the references (round 2/2)",
+  "So với mẫu tham chiếu (vòng 1/1)": "Comparing with the references (round 1/1)",
+  "Người chấm thiết kế": "Design reviewer",
+  "Chênh lệch còn lại": "Remaining differences",
+  "Cần nội dung SVG (tối đa 2 MB).": "SVG content is required (2 MB at most).",
+  "Chưa đổi được chữ logo thành nét trên máy chủ này.": "This server could not convert the logo text to outlines.",
 };
 export const FX_EN2VI: Record<string, string> = {
   "Retry": "Thử lại",

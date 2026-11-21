@@ -464,7 +464,11 @@ export const IMAGE_TOOL_NAME = "generate_image";
 // khi có khóa. Cùng cấu hình máy chủ thì định nghĩa giống hệt nhau giữa các lượt (bộ đệm prompt).
 const imageToolOf = (product: boolean) => ({
   name: IMAGE_TOOL_NAME,
-  description: "Tạo ảnh bằng AI (ảnh chụp như thật, tranh, minh họa, logo, poster, ảnh sản phẩm, ảnh đại diện), khoảng 40 giây; ảnh tự hiện thành thẻ trong chat. Không dùng cho biểu đồ, sơ đồ, slide hay thứ cần chữ chính xác (dựng bằng code).",
+  // Mô tả phải nói rõ ảnh AI là phần hình của slide, trang web, poster; nếu không, model hiểu là slide không có hình
+  // và ra chữ trên nền trơn. Chữ, biểu đồ, sơ đồ vẫn dựng bằng code.
+  description: "Tạo ảnh bằng AI (ảnh chụp như thật, tranh, minh họa, logo, ảnh sản phẩm, ảnh đại diện, và hình chủ đạo"
+    + " cho slide, trang web, poster: ảnh bìa, hero, ảnh poster), khoảng 40 giây; ảnh tự hiện thành thẻ trong chat."
+    + " Chữ, biểu đồ, sơ đồ và thứ cần chữ chính xác trong sản phẩm vẫn dựng bằng code, đặt trên hoặc cạnh ảnh.",
   input_schema: {
     type: "object",
     properties: {
@@ -487,9 +491,18 @@ const IMAGE_TOOLS = { on: imageToolOf(true), off: imageToolOf(false) };
 export const imageProduct = () => !!serviceKey("replicate");
 /** Định nghĩa generate_image theo cấu hình máy chủ (cùng một đối tượng cho cùng cấu hình). */
 export const imageTool = (product = imageProduct()) => (product ? IMAGE_TOOLS.on : IMAGE_TOOLS.off);
+// Hình chủ đạo của sản phẩm thiết kế đi qua đúng công cụ này (cùng hạn mức, cùng lời báo lỗi); đề bài cấm ảnh AI thì
+// có ba đường khác, không bỏ trống khung hình.
+const HERO_RULE = "Slide, trang web và poster cần một hình chủ đạo (ảnh bìa, hero, ảnh poster): tạo bằng generate_image"
+  + " rồi đặt vào artifact, trừ khi người dùng nói không dùng ảnh AI (khi đó dùng ảnh https thật, nền shader của bộ"
+  + " thiết kế hoặc minh họa SVG có chủ đích).";
+const TEXT_RULE = "Chữ, biểu đồ, sơ đồ, infographic số liệu và thứ cần chữ chính xác tuyệt đối: dựng bằng code hoặc"
+  + " artifact, đặt trên hoặc cạnh ảnh; không nhờ ảnh AI vẽ chữ. Chữ trong ảnh AI có thể sai chính tả, nhất là tiếng"
+  + " Việt: logo hay poster nhiều chữ thì nói trước điều đó.";
 export const IMAGE_RULES = `<image_generation>
 Công cụ generate_image tạo ảnh thật bằng AI qua gói người dùng đã đăng nhập. Người dùng xin ảnh chụp, tranh, hình minh họa, logo, poster, ảnh sản phẩm, ảnh đại diện hay nhờ sửa một tấm ảnh: gọi generate_image, không dựng thay bằng code.
-Biểu đồ, sơ đồ, slide, infographic số liệu và thứ cần chữ chính xác tuyệt đối: dựng bằng code hoặc artifact như thường lệ. Chữ trong ảnh AI có thể sai chính tả, nhất là tiếng Việt: logo hay poster nhiều chữ thì nói trước điều đó.
+${HERO_RULE}
+${TEXT_RULE}
 Viết prompt chi tiết, đủ chủ thể, bối cảnh, phong cách, ánh sáng, bố cục. Sửa ảnh có sẵn thì truyền reference.
 Không nói đã tạo ảnh trước khi công cụ trả kết quả; mỗi lần mất khoảng 40 giây nên báo trước một câu ngắn. Xong rồi ảnh tự hiện thành thẻ trong khung chat: trong câu trả lời đừng chèn liên kết, đường dẫn hay cú pháp ảnh markdown, chỉ nói ngắn gọn đã tạo gì.
 Ảnh dùng được trong sản phẩm: kết quả công cụ ghi địa chỉ để đặt vào artifact (src, url(...)) và đường dẫn inputs/ để run_code đọc (Word, PowerPoint, PDF, video). Thiết kế, slide hay video cần ảnh thì tạo ảnh trước rồi đưa đúng ảnh đó vào, không dùng ảnh giữ chỗ.

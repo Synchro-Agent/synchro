@@ -81,8 +81,17 @@ const strongBudget = (uid: string) => {
   return h.n < max && !!++h.n;
 };
 
-/** Một lời gọi không công cụ bằng model key (gói hoặc khóa API). Hạn mức chi phí API chỉ áp cho model khóa API. */
-export async function oneShot(user: UserRow, key: string, system: string, messages: { role: "user" | "assistant"; content: string }[], o: { maxTokens?: number; signal?: AbortSignal; feature?: string; job?: string; bg?: boolean; maxWaitMs?: number } = {}): Promise<string> {
+/** Một khối nội dung kiểu chung của Synchro: chữ, hoặc ảnh base64 (người chấm thiết kế gửi bảng so sánh). */
+export type OneShotBlock = { type: "text"; text: string } | { type: "image"; media_type: string; data: string };
+export type OneShotMsg = { role: "user" | "assistant"; content: string | OneShotBlock[] };
+type OneShotOpts = {
+  maxTokens?: number; signal?: AbortSignal; feature?: string; job?: string; bg?: boolean; maxWaitMs?: number;
+};
+/** Một lời gọi không công cụ bằng model key (gói hoặc khóa API). Hạn mức chi phí API chỉ áp cho model khóa API.
+ *  Nội dung có thể kèm ảnh: CLI nhận ảnh đính kèm (subs.ts textOf), khóa API đổi khối theo từng hãng (llmcall.ts). */
+export async function oneShot(
+  user: UserRow, key: string, system: string, messages: OneShotMsg[], o: OneShotOpts = {},
+): Promise<string> {
   const cli = subCli(key);
   if (cli) {
     // Việc phụ tự động trên gói của người dùng: gói sắp chạm giới hạn hoặc hết ngân sách việc phụ của hôm nay thì để lần sau (NO_CHEAP),

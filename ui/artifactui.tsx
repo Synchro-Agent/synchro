@@ -19,13 +19,16 @@ import { BulkBar, BulkButton, BulkCheck, bulkRow, each, useBulk, type BulkAct } 
 import { useApp } from "./store";
 import { PageBar, usePage } from "./pager";
 import { buildPptx, PPTX_FRAME_JS, type DeckSlide } from "./deckpptx";
-import { fontEmbedCss } from "./artfonts";
+import { fontEmbedCss, svgDownload } from "./artfonts";
 import { htmlToBlocks } from "./htmlblocks";
 
 export type ArtVersion = ArtBlock & { at?: number };
 
 // ---------------------------------------------------------------- khung chạy cô lập
-import { buildDocCore, deckExport, externalImageUrls, genImageId, H2I, htmlExport, isDeck, libUrls, noteGenPending, noteGenSettled, pendingRetryMs, svgExport, swapUrls } from "../shared/artdoc";
+import {
+  buildDocCore, deckExport, externalImageUrls, genImageId, H2I, htmlExport, isDeck, libUrls, noteGenPending,
+  noteGenSettled, pendingRetryMs, swapUrls,
+} from "../shared/artdoc";
 import { kitFontUrl, presetIn, withKitFontLink } from "../shared/artkit";
 import { PRESETS, presetOf } from "../shared/designpresets";
 import { SaveStyleItem } from "./designstyleui";
@@ -603,7 +606,11 @@ export function ArtifactPanel({ versions, index, setIndex, ai, onClose, onFix, o
   const done = (n: string) => say(`${tr("Đã tải")} ${n}`);
   const source = async () => {
     const n = artFileName(art), content = await embedGenerated(art.content);
-    saveBlob(new Blob([art.type === "html" ? htmlExport(content, location.origin) : art.type === "svg" ? svgExport(content) : content], { type: art.type === "html" ? "text/html" : art.type === "svg" ? "image/svg+xml" : "text/plain" }), n); done(n);
+    // SVG đứng một mình: phông nhúng sẵn, chữ logo thành nét (artfonts.ts svgDownload).
+    const file = art.type === "html" ? htmlExport(content, location.origin)
+      : art.type === "svg" ? await svgDownload(content, location.origin) : content;
+    const mime = art.type === "html" ? "text/html" : art.type === "svg" ? "image/svg+xml" : "text/plain";
+    saveBlob(new Blob([file], { type: mime }), n); done(n);
   };
   // Xuất cần phần xem trước đang hiện (tài liệu đã dựng, khung đã chạy): chuyển sang Xem trước rồi chờ một chút.
   const withPreview = (fn: () => void | Promise<void>, wait = 400) => new Promise<void>((ok, no) => {
@@ -650,7 +657,14 @@ Yêu cầu: ${req.trim()}`);
     setPicked(null); setReq("");
   };
   const pdfFrame = () => withPreview(() => { if (!send.current) throw new Error(tr("Khung xem chưa sẵn sàng")); send.current({ t: "print" }); }, 1500);
-  const pngFrame = (scale?: number) => withPreview(async () => { const n = `${name}${scale ? `@${scale}x` : ""}.png`; const d = await frameCall({ t: "capture", scale, fontCss: await fontEmbedCss(withKitFontLink(art.content)) }); saveBlob(dataUrlBlob(String(d.data)), n); done(n); }, 1500);
+  const pngFrame = (scale?: number) => withPreview(async () => {
+    const n = `${name}${scale ? `@${scale}x` : ""}.png`;
+    // Phông của bộ Synchro (face.css) nhúng dạng data:, vì khung không tự tải phông cho thư viện chụp ảnh.
+    const fontCss = await fontEmbedCss(withKitFontLink(art.content, location.origin));
+    const d = await frameCall({ t: "capture", scale, fontCss });
+    saveBlob(dataUrlBlob(String(d.data)), n);
+    done(n);
+  }, 1500);
   // Poster 3:4 và ảnh chia sẻ 1200×630 của bộ thiết kế: thêm bản 3x đúng cỡ in / mạng xã hội (3240×4320, 3600×1890).
   const frame = deck ? null : /class=["'][^"']*\bsx-og\b/.test(art.content) ? "og" : /class=["'][^"']*\bsx-poster\b/.test(art.content) ? "poster" : null;
   const png3x: DlItem[] = frame ? [{ label: "PNG 3x", sub: frame === "og" ? "3600×1890, chữ nét" : "3240×4320, chữ nét", run: () => pngFrame(3) }] : [];
@@ -658,7 +672,8 @@ Yêu cầu: ${req.trim()}`);
   const pptxFrame = () => withPreview(async () => {
     say(tr("Đang dựng tệp PowerPoint…"));
     // Phông web cho ảnh nền của slide (chữ trong hình, SVG): khung không tự tải được, như khi xuất PNG.
-    const d = await frameCall({ t: "pptx", fontCss: await fontEmbedCss(withKitFontLink(art.content)) }, { ms: 10 * 60_000, onStep: (s) => setPptxStep(`${s.i}/${s.n}`) });
+    const fontCss = await fontEmbedCss(withKitFontLink(art.content, location.origin));
+    const d = await frameCall({ t: "pptx", fontCss }, { ms: 10 * 60_000, onStep: (s) => setPptxStep(`${s.i}/${s.n}`) });
     setPptxStep("");
     const n = `${name}.pptx`;
     saveBlob(await buildPptx(d.slides as DeckSlide[], Number(d.w), Number(d.h), art.title), n); done(n);
@@ -672,7 +687,13 @@ Yêu cầu: ${req.trim()}`);
   } else if (art.type === "html") items.push({ label: "HTML", sub: "Trang web chạy được", run: source }, { label: "PDF", sub: "Chọn Lưu thành PDF khi in", run: pdfFrame }, { label: "PNG", sub: frame ? "Ảnh đúng khung" : "Ảnh toàn trang", run: () => pngFrame() }, ...png3x);
   else if (art.type === "react") items.push({ label: "HTML", sub: "Mở bằng trình duyệt, không cần cài gì", run: async () => { const n = `${name}.html`; saveBlob(new Blob([buildDoc("react", await embedGenerated(art.content), location.origin, "export", false, undefined, art.title)], { type: "text/html" }), n); done(n); } },
     { label: "JSX", sub: "Mã nguồn React", run: source }, { label: "PNG", sub: "Ảnh giao diện", run: () => pngFrame() }, ...png3x, { label: "PDF", sub: "Chọn Lưu thành PDF khi in", run: pdfFrame });
-  else if (art.type === "svg") items.push({ label: "SVG", sub: "Hình vector", run: source }, { label: "PNG", sub: "Ảnh độ phân giải cao", run: async () => { saveBlob(await svgToPng(await embedGenerated(art.content)), `${name}.png`); done(`${name}.png`); } });
+  else if (art.type === "svg") items.push({ label: "SVG", sub: "Hình vector", run: source }, {
+    label: "PNG", sub: "Ảnh độ phân giải cao", run: async () => {
+      // Ảnh từ SVG vẽ qua thẻ <img>: hình không tự tải được phông web, phải mang phông nhúng như tệp SVG tải về.
+      saveBlob(await svgToPng(await svgDownload(await embedGenerated(art.content), location.origin)), `${name}.png`);
+      done(`${name}.png`);
+    },
+  });
   else if (art.type === "markdown") items.push({ label: "Word (.docx)", sub: "Mở bằng Word, Google Docs", run: () => withPreview(async () => { const n = `${name}.docx`; saveBlob(await docxFile(shown(".art-md"), art.title, art.content), n); done(n); }) },
     { label: "PDF", sub: "Chọn Lưu thành PDF khi in", run: () => withPreview(() => printHtml(art.title, cleanHtml(shown(".art-md"), art.content))) }, { label: "Markdown (.md)", sub: "Văn bản thuần", run: source });
   else if (art.type === "vbhc") items.push({ label: "Word (.docx)", sub: "Đúng thể thức Nghị định 30/2020", run: async () => {
