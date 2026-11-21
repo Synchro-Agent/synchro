@@ -34,7 +34,7 @@ import { TagChips, TagPicker } from "./tagsui";
 import type { PaletteCmd, PaletteGo } from "./palette";
 import { CHIP_LIMIT } from "./composerchips";
 import { AttachStrip } from "./attachstrip";
-import { DesignChipCard, DesignStylePop, designStyleFor, useDesignChip } from "./designstyleui";
+import { adoptNewChip, DesignChipCard, DesignStylePop, designStyleFor, useDesignChip } from "./designstyleui";
 import { ASK_EVENT } from "./askcard";
 import { fit as fitFloat } from "./floatfit";
 import { steerRun } from "./llm";
@@ -1761,6 +1761,8 @@ export default function Home({ boot }: { boot?: BootData | null }) {
       const np = nextProj ?? (view === "project" ? curProj ?? undefined : undefined);
       pid = np;
       setChats((cs) => [{ id: nid, title: roughTitle(t), msgs, inc: incog || undefined, project: np, studio: tp ? STUDIO_OF[tp.k] : undefined }, ...cs]);
+      // Chip "Kiểu: …" đặt ở ô soạn của trang chủ thuộc về đoạn chat vừa tạo này, không về đoạn chat nào mở sau.
+      adoptNewChip(nid);
       setNextProj(undefined);
       setCur(id);
       setView("chat");
@@ -2000,7 +2002,8 @@ export default function Home({ boot }: { boot?: BootData | null }) {
   const focusKey = `${view}:${cur}:${focusN}:${tplMode}`;
   const project = view === "chat" && meta ? meta.project : nextProj ?? (view === "project" ? curProj ?? undefined : undefined);
   // Cùng một đối tượng khi các giá trị không đổi: khối soạn tin ở đáy đoạn chat là phần tử đã memo (dock), khung đoạn chat (memo) nhận lại đúng nó.
-  const chatKey = cur === null ? "new" : String(cur);
+  // Cùng điều kiện với send(): ngoài màn đoạn chat, lượt gửi luôn tạo đoạn chat mới, nên chip thuộc khóa "new".
+  const chatKey = view !== "chat" || cur === null ? "new" : String(cur);
   const composerProps = useMemo(() => ({
     focusKey, onSend, busy, onSteer: onSteerE, onStop, say, prefill, files, setFiles, model, setModel,
     goCustom: goCustomE, goConnectors, openUpload, onVoice, projects: projPick, project, onProject, chatKey,

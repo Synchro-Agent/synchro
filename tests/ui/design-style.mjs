@@ -73,6 +73,12 @@ const openPop = async () => {
   // Mock chạy chế độ dev dịch /api/design-styles ở lần gọi đầu (có khi quá 10 giây): chờ đủ lâu cho lần đó.
   return until(`!!${POP}?.querySelector(".sty-list .sty-row, .sty-list .sty-empty")`, 25000);
 };
+// Hiệu ứng mở của khung nổi dùng đường lò xo (vượt quá rồi về): đo khi còn chạy thì lệch vài px. Đợi mọi hiệu ứng có
+// hạn của phần tử xong; hiệu ứng lặp mãi (vòng quay đang tải) không tính.
+const settled = (sel) => ev(`(() => { const el = ${sel}; if (!el) return null;
+  const run = el.getAnimations({ subtree: true }).filter((a) => a.effect?.getTiming().iterations !== Infinity);
+  // Hiệu ứng bị hủy giữa chừng (phần tử đóng) cũng là xong: chỉ cần biết lúc nó dừng.
+  return Promise.all(run.map((a) => a.finished.catch(() => null))).then(() => true); })()`);
 // Bảng nằm trọn trong màn hình, không bị phần tử khác che (dò lưới điểm), trang không cuộn ngang.
 const GEOM = `(() => {
   const m = ${POP}; if (!m) return null;
@@ -122,7 +128,7 @@ try {
       await sleep(1200);
       if (await ev(`!!document.querySelector(".side-scrim")`)) await t.click(v.w - 8, v.h - 120);
       ok(await openPop(), `${tag}: mở bảng "Làm theo kiểu này"`);
-      await sleep(400);
+      await settled(POP);
       const g = await ev(GEOM);
       const inView = g && g.l >= 0 && g.r <= g.w && g.t >= 0 && g.b <= g.h;
       ok(inView && g.page, `${tag}: bảng nằm trọn trong màn hình, trang không cuộn ngang`, g);
@@ -158,6 +164,9 @@ try {
           page: document.documentElement.scrollWidth <= innerWidth + 1 };
       })()`);
       ok(chip.inside && chip.page, `${tag}: chip nằm trong ô soạn tin`, chip);
+      // Bảng còn đang mờ dần (lớp .out) thì che ô soạn tin trong ảnh: đợi hiệu ứng đóng xong rồi mới chụp.
+      await until(`!document.querySelector(".menu.sty-pop.out")`, 2000);
+      await sleep(150);
       await shot(`${tag}-3-chip`);
       if (first) {
         console.log("Chip đi theo đoạn chat");
@@ -188,6 +197,24 @@ try {
         await newChat();
         ok(!(await ev(`!!document.querySelector(".composer .sty-chip")`)),
           "đoạn chat mới không mang chip của đoạn khác");
+
+        console.log("Chip ở trang chủ không sang đoạn chat có sẵn");
+        await openPop();
+        await click(`${byText(".sty-row", NAME)}?.querySelector(".sty-use")`, "chọn phong cách ở trang chủ");
+        await until(`!${POP} && (${chipText}).includes(${JSON.stringify(NAME)})`, 4000);
+        await P("Page.navigate", { url });
+        await until(`!!document.querySelector(".composer textarea") && !!document.querySelector(".ai-msg")`, 30000);
+        await sleep(800);
+        ok(!(await ev(`!!document.querySelector(".composer .sty-chip")`)),
+          "mở đoạn chat có sẵn: ô soạn tin không có chip của trang chủ");
+        const n3 = bodies.length;
+        await sendMsg("lượt ở đoạn cũ");
+        ok((await waitBody(n3)) && !bodies.at(-1)?.designStyle,
+          "gửi ở đoạn chat có sẵn: lượt không mang chip của trang chủ", bodies.at(-1)?.designStyle);
+        await until(`!document.querySelector(".ai-msg.ai-streaming")`, 30000);
+        await newChat();
+        ok((await ev(chipText)).includes(NAME), "về trang chủ: chip vẫn chờ đoạn chat mới", await ev(chipText));
+        await click(`document.querySelector('.composer .sty-chip button')`, "bỏ chip trang chủ");
 
         console.log("Đổi tên, xóa, ảnh đính kèm");
         await openPop();
@@ -285,6 +312,7 @@ try {
 } catch (e) {
   fail++;
   console.log("  ✗", e.message);
+  // Ảnh lỗi chỉ để xem lại; Chrome đã đóng kết nối thì không chụp được, lỗi chính đã ghi ở dòng trên.
   await shot("loi").catch(() => {});
 } finally {
   t.close();

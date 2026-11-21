@@ -7,7 +7,7 @@ import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } fr
 import { createPortal } from "react-dom";
 import * as I from "./icons";
 import { Menu } from "./ui";
-import { tf, tr, trc } from "./i18n";
+import { getLang, tf, tr, trc } from "./i18n";
 import { useApp } from "./store";
 import { getBlob } from "./filestate";
 import { FLOATING, isAway } from "./clickaway";
@@ -28,7 +28,8 @@ type PublicStyle = {
 };
 
 // ---------------------------------------------------------------- chip theo đoạn chat
-// Khóa "new": đoạn chat chưa có mã (đang soạn ở trang chủ); lượt gửi đầu tiên chuyển chip sang mã đoạn chat vừa tạo.
+// Khóa "new": đoạn chat chưa có mã (đang soạn ở trang chủ); lượt gửi tạo đoạn chat mới chuyển chip sang mã vừa tạo
+// (adoptNewChip). Gửi trong một đoạn chat có sẵn không lấy chip "new": ô soạn của đoạn đó không hiện chip ấy.
 const KEY = "sx-design-chip";
 const subs = new Set<() => void>();
 let chips: Record<string, DesignChip> = {};
@@ -75,16 +76,18 @@ export function useDesignChip(key: string): [DesignChip | null, (c: DesignChip |
   }, () => null);
   return [c, (v) => setChip(key, v)];
 }
-/** Phong cách gửi kèm lượt của đoạn chat này; chip đặt lúc đoạn chat chưa có mã thì chuyển sang mã vừa tạo. */
+/** Lượt gửi vừa tạo đoạn chat mới từ ô soạn ở trang chủ: chip đặt ở đó thuộc về đoạn chat này. */
+export function adoptNewChip(chat: number) {
+  load();
+  const c = chips.new;
+  if (!c) return;
+  setChip("new", null);
+  setChip(String(chat), c);
+}
+/** Phong cách gửi kèm lượt của đoạn chat này (chip đang hiện ở ô soạn của nó). */
 export function designStyleFor(chat: number): { kind: "mine" | "follow"; id: string } | undefined {
   load();
-  const k = String(chat);
-  if (!chips[k] && chips.new) {
-    const c = chips.new;
-    setChip("new", null);
-    setChip(k, c);
-  }
-  const c = chips[k];
+  const c = chips[String(chat)];
   return c ? { kind: c.kind, id: c.id } : undefined;
 }
 /** Chip "Kiểu: <tên> ×" trong dải thẻ của ô soạn tin. */
@@ -120,6 +123,15 @@ const submit = (f: () => unknown) => (e: React.FormEvent) => {
   e.preventDefault();
   void f();
 };
+/** Tên hiện của phong cách: tên người dùng đặt, không có thì tên trang hay ngày gửi ảnh, theo ngôn ngữ người xem. */
+export function styleName(s: Pick<PublicStyle, "name" | "host" | "source" | "createdAt">): string {
+  if (s.name) return s.name;
+  if (s.host) return s.host;
+  if (s.source !== "image") return tr("Phong cách mới");
+  const d = new Date(s.createdAt).toLocaleDateString(getLang() === "en" ? "en-GB" : "vi-VN",
+    { day: "numeric", month: "numeric" });
+  return tf("Ảnh gửi ngày {d}", { d });
+}
 const daysLeft = (at: number | null) => (at ? Math.max(1, Math.ceil((at - Date.now()) / 86_400_000)) : 0);
 
 const EMPTY = "Chưa có phong cách nào. Lưu từ menu Phong cách của một artifact, hoặc dán liên kết ở trên.";
@@ -221,9 +233,10 @@ export function DesignStylePop({ open, onClose, onPick, files, brief, say, ancho
     };
   }, [open, onClose]);
   const pick = (s: PublicStyle) => {
-    onPick({ kind: s.kind, id: s.id, name: s.name });
+    const name = styleName(s);
+    onPick({ kind: s.kind, id: s.id, name });
     onClose();
-    say(tf("Sản phẩm thiết kế tiếp theo sẽ theo kiểu {name}", { name: s.name }));
+    say(tf("Sản phẩm thiết kế tiếp theo sẽ theo kiểu {name}", { name }));
   };
   const read = async (body: Record<string, unknown>, status: string) => {
     setBusy(status);
@@ -272,14 +285,14 @@ export function DesignStylePop({ open, onClose, onPick, files, brief, say, ancho
   const keep = async (s: PublicStyle) => {
     try {
       await api(`/api/design-styles/${s.id}`, { method: "PATCH", body: JSON.stringify({ save: true }) });
-      say(tf("Đã lưu {name} vào Phong cách của tôi", { name: s.name }));
+      say(tf("Đã lưu {name} vào Phong cách của tôi", { name: styleName(s) }));
       void reload();
     } catch (e) {
       setErr((e as Error).message);
     }
   };
   const remove = (s: PublicStyle) => app.confirm(tr("Xóa phong cách này?"), tf("{name} sẽ bị xóa cùng ảnh mẫu của nó.",
-    { name: s.name }), tr("Xóa"), async () => {
+    { name: styleName(s) }), tr("Xóa"), async () => {
     try {
       await api(`/api/design-styles/${s.id}`, { method: "DELETE" });
       void reload();
@@ -329,7 +342,7 @@ export function DesignStylePop({ open, onClose, onPick, files, brief, say, ancho
                       <button className="sty-use" onClick={() => pick(s)} disabled={!!busy}>
                         <Swatches s={s} />
                         <span className="sty-t">
-                          <b data-notr>{s.name}</b>
+                          <b data-notr>{styleName(s)}</b>
                           <em>
                             <span data-notr>{[s.fonts.head, s.fonts.body].filter(Boolean).join(" · ")}</span>
                             {s.kind === "follow" && <> · {tf("còn {n} ngày", { n: daysLeft(s.expiresAt) })}</>}
@@ -339,9 +352,9 @@ export function DesignStylePop({ open, onClose, onPick, files, brief, say, ancho
                       {s.kind === "follow" && (
                         <button className="btn sty-keep" onClick={() => void keep(s)}>{tr("Lưu")}</button>
                       )}
-                      <button className="icon-btn" aria-label={tf("Đổi tên {name}", { name: s.name })}
-                        onClick={() => setEdit({ id: s.id, name: s.name })}><I.Pencil size={15} /></button>
-                      <button className="icon-btn" aria-label={tf("Xóa {name}", { name: s.name })}
+                      <button className="icon-btn" aria-label={tf("Đổi tên {name}", { name: styleName(s) })}
+                        onClick={() => setEdit({ id: s.id, name: styleName(s) })}><I.Pencil size={15} /></button>
+                      <button className="icon-btn" aria-label={tf("Xóa {name}", { name: styleName(s) })}
                         onClick={() => remove(s)}><I.Trash size={15} /></button>
                     </>
                   )}
@@ -373,7 +386,7 @@ export function SaveStyleItem({ conv, ident, title, content, preset, say }: {
     try {
       const body = { from: "artifact", conv, ident, content, preset, name: name?.trim() || title, save: true };
       const j = await api<{ style: PublicStyle }>("/api/design-styles", { method: "POST", body: JSON.stringify(body) });
-      say(tf("Đã lưu {name} vào Phong cách của tôi", { name: j.style.name }));
+      say(tf("Đã lưu {name} vào Phong cách của tôi", { name: styleName(j.style) }));
       setName(null);
     } catch (e) {
       say(tr((e as Error).message));
