@@ -34,7 +34,7 @@ import { TagChips, TagPicker } from "./tagsui";
 import type { PaletteCmd, PaletteGo } from "./palette";
 import { CHIP_LIMIT } from "./composerchips";
 import { AttachStrip } from "./attachstrip";
-import { adoptNewChip, DesignChipCard, DesignStylePop, designStyleFor, useDesignChip } from "./designstyleui";
+import { adoptNewChip, designStyleFor, useDesignChip } from "./designchip";
 import { ASK_EVENT } from "./askcard";
 import { fit as fitFloat } from "./floatfit";
 import { steerRun } from "./llm";
@@ -100,6 +100,9 @@ import { decodeSettingsTab, hashStep, settingsHash } from "./hashnav";
 // Trang đầu chỉ tải phần chat; các mục khác, hộp thoại và màn hình đăng nhập tải khi cần (rê chuột vào mục thì tải trước).
 const CodeView = lazyView(() => import("./codeview").then((m) => m.CodeView));
 const SpeechView = lazyView(() => import("./speech/view").then((m) => m.SpeechView));
+// Bảng chọn phong cách và chip "Kiểu: …" (cả CSS) nạp khi mở bảng hoặc khi đoạn chat có chip, không nằm trong tải đầu.
+const DesignStylePop = lazyView(() => import("./designstyleui").then((m) => m.DesignStylePop), null);
+const DesignChipCard = lazyView(() => import("./designstyleui").then((m) => m.DesignChipCard), null);
 const BrainWorkspace = lazyView(() => import("./brainui").then((m) => m.BrainWorkspace));
 const InboxPage = lazyView(() => import("./tasksui").then((m) => m.InboxPage));
 const CustomizePage = lazyView(() => import("./pluginsui").then((m) => m.CustomizePage));
@@ -435,6 +438,10 @@ const Composer = memo(function Composer(p: {
   const [dsOpen, setDsOpen] = useState(false);
   const [dchip, setDchip] = useDesignChip(p.chatKey ?? "new");
   const closeDs = useCallback(() => setDsOpen(false), []);
+  // Menu "+" vừa mở: tải trước bảng chọn phong cách để bấm "Làm theo kiểu này…" là hiện ngay.
+  useEffect(() => {
+    if (menu) DesignStylePop.preload();
+  }, [menu]);
   const openDs = () => {
     setMenu(false);
     setSub(null);
@@ -721,8 +728,8 @@ const Composer = memo(function Composer(p: {
             </div>
           )}
         </Menu>
-        <DesignStylePop open={dsOpen} onClose={closeDs} onPick={setDchip} files={files} brief={v} say={say}
-          anchor={ref} />
+        {dsOpen && <DesignStylePop open onClose={closeDs} onPick={setDchip} files={files} brief={v} say={say}
+          anchor={ref} />}
     </div>
   );
 
