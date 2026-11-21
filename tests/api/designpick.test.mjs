@@ -57,6 +57,37 @@ ok(P.followAsk("lam poster giong trang https://x.vn", false)?.url === "https://x
 ok(P.followAsk("làm poster cho https://x.vn", true) === null,
   "liên kết không kèm lời \"theo kiểu\": không phải đọc phong cách");
 ok(P.followAsk("theo phong cách tối giản", false) === null, "không có liên kết, không có ảnh: không đọc gì");
+// Sau "theo phong cách" là tâm trạng, thời kỳ hay tên hãng: đó là lời tả, ảnh kèm theo là ảnh sản phẩm.
+const notFollow = [
+  ["Thiết kế poster theo phong cách tối giản cho sản phẩm này", true],
+  ["Làm slide theo phong cách retro, dùng ảnh sản phẩm đính kèm", true],
+  ["Tạo banner giống kiểu Apple", true],
+  ["make a poster in the style of the 70s with this photo", true],
+  ["Làm landing page cho https://tiembanh.vn theo phong cách sang trọng", false],
+  ["Làm landing page cho https://tiembanh.vn theo phong cách sang trọng", true],
+  ["Thiết kế poster cho sản phẩm này, theo phong cách hiện đại", true],
+  ["Design a banner for this product, I like this photo a lot", true],
+  ["Make a flyer for my bakery in the style of Wes Anderson", true],
+  ["Dùng ảnh này làm ảnh nền cho poster theo phong cách Nhật Bản", true],
+];
+const wrongly = notFollow.filter(([t, img]) => P.followAsk(t, img) !== null);
+ok(!wrongly.length, "tâm trạng, thời kỳ, tên hãng sau \"theo phong cách\" không phải lời làm theo",
+  wrongly.map(([t, img]) => [t, P.followAsk(t, img)]));
+const yesFollow = [
+  ["Làm poster theo kiểu này", true, "image"],
+  ["Thiết kế landing page như ảnh đính kèm", true, "image"],
+  ["Làm slide giống mẫu tôi gửi", true, "image"],
+  ["Làm trang chủ giống trang https://abc.vn nhé", false, "url"],
+  ["Làm trang chủ theo phong cách của https://abc.vn", true, "url"],
+  ["Make a landing page like this site: https://abc.com", false, "url"],
+  ["make a poster in the style of this image", true, "image"],
+  ["Design it like the attached screenshot", true, "image"],
+  ["Làm theo phong cách trang này https://abc.vn", false, "url"],
+];
+const missed = yesFollow.filter(([t, img, want]) => !P.followAsk(t, img)?.[want]);
+ok(!missed.length, "lời trỏ vào ảnh hay trang người dùng gửi vẫn là lời làm theo",
+  missed.map(([t, img]) => [t, P.followAsk(t, img)]));
+ok(P.followAsk("Làm poster theo kiểu này", false) === null, "\"theo kiểu này\" mà không có ảnh, không có liên kết");
 
 console.log("2b. Loại phông tiêu đề đề bài đòi");
 ok(P.briefHeadCat(briefs[0].text) === "serif", "slide trà: \"một serif cho tiêu đề, một sans cho thân\" → serif");
@@ -159,6 +190,69 @@ ok(own.colors.length === 0 && own.fonts.head.kit === t.fonts.head.kit,
 const imgParts = parts.map((p, k) => ({ ...p, tokens: { ...p.tokens, imagery: { ...p.tokens.imagery,
   kind: k === 2 ? "photo" : "type-only" } } }));
 ok(P.mixTokens(imgParts, "slide", false).imagery.kind === "photo", "ảnh lấy từ mẫu đầu tiên có ảnh thật");
+// Mẫu màu là bảng số liệu, mẫu chữ có ảnh: slide vẫn cần hướng ảnh thật, dashboard thì giữ số liệu.
+const kindAt = (kinds) => parts.map((p, k) => ({ ...p, tokens: { ...p.tokens, imagery: { ...p.tokens.imagery,
+  kind: kinds[k] } } }));
+const dataFirst = kindAt(["data", "type-only", "photo"]);
+ok(P.mixTokens(dataFirst, "slide", false).imagery.kind === "photo", "slide: mẫu số liệu không thắng mẫu có ảnh thật");
+ok(P.mixTokens(dataFirst, "dashboard", false).imagery.kind === "data", "dashboard: giữ mẫu số liệu");
+ok(P.mixTokens(kindAt(["data", "type-only", "type-only"]), "poster", false).imagery.kind === "data",
+  "không mẫu nào có ảnh thật: lùi về mẫu đầu tiên không chỉ có chữ");
+
+console.log("4b. Tránh lối mòn kem nâu đồng và hình đề cấm");
+const lo = P.briefFacets(briefs[3].text, "graphic");
+ok(["lúa", "bánh", "wheat", "bread"].every((w) => lo.avoid?.includes(w)) && !lo.avoid.includes("ổ"),
+  "\"không hình ổ bánh hay lúa mì\": đọc chủ thể cấm, bỏ từ chỉ loại", lo.avoid);
+ok(lo.moodGuess === true && !lo.warmOk, "tiệm bánh: tâm trạng là đoán theo ngành, đề không đòi tông ấm", lo);
+const noEmoji = P.briefFacets("Poster, không emoji, không ảnh AI", "graphic");
+ok(!P.briefFacets(briefs[0].text, "slide").avoid && !noEmoji.avoid,
+  "\"không emoji\", \"không ảnh AI\" không phải chủ thể cấm");
+ok(P.briefFacets(briefs[2].text, "graphic").avoid?.includes("saxophone"), "\"không saxophone sáo mòn\"");
+ok(P.briefFacets(briefs[1].text, "graphic").warmOk === true && P.briefFacets(briefs[6].text, "graphic").warmOk === true,
+  "\"tối giản ấm\", \"tông ấm\": đề tự đòi tông ấm");
+ok(P.briefFacets("Banner cho tiệm bánh", "graphic").moods[0] !== "warm-craft", "đồ ăn uống không mặc định ấm trước");
+ok(P.creamBrown({ bg: "#c8c0a5", accent: "#b7a86e", ink: "#856f42" })
+  && P.creamBrown({ bg: "#f2ede8", accent: "#e9875b", ink: "#010101" }), "nhận ra nền kem với nhấn hay chữ nâu đồng");
+ok(!P.creamBrown({ bg: "#ffffff", accent: "#c2410c", ink: "#111111" })
+  && !P.creamBrown({ bg: "#f6f1e9", accent: "#2563eb", ink: "#111827" }) && !P.creamBrown({}),
+  "nền trắng, nền kem nhấn xanh, mẫu thiếu màu: không tính");
+const posterRow = (id, extra) => ({ id, domain: "poster", title: `Poster ${id}`, moods: ["organic"],
+  industries: ["food-beverage"], audience: ["consumer"], host: `${id}.example`, theme: "light",
+  paletteKey: "4-1", fontPair: "fraunces+be-vietnam-pro", imagery: "illustration", ...extra });
+const slopRows = [
+  posterRow("poster-901", { bg: "#c8c0a5", accent: "#b7a86e", ink: "#856f42", moods: ["organic", "warm-craft"],
+    title: "Người gặt lúa trên cánh đồng vàng" }),
+  posterRow("poster-902", { bg: "#f2ede8", accent: "#e9875b", ink: "#1a1a1a", moods: ["organic", "warm-craft"] }),
+  posterRow("poster-903", { bg: "#497776", accent: "#ced15c", ink: "#fafdfe", paletteKey: "2-2" }),
+  posterRow("poster-904", { bg: "#19181a", accent: "#2f63ff", ink: "#ded5c6", paletteKey: "0-7" }),
+  posterRow("poster-905", { bg: "#ffffff", accent: "#e11d48", ink: "#111111", paletteKey: "4-0",
+    subject: "a loaf of bread on a table" }),
+  posterRow("poster-906", { bg: "#0f1a14", accent: "#34d399", ink: "#e8f5ec", paletteKey: "0-5" }),
+];
+const pickOn = (f) => P.pickRefs({ facets: f, rows: slopRows, history: [], seed: "s" });
+const plain = { ...lo, avoid: undefined };
+ok(!P.creamBrown(slopRows.find((r) => r.id === pickOn(plain)[0].row.id)),
+  "đề không đòi tông ấm: mẫu chính không mang bảng màu kem nâu", pickOn(plain).map((x) => x.row.id));
+const warm = { ...plain, warmOk: true, moodGuess: false, moods: ["warm-craft", "organic"] };
+ok(P.creamBrown(slopRows.find((r) => r.id === pickOn(warm)[0].row.id)),
+  "đề đòi tông ấm: bảng màu kem nâu vẫn được chọn", pickOn(warm).map((x) => x.row.id));
+const banned = pickOn(lo).map((x) => x.row.id);
+ok(!banned.includes("poster-901") && !banned.includes("poster-905"),
+  "đề cấm hình lúa, bánh: bỏ mẫu có tên hay chủ thể đó", banned);
+const onlyBanned = P.pickRefs({ facets: lo, rows: slopRows.filter((r) => r.id === "poster-901"), history: [],
+  seed: "s" });
+ok(onlyBanned?.[0]?.row.id === "poster-901", "thư viện chỉ còn mẫu bị cấm: vẫn trả mẫu thay vì không có gì");
+const whiteHist = [1, 2, 3].map((k) => ({ refIds: [`x-${k}`], paletteKey: "4-0", fontPair: "inter+inter",
+  brand: `B${k}` }));
+// Mẫu nền trắng hợp đề hơn hẳn (thêm một tâm trạng khớp): không có lịch sử thì thắng, sau ba sản phẩm nền trắng thì
+// nhường mẫu có độ sáng nền khác.
+const rotRows = slopRows.filter((r) => r.id !== "poster-901" && r.id !== "poster-902")
+  .map((r) => (r.id === "poster-905" ? { ...r, moods: ["organic", "bold-color"] } : r));
+const rotF = { ...plain, moods: ["organic", "bold-color"], moodGuess: false };
+const rot0 = P.pickRefs({ facets: rotF, rows: rotRows, history: [], seed: "s" });
+const rot = P.pickRefs({ facets: rotF, rows: rotRows, history: whiteHist, seed: "s" });
+ok(rot0[0].row.id === "poster-905" && !rot[0].row.paletteKey.startsWith("4-"),
+  "ba sản phẩm vừa rồi đều nền trắng: mẫu chính đổi độ sáng nền", [rot0[0].row.id, rot[0].row.paletteKey]);
 
 console.log("5. Phong cách nền và khối CSS");
 const base = (o) => ({ ...t, ...o });

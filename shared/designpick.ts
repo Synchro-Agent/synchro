@@ -119,13 +119,59 @@ const QUOTED = /["“«]([^"“”«»\n]{1,40})["”»]/u;
 // "ấm áp").
 const unquote = (s: string) => s.replace(/["“«][^"“”«»\n]{1,80}["”»]/gu, " ");
 
+// Đề tự đòi tông ấm, nói bằng màu hay bằng tâm trạng: bảng màu kem nâu lúc đó là lời đề, không phải thói quen của máy.
+const WARM_ASK = words("ấm áp|ấm cúng|tông ấm|màu ấm|màu kem|nền kem|màu be|nền be|nâu|màu đồng|đồng đỏ"
+  + "|vàng rơm|mộc mạc|warm|cozy|rustic|cream|beige|brown|copper|terracotta");
+// Hình đề cấm: "không hình ổ bánh hay lúa mì", "không saxophone sáo mòn", "no wheat or bread imagery". Chỉ đọc cụm
+// nói rõ về hình, để "không emoji", "không chữ" không thành danh sách cấm chủ thể.
+const NO_IMAGERY = [
+  new RegExp("không\\s+(?:có\\s+|dùng\\s+)?(?:hình ảnh|hình|ảnh|minh họa|minh hoạ|biểu tượng|họa tiết|hoạ tiết)"
+    + "\\s+([^,.;:()\\n]{2,60})", "giu"),
+  /không\s+([\p{L}\s]{3,30}?)\s+sáo mòn/giu,
+  /(?:^|\s)(?:no|without)\s+([a-z\s-]{3,40}?)\s+(?:imagery|images?|icons?|illustrations?|motifs?|clich[eé]s?)/giu,
+];
+const AVOID_SPLIT = /\s*(?:,|\s(?:hay|hoặc|lẫn|và|or|and|nor)\s)\s*/u;
+// Từ chỉ loại (ổ, con, chiếc…) không phải chủ thể; "AI", "emoji", "chữ" nói về cách làm hình, không về nội dung.
+const AVOID_STOP = new Set(["ổ", "con", "cái", "chiếc", "bức", "tấm", "cây", "quả", "trái", "những", "các", "một", "a",
+  "an", "the", "any", "ai", "emoji", "chữ", "logo", "stock"]);
+// Tên tiếng Anh của chủ thể hay gặp: chủ thể mẫu (imagery.subject) ghi bằng tiếng Anh.
+const AVOID_EN: Record<string, string[]> = {
+  "bánh": ["bread", "loaf", "pastry", "bakery", "croissant"],
+  "lúa": ["rice", "paddy", "grain", "harvest", "harvesting"],
+  "mì": ["wheat", "noodle", "noodles"],
+  "cà phê": ["coffee"],
+  "trà": ["tea"],
+  "hoa": ["flower", "flowers", "floral"],
+  "saxophone": ["sax", "saxophone"],
+};
+/** Chủ thể hình đề cấm, đã tách từ: mỗi từ có nghĩa và tên tiếng Anh của nó. */
+export function briefAvoid(typed: string): string[] {
+  const out = new Set<string>();
+  const t = lower(typed);
+  for (const re of NO_IMAGERY) {
+    for (const m of t.matchAll(re)) {
+      for (const term of m[1].split(AVOID_SPLIT)) {
+        const w = term.trim().split(/\s+/).filter((x) => x && !AVOID_STOP.has(x));
+        if (!w.length || w.length > 3) continue;
+        const whole = w.join(" ");
+        for (const k of new Set([whole, ...w])) {
+          out.add(k);
+          for (const en of AVOID_EN[k] ?? []) out.add(en);
+        }
+      }
+    }
+  }
+  return [...out];
+}
+
 /** Mặc định tâm trạng theo ngành khi đề không nói rõ. */
 export const MOOD_DEFAULTS: Record<RefIndustry, RefMood[]> = {
   "finance": ["swiss-precise", "clean-light", "data-dense"],
   "tech-saas": ["tech", "clean-light", "dark-cinematic"],
   "ai": ["dark-cinematic", "tech", "minimal-mono"],
   "ecommerce": ["bold-color", "clean-light", "playful"],
-  "food-beverage": ["warm-craft", "organic", "bold-color"],
+  // Đồ ăn uống mặc định ấm là lối mòn kem nâu đồng: để ấm sau cùng, đề muốn ấm thì tự nói.
+  "food-beverage": ["organic", "bold-color", "warm-craft"],
   "hospitality-travel": ["luxury", "organic", "editorial"],
   "real-estate-interior": ["minimal-mono", "luxury", "warm-craft"],
   "fashion-beauty": ["editorial", "luxury", "minimal-mono"],
@@ -193,6 +239,7 @@ export function briefFacets(typed: string, format: "slide" | "doc" | "graphic" |
   if (!industries.length) industries.push("general");
   const said = ranked(plain, MOOD_WORDS, 3, strict);
   const moods = said.length ? said : [...MOOD_DEFAULTS[industries[0]]];
+  const warmOk = said.includes("warm-craft") || has(plain, WARM_ASK, strict);
   // Dashboard luôn cần mật độ số liệu và không dùng giọng tạp chí.
   if (domain === "dashboard") {
     const keep = moods.filter((m) => m !== "editorial");
@@ -204,20 +251,61 @@ export function briefFacets(typed: string, format: "slide" | "doc" | "graphic" |
   const dark = !both && has(plain, DARK, strict);
   const light = !both && has(plain, LIGHT, strict);
   const theme = dark && !light ? "dark" : light && !dark ? "light" : null;
-  return { domain, industries, moods, audience, theme, brand: briefBrand(typed) };
+  const facets: BriefFacets = { domain, industries, moods, audience, theme, brand: briefBrand(typed) };
+  if (!said.length) facets.moodGuess = true;
+  if (warmOk) facets.warmOk = true;
+  const avoid = briefAvoid(unquote(typed));
+  if (avoid.length) facets.avoid = avoid;
+  return facets;
 }
 
-const URL_RE = /https?:\/\/[^\s<>"'`)\]]+/i;
-const FOLLOW_WORDS = words("theo kiểu|theo phong cách|giống kiểu|giống phong cách|giống trang|giống như trang"
-  + "|phong cách như"
-  + "|phong cách của|phong cách giống|lấy cảm hứng từ|làm theo kiểu|như mẫu này|như ảnh này|như trang này"
-  + "|in the style of|same style as|style like|like this (?:site|page|design|image|one)|inspired by");
-/** Người dùng gõ "làm theo kiểu …" kèm liên kết hoặc ảnh đính kèm: trả nguồn cần đọc phong cách, không thì null. */
+const URL_RE = /https?:\/\/[^\s<>"'`)\]]+/gi;
+// Lời "theo kiểu" chỉ là yêu cầu đọc phong cách khi nó trỏ thẳng vào ảnh hay trang người dùng gửi ("theo kiểu này",
+// "như ảnh đính kèm", "giống trang https://…"). Sau "theo phong cách" mà là một tâm trạng ("tối giản", "retro"), một
+// thời kỳ ("the 70s") hay tên hãng ("giống kiểu Apple") thì đó là lời tả, và ảnh đính kèm lúc ấy là ảnh sản phẩm.
+const FOLLOW_VI = "theo kiểu|theo phong cách|theo mẫu|làm theo kiểu|giống kiểu|giống phong cách|giống như|giống"
+  + "|như|phong cách như|phong cách của|phong cách giống|lấy cảm hứng từ";
+// "I like this photo" là lời khen ảnh sản phẩm, không phải lời nhờ làm theo: "like" sau chủ ngữ không tính.
+const FOLLOW_EN = "in the style of|same style as|(?:a |the )?style like|styled like|looks? like"
+  + "|(?<!(?:i|we|you|they|would|'d|’d) )like|inspired by|similar to|match(?:ing)?(?: the style of)?";
+const IMAGE_VI = "bức ảnh|tấm ảnh|ảnh chụp|hình ảnh|ảnh|hình";
+const SITE_VI = "trang web|website|trang|web|site";
+const THING_VI = `${IMAGE_VI}|${SITE_VI}|mẫu|thiết kế|bản`;
+const HERE_VI = "này|đính kèm|gửi kèm|tôi gửi|mình gửi|em gửi";
+const IMAGE_EN = "image|photo|picture|screenshot|shot";
+const SITE_EN = "site|website|web ?page|page|homepage";
+const THING_EN = `${IMAGE_EN}|${SITE_EN}|design|mock-?up|one|style|look|example|reference`;
+const POINT_VI = words(`(?:${FOLLOW_VI})\\s+(?:(?:của|trong|từ)\\s+)?(?:(?:${THING_VI})\\s+)?(?:${HERE_VI})`);
+const POINT_EN = words(`(?:${FOLLOW_EN})\\s+(?:this|these|the attached|attached|my|that)(?:\\s+(?:${THING_EN}))?`);
+// Trước liên kết chỉ có lời "theo kiểu" và tên loại trang: "giống trang https://…", "in the style of https://…".
+const BEFORE_URL = words(`(?:${FOLLOW_VI}|${FOLLOW_EN})\\s+(?:(?:của|trong|từ)\\s+)?`
+  + `(?:(?:the\\s+)?(?:${SITE_VI}|${SITE_EN})\\s+)?$`);
+const IMAGE_WORD = words(`${IMAGE_VI}|${IMAGE_EN}|attached|đính kèm|gửi kèm`);
+const SITE_WORD = words(`${SITE_VI}|${SITE_EN}`);
+const lastMatch = (re: RegExp, text: string) => {
+  re.lastIndex = 0;
+  return re.exec(text)?.[0] ?? null;
+};
+/**
+ * Người dùng nhờ làm theo phong cách của liên kết hay ảnh họ gửi: trả nguồn cần đọc, không thì null. Lời trỏ vào ảnh
+ * ("như ảnh này") lấy ảnh đính kèm; lời trỏ vào trang hay chỉ "theo kiểu này" lấy liên kết nếu câu có liên kết.
+ */
 export function followAsk(typed: string, hasImage: boolean): { url: string } | { image: true } | null {
-  if (!has(lower(typed), FOLLOW_WORDS, isAccented(typed))) return null;
-  const u = URL_RE.exec(typed);
-  if (u) return { url: u[0].replace(/[.,;:!?]+$/, "") };
-  return hasImage ? { image: true } : null;
+  const t = lower(typed);
+  const strict = isAccented(typed);
+  const urls = [...typed.matchAll(URL_RE)];
+  const clean = (u: string) => ({ url: u.replace(/[.,;:!?]+$/, "") });
+  for (const u of urls) {
+    const before = lower(typed.slice(Math.max(0, (u.index ?? 0) - 60), u.index));
+    if (has(before, BEFORE_URL, strict)) return clean(u[0]);
+  }
+  const point = lastMatch(rx(POINT_VI, strict), t) ?? lastMatch(rx(POINT_EN, strict), t);
+  if (!point) return null;
+  const toImage = has(point, IMAGE_WORD, strict);
+  const toSite = has(point, SITE_WORD, strict);
+  if (toImage) return hasImage ? { image: true } : null;
+  if (urls.length) return clean(urls[0][0]);
+  return hasImage && !toSite ? { image: true } : null;
 }
 
 // Đề nghề thường ghi thẳng loại phông tiêu đề ("một serif cho tiêu đề, một sans cho thân"); bản trộn trái lời đề thì
@@ -250,10 +338,13 @@ const hash = (s: string) => {
 };
 const overlap = <T>(a: readonly T[], b: readonly T[]) => a.filter((x) => b.includes(x)).length;
 
-/** Điểm hợp đề của một mẫu: ngành nặng nhất, rồi tâm trạng, khán giả, nền; cộng một phần ngẫu nhiên theo đoạn chat. */
+/**
+ * Điểm hợp đề của một mẫu: ngành nặng nhất, rồi tâm trạng (tâm trạng đoán theo ngành nhẹ hơn lời đề), khán giả, nền;
+ * cộng một phần ngẫu nhiên theo đoạn chat.
+ */
 export function scoreRef(r: RefIndexRow, f: BriefFacets, seed: string): number {
   let s = 3 * overlap(r.industries, f.industries) + (r.industries.includes("general") ? 1 : 0);
-  s += 2 * overlap(r.moods, f.moods) + overlap(r.audience, f.audience);
+  s += (f.moodGuess ? 1 : 2) * overlap(r.moods, f.moods) + overlap(r.audience, f.audience);
   if (f.theme) s += r.theme === f.theme ? 2 : -3;
   return s + ((hash(seed + r.id) % 1000) / 1000) * 1.5;
 }
@@ -278,7 +369,35 @@ const NEIGHBOURS: Record<RefDomain, RefDomain[]> = {
   slide: ["web", "poster"],
   web: ["slide", "email"],
 };
-const VISUAL = new Set(["photo", "3d", "illustration", "mixed"]);
+/** Loại ảnh có hình thật (không chỉ chữ hay biểu đồ): web, slide, poster cần ít nhất một mẫu như vậy. */
+const VISUAL = new Set<string>(["photo", "3d", "illustration", "mixed"]);
+const NEEDS_VISUAL = new Set<RefDomain>(["web", "slide", "poster"]);
+// Nền sáng ngả vàng (kem, be, giấy ngà) với màu nhấn hay chữ nâu, đồng, vàng đất: bộ màu "đồ thủ công cao cấp" mà mọi
+// sản phẩm máy làm đều rơi vào. Mẫu chính mang bộ này bị trừ điểm, trừ khi đề tự đòi tông ấm.
+const warmCream = (hex: string | undefined) => {
+  if (!hex || !isHex(hex)) return false;
+  const c = toHsl(hex);
+  return c.l >= 0.68 && c.s >= 0.08 && c.h >= 20 && c.h <= 65;
+};
+const brownCopper = (hex: string | undefined) => {
+  if (!hex || !isHex(hex)) return false;
+  const c = toHsl(hex);
+  return c.s >= 0.2 && c.l >= 0.15 && c.l <= 0.66 && c.h >= 8 && c.h <= 52;
+};
+/** Mẫu mang bảng màu kem nâu đồng (cần màu nền, nhấn, chữ đọc từ JSON của mẫu; thiếu thì không biết, không phạt). */
+export const creamBrown = (r: Pick<RefIndexRow, "bg" | "accent" | "ink">) =>
+  warmCream(r.bg) && (brownCopper(r.accent) || brownCopper(r.ink));
+const SLOP_PENALTY = 6;
+// Độ sáng nền (phần đầu của paletteKey): sản phẩm liên tiếp cùng một nền trắng trông như nhau dù màu nhấn khác.
+const BG_REPEAT_PENALTY = 1.5;
+const bgBucket = (key: string) => key.split("-")[0];
+const escapeRe = (w: string) => w.replace(/[.*+?^$()|[\]{}\\]/g, "\\$&");
+/** Mẫu có chủ thể đề cấm (tên mẫu hoặc chủ thể ảnh nhắc tới). */
+const avoided = (r: RefIndexRow, avoid: readonly string[] | undefined) => {
+  if (!avoid?.length) return false;
+  const text = lower(`${r.title} ${r.subject ?? ""}`);
+  return avoid.some((w) => new RegExp(`${WB}${escapeRe(w)}${WE}`, "u").test(text));
+};
 // Mẫu của 3 sản phẩm gần nhất cấm hẳn. Bảng màu và cặp phông: tránh cả 10 sản phẩm gần nhất khi thư viện còn lựa chọn,
 // thiếu thì lùi về chỉ tránh 3 sản phẩm gần nhất, để một người làm nhiều sản phẩm liên tiếp không thấy hai cái giống
 // nhau.
@@ -315,6 +434,9 @@ export function pickRefs(i: PickInput): Picked[] | null {
   let pool = i.rows.filter((r) => r.domain === f.domain);
   if (pool.length < 6) pool = [...pool, ...i.rows.filter((r) => NEIGHBOURS[f.domain].includes(r.domain))];
   if (f.domain === "dashboard") pool = pool.filter((r) => !r.moods.includes("editorial"));
+  // Đề cấm một chủ thể ("không hình lúa mì") thì bỏ mẫu vẽ chủ thể đó; bỏ hết thì giữ nguyên (thư viện quá nhỏ).
+  const allowed = pool.filter((r) => !avoided(r, f.avoid));
+  if (allowed.length) pool = allowed;
   if (!pool.length) return null;
   const hist = i.history.filter((h) => !sameBrand(h.brand, f.brand));
   const recent = hist.slice(0, RECENT);
@@ -334,7 +456,17 @@ export function pickRefs(i: PickInput): Picked[] | null {
   };
   const fresh = (r: RefIndexRow) => !usedIds.has(r.id);
   const score = (r: RefIndexRow) => base.get(r.id)!;
-  const primary = best(score, [
+  // Mẫu chính cho màu và nền: phạt bộ kem nâu đồng khi đề không đòi tông ấm, và phạt nền cùng độ sáng với các sản phẩm
+  // vừa làm (web, slide, poster, email; dashboard và tài liệu in nền trắng là đúng nghề).
+  const rotate = f.domain !== "dashboard" && f.domain !== "doc";
+  const recentBg = recent.map((h) => bgBucket(h.paletteKey));
+  const paletteScore = (r: RefIndexRow) => {
+    let s = score(r);
+    if (!f.warmOk && creamBrown(r)) s -= SLOP_PENALTY;
+    if (rotate) s -= BG_REPEAT_PENALTY * recentBg.filter((b) => b === bgBucket(r.paletteKey)).length;
+    return s;
+  };
+  const primary = best(paletteScore, [
     (r) => fresh(r) && !widePal.has(r.paletteKey),
     (r) => fresh(r) && !usedPal.has(r.paletteKey),
     fresh,
@@ -356,7 +488,7 @@ export function pickRefs(i: PickInput): Picked[] | null {
     notP,
   ]);
   if (!second) return [{ row: primary, roles: ["palette", "layout", "type", "shape"] }];
-  const needVisual = ["web", "slide", "poster"].includes(f.domain) && !VISUAL.has(primary.imagery)
+  const needVisual = NEEDS_VISUAL.has(f.domain) && !VISUAL.has(primary.imagery)
     && !VISUAL.has(second.imagery);
   const notPS = (r: RefIndexRow) => r.id !== primary.id && r.id !== second.id;
   const newHost = (r: RefIndexRow) => r.host !== primary.host && r.host !== second.host;
@@ -498,7 +630,9 @@ export function mixTokens(parts: MixPart[], domain: RefDomain, ownBrand: boolean
   const shp = by("shape");
   const lay = by("layout");
   const order = [pal, shp, typ];
-  const img = order.find((p) => p.tokens.imagery.kind !== "type-only") ?? pal;
+  // Web, slide, poster dựa vào hình lớn: lấy hướng ảnh từ mẫu đầu tiên có hình thật, không từ mẫu biểu đồ.
+  const visual = NEEDS_VISUAL.has(domain) ? order.find((p) => VISUAL.has(p.tokens.imagery.kind)) : undefined;
+  const img = visual ?? order.find((p) => p.tokens.imagery.kind !== "type-only") ?? pal;
   const theme = pal.tokens.theme;
   const fonts = typeFonts(typ.tokens.fonts.head.kit, typ.tokens.fonts.body.kit, typ.moods ?? [], domain);
   const font = (f: RefFont, kit: KitFontId): RefFont => (f.kit === kit ? f : kitRef(kit, 400));
