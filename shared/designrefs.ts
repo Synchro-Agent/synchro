@@ -117,6 +117,10 @@ export type DesignRef = {
   source_url: string;
   source_host: string;
   source_kind: "public-page" | "public-image" | "cc-by" | "cc0" | "own";
+  /** Người làm ra tác phẩm khi source_url không nêu (ảnh lấy từ trang tổng hợp, kho lưu trữ). */
+  credit?: string;
+  /** Trang ghi quyền sử dụng (CC0, phạm vi công cộng) cho mẫu cc0 / cc-by. */
+  rights_url?: string;
   captured_at: string;
   image: { file: string; width: number; height: number; bytes: number; layout: "single" | "grid4" };
   tokens: RefTokens;
@@ -239,6 +243,9 @@ const rgb = (hex: string) => {
   return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
 };
 export const isHex = (s: string) => /^#[0-9a-f]{6}$/.test(s);
+// Nền tối hẳn: độ chói tương đối tới 0,1 (khoảng #595959 trở xuống). Nền đỏ, xám vừa có chữ trắng vẫn không phải
+// giao diện tối, xếp chúng vào "dark" làm bộ trộn đặt nền sáng cho một mẫu "tối".
+export const DARK_BG_MAX = 0.1;
 export function luminance(hex: string): number {
   const [r, g, b] = rgb(hex);
   return 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b);

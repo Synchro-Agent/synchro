@@ -1,7 +1,9 @@
 // Kiểm thư viện mẫu tham chiếu: từng mẫu đúng kiểu dữ liệu và đủ trường chấm bằng mắt, cả thư viện đủ đa dạng để bộ
 // chọn mẫu không lặp lại "AI slop" (nền kem, chữ có chân, nhấn đồng). Hàm thuần, không đọc tệp: build-index.mjs và bài
 // thử tự đọc ảnh, đưa số đo thật vào đây.
+import { cleanSeen, shadowCssOk } from "./designextract";
 import {
+  DARK_BG_MAX,
   KIT_FONTS,
   REF_AUDIENCES,
   REF_DOMAINS,
@@ -11,6 +13,7 @@ import {
   REF_QUOTA,
   fontPairKey,
   isHex,
+  luminance,
   paletteKey,
   type DesignRef,
   type RefDomain,
@@ -39,7 +42,33 @@ export const VARIETY = {
   pictureShare: 0.3,
   vietnamese: 10,
   creamSerifCopper: 3,
+  // Một phông chiếm quá 35% vai tiêu đề hoặc vai thân thì bộ trộn lại kéo mọi sản phẩm về cùng một giọng chữ.
+  kitFontShare: 0.35,
+  // Hình chiếm dưới 10% khung thì không dạy được gì về cách dùng hình; khi đó là "type-only" hoặc "data".
+  pictureMinShare: 0.1,
 } as const;
+
+/**
+ * Token của một mẫu vừa chụp mà chưa đo được trường nào ngoài màu: người duyệt phải chấm lại bằng mắt. Bộ kiểm dùng
+ * chính các giá trị này để nhận ra trường còn bỏ trống (vd. phông Inter 400 cho cả tiêu đề và thân).
+ */
+export function defaultTokens(theme: "light" | "dark"): RefTokens {
+  const font = (kit: "inter") => ({ kit, seen: "", seenLicence: "unknown" as const, weight: 400 });
+  return {
+    theme,
+    colors: [],
+    fonts: { head: font("inter"), body: font("inter"), mono: null },
+    type: { basePx: 16, ratio: 1.25, sizes: [], headLine: 1.1, bodyLine: 1.5, headCase: "none" },
+    tracking: { display: 0, heading: 0, body: 0, label: 0 },
+    radius: { outer: 0, inner: 0, pill: false },
+    shadow: { level: 0, css: "none" },
+    spacing: { unit: 8, section: 64, gutter: 24, density: "balanced" },
+    layout: { columns: 1, maxWidth: 1280, align: "left", emptyShare: 0 },
+    imagery: { kind: "type-only", share: 0, light: "", lens: "", grade: "", subject: "" },
+  };
+}
+const UNJUDGED = defaultTokens("light");
+const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
 
 const inRange = (v: unknown, lo: number, hi: number) =>
   typeof v === "number" && Number.isFinite(v) && v >= lo && v <= hi;
@@ -118,6 +147,15 @@ function tokenErrors(t: RefTokens): string[] {
     if (roles.filter((r) => r === need).length !== 1) e.push(`colors: cần đúng một ${need}`);
   }
   if (new Set(roles).size !== roles.length) e.push("colors: vai trùng");
+  const hexOf = (role: string) => t.colors.find((c) => c.role === role)?.hex;
+  const bg = hexOf("bg");
+  const accent = hexOf("accent");
+  if (accent && (accent === bg || accent === hexOf("ink"))) e.push(`colors: nhấn ${accent} trùng nền hoặc chữ`);
+  if (bg && isHex(bg)) {
+    const dark = luminance(bg) <= DARK_BG_MAX;
+    if (t.theme === "dark" && !dark) e.push(`theme: dark nhưng nền ${bg} không tối`);
+    if (t.theme === "light" && dark) e.push(`theme: light nhưng nền ${bg} tối`);
+  }
   for (const c of t.colors) {
     const valid = isHex(c.hex) && COLOR_ROLES.includes(c.role) && inRange(c.share, 0, 1);
     if (!valid) e.push(`colors: ${JSON.stringify(c)}`);
@@ -126,6 +164,7 @@ function tokenErrors(t: RefTokens): string[] {
     const f = t.fonts[slot];
     if (!f && slot === "mono") continue;
     if (!f || !kitIds.has(f.kit)) e.push(`fonts.${slot}: phông ngoài bộ ${f?.kit}`);
+    else if (typeof f.seen !== "string" || cleanSeen(f.seen) !== f.seen) e.push(`fonts.${slot}.seen: ký tự lạ`);
     else if (!["open", "proprietary", "unknown"].includes(f.seenLicence) || !inRange(f.weight, 100, 1000)) {
       e.push(`fonts.${slot}: ${JSON.stringify(f)}`);
     }
@@ -142,6 +181,7 @@ function tokenErrors(t: RefTokens): string[] {
     e.push(`radius: ${JSON.stringify(t.radius)}`);
   }
   if (![0, 1, 2, 3].includes(t.shadow.level) || typeof t.shadow.css !== "string") e.push("shadow");
+  else if (!shadowCssOk(t.shadow.css)) e.push(`shadow.css: không phải box-shadow hợp lệ ${t.shadow.css.slice(0, 80)}`);
   const sp = t.spacing;
   if (![4, 8].includes(sp.unit) || !inRange(sp.section, 0, 1000) || !inRange(sp.gutter, 0, 200)
     || !["airy", "balanced", "dense"].includes(sp.density)) {
@@ -154,6 +194,9 @@ function tokenErrors(t: RefTokens): string[] {
   }
   const im = t.imagery;
   if (!IMAGERY.includes(im.kind) || !inRange(im.share, 0, 1)) e.push(`imagery: ${JSON.stringify(im)}`);
+  else if (PICTURE_KINDS.has(im.kind) && im.share < VARIETY.pictureMinShare) {
+    e.push(`imagery: ${im.kind} mà chỉ chiếm ${im.share} khung`);
+  }
   if (PICTURE_KINDS.has(im.kind)) {
     for (const k of ["light", "lens", "grade", "subject"] as const) {
       if (!im[k]?.trim()) e.push(`imagery.${k}: thiếu mô tả cho câu lệnh tạo ảnh`);
@@ -183,6 +226,16 @@ export function checkRef(ref: DesignRef, brands: string[] = []): string[] {
   }
   if (host && host !== ref.source_host) e.push(`source_host ${ref.source_host} ≠ ${host}`);
   if (!SOURCE_KINDS.includes(ref.source_kind)) e.push("source_kind");
+  // Mẫu tự do bản quyền phải trỏ được tới trang ghi quyền, để trả lời được khi có người hỏi hay đề nghị gỡ.
+  const httpUrl = (v: unknown) => typeof v === "string" && /^https?:\/\/[^\s]+$/.test(v);
+  if ((ref.source_kind === "cc0" || ref.source_kind === "cc-by") && !httpUrl(ref.rights_url)) {
+    e.push("rights_url: mẫu cc0 / cc-by cần trang ghi quyền");
+  }
+  if (ref.rights_url !== undefined && !httpUrl(ref.rights_url)) e.push("rights_url");
+  if (ref.credit !== undefined && (typeof ref.credit !== "string" || !ref.credit.trim() || ref.credit.length > 160
+    || /[\n<>]/.test(ref.credit))) {
+    e.push("credit");
+  }
   if (!/^\d{4}-\d{2}-\d{2}$/.test(ref.captured_at) || Number.isNaN(Date.parse(ref.captured_at))) e.push("captured_at");
   const im = ref.image;
   if (im.file !== `${ref.domain}/${ref.id}.webp`) e.push(`image.file ${im.file}`);
@@ -192,6 +245,15 @@ export function checkRef(ref: DesignRef, brands: string[] = []): string[] {
   if (!inRange(im.bytes, 1, REF_LIMITS.imageMaxBytes)) e.push(`image.bytes ${im.bytes}`);
   if (im.layout !== "single" && im.layout !== "grid4") e.push("image.layout");
   e.push(...tokenErrors(ref.tokens));
+  const measured = Array.isArray(ref.measured) ? ref.measured : [];
+  // Phông không đo được trên trang thì phải chấm bằng mắt; còn đúng Inter 400 cho cả hai vai là chưa ai chấm.
+  const f = ref.tokens.fonts;
+  if (!measured.includes("fonts") && same(f.head, UNJUDGED.fonts.head) && same(f.body, UNJUDGED.fonts.body)) {
+    e.push("fonts: chưa chấm (còn Inter 400 mặc định)");
+  }
+  const untouched = (["tracking", "spacing"] as const).filter((k) => !measured.includes(k)
+    && same(ref.tokens[k], UNJUDGED[k]));
+  if (untouched.length === 2) e.push("tracking, spacing: chưa chấm (còn giá trị mặc định)");
   if (!Array.isArray(ref.measured) || new Set(ref.measured).size !== ref.measured.length
     || !ref.measured.every((m) => TOKEN_FIELDS.includes(m))) {
     e.push(`measured: ${JSON.stringify(ref.measured)}`);
@@ -220,7 +282,18 @@ export type CatalogStats = {
   vietnamese: number;
   creamSerifCopper: string[];
   crowdedHosts: Record<string, number>;
+  topKit: { head: [string, number]; body: [string, number] };
 };
+
+// Nền tảng đăng bài nói (mỗi tài khoản là một người hay một xưởng khác nhau) không có giọng thiết kế chung: giới hạn
+// số mẫu cùng nguồn tính theo tác giả ở đoạn đầu đường dẫn (speakerdeck.com/<tác giả>/…), còn trang thường tính theo
+// máy chủ để một thương hiệu không chiếm cả mảng.
+const AUTHOR_HOSTS = new Set(["speakerdeck.com", "slides.com"]);
+export function publisherOf(r: Pick<DesignRef, "source_host" | "source_url">): string {
+  if (!AUTHOR_HOSTS.has(r.source_host)) return r.source_host;
+  const author = r.source_url.split("/")[3];
+  return author ? `${r.source_host}/${author}` : r.source_host;
+}
 
 /** Kiểm cả thư viện: hạn mức từng mảng, dung lượng, và các luật đa dạng. `vietnamese`: mã mẫu của thương hiệu Việt. */
 export function checkCatalog(refs: DesignRef[], vietnamese: Set<string>): { errors: string[]; stats: CatalogStats } {
@@ -233,7 +306,8 @@ export function checkCatalog(refs: DesignRef[], vietnamese: Set<string>): { erro
   for (const r of refs) {
     perDomain[r.domain]++;
     for (const m of r.moods) moods[r.domain].add(m);
-    hosts.set(r.source_host, (hosts.get(r.source_host) ?? 0) + 1);
+    const key = publisherOf(r);
+    hosts.set(key, (hosts.get(key) ?? 0) + 1);
   }
   for (const d of REF_DOMAINS) {
     if (perDomain[d] !== REF_QUOTA[d]) errors.push(`${d}: ${perDomain[d]} mẫu, hạn mức ${REF_QUOTA[d]}`);
@@ -252,6 +326,25 @@ export function checkCatalog(refs: DesignRef[], vietnamese: Set<string>): { erro
   if (vn < VARIETY.vietnamese) errors.push(`mẫu Việt Nam: ${vn}`);
   if (cream.length > VARIETY.creamSerifCopper) errors.push(`kem + chữ có chân + đồng: ${cream.join(", ")}`);
   if (bytes >= REF_LIMITS.catalogMaxBytes) errors.push(`thư viện ${bytes} byte`);
+  const topOf = (slot: "head" | "body"): [string, number] => {
+    const n = new Map<string, number>();
+    for (const r of refs) n.set(r.tokens.fonts[slot].kit, (n.get(r.tokens.fonts[slot].kit) ?? 0) + 1);
+    const [kit, count] = [...n].sort((a, b) => b[1] - a[1])[0] ?? ["", 0];
+    return [kit, count / total];
+  };
+  const topKit = { head: topOf("head"), body: topOf("body") };
+  for (const slot of ["head", "body"] as const) {
+    const [kit, share] = topKit[slot];
+    if (share > VARIETY.kitFontShare) errors.push(`phông ${slot} ${kit} chiếm ${Math.round(share * 100)}%`);
+  }
+  // Nhiều mẫu chung một địa chỉ nguồn (trang danh sách, kho lưu trữ, một báo cáo nhiều trang) thì địa chỉ không chỉ ra
+  // tác phẩm nào: mỗi mẫu phải ghi công riêng để còn trả lời được người làm ra nó hay đề nghị gỡ.
+  const byUrl = new Map<string, DesignRef[]>();
+  for (const r of refs) byUrl.set(r.source_url, [...(byUrl.get(r.source_url) ?? []), r]);
+  for (const [url, group] of byUrl) {
+    const bare = group.filter((r) => !r.credit?.trim()).map((r) => r.id);
+    if (group.length > 1 && bare.length) errors.push(`${bare.join(", ")}: chung nguồn ${url} mà không ghi công`);
+  }
   const moodsPerDomain = Object.fromEntries(REF_DOMAINS.map((d) => [d, moods[d].size])) as Record<RefDomain, number>;
   const stats: CatalogStats = {
     total: refs.length,
@@ -263,6 +356,7 @@ export function checkCatalog(refs: DesignRef[], vietnamese: Set<string>): { erro
     vietnamese: vn,
     creamSerifCopper: cream,
     crowdedHosts: crowded,
+    topKit,
   };
   return { errors, stats };
 }

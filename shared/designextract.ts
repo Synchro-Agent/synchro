@@ -13,7 +13,7 @@ import type {
   RefTokens,
   TokenField,
 } from "./designrefs";
-import { KIT_FONTS, contrastRatio, isHex, luminance } from "./designrefs";
+import { DARK_BG_MAX, KIT_FONTS, contrastRatio, isHex, luminance } from "./designrefs";
 
 /** Mã nguồn một hàm chạy trong trang: (root: Element) => Probe | null. */
 // Chạy trong trình duyệt nên phải tự chứa, không import gì. Toạ độ tính từ góc trên của root (cộng phần đã cuộn
@@ -89,6 +89,35 @@ export const TOKEN_PROBE = String.raw`(root) => {
     return Number.isFinite(n) ? n : 0;
   };
   const LIMIT_Y = vh * 3;
+  // Tailwind chồng 4-5 lớp vòng trong suốt trước bóng thật: bỏ lớp không nhìn thấy, và chỉ cắt ở dấu phẩy giữa hai lớp
+  // để bóng ghi lại luôn là CSS hợp lệ.
+  const shadowOf = (v) => {
+    if (!v || v === "none") return "";
+    const layers = [];
+    let depth = 0;
+    let cur = "";
+    for (const ch of v) {
+      if (ch === "(") depth++;
+      if (ch === ")") depth--;
+      if (ch === "," && depth === 0) {
+        layers.push(cur.trim());
+        cur = "";
+      } else {
+        cur += ch;
+      }
+    }
+    layers.push(cur.trim());
+    let out = "";
+    for (const layer of layers) {
+      const fn = layer.match(/[a-z]+\([^()]*\)|#[0-9a-f]{3,8}/i);
+      const color = fn ? fn[0] : layer.split(/\s+/).find((w) => /^[a-z]+$/i.test(w) && w !== "inset") || "";
+      if (!layer || (color && rgba(color)[3] <= 0.01)) continue;
+      const next = out ? out + ", " + layer : layer;
+      if (next.length > 300) break;
+      out = next;
+    }
+    return out;
+  };
 
   // Chữ: gom theo phần tử cha của từng nút chữ, bỏ chữ ẩn, chữ nằm ngoài ba màn đầu.
   const textEls = new Map();
@@ -155,13 +184,13 @@ export const TOKEN_PROBE = String.raw`(root) => {
     const border = s.borderTopStyle !== "none" && bw > 0 && rgba(s.borderTopColor)[3] > 0.05
       ? Math.round(bw) + "px " + hex(over(rgba(s.borderTopColor), rgba(parentBg || "#ffffff")))
       : "";
-    const shadow = s.boxShadow === "none" ? "" : s.boxShadow;
+    const shadow = shadowOf(s.boxShadow);
     const rad = s.borderTopLeftRadius.endsWith("%")
       ? (px(s.borderTopLeftRadius) / 100) * Math.min(r.width, r.height)
       : px(s.borderTopLeftRadius);
     const differs = fill && fill !== parentBg;
     if (!differs && !border && !shadow) continue;
-    boxes.push({ ...q, radius: Math.round(rad), shadow: shadow.slice(0, 200), bg: fill, border });
+    boxes.push({ ...q, radius: Math.round(rad), shadow, bg: fill, border });
   }
 
   // Hình: ảnh, video, canvas, SVG lớn và ảnh nền; data-sx-hero đánh dấu hình chủ đạo của sản phẩm Synchro.
@@ -353,6 +382,32 @@ export const HIDE_MARKS = String.raw`() => {
   for (const a of document.querySelectorAll('header a[href="/"], nav a[href="/"], a[href="./"], a[rel="home"]')) {
     for (const el of a.querySelectorAll("img,svg,picture")) hide(el, "mark");
   }
+  // Logo dạng "hình + chữ ngắn" (<a><svg/>Cursor</a>) không phải lúc nào cũng là liên kết đầu tiên bên trái (có nút
+  // Menu, nút đổi ngôn ngữ đứng trước), và ẩn mỗi hình thì chữ thương hiệu vẫn còn. Ở dải 140 px trên cùng, liên kết
+  // có hình kèm chữ ngắn mà trỏ về trang chủ hoặc mang tên miền thì ẩn cả liên kết; liên kết có biểu tượng khác (tài
+  // liệu, tải về) giữ nguyên vì chúng là một phần thanh điều hướng.
+  const LOOSE = brand.length >= 3
+    ? new RegExp(brand.replace(/[^a-z0-9]/gi, "").split("").join("[\\s._-]?"), "i")
+    : null;
+  const homeLink = (a) => {
+    const href = (a.getAttribute("href") || "").trim();
+    if (/^(\.?\/|\/index\.html?|#|#top)$/i.test(href) || a.getAttribute("rel") === "home") return true;
+    try {
+      const u = new URL(href, location.href);
+      return /^https?:$/.test(u.protocol) && u.host === location.host && /^\/?$/.test(u.pathname) && !u.hash;
+    } catch (e) {
+      // href hỏng thì không phải liên kết về trang chủ; bỏ qua, không dừng việc ẩn logo.
+      return false;
+    }
+  };
+  for (const a of document.querySelectorAll("a")) {
+    const r = a.getBoundingClientRect();
+    if (!r.width || r.top + scrollY >= 140 || !small(a, 360, 120)) continue;
+    const words = (a.innerText || "").trim();
+    const short = words.split(/\s+/).filter(Boolean).length <= 3;
+    const named = LOOSE && LOOSE.test(words + " " + tag(a));
+    if (a.querySelector("img,svg,picture") && short && (homeLink(a) || named)) hide(a, "mark");
+  }
   // Dải logo khách hàng / đối tác: từ 4 hình nhỏ trở lên, gần như không có chữ.
   for (const el of document.querySelectorAll("section,div,ul")) {
     const pics = [...el.querySelectorAll("img,svg")]
@@ -509,7 +564,7 @@ export function paletteFromPixels(rgba: Uint8Array, w: number, h: number, max = 
     .map((k) => ({ hex: k.hex, share: Math.round(k.share * 10000) / 10000 }));
 }
 
-// Tách danh sách bóng CSS theo dấu phẩy nằm ngoài ngoặc của rgba().
+// Tách danh sách bóng CSS theo dấu phẩy nằm ngoài ngoặc của hàm màu.
 function splitShadows(css: string): string[] {
   const out: string[] = [];
   let depth = 0;
@@ -527,13 +582,86 @@ function splitShadows(css: string): string[] {
   if (cur.trim()) out.push(cur);
   return out.map((s) => s.trim()).filter(Boolean);
 }
+// Chrome ghi màu đã tính theo không gian màu của trang: rgb() cho sRGB, oklab() / oklch() / color() cho Tailwind 4 và
+// CSS màu mới. Mọi hàm màu phải được tách ra trước khi đọc độ lệch, nếu không số bên trong bị đọc nhầm thành x/y/blur.
+const COLOR_FN = /\b(?:rgba?|hsla?|hwb|lab|lch|oklab|oklch|color)\([^()]*\)/gi;
+const HEX_COLOR = /#[0-9a-f]{3,8}\b/gi;
+const COLOR_WORDS = new Set(["transparent", "black", "white", "currentcolor"]);
+const LENGTH = /^-?(?:\d+\.?\d*|\.\d+)(?:px|em|rem)?$/i;
+const numOf = (v: string) => (v.endsWith("%") ? parseFloat(v) / 100 : parseFloat(v));
+
 function alphaOf(shadow: string): number {
-  const m = /rgba?\(([^)]*)\)/.exec(shadow);
-  if (!m) return /transparent/.test(shadow) ? 0 : 1;
-  const parts = m[1].split(/[\s,/]+/).filter(Boolean);
-  if (parts.length < 4) return 1;
-  const a = parts[3];
-  return a.endsWith("%") ? parseFloat(a) / 100 : parseFloat(a);
+  const fn = shadow.match(COLOR_FN)?.[0];
+  if (fn) {
+    const inner = fn.slice(fn.indexOf("(") + 1, -1);
+    // Cú pháp mới "r g b / a"; cú pháp cũ rgba(r, g, b, a) / hsla(h, s, l, a) có đúng bốn thành phần.
+    const slash = inner.split("/");
+    if (slash.length === 2) return numOf(slash[1].trim());
+    const parts = inner.split(",").map((x) => x.trim());
+    return parts.length === 4 ? numOf(parts[3]) : 1;
+  }
+  const hex = shadow.match(HEX_COLOR)?.[0];
+  if (hex && (hex.length === 5 || hex.length === 9)) {
+    const a = hex.length === 5 ? hex[4] + hex[4] : hex.slice(7, 9);
+    return parseInt(a, 16) / 255;
+  }
+  return /\btransparent\b/i.test(shadow) ? 0 : 1;
+}
+
+/**
+ * Một lớp bóng đúng ngữ pháp box-shadow: tuỳ chọn inset, 2-4 độ dài, nhiều nhất một màu (hàm màu, #hex hoặc vài từ
+ * khoá). Bóng đọc từ trang người dùng dán vào được dán thẳng vào CSS của sản phẩm, nên ký tự lạ (";", "}", url()) làm
+ * cả lớp bị loại thay vì lọt vào.
+ */
+function shadowLayerOk(layer: string): boolean {
+  if (layer.length > 160) return false;
+  const fns = layer.match(COLOR_FN) ?? [];
+  if (fns.some((f) => !/^[a-z]+\([a-z0-9.\s,%/+-]*\)$/i.test(f) || f.length > 90)) return false;
+  const rest = layer.replace(COLOR_FN, " ").trim().split(/\s+/).filter(Boolean);
+  let lengths = 0;
+  let colors = fns.length;
+  for (const tok of rest) {
+    if (/^inset$/i.test(tok)) continue;
+    if (LENGTH.test(tok)) {
+      // Độ dài khác 0 phải có đơn vị: "2" (bị cắt từ "2px") là CSS hỏng, trình duyệt bỏ cả khai báo.
+      if (parseFloat(tok) !== 0 && !/[a-z]$/i.test(tok)) return false;
+      lengths++;
+    } else if (/^#[0-9a-f]{3,8}$/i.test(tok) || COLOR_WORDS.has(tok.toLowerCase())) {
+      colors++;
+    } else {
+      return false;
+    }
+  }
+  return lengths >= 2 && lengths <= 4 && colors <= 1;
+}
+
+/**
+ * box-shadow an toàn để dán vào CSS: bỏ lớp hỏng và lớp trong suốt, giữ tối đa 300 ký tự (cắt giữa hai lớp), không còn
+ * lớp nào thì "none".
+ */
+export function cleanShadow(css: string): string {
+  if (typeof css !== "string" || !css.trim() || /^\s*none\s*$/i.test(css)) return "none";
+  let out = "";
+  for (const layer of splitShadows(css.slice(0, 2000))) {
+    if (!shadowLayerOk(layer) || alphaOf(layer) <= 0.01) continue;
+    const next = out ? `${out}, ${layer}` : layer;
+    if (next.length > 300) break;
+    out = next;
+  }
+  return out || "none";
+}
+
+/** Chuỗi bóng đã lưu có dán được vào CSS không: đúng ngữ pháp từng lớp, ngoặc cân, "none" cũng hợp lệ. */
+export function shadowCssOk(css: string): boolean {
+  if (css === "none") return true;
+  if (typeof css !== "string" || !css.trim()) return false;
+  let depth = 0;
+  for (const ch of css) {
+    if (ch === "(") depth++;
+    if (ch === ")") depth--;
+    if (depth < 0) return false;
+  }
+  return depth === 0 && splitShadows(css).every(shadowLayerOk);
 }
 
 /**
@@ -546,7 +674,7 @@ export function shadowLevel(css: string): 0 | 1 | 2 | 3 {
   let level: 0 | 1 | 2 | 3 = 0;
   for (const s of splitShadows(css)) {
     if (/\binset\b/i.test(s)) continue;
-    const nums = (s.replace(/rgba?\([^)]*\)|hsla?\([^)]*\)|#[0-9a-f]{3,8}\b/gi, "").match(/-?\d*\.?\d+(px)?/g) ?? [])
+    const nums = (s.replace(COLOR_FN, " ").replace(HEX_COLOR, " ").match(/-?\d*\.?\d+(px)?/g) ?? [])
       .map((v) => parseFloat(v));
     const [x = 0, y = 0, blur = 0, spread = 0] = nums;
     const alpha = alphaOf(s);
@@ -656,6 +784,85 @@ const median = (xs: number[]): number => {
 };
 const round = (v: number, d = 0) => Math.round(v * 10 ** d) / 10 ** d;
 
+const mix = (a: string, b: string) => toHex(rgbOf(a).map((v, i) => (v + rgbOf(b)[i]) / 2));
+const finite = (v: unknown, lo: number, hi: number): v is number =>
+  typeof v === "number" && Number.isFinite(v) && v >= lo && v <= hi;
+const hexOr = (v: unknown) => (typeof v === "string" && isHex(v) ? v : "");
+const str = (v: unknown, max: number) => (typeof v === "string" ? v.slice(0, max) : "");
+const list = <T>(v: unknown, max: number, each: (x: Record<string, unknown>) => T | null): T[] =>
+  (Array.isArray(v) ? v.slice(0, max) : [])
+    .map((x) => (x && typeof x === "object" ? each(x as Record<string, unknown>) : null))
+    .filter((x): x is T => x !== null);
+const MEDIA_KINDS = new Set(["img", "video", "canvas", "svg", "bg"]);
+
+/**
+ * Kết quả đo đến từ trang lạ (trang người dùng dán để "Làm theo kiểu này"): trang có thể ghi đè hàm của trình duyệt
+ * và trả bất cứ thứ gì. Chỉ giữ đúng hình dạng Probe, số hữu hạn trong khoảng hợp lý, chuỗi có giới hạn, màu #rrggbb,
+ * bóng đúng ngữ pháp; sai ở cấp trên cùng thì bỏ cả kết quả.
+ */
+export function cleanProbe(raw: unknown): Probe | null {
+  if (!raw || typeof raw !== "object") return null;
+  const r = raw as Record<string, unknown>;
+  if (!finite(r.vw, 50, 20_000) || !finite(r.vh, 50, 50_000)) return null;
+  const vw = r.vw;
+  const vh = r.vh;
+  const coord = (x: Record<string, unknown>) =>
+    finite(x.x, -1e5, 1e5) && finite(x.y, -1e5, 1e6) && finite(x.w, 0, 1e5) && finite(x.h, 0, 1e6)
+      ? { x: x.x, y: x.y, w: x.w, h: x.h }
+      : null;
+  const texts = list(r.texts, 2000, (t) => {
+    const at = coord(t);
+    if (!at || !finite(t.size, 1, 2000) || !finite(t.weight, 1, 1000) || !finite(t.chars, 0, 1e6)) return null;
+    return {
+      tag: /^[a-z][a-z0-9-]{0,19}$/i.test(String(t.tag)) ? String(t.tag).toLowerCase() : "span",
+      size: t.size,
+      weight: t.weight,
+      family: str(t.family, 200),
+      tracking: finite(t.tracking, -1, 2) ? t.tracking : 0,
+      line: finite(t.line, 0.1, 10) ? t.line : 1.2,
+      upper: t.upper === true,
+      color: hexOr(t.color),
+      bg: hexOr(t.bg),
+      chars: t.chars,
+      ...at,
+    };
+  });
+  const boxes = list(r.boxes, 1000, (b) => {
+    const at = coord(b);
+    if (!at) return null;
+    const border = typeof b.border === "string" && /^\d{1,3}px #[0-9a-f]{6}$/.test(b.border) ? b.border : "";
+    return {
+      ...at,
+      // Tailwind rounded-full ra 33554400px (calc(infinity * 1px)): vẫn là viên thuốc, chỉ chặn số vô hạn và âm.
+      radius: finite(b.radius, 0, Number.MAX_VALUE) ? Math.min(b.radius, 1e9) : 0,
+      shadow: cleanShadow(str(b.shadow, 2000)),
+      bg: hexOr(b.bg),
+      border,
+    };
+  });
+  const media = list(r.media, 300, (m) => {
+    const at = coord(m);
+    if (!at || !MEDIA_KINDS.has(String(m.kind))) return null;
+    return { ...at, kind: String(m.kind) as Probe["media"][number]["kind"], hero: m.hero === true };
+  });
+  const nums = (v: unknown) => (Array.isArray(v) ? v.slice(0, 1000) : []).filter((n) => finite(n, 0, 5000));
+  return {
+    url: str(r.url, 2000),
+    vw,
+    vh,
+    scrollH: finite(r.scrollH, 0, 1e6) ? r.scrollH : vh,
+    pageBg: hexOr(r.pageBg),
+    texts,
+    boxes,
+    media,
+    gaps: nums(r.gaps),
+    paddings: nums(r.paddings),
+    maxWidth: finite(r.maxWidth, 0, 20_000) ? r.maxWidth : vw,
+    columns: finite(r.columns, 1, 24) ? Math.round(r.columns) : 1,
+    fonts: list(r.fonts, 100, (f) => ({ family: cleanSeen(str(f.family, 200)), loaded: f.loaded === true })),
+  };
+}
+
 // Gán vai cho màu: nền, chữ, chữ phụ, nhấn, nhấn 2, bề mặt, viền. Mỗi bảng có đúng một nền, một chữ, một nhấn.
 function colorsOf(p: Probe, palette: PaletteColor[]): RefColor[] {
   const pal = palette.filter((c) => isHex(c.hex));
@@ -674,7 +881,7 @@ function colorsOf(p: Probe, palette: PaletteColor[]): RefColor[] {
   // Chữ chính là màu tương phản cao nhất trong các màu chữ chiếm phần đáng kể; màu xám nhiều chữ hơn là chữ phụ.
   const major = textColors.filter((c, i) => i < 4 && shareText(c) >= 0.05 && contrastRatio(c, bg) >= 3);
   const ink = major.sort((a, b) => contrastRatio(b, bg) - contrastRatio(a, bg))[0] ?? textColors[0] ?? fromPal[0]
-    ?? (luminance(bg) < 0.2 ? "#ffffff" : "#111111");
+    ?? (luminance(bg) <= DARK_BG_MAX ? "#ffffff" : "#111111");
   const inkRgb = rgbOf(ink);
   const isNeutral = (hex: string) => chroma(rgbOf(hex)) < 40;
   const muted = textColors.find((c) => dist(rgbOf(c), inkRgb) >= 30 && isNeutral(c) && contrastRatio(c, bg) >= 2.2)
@@ -699,10 +906,17 @@ function colorsOf(p: Probe, palette: PaletteColor[]): RefColor[] {
     else groups.push({ hex: v.key, w: v.w });
   }
   groups.sort((a, b) => b.w - a.w);
-  const accent = groups[0]?.hex ?? ink;
+  // Màu nhấn trùng nền thì không nhìn thấy, trùng chữ thì không còn là nhấn: nền đỏ của poster là nền, không phải nhấn.
+  // Trang đơn sắc không có màu nào đủ sắc: nhấn là màu khác hẳn nền và chữ trong ảnh, hoặc chữ phụ.
+  const apart = (hex: string) => dist(rgbOf(hex), bgRgb) >= MERGE && dist(rgbOf(hex), inkRgb) >= MERGE;
+  const accent = groups.find((g) => apart(g.hex))?.hex
+    ?? pal.map((c) => c.hex).find(apart)
+    ?? muted
+    ?? mix(ink, bg);
   const accentHue = hueOf(rgbOf(accent));
-  const accent2 = groups.slice(1).find((g) => hueGap(hueOf(rgbOf(g.hex)), accentHue) >= 40)?.hex;
-  const darkBg = luminance(bg) < 0.2;
+  const accent2 = groups.find((g) => g.hex !== accent && apart(g.hex)
+    && hueGap(hueOf(rgbOf(g.hex)), accentHue) >= 40)?.hex;
+  const darkBg = luminance(bg) <= DARK_BG_MAX;
   const surfaces = weighted(
     p.boxes
       .filter((b) => isHex(b.bg) && dist(rgbOf(b.bg), bgRgb) >= 8 && dist(rgbOf(b.bg), bgRgb) < 90)
@@ -758,9 +972,27 @@ function bodyTexts(p: Probe): ProbeText[] {
   const main = prose(14, 22);
   return main.reduce((a, t) => a + t.chars, 0) >= 200 ? main : prose(11, 24);
 }
+/**
+ * Tên phông đã thấy, rút về chữ, số, dấu cách và gạch nối (tối đa 4 từ, 40 ký tự): font-family do trang tự đặt, mà
+ * tên này đi vào câu lệnh cho model, nên không để trang nhét câu lệnh hay mã vào đó.
+ */
+export function cleanSeen(name: string): string {
+  return String(name ?? "")
+    // next/font đặt tên kiểu "__GeistSans_fb8f2c": bỏ phần băm để còn tên phông thật.
+    .replace(/^_+|_[0-9a-f]{5,8}$/gi, "")
+    .replace(/_/g, " ")
+    .replace(/[^\p{L}\p{N} -]/gu, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .split(" ")
+    .slice(0, 4)
+    .join(" ")
+    .slice(0, 40)
+    .trim();
+}
 function fontOf(t: ProbeText | undefined, cat?: FontCat): RefFont | null {
   if (!t) return null;
-  const seen = firstFamily(t.family) || t.family;
+  const seen = cleanSeen(firstFamily(t.family) || t.family.split(",")[0]);
   const c = cat ?? fontCatOf(t.family);
   const kit = nearestKitFont(t.family, c);
   const sameAsKit = KIT_FONTS.some((f) => f.family.toLowerCase() === seen.toLowerCase());
@@ -784,13 +1016,18 @@ function ratioOf(sizes: number[], base: number): number {
  * Token đo được từ một lần chạy TOKEN_PROBE (và bảng màu điểm ảnh nếu có). Chỉ trả trường đo được; `measured` liệt kê
  * các trường đó để người duyệt biết trường nào còn phải chấm bằng mắt (ánh sáng, ống kính, chủ thể của hình).
  */
-export function tokensFromProbe(p: Probe, palette: PaletteColor[]): ProbeTokens {
+export function tokensFromProbe(raw: Probe, rawPalette: PaletteColor[]): ProbeTokens {
   const tokens: Partial<RefTokens> = {};
   const measured: TokenField[] = [];
+  const p = cleanProbe(raw);
+  if (!p) return { tokens, measured };
+  const palette = (Array.isArray(rawPalette) ? rawPalette : [])
+    .filter((c) => c && isHex(c.hex) && finite(c.share, 0, 1))
+    .slice(0, 16);
   const colors = colorsOf(p, palette);
   const bg = colors.find((c) => c.role === "bg")?.hex;
   if (bg) {
-    tokens.theme = luminance(bg) < 0.2 ? "dark" : "light";
+    tokens.theme = luminance(bg) <= DARK_BG_MAX ? "dark" : "light";
     tokens.colors = colors;
     measured.push("theme", "colors");
   }
@@ -844,7 +1081,7 @@ export function tokensFromProbe(p: Probe, palette: PaletteColor[]): ProbeTokens 
   const outer = Math.round(median(cards.map((b) => b.radius)));
   const inner = small.length ? Math.round(median(small.map((b) => b.radius))) : Math.round(outer * 0.6);
   tokens.radius = { outer, inner: Math.min(inner, Math.max(outer, inner)), pill: p.boxes.some(isPill) };
-  const shadows = weighted(p.boxes.filter((b) => b.shadow).map((b) => ({ key: b.shadow, w: b.w * b.h })));
+  const shadows = weighted(p.boxes.filter((b) => b.shadow !== "none").map((b) => ({ key: b.shadow, w: b.w * b.h })));
   const shadowCss = shadows.find((s) => shadowLevel(s) > 0) ?? "none";
   tokens.shadow = { level: shadowLevel(shadowCss), css: shadowCss };
   measured.push("radius", "shadow");
