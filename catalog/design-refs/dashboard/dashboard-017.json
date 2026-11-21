@@ -1,0 +1,149 @@
+{
+  "v": 1,
+  "id": "dashboard-017",
+  "domain": "dashboard",
+  "title": "Bảng quản trị xám đậm: thẻ thống kê và lịch nhỏ",
+  "moods": [
+    "dark-cinematic",
+    "data-dense"
+  ],
+  "industries": [
+    "general"
+  ],
+  "audience": [
+    "internal"
+  ],
+  "source_url": "https://demo.adminkit.io/",
+  "source_host": "demo.adminkit.io",
+  "source_kind": "public-page",
+  "captured_at": "2026-11-20",
+  "image": {
+    "file": "dashboard/dashboard-017.webp",
+    "width": 1280,
+    "height": 800,
+    "bytes": 44948,
+    "layout": "single"
+  },
+  "tokens": {
+    "theme": "dark",
+    "colors": [
+      {
+        "hex": "#19222c",
+        "role": "bg",
+        "share": 0
+      },
+      {
+        "hex": "#e9ecef",
+        "role": "ink",
+        "share": 0
+      },
+      {
+        "hex": "#9aa5b1",
+        "role": "muted",
+        "share": 0
+      },
+      {
+        "hex": "#3b7ddd",
+        "role": "accent",
+        "share": 0
+      },
+      {
+        "hex": "#2f3b4a",
+        "role": "line",
+        "share": 0
+      },
+      {
+        "hex": "#117759",
+        "role": "pos",
+        "share": 0
+      },
+      {
+        "hex": "#c62434",
+        "role": "neg",
+        "share": 0
+      },
+      {
+        "hex": "#222e3c",
+        "role": "surface",
+        "share": 0
+      }
+    ],
+    "fonts": {
+      "head": {
+        "kit": "inter",
+        "seen": "Inter",
+        "seenLicence": "open",
+        "weight": 400
+      },
+      "body": {
+        "kit": "inter",
+        "seen": "Inter",
+        "seenLicence": "open",
+        "weight": 400
+      },
+      "mono": null
+    },
+    "type": {
+      "basePx": 14,
+      "ratio": 1.26,
+      "sizes": [
+        28,
+        21,
+        16,
+        14,
+        12,
+        10
+      ],
+      "headLine": 1.2,
+      "bodyLine": 1.5,
+      "headCase": "none"
+    },
+    "tracking": {
+      "display": 0,
+      "heading": 0,
+      "body": 0,
+      "label": 0
+    },
+    "radius": {
+      "outer": 4,
+      "inner": 3,
+      "pill": true
+    },
+    "shadow": {
+      "level": 1,
+      "css": "rgba(33, 37, 41, 0.05) 0px 0px 14px 0px"
+    },
+    "spacing": {
+      "unit": 4,
+      "section": 48,
+      "gutter": 24,
+      "density": "dense"
+    },
+    "layout": {
+      "columns": 2,
+      "maxWidth": 1020,
+      "align": "left",
+      "emptyShare": 0.06
+    },
+    "imagery": {
+      "kind": "data",
+      "share": 0.4,
+      "light": "",
+      "lens": "",
+      "grade": "",
+      "subject": ""
+    }
+  },
+  "measured": [
+    "theme",
+    "fonts",
+    "type",
+    "tracking",
+    "radius",
+    "shadow",
+    "spacing",
+    "layout"
+  ],
+  "why": "Nền xám đậm #19222c với thanh bên tối hơn, thẻ #222e3c bo 4 px chứa con số 28 px và tỉ lệ thay đổi xanh đỏ. Một vòng tròn và lịch nhỏ phá nhịp lưới thẻ vuông. Chữ 14 px, khoảng cách 24 px giữa thẻ, nhấn xanh lam #3b7ddd. Mượn sắc xám xanh đậm thay cho đen tuyền cho bảng làm việc dài giờ; không chép số liệu.",
+  "licence": "Ảnh chụp thu nhỏ của trang công khai, chỉ để model tham khảo nguyên tắc. Không chép logo, chữ, ảnh hay phông độc quyền của trang."
+}

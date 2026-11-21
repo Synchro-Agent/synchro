@@ -1,0 +1,190 @@
+{
+ "url": "https://example.test/light",
+ "vw": 1280,
+ "vh": 800,
+ "scrollH": 4200,
+ "pageBg": "#f4f1ea",
+ "texts": [
+  {
+   "tag": "h1",
+   "size": 96,
+   "weight": 500,
+   "family": "\"Canela\", Georgia, serif",
+   "tracking": -0.03,
+   "line": 1.0,
+   "upper": false,
+   "color": "#1c1a17",
+   "bg": "#f4f1ea",
+   "chars": 38,
+   "x": 96,
+   "y": 180,
+   "w": 760,
+   "h": 200
+  },
+  {
+   "tag": "p",
+   "size": 12,
+   "weight": 600,
+   "family": "\"Graphik\", \"Helvetica Neue\", sans-serif",
+   "tracking": 0.14,
+   "line": 1.4,
+   "upper": true,
+   "color": "#6b645e",
+   "bg": "#f4f1ea",
+   "chars": 22,
+   "x": 96,
+   "y": 140,
+   "w": 260,
+   "h": 18
+  },
+  {
+   "tag": "p",
+   "size": 18,
+   "weight": 400,
+   "family": "\"Graphik\", \"Helvetica Neue\", sans-serif",
+   "tracking": 0,
+   "line": 1.55,
+   "upper": false,
+   "color": "#1c1a17",
+   "bg": "#f4f1ea",
+   "chars": 420,
+   "x": 96,
+   "y": 420,
+   "w": 560,
+   "h": 140
+  },
+  {
+   "tag": "p",
+   "size": 18,
+   "weight": 400,
+   "family": "\"Graphik\", \"Helvetica Neue\", sans-serif",
+   "tracking": 0,
+   "line": 1.55,
+   "upper": false,
+   "color": "#6b645e",
+   "bg": "#f4f1ea",
+   "chars": 260,
+   "x": 96,
+   "y": 600,
+   "w": 560,
+   "h": 90
+  },
+  {
+   "tag": "h2",
+   "size": 32,
+   "weight": 500,
+   "family": "\"Canela\", Georgia, serif",
+   "tracking": -0.015,
+   "line": 1.15,
+   "upper": false,
+   "color": "#1c1a17",
+   "bg": "#f4f1ea",
+   "chars": 44,
+   "x": 96,
+   "y": 900,
+   "w": 700,
+   "h": 80
+  },
+  {
+   "tag": "a",
+   "size": 15,
+   "weight": 600,
+   "family": "\"Graphik\", \"Helvetica Neue\", sans-serif",
+   "tracking": 0.02,
+   "line": 1.2,
+   "upper": false,
+   "color": "#ffffff",
+   "bg": "#b8452a",
+   "chars": 12,
+   "x": 96,
+   "y": 700,
+   "w": 160,
+   "h": 48
+  },
+  {
+   "tag": "span",
+   "size": 14,
+   "weight": 400,
+   "family": "\"Graphik\", \"Helvetica Neue\", sans-serif",
+   "tracking": 0,
+   "line": 1.4,
+   "upper": false,
+   "color": "#b8452a",
+   "bg": "#f4f1ea",
+   "chars": 30,
+   "x": 96,
+   "y": 760,
+   "w": 200,
+   "h": 20
+  }
+ ],
+ "boxes": [
+  {
+   "x": 96,
+   "y": 700,
+   "w": 160,
+   "h": 48,
+   "radius": 24,
+   "shadow": "",
+   "bg": "#b8452a",
+   "border": ""
+  },
+  {
+   "x": 96,
+   "y": 1000,
+   "w": 520,
+   "h": 360,
+   "radius": 4,
+   "shadow": "0 2px 8px rgba(28,25,23,.06)",
+   "bg": "#fbf9f4",
+   "border": "1px #e2ddd2"
+  },
+  {
+   "x": 664,
+   "y": 1000,
+   "w": 520,
+   "h": 360,
+   "radius": 4,
+   "shadow": "0 2px 8px rgba(28,25,23,.06)",
+   "bg": "#fbf9f4",
+   "border": "1px #e2ddd2"
+  }
+ ],
+ "media": [
+  {
+   "x": 720,
+   "y": 120,
+   "w": 480,
+   "h": 600,
+   "kind": "img",
+   "hero": false
+  }
+ ],
+ "gaps": [
+  24,
+  24,
+  32,
+  48,
+  16
+ ],
+ "paddings": [
+  120,
+  120,
+  96,
+  96,
+  24,
+  24
+ ],
+ "maxWidth": 1120,
+ "columns": 2,
+ "fonts": [
+  {
+   "family": "Canela",
+   "loaded": true
+  },
+  {
+   "family": "Graphik",
+   "loaded": true
+  }
+ ]
+}

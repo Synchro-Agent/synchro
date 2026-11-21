@@ -1,0 +1,122 @@
+{
+  "v": 1,
+  "id": "slide-053",
+  "domain": "slide",
+  "title": "Bộ slide cổ đông: khối xanh lam và xanh bạc hà, chữ hoa đậm trong hai dải lệch",
+  "moods": [
+    "bold-color",
+    "playful",
+    "data-dense"
+  ],
+  "industries": [
+    "culture-music",
+    "media-publishing"
+  ],
+  "audience": [
+    "investors"
+  ],
+  "source_url": "https://s29.q4cdn.com/175625835/files/doc_financials/2022/q3/Q3-2022-Shareholder-Deck-FINAL-LOCKED.pdf",
+  "source_host": "s29.q4cdn.com",
+  "source_kind": "public-image",
+  "captured_at": "2026-11-20",
+  "image": {
+    "file": "slide/slide-053.webp",
+    "width": 1280,
+    "height": 720,
+    "bytes": 87666,
+    "layout": "grid4"
+  },
+  "tokens": {
+    "theme": "light",
+    "colors": [
+      {
+        "hex": "#fbfdfb",
+        "role": "bg",
+        "share": 0.382
+      },
+      {
+        "hex": "#2d46b9",
+        "role": "ink",
+        "share": 0.222
+      },
+      {
+        "hex": "#4c917e",
+        "role": "accent",
+        "share": 0.022
+      },
+      {
+        "hex": "#7d93ce",
+        "role": "accent2",
+        "share": 0.005
+      }
+    ],
+    "fonts": {
+      "head": {
+        "kit": "plus-jakarta-sans",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 700
+      },
+      "body": {
+        "kit": "plus-jakarta-sans",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 400
+      },
+      "mono": null
+    },
+    "type": {
+      "basePx": 13,
+      "ratio": 1.5,
+      "sizes": [
+        40,
+        28,
+        13
+      ],
+      "headLine": 1.1,
+      "bodyLine": 1.4,
+      "headCase": "upper"
+    },
+    "tracking": {
+      "display": -0.01,
+      "heading": 0,
+      "body": 0,
+      "label": 0.02
+    },
+    "radius": {
+      "outer": 0,
+      "inner": 0,
+      "pill": false
+    },
+    "shadow": {
+      "level": 0,
+      "css": "none"
+    },
+    "spacing": {
+      "unit": 8,
+      "section": 48,
+      "gutter": 24,
+      "density": "balanced"
+    },
+    "layout": {
+      "columns": 2,
+      "maxWidth": 1280,
+      "align": "asymmetric",
+      "emptyShare": 0.3
+    },
+    "imagery": {
+      "kind": "data",
+      "share": 0.3,
+      "light": "",
+      "lens": "",
+      "grade": "",
+      "subject": ""
+    }
+  },
+  "measured": [
+    "theme",
+    "colors"
+  ],
+  "why": "Bìa nền bạc hà #c1ebc8 với hai hình tròn xanh rêu cắt mép và viền xanh lam #2d46b9 dày. Trang chương là hai dải chữ hoa đậm 40 px lệch bậc thang, một dải nền bạc hà, một dải nền trắng. Trang số liệu dùng biểu đồ cột xanh lá và tím, tiêu đề xanh lam 28 px. Mượn cách lệch hai dải chữ thành bậc thang và hình tròn cắt mép làm trang trí; không chép số liệu.",
+  "licence": "Ảnh chụp thu nhỏ của trang công khai, chỉ để model tham khảo nguyên tắc. Không chép logo, chữ, ảnh hay phông độc quyền của trang."
+}

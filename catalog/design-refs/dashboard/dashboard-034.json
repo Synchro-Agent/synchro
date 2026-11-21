@@ -1,0 +1,146 @@
+{
+  "v": 1,
+  "id": "dashboard-034",
+  "domain": "dashboard",
+  "title": "Bảng dữ liệu y tế công: bản đồ thế giới và bảng xếp hạng thanh",
+  "moods": [
+    "clean-light",
+    "swiss-precise",
+    "data-dense"
+  ],
+  "industries": [
+    "health-wellness",
+    "nonprofit-gov"
+  ],
+  "audience": [
+    "public"
+  ],
+  "source_url": "https://covid19.who.int/",
+  "source_host": "covid19.who.int",
+  "source_kind": "public-page",
+  "captured_at": "2026-11-20",
+  "image": {
+    "file": "dashboard/dashboard-034.webp",
+    "width": 1280,
+    "height": 1600,
+    "bytes": 87700,
+    "layout": "single"
+  },
+  "tokens": {
+    "theme": "light",
+    "colors": [
+      {
+        "hex": "#ffffff",
+        "role": "bg",
+        "share": 0.822
+      },
+      {
+        "hex": "#f7f7f7",
+        "role": "surface",
+        "share": 0
+      },
+      {
+        "hex": "#fafafa",
+        "role": "raised",
+        "share": 0
+      },
+      {
+        "hex": "#000000",
+        "role": "ink",
+        "share": 0.011
+      },
+      {
+        "hex": "#595959",
+        "role": "muted",
+        "share": 0
+      },
+      {
+        "hex": "#001437",
+        "role": "accent",
+        "share": 0.133
+      },
+      {
+        "hex": "#cccccc",
+        "role": "line",
+        "share": 0.005
+      }
+    ],
+    "fonts": {
+      "head": {
+        "kit": "ibm-plex-sans",
+        "seen": "Noto Sans",
+        "seenLicence": "open",
+        "weight": 700
+      },
+      "body": {
+        "kit": "ibm-plex-sans",
+        "seen": "Noto Sans",
+        "seenLicence": "open",
+        "weight": 400
+      },
+      "mono": null
+    },
+    "type": {
+      "basePx": 14,
+      "ratio": 1.221,
+      "sizes": [
+        38,
+        22,
+        20,
+        18,
+        16,
+        14
+      ],
+      "headLine": 1.1,
+      "bodyLine": 1.4,
+      "headCase": "none"
+    },
+    "tracking": {
+      "display": 0,
+      "heading": 0,
+      "body": 0,
+      "label": 0
+    },
+    "radius": {
+      "outer": 5,
+      "inner": 5,
+      "pill": false
+    },
+    "shadow": {
+      "level": 0,
+      "css": "none"
+    },
+    "spacing": {
+      "unit": 4,
+      "section": 41,
+      "gutter": 16,
+      "density": "dense"
+    },
+    "layout": {
+      "columns": 2,
+      "maxWidth": 940,
+      "align": "left",
+      "emptyShare": 0.69
+    },
+    "imagery": {
+      "kind": "data",
+      "share": 0.4,
+      "light": "",
+      "lens": "",
+      "grade": "",
+      "subject": ""
+    }
+  },
+  "measured": [
+    "theme",
+    "colors",
+    "type",
+    "tracking",
+    "radius",
+    "shadow",
+    "spacing",
+    "layout"
+  ],
+  "why": "Băng đầu xanh đậm #001437, phần thân trắng với một con số lớn 38 px, bản đồ thế giới chấm tròn theo vùng và bảng quốc gia có thanh ngang nhỏ. Chữ Noto Sans 14 px, đoạn giải thích đặt trước số liệu. Không bóng, bo 5 px. Mượn cách đặt chú thích phương pháp ngay cạnh con số cho dữ liệu công; không chép số liệu.",
+  "licence": "Ảnh chụp thu nhỏ của trang công khai, chỉ để model tham khảo nguyên tắc. Không chép logo, chữ, ảnh hay phông độc quyền của trang."
+}

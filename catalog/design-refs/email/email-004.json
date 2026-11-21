@@ -1,0 +1,133 @@
+{
+  "v": 1,
+  "id": "email-004",
+  "domain": "email",
+  "title": "Thư ra mắt API nền tối: đoạn mã làm hình chính",
+  "moods": [
+    "dark-cinematic",
+    "tech",
+    "minimal-mono"
+  ],
+  "industries": [
+    "ai",
+    "tech-saas"
+  ],
+  "audience": [
+    "developers"
+  ],
+  "source_url": "https://reallygoodemails.com/emails/google-ai-studio-gemini-decisions-api-launch",
+  "source_host": "reallygoodemails.com",
+  "source_kind": "public-image",
+  "captured_at": "2026-11-20",
+  "image": {
+    "file": "email/email-004.webp",
+    "width": 680,
+    "height": 1600,
+    "bytes": 89058,
+    "layout": "single"
+  },
+  "tokens": {
+    "theme": "dark",
+    "colors": [
+      {
+        "hex": "#181818",
+        "role": "bg",
+        "share": 0.555
+      },
+      {
+        "hex": "#e0e2e5",
+        "role": "ink",
+        "share": 0.009
+      },
+      {
+        "hex": "#818283",
+        "role": "muted",
+        "share": 0.004
+      },
+      {
+        "hex": "#89b4f8",
+        "role": "accent",
+        "share": 0.006
+      },
+      {
+        "hex": "#0b954b",
+        "role": "accent2",
+        "share": 0.004
+      }
+    ],
+    "fonts": {
+      "head": {
+        "kit": "plus-jakarta-sans",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 500
+      },
+      "body": {
+        "kit": "plus-jakarta-sans",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 400
+      },
+      "mono": {
+        "kit": "jetbrains-mono",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 400
+      }
+    },
+    "type": {
+      "basePx": 15,
+      "ratio": 1.25,
+      "sizes": [
+        28,
+        18,
+        15,
+        13
+      ],
+      "headLine": 1.2,
+      "bodyLine": 1.6,
+      "headCase": "none"
+    },
+    "tracking": {
+      "display": 0,
+      "heading": 0,
+      "body": 0,
+      "label": 0
+    },
+    "radius": {
+      "outer": 8,
+      "inner": 6,
+      "pill": true
+    },
+    "shadow": {
+      "level": 0,
+      "css": "none"
+    },
+    "spacing": {
+      "unit": 8,
+      "section": 32,
+      "gutter": 16,
+      "density": "balanced"
+    },
+    "layout": {
+      "columns": 1,
+      "maxWidth": 600,
+      "align": "left",
+      "emptyShare": 0.25
+    },
+    "imagery": {
+      "kind": "type-only",
+      "share": 0.3,
+      "light": "",
+      "lens": "",
+      "grade": "",
+      "subject": ""
+    }
+  },
+  "measured": [
+    "theme",
+    "colors"
+  ],
+  "why": "Thư nền xám đen #181818, chữ #e0e2e5 15 px, liên kết xanh nhạt #89b4f8, một khối mã tô màu cú pháp là hình chính thay cho ảnh. Danh sách chấm ngắn, một nút bo tròn, rất ít trang trí. Đúng giọng tài liệu kỹ thuật dù là thư tiếp thị. Mượn cách dùng đoạn mã thật làm điểm nhìn cho khán giả lập trình; không chép mã hay tên sản phẩm.",
+  "licence": "Ảnh chụp thu nhỏ của trang công khai, chỉ để model tham khảo nguyên tắc. Không chép logo, chữ, ảnh hay phông độc quyền của trang."
+}

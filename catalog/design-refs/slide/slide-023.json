@@ -1,0 +1,123 @@
+{
+  "v": 1,
+  "id": "slide-023",
+  "domain": "slide",
+  "title": "Bìa bộ slide khởi nghiệp: nền xanh trời, vật thể 3D trôi ở góc, chữ xanh đậm giữa",
+  "moods": [
+    "playful",
+    "tech",
+    "clean-light"
+  ],
+  "industries": [
+    "tech-saas",
+    "general"
+  ],
+  "audience": [
+    "investors",
+    "b2b"
+  ],
+  "source_url": "https://imgproxy.services.pitch.com/_/plain/pitch-publish-user-assets/templates/posters/startup.jpg",
+  "source_host": "imgproxy.services.pitch.com",
+  "source_kind": "public-image",
+  "credit": "Pitch, mẫu trình chiếu Startup",
+  "captured_at": "2026-11-20",
+  "image": {
+    "file": "slide/slide-023.webp",
+    "width": 1020,
+    "height": 574,
+    "bytes": 22256,
+    "layout": "single"
+  },
+  "tokens": {
+    "theme": "light",
+    "colors": [
+      {
+        "hex": "#9ec2f8",
+        "role": "bg",
+        "share": 0.86
+      },
+      {
+        "hex": "#2f3fa8",
+        "role": "ink",
+        "share": 0
+      },
+      {
+        "hex": "#7b5cd6",
+        "role": "accent",
+        "share": 0
+      },
+      {
+        "hex": "#e86a92",
+        "role": "accent2",
+        "share": 0
+      }
+    ],
+    "fonts": {
+      "head": {
+        "kit": "plus-jakarta-sans",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 700
+      },
+      "body": {
+        "kit": "plus-jakarta-sans",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 400
+      },
+      "mono": null
+    },
+    "type": {
+      "basePx": 16,
+      "ratio": 1.414,
+      "sizes": [
+        44,
+        24,
+        16
+      ],
+      "headLine": 1.1,
+      "bodyLine": 1.4,
+      "headCase": "none"
+    },
+    "tracking": {
+      "display": -0.02,
+      "heading": 0,
+      "body": 0,
+      "label": 0
+    },
+    "radius": {
+      "outer": 24,
+      "inner": 12,
+      "pill": false
+    },
+    "shadow": {
+      "level": 0,
+      "css": "none"
+    },
+    "spacing": {
+      "unit": 8,
+      "section": 64,
+      "gutter": 24,
+      "density": "airy"
+    },
+    "layout": {
+      "columns": 1,
+      "maxWidth": 1280,
+      "align": "center",
+      "emptyShare": 0.6
+    },
+    "imagery": {
+      "kind": "3d",
+      "share": 0.3,
+      "light": "soft diffuse studio light, frosted glass highlights",
+      "lens": "isometric-ish 3D render, corners",
+      "grade": "periwinkle blue, lilac and coral",
+      "subject": "floating glossy and frosted abstract 3D shapes"
+    }
+  },
+  "measured": [
+    "theme"
+  ],
+  "why": "Nền xanh trời #9ec2f8 có quầng sáng nhẹ ở giữa, tiêu đề xanh lam đậm #3e50bc 44 px căn giữa. Các vật thể 3D mờ trong suốt tím, xanh, hồng trôi ở bốn góc, chiếm khoảng 30% khung, để giữa trống. Không đường kẻ, không khung, chỉ một tiêu đề. Mượn cách để vật thể 3D đóng khung tiêu đề từ các góc; không chép vật thể hay chữ.",
+  "licence": "Ảnh chụp thu nhỏ của trang công khai, chỉ để model tham khảo nguyên tắc. Không chép logo, chữ, ảnh hay phông độc quyền của trang."
+}

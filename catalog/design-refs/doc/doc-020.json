@@ -1,0 +1,127 @@
+{
+  "v": 1,
+  "id": "doc-020",
+  "domain": "doc",
+  "title": "Trang số liệu báo cáo thường niên Việt: bảng kem, biểu đồ tròn xanh",
+  "moods": [
+    "data-dense",
+    "clean-light"
+  ],
+  "industries": [
+    "food-beverage",
+    "finance"
+  ],
+  "audience": [
+    "investors"
+  ],
+  "source_url": "https://www.vinamilk.com.vn/vi/bao-cao-thuong-nien",
+  "source_host": "vinamilk.com.vn",
+  "source_kind": "public-image",
+  "credit": "Vinamilk, báo cáo thường niên, trang số liệu cổ đông",
+  "captured_at": "2026-11-20",
+  "image": {
+    "file": "doc/doc-020.webp",
+    "width": 1280,
+    "height": 905,
+    "bytes": 89732,
+    "layout": "single"
+  },
+  "tokens": {
+    "theme": "light",
+    "colors": [
+      {
+        "hex": "#fdfbef",
+        "role": "bg",
+        "share": 0
+      },
+      {
+        "hex": "#1a1a2e",
+        "role": "ink",
+        "share": 0
+      },
+      {
+        "hex": "#1a3fd6",
+        "role": "accent",
+        "share": 0
+      },
+      {
+        "hex": "#5a5a6a",
+        "role": "muted",
+        "share": 0
+      },
+      {
+        "hex": "#f5c400",
+        "role": "accent2",
+        "share": 0
+      }
+    ],
+    "fonts": {
+      "head": {
+        "kit": "be-vietnam-pro",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 600
+      },
+      "body": {
+        "kit": "be-vietnam-pro",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 400
+      },
+      "mono": null
+    },
+    "type": {
+      "basePx": 12,
+      "ratio": 1.25,
+      "sizes": [
+        24,
+        16,
+        12,
+        10
+      ],
+      "headLine": 1.2,
+      "bodyLine": 1.35,
+      "headCase": "upper"
+    },
+    "tracking": {
+      "display": 0,
+      "heading": 0,
+      "body": 0,
+      "label": 0
+    },
+    "radius": {
+      "outer": 0,
+      "inner": 0,
+      "pill": false
+    },
+    "shadow": {
+      "level": 0,
+      "css": "none"
+    },
+    "spacing": {
+      "unit": 4,
+      "section": 32,
+      "gutter": 16,
+      "density": "dense"
+    },
+    "layout": {
+      "columns": 2,
+      "maxWidth": 1280,
+      "align": "left",
+      "emptyShare": 0.1
+    },
+    "imagery": {
+      "kind": "data",
+      "share": 0.4,
+      "light": "",
+      "lens": "",
+      "grade": "",
+      "subject": ""
+    }
+  },
+  "measured": [
+    "theme"
+  ],
+  "why": "Trang ngang hai cột nền kem nhạt, bảng số liệu dòng mảnh căn phải bên trái, biểu đồ tròn và cột xanh lam bên phải. Tiêu đề xanh đậm, chữ thân nhỏ 9-10 pt dày đặc. Một màu nhấn xanh cho mọi dữ liệu. Mượn bố cục bảng một bên, biểu đồ một bên cho trang tài chính; không chép số liệu.",
+  "licence": "Ảnh chụp thu nhỏ của trang công khai, chỉ để model tham khảo nguyên tắc. Không chép logo, chữ, ảnh hay phông độc quyền của trang."
+}

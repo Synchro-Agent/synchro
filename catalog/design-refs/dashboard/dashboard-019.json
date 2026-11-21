@@ -1,0 +1,151 @@
+{
+  "v": 1,
+  "id": "dashboard-019",
+  "domain": "dashboard",
+  "title": "Mẫu bảng điều khiển sáng: biểu đồ vùng xanh và cột chồng",
+  "moods": [
+    "clean-light",
+    "data-dense"
+  ],
+  "industries": [
+    "general",
+    "tech-saas"
+  ],
+  "audience": [
+    "internal",
+    "b2b"
+  ],
+  "source_url": "https://mui.com/material-ui/getting-started/templates/dashboard/",
+  "source_host": "mui.com",
+  "source_kind": "public-page",
+  "captured_at": "2026-11-20",
+  "image": {
+    "file": "dashboard/dashboard-019.webp",
+    "width": 1280,
+    "height": 800,
+    "bytes": 49044,
+    "layout": "single"
+  },
+  "tokens": {
+    "theme": "light",
+    "colors": [
+      {
+        "hex": "#ffffff",
+        "role": "bg",
+        "share": 0
+      },
+      {
+        "hex": "#fcfcfc",
+        "role": "surface",
+        "share": 0.899
+      },
+      {
+        "hex": "#f5f6fa",
+        "role": "raised",
+        "share": 0
+      },
+      {
+        "hex": "#0b0e14",
+        "role": "ink",
+        "share": 0
+      },
+      {
+        "hex": "#47536b",
+        "role": "muted",
+        "share": 0
+      },
+      {
+        "hex": "#1976d2",
+        "role": "accent",
+        "share": 0
+      },
+      {
+        "hex": "#90caf9",
+        "role": "accent2",
+        "share": 0
+      },
+      {
+        "hex": "#e5e7ed",
+        "role": "line",
+        "share": 0.019
+      }
+    ],
+    "fonts": {
+      "head": {
+        "kit": "inter",
+        "seen": "Inter",
+        "seenLicence": "open",
+        "weight": 600
+      },
+      "body": {
+        "kit": "inter",
+        "seen": "Inter",
+        "seenLicence": "open",
+        "weight": 400
+      },
+      "mono": null
+    },
+    "type": {
+      "basePx": 14,
+      "ratio": 1.144,
+      "sizes": [
+        24,
+        20,
+        18,
+        16,
+        14,
+        12
+      ],
+      "headLine": 1.5,
+      "bodyLine": 1.5,
+      "headCase": "none"
+    },
+    "tracking": {
+      "display": 0,
+      "heading": 0,
+      "body": 0,
+      "label": 0
+    },
+    "radius": {
+      "outer": 8,
+      "inner": 0,
+      "pill": true
+    },
+    "shadow": {
+      "level": 1,
+      "css": "rgb(255, 255, 255) 0px 1px 0px 0px inset, rgba(223, 226, 231, 0.4) 0px -1px 0px 0px inset, rgba(223, 226, 231, 0.5) 0px 1px 2px 0px"
+    },
+    "spacing": {
+      "unit": 8,
+      "section": 40,
+      "gutter": 8,
+      "density": "dense"
+    },
+    "layout": {
+      "columns": 4,
+      "maxWidth": 990,
+      "align": "left",
+      "emptyShare": 0.37
+    },
+    "imagery": {
+      "kind": "data",
+      "share": 0.5,
+      "light": "",
+      "lens": "",
+      "grade": "",
+      "subject": ""
+    }
+  },
+  "measured": [
+    "theme",
+    "fonts",
+    "type",
+    "tracking",
+    "radius",
+    "shadow",
+    "spacing",
+    "layout"
+  ],
+  "why": "Thẻ trắng bo 8 px viền #e5e7ed trên nền #fcfcfc, con số 24 px kèm nhãn tăng giảm bo tròn. Biểu đồ vùng nhiều sắc xanh lam xếp tầng và biểu đồ cột chồng cùng họ màu. Thứ bậc gọn trong 3 cỡ chữ 24, 16, 14 px, lưới 8 px. Mượn một họ màu xanh nhiều độ đậm cho các chuỗi; không chép số liệu.",
+  "licence": "Ảnh chụp thu nhỏ của trang công khai, chỉ để model tham khảo nguyên tắc. Không chép logo, chữ, ảnh hay phông độc quyền của trang."
+}

@@ -1,0 +1,143 @@
+{
+  "v": 1,
+  "id": "doc-013",
+  "domain": "doc",
+  "title": "Tạp chí công nghệ nền đen: ảnh minh hoạ xanh ngọc, tiêu đề có chân trắng",
+  "moods": [
+    "dark-cinematic",
+    "editorial",
+    "tech"
+  ],
+  "industries": [
+    "media-publishing",
+    "ai"
+  ],
+  "audience": [
+    "developers",
+    "b2b"
+  ],
+  "source_url": "https://every.to/",
+  "source_host": "every.to",
+  "source_kind": "public-page",
+  "captured_at": "2026-11-20",
+  "image": {
+    "file": "doc/doc-013.webp",
+    "width": 1280,
+    "height": 1600,
+    "bytes": 89012,
+    "layout": "single"
+  },
+  "tokens": {
+    "theme": "dark",
+    "colors": [
+      {
+        "hex": "#000000",
+        "role": "bg",
+        "share": 0.647
+      },
+      {
+        "hex": "#1a1a1a",
+        "role": "surface",
+        "share": 0.022
+      },
+      {
+        "hex": "#ffffff",
+        "role": "ink",
+        "share": 0
+      },
+      {
+        "hex": "#d0d0d0",
+        "role": "muted",
+        "share": 0
+      },
+      {
+        "hex": "#11b9b9",
+        "role": "accent",
+        "share": 0.195
+      },
+      {
+        "hex": "#3c3c3c",
+        "role": "line",
+        "share": 0.016
+      }
+    ],
+    "fonts": {
+      "head": {
+        "kit": "source-serif-4",
+        "seen": "Signifier",
+        "seenLicence": "unknown",
+        "weight": 400
+      },
+      "body": {
+        "kit": "source-serif-4",
+        "seen": "Signifier",
+        "seenLicence": "unknown",
+        "weight": 400
+      },
+      "mono": null
+    },
+    "type": {
+      "basePx": 20,
+      "ratio": 1.281,
+      "sizes": [
+        42,
+        32,
+        24,
+        20,
+        18,
+        15,
+        12
+      ],
+      "headLine": 1.2,
+      "bodyLine": 1.5,
+      "headCase": "none"
+    },
+    "tracking": {
+      "display": 0,
+      "heading": 0,
+      "body": 0,
+      "label": 0.014
+    },
+    "radius": {
+      "outer": 0,
+      "inner": 6,
+      "pill": true
+    },
+    "shadow": {
+      "level": 0,
+      "css": "none"
+    },
+    "spacing": {
+      "unit": 4,
+      "section": 50,
+      "gutter": 12,
+      "density": "dense"
+    },
+    "layout": {
+      "columns": 3,
+      "maxWidth": 1248,
+      "align": "center",
+      "emptyShare": 0.34
+    },
+    "imagery": {
+      "kind": "mixed",
+      "share": 0.35,
+      "light": "flat studio light on collage illustrations",
+      "lens": "flat editorial collage, square crops",
+      "grade": "teal and cyan on black",
+      "subject": "editorial collages of hands and devices"
+    }
+  },
+  "measured": [
+    "theme",
+    "fonts",
+    "type",
+    "tracking",
+    "radius",
+    "shadow",
+    "spacing",
+    "layout"
+  ],
+  "why": "Nền đen tuyền, bài chính có ảnh minh hoạ nền xanh ngọc #11b9b9 chiếm 30% màn đầu và tiêu đề có chân trắng 28 px. Cột bài phụ bên phải ảnh vuông nhỏ, tiêu đề 16 px, tên tác giả chữ hoa 10 px giãn chữ. Hàng thẻ sản phẩm phía dưới bo 8 px nền màu đậm. Mượn cặp chữ có chân trên nền đen với một màu nhấn lạnh duy nhất; không chép bài hay ảnh.",
+  "licence": "Ảnh chụp thu nhỏ của trang công khai, chỉ để model tham khảo nguyên tắc. Không chép logo, chữ, ảnh hay phông độc quyền của trang."
+}

@@ -1,0 +1,146 @@
+{
+  "v": 1,
+  "id": "doc-010",
+  "domain": "doc",
+  "title": "Hướng dẫn màu của hệ thiết kế: bảng ô màu và giải thích ngắn",
+  "moods": [
+    "clean-light",
+    "swiss-precise",
+    "data-dense"
+  ],
+  "industries": [
+    "tech-saas"
+  ],
+  "audience": [
+    "developers"
+  ],
+  "source_url": "https://atlassian.design/foundations/color",
+  "source_host": "atlassian.design",
+  "source_kind": "public-page",
+  "captured_at": "2026-11-20",
+  "image": {
+    "file": "doc/doc-010.webp",
+    "width": 1280,
+    "height": 800,
+    "bytes": 45126,
+    "layout": "single"
+  },
+  "tokens": {
+    "theme": "light",
+    "colors": [
+      {
+        "hex": "#ffffff",
+        "role": "bg",
+        "share": 0.858
+      },
+      {
+        "hex": "#f8f8f8",
+        "role": "surface",
+        "share": 0
+      },
+      {
+        "hex": "#e9f2fe",
+        "role": "raised",
+        "share": 0
+      },
+      {
+        "hex": "#292a2e",
+        "role": "ink",
+        "share": 0.01
+      },
+      {
+        "hex": "#6b6e76",
+        "role": "muted",
+        "share": 0.004
+      },
+      {
+        "hex": "#1868db",
+        "role": "accent",
+        "share": 0.003
+      },
+      {
+        "hex": "#ba60ed",
+        "role": "accent2",
+        "share": 0.004
+      }
+    ],
+    "fonts": {
+      "head": {
+        "kit": "inter",
+        "seen": "Atlassian Sans",
+        "seenLicence": "unknown",
+        "weight": 700
+      },
+      "body": {
+        "kit": "inter",
+        "seen": "Atlassian Sans",
+        "seenLicence": "unknown",
+        "weight": 653
+      },
+      "mono": null
+    },
+    "type": {
+      "basePx": 14,
+      "ratio": 1.361,
+      "sizes": [
+        48,
+        24,
+        20,
+        16,
+        14,
+        12
+      ],
+      "headLine": 1.08,
+      "bodyLine": 1.43,
+      "headCase": "none"
+    },
+    "tracking": {
+      "display": 0,
+      "heading": 0,
+      "body": 0,
+      "label": 0
+    },
+    "radius": {
+      "outer": 0,
+      "inner": 6,
+      "pill": false
+    },
+    "shadow": {
+      "level": 0,
+      "css": "none"
+    },
+    "spacing": {
+      "unit": 8,
+      "section": 40,
+      "gutter": 8,
+      "density": "dense"
+    },
+    "layout": {
+      "columns": 2,
+      "maxWidth": 930,
+      "align": "center",
+      "emptyShare": 0.22
+    },
+    "imagery": {
+      "kind": "data",
+      "share": 0.2,
+      "light": "",
+      "lens": "",
+      "grade": "",
+      "subject": ""
+    }
+  },
+  "measured": [
+    "theme",
+    "colors",
+    "fonts",
+    "type",
+    "tracking",
+    "radius",
+    "shadow",
+    "spacing",
+    "layout"
+  ],
+  "why": "Trang trắng hai cột: mục lục trái, nội dung phải với tiêu đề 48 px, đoạn giải thích ngắn và bảng ô màu xếp theo độ đậm. Minh họa nhỏ bảng màu tròn đặt góc phải. Nhấn xanh #1868db và tím #ba60ed chỉ trong ví dụ. Mượn cách trình bày bảng màu theo bậc với chú thích vai trò; không chép mã màu hay chữ.",
+  "licence": "Ảnh chụp thu nhỏ của trang công khai, chỉ để model tham khảo nguyên tắc. Không chép logo, chữ, ảnh hay phông độc quyền của trang."
+}

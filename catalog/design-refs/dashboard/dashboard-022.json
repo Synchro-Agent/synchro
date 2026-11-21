@@ -1,0 +1,136 @@
+{
+  "v": 1,
+  "id": "dashboard-022",
+  "domain": "dashboard",
+  "title": "Bộ thành phần biểu đồ: thẻ nổi trên nền trắng, đường hai màu",
+  "moods": [
+    "clean-light",
+    "tech",
+    "swiss-precise"
+  ],
+  "industries": [
+    "tech-saas"
+  ],
+  "audience": [
+    "developers"
+  ],
+  "source_url": "https://www.tremor.so/",
+  "source_host": "tremor.so",
+  "source_kind": "public-page",
+  "captured_at": "2026-11-20",
+  "image": {
+    "file": "dashboard/dashboard-022.webp",
+    "width": 1280,
+    "height": 1600,
+    "bytes": 87672,
+    "layout": "single"
+  },
+  "tokens": {
+    "theme": "light",
+    "colors": [
+      {
+        "hex": "#ffffff",
+        "role": "bg",
+        "share": 0.942
+      },
+      {
+        "hex": "#101828",
+        "role": "ink",
+        "share": 0.026
+      },
+      {
+        "hex": "#6a7282",
+        "role": "muted",
+        "share": 0.002
+      },
+      {
+        "hex": "#155dfc",
+        "role": "accent",
+        "share": 0.005
+      },
+      {
+        "hex": "#e5e7eb",
+        "role": "line",
+        "share": 0.01
+      }
+    ],
+    "fonts": {
+      "head": {
+        "kit": "inter",
+        "seen": "GeistSans",
+        "seenLicence": "open",
+        "weight": 700
+      },
+      "body": {
+        "kit": "inter",
+        "seen": "GeistSans",
+        "seenLicence": "open",
+        "weight": 600
+      },
+      "mono": null
+    },
+    "type": {
+      "basePx": 14,
+      "ratio": 1.338,
+      "sizes": [
+        60,
+        30,
+        18,
+        16,
+        14,
+        12
+      ],
+      "headLine": 1,
+      "bodyLine": 1.43,
+      "headCase": "none"
+    },
+    "tracking": {
+      "display": -0.035,
+      "heading": -0.05,
+      "body": 0,
+      "label": 0.1
+    },
+    "radius": {
+      "outer": 12,
+      "inner": 6,
+      "pill": false
+    },
+    "shadow": {
+      "level": 2,
+      "css": "oklab(0 0 0 / 0.05) 0px 20px 25px -5px"
+    },
+    "spacing": {
+      "unit": 4,
+      "section": 80,
+      "gutter": 16,
+      "density": "balanced"
+    },
+    "layout": {
+      "columns": 2,
+      "maxWidth": 1020,
+      "align": "center",
+      "emptyShare": 0.43
+    },
+    "imagery": {
+      "kind": "data",
+      "share": 0.5,
+      "light": "",
+      "lens": "",
+      "grade": "",
+      "subject": ""
+    }
+  },
+  "measured": [
+    "theme",
+    "colors",
+    "fonts",
+    "type",
+    "tracking",
+    "radius",
+    "shadow",
+    "spacing",
+    "layout"
+  ],
+  "why": "Tiêu đề 60 px siết −0,035em căn giữa, bên dưới các thẻ biểu đồ trắng bo 12 px lệch nhau như bàn làm việc. Đường biểu đồ hai màu xanh lam #155dfc và hồng, cột xanh xếp sát. Nhãn chữ hoa giãn 0,1em, bóng bậc 1. Mượn cách trình bày biểu đồ như vật thể trên mặt bàn; không chép số liệu.",
+  "licence": "Ảnh chụp thu nhỏ của trang công khai, chỉ để model tham khảo nguyên tắc. Không chép logo, chữ, ảnh hay phông độc quyền của trang."
+}

@@ -1,0 +1,118 @@
+{
+  "v": 1,
+  "id": "slide-067",
+  "domain": "slide",
+  "title": "Bộ slide kết quả: bìa xanh lam điện với chấm lưới bán sắc, biểu đồ cột cùng màu",
+  "moods": [
+    "tech",
+    "bold-color",
+    "data-dense"
+  ],
+  "industries": [
+    "finance",
+    "tech-saas"
+  ],
+  "audience": [
+    "investors",
+    "b2b"
+  ],
+  "source_url": "https://s27.q4cdn.com/397450999/files/doc_financials/2026/q2/Q2-26-Earnings-Deck.pdf",
+  "source_host": "s27.q4cdn.com",
+  "source_kind": "public-image",
+  "captured_at": "2026-11-20",
+  "image": {
+    "file": "slide/slide-067.webp",
+    "width": 1280,
+    "height": 720,
+    "bytes": 89972,
+    "layout": "grid4"
+  },
+  "tokens": {
+    "theme": "light",
+    "colors": [
+      {
+        "hex": "#ffffff",
+        "role": "bg",
+        "share": 0.458
+      },
+      {
+        "hex": "#263f7a",
+        "role": "ink",
+        "share": 0.011
+      },
+      {
+        "hex": "#0151fd",
+        "role": "accent",
+        "share": 0.288
+      }
+    ],
+    "fonts": {
+      "head": {
+        "kit": "ibm-plex-sans",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 500
+      },
+      "body": {
+        "kit": "ibm-plex-sans",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 400
+      },
+      "mono": null
+    },
+    "type": {
+      "basePx": 11,
+      "ratio": 1.6,
+      "sizes": [
+        56,
+        20,
+        11
+      ],
+      "headLine": 1,
+      "bodyLine": 1.4,
+      "headCase": "none"
+    },
+    "tracking": {
+      "display": -0.02,
+      "heading": -0.01,
+      "body": 0,
+      "label": 0
+    },
+    "radius": {
+      "outer": 0,
+      "inner": 0,
+      "pill": false
+    },
+    "shadow": {
+      "level": 0,
+      "css": "none"
+    },
+    "spacing": {
+      "unit": 8,
+      "section": 40,
+      "gutter": 16,
+      "density": "dense"
+    },
+    "layout": {
+      "columns": 4,
+      "maxWidth": 1280,
+      "align": "left",
+      "emptyShare": 0.25
+    },
+    "imagery": {
+      "kind": "data",
+      "share": 0.4,
+      "light": "",
+      "lens": "",
+      "grade": "",
+      "subject": ""
+    }
+  },
+  "measured": [
+    "theme",
+    "colors"
+  ],
+  "why": "Bìa nền xanh lam điện #0151fd phủ trọn khung, chữ trắng 56 px góc trái trên và một mảng chấm lưới bán sắc toả sáng. Trang trong nền trắng, tiêu đề xanh lam 20 px, biểu đồ cột và vòng tròn chỉ dùng các sắc của cùng một màu xanh. Chú thích nhỏ dày đặc ở chân trang. Mượn chấm bán sắc làm hình nền và cách giữ biểu đồ trong một họ màu; không chép số liệu.",
+  "licence": "Ảnh chụp thu nhỏ của trang công khai, chỉ để model tham khảo nguyên tắc. Không chép logo, chữ, ảnh hay phông độc quyền của trang."
+}

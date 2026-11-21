@@ -1,0 +1,138 @@
+{
+  "v": 1,
+  "id": "web-065",
+  "domain": "web",
+  "title": "Hãng phim độc lập: chữ tiêu đề khổng lồ đè lên ảnh phim",
+  "moods": [
+    "editorial",
+    "bold-color",
+    "energetic"
+  ],
+  "industries": [
+    "culture-music",
+    "media-publishing"
+  ],
+  "audience": [
+    "youth",
+    "public"
+  ],
+  "source_url": "https://a24films.com/",
+  "source_host": "a24films.com",
+  "source_kind": "public-page",
+  "captured_at": "2026-11-20",
+  "image": {
+    "file": "web/web-065.webp",
+    "width": 1280,
+    "height": 1600,
+    "bytes": 83416,
+    "layout": "single"
+  },
+  "tokens": {
+    "theme": "light",
+    "colors": [
+      {
+        "hex": "#ffffff",
+        "role": "bg",
+        "share": 0.921
+      },
+      {
+        "hex": "#111111",
+        "role": "ink",
+        "share": 0
+      },
+      {
+        "hex": "#c8553d",
+        "role": "accent",
+        "share": 0
+      },
+      {
+        "hex": "#666666",
+        "role": "muted",
+        "share": 0
+      }
+    ],
+    "fonts": {
+      "head": {
+        "kit": "inter",
+        "seen": "neueMontreal",
+        "seenLicence": "unknown",
+        "weight": 485
+      },
+      "body": {
+        "kit": "inter",
+        "seen": "neueMontreal",
+        "seenLicence": "unknown",
+        "weight": 485
+      },
+      "mono": {
+        "kit": "jetbrains-mono",
+        "seen": "neueMontrealMono",
+        "seenLicence": "unknown",
+        "weight": 485
+      }
+    },
+    "type": {
+      "basePx": 12,
+      "ratio": 1.334,
+      "sizes": [
+        382,
+        304,
+        225,
+        56,
+        16,
+        12,
+        10
+      ],
+      "headLine": 0.8,
+      "bodyLine": 1,
+      "headCase": "none"
+    },
+    "tracking": {
+      "display": -0.05,
+      "heading": -0.05,
+      "body": 0.005,
+      "label": 0.006
+    },
+    "radius": {
+      "outer": 0,
+      "inner": 0,
+      "pill": false
+    },
+    "shadow": {
+      "level": 0,
+      "css": "none"
+    },
+    "spacing": {
+      "unit": 4,
+      "section": 108,
+      "gutter": 24,
+      "density": "airy"
+    },
+    "layout": {
+      "columns": 3,
+      "maxWidth": 1233,
+      "align": "left",
+      "emptyShare": 0.3
+    },
+    "imagery": {
+      "kind": "photo",
+      "share": 0.32,
+      "light": "warm late-afternoon film still, natural",
+      "lens": "50mm cinematic, shallow depth",
+      "grade": "warm skin tones, teal shadows",
+      "subject": "two characters in a film still"
+    }
+  },
+  "measured": [
+    "theme",
+    "fonts",
+    "type",
+    "tracking",
+    "radius",
+    "shadow",
+    "spacing",
+    "layout"
+  ],
+  "why": "Tên phim chữ trắng khổng lồ hơn 300 px, siết −0,05em, đặt cắt ngang ảnh tĩnh của phim, dòng chữ bị cắt ở mép khung. Không bo góc, không bóng, chữ thân chỉ 12 px để tạo tương phản cỡ cực lớn. Ảnh phim màu ấm chiếm toàn bộ bề ngang. Mượn tỉ lệ chữ cực đại và ảnh điện ảnh tràn khung; không chép tên phim hay ảnh.",
+  "licence": "Ảnh chụp thu nhỏ của trang công khai, chỉ để model tham khảo nguyên tắc. Không chép logo, chữ, ảnh hay phông độc quyền của trang."
+}

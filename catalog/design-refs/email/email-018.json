@@ -1,0 +1,123 @@
+{
+  "v": 1,
+  "id": "email-018",
+  "domain": "email",
+  "title": "Thư ẩm thực cuối tuần: ảnh món ăn tông nâu, thẻ trắng gọn",
+  "moods": [
+    "warm-craft",
+    "clean-light"
+  ],
+  "industries": [
+    "food-beverage",
+    "hospitality-travel"
+  ],
+  "audience": [
+    "consumer",
+    "families"
+  ],
+  "source_url": "https://stripo.email/templates/promo-email-template-learning-paths-for-education-industry/",
+  "source_host": "stripo.email",
+  "source_kind": "public-image",
+  "captured_at": "2026-11-20",
+  "image": {
+    "file": "email/email-018.webp",
+    "width": 500,
+    "height": 1090,
+    "bytes": 71402,
+    "layout": "single"
+  },
+  "tokens": {
+    "theme": "light",
+    "colors": [
+      {
+        "hex": "#f4f5f5",
+        "role": "bg",
+        "share": 0.679
+      },
+      {
+        "hex": "#17120e",
+        "role": "ink",
+        "share": 0.034
+      },
+      {
+        "hex": "#2c2824",
+        "role": "muted",
+        "share": 0.058
+      },
+      {
+        "hex": "#b89575",
+        "role": "accent",
+        "share": 0.008
+      }
+    ],
+    "fonts": {
+      "head": {
+        "kit": "fraunces",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 600
+      },
+      "body": {
+        "kit": "ibm-plex-sans",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 400
+      },
+      "mono": null
+    },
+    "type": {
+      "basePx": 14,
+      "ratio": 1.333,
+      "sizes": [
+        30,
+        18,
+        14,
+        12
+      ],
+      "headLine": 1.15,
+      "bodyLine": 1.5,
+      "headCase": "none"
+    },
+    "tracking": {
+      "display": 0,
+      "heading": 0,
+      "body": 0,
+      "label": 0
+    },
+    "radius": {
+      "outer": 4,
+      "inner": 4,
+      "pill": false
+    },
+    "shadow": {
+      "level": 0,
+      "css": "none"
+    },
+    "spacing": {
+      "unit": 8,
+      "section": 32,
+      "gutter": 16,
+      "density": "balanced"
+    },
+    "layout": {
+      "columns": 2,
+      "maxWidth": 600,
+      "align": "left",
+      "emptyShare": 0.15
+    },
+    "imagery": {
+      "kind": "photo",
+      "share": 0.4,
+      "light": "warm low-key restaurant light",
+      "lens": "top-down and 45 degree food shots",
+      "grade": "warm browns, amber",
+      "subject": "plated dishes on wooden tables"
+    }
+  },
+  "measured": [
+    "theme",
+    "colors"
+  ],
+  "why": "Băng đầu ảnh bàn ăn tông nâu ấm với tiêu đề trắng, rồi các thẻ món ăn ảnh vuông bên trái, chữ bên phải trên nền #f4f5f5. Màu nhấn nâu caramel #b89575 cho nút và nhãn, chữ đen #17120e. Không bóng, bo nhỏ. Mượn bố cục thẻ ảnh trái chữ phải cho thực đơn trong thư; không chép ảnh hay tên món.",
+  "licence": "Ảnh chụp thu nhỏ của trang công khai, chỉ để model tham khảo nguyên tắc. Không chép logo, chữ, ảnh hay phông độc quyền của trang."
+}

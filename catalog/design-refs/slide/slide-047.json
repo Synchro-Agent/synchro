@@ -1,0 +1,123 @@
+{
+  "v": 1,
+  "id": "slide-047",
+  "domain": "slide",
+  "title": "Bài nói thiết kế kiểu tạp chí: bìa gradient vàng cam, trang trong chữ có chân hai ngôn ngữ",
+  "moods": [
+    "editorial",
+    "clean-light",
+    "warm-craft"
+  ],
+  "industries": [
+    "consulting",
+    "education"
+  ],
+  "audience": [
+    "b2b",
+    "students"
+  ],
+  "source_url": "https://speakerdeck.com/akiramotomura/correspondence-gong-nisheng-cheng-siteikuguo-cheng",
+  "source_host": "speakerdeck.com",
+  "source_kind": "public-image",
+  "captured_at": "2026-11-20",
+  "image": {
+    "file": "slide/slide-047.webp",
+    "width": 1280,
+    "height": 720,
+    "bytes": 89784,
+    "layout": "grid4"
+  },
+  "tokens": {
+    "theme": "light",
+    "colors": [
+      {
+        "hex": "#fefefd",
+        "role": "bg",
+        "share": 0.664
+      },
+      {
+        "hex": "#020203",
+        "role": "ink",
+        "share": 0.007
+      },
+      {
+        "hex": "#a0a0a0",
+        "role": "muted",
+        "share": 0.01
+      },
+      {
+        "hex": "#ffdc5c",
+        "role": "accent",
+        "share": 0.221
+      }
+    ],
+    "fonts": {
+      "head": {
+        "kit": "archivo",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 700
+      },
+      "body": {
+        "kit": "source-serif-4",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 400
+      },
+      "mono": null
+    },
+    "type": {
+      "basePx": 13,
+      "ratio": 1.5,
+      "sizes": [
+        32,
+        14,
+        12
+      ],
+      "headLine": 1.2,
+      "bodyLine": 1.4,
+      "headCase": "none"
+    },
+    "tracking": {
+      "display": -0.01,
+      "heading": 0,
+      "body": 0,
+      "label": 0.02
+    },
+    "radius": {
+      "outer": 0,
+      "inner": 0,
+      "pill": false
+    },
+    "shadow": {
+      "level": 0,
+      "css": "none"
+    },
+    "spacing": {
+      "unit": 8,
+      "section": 56,
+      "gutter": 24,
+      "density": "balanced"
+    },
+    "layout": {
+      "columns": 3,
+      "maxWidth": 1280,
+      "align": "left",
+      "emptyShare": 0.4
+    },
+    "imagery": {
+      "kind": "data",
+      "share": 0.2,
+      "light": "",
+      "lens": "",
+      "grade": "",
+      "subject": ""
+    }
+  },
+  "measured": [
+    "theme",
+    "colors"
+  ],
+  "why": "Bìa là một mảng gradient vàng cam #ffdc5c chiếm 70% khung với tên bài đậm góc trái trên. Trang trong nền trắng, nhãn mục đậm 12 px ở cột trái, thân chữ có chân hai cột và đánh dấu vàng như bút dạ. Sơ đồ khối đa diện nét mảnh nối bằng đường cong cam. Mượn lưới tạp chí cột nhãn trái và cách đánh dấu chữ bằng nền vàng; không chép nội dung.",
+  "licence": "Ảnh chụp thu nhỏ của trang công khai, chỉ để model tham khảo nguyên tắc. Không chép logo, chữ, ảnh hay phông độc quyền của trang."
+}

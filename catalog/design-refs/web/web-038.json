@@ -1,0 +1,138 @@
+{
+  "v": 1,
+  "id": "web-038",
+  "domain": "web",
+  "title": "Chuỗi nhà hàng Việt: phố thật, chữ có chân hẹp và nét vẽ tay xanh",
+  "moods": [
+    "warm-craft",
+    "organic",
+    "editorial"
+  ],
+  "industries": [
+    "food-beverage",
+    "hospitality-travel"
+  ],
+  "audience": [
+    "consumer",
+    "families"
+  ],
+  "source_url": "https://pizza4ps.com/",
+  "source_host": "pizza4ps.com",
+  "source_kind": "public-page",
+  "captured_at": "2026-11-20",
+  "image": {
+    "file": "web/web-038.webp",
+    "width": 1280,
+    "height": 1600,
+    "bytes": 88698,
+    "layout": "single"
+  },
+  "tokens": {
+    "theme": "light",
+    "colors": [
+      {
+        "hex": "#f4f0e6",
+        "role": "bg",
+        "share": 0
+      },
+      {
+        "hex": "#242e52",
+        "role": "ink",
+        "share": 0
+      },
+      {
+        "hex": "#4a5568",
+        "role": "muted",
+        "share": 0
+      },
+      {
+        "hex": "#02499d",
+        "role": "accent",
+        "share": 0.034
+      },
+      {
+        "hex": "#ffffff",
+        "role": "line",
+        "share": 0
+      }
+    ],
+    "fonts": {
+      "head": {
+        "kit": "source-serif-4",
+        "seen": "Century Condensed",
+        "seenLicence": "unknown",
+        "weight": 300
+      },
+      "body": {
+        "kit": "ibm-plex-sans",
+        "seen": "Atlas Grotesk",
+        "seenLicence": "unknown",
+        "weight": 400
+      },
+      "mono": null
+    },
+    "type": {
+      "basePx": 15,
+      "ratio": 1.313,
+      "sizes": [
+        77,
+        60,
+        56,
+        38,
+        33,
+        21,
+        15,
+        13
+      ],
+      "headLine": 1,
+      "bodyLine": 1.4,
+      "headCase": "none"
+    },
+    "tracking": {
+      "display": -0.02,
+      "heading": -0.002,
+      "body": 0,
+      "label": 0
+    },
+    "radius": {
+      "outer": 4,
+      "inner": 2,
+      "pill": true
+    },
+    "shadow": {
+      "level": 0,
+      "css": "none"
+    },
+    "spacing": {
+      "unit": 4,
+      "section": 96,
+      "gutter": 15,
+      "density": "airy"
+    },
+    "layout": {
+      "columns": 3,
+      "maxWidth": 1020,
+      "align": "left",
+      "emptyShare": 0
+    },
+    "imagery": {
+      "kind": "mixed",
+      "share": 1,
+      "light": "soft overcast daylight",
+      "lens": "35mm street level",
+      "grade": "cool blue-green with paper cream",
+      "subject": "tree-lined city street, hand-drawn blue line art below"
+    }
+  },
+  "measured": [
+    "theme",
+    "type",
+    "tracking",
+    "radius",
+    "shadow",
+    "spacing",
+    "layout"
+  ],
+  "why": "Ảnh đường phố với hàng cây ở trên, tên các quốc gia xếp dọc bằng chữ có chân hẹp mảnh; phần dưới nền giấy ngà #f4f0e6 với nét vẽ tay xanh lam #02499d. Tiêu đề 33 px căn giữa, nhịp trang thoáng 96 px. Màu nhấn xanh cobalt, không phải nâu đồng quen thuộc. Mượn sự kết hợp ảnh thật và nét vẽ tay một màu; không chép hình vẽ hay khẩu hiệu.",
+  "licence": "Ảnh chụp thu nhỏ của trang công khai, chỉ để model tham khảo nguyên tắc. Không chép logo, chữ, ảnh hay phông độc quyền của trang."
+}

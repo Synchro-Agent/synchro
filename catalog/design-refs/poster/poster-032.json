@@ -1,0 +1,121 @@
+{
+  "v": 1,
+  "id": "poster-032",
+  "domain": "poster",
+  "title": "Poster ý tưởng xã hội: tay cầm dao kéo trên đĩa chuối, chữ hoa nhuộm xanh ngọc",
+  "moods": [
+    "bold-color",
+    "retro-print",
+    "playful"
+  ],
+  "industries": [
+    "food-beverage",
+    "nonprofit-gov"
+  ],
+  "audience": [
+    "public"
+  ],
+  "source_url": "https://www.posterheroes.org/2019/wp-content/uploads/2019/03/PH5_Rachel-Pleesz-1.jpg",
+  "source_host": "posterheroes.org",
+  "source_kind": "public-image",
+  "credit": "Rachel Pleesz, Poster Heroes 5",
+  "captured_at": "2026-11-20",
+  "image": {
+    "file": "poster/poster-032.webp",
+    "width": 640,
+    "height": 896,
+    "bytes": 89406,
+    "layout": "single"
+  },
+  "tokens": {
+    "theme": "light",
+    "colors": [
+      {
+        "hex": "#497776",
+        "role": "bg",
+        "share": 0.448
+      },
+      {
+        "hex": "#fafdfe",
+        "role": "ink",
+        "share": 0.292
+      },
+      {
+        "hex": "#9db7b7",
+        "role": "muted",
+        "share": 0.064
+      },
+      {
+        "hex": "#ced15c",
+        "role": "accent",
+        "share": 0.017
+      }
+    ],
+    "fonts": {
+      "head": {
+        "kit": "oswald",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 500
+      },
+      "body": {
+        "kit": "montserrat",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 600
+      },
+      "mono": null
+    },
+    "type": {
+      "basePx": 14,
+      "ratio": 1.8,
+      "sizes": [
+        56,
+        14
+      ],
+      "headLine": 0.95,
+      "bodyLine": 1.3,
+      "headCase": "upper"
+    },
+    "tracking": {
+      "display": 0,
+      "heading": 0.02,
+      "body": 0,
+      "label": 0.04
+    },
+    "radius": {
+      "outer": 0,
+      "inner": 0,
+      "pill": false
+    },
+    "shadow": {
+      "level": 0,
+      "css": "none"
+    },
+    "spacing": {
+      "unit": 8,
+      "section": 32,
+      "gutter": 16,
+      "density": "balanced"
+    },
+    "layout": {
+      "columns": 1,
+      "maxWidth": 640,
+      "align": "center",
+      "emptyShare": 0.1
+    },
+    "imagery": {
+      "kind": "illustration",
+      "share": 0.85,
+      "light": "flat screen-print, halftone dots",
+      "lens": "flat 2D, top-down plate",
+      "grade": "teal, white and lime with black outlines",
+      "subject": "two hands with cutlery over a banana on a plate"
+    }
+  },
+  "measured": [
+    "theme"
+  ],
+  "why": "Nền xanh ngọc #497776 với hoa văn lưới chấm in, đĩa trắng chiếm giữa khung, hai bàn tay cầm dao nĩa từ hai góc. Tiêu đề chữ hoa hẹp trắng 56 px ở đỉnh, hai ký tự đầu tô vàng chanh #ced15c. Khẩu hiệu nhỏ chữ hoa ở đáy, mọi hình vẽ phẳng viền đen. Mượn đường chéo của hai bàn tay dẫn mắt vào vật ở tâm; không chép hình hay khẩu hiệu.",
+  "licence": "Ảnh chụp thu nhỏ của trang công khai, chỉ để model tham khảo nguyên tắc. Không chép logo, chữ, ảnh hay phông độc quyền của trang."
+}

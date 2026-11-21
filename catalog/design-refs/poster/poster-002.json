@@ -1,0 +1,120 @@
+{
+  "v": 1,
+  "id": "poster-002",
+  "domain": "poster",
+  "title": "Poster sân khấu tân nghệ thuật: chân dung dài, khung hoa văn mảnh",
+  "moods": [
+    "luxury",
+    "organic",
+    "editorial"
+  ],
+  "industries": [
+    "culture-music",
+    "events"
+  ],
+  "audience": [
+    "premium",
+    "public"
+  ],
+  "source_url": "https://www.loc.gov/pictures/item/00652382/",
+  "source_host": "loc.gov",
+  "source_kind": "cc0",
+  "credit": "Alphonse Mucha, La Dame aux Camélias, 1896, Library of Congress",
+  "rights_url": "https://www.loc.gov/pictures/item/00652382/",
+  "captured_at": "2026-11-20",
+  "image": {
+    "file": "poster/poster-002.webp",
+    "width": 600,
+    "height": 1600,
+    "bytes": 89132,
+    "layout": "single"
+  },
+  "tokens": {
+    "theme": "light",
+    "colors": [
+      {
+        "hex": "#f4ddb8",
+        "role": "bg",
+        "share": 0.245
+      },
+      {
+        "hex": "#65451e",
+        "role": "ink",
+        "share": 0.063
+      },
+      {
+        "hex": "#e9cca0",
+        "role": "accent",
+        "share": 0.124
+      }
+    ],
+    "fonts": {
+      "head": {
+        "kit": "cormorant-garamond",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 600
+      },
+      "body": {
+        "kit": "cormorant-garamond",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 400
+      },
+      "mono": null
+    },
+    "type": {
+      "basePx": 18,
+      "ratio": 1.333,
+      "sizes": [
+        56,
+        32,
+        18
+      ],
+      "headLine": 1,
+      "bodyLine": 1.3,
+      "headCase": "upper"
+    },
+    "tracking": {
+      "display": 0.05,
+      "heading": 0.04,
+      "body": 0,
+      "label": 0.08
+    },
+    "radius": {
+      "outer": 0,
+      "inner": 0,
+      "pill": false
+    },
+    "shadow": {
+      "level": 0,
+      "css": "none"
+    },
+    "spacing": {
+      "unit": 8,
+      "section": 64,
+      "gutter": 24,
+      "density": "balanced"
+    },
+    "layout": {
+      "columns": 1,
+      "maxWidth": 600,
+      "align": "center",
+      "emptyShare": 0.05
+    },
+    "imagery": {
+      "kind": "illustration",
+      "share": 0.8,
+      "light": "soft even light, pastel",
+      "lens": "full-length figure, flat",
+      "grade": "cream, ochre and pale green",
+      "subject": "a standing figure in a flowing gown framed by ornament"
+    }
+  },
+  "measured": [
+    "theme",
+    "colors"
+  ],
+  "why": "Khổ rất dọc 1:2,7, một nhân vật đứng gần trọn chiều cao, viền hoa văn mảnh và chữ tiêu đề trang trí trong khung ở đỉnh. Bảng màu kem #f4ddb8, nâu vàng #65451e và xanh lá nhạt, đường nét mềm. Chữ nhỏ, đặt trong các ô khung, không cạnh tranh với nhân vật. Mượn tỉ lệ khổ dọc mạnh và khung hoa văn làm khung chữ; không chép nhân vật hay hoa văn.",
+  "licence": "Ảnh chụp thu nhỏ của trang công khai, chỉ để model tham khảo nguyên tắc. Không chép logo, chữ, ảnh hay phông độc quyền của trang."
+}
