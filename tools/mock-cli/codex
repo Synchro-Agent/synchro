@@ -104,6 +104,11 @@ async function chatTurn(o, E) {
     await E.message("item_1", pj);
     return E.done({ input_tokens: prompt.length, cached_input_tokens: 0, output_tokens: pj.length });
   }
+  const critic = C.criticReply(prompt, o.images);
+  if (critic) {
+    await E.message("item_1", critic);
+    return E.done({ input_tokens: prompt.length, cached_input_tokens: 0, output_tokens: critic.length });
+  }
   const text = /#media/.test(prompt) && !C.isTitleAsk(prompt) && !C.mockBrain(prompt) ? C.mediaReply(o.images.map((f) => `${C.mediaDesc(fs.readFileSync(f))} (--image)`)) : C.mockBrain(prompt) ?? (C.isTitleAsk(prompt) ? C.mockTitle(prompt) : /#prefs/.test(prompt) ? C.prefsEcho(prompt) : C.reply("Codex (ChatGPT)", prompt, turn) + note + (eff ? ` [effort ${eff}]` : ""));
   await E.message("item_1", text);
   return E.done({ input_tokens: prompt.length, cached_input_tokens: 0, output_tokens: text.length });

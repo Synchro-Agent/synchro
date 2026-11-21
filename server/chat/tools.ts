@@ -431,6 +431,8 @@ export async function designGate(x: Exec, text: string): Promise<{ text: string;
     console.warn(`[designgate] không dựng được "${a.ident}" để so với mẫu: ${(e as Error).message}`);
     return null;
   });
+  // Không dựng được thì giao như hiện tại, nhưng ghi lý do: im lặng thì vòng so với mẫu tắt mà không ai biết.
+  if (r?.is_error) console.warn(`[designgate] bỏ qua "${a.ident}": ${r.content.slice(0, 200)}`);
   if (!r || r.is_error || signal.aborted) return null;
   const deck = a.type === "html" && isDeck(a);
   const facts = r.design?.facts ?? null, probe = r.design?.probe ?? null;

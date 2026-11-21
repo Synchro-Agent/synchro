@@ -88,6 +88,52 @@ export function startMockWs(port, root, secret) {
     p.on("close", (code, sig) => { if (done) return; done = true; clearTimeout(t); ok({ code: sig ? 124 : code ?? 0, out, err }); });
     if (b.stdin != null) p.stdin.end(String(b.stdin)); else p.stdin.end();
   });
+  // /run (run_code, check_artifact, đọc phong cách từ liên kết): mỗi lần một thư mục riêng, tệp ghi vào outputs/ gửi về
+  // như dịch vụ thật. Script puppeteer-core dùng Chrome của máy này; gói puppeteer-core lấy từ MOCK_RUN_NODE_PATH (máy
+  // cá nhân thường không cài sẵn như container), thiếu thì script báo lỗi require rõ ràng.
+  const run = (u, b) => new Promise((ok) => {
+    const cwd = fs.mkdtempSync(path.join(dirOf(u), ".run-"));
+    for (const f of Array.isArray(b.files) ? b.files : []) {
+      const p = path.join(cwd, String(f.path));
+      if (!p.startsWith(cwd + path.sep)) continue;
+      fs.mkdirSync(path.dirname(p), { recursive: true });
+      fs.writeFileSync(p, Buffer.from(String(f.b64 ?? ""), "base64"));
+    }
+    fs.mkdirSync(path.join(cwd, "outputs"), { recursive: true });
+    const sec = Math.max(1, Math.min(Number(b.timeout) || 60, 900));
+    const env = {
+      PATH: process.env.PATH, LANG: "C.UTF-8", HOME: path.join(root, String(u)),
+      ...(CHROME ? { PUPPETEER_EXECUTABLE_PATH: CHROME } : {}),
+      ...(process.env.MOCK_RUN_NODE_PATH ? { NODE_PATH: process.env.MOCK_RUN_NODE_PATH } : {}),
+    };
+    const argv = Array.isArray(b.argv) ? b.argv.map(String) : ["bash", "-lc", String(b.cmd ?? "")];
+    const p = spawn(argv[0], argv.slice(1), { cwd, env, stdio: ["pipe", "pipe", "pipe"] });
+    let out = "", err = "", timedOut = false, done = false;
+    const t = setTimeout(() => { timedOut = true; p.kill("SIGKILL"); }, sec * 1000);
+    p.stdout.on("data", (x) => { if (out.length < 2_000_000) out += x; });
+    p.stderr.on("data", (x) => { if (err.length < 200_000) err += x; });
+    const finish = (code) => {
+      if (done) return;
+      done = true;
+      clearTimeout(t);
+      const files = [];
+      const walk = (d, rel) => {
+        for (const e of fs.readdirSync(d, { withFileTypes: true })) {
+          const r = rel ? `${rel}/${e.name}` : e.name;
+          if (e.isDirectory()) walk(path.join(d, e.name), r);
+          if (!e.isFile() || files.length >= 20) continue;
+          files.push({ path: r, b64: fs.readFileSync(path.join(d, e.name)).toString("base64") });
+        }
+      };
+      walk(path.join(cwd, "outputs"), "");
+      fs.rmSync(cwd, { recursive: true, force: true });
+      ok({ code, out, err, timedOut, files });
+    };
+    p.on("error", (e) => { err += e.message; finish(127); });
+    p.on("close", (code, sig) => finish(sig ? 124 : code ?? 0));
+    if (b.stdin != null) p.stdin.end(String(b.stdin));
+    else p.stdin.end();
+  });
   const fake = (u, b) => {
     const cur = pages.get(u) ?? { url: "about:blank", title: "" };
     if (b.action === "navigate") { const url = String(b.url ?? ""); pages.set(u, { url, title: `Trang giả lập: ${url}` }); return { url, title: `Trang giả lập: ${url}` }; }
@@ -107,6 +153,7 @@ export function startMockWs(port, root, secret) {
         case "/ensure": dirOf(b.u); return json(res, 200, { ok: true, running: true, socks: {} });
         case "/status": return json(res, 200, { running: true, idleMin: 0 });
         case "/exec": return json(res, 200, await exec(b.u, b));
+        case "/run": return json(res, 200, await run(b.u, b));
         case "/browser": if (b.cookies) cookieMode.set(String(b.u), b.cookies); return json(res, 200, CHROME ? await core.tool(String(b.u), b) : fake(b.u, b));
         case "/ext": dirOf(b.u); return json(res, 200, await relay.http(b));
         // Dừng workspace như container bị tắt: trình duyệt của người dùng tắt theo.
