@@ -68,13 +68,13 @@
     ],
     "fonts": {
       "head": {
-        "kit": "inter",
+        "kit": "archivo",
         "seen": "ITCNewBaskervilleRoman",
         "seenLicence": "unknown",
-        "weight": 400
+        "weight": 500
       },
       "body": {
-        "kit": "inter",
+        "kit": "archivo",
         "seen": "NeueHelvetica55Roman",
         "seenLicence": "proprietary",
         "weight": 400
@@ -122,7 +122,7 @@
     },
     "imagery": {
       "kind": "photo",
-      "share": 0,
+      "share": 0.7,
       "light": "soft daylight from tall window, gentle shadows",
       "lens": "35mm architectural, straight verticals",
       "grade": "warm wood oranges, moss green, chalk white",

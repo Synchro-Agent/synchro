@@ -85,7 +85,7 @@
       },
       "mono": {
         "kit": "jetbrains-mono",
-        "seen": "monospace, monospace",
+        "seen": "monospace",
         "seenLicence": "unknown",
         "weight": 400
       }

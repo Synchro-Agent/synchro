@@ -24,7 +24,7 @@
     "file": "web/web-019.webp",
     "width": 1280,
     "height": 1600,
-    "bytes": 85922,
+    "bytes": 82248,
     "layout": "single"
   },
   "tokens": {
@@ -56,13 +56,13 @@
         "kit": "space-grotesk",
         "seen": "TechnoType",
         "seenLicence": "unknown",
-        "weight": 400
+        "weight": 500
       },
       "body": {
         "kit": "space-grotesk",
         "seen": "te-20",
         "seenLicence": "unknown",
-        "weight": 100
+        "weight": 400
       },
       "mono": null
     },

@@ -23,7 +23,7 @@
     "file": "dashboard/dashboard-005.webp",
     "width": 1280,
     "height": 800,
-    "bytes": 36684,
+    "bytes": 36126,
     "layout": "single"
   },
   "tokens": {
@@ -107,7 +107,7 @@
     },
     "shadow": {
       "level": 1,
-      "css": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0.1) 0px 1px 3px 0px, rgba(0, 0, 0, 0.1) 0px 1px 2"
+      "css": "rgba(0, 0, 0, 0.1) 0px 1px 3px 0px"
     },
     "spacing": {
       "unit": 4,

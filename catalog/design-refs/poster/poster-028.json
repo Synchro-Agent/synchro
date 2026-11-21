@@ -16,15 +16,16 @@
     "youth",
     "public"
   ],
-  "source_url": "https://100-beste-plakate.de/plakate/filter/jahr:2025/",
+  "source_url": "https://100-beste-plakate.de/wp-content/uploads/2026/06/100bp25_29610.jpg",
   "source_host": "100-beste-plakate.de",
   "source_kind": "public-image",
+  "credit": "H A N D D, Der Sommer in Stuttgart 2025, 100 Beste Plakate 2025",
   "captured_at": "2026-11-20",
   "image": {
     "file": "poster/poster-028.webp",
     "width": 1130,
     "height": 1600,
-    "bytes": 88194,
+    "bytes": 86218,
     "layout": "single"
   },
   "tokens": {
@@ -51,7 +52,7 @@
         "kit": "archivo",
         "seen": "",
         "seenLicence": "unknown",
-        "weight": 400
+        "weight": 700
       },
       "body": {
         "kit": "archivo",

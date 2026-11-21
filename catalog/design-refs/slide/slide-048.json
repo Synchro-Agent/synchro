@@ -1,0 +1,122 @@
+{
+  "v": 1,
+  "id": "slide-048",
+  "domain": "slide",
+  "title": "Bài nói về thiết kế slide: nền xanh lam đậm, chữ viết tay vàng và chữ có chân trắng",
+  "moods": [
+    "bold-color",
+    "playful",
+    "editorial"
+  ],
+  "industries": [
+    "education",
+    "media-publishing"
+  ],
+  "audience": [
+    "public",
+    "students"
+  ],
+  "source_url": "https://speakerdeck.com/mseckington/the-art-of-slide-design",
+  "source_host": "speakerdeck.com",
+  "source_kind": "public-image",
+  "captured_at": "2026-11-20",
+  "image": {
+    "file": "slide/slide-048.webp",
+    "width": 1280,
+    "height": 720,
+    "bytes": 62994,
+    "layout": "grid4"
+  },
+  "tokens": {
+    "theme": "light",
+    "colors": [
+      {
+        "hex": "#206ab5",
+        "role": "bg",
+        "share": 0.47
+      },
+      {
+        "hex": "#ffffff",
+        "role": "ink",
+        "share": 0.198
+      },
+      {
+        "hex": "#f5d327",
+        "role": "accent",
+        "share": 0
+      },
+      {
+        "hex": "#861002",
+        "role": "accent2",
+        "share": 0.051
+      }
+    ],
+    "fonts": {
+      "head": {
+        "kit": "playfair-display",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 700
+      },
+      "body": {
+        "kit": "source-serif-4",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 400
+      },
+      "mono": null
+    },
+    "type": {
+      "basePx": 20,
+      "ratio": 1.4,
+      "sizes": [
+        72,
+        28,
+        20
+      ],
+      "headLine": 1.1,
+      "bodyLine": 1.4,
+      "headCase": "none"
+    },
+    "tracking": {
+      "display": 0,
+      "heading": 0,
+      "body": 0,
+      "label": 0.06
+    },
+    "radius": {
+      "outer": 0,
+      "inner": 0,
+      "pill": false
+    },
+    "shadow": {
+      "level": 0,
+      "css": "none"
+    },
+    "spacing": {
+      "unit": 8,
+      "section": 64,
+      "gutter": 32,
+      "density": "airy"
+    },
+    "layout": {
+      "columns": 1,
+      "maxWidth": 1280,
+      "align": "left",
+      "emptyShare": 0.5
+    },
+    "imagery": {
+      "kind": "type-only",
+      "share": 0,
+      "light": "",
+      "lens": "",
+      "grade": "",
+      "subject": ""
+    }
+  },
+  "measured": [
+    "theme"
+  ],
+  "why": "Nền xanh lam #206ab5 phủ trọn khung, bìa là chữ viết tay vàng cao gần nửa slide. Trang nội dung dùng chữ có chân trắng 28 px với cụm từ khoá tô vàng, lề trái rộng. Ba hình tròn, vuông, chấm minh hoạ màu, hình và cỡ thay cho đoạn chữ. Mượn cách tô màu cụm từ khoá trong câu và dùng hình hình học tối giản để giải thích; không chép chữ.",
+  "licence": "Ảnh chụp thu nhỏ của trang công khai, chỉ để model tham khảo nguyên tắc. Không chép logo, chữ, ảnh hay phông độc quyền của trang."
+}

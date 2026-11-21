@@ -15,15 +15,16 @@
     "consumer",
     "developers"
   ],
-  "source_url": "https://mjml.io/templates",
-  "source_host": "mjml.io",
+  "source_url": "https://raw.githubusercontent.com/mjmlio/email-templates/master/thumbnails/tech-geek.jpg",
+  "source_host": "raw.githubusercontent.com",
   "source_kind": "public-image",
+  "credit": "MJML, mẫu thư tech-geek (mjmlio/email-templates)",
   "captured_at": "2026-11-20",
   "image": {
     "file": "email/email-008.webp",
     "width": 700,
     "height": 1600,
-    "bytes": 89196,
+    "bytes": 88068,
     "layout": "single"
   },
   "tokens": {
@@ -52,13 +53,13 @@
     ],
     "fonts": {
       "head": {
-        "kit": "inter",
+        "kit": "ibm-plex-sans",
         "seen": "",
         "seenLicence": "unknown",
-        "weight": 400
+        "weight": 500
       },
       "body": {
-        "kit": "inter",
+        "kit": "ibm-plex-sans",
         "seen": "",
         "seenLicence": "unknown",
         "weight": 400
@@ -107,7 +108,7 @@
     },
     "imagery": {
       "kind": "photo",
-      "share": 0,
+      "share": 0.3,
       "light": "cool soft studio light",
       "lens": "50mm product, 3/4 view",
       "grade": "cool blues and greys",

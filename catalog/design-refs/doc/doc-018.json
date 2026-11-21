@@ -19,12 +19,13 @@
   "source_url": "https://hai.stanford.edu/ai-index/2025-ai-index-report",
   "source_host": "hai.stanford.edu",
   "source_kind": "public-image",
+  "credit": "Stanford HAI, AI Index Report 2025, chương Nghiên cứu và Phát triển",
   "captured_at": "2026-11-20",
   "image": {
     "file": "doc/doc-018.webp",
     "width": 1280,
     "height": 1600,
-    "bytes": 89870,
+    "bytes": 89962,
     "layout": "single"
   },
   "tokens": {
@@ -58,13 +59,13 @@
     ],
     "fonts": {
       "head": {
-        "kit": "inter",
+        "kit": "archivo",
         "seen": "",
         "seenLicence": "unknown",
         "weight": 400
       },
       "body": {
-        "kit": "source-serif-4",
+        "kit": "archivo",
         "seen": "",
         "seenLicence": "unknown",
         "weight": 400
@@ -123,6 +124,6 @@
   "measured": [
     "theme"
   ],
-  "why": "Trang A4 với đoạn chữ hai cột ở trên và một biểu đồ thanh ngang xanh lam lớn bám lưới phía dưới, tiêu đề hình, nguồn và chú thích đầy đủ. Một họ màu xanh cho mọi chuỗi, nhãn số căn phải. Nhãn chương xanh đậm cố định ở góc. Mượn cách đặt biểu đồ đúng lưới chữ và ghi nguồn ngay dưới hình; không chép số liệu.",
+  "why": "Trang A4 với đoạn chữ hai cột ở trên và một biểu đồ thanh ngang xanh lam lớn bám lưới phía dưới, tiêu đề hình, nguồn và chú thích đầy đủ. Một họ màu xanh cho mọi chuỗi, nhãn số căn phải. Tiêu đề mục xanh lam 18 px là điểm nhấn duy nhất ngoài biểu đồ. Mượn cách đặt biểu đồ đúng lưới chữ và ghi nguồn ngay dưới hình; không chép số liệu.",
   "licence": "Ảnh chụp thu nhỏ của trang công khai, chỉ để model tham khảo nguyên tắc. Không chép logo, chữ, ảnh hay phông độc quyền của trang."
 }

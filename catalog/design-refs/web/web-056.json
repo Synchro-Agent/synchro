@@ -23,7 +23,7 @@
     "file": "web/web-056.webp",
     "width": 1280,
     "height": 1600,
-    "bytes": 86112,
+    "bytes": 89676,
     "layout": "single"
   },
   "tokens": {
@@ -55,7 +55,7 @@
         "share": 0.035
       },
       {
-        "hex": "#26251e",
+        "hex": "#eb5600",
         "role": "accent",
         "share": 0
       },

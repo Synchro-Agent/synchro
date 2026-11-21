@@ -68,10 +68,10 @@
     ],
     "fonts": {
       "head": {
-        "kit": "jetbrains-mono",
+        "kit": "source-serif-4",
         "seen": "NType82-Regular",
         "seenLicence": "unknown",
-        "weight": 400
+        "weight": 300
       },
       "body": {
         "kit": "jetbrains-mono",

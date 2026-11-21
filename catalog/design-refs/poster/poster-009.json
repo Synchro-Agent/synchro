@@ -22,7 +22,7 @@
     "file": "poster/poster-009.webp",
     "width": 1280,
     "height": 920,
-    "bytes": 89614,
+    "bytes": 88052,
     "layout": "single"
   },
   "tokens": {
@@ -88,9 +88,9 @@
     },
     "spacing": {
       "unit": 8,
-      "section": 64,
-      "gutter": 24,
-      "density": "balanced"
+      "section": 32,
+      "gutter": 16,
+      "density": "dense"
     },
     "layout": {
       "columns": 1,
@@ -100,7 +100,7 @@
     },
     "imagery": {
       "kind": "illustration",
-      "share": 0,
+      "share": 0.95,
       "light": "hazy midday sun, soft",
       "lens": "wide landscape, eye level",
       "grade": "straw yellow, earth brown, muted grey-green",

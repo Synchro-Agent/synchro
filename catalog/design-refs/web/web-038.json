@@ -61,10 +61,10 @@
         "kit": "source-serif-4",
         "seen": "Century Condensed",
         "seenLicence": "unknown",
-        "weight": 400
+        "weight": 300
       },
       "body": {
-        "kit": "inter",
+        "kit": "ibm-plex-sans",
         "seen": "Atlas Grotesk",
         "seenLicence": "unknown",
         "weight": 400

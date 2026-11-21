@@ -41,13 +41,23 @@
         "share": 0.369
       },
       {
-        "hex": "#a32d16",
+        "hex": "#7c8755",
         "role": "accent",
-        "share": 0
+        "share": 0.073
+      },
+      {
+        "hex": "#8b3e1f",
+        "role": "accent2",
+        "share": 0.066
       },
       {
         "hex": "#5d915c",
-        "role": "accent2",
+        "role": "pos",
+        "share": 0
+      },
+      {
+        "hex": "#a32d16",
+        "role": "neg",
         "share": 0
       }
     ],
@@ -56,7 +66,7 @@
         "kit": "archivo",
         "seen": "",
         "seenLicence": "unknown",
-        "weight": 400
+        "weight": 700
       },
       "body": {
         "kit": "archivo",

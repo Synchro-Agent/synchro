@@ -1,0 +1,130 @@
+{
+  "v": 1,
+  "id": "poster-044",
+  "domain": "poster",
+  "title": "Poster sân khấu in lụa: chữ cam khổng lồ uốn theo bánh xe đen, bánh răng xanh xám",
+  "moods": [
+    "retro-print",
+    "bold-color",
+    "energetic"
+  ],
+  "industries": [
+    "culture-music",
+    "events"
+  ],
+  "audience": [
+    "public"
+  ],
+  "source_url": "https://www.loc.gov/pictures/item/98514343/",
+  "source_host": "loc.gov",
+  "source_kind": "cc0",
+  "credit": "Federal Theatre Project (WPA), poster cho vở Power, 1937, Library of Congress",
+  "rights_url": "https://www.loc.gov/pictures/item/98514343/",
+  "captured_at": "2026-11-21",
+  "image": {
+    "file": "poster/poster-044.webp",
+    "width": 1015,
+    "height": 1600,
+    "bytes": 85940,
+    "layout": "single"
+  },
+  "tokens": {
+    "theme": "light",
+    "colors": [
+      {
+        "hex": "#fafbf7",
+        "role": "bg",
+        "share": 0.379
+      },
+      {
+        "hex": "#2d2925",
+        "role": "ink",
+        "share": 0.197
+      },
+      {
+        "hex": "#44403c",
+        "role": "muted",
+        "share": 0.008
+      },
+      {
+        "hex": "#ef621a",
+        "role": "accent",
+        "share": 0.235
+      },
+      {
+        "hex": "#8ba0c0",
+        "role": "accent2",
+        "share": 0.147
+      }
+    ],
+    "fonts": {
+      "head": {
+        "kit": "anton",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 400
+      },
+      "body": {
+        "kit": "montserrat",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 700
+      },
+      "mono": null
+    },
+    "type": {
+      "basePx": 24,
+      "ratio": 1.8,
+      "sizes": [
+        220,
+        64,
+        32,
+        24,
+        14
+      ],
+      "headLine": 0.9,
+      "bodyLine": 1.1,
+      "headCase": "upper"
+    },
+    "tracking": {
+      "display": -0.01,
+      "heading": 0.02,
+      "body": 0.02,
+      "label": 0.2
+    },
+    "radius": {
+      "outer": 0,
+      "inner": 0,
+      "pill": false
+    },
+    "shadow": {
+      "level": 0,
+      "css": "none"
+    },
+    "spacing": {
+      "unit": 8,
+      "section": 48,
+      "gutter": 24,
+      "density": "balanced"
+    },
+    "layout": {
+      "columns": 1,
+      "maxWidth": 1015,
+      "align": "asymmetric",
+      "emptyShare": 0.2
+    },
+    "imagery": {
+      "kind": "illustration",
+      "share": 0.6,
+      "light": "flat screen-print, no shading",
+      "lens": "flat 2D, oversized wheel cropped by the frame edge",
+      "grade": "vermilion, slate blue, black on warm white, four spot colours",
+      "subject": "a giant black wheel with a pale blue cog, cropped at the bottom left"
+    }
+  },
+  "measured": [
+    "theme"
+  ],
+  "why": "Nền giấy trắng #fafbf7, một chữ tiêu đề cam #ef621a cao gần một phần ba khung uốn cong theo vành bánh xe đen lớn. Bánh răng xanh xám #8ba0c0 chiếm góc dưới trái và làm nền cho khối địa chỉ chữ đen đậm. Chỉ bốn màu in lụa, hình khối phẳng không đổ bóng, chữ phụ nhỏ dồn về góc trên phải. Mượn cách cho chữ tiêu đề bám theo đường cong của hình và đặt thông tin trong lòng một hình khối; không chép chữ hay hình.",
+  "licence": "Ảnh chụp thu nhỏ của trang công khai, chỉ để model tham khảo nguyên tắc. Không chép logo, chữ, ảnh hay phông độc quyền của trang."
+}

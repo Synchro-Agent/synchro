@@ -14,9 +14,10 @@
   "audience": [
     "consumer"
   ],
-  "source_url": "https://designmodo.com/postcards/",
+  "source_url": "https://designmodo.com/wp-content/themes/designmodo/assets/img/landing/templates/email-template-6@2x.webp",
   "source_host": "designmodo.com",
   "source_kind": "public-image",
+  "credit": "Designmodo Postcards, mẫu thư số 6",
   "captured_at": "2026-11-20",
   "image": {
     "file": "email/email-031.webp",
@@ -54,10 +55,10 @@
         "kit": "be-vietnam-pro",
         "seen": "",
         "seenLicence": "unknown",
-        "weight": 400
+        "weight": 500
       },
       "body": {
-        "kit": "inter",
+        "kit": "be-vietnam-pro",
         "seen": "",
         "seenLicence": "unknown",
         "weight": 400

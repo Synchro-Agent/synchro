@@ -54,10 +54,10 @@
         "kit": "montserrat",
         "seen": "",
         "seenLicence": "unknown",
-        "weight": 400
+        "weight": 600
       },
       "body": {
-        "kit": "inter",
+        "kit": "montserrat",
         "seen": "",
         "seenLicence": "unknown",
         "weight": 400
@@ -106,7 +106,7 @@
     },
     "imagery": {
       "kind": "photo",
-      "share": 0,
+      "share": 0.4,
       "light": "beauty dish front light, crisp",
       "lens": "85mm beauty portrait",
       "grade": "saturated red, clean whites",

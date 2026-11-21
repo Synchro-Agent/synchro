@@ -24,7 +24,7 @@
     "file": "doc/doc-009.webp",
     "width": 1280,
     "height": 1600,
-    "bytes": 75564,
+    "bytes": 74586,
     "layout": "single"
   },
   "tokens": {
@@ -46,14 +46,14 @@
         "share": 0
       },
       {
-        "hex": "#bae6ff",
+        "hex": "#002d9c",
         "role": "accent",
-        "share": 0
+        "share": 0.012
       },
       {
         "hex": "#002d9c",
         "role": "line",
-        "share": 0.012
+        "share": 0
       }
     ],
     "fonts": {
@@ -61,7 +61,7 @@
         "kit": "source-serif-4",
         "seen": "IBM Plex Sans",
         "seenLicence": "open",
-        "weight": 400
+        "weight": 300
       },
       "body": {
         "kit": "ibm-plex-sans",

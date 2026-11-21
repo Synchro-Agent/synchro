@@ -41,14 +41,14 @@
         "share": 0.015
       },
       {
-        "hex": "#fae51e",
+        "hex": "#05b6e9",
         "role": "accent",
-        "share": 0
+        "share": 0.015
       },
       {
-        "hex": "#05b6e9",
+        "hex": "#f91f9b",
         "role": "accent2",
-        "share": 0.015
+        "share": 0.009
       }
     ],
     "fonts": {
@@ -56,10 +56,10 @@
         "kit": "oswald",
         "seen": "",
         "seenLicence": "unknown",
-        "weight": 400
+        "weight": 300
       },
       "body": {
-        "kit": "inter",
+        "kit": "archivo",
         "seen": "",
         "seenLicence": "unknown",
         "weight": 400
@@ -107,7 +107,7 @@
     },
     "imagery": {
       "kind": "illustration",
-      "share": 0,
+      "share": 0.6,
       "light": "neon glow on black",
       "lens": "flat 2D gesture drawing",
       "grade": "yellow, magenta and cyan neon on black",

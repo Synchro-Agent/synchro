@@ -19,6 +19,8 @@
   "source_url": "https://clevelandart.org/art/1952.10",
   "source_host": "clevelandart.org",
   "source_kind": "cc0",
+  "credit": "Henri de Toulouse-Lautrec, May Milton, 1895, Cleveland Museum of Art",
+  "rights_url": "https://openaccess-api.clevelandart.org/api/artworks/1952.10",
   "captured_at": "2026-11-20",
   "image": {
     "file": "poster/poster-038.webp",
@@ -56,7 +58,7 @@
         "kit": "fraunces",
         "seen": "",
         "seenLicence": "unknown",
-        "weight": 400
+        "weight": 500
       },
       "body": {
         "kit": "source-serif-4",

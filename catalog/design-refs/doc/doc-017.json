@@ -2,7 +2,7 @@
   "v": 1,
   "id": "doc-017",
   "domain": "doc",
-  "title": "Báo cáo chỉ số AI: trang thư mở đầu chữ thân hai cột, nhãn chương xanh",
+  "title": "Báo cáo chỉ số AI: trang thư mở đầu, khối chữ thân rộng, lề lớn",
   "moods": [
     "clean-light",
     "editorial",
@@ -19,12 +19,13 @@
   "source_url": "https://hai.stanford.edu/ai-index/2025-ai-index-report",
   "source_host": "hai.stanford.edu",
   "source_kind": "public-image",
+  "credit": "Stanford HAI, AI Index Report 2025, thư mở đầu",
   "captured_at": "2026-11-20",
   "image": {
     "file": "doc/doc-017.webp",
-    "width": 1120,
-    "height": 1400,
-    "bytes": 89956,
+    "width": 1280,
+    "height": 1600,
+    "bytes": 89734,
     "layout": "single"
   },
   "tokens": {
@@ -53,13 +54,13 @@
     ],
     "fonts": {
       "head": {
-        "kit": "inter",
+        "kit": "archivo",
         "seen": "",
         "seenLicence": "unknown",
         "weight": 400
       },
       "body": {
-        "kit": "source-serif-4",
+        "kit": "archivo",
         "seen": "",
         "seenLicence": "unknown",
         "weight": 400
@@ -118,6 +119,6 @@
   "measured": [
     "theme"
   ],
-  "why": "Trang A4 trắng, tiêu đề 28 px đặt trái, chữ thân 11 pt dòng 1,45 thành khối rộng, lề lớn. Nhãn chương xanh lam đậm hình chữ nhật ở góc phải trên làm điểm màu duy nhất. Không hình, không trang trí, chữ ký ở cuối. Mượn trang thư mở đầu trang nghiêm với một nhãn chương màu; không chép nội dung.",
+  "why": "Trang A4 trắng, tiêu đề 28 px nét thường đặt trái, chữ thân 11 pt dòng 1,45 thành một khối rộng với lề lớn hai bên. Cả trang chỉ có chữ đen trên trắng, không hình, không trang trí, chữ ký và chức danh ở cuối. Khoảng trống phía trên tiêu đề lớn hơn khoảng giữa các đoạn, tạo cảm giác trang trọng. Mượn trang thư mở đầu nghiêm, lề rộng và khối chữ đều; không chép nội dung.",
   "licence": "Ảnh chụp thu nhỏ của trang công khai, chỉ để model tham khảo nguyên tắc. Không chép logo, chữ, ảnh hay phông độc quyền của trang."
 }

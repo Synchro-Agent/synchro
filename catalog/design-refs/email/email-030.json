@@ -16,9 +16,10 @@
     "consumer",
     "youth"
   ],
-  "source_url": "https://designmodo.com/postcards/",
+  "source_url": "https://designmodo.com/wp-content/themes/designmodo/assets/img/landing/templates/email-template-4@2x.webp",
   "source_host": "designmodo.com",
   "source_kind": "public-image",
+  "credit": "Designmodo Postcards, mẫu thư số 4",
   "captured_at": "2026-11-20",
   "image": {
     "file": "email/email-030.webp",
@@ -53,13 +54,13 @@
     ],
     "fonts": {
       "head": {
-        "kit": "archivo",
+        "kit": "montserrat",
         "seen": "",
         "seenLicence": "unknown",
-        "weight": 400
+        "weight": 700
       },
       "body": {
-        "kit": "inter",
+        "kit": "montserrat",
         "seen": "",
         "seenLicence": "unknown",
         "weight": 400

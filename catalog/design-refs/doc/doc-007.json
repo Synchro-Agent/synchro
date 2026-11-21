@@ -42,12 +42,12 @@
       {
         "hex": "#d0d6e0",
         "role": "muted",
-        "share": 0.005
+        "share": 0
       },
       {
-        "hex": "#f7f8f8",
+        "hex": "#d8dbe1",
         "role": "accent",
-        "share": 0
+        "share": 0.005
       },
       {
         "hex": "#e5e5e6",
@@ -96,7 +96,7 @@
     },
     "shadow": {
       "level": 1,
-      "css": "rgba(0, 0, 0, 0) 0px 8px 2px 0px, rgba(0, 0, 0, 0.01) 0px 5px 2px 0px, rgba(0, 0, 0, 0.04) 0px 3px 2px 0px, rgba(0, 0, 0, 0.07) 0px 1px 1px 0px, rgba(0, 0, 0, 0.08) 0px 0px 1px 0px"
+      "css": "rgba(0, 0, 0, 0.04) 0px 3px 2px 0px, rgba(0, 0, 0, 0.07) 0px 1px 1px 0px, rgba(0, 0, 0, 0.08) 0px 0px 1px 0px"
     },
     "spacing": {
       "unit": 8,

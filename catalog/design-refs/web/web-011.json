@@ -22,7 +22,7 @@
     "file": "web/web-011.webp",
     "width": 1280,
     "height": 800,
-    "bytes": 89296,
+    "bytes": 87626,
     "layout": "single"
   },
   "tokens": {
@@ -119,7 +119,7 @@
     },
     "shadow": {
       "level": 1,
-      "css": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0.1) 0px 4px 6px -1px, rgba(0, 0, 0, 0.1) 0px 2px 4px -2px"
+      "css": "rgba(0, 0, 0, 0.1) 0px 4px 6px -1px, rgba(0, 0, 0, 0.1) 0px 2px 4px -2px"
     },
     "spacing": {
       "unit": 4,

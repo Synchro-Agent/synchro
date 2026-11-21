@@ -15,9 +15,11 @@
   "audience": [
     "public"
   ],
-  "source_url": "https://commons.wikimedia.org/wiki/File:W.P.A._concerts_of_unusual_music_LCCN98514344.jpg",
-  "source_host": "commons.wikimedia.org",
+  "source_url": "https://www.loc.gov/pictures/item/98514344/",
+  "source_host": "loc.gov",
   "source_kind": "cc0",
+  "credit": "Federal Music Project (WPA), poster in lụa, Library of Congress",
+  "rights_url": "https://www.loc.gov/pictures/item/98514344/",
   "captured_at": "2026-11-20",
   "image": {
     "file": "poster/poster-001.webp",
@@ -50,7 +52,7 @@
         "kit": "oswald",
         "seen": "",
         "seenLicence": "unknown",
-        "weight": 400
+        "weight": 500
       },
       "body": {
         "kit": "archivo",
@@ -102,7 +104,7 @@
     },
     "imagery": {
       "kind": "illustration",
-      "share": 0,
+      "share": 0.75,
       "light": "flat screen-print, no light modelling",
       "lens": "flat 2D, diagonal composition",
       "grade": "brick red, cream and dark umber, three spot colours",

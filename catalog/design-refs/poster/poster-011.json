@@ -27,7 +27,7 @@
     "layout": "single"
   },
   "tokens": {
-    "theme": "dark",
+    "theme": "light",
     "colors": [
       {
         "hex": "#68635d",
@@ -40,9 +40,9 @@
         "share": 0.088
       },
       {
-        "hex": "#e2d1ad",
+        "hex": "#c7975c",
         "role": "accent",
-        "share": 0
+        "share": 0.064
       }
     ],
     "fonts": {
@@ -50,13 +50,13 @@
         "kit": "cormorant-garamond",
         "seen": "",
         "seenLicence": "unknown",
-        "weight": 400
+        "weight": 600
       },
       "body": {
-        "kit": "montserrat",
+        "kit": "cormorant-garamond",
         "seen": "",
         "seenLicence": "unknown",
-        "weight": 400
+        "weight": 500
       },
       "mono": null
     },
@@ -101,7 +101,7 @@
     },
     "imagery": {
       "kind": "illustration",
-      "share": 0,
+      "share": 0.85,
       "light": "golden sunset raking from left, long shadows",
       "lens": "wide landscape, low viewpoint",
       "grade": "amber, violet-grey, deep teal",

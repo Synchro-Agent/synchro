@@ -19,6 +19,8 @@
   "source_url": "https://www.muis.ee/museaalView/1635488",
   "source_host": "muis.ee",
   "source_kind": "cc0",
+  "credit": "Endel Palmiste, Balti plakat, Art Museum of Estonia",
+  "rights_url": "https://www.europeana.eu/item/401/item_R4W4SB5A4UY4DZGZJBQTNJUJVCRD2PBW",
   "captured_at": "2026-11-20",
   "image": {
     "file": "poster/poster-040.webp",
@@ -46,7 +48,7 @@
         "share": 0.017
       },
       {
-        "hex": "#0b0c13",
+        "hex": "#6b6b6b",
         "role": "accent",
         "share": 0
       }
@@ -56,7 +58,7 @@
         "kit": "bricolage-grotesque",
         "seen": "",
         "seenLicence": "unknown",
-        "weight": 400
+        "weight": 700
       },
       "body": {
         "kit": "ibm-plex-sans",

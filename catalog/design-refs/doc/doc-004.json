@@ -55,13 +55,13 @@
     ],
     "fonts": {
       "head": {
-        "kit": "inter",
+        "kit": "lexend",
         "seen": "GDS Transport",
         "seenLicence": "unknown",
         "weight": 700
       },
       "body": {
-        "kit": "inter",
+        "kit": "lexend",
         "seen": "GDS Transport",
         "seenLicence": "unknown",
         "weight": 400

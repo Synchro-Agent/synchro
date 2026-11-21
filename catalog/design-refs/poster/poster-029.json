@@ -16,15 +16,16 @@
     "youth",
     "public"
   ],
-  "source_url": "https://100-beste-plakate.de/plakate/filter/jahr:2025/",
+  "source_url": "https://100-beste-plakate.de/wp-content/uploads/2026/06/100bp25_29536-3.jpg",
   "source_host": "100-beste-plakate.de",
   "source_kind": "public-image",
+  "credit": "SUPERO, K-Culture (Printemps Culturel Neuchâtel 2025), 100 Beste Plakate 2025",
   "captured_at": "2026-11-20",
   "image": {
     "file": "poster/poster-029.webp",
     "width": 1118,
     "height": 1600,
-    "bytes": 89492,
+    "bytes": 89354,
     "layout": "single"
   },
   "tokens": {
@@ -59,10 +60,10 @@
         "weight": 400
       },
       "body": {
-        "kit": "archivo",
+        "kit": "lexend",
         "seen": "",
         "seenLicence": "unknown",
-        "weight": 400
+        "weight": 500
       },
       "mono": null
     },

@@ -16,9 +16,10 @@
     "consumer",
     "internal"
   ],
-  "source_url": "https://tabular.email/templates",
+  "source_url": "https://tabular.email/demo/welcome-email-template",
   "source_host": "tabular.email",
   "source_kind": "public-image",
+  "credit": "Tabular, mẫu thư Welcome message",
   "captured_at": "2026-11-20",
   "image": {
     "file": "email/email-027.webp",
@@ -61,10 +62,10 @@
         "kit": "fraunces",
         "seen": "",
         "seenLicence": "unknown",
-        "weight": 400
+        "weight": 500
       },
       "body": {
-        "kit": "inter",
+        "kit": "plus-jakarta-sans",
         "seen": "",
         "seenLicence": "unknown",
         "weight": 400

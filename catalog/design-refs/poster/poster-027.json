@@ -16,15 +16,16 @@
     "youth",
     "public"
   ],
-  "source_url": "https://100-beste-plakate.de/plakate/filter/jahr:2025/",
+  "source_url": "https://100-beste-plakate.de/wp-content/uploads/2026/06/100bp25_29889-2.jpg",
   "source_host": "100-beste-plakate.de",
   "source_kind": "public-image",
+  "credit": "Martial Grin, Alix Debraine, Lausanne Underground Film & Music Festival 2025, 100 Beste Plakate 2025",
   "captured_at": "2026-11-20",
   "image": {
     "file": "poster/poster-027.webp",
     "width": 800,
     "height": 1144,
-    "bytes": 89016,
+    "bytes": 89242,
     "layout": "single"
   },
   "tokens": {
@@ -64,7 +65,7 @@
         "weight": 400
       },
       "body": {
-        "kit": "inter",
+        "kit": "space-grotesk",
         "seen": "",
         "seenLicence": "unknown",
         "weight": 400
@@ -119,9 +120,7 @@
       "subject": "a blurred ghostly face"
     }
   },
-  "measured": [
-    "theme"
-  ],
+  "measured": [],
   "why": "Toàn khung là một ảnh xám nhoè như phim nhựa, độ tương phản thấp, mặt người chỉ còn hai hốc mắt tối. Chữ trắng méo như nhiễu sóng đặt ở 20% chân khung, tên sự kiện và ngày ở dải mảnh trên cùng. Chỉ hai sắc xám #68686c và trắng, không màu nhấn. Mượn cách để một ảnh mờ ám ảnh làm toàn bộ poster và đẩy chữ xuống đáy; không chép ảnh hay chữ.",
   "licence": "Ảnh chụp thu nhỏ của trang công khai, chỉ để model tham khảo nguyên tắc. Không chép logo, chữ, ảnh hay phông độc quyền của trang."
 }

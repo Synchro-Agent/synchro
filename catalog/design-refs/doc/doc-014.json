@@ -19,9 +19,9 @@
   "captured_at": "2026-11-20",
   "image": {
     "file": "doc/doc-014.webp",
-    "width": 1120,
-    "height": 1400,
-    "bytes": 89032,
+    "width": 1280,
+    "height": 1600,
+    "bytes": 89934,
     "layout": "single"
   },
   "tokens": {
@@ -73,10 +73,10 @@
         "kit": "source-serif-4",
         "seen": "arial",
         "seenLicence": "proprietary",
-        "weight": 400
+        "weight": 700
       },
       "body": {
-        "kit": "inter",
+        "kit": "archivo",
         "seen": "arial",
         "seenLicence": "proprietary",
         "weight": 400

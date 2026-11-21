@@ -23,7 +23,7 @@
     "file": "web/web-068.webp",
     "width": 1280,
     "height": 1600,
-    "bytes": 89706,
+    "bytes": 89374,
     "layout": "single"
   },
   "tokens": {
@@ -118,7 +118,7 @@
     },
     "imagery": {
       "kind": "illustration",
-      "share": 0.03,
+      "share": 0.25,
       "light": "flat printed ink, no modelling",
       "lens": "flat",
       "grade": "black ink with electric blue accents",

@@ -1,0 +1,127 @@
+{
+  "v": 1,
+  "id": "slide-069",
+  "domain": "slide",
+  "title": "Bài nói hội nghị: tranh khoa học viễn tưởng toàn khung, tiêu đề chữ hoa đỏ hẹp",
+  "moods": [
+    "dark-cinematic",
+    "retro-print",
+    "editorial"
+  ],
+  "industries": [
+    "tech-saas",
+    "media-publishing"
+  ],
+  "audience": [
+    "public",
+    "developers"
+  ],
+  "source_url": "https://idlewords.com/talks/superintelligence.htm",
+  "source_host": "idlewords.com",
+  "source_kind": "public-image",
+  "captured_at": "2026-11-20",
+  "image": {
+    "file": "slide/slide-069.webp",
+    "width": 1280,
+    "height": 720,
+    "bytes": 89028,
+    "layout": "grid4"
+  },
+  "tokens": {
+    "theme": "dark",
+    "colors": [
+      {
+        "hex": "#0f0e0e",
+        "role": "bg",
+        "share": 0.238
+      },
+      {
+        "hex": "#eeeeee",
+        "role": "ink",
+        "share": 0.155
+      },
+      {
+        "hex": "#68635b",
+        "role": "muted",
+        "share": 0.026
+      },
+      {
+        "hex": "#f0b11e",
+        "role": "accent",
+        "share": 0.031
+      },
+      {
+        "hex": "#0a6f9a",
+        "role": "accent2",
+        "share": 0.018
+      }
+    ],
+    "fonts": {
+      "head": {
+        "kit": "oswald",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 600
+      },
+      "body": {
+        "kit": "oswald",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 400
+      },
+      "mono": null
+    },
+    "type": {
+      "basePx": 18,
+      "ratio": 1.6,
+      "sizes": [
+        40,
+        18
+      ],
+      "headLine": 1,
+      "bodyLine": 1.4,
+      "headCase": "upper"
+    },
+    "tracking": {
+      "display": 0.02,
+      "heading": 0,
+      "body": 0,
+      "label": 0.02
+    },
+    "radius": {
+      "outer": 0,
+      "inner": 0,
+      "pill": false
+    },
+    "shadow": {
+      "level": 0,
+      "css": "none"
+    },
+    "spacing": {
+      "unit": 8,
+      "section": 32,
+      "gutter": 16,
+      "density": "dense"
+    },
+    "layout": {
+      "columns": 1,
+      "maxWidth": 1280,
+      "align": "asymmetric",
+      "emptyShare": 0.15
+    },
+    "imagery": {
+      "kind": "photo",
+      "share": 0.8,
+      "light": "film stills and pulp-cover lighting",
+      "lens": "mixed found imagery, frontal",
+      "grade": "high contrast, warm sci-fi yellows",
+      "subject": "a robot, pale children with glowing eyes, a guitarist on an operating table"
+    }
+  },
+  "measured": [
+    "theme",
+    "colors"
+  ],
+  "why": "Bìa là tranh người máy khoa học viễn tưởng tông vàng đen chiếm nửa trái, tiêu đề chữ hoa đỏ hẹp 40 px bên phải và năm dòng chữ nghiêng nhỏ xếp bậc. Các trang sau mỗi trang một ảnh toàn khung, không chữ. Ảnh chọn vì cảm xúc lạ, độ tương phản cao. Mượn nhịp bìa nhiều chữ rồi các trang chỉ có ảnh để người nói dẫn chuyện; không chép ảnh.",
+  "licence": "Ảnh chụp thu nhỏ của trang công khai, chỉ để model tham khảo nguyên tắc. Không chép logo, chữ, ảnh hay phông độc quyền của trang."
+}

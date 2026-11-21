@@ -23,7 +23,7 @@
     "file": "web/web-021.webp",
     "width": 1280,
     "height": 800,
-    "bytes": 82768,
+    "bytes": 84200,
     "layout": "single"
   },
   "tokens": {
@@ -37,7 +37,7 @@
       {
         "hex": "#f2f2f2",
         "role": "surface",
-        "share": 0.032
+        "share": 0
       },
       {
         "hex": "#000000",
@@ -50,9 +50,9 @@
         "share": 0.02
       },
       {
-        "hex": "#000000",
+        "hex": "#e0d7cd",
         "role": "accent",
-        "share": 0
+        "share": 0.19
       }
     ],
     "fonts": {

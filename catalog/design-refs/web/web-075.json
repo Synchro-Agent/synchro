@@ -64,10 +64,10 @@
         "weight": 400
       },
       "body": {
-        "kit": "inter",
+        "kit": "space-grotesk",
         "seen": "neue-haas-grot-text",
         "seenLicence": "unknown",
-        "weight": 400
+        "weight": 300
       },
       "mono": null
     },

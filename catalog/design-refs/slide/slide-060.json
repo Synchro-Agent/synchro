@@ -1,0 +1,134 @@
+{
+  "v": 1,
+  "id": "slide-060",
+  "domain": "slide",
+  "title": "Bộ slide ngày nhà đầu tư nền đen: chữ đậm lớn, ảnh cộng đồng chạy bộ và vòng số cam",
+  "moods": [
+    "dark-cinematic",
+    "swiss-precise",
+    "energetic"
+  ],
+  "industries": [
+    "sports",
+    "fashion-beauty"
+  ],
+  "audience": [
+    "investors",
+    "premium"
+  ],
+  "source_url": "https://s21.q4cdn.com/241001792/files/doc_presentations/2023/10/1/onon-investor-day-2023.pdf",
+  "source_host": "s21.q4cdn.com",
+  "source_kind": "public-image",
+  "captured_at": "2026-11-20",
+  "image": {
+    "file": "slide/slide-060.webp",
+    "width": 1280,
+    "height": 720,
+    "bytes": 88316,
+    "layout": "grid4"
+  },
+  "tokens": {
+    "theme": "dark",
+    "colors": [
+      {
+        "hex": "#000000",
+        "role": "bg",
+        "share": 0.737
+      },
+      {
+        "hex": "#fbfcfc",
+        "role": "ink",
+        "share": 0.027
+      },
+      {
+        "hex": "#d8d6d6",
+        "role": "muted",
+        "share": 0.019
+      },
+      {
+        "hex": "#eeb774",
+        "role": "accent",
+        "share": 0.038
+      },
+      {
+        "hex": "#062b51",
+        "role": "accent2",
+        "share": 0.004
+      }
+    ],
+    "fonts": {
+      "head": {
+        "kit": "archivo",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 700
+      },
+      "body": {
+        "kit": "archivo",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 400
+      },
+      "mono": {
+        "kit": "jetbrains-mono",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 400
+      }
+    },
+    "type": {
+      "basePx": 12,
+      "ratio": 1.6,
+      "sizes": [
+        48,
+        24,
+        12,
+        10
+      ],
+      "headLine": 1,
+      "bodyLine": 1.4,
+      "headCase": "none"
+    },
+    "tracking": {
+      "display": -0.02,
+      "heading": -0.01,
+      "body": 0,
+      "label": 0.02
+    },
+    "radius": {
+      "outer": 0,
+      "inner": 0,
+      "pill": false
+    },
+    "shadow": {
+      "level": 0,
+      "css": "none"
+    },
+    "spacing": {
+      "unit": 8,
+      "section": 48,
+      "gutter": 8,
+      "density": "dense"
+    },
+    "layout": {
+      "columns": 4,
+      "maxWidth": 1280,
+      "align": "left",
+      "emptyShare": 0.35
+    },
+    "imagery": {
+      "kind": "photo",
+      "share": 0.45,
+      "light": "natural daylight, event and street",
+      "lens": "documentary 35mm",
+      "grade": "neutral colour and black and white on black",
+      "subject": "runners, athletes and community events"
+    }
+  },
+  "measured": [
+    "theme",
+    "colors"
+  ],
+  "why": "Nền đen tuyền, tiêu đề trắng đậm 48 px góc trái trên, nhãn chữ đơn cách 10 px ở mép trên mỗi trang. Trang cộng đồng là lưới 8 ảnh chụp đời thường đen trắng và màu xếp sát nhau. Số liệu đặt trong các vòng tròn cam đất #eeb774 viền mảnh. Mượn tổ hợp chữ đậm lớn với nhãn đơn cách nhỏ và vòng tròn số liệu; không chép ảnh.",
+  "licence": "Ảnh chụp thu nhỏ của trang công khai, chỉ để model tham khảo nguyên tắc. Không chép logo, chữ, ảnh hay phông độc quyền của trang."
+}

@@ -16,9 +16,10 @@
     "youth",
     "consumer"
   ],
-  "source_url": "https://mjml.io/templates",
-  "source_host": "mjml.io",
+  "source_url": "https://raw.githubusercontent.com/mjmlio/email-templates/master/thumbnails/ticketshop.jpg",
+  "source_host": "raw.githubusercontent.com",
   "source_kind": "public-image",
+  "credit": "MJML, mẫu thư ticketshop (mjmlio/email-templates)",
   "captured_at": "2026-11-20",
   "image": {
     "file": "email/email-007.webp",
@@ -56,10 +57,10 @@
         "kit": "oswald",
         "seen": "",
         "seenLicence": "unknown",
-        "weight": 400
+        "weight": 600
       },
       "body": {
-        "kit": "inter",
+        "kit": "archivo",
         "seen": "",
         "seenLicence": "unknown",
         "weight": 400
@@ -108,7 +109,7 @@
     },
     "imagery": {
       "kind": "photo",
-      "share": 0,
+      "share": 0.35,
       "light": "single stage spotlight, deep shadows",
       "lens": "70mm concert, low angle",
       "grade": "black and white with warm highlights",

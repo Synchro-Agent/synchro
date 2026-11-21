@@ -53,13 +53,13 @@
     ],
     "fonts": {
       "head": {
-        "kit": "space-grotesk",
+        "kit": "archivo",
         "seen": "",
         "seenLicence": "unknown",
-        "weight": 400
+        "weight": 800
       },
       "body": {
-        "kit": "inter",
+        "kit": "archivo",
         "seen": "",
         "seenLicence": "unknown",
         "weight": 400
@@ -80,10 +80,10 @@
       "headCase": "upper"
     },
     "tracking": {
-      "display": 0,
-      "heading": 0,
+      "display": -0.03,
+      "heading": -0.02,
       "body": 0,
-      "label": 0
+      "label": 0.02
     },
     "radius": {
       "outer": 4,

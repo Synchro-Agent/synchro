@@ -54,7 +54,7 @@
         "kit": "oswald",
         "seen": "",
         "seenLicence": "unknown",
-        "weight": 400
+        "weight": 700
       },
       "body": {
         "kit": "oswald",
@@ -77,10 +77,10 @@
       "headCase": "upper"
     },
     "tracking": {
-      "display": 0,
-      "heading": 0,
+      "display": 0.02,
+      "heading": 0.02,
       "body": 0,
-      "label": 0
+      "label": 0.02
     },
     "radius": {
       "outer": 0,
@@ -93,9 +93,9 @@
     },
     "spacing": {
       "unit": 8,
-      "section": 64,
+      "section": 48,
       "gutter": 24,
-      "density": "balanced"
+      "density": "dense"
     },
     "layout": {
       "columns": 1,
@@ -105,7 +105,7 @@
     },
     "imagery": {
       "kind": "illustration",
-      "share": 0,
+      "share": 0.7,
       "light": "flat lithograph colour",
       "lens": "flat, diagonal subject",
       "grade": "amber orange and cream on black",

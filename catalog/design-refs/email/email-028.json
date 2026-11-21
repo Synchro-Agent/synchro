@@ -15,9 +15,10 @@
   "audience": [
     "consumer"
   ],
-  "source_url": "https://tabular.email/templates",
-  "source_host": "tabular.email",
+  "source_url": "https://tabular.b-cdn.net/thumbnails/90ea55ce-cf6c-491d-bbb7-3d3dd7b41fc8/680x1131.jpg",
+  "source_host": "tabular.b-cdn.net",
   "source_kind": "public-image",
+  "credit": "Tabular, mẫu thư trong thư viện mẫu",
   "captured_at": "2026-11-20",
   "image": {
     "file": "email/email-028.webp",
@@ -60,10 +61,10 @@
         "kit": "plus-jakarta-sans",
         "seen": "",
         "seenLicence": "unknown",
-        "weight": 400
+        "weight": 700
       },
       "body": {
-        "kit": "inter",
+        "kit": "plus-jakarta-sans",
         "seen": "",
         "seenLicence": "unknown",
         "weight": 400

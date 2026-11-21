@@ -41,28 +41,23 @@
         "share": 0.103
       },
       {
-        "hex": "#88d5de",
-        "role": "accent",
-        "share": 0
-      },
-      {
         "hex": "#f9257d",
-        "role": "accent2",
+        "role": "accent",
         "share": 0.393
       }
     ],
     "fonts": {
       "head": {
-        "kit": "fraunces",
+        "kit": "bricolage-grotesque",
         "seen": "",
         "seenLicence": "unknown",
-        "weight": 400
+        "weight": 700
       },
       "body": {
-        "kit": "inter",
+        "kit": "oswald",
         "seen": "",
         "seenLicence": "unknown",
-        "weight": 400
+        "weight": 300
       },
       "mono": null
     },
@@ -79,7 +74,7 @@
       "headCase": "none"
     },
     "tracking": {
-      "display": 0,
+      "display": -0.02,
       "heading": 0,
       "body": 0,
       "label": 0
@@ -95,9 +90,9 @@
     },
     "spacing": {
       "unit": 8,
-      "section": 64,
-      "gutter": 24,
-      "density": "balanced"
+      "section": 32,
+      "gutter": 16,
+      "density": "dense"
     },
     "layout": {
       "columns": 1,
@@ -107,7 +102,7 @@
     },
     "imagery": {
       "kind": "illustration",
-      "share": 0,
+      "share": 0.95,
       "light": "flat graphic, no shading",
       "lens": "close-up portrait crop",
       "grade": "cyan, hot pink, navy",

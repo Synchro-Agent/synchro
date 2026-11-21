@@ -17,6 +17,7 @@
   "source_url": "https://www.vinamilk.com.vn/vi/bao-cao-thuong-nien",
   "source_host": "vinamilk.com.vn",
   "source_kind": "public-image",
+  "credit": "Vinamilk, báo cáo thường niên, trang số liệu cổ đông",
   "captured_at": "2026-11-20",
   "image": {
     "file": "doc/doc-020.webp",
@@ -59,7 +60,7 @@
         "kit": "be-vietnam-pro",
         "seen": "",
         "seenLicence": "unknown",
-        "weight": 400
+        "weight": 600
       },
       "body": {
         "kit": "be-vietnam-pro",

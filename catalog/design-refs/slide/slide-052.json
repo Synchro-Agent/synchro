@@ -1,0 +1,118 @@
+{
+  "v": 1,
+  "id": "slide-052",
+  "domain": "slide",
+  "title": "Bộ slide ngày nhà đầu tư nền đen: gradient xanh neon, ô chữ vàng chanh xếp lưới",
+  "moods": [
+    "tech",
+    "dark-cinematic",
+    "bold-color"
+  ],
+  "industries": [
+    "ecommerce",
+    "tech-saas"
+  ],
+  "audience": [
+    "investors",
+    "developers"
+  ],
+  "source_url": "https://s203.q4cdn.com/784886181/files/doc_presentations/Shopify-Investor-Day-2023-Presentation.pdf",
+  "source_host": "s203.q4cdn.com",
+  "source_kind": "public-image",
+  "captured_at": "2026-11-20",
+  "image": {
+    "file": "slide/slide-052.webp",
+    "width": 1280,
+    "height": 720,
+    "bytes": 89168,
+    "layout": "grid4"
+  },
+  "tokens": {
+    "theme": "dark",
+    "colors": [
+      {
+        "hex": "#000102",
+        "role": "bg",
+        "share": 0.444
+      },
+      {
+        "hex": "#f2fbbc",
+        "role": "ink",
+        "share": 0.049
+      },
+      {
+        "hex": "#43dde8",
+        "role": "accent",
+        "share": 0.046
+      }
+    ],
+    "fonts": {
+      "head": {
+        "kit": "space-grotesk",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 500
+      },
+      "body": {
+        "kit": "ibm-plex-sans",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 400
+      },
+      "mono": null
+    },
+    "type": {
+      "basePx": 14,
+      "ratio": 1.5,
+      "sizes": [
+        44,
+        36,
+        16
+      ],
+      "headLine": 1.05,
+      "bodyLine": 1.4,
+      "headCase": "none"
+    },
+    "tracking": {
+      "display": -0.02,
+      "heading": -0.01,
+      "body": 0,
+      "label": 0.02
+    },
+    "radius": {
+      "outer": 0,
+      "inner": 0,
+      "pill": false
+    },
+    "shadow": {
+      "level": 0,
+      "css": "none"
+    },
+    "spacing": {
+      "unit": 8,
+      "section": 48,
+      "gutter": 16,
+      "density": "dense"
+    },
+    "layout": {
+      "columns": 4,
+      "maxWidth": 1280,
+      "align": "left",
+      "emptyShare": 0.3
+    },
+    "imagery": {
+      "kind": "mixed",
+      "share": 0.3,
+      "light": "soft studio light on product, glowing gradients behind",
+      "lens": "close product macro",
+      "grade": "neon green and cyan on near-black",
+      "subject": "a card terminal and a storefront in square tiles"
+    }
+  },
+  "measured": [
+    "theme",
+    "colors"
+  ],
+  "why": "Nền đen xanh với các đường sáng xanh neon chạy chéo, tiêu đề vàng chanh nhạt #f2fbbc 36 px đặt trái. Một trang chỉ gồm 6 ô vuông bo 8 px: ô chữ lớn xen ô ảnh sản phẩm, như bảng ghép. Lưới 4×4 ô xanh ngọc có biểu tượng trắng tóm tắt các mảng kinh doanh. Mượn cách chia ý thành lưới ô đều và đặt chữ đậm ngắn trong ô; không chép ảnh hay biểu tượng.",
+  "licence": "Ảnh chụp thu nhỏ của trang công khai, chỉ để model tham khảo nguyên tắc. Không chép logo, chữ, ảnh hay phông độc quyền của trang."
+}

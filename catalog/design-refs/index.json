@@ -1,6 +1,6 @@
 {
  "v": 1,
- "built_at": "2026-11-20",
+ "built_at": "2026-11-21",
  "refs": [
   {
    "id": "dashboard-001",
@@ -482,7 +482,7 @@
    "host": "gov.uk",
    "theme": "light",
    "paletteKey": "4-7",
-   "fontPair": "inter+inter",
+   "fontPair": "lexend+lexend",
    "imagery": "type-only"
   },
   {
@@ -700,7 +700,7 @@
    "host": "vnexpress.net",
    "theme": "light",
    "paletteKey": "4-0",
-   "fontPair": "source-serif-4+inter",
+   "fontPair": "source-serif-4+archivo",
    "imagery": "photo"
   },
   {
@@ -727,7 +727,7 @@
   {
    "id": "doc-017",
    "domain": "doc",
-   "title": "Báo cáo chỉ số AI: trang thư mở đầu chữ thân hai cột, nhãn chương xanh",
+   "title": "Báo cáo chỉ số AI: trang thư mở đầu, khối chữ thân rộng, lề lớn",
    "moods": [
     "clean-light",
     "editorial",
@@ -744,7 +744,7 @@
    "host": "hai.stanford.edu",
    "theme": "light",
    "paletteKey": "4-7",
-   "fontPair": "inter+source-serif-4",
+   "fontPair": "archivo+archivo",
    "imagery": "type-only"
   },
   {
@@ -767,7 +767,7 @@
    "host": "hai.stanford.edu",
    "theme": "light",
    "paletteKey": "4-7",
-   "fontPair": "inter+source-serif-4",
+   "fontPair": "archivo+archivo",
    "imagery": "data"
   },
   {
@@ -839,7 +839,7 @@
   {
    "id": "doc-023",
    "domain": "doc",
-   "title": "Trang bài dữ liệu: lưới thẻ ảnh màu chói, tiêu đề chữ đậm hẹp",
+   "title": "Bài phân tích dữ liệu kể chuyện: nền vàng nắng, tiêu đề chữ hoa dày viền đen bóng xanh",
    "moods": [
     "playful",
     "bold-color",
@@ -851,12 +851,12 @@
    ],
    "audience": [
     "public",
-    "youth"
+    "families"
    ],
    "host": "pudding.cool",
    "theme": "light",
-   "paletteKey": "4-10",
-   "fontPair": "oswald+space-grotesk",
+   "paletteKey": "3-7",
+   "fontPair": "unbounded+lexend",
    "imagery": "illustration"
   },
   {
@@ -901,7 +901,7 @@
    "host": "reallygoodemails.com",
    "theme": "light",
    "paletteKey": "4-1",
-   "fontPair": "inter+inter",
+   "fontPair": "archivo+archivo",
    "imagery": "photo"
   },
   {
@@ -924,7 +924,7 @@
    "host": "reallygoodemails.com",
    "theme": "dark",
    "paletteKey": "1-2",
-   "fontPair": "fraunces+inter",
+   "fontPair": "playfair-display+source-serif-4",
    "imagery": "photo"
   },
   {
@@ -946,7 +946,7 @@
    "host": "reallygoodemails.com",
    "theme": "dark",
    "paletteKey": "0-7",
-   "fontPair": "inter+inter",
+   "fontPair": "plus-jakarta-sans+plus-jakarta-sans",
    "imagery": "type-only"
   },
   {
@@ -966,10 +966,10 @@
     "youth",
     "public"
    ],
-   "host": "mjml.io",
+   "host": "raw.githubusercontent.com",
    "theme": "light",
    "paletteKey": "4-0",
-   "fontPair": "source-serif-4+inter",
+   "fontPair": "source-serif-4+ibm-plex-sans",
    "imagery": "photo"
   },
   {
@@ -989,10 +989,10 @@
     "youth",
     "consumer"
    ],
-   "host": "mjml.io",
+   "host": "raw.githubusercontent.com",
    "theme": "light",
    "paletteKey": "4-1",
-   "fontPair": "oswald+inter",
+   "fontPair": "oswald+archivo",
    "imagery": "photo"
   },
   {
@@ -1011,10 +1011,10 @@
     "consumer",
     "developers"
    ],
-   "host": "mjml.io",
+   "host": "raw.githubusercontent.com",
    "theme": "light",
    "paletteKey": "4-6",
-   "fontPair": "inter+inter",
+   "fontPair": "ibm-plex-sans+ibm-plex-sans",
    "imagery": "photo"
   },
   {
@@ -1037,7 +1037,7 @@
    "host": "unlayer.com",
    "theme": "light",
    "paletteKey": "3-1",
-   "fontPair": "montserrat+inter",
+   "fontPair": "montserrat+montserrat",
    "imagery": "photo"
   },
   {
@@ -1059,7 +1059,7 @@
    "host": "unlayer.com",
    "theme": "light",
    "paletteKey": "4-7",
-   "fontPair": "source-serif-4+inter",
+   "fontPair": "source-serif-4+lexend",
    "imagery": "mixed"
   },
   {
@@ -1081,7 +1081,7 @@
    "host": "unlayer.com",
    "theme": "dark",
    "paletteKey": "1-2",
-   "fontPair": "playfair-display+inter",
+   "fontPair": "archivo+archivo",
    "imagery": "photo"
   },
   {
@@ -1102,7 +1102,7 @@
    "host": "stripo.email",
    "theme": "light",
    "paletteKey": "4-11",
-   "fontPair": "playfair-display+inter",
+   "fontPair": "playfair-display+plus-jakarta-sans",
    "imagery": "photo"
   },
   {
@@ -1124,7 +1124,7 @@
    "host": "stripo.email",
    "theme": "light",
    "paletteKey": "4-1",
-   "fontPair": "fraunces+inter",
+   "fontPair": "fraunces+ibm-plex-sans",
    "imagery": "photo"
   },
   {
@@ -1145,7 +1145,7 @@
    "host": "stripo.email",
    "theme": "light",
    "paletteKey": "4-0",
-   "fontPair": "montserrat+inter",
+   "fontPair": "montserrat+montserrat",
    "imagery": "photo"
   },
   {
@@ -1168,7 +1168,7 @@
    "host": "tabular.email",
    "theme": "light",
    "paletteKey": "4-n",
-   "fontPair": "playfair-display+inter",
+   "fontPair": "archivo+archivo",
    "imagery": "photo"
   },
   {
@@ -1191,7 +1191,7 @@
    "host": "tabular.email",
    "theme": "dark",
    "paletteKey": "1-1",
-   "fontPair": "fraunces+inter",
+   "fontPair": "fraunces+plus-jakarta-sans",
    "imagery": "photo"
   },
   {
@@ -1210,10 +1210,10 @@
    "audience": [
     "consumer"
    ],
-   "host": "tabular.email",
+   "host": "tabular.b-cdn.net",
    "theme": "dark",
    "paletteKey": "1-n",
-   "fontPair": "plus-jakarta-sans+inter",
+   "fontPair": "plus-jakarta-sans+plus-jakarta-sans",
    "imagery": "photo"
   },
   {
@@ -1235,7 +1235,7 @@
    "host": "designmodo.com",
    "theme": "dark",
    "paletteKey": "1-8",
-   "fontPair": "plus-jakarta-sans+inter",
+   "fontPair": "plus-jakarta-sans+plus-jakarta-sans",
    "imagery": "type-only"
   },
   {
@@ -1258,7 +1258,7 @@
    "host": "designmodo.com",
    "theme": "dark",
    "paletteKey": "0-1",
-   "fontPair": "archivo+inter",
+   "fontPair": "montserrat+montserrat",
    "imagery": "photo"
   },
   {
@@ -1279,7 +1279,7 @@
    "host": "designmodo.com",
    "theme": "dark",
    "paletteKey": "1-2",
-   "fontPair": "be-vietnam-pro+inter",
+   "fontPair": "be-vietnam-pro+be-vietnam-pro",
    "imagery": "photo"
   },
   {
@@ -1302,7 +1302,7 @@
    "host": "topol.io",
    "theme": "light",
    "paletteKey": "4-0",
-   "fontPair": "source-serif-4+inter",
+   "fontPair": "source-serif-4+source-serif-4",
    "imagery": "photo"
   },
   {
@@ -1324,7 +1324,7 @@
    "host": "topol.io",
    "theme": "dark",
    "paletteKey": "0-1",
-   "fontPair": "anton+inter",
+   "fontPair": "anton+ibm-plex-sans",
    "imagery": "photo"
   },
   {
@@ -1343,7 +1343,7 @@
    "audience": [
     "public"
    ],
-   "host": "commons.wikimedia.org",
+   "host": "loc.gov",
    "theme": "dark",
    "paletteKey": "1-0",
    "fontPair": "oswald+archivo",
@@ -1366,7 +1366,7 @@
     "premium",
     "public"
    ],
-   "host": "commons.wikimedia.org",
+   "host": "loc.gov",
    "theme": "light",
    "paletteKey": "3-1",
    "fontPair": "cormorant-garamond+cormorant-garamond",
@@ -1391,7 +1391,7 @@
    ],
    "host": "emuseum.ch",
    "theme": "dark",
-   "paletteKey": "1-0",
+   "paletteKey": "1-2",
    "fontPair": "archivo+archivo",
    "imagery": "type-only"
   },
@@ -1414,8 +1414,8 @@
    ],
    "host": "emuseum.ch",
    "theme": "dark",
-   "paletteKey": "0-2",
-   "fontPair": "oswald+inter",
+   "paletteKey": "0-6",
+   "fontPair": "oswald+archivo",
    "imagery": "illustration"
   },
   {
@@ -1437,8 +1437,8 @@
    ],
    "host": "emuseum.ch",
    "theme": "light",
-   "paletteKey": "3-6",
-   "fontPair": "fraunces+inter",
+   "paletteKey": "3-11",
+   "fontPair": "bricolage-grotesque+oswald",
    "imagery": "illustration"
   },
   {
@@ -1460,7 +1460,7 @@
    "host": "dogmacollection.com",
    "theme": "light",
    "paletteKey": "3-1",
-   "fontPair": "be-vietnam-pro+be-vietnam-pro",
+   "fontPair": "oswald+be-vietnam-pro",
    "imagery": "illustration"
   },
   {
@@ -1501,9 +1501,9 @@
     "public"
    ],
    "host": "internationalposter.com",
-   "theme": "dark",
+   "theme": "light",
    "paletteKey": "2-1",
-   "fontPair": "cormorant-garamond+montserrat",
+   "fontPair": "cormorant-garamond+cormorant-garamond",
    "imagery": "illustration"
   },
   {
@@ -1528,47 +1528,26 @@
    "imagery": "illustration"
   },
   {
-   "id": "poster-018",
+   "id": "poster-023",
    "domain": "poster",
-   "title": "Poster ảo thuật cổ: chân dung giữa, chữ hoa đậm vàng trên nền xanh",
+   "title": "Poster triển lãm chữ khối vuông đen trên giấy ngà, chữ xếp kín khung và xoay dọc ở mép",
    "moods": [
     "retro-print",
-    "energetic"
-   ],
-   "industries": [
-    "events",
-    "culture-music"
-   ],
-   "audience": [
-    "public"
-   ],
-   "host": "posterhouse.org",
-   "theme": "light",
-   "paletteKey": "2-3",
-   "fontPair": "anton+source-serif-4",
-   "imagery": "illustration"
-  },
-  {
-   "id": "poster-019",
-   "domain": "poster",
-   "title": "Ảnh chiến dịch lễ hội âm nhạc: hàng người áo blouse trắng trong hành lang",
-   "moods": [
-    "editorial",
     "minimal-mono",
-    "energetic"
+    "swiss-precise"
    ],
    "industries": [
     "culture-music",
     "events"
    ],
    "audience": [
-    "youth"
+    "public"
    ],
-   "host": "sonar.es",
+   "host": "commons.wikimedia.org",
    "theme": "light",
-   "paletteKey": "2-n",
-   "fontPair": "inter+inter",
-   "imagery": "photo"
+   "paletteKey": "3-1",
+   "fontPair": "anton+oswald",
+   "imagery": "type-only"
   },
   {
    "id": "poster-024",
@@ -1586,9 +1565,9 @@
     "public"
    ],
    "host": "posterfortomorrow.org",
-   "theme": "dark",
-   "paletteKey": "2-0",
-   "fontPair": "archivo+inter",
+   "theme": "light",
+   "paletteKey": "2-n",
+   "fontPair": "archivo+archivo",
    "imagery": "illustration"
   },
   {
@@ -1610,7 +1589,7 @@
    "host": "posterfortomorrow.org",
    "theme": "dark",
    "paletteKey": "1-0",
-   "fontPair": "inter+inter",
+   "fontPair": "lexend+lexend",
    "imagery": "type-only"
   },
   {
@@ -1633,7 +1612,7 @@
    "host": "100-beste-plakate.de",
    "theme": "dark",
    "paletteKey": "1-n",
-   "fontPair": "space-grotesk+inter",
+   "fontPair": "space-grotesk+space-grotesk",
    "imagery": "photo"
   },
   {
@@ -1679,7 +1658,7 @@
    "host": "100-beste-plakate.de",
    "theme": "light",
    "paletteKey": "2-0",
-   "fontPair": "unbounded+archivo",
+   "fontPair": "unbounded+lexend",
    "imagery": "illustration"
   },
   {
@@ -1701,7 +1680,7 @@
    "host": "posterheroes.org",
    "theme": "dark",
    "paletteKey": "1-1",
-   "fontPair": "oswald+inter",
+   "fontPair": "oswald+oswald",
    "imagery": "illustration"
   },
   {
@@ -1722,7 +1701,7 @@
     "youth"
    ],
    "host": "posterheroes.org",
-   "theme": "dark",
+   "theme": "light",
    "paletteKey": "2-n",
    "fontPair": "archivo+inter",
    "imagery": "illustration"
@@ -1744,9 +1723,9 @@
     "public"
    ],
    "host": "posterheroes.org",
-   "theme": "dark",
+   "theme": "light",
    "paletteKey": "2-2",
-   "fontPair": "oswald+inter",
+   "fontPair": "oswald+montserrat",
    "imagery": "illustration"
   },
   {
@@ -1792,7 +1771,7 @@
    "host": "posterhouse.org",
    "theme": "dark",
    "paletteKey": "1-2",
-   "fontPair": "oswald+inter",
+   "fontPair": "oswald+oswald",
    "imagery": "illustration"
   },
   {
@@ -1859,7 +1838,7 @@
    ],
    "host": "muis.ee",
    "theme": "light",
-   "paletteKey": "4-8",
+   "paletteKey": "4-n",
    "fontPair": "bricolage-grotesque+ibm-plex-sans",
    "imagery": "illustration"
   },
@@ -1882,8 +1861,30 @@
    "host": "muis.ee",
    "theme": "dark",
    "paletteKey": "0-0",
-   "fontPair": "oswald+ibm-plex-sans",
+   "fontPair": "oswald+archivo",
    "imagery": "photo"
+  },
+  {
+   "id": "poster-044",
+   "domain": "poster",
+   "title": "Poster sân khấu in lụa: chữ cam khổng lồ uốn theo bánh xe đen, bánh răng xanh xám",
+   "moods": [
+    "retro-print",
+    "bold-color",
+    "energetic"
+   ],
+   "industries": [
+    "culture-music",
+    "events"
+   ],
+   "audience": [
+    "public"
+   ],
+   "host": "loc.gov",
+   "theme": "light",
+   "paletteKey": "4-1",
+   "fontPair": "anton+montserrat",
+   "imagery": "illustration"
   },
   {
    "id": "slide-001",
@@ -1905,52 +1906,7 @@
    "host": "ben-evans.com",
    "theme": "light",
    "paletteKey": "4-0",
-   "fontPair": "source-serif-4+inter",
-   "imagery": "data"
-  },
-  {
-   "id": "slide-003",
-   "domain": "slide",
-   "title": "Báo cáo kinh tế số Đông Nam Á: bìa 3D đẳng cự xanh, số liệu trong vòng tròn",
-   "moods": [
-    "bold-color",
-    "data-dense",
-    "tech"
-   ],
-   "industries": [
-    "tech-saas",
-    "finance"
-   ],
-   "audience": [
-    "investors",
-    "b2b"
-   ],
-   "host": "economysea.withgoogle.com",
-   "theme": "light",
-   "paletteKey": "4-7",
-   "fontPair": "plus-jakarta-sans+inter",
-   "imagery": "3d"
-  },
-  {
-   "id": "slide-005",
-   "domain": "slide",
-   "title": "Báo cáo đầu tư Việt Nam: trang trắng chữ đỏ, biểu đồ và ô thông điệp",
-   "moods": [
-    "data-dense",
-    "clean-light",
-    "swiss-precise"
-   ],
-   "industries": [
-    "finance",
-    "consulting"
-   ],
-   "audience": [
-    "investors"
-   ],
-   "host": "doventures.vc",
-   "theme": "light",
-   "paletteKey": "4-0",
-   "fontPair": "inter+inter",
+   "fontPair": "source-serif-4+ibm-plex-sans",
    "imagery": "data"
   },
   {
@@ -1973,31 +1929,8 @@
    "host": "a16zcrypto.com",
    "theme": "light",
    "paletteKey": "4-5",
-   "fontPair": "space-grotesk+inter",
+   "fontPair": "archivo+archivo",
    "imagery": "data"
-  },
-  {
-   "id": "slide-013",
-   "domain": "slide",
-   "title": "Báo cáo xu hướng đời sống: ảnh mờ tím hồng, chữ mảnh và cột chữ tím",
-   "moods": [
-    "editorial",
-    "luxury",
-    "tech"
-   ],
-   "industries": [
-    "consulting",
-    "media-publishing"
-   ],
-   "audience": [
-    "b2b",
-    "premium"
-   ],
-   "host": "accenture.com",
-   "theme": "light",
-   "paletteKey": "4-10",
-   "fontPair": "inter+inter",
-   "imagery": "photo"
   },
   {
    "id": "slide-021",
@@ -2019,7 +1952,7 @@
    "host": "pitch.com",
    "theme": "dark",
    "paletteKey": "0-1",
-   "fontPair": "unbounded+inter",
+   "fontPair": "unbounded+space-grotesk",
    "imagery": "photo"
   },
   {
@@ -2039,239 +1972,11 @@
     "investors",
     "b2b"
    ],
-   "host": "pitch.com",
+   "host": "imgproxy.services.pitch.com",
    "theme": "light",
    "paletteKey": "3-9",
-   "fontPair": "plus-jakarta-sans+inter",
+   "fontPair": "plus-jakarta-sans+plus-jakarta-sans",
    "imagery": "3d"
-  },
-  {
-   "id": "slide-024",
-   "domain": "slide",
-   "title": "Bộ slide giới thiệu: thẻ giấy ngà trên nền đen, quầng chuyển sắc cam hồng mờ",
-   "moods": [
-    "minimal-mono",
-    "editorial",
-    "warm-craft"
-   ],
-   "industries": [
-    "consulting",
-    "general"
-   ],
-   "audience": [
-    "b2b",
-    "investors"
-   ],
-   "host": "slidesgo.com",
-   "theme": "light",
-   "paletteKey": "4-1",
-   "fontPair": "source-serif-4+ibm-plex-sans",
-   "imagery": "photo"
-  },
-  {
-   "id": "slide-026",
-   "domain": "slide",
-   "title": "Bộ slide hồ sơ dự án: nền vàng chanh, chữ hẹp đen in đậm, ảnh phố đêm",
-   "moods": [
-    "bold-color",
-    "energetic",
-    "editorial"
-   ],
-   "industries": [
-    "real-estate-interior",
-    "culture-music"
-   ],
-   "audience": [
-    "b2b",
-    "youth"
-   ],
-   "host": "slidesgo.com",
-   "theme": "light",
-   "paletteKey": "2-n",
-   "fontPair": "oswald+inter",
-   "imagery": "photo"
-  },
-  {
-   "id": "slide-027",
-   "domain": "slide",
-   "title": "Bộ slide công nghệ nền xanh đêm: sóng hạt chuyển cam, số lớn căn giữa",
-   "moods": [
-    "dark-cinematic",
-    "tech",
-    "data-dense"
-   ],
-   "industries": [
-    "tech-saas",
-    "ai"
-   ],
-   "audience": [
-    "b2b",
-    "investors"
-   ],
-   "host": "slidesgo.com",
-   "theme": "dark",
-   "paletteKey": "0-1",
-   "fontPair": "montserrat+inter",
-   "imagery": "illustration"
-  },
-  {
-   "id": "slide-029",
-   "domain": "slide",
-   "title": "Bộ slide quảng cáo in: cắt dán ảnh cũ nhuộm màu, chữ hoa đỏ cam lệch",
-   "moods": [
-    "retro-print",
-    "playful",
-    "bold-color"
-   ],
-   "industries": [
-    "media-publishing",
-    "culture-music"
-   ],
-   "audience": [
-    "youth",
-    "b2b"
-   ],
-   "host": "slidescarnival.com",
-   "theme": "light",
-   "paletteKey": "3-0",
-   "fontPair": "playfair-display+jetbrains-mono",
-   "imagery": "photo"
-  },
-  {
-   "id": "slide-030",
-   "domain": "slide",
-   "title": "Bộ slide tổng kết năm: nền lưới giấy, ảnh cắt dán đen trắng, sticker màu",
-   "moods": [
-    "playful",
-    "retro-print",
-    "editorial"
-   ],
-   "industries": [
-    "media-publishing",
-    "general"
-   ],
-   "audience": [
-    "youth",
-    "internal"
-   ],
-   "host": "slidescarnival.com",
-   "theme": "light",
-   "paletteKey": "4-11",
-   "fontPair": "fraunces+space-grotesk",
-   "imagery": "mixed"
-  },
-  {
-   "id": "slide-031",
-   "domain": "slide",
-   "title": "Bộ slide kiểu chương trình truyền hình: chữ viết tay vàng trên ảnh đồng cỏ, khung bo màu",
-   "moods": [
-    "playful",
-    "bold-color",
-    "retro-print"
-   ],
-   "industries": [
-    "culture-music",
-    "media-publishing"
-   ],
-   "audience": [
-    "youth"
-   ],
-   "host": "slidescarnival.com",
-   "theme": "light",
-   "paletteKey": "4-1",
-   "fontPair": "bricolage-grotesque+lexend",
-   "imagery": "photo"
-  },
-  {
-   "id": "slide-032",
-   "domain": "slide",
-   "title": "Bộ slide cắt dán tạp chí nền tím: chữ cắt báo nhiều kiểu, ảnh máy chữ",
-   "moods": [
-    "retro-print",
-    "playful",
-    "editorial"
-   ],
-   "industries": [
-    "education",
-    "media-publishing"
-   ],
-   "audience": [
-    "students",
-    "youth"
-   ],
-   "host": "slidesmania.com",
-   "theme": "light",
-   "paletteKey": "3-9",
-   "fontPair": "anton+jetbrains-mono",
-   "imagery": "mixed"
-  },
-  {
-   "id": "slide-033",
-   "domain": "slide",
-   "title": "Bộ slide dự án nhóm: khung cửa sổ máy tính cũ, chữ tròn tím, nền lưới xanh nhạt",
-   "moods": [
-    "playful",
-    "tech",
-    "clean-light"
-   ],
-   "industries": [
-    "education",
-    "tech-saas"
-   ],
-   "audience": [
-    "students"
-   ],
-   "host": "slidesmania.com",
-   "theme": "light",
-   "paletteKey": "4-8",
-   "fontPair": "lexend+lexend",
-   "imagery": "illustration"
-  },
-  {
-   "id": "slide-035",
-   "domain": "slide",
-   "title": "Báo cáo xu hướng giới trẻ: lưới ảnh chân dung, khối xanh ngọc và chanh, chữ hoa đậm",
-   "moods": [
-    "bold-color",
-    "energetic",
-    "editorial"
-   ],
-   "industries": [
-    "media-publishing",
-    "culture-music"
-   ],
-   "audience": [
-    "youth",
-    "b2b"
-   ],
-   "host": "reasonwhy.es",
-   "theme": "light",
-   "paletteKey": "4-6",
-   "fontPair": "archivo+inter",
-   "imagery": "photo"
-  },
-  {
-   "id": "slide-037",
-   "domain": "slide",
-   "title": "Báo cáo khảo sát người tiêu dùng: trang trắng, khối cam chéo, số lớn cam",
-   "moods": [
-    "clean-light",
-    "data-dense",
-    "swiss-precise"
-   ],
-   "industries": [
-    "consulting",
-    "ecommerce"
-   ],
-   "audience": [
-    "b2b",
-    "investors"
-   ],
-   "host": "pwc.com",
-   "theme": "light",
-   "paletteKey": "4-1",
-   "fontPair": "source-serif-4+inter",
-   "imagery": "data"
   },
   {
    "id": "slide-038",
@@ -2293,7 +1998,7 @@
    "host": "business.adobe.com",
    "theme": "light",
    "paletteKey": "4-0",
-   "fontPair": "archivo+inter",
+   "fontPair": "archivo+archivo",
    "imagery": "mixed"
   },
   {
@@ -2316,7 +2021,7 @@
    "host": "media.dandad.org",
    "theme": "dark",
    "paletteKey": "0-3",
-   "fontPair": "space-grotesk+inter",
+   "fontPair": "space-grotesk+space-grotesk",
    "imagery": "photo"
   },
   {
@@ -2339,40 +2044,154 @@
    "host": "ads.tiktok.com",
    "theme": "dark",
    "paletteKey": "0-0",
-   "fontPair": "plus-jakarta-sans+inter",
+   "fontPair": "plus-jakarta-sans+plus-jakarta-sans",
    "imagery": "photo"
   },
   {
-   "id": "slide-041",
+   "id": "slide-046",
    "domain": "slide",
-   "title": "Báo cáo xu hướng đời sống: trang trắng gần trống, số chương khổng lồ, dải xanh ngọc",
+   "title": "Bài nói hội nghị nền đen: chữ khối đậm trong dải trắng, sơ đồ hành trình nét mảnh",
    "moods": [
+    "dark-cinematic",
     "minimal-mono",
-    "editorial",
-    "swiss-precise"
+    "editorial"
    ],
    "industries": [
     "consulting",
-    "general"
+    "tech-saas"
    ],
    "audience": [
     "b2b",
-    "investors"
+    "public"
    ],
-   "host": "accenture.com",
+   "host": "speakerdeck.com",
+   "theme": "dark",
+   "paletteKey": "0-0",
+   "fontPair": "plus-jakarta-sans+ibm-plex-sans",
+   "imagery": "type-only"
+  },
+  {
+   "id": "slide-047",
+   "domain": "slide",
+   "title": "Bài nói thiết kế kiểu tạp chí: bìa gradient vàng cam, trang trong chữ có chân hai ngôn ngữ",
+   "moods": [
+    "editorial",
+    "clean-light",
+    "warm-craft"
+   ],
+   "industries": [
+    "consulting",
+    "education"
+   ],
+   "audience": [
+    "b2b",
+    "students"
+   ],
+   "host": "speakerdeck.com",
    "theme": "light",
-   "paletteKey": "4-6",
-   "fontPair": "inter+inter",
+   "paletteKey": "4-2",
+   "fontPair": "archivo+source-serif-4",
+   "imagery": "data"
+  },
+  {
+   "id": "slide-048",
+   "domain": "slide",
+   "title": "Bài nói về thiết kế slide: nền xanh lam đậm, chữ viết tay vàng và chữ có chân trắng",
+   "moods": [
+    "bold-color",
+    "playful",
+    "editorial"
+   ],
+   "industries": [
+    "education",
+    "media-publishing"
+   ],
+   "audience": [
+    "public",
+    "students"
+   ],
+   "host": "speakerdeck.com",
+   "theme": "light",
+   "paletteKey": "2-2",
+   "fontPair": "playfair-display+source-serif-4",
+   "imagery": "type-only"
+  },
+  {
+   "id": "slide-050",
+   "domain": "slide",
+   "title": "Bộ slide nhà đầu tư nền trắng: lưới ảnh đời sống khảm bên bìa, số đỏ lớn",
+   "moods": [
+    "clean-light",
+    "bold-color",
+    "editorial"
+   ],
+   "industries": [
+    "media-publishing",
+    "ecommerce"
+   ],
+   "audience": [
+    "investors",
+    "b2b"
+   ],
+   "host": "s204.q4cdn.com",
+   "theme": "light",
+   "paletteKey": "4-0",
+   "fontPair": "plus-jakarta-sans+plus-jakarta-sans",
    "imagery": "photo"
   },
   {
-   "id": "slide-042",
+   "id": "slide-052",
    "domain": "slide",
-   "title": "Báo cáo xu hướng công nghệ: hình 3D vàng bóng, ảnh nhiệt chuyển sắc, trang trắng ngà",
+   "title": "Bộ slide ngày nhà đầu tư nền đen: gradient xanh neon, ô chữ vàng chanh xếp lưới",
    "moods": [
     "tech",
+    "dark-cinematic",
+    "bold-color"
+   ],
+   "industries": [
+    "ecommerce",
+    "tech-saas"
+   ],
+   "audience": [
+    "investors",
+    "developers"
+   ],
+   "host": "s203.q4cdn.com",
+   "theme": "dark",
+   "paletteKey": "0-6",
+   "fontPair": "space-grotesk+ibm-plex-sans",
+   "imagery": "mixed"
+  },
+  {
+   "id": "slide-053",
+   "domain": "slide",
+   "title": "Bộ slide cổ đông: khối xanh lam và xanh bạc hà, chữ hoa đậm trong hai dải lệch",
+   "moods": [
     "bold-color",
-    "clean-light"
+    "playful",
+    "data-dense"
+   ],
+   "industries": [
+    "culture-music",
+    "media-publishing"
+   ],
+   "audience": [
+    "investors"
+   ],
+   "host": "s29.q4cdn.com",
+   "theme": "light",
+   "paletteKey": "4-5",
+   "fontPair": "plus-jakarta-sans+plus-jakarta-sans",
+   "imagery": "data"
+  },
+  {
+   "id": "slide-054",
+   "domain": "slide",
+   "title": "Bộ slide phân tích: bìa đỏ san hô, sơ đồ vòng tròn và chữ có chân nhỏ",
+   "moods": [
+    "editorial",
+    "minimal-mono",
+    "swiss-precise"
    ],
    "industries": [
     "tech-saas",
@@ -2382,79 +2201,265 @@
     "b2b",
     "investors"
    ],
-   "host": "deloitte.com",
+   "host": "ben-evans.com",
    "theme": "light",
-   "paletteKey": "4-8",
-   "fontPair": "ibm-plex-sans+ibm-plex-sans",
-   "imagery": "3d"
+   "paletteKey": "4-0",
+   "fontPair": "source-serif-4+source-serif-4",
+   "imagery": "data"
   },
   {
-   "id": "slide-043",
+   "id": "slide-056",
    "domain": "slide",
-   "title": "Bộ slide khoa học nền xanh đêm: ảnh phi hành gia nhuộm xanh, chữ mảnh, chấm cam",
+   "title": "Bài nói hội nghị nền tối: chữ nhỏ giọt xanh axit trên ảnh tư liệu cũ",
    "moods": [
     "dark-cinematic",
-    "tech",
-    "editorial"
+    "retro-print",
+    "playful"
    ],
    "industries": [
-    "education",
+    "tech-saas",
     "media-publishing"
    ],
    "audience": [
-    "students",
+    "developers",
     "public"
    ],
-   "host": "visme.co",
+   "host": "idlewords.com",
    "theme": "dark",
-   "paletteKey": "1-0",
-   "fontPair": "montserrat+inter",
+   "paletteKey": "0-3",
+   "fontPair": "bricolage-grotesque+oswald",
    "imagery": "photo"
   },
   {
-   "id": "slide-044",
+   "id": "slide-057",
    "domain": "slide",
-   "title": "Bộ slide nội thất: ảnh phòng sang trọng tông gỗ, chữ có chân mảnh, nhãn viền bo",
+   "title": "Bộ slide nhà đầu tư Đông Nam Á: nền xanh lá đậm, ảnh người giao hàng và cột số liệu sáng",
    "moods": [
-    "luxury",
-    "minimal-mono",
-    "warm-craft"
+    "bold-color",
+    "energetic",
+    "data-dense"
    ],
    "industries": [
-    "real-estate-interior"
+    "hospitality-travel",
+    "finance",
+    "ecommerce"
    ],
    "audience": [
-    "premium",
+    "investors",
     "b2b"
    ],
-   "host": "visme.co",
+   "host": "s205.q4cdn.com",
    "theme": "light",
-   "paletteKey": "4-1",
-   "fontPair": "cormorant-garamond+inter",
+   "paletteKey": "1-5",
+   "fontPair": "lexend+lexend",
    "imagery": "photo"
   },
   {
-   "id": "slide-045",
+   "id": "slide-060",
    "domain": "slide",
-   "title": "Bộ slide họp hội đồng: ảnh đen trắng doanh nhân, mảng ô liu, chữ hoa mảnh",
+   "title": "Bộ slide ngày nhà đầu tư nền đen: chữ đậm lớn, ảnh cộng đồng chạy bộ và vòng số cam",
    "moods": [
+    "dark-cinematic",
+    "swiss-precise",
+    "energetic"
+   ],
+   "industries": [
+    "sports",
+    "fashion-beauty"
+   ],
+   "audience": [
+    "investors",
+    "premium"
+   ],
+   "host": "s21.q4cdn.com",
+   "theme": "dark",
+   "paletteKey": "0-1",
+   "fontPair": "archivo+archivo",
+   "imagery": "photo"
+  },
+  {
+   "id": "slide-062",
+   "domain": "slide",
+   "title": "Bộ slide kết quả kinh doanh: xanh trời phẳng, chữ hoa mảnh giãn rộng, ảnh sản phẩm cận",
+   "moods": [
+    "clean-light",
     "minimal-mono",
-    "editorial",
-    "luxury"
+    "editorial"
+   ],
+   "industries": [
+    "fashion-beauty",
+    "health-wellness"
+   ],
+   "audience": [
+    "investors",
+    "consumer"
+   ],
+   "host": "s28.q4cdn.com",
+   "theme": "light",
+   "paletteKey": "4-7",
+   "fontPair": "montserrat+montserrat",
+   "imagery": "photo"
+  },
+  {
+   "id": "slide-063",
+   "domain": "slide",
+   "title": "Bộ slide nhà đầu tư nền vàng chanh: chữ đen đậm, ô vàng chứa con số lớn",
+   "moods": [
+    "bold-color",
+    "playful",
+    "energetic"
+   ],
+   "industries": [
+    "media-publishing",
+    "tech-saas"
+   ],
+   "audience": [
+    "investors",
+    "youth"
+   ],
+   "host": "s25.q4cdn.com",
+   "theme": "light",
+   "paletteKey": "2-n",
+   "fontPair": "archivo+archivo",
+   "imagery": "photo"
+  },
+  {
+   "id": "slide-067",
+   "domain": "slide",
+   "title": "Bộ slide kết quả: bìa xanh lam điện với chấm lưới bán sắc, biểu đồ cột cùng màu",
+   "moods": [
+    "tech",
+    "bold-color",
+    "data-dense"
+   ],
+   "industries": [
+    "finance",
+    "tech-saas"
+   ],
+   "audience": [
+    "investors",
+    "b2b"
+   ],
+   "host": "s27.q4cdn.com",
+   "theme": "light",
+   "paletteKey": "4-7",
+   "fontPair": "ibm-plex-sans+ibm-plex-sans",
+   "imagery": "data"
+  },
+  {
+   "id": "slide-069",
+   "domain": "slide",
+   "title": "Bài nói hội nghị: tranh khoa học viễn tưởng toàn khung, tiêu đề chữ hoa đỏ hẹp",
+   "moods": [
+    "dark-cinematic",
+    "retro-print",
+    "editorial"
+   ],
+   "industries": [
+    "tech-saas",
+    "media-publishing"
+   ],
+   "audience": [
+    "public",
+    "developers"
+   ],
+   "host": "idlewords.com",
+   "theme": "dark",
+   "paletteKey": "0-1",
+   "fontPair": "oswald+oswald",
+   "imagery": "photo"
+  },
+  {
+   "id": "slide-072",
+   "domain": "slide",
+   "title": "Bộ slide nhà đầu tư nền tím than: ảnh mèo ngủ ở bìa, nhấn hồng phấn và thẻ trắng",
+   "moods": [
+    "playful",
+    "bold-color",
+    "tech"
+   ],
+   "industries": [
+    "finance",
+    "ecommerce"
+   ],
+   "audience": [
+    "investors",
+    "consumer"
+   ],
+   "host": "s205.q4cdn.com",
+   "theme": "dark",
+   "paletteKey": "1-11",
+   "fontPair": "plus-jakarta-sans+plus-jakarta-sans",
+   "imagery": "mixed"
+  },
+  {
+   "id": "slide-074",
+   "domain": "slide",
+   "title": "Bài nói hội nghị thiết kế: nền trắng, chữ xanh lam mảnh, chấm tròn xanh làm điểm nhấn",
+   "moods": [
+    "clean-light",
+    "swiss-precise",
+    "minimal-mono"
    ],
    "industries": [
     "consulting",
-    "finance"
+    "tech-saas"
    ],
    "audience": [
     "b2b",
-    "internal"
+    "public"
    ],
-   "host": "visme.co",
+   "host": "speakerdeck.com",
    "theme": "light",
-   "paletteKey": "4-2",
-   "fontPair": "montserrat+inter",
-   "imagery": "photo"
+   "paletteKey": "4-7",
+   "fontPair": "be-vietnam-pro+be-vietnam-pro",
+   "imagery": "type-only"
+  },
+  {
+   "id": "slide-075",
+   "domain": "slide",
+   "title": "Bài nói về trình bày slide: bìa xanh than chữ cực đậm, trang trong nền xám nhạt",
+   "moods": [
+    "bold-color",
+    "swiss-precise",
+    "clean-light"
+   ],
+   "industries": [
+    "education",
+    "tech-saas"
+   ],
+   "audience": [
+    "developers",
+    "public"
+   ],
+   "host": "speakerdeck.com",
+   "theme": "light",
+   "paletteKey": "4-7",
+   "fontPair": "plus-jakarta-sans+plus-jakarta-sans",
+   "imagery": "type-only"
+  },
+  {
+   "id": "slide-080",
+   "domain": "slide",
+   "title": "Bài nói về chuyển động: minh hoạ nét vẽ tay đen trên nền giấy xám, chữ uốn vòng",
+   "moods": [
+    "playful",
+    "warm-craft",
+    "organic"
+   ],
+   "industries": [
+    "education",
+    "tech-saas"
+   ],
+   "audience": [
+    "developers",
+    "public"
+   ],
+   "host": "slides.com",
+   "theme": "light",
+   "paletteKey": "4-8",
+   "fontPair": "fraunces+plus-jakarta-sans",
+   "imagery": "illustration"
   },
   {
    "id": "web-001",
@@ -2563,7 +2568,7 @@
    "host": "supabase.com",
    "theme": "light",
    "paletteKey": "4-5",
-   "fontPair": "plus-jakarta-sans+inter",
+   "fontPair": "plus-jakarta-sans+plus-jakarta-sans",
    "imagery": "illustration"
   },
   {
@@ -2717,7 +2722,7 @@
    "host": "nothing.tech",
    "theme": "light",
    "paletteKey": "4-2",
-   "fontPair": "jetbrains-mono+jetbrains-mono",
+   "fontPair": "source-serif-4+jetbrains-mono",
    "imagery": "photo"
   },
   {
@@ -2738,7 +2743,7 @@
    ],
    "host": "rapha.cc",
    "theme": "light",
-   "paletteKey": "4-n",
+   "paletteKey": "4-1",
    "fontPair": "oswald+archivo",
    "imagery": "photo"
   },
@@ -2782,7 +2787,7 @@
    "host": "rive.app",
    "theme": "dark",
    "paletteKey": "0-9",
-   "fontPair": "unbounded+inter",
+   "fontPair": "unbounded+ibm-plex-sans",
    "imagery": "3d"
   },
   {
@@ -2827,7 +2832,7 @@
    "host": "wearecollins.com",
    "theme": "light",
    "paletteKey": "4-1",
-   "fontPair": "playfair-display+inter",
+   "fontPair": "cormorant-garamond+source-serif-4",
    "imagery": "photo"
   },
   {
@@ -2850,7 +2855,7 @@
    "host": "rice-creative.com",
    "theme": "dark",
    "paletteKey": "1-3",
-   "fontPair": "inter+inter",
+   "fontPair": "archivo+archivo",
    "imagery": "photo"
   },
   {
@@ -2873,7 +2878,7 @@
    "host": "pizza4ps.com",
    "theme": "light",
    "paletteKey": "4-7",
-   "fontPair": "source-serif-4+inter",
+   "fontPair": "source-serif-4+ibm-plex-sans",
    "imagery": "mixed"
   },
   {
@@ -3027,7 +3032,7 @@
    ],
    "host": "cursor.com",
    "theme": "light",
-   "paletteKey": "4-n",
+   "paletteKey": "4-1",
    "fontPair": "inter+inter",
    "imagery": "mixed"
   },
@@ -3137,7 +3142,7 @@
    "host": "bang-olufsen.com",
    "theme": "light",
    "paletteKey": "4-n",
-   "fontPair": "inter+inter",
+   "fontPair": "ibm-plex-sans+ibm-plex-sans",
    "imagery": "photo"
   },
   {
@@ -3228,7 +3233,7 @@
    "host": "hay.com",
    "theme": "light",
    "paletteKey": "4-1",
-   "fontPair": "inter+inter",
+   "fontPair": "archivo+archivo",
    "imagery": "photo"
   },
   {
@@ -3272,7 +3277,7 @@
    "host": "pudding.cool",
    "theme": "light",
    "paletteKey": "4-0",
-   "fontPair": "fraunces+inter",
+   "fontPair": "fraunces+space-grotesk",
    "imagery": "data"
   },
   {
@@ -3294,7 +3299,7 @@
    "host": "bitis.com.vn",
    "theme": "light",
    "paletteKey": "4-0",
-   "fontPair": "anton+inter",
+   "fontPair": "anton+be-vietnam-pro",
    "imagery": "photo"
   },
   {
@@ -3317,7 +3322,7 @@
    "host": "figure.ai",
    "theme": "dark",
    "paletteKey": "0-n",
-   "fontPair": "space-grotesk+inter",
+   "fontPair": "space-grotesk+space-grotesk",
    "imagery": "photo"
   },
   {

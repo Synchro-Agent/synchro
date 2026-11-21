@@ -23,7 +23,7 @@
     "file": "poster/poster-025.webp",
     "width": 500,
     "height": 566,
-    "bytes": 25916,
+    "bytes": 25756,
     "layout": "single"
   },
   "tokens": {
@@ -52,16 +52,16 @@
     ],
     "fonts": {
       "head": {
-        "kit": "inter",
+        "kit": "lexend",
         "seen": "",
         "seenLicence": "unknown",
-        "weight": 400
+        "weight": 200
       },
       "body": {
-        "kit": "inter",
+        "kit": "lexend",
         "seen": "",
         "seenLicence": "unknown",
-        "weight": 400
+        "weight": 300
       },
       "mono": null
     },

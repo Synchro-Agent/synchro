@@ -15,9 +15,10 @@
   "audience": [
     "public"
   ],
-  "source_url": "https://www.posterheroes.org/digital-archive/",
+  "source_url": "https://www.posterheroes.org/2019/wp-content/uploads/2019/03/PH5_Keith-Gorman-1.jpg",
   "source_host": "posterheroes.org",
   "source_kind": "public-image",
+  "credit": "Keith Gorman, Poster Heroes 5",
   "captured_at": "2026-11-20",
   "image": {
     "file": "poster/poster-030.webp",
@@ -50,10 +51,10 @@
         "kit": "oswald",
         "seen": "",
         "seenLicence": "unknown",
-        "weight": 400
+        "weight": 500
       },
       "body": {
-        "kit": "inter",
+        "kit": "oswald",
         "seen": "",
         "seenLicence": "unknown",
         "weight": 400

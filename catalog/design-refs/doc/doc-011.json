@@ -61,7 +61,7 @@
         "kit": "ibm-plex-sans",
         "seen": "Noto Sans Semi-Condensed",
         "seenLicence": "open",
-        "weight": 900
+        "weight": 400
       },
       "mono": null
     },
@@ -105,7 +105,7 @@
     },
     "imagery": {
       "kind": "photo",
-      "share": 0,
+      "share": 0.85,
       "light": "warm late-afternoon sun, natural",
       "lens": "35mm documentary, eye level",
       "grade": "warm earth tones, ochre and maroon",

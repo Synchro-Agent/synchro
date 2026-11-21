@@ -56,10 +56,10 @@
         "kit": "montserrat",
         "seen": "",
         "seenLicence": "unknown",
-        "weight": 400
+        "weight": 700
       },
       "body": {
-        "kit": "inter",
+        "kit": "montserrat",
         "seen": "",
         "seenLicence": "unknown",
         "weight": 400
@@ -108,7 +108,7 @@
     },
     "imagery": {
       "kind": "photo",
-      "share": 0,
+      "share": 0.4,
       "light": "even studio light, cutouts",
       "lens": "flat product shots",
       "grade": "warm browns on mint",

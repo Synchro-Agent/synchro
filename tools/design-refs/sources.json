@@ -47,7 +47,8 @@
    "decision": "keep",
    "robots": "allowed",
    "http": 200,
-   "note": "không mở được: fetch failed"
+   "note": "không mở được: fetch failed",
+   "mask": "0.01,0.005,0.14,0.05"
   },
   {
    "id": "web-005",
@@ -133,7 +134,8 @@
    "decision": "keep",
    "robots": "allowed",
    "http": 200,
-   "note": "không mở được: fetch failed"
+   "note": "không mở được: fetch failed",
+   "mask": "0.15,0.12,0.16,0.09;0.565,0.26,0.04,0.04;0.005,0.01,0.04,0.04"
   },
   {
    "id": "web-012",
@@ -168,7 +170,8 @@
    "intent": "minh họa sáng",
    "decision": "keep",
    "robots": "allowed",
-   "http": 200
+   "http": 200,
+   "mask": "0.16,0.86,0.68,0.05"
   },
   {
    "id": "web-015",
@@ -192,7 +195,8 @@
    "decision": "keep",
    "robots": "allowed",
    "http": 200,
-   "note": "không mở được: fetch failed"
+   "note": "không mở được: fetch failed",
+   "mask": "0.04,0.605,0.92,0.05;0.2,0.0,0.6,0.02"
   },
   {
    "id": "web-017",
@@ -228,7 +232,8 @@
    "decision": "keep",
    "robots": "allowed",
    "http": 200,
-   "note": "không mở được: fetch failed"
+   "note": "không mở được: fetch failed",
+   "mask": "0.03,0.0,0.13,0.05;0.82,0.0,0.17,0.065"
   },
   {
    "id": "web-020",
@@ -251,7 +256,8 @@
    "decision": "keep",
    "robots": "allowed",
    "http": 200,
-   "note": "không mở được: fetch failed"
+   "note": "không mở được: fetch failed",
+   "mask": "0.19,0.66,0.62,0.09;0.4,0.0,0.2,0.035;0.45,0.18,0.1,0.11;0.43,0.3,0.11,0.08;0.455,0.365,0.075,0.065"
   },
   {
    "id": "web-022",
@@ -478,7 +484,8 @@
    "decision": "keep",
    "robots": "none",
    "http": 200,
-   "note": "không mở được: fetch failed"
+   "note": "không mở được: fetch failed",
+   "mask": "0.73,0.28,0.09,0.04;0.87,0.13,0.08,0.07;0.03,0.675,0.94,0.04;0.845,0.115,0.12,0.1"
   },
   {
    "id": "web-041",
@@ -489,7 +496,8 @@
    "intent": "truyền thông VN",
    "decision": "keep",
    "robots": "allowed",
-   "http": 404
+   "http": 404,
+   "mask": "0.03,0.015,0.06,0.05;0.40,0.07,0.14,0.035;0.57,0.255,0.07,0.035;0.6,0.25,0.08,0.045;0.36,0.26,0.12,0.05;0.36,0.26,0.16,0.06"
   },
   {
    "id": "web-042",
@@ -631,7 +639,8 @@
    "intent": "sức khỏe minh họa",
    "decision": "keep",
    "robots": "allowed",
-   "http": 200
+   "http": 200,
+   "mask": "0.15,0.19,0.22,0.045"
   },
   {
    "id": "web-054",
@@ -666,7 +675,8 @@
    "intent": "AI dev tối",
    "decision": "keep",
    "robots": "allowed",
-   "http": 200
+   "http": 200,
+   "mask": "0.0,0.0,0.11,0.035"
   },
   {
    "id": "web-057",
@@ -677,7 +687,8 @@
    "intent": "fintech",
    "decision": "keep",
    "robots": "allowed",
-   "http": 200
+   "http": 200,
+   "mask": "0.6,0.145,0.1,0.05;0.82,0.08,0.13,0.09;0.76,0.43,0.2,0.06;0.31,0.63,0.14,0.04"
   },
   {
    "id": "web-058",
@@ -699,7 +710,8 @@
    "intent": "fintech",
    "decision": "keep",
    "robots": "allowed",
-   "http": 200
+   "http": 200,
+   "mask": "0.04,0.86,0.68,0.14"
   },
   {
    "id": "web-060",
@@ -732,7 +744,8 @@
    "intent": "âm nhạc",
    "decision": "keep",
    "robots": "allowed",
-   "http": 200
+   "http": 200,
+   "mask": "0.26,0.585,0.11,0.035"
   },
   {
    "id": "web-063",
@@ -800,7 +813,8 @@
    "intent": "truyền thông thiết kế",
    "decision": "keep",
    "robots": "allowed",
-   "http": 200
+   "http": 200,
+   "mask": "0.41,0.39,0.15,0.035;0.08,0.42,0.15,0.04"
   },
   {
    "id": "web-069",
@@ -834,7 +848,8 @@
    "intent": "giày trẻ VN",
    "decision": "keep",
    "robots": "allowed",
-   "http": 200
+   "http": 200,
+   "mask": "0.025,0.095,0.085,0.045;0.03,0.905,0.55,0.09"
   },
   {
    "id": "web-072",
@@ -940,7 +955,8 @@
    "intent": "du lịch VN",
    "decision": "keep",
    "robots": "allowed",
-   "http": 200
+   "http": 200,
+   "mask": "0.44,0.062,0.12,0.04"
   },
   {
    "id": "web-081",
@@ -1027,7 +1043,8 @@
    "decision": "keep",
    "robots": "allowed",
    "http": 200,
-   "wait": 5000
+   "wait": 5000,
+   "mask": "0.08,0.115,0.1,0.04"
   },
   {
    "id": "dashboard-006",
@@ -1165,7 +1182,8 @@
    "decision": "keep",
    "robots": "none",
    "http": 200,
-   "wait": 5000
+   "wait": 5000,
+   "mask": "0.0,0.0,0.1,0.035;0.195,0.005,0.145,0.04"
   },
   {
    "id": "dashboard-017",
@@ -1348,7 +1366,8 @@
    "decision": "keep",
    "robots": "allowed",
    "http": 200,
-   "wait": 5000
+   "wait": 5000,
+   "mask": "0.0,0.0,0.08,0.045"
   },
   {
    "id": "dashboard-032",
@@ -1473,7 +1492,8 @@
    "wait": 6000,
    "scroll": 1,
    "robots": "allowed",
-   "http": 200
+   "http": 200,
+   "mask": "0.64,0.445,0.12,0.04"
   },
   {
    "id": "dashboard-042",
@@ -1500,7 +1520,8 @@
    "wait": 6000,
    "scroll": 1,
    "robots": "allowed",
-   "http": 200
+   "http": 200,
+   "mask": "0.84,0.47,0.1,0.03;0.44,0.87,0.1,0.03;0.84,0.87,0.1,0.03;0.06,0.0,0.24,0.02;0.67,0.198,0.19,0.025"
   },
   {
    "id": "email-001",
@@ -1538,7 +1559,8 @@
    "brand": "AutoCamp",
    "intent": "email thật",
    "robots": "allowed",
-   "http": 200
+   "http": 200,
+   "mask": "0.2,0.035,0.6,0.045"
   },
   {
    "id": "email-004",
@@ -1550,7 +1572,8 @@
    "brand": "Google",
    "intent": "email thật",
    "robots": "allowed",
-   "http": 200
+   "http": 200,
+   "mask": "0.05,0.0,0.3,0.02;0.05,0.0,0.3,0.035"
   },
   {
    "id": "email-005",
@@ -1571,12 +1594,14 @@
    "vn": false,
    "decision": "keep",
    "imageUrl": "https://raw.githubusercontent.com/mjmlio/email-templates/master/thumbnails/street-expo.jpg",
-   "sourceUrl": "https://mjml.io/templates",
+   "sourceUrl": "https://raw.githubusercontent.com/mjmlio/email-templates/master/thumbnails/street-expo.jpg",
    "brand": "MJML",
    "intent": "mẫu mã nguồn mở",
    "sourceKind": "public-image",
    "robots": "allowed",
-   "http": 200
+   "http": 200,
+   "mask": "0.1,0.145,0.24,0.04",
+   "credit": "MJML, mẫu thư street-expo (mjmlio/email-templates)"
   },
   {
    "id": "email-007",
@@ -1584,12 +1609,13 @@
    "vn": false,
    "decision": "keep",
    "imageUrl": "https://raw.githubusercontent.com/mjmlio/email-templates/master/thumbnails/ticketshop.jpg",
-   "sourceUrl": "https://mjml.io/templates",
+   "sourceUrl": "https://raw.githubusercontent.com/mjmlio/email-templates/master/thumbnails/ticketshop.jpg",
    "brand": "MJML",
    "intent": "mẫu mã nguồn mở",
    "sourceKind": "public-image",
    "robots": "allowed",
-   "http": 200
+   "http": 200,
+   "credit": "MJML, mẫu thư ticketshop (mjmlio/email-templates)"
   },
   {
    "id": "email-008",
@@ -1597,12 +1623,14 @@
    "vn": false,
    "decision": "keep",
    "imageUrl": "https://raw.githubusercontent.com/mjmlio/email-templates/master/thumbnails/tech-geek.jpg",
-   "sourceUrl": "https://mjml.io/templates",
+   "sourceUrl": "https://raw.githubusercontent.com/mjmlio/email-templates/master/thumbnails/tech-geek.jpg",
    "brand": "MJML",
    "intent": "mẫu mã nguồn mở",
    "sourceKind": "public-image",
    "robots": "allowed",
-   "http": 200
+   "http": 200,
+   "mask": "0.1,0.04,0.27,0.045",
+   "credit": "MJML, mẫu thư tech-geek (mjmlio/email-templates)"
   },
   {
    "id": "email-009",
@@ -1830,12 +1858,14 @@
    "vn": false,
    "decision": "keep",
    "imageUrl": "https://thumb.wikimedia.org/wikipedia/commons/thumb/6/6e/W.P.A._concerts_of_unusual_music_LCCN98514344.jpg/1280px-W.P.A._concerts_of_unusual_music_LCCN98514344.jpg",
-   "sourceUrl": "https://commons.wikimedia.org/wiki/File:W.P.A._concerts_of_unusual_music_LCCN98514344.jpg",
+   "sourceUrl": "https://www.loc.gov/pictures/item/98514344/",
    "brand": "WPA",
    "sourceKind": "cc0",
    "intent": "poster hòa nhạc in lụa 1930s",
    "robots": "allowed",
-   "http": 200
+   "http": 200,
+   "credit": "Federal Music Project (WPA), poster in lụa, Library of Congress",
+   "rightsUrl": "https://www.loc.gov/pictures/item/98514344/"
   },
   {
    "id": "poster-002",
@@ -1843,12 +1873,14 @@
    "vn": false,
    "decision": "keep",
    "imageUrl": "https://thumb.wikimedia.org/wikipedia/commons/thumb/7/70/Alfons_Mucha_-_1896_-_La_Dame_aux_Cam%C3%A9lias_-_Sarah_Bernhardt.jpg/1280px-Alfons_Mucha_-_1896_-_La_Dame_aux_Cam%C3%A9lias_-_Sarah_Bernhardt.jpg",
-   "sourceUrl": "https://commons.wikimedia.org/wiki/File:Alfons_Mucha_-_1896_-_La_Dame_aux_Cam%C3%A9lias_-_Sarah_Bernhardt.jpg",
+   "sourceUrl": "https://www.loc.gov/pictures/item/00652382/",
    "brand": "Mucha",
    "sourceKind": "cc0",
    "intent": "tân nghệ thuật",
    "robots": "allowed",
-   "http": 200
+   "http": 200,
+   "credit": "Alphonse Mucha, La Dame aux Camélias, 1896, Library of Congress",
+   "rightsUrl": "https://www.loc.gov/pictures/item/00652382/"
   },
   {
    "id": "poster-003",
@@ -1916,7 +1948,8 @@
    "brand": "Dogma Collection",
    "intent": "tranh cổ động Việt Nam",
    "robots": "allowed",
-   "http": 200
+   "http": 200,
+   "mask": "0.8,0.9,0.2,0.1"
   },
   {
    "id": "poster-009",
@@ -1927,7 +1960,8 @@
    "brand": "Dogma Collection",
    "intent": "tranh cổ động Việt Nam",
    "robots": "allowed",
-   "http": 200
+   "http": 200,
+   "mask": "0.82,0.9,0.18,0.1"
   },
   {
    "id": "poster-010",
@@ -2028,23 +2062,25 @@
    "id": "poster-018",
    "domain": "poster",
    "vn": false,
-   "decision": "keep",
+   "decision": "drop",
    "imagePage": "https://posterhouse.org/exhibitions/",
    "brand": "Poster House",
    "intent": "poster hiện đại",
    "robots": "allowed",
-   "http": 200
+   "http": 200,
+   "note": "tên và lý do chấm nhầm sang một poster khác; trang nguồn là trang danh sách triển lãm đã đổi ảnh, không còn tìm được tác phẩm để ghi công"
   },
   {
    "id": "poster-019",
    "domain": "poster",
    "vn": false,
-   "decision": "keep",
+   "decision": "drop",
    "imagePage": "https://www.sonar.es/",
    "brand": "Sónar",
    "intent": "poster hiện đại",
    "robots": "none",
-   "http": 200
+   "http": 200,
+   "note": "băng quảng cáo ngang 2:1 của trang web, không phải poster"
   },
   {
    "id": "poster-020",
@@ -2086,15 +2122,15 @@
    "id": "poster-023",
    "domain": "poster",
    "vn": false,
-   "decision": "candidate",
-   "imageUrl": "https://upload.wikimedia.org/wikipedia/commons/d/d2/Theo_van_Doesburg_Design_for_a_poster.jpg",
+   "decision": "keep",
+   "imageUrl": "https://thumb.wikimedia.org/wikipedia/commons/thumb/d/d2/Theo_van_Doesburg_Design_for_a_poster.jpg/1280px-Theo_van_Doesburg_Design_for_a_poster.jpg",
    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Theo_van_Doesburg_Design_for_a_poster.jpg",
    "brand": "De Stijl",
    "sourceKind": "cc0",
    "intent": "De Stijl",
    "robots": "allowed",
-   "http": 429,
-   "note": "chưa chụp được hoặc chưa chọn vào thư viện"
+   "credit": "Theo van Doesburg, thiết kế poster triển lãm",
+   "rightsUrl": "https://commons.wikimedia.org/wiki/File:Theo_van_Doesburg_Design_for_a_poster.jpg#Licensing"
   },
   {
    "id": "poster-024",
@@ -2114,7 +2150,8 @@
    "imagePage": "https://www.posterfortomorrow.org/en/blog/project/the_right_to_education",
    "brand": "Poster for Tomorrow",
    "intent": "poster xã hội hiện đại",
-   "robots": "allowed"
+   "robots": "allowed",
+   "mask": "0.32,0.915,0.28,0.055"
   },
   {
    "id": "poster-026",
@@ -2159,7 +2196,7 @@
    "id": "slide-003",
    "domain": "slide",
    "vn": false,
-   "decision": "keep",
+   "decision": "drop",
    "pdfUrl": "https://services.google.com/fh/files/misc/e_conomy_sea_2026_report.pdf",
    "pages": "1,5,20,40",
    "gridMode": true,
@@ -2167,7 +2204,8 @@
    "intent": "bộ slide",
    "sourceUrl": "https://economysea.withgoogle.com/",
    "robots": "allowed",
-   "http": 200
+   "http": 200,
+   "note": "trang báo cáo xu hướng; giữ tối đa 4 trang báo cáo, thay bằng bộ slide thật"
   },
   {
    "id": "slide-004",
@@ -2188,7 +2226,7 @@
    "id": "slide-005",
    "domain": "slide",
    "vn": true,
-   "decision": "keep",
+   "decision": "drop",
    "pdfUrl": "https://doventures.vc/assets/uploads/reports/download/vietnam-innovation-and-private-capital-report-2026-1779942817.pdf",
    "pages": "1,6,15,25",
    "gridMode": true,
@@ -2196,7 +2234,8 @@
    "intent": "bộ slide",
    "sourceUrl": "https://doventures.vc/en/insights/reports/vietnam-innovation-and-private-capital-report-2026",
    "robots": "allowed",
-   "http": 200
+   "http": 200,
+   "note": "trang báo cáo xu hướng; giữ tối đa 4 trang báo cáo, thay bằng bộ slide thật"
   },
   {
    "id": "slide-006",
@@ -2291,14 +2330,15 @@
    "id": "slide-013",
    "domain": "slide",
    "vn": false,
-   "decision": "keep",
+   "decision": "drop",
    "pdfUrl": "https://www.accenture.com/content/dam/accenture/final/accenture-com/document-3/Accenture-LifeTrends2025-Report.pdf",
    "pages": "1,4,9,14",
    "gridMode": true,
    "brand": "Accenture",
    "sourceUrl": "https://www.accenture.com/us-en/insights/song/accenture-life-trends",
    "intent": "báo cáo xu hướng",
-   "robots": "allowed"
+   "robots": "allowed",
+   "note": "trang báo cáo xu hướng; giữ tối đa 4 trang báo cáo, thay bằng bộ slide thật"
   },
   {
    "id": "slide-014",
@@ -2488,7 +2528,8 @@
    "intent": "tài liệu",
    "wait": 4000,
    "robots": "allowed",
-   "http": 200
+   "http": 200,
+   "mask": "0.008,0.004,0.13,0.02"
   },
   {
    "id": "doc-010",
@@ -2524,7 +2565,8 @@
    "intent": "tài liệu",
    "wait": 4000,
    "robots": "allowed",
-   "http": 200
+   "http": 200,
+   "mask": "0.02,0.002,0.29,0.016"
   },
   {
    "id": "doc-013",
@@ -2548,7 +2590,8 @@
    "intent": "tài liệu",
    "wait": 4000,
    "robots": "allowed",
-   "http": 200
+   "http": 200,
+   "mask": "0.69,0.21,0.25,0.4"
   },
   {
    "id": "doc-015",
@@ -2560,7 +2603,8 @@
    "intent": "tài liệu",
    "wait": 4000,
    "robots": "allowed",
-   "http": 200
+   "http": 200,
+   "mask": "0.69,0.23,0.25,0.33;0.51,0.65,0.42,0.13;0.52,0.4,0.17,0.14"
   },
   {
    "id": "doc-016",
@@ -2586,7 +2630,9 @@
    "sourceUrl": "https://hai.stanford.edu/ai-index/2025-ai-index-report",
    "intent": "báo cáo A4",
    "robots": "allowed",
-   "http": 200
+   "http": 200,
+   "mask": "0.72,0.0,0.28,0.1",
+   "credit": "Stanford HAI, AI Index Report 2025, thư mở đầu"
   },
   {
    "id": "doc-018",
@@ -2599,7 +2645,9 @@
    "sourceUrl": "https://hai.stanford.edu/ai-index/2025-ai-index-report",
    "intent": "trang biểu đồ A4",
    "robots": "allowed",
-   "http": 200
+   "http": 200,
+   "mask": "0.72,0.0,0.28,0.1",
+   "credit": "Stanford HAI, AI Index Report 2025, chương Nghiên cứu và Phát triển"
   },
   {
    "id": "doc-019",
@@ -2613,7 +2661,8 @@
    "intent": "báo cáo thường niên VN",
    "robots": "allowed",
    "http": 200,
-   "mask": "0.66,0,0.34,0.16"
+   "mask": "0.66,0,0.34,0.16",
+   "credit": "Vinamilk, báo cáo thường niên, trang bìa"
   },
   {
    "id": "doc-020",
@@ -2626,7 +2675,8 @@
    "sourceUrl": "https://www.vinamilk.com.vn/vi/bao-cao-thuong-nien",
    "intent": "trang nội dung báo cáo VN",
    "robots": "allowed",
-   "http": 200
+   "http": 200,
+   "credit": "Vinamilk, báo cáo thường niên, trang số liệu cổ đông"
   },
   {
    "id": "doc-021",
@@ -2670,13 +2720,14 @@
    "id": "slide-023",
    "domain": "slide",
    "imageUrl": "https://imgproxy.services.pitch.com/_/plain/pitch-publish-user-assets/templates/posters/startup.jpg",
-   "sourceUrl": "https://pitch.com/templates",
+   "sourceUrl": "https://imgproxy.services.pitch.com/_/plain/pitch-publish-user-assets/templates/posters/startup.jpg",
    "brand": "Pitch",
    "intent": "bìa mẫu 3D",
    "vn": false,
    "decision": "keep",
    "robots": "allowed",
-   "http": 200
+   "http": 200,
+   "credit": "Pitch, mẫu trình chiếu Startup"
   },
   {
    "id": "slide-024",
@@ -2685,10 +2736,11 @@
    "brand": "Slidesgo",
    "intent": "bộ slide tối chuyển sắc",
    "vn": false,
-   "decision": "keep",
+   "decision": "drop",
    "robots": "allowed",
    "http": 200,
-   "slideMatch": "dark-soft-gradients-pitch-deck___media_library_original"
+   "slideMatch": "dark-soft-gradients-pitch-deck___media_library_original",
+   "note": "mẫu bán sẵn trên chợ mẫu trình chiếu, thay bằng bộ slide thật do người thiết kế"
   },
   {
    "id": "slide-025",
@@ -2710,10 +2762,11 @@
    "brand": "Slidesgo",
    "intent": "bộ slide ảnh",
    "vn": false,
-   "decision": "keep",
+   "decision": "drop",
    "robots": "allowed",
    "http": 200,
-   "slideMatch": "forsaken-places-portfolio___media_library_original"
+   "slideMatch": "forsaken-places-portfolio___media_library_original",
+   "note": "mẫu bán sẵn trên chợ mẫu trình chiếu, thay bằng bộ slide thật do người thiết kế"
   },
   {
    "id": "slide-027",
@@ -2722,9 +2775,10 @@
    "brand": "Slidesgo",
    "intent": "dự phòng",
    "vn": false,
-   "decision": "keep",
+   "decision": "drop",
    "robots": "allowed",
-   "http": 200
+   "http": 200,
+   "note": "mẫu bán sẵn trên chợ mẫu trình chiếu, thay bằng bộ slide thật do người thiết kế"
   },
   {
    "id": "slide-028",
@@ -2747,9 +2801,10 @@
    "brand": "SlidesCarnival",
    "intent": "bộ slide quảng cáo in",
    "vn": false,
-   "decision": "keep",
+   "decision": "drop",
    "robots": "allowed",
-   "http": 200
+   "http": 200,
+   "note": "mẫu bán sẵn trên chợ mẫu trình chiếu, thay bằng bộ slide thật do người thiết kế"
   },
   {
    "id": "slide-030",
@@ -2759,9 +2814,10 @@
    "brand": "SlidesCarnival",
    "intent": "bộ slide tổng kết năm",
    "vn": false,
-   "decision": "keep",
+   "decision": "drop",
    "robots": "allowed",
-   "http": 200
+   "http": 200,
+   "note": "mẫu bán sẵn trên chợ mẫu trình chiếu, thay bằng bộ slide thật do người thiết kế"
   },
   {
    "id": "slide-031",
@@ -2771,9 +2827,10 @@
    "brand": "SlidesCarnival",
    "intent": "dự phòng",
    "vn": false,
-   "decision": "keep",
+   "decision": "drop",
    "robots": "allowed",
-   "http": 200
+   "http": 200,
+   "note": "mẫu bán sẵn trên chợ mẫu trình chiếu, thay bằng bộ slide thật do người thiết kế"
   },
   {
    "id": "slide-032",
@@ -2783,9 +2840,10 @@
    "brand": "SlidesMania",
    "intent": "cắt dán tạp chí",
    "vn": false,
-   "decision": "keep",
+   "decision": "drop",
    "robots": "allowed",
-   "http": 200
+   "http": 200,
+   "note": "mẫu bán sẵn trên chợ mẫu trình chiếu, thay bằng bộ slide thật do người thiết kế"
   },
   {
    "id": "slide-033",
@@ -2794,9 +2852,10 @@
    "brand": "SlidesMania",
    "intent": "mẫu nhóm",
    "vn": false,
-   "decision": "keep",
+   "decision": "drop",
    "robots": "allowed",
-   "http": 200
+   "http": 200,
+   "note": "mẫu bán sẵn trên chợ mẫu trình chiếu, thay bằng bộ slide thật do người thiết kế"
   },
   {
    "id": "slide-035",
@@ -2807,9 +2866,10 @@
    "brand": "Spotify",
    "intent": "báo cáo xu hướng màu mạnh",
    "vn": false,
-   "decision": "keep",
+   "decision": "drop",
    "robots": "allowed",
-   "http": 200
+   "http": 200,
+   "note": "trang báo cáo xu hướng; giữ tối đa 4 trang báo cáo, thay bằng bộ slide thật"
   },
   {
    "id": "slide-036",
@@ -2834,82 +2894,92 @@
    "gridMode": true,
    "brand": "PwC",
    "intent": "báo cáo VN",
-   "decision": "keep",
+   "decision": "drop",
    "robots": "allowed",
    "http": 200,
-   "mask": "0,0,0.09,0.07"
+   "mask": "0,0,0.09,0.07",
+   "note": "trang báo cáo xu hướng; giữ tối đa 4 trang báo cáo, thay bằng bộ slide thật"
   },
   {
    "id": "poster-027",
    "domain": "poster",
    "imageUrl": "https://100-beste-plakate.de/wp-content/uploads/2026/06/100bp25_29889-2.jpg",
-   "sourceUrl": "https://100-beste-plakate.de/plakate/filter/jahr:2025/",
+   "sourceUrl": "https://100-beste-plakate.de/wp-content/uploads/2026/06/100bp25_29889-2.jpg",
    "brand": "100 Beste Plakate",
    "intent": "poster phim tối",
    "vn": false,
    "decision": "keep",
    "robots": "allowed",
-   "http": 200
+   "http": 200,
+   "mask": "0.28,0.945,0.46,0.04",
+   "credit": "Martial Grin, Alix Debraine, Lausanne Underground Film & Music Festival 2025, 100 Beste Plakate 2025"
   },
   {
    "id": "poster-028",
    "domain": "poster",
    "imageUrl": "https://100-beste-plakate.de/wp-content/uploads/2026/06/100bp25_29610.jpg",
-   "sourceUrl": "https://100-beste-plakate.de/plakate/filter/jahr:2025/",
+   "sourceUrl": "https://100-beste-plakate.de/wp-content/uploads/2026/06/100bp25_29610.jpg",
    "brand": "100 Beste Plakate",
    "intent": "poster âm nhạc 3D",
    "vn": false,
    "decision": "keep",
    "robots": "allowed",
-   "http": 200
+   "http": 200,
+   "mask": "0.015,0.175,0.18,0.04;0.55,0.222,0.1,0.03;0.7,0.215,0.1,0.04",
+   "credit": "H A N D D, Der Sommer in Stuttgart 2025, 100 Beste Plakate 2025"
   },
   {
    "id": "poster-029",
    "domain": "poster",
    "imageUrl": "https://100-beste-plakate.de/wp-content/uploads/2026/06/100bp25_29536-3.jpg",
-   "sourceUrl": "https://100-beste-plakate.de/plakate/filter/jahr:2025/",
+   "sourceUrl": "https://100-beste-plakate.de/wp-content/uploads/2026/06/100bp25_29536-3.jpg",
    "brand": "100 Beste Plakate",
    "intent": "poster văn hoá màu mạnh",
    "vn": false,
    "decision": "keep",
    "robots": "allowed",
-   "http": 200
+   "http": 200,
+   "mask": "0.02,0.955,0.7,0.04",
+   "credit": "SUPERO, K-Culture (Printemps Culturel Neuchâtel 2025), 100 Beste Plakate 2025"
   },
   {
    "id": "poster-030",
    "domain": "poster",
    "imageUrl": "https://www.posterheroes.org/2019/wp-content/uploads/2019/03/PH5_Keith-Gorman-1.jpg",
-   "sourceUrl": "https://www.posterheroes.org/digital-archive/",
+   "sourceUrl": "https://www.posterheroes.org/2019/wp-content/uploads/2019/03/PH5_Keith-Gorman-1.jpg",
    "brand": "Poster Heroes",
    "intent": "poster xã hội tối",
    "vn": false,
    "decision": "keep",
    "robots": "allowed",
-   "http": 200
+   "http": 200,
+   "credit": "Keith Gorman, Poster Heroes 5"
   },
   {
    "id": "poster-031",
    "domain": "poster",
    "imageUrl": "https://www.posterheroes.org/2019/wp-content/uploads/2019/04/PH6_Giuseppe-Bussolari-1-1.jpg",
-   "sourceUrl": "https://www.posterheroes.org/digital-archive/",
+   "sourceUrl": "https://www.posterheroes.org/2019/wp-content/uploads/2019/04/PH6_Giuseppe-Bussolari-1-1.jpg",
    "brand": "Poster Heroes",
    "intent": "poster đỏ tối giản",
    "vn": false,
    "decision": "keep",
    "robots": "allowed",
-   "http": 200
+   "http": 200,
+   "credit": "Giuseppe Bussolari, Poster Heroes 6"
   },
   {
    "id": "poster-032",
    "domain": "poster",
    "imageUrl": "https://www.posterheroes.org/2019/wp-content/uploads/2019/03/PH5_Rachel-Pleesz-1.jpg",
-   "sourceUrl": "https://www.posterheroes.org/digital-archive/",
+   "sourceUrl": "https://www.posterheroes.org/2019/wp-content/uploads/2019/03/PH5_Rachel-Pleesz-1.jpg",
    "brand": "Poster Heroes",
    "intent": "poster minh hoạ",
    "vn": false,
    "decision": "keep",
    "robots": "allowed",
-   "http": 200
+   "http": 200,
+   "credit": "Rachel Pleesz, Poster Heroes 5"
   },
   {
    "id": "poster-033",
@@ -2966,13 +3036,14 @@
    "id": "poster-037",
    "domain": "poster",
    "imageUrl": "https://posterhouse.org/wp-content/uploads/2026/06/PH.548.low_.jpg",
-   "sourceUrl": "https://posterhouse.org/exhibitions/",
+   "sourceUrl": "https://posterhouse.org/wp-content/uploads/2026/06/PH.548.low_.jpg",
    "brand": "Poster House",
    "intent": "poster không gian tối",
    "vn": false,
    "decision": "keep",
    "robots": "allowed",
-   "http": 200
+   "http": 200,
+   "credit": "Poster tuyển quân Lục quân Mỹ, bộ sưu tập Poster House (PH.548)"
   },
   {
    "id": "poster-038",
@@ -2985,7 +3056,9 @@
    "vn": false,
    "decision": "keep",
    "robots": "allowed",
-   "http": 200
+   "http": 200,
+   "credit": "Henri de Toulouse-Lautrec, May Milton, 1895, Cleveland Museum of Art",
+   "rightsUrl": "https://openaccess-api.clevelandart.org/api/artworks/1952.10"
   },
   {
    "id": "poster-039",
@@ -2998,103 +3071,113 @@
    "vn": false,
    "decision": "keep",
    "robots": "allowed",
-   "http": 200
+   "http": 200,
+   "credit": "Pierre Bonnard, La Revue Blanche, 1894, Cleveland Museum of Art",
+   "rightsUrl": "https://openaccess-api.clevelandart.org/api/artworks/2009.556"
   },
   {
    "id": "email-026",
    "domain": "email",
    "imageUrl": "https://tabular.b-cdn.net/thumbnails/036e07bf-c280-48ce-ae7c-8bfc6a773180/680x3847.jpg",
-   "sourceUrl": "https://tabular.email/templates",
+   "sourceUrl": "https://tabular.email/demo/ecommerce-fashion-products-email-template",
    "brand": "Tabular",
    "intent": "thư thời trang ảnh",
    "vn": false,
    "decision": "keep",
    "robots": "allowed",
-   "http": 200
+   "http": 200,
+   "credit": "Tabular, mẫu thư Fashion products"
   },
   {
    "id": "email-027",
    "domain": "email",
    "imageUrl": "https://tabular.b-cdn.net/thumbnails/75811eef-be86-4f59-9c8e-15b06761d8e4/680x1454.jpg",
-   "sourceUrl": "https://tabular.email/templates",
+   "sourceUrl": "https://tabular.email/demo/welcome-email-template",
    "brand": "Tabular",
    "intent": "thư chào mừng ảnh phong cảnh",
    "vn": false,
    "decision": "keep",
    "robots": "allowed",
-   "http": 200
+   "http": 200,
+   "credit": "Tabular, mẫu thư Welcome message"
   },
   {
    "id": "email-028",
    "domain": "email",
    "imageUrl": "https://tabular.b-cdn.net/thumbnails/90ea55ce-cf6c-491d-bbb7-3d3dd7b41fc8/680x1131.jpg",
-   "sourceUrl": "https://tabular.email/templates",
+   "sourceUrl": "https://tabular.b-cdn.net/thumbnails/90ea55ce-cf6c-491d-bbb7-3d3dd7b41fc8/680x1131.jpg",
    "brand": "Tabular",
    "intent": "thư khuyến mãi tối",
    "vn": false,
    "decision": "keep",
    "robots": "allowed",
-   "http": 200
+   "http": 200,
+   "credit": "Tabular, mẫu thư trong thư viện mẫu"
   },
   {
    "id": "email-029",
    "domain": "email",
    "imageUrl": "https://designmodo.com/wp-content/themes/designmodo/assets/img/landing/templates/email-template-1@2x.webp",
-   "sourceUrl": "https://designmodo.com/postcards/",
+   "sourceUrl": "https://designmodo.com/wp-content/themes/designmodo/assets/img/landing/templates/email-template-1@2x.webp",
    "brand": "Postcards",
    "intent": "thư SaaS tối",
    "vn": false,
    "decision": "keep",
    "robots": "allowed",
-   "http": 200
+   "http": 200,
+   "credit": "Designmodo Postcards, mẫu thư số 1"
   },
   {
    "id": "email-030",
    "domain": "email",
    "imageUrl": "https://designmodo.com/wp-content/themes/designmodo/assets/img/landing/templates/email-template-4@2x.webp",
-   "sourceUrl": "https://designmodo.com/postcards/",
+   "sourceUrl": "https://designmodo.com/wp-content/themes/designmodo/assets/img/landing/templates/email-template-4@2x.webp",
    "brand": "Postcards",
    "intent": "thư sản phẩm tối",
    "vn": false,
    "decision": "keep",
    "robots": "allowed",
-   "http": 200
+   "http": 200,
+   "credit": "Designmodo Postcards, mẫu thư số 4"
   },
   {
    "id": "email-031",
    "domain": "email",
    "imageUrl": "https://designmodo.com/wp-content/themes/designmodo/assets/img/landing/templates/email-template-6@2x.webp",
-   "sourceUrl": "https://designmodo.com/postcards/",
+   "sourceUrl": "https://designmodo.com/wp-content/themes/designmodo/assets/img/landing/templates/email-template-6@2x.webp",
    "brand": "Postcards",
    "intent": "thư đồ uống xanh",
    "vn": false,
    "decision": "keep",
    "robots": "allowed",
-   "http": 200
+   "http": 200,
+   "credit": "Designmodo Postcards, mẫu thư số 6"
   },
   {
    "id": "email-032",
    "domain": "email",
    "imageUrl": "https://d1vyenbk43iobe.cloudfront.net/application/premade_templates/screenshots/145.jpg",
-   "sourceUrl": "https://topol.io/email-templates",
+   "sourceUrl": "https://topol.io/email-templates/spring-sale-up-for-store",
    "brand": "Topol",
    "intent": "thư thời trang pastel",
    "vn": false,
    "decision": "keep",
    "robots": "allowed",
-   "http": 200
+   "http": 200,
+   "credit": "Topol, mẫu thư Spring sale up for store"
   },
   {
    "id": "email-033",
    "domain": "email",
    "imageUrl": "https://d1vyenbk43iobe.cloudfront.net/application/premade_templates/screenshots/135.jpg",
-   "sourceUrl": "https://topol.io/email-templates",
+   "sourceUrl": "https://topol.io/email-templates/happy-halloween-gifts",
    "brand": "Topol",
    "intent": "thư lễ hội tối",
    "vn": false,
    "decision": "keep",
    "robots": "allowed",
-   "http": 200
+   "http": 200,
+   "credit": "Topol, mẫu thư Happy Halloween gifts"
   },
   {
    "id": "doc-022",
@@ -3107,19 +3190,21 @@
    "vn": false,
    "decision": "keep",
    "robots": "allowed",
-   "http": 200
+   "http": 200,
+   "mask": "0.36,0.115,0.14,0.045"
   },
   {
    "id": "doc-023",
    "domain": "doc",
-   "url": "https://pudding.cool/",
-   "wait": 4000,
+   "url": "https://pudding.cool/2025/07/kids-books",
+   "wait": 5000,
    "brand": "The Pudding",
    "intent": "bài dữ liệu",
    "vn": false,
    "decision": "keep",
    "robots": "none",
-   "http": 200
+   "http": 200,
+   "note": "trước đây trùng trang chủ với web-069, chụp lại một bài cụ thể"
   },
   {
    "id": "doc-024",
@@ -3172,7 +3257,9 @@
    "vn": false,
    "decision": "keep",
    "robots": "none",
-   "http": 200
+   "http": 200,
+   "credit": "Endel Palmiste, Balti plakat, Art Museum of Estonia",
+   "rightsUrl": "https://www.europeana.eu/item/401/item_R4W4SB5A4UY4DZGZJBQTNJUJVCRD2PBW"
   },
   {
    "id": "poster-041",
@@ -3184,7 +3271,9 @@
    "intent": "poster tối hình người",
    "vn": false,
    "decision": "keep",
-   "robots": "none"
+   "robots": "none",
+   "credit": "Enno Rand, Ants Tolli, Balti plakat '84, Art Museum of Estonia",
+   "rightsUrl": "https://www.europeana.eu/item/401/item_AGO734RERPJSZC3VWWJVHURVXOADI5U4"
   },
   {
    "id": "poster-042",
@@ -3260,9 +3349,10 @@
    "brand": "Accenture",
    "intent": "báo cáo xu hướng đời sống",
    "vn": false,
-   "decision": "keep",
+   "decision": "drop",
    "robots": "allowed",
-   "http": 200
+   "http": 200,
+   "note": "trang báo cáo xu hướng; giữ tối đa 4 trang báo cáo, thay bằng bộ slide thật"
   },
   {
    "id": "slide-042",
@@ -3273,9 +3363,10 @@
    "brand": "Deloitte",
    "intent": "báo cáo xu hướng công nghệ",
    "vn": false,
-   "decision": "keep",
+   "decision": "drop",
    "robots": "allowed",
-   "http": 200
+   "http": 200,
+   "note": "trang báo cáo xu hướng; giữ tối đa 4 trang báo cáo, thay bằng bộ slide thật"
   },
   {
    "id": "slide-043",
@@ -3291,9 +3382,10 @@
    "brand": "Visme",
    "intent": "bộ slide ảnh không gian",
    "vn": false,
-   "decision": "keep",
+   "decision": "drop",
    "robots": "allowed",
-   "http": 200
+   "http": 200,
+   "note": "mẫu bán sẵn trên chợ mẫu trình chiếu, thay bằng bộ slide thật do người thiết kế"
   },
   {
    "id": "slide-044",
@@ -3309,8 +3401,9 @@
    "brand": "Visme",
    "intent": "bộ slide nội thất",
    "vn": false,
-   "decision": "keep",
-   "robots": "allowed"
+   "decision": "drop",
+   "robots": "allowed",
+   "note": "mẫu bán sẵn trên chợ mẫu trình chiếu, nguồn là trang danh sách"
   },
   {
    "id": "slide-045",
@@ -3326,8 +3419,9 @@
    "brand": "Visme",
    "intent": "bộ slide họp ảnh đen trắng",
    "vn": false,
-   "decision": "keep",
-   "robots": "allowed"
+   "decision": "drop",
+   "robots": "allowed",
+   "note": "mẫu bán sẵn trên chợ mẫu trình chiếu, thay bằng bộ slide thật do người thiết kế"
   },
   {
    "id": "doc-027",
@@ -3355,6 +3449,629 @@
    "robots": "allowed",
    "http": 200,
    "note": "thẻ bài bị ẩn chữ khi chụp, tiêu đề là tên thương hiệu"
+  },
+  {
+   "domain": "slide",
+   "decision": "keep",
+   "id": "slide-046",
+   "grid": [
+    "https://files.speakerdeck.com/presentations/5b53e598845245e8abf8072057c8ef71/slide_0.jpg",
+    "https://files.speakerdeck.com/presentations/5b53e598845245e8abf8072057c8ef71/slide_7.jpg",
+    "https://files.speakerdeck.com/presentations/5b53e598845245e8abf8072057c8ef71/slide_14.jpg",
+    "https://files.speakerdeck.com/presentations/5b53e598845245e8abf8072057c8ef71/slide_21.jpg"
+   ],
+   "sourceUrl": "https://speakerdeck.com/visional_engineering_and_design/designship2025",
+   "brand": "Visional",
+   "intent": "bài nói hội nghị thiết kế, nền đen chữ khối",
+   "vn": false,
+   "robots": "allowed",
+   "mask": "0.0,0.455,0.08,0.04;0.5,0.455,0.08,0.04;0.0,0.955,0.08,0.045;0.5,0.955,0.08,0.045"
+  },
+  {
+   "domain": "slide",
+   "decision": "keep",
+   "id": "slide-047",
+   "grid": [
+    "https://files.speakerdeck.com/presentations/9333608eeb0c4038a4a4dc3d7e43c286/slide_0.jpg",
+    "https://files.speakerdeck.com/presentations/9333608eeb0c4038a4a4dc3d7e43c286/slide_5.jpg",
+    "https://files.speakerdeck.com/presentations/9333608eeb0c4038a4a4dc3d7e43c286/slide_10.jpg",
+    "https://files.speakerdeck.com/presentations/9333608eeb0c4038a4a4dc3d7e43c286/slide_16.jpg"
+   ],
+   "sourceUrl": "https://speakerdeck.com/akiramotomura/correspondence-gong-nisheng-cheng-siteikuguo-cheng",
+   "brand": "YUMEMI",
+   "intent": "bài nói hội nghị thiết kế, lưới biên tập",
+   "vn": false,
+   "robots": "allowed",
+   "mask": "0.0,0.45,0.08,0.045;0.5,0.45,0.08,0.045;0.0,0.95,0.08,0.05;0.5,0.95,0.08,0.05"
+  },
+  {
+   "domain": "slide",
+   "decision": "keep",
+   "id": "slide-048",
+   "grid": [
+    "https://files.speakerdeck.com/presentations/abccc2fc79284723b978dbb8a1277ddc/slide_0.jpg",
+    "https://files.speakerdeck.com/presentations/abccc2fc79284723b978dbb8a1277ddc/slide_19.jpg",
+    "https://files.speakerdeck.com/presentations/abccc2fc79284723b978dbb8a1277ddc/slide_39.jpg",
+    "https://files.speakerdeck.com/presentations/abccc2fc79284723b978dbb8a1277ddc/slide_58.jpg"
+   ],
+   "sourceUrl": "https://speakerdeck.com/mseckington/the-art-of-slide-design",
+   "brand": "Melinda Seckington",
+   "intent": "bài nói về thiết kế slide, xanh than và vàng",
+   "vn": false,
+   "robots": "allowed"
+  },
+  {
+   "domain": "slide",
+   "decision": "drop",
+   "id": "slide-049",
+   "pdfUrl": "https://www.sequoiacap.com/wp-content/uploads/sites/6/2022/06/Adapting-to-Endure_Sequoia-Capital-2022.pdf",
+   "pages": "1,6,14,24",
+   "gridMode": true,
+   "brand": "Sequoia",
+   "intent": "bộ slide gửi nhà sáng lập",
+   "vn": false,
+   "note": "PDF không còn (404)"
+  },
+  {
+   "domain": "slide",
+   "decision": "keep",
+   "id": "slide-050",
+   "pdfUrl": "https://s204.q4cdn.com/369458543/files/doc_events/2023/09/1/Pinterest-Investor-Day-2023.pdf",
+   "pages": "1,14,40,75",
+   "gridMode": true,
+   "brand": "Pinterest",
+   "intent": "bộ slide ngày nhà đầu tư, ảnh",
+   "vn": false,
+   "robots": "none",
+   "mask": "0.0,0.02,0.05,0.07;0.0,0.11,0.19,0.08;0.0,0.455,0.1,0.04;0.5,0.455,0.1,0.04;0.0,0.955,0.1,0.045;0.5,0.955,0.1,0.045"
+  },
+  {
+   "domain": "slide",
+   "decision": "drop",
+   "id": "slide-051",
+   "pdfUrl": "https://s206.q4cdn.com/270053503/files/doc_events/2024/05/Atlassian-FY24-Investor-Day-Section-1-Our-Strategic-Vision-and-Massive-Opportunities-Ahead.pdf",
+   "pages": "1,3,5,7",
+   "gridMode": true,
+   "brand": "Atlassian",
+   "intent": "bộ slide ngày nhà đầu tư, minh họa",
+   "vn": false,
+   "robots": "none",
+   "note": "trang chụp màn hình tài liệu, không phải slide thiết kế"
+  },
+  {
+   "domain": "slide",
+   "decision": "keep",
+   "id": "slide-052",
+   "pdfUrl": "https://s203.q4cdn.com/784886181/files/doc_presentations/Shopify-Investor-Day-2023-Presentation.pdf",
+   "pages": "2,6,15,30",
+   "gridMode": true,
+   "brand": "Shopify",
+   "intent": "bộ slide ngày nhà đầu tư",
+   "vn": false,
+   "robots": "none",
+   "mask": "0.03,0.02,0.1,0.07;0.03,0.16,0.14,0.08;0.82,0.32,0.13,0.08"
+  },
+  {
+   "domain": "slide",
+   "decision": "keep",
+   "id": "slide-053",
+   "pdfUrl": "https://s29.q4cdn.com/175625835/files/doc_financials/2022/q3/Q3-2022-Shareholder-Deck-FINAL-LOCKED.pdf",
+   "pages": "1,3,6,10",
+   "gridMode": true,
+   "brand": "Spotify",
+   "intent": "bộ slide cổ đông màu mạnh",
+   "vn": false,
+   "robots": "none",
+   "mask": "0.0,0.04,0.05,0.07;0.5,0.455,0.06,0.04;0.5,0.955,0.06,0.045;0.05,0.13,0.07,0.05"
+  },
+  {
+   "domain": "slide",
+   "decision": "keep",
+   "id": "slide-054",
+   "pdfUrl": "https://www.ben-evans.com/s/2025-Autumn-AI.pdf",
+   "pages": "1,10,30,50",
+   "gridMode": true,
+   "brand": "Benedict Evans",
+   "intent": "bộ slide phân tích",
+   "vn": false,
+   "robots": "allowed"
+  },
+  {
+   "domain": "slide",
+   "decision": "drop",
+   "id": "slide-055",
+   "grid": [
+    "https://static.pinboard.in/ob/ob.001.jpg",
+    "https://static.pinboard.in/ob/ob.019.jpg",
+    "https://static.pinboard.in/ob/ob.043.jpg",
+    "https://static.pinboard.in/ob/ob.066.jpg"
+   ],
+   "sourceUrl": "https://idlewords.com/talks/website_obesity.htm",
+   "brand": "Idle Words",
+   "intent": "bài nói hội nghị, ảnh và một câu",
+   "vn": false,
+   "robots": "none",
+   "note": "quá nhiều logo và ảnh chụp màn hình thương hiệu trong slide"
+  },
+  {
+   "domain": "slide",
+   "decision": "keep",
+   "id": "slide-056",
+   "grid": [
+    "https://static.pinboard.in/hbd/hbd.001.jpg",
+    "https://static.pinboard.in/hbd/hbd.009.jpg",
+    "https://static.pinboard.in/hbd/hbd.017.jpg",
+    "https://static.pinboard.in/hbd/hbd.025.jpg"
+   ],
+   "sourceUrl": "https://idlewords.com/talks/haunted_by_data.htm",
+   "brand": "Idle Words",
+   "intent": "bài nói hội nghị, ảnh tư liệu",
+   "vn": false,
+   "robots": "none",
+   "mask": "0.01,0.51,0.1,0.08;0.3,0.37,0.17,0.1;0.09,0.54,0.08,0.06"
+  },
+  {
+   "domain": "slide",
+   "decision": "keep",
+   "id": "slide-057",
+   "pdfUrl": "https://s205.q4cdn.com/179588156/files/doc_presentations/2026/Feb/11/Grab-3-Year-Investor-Update.pdf",
+   "pages": "1,5,10,18",
+   "gridMode": true,
+   "brand": "Grab",
+   "intent": "bộ slide nhà đầu tư Đông Nam Á",
+   "vn": false,
+   "robots": "none",
+   "mask": "0.03,0.14,0.13,0.08;0.27,0.11,0.06,0.05;0.40,0.115,0.06,0.05;0.27,0.2,0.06,0.1;0.43,0.23,0.05,0.09;0.44,0.34,0.07,0.06;0.0,0.0,0.07,0.04;0.5,0.0,0.07,0.04;0.0,0.5,0.07,0.04;0.5,0.5,0.07,0.04"
+  },
+  {
+   "domain": "slide",
+   "decision": "drop",
+   "id": "slide-058",
+   "pdfUrl": "https://s22.q4cdn.com/941741262/files/doc_presentations/2024/05/_etsy-elevator-pitch-2024.pdf",
+   "pages": "1,4,8,14",
+   "gridMode": true,
+   "brand": "Etsy",
+   "intent": "bộ slide nhà đầu tư, ảnh sản phẩm thủ công",
+   "vn": false,
+   "note": "PDF không còn (404)"
+  },
+  {
+   "domain": "slide",
+   "decision": "drop",
+   "id": "slide-059",
+   "pdfUrl": "https://s206.q4cdn.com/973901332/files/doc_financials/2025/q2/090425Figma.pdf",
+   "pages": "1,4,8,14",
+   "gridMode": true,
+   "brand": "Figma",
+   "intent": "bộ slide kết quả kinh doanh",
+   "vn": false,
+   "robots": "none",
+   "note": "trang chép lời cuộc gọi, không phải slide thiết kế"
+  },
+  {
+   "domain": "slide",
+   "vn": false,
+   "decision": "keep",
+   "id": "slide-060",
+   "pdfUrl": "https://s21.q4cdn.com/241001792/files/doc_presentations/2023/10/1/onon-investor-day-2023.pdf",
+   "pages": "1,6,14,30",
+   "gridMode": true,
+   "brand": "On",
+   "intent": "bộ slide ngày nhà đầu tư, Thụy Sĩ tối giản",
+   "robots": "none",
+   "mask": "0.21,0.17,0.08,0.15;0.96,0.0,0.04,0.07;0.46,0.5,0.04,0.07;0.96,0.5,0.04,0.07"
+  },
+  {
+   "domain": "slide",
+   "vn": false,
+   "decision": "candidate",
+   "id": "slide-061",
+   "pdfUrl": "https://investors.oatly.com/static-files/e068f40e-fa6d-475e-9dc6-274cff1a7dbc",
+   "pages": "1,4,8,12",
+   "gridMode": true,
+   "brand": "Oatly",
+   "intent": "bộ slide nhà đầu tư, chữ vẽ tay"
+  },
+  {
+   "domain": "slide",
+   "vn": false,
+   "decision": "keep",
+   "id": "slide-062",
+   "pdfUrl": "https://s28.q4cdn.com/987131352/files/doc_financials/2021/q4/Warby-Parker-Inc.-EarningsDeck-Q4-2021_PDF2.pdf",
+   "pages": "1,4,8,12",
+   "gridMode": true,
+   "brand": "Warby Parker",
+   "intent": "bộ slide kết quả, ảnh sản phẩm",
+   "robots": "none",
+   "mask": "0.26,0.02,0.12,0.04;0.82,0.16,0.12,0.08;0.0,0.955,0.07,0.045;0.5,0.955,0.07,0.045;0.2,0.03,0.1,0.04"
+  },
+  {
+   "domain": "slide",
+   "vn": false,
+   "decision": "keep",
+   "id": "slide-063",
+   "pdfUrl": "https://s25.q4cdn.com/442043304/files/doc_financials/2022/q3/Snap-Inc.-Q3-2022-Investor-Deck-(10.20.2022).pdf",
+   "pages": "1,4,8,12",
+   "gridMode": true,
+   "brand": "Snap",
+   "intent": "bộ slide nhà đầu tư vàng",
+   "robots": "none",
+   "mask": "0.19,0.2,0.12,0.09;0.5,0.0,0.06,0.03;0.0,0.5,0.06,0.03;0.5,0.5,0.06,0.03;0.0,0.0,0.06,0.03"
+  },
+  {
+   "domain": "slide",
+   "vn": false,
+   "decision": "candidate",
+   "id": "slide-064",
+   "pdfUrl": "https://investor.onepeloton.com/static-files/18e825f8-acaa-4905-9214-a3b411d89f8b",
+   "pages": "1,3,6,9",
+   "gridMode": true,
+   "brand": "Peloton",
+   "intent": "bộ slide sản phẩm và nội dung, ảnh"
+  },
+  {
+   "domain": "slide",
+   "vn": false,
+   "decision": "candidate",
+   "id": "slide-065",
+   "pdfUrl": "https://ir.hubspot.com/static-files/d7124301-a9df-4324-81dc-060771409817",
+   "pages": "1,5,12,25",
+   "gridMode": true,
+   "brand": "HubSpot",
+   "intent": "bộ slide ngày phân tích, cam"
+  },
+  {
+   "domain": "slide",
+   "vn": false,
+   "decision": "candidate",
+   "id": "slide-066",
+   "pdfUrl": "https://investors.robinhood.com/static-files/41af1a04-6829-4bfc-925c-22141303b793",
+   "pages": "1,4,8,12",
+   "gridMode": true,
+   "brand": "Robinhood",
+   "intent": "bộ slide nhà đầu tư, xanh chanh"
+  },
+  {
+   "domain": "slide",
+   "vn": false,
+   "decision": "keep",
+   "id": "slide-067",
+   "pdfUrl": "https://s27.q4cdn.com/397450999/files/doc_financials/2026/q2/Q2-26-Earnings-Deck.pdf",
+   "pages": "1,4,8,12",
+   "gridMode": true,
+   "brand": "Coinbase",
+   "intent": "bộ slide kết quả, xanh lam",
+   "robots": "none",
+   "mask": "0.0,0.44,0.11,0.05;0.93,0.0,0.07,0.04;0.93,0.5,0.07,0.04;0.43,0.5,0.07,0.04"
+  },
+  {
+   "domain": "slide",
+   "vn": false,
+   "decision": "candidate",
+   "id": "slide-068",
+   "pdfUrl": "https://investors.dropbox.com/static-files/35ad0f54-0007-4e4e-8169-84f40f9a8374",
+   "pages": "1,4,8,12",
+   "gridMode": true,
+   "brand": "Dropbox",
+   "intent": "bộ slide nhà đầu tư"
+  },
+  {
+   "domain": "slide",
+   "vn": false,
+   "decision": "keep",
+   "id": "slide-069",
+   "grid": [
+    "https://static.pinboard.in/si/si.001.jpg",
+    "https://static.pinboard.in/si/si.012.jpg",
+    "https://static.pinboard.in/si/si.026.jpg",
+    "https://static.pinboard.in/si/si.045.jpg"
+   ],
+   "sourceUrl": "https://idlewords.com/talks/superintelligence.htm",
+   "brand": "Idle Words",
+   "intent": "bài nói hội nghị, ảnh và một câu",
+   "robots": "none"
+  },
+  {
+   "domain": "slide",
+   "vn": false,
+   "decision": "candidate",
+   "id": "slide-070",
+   "pdfUrl": "https://s22.q4cdn.com/941741262/files/doc_downloads/2023/05/etsy-elevator-pitch-may-2023.pdf",
+   "pages": "1,3,6,10",
+   "gridMode": true,
+   "brand": "Etsy",
+   "intent": "bộ slide nhà đầu tư, ảnh sản phẩm thủ công"
+  },
+  {
+   "domain": "slide",
+   "vn": false,
+   "decision": "drop",
+   "id": "slide-071",
+   "pdfUrl": "https://s206.q4cdn.com/270053503/files/doc_downloads/2022/04/TEAM-FY22-Investor-Day-Section-3-Building-an-iconic-100-year-company_re.pdf",
+   "pages": "1,3,6,10",
+   "gridMode": true,
+   "brand": "Atlassian",
+   "intent": "bộ slide ngày nhà đầu tư, minh họa",
+   "robots": "none",
+   "note": "trang chụp màn hình tài liệu, không phải slide thiết kế"
+  },
+  {
+   "domain": "slide",
+   "vn": false,
+   "decision": "keep",
+   "id": "slide-072",
+   "pdfUrl": "https://s205.q4cdn.com/644747736/files/doc_financials/2025/q3/Klarna-Investor-presentation.pdf",
+   "pages": "1,4,8,14",
+   "gridMode": true,
+   "brand": "Klarna",
+   "intent": "bộ slide nhà đầu tư, hồng",
+   "robots": "none",
+   "mask": "0.12,0.15,0.25,0.2;0.67,0.01,0.1,0.07"
+  },
+  {
+   "domain": "slide",
+   "vn": false,
+   "decision": "candidate",
+   "id": "slide-073",
+   "pdfUrl": "https://wise.gcs-web.com/static-files/3649f3b2-7c5f-4c41-9ce2-809658734591",
+   "pages": "1,4,8,14",
+   "gridMode": true,
+   "brand": "Wise",
+   "intent": "bộ slide nhà đầu tư, xanh chanh"
+  },
+  {
+   "domain": "slide",
+   "decision": "keep",
+   "id": "slide-074",
+   "grid": [
+    "https://files.speakerdeck.com/presentations/c94a1d2070fd4e77a5b468231dafb740/slide_0.jpg",
+    "https://files.speakerdeck.com/presentations/c94a1d2070fd4e77a5b468231dafb740/slide_9.jpg",
+    "https://files.speakerdeck.com/presentations/c94a1d2070fd4e77a5b468231dafb740/slide_19.jpg",
+    "https://files.speakerdeck.com/presentations/c94a1d2070fd4e77a5b468231dafb740/slide_29.jpg"
+   ],
+   "sourceUrl": "https://speakerdeck.com/goodpatch/yue-jing-surudezainren-cai-dezainagashe-hui-zi-ben-tonarushi-jie-he",
+   "brand": "Goodpatch",
+   "intent": "bài nói hội nghị thiết kế, trắng và xanh lam, chấm tròn",
+   "vn": false,
+   "robots": "allowed",
+   "mask": "0.30,0.425,0.19,0.06;0.86,0.04,0.135,0.05;0.02,0.465,0.09,0.025;0.52,0.465,0.09,0.025;0.02,0.965,0.09,0.025;0.52,0.965,0.09,0.025",
+   "credit": "Goodpatch, Designship 2025"
+  },
+  {
+   "domain": "slide",
+   "decision": "keep",
+   "id": "slide-075",
+   "grid": [
+    "https://files.speakerdeck.com/presentations/597780fb68ab4d34a5825c273edf7a77/slide_0.jpg",
+    "https://files.speakerdeck.com/presentations/597780fb68ab4d34a5825c273edf7a77/slide_4.jpg",
+    "https://files.speakerdeck.com/presentations/597780fb68ab4d34a5825c273edf7a77/slide_9.jpg",
+    "https://files.speakerdeck.com/presentations/597780fb68ab4d34a5825c273edf7a77/slide_13.jpg"
+   ],
+   "sourceUrl": "https://speakerdeck.com/takanorip/jian-seru-deng-tan-zi-liao-dezainnoji-yi",
+   "brand": "takanorip",
+   "intent": "bài nói về thiết kế slide, xanh than chữ đậm",
+   "vn": false,
+   "robots": "allowed",
+   "credit": "takanorip, 「見せる」登壇資料デザインの極意"
+  },
+  {
+   "domain": "slide",
+   "decision": "drop",
+   "id": "slide-076",
+   "grid": [
+    "https://files.speakerdeck.com/presentations/f98a514e86c247ac97eb634ed62ab6fc/slide_0.jpg",
+    "https://files.speakerdeck.com/presentations/f98a514e86c247ac97eb634ed62ab6fc/slide_13.jpg",
+    "https://files.speakerdeck.com/presentations/f98a514e86c247ac97eb634ed62ab6fc/slide_27.jpg",
+    "https://files.speakerdeck.com/presentations/f98a514e86c247ac97eb634ed62ab6fc/slide_41.jpg"
+   ],
+   "sourceUrl": "https://speakerdeck.com/sekiguchiy/dezainwoxin-ziteimasuka",
+   "brand": "GMO Pepabo",
+   "intent": "bài nói thiết kế, mảng hình học xanh hồng",
+   "vn": false,
+   "robots": "allowed",
+   "mask": "0.2,0.385,0.09,0.035;0.92,0.025,0.075,0.03;0.43,0.515,0.07,0.03;0.93,0.515,0.07,0.03",
+   "note": "đã đủ bộ slide tiếng Nhật từ cùng nền tảng; nhường chỗ cho bài nói minh hoạ vẽ tay"
+  },
+  {
+   "domain": "poster",
+   "vn": false,
+   "decision": "keep",
+   "id": "poster-044",
+   "imageUrl": "https://thumb.wikimedia.org/wikipedia/commons/thumb/b/bb/Power-Living-Newspaper-Poster-1937.jpg/1280px-Power-Living-Newspaper-Poster-1937.jpg",
+   "sourceUrl": "https://www.loc.gov/pictures/item/98514343/",
+   "sourceKind": "cc0",
+   "brand": "Federal Theatre Project",
+   "credit": "Federal Theatre Project (WPA), poster cho vở Power, 1937, Library of Congress",
+   "rightsUrl": "https://www.loc.gov/pictures/item/98514343/",
+   "intent": "chữ chéo khổng lồ, hai màu in lụa",
+   "robots": "allowed"
+  },
+  {
+   "domain": "slide",
+   "vn": false,
+   "decision": "drop",
+   "id": "slide-077",
+   "grid": [
+    "https://on.notist.cloud/slides/deck525/large-0.png",
+    "https://on.notist.cloud/slides/deck525/large-8.png",
+    "https://on.notist.cloud/slides/deck525/large-48.png",
+    "https://on.notist.cloud/slides/deck525/large-56.png"
+   ],
+   "sourceUrl": "https://noti.st/jensimmons/20LmLE/everything-you-know-about-web-design-just-changed",
+   "credit": "Jen Simmons, Everything You Know About Web Design Just Changed, An Event Apart 2018",
+   "brand": "jensimmons",
+   "intent": "bài nói thiết kế web, mảng màu bão hoà, chữ slab",
+   "note": "ảnh slide nằm ở on.notist.cloud, robots.txt chặn bộ thu thập cho AI",
+   "robots": "ai-optout"
+  },
+  {
+   "domain": "slide",
+   "vn": false,
+   "decision": "drop",
+   "id": "slide-078",
+   "grid": [
+    "https://on.notist.cloud/slides/deck653/large-0.jpg",
+    "https://on.notist.cloud/slides/deck653/large-9.png",
+    "https://on.notist.cloud/slides/deck653/large-19.png",
+    "https://on.notist.cloud/slides/deck653/large-109.png"
+   ],
+   "sourceUrl": "https://noti.st/bradfrost/VaYawj/let-s-work-together",
+   "credit": "Brad Frost, Let’s Work Together",
+   "brand": "bradfrost",
+   "intent": "bài nói, chấm bi nhiều màu, chữ hẹp đậm, nền kem",
+   "note": "ảnh slide nằm ở on.notist.cloud, robots.txt chặn bộ thu thập cho AI",
+   "robots": "ai-optout"
+  },
+  {
+   "domain": "slide",
+   "vn": false,
+   "decision": "drop",
+   "id": "slide-079",
+   "grid": [
+    "https://on.notist.cloud/slides/deck271/large-0.png",
+    "https://on.notist.cloud/slides/deck271/large-40.png",
+    "https://on.notist.cloud/slides/deck271/large-56.png",
+    "https://on.notist.cloud/slides/deck271/large-86.png"
+   ],
+   "sourceUrl": "https://noti.st/laurakalbag/ESaCQp/sabotaging-our-future-selves",
+   "credit": "Laura Kalbag, Sabotaging Our Future Selves",
+   "brand": "laurakalbag",
+   "intent": "bài nói nền xanh than, chữ cam, minh hoạ phẳng",
+   "note": "ảnh slide nằm ở on.notist.cloud, robots.txt chặn bộ thu thập cho AI",
+   "robots": "ai-optout"
+  },
+  {
+   "domain": "slide",
+   "vn": false,
+   "decision": "keep",
+   "id": "slide-080",
+   "sourceUrl": "https://slides.com/cassiecodes/deck-1daeae",
+   "brand": "Cassie Evans",
+   "intent": "bài nói hội nghị trên slides.com",
+   "robots": "allowed",
+   "grid": [
+    "shot:https://slides.com/cassiecodes/deck-1daeae/embed#/0",
+    "shot:https://slides.com/cassiecodes/deck-1daeae/embed#/4",
+    "shot:https://slides.com/cassiecodes/deck-1daeae/embed#/9",
+    "shot:https://slides.com/cassiecodes/deck-1daeae/embed#/14"
+   ],
+   "gridMode": true,
+   "mask": "0.0,0.475,0.14,0.025;0.5,0.475,0.14,0.025;0.0,0.975,0.14,0.025;0.5,0.975,0.14,0.025",
+   "credit": "Cassie Evans, Animating the Impossible"
+  },
+  {
+   "domain": "slide",
+   "vn": false,
+   "decision": "drop",
+   "id": "slide-081",
+   "url": "https://slides.com/carmenansio/back-to-the-future-css-edition/scroll",
+   "sourceUrl": "https://slides.com/carmenansio/back-to-the-future-css-edition",
+   "brand": "Carmen Ansio",
+   "intent": "bài nói hội nghị trên slides.com",
+   "robots": "allowed",
+   "note": "bìa chép logo phim Back to the Future"
+  },
+  {
+   "domain": "slide",
+   "vn": false,
+   "decision": "drop",
+   "id": "slide-082",
+   "url": "https://slides.com/fitzy/fonts-lca2022/scroll",
+   "sourceUrl": "https://slides.com/fitzy/fonts-lca2022",
+   "brand": "fitzy",
+   "intent": "bài nói hội nghị trên slides.com",
+   "robots": "allowed",
+   "note": "bìa mang logo nhà tài trợ và hội nghị"
+  },
+  {
+   "domain": "slide",
+   "vn": false,
+   "decision": "drop",
+   "id": "slide-083",
+   "sourceUrl": "https://slides.com/akryum/vue-amsterdam-histoire",
+   "brand": "Guillaume Chau",
+   "intent": "bài nói hội nghị trên slides.com",
+   "robots": "allowed",
+   "grid": [
+    "shot:https://slides.com/akryum/vue-amsterdam-histoire/embed#/1",
+    "shot:https://slides.com/akryum/vue-amsterdam-histoire/embed#/6",
+    "shot:https://slides.com/akryum/vue-amsterdam-histoire/embed#/12",
+    "shot:https://slides.com/akryum/vue-amsterdam-histoire/embed#/20"
+   ],
+   "gridMode": true,
+   "note": "slide toàn chữ nhỏ trên nền tối, kèm logo Vite và ảnh chân dung"
+  },
+  {
+   "domain": "slide",
+   "vn": false,
+   "decision": "drop",
+   "id": "slide-084",
+   "grid": [
+    "shot:https://slides.com/lucianomammino/everything-i-know-about-s3-pre-signed-urls/embed#/1",
+    "shot:https://slides.com/lucianomammino/everything-i-know-about-s3-pre-signed-urls/embed#/6",
+    "shot:https://slides.com/lucianomammino/everything-i-know-about-s3-pre-signed-urls/embed#/12",
+    "shot:https://slides.com/lucianomammino/everything-i-know-about-s3-pre-signed-urls/embed#/20"
+   ],
+   "gridMode": true,
+   "sourceUrl": "https://slides.com/lucianomammino/everything-i-know-about-s3-pre-signed-urls",
+   "brand": "Luciano Mammino",
+   "intent": "bài nói hội nghị trên slides.com",
+   "robots": "allowed",
+   "note": "mã QR, ảnh chụp mạng xã hội và khối mã, không phải bố cục thiết kế"
+  },
+  {
+   "domain": "slide",
+   "vn": false,
+   "id": "slide-085",
+   "decision": "drop",
+   "grid": [
+    "shot:https://slides.com/carmenansio/back-to-the-future-css-edition/embed#/3",
+    "shot:https://slides.com/carmenansio/back-to-the-future-css-edition/embed#/8",
+    "shot:https://slides.com/carmenansio/back-to-the-future-css-edition/embed#/13",
+    "shot:https://slides.com/carmenansio/back-to-the-future-css-edition/embed#/18"
+   ],
+   "gridMode": true,
+   "sourceUrl": "https://slides.com/carmenansio/back-to-the-future-css-edition",
+   "brand": "Carmen Ansio",
+   "intent": "bài nói hội nghị trên slides.com",
+   "robots": "allowed",
+   "note": "trang lặp lại chữ cảm ơn, logo Firefox, bìa chép logo phim"
+  },
+  {
+   "domain": "slide",
+   "vn": false,
+   "id": "slide-086",
+   "decision": "drop",
+   "grid": [
+    "shot:https://slides.com/fitzy/fonts-lca2022/embed#/3",
+    "shot:https://slides.com/fitzy/fonts-lca2022/embed#/8",
+    "shot:https://slides.com/fitzy/fonts-lca2022/embed#/14",
+    "shot:https://slides.com/fitzy/fonts-lca2022/embed#/20"
+   ],
+   "gridMode": true,
+   "sourceUrl": "https://slides.com/fitzy/fonts-lca2022",
+   "brand": "Andy Fitzsimon",
+   "intent": "bài nói hội nghị trên slides.com",
+   "robots": "allowed",
+   "note": "bìa mang logo nhà tài trợ, trang trong toàn logo công nghệ"
+  },
+  {
+   "domain": "slide",
+   "vn": false,
+   "id": "slide-087",
+   "decision": "drop",
+   "grid": [
+    "shot:https://slides.com/noriste/reactjsday-2022/embed#/1",
+    "shot:https://slides.com/noriste/reactjsday-2022/embed#/5",
+    "shot:https://slides.com/noriste/reactjsday-2022/embed#/10",
+    "shot:https://slides.com/noriste/reactjsday-2022/embed#/15"
+   ],
+   "gridMode": true,
+   "sourceUrl": "https://slides.com/noriste/reactjsday-2022",
+   "brand": "Stefano Magni",
+   "intent": "bài nói hội nghị trên slides.com",
+   "robots": "allowed",
+   "note": "slide chữ nhỏ giữa nền trắng và ảnh chụp màn hình công cụ"
   }
  ]
 }

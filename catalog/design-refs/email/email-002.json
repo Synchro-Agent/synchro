@@ -52,13 +52,13 @@
     ],
     "fonts": {
       "head": {
-        "kit": "inter",
+        "kit": "archivo",
         "seen": "",
         "seenLicence": "unknown",
-        "weight": 400
+        "weight": 600
       },
       "body": {
-        "kit": "inter",
+        "kit": "archivo",
         "seen": "",
         "seenLicence": "unknown",
         "weight": 400
@@ -79,8 +79,8 @@
       "headCase": "upper"
     },
     "tracking": {
-      "display": 0,
-      "heading": 0,
+      "display": -0.04,
+      "heading": -0.02,
       "body": 0,
       "label": 0
     },
@@ -107,7 +107,7 @@
     },
     "imagery": {
       "kind": "photo",
-      "share": 0,
+      "share": 0.4,
       "light": "soft overhead studio light, gentle falloff",
       "lens": "85mm product, straight-on",
       "grade": "cool greys with warm wood",

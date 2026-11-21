@@ -16,9 +16,10 @@
     "public",
     "youth"
   ],
-  "source_url": "https://posterhouse.org/exhibitions/",
+  "source_url": "https://posterhouse.org/wp-content/uploads/2026/06/PH.548.low_.jpg",
   "source_host": "posterhouse.org",
   "source_kind": "public-image",
+  "credit": "Poster tuyển quân Lục quân Mỹ, bộ sưu tập Poster House (PH.548)",
   "captured_at": "2026-11-20",
   "image": {
     "file": "poster/poster-037.webp",
@@ -61,10 +62,10 @@
         "kit": "oswald",
         "seen": "",
         "seenLicence": "unknown",
-        "weight": 400
+        "weight": 700
       },
       "body": {
-        "kit": "inter",
+        "kit": "oswald",
         "seen": "",
         "seenLicence": "unknown",
         "weight": 400

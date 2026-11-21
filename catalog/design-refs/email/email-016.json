@@ -57,13 +57,13 @@
     ],
     "fonts": {
       "head": {
-        "kit": "playfair-display",
+        "kit": "archivo",
         "seen": "",
         "seenLicence": "unknown",
-        "weight": 400
+        "weight": 700
       },
       "body": {
-        "kit": "inter",
+        "kit": "archivo",
         "seen": "",
         "seenLicence": "unknown",
         "weight": 400
@@ -112,7 +112,7 @@
     },
     "imagery": {
       "kind": "photo",
-      "share": 0,
+      "share": 0.35,
       "light": "warm festive indoor light",
       "lens": "50mm lifestyle",
       "grade": "olive, red and warm browns",

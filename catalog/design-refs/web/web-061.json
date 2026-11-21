@@ -52,13 +52,13 @@
     ],
     "fonts": {
       "head": {
-        "kit": "inter",
+        "kit": "ibm-plex-sans",
         "seen": "",
         "seenLicence": "unknown",
-        "weight": 400
+        "weight": 300
       },
       "body": {
-        "kit": "inter",
+        "kit": "ibm-plex-sans",
         "seen": "",
         "seenLicence": "unknown",
         "weight": 400
@@ -79,10 +79,10 @@
       "headCase": "none"
     },
     "tracking": {
-      "display": 0,
+      "display": -0.01,
       "heading": 0,
       "body": 0,
-      "label": 0
+      "label": 0.02
     },
     "radius": {
       "outer": 0,
@@ -95,9 +95,9 @@
     },
     "spacing": {
       "unit": 8,
-      "section": 64,
+      "section": 96,
       "gutter": 24,
-      "density": "balanced"
+      "density": "airy"
     },
     "layout": {
       "columns": 1,
@@ -107,7 +107,7 @@
     },
     "imagery": {
       "kind": "photo",
-      "share": 0,
+      "share": 0.45,
       "light": "soft window light from left, low contrast",
       "lens": "85mm portrait, shallow depth",
       "grade": "warm beige and taupe, muted",

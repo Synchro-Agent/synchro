@@ -1,0 +1,128 @@
+{
+  "v": 1,
+  "id": "slide-050",
+  "domain": "slide",
+  "title": "Bộ slide nhà đầu tư nền trắng: lưới ảnh đời sống khảm bên bìa, số đỏ lớn",
+  "moods": [
+    "clean-light",
+    "bold-color",
+    "editorial"
+  ],
+  "industries": [
+    "media-publishing",
+    "ecommerce"
+  ],
+  "audience": [
+    "investors",
+    "b2b"
+  ],
+  "source_url": "https://s204.q4cdn.com/369458543/files/doc_events/2023/09/1/Pinterest-Investor-Day-2023.pdf",
+  "source_host": "s204.q4cdn.com",
+  "source_kind": "public-image",
+  "captured_at": "2026-11-20",
+  "image": {
+    "file": "slide/slide-050.webp",
+    "width": 1280,
+    "height": 720,
+    "bytes": 88956,
+    "layout": "grid4"
+  },
+  "tokens": {
+    "theme": "light",
+    "colors": [
+      {
+        "hex": "#fcfcfc",
+        "role": "bg",
+        "share": 0.777
+      },
+      {
+        "hex": "#040303",
+        "role": "ink",
+        "share": 0.013
+      },
+      {
+        "hex": "#1a1a17",
+        "role": "muted",
+        "share": 0.008
+      },
+      {
+        "hex": "#e60221",
+        "role": "accent",
+        "share": 0
+      },
+      {
+        "hex": "#acdcfe",
+        "role": "accent2",
+        "share": 0
+      }
+    ],
+    "fonts": {
+      "head": {
+        "kit": "plus-jakarta-sans",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 800
+      },
+      "body": {
+        "kit": "plus-jakarta-sans",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 400
+      },
+      "mono": null
+    },
+    "type": {
+      "basePx": 14,
+      "ratio": 1.5,
+      "sizes": [
+        40,
+        36,
+        20,
+        14
+      ],
+      "headLine": 1.05,
+      "bodyLine": 1.4,
+      "headCase": "none"
+    },
+    "tracking": {
+      "display": -0.03,
+      "heading": -0.01,
+      "body": 0,
+      "label": 0
+    },
+    "radius": {
+      "outer": 0,
+      "inner": 0,
+      "pill": false
+    },
+    "shadow": {
+      "level": 0,
+      "css": "none"
+    },
+    "spacing": {
+      "unit": 8,
+      "section": 48,
+      "gutter": 16,
+      "density": "balanced"
+    },
+    "layout": {
+      "columns": 3,
+      "maxWidth": 1280,
+      "align": "left",
+      "emptyShare": 0.35
+    },
+    "imagery": {
+      "kind": "photo",
+      "share": 0.45,
+      "light": "soft natural daylight",
+      "lens": "mixed lifestyle shots, flat lays and close-ups",
+      "grade": "warm, saturated, slightly faded",
+      "subject": "home, food, travel and fashion moments in a mosaic"
+    }
+  },
+  "measured": [
+    "theme"
+  ],
+  "why": "Bìa chia đôi: tên sự kiện đỏ #e60221 đậm 40 px bên trái, bên phải là lưới khảm 12 ảnh đời sống so le. Trang trong nền trắng, con số tăng trưởng đỏ cỡ 36 px đứng một mình làm tiêu đề phụ. Thẻ xám bo 12 px chứa biểu tượng nhỏ và hai dòng chữ. Mượn bìa lưới ảnh khảm và cách để một con số màu nhấn đứng riêng; không chép ảnh.",
+  "licence": "Ảnh chụp thu nhỏ của trang công khai, chỉ để model tham khảo nguyên tắc. Không chép logo, chữ, ảnh hay phông độc quyền của trang."
+}

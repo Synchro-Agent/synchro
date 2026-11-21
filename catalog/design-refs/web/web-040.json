@@ -23,7 +23,7 @@
     "file": "web/web-040.webp",
     "width": 1280,
     "height": 1600,
-    "bytes": 87644,
+    "bytes": 86056,
     "layout": "single"
   },
   "tokens": {
@@ -71,7 +71,7 @@
         "kit": "be-vietnam-pro",
         "seen": "BeauLuloClean-OneBold",
         "seenLicence": "unknown",
-        "weight": 700
+        "weight": 500
       },
       "mono": null
     },

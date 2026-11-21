@@ -62,10 +62,10 @@
         "weight": 500
       },
       "body": {
-        "kit": "inter",
+        "kit": "plus-jakarta-sans",
         "seen": "Inter",
         "seenLicence": "open",
-        "weight": 500
+        "weight": 400
       },
       "mono": null
     },
@@ -97,7 +97,7 @@
     },
     "shadow": {
       "level": 1,
-      "css": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0.04) 0px 1px 3px 0px, rgba(0, 0, 0, 0.027) 0px 1p"
+      "css": "rgba(0, 0, 0, 0.04) 0px 1px 3px 0px"
     },
     "spacing": {
       "unit": 8,

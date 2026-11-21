@@ -16,9 +16,10 @@
     "youth",
     "consumer"
   ],
-  "source_url": "https://tabular.email/templates",
+  "source_url": "https://tabular.email/demo/ecommerce-fashion-products-email-template",
   "source_host": "tabular.email",
   "source_kind": "public-image",
+  "credit": "Tabular, mẫu thư Fashion products",
   "captured_at": "2026-11-20",
   "image": {
     "file": "email/email-026.webp",
@@ -53,13 +54,13 @@
     ],
     "fonts": {
       "head": {
-        "kit": "playfair-display",
+        "kit": "archivo",
         "seen": "",
         "seenLicence": "unknown",
         "weight": 400
       },
       "body": {
-        "kit": "inter",
+        "kit": "archivo",
         "seen": "",
         "seenLicence": "unknown",
         "weight": 400
@@ -118,6 +119,6 @@
   "measured": [
     "theme"
   ],
-  "why": "Đầu thư là menu chữ hoa nhỏ giãn 0,08em, rồi tên bộ sưu tập chữ có chân 48 px căn giữa. Ảnh đường phố dọc chiếm gần trọn bề ngang 600 px, tông xám lạnh. Nền ngà #faf9f7, chữ đen tuyền, nút đen chữ trắng vuông góc. Mượn nhịp tạp chí: chữ có chân lớn, ảnh dọc, menu chữ hoa nhỏ; không chép ảnh hay tên.",
+  "why": "Đầu thư là menu chữ hoa nhỏ giãn 0,08em, rồi tên bộ sưu tập chữ không chân nét mảnh 48 px căn giữa. Ảnh đường phố dọc chiếm gần trọn bề ngang 600 px, tông xám lạnh. Nền ngà #faf9f7, chữ đen tuyền, nút đen chữ trắng vuông góc. Mượn nhịp tạp chí: tên lớn nét mảnh, ảnh dọc, menu chữ hoa nhỏ; không chép ảnh hay tên.",
   "licence": "Ảnh chụp thu nhỏ của trang công khai, chỉ để model tham khảo nguyên tắc. Không chép logo, chữ, ảnh hay phông độc quyền của trang."
 }

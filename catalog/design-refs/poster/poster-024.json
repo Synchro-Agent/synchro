@@ -26,7 +26,7 @@
     "layout": "single"
   },
   "tokens": {
-    "theme": "dark",
+    "theme": "light",
     "colors": [
       {
         "hex": "#c41c1c",
@@ -44,7 +44,7 @@
         "share": 0.084
       },
       {
-        "hex": "#c41c1c",
+        "hex": "#111111",
         "role": "accent",
         "share": 0
       }
@@ -54,10 +54,10 @@
         "kit": "archivo",
         "seen": "",
         "seenLicence": "unknown",
-        "weight": 400
+        "weight": 800
       },
       "body": {
-        "kit": "inter",
+        "kit": "archivo",
         "seen": "",
         "seenLicence": "unknown",
         "weight": 400
@@ -73,8 +73,8 @@
       "headCase": "none"
     },
     "tracking": {
-      "display": 0,
-      "heading": 0,
+      "display": -0.02,
+      "heading": -0.01,
       "body": 0,
       "label": 0
     },
@@ -89,9 +89,9 @@
     },
     "spacing": {
       "unit": 8,
-      "section": 64,
-      "gutter": 24,
-      "density": "balanced"
+      "section": 96,
+      "gutter": 32,
+      "density": "airy"
     },
     "layout": {
       "columns": 1,
@@ -109,8 +109,7 @@
     }
   },
   "measured": [
-    "theme",
-    "colors"
+    "theme"
   ],
   "why": "Một ý tưởng duy nhất: bóng thoại trắng bị dây thép gai đen quấn ngang, đặt lệch trên nền đỏ #c41c1c phủ toàn khung. Không chữ trên hình, ba màu đỏ, trắng, đen. Đọc được trong một giây từ xa. Mượn cách gộp hai biểu tượng thành một hình để nói một thông điệp; không chép hình.",
   "licence": "Ảnh chụp thu nhỏ của trang công khai, chỉ để model tham khảo nguyên tắc. Không chép logo, chữ, ảnh hay phông độc quyền của trang."

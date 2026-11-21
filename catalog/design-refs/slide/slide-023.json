@@ -16,9 +16,10 @@
     "investors",
     "b2b"
   ],
-  "source_url": "https://pitch.com/templates",
-  "source_host": "pitch.com",
+  "source_url": "https://imgproxy.services.pitch.com/_/plain/pitch-publish-user-assets/templates/posters/startup.jpg",
+  "source_host": "imgproxy.services.pitch.com",
   "source_kind": "public-image",
+  "credit": "Pitch, mẫu trình chiếu Startup",
   "captured_at": "2026-11-20",
   "image": {
     "file": "slide/slide-023.webp",
@@ -56,10 +57,10 @@
         "kit": "plus-jakarta-sans",
         "seen": "",
         "seenLicence": "unknown",
-        "weight": 400
+        "weight": 700
       },
       "body": {
-        "kit": "inter",
+        "kit": "plus-jakarta-sans",
         "seen": "",
         "seenLicence": "unknown",
         "weight": 400

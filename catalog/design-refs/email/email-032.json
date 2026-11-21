@@ -16,9 +16,10 @@
     "youth",
     "consumer"
   ],
-  "source_url": "https://topol.io/email-templates",
+  "source_url": "https://topol.io/email-templates/spring-sale-up-for-store",
   "source_host": "topol.io",
   "source_kind": "public-image",
+  "credit": "Topol, mẫu thư Spring sale up for store",
   "captured_at": "2026-11-20",
   "image": {
     "file": "email/email-032.webp",
@@ -56,10 +57,10 @@
         "kit": "source-serif-4",
         "seen": "",
         "seenLicence": "unknown",
-        "weight": 400
+        "weight": 700
       },
       "body": {
-        "kit": "inter",
+        "kit": "source-serif-4",
         "seen": "",
         "seenLicence": "unknown",
         "weight": 400

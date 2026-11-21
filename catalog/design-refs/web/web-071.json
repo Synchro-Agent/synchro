@@ -23,7 +23,7 @@
     "file": "web/web-071.webp",
     "width": 1280,
     "height": 1600,
-    "bytes": 88972,
+    "bytes": 89766,
     "layout": "single"
   },
   "tokens": {
@@ -78,7 +78,7 @@
         "weight": 700
       },
       "body": {
-        "kit": "inter",
+        "kit": "be-vietnam-pro",
         "seen": "Inter",
         "seenLicence": "open",
         "weight": 400

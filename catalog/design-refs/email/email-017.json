@@ -57,7 +57,7 @@
         "weight": 400
       },
       "body": {
-        "kit": "inter",
+        "kit": "plus-jakarta-sans",
         "seen": "",
         "seenLicence": "unknown",
         "weight": 400
@@ -106,7 +106,7 @@
     },
     "imagery": {
       "kind": "photo",
-      "share": 0,
+      "share": 0.4,
       "light": "soft pastel daylight",
       "lens": "50mm lifestyle and landscape",
       "grade": "blush pink, snow white, sky blue",

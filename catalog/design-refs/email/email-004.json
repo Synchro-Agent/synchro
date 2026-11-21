@@ -23,7 +23,7 @@
     "file": "email/email-004.webp",
     "width": 680,
     "height": 1600,
-    "bytes": 89764,
+    "bytes": 89058,
     "layout": "single"
   },
   "tokens": {
@@ -57,13 +57,13 @@
     ],
     "fonts": {
       "head": {
-        "kit": "inter",
+        "kit": "plus-jakarta-sans",
         "seen": "",
         "seenLicence": "unknown",
-        "weight": 400
+        "weight": 500
       },
       "body": {
-        "kit": "inter",
+        "kit": "plus-jakarta-sans",
         "seen": "",
         "seenLicence": "unknown",
         "weight": 400

@@ -18,6 +18,8 @@
   "source_url": "https://www.muis.ee/museaalView/1614064",
   "source_host": "muis.ee",
   "source_kind": "cc0",
+  "credit": "Enno Rand, Ants Tolli, Balti plakat '84, Art Museum of Estonia",
+  "rights_url": "https://www.europeana.eu/item/401/item_AGO734RERPJSZC3VWWJVHURVXOADI5U4",
   "captured_at": "2026-11-20",
   "image": {
     "file": "poster/poster-041.webp",
@@ -55,13 +57,13 @@
         "kit": "oswald",
         "seen": "",
         "seenLicence": "unknown",
-        "weight": 400
+        "weight": 700
       },
       "body": {
-        "kit": "ibm-plex-sans",
+        "kit": "archivo",
         "seen": "",
         "seenLicence": "unknown",
-        "weight": 400
+        "weight": 500
       },
       "mono": null
     },

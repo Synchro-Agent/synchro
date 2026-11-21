@@ -55,10 +55,10 @@
         "kit": "fraunces",
         "seen": "",
         "seenLicence": "unknown",
-        "weight": 400
+        "weight": 600
       },
       "body": {
-        "kit": "inter",
+        "kit": "ibm-plex-sans",
         "seen": "",
         "seenLicence": "unknown",
         "weight": 400
@@ -107,7 +107,7 @@
     },
     "imagery": {
       "kind": "photo",
-      "share": 0,
+      "share": 0.4,
       "light": "warm low-key restaurant light",
       "lens": "top-down and 45 degree food shots",
       "grade": "warm browns, amber",

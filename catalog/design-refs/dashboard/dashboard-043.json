@@ -22,7 +22,7 @@
     "file": "dashboard/dashboard-043.webp",
     "width": 1280,
     "height": 1600,
-    "bytes": 89036,
+    "bytes": 89184,
     "layout": "single"
   },
   "tokens": {
@@ -122,7 +122,7 @@
     },
     "shadow": {
       "level": 2,
-      "css": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgb(53, 175, 0) 0px 4px 0px 0px"
+      "css": "rgb(53, 175, 0) 0px 4px 0px 0px"
     },
     "spacing": {
       "unit": 8,

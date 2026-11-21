@@ -15,9 +15,10 @@
   "audience": [
     "consumer"
   ],
-  "source_url": "https://topol.io/email-templates",
+  "source_url": "https://topol.io/email-templates/happy-halloween-gifts",
   "source_host": "topol.io",
   "source_kind": "public-image",
+  "credit": "Topol, mẫu thư Happy Halloween gifts",
   "captured_at": "2026-11-20",
   "image": {
     "file": "email/email-033.webp",
@@ -58,7 +59,7 @@
         "weight": 400
       },
       "body": {
-        "kit": "inter",
+        "kit": "ibm-plex-sans",
         "seen": "",
         "seenLicence": "unknown",
         "weight": 400

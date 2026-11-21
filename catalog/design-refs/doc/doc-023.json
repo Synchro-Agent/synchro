@@ -2,7 +2,7 @@
   "v": 1,
   "id": "doc-023",
   "domain": "doc",
-  "title": "Trang bài dữ liệu: lưới thẻ ảnh màu chói, tiêu đề chữ đậm hẹp",
+  "title": "Bài phân tích dữ liệu kể chuyện: nền vàng nắng, tiêu đề chữ hoa dày viền đen bóng xanh",
   "moods": [
     "playful",
     "bold-color",
@@ -14,125 +14,119 @@
   ],
   "audience": [
     "public",
-    "youth"
+    "families"
   ],
-  "source_url": "https://pudding.cool/",
+  "source_url": "https://pudding.cool/2025/07/kids-books",
   "source_host": "pudding.cool",
   "source_kind": "public-page",
-  "captured_at": "2026-11-20",
+  "captured_at": "2026-11-21",
   "image": {
     "file": "doc/doc-023.webp",
     "width": 1280,
     "height": 1600,
-    "bytes": 89698,
+    "bytes": 88834,
     "layout": "single"
   },
   "tokens": {
     "theme": "light",
     "colors": [
       {
-        "hex": "#ffffff",
+        "hex": "#ffd85d",
         "role": "bg",
-        "share": 0.629
+        "share": 0.855
       },
       {
         "hex": "#262626",
         "role": "ink",
-        "share": 0.076
+        "share": 0.009
       },
       {
-        "hex": "#6d6d6d",
-        "role": "muted",
-        "share": 0
-      },
-      {
-        "hex": "#df20df",
+        "hex": "#a3d1ed",
         "role": "accent",
-        "share": 0
+        "share": 0.083
       },
       {
-        "hex": "#d5992a",
+        "hex": "#f39c4b",
         "role": "accent2",
         "share": 0
       },
       {
-        "hex": "#e2e2e2",
+        "hex": "#262626",
         "role": "line",
         "share": 0
       }
     ],
     "fonts": {
       "head": {
-        "kit": "oswald",
-        "seen": "Gooper SemiCondensed",
+        "kit": "unbounded",
+        "seen": "Bowlby One SC",
         "seenLicence": "unknown",
-        "weight": 700
+        "weight": 900
       },
       "body": {
-        "kit": "space-grotesk",
-        "seen": "Atlas Grotesk",
+        "kit": "lexend",
+        "seen": "Baloo Bhai",
         "seenLicence": "unknown",
         "weight": 400
       },
-      "mono": {
-        "kit": "jetbrains-mono",
-        "seen": "Atlas Typewriter",
-        "seenLicence": "unknown",
-        "weight": 400
-      }
+      "mono": null
     },
     "type": {
-      "basePx": 16,
-      "ratio": 1.414,
+      "basePx": 24,
+      "ratio": 1.322,
       "sizes": [
+        128,
+        64,
+        48,
         32,
+        24,
         22,
-        16,
-        14
+        18,
+        16
       ],
-      "headLine": 1,
-      "bodyLine": 1.4,
+      "headLine": 0.9,
+      "bodyLine": 1.5,
       "headCase": "none"
     },
     "tracking": {
-      "display": -0.02,
-      "heading": -0.02,
+      "display": 0.033,
+      "heading": 0,
       "body": 0,
       "label": 0
     },
     "radius": {
-      "outer": 0,
-      "inner": 6,
-      "pill": true
+      "outer": 8,
+      "inner": 5,
+      "pill": false
     },
     "shadow": {
-      "level": 1,
-      "css": "rgba(0, 0, 0, 0.3) 0px 2px 1px 0px"
+      "level": 0,
+      "css": "none"
     },
     "spacing": {
       "unit": 8,
       "section": 64,
-      "gutter": 32,
+      "gutter": 16,
       "density": "balanced"
     },
     "layout": {
       "columns": 2,
-      "maxWidth": 1247,
-      "align": "left",
-      "emptyShare": 0.36
+      "maxWidth": 770,
+      "align": "center",
+      "emptyShare": 0.66
     },
     "imagery": {
       "kind": "illustration",
-      "share": 0.55,
-      "light": "flat digital colour, no lighting",
-      "lens": "square editorial data graphics",
-      "grade": "hot pink, red, mustard and violet",
-      "subject": "data visualisation covers for essays"
+      "share": 0.12,
+      "light": "flat sticker illustration, soft paper shading",
+      "lens": "flat 2D sticker with white die-cut border",
+      "grade": "sunny yellow, sky blue, tangerine, warm brown",
+      "subject": "a smiling cartoon animal face sticker above a chunky outlined title"
     }
   },
   "measured": [
     "theme",
-    "fonts",
+    "colors",
     "type",
     "tracking",
     "radius",
@@ -140,6 +134,6 @@
     "spacing",
     "layout"
   ],
-  "why": "Lưới ba cột thẻ bài, mỗi thẻ là một hình dữ liệu vuông nền màu chói: đỏ, vàng, tím đậm. Tên bài chữ đậm hẹp 18 px chữ thường ngay dưới hình, mô tả 13 px xám #6d6d6d. Nền trắng, nhãn số thứ tự nhỏ góc trên mỗi thẻ. Mượn cách để mỗi bài có một hình dữ liệu riêng màu mạnh như bìa sách; không chép hình hay chữ.",
+  "why": "Nền vàng nắng #ffd85d phủ kín trang, một minh hoạ dán sticker viền trắng mở đầu, tiêu đề ba dòng chữ hoa cực dày màu xanh trời #a3d1ed viền đen có bóng lệch. Chữ thân tròn mềm 22 px trên cột hẹp khoảng 730 px, câu hỏi chính in đậm cuối đoạn. Khối mục lục là thẻ trắng trong khung cam #f39c4b viền đen dày, mũi tên tròn mời cuộn xuống. Mượn tiêu đề có viền và bóng lệch kiểu sticker cùng khung viền đen dày cho từng phần; không chép minh hoạ hay chữ.",
   "licence": "Ảnh chụp thu nhỏ của trang công khai, chỉ để model tham khảo nguyên tắc. Không chép logo, chữ, ảnh hay phông độc quyền của trang."
 }

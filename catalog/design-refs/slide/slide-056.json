@@ -1,0 +1,127 @@
+{
+  "v": 1,
+  "id": "slide-056",
+  "domain": "slide",
+  "title": "Bài nói hội nghị nền tối: chữ nhỏ giọt xanh axit trên ảnh tư liệu cũ",
+  "moods": [
+    "dark-cinematic",
+    "retro-print",
+    "playful"
+  ],
+  "industries": [
+    "tech-saas",
+    "media-publishing"
+  ],
+  "audience": [
+    "developers",
+    "public"
+  ],
+  "source_url": "https://idlewords.com/talks/haunted_by_data.htm",
+  "source_host": "idlewords.com",
+  "source_kind": "public-image",
+  "captured_at": "2026-11-20",
+  "image": {
+    "file": "slide/slide-056.webp",
+    "width": 1280,
+    "height": 720,
+    "bytes": 89856,
+    "layout": "grid4"
+  },
+  "tokens": {
+    "theme": "dark",
+    "colors": [
+      {
+        "hex": "#211d15",
+        "role": "bg",
+        "share": 0.176
+      },
+      {
+        "hex": "#fefffe",
+        "role": "ink",
+        "share": 0.071
+      },
+      {
+        "hex": "#eecee3",
+        "role": "muted",
+        "share": 0.149
+      },
+      {
+        "hex": "#71c041",
+        "role": "accent",
+        "share": 0.035
+      },
+      {
+        "hex": "#d1a08d",
+        "role": "accent2",
+        "share": 0.01
+      }
+    ],
+    "fonts": {
+      "head": {
+        "kit": "bricolage-grotesque",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 800
+      },
+      "body": {
+        "kit": "oswald",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 500
+      },
+      "mono": null
+    },
+    "type": {
+      "basePx": 28,
+      "ratio": 1.6,
+      "sizes": [
+        80,
+        40
+      ],
+      "headLine": 0.95,
+      "bodyLine": 1.4,
+      "headCase": "upper"
+    },
+    "tracking": {
+      "display": 0.02,
+      "heading": 0.02,
+      "body": 0,
+      "label": 0.04
+    },
+    "radius": {
+      "outer": 0,
+      "inner": 0,
+      "pill": false
+    },
+    "shadow": {
+      "level": 0,
+      "css": "none"
+    },
+    "spacing": {
+      "unit": 8,
+      "section": 32,
+      "gutter": 16,
+      "density": "dense"
+    },
+    "layout": {
+      "columns": 1,
+      "maxWidth": 1280,
+      "align": "asymmetric",
+      "emptyShare": 0.1
+    },
+    "imagery": {
+      "kind": "photo",
+      "share": 0.8,
+      "light": "harsh flash and archival press light",
+      "lens": "found photos and pulp illustration",
+      "grade": "muted archival colour under acid-green type",
+      "subject": "crowds, gadgets on a wrist, a retro diver, an android face"
+    }
+  },
+  "measured": [
+    "theme",
+    "colors"
+  ],
+  "why": "Mỗi slide là một ảnh tư liệu hoặc tranh khoa học viễn tưởng phủ trọn khung, chữ xanh axit #71c041 kiểu nhỏ giọt cao 80 px đè lên. Chữ chỉ là một câu ngắn hoặc một từ, không khung, không lưới. Ảnh giữ màu cũ bạc, chữ là điểm màu duy nhất. Mượn cách để ảnh toàn khung kể chuyện và chữ hiệu ứng đóng vai tiêu đề phim; không chép ảnh.",
+  "licence": "Ảnh chụp thu nhỏ của trang công khai, chỉ để model tham khảo nguyên tắc. Không chép logo, chữ, ảnh hay phông độc quyền của trang."
+}
