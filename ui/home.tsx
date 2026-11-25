@@ -16,7 +16,7 @@ import { chatError, GENERIC_ERR } from "../shared/chaterror";
 import { armDraft, saveDraft, takeDraft } from "./draft";
 import { Lockup, Mark, SideToggle } from "./brand";
 import { BrandLogo, ModelLogo, ProviderLogo } from "./brands";
-import { ProviderModels } from "./modellist";
+import { AllToggle, ProviderModels } from "./modellist";
 import { lineup } from "../shared/modellineup";
 import { lazyView } from "./lazy";
 import type { CodeMeta } from "./codeview";
@@ -250,11 +250,16 @@ function ModelPicker({ model, setModel, prefix }: { model: string; setModel: (m:
     subAnchor.current = { off: el.offsetTop, below: window.innerHeight - r.top - 12, menuBottom: menu.bottom };
     setSub(id);
   };
-  const placeSub = (scroller: HTMLElement) => {
+  // tall: đang mở "Xem tất cả model": khung được cao hết chỗ trống của màn hình thay vì dừng ở 420px, để người
+  // vừa xin xem cả danh sách thấy được nhiều dòng nhất mà không phải cuộn trong một khung thấp.
+  const placeSub = (scroller: HTMLElement, tall: boolean) => {
     const panel = scroller.closest<HTMLElement>(".msub-models"), a = subAnchor.current;
     if (!panel) return;
+    const cap = tall ? Infinity : 420;
     const need = panel.offsetHeight - scroller.clientHeight + scroller.scrollHeight;
-    setSubPos(need <= a.below ? { top: a.off - 6, maxHeight: Math.min(420, a.below) } : { bottom: 0, maxHeight: Math.min(420, Math.max(160, a.menuBottom - 12)) });
+    setSubPos(need <= a.below
+      ? { top: a.off - 6, maxHeight: Math.min(cap, a.below) }
+      : { bottom: 0, maxHeight: Math.min(cap, Math.max(160, a.menuBottom - 12)) });
   };
   const mref = useClickAway(() => { setMm(false); setSub(null); });
   const close = () => { setMm(false); setSub(null); };
@@ -359,10 +364,10 @@ function ModelPicker({ model, setModel, prefix }: { model: string; setModel: (m:
         {providers.map((pv) => (
           <Menu key={pv.id} open={sub === pv.id} className="model-sub msub-models" style={{ ...subX, ...subPos, width: 260 }}>
             {pv.plan && <PlanNote pv={pv} />}
-            <MsubBody on={sub === pv.id} count={shownCount(pv.id)} place={placeSub}>
-              <ProviderModels pv={pv} lu={lineups[pv.id]} model={model} ok={ok} pick={pick}
-                all={allFor.has(pv.id)} onAll={() => toggleAll(pv.id)} />
+            <MsubBody on={sub === pv.id} count={shownCount(pv.id)} tall={allFor.has(pv.id)} place={placeSub}>
+              <ProviderModels pv={pv} lu={lineups[pv.id]} model={model} ok={ok} pick={pick} all={allFor.has(pv.id)} />
             </MsubBody>
+            <AllToggle lu={lineups[pv.id]} all={allFor.has(pv.id)} onAll={() => toggleAll(pv.id)} />
           </Menu>
         ))}
       </Menu>
@@ -384,10 +389,27 @@ const noticeOf = (d: Record<string, unknown>, text: string): Msg["notice"] => ({
 
 // Phần cuộn của danh sách model nằm trong khung kính chứ không phải chính khung kính: nền và viền kính là lớp ::before / ::after của khung,
 // khung tự cuộn thì chúng trôi theo nội dung (viền cắt ngang dòng cuối, các dòng lòi ra ngoài nền). Ghi chú gói đứng yên ở đầu khung.
-function MsubBody({ on, count, place, children }: { on: boolean; count: number; place: (scroller: HTMLElement) => void; children: React.ReactNode }) {
+// more: còn dòng ở dưới chưa thấy: đáy vùng cuộn mờ dần để báo còn nữa (khung kính không có thanh cuộn hiện sẵn).
+type MsubProps = {
+  on: boolean; count: number; tall?: boolean; children: React.ReactNode;
+  place: (scroller: HTMLElement, tall: boolean) => void;
+};
+function MsubBody({ on, count, tall = false, place, children }: MsubProps) {
   const ref = useRef<HTMLDivElement>(null);
-  useLayoutEffect(() => { if (on && ref.current) place(ref.current); }, [on, count]); // eslint-disable-line react-hooks/exhaustive-deps
-  return <div ref={ref} className="menu-scroll msub-scroll">{children}</div>;
+  const [more, setMore] = useState(false);
+  const check = () => {
+    const el = ref.current;
+    if (el) setMore(el.scrollHeight - el.scrollTop - el.clientHeight > 2);
+  };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useLayoutEffect(() => { if (on && ref.current) place(ref.current, tall); }, [on, count, tall]);
+  // Sau khi khung đã đặt chỗ và đổi cao (placeSub đổi maxHeight ở lượt vẽ sau) mới đo được còn dòng ẩn hay không.
+  useEffect(() => {
+    if (!on) return;
+    const raf = requestAnimationFrame(check);
+    return () => cancelAnimationFrame(raf);
+  });
+  return <div ref={ref} className={`menu-scroll msub-scroll${more ? " more" : ""}`} onScroll={check}>{children}</div>;
 }
 
 function PlanNote({ pv }: { pv: ProviderInfo }) {
