@@ -56,7 +56,8 @@ const kept = (await a("GET", `/api/chats?keys=chat:${it.chat}`)).j?.items?.[0];
 const conv = kept?.data ? JSON.parse(kept.data) : null;
 const ans = conv?.msgs?.[1];
 ok(typeof it.chat === "number" && conv?.tags?.includes("Autopilot") && ans?.role === "ai" && ans.text === it.text,
-  "kết quả thành đoạn chat thường có thẻ Autopilot, cùng nội dung", JSON.stringify({ chat: it.chat, conv }).slice(0, 300));
+  "kết quả thành đoạn chat thường có thẻ Autopilot, cùng nội dung",
+  JSON.stringify({ chat: it.chat, conv }).slice(0, 300));
 // Địa chỉ cũ của Hộp thư vẫn trả đúng dữ liệu (trang mở từ bản trước, kịch bản của người dùng).
 const legacy = (await a("GET", "/api/inbox")).j;
 ok(legacy?.items?.some((x) => x.run === it.run && x.chat === it.chat), "địa chỉ cũ /api/inbox vẫn trả cùng dữ liệu");

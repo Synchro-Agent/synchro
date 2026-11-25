@@ -11,14 +11,19 @@ export const dynamic = "force-dynamic";
 export const GET = handle(async (req: Request) => {
   const { user } = requireUser(req);
   const u = new URL(req.url);
-  return Response.json({ proposals: listProposals(user.id, { all: u.searchParams.get("all") === "1", run: u.searchParams.get("run") ?? undefined }) });
+  const q = u.searchParams;
+  return Response.json({ proposals: listProposals(user.id, { all: q.get("all") === "1", run: q.get("run") ?? undefined }) });
 });
 export const POST = handle(async (req: Request) => {
   sameOrigin(req);
   const { user } = requireUser(req);
   limit("proposal:" + user.id, 120, 10 * 60_000);
   const b = (await req.json().catch(() => ({}))) as { id?: unknown; decision?: unknown; edits?: unknown };
-  if (typeof b.id !== "string" || (b.decision !== "approve" && b.decision !== "reject")) return Response.json({ error: "Thiếu mã đề xuất hoặc quyết định (approve | reject)." }, { status: 400 });
-  try { return Response.json(await decideProposal(user, b.id, b.decision, (b.edits && typeof b.edits === "object" ? b.edits : {}) as Record<string, unknown>)); }
+  if (typeof b.id !== "string" || (b.decision !== "approve" && b.decision !== "reject")) {
+    return Response.json({ error: "Thiếu mã đề xuất hoặc quyết định (approve | reject)." }, { status: 400 });
+  }
+  const edits = (b.edits && typeof b.edits === "object" ? b.edits : {}) as Record<string, unknown>;
+  try { return Response.json(await decideProposal(user, b.id, b.decision, edits)); }
+  // Lỗi nghiệp vụ (đề xuất không còn, đã xử lý…) trả về đúng mã cho người dùng; lỗi khác để handle() ghi nhật ký.
   catch (e) { if (e instanceof TaskError) return Response.json({ error: e.message }, { status: e.status }); throw e; }
 });

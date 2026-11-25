@@ -1508,42 +1508,70 @@ addNew(VI2EN, {
   "Múi giờ ‹autopilot›": "Time zone",
   "Hẹn giờ ‹autopilot›": "Schedule it",
   "đã chạy ‹autopilot›": "done",
-  "Trường phút của cron không hợp lệ (cho phép 0–59, *, dấu phẩy, a-b, /bước).": "The cron minute field is invalid (allowed 0–59, *, commas, a-b, /step).",
-  "Trường giờ của cron không hợp lệ (cho phép 0–23, *, dấu phẩy, a-b, /bước).": "The cron hour field is invalid (allowed 0–23, *, commas, a-b, /step).",
-  "Trường ngày của cron không hợp lệ (cho phép 1–31, *, dấu phẩy, a-b, /bước).": "The cron day field is invalid (allowed 1–31, *, commas, a-b, /step).",
-  "Trường tháng của cron không hợp lệ (cho phép 1–12 hoặc JAN–DEC, *, dấu phẩy, a-b, /bước).": "The cron month field is invalid (allowed 1–12 or JAN–DEC, *, commas, a-b, /step).",
-  "Trường thứ của cron không hợp lệ (cho phép 0–7 hoặc SUN–SAT, *, dấu phẩy, a-b, /bước).": "The cron weekday field is invalid (allowed 0–7 or SUN–SAT, *, commas, a-b, /step).",
+  "Trường phút của cron không hợp lệ (cho phép 0–59, *, dấu phẩy, a-b, /bước).":
+    "The cron minute field is invalid (allowed 0–59, *, commas, a-b, /step).",
+  "Trường giờ của cron không hợp lệ (cho phép 0–23, *, dấu phẩy, a-b, /bước).":
+    "The cron hour field is invalid (allowed 0–23, *, commas, a-b, /step).",
+  "Trường ngày của cron không hợp lệ (cho phép 1–31, *, dấu phẩy, a-b, /bước).":
+    "The cron day field is invalid (allowed 1–31, *, commas, a-b, /step).",
+  "Trường tháng của cron không hợp lệ (cho phép 1–12 hoặc JAN–DEC, *, dấu phẩy, a-b, /bước).":
+    "The cron month field is invalid (allowed 1–12 or JAN–DEC, *, commas, a-b, /step).",
+  "Trường thứ của cron không hợp lệ (cho phép 0–7 hoặc SUN–SAT, *, dấu phẩy, a-b, /bước).":
+    "The cron weekday field is invalid (allowed 0–7 or SUN–SAT, *, commas, a-b, /step).",
   "Autopilot: “{title}” có đề xuất chờ bạn duyệt": "Autopilot: “{title}” has a proposal waiting for your approval",
   "Autopilot đã xong “{title}”": "Autopilot finished “{title}”",
-  "Đoạn chat kết quả chưa về máy này, hãy thử lại sau giây lát": "The result chat hasn't reached this device yet. Try again in a moment",
+  "Đoạn chat kết quả chưa về máy này, hãy thử lại sau giây lát":
+    "The result chat hasn't reached this device yet. Try again in a moment",
   "Autopilot có đề xuất cần bạn duyệt.": "Autopilot has a proposal for you to review.",
   "Autopilot đã xong, mở để xem kết quả và hỏi tiếp.": "Autopilot finished. Open it to see the result and follow up.",
   "Đã giao, Synchro bắt đầu trong vòng một phút": "Assigned. Synchro starts within a minute",
-  "Đã tạo và đang chạy thử, xong sẽ có thông báo": "Created and running a test now. You'll get a notification when it's done",
+  "Đã tạo và đang chạy thử, xong sẽ có thông báo":
+    "Created and running a test now. You'll get a notification when it's done",
   "Đã lên lịch cho Autopilot": "Scheduled in Autopilot",
   "Đã lưu việc của Autopilot": "Autopilot task saved",
   "Sửa việc của Autopilot": "Edit Autopilot task",
   "Việc mới cho Autopilot": "New Autopilot task",
-  "Xem lại và sửa nếu cần. Synchro chạy việc này trên máy chủ, kể cả khi bạn đóng tab hay gập máy.": "Review and edit if needed. Synchro runs this on its server, even after you close the tab or your laptop.",
+  "Xem lại và sửa nếu cần. Synchro chạy việc này trên máy chủ, kể cả khi bạn đóng tab hay gập máy.":
+    "Review and edit if needed. Synchro runs this on its server, even after you close the tab or your laptop.",
   "Biểu thức cron": "Cron expression",
-  "Năm trường: phút giờ ngày tháng thứ (0 = Chủ nhật). Ví dụ 0 9 1 * * là 9:00 ngày 1 hằng tháng; 30 8,17 * * 1-5 là 8:30 và 17:30 từ thứ Hai tới thứ Sáu. Mỗi giờ chạy tối đa một lần.": "Five fields: minute hour day month weekday (0 = Sunday). For example 0 9 1 * * is 9:00 on the 1st of every month; 30 8,17 * * 1-5 is 8:30 and 17:30 Monday to Friday. Runs at most once an hour.",
+  "Năm trường: phút giờ ngày tháng thứ (0 = Chủ nhật).": "Five fields: minute hour day month weekday (0 = Sunday).",
+  "Ví dụ 0 9 1 * * là 9:00 ngày 1 hằng tháng; 30 8,17 * * 1-5 là 8:30 và 17:30 từ thứ Hai tới thứ Sáu.":
+    "For example 0 9 1 * * is 9:00 on the 1st of every month; 30 8,17 * * 1-5 is 8:30 and 17:30 Monday to Friday.",
+  "Mỗi giờ chạy tối đa một lần.": "Runs at most once an hour.",
   "múi giờ của máy này": "this device's time zone",
   "Ngày": "Date",
-  "Synchro Code dùng trình duyệt của Synchro trên máy chủ khi cần mở web. Lệnh cần duyệt (khi chế độ Tự động đang tắt trong Cài đặt → Synchro Code) sẽ thành đề xuất trong mục Cần duyệt của Autopilot.": "Synchro Code uses Synchro's browser on the server when it needs the web. Commands that need approval (when Auto mode is off in Settings → Synchro Code) become proposals under Needs approval in Autopilot.",
-  "Viết như khi nhắn cho Synchro. Mọi thứ chat làm được đều dùng được ở đây: connector, skill, web, chạy code, artifact, ảnh, tệp.": "Write it like a message to Synchro. Everything chat can do works here: connectors, skills, web, running code, artifacts, images, files.",
+  "Synchro Code dùng trình duyệt của Synchro trên máy chủ khi cần mở web.":
+    "Synchro Code uses Synchro's browser on the server when it needs the web.",
+  "Lệnh cần duyệt (khi tắt chế độ Tự động trong Cài đặt → Synchro Code) thành đề xuất ở mục Cần duyệt.":
+    "Commands that need approval (when Auto mode is off in Settings → Synchro Code) become proposals under To approve.",
+  "Viết như khi nhắn cho Synchro.": "Write it like a message to Synchro.",
+  "Mọi thứ chat làm được đều dùng được ở đây: connector, skill, web, chạy code, artifact, ảnh, tệp.":
+    "Everything chat can do works here: connectors, skills, web, running code, artifacts, images, files.",
   "Gửi email khi xong": "Email me when done",
-  "Ngoài thông báo trong Synchro, gửi tóm tắt kết quả tới email của bạn (email đã xác minh).": "Besides the notification in Synchro, send a summary of the result to your email (verified email only).",
+  "Ngoài thông báo trong Synchro, gửi tóm tắt kết quả tới email của bạn (email đã xác minh).":
+    "Besides the notification in Synchro, send a summary of the result to your email (verified email only).",
   "Lên lịch": "Schedule",
-  "Synchro đang làm việc đã duyệt, xong sẽ có thông báo": "Synchro is doing the approved task. You'll get a notification when it's done",
+  "Synchro đang làm việc đã duyệt, xong sẽ có thông báo":
+    "Synchro is doing the approved task. You'll get a notification when it's done",
   "Mở đoạn chat để hỏi tiếp": "Open the chat to follow up",
   "Đang chạy trên máy chủ, xong sẽ có thông báo": "Running on the server. You'll get a notification when it's done",
-  "Kết quả cũ trong Autopilot cũng bị xóa. Đoạn chat kết quả vẫn giữ.": "Its past results in Autopilot are deleted too. Result chats are kept.",
-  "Chỉ gỡ khỏi danh sách Kết quả; việc tự động, lịch chạy và đoạn chat kết quả giữ nguyên. Kết quả đang chạy được giữ lại.": "Only removed from Results; tasks, schedules and result chats stay. Results still running are kept.",
+  "Kết quả cũ trong Autopilot cũng bị xóa. Đoạn chat kết quả vẫn giữ.":
+    "Its past results in Autopilot are deleted too. Result chats are kept.",
+  "Chỉ gỡ khỏi danh sách Kết quả; việc tự động, lịch chạy và đoạn chat kết quả giữ nguyên.":
+    "Only removed from Results; tasks, schedules and result chats stay.",
+  "Kết quả đang chạy được giữ lại.": "Results still running are kept.",
   "Chạy tiếp theo lịch": "Resume schedule",
   "Tạm dừng": "Pause",
-  "Kết quả cũ của các việc này trong Autopilot cũng bị xóa. Đoạn chat kết quả vẫn giữ.": "Their past results in Autopilot are deleted too. Result chats are kept.",
-  "Giao việc hoặc lên lịch, Synchro tự làm kể cả khi bạn tắt tab hay gập máy. Xong là có thông báo, kết quả thành đoạn chat để bạn hỏi tiếp.": "Hand off a task or schedule it. Synchro does it even after you close the tab or your laptop. When it's done you get a notification, and the result becomes a chat you can follow up in.",
-  "Giao một việc ở ô phía trên (ví dụ giá cổ phiếu mỗi sáng, repo GitHub hay mỗi ngày). Synchro tự chạy, kết quả hiện ở đây và thành đoạn chat để bạn hỏi tiếp.": "Hand off a task in the box above (for example stock prices every morning, or interesting GitHub repos every day). Synchro runs it, the result shows up here and becomes a chat you can follow up in.",
+  "Kết quả cũ của các việc này trong Autopilot cũng bị xóa. Đoạn chat kết quả vẫn giữ.":
+    "Their past results in Autopilot are deleted too. Result chats are kept.",
+  "Giao việc hoặc lên lịch, Synchro tự làm kể cả khi bạn tắt tab hay gập máy.":
+    "Hand off a task or schedule it. Synchro does it even after you close the tab or your laptop.",
+  "Xong là có thông báo, kết quả thành đoạn chat để bạn hỏi tiếp.":
+    "When it's done you get a notification, and the result becomes a chat you can follow up in.",
+  "Giao một việc ở ô phía trên (ví dụ giá cổ phiếu mỗi sáng, repo GitHub hay mỗi ngày).":
+    "Hand off a task in the box above (for example stock prices every morning, or interesting GitHub repos every day).",
+  "Synchro tự chạy, kết quả hiện ở đây và thành đoạn chat để bạn hỏi tiếp.":
+    "Synchro runs it, the result shows up here and becomes a chat you can follow up in.",
   "đang tạm dừng": "paused",
   "Chạy theo lịch": "Run on schedule",
   "Mở kết quả gần nhất": "Open latest result",
@@ -1551,10 +1579,14 @@ addNew(VI2EN, {
   "Tùy chỉnh (cron)": "Custom (cron)",
   "Một lần lúc": "Once at",
   "Chưa tải được Autopilot": "Couldn't load Autopilot",
-  "Cron cần đúng 5 trường: phút giờ ngày tháng thứ (ví dụ \"30 8 * * 1-5\").": "Cron needs exactly 5 fields: minute hour day month weekday (for example \"30 8 * * 1-5\").",
-  "Autopilot chạy tối đa mỗi giờ một lần: trường phút của cron phải là một số (0–59).": "Autopilot runs at most once an hour: the cron minute field must be a single number (0–59).",
-  "Biểu thức cron này không có lần chạy nào trong 18 tháng tới.": "This cron expression has no run in the next 18 months.",
-  "Giờ hẹn đã qua. Hãy chọn một thời điểm trong tương lai, hoặc chọn \"Một lần, chạy ngay\".": "That time has already passed. Pick a time in the future, or choose \"Once, run now\".",
+  "Cron cần đúng 5 trường: phút giờ ngày tháng thứ (ví dụ \"30 8 * * 1-5\").":
+    "Cron needs exactly 5 fields: minute hour day month weekday (for example \"30 8 * * 1-5\").",
+  "Autopilot chạy tối đa mỗi giờ một lần: trường phút của cron phải là một số (0–59).":
+    "Autopilot runs at most once an hour: the cron minute field must be a single number (0–59).",
+  "Biểu thức cron này không có lần chạy nào trong 18 tháng tới.":
+    "This cron expression has no run in the next 18 months.",
+  "Giờ hẹn đã qua. Hãy chọn một thời điểm trong tương lai, hoặc chọn \"Một lần, chạy ngay\".":
+    "That time has already passed. Pick a time in the future, or choose \"Once, run now\".",
   "Nhật ký": "Log", "Ẩn nhật ký": "Hide log", "Lỗi:": "Error:",
   "Đã tạo, Synchro chạy trong vòng một phút": "Created, Synchro will run it within a minute", "Đã tạo và đang chạy thử, kết quả vào Autopilot": "Created and running a test now, the result will arrive in Autopilot",
   "Đã tạo việc tự động": "Automation created", "Sửa việc tự động": "Edit automation", "Kế hoạch của Synchro": "Synchro's plan", "Việc tự động mới": "New automation",

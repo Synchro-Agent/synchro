@@ -310,7 +310,8 @@ try {
     await click(`document.querySelector(".rail [data-nav=projects]")`, "Dự án");
     ok(await until(`location.hash === "#v=projects"`, 4000), "bấm Dự án → #v=projects", await ev(`location.hash`));
     await click(`document.querySelector(".rail [data-nav=autopilot]")`, "Autopilot");
-    ok(await until(`location.hash === "#v=autopilot"`, 4000), "bấm Autopilot → #v=autopilot", await ev(`location.hash`));
+    ok(await until(`location.hash === "#v=autopilot"`, 4000), "bấm Autopilot → #v=autopilot",
+      await ev(`location.hash`));
     await ev(`history.back()`);
     ok(await until(`location.hash === "#v=projects" && (${cur}) === "projects"`, 4000), "Back → về lại Dự án", { hash: await ev(`location.hash`), nav: await ev(cur) });
     await ev(`history.forward()`);

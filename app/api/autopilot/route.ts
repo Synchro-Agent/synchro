@@ -11,7 +11,8 @@ export const GET = handle(async (req: Request) => {
   const { user } = requireUser(req);
   const q = new URL(req.url).searchParams;
   if (q.get("count")) return Response.json(inboxCount(user.id));
-  return Response.json(inbox(user.id, { before: Number(q.get("before")) || undefined, limit: Number(q.get("limit")) || undefined }));
+  const before = Number(q.get("before")) || undefined, max = Number(q.get("limit")) || undefined;
+  return Response.json(inbox(user.id, { before, limit: max }));
 });
 export const POST = handle(async (req: Request) => {
   sameOrigin(req);

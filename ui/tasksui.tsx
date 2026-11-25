@@ -149,10 +149,18 @@ const dayStr = (t: number) => {
   return `${d.getFullYear()}-${z(d.getMonth() + 1)}-${z(d.getDate())}`;
 };
 const tomorrow = () => dayStr(Date.now() + 86_400_000);
-// Câu dài để nguyên một chuỗi: từ điển dịch tra theo cả câu.
-const PROMPT_HINT = "Viết như khi nhắn cho Synchro. Mọi thứ chat làm được đều dùng được ở đây: connector, skill, web, chạy code, artifact, ảnh, tệp.";
+// Đoạn nhiều câu dịch từng câu (từ điển tra theo cả câu), rồi ghép lại bằng một khoảng trắng.
+const trs = (...l: string[]) => l.map((x) => tr(x)).join(" ");
+const PROMPT_HINT = [
+  "Viết như khi nhắn cho Synchro.",
+  "Mọi thứ chat làm được đều dùng được ở đây: connector, skill, web, chạy code, artifact, ảnh, tệp.",
+];
 const EMAIL_HINT = "Ngoài thông báo trong Synchro, gửi tóm tắt kết quả tới email của bạn (email đã xác minh).";
-const CRON_HELP = "Năm trường: phút giờ ngày tháng thứ (0 = Chủ nhật). Ví dụ 0 9 1 * * là 9:00 ngày 1 hằng tháng; 30 8,17 * * 1-5 là 8:30 và 17:30 từ thứ Hai tới thứ Sáu. Mỗi giờ chạy tối đa một lần.";
+const CRON_HELP = [
+  "Năm trường: phút giờ ngày tháng thứ (0 = Chủ nhật).",
+  "Ví dụ 0 9 1 * * là 9:00 ngày 1 hằng tháng; 30 8,17 * * 1-5 là 8:30 và 17:30 từ thứ Hai tới thứ Sáu.",
+  "Mỗi giờ chạy tối đa một lần.",
+];
 function TaskEditor({ init, plan, onClose, onSaved, say }: { init?: Task | null; plan?: Plan | null; onClose: () => void; onSaved: (t: Task, ran: boolean) => void; say: (m: string) => void }) {
   const src = init ?? plan;
   const [title, setTitle] = useState(src?.title ?? "");
@@ -219,7 +227,7 @@ function TaskEditor({ init, plan, onClose, onSaved, say }: { init?: Task | null;
               onChange={(e) => setCron(e.target.value)} placeholder="0 8 * * 1-5" data-notr />
           </label>}
         </div>
-        {kind === "cron" && <p className="tk-tz">{tr(CRON_HELP)}</p>}
+        {kind === "cron" && <p className="tk-tz">{trs(...CRON_HELP)}</p>}
         <div className="tk-l tk-zone">{trc("Múi giờ", "autopilot")}
           <Dropdown<string> block label={trc("Múi giờ", "autopilot")} value={zone} onChange={setZone}
             options={zones.map((x) => ({ value: x, label: x === here ? `${x} · ${mine}` : x, notr: x !== here }))} />
@@ -234,10 +242,13 @@ function TaskEditor({ init, plan, onClose, onSaved, say }: { init?: Task | null;
             <button type="button" key={b.id} role="radio" aria-checked={browser === b.id} className={browser === b.id ? "on" : ""} disabled={b.id === "user" && !chromeOk} onClick={() => setBrowser(b.id)}><b>{tr(b.label)}</b><span>{tr(b.hint)}</span></button>
           ))}</div>
           {!chromeOk && <p className="tk-tz">{tr(browser === "user" ? "Quản trị viên chưa cho phép tài khoản của bạn dùng Chrome của bạn: việc này sẽ chạy bằng trình duyệt của Synchro." : "Quản trị viên chưa cho phép tài khoản của bạn dùng Chrome của bạn.")}</p>}
-        </div> : <p className="tk-tz">{tr("Synchro Code dùng trình duyệt của Synchro trên máy chủ khi cần mở web. Lệnh cần duyệt (khi chế độ Tự động đang tắt trong Cài đặt → Synchro Code) sẽ thành đề xuất trong mục Cần duyệt của Autopilot.")}</p>}
+        </div> : <p className="tk-tz">{trs(
+          "Synchro Code dùng trình duyệt của Synchro trên máy chủ khi cần mở web.",
+          "Lệnh cần duyệt (khi tắt chế độ Tự động trong Cài đặt → Synchro Code) thành đề xuất ở mục Cần duyệt.",
+        )}</p>}
         <label className="tk-l">{tr("Model")}<ModelPick value={model} onChange={setModel} /></label>
         <label className="tk-l">{tr("Hướng dẫn chi tiết cho Synchro")}
-          <textarea className="field" value={prompt} maxLength={8000} rows={7} placeholder={tr(PROMPT_HINT)} data-notr
+          <textarea className="field" value={prompt} maxLength={8000} rows={7} placeholder={trs(...PROMPT_HINT)} data-notr
             onChange={(e) => setPrompt(e.target.value)} />
         </label>
         {plan && (plan.approvals.length > 0 || plan.needs.length > 0) && <div className="tk-notes">
@@ -481,7 +492,10 @@ export function AutopilotPage({ say, onOpenChat }: { say: (m: string) => void; m
     { id: "rm", label: tr("Gỡ khỏi Autopilot"), icon: <I.Trash size={14} />, danger: true, when: (l) => l.some((x) => !live(x)),
       confirm: (l) => ({
         title: `${tr("Gỡ")} ${l.filter((x) => !live(x)).length} ${tr("kết quả khỏi Autopilot?")}`, ok: tr("Gỡ"),
-        text: tr("Chỉ gỡ khỏi danh sách Kết quả; việc tự động, lịch chạy và đoạn chat kết quả giữ nguyên. Kết quả đang chạy được giữ lại."),
+        text: trs(
+          "Chỉ gỡ khỏi danh sách Kết quả; việc tự động, lịch chạy và đoạn chat kết quả giữ nguyên.",
+          "Kết quả đang chạy được giữ lại.",
+        ),
       }),
       run: async (l) => { const ids = l.filter((x) => !live(x)).map((x) => x.run); await api("POST", "/api/autopilot", { remove: ids }); setOlder((o) => o.filter((x) => !ids.includes(x.run))); changed(); load(); say(tr("Đã gỡ khỏi Autopilot")); } },
   ];
@@ -505,7 +519,10 @@ export function AutopilotPage({ say, onOpenChat }: { say: (m: string) => void; m
       <header className="ds-head tk-top">
         <div className="ds-head-t">
           <h1 data-notr>Autopilot</h1>
-          <p>{tr("Giao việc hoặc lên lịch, Synchro tự làm kể cả khi bạn tắt tab hay gập máy. Xong là có thông báo, kết quả thành đoạn chat để bạn hỏi tiếp.")}</p>
+          <p>{trs(
+            "Giao việc hoặc lên lịch, Synchro tự làm kể cả khi bạn tắt tab hay gập máy.",
+            "Xong là có thông báo, kết quả thành đoạn chat để bạn hỏi tiếp.",
+          )}</p>
         </div>
       </header>
       <Composer say={say} onPlan={(plan) => setEdit({ plan })} onManual={() => setEdit("new")} />
@@ -530,7 +547,10 @@ export function AutopilotPage({ say, onOpenChat }: { say: (m: string) => void; m
       </div>
 
       {tab === "results" && (items === null ? (loadErr ? <LoadErr title={tr("Chưa tải được Autopilot")} err={loadErr} retry={load} /> : <div className="empty"><span className="art-spin" /></div>) : !shown.length ? (
-        <div className="apps-empty"><I.Inbox size={22} /><b>{tr("Chưa có kết quả nào")}</b><span>{tr("Giao một việc ở ô phía trên (ví dụ giá cổ phiếu mỗi sáng, repo GitHub hay mỗi ngày). Synchro tự chạy, kết quả hiện ở đây và thành đoạn chat để bạn hỏi tiếp.")}</span></div>
+        <div className="apps-empty"><I.Inbox size={22} /><b>{tr("Chưa có kết quả nào")}</b><span>{trs(
+          "Giao một việc ở ô phía trên (ví dụ giá cổ phiếu mỗi sáng, repo GitHub hay mỗi ngày).",
+          "Synchro tự chạy, kết quả hiện ở đây và thành đoạn chat để bạn hỏi tiếp.",
+        )}</span></div>
       ) : (
         <div className="tk-feed">{groups.map(([d, list]) => (
           <section key={d}><h3 className="tk-day">{dayLabel(d)}</h3>
