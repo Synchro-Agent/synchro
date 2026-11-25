@@ -15,6 +15,7 @@ import { can, db, getUser } from "./authstore";
 import { getRun, startRun } from "./runs";
 import { extLive } from "./browserext";
 import { TOO_OLD } from "../shared/taskerr";
+import { AUTO } from "./router";
 
 export type Schedule = { kind: "once" | "hourly" | "daily" | "weekdays" | "weekly"; time?: string; weekday?: number; every?: number; tz: string };
 export type BrowserPref = "auto" | "synchro" | "user";
@@ -197,7 +198,9 @@ function taskBody(r: TaskRow, o: { chrome: boolean; note?: string; action?: { ti
     : `${r.memory ? previous(r) : ""}${r.prompt}`;
   return {
     system: `${SYSTEM}\n\n${ctx}`, messages: [{ role: "user", content }], skills: true, max_tokens: 8000, web: true,
-    ...(r.model ? { model: r.model } : {}), feature: "chat", conv: `task-${r.id}`,
+    // Chưa chọn model: chạy ở chế độ Tự động như Hộp thư vẫn ghi ("Tự động"), nên được định tuyến theo việc và việc
+    // nhiều nhánh được chia cho nhóm Orchestra như ở khung chat.
+    model: r.model ?? AUTO, feature: "chat", conv: `task-${r.id}`,
     task: { id: r.id, browser: r.browser, chrome: o.chrome } satisfies TaskCtx,
     ...(r.engine === "code" ? { sid: taskSid(r.id), allow: o.allow ?? [] } : {}),
   };
