@@ -1,6 +1,6 @@
 // Công cụ và hướng dẫn riêng cho lượt chạy của việc tự động (tasks.ts): lượt chạy nền không có người xem nên việc cần người dùng đồng ý
-// (tạo skill, hành động có tác động, trang web mới, công cụ để "hỏi trước") không chờ hỏi mà thành đề xuất trong Hộp thư.
-// Model gọi inbox_propose; Synchro tự gửi đề xuất trang web / công cụ khi chốt chặn cần hỏi. Người dùng duyệt thì automate.ts làm.
+// (tạo skill, hành động có tác động, trang web mới, công cụ để "hỏi trước") không chờ hỏi mà thành đề xuất trong mục Cần duyệt của Autopilot.
+// Model gọi autopilot_propose; Synchro tự gửi đề xuất trang web / công cụ khi chốt chặn cần hỏi. Người dùng duyệt thì automate.ts làm.
 import "server-only";
 import path from "node:path";
 import { currentRun } from "./runs";
@@ -19,8 +19,8 @@ export function taskOf(body: Record<string, unknown>): TaskCtx | null {
 export const taskBrowser = (t: TaskCtx): "synchro" | "user" => (t.browser === "user" && t.chrome ? "user" : "synchro");
 
 export const TASK_TOOL = {
-  name: "inbox_propose",
-  description: "Gửi một đề xuất vào Hộp thư để người dùng duyệt (việc tự động chạy nền không hỏi người dùng giữa chừng được). Dùng cho việc cần người dùng đồng ý trước: kind=\"skill\" tạo skill mới cho người dùng (kèm skill_md hoàn chỉnh và source); kind=\"action\" một hành động có tác động ra bên ngoài hoặc khó hoàn tác (gửi tin / email, đăng bài, mua bán, đặt lệnh, xóa / sửa dữ liệu của người dùng…) kèm instructions để Synchro làm sau khi được duyệt. Không tự làm những việc đó trong lượt này. Mỗi lần gọi là một đề xuất.",
+  name: "autopilot_propose",
+  description: "Gửi một đề xuất vào mục Cần duyệt của Autopilot để người dùng duyệt (việc tự động chạy nền không hỏi người dùng giữa chừng được). Dùng cho việc cần người dùng đồng ý trước: kind=\"skill\" tạo skill mới cho người dùng (kèm skill_md hoàn chỉnh và source); kind=\"action\" một hành động có tác động ra bên ngoài hoặc khó hoàn tác (gửi tin / email, đăng bài, mua bán, đặt lệnh, xóa / sửa dữ liệu của người dùng…) kèm instructions để Synchro làm sau khi được duyệt. Không tự làm những việc đó trong lượt này. Mỗi lần gọi là một đề xuất.",
   input_schema: {
     type: "object",
     properties: {
@@ -47,8 +47,8 @@ export function taskRules(t: TaskCtx, browse: boolean) {
         : `- Trình duyệt: mặc định dùng trình duyệt của Synchro (browser="synchro", chạy trên máy chủ, luôn dùng được). Chrome của người dùng (browser="user") ${chrome}; chỉ dùng khi việc cần tài khoản họ đã đăng nhập, hoặc trang chặn trình duyệt của máy chủ (captcha, chặn truy cập tự động)${t.chrome ? "" : " — lúc này không dùng được, hãy tìm nguồn khác và ghi rõ"}.`;
   return `<automation_tools>
 Đây là lượt chạy nền của việc tự động: không có người dùng để hỏi.
-- inbox_propose: gửi đề xuất chờ người dùng duyệt (xem mô tả công cụ). Skill: SKILL.md hoàn chỉnh dùng được ngay (name chữ thường-gạch-ngang, description nói rõ làm gì và khi nào dùng, phần thân là hướng dẫn cụ thể kèm ví dụ), source là liên kết nguồn. Đề xuất đã có (đang chờ hay đã duyệt) thì không gửi lại.
-- Trang web chưa được phép hay công cụ để "hỏi trước": Synchro tự gửi yêu cầu duyệt vào Hộp thư và báo lại cho bạn; dùng nguồn khác và ghi rõ trong kết quả.
+- autopilot_propose: gửi đề xuất chờ người dùng duyệt (xem mô tả công cụ). Skill: SKILL.md hoàn chỉnh dùng được ngay (name chữ thường-gạch-ngang, description nói rõ làm gì và khi nào dùng, phần thân là hướng dẫn cụ thể kèm ví dụ), source là liên kết nguồn. Đề xuất đã có (đang chờ hay đã duyệt) thì không gửi lại.
+- Trang web chưa được phép hay công cụ để "hỏi trước": Synchro tự gửi yêu cầu duyệt vào mục Cần duyệt của Autopilot và báo lại cho bạn; dùng nguồn khác và ghi rõ trong kết quả.
 - Tìm trên web hay API đủ dữ liệu thì không cần mở trình duyệt (nhanh hơn).
 ${b}
 </automation_tools>`.replace(/\n\n<\/automation_tools>/, "\n</automation_tools>");
@@ -56,7 +56,7 @@ ${b}
 
 type R = Record<string, unknown>;
 const str = (x: unknown, max: number) => (typeof x === "string" ? x.trim().slice(0, max) : "");
-/** Công cụ inbox_propose: kiểm tra đề xuất (skill phải đúng định dạng) rồi ghi vào Hộp thư. */
+/** Công cụ autopilot_propose: kiểm tra đề xuất (skill phải đúng định dạng) rồi ghi vào Autopilot. */
 export async function runPropose(uid: string, t: TaskCtx, input: R): Promise<{ content: string; is_error: boolean }> {
   const kind = input.kind === "skill" || input.kind === "action" ? input.kind : null;
   const title = str(input.title, 200), summary = str(input.summary, 4000), source = str(input.source, 500);
@@ -89,8 +89,8 @@ export async function runPropose(uid: string, t: TaskCtx, input: R): Promise<{ c
   }
   try {
     const r = propose(uid, { task: t.id, run: currentRun(), kind, key, title: name, summary, payload, doneGone });
-    if (r.dup) return { content: `Đề xuất "${name}" đã có trong Hộp thư (${r.dup.status === "rejected" ? "người dùng đã bỏ qua trước đây" : r.dup.status === "pending" ? "đang chờ người dùng duyệt" : "người dùng đã duyệt trước đây"}), không gửi lại.`, is_error: false };
-    return { content: `Đã gửi đề xuất "${name}" vào Hộp thư, chờ người dùng duyệt. Không tự làm việc này; trong kết quả cuối, nhắc người dùng xem mục Cần duyệt của Hộp thư.`, is_error: false };
+    if (r.dup) return { content: `Đề xuất "${name}" đã có trong mục Cần duyệt của Autopilot (${r.dup.status === "rejected" ? "người dùng đã bỏ qua trước đây" : r.dup.status === "pending" ? "đang chờ người dùng duyệt" : "người dùng đã duyệt trước đây"}), không gửi lại.`, is_error: false };
+    return { content: `Đã gửi đề xuất "${name}" vào Autopilot, chờ người dùng duyệt. Không tự làm việc này; trong kết quả cuối, nhắc người dùng xem mục Cần duyệt của Autopilot.`, is_error: false };
   } catch (e) {
     if (e instanceof TaskError) return { content: e.message, is_error: true };
     throw e;
@@ -115,6 +115,6 @@ export function queueTool(uid: string, t: TaskCtx, c: { name: string; input: R }
   const input = JSON.stringify(c.input ?? {});
   try {
     const r = propose(uid, { task: t.id, run: currentRun(), kind: "tool", key: `tool:${c.name}:${input.slice(0, 200)}`, title: `${meta.connector}: ${meta.title}`, summary: input.length > 1500 ? input.slice(0, 1500) + "…" : input, payload: { tool: c.name, input: c.input ?? {}, connector: meta.connector } });
-    return r.dup ? "Đề xuất dùng công cụ này với đúng tham số đó đã có trong Hộp thư." : "Công cụ này để chế độ hỏi trước mỗi lần dùng. Synchro đã gửi yêu cầu duyệt vào Hộp thư (người dùng duyệt thì Synchro gọi công cụ với đúng tham số này). Không thử lại; làm tiếp phần còn lại và ghi rõ trong kết quả.";
+    return r.dup ? "Đề xuất dùng công cụ này với đúng tham số đó đã có trong mục Cần duyệt của Autopilot." : "Công cụ này để chế độ hỏi trước mỗi lần dùng. Synchro đã gửi yêu cầu duyệt vào mục Cần duyệt của Autopilot (người dùng duyệt thì Synchro gọi công cụ với đúng tham số này). Không thử lại; làm tiếp phần còn lại và ghi rõ trong kết quả.";
   } catch (e) { return e instanceof TaskError ? e.message : "Không gửi được yêu cầu duyệt."; }
 }

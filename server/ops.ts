@@ -144,7 +144,8 @@ export function opsSnapshot() {
   };
 }
 
-// Tiếng Việt, tiếng Anh: Hộp thư tự dịch theo ngôn ngữ của người đọc, còn email gửi cả hai vì máy chủ không biết ngôn ngữ của quản trị viên.
+// Tiếng Việt, tiếng Anh: Autopilot tự dịch theo ngôn ngữ của người đọc, còn email gửi cả hai vì máy chủ không biết ngôn
+// ngữ của quản trị viên.
 const ALERT_TEXT: Record<string, [string, string, string, string]> = {
   disk_crit: ["Đĩa máy chủ sắp đầy", "Đĩa còn rất ít chỗ trống: Synchro từ chối tệp mới và cơ sở dữ liệu có thể ngừng ghi.", "The server disk is almost full", "Very little disk space is left: Synchro refuses new files and the database may stop writing."],
   mail_failing: ["Gửi email đang lỗi", "Thư gần nhất gửi không được, nên email đặt lại mật khẩu và xác minh có thể không tới người dùng.", "Email sending is failing", "The latest emails could not be sent, so password reset and verification emails may not reach people."],
@@ -156,7 +157,8 @@ const ALERT_TEXT: Record<string, [string, string, string, string]> = {
   cli_auth: ["Nhiều người bị từ chối đăng nhập gói AI", "Từ 3 người trở lên bị hãng từ chối đăng nhập trong 24 giờ qua. Có thể CLI hoặc hãng vừa đổi gì đó.", "Several people were refused an AI plan sign-in", "Three or more people were refused sign-in by a vendor in the last 24 hours. A CLI or vendor may have changed something."],
 };
 
-/** Chạy nền mỗi giờ: vấn đề nghiêm trọng mới thì báo vào Hộp thư và email của quản trị viên, mỗi loại tối đa một lần mỗi ngày. */
+/** Chạy nền mỗi giờ: vấn đề nghiêm trọng mới thì báo vào Autopilot và email của quản trị viên, mỗi loại tối đa một
+ *  lần mỗi ngày. */
 export async function opsWatch() {
   const list = opsProblems(opsSnapshot()).filter((p) => p.level === "crit" && ALERT_TEXT[p.code]);
   if (!list.length) return;
@@ -172,7 +174,7 @@ export async function opsWatch() {
     setSetting(`ops:alert:${p.code}`, String(Date.now()));
     for (const a of admins) {
       addNotice(a.id, title, `${text} Xem chi tiết ở Cài đặt → Sức khỏe hệ thống.`, "settings:Health");
-      // Thư lỗi thì báo bằng thư cũng vô ích: Hộp thư ở trên là đủ.
+      // Thư lỗi thì báo bằng thư cũng vô ích: Autopilot ở trên là đủ.
       if (p.code !== "mail_failing") sendMail(a.email, opsAlertMail({ base, title, text, titleEn, textEn }), "alert");
     }
   }

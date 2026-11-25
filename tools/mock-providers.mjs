@@ -476,7 +476,12 @@ function mockPlan(q) {
   const days = ["chu nhat", "thu hai", "thu ba", "thu tu", "thu nam", "thu sau", "thu bay"];
   const wd = days.findIndex((d) => t.includes(d));
   const every = Number(/moi (\d{1,2}) (?:gio|tieng)/.exec(t)?.[1] ?? 0);
-  const kind = /mot lan|ngay bay gio|ngay lap tuc/.test(t) ? "once" : every || /moi gio|hang gio|every hour/.test(t) ? "hourly"
+  // "ngày 30/11" không kèm lời lặp lại: một lần vào lúc đó; "hằng tháng": cron (như model thật chọn khi không có loại
+  // lịch nào hợp).
+  const date = /ngay (\d{1,2})\/(\d{1,2})(?:\/(\d{4}))?/.exec(t);
+  const monthly = /hang thang|moi thang|monthly/.test(t);
+  const kind = monthly ? "cron" : date ? "once" : /mot lan|ngay bay gio|ngay lap tuc/.test(t) ? "once"
+    : every || /moi gio|hang gio|every hour/.test(t) ? "hourly"
     : /ngay lam viec|ngay thuong|thu hai (den|toi|-) thu sau|co phieu|chung khoan|ty gia/.test(t) ? "weekdays" : /moi tuan|hang tuan|weekly/.test(t) || wd >= 0 ? "weekly" : "daily";
   const m = /(\d{1,2})\s*(?:h|gio|:)\s*(\d{2})?\s*(sang|chieu|toi)?/.exec(t);
   let h = m ? Number(m[1]) : /chieu/.test(t) ? 17 : /toi/.test(t) ? 20 : 8;
@@ -486,8 +491,21 @@ function mockPlan(q) {
   const skill = /skill/.test(t);
   const engine = /repo cua toi|sua code|sua loi|pull request|\bpr\b|commit|dependenc|thu vien|refactor|chay kiem thu|\bci\b/.test(t) ? "code" : "chat";
   const title = text.replace(/^(hãy|mỗi ngày|hằng ngày|mỗi sáng)\s+/i, "").split(/[,.;]/)[0].split(" ").slice(0, 8).join(" ");
-  const prompt = `Mục tiêu: ${text}\n\nCách làm:\n1. Tra cứu dữ liệu mới nhất từ nguồn đáng tin cậy (ghi rõ nguồn và thời điểm).\n2. So sánh với kết quả lần chạy trước, nêu thay đổi đáng chú ý.\n3. Phân tích ngắn gọn, nêu lập luận và rủi ro.${skill ? "\n4. Với mục đáng giá nhất, soạn skill và gửi đề xuất bằng inbox_propose (kind=skill) để người dùng duyệt trước khi tạo." : ""}\n\nKết quả: dòng đầu tóm tắt, rồi bảng chi tiết, cuối cùng là Nguồn.`;
-  return JSON.stringify({ title: title[0]?.toUpperCase() + title.slice(1), engine, schedule: { kind, time, ...(kind === "weekly" ? { weekday: wd >= 0 ? wd : 1 } : {}), ...(kind === "hourly" && every > 1 ? { every } : {}) }, browser, prompt, approvals: skill ? ["Tạo skill từ mục được chọn"] : [], needs: browser === "user" ? ["Mở Chrome có cài tiện ích Synchro"] : [] });
+  const prompt = `Mục tiêu: ${text}\n\nCách làm:\n1. Tra cứu dữ liệu mới nhất từ nguồn đáng tin cậy (ghi rõ nguồn và thời điểm).\n2. So sánh với kết quả lần chạy trước, nêu thay đổi đáng chú ý.\n3. Phân tích ngắn gọn, nêu lập luận và rủi ro.${skill ? "\n4. Với mục đáng giá nhất, soạn skill và gửi đề xuất bằng autopilot_propose (kind=skill) để người dùng duyệt trước khi tạo." : ""}\n\nKết quả: dòng đầu tóm tắt, rồi bảng chi tiết, cuối cùng là Nguồn.`;
+  // Ngày đã qua trong năm nay thì là năm sau.
+  const year = () => date[3] ?? new Date().getFullYear() + (Number(date[2]) - 1 < new Date().getMonth() ? 1 : 0);
+  const at = date && !monthly ? `${year()}-${date[2].padStart(2, "0")}-${date[1].padStart(2, "0")}T${time}` : "";
+  const dom = /ngay (\d{1,2})/.exec(t)?.[1] ?? 1;
+  const cron = monthly ? `${Number(time.slice(3))} ${Number(time.slice(0, 2))} ${dom} * *` : "";
+  const schedule = {
+    kind, time, ...(kind === "weekly" ? { weekday: wd >= 0 ? wd : 1 } : {}),
+    ...(kind === "hourly" && every > 1 ? { every } : {}), ...(at ? { at } : {}), ...(cron ? { cron } : {}),
+  };
+  return JSON.stringify({
+    title: title[0]?.toUpperCase() + title.slice(1), engine, schedule, browser, prompt,
+    approvals: skill ? ["Tạo skill từ mục được chọn"] : [],
+    needs: browser === "user" ? ["Mở Chrome có cài tiện ích Synchro"] : [],
+  });
 }
 // Các tệp trong tin nhắn người dùng gần nhất, theo đúng định dạng từng API (Anthropic, OpenAI Responses, chat/completions).
 function mediaOf(msgs = []) {

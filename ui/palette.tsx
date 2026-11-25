@@ -18,7 +18,7 @@ export type PaletteGo = {
   project: (id: number) => void;
   code?: (id: number) => void;
   brain?: (title: string) => void;
-  inbox?: () => void;
+  autopilot?: () => void;
   /** Lọc thanh bên theo thẻ. */
   tag?: (t: string) => void;
 };
@@ -66,7 +66,7 @@ type Remote = {
   apps: { id: string; title: string; visibility?: string }[];
   skills: { name: string; description: string }[];
   libs: { name: string; skillCount: number }[];
-  inbox: { run: string; title: string; text?: string }[];
+  autopilot: { run: string; title: string; text?: string }[];
 };
 
 const MAX_SHOWN = 500;
@@ -92,8 +92,8 @@ export function CommandPalette({ chats, projects, codes, cmds, go, seed, onClose
 
   useEffect(() => {
     let live = true;
-    Promise.all([get("/api/artifacts?view=titles"), get("/api/apps"), cachedJson<{ skills?: Remote["skills"] }>("/api/skills"), cachedJson<{ plugins?: Remote["libs"] }>("/api/plugins?view=lite"), get("/api/inbox?limit=100")]).then(([a, ap, sk, pl, ib]) => {
-      if (live) setRem({ arts: a.artifacts ?? [], apps: ap.apps ?? [], skills: sk.skills ?? [], libs: pl.plugins ?? [], inbox: ib.items ?? [] });
+    Promise.all([get("/api/artifacts?view=titles"), get("/api/apps"), cachedJson<{ skills?: Remote["skills"] }>("/api/skills"), cachedJson<{ plugins?: Remote["libs"] }>("/api/plugins?view=lite"), get("/api/autopilot?limit=100")]).then(([a, ap, sk, pl, ib]) => {
+      if (live) setRem({ arts: a.artifacts ?? [], apps: ap.apps ?? [], skills: sk.skills ?? [], libs: pl.plugins ?? [], autopilot: ib.items ?? [] });
     });
     return () => { live = false; };
   }, []);
@@ -146,7 +146,11 @@ export function CommandPalette({ chats, projects, codes, cmds, go, seed, onClose
       add({ key: "proj:" + p.id, group: "Dự án", label: p.name, sub: doc?.name ?? p.desc?.slice(0, 80), icon: doc ? <I.Clip size={16} /> : <I.Folder size={16} />, hay: doc ? words.join(" ") : undefined, run: () => go.project(p.id) });
     }
     if (rem) {
-      for (const a of rem.inbox) if (a.title) add({ key: "inbox:" + a.run, group: "Hộp thư", label: a.title, hay: a.text?.slice(0, 500), icon: <I.Inbox size={16} />, run: () => go.inbox?.() });
+      for (const a of rem.autopilot) {
+        if (!a.title) continue;
+        add({ key: "autopilot:" + a.run, group: "Autopilot", label: a.title, hay: a.text?.slice(0, 500),
+          icon: <I.Autopilot size={16} />, run: () => go.autopilot?.() });
+      }
       for (const a of rem.arts) add({ key: `art:${a.conv}:${a.title}`, group: "Artifact và ứng dụng", label: a.title, sub: tr("Artifact"), icon: <I.Shapes size={16} />, run: () => go.artifact(a.conv, a.title) });
       for (const a of rem.apps) add({ key: "app:" + a.id, group: "Artifact và ứng dụng", label: a.title, sub: tr(a.visibility === "org" ? "Ứng dụng dùng chung" : "Ứng dụng"), icon: <I.GetApps size={16} />, run: () => go.app(a.id) });
       for (const s of rem.skills) add({ key: "skill:" + s.name, group: "Skill và thư viện", label: s.name, sub: s.description.slice(0, 90), icon: <I.Scroll size={16} />, run: () => go.skillHub(s.name) });
@@ -154,7 +158,7 @@ export function CommandPalette({ chats, projects, codes, cmds, go, seed, onClose
     }
     // Chưa gõ gì: lệnh và vài đoạn chat gần đây. Đã gõ: mọi nhóm, mỗi nhóm trước tiên hiện 6 kết quả kèm dòng "Xem tất cả N kết quả", nhóm theo thứ tự cố định.
     if (!words.length) return { cuts, rows: [...out.filter((r) => r.group === "Lệnh"), ...out.filter((r) => r.group === "Đoạn chat").slice(0, PER_GROUP)] };
-    const order = ["Lệnh", "Thẻ", "Đoạn chat", "Phiên Code", "Dự án", "Bộ não", "Hộp thư", "Artifact và ứng dụng", "Skill và thư viện"];
+    const order = ["Lệnh", "Thẻ", "Đoạn chat", "Phiên Code", "Dự án", "Bộ não", "Autopilot", "Artifact và ứng dụng", "Skill và thư viện"];
     const scored = out.map((r) => ({ r, s: score(r.hay, words, r.label) })).filter((x) => x.s > 0);
     const rows = order.flatMap((g): Row[] => {
       const l = scored.filter((x) => x.r.group === g).sort((a, b) => b.s - a.s).map((x) => x.r);

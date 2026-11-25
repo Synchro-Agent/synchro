@@ -416,7 +416,7 @@ input,textarea{font:inherit;color:inherit;outline:0}
 .user-wrap,.sk-uwrap{align-self:flex-end;max-width:80%;display:flex;flex-direction:column;align-items:flex-end;gap:6px}
 .user-wrap .user-msg,.sk-uwrap .sk-user{max-width:100%}
 .ai-msg ul{list-style:disc}.ai-msg ol{list-style:decimal}.ai-msg li{margin:.2em 0}
-/* Markdown ngoài khung chat (tài liệu artifact, xem tệp .md, kết quả tác vụ ở Hộp thư) dùng cùng kiểu; tiêu đề giữ đúng cấp. */
+/* Markdown ngoài khung chat (tài liệu artifact, xem tệp .md, kết quả của Autopilot) dùng cùng kiểu; tiêu đề giữ đúng cấp. */
 .mdx p{margin:0 0 .8em}.mdx ul,.mdx ol{margin:0 0 .8em;padding-left:1.4em}.mdx ul{list-style:disc}.mdx ol{list-style:decimal}.mdx li{margin:.2em 0}
 .ai-msg h1,.mdx h1{font-size:1.32em;line-height:1.3;margin:1.1em 0 .5em}
 .ai-msg h2,.mdx h2{font-size:1.16em;line-height:1.35;margin:1.1em 0 .45em}
@@ -3062,7 +3062,7 @@ html body .menu.art-style-menu{--gl-fill:var(--card);background:var(--card);min-
 /* Văn bản hành chính: khung xem trang A4 */
 .vbhc-box{height:100%;width:100%;display:flex}
 .vbhc-box .vbhc-frame{flex:1;border:0;background:#e9e9e6}
-/* ===================== Hộp thư và tác vụ nền ===================== */
+/* ===================== Autopilot (việc tự làm trên máy chủ) ===================== */
 .nav-badge{margin-left:auto;min-width:18px;height:18px;padding:0 5px;border-radius:999px;background:var(--accent);color:var(--on-accent);font-size:var(--fs-1);font-weight:600;display:inline-grid;place-items:center}
 .tk-top{display:flex;align-items:center;gap:12px;margin-bottom:18px;flex-wrap:wrap}
 .tk-top h1{margin:0}
@@ -3118,7 +3118,7 @@ html body .menu.art-style-menu{--gl-fill:var(--card);background:var(--card);min-
 .tpk-quick button:hover{color:var(--text)}
 .tpk-quick button.on{background:var(--accent);color:var(--on-accent)}
 .tk-tz{margin:0;font-size:var(--fs-1);color:var(--text-3)}
-/* Hộp thư tự động hóa: ô giao việc, trạng thái máy chủ / Chrome, kết quả theo ngày, đề xuất chờ duyệt, việc tự động */
+/* Autopilot: ô giao việc, trạng thái máy chủ / Chrome, kết quả theo ngày, đề xuất chờ duyệt, việc tự động */
 .tk{--tk-ok:#16a34a;--tk-warn:#d97706;--tk-bad:#dc2626;padding-bottom:48px}
 .tk .btn,.tk-modal .btn{display:inline-flex;align-items:center;gap:6px}
 .tk .btn.ghost,.tk-modal .btn.ghost{background:transparent;border-color:transparent;color:var(--text-2)}

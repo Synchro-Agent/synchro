@@ -53,6 +53,9 @@ const sessFor = (uid: string) => (cur && !cur.dead && cur.uid === uid ? cur : nu
 // chatsync lấy về từ máy chủ các đoạn mà thân không còn ở máy này (bản rút gọn local mà kho không có thân).
 let needHook: ((ids: number[]) => void) | null = null;
 export function onNeedChats(f: (ids: number[]) => void) { needHook = f; return () => { if (needHook === f) needHook = null; }; }
+/** Xin máy chủ đúng các đoạn chat này ngay (không chờ nhịp đồng bộ 30 giây), ví dụ đoạn chat kết quả Autopilot vừa
+ *  tạo ở máy chủ. */
+export function needChats(ids: number[]) { needHook?.(ids); }
 
 /** Kho dự phòng của tài khoản bỏ qua khóa cũ: chatsync tải lại từ máy chủ như máy mới, không đánh dấu gì là cần đẩy. */
 export const freshDevice = (uid: string) => !!sessFor(uid)?.fresh;

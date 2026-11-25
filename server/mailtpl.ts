@@ -149,3 +149,32 @@ export function opsAlertMail(o: { base: string; title: string; text: string; tit
     text: `${o.title}\n\n${o.text}\n\n${o.titleEn}\n\n${o.textEn}\n\nCài đặt → Sức khỏe hệ thống / Settings → System health: ${url}\n\nSynchro`,
   };
 }
+
+type AutopilotMailIn = {
+  base: string; lang: MailLang; title: string; when: string; ok: boolean; summary: string; url: string;
+};
+/** Autopilot vừa chạy xong một việc (người dùng bật "Gửi email khi xong" cho việc đó): tóm tắt kết quả và nút mở đoạn
+ *  chat để hỏi tiếp. ok = false: lần chạy lỗi, phần tóm tắt là lý do. */
+export function autopilotMail(o: AutopilotMailIn): Mail {
+  const vi = o.lang === "vi";
+  const subject = o.ok
+    ? (vi ? `Autopilot đã xong: ${o.title}` : `Autopilot finished: ${o.title}`)
+    : (vi ? `Autopilot gặp lỗi: ${o.title}` : `Autopilot hit an error: ${o.title}`);
+  const at = `<b style="color:${INK};font-weight:600">${esc(o.when)}</b>`;
+  const lead = o.ok
+    ? (vi ? `Synchro đã chạy xong việc này lúc ${at}. Kết quả nằm trong một đoạn chat để bạn đọc đầy đủ và hỏi tiếp.`
+      : `Synchro finished this task at ${at}. The result is in a chat you can open to read in full and follow up.`)
+    : (vi ? `Lần chạy lúc ${at} chưa xong. Mở Autopilot để xem chi tiết hoặc bấm Chạy lại.`
+      : `The run at ${at} didn't finish. Open Autopilot to see the details or run it again.`);
+  const label = o.ok ? (vi ? "Mở đoạn chat" : "Open the chat") : (vi ? "Mở Autopilot" : "Open Autopilot");
+  const note = vi
+    ? "Bạn nhận email này vì đã bật \"Gửi email khi xong\" cho việc này trong Autopilot. Tắt ở nút Sửa của việc."
+    : "You're getting this because \"Email me when done\" is on for this task in Autopilot. Turn it off in Edit.";
+  const after = esc(o.summary).replace(/\n/g, "<br>");
+  return {
+    subject: subject.slice(0, 160),
+    html: frame(o.base, o.lang, { pre: o.summary.slice(0, 140), title: o.title, lead, cta: { label, url: o.url }, after,
+      note }),
+    text: `${o.title}\n\n${o.summary}\n\n${label}: ${o.url}\n\nSynchro`,
+  };
+}

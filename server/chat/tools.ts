@@ -192,7 +192,7 @@ export type Lib = { key: string; label: string };
 // browse: công cụ trình duyệt đang bật (Cài đặt → Khả năng); bctx: trình duyệt của lượt (của Synchro / Chrome của người dùng, browsertools.ts);
 // shown: trình duyệt đã mở khung cho người dùng ở lượt này;
 // heavy: id các lượt đọc trang / chụp màn hình (lược bớt bản cũ để ngữ cảnh không phình khi thao tác dài).
-// task: lượt chạy nền của việc tự động (tasks.ts): việc cần người dùng đồng ý thành đề xuất trong Hộp thư thay vì chờ hỏi.
+// task: lượt chạy nền của việc tự động (tasks.ts): việc cần người dùng đồng ý thành đề xuất trong mục Cần duyệt của Autopilot thay vì chờ hỏi.
 // art: lịch sử để read_artifact / check_artifact dựng lại bản hiện tại của artifact (cùng phần đã nén ở artBase).
 // turnArts: artifact model viết giữa lượt (trong lời dẫn trước công cụ), xem sayOut.
 // image: công cụ generate_image đang bật; msgs: lịch sử của lượt, để tìm ảnh gốc người dùng nhờ sửa.
@@ -898,7 +898,8 @@ async function runCall(x: Exec, c: Call, d?: Decision): Promise<Run> {
     // Trang web được phép (Cài đặt → Synchro Code → Trình duyệt): trang bị chặn thì không làm, trang lạ thì hỏi người dùng ngay trong đoạn chat.
     // Lượt không chạy nền (không có khung chat theo dõi) thì không hỏi được: từ chối luôn, model được dặn nhờ người dùng thêm trang.
     x.gate ??= makeGate({ uid: x.uid, signal: runSignal(), probe: async () => (await runBrowserTool(x.uid, "browser_tabs", { op: "list" }, x.bctx)).url,
-      // Việc tự động chạy nền: không ai trả lời giữa chừng, nên gửi đề xuất cho phép trang vào Hộp thư và làm tiếp bằng nguồn khác.
+      // Việc tự động chạy nền: không ai trả lời giữa chừng, nên gửi đề xuất cho phép trang vào mục Cần duyệt của
+      // Autopilot và làm tiếp bằng nguồn khác.
       ask: (a) => { if (x.task && a.kind === "site") { queueSite(x.uid, x.task, a.host ?? "", a.detail ?? ""); answerAsk(x.uid, a.id, { ok: false, note: QUEUED }); } else if (currentRun()) { progress("ask", JSON.stringify(a)); x.park?.(); } else answerAsk(x.uid, a.id, { ok: false, note: NO_UI }); },
       asked: (id, a) => { if (currentRun()) progress("asked", JSON.stringify({ id, ok: a.ok, always: !!a.always })); },
       // D6: đang mở skill của danh mục (chưa kiểm chứng) và thao tác trên Chrome của người dùng → hỏi một lần trong lượt trước khi dùng.

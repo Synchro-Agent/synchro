@@ -1,6 +1,6 @@
 // Việc tự động chạy bằng Synchro Code (tasks.ts, engine "code"): một lượt agent trong workspace riêng của việc (repo, tệp giữ lại giữa các lần chạy),
-// đủ công cụ của Synchro Code (sửa tệp, chạy lệnh, git, GitHub, trình duyệt, skill) cộng inbox_propose. Không ai ngồi duyệt giữa chừng nên câu hỏi
-// duyệt (lệnh ở chế độ hỏi trước, trang web chưa được phép) thành đề xuất trong Hộp thư và lượt chạy làm tiếp phần còn lại.
+// đủ công cụ của Synchro Code (sửa tệp, chạy lệnh, git, GitHub, trình duyệt, skill) cộng autopilot_propose. Không ai ngồi duyệt giữa chừng nên câu hỏi
+// duyệt (lệnh ở chế độ hỏi trước, trang web chưa được phép) thành đề xuất trong mục Cần duyệt của Autopilot và lượt chạy làm tiếp phần còn lại.
 import "server-only";
 import { answer } from "./approvals";
 import { usableModels } from "./ai/anymodel";
@@ -12,12 +12,12 @@ import { getPrefs, type PermMode } from "./codestore";
 import { progress, registerExec, runSignal, takeInbox } from "./runs";
 import { queueAsk, runPropose, TASK_TOOL, taskOf } from "./tasktools";
 
-// Bước đang làm, hiện ở Hộp thư khi việc đang chạy và trong nhật ký.
+// Bước đang làm, hiện ở Autopilot khi việc đang chạy và trong nhật ký.
 const describe = (name: string, a: Record<string, unknown>) => {
   const s = (k: string) => String(a[k] ?? "").split("\n")[0].slice(0, 160);
   return name === "bash" ? `Chạy lệnh: ${s("description") || s("command")}` : name === "write_file" ? `Ghi tệp ${s("path")}` : name === "edit_file" ? `Sửa tệp ${s("path")}`
     : name === "read_file" ? `Đọc tệp ${s("path")}` : name === "list_files" ? `Xem thư mục ${s("path") || "."}` : name === "grep" ? `Tìm "${s("pattern")}"`
-    : name === TASK_TOOL.name ? `Gửi đề xuất vào Hộp thư: ${s("title")}` : name.startsWith("browser_") ? `Trình duyệt: ${s("url") || name.slice(8)}` : name;
+    : name === TASK_TOOL.name ? `Gửi đề xuất vào mục Cần duyệt của Autopilot: ${s("title")}` : name.startsWith("browser_") ? `Trình duyệt: ${s("url") || name.slice(8)}` : name;
 };
 
 registerExec("agent", async (body, user) => {

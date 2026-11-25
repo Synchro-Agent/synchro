@@ -1,4 +1,4 @@
-// Cộng tác trên ứng dụng nội bộ (chỉ chạy ở máy chủ): bình luận có @nhắc tên (người được nhắc nhận thông báo trong Hộp thư),
+// Cộng tác trên ứng dụng nội bộ (chỉ chạy ở máy chủ): bình luận có @nhắc tên (người được nhắc nhận thông báo trong Autopilot),
 // và kênh trực tiếp: ai đang mở ứng dụng, dữ liệu chung vừa đổi, bình luận mới — mọi người đang mở thấy ngay, không cần tải lại.
 import "server-only";
 import crypto from "node:crypto";

@@ -51,7 +51,7 @@ export const UX_VI2EN: Record<string, string> = {
   "Synchro chạy bằng chính tài khoản AI của bạn. ChatGPT, Gemini và Grok dùng được cả tài khoản miễn phí, Claude cần gói Pro hoặc Max. Đăng nhập một tài khoản là chat được ngay, tin bạn đã gõ dưới đây vẫn được giữ.": "Synchro runs on your own AI account. ChatGPT, Gemini and Grok work on a free account; Claude needs a Pro or Max plan. Sign in to one and you can chat right away. What you've typed below stays here.",
   "Hãy kết nối một gói AI để gửi tin này": "Connect an AI plan to send this message",
   "Đến nội dung chính": "Skip to main content", "Ngôn ngữ": "Language",
-  "Chưa tải được danh sách artifact": "Couldn't load your artifacts", "Chưa tải được Hộp thư": "Couldn't load your Inbox",
+  "Chưa tải được danh sách artifact": "Couldn't load your artifacts", "Chưa tải được Autopilot": "Couldn't load Autopilot",
   "Hướng dẫn và khả năng": "Instructions and capabilities",
   // Terminal của Synchro Code, các thẻ làm việc
   "Đã ngắt kết nối": "Disconnected", "Đang nối lại…": "Reconnecting…", "mất kết nối mạng": "network connection lost", "Rê chuột": "Hover", "Kéo thả": "Drag and drop", "Tải tệp": "Upload file",

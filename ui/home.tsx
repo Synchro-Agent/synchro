@@ -62,8 +62,10 @@ const roughTitle = (t: string) => {
 const vagueMsg = (t: string) => t.trim().split(/\s+/).length <= 3 || /^(xin )?ch[àa]o|^(hi|hello|hey|alo|test)\b/i.test(t.trim());
 // U6: mỗi mục có một địa chỉ #v=… để Back / liên kết / F5 mở đúng trang (đoạn chat vẫn dùng #c=, Cài đặt dùng #s=<tab>).
 // "project" (chi tiết một dự án) dùng chung #v=projects với danh sách dự án. "new"/"chat" không có #v=.
-const HASH_VIEW: Partial<Record<View, string>> = { projects: "projects", project: "projects", artifacts: "artifacts", inbox: "inbox", brain: "brain", code: "code", speech: "speech", customize: "skills" };
-const VIEW_OF_HASH: Record<string, View> = { projects: "projects", artifacts: "artifacts", inbox: "inbox", brain: "brain", code: "code", speech: "speech", skills: "customize" };
+const HASH_VIEW: Partial<Record<View, string>> = { projects: "projects", project: "projects", artifacts: "artifacts", autopilot: "autopilot", brain: "brain", code: "code", speech: "speech", customize: "skills" };
+// #v=inbox: địa chỉ cũ của Autopilot (trước đây là Hộp thư) trong dấu trang, email cũ: vẫn mở đúng trang, rồi địa chỉ
+// tự đổi sang #v=autopilot.
+const VIEW_OF_HASH: Record<string, View> = { projects: "projects", artifacts: "artifacts", autopilot: "autopilot", inbox: "autopilot", brain: "brain", code: "code", speech: "speech", skills: "customize" };
 import { AppCtx, useApp, VOICE_LANG, VOICE_RATE, initials, readPref, reloadPrefs, resetPrefs, usePref, type Chat, type Msg, type Project } from "./store";
 import { IMAGE_PLANS, allowsModel, clampEffort, effortCap, effortsFor, isEffort, legacyModel, type Effort } from "../shared/catalog";
 import { AUTO, fitModel, modelName, modelsSettled, refreshModels, seedModels, useModels } from "./models";
@@ -74,7 +76,7 @@ import type { ProviderInfo } from "../shared/catalog";
 import { useInboxCount } from "./inboxcount";
 import { adoptLegacyData, clearAccountData, ls, setUserScope, userScope } from "./userscope";
 import { useChatSync, useSyncStatus } from "./chatsync";
-import { chatsForExport, closeChats, hydrateAll, loadChats, wipeChats, writeJournal } from "./chatload";
+import { chatsForExport, closeChats, hydrateAll, loadChats, needChats, wipeChats, writeJournal } from "./chatload";
 import { shortName, topicTitle } from "../shared/names";
 import { loadCaps, seedCaps, useCaps } from "./capsclient";
 import { hasArtifacts, splitArtifacts, type ArtBlock } from "../shared/artifacts";
@@ -104,7 +106,7 @@ const SpeechView = lazyView(() => import("./speech/view").then((m) => m.SpeechVi
 const DesignStylePop = lazyView(() => import("./designstyleui").then((m) => m.DesignStylePop), null);
 const DesignChipCard = lazyView(() => import("./designstyleui").then((m) => m.DesignChipCard), null);
 const BrainWorkspace = lazyView(() => import("./brainui").then((m) => m.BrainWorkspace));
-const InboxPage = lazyView(() => import("./tasksui").then((m) => m.InboxPage));
+const AutopilotPage = lazyView(() => import("./tasksui").then((m) => m.AutopilotPage));
 const CustomizePage = lazyView(() => import("./pluginsui").then((m) => m.CustomizePage));
 const ConnectorsPanel = lazyView(() => import("./connectorsui").then((m) => m.ConnectorsPanel));
 const ProjectsPage = lazyView(() => import("./projects").then((m) => m.ProjectsPage));
@@ -120,7 +122,7 @@ const IntroFilm = lazyView(() => import("./introfilm").then((m) => m.IntroFilm),
 const HalftoneBg = lazyView(() => import("./halftone").then((m) => m.HalftoneBg), null);
 // Khách chưa đăng nhập lần nào: tải sẵn màn hình đăng nhập ngay từ đầu.
 if (typeof document !== "undefined" && !document.documentElement.dataset.sess) AuthComponent.preload();
-const PRELOAD: Partial<Record<View, () => void>> = { artifacts: ArtifactsGallery.preload, code: CodeView.preload, speech: SpeechView.preload, brain: BrainWorkspace.preload, inbox: InboxPage.preload, customize: CustomizePage.preload, projects: ProjectsPage.preload };
+const PRELOAD: Partial<Record<View, () => void>> = { artifacts: ArtifactsGallery.preload, code: CodeView.preload, speech: SpeechView.preload, brain: BrainWorkspace.preload, autopilot: AutopilotPage.preload, customize: CustomizePage.preload, projects: ProjectsPage.preload };
 
 const MODELS: [string, string][] = [["Opus 5", "Mạnh nhất cho việc phức tạp"], ["Sonnet 5.5", "Cân bằng tốc độ và chất lượng"], ["Haiku 5", "Nhanh nhất cho việc đơn giản"]];
 
@@ -1291,7 +1293,7 @@ export default function Home({ boot }: { boot?: BootData | null }) {
     if (v === "customize") return f.skills !== false;
     if (v === "projects" || v === "project") return f.projects !== false;
     if (v === "artifacts") return caps.art !== false;
-    return true; // inbox, brain, new, chat
+    return true; // autopilot, brain, new, chat
   }, [me, speechReady, caps.art]);
   // Địa chỉ mà trạng thái hiện tại nên có: Cài đặt (#s=) ưu tiên, rồi đoạn chat không ẩn danh (#c=), rồi mục (#v=).
   const curHash = (): string => {
@@ -1373,7 +1375,7 @@ export default function Home({ boot }: { boot?: BootData | null }) {
     }
   }, [needYou]); // eslint-disable-line react-hooks/exhaustive-deps
   // Tiêu đề thẻ trình duyệt theo màn hình đang xem: nhiều thẻ vẫn phân biệt được, trình đọc màn hình có tín hiệu đổi trang. Đoạn chat ẩn danh không lộ tên lên thẻ.
-  const VIEW_TITLE: Partial<Record<View, string>> = { projects: "Dự án", project: "Dự án", artifacts: "Artifacts", customize: "Kho kỹ năng", code: "Code", speech: "Speech", inbox: "Hộp thư", brain: "Bộ não" };
+  const VIEW_TITLE: Partial<Record<View, string>> = { projects: "Dự án", project: "Dự án", artifacts: "Artifacts", customize: "Kho kỹ năng", code: "Code", speech: "Speech", autopilot: "Autopilot", brain: "Bộ não" };
   const tabName = view === "chat" ? (meta && !meta.inc ? meta.title : "") : tr(VIEW_TITLE[view] ?? "");
   useEffect(() => {
     const n = needYou.size;
@@ -1946,11 +1948,18 @@ export default function Home({ boot }: { boot?: BootData | null }) {
     return () => window.removeEventListener("synchro:brain", h);
   }, []);
   useBrainSync(!!me);
-  const inboxN = useInboxCount(!!me);
+  // Autopilot xong một việc khi người dùng đang mở app ở chỗ khác: báo một dòng (trang Autopilot đang mở thì đã thấy
+  // ngay trên danh sách).
+  const inboxN = useInboxCount(!!me, (x) => {
+    if (viewRef.current === "autopilot") return;
+    const v = { title: x.title };
+    say(x.proposals ? tf("Autopilot: “{title}” có đề xuất chờ bạn duyệt", v) : tf("Autopilot đã xong “{title}”", v));
+  });
   // Bảng lệnh ⌘K: lệnh nhanh và cách mở từng loại kết quả.
   const paletteCmds: PaletteCmd[] = [
     { id: "new", label: "Đoạn chat mới", icon: <I.Plus size={16} />, keys: "⇧⌘O", hay: "new chat tao moi", run: goNew },
-    { id: "inbox", label: "Hộp thư", icon: <I.Inbox size={16} />, hay: "inbox tac vu nen lich hen ket qua", run: () => setView("inbox") },
+    { id: "autopilot", label: "Autopilot", icon: <I.Autopilot size={16} />, run: () => setView("autopilot"),
+      hay: "autopilot hop thu inbox tac vu nen lich hen cron ket qua tu dong" },
     { id: "hub", label: "Kho kỹ năng", icon: <I.Plugins size={16} />, hay: "skill hub plugin thu vien", run: goCustom },
     { id: "connectors", label: "Connectors", icon: <I.Connectors size={16} />, hay: "connectors mcp ket noi", run: () => { setCzTab("connectors"); setView("customize"); } },
     ...(caps.art !== false ? [{ id: "artifacts", label: "Artifacts", icon: <I.Shapes size={16} />, hay: "ung dung apps", run: () => setView("artifacts") }] : []),
@@ -1968,14 +1977,28 @@ export default function Home({ boot }: { boot?: BootData | null }) {
     project: (id) => { setCurProj(id); setView("project"); },
     code: (id) => { setCodeCur(id); setView("code"); if (codeList.find((c) => c.id === id)?.archived) codePatch(id, { archived: false }); },
     brain: (title) => window.dispatchEvent(new CustomEvent("synchro:brain", { detail: { title } })),
-    inbox: () => setView("inbox"),
+    autopilot: () => setView("autopilot"),
     tag: (t) => filterTag(t),
   };
-  // Mở kết quả tác vụ nền thành đoạn chat để hỏi tiếp.
-  const openAsChat = (title: string, text: string) => {
-    const id = Date.now();
-    setChats((cs) => [{ id, title: title.slice(0, 40), msgs: [{ role: "user", text: `${tr("Tác vụ nền")}: ${title}`, time: id }, { role: "ai", text, done: true, time: id }] }, ...cs]);
-    setCur(id); setView("chat");
+  // Mở kết quả của Autopilot để hỏi tiếp. chat: đoạn chat máy chủ đã tạo cho kết quả; máy này chưa đồng bộ về thì xin
+  // máy chủ đúng đoạn đó và chờ tối đa 8 giây. Kết quả cũ (trước khi có đoạn chat kết quả) hay chờ không được thì dựng
+  // đoạn chat mới từ chữ của kết quả.
+  const openAsChat = (title: string, text: string, chat?: number) => {
+    const has = (id: number) => chatsRef.current.some((c) => c.id === id);
+    const local = () => {
+      if (!text) return say("Đoạn chat kết quả chưa về máy này, hãy thử lại sau giây lát");
+      const id = Date.now();
+      setChats((cs) => [{ id, title: title.slice(0, 40), msgs: [{ role: "user", text: title, time: id }, { role: "ai", text, done: true, time: id }] }, ...cs]);
+      setCur(id); setView("chat");
+    };
+    if (chat === undefined) return local();
+    if (has(chat)) { setCur(chat); setView("chat"); return; }
+    needChats([chat]);
+    const t0 = Date.now();
+    const wait = setInterval(() => {
+      if (has(chat)) { clearInterval(wait); setCur(chat); setView("chat"); }
+      else if (Date.now() - t0 > 8000) { clearInterval(wait); local(); }
+    }, 250);
   };
   // Gửi tiếp một tin vào đoạn chat có sẵn (tin "gửi sau khi xong"), kể cả khi người dùng đang ở mục khác hay đoạn chat khác.
   const followUp = (id: number, t: string) => {
@@ -2154,7 +2177,7 @@ export default function Home({ boot }: { boot?: BootData | null }) {
         <div className="rail-nav">
           {me?.perms.features.projects !== false && nav({ v: "projects", icon: <I.Layers />, label: "Dự án" })}
           {caps.art !== false && nav({ v: "artifacts", icon: <I.Shapes />, label: "Artifacts" })}
-          {nav({ v: "inbox", icon: <I.Inbox />, label: "Hộp thư", badge: inboxN })}
+          {nav({ v: "autopilot", icon: <I.Autopilot />, label: "Autopilot", badge: inboxN })}
           {nav({ v: "brain", icon: <I.Brain />, label: "Bộ não" })}
           {me?.perms.features.code !== false && nav({ v: "code", icon: <I.Code />, label: "Code", onPick: () => {
             // Rời Code khi lượt đang chạy rồi quay lại thì về đúng phiên đó, không phải trang trống. Đang ở trong Code mà bấm lại thì mới là mở phiên mới.
@@ -2291,7 +2314,7 @@ export default function Home({ boot }: { boot?: BootData | null }) {
           </div></div>
         )}
 
-        {view === "inbox" && <InboxPage say={say} model={model} onOpenChat={openAsChat} />}
+        {view === "autopilot" && <AutopilotPage say={say} model={model} onOpenChat={openAsChat} />}
         {view === "customize" && <CustomizePage tab={czTab} setTab={setCzTab} connectors={<ConnectorsPanel />} feats={{ skills: me?.perms.features.skills !== false, connectors: me?.perms.features.connectors !== false }} />}
         {view === "code" && <CodeView say={say} onMeta={onCodeMeta} onEmpty={setCodeEmpty} sid={codeCur} title={codeList.find((c) => c.id === codeCur)?.title ?? "Synchro Code"} model={model} modelPicker={<ModelPicker model={model} setModel={setModel} prefix="Model" />} sideOpen={open} onSide={() => setOpen(true)} onNew={() => setCodeCur(null)} onCreate={(id, title) => { setCodeList((l) => [{ id, title }, ...l]); setCodeCur(id); }} />}
         {view === "brain" && <BrainWorkspace initial={brainAt} onInitial={() => setBrainAt(null)} sideOpen={open} onSide={() => setOpen(true)} />}
