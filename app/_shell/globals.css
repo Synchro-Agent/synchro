@@ -1658,12 +1658,15 @@ b,strong{font-weight:560}
 .sp-compose-f{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 /* auto-fit: nhóm ít thẻ vẫn lấp đủ hàng, không để khoảng trống bên phải. */
 .sp-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;margin-top:8px}
-.sp-tcard{display:flex;flex-direction:column;align-items:flex-start;gap:4px;padding:14px;border-radius:var(--r-card);background:var(--card);box-shadow:0 0 0 .5px var(--border-strong);text-align:left;transition:transform .2s var(--ease),box-shadow .2s;--tc:var(--accent)}
+.sp-tcard{display:flex;flex-direction:column;align-items:flex-start;gap:4px;padding:14px;border-radius:var(--r-card);
+  background:var(--card);box-shadow:0 0 0 .5px var(--border-strong);text-align:left;
+  transition:transform .2s var(--ease),box-shadow .2s}
 .sp-tcard b{font-size:var(--fs-chat);font-weight:560;margin-top:6px}
 .sp-tcard span:not(.sp-tic){font-size:var(--fs-1);color:var(--text-3);line-height:1.4}
-.sp-tic{width:32px;height:32px;border-radius:25%;display:grid;place-items:center;color:var(--tc);background:color-mix(in srgb,var(--tc) 12%,transparent)}
-.t-violet{--tc:#7c5cd6}.t-green{--tc:#1f9255}.t-amber{--tc:#c27a12}.t-pink{--tc:#cf4a85}
-[data-theme="dark"] .t-blue{--tc:#6fa0f0}[data-theme="dark"] .t-violet{--tc:#a993ef}[data-theme="dark"] .t-green{--tc:#5cc48b}[data-theme="dark"] .t-amber{--tc:#e0a54d}[data-theme="dark"] .t-pink{--tc:#ec82b2}
+/* Ô biểu tượng của công cụ Speech: trung tính theo bộ nhận diện (mực trên nền phủ nhẹ), giống nhau ở mọi công cụ, sáng
+   lẫn tối. Màu chỉ dành cho thứ mang nghĩa (trạng thái, người nói, giọng). */
+.sp-tic{width:32px;height:32px;border-radius:25%;display:grid;place-items:center;color:var(--text);
+  background:var(--sp-soft,var(--hover));box-shadow:inset 0 0 0 .5px var(--border-strong)}
 .sp-sec-h b{font-weight:560}
 .sp-recent{display:flex;flex-direction:column;gap:8px}
 .sp-rrow{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.3fr);gap:14px;align-items:center;padding:6px 0}
@@ -3400,16 +3403,18 @@ button.tk-pill:hover{color:var(--text)}
 .ag-steer p{margin:0;padding:8px 12px;border-radius:var(--r-card);background:var(--user-bg,var(--hover));font-size:var(--fs-3);white-space:pre-wrap}
 
 /* ===== Speech: bố cục mới kiểu ElevenLabs (tiêu đề có biểu tượng, thẻ hướng dẫn, thanh tạo ở đáy, ngăn kéo cài đặt, trình phát chung) ===== */
-.t-blue{--tc:#2f6fdc}
 .sp-guide-h b{flex:1;min-width:0;font-size:15px;font-weight:560;letter-spacing:-.005em}
 .sp-guide-x{display:inline-flex;align-items:center;height:28px;padding:0 10px;gap:5px;font-size:var(--fs-1);color:var(--text-2);flex:none;border-color:transparent;background:transparent}
 .sp-guide-body{display:grid;grid-template-columns:minmax(0,1fr);gap:16px}
 .sp-guide-steps li{position:relative;display:flex;gap:11px;align-items:flex-start;padding-bottom:12px}
-.sp-guide-steps li>span{width:23px;height:23px;border-radius:50%;flex:none;display:grid;place-items:center;font-size:var(--fs-1);font-weight:600;color:var(--tc);background:color-mix(in srgb,var(--tc) 13%,var(--card));box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--tc) 38%,transparent)}
-.sp-guide-cost>svg{flex:none;margin-top:1px;color:var(--tc)}
+.sp-guide-steps li>span{width:23px;height:23px;border-radius:50%;flex:none;display:grid;place-items:center;
+  font-size:var(--fs-1);font-weight:600;color:var(--text);background:var(--card);
+  box-shadow:inset 0 0 0 1px var(--border-strong)}
+.sp-guide-cost>svg{flex:none;margin-top:1px;color:var(--text-2)}
 .sp-guide-cost>p{margin:0;font-size:var(--fs-label);line-height:1.45;color:var(--text-2)}
 .sp-guide-cost b{display:block;font-size:var(--fs-1);font-weight:560;color:var(--text);margin-bottom:1px}
-.sp-guide-more{display:none;align-self:flex-start;align-items:center;gap:5px;padding:0;border:0;background:none;font:inherit;font-size:var(--fs-label);font-weight:500;color:var(--tc);cursor:pointer}
+.sp-guide-more{display:none;align-self:flex-start;align-items:center;gap:5px;padding:0;border:0;background:none;
+  font:inherit;font-size:var(--fs-label);font-weight:500;color:var(--text);cursor:pointer}
 .sp-guide-more svg{transition:transform .2s var(--ease)}
 @container (min-width:560px){
   .sp-guide-body{grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:24px}
