@@ -102,7 +102,9 @@ export function OrchestraCard({ s, live }: { s: OrchState; live: boolean }) {
         </span>
         <b data-notr>Orchestra</b>
         <span className="orc-ph">{tr(PHASE_LABEL[s.phase])}</span>
-        <span className="orc-meta" data-notr>{bits.join(" · ")}</span>
+        <span className="orc-meta" data-notr>
+          {bits.map((b, k) => (k ? <span key={k} className="orc-more"> · {b}</span> : <span key={k}>{b}</span>))}
+        </span>
         <I.ChevronR size={13} />
       </button>
       {open && (

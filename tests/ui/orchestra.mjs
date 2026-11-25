@@ -46,6 +46,13 @@ const open = async (theme, lang = "vi") => {
   await P("Page.bringToFront");
   await sleep(800);
 };
+// Câu trả lời giả lập có thể mở khung artifact (trên điện thoại che cả màn hình): đóng lại, cuộn tới thẻ rồi mới chụp.
+const view = async () => {
+  await ev(`document.querySelector('button.icon-btn[aria-label="Đóng"], button.icon-btn[aria-label="Close"]')?.click()`);
+  await sleep(300);
+  await ev(`${card}?.scrollIntoView({ block: "center" })`);
+  await sleep(300);
+};
 const fits = (w) => ev(`(() => { const c = ${card}; if (!c) return null; const r = c.getBoundingClientRect();
   return { l: r.left, r: r.right, page: document.documentElement.scrollWidth, w: ${w} }; })()`);
 try {
@@ -76,7 +83,11 @@ try {
     ok(roles.includes("Trưởng nhóm") && roles.includes("Thực tập"), "sơ đồ có vai trưởng nhóm và thực tập", roles);
     const box = await fits(w);
     ok(box && box.l >= 0 && box.r <= w + 0.5 && box.page <= w, "thẻ nằm trọn chiều ngang, trang không cuộn ngang", box);
+    await view();
     await t.shot(`orchestra-done-${w}`);
+    await ev(`${card}.querySelector(".orc-h").click()`);
+    await sleep(300);
+    await t.shot(`orchestra-collapsed-${w}`);
     await P("Page.reload", {});
     ok(await until(`!!${card}`, 30000), "tải lại trang: thẻ vẫn còn cùng câu trả lời");
 
@@ -99,17 +110,19 @@ try {
   ok(/The team is done/.test(en) && /Lead/.test(en) && /Intern/.test(en) && /Assignments/.test(en) && /3\/3 tasks/.test(en),
     "giao diện tiếng Anh: nhãn đã dịch", en);
   ok(!/Trưởng nhóm|Thực tập|Nhóm đã xong|Phân công/.test(en), "không sót chữ tiếng Việt trong thẻ", en);
+  await view();
   await t.shot("orchestra-en");
 
   console.log("━━ Autopilot");
   await open("light");
   const title = `Orchestra Autopilot ${R}`;
   const tz = "Asia/Ho_Chi_Minh";
-  const made = await api("POST", "/api/tasks", { title, prompt: ASK("ap"), schedule: { kind: "daily", time: "07:00", tz } });
+  const schedule = { kind: "daily", time: "07:00", tz };
+  const made = await api("POST", "/api/tasks", { title, prompt: ASK("ap"), model: "auto", schedule });
   ok(!!made?.task?.id, "tạo việc Autopilot", made);
   const ran = await api("POST", `/api/tasks/${made.task.id}/run`, {});
   ok(!!ran?.run, "chạy ngay", ran);
-  await P("Page.navigate", { url: B + "/#inbox" });
+  await ev(`[...document.querySelectorAll(".nav-item")].find((e) => /Hộp thư/.test(e.textContent))?.click()`);
   await until(`!!document.querySelector(".pl-seg")`, 30000);
   await ev(`[...document.querySelectorAll(".pl-seg button")].find((b) => /Kết quả/.test(b.textContent))?.click()`);
   const row = `[...document.querySelectorAll(".tk-item")].find((e) => e.textContent.includes(${JSON.stringify(title)}))`;
