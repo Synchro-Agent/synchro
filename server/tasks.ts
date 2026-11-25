@@ -9,6 +9,7 @@
 // - Đề xuất chờ duyệt (proposals): việc cần người dùng đồng ý (tạo skill, hành động có tác động, trang web mới, công cụ để "hỏi trước")
 //   không tự làm mà vào Hộp thư; người dùng duyệt thì Synchro làm (automate.ts).
 import "server-only";
+import { parseOrch, type OrchState } from "../shared/orchestra";
 import crypto from "node:crypto";
 import { can, db, getUser } from "./authstore";
 import { getRun, startRun } from "./runs";
@@ -357,9 +358,15 @@ export function settleProposal(uid: string, id: string, status: ProposalStatus, 
 }
 
 // ---------------------------------------------------------------- hộp thư
-export type InboxItem = { run: string; task: string; title: string; at: number; read: boolean; status: string; text: string; error?: string; kind?: "task" | "notice" | "action"; link?: string; note?: string; model?: string; proposals?: number };
+export type InboxItem = {
+  run: string; task: string; title: string; at: number; read: boolean; status: string; text: string; error?: string;
+  kind?: "task" | "notice" | "action"; link?: string; note?: string; model?: string; proposals?: number;
+  orch?: OrchState;
+};
 type RunRow = { run_id: string; task_id: string; title: string; at: number; read: number; kind: string; note: string | null; result: string | null };
-type Kept = { status: string; text?: string; error?: string; model?: string };
+// orch: sơ đồ tổ chức lúc xong khi lần chạy chia việc cho nhiều model (Orchestra), để Autopilot hiện lại nhật ký
+// làm việc của nhóm.
+type Kept = { status: string; text?: string; error?: string; model?: string; orch?: OrchState };
 export const INBOX_KEEP = 1000;
 // Quá cũ: không còn biết lần đó xong hay lỗi, nên ghi "expired" chứ không phải "error" (không hiện như lần chạy lỗi, không nút Chạy lại).
 const EXPIRED = JSON.stringify({ status: "expired", error: TOO_OLD });
@@ -368,8 +375,13 @@ const EXPIRED = JSON.stringify({ status: "expired", error: TOO_OLD });
 function keepResult(uid: string, r: Pick<RunRow, "run_id">): Kept | null {
   const run = getRun(r.run_id, uid);
   if (run?.status === "running") return null;
-  const res = (run?.result ?? {}) as { text?: string; error?: string; model?: string };
-  const k: Kept = run ? { status: run.status, text: String(res.text ?? "").slice(0, 60_000), ...(res.error ? { error: String(res.error) } : {}), ...(typeof res.model === "string" ? { model: res.model } : {}) } : { status: "expired", error: TOO_OLD };
+  const res = (run?.result ?? {}) as { text?: string; error?: string; model?: string; orchestra?: unknown };
+  const orch = res.orchestra ? parseOrch(JSON.stringify(res.orchestra)) : null;
+  const k: Kept = run ? {
+    status: run.status, text: String(res.text ?? "").slice(0, 60_000),
+    ...(res.error ? { error: String(res.error) } : {}),
+    ...(typeof res.model === "string" ? { model: res.model } : {}), ...(orch ? { orch } : {}),
+  } : { status: "expired", error: TOO_OLD };
   const d = init();
   d.prepare("UPDATE task_runs SET result = ? WHERE run_id = ? AND owner = ?").run(JSON.stringify(k), r.run_id, uid);
   d.prepare("UPDATE task_runs SET result = ? WHERE owner = ? AND run_id IN (SELECT run_id FROM task_runs WHERE owner = ? AND result IS NOT NULL ORDER BY at DESC LIMIT -1 OFFSET ?)").run(EXPIRED, uid, uid, INBOX_KEEP);
@@ -410,6 +422,7 @@ export function inbox(uid: string, o: { limit?: number; before?: number } = {}):
     return {
       run: r.run_id, task: r.task_id, title: r.title, at: r.at, read: !!r.read, status: k?.error === TOO_OLD ? "expired" : k?.status ?? "running", text: k?.text ?? "", kind: r.kind === "action" ? "action" : "task",
       ...(r.note ? { note: r.note } : {}), ...(k?.model ? { model: k.model } : {}), ...(props.get(r.run_id) ? { proposals: props.get(r.run_id) } : {}), ...(k?.error ? { error: k.error } : {}),
+      ...(k?.orch ? { orch: k.orch } : {}),
     };
   });
   const notes = (d.prepare("SELECT * FROM notices WHERE owner = ? AND at < ? ORDER BY at DESC LIMIT ?").all(uid, before, limit + 1) as { id: string; title: string; text: string; link: string | null; at: number; read: number }[])

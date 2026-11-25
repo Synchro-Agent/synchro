@@ -52,6 +52,7 @@ import { getPrefs as codePrefs } from "../codestore";
 import { BROWSER_RULES, BROWSER_TOOLS, chatFiles, releaseBrowser } from "../browsertools";
 import { fastNeedsTools, holdNeedTools } from "./needtools";
 import { seesImages } from "../visioncaps";
+import { finishState, orchestraTurn, withTeam } from "../orchestra";
 import {
   useProfile, lastUserText, DEFAULT_SYSTEM, FAST_RULES, contextOf, estimate, pinnedBlock, artifactMessages,
   QUALITY_RULES, BRIDGE_CLIS, brainOn, CLI_TOOLS_NOTE, NARRATE_RULES, withRecall, designOf, nowBlock, crisisBlock,
@@ -411,17 +412,39 @@ async function chatPostTurn(body: Parameters<typeof chatPost>[0], c: Who, scope:
   // Nhật ký định tuyến (D1.6) chỉ ghi ở đây — lượt chat thật; rerun khi người dùng bấm "Chạy lại bằng model khác".
   const rerun = typeof body.avoidModel === "string" && !!body.avoidModel;
   const avoid = [...skip, ...stalledModels(c.user.id, pool)];
-  const r = routeModel(q, pool, { avoid, log: { rerun }, sees: seesImages });
-  addSpan("routing", "routing", r0, Date.now(), r ? { "synchro.route.model": r.model, "synchro.route.task": r.task } : undefined);
-  if (!r) return Response.json({ error: "Tài khoản của bạn chưa được dùng model nào. Hãy liên hệ quản trị viên." }, { status: 403 });
-  // Nỗ lực: người dùng để "Tự động" (hoặc chưa chọn) thì theo độ khó của việc; chọn tay thì giữ lựa chọn đó.
-  const effort = body.effort === "auto" || !isEffort(body.effort) ? r.effort : body.effort;
+  const route = routeModel(q, pool, { avoid, log: { rerun }, sees: seesImages });
+  const routeAttrs = route ? { "synchro.route.model": route.model, "synchro.route.task": route.task } : undefined;
+  addSpan("routing", "routing", r0, Date.now(), routeAttrs);
+  const noModel = "Tài khoản của bạn chưa được dùng model nào. Hãy liên hệ quản trị viên.";
+  if (!route) return Response.json({ error: noModel }, { status: 403 });
   if (plansOnly) progress("note", PLANS_ONLY_NOTE);
-  progress("note", `Tự động chọn ${shown(r.model)} · việc ${taskLabel(r.task)} · nỗ lực ${effortLabel(effort)}`);
+  // Orchestra: việc có nhiều nhánh thì cả nhóm model cùng làm, trưởng nhóm viết câu trả lời cuối bằng đúng đường chat
+  // dưới đây. Quyết định bằng luật (không gọi model): câu đơn giản đi thẳng như cũ. Không chia khi người dùng vừa
+  // xin "chạy lại bằng model khác" (họ muốn một model khác trả lời), ở Synchro Code (có cách làm việc riêng) hay lời
+  // gọi nội bộ.
+  const canSplit = body.skills && !skip.length && body.feature !== "code" && body.estimate !== true;
+  const team = canSplit
+    ? await orchestraTurn({
+      user: c.user, q, messages: body.messages, pool: pool.filter((k) => !avoid.includes(k)), autopilot: !!taskOf(body),
+      name: (k) => shown(k) ?? k,
+    })
+    : null;
+  if (team === "cancelled") return Response.json({ model: route.model, text: "", cancelled: true });
+  const r = team
+    ? { ...route, model: team.boss, alt: [route.model, ...route.alt].filter((k) => k !== team.boss) }
+    : route;
+  const turnBody = team ? { ...body, messages: withTeam(body.messages, team.block) } : body;
+  // Nỗ lực: người dùng để "Tự động" (hoặc chưa chọn) thì theo độ khó của việc; chọn tay thì giữ lựa chọn đó.
+  // Trưởng nhóm hợp nhất kết quả của cả nhóm nên không dưới mức "cao".
+  const autoE = team && (r.effort === "low" || r.effort === "medium") ? "high" : r.effort;
+  const effort = body.effort === "auto" || !isEffort(body.effort) ? autoE : body.effort;
+  progress("note", team
+    ? `Orchestra · ${team.models} model · trưởng nhóm ${shown(r.model)} viết câu trả lời`
+    : `Tự động chọn ${shown(r.model)} · việc ${taskLabel(r.task)} · nỗ lực ${effortLabel(effort)}`);
   const fromSub = !!subCli(r.model);
   // Còn model của CLI khác để chuyển thì không chờ lâu khi tài khoản đang chạy lượt Antigravity / Grok khác; không còn thì chờ như chọn tay.
   const auto = r.alt.some((k) => !blocked.has(k) && !!subCli(k) && subCli(k) !== subCli(r.model));
-  let res = await chatTurn({ ...body, model: r.model, effort }, c, scope, { auto });
+  let res = await chatTurn({ ...turnBody, model: r.model, effort }, c, scope, { auto });
   let used = r.model;
   const tried = [r.model];
   // Model lỗi / quá tải / hết hạn mức / cần đăng nhập lại / treo: thử lần lượt các model dự phòng (ưu tiên hãng khác) mà người dùng không phải
@@ -451,7 +474,7 @@ async function chatPostTurn(body: Parameters<typeof chatPost>[0], c: Who, scope:
     }
     deltaStep();
     used = next; tried.push(next);
-    res = await chatTurn({ ...body, model: next, effort }, c, scope, { auto: true });
+    res = await chatTurn({ ...turnBody, model: next, effort }, c, scope, { auto: true });
   }
   if (res.status === 200 && subCli(used)) clearStall(c.user.id, subCli(used)!);
   const j = await (await withSwitch(res, body, c.user, tried)).json().catch(() => ({}));
@@ -464,6 +487,12 @@ async function chatPostTurn(body: Parameters<typeof chatPost>[0], c: Who, scope:
   const switched = res.status === 200 && used !== r.model && switchedWhy ? `${switchedWhy}, nên Synchro đã trả lời bằng ${shown(used)}.${resetNote ? ` ${resetNote}` : ""}` : "";
   // Tự động chọn model chạy bằng khóa API chung trong khi tài khoản đã kết nối gói (kể cả gói đang tạm hết hạn mức): một dòng nói lượt này tính vào hạn mức chi phí API (H1 bổ sung).
   const keyNote = res.status === 200 && !subCli(used) && allowed.some((k) => !!subCli(k)) ? sharedKeyMsg(shown(used) ?? used) : "";
+  // Sơ đồ tổ chức lúc xong: còn trong câu trả lời (Autopilot hiện lại từ kết quả của lần chạy, không từ sự kiện).
+  if (team) {
+    const orchestra = finishState(team.state, res.status === 200, typeof j.text === "string" ? j.text : "");
+    progress("orch", JSON.stringify(orchestra));
+    j.orchestra = orchestra;
+  }
   return Response.json({ ...j, model: j.model ?? used, ...(switched ? { switched, ...(j.notice ? {} : { notice: switched }) } : {}), ...(keyNote ? { keyNote, ...(j.notice || switched ? {} : { notice: keyNote }) } : {}), ...(plansOnly && res.status === 200 && !j.notice && !switched ? { notice: PLANS_ONLY_NOTE } : {}), ...(res.status !== 200 && tried.length > 1 ? { tried: tried.map(shown) } : {}), auto: { tier: r.tier, vendor: r.vendor, task: r.task, effort, why: r.why, ...(used !== r.model ? { fallback: used } : {}) } }, { status: res.status });
 }
 const PLANS_ONLY_NOTE = "Đã hết hạn mức API của bạn trên Synchro, nên Tự động đang dùng gói đã kết nối (Claude, ChatGPT, Gemini, Grok) thay vì khóa chat.";
