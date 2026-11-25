@@ -22,13 +22,21 @@ import { TimePick } from "./timepick";
 import { Dropdown } from "./listbox";
 import { BulkBar, BulkButton, BulkCheck, bulkRow, each, useBulk, type BulkAct } from "./bulk";
 import { PageBar, usePage } from "./pager";
+import { lazyView } from "./lazy";
+import { parseOrch, type OrchState } from "../shared/orchestra";
+// Sơ đồ tổ chức của Orchestra: chỉ lần chạy chia việc cho nhiều model mới cần.
+const OrchestraCard = lazyView(() => import("./orchestra").then((m) => m.OrchestraCard), null);
 
 type Schedule = { kind: "once" | "hourly" | "daily" | "weekdays" | "weekly"; time?: string; weekday?: number; every?: number; tz: string };
 type BrowserPref = "auto" | "synchro" | "user";
 type Engine = "chat" | "code";
 type Last = { run: string; status: string; at: number } | null;
 type Task = { id: string; title: string; prompt: string; schedule: Schedule; model: string | null; enabled: boolean; next_run_at: number | null; last_run_at: number | null; created_at: number; runs: number; browser: BrowserPref; memory: boolean; wait_since: number | null; retries: number; last: Last; pending: number; engine: Engine; sid: string | null };
-type Item = { run: string; task: string; title: string; at: number; read: boolean; status: string; text: string; error?: string; kind?: "task" | "notice" | "action"; link?: string; note?: string; model?: string; proposals?: number };
+type Item = {
+  run: string; task: string; title: string; at: number; read: boolean; status: string; text: string; error?: string;
+  kind?: "task" | "notice" | "action"; link?: string; note?: string; model?: string; proposals?: number;
+  orch?: OrchState;
+};
 type Proposal = { id: string; task: string | null; taskTitle: string | null; run: string | null; kind: "skill" | "action" | "site" | "tool"; title: string; summary: string; payload: Record<string, unknown>; status: "pending" | "running" | "done" | "failed" | "rejected"; result: string | null; at: number; decidedAt: number | null };
 type Plan = { title: string; prompt: string; schedule: Schedule; browser: BrowserPref; engine: Engine; approvals: string[]; needs: string[] };
 type RunEv = { seq: number; at: number; kind: string; text: string };
@@ -280,9 +288,13 @@ function ResultBody({ x, task, say, onOpenChat, onRetry, reload }: { x: Item; ta
   }, [x.run, x.status, x.proposals, real, reload]);
   const steps = (events ?? []).filter((e) => LOG_KINDS.has(e.kind) && !(e.kind === "ui"));
   const lastStep = [...steps].reverse().find((e) => e.kind !== "say");
+  // Orchestra: lúc đang chạy lấy bản chụp mới nhất từ sự kiện của lần chạy, xong thì bản đã lưu cùng kết quả.
+  const lastOrch = [...(events ?? [])].reverse().find((e) => e.kind === "orch");
+  const orch = x.orch ?? (lastOrch ? parseOrch(lastOrch.text) : null);
   return (
     <div className="tk-body">
       {x.note && <p className="tk-note"><I.InfoCircle size={13} /><span data-notr>{tr(x.note)}</span></p>}
+      {orch && <OrchestraCard s={orch} live={x.status === "running"} />}
       {x.status === "waiting" ? <div className="tk-run"><I.Clock size={14} />{tr("Đến giờ chạy nhưng Chrome của bạn đang tắt. Synchro chạy ngay khi Chrome kết nối lại, hoặc sau 12 giờ thì chạy bằng trình duyệt của Synchro.")}</div>
         : x.status === "running" ? <div className="tk-run"><span className="art-spin sm" />{lastStep ? <span data-notr>{tr(lastStep.text)}</span> : <span>{tr("Synchro đang chạy việc này trên máy chủ")}</span>}</div>
         : isExpired(x) ? <p className="tk-note"><I.Clock size={13} /><span>{tr(TOO_OLD)}</span></p>

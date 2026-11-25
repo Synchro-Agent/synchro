@@ -13,6 +13,8 @@ export type Msg = { role: "user" | "ai"; text: string; pick?: { id: string; labe
   // Nhật ký làm việc của lượt (lời dẫn, công cụ, danh sách việc); steer: tin nhắn thêm đã ghép vào lượt đang chạy.
   // dur: thời gian câu trả lời đã chạy (ms), cho dòng tổng kết khi xong.
   parts?: import("./worklog").Part[]; plan?: import("./worklog").PlanItem[]; seq?: number; steer?: boolean; dur?: number;
+  // orch: sơ đồ tổ chức của Orchestra khi lượt này chia việc cho nhiều model (nhật ký làm việc của cả nhóm).
+  orch?: import("../shared/orchestra").OrchState;
   // notice: lượt lỗi: text là lời báo khi còn giữ được phần đã viết (partial); failed: nội dung tin chính là lời báo, không gửi lại cho model ở lượt sau;
   // at: mốc hạn mức hồi lại; switchTo: model khác dùng được để đổi bằng một lần bấm; work: đã làm việc không chạy lại được; tried: các model đã thử.
   notice?: { text?: string; partial?: boolean; failed?: boolean; at?: number; switchTo?: { model: string; name: string }; work?: boolean; tried?: string[] };

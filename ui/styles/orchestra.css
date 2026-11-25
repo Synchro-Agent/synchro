@@ -1,0 +1,75 @@
+@layer properties, theme, base, components, utilities, syn, syn-over;
+@layer syn {
+/* Sơ đồ tổ chức của Orchestra (ui/orchestra.tsx): nạp cùng thành phần, chỉ khi một lượt chia việc cho nhiều model.
+   Mọi lớp mang tiền tố orc- nên không đổi bên thắng với luật nào của các tệp tải đầu. Màu lấy từ token của bộ thiết kế
+   (--ds-*): sáng / tối tự đổi. */
+.orc{margin:2px 0 12px;max-width:620px;border:.5px solid var(--ds-line-2);border-radius:var(--ds-r-tile,14px);
+  background:var(--ds-sunken);overflow:hidden}
+.orc:not(.open){border-color:transparent;background:transparent}
+.orc-h{display:flex;align-items:center;gap:8px;width:100%;min-height:36px;padding:6px 12px 6px 8px;border:0;
+  background:transparent;color:var(--ds-muted);font:inherit;font-size:var(--fs-2);text-align:left;cursor:pointer;
+  border-radius:var(--ds-r-tile,14px)}
+.orc-h:hover{background:var(--ds-hover);color:var(--ds-ink)}
+.orc-h:focus-visible{outline:2px solid var(--ds-ring);outline-offset:-2px}
+.orc-h b{font-weight:560;color:var(--ds-ink)}
+.orc-ic{display:grid;place-items:center;width:22px;height:22px;flex:none;border-radius:50%;background:var(--ds-inv);
+  color:var(--ds-inv-fg)}
+.orc.live .orc-ic{background:transparent;box-shadow:inset 0 0 0 1px var(--ds-line-2)}
+.orc-ph{color:var(--ds-ink-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.orc-meta{margin-left:auto;font-size:var(--fs-1);color:var(--ds-faint);font-variant-numeric:tabular-nums;
+  white-space:nowrap}
+.orc-h>svg:last-child{flex:none;color:var(--ds-faint);transition:transform .2s var(--ds-ease)}
+.orc.open .orc-h>svg:last-child{transform:rotate(90deg)}
+.orc-b{padding:4px 12px 12px;display:flex;flex-direction:column;gap:12px;animation:rise .2s var(--ds-ease) backwards}
+
+/* Sơ đồ: mỗi vai một hàng, nối với hàng trên bằng một nét dọc ở giữa. */
+.orc-chart{display:flex;flex-direction:column;align-items:center;gap:14px;padding-top:4px}
+.orc-row{position:relative;display:flex;flex-wrap:wrap;justify-content:center;gap:8px;max-width:100%}
+.orc-row+.orc-row::before{content:"";position:absolute;left:50%;top:-14px;width:1px;height:14px;
+  background:var(--ds-line-2)}
+.orc-m{display:flex;align-items:center;gap:8px;min-width:0;max-width:100%;padding:6px 10px 6px 8px;
+  border:.5px solid var(--ds-line-2);border-radius:12px;background:var(--ds-bg);box-shadow:0 1px 0 rgba(0,0,0,.03)}
+.orc-m.boss{border-color:var(--ds-ink-2)}
+.orc-m.working{border-color:var(--ds-ink-2);box-shadow:0 0 0 3px color-mix(in srgb,var(--ds-ink) 7%,transparent)}
+.orc-m.failed{border-color:color-mix(in srgb,var(--ds-bad,#c4452e) 55%,transparent)}
+.orc-m-t{display:flex;flex-direction:column;min-width:0;line-height:1.25}
+.orc-m-t small{font-size:var(--fs-1);color:var(--ds-faint)}
+.orc-m-t b{font-weight:500;font-size:var(--fs-2);color:var(--ds-ink);white-space:nowrap;overflow:hidden;
+  text-overflow:ellipsis;max-width:22ch}
+.orc-m em{font-style:normal;font-size:var(--fs-1);color:var(--ds-faint);font-variant-numeric:tabular-nums;
+  white-space:nowrap}
+
+/* Trạng thái: vòng xoay khi đang làm, dấu xong / lỗi, chấm rỗng khi chờ. */
+.orc-spin{width:12px;height:12px;flex:none;border-radius:50%;
+  border:1.5px solid color-mix(in srgb,var(--ds-muted) 35%,transparent);border-top-color:var(--ds-ink-2);
+  animation:orc-spin .8s linear infinite;display:inline-block}
+@keyframes orc-spin{to{transform:rotate(360deg)}}
+.orc-dot{width:15px;height:15px;flex:none;border-radius:50%;display:grid;place-items:center}
+.orc-dot.ok{background:var(--ds-inv);color:var(--ds-inv-fg)}
+.orc-dot.bad{background:var(--ds-bad,#c4452e);color:#fff}
+.orc-dot.idle{border:1.5px dashed color-mix(in srgb,var(--ds-muted) 60%,transparent)}
+.orc-dot.skip{border:1.5px solid color-mix(in srgb,var(--ds-muted) 40%,transparent)}
+
+/* Phân công: một dòng mỗi nhánh việc. */
+.orc-tasks{display:flex;flex-direction:column;gap:7px;border-top:.5px solid var(--ds-line);padding-top:10px}
+.orc-tasks-h{font-size:var(--fs-1);color:var(--ds-faint)}
+.orc-t{display:flex;gap:8px;align-items:flex-start;font-size:var(--fs-2)}
+.orc-t>.orc-dot,.orc-t>.orc-spin{margin-top:2px}
+.orc-t-b{display:flex;flex-direction:column;gap:1px;min-width:0;flex:1}
+.orc-t-h{display:flex;align-items:center;gap:6px;min-width:0}
+.orc-t-n{color:var(--ds-ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.orc-t.wait .orc-t-n,.orc-t.skip .orc-t-n{color:var(--ds-muted)}
+.orc-t.fail .orc-t-n{color:var(--ds-bad,#c4452e)}
+.orc-t-m{display:flex;flex-wrap:wrap;gap:2px 10px;font-size:var(--fs-1);color:var(--ds-faint)}
+.orc-t-m span{white-space:nowrap}
+.orc-tag{flex:none;font-size:var(--fs-1);padding:0 6px;border-radius:var(--r-pill,999px);background:var(--ds-hover);
+  color:var(--ds-ink-2)}
+.orc-t-note{margin:2px 0 0;font-size:var(--fs-1);color:var(--ds-muted);line-height:1.4;overflow:hidden;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+
+@media (max-width:520px){
+  .orc-meta{display:none}
+  .orc-m-t b{max-width:16ch}
+}
+@media (prefers-reduced-motion:reduce){.orc-spin{animation-duration:2.4s}.orc-b{animation:none}}
+}

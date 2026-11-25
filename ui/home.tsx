@@ -1455,7 +1455,7 @@ export default function Home({ boot }: { boot?: BootData | null }) {
   const openPlugins = () => { setCzTab("hub"); setView("customize"); };
   const projsRef = useRef<Project[]>([]);
   projsRef.current = projects;
-  const workOf = (x?: Msg) => (x?.role === "ai" ? { parts: x.parts, plan: x.plan, seq: x.seq } : {});
+  const workOf = (x?: Msg) => (x?.role === "ai" ? { parts: x.parts, plan: x.plan, orch: x.orch, seq: x.seq } : {});
   // avoid: "Chạy lại bằng model khác" dưới câu trả lời của chế độ Tự động — lượt này vẫn Tự động nhưng tránh model đó. Truyền theo lượt, không qua biến dùng chung:
   // lượt dừng sớm (tệp đính kèm không đọc được) không được để lại model cần tránh cho tin nhắn sau, ở đoạn chat khác.
   // rejected: thẻ tệp báo lỗi của lượt này (tên, loại, lý do): máy chủ báo cho model để câu trả lời nói rõ tệp nào không đọc được và vì sao.
