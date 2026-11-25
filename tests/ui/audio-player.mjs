@@ -175,8 +175,9 @@ const quietMiddle = (bars) => {
   const t = Math.floor(bars.length / 3), loud = mean(bars.slice(2, t - 2)), quiet = mean(bars.slice(t + 2, 2 * t - 2));
   return { ok: quiet < loud * 0.5, loud: Math.round(loud), quiet: Math.round(quiet) };
 };
-const peaksIn = (root) => `new Set([...${root}.querySelectorAll(".aud-wave-row:not(.on) i")]
-  .map((i) => i.style.height)).size > 4`;
+// Đã vẽ từ mẫu thật: vạch chờ đều 30%, còn dạng sóng thật của tiếng sin to / nhỏ chỉ có vài mức cao khác nhau.
+const peaksIn = (root) => `(() => { const h = [...${root}.querySelectorAll(".aud-wave-row:not(.on) i")]
+  .map((i) => parseFloat(i.style.height)); return Math.max(...h) - Math.min(...h) > 20; })()`;
 // Bản ghi webm thật bằng MediaRecorder của chính trình duyệt (dao động 220 Hz: to — rất nhỏ — to), như bấm “Ghi âm”.
 const record = (sec) => ev(`(async () => {
   const ctx = new AudioContext(), osc = ctx.createOscillator(), g = ctx.createGain();
@@ -221,14 +222,22 @@ try {
   await click(`document.querySelector(".sp-go")`, "đổi giọng");
   await until(`document.querySelectorAll(".sp-gcard .aud-player").length === 2`, 30000, "result card");
   const orig = `document.querySelector(".sp-gcard .aud-player")`;
-  await until(`/ 0:0[56]$/.test(${orig}.querySelector(".aud-time").textContent)`, 10000, "orig duration");
+  // Bản dưới 10 giây hiện thêm phần mười giây (“0:05,6”, tiếng Anh “0:05.6”) để tua chính xác hơn.
+  await until(`/ 0:0[56]([.,]\\d)?$/.test(${orig}.querySelector(".aud-time").textContent)`, 10000, "orig duration");
   let st = await state(orig);
-  const total = /^0:00 \/ 0:0[56]$/.test(st.time) && st.max >= 5.5 && st.max <= 6.6;
+  const total = /^0:00([.,]0)? \/ 0:0[56]([.,]\d)?$/.test(st.time) && st.max >= 5.5 && st.max <= 6.6;
   ok(total, `“Bản gốc” có tổng thời lượng: “${st.time}”`, st);
   await until(peaksIn(orig), 10000, "peaks");
   st = await state(orig);
   const q1 = quietMiddle(st.bars);
   ok(q1.ok, `dạng sóng theo mẫu thật: đoạn nhỏ tiếng ${q1.quiet}% < đoạn to ${q1.loud}%`, st.bars);
+  // Vạch phải trải hết thanh tua: dồn sang trái thì bấm vào khoảng trống bên phải vẫn tua và vệt tô lệch khỏi vạch.
+  const span = await ev(`(() => { const w = ${orig}.querySelector(".aud-wave").getBoundingClientRect();
+    const is = ${orig}.querySelectorAll(".aud-wave-row:not(.on) i"), first = is[0].getBoundingClientRect();
+    const last = is[is.length - 1].getBoundingClientRect();
+    return { left: Math.round(first.left - w.left), right: Math.round(w.right - last.right),
+      w: Math.round(w.width) }; })()`);
+  ok(span.left <= 1 && span.right <= 1, `vạch trải hết thanh tua (lề trái ${span.left}px, phải ${span.right}px)`, span);
   await shot("1-changer");
 
   console.log("3. Phát: vệt tiến độ và đồng hồ chạy, trình phát ở đáy có tổng thời lượng");
@@ -239,9 +248,9 @@ try {
   const a2 = await state(orig);
   const moved = `${a1.played.toFixed(1)}% → ${a2.played.toFixed(1)}%`;
   ok(a1.played > 5 && a2.played > a1.played, `vệt đã phát chạy theo: ${moved}`, [a1, a2]);
-  ok(a2.now > 0.8 && !/^0:00 /.test(a2.time), `đồng hồ chạy: “${a2.time}”`, a2);
+  ok(a2.now > 0.8 && !/^0:00([.,]0)? /.test(a2.time), `đồng hồ chạy: “${a2.time}”`, a2);
   const dock = await ev(`document.querySelector(".sp-dock .aud-time")?.textContent ?? ""`);
-  ok(/ 0:0[56]$/.test(dock), `trình phát ở đáy trang có tổng thời lượng: “${dock}”`, dock);
+  ok(/ 0:0[56]([.,]\d)?$/.test(dock), `trình phát ở đáy trang có tổng thời lượng: “${dock}”`, dock);
   await shot("2-playing");
   await click(`${orig}.querySelector(".aud-btn")`, "tạm dừng");
   await sleep(300);
@@ -311,7 +320,8 @@ try {
   await P("Page.removeScriptToEvaluateOnNewDocument", { identifier: seedJs });
   await click(`document.querySelector(".out-card")`, "thẻ tệp");
   const fp = `document.querySelector(".fp-audio .aud-player")`;
-  await until(`!!${fp} && / 0:03$/.test(${fp}.querySelector(".aud-time").textContent)`, 20000, "file preview player");
+  const fpTime = `${fp}.querySelector(".aud-time").textContent`;
+  await until(`!!${fp} && / 0:03([.,]0)?$/.test(${fpTime})`, 20000, "file preview player");
   await until(peaksIn(fp), 10000, "chat peaks");
   st = await state(fp);
   const q2 = quietMiddle(st.bars);
