@@ -114,7 +114,37 @@ function mockSkillScan(prompt) {
   return "```json\n" + JSON.stringify({ items }) + "\n```";
 }
 
+// Orchestra (server/orchestra/engine.ts) trên máy giả lập: kế hoạch của trưởng nhóm, phần việc của thành viên, kết quả
+// duyệt của quản lý, nhận ra theo thẻ trong lời nhắc như model thật đọc. "#orchnosplit": trưởng nhóm thấy không có
+// nhánh; "#orchredo": quản lý trả lại nhánh đầu một lần.
+function mockOrchestra(prompt) {
+  if (prompt.includes("<orchestra_results>")) return null;
+  if (/<yeu_cau>\n/.test(prompt) && !prompt.includes("<phan_viec")) {
+    if (prompt.includes("#orchnosplit")) return JSON.stringify({ split: false });
+    const task = (id, title, role, needs, size, deps) => ({ id, title, role, needs, size, do: `${title} cho yêu cầu.`,
+      out: "Các ý chính, có nguồn", deps });
+    return "```json\n" + JSON.stringify({ split: true, tasks: [
+      task("t1", "Tra cứu số liệu thị trường", "intern", ["search"], "s", []),
+      task("t2", "Tìm chính sách và đối thủ", "intern", ["search"], "s", []),
+      task("t3", "Phân tích và khuyến nghị", "staff", ["reason", "write_vi"], "m", ["t1", "t2"]),
+    ] }) + "\n```";
+  }
+  if (prompt.includes("<ket_qua>\n") && prompt.includes("<yeu_cau_goc>")) {
+    const ids = [...prompt.matchAll(/<phan_viec id="([\w-]+)"/g)].map((m) => m[1]);
+    const redo = prompt.includes("#orchredo");
+    return JSON.stringify({ reviews: ids.map((id, k) => (redo && k === 0 ? { id, ok: false, fix: "Thiếu số liệu năm gần nhất." }
+      : { id, ok: true })) });
+  }
+  const part = /<phan_viec id="([\w-]+)" title="([^"]*)">/.exec(prompt);
+  if (part && prompt.includes("<yeu_cau_goc>")) {
+    const fixed = prompt.includes("<quan_ly_yeu_cau_sua>") ? " (đã sửa theo góp ý)" : "";
+    return `Kết quả phần ${part[2]}${fixed}:\n- Ý một của phần này.\n- Ý hai, có nguồn: https://example.com/${part[1]}`;
+  }
+  return null;
+}
 function mockBrain(prompt) {
+  const orch = mockOrchestra(prompt);
+  if (orch) return orch;
   const sg = mockSkillGen(prompt);
   if (sg) return sg;
   const sc = mockSkillScan(prompt);
