@@ -1,5 +1,6 @@
 "use client";
-// Bộ não: không gian riêng (thanh bên → Bộ não) để đi trong mạng ghi chú mà Synchro tự xây và tự chăm sóc từ các đoạn chat.
+// Bộ não: không gian riêng (menu tài khoản, ⌘K hay Cài đặt → Bộ não) để đi trong mạng ghi chú mà Synchro tự xây và
+// tự chăm sóc từ các đoạn chat.
 // - Đồ thị: mỗi chấm là một ghi chú, mỗi đường là một [[liên kết]]; chấm càng nhiều liên kết càng to. Màu trầm, chỉ sáng màu nhấn khi
 //   rê chuột (ghi chú lân cận sáng theo, phần còn lại mờ dần); các chấm bung ra từ tâm rồi lắng lại như lò xo; kéo một chấm thì các chấm
 //   nối với nó bị kéo theo; cuộn để phóng to êm, chữ hiện dần khi phóng to. Bảng cài đặt: lọc, nhóm màu, hiển thị, lực.

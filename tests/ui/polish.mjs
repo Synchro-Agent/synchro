@@ -312,7 +312,13 @@ for (const theme of THEMES) for (const size of SIZES) {
   };
   // Nút điều hướng đang hiện (ở 768px thanh bên đóng vẫn còn bản ẩn của cùng nút: bấm vào bản ẩn là bấm nhầm chỗ khác trên trang).
   const nav = (v) => `[...document.querySelectorAll('[data-nav="${v}"]')].find((e) => e.checkVisibility()) ?? document.querySelector('[data-nav="${v}"]')`;
-  const go = async (v) => { if (!(await ev(`!!document.querySelector("[data-nav]")`))) await home(); await esc(); await side(); await click(nav(v), v); await ready(); };
+  const go = async (v) => {
+    if (!(await ev(`!!document.querySelector("[data-nav]")`))) await home();
+    await esc(); await side();
+    // Bộ não không còn trên thanh điều hướng: mục của nó nằm trong menu tài khoản.
+    if (v === "brain") { await click(`document.querySelector(".rail-user .user")`, "user menu"); await ready(); }
+    await click(nav(v), v); await ready();
+  };
   // Các tab của trang đang mở (không phải thanh bên): bấm lần lượt, đo từng tab.
   const tabs = async (label, sel = "main [role=tablist] [role=tab], .main [role=tablist] [role=tab]", max = 8) => {
     const n = Math.min(max, await ev(`[...document.querySelectorAll(${JSON.stringify(sel)})].filter((t) => t.checkVisibility()).length`));

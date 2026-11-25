@@ -1955,6 +1955,8 @@ export default function Home({ boot }: { boot?: BootData | null }) {
     { id: "connectors", label: "Connectors", icon: <I.Connectors size={16} />, hay: "connectors mcp ket noi", run: () => { setCzTab("connectors"); setView("customize"); } },
     ...(caps.art !== false ? [{ id: "artifacts", label: "Artifacts", icon: <I.Shapes size={16} />, hay: "ung dung apps", run: () => setView("artifacts") }] : []),
     { id: "projects", label: "Dự án", icon: <I.Folder size={16} />, hay: "projects", run: () => { setCurProj(null); setView("projects"); } },
+    { id: "brain", label: "Bộ não", icon: <I.Brain size={16} />, hay: "brain bo nao ghi chu notes graph do thi",
+      run: () => setView("brain") },
     { id: "settings", label: "Cài đặt", icon: <I.Cog size={16} />, keys: "⇧⌘,", hay: "settings", run: () => { setSettingsTab("General"); setModal("settings"); } },
     { id: "theme", label: theme === "dark" ? "Chuyển sang giao diện sáng" : "Chuyển sang giao diện tối", icon: theme === "dark" ? <I.M icon="Sun" size={16} /> : <I.M icon="Moon" size={16} />, hay: "theme dark light toi sang", run: () => setTheme(theme === "dark" ? "light" : "dark") },
     { id: "sidebar", label: "Ẩn / hiện thanh bên", icon: <I.Panel size={16} />, keys: "⌘.", hay: "sidebar", run: () => setOpen((o) => !o) },
@@ -2155,7 +2157,6 @@ export default function Home({ boot }: { boot?: BootData | null }) {
           {me?.perms.features.projects !== false && nav({ v: "projects", icon: <I.Layers />, label: "Dự án" })}
           {caps.art !== false && nav({ v: "artifacts", icon: <I.Shapes />, label: "Artifacts" })}
           {nav({ v: "inbox", icon: <I.Inbox />, label: "Hộp thư", badge: inboxN })}
-          {nav({ v: "brain", icon: <I.Brain />, label: "Bộ não" })}
           {me?.perms.features.code !== false && nav({ v: "code", icon: <I.Code />, label: "Code", onPick: () => {
             // Rời Code khi lượt đang chạy rồi quay lại thì về đúng phiên đó, không phải trang trống. Đang ở trong Code mà bấm lại thì mới là mở phiên mới.
             const live = view !== "code" ? (codeList.find((c) => c.id === codeCur && c.running) ?? codeList.find((c) => c.running)) : undefined;
@@ -2173,6 +2174,11 @@ export default function Home({ boot }: { boot?: BootData | null }) {
               <hr />
               <button className="menu-item" onClick={() => { setSettingsTab("General"); setModal("settings"); setUserMenu(false); }}><I.Cog />Cài đặt<span className="sc">⇧⌘,</span></button>
               <button className="menu-item" onClick={() => { setModal("lang"); setUserMenu(false); }}><I.Globe />Ngôn ngữ</button>
+              {/* Bộ não không nằm trên thanh điều hướng của trang chủ: mở từ đây, ⌘K, Cài đặt → Bộ não hoặc
+                  địa chỉ #v=brain. */}
+              <button className="menu-item" data-nav="brain" onClick={() => { setView("brain"); setUserMenu(false); }}>
+                <I.Brain />Bộ não
+              </button>
               <hr />
               <button className="menu-item" onClick={() => { window.open("/download", "_blank", "noopener"); setUserMenu(false); }}><I.GetApps />Tải ứng dụng</button>
               <button className="menu-item" onClick={() => { setModal("keys"); setUserMenu(false); }}><I.Keyboard />Phím tắt<span className="sc">⌘/</span></button>

@@ -458,7 +458,11 @@ for (const theme of THEMES) for (const size of SIZES) {
     await P("Input.insertText", { text: "Mục tiêu: Tìm kiếm, chọn lọc và đánh giá các repository đỉnh cao trên GitHub về design, motion graphics, animation, UI/UX.\n\nCác bước thực hiện:\n1. Tìm kiếm trên GitHub và các danh sách awesome lists.\n2. Đánh giá và chọn lọc những repo tốt nhất.\n3. Trình bày kết quả gửi vào Hộp thư." });
     await sleep(400); await shot("viec-tu-dong"); await esc(); await sleep(400);
   });
-  await step0("bo-nao", async () => { await nav("Bộ não"); await shot("bo-nao"); });
+  // Bộ não mở từ menu tài khoản (không còn trên thanh điều hướng).
+  await step0("bo-nao", async () => {
+    await side(); await click(`document.querySelector(".rail-user .user")`, "user menu"); await sleep(400);
+    await click(`document.querySelector('[data-nav="brain"]')`, "Bộ não"); await ready(); await shot("bo-nao");
+  });
   await step0("code", async () => { await nav("Code"); await shot("code"); });
   // Menu ⋮ của Synchro Code khi bảng phiên đang mở: menu nằm trên bảng phiên (từng bị bảng phiên che gần hết).
   if (!mobile) await step0("code-menu", async () => {
