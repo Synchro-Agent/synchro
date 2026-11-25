@@ -39,6 +39,7 @@ import { fmtSize } from "./fileicon";
 import { SharedChats } from "./shareui";
 import { UploadedFiles } from "./filesui";
 import { deleteServerSession, listServerSessions, saveCodePrefs, useCodePrefs, type CodePrefs } from "./codesync";
+import { Spinner } from "./spinner";
 const voiceLabel = (v: Voice | undefined) => (v ? `${v.name}${v.lang ? ` · ${v.lang}` : ""}` : "Auto");
 
 function useAway(close: () => void) {
@@ -324,7 +325,10 @@ function Account() {
               <input className="field" type="email" autoComplete="email" aria-label="New email" placeholder="New email" value={mailForm?.email ?? ""} onChange={(e) => setMailForm((o) => o && { ...o, email: e.target.value, err: "" })} />
               <input className="field" type="password" autoComplete="current-password" aria-label="Current password" placeholder="Current password" value={mailForm?.pw ?? ""} onChange={(e) => setMailForm((o) => o && { ...o, pw: e.target.value, err: "" })} />
               {mailForm?.err && <p className="auth-field-err" role="alert">{tr(mailForm.err)}</p>}
-              <div className="modal-foot"><button className="btn" onClick={() => setMailForm(null)}>Cancel</button><button className="btn dark" disabled={mailForm?.busy || !mailForm?.email.trim() || !mailForm?.pw} onClick={() => void sendMailChange()}>{mailForm?.busy ? <span className="api-spin" /> : "Send link"}</button></div>
+              <div className="modal-foot"><button className="btn" onClick={() => setMailForm(null)}>Cancel</button>
+                <button className="btn dark" disabled={mailForm?.busy || !mailForm?.email.trim()
+                || !mailForm?.pw} onClick={() => void sendMailChange()}>{mailForm?.busy
+                ? <Spinner className="api-spin" /> : "Send link"}</button></div>
             </>}
           </div>
         </div>

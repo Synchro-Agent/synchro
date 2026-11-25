@@ -11,6 +11,7 @@ import { inspectGithub, SkillAddModal, type Found } from "./skillsui";
 import { PreviewModal } from "./pluginsui";
 import type { PublicPlugin } from "../shared/types/plugins";
 import { cachedJson, META, type PluginsMeta } from "./studios";
+import { Spinner } from "./spinner";
 
 const isAdmin = () => cachedJson<PluginsMeta>(META).then((j) => !!j?.admin).catch(() => false);
 const repoName = (u: string) => u.replace(/^https?:\/\/(www\.)?github\.com\//, "").replace(/\/(tree|blob)\/[^/]+/, "").replace(/\/$/, "");
@@ -43,7 +44,9 @@ export function GithubAdd({ focus, onDone }: { focus?: number; onDone?: (r: { ki
       <form className="sk-gh" onSubmit={(e) => { e.preventDefault(); go(); }}>
         <I.GitHub size={16} />
         <input ref={input} placeholder={ph} value={url} onChange={(e) => setUrl(e.target.value)} spellCheck={false} />
-        <button className="btn dark" disabled={busy || !url.trim()}>{busy ? <><span className="art-spin sm" />{reading ? "Reading the repository…" : "Checking…"}</> : "Add"}</button>
+        <button className="btn dark" disabled={busy || !url.trim()}>{busy
+          ? <><Spinner className="art-spin sm" />{reading ? "Reading the repository…" : "Checking…"}</>
+          : "Add"}</button>
       </form>
       <p className="d gh-hint">Synchro looks at the link for you. One skill goes to Your skills. A repository with several skills is installed as a library, with license and script checks and one-click updates. A repository without SKILL.md: Synchro reads every file in it and writes the skill from it.</p>
       {reading && <p className="d gh-hint" role="status">This repository has no SKILL.md. Synchro is reading every file in it and writing the skill. This can take a minute.</p>}

@@ -10,6 +10,7 @@ import { ArtifactFrame, type ArtVersion, type FrameSend } from "./artifactui";
 import { CommentsPanel, Presence, useLive } from "./collabui";
 import { Menu } from "./ui";
 import { PUBLISHABLE } from "../shared/artifacts";
+import { Spinner } from "./spinner";
 
 export type AppInfo = { id: string; title: string; type: "html" | "react" | "svg"; visibility: "private" | "org"; conv: string; ident: string; created_at: number; updated_at: number; opens: number; mine: boolean; ownerName: string };
 const api = async <T,>(method: string, url: string, body?: unknown): Promise<T> => {
@@ -58,7 +59,7 @@ export function PublishButton({ conv, art, say }: { conv: string; art: ArtVersio
       <button className={`icon-btn ${cur ? "pub-on" : ""}`} onClick={() => setOpen(!open)} aria-label="Xuất bản thành ứng dụng" data-tip="Xuất bản thành ứng dụng" aria-expanded={open}><I.Rocket size={15} /></button>
       <Menu open={open} className="pub-menu">
         <div className="pub-h"><b>{cur ? tr("Ứng dụng đã xuất bản") : tr("Xuất bản thành ứng dụng")}</b><span>{tr("Một địa chỉ riêng để dùng thật: dữ liệu được lưu lại, cả nhóm cùng dùng được.")}</span></div>
-        {cur === undefined ? <div className="pub-load"><span className="art-spin sm" /></div> : (
+        {cur === undefined ? <div className="pub-load"><Spinner className="art-spin sm" /></div> : (
           <>
             <label className="pub-l">{tr("Tên ứng dụng")}<input className="field" value={title} maxLength={120} onChange={(e) => setTitle(e.target.value)} /></label>
             <div className="pub-vis" role="radiogroup">
@@ -73,7 +74,8 @@ export function PublishButton({ conv, art, say }: { conv: string; art: ArtVersio
             )}
             <div className="pub-acts">
               {cur && <a className="btn" href={`/apps/${cur.id}`} target="_blank" rel="noreferrer">{tr("Mở ứng dụng")}</a>}
-              <button className="btn dark" disabled={busy || !title.trim()} onClick={publish}>{busy ? <span className="art-spin sm" /> : null}{cur ? tr("Cập nhật") : tr("Xuất bản")}</button>
+              <button className="btn dark" disabled={busy || !title.trim()} onClick={publish}>{busy
+                ? <Spinner className="art-spin sm" /> : null}{cur ? tr("Cập nhật") : tr("Xuất bản")}</button>
             </div>
             <p className="pub-note">{tr("Ứng dụng lưu dữ liệu bằng window.storage. Người dùng ứng dụng gọi AI bằng hạn mức của chính họ.")}</p>
           </>
@@ -146,7 +148,7 @@ export function AppRunner({ id }: { id: string }) {
   useEffect(() => { if (!toast) return; const t = setTimeout(() => setToast(""), 2600); return () => clearTimeout(t); }, [toast]);
   // eslint-disable-next-line @next/next/no-html-link-for-pages -- rời trang ứng dụng độc lập về app chính: tải toàn trang có chủ đích
   if (err) return <div className="app-run"><div className="app-miss"><I.Rocket size={26} /><b>{tr("Không mở được ứng dụng")}</b><span>{err}</span><a className="btn" href="/">{tr("Về Synchro")}</a></div></div>;
-  if (!app) return <div className="app-run"><div className="app-miss"><span className="art-spin" /></div></div>;
+  if (!app) return <div className="app-run"><div className="app-miss"><Spinner className="art-spin" /></div></div>;
   const n = (live.comments ?? []).filter((c) => !c.resolved).length;
   return (
     <div className="app-run">

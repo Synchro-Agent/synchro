@@ -8,6 +8,7 @@ import { tr } from "./i18n";
 import { plainSnippet } from "../shared/runtext";
 import { stripAppliedNotes } from "../shared/turnctx";
 import { useFitPlaceholder } from "./phfit";
+import { Spinner } from "./spinner";
 
 export type PaletteCmd = { id: string; label: string; icon: ReactNode; keys?: string; hay?: string; run: () => void };
 export type PaletteGo = {
@@ -181,7 +182,7 @@ export function CommandPalette({ chats, projects, codes, cmds, go, seed, onClose
               else if (e.key === "Enter") { e.preventDefault(); run(rows[sel]); }
               else if (e.key === "Escape") onClose();
             }} />
-          {!rem && <span className="art-spin sm" />}
+          {!rem && <Spinner className="art-spin sm" />}
         </div>
         <div className="s-list" ref={list} id="pal-list" role="listbox" aria-label={tr("Kết quả")}>
           {rows.map((r, i) => {

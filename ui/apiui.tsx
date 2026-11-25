@@ -11,6 +11,7 @@ import type { ProviderInfo } from "../shared/catalog";
 import { LogoMark, ModelLogo } from "./brands";
 import { hostLogo, providerLogo } from "../shared/vendorlogo";
 import { SettingsSkeleton } from "./skeleton";
+import { Spinner } from "./spinner";
 
 export type ApiProvider = {
   id: string; kind: string; name: string; vendor: string; builtin: boolean; configured: boolean; source: "db" | "env" | null;
@@ -76,7 +77,8 @@ function KeyForm({ p, busy, err, ws, onCancel, onSave }: { p: ApiProvider; busy:
       {err && <div className="api-err" role="alert"><I.Alert size={14} /><span>{err}</span></div>}
       <div className="api-actions">
         <button type="button" className="btn" onClick={onCancel} disabled={busy}>Cancel</button>
-        <button type="submit" className="btn dark" disabled={!can}>{busy ? <><span className="api-spin" />Checking…</> : "Verify and save"}</button>
+        <button type="submit" className="btn dark" disabled={!can}>{busy
+          ? <><Spinner className="api-spin" />Checking…</> : "Verify and save"}</button>
       </div>
       <p className="api-note"><I.Lock size={12} /><span>{`Synchro checks the key with ${p.vendor} first, then stores it encrypted on the server. It is never shown again in full.`}</span></p>
     </form>
@@ -171,7 +173,10 @@ export function ProviderCard({ p, onChange, credit, bare = false }: { p: ApiProv
           {owner && !p.configured && !edit && <button className="btn dark" onClick={() => { setEdit(true); setErr(""); }}>Add key</button>}
           {p.configured && !edit && (
             <>
-              <button className="icon-btn" aria-label={SERVICE.has(p.id) ? "Check key" : "Refresh model list"} title={SERVICE.has(p.id) ? "Check key" : "Check key and refresh models"} onClick={refresh} disabled={busy}>{busy ? <span className="api-spin" /> : <I.Retry size={16} />}</button>
+              <button className="icon-btn" aria-label={SERVICE.has(p.id) ? "Check key"
+                : "Refresh model list"} title={SERVICE.has(p.id) ? "Check key"
+                : "Check key and refresh models"} onClick={refresh} disabled={busy}>{busy
+                ? <Spinner className="api-spin" /> : <I.Retry size={16} />}</button>
               {owner && <button className="btn" onClick={() => { setEdit(true); setErr(""); }}>{p.source === "env" ? "Add key" : "Change key"}</button>}
               {owner && p.source === "db" && <button className="icon-btn" aria-label="Remove key" title="Remove key" onClick={remove}><I.Trash size={16} /></button>}
             </>
@@ -213,7 +218,8 @@ export function TestBox({ catalog }: { catalog: ProviderInfo[] }) {
       <div className="api-test-row">
         <Dropdown label="Model" className="api-sel" minWidth={240} notr value={model} onChange={setModel} options={catalog.flatMap((p) => p.models.map((m) => ({ value: m.key, label: m.name, group: p.name })))} />
         <input className="field" placeholder="Message (optional)" value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && !busy && model) send(); }} />
-        <button className="btn dark" onClick={send} disabled={busy || !model}>{busy ? <><span className="api-spin" />Sending…</> : "Send test"}</button>
+        <button className="btn dark" onClick={send} disabled={busy || !model}>{busy
+          ? <><Spinner className="api-spin" />Sending…</> : "Send test"}</button>
       </div>
       {out && (out.error
         ? <div className="api-err" role="alert"><I.Alert size={14} /><span>{out.error}</span></div>

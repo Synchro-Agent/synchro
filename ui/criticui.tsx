@@ -5,6 +5,7 @@ import * as I from "./icons";
 import { tr, trc } from "./i18n";
 import { SEV_LABEL, type CriticEntry, type Finding } from "../shared/critic";
 import { modelName } from "./models";
+import { Spinner } from "./spinner";
 
 // Tên model như ở bộ chọn model ("Claude Sonnet 5.5"), không phải mã ("sub-claude/sonnet" → "sonnet").
 const short = (key: string) => modelName(key);
@@ -12,7 +13,8 @@ const short = (key: string) => modelName(key);
 export function CriticPill({ entry, findings, can, onRun, onShow }: { entry?: CriticEntry; findings: Finding[]; can: boolean; onRun: () => void; onShow: () => void }) {
   if (!entry) return can ? <button className="icon-btn" onClick={onRun} aria-label={tr("Phản biện")} data-tip={tr("Nhờ hội đồng phản biện đọc lại")}><I.Shield size={15} /></button> : null;
   const names = entry.by.map(short).join(", ");
-  if (entry.status === "run") return <span className="cr-pill run" role="status"><span className="art-spin sm" />{tr("Đang phản biện")}</span>;
+  if (entry.status === "run") return <span className="cr-pill run" role="status"><Spinner className="art-spin sm" />
+    {tr("Đang phản biện")}</span>;
   if (entry.status === "error") return <button className="cr-pill err" onClick={onRun} data-tip={entry.error}><I.Alert size={13} />{tr("Phản biện lỗi, thử lại")}</button>;
   if (!findings.length) return <span className="cr-pill ok" data-tip={`${tr("Hội đồng phản biện không thấy lỗi")}${names ? ` (${names})` : ""}`}><I.ShieldCheck size={14} />{tr("Ổn")}</span>;
   return (

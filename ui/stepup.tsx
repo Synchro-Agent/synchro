@@ -10,6 +10,7 @@ import { tr } from "./i18n";
 import { passkeyCancelled, passkeyStepUp, passkeySupported } from "./passkeyclient";
 import { useApp } from "./store";
 import { Fade } from "./ui";
+import { Spinner } from "./spinner";
 
 /** Lỗi máy chủ đòi xác minh lại (hoặc báo mật khẩu xác minh lại bị sai). */
 export const needsReauth = (e: unknown) => (e as { data?: { reauth?: unknown } } | null)?.data?.reauth === true;
@@ -72,7 +73,8 @@ export function useStepUp() {
       <div className="modal-foot">
         <button className="btn" disabled={busy} onClick={() => close(null)}>{tr("Hủy")}</button>
         {hasKey && <button className={hasPw ? "btn" : "btn dark"} disabled={busy} onClick={viaPasskey}>{tr("Dùng khóa truy cập")}</button>}
-        {hasPw && <button className="btn dark" disabled={busy || !pw} onClick={viaPassword}>{busy ? <span className="api-spin" /> : tr("Xác nhận")}</button>}
+        {hasPw && <button className="btn dark" disabled={busy || !pw} onClick={viaPassword}>{busy
+          ? <Spinner className="api-spin" /> : tr("Xác nhận")}</button>}
         {!hasPw && !hasKey && <button className="btn dark" onClick={signOut}>{tr("Đăng xuất")}</button>}
       </div>
     </div>

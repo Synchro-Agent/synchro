@@ -10,6 +10,7 @@ import { locale, tr } from "./i18n";
 import { apiFetch, statusText } from "./apierr";
 import { PLUGIN_CATS } from "../shared/plugindir";
 import { Pager } from "./pager";
+import { Spinner } from "./spinner";
 
 type Item = { id: string; name: string; summary: string; author: string; cats: string[]; license: string; skillCount: number; skills: string[]; homepage: string; verified: string | null; installed: string | null;
   closed: boolean; closedWhy: string | null; failed: boolean; failedWhy: string | null; github: boolean; altFor: string[]; altAuto: boolean; alt: { id: string; name: string; installed: string | null }[] };
@@ -80,7 +81,11 @@ export function ClaudeDirectory({ q, onOpen, onChanged }: { q: string; onOpen: (
   // Còn phải cài: trừ thư viện giấy phép đóng và thư viện đã cài lỗi từ nguồn của nó (nút Cài tất cả không còn hiện mãi vì chúng).
   const missing = (c: string) => (d?.cats[c]?.plugins ?? 0) - (d?.cats[c]?.installed ?? 0) - (d?.cats[c]?.closed ?? 0) - (d?.cats[c]?.failed ?? 0);
   const missingAll = d ? d.totals.plugins - d.totals.installed - d.totals.closed - d.totals.failed : 0;
-  const altNames = (x: Item) => x.alt.map((a, i) => <span key={a.id}>{i > 0 && ", "}{a.installed ? <button className="cd-link" data-notr onClick={() => onOpen(a.installed!)}>{a.name}</button> : d?.canInstall ? <button className="cd-link" data-notr disabled={!!busy || running} aria-label={`${tr("Install")} ${a.name}`} onClick={() => install(a)}>{busy === a.id ? <span className="art-spin sm" /> : null}{a.name}</button> : <span data-notr>{a.name}</span>}</span>);
+  const altNames = (x: Item) => x.alt.map((a, i) => <span key={a.id}>{i > 0 && ", "}{a.installed
+    ? <button className="cd-link" data-notr onClick={() => onOpen(a.installed!)}>{a.name}</button> : d?.canInstall
+    ? <button className="cd-link" data-notr disabled={!!busy
+    || running} aria-label={`${tr("Install")} ${a.name}`} onClick={() => install(a)}>{busy === a.id
+    ? <Spinner className="art-spin sm" /> : null}{a.name}</button> : <span data-notr>{a.name}</span>}</span>);
   // Không có thư viện mở làm cùng việc: vẫn có đường đi tiếp, mở cả mục ngành nghề của thư viện đó.
   const browse = (x: Item) => { const c = x.cats[0]; return c && c !== cat && CAT.has(c) ? <> <button className="cd-link" onClick={() => { setCat(c); setOnly(""); }}>{tr("See other libraries in")} {tr(CAT.get(c)!.label)}</button></> : null; };
   const askAll = (c: string | null) => {
@@ -95,7 +100,7 @@ export function ClaudeDirectory({ q, onOpen, onChanged }: { q: string; onOpen: (
   };
 
   if (err && !d) return <div className="empty" style={{ marginTop: 24 }}><I.Alert size={22} /><span>{err}</span><button className="btn" onClick={load}>Try again</button></div>;
-  if (!d) return <div className="empty" style={{ marginTop: 24 }}><span className="art-spin" /></div>;
+  if (!d) return <div className="empty" style={{ marginTop: 24 }}><Spinner className="art-spin" /></div>;
   if (!d.totals.plugins) return null;
   // 55 mục: hiện các mục lớn trước, phần còn lại mở bằng "Thêm mục" (màn hẹp không phải cuộn qua hàng chục dòng nhãn). Mục đang chọn luôn hiện.
   const all = PLUGIN_CATS.filter((c) => d.cats[c.key]?.plugins);
@@ -115,7 +120,7 @@ export function ClaudeDirectory({ q, onOpen, onChanged }: { q: string; onOpen: (
       {j && (
         <div className={`cd-job${j.running ? " on" : ""}`}>
           <div className="cd-job-h">
-            {j.running ? <span className="art-spin sm" /> : <I.Check size={15} />}
+            {j.running ? <Spinner className="art-spin sm" /> : <I.Check size={15} />}
             <b>{j.running ? (j.paused ? tr("Paused: GitHub is limiting downloads") : tr("Installing libraries")) : j.stopped ? tr("Installation stopped") : tr("Installation finished")}</b>
             <span data-notr>{n(j.done)} / {n(j.total)}</span>
             <span className="cd-job-s">{n(j.installed)} {tr("installed")} · {n(j.skills)} skill{j.failed.length ? <> · <button className="cd-link" onClick={() => setShowFails(!showFails)}>{n(j.failed.length)} {tr("not installed")}</button></> : null}</span>
@@ -163,8 +168,14 @@ export function ClaudeDirectory({ q, onOpen, onChanged }: { q: string; onOpen: (
               </div>
               {x.closed ? <span className="pl-plus done" aria-label="Closed license" data-tip="Closed license"><I.Lock size={14} /></span>
                 : x.installed ? <button className="pl-plus done" aria-label="Installed" data-tip="Installed" onClick={() => onOpen(x.installed!)}><I.Check size={15} /></button>
-                : x.failed ? (d.admin ? <button className="pl-plus" aria-label={`${tr("Retry")} ${x.name}`} data-tip="Retry" disabled={!!busy || running} onClick={() => install(x)}>{busy === x.id ? <span className="art-spin sm" /> : <I.Retry size={15} />}</button> : <span className="pl-plus done" aria-label="Could not install" data-tip="Could not install"><I.Alert size={14} /></span>)
-                : d.canInstall ? <button className="pl-plus" aria-label={`Install ${x.name}`} data-tip="Install" disabled={!!busy || running} onClick={() => install(x)}>{busy === x.id ? <span className="art-spin sm" /> : <I.Plus size={15} />}</button> : null}
+                : x.failed ? (d.admin ? <button className="pl-plus" aria-label={`${tr("Retry")} ${x.name}`}
+                  data-tip="Retry" disabled={!!busy || running} onClick={() => install(x)}>{busy === x.id ? <Spinner
+                  className="art-spin sm" /> : <I.Retry size={15} />}</button> : <span className="pl-plus done"
+                  aria-label="Could not install" data-tip="Could not install"><I.Alert size={14} /></span>)
+                : d.canInstall
+                  ? <button className="pl-plus" aria-label={`Install ${x.name}`} data-tip="Install" disabled={!!busy
+                  || running} onClick={() => install(x)}>{busy === x.id ? <Spinner className="art-spin sm" />
+                  : <I.Plus size={15} />}</button> : null}
             </div>
           ))}
         </div>

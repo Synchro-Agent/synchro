@@ -96,6 +96,7 @@ type CxData = { connectors: Conn[]; composio?: ComposioInfo; err?: boolean };
 import { wantsIntro } from "./introflag";
 import { startWarmPing, warmChoice } from "./warmping";
 import { decodeSettingsTab, hashStep, settingsHash } from "./hashnav";
+import { Spinner } from "./spinner";
 
 // Trang đầu chỉ tải phần chat; các mục khác, hộp thoại và màn hình đăng nhập tải khi cần (rê chuột vào mục thì tải trước).
 const CodeView = lazyView(() => import("./codeview").then((m) => m.CodeView));
@@ -312,7 +313,9 @@ function ModelPicker({ model, setModel, prefix }: { model: string; setModel: (m:
         )}
         {!none && <hr />}
         {/* Danh sách chưa về (máy chủ vừa khởi động lại còn kiểm tra đăng nhập gói): báo đang tải thay vì để trống. */}
-        {!loaded && <div className="mload" role="status"><span className="art-spin sm" /><span>Đang tải danh sách model…</span></div>}
+        {!loaded
+          && <div className="mload" role="status"><Spinner className="art-spin sm" />
+          <span>Đang tải danh sách model…</span></div>}
         {providers.map((pv) => (
           <button key={pv.id} aria-haspopup="menu" aria-expanded={sub === pv.id} className={`menu-item mline mprov ${sub === pv.id ? "is-sel" : ""}`} onClick={(e) => hoverProv(pv.id, e.currentTarget)} onMouseEnter={(e) => hoverProv(pv.id, e.currentTarget)}>
             <ProviderLogo p={pv} /><span className="mname-t" data-notr>{pv.name}</span><span className="sc">{pv.models.some((m) => m.key === model) && <i className="dot" />}<I.ChevronR size={16} /></span>
@@ -565,7 +568,7 @@ const Composer = memo(function Composer(p: {
   const atMenu = at && (
     <div className="at-menu" role="listbox" aria-label={tr("Chọn connector")} onMouseDown={(e) => e.preventDefault()}>
       <div className="at-h">{tr("Dùng connector cho tin này")}</div>
-      {cx === null ? <div className="cm-empty"><span className="art-spin sm" /></div>
+      {cx === null ? <div className="cm-empty"><Spinner className="art-spin sm" /></div>
         : atList.length ? atList.map((c, i) => (
           <button key={c.id} type="button" role="option" aria-selected={i === atSel} className={`menu-item${i === atSel ? " on" : ""}`} onMouseEnter={() => setAtSel(i)} onClick={() => pickAt(c.name)}>
             <ConnLogo logo={c.logo} color={c.color} icon={c.icon} site={c.site} name={c.name} size={18} /><span className="cv-ell" data-notr>{c.name}</span>
@@ -674,7 +677,8 @@ const Composer = memo(function Composer(p: {
                 {/* Như Claude: ô tìm ở đầu danh sách. Chưa gõ: skill và thư viện bạn tự cài; gõ: tìm cả thư viện của danh mục skill (vài nghìn). */}
                 {skl && skl.length > 8 && <div className="cm-find"><I.Search size={14} /><input autoFocus value={skq} onChange={(e) => setSkq(e.target.value)} placeholder="Tìm skill hoặc thư viện" aria-label="Tìm skill hoặc thư viện" /></div>}
                 <div className="cm-list">
-                  {skl === null ? <div className="cm-empty"><span className="art-spin sm" /></div> : !skl.length ? <div className="cm-empty">Chưa có skill nào đang bật</div>
+                  {skl === null ? <div className="cm-empty"><Spinner className="art-spin sm" /></div> : !skl.length
+                    ? <div className="cm-empty">Chưa có skill nào đang bật</div>
                     : (() => { const q = skq.trim().toLowerCase(); const l = (q ? [...skl, ...skCat].filter((k) => k.label.toLowerCase().includes(q) || k.id.includes(q)) : skl.filter((k) => !k.cat)).slice(0, 60); return l.length ? l : [null]; })().map((k) => { if (!k) return <div key="none" className="cm-empty">Không có skill hoặc thư viện nào khớp</div>; const on = picks.some((x) => x.id === k.id); return (
                       <button key={k.id} className="menu-item" role="menuitemcheckbox" aria-checked={on} onClick={() => { setPicks(on ? picks.filter((x) => x.id !== k.id) : [...picks, { id: k.id, label: k.label }]); setMenu(false); setSub(null); ta.current?.focus(); }}>
                         {k.lib ? <I.Plugins /> : <I.Scroll />}<span className="cv-ell" data-notr>{k.label}</span>{on && <span className="ck"><I.Check /></span>}
@@ -686,7 +690,10 @@ const Composer = memo(function Composer(p: {
               </>)}
               {sub === "conn" && (<>
                 <div className="cm-list">
-                  {cx === null ? <div className="cm-empty"><span className="art-spin sm" /></div> : cx.err ? <div className="cm-empty cm-err"><span>Không tải được</span><span className="cm-dot">·</span><button className="cn-link" onClick={() => { setCx(null); void loadCx(); }}>Thử lại</button></div> : <>
+                  {cx === null ? <div className="cm-empty"><Spinner className="art-spin sm" /></div> : cx.err
+                    ? <div className="cm-empty cm-err"><span>Không tải được</span><span className="cm-dot">·</span>
+                    <button className="cn-link" onClick={() => { setCx(null); void loadCx(); }}>Thử lại</button></div>
+                    : <>
                     {cx.composio && (() => {
                       const k = cx.composio, c = k.connector, live = k.state === "linked" && c?.status === "ok", on = live && !!c?.enabled;
                       const note = k.state === "unlinked" ? "Chưa liên kết" : k.state === "blocked" ? "Không được phép" : live ? "" : "Cần liên kết lại";

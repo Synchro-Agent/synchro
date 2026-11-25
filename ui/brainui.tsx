@@ -20,6 +20,7 @@ import { ColorField } from "./colorpick";
 import { type Chat, useApp, usePref } from "./store";
 import { locale, tf, tr, trc } from "./i18n";
 import { maxW } from "./breakpoints";
+import { Spinner } from "./spinner";
 
 type Kind = "hub" | "about" | "model" | "chat" | "code" | "topic" | "entity" | "map" | "index" | "log" | "skill" | "connector" | "note" | "daily" | "rule" | "ghost" | "tag";
 type GNode = { id: string; title: string; kind: Kind; tags: string[]; created: number; links: number; aliases?: string[]; pinned?: boolean };
@@ -487,7 +488,9 @@ function Peek({ onOpen }: { onOpen: (t: string) => void }) {
     <div className="bn-peek" style={{ left, ...(below ? { top: p.rect.bottom + 6 } : { bottom: window.innerHeight - p.rect.top + 6 }) }}
       onMouseEnter={() => peekTimer && clearTimeout(peekTimer)} onMouseLeave={() => peek(null)}>
       <button className="bn-peek-h" onClick={() => { onOpen(p.title); setP(null); }} data-notr>{p.d?.note.title ?? p.title}<I.ChevronR size={12} /></button>
-      {p.d ? <NoteMd text={p.d.note.body.slice(0, 1400)} exists={new Set()} onOpen={(t) => { onOpen(t); setP(null); }} depth={2} /> : peekCache.has(fold(p.title)) ? <p className="d">{tr("Chưa có ghi chú này.")}</p> : <span className="art-spin sm" />}
+      {p.d ? <NoteMd text={p.d.note.body.slice(0, 1400)} exists={new Set()} onOpen={(t) => { onOpen(t); setP(null); }}
+        depth={2} /> : peekCache.has(fold(p.title)) ? <p className="d">{tr("Chưa có ghi chú này.")}</p> : <Spinner
+        className="art-spin sm" />}
     </div>
   );
 }
@@ -532,7 +535,9 @@ function Embed({ target, exists, onOpen, depth }: { target: string; exists: Set<
   return (
     <div className="bn-embed">
       <button className="bn-embed-h" onClick={() => onOpen(title.trim(), sub)} data-notr>{target}<I.ChevronR size={12} /></button>
-      {body === null ? <span className="art-spin sm" /> : body ? <NoteMd text={body} exists={exists} onOpen={onOpen} depth={depth + 1} /> : <p className="d">{tr("Chưa có ghi chú này.")}</p>}
+      {body === null ? <Spinner className="art-spin sm" /> : body
+        ? <NoteMd text={body} exists={exists} onOpen={onOpen} depth={depth + 1} />
+        : <p className="d">{tr("Chưa có ghi chú này.")}</p>}
     </div>
   );
 }
@@ -676,7 +681,7 @@ function NoteView({ title, sub, exists, onOpen, onChanged, onLoaded }: { title: 
           <div className="bn-edit-a"><button className="btn sm" onClick={() => setProp(null)}>{tr("Hủy")}</button><button className="btn sm dark" disabled={busy} onClick={saveProps}>{tr("Lưu")}</button></div>
         </div>
       )}
-      {!d && !missing && <div className="us-empty"><span className="art-spin sm" /></div>}
+      {!d && !missing && <div className="us-empty"><Spinner className="art-spin sm" /></div>}
       {n?.kind === "rule" && !edit && <p className="bn-empty">{tr("Synchro đặt quy tắc này lên đầu lời nhắc của mọi model, ở mọi nơi bạn trò chuyện: chat, Synchro Code, việc tự động trong Hộp thư và giọng nói. Quy tắc luôn được ghim và không bị xóa, kể cả khi xóa bộ não.")}</p>}
       {missing && !edit && <p className="bn-empty">{tr("Ghi chú này chưa có: các ghi chú khác đang trỏ tới nó. Synchro sẽ viết trang này khi biết thêm về nó, hoặc bạn tự tạo.")}</p>}
       {edit ? (
@@ -686,7 +691,9 @@ function NoteView({ title, sub, exists, onOpen, onChanged, onLoaded }: { title: 
             placeholder={tr("Viết bằng Markdown. Gõ [[Tên ghi chú]] để nối tới ghi chú khác, #thẻ để gắn thẻ.")} />
           {n?.generated && <p className="d">{tr("Synchro tự viết phần còn lại của trang này từ các đoạn chat; phần bạn viết nằm ở mục “Ghi chú của bạn”.")}</p>}
           {n?.kind === "rule" && <p className="d">{tr("Để trống thì Synchro dùng lại bản mặc định.")}</p>}
-          <div className="bn-edit-a"><button className="btn" onClick={() => setEdit(null)} disabled={busy}>{tr("Hủy")}</button><button className="btn dark" onClick={save} disabled={busy}>{busy ? <span className="art-spin sm" /> : null}{tr("Lưu")}</button></div>
+          <div className="bn-edit-a"><button className="btn" onClick={() => setEdit(null)} disabled={busy}>{tr("Hủy")}
+            </button><button className="btn dark" onClick={save} disabled={busy}>{busy
+            ? <Spinner className="art-spin sm" /> : null}{tr("Lưu")}</button></div>
         </div>
       ) : n && <div className="bn-body"><NoteMd text={n.body} exists={exists} onOpen={onOpen} onTask={n.kind === "chat" || n.kind === "code" || n.kind === "daily" || n.kind === "note" ? task : undefined} /></div>}
     </article>
@@ -773,7 +780,7 @@ function Bases({ onOpen, version }: { onOpen: Open; version: number }) {
         {([["tasks", tr("Việc dang dở")], ["chats", trc("Đoạn chat", "nhóm ghi chú")], ["topics", trc("Chủ đề", "nhóm ghi chú")], ["entities", trc("Tên riêng", "nhóm ghi chú")]] as const).map(([k, l]) => <button key={k} className={`bn-chip ${view === k ? "on" : ""}`} aria-pressed={view === k} onClick={() => { setView(k); setSort({ k: k === "tasks" || k === "chats" ? "date" : "links", dir: -1 }); }}>{l}</button>)}
         {view === "tasks" && <label className="bn-check"><input type="checkbox" checked={showDone} onChange={(e) => setShowDone(e.target.checked)} />{tr("Hiện cả việc đã xong")}</label>}
       </div>
-      {rows === null ? <div className="us-empty"><span className="art-spin sm" /></div> : view === "tasks" ? (
+      {rows === null ? <div className="us-empty"><Spinner className="art-spin sm" /></div> : view === "tasks" ? (
         tasks.length ? <div className="bn-tasks">{tasks.map((r, i) => (
           <div key={`${r.title}-${i}`} className={`bn-task ${r.done ? "done" : ""}`}>
             <button className={`bn-box ${r.done ? "on" : ""}`} aria-label={r.done ? tr("Đánh dấu chưa xong") : tr("Đánh dấu đã xong")} onClick={() => toggle(r)}>{r.done && <I.Check size={10} />}</button>
@@ -810,7 +817,8 @@ function Activity({ onOpen, version }: { onOpen: Open; version: number }) {
     </header>
   );
   if (err && !rows) return <div className="bw-act-page">{head}<LoadRetry err={err} retry={() => setAgain((n) => n + 1)} /></div>;
-  if (!rows) return <div className="bw-act-page">{head}<div className="us-empty"><span className="art-spin sm" /></div></div>;
+  if (!rows) return <div className="bw-act-page">{head}<div className="us-empty"><Spinner className="art-spin sm" />
+    </div></div>;
   if (!rows.length) return <div className="bw-act-page">{head}<p className="bn-empty">{tr("Bộ não chưa học gì. Sau mỗi đoạn chat, Synchro tự học và ghi lại ở đây.")}</p></div>;
   const days = new Map<string, typeof rows>();
   for (const r of rows) { const k = dateStr(r.at); if (!days.has(k)) days.set(k, []); days.get(k)!.push(r); }
@@ -1021,7 +1029,10 @@ export function BrainWorkspace({ initial, onInitial, sideOpen = true, onSide }: 
         </div>
       </header>
       <aside className="bw-left" aria-label={tr("Khám phá bộ não")}>
-        {!g ? (loadErr ? <div className="us-empty" role="alert"><span>{tr("Không tải được Bộ não.")}</span><button className="btn sm" onClick={() => { setLoadErr(false); void load(); }}>{tr("Thử lại")}</button></div> : <div className="us-empty"><span className="art-spin sm" /></div>) : (
+        {!g ? (loadErr
+          ? <div className="us-empty" role="alert"><span>{tr("Không tải được Bộ não.")}</span>
+          <button className="btn sm" onClick={() => { setLoadErr(false); void load(); }}>{tr("Thử lại")}</button></div>
+          : <div className="us-empty"><Spinner className="art-spin sm" /></div>) : (
           <>
             {pickable.length > 0 && <div className="bk-head bw-bk"><BulkButton b={bkN} compact /></div>}
             <nav className="bw-entry">
@@ -1047,7 +1058,7 @@ export function BrainWorkspace({ initial, onInitial, sideOpen = true, onSide }: 
       </aside>
       <div className="bw-main">
         <h1 className="sr-only">{tr("Bộ não")}</h1>
-        {!g ? <div className="us-empty"><span className="art-spin sm" /></div> : <>
+        {!g ? <div className="us-empty"><Spinner className="art-spin sm" /></div> : <>
           {/* Đồ thị luôn chạy (ẩn khi xem tab khác) để quay lại vẫn y nguyên như lúc rời đi. */}
           <div className="bw-graph" hidden={tab !== "graph"}>
             <BrainGraph data={g} gs={gs} cutoff={cut} active={null} height="100%" onOpen={(t) => open(t)} onBg={() => setPanel(false)} />
@@ -1090,7 +1101,8 @@ export function BrainSettings({ memory }: { memory: React.ReactNode }) {
       </div>}
       {g ? <div className="bn-mini" role="button" tabIndex={0} aria-label={tr("Mở bộ não")} onKeyDown={rowKeys(() => openBrain())}>
         <BrainGraph data={g} gs={gs} mini height={220} onOpen={(t) => openBrain(t)} onBg={() => openBrain()} />
-      </div> : err ? <LoadRetry err={err} retry={() => void load()} /> : <div className="us-empty"><span className="art-spin sm" /></div>}
+      </div> : err ? <LoadRetry err={err} retry={() => void load()} />
+        : <div className="us-empty"><Spinner className="art-spin sm" /></div>}
       <div className="bn-acts" style={{ margin: "12px 0 18px" }}>
         <button className="btn dark" onClick={() => openBrain()}><I.Brain size={14} />{tr("Mở bộ não")}</button>
         <a className="btn" href="/api/brain/export" download><I.Download size={13} />{tr("Tải bộ não về (.zip Markdown)")}</a>

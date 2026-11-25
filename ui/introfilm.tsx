@@ -15,7 +15,8 @@
 //   Chỉ khi phim vào chế độ toàn màn hình trên màn lớn (nút Toàn màn hình của phim, màn ≥ 1280px) mới đổi sang bản
 //   1080p (19 MB), giữ nguyên vị trí đang phát (blueprint B3.5); bản 1080p tải lỗi thì quay về 720p, phim không dừng.
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { Loader, Mark, Wordmark } from "./brand";
+import { Mark, Wordmark } from "./brand";
+import { Spinner } from "./spinner";
 import { assemble, boxOf, center, fly as flyTo, markTarget, onScreen, openHole, reducedMotion, settleApp, type Box } from "./handoff";
 import { getLang, tr, trc } from "./i18n";
 import { SEEN, wantsIntro } from "./introflag";
@@ -347,7 +348,8 @@ export function IntroFilm({ uid, onCovered, onReveal, onDone }: { uid: string; o
       {!reduced && phase === "iris" && <div ref={iris} className="intro-iris" style={{ clipPath: "circle(0px at 50% 50%)", background: vig || undefined }} />}
       <div ref={stage} className="intro-stage" style={vig ? { background: vig } : undefined} onClick={() => { if (phase === "play") toggle(); }}>
         <div ref={host} className={`intro-host ${shown ? "on" : ""}`} />
-        {phase === "wait" && !seedOn && <div className="intro-load"><Loader size={34} label={tr("Đang tải phim")} /></div>}
+        {phase === "wait" && !seedOn
+          && <div className="intro-load"><Spinner size={30} className="intro-spin" label={tr("Đang tải phim")} /></div>}
         {phase === "ask" && (
           <div className="intro-ask" onClick={(e) => e.stopPropagation()}>
             <img src="/intro/synchro-intro-poster.jpg" alt="" />

@@ -8,6 +8,7 @@ import { useApp } from "./store";
 import { call, ago, fmtDate } from "./adminui";
 import { refreshModels } from "./models";
 import { ModelLogo } from "./brands";
+import { Spinner } from "./spinner";
 
 type Step = { name: "text" | "tool" | "image"; ok: boolean; note?: string };
 type Test = { at: number; ok: boolean; ms: number; steps: Step[]; error?: string };
@@ -118,7 +119,8 @@ export function ModelRegistry() {
         )}
         <div className="mr-check">
           <span className="d">{s.lastCheck ? <>Last check <span data-notr>{ago(s.lastCheck)}</span>. Synchro checks every 6 hours.</> : "Synchro checks every 6 hours."}</span>
-          <button className="btn dark" disabled={busy || !owner} onClick={check}>{busy ? <><span className="api-spin" />Checking…</> : <><I.Retry size={14} />Check now</>}</button>
+          <button className="btn dark" disabled={busy || !owner} onClick={check}>{busy
+            ? <><Spinner className="api-spin" />Checking…</> : <><I.Retry size={14} />Check now</>}</button>
         </div>
         {!owner && <p className="api-own"><I.Lock size={12} /><span>Only the Owner can turn automatic model updates on or off, check now or test a model again, since these use the Owner&apos;s API keys. You can still pin, hide or switch to a model.</span></p>}
         {s.lastError && <div className="api-err in"><I.Alert size={14} /><span>{s.lastError}</span></div>}

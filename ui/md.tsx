@@ -13,6 +13,7 @@ import { CiteText, hasCite } from "./cites";
 import { TokLine, useHighlight } from "./highlight";
 import { connectName, isConnectUrl, tidyConnectLinks } from "../shared/cxlink";
 import { ConnLogo } from "./connlogo";
+import { Spinner } from "./spinner";
 // Trang đang chạy bản giả lập ở máy cục bộ: nhận cả Connect Link của Composio giả lập.
 // Logo ứng dụng của nút Kết nối (Gmail, Google Drive → googledrive): biểu tượng trang chủ qua /api/favicon?app=…, không có thì chữ cái đầu.
 const cxSlug = (name: string) => { const s = name.toLowerCase().replace(/[^a-z0-9]/g, ""); return s.length >= 2 && s.length <= 40 ? s : ""; };
@@ -240,7 +241,8 @@ function MermaidCard({ code }: { code: string }) {
 function Visual({ lang, code, closed, say }: { lang: string; code: string; closed: boolean; say: (m: string) => void }) {
   const [h, setH] = useState(120);
   const [err, setErr] = useState("");
-  if (!closed) return <div className="viz-wait"><span className="art-spin sm" />{tr(lang === "chart" ? "Đang vẽ biểu đồ…" : lang === "mermaid" || lang === "d2" ? "Đang vẽ sơ đồ…" : "Đang tạo hình minh họa…")}</div>;
+  if (!closed) return <div className="viz-wait"><Spinner className="art-spin sm" />{tr(lang === "chart"
+    ? "Đang vẽ biểu đồ…" : lang === "mermaid" || lang === "d2" ? "Đang vẽ sơ đồ…" : "Đang tạo hình minh họa…")}</div>;
   if (lang === "chart") {
     const spec = parseChart(code);
     return typeof spec === "string" ? <><div className="viz-note">{tr("Không vẽ được biểu đồ")}: {spec}</div><Code lang="json" code={code} say={say} idx={0} /></> : <ChartView spec={spec} />;

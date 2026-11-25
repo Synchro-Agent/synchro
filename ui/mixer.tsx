@@ -12,6 +12,7 @@ import { chatHistory, mixExtra } from "./history";
 import { fileContext } from "./filestate";
 import type { Chat } from "./store";
 import { useChatStore } from "./chatstore.client";
+import { Spinner } from "./spinner";
 
 const HOT = 32_000;
 const LABEL: Record<CtxBlock["key"], string> = {
@@ -118,14 +119,17 @@ export function ContextMixer({ chat, studio, recentSkills, busy, onChange, say }
         <div className="cx-pop" role="dialog" aria-label={tr("Bàn trộn ngữ cảnh")}>
           <div className="cx-h"><b>{tr("Ngữ cảnh của lượt tiếp theo")}</b><span>{tr("Ước tính")} ≈ <b data-notr>{total.toLocaleString(locale())}</b> token</span></div>
           {hot && <div className="cx-hot"><I.Alert size={14} /><span>{tr("Ngữ cảnh đã lớn: trả lời chậm hơn và tốn hơn. Nén lịch sử để gọn lại.")}</span></div>}
-          {!est ? <div className="cx-load"><span className="art-spin sm" /></div> : TIER.map(([tier, name, hint]) => (
+          {!est ? <div className="cx-load"><Spinner className="art-spin sm" /></div>
+            : TIER.map(([tier, name, hint]) => (
             <div key={tier} className="cx-tier">
               <div className="cx-tier-h"><b>{tr(name)}</b><span>{tr(hint)}</span></div>
               {est.blocks.filter((b) => b.tier === tier && (b.tokens > 0 || b.key === "tools" || b.key === "artifacts" || b.key === "pinned" || b.key === "history")).map(row)}
               {tier === "static" && (
                 <div className="cx-pins">
                   {(chat.pins ?? []).map((p) => <span key={p.name} className="cx-chip" data-notr><I.Pin size={12} />{p.name}<button aria-label={tr("Bỏ ghim")} onClick={() => onChange({ pins: (chat.pins ?? []).filter((x) => x.name !== p.name) })}><I.X size={11} /></button></span>)}
-                  {files.slice(0, 6).map((f) => <button key={f} className="cx-chip add" disabled={!!work} onClick={() => pin(f)} data-notr>{work === "pin:" + f ? <span className="art-spin sm" /> : <I.Plus size={12} />}{tr("Ghim")} {f}</button>)}
+                  {files.slice(0, 6).map((f) => <button key={f} className="cx-chip add" disabled={!!work}
+                    onClick={() => pin(f)} data-notr>{work === "pin:" + f ? <Spinner
+                    className="art-spin sm" /> : <I.Plus size={12} />}{tr("Ghim")} {f}</button>)}
                   {!chat.pins?.length && !files.length && <span className="cx-note">{tr("Đính kèm tệp vào đoạn chat rồi ghim để tệp luôn có trong ngữ cảnh.")}</span>}
                 </div>
               )}
@@ -136,7 +140,10 @@ export function ContextMixer({ chat, studio, recentSkills, busy, onChange, say }
                   </span>
                   {chat.compact && <button className="lnk" onClick={() => onChange({ compact: undefined })}>{tr("Bỏ nén")}</button>}
                   <span style={{ flex: 1 }} />
-                  <button className={`btn ${hot ? "dark" : ""}`} disabled={!!work || histCount <= KEEP} onClick={compact} title={tr("Tóm tắt các lượt cũ (giữ 4 tin gần nhất)")}>{work === "compact" ? <span className="art-spin sm" /> : <I.Sparkle size={13} />}{tr("Nén lịch sử")}</button>
+                  <button className={`btn ${hot ? "dark" : ""}`} disabled={!!work
+                    || histCount <= KEEP} onClick={compact} title={tr("Tóm tắt các lượt cũ (giữ 4 tin gần nhất)")}>
+                    {work === "compact" ? <Spinner className="art-spin sm" />
+                    : <I.Sparkle size={13} />}{tr("Nén lịch sử")}</button>
                 </div>
               )}
             </div>

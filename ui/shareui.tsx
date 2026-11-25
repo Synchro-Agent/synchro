@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import * as I from "./icons";
 import { locale, tr } from "./i18n";
 import type { Chat } from "./store";
+import { Spinner } from "./spinner";
 
 export type ShareInfo = { token: string; conv: string; title: string; size: number; createdAt: number; updatedAt: number };
 const urlOf = (token: string) => `${location.origin}/share/${token}`;
@@ -52,7 +53,8 @@ export function ShareModal({ chat, onClose, say }: { chat: Chat; onClose: () => 
         <div className="sy-mh"><h2>Chia sẻ đoạn chat</h2><button className="icon-btn sy-x" onClick={onClose} aria-label="Đóng"><I.X size={15} /></button></div>
         <div className="sy-mb sy-share">
           <p className="sy-sub" data-notr>{chat.title}</p>
-          {chat.inc ? <p className="sh-hint">Đoạn chat ẩn danh không chia sẻ được.</p> : cur === undefined ? <p className="sh-hint"><span className="art-spin sm" /></p> : cur ? (<>
+          {chat.inc ? <p className="sh-hint">Đoạn chat ẩn danh không chia sẻ được.</p> : cur === undefined
+            ? <p className="sh-hint"><Spinner className="art-spin sm" /></p> : cur ? (<>
             <p className="sh-hint"><I.Globe size={14} /> Bất kỳ ai có liên kết đều xem được bản chụp này, không cần đăng nhập. Tin nhắn sau thời điểm chụp không tự thêm vào.</p>
             <div className="sh-link"><input readOnly aria-label="Liên kết chia sẻ" value={urlOf(cur.token)} onFocus={(e) => e.target.select()} data-notr />
               <button className="btn" onClick={() => copyText(urlOf(cur.token)).then((ok) => say(ok ? "Đã sao chép liên kết" : "Không sao chép được, hãy chép tay"))}>Sao chép</button></div>
@@ -84,7 +86,7 @@ export function SharedChats({ say, confirm }: { say: (m: string) => void; confir
     send("DELETE", `/api/share?token=${encodeURIComponent(s.token)}`).then(() => { setList((l) => l?.filter((x) => x.token !== s.token) ?? null); say("Đã dừng chia sẻ"); }).catch((e) => say((e as Error).message));
   });
   if (err) return <div className="empty">{tr(err)} <button className="lnk" onClick={load}>Thử lại</button></div>;
-  if (!list) return <div className="empty"><span className="art-spin sm" /></div>;
+  if (!list) return <div className="empty"><Spinner className="art-spin sm" /></div>;
   if (!list.length) return <div className="empty">No shared chats.</div>;
   return <>{list.map((s) => (
     <div key={s.token} className="item-row sh-row">
