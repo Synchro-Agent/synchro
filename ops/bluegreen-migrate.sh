@@ -18,8 +18,9 @@ SIDE="$(dirname "$APP")"
 . "$(dirname "${BASH_SOURCE[0]}")/bluegreen-lib.sh"
 [ "$(id -u)" = 0 ] || { echo "Chạy bằng root." >&2; exit 1; }
 [ -f "$APP/ecosystem.config.cjs" ] || { echo "Thiếu $APP/ecosystem.config.cjs: deploy bản có xanh/lam trước (bằng cách cũ), rồi chạy lại." >&2; exit 1; }
+# Cùng tệp khóa với server-build.sh và watchdog.sh; DEPLOY_LOCK đổi chỗ đặt khóa (đặt cùng giá trị cho cả ba script).
 if command -v flock >/dev/null 2>&1; then
-  exec 9>/run/synchro-deploy.lock
+  exec 9>"${DEPLOY_LOCK:-/run/synchro-deploy.lock}"
   flock -w 900 9 || { echo "Đang có lần deploy khác." >&2; exit 1; }
 fi
 say() { echo "• $*"; }
