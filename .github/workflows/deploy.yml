@@ -70,7 +70,7 @@ jobs:
             echo "pub=$( (env | grep -E '^(NEXT_PUBLIC_[A-Z0-9_]*|APP_URL|SYNCHRO_FIXED_LANG)=' || true) | LC_ALL=C sort | sha1sum | cut -d' ' -f1)"
             echo "dist=.next-ci"
             echo "tgz=$(sha256sum synchro-artifact/next.tgz | cut -d' ' -f1)"; } > synchro-artifact/meta
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: github.ref_name == 'main'
         with:
           name: next-build
@@ -107,7 +107,7 @@ jobs:
           { echo "commit ${{ github.sha }} · ${{ job.status }} · $(date -u '+%Y-%m-%d %H:%M UTC')"
             [ -f tests.log ] && { echo; echo "━━ Các kiểm tra lỗi"; grep -n -B1 "✗" tests.log | cut -c1-600; }
             for f in tsc.log lint-errors.log lint.log build.log tests.log mock.log audit.log; do [ -f $f ] && { echo; echo "━━ $f"; tail -150 $f; }; done; } > ci.txt
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: ci-result
