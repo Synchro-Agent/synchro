@@ -1,0 +1,124 @@
+{
+  "v": 1,
+  "id": "doc-017",
+  "domain": "doc",
+  "title": "Báo cáo chỉ số AI: trang thư mở đầu, khối chữ thân rộng, lề lớn",
+  "moods": [
+    "clean-light",
+    "editorial",
+    "swiss-precise"
+  ],
+  "industries": [
+    "education",
+    "ai"
+  ],
+  "audience": [
+    "public",
+    "b2b"
+  ],
+  "source_url": "https://hai.stanford.edu/ai-index/2025-ai-index-report",
+  "source_host": "hai.stanford.edu",
+  "source_kind": "public-image",
+  "credit": "Stanford HAI, AI Index Report 2025, thư mở đầu",
+  "captured_at": "2026-11-20",
+  "image": {
+    "file": "doc/doc-017.webp",
+    "width": 1280,
+    "height": 1600,
+    "bytes": 89734,
+    "layout": "single"
+  },
+  "tokens": {
+    "theme": "light",
+    "colors": [
+      {
+        "hex": "#ffffff",
+        "role": "bg",
+        "share": 0.909
+      },
+      {
+        "hex": "#1a1a1a",
+        "role": "ink",
+        "share": 0
+      },
+      {
+        "hex": "#555555",
+        "role": "muted",
+        "share": 0
+      },
+      {
+        "hex": "#1e5bd6",
+        "role": "accent",
+        "share": 0
+      }
+    ],
+    "fonts": {
+      "head": {
+        "kit": "archivo",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 400
+      },
+      "body": {
+        "kit": "archivo",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 400
+      },
+      "mono": null
+    },
+    "type": {
+      "basePx": 15,
+      "ratio": 1.333,
+      "sizes": [
+        28,
+        18,
+        15,
+        10
+      ],
+      "headLine": 1.2,
+      "bodyLine": 1.45,
+      "headCase": "none"
+    },
+    "tracking": {
+      "display": 0,
+      "heading": 0,
+      "body": 0,
+      "label": 0
+    },
+    "radius": {
+      "outer": 0,
+      "inner": 0,
+      "pill": false
+    },
+    "shadow": {
+      "level": 0,
+      "css": "none"
+    },
+    "spacing": {
+      "unit": 8,
+      "section": 48,
+      "gutter": 24,
+      "density": "airy"
+    },
+    "layout": {
+      "columns": 2,
+      "maxWidth": 1000,
+      "align": "left",
+      "emptyShare": 0.35
+    },
+    "imagery": {
+      "kind": "type-only",
+      "share": 0,
+      "light": "",
+      "lens": "",
+      "grade": "",
+      "subject": ""
+    }
+  },
+  "measured": [
+    "theme"
+  ],
+  "why": "Trang A4 trắng, tiêu đề 28 px nét thường đặt trái, chữ thân 11 pt dòng 1,45 thành một khối rộng với lề lớn hai bên. Cả trang chỉ có chữ đen trên trắng, không hình, không trang trí, chữ ký và chức danh ở cuối. Khoảng trống phía trên tiêu đề lớn hơn khoảng giữa các đoạn, tạo cảm giác trang trọng. Mượn trang thư mở đầu nghiêm, lề rộng và khối chữ đều; không chép nội dung.",
+  "licence": "Ảnh chụp thu nhỏ của trang công khai, chỉ để model tham khảo nguyên tắc. Không chép logo, chữ, ảnh hay phông độc quyền của trang."
+}

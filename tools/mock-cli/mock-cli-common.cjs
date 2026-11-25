@@ -238,6 +238,47 @@ ${slide(4, "Gọi vốn 3 tỷ đồng để mở 12 micro-hub", 2)}
 </body></html>
 </artifact>`;
 }
+// "#sxmix": sản phẩm thiết kế dán đúng khối CSS trộn của <design_refs>, để vòng so với mẫu chạy được trên máy giả
+// lập. Bản nào cũng thiếu hình chủ đạo (người chấm giả luôn chê) nên kiểm được trần số vòng. Lời nhắc <design_review>
+// nối tiếp phiên, không nhắc lại đề: khối CSS và cờ đọc từ các lượt trước của phiên (past).
+function sxMix(prompt, past) {
+  const all = [...past, prompt].join("\n");
+  const round = Number(/<design_review round="(\d+)\//.exec(prompt)?.[1] ?? 0);
+  if (!all.includes("#sxmix") || (!round && !prompt.includes("#sxmix"))) return null;
+  const style = /<style data-sx-mix="[^"]+"[^>]*>[\s\S]*?<\/style>/.exec(all)?.[0] ?? "";
+  const head = /<design_refs mix="([^"]+)" preset="([^"]+)"/.exec(all);
+  const attrs = head ? ` data-sx-preset="${head[2]}" data-sx-mix="${head[1]}"` : "";
+  const img = /"url":"(https?:[^"]+)"|(https?:\/\/[^\s"<>]+\.(?:png|jpe?g|webp))/.exec(all);
+  const pic = img ? `<img src="${img[1] ?? img[2]}" alt="" style="width:40%;height:auto">` : "";
+  const fix = round ? ` (bản sửa ${round})` : "";
+  const lead = round ? `Đã sửa theo vòng chấm ${round}.` : "Định hướng: bảng màu và bố cục theo Mẫu 1, chữ theo Mẫu 2.";
+  return `${lead}\n<artifact identifier="sx-mix" type="text/html" title="Trang thử bộ trộn">
+<!doctype html><html${attrs}><head><meta charset="utf-8">${style}</head>
+<body style="margin:0;background:var(--sx-bg);color:var(--sx-ink);font-family:var(--sx-body)">
+<main style="padding:64px"><h1 style="font-family:var(--sx-head);font-size:72px;margin:0">Trà đồi sương${fix}</h1>
+<p style="max-width:560px">Trà ô long hái tay trên đồi Cầu Đất, sao lửa nhỏ.</p>${pic}</main></body></html>
+</artifact>`;
+}
+// "#sxhero": gọi generate_image bằng câu lệnh mẫu mà luật hình chủ đạo đưa (thay chủ thể), như model thật làm theo.
+function heroAsk(prompt) {
+  if (!prompt.includes("#sxhero")) return null;
+  const tpl = /Câu lệnh mẫu \(tiếng Anh, thay chủ thể\): "([^"]+)"/.exec(prompt)?.[1];
+  if (!tpl) return null;
+  const aspect = /aspect_ratio ([\d:]+)/.exec(prompt)?.[1] ?? "16:9";
+  const args = { prompt: tpl.replace("<subject from the brief>", "Oolong tea hills"), aspect_ratio: aspect };
+  return { name: "generate_image", args };
+}
+// Người chấm thiết kế giả (designcritic.ts CRITIC_SYSTEM): trả đúng JSON ba vai, ghi số ảnh nhận được để kiểm thử thấy
+// bảng so sánh tới nơi; luôn có một mục mức cao để vòng sửa chạy tới trần.
+function criticReply(text, media) {
+  if (!/giám khảo thiết kế|^Đề bài:\n/m.test(text)) return null;
+  const refs = (text.match(/^Mẫu \d+: /gm) ?? []).length;
+  const hi = {
+    where: "khung đầu", property: "image", measured: `chưa có hình chủ đạo (đã xem ${media.length} ảnh, ${refs} mẫu)`,
+    target: "hình lớn từ 25% khung", fix: "thêm ảnh hero có data-sx-hero", severity: "high",
+  };
+  return JSON.stringify({ brief: [hi], quality: [], impact: [], keep: ["bảng màu theo Mẫu 1"] });
+}
 function reply(name, prompt, turn) {
   if (prompt.includes("#sxkit")) return sxKit();
   if (prompt.includes("#deck4")) return deck4();
@@ -376,3 +417,6 @@ module.exports = { oauthTurn, version, gate, sxKit, TINY_JPEG, tinyPng, isImageT
 module.exports.pjSession = pjSession;
 module.exports.cliPatch = cliPatch;
 module.exports.deck4 = deck4;
+module.exports.sxMix = sxMix;
+module.exports.criticReply = criticReply;
+module.exports.heroAsk = heroAsk;

@@ -1,0 +1,161 @@
+{
+  "v": 1,
+  "id": "dashboard-040",
+  "domain": "dashboard",
+  "title": "Bảng phân tích tím nhạt: thẻ gradient và vòng tiến độ",
+  "moods": [
+    "clean-light",
+    "playful",
+    "data-dense"
+  ],
+  "industries": [
+    "ecommerce",
+    "tech-saas"
+  ],
+  "audience": [
+    "internal",
+    "b2b"
+  ],
+  "source_url": "https://demos.pixinvent.com/vuexy-html-admin-template/html/vertical-menu-template/",
+  "source_host": "demos.pixinvent.com",
+  "source_kind": "public-page",
+  "captured_at": "2026-11-20",
+  "image": {
+    "file": "dashboard/dashboard-040.webp",
+    "width": 1280,
+    "height": 1600,
+    "bytes": 87826,
+    "layout": "single"
+  },
+  "tokens": {
+    "theme": "light",
+    "colors": [
+      {
+        "hex": "#ffffff",
+        "role": "bg",
+        "share": 0.785
+      },
+      {
+        "hex": "#e9e7fd",
+        "role": "surface",
+        "share": 0
+      },
+      {
+        "hex": "#ddf6e8",
+        "role": "raised",
+        "share": 0
+      },
+      {
+        "hex": "#444050",
+        "role": "ink",
+        "share": 0.011
+      },
+      {
+        "hex": "#6d6b77",
+        "role": "muted",
+        "share": 0.005
+      },
+      {
+        "hex": "#7367f0",
+        "role": "accent",
+        "share": 0.095
+      },
+      {
+        "hex": "#28c76f",
+        "role": "accent2",
+        "share": 0
+      },
+      {
+        "hex": "#e6e6e8",
+        "role": "line",
+        "share": 0.042
+      },
+      {
+        "hex": "#28c76f",
+        "role": "pos",
+        "share": 0
+      },
+      {
+        "hex": "#ff4c51",
+        "role": "neg",
+        "share": 0.004
+      }
+    ],
+    "fonts": {
+      "head": {
+        "kit": "archivo",
+        "seen": "Public Sans",
+        "seenLicence": "open",
+        "weight": 500
+      },
+      "body": {
+        "kit": "archivo",
+        "seen": "Public Sans",
+        "seenLicence": "open",
+        "weight": 400
+      },
+      "mono": null
+    },
+    "type": {
+      "basePx": 15,
+      "ratio": 1.363,
+      "sizes": [
+        38,
+        24,
+        18,
+        15,
+        13
+      ],
+      "headLine": 1.47,
+      "bodyLine": 1.47,
+      "headCase": "none"
+    },
+    "tracking": {
+      "display": 0,
+      "heading": 0,
+      "body": 0,
+      "label": 0.022
+    },
+    "radius": {
+      "outer": 6,
+      "inner": 6,
+      "pill": true
+    },
+    "shadow": {
+      "level": 2,
+      "css": "rgba(47, 43, 61, 0.14) 0px 3px 12px 0px"
+    },
+    "spacing": {
+      "unit": 8,
+      "section": 72,
+      "gutter": 8,
+      "density": "balanced"
+    },
+    "layout": {
+      "columns": 3,
+      "maxWidth": 970,
+      "align": "left",
+      "emptyShare": 0.4
+    },
+    "imagery": {
+      "kind": "data",
+      "share": 0.5,
+      "light": "",
+      "lens": "",
+      "grade": "",
+      "subject": ""
+    }
+  },
+  "measured": [
+    "theme",
+    "colors",
+    "type",
+    "tracking",
+    "radius",
+    "shadow",
+    "spacing",
+    "layout"
+  ],
+  "why": "Thẻ đầu gradient tím #7367f0 với vật thể 3D, các thẻ trắng bo 6 px bóng bậc 2 chứa cột tím, vòng tiến độ 85% và danh sách quốc gia có cờ. Nền trắng, chữ xám tím #444050, lưới 8 px. Nhấn phụ xanh lá #28c76f cho tăng trưởng. Mượn cách dùng một màu thương hiệu tím xuyên suốt các biểu đồ; không chép số liệu.",
+  "licence": "Ảnh chụp thu nhỏ của trang công khai, chỉ để model tham khảo nguyên tắc. Không chép logo, chữ, ảnh hay phông độc quyền của trang."
+}

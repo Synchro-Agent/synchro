@@ -1,0 +1,154 @@
+{
+  "v": 1,
+  "id": "dashboard-011",
+  "domain": "dashboard",
+  "title": "Bảng chiến dịch nền tối: biểu đồ vùng nhiều màu và luồng Sankey",
+  "moods": [
+    "dark-cinematic",
+    "data-dense",
+    "energetic"
+  ],
+  "industries": [
+    "tech-saas",
+    "media-publishing"
+  ],
+  "audience": [
+    "b2b"
+  ],
+  "source_url": "https://apexcharts.com/javascript-chart-demos/dashboards/dark/",
+  "source_host": "apexcharts.com",
+  "source_kind": "public-page",
+  "captured_at": "2026-11-20",
+  "image": {
+    "file": "dashboard/dashboard-011.webp",
+    "width": 1280,
+    "height": 1600,
+    "bytes": 88592,
+    "layout": "single"
+  },
+  "tokens": {
+    "theme": "dark",
+    "colors": [
+      {
+        "hex": "#111827",
+        "role": "bg",
+        "share": 0
+      },
+      {
+        "hex": "#1f2937",
+        "role": "surface",
+        "share": 0
+      },
+      {
+        "hex": "#f9fafb",
+        "role": "ink",
+        "share": 0
+      },
+      {
+        "hex": "#9ca3af",
+        "role": "muted",
+        "share": 0
+      },
+      {
+        "hex": "#00e396",
+        "role": "accent",
+        "share": 0
+      },
+      {
+        "hex": "#374151",
+        "role": "line",
+        "share": 0
+      },
+      {
+        "hex": "#273244",
+        "role": "raised",
+        "share": 0
+      },
+      {
+        "hex": "#775dd0",
+        "role": "accent2",
+        "share": 0
+      }
+    ],
+    "fonts": {
+      "head": {
+        "kit": "inter",
+        "seen": "Inter",
+        "seenLicence": "open",
+        "weight": 700
+      },
+      "body": {
+        "kit": "inter",
+        "seen": "Inter",
+        "seenLicence": "open",
+        "weight": 600
+      },
+      "mono": {
+        "kit": "jetbrains-mono",
+        "seen": "monospace",
+        "seenLicence": "unknown",
+        "weight": 400
+      }
+    },
+    "type": {
+      "basePx": 16,
+      "ratio": 1.31,
+      "sizes": [
+        36,
+        30,
+        16,
+        14,
+        12
+      ],
+      "headLine": 1.25,
+      "bodyLine": 1.63,
+      "headCase": "none"
+    },
+    "tracking": {
+      "display": -0.025,
+      "heading": -0.025,
+      "body": 0,
+      "label": 0
+    },
+    "radius": {
+      "outer": 8,
+      "inner": 8,
+      "pill": false
+    },
+    "shadow": {
+      "level": 1,
+      "css": "rgba(0, 0, 0, 0.04) 0px 1px 3px 0px, rgba(0, 0, 0, 0.03) 0px 1px 2px -1px"
+    },
+    "spacing": {
+      "unit": 4,
+      "section": 120,
+      "gutter": 8,
+      "density": "airy"
+    },
+    "layout": {
+      "columns": 2,
+      "maxWidth": 1200,
+      "align": "center",
+      "emptyShare": 0.65
+    },
+    "imagery": {
+      "kind": "data",
+      "share": 0.6,
+      "light": "",
+      "lens": "",
+      "grade": "",
+      "subject": ""
+    }
+  },
+  "measured": [
+    "fonts",
+    "type",
+    "tracking",
+    "radius",
+    "shadow",
+    "spacing",
+    "layout"
+  ],
+  "why": "Bảng tối #111827 với biểu đồ vùng xếp chồng xanh ngọc, tím và cam, một vòng tròn 77% viền phát sáng và biểu đồ luồng Sankey bên dưới. Thẻ bo 8 px trên nền #1f2937, chữ trắng 16 px, con số 30 px. Nhiều màu nhưng mỗi màu gắn một kênh cố định. Mượn cách gán màu cố định theo kênh trên nền tối; không chép số liệu.",
+  "licence": "Ảnh chụp thu nhỏ của trang công khai, chỉ để model tham khảo nguyên tắc. Không chép logo, chữ, ảnh hay phông độc quyền của trang."
+}

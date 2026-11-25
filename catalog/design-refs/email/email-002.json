@@ -1,0 +1,123 @@
+{
+  "v": 1,
+  "id": "email-002",
+  "domain": "email",
+  "title": "Thư khuyến mãi đèn thiết kế: ảnh sản phẩm trên nền trắng, chữ hoa mảnh",
+  "moods": [
+    "luxury",
+    "minimal-mono",
+    "clean-light"
+  ],
+  "industries": [
+    "real-estate-interior",
+    "ecommerce"
+  ],
+  "audience": [
+    "premium"
+  ],
+  "source_url": "https://reallygoodemails.com/emails/flos-black-friday-sale",
+  "source_host": "reallygoodemails.com",
+  "source_kind": "public-image",
+  "captured_at": "2026-11-20",
+  "image": {
+    "file": "email/email-002.webp",
+    "width": 680,
+    "height": 1600,
+    "bytes": 70742,
+    "layout": "single"
+  },
+  "tokens": {
+    "theme": "light",
+    "colors": [
+      {
+        "hex": "#ffffff",
+        "role": "bg",
+        "share": 0.408
+      },
+      {
+        "hex": "#060607",
+        "role": "ink",
+        "share": 0.257
+      },
+      {
+        "hex": "#212020",
+        "role": "muted",
+        "share": 0.064
+      },
+      {
+        "hex": "#6c502b",
+        "role": "accent",
+        "share": 0.04
+      }
+    ],
+    "fonts": {
+      "head": {
+        "kit": "archivo",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 600
+      },
+      "body": {
+        "kit": "archivo",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 400
+      },
+      "mono": null
+    },
+    "type": {
+      "basePx": 15,
+      "ratio": 1.414,
+      "sizes": [
+        40,
+        20,
+        15,
+        12
+      ],
+      "headLine": 1.1,
+      "bodyLine": 1.6,
+      "headCase": "upper"
+    },
+    "tracking": {
+      "display": -0.04,
+      "heading": -0.02,
+      "body": 0,
+      "label": 0
+    },
+    "radius": {
+      "outer": 0,
+      "inner": 0,
+      "pill": false
+    },
+    "shadow": {
+      "level": 0,
+      "css": "none"
+    },
+    "spacing": {
+      "unit": 8,
+      "section": 48,
+      "gutter": 24,
+      "density": "airy"
+    },
+    "layout": {
+      "columns": 1,
+      "maxWidth": 600,
+      "align": "center",
+      "emptyShare": 0.3
+    },
+    "imagery": {
+      "kind": "photo",
+      "share": 0.4,
+      "light": "soft overhead studio light, gentle falloff",
+      "lens": "85mm product, straight-on",
+      "grade": "cool greys with warm wood",
+      "subject": "a designer table lamp on a plinth"
+    }
+  },
+  "measured": [
+    "theme",
+    "colors"
+  ],
+  "why": "Thư rộng 680 px, mở bằng một dòng chữ hoa lớn mảnh trên ảnh chiếc đèn đặt giữa nền xám nhạt, rồi một đoạn chữ ngắn căn giữa và một nút đen nhỏ. Chỉ đen, trắng và màu gỗ #6c502b của chính sản phẩm. Mỗi khối là một ảnh lớn cộng một câu, không cột phụ. Mượn nhịp một ảnh, một câu, một nút cho hàng cao cấp; không chép tên hãng hay ảnh.",
+  "licence": "Ảnh chụp thu nhỏ của trang công khai, chỉ để model tham khảo nguyên tắc. Không chép logo, chữ, ảnh hay phông độc quyền của trang."
+}

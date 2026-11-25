@@ -117,8 +117,8 @@ const loginFile = path.join(dir, ".mock-login");
     // Như Claude Code thật với --mcp-config: nhận cả chuỗi JSON lẫn ĐƯỜNG DẪN TỆP (Synchro gửi token MCP qua tệp 0600, không qua tham số).
     const cfgJson = (() => { let v = C.flag(a, "--mcp-config") ?? "null"; try { if (v !== "null" && fs.existsSync(v)) v = fs.readFileSync(v, "utf8"); } catch {} try { return JSON.parse(v); } catch { return null; } })();
     const mcpUrl = cfgJson?.mcpServers?.synchro?.url;
-    const ask = C.toolAsk(prompt), allowed = (C.flag(a, "--allowedTools") ?? "").split(",");
-    let mcpNote = "";
+    const ask = C.toolAsk(prompt) ?? C.heroAsk(prompt), allowed = (C.flag(a, "--allowedTools") ?? "").split(",");
+    let mcpNote = "", toolOut = "";
     if (mcpUrl) {
       if (ask && allowed.includes("mcp__synchro")) {
         // [mock:dieaftertool]: như model gọi công cụ ngay không có câu dẫn, rồi tiến trình chết trước khi viết chữ nào (Synchro không được chạy lại lượt: công cụ đã chạy).
@@ -129,6 +129,7 @@ const loginFile = path.join(dir, ".mock-login");
         C.out({ type: "assistant", message: { role: "assistant", content: [{ type: "tool_use", id: "toolu_mock", name: `mcp__synchro__${ask.name}`, input: ask.args }] }, session_id: sid });
         const r = await C.mcp(mcpUrl, ask).catch((e) => ({ error: { message: String(e) } }));
         const out = r.error ? `lỗi ${r.error.message}` : (r.result?.content ?? []).map((c) => c.text).join("\n");
+        toolOut = out;
         mcpNote = ` [đã dùng ${ask.name}: ${out.replace(/\s+/g, " ").slice(0, 160)}]`;
         if (die) process.exit(1);
         if (prompt.includes("[mock:quotaonce]")) { await delta("Đã chạy công cụ, phần còn lại chưa xong."); result({ subtype: "success", is_error: true, result: "You've hit your usage limit" }); process.exit(1); }
@@ -165,11 +166,18 @@ const loginFile = path.join(dir, ".mock-login");
       return;
     }
     const web = (C.flag(a, "--tools") ?? "").includes("WebSearch") ? " [tìm web]" : "";
+    // #sxmix: trang dựng từ khối CSS trộn; lượt <design_review> đọc đề và khối CSS từ các lượt trước của phiên.
+    const past = fs.readFileSync(path.join(dir, "projects", "mock", `${sid}.jsonl`), "utf8").split("\n")
+      .filter(Boolean).map((l) => JSON.parse(l).prompt);
+    const sx = C.sxMix(prompt, [...past, toolOut]);
     // Cho kiểm thử biết Synchro có gửi kèm hướng dẫn artifact (--append-system-prompt) hay không.
     const text = /#pid/.test(prompt) ? `PID ${process.pid} lượt ${turn} hệ thống ${(SYS ?? "").length} ký tự` : /\[\[CAN_CONG_CU\]\]/.test(SYS ?? "") && /needtools/.test(prompt) ? "[[CAN_CONG_CU]]" : /#media/.test(prompt) && !C.isTitleAsk(prompt) && !C.mockBrain(prompt) ? C.mediaReply(media) : C.mockBrain(prompt) ?? (C.isTitleAsk(prompt) ? C.mockTitle(prompt) : /#prefs/.test(prompt) ? C.prefsEcho(`${SYS ?? ""}\n${prompt}`) : /#toprule/.test(prompt) ? C.ruleEcho(SYS ?? "") : /#pjins/.test(prompt) ? C.pjEcho(SYS ?? "") : C.reply("Claude", prompt, turn) + mcpNote + web + (/<artifacts>/.test(SYS ?? "") ? " [có hướng dẫn artifact]" : "") + (C.flag(a, "--effort") ? ` [effort ${C.flag(a, "--effort")}]` : ""));
-    await delta(text);
-    C.out({ type: "assistant", message: { role: "assistant", content: [{ type: "text", text }] }, session_id: sid });
-    result({ subtype: "success", is_error: false, result: text, usage: { input_tokens: prompt.length, output_tokens: text.length, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 } });
+    const said = sx ? sx + mcpNote : text;
+    await delta(said);
+    const message = { role: "assistant", content: [{ type: "text", text: said }] };
+    C.out({ type: "assistant", message, session_id: sid });
+    const usage = { input_tokens: prompt.length, output_tokens: said.length, cache_read_input_tokens: 0 };
+    result({ subtype: "success", is_error: false, result: said, usage: { ...usage, cache_creation_input_tokens: 0 } });
     }
   }
   console.error(`mock claude: không hỗ trợ "${a.join(" ")}"`);

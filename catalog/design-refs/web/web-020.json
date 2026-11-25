@@ -1,0 +1,152 @@
+{
+  "v": 1,
+  "id": "web-020",
+  "domain": "web",
+  "title": "Thiết bị điện tử trong suốt trên nền xám nhạt",
+  "moods": [
+    "minimal-mono",
+    "tech",
+    "clean-light"
+  ],
+  "industries": [
+    "ecommerce",
+    "tech-saas"
+  ],
+  "audience": [
+    "youth",
+    "consumer"
+  ],
+  "source_url": "https://nothing.tech/",
+  "source_host": "nothing.tech",
+  "source_kind": "public-page",
+  "captured_at": "2026-11-20",
+  "image": {
+    "file": "web/web-020.webp",
+    "width": 1280,
+    "height": 1600,
+    "bytes": 86936,
+    "layout": "single"
+  },
+  "tokens": {
+    "theme": "light",
+    "colors": [
+      {
+        "hex": "#f4f4f4",
+        "role": "bg",
+        "share": 0
+      },
+      {
+        "hex": "#ededed",
+        "role": "surface",
+        "share": 0.134
+      },
+      {
+        "hex": "#fdfdfd",
+        "role": "raised",
+        "share": 0.153
+      },
+      {
+        "hex": "#040404",
+        "role": "ink",
+        "share": 0
+      },
+      {
+        "hex": "#595a5a",
+        "role": "muted",
+        "share": 0
+      },
+      {
+        "hex": "#ffc700",
+        "role": "accent",
+        "share": 0.018
+      },
+      {
+        "hex": "#e16393",
+        "role": "accent2",
+        "share": 0.014
+      }
+    ],
+    "fonts": {
+      "head": {
+        "kit": "source-serif-4",
+        "seen": "NType82-Regular",
+        "seenLicence": "unknown",
+        "weight": 300
+      },
+      "body": {
+        "kit": "jetbrains-mono",
+        "seen": "Geist Mono Variable",
+        "seenLicence": "open",
+        "weight": 400
+      },
+      "mono": {
+        "kit": "jetbrains-mono",
+        "seen": "Geist Mono Variable",
+        "seenLicence": "open",
+        "weight": 400
+      }
+    },
+    "type": {
+      "basePx": 14,
+      "ratio": 1.361,
+      "sizes": [
+        48,
+        32,
+        20,
+        16,
+        14,
+        12
+      ],
+      "headLine": 1,
+      "bodyLine": 1.25,
+      "headCase": "none"
+    },
+    "tracking": {
+      "display": 0,
+      "heading": 0,
+      "body": 0,
+      "label": 0
+    },
+    "radius": {
+      "outer": 8,
+      "inner": 4,
+      "pill": false
+    },
+    "shadow": {
+      "level": 0,
+      "css": "none"
+    },
+    "spacing": {
+      "unit": 8,
+      "section": 64,
+      "gutter": 16,
+      "density": "balanced"
+    },
+    "layout": {
+      "columns": 4,
+      "maxWidth": 640,
+      "align": "left",
+      "emptyShare": 0
+    },
+    "imagery": {
+      "kind": "photo",
+      "share": 1,
+      "light": "soft overhead studio light, gentle reflections",
+      "lens": "macro 100mm, close crop",
+      "grade": "cool neutral greys with pink accents",
+      "subject": "transparent earbuds and headphones on grey"
+    }
+  },
+  "measured": [
+    "theme",
+    "colors",
+    "type",
+    "tracking",
+    "radius",
+    "shadow",
+    "spacing",
+    "layout"
+  ],
+  "why": "Ảnh sản phẩm trong suốt cận cảnh trên nền xám #f4f4f4, chữ đen kiểu ma trận chấm và chữ đơn cách nhỏ, không bóng. Màu chỉ đến từ chính sản phẩm: một điểm hồng và một điểm vàng. Lưới 4 cột sản phẩm bên dưới đều nhau, bo 8 px. Mượn sự tiết chế đơn sắc để vật liệu sản phẩm tự nói; không chép kiểu chữ chấm hay sản phẩm.",
+  "licence": "Ảnh chụp thu nhỏ của trang công khai, chỉ để model tham khảo nguyên tắc. Không chép logo, chữ, ảnh hay phông độc quyền của trang."
+}

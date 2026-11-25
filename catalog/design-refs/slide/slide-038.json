@@ -1,0 +1,122 @@
+{
+  "v": 1,
+  "id": "slide-038",
+  "domain": "slide",
+  "title": "Báo cáo xu hướng sáng tạo: tượng cổ đeo kính màu, ảnh cắt dán chói, chữ đen đậm",
+  "moods": [
+    "bold-color",
+    "playful",
+    "energetic"
+  ],
+  "industries": [
+    "media-publishing",
+    "tech-saas"
+  ],
+  "audience": [
+    "b2b",
+    "youth"
+  ],
+  "source_url": "https://business.adobe.com/assets/pdfs/resources/reports/creative-trends-report-2025/media_1870e72bdf93d7292b6cb1be897fb202612c8b2a2.pdf",
+  "source_host": "business.adobe.com",
+  "source_kind": "public-image",
+  "captured_at": "2026-11-20",
+  "image": {
+    "file": "slide/slide-038.webp",
+    "width": 1280,
+    "height": 720,
+    "bytes": 89874,
+    "layout": "grid4"
+  },
+  "tokens": {
+    "theme": "light",
+    "colors": [
+      {
+        "hex": "#ffffff",
+        "role": "bg",
+        "share": 0.216
+      },
+      {
+        "hex": "#241d1c",
+        "role": "ink",
+        "share": 0.039
+      },
+      {
+        "hex": "#eb1001",
+        "role": "accent",
+        "share": 0
+      },
+      {
+        "hex": "#7ac5a6",
+        "role": "accent2",
+        "share": 0.108
+      }
+    ],
+    "fonts": {
+      "head": {
+        "kit": "archivo",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 800
+      },
+      "body": {
+        "kit": "archivo",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 400
+      },
+      "mono": null
+    },
+    "type": {
+      "basePx": 10,
+      "ratio": 1.414,
+      "sizes": [
+        48,
+        24,
+        10
+      ],
+      "headLine": 0.95,
+      "bodyLine": 1.4,
+      "headCase": "none"
+    },
+    "tracking": {
+      "display": -0.02,
+      "heading": 0,
+      "body": 0,
+      "label": 0.02
+    },
+    "radius": {
+      "outer": 0,
+      "inner": 0,
+      "pill": false
+    },
+    "shadow": {
+      "level": 0,
+      "css": "none"
+    },
+    "spacing": {
+      "unit": 8,
+      "section": 32,
+      "gutter": 16,
+      "density": "dense"
+    },
+    "layout": {
+      "columns": 3,
+      "maxWidth": 1280,
+      "align": "asymmetric",
+      "emptyShare": 0.2
+    },
+    "imagery": {
+      "kind": "mixed",
+      "share": 0.6,
+      "light": "bright studio flash, hard colour gels",
+      "lens": "surreal photo collage, tight crops",
+      "grade": "coral pink, mint and saturated primaries",
+      "subject": "a classical bust with sunglasses and flowers"
+    }
+  },
+  "measured": [
+    "theme"
+  ],
+  "why": "Bìa nền hồng san hô #fdb5af, tượng cổ cắt dán với hoa và vệt màu, tiêu đề đen đậm 48 px góc trái. Trang trong xen chân dung cận mặt cười rực rỡ và cột chữ hẹp 10 px trên nền trắng. Khối xanh bạc hà #7ac5a6 làm nền trích dẫn chữ trắng đậm. Mượn cách ghép ảnh siêu thực màu chói với chữ đen đậm đơn giản; không chép ảnh hay chữ.",
+  "licence": "Ảnh chụp thu nhỏ của trang công khai, chỉ để model tham khảo nguyên tắc. Không chép logo, chữ, ảnh hay phông độc quyền của trang."
+}

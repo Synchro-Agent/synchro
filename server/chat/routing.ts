@@ -51,10 +51,11 @@ import { resolveTool } from "../connproxy";
 import { getPrefs as codePrefs } from "../codestore";
 import { BROWSER_RULES, BROWSER_TOOLS, chatFiles, releaseBrowser } from "../browsertools";
 import { fastNeedsTools, holdNeedTools } from "./needtools";
+import { seesImages } from "../visioncaps";
 import {
   useProfile, lastUserText, DEFAULT_SYSTEM, FAST_RULES, contextOf, estimate, pinnedBlock, artifactMessages,
   QUALITY_RULES, BRIDGE_CLIS, brainOn, CLI_TOOLS_NOTE, NARRATE_RULES, withRecall, designOf, nowBlock, crisisBlock,
-  ARTIFACT_SYSTEM, useMemory,
+  ARTIFACT_SYSTEM, useMemory, withDesignImages,
 } from "./prompt";
 import { sweep, pending, unparkApproval, type Decision, needsAsk, applyEdit } from "./approvals";
 import { notePlan } from "./planmerge";
@@ -62,7 +63,7 @@ import {
   type Lib, execute, reply, toolLoop, type Exec, connTools, PLAN_TOOL, announceOffline, bridgeCall, connProxy,
   CONN_CALL, live, keepImages, sayOut, deckGate, holdAnswer, settleGate, withTurnArts, usedLibs, GEMINI_WEB_TOOL,
   WEB_DESC, mockAdapter, anthropicAdapter, citeOf, responsesAdapter, openaiAdapter, healPatch, isAbort, patchHealAsk,
-  patchHealMerge, priorArts,
+  patchHealMerge, priorArts, designGate, designState,
 } from "./tools";
 
 // Gợi ý định tuyến cho lượt này: skill hợp nhất với yêu cầu (tìm trong toàn bộ kho, cả skill bên trong thư viện)
@@ -408,7 +409,9 @@ async function chatPostTurn(body: Parameters<typeof chatPost>[0], c: Who, scope:
   const pool = usable.length ? usable : allowed;
   const skip = typeof body.avoidModel === "string" && pool.includes(body.avoidModel) ? [body.avoidModel] : [];
   // Nhật ký định tuyến (D1.6) chỉ ghi ở đây — lượt chat thật; rerun khi người dùng bấm "Chạy lại bằng model khác".
-  const r = routeModel(q, pool, { avoid: [...skip, ...stalledModels(c.user.id, pool)], log: { rerun: typeof body.avoidModel === "string" && !!body.avoidModel } });
+  const rerun = typeof body.avoidModel === "string" && !!body.avoidModel;
+  const avoid = [...skip, ...stalledModels(c.user.id, pool)];
+  const r = routeModel(q, pool, { avoid, log: { rerun }, sees: seesImages });
   addSpan("routing", "routing", r0, Date.now(), r ? { "synchro.route.model": r.model, "synchro.route.task": r.task } : undefined);
   if (!r) return Response.json({ error: "Tài khoản của bạn chưa được dùng model nào. Hãy liên hệ quản trị viên." }, { status: 403 });
   // Nỗ lực: người dùng để "Tự động" (hoặc chưa chọn) thì theo độ khó của việc; chọn tay thì giữ lựa chọn đó.
@@ -477,7 +480,7 @@ async function withSwitch(res: Response, body: Record<string, any>, user: UserRo
   const list = cli
     ? usable.filter((k) => !tried.includes(k) && !!subCli(k) && (j.quota === "model" || subCli(k) !== cli))
     : usable.filter((k) => !tried.includes(k) && !subCli(k) && vendor(k) !== vendor(tried[tried.length - 1]));
-  const next = routeModel(routeInput(body, user), list);
+  const next = routeModel(routeInput(body, user), list, { sees: seesImages });
   if (!next) return res;
   return Response.json({ ...j, switchTo: { model: next.model, name: groups.flatMap((g) => g.models).find((m) => m.key === next.model)?.name ?? next.model.split("/").pop() } }, { status: res.status });
 }
@@ -601,7 +604,15 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
       const say0 = am ? undefined : fast ? holdNeedTools(live()) : live();
       // Antigravity trả cả câu trả lời một lần nên làm sạch được ngay; CLI khác làm sạch ở câu trả lời cuối (đường dẫn có thể bị cắt giữa hai đoạn chữ).
       const say = say0 && cli === "agy" ? (t: string) => say0(scrubServerPaths(t)) : say0;
-      const turnMsgs = am ?? withRecall(withRecall(messages, await recallOf(body, c.user, convId)), [route, fast || !pc ? "" : designOf(body, { art: !!pc.art, code: !!pc.code, image: BRIDGE_CLIS.has(subCli(model)!) && feature !== "code" }, can(c.user, "skills") ? studioOf(body.studio) : null, convId), nowBlock(body), crisisBlock(body)].filter(Boolean).join("\n\n"));
+      // Thiết kế: khối quy tắc và mẫu tham chiếu đi cạnh tin nhắn mới nhất; ảnh mẫu chỉ nối vào bản gửi của lượt này.
+      const dcaps = pc ? { art: !!pc.art, code: !!pc.code, image: BRIDGE_CLIS.has(cli) && feature !== "code" } : null;
+      const dstudio = can(c.user, "skills") ? studioOf(body.studio) : null;
+      const dctx = { uid: c.user.id, sees: seesImages(model), agy: cli === "agy", signal: turnSignal() };
+      const dz = am || fast || !pc ? null : await designOf(body, dcaps, dstudio, convId, dctx);
+      if (x && dz?.gate) x.design = designState(c.user, model, dz, convId);
+      const dyn = [route, dz?.text ?? "", nowBlock(body), crisisBlock(body)].filter(Boolean).join("\n\n");
+      const recalled = withRecall(withRecall(messages, await recallOf(body, c.user, convId)), dyn);
+      const turnMsgs = am ?? withDesignImages(recalled, dz?.images ?? []);
       // cont: lượt làm tiếp trong cùng tin nhắn (nhắc làm tiếp, chờ kết quả công cụ): ghi "job:cont", không đếm thành tin nhắn mới (helperquota.ts CONT_JOB).
       let cont = false;
       const turn = (msgs: unknown, fresh = false) => subTurn({
@@ -676,7 +687,7 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
       let good: typeof r | null = null;
       // Lượt của CLI xong mà còn tin nhắn thêm chưa đọc: làm tiếp ngay trong cùng phiên của CLI (không chờ lượt sau). Gói mới báo
       // "Mình sẽ…" mà chưa gọi công cụ nào của Synchro: nhắc làm tiếp (stall.ts). agy tự chặn công cụ: nhắc dùng công cụ được phép.
-      let gate: string | null = null;
+      let gate: string | null = null, review: Awaited<ReturnType<typeof designGate>> = null;
       // Bản sửa artifact còn khối không khớp khi CLI định trả lời xong: nhắc gửi lại đúng các khối đó (một lần), rồi
       // ghép vào câu trả lời. healing: câu trả lời đang chờ ghép; câu đó vẫn là câu người dùng nhận.
       let priorSt: ArtState | undefined;
@@ -689,7 +700,7 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
         if (j.cancelled) break;
         const said = String(j.text ?? "");
         const more = takeInbox();
-        let next: string;
+        let next: string | unknown[];
         if (more.length) { for (const t of more) progress("steer", t); next = `<user_followup>\n${more.join("\n\n")}\n</user_followup>`; }
         else if (j.denied?.length && nd < MAX_NUDGE) { nd++; next = DENIED_NUDGE(j.denied); }
         else if (bridge?.pendingJobs().length) next = `Còn công cụ chưa lấy kết quả (${bridge.pendingJobs().map((p) => `${p.name}: job_id ${p.id}`).join("; ")}). Gọi wait_for_result với từng job_id tới khi có kết quả thật rồi mới trả lời tiếp; đừng báo thất bại khi chưa có kết quả.`;
@@ -702,6 +713,12 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
           next = gate;
         }
         else if (x && !x.deckGated && (gate = await deckGate(x, said))) { holdAnswer(x, said); next = gate; }
+        // Sản phẩm thiết kế: so với mẫu tham chiếu, lời nhắc kèm bảng so sánh (ảnh). Câu đầu được giữ cho người dùng;
+        // lần sửa sau (đã có câu giữ) đi qua sayOut bên dưới nên artifact của nó vào turnArts.
+        else if (x?.design && (review = await designGate(x, said))) {
+          if (!x.held) holdAnswer(x, said);
+          next = review.blocks;
+        }
         else break;
         if (healing === null && x?.held?.text !== said) sayOut(x, said);
         hist = [...hist, { role: "assistant", content: said }, { role: "user", content: next }];
@@ -789,8 +806,13 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
     const { list, visible, libs, prefer, route, ownSuggested } = await span("skills", "retrieval", () => skillSet(c.user, body, messages, studio, st));
     // Lịch sử theo chuẩn Synchro → tin nhắn sẵn sàng cho mọi hãng. Gợi ý skill theo câu hỏi mới nhất đổi mỗi lượt nên ở tầng động
     // (cuối prompt), không ở phần đầu: phần đầu (hướng dẫn, danh mục skill, tài liệu ghim) giữ nguyên để đọc từ bộ đệm.
-    const dyn = [route, cs ? designOf(body, { art: !!cs.caps.art, code: !!cs.caps.code, image }, studio, convId) : "", await recallOf(body, c.user, convId), nowBlock(body), crisisBlock(body)];
+    const dctx = { uid: c.user.id, sees: seesImages(model ?? ""), agy: false, signal: turnSignal() };
+    const dcaps = cs ? { art: !!cs.caps.art, code: !!cs.caps.code, image } : null;
+    const dz = dcaps ? await designOf(body, dcaps, studio, convId, dctx) : null;
+    const dyn = [route, dz?.text ?? "", await recallOf(body, c.user, convId), nowBlock(body), crisisBlock(body)];
     const prep = spanSync("history", "history", () => prepareHistory(messages, dyn, mix));
+    // Ảnh mẫu tham chiếu: nối sau khi dựng lịch sử, vào đúng tin nhắn mới nhất của bản gửi (lịch sử đã lưu không có).
+    if (dz?.images.length) prep.messages = withDesignImages(prep.messages, dz.images) as typeof prep.messages;
     markPrompt();
     // Connector chỉ dùng trong lượt chat chính (skills = true), không dùng cho các lệnh nội bộ như tóm tắt bộ nhớ.
     if (skills && t.kind !== "mock" && can(c.user, "connectors")) { sess = new ConnectorSession(c.user.id, { conv: convId, project: !!project, pol: connPolicy(permsOf(c.user)) }); if (!sess.tools.length && !sess.offline.length) sess = null; }
@@ -819,6 +841,7 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
       if (body.estimate === true) { sess?.close(); return estimate([system, capSys], [skillsPrompt(visible, scripts, ownSuggested), sess ? connectorsPrompt(sess, connProxy(sess)) : "", JSON.stringify(tools)], pinned, prep); }
       const x: Exec = { project: pdocs ? project : undefined, image, msgs: messages, list: [...visible, ...list.filter((k) => !visible.includes(k))], scripts, sess, uid: c.user.id, code, net: !!cs?.caps.net, web: !!cs?.caps.web, art: arts ? { messages, base: body.artBase } : undefined, outs: [], libs, studio: studio ? libs[`studio-${studio}`][0] : undefined, prefer, trace: [], conv: convId, untrusted: convUntrusted(c.user.id, convId), heal: scripts ? t : undefined, search: web && synWeb ? t : undefined, browse, task, bctx: browse && cs ? { def: task ? taskBrowser(task) : browserDefault(cs), synchro: !cs.locks.browse, user: cs.locks.mine !== "admin", scope: convId ? `chat:${convId}` : undefined, cookies: codePrefs(c.user.id).cookies, files: chatFiles(messages, c.user.id, () => x.outs) } : undefined };
       if (sess) announceOffline(x, messages);
+      if (dz?.gate && model) x.design = designState(c.user, model, dz, convId);
       const msgs = prep.messages;
       const ad = t.kind === "mock" ? mockAdapter(list)
         : t.kind === "anthropic" ? anthropicAdapter(t, system, sk, max_tokens, web ? [...tools, webTool] : tools, effort, prep.historyEnd, web ? citeOf(x) : undefined)

@@ -1,0 +1,152 @@
+{
+  "v": 1,
+  "id": "dashboard-007",
+  "domain": "dashboard",
+  "title": "Bảng quản trị sáng: thẻ chỉ số có biểu đồ nhỏ và vòng tròn tiến độ",
+  "moods": [
+    "clean-light",
+    "data-dense"
+  ],
+  "industries": [
+    "general",
+    "ecommerce"
+  ],
+  "audience": [
+    "internal",
+    "b2b"
+  ],
+  "source_url": "https://preview.tabler.io/",
+  "source_host": "preview.tabler.io",
+  "source_kind": "public-page",
+  "captured_at": "2026-11-20",
+  "image": {
+    "file": "dashboard/dashboard-007.webp",
+    "width": 1280,
+    "height": 800,
+    "bytes": 72018,
+    "layout": "single"
+  },
+  "tokens": {
+    "theme": "light",
+    "colors": [
+      {
+        "hex": "#ffffff",
+        "role": "bg",
+        "share": 0.863
+      },
+      {
+        "hex": "#171717",
+        "role": "ink",
+        "share": 0
+      },
+      {
+        "hex": "#404040",
+        "role": "muted",
+        "share": 0
+      },
+      {
+        "hex": "#066fd1",
+        "role": "accent",
+        "share": 0.024
+      },
+      {
+        "hex": "#2fb344",
+        "role": "accent2",
+        "share": 0
+      },
+      {
+        "hex": "#e1e1e1",
+        "role": "line",
+        "share": 0.036
+      },
+      {
+        "hex": "#2fb344",
+        "role": "pos",
+        "share": 0
+      },
+      {
+        "hex": "#d63939",
+        "role": "neg",
+        "share": 0
+      }
+    ],
+    "fonts": {
+      "head": {
+        "kit": "inter",
+        "seen": "-apple-system",
+        "seenLicence": "unknown",
+        "weight": 700
+      },
+      "body": {
+        "kit": "inter",
+        "seen": "-apple-system",
+        "seenLicence": "unknown",
+        "weight": 400
+      },
+      "mono": null
+    },
+    "type": {
+      "basePx": 14,
+      "ratio": 1.21,
+      "sizes": [
+        30,
+        24,
+        20,
+        16,
+        14,
+        12,
+        10
+      ],
+      "headLine": 1.43,
+      "bodyLine": 1.71,
+      "headCase": "none"
+    },
+    "tracking": {
+      "display": 0,
+      "heading": 0,
+      "body": 0,
+      "label": 0.034
+    },
+    "radius": {
+      "outer": 8,
+      "inner": 0,
+      "pill": true
+    },
+    "shadow": {
+      "level": 1,
+      "css": "oklab(0.184539 0.00269308 -0.00976676 / 0.05) 0px 1px 2px 0px"
+    },
+    "spacing": {
+      "unit": 8,
+      "section": 64,
+      "gutter": 8,
+      "density": "balanced"
+    },
+    "layout": {
+      "columns": 4,
+      "maxWidth": 1140,
+      "align": "left",
+      "emptyShare": 0.44
+    },
+    "imagery": {
+      "kind": "data",
+      "share": 0.4,
+      "light": "",
+      "lens": "",
+      "grade": "",
+      "subject": ""
+    }
+  },
+  "measured": [
+    "theme",
+    "colors",
+    "type",
+    "tracking",
+    "radius",
+    "shadow",
+    "spacing",
+    "layout"
+  ],
+  "why": "Lưới 4 thẻ trắng bo 8 px trên nền xám rất nhạt, mỗi thẻ một con số 24 px cùng biểu đồ nhỏ hoặc vòng tiến độ 58%. Màu xanh lam #066fd1 cho số chính, xanh lá và đỏ chỉ cho tăng giảm, có cả chữ phần trăm. Nhãn chữ hoa nhỏ giãn 0,034em. Mượn cách nén nhiều chỉ số vào thẻ nhỏ có biểu đồ mini; không chép số liệu hay tên.",
+  "licence": "Ảnh chụp thu nhỏ của trang công khai, chỉ để model tham khảo nguyên tắc. Không chép logo, chữ, ảnh hay phông độc quyền của trang."
+}

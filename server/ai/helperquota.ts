@@ -13,7 +13,11 @@ export const isUserVia = (via: string) => via !== "warm" && !via.startsWith(JOB_
  * Việc phụ chạy tự động, không ai bấm: chịu ngân sách. Việc người dùng tự bấm hoặc đang đứng chờ (phản biện bấm tay, nén ngữ cảnh,
  * tóm tắt để đọc to, lập lịch tự động hóa, quét skill…) vẫn là việc phụ (không tính vào "tin nhắn hôm nay") nhưng không bị chặn.
  */
-export const THROTTLED_JOBS = new Set(["title", "memory", "project-memory", "brain", "meta", "critic-auto", "skill-studio"]);
+// Người chấm thiết kế tự chạy sau mỗi bản dựng, có thể trên một gói khác của người dùng: gói đó gần hạn mức thì vòng
+// chấm rơi về tự chấm (designcritic.ts trả null) thay vì tiêu lượt của họ.
+export const THROTTLED_JOBS = new Set([
+  "title", "memory", "project-memory", "brain", "meta", "critic-auto", "skill-studio", "design-critic",
+]);
 
 /**
  * Lượt làm tiếp trong cùng một tin nhắn của người dùng (nhắc làm tiếp khi model mới báo "Mình sẽ…", nhắc dùng công cụ được phép, chờ kết quả

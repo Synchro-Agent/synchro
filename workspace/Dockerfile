@@ -197,6 +197,53 @@ RUN set -e; chmod 755 /opt/synchro/charts/synchro-chart.mjs; ln -sf /opt/synchro
     printf '%s\n' 'export NODE_PATH="$NODE_PATH:/opt/synchro/charts/node_modules"' >> /etc/profile.d/synchro.sh
 ENV NODE_PATH=/usr/local/lib/node_modules:/home/user/.npm-global/lib/node_modules:/opt/synchro/charts/node_modules
 
+# ------------------------------------------------------------------ đủ bộ phông (shared/designrefs.ts KIT_FONTS)
+# Phần còn lại của 17 phông khung artifact tự phục vụ (/kitfonts/v1/): PDF, ảnh và video dựng trong sandbox dùng đúng
+# phông của bản xem. Cùng commit google/fonts và cách ghim mã băm như lớp phông ở trên; tất cả là OFL-1.1.
+# Đặt sau các lớp nặng để thêm phông không phải dựng lại Remotion và bộ tài liệu.
+RUN set -e; cd /usr/share/fonts/truetype/synchro; \
+    base=https://raw.githubusercontent.com/google/fonts/bbda7253fc363238b05d97515ca71f8ae49c4fa9; \
+    printf '%s %s %s\n' \
+      '0f7b311b2f3279e4eef9b2f968bcdbab6e28f4daeb1f049f4f278a902bcd82f7' \
+        'ofl/montserrat/Montserrat%5Bwght%5D.ttf' 'Montserrat.ttf' \
+      '3b031aa4216174205bd8471f88a49b91f093169e9e87bd5262242bc5967fe2e3' \
+        'ofl/ibmplexsans/IBMPlexSans%5Bwdth,wght%5D.ttf' 'IBMPlexSans.ttf' \
+      '0e094a7d3c7c4c25cf1310c4b30014f1dae9332220b1c2c88f4fa996f0b05053' \
+        'ofl/archivo/Archivo%5Bwdth,wght%5D.ttf' 'Archivo.ttf' \
+      '413e7357809ddd12fd80a96a8a396de0e401638d4acd3cb3e37532f0472ac682' \
+        'ofl/bricolagegrotesque/BricolageGrotesque%5Bopsz,wdth,wght%5D.ttf' 'BricolageGrotesque.ttf' \
+      '3add53e641fbc81da64da4bb254285e2831b52b029527bc0714e2b9610832ee6' \
+        'ofl/lexend/Lexend%5Bwght%5D.ttf' 'Lexend.ttf' \
+      '323b511be380c8d474ef030686b71aedde501f8d9cd46da558b7c40454372c3f' \
+        'ofl/unbounded/Unbounded%5Bwght%5D.ttf' 'Unbounded.ttf' \
+      '5b38c246e255a12f5712d640d56bcced0472466fc68983d2d0410ec0457c2817' \
+        'ofl/oswald/Oswald%5Bwght%5D.ttf' 'Oswald.ttf' \
+      'a4ba3a92350ebb031da0cb47630ac49eb265082ca1bc0450442f4a83ab947cab' \
+        'ofl/anton/Anton-Regular.ttf' 'Anton-Regular.ttf' \
+      '177ff6c0f14e5550a3c624247cd1189611d4eb65d000b14944c63d967958abbb' \
+        'ofl/fraunces/Fraunces%5BSOFT,WONK,opsz,wght%5D.ttf' 'Fraunces.ttf' \
+      'b24448c43702fac4ee856781d461a0dfba8d8e594b6e8e190234b75fed2c0e01' \
+        'ofl/fraunces/Fraunces-Italic%5BSOFT,WONK,opsz,wght%5D.ttf' 'Fraunces-Italic.ttf' \
+      '97b2d4da6e3cb494b5a1e66ae176914d852ccabef49e0c02c0df25f3e39aca0b' \
+        'ofl/sourceserif4/SourceSerif4%5Bopsz,wght%5D.ttf' 'SourceSerif4.ttf' \
+      '15fbc7e4679489a501998c3669272637a6646388ef7e4bd77eebb5bf967a1f42' \
+        'ofl/sourceserif4/SourceSerif4-Italic%5Bopsz,wght%5D.ttf' 'SourceSerif4-Italic.ttf' \
+      'b20b7d9626dd956b2c5e558692ad328b1f19e3275e2782db4fa07670d83f35e0' \
+        'ofl/cormorantgaramond/CormorantGaramond%5Bwght%5D.ttf' 'CormorantGaramond.ttf' \
+      '0f48ea6abb2084537854f7174c470991a463b13036309e3b50a81511611c530d' \
+        'ofl/cormorantgaramond/CormorantGaramond-Italic%5Bwght%5D.ttf' 'CormorantGaramond-Italic.ttf' \
+      'a5e26dc5e2e77fb2803a0bf02fd4f81ee136ec8dea863ccdb0c59a263b21378b' \
+        'ofl/playfairdisplay/PlayfairDisplay-Italic%5Bwght%5D.ttf' 'PlayfairDisplay-Italic.ttf' \
+    | while read -r sum src out; do \
+        curl -fsSLg --retry 5 --retry-all-errors --connect-timeout 20 -o "$out" "$base/$src"; \
+        echo "$sum  $out" | sha256sum -c --quiet -; \
+      done; \
+    fc-cache -f; \
+    for f in 'Montserrat' 'IBM Plex Sans' 'Archivo' 'Bricolage Grotesque' 'Lexend' 'Unbounded' 'Oswald' 'Anton' \
+      'Fraunces' 'Source Serif 4' 'Cormorant Garamond'; do \
+      fc-list : family | grep -qF "$f" || { echo "thiếu phông $f"; exit 1; }; \
+    done
+
 USER user
 # Biểu đồ và sơ đồ: 8 loại ra SVG hợp lệ và PNG, require("echarts") từ thư mục bất kỳ, D2 có chữ tiếng Việt, tất cả không mạng.
 RUN set -e; cd /tmp; synchro-chart example > ex.json; \

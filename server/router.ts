@@ -833,7 +833,10 @@ function routeLog(task: Task, score: number, rerun: boolean, model: string) {
   if (!rerun && Number.isFinite(rate) && rate < 1 && Math.random() >= rate) return;
   console.log(`[route] ${JSON.stringify({ task, score, rerun, model })}`);
 }
-export function routeModel(q: RouteInput, allowed: string[], o: { avoid?: string[]; log?: { rerun?: boolean } } = {}): Route | null {
+// sees: model nhìn được ảnh không (server/visioncaps.ts, truyền vào để tệp này không đọc sổ model). Việc thiết kế cộng
+// một bậc cho model có mắt: model đó xem được ảnh mẫu tham chiếu và tự xem ảnh chụp sản phẩm của mình.
+export type RouteOpts = { avoid?: string[]; log?: { rerun?: boolean }; sees?: (key: string) => boolean };
+export function routeModel(q: RouteInput, allowed: string[], o: RouteOpts = {}): Route | null {
   if (!allowed.length) return null;
   const r = readOf(q), { task, score, retry, think, follow, long, design } = r;
   // Bản sao: kết quả phân loại được nhớ theo RouteInput và máy chủ hỏi lại cùng đối tượng nhiều lần trong một lượt.
@@ -860,7 +863,9 @@ export function routeModel(q: RouteInput, allowed: string[], o: { avoid?: string
   // được giao cho Haiku, Sonnet). "Mạnh nhất" xét theo hạng; trong cùng hạng, gói subscription đã trả tiền đứng trước
   // khóa API (khóa API có thể là khóa dùng chung của máy chủ), rồi mới tới thế mạnh của hãng.
   const best = (xs: typeof pool) => xs.sort((a, b) => b.q - a.q || price(a.p) - price(b.p) || a.i - b.i);
-  const level = (p: Profile) => BASE[p.frontier ? "frontier" : p.tier];
+  // Có mắt +1: model mạnh có mắt (10) thắng model mạnh nhất chỉ đọc chữ (9,5); model mạnh chỉ đọc chữ (9) vẫn thắng
+  // model cân bằng có mắt (8,5).
+  const level = (p: Profile) => BASE[p.frontier ? "frontier" : p.tier] + (o.sees?.(p.key) ? 1 : 0);
   const strongest = (xs: typeof pool) =>
     xs.sort((a, b) => level(b.p) - level(a.p) || Number(b.p.sub) - Number(a.p.sub) || b.q - a.q || a.i - b.i);
   const rank = design

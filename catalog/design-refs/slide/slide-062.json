@@ -1,0 +1,128 @@
+{
+  "v": 1,
+  "id": "slide-062",
+  "domain": "slide",
+  "title": "Bộ slide kết quả kinh doanh: xanh trời phẳng, chữ hoa mảnh giãn rộng, ảnh sản phẩm cận",
+  "moods": [
+    "clean-light",
+    "minimal-mono",
+    "editorial"
+  ],
+  "industries": [
+    "fashion-beauty",
+    "health-wellness"
+  ],
+  "audience": [
+    "investors",
+    "consumer"
+  ],
+  "source_url": "https://s28.q4cdn.com/987131352/files/doc_financials/2021/q4/Warby-Parker-Inc.-EarningsDeck-Q4-2021_PDF2.pdf",
+  "source_host": "s28.q4cdn.com",
+  "source_kind": "public-image",
+  "captured_at": "2026-11-20",
+  "image": {
+    "file": "slide/slide-062.webp",
+    "width": 1280,
+    "height": 720,
+    "bytes": 88734,
+    "layout": "grid4"
+  },
+  "tokens": {
+    "theme": "light",
+    "colors": [
+      {
+        "hex": "#ffffff",
+        "role": "bg",
+        "share": 0.34
+      },
+      {
+        "hex": "#0b0403",
+        "role": "ink",
+        "share": 0.015
+      },
+      {
+        "hex": "#1d1412",
+        "role": "muted",
+        "share": 0.013
+      },
+      {
+        "hex": "#00a8e0",
+        "role": "accent",
+        "share": 0.257
+      },
+      {
+        "hex": "#8f5038",
+        "role": "accent2",
+        "share": 0.009
+      }
+    ],
+    "fonts": {
+      "head": {
+        "kit": "montserrat",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 300
+      },
+      "body": {
+        "kit": "montserrat",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 400
+      },
+      "mono": null
+    },
+    "type": {
+      "basePx": 12,
+      "ratio": 1.5,
+      "sizes": [
+        48,
+        16,
+        12
+      ],
+      "headLine": 1.1,
+      "bodyLine": 1.4,
+      "headCase": "upper"
+    },
+    "tracking": {
+      "display": 0.04,
+      "heading": 0.06,
+      "body": 0,
+      "label": 0.12
+    },
+    "radius": {
+      "outer": 0,
+      "inner": 0,
+      "pill": false
+    },
+    "shadow": {
+      "level": 0,
+      "css": "none"
+    },
+    "spacing": {
+      "unit": 8,
+      "section": 64,
+      "gutter": 24,
+      "density": "airy"
+    },
+    "layout": {
+      "columns": 2,
+      "maxWidth": 1280,
+      "align": "center",
+      "emptyShare": 0.45
+    },
+    "imagery": {
+      "kind": "photo",
+      "share": 0.35,
+      "light": "soft studio light and documentary daylight",
+      "lens": "macro product close-up and reportage",
+      "grade": "clean cyan and white, natural skin tones",
+      "subject": "a pair of eyeglasses and a man reading among children"
+    }
+  },
+  "measured": [
+    "theme",
+    "colors"
+  ],
+  "why": "Bìa nền xanh trời #00a8e0 phẳng, tiêu đề chữ hoa nét mảnh 300 cỡ 48 px giãn 0,04em căn giữa. Trang trong nền trắng, nhãn chữ hoa nhỏ giãn rộng, danh sách đánh số xanh, ảnh sản phẩm cận cắt tràn mép phải. Biểu đồ cột xanh trời với nhãn số đặt trên đỉnh cột. Mượn chữ hoa mảnh giãn rộng làm giọng sang và ảnh cận cắt mép; không chép ảnh.",
+  "licence": "Ảnh chụp thu nhỏ của trang công khai, chỉ để model tham khảo nguyên tắc. Không chép logo, chữ, ảnh hay phông độc quyền của trang."
+}

@@ -50,8 +50,18 @@ addEventListener("click",function(e){if(e.target.closest&&e.target.closest("a,bu
 function start(){show(fixed===null?0:fixed);setTimeout(function(){show(fixed===null?cur:fixed)},120)}
 if(document.readyState==="loading")addEventListener("DOMContentLoaded",start);else start()})();</script>`;
 
+// Phông của bộ thiết kế nạp từ chính Synchro (/kitfonts/v1/): khung vẫn đúng phông khi mạng ngoài bị chặn. Google Fonts
+// giữ lại trong danh sách cho artifact cũ và cho đường dự phòng của kitHead.
 export function csp(origin: string) {
-  return `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' 'unsafe-eval' ${origin}${V} ${CDNS}; style-src 'unsafe-inline' https://fonts.googleapis.com ${CDNS}; font-src https://fonts.gstatic.com ${CDNS} data:; img-src data: blob:; media-src data: blob:; connect-src 'none'; form-action 'none'; base-uri 'none'">`;
+  const kit = origin ? ` ${origin}/kitfonts/` : "";
+  const rules = [
+    "default-src 'none'",
+    `script-src 'unsafe-inline' 'unsafe-eval' ${origin}${V} ${CDNS}`,
+    `style-src 'unsafe-inline'${kit} https://fonts.googleapis.com ${CDNS}`,
+    `font-src${kit} https://fonts.gstatic.com ${CDNS} data:`,
+    "img-src data: blob:; media-src data: blob:; connect-src 'none'; form-action 'none'; base-uri 'none'",
+  ];
+  return `<meta http-equiv="Content-Security-Policy" content="${rules.join("; ")}">`;
 }
 export const BASE_CSS = `<style>:root{color-scheme:light dark}html,body{margin:0}body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}</style>`;
 
@@ -68,8 +78,13 @@ export function withHead(content: string, head: string, kit = "") {
 export const deckExport = (content: string, origin = "") => withHead(content, `<meta charset="utf-8"><script>window.__sxPresent=true</script>${deckRuntime(null)}`, kitHead(content, origin));
 /** Tệp HTML tải về của trang thường: trang dùng bộ CSS phải kèm bộ CSS, không thì mở ra vỡ hết; trang khác giữ nguyên từng byte. */
 export const htmlExport = (content: string, origin = "") => (usesKit(content) ? withHead(content, `<meta charset="utf-8">`, kitHead(content, origin)) : content);
-/** Tệp SVG tải về đứng một mình: hình dùng biến --sx-… phải mang theo bộ CSS trong chính tệp (CDATA vì tệp là XML); hình khác giữ nguyên từng byte. */
-export const svgExport = (content: string) => (usesKit(content) ? content.replace(/<svg\b[^>]*>/i, (m) => `${m}<style><![CDATA[${KIT_CSS}]]></style>`) : content);
+/** Tệp SVG tải về đứng một mình: hình dùng biến --sx-… phải mang theo bộ CSS trong chính tệp (CDATA vì tệp là XML);
+ *  hình khác giữ nguyên từng byte.
+ *  faces: các @font-face đã nhúng dạng data: (ui/artfonts.ts svgDownload), để chữ đúng phông ở máy không cài phông. */
+export function svgExport(content: string, faces = ""): string {
+  const css = `${faces}${usesKit(content) ? KIT_CSS : ""}`;
+  return css ? content.replace(/<svg\b[^>]*>/i, (m) => `${m}<style><![CDATA[${css}]]></style>`) : content;
+}
 
 // loc: đánh dấu dòng mã nguồn lên từng phần tử (Alt+Click → đúng dòng), chỉ ở khung xem trước, không có trong bản tải về.
 // bridge: cầu nối với khung cha (postMessage) của khung xem trước; máy chủ kiểm tra hiển thị thì truyền phần báo lỗi riêng.

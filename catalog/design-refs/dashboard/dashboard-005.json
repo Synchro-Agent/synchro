@@ -1,0 +1,146 @@
+{
+  "v": 1,
+  "id": "dashboard-005",
+  "domain": "dashboard",
+  "title": "Phân tích lượt truy cập: một đường tím lớn và bảng nguồn",
+  "moods": [
+    "clean-light",
+    "data-dense",
+    "minimal-mono"
+  ],
+  "industries": [
+    "tech-saas",
+    "media-publishing"
+  ],
+  "audience": [
+    "b2b"
+  ],
+  "source_url": "https://plausible.io/plausible.io",
+  "source_host": "plausible.io",
+  "source_kind": "public-page",
+  "captured_at": "2026-11-20",
+  "image": {
+    "file": "dashboard/dashboard-005.webp",
+    "width": 1280,
+    "height": 800,
+    "bytes": 36126,
+    "layout": "single"
+  },
+  "tokens": {
+    "theme": "light",
+    "colors": [
+      {
+        "hex": "#ffffff",
+        "role": "bg",
+        "share": 0.975
+      },
+      {
+        "hex": "#fff7ed",
+        "role": "surface",
+        "share": 0
+      },
+      {
+        "hex": "#eff6ff",
+        "role": "raised",
+        "share": 0
+      },
+      {
+        "hex": "#18181b",
+        "role": "ink",
+        "share": 0.002
+      },
+      {
+        "hex": "#27272a",
+        "role": "muted",
+        "share": 0
+      },
+      {
+        "hex": "#4f39f6",
+        "role": "accent",
+        "share": 0.003
+      },
+      {
+        "hex": "#606f7b",
+        "role": "line",
+        "share": 0.003
+      }
+    ],
+    "fonts": {
+      "head": {
+        "kit": "inter",
+        "seen": "ui-sans-serif",
+        "seenLicence": "unknown",
+        "weight": 600
+      },
+      "body": {
+        "kit": "inter",
+        "seen": "ui-sans-serif",
+        "seenLicence": "unknown",
+        "weight": 500
+      },
+      "mono": null
+    },
+    "type": {
+      "basePx": 14,
+      "ratio": 1.37,
+      "sizes": [
+        36,
+        19,
+        16,
+        14,
+        12
+      ],
+      "headLine": 1.5,
+      "bodyLine": 1.43,
+      "headCase": "none"
+    },
+    "tracking": {
+      "display": -0.025,
+      "heading": -0.025,
+      "body": 0,
+      "label": 0.007
+    },
+    "radius": {
+      "outer": 6,
+      "inner": 4,
+      "pill": true
+    },
+    "shadow": {
+      "level": 1,
+      "css": "rgba(0, 0, 0, 0.1) 0px 1px 3px 0px"
+    },
+    "spacing": {
+      "unit": 4,
+      "section": 64,
+      "gutter": 12,
+      "density": "balanced"
+    },
+    "layout": {
+      "columns": 6,
+      "maxWidth": 1120,
+      "align": "asymmetric",
+      "emptyShare": 0.36
+    },
+    "imagery": {
+      "kind": "data",
+      "share": 0.5,
+      "light": "",
+      "lens": "",
+      "grade": "",
+      "subject": ""
+    }
+  },
+  "measured": [
+    "theme",
+    "colors",
+    "fonts",
+    "type",
+    "tracking",
+    "radius",
+    "shadow",
+    "spacing",
+    "layout"
+  ],
+  "why": "Hàng 6 chỉ số trên cùng chữ hoa nhỏ giãn nhẹ, con số 19 px đậm, bên dưới là một biểu đồ đường tím #4f39f6 chiếm trọn bề ngang. Không thẻ, không bóng, chỉ đường kẻ mảnh tách vùng. Bảng nguồn và trang có thanh tỉ lệ nhạt sau chữ. Mượn bố cục một biểu đồ chính và các bảng xếp hạng bên dưới; không chép số liệu.",
+  "licence": "Ảnh chụp thu nhỏ của trang công khai, chỉ để model tham khảo nguyên tắc. Không chép logo, chữ, ảnh hay phông độc quyền của trang."
+}

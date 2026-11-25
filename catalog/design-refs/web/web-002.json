@@ -1,0 +1,154 @@
+{
+  "v": 1,
+  "id": "web-002",
+  "domain": "web",
+  "title": "Hạ tầng thanh toán: dải gradient lụa cam tím trên nền trắng",
+  "moods": [
+    "clean-light",
+    "bold-color",
+    "tech"
+  ],
+  "industries": [
+    "finance",
+    "tech-saas"
+  ],
+  "audience": [
+    "b2b",
+    "developers"
+  ],
+  "source_url": "https://stripe.com/",
+  "source_host": "stripe.com",
+  "source_kind": "public-page",
+  "captured_at": "2026-11-20",
+  "image": {
+    "file": "web/web-002.webp",
+    "width": 1280,
+    "height": 1600,
+    "bytes": 89920,
+    "layout": "single"
+  },
+  "tokens": {
+    "theme": "light",
+    "colors": [
+      {
+        "hex": "#ffffff",
+        "role": "bg",
+        "share": 0.638
+      },
+      {
+        "hex": "#e5edf5",
+        "role": "surface",
+        "share": 0
+      },
+      {
+        "hex": "#f8fafd",
+        "role": "raised",
+        "share": 0
+      },
+      {
+        "hex": "#061b31",
+        "role": "ink",
+        "share": 0.048
+      },
+      {
+        "hex": "#635bff",
+        "role": "accent",
+        "share": 0
+      },
+      {
+        "hex": "#ff8a3d",
+        "role": "accent2",
+        "share": 0
+      },
+      {
+        "hex": "#e5edf5",
+        "role": "line",
+        "share": 0
+      }
+    ],
+    "fonts": {
+      "head": {
+        "kit": "inter",
+        "seen": "sohne-var",
+        "seenLicence": "proprietary",
+        "weight": 300
+      },
+      "body": {
+        "kit": "inter",
+        "seen": "sohne-var",
+        "seenLicence": "proprietary",
+        "weight": 300
+      },
+      "mono": {
+        "kit": "jetbrains-mono",
+        "seen": "SourceCodePro",
+        "seenLicence": "unknown",
+        "weight": 400
+      }
+    },
+    "type": {
+      "basePx": 14,
+      "ratio": 1.361,
+      "sizes": [
+        48,
+        32,
+        26,
+        16,
+        14,
+        12,
+        10,
+        8
+      ],
+      "headLine": 1.15,
+      "bodyLine": 1.4,
+      "headCase": "none"
+    },
+    "tracking": {
+      "display": -0.02,
+      "heading": -0.015,
+      "body": 0,
+      "label": 0.003
+    },
+    "radius": {
+      "outer": 6,
+      "inner": 4,
+      "pill": true
+    },
+    "shadow": {
+      "level": 2,
+      "css": "rgba(23, 23, 23, 0.08) 0px 15px 35px 0px"
+    },
+    "spacing": {
+      "unit": 4,
+      "section": 96,
+      "gutter": 10,
+      "density": "airy"
+    },
+    "layout": {
+      "columns": 3,
+      "maxWidth": 1250,
+      "align": "center",
+      "emptyShare": 0.15
+    },
+    "imagery": {
+      "kind": "3d",
+      "share": 0.8,
+      "light": "luminous gradient ribbon, soft inner glow",
+      "lens": "flat 2D render, no perspective",
+      "grade": "orange to magenta to violet on white",
+      "subject": "flowing silk-like colour ribbon"
+    }
+  },
+  "measured": [
+    "theme",
+    "fonts",
+    "type",
+    "tracking",
+    "radius",
+    "shadow",
+    "spacing",
+    "layout"
+  ],
+  "why": "Màn đầu trắng, chữ xanh than #061b31 cỡ 48 px nặng 300 siết −0,02em, đối lập với một dải gradient lụa cam hồng tím chéo góc phải. Thẻ minh họa bo 6 px, bóng bậc 2, xếp lưới 3 cột với khoảng thoáng 96 px giữa các phần. Màu nhấn tím chàm chỉ dùng cho nút và liên kết. Mượn cách để một mảng màu chuyển sắc mang toàn bộ cảm xúc trong khi chữ giữ trung tính; không chép hình dải lụa hay số liệu.",
+  "licence": "Ảnh chụp thu nhỏ của trang công khai, chỉ để model tham khảo nguyên tắc. Không chép logo, chữ, ảnh hay phông độc quyền của trang."
+}

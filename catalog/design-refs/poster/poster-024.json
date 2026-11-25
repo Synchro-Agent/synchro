@@ -1,0 +1,116 @@
+{
+  "v": 1,
+  "id": "poster-024",
+  "domain": "poster",
+  "title": "Poster ý tưởng xã hội: bóng thoại trắng quấn dây thép gai trên nền đỏ",
+  "moods": [
+    "bold-color",
+    "minimal-mono",
+    "editorial"
+  ],
+  "industries": [
+    "nonprofit-gov"
+  ],
+  "audience": [
+    "public"
+  ],
+  "source_url": "https://www.posterfortomorrow.org/en/blog/project/a-planet-for-tomorrow",
+  "source_host": "posterfortomorrow.org",
+  "source_kind": "public-image",
+  "captured_at": "2026-11-20",
+  "image": {
+    "file": "poster/poster-024.webp",
+    "width": 500,
+    "height": 500,
+    "bytes": 12744,
+    "layout": "single"
+  },
+  "tokens": {
+    "theme": "light",
+    "colors": [
+      {
+        "hex": "#c41c1c",
+        "role": "bg",
+        "share": 0.732
+      },
+      {
+        "hex": "#ffffff",
+        "role": "ink",
+        "share": 0.163
+      },
+      {
+        "hex": "#000000",
+        "role": "muted",
+        "share": 0.084
+      },
+      {
+        "hex": "#111111",
+        "role": "accent",
+        "share": 0
+      }
+    ],
+    "fonts": {
+      "head": {
+        "kit": "archivo",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 800
+      },
+      "body": {
+        "kit": "archivo",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 400
+      },
+      "mono": null
+    },
+    "type": {
+      "basePx": 16,
+      "ratio": 1.25,
+      "sizes": [],
+      "headLine": 1.1,
+      "bodyLine": 1.5,
+      "headCase": "none"
+    },
+    "tracking": {
+      "display": -0.02,
+      "heading": -0.01,
+      "body": 0,
+      "label": 0
+    },
+    "radius": {
+      "outer": 0,
+      "inner": 0,
+      "pill": false
+    },
+    "shadow": {
+      "level": 0,
+      "css": "none"
+    },
+    "spacing": {
+      "unit": 8,
+      "section": 96,
+      "gutter": 32,
+      "density": "airy"
+    },
+    "layout": {
+      "columns": 1,
+      "maxWidth": 500,
+      "align": "asymmetric",
+      "emptyShare": 0.45
+    },
+    "imagery": {
+      "kind": "illustration",
+      "share": 0.45,
+      "light": "flat screen-print colour, no lighting",
+      "lens": "flat 2D symbol",
+      "grade": "pure red, white and black",
+      "subject": "a speech bubble wrapped in barbed wire"
+    }
+  },
+  "measured": [
+    "theme"
+  ],
+  "why": "Một ý tưởng duy nhất: bóng thoại trắng bị dây thép gai đen quấn ngang, đặt lệch trên nền đỏ #c41c1c phủ toàn khung. Không chữ trên hình, ba màu đỏ, trắng, đen. Đọc được trong một giây từ xa. Mượn cách gộp hai biểu tượng thành một hình để nói một thông điệp; không chép hình.",
+  "licence": "Ảnh chụp thu nhỏ của trang công khai, chỉ để model tham khảo nguyên tắc. Không chép logo, chữ, ảnh hay phông độc quyền của trang."
+}

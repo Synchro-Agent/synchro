@@ -1,0 +1,137 @@
+{
+  "v": 1,
+  "id": "web-041",
+  "domain": "web",
+  "title": "Tạp chí số tiếng Việt: lưới tin dày, chữ hẹp đậm",
+  "moods": [
+    "editorial",
+    "data-dense",
+    "clean-light"
+  ],
+  "industries": [
+    "media-publishing"
+  ],
+  "audience": [
+    "youth",
+    "public"
+  ],
+  "source_url": "https://vietcetera.com/",
+  "source_host": "vietcetera.com",
+  "source_kind": "public-page",
+  "captured_at": "2026-11-20",
+  "image": {
+    "file": "web/web-041.webp",
+    "width": 1280,
+    "height": 1600,
+    "bytes": 89852,
+    "layout": "single"
+  },
+  "tokens": {
+    "theme": "light",
+    "colors": [
+      {
+        "hex": "#ffffff",
+        "role": "bg",
+        "share": 0.622
+      },
+      {
+        "hex": "#f2f2f2",
+        "role": "surface",
+        "share": 0
+      },
+      {
+        "hex": "#000000",
+        "role": "ink",
+        "share": 0.03
+      },
+      {
+        "hex": "#555555",
+        "role": "muted",
+        "share": 0
+      },
+      {
+        "hex": "#05a2fb",
+        "role": "accent",
+        "share": 0.05
+      }
+    ],
+    "fonts": {
+      "head": {
+        "kit": "archivo",
+        "seen": "Archivo Narrow",
+        "seenLicence": "open",
+        "weight": 600
+      },
+      "body": {
+        "kit": "archivo",
+        "seen": "Archivo Narrow",
+        "seenLicence": "open",
+        "weight": 400
+      },
+      "mono": null
+    },
+    "type": {
+      "basePx": 16,
+      "ratio": 1.303,
+      "sizes": [
+        60,
+        28,
+        24,
+        20,
+        18,
+        16,
+        14
+      ],
+      "headLine": 1.13,
+      "bodyLine": 1.2,
+      "headCase": "none"
+    },
+    "tracking": {
+      "display": 0,
+      "heading": 0,
+      "body": 0.01,
+      "label": 0
+    },
+    "radius": {
+      "outer": 0,
+      "inner": 0,
+      "pill": true
+    },
+    "shadow": {
+      "level": 2,
+      "css": "rgba(29, 255, 217, 0.25) 0px -3px 8px 0px, rgba(59, 29, 255, 0.18) -3px 4px 8px 0px"
+    },
+    "spacing": {
+      "unit": 8,
+      "section": 120,
+      "gutter": 16,
+      "density": "airy"
+    },
+    "layout": {
+      "columns": 2,
+      "maxWidth": 1174,
+      "align": "left",
+      "emptyShare": 0.14
+    },
+    "imagery": {
+      "kind": "photo",
+      "share": 0.61,
+      "light": "daylight editorial photography",
+      "lens": "mixed 35mm news photos",
+      "grade": "natural colours",
+      "subject": "news photos of buildings and people"
+    }
+  },
+  "measured": [
+    "theme",
+    "colors",
+    "type",
+    "tracking",
+    "radius",
+    "shadow",
+    "spacing",
+    "layout"
+  ],
+  "why": "Lưới tin hai cột: ảnh lớn bên trái, danh sách tiêu đề chữ hẹp đậm bên phải, nền trắng chữ đen. Nhấn xanh trời #05a2fb chỉ ở nhãn chuyên mục, không bo góc ở khung ảnh. Mật độ chữ cao nhưng đọc được nhờ thứ bậc 3 cỡ rõ: 60, 24 và 16 px. Mượn cách tổ chức trang tin nhiều bài mà không rối; không chép bài viết hay ảnh.",
+  "licence": "Ảnh chụp thu nhỏ của trang công khai, chỉ để model tham khảo nguyên tắc. Không chép logo, chữ, ảnh hay phông độc quyền của trang."
+}

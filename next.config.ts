@@ -70,6 +70,15 @@ const nextConfig: NextConfig = {
         { key: "Cache-Control", value: "public, max-age=31536000, immutable" },
       ],
     }, {
+      // Bộ phông của artifact (tools/fetch-kit-fonts.mjs): khung artifact là nguồn gốc khác nên phông phải cho tải
+      // chéo nguồn (trình duyệt luôn tải phông theo CORS). Thư mục có số phiên bản (v1): đổi phông là thư mục mới,
+      // giữ lâu được.
+      source: "/kitfonts/v1/:path*", headers: [
+        { key: "Cross-Origin-Resource-Policy", value: "cross-origin" },
+        { key: "Access-Control-Allow-Origin", value: "*" },
+        { key: "Cache-Control", value: "public, max-age=31536000, immutable" },
+      ],
+    }, {
       // Phông chữ không đổi nội dung theo bản phát hành: giữ lâu, mở lại không phải hỏi lại máy chủ từng tệp.
       source: "/fonts/:path*", headers: [{ key: "Cache-Control", value: "public, max-age=31536000, immutable" }],
     }, ...["/brand/:path*", "/connectors/:path*", "/logos/:path*", "/ts/:path*", "/intro/:path*", "/icon-:size(\\d+).png", "/icon-maskable-:size(\\d+).png"].map((source) => ({

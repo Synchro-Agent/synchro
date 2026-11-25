@@ -29,6 +29,16 @@ export function fit(el: HTMLElement) {
   if (b.bottom > H - M) dy = H - M - b.bottom;
   if (b.top + dy < M) dy = M - b.top;
   if (dx || dy) el.style.translate = `${Math.round(dx)}px ${Math.round(dy)}px`;
+  // Khung vừa mở còn chạy hiệu ứng (thu nhỏ, trượt xuống 6px): số đo lúc này lệch vài px so với lúc đứng yên,
+  // tấm phủ đáy của điện thoại từng bị đẩy lên 4px mãi. Đo lại khi hiệu ứng xong.
+  const opening = el.getAnimations?.().filter((a) => a.playState === "running"
+    && a.effect?.getTiming().iterations !== Infinity) ?? [];
+  for (const a of opening) {
+    a.finished.then(() => fit(el), () => {
+      // Hiệu ứng bị hủy (khung đóng giữa chừng hoặc đổi hiệu ứng): lần đo của ResizeObserver hay lần mở sau
+      // lo việc này.
+    });
+  }
 }
 
 /** Gắn một lần cho cả trang (page.tsx). */

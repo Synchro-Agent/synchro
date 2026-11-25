@@ -1,0 +1,155 @@
+{
+  "v": 1,
+  "id": "doc-001",
+  "domain": "doc",
+  "title": "Bài dữ liệu khoa học: tiêu đề có chân, hộp tóm tắt và biểu đồ tương tác",
+  "moods": [
+    "editorial",
+    "data-dense",
+    "clean-light"
+  ],
+  "industries": [
+    "nonprofit-gov",
+    "education"
+  ],
+  "audience": [
+    "public",
+    "students"
+  ],
+  "source_url": "https://ourworldindata.org/co2-and-greenhouse-gas-emissions",
+  "source_host": "ourworldindata.org",
+  "source_kind": "public-page",
+  "captured_at": "2026-11-20",
+  "image": {
+    "file": "doc/doc-001.webp",
+    "width": 1280,
+    "height": 1600,
+    "bytes": 89250,
+    "layout": "single"
+  },
+  "tokens": {
+    "theme": "light",
+    "colors": [
+      {
+        "hex": "#ffffff",
+        "role": "bg",
+        "share": 0.553
+      },
+      {
+        "hex": "#ebeef2",
+        "role": "surface",
+        "share": 0.302
+      },
+      {
+        "hex": "#e7f2ff",
+        "role": "raised",
+        "share": 0
+      },
+      {
+        "hex": "#1d3d63",
+        "role": "ink",
+        "share": 0.027
+      },
+      {
+        "hex": "#5b5b5b",
+        "role": "muted",
+        "share": 0
+      },
+      {
+        "hex": "#426591",
+        "role": "accent",
+        "share": 0.006
+      },
+      {
+        "hex": "#ce261e",
+        "role": "accent2",
+        "share": 0.008
+      },
+      {
+        "hex": "#ebeef2",
+        "role": "line",
+        "share": 0
+      }
+    ],
+    "fonts": {
+      "head": {
+        "kit": "playfair-display",
+        "seen": "Playfair Display",
+        "seenLicence": "open",
+        "weight": 600
+      },
+      "body": {
+        "kit": "ibm-plex-sans",
+        "seen": "Lato",
+        "seenLicence": "open",
+        "weight": 600
+      },
+      "mono": null
+    },
+    "type": {
+      "basePx": 16,
+      "ratio": 1.201,
+      "sizes": [
+        40,
+        32,
+        25,
+        20,
+        18,
+        16,
+        14,
+        12
+      ],
+      "headLine": 1.2,
+      "bodyLine": 1.6,
+      "headCase": "none"
+    },
+    "tracking": {
+      "display": -0.004,
+      "heading": 0,
+      "body": 0,
+      "label": 0.298
+    },
+    "radius": {
+      "outer": 0,
+      "inner": 0,
+      "pill": false
+    },
+    "shadow": {
+      "level": 0,
+      "css": "none"
+    },
+    "spacing": {
+      "unit": 8,
+      "section": 64,
+      "gutter": 16,
+      "density": "balanced"
+    },
+    "layout": {
+      "columns": 5,
+      "maxWidth": 1232,
+      "align": "left",
+      "emptyShare": 0.49
+    },
+    "imagery": {
+      "kind": "data",
+      "share": 0.3,
+      "light": "",
+      "lens": "",
+      "grade": "",
+      "subject": ""
+    }
+  },
+  "measured": [
+    "theme",
+    "colors",
+    "fonts",
+    "type",
+    "tracking",
+    "radius",
+    "shadow",
+    "spacing",
+    "layout"
+  ],
+  "why": "Tiêu đề chữ có chân 40 px xanh than #1d3d63 trên nền trắng, hộp tóm tắt 4 ô nền xám xanh #ebeef2 đặt trước bài. Biểu đồ đặt trong khung, có tiêu đề, nguồn và giấy phép ghi ngay dưới. Chữ thân sans 16 px, nhãn chữ hoa giãn rộng. Mượn cấu trúc tóm tắt trước, bằng chứng sau và ghi nguồn cạnh từng biểu đồ; không chép số liệu.",
+  "licence": "Ảnh chụp thu nhỏ của trang công khai, chỉ để model tham khảo nguyên tắc. Không chép logo, chữ, ảnh hay phông độc quyền của trang."
+}

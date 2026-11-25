@@ -1,0 +1,155 @@
+{
+  "v": 1,
+  "id": "web-050",
+  "domain": "web",
+  "title": "Giày thân thiện môi trường: ảnh phòng khách ấm và lưới sản phẩm màu đất",
+  "moods": [
+    "warm-craft",
+    "organic",
+    "clean-light"
+  ],
+  "industries": [
+    "ecommerce",
+    "fashion-beauty"
+  ],
+  "audience": [
+    "consumer",
+    "families"
+  ],
+  "source_url": "https://www.allbirds.com/",
+  "source_host": "allbirds.com",
+  "source_kind": "public-page",
+  "captured_at": "2026-11-20",
+  "image": {
+    "file": "web/web-050.webp",
+    "width": 1280,
+    "height": 1600,
+    "bytes": 88970,
+    "layout": "single"
+  },
+  "tokens": {
+    "theme": "light",
+    "colors": [
+      {
+        "hex": "#ece9e2",
+        "role": "bg",
+        "share": 0.051
+      },
+      {
+        "hex": "#ffffff",
+        "role": "surface",
+        "share": 0.075
+      },
+      {
+        "hex": "#e0dacf",
+        "role": "raised",
+        "share": 0
+      },
+      {
+        "hex": "#212121",
+        "role": "ink",
+        "share": 0.376
+      },
+      {
+        "hex": "#000000",
+        "role": "muted",
+        "share": 0
+      },
+      {
+        "hex": "#b88f70",
+        "role": "accent",
+        "share": 0.041
+      },
+      {
+        "hex": "#212121",
+        "role": "line",
+        "share": 0
+      },
+      {
+        "hex": "#5d6b78",
+        "role": "accent2",
+        "share": 0
+      }
+    ],
+    "fonts": {
+      "head": {
+        "kit": "plus-jakarta-sans",
+        "seen": "Geograph",
+        "seenLicence": "unknown",
+        "weight": 400
+      },
+      "body": {
+        "kit": "plus-jakarta-sans",
+        "seen": "Geograph",
+        "seenLicence": "unknown",
+        "weight": 400
+      },
+      "mono": {
+        "kit": "jetbrains-mono",
+        "seen": "Akkurat Mono",
+        "seenLicence": "unknown",
+        "weight": 500
+      }
+    },
+    "type": {
+      "basePx": 12,
+      "ratio": 1.351,
+      "sizes": [
+        40,
+        24,
+        16,
+        14,
+        12
+      ],
+      "headLine": 1.33,
+      "bodyLine": 1.33,
+      "headCase": "none"
+    },
+    "tracking": {
+      "display": 0.025,
+      "heading": 0.025,
+      "body": 0.05,
+      "label": 0.044
+    },
+    "radius": {
+      "outer": 16,
+      "inner": 10,
+      "pill": true
+    },
+    "shadow": {
+      "level": 2,
+      "css": "rgba(0, 0, 0, 0.1) 0px 20px 25px -5px"
+    },
+    "spacing": {
+      "unit": 4,
+      "section": 80,
+      "gutter": 8,
+      "density": "balanced"
+    },
+    "layout": {
+      "columns": 4,
+      "maxWidth": 530,
+      "align": "asymmetric",
+      "emptyShare": 0.02
+    },
+    "imagery": {
+      "kind": "photo",
+      "share": 0.96,
+      "light": "warm tungsten interior evening light",
+      "lens": "35mm, eye level, environmental",
+      "grade": "warm browns and amber, soft shadows",
+      "subject": "couple relaxing on a sofa with a decorated tree"
+    }
+  },
+  "measured": [
+    "theme",
+    "type",
+    "tracking",
+    "radius",
+    "shadow",
+    "spacing",
+    "layout"
+  ],
+  "why": "Ảnh đời thường trong phòng khách ánh đèn ấm phủ màn đầu, bên dưới là lưới 4 ô sản phẩm nền màu đất: xanh xám, nâu, hồng, xanh rêu. Thẻ bo 16 px, chữ nhỏ 12 px giãn nhẹ 0,025em, nút trắng bo tròn. Màu chủ đạo trung tính ấm, không nhấn gắt. Mượn cách dùng nền màu đất khác nhau cho từng ô sản phẩm; không chép ảnh hay sản phẩm.",
+  "licence": "Ảnh chụp thu nhỏ của trang công khai, chỉ để model tham khảo nguyên tắc. Không chép logo, chữ, ảnh hay phông độc quyền của trang."
+}

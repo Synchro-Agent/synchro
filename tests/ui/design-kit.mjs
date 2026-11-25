@@ -13,7 +13,9 @@ import os from "node:os";
 import path from "node:path";
 import { loadTs } from "../lib/ts.mjs";
 
-const { artdoc, artkit, artprobe, designpresets, deckpptx } = await loadTs(["artdoc", "artkit", "artprobe", "designpresets", "deckpptx"]);
+const mods = await loadTs(["artdoc", "artkit", "artprobe", "designpresets", "deckpptx", "shared/designrefs"]);
+const { artdoc, artkit, artprobe, designpresets, deckpptx, "shared/designrefs": designrefs } = mods;
+const { KIT_FONTS } = designrefs;
 const { buildDocCore } = artdoc, { FONT_SPEC, PRESETS } = designpresets;
 const FONT_DIR = process.env.SYNCHRO_FONT_DIR ?? "", SAMPLES = process.env.SAMPLES ?? "";
 const CDP = Number(process.env.CDP_PORT ?? 9377), PROF = path.join(os.tmpdir(), `synchro-ui/chrome-prof-design-${CDP}`);
@@ -72,7 +74,11 @@ const ws = new WebSocket(ver.webSocketDebuggerUrl);
 await new Promise((r) => ws.addEventListener("open", r));
 let seq = 0;
 const waits = new Map(), errs = [], stray = [], cspErr = [], pages = new Map(), fontLoads = new Set();
-let hangFonts = false; // đóng vai mạng treo: yêu cầu Google Fonts không bao giờ có trả lời
+const kitLoads = new Set();
+let hangFonts = false; // đóng vai mạng treo: yêu cầu phông (Google Fonts, bộ của Synchro) không bao giờ có trả lời
+// Đóng vai mạng ngoài bị chặn (tường lửa): Google Fonts trả lỗi ngay, chỉ còn bộ phông của Synchro (/kitfonts/v1/).
+let blockGoogle = false;
+const KIT_TYPE = { ".css": "text/css", ".woff2": "font/woff2", ".txt": "text/plain" };
 const ORIGIN = "https://app.test";
 const send = (method, params = {}, sessionId) => new Promise((ok, no) => { const id = ++seq; waits.set(id, [ok, no]); ws.send(JSON.stringify({ id, method, params, sessionId })); });
 const answer = (S, requestId, body, type, extra = []) => send("Fetch.fulfillRequest", { requestId, responseCode: 200, responseHeaders: [{ name: "content-type", value: type }, { name: "access-control-allow-origin", value: "*" }, ...extra], body: Buffer.from(body).toString("base64") }, S);
@@ -85,7 +91,17 @@ ws.addEventListener("message", (e) => {
     const { requestId, request } = m.params, S = m.sessionId, u = request.url;
     if (u.startsWith(`${ORIGIN}/doc/`)) return answer(S, requestId, pages.get(u) ?? "", "text/html; charset=utf-8");
     if (u.startsWith(`${ORIGIN}/vendor/`)) return answer(S, requestId, readFileSync(path.join("public/vendor", path.basename(new URL(u).pathname))), "application/javascript");
-    if (hangFonts && u.startsWith("https://fonts.googleapis.com/")) return;
+    if (hangFonts && (u.startsWith("https://fonts.googleapis.com/") || u.startsWith(`${ORIGIN}/kitfonts/`))) return;
+    if (blockGoogle && /^https:\/\/fonts\.(googleapis|gstatic)\.com\//.test(u)) {
+      return send("Fetch.failRequest", { requestId, errorReason: "BlockedByClient" }, S);
+    }
+    if (u.startsWith(`${ORIGIN}/kitfonts/v1/`)) {
+      const rel = new URL(u).pathname.slice("/kitfonts/v1/".length), file = path.join("public/kitfonts/v1", rel);
+      if (!rel.includes("..") && existsSync(file)) {
+        kitLoads.add(rel);
+        return answer(S, requestId, readFileSync(file), KIT_TYPE[path.extname(file)] ?? "application/octet-stream");
+      }
+    }
     if (u.startsWith("https://fonts.googleapis.com/css2")) return answer(S, requestId, fontCss(u), "text/css");
     if (u.startsWith("https://fonts.gstatic.com/local/")) { const f = decodeURIComponent(path.basename(new URL(u).pathname)); fontLoads.add(f); return answer(S, requestId, readFileSync(path.join(FONT_DIR, f)), "font/ttf"); }
     if (u.endsWith("/favicon.ico")) return send("Fetch.failRequest", { requestId, errorReason: "BlockedByClient" }, S);
@@ -101,6 +117,16 @@ await P("Fetch.enable", { patterns: [{ urlPattern: "*" }] });
 const ev = async (expr) => { const r = await P("Runtime.evaluate", { expression: expr, awaitPromise: true, returnByValue: true }); if (r.exceptionDetails) throw new Error(r.exceptionDetails.exception?.description ?? r.exceptionDetails.text); return r.result.value; };
 const view = (width, height) => P("Emulation.setDeviceMetricsOverride", { width, height, deviceScaleFactor: 1, mobile: false });
 const media = (m = "", features = []) => P("Emulation.setEmulatedMedia", { media: m, features });
+// Chờ mọi thẻ <link data-sx-font> (kitHead nạp sau sự kiện load) có stylesheet; need: phải có ít nhất một thẻ.
+const FONT_LINKS = (need) => `new Promise((ok) => {
+  let n = 0;
+  const t = setInterval(() => {
+    const ls = [...document.querySelectorAll("link[data-sx-font]")];
+    if (!(((!${need} || ls.length) && ls.every((l) => l.sheet)) || ++n > 80)) return;
+    clearInterval(t);
+    ok(1);
+  }, 25);
+})`;
 let docN = 0;
 const open = async (content, { deck = false, title = "" } = {}) => {
   const url = `${ORIGIN}/doc/${++docN}`;
@@ -109,7 +135,7 @@ const open = async (content, { deck = false, title = "" } = {}) => {
   await P("Page.navigate", { url });
   await done;
   // Phông của bộ CSS nạp sau sự kiện load (kitHead): chờ tệp CSS rồi mới chờ phông.
-  await ev(`new Promise((ok) => { let n = 0; const t = setInterval(() => { const l = document.querySelector("link[data-sx-font]"); if (!l || l.sheet || ++n > 40) { clearInterval(t); ok(1); } }, 25); })`);
+  await ev(FONT_LINKS(false));
   await ev(`document.fonts.ready.then(() => 1)`);
   await sleep(120);
 };
@@ -153,6 +179,63 @@ if (faces.size) {
     const m = await ev(`(async () => { const el = document.getElementById("d"), cs = getComputedStyle(el), font = "800 80px " + cs.fontFamily.split(",")[0]; await document.fonts.load(font, "Ấ"); const lh = parseFloat(cs.lineHeight) / parseFloat(cs.fontSize); const c = document.createElement("canvas"); c.width = 1200; c.height = 500; const x = c.getContext("2d", { willReadFrequently: true }); x.font = font; const ink = (t, y) => { x.clearRect(0, 0, 1200, 500); x.fillText(t, 10, y); return x.getImageData(0, 0, 1200, 500).data.slice(); }; const at = (L) => { const a = ink("Hàng giày gặp", 150), b = ink("Ấn Độ, Đồng Ệ", 150 + 80 * L); let n = 0; for (let i = 3; i < a.length; i += 4) if (a[i] > 64 && b[i] > 64) n++; return n; }; return { lh, on: at(lh), scan: Object.fromEntries([1.1, 1.15, 1.2, 1.25, 1.3, 1.35, 1.4].map((L) => [L, at(L)])) }; })()`);
     check(`${p.head}: dấu chồng không chạm dòng trên ở .sx-display (bước dòng ${m.lh.toFixed(2)})`, m.on === 0, JSON.stringify(m));
   }
+}
+
+// ---------------------------------------------------------------- bộ phông Synchro
+console.log("1b. Bộ phông Synchro (/kitfonts/v1/): đủ dấu ở 16px và 96px, vẫn đúng khi Google Fonts bị chặn");
+{
+  blockGoogle = true;
+  const GLYPHS = "ư ơ ệ ẫ Ấ Ỗ ự ở";
+  const ids = KIT_FONTS.map((f) => f.id).join(",");
+  const cell = (f, i, px) => `<p id="k${i}-${px}" style="font-family:'${f.family}';font-size:${px}px;line-height:1.4;`
+    + `margin:0">${GLYPHS}</p>`;
+  const rows = KIT_FONTS.map((f, i) => [16, 96].map((px) => cell(f, i, px)).join("")).join("");
+  const page = `<html data-sx-mix="m-test" data-sx-fonts="${ids}"><body class="sx-p-16">${rows}</body></html>`;
+  await view(1400, 900);
+  await open(page);
+  // Mặt nào không tải được thì phép đo bên dưới báo lỗi; ở đây chỉ chờ mọi mặt xong.
+  await ev(`Promise.all([...document.fonts].map((f) => f.load().catch(() => null))).then(() => 1)`);
+  await P("DOM.getDocument", { depth: -1 });
+  const root = (await P("DOM.getDocument", { depth: 0 })).root.nodeId;
+  for (const [i, f] of KIT_FONTS.entries()) {
+    for (const px of [16, 96]) {
+      const { nodeId } = await P("DOM.querySelector", { nodeId: root, selector: `#k${i}-${px}` });
+      const { fonts } = await P("CSS.getPlatformFontsForNode", { nodeId });
+      const own = fonts.filter((x) => x.isCustomFont && x.familyName.startsWith(f.family));
+      const other = fonts.filter((x) => !x.familyName.startsWith(f.family) && x.familyName.trim());
+      check(`${f.family} ${px}px: Chrome vẽ "${GLYPHS}" bằng đúng phông của bộ`, own.length > 0 && !other.length,
+        JSON.stringify(fonts.map((x) => [x.familyName, x.glyphCount])));
+    }
+  }
+  // Đạt khi có FontFace cùng tên đã tải và document.fonts.check() đúng (check() một mình đúng cả khi chưa khai báo).
+  const families = JSON.stringify(KIT_FONTS.map((f) => f.family));
+  const loadedFace = `[...document.fonts].some((x) => x.family.replace(/["']/g, "") === fam && x.status === "loaded")`;
+  const okFonts = (label) => ev(`(${families}).filter((fam) => !(${loadedFace}
+    && document.fonts.check('16px "' + fam + '"', "ưệẪ")))`)
+    .then((bad) => check(`${label}: cả 17 phông qua document.fonts.check khi Google Fonts bị chặn`, !bad.length,
+      bad.join(", ")));
+  await okFonts("khung artifact");
+  // Tệp HTML tải về (htmlExport): mở ở trình duyệt khác, không CSP của khung, phông vẫn từ Synchro.
+  const dl = `${ORIGIN}/doc/${++docN}`;
+  pages.set(dl, artdoc.htmlExport(page, ORIGIN));
+  const loaded = new Promise((r) => {
+    const h = (e) => {
+      const m = JSON.parse(e.data);
+      if (m.method !== "Page.loadEventFired" || m.sessionId !== S) return;
+      ws.removeEventListener("message", h);
+      r();
+    };
+    ws.addEventListener("message", h);
+  });
+  await P("Page.navigate", { url: dl });
+  await loaded;
+  await ev(FONT_LINKS(true));
+  await ev(`Promise.all([...document.fonts].map((f) => f.load().catch(() => null))).then(() => 1)`);
+  await okFonts("tệp HTML tải về");
+  check("không gọi Google Fonts lần nào khi bộ Synchro tải được",
+    !stray.some((u) => /fonts\.(googleapis|gstatic)/.test(u)));
+  if (SAMPLES) await shot(path.join(SAMPLES, "bo-phong-synchro.png"));
+  blockGoogle = false;
 }
 
 // ---------------------------------------------------------------- chuyển động
@@ -231,6 +314,81 @@ check("chữ tràn khỏi thẻ, dù vẫn nằm trong slide", kinds(r).includes
   }
   await media();
   check("mọi phong cách, sáng và tối: chữ trên thẻ, nhãn, hộp ghi chú, bề mặt nhuộm đạt WCAG", !bad.length, bad.join(" | "));
+}
+
+// ---------------------------------------------------------------- số đo khung đầu cho vòng so với mẫu
+// Đúng mã DESIGN_FACTS mà check_artifact chạy trong sandbox, rồi đúng hàm quyết định của vòng so với mẫu: thiếu hình
+// chủ đạo hay phông chưa tải phải đòi sửa; trang đủ hình, phông của bộ đã tải thì không.
+console.log("3b. Số đo khung đầu (DESIGN_FACTS) và quyết định sửa của vòng so với mẫu");
+{
+  process.env.DATA_DIR ??= path.join(os.tmpdir(), `synchro-ui/design-kit-data-${CDP}`);
+  process.env.DATA_KEY ??= "design-kit-ui";
+  mkdirSync(process.env.DATA_DIR, { recursive: true });
+  const { "server/designcritic": C } = await loadTs(["server/designcritic"]);
+  const facts = () => ev(`(${artprobe.DESIGN_FACTS})(document.body)`);
+  const decide = (f) => C.measuredDiffs(null, f, null, { hero: true, deck: false });
+  const tag = (ds) => ds.map((d) => `${d.property}:${d.severity}`).sort().join(",");
+  const pic = `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="16" height="9">`
+    + `<rect width="16" height="9" fill="#2f6b3a"/></svg>`)}`;
+  const head = `<html data-sx-preset="midnight-tech" data-sx-fonts="fraunces,inter"><body style="margin:0">`;
+  const title = `<h1 style="font-family:'Fraunces';font-size:72px;margin:24px">Trà xanh hái tay mỗi sáng</h1>`;
+  const body = `<p style="font-family:'Inter';margin:24px">Đồi chè Thái Nguyên, sấy than củi.</p>`;
+  const heroImg = `<img data-sx-hero src="${pic}" style="display:block;width:100%;height:420px;object-fit:cover">`;
+  await view(1280, 800);
+  await open(`${head}${heroImg}${title}${body}</body></html>`);
+  const good = await facts();
+  const fontsOk = good.fonts.length === 2 && good.fonts.every((f) => f.loaded && f.declared);
+  check("trang có hình chủ đạo, phông của bộ: đủ phông đã tải, không đòi sửa",
+    fontsOk && good.hero.marked && !C.needsFix(decide(good)), JSON.stringify({ good, d: decide(good) }));
+  await open(`${head}${title}${body}</body></html>`);
+  const bare = await facts();
+  // Trang chỉ còn hai dòng chữ nên cũng trống quá trần: chỉ cần có lỗi cao về hình.
+  const bareTag = tag(decide(bare));
+  check("thiếu hình chủ đạo: lỗi cao về hình, đòi sửa",
+    bareTag.split(",").includes("image:high") && C.needsFix(decide(bare)), bareTag);
+  // Khối tô màu gắn data-sx-hero mà không có hình bên trong vẫn là thiếu hình chủ đạo.
+  const fill = `<section data-sx-hero style="height:520px;background:#2f6b3a">${title}</section>`;
+  await open(`${head}${fill}${body}</body></html>`);
+  const flat = await facts();
+  check("data-sx-hero chỉ là khối màu: không tính là hình chủ đạo, lỗi cao về hình",
+    !flat.hero.marked && tag(decide(flat)).split(",").includes("image:high"), JSON.stringify(flat.hero));
+  // Hình nằm trong khối hero (khối hero là khung chứa, không phải chính thẻ img) thì đạt.
+  const inner = heroImg.replace(" data-sx-hero", "");
+  await open(`${head}<section data-sx-hero>${inner}${title}</section>${body}</body></html>`);
+  const wrapped = await facts();
+  check("khung chứa data-sx-hero có ảnh lớn bên trong: tính là hình chủ đạo", wrapped.hero.marked,
+    JSON.stringify(wrapped.hero));
+  // Nền shader nhỏ hoặc nằm dưới khung đầu không thay được hình chủ đạo; nền phủ cả khung đầu thì thay được.
+  const tiny = `<div data-sx-shader="silk" style="width:120px;height:80px"></div>`;
+  const below = `<div style="height:900px"></div><div data-sx-shader="silk" style="height:600px"></div>`;
+  await open(`${head}${title}${tiny}${body}${below}</body></html>`);
+  const small = await facts();
+  check("nền shader nhỏ hoặc dưới khung đầu: không tính, lỗi cao về hình",
+    !small.hero.shader && tag(decide(small)).split(",").includes("image:high"), JSON.stringify(small.hero));
+  await open(`${head}<div data-sx-shader="silk" style="height:640px">${title}</div>${body}</body></html>`);
+  const full = await facts();
+  check("nền shader phủ khung đầu: tính là hình chủ đạo", full.hero.shader && !tag(decide(full)).includes("image"),
+    JSON.stringify(full.hero));
+  // Anton có trong bộ nhưng trang không khai báo: không có FontFace nào, máy rơi về phông khác mà check() vẫn đúng.
+  const anton = `<h2 style="font-family:'Anton';font-size:48px;margin:24px">Mùa thu hoạch</h2>`;
+  await open(`${head}${heroImg}${title}${anton}${body}</body></html>`);
+  const lost = await facts();
+  const lostTag = tag(decide(lost));
+  check("phông trong bộ chưa tải: một lỗi cao về phông, đòi sửa",
+    lostTag === "font:high" && C.needsFix(decide(lost)), JSON.stringify({ fonts: lost.fonts, d: lostTag }));
+  // Mạng treo khi tải phông: bộ đo không được treo theo, chỉ chờ có hạn rồi báo chưa tải.
+  hangFonts = true;
+  const t0 = Date.now();
+  const url = `${ORIGIN}/doc/${++docN}`;
+  pages.set(url, buildDocCore("html", `${head}${heroImg}${title}${body}</body></html>`, ORIGIN, "t", false, ""));
+  await P("Page.navigate", { url });
+  await sleep(400);
+  const hung = await facts();
+  const ms = Date.now() - t0;
+  hangFonts = false;
+  const unloaded = hung.fonts.some((f) => !f.loaded);
+  check("phông treo mạng: bộ đo trả kết quả trong 8 giây, báo phông chưa tải",
+    ms < 8000 && unloaded && C.needsFix(decide(hung)), `${ms} ms ${JSON.stringify(hung.fonts)}`);
 }
 
 // ---------------------------------------------------------------- PowerPoint
@@ -459,6 +617,8 @@ check("không có yêu cầu mạng lạ", !stray.length, stray.slice(0, 5).join
 check("CSP không chặn gì (phông, thư viện)", !cspErr.length, cspErr.slice(0, 3).join(" | "));
 check("không có lỗi JavaScript", !errs.length, errs.slice(0, 3).join(" | "));
 if (faces.size) check("đã thật sự tải tệp phông qua đường Google Fonts", fontLoads.size > 0, `${fontLoads.size} tệp`);
+check("đã thật sự tải tệp phông của bộ Synchro", [...kitLoads].some((f) => f.endsWith(".woff2")),
+  `${kitLoads.size} tệp`);
 ws.close(); chrome.kill();
 console.log(fails ? `\n${fails} lỗi` : "\nTất cả đạt");
 process.exit(fails ? 1 : 0);

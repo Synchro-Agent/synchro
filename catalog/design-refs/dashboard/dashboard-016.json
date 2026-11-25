@@ -1,0 +1,161 @@
+{
+  "v": 1,
+  "id": "dashboard-016",
+  "domain": "dashboard",
+  "title": "Phân tích web tối giản: cột xanh dày và danh sách trang",
+  "moods": [
+    "clean-light",
+    "minimal-mono",
+    "data-dense"
+  ],
+  "industries": [
+    "tech-saas"
+  ],
+  "audience": [
+    "b2b",
+    "developers"
+  ],
+  "source_url": "https://cloud.umami.is/share/LGazGOecbDtaIwDr/umami.is",
+  "source_host": "cloud.umami.is",
+  "source_kind": "public-page",
+  "captured_at": "2026-11-20",
+  "image": {
+    "file": "dashboard/dashboard-016.webp",
+    "width": 1280,
+    "height": 1600,
+    "bytes": 63328,
+    "layout": "single"
+  },
+  "tokens": {
+    "theme": "light",
+    "colors": [
+      {
+        "hex": "#ffffff",
+        "role": "bg",
+        "share": 0.805
+      },
+      {
+        "hex": "#fef2f2",
+        "role": "surface",
+        "share": 0
+      },
+      {
+        "hex": "#fafafa",
+        "role": "raised",
+        "share": 0
+      },
+      {
+        "hex": "#171717",
+        "role": "ink",
+        "share": 0.009
+      },
+      {
+        "hex": "#737373",
+        "role": "muted",
+        "share": 0
+      },
+      {
+        "hex": "#5a9ef0",
+        "role": "accent",
+        "share": 0.104
+      },
+      {
+        "hex": "#fb2c36",
+        "role": "accent2",
+        "share": 0
+      },
+      {
+        "hex": "#d4d4d4",
+        "role": "line",
+        "share": 0.016
+      },
+      {
+        "hex": "#00c950",
+        "role": "pos",
+        "share": 0
+      },
+      {
+        "hex": "#fb2c36",
+        "role": "neg",
+        "share": 0
+      }
+    ],
+    "fonts": {
+      "head": {
+        "kit": "inter",
+        "seen": "Inter",
+        "seenLicence": "open",
+        "weight": 700
+      },
+      "body": {
+        "kit": "inter",
+        "seen": "Inter",
+        "seenLicence": "open",
+        "weight": 700
+      },
+      "mono": null
+    },
+    "type": {
+      "basePx": 14,
+      "ratio": 1.266,
+      "sizes": [
+        36,
+        30,
+        24,
+        16,
+        14
+      ],
+      "headLine": 1.11,
+      "bodyLine": 1.43,
+      "headCase": "none"
+    },
+    "tracking": {
+      "display": -0.022,
+      "heading": -0.022,
+      "body": 0,
+      "label": 0
+    },
+    "radius": {
+      "outer": 6,
+      "inner": 0,
+      "pill": false
+    },
+    "shadow": {
+      "level": 1,
+      "css": "rgba(0, 0, 0, 0.05) 0px 1px 2px 0px"
+    },
+    "spacing": {
+      "unit": 8,
+      "section": 64,
+      "gutter": 8,
+      "density": "balanced"
+    },
+    "layout": {
+      "columns": 5,
+      "maxWidth": 1040,
+      "align": "left",
+      "emptyShare": 0.39
+    },
+    "imagery": {
+      "kind": "data",
+      "share": 0.5,
+      "light": "",
+      "lens": "",
+      "grade": "",
+      "subject": ""
+    }
+  },
+  "measured": [
+    "theme",
+    "colors",
+    "fonts",
+    "type",
+    "tracking",
+    "radius",
+    "shadow",
+    "spacing",
+    "layout"
+  ],
+  "why": "Năm chỉ số đặt thành hàng 36 px đậm, tăng giảm ghi bằng nhãn đỏ xanh nhỏ, rồi biểu đồ cột xanh #5a9ef0 dày đặc chiếm trọn bề ngang. Thanh bên trái chỉ là chữ, không biểu tượng màu. Bảng trang có cột số căn phải, thẻ bo 6 px. Mượn sự gọn gàng: một màu cho dữ liệu, đỏ và xanh chỉ cho thay đổi; không chép số liệu.",
+  "licence": "Ảnh chụp thu nhỏ của trang công khai, chỉ để model tham khảo nguyên tắc. Không chép logo, chữ, ảnh hay phông độc quyền của trang."
+}
