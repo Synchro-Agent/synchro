@@ -33,16 +33,19 @@ const COST_W: Record<Exclude<OrchRole, "boss">, number> = { manager: 0.15, staff
 const usable = (m: Member) => !m.credit;
 
 /**
- * Trưởng nhóm: model mạnh nhất (hạng, rồi gói trước khóa API, rồi suy luận và viết code), ổn định với việc nhiều công
- * cụ (câu trả lời cuối đi đường chat đầy đủ). Quản lý: model hạng cân bằng / mạnh khác trưởng nhóm, ưu tiên hãng khác
- * để bước duyệt nhìn bằng con mắt khác; không có ai thì trưởng nhóm tự duyệt.
+ * Trưởng nhóm: model bộ định tuyến đã chọn cho lượt này (prefer) khi nó đủ mạnh, vì câu trả lời cuối vẫn do nó viết như
+ * khi không chia việc, nên Orchestra không làm câu trả lời cuối đắt hơn và vẫn theo mọi luật chọn model sẵn có (gói
+ * trước khóa API, hạn mức, chi phí). Không có thì model mạnh nhất (hạng, rồi gói trước khóa API, rồi suy luận và viết
+ * code), ổn định với việc nhiều công cụ. Quản lý: model hạng cân bằng / mạnh khác trưởng nhóm, ưu tiên hãng khác để
+ * bước duyệt nhìn bằng con mắt khác; không có ai thì trưởng nhóm tự duyệt.
  */
-export function pickTeam(pool: Member[]): Team | null {
+export function pickTeam(pool: Member[], prefer?: string): Team | null {
   const all = pool.filter((m) => usable(m) && !m.codeOnly);
   if (!all.length) return null;
   const head = (m: Member) => (m.caps.reason + m.caps.code + m.caps.write_vi) / 3;
   const steady = all.some((m) => m.steady) ? all.filter((m) => m.steady) : all;
-  const boss = [...steady].sort((a, b) => b.level - a.level || Number(!a.cli) - Number(!b.cli)
+  const routed = all.find((m) => m.key === prefer && m.level >= 1 && !m.low);
+  const boss = routed ?? [...steady].sort((a, b) => b.level - a.level || Number(!a.cli) - Number(!b.cli)
     || Number(a.low) - Number(b.low) || head(b) - head(a))[0];
   const others = all.filter((m) => m.key !== boss.key);
   const mgr = others

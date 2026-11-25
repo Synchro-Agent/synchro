@@ -426,7 +426,7 @@ async function chatPostTurn(body: Parameters<typeof chatPost>[0], c: Who, scope:
   const team = canSplit
     ? await orchestraTurn({
       user: c.user, q, messages: body.messages, pool: pool.filter((k) => !avoid.includes(k)), autopilot: !!taskOf(body),
-      name: (k) => shown(k) ?? k,
+      name: (k) => shown(k) ?? k, routed: route.model,
     })
     : null;
   if (team === "cancelled") return Response.json({ model: route.model, text: "", cancelled: true });

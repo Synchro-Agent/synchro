@@ -124,13 +124,15 @@ export type OrchTurn = { boss: string; block: string; state: OrchState; models: 
  */
 type TurnIn = {
   user: UserRow; q: RouteInput; messages: unknown; pool: string[]; autopilot: boolean; name: (k: string) => string;
+  /** Model bộ định tuyến chọn cho lượt này: làm trưởng nhóm khi đủ mạnh. */
+  routed?: string;
 };
 export async function orchestraTurn(o: TurnIn): Promise<OrchTurn | "cancelled" | null> {
   const dec = shouldSplit(o.q, { pool: o.pool.length, autopilot: o.autopilot });
   if (!dec.split) return null;
   const l = learned();
   const members = o.pool.map((k) => memberOf(o.user, k, l));
-  const team = pickTeam(members);
+  const team = pickTeam(members, o.routed);
   if (!team) return null;
   const why = { branches: dec.branches, boss: team.boss, manager: team.manager, pool: o.pool.length };
   console.log(`[orchestra] ${JSON.stringify(why)}`);

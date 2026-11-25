@@ -98,6 +98,13 @@ ok(team.manager === "sub-codex/gpt-6-sol", "quản lý: hạng cân bằng của
 const creditBoss = A.pickTeam([mem("sub-claude/fable-5-1", { credit: true, level: 3 }), mem("sub-claude/sonnet")]);
 ok(creditBoss.boss === "sub-claude/sonnet", "model tính tiền ngoài gói không làm trưởng nhóm");
 ok(A.pickTeam([mem("sub-claude/haiku")]).manager === "sub-claude/haiku", "chỉ một model: trưởng nhóm tự duyệt");
+ok(A.pickTeam(pool, "sub-codex/gpt-6-sol").boss === "sub-codex/gpt-6-sol",
+  "model bộ định tuyến chọn (đủ mạnh) làm trưởng nhóm: câu trả lời cuối không đắt hơn khi không chia");
+ok(A.pickTeam(pool, "sub-claude/haiku").boss === "sub-claude/opus",
+  "model định tuyến hạng nhanh: chọn model mạnh làm trưởng nhóm");
+const lowSol = pool.map((m) => (m.key === "sub-codex/gpt-6-sol" ? { ...m, low: true } : m));
+ok(A.pickTeam(lowSol, "sub-codex/gpt-6-sol").boss === "sub-claude/opus",
+  "model định tuyến sắp hết hạn mức: không làm trưởng nhóm");
 const tk = (id, role, needs, size, deps = []) => ({ id, title: id, role, needs, size, do: "x", out: "", deps });
 const tasks = [
   tk("r1", "intern", ["search"], "s"), tk("r2", "intern", ["search"], "s"), tk("r3", "intern", ["search"], "s"),
