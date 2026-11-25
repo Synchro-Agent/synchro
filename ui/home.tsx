@@ -16,6 +16,8 @@ import { chatError, GENERIC_ERR } from "../shared/chaterror";
 import { armDraft, saveDraft, takeDraft } from "./draft";
 import { Lockup, Mark, SideToggle } from "./brand";
 import { BrandLogo, ModelLogo, ProviderLogo } from "./brands";
+import { ProviderModels } from "./modellist";
+import { lineup } from "../shared/modellineup";
 import { lazyView } from "./lazy";
 import type { CodeMeta } from "./codeview";
 import { deleteServerSession, flushAllNow, listServerSessions, patchServerSession, pushSession, resetCodePrefs, seedCodePrefs, useCodePrefs } from "./codesync";
@@ -227,6 +229,7 @@ function ModelPicker({ model, setModel, prefix }: { model: string; setModel: (m:
   const [subPos, setSubPos] = useState<React.CSSProperties>({});
   const [subLeft, setSubLeft] = useState<number | string>("calc(100% + 8px)");
   const [effort, setEffort] = usePref("effort", "auto");
+  const [allFor, setAllFor] = useState<Set<string>>(() => new Set());
   const { say, me, openSettings } = useApp();
   const { providers, allowed, loaded, effort: caps } = useModels();
   // Mức nỗ lực thật sự dùng: mức người dùng chọn, hạ theo giới hạn quản trị viên đặt cho model và các mức model hỗ trợ.
@@ -270,6 +273,8 @@ function ModelPicker({ model, setModel, prefix }: { model: string; setModel: (m:
   // Đổi chỗ mà không đổi cỡ thì bộ theo dõi kích thước không báo: tính lại phần dời ngay.
   useLayoutEffect(() => { mref.current?.querySelectorAll<HTMLElement>(".model-sub").forEach(fitFloat); }, [sub, subLeft, subPos]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (mm) refreshModels(); }, [mm]);
+  // Mỗi lần mở menu, các hãng trở về đội hình ngắn (không giữ "Xem tất cả model" của lần trước).
+  useEffect(() => { if (mm) setAllFor(new Set()); }, [mm]);
   // Menu mở ra bị tràn khỏi màn hình (nút nằm giữa ô soạn tin trên điện thoại): dịch ngang cho vừa.
   const [shift, setShift] = useState(0);
   useEffect(() => {
@@ -284,6 +289,18 @@ function ModelPicker({ model, setModel, prefix }: { model: string; setModel: (m:
     return () => cancelAnimationFrame(raf);
   }, [mm]);
   const subX = { left: subLeft };
+  // Mỗi hãng chỉ hiện đội hình theo bậc như ứng dụng của hãng; model đời trước vẫn ở "Xem tất cả model".
+  // Synchro Code (có tiền tố) thêm model chỉ viết code của hãng vào đội hình.
+  const lineups = useMemo(() => {
+    const ownPlans = new Set(providers.filter((p) => p.source === "plan").map((p) => p.kind as string));
+    const opts = (kind: string) => ({ selected: model, code: !!prefix, ownPlans, kind });
+    return Object.fromEntries(providers.map((p) => [p.id, lineup(p.models, opts(p.kind))]));
+  }, [providers, model, prefix]);
+  const toggleAll = (id: string) => setAllFor((s) => { const n = new Set(s); if (!n.delete(id)) n.add(id); return n; });
+  const shownCount = (id: string) => {
+    const l = lineups[id];
+    return l ? l.main.length + l.via.length + (allFor.has(id) ? l.rest.length : 0) : 0;
+  };
   const ok = (k: string) => k === AUTO || allowsModel(allowed, k);
   const pick = (k: string) => {
     if (!ok(k)) { close(); say("Quản trị viên chưa cho phép tài khoản của bạn dùng model này"); return; }
@@ -340,12 +357,9 @@ function ModelPicker({ model, setModel, prefix }: { model: string; setModel: (m:
         {providers.map((pv) => (
           <Menu key={pv.id} open={sub === pv.id} className="model-sub msub-models" style={{ ...subX, ...subPos, width: 260 }}>
             {pv.plan && <PlanNote pv={pv} />}
-            <MsubBody on={sub === pv.id} count={pv.models.length} place={placeSub}>
-            {pv.models.map((m) => (
-              <button key={m.key} className={`menu-item mline ${ok(m.key) ? "" : "locked"}`} onClick={() => pick(m.key)} title={ok(m.key) ? m.id : "Quản trị viên chưa cho phép tài khoản của bạn dùng model này"}>
-                <ModelLogo k={m.key} name={m.name} /><span className="mname-t">{m.name}</span>{m.isNew && !m.blockedUntil ? <span className="mtag mnew" title="Hãng vừa ra mắt, Synchro đã thử và cho dùng">Mới</span> : null}{m.blockedUntil ? <span className="mtag" title={resetClock(m.blockedUntil, getLang())}>{tr("Hết hạn mức")}</span> : null}{m.key === model ? <span className="ck"><I.Check /></span> : !ok(m.key) && <span className="sc"><I.Lock size={14} /></span>}
-              </button>
-            ))}
+            <MsubBody on={sub === pv.id} count={shownCount(pv.id)} place={placeSub}>
+              <ProviderModels pv={pv} lu={lineups[pv.id]} model={model} ok={ok} pick={pick}
+                all={allFor.has(pv.id)} onAll={() => toggleAll(pv.id)} />
             </MsubBody>
           </Menu>
         ))}

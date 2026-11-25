@@ -196,6 +196,14 @@ export function untested(key: string): boolean {
   const r = rows().get(key);
   return !!r && (r.status === "new" || r.status === "testing") && !r.pinned;
 }
+/**
+ * Ngày hãng báo ra mắt, không có thì lúc sổ thấy lần đầu: đội hình ở bộ chọn model (shared/modellineup.ts)
+ * so hai model cùng số phiên bản (Gemini 4 Neon thay Gemini 4 Argon). Model chưa có trong sổ: undefined.
+ */
+export function sinceOf(key: string): number | undefined {
+  const r = rows().get(key);
+  return r ? r.created ?? r.first_seen : undefined;
+}
 /** Thời điểm ra mắt hãng báo (để so hai model cùng dòng không có số phiên bản). */
 export const createdOf = (key: string) => rows().get(key)?.created ?? null;
 /** Giá hãng tự báo cho model này (USD / 1 triệu token), không có thì null. */

@@ -2156,6 +2156,12 @@ b,strong{font-weight:560}
 /* Bộ chọn model: danh sách dài cuộn được, trạng thái chưa có model */
 .msub-models{max-height:min(420px,60vh);display:flex;flex-direction:column;overflow:visible}
 .msub-models .msub-plan{flex:none}
+/* Đội hình model của một hãng: tiêu đề mục (model hãng khác đi kèm gói, model khác) và nút "Xem tất cả model" */
+.msub-sec{padding:8px 12px 4px;font-size:var(--fs-1);font-weight:500;color:var(--text-3)}
+.mall{color:var(--text-2)}
+.mall-n{font-size:var(--fs-1);color:var(--text-3)}
+.mall .sc svg{transition:transform .15s}
+.mall[aria-expanded="true"] .sc svg{transform:rotate(180deg)}
 /* Khung kính không tự cuộn: nền và viền của nó là lớp phủ ::before / ::after, khung cuộn thì chúng trôi theo nội dung. Phần cuộn nằm bên trong. */
 .menu-scroll.msub-scroll,.menu-scroll.gl-scroll{flex:0 1 auto;min-height:0;max-height:none}
 .mname-t{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}

@@ -3,10 +3,10 @@
 import "server-only";
 import { isAdmin, permsOf, type UserRow } from "./authstore";
 import { sharedKeyBlock } from "./auth/sharedkey";
-import { ALL } from "../shared/catalog";
+import { ALL, type ModelInfo } from "../shared/catalog";
 import { catalog, defaultModel, mainModels } from "./providers";
 import { mergedProviders } from "./ai/subs";
-import { isNewModel, replacementOf, replacements, withReplacements } from "./modelreg";
+import { isNewModel, replacementOf, replacements, sinceOf, withReplacements } from "./modelreg";
 
 export async function modelsFor(user: UserRow) {
   const cat = await catalog();
@@ -18,8 +18,13 @@ export async function modelsFor(user: UserRow) {
   const perms = permsOf(user);
   // Gộp theo hãng: nhóm Claude / ChatGPT / Gemini hiện model của gói người dùng đã đăng nhập (Cài đặt → Providers), hoặc model của
   // khóa API dùng chung khi chưa đăng nhập gói hay người dùng đã đồng ý dùng API thay gói. Model của gói luôn dùng được với chính họ.
-  // Nhãn "Mới" cho cả model của gói (sổ model đọc danh sách gói bằng đăng nhập của quản trị viên).
-  const merged = (await mergedProviders(user, providers).catch(() => providers)).map((p) => (p.source === "plan" ? { ...p, models: p.models.map((m) => (isNewModel(m.key) ? { ...m, isNew: true } : m)) } : p));
+  // Nhãn "Mới" và ngày thấy lần đầu cho cả model của gói (sổ model đọc danh sách gói bằng đăng nhập của quản trị viên).
+  const planInfo = (m: ModelInfo): ModelInfo => {
+    const since = sinceOf(m.key);
+    return { ...m, ...(isNewModel(m.key) ? { isNew: true } : {}), ...(since ? { since } : {}) };
+  };
+  const merged = (await mergedProviders(user, providers).catch(() => providers))
+    .map((p) => (p.source === "plan" ? { ...p, models: p.models.map(planInfo) } : p));
   const subKeys = merged.flatMap((p) => p.plan?.models.map((m) => m.key) ?? []);
   // default: chỉ model quản trị viên đặt; không đặt thì người dùng mới bắt đầu ở Tự động (models.ts), không phải model đầu danh sách.
   // Model mặc định đã cũ hoặc bị hãng gỡ: bản thay thế của nó.

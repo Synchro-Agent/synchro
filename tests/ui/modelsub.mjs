@@ -72,6 +72,12 @@ try {
       if (!pt) { ok(false, `${h}px: không thấy dòng ${names[i]}`); continue; }
       await P("Input.dispatchMouseEvent", { type: "mouseMoved", x: pt[0], y: pt[1] });
       await sleep(450);
+      // Menu con chỉ hiện đội hình ngắn: mở "Xem tất cả model" để có danh sách dài thật sự phải cuộn.
+      const openSub = `[...document.querySelectorAll(".msub-models")].find((e) => !e.classList.contains("out"))`;
+      if (await ev(`!!${openSub}?.querySelector(".mall")`)) {
+        await click(`${openSub}.querySelector(".mall")`, "Xem tất cả model");
+        await sleep(450);
+      }
       const a = await ev(measure);
       const tag = `${h}px, ${names[i]} (${a?.items} model)`;
       ok(a && !a.panelScrolls, `${tag}: khung kính không tự cuộn`, JSON.stringify(a));
