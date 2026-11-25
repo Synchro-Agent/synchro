@@ -141,6 +141,11 @@ ok(r.main.find((m) => m.id === "gemini-4-neon")?.isNew && !r.main.find((m) => m.
 const DAY = 86_400_000, neon = key("gemini-4-neon");
 ok(G.isNewModel(neon, Date.now() + 13 * DAY) && !G.isNewModel(neon, Date.now() + 15 * DAY),
   "nhãn Mới tự hết sau 14 ngày, không ở mãi");
+// Gói vừa nối (hay sổ làm lại) thấy lần đầu một model hãng đã bán từ lâu: không phải model mới.
+G.syncListed("sub-agy", "google", [...LIST([...BASE, "gemini-4-neon"]),
+  { id: "gemini-3.8-flash", name: "Gemini 3.8 Flash", created: Date.now() - 40 * DAY }], { plan: true });
+ok(!G.isNewModel(key("gemini-3.8-flash")) && G.isNewModel(neon),
+  "thấy lần đầu nhưng hãng ra mắt 40 ngày trước: không gắn nhãn Mới");
 
 console.log(`\n${pass} đạt, ${fail} lỗi`);
 process.exit(fail ? 1 : 0);
