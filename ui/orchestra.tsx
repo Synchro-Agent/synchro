@@ -13,6 +13,8 @@ import {
 
 const tok = (n: number) =>
   (n >= 10_000 ? `${Math.round(n / 1000)}k` : n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n));
+// "≈2.5k token" / "≈2.5k tokens": số nhiều tiếng Anh theo số thật (từ điển ghi hai dạng, tf chọn theo n).
+const tokens = (n: number) => tf("≈{k} token", { k: tok(n), n });
 const dur = (ms: number) => {
   const s = Math.max(0, Math.round(ms / 1000));
   return s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${String(s % 60).padStart(2, "0")}s`;
@@ -68,7 +70,7 @@ function TaskRow({ t, live }: { t: OrchTaskView; live: boolean }) {
         </div>
         <div className="orc-t-m">
           <span>{role(t.role)}</span><span data-notr>{t.name}</span>
-          {t.tokens > 0 && <span data-notr>≈{tok(t.tokens)} token</span>}
+          {t.tokens > 0 && <span data-notr>{tokens(t.tokens)}</span>}
           {t.ms && t.ms >= 1000 ? <span data-notr>{dur(t.ms)}</span> : null}
           {t.status === "skip" || t.status === "fail" ? <span>{said(t.status)}</span> : null}
         </div>
@@ -79,29 +81,35 @@ function TaskRow({ t, live }: { t: OrchTaskView; live: boolean }) {
   );
 }
 
-/** live: lượt đang chạy (mở sẵn, có vòng xoay); xong thì gọn thành một dòng. */
-export function OrchestraCard({ s, live }: { s: OrchState; live: boolean }) {
+/**
+ * live: lượt đang chạy (mở sẵn, có vòng xoay); xong thì gọn thành một dòng. showDur: hiện tổng thời gian ở dòng đầu
+ * (Autopilot); trong khung chat thì không, vì nhật ký làm việc ngay dưới đã ghi thời gian của cả lượt.
+ */
+export function OrchestraCard({ s, live, showDur }: { s: OrchState; live: boolean; showDur?: boolean }) {
   const [open, setOpen] = useState(live);
   // Lượt vừa xong: thu gọn đúng một lần; người dùng mở lại thì giữ.
   useEffect(() => { if (!live) setOpen(false); }, [live]);
   const total = s.tasks.length, done = s.tasks.filter((t) => t.status === "done").length;
   const models = new Set(s.members.map((m) => m.model)).size;
-  const running = live && s.phase !== "done" && s.phase !== "failed";
+  // Bản chụp cuối (nhóm xong) tới trước khi lần chạy kết thúc hẳn (còn lưu kết quả, gửi Hộp thư): lần chạy còn chạy
+  // thì chưa nói "đã xong", tránh dòng đầu của mục Autopilot ghi "Đang chạy" mà thẻ ghi "Nhóm đã xong".
+  const ending = live && (s.phase === "done" || s.phase === "failed");
+  const phase = ending ? trc("Đang hoàn tất", "Orchestra") : tr(PHASE_LABEL[s.phase]);
   const bits = [
     total ? tf("{done}/{total} việc", { done, total }) : "",
     tf("{n} model cùng làm", { n: models }),
-    s.tokens ? `≈${tok(s.tokens)} token` : "",
-    !running && s.ended ? dur(s.ended - s.started) : "",
+    s.tokens ? tokens(s.tokens) : "",
+    showDur && !live && s.ended ? dur(s.ended - s.started) : "",
   ].filter(Boolean);
   const rows = ORCH_ROLES.map((r) => ({ r, list: s.members.filter((m) => m.role === r) })).filter((x) => x.list.length);
   return (
-    <section className={`orc ${open ? "open" : ""} ${running ? "live" : ""}`} aria-label="Orchestra">
+    <section className={`orc ${open ? "open" : ""} ${live ? "live" : ""}`} aria-label="Orchestra">
       <button type="button" className="orc-h" aria-expanded={open} onClick={() => setOpen(!open)}>
         <span className="orc-ic">
-          {running ? <span className="orc-spin" aria-hidden="true" /> : <I.Users size={14} />}
+          {live ? <span className="orc-spin" aria-hidden="true" /> : <I.Users size={14} />}
         </span>
         <b data-notr>Orchestra</b>
-        <span className="orc-ph">{tr(PHASE_LABEL[s.phase])}</span>
+        <span className="orc-ph">{phase}</span>
         <span className="orc-meta" data-notr>
           {bits.map((b, k) => (k ? <span key={k} className="orc-more"> · {b}</span> : <span key={k}>{b}</span>))}
         </span>
@@ -112,14 +120,14 @@ export function OrchestraCard({ s, live }: { s: OrchState; live: boolean }) {
           <div className="orc-chart" role="list" aria-label={tr("Sơ đồ nhóm")}>
             {rows.map(({ r, list }) => (
               <div key={r} className={`orc-row ${r}`} role="presentation">
-                {list.map((m) => <Member key={`${m.role}-${m.model}`} m={m} live={running} />)}
+                {list.map((m) => <Member key={`${m.role}-${m.model}`} m={m} live={live} />)}
               </div>
             ))}
           </div>
           {total > 0 && (
             <div className="orc-tasks" role="list" aria-label={tr("Phân công việc")}>
               <div className="orc-tasks-h">{tr("Phân công việc")}</div>
-              {s.tasks.map((t) => <TaskRow key={t.id} t={t} live={running} />)}
+              {s.tasks.map((t) => <TaskRow key={t.id} t={t} live={live} />)}
             </div>
           )}
         </div>

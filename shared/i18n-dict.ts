@@ -1428,6 +1428,8 @@ addNew(VI2EN, DESIGN_VI2EN);
 addNew(VI2EN, FX_VI2EN);
 addNew(VI2EN, AUTH_VI2EN);
 addNew(VI2EN, ORCH_VI2EN);
+// Số token của Orchestra: chữ "token" giống nhau ở hai ngôn ngữ; mục VI2EN chỉ để tiếng Anh có số nhiều.
+SAME.add("≈{k} token");
 RULES_EN.push(...ORCH_RULES_EN);
 // Tên tính năng nhiều model cùng làm một việc: giữ nguyên ở cả hai ngôn ngữ.
 SAME_WORDS.add("Orchestra");

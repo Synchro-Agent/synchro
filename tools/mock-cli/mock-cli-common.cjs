@@ -132,8 +132,9 @@ function mockOrchestra(prompt) {
   if (prompt.includes("<ket_qua>\n") && prompt.includes("<yeu_cau_goc>")) {
     const ids = [...prompt.matchAll(/<phan_viec id="([\w-]+)"/g)].map((m) => m[1]);
     const redo = prompt.includes("#orchredo");
-    return JSON.stringify({ reviews: ids.map((id, k) => (redo && k === 0 ? { id, ok: false, fix: "Thiếu số liệu năm gần nhất." }
-      : { id, ok: true })) });
+    const fix = "Thiếu số liệu năm gần nhất.";
+    const reviews = ids.map((id, k) => (redo && k === 0 ? { id, ok: false, fix } : { id, ok: true }));
+    return JSON.stringify({ reviews });
   }
   const part = /<phan_viec id="([\w-]+)" title="([^"]*)">/.exec(prompt);
   if (part && prompt.includes("<yeu_cau_goc>")) {

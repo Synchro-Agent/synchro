@@ -71,6 +71,20 @@
 @media (max-width:520px){
   .orc-meta .orc-more{display:none}
   .orc-m-t b{max-width:16ch}
+  /* Điện thoại: thành viên cùng vai giữ trên một hàng ngang (vuốt khi không đủ chỗ) thay vì xuống dòng thành cột, vì
+     cột đọc như người dưới báo cáo cho người trên. Hàng cuộn được nên nét nối vẽ bằng nền ở phần đệm trên (nét dựng
+     bằng ::before nằm ngoài hộp sẽ bị cắt); lề tự động ở hai đầu giữ hàng ở giữa khi đủ chỗ mà vẫn cuộn được tới thẻ
+     đầu khi tràn. */
+  .orc-chart{gap:0;align-items:stretch}
+  .orc-row{flex-wrap:nowrap;justify-content:flex-start;overflow-x:auto;overscroll-behavior-x:contain;
+    scrollbar-width:thin;padding:4px}
+  .orc-row>:first-child{margin-left:auto}
+  .orc-row>:last-child{margin-right:auto}
+  /* Kéo lên đúng phần đệm dưới của hàng trên (chỗ cho viền sáng của thẻ đang làm) để nét nối chạm thẻ trên. */
+  .orc-row+.orc-row{margin-top:-4px;padding-top:18px;
+    background:linear-gradient(var(--ds-line-2),var(--ds-line-2)) 50% 0/1px 18px no-repeat}
+  .orc-row+.orc-row::before{content:none}
+  .orc-m{flex:none}
 }
 @media (prefers-reduced-motion:reduce){.orc-spin{animation-duration:2.4s}.orc-b{animation:none}}
 }
