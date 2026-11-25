@@ -112,6 +112,7 @@ await P("Page.addScriptToEvaluateOnNewDocument", { source: `(() => { const f = w
   window.fetch = async (...a) => { const r = await f(...a); if (!String(a[0]).includes("/api/models")) return r;
   const j = await r.clone().json().catch(() => null); if (!j) return r;
   j.providers = ${JSON.stringify(PROVIDERS)}; j.allowed = ["*"]; j.default = null;
+  window.__lineupLoads = (window.__lineupLoads || 0) + 1;
   return new Response(JSON.stringify(j), { status: 200, headers: { "content-type": "application/json" } }); }; })()` });
 
 const openSub = `[...document.querySelectorAll(".msub-models")].find((e) => !e.classList.contains("out"))`;
@@ -127,9 +128,15 @@ const fits = `(() => { const r = ${openSub}.getBoundingClientRect();
 const provRow = (name) => `[...document.querySelectorAll(".model-menu .mprov")]
   .find((x) => x.textContent.trim().startsWith(${JSON.stringify(name)}))`;
 const menuOpen = `!!document.querySelector(".model-menu:not(.out)")`;
+// Trang đầu tiên dùng danh sách model của gói khởi động (danh sách thật của mock); mở menu thì trang hỏi lại
+// /api/models, và chỉ lần hỏi đó mới mang danh sách giả ở trên. Mock chạy chế độ dev trả lời chậm, nên chờ
+// lần hỏi ấy xong rồi mới đọc menu.
+const loads = `window.__lineupLoads || 0`;
 const openPicker = async () => {
+  const n = await ev(loads);
   if (!(await ev(menuOpen))) await click(`document.querySelector(".model-btn")`, "nút model");
   await until(menuOpen, 5000, "menu model");
+  await until(`${loads} > ${n}`, 60000, "danh sách model giả");
   await sleep(250);
 };
 const showProv = async (name) => { await hover(provRow(name), name); await sleep(450); return ev(rows); };
