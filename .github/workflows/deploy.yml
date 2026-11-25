@@ -22,7 +22,7 @@ jobs:
     # Phút Actions (repo riêng tư, gói Free 2.000 phút / tháng): ≈ 40 phút mỗi lần đẩy → khoảng 40 lần đẩy main / staging mỗi tháng.
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # Cùng bản Node với "engines" trong package.json (22.x) và máy chủ.
       - uses: actions/setup-node@v4
@@ -171,7 +171,7 @@ jobs:
       cancel-in-progress: false
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: actions/download-artifact@v4
         continue-on-error: true
@@ -209,7 +209,7 @@ jobs:
       cancel-in-progress: false
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Cấu hình SSH
         run: |
