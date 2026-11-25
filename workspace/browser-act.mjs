@@ -541,13 +541,21 @@ export function createActor(env) {
   // Trang ở nền (người dùng chuyển sang tab khác, thu nhỏ hay để Chrome sau ứng dụng khác): trình duyệt ngừng vẽ trang, nên cuộn vô tận,
   // hiệu ứng, danh sách tải dần không chạy. Giữ trang "đang hiện" bằng một luồng hình nhỏ (như khi chia sẻ tab) suốt lúc Synchro điều khiển,
   // không phải chuyển tab hay kéo cửa sổ lên trước.
+  // Hỏi lại trước MỖI thao tác (một lần evaluate rất nhẹ): người dùng chuyển tab ngay sau thao tác trước thì thao tác
+  // kế (bấm chạy hoạt ảnh, cuộn tải thêm) phải thấy trang đã ẩn; chờ 2 giây mới hỏi lại thì nó chạy trên trang đã
+  // ngừng vẽ. Chỉ giãn 2 giây sau khi bật luồng hình thất bại, để không thử lại liên tục.
   async function awake(c) {
-    if (c.awake || c.closed || Date.now() - (c.awakeAt ?? 0) < 2000) return;
-    c.awakeAt = Date.now();
+    if (c.awake || c.closed || Date.now() - (c.awakeFailAt ?? 0) < 2000) return;
     if ((await evaluate(c, "document.visibilityState", 3000).catch(() => "visible")) !== "hidden") return;
     c.awake = true;
-    c.on("Page.screencastFrame", (p, sid) => { if (!sid) c.send("Page.screencastFrameAck", { sessionId: p.sessionId }).catch(() => {}); });
-    await c.send("Page.startScreencast", { format: "jpeg", quality: 5, maxWidth: 160, maxHeight: 160, everyNthFrame: 30 }).catch(() => { c.awake = false; });
+    if (!c.awakeHooked) {
+      c.awakeHooked = true;
+      c.on("Page.screencastFrame", (p, sid) => {
+        if (!sid) c.send("Page.screencastFrameAck", { sessionId: p.sessionId }).catch(() => {});
+      });
+    }
+    const cast = { format: "jpeg", quality: 5, maxWidth: 160, maxHeight: 160, everyNthFrame: 30 };
+    await c.send("Page.startScreencast", cast).catch(() => { c.awake = false; c.awakeFailAt = Date.now(); });
   }
   // Chờ trang tải xong sau một thao tác (bấm nút gửi, nhấn Enter…): đợi ngắn cho trang kịp phản ứng, rồi chờ readyState tối đa ~8 giây.
   async function settle(c, ms = 350) {
