@@ -59,14 +59,29 @@ export const ghUnlink = () => fetch("/api/github", { method: "DELETE" }).then((r
 export function ghConnect(): Promise<string | null> {
   return new Promise((resolve) => {
     const w = window.open("/api/github/connect", "synchro-gh", "width=760,height=780");
-    if (!w) { location.href = "/api/github/connect"; return; }
+    // Ứng dụng máy tính chặn mọi cửa sổ con (window.open trả null) và tự mở trang ở trình duyệt của máy:
+    // chuyển cả trang sang /api/github/connect ở đó sẽ mở trang GitHub lần thứ hai, nên chỉ chờ người dùng quay lại.
+    const desktop = !!(window as { synchroDesktop?: unknown }).synchroDesktop;
+    if (!w && !desktop) { location.href = "/api/github/connect"; return; }
     let done = false;
-    const finish = (err: string | null) => { if (done) return; done = true; window.removeEventListener("storage", onStore); clearTimeout(t); resolve(err); };
+    const finish = (err: string | null) => {
+      if (done) return;
+      done = true;
+      window.removeEventListener("storage", onStore);
+      window.removeEventListener("focus", onBack);
+      clearTimeout(t);
+      resolve(err);
+    };
     const onStore = (e: StorageEvent) => {
       if (e.key !== "synchro:gh" || !e.newValue) return;
       try { finish((JSON.parse(e.newValue) as { error?: string }).error || null); } catch { finish(null); }
     };
+    // Ứng dụng máy tính mở trang GitHub ở trình duyệt ngoài, tin nhắn localStorage không về được trang này;
+    // trên web người dùng cũng có thể đóng cửa sổ con giữa chừng. Quay lại trang mà chưa có kết quả thì thôi chờ
+    // ("timeout": nơi gọi tự đọc lại trạng thái kết nối), chừa một nhịp cho tin nhắn đến trước.
+    const onBack = () => setTimeout(() => finish("timeout"), 1500);
     window.addEventListener("storage", onStore);
+    window.addEventListener("focus", onBack);
     // COOP tách cửa sổ con khỏi trang này nên không đọc được w.closed; hết 10 phút thì thôi chờ.
     const t = setTimeout(() => finish("timeout"), 600_000);
   });

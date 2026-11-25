@@ -39,7 +39,7 @@ export function RepoModal({ git, ensureSid, say, onClose, onCloned }: {
   const [busy, setBusy] = useState<string>("");
   const [more, setMore] = useState(false);
   const [err, setErr] = useState<{ msg: string; fix?: GhFix; reconnect?: boolean } | null>(null);
-  // Đã mở trang GitHub để gỡ chặn: lần cửa sổ được chọn lại thì đọc lại danh sách từ GitHub (bỏ bản giữ tạm).
+  // Đã mở trang GitHub (gỡ chặn, kết nối): lần cửa sổ được chọn lại thì đọc lại trạng thái và danh sách từ GitHub.
   const away = useRef(false);
   const [nonce, setNonce] = useState(0);
   const fresh = useRef(false);
@@ -56,7 +56,13 @@ export function RepoModal({ git, ensureSid, say, onClose, onCloned }: {
   }, [st?.linked, q, nonce]);
   const reload = () => { fresh.current = true; setList(null); setNonce((n) => n + 1); };
   useEffect(() => {
-    const back = () => { if (away.current) { away.current = false; setErr(null); reload(); } };
+    const back = () => {
+      if (!away.current) return;
+      away.current = false;
+      setErr(null);
+      void load();
+      reload();
+    };
     window.addEventListener("focus", back);
     return () => window.removeEventListener("focus", back);
   }, []);
@@ -73,13 +79,15 @@ export function RepoModal({ git, ensureSid, say, onClose, onCloned }: {
     setBusy("connect"); setErr(null);
     const e = await ghConnect();
     setBusy("");
-    if (e && e !== "timeout") setErr({ msg: e });
-    else if (!e) {
-      say("Đã kết nối GitHub");
-      // Kết nối lại khi đã kết nối (cấp thêm quyền): token mới nên đọc lại danh sách; lần đầu thì danh sách tự tải.
-      if (st?.linked) reload();
-      await load();
-    }
+    if (e && e !== "timeout") return setErr({ msg: e });
+    if (!e) say("Đã kết nối GitHub");
+    // Chưa có tin: người dùng có thể còn đang cấp quyền ở trình duyệt ngoài, lần quay lại sau đọc lại lần nữa.
+    else away.current = true;
+    // Kết nối lại khi đã kết nối (cấp thêm quyền): token mới nên đọc lại danh sách; lần đầu thì danh sách tự tải.
+    // "timeout" (quay lại mà chưa có tin, vd. ứng dụng máy tính kết nối ở trình duyệt ngoài) cũng đọc lại,
+    // vì kết nối có thể đã xong ở nơi khác.
+    if (st?.linked) reload();
+    await load();
   };
   const clone = async (repo: string, branch?: string) => {
     if (!repo.trim()) return;
