@@ -13,7 +13,8 @@ import { ASK_GONE } from "./codesync";
 import { ArgsEditor, readArgs } from "./argsedit";
 import { CxDetails, cxHead } from "./cxcard";
 import type { CxCard } from "../shared/cxactions";
-import { ghConnect, ghRepos, ghStatus, ghUnlink, gitOp, useCodeUi, type GhRepo, type GhStatus, type GitState, type PlanItem } from "./wsclient";
+import { useCodeUi, type GitState, type PlanItem } from "./wsclient";
+import { RepoModal } from "./ghrepomodal";
 
 export type ToolStep = { k: "tool"; id: string; name: string; input: Record<string, unknown>; done?: boolean; ok?: boolean; summary?: string; output?: string; diff?: { path: string; add: number; del: number }; image?: string };
 // Câu hỏi duyệt (chế độ quyền, trang web chưa được phép): wait = đang chờ bạn; ok / no = đã trả lời; always = luôn cho phép.
@@ -302,78 +303,6 @@ export function GitHubButton({ git, available, reason, ensureSid, say, onCloned 
       </button>
       {open && typeof document !== "undefined" && createPortal(<RepoModal git={git} ensureSid={ensureSid} say={say} onClose={() => setOpen(false)} onCloned={(g) => { setOpen(false); onCloned(g); }} />, document.body)}
     </>
-  );
-}
-
-function RepoModal({ git, ensureSid, say, onClose, onCloned }: { git?: GitState; ensureSid: () => number; say: Say; onClose: () => void; onCloned: (g: GitState) => void }) {
-  const [st, setSt] = useState<GhStatus | null>(null);
-  const [repos, setRepos] = useState<GhRepo[] | null>(null);
-  const [q, setQ] = useState("");
-  const [url, setUrl] = useState("");
-  const [busy, setBusy] = useState<string>("");
-  const [err, setErr] = useState("");
-  const load = () => ghStatus().then(setSt).catch((e) => setErr(e.message));
-  useEffect(() => { load(); }, []);
-  useEffect(() => {
-    if (!st?.linked) return;
-    const t = setTimeout(() => ghRepos(q).then(setRepos).catch((e) => setErr(e.message)), q ? 250 : 0);
-    return () => clearTimeout(t);
-  }, [st?.linked, q]);
-  const connect = async () => {
-    setBusy("connect"); setErr("");
-    const e = await ghConnect();
-    setBusy("");
-    if (e && e !== "timeout") setErr(e); else if (!e) { say("Đã kết nối GitHub"); load(); }
-  };
-  const clone = async (repo: string, branch?: string) => {
-    if (!repo.trim()) return;
-    setBusy(repo); setErr("");
-    try {
-      const g = await gitOp(ensureSid(), "clone", { repo, branch });
-      say(`Đã clone ${g.git && g.repo ? g.repo : repo}`);
-      onCloned(g);
-    } catch (e) { setErr((e as Error).message); }
-    setBusy("");
-  };
-  const has = git?.git && git.repo;
-  return (
-    <div className="overlay" onMouseDown={(e) => { if (e.target === e.currentTarget && !busy) onClose(); }}>
-      <div className="modal gh-modal">
-        <div className="gh-head"><I.GitHub size={22} /><div><h2>Repo GitHub</h2><p>Clone repo vào workspace của phiên này để agent đọc, sửa, chạy và kiểm tra code.</p></div>
-          <button className="icon-btn" onClick={onClose} aria-label="Đóng"><I.X size={18} /></button></div>
-        {has ? (
-          <div className="gh-cur">
-            <div><b data-notr>{git.repo}</b><span><I.Branch size={13} />{git.branch}</span></div>
-            <a className="btn" href={`https://github.com/${git.repo}`} target="_blank" rel="noreferrer"><I.External size={14} />Mở trên GitHub</a>
-            <p className="gh-note">Mỗi phiên gắn với một repo. Muốn làm repo khác, hãy tạo phiên mới.</p>
-          </div>
-        ) : <>
-          <div className="gh-acc">
-            {!st ? <span className="gh-note">Đang tải…</span>
-              : st.linked ? <><span className="gh-ok"><I.Check size={14} />Đã kết nối <b data-notr>@{st.login}</b></span><button className="gh-lnk" onClick={async () => { await ghUnlink(); setRepos(null); load(); say("Đã ngắt kết nối GitHub"); }}>Ngắt kết nối</button></>
-              : st.configured ? <><span className="gh-note">Kết nối tài khoản GitHub để clone repo riêng tư và push code.</span><button className="btn dark" disabled={busy === "connect"} onClick={connect}><I.GitHub size={15} />{busy === "connect" ? "Đang chờ GitHub…" : "Kết nối GitHub"}</button></>
-              : <span className="gh-note">Máy chủ chưa bật đăng nhập GitHub nên chỉ clone được repo công khai.</span>}
-          </div>
-          <div className="gh-url">
-            <input value={url} onChange={(e) => setUrl(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") clone(url); }} placeholder="owner/repo hoặc https://github.com/owner/repo" />
-            <button className="btn dark" disabled={!url.trim() || !!busy} onClick={() => clone(url)}>{busy && busy === url ? "Đang clone…" : "Clone"}</button>
-          </div>
-          {st?.linked && <>
-            <div className="gh-search"><I.Search size={15} /><input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Tìm repo của bạn" /></div>
-            <div className="gh-list">
-              {!repos ? <span className="gh-note">Đang tải danh sách repo…</span> : !repos.length ? <span className="gh-note">Không có repo nào.</span> : repos.map((r) => (
-                <button key={r.full} className="gh-repo" disabled={!!busy} onClick={() => clone(r.full)}>
-                  <span className="gh-repo-n"><b data-notr>{r.full}</b>{r.private && <em>Riêng tư</em>}</span>
-                  {r.desc && <span className="gh-repo-d" data-notr>{r.desc}</span>}
-                  {busy === r.full && <span className="gh-repo-s"><span className="ag-spin" />Đang clone…</span>}
-                </button>
-              ))}
-            </div>
-          </>}
-        </>}
-        {err && <div className="gh-err">{err}</div>}
-      </div>
-    </div>
   );
 }
 

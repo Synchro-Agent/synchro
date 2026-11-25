@@ -396,3 +396,39 @@ Object.assign(FX_VI2EN, {
     + " description: enlarge the title or cut the body text.",
   "Đo thật ở {vw}×{vh}: slide {slides} cao hoặc rộng hơn khung, phần thừa bị cắt khi trình chiếu. Rút chữ, giảm khoảng trống hoặc tách slide.": "Measured at {vw}×{vh}: slides {slides} are taller or wider than the frame, so the extra part is cut off when presented. Shorten the text, reduce the spacing, or split the slides.",
 });
+// Hộp thoại Repo GitHub (ui/ghrepomodal.tsx) và lý do GitHub chặn repo của tổ chức (server/ghrepos.ts).
+Object.assign(FX_VI2EN, {
+  "Tổ chức chưa cho Synchro truy cập. Chủ tổ chức bấm Grant trên GitHub.":
+    "This organization hasn't given Synchro access. An organization owner clicks Grant on GitHub.",
+  "Tổ chức bật SAML SSO. Cho phép Synchro dùng kết nối với tổ chức này.":
+    "This organization uses SAML SSO. Allow Synchro to use your connection with it.",
+  "Ứng dụng Synchro chưa được cài vào tổ chức này.": "The Synchro app isn't installed on this organization.",
+  "Cấp quyền ‹repo GitHub›": "Grant access",
+  "Cài vào tổ chức": "Install on organization",
+  "Tổ chức ‹repo GitHub›": "Organization",
+  "Cá nhân ‹repo GitHub›": "Personal",
+  "Cộng tác ‹repo GitHub›": "Collaborator",
+  "Kết nối lại GitHub một lần để Synchro đọc được repo riêng tư và repo của tổ chức.":
+    "Reconnect GitHub once so Synchro can read private and organization repos.",
+  "Kết nối lại GitHub một lần để Synchro thấy repo của mọi tổ chức bạn tham gia.":
+    "Reconnect GitHub once so Synchro can see repos from every organization you belong to.",
+  "Tìm trong mọi repo bạn truy cập được": "Search every repo you can access",
+  "Tải lại danh sách repo": "Reload the repo list",
+  "Không có repo nào khớp.": "No matching repos.",
+  "Xem thêm ({n} repo nữa)": "Show more ({n} more repos)",
+  "Chưa kết nối được GitHub. Thử lại sau ít phút.": "Couldn't reach GitHub. Try again in a few minutes.",
+  "Kết nối GitHub hiện tại chưa có quyền đọc repo riêng tư. Bấm Kết nối lại một lần để cấp thêm quyền.":
+    "Your GitHub connection can't read private repos yet. Click Reconnect once to grant the extra access.",
+  ["Tổ chức sở hữu repo này đang chặn ứng dụng bên ngoài nên Synchro chưa đọc được repo."
+    + " Bấm Cấp quyền, chọn Grant cạnh tên tổ chức trên GitHub, rồi clone lại."]:
+    "The organization that owns this repo blocks outside apps, so Synchro can't read it yet."
+    + " Click Grant access, choose Grant next to the organization on GitHub, then clone again.",
+  ["Tổ chức sở hữu repo này bật đăng nhập SAML SSO."
+    + " Bấm Cho phép để Synchro dùng kết nối GitHub với tổ chức này, rồi clone lại."]:
+    "The organization that owns this repo uses SAML SSO."
+    + " Click Allow so Synchro can use your GitHub connection with it, then clone again.",
+  ["Ứng dụng GitHub của Synchro chưa được cài vào tổ chức sở hữu repo này."
+    + " Bấm Cài vào tổ chức trên GitHub, rồi clone lại."]:
+    "The Synchro GitHub app isn't installed on the organization that owns this repo."
+    + " Click Install on organization on GitHub, then clone again.",
+});

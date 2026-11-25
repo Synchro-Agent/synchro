@@ -1465,7 +1465,34 @@ table{font-variant-numeric:tabular-nums}h1,h2,h3{text-wrap:balance}
 .gh-cur>div{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px;border-radius:var(--r-card);background:color-mix(in srgb,var(--text) 4%,transparent);font-size:var(--fs-3)}
 .gh-cur>div span{display:flex;align-items:center;gap:4px;font-size:var(--fs-label);color:var(--text-3)}
 .gh-cur .btn{display:flex;align-items:center;gap:6px;align-self:flex-start;text-decoration:none;color:var(--text)}
-.gh-err{font-size:var(--fs-label);color:#c92a2a;padding:8px 10px;border-radius:var(--r-plate);background:color-mix(in srgb,#e03131 8%,transparent)}
+.gh-err{font-size:var(--fs-label);color:#c92a2a;padding:8px 10px;border-radius:var(--r-plate);
+  background:color-mix(in srgb,#e03131 8%,transparent);display:flex;align-items:center;gap:10px}
+.gh-err>span{flex:1;min-width:0;line-height:1.45}
+[data-theme="dark"] .gh-err{color:var(--ds-bad)}
+/* nhóm repo theo chủ (cá nhân / tổ chức / cộng tác); tiêu đề nhóm dính ở đầu khung khi cuộn */
+.gh-grp{position:sticky;top:-4px;z-index:1;background:var(--card);padding:8px 10px 4px;display:flex;
+  flex-direction:column;gap:6px}
+.gh-grp+.gh-grp,.gh-repo+.gh-grp{margin-top:6px;border-top:.5px solid var(--border)}
+.gh-grp-t{display:flex;align-items:center;gap:6px;font-size:var(--fs-label);color:var(--text-3);min-width:0}
+.gh-grp-t b{font-weight:560;color:var(--text-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.gh-grp-t svg{flex:none}
+.gh-grp-n{margin-left:auto;font-variant-numeric:tabular-nums}
+.gh-grp-b{display:flex;align-items:center;gap:8px;font-size:var(--fs-1);color:var(--text-2);padding:6px 8px;
+  border-radius:var(--r-plate);background:color-mix(in srgb,#f59f00 12%,transparent)}
+.gh-grp-b>span{flex:1;min-width:0;line-height:1.4}
+.gh-grp-b svg{flex:none;color:#e67700}
+.gh-fix{display:inline-flex;align-items:center;gap:4px;flex:none;height:28px;padding:0 10px;font-size:var(--fs-1);
+  text-decoration:none;color:var(--text);white-space:nowrap}
+.gh-scope{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:var(--r-card);
+  font-size:var(--fs-label);color:var(--text-2);line-height:1.45;
+  background:color-mix(in srgb,var(--accent) 10%,transparent)}
+.gh-scope>span{flex:1;min-width:0}
+.gh-scope .btn,.gh-err .btn{flex:none;height:30px}
+.gh-search .icon-btn{flex:none;width:30px;height:30px}
+.gh-more{margin:6px 4px 2px;padding:8px;border-radius:var(--r-plate);font-size:var(--fs-label);color:var(--text-2);
+  text-align:center}
+.gh-more:hover:not(:disabled){background:var(--hover)}
+@media (max-width:640px){.gh-scope,.gh-err,.gh-grp-b{flex-wrap:wrap}.gh-modal{padding:16px}}
 
 /* ===================== Cỡ chữ khung chat (thanh bên, menu, Cài đặt: xem biến thiết kế ở đầu tệp) ===================== */
 .ai-msg,.cv-ai .ai-msg,.sk-ai{font-size:var(--fs-3);line-height:1.5}

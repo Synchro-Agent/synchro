@@ -11,15 +11,38 @@ export type GitFile = { path: string; status: string; add: number; del: number }
 export type GitState = { git: false } | { git: true; branch: string; remote: string; repo: string | null; ahead: number | null; files: GitFile[]; output?: string; pr?: { url: string; number: number; created?: boolean } };
 // Pull request của phiên mà Synchro theo dõi (tự sửa CI / góp ý, tự lưu trữ khi xong).
 export type PrInfo = { repo: string; number: number; url: string | null; branch: string | null; state: string; fixes: number; note: string | null; busy: boolean };
-export type GhStatus = { configured: boolean; allowed: boolean; linked: boolean; login: string | null; repoScope: boolean };
-export type GhRepo = { full: string; private: boolean; branch: string; desc: string | null; pushed: string; url: string; push: boolean };
+// missing: quyền OAuth còn thiếu để thấy mọi repo (kết nối từ trước khi Synchro xin read:org)
+// -> mời kết nối lại một lần.
+export type GhStatus = {
+  configured: boolean; allowed: boolean; linked: boolean; login: string | null; repoScope: boolean;
+  kind?: "oauth" | "app" | null; missing?: string[]; fixUrl?: string | null;
+};
+export type GhRepo = {
+  full: string; owner?: string; private: boolean; branch: string; desc: string | null; pushed: string; url: string;
+  push: boolean;
+};
+// Nhóm repo theo chủ. block: tổ chức đang chặn Synchro (oauth: chặn OAuth App, sso: SAML SSO, app: chưa cài app),
+// fixUrl là trang GitHub để gỡ chặn.
+export type GhGroup = {
+  owner: string; type: "user" | "org"; count: number; block?: "oauth" | "sso" | "app"; fixUrl?: string;
+};
+export type GhRepoPage = {
+  repos: GhRepo[]; groups: GhGroup[]; total: number; page: number; more: boolean; missing?: string[];
+};
+// Lỗi kèm cách sửa từ máy chủ: fix = nút mở trang GitHub (cấp quyền tổ chức…), reconnect = kết nối lại GitHub.
+export type GhFix = { url: string; org: string; block: "oauth" | "sso" | "app" };
 
-export class WsError extends Error { constructor(m: string, public status: number) { super(m); } }
+export class WsError extends Error {
+  constructor(m: string, public status: number, public extra: { fix?: GhFix; reconnect?: boolean } = {}) { super(m); }
+}
 /** Máy chủ từ chối lượt mới vì phiên đã có lượt đang chạy: nối vào lượt đó, không phải lỗi. */
 export const alreadyRunning = (e: unknown) => e instanceof WsError && e.status === 409;
 async function json<T>(r: Response): Promise<T> {
   const j = await r.json().catch(() => ({}));
-  if (!r.ok) throw new WsError((j as { error?: string }).error || `Lỗi ${r.status}`, r.status);
+  if (!r.ok) {
+    const e = j as { error?: string; fix?: GhFix; reconnect?: boolean };
+    throw new WsError(e.error || `Lỗi ${r.status}`, r.status, { fix: e.fix, reconnect: e.reconnect });
+  }
   return j as T;
 }
 export const wsStatus = () => fetch("/api/ws", { cache: "no-store" }).then((r) => json<WsStatus>(r));
@@ -27,7 +50,9 @@ export const wsOp = <T = Record<string, unknown>>(op: string, sid: number | null
   fetch("/api/ws", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ op, sid: sid === null ? undefined : String(sid), ...body }) }).then((r) => json<T>(r));
 export const gitOp = (sid: number, action: string, body: Record<string, unknown> = {}) => wsOp<GitState>("git", sid, { action, ...body });
 export const ghStatus = () => fetch("/api/github", { cache: "no-store" }).then((r) => json<GhStatus>(r));
-export const ghRepos = (q = "") => fetch(`/api/github?repos=1&q=${encodeURIComponent(q)}`, { cache: "no-store" }).then((r) => json<{ repos: GhRepo[] }>(r)).then((j) => j.repos);
+export const ghRepos = (q = "", page = 1, refresh = false) =>
+  fetch(`/api/github?repos=1&q=${encodeURIComponent(q)}&page=${page}${refresh ? "&refresh=1" : ""}`,
+    { cache: "no-store" }).then((r) => json<GhRepoPage>(r));
 export const ghUnlink = () => fetch("/api/github", { method: "DELETE" }).then((r) => json(r));
 
 // Kết nối GitHub trong cửa sổ nhỏ; trang /api/github/done báo kết quả qua localStorage rồi tự đóng.

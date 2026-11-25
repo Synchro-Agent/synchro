@@ -62,7 +62,9 @@ export function start(req: Request, p: Provider, purpose: Purpose = "login", sid
     q.set("prompt", "select_account");
     url = "https://accounts.google.com/o/oauth2/v2/auth?" + q;
   } else if (p === "github") {
-    q.set("scope", purpose === "link" ? "repo read:user user:email" : "read:user user:email");
+    // Kết nối repo: repo (repo riêng tư) và read:org (thấy cả tổ chức để chế độ thành viên riêng tư,
+    // xem server/ghrepos.ts).
+    q.set("scope", purpose === "link" ? "repo read:org read:user user:email" : "read:user user:email");
     url = `${GH_WEB}/login/oauth/authorize?` + q;
   } else {
     q.set("response_type", "code");
