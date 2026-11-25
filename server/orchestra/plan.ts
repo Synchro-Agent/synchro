@@ -40,7 +40,13 @@ export function jsonOf(text: string): unknown {
   }
   if (end < 0) return null;
   const raw = src.slice(a, end + 1).replace(/,\s*([}\]])/g, "$1");
-  try { return JSON.parse(raw); } catch { return null; }
+  try {
+    return JSON.parse(raw);
+  } catch {
+    // JSON hỏng không phải lỗi cần ghi nhật ký: null cho nơi gọi biết để nhờ model viết lại đúng một lần (kế
+    // hoạch), hay coi mọi phần là đạt (bước duyệt, parseReviews).
+    return null;
+  }
 }
 
 const str = (x: unknown, max: number) => (typeof x === "string" ? x.replace(/\s+/g, " ").trim().slice(0, max) : "");

@@ -40,7 +40,7 @@ ok(!AU.db().prepare("SELECT 1 FROM conv_untrusted WHERE user_id = ?").get(a.id),
 console.log("6. Vòng lặp chat: dựng Exec từ dấu của cuộc trò chuyện, load_skill skill danh mục thì ghi dấu");
 const src = readChatEngine();
 const seeds = src.match(/const xx?: Exec = \{[^\n]*\}/g) ?? [];
-ok(seeds.length === 2 && seeds.every((l) => l.includes("untrusted: convUntrusted(c.user.id, convId)")), "cả hai chỗ dựng Exec khởi tạo untrusted từ cuộc trò chuyện", seeds.length);
+ok(seeds.length === 2 && seeds.every((l) => l.includes("untrusted: !!o.untrusted || convUntrusted(c.user.id, convId)")), "cả hai chỗ dựng Exec khởi tạo untrusted từ cuộc trò chuyện", seeds.length);
 ok(/if \(r\.used\.untrusted\) \{ x\.untrusted = true; markConvUntrusted\(x\.uid, x\.conv\); \}/.test(src), "load_skill skill chưa kiểm chứng ghi dấu cho cuộc trò chuyện");
 ok(/const untrustedConnWrite = \(x: Exec, c: Call\) => !!x\.untrusted/.test(src) && /gateExtra: \(_name, input\) => x\.untrusted && browserTargetOf/.test(src), "hạ quyền connector / Chrome của người dùng đọc x.untrusted (gồm dấu từ lượt trước)");
 

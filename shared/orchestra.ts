@@ -3,6 +3,12 @@
 // (server/orchestra/) và giao diện (ui/orchestra.tsx): bản chụp sơ đồ tổ chức mà máy chủ gửi qua sự kiện "orch" của
 // lượt chạy.
 
+/**
+ * Thẻ của khối kết quả nhóm đính sau tin nhắn mới nhất của người dùng cho trưởng nhóm viết câu trả lời cuối. Đó là dữ
+ * liệu Synchro thêm vào, không phải chữ người dùng gõ: chat/prompt.ts lastUserText bỏ khối mở đầu bằng thẻ này.
+ */
+export const ORCH_TAG = "orchestra_results";
+
 export type OrchRole = "boss" | "manager" | "staff" | "intern";
 export const ORCH_ROLES: OrchRole[] = ["boss", "manager", "staff", "intern"];
 /** Nhãn tiếng Việt (nguồn i18n); giao diện dịch qua tr(). */

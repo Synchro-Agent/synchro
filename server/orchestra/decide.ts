@@ -11,11 +11,13 @@ import {
 // So khớp trên chữ đã bỏ dấu (fold) để người dùng gõ không dấu vẫn nhận ra. Vì vậy tránh từ mà khi bỏ dấu trùng với từ
 // thông dụng khác ("dựng" thành "dung" như "dùng", "lập" thành "lap" như "lặp"): dùng cụm dài hơn.
 const F = (s: string) => new RegExp(`(?<![\\p{L}\\p{N}])(?:${s})(?![\\p{L}\\p{N}])`, "iu");
-// Nhánh tìm hiểu / lấy dữ liệu.
+// Nhánh tìm hiểu / lấy dữ liệu: chỉ động từ tìm hiểu rõ ràng. Danh từ chung ("dữ liệu", "nguồn", "số liệu", "thị
+// trường", "data", "API") có ở rất nhiều câu viết code hay viết bài một lần ("hàm đọc dữ liệu từ CSV"), coi là nhánh
+// tìm hiểu thì lượt đơn giản cũng phải chờ trưởng nhóm lập kế hoạch.
 const RESEARCH = F([
-  "tim hieu|nghien cuu|khao sat|tra cuu|thu thap|tong hop thong tin|so sanh|doi chieu|so lieu|thong ke|du lieu|nguon",
-  "xu huong|thi truong|doi thu|research|investigate|look up|gather|compare|comparison|survey|benchmark|data|statistics",
-  "sources|market|competitors?|trends?",
+  "tim hieu|nghien cuu|khao sat|tra cuu|thu thap|tong hop thong tin|so sanh|doi chieu",
+  "tim (?:kiem )?(?:so lieu|thong tin|nguon)",
+  "research|investigate|look up|gather|compare|comparison|survey|benchmark|find (?:data|statistics|sources)",
 ].join("|"));
 // Nhánh tạo ra sản phẩm.
 const PRODUCE = F([
@@ -39,8 +41,9 @@ const CODE_PARTS = F([
 // Chỗ tách các đối tượng trong "so sánh A, B và C".
 const ITEM_SEP = /,|;|(?<![\p{L}\p{N}])(?:va|voi|hoac|and|or|vs\.?|versus)(?![\p{L}\p{N}])/u;
 const CODE_TASKS = new Set(["code", "build", "debug"]);
-// Tín hiệu đủ mạnh để chia một mình.
-const STRONG = new Set(["research+produce", "code-parts", "autopilot"]);
+// Tín hiệu đủ mạnh để chia một mình. "research+produce" chỉ mạnh ở việc không phải code hay viết một lần (xem dưới).
+const STRONG = new Set(["research+produce", "code-parts"]);
+
 // "So sánh A, B và C": từ ba đối tượng trở lên.
 const COMPARE = /(?<![\p{L}\p{N}])(?:so sanh|compare)(?![\p{L}\p{N}])([^.?!\n]{0,160})/iu;
 
@@ -67,14 +70,22 @@ export function shouldSplit(q: RouteInput, o: { pool: number; autopilot?: boolea
   if (ONE_SHOT.has(task) && steps < 2) return NO;
   const why: string[] = [];
   const research = RESEARCH.test(ins), produce = PRODUCE.test(ins), check = CHECK.test(ins);
-  if (research && produce) why.push("research+produce");
+  // Code, viết một bài: tìm hiểu + viết thường vẫn là một việc một model làm xong ("tra cú pháp rồi viết hàm"), nên
+  // chỉ là tín hiệu nhẹ. Việc viết có bước nối rõ ràng ("tìm hiểu… rồi viết báo cáo") thì mạnh; code luôn cần thêm
+  // tín hiệu khác (nhiều phần code, nhiều bước, kiểm tra).
+  if (research && produce) {
+    const light = CODE_TASKS.has(task) || (task === "write" && steps < 1);
+    why.push(light ? "research+produce:light" : "research+produce");
+  }
   if (check && (produce || research)) why.push("check");
   if (steps >= 2) why.push(`steps:${steps}`);
   const cmp = COMPARE.exec(ins)?.[1] ?? "";
   const items = cmp ? cmp.split(ITEM_SEP).filter((x) => x.trim()).length : 0;
   if (items >= 3) why.push(`compare:${items}`);
   if (CODE_TASKS.has(task) && score >= 4 && CODE_PARTS.test(ins)) why.push("code-parts");
-  if (o.autopilot && steps >= 1 && (research || produce)) why.push("autopilot");
+  // Autopilot không tự là một tín hiệu: việc chạy theo lịch mỗi giờ / mỗi ngày mà chia thì mỗi lần chạy tốn lượt gói
+  // và khóa chung gấp mấy lần, không ai ngồi chờ để thấy lợi. Nó chỉ nới ngưỡng độ khó ở trên; vẫn cần hai tín hiệu
+  // độc lập như mọi lượt.
   // Một tín hiệu nhẹ thôi (chỉ có "kiểm tra", hay chỉ có hai bước nối) chưa đủ: cần hai tín hiệu, hoặc một tín hiệu
   // mạnh.
   const strong = steps >= 3 || why.some((w) => STRONG.has(w));

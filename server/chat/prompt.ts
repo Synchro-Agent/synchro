@@ -16,6 +16,7 @@ import { videoTurn } from "../videokit";
 import { docTurn } from "../dockit";
 import { featTurn } from "../featkit";
 import { REJECTED_TAG } from "../../shared/turnctx";
+import { ORCH_TAG } from "../../shared/orchestra";
 import { imageProduct } from "../ai/imagegen";
 import { AGY_WAIT_NOTE } from "../mcpbridge";
 import { userContext } from "../memory";
@@ -108,8 +109,16 @@ export function lastUserText(messages: unknown): string {
   if (typeof m.content === "string") return m.content.slice(0, 4000);
   // Khối <attachments_rejected> (tệp không đọc được, do turnctx.withRejected chèn lên đầu tin nhắn mới nhất) là dữ liệu, không phải chữ người dùng gõ:
   // bỏ qua ở đây để không lẫn vào brain recall, crisisHelp, mentionsConnector / announceOffline, hasOwnSkill (cùng cách router.FILE_TEXT bỏ khối này khi chọn việc).
-  return Array.isArray(m.content) ? (m.content as { type?: string; text?: string }[]).filter((b) => b?.type === "text" && typeof b.text === "string" && !b.text.trimStart().startsWith(`<${REJECTED_TAG}>`)).map((b) => b.text).join("\n").slice(0, 4000) : "";
+  // Khối kết quả của nhóm Orchestra (orchestra/engine.ts withTeam) cũng vậy: chữ của các model khác, có thể chép từ
+  // trang web.
+  if (!Array.isArray(m.content)) return "";
+  const blocks = m.content as { type?: string; text?: string }[];
+  return blocks.filter(isTypedText).map((b) => b.text).join("\n").slice(0, 4000);
 }
+// Khối dữ liệu Synchro đính vào tin nhắn mới nhất, không phải chữ người dùng gõ.
+const DATA_TAGS = [REJECTED_TAG, ORCH_TAG];
+const isTypedText = (b: { type?: string; text?: string }) =>
+  b?.type === "text" && typeof b.text === "string" && !DATA_TAGS.some((t) => b.text!.trimStart().startsWith(`<${t}>`));
 
 // Artifact dùng AI: trang trong artifact gọi window.synchro.complete(...) → trình duyệt chuyển tới đây.
 // Không có công cụ, không có skill; chỉ tài khoản đang bật "Artifact dùng AI" mới gọi được.

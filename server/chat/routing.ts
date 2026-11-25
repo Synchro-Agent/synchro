@@ -425,7 +425,7 @@ async function chatPostTurn(body: Parameters<typeof chatPost>[0], c: Who, scope:
   const canSplit = body.skills && !skip.length && body.feature !== "code" && body.estimate !== true;
   const team = canSplit
     ? await orchestraTurn({
-      user: c.user, q, messages: body.messages, pool: pool.filter((k) => !avoid.includes(k)), autopilot: !!taskOf(body),
+      user: c.user, q, messages: body.messages, pool: pool.filter((k) => !avoid.includes(k)), task: taskOf(body)?.id,
       name: (k) => shown(k) ?? k, routed: route.model,
     })
     : null;
@@ -444,7 +444,10 @@ async function chatPostTurn(body: Parameters<typeof chatPost>[0], c: Who, scope:
   const fromSub = !!subCli(r.model);
   // Còn model của CLI khác để chuyển thì không chờ lâu khi tài khoản đang chạy lượt Antigravity / Grok khác; không còn thì chờ như chọn tay.
   const auto = r.alt.some((k) => !blocked.has(k) && !!subCli(k) && subCli(k) !== subCli(r.model));
-  let res = await chatTurn({ ...turnBody, model: r.model, effort }, c, scope, { auto });
+  // Thành viên đã tìm web: chữ trang web nằm trong khối kết quả của nhóm, nên lượt này hạ quyền ghi như khi đọc skill
+  // chưa kiểm chứng (connector ghi, Chrome của người dùng phải hỏi trước). Chỉ lượt này: khối không lưu vào đoạn chat.
+  const untrusted = !!team?.untrusted;
+  let res = await chatTurn({ ...turnBody, model: r.model, effort }, c, scope, { auto, untrusted });
   let used = r.model;
   const tried = [r.model];
   // Model lỗi / quá tải / hết hạn mức / cần đăng nhập lại / treo: thử lần lượt các model dự phòng (ưu tiên hãng khác) mà người dùng không phải
@@ -474,7 +477,7 @@ async function chatPostTurn(body: Parameters<typeof chatPost>[0], c: Who, scope:
     }
     deltaStep();
     used = next; tried.push(next);
-    res = await chatTurn({ ...turnBody, model: next, effort }, c, scope, { auto: true });
+    res = await chatTurn({ ...turnBody, model: next, effort }, c, scope, { auto: true, untrusted });
   }
   if (res.status === 200 && subCli(used)) clearStall(c.user.id, subCli(used)!);
   const j = await (await withSwitch(res, body, c.user, tried)).json().catch(() => ({}));
@@ -486,10 +489,15 @@ async function chatPostTurn(body: Parameters<typeof chatPost>[0], c: Who, scope:
   // Tự động đã chuyển model trong lượt này: nói rõ ở câu trả lời (switched) và một lần trên thanh thông báo (notice).
   const switched = res.status === 200 && used !== r.model && switchedWhy ? `${switchedWhy}, nên Synchro đã trả lời bằng ${shown(used)}.${resetNote ? ` ${resetNote}` : ""}` : "";
   // Tự động chọn model chạy bằng khóa API chung trong khi tài khoản đã kết nối gói (kể cả gói đang tạm hết hạn mức): một dòng nói lượt này tính vào hạn mức chi phí API (H1 bổ sung).
-  const keyNote = res.status === 200 && !subCli(used) && allowed.some((k) => !!subCli(k)) ? sharedKeyMsg(shown(used) ?? used) : "";
+  // Orchestra: thành viên chạy bằng khóa API (chỉ khi không gói nào làm được nhánh đó) cũng được báo, không chỉ model
+  // viết câu trả lời cuối.
+  const keyModels = [...new Set([...(subCli(used) ? [] : [used]), ...(team?.api ?? [])])];
+  const keyNote = res.status === 200 && keyModels.length && allowed.some((k) => !!subCli(k))
+    ? sharedKeyMsg(keyModels.map((k) => shown(k) ?? k).join(", ")) : "";
   // Sơ đồ tổ chức lúc xong: còn trong câu trả lời (Autopilot hiện lại từ kết quả của lần chạy, không từ sự kiện).
   if (team) {
-    const orchestra = finishState(team.state, res.status === 200, typeof j.text === "string" ? j.text : "");
+    const writer = { key: used, name: shown(used) ?? used };
+    const orchestra = finishState(team.state, res.status === 200, typeof j.text === "string" ? j.text : "", writer);
     progress("orch", JSON.stringify(orchestra));
     j.orchestra = orchestra;
   }
@@ -532,8 +540,15 @@ function routeInput(body: Record<string, any>, user: UserRow): RouteInput {
   return q;
 }
 
-/** o.auto: chế độ Tự động còn model khác để chuyển: không chờ lâu khi tài khoản đang bận lượt khác. */
-async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: string }, o: { auto?: boolean } = {}): Promise<Response> { // eslint-disable-line @typescript-eslint/no-explicit-any
+/**
+ * o.auto: chế độ Tự động còn model khác để chuyển: không chờ lâu khi tài khoản đang bận lượt khác. o.untrusted: lượt
+ * mang nội dung không đáng tin (kết quả Orchestra có chữ trang web) nên bắt đầu ở trạng thái hạ quyền ghi.
+ */
+type TurnOpts = { auto?: boolean; untrusted?: boolean };
+async function chatTurn(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  body: Record<string, any>, c: Who, scope: { feature: string }, o: TurnOpts = {},
+): Promise<Response> {
   // feature: "chat" | "code"; picked: khóa model đang chọn ("openai/gpt-5.1"); project: id dự án (để bật skill theo dự án)
   // Tiếp tục lượt chat đang chờ duyệt công cụ: { resume, decisions: { id lượt gọi: "allow" | "always" | "deny" } }.
   if (typeof body.resume === "string") {
@@ -617,7 +632,7 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
         const image = feature !== "code";
         const pdocs = feature !== "code" && !!project && projectDocsLong(c.user.id, project);
         const tools = [...(pdocs ? [PROJECT_DOC_TOOL] : []), ...(task ? [TASK_TOOL] : []), ...(code ? [runCodeTool(pc.net, !!pc.web)] : []), ...(arts ? [READ_ARTIFACT_TOOL] : []), ...(check ? [CHECK_ARTIFACT_TOOL] : []), ...(ss.visible.length ? skillTools(ss.visible.length, code) : []), ...(sess ? connTools(sess, cli === "agy") : []), ...(refs ? [READ_REF_TOOL] : []), ...(brainOn(body, c.user) ? BRAIN_TOOLS : []), ...(browse ? BROWSER_TOOLS : []), ...(image ? [imageTool()] : []), PLAN_TOOL];
-        const xx: Exec = { project: pdocs ? project : undefined, image, msgs: messages, toolSync: subCli(model) === "claude", list: [...ss.visible, ...ss.list.filter((k) => !ss.visible.includes(k))], scripts: code, sess, uid: c.user.id, code, net: pc.net, web: !!pc.web, art: arts ? { messages, base: body.artBase } : undefined, outs: [], libs: ss.libs, studio: studio ? ss.libs[`studio-${studio}`][0] : undefined, prefer: ss.prefer, trace: [], conv: convId, untrusted: convUntrusted(c.user.id, convId), browse, task, bctx: browse ? { def: task ? taskBrowser(task) : browserDefault(bst), synchro: !bst.locks.browse, user: bst.locks.mine !== "admin", scope: convId ? `chat:${convId}` : undefined, cookies: codePrefs(c.user.id).cookies, files: chatFiles(messages, c.user.id, () => xx.outs) } : undefined };
+        const xx: Exec = { project: pdocs ? project : undefined, image, msgs: messages, toolSync: subCli(model) === "claude", list: [...ss.visible, ...ss.list.filter((k) => !ss.visible.includes(k))], scripts: code, sess, uid: c.user.id, code, net: pc.net, web: !!pc.web, art: arts ? { messages, base: body.artBase } : undefined, outs: [], libs: ss.libs, studio: studio ? ss.libs[`studio-${studio}`][0] : undefined, prefer: ss.prefer, trace: [], conv: convId, untrusted: !!o.untrusted || convUntrusted(c.user.id, convId), browse, task, bctx: browse ? { def: task ? taskBrowser(task) : browserDefault(bst), synchro: !bst.locks.browse, user: bst.locks.mine !== "admin", scope: convId ? `chat:${convId}` : undefined, cookies: codePrefs(c.user.id).cookies, files: chatFiles(messages, c.user.id, () => xx.outs) } : undefined };
         x = xx;
         announceOffline(xx, messages);
         const trc = currentTrace();
@@ -868,7 +883,7 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
       // Phiên bản công cụ tìm web theo model (bản có lọc động cho dòng mới; model cũ dùng bản cơ bản).
       const webTool = { type: anthropicWebSearch(t.model), name: "web_search", max_uses: 5 };
       if (body.estimate === true) { sess?.close(); return estimate([system, capSys], [skillsPrompt(visible, scripts, ownSuggested), sess ? connectorsPrompt(sess, connProxy(sess)) : "", JSON.stringify(tools)], pinned, prep); }
-      const x: Exec = { project: pdocs ? project : undefined, image, msgs: messages, list: [...visible, ...list.filter((k) => !visible.includes(k))], scripts, sess, uid: c.user.id, code, net: !!cs?.caps.net, web: !!cs?.caps.web, art: arts ? { messages, base: body.artBase } : undefined, outs: [], libs, studio: studio ? libs[`studio-${studio}`][0] : undefined, prefer, trace: [], conv: convId, untrusted: convUntrusted(c.user.id, convId), heal: scripts ? t : undefined, search: web && synWeb ? t : undefined, browse, task, bctx: browse && cs ? { def: task ? taskBrowser(task) : browserDefault(cs), synchro: !cs.locks.browse, user: cs.locks.mine !== "admin", scope: convId ? `chat:${convId}` : undefined, cookies: codePrefs(c.user.id).cookies, files: chatFiles(messages, c.user.id, () => x.outs) } : undefined };
+      const x: Exec = { project: pdocs ? project : undefined, image, msgs: messages, list: [...visible, ...list.filter((k) => !visible.includes(k))], scripts, sess, uid: c.user.id, code, net: !!cs?.caps.net, web: !!cs?.caps.web, art: arts ? { messages, base: body.artBase } : undefined, outs: [], libs, studio: studio ? libs[`studio-${studio}`][0] : undefined, prefer, trace: [], conv: convId, untrusted: !!o.untrusted || convUntrusted(c.user.id, convId), heal: scripts ? t : undefined, search: web && synWeb ? t : undefined, browse, task, bctx: browse && cs ? { def: task ? taskBrowser(task) : browserDefault(cs), synchro: !cs.locks.browse, user: cs.locks.mine !== "admin", scope: convId ? `chat:${convId}` : undefined, cookies: codePrefs(c.user.id).cookies, files: chatFiles(messages, c.user.id, () => x.outs) } : undefined };
       if (sess) announceOffline(x, messages);
       if (dz?.gate && model) x.design = designState(c.user, model, dz, convId);
       const msgs = prep.messages;
