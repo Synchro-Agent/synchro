@@ -154,7 +154,6 @@ export const VI2EN: Record<string, string> = {
   "Ngữ cảnh phiên chat": "Session context",
   "Chạy lệnh": "Run command",
   "Đẩy code lên GitHub": "Push code to GitHub",
-  "Đã gửi · Synchro đang đọc": "Sent · Synchro is reading it",
   "Trang đang mở": "Open page",
   "Gõ vào trang": "Type into the page",
   "Mở pull request trên GitHub": "Open a pull request on GitHub",

@@ -198,6 +198,37 @@ try {
     ok(off.final && CS.codexServerStats().servers === 0, "SYNCHRO_CODEX_SERVER=0: không mở app-server", CS.codexServerStats());
   }
 
+  console.log("5b. Codex: tin nhắn thêm vào chính lượt đang chạy (turn/steer)");
+  {
+    const env = acct("steer"), w = path.join(HOME, "work", "steer");
+    const steerOnce = async () => {
+      let send = null;
+      const seen = [];
+      const onInject = (f) => { seen.push(!!f); if (f) send = f; };
+      const p = run(eng, { prompt: "[mock:slowcodex] viết chậm", env, workdir: w, onInject });
+      for (let i = 0; i < 60 && !send; i++) await sleep(50);
+      const t0 = Date.now();
+      const sent = send ? await send("<user_followup>\nThêm lời chào\n</user_followup>") : null;
+      const ms = Date.now() - t0;
+      const r = await p;
+      const late = send ? await send("<user_followup>\nmuộn\n</user_followup>") : null;
+      return { sent, ms, r, seen, late };
+    };
+    const a = await steerOnce();
+    timings.push(["Codex turn/steer (gửi → app-server nhận)", a.ms]);
+    ok(a.sent === true && a.ms < 1000 && /nhắn thêm giữa lượt: Thêm lời chào/.test(a.r.final ?? ""),
+      "tin nhắn thêm vào thẳng lượt đang chạy, model trả lời cả tin đó trong cùng lượt", a);
+    ok(a.seen[0] === true && a.seen.at(-1) === false && a.late === false,
+      "lượt xong: kênh nhắn thêm được thu lại, gửi muộn trả false", a);
+    // Bản CLI chưa có turn/steer: hàm gửi trả false (bên gọi tự cắt lượt), lượt vẫn chạy tiếp bình thường.
+    CS.dropAllCodexServers();
+    cfg({ mockNoSteer: true });
+    const b = await steerOnce();
+    cfg();
+    ok(b.sent === false && b.r.final && !/nhắn thêm giữa lượt/.test(b.r.final),
+      "CLI chưa có turn/steer: báo không gửi được, lượt không hỏng", b);
+  }
+
   console.log("6. Lượt nhanh và lượt có công cụ xen kẽ trong một cuộc trò chuyện (không dùng bản hội thoại cũ)");
   {
     const eng = new CE.ClaudeCodeEngine();

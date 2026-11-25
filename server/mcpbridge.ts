@@ -113,6 +113,9 @@ export function openBridge(o: { uid: string; tools: BridgeTool[]; call: Bridge["
     /** Việc đã nhận job_id mà model chưa lấy kết quả: model kết thúc lượt sớm thì nhắc nó quay lại. */
     pendingJobs: () => [...b.jobs].map(([id, j]) => ({ id, name: j.name })),
     alive: () => (b.busy ? Date.now() : b.last),
+    /** Đang chạy công cụ của Synchro: tin nhắn thêm tới lúc này đi kèm kết quả công cụ (bridgeCall), không cần cắt
+     *  lượt CLI. */
+    busy: () => b.busy > 0,
     // Chỉ nhả lượt CLI đang chạy. Cầu nối sống cả lượt chat, có thể chạy CLI nhiều lần (nhắc làm tiếp, tin nhắn thêm): lần chạy sau cần giữ khóa tới khi nó đọc xong cấu hình,
     // mà công cụ chỉ tới được đây sau khi CLI đã khởi động, tức là sau onPark của chính lần chạy đó.
     park: () => { for (const f of onParked.splice(0)) f(); },

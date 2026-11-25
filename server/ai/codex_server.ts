@@ -52,7 +52,12 @@ type Waiter = { ok: (v: J) => void; fail: (e: Error) => void };
 /** key: mọi thứ chỉ đặt được lúc nạp thread (threadKey). */
 type Thread = { key: string };
 /** noThreads: bản CLI không nhận thread/start (lỗi JSON-RPC): app-server chỉ dùng cho codexRpc, lượt chạy exec ngay. */
-type Srv = { home: string; proc: Proc; next: number; pending: Map<number, Waiter>; subs: Map<string, (method: string, params: J) => void>; threads: Map<string, Thread>; busy: number; used: number; born: number; dead: boolean; retired: boolean; noThreads: boolean; ready: Promise<void> };
+type Srv = { home: string; proc: Proc; next: number; pending: Map<number, Waiter>; subs: Map<string, (method: string,
+  params: J) => void>; threads: Map<string, Thread>; busy: number; used: number; born: number; dead: boolean;
+  retired: boolean; noThreads: boolean; ready: Promise<void>;
+  /** Bản CLI không có turn/steer (nhắn thêm giữa lượt): không thử lại ở mỗi tin; bên gọi cắt lượt rồi làm tiếp
+   *  như CLI khác. */
+  noSteer?: boolean };
 /** app-server trả lỗi JSON-RPC (đã nhận và từ chối yêu cầu), khác với quá giờ / tiến trình chết (không biết yêu cầu đã chạy tới đâu). */
 class RpcError extends Error {}
 type G = { servers: Map<string, Srv>; starts: number };
@@ -253,6 +258,25 @@ export async function* codexServerTurn(req: TurnRequest, prompt: string, cwd: st
     let partial = "", tools = false, lastErr = "", done = false;
     const asked = new Set<string>();
     const interrupt = () => { if (!done && turnId) void call(s, "turn/interrupt", { threadId: tid, turnId }, 5000).catch(() => drop(s, "không dừng được lượt")); };
+    // Nhắn thêm giữa lượt: Codex nhận tin vào chính lượt đang chạy (turn/steer), model đọc ở bước kế tiếp mà không bỏ
+    // phần đã làm. Câu trả lời cuối chỉ gồm các tin model viết sau đó: phần trước đã vào nhật ký làm việc lúc tin tới
+    // (clisteer.ts).
+    let steeredAt = -1;
+    const inject = async (text: string) => {
+      if (done || !turnId || s.noSteer || s.dead) return false;
+      try {
+        const input = [{ type: "text", text, text_elements: [] }];
+        await call(s, "turn/steer", { threadId: tid, input, expectedTurnId: turnId }, 5000);
+        steeredAt = parts.length + (partial ? 1 : 0);
+        return true;
+      } catch (e) {
+        const unknown = e instanceof RpcError && /method not found|unknown method|unknown variant/i.test(e.message);
+        if (unknown) s.noSteer = true;
+        else console.warn(`[codex] turn/steer: ${redact((e as Error).message).slice(0, 200)}`);
+        return false;
+      }
+    };
+    req.onInject?.(inject);
     if (req.signal?.aborted) interrupt(); else req.signal?.addEventListener("abort", interrupt, { once: true });
     try {
       while (!done) {
@@ -298,10 +322,11 @@ export async function* codexServerTurn(req: TurnRequest, prompt: string, cwd: st
           const t = obj(p.turn), st = str(t.status);
           if (st === "interrupted" || req.signal?.aborted) { yield { kind: "error", message: "Đã dừng.", code: "aborted" }; return; }
           if (st === "failed") { const m = str(obj(t.error).message) || lastErr || "Codex báo lỗi."; yield { kind: "error", message: redact(m), code: classify(m) }; return; }
-          yield { kind: "final", text: tools && parts.length ? parts[parts.length - 1] : parts.join("\n\n"), via: "codex" };
+          const own = steeredAt >= 0 && steeredAt < parts.length ? parts.slice(steeredAt) : parts;
+          yield { kind: "final", text: tools && own.length ? own[own.length - 1] : own.join("\n\n"), via: "codex" };
         }
       }
-    } finally { req.signal?.removeEventListener("abort", interrupt); }
+    } finally { req.signal?.removeEventListener("abort", interrupt); req.onInject?.(null); }
   } catch (e) {
     // Lượt đã bắt đầu (đã có sự kiện tới người dùng): báo lỗi, không chạy lại bằng exec.
     if (started) { yield { kind: "error", message: redact((e as Error).message || "Codex app-server lỗi giữa lượt."), code: "other" }; return; }

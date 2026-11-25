@@ -71,11 +71,50 @@ console.log("2b. Gói Claude Code: tin tới khi CLI đang trả lời → làm 
   await adm("POST", "/api/engines/claude/login/code", { code });
   const r3 = await adm("POST", "/api/llm", { async: true, skills: true, system: "", model: "sub-claude/sonnet", messages: [{ role: "user", content: "Viết một câu chào #slow" }], conv: `steer-sub-${Date.now()}` });
   await new Promise((x) => setTimeout(x, 800));
+  const t3 = Date.now();
   const pr = await adm("POST", `/api/runs/${r3.j?.run}`, { text: "Thêm lời chúc ngủ ngon" });
-  let run3 = null;
-  for (let i = 0; i < 100; i++) { const g = await adm("GET", `/api/runs/${r3.j?.run}?json=1`); if (g.j?.run && g.j.run.status !== "running") { run3 = g.j.run; break; } await new Promise((x) => setTimeout(x, 400)); }
-  ok(pr.j?.queued !== false && run3?.status === "done" && !run3.result.steer && run3.events.some((e) => e.kind === "steer" && e.text === "Thêm lời chúc ngủ ngon") && /lượt 2/.test(run3.result.text ?? ""), "gói: đọc tin mới ngay khi CLI xong lượt (nối tiếp phiên), không để lượt sau", JSON.stringify(run3?.result ?? pr.j).slice(0, 300));
+  const done = async (id) => {
+    for (let i = 0; i < 100; i++) {
+      const g = await adm("GET", `/api/runs/${id}?json=1`);
+      if (g.j?.run && g.j.run.status !== "running") return g.j.run;
+      await new Promise((x) => setTimeout(x, 400));
+    }
+    return null;
+  };
+  const run3 = await done(r3.j?.run);
+  const st3 = run3?.events.find((e) => e.kind === "steer" && e.text === "Thêm lời chúc ngủ ngon");
+  // CLI giả lập viết câu trả lời mất 3 giây (#slow): trước đây tin chờ tới hết lượt; nay lượt bị cắt ngay, làm tiếp
+  // cùng phiên.
+  console.log(`  · Claude Code: gửi → model nhận tin nhắn thêm ${st3 ? st3.at - t3 : "?"} ms`);
+  const sub3 = run3?.status === "done" && !run3.result.steer && /lượt 2/.test(run3.result.text ?? "");
+  ok(pr.j?.queued !== false && sub3 && !!st3,
+    "gói: tin mới vào cùng phiên của CLI, không để lượt sau", JSON.stringify(run3?.result ?? pr.j).slice(0, 300));
+  ok(!!st3 && st3.at - t3 < 1500, "Claude Code: không đợi CLI viết xong, cắt lượt, đọc tin mới ngay (dưới 1,5 giây)",
+    st3 && st3.at - t3);
   await adm("POST", "/api/engines/claude/logout");
+
+  console.log("2c. Gói Codex: tin nhắn thêm vào thẳng lượt đang chạy (turn/steer của app-server)");
+  const cx = await adm("POST", "/api/engines/codex/login/start", {});
+  await fetch(`${M}/mock-login/codex/approve?code=${cx.j?.userCode}`);
+  for (let i = 0; i < 20 && !(await adm("GET", "/api/engines/codex/status?fresh=1")).j?.loggedIn; i++) {
+    await new Promise((x) => setTimeout(x, 500));
+  }
+  const msg = [{ role: "user", content: "[mock:slowcodex] Viết một câu chào" }];
+  const cxModel = "sub-codex/gpt-6.1-sol";
+  const conv4 = `steer-cx-${Date.now()}`;
+  const r4 = await adm("POST", "/api/llm", { async: true, skills: true, system: "", model: cxModel, messages: msg,
+    conv: conv4 });
+  await new Promise((x) => setTimeout(x, 900));
+  const t4 = Date.now();
+  await adm("POST", `/api/runs/${r4.j?.run}`, { text: "Thêm lời chúc ngủ ngon" });
+  const run4 = await done(r4.j?.run);
+  const st4 = run4?.events.find((e) => e.kind === "steer");
+  console.log(`  · Codex: gửi → model nhận tin nhắn thêm ${st4 ? st4.at - t4 : "?"} ms`);
+  const said4 = /nhắn thêm giữa lượt: Thêm lời chúc ngủ ngon/.test(run4?.result?.text ?? "");
+  ok(run4?.status === "done" && !run4.result.steer && said4, "Codex trả lời cả tin nhắn thêm trong cùng lượt",
+    JSON.stringify(run4?.result).slice(0, 300));
+  ok(!!st4 && st4.at - t4 < 1500, "Codex: tin tới model ngay ở bước kế tiếp (dưới 1,5 giây)", st4 && st4.at - t4);
+  await adm("POST", "/api/engines/codex/logout");
 }
 
 console.log("3. Danh sách việc");

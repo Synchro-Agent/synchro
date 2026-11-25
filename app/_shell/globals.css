@@ -3370,10 +3370,7 @@ button.tk-pill:hover{color:var(--text)}
 .wl-q em{font-style:normal;color:var(--text-3);white-space:nowrap}
 .wl-q .icon-btn{width:20px;height:20px}
 .steer-tag{display:block;text-align:right;font-size:var(--fs-1);color:var(--text-3);margin:0 4px 3px}
-.steer-pending .user-msg{opacity:.78}
-.steer-pending .steer-tag::before{content:"";display:inline-block;width:6px;height:6px;margin-right:6px;border-radius:50%;background:var(--accent);vertical-align:1px;animation:steer-pulse 1.2s ease-in-out infinite}
-@keyframes steer-pulse{50%{opacity:.25}}
-@media (prefers-reduced-motion:reduce){.steer-pending .steer-tag::before{animation:none}}
+.steer-pending{animation:fadeIn .18s both}
 .ag-steer{margin:8px 0 10px auto;max-width:80%;display:flex;flex-direction:column;align-items:flex-end;gap:3px}
 .ag-steer span{font-size:var(--fs-1);color:var(--text-3)}
 .ag-steer p{margin:0;padding:8px 12px;border-radius:var(--r-card);background:var(--user-bg,var(--hover));font-size:var(--fs-3);white-space:pre-wrap}

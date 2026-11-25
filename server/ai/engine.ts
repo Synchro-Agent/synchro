@@ -50,6 +50,12 @@ export type TurnRequest = {
   /** Biến môi trường thêm cho tiến trình (đã qua bộ lọc của cli_runtime). */
   env?: Record<string, string>;
   signal?: AbortSignal;
+  /**
+   * Kênh nhắn thêm giữa lượt của chính CLI (Codex app-server: turn/steer): engine gọi với hàm gửi khi lượt đã chạy,
+   * với null khi lượt xong. Hàm gửi trả false khi CLI không nhận (bản cũ, lượt vừa xong): bên gọi tự cắt lượt rồi làm
+   * tiếp trong cùng phiên.
+   */
+  onInject?: (send: ((text: string) => Promise<boolean>) | null) => void;
 };
 
 /** Một cửa sổ hạn mức của gói (vd. phiên 5 giờ, tuần) như CLI báo về: phần trăm đã dùng và lúc đặt lại (ms). */

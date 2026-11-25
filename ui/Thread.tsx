@@ -464,10 +464,12 @@ export const ChatThread = memo(function ChatThread({ busy, copied, speaking, mod
             fileActive={m.outs?.length && fileOpen ? fileSel?.file.id : undefined} copied={copied === `${chat.id}-${i}`} speaking={speaking === `${chat.id}-${i}`} chatId={chat.id} cx={rowCx} /></Boundary>)}
           {undoFor === chat.id && <div className="msg-notice turn-undo" role="status"><p>{tr("Câu trả lời cũ đã được thay bằng lượt mới.")}</p><div className="msg-notice-act"><button className="lnk" onClick={() => x().undoLost()}>{tr("Khôi phục bản cũ")}</button></div></div>}
           {approval && approval.chat === chat.id && <ApprovalCard calls={approval.calls} onDone={(d, inputs) => x().approvalDone({ decisions: d, inputs })} />}
-          {/* Tin nhắn thêm khi Synchro đang làm: hiện ngay trong đoạn chat (như Claude); model đọc ở bước kế tiếp rồi trả lời tiếp. */}
+          {/* Tin nhắn thêm khi Synchro đang làm: hiện ngay trong đoạn chat, giống hệt tin đã được ghép vào lượt (cùng
+              nhãn), nên lúc máy chủ báo đã ghép (sự kiện steer) tin chỉ đổi chỗ vào giữa câu trả lời, không nhảy chữ.
+              Model đọc ở bước kế tiếp. */}
           {queued.filter((q) => q.chat === chat.id && q.mode === "steer").map((q) => (
             <div key={q.id} className="user-wrap steer-pending">
-              <span className="steer-tag">{tr("Đã gửi · Synchro đang đọc")}</span>
+              <span className="steer-tag">{tr("Nhắn thêm khi Synchro đang làm")}</span>
               <div className="user-msg"><UserText text={q.text} /></div>
             </div>
           ))}
