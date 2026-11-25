@@ -425,6 +425,9 @@ ok(bosses.length === 2 && bosses[0].model === team.boss && bosses[0].status === 
   "trưởng nhóm lỗi, model dự phòng viết câu trả lời: sơ đồ ghi đúng model đã viết", J(bosses));
 ok(E.finishState(last, true, "x", { key: team.boss, name: "x" }).members.filter((m) => m.role === "boss").length === 1,
   "trưởng nhóm tự viết: không thêm thành viên");
+const allFail = E.finishState(last, false, "", { key: "sub-codex/gpt-6-sol", name: "Sol" });
+ok(allFail.members.filter((m) => m.role === "boss").length === 1 && allFail.phase === "failed",
+  "mọi model đều lỗi: trưởng nhóm ghi lỗi, không thêm model dự phòng");
 ok(S.parseOrch(J(fin))?.phase === "done" && S.parseOrch("{") === null && S.parseOrch('{"v":2}') === null,
   "giao diện đọc được bản chụp, bỏ bản hỏng");
 

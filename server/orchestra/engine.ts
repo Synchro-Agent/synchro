@@ -442,15 +442,15 @@ export function finishState(
 ): OrchState {
   const boss = s.members.find((m) => m.role === "boss");
   const add = ok ? estTokens(text) : 0;
-  const swap = !!used && !!boss && used.key !== boss.model;
+  // Chỉ khi có câu trả lời: lượt hỏng hết thì trưởng nhóm ghi lỗi như cũ, không thêm model dự phòng cũng lỗi.
+  const swap = ok && !!used && !!boss && used.key !== boss.model;
   const members = s.members.map((m): OrchMember => {
     if (m !== boss) return m.status === "working" ? { ...m, status: "done" } : m;
     return swap ? { ...m, status: "failed" } : { ...m, status: ok ? "done" : "failed", tokens: m.tokens + add };
   });
   if (swap && used) {
     const i = members.findIndex((m) => m.role === "boss");
-    const status = ok ? "done" : "failed";
-    members.splice(i + 1, 0, { role: "boss", model: used.key, name: used.name, status, tokens: add });
+    members.splice(i + 1, 0, { role: "boss", model: used.key, name: used.name, status: "done", tokens: add });
   }
   return { ...s, phase: ok ? "done" : "failed", ended: Date.now(), tokens: s.tokens + add, members };
 }
