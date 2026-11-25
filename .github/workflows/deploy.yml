@@ -4,6 +4,10 @@ name: Deploy to VPS
 on:
   push:
     branches: [main, staging]
+  # Bộ quy tắc của repo bắt kiểm tra "verify" đạt trước khi gộp vào main, nên Pull Request vào main cũng chạy verify.
+  # Các bước deploy chỉ chạy khi github.ref_name là main, nên Pull Request không deploy.
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
 # Lần đẩy mới chỉ hủy bước kiểm tra đang chạy, không bao giờ hủy bước deploy: hủy giữa lúc tráo bản thì web dừng ở trạng thái dở dang.
