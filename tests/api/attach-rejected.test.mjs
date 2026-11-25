@@ -56,7 +56,8 @@ console.log("6. lastUserText bỏ qua khối tệp bị từ chối (không lẫ
 // Chạy thật hàm của máy chủ thay vì đọc mã nguồn: khối nằm đầu tin nhắn mới nhất, chữ người dùng gõ ở sau.
 const { "server/chat/prompt": CP } = await loadTs(["server/chat/prompt"]);
 const typedOnly = CP.lastUserText(T.withRejected([{ role: "user", content: "Tóm tắt giúp mình" }], b));
-ok(typedOnly === "Tóm tắt giúp mình", "lastUserText lọc khối <attachments_rejected> ra khỏi chữ người dùng gõ", typedOnly);
+ok(typedOnly === "Tóm tắt giúp mình", "lastUserText lọc khối <attachments_rejected> ra khỏi chữ người dùng gõ",
+  typedOnly);
 const onlyBlock = CP.lastUserText(T.withRejected([{ role: "user", content: "" }], b));
 ok(onlyBlock === "", "tin chỉ có khối tệp bị từ chối: không có chữ người dùng gõ", onlyBlock);
 
