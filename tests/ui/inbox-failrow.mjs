@@ -1,4 +1,4 @@
-// H4.3 trên app thật (Chrome ẩn, npm run dev:mock): dòng lỗi trong Hộp thư hiện "Lỗi: <lý do>" màu --ds-bad (sáng / tối),
+// H4.3 trên app thật (Chrome ẩn, npm run dev:mock): dòng lỗi trong Autopilot hiện "Lỗi: <lý do>" màu --ds-bad (sáng / tối),
 // nút "Chạy lại" cạnh dòng (không lồng nút, không tràn), điện thoại chỉ còn biểu tượng; dòng quá cũ không đỏ, không nút;
 // mở ra thấy "Chi tiết kỹ thuật"; bấm Chạy lại thì lần lỗi cũ không còn nút và không bị bộ hẹn giờ tự chạy lại (retried = 2).
 // Chạy tay: node tests/ui/inbox-failrow.mjs   (ONLY=sang-chay-lai chỉ chạy một phần; BASE=http://localhost:3200, MOCK_DB=data-mock/synchro.db, CDP_PORT=9341; ảnh ở <tmp>/synchro-ui/failrow-*.png)
@@ -16,7 +16,7 @@ mkdirSync(SCR, { recursive: true });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const TOO_OLD = "Kết quả này đã quá cũ nên không còn lưu.";
 
-// Tài khoản riêng của bài này; dọn việc và dòng Hộp thư của lần chạy trước.
+// Tài khoản riêng của bài này; dọn việc và dòng Autopilot của lần chạy trước.
 const email = "inbox-failrow@synchro.test", password = "Member-pass-123";
 let cookie = "";
 const api = async (method, p, body) => {
@@ -82,17 +82,17 @@ async function session(theme, view) {
   const byText = (sel, text) => `[...document.querySelectorAll(${JSON.stringify(sel)})].find((e) => e.textContent.trim().startsWith(${JSON.stringify(text)}))`;
   const shot = async (n) => { const { data } = await P("Page.captureScreenshot", { format: "png" }); writeFileSync(`${SCR}failrow-${n}.png`, Buffer.from(data, "base64")); };
   const side = async () => { if (await ev(`!!document.querySelector(".sidebar.closed, .shell-side.closed")`)) { await click(`document.querySelector("[aria-label='Mở thanh bên']")`, "burger"); await sleep(600); } };
-  // Mở Hộp thư từ thanh bên như người dùng (chế độ dev biên dịch trang lần đầu khá lâu).
+  // Mở Autopilot từ thanh bên như người dùng (chế độ dev biên dịch trang lần đầu khá lâu).
   const open = async () => {
     await P("Page.navigate", { url: B + "/" });
     await until(`!!document.querySelector("textarea")`, 120000, "app loaded");
     await sleep(1200);
     await side();
-    await click(byText(".nav-item", "Hộp thư"), "inbox");
+    await click(byText(".nav-item", "Autopilot"), "inbox");
     await until(`!!document.querySelector(".tk-top")`, 120000, "inbox open");
     if (await ev(`!!${byText(".pl-seg button", "Kết quả")}`)) await click(byText(".pl-seg button", "Kết quả"), "results tab");
     await until(`[...document.querySelectorAll(".tk-item")].some((e) => e.textContent.includes(${JSON.stringify(TITLE2)}))`, 60000, "seeded rows");
-    // Nút Chạy lại cần danh sách việc (/api/tasks tải song song với Hộp thư): chờ tối đa 30 giây, quá thì các bước đo dưới báo thiếu nút.
+    // Nút Chạy lại cần danh sách việc (/api/tasks tải song song với Autopilot): chờ tối đa 30 giây, quá thì các bước đo dưới báo thiếu nút.
     const t0 = Date.now();
     await until(`document.querySelectorAll(".tk-rerun").length >= 2`, 30000, "rerun buttons").catch(() => {});
     console.log(`    nút Chạy lại hiện sau ${Date.now() - t0} ms kể từ khi có dòng`);
@@ -159,7 +159,7 @@ try {
         ok(db.prepare("SELECT retried FROM task_runs WHERE run_id = ?").get(R1).retried === 2, "sau khi bấm: lần lỗi cũ đánh dấu đã xử lý, bộ hẹn giờ không chạy lại lần nữa");
         await s.shot("sang-sau-chay-lai");
       }
-      if (view.mobile && theme === "light") { await s.side(); await sleep(600); await s.shot(name + "-thanh-ben"); ok(await s.ev(`!document.querySelector(".sidebar.closed, .shell-side.closed")`), `${name}: mở ngăn kéo thanh bên trên trang Hộp thư`); }
+      if (view.mobile && theme === "light") { await s.side(); await sleep(600); await s.shot(name + "-thanh-ben"); ok(await s.ev(`!document.querySelector(".sidebar.closed, .shell-side.closed")`), `${name}: mở ngăn kéo thanh bên trên trang Autopilot`); }
       ok(!s.errs.length, `${name}: không lỗi JS`, s.errs.join(" | "));
     } catch (e) { ok(false, `${name}: lỗi khi chạy`, e.stack); await s.shot(name + "-fail").catch(() => {}); }
     await s.close();

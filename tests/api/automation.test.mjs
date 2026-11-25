@@ -1,4 +1,4 @@
-// Hộp thư tự động hóa: giao việc bằng câu thường → kế hoạch; việc chạy nền ở máy chủ (không cần trang mở) với đủ công cụ, nhớ kết quả cũ;
+// Autopilot tự động hóa: giao việc bằng câu thường → kế hoạch; việc chạy nền ở máy chủ (không cần trang mở) với đủ công cụ, nhớ kết quả cũ;
 // đề xuất chờ duyệt (tạo skill, hành động, trang web mới) → người dùng duyệt thì Synchro làm; Chrome của người dùng: chờ Chrome kết nối
 // rồi chạy, chờ quá lâu thì chạy bằng trình duyệt của Synchro; lỗi thì tự chạy lại; quyền sở hữu; /api/llm không nhận thông tin việc tự động.
 // dev:mock đặt SYNCHRO_TASK_TICK_MS=3000, SYNCHRO_TASK_RETRY_MS=4000, SYNCHRO_CHROME_WAIT_MS=30000.
@@ -31,10 +31,10 @@ const rowA = (await admin("GET", "/api/admin")).j.users.find((x) => x.email === 
 await admin("PATCH", `/api/admin/users/${rowA.id}`, { action: "set_perms", perms: { models: ["*"], features: Object.fromEntries(Object.keys(rowA.perms.features).map((k) => [k, true])) } });
 // Dọn việc của lần chạy trước (xóa việc thì xóa luôn đề xuất còn chờ), gỡ trình duyệt đã ghép nối, trả cài đặt trang web về mặc định.
 for (const t of (await a("GET", "/api/tasks")).j?.tasks ?? []) await a("DELETE", `/api/tasks/${t.id}`);
-for (const p of (await a("GET", "/api/inbox/proposals")).j?.proposals ?? []) await a("POST", "/api/inbox/proposals", { id: p.id, decision: "reject" });
+for (const p of (await a("GET", "/api/autopilot/proposals")).j?.proposals ?? []) await a("POST", "/api/autopilot/proposals", { id: p.id, decision: "reject" });
 for (const d of (await a("GET", "/api/browser/ext")).j?.devices ?? []) await a("POST", "/api/browser/ext", { op: "remove", id: d.id });
 await a("PATCH", "/api/code/prefs", { siteAsk: false, sites: [], blocked: [] });
-await a("POST", "/api/inbox", { read: "all" });
+await a("POST", "/api/autopilot", { read: "all" });
 // Bộ não của tài khoản thử bắt đầu trống (ghi chú cũ được nhắc lại vào lượt chạy sẽ làm lệch kịch bản của model giả).
 await a("DELETE", "/api/brain");
 const M = "anthropic/claude-haiku-5-5", TZ = "Asia/Ho_Chi_Minh";
@@ -43,7 +43,7 @@ const TAG = Date.now().toString(36), SK = `repo-radar-${TAG}`, MAIL = `Gửi b�
 const hist = async () => (await fetch(`${MOCK}/_debug/hist`)).json();
 // Yêu cầu gần nhất khớp re; auto: chỉ lượt chạy của việc tự động (bỏ qua lời gọi chạy nền khác như đặt tên, bộ não chép lại cả đoạn chat).
 const reqWith = async (re, auto = true) => [...((await hist()).anthropic ?? [])].reverse().find((x) => (!auto || /<automation>/.test(JSON.stringify(x.system ?? ""))) && re.test(JSON.stringify(x)));
-const itemsOf = async (taskId) => ((await a("GET", "/api/inbox")).j?.items ?? []).filter((x) => x.task === taskId);
+const itemsOf = async (taskId) => ((await a("GET", "/api/autopilot")).j?.items ?? []).filter((x) => x.task === taskId);
 async function until(f, ms = 40_000, step = 1000) { const t0 = Date.now(); let v; while (Date.now() - t0 < ms) { v = await f(); if (v) return v; await sleep(step); } return v; }
 const fmt = (t, o) => new Intl.DateTimeFormat("en-GB", { timeZone: TZ, hourCycle: "h23", ...o }).format(new Date(t));
 
@@ -67,7 +67,7 @@ const planReq = Object.values(await hist()).flat().reverse().find((x) => x && /<
 ok(!!planReq && /Việc cần tự động hóa:/.test(JSON.stringify(planReq.messages ?? planReq.input ?? planReq.contents ?? planReq)), "lời giao việc tới model kèm hướng dẫn lên kế hoạch", JSON.stringify(planReq ?? {}).slice(0, 200));
 r = await a("POST", "/api/tasks/plan", { text: "Mỗi ngày lúc 7h sáng lên GitHub tìm những repo có ý tưởng hay, đột phá, phân tích rồi chuyển repo đáng giá nhất thành skill (hỏi tôi trước khi tạo)", tz: TZ });
 p = r.j?.plan;
-ok(r.s === 200 && p.schedule.kind === "daily" && p.schedule.time === "07:00" && p.approvals.length > 0 && /inbox_propose/.test(p.prompt), "repo GitHub → skill: mỗi ngày 07:00, có bước chờ duyệt", JSON.stringify(r.j));
+ok(r.s === 200 && p.schedule.kind === "daily" && p.schedule.time === "07:00" && p.approvals.length > 0 && /autopilot_propose/.test(p.prompt), "repo GitHub → skill: mỗi ngày 07:00, có bước chờ duyệt", JSON.stringify(r.j));
 r = await a("POST", "/api/tasks/plan", { text: "Mỗi tối 9h đọc hộp thư Gmail của tôi và tóm tắt email quan trọng", tz: TZ });
 ok(r.j?.plan?.browser === "user" && r.j.plan.schedule.time === "21:00", "việc cần tài khoản của người dùng → Chrome của bạn, 21:00", JSON.stringify(r.j));
 ok((await a("POST", "/api/tasks/plan", { text: "  ", tz: TZ })).s === 400, "lời giao việc trống → 400");
@@ -76,26 +76,26 @@ ok(((await a("GET", "/api/tasks")).j?.tasks ?? []).length === 0, "lên kế ho�
 console.log("3. Việc chạy nền ở máy chủ: đủ công cụ, gửi đề xuất chờ duyệt thay vì tự làm");
 const SKILL = `---\nname: ${SK}\ndescription: Dùng khi cần tóm tắt nhanh một repo GitHub mới và đánh giá ý tưởng của nó.\n---\n# Repo radar\n\n1. Đọc README.\n2. Tóm tắt ý tưởng chính.\n`;
 const SEQ = [
-  { tool: "inbox_propose", args: { kind: "skill", title: "Repo Radar", summary: "Repo **radar** tóm tắt repo mới rất nhanh.", source: "https://github.com/example/radar", skill_md: SKILL, files: [{ path: "references/notes.md", content: "# Ghi chú\nNguồn: radar" }] } },
-  { tool: "inbox_propose", args: { kind: "action", title: MAIL, summary: "Gửi bản tóm tắt repo cho nhóm qua email.", instructions: "Soạn bản tin 3 dòng về repo radar và báo lại nội dung." } },
-  { tool: "inbox_propose", args: { kind: "action", title: POST, summary: "Đăng bài giới thiệu repo.", instructions: "Đăng bài." } },
-  { tool: "inbox_propose", args: { kind: "skill", title: "Hỏng", summary: "SKILL.md sai định dạng", skill_md: "không có frontmatter" } },
+  { tool: "autopilot_propose", args: { kind: "skill", title: "Repo Radar", summary: "Repo **radar** tóm tắt repo mới rất nhanh.", source: "https://github.com/example/radar", skill_md: SKILL, files: [{ path: "references/notes.md", content: "# Ghi chú\nNguồn: radar" }] } },
+  { tool: "autopilot_propose", args: { kind: "action", title: MAIL, summary: "Gửi bản tóm tắt repo cho nhóm qua email.", instructions: "Soạn bản tin 3 dòng về repo radar và báo lại nội dung." } },
+  { tool: "autopilot_propose", args: { kind: "action", title: POST, summary: "Đăng bài giới thiệu repo.", instructions: "Đăng bài." } },
+  { tool: "autopilot_propose", args: { kind: "skill", title: "Hỏng", summary: "SKILL.md sai định dạng", skill_md: "không có frontmatter" } },
 ];
 r = await a("POST", "/api/tasks", { title: "Repo GitHub hay", prompt: `Tìm repo hay trên GitHub #seq=${JSON.stringify(SEQ)}`, schedule: { kind: "once", tz: TZ }, model: M });
 const job = r.j?.task;
 let it = await until(async () => (await itemsOf(job.id)).find((x) => x.status !== "running"));
 ok(it?.status === "done", "bộ hẹn giờ tự chạy việc, không cần trang mở", JSON.stringify(it).slice(0, 300));
-ok(it?.proposals === 3 && /SKILL\.md chưa đúng/.test(it.text), "3 đề xuất hợp lệ vào Hộp thư; SKILL.md sai thì model được báo để sửa", JSON.stringify(it).slice(0, 400));
+ok(it?.proposals === 3 && /SKILL\.md chưa đúng/.test(it.text), "3 đề xuất hợp lệ vào Autopilot; SKILL.md sai thì model được báo để sửa", JSON.stringify(it).slice(0, 400));
 const runReq = await reqWith(/<automation>[\s\S]*Repo GitHub hay/);
 const sys = JSON.stringify(runReq?.system ?? "");
-ok(/<automation>/.test(sys) && /<automation_tools>/.test(sys) && /trình duyệt của Synchro/.test(sys) && runReq.tools.some((t) => t.name === "inbox_propose") && runReq.tools.some((t) => /^web_search_/.test(t.type ?? "")), "model nhận bối cảnh việc tự động, công cụ đề xuất, tìm web, hướng dẫn trình duyệt", sys.slice(0, 300));
+ok(/<automation>/.test(sys) && /<automation_tools>/.test(sys) && /trình duyệt của Synchro/.test(sys) && runReq.tools.some((t) => t.name === "autopilot_propose") && runReq.tools.some((t) => /^web_search_/.test(t.type ?? "")), "model nhận bối cảnh việc tự động, công cụ đề xuất, tìm web, hướng dẫn trình duyệt", sys.slice(0, 300));
 ok(runReq?.tools.some((t) => t.name === "browser_navigate"), "có công cụ trình duyệt (trình duyệt của Synchro trên máy chủ)");
-let box = (await a("GET", "/api/inbox")).j;
-ok(box.pending === 3 && box.unread >= 1, `Hộp thư: ${box.pending} chờ duyệt, ${box.unread} chưa đọc`, JSON.stringify({ pending: box.pending, unread: box.unread }));
-let props = (await a("GET", "/api/inbox/proposals")).j.proposals;
+let box = (await a("GET", "/api/autopilot")).j;
+ok(box.pending === 3 && box.unread >= 1, `Autopilot: ${box.pending} chờ duyệt, ${box.unread} chưa đọc`, JSON.stringify({ pending: box.pending, unread: box.unread }));
+let props = (await a("GET", "/api/autopilot/proposals")).j.proposals;
 const pSkill = props.find((x) => x.kind === "skill"), pMail = props.find((x) => x.title === MAIL), pPost = props.find((x) => x.title === POST);
 ok(pSkill?.title === SK && pSkill.taskTitle === "Repo GitHub hay" && pSkill.payload.source === "https://github.com/example/radar" && pSkill.payload.files.length === 1 && pSkill.run === it.run, "đề xuất skill: tên theo SKILL.md, nguồn, tệp kèm, gắn với lần chạy", JSON.stringify(pSkill).slice(0, 300));
-ok(((await a("GET", `/api/inbox/proposals?run=${it.run}`)).j.proposals ?? []).length === 3, "đề xuất theo từng lần chạy");
+ok(((await a("GET", `/api/autopilot/proposals?run=${it.run}`)).j.proposals ?? []).length === 3, "đề xuất theo từng lần chạy");
 ok(((await a("GET", "/api/skills")).j?.skills ?? []).every((s) => s.name !== SK), "chưa duyệt thì chưa tạo skill");
 let jobs = (await a("GET", "/api/tasks")).j.tasks;
 ok(jobs.find((t) => t.id === job.id)?.pending === 3 && jobs.find((t) => t.id === job.id)?.last?.status === "done", "danh sách việc: số đề xuất chờ duyệt, lần chạy gần nhất", JSON.stringify(jobs[0]).slice(0, 300));
@@ -108,29 +108,29 @@ const req2 = await reqWith(/<previous_runs>/);
 const msg2 = JSON.stringify(req2?.messages?.[0] ?? "");
 ok(/<previous_runs>/.test(msg2) && /Lần chạy lúc/.test(msg2) && msg2.includes(`[chờ duyệt] Skill: ${SK}`), "lần sau nhận kết quả lần trước và các đề xuất đã gửi", msg2.slice(0, 400));
 ok(/Lần chạy thứ 2/.test(JSON.stringify(req2?.system ?? "")), "biết đây là lần chạy thứ mấy");
-ok(it?.status === "done" && !it.proposals && /đã có trong Hộp thư/.test(it.text) && (await a("GET", "/api/inbox")).j.pending === 3, "đề xuất trùng không gửi lại", JSON.stringify(it).slice(0, 300));
+ok(it?.status === "done" && !it.proposals && /đã có trong mục Cần duyệt của Autopilot/.test(it.text) && (await a("GET", "/api/autopilot")).j.pending === 3, "đề xuất trùng không gửi lại", JSON.stringify(it).slice(0, 300));
 
 console.log("5. Duyệt đề xuất: Synchro làm ngay; người khác không duyệt được");
-ok((await b("POST", "/api/inbox/proposals", { id: pSkill.id, decision: "approve" })).s === 404 && ((await b("GET", "/api/inbox/proposals")).j.proposals ?? []).length === 0, "tài khoản khác không thấy, không duyệt được");
-ok((await a("POST", "/api/inbox/proposals", { id: pSkill.id, decision: "approve" }, { origin: "https://evil.example" })).s === 403, "duyệt từ trang khác (CSRF) → 403");
+ok((await b("POST", "/api/autopilot/proposals", { id: pSkill.id, decision: "approve" })).s === 404 && ((await b("GET", "/api/autopilot/proposals")).j.proposals ?? []).length === 0, "tài khoản khác không thấy, không duyệt được");
+ok((await a("POST", "/api/autopilot/proposals", { id: pSkill.id, decision: "approve" }, { origin: "https://evil.example" })).s === 403, "duyệt từ trang khác (CSRF) → 403");
 const edited = SKILL.replace("2. Tóm tắt ý tưởng chính.", "2. Tóm tắt ý tưởng chính.\n3. Chấm điểm độ đột phá 1–10.");
-r = await a("POST", "/api/inbox/proposals", { id: pSkill.id, decision: "approve", edits: { skill_md: edited } });
+r = await a("POST", "/api/autopilot/proposals", { id: pSkill.id, decision: "approve", edits: { skill_md: edited } });
 ok(r.s === 200 && r.j.proposal.status === "done" && r.j.proposal.result?.includes(`Đã tạo skill ${SK}`), "duyệt skill (đã sửa SKILL.md) → tạo skill ngay", JSON.stringify(r.j).slice(0, 300));
 const sk = ((await a("GET", "/api/skills")).j?.skills ?? []).find((s) => s.name === SK);
 const body = (await a("GET", `/api/skills/${SK}`)).j?.skill;
 ok(sk && sk.enabled !== false && (body?.files ?? []).some((f) => f.path === "references/notes.md"), "skill có trong danh sách, đang bật, kèm tệp references/notes.md", JSON.stringify({ sk, files: body?.files }).slice(0, 300));
 ok(/Chấm điểm độ đột phá/.test(body?.body ?? ""), "nội dung skill là bản người dùng đã sửa", JSON.stringify(body).slice(0, 200));
-ok((await a("POST", "/api/inbox/proposals", { id: pSkill.id, decision: "approve" })).s === 409, "duyệt lại lần nữa → 409, không tạo hai lần");
-r = await a("POST", "/api/inbox/proposals", { id: pMail.id, decision: "approve" });
+ok((await a("POST", "/api/autopilot/proposals", { id: pSkill.id, decision: "approve" })).s === 409, "duyệt lại lần nữa → 409, không tạo hai lần");
+r = await a("POST", "/api/autopilot/proposals", { id: pMail.id, decision: "approve" });
 ok(r.s === 200 && r.j.proposal.status === "done" && /^run_/.test(r.j.run ?? ""), "duyệt hành động → Synchro chạy việc đó ngay", JSON.stringify(r.j).slice(0, 300));
 it = await until(async () => (await itemsOf(job.id)).find((x) => x.run === r.j.run && x.status !== "running"));
 const actReq = await reqWith(new RegExp(`Người dùng đã duyệt đề xuất \\\\"${MAIL}\\\\"`));
-ok(it?.status === "done" && it.kind === "action" && it.title === `Đã duyệt: ${MAIL}` && !!actReq && /Soạn bản tin 3 dòng/.test(JSON.stringify(actReq.messages)), "kết quả việc đã duyệt vào Hộp thư; model nhận đúng việc được duyệt", JSON.stringify(it).slice(0, 300));
-r = await a("POST", "/api/inbox/proposals", { id: pPost.id, decision: "reject" });
+ok(it?.status === "done" && it.kind === "action" && it.title === `Đã duyệt: ${MAIL}` && !!actReq && /Soạn bản tin 3 dòng/.test(JSON.stringify(actReq.messages)), "kết quả việc đã duyệt vào Autopilot; model nhận đúng việc được duyệt", JSON.stringify(it).slice(0, 300));
+r = await a("POST", "/api/autopilot/proposals", { id: pPost.id, decision: "reject" });
 ok(r.s === 200 && r.j.proposal.status === "rejected", "bỏ qua đề xuất", JSON.stringify(r.j));
-box = (await a("GET", "/api/inbox")).j;
+box = (await a("GET", "/api/autopilot")).j;
 ok(box.pending === 0, "hết đề xuất chờ duyệt", box.pending);
-props = (await a("GET", "/api/inbox/proposals?all=1")).j.proposals;
+props = (await a("GET", "/api/autopilot/proposals?all=1")).j.proposals;
 ok(props.filter((x) => x.task === job.id).map((x) => x.status).sort().join(",") === "done,done,rejected", "lịch sử đề xuất: đã duyệt / đã bỏ qua", JSON.stringify(props.map((x) => [x.title, x.status])));
 await a("POST", `/api/tasks/${job.id}/run`);
 await until(async () => (await itemsOf(job.id)).filter((x) => x.kind === "task").length === 3 && (await itemsOf(job.id)).every((x) => x.status !== "running"));
@@ -144,9 +144,9 @@ const siteJob = r.j.task;
 const t0 = Date.now();
 it = await until(async () => (await itemsOf(siteJob.id)).find((x) => x.status !== "running"));
 ok(it?.status === "done" && /chưa có trong danh sách trang được phép/.test(it.text) && Date.now() - t0 < 30_000, "lượt chạy không treo: model được báo, làm tiếp bằng nguồn khác", JSON.stringify(it).slice(0, 300));
-const pSite = (await a("GET", "/api/inbox/proposals")).j.proposals.find((x) => x.kind === "site");
+const pSite = (await a("GET", "/api/autopilot/proposals")).j.proposals.find((x) => x.kind === "site");
 ok(pSite?.payload.host === HOST && pSite.task === siteJob.id, "đề xuất cho phép trang mới", JSON.stringify(pSite));
-r = await a("POST", "/api/inbox/proposals", { id: pSite.id, decision: "approve" });
+r = await a("POST", "/api/autopilot/proposals", { id: pSite.id, decision: "approve" });
 ok(r.s === 200 && ((await a("GET", "/api/code/prefs")).j?.sites ?? []).includes(HOST), "duyệt → trang vào danh sách được phép, lần sau dùng được", JSON.stringify(r.j));
 await a("PATCH", "/api/code/prefs", { siteAsk: false, sites: [], blocked: [] });
 
@@ -167,7 +167,7 @@ await a("DELETE", `/api/tasks/${chromeJob.id}`);
 r = await a("POST", "/api/tasks", { title: "Chờ Chrome", prompt: "Đọc trang tin trên Chrome của tôi", schedule: { kind: "once", tz: TZ }, model: M, browser: "user" });
 const waitJob = r.j.task;
 const w = await until(async () => (await itemsOf(waitJob.id)).find((x) => x.status === "waiting"), 15_000);
-ok(!!w && !!(await a("GET", "/api/tasks")).j.tasks.find((t) => t.id === waitJob.id)?.wait_since, "đến giờ mà Chrome tắt → \"đang chờ Chrome\" trong Hộp thư", JSON.stringify(w));
+ok(!!w && !!(await a("GET", "/api/tasks")).j.tasks.find((t) => t.id === waitJob.id)?.wait_since, "đến giờ mà Chrome tắt → \"đang chờ Chrome\" trong Autopilot", JSON.stringify(w));
 it = await until(async () => (await itemsOf(waitJob.id)).find((x) => x.status === "done"), 60_000);
 const reqW = await reqWith(/Chrome của người dùng không kết nối suốt/);
 ok(it && /Chrome của người dùng không kết nối/.test(it.note ?? "") && /Chrome không kết nối/.test(JSON.stringify(reqW?.system ?? "")), "chờ quá lâu → chạy bằng trình duyệt của Synchro, ghi rõ lý do", JSON.stringify(it).slice(0, 300));
@@ -201,13 +201,13 @@ else {
 console.log("9. /api/llm không nhận thông tin việc tự động từ trình duyệt; xóa việc thì xóa đề xuất còn chờ");
 r = await a("POST", "/api/llm", { system: "", model: M, skills: true, task: { id: job.id, browser: "user", chrome: true }, messages: [{ role: "user", content: `Thử #seq=${JSON.stringify([SEQ[1]])}` }] });
 const direct = await reqWith(/Thử #seq=/, false);
-ok(r.s === 200 && !direct?.tools?.some((t) => t.name === "inbox_propose") && !/<automation_tools>/.test(JSON.stringify(direct?.system ?? "")), "chat thường không có công cụ đề xuất dù trình duyệt gửi kèm task", JSON.stringify(r.j).slice(0, 200));
-r = await a("POST", "/api/tasks", { title: "Tạm", prompt: `x #seq=${JSON.stringify([{ tool: "inbox_propose", args: { kind: "action", title: "Việc tạm", summary: "tạm", instructions: "tạm" } }])}`, schedule: { kind: "once", tz: TZ }, model: M });
+ok(r.s === 200 && !direct?.tools?.some((t) => t.name === "autopilot_propose") && !/<automation_tools>/.test(JSON.stringify(direct?.system ?? "")), "chat thường không có công cụ đề xuất dù trình duyệt gửi kèm task", JSON.stringify(r.j).slice(0, 200));
+r = await a("POST", "/api/tasks", { title: "Tạm", prompt: `x #seq=${JSON.stringify([{ tool: "autopilot_propose", args: { kind: "action", title: "Việc tạm", summary: "tạm", instructions: "tạm" } }])}`, schedule: { kind: "once", tz: TZ }, model: M });
 const tmp = r.j.task;
 await until(async () => (await itemsOf(tmp.id)).find((x) => x.status === "done"));
-ok((await a("GET", "/api/inbox")).j.pending >= 1, "việc tạm gửi một đề xuất");
+ok((await a("GET", "/api/autopilot")).j.pending >= 1, "việc tạm gửi một đề xuất");
 await a("DELETE", `/api/tasks/${tmp.id}`);
-ok(!(await a("GET", "/api/inbox/proposals")).j.proposals.some((x) => x.task === tmp.id), "xóa việc → đề xuất còn chờ của việc đó cũng mất");
+ok(!(await a("GET", "/api/autopilot/proposals")).j.proposals.some((x) => x.task === tmp.id), "xóa việc → đề xuất còn chờ của việc đó cũng mất");
 
 console.log("10. Việc làm trên repo chạy bằng Synchro Code: workspace riêng giữ lại giữa các lần chạy, lệnh cần duyệt thành đề xuất");
 r = await a("POST", "/api/tasks/plan", { text: "Mỗi tối thứ Sáu cập nhật thư viện cho repo của tôi, chạy kiểm thử rồi mở pull request", tz: TZ });
@@ -216,7 +216,7 @@ const CODE_ACT = `Mở pull request cập nhật thư viện ${TAG}`;
 const CSEQ = [
   { tool: "write_file", args: { path: "bao-cao.md", content: `# Báo cáo ${TAG}\nThư viện đã cập nhật.` } },
   { tool: "bash", args: { command: "cat bao-cao.md", description: "Xem báo cáo" } },
-  { tool: "inbox_propose", args: { kind: "action", title: CODE_ACT, summary: "Đã cập nhật 3 thư viện, kiểm thử đạt.", instructions: "Đẩy nhánh và mở pull request." } },
+  { tool: "autopilot_propose", args: { kind: "action", title: CODE_ACT, summary: "Đã cập nhật 3 thư viện, kiểm thử đạt.", instructions: "Đẩy nhánh và mở pull request." } },
 ];
 r = await a("POST", "/api/tasks", { title: "Cập nhật thư viện", prompt: `Cập nhật thư viện #seq=${JSON.stringify(CSEQ)}`, schedule: { kind: "once", tz: TZ }, model: M, engine: "code" });
 const codeJob = r.j?.task;
@@ -224,7 +224,7 @@ ok(r.s === 200 && codeJob.engine === "code" && /^9\d{14}$/.test(codeJob.sid ?? "
 it = await until(async () => (await itemsOf(codeJob.id)).find((x) => x.status !== "running"), 60_000);
 ok(it?.status === "done" && /Đã chạy 3 bước/.test(it.text) && it.text.includes(`# Báo cáo ${TAG}`) && it.proposals === 1, "Synchro Code chạy nền: ghi tệp, chạy lệnh, gửi đề xuất", JSON.stringify(it).slice(0, 400));
 const codeReq = await reqWith(/workspace riêng của việc này/);
-ok(!!codeReq && ["write_file", "bash", "inbox_propose"].every((n) => codeReq.tools.some((t) => t.name === n)), "model nhận bối cảnh workspace riêng và đủ công cụ Synchro Code + inbox_propose", JSON.stringify(codeReq?.tools?.map((t) => t.name) ?? []));
+ok(!!codeReq && ["write_file", "bash", "autopilot_propose"].every((n) => codeReq.tools.some((t) => t.name === n)), "model nhận bối cảnh workspace riêng và đủ công cụ Synchro Code + autopilot_propose", JSON.stringify(codeReq?.tools?.map((t) => t.name) ?? []));
 const files = (await a("POST", "/api/ws", { op: "list", sid: codeJob.sid, path: "." })).j?.entries ?? [];
 ok(files.some((f) => f.name === "bao-cao.md"), "tệp nằm trong workspace của việc", JSON.stringify(files.map((f) => f.name)));
 ok(!((await a("GET", "/api/code/sessions")).j?.sessions ?? []).some((x) => String(x.id) === codeJob.sid), "không tạo phiên rác trong danh sách Code");
@@ -238,9 +238,9 @@ await a("PATCH", `/api/tasks/${codeJob.id}`, { prompt: `Ghi kết quả #seq=${J
 const t1 = Date.now();
 r = await a("POST", `/api/tasks/${codeJob.id}/run`);
 it = await until(async () => (await itemsOf(codeJob.id)).find((x) => x.run === r.j?.run && x.status !== "running"), 60_000);
-const pCmd = (await a("GET", "/api/inbox/proposals")).j.proposals.find((x) => x.task === codeJob.id && x.kind === "action" && (x.payload.allow ?? []).length);
+const pCmd = (await a("GET", "/api/autopilot/proposals")).j.proposals.find((x) => x.task === codeJob.id && x.kind === "action" && (x.payload.allow ?? []).length);
 ok(it?.status === "done" && Date.now() - t1 < 40_000 && /cần người dùng duyệt trước/.test(it.text) && pCmd?.summary.includes(CMD), "chế độ Tự động tắt: lệnh cần duyệt thành đề xuất, lượt chạy không treo", JSON.stringify({ it: it?.text?.slice(0, 200), pCmd }).slice(0, 400));
-r = await a("POST", "/api/inbox/proposals", { id: pCmd.id, decision: "approve", edits: { instructions: `Chạy lệnh đã duyệt #seq=${JSON.stringify([{ tool: "bash", args: { command: CMD, description: "Ghi kết quả" } }])}` } });
+r = await a("POST", "/api/autopilot/proposals", { id: pCmd.id, decision: "approve", edits: { instructions: `Chạy lệnh đã duyệt #seq=${JSON.stringify([{ tool: "bash", args: { command: CMD, description: "Ghi kết quả" } }])}` } });
 it = await until(async () => (await itemsOf(codeJob.id)).find((x) => x.run === r.j?.run && x.status !== "running"), 60_000);
 const out = (await a("POST", "/api/ws", { op: "read", sid: codeJob.sid, path: "ket-qua.txt" })).j;
 ok(it?.status === "done" && it.kind === "action" && JSON.stringify(out ?? {}).includes(`xin-chao-${TAG}`), "duyệt → Synchro chạy đúng lệnh đó trong workspace của việc", JSON.stringify({ it: it?.text?.slice(0, 200), out }).slice(0, 400));

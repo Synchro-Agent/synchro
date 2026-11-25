@@ -1,5 +1,6 @@
 // Kiểm thử giao diện bằng Chrome ẩn (hồ sơ riêng) trên npm run dev:mock. Chạy tay: node tests/ui/apps.mjs
-// Hộp thư và tác vụ nền: tạo tác vụ từ mẫu, kết quả vào Hộp thư (có số đếm trên thanh bên), mở kết quả thành đoạn chat.
+// Autopilot: giao việc từ mẫu, kết quả vào Autopilot (có số đếm trên thanh bên), mở đoạn chat kết quả, địa chỉ cũ
+// #v=inbox.
 import { waitFor } from "../lib/wait.mjs";
 import { spawn } from "node:child_process";
 import { mkdirSync, rmSync, readdirSync, statSync, writeFileSync, readFileSync } from "node:fs";
@@ -102,9 +103,9 @@ const ok = (c, n, x = "") => { results.push([c, n]); console.log(c ? "  ✓" : "
 const shot = async (n) => { const { data } = await P("Page.captureScreenshot", { format: "png" }); writeFileSync(`${SCR}inbox-${n}.png`, Buffer.from(data, "base64")); };
 try {
   await sleep(800);
-  await click(byText(".nav-item", "Hộp thư"), "inbox");
-  ok(await waitFor(() => ev(`!!document.querySelector(".tk-top")`), 8000), "trang Hộp thư mở từ thanh bên");
-  // Hộp thư thành trung tâm tự động hóa (5917e17): nút "Tác vụ nền mới" và chip mẫu .tk-tpl được thay bằng ô giao việc (.tk-comp):
+  await click(byText(".nav-item", "Autopilot"), "inbox");
+  ok(await waitFor(() => ev(`!!document.querySelector(".tk-top")`), 8000), "trang Autopilot mở từ thanh bên");
+  // Autopilot thành trung tâm tự động hóa (5917e17): nút "Tác vụ nền mới" và chip mẫu .tk-tpl được thay bằng ô giao việc (.tk-comp):
   // chip ví dụ điền sẵn câu, "Lên kế hoạch" mở thẻ kế hoạch (.tk-modal) đã điền tên, yêu cầu, lịch.
   await click(byText(".tk-comp .tk-ex .chip", "Bản tin AI buổi sáng"), "example"); await sleep(200);
   await click(byText(".tk-comp .btn.dark", "Lên kế hoạch"), "plan");
@@ -120,22 +121,32 @@ try {
   await click(byText(".pl-seg button", "Kết quả"), "results tab");
   // Chỉ tính kết quả mới (chưa đọc): tài khoản test có thể còn kết quả cũ từ lần chạy trước.
   await until(`[...document.querySelectorAll(".tk-item.unread")].some((e) => e.textContent.includes("Bản tin buổi sáng") && !e.querySelector(".tk-dot.running"))`, 60000, "result in inbox");
-  ok(true, "tác vụ chạy ở nền, kết quả hiện trong Hộp thư");
+  ok(true, "tác vụ chạy ở nền, kết quả hiện trong Autopilot");
   await P("Page.reload", {});
   // Chờ app tải lại xong (thanh bên có số chưa đọc) thay vì 3 giây cố định (H2.3).
   await waitFor(() => ev(`Number(document.querySelector(".nav-badge")?.textContent) >= 1`), 20000);
   const badge = await ev(`document.querySelector(".nav-badge")?.textContent ?? ""`);
   ok(Number(badge) >= 1, "thanh bên hiện số kết quả chưa đọc: " + badge);
-  await click(byText(".nav-item", "Hộp thư"), "inbox");
+  await click(byText(".nav-item", "Autopilot"), "inbox");
   // Danh sách kết quả tải sau khung chờ (máy chậm: hơn 1,5 giây): chờ đúng mục thay vì chờ cố định (H2.3).
   const item = `[...document.querySelectorAll(".tk-item.unread .tk-row")].find((e) => e.textContent.includes("Bản tin buổi sáng"))`;
   await until(`!!${item}`, 15000, "result row");
   await click(item, "open item");
   ok(await waitFor(() => ev(`!!document.querySelector(".tk-body .mdx")`), 6000), "mở kết quả: hiện nội dung đầy đủ");
   await shot("2-result");
-  await click(byText(".tk-acts .btn", "Mở thành đoạn chat"), "as chat");
-  ok(await waitFor(() => ev(`document.querySelectorAll(".ai-msg").length >= 1 && /Bản tin buổi sáng/.test(document.body.innerText)`), 8000), "mở thành đoạn chat để hỏi tiếp");
+  // Kết quả đã là một đoạn chat thường máy chủ tạo sẵn (thẻ Autopilot, đồng bộ về mọi thiết bị): nút mở đúng đoạn
+  // chat đó.
+  await click(byText(".tk-acts .btn", "Mở đoạn chat để hỏi tiếp"), "as chat");
+  ok(await waitFor(() => ev(`document.querySelectorAll(".ai-msg").length >= 1 && /Bản tin buổi sáng/.test(document.body.innerText)`), 10000),
+    "mở đoạn chat kết quả để hỏi tiếp");
+  const listed = `/#c=\\d+/.test(location.hash) && [...document.querySelectorAll(".chat-item")]
+    .some((e) => /Bản tin buổi sáng/.test(e.textContent))`;
+  ok(await waitFor(() => ev(listed), 10000), "đoạn chat kết quả có trong danh sách đoạn chat ở thanh bên");
   await shot("3-chat");
+  // Địa chỉ cũ #v=inbox (dấu trang, email cũ) mở đúng trang Autopilot và tự đổi sang #v=autopilot.
+  await ev(`(location.hash = "#v=inbox", 1)`);
+  ok(await waitFor(() => ev(`!!document.querySelector(".tk-top") && location.hash === "#v=autopilot"`), 8000),
+    "#v=inbox → trang Autopilot, địa chỉ #v=autopilot");
 } catch (e) { ok(false, "lỗi khi chạy", e.stack); await shot("fail"); }
 const fails = results.filter((r) => !r[0]).length;
 console.log(`${results.length - fails}/${results.length} đạt`);

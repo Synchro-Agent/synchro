@@ -309,34 +309,38 @@ try {
     ok((await ev(`location.hash`)) === "", "trang Mới: địa chỉ không có #v=");
     await click(`document.querySelector(".rail [data-nav=projects]")`, "Dự án");
     ok(await until(`location.hash === "#v=projects"`, 4000), "bấm Dự án → #v=projects", await ev(`location.hash`));
-    await click(`document.querySelector(".rail [data-nav=inbox]")`, "Hộp thư");
-    ok(await until(`location.hash === "#v=inbox"`, 4000), "bấm Hộp thư → #v=inbox", await ev(`location.hash`));
+    await click(`document.querySelector(".rail [data-nav=autopilot]")`, "Autopilot");
+    ok(await until(`location.hash === "#v=autopilot"`, 4000), "bấm Autopilot → #v=autopilot", await ev(`location.hash`));
     await ev(`history.back()`);
     ok(await until(`location.hash === "#v=projects" && (${cur}) === "projects"`, 4000), "Back → về lại Dự án", { hash: await ev(`location.hash`), nav: await ev(cur) });
     await ev(`history.forward()`);
-    ok(await until(`location.hash === "#v=inbox" && (${cur}) === "inbox"`, 4000), "Forward → sang lại Hộp thư", { hash: await ev(`location.hash`), nav: await ev(cur) });
+    ok(await until(`location.hash === "#v=autopilot" && (${cur}) === "autopilot"`, 4000), "Forward → sang lại Autopilot", { hash: await ev(`location.hash`), nav: await ev(cur) });
     await ev(`history.back()`); await until(`location.hash === "#v=projects"`, 3000);
     await ev(`history.back()`);
     ok(await until(`location.hash === "" && (${cur}) === "new"`, 4000), "Back lần nữa → về trang Mới", { hash: await ev(`location.hash`), nav: await ev(cur) });
     await home("desktop", "#v=artifacts");
     ok(await until(`(${cur}) === "artifacts" && location.hash === "#v=artifacts"`, 10000), "mở thẳng link #v=artifacts → đúng trang Artifacts", { hash: await ev(`location.hash`), nav: await ev(cur) });
+    // Địa chỉ cũ của Autopilot (trước đây là Hộp thư) trong dấu trang, email cũ: mở đúng trang và đổi sang địa chỉ mới.
+    await home("desktop", "#v=inbox");
+    ok(await until(`(${cur}) === "autopilot" && location.hash === "#v=autopilot"`, 10000),
+      "mở link cũ #v=inbox → Autopilot, địa chỉ #v=autopilot", { hash: await ev(`location.hash`), nav: await ev(cur) });
     await home("desktop", "#v=skills");
     ok(await until(`(${cur}) === "customize"`, 10000), "mở thẳng link #v=skills → Kho kỹ năng", await ev(cur));
     // Cài đặt: ⇧⌘, → #s=<mục>; Esc đóng thì địa chỉ không còn #s=; Back không mở lại Cài đặt.
     // Mở Cài đặt là một mục lịch sử (LIVE-8, hashnav.ts): Back lúc Cài đặt đang mở chỉ đóng Cài đặt, về đúng trang đã mở nó — thay thế mục
     // của trang đó thì Back bỏ qua luôn trang ấy. Đóng bằng Esc thì app history.back() bỏ mục #s= vừa thêm, nên Back sau đó không mở lại Cài đặt.
     await home("desktop");
-    await click(`document.querySelector(".rail [data-nav=inbox]")`, "Hộp thư"); await until(`location.hash === "#v=inbox"`, 4000);
+    await click(`document.querySelector(".rail [data-nav=autopilot]")`, "Autopilot"); await until(`location.hash === "#v=autopilot"`, 4000);
     await key(",", "Comma", 188, 4 | 8);
     ok(await until(`!!document.querySelector(".modal.settings") && location.hash.startsWith("#s=")`, 6000), "⇧⌘, → Cài đặt mở, địa chỉ #s=<mục>", await ev(`location.hash`));
     await ev(`history.back()`);
-    ok(await until(`!document.querySelector(".modal.settings") && location.hash === "#v=inbox" && (${cur}) === "inbox"`, 4000), "Back lúc Cài đặt đang mở → chỉ đóng Cài đặt, về lại Hộp thư", { hash: await ev(`location.hash`), nav: await ev(cur) });
+    ok(await until(`!document.querySelector(".modal.settings") && location.hash === "#v=autopilot" && (${cur}) === "autopilot"`, 4000), "Back lúc Cài đặt đang mở → chỉ đóng Cài đặt, về lại Autopilot", { hash: await ev(`location.hash`), nav: await ev(cur) });
     await key(",", "Comma", 188, 4 | 8);
     ok(await until(`!!document.querySelector(".modal.settings") && location.hash.startsWith("#s=")`, 6000), "mở lại Cài đặt", await ev(`location.hash`));
     await esc();
-    ok(await until(`!document.querySelector(".modal.settings") && location.hash === "#v=inbox"`, 4000), "Esc đóng Cài đặt → địa chỉ về #v=inbox", await ev(`location.hash`));
+    ok(await until(`!document.querySelector(".modal.settings") && location.hash === "#v=autopilot"`, 4000), "Esc đóng Cài đặt → địa chỉ về #v=autopilot", await ev(`location.hash`));
     await ev(`history.back()`);
-    ok(await until(`location.hash === "" && (${cur}) === "new"`, 4000) && !(await ev(`!!document.querySelector(".modal.settings")`)), "đóng Cài đặt rồi Back → về trang trước Hộp thư, không mở lại Cài đặt", { hash: await ev(`location.hash`), nav: await ev(cur) });
+    ok(await until(`location.hash === "" && (${cur}) === "new"`, 4000) && !(await ev(`!!document.querySelector(".modal.settings")`)), "đóng Cài đặt rồi Back → về trang trước Autopilot, không mở lại Cài đặt", { hash: await ev(`location.hash`), nav: await ev(cur) });
     await home("desktop", "#s=General");
     ok(await until(`!!document.querySelector(".modal.settings")`, 10000), "mở thẳng link #s=General → Cài đặt mở sẵn");
     await esc(); await sleep(300);

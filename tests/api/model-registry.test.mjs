@@ -63,7 +63,7 @@ try {
   const m6 = md1.providers.flatMap((p) => p.models).find((m) => m.key === "anthropic/claude-opus-6");
   ok(m6?.isNew === true && m6.name === "Claude Opus 6", "bộ chọn model của thành viên: Claude Opus 6 với nhãn Mới", JSON.stringify(m6));
   ok(keys(md1).includes("anthropic/claude-opus-5-5"), "bản trước (Opus 5.5) vẫn ở lại làm dự phòng");
-  const inbox = (await admin("GET", "/api/inbox")).j;
+  const inbox = (await admin("GET", "/api/autopilot")).j;
   const note = (inbox?.items ?? []).find((x) => /Synchro đã thêm model mới: .*Claude Opus 6/.test(x.title ?? ""));
   ok(!!note && /chữ ✓, công cụ ✓, ảnh ✓/.test(note.text ?? note.preview ?? JSON.stringify(note)), "quản trị viên nhận thông báo kèm kết quả thử", JSON.stringify(inbox?.items?.slice(0, 2)));
 

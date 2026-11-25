@@ -69,7 +69,7 @@ try {
   await sleep(600);
 
   console.log("Ô soạn tin nhận tiêu điểm");
-  await click(`document.querySelector("[data-nav=inbox]")`); await sleep(300);
+  await click(`document.querySelector("[data-nav=autopilot]")`); await sleep(300);
   await click(`document.querySelector(".rail-new")`); await sleep(400);
   ok(await focusIs(COMPOSER), "bấm Mới từ mục khác: con trỏ ở ô nhập");
   await ev(`document.activeElement.blur()`);
@@ -232,9 +232,9 @@ try {
   ok(await ev(`/cookie/i.test(document.querySelector(".modal.settings .s-hit").textContent)`), "bấm kết quả: mở đúng tab, cuộn tới đúng dòng");
   await click(`document.querySelector(".modal.settings .close")`); await sleep(300);
 
-  console.log("Hộp thư: tab nào lỗi cũng có nút thử lại, không quay mãi");
-  await ev(`(() => { window.__f = window.fetch; window.fetch = (u, i) => (/\\/api\\/(tasks|inbox)/.test(String(u)) ? Promise.reject(new TypeError("Failed to fetch")) : window.__f(u, i)); })()`);
-  await click(`document.querySelector("[data-nav=inbox]")`);
+  console.log("Autopilot: tab nào lỗi cũng có nút thử lại, không quay mãi");
+  await ev(`(() => { window.__f = window.fetch; window.fetch = (u, i) => (/\\/api\\/(tasks|autopilot)/.test(String(u)) ? Promise.reject(new TypeError("Failed to fetch")) : window.__f(u, i)); })()`);
+  await click(`document.querySelector("[data-nav=autopilot]")`);
   await until(`!!document.querySelector(".err-box")`, 8000, "hộp lỗi tab Kết quả");
   ok(!/Failed to fetch/.test(await ev(`document.querySelector(".err-box").textContent`)), "không lộ Failed to fetch", await ev(`document.querySelector(".err-box").textContent`));
   await ev(`window.fetch = window.__f`);

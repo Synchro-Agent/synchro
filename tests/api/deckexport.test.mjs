@@ -65,9 +65,9 @@ console.log("3. SEC-5: chỉ xuất nội dung của chính người dùng, mạ
   ok(D.deckFromText(broken, "q3-deck") === null, "W23-11: bản vá áp không được → không xuất bản cũ");
   ok(D.deckFromText(`<artifact identifier="q3-deck" mode="patch">\n<<<<<<< SEARCH\na\n=======\nb\n>>>>>>> REPLACE\n</artifact>`, "q3-deck") === null, "W23-11: chỉ có bản vá, không có bản đầy đủ → null");
   ok(D.deckFromText(`<artifact identifier="Q3 Deck" type="text/html" title="T">${DECK}</artifact>`, "Q3 Deck")?.content === DECK, "identifier chuẩn hóa như khi tách artifact");
-  // W23-11: Hộp thư có nút "Tải PowerPoint" gọi đúng route xuất ở máy chủ với { run, identifier }.
+  // W23-11: Autopilot có nút "Tải PowerPoint" gọi đúng route xuất ở máy chủ với { run, identifier }.
   const inbox = fs.readFileSync(path.join(process.cwd(), "ui/tasksui.tsx"), "utf8");
-  ok(/apiFetch\("\/api\/artifacts\/pptx"/.test(inbox) && /JSON\.stringify\(\{ run, identifier: ident \}\)/.test(inbox) && /tr\("Tải PowerPoint"\)/.test(inbox), "W23-11: Hộp thư gọi /api/artifacts/pptx với { run, identifier }");
+  ok(/apiFetch\("\/api\/artifacts\/pptx"/.test(inbox) && /JSON\.stringify\(\{ run, identifier: ident \}\)/.test(inbox) && /tr\("Tải PowerPoint"\)/.test(inbox), "W23-11: Autopilot gọi /api/artifacts/pptx với { run, identifier }");
   ok(/isDeck\(sg\.art\)/.test(inbox) && /!sg\.art\.patch/.test(inbox), "W23-11: nút chỉ hiện cho bản trình bày slide HTML trong kết quả");
   const route = fs.readFileSync(path.join(process.cwd(), "app/api/artifacts/pptx/route.ts"), "utf8");
   ok(!/body\.content|body\.type/.test(route), "route không còn nhận HTML thô từ trình duyệt");

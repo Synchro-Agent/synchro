@@ -100,8 +100,8 @@ try {
   await P("Input.dispatchKeyEvent", { type: "keyDown", key: "Escape", code: "Escape", windowsVirtualKeyCode: 27 });
   await sleep(400);
   ok(await ev(`!document.querySelector(".overlay.cf-top") && document.querySelectorAll(".art-tile").length === ${tiles0}`), "hủy thì artifact còn nguyên");
-  await click(`[...document.querySelectorAll(".nav-item")].find((e) => e.textContent.trim().startsWith("Hộp thư"))`, "inbox");
-  // Thẻ "Việc tự động" của Hộp thư: nút Sửa của việc đầu tiên.
+  await click(`[...document.querySelectorAll(".nav-item")].find((e) => e.textContent.trim().startsWith("Autopilot"))`, "inbox");
+  // Thẻ "Việc tự động" của Autopilot: nút Sửa của việc đầu tiên.
   await until(`!![...document.querySelectorAll("button")].find((e) => e.textContent.trim().startsWith("Việc tự động"))`, 15000, "jobs tab");
   await ev(`[...document.querySelectorAll("button")].find((e) => e.textContent.trim().startsWith("Việc tự động")).click(), 1`);
   await until(`!!document.querySelector(".tk-acts .btn.ghost")`, 15000, "task edit button");

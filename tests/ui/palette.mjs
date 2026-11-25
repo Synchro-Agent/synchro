@@ -136,11 +136,11 @@ try {
 
   console.log("1. Bảng lệnh ⌘K");
   let rows = await palette("");
-  ok(rows.some((r) => r.startsWith("Đoạn chat mới")) && rows.some((r) => r.startsWith("Hộp thư")), "mở bằng ⌘K, chưa gõ gì thì hiện lệnh nhanh", rows.join(" | "));
+  ok(rows.some((r) => r.startsWith("Đoạn chat mới")) && rows.some((r) => r.startsWith("Autopilot")), "mở bằng ⌘K, chưa gõ gì thì hiện lệnh nhanh", rows.join(" | "));
   await shot("1-open");
   ok(!rows.some((r) => /^(Tri thức|Cuộc họp)/.test(r)), "không có lệnh Tri thức, Cuộc họp", rows.join(" | "));
   rows = await palette("hop thu");
-  ok(rows[0]?.startsWith("Hộp thư"), "gõ không dấu \"hop thu\" → lệnh Hộp thư đứng đầu", rows.join(" | "));
+  ok(rows[0]?.startsWith("Autopilot"), "gõ không dấu \"hop thu\" → lệnh Autopilot đứng đầu", rows.join(" | "));
   await key("Escape", "Escape", 27); await sleep(400);
   // Mục đổi nhãn thành "Connectors": người gõ tiếng Việt (có dấu hay không dấu) vẫn tìm được lệnh.
   for (const q of ["kết nối", "ket noi"]) {
@@ -152,7 +152,7 @@ try {
   await key("Enter", "Enter", 13);
   await until(`!!document.querySelector(".tk-top")`, 8000, "inbox page");
   await sleep(600);
-  ok(!(await ev(`!!document.querySelector(".pal") && !document.querySelector(".pal").closest(".closing")`)), "Enter mở trang Hộp thư, bảng lệnh đóng");
+  ok(!(await ev(`!!document.querySelector(".pal") && !document.querySelector(".pal").closest(".closing")`)), "Enter mở trang Autopilot, bảng lệnh đóng");
   await shot("2-search");
   rows = await palette("ban tin noi bo");
   ok(rows.some((r) => r.startsWith(SK)), "tìm skill theo mô tả", rows.join(" | "));

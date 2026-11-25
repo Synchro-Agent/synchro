@@ -20,7 +20,7 @@ const api = async (method, p, body) => {
 };
 await api("POST", "/api/auth/login", { email, password });
 if (!cookie) throw new Error("login failed");
-// Việc tự động của riêng bộ này để mở hộp Sửa (trước đây dựa vào việc do inbox.mjs bỏ lại; luồng tạo việc ở Hộp thư đã đổi, 5917e17),
+// Việc tự động của riêng bộ này để mở hộp Sửa (trước đây dựa vào việc do inbox.mjs bỏ lại; luồng tạo việc ở Autopilot đã đổi, 5917e17),
 // đặt tên riêng để tìm đúng thẻ; xóa khi xong. Không chạy lần nào (lịch hằng ngày).
 const TITLE = "Kiểm thử ô chọn giờ";
 const made = await api("POST", "/api/tasks", { title: TITLE, prompt: "Tóm tắt tin công nghệ buổi sáng", schedule: { kind: "daily", time: "08:00", tz: "Asia/Ho_Chi_Minh" }, browser: "auto", engine: "chat" });
@@ -70,7 +70,7 @@ try {
   await P("Page.navigate", { url: B + "/" });
   await until(`!!document.querySelector("textarea")`, 30000, "app");
   await sleep(800);
-  await ev(`[...document.querySelectorAll(".nav-item")].find((e) => e.textContent.trim().startsWith("Hộp thư"))?.click(), 1`);
+  await ev(`[...document.querySelectorAll(".nav-item")].find((e) => e.textContent.trim().startsWith("Autopilot"))?.click(), 1`);
   await until(`!![...document.querySelectorAll("button")].find((e) => e.textContent.trim().startsWith("Việc tự động"))`, 15000, "jobs tab");
   await ev(`[...document.querySelectorAll("button")].find((e) => e.textContent.trim().startsWith("Việc tự động")).click(), 1`);
   const edit = `[...document.querySelectorAll(".tk-job")].find((e) => e.querySelector(".tk-t b")?.textContent === ${JSON.stringify(TITLE)})?.querySelector(".tk-acts .btn.ghost")`;

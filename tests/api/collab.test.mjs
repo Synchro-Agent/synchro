@@ -1,4 +1,4 @@
-// Cộng tác trên ứng dụng nội bộ: bình luận, @nhắc tên (thông báo vào Hộp thư), quyền, kênh trực tiếp (ai đang xem, dữ liệu chung vừa đổi, bình luận mới).
+// Cộng tác trên ứng dụng nội bộ: bình luận, @nhắc tên (thông báo vào Autopilot), quyền, kênh trực tiếp (ai đang xem, dữ liệu chung vừa đổi, bình luận mới).
 const B = "http://localhost:3200";
 let pass = 0, fail = 0;
 const ok = (c, n, x = "") => { c ? pass++ : fail++; console.log(c ? "  ✓" : "  ✗", n, c ? "" : String(x).slice(0, 400)); };
@@ -62,9 +62,9 @@ ok(!(await b("GET", `/api/apps/${app}/people?q=collab-b`)).j.people.some((p) => 
 r = await b("POST", `/api/apps/${app}/comments`, { body: `@${pc.name} xem giúp cột hạn chót ${tag}`, mentions: [ids.c] });
 ok(r.s === 200 && r.j.comment.mentions.some((m) => m.id === ids.c) && r.j.comment.user.id === ids.b, "thêm bình luận có nhắc tên", JSON.stringify(r.j));
 const cm = r.j.comment.id;
-const inbox = async (cl) => ((await cl("GET", "/api/inbox")).j?.items ?? []).filter((x) => x.text?.includes(tag));
+const inbox = async (cl) => ((await cl("GET", "/api/autopilot")).j?.items ?? []).filter((x) => x.text?.includes(tag));
 let ic = await inbox(c);
-ok(ic.some((x) => /nhắc bạn trong Bảng việc nhóm/.test(x.title) && x.link === `app:${app}`), "người được nhắc nhận thông báo trong Hộp thư (mở được ứng dụng)", JSON.stringify(ic));
+ok(ic.some((x) => /nhắc bạn trong Bảng việc nhóm/.test(x.title) && x.link === `app:${app}`), "người được nhắc nhận thông báo trong Autopilot (mở được ứng dụng)", JSON.stringify(ic));
 let ia = await inbox(a);
 ok(ia.some((x) => /bình luận trong Bảng việc nhóm/.test(x.title)), "chủ ứng dụng nhận thông báo có bình luận mới", JSON.stringify(ia));
 ok((await inbox(b)).length === 0, "người viết không tự nhận thông báo");
@@ -75,7 +75,7 @@ console.log("2. Ứng dụng riêng");
 ok((await a("GET", `/api/apps/${priv}/people?q=collab`)).j.people.length === 0, "ứng dụng riêng: không gợi ý nhắc người không xem được");
 r = await a("POST", `/api/apps/${priv}/comments`, { body: `ghi chú riêng ${tag}-p`, mentions: [ids.b] });
 ok(r.s === 200 && r.j.comment.mentions.length === 0, "nhắc người không xem được ứng dụng → bị bỏ khỏi danh sách nhắc", JSON.stringify(r.j));
-ok(!(await b("GET", "/api/inbox")).j.items.some((x) => x.text?.includes(`${tag}-p`)), "người đó không nhận thông báo (không lộ ứng dụng riêng)");
+ok(!(await b("GET", "/api/autopilot")).j.items.some((x) => x.text?.includes(`${tag}-p`)), "người đó không nhận thông báo (không lộ ứng dụng riêng)");
 ok((await b("GET", `/api/apps/${priv}/comments`)).s === 404, "người ngoài không đọc được bình luận của ứng dụng riêng");
 ok((await b("POST", `/api/apps/${priv}/comments`, { body: "x" })).s === 404, "người ngoài không bình luận được vào ứng dụng riêng");
 
