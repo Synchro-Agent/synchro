@@ -290,12 +290,14 @@ function ModelPicker({ model, setModel, prefix }: { model: string; setModel: (m:
   }, [mm]);
   const subX = { left: subLeft };
   // Mỗi hãng chỉ hiện đội hình theo bậc như ứng dụng của hãng; model đời trước vẫn ở "Xem tất cả model".
-  // Synchro Code (có tiền tố) thêm model chỉ viết code của hãng vào đội hình.
+  // Synchro Code (có tiền tố) thêm model chỉ viết code của hãng vào đội hình. Ô của mỗi bậc ưu tiên model người
+  // dùng được phép dùng: quản trị viên chỉ cho bản cũ thì bản cũ đứng ở đội hình, không bị đẩy vào "Xem tất cả".
   const lineups = useMemo(() => {
     const ownPlans = new Set(providers.filter((p) => p.source === "plan").map((p) => p.kind as string));
-    const opts = (kind: string) => ({ selected: model, code: !!prefix, ownPlans, kind });
+    const can = (k: string) => allowsModel(allowed, k);
+    const opts = (kind: string) => ({ selected: model, code: !!prefix, ownPlans, kind, ok: can });
     return Object.fromEntries(providers.map((p) => [p.id, lineup(p.models, opts(p.kind))]));
-  }, [providers, model, prefix]);
+  }, [providers, model, prefix, allowed]);
   const toggleAll = (id: string) => setAllFor((s) => { const n = new Set(s); if (!n.delete(id)) n.add(id); return n; });
   const shownCount = (id: string) => {
     const l = lineups[id];

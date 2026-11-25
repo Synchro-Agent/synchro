@@ -60,8 +60,20 @@ eq(L.lineup(listed).main, GEM4, "không có ngày: bản hãng liệt kê trư�
 const newFlash = [...after, { ...group("sub-agy", [["gemini-3.9-flash", "F2", T1 + 1]])[0], isNew: true }];
 eq(L.lineup(newFlash).main, GEM4, "model mới nhưng đời cũ hơn (3.9 Flash) không chen vào: mới thôi chưa đủ");
 const gen5 = [...after, ...group("google", [["gemini-5-oxygen", "O", T1 + 2]])];
-eq(L.lineup(gen5, { kind: "google" }).main, "gemini-4-hydrogen,gemini-5-oxygen,gemini-4-carbon",
-  "dòng lạ đời 5 tự vào ô theo hạng chung (không cần sửa code)");
+eq(L.lineup(gen5, { kind: "google" }).main, GEM4,
+  "dòng lạ đời 5 (chỉ vào ô theo hạng chung) không đẩy dòng có tên ra");
+eq(L.lineup(byIds("google", ["gemini-4-hydrogen", "gemini-5-oxygen", "gemini-4-carbon"]), { kind: "google" }).main,
+  "gemini-4-hydrogen,gemini-5-oxygen,gemini-4-carbon", "ô chưa có dòng có tên: dòng lạ tự vào theo hạng chung");
+// API Gemini (server/providers.ts, kind google) không xếp theo đời và không báo ngày ra mắt; sổ model ghi cùng
+// một ngày cho mọi model của một lần đọc. Neon vẫn phải thay Argon.
+const SAME = Date.UTC(2026, 10, 1);
+const alpha = group("google", ["gemini-4-argon", "gemini-4-carbon", "gemini-4-hydrogen", "gemini-4-neon"]
+  .map((id) => [id, id, SAME]));
+eq(L.lineup(alpha, { kind: "google" }).main, GEM4, "API Gemini: cùng ngày, xếp theo chữ cái → vẫn Neon");
+eq(L.lineup(byIds("google", ["gemini-4-argon", "gemini-4-neon", "gemini-4-hydrogen", "gemini-4-carbon"]),
+  { kind: "google" }).main, GEM4, "không có ngày, Argon liệt kê trước → vẫn Neon");
+eq(L.lineup(byIds("google", ["gemini-4-hydrogen", "gemini-4.1-flash-lite", "gemini-4-carbon"]), { kind: "google" })
+  .main, "gemini-4-hydrogen,gemini-4-carbon", "Gemini 4.1 Flash Lite (dòng phụ, số lớn hơn) không thay Hydrogen");
 
 console.log("3. Gói ChatGPT như ảnh chụp");
 const CODEX = group("sub-codex", [["gpt-6.2-sol", "GPT-6.2 Sol"], ["gpt-6.2-astra", "GPT-6.2 Astra"],
@@ -76,6 +88,34 @@ eq(L.lineup([...group("sub-codex", [["gpt-7-luna", "GPT-7 Luna"]]), ...CODEX]).m
   "gpt-7-luna,gpt-6.2-sol,gpt-6.2-astra", "GPT-7 Luna thay GPT-6 Luna");
 eq(L.lineup(group("sub-codex", [["default", "ChatGPT (plan default)"]])).main, "default",
   "gói chưa đọc được danh sách: vẫn hiện model mặc định");
+
+console.log("3b. Bản phụ và dòng lạ không đẩy dòng chính ra");
+const sideOf = (extra, since) => [...CODEX.map((m) => ({ ...m, since: T0 })),
+  ...group("sub-codex", extra.map((id) => [id, id, since]))];
+eq(L.lineup(sideOf(["gpt-6.2-cyber"], T1)).main, "gpt-6-luna,gpt-6.2-sol,gpt-6.2-astra",
+  "GPT-6.2 Cyber (bản bảo mật, ra sau) không thay Sol");
+ok(has(L.lineup(sideOf(["gpt-6.2-cyber"], T1)).rest, "gpt-6.2-cyber"), "Cyber vẫn ở Xem tất cả");
+eq(L.lineup(sideOf(["gpt-7"], T1)).main, "gpt-6-luna,gpt-6.2-sol,gpt-6.2-astra",
+  "GPT-7 không tên bậc (chỉ vào ô theo hạng chung) không thay Sol");
+eq(L.lineup(sideOf(["gpt-6.1-nano", "gpt-6.2-mini"], T1)).main, "gpt-6-luna,gpt-6.2-sol,gpt-6.2-astra",
+  "GPT-6.1 Nano, GPT-6.2 Mini (dòng phụ, số lớn hơn) không thay GPT-6 Luna");
+eq(L.lineup(byIds("openai", ["gpt-6.2-mini", "gpt-6.1-nano", "gpt-6-sol"]), { kind: "openai" }).main,
+  "gpt-6.2-mini,gpt-6-sol", "không có Luna: dòng phụ mới nhất giữ ô nhẹ");
+
+console.log("3c. Quyền của người dùng: ô ưu tiên model được dùng");
+const HAIKUS = byIds("anthropic", ["claude-haiku-5-5", "claude-sonnet-5-5", "claude-haiku-4-5-20251001"]);
+const onlyOld = (k) => k !== "anthropic/claude-haiku-5-5";
+r = L.lineup(HAIKUS, { ok: onlyOld });
+eq(r.main, "claude-haiku-4-5-20251001,claude-sonnet-5-5",
+  "quản trị viên chỉ cho Haiku 4.5: Haiku 4.5 giữ ô nhẹ, không phải Haiku 5.5 bị khóa");
+ok(has(r.rest, "claude-haiku-5-5"), "Haiku 5.5 bị khóa vẫn ở Xem tất cả");
+eq(L.lineup(HAIKUS, { ok: (k) => k.includes("sonnet") }).main, "claude-haiku-5-5,claude-sonnet-5-5",
+  "không có Haiku nào được dùng: ô vẫn hiện bản mới nhất (có khóa)");
+const quota = HAIKUS.map((m) => (m.id === "claude-haiku-5-5" ? { ...m, blockedUntil: T1 } : m));
+eq(L.lineup(quota).main, "claude-haiku-4-5-20251001,claude-sonnet-5-5",
+  "Haiku 5.5 hết hạn mức: bản còn dùng được giữ ô");
+eq(L.lineup(quota, { ok: onlyOld }).main, "claude-haiku-4-5-20251001,claude-sonnet-5-5",
+  "hết hạn mức vẫn đứng trên bị khóa");
 
 console.log("4. Khóa API OpenAI (danh sách giống API thật)");
 const OA = byIds("openai", ["gpt-6-astra", "gpt-6.1-sol", "gpt-6-sol", "gpt-6-luna", "chat-latest", "gpt-5.6-sol",
@@ -110,6 +150,8 @@ const XAI = byIds("xai", ["grok-4.7", "grok-4.6", "grok-4.5", "grok-4.20-0309-re
 eq(L.lineup(XAI).main, "grok-4-fast-reasoning,grok-4.7", "khóa API Grok: Fast → dòng chính");
 eq(L.lineup([...XAI, ...byIds("xai", ["grok-5-heavy"])]).main, "grok-4-fast-reasoning,grok-4.7,grok-5-heavy",
   "bậc Heavy khi hãng có");
+eq(L.lineup(byIds("xai", ["grok-4.20-0309-non-reasoning", "grok-4.20-0309-reasoning", "grok-4.20-multi-agent"]))
+  .main, "grok-4.20-0309-reasoning", "Grok 4.20: bản suy luận, không phải bản tắt suy luận liệt kê trước");
 eq(L.lineup(byIds("deepseek", ["deepseek-v4-pro", "deepseek-flash", "deepseek-chat"])).main,
   "deepseek-flash,deepseek-chat,deepseek-v4-pro", "DeepSeek: Flash → Chat → Pro");
 
@@ -117,6 +159,15 @@ console.log("7. Model đang chọn, nhà cung cấp chưa có đội hình");
 r = L.lineup(CODEX, { selected: "sub-codex/gpt-5.6-sol" });
 ok(ids(r.main) === "gpt-6-luna,gpt-6.2-sol,gpt-6.2-astra,gpt-5.6-sol" && !has(r.rest, "gpt-5.6-sol"),
   "chat cũ ghim GPT-5.6 Sol: vẫn hiện ở danh sách chính (có dấu chọn), không lặp ở Xem tất cả", ids(r.main));
+const AGY_OLD = [...AGY, ...group("sub-agy", [["claude-opus-4-6-thinking", "Claude Opus 4.6 (Antigravity)"]])];
+r = L.lineup(AGY_OLD, { ownPlans: new Set(["google"]), selected: "sub-agy/claude-opus-4-6-thinking" });
+ok(ids(r.main) === GEM4 && ids(r.via) === "claude-sonnet-5-5,claude-opus-5-5,claude-opus-4-6-thinking"
+  && !has(r.rest, "claude-opus-4-6-thinking"),
+  "chat ghim Claude Opus 4.6 qua Antigravity: đứng trong mục Qua Antigravity, không lẫn vào đội hình Gemini",
+  `${ids(r.main)} | ${ids(r.via)}`);
+r = L.lineup(AGY_OLD, { ownPlans: new Set(["google", "anthropic"]), selected: "sub-agy/claude-opus-4-6-thinking" });
+ok(ids(r.main) === `${GEM4},claude-opus-4-6-thinking` && !r.via.length,
+  "có gói Claude (không có mục riêng): model ghim hiện cuối đội hình như trước", `${ids(r.main)} | ${ids(r.via)}`);
 r = L.lineup(byIds("openrouter", ["anthropic/claude-opus-5-5", "meta/llama-5", "x/y"]), { kind: "compatible" });
 ok(r.main.length === 3 && !r.rest.length, "nhà cung cấp tương thích OpenAI: hiện đủ như trước");
 ok(L.lineup([]).main.length === 0, "nhóm trống không lỗi");
