@@ -4,6 +4,8 @@
 //    lệnh "ESLint" và "Gói kết quả kiểm tra" bằng bash (-e như mặc định của GitHub, và -eo pipefail) với npm giả.
 // 3. tools/i18n-audit.mjs giải mã thực thể JSX (&quot; &apos; &amp;) như React và tests/lib/i18n-scan.mjs: chữ viết &quot;…&quot; để qua
 //    react/no-unescaped-entities không bị báo thiếu bản dịch nhầm. Không cần máy chủ.
+// 4. Job report của deploy.yml: chạy thật bước gửi ci.txt với scp giả; đẩy nhánh ghi <nhánh>.txt,
+//    Pull Request ghi pr-<số>.txt (ref_name của Pull Request là "<số>/merge", có dấu /).
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
@@ -107,6 +109,50 @@ echo "✖ 1301 problems (1 error, 1300 warnings)"; exit 1
   ok(!vi.some((t) => /&(quot|amp|apos);/.test(t)), "không báo chữ còn nguyên thực thể", JSON.stringify(vi));
   ok(!vi.includes('quyền "luôn cho phép"') && !vi.includes("Tên tệp & diff"), "chữ đã có trong từ điển (sau giải mã) không bị báo thiếu", JSON.stringify(vi));
   ok(vi.includes('Chữ thử zzq "chưa dịch" nhé'), "chữ thật sự thiếu vẫn bị báo, ở dạng đã giải mã", JSON.stringify(vi));
+
+  console.log("4. Job report: kết quả của mỗi lần chạy về đúng tệp trên VPS");
+  // Chạy thật khối lệnh của bước gửi với scp / ssh-keyscan giả, như GitHub điền biến cho từng loại sự kiện.
+  const send = wf.jobs.report?.steps?.find((s) => s.name === "Gửi kết quả kiểm tra lên VPS");
+  const sendEnv = { EVENT: "${{ github.event_name }}", PR: "${{ github.event.pull_request.number }}",
+    REF: "${{ github.ref_name }}" };
+  ok(Object.entries(sendEnv).every(([k, v]) => send?.env?.[k] === v),
+    "tên sự kiện, số Pull Request, tên nhánh đi qua env", JSON.stringify(send?.env));
+  const secrets = { VPS_KEY: "khoa-gia", VPS_KNOWN_HOSTS: "", VPS_USER: "ci", VPS_HOST: "vps.example" };
+  const sendRun = String(send?.run ?? "")
+    .replace(/\$\{\{\s*secrets\.(\w+)\s*\}\}/g, (_, k) => secrets[k] ?? `CHUA_CO_${k}`);
+  ok(!/\$\{\{|CHUA_CO_/.test(sendRun),
+    "khối gửi chỉ dùng các secret đã biết, không chèn biểu thức GitHub nào khác", sendRun);
+  fs.writeFileSync(path.join(tmp, "send.sh"), sendRun);
+  const sbin = path.join(tmp, "send-bin");
+  fs.mkdirSync(sbin);
+  const scpFake = `#!/usr/bin/env bash\nprintf '%s\\n' "\${@: -1}" >> "$SCP_LOG"\nexit "\${SCP_EXIT:-0}"\n`;
+  fs.writeFileSync(path.join(sbin, "scp"), scpFake, { mode: 0o755 });
+  const keyscanFake = "#!/usr/bin/env bash\necho \"$* ssh-ed25519 AAAA\"\n";
+  fs.writeFileSync(path.join(sbin, "ssh-keyscan"), keyscanFake, { mode: 0o755 });
+  const sendAs = (vars) => {
+    const dir = fs.mkdtempSync(path.join(tmp, "send-"));
+    fs.writeFileSync(path.join(dir, "ci.txt"), "kết quả\n");
+    const env = { ...process.env, PATH: `${sbin}:${process.env.PATH}`, HOME: dir,
+      SCP_LOG: path.join(dir, "scp.log"), ...vars };
+    const r = spawnSync("bash", ["-e", path.join(tmp, "send.sh")], { cwd: dir, env, encoding: "utf8" });
+    const dest = fs.existsSync(env.SCP_LOG) ? fs.readFileSync(env.SCP_LOG, "utf8").trim() : "";
+    return { code: r.status, dest, err: r.stderr };
+  };
+  const base = "ci@vps.example:/var/www/ci-status/";
+  for (const [vars, want, what] of [
+    [{ EVENT: "push", PR: "", REF: "main" }, "main.txt", "đẩy main → main.txt như trước"],
+    [{ EVENT: "push", PR: "", REF: "staging" }, "staging.txt", "đẩy staging → staging.txt"],
+    [{ EVENT: "pull_request", PR: "42", REF: "42/merge" }, "pr-42.txt",
+      "Pull Request #42 → pr-42.txt, không vào thư mục con"],
+    [{ EVENT: "workflow_dispatch", PR: "", REF: "sua/lỗi $(id)" }, null, "tên nhánh lạ: chỉ còn chữ, số, . _ -"],
+  ]) {
+    const r = sendAs(vars);
+    const name = r.dest.startsWith(base) ? r.dest.slice(base.length) : "";
+    const good = want ? name === want : /^[A-Za-z0-9._-]+\.txt$/.test(name);
+    ok(r.code === 0 && good, what, JSON.stringify(r));
+  }
+  const down = sendAs({ EVENT: "push", PR: "", REF: "main", SCP_EXIT: "1" });
+  ok(down.code === 0, "VPS không nhận tệp: bước gửi không làm đỏ cả lần chạy", JSON.stringify(down));
 } finally {
   fs.rmSync(tmp, { recursive: true, force: true });
 }

@@ -396,7 +396,12 @@ const mig = (name, o = {}) => {
   sh("id", `[ "$1" = -u ] && { echo 0; exit 0; }; exec /usr/bin/id "$@"`);
   sh("chown", "exit 0");
   sh("sqlite3", "echo 0");
-  sh("sed", `if [ "$1" = -i ]; then shift; exec /usr/bin/sed -i '' "$@"; fi; exec /usr/bin/sed "$@"`);
+  // Script viết cho sed GNU (máy chủ Ubuntu); sed BSD của macOS cần hậu tố rỗng sau -i.
+  // Có sed GNU (máy CI Linux) thì dùng nguyên lệnh.
+  sh("sed", `if [ "$1" = -i ] && ! /usr/bin/sed --version >/dev/null 2>&1; then
+  shift; exec /usr/bin/sed -i '' "$@"
+fi
+exec /usr/bin/sed "$@"`);
   sh("nginx", `[ "$1" = -t ] && { [ -n "\${FAKE_NGINX_FAIL:-}" ] && exit 1; exit 0; }
 up=$(/usr/bin/sed -n 's/.*127\\.0\\.0\\.1:\\([0-9]*\\);.*/\\1/p' "$BG_UPSTREAM" 2>/dev/null | head -1)
 grep -q synchro-upstream.conf "${H}/site" && echo "$up" > "${H}/active"; exit 0`);
@@ -418,7 +423,12 @@ case "$*" in *"-o /dev/null"*) exit 0 ;; esac; case "$url" in *api/health*) prin
   sh("sleep", `[ -n "\${NO_PROMOTE:-}" ] && exit 0
 [ "$(awk '{print $1}' "${H}/state/live-color" 2>/dev/null)" = green ] && [ "$(cat "${P}/${o.oldName ?? "synchro"}" 2>/dev/null)" != online ] && echo "4242 green" > "${A}/data/.primary.pid"; exit 0`);
   const run = (env = {}) => spawnSync("bash", [path.join(A, "ops", "bluegreen-migrate.sh"), A, "synchro", path.join(H, "site")], { encoding: "utf8",
-    env: { ...process.env, PATH: `${mb}:${process.env.PATH}`, BG_STATE_DIR: path.join(H, "state"), BG_UPSTREAM: path.join(H, "nginx", "snippets", "synchro-upstream.conf"), BG_TRIES: "2", BG_SLEEP: "0", BG_WEB_USER: "", DATA_DIR: path.join(A, "data"), SYNCHRO_OPS_ENV: path.join(H, "ops.env"), ...o.env, ...env } });
+    env: { ...process.env, PATH: `${mb}:${process.env.PATH}`, BG_STATE_DIR: path.join(H, "state"),
+      BG_UPSTREAM: path.join(H, "nginx", "snippets", "synchro-upstream.conf"),
+      BG_TRIES: "2", BG_SLEEP: "0", BG_WEB_USER: "",
+      DATA_DIR: path.join(A, "data"), SYNCHRO_OPS_ENV: path.join(H, "ops.env"),
+      // Máy có flock (Linux) giữ khóa deploy; /run chỉ root ghi được, mà bộ kiểm chạy bằng user thường.
+      DEPLOY_LOCK: path.join(H, "deploy.lock"), ...o.env, ...env } });
   const r = run();
   const st = () => ({ live: fs.existsSync(path.join(H, "state", "live-color")) ? fs.readFileSync(path.join(H, "state", "live-color"), "utf8").split(" ")[0] : "", active: fs.readFileSync(path.join(H, "active"), "utf8").trim(),
     pm2: Object.fromEntries(fs.readdirSync(P).map((f) => [f, fs.readFileSync(path.join(P, f), "utf8").trim()])), dump: fs.existsSync(path.join(H, "dump")) ? fs.readFileSync(path.join(H, "dump"), "utf8").trim() : "", env: fs.readFileSync(path.join(H, "ops.env"), "utf8") });
@@ -427,7 +437,9 @@ case "$*" in *"-o /dev/null"*) exit 0 ;; esac; case "$url" in *api/health*) prin
 {
   let m = mig("ok"); if (process.env.DEBUG_MIG) console.log(m.out);
   ok(m.code === 0 && m.st.live === "green" && m.st.active === "3002" && m.st.pm2["synchro-green"] === "online" && !m.st.pm2.synchro && /synchro-green/.test(m.st.dump) && /PM2=synchro-green/.test(m.st.env), "chuyển đổi đủ bước: green 3002 sống, app cũ xóa, pm2 save, synchro-ops.env", { code: m.code, st: m.st, out: m.out.slice(-1500) });
-  ok(fs.readlinkSync(path.join(m.A, ".next-green", "node_modules")).endsWith("lockhash/node_modules"), "DEPLOY-4: green có liên kết thư viện riêng");
+  const green = path.join(m.A, ".next-green", "node_modules");
+  const link = (() => { try { return fs.readlinkSync(green); } catch (e) { return String(e.code); } })();
+  ok(link.endsWith("lockhash/node_modules"), "DEPLOY-4: green có liên kết thư viện riêng", link);
   m = mig("noanswer", { oldDown: true });
   ok(m.code === 1 && /không trả lời/.test(m.out) && !m.st.live, "MIGRATE-1: cổng cũ không trả lời: báo rõ lý do (không thoát im lặng vì set -e)", { code: m.code, out: m.out.slice(-300) });
   m = mig("oldcode", { newCode: false });

@@ -139,6 +139,8 @@ if (!chrome) {
       const res = msgs.filter((b) => b.type === "tool_result").pop();
       return typeof res?.content === "string" ? res.content : JSON.stringify(res?.content ?? "");
     };
+    // Mặc định của tiện ích là "group" (chỉ tab Synchro); toàn quyền phải do người dùng chọn rõ trong cửa sổ tiện ích.
+    await ctl("/scope", { scope: "all" });
     let txt = await list();
     ok(/Các tab:/.test(txt) && txt.includes("cua-toi=1"), "toàn quyền: model thấy cả tab người dùng tự mở", txt.slice(0, 400));
     ok(!txt.includes(new URL(B).host), "không liệt kê tab của chính Synchro (trang chat)", txt.slice(0, 400));

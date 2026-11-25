@@ -228,13 +228,15 @@ ok(/máy chủ chưa chuyển được/.test(msg(miss)), "đặt biến mà chư
 console.log("6b. OCR PDF scan: một tiến trình cho cả tệp, ngoài hàng đọc tệp, có ngân sách thời gian");
 // Python giả: pdf_extract.py ghi ảnh 3 trang (trang 1, 2 không có chữ: trang scan), ocr.py --each in từng trang một
 // dòng JSON; trang có tệp "<ảnh>.slow" bên cạnh thì ngủ 5 giây trước khi in (vượt ngân sách 2,5 giây của bài này).
+// Mỗi bước giả ngủ 0,3 giây: không thì cả bước xong giữa hai lần lấy mẫu 5 ms (máy CI từng thấy parse = 0) và bài đo
+// thứ tự hàng đọc tệp / hàng convert không thấy gì.
 const ocrLog = path.join(tmp, "ocr.log");
 const LONG = "chữ thật của trang ba, đủ dài để không bị coi là trang scan";
 const pyOcr = script("python-ocr", [
   `case "$1" in`,
-  `  *pdf_extract.py) d="$6"; for i in 1 2 3; do cp "${png64}" "$d/p$i.jpg"; done`,
+  `  *pdf_extract.py) d="$6"; sleep 0.3; for i in 1 2 3; do cp "${png64}" "$d/p$i.jpg"; done`,
   `    echo '{"total":3,"texts":["","","${LONG}"],"images":["p1.jpg","p2.jpg","p3.jpg"]}' ;;`,
-  `  *ocr.py) echo "$@" >> "${ocrLog}"; shift 2`,
+  `  *ocr.py) echo "$@" >> "${ocrLog}"; shift 2; sleep 0.3`,
   `    for p; do [ -f "$p.slow" ] && sleep 5; echo '{"text": "DAUHIEU_OCR '"$(basename "$p")"' đã đọc chữ"}'; done ;;`,
   `esac`,
 ].join("\n"));
