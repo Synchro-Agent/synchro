@@ -103,6 +103,8 @@ console.log("3. Đổi qua lại 3 hãng, gọi công cụ, sửa artifact 10 l�
 const MODELS = ["anthropic/claude-sonnet-5-5", "openai/gpt-5.1", "google/gemini-3.6-flash"];
 const hist = [];
 let cur = "", bad400 = 0, maxTok = 0, refs = [];
+// Ảnh mẫu của lượt thiết kế tính riêng: giới hạn 15k đo phần chữ (lịch sử, kết quả công cụ), ảnh có giới hạn của nó.
+const imgTok = [];
 const turn = async (model, text) => {
   hist.push({ role: "user", content: text });
   const id = await start({ model, messages: hist });
@@ -111,7 +113,10 @@ const turn = async (model, text) => {
   if (res.done?.http !== 200) { bad400++; console.log("    lỗi", model, res.done?.http, JSON.stringify(out).slice(0, 300)); }
   hist.push({ role: "assistant", content: out.text ?? "", ...(out.trace ? { trace: out.trace } : {}) });
   const prov = model.split("/")[0];
-  const tok = (await last())[`${prov}_tokens`] ?? 0;
+  const l = await last();
+  const img = l[`${prov}_image_tokens`] ?? 0;
+  const tok = (l[`${prov}_tokens`] ?? 0) - img;
+  imgTok.push(img);
   maxTok = Math.max(maxTok, tok);
   return { out, tok, prov };
 };
@@ -130,7 +135,10 @@ for (let n = 1; n <= 10; n++) {
 ok(bad400 === 0, "11 lượt qua 3 hãng, không lượt nào lỗi");
 ok(patches === 10 && failed === 0, `10 lần sửa đều là bản sửa SEARCH/REPLACE áp được (${patches} / 10)`);
 ok(/<!-- rev 10 -->/.test(cur) && !/<!-- rev 9 -->/.test(cur), "bản cuối có đúng thay đổi của lần sửa thứ 10");
-ok(maxTok > 0 && maxTok <= 15000, `prompt lớn nhất ${maxTok} token (≤ 15k) dù mỗi lượt công cụ trả ~60 KB`);
+ok(maxTok > 0 && maxTok <= 15000, `prompt lớn nhất ${maxTok} token chữ (≤ 15k) dù mỗi lượt công cụ trả ~60 KB`);
+const imgFollow = imgTok.slice(1).reduce((s, n) => s + n, 0);
+ok(imgTok[0] <= 3 * 1600 && imgFollow === 0, "ảnh mẫu chỉ đi ở lượt tạo trang (tối đa 3 ảnh), các lần sửa không gửi lại",
+  JSON.stringify(imgTok));
 ok(refs.length >= 5, `kết quả list_orders lưu theo tham chiếu ở mỗi lượt có công cụ (${refs.length} mã ref)`);
 const L = await last();
 const sentG = JSON.stringify(L.google ?? {});

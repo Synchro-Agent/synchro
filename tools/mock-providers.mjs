@@ -44,7 +44,27 @@ const EFF = ["low", "medium", "high", "xhigh", "max"];
 // Như API thật: phản hồi thành công kèm số token đã dùng (usage) và header hạn mức token mỗi phút của tổ chức,
 // để Synchro tính mức dùng và hiện hạn mức API trong vòng tròn usage.
 const RATE = { anthropic: { limit: 400_000, used: 0, start: 0 }, openai: { limit: 2_000_000, used: 0, start: 0 } };
-const inTok = (b) => Math.ceil(JSON.stringify([b?.system, b?.instructions, b?.messages, b?.input, b?.tools]).length / 4);
+// Ảnh tính theo cỡ ảnh như hãng thật (Anthropic thu nhỏ cạnh dài về 1568 px, tối đa khoảng 1600 token mỗi ảnh), không
+// theo độ dài base64: lượt thiết kế gửi kèm ba ảnh mẫu, đếm base64 thành chữ làm một lượt thành hơn 100 nghìn token
+// và đốt hết hạn mức giả lập của tài khoản thử.
+const IMG_TOK = 1600;
+const IMG_KEYS = new Set(["data", "image_url", "url"]);
+const isImageData = (k, v) => IMG_KEYS.has(k) && typeof v === "string" && v.length > 1000
+  && (v.startsWith("data:") || /^[A-Za-z0-9+/]+=*$/.test(v.slice(0, 4000)));
+const tokParts = (b) => {
+  let images = 0;
+  const parts = [b?.system, b?.instructions, b?.messages, b?.input, b?.tools];
+  const json = JSON.stringify(parts, (k, v) => {
+    if (!isImageData(k, v)) return v;
+    images++;
+    return "";
+  });
+  return { text: Math.ceil(json.length / 4), image: images * IMG_TOK };
+};
+const inTok = (b) => {
+  const t = tokParts(b);
+  return t.text + t.image;
+};
 function meter(res, obj) {
   const prov = res.__prov, b = res.__body;
   if (!prov || !obj || obj.error || obj.type === "error") return obj;
@@ -792,7 +812,13 @@ async function handler(req, res) {
   if (p === "/_debug/calls") return send(res, 200, CALLS);
   // Lời gọi rút bộ nhớ chạy nền sau lượt chat không tính là "gần nhất" (chỉ ghi vào lịch sử) để kiểm thử đọc đúng lượt chat.
   if (res.__prov) {
-    if (!JSON.stringify(b).includes("Bạn trích xuất bộ nhớ dài hạn")) { LAST[res.__prov] = b; LAST[`${res.__prov}_tokens`] = inTok(b); }
+    if (!JSON.stringify(b).includes("Bạn trích xuất bộ nhớ dài hạn")) {
+      const t = tokParts(b);
+      LAST[res.__prov] = b;
+      LAST[`${res.__prov}_tokens`] = t.text + t.image;
+      // Phần ảnh tách riêng: kiểm thử giới hạn lịch sử chữ không bị ảnh mẫu của lượt thiết kế làm lệch.
+      LAST[`${res.__prov}_image_tokens`] = t.image;
+    }
     (HIST[res.__prov] ??= []).push(b); HIST[res.__prov].splice(0, HIST[res.__prov].length - 200);
     CALLS[res.__prov] = (CALLS[res.__prov] ?? 0) + 1;
   }
