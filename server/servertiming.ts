@@ -11,7 +11,9 @@ type Clock = { auth: number };
 const g = globalThis as unknown as { __synchroTimingAls?: AsyncLocalStorage<Clock> };
 const als = (g.__synchroTimingAls ??= new AsyncLocalStorage<Clock>());
 
-const ms = (n: number) => (Math.round(n * 10) / 10).toFixed(1);
+// Đơn vị ms, ba chữ số thập phân (µs): kiểm tra phiên trên máy nhanh chỉ mất vài chục µs, làm tròn 0,1 ms thì thành 0.0
+// như thể không đo.
+const ms = (n: number) => n.toFixed(3);
 
 /** Chạy fn và cộng thời gian của nó vào phần auth của yêu cầu đang đo (ngoài một yêu cầu đang đo thì chỉ chạy fn). */
 export function timeAuth<T>(fn: () => T): T {
