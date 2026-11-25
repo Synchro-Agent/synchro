@@ -1,0 +1,121 @@
+{
+  "v": 1,
+  "id": "poster-012",
+  "domain": "poster",
+  "title": "Poster quảng cáo cổ điển: nhân vật vác thùng gỗ trên nền đen",
+  "moods": [
+    "retro-print",
+    "playful",
+    "bold-color"
+  ],
+  "industries": [
+    "food-beverage"
+  ],
+  "audience": [
+    "consumer"
+  ],
+  "source_url": "https://www.internationalposter.com/product/cognac-pellisson-small/",
+  "source_host": "internationalposter.com",
+  "source_kind": "public-image",
+  "captured_at": "2026-11-20",
+  "image": {
+    "file": "poster/poster-012.webp",
+    "width": 538,
+    "height": 800,
+    "bytes": 59198,
+    "layout": "single"
+  },
+  "tokens": {
+    "theme": "dark",
+    "colors": [
+      {
+        "hex": "#19181a",
+        "role": "bg",
+        "share": 0.562
+      },
+      {
+        "hex": "#ded5c6",
+        "role": "ink",
+        "share": 0.12
+      },
+      {
+        "hex": "#99957a",
+        "role": "muted",
+        "share": 0.029
+      },
+      {
+        "hex": "#9c6222",
+        "role": "accent",
+        "share": 0.091
+      }
+    ],
+    "fonts": {
+      "head": {
+        "kit": "oswald",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 700
+      },
+      "body": {
+        "kit": "oswald",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 400
+      },
+      "mono": null
+    },
+    "type": {
+      "basePx": 18,
+      "ratio": 1.5,
+      "sizes": [
+        72,
+        24,
+        18
+      ],
+      "headLine": 0.95,
+      "bodyLine": 1.2,
+      "headCase": "upper"
+    },
+    "tracking": {
+      "display": 0.02,
+      "heading": 0.02,
+      "body": 0,
+      "label": 0.02
+    },
+    "radius": {
+      "outer": 0,
+      "inner": 0,
+      "pill": false
+    },
+    "shadow": {
+      "level": 0,
+      "css": "none"
+    },
+    "spacing": {
+      "unit": 8,
+      "section": 48,
+      "gutter": 24,
+      "density": "dense"
+    },
+    "layout": {
+      "columns": 1,
+      "maxWidth": 520,
+      "align": "center",
+      "emptyShare": 0.15
+    },
+    "imagery": {
+      "kind": "illustration",
+      "share": 0.7,
+      "light": "flat lithograph colour",
+      "lens": "flat, diagonal subject",
+      "grade": "amber orange and cream on black",
+      "subject": "a small figure carrying a giant barrel"
+    }
+  },
+  "measured": [
+    "theme",
+    "colors"
+  ],
+  "why": "Nền đen #19181a, một nhân vật nhỏ vác thùng gỗ khổng lồ màu cam nâu #9c6222 chéo qua khung, tên sản phẩm chữ hoa vàng kem chạy ngang chân poster. Tỉ lệ phóng đại vui nhộn giữa người và vật là ý tưởng duy nhất. Ba màu chính trên đen, không chi tiết nền. Mượn ý tưởng phóng đại sản phẩm so với người trên nền tối; không chép nhân vật hay tên.",
+  "licence": "Ảnh chụp thu nhỏ của trang công khai, chỉ để model tham khảo nguyên tắc. Không chép logo, chữ, ảnh hay phông độc quyền của trang."
+}

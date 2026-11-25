@@ -2,6 +2,7 @@ import { SPEECH_RULES_EN, SPEECH_VI2EN } from "./speech/i18n";
 import { DIRECTORY } from "./connectordir";
 import { UX_RULES_EN, UX_VI2EN } from "./i18n-ux";
 import { OPS_RULES_EN, OPS_VI2EN } from "./i18n-ops";
+import { DESIGN_VI2EN } from "./i18n-design";
 import { MODELS_RULES_EN, MODELS_VI2EN } from "./i18n-models";
 import { AUTH_VI2EN } from "./i18n-auth";
 import { FX_VI2EN } from "./i18n-features";
@@ -1422,6 +1423,7 @@ RULES_EN.push(
 // Chỉ thêm mục chưa có (không ghi đè bản dịch sẵn có của cùng chữ ở chỗ khác).
 const addNew = (d: Record<string, string>, o: Record<string, string>) => { for (const [k, v] of Object.entries(o)) if (!Object.prototype.hasOwnProperty.call(d, k)) d[k] = v; };
 addNew(VI2EN, UX_VI2EN);
+addNew(VI2EN, DESIGN_VI2EN);
 addNew(VI2EN, FX_VI2EN);
 addNew(VI2EN, AUTH_VI2EN);
 // Artifact, chia sẻ, xuất tệp.

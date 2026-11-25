@@ -1,0 +1,144 @@
+{
+  "v": 1,
+  "id": "web-016",
+  "domain": "web",
+  "title": "Công cụ trình chiếu: gradient tím đậm, chữ đậm siết",
+  "moods": [
+    "bold-color",
+    "playful",
+    "tech"
+  ],
+  "industries": [
+    "tech-saas"
+  ],
+  "audience": [
+    "b2b",
+    "consumer"
+  ],
+  "source_url": "https://pitch.com/",
+  "source_host": "pitch.com",
+  "source_kind": "public-page",
+  "captured_at": "2026-11-20",
+  "image": {
+    "file": "web/web-016.webp",
+    "width": 1280,
+    "height": 1600,
+    "bytes": 88792,
+    "layout": "single"
+  },
+  "tokens": {
+    "theme": "light",
+    "colors": [
+      {
+        "hex": "#ffffff",
+        "role": "bg",
+        "share": 0.172
+      },
+      {
+        "hex": "#ebe3fe",
+        "role": "surface",
+        "share": 0
+      },
+      {
+        "hex": "#0c021c",
+        "role": "ink",
+        "share": 0
+      },
+      {
+        "hex": "#363636",
+        "role": "muted",
+        "share": 0
+      },
+      {
+        "hex": "#6c2bd9",
+        "role": "accent",
+        "share": 0
+      },
+      {
+        "hex": "#c4ee87",
+        "role": "accent2",
+        "share": 0.003
+      }
+    ],
+    "fonts": {
+      "head": {
+        "kit": "plus-jakarta-sans",
+        "seen": "Mark Pro Bold",
+        "seenLicence": "unknown",
+        "weight": 700
+      },
+      "body": {
+        "kit": "plus-jakarta-sans",
+        "seen": "Eina 03 Regular",
+        "seenLicence": "unknown",
+        "weight": 400
+      },
+      "mono": {
+        "kit": "jetbrains-mono",
+        "seen": "Space Mono",
+        "seenLicence": "open",
+        "weight": 400
+      }
+    },
+    "type": {
+      "basePx": 18,
+      "ratio": 1.387,
+      "sizes": [
+        48,
+        18,
+        16,
+        14
+      ],
+      "headLine": 1.2,
+      "bodyLine": 1.6,
+      "headCase": "none"
+    },
+    "tracking": {
+      "display": -0.04,
+      "heading": -0.04,
+      "body": -0.02,
+      "label": 0
+    },
+    "radius": {
+      "outer": 16,
+      "inner": 4,
+      "pill": true
+    },
+    "shadow": {
+      "level": 3,
+      "css": "rgba(198, 165, 255, 0.35) 0px 20px 60px -20px"
+    },
+    "spacing": {
+      "unit": 4,
+      "section": 120,
+      "gutter": 12,
+      "density": "airy"
+    },
+    "layout": {
+      "columns": 2,
+      "maxWidth": 1220,
+      "align": "center",
+      "emptyShare": 0
+    },
+    "imagery": {
+      "kind": "mixed",
+      "share": 1,
+      "light": "glowing edges on violet haze",
+      "lens": "flat, layered depth with blur",
+      "grade": "violet to plum, soft glow",
+      "subject": "floating slide thumbnails behind a prompt box"
+    }
+  },
+  "measured": [
+    "theme",
+    "fonts",
+    "type",
+    "tracking",
+    "radius",
+    "shadow",
+    "spacing",
+    "layout"
+  ],
+  "why": "Màn đầu phủ gradient tím #6c2bd9 sang tím than, tiêu đề trắng đậm 700 siết −0,04em, căn giữa. Một ô nhập lớn bo 16 px phát sáng viền là hình chủ đạo, các ô slide mờ trôi phía sau. Nhấn phụ xanh chanh #c4ee87 dùng rất ít. Mượn cách dùng một màu nền mạnh và một thành phần tương tác làm hình; không chép hình slide hay logo khách hàng.",
+  "licence": "Ảnh chụp thu nhỏ của trang công khai, chỉ để model tham khảo nguyên tắc. Không chép logo, chữ, ảnh hay phông độc quyền của trang."
+}

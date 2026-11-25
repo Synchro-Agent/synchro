@@ -1,0 +1,131 @@
+{
+  "v": 1,
+  "id": "web-032",
+  "domain": "web",
+  "title": "Studio thiết kế số: lưới thẻ dự án sáng với vật thể 3D nhỏ",
+  "moods": [
+    "clean-light",
+    "playful",
+    "minimal-mono"
+  ],
+  "industries": [
+    "consulting",
+    "tech-saas"
+  ],
+  "audience": [
+    "b2b"
+  ],
+  "source_url": "https://cuberto.com/",
+  "source_host": "cuberto.com",
+  "source_kind": "public-page",
+  "captured_at": "2026-11-20",
+  "image": {
+    "file": "web/web-032.webp",
+    "width": 1280,
+    "height": 1600,
+    "bytes": 72742,
+    "layout": "single"
+  },
+  "tokens": {
+    "theme": "light",
+    "colors": [
+      {
+        "hex": "#ffffff",
+        "role": "bg",
+        "share": 0.773
+      },
+      {
+        "hex": "#000000",
+        "role": "ink",
+        "share": 0.028
+      },
+      {
+        "hex": "#2c2927",
+        "role": "muted",
+        "share": 0.008
+      },
+      {
+        "hex": "#f2a93b",
+        "role": "accent",
+        "share": 0
+      }
+    ],
+    "fonts": {
+      "head": {
+        "kit": "inter",
+        "seen": "Suisse Intl",
+        "seenLicence": "proprietary",
+        "weight": 500
+      },
+      "body": {
+        "kit": "inter",
+        "seen": "Suisse Intl",
+        "seenLicence": "proprietary",
+        "weight": 400
+      },
+      "mono": null
+    },
+    "type": {
+      "basePx": 16,
+      "ratio": 1.351,
+      "sizes": [
+        72,
+        34,
+        21,
+        19,
+        16,
+        13
+      ],
+      "headLine": 1,
+      "bodyLine": 1.2,
+      "headCase": "none"
+    },
+    "tracking": {
+      "display": -0.01,
+      "heading": 0.006,
+      "body": 0,
+      "label": 0
+    },
+    "radius": {
+      "outer": 16,
+      "inner": 10,
+      "pill": true
+    },
+    "shadow": {
+      "level": 0,
+      "css": "none"
+    },
+    "spacing": {
+      "unit": 4,
+      "section": 80,
+      "gutter": 10,
+      "density": "balanced"
+    },
+    "layout": {
+      "columns": 2,
+      "maxWidth": 450,
+      "align": "left",
+      "emptyShare": 0.46
+    },
+    "imagery": {
+      "kind": "3d",
+      "share": 0.41,
+      "light": "soft studio light, subtle contact shadows",
+      "lens": "isometric, orthographic",
+      "grade": "warm yellows and oranges on white",
+      "subject": "small toy-like 3D objects in project cards"
+    }
+  },
+  "measured": [
+    "theme",
+    "fonts",
+    "type",
+    "tracking",
+    "radius",
+    "shadow",
+    "spacing",
+    "layout"
+  ],
+  "why": "Tiêu đề 72 px căn giữa trên nền trắng, bên dưới là lưới thẻ dự án bo 16 px, mỗi thẻ một vật thể 3D nhỏ màu vàng cam #f8d176 như đồ chơi. Không bóng, không viền, khoảng trống chiếm gần nửa màn đầu. Chữ đen thuần, một cỡ thân 16 px. Mượn cách dùng vật thể 3D nhỏ làm điểm vui trên nền rất sạch; không chép vật thể hay tên dự án.",
+  "licence": "Ảnh chụp thu nhỏ của trang công khai, chỉ để model tham khảo nguyên tắc. Không chép logo, chữ, ảnh hay phông độc quyền của trang."
+}

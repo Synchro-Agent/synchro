@@ -1,0 +1,126 @@
+{
+  "v": 1,
+  "id": "poster-027",
+  "domain": "poster",
+  "title": "Poster liên hoan phim tối: ảnh nhoè xám chiếm cả khung, chữ trắng méo ở chân",
+  "moods": [
+    "dark-cinematic",
+    "minimal-mono",
+    "editorial"
+  ],
+  "industries": [
+    "culture-music",
+    "events"
+  ],
+  "audience": [
+    "youth",
+    "public"
+  ],
+  "source_url": "https://100-beste-plakate.de/wp-content/uploads/2026/06/100bp25_29889-2.jpg",
+  "source_host": "100-beste-plakate.de",
+  "source_kind": "public-image",
+  "credit": "Martial Grin, Alix Debraine, Lausanne Underground Film & Music Festival 2025, 100 Beste Plakate 2025",
+  "captured_at": "2026-11-20",
+  "image": {
+    "file": "poster/poster-027.webp",
+    "width": 800,
+    "height": 1144,
+    "bytes": 89242,
+    "layout": "single"
+  },
+  "tokens": {
+    "theme": "dark",
+    "colors": [
+      {
+        "hex": "#4f5054",
+        "role": "bg",
+        "share": 0
+      },
+      {
+        "hex": "#fefeff",
+        "role": "ink",
+        "share": 0.007
+      },
+      {
+        "hex": "#b4b5b9",
+        "role": "muted",
+        "share": 0.069
+      },
+      {
+        "hex": "#d8d9dc",
+        "role": "accent",
+        "share": 0
+      },
+      {
+        "hex": "#68686c",
+        "role": "surface",
+        "share": 0
+      }
+    ],
+    "fonts": {
+      "head": {
+        "kit": "space-grotesk",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 400
+      },
+      "body": {
+        "kit": "space-grotesk",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 400
+      },
+      "mono": null
+    },
+    "type": {
+      "basePx": 14,
+      "ratio": 1.8,
+      "sizes": [
+        96,
+        24,
+        14
+      ],
+      "headLine": 0.95,
+      "bodyLine": 1.3,
+      "headCase": "upper"
+    },
+    "tracking": {
+      "display": -0.02,
+      "heading": 0,
+      "body": 0,
+      "label": 0.06
+    },
+    "radius": {
+      "outer": 0,
+      "inner": 0,
+      "pill": false
+    },
+    "shadow": {
+      "level": 0,
+      "css": "none"
+    },
+    "spacing": {
+      "unit": 8,
+      "section": 32,
+      "gutter": 16,
+      "density": "airy"
+    },
+    "layout": {
+      "columns": 1,
+      "maxWidth": 800,
+      "align": "center",
+      "emptyShare": 0.15
+    },
+    "imagery": {
+      "kind": "photo",
+      "share": 0.9,
+      "light": "flat overcast light, heavy grain and motion blur",
+      "lens": "50mm, slow shutter, close portrait",
+      "grade": "monochrome cool grey, lifted blacks",
+      "subject": "a blurred ghostly face"
+    }
+  },
+  "measured": [],
+  "why": "Toàn khung là một ảnh xám nhoè như phim nhựa, độ tương phản thấp, mặt người chỉ còn hai hốc mắt tối. Chữ trắng méo như nhiễu sóng đặt ở 20% chân khung, tên sự kiện và ngày ở dải mảnh trên cùng. Chỉ hai sắc xám #68686c và trắng, không màu nhấn. Mượn cách để một ảnh mờ ám ảnh làm toàn bộ poster và đẩy chữ xuống đáy; không chép ảnh hay chữ.",
+  "licence": "Ảnh chụp thu nhỏ của trang công khai, chỉ để model tham khảo nguyên tắc. Không chép logo, chữ, ảnh hay phông độc quyền của trang."
+}

@@ -9,7 +9,7 @@ import { loadTs } from "../lib/ts.mjs";
 const B = process.env.SYNCHRO_URL ?? "http://localhost:3200";
 let pass = 0, fail = 0;
 const ok = (c, n, x = "") => { c ? pass++ : fail++; console.log(c ? "  ✓" : "  ✗", n, c ? "" : String(typeof x === "string" ? x : JSON.stringify(x)).slice(0, 700)); };
-const RE = /^auth;dur=(\d+\.\d), work;dur=(\d+\.\d), total;dur=(\d+\.\d)$/;
+const RE = /^auth;dur=(\d+\.\d{3}), work;dur=(\d+\.\d{3}), total;dur=(\d+\.\d{3})$/;
 const parse = (h) => { const m = RE.exec(h ?? ""); return m ? { auth: Number(m[1]), work: Number(m[2]), total: Number(m[3]) } : null; };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 

@@ -1,0 +1,127 @@
+{
+  "v": 1,
+  "id": "slide-039",
+  "domain": "slide",
+  "title": "Báo cáo xu hướng thiết kế nền đen: ảnh rêu nhiễu hạt, chữ xanh chanh nhạt",
+  "moods": [
+    "dark-cinematic",
+    "organic",
+    "editorial"
+  ],
+  "industries": [
+    "media-publishing",
+    "culture-music"
+  ],
+  "audience": [
+    "b2b",
+    "students"
+  ],
+  "source_url": "https://media.dandad.org/documents/d-ad-2025-trend-report-250929.pdf",
+  "source_host": "media.dandad.org",
+  "source_kind": "public-image",
+  "captured_at": "2026-11-20",
+  "image": {
+    "file": "slide/slide-039.webp",
+    "width": 800,
+    "height": 450,
+    "bytes": 88988,
+    "layout": "grid4"
+  },
+  "tokens": {
+    "theme": "dark",
+    "colors": [
+      {
+        "hex": "#020202",
+        "role": "bg",
+        "share": 0.15
+      },
+      {
+        "hex": "#fcfbf9",
+        "role": "ink",
+        "share": 0.078
+      },
+      {
+        "hex": "#6d7563",
+        "role": "muted",
+        "share": 0.065
+      },
+      {
+        "hex": "#e3fdbd",
+        "role": "accent",
+        "share": 0.08
+      },
+      {
+        "hex": "#e9c53a",
+        "role": "accent2",
+        "share": 0
+      }
+    ],
+    "fonts": {
+      "head": {
+        "kit": "space-grotesk",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 700
+      },
+      "body": {
+        "kit": "space-grotesk",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 400
+      },
+      "mono": null
+    },
+    "type": {
+      "basePx": 10,
+      "ratio": 1.414,
+      "sizes": [
+        44,
+        20,
+        10
+      ],
+      "headLine": 0.95,
+      "bodyLine": 1.45,
+      "headCase": "none"
+    },
+    "tracking": {
+      "display": -0.02,
+      "heading": 0,
+      "body": 0,
+      "label": 0.02
+    },
+    "radius": {
+      "outer": 0,
+      "inner": 0,
+      "pill": false
+    },
+    "shadow": {
+      "level": 0,
+      "css": "none"
+    },
+    "spacing": {
+      "unit": 8,
+      "section": 32,
+      "gutter": 16,
+      "density": "dense"
+    },
+    "layout": {
+      "columns": 2,
+      "maxWidth": 1280,
+      "align": "left",
+      "emptyShare": 0.2
+    },
+    "imagery": {
+      "kind": "photo",
+      "share": 0.6,
+      "light": "harsh flash, grainy high contrast",
+      "lens": "macro texture shots",
+      "grade": "black and white grain with acid lime and mustard tints",
+      "subject": "moss, stones and organic textures"
+    }
+  },
+  "measured": [
+    "theme"
+  ],
+  "why": "Nền đen với ảnh rêu và đá nhiễu hạt đen trắng, tiêu đề xanh chanh nhạt #e3fdbd đậm 44 px đè lên ảnh. Trang trong chia hai cột chữ nhỏ 10 px trên nền xanh nhạt và một ảnh nhiễu hạt cạnh bên. Ảnh vàng mù tạt cận cảnh làm điểm màu duy nhất. Mượn ảnh nhiễu hạt đen trắng phối một màu chữ nhạt; không chép ảnh hay chữ.",
+  "licence": "Ảnh chụp thu nhỏ của trang công khai, chỉ để model tham khảo nguyên tắc. Không chép logo, chữ, ảnh hay phông độc quyền của trang."
+}

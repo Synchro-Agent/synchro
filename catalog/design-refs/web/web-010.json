@@ -1,0 +1,157 @@
+{
+  "v": 1,
+  "id": "web-010",
+  "domain": "web",
+  "title": "Nhà máy phần mềm: chữ đơn cách trên lưới chấm sáng",
+  "moods": [
+    "swiss-precise",
+    "tech",
+    "minimal-mono"
+  ],
+  "industries": [
+    "tech-saas",
+    "ai"
+  ],
+  "audience": [
+    "developers",
+    "b2b"
+  ],
+  "source_url": "https://www.warp.dev/",
+  "source_host": "warp.dev",
+  "source_kind": "public-page",
+  "captured_at": "2026-11-20",
+  "image": {
+    "file": "web/web-010.webp",
+    "width": 1280,
+    "height": 1600,
+    "bytes": 88104,
+    "layout": "single"
+  },
+  "tokens": {
+    "theme": "light",
+    "colors": [
+      {
+        "hex": "#fbf9fe",
+        "role": "bg",
+        "share": 0
+      },
+      {
+        "hex": "#ffffff",
+        "role": "surface",
+        "share": 0.89
+      },
+      {
+        "hex": "#f6f5fb",
+        "role": "raised",
+        "share": 0.006
+      },
+      {
+        "hex": "#1a1522",
+        "role": "ink",
+        "share": 0.018
+      },
+      {
+        "hex": "#5d5964",
+        "role": "muted",
+        "share": 0.003
+      },
+      {
+        "hex": "#2a1eff",
+        "role": "accent",
+        "share": 0
+      },
+      {
+        "hex": "#edf872",
+        "role": "accent2",
+        "share": 0.003
+      },
+      {
+        "hex": "#e0dee3",
+        "role": "line",
+        "share": 0.018
+      }
+    ],
+    "fonts": {
+      "head": {
+        "kit": "jetbrains-mono",
+        "seen": "azeretSemiMono",
+        "seenLicence": "unknown",
+        "weight": 400
+      },
+      "body": {
+        "kit": "plus-jakarta-sans",
+        "seen": "matter",
+        "seenLicence": "unknown",
+        "weight": 400
+      },
+      "mono": {
+        "kit": "jetbrains-mono",
+        "seen": "azeretSemiMono",
+        "seenLicence": "unknown",
+        "weight": 500
+      }
+    },
+    "type": {
+      "basePx": 16,
+      "ratio": 1.355,
+      "sizes": [
+        54,
+        34,
+        16,
+        14,
+        12
+      ],
+      "headLine": 1.18,
+      "bodyLine": 1.55,
+      "headCase": "none"
+    },
+    "tracking": {
+      "display": 0,
+      "heading": 0,
+      "body": 0,
+      "label": 0.031
+    },
+    "radius": {
+      "outer": 0,
+      "inner": 4,
+      "pill": true
+    },
+    "shadow": {
+      "level": 0,
+      "css": "none"
+    },
+    "spacing": {
+      "unit": 4,
+      "section": 56,
+      "gutter": 16,
+      "density": "balanced"
+    },
+    "layout": {
+      "columns": 4,
+      "maxWidth": 1180,
+      "align": "center",
+      "emptyShare": 0.32
+    },
+    "imagery": {
+      "kind": "data",
+      "share": 0.4,
+      "light": "",
+      "lens": "",
+      "grade": "",
+      "subject": ""
+    }
+  },
+  "measured": [
+    "theme",
+    "colors",
+    "fonts",
+    "type",
+    "tracking",
+    "radius",
+    "shadow",
+    "spacing",
+    "layout"
+  ],
+  "why": "Tiêu đề chữ đơn cách 54 px trên nền trắng tím rất nhạt #fbf9fe, bên dưới là một lưới chấm như bảng đo, gợi cảm giác kỹ thuật chính xác. Không bo góc ở khung lớn, không bóng, đường kẻ #e0dee3 mảnh 1 px. Màu nhấn xanh lam #2a1eff chỉ xuất hiện ở vài chấm dữ liệu. Mượn cách dùng chữ đơn cách cho tiêu đề và lưới chấm làm hình; không chép nội dung lưới hay câu khẩu hiệu.",
+  "licence": "Ảnh chụp thu nhỏ của trang công khai, chỉ để model tham khảo nguyên tắc. Không chép logo, chữ, ảnh hay phông độc quyền của trang."
+}

@@ -87,8 +87,13 @@ try {
   await shot("1-truoc");
   await click(`document.querySelector('.art-acts [aria-label="Đổi phong cách"]')`, "palette");
   await until(`!!document.querySelector(".art-style-menu .menu-item")`, 5000, "menu");
-  const items = await ev(`[...document.querySelectorAll(".art-style-menu .menu-item")].map((e) => e.textContent.trim())`);
-  ok(items.length === 8 && items.some((t) => t.startsWith("Kính cực quang")) && items.some((t) => /Đang dùng/.test(t)), "menu có 8 phong cách, đánh dấu phong cách đang dùng", JSON.stringify(items));
+  // Artifact đã lưu ở máy chủ có thêm mục "Lưu làm phong cách của tôi" ở cuối menu: mục đó không phải một phong cách.
+  const items = await ev(`[...document.querySelectorAll(".art-style-menu .menu-item:not(.sty-save)")]
+    .map((e) => e.textContent.trim())`);
+  ok(items.length === 8 && items.some((t) => t.startsWith("Kính cực quang")) && items.some((t) => /Đang dùng/.test(t)),
+    "menu có 8 phong cách, đánh dấu phong cách đang dùng", JSON.stringify(items));
+  const tail = await ev(`[...document.querySelectorAll(".art-style-menu .menu-item")].pop()?.textContent.trim()`);
+  ok(tail === "Lưu làm phong cách của tôi", "cuối menu: Lưu làm phong cách của tôi", tail);
   await sleep(500);
   // Lớp kính của giao diện vẽ nền menu ở ::before: một trong hai lớp phải đặc hoàn toàn.
   const bg = await ev(`(() => { const m = document.querySelector(".art-style-menu"); return [getComputedStyle(m).backgroundColor, getComputedStyle(m, "::before").backgroundColor]; })()`);

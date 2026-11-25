@@ -1,0 +1,130 @@
+{
+  "v": 1,
+  "id": "web-035",
+  "domain": "web",
+  "title": "Studio thương hiệu: một câu chữ có chân và đường hầm ánh sáng vàng",
+  "moods": [
+    "editorial",
+    "luxury",
+    "dark-cinematic"
+  ],
+  "industries": [
+    "consulting",
+    "media-publishing"
+  ],
+  "audience": [
+    "premium",
+    "b2b"
+  ],
+  "source_url": "https://www.wearecollins.com/",
+  "source_host": "wearecollins.com",
+  "source_kind": "public-page",
+  "captured_at": "2026-11-20",
+  "image": {
+    "file": "web/web-035.webp",
+    "width": 1280,
+    "height": 1600,
+    "bytes": 57832,
+    "layout": "single"
+  },
+  "tokens": {
+    "theme": "light",
+    "colors": [
+      {
+        "hex": "#f8f8f7",
+        "role": "bg",
+        "share": 0.915
+      },
+      {
+        "hex": "#140700",
+        "role": "ink",
+        "share": 0.005
+      },
+      {
+        "hex": "#5e5855",
+        "role": "muted",
+        "share": 0
+      },
+      {
+        "hex": "#e0a100",
+        "role": "accent",
+        "share": 0
+      }
+    ],
+    "fonts": {
+      "head": {
+        "kit": "cormorant-garamond",
+        "seen": "COLLINS Portrait Text Web",
+        "seenLicence": "unknown",
+        "weight": 500
+      },
+      "body": {
+        "kit": "source-serif-4",
+        "seen": "COLLINS Graphik Web",
+        "seenLicence": "proprietary",
+        "weight": 400
+      },
+      "mono": null
+    },
+    "type": {
+      "basePx": 16,
+      "ratio": 1.351,
+      "sizes": [
+        72,
+        36,
+        28,
+        16,
+        14,
+        12
+      ],
+      "headLine": 1,
+      "bodyLine": 1.3,
+      "headCase": "none"
+    },
+    "tracking": {
+      "display": -0.02,
+      "heading": -0.012,
+      "body": -0.01,
+      "label": -0.053
+    },
+    "radius": {
+      "outer": 0,
+      "inner": 0,
+      "pill": false
+    },
+    "shadow": {
+      "level": 0,
+      "css": "none"
+    },
+    "spacing": {
+      "unit": 4,
+      "section": 96,
+      "gutter": 24,
+      "density": "airy"
+    },
+    "layout": {
+      "columns": 2,
+      "maxWidth": 500,
+      "align": "left",
+      "emptyShare": 0.7
+    },
+    "imagery": {
+      "kind": "photo",
+      "share": 0.35,
+      "light": "radiant golden backlight, glowing concentric rings",
+      "lens": "50mm, centered, symmetrical",
+      "grade": "amber and gold on black",
+      "subject": "silhouette at the centre of a golden light tunnel"
+    }
+  },
+  "measured": [
+    "theme",
+    "type",
+    "tracking",
+    "radius",
+    "shadow",
+    "spacing"
+  ],
+  "why": "Một câu ngắn chữ có chân 36 px đặt giữa nền trắng ngà #f8f8f7, bên dưới là ảnh đường hầm ánh sáng vàng cam với bóng người ở tâm. Hơn 70% màn đầu là khoảng trống có chủ đích, chỉ hai thành phần: câu chữ và hình. Không bóng, không bo, không màu nhấn ngoài chính hình. Mượn sự can đảm dùng một câu và một hình; không chép câu chữ hay ảnh.",
+  "licence": "Ảnh chụp thu nhỏ của trang công khai, chỉ để model tham khảo nguyên tắc. Không chép logo, chữ, ảnh hay phông độc quyền của trang."
+}

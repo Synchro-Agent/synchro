@@ -1,0 +1,124 @@
+{
+  "v": 1,
+  "id": "slide-057",
+  "domain": "slide",
+  "title": "Bộ slide nhà đầu tư Đông Nam Á: nền xanh lá đậm, ảnh người giao hàng và cột số liệu sáng",
+  "moods": [
+    "bold-color",
+    "energetic",
+    "data-dense"
+  ],
+  "industries": [
+    "hospitality-travel",
+    "finance",
+    "ecommerce"
+  ],
+  "audience": [
+    "investors",
+    "b2b"
+  ],
+  "source_url": "https://s205.q4cdn.com/179588156/files/doc_presentations/2026/Feb/11/Grab-3-Year-Investor-Update.pdf",
+  "source_host": "s205.q4cdn.com",
+  "source_kind": "public-image",
+  "captured_at": "2026-11-20",
+  "image": {
+    "file": "slide/slide-057.webp",
+    "width": 1280,
+    "height": 720,
+    "bytes": 86534,
+    "layout": "grid4"
+  },
+  "tokens": {
+    "theme": "light",
+    "colors": [
+      {
+        "hex": "#006850",
+        "role": "bg",
+        "share": 0.762
+      },
+      {
+        "hex": "#f1f4f5",
+        "role": "ink",
+        "share": 0.056
+      },
+      {
+        "hex": "#d7dfdd",
+        "role": "muted",
+        "share": 0.016
+      },
+      {
+        "hex": "#1a7f61",
+        "role": "accent",
+        "share": 0.01
+      }
+    ],
+    "fonts": {
+      "head": {
+        "kit": "lexend",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 700
+      },
+      "body": {
+        "kit": "lexend",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 400
+      },
+      "mono": null
+    },
+    "type": {
+      "basePx": 14,
+      "ratio": 1.5,
+      "sizes": [
+        44,
+        24,
+        14
+      ],
+      "headLine": 1.05,
+      "bodyLine": 1.4,
+      "headCase": "none"
+    },
+    "tracking": {
+      "display": -0.01,
+      "heading": 0,
+      "body": 0,
+      "label": 0.04
+    },
+    "radius": {
+      "outer": 0,
+      "inner": 0,
+      "pill": false
+    },
+    "shadow": {
+      "level": 0,
+      "css": "none"
+    },
+    "spacing": {
+      "unit": 8,
+      "section": 48,
+      "gutter": 24,
+      "density": "balanced"
+    },
+    "layout": {
+      "columns": 2,
+      "maxWidth": 1280,
+      "align": "asymmetric",
+      "emptyShare": 0.3
+    },
+    "imagery": {
+      "kind": "photo",
+      "share": 0.4,
+      "light": "bright overcast daylight outdoors",
+      "lens": "50mm, eye-level",
+      "grade": "saturated greens, clean skin tones",
+      "subject": "two delivery riders shaking hands next to a scooter"
+    }
+  },
+  "measured": [
+    "theme",
+    "colors"
+  ],
+  "why": "Nền xanh lá đậm #006850 phủ 76% khung, tiêu đề trắng tròn nét đậm 44 px đặt trái, ảnh người thật chiếm nửa phải. Trang số liệu giữ nền xanh, cột biểu đồ màu bạc hà nhạt và con số nhấn vàng chanh. Nhãn nhỏ chữ hoa trên đầu mỗi trang. Mượn cách giữ một màu nền thương hiệu cho cả bộ và vẽ biểu đồ bằng sắc nhạt của chính màu đó; không chép ảnh hay số.",
+  "licence": "Ảnh chụp thu nhỏ của trang công khai, chỉ để model tham khảo nguyên tắc. Không chép logo, chữ, ảnh hay phông độc quyền của trang."
+}

@@ -1,0 +1,159 @@
+{
+  "v": 1,
+  "id": "dashboard-036",
+  "domain": "dashboard",
+  "title": "Bảng tổng quan tối giản: số lớn, thẻ mời và đường cong mảnh",
+  "moods": [
+    "clean-light",
+    "minimal-mono"
+  ],
+  "industries": [
+    "tech-saas"
+  ],
+  "audience": [
+    "b2b"
+  ],
+  "source_url": "https://keenthemes.com/metronic/tailwind/demo1/",
+  "source_host": "keenthemes.com",
+  "source_kind": "public-page",
+  "captured_at": "2026-11-20",
+  "image": {
+    "file": "dashboard/dashboard-036.webp",
+    "width": 1280,
+    "height": 800,
+    "bytes": 48934,
+    "layout": "single"
+  },
+  "tokens": {
+    "theme": "light",
+    "colors": [
+      {
+        "hex": "#ffffff",
+        "role": "bg",
+        "share": 0.949
+      },
+      {
+        "hex": "#fbfbfb",
+        "role": "surface",
+        "share": 0
+      },
+      {
+        "hex": "#f9f9fa",
+        "role": "raised",
+        "share": 0
+      },
+      {
+        "hex": "#09090b",
+        "role": "ink",
+        "share": 0.004
+      },
+      {
+        "hex": "#18181b",
+        "role": "muted",
+        "share": 0.002
+      },
+      {
+        "hex": "#2b7fff",
+        "role": "accent",
+        "share": 0
+      },
+      {
+        "hex": "#00c950",
+        "role": "accent2",
+        "share": 0.002
+      },
+      {
+        "hex": "#ebebee",
+        "role": "line",
+        "share": 0.02
+      },
+      {
+        "hex": "#00c950",
+        "role": "pos",
+        "share": 0
+      },
+      {
+        "hex": "#e7000b",
+        "role": "neg",
+        "share": 0
+      }
+    ],
+    "fonts": {
+      "head": {
+        "kit": "inter",
+        "seen": "ui-sans-serif",
+        "seenLicence": "unknown",
+        "weight": 600
+      },
+      "body": {
+        "kit": "inter",
+        "seen": "ui-sans-serif",
+        "seenLicence": "unknown",
+        "weight": 500
+      },
+      "mono": null
+    },
+    "type": {
+      "basePx": 14,
+      "ratio": 1.289,
+      "sizes": [
+        30,
+        20,
+        16,
+        14,
+        12
+      ],
+      "headLine": 1.2,
+      "bodyLine": 1,
+      "headCase": "none"
+    },
+    "tracking": {
+      "display": 0,
+      "heading": 0,
+      "body": 0,
+      "label": 0
+    },
+    "radius": {
+      "outer": 12,
+      "inner": 4,
+      "pill": true
+    },
+    "shadow": {
+      "level": 1,
+      "css": "oklab(0 0 0 / 0.0509804) 0px 1px 2px 0px"
+    },
+    "spacing": {
+      "unit": 4,
+      "section": 70,
+      "gutter": 16,
+      "density": "balanced"
+    },
+    "layout": {
+      "columns": 4,
+      "maxWidth": 1000,
+      "align": "asymmetric",
+      "emptyShare": 0.47
+    },
+    "imagery": {
+      "kind": "data",
+      "share": 0.3,
+      "light": "",
+      "lens": "",
+      "grade": "",
+      "subject": ""
+    }
+  },
+  "measured": [
+    "theme",
+    "colors",
+    "fonts",
+    "type",
+    "tracking",
+    "radius",
+    "shadow",
+    "spacing",
+    "layout"
+  ],
+  "why": "Bốn ô chỉ số chỉ có số 30 px và nhãn xám, không khung màu; bên cạnh là thẻ mời hợp tác bo 12 px có ảnh đại diện. Biểu đồ đường xanh lam #2b7fff mảnh, nhiều khoảng trắng 70 px giữa các vùng. Không bóng, viền #ebebee. Mượn sự thưa thoáng cho bảng ít chỉ số; không chép số liệu.",
+  "licence": "Ảnh chụp thu nhỏ của trang công khai, chỉ để model tham khảo nguyên tắc. Không chép logo, chữ, ảnh hay phông độc quyền của trang."
+}

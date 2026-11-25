@@ -9,6 +9,8 @@ import { DOC_TPL_GUIDE } from "../shared/designdocs";
 import { EMAIL_TPL_GUIDE } from "../shared/designemails";
 import { POSTER_TPL_GUIDE, SLIDE_TPL_GUIDE, templateKinds } from "../shared/designtemplates";
 import { TITLE_FLOOR, TYPE_RATIO, viNum } from "../shared/deckfit";
+import { KIT_FONTS, kitFont, MIX_ATTR, type RefDomain, type StyleMix, type StyleTurn, type TurnRef }
+  from "../shared/designrefs";
 
 export type DesignFormat = "slide" | "doc" | "sheet" | "graphic";
 export type DesignDomain = "finance" | "data" | "tech" | "editorial" | "marketing" | "event" | "product" | "general";
@@ -185,42 +187,77 @@ const FILE_RULES: Partial<Record<DesignFormat, string>> = {
   graphic: `Ảnh qua run_code: HTML + Chromium ở deviceScaleFactor 2, đúng kích thước yêu cầu.`,
 };
 // Phông trong image workspace (workspace/Dockerfile): PDF và ảnh nhúng sẵn nên dùng được; Office thì không (xem trên).
-const WS_FONTS = `Phông có sẵn trong sandbox: Be Vietnam Pro, Inter, Plus Jakarta Sans, Playfair Display, Space Grotesk, JetBrains Mono, Noto Sans.`;
+// Đúng bộ phông của khung artifact (KIT_FONTS), nên PDF / PNG dựng trong sandbox giống bản xem.
+const WS_FONTS = `Phông có sẵn trong sandbox: ${KIT_FONTS.map((f) => f.family).join(", ")}, Noto Sans.`;
+// Bộ phông tự phục vụ của khung (/kitfonts/v1/): phông ngoài bộ không tải được khi mạng ngoài bị chặn, tải về không
+// kèm.
+// Đi ngoài trần DESIGN_BUDGET (khối slide đã gần trần), cùng phần mẫu tham chiếu, chỉ ở lượt làm sản phẩm mới.
+export const KIT_FONT_RULE = "Phông: chỉ dùng phông trong bộ của Synchro (đủ dấu tiếng Việt, tự tải, tải về vẫn kèm): "
+  + `${KIT_FONTS.map((f) => f.family).join(", ")}. Không nạp phông nào khác (không <link> Google Fonts, không`
+  + " @import).";
 
-function presetLine(id: string, own: boolean) {
+function presetLine(id: string, own: boolean, mix?: string) {
   if (own) return `Người dùng đã có bản sắc riêng (thương hiệu, bảng màu, mẫu): theo đúng bản sắc đó, chỉ giữ các số đo; không áp preset màu.`;
+  // Lượt có mẫu tham chiếu: màu, phông, hình khối nằm trong khối CSS trộn; nêu thêm màu, phông của preset là hai
+  // chỉ dẫn trái nhau (model từng trộn cả hai).
+  if (mix) {
+    return `Màu, phông, bo góc, bóng: theo khối <design_refs ${MIX_ATTR}="${mix}"> bên dưới, preset nền ${id}; không`
+      + " dùng màu, phông của preset nào khác. Người dùng nói khác thì theo họ. Không bắt chước thương hiệu có thật.";
+  }
   const p = presetOf(id)!;
   return `Phong cách gợi ý: ${p.id} (${p.looks}; phông ${p.head}${p.body !== p.head ? ` + ${p.body}` : ""}; nền ${p.bg}, chữ ${p.ink}, nhấn ${p.accent}; bo ${p.r}/${p.ri}px; hợp ${p.best}). Người dùng hoặc nội dung nói khác thì theo họ. Preset khác: ${PRESETS.filter((x) => x.id !== id).map((x) => x.id).join(", ")}. Không bắt chước thương hiệu có thật.`;
 }
 
-export type DesignPick = { format: DesignFormat; domain: DesignDomain; preset: string; own: boolean };
+// mix: mã khối token trộn của lượt (có mẫu tham chiếu): khối quy tắc không gợi ý màu, phông của preset nữa.
+// kind: loại sản phẩm đồ họa bộ chọn mẫu đã nhận ra (trang web, poster, email): chỉ nêu thực đơn mẫu của loại đó.
+export type DesignPick = {
+  format: DesignFormat; domain: DesignDomain; preset: string; own: boolean; mix?: string; kind?: RefDomain;
+};
+/** Thực đơn mẫu điền sẵn của định dạng; đồ họa đã biết là email hay không thì bỏ thực đơn của loại kia. */
+function tplGuide(p: DesignPick): string | undefined {
+  if (p.format !== "graphic" || !p.kind) return TPL_GUIDE[p.format];
+  return p.kind === "email" ? EMAIL_TPL_GUIDE : POSTER_TPL_GUIDE;
+}
+/** menu false: bỏ thực đơn mẫu điền sẵn; budget: trần riêng thay DESIGN_BUDGET (phần thiết kế còn khối mẫu đi kèm). */
+export type BlockOpts = { menu?: boolean; budget?: number };
 /** Ghép khối quy tắc đầy đủ; phần sau bị bỏ nếu vượt trần (phần trên quan trọng hơn). */
-export function designBlock(p: DesignPick, caps: { art: boolean; code: boolean }): string {
+export function designBlock(p: DesignPick, caps: { art: boolean; code: boolean }, o: BlockOpts = {}): string {
+  const budget = Math.min(DESIGN_BUDGET, o.budget ?? DESIGN_BUDGET);
   const open = `<design_kit format="${p.format}" domain="${p.domain}"${p.own ? "" : ` preset="${p.preset}"`}>\nSố đo cho sản phẩm của lượt này (artifact hoặc tệp), áp dụng im lặng, không kể lại. Yêu cầu riêng của người dùng luôn ưu tiên. Chỉ trả lời thường trong chat thì bỏ qua khối này.`, close = "</design_kit>";
   const sheetOnly = p.format === "sheet" && caps.code;
   const parts = [
     FORMAT_RULES[p.format],
-    sheetOnly ? "" : presetLine(p.preset, p.own),
+    sheetOnly ? "" : presetLine(p.preset, p.own, p.mix),
     sheetOnly ? "" : CORE,
     // Thực đơn mẫu điền sẵn của đúng định dạng này (không nạp thực đơn của định dạng khác), đứng trước bộ CSS vì là cách nên dùng.
-    caps.art && !sheetOnly && TPL_GUIDE[p.format] ? TPL_GUIDE[p.format]!.replace("<phong cách>", p.own ? DEFAULT_TPL_STYLE : p.preset) : "",
+    caps.art && !sheetOnly && o.menu !== false
+      ? (tplGuide(p) ?? "").replace("<phong cách>", p.own ? DEFAULT_TPL_STYLE : p.preset) : "",
     caps.art && !sheetOnly && p.format !== "sheet" ? CHART_RULE : "",
     caps.art && !sheetOnly ? KIT(p.own ? "" : p.preset) : "",
     caps.code && FILE_RULES[p.format] ? FILE_RULES[p.format]! : "",
     // Mảng: lấy phần đầu tiên còn vừa trần.
     caps.art && !sheetOnly ? [FX_RULE, `${FX_SHORT} Biểu đồ ECharts: <div class="sx-chart" data-sx-chart='{…}'>.`, FX_SHORT] : "",
-    caps.code && (p.format === "doc" || p.format === "graphic" || p.format === "slide") ? WS_FONTS : "",
+    // Có khối mẫu tham chiếu thì luật phông của khối đó đã nêu đúng bộ này (sandbox cũng có đủ): không nêu hai lần.
+    caps.code && !p.mix && (p.format === "doc" || p.format === "graphic" || p.format === "slide") ? WS_FONTS : "",
   ].filter(Boolean);
   let out = open;
   for (const part of parts) {
-    const x = (Array.isArray(part) ? part : [part]).find((y) => designBytes(`${out}\n${y}\n${close}`) <= DESIGN_BUDGET);
+    const x = (Array.isArray(part) ? part : [part]).find((y) => designBytes(`${out}\n${y}\n${close}`) <= budget);
     if (x) out += `\n${x}`;
   }
   return `${out}\n${close}`;
 }
-const compactBlock = (format: DesignFormat, preset: string) => `<design_kit format="${format}" mode="follow-up"${preset ? ` preset="${preset}"` : ""}>
-Đang sửa tiếp sản phẩm đã có (câu này không nói về sản phẩm thì bỏ qua khối): giữ nguyên phong cách, phông, thang chữ và lưới 8pt của bản hiện tại (lớp sx-… nếu bản hiện tại đang dùng vẫn có sẵn); chỉ đổi đúng chỗ được yêu cầu. Tiêu đề vẫn nêu kết luận, tương phản đạt 4.5:1, chữ không tràn.
-</design_kit>`;
+// Bản trước có khối token trộn (data-sx-mix): lượt sửa giữ khối đó, không quay về màu, phông của preset nền.
+const KEEP_MIX = (mix: string) => ` Giữ nguyên khối <style ${MIX_ATTR}="${mix}"> và thuộc tính ${MIX_ATTR}="${mix}"`
+  + " trên thẻ ngoài cùng: đó là màu, phông, bo góc của sản phẩm; chỉ dùng phông trong bộ của Synchro.";
+const FOLLOW_TEXT = "Đang sửa tiếp sản phẩm đã có (câu này không nói về sản phẩm thì bỏ qua khối): giữ nguyên phong"
+  + " cách, phông, thang chữ và lưới 8pt của bản hiện tại (lớp sx-… nếu bản hiện tại đang dùng vẫn có sẵn); chỉ đổi"
+  + " đúng chỗ được yêu cầu. Tiêu đề vẫn nêu kết luận, tương phản đạt 4.5:1, chữ không tràn.";
+const compactBlock = (format: DesignFormat, preset: string, mix = "") => {
+  const attrs = `${preset ? ` preset="${preset}"` : ""}${mix ? ` mix="${mix}"` : ""}`;
+  const text = `${FOLLOW_TEXT}${mix ? KEEP_MIX(mix) : ""}`;
+  return `<design_kit format="${format}" mode="follow-up"${attrs}>\n${text}\n</design_kit>`;
+};
 
 const attrOf = (tag: string, name: string) => new RegExp(`\\b${name}=["']([^"']*)`).exec(tag)?.[1] ?? "";
 /**
@@ -228,8 +265,8 @@ const attrOf = (tag: string, name: string) => new RegExp(`\\b${name}=["']([^"']*
  * Bản sửa (mode="patch", ARTIFACT_RULES bắt sửa theo cách này) và thẻ đánh dấu phiên bản cũ tự đóng không có kiểu, không có thân: đi tiếp về bản đầy đủ của cùng artifact.
  * Bản sửa đổi data-sx-preset thì phong cách hiện tại là của bản sửa (khối thay thế đứng sau khối tìm).
  */
-export function priorDesign(texts: string[]): { format: DesignFormat; preset: string } | null {
-  let ident = "", newer = "";
+export function priorDesign(texts: string[]): { format: DesignFormat; preset: string; mix?: string } | null {
+  let ident = "", newer = "", newMix = "";
   for (let i = texts.length - 1; i >= 0; i--) {
     const t = texts[i];
     if (!t || !/<artifact\b/.test(t)) continue;
@@ -239,16 +276,25 @@ export function priorDesign(texts: string[]): { format: DesignFormat; preset: st
       if (ident && id && id !== ident) continue;
       if (/\/>$/.test(open)) { ident ||= id; continue; }
       const sets = [...part.matchAll(/data-sx-preset=["']?([\w-]+)/g)].map((m) => presetId(m[1]));
-      if (attrOf(open, "mode").toLowerCase() === "patch") { ident ||= id; newer ||= sets[sets.length - 1] ?? ""; continue; }
+      if (attrOf(open, "mode").toLowerCase() === "patch") {
+        ident ||= id;
+        newer ||= sets[sets.length - 1] ?? "";
+        newMix ||= [...part.matchAll(/data-sx-mix=["']?([\w-]+)/g)].pop()?.[1] ?? "";
+        continue;
+      }
       const preset = newer || sets[0] || presetId(/"styleArchetype"\s*:\s*"([\w-]+)"/.exec(part)?.[1] ?? ""), type = attrOf(open, "type");
+      const mix = newMix || /data-sx-mix=["']?([\w-]+)/.exec(part)?.[1];
+      const res = (format: DesignFormat) => (mix ? { format, preset, mix } : { format, preset });
       // Trang viết bằng mẫu điền sẵn: loại sản phẩm theo mẫu của khối JSON.
       const kinds = templateKinds(part);
-      if (kinds.includes("slide")) return { format: "slide", preset };
-      if (kinds.includes("doc")) return { format: "doc", preset };
-      if (kinds.length) return { format: "graphic", preset };
-      if (/<section\b[^>]*(?:class(?:Name)?=["'][^"']*\bslide\b|data-slide)/.test(part)) return { format: "slide", preset };
-      if (/^(?:text\/markdown|markdown)/.test(type) || /sx-page/.test(part)) return { format: "doc", preset };
-      if (/^(?:text\/html|html|react|svg|application\/vnd\.(?:ant\.)?react|image\/svg)/.test(type)) return { format: "graphic", preset };
+      if (kinds.includes("slide")) return res("slide");
+      if (kinds.includes("doc")) return res("doc");
+      if (kinds.length) return res("graphic");
+      if (/<section\b[^>]*(?:class(?:Name)?=["'][^"']*\bslide\b|data-slide)/.test(part)) return res("slide");
+      if (/^(?:text\/markdown|markdown)/.test(type) || /sx-page/.test(part)) return res("doc");
+      if (/^(?:text\/html|html|react|svg|application\/vnd\.(?:ant\.)?react|image\/svg)/.test(type)) {
+        return res("graphic");
+      }
       return null;
     }
   }
@@ -269,7 +315,11 @@ export function designTurn(i: { typed: string; studio?: string | null; art: bool
   // Việc lập trình nhắc tới sản phẩm ("viết script python xuất báo cáo pdf"): không phải làm sản phẩm.
   if (job && CODE.test(t.slice(0, job.at))) return null;
   const prior = priorDesign(i.prior ?? []);
-  const follow = (f: DesignFormat, preset: string) => { const block = compactBlock(f, preset); return { format: f, domain: "general" as const, preset, own: false, block, compact: true, bytes: designBytes(block) }; };
+  const follow = (f: DesignFormat, preset: string) => {
+    const block = compactBlock(f, preset, prior?.mix);
+    const bytes = designBytes(block);
+    return { format: f, domain: "general" as const, preset, own: false, block, compact: true, bytes };
+  };
   if (!job) {
     if (prior && wantsEdit.test(t) && !CODE.test(t)) return follow(prior.format, prior.preset);
     if (!inStudio) return null;
@@ -286,6 +336,28 @@ export function designTurn(i: { typed: string; studio?: string | null; art: bool
   const block = designBlock({ format, domain, preset, own }, { art: i.art, code: i.code });
   return { format, domain, preset, own, block, compact: false, bytes: designBytes(block) };
 }
+/** Khối quy tắc của lượt sau khi đã chọn mẫu tham chiếu: preset nền của bộ trộn, màu và phông theo khối trộn. */
+export function mixedTurn(
+  d: DesignTurn, mix: StyleMix, caps: { art: boolean; code: boolean }, o: BlockOpts = {},
+): DesignTurn {
+  const pick = { format: d.format, domain: d.domain, preset: mix.preset, own: d.own, mix: mix.id, kind: mix.domain };
+  const block = designBlock(pick, caps, o);
+  return { ...d, preset: mix.preset, mix: mix.id, kind: mix.domain, block, bytes: designBytes(block) };
+}
+/**
+ * Khối quy tắc vừa với khối mẫu trong trần DESIGN_TEXT_MAX. Model chỉ đọc chữ luôn giữ lời giải thích của mẫu nên
+ * khối mẫu có thể dài hơn 3 KB: khi đó bỏ thực đơn mẫu điền sẵn trước (model vẫn có bộ lớp sx-… và luật định dạng),
+ * còn chưa vừa thì cắt các phần cuối theo trần còn lại.
+ */
+export function fitMixed(
+  d: DesignTurn, mix: StyleMix, caps: { art: boolean; code: boolean }, refs: string,
+): DesignTurn {
+  const room = DESIGN_TEXT_MAX - (refs ? designBytes(refs) + 2 : 0);
+  const full = mixedTurn(d, mix, caps);
+  if (full.bytes <= room) return full;
+  const lean = mixedTurn(d, mix, caps, { menu: false });
+  return lean.bytes <= room ? lean : mixedTurn(d, mix, caps, { menu: false, budget: room });
+}
 
 /** Văn bản của các artifact trước trong đoạn chat, để biết lượt này là làm mới hay sửa tiếp. */
 export function historyTexts(messages: unknown, base?: unknown): string[] {
@@ -297,4 +369,172 @@ export function historyTexts(messages: unknown, base?: unknown): string[] {
     else if (Array.isArray(m.content)) out.push((m.content as { text?: unknown }[]).map((b) => (typeof b?.text === "string" ? b.text : "")).join("\n"));
   }
   return out;
+}
+
+// ---------------------------------------------------------------- mẫu tham chiếu và hình chủ đạo
+// Model chỉ đọc chữ mô tả thiết kế thì mọi sản phẩm trôi về cùng một kiểu (nền kem, chữ than, nhấn đồng): lượt làm sản
+// phẩm mới có thêm 3 mẫu thật (server/designrefs.ts chọn, mỗi mẫu một vai), một khối CSS trộn sẵn để dán, và luật hình
+// chủ đạo. Khối không bao giờ ghi địa chỉ hay tên trang nguồn: model không thể "làm giống hãng X".
+export const REFS_BUDGET = 3072;
+/** Trần cả phần thiết kế của một lượt (khối quy tắc + khối mẫu). */
+export const DESIGN_TEXT_MAX = 12288;
+
+// Cách nói "không ảnh AI": "không (dùng | sử dụng) (ảnh | hình ảnh | hình) (do | tạo bằng) AI", "đừng / tránh /
+// cấm dùng ảnh AI", "no AI-generated imagery", "without generative AI images". "Đừng" đổi thành "không" trước khi bỏ
+// dấu, vì bỏ dấu thì "đừng" trùng "dùng" và "dùng ảnh AI" (xin ảnh AI) sẽ bị đọc thành cấm.
+const NO_AI = new RegExp("\\b(?:khong|ko|tranh|cam)(?: (?:dung|su dung|can|co|xai))? (?:hinh anh|anh|hinh)"
+  + "(?: (?:do|tao bang|sinh bang|tao boi|bang))? ai\\b"
+  + "|\\b(?:no|without|avoid|never use|do not use|don'?t use)(?: any)?"
+  + " (?:generative ai|ai(?:[- ]?(?:generated|generative))?) (?:images?|imagery|visuals?|pictures?|photos?)\\b");
+/** Đề bài cấm ảnh do AI tạo: hình chủ đạo đi đường ảnh thật, nền shader hoặc minh họa SVG. */
+export const forbidsAiImage = (typed: string) => {
+  const t = fold(typed.normalize("NFC").toLowerCase().replace(/đừng/g, "không"));
+  return NO_AI.test(t.replace(/\bdung dung\b/g, "khong dung"));
+};
+
+// Web, slide, poster cần một hình chủ đạo ở khung nhìn đầu; dashboard, email, tài liệu, bộ nhận diện (logo, brand
+// sheet: hình chính là chính logo) thì không bắt buộc. Email, logo chỉ là sản phẩm khi là thứ được yêu cầu làm
+// ("thiết kế email", "làm logo", đề mở đầu bằng "Logo cho…"): landing page có ô nhận email hay logo trên thanh điều
+// hướng vẫn cần hình chủ đạo. Đề nhắc landing page / trang web thì luôn là trang web. Không xét "dựng", "vẽ": bỏ dấu
+// thì trùng "dùng", "về" ("poster dùng logo nhà tài trợ" vẫn là poster).
+const NO_HERO = /\b(?:dashboard|bang dieu khien)\b/;
+const IDENTITY = /\b(?:bo nhan dien|nhan dien thuong hieu|brand ?sheet|brand identity)\b/;
+const MADE_THING = new RegExp("(?:^|\\b(?:thiet ke|lam|tao|viet|soan|design|make|create|write|build))"
+  + "(?: (?:giup|giup toi|cho toi|cho minh|minh|toi|mot|1|cai|mau|bo|chiec|an?|me|us))*"
+  + " ?(?:email|e-mail|thu html|newsletter|ban tin|logo)\\b|\\b(?:email|newsletter) marketing\\b");
+const WEB_PAGE = /\b(?:landing ?page|trang web|website|web ?site|trang dich|trang chu|trang gioi thieu)\b/;
+export type HeroDomain = "web" | "slide" | "poster";
+export function heroDomain(format: DesignFormat, typed: string, domain?: RefDomain | null): HeroDomain | null {
+  if (domain === "web" || domain === "slide" || domain === "poster") return domain;
+  if (domain) return null;
+  if (format === "slide") return "slide";
+  if (format !== "graphic") return null;
+  const t = fold(typed).trim();
+  if (NO_HERO.test(t)) return null;
+  if (!WEB_PAGE.test(t) && (IDENTITY.test(t) || MADE_THING.test(t))) return null;
+  return /\b(?:poster|banner|flyer|to roi|thumbnail|anh bia|the mang xa hoi)\b/.test(t) ? "poster" : "web";
+}
+/** Tỉ lệ ảnh của hình chủ đạo: trang web, slide 16:9; poster 2:3 (gần A3 1:1,41 nhất trong các tỉ lệ của công cụ
+ *  ảnh). */
+export const heroAspect = (d: HeroDomain) => (d === "poster" ? "2:3" : "16:9");
+
+const hsl = (hex: string) => {
+  const n = parseInt(hex.slice(1), 16);
+  const [r, g, b] = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map((v) => v / 255);
+  const max = Math.max(r, g, b), min = Math.min(r, g, b), l = (max + min) / 2, d = max - min;
+  if (!d) return { h: 0, s: 0, l };
+  const h = max === r ? ((g - b) / d + 6) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  return { h: h * 60, s: d / (1 - Math.abs(2 * l - 1)), l };
+};
+const HUES: [number, string][] = [[15, "red"], [40, "orange"], [55, "amber"], [70, "yellow"], [160, "green"],
+  [195, "teal"], [250, "blue"], [290, "violet"], [335, "magenta"], [360, "red"]];
+/** Tên màu tiếng Anh cho câu lệnh ảnh (model ảnh hiểu chữ, không hiểu mã hex). */
+export function colourWord(hex: string): string {
+  if (!/^#[0-9a-f]{6}$/i.test(hex)) return "neutral";
+  const { h, s, l } = hsl(hex.toLowerCase());
+  const tone = l < 0.12 ? "near-black" : l < 0.3 ? "deep" : l > 0.92 ? "pale" : l > 0.7 ? "soft" : "";
+  if (s < 0.12) return l < 0.12 ? "near-black" : l < 0.35 ? "charcoal" : l > 0.9 ? "off-white" : "grey";
+  const name = HUES.find(([top]) => h < top)?.[1] ?? "red";
+  return [tone === "near-black" ? "very dark" : tone, s < 0.35 ? "muted" : "", name].filter(Boolean).join(" ");
+}
+const colorOf = (mix: StyleMix, role: string) => mix.tokens.colors.find((c) => c.role === role)?.hex ?? "";
+
+/** Câu lệnh mẫu cho generate_image theo ánh sáng, ống kính, màu của mẫu tham chiếu; model thay chủ thể theo đề bài. */
+export function heroPrompt(mix: StyleMix, subject = "<subject from the brief>"): string {
+  const im = mix.tokens.imagery;
+  const tones = [colorOf(mix, "bg"), colorOf(mix, "surface")].filter(Boolean).map(colourWord);
+  const side = mix.tokens.layout.align === "center" ? "top" : "left";
+  const key = mix.tokens.theme === "dark" ? "Low-key" : "High-key";
+  const parts = [
+    `${subject}.`, im.light ? `${im.light}.` : "", im.lens ? `${im.lens}.` : "",
+    `Colour grade: ${im.grade || "natural"}, dominant tones ${[...new Set(tones)].join(" and ") || "neutral"},`
+      + ` accent ${colourWord(colorOf(mix, "accent"))}.`,
+    `Leave clean negative space on the ${side} third for a headline. ${key} background.`,
+    "No text, no letters, no logos, no watermark.",
+  ];
+  return parts.filter(Boolean).join(" ");
+}
+
+export type HeroCaps = { image: boolean; forbid: boolean; domain: HeroDomain | null; mix: StyleMix | null };
+/** Luật hình chủ đạo cho lượt làm web, slide, poster (rỗng với định dạng khác). */
+export function heroRule(h: HeroCaps): string {
+  if (!h.domain) return "";
+  const where = h.domain === "slide" ? "slide bìa và ít nhất một slide nội dung"
+    : h.domain === "poster" ? "poster" : "hero";
+  const head = `Hình chủ đạo bắt buộc: ${where} có một hình lớn nhìn thấy ngay ở khung đầu (chiếm từ 25% khung),`
+    + " đánh dấu khung chứa bằng data-sx-hero. Không bỏ nửa khung trống, không thay hình bằng khối màu.";
+  const ai = h.image && !h.forbid;
+  const prompt = h.mix ? ` Câu lệnh mẫu (tiếng Anh, thay chủ thể): "${heroPrompt(h.mix)}"` : "";
+  const how = ai
+    ? ` Tạo bằng generate_image (aspect_ratio ${heroAspect(h.domain)}) rồi đặt đúng địa chỉ công cụ trả về.${prompt}`
+      + " Công cụ báo lỗi hay hết lượt thì theo thứ tự:"
+    : " Đề bài không dùng ảnh AI (hoặc không có công cụ ảnh), theo thứ tự:";
+  const other = " ảnh https thật từ images.unsplash.com hoặc upload.wikimedia.org (ghi nguồn);"
+    + ` nền 3D của bộ (<div class="sx-shader" data-sx-shader="silk">); minh họa SVG dựng có chủ đích.`;
+  return `${head}${how}${other}`;
+}
+
+const ROLE_VI: Record<string, string> = { palette: "bảng màu", type: "chữ", shape: "hình khối", layout: "bố cục" };
+const famOf = (id: string) => kitFont(id)?.family ?? id;
+function tokenLine(r: TurnRef): string {
+  const t = r.tokens, c = (role: string) => t.colors.find((x) => x.role === role)?.hex;
+  const bits: string[] = [];
+  const theme = t.theme === "dark" ? "nền tối" : "nền sáng";
+  if (r.roles.includes("palette")) bits.push(`${theme} ${c("bg")}, chữ ${c("ink")}, nhấn ${c("accent")}`);
+  if (r.roles.includes("type")) {
+    bits.push(`${famOf(t.fonts.head.kit)} + ${famOf(t.fonts.body.kit)}, tỉ lệ ${t.type.ratio},`
+      + ` giãn tiêu đề ${t.tracking.display}em${t.type.headCase === "upper" ? ", tiêu đề in hoa" : ""}`);
+  }
+  if (r.roles.includes("shape")) {
+    bits.push(`bo ${t.radius.outer}px, bóng mức ${t.shadow.level}, lưới ${t.spacing.unit}px`);
+  }
+  if (r.roles.includes("layout")) {
+    const empty = Math.round(t.layout.emptyShare * 100);
+    bits.push(`${t.layout.columns} cột, căn ${t.layout.align}, trống chủ ý ${empty}%`);
+  }
+  return bits.join("; ");
+}
+// Khung đầu đọc được ở email: mail client bỏ biến CSS, nên email nhận mã màu thẳng thay cho khối CSS.
+const emailHex = (mix: StyleMix) => mix.tokens.colors.map((c) => `${c.role} ${c.hex}`).join(", ");
+
+// room: chỗ còn lại trong trần cả phần thiết kế (DESIGN_TEXT_MAX trừ khối quy tắc); khối mẫu có ít nhất REFS_BUDGET.
+export type RefsOpts = { sees: boolean; agy: boolean; hero: string; room?: number };
+/**
+ * Khối <design_refs>: vai từng mẫu, khối CSS trộn để dán, luật dùng mẫu và hình chủ đạo. Lời giải thích của mẫu cắt
+ * dần cho vừa chỗ; model chỉ đọc chữ luôn giữ ít nhất 140 ký tự mỗi mẫu vì nó không có ảnh để nhìn.
+ */
+export function designRefsBlock(turn: StyleTurn, o: RefsOpts): string {
+  const m = turn.mix;
+  const open = `<design_refs mix="${m.id}" preset="${m.preset}">`, close = "</design_refs>";
+  const look = o.sees
+    ? `Ảnh của ${turn.refs.length} mẫu nằm cuối tin nhắn này, nhãn "Mẫu tham chiếu k" (không phải ảnh người dùng gửi).`
+      + (o.agy ? " Mở và xem cả 3 ảnh mẫu trước khi dựng." : "")
+    : "Bạn không xem được ảnh: dựa vào số đo và lời giải thích của từng mẫu.";
+  const paste = m.domain === "email"
+    ? `Email: dùng đúng các mã màu này trong style nội tuyến (mail client bỏ biến CSS): ${emailHex(m)}.`
+    : `Dán nguyên khối sau vào <head>, đặt <html data-sx-preset="${m.preset}" ${MIX_ATTR}="${m.id}"> (React: trên div`
+      + ` ngoài cùng; SVG: trên thẻ svg); không tự đặt màu, phông khác:\n${m.css}`;
+  const rules = [
+    "Trước khi dựng, viết 2 câu định hướng mỹ thuật: đã lấy gì từ Mẫu 1, 2, 3 và vì sao hợp đề bài.",
+    "Mẫu là nguyên tắc, không chép: không logo, chữ, ảnh hay bố cục đặc trưng của mẫu; trộn cả ba, không giống hẳn"
+      + " mẫu nào.",
+    m.brand ? "Đề bài có thương hiệu riêng: màu theo thương hiệu đó, chỉ lấy chữ và hình khối từ mẫu." : "",
+    KIT_FONT_RULE,
+    o.hero,
+  ].filter(Boolean);
+  const head = [open, `Mẫu tham chiếu Synchro chọn cho đề này (mỗi mẫu một vai). ${look}`];
+  const tail = [paste, ...rules.map((r) => `- ${r}`), close];
+  // Phần dài nhất là lời giải thích của từng mẫu: cắt dần tới khi cả khối vừa chỗ.
+  const room = Math.max(REFS_BUDGET, o.room ?? REFS_BUDGET);
+  const steps = o.sees ? [420, 260, 140, 0] : [420, 260, 140];
+  for (const why of steps) {
+    const lines = turn.refs.map((r, i) => {
+      const roles = r.roles.map((x) => ROLE_VI[x] ?? x).join(", ");
+      const say = why && r.why ? ` ${r.why.length > why ? `${r.why.slice(0, why).trimEnd()}…` : r.why}` : "";
+      return `Mẫu ${i + 1} (${roles}): ${r.title}.${say} Số đo: ${tokenLine(r)}.`;
+    });
+    const out = [...head, ...lines, ...tail].join("\n");
+    if (designBytes(out) <= room || why === steps[steps.length - 1]) return out;
+  }
+  return "";
 }

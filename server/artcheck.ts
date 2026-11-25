@@ -6,7 +6,9 @@
 //   trang tràn ngang, lỗi script) rồi trả ảnh ghép + danh sách lỗi để model tự sửa trước khi báo xong.
 import "server-only";
 import { buildDocCore, isDeck } from "../shared/artdoc";
-import { DESIGN_PROBE } from "./artprobe";
+import { DESIGN_FACTS, DESIGN_PROBE } from "./artprobe";
+import { TOKEN_PROBE } from "../shared/designextract";
+import type { Probe } from "../shared/designrefs";
 import { getArtifactByIdent } from "./artifactstore";
 import { inlineImages } from "./artimg";
 import { splitArtifacts, type ArtType } from "../shared/artifacts";
@@ -201,14 +203,29 @@ const cfg = JSON.parse(fs.readFileSync("check.json", "utf8")), html = fs.readFil
 const PROBE = ${PROBE};
 const FIT = ${FIT};
 const TYPE = ${TYPE_JS};
+const FACTS = ${DESIGN_FACTS};
+const TOKEN = ${TOKEN_PROBE};
 (async () => {
   const px = process.env.HTTPS_PROXY ? new URL(process.env.HTTPS_PROXY) : null;
   const browser = await puppeteer.launch({ executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || "/usr/bin/chromium", headless: true,
     // Trang có nền shader / cảnh 3D: Chromium không còn tự rơi về WebGL phần mềm (từ khoảng bản 137), phải bật SwiftShader thì mới đo, chụp được canvas WebGL.
     // Chỉ cho trang của chính người dùng, chạy trong container sandbox.
     args: ["--no-sandbox", "--disable-dev-shm-usage", "--font-render-hinting=none", "--hide-scrollbars", ...(/synchro-3d|data-sx-shader/.test(html) ? ["--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--ignore-gpu-blocklist"] : []), ...(px ? ["--proxy-server=" + px.protocol + "//" + px.host] : [])] });
-  const report = { slides: 0, views: [], issues: [], errors: [], fit: [] };
+  const report = { slides: 0, views: [], issues: [], errors: [], fit: [], design: null };
   const shots = [];
+  // Khung nhìn đầu (bìa, màn đầu) và khung sau đó: vòng so với mẫu đặt hai ảnh này cạnh ảnh mẫu tham chiếu.
+  const views = [];
+  // Số đo thiết kế của khung đầu (designcritic.ts): phông đã tải, hình chủ đạo, phần có nội dung, token đo được.
+  const facts = async (page, pick) => {
+    const one = async (src) => page.evaluate((s, p) => {
+      const el = p ? (window.__sxCur && window.__sxCur()) : document.body;
+      return el ? (0, eval)("(" + s + ")")(el) : null;
+    }, src, pick).catch((e) => {
+      report.errors.push("Không đo được số đo thiết kế: " + String(e).slice(0, 160));
+      return null;
+    });
+    report.design = { facts: await one(FACTS.toString()), probe: await one(TOKEN.toString()) };
+  };
   const open = async (w, h, mobile) => {
     const page = await browser.newPage();
     if (px && px.username) await page.authenticate({ username: decodeURIComponent(px.username), password: decodeURIComponent(px.password) });
@@ -246,7 +263,9 @@ const TYPE = ${TYPE_JS};
         return null;
       });
       if (fit) report.fit.push({ slide: i + 1, ...fit, ...type });
+      if (i === 0) await facts(page, true);
       await shot(page, "Slide " + (i + 1));
+      if (views.length < 2) views.push(shots[shots.length - 1].buf);
     }
     report.views.push("1280×720");
   } else {
@@ -255,6 +274,16 @@ const TYPE = ${TYPE_JS};
       const found = await page.evaluate((src) => (0, eval)("(" + src + ")")(document.body, false), PROBE.toString());
       for (const f of found) report.issues.push({ where: v.name, ...f });
       const tall = await page.evaluate(() => document.documentElement.scrollHeight);
+      if (!v.m) {
+        await facts(page, false);
+        views.push(Buffer.from(await page.screenshot({ type: "jpeg", quality: 80 })));
+        if (tall > v.h * 1.2) {
+          await page.evaluate((y) => scrollTo(0, y), v.h);
+          await new Promise((r) => setTimeout(r, 400));
+          views.push(Buffer.from(await page.screenshot({ type: "jpeg", quality: 80 })));
+          await page.evaluate(() => scrollTo(0, 0));
+        }
+      }
       if (tall > v.h * 3) await page.setViewport({ width: v.w, height: Math.min(tall, v.h * 3) });
       await shot(page, v.name + (tall > v.h * 3 ? " (3 màn đầu)" : ""), tall <= v.h * 3);
       report.views.push(v.name);
@@ -271,6 +300,7 @@ const TYPE = ${TYPE_JS};
     shots.map((s) => '<figure style="margin:0"><figcaption style="margin:0 0 4px">' + s.label + '</figcaption><img style="width:' + cw + 'px;display:block;border:1px solid #999;background:#fff" src="data:image/jpeg;base64,' + s.buf.toString("base64") + '"></figure>').join("") + "</body>", { waitUntil: "load" });
   fs.mkdirSync("outputs", { recursive: true });
   fs.writeFileSync("outputs/sheet.jpg", Buffer.from(await grid.screenshot({ type: "jpeg", quality: 78, fullPage: true })));
+  views.forEach((b, i) => fs.writeFileSync("outputs/view" + (i + 1) + ".jpg", b));
   report.errors = [...new Set(report.errors)].slice(0, 12);
   fs.writeFileSync("outputs/report.json", JSON.stringify(report));
   await browser.close();
@@ -381,7 +411,23 @@ export async function measureDeck(uid: string, a: { ident: string; title: string
   return r && !r.is_error ? layoutOf(a.content) : null;
 }
 
-export async function checkArtifact(uid: string, a: ArtVersion | null, input: Record<string, unknown>, origin: string, signal?: AbortSignal): Promise<{ content: string; is_error: boolean; image?: string }> {
+/** Số đo thiết kế của khung đầu (artprobe.ts DESIGN_FACTS) và token đo được (TOKEN_PROBE, null khi bộ đo chưa có). */
+export type DesignFacts = {
+  fonts: { family: string; loaded: boolean; declared: boolean }[];
+  hero: { marked: boolean; share: number; shader: boolean };
+  media: number;
+  content: number;
+};
+export type CheckResult = {
+  content: string; is_error: boolean; image?: string;
+  /** Ảnh khung đầu và khung sau đó (JPEG base64) cho bảng so với mẫu. */
+  views?: string[];
+  design?: { facts: DesignFacts | null; probe: Probe | null };
+  issues?: { where: string; kind: string; detail: string }[];
+};
+export async function checkArtifact(
+  uid: string, a: ArtVersion | null, input: Record<string, unknown>, origin: string, signal?: AbortSignal,
+): Promise<CheckResult> {
   if (!a) return notFound(typeof input.identifier === "string" ? input.identifier : undefined);
   const kinds: ArtType[] = ["html", "react", "svg"];
   if (!kinds.includes(a.type)) return { content: `Artifact "${a.ident}" là ${a.type}: check_artifact kiểm tra hiển thị trang web, bản trình bày, ứng dụng React và SVG. Với loại này, đọc lại bằng read_artifact.`, is_error: true };
@@ -412,5 +458,10 @@ export async function checkArtifact(uid: string, a: ArtVersion | null, input: Re
   const issues = all.length ? `\nLỗi hiển thị cần sửa (${all.length}):\n${all.join("\n")}` : "\nKhông đo thấy lỗi (chữ đè, tràn, cắt, ảnh hỏng, chữ quá nhỏ, tiêu đề rớt chữ, tương phản, đánh số slide).";
   const errs = j.errors.length ? `\nLỗi khi chạy trang:\n${j.errors.map((e) => `- ${e}`).join("\n")}` : "";
   const tail = "\nẢnh ghép đi kèm: tự xem thêm bố cục, căn lề, khoảng cách, độ tương phản và chỗ nào trông chưa chỉn chu.";
-  return { content: head + issues + errs + tail, is_error: false, ...(sheet ? { image: sheet.data.toString("base64") } : {}) };
+  const views = ["view1.jpg", "view2.jpg"]
+    .flatMap((n) => r.files.filter((f) => f.path === n).map((f) => f.data.toString("base64")));
+  const design = (j as { design?: CheckResult["design"] }).design ?? undefined;
+  const image = sheet ? { image: sheet.data.toString("base64") } : {};
+  const content = head + issues + errs + tail;
+  return { content, is_error: false, ...image, views, ...(design ? { design } : {}), issues: j.issues };
 }

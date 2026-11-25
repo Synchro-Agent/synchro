@@ -5,6 +5,8 @@
 // Mọi cỡ tính theo --sx-u: 1px ở trang thường; trong slide, poster là phần nhỏ hơn của chiều rộng và chiều cao, vì khung xem trước, trình chiếu, ảnh thu nhỏ, tệp tải về mở ở cửa sổ bất kỳ có cỡ khác nhau: khung giữ đúng tỉ lệ, không bị cắt đáy, không sinh thanh cuộn. Canh giữa bằng translate (phần trăm theo chính khung), không bằng margin: model tự đặt lại width:100vw thì khung vẫn đúng chỗ.
 // Màu chữ luôn là mã màu thuần, chỉ nền và viền dùng color-mix: bộ xuất PowerPoint đọc màu chữ từ getComputedStyle.
 import { DEFAULT_PRESET, FONT_SPEC, PRESETS, presetIds, presetOf, type Preset, type PresetColors } from "./designpresets";
+import { kitFont, type KitFontId } from "./designrefs";
+import { KIT_FONT_CSS2, kitFaceUrl } from "./kitfonts";
 import { chartKitJs } from "./design-engine/charts/echarts-presets";
 import { CHART_CSS } from "./designcharts";
 import { DOC_TPL_CSS } from "./designdocs";
@@ -313,23 +315,49 @@ function go(){requestAnimationFrame(function(){run()});try{document.fonts.ready.
 try{new MutationObserver(function(ms){ms.forEach(function(m){var t=m.target;if(t.hasAttribute&&t.hasAttribute("data-sx-on")&&!t.hasAttribute("data-sx-fitok"))requestAnimationFrame(function(){setTimeout(function(){if(!t.hasAttribute("data-sx-on")||t.hasAttribute("data-sx-fitok"))return;fitSlide(t)},0)})})}).observe(document.body,{subtree:true,attributes:true,attributeFilter:["data-sx-on"]})}catch(e){}}
 if(document.readyState==="loading")addEventListener("DOMContentLoaded",go);else go()})();`;
 
-/** Đường dẫn Google Fonts chỉ gồm các phông trang dùng: khung cho phép fonts.googleapis.com và fonts.gstatic.com (csp ở artdoc.ts). */
-export function kitFontUrl(content: string): string {
-  const ids = [...content.matchAll(/data-sx-preset=["']?([\w-]+)/g)].map((m) => m[1]).filter((i) => presetOf(i)).map((i) => presetOf(i)!.id);
-  const used = ids.length ? ids : [DEFAULT_PRESET];
-  const names = new Set(used.flatMap((i) => { const p = presetOf(i)!; return [p.head, p.body, p.mono]; }));
-  return `https://fonts.googleapis.com/css2?${[...names].map((n) => `family=${FONT_SPEC[n].css}`).join("&")}&display=swap`;
+/** Phông của bộ mà trang dùng: phông của mọi preset trang đặt, cộng phông khai báo ở data-sx-fonts của khối token
+ *  trộn. */
+export function kitFontIds(content: string): KitFontId[] {
+  const presets = [...content.matchAll(/data-sx-preset=["']?([\w-]+)/g)].flatMap((m) => presetOf(m[1]) ?? []);
+  const mixed = [...content.matchAll(/data-sx-fonts=["']([\w,\s-]+)["']/g)].flatMap((m) => m[1].split(","));
+  // Trang không đặt preset nào: phông của preset mặc định, trừ khi khối token trộn đã nói phông.
+  const used = presets.length ? presets : mixed.length ? [] : [presetOf(DEFAULT_PRESET)!];
+  const out = new Set<KitFontId>(used.flatMap((p) => [p.head, p.body, p.mono]).map((n) => FONT_SPEC[n].id));
+  for (const m of mixed) {
+    const f = kitFont(m.trim());
+    if (f) out.add(f.id as KitFontId);
+  }
+  return [...out];
 }
+/** Đường dẫn Google Fonts của các phông trang dùng: đường dự phòng khi không có địa chỉ Synchro hoặc Synchro không
+ *  tải được. */
+export function kitFontUrl(content: string): string {
+  const families = kitFontIds(content).map((id) => `family=${KIT_FONT_CSS2[id]}`).join("&");
+  return `https://fonts.googleapis.com/css2?${families}&display=swap`;
+}
+/** Tệp face.css của Synchro cho các phông trang dùng (origin rỗng: chỉ còn Google Fonts). */
+export const kitFontLinks = (content: string, origin = "") =>
+  (origin ? kitFontIds(content).map((id) => kitFaceUrl(origin, id)) : [kitFontUrl(content)]);
 /** Phần chèn vào <head> của trang có dùng bộ CSS; trang không dùng thì rỗng. */
 // Nạp phông sau sự kiện load, không dùng <link> trong <head>: thẻ đó chặn lần vẽ đầu, mạng treo (tường lửa, gói tin bị bỏ) thì trang trắng tới khi yêu cầu hết giờ. Kể cả media="print" cũng giữ
 // sự kiện load, khung không báo được chiều cao. Phông là phần thêm, chữ phải hiện trước; font-display:swap đổi phông khi tải xong.
-// origin: địa chỉ Synchro để nạp thư viện từ /vendor (khung xem, tệp tải về); rỗng thì nạp từ jsDelivr (cùng SRI).
+// origin: địa chỉ Synchro để nạp phông từ /kitfonts và thư viện từ /vendor (khung xem, tệp tải về); rỗng thì nạp từ
+// Google Fonts và jsDelivr. Phông của Synchro không tải được (máy chạy thử cục bộ, khung không gọi được về localhost)
+// thì nạp thêm Google Fonts một lần: chữ vẫn đúng phông khi còn mạng ngoài.
 export const kitHead = (content: string, origin = "") => {
   if (!usesKit(content)) return "";
-  const url = kitFontUrl(content);
+  const links = kitFontLinks(content, origin), google = kitFontUrl(content);
+  const back = origin ? JSON.stringify(google) : "null";
+  const load = `addEventListener("load",function(){var L=${JSON.stringify(links)},G=${back},n=0;`
+    + `function add(h,f){var l=document.createElement("link");l.rel="stylesheet";l.href=h;`
+    + `l.setAttribute("data-sx-font","");`
+    + `if(f)l.onerror=f;document.head.appendChild(l)}function g(){if(!n++)add(G)}`
+    + `L.forEach(function(h){add(h,G?g:null)})});`;
+  const noscript = links.map((h) => `<link rel="stylesheet" href="${h.replace(/&/g, "&amp;")}">`).join("");
   const charts = ECHARTS_ON.test(content) ? `<script data-sx-charts>${chartKitJs(libAt(origin, ECHARTS))}</script>` : "";
   const shader = /data-sx-shader/.test(content) ? `<script data-sx-3d>${shaderKitJs(origin)}</script>` : "";
-  return `<script>addEventListener("load",function(){var l=document.createElement("link");l.rel="stylesheet";l.href=${JSON.stringify(url)};l.setAttribute("data-sx-font","");document.head.appendChild(l)});${FIT_JS}</script><noscript><link rel="stylesheet" href="${url.replace(/&/g, "&amp;")}"></noscript><style data-sx-kit>${CSS}</style>${charts}${shader}`;
+  const style = `<style data-sx-kit>${CSS}</style>`;
+  return `<script>${load}${FIT_JS}</script><noscript>${noscript}</noscript>${style}${charts}${shader}`;
 };
 export const KIT_CSS = CSS;
 /** Phong cách đang dùng của trang (mã chính), hoặc "" nếu trang không đặt data-sx-preset hợp lệ. */
@@ -345,5 +373,8 @@ export function restylePatch(content: string, id: string): string | null {
   if (!hits.length) return null;
   return hits.map((m) => `<<<<<<< SEARCH\n${m[0]}\n=======\ndata-sx-preset=${m[1]}${to}${m[1]}\n>>>>>>> REPLACE`).join("\n");
 }
-/** Để lấy phông nhúng khi chụp ảnh / xuất PowerPoint (artfonts.ts tìm đường dẫn Google Fonts trong chữ của trang). */
-export const withKitFontLink = (content: string) => (usesKit(content) ? `${content}\n<!-- ${kitFontUrl(content)} -->` : content);
+/** Để lấy phông nhúng khi chụp ảnh / xuất PowerPoint: artfonts.ts tìm face.css của Synchro (có origin) hoặc đường dẫn
+ *  Google Fonts trong chữ của trang. */
+export const withKitFontLink = (content: string, origin = "") =>
+  (usesKit(content) ? `${content}\n<!-- ${[...kitFontLinks(content, origin), kitFontUrl(content)].join(" ")} -->`
+    : content);

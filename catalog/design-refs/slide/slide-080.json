@@ -1,0 +1,129 @@
+{
+  "v": 1,
+  "id": "slide-080",
+  "domain": "slide",
+  "title": "Bài nói về chuyển động: minh hoạ nét vẽ tay đen trên nền giấy xám, chữ uốn vòng",
+  "moods": [
+    "playful",
+    "warm-craft",
+    "organic"
+  ],
+  "industries": [
+    "education",
+    "tech-saas"
+  ],
+  "audience": [
+    "developers",
+    "public"
+  ],
+  "source_url": "https://slides.com/cassiecodes/deck-1daeae",
+  "source_host": "slides.com",
+  "source_kind": "public-image",
+  "credit": "Cassie Evans, Animating the Impossible",
+  "captured_at": "2026-11-21",
+  "image": {
+    "file": "slide/slide-080.webp",
+    "width": 1280,
+    "height": 720,
+    "bytes": 60450,
+    "layout": "grid4"
+  },
+  "tokens": {
+    "theme": "light",
+    "colors": [
+      {
+        "hex": "#e7e6da",
+        "role": "bg",
+        "share": 0.549
+      },
+      {
+        "hex": "#373636",
+        "role": "ink",
+        "share": 0.036
+      },
+      {
+        "hex": "#666666",
+        "role": "muted",
+        "share": 0.047
+      },
+      {
+        "hex": "#9c9ff1",
+        "role": "accent",
+        "share": 0.231
+      },
+      {
+        "hex": "#6fdbbf",
+        "role": "accent2",
+        "share": 0.06
+      }
+    ],
+    "fonts": {
+      "head": {
+        "kit": "fraunces",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 600
+      },
+      "body": {
+        "kit": "plus-jakarta-sans",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 700
+      },
+      "mono": null
+    },
+    "type": {
+      "basePx": 22,
+      "ratio": 1.5,
+      "sizes": [
+        80,
+        48,
+        32,
+        22
+      ],
+      "headLine": 1.1,
+      "bodyLine": 1.4,
+      "headCase": "none"
+    },
+    "tracking": {
+      "display": 0.02,
+      "heading": 0.01,
+      "body": 0,
+      "label": 0.02
+    },
+    "radius": {
+      "outer": 0,
+      "inner": 0,
+      "pill": false
+    },
+    "shadow": {
+      "level": 0,
+      "css": "none"
+    },
+    "spacing": {
+      "unit": 8,
+      "section": 64,
+      "gutter": 32,
+      "density": "airy"
+    },
+    "layout": {
+      "columns": 1,
+      "maxWidth": 1280,
+      "align": "center",
+      "emptyShare": 0.45
+    },
+    "imagery": {
+      "kind": "illustration",
+      "share": 0.4,
+      "light": "flat ink drawing, no light modelling",
+      "lens": "flat 2D, hand-drawn objects centred under the title",
+      "grade": "black ink on warm grey paper, lavender and mint accents",
+      "subject": "hand-drawn candles, a potion bottle and a laptop with sparkles around a curved title"
+    }
+  },
+  "measured": [
+    "theme"
+  ],
+  "why": "Nền giấy xám ấm #e7e6da, minh hoạ nét mực đen dày như vẽ tay: nến, lọ thuốc, máy tính và các ngôi sao nhỏ rải quanh tiêu đề. Chữ tiêu đề có chân mềm uốn theo vòng cung, cỡ to dần về giữa. Một slide chuyển sắc tím lavender #9c9ff1 sang xanh trời làm nhịp đổi, điểm xanh bạc hà #6fdbbf chỉ xuất hiện trong khung trình duyệt vẽ tay. Mượn nét minh hoạ đơn sắc dày làm chất liệu chính và chữ uốn theo đường cong; không chép hình vẽ.",
+  "licence": "Ảnh chụp thu nhỏ của trang công khai, chỉ để model tham khảo nguyên tắc. Không chép logo, chữ, ảnh hay phông độc quyền của trang."
+}

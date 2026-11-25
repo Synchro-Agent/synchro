@@ -12,7 +12,15 @@ const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "synchro-enginefs-"));
 const HOME = (process.env.SYNCHRO_ENGINE_HOME = path.join(tmp, "engine"));
 const BIN = path.join(tmp, "bin"), LOG = path.join(tmp, "sudo.log");
 fs.mkdirSync(BIN, { recursive: true }); fs.mkdirSync(HOME, { recursive: true });
-fs.writeFileSync(path.join(BIN, "sudo"), `#!/bin/sh\necho "$@" >> "${LOG}"\n[ "$1" = "-n" ] && [ "$2" = "-u" ] && [ "$4" = "--" ] || exit 9\nshift 4\nexec "$@"\n`, { mode: 0o755 });
+// printf, không echo: echo của dash (/bin/sh trên Ubuntu) coi "-n" đầu tiên là cờ bỏ xuống dòng, nhật ký mất "-n"
+// và các dòng dính nhau.
+const FAKE_SUDO = `#!/bin/sh
+printf '%s\\n' "$*" >> "${LOG}"
+[ "$1" = "-n" ] && [ "$2" = "-u" ] && [ "$4" = "--" ] || exit 9
+shift 4
+exec "$@"
+`;
+fs.writeFileSync(path.join(BIN, "sudo"), FAKE_SUDO, { mode: 0o755 });
 process.env.PATH = `${BIN}:${process.env.PATH}`;
 const src = fs.readFileSync("server/ai/cli_runtime.ts", "utf8");
 process.env.DATA_DIR = path.join(tmp, "data"); fs.mkdirSync(process.env.DATA_DIR, { recursive: true });

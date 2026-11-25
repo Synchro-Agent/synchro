@@ -1,0 +1,124 @@
+{
+  "v": 1,
+  "id": "poster-023",
+  "domain": "poster",
+  "title": "Poster triển lãm chữ khối vuông đen trên giấy ngà, chữ xếp kín khung và xoay dọc ở mép",
+  "moods": [
+    "retro-print",
+    "minimal-mono",
+    "swiss-precise"
+  ],
+  "industries": [
+    "culture-music",
+    "events"
+  ],
+  "audience": [
+    "public"
+  ],
+  "source_url": "https://commons.wikimedia.org/wiki/File:Theo_van_Doesburg_Design_for_a_poster.jpg",
+  "source_host": "commons.wikimedia.org",
+  "source_kind": "cc0",
+  "credit": "Theo van Doesburg, thiết kế poster triển lãm",
+  "rights_url": "https://commons.wikimedia.org/wiki/File:Theo_van_Doesburg_Design_for_a_poster.jpg#Licensing",
+  "captured_at": "2026-11-20",
+  "image": {
+    "file": "poster/poster-023.webp",
+    "width": 1280,
+    "height": 1319,
+    "bytes": 88754,
+    "layout": "single"
+  },
+  "tokens": {
+    "theme": "light",
+    "colors": [
+      {
+        "hex": "#ebd8a8",
+        "role": "bg",
+        "share": 0.461
+      },
+      {
+        "hex": "#16100a",
+        "role": "ink",
+        "share": 0.038
+      },
+      {
+        "hex": "#2a2621",
+        "role": "muted",
+        "share": 0.199
+      },
+      {
+        "hex": "#8a6d3b",
+        "role": "accent",
+        "share": 0
+      }
+    ],
+    "fonts": {
+      "head": {
+        "kit": "anton",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 400
+      },
+      "body": {
+        "kit": "oswald",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 500
+      },
+      "mono": null
+    },
+    "type": {
+      "basePx": 24,
+      "ratio": 1.6,
+      "sizes": [
+        120,
+        64,
+        40,
+        24
+      ],
+      "headLine": 0.95,
+      "bodyLine": 1.1,
+      "headCase": "upper"
+    },
+    "tracking": {
+      "display": 0,
+      "heading": 0,
+      "body": 0,
+      "label": 0.02
+    },
+    "radius": {
+      "outer": 0,
+      "inner": 0,
+      "pill": false
+    },
+    "shadow": {
+      "level": 0,
+      "css": "none"
+    },
+    "spacing": {
+      "unit": 8,
+      "section": 32,
+      "gutter": 16,
+      "density": "dense"
+    },
+    "layout": {
+      "columns": 1,
+      "maxWidth": 1280,
+      "align": "asymmetric",
+      "emptyShare": 0.2
+    },
+    "imagery": {
+      "kind": "type-only",
+      "share": 0,
+      "light": "",
+      "lens": "",
+      "grade": "",
+      "subject": ""
+    }
+  },
+  "measured": [
+    "theme"
+  ],
+  "why": "Toàn bộ poster là chữ: các khối chữ vuông đen vẽ tay xếp kín khung vuông trên giấy ngà #ebd8a8. Cỡ chữ đổi theo độ quan trọng, từ dòng lớn cao 12% khung tới dòng nhỏ chạy dọc mép phải và mép trái. Không hình, không màu nhấn, chỉ đen và giấy. Mượn cách lấp khung bằng chữ khối, xoay chữ dọc theo mép và đổi cỡ thay cho hình; không chép chữ.",
+  "licence": "Ảnh chụp thu nhỏ của trang công khai, chỉ để model tham khảo nguyên tắc. Không chép logo, chữ, ảnh hay phông độc quyền của trang."
+}

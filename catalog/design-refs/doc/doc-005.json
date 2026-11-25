@@ -1,0 +1,148 @@
+{
+  "v": 1,
+  "id": "doc-005",
+  "domain": "doc",
+  "title": "Tài liệu kỹ thuật thanh toán: thanh bên trái, thẻ hướng dẫn gọn",
+  "moods": [
+    "clean-light",
+    "tech",
+    "minimal-mono"
+  ],
+  "industries": [
+    "finance",
+    "tech-saas"
+  ],
+  "audience": [
+    "developers"
+  ],
+  "source_url": "https://docs.stripe.com/payments",
+  "source_host": "docs.stripe.com",
+  "source_kind": "public-page",
+  "captured_at": "2026-11-20",
+  "image": {
+    "file": "doc/doc-005.webp",
+    "width": 1280,
+    "height": 800,
+    "bytes": 78980,
+    "layout": "single"
+  },
+  "tokens": {
+    "theme": "light",
+    "colors": [
+      {
+        "hex": "#ffffff",
+        "role": "bg",
+        "share": 0.875
+      },
+      {
+        "hex": "#f4f7fa",
+        "role": "surface",
+        "share": 0
+      },
+      {
+        "hex": "#f7fafc",
+        "role": "raised",
+        "share": 0
+      },
+      {
+        "hex": "#1a2c44",
+        "role": "ink",
+        "share": 0.033
+      },
+      {
+        "hex": "#4e566d",
+        "role": "muted",
+        "share": 0.041
+      },
+      {
+        "hex": "#5469d4",
+        "role": "accent",
+        "share": 0
+      },
+      {
+        "hex": "#e3e8ee",
+        "role": "line",
+        "share": 0.012
+      }
+    ],
+    "fonts": {
+      "head": {
+        "kit": "inter",
+        "seen": "-apple-system",
+        "seenLicence": "unknown",
+        "weight": 700
+      },
+      "body": {
+        "kit": "inter",
+        "seen": "-apple-system",
+        "seenLicence": "unknown",
+        "weight": 400
+      },
+      "mono": null
+    },
+    "type": {
+      "basePx": 14,
+      "ratio": 1.18,
+      "sizes": [
+        32,
+        24,
+        21,
+        18,
+        16,
+        14,
+        12
+      ],
+      "headLine": 1.25,
+      "bodyLine": 1.2,
+      "headCase": "none"
+    },
+    "tracking": {
+      "display": 0,
+      "heading": 0,
+      "body": 0,
+      "label": 0
+    },
+    "radius": {
+      "outer": 4,
+      "inner": 0,
+      "pill": false
+    },
+    "shadow": {
+      "level": 1,
+      "css": "rgba(16, 17, 26, 0.16) 0px 1px 1px 0px, rgb(212, 222, 233) 0px 0px 0px 1px"
+    },
+    "spacing": {
+      "unit": 8,
+      "section": 40,
+      "gutter": 8,
+      "density": "dense"
+    },
+    "layout": {
+      "columns": 3,
+      "maxWidth": 1030,
+      "align": "left",
+      "emptyShare": 0.44
+    },
+    "imagery": {
+      "kind": "illustration",
+      "share": 0.1,
+      "light": "flat even UI rendering, no shadows",
+      "lens": "flat UI illustration",
+      "grade": "soft blue and violet",
+      "subject": "small product UI thumbnails"
+    }
+  },
+  "measured": [
+    "theme",
+    "colors",
+    "fonts",
+    "type",
+    "tracking",
+    "radius",
+    "shadow",
+    "spacing",
+    "layout"
+  ],
+  "why": "Thanh mục lục trái chữ 14 px, nội dung giữa với tiêu đề 32 px xanh than #1a2c44 và các thẻ hướng dẫn bo 4 px có ảnh minh họa nhỏ. Nhấn tím #5469d4 cho liên kết, viền #e3e8ee mảnh. Mật độ thông tin cao nhưng thoáng nhờ khoảng 40 px giữa các nhóm. Mượn cấu trúc tài liệu ba vùng và thẻ dẫn đường; không chép nội dung.",
+  "licence": "Ảnh chụp thu nhỏ của trang công khai, chỉ để model tham khảo nguyên tắc. Không chép logo, chữ, ảnh hay phông độc quyền của trang."
+}

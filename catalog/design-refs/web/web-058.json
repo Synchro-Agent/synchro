@@ -1,0 +1,151 @@
+{
+  "v": 1,
+  "id": "web-058",
+  "domain": "web",
+  "title": "Chuyển tiền quốc tế: chữ hoa siêu đậm, xanh chanh và xanh rừng",
+  "moods": [
+    "bold-color",
+    "energetic",
+    "clean-light"
+  ],
+  "industries": [
+    "finance"
+  ],
+  "audience": [
+    "consumer"
+  ],
+  "source_url": "https://wise.com/",
+  "source_host": "wise.com",
+  "source_kind": "public-page",
+  "captured_at": "2026-11-20",
+  "image": {
+    "file": "web/web-058.webp",
+    "width": 1280,
+    "height": 1600,
+    "bytes": 89554,
+    "layout": "single"
+  },
+  "tokens": {
+    "theme": "light",
+    "colors": [
+      {
+        "hex": "#ffffff",
+        "role": "bg",
+        "share": 0.782
+      },
+      {
+        "hex": "#edefeb",
+        "role": "surface",
+        "share": 0.048
+      },
+      {
+        "hex": "#e0f7f7",
+        "role": "raised",
+        "share": 0
+      },
+      {
+        "hex": "#0e0f0c",
+        "role": "ink",
+        "share": 0.044
+      },
+      {
+        "hex": "#454745",
+        "role": "muted",
+        "share": 0.004
+      },
+      {
+        "hex": "#9fe870",
+        "role": "accent",
+        "share": 0
+      },
+      {
+        "hex": "#163300",
+        "role": "accent2",
+        "share": 0
+      },
+      {
+        "hex": "#e2e2e1",
+        "role": "line",
+        "share": 0
+      }
+    ],
+    "fonts": {
+      "head": {
+        "kit": "archivo",
+        "seen": "Wise Sans",
+        "seenLicence": "unknown",
+        "weight": 800
+      },
+      "body": {
+        "kit": "inter",
+        "seen": "Inter",
+        "seenLicence": "open",
+        "weight": 400
+      },
+      "mono": null
+    },
+    "type": {
+      "basePx": 16,
+      "ratio": 1.324,
+      "sizes": [
+        86,
+        56,
+        53,
+        40,
+        20,
+        18,
+        16,
+        14
+      ],
+      "headLine": 0.88,
+      "bodyLine": 1.5,
+      "headCase": "none"
+    },
+    "tracking": {
+      "display": 0,
+      "heading": -0.005,
+      "body": -0.011,
+      "label": -0.006
+    },
+    "radius": {
+      "outer": 16,
+      "inner": 10,
+      "pill": true
+    },
+    "shadow": {
+      "level": 2,
+      "css": "rgba(0, 0, 0, 0.08) 0px 6px 20px 0px"
+    },
+    "spacing": {
+      "unit": 4,
+      "section": 55,
+      "gutter": 9,
+      "density": "dense"
+    },
+    "layout": {
+      "columns": 3,
+      "maxWidth": 1100,
+      "align": "asymmetric",
+      "emptyShare": 0.32
+    },
+    "imagery": {
+      "kind": "type-only",
+      "share": 0.05,
+      "light": "",
+      "lens": "",
+      "grade": "",
+      "subject": ""
+    }
+  },
+  "measured": [
+    "theme",
+    "type",
+    "tracking",
+    "radius",
+    "shadow",
+    "spacing",
+    "layout"
+  ],
+  "why": "Tiêu đề chữ hoa cực đậm 86 px, dòng sát 0,88, màu xanh rừng #163300, đặt trái cạnh một khung tính tiền bo 16 px. Xanh chanh #9fe870 làm nền nút và băng cuối trang, không dùng màu nào khác. Con số lớn căn phải, khoảng cách dày 55 px. Mượn cặp màu hai sắc xanh và chữ hoa đặc khối; không chép khung tính hay khẩu hiệu.",
+  "licence": "Ảnh chụp thu nhỏ của trang công khai, chỉ để model tham khảo nguyên tắc. Không chép logo, chữ, ảnh hay phông độc quyền của trang."
+}

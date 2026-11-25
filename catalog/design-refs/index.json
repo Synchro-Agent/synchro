@@ -1,0 +1,3352 @@
+{
+ "v": 1,
+ "built_at": "2026-11-21",
+ "refs": [
+  {
+   "id": "dashboard-001",
+   "domain": "dashboard",
+   "title": "Bảng tổng quan doanh thu đơn sắc: thẻ chỉ số và biểu đồ vùng xám",
+   "moods": [
+    "minimal-mono",
+    "clean-light",
+    "data-dense"
+   ],
+   "industries": [
+    "tech-saas",
+    "general"
+   ],
+   "audience": [
+    "b2b",
+    "internal"
+   ],
+   "host": "ui.shadcn.com",
+   "theme": "light",
+   "paletteKey": "4-n",
+   "fontPair": "inter+inter",
+   "imagery": "data"
+  },
+  {
+   "id": "dashboard-002",
+   "domain": "dashboard",
+   "title": "Bảng công việc nền đen: bảng dài nhãn trạng thái gọn",
+   "moods": [
+    "dark-cinematic",
+    "data-dense",
+    "minimal-mono"
+   ],
+   "industries": [
+    "tech-saas"
+   ],
+   "audience": [
+    "developers",
+    "internal"
+   ],
+   "host": "ui.shadcn.com",
+   "theme": "dark",
+   "paletteKey": "0-n",
+   "fontPair": "inter+inter",
+   "imagery": "data"
+  },
+  {
+   "id": "dashboard-005",
+   "domain": "dashboard",
+   "title": "Phân tích lượt truy cập: một đường tím lớn và bảng nguồn",
+   "moods": [
+    "clean-light",
+    "data-dense",
+    "minimal-mono"
+   ],
+   "industries": [
+    "tech-saas",
+    "media-publishing"
+   ],
+   "audience": [
+    "b2b"
+   ],
+   "host": "plausible.io",
+   "theme": "light",
+   "paletteKey": "4-8",
+   "fontPair": "inter+inter",
+   "imagery": "data"
+  },
+  {
+   "id": "dashboard-007",
+   "domain": "dashboard",
+   "title": "Bảng quản trị sáng: thẻ chỉ số có biểu đồ nhỏ và vòng tròn tiến độ",
+   "moods": [
+    "clean-light",
+    "data-dense"
+   ],
+   "industries": [
+    "general",
+    "ecommerce"
+   ],
+   "audience": [
+    "internal",
+    "b2b"
+   ],
+   "host": "preview.tabler.io",
+   "theme": "light",
+   "paletteKey": "4-7",
+   "fontPair": "inter+inter",
+   "imagery": "data"
+  },
+  {
+   "id": "dashboard-010",
+   "domain": "dashboard",
+   "title": "Bảng phân tích bán hàng: bản đồ nhiệt xanh và thanh ngang",
+   "moods": [
+    "clean-light",
+    "data-dense",
+    "swiss-precise"
+   ],
+   "industries": [
+    "ecommerce",
+    "general"
+   ],
+   "audience": [
+    "b2b",
+    "internal"
+   ],
+   "host": "apexcharts.com",
+   "theme": "light",
+   "paletteKey": "4-7",
+   "fontPair": "inter+inter",
+   "imagery": "data"
+  },
+  {
+   "id": "dashboard-011",
+   "domain": "dashboard",
+   "title": "Bảng chiến dịch nền tối: biểu đồ vùng nhiều màu và luồng Sankey",
+   "moods": [
+    "dark-cinematic",
+    "data-dense",
+    "energetic"
+   ],
+   "industries": [
+    "tech-saas",
+    "media-publishing"
+   ],
+   "audience": [
+    "b2b"
+   ],
+   "host": "apexcharts.com",
+   "theme": "dark",
+   "paletteKey": "0-5",
+   "fontPair": "inter+inter",
+   "imagery": "data"
+  },
+  {
+   "id": "dashboard-016",
+   "domain": "dashboard",
+   "title": "Phân tích web tối giản: cột xanh dày và danh sách trang",
+   "moods": [
+    "clean-light",
+    "minimal-mono",
+    "data-dense"
+   ],
+   "industries": [
+    "tech-saas"
+   ],
+   "audience": [
+    "b2b",
+    "developers"
+   ],
+   "host": "cloud.umami.is",
+   "theme": "light",
+   "paletteKey": "4-7",
+   "fontPair": "inter+inter",
+   "imagery": "data"
+  },
+  {
+   "id": "dashboard-017",
+   "domain": "dashboard",
+   "title": "Bảng quản trị xám đậm: thẻ thống kê và lịch nhỏ",
+   "moods": [
+    "dark-cinematic",
+    "data-dense"
+   ],
+   "industries": [
+    "general"
+   ],
+   "audience": [
+    "internal"
+   ],
+   "host": "demo.adminkit.io",
+   "theme": "dark",
+   "paletteKey": "1-7",
+   "fontPair": "inter+inter",
+   "imagery": "data"
+  },
+  {
+   "id": "dashboard-019",
+   "domain": "dashboard",
+   "title": "Mẫu bảng điều khiển sáng: biểu đồ vùng xanh và cột chồng",
+   "moods": [
+    "clean-light",
+    "data-dense"
+   ],
+   "industries": [
+    "general",
+    "tech-saas"
+   ],
+   "audience": [
+    "internal",
+    "b2b"
+   ],
+   "host": "mui.com",
+   "theme": "light",
+   "paletteKey": "4-7",
+   "fontPair": "inter+inter",
+   "imagery": "data"
+  },
+  {
+   "id": "dashboard-022",
+   "domain": "dashboard",
+   "title": "Bộ thành phần biểu đồ: thẻ nổi trên nền trắng, đường hai màu",
+   "moods": [
+    "clean-light",
+    "tech",
+    "swiss-precise"
+   ],
+   "industries": [
+    "tech-saas"
+   ],
+   "audience": [
+    "developers"
+   ],
+   "host": "tremor.so",
+   "theme": "light",
+   "paletteKey": "4-7",
+   "fontPair": "inter+inter",
+   "imagery": "data"
+  },
+  {
+   "id": "dashboard-027",
+   "domain": "dashboard",
+   "title": "Hồ sơ dữ liệu thành phố: ảnh đô thị tối và chỉ số chữ lớn",
+   "moods": [
+    "dark-cinematic",
+    "editorial",
+    "data-dense"
+   ],
+   "industries": [
+    "nonprofit-gov",
+    "real-estate-interior"
+   ],
+   "audience": [
+    "public"
+   ],
+   "host": "datausa.io",
+   "theme": "dark",
+   "paletteKey": "1-8",
+   "fontPair": "inter+inter",
+   "imagery": "photo"
+  },
+  {
+   "id": "dashboard-028",
+   "domain": "dashboard",
+   "title": "Biểu đồ bong bóng toàn màn: năm cỡ chữ khổng lồ làm nền",
+   "moods": [
+    "playful",
+    "data-dense",
+    "clean-light"
+   ],
+   "industries": [
+    "education",
+    "nonprofit-gov"
+   ],
+   "audience": [
+    "students",
+    "public"
+   ],
+   "host": "gapminder.org",
+   "theme": "light",
+   "paletteKey": "4-0",
+   "fontPair": "inter+inter",
+   "imagery": "data"
+  },
+  {
+   "id": "dashboard-031",
+   "domain": "dashboard",
+   "title": "Bảng giá chứng khoán Việt nền tím đen: lưới số dày đặc",
+   "moods": [
+    "dark-cinematic",
+    "data-dense",
+    "energetic"
+   ],
+   "industries": [
+    "finance"
+   ],
+   "audience": [
+    "consumer",
+    "investors"
+   ],
+   "host": "iboard.ssi.com.vn",
+   "theme": "dark",
+   "paletteKey": "1-2",
+   "fontPair": "inter+inter",
+   "imagery": "data"
+  },
+  {
+   "id": "dashboard-033",
+   "domain": "dashboard",
+   "title": "Cổng tin tài chính Việt: chỉ số, tin và biểu đồ trên một trang",
+   "moods": [
+    "data-dense",
+    "clean-light",
+    "energetic"
+   ],
+   "industries": [
+    "finance",
+    "media-publishing"
+   ],
+   "audience": [
+    "consumer",
+    "investors"
+   ],
+   "host": "24hmoney.vn",
+   "theme": "light",
+   "paletteKey": "4-0",
+   "fontPair": "inter+inter",
+   "imagery": "mixed"
+  },
+  {
+   "id": "dashboard-034",
+   "domain": "dashboard",
+   "title": "Bảng dữ liệu y tế công: bản đồ thế giới và bảng xếp hạng thanh",
+   "moods": [
+    "clean-light",
+    "swiss-precise",
+    "data-dense"
+   ],
+   "industries": [
+    "health-wellness",
+    "nonprofit-gov"
+   ],
+   "audience": [
+    "public"
+   ],
+   "host": "covid19.who.int",
+   "theme": "light",
+   "paletteKey": "4-7",
+   "fontPair": "ibm-plex-sans+ibm-plex-sans",
+   "imagery": "data"
+  },
+  {
+   "id": "dashboard-036",
+   "domain": "dashboard",
+   "title": "Bảng tổng quan tối giản: số lớn, thẻ mời và đường cong mảnh",
+   "moods": [
+    "clean-light",
+    "minimal-mono"
+   ],
+   "industries": [
+    "tech-saas"
+   ],
+   "audience": [
+    "b2b"
+   ],
+   "host": "keenthemes.com",
+   "theme": "light",
+   "paletteKey": "4-7",
+   "fontPair": "inter+inter",
+   "imagery": "data"
+  },
+  {
+   "id": "dashboard-039",
+   "domain": "dashboard",
+   "title": "Bảng quản trị xanh lam: băng chào mừng minh họa và thẻ biểu đồ",
+   "moods": [
+    "clean-light",
+    "playful",
+    "data-dense"
+   ],
+   "industries": [
+    "general",
+    "ecommerce"
+   ],
+   "audience": [
+    "internal"
+   ],
+   "host": "ableproadmin.com",
+   "theme": "light",
+   "paletteKey": "4-8",
+   "fontPair": "inter+inter",
+   "imagery": "mixed"
+  },
+  {
+   "id": "dashboard-040",
+   "domain": "dashboard",
+   "title": "Bảng phân tích tím nhạt: thẻ gradient và vòng tiến độ",
+   "moods": [
+    "clean-light",
+    "playful",
+    "data-dense"
+   ],
+   "industries": [
+    "ecommerce",
+    "tech-saas"
+   ],
+   "audience": [
+    "internal",
+    "b2b"
+   ],
+   "host": "demos.pixinvent.com",
+   "theme": "light",
+   "paletteKey": "4-8",
+   "fontPair": "archivo+archivo",
+   "imagery": "data"
+  },
+  {
+   "id": "dashboard-041",
+   "domain": "dashboard",
+   "title": "Bảng dữ liệu tài chính phi tập trung: nền than, chữ đơn cách",
+   "moods": [
+    "dark-cinematic",
+    "data-dense",
+    "tech"
+   ],
+   "industries": [
+    "finance",
+    "tech-saas"
+   ],
+   "audience": [
+    "investors",
+    "developers"
+   ],
+   "host": "defillama.com",
+   "theme": "dark",
+   "paletteKey": "0-7",
+   "fontPair": "jetbrains-mono+inter",
+   "imagery": "data"
+  },
+  {
+   "id": "dashboard-043",
+   "domain": "dashboard",
+   "title": "Biểu đồ vốn hóa thị trường: đường xanh lá trên nền trắng, nhiều khung thời gian",
+   "moods": [
+    "clean-light",
+    "data-dense"
+   ],
+   "industries": [
+    "finance"
+   ],
+   "audience": [
+    "investors",
+    "consumer"
+   ],
+   "host": "coingecko.com",
+   "theme": "light",
+   "paletteKey": "4-3",
+   "fontPair": "inter+inter",
+   "imagery": "data"
+  },
+  {
+   "id": "doc-001",
+   "domain": "doc",
+   "title": "Bài dữ liệu khoa học: tiêu đề có chân, hộp tóm tắt và biểu đồ tương tác",
+   "moods": [
+    "editorial",
+    "data-dense",
+    "clean-light"
+   ],
+   "industries": [
+    "nonprofit-gov",
+    "education"
+   ],
+   "audience": [
+    "public",
+    "students"
+   ],
+   "host": "ourworldindata.org",
+   "theme": "light",
+   "paletteKey": "4-7",
+   "fontPair": "playfair-display+ibm-plex-sans",
+   "imagery": "data"
+  },
+  {
+   "id": "doc-004",
+   "domain": "doc",
+   "title": "Cẩm nang dịch vụ công: chữ lớn rõ ràng, liên kết xanh, hai cột",
+   "moods": [
+    "clean-light",
+    "swiss-precise"
+   ],
+   "industries": [
+    "nonprofit-gov"
+   ],
+   "audience": [
+    "public"
+   ],
+   "host": "gov.uk",
+   "theme": "light",
+   "paletteKey": "4-7",
+   "fontPair": "lexend+lexend",
+   "imagery": "type-only"
+  },
+  {
+   "id": "doc-005",
+   "domain": "doc",
+   "title": "Tài liệu kỹ thuật thanh toán: thanh bên trái, thẻ hướng dẫn gọn",
+   "moods": [
+    "clean-light",
+    "tech",
+    "minimal-mono"
+   ],
+   "industries": [
+    "finance",
+    "tech-saas"
+   ],
+   "audience": [
+    "developers"
+   ],
+   "host": "docs.stripe.com",
+   "theme": "light",
+   "paletteKey": "4-8",
+   "fontPair": "inter+inter",
+   "imagery": "illustration"
+  },
+  {
+   "id": "doc-006",
+   "domain": "doc",
+   "title": "Tài liệu lập trình nền tối: khối mã nổi, chữ xám nhạt",
+   "moods": [
+    "dark-cinematic",
+    "tech",
+    "minimal-mono"
+   ],
+   "industries": [
+    "tech-saas"
+   ],
+   "audience": [
+    "developers"
+   ],
+   "host": "tailwindcss.com",
+   "theme": "dark",
+   "paletteKey": "0-7",
+   "fontPair": "inter+inter",
+   "imagery": "type-only"
+  },
+  {
+   "id": "doc-007",
+   "domain": "doc",
+   "title": "Bản tuyên ngôn làm việc: cột chữ hẹp trên nền đen, tiêu đề có chân",
+   "moods": [
+    "dark-cinematic",
+    "editorial",
+    "minimal-mono"
+   ],
+   "industries": [
+    "tech-saas",
+    "consulting"
+   ],
+   "audience": [
+    "b2b"
+   ],
+   "host": "linear.app",
+   "theme": "dark",
+   "paletteKey": "0-n",
+   "fontPair": "fraunces+inter",
+   "imagery": "type-only"
+  },
+  {
+   "id": "doc-008",
+   "domain": "doc",
+   "title": "Tài liệu hệ thiết kế: khối hình cam và tím lớn, chữ tròn",
+   "moods": [
+    "playful",
+    "bold-color",
+    "clean-light"
+   ],
+   "industries": [
+    "tech-saas"
+   ],
+   "audience": [
+    "developers",
+    "b2b"
+   ],
+   "host": "m3.material.io",
+   "theme": "light",
+   "paletteKey": "4-8",
+   "fontPair": "plus-jakarta-sans+plus-jakarta-sans",
+   "imagery": "illustration"
+  },
+  {
+   "id": "doc-009",
+   "domain": "doc",
+   "title": "Hệ thiết kế doanh nghiệp: nền xanh trời, chữ có chân lớn, lưới vuông",
+   "moods": [
+    "swiss-precise",
+    "clean-light",
+    "tech"
+   ],
+   "industries": [
+    "industrial-b2b",
+    "tech-saas"
+   ],
+   "audience": [
+    "developers",
+    "b2b"
+   ],
+   "host": "carbondesignsystem.com",
+   "theme": "light",
+   "paletteKey": "3-7",
+   "fontPair": "source-serif-4+ibm-plex-sans",
+   "imagery": "illustration"
+  },
+  {
+   "id": "doc-010",
+   "domain": "doc",
+   "title": "Hướng dẫn màu của hệ thiết kế: bảng ô màu và giải thích ngắn",
+   "moods": [
+    "clean-light",
+    "swiss-precise",
+    "data-dense"
+   ],
+   "industries": [
+    "tech-saas"
+   ],
+   "audience": [
+    "developers"
+   ],
+   "host": "atlassian.design",
+   "theme": "light",
+   "paletteKey": "4-7",
+   "fontPair": "inter+inter",
+   "imagery": "data"
+  },
+  {
+   "id": "doc-011",
+   "domain": "doc",
+   "title": "Báo cáo quỹ từ thiện: ảnh tư liệu gia đình lớn, chữ sans hẹp đậm",
+   "moods": [
+    "editorial",
+    "organic",
+    "warm-craft"
+   ],
+   "industries": [
+    "nonprofit-gov",
+    "health-wellness"
+   ],
+   "audience": [
+    "public"
+   ],
+   "host": "gatesfoundation.org",
+   "theme": "light",
+   "paletteKey": "4-1",
+   "fontPair": "archivo+ibm-plex-sans",
+   "imagery": "photo"
+  },
+  {
+   "id": "doc-012",
+   "domain": "doc",
+   "title": "Viện nghiên cứu: lưới bài dày đặc, tiêu đề có chân đậm, bản đồ nhỏ",
+   "moods": [
+    "editorial",
+    "data-dense",
+    "clean-light"
+   ],
+   "industries": [
+    "media-publishing",
+    "nonprofit-gov"
+   ],
+   "audience": [
+    "public"
+   ],
+   "host": "pewresearch.org",
+   "theme": "light",
+   "paletteKey": "4-7",
+   "fontPair": "playfair-display+archivo",
+   "imagery": "mixed"
+  },
+  {
+   "id": "doc-013",
+   "domain": "doc",
+   "title": "Tạp chí công nghệ nền đen: ảnh minh hoạ xanh ngọc, tiêu đề có chân trắng",
+   "moods": [
+    "dark-cinematic",
+    "editorial",
+    "tech"
+   ],
+   "industries": [
+    "media-publishing",
+    "ai"
+   ],
+   "audience": [
+    "developers",
+    "b2b"
+   ],
+   "host": "every.to",
+   "theme": "dark",
+   "paletteKey": "0-6",
+   "fontPair": "source-serif-4+source-serif-4",
+   "imagery": "mixed"
+  },
+  {
+   "id": "doc-014",
+   "domain": "doc",
+   "title": "Báo điện tử tiếng Việt: lưới tin trắng, tiêu đề có chân, ảnh lớn đầu trang",
+   "moods": [
+    "editorial",
+    "data-dense"
+   ],
+   "industries": [
+    "media-publishing"
+   ],
+   "audience": [
+    "public"
+   ],
+   "host": "vnexpress.net",
+   "theme": "light",
+   "paletteKey": "4-0",
+   "fontPair": "source-serif-4+archivo",
+   "imagery": "photo"
+  },
+  {
+   "id": "doc-015",
+   "domain": "doc",
+   "title": "Báo điện tử Việt: thanh đỏ đậm, tin xếp lưới với ảnh vuông",
+   "moods": [
+    "energetic",
+    "data-dense",
+    "editorial"
+   ],
+   "industries": [
+    "media-publishing"
+   ],
+   "audience": [
+    "public"
+   ],
+   "host": "tuoitre.vn",
+   "theme": "light",
+   "paletteKey": "4-0",
+   "fontPair": "be-vietnam-pro+be-vietnam-pro",
+   "imagery": "photo"
+  },
+  {
+   "id": "doc-017",
+   "domain": "doc",
+   "title": "Báo cáo chỉ số AI: trang thư mở đầu, khối chữ thân rộng, lề lớn",
+   "moods": [
+    "clean-light",
+    "editorial",
+    "swiss-precise"
+   ],
+   "industries": [
+    "education",
+    "ai"
+   ],
+   "audience": [
+    "public",
+    "b2b"
+   ],
+   "host": "hai.stanford.edu",
+   "theme": "light",
+   "paletteKey": "4-7",
+   "fontPair": "archivo+archivo",
+   "imagery": "type-only"
+  },
+  {
+   "id": "doc-018",
+   "domain": "doc",
+   "title": "Báo cáo chỉ số AI: trang biểu đồ thanh ngang có nguồn, lưới hai cột",
+   "moods": [
+    "data-dense",
+    "clean-light",
+    "swiss-precise"
+   ],
+   "industries": [
+    "education",
+    "ai"
+   ],
+   "audience": [
+    "public",
+    "b2b"
+   ],
+   "host": "hai.stanford.edu",
+   "theme": "light",
+   "paletteKey": "4-7",
+   "fontPair": "archivo+archivo",
+   "imagery": "data"
+  },
+  {
+   "id": "doc-019",
+   "domain": "doc",
+   "title": "Bìa báo cáo thường niên Việt: chữ hoa đặc khối xanh lam và sọc ngang",
+   "moods": [
+    "bold-color",
+    "swiss-precise",
+    "energetic"
+   ],
+   "industries": [
+    "food-beverage",
+    "finance"
+   ],
+   "audience": [
+    "investors",
+    "public"
+   ],
+   "host": "vinamilk.com.vn",
+   "theme": "light",
+   "paletteKey": "4-8",
+   "fontPair": "anton+be-vietnam-pro",
+   "imagery": "type-only"
+  },
+  {
+   "id": "doc-020",
+   "domain": "doc",
+   "title": "Trang số liệu báo cáo thường niên Việt: bảng kem, biểu đồ tròn xanh",
+   "moods": [
+    "data-dense",
+    "clean-light"
+   ],
+   "industries": [
+    "food-beverage",
+    "finance"
+   ],
+   "audience": [
+    "investors"
+   ],
+   "host": "vinamilk.com.vn",
+   "theme": "light",
+   "paletteKey": "4-8",
+   "fontPair": "be-vietnam-pro+be-vietnam-pro",
+   "imagery": "data"
+  },
+  {
+   "id": "doc-022",
+   "domain": "doc",
+   "title": "Tài liệu kỹ thuật nền đen tuyền: chữ xám trắng, khối mã viền mảnh, chấm xanh lục",
+   "moods": [
+    "dark-cinematic",
+    "tech",
+    "minimal-mono"
+   ],
+   "industries": [
+    "tech-saas",
+    "ai"
+   ],
+   "audience": [
+    "developers"
+   ],
+   "host": "vercel.com",
+   "theme": "dark",
+   "paletteKey": "0-7",
+   "fontPair": "inter+inter",
+   "imagery": "type-only"
+  },
+  {
+   "id": "doc-023",
+   "domain": "doc",
+   "title": "Bài phân tích dữ liệu kể chuyện: nền vàng nắng, tiêu đề chữ hoa dày viền đen bóng xanh",
+   "moods": [
+    "playful",
+    "bold-color",
+    "editorial"
+   ],
+   "industries": [
+    "media-publishing",
+    "education"
+   ],
+   "audience": [
+    "public",
+    "families"
+   ],
+   "host": "pudding.cool",
+   "theme": "light",
+   "paletteKey": "3-7",
+   "fontPair": "unbounded+lexend",
+   "imagery": "illustration"
+  },
+  {
+   "id": "doc-026",
+   "domain": "doc",
+   "title": "Tài liệu kỹ thuật ba cột: thanh mục lục trái, liên kết xanh gạch chân, chữ đen rõ",
+   "moods": [
+    "clean-light",
+    "swiss-precise",
+    "tech"
+   ],
+   "industries": [
+    "education",
+    "tech-saas"
+   ],
+   "audience": [
+    "developers",
+    "students"
+   ],
+   "host": "developer.mozilla.org",
+   "theme": "light",
+   "paletteKey": "4-7",
+   "fontPair": "inter+inter",
+   "imagery": "type-only"
+  },
+  {
+   "id": "email-002",
+   "domain": "email",
+   "title": "Thư khuyến mãi đèn thiết kế: ảnh sản phẩm trên nền trắng, chữ hoa mảnh",
+   "moods": [
+    "luxury",
+    "minimal-mono",
+    "clean-light"
+   ],
+   "industries": [
+    "real-estate-interior",
+    "ecommerce"
+   ],
+   "audience": [
+    "premium"
+   ],
+   "host": "reallygoodemails.com",
+   "theme": "light",
+   "paletteKey": "4-1",
+   "fontPair": "archivo+archivo",
+   "imagery": "photo"
+  },
+  {
+   "id": "email-003",
+   "domain": "email",
+   "title": "Thư chuỗi hòa nhạc ngoài trời: vàng chanh trên nền nâu đen, chữ in cổ điển",
+   "moods": [
+    "retro-print",
+    "dark-cinematic",
+    "energetic"
+   ],
+   "industries": [
+    "events",
+    "culture-music"
+   ],
+   "audience": [
+    "youth",
+    "consumer"
+   ],
+   "host": "reallygoodemails.com",
+   "theme": "dark",
+   "paletteKey": "1-2",
+   "fontPair": "playfair-display+source-serif-4",
+   "imagery": "photo"
+  },
+  {
+   "id": "email-004",
+   "domain": "email",
+   "title": "Thư ra mắt API nền tối: đoạn mã làm hình chính",
+   "moods": [
+    "dark-cinematic",
+    "tech",
+    "minimal-mono"
+   ],
+   "industries": [
+    "ai",
+    "tech-saas"
+   ],
+   "audience": [
+    "developers"
+   ],
+   "host": "reallygoodemails.com",
+   "theme": "dark",
+   "paletteKey": "0-7",
+   "fontPair": "plus-jakarta-sans+plus-jakarta-sans",
+   "imagery": "type-only"
+  },
+  {
+   "id": "email-006",
+   "domain": "email",
+   "title": "Thư triển lãm nghệ thuật đường phố: băng cam, chữ có chân, ảnh tường màu",
+   "moods": [
+    "bold-color",
+    "editorial",
+    "energetic"
+   ],
+   "industries": [
+    "events",
+    "culture-music"
+   ],
+   "audience": [
+    "youth",
+    "public"
+   ],
+   "host": "raw.githubusercontent.com",
+   "theme": "light",
+   "paletteKey": "4-0",
+   "fontPair": "source-serif-4+ibm-plex-sans",
+   "imagery": "photo"
+  },
+  {
+   "id": "email-007",
+   "domain": "email",
+   "title": "Thư bán vé hòa nhạc: ảnh nghệ sĩ sân khấu tối và băng vàng",
+   "moods": [
+    "dark-cinematic",
+    "energetic",
+    "bold-color"
+   ],
+   "industries": [
+    "events",
+    "culture-music"
+   ],
+   "audience": [
+    "youth",
+    "consumer"
+   ],
+   "host": "raw.githubusercontent.com",
+   "theme": "light",
+   "paletteKey": "4-1",
+   "fontPair": "oswald+archivo",
+   "imagery": "photo"
+  },
+  {
+   "id": "email-008",
+   "domain": "email",
+   "title": "Bản tin công nghệ: thẻ trắng bo tròn, ảnh máy tính tông lạnh",
+   "moods": [
+    "clean-light",
+    "tech"
+   ],
+   "industries": [
+    "media-publishing",
+    "tech-saas"
+   ],
+   "audience": [
+    "consumer",
+    "developers"
+   ],
+   "host": "raw.githubusercontent.com",
+   "theme": "light",
+   "paletteKey": "4-6",
+   "fontPair": "ibm-plex-sans+ibm-plex-sans",
+   "imagery": "photo"
+  },
+  {
+   "id": "email-013",
+   "domain": "email",
+   "title": "Thư thời trang mùa lễ: nền xanh bạc hà, ảnh sản phẩm cắt nền",
+   "moods": [
+    "playful",
+    "bold-color",
+    "clean-light"
+   ],
+   "industries": [
+    "fashion-beauty",
+    "ecommerce"
+   ],
+   "audience": [
+    "youth",
+    "consumer"
+   ],
+   "host": "unlayer.com",
+   "theme": "light",
+   "paletteKey": "3-1",
+   "fontPair": "montserrat+montserrat",
+   "imagery": "photo"
+  },
+  {
+   "id": "email-014",
+   "domain": "email",
+   "title": "Thư giới thiệu ứng dụng: ảnh điện thoại xen kẽ chữ, băng xanh đậm",
+   "moods": [
+    "clean-light",
+    "tech"
+   ],
+   "industries": [
+    "tech-saas",
+    "education"
+   ],
+   "audience": [
+    "consumer",
+    "students"
+   ],
+   "host": "unlayer.com",
+   "theme": "light",
+   "paletteKey": "4-7",
+   "fontPair": "source-serif-4+lexend",
+   "imagery": "mixed"
+  },
+  {
+   "id": "email-016",
+   "domain": "email",
+   "title": "Thư lễ hội nền tối: chữ trắng, khối ô liu và đỏ",
+   "moods": [
+    "dark-cinematic",
+    "warm-craft"
+   ],
+   "industries": [
+    "ecommerce",
+    "events"
+   ],
+   "audience": [
+    "consumer",
+    "families"
+   ],
+   "host": "unlayer.com",
+   "theme": "dark",
+   "paletteKey": "1-2",
+   "fontPair": "archivo+archivo",
+   "imagery": "photo"
+  },
+  {
+   "id": "email-017",
+   "domain": "email",
+   "title": "Thư du lịch dịp lễ tình nhân: ảnh hồng phấn và lưới điểm đến",
+   "moods": [
+    "playful",
+    "clean-light",
+    "organic"
+   ],
+   "industries": [
+    "hospitality-travel"
+   ],
+   "audience": [
+    "consumer"
+   ],
+   "host": "stripo.email",
+   "theme": "light",
+   "paletteKey": "4-11",
+   "fontPair": "playfair-display+plus-jakarta-sans",
+   "imagery": "photo"
+  },
+  {
+   "id": "email-018",
+   "domain": "email",
+   "title": "Thư ẩm thực cuối tuần: ảnh món ăn tông nâu, thẻ trắng gọn",
+   "moods": [
+    "warm-craft",
+    "clean-light"
+   ],
+   "industries": [
+    "food-beverage",
+    "hospitality-travel"
+   ],
+   "audience": [
+    "consumer",
+    "families"
+   ],
+   "host": "stripo.email",
+   "theme": "light",
+   "paletteKey": "4-1",
+   "fontPair": "fraunces+ibm-plex-sans",
+   "imagery": "photo"
+  },
+  {
+   "id": "email-019",
+   "domain": "email",
+   "title": "Thư mỹ phẩm: ảnh chân dung đỏ, lưới sản phẩm ba cột",
+   "moods": [
+    "bold-color",
+    "clean-light"
+   ],
+   "industries": [
+    "fashion-beauty",
+    "ecommerce"
+   ],
+   "audience": [
+    "consumer"
+   ],
+   "host": "stripo.email",
+   "theme": "light",
+   "paletteKey": "4-0",
+   "fontPair": "montserrat+montserrat",
+   "imagery": "photo"
+  },
+  {
+   "id": "email-026",
+   "domain": "email",
+   "title": "Thư thời trang dạng tạp chí: ảnh đường phố cao, chữ có chân lớn giữa thư",
+   "moods": [
+    "editorial",
+    "minimal-mono",
+    "clean-light"
+   ],
+   "industries": [
+    "fashion-beauty",
+    "ecommerce"
+   ],
+   "audience": [
+    "youth",
+    "consumer"
+   ],
+   "host": "tabular.email",
+   "theme": "light",
+   "paletteKey": "4-n",
+   "fontPair": "archivo+archivo",
+   "imagery": "photo"
+  },
+  {
+   "id": "email-027",
+   "domain": "email",
+   "title": "Thư chào mừng: ảnh phong cảnh núi đầu thư, khối xanh đêm, chữ nghiêng vàng",
+   "moods": [
+    "organic",
+    "editorial",
+    "warm-craft"
+   ],
+   "industries": [
+    "hospitality-travel",
+    "general"
+   ],
+   "audience": [
+    "consumer",
+    "internal"
+   ],
+   "host": "tabular.email",
+   "theme": "dark",
+   "paletteKey": "1-1",
+   "fontPair": "fraunces+plus-jakarta-sans",
+   "imagery": "photo"
+  },
+  {
+   "id": "email-028",
+   "domain": "email",
+   "title": "Thư khuyến mãi mùa đông: thẻ trắng nổi trên nền than, ảnh chân dung ấm",
+   "moods": [
+    "dark-cinematic",
+    "minimal-mono",
+    "editorial"
+   ],
+   "industries": [
+    "ecommerce",
+    "general"
+   ],
+   "audience": [
+    "consumer"
+   ],
+   "host": "tabular.b-cdn.net",
+   "theme": "dark",
+   "paletteKey": "1-n",
+   "fontPair": "plus-jakarta-sans+plus-jakarta-sans",
+   "imagery": "photo"
+  },
+  {
+   "id": "email-029",
+   "domain": "email",
+   "title": "Thư dịch vụ phần mềm nền tím đêm: tiêu đề lớn căn giữa, thẻ danh sách viền mảnh",
+   "moods": [
+    "dark-cinematic",
+    "tech",
+    "clean-light"
+   ],
+   "industries": [
+    "tech-saas"
+   ],
+   "audience": [
+    "b2b",
+    "consumer"
+   ],
+   "host": "designmodo.com",
+   "theme": "dark",
+   "paletteKey": "1-8",
+   "fontPair": "plus-jakarta-sans+plus-jakarta-sans",
+   "imagery": "type-only"
+  },
+  {
+   "id": "email-030",
+   "domain": "email",
+   "title": "Thư ra mắt sản phẩm nền đen: ảnh xe đạp trắng đen, chữ trắng đậm, một từ màu cam",
+   "moods": [
+    "dark-cinematic",
+    "energetic",
+    "minimal-mono"
+   ],
+   "industries": [
+    "sports",
+    "ecommerce"
+   ],
+   "audience": [
+    "consumer",
+    "youth"
+   ],
+   "host": "designmodo.com",
+   "theme": "dark",
+   "paletteKey": "0-1",
+   "fontPair": "montserrat+montserrat",
+   "imagery": "photo"
+  },
+  {
+   "id": "email-031",
+   "domain": "email",
+   "title": "Thư đồ uống nền xanh rêu: tiêu đề kem lớn, hai ảnh ly matcha cạnh nhau",
+   "moods": [
+    "organic",
+    "warm-craft",
+    "clean-light"
+   ],
+   "industries": [
+    "food-beverage"
+   ],
+   "audience": [
+    "consumer"
+   ],
+   "host": "designmodo.com",
+   "theme": "dark",
+   "paletteKey": "1-2",
+   "fontPair": "be-vietnam-pro+be-vietnam-pro",
+   "imagery": "photo"
+  },
+  {
+   "id": "email-032",
+   "domain": "email",
+   "title": "Thư thời trang hồng đào: ảnh cắt nền xen chữ có chân, nút cam nhỏ",
+   "moods": [
+    "playful",
+    "warm-craft",
+    "clean-light"
+   ],
+   "industries": [
+    "fashion-beauty",
+    "ecommerce"
+   ],
+   "audience": [
+    "youth",
+    "consumer"
+   ],
+   "host": "topol.io",
+   "theme": "light",
+   "paletteKey": "4-0",
+   "fontPair": "source-serif-4+source-serif-4",
+   "imagery": "photo"
+  },
+  {
+   "id": "email-033",
+   "domain": "email",
+   "title": "Thư lễ hội nền xanh đêm: ảnh bí ngô cam, khối ưu đãi viền cam, chữ hoa đậm",
+   "moods": [
+    "energetic",
+    "bold-color",
+    "dark-cinematic"
+   ],
+   "industries": [
+    "ecommerce",
+    "events"
+   ],
+   "audience": [
+    "consumer"
+   ],
+   "host": "topol.io",
+   "theme": "dark",
+   "paletteKey": "0-1",
+   "fontPair": "anton+ibm-plex-sans",
+   "imagery": "photo"
+  },
+  {
+   "id": "poster-001",
+   "domain": "poster",
+   "title": "Poster hòa nhạc in lụa thập niên 1930: chữ chéo trên cây đàn piano đỏ",
+   "moods": [
+    "retro-print",
+    "bold-color",
+    "editorial"
+   ],
+   "industries": [
+    "culture-music",
+    "events"
+   ],
+   "audience": [
+    "public"
+   ],
+   "host": "loc.gov",
+   "theme": "dark",
+   "paletteKey": "1-0",
+   "fontPair": "oswald+archivo",
+   "imagery": "illustration"
+  },
+  {
+   "id": "poster-002",
+   "domain": "poster",
+   "title": "Poster sân khấu tân nghệ thuật: chân dung dài, khung hoa văn mảnh",
+   "moods": [
+    "luxury",
+    "organic",
+    "editorial"
+   ],
+   "industries": [
+    "culture-music",
+    "events"
+   ],
+   "audience": [
+    "premium",
+    "public"
+   ],
+   "host": "loc.gov",
+   "theme": "light",
+   "paletteKey": "3-1",
+   "fontPair": "cormorant-garamond+cormorant-garamond",
+   "imagery": "illustration"
+  },
+  {
+   "id": "poster-003",
+   "domain": "poster",
+   "title": "Poster jazz chữ chồng lớp: tên nghệ sĩ đỏ đè lên nhau trên nền xanh",
+   "moods": [
+    "bold-color",
+    "energetic",
+    "swiss-precise"
+   ],
+   "industries": [
+    "culture-music",
+    "events"
+   ],
+   "audience": [
+    "youth",
+    "public"
+   ],
+   "host": "emuseum.ch",
+   "theme": "dark",
+   "paletteKey": "1-2",
+   "fontPair": "archivo+archivo",
+   "imagery": "type-only"
+  },
+  {
+   "id": "poster-005",
+   "domain": "poster",
+   "title": "Poster lễ hội jazz nền đen: nét vẽ neon nhiều màu như âm thanh",
+   "moods": [
+    "dark-cinematic",
+    "energetic",
+    "bold-color"
+   ],
+   "industries": [
+    "culture-music",
+    "events"
+   ],
+   "audience": [
+    "youth",
+    "public"
+   ],
+   "host": "emuseum.ch",
+   "theme": "dark",
+   "paletteKey": "0-6",
+   "fontPair": "oswald+archivo",
+   "imagery": "illustration"
+  },
+  {
+   "id": "poster-006",
+   "domain": "poster",
+   "title": "Poster nữ nghệ sĩ jazz: mảng màu phẳng xanh lơ và hồng đậm",
+   "moods": [
+    "bold-color",
+    "playful",
+    "retro-print"
+   ],
+   "industries": [
+    "culture-music",
+    "events"
+   ],
+   "audience": [
+    "youth",
+    "public"
+   ],
+   "host": "emuseum.ch",
+   "theme": "light",
+   "paletteKey": "3-11",
+   "fontPair": "bricolage-grotesque+oswald",
+   "imagery": "illustration"
+  },
+  {
+   "id": "poster-008",
+   "domain": "poster",
+   "title": "Tranh cổ động Việt Nam: đôi trai gái miền núi, chữ hoa dưới chân",
+   "moods": [
+    "retro-print",
+    "warm-craft",
+    "organic"
+   ],
+   "industries": [
+    "nonprofit-gov",
+    "culture-music"
+   ],
+   "audience": [
+    "public"
+   ],
+   "host": "dogmacollection.com",
+   "theme": "light",
+   "paletteKey": "3-1",
+   "fontPair": "oswald+be-vietnam-pro",
+   "imagery": "illustration"
+  },
+  {
+   "id": "poster-009",
+   "domain": "poster",
+   "title": "Tranh màu nước Việt Nam: người gặt lúa trên cánh đồng vàng",
+   "moods": [
+    "organic",
+    "warm-craft"
+   ],
+   "industries": [
+    "culture-music",
+    "crafts-artisan"
+   ],
+   "audience": [
+    "public"
+   ],
+   "host": "dogmacollection.com",
+   "theme": "light",
+   "paletteKey": "3-2",
+   "fontPair": "cormorant-garamond+be-vietnam-pro",
+   "imagery": "illustration"
+  },
+  {
+   "id": "poster-011",
+   "domain": "poster",
+   "title": "Poster du lịch Art Deco: núi lúc hoàng hôn, chữ hoa giãn ở chân",
+   "moods": [
+    "retro-print",
+    "luxury",
+    "organic"
+   ],
+   "industries": [
+    "hospitality-travel"
+   ],
+   "audience": [
+    "premium",
+    "public"
+   ],
+   "host": "internationalposter.com",
+   "theme": "light",
+   "paletteKey": "2-1",
+   "fontPair": "cormorant-garamond+cormorant-garamond",
+   "imagery": "illustration"
+  },
+  {
+   "id": "poster-012",
+   "domain": "poster",
+   "title": "Poster quảng cáo cổ điển: nhân vật vác thùng gỗ trên nền đen",
+   "moods": [
+    "retro-print",
+    "playful",
+    "bold-color"
+   ],
+   "industries": [
+    "food-beverage"
+   ],
+   "audience": [
+    "consumer"
+   ],
+   "host": "internationalposter.com",
+   "theme": "dark",
+   "paletteKey": "0-1",
+   "fontPair": "oswald+oswald",
+   "imagery": "illustration"
+  },
+  {
+   "id": "poster-023",
+   "domain": "poster",
+   "title": "Poster triển lãm chữ khối vuông đen trên giấy ngà, chữ xếp kín khung và xoay dọc ở mép",
+   "moods": [
+    "retro-print",
+    "minimal-mono",
+    "swiss-precise"
+   ],
+   "industries": [
+    "culture-music",
+    "events"
+   ],
+   "audience": [
+    "public"
+   ],
+   "host": "commons.wikimedia.org",
+   "theme": "light",
+   "paletteKey": "3-1",
+   "fontPair": "anton+oswald",
+   "imagery": "type-only"
+  },
+  {
+   "id": "poster-024",
+   "domain": "poster",
+   "title": "Poster ý tưởng xã hội: bóng thoại trắng quấn dây thép gai trên nền đỏ",
+   "moods": [
+    "bold-color",
+    "minimal-mono",
+    "editorial"
+   ],
+   "industries": [
+    "nonprofit-gov"
+   ],
+   "audience": [
+    "public"
+   ],
+   "host": "posterfortomorrow.org",
+   "theme": "light",
+   "paletteKey": "2-n",
+   "fontPair": "archivo+archivo",
+   "imagery": "illustration"
+  },
+  {
+   "id": "poster-025",
+   "domain": "poster",
+   "title": "Poster chữ mảnh trên nền xám than: biểu tượng nét và tiêu đề bốn dòng",
+   "moods": [
+    "minimal-mono",
+    "swiss-precise"
+   ],
+   "industries": [
+    "education",
+    "nonprofit-gov"
+   ],
+   "audience": [
+    "public",
+    "students"
+   ],
+   "host": "posterfortomorrow.org",
+   "theme": "dark",
+   "paletteKey": "1-0",
+   "fontPair": "lexend+lexend",
+   "imagery": "type-only"
+  },
+  {
+   "id": "poster-027",
+   "domain": "poster",
+   "title": "Poster liên hoan phim tối: ảnh nhoè xám chiếm cả khung, chữ trắng méo ở chân",
+   "moods": [
+    "dark-cinematic",
+    "minimal-mono",
+    "editorial"
+   ],
+   "industries": [
+    "culture-music",
+    "events"
+   ],
+   "audience": [
+    "youth",
+    "public"
+   ],
+   "host": "100-beste-plakate.de",
+   "theme": "dark",
+   "paletteKey": "1-n",
+   "fontPair": "space-grotesk+space-grotesk",
+   "imagery": "photo"
+  },
+  {
+   "id": "poster-028",
+   "domain": "poster",
+   "title": "Poster lễ hội âm nhạc: chữ xanh lam dày đặc nửa trên, khối 3D xanh chanh nửa dưới",
+   "moods": [
+    "bold-color",
+    "playful",
+    "swiss-precise"
+   ],
+   "industries": [
+    "culture-music",
+    "events"
+   ],
+   "audience": [
+    "youth",
+    "public"
+   ],
+   "host": "100-beste-plakate.de",
+   "theme": "light",
+   "paletteKey": "4-4",
+   "fontPair": "archivo+archivo",
+   "imagery": "3d"
+  },
+  {
+   "id": "poster-029",
+   "domain": "poster",
+   "title": "Poster văn hoá màu chói: chữ K khổng lồ đỏ trên nền vàng, chữ dọc tím hồng",
+   "moods": [
+    "bold-color",
+    "playful",
+    "energetic"
+   ],
+   "industries": [
+    "culture-music",
+    "events"
+   ],
+   "audience": [
+    "youth",
+    "public"
+   ],
+   "host": "100-beste-plakate.de",
+   "theme": "light",
+   "paletteKey": "2-0",
+   "fontPair": "unbounded+lexend",
+   "imagery": "illustration"
+  },
+  {
+   "id": "poster-030",
+   "domain": "poster",
+   "title": "Poster ý tưởng xã hội nền than: chữ hoa nhỏ góc trái, đàn chim trắng bay chéo",
+   "moods": [
+    "minimal-mono",
+    "dark-cinematic",
+    "editorial"
+   ],
+   "industries": [
+    "nonprofit-gov",
+    "general"
+   ],
+   "audience": [
+    "public"
+   ],
+   "host": "posterheroes.org",
+   "theme": "dark",
+   "paletteKey": "1-1",
+   "fontPair": "oswald+oswald",
+   "imagery": "illustration"
+  },
+  {
+   "id": "poster-031",
+   "domain": "poster",
+   "title": "Poster đỏ tối giản: hai khối isometric, hình người nhỏ và chữ hoa trắng lớn",
+   "moods": [
+    "bold-color",
+    "minimal-mono",
+    "swiss-precise"
+   ],
+   "industries": [
+    "nonprofit-gov",
+    "culture-music"
+   ],
+   "audience": [
+    "public",
+    "youth"
+   ],
+   "host": "posterheroes.org",
+   "theme": "light",
+   "paletteKey": "2-n",
+   "fontPair": "archivo+inter",
+   "imagery": "illustration"
+  },
+  {
+   "id": "poster-032",
+   "domain": "poster",
+   "title": "Poster ý tưởng xã hội: tay cầm dao kéo trên đĩa chuối, chữ hoa nhuộm xanh ngọc",
+   "moods": [
+    "bold-color",
+    "retro-print",
+    "playful"
+   ],
+   "industries": [
+    "food-beverage",
+    "nonprofit-gov"
+   ],
+   "audience": [
+    "public"
+   ],
+   "host": "posterheroes.org",
+   "theme": "light",
+   "paletteKey": "2-2",
+   "fontPair": "oswald+montserrat",
+   "imagery": "illustration"
+  },
+  {
+   "id": "poster-036",
+   "domain": "poster",
+   "title": "Poster du lịch thập niên 1930: tượng đá đen in bóng trên hoàng hôn cam",
+   "moods": [
+    "retro-print",
+    "dark-cinematic",
+    "editorial"
+   ],
+   "industries": [
+    "hospitality-travel",
+    "culture-music"
+   ],
+   "audience": [
+    "public",
+    "premium"
+   ],
+   "host": "posterhouse.org",
+   "theme": "dark",
+   "paletteKey": "0-1",
+   "fontPair": "cormorant-garamond+source-serif-4",
+   "imagery": "illustration"
+  },
+  {
+   "id": "poster-037",
+   "domain": "poster",
+   "title": "Poster khoa học viễn tưởng: tên lửa bay chéo trên bầu trời xanh đêm, chữ viết tay vàng",
+   "moods": [
+    "retro-print",
+    "dark-cinematic",
+    "tech"
+   ],
+   "industries": [
+    "education",
+    "nonprofit-gov"
+   ],
+   "audience": [
+    "public",
+    "youth"
+   ],
+   "host": "posterhouse.org",
+   "theme": "dark",
+   "paletteKey": "1-2",
+   "fontPair": "oswald+oswald",
+   "imagery": "illustration"
+  },
+  {
+   "id": "poster-038",
+   "domain": "poster",
+   "title": "Poster in đá cổ điển: dáng người váy trắng, nét viền đen, chữ tên tay dọc đầu",
+   "moods": [
+    "retro-print",
+    "editorial",
+    "organic"
+   ],
+   "industries": [
+    "culture-music",
+    "events"
+   ],
+   "audience": [
+    "public",
+    "premium"
+   ],
+   "host": "clevelandart.org",
+   "theme": "light",
+   "paletteKey": "3-7",
+   "fontPair": "fraunces+source-serif-4",
+   "imagery": "illustration"
+  },
+  {
+   "id": "poster-039",
+   "domain": "poster",
+   "title": "Poster tạp chí in đá: chữ to vẽ tay trên nền nâu, nhóm người đọc báo",
+   "moods": [
+    "retro-print",
+    "editorial",
+    "warm-craft"
+   ],
+   "industries": [
+    "media-publishing",
+    "culture-music"
+   ],
+   "audience": [
+    "public"
+   ],
+   "host": "clevelandart.org",
+   "theme": "dark",
+   "paletteKey": "1-1",
+   "fontPair": "bricolage-grotesque+source-serif-4",
+   "imagery": "illustration"
+  },
+  {
+   "id": "poster-040",
+   "domain": "poster",
+   "title": "Poster triển lãm chữ: nét cọ đen phóng khoáng trên nền trắng, đường tròn mảnh",
+   "moods": [
+    "minimal-mono",
+    "editorial",
+    "energetic"
+   ],
+   "industries": [
+    "culture-music",
+    "events"
+   ],
+   "audience": [
+    "public",
+    "students"
+   ],
+   "host": "muis.ee",
+   "theme": "light",
+   "paletteKey": "4-n",
+   "fontPair": "bricolage-grotesque+ibm-plex-sans",
+   "imagery": "illustration"
+  },
+  {
+   "id": "poster-041",
+   "domain": "poster",
+   "title": "Poster triển lãm nền đen: ảnh người đội mũ bê giá vẽ, ba vệt màu nhỏ góc phải",
+   "moods": [
+    "dark-cinematic",
+    "editorial",
+    "retro-print"
+   ],
+   "industries": [
+    "culture-music",
+    "events"
+   ],
+   "audience": [
+    "public"
+   ],
+   "host": "muis.ee",
+   "theme": "dark",
+   "paletteKey": "0-0",
+   "fontPair": "oswald+archivo",
+   "imagery": "photo"
+  },
+  {
+   "id": "poster-044",
+   "domain": "poster",
+   "title": "Poster sân khấu in lụa: chữ cam khổng lồ uốn theo bánh xe đen, bánh răng xanh xám",
+   "moods": [
+    "retro-print",
+    "bold-color",
+    "energetic"
+   ],
+   "industries": [
+    "culture-music",
+    "events"
+   ],
+   "audience": [
+    "public"
+   ],
+   "host": "loc.gov",
+   "theme": "light",
+   "paletteKey": "4-1",
+   "fontPair": "anton+montserrat",
+   "imagery": "illustration"
+  },
+  {
+   "id": "slide-001",
+   "domain": "slide",
+   "title": "Bộ slide phân tích công nghệ: bìa đỏ san hô, biểu đồ tối giản nền trắng",
+   "moods": [
+    "minimal-mono",
+    "editorial",
+    "data-dense"
+   ],
+   "industries": [
+    "tech-saas",
+    "consulting"
+   ],
+   "audience": [
+    "investors",
+    "b2b"
+   ],
+   "host": "ben-evans.com",
+   "theme": "light",
+   "paletteKey": "4-0",
+   "fontPair": "source-serif-4+ibm-plex-sans",
+   "imagery": "data"
+  },
+  {
+   "id": "slide-007",
+   "domain": "slide",
+   "title": "Báo cáo tiền mã hóa: chữ điểm ảnh trên nền xanh bạc hà, biểu đồ kem",
+   "moods": [
+    "playful",
+    "bold-color",
+    "data-dense"
+   ],
+   "industries": [
+    "finance",
+    "tech-saas"
+   ],
+   "audience": [
+    "investors",
+    "developers"
+   ],
+   "host": "a16zcrypto.com",
+   "theme": "light",
+   "paletteKey": "4-5",
+   "fontPair": "archivo+archivo",
+   "imagery": "data"
+  },
+  {
+   "id": "slide-021",
+   "domain": "slide",
+   "title": "Bìa bộ slide nền đen: ảnh tháp nước trong khung bo tròn, chữ cong trắng đè ngang",
+   "moods": [
+    "dark-cinematic",
+    "bold-color",
+    "editorial"
+   ],
+   "industries": [
+    "real-estate-interior",
+    "culture-music"
+   ],
+   "audience": [
+    "b2b",
+    "youth"
+   ],
+   "host": "pitch.com",
+   "theme": "dark",
+   "paletteKey": "0-1",
+   "fontPair": "unbounded+space-grotesk",
+   "imagery": "photo"
+  },
+  {
+   "id": "slide-023",
+   "domain": "slide",
+   "title": "Bìa bộ slide khởi nghiệp: nền xanh trời, vật thể 3D trôi ở góc, chữ xanh đậm giữa",
+   "moods": [
+    "playful",
+    "tech",
+    "clean-light"
+   ],
+   "industries": [
+    "tech-saas",
+    "general"
+   ],
+   "audience": [
+    "investors",
+    "b2b"
+   ],
+   "host": "imgproxy.services.pitch.com",
+   "theme": "light",
+   "paletteKey": "3-9",
+   "fontPair": "plus-jakarta-sans+plus-jakarta-sans",
+   "imagery": "3d"
+  },
+  {
+   "id": "slide-038",
+   "domain": "slide",
+   "title": "Báo cáo xu hướng sáng tạo: tượng cổ đeo kính màu, ảnh cắt dán chói, chữ đen đậm",
+   "moods": [
+    "bold-color",
+    "playful",
+    "energetic"
+   ],
+   "industries": [
+    "media-publishing",
+    "tech-saas"
+   ],
+   "audience": [
+    "b2b",
+    "youth"
+   ],
+   "host": "business.adobe.com",
+   "theme": "light",
+   "paletteKey": "4-0",
+   "fontPair": "archivo+archivo",
+   "imagery": "mixed"
+  },
+  {
+   "id": "slide-039",
+   "domain": "slide",
+   "title": "Báo cáo xu hướng thiết kế nền đen: ảnh rêu nhiễu hạt, chữ xanh chanh nhạt",
+   "moods": [
+    "dark-cinematic",
+    "organic",
+    "editorial"
+   ],
+   "industries": [
+    "media-publishing",
+    "culture-music"
+   ],
+   "audience": [
+    "b2b",
+    "students"
+   ],
+   "host": "media.dandad.org",
+   "theme": "dark",
+   "paletteKey": "0-3",
+   "fontPair": "space-grotesk+space-grotesk",
+   "imagery": "photo"
+  },
+  {
+   "id": "slide-040",
+   "domain": "slide",
+   "title": "Báo cáo xu hướng mạng xã hội nền đen: mảng xanh ngọc chéo, ảnh nhóm bạn, đỏ hồng nóng",
+   "moods": [
+    "energetic",
+    "bold-color",
+    "dark-cinematic"
+   ],
+   "industries": [
+    "media-publishing",
+    "tech-saas"
+   ],
+   "audience": [
+    "youth",
+    "b2b"
+   ],
+   "host": "ads.tiktok.com",
+   "theme": "dark",
+   "paletteKey": "0-0",
+   "fontPair": "plus-jakarta-sans+plus-jakarta-sans",
+   "imagery": "photo"
+  },
+  {
+   "id": "slide-046",
+   "domain": "slide",
+   "title": "Bài nói hội nghị nền đen: chữ khối đậm trong dải trắng, sơ đồ hành trình nét mảnh",
+   "moods": [
+    "dark-cinematic",
+    "minimal-mono",
+    "editorial"
+   ],
+   "industries": [
+    "consulting",
+    "tech-saas"
+   ],
+   "audience": [
+    "b2b",
+    "public"
+   ],
+   "host": "speakerdeck.com",
+   "theme": "dark",
+   "paletteKey": "0-0",
+   "fontPair": "plus-jakarta-sans+ibm-plex-sans",
+   "imagery": "type-only"
+  },
+  {
+   "id": "slide-047",
+   "domain": "slide",
+   "title": "Bài nói thiết kế kiểu tạp chí: bìa gradient vàng cam, trang trong chữ có chân hai ngôn ngữ",
+   "moods": [
+    "editorial",
+    "clean-light",
+    "warm-craft"
+   ],
+   "industries": [
+    "consulting",
+    "education"
+   ],
+   "audience": [
+    "b2b",
+    "students"
+   ],
+   "host": "speakerdeck.com",
+   "theme": "light",
+   "paletteKey": "4-2",
+   "fontPair": "archivo+source-serif-4",
+   "imagery": "data"
+  },
+  {
+   "id": "slide-048",
+   "domain": "slide",
+   "title": "Bài nói về thiết kế slide: nền xanh lam đậm, chữ viết tay vàng và chữ có chân trắng",
+   "moods": [
+    "bold-color",
+    "playful",
+    "editorial"
+   ],
+   "industries": [
+    "education",
+    "media-publishing"
+   ],
+   "audience": [
+    "public",
+    "students"
+   ],
+   "host": "speakerdeck.com",
+   "theme": "light",
+   "paletteKey": "2-2",
+   "fontPair": "playfair-display+source-serif-4",
+   "imagery": "type-only"
+  },
+  {
+   "id": "slide-050",
+   "domain": "slide",
+   "title": "Bộ slide nhà đầu tư nền trắng: lưới ảnh đời sống khảm bên bìa, số đỏ lớn",
+   "moods": [
+    "clean-light",
+    "bold-color",
+    "editorial"
+   ],
+   "industries": [
+    "media-publishing",
+    "ecommerce"
+   ],
+   "audience": [
+    "investors",
+    "b2b"
+   ],
+   "host": "s204.q4cdn.com",
+   "theme": "light",
+   "paletteKey": "4-0",
+   "fontPair": "plus-jakarta-sans+plus-jakarta-sans",
+   "imagery": "photo"
+  },
+  {
+   "id": "slide-052",
+   "domain": "slide",
+   "title": "Bộ slide ngày nhà đầu tư nền đen: gradient xanh neon, ô chữ vàng chanh xếp lưới",
+   "moods": [
+    "tech",
+    "dark-cinematic",
+    "bold-color"
+   ],
+   "industries": [
+    "ecommerce",
+    "tech-saas"
+   ],
+   "audience": [
+    "investors",
+    "developers"
+   ],
+   "host": "s203.q4cdn.com",
+   "theme": "dark",
+   "paletteKey": "0-6",
+   "fontPair": "space-grotesk+ibm-plex-sans",
+   "imagery": "mixed"
+  },
+  {
+   "id": "slide-053",
+   "domain": "slide",
+   "title": "Bộ slide cổ đông: khối xanh lam và xanh bạc hà, chữ hoa đậm trong hai dải lệch",
+   "moods": [
+    "bold-color",
+    "playful",
+    "data-dense"
+   ],
+   "industries": [
+    "culture-music",
+    "media-publishing"
+   ],
+   "audience": [
+    "investors"
+   ],
+   "host": "s29.q4cdn.com",
+   "theme": "light",
+   "paletteKey": "4-5",
+   "fontPair": "plus-jakarta-sans+plus-jakarta-sans",
+   "imagery": "data"
+  },
+  {
+   "id": "slide-054",
+   "domain": "slide",
+   "title": "Bộ slide phân tích: bìa đỏ san hô, sơ đồ vòng tròn và chữ có chân nhỏ",
+   "moods": [
+    "editorial",
+    "minimal-mono",
+    "swiss-precise"
+   ],
+   "industries": [
+    "tech-saas",
+    "consulting"
+   ],
+   "audience": [
+    "b2b",
+    "investors"
+   ],
+   "host": "ben-evans.com",
+   "theme": "light",
+   "paletteKey": "4-0",
+   "fontPair": "source-serif-4+source-serif-4",
+   "imagery": "data"
+  },
+  {
+   "id": "slide-056",
+   "domain": "slide",
+   "title": "Bài nói hội nghị nền tối: chữ nhỏ giọt xanh axit trên ảnh tư liệu cũ",
+   "moods": [
+    "dark-cinematic",
+    "retro-print",
+    "playful"
+   ],
+   "industries": [
+    "tech-saas",
+    "media-publishing"
+   ],
+   "audience": [
+    "developers",
+    "public"
+   ],
+   "host": "idlewords.com",
+   "theme": "dark",
+   "paletteKey": "0-3",
+   "fontPair": "bricolage-grotesque+oswald",
+   "imagery": "photo"
+  },
+  {
+   "id": "slide-057",
+   "domain": "slide",
+   "title": "Bộ slide nhà đầu tư Đông Nam Á: nền xanh lá đậm, ảnh người giao hàng và cột số liệu sáng",
+   "moods": [
+    "bold-color",
+    "energetic",
+    "data-dense"
+   ],
+   "industries": [
+    "hospitality-travel",
+    "finance",
+    "ecommerce"
+   ],
+   "audience": [
+    "investors",
+    "b2b"
+   ],
+   "host": "s205.q4cdn.com",
+   "theme": "light",
+   "paletteKey": "1-5",
+   "fontPair": "lexend+lexend",
+   "imagery": "photo"
+  },
+  {
+   "id": "slide-060",
+   "domain": "slide",
+   "title": "Bộ slide ngày nhà đầu tư nền đen: chữ đậm lớn, ảnh cộng đồng chạy bộ và vòng số cam",
+   "moods": [
+    "dark-cinematic",
+    "swiss-precise",
+    "energetic"
+   ],
+   "industries": [
+    "sports",
+    "fashion-beauty"
+   ],
+   "audience": [
+    "investors",
+    "premium"
+   ],
+   "host": "s21.q4cdn.com",
+   "theme": "dark",
+   "paletteKey": "0-1",
+   "fontPair": "archivo+archivo",
+   "imagery": "photo"
+  },
+  {
+   "id": "slide-062",
+   "domain": "slide",
+   "title": "Bộ slide kết quả kinh doanh: xanh trời phẳng, chữ hoa mảnh giãn rộng, ảnh sản phẩm cận",
+   "moods": [
+    "clean-light",
+    "minimal-mono",
+    "editorial"
+   ],
+   "industries": [
+    "fashion-beauty",
+    "health-wellness"
+   ],
+   "audience": [
+    "investors",
+    "consumer"
+   ],
+   "host": "s28.q4cdn.com",
+   "theme": "light",
+   "paletteKey": "4-7",
+   "fontPair": "montserrat+montserrat",
+   "imagery": "photo"
+  },
+  {
+   "id": "slide-063",
+   "domain": "slide",
+   "title": "Bộ slide nhà đầu tư nền vàng chanh: chữ đen đậm, ô vàng chứa con số lớn",
+   "moods": [
+    "bold-color",
+    "playful",
+    "energetic"
+   ],
+   "industries": [
+    "media-publishing",
+    "tech-saas"
+   ],
+   "audience": [
+    "investors",
+    "youth"
+   ],
+   "host": "s25.q4cdn.com",
+   "theme": "light",
+   "paletteKey": "2-n",
+   "fontPair": "archivo+archivo",
+   "imagery": "photo"
+  },
+  {
+   "id": "slide-067",
+   "domain": "slide",
+   "title": "Bộ slide kết quả: bìa xanh lam điện với chấm lưới bán sắc, biểu đồ cột cùng màu",
+   "moods": [
+    "tech",
+    "bold-color",
+    "data-dense"
+   ],
+   "industries": [
+    "finance",
+    "tech-saas"
+   ],
+   "audience": [
+    "investors",
+    "b2b"
+   ],
+   "host": "s27.q4cdn.com",
+   "theme": "light",
+   "paletteKey": "4-7",
+   "fontPair": "ibm-plex-sans+ibm-plex-sans",
+   "imagery": "data"
+  },
+  {
+   "id": "slide-069",
+   "domain": "slide",
+   "title": "Bài nói hội nghị: tranh khoa học viễn tưởng toàn khung, tiêu đề chữ hoa đỏ hẹp",
+   "moods": [
+    "dark-cinematic",
+    "retro-print",
+    "editorial"
+   ],
+   "industries": [
+    "tech-saas",
+    "media-publishing"
+   ],
+   "audience": [
+    "public",
+    "developers"
+   ],
+   "host": "idlewords.com",
+   "theme": "dark",
+   "paletteKey": "0-1",
+   "fontPair": "oswald+oswald",
+   "imagery": "photo"
+  },
+  {
+   "id": "slide-072",
+   "domain": "slide",
+   "title": "Bộ slide nhà đầu tư nền tím than: ảnh mèo ngủ ở bìa, nhấn hồng phấn và thẻ trắng",
+   "moods": [
+    "playful",
+    "bold-color",
+    "tech"
+   ],
+   "industries": [
+    "finance",
+    "ecommerce"
+   ],
+   "audience": [
+    "investors",
+    "consumer"
+   ],
+   "host": "s205.q4cdn.com",
+   "theme": "dark",
+   "paletteKey": "1-11",
+   "fontPair": "plus-jakarta-sans+plus-jakarta-sans",
+   "imagery": "mixed"
+  },
+  {
+   "id": "slide-074",
+   "domain": "slide",
+   "title": "Bài nói hội nghị thiết kế: nền trắng, chữ xanh lam mảnh, chấm tròn xanh làm điểm nhấn",
+   "moods": [
+    "clean-light",
+    "swiss-precise",
+    "minimal-mono"
+   ],
+   "industries": [
+    "consulting",
+    "tech-saas"
+   ],
+   "audience": [
+    "b2b",
+    "public"
+   ],
+   "host": "speakerdeck.com",
+   "theme": "light",
+   "paletteKey": "4-7",
+   "fontPair": "be-vietnam-pro+be-vietnam-pro",
+   "imagery": "type-only"
+  },
+  {
+   "id": "slide-075",
+   "domain": "slide",
+   "title": "Bài nói về trình bày slide: bìa xanh than chữ cực đậm, trang trong nền xám nhạt",
+   "moods": [
+    "bold-color",
+    "swiss-precise",
+    "clean-light"
+   ],
+   "industries": [
+    "education",
+    "tech-saas"
+   ],
+   "audience": [
+    "developers",
+    "public"
+   ],
+   "host": "speakerdeck.com",
+   "theme": "light",
+   "paletteKey": "4-7",
+   "fontPair": "plus-jakarta-sans+plus-jakarta-sans",
+   "imagery": "type-only"
+  },
+  {
+   "id": "slide-080",
+   "domain": "slide",
+   "title": "Bài nói về chuyển động: minh hoạ nét vẽ tay đen trên nền giấy xám, chữ uốn vòng",
+   "moods": [
+    "playful",
+    "warm-craft",
+    "organic"
+   ],
+   "industries": [
+    "education",
+    "tech-saas"
+   ],
+   "audience": [
+    "developers",
+    "public"
+   ],
+   "host": "slides.com",
+   "theme": "light",
+   "paletteKey": "4-8",
+   "fontPair": "fraunces+plus-jakarta-sans",
+   "imagery": "illustration"
+  },
+  {
+   "id": "web-001",
+   "domain": "web",
+   "title": "Công cụ quản lý sản phẩm nền đen, ảnh giao diện làm hình chính",
+   "moods": [
+    "dark-cinematic",
+    "tech",
+    "minimal-mono"
+   ],
+   "industries": [
+    "tech-saas",
+    "ai"
+   ],
+   "audience": [
+    "developers",
+    "b2b"
+   ],
+   "host": "linear.app",
+   "theme": "dark",
+   "paletteKey": "0-7",
+   "fontPair": "inter+inter",
+   "imagery": "photo"
+  },
+  {
+   "id": "web-002",
+   "domain": "web",
+   "title": "Hạ tầng thanh toán: dải gradient lụa cam tím trên nền trắng",
+   "moods": [
+    "clean-light",
+    "bold-color",
+    "tech"
+   ],
+   "industries": [
+    "finance",
+    "tech-saas"
+   ],
+   "audience": [
+    "b2b",
+    "developers"
+   ],
+   "host": "stripe.com",
+   "theme": "light",
+   "paletteKey": "4-8",
+   "fontPair": "inter+inter",
+   "imagery": "3d"
+  },
+  {
+   "id": "web-004",
+   "domain": "web",
+   "title": "Công cụ máy tính: sọc đỏ 3D chéo trên nền đen sâu",
+   "moods": [
+    "dark-cinematic",
+    "energetic",
+    "tech"
+   ],
+   "industries": [
+    "tech-saas"
+   ],
+   "audience": [
+    "developers",
+    "consumer"
+   ],
+   "host": "raycast.com",
+   "theme": "dark",
+   "paletteKey": "0-0",
+   "fontPair": "inter+inter",
+   "imagery": "3d"
+  },
+  {
+   "id": "web-007",
+   "domain": "web",
+   "title": "Dịch vụ email cho lập trình viên: chữ có chân trên nền đen tuyền",
+   "moods": [
+    "dark-cinematic",
+    "minimal-mono",
+    "editorial"
+   ],
+   "industries": [
+    "tech-saas"
+   ],
+   "audience": [
+    "developers"
+   ],
+   "host": "resend.com",
+   "theme": "dark",
+   "paletteKey": "0-n",
+   "fontPair": "playfair-display+inter",
+   "imagery": "type-only"
+  },
+  {
+   "id": "web-008",
+   "domain": "web",
+   "title": "Nền tảng cơ sở dữ liệu: lưới thẻ tính năng với hình vẽ nét mảnh",
+   "moods": [
+    "clean-light",
+    "tech",
+    "swiss-precise"
+   ],
+   "industries": [
+    "tech-saas"
+   ],
+   "audience": [
+    "developers"
+   ],
+   "host": "supabase.com",
+   "theme": "light",
+   "paletteKey": "4-5",
+   "fontPair": "plus-jakarta-sans+plus-jakarta-sans",
+   "imagery": "illustration"
+  },
+  {
+   "id": "web-009",
+   "domain": "web",
+   "title": "Nền tảng triển khai: bầu trời đêm tím và ảnh giao diện",
+   "moods": [
+    "dark-cinematic",
+    "tech"
+   ],
+   "industries": [
+    "tech-saas"
+   ],
+   "audience": [
+    "developers"
+   ],
+   "host": "railway.com",
+   "theme": "dark",
+   "paletteKey": "0-9",
+   "fontPair": "source-serif-4+inter",
+   "imagery": "mixed"
+  },
+  {
+   "id": "web-010",
+   "domain": "web",
+   "title": "Nhà máy phần mềm: chữ đơn cách trên lưới chấm sáng",
+   "moods": [
+    "swiss-precise",
+    "tech",
+    "minimal-mono"
+   ],
+   "industries": [
+    "tech-saas",
+    "ai"
+   ],
+   "audience": [
+    "developers",
+    "b2b"
+   ],
+   "host": "warp.dev",
+   "theme": "light",
+   "paletteKey": "4-8",
+   "fontPair": "jetbrains-mono+plus-jakarta-sans",
+   "imagery": "data"
+  },
+  {
+   "id": "web-011",
+   "domain": "web",
+   "title": "Công cụ phân tích dạng màn hình máy tính hoài cổ",
+   "moods": [
+    "playful",
+    "retro-print",
+    "tech"
+   ],
+   "industries": [
+    "tech-saas"
+   ],
+   "audience": [
+    "developers"
+   ],
+   "host": "posthog.com",
+   "theme": "light",
+   "paletteKey": "3-1",
+   "fontPair": "plus-jakarta-sans+plus-jakarta-sans",
+   "imagery": "illustration"
+  },
+  {
+   "id": "web-014",
+   "domain": "web",
+   "title": "Không gian làm việc: tiêu đề giữa, ảnh giao diện trên nền sơn dầu",
+   "moods": [
+    "clean-light",
+    "organic"
+   ],
+   "industries": [
+    "tech-saas",
+    "ai"
+   ],
+   "audience": [
+    "b2b",
+    "consumer"
+   ],
+   "host": "notion.com",
+   "theme": "light",
+   "paletteKey": "4-7",
+   "fontPair": "archivo+archivo",
+   "imagery": "mixed"
+  },
+  {
+   "id": "web-016",
+   "domain": "web",
+   "title": "Công cụ trình chiếu: gradient tím đậm, chữ đậm siết",
+   "moods": [
+    "bold-color",
+    "playful",
+    "tech"
+   ],
+   "industries": [
+    "tech-saas"
+   ],
+   "audience": [
+    "b2b",
+    "consumer"
+   ],
+   "host": "pitch.com",
+   "theme": "light",
+   "paletteKey": "4-9",
+   "fontPair": "plus-jakarta-sans+plus-jakarta-sans",
+   "imagery": "mixed"
+  },
+  {
+   "id": "web-019",
+   "domain": "web",
+   "title": "Thiết bị âm nhạc: một sản phẩm dưới đèn rọi trên nền đen",
+   "moods": [
+    "dark-cinematic",
+    "minimal-mono",
+    "luxury"
+   ],
+   "industries": [
+    "culture-music",
+    "ecommerce"
+   ],
+   "audience": [
+    "premium",
+    "consumer"
+   ],
+   "host": "teenage.engineering",
+   "theme": "dark",
+   "paletteKey": "0-1",
+   "fontPair": "space-grotesk+space-grotesk",
+   "imagery": "photo"
+  },
+  {
+   "id": "web-020",
+   "domain": "web",
+   "title": "Thiết bị điện tử trong suốt trên nền xám nhạt",
+   "moods": [
+    "minimal-mono",
+    "tech",
+    "clean-light"
+   ],
+   "industries": [
+    "ecommerce",
+    "tech-saas"
+   ],
+   "audience": [
+    "youth",
+    "consumer"
+   ],
+   "host": "nothing.tech",
+   "theme": "light",
+   "paletteKey": "4-2",
+   "fontPair": "source-serif-4+jetbrains-mono",
+   "imagery": "photo"
+  },
+  {
+   "id": "web-021",
+   "domain": "web",
+   "title": "Thể thao xe đạp: ảnh vận động viên toàn khung, chữ hoa giãn",
+   "moods": [
+    "energetic",
+    "minimal-mono"
+   ],
+   "industries": [
+    "sports",
+    "fashion-beauty"
+   ],
+   "audience": [
+    "premium",
+    "youth"
+   ],
+   "host": "rapha.cc",
+   "theme": "light",
+   "paletteKey": "4-1",
+   "fontPair": "oswald+archivo",
+   "imagery": "photo"
+  },
+  {
+   "id": "web-025",
+   "domain": "web",
+   "title": "Đồ uống thực vật: chữ in khối và ảnh sản phẩm xếp chéo",
+   "moods": [
+    "bold-color",
+    "playful",
+    "retro-print"
+   ],
+   "industries": [
+    "food-beverage"
+   ],
+   "audience": [
+    "consumer",
+    "youth"
+   ],
+   "host": "oatly.com",
+   "theme": "light",
+   "paletteKey": "4-3",
+   "fontPair": "inter+inter",
+   "imagery": "photo"
+  },
+  {
+   "id": "web-031",
+   "domain": "web",
+   "title": "Công cụ chuyển động: chữ hoa rộng trên nền đen, thẻ viền mảnh",
+   "moods": [
+    "dark-cinematic",
+    "tech",
+    "energetic"
+   ],
+   "industries": [
+    "tech-saas"
+   ],
+   "audience": [
+    "developers"
+   ],
+   "host": "rive.app",
+   "theme": "dark",
+   "paletteKey": "0-9",
+   "fontPair": "unbounded+ibm-plex-sans",
+   "imagery": "3d"
+  },
+  {
+   "id": "web-032",
+   "domain": "web",
+   "title": "Studio thiết kế số: lưới thẻ dự án sáng với vật thể 3D nhỏ",
+   "moods": [
+    "clean-light",
+    "playful",
+    "minimal-mono"
+   ],
+   "industries": [
+    "consulting",
+    "tech-saas"
+   ],
+   "audience": [
+    "b2b"
+   ],
+   "host": "cuberto.com",
+   "theme": "light",
+   "paletteKey": "4-1",
+   "fontPair": "inter+inter",
+   "imagery": "3d"
+  },
+  {
+   "id": "web-035",
+   "domain": "web",
+   "title": "Studio thương hiệu: một câu chữ có chân và đường hầm ánh sáng vàng",
+   "moods": [
+    "editorial",
+    "luxury",
+    "dark-cinematic"
+   ],
+   "industries": [
+    "consulting",
+    "media-publishing"
+   ],
+   "audience": [
+    "premium",
+    "b2b"
+   ],
+   "host": "wearecollins.com",
+   "theme": "light",
+   "paletteKey": "4-1",
+   "fontPair": "cormorant-garamond+source-serif-4",
+   "imagery": "photo"
+  },
+  {
+   "id": "web-036",
+   "domain": "web",
+   "title": "Studio sáng tạo Sài Gòn: ảnh flycam công viên xanh, chữ trắng dày đặc",
+   "moods": [
+    "organic",
+    "editorial",
+    "bold-color"
+   ],
+   "industries": [
+    "consulting",
+    "media-publishing"
+   ],
+   "audience": [
+    "b2b",
+    "public"
+   ],
+   "host": "rice-creative.com",
+   "theme": "dark",
+   "paletteKey": "1-3",
+   "fontPair": "archivo+archivo",
+   "imagery": "photo"
+  },
+  {
+   "id": "web-038",
+   "domain": "web",
+   "title": "Chuỗi nhà hàng Việt: phố thật, chữ có chân hẹp và nét vẽ tay xanh",
+   "moods": [
+    "warm-craft",
+    "organic",
+    "editorial"
+   ],
+   "industries": [
+    "food-beverage",
+    "hospitality-travel"
+   ],
+   "audience": [
+    "consumer",
+    "families"
+   ],
+   "host": "pizza4ps.com",
+   "theme": "light",
+   "paletteKey": "4-7",
+   "fontPair": "source-serif-4+ibm-plex-sans",
+   "imagery": "mixed"
+  },
+  {
+   "id": "web-040",
+   "domain": "web",
+   "title": "Chuỗi cà phê hoài cổ: chữ cổ điển, xanh rêu và đỏ trên nền giấy",
+   "moods": [
+    "retro-print",
+    "warm-craft"
+   ],
+   "industries": [
+    "food-beverage",
+    "hospitality-travel"
+   ],
+   "audience": [
+    "youth",
+    "consumer"
+   ],
+   "host": "congcaphe.com",
+   "theme": "light",
+   "paletteKey": "4-0",
+   "fontPair": "fraunces+be-vietnam-pro",
+   "imagery": "photo"
+  },
+  {
+   "id": "web-041",
+   "domain": "web",
+   "title": "Tạp chí số tiếng Việt: lưới tin dày, chữ hẹp đậm",
+   "moods": [
+    "editorial",
+    "data-dense",
+    "clean-light"
+   ],
+   "industries": [
+    "media-publishing"
+   ],
+   "audience": [
+    "youth",
+    "public"
+   ],
+   "host": "vietcetera.com",
+   "theme": "light",
+   "paletteKey": "4-7",
+   "fontPair": "archivo+archivo",
+   "imagery": "photo"
+  },
+  {
+   "id": "web-044",
+   "domain": "web",
+   "title": "Ứng dụng học nói tiếng Anh: nền xanh đêm, chữ trắng căn giữa",
+   "moods": [
+    "dark-cinematic",
+    "tech",
+    "playful"
+   ],
+   "industries": [
+    "education",
+    "ai"
+   ],
+   "audience": [
+    "students",
+    "youth"
+   ],
+   "host": "elsaspeak.com",
+   "theme": "dark",
+   "paletteKey": "0-8",
+   "fontPair": "inter+inter",
+   "imagery": "illustration"
+  },
+  {
+   "id": "web-047",
+   "domain": "web",
+   "title": "Ngân hàng số Việt: minh họa heo đất, cam và tím vui tươi",
+   "moods": [
+    "playful",
+    "bold-color"
+   ],
+   "industries": [
+    "finance"
+   ],
+   "audience": [
+    "youth",
+    "consumer"
+   ],
+   "host": "timo.vn",
+   "theme": "light",
+   "paletteKey": "4-9",
+   "fontPair": "be-vietnam-pro+be-vietnam-pro",
+   "imagery": "3d"
+  },
+  {
+   "id": "web-050",
+   "domain": "web",
+   "title": "Giày thân thiện môi trường: ảnh phòng khách ấm và lưới sản phẩm màu đất",
+   "moods": [
+    "warm-craft",
+    "organic",
+    "clean-light"
+   ],
+   "industries": [
+    "ecommerce",
+    "fashion-beauty"
+   ],
+   "audience": [
+    "consumer",
+    "families"
+   ],
+   "host": "allbirds.com",
+   "theme": "light",
+   "paletteKey": "4-1",
+   "fontPair": "plus-jakarta-sans+plus-jakarta-sans",
+   "imagery": "photo"
+  },
+  {
+   "id": "web-053",
+   "domain": "web",
+   "title": "Ứng dụng sức khỏe tinh thần: mảng cam tròn và nhân vật đơn giản",
+   "moods": [
+    "playful",
+    "bold-color",
+    "clean-light"
+   ],
+   "industries": [
+    "health-wellness"
+   ],
+   "audience": [
+    "consumer",
+    "youth"
+   ],
+   "host": "headspace.com",
+   "theme": "light",
+   "paletteKey": "4-1",
+   "fontPair": "plus-jakarta-sans+plus-jakarta-sans",
+   "imagery": "illustration"
+  },
+  {
+   "id": "web-056",
+   "domain": "web",
+   "title": "Trình soạn mã AI: tranh phong cảnh làm nền cho giao diện",
+   "moods": [
+    "editorial",
+    "clean-light",
+    "tech"
+   ],
+   "industries": [
+    "ai",
+    "tech-saas"
+   ],
+   "audience": [
+    "developers"
+   ],
+   "host": "cursor.com",
+   "theme": "light",
+   "paletteKey": "4-1",
+   "fontPair": "inter+inter",
+   "imagery": "mixed"
+  },
+  {
+   "id": "web-057",
+   "domain": "web",
+   "title": "Ngân hàng số: ảnh tay cầm điện thoại, chữ đậm trên ảnh",
+   "moods": [
+    "bold-color",
+    "clean-light",
+    "energetic"
+   ],
+   "industries": [
+    "finance"
+   ],
+   "audience": [
+    "consumer",
+    "youth"
+   ],
+   "host": "monzo.com",
+   "theme": "light",
+   "paletteKey": "4-0",
+   "fontPair": "inter+inter",
+   "imagery": "photo"
+  },
+  {
+   "id": "web-058",
+   "domain": "web",
+   "title": "Chuyển tiền quốc tế: chữ hoa siêu đậm, xanh chanh và xanh rừng",
+   "moods": [
+    "bold-color",
+    "energetic",
+    "clean-light"
+   ],
+   "industries": [
+    "finance"
+   ],
+   "audience": [
+    "consumer"
+   ],
+   "host": "wise.com",
+   "theme": "light",
+   "paletteKey": "4-3",
+   "fontPair": "archivo+inter",
+   "imagery": "type-only"
+  },
+  {
+   "id": "web-059",
+   "domain": "web",
+   "title": "Quản lý chi tiêu doanh nghiệp: tối giản trắng, nhấn vàng chanh",
+   "moods": [
+    "clean-light",
+    "swiss-precise",
+    "minimal-mono"
+   ],
+   "industries": [
+    "finance",
+    "tech-saas"
+   ],
+   "audience": [
+    "b2b"
+   ],
+   "host": "ramp.com",
+   "theme": "light",
+   "paletteKey": "4-2",
+   "fontPair": "inter+inter",
+   "imagery": "3d"
+  },
+  {
+   "id": "web-060",
+   "domain": "web",
+   "title": "Ngân hàng doanh nghiệp: ảnh bàn làm việc giữa núi lúc chạng vạng",
+   "moods": [
+    "dark-cinematic",
+    "luxury",
+    "editorial"
+   ],
+   "industries": [
+    "finance"
+   ],
+   "audience": [
+    "b2b",
+    "premium"
+   ],
+   "host": "mercury.com",
+   "theme": "dark",
+   "paletteKey": "0-8",
+   "fontPair": "plus-jakarta-sans+inter",
+   "imagery": "photo"
+  },
+  {
+   "id": "web-061",
+   "domain": "web",
+   "title": "Âm thanh cao cấp: chân dung tĩnh lặng, chữ nhỏ tinh tế",
+   "moods": [
+    "luxury",
+    "minimal-mono",
+    "editorial"
+   ],
+   "industries": [
+    "ecommerce",
+    "culture-music"
+   ],
+   "audience": [
+    "premium"
+   ],
+   "host": "bang-olufsen.com",
+   "theme": "light",
+   "paletteKey": "4-n",
+   "fontPair": "ibm-plex-sans+ibm-plex-sans",
+   "imagery": "photo"
+  },
+  {
+   "id": "web-062",
+   "domain": "web",
+   "title": "Phần mềm làm nhạc: ảnh phòng thu thật và chữ hình học",
+   "moods": [
+    "energetic",
+    "editorial",
+    "clean-light"
+   ],
+   "industries": [
+    "culture-music",
+    "tech-saas"
+   ],
+   "audience": [
+    "consumer",
+    "youth"
+   ],
+   "host": "ableton.com",
+   "theme": "light",
+   "paletteKey": "4-8",
+   "fontPair": "montserrat+montserrat",
+   "imagery": "photo"
+  },
+  {
+   "id": "web-064",
+   "domain": "web",
+   "title": "Đài phát thanh trực tuyến: lưới đen chữ hẹp hoa, ảnh nghệ sĩ nhỏ",
+   "moods": [
+    "dark-cinematic",
+    "minimal-mono",
+    "swiss-precise"
+   ],
+   "industries": [
+    "culture-music",
+    "media-publishing"
+   ],
+   "audience": [
+    "youth"
+   ],
+   "host": "nts.live",
+   "theme": "dark",
+   "paletteKey": "0-n",
+   "fontPair": "oswald+oswald",
+   "imagery": "photo"
+  },
+  {
+   "id": "web-065",
+   "domain": "web",
+   "title": "Hãng phim độc lập: chữ tiêu đề khổng lồ đè lên ảnh phim",
+   "moods": [
+    "editorial",
+    "bold-color",
+    "energetic"
+   ],
+   "industries": [
+    "culture-music",
+    "media-publishing"
+   ],
+   "audience": [
+    "youth",
+    "public"
+   ],
+   "host": "a24films.com",
+   "theme": "light",
+   "paletteKey": "4-0",
+   "fontPair": "inter+inter",
+   "imagery": "photo"
+  },
+  {
+   "id": "web-067",
+   "domain": "web",
+   "title": "Nội thất Bắc Âu: phòng khách gỗ ấm, chữ hoa giãn nhỏ",
+   "moods": [
+    "warm-craft",
+    "minimal-mono",
+    "luxury"
+   ],
+   "industries": [
+    "real-estate-interior",
+    "ecommerce"
+   ],
+   "audience": [
+    "premium",
+    "consumer"
+   ],
+   "host": "hay.com",
+   "theme": "light",
+   "paletteKey": "4-1",
+   "fontPair": "archivo+archivo",
+   "imagery": "photo"
+  },
+  {
+   "id": "web-068",
+   "domain": "web",
+   "title": "Tạp chí sáng tạo: lưới bài với minh họa đen trắng và màu",
+   "moods": [
+    "editorial",
+    "playful",
+    "clean-light"
+   ],
+   "industries": [
+    "media-publishing"
+   ],
+   "audience": [
+    "youth",
+    "b2b"
+   ],
+   "host": "itsnicethat.com",
+   "theme": "light",
+   "paletteKey": "4-9",
+   "fontPair": "space-grotesk+space-grotesk",
+   "imagery": "illustration"
+  },
+  {
+   "id": "web-069",
+   "domain": "web",
+   "title": "Bài báo dữ liệu: lưới thẻ màu đậm, chữ có chân mềm",
+   "moods": [
+    "playful",
+    "bold-color",
+    "data-dense"
+   ],
+   "industries": [
+    "media-publishing"
+   ],
+   "audience": [
+    "public",
+    "youth"
+   ],
+   "host": "pudding.cool",
+   "theme": "light",
+   "paletteKey": "4-0",
+   "fontPair": "fraunces+space-grotesk",
+   "imagery": "data"
+  },
+  {
+   "id": "web-071",
+   "domain": "web",
+   "title": "Giày trẻ Việt: ảnh đường phố, chữ nghiêng đậm như áp phích",
+   "moods": [
+    "energetic",
+    "bold-color",
+    "playful"
+   ],
+   "industries": [
+    "fashion-beauty",
+    "ecommerce"
+   ],
+   "audience": [
+    "youth"
+   ],
+   "host": "bitis.com.vn",
+   "theme": "light",
+   "paletteKey": "4-0",
+   "fontPair": "anton+be-vietnam-pro",
+   "imagery": "photo"
+  },
+  {
+   "id": "web-075",
+   "domain": "web",
+   "title": "Robot hình người: ảnh đen trắng điện ảnh, chữ hoa nhỏ",
+   "moods": [
+    "dark-cinematic",
+    "tech",
+    "luxury"
+   ],
+   "industries": [
+    "ai",
+    "industrial-b2b"
+   ],
+   "audience": [
+    "investors",
+    "premium"
+   ],
+   "host": "figure.ai",
+   "theme": "dark",
+   "paletteKey": "0-n",
+   "fontPair": "space-grotesk+space-grotesk",
+   "imagery": "photo"
+  },
+  {
+   "id": "web-080",
+   "domain": "web",
+   "title": "Khu du lịch Việt: băng lễ hội đỏ vàng, chữ có chân trang trọng",
+   "moods": [
+    "bold-color",
+    "energetic",
+    "warm-craft"
+   ],
+   "industries": [
+    "hospitality-travel",
+    "events"
+   ],
+   "audience": [
+    "families",
+    "consumer"
+   ],
+   "host": "sunworld.vn",
+   "theme": "light",
+   "paletteKey": "4-0",
+   "fontPair": "playfair-display+be-vietnam-pro",
+   "imagery": "photo"
+  }
+ ]
+}

@@ -1,0 +1,146 @@
+{
+  "v": 1,
+  "id": "doc-014",
+  "domain": "doc",
+  "title": "Báo điện tử tiếng Việt: lưới tin trắng, tiêu đề có chân, ảnh lớn đầu trang",
+  "moods": [
+    "editorial",
+    "data-dense"
+  ],
+  "industries": [
+    "media-publishing"
+  ],
+  "audience": [
+    "public"
+  ],
+  "source_url": "https://vnexpress.net/",
+  "source_host": "vnexpress.net",
+  "source_kind": "public-page",
+  "captured_at": "2026-11-20",
+  "image": {
+    "file": "doc/doc-014.webp",
+    "width": 1280,
+    "height": 1600,
+    "bytes": 89934,
+    "layout": "single"
+  },
+  "tokens": {
+    "theme": "light",
+    "colors": [
+      {
+        "hex": "#ffffff",
+        "role": "bg",
+        "share": 0.588
+      },
+      {
+        "hex": "#f4f4f4",
+        "role": "surface",
+        "share": 0
+      },
+      {
+        "hex": "#f7f7f7",
+        "role": "raised",
+        "share": 0
+      },
+      {
+        "hex": "#222222",
+        "role": "ink",
+        "share": 0.176
+      },
+      {
+        "hex": "#757575",
+        "role": "muted",
+        "share": 0
+      },
+      {
+        "hex": "#d3100c",
+        "role": "accent",
+        "share": 0.009
+      },
+      {
+        "hex": "#a79157",
+        "role": "accent2",
+        "share": 0.007
+      },
+      {
+        "hex": "#e5e5e5",
+        "role": "line",
+        "share": 0
+      }
+    ],
+    "fonts": {
+      "head": {
+        "kit": "source-serif-4",
+        "seen": "arial",
+        "seenLicence": "proprietary",
+        "weight": 700
+      },
+      "body": {
+        "kit": "archivo",
+        "seen": "arial",
+        "seenLicence": "proprietary",
+        "weight": 400
+      },
+      "mono": null
+    },
+    "type": {
+      "basePx": 14,
+      "ratio": 1.25,
+      "sizes": [
+        22,
+        18,
+        15,
+        12
+      ],
+      "headLine": 1.25,
+      "bodyLine": 1.5,
+      "headCase": "none"
+    },
+    "tracking": {
+      "display": 0,
+      "heading": 0,
+      "body": 0,
+      "label": 0
+    },
+    "radius": {
+      "outer": 0,
+      "inner": 0,
+      "pill": true
+    },
+    "shadow": {
+      "level": 1,
+      "css": "rgba(0, 0, 0, 0.1) 0px 2px 8px 0px"
+    },
+    "spacing": {
+      "unit": 4,
+      "section": 64,
+      "gutter": 10,
+      "density": "balanced"
+    },
+    "layout": {
+      "columns": 6,
+      "maxWidth": 1130,
+      "align": "asymmetric",
+      "emptyShare": 0.66
+    },
+    "imagery": {
+      "kind": "photo",
+      "share": 0.18,
+      "light": "natural news photography",
+      "lens": "mixed news crops",
+      "grade": "natural colours",
+      "subject": "news photos"
+    }
+  },
+  "measured": [
+    "theme",
+    "colors",
+    "tracking",
+    "radius",
+    "shadow",
+    "spacing",
+    "layout"
+  ],
+  "why": "Lưới tin nền trắng, bài chính ảnh lớn bên trái, cột tin phụ chữ nhỏ bên phải, tiêu đề có chân đậm. Đỏ #d3100c chỉ cho nhãn nóng, phần còn lại đen #222222 và xám. Mật độ cao nhưng phân tầng rõ bằng cỡ ảnh. Mượn thứ bậc ảnh lớn, ảnh nhỏ, chỉ chữ cho trang tin tiếng Việt; không chép bài hay ảnh.",
+  "licence": "Ảnh chụp thu nhỏ của trang công khai, chỉ để model tham khảo nguyên tắc. Không chép logo, chữ, ảnh hay phông độc quyền của trang."
+}

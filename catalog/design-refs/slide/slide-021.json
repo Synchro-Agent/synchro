@@ -1,0 +1,122 @@
+{
+  "v": 1,
+  "id": "slide-021",
+  "domain": "slide",
+  "title": "Bìa bộ slide nền đen: ảnh tháp nước trong khung bo tròn, chữ cong trắng đè ngang",
+  "moods": [
+    "dark-cinematic",
+    "bold-color",
+    "editorial"
+  ],
+  "industries": [
+    "real-estate-interior",
+    "culture-music"
+  ],
+  "audience": [
+    "b2b",
+    "youth"
+  ],
+  "source_url": "https://pitch.com/templates/Brutalist-0DHH6X0o4m9D5t1Rmj7GLi1n",
+  "source_host": "pitch.com",
+  "source_kind": "public-image",
+  "captured_at": "2026-11-20",
+  "image": {
+    "file": "slide/slide-021.webp",
+    "width": 1020,
+    "height": 574,
+    "bytes": 25644,
+    "layout": "single"
+  },
+  "tokens": {
+    "theme": "dark",
+    "colors": [
+      {
+        "hex": "#000000",
+        "role": "bg",
+        "share": 0.701
+      },
+      {
+        "hex": "#edebe9",
+        "role": "ink",
+        "share": 0.032
+      },
+      {
+        "hex": "#9a9187",
+        "role": "muted",
+        "share": 0
+      },
+      {
+        "hex": "#c96a3d",
+        "role": "accent",
+        "share": 0
+      }
+    ],
+    "fonts": {
+      "head": {
+        "kit": "unbounded",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 600
+      },
+      "body": {
+        "kit": "space-grotesk",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 400
+      },
+      "mono": null
+    },
+    "type": {
+      "basePx": 16,
+      "ratio": 1.414,
+      "sizes": [
+        96,
+        32,
+        16
+      ],
+      "headLine": 1,
+      "bodyLine": 1.4,
+      "headCase": "upper"
+    },
+    "tracking": {
+      "display": -0.01,
+      "heading": 0,
+      "body": 0,
+      "label": 0.04
+    },
+    "radius": {
+      "outer": 999,
+      "inner": 999,
+      "pill": true
+    },
+    "shadow": {
+      "level": 0,
+      "css": "none"
+    },
+    "spacing": {
+      "unit": 8,
+      "section": 64,
+      "gutter": 24,
+      "density": "airy"
+    },
+    "layout": {
+      "columns": 1,
+      "maxWidth": 1280,
+      "align": "center",
+      "emptyShare": 0.35
+    },
+    "imagery": {
+      "kind": "photo",
+      "share": 0.5,
+      "light": "low golden-hour sun raking from the right",
+      "lens": "70mm, looking up at the tower",
+      "grade": "copper orange highlights, teal-grey sky",
+      "subject": "a brutalist concrete water tower at dusk"
+    }
+  },
+  "measured": [
+    "theme"
+  ],
+  "why": "Nền đen tuyền, một ảnh kiến trúc hoàng hôn đặt trong khung bo tròn kiểu viên thuốc chiếm 60% bề ngang. Tiêu đề chữ trắng nét cong dị cao 90 px nằm đè ngang giữa ảnh và nền. Màu ảnh nâu đồng #a55331 và xanh xám, ngoài ra chỉ có đen và trắng. Mượn cách đặt một ảnh trong khung bo lớn và cho chữ đè qua mép khung; không chép ảnh hay chữ.",
+  "licence": "Ảnh chụp thu nhỏ của trang công khai, chỉ để model tham khảo nguyên tắc. Không chép logo, chữ, ảnh hay phông độc quyền của trang."
+}

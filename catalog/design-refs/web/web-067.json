@@ -1,0 +1,143 @@
+{
+  "v": 1,
+  "id": "web-067",
+  "domain": "web",
+  "title": "Nội thất Bắc Âu: phòng khách gỗ ấm, chữ hoa giãn nhỏ",
+  "moods": [
+    "warm-craft",
+    "minimal-mono",
+    "luxury"
+  ],
+  "industries": [
+    "real-estate-interior",
+    "ecommerce"
+  ],
+  "audience": [
+    "premium",
+    "consumer"
+  ],
+  "source_url": "https://www.hay.com/",
+  "source_host": "hay.com",
+  "source_kind": "public-page",
+  "captured_at": "2026-11-20",
+  "image": {
+    "file": "web/web-067.webp",
+    "width": 1280,
+    "height": 800,
+    "bytes": 69738,
+    "layout": "single"
+  },
+  "tokens": {
+    "theme": "light",
+    "colors": [
+      {
+        "hex": "#f2f2f2",
+        "role": "bg",
+        "share": 0.249
+      },
+      {
+        "hex": "#d1dee7",
+        "role": "surface",
+        "share": 0
+      },
+      {
+        "hex": "#111111",
+        "role": "ink",
+        "share": 0
+      },
+      {
+        "hex": "#8a481b",
+        "role": "accent",
+        "share": 0.179
+      },
+      {
+        "hex": "#0a0a0a",
+        "role": "line",
+        "share": 0
+      },
+      {
+        "hex": "#6b6b6b",
+        "role": "muted",
+        "share": 0
+      },
+      {
+        "hex": "#5c6b4a",
+        "role": "accent2",
+        "share": 0
+      }
+    ],
+    "fonts": {
+      "head": {
+        "kit": "archivo",
+        "seen": "ITCNewBaskervilleRoman",
+        "seenLicence": "unknown",
+        "weight": 500
+      },
+      "body": {
+        "kit": "archivo",
+        "seen": "NeueHelvetica55Roman",
+        "seenLicence": "proprietary",
+        "weight": 400
+      },
+      "mono": null
+    },
+    "type": {
+      "basePx": 12,
+      "ratio": 1.291,
+      "sizes": [
+        20,
+        16,
+        12
+      ],
+      "headLine": 1.4,
+      "bodyLine": 1.6,
+      "headCase": "upper"
+    },
+    "tracking": {
+      "display": 0.055,
+      "heading": 0.055,
+      "body": 0.167,
+      "label": 0.163
+    },
+    "radius": {
+      "outer": 0,
+      "inner": 0,
+      "pill": false
+    },
+    "shadow": {
+      "level": 0,
+      "css": "none"
+    },
+    "spacing": {
+      "unit": 4,
+      "section": 130,
+      "gutter": 24,
+      "density": "airy"
+    },
+    "layout": {
+      "columns": 3,
+      "maxWidth": 1240,
+      "align": "center",
+      "emptyShare": 0.14
+    },
+    "imagery": {
+      "kind": "photo",
+      "share": 0.7,
+      "light": "soft daylight from tall window, gentle shadows",
+      "lens": "35mm architectural, straight verticals",
+      "grade": "warm wood oranges, moss green, chalk white",
+      "subject": "minimal living room with sofa and wooden wall"
+    }
+  },
+  "measured": [
+    "theme",
+    "type",
+    "tracking",
+    "radius",
+    "shadow",
+    "spacing",
+    "layout"
+  ],
+  "why": "Ảnh phòng khách với ghế sofa xanh rêu trước vách gỗ cam đất chiếm gần trọn màn đầu, chữ chỉ là thanh điều hướng chữ hoa nhỏ giãn 0,16em. Không khung, không bo, không bóng; ảnh là toàn bộ thiết kế. Màu đến từ vật liệu: gỗ #8a481b, rêu và trắng vôi. Mượn sự tiết chế để ảnh nội thất làm việc; không chép ảnh hay sản phẩm.",
+  "licence": "Ảnh chụp thu nhỏ của trang công khai, chỉ để model tham khảo nguyên tắc. Không chép logo, chữ, ảnh hay phông độc quyền của trang."
+}

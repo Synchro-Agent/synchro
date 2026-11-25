@@ -1,0 +1,124 @@
+{
+  "v": 1,
+  "id": "slide-007",
+  "domain": "slide",
+  "title": "Báo cáo tiền mã hóa: chữ điểm ảnh trên nền xanh bạc hà, biểu đồ kem",
+  "moods": [
+    "playful",
+    "bold-color",
+    "data-dense"
+  ],
+  "industries": [
+    "finance",
+    "tech-saas"
+  ],
+  "audience": [
+    "investors",
+    "developers"
+  ],
+  "source_url": "https://a16zcrypto.com/posts/article/state-of-crypto-report-2025/",
+  "source_host": "a16zcrypto.com",
+  "source_kind": "public-image",
+  "captured_at": "2026-11-20",
+  "image": {
+    "file": "slide/slide-007.webp",
+    "width": 1280,
+    "height": 720,
+    "bytes": 88194,
+    "layout": "grid4"
+  },
+  "tokens": {
+    "theme": "light",
+    "colors": [
+      {
+        "hex": "#f2efe6",
+        "role": "bg",
+        "share": 0.683
+      },
+      {
+        "hex": "#010101",
+        "role": "ink",
+        "share": 0.026
+      },
+      {
+        "hex": "#79d497",
+        "role": "accent",
+        "share": 0.117
+      },
+      {
+        "hex": "#f8961f",
+        "role": "accent2",
+        "share": 0.013
+      }
+    ],
+    "fonts": {
+      "head": {
+        "kit": "archivo",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 800
+      },
+      "body": {
+        "kit": "archivo",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 400
+      },
+      "mono": null
+    },
+    "type": {
+      "basePx": 14,
+      "ratio": 1.5,
+      "sizes": [
+        96,
+        32,
+        20,
+        14
+      ],
+      "headLine": 1.05,
+      "bodyLine": 1.35,
+      "headCase": "upper"
+    },
+    "tracking": {
+      "display": -0.03,
+      "heading": -0.02,
+      "body": 0,
+      "label": 0.02
+    },
+    "radius": {
+      "outer": 4,
+      "inner": 4,
+      "pill": false
+    },
+    "shadow": {
+      "level": 0,
+      "css": "none"
+    },
+    "spacing": {
+      "unit": 8,
+      "section": 40,
+      "gutter": 16,
+      "density": "balanced"
+    },
+    "layout": {
+      "columns": 12,
+      "maxWidth": 1280,
+      "align": "left",
+      "emptyShare": 0.2
+    },
+    "imagery": {
+      "kind": "data",
+      "share": 0.45,
+      "light": "",
+      "lens": "",
+      "grade": "",
+      "subject": ""
+    }
+  },
+  "measured": [
+    "theme",
+    "colors"
+  ],
+  "why": "Bìa nền xanh bạc hà #79d497 với tiêu đề chữ điểm ảnh đen khổng lồ, trang trong nền kem #f2efe6 với biểu đồ đường và vùng màu tím, cam #f8961f. Tiêu đề trang đen đậm có từ khóa tô nền cam như bút dạ quang. Thẻ chú thích màu đặt ngay trên biểu đồ. Mượn kiểu tô nền từ khóa trong tiêu đề và nền kem ấm cho dữ liệu; không chép chữ điểm ảnh hay số liệu.",
+  "licence": "Ảnh chụp thu nhỏ của trang công khai, chỉ để model tham khảo nguyên tắc. Không chép logo, chữ, ảnh hay phông độc quyền của trang."
+}

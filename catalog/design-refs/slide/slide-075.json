@@ -1,0 +1,119 @@
+{
+  "v": 1,
+  "id": "slide-075",
+  "domain": "slide",
+  "title": "Bài nói về trình bày slide: bìa xanh than chữ cực đậm, trang trong nền xám nhạt",
+  "moods": [
+    "bold-color",
+    "swiss-precise",
+    "clean-light"
+  ],
+  "industries": [
+    "education",
+    "tech-saas"
+  ],
+  "audience": [
+    "developers",
+    "public"
+  ],
+  "source_url": "https://speakerdeck.com/takanorip/jian-seru-deng-tan-zi-liao-dezainnoji-yi",
+  "source_host": "speakerdeck.com",
+  "source_kind": "public-image",
+  "credit": "takanorip, 「見せる」登壇資料デザインの極意",
+  "captured_at": "2026-11-21",
+  "image": {
+    "file": "slide/slide-075.webp",
+    "width": 1280,
+    "height": 720,
+    "bytes": 65114,
+    "layout": "grid4"
+  },
+  "tokens": {
+    "theme": "light",
+    "colors": [
+      {
+        "hex": "#f5f6f7",
+        "role": "bg",
+        "share": 0.719
+      },
+      {
+        "hex": "#022556",
+        "role": "ink",
+        "share": 0.256
+      },
+      {
+        "hex": "#1f4f9a",
+        "role": "accent",
+        "share": 0
+      }
+    ],
+    "fonts": {
+      "head": {
+        "kit": "plus-jakarta-sans",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 800
+      },
+      "body": {
+        "kit": "plus-jakarta-sans",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 500
+      },
+      "mono": null
+    },
+    "type": {
+      "basePx": 18,
+      "ratio": 1.6,
+      "sizes": [
+        96,
+        44,
+        18,
+        14
+      ],
+      "headLine": 1.1,
+      "bodyLine": 1.6,
+      "headCase": "none"
+    },
+    "tracking": {
+      "display": -0.01,
+      "heading": -0.01,
+      "body": 0,
+      "label": 0.02
+    },
+    "radius": {
+      "outer": 0,
+      "inner": 0,
+      "pill": false
+    },
+    "shadow": {
+      "level": 0,
+      "css": "none"
+    },
+    "spacing": {
+      "unit": 8,
+      "section": 64,
+      "gutter": 32,
+      "density": "airy"
+    },
+    "layout": {
+      "columns": 1,
+      "maxWidth": 1280,
+      "align": "left",
+      "emptyShare": 0.55
+    },
+    "imagery": {
+      "kind": "type-only",
+      "share": 0,
+      "light": "",
+      "lens": "",
+      "grade": "",
+      "subject": ""
+    }
+  },
+  "measured": [
+    "theme"
+  ],
+  "why": "Bìa xanh than #022556 phủ kín với tiêu đề trắng cực đậm cao khoảng một phần năm khung và ngoặc vuông lớn ôm chữ. Trang trong nền xám rất nhạt #f5f6f7, tiêu đề cùng màu xanh than cực đậm đặt sát trái phía trên, chữ thân nhỏ hai dòng ngay dưới. Hình minh hoạ chỉ là chuỗi chấm tròn đặc cùng màu, không ảnh. Mượn tương phản giữa tiêu đề cực đậm và chữ thân nhỏ, một màu duy nhất cho chữ và hình; không chép chữ.",
+  "licence": "Ảnh chụp thu nhỏ của trang công khai, chỉ để model tham khảo nguyên tắc. Không chép logo, chữ, ảnh hay phông độc quyền của trang."
+}

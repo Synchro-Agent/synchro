@@ -1,0 +1,123 @@
+{
+  "v": 1,
+  "id": "slide-054",
+  "domain": "slide",
+  "title": "Bộ slide phân tích: bìa đỏ san hô, sơ đồ vòng tròn và chữ có chân nhỏ",
+  "moods": [
+    "editorial",
+    "minimal-mono",
+    "swiss-precise"
+  ],
+  "industries": [
+    "tech-saas",
+    "consulting"
+  ],
+  "audience": [
+    "b2b",
+    "investors"
+  ],
+  "source_url": "https://www.ben-evans.com/s/2025-Autumn-AI.pdf",
+  "source_host": "ben-evans.com",
+  "source_kind": "public-image",
+  "captured_at": "2026-11-20",
+  "image": {
+    "file": "slide/slide-054.webp",
+    "width": 1280,
+    "height": 720,
+    "bytes": 59408,
+    "layout": "grid4"
+  },
+  "tokens": {
+    "theme": "light",
+    "colors": [
+      {
+        "hex": "#f4f4f4",
+        "role": "bg",
+        "share": 0.67
+      },
+      {
+        "hex": "#535352",
+        "role": "ink",
+        "share": 0.027
+      },
+      {
+        "hex": "#7d7c7a",
+        "role": "muted",
+        "share": 0.004
+      },
+      {
+        "hex": "#eb4b43",
+        "role": "accent",
+        "share": 0.252
+      }
+    ],
+    "fonts": {
+      "head": {
+        "kit": "source-serif-4",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 400
+      },
+      "body": {
+        "kit": "source-serif-4",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 400
+      },
+      "mono": null
+    },
+    "type": {
+      "basePx": 12,
+      "ratio": 1.4,
+      "sizes": [
+        28,
+        24,
+        12
+      ],
+      "headLine": 1.2,
+      "bodyLine": 1.4,
+      "headCase": "none"
+    },
+    "tracking": {
+      "display": 0,
+      "heading": 0,
+      "body": 0,
+      "label": 0
+    },
+    "radius": {
+      "outer": 0,
+      "inner": 0,
+      "pill": false
+    },
+    "shadow": {
+      "level": 0,
+      "css": "none"
+    },
+    "spacing": {
+      "unit": 8,
+      "section": 64,
+      "gutter": 32,
+      "density": "airy"
+    },
+    "layout": {
+      "columns": 2,
+      "maxWidth": 1280,
+      "align": "left",
+      "emptyShare": 0.55
+    },
+    "imagery": {
+      "kind": "data",
+      "share": 0.2,
+      "light": "",
+      "lens": "",
+      "grade": "",
+      "subject": ""
+    }
+  },
+  "measured": [
+    "theme",
+    "colors"
+  ],
+  "why": "Bìa nền đỏ san hô #eb4b43 với tên bài chữ có chân trắng nét mảnh trong khung viền mỏng. Trang trong nền xám rất nhạt #f4f4f4, tiêu đề chữ có chân 24 px đặt trái, một câu hỏi hoặc một sơ đồ mỗi trang. Sơ đồ là chuỗi 4 vòng tròn xám nối mũi tên, vòng cuối viền đỏ làm điểm đến. Mượn cách dùng một màu nhấn duy nhất để đánh dấu bước cuối của sơ đồ; không chép số liệu.",
+  "licence": "Ảnh chụp thu nhỏ của trang công khai, chỉ để model tham khảo nguyên tắc. Không chép logo, chữ, ảnh hay phông độc quyền của trang."
+}

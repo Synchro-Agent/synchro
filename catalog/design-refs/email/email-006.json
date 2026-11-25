@@ -1,0 +1,129 @@
+{
+  "v": 1,
+  "id": "email-006",
+  "domain": "email",
+  "title": "Thư triển lãm nghệ thuật đường phố: băng cam, chữ có chân, ảnh tường màu",
+  "moods": [
+    "bold-color",
+    "editorial",
+    "energetic"
+  ],
+  "industries": [
+    "events",
+    "culture-music"
+  ],
+  "audience": [
+    "youth",
+    "public"
+  ],
+  "source_url": "https://raw.githubusercontent.com/mjmlio/email-templates/master/thumbnails/street-expo.jpg",
+  "source_host": "raw.githubusercontent.com",
+  "source_kind": "public-image",
+  "credit": "MJML, mẫu thư street-expo (mjmlio/email-templates)",
+  "captured_at": "2026-11-20",
+  "image": {
+    "file": "email/email-006.webp",
+    "width": 700,
+    "height": 1600,
+    "bytes": 89570,
+    "layout": "single"
+  },
+  "tokens": {
+    "theme": "light",
+    "colors": [
+      {
+        "hex": "#e9e6d7",
+        "role": "bg",
+        "share": 0.301
+      },
+      {
+        "hex": "#0c0e0c",
+        "role": "ink",
+        "share": 0.103
+      },
+      {
+        "hex": "#9d9885",
+        "role": "muted",
+        "share": 0.145
+      },
+      {
+        "hex": "#f4511e",
+        "role": "accent",
+        "share": 0
+      },
+      {
+        "hex": "#e8d203",
+        "role": "accent2",
+        "share": 0
+      }
+    ],
+    "fonts": {
+      "head": {
+        "kit": "source-serif-4",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 400
+      },
+      "body": {
+        "kit": "ibm-plex-sans",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 400
+      },
+      "mono": null
+    },
+    "type": {
+      "basePx": 15,
+      "ratio": 1.333,
+      "sizes": [
+        32,
+        24,
+        15,
+        12
+      ],
+      "headLine": 1.15,
+      "bodyLine": 1.6,
+      "headCase": "none"
+    },
+    "tracking": {
+      "display": 0,
+      "heading": 0,
+      "body": 0,
+      "label": 0
+    },
+    "radius": {
+      "outer": 0,
+      "inner": 0,
+      "pill": false
+    },
+    "shadow": {
+      "level": 0,
+      "css": "none"
+    },
+    "spacing": {
+      "unit": 8,
+      "section": 40,
+      "gutter": 20,
+      "density": "balanced"
+    },
+    "layout": {
+      "columns": 1,
+      "maxWidth": 600,
+      "align": "left",
+      "emptyShare": 0.1
+    },
+    "imagery": {
+      "kind": "photo",
+      "share": 0.2,
+      "light": "bright hard sun, saturated",
+      "lens": "35mm street",
+      "grade": "orange, yellow and teal",
+      "subject": "colourful graffiti wall with cacti"
+    }
+  },
+  "measured": [
+    "theme"
+  ],
+  "why": "Nền kem #e9e6d7, tiêu đề chữ có chân 32 px, các băng ngang màu cam #f4511e và vàng #e8d203 chia thư thành từng phần với tiêu đề in hoa trắng. Ảnh tường graffiti và xương rồng màu rực đặt tràn bề ngang. Không bo góc, chữ thân 15 px. Mượn cách chia thư bằng băng màu đặc thay cho đường kẻ; không chép ảnh hay chữ.",
+  "licence": "Ảnh chụp thu nhỏ của trang công khai, chỉ để model tham khảo nguyên tắc. Không chép logo, chữ, ảnh hay phông độc quyền của trang."
+}

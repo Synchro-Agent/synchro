@@ -1,0 +1,123 @@
+{
+  "v": 1,
+  "id": "poster-039",
+  "domain": "poster",
+  "title": "Poster tạp chí in đá: chữ to vẽ tay trên nền nâu, nhóm người đọc báo",
+  "moods": [
+    "retro-print",
+    "editorial",
+    "warm-craft"
+  ],
+  "industries": [
+    "media-publishing",
+    "culture-music"
+  ],
+  "audience": [
+    "public"
+  ],
+  "source_url": "https://clevelandart.org/art/2009.556",
+  "source_host": "clevelandart.org",
+  "source_kind": "cc0",
+  "credit": "Pierre Bonnard, La Revue Blanche, 1894, Cleveland Museum of Art",
+  "rights_url": "https://openaccess-api.clevelandart.org/api/artworks/2009.556",
+  "captured_at": "2026-11-20",
+  "image": {
+    "file": "poster/poster-039.webp",
+    "width": 695,
+    "height": 893,
+    "bytes": 87798,
+    "layout": "single"
+  },
+  "tokens": {
+    "theme": "dark",
+    "colors": [
+      {
+        "hex": "#615643",
+        "role": "bg",
+        "share": 0.488
+      },
+      {
+        "hex": "#e5cfac",
+        "role": "ink",
+        "share": 0.371
+      },
+      {
+        "hex": "#201f1d",
+        "role": "muted",
+        "share": 0.042
+      },
+      {
+        "hex": "#c9673a",
+        "role": "accent",
+        "share": 0
+      }
+    ],
+    "fonts": {
+      "head": {
+        "kit": "bricolage-grotesque",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 400
+      },
+      "body": {
+        "kit": "source-serif-4",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 400
+      },
+      "mono": null
+    },
+    "type": {
+      "basePx": 14,
+      "ratio": 2,
+      "sizes": [
+        140,
+        24,
+        12
+      ],
+      "headLine": 0.9,
+      "bodyLine": 1.3,
+      "headCase": "none"
+    },
+    "tracking": {
+      "display": -0.01,
+      "heading": 0,
+      "body": 0,
+      "label": 0.02
+    },
+    "radius": {
+      "outer": 0,
+      "inner": 0,
+      "pill": false
+    },
+    "shadow": {
+      "level": 0,
+      "css": "none"
+    },
+    "spacing": {
+      "unit": 8,
+      "section": 32,
+      "gutter": 16,
+      "density": "dense"
+    },
+    "layout": {
+      "columns": 1,
+      "maxWidth": 900,
+      "align": "asymmetric",
+      "emptyShare": 0.1
+    },
+    "imagery": {
+      "kind": "illustration",
+      "share": 0.6,
+      "light": "flat lithograph, no lighting",
+      "lens": "loose ink sketch, eye level",
+      "grade": "olive brown, cream and black",
+      "subject": "people reading newspapers in a cafe"
+    }
+  },
+  "measured": [
+    "theme"
+  ],
+  "why": "Nền nâu ô liu #615643 với nhóm người phác nét đen ở nửa trên, chữ tên tạp chí vẽ tay cao gần 30% khung ở đáy. Chữ kem #e5cfac và đen, bố cục lệch, một dòng chữ nhỏ viết tay ở góc trên phải. Màu đất trầm, nét vẽ vội như ký hoạ. Mượn chữ vẽ tay khổng lồ làm nền móng cho bố cục; không chép hình hay chữ.",
+  "licence": "Ảnh chụp thu nhỏ của trang công khai, chỉ để model tham khảo nguyên tắc. Không chép logo, chữ, ảnh hay phông độc quyền của trang."
+}

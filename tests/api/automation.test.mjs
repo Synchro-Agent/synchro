@@ -189,9 +189,12 @@ else {
     const sysU = JSON.stringify((await reqWith(/Bài trên Chrome/))?.system ?? "");
     ok(/mặc định dùng Chrome của người dùng/.test(sysU), "model được dặn dùng Chrome của người dùng (đang kết nối)");
   } finally {
+    // Chrome còn ghi hồ sơ vài trăm ms sau khi bị dừng: xóa ngay thì rmdir báo ENOTEMPTY (máy CI Linux).
+    const exited = new Promise((res) => proc.once("exit", res));
     proc.kill();
+    await Promise.race([exited, sleep(5000)]);
     for (const d of (await a("GET", "/api/browser/ext")).j?.devices ?? []) await a("POST", "/api/browser/ext", { op: "remove", id: d.id });
-    fs.rmSync(PROFILE, { recursive: true, force: true });
+    fs.rmSync(PROFILE, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
   }
 }
 

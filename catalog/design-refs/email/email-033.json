@@ -1,0 +1,123 @@
+{
+  "v": 1,
+  "id": "email-033",
+  "domain": "email",
+  "title": "Thư lễ hội nền xanh đêm: ảnh bí ngô cam, khối ưu đãi viền cam, chữ hoa đậm",
+  "moods": [
+    "energetic",
+    "bold-color",
+    "dark-cinematic"
+  ],
+  "industries": [
+    "ecommerce",
+    "events"
+  ],
+  "audience": [
+    "consumer"
+  ],
+  "source_url": "https://topol.io/email-templates/happy-halloween-gifts",
+  "source_host": "topol.io",
+  "source_kind": "public-image",
+  "credit": "Topol, mẫu thư Happy Halloween gifts",
+  "captured_at": "2026-11-20",
+  "image": {
+    "file": "email/email-033.webp",
+    "width": 1280,
+    "height": 1600,
+    "bytes": 89256,
+    "layout": "single"
+  },
+  "tokens": {
+    "theme": "dark",
+    "colors": [
+      {
+        "hex": "#01202c",
+        "role": "bg",
+        "share": 0.68
+      },
+      {
+        "hex": "#f9fdfd",
+        "role": "ink",
+        "share": 0.015
+      },
+      {
+        "hex": "#ef850b",
+        "role": "accent",
+        "share": 0.094
+      },
+      {
+        "hex": "#ffd23f",
+        "role": "accent2",
+        "share": 0
+      }
+    ],
+    "fonts": {
+      "head": {
+        "kit": "anton",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 400
+      },
+      "body": {
+        "kit": "ibm-plex-sans",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 400
+      },
+      "mono": null
+    },
+    "type": {
+      "basePx": 14,
+      "ratio": 1.333,
+      "sizes": [
+        48,
+        36,
+        14,
+        12
+      ],
+      "headLine": 1.15,
+      "bodyLine": 1.6,
+      "headCase": "none"
+    },
+    "tracking": {
+      "display": 0.01,
+      "heading": 0.02,
+      "body": 0,
+      "label": 0.04
+    },
+    "radius": {
+      "outer": 0,
+      "inner": 0,
+      "pill": false
+    },
+    "shadow": {
+      "level": 0,
+      "css": "none"
+    },
+    "spacing": {
+      "unit": 8,
+      "section": 32,
+      "gutter": 16,
+      "density": "dense"
+    },
+    "layout": {
+      "columns": 2,
+      "maxWidth": 600,
+      "align": "center",
+      "emptyShare": 0.1
+    },
+    "imagery": {
+      "kind": "photo",
+      "share": 0.35,
+      "light": "warm candle glow on pumpkins, dark surroundings",
+      "lens": "50mm still life, eye level",
+      "grade": "saturated orange on deep teal",
+      "subject": "carved pumpkins and autumn decor"
+    }
+  },
+  "measured": [
+    "theme"
+  ],
+  "why": "Nền xanh đêm #01202c với ảnh bí ngô cam #ef850b chiếm 30% đầu thư và con số 50% trắng 48 px. Tiêu đề chữ hoa đậm 36 px, các khối ưu đãi nền cam viền trắng xếp hai cột. Mã giảm giá đặt trong ô vàng nổi bật ở cuối. Mượn cách dùng một màu nóng trên nền lạnh sâu cho thư khuyến mãi theo mùa; không chép ảnh hay chữ.",
+  "licence": "Ảnh chụp thu nhỏ của trang công khai, chỉ để model tham khảo nguyên tắc. Không chép logo, chữ, ảnh hay phông độc quyền của trang."
+}

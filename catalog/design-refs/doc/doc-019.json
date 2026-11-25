@@ -1,0 +1,119 @@
+{
+  "v": 1,
+  "id": "doc-019",
+  "domain": "doc",
+  "title": "Bìa báo cáo thường niên Việt: chữ hoa đặc khối xanh lam và sọc ngang",
+  "moods": [
+    "bold-color",
+    "swiss-precise",
+    "energetic"
+  ],
+  "industries": [
+    "food-beverage",
+    "finance"
+  ],
+  "audience": [
+    "investors",
+    "public"
+  ],
+  "source_url": "https://www.vinamilk.com.vn/vi/bao-cao-thuong-nien",
+  "source_host": "vinamilk.com.vn",
+  "source_kind": "public-image",
+  "credit": "Vinamilk, báo cáo thường niên, trang bìa",
+  "captured_at": "2026-11-20",
+  "image": {
+    "file": "doc/doc-019.webp",
+    "width": 1280,
+    "height": 1600,
+    "bytes": 49790,
+    "layout": "single"
+  },
+  "tokens": {
+    "theme": "light",
+    "colors": [
+      {
+        "hex": "#fffef2",
+        "role": "bg",
+        "share": 0.666
+      },
+      {
+        "hex": "#000dad",
+        "role": "ink",
+        "share": 0.291
+      },
+      {
+        "hex": "#4650c0",
+        "role": "accent",
+        "share": 0.007
+      }
+    ],
+    "fonts": {
+      "head": {
+        "kit": "anton",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 400
+      },
+      "body": {
+        "kit": "be-vietnam-pro",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 400
+      },
+      "mono": null
+    },
+    "type": {
+      "basePx": 14,
+      "ratio": 1.618,
+      "sizes": [
+        140,
+        40,
+        14
+      ],
+      "headLine": 0.9,
+      "bodyLine": 1.3,
+      "headCase": "upper"
+    },
+    "tracking": {
+      "display": -0.02,
+      "heading": 0,
+      "body": 0,
+      "label": 0.04
+    },
+    "radius": {
+      "outer": 0,
+      "inner": 0,
+      "pill": false
+    },
+    "shadow": {
+      "level": 0,
+      "css": "none"
+    },
+    "spacing": {
+      "unit": 8,
+      "section": 64,
+      "gutter": 24,
+      "density": "balanced"
+    },
+    "layout": {
+      "columns": 1,
+      "maxWidth": 1280,
+      "align": "left",
+      "emptyShare": 0.2
+    },
+    "imagery": {
+      "kind": "type-only",
+      "share": 0,
+      "light": "",
+      "lens": "",
+      "grade": "",
+      "subject": ""
+    }
+  },
+  "measured": [
+    "theme",
+    "colors"
+  ],
+  "why": "Bìa trắng với dòng chữ hoa tiếng Việt cực đậm xanh lam cobalt cao khoảng 140 px chiếm nửa trên, dấu tiếng Việt rõ ở cỡ lớn. Nửa dưới là khoảng 12 sọc ngang xanh lam dày mỏng xen kẽ như nhịp thời gian. Chỉ một màu xanh trên trắng. Mượn chữ hoa đặc khối có dấu đặt làm hình chính và sọc nhịp điệu; không chép chữ hay logo.",
+  "licence": "Ảnh chụp thu nhỏ của trang công khai, chỉ để model tham khảo nguyên tắc. Không chép logo, chữ, ảnh hay phông độc quyền của trang."
+}

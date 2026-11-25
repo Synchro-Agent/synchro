@@ -50,15 +50,35 @@ const lg = await fetch(`${B}/api/auth/login`, { method: "POST", headers: { "cont
 const adminCookie = (lg.headers.getSetCookie?.() ?? []).find((c) => c.startsWith("synchro_session="))?.split(";")[0];
 if (!adminCookie) { console.error(`Không đăng nhập được tài khoản quản trị thử nghiệm (${lg.status}): ${(await lg.text()).slice(0, 200)}`); process.exit(1); }
 
+const SUITE_MS = 15 * 60_000;
+/** Vì sao bộ kiểm dừng: hết giờ / bị giết / mã thoát, kèm dòng lỗi đầu tiên của stderr
+ *  và chỗ ném lỗi (dòng "at …" kế tiếp). */
+function why(r, err) {
+  const head = r.error?.code === "ETIMEDOUT" ? `hết ${SUITE_MS / 60_000} phút, bị dừng`
+    : r.error ? `${r.error.code ?? r.error.message}` : r.signal ? `bị giết (${r.signal})` : `mã thoát ${r.status}`;
+  const lines = err.split("\n").map((l) => l.trim()).filter(Boolean);
+  const i = lines.findIndex((l) => /^(?:[A-Za-z]*Error|AssertionError|Uncaught)\b/.test(l));
+  const msg = i >= 0 ? [lines[i], lines.slice(i + 1).find((l) => l.startsWith("at "))].filter(Boolean)
+    : lines.filter((l) => !/^Node\.js v/.test(l)).slice(-2);
+  return [head, ...msg].join(" · ").slice(0, 500);
+}
+
 const rows = [];
 for (const f of suites) {
   const t = Date.now();
   console.log(`\n━━ ${f}`);
-  const r = spawnSync(process.execPath, [path.join(dir, f)], { stdio: ["ignore", "pipe", "pipe"], encoding: "utf8", timeout: 15 * 60_000, env: { ...process.env, SYNCHRO_ADMIN_COOKIE: adminCookie } });
-  process.stdout.write(r.stdout); process.stderr.write(r.stderr);
+  // maxBuffer: mặc định 1 MB; bộ in nhiều hơn bị giết giữa chừng (ENOBUFS) và trông như tự sập.
+  const r = spawnSync(process.execPath, [path.join(dir, f)], { stdio: ["ignore", "pipe", "pipe"], encoding: "utf8",
+    timeout: SUITE_MS, maxBuffer: 64 * 1024 * 1024, env: { ...process.env, SYNCHRO_ADMIN_COOKIE: adminCookie } });
+  const out = r.stdout ?? "", err = r.stderr ?? "";
+  process.stdout.write(out); process.stderr.write(err);
   // Dòng tổng kết: "N đạt, M lỗi|hỏng", "N/T đạt", hoặc "N passed, M failed" (vài bộ Speech in tiếng Anh; trước đây không khớp nên luôn bị tính là lỗi).
-  const m = /(\d+) (?:đạt|passed), (\d+) (?:lỗi|hỏng|failed)|(\d+)\/(\d+) đạt/.exec(r.stdout.split("\n").reverse().join("\n"));
+  const SUM = /(\d+) (?:đạt|passed), (\d+) (?:lỗi|hỏng|failed)|(\d+)\/(\d+) đạt/;
+  const m = SUM.exec(out.split("\n").reverse().join("\n"));
   const pass = m ? Number(m[1] ?? m[3]) : 0, fail = m ? Number(m[2] ?? Number(m[4]) - Number(m[3])) : 1;
+  // Bộ hỏng mà không có dòng ✗ nào giải thích (sập giữa chừng, hết giờ, bị giết): in lý do trên MỘT dòng ✗, vì ci.txt
+  // của CI chỉ giữ các dòng ✗ và đuôi nhật ký, vết ngăn xếp nằm giữa nhật ký sẽ mất.
+  if (r.status !== 0 && (!m || !fail)) console.log(`  ✗ ${f} dừng không có tổng kết: ${why(r, err)}`);
   rows.push({ f, pass, fail: r.status === 0 ? fail : Math.max(fail, 1), s: ((Date.now() - t) / 1000).toFixed(0) });
 }
 console.log("\n━━ Tổng kết");

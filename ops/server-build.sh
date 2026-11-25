@@ -26,7 +26,7 @@ SRC="${SYNCHRO_INCOMING:-$APP}"
 . "$(dirname "${BASH_SOURCE[0]}")/bluegreen-lib.sh"
 # Một lần deploy mỗi lúc; watchdog (ops/watchdog.sh) thấy khóa này thì không khởi động lại web giữa chừng. Lần sau chờ lần trước xong, không cắt ngang lúc đang tráo bản.
 if command -v flock >/dev/null 2>&1; then
-  exec 9>/run/synchro-deploy.lock
+  exec 9>"${DEPLOY_LOCK:-/run/synchro-deploy.lock}"
   flock -w 900 9 || { echo "Đang có lần deploy khác chạy quá lâu." >&2; exit 1; }
 fi
 # Chọn cách deploy SAU khi giữ khóa: bluegreen-migrate.sh (giữ cùng khóa) có thể vừa chuyển production sang xanh/lam.

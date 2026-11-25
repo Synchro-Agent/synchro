@@ -1,0 +1,119 @@
+{
+  "v": 1,
+  "id": "poster-028",
+  "domain": "poster",
+  "title": "Poster lễ hội âm nhạc: chữ xanh lam dày đặc nửa trên, khối 3D xanh chanh nửa dưới",
+  "moods": [
+    "bold-color",
+    "playful",
+    "swiss-precise"
+  ],
+  "industries": [
+    "culture-music",
+    "events"
+  ],
+  "audience": [
+    "youth",
+    "public"
+  ],
+  "source_url": "https://100-beste-plakate.de/wp-content/uploads/2026/06/100bp25_29610.jpg",
+  "source_host": "100-beste-plakate.de",
+  "source_kind": "public-image",
+  "credit": "H A N D D, Der Sommer in Stuttgart 2025, 100 Beste Plakate 2025",
+  "captured_at": "2026-11-20",
+  "image": {
+    "file": "poster/poster-028.webp",
+    "width": 1130,
+    "height": 1600,
+    "bytes": 86218,
+    "layout": "single"
+  },
+  "tokens": {
+    "theme": "light",
+    "colors": [
+      {
+        "hex": "#ffffff",
+        "role": "bg",
+        "share": 0.562
+      },
+      {
+        "hex": "#0201ff",
+        "role": "ink",
+        "share": 0.2
+      },
+      {
+        "hex": "#00fe01",
+        "role": "accent",
+        "share": 0
+      }
+    ],
+    "fonts": {
+      "head": {
+        "kit": "archivo",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 700
+      },
+      "body": {
+        "kit": "archivo",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 400
+      },
+      "mono": null
+    },
+    "type": {
+      "basePx": 16,
+      "ratio": 1.5,
+      "sizes": [
+        60,
+        32,
+        20,
+        14
+      ],
+      "headLine": 0.95,
+      "bodyLine": 1.2,
+      "headCase": "none"
+    },
+    "tracking": {
+      "display": -0.03,
+      "heading": -0.02,
+      "body": 0,
+      "label": 0
+    },
+    "radius": {
+      "outer": 0,
+      "inner": 0,
+      "pill": false
+    },
+    "shadow": {
+      "level": 0,
+      "css": "none"
+    },
+    "spacing": {
+      "unit": 8,
+      "section": 24,
+      "gutter": 16,
+      "density": "dense"
+    },
+    "layout": {
+      "columns": 2,
+      "maxWidth": 1130,
+      "align": "asymmetric",
+      "emptyShare": 0.1
+    },
+    "imagery": {
+      "kind": "3d",
+      "share": 0.45,
+      "light": "glossy studio light, bright specular highlights",
+      "lens": "macro product render, low angle",
+      "grade": "pure saturated green on electric blue",
+      "subject": "a glossy lime-green blob object"
+    }
+  },
+  "measured": [
+    "theme"
+  ],
+  "why": "Nửa trên là khối chữ sans xanh lam #0201ff căn phải, cỡ từ 20 đến 60 px, xếp như bảng thông báo. Nửa dưới nền xanh lam đặc với một vật thể 3D xanh chanh #00fe01 bóng loáng, đặt lệch trái. Chỉ hai màu thuần cạnh trắng, tương phản cực mạnh. Mượn cách chia đôi khung chữ và một vật 3D lạ làm hình chủ đạo; không chép hình hay chữ.",
+  "licence": "Ảnh chụp thu nhỏ của trang công khai, chỉ để model tham khảo nguyên tắc. Không chép logo, chữ, ảnh hay phông độc quyền của trang."
+}

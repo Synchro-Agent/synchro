@@ -1,0 +1,161 @@
+{
+  "v": 1,
+  "id": "dashboard-039",
+  "domain": "dashboard",
+  "title": "Bảng quản trị xanh lam: băng chào mừng minh họa và thẻ biểu đồ",
+  "moods": [
+    "clean-light",
+    "playful",
+    "data-dense"
+  ],
+  "industries": [
+    "general",
+    "ecommerce"
+  ],
+  "audience": [
+    "internal"
+  ],
+  "source_url": "https://ableproadmin.com/dashboard/index.html",
+  "source_host": "ableproadmin.com",
+  "source_kind": "public-page",
+  "captured_at": "2026-11-20",
+  "image": {
+    "file": "dashboard/dashboard-039.webp",
+    "width": 1280,
+    "height": 1600,
+    "bytes": 86950,
+    "layout": "single"
+  },
+  "tokens": {
+    "theme": "light",
+    "colors": [
+      {
+        "hex": "#f8f9fa",
+        "role": "bg",
+        "share": 0.634
+      },
+      {
+        "hex": "#ffffff",
+        "role": "surface",
+        "share": 0
+      },
+      {
+        "hex": "#f3f5f7",
+        "role": "raised",
+        "share": 0
+      },
+      {
+        "hex": "#131920",
+        "role": "ink",
+        "share": 0.067
+      },
+      {
+        "hex": "#5b6b79",
+        "role": "muted",
+        "share": 0
+      },
+      {
+        "hex": "#2f63ff",
+        "role": "accent",
+        "share": 0.104
+      },
+      {
+        "hex": "#dc2626",
+        "role": "accent2",
+        "share": 0.003
+      },
+      {
+        "hex": "#e7eaee",
+        "role": "line",
+        "share": 0.022
+      },
+      {
+        "hex": "#2ca87f",
+        "role": "pos",
+        "share": 0
+      },
+      {
+        "hex": "#dc2626",
+        "role": "neg",
+        "share": 0
+      }
+    ],
+    "fonts": {
+      "head": {
+        "kit": "inter",
+        "seen": "Inter var",
+        "seenLicence": "open",
+        "weight": 700
+      },
+      "body": {
+        "kit": "inter",
+        "seen": "Inter var",
+        "seenLicence": "open",
+        "weight": 500
+      },
+      "mono": null
+    },
+    "type": {
+      "basePx": 14,
+      "ratio": 1.289,
+      "sizes": [
+        30,
+        18,
+        16,
+        14,
+        12
+      ],
+      "headLine": 1.2,
+      "bodyLine": 1.5,
+      "headCase": "none"
+    },
+    "tracking": {
+      "display": 0,
+      "heading": 0,
+      "body": 0,
+      "label": 0
+    },
+    "radius": {
+      "outer": 12,
+      "inner": 12,
+      "pill": true
+    },
+    "shadow": {
+      "level": 1,
+      "css": "rgba(27, 46, 94, 0.04) -6px 0px 14px 1px"
+    },
+    "spacing": {
+      "unit": 8,
+      "section": 64,
+      "gutter": 8,
+      "density": "balanced"
+    },
+    "layout": {
+      "columns": 2,
+      "maxWidth": 1223,
+      "align": "left",
+      "emptyShare": 0.14
+    },
+    "imagery": {
+      "kind": "mixed",
+      "share": 0.4,
+      "light": "soft top light with gentle glossy highlights",
+      "lens": "small isometric 3D render",
+      "grade": "saturated blue with white highlights",
+      "subject": "small 3D rocket illustration in a blue banner"
+    }
+  },
+  "measured": [
+    "theme",
+    "colors",
+    "fonts",
+    "type",
+    "tracking",
+    "radius",
+    "shadow",
+    "spacing",
+    "layout"
+  ],
+  "why": "Băng chào mừng xanh lam #2f63ff bo 12 px với minh họa tên lửa 3D nhỏ, bên dưới các thẻ trắng có biểu đồ cột mini và số 18 px. Nền #f8f9fa, viền #e7eaee mảnh, bóng bậc 1. Màu xanh lá và đỏ chỉ cho tăng giảm. Mượn cách dùng một băng màu có minh họa làm điểm mở đầu cho bảng nội bộ; không chép hình hay số.",
+  "licence": "Ảnh chụp thu nhỏ của trang công khai, chỉ để model tham khảo nguyên tắc. Không chép logo, chữ, ảnh hay phông độc quyền của trang."
+}

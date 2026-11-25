@@ -1,0 +1,124 @@
+{
+  "v": 1,
+  "id": "email-032",
+  "domain": "email",
+  "title": "Thư thời trang hồng đào: ảnh cắt nền xen chữ có chân, nút cam nhỏ",
+  "moods": [
+    "playful",
+    "warm-craft",
+    "clean-light"
+  ],
+  "industries": [
+    "fashion-beauty",
+    "ecommerce"
+  ],
+  "audience": [
+    "youth",
+    "consumer"
+  ],
+  "source_url": "https://topol.io/email-templates/spring-sale-up-for-store",
+  "source_host": "topol.io",
+  "source_kind": "public-image",
+  "credit": "Topol, mẫu thư Spring sale up for store",
+  "captured_at": "2026-11-20",
+  "image": {
+    "file": "email/email-032.webp",
+    "width": 1280,
+    "height": 1600,
+    "bytes": 88196,
+    "layout": "single"
+  },
+  "tokens": {
+    "theme": "light",
+    "colors": [
+      {
+        "hex": "#f3d9cd",
+        "role": "bg",
+        "share": 0.634
+      },
+      {
+        "hex": "#3a3f3e",
+        "role": "ink",
+        "share": 0
+      },
+      {
+        "hex": "#8b8f97",
+        "role": "muted",
+        "share": 0.017
+      },
+      {
+        "hex": "#e2603c",
+        "role": "accent",
+        "share": 0
+      }
+    ],
+    "fonts": {
+      "head": {
+        "kit": "source-serif-4",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 700
+      },
+      "body": {
+        "kit": "source-serif-4",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 400
+      },
+      "mono": null
+    },
+    "type": {
+      "basePx": 13,
+      "ratio": 1.333,
+      "sizes": [
+        32,
+        22,
+        13,
+        11
+      ],
+      "headLine": 1.15,
+      "bodyLine": 1.6,
+      "headCase": "none"
+    },
+    "tracking": {
+      "display": 0,
+      "heading": 0,
+      "body": 0,
+      "label": 0.04
+    },
+    "radius": {
+      "outer": 4,
+      "inner": 4,
+      "pill": false
+    },
+    "shadow": {
+      "level": 0,
+      "css": "none"
+    },
+    "spacing": {
+      "unit": 8,
+      "section": 48,
+      "gutter": 24,
+      "density": "airy"
+    },
+    "layout": {
+      "columns": 2,
+      "maxWidth": 600,
+      "align": "asymmetric",
+      "emptyShare": 0.4
+    },
+    "imagery": {
+      "kind": "photo",
+      "share": 0.4,
+      "light": "soft even studio light, cut-out products",
+      "lens": "flat lay and cut-out model shots",
+      "grade": "peach, blush and denim",
+      "subject": "summer blouses and denim shorts on a peach background"
+    }
+  },
+  "measured": [
+    "theme"
+  ],
+  "why": "Nền hồng đào #f3d9cd, sản phẩm chụp cắt nền đặt so le trái phải với khối chữ có chân 22 px. Tiêu đề khuyến mãi 32 px, nút cam san hô #fc8d6a nhỏ bo 4 px dưới mỗi sản phẩm. Nhiều khoảng trống quanh ảnh, chữ thân xám 13 px. Mượn bố cục so le ảnh cắt nền và chữ để thư dài vẫn có nhịp; không chép ảnh hay tên hàng.",
+  "licence": "Ảnh chụp thu nhỏ của trang công khai, chỉ để model tham khảo nguyên tắc. Không chép logo, chữ, ảnh hay phông độc quyền của trang."
+}

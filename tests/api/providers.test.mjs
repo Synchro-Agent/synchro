@@ -179,7 +179,22 @@ console.log("5. Antigravity: đăng nhập qua terminal giả");
   const cfg = `${process.cwd()}/data-mock/engine/logins/agy/${uid}/.gemini/config`;
   // Gỡ cầu nối có thể xóa luôn tệp cấu hình MCP khi không còn máy chủ nào: thiếu tệp nghĩa là không còn cầu nối (không làm bộ kiểm dừng giữa chừng).
   const rd = (f) => { try { return readFileSync(f, "utf8"); } catch { return ""; } };
-  ok(!JSON.parse(rd(`${cfg}/mcp_config.json`) || "{}").mcpServers?.synchro && /"matcher":"mcp_synchro_\.\*\|CallMcpTool"/.test(rd(`${cfg}/hooks.json`)), "xong lượt: gỡ cầu nối khỏi cấu hình agy; hook chỉ cho phép công cụ MCP (của Synchro)");
+  // Cầu nối và hook (chỉ cho phép công cụ MCP của Synchro) nằm trong HOME riêng của lượt (server/ai/turnhome.ts):
+  // lượt trên gọi được update_plan là hook đã có tác dụng. Cấu hình chung có thể chưa từng được tạo (dữ liệu giả lập
+  // mới, như máy CI); hooks.json ở đó chỉ còn sót từ cách cũ (SYNCHRO_CLI_TURN_HOME=0) nên không dùng để kiểm.
+  // Xong lượt: cấu hình chung không có cầu nối, HOME của lượt đã bỏ (dọn sau khi trả lời, nên chờ một chút).
+  const loginDir = `${process.cwd()}/data-mock/engine/logins/agy/${uid}`;
+  const { readdirSync: ls } = await import("node:fs");
+  let leftHomes = [];
+  for (let i = 0; i < 40; i++) {
+    leftHomes = ls(loginDir).filter((n) => n.startsWith(".synchro-home-") && n !== ".synchro-home-lock");
+    if (!leftHomes.length) break;
+    await sleep(250);
+  }
+  const shared = JSON.parse(rd(`${cfg}/mcp_config.json`) || "{}");
+  ok(!shared.mcpServers?.synchro && !leftHomes.length,
+    "xong lượt: cấu hình chung của agy không có cầu nối; HOME riêng của lượt (cầu nối + hook) đã dọn",
+    { shared, leftHomes });
   // agy 1.4.11: công cụ MCP nạp khi cần được gọi qua tên chung CallMcpTool — vẫn được phép, không dừng sau câu dẫn.
   const od = await member("POST", "/api/llm", { model: "sub-agy/gemini-3.8-flash", messages: [{ role: "user", content: 'Ghi việc [mock:ondemand] #tool=update_plan #args={"items":[{"content":"Buoc hai","status":"in_progress"}]}' }], skills: true });
   ok(od.s === 200 && /\[đã dùng update_plan qua CallMcpTool: Đã cập nhật/.test(od.j?.text ?? ""), "agy gọi công cụ qua CallMcpTool (nạp khi cần) vẫn chạy", JSON.stringify(od.j));

@@ -1,0 +1,125 @@
+{
+  "v": 1,
+  "id": "web-036",
+  "domain": "web",
+  "title": "Studio sáng tạo Sài Gòn: ảnh flycam công viên xanh, chữ trắng dày đặc",
+  "moods": [
+    "organic",
+    "editorial",
+    "bold-color"
+  ],
+  "industries": [
+    "consulting",
+    "media-publishing"
+  ],
+  "audience": [
+    "b2b",
+    "public"
+  ],
+  "source_url": "https://rice-creative.com/",
+  "source_host": "rice-creative.com",
+  "source_kind": "public-page",
+  "captured_at": "2026-11-20",
+  "image": {
+    "file": "web/web-036.webp",
+    "width": 1280,
+    "height": 800,
+    "bytes": 89138,
+    "layout": "single"
+  },
+  "tokens": {
+    "theme": "dark",
+    "colors": [
+      {
+        "hex": "#3d4a2a",
+        "role": "bg",
+        "share": 0
+      },
+      {
+        "hex": "#ffffff",
+        "role": "ink",
+        "share": 0
+      },
+      {
+        "hex": "#b8d26a",
+        "role": "accent",
+        "share": 0
+      },
+      {
+        "hex": "#dfe6cf",
+        "role": "muted",
+        "share": 0
+      }
+    ],
+    "fonts": {
+      "head": {
+        "kit": "archivo",
+        "seen": "Suisse Rice",
+        "seenLicence": "proprietary",
+        "weight": 600
+      },
+      "body": {
+        "kit": "archivo",
+        "seen": "Suisse Rice",
+        "seenLicence": "proprietary",
+        "weight": 400
+      },
+      "mono": null
+    },
+    "type": {
+      "basePx": 24,
+      "ratio": 1.417,
+      "sizes": [
+        34,
+        24
+      ],
+      "headLine": 1.2,
+      "bodyLine": 1.17,
+      "headCase": "none"
+    },
+    "tracking": {
+      "display": -0.01,
+      "heading": -0.01,
+      "body": 0,
+      "label": 0
+    },
+    "radius": {
+      "outer": 0,
+      "inner": 0,
+      "pill": false
+    },
+    "shadow": {
+      "level": 0,
+      "css": "none"
+    },
+    "spacing": {
+      "unit": 8,
+      "section": 120,
+      "gutter": 20,
+      "density": "airy"
+    },
+    "layout": {
+      "columns": 4,
+      "maxWidth": 1240,
+      "align": "left",
+      "emptyShare": 0
+    },
+    "imagery": {
+      "kind": "photo",
+      "share": 0.95,
+      "light": "overcast soft daylight, even",
+      "lens": "drone top-down at 45 degrees, wide",
+      "grade": "lush greens, soft contrast",
+      "subject": "curving park path through tropical trees"
+    }
+  },
+  "measured": [
+    "type",
+    "radius",
+    "shadow",
+    "spacing",
+    "layout"
+  ],
+  "why": "Ảnh flycam công viên xanh với lối đi cong phủ toàn màn đầu, đoạn chữ trắng 34 px chạy dày đặc đè lên ảnh như một tuyên ngôn. Không nút, không khung, không bo góc; thanh điều hướng chỉ có chữ. Xanh lá #7e9b45 của cây là màu chủ đạo. Mượn cách để đoạn văn lớn và ảnh địa phương cùng làm hình chính; không chép ảnh hay câu chữ của studio.",
+  "licence": "Ảnh chụp thu nhỏ của trang công khai, chỉ để model tham khảo nguyên tắc. Không chép logo, chữ, ảnh hay phông độc quyền của trang."
+}

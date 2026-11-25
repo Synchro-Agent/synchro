@@ -116,9 +116,20 @@ console.log("4b. Skill kèm hơn nghìn tệp: nhập được, script của ski
   const sv = await admin("POST", "/api/skills/import", { url: "https://github.com/mock-dev/big-skill", dry: false });
   ok(sv.s === 200 && sv.j?.skill?.fileCount === BIG + 1, "cài được vào Skill của bạn", { s: sv.s, error: sv.j?.error, n: sv.j?.skill?.fileCount });
   if (sv.j?.skill && !sv.j.skill.enabled) await admin("PATCH", "/api/skills/big-skill", { enabled: true });
-  let t = await admin("POST", "/api/llm", { system: "", max_tokens: 1500, skills: true, model: "anthropic/claude-sonnet-5-5", messages: [{ role: "user", content: "#skillrun big-skill scripts/count.py" }] });
-  for (let i = 0; i < 120 && t.j?.run && !t.j.done; i++) { await sleep(500); t = await admin("GET", `/api/runs/${t.j.run ?? t.j.id}?json=1`); }
-  ok(String(t.j?.text ?? "").includes(`SVG: ${BIG}`), `script của skill chạy với đủ ${BIG} tệp SVG`, String(t.j?.text ?? JSON.stringify(t.j)).slice(0, 400));
+  // dev:mock chạy script của skill trong sandbox-exec của macOS (CODE_RUN=local); máy Linux (CI) không có nơi chạy nào.
+  if (process.platform !== "darwin") {
+    console.log("  (bỏ qua chạy script của skill: dev:mock chỉ chạy code trong sandbox-exec của macOS)");
+  } else {
+    const msg = { role: "user", content: "#skillrun big-skill scripts/count.py" };
+    const q = { system: "", max_tokens: 1500, skills: true, model: "anthropic/claude-sonnet-5-5", messages: [msg] };
+    let t = await admin("POST", "/api/llm", q);
+    for (let i = 0; i < 120 && t.j?.run && !t.j.done; i++) {
+      await sleep(500);
+      t = await admin("GET", `/api/runs/${t.j.run ?? t.j.id}?json=1`);
+    }
+    const text = String(t.j?.text ?? JSON.stringify(t.j));
+    ok(text.includes(`SVG: ${BIG}`), `script của skill chạy với đủ ${BIG} tệp SVG`, text.slice(0, 400));
+  }
   await admin("DELETE", "/api/skills/big-skill");
 }
 

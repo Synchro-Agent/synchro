@@ -1,0 +1,154 @@
+{
+  "v": 1,
+  "id": "dashboard-028",
+  "domain": "dashboard",
+  "title": "Biểu đồ bong bóng toàn màn: năm cỡ chữ khổng lồ làm nền",
+  "moods": [
+    "playful",
+    "data-dense",
+    "clean-light"
+  ],
+  "industries": [
+    "education",
+    "nonprofit-gov"
+  ],
+  "audience": [
+    "students",
+    "public"
+  ],
+  "source_url": "https://www.gapminder.org/tools/",
+  "source_host": "gapminder.org",
+  "source_kind": "public-page",
+  "captured_at": "2026-11-20",
+  "image": {
+    "file": "dashboard/dashboard-028.webp",
+    "width": 1280,
+    "height": 800,
+    "bytes": 81690,
+    "layout": "single"
+  },
+  "tokens": {
+    "theme": "light",
+    "colors": [
+      {
+        "hex": "#ffffff",
+        "role": "bg",
+        "share": 0.839
+      },
+      {
+        "hex": "#f5f9fb",
+        "role": "surface",
+        "share": 0.021
+      },
+      {
+        "hex": "#222222",
+        "role": "ink",
+        "share": 0
+      },
+      {
+        "hex": "#666666",
+        "role": "muted",
+        "share": 0
+      },
+      {
+        "hex": "#ff798e",
+        "role": "accent",
+        "share": 0.015
+      },
+      {
+        "hex": "#4b98aa",
+        "role": "accent2",
+        "share": 0
+      },
+      {
+        "hex": "#425663",
+        "role": "line",
+        "share": 0
+      }
+    ],
+    "fonts": {
+      "head": {
+        "kit": "inter",
+        "seen": "Brand Sans Heading",
+        "seenLicence": "unknown",
+        "weight": 400
+      },
+      "body": {
+        "kit": "inter",
+        "seen": "Brand Sans Body",
+        "seenLicence": "unknown",
+        "weight": 400
+      },
+      "mono": {
+        "kit": "jetbrains-mono",
+        "seen": "Brand Mono",
+        "seenLicence": "unknown",
+        "weight": 400
+      }
+    },
+    "type": {
+      "basePx": 18,
+      "ratio": 1.13,
+      "sizes": [
+        26,
+        22,
+        20,
+        18,
+        16,
+        13,
+        10
+      ],
+      "headLine": 1.2,
+      "bodyLine": 1.2,
+      "headCase": "none"
+    },
+    "tracking": {
+      "display": 0,
+      "heading": 0,
+      "body": 0,
+      "label": 0
+    },
+    "radius": {
+      "outer": 0,
+      "inner": 4,
+      "pill": true
+    },
+    "shadow": {
+      "level": 1,
+      "css": "rgba(0, 0, 0, 0.05) 1px 1px 11px 0px, rgba(0, 0, 0, 0.18) 1px 1px 6px 0px"
+    },
+    "spacing": {
+      "unit": 4,
+      "section": 64,
+      "gutter": 15,
+      "density": "balanced"
+    },
+    "layout": {
+      "columns": 6,
+      "maxWidth": 620,
+      "align": "left",
+      "emptyShare": 0.15
+    },
+    "imagery": {
+      "kind": "data",
+      "share": 0.8,
+      "light": "",
+      "lens": "",
+      "grade": "",
+      "subject": ""
+    }
+  },
+  "measured": [
+    "theme",
+    "colors",
+    "fonts",
+    "type",
+    "tracking",
+    "radius",
+    "shadow",
+    "spacing",
+    "layout"
+  ],
+  "why": "Một biểu đồ bong bóng chiếm gần trọn khung, con số năm xám nhạt cỡ rất lớn nằm sau dữ liệu như hình nền. Bong bóng màu theo vùng: hồng #ff798e, vàng, xanh ngọc, xanh lá, có chú giải bản đồ nhỏ bên phải. Trục và nhãn mảnh, thanh trượt thời gian ở đáy. Mượn ý tưởng chữ lớn làm nền cho dữ liệu và màu theo nhóm; không chép dữ liệu.",
+  "licence": "Ảnh chụp thu nhỏ của trang công khai, chỉ để model tham khảo nguyên tắc. Không chép logo, chữ, ảnh hay phông độc quyền của trang."
+}

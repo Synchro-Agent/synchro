@@ -1,0 +1,155 @@
+{
+  "v": 1,
+  "id": "doc-006",
+  "domain": "doc",
+  "title": "Tài liệu lập trình nền tối: khối mã nổi, chữ xám nhạt",
+  "moods": [
+    "dark-cinematic",
+    "tech",
+    "minimal-mono"
+  ],
+  "industries": [
+    "tech-saas"
+  ],
+  "audience": [
+    "developers"
+  ],
+  "source_url": "https://tailwindcss.com/docs/installation/using-vite",
+  "source_host": "tailwindcss.com",
+  "source_kind": "public-page",
+  "captured_at": "2026-11-20",
+  "image": {
+    "file": "doc/doc-006.webp",
+    "width": 1280,
+    "height": 1600,
+    "bytes": 89594,
+    "layout": "single"
+  },
+  "tokens": {
+    "theme": "dark",
+    "colors": [
+      {
+        "hex": "#030712",
+        "role": "bg",
+        "share": 0.84
+      },
+      {
+        "hex": "#10141e",
+        "role": "surface",
+        "share": 0
+      },
+      {
+        "hex": "#1c202a",
+        "role": "raised",
+        "share": 0.119
+      },
+      {
+        "hex": "#ffffff",
+        "role": "ink",
+        "share": 0
+      },
+      {
+        "hex": "#d1d5dc",
+        "role": "muted",
+        "share": 0.007
+      },
+      {
+        "hex": "#74d4ff",
+        "role": "accent",
+        "share": 0
+      },
+      {
+        "hex": "#fb64b6",
+        "role": "accent2",
+        "share": 0
+      },
+      {
+        "hex": "#818389",
+        "role": "line",
+        "share": 0.004
+      }
+    ],
+    "fonts": {
+      "head": {
+        "kit": "inter",
+        "seen": "inter",
+        "seenLicence": "open",
+        "weight": 500
+      },
+      "body": {
+        "kit": "inter",
+        "seen": "inter",
+        "seenLicence": "open",
+        "weight": 400
+      },
+      "mono": {
+        "kit": "jetbrains-mono",
+        "seen": "inter",
+        "seenLicence": "open",
+        "weight": 400
+      }
+    },
+    "type": {
+      "basePx": 14,
+      "ratio": 1.289,
+      "sizes": [
+        30,
+        18,
+        16,
+        14,
+        12,
+        10
+      ],
+      "headLine": 1.2,
+      "bodyLine": 1.71,
+      "headCase": "none"
+    },
+    "tracking": {
+      "display": -0.025,
+      "heading": -0.025,
+      "body": 0,
+      "label": 0.086
+    },
+    "radius": {
+      "outer": 12,
+      "inner": 0,
+      "pill": true
+    },
+    "shadow": {
+      "level": 0,
+      "css": "none"
+    },
+    "spacing": {
+      "unit": 8,
+      "section": 57,
+      "gutter": 8,
+      "density": "balanced"
+    },
+    "layout": {
+      "columns": 2,
+      "maxWidth": 910,
+      "align": "left",
+      "emptyShare": 0.24
+    },
+    "imagery": {
+      "kind": "type-only",
+      "share": 0,
+      "light": "",
+      "lens": "",
+      "grade": "",
+      "subject": ""
+    }
+  },
+  "measured": [
+    "theme",
+    "colors",
+    "type",
+    "tracking",
+    "radius",
+    "shadow",
+    "spacing",
+    "layout"
+  ],
+  "why": "Nền xanh đen #030712, chữ thân xám nhạt #d1d5dc 14 px, tiêu đề 30 px siết −0,025em. Khối mã bo 12 px nền sáng hơn một bậc, tô cú pháp xanh lơ #74d4ff và hồng #fb64b6. Các bước đánh số với đường dọc mảnh nối nhau. Mượn cách trình bày từng bước bằng khối mã nổi trên nền tối; không chép mã.",
+  "licence": "Ảnh chụp thu nhỏ của trang công khai, chỉ để model tham khảo nguyên tắc. Không chép logo, chữ, ảnh hay phông độc quyền của trang."
+}

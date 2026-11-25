@@ -4,6 +4,10 @@ name: Deploy to VPS
 on:
   push:
     branches: [main, staging]
+  # Bộ quy tắc của repo bắt kiểm tra "verify" đạt trước khi gộp vào main, nên Pull Request vào main cũng chạy verify.
+  # Các bước deploy chỉ chạy khi github.ref_name là main, nên Pull Request không deploy.
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
 # Lần đẩy mới chỉ hủy bước kiểm tra đang chạy, không bao giờ hủy bước deploy: hủy giữa lúc tráo bản thì web dừng ở trạng thái dở dang.
@@ -119,14 +123,23 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: ci-result
+      # Pull Request: github.ref_name là "<số>/merge" (có dấu /, scp ghi vào thư mục con không có): ghi pr-<số>.txt.
+      # Đẩy main / staging giữ tên main.txt / staging.txt. Tên đi qua env, không chèn thẳng vào lệnh shell.
       - name: Gửi kết quả kiểm tra lên VPS
+        env:
+          EVENT: ${{ github.event_name }}
+          PR: ${{ github.event.pull_request.number }}
+          REF: ${{ github.ref_name }}
         run: |
+          if [ "$EVENT" = pull_request ]; then name="pr-$PR"; else name="$REF"; fi
+          name=$(printf '%s' "$name" | tr -c 'A-Za-z0-9._-' '-')
           mkdir -p ~/.ssh
           echo "${{ secrets.VPS_KEY }}" > ~/.ssh/id_deploy
           chmod 600 ~/.ssh/id_deploy
           # VPS_KNOWN_HOSTS (dòng known_hosts của máy chủ): có thì dùng, khỏi tin máy trả lời ssh-keyscan lần đầu.
           if [ -n "${{ secrets.VPS_KNOWN_HOSTS }}" ]; then echo "${{ secrets.VPS_KNOWN_HOSTS }}" >> ~/.ssh/known_hosts; else ssh-keyscan -H ${{ secrets.VPS_HOST }} >> ~/.ssh/known_hosts 2>/dev/null; fi
-          scp -i ~/.ssh/id_deploy ci.txt ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/var/www/ci-status/${{ github.ref_name }}.txt || true
+          dest="${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/var/www/ci-status/$name.txt"
+          scp -i ~/.ssh/id_deploy ci.txt "$dest" || true
 
   # Gộp deploy: lần deploy đạt gần nhất (máy chủ ghi /var/lib/synchro-ops/last-deploy-synchro) chưa đủ 15 phút thì chờ cho đủ. Lần đẩy mới
   # trong lúc chờ hủy lần đang chờ (cancel-in-progress), nên nhiều lần đẩy liền nhau thành một lần deploy của commit mới nhất.

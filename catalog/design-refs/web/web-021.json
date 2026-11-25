@@ -1,0 +1,135 @@
+{
+  "v": 1,
+  "id": "web-021",
+  "domain": "web",
+  "title": "Thể thao xe đạp: ảnh vận động viên toàn khung, chữ hoa giãn",
+  "moods": [
+    "energetic",
+    "minimal-mono"
+  ],
+  "industries": [
+    "sports",
+    "fashion-beauty"
+  ],
+  "audience": [
+    "premium",
+    "youth"
+  ],
+  "source_url": "https://www.rapha.cc/",
+  "source_host": "rapha.cc",
+  "source_kind": "public-page",
+  "captured_at": "2026-11-20",
+  "image": {
+    "file": "web/web-021.webp",
+    "width": 1280,
+    "height": 800,
+    "bytes": 84200,
+    "layout": "single"
+  },
+  "tokens": {
+    "theme": "light",
+    "colors": [
+      {
+        "hex": "#ffffff",
+        "role": "bg",
+        "share": 0.522
+      },
+      {
+        "hex": "#f2f2f2",
+        "role": "surface",
+        "share": 0
+      },
+      {
+        "hex": "#000000",
+        "role": "ink",
+        "share": 0.053
+      },
+      {
+        "hex": "#767676",
+        "role": "muted",
+        "share": 0.02
+      },
+      {
+        "hex": "#e0d7cd",
+        "role": "accent",
+        "share": 0.19
+      }
+    ],
+    "fonts": {
+      "head": {
+        "kit": "oswald",
+        "seen": "tradeGothic20",
+        "seenLicence": "unknown",
+        "weight": 700
+      },
+      "body": {
+        "kit": "archivo",
+        "seen": "trade-gothic-next",
+        "seenLicence": "unknown",
+        "weight": 400
+      },
+      "mono": null
+    },
+    "type": {
+      "basePx": 14,
+      "ratio": 1.331,
+      "sizes": [
+        44,
+        24,
+        16,
+        14,
+        12
+      ],
+      "headLine": 1.2,
+      "bodyLine": 1.3,
+      "headCase": "upper"
+    },
+    "tracking": {
+      "display": 0.05,
+      "heading": 0.05,
+      "body": 0,
+      "label": 0.04
+    },
+    "radius": {
+      "outer": 0,
+      "inner": 0,
+      "pill": false
+    },
+    "shadow": {
+      "level": 0,
+      "css": "none"
+    },
+    "spacing": {
+      "unit": 8,
+      "section": 44,
+      "gutter": 10,
+      "density": "dense"
+    },
+    "layout": {
+      "columns": 3,
+      "maxWidth": 1280,
+      "align": "center",
+      "emptyShare": 0.17
+    },
+    "imagery": {
+      "kind": "photo",
+      "share": 0.76,
+      "light": "cool overhead industrial light, strong contrast",
+      "lens": "35mm, low angle, centered",
+      "grade": "desaturated cool greys",
+      "subject": "cyclist crouched in a tunnel of fans"
+    }
+  },
+  "measured": [
+    "theme",
+    "colors",
+    "type",
+    "tracking",
+    "radius",
+    "shadow",
+    "spacing",
+    "layout"
+  ],
+  "why": "Ảnh vận động viên tràn hết bề ngang, chữ hoa giãn 0,05em đặt đè giữa ảnh, không khung, không bo góc. Bảng màu chỉ đen, trắng và xám #767676, để ảnh mang toàn bộ năng lượng. Khoảng cách giữa các phần chỉ 44 px, nhịp dày và nhanh như tạp chí thể thao. Mượn cách để một ảnh hành động thống trị và chữ hoa giãn nhẹ; không chép ảnh hay tên đội.",
+  "licence": "Ảnh chụp thu nhỏ của trang công khai, chỉ để model tham khảo nguyên tắc. Không chép logo, chữ, ảnh hay phông độc quyền của trang."
+}

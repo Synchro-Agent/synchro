@@ -1,0 +1,116 @@
+{
+  "v": 1,
+  "id": "poster-030",
+  "domain": "poster",
+  "title": "Poster ý tưởng xã hội nền than: chữ hoa nhỏ góc trái, đàn chim trắng bay chéo",
+  "moods": [
+    "minimal-mono",
+    "dark-cinematic",
+    "editorial"
+  ],
+  "industries": [
+    "nonprofit-gov",
+    "general"
+  ],
+  "audience": [
+    "public"
+  ],
+  "source_url": "https://www.posterheroes.org/2019/wp-content/uploads/2019/03/PH5_Keith-Gorman-1.jpg",
+  "source_host": "posterheroes.org",
+  "source_kind": "public-image",
+  "credit": "Keith Gorman, Poster Heroes 5",
+  "captured_at": "2026-11-20",
+  "image": {
+    "file": "poster/poster-030.webp",
+    "width": 771,
+    "height": 1080,
+    "bytes": 23256,
+    "layout": "single"
+  },
+  "tokens": {
+    "theme": "dark",
+    "colors": [
+      {
+        "hex": "#282425",
+        "role": "bg",
+        "share": 0.957
+      },
+      {
+        "hex": "#fdfdfd",
+        "role": "ink",
+        "share": 0.032
+      },
+      {
+        "hex": "#e9e4dc",
+        "role": "accent",
+        "share": 0
+      }
+    ],
+    "fonts": {
+      "head": {
+        "kit": "oswald",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 500
+      },
+      "body": {
+        "kit": "oswald",
+        "seen": "",
+        "seenLicence": "unknown",
+        "weight": 400
+      },
+      "mono": null
+    },
+    "type": {
+      "basePx": 14,
+      "ratio": 1.333,
+      "sizes": [
+        28,
+        14
+      ],
+      "headLine": 1.05,
+      "bodyLine": 1.3,
+      "headCase": "upper"
+    },
+    "tracking": {
+      "display": 0.02,
+      "heading": 0.02,
+      "body": 0,
+      "label": 0.04
+    },
+    "radius": {
+      "outer": 0,
+      "inner": 0,
+      "pill": false
+    },
+    "shadow": {
+      "level": 0,
+      "css": "none"
+    },
+    "spacing": {
+      "unit": 8,
+      "section": 48,
+      "gutter": 24,
+      "density": "airy"
+    },
+    "layout": {
+      "columns": 1,
+      "maxWidth": 770,
+      "align": "asymmetric",
+      "emptyShare": 0.78
+    },
+    "imagery": {
+      "kind": "illustration",
+      "share": 0.2,
+      "light": "flat white silhouettes, no lighting",
+      "lens": "flat 2D icons on a diagonal",
+      "grade": "white on charcoal",
+      "subject": "a diagonal trail of bird footprints"
+    }
+  },
+  "measured": [
+    "theme"
+  ],
+  "why": "Nền than đen #282425 phủ 95% khung, câu hỏi năm dòng chữ hoa trắng cỡ nhỏ đặt ở góc trên trái. Một hàng dấu chân chim trắng cắt chéo từ góc phải xuống đáy, tạo đường dẫn mắt duy nhất. Không màu nhấn, không ảnh, khoảng trống chiếm gần 80% diện tích. Mượn cách dùng một chuỗi biểu tượng lặp để kể chuyện trên nền tối gần trống; không chép hình hay câu chữ.",
+  "licence": "Ảnh chụp thu nhỏ của trang công khai, chỉ để model tham khảo nguyên tắc. Không chép logo, chữ, ảnh hay phông độc quyền của trang."
+}
