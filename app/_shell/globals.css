@@ -1600,11 +1600,28 @@ b,strong{font-weight:560}
 .sp-drop b{font-weight:460;font-size:var(--fs-chat);max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .sp-drop>span:not(.sp-drop-ic){font-size:var(--fs-1);color:var(--text-3)}
 .sp-drop-ic{width:36px;height:36px;border-radius:25%;display:grid;place-items:center;background:var(--card);box-shadow:0 0 0 .5px var(--border-strong);margin-bottom:6px;color:var(--text-2)}
-.sp-wave{display:flex;align-items:center;gap:2px;width:100%;min-width:0}
-.sp-wave i{flex:1;min-width:1px;max-width:4px;border-radius:9px;background:var(--sp-line);transition:background .2s}
-.sp-player{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:var(--r-card);background:var(--card);box-shadow:0 0 0 .5px var(--border-strong);min-width:0}
-.sp-pbtn{width:32px;height:32px;border-radius:50%;flex:none;display:grid;place-items:center;background:var(--btn-dark);color:var(--btn-dark-text)}
-.sp-player .icon-btn{width:28px;height:28px;flex:none}
+/* Trình phát âm thanh dùng chung (ui/audioplayer.tsx): mục Speech và khung xem trước tệp trong đoạn chat, nên ở
+   tệp chung. Dạng sóng là hai lớp vạch chồng khít nhau; lớp trên (.on) tô đậm và được cắt theo vị trí phát bằng
+   clip-path nên vệt tiến độ chạy mượt. 56 vạch tối thiểu 1px + khe 2px cần 166px, rộng hơn chỗ còn lại trên điện
+   thoại khi đồng hồ có phần thập phân: khe theo bề rộng (tối đa 2px, 1% khi hẹp) và cắt phần thừa để khe 10px
+   trước đồng hồ luôn còn. */
+.aud-player{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:var(--r-card);
+  background:var(--card);box-shadow:0 0 0 .5px var(--border-strong);min-width:0}
+.aud-btn{width:32px;height:32px;border-radius:50%;flex:none;display:grid;place-items:center;background:var(--btn-dark);
+  color:var(--btn-dark-text)}
+.aud-btn:hover{opacity:.88}.aud-btn:disabled{opacity:.4}
+.aud-player .icon-btn{width:28px;height:28px;flex:none}
+.aud-main{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
+.aud-title{font-size:var(--fs-1);color:var(--text-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.aud-time{font-size:var(--fs-1);color:var(--text-3);font-variant-numeric:tabular-nums;white-space:nowrap}
+.aud-wave{position:relative;display:block;width:100%;height:26px;min-width:0;overflow:hidden;gap:min(2px,1%);
+  touch-action:none;border-radius:4px;outline:none}
+.aud-wave:focus-visible{box-shadow:0 0 0 2px var(--bg),0 0 0 3.5px var(--text)}
+.aud-wave-row{position:absolute;inset:0;display:flex;align-items:center;gap:inherit;pointer-events:none}
+.aud-wave-row i{flex:1;min-width:1px;max-width:4px;border-radius:9px;
+  background:var(--sp-line,color-mix(in srgb,var(--border-strong) 85%,transparent))}
+.aud-wave-row.on{clip-path:inset(0 100% 0 0)}
+.aud-wave-row.on i{background:var(--text)}
 .sp-vchip{display:inline-flex;align-items:center;gap:7px;height:32px;padding:0 10px 0 5px;border-radius:var(--r-pill);border:.5px solid var(--border-strong);background:var(--card);font-size:var(--fs-2);max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.sp-vchip svg{color:var(--text-3);flex:none}
 .sp-pill{display:inline-flex;align-items:center;height:24px;padding:0 9px;border-radius:var(--r-pill);background:var(--sp-soft);font-size:var(--fs-1);color:var(--text-2);white-space:nowrap}
 .sp-add{display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 10px;border-radius:var(--r-pill);font-size:var(--fs-2);color:var(--text-2);align-self:flex-start}
@@ -2855,6 +2872,7 @@ html body .menu.art-style-menu{--gl-fill:var(--card);background:var(--card);min-
 .fp-img{flex:1;display:grid;place-items:center;padding:16px;box-sizing:border-box;overflow:auto;background:var(--bg-2,var(--hover))}
 .fp-img img{max-width:100%;max-height:100%;border-radius:var(--r-plate);box-shadow:0 1px 2px rgba(0,0,0,.08),0 8px 24px rgba(0,0,0,.1);background:#fff}
 .fp-media{flex:1;display:grid;place-items:center;padding:20px}.fp-media video{max-width:100%;max-height:100%;border-radius:var(--r-plate)}
+.fp-audio>.aud-player{width:min(560px,100%)}
 .fp-none{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:24px;text-align:center;color:var(--text-2);font-size:var(--fs-3)}
 .fp-none b{color:var(--text);font-weight:500}
 .fp-dl{height:30px;font-size:var(--fs-2);gap:6px;display:inline-flex;align-items:center;margin-right:4px;text-decoration:none;color:inherit}

@@ -13,6 +13,7 @@ import { Head, Wide } from "./shell";
 import type { ToolProps } from "./view";
 import { BulkBar, BulkButton, BulkCheck, bulkRow, each, useBulk, type BulkAct } from "../bulk";
 import { PageBar, usePage } from "../pager";
+import { fileDuration } from "../audioplayer";
 
 type Sub = "mine" | "library" | "create" | "ivc" | "pvc" | "design" | "remix";
 type Prev = { id: string; audio: string; dur: number };
@@ -337,11 +338,12 @@ function PickOwn({ own, value, onPick, onClose }: { own: Voice[]; value?: string
 }
 
 const fmtSec = (s: number) => (s >= 60 ? `${Math.floor(s / 60)} phút${s % 60 ? ` ${Math.round(s % 60)} giây` : ""}` : `${Math.round(s)} giây`);
-// Độ dài mẫu ước lượng ngay trên trình duyệt (đọc metadata của tệp âm thanh).
-const durOf = (f: File) => new Promise<number>((ok) => { const a = new Audio(); const u = URL.createObjectURL(f); a.preload = "metadata"; a.onloadedmetadata = () => { ok(Number.isFinite(a.duration) ? a.duration : 0); URL.revokeObjectURL(u); }; a.onerror = () => { ok(0); URL.revokeObjectURL(u); }; a.src = u; });
 function useSamples() {
   const [samples, setSamples] = useState<{ f: File; sec: number }[]>([]);
-  const add = async (fl: File[]) => { const out = await Promise.all(fl.map(async (f) => ({ f, sec: await durOf(f) }))); setSamples((s) => [...s, ...out]); };
+  const add = async (fl: File[]) => {
+    const out = await Promise.all(fl.map(async (f) => ({ f, sec: await fileDuration(f) })));
+    setSamples((s) => [...s, ...out]);
+  };
   return [samples, add, setSamples] as const;
 }
 // Đoạn văn để đọc to khi ghi âm mẫu (như ElevenLabs): AI viết đoạn mới, đọc xong một đoạn thì tự đổi sang đoạn khác cho lần ghi tiếp theo.
