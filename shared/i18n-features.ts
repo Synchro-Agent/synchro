@@ -431,4 +431,23 @@ Object.assign(FX_VI2EN, {
     + " Bấm Cài vào tổ chức trên GitHub, rồi clone lại."]:
     "The Synchro GitHub app isn't installed on the organization that owns this repo."
     + " Click Install on organization on GitHub, then clone again.",
+  "Tổ chức {org} chưa cấp quyền cho Synchro.": "The {org} organization hasn't given Synchro access.",
+  "Tổ chức {org} bật SAML SSO, cần cho phép Synchro dùng kết nối GitHub.":
+    "The {org} organization uses SAML SSO, so Synchro needs to be allowed to use your GitHub connection.",
+  "Ứng dụng Synchro chưa được cài vào tổ chức {org}.": "The Synchro app isn't installed on the {org} organization.",
+  ["Danh sách chưa đủ mọi repo (tài khoản rất nhiều repo hoặc GitHub ngắt giữa chừng). Tìm theo tên hoặc dán"
+    + " owner/repo vào ô ở trên."]:
+    "This list may be missing some repos (the account has a great many, or GitHub cut the connection)."
+    + " Search by name, or paste owner/repo into the box above.",
+  "Hoàn tất bước cấp quyền GitHub trong trình duyệt vừa mở. Synchro tự cập nhật khi xong.":
+    "Finish granting access to GitHub in the browser that just opened. Synchro updates by itself when you're done.",
+  // Kết nối GitHub từ ứng dụng máy tính qua trình duyệt của máy (server/ghlink.ts, app/api/github/connect).
+  "Lượt kết nối GitHub đã hết hạn. Bấm Kết nối GitHub lại.":
+    "This GitHub connection attempt has expired. Click Connect GitHub again.",
+  ["Đường dẫn kết nối GitHub này đã hết hạn hoặc đã được dùng. Bấm Kết nối GitHub lại trong ứng dụng"
+    + " Synchro."]: "This GitHub connection link has expired or was already used. Click Connect GitHub again in"
+    + " the Synchro app.",
+  "Tài khoản Synchro này không còn dùng được.": "This Synchro account can no longer be used.",
+  "Máy chủ chưa bật đăng nhập GitHub.": "This server hasn't turned on GitHub sign-in.",
+  "GitHub chưa kết nối được. Thử lại.": "Couldn't connect GitHub. Try again.",
 });

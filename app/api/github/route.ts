@@ -1,5 +1,6 @@
 import { can, handle, requireUser, sameOrigin } from "../../../server/authstore";
 import { getLink, gh, removeLink, updateScopes } from "../../../server/github";
+import { handoffState } from "../../../server/ghlink";
 import { cachedListing, fixUrlFor, missingScopes, pageOf, tokenKind } from "../../../server/ghrepos";
 import { configured } from "../../../server/oauth";
 
@@ -13,11 +14,14 @@ const repoOk = (s: string) => /^[\w.-]+\/[\w.-]+$/.test(s);
 
 // Trạng thái kết nối GitHub; ?repos=1&q=…&page=… liệt kê mọi repo người dùng truy cập được (cá nhân, cộng tác,
 // tổ chức), nhóm theo chủ, 50 repo mỗi trang; &refresh=1 đọc lại từ GitHub thay vì bản giữ vài phút;
-// ?tree=owner/repo&ref=nhánh liệt kê tệp văn bản trong repo (để thêm vào ngữ cảnh dự án).
+// ?tree=owner/repo&ref=nhánh liệt kê tệp văn bản trong repo (để thêm vào ngữ cảnh dự án);
+// ?handoff=id: kết quả lượt kết nối mà ứng dụng máy tính mở ở trình duyệt của máy (server/ghlink.ts).
 export const GET = handle(async (req) => {
   const { user } = requireUser(req);
-  const l = getLink(user.id);
   const url = new URL(req.url);
+  const hid = url.searchParams.get("handoff");
+  if (hid !== null) return Response.json(handoffState(user.id, hid) ?? { state: "gone", error: null, login: null });
+  const l = getLink(user.id);
   const tree = url.searchParams.get("tree") ?? "";
   if (tree) {
     if (!l) return Response.json({ error: "Chưa kết nối GitHub." }, { status: 400 });

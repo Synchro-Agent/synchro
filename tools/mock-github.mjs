@@ -3,7 +3,8 @@
 // Repo công khai (Kho kỹ năng dán link repo): /codeload/<chủ>/<repo>/zip/<nhánh> như codeload.github.com, /public-git/<chủ>/<repo>.git
 // clone không cần đăng nhập (chỉ đọc) như một máy chủ git công khai bất kỳ (GitLab, Gitea…).
 // CI giả lập: commit có tệp BROKEN thì lượt kiểm tra "test" lỗi (chạy xong sau ~1,5 giây kể từ lần đầu được hỏi), không có thì đạt.
-// Điều khiển cho kiểm thử: POST /_mock/repo, /_mock/comment, /_mock/merge, /_mock/close, /_mock/scopes;
+// Điều khiển cho kiểm thử: POST /_mock/repo, /_mock/comment, /_mock/merge, /_mock/close, /_mock/scopes,
+// /_mock/revoke ({ on }: mọi token bị thu hồi, như người dùng gỡ Synchro trên GitHub);
 // GET /_mock/state, /_mock/file.
 // Tổ chức: mọi chủ repo khác mock-dev là một tổ chức mock-dev tham gia. Tổ chức tên "locked-…" giả lập tổ chức bật
 // OAuth App access restrictions như github.com: repo riêng tư biến khỏi danh sách, API và git báo "not found",
@@ -29,7 +30,8 @@ export async function startMockGithub(port, dir) {
   const gitDir = (repo) => path.join(dir, `${repo}.git`);
   const git = (repo, args, input) => spawnSync("git", ["--git-dir", gitDir(repo), ...args], { encoding: "utf8", input });
   const sha = (repo, ref) => { const r = git(repo, ["rev-parse", "--verify", "-q", `${ref}^{commit}`]); return r.status === 0 ? r.stdout.trim() : null; };
-  const okToken = (t) => typeof t === "string" && t.startsWith("gho_mock_");
+  let revoked = false;
+  const okToken = (t) => !revoked && typeof t === "string" && t.startsWith("gho_mock_");
   // Quyền của token: theo scope xin lúc kết nối, hoặc theo /_mock/scopes (giả lập kết nối cũ thiếu read:org).
   const tokenScopes = new Map();
   let lastScope = "repo,read:user,user:email", forceScope = null;
@@ -142,6 +144,7 @@ export async function startMockGithub(port, dir) {
         return json(res, 200, { access_token: t, token_type: "bearer", scope });
       }
       if (p === "/_mock/scopes") { forceScope = (await body(req)).scopes ?? null; return json(res, 200, { ok: true }); }
+      if (p === "/_mock/revoke") { revoked = !!(await body(req)).on; return json(res, 200, { ok: true }); }
       // ---- điều khiển cho kiểm thử ----
       if (p === "/_mock/repo") { const b = await body(req); createRepo(b.repo, b.files, b.branch); return json(res, 200, { ok: true }); }
       if (p === "/_mock/comment") {

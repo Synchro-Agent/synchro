@@ -1469,17 +1469,25 @@ table{font-variant-numeric:tabular-nums}h1,h2,h3{text-wrap:balance}
   background:color-mix(in srgb,#e03131 8%,transparent);display:flex;align-items:center;gap:10px}
 .gh-err>span{flex:1;min-width:0;line-height:1.45}
 [data-theme="dark"] .gh-err{color:var(--ds-bad)}
-/* nhóm repo theo chủ (cá nhân / tổ chức / cộng tác); tiêu đề nhóm dính ở đầu khung khi cuộn, cùng nền đặc
-   với khung danh sách (nền kính của hộp thoại đổi theo phía sau nên tiêu đề không khớp được với nó) */
+/* nhóm repo theo chủ (cá nhân / tổ chức / cộng tác); chỉ dòng tên nhóm dính ở đầu khung khi cuộn (dòng giải thích
+   tổ chức bị chặn cuộn theo, để không chiếm chỗ của danh sách trên điện thoại), cùng nền đặc với khung danh sách
+   (nền kính của hộp thoại đổi theo phía sau nên tiêu đề không khớp được với nó) */
 .gh-grp{position:sticky;top:-4px;z-index:1;background:var(--card);padding:8px 10px 4px;display:flex;
   flex-direction:column;gap:6px}
-.gh-grp+.gh-grp,.gh-repo+.gh-grp{margin-top:6px;border-top:.5px solid var(--border)}
+.gh-grp+.gh-grp,.gh-repo+.gh-grp,.gh-grp-b+.gh-grp{margin-top:6px;border-top:.5px solid var(--border)}
 .gh-grp-t{display:flex;align-items:center;gap:6px;font-size:var(--fs-label);color:var(--text-3);min-width:0}
 .gh-grp-t b{font-weight:560;color:var(--text-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .gh-grp-t svg{flex:none}
 .gh-grp-n{margin-left:auto;font-variant-numeric:tabular-nums}
 .gh-grp-b{display:flex;align-items:center;gap:8px;font-size:var(--fs-1);color:var(--text-2);padding:6px 8px;
-  border-radius:var(--r-plate);background:color-mix(in srgb,#f59f00 12%,transparent)}
+  margin:2px 10px 6px;border-radius:var(--r-plate);background:color-mix(in srgb,#f59f00 12%,transparent)}
+.gh-grp-k{margin-left:auto;display:inline-flex;align-items:center;gap:4px;flex:none}
+.gh-grp-k>svg{color:#e67700}
+.gh-grp-k+.gh-grp-n{margin-left:6px}
+.gh-fix.sm{height:24px;padding:0 8px}
+.gh-trunc{padding:8px 10px}
+.gh-list>.gh-err{margin:4px}
+.gh-wait .ag-spin{flex:none}
 .gh-grp-b>span{flex:1;min-width:0;line-height:1.4}
 .gh-grp-b svg{flex:none;color:#e67700}
 .gh-fix{display:inline-flex;align-items:center;gap:4px;flex:none;height:28px;padding:0 10px;font-size:var(--fs-1);
@@ -3348,7 +3356,12 @@ button.tk-pill:hover{color:var(--text)}
 /* Chế độ Tự động của Code: các giai đoạn đã đi qua */
 
 /* Dự án: thêm tệp từ GitHub */
-.gh-imp{width:560px;max-width:calc(100vw - 32px);display:flex;flex-direction:column;gap:10px}
+/* hộp chọn repo / tệp của "Thêm từ GitHub" (Dự án): .modal không có lề trong, hộp tự đặt; danh sách repo dùng chung
+   với hộp thoại Repo GitHub nhưng ở đây nằm gọn trong lề */
+.gh-imp{width:560px;max-width:calc(100vw - 32px);display:flex;flex-direction:column;gap:10px;padding:20px;
+  max-height:min(720px,calc(100vh - 48px))}
+.gh-imp .gh-list{margin:0}
+@media (max-width:640px){.gh-imp{padding:16px}}
 .gh-list{max-height:360px;overflow:auto;display:flex;flex-direction:column;gap:2px;border:.5px solid var(--border);border-radius:var(--r-card);padding:4px}
 .gh-row{display:grid;grid-template-columns:1fr auto;gap:2px 8px;text-align:left;padding:8px 10px;border-radius:var(--r-plate)}.gh-row small{grid-column:1/-1;color:var(--text-3);font-size:var(--fs-1)}
 .gh-file{display:flex;align-items:center;gap:8px;padding:4px 8px;font-size:var(--fs-2);border-radius:var(--r-pill)}.gh-file span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.gh-file small{color:var(--text-3)}
