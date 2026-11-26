@@ -62,7 +62,9 @@ export function start(req: Request, p: Provider, purpose: Purpose = "login", sid
     q.set("prompt", "select_account");
     url = "https://accounts.google.com/o/oauth2/v2/auth?" + q;
   } else if (p === "github") {
-    q.set("scope", purpose === "link" ? "repo read:user user:email" : "read:user user:email");
+    // Kết nối repo: repo (repo riêng tư) và read:org (thấy cả tổ chức để chế độ thành viên riêng tư,
+    // xem server/ghrepos.ts).
+    q.set("scope", purpose === "link" ? "repo read:org read:user user:email" : "read:user user:email");
     url = `${GH_WEB}/login/oauth/authorize?` + q;
   } else {
     q.set("response_type", "code");
@@ -76,8 +78,11 @@ export function start(req: Request, p: Provider, purpose: Purpose = "login", sid
     for (const [k, v] of connectTickets) if (v.exp < now) connectTickets.delete(k);
     connectTickets.set(stateKey(state), { sid, exp: now + 600_000 });
   }
-  return { url, cookie: cookie(req, stateCookie(p), `${state}.${verifier}.${nonce}.${purpose}`, 600, { sameSite: sameSite(p), path: COOKIE_PATH }) };
+  const value = `${state}.${verifier}.${nonce}.${purpose}`;
+  return { url, state, cookie: cookie(req, stateCookie(p), value, 600, { sameSite: sameSite(p), path: COOKIE_PATH }) };
 }
+/** Mã trạng thái của lượt đăng nhập đang chạy trong trình duyệt này (từ cookie trạng thái), "" nếu không có. */
+export const stateOf = (req: Request, p: Provider) => (readCookie(req, stateCookie(p)) ?? "").split(".")[0];
 export const purposeOf = (req: Request, p: Provider): Purpose => { const v = (readCookie(req, stateCookie(p)) ?? "").split(".")[3]; return v === "link" || v === "connect" ? v : "login"; };
 export const clearState = (req: Request, p: Provider) => cookie(req, stateCookie(p), "", 0, { sameSite: sameSite(p), path: COOKIE_PATH });
 

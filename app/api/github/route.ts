@@ -1,23 +1,27 @@
 import { can, handle, requireUser, sameOrigin } from "../../../server/authstore";
-import { getLink, gh, removeLink } from "../../../server/github";
+import { getLink, gh, removeLink, updateScopes } from "../../../server/github";
+import { handoffState } from "../../../server/ghlink";
+import { cachedListing, fixUrlFor, missingScopes, pageOf, tokenKind } from "../../../server/ghrepos";
 import { configured } from "../../../server/oauth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-type Repo = { full_name: string; private: boolean; default_branch: string; description: string | null; pushed_at: string; html_url: string; permissions?: { push?: boolean } };
 
 // Tệp văn bản trong repo dùng được làm ngữ cảnh (bỏ ảnh, tệp nhị phân, thư mục phụ thuộc và bản build).
 const TEXT_RE = /\.(md|mdx|txt|rst|adoc|json|ya?ml|toml|ini|cfg|env\.example|csv|tsv|xml|html?|css|scss|less|js|jsx|ts|tsx|mjs|cjs|vue|svelte|py|rb|go|rs|java|kt|kts|swift|c|h|cc|cpp|hpp|cs|php|sh|bash|zsh|ps1|sql|graphql|gql|proto|dart|lua|r|scala|ex|exs|erl|clj|tf|gradle|dockerfile|makefile)$|(^|\/)(Dockerfile|Makefile|README|LICENSE|CHANGELOG)[^/]*$/i;
 const SKIP_RE = /(^|\/)(node_modules|vendor|dist|build|out|\.next|\.git|coverage|__pycache__|\.venv|venv|target|\.idea|\.vscode)\//;
 const repoOk = (s: string) => /^[\w.-]+\/[\w.-]+$/.test(s);
 
-// Trạng thái kết nối GitHub; ?repos=1&q=… liệt kê repo của người dùng (mới cập nhật trước);
-// ?tree=owner/repo&ref=nhánh liệt kê tệp văn bản trong repo (để thêm vào ngữ cảnh dự án).
+// Trạng thái kết nối GitHub; ?repos=1&q=…&page=… liệt kê mọi repo người dùng truy cập được (cá nhân, cộng tác,
+// tổ chức), nhóm theo chủ, 50 repo mỗi trang; &refresh=1 đọc lại từ GitHub thay vì bản giữ vài phút;
+// ?tree=owner/repo&ref=nhánh liệt kê tệp văn bản trong repo (để thêm vào ngữ cảnh dự án);
+// ?handoff=id: kết quả lượt kết nối mà ứng dụng máy tính mở ở trình duyệt của máy (server/ghlink.ts).
 export const GET = handle(async (req) => {
   const { user } = requireUser(req);
-  const l = getLink(user.id);
   const url = new URL(req.url);
+  const hid = url.searchParams.get("handoff");
+  if (hid !== null) return Response.json(handoffState(user.id, hid) ?? { state: "gone", error: null, login: null });
+  const l = getLink(user.id);
   const tree = url.searchParams.get("tree") ?? "";
   if (tree) {
     if (!l) return Response.json({ error: "Chưa kết nối GitHub." }, { status: 400 });
@@ -28,15 +32,24 @@ export const GET = handle(async (req) => {
     return Response.json({ files, truncated: t.truncated });
   }
   if (url.searchParams.get("repos")) {
-    if (!l) return Response.json({ repos: [] });
-    const q = (url.searchParams.get("q") ?? "").trim().toLowerCase();
-    const list = await gh<Repo[]>(l.token, "/user/repos?per_page=100&sort=pushed&affiliation=owner,collaborator,organization_member");
+    if (!l) return Response.json({ repos: [], groups: [], total: 0, page: 1, more: false });
+    const listing = await cachedListing(user.id, l.token, l.login, url.searchParams.get("refresh") === "1");
+    // Quyền thật của token (người dùng có thể đã thu hồi bớt trên GitHub): lưu lại để trạng thái
+    // báo đúng quyền còn thiếu.
+    if (listing.scopes !== null && listing.scopes !== l.scopes) updateScopes(user.id, listing.scopes);
+    const kind = tokenKind(l.token);
     return Response.json({
-      repos: list.filter((r) => !q || r.full_name.toLowerCase().includes(q)).slice(0, 50)
-        .map((r) => ({ full: r.full_name, private: r.private, branch: r.default_branch, desc: r.description, pushed: r.pushed_at, url: r.html_url, push: !!r.permissions?.push })),
+      ...pageOf(listing, url.searchParams.get("q") ?? "", Number(url.searchParams.get("page") ?? 1)),
+      missing: missingScopes(kind, listing.scopes ?? l.scopes),
     });
   }
-  return Response.json({ configured: configured("github"), allowed: can(user, "code"), linked: !!l && !l.broken, broken: !!l?.broken, login: l?.login ?? null, repoScope: !!l?.scopes.split(/[ ,]/).includes("repo") });
+  const kind = l ? tokenKind(l.token) : null;
+  return Response.json({
+    configured: configured("github"), allowed: can(user, "code"), linked: !!l && !l.broken, broken: !!l?.broken,
+    login: l?.login ?? null, repoScope: !!l && !missingScopes(kind!, l.scopes).includes("repo"),
+    // Kết nối cũ thiếu quyền (trước khi Synchro xin read:org): hộp thoại mời kết nối lại một lần.
+    kind, missing: l ? missingScopes(kind!, l.scopes) : [], fixUrl: kind ? fixUrlFor(kind) : null,
+  });
 });
 
 // Lấy nội dung các tệp đã chọn (tối đa 80 tệp, 2 MB) để thêm vào ngữ cảnh dự án.

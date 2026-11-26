@@ -11,15 +11,40 @@ export type GitFile = { path: string; status: string; add: number; del: number }
 export type GitState = { git: false } | { git: true; branch: string; remote: string; repo: string | null; ahead: number | null; files: GitFile[]; output?: string; pr?: { url: string; number: number; created?: boolean } };
 // Pull request của phiên mà Synchro theo dõi (tự sửa CI / góp ý, tự lưu trữ khi xong).
 export type PrInfo = { repo: string; number: number; url: string | null; branch: string | null; state: string; fixes: number; note: string | null; busy: boolean };
-export type GhStatus = { configured: boolean; allowed: boolean; linked: boolean; login: string | null; repoScope: boolean };
-export type GhRepo = { full: string; private: boolean; branch: string; desc: string | null; pushed: string; url: string; push: boolean };
+// missing: quyền OAuth còn thiếu để thấy mọi repo (kết nối từ trước khi Synchro xin read:org)
+// -> mời kết nối lại một lần.
+export type GhStatus = {
+  configured: boolean; allowed: boolean; linked: boolean; login: string | null; repoScope: boolean;
+  kind?: "oauth" | "app" | null; missing?: string[]; fixUrl?: string | null;
+};
+export type GhRepo = {
+  full: string; owner?: string; private: boolean; branch: string; desc: string | null; pushed: string; url: string;
+  push: boolean;
+};
+// Nhóm repo theo chủ. block: tổ chức đang chặn Synchro (oauth: chặn OAuth App, sso: SAML SSO, app: chưa cài app),
+// fixUrl là trang GitHub để gỡ chặn.
+export type GhGroup = {
+  owner: string; type: "user" | "org"; count: number; block?: "oauth" | "sso" | "app"; fixUrl?: string;
+};
+// truncated: danh sách chưa đủ (tài khoản quá nhiều repo, hay GitHub ngắt giữa chừng khi đọc các trang sau).
+export type GhRepoPage = {
+  repos: GhRepo[]; groups: GhGroup[]; total: number; page: number; more: boolean; missing?: string[];
+  truncated?: boolean;
+};
+// Lỗi kèm cách sửa từ máy chủ: fix = nút mở trang GitHub (cấp quyền tổ chức…), reconnect = kết nối lại GitHub.
+export type GhFix = { url: string; org: string; block: "oauth" | "sso" | "app" };
 
-export class WsError extends Error { constructor(m: string, public status: number) { super(m); } }
+export class WsError extends Error {
+  constructor(m: string, public status: number, public extra: { fix?: GhFix; reconnect?: boolean } = {}) { super(m); }
+}
 /** Máy chủ từ chối lượt mới vì phiên đã có lượt đang chạy: nối vào lượt đó, không phải lỗi. */
 export const alreadyRunning = (e: unknown) => e instanceof WsError && e.status === 409;
 async function json<T>(r: Response): Promise<T> {
   const j = await r.json().catch(() => ({}));
-  if (!r.ok) throw new WsError((j as { error?: string }).error || `Lỗi ${r.status}`, r.status);
+  if (!r.ok) {
+    const e = j as { error?: string; fix?: GhFix; reconnect?: boolean };
+    throw new WsError(e.error || `Lỗi ${r.status}`, r.status, { fix: e.fix, reconnect: e.reconnect });
+  }
   return j as T;
 }
 export const wsStatus = () => fetch("/api/ws", { cache: "no-store" }).then((r) => json<WsStatus>(r));
@@ -27,24 +52,90 @@ export const wsOp = <T = Record<string, unknown>>(op: string, sid: number | null
   fetch("/api/ws", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ op, sid: sid === null ? undefined : String(sid), ...body }) }).then((r) => json<T>(r));
 export const gitOp = (sid: number, action: string, body: Record<string, unknown> = {}) => wsOp<GitState>("git", sid, { action, ...body });
 export const ghStatus = () => fetch("/api/github", { cache: "no-store" }).then((r) => json<GhStatus>(r));
-export const ghRepos = (q = "") => fetch(`/api/github?repos=1&q=${encodeURIComponent(q)}`, { cache: "no-store" }).then((r) => json<{ repos: GhRepo[] }>(r)).then((j) => j.repos);
+export const ghRepos = (q = "", page = 1, refresh = false) =>
+  fetch(`/api/github?repos=1&q=${encodeURIComponent(q)}&page=${page}${refresh ? "&refresh=1" : ""}`,
+    { cache: "no-store" }).then((r) => json<GhRepoPage>(r));
 export const ghUnlink = () => fetch("/api/github", { method: "DELETE" }).then((r) => json(r));
 
-// Kết nối GitHub trong cửa sổ nhỏ; trang /api/github/done báo kết quả qua localStorage rồi tự đóng.
-export function ghConnect(): Promise<string | null> {
+/** Đang chạy trong ứng dụng máy tính: trang cấp quyền GitHub mở ở trình duyệt của máy, không ở cửa sổ con. */
+export const ghOutside = () =>
+  typeof window !== "undefined" && !!(window as { synchroDesktop?: unknown }).synchroDesktop;
+
+// Kết nối GitHub. Kết quả: null = đã kết nối, "timeout" = chưa có tin (nơi gọi đọc lại trạng thái),
+// "cancel" = người dùng thôi chờ (signal), còn lại là lời báo lỗi.
+export function ghConnect(signal?: AbortSignal): Promise<string | null> {
+  return ghOutside() ? ghConnectOutside(signal) : ghConnectPopup(signal);
+}
+
+// Web: cửa sổ nhỏ dùng chung cookie với trang; trang /api/github/done báo kết quả qua localStorage rồi tự đóng.
+function ghConnectPopup(signal?: AbortSignal): Promise<string | null> {
   return new Promise((resolve) => {
     const w = window.open("/api/github/connect", "synchro-gh", "width=760,height=780");
+    // Trình duyệt chặn cửa sổ bật lên: đi thẳng tới trang GitHub trong tab này, xong quay về trang chủ.
     if (!w) { location.href = "/api/github/connect"; return; }
     let done = false;
-    const finish = (err: string | null) => { if (done) return; done = true; window.removeEventListener("storage", onStore); clearTimeout(t); resolve(err); };
+    const finish = (err: string | null) => {
+      if (done) return;
+      done = true;
+      window.removeEventListener("storage", onStore);
+      window.removeEventListener("focus", onBack);
+      signal?.removeEventListener("abort", onAbort);
+      clearTimeout(t);
+      resolve(err);
+    };
     const onStore = (e: StorageEvent) => {
       if (e.key !== "synchro:gh" || !e.newValue) return;
-      try { finish((JSON.parse(e.newValue) as { error?: string }).error || null); } catch { finish(null); }
+      try { finish((JSON.parse(e.newValue) as { error?: string }).error || null); } catch (x) {
+        console.warn("[github] tin kết nối hỏng", x);
+        finish(null);
+      }
     };
+    // Người dùng có thể đóng cửa sổ con giữa chừng: quay lại trang mà chưa có kết quả thì thôi chờ
+    // ("timeout": nơi gọi tự đọc lại trạng thái kết nối), chừa một nhịp cho tin nhắn đến trước.
+    const onBack = () => setTimeout(() => finish("timeout"), 1500);
+    const onAbort = () => finish("cancel");
     window.addEventListener("storage", onStore);
+    window.addEventListener("focus", onBack);
+    signal?.addEventListener("abort", onAbort);
     // COOP tách cửa sổ con khỏi trang này nên không đọc được w.closed; hết 10 phút thì thôi chờ.
     const t = setTimeout(() => finish("timeout"), 600_000);
   });
+}
+
+type HandoffInfo = { state: "wait" | "open" | "done" | "error" | "gone"; error: string | null; login: string | null };
+// Ứng dụng máy tính: trình duyệt của máy có thể đăng nhập tài khoản Synchro khác hoặc chưa đăng nhập, nên app xin
+// đường dẫn trao tay gắn với tài khoản của app (server/ghlink.ts), mở nó ở trình duyệt (app chuyển mọi cửa sổ mới
+// ra trình duyệt của máy) và hỏi máy chủ kết quả tới khi xong, lỗi, hết hạn hay người dùng thôi chờ.
+async function ghConnectOutside(signal?: AbortSignal): Promise<string | null> {
+  let h: { id: string; url: string };
+  try {
+    h = await fetch("/api/github/connect", { method: "POST" }).then((r) => json<{ id: string; url: string }>(r));
+  } catch (e) { return (e as Error).message; }
+  window.open(h.url, "_blank");
+  const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
+  const until = Date.now() + 600_000;
+  let misses = 0;
+  while (Date.now() < until) {
+    await wait(2000);
+    if (signal?.aborted) return "cancel";
+    const s = await fetch(`/api/github?handoff=${encodeURIComponent(h.id)}`, { cache: "no-store" })
+      .then((r) => json<HandoffInfo>(r))
+      // Mất mạng một nhịp: hỏi lại; mất hẳn (nhiều lần liền) thì thôi, nơi gọi đọc lại trạng thái.
+      .catch((e) => { console.warn("[github] hỏi kết quả kết nối", (e as Error).message); return null; });
+    if (!s) { if (++misses > 5) return "timeout"; continue; }
+    misses = 0;
+    if (s.state === "done") return null;
+    if (s.state === "error") return s.error || "GitHub chưa kết nối được. Thử lại.";
+    if (s.state === "gone") {
+      // Máy chủ khởi động lại giữa chừng thì lượt không còn: có thể kết nối vẫn đã xong, nơi gọi đọc lại trạng thái.
+      const st = await ghStatus().catch((e) => {
+        console.warn("[github] trạng thái", (e as Error).message);
+        return null;
+      });
+      return st?.linked ? null : "Lượt kết nối GitHub đã hết hạn. Bấm Kết nối GitHub lại.";
+    }
+  }
+  return "timeout";
 }
 
 // Dòng của lượt agent: sự kiện (kèm số thứ tự s), mở đầu { t: "run" }, kết thúc { t: "end" }.

@@ -54,6 +54,10 @@ export function getLink(uid: string) {
     return { id: r.gh_id, login: r.login, token, scopes: r.scopes, createdAt: r.created_at, expiresAt: r.expires_at, broken: !!r.broken };
   } catch { return null; }
 }
+/** Quyền GitHub thật của token (header X-OAuth-Scopes) khác với bản đã lưu: cập nhật để biết còn thiếu quyền gì. */
+export function updateScopes(uid: string, scopes: string) {
+  links().prepare("UPDATE github_links SET scopes = ? WHERE user_id = ? AND scopes <> ?").run(scopes, uid, scopes);
+}
 export const removeLink = (uid: string) => links().prepare("DELETE FROM github_links WHERE user_id = ?").run(uid);
 
 // Làm mới token có hạn bằng refresh token (mỗi lần làm mới GitHub cấp refresh token mới, nên kết nối tự gia hạn mãi).
