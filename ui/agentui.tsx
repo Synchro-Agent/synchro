@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import * as I from "./icons";
 import { Markdown } from "./md";
-import { Loader } from "./brand";
+import { FluidDots } from "./fluiddots";
 import { tr, useLangReady } from "./i18n";
 import { localizeNote } from "../shared/agentfold";
 import { ConnLogo } from "./connlogo";
@@ -14,6 +14,7 @@ import { ArgsEditor, readArgs } from "./argsedit";
 import { CxDetails, cxHead } from "./cxcard";
 import type { CxCard } from "../shared/cxactions";
 import { ghConnect, ghRepos, ghStatus, ghUnlink, gitOp, useCodeUi, type GhRepo, type GhStatus, type GitState, type PlanItem } from "./wsclient";
+import { Spinner } from "./spinner";
 
 export type ToolStep = { k: "tool"; id: string; name: string; input: Record<string, unknown>; done?: boolean; ok?: boolean; summary?: string; output?: string; diff?: { path: string; add: number; del: number }; image?: string };
 // Câu hỏi duyệt (chế độ quyền, trang web chưa được phép): wait = đang chờ bạn; ok / no = đã trả lời; always = luôn cho phép.
@@ -83,7 +84,7 @@ function ToolRow({ t, onFile, verbose }: { t: ToolStep; onFile: (p: string) => v
   return (
     <div className={`ag-tool ${t.ok === false ? "bad" : ""}`}>
       <button className="ag-tool-h" onClick={() => setOpen(!open)}>
-        <span className="ag-ic">{!t.done ? <span className="ag-spin" /> : iconOf(t.name)}</span>
+        <span className="ag-ic">{!t.done ? <Spinner className="ag-spin" /> : iconOf(t.name)}</span>
         <span className="ag-verb">{desc(t) || VERB[t.name] || t.name}</span>
         <code className="ag-sum" data-notr>{label}</code>
         <Diff d={t.diff} />
@@ -233,7 +234,8 @@ export function AgentSteps({ steps, live, say, view = "normal", onAnswer }: { st
 const fmtTok = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n));
 const fmtTime = (s: number) => (s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${s % 60}s`);
 
-// Dòng trạng thái khi agent đang làm: logo Synchro xoay theo nhịp đồng bộ (Loader), việc đang làm (chữ lướt sáng), thời gian, số token.
+// Dòng trạng thái khi agent đang làm: chấm "đang trả lời" (FluidDots), việc đang làm (chữ lướt sáng), thời gian,
+// số token.
 export function StatusLine({ steps, start, tokens }: { steps: AStep[]; start: number; tokens: number }) {
   const [now, setNow] = useState(Date.now());
   useEffect(() => { const t = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(t); }, []);
@@ -257,7 +259,7 @@ export function StatusLine({ steps, start, tokens }: { steps: AStep[]; start: nu
   }
   return (
     <div className="ag-status">
-      <span className="ag-load" aria-hidden><Loader size={15} /></span>
+      <span className="ag-load" aria-hidden><FluidDots size={14} /></span>
       <span className="ag-shimmer">{tr(label)}</span>
       <span className="ag-meta" data-notr>{sec >= 1 ? `${fmtTime(sec)} · ` : ""}{fmtTok(tokens)} tokens</span>
     </div>
@@ -271,7 +273,7 @@ export function TaskCard({ plan }: { plan: PlanItem[] }) {
       {plan.map((x, i) => (
         <li key={i} className={x.status}>
           <span className="tk-ic">{x.status === "completed" ? <I.CheckCircle size={16} />
-            : x.status === "in_progress" ? <Loader size={14} />
+            : x.status === "in_progress" ? <Spinner size={14} />
             : <I.CircleDashed size={16} />}</span>
           <span>{x.content}</span>
         </li>
@@ -365,7 +367,7 @@ function RepoModal({ git, ensureSid, say, onClose, onCloned }: { git?: GitState;
                 <button key={r.full} className="gh-repo" disabled={!!busy} onClick={() => clone(r.full)}>
                   <span className="gh-repo-n"><b data-notr>{r.full}</b>{r.private && <em>Riêng tư</em>}</span>
                   {r.desc && <span className="gh-repo-d" data-notr>{r.desc}</span>}
-                  {busy === r.full && <span className="gh-repo-s"><span className="ag-spin" />Đang clone…</span>}
+                  {busy === r.full && <span className="gh-repo-s"><Spinner className="ag-spin" />Đang clone…</span>}
                 </button>
               ))}
             </div>

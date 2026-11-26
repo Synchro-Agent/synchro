@@ -11,6 +11,7 @@ import { getLang, locale, tf, tr } from "./i18n";
 import { diffLines } from "./md";
 import { slimSkillZip, tooLarge } from "./skillzip";
 import { PageBar, usePage } from "./pager";
+import { Spinner } from "./spinner";
 
 // studio: mục ở trang Artifacts (Tài liệu / Trình bày / Thiết kế) mà Synchro tự xếp skill vào (src: bộ luật / model / người dùng tự chọn).
 type Kind = "docs" | "slides" | "design";
@@ -285,7 +286,9 @@ export function SkillsPanel({ q, Toggle }: { q: string; Toggle: ComponentType<{ 
 
   return (
     <>
-      {(list === null || list.length > 0 || !q) && <div className="pl-sec">Your skills <i>{list?.length ?? 0}</i>{list && list.length > 0 && <span className="pl-sec-d">{`${on} enabled`}</span>}{checking && <span className="art-spin sm" />}<span className="pl-sec-r"><BulkButton b={bs} compact /></span></div>}
+      {(list === null || list.length > 0 || !q) && <div className="pl-sec">Your skills <i>{list?.length ?? 0}</i>{list
+        && list.length > 0 && <span className="pl-sec-d">{`${on} enabled`}</span>}{checking
+        && <Spinner className="art-spin sm" />}<span className="pl-sec-r"><BulkButton b={bs} compact /></span></div>}
       {err && <div className="sk-err" role="alert"><span>{err}</span><button className="icon-btn" aria-label={tr("Đóng")} style={{ width: 22, height: 22 }} onClick={() => setErr("")}>×</button></div>}
       {loadErr && <div className="sk-err">{loadErr}</div>}
       {list !== null && !list.length && !q && <div className="hub-empty"><I.Scroll size={18} /><span>Single skills you add show up here. Paste a GitHub link above, or drop a .zip skill folder or a SKILL.md anywhere on this page.</span></div>}
@@ -359,7 +362,8 @@ export function SkillsPanel({ q, Toggle }: { q: string; Toggle: ComponentType<{ 
             <div className="sk-actions">
               <button className="btn danger" onClick={() => del(detail.name)}>Delete</button>
               <span style={{ flex: 1 }} />
-              <button className="btn" disabled={exporting} onClick={() => exportZip(detail.name)}>{exporting ? <span className="art-spin sm" /> : <I.Download size={14} />}Export .zip</button>
+              <button className="btn" disabled={exporting} onClick={() => exportZip(detail.name)}>{exporting
+                ? <Spinner className="art-spin sm" /> : <I.Download size={14} />}Export .zip</button>
               <button className="btn" onClick={() => verRef.current?.click()}>Upload new version</button>
               <button className="btn dark" onClick={() => { toggle(detail.name, !detail.enabled); setDetail({ ...detail, enabled: !detail.enabled }); }}>{detail.enabled ? "Disable" : "Enable"}</button>
             </div>

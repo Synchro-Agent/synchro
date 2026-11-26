@@ -32,6 +32,7 @@ import {
 import { kitFontUrl, presetIn, withKitFontLink } from "../shared/artkit";
 import { PRESETS, presetOf } from "../shared/designpresets";
 import { SaveStyleItem } from "./designstyleui";
+import { Spinner } from "./spinner";
 export { deckExport, H2I, isDeck, libUrls };
 
 // Cầu nối trong artifact: window.synchro.complete (và window.claude.complete cho artifact viết theo Claude),
@@ -201,7 +202,8 @@ export function ArtifactFrame({ type, content, ai, onError, onHeight, title, cla
     addEventListener("message", h);
     return () => removeEventListener("message", h);
   }, [ch]);
-  if (shown === null) return <div className={className} style={{ ...style, display: "grid", placeItems: "center" }} aria-busy="true"><span className="art-spin" /></div>;
+  if (shown === null) return <div className={className} style={{ ...style, display: "grid", placeItems: "center" }}
+    aria-busy="true"><Spinner className="art-spin" /></div>;
   if (strayed === ch) return <p className="sh-warn" role="alert">{tr("Phần này tự chuyển sang một trang khác nên Synchro đã dừng hiển thị.")}</p>;
   return <iframe ref={ref} key={ch} title={title} className={className} style={style} srcDoc={doc}
     onLoad={isPublic ? () => { if (loaded.current === doc) setStrayed(ch); loaded.current = doc; } : undefined}
@@ -225,7 +227,8 @@ export function MermaidSvg({ code, onError }: { code: string; onError?: (m: stri
     return () => { on = false; };
   }, [code]); // eslint-disable-line react-hooks/exhaustive-deps
   if (err) return <div className="art-err-inline">{tr("Không vẽ được sơ đồ")}: {err}</div>;
-  return svg ? <div className="art-mermaid" dangerouslySetInnerHTML={{ __html: svg }} /> : <div className="art-loading"><span className="art-spin" /></div>;
+  return svg ? <div className="art-mermaid" dangerouslySetInnerHTML={{ __html: svg }} />
+    : <div className="art-loading"><Spinner className="art-spin" /></div>;
 }
 
 // Sơ đồ D2: máy chủ dựng SVG trong sandbox (d2render.ts), hiện bằng <img> nên SVG không chạy được mã nào. svg(): SVG đã vẽ (tải về, chuyển PNG).
@@ -254,7 +257,10 @@ export function D2Svg({ code, onError, onSvg }: { code: string; onError?: (m: st
   if (err) return <div className="art-err-inline">{tr("Không vẽ được sơ đồ")}: {err}</div>;
   // SVG của D2 chỉ có viewBox: không đặt cỡ thì ảnh giãn hết bề ngang, sơ đồ bốn khối thành chữ 30px. Hiện đúng cỡ thật, chỉ co lại khi khung hẹp hơn.
   const vb = /viewBox="[-\d.]+[ ,]+[-\d.]+[ ,]+([\d.]+)[ ,]+([\d.]+)"/.exec(svg);
-  return svg ? <div className="art-d2"><img alt={tr("Sơ đồ D2")} width={vb ? Math.round(Number(vb[1])) : undefined} height={vb ? Math.round(Number(vb[2])) : undefined} src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`} /></div> : <div className="art-loading"><span className="art-spin" /></div>;
+  return svg ? <div className="art-d2"><img alt={tr("Sơ đồ D2")} width={vb ? Math.round(Number(vb[1]))
+    : undefined} height={vb ? Math.round(Number(vb[2]))
+    : undefined} src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`} /></div>
+    : <div className="art-loading"><Spinner className="art-spin" /></div>;
 }
 export const d2Drawn = (code: string) => d2Cache.get(`${isDark() ? 1 : 0}:${code}`) ?? "";
 
@@ -343,7 +349,8 @@ function DownloadMenu({ items, say, note }: { items: DlItem[]; say: (m: string) 
   return (
     <div className="art-dl" ref={ref}>
       {note && <span className="art-dl-note" role="status">{note}</span>}
-      <button className="icon-btn" onClick={() => setOpen(!open)} aria-label="Tải về" data-tip="Tải về" aria-expanded={open}>{busy ? <span className="art-spin sm" /> : <I.Download size={16} />}</button>
+      <button className="icon-btn" onClick={() => setOpen(!open)} aria-label="Tải về" data-tip="Tải về"
+        aria-expanded={open}>{busy ? <Spinner className="art-spin sm" /> : <I.Download size={16} />}</button>
       <Menu open={open} className="art-dl-menu">
         <div className="art-dl-h">{tr("Tải về")}</div>
         {items.map((it) => <button key={it.label} className="menu-item" onClick={() => run(it)}><span className="art-dl-t"><b>{it.label}</b><em>{tr(it.sub)}</em></span></button>)}

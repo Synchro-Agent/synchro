@@ -14,6 +14,7 @@ import { useFileMenu, saveBlob } from "./filemenu";
 import { ghConnect } from "./wsclient";
 import { BulkBar, BulkButton, BulkCheck, bulkRow, useBulk, type BulkAct } from "./bulk";
 import { PageBar, usePage } from "./pager";
+import { Spinner } from "./spinner";
 
 type Say = (t: string) => void;
 
@@ -376,7 +377,7 @@ export function ProjectPage({ proj, chats, composer, patch, onBack, onOpenChat, 
         <div className="ds-acts">
           {tab === "ins" && <button className="btn" onClick={() => setIns(true)}>{proj.ins ? <I.M icon="Pencil" size={15} /> : <I.M icon="Plus" size={15} />}{proj.ins ? "Chỉnh sửa hướng dẫn" : "Đặt hướng dẫn"}</button>}
           {tab === "mem" && <button className="btn pj-memlink" onClick={() => setMemOpen(true)}>Xem bộ nhớ</button>}
-          {tab === "ctx" && (busyCtx ? <span className="pj-spin" aria-label="Đang tải" /> : (
+          {tab === "ctx" && (busyCtx ? <Spinner className="pj-spin" label="Đang tải" /> : (
             <>
               {ctx.length > 0 && <button className={`icon-btn ${sq !== null ? "on" : ""}`} data-tip="Tìm kiếm tệp" aria-label="Tìm kiếm tệp" onClick={() => setSq(sq === null ? "" : null)}><I.Search size={16} /></button>}
               <div ref={aRef} style={{ position: "relative" }}>

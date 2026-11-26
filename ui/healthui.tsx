@@ -13,6 +13,7 @@ import type { BackupStatus, MediaCap, MediaCaps, Problem, WatchdogState } from "
 import { ContinuousBackup } from "./backupui";
 import { LatencyTable, type Latency } from "./latencyui";
 import { SettingsSkeleton } from "./skeleton";
+import { Spinner } from "./spinner";
 
 type Disk = { key: string; path: string; freeMB: number; totalMB: number };
 type Health = {
@@ -236,7 +237,8 @@ export function HealthPanel({ Toggle }: { Toggle: (p: { on: boolean; set: (v: bo
         {h.dns ? <div className="adm-kv"><span>DNS records</span><b>{dnsRow("SPF", h.dns.spf)}{dnsRow("DKIM", h.dns.dkim)}{dnsRow("DMARC", h.dns.dmarc)}</b></div> : null}
         <div className="adm-perm-row">
           <div><div className="t">Send a test email</div><div className="d">Sends to your own address and waits for the receiving server&apos;s answer.</div></div>
-          <button className="btn" disabled={sending} onClick={sendTest}>{sending ? <span className="api-spin" /> : "Send test"}</button>
+          <button className="btn" disabled={sending} onClick={sendTest}>{sending ? <Spinner className="api-spin" />
+            : "Send test"}</button>
         </div>
         {test && <p className="d" role="status" style={test.ok ? undefined : { color: "#c6422f" }} data-notr>{test.ok
           ? tf("Máy chủ thư của {to} đã nhận thư ({sec} giây). Hãy mở hộp thư để chắc thư không vào Spam.", { to: test.to, sec: (test.ms / 1000).toFixed(1) })

@@ -198,6 +198,62 @@ try {
     ok(off.final && CS.codexServerStats().servers === 0, "SYNCHRO_CODEX_SERVER=0: không mở app-server", CS.codexServerStats());
   }
 
+  console.log("5b. Codex: tin nhắn thêm vào chính lượt đang chạy (turn/steer)");
+  {
+    const env = acct("steer"), w = path.join(HOME, "work", "steer");
+    const steerOnce = async () => {
+      let send = null;
+      const seen = [];
+      const onInject = (f) => { seen.push(!!f); if (f) send = f; };
+      const p = run(eng, { prompt: "[mock:slowcodex] viết chậm", env, workdir: w, onInject });
+      for (let i = 0; i < 60 && !send; i++) await sleep(50);
+      const t0 = Date.now();
+      const sent = send ? await send("<user_followup>\nThêm lời chào\n</user_followup>", () => {}) : null;
+      const ms = Date.now() - t0;
+      const r = await p;
+      const late = send ? await send("<user_followup>\nmuộn\n</user_followup>", () => {}) : null;
+      return { sent, ms, r, seen, late };
+    };
+    const a = await steerOnce();
+    timings.push(["Codex turn/steer (gửi → app-server nhận)", a.ms]);
+    ok(a.sent === true && a.ms < 1000 && /nhắn thêm giữa lượt: Thêm lời chào/.test(a.r.final ?? ""),
+      "tin nhắn thêm vào thẳng lượt đang chạy, model trả lời cả tin đó trong cùng lượt", a);
+    ok(a.seen[0] === true && a.seen.at(-1) === false && a.late === false,
+      "lượt xong: kênh nhắn thêm được thu lại, gửi muộn trả false", a);
+    // Codex thật viết tiếp tin đang dở sau khi nhận tin nhắn thêm, chỉ đọc tin đó ở bước kế tiếp. Phần cuối của tin
+    // đang dở phải tới bên gọi trước ranh giới (atEdge) — vào nhật ký làm việc — và không lẫn vào câu trả lời cuối.
+    {
+      let send = null, edgeText = null, text = "";
+      const req = { prompt: "[mock:steerstream] viết chậm", env, workdir: w, onInject: (f) => { if (f) send = f; } };
+      const p = (async () => {
+        const o = { final: null };
+        for await (const e of eng.runTurn(req)) {
+          if (e.kind === "text") text += e.text;
+          else if (e.kind === "final") o.final = e.text;
+        }
+        return o;
+      })();
+      for (let i = 0; i < 80 && !/Đoạn 2 /.test(text); i++) await sleep(25);
+      const mid = text;
+      const more = "<user_followup>\nThêm lời chúc\n</user_followup>";
+      const sent = send ? await send(more, () => { edgeText = text; }) : null;
+      const r = await p;
+      const first = Array.from({ length: 12 }, (_, k) => `Đoạn ${k + 1} của tin đầu.`).join(" ");
+      ok(sent === true && mid.length < first.length, "tin nhắn thêm tới khi tin đầu đang viết dở", { sent, mid });
+      ok(edgeText === first, "ranh giới tới khi tin đang dở đã viết xong: đủ cả phần cuối (vào nhật ký)",
+        { edgeText, first });
+      ok(/^Đã đọc tin nhắn thêm: Thêm lời chúc/.test(r.final ?? "") && !/Đoạn 12/.test(r.final ?? ""),
+        "câu trả lời cuối chỉ gồm phần viết sau tin nhắn thêm", r.final);
+    }
+    // Bản CLI chưa có turn/steer: hàm gửi trả false (bên gọi tự cắt lượt), lượt vẫn chạy tiếp bình thường.
+    CS.dropAllCodexServers();
+    cfg({ mockNoSteer: true });
+    const b = await steerOnce();
+    cfg();
+    ok(b.sent === false && b.r.final && !/nhắn thêm giữa lượt/.test(b.r.final),
+      "CLI chưa có turn/steer: báo không gửi được, lượt không hỏng", b);
+  }
+
   console.log("6. Lượt nhanh và lượt có công cụ xen kẽ trong một cuộc trò chuyện (không dùng bản hội thoại cũ)");
   {
     const eng = new CE.ClaudeCodeEngine();
@@ -236,6 +292,20 @@ try {
     const r = await run(eng, { ...base, prompt: "#tool=dem [mock:dieaftertool] gửi thư", mcp: mcpOf(b) });
     b.close();
     ok(calls.filter((c) => c === "die:dem").length === 1 && r.err && !r.final, "công cụ chạy đúng một lần, lượt báo lỗi thay vì chạy lại từ đầu", { calls, r });
+  }
+
+  console.log("7b. Claude: báo lúc công cụ dựng sẵn (tìm web) chạy, để tin nhắn thêm không cắt ngang lần tìm");
+  {
+    const eng = new CE.ClaudeCodeEngine();
+    const d = path.join(HOME, "logins", "claude", "nat"); fs.mkdirSync(d, { recursive: true });
+    fs.writeFileSync(path.join(d, ".mock-login"), "1");
+    const seq = [];
+    for await (const e of eng.runTurn({ env: { CLAUDE_CONFIG_DIR: d }, workdir: path.join(HOME, "work", "nat"),
+      model: "haiku", system: "Trả lời ngắn.", prompt: "[mock:twomsg] tìm giúp" })) {
+      if (e.kind === "native") seq.push(e.busy ? "tìm" : "xong");
+      else if (e.kind === "text" && !/^\s*$/.test(e.text) && seq.at(-1) !== "chữ") seq.push("chữ");
+    }
+    ok(seq.join(" ") === "chữ tìm xong chữ", "câu dẫn → đang tìm → tìm xong → câu trả lời", seq);
   }
 
   console.log("8. Claude: giới hạn tiến trình rảnh của lượt có công cụ");

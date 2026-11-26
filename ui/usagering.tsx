@@ -10,6 +10,7 @@ import { getLang, tf, tr, trc } from "./i18n";
 import { resetAt } from "./resetfmt";
 import * as I from "./icons";
 import type { NextSource } from "../shared/usagenext";
+import { Spinner } from "./spinner";
 
 /** turn: phần chi phí của lượt người dùng (chat, code…) trong cửa sổ, không gồm việc nền như rút bộ nhớ, embedding (server/usage.ts). */
 export type Limit = { key: "session" | "weekly" | "daily"; used: number; turn?: number; limit: number | null; pct: number; resetAt: number | null; active: boolean };
@@ -294,7 +295,7 @@ export function UsageRing({ model, extra, onDetails, up = true }: { model?: stri
       <Menu open={open} role="dialog" className={`us-pop ${up ? "up" : "down"}`}>
         <div className="menu-scroll gl-scroll">
         <div className="us-h"><span>{head}</span><UsageIcon size={15} /></div>
-        {!st ? <div className="us-empty"><span className="art-spin sm" /></div> : auto ? (
+        {!st ? <div className="us-empty"><Spinner className="art-spin sm" /></div> : auto ? (
           <>
             {next && <p className="us-note us-next">{tf(NEXT_NOTE, { src, pct: Math.round(pct) })} {tr(NEXT_OTHER)}</p>}
             {empty && live.length > 0 && <p className="us-note us-next">{tr(NO_SOURCE)}</p>}

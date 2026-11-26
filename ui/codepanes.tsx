@@ -11,6 +11,7 @@ import * as I from "./icons";
 import { Mark } from "./brand";
 import { AskText } from "./modals";
 import { gitOp, isLocalUrl, useCodeUi, wsOp, type GitState, type PrInfo, type WsStatus } from "./wsclient";
+import { Spinner } from "./spinner";
 
 const Monaco = dynamic(() => import("@monaco-editor/react"), { ssr: false, loading: () => <div className="cv-ed-load">Đang tải Monaco…</div> });
 type Say = (m: string) => void;
@@ -115,7 +116,7 @@ function Term({ sid, kind, visible }: { sid: number; kind: "log" | "term"; visib
     <div className="tp-term" style={{ display: visible ? "flex" : "none" }}>
       <div ref={host} className="tp-xterm" />
       {st === "closed" && <button className="tp-re btn" onClick={() => api.current?.connect()}><I.Retry size={14} />Kết nối lại</button>}
-      {st === "connecting" && <div className="tp-wait"><span className="ag-spin" />Đang bật workspace…</div>}
+      {st === "connecting" && <div className="tp-wait"><Spinner className="ag-spin" />Đang bật workspace…</div>}
     </div>
   );
 }
@@ -532,7 +533,8 @@ export function BrowserPane({ sid, ticket, visible, say, onClose, onExpand, expa
       <form className="bp-bar" onSubmit={(e) => { e.preventDefault(); go(addr); }}>
         <button type="button" className="icon-btn" onClick={() => send({ t: "back" })} aria-label="Quay lại"><I.Back size={15} /></button>
         <button type="button" className="icon-btn" onClick={() => send({ t: "forward" })} aria-label="Tiến tới"><span style={{ display: "inline-flex", transform: "scaleX(-1)" }}><I.Back size={15} /></span></button>
-        <button type="button" className="icon-btn" onClick={() => send({ t: "reload" })} aria-label="Tải lại">{loading ? <span className="ag-spin" /> : <I.Retry size={15} />}</button>
+        <button type="button" className="icon-btn" onClick={() => send({ t: "reload" })} aria-label="Tải lại">{loading
+          ? <Spinner className="ag-spin" /> : <I.Retry size={15} />}</button>
         {/* Không gõ: tên miền nổi, đường dẫn mờ (như thanh địa chỉ của trình duyệt thường); bấm vào thì sửa cả địa chỉ. */}
         <span className="bp-addr-w">
           <input ref={addrIn} className={focus || !addr ? "" : "rest"} value={addr}
@@ -563,7 +565,7 @@ export function BrowserPane({ sid, ticket, visible, say, onClose, onExpand, expa
         {/* Chỉ hiện khi Synchro thật sự đang thao tác trên trình duyệt (không phải khi đoạn chat đang chạy việc khác hay bạn tự mở trang). */}
         {agentOn && (
           <div className="bp-agent" onMouseDown={(e) => e.stopPropagation()}>
-            <Mark size={15} state="load" />
+            <Spinner size={14} />
             <span className="bp-agent-t"><b>Synchro đang điều khiển trình duyệt</b>{act?.label ? <span data-notr>{act.kind === "type" ? `Gõ “${act.label}”` : act.kind === "navigate" ? `Mở ${hostOf(act.label)}` : act.kind === "key" ? `Nhấn ${act.label}` : act.kind === "select" ? `Chọn “${act.label}”` : `${act.kind === "hover" ? "Rê chuột" : act.kind === "drag" ? "Kéo thả" : act.kind === "upload" ? "Tải tệp" : "Bấm"} ${act.label}`}</span> : null}</span>
             {onStop && <button className="btn sm" onClick={onStop}><I.Stop size={12} />Dừng</button>}
           </div>
@@ -594,7 +596,8 @@ export function BrowserPane({ sid, ticket, visible, say, onClose, onExpand, expa
         {isNew && sid != null && (
           <div className="bp-newtab" onMouseDown={(e) => e.stopPropagation()}>
             <div className="bp-nt-in">
-              {ports === null ? <p className="bp-nt-note"><span className="ag-spin" />Đang tìm server trong workspace…</p>
+              {ports === null
+                ? <p className="bp-nt-note"><Spinner className="ag-spin" />Đang tìm server trong workspace…</p>
                 : ports.length ? <>
                   <p className="bp-nt-note">Đã tìm thấy server đang chạy trong workspace.</p>
                   {ports.map((p) => (
@@ -604,7 +607,8 @@ export function BrowserPane({ sid, ticket, visible, say, onClose, onExpand, expa
             </div>
           </div>
         )}
-        {blank && !isNew && st !== "closed" && <div className="bp-empty"><span className="ag-spin" />{sid == null ? "Đang bật trình duyệt…" : "Đang bật trình duyệt của workspace…"}</div>}
+        {blank && !isNew && st !== "closed" && <div className="bp-empty"><Spinner className="ag-spin" />{sid == null
+          ? "Đang bật trình duyệt…" : "Đang bật trình duyệt của workspace…"}</div>}
         {st === "closed" && <div className="bp-empty"><span>Đã ngắt kết nối trình duyệt.</span>{downWhy && <span>{tr(downWhy)}</span>}<button className="btn" onClick={connect}><I.Retry size={14} />Kết nối lại</button></div>}
       </div>
     </div>
@@ -703,7 +707,11 @@ export function FilesPane({ sid, visible, say }: { sid: number; visible: boolean
       </div>
       <div className="fp-tree">
         <div className="fp-search"><I.Search size={14} /><input value={filter} onChange={(e) => setFilter(e.target.value)} placeholder="Lọc file" /><button className="icon-btn" onClick={refresh} aria-label="Làm mới" title="Làm mới"><I.Retry size={13} /></button></div>
-        <div className="fp-rows">{dirs["."] === undefined ? <div className="fp-note"><span className="ag-spin" />Đang tải…</div> : loadErr ? <div className="fp-note" role="alert"><span>{tr("Chưa đọc được danh sách file.")} <span>{loadErr}</span></span><button className="btn sm" onClick={refresh}><I.Retry size={13} />Thử lại</button></div> : rows.length ? rows : <div className="fp-note">Thư mục trống. Kết nối repo GitHub hoặc nhờ agent tạo file.</div>}</div>
+        <div className="fp-rows">{dirs["."] === undefined
+          ? <div className="fp-note"><Spinner className="ag-spin" />Đang tải…</div> : loadErr
+          ? <div className="fp-note" role="alert"><span>{tr("Chưa đọc được danh sách file.")} <span>{loadErr}</span>
+          </span><button className="btn sm" onClick={refresh}><I.Retry size={13} />Thử lại</button></div> : rows.length
+          ? rows : <div className="fp-note">Thư mục trống. Kết nối repo GitHub hoặc nhờ agent tạo file.</div>}</div>
       </div>
     </div>
   );
@@ -781,7 +789,7 @@ export function SessionRail({ sid, status, git, onGit, say, context }: { sid: nu
         <Sec id="pr" title="Pull request" open={!closed.includes("pr")} onToggle={toggle}>
           {prs.map((p) => (
             <div key={p.repo + p.number} className="sr-pr">
-              <div className="sr-row">{p.busy ? <span className="wl-spin" /> : <I.Branch size={16} />}
+              <div className="sr-row">{p.busy ? <Spinner className="wl-spin" /> : <I.Branch size={16} />}
                 <a className="cv-ell" href={p.url ?? undefined} target="_blank" rel="noreferrer"><span data-notr>#{p.number}</span> · {prState(p)}</a>
               </div>
               {p.note && <p className="sr-note sr-pr-note">{p.note}</p>}

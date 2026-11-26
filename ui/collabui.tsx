@@ -4,6 +4,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import * as I from "./icons";
 import { tr } from "./i18n";
+import { Spinner } from "./spinner";
 
 const ago = (ts: number) => {
   const m = Math.floor((Date.now() - ts) / 60000);
@@ -150,7 +151,7 @@ export function CommentsPanel({ app, me, owner, comments, setComments, onClose, 
     <aside className="cl-panel" aria-label={tr("Bình luận")}>
       <div className="cl-ph"><b>{tr("Bình luận")}</b>{open.length > 0 && <span className="cl-n">{open.length}</span>}<span style={{ flex: 1 }} /><button className="icon-btn" onClick={onClose} aria-label="Đóng"><I.X size={15} /></button></div>
       <div className="cl-list">
-        {comments === null ? <div className="cl-empty"><span className="art-spin sm" /></div>
+        {comments === null ? <div className="cl-empty"><Spinner className="art-spin sm" /></div>
           : !comments.length ? <div className="cl-empty">{tr("Chưa có bình luận. Góp ý cho ứng dụng, gõ @ để nhắc đồng nghiệp.")}</div>
           : <>{open.map(row)}{done.length > 0 && <button className="cl-done-t" onClick={() => setShowDone(!showDone)}>{tr(showDone ? "Ẩn bình luận đã xử lý" : "Xem bình luận đã xử lý")} ({done.length})</button>}{showDone && done.map(row)}</>}
         <div ref={end} />

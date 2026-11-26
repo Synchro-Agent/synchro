@@ -22,6 +22,7 @@ import { TimePick } from "./timepick";
 import { Dropdown } from "./listbox";
 import { BulkBar, BulkButton, BulkCheck, bulkRow, each, useBulk, type BulkAct } from "./bulk";
 import { PageBar, usePage } from "./pager";
+import { Spinner } from "./spinner";
 
 type Schedule = { kind: "once" | "hourly" | "daily" | "weekdays" | "weekly"; time?: string; weekday?: number; every?: number; tz: string };
 type BrowserPref = "auto" | "synchro" | "user";
@@ -168,8 +169,12 @@ function TaskEditor({ init, plan, onClose, onSaved, say }: { init?: Task | null;
         </div>
         <div className="modal-foot">
           <button type="button" className="btn" onClick={onClose} disabled={!!busy}>{tr("Hủy")}</button>
-          {!init && kind !== "once" && <button type="button" className="btn" disabled={!!busy || !title.trim() || !prompt.trim()} onClick={() => save(true)}>{busy === "run" ? <span className="art-spin sm" /> : <I.Play size={13} />}{tr("Tạo và chạy thử ngay")}</button>}
-          <button className="btn dark" disabled={!!busy || !title.trim() || !prompt.trim()}>{busy === "save" ? <span className="art-spin sm" /> : null}{init ? tr("Lưu") : kind === "once" ? tr("Chạy") : tr("Tạo việc tự động")}</button>
+          {!init && kind !== "once" && <button type="button" className="btn" disabled={!!busy || !title.trim()
+            || !prompt.trim()} onClick={() => save(true)}>{busy === "run" ? <Spinner className="art-spin sm" />
+            : <I.Play size={13} />}{tr("Tạo và chạy thử ngay")}</button>}
+          <button className="btn dark" disabled={!!busy || !title.trim() || !prompt.trim()}>{busy === "save"
+            ? <Spinner className="art-spin sm" /> : null}{init ? tr("Lưu") : kind === "once" ? tr("Chạy")
+            : tr("Tạo việc tự động")}</button>
         </div>
       </form>
     </div>
@@ -194,7 +199,9 @@ function Composer({ onPlan, onManual, say }: { onPlan: (p: Plan) => void; onManu
       <div className="tk-comp-bar">
         <div className="tk-ex">{EXAMPLES.map((x) => <button key={x.label} type="button" className="chip" onClick={() => setText(tr(x.text))}>{tr(x.label)}</button>)}</div>
         <button type="button" className="btn ghost" onClick={onManual}>{tr("Tự đặt")}</button>
-        <button type="button" className="btn dark" disabled={!text.trim() || busy} onClick={go}>{busy ? <span className="art-spin sm" /> : <I.Sparkle size={14} />}{busy ? tr("Đang lên kế hoạch…") : tr("Lên kế hoạch")}</button>
+        <button type="button" className="btn dark" disabled={!text.trim() || busy} onClick={go}>{busy
+          ? <Spinner className="art-spin sm" /> : <I.Sparkle size={14} />}{busy ? tr("Đang lên kế hoạch…")
+          : tr("Lên kế hoạch")}</button>
       </div>
     </div>
   );
@@ -241,7 +248,8 @@ function ProposalCard({ p, say, onDone }: { p: Proposal; say: (m: string) => voi
       {p.kind === "skill" && p.status === "pending" && <ScopeChoice value={scope} onChange={setScope} admin={admin} disabled={!!busy} />}
       {p.status !== "pending" && p.result && <p className="tk-prop-r" data-notr>{p.result.slice(0, 600)}</p>}
       {p.status === "pending" && <div className="tk-acts">
-        <button className="btn dark" disabled={!!busy} onClick={() => decide("approve")}>{busy === "approve" ? <span className="art-spin sm" /> : <I.Check size={14} />}{tr(APPROVE[p.kind])}</button>
+        <button className="btn dark" disabled={!!busy} onClick={() => decide("approve")}>{busy === "approve"
+          ? <Spinner className="art-spin sm" /> : <I.Check size={14} />}{tr(APPROVE[p.kind])}</button>
         <button className="btn" disabled={!!busy} onClick={() => decide("reject")}>{tr("Bỏ qua")}</button>
       </div>}
     </div>
@@ -284,7 +292,9 @@ function ResultBody({ x, task, say, onOpenChat, onRetry, reload }: { x: Item; ta
     <div className="tk-body">
       {x.note && <p className="tk-note"><I.InfoCircle size={13} /><span data-notr>{tr(x.note)}</span></p>}
       {x.status === "waiting" ? <div className="tk-run"><I.Clock size={14} />{tr("Đến giờ chạy nhưng Chrome của bạn đang tắt. Synchro chạy ngay khi Chrome kết nối lại, hoặc sau 12 giờ thì chạy bằng trình duyệt của Synchro.")}</div>
-        : x.status === "running" ? <div className="tk-run"><span className="art-spin sm" />{lastStep ? <span data-notr>{tr(lastStep.text)}</span> : <span>{tr("Synchro đang chạy việc này trên máy chủ")}</span>}</div>
+        : x.status === "running" ? <div className="tk-run"><Spinner className="art-spin sm" />{lastStep
+          ? <span data-notr>{tr(lastStep.text)}</span>
+          : <span>{tr("Synchro đang chạy việc này trên máy chủ")}</span>}</div>
         : isExpired(x) ? <p className="tk-note"><I.Clock size={13} /><span>{tr(TOO_OLD)}</span></p>
         : x.error ? ((e) => <div className="sk-err tk-err"><span data-notr>{tr(e.text)}</span>{e.detail && <details><summary>{tr("Chi tiết kỹ thuật")}</summary><code data-notr>{e.detail}</code></details>}</div>)(failInfo(x.error, foreign))
         : <div className="mdx"><Markdown text={readable(x.text)} say={say} /></div>}
@@ -293,7 +303,9 @@ function ResultBody({ x, task, say, onOpenChat, onRetry, reload }: { x: Item; ta
       {x.kind !== "notice" && x.status !== "waiting" && <div className="tk-acts">
         {x.status === "done" && <button className="btn" onClick={() => onOpenChat(x.title, x.text)}><I.Chat2 size={14} />{tr("Mở thành đoạn chat")}</button>}
         {decks.map((d) => <button key={d.ident} className="btn" disabled={!!pptx} aria-busy={pptx === d.ident} title={d.title} onClick={() => getPptx(d.ident)}>
-          {pptx === d.ident ? <span className="art-spin sm" /> : <I.Download size={14} />}{tr("Tải PowerPoint")}{decks.length > 1 && <span className="tk-deck" data-notr>{d.title}</span>}</button>)}
+          {pptx === d.ident ? <Spinner className="art-spin sm" />
+            : <I.Download size={14} />}{tr("Tải PowerPoint")}{decks.length > 1
+            && <span className="tk-deck" data-notr>{d.title}</span>}</button>)}
         {task && x.status !== "running" && <button className="btn" onClick={() => onRetry(task)}><I.Retry size={14} />{tr("Chạy lại")}</button>}
         {steps.length > 0 && <button className="btn ghost" onClick={() => setLog(!log)}><I.List size={14} />{log ? tr("Ẩn nhật ký") : `${tr("Nhật ký")} (${steps.length})`}</button>}
         {x.model && <span className="tk-model" data-notr>{modelName(x.model)}</span>}
@@ -421,7 +433,9 @@ export function InboxPage({ say, onOpenChat }: { say: (m: string) => void; model
         {tab === "jobs" && <BulkButton b={bkJ} />}
       </div>
 
-      {tab === "results" && (items === null ? (loadErr ? <LoadErr title={tr("Chưa tải được Hộp thư")} err={loadErr} retry={load} /> : <div className="empty"><span className="art-spin" /></div>) : !shown.length ? (
+      {tab === "results" && (items === null ? (loadErr
+        ? <LoadErr title={tr("Chưa tải được Hộp thư")} err={loadErr} retry={load} />
+        : <div className="empty"><Spinner className="art-spin" /></div>) : !shown.length ? (
         <div className="apps-empty"><I.Inbox size={22} /><b>{tr("Chưa có kết quả nào")}</b><span>{tr("Giao một việc ở ô phía trên (ví dụ giá cổ phiếu mỗi sáng, repo GitHub hay mỗi ngày). Synchro tự chạy và gửi kết quả vào đây.")}</span></div>
       ) : (
         <div className="tk-feed">{groups.map(([d, list]) => (
@@ -437,16 +451,22 @@ export function InboxPage({ say, onOpenChat }: { say: (m: string) => void; model
                   <span className="tk-when">{when(x.at).split(" ·")[0]}</span>
                 </button>
                 {!bkR.on && canRerun(x, all, byId.has(x.task)) && <button type="button" className="btn sm tk-rerun" disabled={rerun === x.run} aria-busy={rerun === x.run} onClick={() => rerunRow(x)} aria-label={`${tr("Chạy lại")}: ${x.title}`} data-tip="Chạy lại">
-                  {rerun === x.run ? <span className="art-spin sm" /> : <I.Retry size={13} />}<span>{tr("Chạy lại")}</span></button>}
+                  {rerun === x.run ? <Spinner className="art-spin sm" />
+                    : <I.Retry size={13} />}<span>{tr("Chạy lại")}</span></button>}
                 </div>
                 {open === x.run && !bkR.on && <ResultBody x={x} task={byId.get(x.task)} say={say} onOpenChat={onOpenChat} onRetry={runNow} reload={load} />}
               </div>
             ))}</div>
           </section>
-        ))}<PageBar pg={pgR} />{more && <div className="tk-more"><button className="btn" disabled={moreBusy} onClick={loadMore}>{moreBusy ? <span className="art-spin sm" /> : null}{tr("Xem kết quả cũ hơn")}</button></div>}<BulkBar b={bkR} acts={resActs} noun="kết quả" /></div>
+        ))}<PageBar pg={pgR} />{more
+          && <div className="tk-more"><button className="btn" disabled={moreBusy} onClick={loadMore}>{moreBusy
+          ? <Spinner className="art-spin sm" />
+          : null}{tr("Xem kết quả cũ hơn")}</button></div>}<BulkBar b={bkR} acts={resActs} noun="kết quả" /></div>
       ))}
 
-      {tab === "approve" && (props === null ? (propsErr ? <LoadErr title={tr("Chưa tải được danh sách cần duyệt")} err={propsErr} retry={load} /> : <div className="empty"><span className="art-spin" /></div>) : !pending.length && !decided.length ? (
+      {tab === "approve" && (props === null ? (propsErr
+        ? <LoadErr title={tr("Chưa tải được danh sách cần duyệt")} err={propsErr} retry={load} />
+        : <div className="empty"><Spinner className="art-spin" /></div>) : !pending.length && !decided.length ? (
         <div className="apps-empty"><I.ShieldCheck size={22} /><b>{tr("Không có gì cần duyệt")}</b><span>{tr("Việc cần bạn đồng ý (tạo skill, gửi tin, mở trang web mới…) Synchro không tự làm mà gửi vào đây. Bạn chỉ việc duyệt.")}</span></div>
       ) : (
         <div className="tk-props">
@@ -456,7 +476,9 @@ export function InboxPage({ say, onOpenChat }: { say: (m: string) => void; model
         </div>
       ))}
 
-      {tab === "jobs" && (tasks === null ? (tasksErr ? <LoadErr title={tr("Chưa tải được danh sách việc tự động")} err={tasksErr} retry={load} /> : <div className="empty"><span className="art-spin" /></div>) : !tasks.length ? (
+      {tab === "jobs" && (tasks === null ? (tasksErr
+        ? <LoadErr title={tr("Chưa tải được danh sách việc tự động")} err={tasksErr} retry={load} />
+        : <div className="empty"><Spinner className="art-spin" /></div>) : !tasks.length ? (
         <div className="apps-empty"><I.Clock size={22} /><b>{tr("Chưa có việc tự động nào")}</b><span>{tr("Giao việc ở ô phía trên, Synchro lên kế hoạch để bạn xem lại trước khi tạo.")}</span></div>
       ) : (
         <div className="tk-jobs">{pgJ.items.map((t) => (

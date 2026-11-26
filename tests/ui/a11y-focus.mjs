@@ -24,7 +24,10 @@ const ev = async (expr) => { const r = await P("Runtime.evaluate", { expression:
 const until = async (expr, ms = 60000) => { const t = Date.now(); while (Date.now() - t < ms) { if (await ev(expr).catch(() => false)) return true; await sleep(150); } return false; };
 const key = async (k, code, vk, mods = 0) => { await P("Input.dispatchKeyEvent", { type: "keyDown", key: k, code, windowsVirtualKeyCode: vk, modifiers: mods }); await P("Input.dispatchKeyEvent", { type: "keyUp", key: k, code, windowsVirtualKeyCode: vk, modifiers: mods }); };
 const typeIn = (text) => P("Input.insertText", { text });
-const nav = (v) => ev(`document.querySelector('[data-nav="${v}"]')?.click(), 1`);
+// Bộ não không còn trên thanh điều hướng (mở từ menu tài khoản, ⌘K hoặc địa chỉ #v=brain).
+const nav = (v) => ev(v === "brain"
+  ? `(location.hash = "#v=brain"), 1`
+  : `document.querySelector('[data-nav="${v}"]')?.click(), 1`);
 try {
   await P("Page.enable"); await P("Runtime.enable"); await P("Network.enable");
   await P("Network.setCookie", { name: "synchro_session", value: cookie.split("=")[1], url: B });

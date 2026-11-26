@@ -8,6 +8,7 @@ import { useApp } from "./store";
 import { call, ago, fmtDate } from "./adminui";
 import { refreshModels } from "./models";
 import { tr } from "./i18n";
+import { Spinner } from "./spinner";
 
 type Outcome = "updated" | "same" | "failed" | "smoke_failed" | "skipped" | "rolled_back" | "not_installed";
 type Result = { cli: string; outcome: Outcome; from: string | null; to: string | null; detail: string; at: number };
@@ -83,7 +84,9 @@ export function CliUpdates() {
         </div>
         <div className="mr-check">
           <span className="d">{v.running ? "Installing and checking new versions…" : <>{v.lastRun ? <>Last run <span data-notr>{ago(v.lastRun)}</span>. </> : "Not run yet. "}{v.nextAt ? <>Next run <span data-notr>{fmtDate(v.nextAt)}</span>.</> : null}</>}</span>
-          <button className="btn dark" disabled={busy || lock || v.running} onClick={() => void post({ action: "run" })}>{v.running ? <><span className="api-spin" />Updating…</> : <><I.Retry size={14} />Update now</>}</button>
+          <button className="btn dark" disabled={busy || lock
+            || v.running} onClick={() => void post({ action: "run" })}>{v.running
+            ? <><Spinner className="api-spin" />Updating…</> : <><I.Retry size={14} />Update now</>}</button>
         </div>
         {v.envOff && <p className="api-own"><I.Lock size={12} /><span>Turned off on this server (SYNCHRO_CLI_AUTOUPDATE=0).</span></p>}
         {!v.owner && !v.envOff && <p className="api-own"><I.Lock size={12} /><span>Only the Owner can turn weekly updates on or off, update now or roll back, since this installs software on the server for everyone.</span></p>}

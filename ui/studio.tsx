@@ -8,6 +8,7 @@ import * as I from "./icons";
 import { tr } from "./i18n";
 import { fmtCount } from "./studios";
 import { StudioScene } from "./syart";
+import { Spinner } from "./spinner";
 
 export type StudioKey = "doc" | "slides" | "design";
 type Lib = { name: string; skills: number; autoTotal?: number };
@@ -75,7 +76,9 @@ function Shelf({ item, onClose }: { item: Item; onClose: () => void }) {
           {/* Lỗi tải không được trông như mục này không có skill nào. */}
           {!busy && failed && <div className="st-shelf-empty">Chưa tải được danh sách. <button className="lnk" onClick={() => load(q.trim(), rows.length)}>Thử lại</button></div>}
           {!busy && !failed && !rows.length && !more.length && <div className="st-shelf-empty">Không có skill nào khớp</div>}
-          {rows.length < matched && <button className="btn st-shelf-more" disabled={busy} onClick={() => load(q.trim(), rows.length)}>{busy ? <span className="art-spin sm" /> : null}Xem thêm</button>}
+          {rows.length < matched
+            && <button className="btn st-shelf-more" disabled={busy} onClick={() => load(q.trim(), rows.length)}>{busy
+            ? <Spinner className="art-spin sm" /> : null}Xem thêm</button>}
         </div>
       </div>
     </div>

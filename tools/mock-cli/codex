@@ -30,7 +30,8 @@ function mcpConfig() {
 }
 
 // Lõi một lượt chat, dùng chung cho `exec` (sự kiện JSONL) và `app-server` (thông báo JSON-RPC): E là bộ phát sự kiện của từng đường.
-// o = { prompt, tid, effort, web, nativeOn, mcp: { url, approved } | null, images: [đường dẫn], argvNote }
+// o = { prompt, tid, effort, web, nativeOn, mcp: { url, approved } | null, images: [đường dẫn], argvNote,
+//       steered: () => tin nhận qua turn/steer trong lượt này (chỉ app-server) }
 async function chatTurn(o, E) {
   let prompt = o.prompt;
   // [mock:codexnative]: như gói trả phí, model thấy image_gen dựng sẵn nếu Synchro không tắt: ảnh nằm trong thư mục trên máy chủ, không thành tệp của người dùng.
@@ -109,6 +110,21 @@ async function chatTurn(o, E) {
     await E.message("item_1", critic);
     return E.done({ input_tokens: prompt.length, cached_input_tokens: 0, output_tokens: critic.length });
   }
+  const clean = (a) => a.join(" | ").replace(/<\/?user_followup>/g, "").replace(/\s+/g, " ").trim().slice(0, 160);
+  // [mock:steerstream]: tin đầu viết chậm (khoảng 2 giây) để tin nhắn thêm tới giữa tin. Như codex thật: tin đang viết
+  // vẫn viết tới hết, model chỉ đọc tin nhắn thêm ở bước kế tiếp và trả lời nó trong tin thứ hai.
+  if (prompt.includes("[mock:steerstream]") && o.steered) {
+    const first = Array.from({ length: 12 }, (_, k) => `Đoạn ${k + 1} của tin đầu.`).join(" ");
+    await E.message("item_0", first, 200);
+    const st = o.steered();
+    const second = st.length ? `Đã đọc tin nhắn thêm: ${clean(st)}` : "Không có tin nhắn thêm.";
+    await E.message("item_1", second);
+    return E.done({ input_tokens: prompt.length, cached_input_tokens: 0, output_tokens: first.length + second.length });
+  }
+  // Như codex thật: tin nhận qua turn/steer giữa lượt nằm trong cùng lượt, model trả lời cả tin đó.
+  const steered = o.steered?.() ?? [];
+  const said = clean(steered);
+  if (steered.length) note += ` [nhắn thêm giữa lượt: ${said}]`;
   const text = /#media/.test(prompt) && !C.isTitleAsk(prompt) && !C.mockBrain(prompt) ? C.mediaReply(o.images.map((f) => `${C.mediaDesc(fs.readFileSync(f))} (--image)`)) : C.mockBrain(prompt) ?? (C.isTitleAsk(prompt) ? C.mockTitle(prompt) : /#prefs/.test(prompt) ? C.prefsEcho(prompt) : C.reply("Codex (ChatGPT)", prompt, turn) + note + (eff ? ` [effort ${eff}]` : ""));
   await E.message("item_1", text);
   return E.done({ input_tokens: prompt.length, cached_input_tokens: 0, output_tokens: text.length });
@@ -140,7 +156,9 @@ const appLog = (method, extra = {}) => { try { fs.appendFileSync(path.join(dir, 
     const rl = require("readline").createInterface({ input: process.stdin });
     const reply = (id, result, error) => process.stdout.write(JSON.stringify({ id, ...(error ? { error } : { result }) }) + "\n");
     const li = () => fs.existsSync(authFile);
-    const threads = new Map(), interrupted = new Set();
+    // steers: tin nhắn thêm theo lượt (turn/steer); active: lượt đang chạy của từng thread (turn/steer chỉ nhận đúng
+    // lượt đó).
+    const threads = new Map(), interrupted = new Set(), steers = new Map(), active = new Map();
     const note = (method, params) => process.stdout.write(JSON.stringify({ method, params }) + "\n");
     rl.on("line", (l) => {
       let m; try { m = JSON.parse(l); } catch { return; }
@@ -167,14 +185,23 @@ const appLog = (method, extra = {}) => { try { fs.appendFileSync(path.join(dir, 
         appLog("turn/start", { thread: tid });
         reply(m.id, { turn: { id: turnId, status: "inProgress", items: [] } });
         const cam = (item) => ({ ...item, type: CAMEL[item.type] ?? item.type });
-        const finish = (turn) => note("turn/completed", { threadId: tid, turn: { id: turnId, ...turn } });
+        const finish = (turn) => {
+          active.delete(tid);
+          note("turn/completed", { threadId: tid, turn: { id: turnId, ...turn } });
+        };
+        active.set(tid, turnId);
         const stopped = () => interrupted.has(turnId);
         const E = {
           started: (item) => note("item/started", { ...at, item: cam(item) }),
           completed: (item) => note("item/completed", { ...at, item: cam(item) }),
-          message: async (id, text) => {
+          // ms: khoảng nghỉ giữa các mẩu chữ (mặc định 5 ms; [mock:steerstream] viết chậm).
+          message: async (id, text, ms = 5) => {
             note("item/started", { ...at, item: { id, type: "agentMessage", text: "" } });
-            for (const ch of C.chunks(text, 24)) { if (stopped()) return; note("item/agentMessage/delta", { ...at, itemId: id, delta: ch }); await C.sleep(5); }
+            for (const ch of C.chunks(text, 24)) {
+              if (stopped()) return;
+              note("item/agentMessage/delta", { ...at, itemId: id, delta: ch });
+              await C.sleep(ms);
+            }
             note("item/completed", { ...at, item: { id, type: "agentMessage", text } });
           },
           done: (u) => { if (stopped()) return finish({ status: "interrupted" }); note("thread/tokenUsage/updated", { ...at, tokenUsage: { last: { inputTokens: u.input_tokens, cachedInputTokens: u.cached_input_tokens, outputTokens: u.output_tokens } } }); finish({ status: "completed" }); },
@@ -189,11 +216,27 @@ const appLog = (method, extra = {}) => { try { fs.appendFileSync(path.join(dir, 
           const images = (p.input ?? []).filter((x) => x.type === "localImage").map((x) => x.path);
           await chatTurn({ prompt: text, tid, effort: p.effort ?? c.model_reasoning_effort, web: c["tools.web_search"] === true, nativeOn: c["features.image_generation"] !== false,
             mcp: typeof c["mcp_servers.synchro.url"] === "string" ? { url: c["mcp_servers.synchro.url"], approved: c["mcp_servers.synchro.default_tools_approval_mode"] === "approve" } : null,
-            images, argvNote: ` [app-server ${JSON.stringify({ approval: t.approval, sandbox: t.sandbox, shell: c["features.shell_tool"] })}]` }, E);
+            images,
+            argvNote: ` [app-server ${JSON.stringify({ approval: t.approval, sandbox: t.sandbox,
+              shell: c["features.shell_tool"] })}]`,
+            steered: () => steers.get(turnId) ?? [] }, E);
         })().catch((e) => E.failed(String(e)));
         return;
       }
       if (m.method === "turn/interrupt") { interrupted.add(m.params?.turnId); return reply(m.id, {}); }
+      // Nhắn thêm giữa lượt (giao thức v2): chỉ nhận khi đúng lượt đang chạy; mockNoSteer (mock-cli.json) giả bản CLI
+      // chưa có phương thức này.
+      if (m.method === "turn/steer") {
+        const p = m.params ?? {}, cur = active.get(p.threadId);
+        if (C.cfg.mockNoSteer) return reply(m.id, null, { code: -32601, message: "method not found" });
+        if (!cur || (p.expectedTurnId && p.expectedTurnId !== cur)) {
+          return reply(m.id, null, { code: -32600, message: "no active turn to steer" });
+        }
+        const text = (p.input ?? []).filter((x) => x.type === "text").map((x) => x.text).join("\n");
+        steers.set(cur, [...(steers.get(cur) ?? []), text]);
+        appLog("turn/steer", { thread: p.threadId, at: Date.now() });
+        return reply(m.id, { turnId: cur });
+      }
       if (m.method === "model/list") return reply(m.id, { data: [
         // Như codex thật: mỗi model một bộ mức effort hỗ trợ.
         { id: "gpt-6.1-sol", model: "gpt-6.1-sol", displayName: "GPT-6.1-Sol", hidden: false, supportedReasoningEfforts: ["low", "medium", "high", "xhigh", "max", "ultra"].map((e) => ({ reasoningEffort: e })) },

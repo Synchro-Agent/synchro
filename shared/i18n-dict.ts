@@ -154,7 +154,6 @@ export const VI2EN: Record<string, string> = {
   "Ngữ cảnh phiên chat": "Session context",
   "Chạy lệnh": "Run command",
   "Đẩy code lên GitHub": "Push code to GitHub",
-  "Đã gửi · Synchro đang đọc": "Sent · Synchro is reading it",
   "Trang đang mở": "Open page",
   "Gõ vào trang": "Type into the page",
   "Mở pull request trên GitHub": "Open a pull request on GitHub",
@@ -885,6 +884,7 @@ RULES_EN.push([/^Khóa ElevenLabs chưa được cấp quyền (.+)\. Vào eleve
 Object.assign(VI2EN, {
   "công cụ": "tools", "lỗi": "failed", "Đang ghép vào việc đang làm": "Adding to the current task", "Gửi sau khi xong": "Send when done", "Bỏ tin chờ gửi": "Remove queued message",
   "Danh sách việc": "Tasks", "Bạn nhắn thêm": "You added", "Nhắn thêm khi Synchro đang làm": "Sent while Synchro was working",
+  "Sẽ đọc khi xong bước này": "Will be read when this step finishes",
   "Nhắn thêm: ↵ ghép vào việc đang làm, ⌘↵ gửi sau khi xong": "Add a message: ↵ adds it to the current task, ⌘↵ sends it when done", "Gửi thêm": "Send",
   "Synchro chưa được kết nối với model nào. Quản trị viên vào Cài đặt → Providers để đăng nhập gói Claude / ChatGPT / Gemini / Grok hoặc thêm khóa API.": "Synchro isn't connected to any model. An admin can sign in to a Claude / ChatGPT / Gemini / Grok plan or add an API key in Settings → Providers.",
   "Synchro tự chọn và chuyển giai đoạn": "Synchro picks and switches phases on its own",

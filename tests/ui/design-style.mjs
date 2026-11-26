@@ -52,6 +52,22 @@ t.on("Network.requestWillBeSent", async (p) => {
     // Lượt tiếp tục (duyệt quyền, resume) không phải JSON của một tin nhắn mới: bỏ qua.
   }
 });
+// Vòng tải của bảng (đang tải danh sách, đang lưu, đang đọc liên kết) chỉ hiện trong chốc lát: ghi lại mọi vòng *-spin
+// lúc nó xuất hiện, kèm nó có viền và có quay không, để cuối bài kiểm tra xem có vòng nào trống trơn. Giữ trong
+// sessionStorage vì mỗi cỡ màn hình nạp lại trang.
+await P("Page.addScriptToEvaluateOnNewDocument", { source: `(() => {
+  const keep = (x) => { const a = JSON.parse(sessionStorage.getItem("__spins") || "[]"); a.push(x);
+    sessionStorage.setItem("__spins", JSON.stringify(a)); };
+  const look = (el) => { if (!(el instanceof Element)) return;
+    for (const s of [el, ...el.querySelectorAll("[class*='-spin']")]) {
+      if (![...s.classList].some((c) => c.endsWith("-spin"))) continue;
+      const cs = getComputedStyle(s);
+      keep({ cls: s.className, anim: cs.animationName, border: cs.borderTopStyle,
+        where: s.parentElement?.className ?? "" });
+    } };
+  new MutationObserver((ms) => { for (const m of ms) m.addedNodes.forEach(look); })
+    .observe(document, { childList: true, subtree: true });
+})()` });
 const click = async (expr, what) => {
   const js = `(() => { const el = ${expr}; if (!el) return null; el.scrollIntoView({ block: "nearest" });`
     + " const b = el.getBoundingClientRect(); return [b.x + b.width / 2, b.y + b.height / 2]; })()";
@@ -309,6 +325,10 @@ try {
   await sleep(1500);
   const names = ((await api("/api/design-styles")).styles ?? []).map((s) => s.name);
   ok(names.includes("Trà sớm"), "đã lưu vào Phong cách của tôi", names);
+  const spins = await ev(`JSON.parse(sessionStorage.getItem("__spins") || "[]")`);
+  const bare = spins.filter((x) => x.anim === "none" || x.border === "none");
+  ok(spins.length > 0 && bare.length === 0, `vòng tải của bảng có viền và đang quay (${spins.length} lần thấy)`,
+    bare.slice(0, 3));
 } catch (e) {
   fail++;
   console.log("  ✗", e.message);

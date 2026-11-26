@@ -128,7 +128,14 @@ if (process.env.SNAP_ALL) {
     } else { await openSide(v); await click(`document.querySelector(".chat-item")`, "chat"); await sleep(2500); }
     await both(`${v.w}-chat`);
     if (v.mobile) { await openSide(v); await both(`${v.w}-drawer`); }
-    for (const [nav, n] of [["Artifacts", "artifacts"], ["Skill", "hub"], ["Dự án", "projects"], ["Code", "code"], ["Speech", "speech"], ["Bộ não", "brain"]]) { await openSide(v); await click(byText(".nav-item", nav), n); await sleep(2500); await both(`${v.w}-${n}`); }
+    const navs = [["Artifacts", "artifacts"], ["Skill", "hub"], ["Dự án", "projects"], ["Code", "code"],
+      ["Speech", "speech"]];
+    for (const [nav, n] of navs) {
+      await openSide(v); await click(byText(".nav-item", nav), n); await sleep(2500); await both(`${v.w}-${n}`);
+    }
+    // Bộ não mở từ menu tài khoản (không còn trên thanh điều hướng).
+    await openSide(v); await click(`document.querySelector(".rail-user .user")`, "user menu"); await sleep(500);
+    await click(`document.querySelector('[data-nav="brain"]')`, "brain"); await sleep(2500); await both(`${v.w}-brain`);
     await openSide(v);
     // Nút tài khoản: tên đầy đủ ở thanh bên rộng, chữ viết tắt "DT" ở thanh rail.
     try {

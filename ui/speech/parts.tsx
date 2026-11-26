@@ -13,6 +13,7 @@ import { useApp, usePref, VOICE_RATE } from "../store";
 import { toSpeech, VI } from "../voiceflow";
 import { CAT_LABEL, LANGS, api, fmtClock, fmtDur, fmtNum, hueOf, micError, on, post, refreshPlan, reloadVoices, useMyVoices, usePlan, usePlanFailed, type Voice } from "./client";
 import { AGES, CATEGORIES, GENDERS } from "../../shared/speech/data";
+import { Spinner } from "../spinner";
 
 // Mức hoạt động khi đang phát (âm tiết và quãng nghỉ), dùng chung cho các quả cầu.
 const talking = () => { const t = performance.now() / 1000; return Math.max(0, Math.sin(t * 0.85) + 0.35) * (0.12 + Math.max(0, Math.sin(t * 9.3 + Math.sin(t * 2.1))) ** 2 * 0.6); };
@@ -302,7 +303,7 @@ export function OrbStage({ hue, active, progress, min, best, size = 168, onPlay,
 }
 
 /** Nút đang làm việc / thông báo lỗi dùng chung. */
-export const Spin = () => <span className="sp-spin" />;
+export const Spin = () => <Spinner className="sp-spin" />;
 export function ErrBox({ msg }: { msg: string }) { return msg ? <div className="api-err" role="alert"><I.Alert size={14} /><span>{msg}</span></div> : null; }
 
 function Sec({ title, open, onToggle, children }: { title: string; open: boolean; onToggle: () => void; children: React.ReactNode }) {

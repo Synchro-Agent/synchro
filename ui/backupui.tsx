@@ -8,6 +8,7 @@ import { call, ago, fmtDate } from "./adminui";
 import { useApp } from "./store";
 import { locale, tf, tr } from "./i18n";
 import * as I from "./icons";
+import { Spinner } from "./spinner";
 
 type St = {
   enabled: boolean; accountId: string; bucket: string; accessKeyId: string; hasSecret: boolean; prefix: string; testReplica: boolean; binary: string | null;
@@ -68,7 +69,9 @@ export function ContinuousBackup({ Toggle }: { Toggle: ToggleT }) {
       </div>
       <div className="modal-foot bk-foot">
         {own && (s.accountId || s.hasSecret) && <button className="btn" disabled={!!busy} onClick={() => app.confirm("Remove the R2 settings?", "Continuous backup stops and the keys are deleted from this server. Copies already in your bucket stay there.", "Remove", () => void act("clear", { action: "clear" }, "R2 settings removed"))}>Remove</button>}
-        <button className="btn dark" disabled={!own || !dirty || !!busy} onClick={() => void act("save", { action: "save", ...f }, "Backup settings saved")}>{busy === "save" ? <span className="api-spin" /> : "Save"}</button>
+        <button className="btn dark" disabled={!own || !dirty
+          || !!busy} onClick={() => void act("save", { action: "save", ...f }, "Backup settings saved")}>
+          {busy === "save" ? <Spinner className="api-spin" /> : "Save"}</button>
       </div>
       <div className="adm-perm-row">
         <div><div className="t">Back up continuously</div><div className="d">Runs litestream next to Synchro. It restarts on its own if it stops.</div></div>
@@ -87,7 +90,9 @@ export function ContinuousBackup({ Toggle }: { Toggle: ToggleT }) {
       {oldErrs.length > 0 && <details className="bk-errs bk-old"><summary className="d"><span>Earlier errors (fixed by a later successful sync)</span> · <span data-notr>{oldErrs.length}</span></summary>{oldErrs.slice(0, 5).map((e, i) => <div key={i} className="adm-log"><span className="tm" data-notr>{fmtDate(e.at)}</span><span style={{ minWidth: 0, overflowWrap: "anywhere", opacity: 0.7 }}><span className="adm-chip">Fixed</span> <span data-notr>{e.msg}</span></span></div>)}</details>}
       <div className="adm-perm-row">
         <div><div className="t">Test restore</div><div className="d">Restores the newest copy from R2 into a temporary file, checks it with PRAGMA integrity_check, counts rows in the main tables, then deletes it. The live database isn&apos;t touched.</div></div>
-        <button className="btn" disabled={!ready || !s.binary || !!busy} onClick={() => void runDrill()}>{busy === "drill" ? <span className="api-spin" /> : "Test restore"}</button>
+        <button className="btn" disabled={!ready || !s.binary
+          || !!busy} onClick={() => void runDrill()}>{busy === "drill" ? <Spinner className="api-spin" />
+          : "Test restore"}</button>
       </div>
       {drill && <div className={`bk-drill ${drill.ok ? "ok" : "bad"}`} role="status">
         <p><b>{drill.ok ? "Restore works" : "Restore failed"}</b> <span data-notr>{`· ${(drill.ms / 1000).toLocaleString(locale(), { maximumFractionDigits: 1 })} s · ${drill.sizeMB.toLocaleString(locale())} MB · integrity_check: ${drill.integrity}`}</span></p>

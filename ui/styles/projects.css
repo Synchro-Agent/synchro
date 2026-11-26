@@ -97,7 +97,7 @@ html body .modal.pj-modal{border-radius:var(--r-panel);padding:22px 24px 20px;--
 .pj-ctx-empty:hover .pj-c2{transform:translate(-4px,-3px) rotate(-2deg)}
 .pj-ctx-empty:hover .pj-c3{transform:translate(10px,-4px) rotate(9deg)}
 .pj-ctx-empty:hover .pj-c4{transform:translate(8px,2px)}
-.pj-spin{width:16px;height:16px;margin-right:9px;border-radius:50%;border:2px solid currentColor;border-right-color:transparent;opacity:.6;animation:pjspin .7s linear infinite}
+.pj-spin{width:16px;height:16px;margin-right:9px;opacity:.6;border-width:2px}
 .pj-usage{margin:2px 0 14px;animation:fadeIn .3s both}
 .pj-bar{height:7px;border-radius:99px;background:color-mix(in srgb,currentColor 8%,transparent);overflow:hidden}
 .pj-usage-t{display:flex;justify-content:space-between;align-items:center;margin-top:10px;font-size:var(--fs-label);opacity:.7}

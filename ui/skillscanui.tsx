@@ -13,6 +13,7 @@ import { useApp, usePref } from "./store";
 import { getLang, locale } from "./i18n";
 import { SKILLS_CHANGED } from "./skillsui";
 import type { ScanItem, ScanJob, Verdict } from "../shared/types/skillscan";
+import { Spinner } from "./spinner";
 
 type Group = { name: string; models: { key: string; name: string }[] };
 type Data = { job: ScanJob | null; count: number; models: Group[] };
@@ -63,7 +64,8 @@ export function SkillScan() {
   return (
     <>
       <button className={`btn pl-scan ${running ? "busy" : ""}`} aria-label="Scan for junk skills" data-tip={running ? "Scanning skills…" : "Scan for junk skills"} onClick={() => { setOpen(true); setFull(false); load(true).then(() => setFull(true)).catch(() => setFull(true)); }}>
-        {running ? <span className="art-spin sm" /> : <I.Sparkles size={15} />}<span className="pl-scan-l">Scan for junk skills</span>
+        {running ? <Spinner className="art-spin sm" />
+          : <I.Sparkles size={15} />}<span className="pl-scan-l">Scan for junk skills</span>
       </button>
       {open && createPortal(<ScanModal d={full ? d : null} setD={put} reload={load} onClose={() => setOpen(false)} />, document.body)}
     </>
@@ -163,7 +165,7 @@ function ScanModal({ d, setD, reload, onClose }: { d: Data | null; setD: (f: (x:
         <h2 id="scan-h">Scan for junk skills</h2>
         <p className="d">A model reads every skill in your Skill Hub: your skills, your libraries and the libraries for everyone. It points out junk skills and skills with no real use, and explains why for each one.</p>
         {err && <div className="sk-err" role="alert"><span>{err}</span><button className="icon-btn" style={{ width: 22, height: 22 }} onClick={() => setErr("")} aria-label="Close">×</button></div>}
-        {!d ? <div className="pl-load"><span className="art-spin" /></div> : showIntro ? (
+        {!d ? <div className="pl-load"><Spinner className="art-spin" /></div> : showIntro ? (
           <>
             <ul className="scan-kinds">
               <li><b>Junk</b><span>Empty, placeholder or test content, only a README or links, broken text, or an exact copy of another skill.</span></li>
@@ -179,7 +181,9 @@ function ScanModal({ d, setD, reload, onClose }: { d: Data | null; setD: (f: (x:
         ) : job && n && (
           <>
             <div className="scan-stat" aria-live="polite">
-              {running ? <><span className="art-spin sm" /><span>{`Đang đọc ${job.done}/${job.total} skill · ${job.modelName}`}</span></>
+              {running
+                ? <><Spinner className="art-spin sm" /><span>
+                {`Đang đọc ${job.done}/${job.total} skill · ${job.modelName}`}</span></>
                 : <span>{job.status === "stopped" ? `Đã dừng ở ${job.done}/${job.total} skill · ${job.modelName} · ${when}` : `Đã quét ${job.total} skill bằng ${job.modelName} · ${when}`}</span>}
             </div>
             {running && <div className="scan-bar" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100}><i style={{ width: `${pct}%` }} /></div>}
@@ -193,7 +197,10 @@ function ScanModal({ d, setD, reload, onClose }: { d: Data | null; setD: (f: (x:
               <div className="scan-tools">
                 {locked && <span className="scan-lock"><I.Lock size={13} /><span>Only an admin can change libraries for everyone.</span></span>}
                 <span className="scan-sp" />
-                {offable.length > 0 && <button className="btn sm" disabled={!!busy} onClick={() => setOn(offable, false)}>{busy === "all" ? <span className="art-spin sm" /> : <I.M icon="Pause" size={13} />}<span>Turn off all</span><i data-notr>{offable.length}</i></button>}
+                {offable.length > 0
+                  && <button className="btn sm" disabled={!!busy} onClick={() => setOn(offable, false)}>{busy === "all"
+                  ? <Spinner className="art-spin sm" />
+                  : <I.M icon="Pause" size={13} />}<span>Turn off all</span><i data-notr>{offable.length}</i></button>}
                 {deletable.length > 0 && (cur === "junk" || cur === "useless") && <button className="btn sm scan-danger" disabled={!!busy} onClick={() => del(deletable)}><I.Trash size={13} /><span>Delete all</span><i data-notr>{deletable.length}</i></button>}
               </div>
             )}
@@ -208,7 +215,9 @@ function ScanModal({ d, setD, reload, onClose }: { d: Data | null; setD: (f: (x:
                   {cur !== "ok" && (
                     <div className="scan-act">
                       {x.manage ? <>
-                        <button className="btn sm" disabled={!!busy} onClick={() => setOn([x], !x.enabled)}>{busy === x.key ? <span className="art-spin sm" /> : null}{x.enabled ? "Turn off" : "Turn on"}</button>
+                        <button className="btn sm" disabled={!!busy} onClick={() => setOn([x], !x.enabled)}>
+                          {busy === x.key ? <Spinner className="art-spin sm" /> : null}{x.enabled ? "Turn off"
+                          : "Turn on"}</button>
                         <button className="icon-btn scan-del" disabled={!!busy} onClick={() => del([x])} aria-label="Delete" data-tip="Delete"><I.Trash size={14} /></button>
                       </> : <span className="scan-ro" data-tip="Only an admin can change libraries for everyone"><I.Lock size={14} /></span>}
                     </div>
@@ -222,7 +231,9 @@ function ScanModal({ d, setD, reload, onClose }: { d: Data | null; setD: (f: (x:
         {d && <div className="modal-foot">
           {showIntro ? <>
             <button className="btn" onClick={() => (job ? setIntro(false) : onClose())}>Cancel</button>
-            <button className="btn dark" disabled={starting || !d?.count} onClick={start}>{starting ? <span className="art-spin sm" /> : <I.Sparkles size={14} />}<span>{`Quét ${d?.count ?? 0} skill`}</span></button>
+            <button className="btn dark" disabled={starting || !d?.count} onClick={start}>{starting
+              ? <Spinner className="art-spin sm" />
+              : <I.Sparkles size={14} />}<span>{`Quét ${d?.count ?? 0} skill`}</span></button>
           </> : running ? <>
             <span className="scan-bg">Keeps running if you close this window.</span>
             <button className="btn" onClick={stop}>Stop</button>

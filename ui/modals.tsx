@@ -12,6 +12,7 @@ import { UPLOAD_ACCEPT } from "../shared/fileproc/types";
 import { tr, type Lang } from "./i18n";
 import { createPortal } from "react-dom";
 import { Boundary } from "./ui";
+import { Spinner } from "./spinner";
 
 // Hộp xác nhận (Đăng xuất?, Xóa…?): tên và mô tả gắn thẳng vào hộp (alertdialog + aria-labelledby / describedby), trình đọc màn hình đọc
 // "Đăng xuất?" cùng câu hỏi ngay khi hộp mở, không phụ thuộc lúc cơ chế hộp thoại chung (a11y.ts) kịp gắn tên.
@@ -232,7 +233,8 @@ export function UploadModal({ onClose, onFiles, onConverted }: { onClose: () => 
           <input ref={mdIn} type="file" hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) convert(f); }} />
           <button className="btn" onClick={() => inp.current?.click()} disabled={!!busy}>Chọn tệp</button>
           <button className="btn upl-md" onClick={() => mdIn.current?.click()} disabled={!!busy}>
-            {busy ? <><i className="upl-spin" />Đang chuyển {busy}… (tệp quét sẽ qua OCR, có thể mất ~1 phút)</> : "Chọn tệp và chuyển thành markdown"}
+            {busy ? <><Spinner className="upl-spin" />Đang chuyển {busy}… (tệp quét sẽ qua OCR, có thể mất ~1 phút)</>
+              : "Chọn tệp và chuyển thành markdown"}
           </button>
           {err && <em className="upl-err">{err}</em>}
           <small className="upl-hint">Hỗ trợ PDF, Word, Excel, PowerPoint, HTML, CSV, JSON, ảnh, âm thanh, EPUB, ZIP… (MarkItDown)</small>

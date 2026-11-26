@@ -50,6 +50,13 @@ export type TurnRequest = {
   /** Biến môi trường thêm cho tiến trình (đã qua bộ lọc của cli_runtime). */
   env?: Record<string, string>;
   signal?: AbortSignal;
+  /**
+   * Kênh nhắn thêm giữa lượt của chính CLI (Codex app-server: turn/steer): engine gọi với hàm gửi khi lượt đã chạy,
+   * với null khi lượt xong. Hàm gửi trả false khi CLI không nhận (bản cũ, lượt vừa xong): bên gọi tự cắt lượt rồi làm
+   * tiếp trong cùng phiên. atEdge: engine gọi (một lần, đồng bộ) đúng lúc phần trả lời viết trước tin nhắn thêm đã
+   * tới đủ, để bên gọi đưa phần đó vào nhật ký làm việc rồi mới hiện tin của người dùng.
+   */
+  onInject?: (send: Inject | null) => void;
 };
 
 /** Một cửa sổ hạn mức của gói (vd. phiên 5 giờ, tuần) như CLI báo về: phần trăm đã dùng và lúc đặt lại (ms). */
@@ -59,6 +66,8 @@ export type Usage = { input: number; output: number; cacheRead?: number; cacheWr
 /** Mã lỗi: quota (hết hạn mức), rate (giới hạn tốc độ, quá tải ngắn hạn), auth (cần đăng nhập lại), other, aborted (người dùng bấm Dừng),
  *  timeout (CLI im lặng quá lâu hoặc chạm mức trần của lượt), busy (lượt khác của cùng tài khoản đang giữ CLI quá lâu). */
 export type ErrorCode = "quota" | "rate" | "auth" | "other" | "aborted" | "timeout" | "busy";
+
+export type Inject = (text: string, atEdge: () => void) => Promise<boolean>;
 
 export type Event =
   | { kind: "text"; text: string }
@@ -83,7 +92,10 @@ export type Event =
   /** Nguồn web CLI vừa nhận được. */
   | { kind: "sources"; items: WebSource[] }
   /** Danh sách việc model cập nhật bằng công cụ dựng sẵn của CLI (update_plan của Codex): hiện như danh sách việc của Synchro. */
-  | { kind: "plan"; items: PlanStep[] };
+  | { kind: "plan"; items: PlanStep[] }
+  /** Claude Code: công cụ dựng sẵn của CLI (tìm, đọc web) bắt đầu (native: true) hoặc đã xong (false). Cắt lượt lúc đó
+   *  là bỏ phí cả lần tìm; tin nhắn thêm chờ tới khi công cụ xong. */
+  | { kind: "native"; busy: boolean };
 
 export type PlanStep = { content: string; status: "pending" | "in_progress" | "completed" };
 /** Danh sách việc dựng sẵn của Codex → danh sách việc của Synchro. exec --json: mục todo_list { items: [{ text, completed }] } (việc đầu chưa xong là

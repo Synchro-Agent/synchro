@@ -142,9 +142,21 @@ for (const v of VIEWS) {
   }
   await capture(`${v.w} chat`);
   if (v.mobile) { await click(`document.querySelector(".side-toggle")`); await sleep(600); await capture(`${v.w} drawer`); }
-  for (const [nav, n] of [["Artifacts", "artifacts"], ["Skill", "hub"], ["Dự án", "projects"], ["Code", "code"], ["Speech", "speech"], ["Bộ não", "brain"]]) {
+  const navs = [["Artifacts", "artifacts"], ["Skill", "hub"], ["Dự án", "projects"], ["Code", "code"],
+    ["Speech", "speech"]];
+  for (const [nav, n] of navs) {
     if (v.mobile && !(await ev(`!!document.querySelector(".shell-side:not(.closed)")`).catch(() => false))) { await click(`document.querySelector(".side-toggle")`); await sleep(600); }
     if (await click(byText(".nav-item", nav))) { await sleep(2000); await capture(`${v.w} ${n}`); }
+  }
+  // Bộ não mở từ menu tài khoản (không còn trên thanh điều hướng).
+  const shut = `!!document.querySelector(".shell-side.closed")`;
+  if (v.mobile && (await ev(shut).catch(() => false))) {
+    await click(`document.querySelector(".side-toggle")`); await sleep(600);
+  }
+  if (await click(`document.querySelector(".rail-user .user")`)) {
+    await sleep(500);
+    const brain = `document.querySelector('[data-nav="brain"]')`;
+    if (await click(brain)) { await sleep(2000); await capture(`${v.w} brain`); }
   }
   if (await click(`[...document.querySelectorAll("aside button")].find((e) => e.textContent.includes("Download Tester"))`)) {
     await sleep(500); await capture(`${v.w} usermenu`);

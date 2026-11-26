@@ -316,6 +316,13 @@ const CHECK = `(() => {
   for (const g of document.querySelectorAll(".ds-seg,.pl-seg")) { const on = g.querySelector(":scope>button.on"); if (on && vis(on) && !on.matches("[aria-selected=true],[aria-pressed=true],[aria-current],[aria-checked=true]")) out.push("nút đang chọn không báo trạng thái: " + on.textContent.trim().slice(0, 20) + " trong " + name(g)); }
   // Tab không được rơi vào một phần tử khuất dưới lớp phủ của khung artifact: dải báo, nút trong .main phải nằm ngoài khung đang mở.
   { const art = document.querySelector(".main.has-art .art-panel, .main.has-art .art-pane"); const vb = document.querySelector(".verify-banner"); if (art && vb && vb.getBoundingClientRect().right > art.getBoundingClientRect().left + 1) out.push("dải xác minh nằm dưới khung artifact"); }
+  // Vòng tải chỉ có hình và chuyển động khi có lớp .spinner (ui/spinner.tsx); các lớp *-spin chỉ đặt cỡ.
+  // Thiếu .spinner là nút "Lưu" hay ô đang tải trống trơn.
+  for (const el of document.querySelectorAll("[class*='-spin']")) {
+    if (![...el.classList].some((c) => c.endsWith("-spin")) || el.classList.contains("spinner") || !vis(el)) continue;
+    out.push("vòng tải không có .spinner (không hiện, không quay): " + name(el));
+    break;
+  }
   return out;
 })()`;
 
@@ -458,7 +465,11 @@ for (const theme of THEMES) for (const size of SIZES) {
     await P("Input.insertText", { text: "Mục tiêu: Tìm kiếm, chọn lọc và đánh giá các repository đỉnh cao trên GitHub về design, motion graphics, animation, UI/UX.\n\nCác bước thực hiện:\n1. Tìm kiếm trên GitHub và các danh sách awesome lists.\n2. Đánh giá và chọn lọc những repo tốt nhất.\n3. Trình bày kết quả gửi vào Hộp thư." });
     await sleep(400); await shot("viec-tu-dong"); await esc(); await sleep(400);
   });
-  await step0("bo-nao", async () => { await nav("Bộ não"); await shot("bo-nao"); });
+  // Bộ não mở từ menu tài khoản (không còn trên thanh điều hướng).
+  await step0("bo-nao", async () => {
+    await side(); await click(`document.querySelector(".rail-user .user")`, "user menu"); await sleep(400);
+    await click(`document.querySelector('[data-nav="brain"]')`, "Bộ não"); await ready(); await shot("bo-nao");
+  });
   await step0("code", async () => { await nav("Code"); await shot("code"); });
   // Menu ⋮ của Synchro Code khi bảng phiên đang mở: menu nằm trên bảng phiên (từng bị bảng phiên che gần hết).
   if (!mobile) await step0("code-menu", async () => {

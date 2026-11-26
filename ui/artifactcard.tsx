@@ -8,6 +8,7 @@ import type { OutFile } from "./llm";
 import { FILE_KIND as KIND, fileKind, fmtSize } from "./fileicon";
 import { genVerdict, imgVerdict } from "./outimg";
 import { artKindLabel, type ArtBlock, type ArtType } from "../shared/artifacts";
+import { Spinner } from "./spinner";
 
 // ---------------------------------------------------------------- biểu tượng theo loại
 export function ArtIcon({ type, size = 18 }: { type: ArtType; size?: number }) {
@@ -27,7 +28,8 @@ export function ArtifactCard({ art, version, total, active, onOpen, fix, onRedo 
   return (
     <div className="art-card-wrap">
       <button className={`art-card ${active ? "on" : ""} ${art.complete ? "" : "busy"} ${bad ? "warn" : ""}`} onClick={onOpen}>
-        <span className="art-card-ic"><ArtIcon type={art.type} size={20} />{!art.complete && <span className="art-spin sm" />}</span>
+        <span className="art-card-ic"><ArtIcon type={art.type} size={20} />{!art.complete
+          && <Spinner className="art-spin sm" />}</span>
         <span className="art-card-txt">
           <b>{art.title}</b>
           <span>{tr(!art.complete ? (fix ? "Đang sửa…" : "Đang tạo…") : artKindLabel(art))}
