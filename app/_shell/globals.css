@@ -3380,6 +3380,10 @@ button.tk-pill:hover{color:var(--text)}
 .wl-q .icon-btn{width:20px;height:20px}
 .steer-tag{display:block;text-align:right;font-size:var(--fs-1);color:var(--text-3);margin:0 4px 3px}
 .steer-pending{animation:fadeIn .18s both}
+/* Tin chờ ghép nằm trong câu trả lời đang chạy, đúng chỗ của nó sau khi ghép: cùng lề phải, cùng khoảng cách như dòng tin
+   riêng trong đoạn chat (gap 28px của .thread-in). */
+.ai-msg>.steer-pending.in-turn{margin:28px 0 28px auto;white-space:normal}
+.steer-late{display:block;text-align:right;font-size:var(--fs-1);color:var(--text-3);margin:0 4px}
 .ag-steer{margin:8px 0 10px auto;max-width:80%;display:flex;flex-direction:column;align-items:flex-end;gap:3px}
 .ag-steer span{font-size:var(--fs-1);color:var(--text-3)}
 .ag-steer p{margin:0;padding:8px 12px;border-radius:var(--r-card);background:var(--user-bg,var(--hover));font-size:var(--fs-3);white-space:pre-wrap}
