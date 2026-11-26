@@ -125,7 +125,12 @@ const fits = `(() => { const m = ${M}.getBoundingClientRect();
   .map((e) => e.className || e.tagName); return { w: Math.round(m.width), vw: innerWidth, bad: bad.slice(0, 5),
   over: document.documentElement.scrollWidth > innerWidth }; })()`;
 const openDialog = async () => {
-  await click(`document.querySelector(".cv-gh")`, "GitHub button");
+  // Ngay sau khi tải trang, nút GitHub chưa biết workspace đã sẵn sàng (bấm chỉ hiện lời nhắc): bấm lại tới khi mở.
+  const btn = `[...document.querySelectorAll(".cv-gh")].find((e) => e.getBoundingClientRect().width)`;
+  for (let i = 0; i < 15 && !(await ev(`!!${M}`)); i++) {
+    await click(btn, "GitHub button");
+    await until(`!!${M}`, 2000, "dialog").catch(() => false);
+  }
   await until(`!!${M} && !!document.querySelector(".gh-grp")`, 30000, "repo list");
 };
 const closeDialog = () => click(`${M}.querySelector(".gh-head .icon-btn")`, "close");
@@ -197,6 +202,15 @@ try {
   await closeDialog();
   await size(390, 844, true);
   await sleep(400);
+  // Thu từ máy tính xuống điện thoại thì thanh bên đang mở thành ngăn kéo phủ lên nút GitHub:
+  // bấm vào lớp phủ tối để đóng, như người dùng điện thoại.
+  if (await ev(`!!document.querySelector(".side-scrim")`)) {
+    for (const type of ["mouseMoved", "mousePressed", "mouseReleased"]) {
+      await P("Input.dispatchMouseEvent", { type, x: 382, y: 724, button: "left", clickCount: 1 });
+    }
+    await until(`!document.querySelector(".side-scrim")`, 5000, "drawer closed");
+    await sleep(700);
+  }
   await openDialog();
   f = await ev(fits);
   ok(!f.bad.length && !f.over && f.w <= 390, "điện thoại: hộp thoại vừa màn hình, không tràn", f);
