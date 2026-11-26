@@ -3187,6 +3187,9 @@ button.tk-pill:hover{color:var(--text)}
 .tk-job{display:flex;flex-direction:column;gap:8px;padding:14px 16px}
 .tk-job.off{opacity:.62}
 .tk-job-h{display:flex;align-items:center;gap:12px}
+/* Lịch và lần tới của thẻ việc xuống dòng thay vì cắt: lần tới có thể kèm tên múi giờ (múi giờ của việc khác múi giờ
+   của máy), cắt đi thì người dùng không biết giờ đó theo múi giờ nào. */
+.tk-job-h .tk-t em{white-space:normal;overflow-wrap:anywhere}
 .tk-job-m{display:flex;gap:6px;flex-wrap:wrap}
 .tk-job-p{margin:0;font-size:var(--fs-2);line-height:1.5;color:var(--text-3);overflow-wrap:anywhere}
 .modal.tk-modal{max-height:min(92vh,880px)}
