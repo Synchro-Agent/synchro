@@ -1,5 +1,5 @@
 // Bản dịch cho sổ model tự cập nhật: Cài đặt → Providers → New models (chữ gốc tiếng Anh), thông báo và lỗi của máy chủ (chữ gốc tiếng Việt),
-// nhãn "Mới" ở bộ chọn model, lời báo khi model đã chọn bị hãng gỡ.
+// nhãn "Mới" và đội hình theo bậc ở bộ chọn model, lời báo khi model đã chọn bị hãng gỡ.
 export const MODELS_EN2VI: Record<string, string> = {
   "New models": "Model mới", "Claude plan": "Gói Claude", "ChatGPT plan": "Gói ChatGPT", "Gemini plan": "Gói Gemini", "Grok plan": "Gói Grok",
   "Claude API": "Claude API", "ChatGPT API": "ChatGPT API", "Gemini API": "Gemini API", "Grok API": "Grok API", "DeepSeek API": "DeepSeek API",
@@ -17,6 +17,10 @@ export const MODELS_EN2VI: Record<string, string> = {
 };
 export const MODELS_VI2EN: Record<string, string> = {
   "Mới": "New", "Hãng vừa ra mắt, Synchro đã thử và cho dùng": "Just released by the provider; Synchro tested it and turned it on",
+  // Đội hình model theo bậc ở bộ chọn model (ui/modellist.tsx).
+  // Chữ ngắn dịch theo ngữ cảnh (trc): bộ dịch trang không đổi nhầm chữ trùng ở chỗ khác.
+  "Xem tất cả model": "Show all models", "Model khác ‹bộ chọn model›": "Other models",
+  "Qua Antigravity ‹bộ chọn model›": "Via Antigravity", "Hãng khác ‹bộ chọn model›": "Other providers",
   "Không tìm thấy model này trong sổ.": "This model isn't in the registry.", "Model này không ở trạng thái chờ.": "This model isn't waiting.",
   "Không có khóa API cho nhà cung cấp này.": "There's no API key for this provider.", "Hãng từ chối mọi cách gọi thử.": "The provider rejected every test call.",
   "Model trả lời rỗng.": "The model replied with nothing.", "Model không gọi công cụ khi được yêu cầu.": "The model didn't call the tool when asked.",

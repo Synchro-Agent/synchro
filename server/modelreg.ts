@@ -160,10 +160,15 @@ export function regShows(key: string): boolean {
 }
 /** Quản trị viên ghim: hiện cả khi luật đời cũ ẩn nó. */
 export const regPinned = (key: string) => !!rows().get(key)?.pinned && rows().get(key)?.status !== "retired";
-/** Model mới (không phải nền) dùng được, lần đầu thấy trong 14 ngày qua: hiện nhãn "Mới" ở bộ chọn model. */
+/**
+ * Model mới (không phải nền) dùng được, ra mắt trong 14 ngày qua: hiện nhãn "Mới" ở bộ chọn model.
+ * Tính từ ngày hãng báo ra mắt nếu sớm hơn lúc sổ thấy lần đầu: gói vừa nối, sổ làm lại hay model hãng đưa lại
+ * sau khi bị xóa khỏi sổ đều làm sổ "thấy lần đầu" model đã bán từ lâu, và nhãn Mới khi đó là sai.
+ */
 export function isNewModel(key: string, now = Date.now()): boolean {
   const r = rows().get(key);
-  return !!r && !r.baseline && r.status === "active" && !r.hidden && now - r.first_seen < NEW_DAYS * DAY;
+  if (!r || r.baseline || r.status !== "active" || r.hidden) return false;
+  return now - Math.min(r.first_seen, r.created ?? r.first_seen) < NEW_DAYS * DAY;
 }
 /**
  * Model đã ngừng hoặc đã cũ → bản thay thế cùng dòng, để chuyển người đã chọn tay nó (kèm tên cũ để báo).
@@ -195,6 +200,14 @@ export function withReplacements(keys: string[]): string[] {
 export function untested(key: string): boolean {
   const r = rows().get(key);
   return !!r && (r.status === "new" || r.status === "testing") && !r.pinned;
+}
+/**
+ * Ngày hãng báo ra mắt, không có thì lúc sổ thấy lần đầu: đội hình ở bộ chọn model (shared/modellineup.ts)
+ * so hai model cùng số phiên bản (Gemini 4 Neon thay Gemini 4 Argon). Model chưa có trong sổ: undefined.
+ */
+export function sinceOf(key: string): number | undefined {
+  const r = rows().get(key);
+  return r ? r.created ?? r.first_seen : undefined;
 }
 /** Thời điểm ra mắt hãng báo (để so hai model cùng dòng không có số phiên bản). */
 export const createdOf = (key: string) => rows().get(key)?.created ?? null;

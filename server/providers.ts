@@ -8,7 +8,8 @@ import path from "node:path";
 import { DATA_DIR, db, getSetting, setSetting } from "./authstore";
 import { ALL, modelKey, splitKey, type ModelInfo, type ProviderInfo, type ProviderKind } from "../shared/catalog";
 import { datedDuplicate, nonChat, providerPrice } from "../shared/modelrules";
-import { isNewModel, regPinned, regShows, syncListed, untested, type Listed, type ModelCaps } from "./modelreg";
+import { isNewModel, regPinned, regShows, sinceOf, syncListed, untested } from "./modelreg";
+import type { Listed, ModelCaps } from "./modelreg";
 import { brandHost, publicHost } from "./iconproxy";
 import { hostLogo } from "../shared/vendorlogo";
 
@@ -231,7 +232,10 @@ const parse = (s: string) => { try { return JSON.parse(s) as { id: string; name:
 // Danh sách đã lưu cũng lọc lại, để model vừa thành đời cũ biến mất mà không cần làm mới khóa. Sổ model quyết định thêm: model mới chưa thử đạt,
 // model quản trị viên ẩn, model đã cũ thì không hiện; model quản trị viên ghim thì hiện cả khi là đời cũ.
 const stored = (r: Row) => parse(r.models).filter((m) => { const k = modelKey(r.id, m.id); return (isCurrent(r.kind, m.id) || regPinned(k)) && regShows(k); });
-const info = (key: string, id: string, name: string): ModelInfo => ({ key, id, name, ...(isNewModel(key) ? { isNew: true } : {}) });
+const info = (key: string, id: string, name: string): ModelInfo => {
+  const since = sinceOf(key);
+  return { key, id, name, ...(isNewModel(key) ? { isNew: true } : {}), ...(since ? { since } : {}) };
+};
 
 // Logo của nhà cung cấp tương thích OpenAI theo địa chỉ API: hãng đã biết (api.groq.com → groq), tên miền công khai khác → "site" (biểu tượng trang
 // tải hộ qua /api/favicon?p=<id>), địa chỉ nội bộ / máy riêng → không có (giao diện lấy logo theo dòng model hoặc chữ cái đầu).

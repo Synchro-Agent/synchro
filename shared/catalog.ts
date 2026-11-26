@@ -2,8 +2,15 @@
 // Danh sách model thật lấy từ khóa API quản trị viên nhập ở Cài đặt → Providers (xem server/providers.ts),
 // mỗi model định danh bằng khóa "nhà cung cấp/mã model", ví dụ "anthropic/claude-opus-5-5".
 
-/** blockedUntil: riêng model này đang hết hạn mức tới lúc đó (các model khác của gói vẫn dùng được). isNew: hãng vừa ra mắt, Synchro đã thử đạt (nhãn "Mới" 14 ngày). */
-export type ModelInfo = { key: string; id: string; name: string; blockedUntil?: number; isNew?: boolean };
+/**
+ * blockedUntil: riêng model này đang hết hạn mức tới lúc đó (model khác của gói vẫn dùng được).
+ * isNew: hãng vừa ra mắt, Synchro đã thử đạt (nhãn "Mới" 14 ngày).
+ * since: ngày hãng báo ra mắt, không có thì lúc sổ model thấy lần đầu (ms), để đội hình ở bộ chọn
+ * biết bản nào mới hơn khi hai model cùng số phiên bản.
+ */
+export type ModelInfo = {
+  key: string; id: string; name: string; blockedUntil?: number; isNew?: boolean; since?: number;
+};
 // Gói subscription của người dùng trong một nhóm hãng (bộ chọn model gộp gói và khóa API theo hãng, xem server/ai/subs.ts):
 // blockedUntil: gói đang hết hạn mức tới lúc nào; usingApiUntil: người dùng đã đồng ý dùng khóa API thay gói tới lúc nào.
 /** Gói tạo được ảnh bằng generate_image (ai/imagegen.ts): chip "Tạo ảnh" ở trang chủ, thẻ "chưa tạo được ảnh" trong khung chat. */
