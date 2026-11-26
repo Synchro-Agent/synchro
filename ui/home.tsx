@@ -1492,7 +1492,14 @@ export default function Home({ boot }: { boot?: BootData | null }) {
         patch(id, (ms) => {
           const last = ms[ms.length - 1];
           if (!last || last.role !== "ai" || (last.seq ?? 0) >= ev.seq) return ms;
-          return [...ms.slice(0, -1), { ...last, done: true, prog: undefined, run: undefined, seq: ev.seq }, { role: "user", text: ev.text, time: Date.now(), steer: true }, { role: "ai", text: "", time: Date.now(), run: last.run, seq: ev.seq }];
+          const said: Msg = { role: "user", text: ev.text, time: Date.now(), steer: true };
+          // Tin tới trước khi model kịp viết hay làm gì (lượt CLI bị cắt ngay): đóng câu trả lời đó sẽ để lại một tin
+          // rỗng chỉ có hàng nút. Chuyển nguyên câu trả lời đang chạy xuống dưới tin nhắn thêm.
+          const blank = !last.text.trim() && !last.parts?.length && !last.plan?.length && !last.outs?.length
+            && !last.tools?.length && !last.skills?.length && !last.libs?.length;
+          if (blank) return [...ms.slice(0, -1), said, { ...last, seq: ev.seq }];
+          return [...ms.slice(0, -1), { ...last, done: true, prog: undefined, run: undefined, seq: ev.seq }, said,
+            { role: "ai", text: "", time: Date.now(), run: last.run, seq: ev.seq }];
         });
         setQueued((q) => { const k = q.findIndex((x) => x.chat === id && x.mode === "steer" && x.text === ev.text); return k < 0 ? q : q.filter((_, j) => j !== k); });
         return;
@@ -2182,8 +2189,11 @@ export default function Home({ boot }: { boot?: BootData | null }) {
               <button className="menu-item" onClick={() => { setSettingsTab("General"); setModal("settings"); setUserMenu(false); }}><I.Cog />Cài đặt<span className="sc">⇧⌘,</span></button>
               <button className="menu-item" onClick={() => { setModal("lang"); setUserMenu(false); }}><I.Globe />Ngôn ngữ</button>
               {/* Bộ não không nằm trên thanh điều hướng của trang chủ: mở từ đây, ⌘K, Cài đặt → Bộ não hoặc
-                  địa chỉ #v=brain. */}
-              <button className="menu-item" data-nav="brain" onClick={() => { setView("brain"); setUserMenu(false); }}>
+                  địa chỉ #v=brain. Điện thoại: đóng ngăn kéo như khi chọn một mục điều hướng, không thì
+                  ngăn kéo che Bộ não vừa mở. */}
+              <button className="menu-item" data-nav="brain" onClick={() => {
+                setView("brain"); setUserMenu(false); if (narrow()) setOpen(false);
+              }}>
                 <I.Brain />Bộ não
               </button>
               <hr />
