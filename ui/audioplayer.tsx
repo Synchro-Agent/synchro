@@ -107,7 +107,8 @@ async function fetchCapped(src: string, maxBytes: number): Promise<ArrayBuffer> 
   const r = await fetch(src, { signal: stop.signal });
   if (!r.ok) throw new Error(`HTTP ${r.status}`);
   const mb = (n: number) => Math.round(n / 1048576);
-  const big = (n: number) => new Error(`tệp ${mb(n)} MB, quá mức ${mb(maxBytes)} MB`);
+  // Lời báo chỉ vào nhật ký gỡ lỗi (không hiện cho người dùng: thiếu dạng sóng thì thanh tua vẫn chạy) nên chỉ ghi số.
+  const big = (n: number) => new Error(`${mb(n)} MB > ${mb(maxBytes)} MB`);
   const len = Number(r.headers.get("content-length") ?? 0);
   if (len > maxBytes) { stop.abort(); throw big(len); }
   const buf = await r.arrayBuffer();
