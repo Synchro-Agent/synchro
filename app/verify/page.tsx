@@ -6,6 +6,7 @@ import { Lockup } from "../../ui/brand";
 import { tr } from "../../ui/i18n";
 import { LangSwitch } from "../../ui/langswitch";
 import { AlertCircle, Check, Mail } from "lucide-react";
+import { Spinner } from "../../ui/spinner";
 
 // Chỉ 400 mới nghĩa là đường dẫn hỏng. Mất mạng, 5xx, quá giới hạn thì đường dẫn vẫn tốt: không được báo hết hạn, không được bỏ mã khỏi địa chỉ.
 class PostError extends Error { constructor(m: string, public status: number) { super(m); } }
@@ -51,13 +52,16 @@ export default function VerifyEmail() {
       <LangSwitch />
       <div className="rp-card">
         <Link href="/" className="rp-brand" aria-label="Synchro"><Lockup height={20} className="lk-hover" /></Link>
-        {stage === "loading" && <div className="rp-wait" role="status" aria-label={tr("Đang tải")}><span className="art-spin sm" /></div>}
+        {stage === "loading"
+          && <div className="rp-wait" role="status" aria-label={tr("Đang tải")}><Spinner className="art-spin sm" />
+          </div>}
         {stage === "ask" && <>
           <div className="rp-ico"><Mail size={20} /></div>
           <h1>Xác minh email của bạn</h1>
           <p className="rp-lead">Có người vừa tạo tài khoản Synchro bằng địa chỉ email này. Nếu là bạn, hãy xác minh để dùng đủ tính năng.</p>
           {err && <p className="auth-field-err rp-err" role="alert">{tr(err)}</p>}
-          <button className="btn dark rp-go" disabled={busy} onClick={() => void act("confirm")}>{busy ? <span className="api-spin" /> : "Đúng, là tôi"}</button>
+          <button className="btn dark rp-go" disabled={busy} onClick={() => void act("confirm")}>{busy
+            ? <Spinner className="api-spin" /> : "Đúng, là tôi"}</button>
           {!sure
             ? <button className="lnk rp-back" onClick={() => setSure(true)}>Không phải tôi</button>
             : <>
@@ -70,7 +74,8 @@ export default function VerifyEmail() {
           <h1>Xác nhận email mới</h1>
           <p className="rp-lead">Tài khoản của bạn sẽ dùng <b data-notr>{newEmail}</b> để đăng nhập và nhận thư. Mọi thiết bị sẽ được đăng xuất.</p>
           {err && <p className="auth-field-err rp-err" role="alert">{tr(err)}</p>}
-          <button className="btn dark rp-go" disabled={busy} onClick={() => void confirmChange()}>{busy ? <span className="api-spin" /> : "Đổi sang email này"}</button>
+          <button className="btn dark rp-go" disabled={busy} onClick={() => void confirmChange()}>{busy
+            ? <Spinner className="api-spin" /> : "Đổi sang email này"}</button>
         </>}
         {stage === "changed" && <>
           <div className="rp-ico ok"><Check size={20} /></div>

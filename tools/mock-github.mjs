@@ -3,7 +3,12 @@
 // Repo công khai (Kho kỹ năng dán link repo): /codeload/<chủ>/<repo>/zip/<nhánh> như codeload.github.com, /public-git/<chủ>/<repo>.git
 // clone không cần đăng nhập (chỉ đọc) như một máy chủ git công khai bất kỳ (GitLab, Gitea…).
 // CI giả lập: commit có tệp BROKEN thì lượt kiểm tra "test" lỗi (chạy xong sau ~1,5 giây kể từ lần đầu được hỏi), không có thì đạt.
-// Điều khiển cho kiểm thử: POST /_mock/repo, /_mock/comment, /_mock/merge, /_mock/close; GET /_mock/state, /_mock/file.
+// Điều khiển cho kiểm thử: POST /_mock/repo, /_mock/comment, /_mock/merge, /_mock/close, /_mock/scopes,
+// /_mock/revoke ({ on }: mọi token bị thu hồi, như người dùng gỡ Synchro trên GitHub);
+// GET /_mock/state, /_mock/file.
+// Tổ chức: mọi chủ repo khác mock-dev là một tổ chức mock-dev tham gia. Tổ chức tên "locked-…" giả lập tổ chức bật
+// OAuth App access restrictions như github.com: repo riêng tư biến khỏi danh sách, API và git báo "not found",
+// chỉ GraphQL nói rõ lý do.
 import { spawn, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import http from "node:http";
@@ -25,9 +30,22 @@ export async function startMockGithub(port, dir) {
   const gitDir = (repo) => path.join(dir, `${repo}.git`);
   const git = (repo, args, input) => spawnSync("git", ["--git-dir", gitDir(repo), ...args], { encoding: "utf8", input });
   const sha = (repo, ref) => { const r = git(repo, ["rev-parse", "--verify", "-q", `${ref}^{commit}`]); return r.status === 0 ? r.stdout.trim() : null; };
-  const okToken = (t) => typeof t === "string" && t.startsWith("gho_mock_");
+  let revoked = false;
+  const okToken = (t) => !revoked && typeof t === "string" && t.startsWith("gho_mock_");
+  // Quyền của token: theo scope xin lúc kết nối, hoặc theo /_mock/scopes (giả lập kết nối cũ thiếu read:org).
+  const tokenScopes = new Map();
+  let lastScope = "repo,read:user,user:email", forceScope = null;
+  const locked = (owner) => /^locked-/.test(owner);
+  const owners = () => (!fs.existsSync(dir) ? []
+    : fs.readdirSync(dir).filter((o) => fs.statSync(path.join(dir, o)).isDirectory()));
+  const reposOf = (owner) => (!fs.existsSync(path.join(dir, owner)) ? []
+    : fs.readdirSync(path.join(dir, owner)).map((r) => `${owner}/${r.replace(/\.git$/, "")}`));
+  const RESTRICTED = (o) => "Although you appear to have the correct authorization credentials,"
+    + ` the \`${o}\` organization has enabled OAuth App access restrictions,`
+    + " meaning that data access to third-parties is limited.";
   const repoInfo = (repo) => ({ id: repo.length, full_name: repo, name: repo.split("/")[1], private: true, default_branch: "main", description: "Repo giả lập", pushed_at: new Date().toISOString(),
-    html_url: `${base}/${repo}`, permissions: { admin: true, push: true, pull: true }, owner: { login: repo.split("/")[0] } });
+    html_url: `${base}/${repo}`, permissions: { admin: true, push: true, pull: true },
+    owner: { login: repo.split("/")[0], type: repo.split("/")[0] === MOCK_GH_LOGIN ? "User" : "Organization" } });
   const exists = (repo) => fs.existsSync(gitDir(repo));
   const prOut = (repo, p) => ({ ...p, head: { ref: p.headRef, sha: sha(repo, `refs/heads/${p.headRef}`) ?? p.lastSha, repo: { full_name: repo } }, base: { ref: p.baseRef }, html_url: `${base}/${repo}/pull/${p.number}`, merged: p.merged });
 
@@ -63,7 +81,10 @@ export async function startMockGithub(port, dir) {
     const pass = tok ? Buffer.from(tok, "base64").toString().split(":")[1] : null;
     if (auth === "public" ? write : !okToken(pass)) { res.writeHead(401, { "WWW-Authenticate": 'Basic realm="GitHub"' }); return res.end("Cần đăng nhập GitHub"); }
     const repo = /^\/([^/]+\/[^/]+?)\.git/.exec(rel)?.[1];
-    if (!repo || !exists(repo)) { res.writeHead(404); return res.end("Repository not found"); }
+    if (!repo || !exists(repo) || (auth !== "public" && locked(repo.split("/")[0]))) {
+      res.writeHead(404);
+      return res.end("Repository not found");
+    }
     const q = new URL(req.url, base).search.slice(1);
     const p = spawn("git", ["http-backend"], { env: { ...process.env, GIT_PROJECT_ROOT: dir, GIT_HTTP_EXPORT_ALL: "1", PATH_INFO: rel, REQUEST_METHOD: req.method, QUERY_STRING: q,
       CONTENT_TYPE: req.headers["content-type"] ?? "", HTTP_CONTENT_ENCODING: req.headers["content-encoding"] ?? "", REMOTE_USER: MOCK_GH_LOGIN, REMOTE_ADDR: "127.0.0.1", GIT_HTTP_MAX_REQUEST_BUFFER: "100M" } });
@@ -85,7 +106,10 @@ export async function startMockGithub(port, dir) {
     p.on("close", () => { if (!sent) res.writeHead(500); res.end(); if (write) for (const l of prs.values()) for (const x of l) x.lastSha = sha(repo, `refs/heads/${x.headRef}`) ?? x.lastSha; });
   }
 
-  const json = (res, code, o) => { res.writeHead(code, { "content-type": "application/json" }); res.end(JSON.stringify(o)); };
+  const json = (res, code, o, h = {}) => {
+    res.writeHead(code, { "content-type": "application/json", ...h });
+    res.end(JSON.stringify(o));
+  };
   const body = (req) => new Promise((ok) => { let b = ""; req.on("data", (d) => { b += d; }); req.on("end", () => { try { ok(b ? JSON.parse(b) : {}); } catch { ok(Object.fromEntries(new URLSearchParams(b))); } }); });
   const html = (res, s) => { res.writeHead(200, { "content-type": "text/html; charset=utf-8" }); res.end(`<!doctype html><meta charset="utf-8"><title>GitHub giả lập</title><body style="font:16px system-ui;max-width:560px;margin:60px auto;line-height:1.5">${s}</body>`); };
 
@@ -107,12 +131,20 @@ export async function startMockGithub(port, dir) {
       }
       // ---- OAuth (cửa sổ "Kết nối GitHub") ----
       if (p === "/login/oauth/authorize") {
+        lastScope = (u.searchParams.get("scope") ?? lastScope).split(/\s+/).join(",");
         const to = new URL(u.searchParams.get("redirect_uri"));
         to.searchParams.set("code", "mockcode");
         to.searchParams.set("state", u.searchParams.get("state") ?? "");
         return html(res, `<h2>GitHub (giả lập)</h2><p>Synchro muốn truy cập repo của <b>${MOCK_GH_LOGIN}</b>.</p><p><a id="allow" href="${to}">Cho phép</a></p>`);
       }
-      if (p === "/login/oauth/access_token") { await body(req); return json(res, 200, { access_token: `gho_mock_${Math.random().toString(36).slice(2)}`, token_type: "bearer", scope: "repo,read:user,user:email" }); }
+      if (p === "/login/oauth/access_token") {
+        await body(req);
+        const t = `gho_mock_${Math.random().toString(36).slice(2)}`, scope = forceScope ?? lastScope;
+        tokenScopes.set(t, scope);
+        return json(res, 200, { access_token: t, token_type: "bearer", scope });
+      }
+      if (p === "/_mock/scopes") { forceScope = (await body(req)).scopes ?? null; return json(res, 200, { ok: true }); }
+      if (p === "/_mock/revoke") { revoked = !!(await body(req)).on; return json(res, 200, { ok: true }); }
       // ---- điều khiển cho kiểm thử ----
       if (p === "/_mock/repo") { const b = await body(req); createRepo(b.repo, b.files, b.branch); return json(res, 200, { ok: true }); }
       if (p === "/_mock/comment") {
@@ -150,17 +182,42 @@ export async function startMockGithub(port, dir) {
         if (/vnd\.github\.sha/.test(req.headers.accept ?? "")) { res.writeHead(200, { "content-type": "text/plain" }); return res.end(s); }
         return json(res, 200, { sha: s });
       }
-      if (!okToken(/^Bearer\s+(.+)$/i.exec(auth ?? "")?.[1])) return json(res, 401, { message: "Bad credentials" });
-      if (ap === "/user") return json(res, 200, USER);
+      const tok = /^Bearer\s+(.+)$/i.exec(auth ?? "")?.[1];
+      if (!okToken(tok)) return json(res, 401, { message: "Bad credentials" });
+      const sh = { "x-oauth-scopes": (tokenScopes.get(tok) ?? "repo,read:user,user:email").split(",").join(", ") };
+      if (ap === "/user") return json(res, 200, USER, sh);
       if (ap === "/user/emails") return json(res, 200, [{ email: `${MOCK_GH_LOGIN}@users.noreply.github.com`, primary: true, verified: true }]);
-      if (ap === "/user/repos") {
-        const list = fs.existsSync(path.join(dir, MOCK_GH_LOGIN)) ? fs.readdirSync(path.join(dir, MOCK_GH_LOGIN)).map((r) => repoInfo(`${MOCK_GH_LOGIN}/${r.replace(/\.git$/, "")}`)) : [];
-        return json(res, 200, list);
+      // Danh sách chia trang như api.github.com (per_page, page, Link rel="next"); tổ chức chặn ứng dụng không có mặt.
+      const paged = (all) => {
+        const per = Math.min(100, Number(u.searchParams.get("per_page")) || 30);
+        const page = Number(u.searchParams.get("page")) || 1;
+        const next = new URL(req.url, base);
+        next.searchParams.set("page", String(page + 1));
+        const h = page * per < all.length ? { ...sh, link: `<${base}${next.pathname}${next.search}>; rel="next"` } : sh;
+        return json(res, 200, all.slice((page - 1) * per, page * per), h);
+      };
+      if (ap === "/user/repos") return paged(owners().filter((o) => !locked(o)).flatMap(reposOf).map(repoInfo));
+      if (ap === "/user/orgs") return paged(owners().filter((o) => o !== MOCK_GH_LOGIN).map((login) => ({ login })));
+      let om;
+      if ((om = /^\/orgs\/([^/]+)\/repos$/.exec(ap))) return paged(locked(om[1]) ? [] : reposOf(om[1]).map(repoInfo));
+      if ((om = /^\/user\/memberships\/orgs\/([^/]+)$/.exec(ap))) {
+        const member = owners().includes(om[1]) && om[1] !== MOCK_GH_LOGIN;
+        if (!member) return json(res, 404, { message: "Not Found" }, sh);
+        return json(res, 200, { state: "active", role: "admin" }, sh);
+      }
+      if (ap === "/graphql") {
+        const v = (await body(req)).variables ?? {};
+        const err = (type, message) => json(res, 200, { data: null, errors: [{ type, message }] }, sh);
+        if (locked(v.o ?? "")) return err("FORBIDDEN", RESTRICTED(v.o));
+        if (!owners().includes(v.o ?? "")) return err("NOT_FOUND", "Could not resolve to a node");
+        const found = v.n ? exists(`${v.o}/${v.n}`) : true;
+        if (!found) return err("NOT_FOUND", "Could not resolve to a Repository");
+        return json(res, 200, { data: { organization: { repositories: { totalCount: reposOf(v.o).length } } } }, sh);
       }
       const m = /^\/repos\/([^/]+\/[^/]+)(\/.*)?$/.exec(ap);
       if (!m) return json(res, 404, { message: "Not Found" });
       const repo = m[1], rest = m[2] ?? "";
-      if (!exists(repo)) return json(res, 404, { message: "Not Found" });
+      if (!exists(repo) || locked(repo.split("/")[0])) return json(res, 404, { message: "Not Found" });
       const list = prs.get(repo) ?? [];
       prs.set(repo, list);
       if (!rest) return json(res, 200, repoInfo(repo));

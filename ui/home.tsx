@@ -62,19 +62,26 @@ const roughTitle = (t: string) => {
 const vagueMsg = (t: string) => t.trim().split(/\s+/).length <= 3 || /^(xin )?ch[àa]o|^(hi|hello|hey|alo|test)\b/i.test(t.trim());
 // U6: mỗi mục có một địa chỉ #v=… để Back / liên kết / F5 mở đúng trang (đoạn chat vẫn dùng #c=, Cài đặt dùng #s=<tab>).
 // "project" (chi tiết một dự án) dùng chung #v=projects với danh sách dự án. "new"/"chat" không có #v=.
-const HASH_VIEW: Partial<Record<View, string>> = { projects: "projects", project: "projects", artifacts: "artifacts", inbox: "inbox", brain: "brain", code: "code", speech: "speech", customize: "skills" };
-const VIEW_OF_HASH: Record<string, View> = { projects: "projects", artifacts: "artifacts", inbox: "inbox", brain: "brain", code: "code", speech: "speech", skills: "customize" };
+const HASH_VIEW: Partial<Record<View, string>> = {
+  projects: "projects", project: "projects", artifacts: "artifacts", autopilot: "autopilot", brain: "brain",
+  code: "code", speech: "speech", customize: "skills",
+};
+// #v=inbox: địa chỉ cũ của Autopilot (trước đây là Hộp thư) trong dấu trang, email cũ: vẫn mở đúng trang, rồi địa chỉ
+// tự đổi sang #v=autopilot.
+const VIEW_OF_HASH: Record<string, View> = {
+  projects: "projects", artifacts: "artifacts", autopilot: "autopilot", inbox: "autopilot", brain: "brain",
+  code: "code", speech: "speech", skills: "customize",
+};
 import { AppCtx, useApp, VOICE_LANG, VOICE_RATE, initials, readPref, reloadPrefs, resetPrefs, usePref, type Chat, type Msg, type Project } from "./store";
 import { IMAGE_PLANS, allowsModel, clampEffort, effortCap, effortsFor, isEffort, legacyModel, type Effort } from "../shared/catalog";
 import { AUTO, fitModel, modelName, modelsSettled, refreshModels, seedModels, useModels } from "./models";
 import type { BootData } from "../server/bootdata";
-import { seedInboxCount } from "./inboxcount";
+import { INBOX_CHANGED, seedInboxCount, useInboxCount, type Fresh } from "./inboxcount";
 import { useFitPlaceholder } from "./phfit";
 import type { ProviderInfo } from "../shared/catalog";
-import { useInboxCount } from "./inboxcount";
 import { adoptLegacyData, clearAccountData, ls, setUserScope, userScope } from "./userscope";
 import { useChatSync, useSyncStatus } from "./chatsync";
-import { chatsForExport, closeChats, hydrateAll, loadChats, wipeChats, writeJournal } from "./chatload";
+import { chatsForExport, closeChats, hydrateAll, loadChats, needChats, wipeChats, writeJournal } from "./chatload";
 import { shortName, topicTitle } from "../shared/names";
 import { loadCaps, seedCaps, useCaps } from "./capsclient";
 import { hasArtifacts, splitArtifacts, type ArtBlock } from "../shared/artifacts";
@@ -96,6 +103,7 @@ type CxData = { connectors: Conn[]; composio?: ComposioInfo; err?: boolean };
 import { wantsIntro } from "./introflag";
 import { startWarmPing, warmChoice } from "./warmping";
 import { decodeSettingsTab, hashStep, settingsHash } from "./hashnav";
+import { Spinner } from "./spinner";
 
 // Trang đầu chỉ tải phần chat; các mục khác, hộp thoại và màn hình đăng nhập tải khi cần (rê chuột vào mục thì tải trước).
 const CodeView = lazyView(() => import("./codeview").then((m) => m.CodeView));
@@ -104,10 +112,12 @@ const SpeechView = lazyView(() => import("./speech/view").then((m) => m.SpeechVi
 const DesignStylePop = lazyView(() => import("./designstyleui").then((m) => m.DesignStylePop), null);
 const DesignChipCard = lazyView(() => import("./designstyleui").then((m) => m.DesignChipCard), null);
 const BrainWorkspace = lazyView(() => import("./brainui").then((m) => m.BrainWorkspace));
-const InboxPage = lazyView(() => import("./tasksui").then((m) => m.InboxPage));
+const AutopilotPage = lazyView(() => import("./tasksui").then((m) => m.AutopilotPage));
 const CustomizePage = lazyView(() => import("./pluginsui").then((m) => m.CustomizePage));
 const ConnectorsPanel = lazyView(() => import("./connectorsui").then((m) => m.ConnectorsPanel));
 const ProjectsPage = lazyView(() => import("./projects").then((m) => m.ProjectsPage));
+// Danh sách model trong menu con của từng hãng (đội hình theo bậc): chỉ cần khi mở bộ chọn model, nạp trước lúc mở.
+const ProviderSub = lazyView(() => import("./modellist").then((m) => m.ProviderSub), null);
 const ProjectPage = lazyView(() => import("./projects").then((m) => m.ProjectPage));
 const Studio = lazyView(() => import("./studio").then((m) => m.Studio), null);
 const AppsGallery = lazyView(() => import("./appsui").then((m) => m.AppsGallery));
@@ -120,7 +130,11 @@ const IntroFilm = lazyView(() => import("./introfilm").then((m) => m.IntroFilm),
 const HalftoneBg = lazyView(() => import("./halftone").then((m) => m.HalftoneBg), null);
 // Khách chưa đăng nhập lần nào: tải sẵn màn hình đăng nhập ngay từ đầu.
 if (typeof document !== "undefined" && !document.documentElement.dataset.sess) AuthComponent.preload();
-const PRELOAD: Partial<Record<View, () => void>> = { artifacts: ArtifactsGallery.preload, code: CodeView.preload, speech: SpeechView.preload, brain: BrainWorkspace.preload, inbox: InboxPage.preload, customize: CustomizePage.preload, projects: ProjectsPage.preload };
+const PRELOAD: Partial<Record<View, () => void>> = {
+  artifacts: ArtifactsGallery.preload, code: CodeView.preload, speech: SpeechView.preload,
+  brain: BrainWorkspace.preload, autopilot: AutopilotPage.preload, customize: CustomizePage.preload,
+  projects: ProjectsPage.preload,
+};
 
 const MODELS: [string, string][] = [["Opus 5", "Mạnh nhất cho việc phức tạp"], ["Sonnet 5.5", "Cân bằng tốc độ và chất lượng"], ["Haiku 5", "Nhanh nhất cho việc đơn giản"]];
 
@@ -221,12 +235,15 @@ const STARTERS: Record<TplKey, { t: string; d: string; p: string }[]> = {
   ],
 };
 
+// Cỡ logo model trên nút chọn model (cùng cỡ ô logo hãng trong menu).
+const LOGO16 = { width: 16, height: 16 };
 function ModelPicker({ model, setModel, prefix }: { model: string; setModel: (m: string) => void; prefix?: string }) {
   const [mm, setMm] = useState(false);
   const [sub, setSub] = useState<null | string>(null);
   const [subPos, setSubPos] = useState<React.CSSProperties>({});
   const [subLeft, setSubLeft] = useState<number | string>("calc(100% + 8px)");
   const [effort, setEffort] = usePref("effort", "auto");
+  const [allFor, setAllFor] = useState<Set<string>>(() => new Set());
   const { say, me, openSettings } = useApp();
   const { providers, allowed, loaded, effort: caps } = useModels();
   // Mức nỗ lực thật sự dùng: mức người dùng chọn, hạ theo giới hạn quản trị viên đặt cho model và các mức model hỗ trợ.
@@ -247,11 +264,16 @@ function ModelPicker({ model, setModel, prefix }: { model: string; setModel: (m:
     subAnchor.current = { off: el.offsetTop, below: window.innerHeight - r.top - 12, menuBottom: menu.bottom };
     setSub(id);
   };
-  const placeSub = (scroller: HTMLElement) => {
+  // tall: đang mở "Xem tất cả model": khung được cao hết chỗ trống của màn hình thay vì dừng ở 420px, để người
+  // vừa xin xem cả danh sách thấy được nhiều dòng nhất mà không phải cuộn trong một khung thấp.
+  const placeSub = (scroller: HTMLElement, tall: boolean) => {
     const panel = scroller.closest<HTMLElement>(".msub-models"), a = subAnchor.current;
     if (!panel) return;
+    const cap = tall ? Infinity : 420;
     const need = panel.offsetHeight - scroller.clientHeight + scroller.scrollHeight;
-    setSubPos(need <= a.below ? { top: a.off - 6, maxHeight: Math.min(420, a.below) } : { bottom: 0, maxHeight: Math.min(420, Math.max(160, a.menuBottom - 12)) });
+    setSubPos(need <= a.below
+      ? { top: a.off - 6, maxHeight: Math.min(cap, a.below) }
+      : { bottom: 0, maxHeight: Math.min(cap, Math.max(160, a.menuBottom - 12)) });
   };
   const mref = useClickAway(() => { setMm(false); setSub(null); });
   const close = () => { setMm(false); setSub(null); };
@@ -269,7 +291,9 @@ function ModelPicker({ model, setModel, prefix }: { model: string; setModel: (m:
   }, [sub, mm]); // eslint-disable-line react-hooks/exhaustive-deps
   // Đổi chỗ mà không đổi cỡ thì bộ theo dõi kích thước không báo: tính lại phần dời ngay.
   useLayoutEffect(() => { mref.current?.querySelectorAll<HTMLElement>(".model-sub").forEach(fitFloat); }, [sub, subLeft, subPos]); // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => { if (mm) refreshModels(); }, [mm]);
+  useEffect(() => { if (mm) { refreshModels(); ProviderSub.preload(); } }, [mm]);
+  // Mỗi lần mở menu, các hãng trở về đội hình ngắn (không giữ "Xem tất cả model" của lần trước).
+  useEffect(() => { if (mm) setAllFor(new Set()); }, [mm]);
   // Menu mở ra bị tràn khỏi màn hình (nút nằm giữa ô soạn tin trên điện thoại): dịch ngang cho vừa.
   const [shift, setShift] = useState(0);
   useEffect(() => {
@@ -284,6 +308,13 @@ function ModelPicker({ model, setModel, prefix }: { model: string; setModel: (m:
     return () => cancelAnimationFrame(raf);
   }, [mm]);
   const subX = { left: subLeft };
+  // Mỗi hãng chỉ hiện đội hình theo bậc như ứng dụng của hãng; model đời trước vẫn ở "Xem tất cả model".
+  // Synchro Code (có tiền tố) thêm model chỉ viết code của hãng vào đội hình. Ô của mỗi bậc ưu tiên model người
+  // dùng được phép dùng: quản trị viên chỉ cho bản cũ thì bản cũ đứng ở đội hình, không bị đẩy vào "Xem tất cả".
+  const ownPlans = useMemo(() => new Set(providers.filter((p) => p.source === "plan").map((p) => p.kind as string)),
+    [providers]);
+  const can = useCallback((k: string) => allowsModel(allowed, k), [allowed]);
+  const toggleAll = (id: string) => setAllFor((s) => { const n = new Set(s); if (!n.delete(id)) n.add(id); return n; });
   const ok = (k: string) => k === AUTO || allowsModel(allowed, k);
   const pick = (k: string) => {
     if (!ok(k)) { close(); say("Quản trị viên chưa cho phép tài khoản của bạn dùng model này"); return; }
@@ -293,7 +324,14 @@ function ModelPicker({ model, setModel, prefix }: { model: string; setModel: (m:
   const none = loaded && !providers.length;
   return (
     <div ref={mref} style={{ position: "relative" }} onKeyDown={(e) => { if (e.key === "ArrowLeft" && sub && (e.target as HTMLElement).closest(".model-sub")) setSub(null); }}>
-      <button className="model-btn" data-tip="Chọn model" aria-label={prefix ? `${prefix}: ${none ? tr("Chưa có model") : model ? tr(modelName(model)) : tr("Chọn model")}` : undefined} aria-haspopup="menu" aria-expanded={mm} onPointerEnter={() => { if (!mm) refreshModels(); }} onClick={() => { setMm(!mm); setSub(null); }}>{!none && model ? (model === AUTO ? <span className="vlogo" style={{ width: 16, height: 16 }} aria-hidden><I.Sparkle size={15} /></span> : <ModelLogo k={model} />) : null}{prefix ? (
+      <button className="model-btn" data-tip="Chọn model"
+        aria-label={prefix
+          ? `${prefix}: ${none ? tr("Chưa có model") : model ? tr(modelName(model)) : tr("Chọn model")}` : undefined}
+        aria-haspopup="menu" aria-expanded={mm}
+        onPointerEnter={() => { if (!mm) { refreshModels(); ProviderSub.preload(); } }}
+        onClick={() => { setMm(!mm); setSub(null); }}>{!none && model ? (
+          model === AUTO ? <span className="vlogo" style={LOGO16} aria-hidden><I.Sparkle size={15} /></span>
+            : <ModelLogo k={model} />) : null}{prefix ? (
         // Trong Synchro Code: thêm tiền tố "Model:" để phân biệt với hai nút "Chế độ"/"Quyền" bên cạnh; dưới 1100px CSS ẩn nhãn, chỉ còn icon.
         <span className="mp-lbl"><span className="mp-k">{prefix}</span>: {none ? "Chưa có model" : model ? modelName(model) : "Chọn model"}{!(model === AUTO && autoEff) && <> <span className="muted">{eLabel}</span></>}</span>
       ) : (<>{none ? "Chưa có model" : model ? modelName(model) : "Chọn model"}{!(model === AUTO && autoEff) && <> <span className="muted">{eLabel}</span></>}</>)}<I.Chevron size={14} /></button>
@@ -312,7 +350,9 @@ function ModelPicker({ model, setModel, prefix }: { model: string; setModel: (m:
         )}
         {!none && <hr />}
         {/* Danh sách chưa về (máy chủ vừa khởi động lại còn kiểm tra đăng nhập gói): báo đang tải thay vì để trống. */}
-        {!loaded && <div className="mload" role="status"><span className="art-spin sm" /><span>Đang tải danh sách model…</span></div>}
+        {!loaded
+          && <div className="mload" role="status"><Spinner className="art-spin sm" />
+          <span>Đang tải danh sách model…</span></div>}
         {providers.map((pv) => (
           <button key={pv.id} aria-haspopup="menu" aria-expanded={sub === pv.id} className={`menu-item mline mprov ${sub === pv.id ? "is-sel" : ""}`} onClick={(e) => hoverProv(pv.id, e.currentTarget)} onMouseEnter={(e) => hoverProv(pv.id, e.currentTarget)}>
             <ProviderLogo p={pv} /><span className="mname-t" data-notr>{pv.name}</span><span className="sc">{pv.models.some((m) => m.key === model) && <i className="dot" />}<I.ChevronR size={16} /></span>
@@ -340,13 +380,9 @@ function ModelPicker({ model, setModel, prefix }: { model: string; setModel: (m:
         {providers.map((pv) => (
           <Menu key={pv.id} open={sub === pv.id} className="model-sub msub-models" style={{ ...subX, ...subPos, width: 260 }}>
             {pv.plan && <PlanNote pv={pv} />}
-            <MsubBody on={sub === pv.id} count={pv.models.length} place={placeSub}>
-            {pv.models.map((m) => (
-              <button key={m.key} className={`menu-item mline ${ok(m.key) ? "" : "locked"}`} onClick={() => pick(m.key)} title={ok(m.key) ? m.id : "Quản trị viên chưa cho phép tài khoản của bạn dùng model này"}>
-                <ModelLogo k={m.key} name={m.name} /><span className="mname-t">{m.name}</span>{m.isNew && !m.blockedUntil ? <span className="mtag mnew" title="Hãng vừa ra mắt, Synchro đã thử và cho dùng">Mới</span> : null}{m.blockedUntil ? <span className="mtag" title={resetClock(m.blockedUntil, getLang())}>{tr("Hết hạn mức")}</span> : null}{m.key === model ? <span className="ck"><I.Check /></span> : !ok(m.key) && <span className="sc"><I.Lock size={14} /></span>}
-              </button>
-            ))}
-            </MsubBody>
+            <ProviderSub pv={pv} on={sub === pv.id} place={placeSub} model={model} ok={ok} pick={pick}
+              opts={{ selected: model, code: !!prefix, ownPlans, kind: pv.kind, ok: can }}
+              all={allFor.has(pv.id)} onAll={() => toggleAll(pv.id)} />
           </Menu>
         ))}
       </Menu>
@@ -365,14 +401,6 @@ const noticeOf = (d: Record<string, unknown>, text: string): Msg["notice"] => ({
   ...(d.partialWork ? { work: true } : {}),
   ...(Array.isArray(d.tried) ? { tried: d.tried as string[] } : {}),
 });
-
-// Phần cuộn của danh sách model nằm trong khung kính chứ không phải chính khung kính: nền và viền kính là lớp ::before / ::after của khung,
-// khung tự cuộn thì chúng trôi theo nội dung (viền cắt ngang dòng cuối, các dòng lòi ra ngoài nền). Ghi chú gói đứng yên ở đầu khung.
-function MsubBody({ on, count, place, children }: { on: boolean; count: number; place: (scroller: HTMLElement) => void; children: React.ReactNode }) {
-  const ref = useRef<HTMLDivElement>(null);
-  useLayoutEffect(() => { if (on && ref.current) place(ref.current); }, [on, count]); // eslint-disable-line react-hooks/exhaustive-deps
-  return <div ref={ref} className="menu-scroll msub-scroll">{children}</div>;
-}
 
 function PlanNote({ pv }: { pv: ProviderInfo }) {
   const p = pv.plan!;
@@ -565,7 +593,7 @@ const Composer = memo(function Composer(p: {
   const atMenu = at && (
     <div className="at-menu" role="listbox" aria-label={tr("Chọn connector")} onMouseDown={(e) => e.preventDefault()}>
       <div className="at-h">{tr("Dùng connector cho tin này")}</div>
-      {cx === null ? <div className="cm-empty"><span className="art-spin sm" /></div>
+      {cx === null ? <div className="cm-empty"><Spinner className="art-spin sm" /></div>
         : atList.length ? atList.map((c, i) => (
           <button key={c.id} type="button" role="option" aria-selected={i === atSel} className={`menu-item${i === atSel ? " on" : ""}`} onMouseEnter={() => setAtSel(i)} onClick={() => pickAt(c.name)}>
             <ConnLogo logo={c.logo} color={c.color} icon={c.icon} site={c.site} name={c.name} size={18} /><span className="cv-ell" data-notr>{c.name}</span>
@@ -674,7 +702,8 @@ const Composer = memo(function Composer(p: {
                 {/* Như Claude: ô tìm ở đầu danh sách. Chưa gõ: skill và thư viện bạn tự cài; gõ: tìm cả thư viện của danh mục skill (vài nghìn). */}
                 {skl && skl.length > 8 && <div className="cm-find"><I.Search size={14} /><input autoFocus value={skq} onChange={(e) => setSkq(e.target.value)} placeholder="Tìm skill hoặc thư viện" aria-label="Tìm skill hoặc thư viện" /></div>}
                 <div className="cm-list">
-                  {skl === null ? <div className="cm-empty"><span className="art-spin sm" /></div> : !skl.length ? <div className="cm-empty">Chưa có skill nào đang bật</div>
+                  {skl === null ? <div className="cm-empty"><Spinner className="art-spin sm" /></div> : !skl.length
+                    ? <div className="cm-empty">Chưa có skill nào đang bật</div>
                     : (() => { const q = skq.trim().toLowerCase(); const l = (q ? [...skl, ...skCat].filter((k) => k.label.toLowerCase().includes(q) || k.id.includes(q)) : skl.filter((k) => !k.cat)).slice(0, 60); return l.length ? l : [null]; })().map((k) => { if (!k) return <div key="none" className="cm-empty">Không có skill hoặc thư viện nào khớp</div>; const on = picks.some((x) => x.id === k.id); return (
                       <button key={k.id} className="menu-item" role="menuitemcheckbox" aria-checked={on} onClick={() => { setPicks(on ? picks.filter((x) => x.id !== k.id) : [...picks, { id: k.id, label: k.label }]); setMenu(false); setSub(null); ta.current?.focus(); }}>
                         {k.lib ? <I.Plugins /> : <I.Scroll />}<span className="cv-ell" data-notr>{k.label}</span>{on && <span className="ck"><I.Check /></span>}
@@ -686,7 +715,10 @@ const Composer = memo(function Composer(p: {
               </>)}
               {sub === "conn" && (<>
                 <div className="cm-list">
-                  {cx === null ? <div className="cm-empty"><span className="art-spin sm" /></div> : cx.err ? <div className="cm-empty cm-err"><span>Không tải được</span><span className="cm-dot">·</span><button className="cn-link" onClick={() => { setCx(null); void loadCx(); }}>Thử lại</button></div> : <>
+                  {cx === null ? <div className="cm-empty"><Spinner className="art-spin sm" /></div> : cx.err
+                    ? <div className="cm-empty cm-err"><span>Không tải được</span><span className="cm-dot">·</span>
+                    <button className="cn-link" onClick={() => { setCx(null); void loadCx(); }}>Thử lại</button></div>
+                    : <>
                     {cx.composio && (() => {
                       const k = cx.composio, c = k.connector, live = k.state === "linked" && c?.status === "ok", on = live && !!c?.enabled;
                       const note = k.state === "unlinked" ? "Chưa liên kết" : k.state === "blocked" ? "Không được phép" : live ? "" : "Cần liên kết lại";
@@ -824,18 +856,25 @@ function FitLine({ className, children }: { className: string; children: React.R
   return <span ref={ref} className={className}>{children}</span>;
 }
 
-function Toast({ text }: { text: string }) {
-  const [shown, setShown] = useState(text);
+/** Nút đi kèm dòng thông báo (ví dụ "Mở đoạn chat" khi Autopilot xong một việc). */
+type ToastAct = { label: string; run: () => void };
+function Toast({ text, act, onDone }: { text: string; act?: ToastAct; onDone: () => void }) {
+  const [shown, setShown] = useState<{ text: string; act?: ToastAct }>({ text, act });
   const [out, setOut] = useState(false);
   useEffect(() => {
-    if (text) { setShown(text); setOut(false); return; }
+    if (text) { setShown({ text, act }); setOut(false); return; }
     setOut(true);
-    const t = setTimeout(() => setShown(""), 180);
+    const t = setTimeout(() => setShown({ text: "" }), 180);
     return () => clearTimeout(t);
-  }, [text]);
-  if (!shown || typeof document === "undefined") return null;
+  }, [text, act]);
+  if (!shown.text || typeof document === "undefined") return null;
+  const a = shown.act;
   // Gắn vào cuối <body>, trên mọi lớp phủ: thông báo (vd. lỗi kết nối connector) không bị hộp đang mở che mất.
-  return createPortal(<div className={`toast ${out ? "out" : ""}`} key={shown} role="status">{shown}</div>, document.body);
+  return createPortal(
+    <div className={`toast ${a ? "act" : ""} ${out ? "out" : ""}`} key={shown.text} role="status">
+      <span>{shown.text}</span>
+      {a && <button type="button" className="btn" onClick={() => { a.run(); onDone(); }}>{a.label}</button>}
+    </div>, document.body);
 }
 
 // Phần cần cả danh sách hay nội dung đoạn chat (trang dự án, bảng lệnh ⌘K, hộp chia sẻ, chế độ giọng nói) tự đăng ký kho, chỉ trong lúc đang
@@ -984,7 +1023,7 @@ export default function Home({ boot }: { boot?: BootData | null }) {
   const [banner, setBanner] = useState(true);
   const [tab, setTab] = useState(0);
   const [tplMode, setTplMode] = useState<TplKey | null>(null);
-  const [toast, setToast] = useState("");
+  const [toast, setToast] = useState<{ text: string; act?: ToastAct }>({ text: "" });
   const [model, setModel] = useState("");
   const models = useModels();
   const [settingsTab, setSettingsTab] = useState("General");
@@ -1118,12 +1157,14 @@ export default function Home({ boot }: { boot?: BootData | null }) {
   const toastT = useRef<ReturnType<typeof setTimeout> | null>(null);
   const userRef = useRef<HTMLDivElement>(null);
 
-  const say = useCallback((m: string) => {
-    setToast(m);
+  const say = useCallback((m: string, act?: ToastAct) => {
+    setToast({ text: m, act });
     if (toastT.current) clearTimeout(toastT.current);
-    // Câu dài (lời giải thích lỗi kết nối) cần nhiều thời gian đọc hơn.
-    toastT.current = setTimeout(() => setToast(""), Math.min(10_000, Math.max(2400, m.length * 55)));
+    // Câu dài (lời giải thích lỗi kết nối) cần nhiều thời gian đọc hơn; có nút thì để lâu hơn cho kịp bấm.
+    const ms = Math.min(10_000, Math.max(act ? 8000 : 2400, m.length * 55));
+    toastT.current = setTimeout(() => setToast({ text: "" }), ms);
   }, []);
+  const hideToast = useCallback(() => setToast({ text: "" }), []);
   // Quay về từ trang đăng nhập connector (trình duyệt chặn cửa sổ bật lên): mở Cài đặt đúng tab và báo kết quả.
   useEffect(() => {
     const q = new URLSearchParams(location.search);
@@ -1291,7 +1332,7 @@ export default function Home({ boot }: { boot?: BootData | null }) {
     if (v === "customize") return f.skills !== false;
     if (v === "projects" || v === "project") return f.projects !== false;
     if (v === "artifacts") return caps.art !== false;
-    return true; // inbox, brain, new, chat
+    return true; // autopilot, brain, new, chat
   }, [me, speechReady, caps.art]);
   // Địa chỉ mà trạng thái hiện tại nên có: Cài đặt (#s=) ưu tiên, rồi đoạn chat không ẩn danh (#c=), rồi mục (#v=).
   const curHash = (): string => {
@@ -1342,7 +1383,15 @@ export default function Home({ boot }: { boot?: BootData | null }) {
       setModal((m) => (m === "settings" ? null : m));
       if (/^#c=/.test(h)) { const id = Number(/^#c=(\d{1,16})$/.exec(h)?.[1] ?? 0) || null; if (id !== null && chatsRef.current.some((c) => c.id === id && !c.inc)) { setCur(id); setView("chat"); } return; }
       const mv = /^#v=([a-z]+)$/.exec(h);
-      if (mv) { const v = VIEW_OF_HASH[mv[1]]; if (v && viewAllowed(v)) { setCur(null); setCurProj(null); setView(v); } return; }
+      if (mv) {
+        const v = VIEW_OF_HASH[mv[1]];
+        if (v && viewAllowed(v)) { setCur(null); setCurProj(null); setView(v); }
+        // Địa chỉ cũ (#v=inbox) bấm khi đang ở đúng trang đó: view không đổi nên hiệu ứng ghi địa chỉ không chạy lại,
+        // phải tự đổi sang địa chỉ mới ở đây.
+        const canon = v && HASH_VIEW[v];
+        if (canon && canon !== mv[1]) history.replaceState(history.state, "", `#v=${canon}`);
+        return;
+      }
       setCur(null); setView("new"); // địa chỉ trống: về trang Mới
     };
     window.addEventListener("popstate", onPop);
@@ -1373,7 +1422,10 @@ export default function Home({ boot }: { boot?: BootData | null }) {
     }
   }, [needYou]); // eslint-disable-line react-hooks/exhaustive-deps
   // Tiêu đề thẻ trình duyệt theo màn hình đang xem: nhiều thẻ vẫn phân biệt được, trình đọc màn hình có tín hiệu đổi trang. Đoạn chat ẩn danh không lộ tên lên thẻ.
-  const VIEW_TITLE: Partial<Record<View, string>> = { projects: "Dự án", project: "Dự án", artifacts: "Artifacts", customize: "Kho kỹ năng", code: "Code", speech: "Speech", inbox: "Hộp thư", brain: "Bộ não" };
+  const VIEW_TITLE: Partial<Record<View, string>> = {
+    projects: "Dự án", project: "Dự án", artifacts: "Artifacts", customize: "Kho kỹ năng", code: "Code",
+    speech: "Speech", autopilot: "Autopilot", brain: "Bộ não",
+  };
   const tabName = view === "chat" ? (meta && !meta.inc ? meta.title : "") : tr(VIEW_TITLE[view] ?? "");
   useEffect(() => {
     const n = needYou.size;
@@ -1455,7 +1507,7 @@ export default function Home({ boot }: { boot?: BootData | null }) {
   const openPlugins = () => { setCzTab("hub"); setView("customize"); };
   const projsRef = useRef<Project[]>([]);
   projsRef.current = projects;
-  const workOf = (x?: Msg) => (x?.role === "ai" ? { parts: x.parts, plan: x.plan, seq: x.seq } : {});
+  const workOf = (x?: Msg) => (x?.role === "ai" ? { parts: x.parts, plan: x.plan, orch: x.orch, seq: x.seq } : {});
   // avoid: "Chạy lại bằng model khác" dưới câu trả lời của chế độ Tự động — lượt này vẫn Tự động nhưng tránh model đó. Truyền theo lượt, không qua biến dùng chung:
   // lượt dừng sớm (tệp đính kèm không đọc được) không được để lại model cần tránh cho tin nhắn sau, ở đoạn chat khác.
   // rejected: thẻ tệp báo lỗi của lượt này (tên, loại, lý do): máy chủ báo cho model để câu trả lời nói rõ tệp nào không đọc được và vì sao.
@@ -1485,7 +1537,14 @@ export default function Home({ boot }: { boot?: BootData | null }) {
         patch(id, (ms) => {
           const last = ms[ms.length - 1];
           if (!last || last.role !== "ai" || (last.seq ?? 0) >= ev.seq) return ms;
-          return [...ms.slice(0, -1), { ...last, done: true, prog: undefined, run: undefined, seq: ev.seq }, { role: "user", text: ev.text, time: Date.now(), steer: true }, { role: "ai", text: "", time: Date.now(), run: last.run, seq: ev.seq }];
+          const said: Msg = { role: "user", text: ev.text, time: Date.now(), steer: true };
+          // Tin tới trước khi model kịp viết hay làm gì (lượt CLI bị cắt ngay): đóng câu trả lời đó sẽ để lại một tin
+          // rỗng chỉ có hàng nút. Chuyển nguyên câu trả lời đang chạy xuống dưới tin nhắn thêm.
+          const blank = !last.text.trim() && !last.parts?.length && !last.plan?.length && !last.outs?.length
+            && !last.tools?.length && !last.skills?.length && !last.libs?.length;
+          if (blank) return [...ms.slice(0, -1), said, { ...last, seq: ev.seq }];
+          return [...ms.slice(0, -1), { ...last, done: true, prog: undefined, run: undefined, seq: ev.seq }, said,
+            { role: "ai", text: "", time: Date.now(), run: last.run, seq: ev.seq }];
         });
         setQueued((q) => { const k = q.findIndex((x) => x.chat === id && x.mode === "steer" && x.text === ev.text); return k < 0 ? q : q.filter((_, j) => j !== k); });
         return;
@@ -1946,15 +2005,41 @@ export default function Home({ boot }: { boot?: BootData | null }) {
     return () => window.removeEventListener("synchro:brain", h);
   }, []);
   useBrainSync(!!me);
-  const inboxN = useInboxCount(!!me);
+  // Mở một mục mới của Autopilot: kết quả xong có đoạn chat thì mở thẳng đoạn chat (đánh dấu đã đọc) để hỏi tiếp, còn
+  // lại (lỗi, đề xuất, thông báo) thì mở trang Autopilot.
+  const openFresh = (x: Fresh) => {
+    if (x.chat !== undefined && x.status === "done" && !x.proposals) {
+      openAsChat(x.title, "", x.chat);
+      const body = JSON.stringify({ read: [x.run] });
+      void fetch("/api/autopilot", { method: "POST", headers: { "content-type": "application/json" }, body })
+        .then(() => window.dispatchEvent(new Event(INBOX_CHANGED)))
+        // Không đánh dấu được thì dòng chỉ còn chấm chưa đọc trong Autopilot; đoạn chat vẫn mở.
+        .catch((e) => console.warn("[autopilot] chưa đánh dấu đã đọc", e));
+    } else setView("autopilot");
+  };
+  // Autopilot xong một việc (hay có thông báo mới) khi người dùng đang mở app ở chỗ khác: báo một dòng có nút mở (trang
+  // Autopilot đang mở thì đã thấy ngay trên danh sách). Tab đang ẩn: thông báo của hệ thống, bấm vào cũng mở như vậy.
+  const inboxN = useInboxCount(!!me, (x) => {
+    if (viewRef.current === "autopilot") return;
+    const v = { title: x.title };
+    const msg = x.kind === "notice" ? tf("Thông báo mới: “{title}”", v)
+      : x.proposals ? tf("Autopilot: “{title}” có đề xuất chờ bạn duyệt", v)
+      : x.status === "error" ? tf("Autopilot gặp lỗi khi chạy “{title}”", v)
+      : tf("Autopilot đã xong “{title}”", v);
+    const chat = x.chat !== undefined && x.status === "done" && !x.proposals;
+    say(msg, { label: chat ? tr("Mở đoạn chat") : trc("Mở Autopilot", "autopilot"), run: () => openFresh(x) });
+  }, (x) => openFresh(x));
   // Bảng lệnh ⌘K: lệnh nhanh và cách mở từng loại kết quả.
   const paletteCmds: PaletteCmd[] = [
     { id: "new", label: "Đoạn chat mới", icon: <I.Plus size={16} />, keys: "⇧⌘O", hay: "new chat tao moi", run: goNew },
-    { id: "inbox", label: "Hộp thư", icon: <I.Inbox size={16} />, hay: "inbox tac vu nen lich hen ket qua", run: () => setView("inbox") },
+    { id: "autopilot", label: "Autopilot", icon: <I.Autopilot size={16} />, run: () => setView("autopilot"),
+      hay: "autopilot hop thu inbox tac vu nen lich hen cron ket qua tu dong" },
     { id: "hub", label: "Kho kỹ năng", icon: <I.Plugins size={16} />, hay: "skill hub plugin thu vien", run: goCustom },
     { id: "connectors", label: "Connectors", icon: <I.Connectors size={16} />, hay: "connectors mcp ket noi", run: () => { setCzTab("connectors"); setView("customize"); } },
     ...(caps.art !== false ? [{ id: "artifacts", label: "Artifacts", icon: <I.Shapes size={16} />, hay: "ung dung apps", run: () => setView("artifacts") }] : []),
     { id: "projects", label: "Dự án", icon: <I.Folder size={16} />, hay: "projects", run: () => { setCurProj(null); setView("projects"); } },
+    { id: "brain", label: "Bộ não", icon: <I.Brain size={16} />, hay: "brain bo nao ghi chu notes graph do thi",
+      run: () => setView("brain") },
     { id: "settings", label: "Cài đặt", icon: <I.Cog size={16} />, keys: "⇧⌘,", hay: "settings", run: () => { setSettingsTab("General"); setModal("settings"); } },
     { id: "theme", label: theme === "dark" ? "Chuyển sang giao diện sáng" : "Chuyển sang giao diện tối", icon: theme === "dark" ? <I.M icon="Sun" size={16} /> : <I.M icon="Moon" size={16} />, hay: "theme dark light toi sang", run: () => setTheme(theme === "dark" ? "light" : "dark") },
     { id: "sidebar", label: "Ẩn / hiện thanh bên", icon: <I.Panel size={16} />, keys: "⌘.", hay: "sidebar", run: () => setOpen((o) => !o) },
@@ -1968,14 +2053,29 @@ export default function Home({ boot }: { boot?: BootData | null }) {
     project: (id) => { setCurProj(id); setView("project"); },
     code: (id) => { setCodeCur(id); setView("code"); if (codeList.find((c) => c.id === id)?.archived) codePatch(id, { archived: false }); },
     brain: (title) => window.dispatchEvent(new CustomEvent("synchro:brain", { detail: { title } })),
-    inbox: () => setView("inbox"),
+    autopilot: () => setView("autopilot"),
     tag: (t) => filterTag(t),
   };
-  // Mở kết quả tác vụ nền thành đoạn chat để hỏi tiếp.
-  const openAsChat = (title: string, text: string) => {
-    const id = Date.now();
-    setChats((cs) => [{ id, title: title.slice(0, 40), msgs: [{ role: "user", text: `${tr("Tác vụ nền")}: ${title}`, time: id }, { role: "ai", text, done: true, time: id }] }, ...cs]);
-    setCur(id); setView("chat");
+  // Mở kết quả của Autopilot để hỏi tiếp. chat: đoạn chat máy chủ đã tạo cho kết quả; máy này chưa đồng bộ về thì xin
+  // máy chủ đúng đoạn đó và chờ tối đa 8 giây. Kết quả cũ (trước khi có đoạn chat kết quả) hay chờ không được thì dựng
+  // đoạn chat mới từ chữ của kết quả.
+  const openAsChat = (title: string, text: string, chat?: number) => {
+    const has = (id: number) => chatsRef.current.some((c) => c.id === id);
+    const local = () => {
+      if (!text) return say("Đoạn chat kết quả chưa về máy này, hãy thử lại sau giây lát");
+      const id = Date.now();
+      const msgs: Msg[] = [{ role: "user", text: title, time: id }, { role: "ai", text, done: true, time: id }];
+      setChats((cs) => [{ id, title: title.slice(0, 40), msgs }, ...cs]);
+      setCur(id); setView("chat");
+    };
+    if (chat === undefined) return local();
+    if (has(chat)) { setCur(chat); setView("chat"); return; }
+    needChats([chat]);
+    const t0 = Date.now();
+    const wait = setInterval(() => {
+      if (has(chat)) { clearInterval(wait); setCur(chat); setView("chat"); }
+      else if (Date.now() - t0 > 8000) { clearInterval(wait); local(); }
+    }, 250);
   };
   // Gửi tiếp một tin vào đoạn chat có sẵn (tin "gửi sau khi xong"), kể cả khi người dùng đang ở mục khác hay đoạn chat khác.
   const followUp = (id: number, t: string) => {
@@ -2154,8 +2254,7 @@ export default function Home({ boot }: { boot?: BootData | null }) {
         <div className="rail-nav">
           {me?.perms.features.projects !== false && nav({ v: "projects", icon: <I.Layers />, label: "Dự án" })}
           {caps.art !== false && nav({ v: "artifacts", icon: <I.Shapes />, label: "Artifacts" })}
-          {nav({ v: "inbox", icon: <I.Inbox />, label: "Hộp thư", badge: inboxN })}
-          {nav({ v: "brain", icon: <I.Brain />, label: "Bộ não" })}
+          {nav({ v: "autopilot", icon: <I.Autopilot />, label: "Autopilot", badge: inboxN })}
           {me?.perms.features.code !== false && nav({ v: "code", icon: <I.Code />, label: "Code", onPick: () => {
             // Rời Code khi lượt đang chạy rồi quay lại thì về đúng phiên đó, không phải trang trống. Đang ở trong Code mà bấm lại thì mới là mở phiên mới.
             const live = view !== "code" ? (codeList.find((c) => c.id === codeCur && c.running) ?? codeList.find((c) => c.running)) : undefined;
@@ -2173,6 +2272,14 @@ export default function Home({ boot }: { boot?: BootData | null }) {
               <hr />
               <button className="menu-item" onClick={() => { setSettingsTab("General"); setModal("settings"); setUserMenu(false); }}><I.Cog />Cài đặt<span className="sc">⇧⌘,</span></button>
               <button className="menu-item" onClick={() => { setModal("lang"); setUserMenu(false); }}><I.Globe />Ngôn ngữ</button>
+              {/* Bộ não không nằm trên thanh điều hướng của trang chủ: mở từ đây, ⌘K, Cài đặt → Bộ não hoặc
+                  địa chỉ #v=brain. Điện thoại: đóng ngăn kéo như khi chọn một mục điều hướng, không thì
+                  ngăn kéo che Bộ não vừa mở. */}
+              <button className="menu-item" data-nav="brain" onClick={() => {
+                setView("brain"); setUserMenu(false); if (narrow()) setOpen(false);
+              }}>
+                <I.Brain />Bộ não
+              </button>
               <hr />
               <button className="menu-item" onClick={() => { window.open("/download", "_blank", "noopener"); setUserMenu(false); }}><I.GetApps />Tải ứng dụng</button>
               <button className="menu-item" onClick={() => { setModal("keys"); setUserMenu(false); }}><I.Keyboard />Phím tắt<span className="sc">⌘/</span></button>
@@ -2291,7 +2398,7 @@ export default function Home({ boot }: { boot?: BootData | null }) {
           </div></div>
         )}
 
-        {view === "inbox" && <InboxPage say={say} model={model} onOpenChat={openAsChat} />}
+        {view === "autopilot" && <AutopilotPage say={say} model={model} onOpenChat={openAsChat} />}
         {view === "customize" && <CustomizePage tab={czTab} setTab={setCzTab} connectors={<ConnectorsPanel />} feats={{ skills: me?.perms.features.skills !== false, connectors: me?.perms.features.connectors !== false }} />}
         {view === "code" && <CodeView say={say} onMeta={onCodeMeta} onEmpty={setCodeEmpty} sid={codeCur} title={codeList.find((c) => c.id === codeCur)?.title ?? "Synchro Code"} model={model} modelPicker={<ModelPicker model={model} setModel={setModel} prefix="Model" />} sideOpen={open} onSide={() => setOpen(true)} onNew={() => setCodeCur(null)} onCreate={(id, title) => { setCodeList((l) => [{ id, title }, ...l]); setCodeCur(id); }} />}
         {view === "brain" && <BrainWorkspace initial={brainAt} onInitial={() => setBrainAt(null)} sideOpen={open} onSide={() => setOpen(true)} />}
@@ -2300,7 +2407,7 @@ export default function Home({ boot }: { boot?: BootData | null }) {
       </main>
 
       {drag && <div className="drop"><div className="drop-in"><div className="drop-ic"><I.Image size={30} /><I.Copy size={30} /><I.Folder size={30} /></div><span>Thả tệp vào đây</span></div></div>}
-      <Toast text={toast} />
+      <Toast text={toast.text} act={toast.act} onDone={hideToast} />
       {voiceOn && <VoiceFor onClose={() => setVoiceOn(false)} onAsk={(t) => send(t)} onTurn={voiceTurn} busy={busy} rate={VOICE_RATE[vspeed] ?? 1} voice={vvoice} say={say} />}
       <Fade show={!!(modal === "settings")}><Settings initial={settingsTab} onTab={setSettingsTab} onClose={() => setModal(null)} theme={theme} setTheme={setTheme} /></Fade>
       <Fade show={!!(modal === "lang")}><LangModal onClose={() => setModal(null)} /></Fade>

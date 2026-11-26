@@ -28,6 +28,8 @@ export const NAMES = {
   ArrowRight: "arrow-right", Browser: "browser", Browsers: "browsers", Eraser: "eraser", SignOut: "sign-out", WarningCircle: "warning-circle",
   Archive: "archive", TextIn: "text-align-left", FileText: "file-text", Flow: "flow-arrow", FileDoc: "file-doc", CheckCircle: "check-circle",
   CircleDashed: "circle-dashed", SquaresFour: "squares-four",
+  // Autopilot ở thanh bên: máy bay tự bay, nhẹ hơn tên lửa (tên lửa đã là icon của đề xuất "việc cần làm").
+  Autopilot: "airplane-tilt",
   // Giao diện "Instrument": lối tắt ở trang chủ, sân khấu Artifacts, tab của trang dự án.
   Slides: "presentation-chart", PenNib: "pen-nib", Article: "article", ArrowUpRight: "arrow-up-right", ChatsCircle: "chats-circle",
   ChevronL: "caret-left",

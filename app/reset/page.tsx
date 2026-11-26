@@ -8,6 +8,7 @@ import { getLang, tr } from "../../ui/i18n";
 import { LangSwitch } from "../../ui/langswitch";
 import { AlertCircle, Check, Eye, EyeOff, Mail } from "lucide-react";
 import { TurnstileBox, useTurnstileKey } from "../../ui/turnstilebox";
+import { Spinner } from "../../ui/spinner";
 
 // Chỉ 400 mới nghĩa là đường dẫn hỏng. Mất mạng, 5xx, quá giới hạn thì đường dẫn vẫn tốt: không được báo hết hạn, không được bỏ mã khỏi địa chỉ.
 class PostError extends Error { constructor(m: string, public status: number) { super(m); } }
@@ -76,7 +77,9 @@ export default function ResetPassword() {
       <LangSwitch />
       <div className="rp-card">
         <Link href="/" className="rp-brand" aria-label="Synchro"><Lockup height={20} className="lk-hover" /></Link>
-        {stage === "loading" && <div className="rp-wait" role="status" aria-label={tr("Đang tải")}><span className="art-spin sm" /></div>}
+        {stage === "loading"
+          && <div className="rp-wait" role="status" aria-label={tr("Đang tải")}><Spinner className="art-spin sm" />
+          </div>}
         {stage === "ask" && <>
           <h1>Quên mật khẩu?</h1>
           <p className="rp-lead">Nhập email của tài khoản. Synchro sẽ gửi cho bạn một đường dẫn để đặt mật khẩu mới.</p>
@@ -85,7 +88,8 @@ export default function ResetPassword() {
             <input id="rp-email" className="field" type="email" autoComplete="email" autoFocus value={email} onChange={(ev) => { setEmail(ev.target.value); setErr(""); }} />
             {tsKey && <TurnstileBox siteKey={tsKey} action="reset" nonce={tsNonce} onToken={(t) => { tsTok.current = t; }} />}
             {e}
-            <button className="btn dark rp-go" disabled={busy || !email.trim()}>{busy ? <span className="api-spin" /> : "Gửi đường dẫn"}</button>
+            <button className="btn dark rp-go" disabled={busy || !email.trim()}>{busy ? <Spinner className="api-spin" />
+              : "Gửi đường dẫn"}</button>
           </form>
           <Link className="rp-back" href="/">Quay lại đăng nhập</Link>
         </>}
@@ -113,7 +117,8 @@ export default function ResetPassword() {
             </div>
             {factors && <label className="rp-check"><input type="checkbox" checked={dropFactors} onChange={(ev) => setDropFactors(ev.target.checked)} /><span>{tr("Xóa cả passkey và xác thực 2 bước cũ (nên chọn nếu bạn mất thiết bị)")}</span></label>}
             {e}
-            <button className="btn dark rp-go" disabled={busy || !pw || !again}>{busy ? <span className="api-spin" /> : "Lưu mật khẩu mới"}</button>
+            <button className="btn dark rp-go" disabled={busy || !pw || !again}>{busy ? <Spinner className="api-spin" />
+              : "Lưu mật khẩu mới"}</button>
           </form>
         </>}
         {stage === "retry" && <>

@@ -710,6 +710,14 @@ export type SubTurn = {
   onSearch?: (q: { query?: string; url?: string }) => void; onSources?: (s: WebSource[]) => void;
   /** Danh sách việc model cập nhật bằng công cụ dựng sẵn của CLI. */
   onPlan?: (items: PlanStep[]) => void;
+  /** Kênh nhắn thêm giữa lượt của CLI (TurnRequest.onInject). */
+  onInject?: TurnRequest["onInject"];
+  /** Lượt vừa bị dừng là do người dùng nhắn thêm (không phải nút Dừng): phiên vẫn được ghi để lượt làm tiếp nối
+   *  tiếp đúng phiên đó. */
+  cut?: () => boolean;
+  /** "working": CLI đã đọc tin và model đang làm (sự kiện đầu của model), hoặc công cụ dựng sẵn vừa xong; "native":
+   *  công cụ dựng sẵn của CLI đang chạy. Bên gọi chỉ cắt lượt vì tin nhắn thêm khi đang "working". */
+  onPhase?: (p: "working" | "native") => void;
   /** Tiến độ đã biết của lượt (TurnRequest.pulse). */
   pulse?: () => string;
 };
@@ -770,7 +778,8 @@ const SIDE_WAIT_MS = 120_000;
 const STREAMS = new Set<Cli>(["claude", "grok"]), WAIT_TELL_MS = 8000;
 // Việc nền của một tài khoản chạy tối đa chừng này cùng lúc: sau một câu trả lời có artifact từng là rút bộ nhớ, chưng cất, đặt tên và hai phản biện cùng lúc, tức 5 CLI ăn vào mức chung của tài khoản (6),
 // tin nhắn kế tiếp có thể phải xếp hàng sau chính những việc đó. Chúng không ai đứng chờ nên được chờ lâu hơn việc phụ thường.
-const BG_MAX = 2, BG_WAIT_MS = 5 * 60_000;
+export const BG_MAX = 2;
+const BG_WAIT_MS = 5 * 60_000;
 export const BUSY = "Máy chủ đang bận. Hãy thử lại sau ít phút.";
 /** Một lượt chat bằng gói subscription của chính người dùng. */
 export async function subTurn(o: SubTurn): Promise<SubResult> {
@@ -808,6 +817,16 @@ async function subTurnInner(o: SubTurn): Promise<SubResult> {
     // Tệp đính kèm của đoạn chat ẩn danh không được nằm lại máy chủ chờ dọn theo tuổi (7 ngày).
     for (const d of dirs) { try { await removeDir(d); } catch {} }
   }
+}
+/** Ghi phiên CLI của đoạn chat: lượt sau có lịch sử dài đúng `turns` - 1 tin thì nối tiếp phiên này. */
+function saveSession(d: ReturnType<typeof sessDb>, uid: string, conv: string, cli: Cli, session: string, turns: number,
+  tooled: boolean, sys: string[]) {
+  const parts = RESEND.has(cli) ? JSON.stringify([...new Set(sys)].slice(-800)) : null;
+  d.prepare(`INSERT INTO engine_sessions (user_id, conv, cli, session_id, turns, updated_at, tooled, sys_parts)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(user_id, conv, cli) DO UPDATE SET session_id = excluded.session_id, turns = excluded.turns,
+      updated_at = excluded.updated_at, tooled = excluded.tooled, sys_parts = excluded.sys_parts`)
+    .run(uid, conv, cli, session, turns, Date.now(), tooled ? 1 : 0, parts);
 }
 async function runTurn(o: SubTurn): Promise<SubResult> {
   const cli = subCli(o.model)!;
@@ -885,7 +904,7 @@ async function runTurn(o: SubTurn): Promise<SubResult> {
     sysUpdate: sysNew.length ? `<system_update>\nHướng dẫn của Synchro có phần mới cho lượt này. Áp dụng cùng với hướng dẫn đã nhận:\n\n${sysNew.join("\n\n")}\n</system_update>` : undefined,
     prompt, attachments: col.atts.length ? col.atts : undefined, system: o.system || undefined, model: run.model, effort: run.effort, sessionId: resume ?? fork, fork: !!fork, workdir: work, env: await engineEnvReady(cli, o.user.id), signal: o.signal ? AbortSignal.any([o.signal, wd.signal]) : wd.signal, mcp: o.mcp && { url: o.mcp.url, onPark: o.mcp.onPark, live: o.mcp.live }, alive: o.mcp?.alive, web: o.web, lockMs: o.lockMs, awaitingUser: o.awaitingUser,
     history: msgs.slice(0, -1).map((m) => ({ role: m.role === "assistant" ? "assistant" : "user", content: textOf(m.content) })),
-    pulse: o.pulse,
+    pulse: o.pulse, onInject: o.onInject,
   };
   const natStamp = cli === "agy" && o.onNativeImages ? await nativeStamp(work) : null;
   // Không tự chuyển sang khóa API khi gói hết hạn mức: trả về để trình duyệt hỏi người dùng (xem planLimit bên dưới).
@@ -899,8 +918,13 @@ async function runTurn(o: SubTurn): Promise<SubResult> {
   for await (const e of eng.runTurn(req)) {
     // event: dòng đầu CLI thật sự in ra. Dấu hiệu của chính Synchro (pool, status) không tính: lượt trong hồ từng ghi event=1 dù CLI còn đang khởi động.
     if (e.kind !== "pool" && e.kind !== "status") tm.event ??= Date.now() - T0;
+    // Sự kiện đầu tiên của model: CLI đã đọc (và ghi vào phiên) tin của lượt này.
+    if ((e.kind === "text" || e.kind === "activity") && tm.active === undefined && tm.text === undefined) {
+      o.onPhase?.("working");
+    }
     if (e.kind === "text") { tm.text ??= Date.now() - T0; chunks++; ws.last = Date.now(); text += e.text; o.onDelta?.(e.text); }
     else if (e.kind === "activity") { tm.active ??= Date.now() - T0; ws.last = Date.now(); }
+    else if (e.kind === "native") { ws.last = Date.now(); o.onPhase?.(e.busy ? "native" : "working"); }
     else if (e.kind === "status") {
       if (e.wait !== undefined) ws.waiting = e.wait;
       // Hết chờ lượt khác, hoặc CLI báo đang thử lại: tính lại từ lúc này.
@@ -949,7 +973,18 @@ async function runTurn(o: SubTurn): Promise<SubResult> {
   // Phiên ấm hỏng (bị xóa, hết hạn phía CLI): bỏ đi rồi chạy lại một lần bằng phiên mới.
   if (fork && wk && err && final === null && !text && err.code !== "aborted" && !o.signal?.aborted) { warm.delete(wk); return runTurn(o); }
   if (err && final === null) {
-    if (err.code === "aborted") return { status: 200, json: { model: o.model, text, cancelled: true } };
+    if (err.code === "aborted") {
+      // Cắt lượt vì tin nhắn thêm: CLI đã ghi tin của người dùng (và các bước đã xong) vào phiên. Ghi phiên như
+      // lượt xong để lượt làm tiếp (lịch sử dài thêm đúng 2 tin: câu đã viết + tin nhắn thêm) nối tiếp phiên này thay
+      // vì mở phiên mới kèm cả lịch sử. Chỉ khi model đã có sự kiện đầu: biết mã phiên (init) chưa có nghĩa là CLI đã
+      // ghi tin vào phiên; ghi sớm thì lượt sau chỉ gửi tin nhắn thêm, model không thấy yêu cầu gốc.
+      const read = tm.active !== undefined || tm.text !== undefined;
+      if (o.cut?.() && conv && session && read) {
+        const tooled = searched || (o.mcp?.alive?.() ?? 0) > T0 || (resume ? prev?.tooled !== 0 : false);
+        saveSession(d, o.user.id, conv, cli, session, total + 1, tooled, [...sysHad, ...sysNow.map(sysMark)]);
+      }
+      return { status: 200, json: { model: o.model, text, cancelled: true } };
+    }
     const apiModel = await apiEquivalent(o.user, o.model), apiName = await apiModelName(apiModel);
     const id = splitKey(o.model).id;
     if (err.code === "auth") {
@@ -986,10 +1021,7 @@ async function runTurn(o: SubTurn): Promise<SubResult> {
   if (conv && session) {
     // Phiên nối tiếp giữ dấu "đã gọi công cụ" (phiên cũ chưa có dấu: coi như có); phiên mới tính từ lượt này.
     const tooled = searched || (o.mcp?.alive?.() ?? 0) > T0 || (resume ? prev?.tooled !== 0 : false);
-    const parts = RESEND.has(cli) ? JSON.stringify([...new Set([...sysHad, ...sysNow.map(sysMark)])].slice(-800)) : null;
-    d.prepare(`INSERT INTO engine_sessions (user_id, conv, cli, session_id, turns, updated_at, tooled, sys_parts) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT(user_id, conv, cli) DO UPDATE SET session_id = excluded.session_id, turns = excluded.turns, updated_at = excluded.updated_at, tooled = excluded.tooled, sys_parts = excluded.sys_parts`)
-      .run(o.user.id, conv, cli, session, total + 1, Date.now(), tooled ? 1 : 0, parts);
+    saveSession(d, o.user.id, conv, cli, session, total + 1, tooled, [...sysHad, ...sysNow.map(sysMark)]);
   }
   // Khởi tạo sẵn (hoặc làm mới) phiên ấm cho đoạn chat mới sau, ở nền, sau khi lượt này đã xong.
   if (wk && (!w || Date.now() - w.at > WARM_TTL * 0.8)) void primeWarm(wk, req, o.user.id);

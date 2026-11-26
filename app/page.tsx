@@ -1,5 +1,6 @@
 // Trang chủ (server component, blueprint A3): đọc cookie phiên synchro_session, dựng sẵn gói khởi động (tài khoản, danh sách model, khả năng,
-// studio, số mục Hộp thư) ở máy chủ rồi truyền vào <Home boot>. Trang không còn hai tầng chờ (auth/me rồi bảy lệnh song song) trước khi dùng được.
+// studio, số mục Autopilot) ở máy chủ rồi truyền vào <Home boot>. Trang không còn hai tầng chờ (auth/me rồi bảy lệnh
+// song song) trước khi dùng được.
 // Thân trang (client component) nằm ở ui/home.tsx.
 import { cookies } from "next/headers";
 import { COOKIE } from "../server/authstore";

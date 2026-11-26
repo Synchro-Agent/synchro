@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import * as I from "./icons";
 import { locale, tr } from "./i18n";
+import { Spinner } from "./spinner";
 
 type MyFile = { id: string; name: string; size: number; at: number; kind: string };
 const PAGE = 50;
@@ -28,7 +29,7 @@ export function UploadedFiles({ say, confirm }: { say: (m: string) => void; conf
     }).catch((e) => say((e as Error).message));
   });
   if (err) return <div className="empty">{tr(err)} <button className="lnk" onClick={load}>Thử lại</button></div>;
-  if (!d) return <div className="empty"><span className="art-spin sm" /></div>;
+  if (!d) return <div className="empty"><Spinner className="art-spin sm" /></div>;
   return (
     <>
       <p className="d" style={{ margin: "0 0 8px" }}><span data-notr>{fmt(d.used)} / {fmt(d.quota)}</span></p>

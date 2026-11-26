@@ -19,6 +19,7 @@ import { slimSkillZip, tooLarge, UPLOAD_MAX } from "./skillzip";
 import { downloadExport, ScoreBadge, SkillsPanel, SKILL_STUDIOS, SKILLS_CHANGED, SKILLS_DROP, SKILLS_UPLOAD, sumScores, useSkillScores } from "./skillsui";
 import { PageBar, usePage } from "./pager";
 import { SkillScan } from "./skillscanui";
+import { Spinner } from "./spinner";
 
 type Data = { plugins: PluginSummary[]; catalogInstalled?: { libraries: number; skills: number }; directory: DirPlugin[]; admin: boolean; canInstall: boolean; studios?: Partial<Record<Studio, StudioInfo>> };
 async function api<T>(method: string, url: string, body?: unknown): Promise<T> {
@@ -81,7 +82,9 @@ export function PreviewModal({ target, admin, note, onClose, onDone }: { target:
       <div className="modal pl-modal">
         <button className="icon-btn" style={{ position: "absolute", top: 12, right: 12 }} onClick={onClose} disabled={busy} aria-label="Close"><I.X size={16} /></button>
         <h2>{tr("Cài")} {pv?.def.name ?? target.name}</h2>
-        {err ? <div className="pl-err"><I.Alert size={16} />{err}</div> : !pv ? <div className="pl-load"><span className="art-spin" /><span>Reading the repository and checking every skill…</span></div> : (
+        {err ? <div className="pl-err"><I.Alert size={16} />{err}</div> : !pv
+          ? <div className="pl-load"><Spinner className="art-spin" />
+          <span>Reading the repository and checking every skill…</span></div> : (
           <>
             <p className="d">{pv.def.description}</p>
             {note && <div className="pl-note"><I.InfoCircle size={14} /><span>{note}</span></div>}
@@ -101,7 +104,9 @@ export function PreviewModal({ target, admin, note, onClose, onDone }: { target:
             )}
           </>
         )}
-        <div className="modal-foot"><button className="btn" onClick={onClose} disabled={busy}>Cancel</button><button className="btn dark" disabled={!pv || !n || busy} onClick={install}>{busy ? <><span className="art-spin sm" />Installing…</> : `${tr("Cài")} ${n} skill`}</button></div>
+        <div className="modal-foot"><button className="btn" onClick={onClose} disabled={busy}>Cancel</button>
+          <button className="btn dark" disabled={!pv || !n || busy} onClick={install}>{busy
+          ? <><Spinner className="art-spin sm" />Installing…</> : `${tr("Cài")} ${n} skill`}</button></div>
       </div>
     </div>
   );
@@ -183,17 +188,27 @@ function Detail({ p: sum, admin, onClose, onChange: up }: { p: PluginSummary; ad
           <span className="d">{tr("Updated")} {new Date(p.updatedAt).toLocaleDateString(locale())}</span>
         </div>
         <div className="pl-list">
-          {!full ? <div className="pl-load"><span className="art-spin" /></div> : full.skills.map((s) => <SkillLine key={s.id} s={s.report} right={<>{s.useCount > 0 && <span className="pl-use">{s.useCount}×</span>}{manage && <button className={`toggle ${s.enabled ? "on" : ""}`} role="switch" aria-checked={s.enabled} aria-label={s.name} onClick={() => patch({ skills: { [s.name]: !s.enabled } })} />}</>} />)}
+          {!full ? <div className="pl-load"><Spinner className="art-spin" /></div> : full.skills.map((s) => <SkillLine
+            key={s.id} s={s.report} right={<>{s.useCount > 0 && <span
+            className="pl-use">{s.useCount}×</span>}{manage && <button className={`toggle ${s.enabled ? "on" : ""}`}
+            role="switch" aria-checked={s.enabled} aria-label={s.name}
+            onClick={() => patch({ skills: { [s.name]: !s.enabled } })} />}</>} />)}
         </div>
         <div className="modal-foot pl-acts">
           {manage && <button className="btn danger" onClick={remove}>Uninstall</button>}
           <span style={{ flex: 1 }} />
-          <button className="btn" disabled={!!busy} onClick={async () => { setBusy("export"); await exportLib(p, app.say); setBusy(""); }}>{busy === "export" ? <span className="art-spin sm" /> : <I.Download size={14} />}Export .zip</button>
+          <button className="btn" disabled={!!busy} onClick={async () => { setBusy("export"); await exportLib(p,
+            app.say); setBusy(""); }}>{busy === "export" ? <Spinner className="art-spin sm" /> : <I.Download
+            size={14} />}Export .zip</button>
           {manage && <>
             <input ref={file} type="file" accept=".zip" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) upload(f); e.target.value = ""; }} />
-            <button className="btn" disabled={!!busy} onClick={() => file.current?.click()}>{busy === "upload" ? <span className="art-spin sm" /> : <I.Plus size={14} />}Add skills from zip</button>
-            {p.updateAvailable ? <button className="btn dark" disabled={!!busy} onClick={() => act("update")}>{busy === "update" ? <span className="art-spin sm" /> : null}Update</button>
-              : <button className="btn" disabled={!!busy} onClick={() => act("check")}>{busy === "check" ? <span className="art-spin sm" /> : null}Check for updates</button>}
+            <button className="btn" disabled={!!busy} onClick={() => file.current?.click()}>{busy === "upload"
+              ? <Spinner className="art-spin sm" /> : <I.Plus size={14} />}Add skills from zip</button>
+            {p.updateAvailable
+              ? <button className="btn dark" disabled={!!busy} onClick={() => act("update")}>{busy === "update"
+              ? <Spinner className="art-spin sm" /> : null}Update</button>
+              : <button className="btn" disabled={!!busy} onClick={() => act("check")}>{busy === "check"
+                ? <Spinner className="art-spin sm" /> : null}Check for updates</button>}
           </>}
         </div>
       </div>
@@ -296,7 +311,7 @@ export function SkillHub() {
     document.addEventListener("mousedown", h); return () => document.removeEventListener("mousedown", h);
   }, [addMenu]);
   if (err) return <div className="empty" style={{ marginTop: 40 }}><I.Alert size={28} /><span>{err}</span><button className="btn" onClick={load}>Try again</button></div>;
-  if (!d) return <div className="empty" style={{ marginTop: 40 }}><span className="art-spin" /></div>;
+  if (!d) return <div className="empty" style={{ marginTop: 40 }}><Spinner className="art-spin" /></div>;
   const view = tab ?? (d.plugins.length || ownSkills ? "yours" : "discover");
   const merge = (r: { plugins: PluginSummary[]; plugin?: PluginSummary | PublicPlugin }) => setD((x) => (x ? { ...x, plugins: r.plugins.length ? r.plugins : x.plugins.map((p) => (r.plugin && p.id === r.plugin.id ? r.plugin : p)) } : x));
   const byCat = new Map(d.plugins.filter((p) => p.catalogId).map((p) => [p.catalogId!, p]));
@@ -347,7 +362,9 @@ export function SkillHub() {
     const inst = byCat.get(x.catalogId);
     if (inst) return <button className="pl-plus done" aria-label="Installed" data-tip="Installed" onClick={() => setOpen(inst.id)}><I.Check size={15} /></button>;
     if (!d.canInstall) return null;
-    return <button className="pl-plus" aria-label={`Install ${x.name}`} data-tip="Install" disabled={!!busy} onClick={() => quick(x)}>{busy === x.catalogId ? <span className="art-spin sm" /> : <I.Plus size={15} />}</button>;
+    return <button className="pl-plus" aria-label={`Install ${x.name}`} data-tip="Install" disabled={!!busy}
+      onClick={() => quick(x)}>{busy === x.catalogId ? <Spinner className="art-spin sm" /> : <I.Plus
+      size={15} />}</button>;
   };
   const card = (x: DirPlugin) => {
     // Thư viện đã cài: bấm cả thẻ mở chi tiết, như nút ✓ (trước đây chỉ nút ✓ mới mở, bấm vào thẻ không có phản hồi).
@@ -434,7 +451,9 @@ export function SkillHub() {
             <div className="pl-hero feat">
               <div><em>From Synchro</em><b>{featured.name}</b><span>{featured.tagline}</span>
                 {byCat.get(featured.catalogId) ? <button className="btn" onClick={() => setOpen(byCat.get(featured.catalogId)!.id)}><I.Check size={14} />Installed</button>
-                  : d.canInstall ? <button className="btn dark" disabled={!!busy} onClick={() => quick(featured)}>{busy === featured.catalogId ? <span className="art-spin sm" /> : null}Add</button> : null}
+                  : d.canInstall
+                    ? <button className="btn dark" disabled={!!busy} onClick={() => quick(featured)}>
+                    {busy === featured.catalogId ? <Spinner className="art-spin sm" /> : null}Add</button> : null}
               </div>
               <I.Palette size={72} />
             </div>

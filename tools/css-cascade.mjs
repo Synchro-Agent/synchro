@@ -414,7 +414,7 @@ async function vendor(root, compile) {
 // thể trước hay sau CSS riêng của màn. Mặc định xếp sau; CSS_LAZY_ORDER=first xếp trước, để kiểm cả hai thứ tự. Bản gốc chưa có tệp nào
 // (so với bản trước khi tách) thì bỏ qua tệp đó.
 const SCREENS = ["ui/styles/codeview.css", "ui/styles/speech.css", "ui/styles/brainview.css", "ui/styles/download.css", "ui/styles/projects.css", "ui/styles/settings.css", "ui/styles/skills.css"];
-const COMPONENTS = ["ui/styles/colorpick.css", "ui/styles/pearlorb.css"];
+const COMPONENTS = ["ui/styles/colorpick.css", "ui/styles/pearlorb.css", "ui/styles/orchestra.css"];
 const LAZY = process.env.CSS_LAZY_ORDER === "first" ? [...COMPONENTS, ...SCREENS] : [...SCREENS, ...COMPONENTS];
 /** Bản mã nguồn: dịch globals.css qua Tailwind như bản dựng, rồi xếp theo thứ tự nạp. */
 export async function loadSource(root, order = "dev") {

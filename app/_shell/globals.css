@@ -193,13 +193,6 @@ input,textarea{font:inherit;color:inherit;outline:0}
 .mk-a,.mk-b{transition:transform .7s var(--ease-lock)}
 .mk-sync .mk-a,.lk-hover:hover .mk-a,a:hover>.lk-hover .mk-a,button:hover>.lk-hover .mk-a{transform:translateY(175px)}
 .mk-sync .mk-b,.lk-hover:hover .mk-b,a:hover>.lk-hover .mk-b,button:hover>.lk-hover .mk-b{transform:translateY(-175px)}
-/* Đang chạy (lặp 1,6 giây): xoay 180° rồi nghỉ 0,4 giây; giữa vòng xoay hai nửa thu về vòng tròn rồi tách ra. Hình đối xứng tâm nên liền mạch. */
-.mk-load .mk-r{animation:mkSpin 1.6s var(--ease-glide) infinite}
-.mk-load .mk-a{animation:mkLa 1.6s infinite}
-.mk-load .mk-b{animation:mkLb 1.6s infinite}
-@keyframes mkSpin{0%{transform:rotate(0)}75%,100%{transform:rotate(180deg)}}
-@keyframes mkLa{0%{transform:none;animation-timing-function:cubic-bezier(.37,0,.63,1)}37.5%{transform:translateY(175px);animation-timing-function:cubic-bezier(.37,0,.63,1)}75%,100%{transform:none}}
-@keyframes mkLb{0%{transform:none;animation-timing-function:cubic-bezier(.37,0,.63,1)}37.5%{transform:translateY(-175px);animation-timing-function:cubic-bezier(.37,0,.63,1)}75%,100%{transform:none}}
 /* Mark hiện ra: vòng tròn (0,1–0,7s) rồi lệch pha thành chữ S (0,55–1,25s). */
 .mk-intro .mk-r{animation:mkIn .6s var(--ease-out) .1s both}
 .mk-intro .mk-a{animation:mkPa .7s var(--ease-lock) .55s both}
@@ -219,15 +212,31 @@ input,textarea{font:inherit;color:inherit;outline:0}
 .lk-intro .lk-l{animation:lkLi .6s var(--ease-out) both;animation-delay:calc(1.8s + var(--i) * 45ms)}
 @keyframes lkSlide{from{transform:translateX(2480.5px)}to{transform:none}}
 @keyframes lkLi{from{opacity:0;transform:translateX(-80px)}to{opacity:1;transform:none}}
-/* Mọi vòng quay nhỏ cũ (nút đang lưu, tải tệp, Speech, Code…) vẽ lại thành loader của logo chỉ bằng CSS: ::before / ::after là hai nửa
-   đĩa (rộng R, cao 2R; chiều cao phần tử = 3R), lệch nhau R; cả khối xoay 180° rồi nghỉ, giữa vòng hai nửa thu về vòng tròn. */
-:is(.pj-spin,.upl-spin,.ag-spin,.sp-spin,.api-spin,.art-spin,.wl-spin){position:relative;display:inline-block;flex:none;aspect-ratio:13/18;opacity:1}
+/* Vòng chờ dùng chung (Spinner, ui/spinner.tsx): vòng tròn trung tính theo màu chữ, phần đậm chạy vòng. Các lớp cũ của
+   chỗ đặt (wl-spin, art-spin…) chỉ còn đặt cỡ và màu; giảm chuyển động thì vòng đứng yên. */
+.spinner{display:inline-block;flex:none;box-sizing:border-box;width:14px;height:14px;border-radius:50%;
+  vertical-align:-2px;border:1.6px solid color-mix(in srgb,currentColor 22%,transparent);border-top-color:currentColor;
+  animation:spinnerTurn .8s linear infinite}
+@keyframes spinnerTurn{to{transform:rotate(360deg)}}
+.auth-spin{border-width:3px}
+.intro-spin{border-width:2.5px}
+.tk-ic .spinner{display:block;margin:1px}
 :is(.ag-spin,.art-spin,.wl-spin){color:var(--text-2)}
-:is(.pj-spin,.upl-spin,.ag-spin,.sp-spin,.api-spin,.art-spin,.wl-spin)::before,:is(.pj-spin,.upl-spin,.ag-spin,.sp-spin,.api-spin,.art-spin,.wl-spin)::after{content:"";position:absolute;width:46.15%;height:66.67%;background:currentColor}
-:is(.pj-spin,.upl-spin,.ag-spin,.sp-spin,.api-spin,.art-spin,.wl-spin)::before{left:0;top:0;border-radius:100% 0 0 100%/50% 0 0 50%;animation:mkLaP 1.6s infinite}
-:is(.pj-spin,.upl-spin,.ag-spin,.sp-spin,.api-spin,.art-spin,.wl-spin)::after{right:0;bottom:0;border-radius:0 100% 100% 0/0 50% 50% 0;animation:mkLbP 1.6s infinite}
-@keyframes mkLaP{0%{transform:none;animation-timing-function:cubic-bezier(.37,0,.63,1)}37.5%{transform:translateY(25%);animation-timing-function:cubic-bezier(.37,0,.63,1)}75%,100%{transform:none}}
-@keyframes mkLbP{0%{transform:none;animation-timing-function:cubic-bezier(.37,0,.63,1)}37.5%{transform:translateY(-25%);animation-timing-function:cubic-bezier(.37,0,.63,1)}75%,100%{transform:none}}
+/* FluidDots (ui/fluiddots.tsx): chấm của dòng "đang trả lời / đang suy nghĩ". Canvas WebGL nằm giữa, rộng gấp 4 lần
+   để quầng sáng tràn ra ngoài mà không đẩy chữ; chưa có / không có WebGL hay giảm chuyển động thì ba chấm CSS gom vào
+   rồi tách ra. */
+.fd{position:relative;display:inline-block;flex:none;vertical-align:middle;color:var(--text)}
+.fd-gl{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);pointer-events:none}
+.fd-css{position:absolute;inset:0;display:block;animation:fdTurn 6s linear infinite}
+.fd.live .fd-css{visibility:hidden}
+.fd-css i{position:absolute;left:31%;top:31%;width:38%;height:38%;border-radius:50%;background:currentColor;opacity:.8;
+  transform:rotate(var(--a)) translateY(-78%);animation:fdGather 2.4s cubic-bezier(.45,0,.2,1) infinite}
+.fd-css i:nth-child(1){--a:0deg}
+.fd-css i:nth-child(2){--a:120deg;animation-delay:.12s}
+.fd-css i:nth-child(3){--a:240deg;animation-delay:.24s}
+@keyframes fdGather{0%,100%{transform:rotate(var(--a)) translateY(-78%)}
+  50%{transform:rotate(var(--a)) translateY(-12%) scale(1.15)}}
+@keyframes fdTurn{to{transform:rotate(360deg)}}
 .brand-lock{display:inline-flex;align-items:center;gap:8px;min-width:0}
 .composer{width:min(768px,calc(100% - 48px));border-radius:var(--r-panel);background:var(--input);box-shadow:var(--shadow-input);padding:14px 16px 12px;transition:box-shadow .2s;animation:rise .6s .08s var(--ease) backwards}
 .composer:focus-within{box-shadow:0 4px 20px rgba(0,0,0,.08),0 0 0 .5px rgba(0,0,0,.2)}
@@ -345,6 +354,11 @@ input,textarea{font:inherit;color:inherit;outline:0}
    Trang Tải ứng dụng giữ thông báo ở đáy (.dl-toast, không có khối soạn tin). */
 .toast{position:fixed;right:24px;bottom:24px;isolation:isolate;pointer-events:none;display:flex;gap:8px;align-items:center;background:var(--card);box-shadow:var(--shadow);border-radius:var(--r-menu);padding:10px 14px;font-size:var(--fs-2);z-index:var(--z-toast);max-width:min(560px,calc(100vw - 48px));animation:pop .2s backwards}
 @media (max-width:860px){.toast:not(.dl-toast){top:calc(64px + env(safe-area-inset-top));bottom:auto;left:16px;right:16px;margin-inline:auto;width:max-content;max-width:calc(100vw - 32px)}}
+/* Thông báo có nút (Autopilot xong: "Mở đoạn chat"): nhận cú bấm, chữ co lại để nút không tràn ra ngoài. */
+.toast.act{pointer-events:auto;padding-block:6px;padding-inline-end:6px}
+.toast.act>span{min-width:0}
+.toast.act>.btn{flex:none;height:32px;padding:0 12px}
+@media (pointer:coarse){.toast.act>.btn{min-height:44px}}
 .btn.danger{background:#c6422f;color:#fff;border-color:transparent}.btn.danger:hover{background:#b23a29}.menu-item.del:hover{background:#c6422f;color:#fff}
 .chat-wrap{position:relative}.chat-wrap .dots{position:absolute;right:4px;top:4px;width:24px;height:24px;border-radius:var(--r-pill);opacity:0;color:var(--text-2)}
 .chat-wrap:hover .dots,.chat-wrap:focus-within .dots,.chat-wrap .dots:focus-visible,.chat-wrap .dots[aria-expanded="true"]{opacity:1}
@@ -416,7 +430,8 @@ input,textarea{font:inherit;color:inherit;outline:0}
 .user-wrap,.sk-uwrap{align-self:flex-end;max-width:80%;display:flex;flex-direction:column;align-items:flex-end;gap:6px}
 .user-wrap .user-msg,.sk-uwrap .sk-user{max-width:100%}
 .ai-msg ul{list-style:disc}.ai-msg ol{list-style:decimal}.ai-msg li{margin:.2em 0}
-/* Markdown ngoài khung chat (tài liệu artifact, xem tệp .md, kết quả tác vụ ở Hộp thư) dùng cùng kiểu; tiêu đề giữ đúng cấp. */
+/* Markdown ngoài khung chat (tài liệu artifact, xem tệp .md, kết quả của Autopilot) dùng cùng kiểu; tiêu đề giữ đúng
+   cấp. */
 .mdx p{margin:0 0 .8em}.mdx ul,.mdx ol{margin:0 0 .8em;padding-left:1.4em}.mdx ul{list-style:disc}.mdx ol{list-style:decimal}.mdx li{margin:.2em 0}
 .ai-msg h1,.mdx h1{font-size:1.32em;line-height:1.3;margin:1.1em 0 .5em}
 .ai-msg h2,.mdx h2{font-size:1.16em;line-height:1.35;margin:1.1em 0 .45em}
@@ -963,7 +978,7 @@ html body .cv-card,html[data-theme=dark] body .cv-card{background:var(--gl-fill)
 .upl-meta{margin-left:auto;font-size:var(--fs-1);color:var(--text-3)}
 .upl-doc{flex:1;overflow:auto;padding:18px 24px;user-select:text}
 .upl-doc pre{margin:0;white-space:pre-wrap;word-break:break-word;font:var(--fs-label)/1.6 var(--font-mono,ui-monospace,monospace)}
-.upl-spin{width:12px;height:12px;border-radius:50%;border:2px solid currentColor;border-right-color:transparent;display:inline-block;margin-right:8px;vertical-align:-2px;animation:uplspin .7s linear infinite}
+.upl-spin{width:12px;height:12px;margin-right:8px}
 @keyframes uplspin{to{transform:rotate(360deg)}}
 .upl-zone .btn+.btn{margin-top:8px}
 .upl-zone .av-actions{display:flex;align-items:center;justify-content:center;gap:8px}
@@ -1404,7 +1419,7 @@ table{font-variant-numeric:tabular-nums}h1,h2,h3{text-wrap:balance}
 .ag-shot.sm{max-width:280px}
 .ag-diff{display:inline-flex;gap:5px;font:500 var(--fs-1) var(--font-mono);flex:none}
 .ag-diff b{color:#2f9e44;font-weight:460}.ag-diff i{color:#e03131;font-style:normal}
-.ag-spin{width:12px;height:12px;border-radius:50%;border:1.6px solid color-mix(in srgb,var(--text) 18%,transparent);border-top-color:var(--text-2);animation:spin .8s linear infinite;display:inline-block;flex:none}
+.ag-spin{width:12px;height:12px}
 @keyframes spin{to{transform:rotate(360deg)}}
 
 /* thẻ danh sách việc phía trên khung chat */
@@ -1452,7 +1467,7 @@ table{font-variant-numeric:tabular-nums}h1,h2,h3{text-wrap:balance}
 .gh-url .btn{height:36px}
 .gh-search{display:flex;align-items:center;gap:8px;color:var(--text-3)}
 .gh-search input{border:0;background:transparent;padding:0;height:30px}
-.gh-list{flex:1;min-height:80px;margin:0 -8px}
+.gh-list{flex:1;min-height:80px;margin:0 -8px;background:var(--card)}
 .gh-repo{display:flex;flex-direction:column;align-items:flex-start;gap:2px;padding:8px 10px;border-radius:var(--r-plate);text-align:left;position:relative}
 .gh-repo:hover:not(:disabled){background:var(--hover)}
 .gh-repo:disabled{opacity:.6}
@@ -1465,7 +1480,10 @@ table{font-variant-numeric:tabular-nums}h1,h2,h3{text-wrap:balance}
 .gh-cur>div{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px;border-radius:var(--r-card);background:color-mix(in srgb,var(--text) 4%,transparent);font-size:var(--fs-3)}
 .gh-cur>div span{display:flex;align-items:center;gap:4px;font-size:var(--fs-label);color:var(--text-3)}
 .gh-cur .btn{display:flex;align-items:center;gap:6px;align-self:flex-start;text-decoration:none;color:var(--text)}
-.gh-err{font-size:var(--fs-label);color:#c92a2a;padding:8px 10px;border-radius:var(--r-plate);background:color-mix(in srgb,#e03131 8%,transparent)}
+.gh-err{font-size:var(--fs-label);color:#c92a2a;padding:8px 10px;border-radius:var(--r-plate);
+  background:color-mix(in srgb,#e03131 8%,transparent);display:flex;align-items:center;gap:10px}
+.gh-err>span{flex:1;min-width:0;line-height:1.45}
+[data-theme="dark"] .gh-err{color:var(--ds-bad)}
 
 /* ===================== Cỡ chữ khung chat (thanh bên, menu, Cài đặt: xem biến thiết kế ở đầu tệp) ===================== */
 .ai-msg,.cv-ai .ai-msg,.sk-ai{font-size:var(--fs-3);line-height:1.5}
@@ -1600,16 +1618,37 @@ b,strong{font-weight:560}
 .sp-drop b{font-weight:460;font-size:var(--fs-chat);max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .sp-drop>span:not(.sp-drop-ic){font-size:var(--fs-1);color:var(--text-3)}
 .sp-drop-ic{width:36px;height:36px;border-radius:25%;display:grid;place-items:center;background:var(--card);box-shadow:0 0 0 .5px var(--border-strong);margin-bottom:6px;color:var(--text-2)}
-.sp-wave{display:flex;align-items:center;gap:2px;width:100%;min-width:0}
-.sp-wave i{flex:1;min-width:1px;max-width:4px;border-radius:9px;background:var(--sp-line);transition:background .2s}
-.sp-player{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:var(--r-card);background:var(--card);box-shadow:0 0 0 .5px var(--border-strong);min-width:0}
-.sp-pbtn{width:32px;height:32px;border-radius:50%;flex:none;display:grid;place-items:center;background:var(--btn-dark);color:var(--btn-dark-text)}
-.sp-player .icon-btn{width:28px;height:28px;flex:none}
+/* Trình phát âm thanh dùng chung (ui/audioplayer.tsx): mục Speech và khung xem trước tệp trong đoạn chat, nên ở
+   tệp chung. Dạng sóng là hai lớp vạch chồng khít nhau; lớp trên (.on) tô đậm và được cắt theo vị trí phát bằng
+   clip-path nên vệt tiến độ chạy mượt. 56 vạch tối thiểu 1px + khe 2px cần 166px, rộng hơn chỗ còn lại trên điện
+   thoại khi đồng hồ có phần thập phân: khe theo bề rộng (tối đa 2px, 1% khi hẹp) và cắt phần thừa để khe 10px
+   trước đồng hồ luôn còn. */
+.aud-player{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:var(--r-card);
+  background:var(--card);box-shadow:0 0 0 .5px var(--border-strong);min-width:0}
+.aud-btn{width:32px;height:32px;border-radius:50%;flex:none;display:grid;place-items:center;background:var(--btn-dark);
+  color:var(--btn-dark-text)}
+.aud-btn:hover{opacity:.88}.aud-btn:disabled{opacity:.4}
+.aud-player .icon-btn{width:28px;height:28px;flex:none}
+.aud-main{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
+.aud-title{font-size:var(--fs-1);color:var(--text-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.aud-time{font-size:var(--fs-1);color:var(--text-3);font-variant-numeric:tabular-nums;white-space:nowrap}
+/* pan-y: vuốt dọc bắt đầu trên dạng sóng vẫn cuộn trang trên điện thoại; chạm nhẹ hoặc kéo ngang mới tua. */
+.aud-wave{position:relative;display:block;width:100%;height:26px;min-width:0;overflow:hidden;gap:min(2px,1%);
+  touch-action:pan-y;border-radius:4px;outline:none}
+.aud-wave:focus-visible{box-shadow:0 0 0 2px var(--bg),0 0 0 3.5px var(--text)}
+/* Vạch rải đều hết bề rộng (space-between): vị trí vạch khớp với chỗ bấm tua và với vệt đã phát, không dồn sang trái
+   để lại khoảng trống mà bấm vào vẫn tua. */
+.aud-wave-row{position:absolute;inset:0;display:flex;align-items:center;justify-content:space-between;gap:inherit;
+  pointer-events:none}
+.aud-wave-row i{flex:1;min-width:1px;max-width:4px;border-radius:9px;
+  background:var(--sp-line,color-mix(in srgb,var(--border-strong) 85%,transparent))}
+.aud-wave-row.on{clip-path:inset(0 100% 0 0)}
+.aud-wave-row.on i{background:var(--text)}
 .sp-vchip{display:inline-flex;align-items:center;gap:7px;height:32px;padding:0 10px 0 5px;border-radius:var(--r-pill);border:.5px solid var(--border-strong);background:var(--card);font-size:var(--fs-2);max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.sp-vchip svg{color:var(--text-3);flex:none}
 .sp-pill{display:inline-flex;align-items:center;height:24px;padding:0 9px;border-radius:var(--r-pill);background:var(--sp-soft);font-size:var(--fs-1);color:var(--text-2);white-space:nowrap}
 .sp-add{display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 10px;border-radius:var(--r-pill);font-size:var(--fs-2);color:var(--text-2);align-self:flex-start}
 .sp-hr{border:0;border-top:.5px solid var(--border);margin:4px 0;width:100%}
-.sp-spin{width:13px;height:13px;border-radius:50%;border:1.6px solid currentColor;border-right-color:transparent;animation:pjspin .7s linear infinite;flex:none;display:inline-block}
+.sp-spin{width:13px;height:13px}
 .sp-go{display:inline-flex;align-items:center;gap:7px;height:34px;padding:0 14px}
 .sp .btn:disabled,.sp-picker .btn:disabled{opacity:.4;pointer-events:none}
 .sp-tag{height:26px;padding:0 9px;border-radius:var(--r-pill);border:.5px solid var(--border-strong);font-size:var(--fs-1);color:var(--text-2);white-space:nowrap;background:var(--card)}
@@ -1638,12 +1677,15 @@ b,strong{font-weight:560}
 .sp-compose-f{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 /* auto-fit: nhóm ít thẻ vẫn lấp đủ hàng, không để khoảng trống bên phải. */
 .sp-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;margin-top:8px}
-.sp-tcard{display:flex;flex-direction:column;align-items:flex-start;gap:4px;padding:14px;border-radius:var(--r-card);background:var(--card);box-shadow:0 0 0 .5px var(--border-strong);text-align:left;transition:transform .2s var(--ease),box-shadow .2s;--tc:var(--accent)}
+.sp-tcard{display:flex;flex-direction:column;align-items:flex-start;gap:4px;padding:14px;border-radius:var(--r-card);
+  background:var(--card);box-shadow:0 0 0 .5px var(--border-strong);text-align:left;
+  transition:transform .2s var(--ease),box-shadow .2s}
 .sp-tcard b{font-size:var(--fs-chat);font-weight:560;margin-top:6px}
 .sp-tcard span:not(.sp-tic){font-size:var(--fs-1);color:var(--text-3);line-height:1.4}
-.sp-tic{width:32px;height:32px;border-radius:25%;display:grid;place-items:center;color:var(--tc);background:color-mix(in srgb,var(--tc) 12%,transparent)}
-.t-violet{--tc:#7c5cd6}.t-green{--tc:#1f9255}.t-amber{--tc:#c27a12}.t-pink{--tc:#cf4a85}
-[data-theme="dark"] .t-blue{--tc:#6fa0f0}[data-theme="dark"] .t-violet{--tc:#a993ef}[data-theme="dark"] .t-green{--tc:#5cc48b}[data-theme="dark"] .t-amber{--tc:#e0a54d}[data-theme="dark"] .t-pink{--tc:#ec82b2}
+/* Ô biểu tượng của công cụ Speech: trung tính theo bộ nhận diện (mực trên nền phủ nhẹ), giống nhau ở mọi công cụ, sáng
+   lẫn tối. Màu chỉ dành cho thứ mang nghĩa (trạng thái, người nói, giọng). */
+.sp-tic{width:32px;height:32px;border-radius:25%;display:grid;place-items:center;color:var(--text);
+  background:var(--sp-soft,var(--hover));box-shadow:inset 0 0 0 .5px var(--border-strong)}
 .sp-sec-h b{font-weight:560}
 .sp-recent{display:flex;flex-direction:column;gap:8px}
 .sp-rrow{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.3fr);gap:14px;align-items:center;padding:6px 0}
@@ -2020,7 +2062,7 @@ b,strong{font-weight:560}
 .api-own{display:flex;align-items:flex-start;gap:6px;margin:8px 0 0;font-size:var(--fs-1);line-height:1.5;color:var(--text-3)}
 .api-own svg{flex:none;margin-top:3px}
 .api-own.top{margin:0 0 12px;padding:10px 12px;border-radius:10px;background:var(--hover);color:var(--text-2)}
-.api-spin{width:12px;height:12px;border-radius:50%;border:1.5px solid currentColor;border-right-color:transparent;animation:pjspin .7s linear infinite;display:inline-block;flex:none}
+.api-spin{width:12px;height:12px}
 .api-models{margin-top:8px}
 .api-models .api-adv{margin:0}
 .api-chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;max-height:180px;overflow:auto}
@@ -2156,6 +2198,17 @@ b,strong{font-weight:560}
 /* Bộ chọn model: danh sách dài cuộn được, trạng thái chưa có model */
 .msub-models{max-height:min(420px,60vh);display:flex;flex-direction:column;overflow:visible}
 .msub-models .msub-plan{flex:none}
+/* Đội hình model của một hãng: tiêu đề mục (model hãng khác đi kèm gói, model khác) và nút "Xem tất cả model" */
+.msub-sec{padding:8px 12px 4px;font-size:var(--fs-1);font-weight:500;color:var(--text-3)}
+.mall{color:var(--text-2)}
+.mall-n{font-size:var(--fs-1);color:var(--text-3)}
+.mall .sc svg{transition:transform .15s}
+/* Nút "Xem tất cả model" đứng ngoài vùng cuộn, ở đáy menu con: danh sách mở rộng dài mấy nút vẫn thấy */
+.msub-models .mall-foot{flex:none}
+/* Còn dòng ở dưới chưa thấy: đáy vùng cuộn mờ dần (dùng mặt nạ nên hợp cả nền kính sáng lẫn tối) */
+.msub-scroll.more{--fade:linear-gradient(#000 calc(100% - 28px),transparent)}
+.msub-scroll.more{-webkit-mask-image:var(--fade);mask-image:var(--fade)}
+.mall[aria-expanded="true"] .sc svg{transform:rotate(180deg)}
 /* Khung kính không tự cuộn: nền và viền của nó là lớp phủ ::before / ::after, khung cuộn thì chúng trôi theo nội dung. Phần cuộn nằm bên trong. */
 .menu-scroll.msub-scroll,.menu-scroll.gl-scroll{flex:0 1 auto;min-height:0;max-height:none}
 .mname-t{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -2431,7 +2484,7 @@ b,strong{font-weight:560}
 .art-card-txt b{font-weight:480;font-size:var(--fs-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .art-card-txt span{font-size:var(--fs-label);color:var(--text-3)}
 .art-card-txt em{font-style:normal}
-.art-spin{width:18px;height:18px;border-radius:50%;border:2px solid color-mix(in srgb,var(--text-3) 35%,transparent);border-top-color:var(--text-2);animation:twirl .8s linear infinite;display:inline-block;flex:none}
+.art-spin{width:18px;height:18px;border-width:2px}
 .art-spin.sm{width:14px;height:14px}
 .flip{display:inline-flex;transform:scaleX(-1)}
 
@@ -2855,6 +2908,7 @@ html body .menu.art-style-menu{--gl-fill:var(--card);background:var(--card);min-
 .fp-img{flex:1;display:grid;place-items:center;padding:16px;box-sizing:border-box;overflow:auto;background:var(--bg-2,var(--hover))}
 .fp-img img{max-width:100%;max-height:100%;border-radius:var(--r-plate);box-shadow:0 1px 2px rgba(0,0,0,.08),0 8px 24px rgba(0,0,0,.1);background:#fff}
 .fp-media{flex:1;display:grid;place-items:center;padding:20px}.fp-media video{max-width:100%;max-height:100%;border-radius:var(--r-plate)}
+.fp-audio>.aud-player{width:min(560px,100%)}
 .fp-none{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:24px;text-align:center;color:var(--text-2);font-size:var(--fs-3)}
 .fp-none b{color:var(--text);font-weight:500}
 .fp-dl{height:30px;font-size:var(--fs-2);gap:6px;display:inline-flex;align-items:center;margin-right:4px;text-decoration:none;color:inherit}
@@ -3062,7 +3116,7 @@ html body .menu.art-style-menu{--gl-fill:var(--card);background:var(--card);min-
 /* Văn bản hành chính: khung xem trang A4 */
 .vbhc-box{height:100%;width:100%;display:flex}
 .vbhc-box .vbhc-frame{flex:1;border:0;background:#e9e9e6}
-/* ===================== Hộp thư và tác vụ nền ===================== */
+/* ===================== Autopilot (việc tự làm trên máy chủ) ===================== */
 .nav-badge{margin-left:auto;min-width:18px;height:18px;padding:0 5px;border-radius:999px;background:var(--accent);color:var(--on-accent);font-size:var(--fs-1);font-weight:600;display:inline-grid;place-items:center}
 .tk-top{display:flex;align-items:center;gap:12px;margin-bottom:18px;flex-wrap:wrap}
 .tk-top h1{margin:0}
@@ -3099,7 +3153,9 @@ html body .menu.art-style-menu{--gl-fill:var(--card);background:var(--card);min-
 .ss-rule input{margin-top:3px;flex:none}
 .ss-hint{font-size:var(--fs-1);color:#c13c3c;margin-top:-6px}
 .tk-l textarea.field{height:auto;min-height:110px;padding:10px 12px;resize:vertical;font:inherit;font-size:var(--fs-3);line-height:1.5}
-.tk-sch{display:flex;gap:10px}
+/* Lịch hẹn một lần có ba ô (loại lịch, ngày, giờ): ô co lại theo bề rộng của form, không đủ chỗ thì xuống dòng. */
+.tk-sch{display:flex;flex-wrap:wrap;gap:10px}
+.tk-sch>.tk-l{flex:1 1 140px;min-width:0}.tk-sch>.tk-l:first-child{flex-basis:190px}
 /* Chọn giờ (ui/timepick.tsx): ô nhập gõ được + đồng hồ; bảng kính hai cột Giờ / Phút, ô đang chọn màu mực, hàng mốc nhanh. */
 .field.tpk{display:flex;align-items:center;gap:6px;padding:0 5px 0 11px;height:38px;cursor:text}
 .tpk input{flex:1;min-width:0;height:100%;border:0;background:none;outline:none;padding:0;font:inherit;font-size:14.5px;font-variant-numeric:tabular-nums;letter-spacing:.01em;color:var(--text)}
@@ -3118,7 +3174,7 @@ html body .menu.art-style-menu{--gl-fill:var(--card);background:var(--card);min-
 .tpk-quick button:hover{color:var(--text)}
 .tpk-quick button.on{background:var(--accent);color:var(--on-accent)}
 .tk-tz{margin:0;font-size:var(--fs-1);color:var(--text-3)}
-/* Hộp thư tự động hóa: ô giao việc, trạng thái máy chủ / Chrome, kết quả theo ngày, đề xuất chờ duyệt, việc tự động */
+/* Autopilot: ô giao việc, trạng thái máy chủ / Chrome, kết quả theo ngày, đề xuất chờ duyệt, việc tự động */
 .tk{--tk-ok:#16a34a;--tk-warn:#d97706;--tk-bad:#dc2626;padding-bottom:48px}
 .tk .btn,.tk-modal .btn{display:inline-flex;align-items:center;gap:6px}
 .tk .btn.ghost,.tk-modal .btn.ghost{background:transparent;border-color:transparent;color:var(--text-2)}
@@ -3179,6 +3235,9 @@ button.tk-pill:hover{color:var(--text)}
 .tk-job{display:flex;flex-direction:column;gap:8px;padding:14px 16px}
 .tk-job.off{opacity:.62}
 .tk-job-h{display:flex;align-items:center;gap:12px}
+/* Lịch và lần tới của thẻ việc xuống dòng thay vì cắt: lần tới có thể kèm tên múi giờ (múi giờ của việc khác múi giờ
+   của máy), cắt đi thì người dùng không biết giờ đó theo múi giờ nào. */
+.tk-job-h .tk-t em{white-space:normal;overflow-wrap:anywhere}
 .tk-job-m{display:flex;gap:6px;flex-wrap:wrap}
 .tk-job-p{margin:0;font-size:var(--fs-2);line-height:1.5;color:var(--text-3);overflow-wrap:anywhere}
 .modal.tk-modal{max-height:min(92vh,880px)}
@@ -3320,7 +3379,12 @@ button.tk-pill:hover{color:var(--text)}
 /* Chế độ Tự động của Code: các giai đoạn đã đi qua */
 
 /* Dự án: thêm tệp từ GitHub */
-.gh-imp{width:560px;max-width:calc(100vw - 32px);display:flex;flex-direction:column;gap:10px}
+/* hộp chọn repo / tệp của "Thêm từ GitHub" (Dự án): .modal không có lề trong, hộp tự đặt; danh sách repo dùng chung
+   với hộp thoại Repo GitHub nhưng ở đây nằm gọn trong lề */
+.gh-imp{width:560px;max-width:calc(100vw - 32px);display:flex;flex-direction:column;gap:10px;padding:20px;
+  max-height:min(720px,calc(100vh - 48px))}
+.gh-imp .gh-list{margin:0}
+@media (max-width:640px){.gh-imp{padding:16px}}
 .gh-list{max-height:360px;overflow:auto;display:flex;flex-direction:column;gap:2px;border:.5px solid var(--border);border-radius:var(--r-card);padding:4px}
 .gh-row{display:grid;grid-template-columns:1fr auto;gap:2px 8px;text-align:left;padding:8px 10px;border-radius:var(--r-plate)}.gh-row small{grid-column:1/-1;color:var(--text-3);font-size:var(--fs-1)}
 .gh-file{display:flex;align-items:center;gap:8px;padding:4px 8px;font-size:var(--fs-2);border-radius:var(--r-pill)}.gh-file span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.gh-file small{color:var(--text-3)}
@@ -3353,7 +3417,7 @@ button.tk-pill:hover{color:var(--text)}
 .wl-tool small{display:block;color:var(--text-3);font-size:var(--fs-1);line-height:1.4;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
 .wl-tool.bad b{color:#c4452e}
 .wl-ic{width:16px;height:16px;flex:none;display:grid;place-items:center;border-radius:50%;color:var(--text-3);margin-top:1px}
-.wl-spin{width:11px;height:11px;border-radius:50%;border:1.5px solid color-mix(in srgb,var(--text-3) 35%,transparent);border-top-color:var(--text-2);animation:spin .8s linear infinite;display:inline-block;flex:none}
+.wl-spin{width:11px;height:11px;border-width:1.5px}
 .wl-plan{margin:10px 0 8px;padding:10px 12px;border:.5px solid var(--border-strong);border-radius:var(--r-card);background:color-mix(in srgb,var(--surface) 60%,transparent);display:flex;flex-direction:column;gap:5px;max-width:520px}
 .wl-plan-h{font-size:var(--fs-1);color:var(--text-3);display:flex;justify-content:space-between}
 .wl-pi{display:flex;align-items:center;gap:8px;font-size:var(--fs-chat)}
@@ -3370,25 +3434,28 @@ button.tk-pill:hover{color:var(--text)}
 .wl-q em{font-style:normal;color:var(--text-3);white-space:nowrap}
 .wl-q .icon-btn{width:20px;height:20px}
 .steer-tag{display:block;text-align:right;font-size:var(--fs-1);color:var(--text-3);margin:0 4px 3px}
-.steer-pending .user-msg{opacity:.78}
-.steer-pending .steer-tag::before{content:"";display:inline-block;width:6px;height:6px;margin-right:6px;border-radius:50%;background:var(--accent);vertical-align:1px;animation:steer-pulse 1.2s ease-in-out infinite}
-@keyframes steer-pulse{50%{opacity:.25}}
-@media (prefers-reduced-motion:reduce){.steer-pending .steer-tag::before{animation:none}}
+.steer-pending{animation:fadeIn .18s both}
+/* Tin chờ ghép nằm trong câu trả lời đang chạy, đúng chỗ của nó sau khi ghép: cùng lề phải, cùng khoảng cách như dòng tin
+   riêng trong đoạn chat (gap 28px của .thread-in). */
+.ai-msg>.steer-pending.in-turn{margin:28px 0 28px auto;white-space:normal}
+.steer-late{display:block;text-align:right;font-size:var(--fs-1);color:var(--text-3);margin:0 4px}
 .ag-steer{margin:8px 0 10px auto;max-width:80%;display:flex;flex-direction:column;align-items:flex-end;gap:3px}
 .ag-steer span{font-size:var(--fs-1);color:var(--text-3)}
 .ag-steer p{margin:0;padding:8px 12px;border-radius:var(--r-card);background:var(--user-bg,var(--hover));font-size:var(--fs-3);white-space:pre-wrap}
 
 /* ===== Speech: bố cục mới kiểu ElevenLabs (tiêu đề có biểu tượng, thẻ hướng dẫn, thanh tạo ở đáy, ngăn kéo cài đặt, trình phát chung) ===== */
-.t-blue{--tc:#2f6fdc}
 .sp-guide-h b{flex:1;min-width:0;font-size:15px;font-weight:560;letter-spacing:-.005em}
 .sp-guide-x{display:inline-flex;align-items:center;height:28px;padding:0 10px;gap:5px;font-size:var(--fs-1);color:var(--text-2);flex:none;border-color:transparent;background:transparent}
 .sp-guide-body{display:grid;grid-template-columns:minmax(0,1fr);gap:16px}
 .sp-guide-steps li{position:relative;display:flex;gap:11px;align-items:flex-start;padding-bottom:12px}
-.sp-guide-steps li>span{width:23px;height:23px;border-radius:50%;flex:none;display:grid;place-items:center;font-size:var(--fs-1);font-weight:600;color:var(--tc);background:color-mix(in srgb,var(--tc) 13%,var(--card));box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--tc) 38%,transparent)}
-.sp-guide-cost>svg{flex:none;margin-top:1px;color:var(--tc)}
+.sp-guide-steps li>span{width:23px;height:23px;border-radius:50%;flex:none;display:grid;place-items:center;
+  font-size:var(--fs-1);font-weight:600;color:var(--text);background:var(--card);
+  box-shadow:inset 0 0 0 1px var(--border-strong)}
+.sp-guide-cost>svg{flex:none;margin-top:1px;color:var(--text-2)}
 .sp-guide-cost>p{margin:0;font-size:var(--fs-label);line-height:1.45;color:var(--text-2)}
 .sp-guide-cost b{display:block;font-size:var(--fs-1);font-weight:560;color:var(--text);margin-bottom:1px}
-.sp-guide-more{display:none;align-self:flex-start;align-items:center;gap:5px;padding:0;border:0;background:none;font:inherit;font-size:var(--fs-label);font-weight:500;color:var(--tc);cursor:pointer}
+.sp-guide-more{display:none;align-self:flex-start;align-items:center;gap:5px;padding:0;border:0;background:none;
+  font:inherit;font-size:var(--fs-label);font-weight:500;color:var(--text);cursor:pointer}
 .sp-guide-more svg{transition:transform .2s var(--ease)}
 @container (min-width:560px){
   .sp-guide-body{grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:24px}
@@ -4272,9 +4339,7 @@ html body .sk-user .sk-txt{background:color-mix(in srgb,var(--ds-inv-fg,#fff) 22
 .mk *,.lk *{animation:none;transition:none}
 }
 html[data-motion="reduced"] :is(.mk,.lk) *{animation:none;transition:none}
-:is(.pj-spin,.upl-spin,.ag-spin,.sp-spin,.api-spin,.art-spin,.wl-spin){width:auto;border:0;border-radius:0;background:none;animation:mkSpin 1.6s var(--ease-glide) infinite}
 @media (prefers-reduced-motion:reduce){
-:is(.pj-spin,.upl-spin,.ag-spin,.sp-spin,.api-spin,.art-spin,.wl-spin),:is(.pj-spin,.upl-spin,.ag-spin,.sp-spin,.api-spin,.art-spin,.wl-spin)::before,:is(.pj-spin,.upl-spin,.ag-spin,.sp-spin,.api-spin,.art-spin,.wl-spin)::after{animation:none}
 *{animation:none;transition:none}
 }
 .ghost-on{background:var(--active)}

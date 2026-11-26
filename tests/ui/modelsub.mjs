@@ -55,7 +55,13 @@ await P("Page.addScriptToEvaluateOnNewDocument", { source: `(() => { const f = w
   const mk = (p, n) => Array.from({ length: n }, (_, i) => ({ key: p + "/m" + i, id: "m" + i, name: "Model thử " + (i + 1) }));
   j.providers = j.providers.slice(0, 3).map((p, i) => ({ ...p, plan: { cli: "agy" }, models: mk(p.id, [3, 4, 30][i] ?? 4) }));
   j.allowed = "*"; return new Response(JSON.stringify(j), { status: 200, headers: { "content-type": "application/json" } }); }; })()` });
-const measure = `(() => { const m = [...document.querySelectorAll(".msub-models")].find((e) => !e.classList.contains("out")); if (!m) return null; const s = m.querySelector(".msub-scroll"), r = m.getBoundingClientRect(), it = [...m.querySelectorAll(".menu-item")], last = it.at(-1).getBoundingClientRect(), sr = s.getBoundingClientRect(), n = m.querySelector(".msub-plan")?.getBoundingClientRect();
+// Chỉ đếm dòng model trong vùng cuộn: nút "Xem tất cả model" / "Thu gọn" đứng ngoài vùng cuộn, ở đáy khung.
+const measure = `(() => {
+  const m = [...document.querySelectorAll(".msub-models")].find((e) => !e.classList.contains("out"));
+  if (!m) return null;
+  const s = m.querySelector(".msub-scroll"), r = m.getBoundingClientRect(), it = [...s.querySelectorAll(".menu-item")];
+  const last = it.at(-1).getBoundingClientRect(), sr = s.getBoundingClientRect();
+  const n = m.querySelector(".msub-plan")?.getBoundingClientRect();
   return { top: r.top, bottom: r.bottom, h: r.height, H: innerHeight, panelScrolls: /(auto|scroll)/.test(getComputedStyle(m).overflowY), panelTop: m.scrollTop, canScroll: s.scrollHeight > s.clientHeight + 1, scrollTop: s.scrollTop, lastBottom: last.bottom, listBottom: sr.bottom, listTop: sr.top, noteTop: n?.top, noteBottom: n?.bottom, items: it.length }; })()`;
 try {
   for (const [w, h] of [[1440, 900], [1280, 640], [1280, 480]]) {
@@ -72,6 +78,12 @@ try {
       if (!pt) { ok(false, `${h}px: không thấy dòng ${names[i]}`); continue; }
       await P("Input.dispatchMouseEvent", { type: "mouseMoved", x: pt[0], y: pt[1] });
       await sleep(450);
+      // Menu con chỉ hiện đội hình ngắn: mở "Xem tất cả model" để có danh sách dài thật sự phải cuộn.
+      const openSub = `[...document.querySelectorAll(".msub-models")].find((e) => !e.classList.contains("out"))`;
+      if (await ev(`!!${openSub}?.querySelector(".mall")`)) {
+        await click(`${openSub}.querySelector(".mall")`, "Xem tất cả model");
+        await sleep(450);
+      }
       const a = await ev(measure);
       const tag = `${h}px, ${names[i]} (${a?.items} model)`;
       ok(a && !a.panelScrolls, `${tag}: khung kính không tự cuộn`, JSON.stringify(a));

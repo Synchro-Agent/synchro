@@ -15,7 +15,8 @@
 //   Chỉ khi phim vào chế độ toàn màn hình trên màn lớn (nút Toàn màn hình của phim, màn ≥ 1280px) mới đổi sang bản
 //   1080p (19 MB), giữ nguyên vị trí đang phát (blueprint B3.5); bản 1080p tải lỗi thì quay về 720p, phim không dừng.
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { Loader, Mark, Wordmark } from "./brand";
+import { Mark, Wordmark } from "./brand";
+import { Spinner } from "./spinner";
 import { assemble, boxOf, center, fly as flyTo, markTarget, onScreen, openHole, reducedMotion, settleApp, type Box } from "./handoff";
 import { getLang, tr, trc } from "./i18n";
 import { SEEN, wantsIntro } from "./introflag";
@@ -75,7 +76,10 @@ const CAPS: [number, number, [string, string], boolean?][] = [
   [9.7, 14.0, ["Chrome của bạn, tự lái: tiện ích Synchro tự bấm, tự gõ, tự đặt chỗ.", "Your Chrome, on autopilot. The Synchro extension clicks, types and books by itself."]],
   [14.2, 17.0, ["Rồi nhắn cho Mai giúp bạn: lịch và tin nhắn, xử lý luôn trên điện thoại.", "Then it texts Mai for you. Calendar and messages, handled on your phone too."]],
   [18.3, 19.6, ["Bạn giao việc. Synchro làm xong.", "You hand it off. Synchro gets it done."]],
-  [20.0, 23.4, ["Chạy cả khi bạn ngủ: giao cho Hộp thư một lần, Synchro chạy theo lịch trên máy chủ của nó, kể cả khi bạn gập máy.", "Runs while you sleep. Give Inbox a job once. Synchro runs it on schedule on its own server, even with your laptop closed."]],
+  [20.0, 23.4, [
+    "Chạy cả khi bạn ngủ: giao cho Autopilot một lần, Synchro chạy theo lịch trên máy chủ của nó, kể cả khi bạn gập máy.",
+    "Runs while you sleep. Give Autopilot a job once. Synchro runs it on schedule on its own server, even with your laptop closed.",
+  ]],
   [23.6, 25.8, ["Synchro Code: không gian làm việc thật với terminal, trình duyệt, git và pull request.", "Synchro Code. A real workspace: terminal, browser, git and pull requests."]],
   [26.0, 28.2, ["Skills & Connectors: kết nối ứng dụng của bạn, Synchro tự chọn skill hợp với việc.", "Skills & Connectors. Plug in your apps. Synchro picks the right skill for the job."]],
   [28.4, 30.9, ["Speech: giọng đọc, đổi giọng và trợ lý giọng nói, chạy bằng ElevenLabs.", "Speech. Voices, voice changer and voice agents, powered by ElevenLabs."]],
@@ -347,7 +351,8 @@ export function IntroFilm({ uid, onCovered, onReveal, onDone }: { uid: string; o
       {!reduced && phase === "iris" && <div ref={iris} className="intro-iris" style={{ clipPath: "circle(0px at 50% 50%)", background: vig || undefined }} />}
       <div ref={stage} className="intro-stage" style={vig ? { background: vig } : undefined} onClick={() => { if (phase === "play") toggle(); }}>
         <div ref={host} className={`intro-host ${shown ? "on" : ""}`} />
-        {phase === "wait" && !seedOn && <div className="intro-load"><Loader size={34} label={tr("Đang tải phim")} /></div>}
+        {phase === "wait" && !seedOn
+          && <div className="intro-load"><Spinner size={30} className="intro-spin" label={tr("Đang tải phim")} /></div>}
         {phase === "ask" && (
           <div className="intro-ask" onClick={(e) => e.stopPropagation()}>
             <img src="/intro/synchro-intro-poster.jpg" alt="" />

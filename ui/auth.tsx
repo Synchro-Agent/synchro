@@ -10,6 +10,7 @@ import { ArrowRight, Mail, Gem, Lock, Eye, EyeOff, ArrowLeft, User, Smile, Calen
 import { AnimatePresence, motion, Variants } from "framer-motion";
 import type { Perms } from "../shared/catalog";
 import { Mark } from "./brand";
+import { Spinner } from "./spinner";
 import { usePref } from "./store";
 import { OCCUPATIONS } from "../shared/names";
 export { OCCUPATIONS };
@@ -137,9 +138,11 @@ function Orb({ stage }: { stage: Stage }) {
         {stage === "success" && <motion.span key="ring2" className="auth-orb-ring" initial={{ scale: 1, opacity: 0.35 }} animate={{ scale: 1.9, opacity: 0 }} transition={{ duration: 1.3, delay: 0.18, ease: [0.16, 1, 0.3, 1] }} />}
       </AnimatePresence>
       <AnimatePresence mode="wait">
-        {/* Đang xử lý: logo xoay theo nhịp đồng bộ. Thành công: hai nửa khớp pha thành một vòng tròn trọn vẹn (đã đồng bộ). */}
+        {/* Đang xử lý: vòng chờ trung tính. Thành công: hai nửa của logo khớp pha thành một vòng tròn trọn vẹn
+            (đã đồng bộ). */}
         {stage === "loading" && (
-          <motion.span key="load" className="auth-mark" exit={{ scale: 0.6, opacity: 0, transition: { duration: 0.28, ease: "easeIn" } }}><Mark size={46} state="load" /></motion.span>
+          <motion.span key="load" className="auth-mark" exit={{ scale: 0.6, opacity: 0, transition: { duration: 0.28,
+            ease: "easeIn" } }}><Spinner size={34} className="auth-spin" /></motion.span>
         )}
         {stage === "success" && (
           <motion.span key="done" className="auth-mark" initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ duration: 0.35, ease: EASE }}><Mark size={46} state="close" /></motion.span>

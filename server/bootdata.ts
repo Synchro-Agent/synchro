@@ -1,6 +1,6 @@
 // Một lệnh khởi động thay cho tám (blueprint A3): mọi thứ trang chủ cần trước khi dùng được, từ một lần tra phiên.
 // Trang chủ (app/page.tsx, server component) dựng sẵn gói này ở máy chủ và truyền vào <Home boot>; /api/bootstrap trả cùng gói cho lần hỏi lại.
-// Thay cho: /api/auth/me, /api/models, /api/caps, /api/plugins?view=meta, /api/inbox?count=1 lúc mở trang.
+// Thay cho: /api/auth/me, /api/models, /api/caps, /api/plugins?view=meta, /api/autopilot?count=1 lúc mở trang.
 import "server-only";
 import { createHash } from "node:crypto";
 import { can, current, isAdmin, publicUser, signupOpen, type UserRow } from "./authstore";

@@ -1,8 +1,10 @@
 "use client";
 // Tải chậm các phần không phải chat (Code, Speech, Bộ não, Kho kỹ năng, Cài đặt…): trang đầu chỉ tải phần chat, mở mục nào mới tải mục đó.
 import { lazy, Suspense, type ComponentType } from "react";
+import { Spinner } from "./spinner";
 
-export const ViewLoading = () => <div className="view-load" role="status" aria-label="Đang tải"><span className="art-spin" /></div>;
+export const ViewLoading = () => <div className="view-load" role="status" aria-label="Đang tải">
+  <Spinner className="art-spin" /></div>;
 
 // Sau một lần phát hành, tab đang mở có thể đòi tệp cũ đã bị xóa: tải lại trang một lần là có bản mới (bản nháp, lượt đang chạy đều được giữ).
 function reloadOnce(e: unknown): never {

@@ -192,14 +192,18 @@ try {
   await api("POST", "/api/speech/sfx", { text: "Almost ten seconds", duration: 9.97 });
   await api("POST", "/api/speech/sfx", { text: "Short click", duration: 0.5 });
   await openTool("sfx");
-  await until(`[...document.querySelectorAll(".sp-hrow .sp-time")].length >= 2 && [...document.querySelectorAll(".sp-hrow .sp-time")].every((e) => !/ 0:00$/.test(e.textContent))`, 15000, "sfx time");
-  const tms = await ev(`[...document.querySelectorAll(".sp-hrow .sp-time")].map((e) => e.textContent)`);
+  const times = `[...document.querySelectorAll(".sp-hrow .aud-time")]`;
+  await until(`${times}.length >= 2 && ${times}.every((e) => !/ 0:00$/.test(e.textContent))`, 15000, "sfx time");
+  const tms = await ev(`[...document.querySelectorAll(".sp-hrow .aud-time")].map((e) => e.textContent)`);
   ok(/^0:00\.0 \/ 0:00\.5$/.test(tms[0]), `tiếng động 0,5 giây hiện “${tms[0]}” (không còn “0:00 / 0:00”)`, tms);
   ok(tms[1] === "0:00 / 0:10", `tiếng động 9,97 giây hiện “${tms[1]}” (không còn “0:010.0”)`, tms);
   // Trình phát thật (WAV mock có thể lệch vài mẫu so với 9,97): mọi đồng hồ chỉ có một hoặc hai chữ số giây.
   ok(tms.every((x) => /^\d+:\d\d(\.\d)? \/ \d+:\d\d(\.\d)?$/.test(x)), "đồng hồ đúng dạng m:ss hoặc m:ss.d", tms);
-  await phone(".sp-hrow .sp-player", "trình phát tiếng động");
-  const gap = await ev(`[...document.querySelectorAll(".sp-hrow .sp-player")].map((p) => { const w = p.querySelector(".sp-wave"), t = p.querySelector(".sp-time"); return { gap: Math.round(t.getBoundingClientRect().left - w.getBoundingClientRect().right), fit: w.scrollWidth <= w.clientWidth + 1, wave: Math.round(w.clientWidth) }; })`);
+  await phone(".sp-hrow .aud-player", "trình phát tiếng động");
+  const gap = await ev(`[...document.querySelectorAll(".sp-hrow .aud-player")].map((p) => {
+    const w = p.querySelector(".aud-wave"), t = p.querySelector(".aud-time");
+    const gap = Math.round(t.getBoundingClientRect().left - w.getBoundingClientRect().right);
+    return { gap, fit: w.scrollWidth <= w.clientWidth + 1, wave: Math.round(w.clientWidth) }; })`);
   ok(gap.every((g) => g.gap >= 8 && g.fit), `điện thoại: dạng sóng không tràn sang đồng hồ (khe ≥ 8px, vạch vừa khung): ${JSON.stringify(gap)}`, gap);
   await shot("4b-sfx-phone");
   await desk();
@@ -252,7 +256,7 @@ try {
   await phone(".sp-proj .sp-progress", "thanh tiến độ lồng tiếng");
   await shot("5-dub-phone");
   await desk();
-  await until(`!!document.querySelector(".sp-proj .sp-player")`, 45000, "dub done");
+  await until(`!!document.querySelector(".sp-proj .aud-player")`, 45000, "dub done");
   ok(dubPolls >= 3, `danh sách tự chuyển sang xong dù lần hỏi đầu lỗi 504 (${dubPolls} lần hỏi), không phải mở lại trang`, dubPolls);
   ok(!(await viLeft()).length, "không còn chữ Việt ở Lồng tiếng", await viLeft());
   await shot("6-dub-done");

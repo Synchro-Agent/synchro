@@ -6,6 +6,7 @@ import { DESIGN_VI2EN } from "./i18n-design";
 import { MODELS_RULES_EN, MODELS_VI2EN } from "./i18n-models";
 import { AUTH_VI2EN } from "./i18n-auth";
 import { FX_VI2EN } from "./i18n-features";
+import { ORCH_RULES_EN, ORCH_VI2EN } from "./i18n-orchestra";
 import { CX_VI2EN, cxActEn } from "./cxactions";
 /** Thời gian chờ "2 giờ 5 phút" / "45 phút" / "3 ngày" (limitmsg.ts waitVi) sang tiếng Anh. */
 const limitDurEn = (s: string) => s.replace(/(\d+) ngày/, (_, n: string) => `${n} ${n === "1" ? "day" : "days"}`).replace(/(\d+) giờ/, "$1 h").replace(/(\d+) phút/, "$1 min");
@@ -28,7 +29,7 @@ export const VI2EN: Record<string, string> = {
   "không được thêm: dự án đã đầy dung lượng ngữ cảnh": "was not added: this project's context is full",
   "Tệp và văn bản trong dự án được dùng làm ngữ cảnh cho mọi đoạn chat. Mỗi dự án chứa tối đa 2 triệu ký tự.": "Files and text in the project are used as context for every chat. Each project holds up to 2 million characters.",
   "Việc tự động có đề xuất cần bạn duyệt.": "A scheduled task has a proposal for you to review.",
-  "Đã có kết quả trong Hộp thư.": "A result is ready in your Inbox.",
+  "Đã có kết quả trong Autopilot.": "A result is ready in Autopilot.",
   "Ảnh dựng nền đã xong và đã thay vào artifact.": "The background image is ready and is now in the artifact.",
   "Không dựng được ảnh nền; artifact vẫn giữ khung giữ chỗ.": "The background image couldn't be made, so the artifact keeps the placeholder.",
   "Không dựng được ảnh này; artifact vẫn giữ khung giữ chỗ.": "This image couldn't be made, so the artifact keeps the placeholder.",
@@ -154,7 +155,6 @@ export const VI2EN: Record<string, string> = {
   "Ngữ cảnh phiên chat": "Session context",
   "Chạy lệnh": "Run command",
   "Đẩy code lên GitHub": "Push code to GitHub",
-  "Đã gửi · Synchro đang đọc": "Sent · Synchro is reading it",
   "Trang đang mở": "Open page",
   "Gõ vào trang": "Type into the page",
   "Mở pull request trên GitHub": "Open a pull request on GitHub",
@@ -799,21 +799,28 @@ Object.assign(VI2EN, {
 });
 // Văn bản hành chính
 Object.assign(VI2EN, { "Văn bản hành chính": "Official document", "Văn bản chưa đúng định dạng": "The document is not in the right format" });
-// Hộp thư, tác vụ nền
+// Autopilot (trước đây là Hộp thư), tác vụ nền
 Object.assign(VI2EN, {
-  "Hộp thư": "Inbox", "Kết quả": "Results", "Tác vụ đã hẹn": "Scheduled tasks", "Tác vụ nền mới": "New background task", "Đánh dấu đã đọc hết": "Mark all as read",
+  "Kết quả": "Results", "Tác vụ đã hẹn": "Scheduled tasks", "Tác vụ nền mới": "New background task",
+  "Đánh dấu đã đọc hết": "Mark all as read",
   "Chưa có kết quả nào": "No results yet", "Hẹn một tác vụ nền (ví dụ bản tin mỗi sáng, tổng kết cuối tuần), Synchro sẽ tự chạy và gửi kết quả vào đây.": "Schedule a background task (a morning briefing, a weekly wrap-up) and Synchro will run it and send the result here.",
   "Đang chạy…": "Running…", "Lỗi": "Error", "Xong": "Done", "Synchro đang chạy tác vụ này ở nền": "Synchro is running this task in the background", "Mở thành đoạn chat": "Open as a chat",
   "Chưa hẹn tác vụ nào": "No scheduled tasks", "Ví dụ: 8 giờ sáng mỗi ngày tóm tắt lịch và email; chiều thứ Sáu tổng kết tuần.": "For example: every morning at 8 summarize calendar and email; Friday afternoon wrap up the week.",
-  "lần tới": "next", "đã tắt": "off", "lần chạy": "runs", "Chạy ngay": "Run now", "Đang chạy, kết quả sẽ vào Hộp thư": "Running, the result will arrive in your Inbox", "Đã xóa tác vụ": "Task deleted",
-  "Sửa tác vụ": "Edit task", "Synchro tự chạy yêu cầu này theo lịch, kể cả khi bạn không mở trang. Kết quả vào Hộp thư.": "Synchro runs this request on schedule, even when you're not on the page. Results arrive in your Inbox.",
+  "lần tới": "next", "đã tắt": "off", "lần chạy": "runs", "Chạy ngay": "Run now",
+  "Đang chạy, kết quả sẽ vào Autopilot": "Running, the result will arrive in Autopilot",
+  "Đã xóa tác vụ": "Task deleted",
+  "Sửa tác vụ": "Edit task",
+  "Synchro tự chạy yêu cầu này theo lịch, kể cả khi bạn không mở trang. Kết quả vào Autopilot.":
+    "Synchro runs this request on schedule, even when you're not on the page. Results arrive in Autopilot.",
   "Tên": "Name", "Yêu cầu": "Request", "Lịch chạy": "Schedule", "Vào": "On", "Lúc": "At", "Đã tạm dừng trên Chrome": "Paused in Chrome", "Đang tạm dừng trên Chrome": "Paused in Chrome", "Giờ chạy": "Run time", "Chọn giờ": "Pick a time", "Giờ": "Hour", "Phút": "Minute", "Giờ theo múi giờ": "Times in time zone", "Lưu": "Save", "Chạy": "Run", "Hẹn lịch": "Schedule",
   "Một lần, chạy ngay": "Once, run now", "Một lần": "Once", "Mỗi giờ": "Every hour", "Mỗi ngày": "Every day", "Mỗi tuần": "Every week", "Mỗi ngày lúc": "Every day at", "hằng tuần lúc": "weekly at",
   "Chủ nhật": "Sunday", "Thứ Hai": "Monday", "Thứ Ba": "Tuesday", "Thứ Tư": "Wednesday", "Thứ Năm": "Thursday", "Thứ Sáu": "Friday", "Thứ Bảy": "Saturday",
   "Bản tin buổi sáng": "Morning briefing", "Tổng kết tuần": "Weekly wrap-up", "Theo dõi đối thủ": "Competitor watch", "Ví dụ: Bản tin buổi sáng": "For example: Morning briefing",
   "Viết như khi nhắn cho Synchro. Connector đã kết nối (email, lịch…) được dùng như trong chat.": "Write it like a chat message. Connected connectors (email, calendar…) work as in chat.",
   "Đã lưu tác vụ": "Task saved", "Đã tạo tác vụ, sẽ chạy trong vòng một phút": "Task created, it will run within a minute", "Đã hẹn tác vụ": "Task scheduled",
-  "Tác vụ nền đã chạy xong. Mở Hộp thư để xem kết quả.": "A background task finished. Open your Inbox to see the result.", "Tác vụ nền": "Background task",
+  "Tác vụ nền đã chạy xong. Mở Autopilot để xem kết quả.":
+    "A background task finished. Open Autopilot to see the result.",
+  "Tác vụ nền": "Background task",
 });
 // Bộ não công ty
 Object.assign(VI2EN, {
@@ -835,7 +842,9 @@ Object.assign(VI2EN, {
   "Bạn có thể rời trang, Synchro vẫn xử lý ở nền.": "You can leave this page; Synchro keeps working in the background.", "Tất cả cuộc họp": "All meetings", "chép lời bằng": "transcribed with",
   "Biên bản": "Minutes", "Việc cần làm": "Action items", "Bản ghi": "Transcript", "Biên bản Word": "Minutes (Word)", "Hỏi tiếp trong chat": "Continue in chat",
   "Thành phần": "Attendees", "Nội dung chính": "Key points", "Quyết định": "Decisions", "Câu hỏi còn mở": "Open questions", "Người phụ trách": "Owner", "hạn": "due", "việc": "items", "đã xong": "done",
-  "Cuộc họp không có việc cần làm nào.": "This meeting has no action items.", "Đến hạn mà chưa xong, Synchro gửi lời nhắc vào Hộp thư lúc 8 giờ sáng.": "When an item is due and not done, Synchro sends a reminder to your Inbox at 8 am.",
+  "Cuộc họp không có việc cần làm nào.": "This meeting has no action items.",
+  "Đến hạn mà chưa xong, Synchro gửi lời nhắc vào Autopilot lúc 8 giờ sáng.":
+    "When an item is due and not done, Synchro sends a reminder to Autopilot at 8 am.",
   "Mở cuộc họp": "Open meeting", "Đã tải biên bản": "Minutes downloaded",
   "Máy chủ chưa có dịch vụ chép lời (cần khóa ElevenLabs hoặc OpenAI ở Cài đặt → Providers). Hãy dán nội dung cuộc họp.": "The server has no transcription service yet (needs an ElevenLabs or OpenAI key in Settings → Providers). Paste the meeting content instead.",
 });
@@ -885,6 +894,7 @@ RULES_EN.push([/^Khóa ElevenLabs chưa được cấp quyền (.+)\. Vào eleve
 Object.assign(VI2EN, {
   "công cụ": "tools", "lỗi": "failed", "Đang ghép vào việc đang làm": "Adding to the current task", "Gửi sau khi xong": "Send when done", "Bỏ tin chờ gửi": "Remove queued message",
   "Danh sách việc": "Tasks", "Bạn nhắn thêm": "You added", "Nhắn thêm khi Synchro đang làm": "Sent while Synchro was working",
+  "Sẽ đọc khi xong bước này": "Will be read when this step finishes",
   "Nhắn thêm: ↵ ghép vào việc đang làm, ⌘↵ gửi sau khi xong": "Add a message: ↵ adds it to the current task, ⌘↵ sends it when done", "Gửi thêm": "Send",
   "Synchro chưa được kết nối với model nào. Quản trị viên vào Cài đặt → Providers để đăng nhập gói Claude / ChatGPT / Gemini / Grok hoặc thêm khóa API.": "Synchro isn't connected to any model. An admin can sign in to a Claude / ChatGPT / Gemini / Grok plan or add an API key in Settings → Providers.",
   "Synchro tự chọn và chuyển giai đoạn": "Synchro picks and switches phases on its own",
@@ -1426,6 +1436,12 @@ addNew(VI2EN, UX_VI2EN);
 addNew(VI2EN, DESIGN_VI2EN);
 addNew(VI2EN, FX_VI2EN);
 addNew(VI2EN, AUTH_VI2EN);
+addNew(VI2EN, ORCH_VI2EN);
+// Số token của Orchestra: chữ "token" giống nhau ở hai ngôn ngữ; mục VI2EN chỉ để tiếng Anh có số nhiều.
+SAME.add("≈{k} token");
+RULES_EN.push(...ORCH_RULES_EN);
+// Tên tính năng nhiều model cùng làm một việc: giữ nguyên ở cả hai ngôn ngữ.
+SAME_WORDS.add("Orchestra");
 // Artifact, chia sẻ, xuất tệp.
 addNew(VI2EN, {
   "Mọi phiên bản của artifact này sẽ bị xóa, không hoàn tác được.": "Every version of this artifact will be deleted. This can't be undone.",
@@ -1510,10 +1526,100 @@ RULES_EN.push(
   [/^\[Ảnh đã gửi ở lượt trước: (.+)\]$/, (m) => `[Image sent in an earlier turn: ${m[1]}]`],
 );
 
-// Hộp thư tự động hóa (tasksui.tsx): giao việc, kế hoạch, kết quả, đề xuất chờ duyệt, việc tự động
+// Autopilot (tasksui.tsx): giao việc, kế hoạch, kết quả, đề xuất chờ duyệt, việc tự động
 addNew(VI2EN, {
+  "Múi giờ ‹autopilot›": "Time zone",
+  "Hẹn giờ ‹autopilot›": "Schedule it",
+  "đã chạy ‹autopilot›": "done",
+  "Trường phút của cron không hợp lệ (cho phép 0–59, *, dấu phẩy, a-b, /bước).":
+    "The cron minute field is invalid (allowed 0–59, *, commas, a-b, /step).",
+  "Trường giờ của cron không hợp lệ (cho phép 0–23, *, dấu phẩy, a-b, /bước).":
+    "The cron hour field is invalid (allowed 0–23, *, commas, a-b, /step).",
+  "Trường ngày của cron không hợp lệ (cho phép 1–31, *, dấu phẩy, a-b, /bước).":
+    "The cron day field is invalid (allowed 1–31, *, commas, a-b, /step).",
+  "Trường tháng của cron không hợp lệ (cho phép 1–12 hoặc JAN–DEC, *, dấu phẩy, a-b, /bước).":
+    "The cron month field is invalid (allowed 1–12 or JAN–DEC, *, commas, a-b, /step).",
+  "Trường thứ của cron không hợp lệ (cho phép 0–7 hoặc SUN–SAT, *, dấu phẩy, a-b, /bước).":
+    "The cron weekday field is invalid (allowed 0–7 or SUN–SAT, *, commas, a-b, /step).",
+  "Autopilot: “{title}” có đề xuất chờ bạn duyệt": "Autopilot: “{title}” has a proposal waiting for your approval",
+  "Autopilot đã xong “{title}”": "Autopilot finished “{title}”",
+  "Autopilot gặp lỗi khi chạy “{title}”": "Autopilot hit an error running “{title}”",
+  "Thông báo mới: “{title}”": "New notice: “{title}”", "Mở đoạn chat": "Open the chat",
+  "Mở Autopilot ‹autopilot›": "Open Autopilot",
+  "Synchro có thông báo mới cho bạn.": "Synchro has a new notice for you.",
+  "Autopilot gặp lỗi khi chạy việc này, mở để xem chi tiết.":
+    "Autopilot hit an error running this task. Open it to see the details.",
+  "Đoạn chat kết quả chưa về máy này, hãy thử lại sau giây lát":
+    "The result chat hasn't reached this device yet. Try again in a moment",
+  "Autopilot có đề xuất cần bạn duyệt.": "Autopilot has a proposal for you to review.",
+  "Autopilot đã xong, mở để xem kết quả và hỏi tiếp.": "Autopilot finished. Open it to see the result and follow up.",
+  "Đã giao, Synchro bắt đầu trong vòng một phút": "Assigned. Synchro starts within a minute",
+  "Đã tạo và đang chạy thử, xong sẽ có thông báo":
+    "Created and running a test now. You'll get a notification when it's done",
+  "Đã lên lịch cho Autopilot": "Scheduled in Autopilot",
+  "Đã lưu việc của Autopilot": "Autopilot task saved",
+  "Sửa việc của Autopilot": "Edit Autopilot task",
+  "Việc mới cho Autopilot": "New Autopilot task",
+  "Xem lại và sửa nếu cần. Synchro chạy việc này trên máy chủ, kể cả khi bạn đóng tab hay gập máy.":
+    "Review and edit if needed. Synchro runs this on its server, even after you close the tab or your laptop.",
+  "Biểu thức cron": "Cron expression",
+  "Năm trường: phút giờ ngày tháng thứ (0 = Chủ nhật).": "Five fields: minute hour day month weekday (0 = Sunday).",
+  "Ví dụ 0 9 1 * * là 9:00 ngày 1 hằng tháng; 30 8,17 * * 1-5 là 8:30 và 17:30 từ thứ Hai tới thứ Sáu.":
+    "For example 0 9 1 * * is 9:00 on the 1st of every month; 30 8,17 * * 1-5 is 8:30 and 17:30 Monday to Friday.",
+  "Mỗi giờ chạy tối đa một lần.": "Runs at most once an hour.",
+  "múi giờ của máy này": "this device's time zone",
+  "Ngày": "Date",
+  "Synchro Code dùng trình duyệt của Synchro trên máy chủ khi cần mở web.":
+    "Synchro Code uses Synchro's browser on the server when it needs the web.",
+  "Lệnh cần duyệt (khi tắt chế độ Tự động trong Cài đặt → Synchro Code) thành đề xuất ở mục Cần duyệt.":
+    "Commands that need approval (when Auto mode is off in Settings → Synchro Code) become proposals under To approve.",
+  "Viết như khi nhắn cho Synchro.": "Write it like a message to Synchro.",
+  "Mọi thứ chat làm được đều dùng được ở đây: connector, skill, web, chạy code, artifact, ảnh, tệp.":
+    "Everything chat can do works here: connectors, skills, web, running code, artifacts, images, files.",
+  "Gửi email khi xong": "Email me when done",
+  "Ngoài thông báo trong Synchro, gửi tóm tắt kết quả tới email của bạn (email đã xác minh).":
+    "Besides the notification in Synchro, send a summary of the result to your email (verified email only).",
+  "Lên lịch": "Schedule",
+  "Synchro đang làm việc đã duyệt, xong sẽ có thông báo":
+    "Synchro is doing the approved task. You'll get a notification when it's done",
+  "Mở đoạn chat để hỏi tiếp": "Open the chat to follow up",
+  "Đang chạy trên máy chủ, xong sẽ có thông báo": "Running on the server. You'll get a notification when it's done",
+  "Kết quả cũ trong Autopilot cũng bị xóa. Đoạn chat kết quả vẫn giữ.":
+    "Its past results in Autopilot are deleted too. Result chats are kept.",
+  "Chỉ gỡ khỏi danh sách Kết quả; việc tự động, lịch chạy và đoạn chat kết quả giữ nguyên.":
+    "Only removed from Results; tasks, schedules and result chats stay.",
+  "Kết quả đang chạy được giữ lại.": "Results still running are kept.",
+  "Chạy tiếp theo lịch": "Resume schedule",
+  "Tạm dừng": "Pause",
+  "Kết quả cũ của các việc này trong Autopilot cũng bị xóa. Đoạn chat kết quả vẫn giữ.":
+    "Their past results in Autopilot are deleted too. Result chats are kept.",
+  "Giao việc hoặc lên lịch, Synchro tự làm kể cả khi bạn tắt tab hay gập máy.":
+    "Hand off a task or schedule it. Synchro does it even after you close the tab or your laptop.",
+  "Xong là có thông báo, kết quả thành đoạn chat để bạn hỏi tiếp.":
+    "When it's done you get a notification, and the result becomes a chat you can follow up in.",
+  "Giao một việc ở ô phía trên (ví dụ giá cổ phiếu mỗi sáng, repo GitHub hay mỗi ngày).":
+    "Hand off a task in the box above (for example stock prices every morning, or interesting GitHub repos every day).",
+  "Synchro tự chạy, kết quả hiện ở đây và thành đoạn chat để bạn hỏi tiếp.":
+    "Synchro runs it, the result shows up here and becomes a chat you can follow up in.",
+  "đang tạm dừng": "paused",
+  "Chạy theo lịch": "Run on schedule",
+  "Mở kết quả gần nhất": "Open latest result",
+  "Một lần, vào lúc đã hẹn": "Once, at a set time",
+  "Tùy chỉnh (cron)": "Custom (cron)",
+  "Một lần lúc": "Once at",
+  "Chưa tải được Autopilot": "Couldn't load Autopilot",
+  "Cron cần đúng 5 trường: phút giờ ngày tháng thứ (ví dụ \"30 8 * * 1-5\").":
+    "Cron needs exactly 5 fields: minute hour day month weekday (for example \"30 8 * * 1-5\").",
+  "Autopilot chạy tối đa mỗi giờ một lần: trường phút của cron phải là một số (0–59).":
+    "Autopilot runs at most once an hour: the cron minute field must be a single number (0–59).",
+  "Biểu thức cron này không có lần chạy nào trong 18 tháng tới.":
+    "This cron expression has no run in the next 18 months.",
+  "Giờ hẹn đã qua. Hãy chọn một thời điểm trong tương lai, hoặc chọn \"Một lần, chạy ngay\".":
+    "That time has already passed. Pick a time in the future, or choose \"Once, run now\".",
   "Nhật ký": "Log", "Ẩn nhật ký": "Hide log", "Lỗi:": "Error:",
-  "Đã tạo, Synchro chạy trong vòng một phút": "Created, Synchro will run it within a minute", "Đã tạo và đang chạy thử, kết quả vào Hộp thư": "Created and running a test now, the result will arrive in your Inbox",
+  "Đã tạo, Synchro chạy trong vòng một phút": "Created, Synchro will run it within a minute",
+  "Đã tạo và đang chạy thử, kết quả vào Autopilot":
+    "Created and running a test now, the result will arrive in Autopilot",
   "Đã tạo việc tự động": "Automation created", "Sửa việc tự động": "Edit automation", "Kế hoạch của Synchro": "Synchro's plan", "Việc tự động mới": "New automation",
   "Đổi lịch, trình duyệt hay hướng dẫn; lần chạy tới dùng ngay bản mới.": "Change the schedule, browser or instructions; the next run uses the new version.",
   "Xem lại và sửa nếu cần. Synchro chạy việc này trên máy chủ theo lịch, kể cả khi bạn tắt máy.": "Review and edit if needed. Synchro runs this on its server on schedule, even when your computer is off.",
@@ -1523,14 +1629,17 @@ addNew(VI2EN, {
   "Tạo và chạy thử ngay": "Create and test now", "Tạo việc tự động": "Create automation",
   "Giao việc cho Synchro, ví dụ: mỗi sáng 8h tra giá cổ phiếu FPT, phân tích và gợi ý giao dịch": "Give Synchro a job, e.g. every morning at 8 check the FPT stock price, analyse it and suggest a trade",
   "Giao việc cho Synchro": "Give Synchro a job", "Tự đặt": "Set up manually", "Đang lên kế hoạch…": "Planning…", "Lên kế hoạch": "Plan it",
-  "Đã bỏ qua đề xuất": "Proposal dismissed", "Đã tạo skill": "Skill created", "Synchro đang làm việc đã duyệt, kết quả vào Hộp thư": "Synchro is doing the approved task, the result will arrive in your Inbox",
+  "Đã bỏ qua đề xuất": "Proposal dismissed", "Đã tạo skill": "Skill created",
+  "Synchro đang làm việc đã duyệt, kết quả vào Autopilot":
+    "Synchro is doing the approved task, the result will arrive in Autopilot",
   "Đã duyệt": "Approved", "Đã bỏ qua": "Dismissed", "Đang làm": "In progress", "Đã cho phép": "Allowed",
   "Việc tự động cần mở trang này nhưng trang chưa có trong danh sách trang được phép.": "The automation needs this site, but it isn't on your list of allowed sites yet.",
   "Công cụ này đang để chế độ hỏi trước mỗi lần dùng. Tham số:": "This tool is set to ask before each use. Arguments:",
   "Xem và sửa SKILL.md": "View and edit SKILL.md", "Xem và sửa việc Synchro sẽ làm": "View and edit what Synchro will do", "tệp kèm theo": "attached files",
   "Đến giờ chạy nhưng Chrome của bạn đang tắt. Synchro chạy ngay khi Chrome kết nối lại, hoặc sau 12 giờ thì chạy bằng trình duyệt của Synchro.": "It's time to run, but your Chrome is off. Synchro runs as soon as Chrome reconnects, or after 12 hours with Synchro's browser.",
   "Synchro đang chạy việc này trên máy chủ": "Synchro is running this on its server", "Đề xuất của lần chạy này": "Proposals from this run",
-  "Xóa việc tự động này? Kết quả cũ trong Hộp thư cũng bị xóa.": "Delete this automation? Its past results in the Inbox are deleted too.",
+  "Xóa việc tự động này? Kết quả cũ trong Autopilot cũng bị xóa.":
+    "Delete this automation? Its past results in Autopilot are deleted too.",
   "Giao việc một lần, Synchro tự làm theo lịch trên máy chủ, kể cả khi bạn tắt máy. Kết quả và những việc cần bạn duyệt nằm ở đây.": "Hand off a job once and Synchro does it on schedule on its server, even when your computer is off. Results and anything that needs your approval land here.",
   "việc đang chạy theo lịch trên máy chủ": "automations running on schedule on the server", "Máy chủ Synchro sẵn sàng chạy việc của bạn": "Synchro's server is ready to run your jobs",
   "Mỗi": "Every", "Chrome của bạn đang kết nối": "Your Chrome is connected", "Chrome của bạn chưa kết nối": "Your Chrome isn't connected", "Chưa cài tiện ích Synchro cho Chrome": "Synchro extension for Chrome not installed",
@@ -1552,7 +1661,10 @@ addNew(VI2EN, {
   "Luôn chạy trên máy chủ, không đụng tới Chrome của bạn.": "Always runs on the server and never touches your Chrome.",
   "Dùng tài khoản bạn đã đăng nhập. Đến giờ mà Chrome đang tắt thì chờ bạn mở lại (tối đa 12 giờ) rồi mới chạy.": "Uses the accounts you're signed in to. If Chrome is off when it's time, it waits for you to open it (up to 12 hours) before running.",
   "Tạo skill": "Create skill", "Cho phép trang web": "Allow a website", "Dùng công cụ": "Use a tool", "Cho phép làm": "Allow it", "Cho phép trang này": "Allow this site", "Cho phép chạy": "Allow the run",
-  "Việc tự động đã chạy xong và có đề xuất chờ bạn duyệt.": "An automation finished and has proposals waiting for your approval.", "Việc tự động đã chạy xong. Mở Hộp thư để xem kết quả.": "An automation finished. Open your Inbox to see the result.",
+  "Việc tự động đã chạy xong và có đề xuất chờ bạn duyệt.":
+    "An automation finished and has proposals waiting for your approval.",
+  "Việc tự động đã chạy xong. Mở Autopilot để xem kết quả.":
+    "An automation finished. Open Autopilot to see the result.",
   "Tự động: chọn model hợp với việc, lỗi thì chuyển model khác": "Auto: picks the right model for the job and switches models on errors",
   "Đã lưu việc tự động": "Automation saved", "Đã xóa việc tự động": "Automation deleted", "Hôm nay": "Today", "Hôm qua": "Yesterday", "Model": "Model", "Trình duyệt": "Browser",
 });
@@ -1561,7 +1673,8 @@ addNew(VI2EN, {
   "Không tìm thấy đề xuất.": "Proposal not found.", "Đề xuất này đang được thực hiện.": "This proposal is being carried out.", "Đề xuất này đã được xử lý.": "This proposal has already been handled.",
   "Công cụ này không còn (connector đã gỡ hoặc tắt).": "This tool is no longer available (the connector was removed or turned off).", "đã duyệt": "approved",
   "Việc tự động cần có tên.": "The automation needs a name.", "Yêu cầu của việc tự động trống hoặc quá dài (tối đa 8.000 ký tự).": "The automation's instructions are empty or too long (8,000 characters max).",
-  "Không tìm thấy việc tự động.": "Automation not found.", "Hộp thư đã có quá nhiều đề xuất chờ duyệt.": "Your Inbox already has too many proposals waiting for approval.",
+  "Không tìm thấy việc tự động.": "Automation not found.",
+  "Autopilot đã có quá nhiều đề xuất chờ duyệt.": "Your Autopilot already has too many proposals waiting for approval.",
   "Việc này đặt chạy bằng Chrome của bạn nhưng Chrome chưa kết nối với Synchro. Mở Chrome có cài tiện ích Synchro rồi thử lại, hoặc đổi trình duyệt của việc thành Tự chọn.": "This automation is set to run in your Chrome, but Chrome isn't connected to Synchro. Open Chrome with the Synchro extension and try again, or switch the automation's browser to Automatic.",
 });
 // Thời lượng "5 phút" / "12 giờ" trong ghi chú của việc tự động.
@@ -1577,7 +1690,8 @@ addNew(VI2EN, {
   "Cách làm": "How it runs", "Tra cứu & xử lý": "Research & process",
   "Tìm web, trình duyệt, Chrome của bạn, connector, skill, chạy code. Hợp với báo cáo, phân tích, theo dõi, soạn nội dung.": "Web search, browser, your Chrome, connectors, skills, code runs. Good for reports, analysis, monitoring and writing.",
   "Làm trong workspace riêng, giữ lại giữa các lần chạy: sửa tệp, chạy lệnh, git, mở pull request trên repo của bạn.": "Works in its own workspace that persists between runs: edits files, runs commands, uses git and opens pull requests on your repos.",
-  "Synchro Code dùng trình duyệt của Synchro trên máy chủ khi cần mở web. Lệnh cần duyệt (khi chế độ Tự động đang tắt trong Cài đặt → Synchro Code) sẽ thành đề xuất trong Hộp thư.": "Synchro Code uses Synchro's browser on the server when it needs the web. Commands that need approval (when Auto mode is off in Settings → Synchro Code) become proposals in your Inbox.",
+  "Synchro Code dùng trình duyệt của Synchro trên máy chủ khi cần mở web. Lệnh cần duyệt (khi chế độ Tự động đang tắt trong Cài đặt → Synchro Code) sẽ thành đề xuất trong Autopilot.":
+    "Synchro Code uses Synchro's browser on the server when it needs the web. Commands that need approval (when Auto mode is off in Settings → Synchro Code) become proposals in Autopilot.",
   "Quản trị viên chưa cho phép tài khoản của bạn dùng Synchro Code, nên việc này chưa chạy bằng Synchro Code được.": "Your administrator hasn't enabled Synchro Code for your account, so this automation can't run with Synchro Code yet.",
   "Thiếu thông tin việc tự động.": "Missing automation details.",
 });
@@ -1602,7 +1716,7 @@ Object.assign(VI2EN, {
   "tệp gốc và phần chữ trích ra. Chỉ tài khoản đã tải tệp lên đọc được. Giữ tới khi bạn xóa tệp ở Cài đặt → Quyền riêng tư, xóa đoạn chat duy nhất dùng tệp đó, hoặc xóa tài khoản; tệp nhiều người cùng tải lên được xóa khi người cuối cùng bỏ tệp.": "the original file and its extracted text. Only accounts that uploaded the file can read it. Kept until you delete it in Settings → Privacy, delete the only chat using it, or delete your account; a file several people uploaded is deleted when the last of them removes it.",
   "Sản phẩm và tệp tạo ra:": "Outputs and generated files:",
   "tệp do model tạo (giữ 30 ngày hoặc tới khi xóa đoạn chat; mỗi tài khoản tối đa 5 GB, đầy thì tệp mới không được lưu cho tới khi bạn xóa bớt hoặc tệp cũ hết hạn), giọng nói đã tạo, artifact, ứng dụng đã xuất bản và dữ liệu của chúng, kết quả công cụ (giữ 30 ngày hoặc tới khi xóa đoạn chat).": "files made by models (kept 30 days or until the chat is deleted; up to 5 GB per account, and when that is full new files are not saved until you delete some or old ones expire), generated speech, artifacts, published apps and their data, and tool results (kept 30 days or until the chat is deleted).",
-  "Skill, plugin, connector, tác vụ tự động và thông báo:": "Skills, plugins, connectors, automated tasks and notices:",
+  "Skill, plugin, connector, Autopilot và thông báo:": "Skills, plugins, connectors, Autopilot and notices:",
   "của riêng tài khoản bạn. Token kết nối được mã hóa trước khi lưu.": "belonging to your account. Connection tokens are encrypted before they are stored.",
   "Synchro Code:": "Synchro Code:",
   "phiên làm việc khi bật đồng bộ và tệp trong workspace (container riêng của bạn). Workspace không nằm trong bản sao lưu của máy chủ: hãy đẩy phần quan trọng lên GitHub hoặc tải về. Thư mục làm việc của code chạy trong chat tự xóa sau 24 giờ không dùng.": "sessions while syncing is on and the files in your workspace (your own container). Workspaces are not in the server's backups, so push anything important to GitHub or download it. Folders used by code run in chat are deleted after 24 hours without use.",
@@ -1675,7 +1789,8 @@ Object.assign(VI2EN, { "Đóng bảng đoạn chat": "Close chats panel", "Mở 
     "Thao tác hàng loạt": "Bulk actions", "Chọn tất cả": "Select all", "Bỏ chọn tất cả": "Deselect all",
     "Bật": "Turn on", "Tắt": "Turn off", "Kiểm tra cập nhật": "Check for updates", "Xuất .zip": "Export .zip", "Gỡ": "Uninstall", "Xóa": "Delete",
     "Ghim": "Pin", "Bỏ ghim": "Unpin", "Lưu trữ": "Archive", "Khôi phục": "Restore", "Bỏ lưu trữ": "Unarchive", "Thêm vào dự án": "Add to project", "Gỡ khỏi dự án": "Remove from project",
-    "Đánh dấu đã đọc": "Mark as read", "Đánh dấu chưa đọc": "Mark as unread", "Gỡ khỏi Hộp thư": "Remove from Inbox", "Tắt lịch": "Turn schedule off",
+    "Đánh dấu đã đọc": "Mark as read", "Đánh dấu chưa đọc": "Mark as unread",
+    "Gỡ khỏi Autopilot": "Remove from Autopilot", "Tắt lịch": "Turn schedule off",
     "Làm mới công cụ": "Refresh tools", "Ngắt kết nối": "Disconnect", "Tạm khóa": "Suspend", "Mở khóa": "Restore", "Đăng xuất mọi nơi": "Sign out everywhere",
     "Xóa tài khoản": "Delete account", "Xóa vĩnh viễn": "Delete permanently", "Tải về": "Download", "Xóa giọng": "Delete voice",
     "Đã bật các thư viện đã chọn": "Selected libraries turned on", "Đã tắt các thư viện đã chọn": "Selected libraries turned off", "Đã gỡ các thư viện đã chọn": "Selected libraries uninstalled",
@@ -1686,9 +1801,13 @@ Object.assign(VI2EN, { "Đóng bảng đoạn chat": "Close chats panel", "Mở 
     "Các dự án sẽ bị xóa. Các đoạn chat bên trong vẫn được giữ lại.": "The projects will be deleted. Chats inside them are kept.",
     "Các đoạn chat đã chọn sẽ bị xóa, không hoàn tác được.": "The selected chats will be deleted. This can't be undone.",
     "Synchro sẽ không dùng các mục này trong dự án nữa.": "Synchro won't use these items in the project anymore.",
-    "Chỉ gỡ khỏi Hộp thư; việc tự động và lịch chạy giữ nguyên. Kết quả đang chạy được giữ lại.": "Only removed from the Inbox; automations and schedules stay. Results still running are kept.",
-    "kết quả khỏi Hộp thư?": "results from the Inbox?", "việc tự động?": "automations?", "Kết quả cũ của các việc này trong Hộp thư cũng bị xóa.": "Their past results in the Inbox are deleted too.",
-    "Đã gỡ khỏi Hộp thư": "Removed from the Inbox", "Đã lưu trữ các phiên code đã chọn": "Selected code sessions archived", "Đã khôi phục các phiên code đã chọn": "Selected code sessions restored",
+    "Chỉ gỡ khỏi Autopilot; việc tự động và lịch chạy giữ nguyên. Kết quả đang chạy được giữ lại.":
+      "Only removed from Autopilot; automations and schedules stay. Results still running are kept.",
+    "kết quả khỏi Autopilot?": "results from Autopilot?", "việc tự động?": "automations?",
+    "Kết quả cũ của các việc này trong Autopilot cũng bị xóa.": "Their past results in Autopilot are deleted too.",
+    "Đã gỡ khỏi Autopilot": "Removed from Autopilot",
+    "Đã lưu trữ các phiên code đã chọn": "Selected code sessions archived",
+    "Đã khôi phục các phiên code đã chọn": "Selected code sessions restored",
     "Synchro sẽ thôi dùng các connector này và quên đăng nhập của chúng. Bạn có thể kết nối lại sau.": "Synchro will stop using these connectors and forget their sign-ins. You can connect them again later.",
     "Họ bị đăng xuất mọi nơi và không đăng nhập được cho tới khi bạn mở khóa.": "They're signed out everywhere and can't sign in until you restore them.",
     "Mọi phiên đăng nhập của các tài khoản này kết thúc ngay.": "Every session of these accounts ends right away.",
@@ -1994,7 +2113,7 @@ for (const [k, v] of Object.entries({
   "Bản trình bày chưa viết xong.": "The presentation isn't finished yet.",
   "Máy chủ này chưa có Chromium để xuất PowerPoint (cần dịch vụ workspace).": "This server has no Chromium to export PowerPoint (the workspace service is required).",
   "Đang xuất một bản PowerPoint khác, đợi xong rồi thử lại.": "Another PowerPoint export is still running. Wait for it to finish, then try again.",
-  // Hộp thư → kết quả có bản trình bày (tasksui.tsx): xuất PowerPoint ở máy chủ.
+  // Autopilot → kết quả có bản trình bày (tasksui.tsx): xuất PowerPoint ở máy chủ.
   "Tải PowerPoint": "Download PowerPoint",
   "Đã tải tệp PowerPoint": "PowerPoint file downloaded",
 })) if (!Object.prototype.hasOwnProperty.call(VI2EN, k)) VI2EN[k] = v;

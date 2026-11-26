@@ -3,22 +3,26 @@
 import type { Feat, Plan } from "../types/speech";
 
 export type SpeechTool = "home" | "tts" | "changer" | "voices" | "create" | "stt" | "dub" | "agent" | "music" | "sfx" | "isolate" | "dict" | "native" | "studio";
-export type ToolDef = { k: SpeechTool; label: string; desc: string; feats: Feat[]; color: string };
+export type ToolDef = { k: SpeechTool; label: string; desc: string; feats: Feat[] };
 export const TOOLS: ToolDef[] = [
-  { k: "home", label: "Trang chính", desc: "", feats: [], color: "t-blue" },
-  { k: "tts", label: "Đọc văn bản", desc: "Biến chữ thành giọng nói tự nhiên, một hoặc nhiều người nói", feats: ["tts", "dialogue"], color: "t-blue" },
-  { k: "changer", label: "Đổi giọng", desc: "Bạn nói, AI đổi thành giọng khác mà vẫn giữ cảm xúc", feats: ["changer"], color: "t-violet" },
-  { k: "agent", label: "Voice Agent", desc: "Trợ lý trò chuyện hai chiều bằng giọng nói", feats: ["agent"], color: "t-green" },
-  { k: "voices", label: "Giọng nói", desc: "Nghe thử, tìm và chọn giọng để dùng", feats: ["tts"], color: "t-pink" },
-  { k: "create", label: "Tạo giọng", desc: "Nhân bản giọng của bạn hoặc thiết kế giọng mới", feats: ["design", "ivc", "pvc", "remix"], color: "t-amber" },
-  { k: "stt", label: "Chép lời", desc: "Âm thanh, video thành chữ; tách người nói, xuất phụ đề", feats: ["stt", "live", "align"], color: "t-blue" },
-  { k: "dub", label: "Lồng tiếng", desc: "Dịch và lồng tiếng video sang ngôn ngữ khác", feats: ["dub"], color: "t-green" },
-  { k: "music", label: "Nhạc", desc: "Sáng tác bài hát, nhạc nền từ một câu mô tả", feats: ["music"], color: "t-pink" },
-  { k: "sfx", label: "Tiếng động", desc: "Hiệu ứng âm thanh từ mô tả, tới 30 giây", feats: ["sfx"], color: "t-amber" },
-  { k: "isolate", label: "Lọc tạp âm", desc: "Tách giọng nói khỏi nhạc nền và tiếng ồn", feats: ["isolate"], color: "t-violet" },
-  { k: "dict", label: "Từ điển phát âm", desc: "Dạy AI đọc đúng tên riêng, từ viết tắt", feats: ["dict"], color: "t-blue" },
-  { k: "native", label: "Audio Native", desc: "Trình phát đọc bài viết trên website của bạn", feats: ["native"], color: "t-green" },
-  { k: "studio", label: "Podcast & Sách nói", desc: "Tài liệu thành podcast, sách thành sách nói", feats: ["podcast", "book"], color: "t-amber" },
+  { k: "home", label: "Trang chính", desc: "", feats: [] },
+  { k: "tts", label: "Đọc văn bản", desc: "Biến chữ thành giọng nói tự nhiên, một hoặc nhiều người nói",
+    feats: ["tts", "dialogue"] },
+  { k: "changer", label: "Đổi giọng", desc: "Bạn nói, AI đổi thành giọng khác mà vẫn giữ cảm xúc", feats: ["changer"] },
+  { k: "agent", label: "Voice Agent", desc: "Trợ lý trò chuyện hai chiều bằng giọng nói", feats: ["agent"] },
+  { k: "voices", label: "Giọng nói", desc: "Nghe thử, tìm và chọn giọng để dùng", feats: ["tts"] },
+  { k: "create", label: "Tạo giọng", desc: "Nhân bản giọng của bạn hoặc thiết kế giọng mới",
+    feats: ["design", "ivc", "pvc", "remix"] },
+  { k: "stt", label: "Chép lời", desc: "Âm thanh, video thành chữ; tách người nói, xuất phụ đề",
+    feats: ["stt", "live", "align"] },
+  { k: "dub", label: "Lồng tiếng", desc: "Dịch và lồng tiếng video sang ngôn ngữ khác", feats: ["dub"] },
+  { k: "music", label: "Nhạc", desc: "Sáng tác bài hát, nhạc nền từ một câu mô tả", feats: ["music"] },
+  { k: "sfx", label: "Tiếng động", desc: "Hiệu ứng âm thanh từ mô tả, tới 30 giây", feats: ["sfx"] },
+  { k: "isolate", label: "Lọc tạp âm", desc: "Tách giọng nói khỏi nhạc nền và tiếng ồn", feats: ["isolate"] },
+  { k: "dict", label: "Từ điển phát âm", desc: "Dạy AI đọc đúng tên riêng, từ viết tắt", feats: ["dict"] },
+  { k: "native", label: "Audio Native", desc: "Trình phát đọc bài viết trên website của bạn", feats: ["native"] },
+  { k: "studio", label: "Podcast & Sách nói", desc: "Tài liệu thành podcast, sách thành sách nói",
+    feats: ["podcast", "book"] },
 ];
 /** Nhóm công cụ cho trang chính và thanh bên, theo cách ElevenLabs xếp. */
 export const GROUPS: { label: string; tools: SpeechTool[] }[] = [

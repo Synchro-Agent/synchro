@@ -16,6 +16,7 @@ import { ModelRegistry } from "./modelregui";
 import { CliUpdates } from "./cliupdateui";
 import { getLang } from "./i18n";
 import { resetClock } from "./resetfmt";
+import { Spinner } from "./spinner";
 
 type Cli = "claude" | "codex" | "agy" | "grok";
 type Login = { state: "starting" | "open_url" | "verifying" | "done" | "error"; method: string | null; url?: string; userCode?: string; needsCode: boolean; message?: string; startedAt: number };
@@ -138,10 +139,17 @@ function PlanPane({ v, admin, plan }: { v: PlanVendor; admin: boolean; plan: Ret
         </div>
         <span className={`api-badge ${st?.loggedIn && !st.relogin ? "ok" : st?.relogin ? "bad" : ""}`}><i />{state}</span>
         <div className="api-btns">
-          {st && !st.installed && admin && <button className="btn dark" onClick={install} disabled={!!busy}>{busy === "install" ? <><span className="api-spin" />Installing…</> : "Install"}</button>}
-          {st?.installed && (!st.loggedIn || st.relogin) && !login && <button className="btn dark" onClick={() => start()} disabled={!!busy}>{busy === "start" ? <><span className="api-spin" />Starting…</> : "Sign in"}</button>}
-          {st?.loggedIn && !login && <button className="icon-btn" aria-label="Refresh plan and models" data-tip="Refresh plan and models" disabled={fresh} onClick={refresh}>{fresh ? <span className="api-spin" /> : <I.Retry size={16} />}</button>}
-          {st?.loggedIn && !login && <button className="btn" onClick={logout} disabled={!!busy}>{busy === "out" ? <span className="api-spin" /> : "Sign out"}</button>}
+          {st && !st.installed && admin
+            && <button className="btn dark" onClick={install} disabled={!!busy}>{busy === "install"
+            ? <><Spinner className="api-spin" />Installing…</> : "Install"}</button>}
+          {st?.installed && (!st.loggedIn || st.relogin) && !login
+            && <button className="btn dark" onClick={() => start()} disabled={!!busy}>{busy === "start"
+            ? <><Spinner className="api-spin" />Starting…</> : "Sign in"}</button>}
+          {st?.loggedIn && !login && <button className="icon-btn" aria-label="Refresh plan and models"
+            data-tip="Refresh plan and models" disabled={fresh} onClick={refresh}>{fresh ? <Spinner
+            className="api-spin" /> : <I.Retry size={16} />}</button>}
+          {st?.loggedIn && !login && <button className="btn" onClick={logout} disabled={!!busy}>{busy === "out"
+            ? <Spinner className="api-spin" /> : "Sign out"}</button>}
         </div>
       </div>
       {st && !st.installed && !admin && <p className="pv-note">{`An administrator needs to install ${v.via} on the server first.`}</p>}
@@ -173,7 +181,7 @@ function PlanPane({ v, admin, plan }: { v: PlanVendor; admin: boolean; plan: Ret
                 <b>{v.cli === "grok" ? "Check this code" : "Enter this code"}</b>
                 <span>{v.cli === "grok" ? "The sign-in page should show the same code. It expires in 10 minutes. Never share it with anyone." : "It expires in 15 minutes. Never share it with anyone."}</span>
                 <div className="pv-code"><code data-notr>{login.userCode}</code><button className="icon-btn" aria-label="Copy code" data-tip={copied ? "Copied" : "Copy code"} onClick={() => copy(login.userCode!)}>{copied ? <I.M icon="Check" size={15} /> : <I.M icon="Copy" size={15} />}</button></div>
-                <span className="pv-wait"><span className="api-spin" />Waiting for you to approve…</span>
+                <span className="pv-wait"><Spinner className="api-spin" />Waiting for you to approve…</span>
               </li>
             )}
             {login.needsCode && (
@@ -182,7 +190,8 @@ function PlanPane({ v, admin, plan }: { v: PlanVendor; admin: boolean; plan: Ret
                 <span>Use the code from the page you just opened. Each time you press Sign in, a new link is created and older codes stop working.</span>
                 <form className="pv-paste" onSubmit={(e) => { e.preventDefault(); submit(); }}>
                   <input className="field" autoComplete="off" spellCheck={false} placeholder="Paste the code from the sign-in page" value={code} onChange={(e) => setCode(e.target.value)} autoFocus />
-                  <button type="submit" className="btn dark" disabled={!code.trim() || busy === "code"}>{busy === "code" ? <><span className="api-spin" />Checking…</> : "Continue"}</button>
+                  <button type="submit" className="btn dark" disabled={!code.trim() || busy === "code"}>{busy === "code"
+                    ? <><Spinner className="api-spin" />Checking…</> : "Continue"}</button>
                 </form>
               </li>
             )}

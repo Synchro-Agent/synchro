@@ -11,9 +11,11 @@ import { extractText, PROJECT_CTX_LIMIT } from "./llm";
 import { tf, tr, trc } from "./i18n";
 import { UploadModal } from "./modals";
 import { useFileMenu, saveBlob } from "./filemenu";
-import { ghConnect } from "./wsclient";
+import { OutsideWait, RepoList, useGhConnect } from "./ghrepomodal";
+import { ghOutside } from "./ghclient";
 import { BulkBar, BulkButton, BulkCheck, bulkRow, useBulk, type BulkAct } from "./bulk";
 import { PageBar, usePage } from "./pager";
+import { Spinner } from "./spinner";
 
 type Say = (t: string) => void;
 
@@ -376,7 +378,7 @@ export function ProjectPage({ proj, chats, composer, patch, onBack, onOpenChat, 
         <div className="ds-acts">
           {tab === "ins" && <button className="btn" onClick={() => setIns(true)}>{proj.ins ? <I.M icon="Pencil" size={15} /> : <I.M icon="Plus" size={15} />}{proj.ins ? "Chỉnh sửa hướng dẫn" : "Đặt hướng dẫn"}</button>}
           {tab === "mem" && <button className="btn pj-memlink" onClick={() => setMemOpen(true)}>Xem bộ nhớ</button>}
-          {tab === "ctx" && (busyCtx ? <span className="pj-spin" aria-label="Đang tải" /> : (
+          {tab === "ctx" && (busyCtx ? <Spinner className="pj-spin" label="Đang tải" /> : (
             <>
               {ctx.length > 0 && <button className={`icon-btn ${sq !== null ? "on" : ""}`} data-tip="Tìm kiếm tệp" aria-label="Tìm kiếm tệp" onClick={() => setSq(sq === null ? "" : null)}><I.Search size={16} /></button>}
               <div ref={aRef} style={{ position: "relative" }}>
@@ -461,12 +463,13 @@ export function ProjectPage({ proj, chats, composer, patch, onBack, onOpenChat, 
   );
 }
 
-// Thêm tệp từ repo GitHub vào ngữ cảnh dự án: kết nối GitHub (nếu chưa), chọn repo, chọn tệp (sẵn README, tài liệu và tệp nhỏ ở gốc).
+// Thêm tệp từ repo GitHub vào ngữ cảnh dự án: kết nối GitHub (nếu chưa), chọn repo (cùng danh sách với hộp thoại
+// Repo GitHub của Synchro Code: mọi repo, nhóm theo chủ, báo tổ chức chặn và kết nối hết hạn), chọn tệp (sẵn README,
+// tài liệu và tệp nhỏ ở gốc).
 type GhFile = { path: string; size: number };
 function GitHubImport({ onClose, onFiles, say }: { onClose: () => void; onFiles: (f: File[]) => void; say: Say }) {
-  const [st, setSt] = useState<{ linked: boolean; configured: boolean; allowed: boolean } | null>(null);
-  const [repos, setRepos] = useState<{ full: string; branch: string; desc: string | null; private: boolean }[] | null>(null);
-  const [q, setQ] = useState("");
+  type St = { linked: boolean; configured: boolean; allowed: boolean; login: string | null };
+  const [st, setSt] = useState<St | null>(null);
   const [repo, setRepo] = useState<{ full: string; branch: string } | null>(null);
   const [files, setFiles] = useState<GhFile[] | null>(null);
   const [sel, setSel] = useState<Set<string>>(new Set());
@@ -475,11 +478,13 @@ function GitHubImport({ onClose, onFiles, say }: { onClose: () => void; onFiles:
   const [err, setErr] = useState("");
   const load = () => fetch("/api/github", { cache: "no-store" }).then((r) => r.json()).then(setSt).catch(() => setErr("Không đọc được trạng thái GitHub."));
   useEffect(() => { void load(); }, []);
-  useEffect(() => {
-    if (!st?.linked || repo) return;
-    const t = setTimeout(() => fetch(`/api/github?repos=1&q=${encodeURIComponent(q)}`, { cache: "no-store" }).then((r) => r.json()).then((j) => setRepos(j.repos ?? [])).catch(() => setRepos([])), 250);
-    return () => clearTimeout(t);
-  }, [st?.linked, q, repo]);
+  const [reloadKey, setReloadKey] = useState(0);
+  const gh = useGhConnect((e) => {
+    if (e && e !== "timeout") setErr(e);
+    if (st?.linked) setReloadKey((k) => k + 1);
+    void load();
+  });
+  const connect = () => { setErr(""); void gh.start(); };
   const open = async (r: { full: string; branch: string }) => {
     setRepo(r); setFiles(null); setErr("");
     try {
@@ -515,16 +520,17 @@ function GitHubImport({ onClose, onFiles, say }: { onClose: () => void; onFiles:
         {!st ? <p className="d">Đang kiểm tra kết nối GitHub…</p> : !st.configured ? <p className="d">Máy chủ chưa cấu hình đăng nhập GitHub (GITHUB_CLIENT_ID).</p> : !st.allowed ? <p className="d">Quản trị viên chưa cho phép tài khoản của bạn dùng Synchro Code (cần cho GitHub).</p> : !st.linked ? (
           <>
             <p className="d">Kết nối tài khoản GitHub để chọn repo. Synchro chỉ đọc các tệp bạn chọn.</p>
-            <div className="modal-foot"><button className="btn dark" disabled={!!busy} onClick={async () => { setBusy("link"); const e = await ghConnect(); setBusy(""); if (e && e !== "timeout") setErr(e); void load(); }}>{busy === "link" ? "Đang chờ GitHub…" : "Kết nối GitHub"}</button></div>
+            {gh.waiting && ghOutside() && <OutsideWait cancel={gh.cancel} />}
+            <div className="modal-foot">
+              <button className="btn dark" disabled={!!busy || gh.waiting} onClick={connect}>
+                {gh.waiting ? "Đang chờ GitHub…" : "Kết nối GitHub"}
+              </button>
+            </div>
           </>
         ) : !repo ? (
           <>
-            <input className="field" autoFocus placeholder="Tìm repo…" value={q} onChange={(e) => setQ(e.target.value)} />
-            <div className="gh-list">
-              {repos === null && <p className="d">Đang tải repo…</p>}
-              {repos?.length === 0 && <p className="d">Không có repo khớp.</p>}
-              {repos?.map((r) => <button key={r.full} className="gh-row" onClick={() => open(r)}><b data-notr>{r.full}</b>{r.private && <span className="pill">Riêng tư</span>}<small data-notr>{r.desc ?? ""}</small></button>)}
-            </div>
+            {gh.waiting && ghOutside() && <OutsideWait cancel={gh.cancel} />}
+            <RepoList pick={open} login={st.login} connect={connect} reloadKey={reloadKey} autoFocus />
           </>
         ) : (
           <>

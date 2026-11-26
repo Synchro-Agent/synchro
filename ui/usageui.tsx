@@ -14,6 +14,7 @@ import { Dropdown } from "./listbox";
 import { BrandLogo, ModelLogo } from "./brands";
 import { vendorOf } from "../shared/vendor";
 import { Bar, CreditBar, ModeTag, PLAN_NOTE, PlanRow, RateRow, VENDOR_COLOR, hasApi, kTok, money, noWindows, refreshUsage, resetText, setupNote, useUsage, type Limit, type SubUsage, type VendorUsage } from "./usagering";
+import { Spinner } from "./spinner";
 export * from "./usagering";
 
 // ---------------------------------------------------------------- Cài đặt → Usage
@@ -56,7 +57,8 @@ function VendorCard({ v, turns, cost, go }: { v: VendorUsage; turns: number; cos
           : v.mode === "api" ? tr("Chạy bằng khóa API; tính theo chi phí token thật.") : tr("Chưa đăng nhập gói hay thêm khóa API.")}</span></div>
         <ModeTag v={v} />
         {v.mode === "plan" && <button className="icon-btn" aria-label={tr("Đọc lại hạn mức")} data-tip={tr("Đọc lại hạn mức")} disabled={busy}
-          onClick={() => { setBusy(true); refreshUsage(true); setTimeout(() => setBusy(false), 2500); }}>{busy ? <span className="art-spin sm" /> : <I.Retry size={14} />}</button>}
+          onClick={() => { setBusy(true); refreshUsage(true); setTimeout(() => setBusy(false), 2500); }}>{busy
+            ? <Spinner className="art-spin sm" /> : <I.Retry size={14} />}</button>}
       </div>
       {v.mode === "plan" && (wins.length ? wins.map((w) => <PlanRow key={w.window} w={w} />)
         : <p className="us-note">{v.sub?.setup ? setupNote(v.sub) : v.cli === "agy" || v.cli === "grok" ? noWindows(v.cli, "Synchro chưa đọc được hạn mức của gói này. Bấm nút đọc lại ở góc thẻ để thử lại.") : tr("Gửi một tin nhắn bằng gói này để Synchro đọc hạn mức.")}</p>)}
@@ -173,7 +175,7 @@ export function UsageSettings({ go }: { go?: (t: string) => void }) {
     <div className="us-page">
       <h3 style={{ marginTop: 0 }}>{tr("Mức dùng")}</h3>
       <p className="d" style={{ margin: "-4px 0 14px" }}>{tr("Synchro tự nhận ra mỗi hãng đang chạy bằng gói subscription hay khóa API và hiện mức dùng theo đúng cách đó.")} {lead}</p>
-      {!st ? <div className="us-card"><div className="us-empty"><span className="art-spin sm" /></div></div>
+      {!st ? <div className="us-card"><div className="us-empty"><Spinner className="art-spin sm" /></div></div>
         : <div className="us-vgrid">{vendors.map((v) => <VendorCard key={v.vendor} v={v} turns={callsOf(v.vendor)} cost={costOf(v)} go={go} />)}</div>}
 
       {st && apiNow && (

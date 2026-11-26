@@ -17,10 +17,10 @@ const LETTERS = [
   "M5374.33 822Q5271.33 822 5193.83 784.5Q5116.33 747 5072.83 680Q5029.33 613 5029.33 525Q5029.33 436 5072.83 369.5Q5116.33 303 5193.83 265.5Q5271.33 228 5374.33 228Q5477.33 228 5554.83 265.5Q5632.33 303 5675.83 369.5Q5719.33 436 5719.33 525Q5719.33 613 5675.83 680Q5632.33 747 5554.83 784.5Q5477.33 822 5374.33 822ZM5374.33 720Q5440.33 720 5487.83 696Q5535.33 672 5561.33 628.5Q5587.33 585 5587.33 525Q5587.33 465 5561.33 421.5Q5535.33 378 5487.83 354Q5440.33 330 5374.33 330Q5309.33 330 5261.33 354Q5213.33 378 5187.33 421.5Q5161.33 465 5161.33 525Q5161.33 585 5187.33 628.5Q5213.33 672 5261.33 696Q5309.33 720 5374.33 720Z"
 ];
 
-type MarkState = "s" | "sync" | "load" | "intro" | "close";
+type MarkState = "s" | "sync" | "intro" | "close";
 
 /** Biểu tượng (mark). size: chiều cao (px). state: "s" chữ S (mặc định), "sync" khớp thành vòng tròn (đổi qua lại có chuyển động),
- *  "load" đang chạy (xoay 180° rồi nghỉ, giữa vòng thu về vòng tròn), "intro" vòng tròn hiện ra rồi tách thành S,
+ *  "intro" vòng tròn hiện ra rồi tách thành S,
  *  "close" vừa xong việc: chữ S khớp pha thành vòng tròn. */
 export function Mark({ size = 20, state = "s", title, className = "" }: { size?: number; state?: MarkState; title?: string; className?: string }) {
   const [a, b] = size <= 32 ? MARK_SMALL : MARK;
@@ -32,9 +32,6 @@ export function Mark({ size = 20, state = "s", title, className = "" }: { size?:
     </svg>
   );
 }
-
-/** Đang chạy: mark xoay theo nhịp đồng bộ (thay cho chấm / vòng quay). */
-export const Loader = ({ size = 14, label }: { size?: number; label?: string }) => <Mark size={size} state="load" title={label} className="mk-loader" />;
 
 /** Lockup ngang (mark + chữ). height: chiều cao (px). intro: chuyển động mở đầu 2,7 giây (vòng tròn → lệch pha thành S → trượt sang trái
  *  → từng chữ hiện, cách nhau 45ms). Rê chuột (lớp .lk-hover) thì hai nửa khớp thành vòng tròn. */

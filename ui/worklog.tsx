@@ -3,7 +3,7 @@
 // danh sách việc có đánh dấu, và dòng trạng thái (đang làm gì · bao lâu · bao nhiêu token) — thay cho màn hình trống chỉ có vòng xoay.
 import { useEffect, useState } from "react";
 import * as I from "./icons";
-import { Loader } from "./brand";
+import { FluidDots } from "./fluiddots";
 import { tf, tr, trc, trCx } from "./i18n";
 import { AskCard, type AskStep, type OnAnswer } from "./agentui";
 import { lazyView } from "./lazy";
@@ -13,6 +13,9 @@ import { serverNow } from "./clock";
 import { ConnLogo } from "./connlogo";
 import { toolErrNote } from "./worktone";
 import { stripAppliedNotes } from "../shared/turnctx";
+import { Spinner } from "./spinner";
+import { parseOrch } from "../shared/orchparse";
+import type { OrchState } from "../shared/orchestra";
 // Thẻ kết nối lại chỉ cần khi connector mất đăng nhập: không kéo cả màn hình Connectors vào phần tải đầu của trang chat.
 const ReconnectCard = lazyView(() => import("./connectorsui").then((m) => m.ReconnectCard), null);
 
@@ -35,14 +38,15 @@ export type LinkPart = { k: "link"; app: string; name: string; url: string; logo
 export type RatePart = { k: "rate"; name: string; until: number };
 export type Part = { k: "say"; text: string } | { k: "tools"; items: ToolItem[] } | AskStep | ConnPart | PlansPart | LinkPart | RatePart;
 export type PlanItem = { content: string; status: "pending" | "in_progress" | "completed" };
-export type Work = { parts?: Part[]; plan?: PlanItem[]; seq?: number };
+// orch: sơ đồ tổ chức của Orchestra khi lượt này chia việc cho nhiều model (bản chụp mới nhất).
+export type Work = { parts?: Part[]; plan?: PlanItem[]; orch?: OrchState; seq?: number };
 export type RunEv = { seq: number; at: number; kind: string; text: string };
 
 /** Áp một bước của lượt chạy vào nhật ký (bỏ qua bước đã áp — mở lại trang thì máy chủ gửi lại từ đầu). */
 export function applyEvent(w: Work, ev: RunEv): Work {
   if (w.seq && ev.seq <= w.seq) return w;
   const parts = [...(w.parts ?? [])];
-  let plan = w.plan;
+  let plan = w.plan, orch = w.orch;
   if (ev.kind === "say") {
     const text = stripAppliedNotes(ev.text);
     if (text.trim()) parts.push({ k: "say", text });
@@ -71,6 +75,8 @@ export function applyEvent(w: Work, ev: RunEv): Work {
         if (p.k === "tools" && p.items.some((x) => x.seq === r.ref)) { parts[i] = { k: "tools", items: p.items.map((x) => (x.seq === r.ref ? { ...x, c } : x)) }; break; }
       }
     } catch {}
+  } else if (ev.kind === "orch") {
+    orch = parseOrch(ev.text) ?? orch;
   } else if (ev.kind === "plan") {
     try { plan = JSON.parse(ev.text) as PlanItem[]; } catch {}
   } else if (ev.kind === "ask") {
@@ -91,7 +97,7 @@ export function applyEvent(w: Work, ev: RunEv): Work {
   } else if (ev.kind === "conn") {
     try { const c = JSON.parse(ev.text) as Omit<ConnPart, "k">; if (!parts.some((p) => p.k === "conn" && p.id === c.id)) parts.push({ ...c, k: "conn" }); } catch {}
   } else return { ...w, seq: ev.seq };
-  return { parts, plan, seq: ev.seq };
+  return { parts, plan, orch, seq: ev.seq };
 }
 
 // Nhãn công cụ máy chủ ghi bằng tiếng Việt, đã bỏ chữ "Đang" (nhật ký lưu trong đoạn chat cũ cũng vậy): dịch khi hiện theo ngôn ngữ giao diện, chữ đầu viết hoa.
@@ -129,7 +135,8 @@ function ToolGroup({ items, all, live, failed, stopped }: { items: ToolItem[]; a
   return (
     <div className={`wl-tools ${open ? "open" : ""}`}>
       <button className="wl-tools-h" aria-expanded={open} onClick={() => setOpen(!open)}>
-        {running ? <span className="wl-spin" /> : note ? (note.tone === "soft" && !live && !stopped ? <I.Retry size={13} /> : <I.Alert size={13} />) : null}
+        {running ? <Spinner className="wl-spin" /> : note ? (note.tone === "soft" && !live && !stopped
+          ? <I.Retry size={13} /> : <I.Alert size={13} />) : null}
         {heads.length > 0 && <span className="wl-clogos">{heads.map((c) => <ConnLogo key={c.name} logo={c.logo} color={c.color} icon={c.icon} site={c.site} name={c.name} size={16} />)}</span>}
         <span data-notr={items.length === 1 ? true : undefined}>{label}</span>
         {note && <em className={note.tone === "soft" ? "soft" : undefined}>{tr(note.text)}</em>}
@@ -142,7 +149,8 @@ function ToolGroup({ items, all, live, failed, stopped }: { items: ToolItem[]; a
         <div className="wl-tools-b">
           {items.map((x) => (
             <div key={x.seq} className={`wl-tool ${x.ok === false ? "bad" : ""}`}>
-              <span className="wl-ic">{x.ok === undefined ? <span className="wl-spin" /> : x.ok ? <I.Check size={12} /> : <I.X size={12} />}</span>
+              <span className="wl-ic">{x.ok === undefined ? <Spinner className="wl-spin" /> : x.ok
+                ? <I.Check size={12} /> : <I.X size={12} />}</span>
               <div><b data-notr>{x.c && <ConnLogo logo={x.c.logo} color={x.c.color} icon={x.c.icon} site={x.c.site} name={x.c.name} size={14} />}{toolLabel(x.label)}</b>{x.at && ((x.end && x.end - x.at >= 1000) || (live && x.ok === undefined)) ? <span className="wl-tsec" data-notr>{secs((x.end ?? now) - x.at)}</span> : null}{x.args && <small data-notr>{tr("Đã gửi")}: {x.args}</small>}{x.sum && <small data-notr>{tr(x.sum)}</small>}</div>
             </div>
           ))}
@@ -160,7 +168,8 @@ export function PlanCard({ plan, live }: { plan: PlanItem[]; live: boolean }) {
       <div className="wl-plan-h">{tr("Danh sách việc")} <span>{done}/{plan.length}</span></div>
       {plan.map((x, i) => (
         <div key={i} className={`wl-pi ${x.status}`}>
-          <span className="wl-pic">{x.status === "completed" ? <I.Check size={11} /> : x.status === "in_progress" && live ? <span className="wl-spin" /> : null}</span>
+          <span className="wl-pic">{x.status === "completed" ? <I.Check size={11} /> : x.status === "in_progress"
+            && live ? <Spinner className="wl-spin" /> : null}</span>
           <span data-notr>{x.content}</span>
         </div>
       ))}
@@ -291,7 +300,7 @@ export function WorkStatus({ label, since, steps }: { label?: string; since: num
     <div className="wl-status">
       {/* Trình đọc màn hình chỉ đọc khi việc đang làm đổi, không đọc đồng hồ đếm từng giây. */}
       <span className="sr-only" role="status" aria-live="polite">{tr(label || "Đang suy nghĩ…")}</span>
-      <Loader size={14} />
+      <FluidDots size={14} />
       <span className="wl-st-t" key={label} aria-hidden="true">{tr(label || "Đang suy nghĩ…")}</span>
       <span className="wl-st-m" aria-hidden="true">{dur(now - since)}{steps > 0 ? ` · ${tf("{n} bước", { n: steps })}` : ""}</span>
     </div>
@@ -306,7 +315,7 @@ export function QueueChips({ items, onCancel }: { items: Queued[]; onCancel: (id
     <div className="wl-queue">
       {items.map((q) => (
         <div key={q.id} className={`wl-q ${q.mode}`}>
-          {q.mode === "steer" ? <span className="wl-spin" /> : <I.Clock size={12} />}
+          {q.mode === "steer" ? <Spinner className="wl-spin" /> : <I.Clock size={12} />}
           <span className="wl-q-t" data-notr>{q.text}</span>
           <em>{q.mode === "steer" ? tr("Đang ghép vào việc đang làm") : tr("Gửi sau khi xong")}</em>
           {q.mode === "later" && <button className="icon-btn" aria-label={tr("Bỏ tin chờ gửi")} onClick={() => onCancel(q.id)}><I.X size={12} /></button>}

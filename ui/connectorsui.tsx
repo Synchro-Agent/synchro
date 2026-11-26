@@ -20,6 +20,7 @@ import { PageBar, usePage } from "./pager";
 import { tr } from "./i18n";
 import { CONN_CHANGED, loginClaims } from "./connwatch";
 import { SettingsSkeleton } from "./skeleton";
+import { Spinner } from "./spinner";
 
 type Perm = "allow" | "chat" | "ask" | "block";
 // askOnly: chỉ đặt được Hỏi mỗi lần hoặc Chặn (bash / workbench của Composio). Gọi API đặt được mọi quyền nhưng quyền chỉ áp cho GET đọc.
@@ -201,9 +202,13 @@ export function ReconnectCard({ c, done }: { c: { id: string; name: string; logo
       {f.blocked && <div className="cn-pop"><I.External size={14} /><span>{tr("Trình duyệt đã chặn cửa sổ đăng nhập.")}</span><button className="btn" onClick={f.reopen}>{tr("Mở cửa sổ đăng nhập")}</button></div>}
       {state !== "ok" && isToken && !f.blocked && <form className="ag-ask-note" onSubmit={(e) => { e.preventDefault(); if (token.trim() && state !== "busy") go(); }}>
         <input type="password" autoComplete="off" spellCheck={false} aria-label={tr("Token mới")} placeholder={tr("Token mới")} value={token} onChange={(e) => setToken(e.target.value)} />
-        <button type="submit" className="btn dark" disabled={state === "busy" || !token.trim()}>{state === "busy" ? <span className="api-spin" /> : null}{tr("Lưu token")}</button>
+        <button type="submit" className="btn dark" disabled={state === "busy" || !token.trim()}>{state === "busy"
+          ? <Spinner className="api-spin" /> : null}{tr("Lưu token")}</button>
       </form>}
-      {state !== "ok" && !isToken && !f.blocked && <div className="ag-ask-a"><button className="btn dark" disabled={state === "busy"} onClick={waiting ? f.reopen : go}>{state === "busy" ? <span className="api-spin" /> : null}{tr(waiting ? "Mở lại cửa sổ đăng nhập" : err ? "Thử lại" : c.link ? "Liên kết Composio" : "Kết nối lại")}</button>
+      {state !== "ok" && !isToken && !f.blocked
+        && <div className="ag-ask-a"><button className="btn dark" disabled={state === "busy"} onClick={waiting
+        ? f.reopen : go}>{state === "busy" ? <Spinner className="api-spin" /> : null}{tr(waiting
+        ? "Mở lại cửa sổ đăng nhập" : err ? "Thử lại" : c.link ? "Liên kết Composio" : "Kết nối lại")}</button>
         {/* Chưa liên kết Composio (thường gặp khi hỏi Google Docs, Gmail… mà chưa có connector): lối thẳng tới Cài đặt → Connectors để xem và quản lý mọi connector. */}
         {c.link && !waiting && openSettings && <button type="button" className="btn" onClick={() => openSettings("Connectors")}>{tr("Mở Cài đặt → Connectors")}</button>}</div>}
     </div>
@@ -221,7 +226,8 @@ export function ReconnectLink({ c, onDone, onManage, say }: { c: Conn; onDone: (
     catch (x) { say((x as Error).message); onDone(); }
     finally { setBusy(false); }
   };
-  return <button className="cn-link cm-rec" disabled={busy} onClick={go}>{busy ? <span className="api-spin" /> : f.blocked ? "Mở cửa sổ đăng nhập" : f.pending ? "Đang chờ đăng nhập…" : "Kết nối lại"}</button>;
+  return <button className="cn-link cm-rec" disabled={busy} onClick={go}>{busy ? <Spinner className="api-spin" />
+    : f.blocked ? "Mở cửa sổ đăng nhập" : f.pending ? "Đang chờ đăng nhập…" : "Kết nối lại"}</button>;
 }
 
 // only: các lựa chọn được phép (công cụ luôn hỏi: Hỏi mỗi lần / Chặn).
@@ -335,12 +341,18 @@ function ConnectorCard({ c, policy, open, busy, waiting, stale, onDismissScope, 
         {!bk.on && <div className="cn-actions">
           {c.status === "ok" || c.adminBlocked
             ? <button className={`cn-switch ${c.enabled && !c.adminBlocked ? "on" : ""}`} role="switch" aria-checked={c.enabled && !c.adminBlocked} aria-label={c.enabled ? "Turn off connector" : "Turn on connector"} onClick={() => onEnable(!c.enabled)} disabled={busy || c.adminBlocked}><i /></button>
-            : c.vendorBlocked ? <button className="btn cn-connect" onClick={onConnect} disabled={busy}>{busy ? <span className="api-spin" /> : null}Try again</button>
+            : c.vendorBlocked ? <button className="btn cn-connect" onClick={onConnect} disabled={busy}>{busy
+              ? <Spinner className="api-spin" /> : null}Try again</button>
             : c.auth === "token" && c.status === "needs_auth" ? <button className="btn dark cn-connect" onClick={() => onCreds("token")} disabled={busy}>Update token</button>
             : c.status === "error" && !waiting ? null
-            : <button className="btn dark cn-connect" onClick={c.status === "forbidden" && !waiting ? onReauth : onConnect} disabled={busy}>{busy ? <span className="api-spin" /> : null}{waiting ? "Open sign-in window" : c.status === "forbidden" || (c.status === "needs_auth" && c.checkedAt) ? "Reconnect" : "Connect"}</button>}
+            : <button className="btn dark cn-connect" onClick={c.status === "forbidden" && !waiting ? onReauth
+              : onConnect} disabled={busy}>{busy ? <Spinner className="api-spin" /> : null}{waiting
+              ? "Open sign-in window" : c.status === "forbidden" || (c.status === "needs_auth" && c.checkedAt)
+              ? "Reconnect" : "Connect"}</button>}
           <div className="cn-more" ref={mref}>
-            <button className="icon-btn" aria-label="More options" aria-expanded={menu} onClick={() => setMenu(!menu)} disabled={busy}>{busy && c.status === "ok" ? <span className="api-spin" /> : <I.Dots size={16} />}</button>
+            <button className="icon-btn" aria-label="More options" aria-expanded={menu} onClick={() => setMenu(!menu)}
+              disabled={busy}>{busy && c.status === "ok" ? <Spinner className="api-spin" /> : <I.Dots
+              size={16} />}</button>
             {menu && (
               <div className="cn-menu" role="menu">
                 {c.status === "ok" && <button role="menuitem" onClick={() => { setMenu(false); onRefresh(); }}><I.Retry size={15} />Refresh tools</button>}
@@ -361,11 +373,16 @@ function ConnectorCard({ c, policy, open, busy, waiting, stale, onDismissScope, 
         </div>
       )}
       {c.status !== "ok" && c.error && <div className="api-err in" role="alert"><I.Alert size={14} /><span>{c.error}</span>
-        {c.status === "error" && <span className="api-err-recheck">{c.checkedAt ? <span className="cn-lastok">{lastOk(c.checkedAt)}</span> : null}<button className="btn cn-recheck" onClick={onRefresh} disabled={busy}>{busy ? <span className="api-spin" /> : null}Check again</button></span>}
+        {c.status === "error" && <span className="api-err-recheck">{c.checkedAt
+          ? <span className="cn-lastok">{lastOk(c.checkedAt)}</span>
+          : null}<button className="btn cn-recheck" onClick={onRefresh} disabled={busy}>{busy
+          ? <Spinner className="api-spin" /> : null}Check again</button></span>}
       </div>}
       {c.status === "ok" && c.needsScope && <div className="cn-pop in"><I.Key size={14} /><span>{c.auth === "token" ? "A tool needs more access than this token allows. Other tools keep working." : "A tool needs more access than this sign-in allows. Other tools keep working."}</span>{c.auth === "token" ? <button className="btn" disabled={busy} onClick={() => onCreds("token")}>Update token</button> : <button className="btn" disabled={busy} onClick={onReauth}>Grant more access</button>}<button className="icon-btn" aria-label="Dismiss" onClick={onDismissScope}><I.X size={13} /></button></div>}
       {c.status === "ok" && c.lastError && <div className="cn-warnline"><I.Alert size={13} /><span>Last check failed. Tools keep working with the list from the last good check. </span><span>{c.lastError}</span>
-        <span className="api-err-recheck">{c.checkedAt ? <span className="cn-lastok">{lastOk(c.checkedAt)}</span> : null}<button className="btn cn-recheck" onClick={onRefresh} disabled={busy}>{busy ? <span className="api-spin" /> : null}Check again</button></span>
+        <span className="api-err-recheck">{c.checkedAt ? <span className="cn-lastok">{lastOk(c.checkedAt)}</span>
+          : null}<button className="btn cn-recheck" onClick={onRefresh} disabled={busy}>{busy
+          ? <Spinner className="api-spin" /> : null}Check again</button></span>
       </div>}
       {open && !bk.on && c.status === "ok" && (
         <div className="cn-body">
@@ -440,7 +457,8 @@ function Custom({ init, onClose, onAdd }: { init: CustomInit; onClose: () => voi
         {err && <div className="api-err" role="alert"><I.Alert size={14} /><span>{err}</span></div>}
         <div className="api-actions">
           <button type="button" className="btn" onClick={onClose} disabled={busy}>Cancel</button>
-          <button type="submit" className="btn dark" disabled={!can}>{busy ? <><span className="api-spin" />Connecting…</> : init.locked ? "Connect" : "Add"}</button>
+          <button type="submit" className="btn dark" disabled={!can}>{busy
+            ? <><Spinner className="api-spin" />Connecting…</> : init.locked ? "Connect" : "Add"}</button>
         </div>
       </form>
     </div>
@@ -502,8 +520,13 @@ function ComposioSection({ info, onInfo, login }: { info: ComposioInfo; onInfo: 
         </div>
         <div className="cn-actions">
           {ok && c && <button className={`cn-switch ${on ? "on" : ""}`} role="switch" aria-checked={on} aria-label={on ? "Turn off Composio" : "Turn on Composio"} onClick={() => { onInfo({ ...info, connector: { ...c, enabled: !c.enabled } }); void patch({ enabled: !c.enabled }); }}><i /></button>}
-          {info.state === "unlinked" && <button className="btn dark cn-connect" disabled={busy === "link"} onClick={link}>{busy === "link" ? <span className="api-spin" /> : null}{waiting ? "Open sign-in window" : "Link Composio"}</button>}
-          {linked && !ok && info.via !== "key" && <button className="btn dark cn-connect" disabled={busy === "link"} onClick={link}>{busy === "link" ? <span className="api-spin" /> : null}{waiting ? "Open sign-in window" : "Sign in to Composio again"}</button>}
+          {info.state === "unlinked"
+            && <button className="btn dark cn-connect" disabled={busy === "link"} onClick={link}>{busy === "link"
+            ? <Spinner className="api-spin" /> : null}{waiting ? "Open sign-in window" : "Link Composio"}</button>}
+          {linked && !ok && info.via !== "key"
+            && <button className="btn dark cn-connect" disabled={busy === "link"} onClick={link}>{busy === "link"
+            ? <Spinner className="api-spin" /> : null}{waiting ? "Open sign-in window"
+            : "Sign in to Composio again"}</button>}
         </div>
       </div>
       {info.state === "blocked" ? <p className="cpo-note">Your administrator hasn&apos;t allowed Composio for your account.</p> : <>
@@ -522,7 +545,8 @@ function ComposioSection({ info, onInfo, login }: { info: ComposioInfo; onInfo: 
             <label htmlFor="cpo-key">Use a Composio API key instead of signing in</label>
             <div className="cpo-keyrow">
               <input id="cpo-key" className="field" type="password" autoComplete="off" spellCheck={false} placeholder="ck_…" value={key} onChange={(e) => setKey(e.target.value)} />
-              <button type="submit" className="btn dark" disabled={!key.trim() || busy === "key"}>{busy === "key" ? <span className="api-spin" /> : null}Save key</button>
+              <button type="submit" className="btn dark" disabled={!key.trim() || busy === "key"}>{busy === "key"
+                ? <Spinner className="api-spin" /> : null}Save key</button>
             </div>
             <span className="d">Find it in Composio → Settings → Sessions &amp; API Key. Synchro checks the key with Composio, then stores it encrypted.</span>
             {keyErr && <div className="api-err in" role="alert"><I.Alert size={14} /><span>{tr(keyErr)}</span></div>}

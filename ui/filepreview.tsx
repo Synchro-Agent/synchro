@@ -13,6 +13,8 @@ import { ArtifactFrame, isDeck } from "./artifactui";
 import { Menu } from "./ui";
 import { ART_LABEL, type ArtType } from "../shared/artifacts";
 import { officeDoc, officeKind, type OfficeKind } from "./officeview";
+import { Spinner } from "./spinner";
+import { AudioPlayer, WAVE_MAX_BYTES } from "./audioplayer";
 
 export const fileLabel = (f: OutFile) => `${tr(KIND[fileKind(f.name).ext] ?? "Tệp")} · ${fmtSize(f.size)}`;
 const url = (f: OutFile, inline = false) => `/api/outputs/${f.id}${inline ? "?inline=1" : ""}`;
@@ -45,7 +47,7 @@ function OfficeFrame({ f, kind, onPages }: { f: OutFile; kind: OfficeKind; onPag
   if (err) return <div className="fp-none"><b>{err}</b></div>;
   return <>
     <iframe ref={ref} className="fp-frame" title={f.name} srcDoc={doc} sandbox="allow-scripts" referrerPolicy="no-referrer" />
-    {loading && <div className="fp-loading"><span className="art-spin" /><em>{tr("Đang mở tệp…")}</em></div>}
+    {loading && <div className="fp-loading"><Spinner className="art-spin" /><em>{tr("Đang mở tệp…")}</em></div>}
   </>;
 }
 
@@ -54,7 +56,7 @@ function TextView({ f, say }: { f: OutFile; say: (m: string) => void }) {
   const [err, setErr] = useState("");
   useEffect(() => { fetch(url(f)).then((r) => (r.ok ? r.text() : Promise.reject(new Error(tr("Tệp không còn nữa (tệp được giữ 30 ngày)."))))).then(setT, (e) => setErr(e.message)); }, [f.id]); // eslint-disable-line react-hooks/exhaustive-deps
   if (err) return <div className="fp-none"><b>{err}</b></div>;
-  if (t === null) return <div className="art-loading"><span className="art-spin" /></div>;
+  if (t === null) return <div className="art-loading"><Spinner className="art-spin" /></div>;
   const ext = fileKind(f.name).ext;
   if (ext === "md" || ext === "markdown") return <div className="art-md mdx"><Markdown text={t} say={say} /></div>;
   if (ext === "html" || ext === "htm") return <ArtifactFrame type="html" content={t} ai={false} title={f.name} className="art-frame" />;
@@ -93,7 +95,12 @@ export function FilePanel({ file, onClose, expanded, setExpanded, say, switcher 
       </header>
       <div className={`art-body fp-body fp-${mode}`}>
         {mode === "image" ? <div className="fp-img"><img src={url(file, true)} alt={file.name} /></div>
-          : mode === "audio" ? <div className="fp-media"><audio controls src={url(file, true)} /></div>
+          : mode === "audio" ? (
+            <div className="fp-media fp-audio">
+              {/* Đã biết dung lượng: tệp nặng không tải thêm lần nữa chỉ để vẽ dạng sóng. */}
+              <AudioPlayer key={file.id} src={url(file, true)} noWave={file.size > WAVE_MAX_BYTES} />
+            </div>
+          )
           : mode === "video" ? <div className="fp-media"><video controls src={url(file, true)} /></div>
           : mode === "office" && office ? <OfficeFrame key={file.id} f={file} kind={office} onPages={setPages} />
           : mode === "text" ? <TextView key={file.id} f={file} say={say} />

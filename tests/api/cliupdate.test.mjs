@@ -2,7 +2,7 @@
 // data-mock/cli-releases (dev:mock đặt SYNCHRO_CLI_UPDATE_SOURCE tới đó): không gọi npm hay script cài của hãng, không tốn gì.
 // Kiểm: chỉ chủ sở hữu bật / tắt, cập nhật ngay, trả về bản trước; bản mới cài cạnh bản cũ, kiểm tra bằng đăng nhập sẵn có của quản trị viên
 // rồi mới đổi; bản không qua kiểm tra thì giữ bản cũ; lượt chat thật đầu tiên lỗi thì tự trả về bản trước và không cài lại bản đó;
-// thư mục đăng nhập không đổi; Hộp thư của quản trị viên có kết quả; khi xong trả CLI giả lập về như cũ.
+// thư mục đăng nhập không đổi; Autopilot của quản trị viên có kết quả; khi xong trả CLI giả lập về như cũ.
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -125,11 +125,14 @@ try {
     const st = (await owner("GET", "/api/engines/claude/status?fresh=1")).j;
     ok(st.installed && st.version?.includes(v1) && st.loggedIn, "trạng thái gói Claude: bản mới, vẫn đăng nhập", st);
     ok(snap(path.join(HOME, "logins")) === logins0 && snap(path.join(DATA, "engine-tokens")) === tokens0, "thư mục đăng nhập của mọi tài khoản không đổi", { logins0, now: snap(path.join(HOME, "logins")) });
-    const inbox = (await owner("GET", "/api/inbox")).j?.items ?? [];
+    const inbox = (await owner("GET", "/api/autopilot")).j?.items ?? [];
     const n = inbox.find((x) => x.kind === "notice" && /Claude Code/.test(x.title) && /Codex/.test(x.text));
-    ok(n && /đã cập nhật/.test(n.text) && /không qua kiểm tra/.test(n.text) && n.link === "settings:Providers", "Hộp thư của chủ sở hữu có kết quả từng CLI", inbox.slice(0, 2));
-    ok(((await admin("GET", "/api/inbox")).j?.items ?? []).some((x) => x.kind === "notice" && x.title === n?.title), "quản trị viên khác cũng nhận");
-    ok(!((await member("GET", "/api/inbox")).j?.items ?? []).some((x) => x.title === n?.title), "thành viên không nhận");
+    ok(n && /đã cập nhật/.test(n.text) && /không qua kiểm tra/.test(n.text) && n.link === "settings:Providers",
+      "Autopilot của chủ sở hữu có kết quả từng CLI", inbox.slice(0, 2));
+    ok(((await admin("GET", "/api/autopilot")).j?.items ?? []).some((x) => x.kind === "notice" && x.title === n?.title),
+      "quản trị viên khác cũng nhận");
+    ok(!((await member("GET", "/api/autopilot")).j?.items ?? []).some((x) => x.title === n?.title),
+      "thành viên không nhận");
     const audit = (await owner("GET", "/api/admin")).j.audit;
     ok(audit.some((x) => x.action === "admin_cli_update" && x.actor_email === "admin@synchro.test"), "nhật ký ghi lần cập nhật");
   }
@@ -166,8 +169,10 @@ try {
     ok(cl?.last?.outcome === "rolled_back" && /2\.1\.310/.test(cl.version ?? "") && cl.bad.includes(v2) && /lượt chat đầu tiên/.test(cl.last.detail), "tự trả về bản trước, ghi lý do", cl);
     const c = await chat("lượt ba");
     ok(c.s === 200, "chat chạy lại ngay", c.j);
-    const inbox = (await owner("GET", "/api/inbox")).j?.items ?? [];
-    ok(inbox.some((x) => x.kind === "notice" && /Đã trả Claude Code về bản trước/.test(x.title) && /Đăng nhập gói của mọi người vẫn giữ nguyên/.test(x.text)), "Hộp thư báo đã tự trả về", inbox.slice(0, 2).map((x) => x.title));
+    const inbox = (await owner("GET", "/api/autopilot")).j?.items ?? [];
+    ok(inbox.some((x) => x.kind === "notice" && /Đã trả Claude Code về bản trước/.test(x.title)
+      && /Đăng nhập gói của mọi người vẫn giữ nguyên/.test(x.text)), "Autopilot báo đã tự trả về", inbox.slice(0,
+      2).map((x) => x.title));
     const all = await view();
     ok(all.clis.every((r) => !r.probation), "không còn CLI nào đang theo dõi (không ảnh hưởng các bộ kiểm thử khác)", all.clis.map((r) => [r.cli, r.probation]));
   }

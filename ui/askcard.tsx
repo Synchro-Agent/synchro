@@ -4,6 +4,7 @@
 import { useMemo, useState } from "react";
 import * as I from "./icons";
 import { tr } from "./i18n";
+import { Spinner } from "./spinner";
 
 export type AskQ = { q: string; options: string[]; multi: boolean };
 export const ASK_EVENT = "synchro:ask";
@@ -31,7 +32,7 @@ export function AskCard({ code, closed, live }: { code: string; closed: boolean;
   const [pick, setPick] = useState<string[][]>([]);
   const [other, setOther] = useState<string[]>([]);
   const [sent, setSent] = useState(false);
-  if (!closed) return <div className="viz-wait"><span className="art-spin sm" />{tr("Đang soạn câu hỏi…")}</div>;
+  if (!closed) return <div className="viz-wait"><Spinner className="art-spin sm" />{tr("Đang soạn câu hỏi…")}</div>;
   if (!qs) return null;
   const off = sent || !live;
   const answer = (i: number) => [...(pick[i] ?? []), ...(other[i]?.trim() ? [other[i].trim()] : [])];

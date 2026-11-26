@@ -23,6 +23,7 @@ import { useClickAway } from "./clickaway";
 import { countRender } from "./perfmark";
 import { sameList, selectSideList, useChatState, useChatStore, useSideUi, type SideChat } from "./chatstore.client";
 import type { CodeItem, View } from "./hometypes";
+import { Spinner } from "./spinner";
 
 // Công cụ Speech ở thanh bên: danh mục công cụ chỉ tải khi đang ở Speech (blueprint B3.3).
 const SpeechSideTools = lazyView(() => import("./speech/sidetools").then((m) => m.SpeechSideTools), null);
@@ -30,7 +31,9 @@ const ProjMenu = lazyView(() => import("./projects").then((m) => m.ProjMenu), nu
 
 // Trạng thái phiên: đang chạy, cần bạn (hỏi lại / chờ duyệt / gặp lỗi / bị dừng), chờ xem lại (có thay đổi chưa commit / chưa push / PR chờ duyệt), xong.
 function CodeBadge({ c }: { c: CodeItem }) {
-  if (c.running && c.state !== "blocked") return <span className="cb run" title={tr("Đang chạy")} aria-label={tr("Đang chạy")}><span className="wl-spin" /></span>;
+  if (c.running
+    && c.state !== "blocked") return <span className="cb run" title={tr("Đang chạy")} aria-label={tr("Đang chạy")}>
+    <Spinner className="wl-spin" /></span>;
   if (!c.state) return null;
   const t = tr(c.state === "blocked" ? "Cần bạn" : c.state === "review" ? "Chờ xem lại" : "Xong");
   return <span className={`cb ${c.state}`} title={c.reason ? `${t}: ${c.reason}` : t} aria-label={t} />;

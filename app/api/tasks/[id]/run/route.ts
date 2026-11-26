@@ -6,7 +6,7 @@ import { drainingResponse } from "../../../../../server/drain";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-// Chạy tác vụ ngay (không đổi lịch): trả về mã lượt chạy để theo dõi, kết quả cũng vào Hộp thư.
+// Chạy tác vụ ngay (không đổi lịch): trả về mã lượt chạy để theo dõi, kết quả cũng vào Autopilot.
 export const POST = handle(async (req: Request, ctx: { params: Promise<{ id: string }> }) => {
   const off = drainingResponse(); if (off) return off;
   sameOrigin(req);

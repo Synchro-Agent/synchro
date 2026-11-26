@@ -122,7 +122,10 @@ export function priceOf(model: string, cfg = getConfig()): Price {
 
 // ---------------------------------------------------------------- ghi nhận mỗi lần gọi model
 // Mọi lời gọi model trong một yêu cầu (chat, artifact, Synchro Code…) được tính cho tài khoản đang gọi.
-export const usageScope = new AsyncLocalStorage<{ uid: string; feature: string }>();
+// tap: nơi gọi muốn biết token và tiền của chính các lời gọi trong phạm vi này (Orchestra hiện số token của từng
+// thành viên, giữ trần chi phí của một việc theo số thật thay vì ước lượng).
+type UsageCtx = { uid: string; feature: string; tap?: (tokens: number, usd: number) => void };
+export const usageScope = new AsyncLocalStorage<UsageCtx>();
 export const withUsage = <T,>(uid: string, feature: string, fn: () => T) => usageScope.run({ uid, feature }, fn);
 
 type Tok = { input: number; output: number; cacheRead: number; cacheWrite: number };
@@ -171,8 +174,10 @@ export function recordUsage(model: string, usage: unknown) {
   d.prepare(`INSERT INTO usage_users (user_id, session_start, week_anchor) VALUES (?, ?, ?)
     ON CONFLICT(user_id) DO UPDATE SET session_start = excluded.session_start, week_anchor = COALESCE(usage_users.week_anchor, excluded.week_anchor)`)
     .run(s.uid, w.sessionStart ?? now, w.anchor ?? now);
+  const cost = costOf(t, priceOf(model));
   d.prepare("INSERT INTO usage_events (user_id, at, model, feature, input, output, cache_read, cache_write, cost) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")
-    .run(s.uid, now, model, s.feature, t.input, t.output, t.cacheRead, t.cacheWrite, costOf(t, priceOf(model)));
+    .run(s.uid, now, model, s.feature, t.input, t.output, t.cacheRead, t.cacheWrite, cost);
+  s.tap?.(t.input + t.output + t.cacheRead + t.cacheWrite, cost);
 }
 
 /** Tổng chi phí (USD) một tính năng đã dùng của một người từ mốc since (hạn mức riêng cho việc nền như embedding). */

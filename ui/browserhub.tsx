@@ -7,6 +7,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import * as I from "./icons";
 import { BrowserPane } from "./codepanes";
 import { loadCaps, setCaps, useCaps } from "./capsclient";
+import { Spinner } from "./spinner";
 
 type Say = (m: string) => void;
 export type ExtDevice = { id: string; name: string; browser: string | null; createdAt: number; lastSeen: number | null; connected: boolean; active: boolean; scope: "all" | "group" | null; tab: { title: string; url: string } | null; acting: boolean; paused?: boolean; last: { kind: string; label: string; at: number } | null; version: string | null };
@@ -68,7 +69,7 @@ export function ExtSetup({ st, reload, say, pairOnly }: { st: ExtState | null; r
           : code && left > 0 ? <>
             <div className="ext-code"><code data-notr>{code.code}</code><button className="icon-btn" onClick={() => copy(code.code, "Đã sao chép mã")} aria-label="Sao chép mã" data-tip="Sao chép mã"><I.Copy size={15} /></button></div>
             <p>Bấm biểu tượng Synchro trên thanh công cụ của Chrome, nhập mã này rồi bấm Kết nối. Mã dùng một lần, hết hạn sau <span data-notr>{Math.floor(left / 60000)}:{String(Math.floor((left % 60000) / 1000)).padStart(2, "0")}</span>.</p>
-            <p className="ext-wait"><span className="ag-spin" />Đang chờ trình duyệt kết nối…</p>
+            <p className="ext-wait"><Spinner className="ag-spin" />Đang chờ trình duyệt kết nối…</p>
           </> : <>
             <p>Mỗi tài khoản Synchro ghép nối trình duyệt của mình bằng một mã riêng; trên máy khác cứ đăng nhập tài khoản của bạn rồi làm lại các bước này.</p>
             <button className="btn dark" disabled={busy || !st?.allowed} onClick={getCode}>{code ? "Lấy mã mới" : "Lấy mã ghép nối"}</button>
@@ -109,7 +110,7 @@ export function ExtSetup({ st, reload, say, pairOnly }: { st: ExtState | null; r
 function ChromePanel({ ext, say, busy, onStop }: { ext: ReturnType<typeof useExt>; say: Say; busy?: boolean; onStop?: () => void }) {
   const { st, reload, setSt } = ext;
   const [more, setMore] = useState(false);
-  if (!st) return <div className="bp-empty"><span className="ag-spin" />Đang kiểm tra…</div>;
+  if (!st) return <div className="bp-empty"><Spinner className="ag-spin" />Đang kiểm tra…</div>;
   if (!st.allowed) return <div className="brw-off"><I.Globe size={28} /><b>Chrome của bạn</b><span>Máy chủ chưa bật dịch vụ workspace nên chưa nối được trình duyệt của bạn.</span></div>;
   if (!st.devices.length) return (
     <div className="ext-panel">

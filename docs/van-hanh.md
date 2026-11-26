@@ -17,7 +17,10 @@ cờ đúng / sai.
 
 ## Sức khỏe hệ thống và watchdog
 
-Quản trị viên xem ở **Cài đặt → Sức khỏe hệ thống**: lỗi máy chủ gần đây (đã bỏ email, token), người bị hãng từ chối đăng nhập gói AI, đĩa, thư gửi lỗi và nút gửi thử, tuổi và kết quả kiểm tra của bản sao lưu mới nhất, watchdog. Vấn đề nghiêm trọng (đĩa, thư, sao lưu, từ 3 người mất đăng nhập gói) còn được báo vào Hộp thư và email của quản trị viên, mỗi loại tối đa một lần mỗi ngày.
+Quản trị viên xem ở **Cài đặt → Sức khỏe hệ thống**: lỗi máy chủ gần đây (đã bỏ email, token), người bị hãng từ chối
+đăng nhập gói AI, đĩa, thư gửi lỗi và nút gửi thử, tuổi và kết quả kiểm tra của bản sao lưu mới nhất, watchdog. Vấn đề
+nghiêm trọng (đĩa, thư, sao lưu, từ 3 người mất đăng nhập gói) còn được báo vào Autopilot và email của quản trị viên,
+mỗi loại tối đa một lần mỗi ngày.
 
 `ops/setup.sh` (deploy chạy mỗi lần) cài `synchro-watchdog.timer`: mỗi phút gọi `/api/health` ở máy chủ. Web không trả lời hoặc `db` sai 3 lần liên tiếp thì `pm2 restart`; tối thiểu 10 phút giữa hai lần, tối đa 3 lần mỗi giờ. Đang deploy thì bỏ qua (khóa `/run/synchro-deploy.lock`). Báo 503 vì đĩa hay dịch vụ workspace thì chỉ ghi lại, khởi động lại web không chữa được.
 
@@ -347,7 +350,12 @@ Kiểm tra lớp 2 với Codex thật bằng một tài khoản thử: nhắn "c
 3. Đạt thì đổi `<engine home>/.local/bin/<cli>` thành liên kết tới bản mới (một lần `mv`). Bản trước giữ lại (lần đầu: liên kết cũ tới `.local/lib/node_modules`, hoặc tệp `agy` cũ đổi tên thành `agy.synchro-prev`); bản cũ hơn bị xóa.
 4. Theo dõi tối đa 5 lượt thật đầu tiên trong 3 ngày: hai lượt đầu đều lỗi (CLI chết, không phản hồi, hãng không nhận đăng nhập), hoặc lỗi nhiều hơn chạy được sau 3 lượt, thì tự trả về bản trước và không cài lại bản đó.
 
-Thư mục đăng nhập (`logins/`, `engine-tokens/`) không bao giờ bị chép, chuyển hay xóa. Kết quả vào Hộp thư của quản trị viên (lần hằng tuần chỉ báo khi có thay đổi hay lỗi). Claude Code chạy với `DISABLE_AUTOUPDATER=1` để không tự tải bản mới đè lên bản đã kiểm tra. Tắt hẳn: `SYNCHRO_CLI_AUTOUPDATE=0` trong `.env.production` (Claude Code lại tự cập nhật như trước). Trả về tay khi web không mở được: `sudo -u synchro-cli ln -sfn <đích cũ> /var/www/synchro-engine/.local/bin/<cli>` (đích cũ xem bằng `ls -la .local/versions/<cli>` hoặc `readlink` trước khi cập nhật).
+Thư mục đăng nhập (`logins/`, `engine-tokens/`) không bao giờ bị chép, chuyển hay xóa. Kết quả vào Autopilot của quản
+trị viên (lần hằng tuần chỉ báo khi có thay đổi hay lỗi). Claude Code chạy với `DISABLE_AUTOUPDATER=1` để không tự tải
+bản mới đè lên bản đã kiểm tra. Tắt hẳn: `SYNCHRO_CLI_AUTOUPDATE=0` trong `.env.production` (Claude Code lại tự cập nhật
+như trước). Trả về tay khi web không mở được: `sudo -u synchro-cli ln -sfn <đích cũ>
+/var/www/synchro-engine/.local/bin/<cli>` (đích cũ xem bằng `ls -la .local/versions/<cli>` hoặc `readlink` trước khi cập
+nhật).
 
 ## Hạn mức đĩa
 

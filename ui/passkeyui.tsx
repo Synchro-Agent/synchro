@@ -9,6 +9,7 @@ import { useStepUp } from "./stepup";
 import { useApp } from "./store";
 import { Fade } from "./ui";
 import * as I from "./icons";
+import { Spinner } from "./spinner";
 
 type Key = { id: string; name: string; createdAt: number; lastUsedAt: number | null; synced: boolean };
 type RowT = (p: { t: React.ReactNode; d?: React.ReactNode; children?: React.ReactNode }) => React.ReactNode;
@@ -46,7 +47,8 @@ export function PasskeyRows({ Row, onChange }: { Row: RowT; onChange?: () => voi
 
   return <>
     <Row t="Passkeys" d={ok ? "Sign in with your fingerprint, face or device PIN instead of a password. Passkeys can't be phished or reused on another site." : "This browser can't create passkeys. Try a recent version of Chrome, Safari, Edge or Firefox."}>
-      <button className="btn" disabled={!ok || busy || keys === null} onClick={() => void add()}>{busy && !edit ? <span className="api-spin" /> : <><I.Plus size={14} />Add passkey</>}</button>
+      <button className="btn" disabled={!ok || busy || keys === null} onClick={() => void add()}>{busy && !edit
+        ? <Spinner className="api-spin" /> : <><I.Plus size={14} />Add passkey</>}</button>
     </Row>
     {keys && keys.length > 0 && <div className="pk-list" role="list" aria-label="Passkeys">
       {keys.map((k) => (

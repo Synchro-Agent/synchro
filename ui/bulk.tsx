@@ -7,6 +7,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { isAway } from "./clickaway";
 import * as I from "./icons";
 import { useApp } from "./store";
+import { Spinner } from "./spinner";
 
 export type BulkAct<T> = {
   id: string;
@@ -139,7 +140,7 @@ export function BulkBar<T>({ b, acts, noun = "mục", compact }: { b: Bulk<T>; a
         {shown.map((a) => (
           <span key={a.id} className="bk-aw">
             <button className={`bk-act${a.danger ? " danger" : ""}${pick === a.id ? " open" : ""}`} disabled={!b.count || !!busy} onClick={() => run(a)} aria-label={a.label} data-tip={compact ? a.label : undefined}>
-              {busy === a.id ? <span className="art-spin sm" /> : a.icon}{!compact && <span>{a.label}</span>}
+              {busy === a.id ? <Spinner className="art-spin sm" /> : a.icon}{!compact && <span>{a.label}</span>}
             </button>
             {pick === a.id && a.choices && (
               <div className="menu bk-menu" role="menu">

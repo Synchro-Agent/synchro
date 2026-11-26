@@ -42,6 +42,9 @@ const browserTicket = () => fetch("/api/browser", { method: "POST", headers: { "
 
 const PublishButton = lazyView(() => import("./appsui").then((m) => m.PublishButton), null);
 const BrowserHub = lazyView(() => import("./browserhub").then((m) => m.BrowserHub));
+// Sơ đồ tổ chức của Orchestra: chỉ lượt chia việc cho nhiều model mới cần, nên nạp (cùng CSS riêng) khi lượt
+// đó hiện.
+const OrchestraCard = lazyView(() => import("./orchestra").then((m) => m.OrchestraCard), null);
 // Khung xem tệp / artifact đang tải phần mã: khung chờ cùng chỗ, cùng bề rộng, có sẵn tên (cột chat không co giãn hai lần).
 const FilePanel = lazyView(() => import("./filepreview").then((m) => m.FilePanel), (p) => <ArtPanelSkeleton title={p.file.name} expanded={p.expanded} acts={3} />);
 const ArtifactPanel = lazyView(() => import("./artifactui").then((m) => m.ArtifactPanel), (p) => {
@@ -211,9 +214,14 @@ function ErrCard({ raw, onRetry, onProviders }: { raw?: string; onRetry?: () => 
 /** Tin của AI không còn dòng ghi chú "đã áp dụng hướng dẫn" kiểu cũ (stripAppliedNotes); tin không đổi thì trả đúng đối tượng cũ. */
 const cleanAiMsg = (m: Msg): Msg => { if (m.role !== "ai") return m; const text = stripAppliedNotes(m.text); return text === m.text ? m : { ...m, text }; };
 // Một tin của đoạn chat. memo: mỗi khung hình chữ đang chảy chỉ vẽ lại tin cuối; đoạn chat dài không phải dựng lại toàn bộ tin nhắn.
-const MsgRow = memo(function MsgRow({ m: raw, i, last, busy, mark, art, inl, fileActive, copied, speaking, chatId, cx }: {
+const MsgRow = memo(function MsgRow({ m: raw, i, last, busy, mark, art, inl, fileActive, copied, speaking, chatId, cx,
+  pending, late }: {
   // lang: đổi ngôn ngữ thì dòng tin đã memo cũng dịch lại các nút và lời báo.
   m: Msg; i: number; last: boolean; lang: string; busy: boolean; mark: boolean; art?: boolean; inl?: boolean; artSig: string; fileActive?: string; copied: boolean; speaking: boolean; chatId: number; cx: React.RefObject<RowCx | null>;
+  /** Tin nhắn thêm chưa được ghép (câu trả lời đang chạy): hiện ngay sau phần đã viết, trên dòng trạng thái. */
+  pending?: { id: number; text: string }[];
+  /** Model đang chạy chỉ đọc tin nhắn thêm khi xong bước của nó (Antigravity, Grok). */
+  late?: boolean;
 }) {
   // W1-08: câu trả lời cũ còn dòng ghi chú "đã áp dụng hướng dẫn" kèm trích dẫn trong chữ (đã lưu, đã đồng bộ): bỏ khi vẽ và khi sao chép,
   // như lịch sử gửi model (history.ts) và bản chia sẻ (sharesnap.ts). Không có dòng đó thì giữ nguyên đối tượng tin.
@@ -252,7 +260,9 @@ const MsgRow = memo(function MsgRow({ m: raw, i, last, busy, mark, art, inl, fil
       </div>
     ) : (
       <div style={est}>
-        <CiteCtx.Provider value={cites}><OutsCtx.Provider value={m.outs ?? null}><div className={`ai-msg${m.done ? "" : " ai-streaming"}`}>{m.tools?.length ? <div className="skill-used">{m.tools.map((n) => <span key={n} className="skill-chip tool-chip"><I.SetPlug size={13} /><span>{tr("Đã dùng")}</span><span data-notr>{toolChip(n)}</span></span>)}</div> : null}{m.libs?.length ? <LibChips libs={m.libs} onOpen={() => cx.current!.openPlugins()} /> : null}{m.skills?.length ? <div className="skill-used">{m.skills.map((n) => <span key={n} className="skill-chip"><I.Scroll size={13} />{tr("Đang dùng skill")}: {n}</span>)}</div> : null}{m.done ? <WorkSummary parts={m.parts} plan={m.plan} ms={m.dur} stopped={m.stopped} failed={m.failed || !!m.notice?.partial} render={(t) => <Markdown text={t} say={say} />} /> : m.parts?.length ? <WorkParts parts={m.parts} live onAnswer={answerAsk} render={(t) => <Markdown text={t} say={say} />} /> : null}{m.text ? (art && hasArtifacts(m.text) ? artSegsOf(m).map((sg, k, segs) => sg.kind === "text" ? <Markdown key={k} text={sg.text} say={say} viz={inl} live={m.done && last && !busy} streaming={!m.done} /> : (() => {
+        <CiteCtx.Provider value={cites}><OutsCtx.Provider value={m.outs ?? null}><div className={`ai-msg${m.done ? "" : " ai-streaming"}`}>{m.tools?.length ? <div className="skill-used">{m.tools.map((n) => <span key={n} className="skill-chip tool-chip"><I.SetPlug size={13} /><span>{tr("Đã dùng")}</span><span data-notr>{toolChip(n)}</span></span>)}</div> : null}{m.libs?.length ? <LibChips libs={m.libs} onOpen={() => cx.current!.openPlugins()} /> : null}{m.skills?.length ? <div className="skill-used">{m.skills.map((n) => <span key={n} className="skill-chip"><I.Scroll size={13} />{tr("Đang dùng skill")}: {n}</span>)}</div> : null}
+          {m.orch ? <OrchestraCard s={m.orch} live={!m.done} /> : null}
+          {m.done ? <WorkSummary parts={m.parts} plan={m.plan} ms={m.dur} stopped={m.stopped} failed={m.failed || !!m.notice?.partial} render={(t) => <Markdown text={t} say={say} />} /> : m.parts?.length ? <WorkParts parts={m.parts} live onAnswer={answerAsk} render={(t) => <Markdown text={t} say={say} />} /> : null}{m.text ? (art && hasArtifacts(m.text) ? artSegsOf(m).map((sg, k, segs) => sg.kind === "text" ? <Markdown key={k} text={sg.text} say={say} viz={inl} live={m.done && last && !busy} streaming={!m.done} /> : (() => {
           // Một thẻ cho mỗi artifact trong một tin: bản đầy đủ rồi bản sửa (mode="patch") cùng identifier trong cùng câu trả lời là hai phiên bản
           // của một artifact. Thẻ đứng ở chỗ artifact xuất hiện lần đầu, ghi phiên bản cuối cùng tin này tạo ra và mở đúng phiên bản đó.
           if (segs.findIndex((x) => x.kind === "art" && x.art.ident === sg.art.ident) !== k) return null;
@@ -262,7 +272,7 @@ const MsgRow = memo(function MsgRow({ m: raw, i, last, busy, mark, art, inl, fil
           const active = c.artOpen && c.artIdent === sg.art.ident && c.artIndex === v;
           const full = arts.map.get(sg.art.ident)?.[v];
           return <ArtifactCard key={k} art={full ?? sg.art} version={v + 1} total={total} active={active} fix={full?.fix} onRedo={last && !busy ? () => cx.current!.send(`${tr("Bản sửa")} “${full?.title ?? sg.art.ident}” ${tr("không áp được. Hãy viết lại toàn bộ artifact này (không dùng mode=\"patch\"), giữ các thay đổi tôi vừa yêu cầu.")}`) : undefined} onOpen={() => cx.current!.openArt({ chat: chatId, ident: sg.art.ident, v, follow: false })} />;
-        })()) : <Markdown text={hasArtifacts(m.text) ? artifactsAsCode(m.text) : m.text} say={say} viz={inl} live={m.done && last && !busy} streaming={!m.done} />) : null}{m.failed ? <ErrCard raw={m.err} onRetry={last && !busy ? () => cx.current!.retry() : undefined} onProviders={() => cx.current!.openProviders()} /> : null}{m.done && last ? <ConnCards parts={m.parts} text={m.text} /> : null}{!m.done && m.plan?.length ? <PlanCard plan={m.plan} live /> : null}{!m.done ? <WorkStatus label={m.parts?.some((p) => p.k === "ask" && p.state === "wait") ? tr("Đang chờ bạn duyệt") : m.prog} since={m.time} steps={stepsOf(m.parts)} /> : null}{m.outs?.length ? <OutputFiles files={m.outs} onOpen={(f) => cx.current!.openFile(f)} active={fileActive} /> : null}</div></OutsCtx.Provider></CiteCtx.Provider>
+        })()) : <Markdown text={hasArtifacts(m.text) ? artifactsAsCode(m.text) : m.text} say={say} viz={inl} live={m.done && last && !busy} streaming={!m.done} />) : null}{m.failed ? <ErrCard raw={m.err} onRetry={last && !busy ? () => cx.current!.retry() : undefined} onProviders={() => cx.current!.openProviders()} /> : null}{m.done && last ? <ConnCards parts={m.parts} text={m.text} /> : null}{!m.done && pending?.length ? <PendingSteer items={pending} late={late} /> : null}{!m.done && m.plan?.length ? <PlanCard plan={m.plan} live /> : null}{!m.done ? <WorkStatus label={m.parts?.some((p) => p.k === "ask" && p.state === "wait") ? tr("Đang chờ bạn duyệt") : m.prog} since={m.time} steps={stepsOf(m.parts)} /> : null}{m.outs?.length ? <OutputFiles files={m.outs} onOpen={(f) => cx.current!.openFile(f)} active={fileActive} /> : null}</div></OutsCtx.Provider></CiteCtx.Provider>
         {m.done && m.stopped && <div className="msg-stopped"><I.Stop size={11} />{tr("Đã dừng · giữ lại phần đã viết")}</div>}
         {m.done && !m.failed && (m.pjApplied || m.insApplied) ? <div className="msg-applied">{m.pjApplied && <span className="skill-chip"><I.Folder size={13} />{tr("Đã áp dụng ngữ cảnh dự án")}</span>}{m.insApplied && <span className="skill-chip"><I.User size={13} />{tr("Đã áp dụng hướng dẫn cá nhân")}</span>}</div> : null}
         {m.done && m.webs?.length ? <SourceChips webs={m.webs} id={citeId} /> : null}
@@ -318,6 +328,20 @@ export type ThreadActs = {
 };
 export type BrwState = { available: boolean; reason?: string; control?: boolean; ext?: { allowed: boolean; paired: boolean }; target?: "synchro" | "user" };
 
+/** Tin nhắn thêm đang chờ ghép, đặt đúng chỗ nó sẽ nằm sau khi máy chủ báo đã ghép (sau phần đã viết, trước phần trả
+ *  lời tiếp theo): lúc ghép chỉ dòng trạng thái chuyển xuống dưới tin, chữ không nhảy. */
+function PendingSteer({ items, late }: { items: { id: number; text: string }[]; late?: boolean }) {
+  return <>{items.map((q) => (
+    <div key={q.id} className="user-wrap steer-pending in-turn">
+      <span className="steer-tag">{tr("Nhắn thêm khi Synchro đang làm")}</span>
+      <div className="user-msg"><UserText text={q.text} /></div>
+      {late && <span className="steer-late">{tr("Sẽ đọc khi xong bước này")}</span>}
+    </div>
+  ))}</>;
+}
+// Model chỉ đọc tin nhắn thêm khi CLI xong bước (không có kênh giữa lượt, cắt lượt thì mất phiên).
+const LATE_STEER = /^sub-(agy|grok)\//;
+
 export const ChatThread = memo(function ChatThread({ busy, copied, speaking, model, altModels, undoFor, approval, brw, dock, hx }: {
   busy: boolean; copied: string | null; speaking: string | null; model: string; altModels: boolean;
   /** Đoạn chat có lượt cũ vừa bị thay (hiện nút Khôi phục bản cũ). */
@@ -343,6 +367,12 @@ export const ChatThread = memo(function ChatThread({ busy, copied, speaking, mod
   useEffect(() => { if (arts.map.size) ArtifactPanel.preload(); }, [arts.map.size]);
   const artVersions = artSel && chat && artSel.chat === chat.id ? arts.map.get(artSel.ident) ?? null : null;
   const artIndex = artVersions ? (artSel!.follow ? artVersions.length - 1 : Math.min(artSel!.v, artVersions.length - 1)) : 0;
+  // Tin nhắn thêm chưa ghép của đoạn chat này. Câu trả lời đang chạy là tin cuối: tin chờ nằm trong nó (sau phần đã
+  // viết, trên dòng trạng thái); chưa có câu trả lời nào đang chạy thì nằm cuối đoạn chat.
+  const steers = useMemo(() => queued.filter((q) => q.chat === chat?.id && q.mode === "steer"), [queued, chat?.id]);
+  const tail = chat?.msgs[chat.msgs.length - 1];
+  const inTurn = !!tail && tail.role === "ai" && !tail.done;
+  const lateSteer = LATE_STEER.test(model);
   const artOpen = !!artVersions?.length;
   // Tự mở khung xem theo artifact đang viết: useLiveArtFollow (Home), chạy cả khi khung này chưa gắn.
   const { lastIdx, liveArt } = liveArtOf(chat, arts);
@@ -461,16 +491,13 @@ export const ChatThread = memo(function ChatThread({ busy, copied, speaking, mod
         <div className="thread-in">
           {chat.stub && <StubWait key={chat.id} local={!!chat.local} />}
           {chat.msgs.map((m, i) => <Boundary key={`${chat.id}-${i}`} compact resetKey={m.text}><MsgRow m={m} i={i} last={i === chat.msgs.length - 1} lang={getLang()} busy={busy} mark={chat.compact?.upto === i} art={caps.art} inl={caps.inl} artSig={artSig(i)}
-            fileActive={m.outs?.length && fileOpen ? fileSel?.file.id : undefined} copied={copied === `${chat.id}-${i}`} speaking={speaking === `${chat.id}-${i}`} chatId={chat.id} cx={rowCx} /></Boundary>)}
+            fileActive={m.outs?.length && fileOpen ? fileSel?.file.id : undefined} copied={copied === `${chat.id}-${i}`} speaking={speaking === `${chat.id}-${i}`} chatId={chat.id} cx={rowCx}
+            pending={inTurn && i === chat.msgs.length - 1 ? steers : undefined} late={lateSteer} /></Boundary>)}
           {undoFor === chat.id && <div className="msg-notice turn-undo" role="status"><p>{tr("Câu trả lời cũ đã được thay bằng lượt mới.")}</p><div className="msg-notice-act"><button className="lnk" onClick={() => x().undoLost()}>{tr("Khôi phục bản cũ")}</button></div></div>}
           {approval && approval.chat === chat.id && <ApprovalCard calls={approval.calls} onDone={(d, inputs) => x().approvalDone({ decisions: d, inputs })} />}
-          {/* Tin nhắn thêm khi Synchro đang làm: hiện ngay trong đoạn chat (như Claude); model đọc ở bước kế tiếp rồi trả lời tiếp. */}
-          {queued.filter((q) => q.chat === chat.id && q.mode === "steer").map((q) => (
-            <div key={q.id} className="user-wrap steer-pending">
-              <span className="steer-tag">{tr("Đã gửi · Synchro đang đọc")}</span>
-              <div className="user-msg"><UserText text={q.text} /></div>
-            </div>
-          ))}
+          {/* Tin nhắn thêm khi chưa có câu trả lời nào đang chạy (lượt vừa bắt đầu): cuối đoạn chat. Có câu trả lời
+              đang chạy thì tin nằm trong câu đó (PendingSteer trong MsgRow). */}
+          {!inTurn && steers.length ? <PendingSteer items={steers} late={lateSteer} /> : null}
           <div ref={endRef} />
         </div>
       </div>

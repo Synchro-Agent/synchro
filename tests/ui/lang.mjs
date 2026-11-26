@@ -113,7 +113,12 @@ for (const lang of LANGS) {
     console.log(`  ${found.length ? "✗" : "✓"} ${name}${found.length ? ` (${found.length})` : ""}`);
   };
   const step = async (name, fn) => { try { await fn(); } catch (e) { report.set(`${lang} · ${name}`, ["(không chạy được: " + e.message.split("\n")[0].slice(0, 100) + ")"]); console.log("  ! " + name + ": " + e.message.split("\n")[0].slice(0, 100)); } };
-  const nav = async (v) => { await click(`document.querySelector('[data-nav="${v}"]')`, v); await sleep(1500); };
+  // Bộ não mở từ menu tài khoản (không còn trên thanh điều hướng).
+  const nav = async (v) => {
+    if (v === "brain") { await click(`document.querySelector(".rail-user .user")`, "user menu"); await sleep(400); }
+    await click(`document.querySelector('[data-nav="${v}"]')`, v);
+    await sleep(1500);
+  };
 
   await step("đăng nhập", async () => { await P("Page.navigate", { url: B + "/" }); await until(`!!document.querySelector("input[type=email], input[type=password], form")`, 20000); await look("đăng nhập", true); });
   await step("điều khoản", async () => { await P("Page.navigate", { url: B + "/terms" }); await sleep(1500); await look("điều khoản", true); });
@@ -129,7 +134,8 @@ for (const lang of LANGS) {
     await until(`!document.querySelector(".thinking") && !document.querySelector(".art-card.busy") && !document.querySelector("[aria-label='Dừng'], [aria-label='Stop']")`, 90000, "reply");
     await sleep(1500); await look("chat + artifact");
   });
-  for (const v of ["projects", "artifacts", "inbox", "code", "customize"]) await step(v, async () => { await nav(v); await look(v); });
+  for (const v of ["projects", "artifacts", "autopilot", "code", "customize"]) await step(v, async () => { await nav(v);
+    await look(v); });
   await step("skill hub · connectors", async () => { await click(`[...document.querySelectorAll("button, [role=tab]")].find((e) => /^(Connectors|Kết nối)$/.test(e.textContent.trim()))`, "connectors tab"); await sleep(1200); await look("skill hub · connectors"); });
   // Bộ não: đồ thị, ô tìm nhanh, một ghi chú (kèm cột liên kết), Bảng, Hoạt động.
   await step("bộ não", async () => { await nav("brain"); await sleep(1500); await look("bộ não · đồ thị"); });

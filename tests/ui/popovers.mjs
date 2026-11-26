@@ -100,7 +100,9 @@ const runSize = async (size, theme) => {
   if (!VIEW[size]) throw new Error("cỡ màn hình lạ: " + size);
   const mobile = size === "mobile", tablet = size === "tablet", W = VIEW[size].width, H = VIEW[size].height;
   const SCR = `${SCR0}${theme === "dark" ? "-dark" : ""}/`;
-  rmSync(PROF, { recursive: true, force: true });
+  // Tiến trình phụ của Chrome vòng trước còn ghi hồ sơ một lúc sau khi Chrome chính thoát: xóa ngay thì rmdir báo
+  // ENOTEMPTY và cả lượt kiểm dừng trước cỡ điện thoại. Thử lại vài lần thay vì bỏ cả lượt.
+  rmSync(PROF, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
   const chrome = spawn(process.env.CHROME_PATH ?? "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
     ["--headless=new", `--remote-debugging-port=${PORT}`, `--user-data-dir=${PROF}`, "--window-size=1440,900", "--no-first-run", "--no-default-browser-check", "--use-fake-ui-for-media-stream", "--use-fake-device-for-media-stream", "about:blank"], { stdio: "ignore" });
   let ver; for (let i = 0; i < 50 && !ver; i++) { await sleep(200); ver = await fetch(`http://127.0.0.1:${PORT}/json/version`).then((r) => r.json()).catch(() => null); }

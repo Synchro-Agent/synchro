@@ -1,4 +1,4 @@
-// Bản dịch cho Dự án, Hộp thư, Giọng nói, Kho kỹ năng, Cài đặt và Synchro Code (bổ sung vào i18n-dict.ts).
+// Bản dịch cho Dự án, Autopilot, Giọng nói, Kho kỹ năng, Cài đặt và Synchro Code (bổ sung vào i18n-dict.ts).
 export const FX_VI2EN: Record<string, string> = {
   "Model chưa đọc được": "Not readable by models",
   "Không trích được chữ từ tệp này nên model không đọc được": "No text could be extracted from this file, so models can't read it",
@@ -18,7 +18,7 @@ export const FX_VI2EN: Record<string, string> = {
   "Chỉ nghe, không tải về được": "Listen only, no download",
   "Dừng": "Stop",
   "Xóa việc tự động này?": "Delete this automation?",
-  "Kết quả cũ trong Hộp thư cũng bị xóa.": "Its past results in the Inbox are deleted too.",
+  "Kết quả cũ trong Autopilot cũng bị xóa.": "Its past results in Autopilot are deleted too.",
   "Chưa tải được danh sách cần duyệt": "Couldn't load your approvals",
   "Chưa tải được danh sách việc tự động": "Couldn't load your automations",
   "Máy chủ phản hồi quá lâu. Thử lại sau ít phút.": "The server took too long to respond. Try again in a few minutes.",
@@ -156,7 +156,8 @@ export const FX_VI2EN: Record<string, string> = {
   "Xóa ghi chú": "Delete note",
   "Tên khác (cách nhau bằng dấu phẩy)": "Aliases (comma-separated)",
   "ví dụ: An ninh mạng, ATTT": "e.g. Infosec, Security",
-  "Synchro đặt quy tắc này lên đầu lời nhắc của mọi model, ở mọi nơi bạn trò chuyện: chat, Synchro Code, việc tự động trong Hộp thư và giọng nói. Quy tắc luôn được ghim và không bị xóa, kể cả khi xóa bộ não.": "Synchro puts this rule at the very top of every model's prompt, everywhere you talk to it: chat, Synchro Code, Inbox automations and voice. It stays pinned and is never deleted, even when you clear the brain.",
+  "Synchro đặt quy tắc này lên đầu lời nhắc của mọi model, ở mọi nơi bạn trò chuyện: chat, Synchro Code, Autopilot và giọng nói. Quy tắc luôn được ghim và không bị xóa, kể cả khi xóa bộ não.":
+    "Synchro puts this rule at the very top of every model's prompt, everywhere you talk to it: chat, Synchro Code, Autopilot automations and voice. It stays pinned and is never deleted, even when you clear the brain.",
   "Ghi chú này chưa có: các ghi chú khác đang trỏ tới nó. Synchro sẽ viết trang này khi biết thêm về nó, hoặc bạn tự tạo.": "This note doesn't exist yet, but other notes link to it. Synchro writes it once it learns more, or you can create it.",
   "Tên ghi chú": "Note title",
   "Viết bằng Markdown. Gõ [[Tên ghi chú]] để nối tới ghi chú khác, #thẻ để gắn thẻ.": "Write in Markdown. Type [[Note name]] to link another note, #tag to tag it.",
@@ -395,4 +396,59 @@ Object.assign(FX_VI2EN, {
     "Measured at {vw}×{vh}: {rows}. A title should be at least {r} times the body text and {l} times the"
     + " description: enlarge the title or cut the body text.",
   "Đo thật ở {vw}×{vh}: slide {slides} cao hoặc rộng hơn khung, phần thừa bị cắt khi trình chiếu. Rút chữ, giảm khoảng trống hoặc tách slide.": "Measured at {vw}×{vh}: slides {slides} are taller or wider than the frame, so the extra part is cut off when presented. Shorten the text, reduce the spacing, or split the slides.",
+});
+// Hộp thoại Repo GitHub (ui/ghrepomodal.tsx) và lý do GitHub chặn repo của tổ chức (server/ghrepos.ts).
+Object.assign(FX_VI2EN, {
+  "Tổ chức chưa cho Synchro truy cập. Chủ tổ chức bấm Grant trên GitHub.":
+    "This organization hasn't given Synchro access. An organization owner clicks Grant on GitHub.",
+  "Tổ chức bật SAML SSO. Cho phép Synchro dùng kết nối với tổ chức này.":
+    "This organization uses SAML SSO. Allow Synchro to use your connection with it.",
+  "Ứng dụng Synchro chưa được cài vào tổ chức này.": "The Synchro app isn't installed on this organization.",
+  "Cấp quyền ‹repo GitHub›": "Grant access",
+  "Cài vào tổ chức": "Install on organization",
+  "Tổ chức ‹repo GitHub›": "Organization",
+  "Cá nhân ‹repo GitHub›": "Personal",
+  "Cộng tác ‹repo GitHub›": "Collaborator",
+  "Kết nối lại GitHub một lần để Synchro đọc được repo riêng tư và repo của tổ chức.":
+    "Reconnect GitHub once so Synchro can read private and organization repos.",
+  "Kết nối lại GitHub một lần để Synchro thấy repo của mọi tổ chức bạn tham gia.":
+    "Reconnect GitHub once so Synchro can see repos from every organization you belong to.",
+  "Tìm trong mọi repo bạn truy cập được": "Search every repo you can access",
+  "Tải lại danh sách repo": "Reload the repo list",
+  "Không có repo nào khớp.": "No matching repos.",
+  "Xem thêm ({n} repo nữa)": "Show more ({n} more repos)",
+  "Chưa kết nối được GitHub. Thử lại sau ít phút.": "Couldn't reach GitHub. Try again in a few minutes.",
+  "Kết nối GitHub hiện tại chưa có quyền đọc repo riêng tư. Bấm Kết nối lại một lần để cấp thêm quyền.":
+    "Your GitHub connection can't read private repos yet. Click Reconnect once to grant the extra access.",
+  ["Tổ chức sở hữu repo này đang chặn ứng dụng bên ngoài nên Synchro chưa đọc được repo."
+    + " Bấm Cấp quyền, chọn Grant cạnh tên tổ chức trên GitHub, rồi clone lại."]:
+    "The organization that owns this repo blocks outside apps, so Synchro can't read it yet."
+    + " Click Grant access, choose Grant next to the organization on GitHub, then clone again.",
+  ["Tổ chức sở hữu repo này bật đăng nhập SAML SSO."
+    + " Bấm Cho phép để Synchro dùng kết nối GitHub với tổ chức này, rồi clone lại."]:
+    "The organization that owns this repo uses SAML SSO."
+    + " Click Allow so Synchro can use your GitHub connection with it, then clone again.",
+  ["Ứng dụng GitHub của Synchro chưa được cài vào tổ chức sở hữu repo này."
+    + " Bấm Cài vào tổ chức trên GitHub, rồi clone lại."]:
+    "The Synchro GitHub app isn't installed on the organization that owns this repo."
+    + " Click Install on organization on GitHub, then clone again.",
+  "Tổ chức {org} chưa cấp quyền cho Synchro.": "The {org} organization hasn't given Synchro access.",
+  "Tổ chức {org} bật SAML SSO, cần cho phép Synchro dùng kết nối GitHub.":
+    "The {org} organization uses SAML SSO, so Synchro needs to be allowed to use your GitHub connection.",
+  "Ứng dụng Synchro chưa được cài vào tổ chức {org}.": "The Synchro app isn't installed on the {org} organization.",
+  ["Danh sách chưa đủ mọi repo (tài khoản rất nhiều repo hoặc GitHub ngắt giữa chừng). Tìm theo tên hoặc dán"
+    + " owner/repo vào ô ở trên."]:
+    "This list may be missing some repos (the account has a great many, or GitHub cut the connection)."
+    + " Search by name, or paste owner/repo into the box above.",
+  "Hoàn tất bước cấp quyền GitHub trong trình duyệt vừa mở. Synchro tự cập nhật khi xong.":
+    "Finish granting access to GitHub in the browser that just opened. Synchro updates by itself when you're done.",
+  // Kết nối GitHub từ ứng dụng máy tính qua trình duyệt của máy (server/ghlink.ts, app/api/github/connect).
+  "Lượt kết nối GitHub đã hết hạn. Bấm Kết nối GitHub lại.":
+    "This GitHub connection attempt has expired. Click Connect GitHub again.",
+  ["Đường dẫn kết nối GitHub này đã hết hạn hoặc đã được dùng. Bấm Kết nối GitHub lại trong ứng dụng"
+    + " Synchro."]: "This GitHub connection link has expired or was already used. Click Connect GitHub again in"
+    + " the Synchro app.",
+  "Tài khoản Synchro này không còn dùng được.": "This Synchro account can no longer be used.",
+  "Máy chủ chưa bật đăng nhập GitHub.": "This server hasn't turned on GitHub sign-in.",
+  "GitHub chưa kết nối được. Thử lại.": "Couldn't connect GitHub. Try again.",
 });

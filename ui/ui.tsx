@@ -1,6 +1,6 @@
 "use client";
 
-import { Loader } from "./brand";
+import { FluidDots } from "./fluiddots";
 import { Component, useEffect, useRef, useState } from "react";
 import { armDraft } from "./draft";
 import { labelMenu, registerMenu } from "./a11y";
@@ -27,10 +27,11 @@ export function Menu({ open, className = "", style, children, role = "menu" }: {
   return <div ref={el} role={role} className={`menu ${className} ${out && !open ? "out" : ""}`} style={style}>{open ? children : last.current}</div>;
 }
 
-// text: bước đang làm của lượt chạy nền ("Đang đọc skill …"), hiện cạnh chấm động.
+// text: bước đang làm của lượt chạy nền ("Đang đọc skill …"), hiện cạnh chấm động của câu trả lời (FluidDots).
 export function Thinking({ label, text }: { label: string; text?: string }) {
   return (
-    <div className="thinking" role="status" aria-label={text || label}><Loader size={15} />{text && <span className="thinking-t" key={text}>{text}</span>}</div>
+    <div className="thinking" role="status" aria-label={text || label}><FluidDots size={14} />{text
+      && <span className="thinking-t" key={text}>{text}</span>}</div>
   );
 }
 

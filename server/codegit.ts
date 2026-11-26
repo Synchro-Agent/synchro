@@ -4,6 +4,7 @@ import "server-only";
 import { EXCLUDE_SYNCHRO } from "./uploads";
 import { AuthError, type UserRow } from "./authstore";
 import { getLink, gh, GH_GIT, gitAuth, parseRepo, repoOfRemote } from "./github";
+import { diagnoseRepo } from "./ghrepos";
 import { getPrefs, prsOf, trackPr } from "./codestore";
 import { exec } from "./workspace";
 
@@ -103,7 +104,15 @@ export async function gitOp(user: UserRow, d: string, b: Record<string, unknown>
       cmd: `${a.prelude}k=""; if [ -e .synchro ]; then k="../.synchro-giu-$$"; mv .synchro "$k"; fi; git clone --quiet ${branch ? '--branch "$BR" ' : ""}"$GH/$REPO.git" . 2>&1; c=$?; if [ -n "$k" ]; then mv "$k" .synchro; fi; ${EXCLUDE_SYNCHRO}${a.epilogue}; exit $c`,
       env: { GH: GH_GIT, REPO: `${owner}/${name}`, BR: branch, ...a.env }, stdin: a.stdin, timeout: 300,
     });
-    if (r.code) throw new AuthError(/not found|could not read Username|Authentication/i.test(r.out + r.err) ? (l ? "Không tìm thấy repo hoặc tài khoản GitHub của bạn không có quyền với repo này." : "Repo riêng tư hoặc không tồn tại. Hãy kết nối GitHub để clone repo riêng tư.") : `Clone thất bại: ${(r.out || r.err).trim().slice(-300)}`, 400);
+    if (r.code) {
+      const denied = /not found|could not read Username|Authentication/i.test(r.out + r.err);
+      if (!denied) throw new AuthError(`Clone thất bại: ${(r.out || r.err).trim().slice(-300)}`, 400);
+      if (!l) throw new AuthError("Repo riêng tư hoặc không tồn tại. Hãy kết nối GitHub để clone repo riêng tư.", 400);
+      // Repo của tổ chức hay bị chặn theo cách trông như "không tồn tại": hỏi GitHub lý do để chỉ đúng nút cần bấm.
+      const why = await diagnoseRepo(l.token, owner, name, l.scopes)
+        .catch((e) => { console.warn("[github] chẩn đoán clone", (e as Error).message); return null; });
+      throw why ?? new AuthError("Không tìm thấy repo hoặc tài khoản GitHub của bạn không có quyền với repo này.", 400);
+    }
     await exec(u, d, { cmd: 'git config user.name "$N" && git config user.email "$M"', env: ident(user), timeout: 10 });
     return status(u, d);
   }

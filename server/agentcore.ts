@@ -47,7 +47,8 @@ export const AGENT_TOOLS = [
 
 // ------------------------------------------------------------------ chạy công cụ
 type Out = { content: string; is_error: boolean; summary: string; output?: string; image?: string; diff?: { path: string; add: number; del: number }; url?: string };
-// extra: công cụ thêm của nơi gọi (vd. inbox_propose của việc tự động chạy nền), chạy sau chốt chặn như công cụ thường.
+// extra: công cụ thêm của nơi gọi (vd. autopilot_propose của việc tự động chạy nền), chạy sau chốt chặn như công cụ
+// thường.
 export type ExtraTool = { name: string; run: (input: Record<string, unknown>) => Promise<{ content: string; is_error: boolean; summary?: string }> };
 type Ctx = { u: string; d: string; emit: Emit; skills: Skill[]; scripts: boolean; usedSkills: string[]; opened: Set<Pane>; bctx?: BrowserCtx; extra?: ExtraTool[] };
 
