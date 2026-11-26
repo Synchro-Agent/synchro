@@ -316,6 +316,13 @@ const CHECK = `(() => {
   for (const g of document.querySelectorAll(".ds-seg,.pl-seg")) { const on = g.querySelector(":scope>button.on"); if (on && vis(on) && !on.matches("[aria-selected=true],[aria-pressed=true],[aria-current],[aria-checked=true]")) out.push("nút đang chọn không báo trạng thái: " + on.textContent.trim().slice(0, 20) + " trong " + name(g)); }
   // Tab không được rơi vào một phần tử khuất dưới lớp phủ của khung artifact: dải báo, nút trong .main phải nằm ngoài khung đang mở.
   { const art = document.querySelector(".main.has-art .art-panel, .main.has-art .art-pane"); const vb = document.querySelector(".verify-banner"); if (art && vb && vb.getBoundingClientRect().right > art.getBoundingClientRect().left + 1) out.push("dải xác minh nằm dưới khung artifact"); }
+  // Vòng tải chỉ có hình và chuyển động khi có lớp .spinner (ui/spinner.tsx); các lớp *-spin chỉ đặt cỡ.
+  // Thiếu .spinner là nút "Lưu" hay ô đang tải trống trơn.
+  for (const el of document.querySelectorAll("[class*='-spin']")) {
+    if (![...el.classList].some((c) => c.endsWith("-spin")) || el.classList.contains("spinner") || !vis(el)) continue;
+    out.push("vòng tải không có .spinner (không hiện, không quay): " + name(el));
+    break;
+  }
   return out;
 })()`;
 

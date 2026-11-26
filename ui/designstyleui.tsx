@@ -8,6 +8,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import * as I from "./icons";
 import { Menu } from "./ui";
+import { Spinner } from "./spinner";
 import { getLang, tf, tr, trc } from "./i18n";
 import { useApp } from "./store";
 import { getBlob } from "./filestate";
@@ -92,7 +93,7 @@ function NameForm({ className, value, onChange, onSubmit, onCancel, busy = false
       <input ref={inp} className="field" value={value} maxLength={60} aria-label="Tên phong cách" disabled={busy}
         onChange={(e) => onChange(e.target.value)} />
       <button type="submit" className="btn dark" disabled={busy}>
-        {busy ? <span className="art-spin sm" /> : tr("Lưu")}
+        {busy ? <Spinner className="art-spin sm" /> : tr("Lưu")}
       </button>
       {onCancel && <button type="button" className="btn" onClick={onCancel}>{tr("Hủy")}</button>}
     </form>
@@ -264,11 +265,11 @@ export function DesignStylePop({ open, onClose, onPick, files, brief, say, ancho
             <em>{image ? <span data-notr>{image}</span> : tr("Đính kèm trước ảnh chụp trang bạn thích")}</em>
           </span>
         </button>
-        {busy && <div className="sty-busy" role="status"><span className="art-spin sm" />{busy}</div>}
+        {busy && <div className="sty-busy" role="status"><Spinner className="art-spin sm" />{busy}</div>}
         {err && <div className="sty-err" role="alert">{tr(err)}</div>}
         <div className="sty-sec">{tr("Phong cách của tôi")}</div>
         <div className="sty-list">
-          {list === null ? <div className="cm-empty"><span className="art-spin sm" /></div>
+          {list === null ? <div className="cm-empty"><Spinner className="art-spin sm" /></div>
             : !list.length ? <div className="sty-empty">{tr(EMPTY)}</div>
               : list.map((s) => (
                 <div key={s.id} className="sty-row">
