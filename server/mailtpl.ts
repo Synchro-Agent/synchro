@@ -72,7 +72,11 @@ export function changedMail(o: { base: string; name?: string | null; when: strin
 export function verifyMail(o: { base: string; name?: string | null; url: string; days: number; lang: MailLang }): Mail {
   const vi = o.lang === "vi", name = o.name?.trim() ? esc(o.name.trim()) : "";
   const title = vi ? "Xác minh email của bạn" : "Verify your email";
-  const lead = vi ? `Chào${name ? ` ${name}` : " bạn"}, có người vừa tạo tài khoản Synchro bằng địa chỉ này. Nếu là bạn, hãy xác minh để dùng tệp đính kèm, connector, Autopilot và Synchro Code.` : `Hi${name ? ` ${name}` : ""}, someone just created a Synchro account with this address. If it was you, verify it to use file attachments, connectors, Autopilot and Synchro Code.`;
+  const lead = vi ? `Chào${name
+    ? ` ${name}` : " bạn"}, có người vừa tạo tài khoản Synchro bằng địa chỉ này. Nếu là bạn, hãy xác minh để dùng ` +
+    `tệp đính kèm, connector, Autopilot và Synchro Code.` : `Hi${name
+    ? ` ${name}` : ""}, someone just created a Synchro account with this address. If it was you, verify it to use ` +
+    `file attachments, connectors, Autopilot and Synchro Code.`;
   const after = vi ? `Đường dẫn có hiệu lực trong <b style="color:${INK};font-weight:600">${o.days} ngày</b>.` : `This link works for <b style="color:${INK};font-weight:600">${o.days} days</b>.`;
   const note = vi ? "Không phải bạn đăng ký? Mở đường dẫn rồi chọn \"Không phải tôi\" để xóa tài khoản đó, hoặc bỏ qua email này." : "Didn't sign up? Open the link and choose \"This wasn't me\" to remove that account, or ignore this email.";
   const label = vi ? "Xác minh email" : "Verify email";
@@ -163,7 +167,8 @@ export function autopilotMail(o: AutopilotMailIn): Mail {
     ? (vi ? `Autopilot đã xong: ${o.title}` : `Autopilot finished: ${o.title}`)
     : (vi ? `Autopilot gặp lỗi: ${o.title}` : `Autopilot hit an error: ${o.title}`);
   const at = `<b style="color:${INK};font-weight:600">${esc(o.when)}</b>`;
-  const again = vi ? "Mở Autopilot để xem chi tiết hoặc bấm Chạy lại." : "Open Autopilot to see the details or run it again.";
+  const again = vi
+    ? "Mở Autopilot để xem chi tiết hoặc bấm Chạy lại." : "Open Autopilot to see the details or run it again.";
   const failed = o.tries
     ? (vi ? `Lần chạy lúc ${at} vẫn lỗi sau ${o.tries} lần Synchro tự chạy lại.`
       : `The run at ${at} still failed after Synchro retried it ${o.tries} times.`)

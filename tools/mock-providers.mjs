@@ -491,7 +491,11 @@ function mockPlan(q) {
   const skill = /skill/.test(t);
   const engine = /repo cua toi|sua code|sua loi|pull request|\bpr\b|commit|dependenc|thu vien|refactor|chay kiem thu|\bci\b/.test(t) ? "code" : "chat";
   const title = text.replace(/^(hãy|mỗi ngày|hằng ngày|mỗi sáng)\s+/i, "").split(/[,.;]/)[0].split(" ").slice(0, 8).join(" ");
-  const prompt = `Mục tiêu: ${text}\n\nCách làm:\n1. Tra cứu dữ liệu mới nhất từ nguồn đáng tin cậy (ghi rõ nguồn và thời điểm).\n2. So sánh với kết quả lần chạy trước, nêu thay đổi đáng chú ý.\n3. Phân tích ngắn gọn, nêu lập luận và rủi ro.${skill ? "\n4. Với mục đáng giá nhất, soạn skill và gửi đề xuất bằng autopilot_propose (kind=skill) để người dùng duyệt trước khi tạo." : ""}\n\nKết quả: dòng đầu tóm tắt, rồi bảng chi tiết, cuối cùng là Nguồn.`;
+  const step4 = skill ? "\n4. Với mục đáng giá nhất, soạn skill và gửi đề xuất bằng autopilot_propose (kind=skill) để"
+    + " người dùng duyệt trước khi tạo." : "";
+  const prompt = `Mục tiêu: ${text}\n\nCách làm:\n1. Tra cứu dữ liệu mới nhất từ nguồn đáng tin cậy (ghi rõ nguồn và `
+    + "thời điểm).\n2. So sánh với kết quả lần chạy trước, nêu thay đổi đáng chú ý.\n3. Phân tích ngắn gọn, nêu lập "
+    + `luận và rủi ro.${step4}\n\nKết quả: dòng đầu tóm tắt, rồi bảng chi tiết, cuối cùng là Nguồn.`;
   // Ngày đã qua trong năm nay thì là năm sau.
   const year = () => date[3] ?? new Date().getFullYear() + (Number(date[2]) - 1 < new Date().getMonth() ? 1 : 0);
   const at = date && !monthly ? `${year()}-${date[2].padStart(2, "0")}-${date[1].padStart(2, "0")}T${time}` : "";

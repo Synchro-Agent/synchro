@@ -233,7 +233,9 @@ try {
   await click(`document.querySelector(".modal.settings .close")`); await sleep(300);
 
   console.log("Autopilot: tab nào lỗi cũng có nút thử lại, không quay mãi");
-  await ev(`(() => { window.__f = window.fetch; window.fetch = (u, i) => (/\\/api\\/(tasks|autopilot)/.test(String(u)) ? Promise.reject(new TypeError("Failed to fetch")) : window.__f(u, i)); })()`);
+  await ev(`(() => { window.__f = window.fetch; window.fetch = (u, i) => ` +
+    `(/\\/api\\/(tasks|autopilot)/.test(String(u)) ? Promise.reject(new TypeError("Failed to fetch")) : ` +
+    `window.__f(u, i)); })()`);
   await click(`document.querySelector("[data-nav=autopilot]")`);
   await until(`!!document.querySelector(".err-box")`, 8000, "hộp lỗi tab Kết quả");
   ok(!/Failed to fetch/.test(await ev(`document.querySelector(".err-box").textContent`)), "không lộ Failed to fetch", await ev(`document.querySelector(".err-box").textContent`));

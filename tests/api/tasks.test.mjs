@@ -41,9 +41,11 @@ console.log("2. Tác vụ một lần tự chạy, kết quả vào Autopilot");
 r = await a("POST", "/api/tasks", { title: "Kể về cà phê", prompt: "Kể ngắn về lịch sử cà phê", schedule: { kind: "once", tz: TZ }, model: MODEL });
 const once = r.j.task;
 let box = null;
-for (let i = 0; i < 40; i++) { box = (await a("GET", "/api/autopilot")).j; if (box.items.some((x) => x.task === once.id && x.status === "done")) break; await sleep(1000); }
+for (let i = 0; i < 40; i++) { box = (await a("GET", "/api/autopilot")).j; if (box.items.some((x) => x.task === once.id
+  && x.status === "done")) break; await sleep(1000); }
 const it = box.items.find((x) => x.task === once.id);
-ok(it?.status === "done" && it.text.length > 20, "bộ hẹn giờ tự chạy tác vụ, kết quả có trong Autopilot", JSON.stringify(it).slice(0, 300));
+ok(it?.status === "done" && it.text.length > 20, "bộ hẹn giờ tự chạy tác vụ, kết quả có trong Autopilot",
+  JSON.stringify(it).slice(0, 300));
 ok(box.unread >= 1 && !it.read, `đếm chưa đọc: ${box.unread}`);
 r = (await a("GET", "/api/tasks")).j.tasks.find((x) => x.id === once.id);
 ok(r && !r.enabled && r.next_run_at === null && r.runs === 1, "tác vụ một lần chạy xong thì tự tắt, không chạy lại", JSON.stringify(r));
@@ -65,7 +67,8 @@ ok(legacy?.items?.some((x) => x.run === it.run && x.chat === it.chat), "địa c
 console.log("3. Chạy ngay, bật / tắt");
 r = await a("POST", `/api/tasks/${daily.id}/run`);
 ok(r.s === 200 && /^run_/.test(r.j.run), "chạy ngay trả về mã lượt chạy", JSON.stringify(r.j));
-for (let i = 0; i < 30; i++) { box = (await a("GET", "/api/autopilot")).j; if (box.items.some((x) => x.run === r.j.run && x.status !== "running")) break; await sleep(1000); }
+for (let i = 0; i < 30; i++) { box = (await a("GET", "/api/autopilot")).j; if (box.items.some((x) => x.run === r.j.run
+  && x.status !== "running")) break; await sleep(1000); }
 ok(box.items.find((x) => x.run === r.j.run)?.status === "done", "kết quả chạy ngay vào Autopilot");
 const same = (await a("GET", "/api/tasks")).j.tasks.find((x) => x.id === daily.id);
 ok(same.next_run_at === daily.next_run_at, "chạy ngay không đổi lịch hẹn");
@@ -79,7 +82,8 @@ ok((await b("GET", "/api/tasks")).j.tasks.every((x) => x.id !== daily.id), "tài
 ok((await b("PATCH", `/api/tasks/${daily.id}`, { enabled: false })).s === 404 && (await b("POST", `/api/tasks/${daily.id}/run`)).s === 404 && (await b("DELETE", `/api/tasks/${daily.id}`)).s === 404, "tài khoản khác không sửa, chạy hay xóa được");
 ok((await b("GET", "/api/autopilot")).j.items.every((x) => x.task !== once.id), "Autopilot của ai người nấy xem");
 r = await a("DELETE", `/api/tasks/${once.id}`);
-ok(r.s === 200 && (await a("GET", "/api/autopilot")).j.items.every((x) => x.task !== once.id), "xóa tác vụ thì kết quả của nó cũng rời Autopilot");
+ok(r.s === 200 && (await a("GET", "/api/autopilot")).j.items.every((x) => x.task !== once.id),
+  "xóa tác vụ thì kết quả của nó cũng rời Autopilot");
 ok((await fetch(`${B}/api/tasks`)).status === 401, "chưa đăng nhập → 401");
 
 console.log(`\nKết quả: ${pass} đạt, ${fail} lỗi`);

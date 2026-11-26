@@ -52,7 +52,12 @@ export function CliUpdates() {
   useEffect(() => { void load(); }, [load]);
   // Đang cập nhật (cài từng CLI mất tới vài phút): hỏi lại mỗi 3 giây tới khi xong, rồi đọc lại danh sách model (bản mới có thể có model mới).
   useEffect(() => {
-    if (!v?.running) { if (was.current) { was.current = false; refreshModels(); app.say("CLI update finished. Results are below and in Autopilot"); } return; }
+    if (!v?.running) {
+      if (was.current) {
+        was.current = false; refreshModels(); app.say("CLI update finished. Results are below and in Autopilot");
+      }
+      return;
+    }
     was.current = true;
     const t = setInterval(() => { void load(); }, 3000);
     return () => clearInterval(t);

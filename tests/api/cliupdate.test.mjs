@@ -127,9 +127,12 @@ try {
     ok(snap(path.join(HOME, "logins")) === logins0 && snap(path.join(DATA, "engine-tokens")) === tokens0, "thư mục đăng nhập của mọi tài khoản không đổi", { logins0, now: snap(path.join(HOME, "logins")) });
     const inbox = (await owner("GET", "/api/autopilot")).j?.items ?? [];
     const n = inbox.find((x) => x.kind === "notice" && /Claude Code/.test(x.title) && /Codex/.test(x.text));
-    ok(n && /đã cập nhật/.test(n.text) && /không qua kiểm tra/.test(n.text) && n.link === "settings:Providers", "Autopilot của chủ sở hữu có kết quả từng CLI", inbox.slice(0, 2));
-    ok(((await admin("GET", "/api/autopilot")).j?.items ?? []).some((x) => x.kind === "notice" && x.title === n?.title), "quản trị viên khác cũng nhận");
-    ok(!((await member("GET", "/api/autopilot")).j?.items ?? []).some((x) => x.title === n?.title), "thành viên không nhận");
+    ok(n && /đã cập nhật/.test(n.text) && /không qua kiểm tra/.test(n.text) && n.link === "settings:Providers",
+      "Autopilot của chủ sở hữu có kết quả từng CLI", inbox.slice(0, 2));
+    ok(((await admin("GET", "/api/autopilot")).j?.items ?? []).some((x) => x.kind === "notice" && x.title === n?.title),
+      "quản trị viên khác cũng nhận");
+    ok(!((await member("GET", "/api/autopilot")).j?.items ?? []).some((x) => x.title === n?.title),
+      "thành viên không nhận");
     const audit = (await owner("GET", "/api/admin")).j.audit;
     ok(audit.some((x) => x.action === "admin_cli_update" && x.actor_email === "admin@synchro.test"), "nhật ký ghi lần cập nhật");
   }
@@ -167,7 +170,9 @@ try {
     const c = await chat("lượt ba");
     ok(c.s === 200, "chat chạy lại ngay", c.j);
     const inbox = (await owner("GET", "/api/autopilot")).j?.items ?? [];
-    ok(inbox.some((x) => x.kind === "notice" && /Đã trả Claude Code về bản trước/.test(x.title) && /Đăng nhập gói của mọi người vẫn giữ nguyên/.test(x.text)), "Autopilot báo đã tự trả về", inbox.slice(0, 2).map((x) => x.title));
+    ok(inbox.some((x) => x.kind === "notice" && /Đã trả Claude Code về bản trước/.test(x.title)
+      && /Đăng nhập gói của mọi người vẫn giữ nguyên/.test(x.text)), "Autopilot báo đã tự trả về", inbox.slice(0,
+      2).map((x) => x.title));
     const all = await view();
     ok(all.clis.every((r) => !r.probation), "không còn CLI nào đang theo dõi (không ảnh hưởng các bộ kiểm thử khác)", all.clis.map((r) => [r.cli, r.probation]));
   }

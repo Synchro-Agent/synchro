@@ -196,8 +196,10 @@ window.add = (v) => window.storage.set("notes", v, true);
   ok(true, "B (chưa mở bảng bình luận) thấy số bình luận mới ngay, không cần tải lại");
   await pb.click(`document.querySelector(".app-cmt")`, "B comments"); await sleep(600);
   ok(await pb.ev(`[...document.querySelectorAll(".cl-c-b")].some((b) => b.textContent.includes("@Minh Bình cập nhật hạn chót"))`), "B mở bảng thấy bình luận");
-  const inbox = await pb.ev(`fetch("/api/autopilot").then((r) => r.json()).then((j) => j.items.filter((x) => x.link === "app:${app}").map((x) => x.title))`);
-  ok(inbox.some((t) => /Lan Anh nhắc bạn trong Việc chung/.test(t)), "B nhận thông báo trong Autopilot", JSON.stringify(inbox));
+  const inbox = await pb.ev(`fetch("/api/autopilot").then((r) => r.json()).then((j) => j.items.filter((x) => x.link ` +
+    `=== "app:${app}").map((x) => x.title))`);
+  ok(inbox.some((t) => /Lan Anh nhắc bạn trong Việc chung/.test(t)), "B nhận thông báo trong Autopilot",
+    JSON.stringify(inbox));
   await pb.shot("4-comments-b");
   await pa.ev(`document.querySelector(".cl-c").dispatchEvent(new MouseEvent("mouseover", { bubbles: true })); 1`);
   await pa.click(`document.querySelector(".cl-c-a [aria-label='Đánh dấu đã xử lý']")`, "resolve");

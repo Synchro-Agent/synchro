@@ -156,7 +156,8 @@ export const FX_VI2EN: Record<string, string> = {
   "Xóa ghi chú": "Delete note",
   "Tên khác (cách nhau bằng dấu phẩy)": "Aliases (comma-separated)",
   "ví dụ: An ninh mạng, ATTT": "e.g. Infosec, Security",
-  "Synchro đặt quy tắc này lên đầu lời nhắc của mọi model, ở mọi nơi bạn trò chuyện: chat, Synchro Code, Autopilot và giọng nói. Quy tắc luôn được ghim và không bị xóa, kể cả khi xóa bộ não.": "Synchro puts this rule at the very top of every model's prompt, everywhere you talk to it: chat, Synchro Code, Autopilot automations and voice. It stays pinned and is never deleted, even when you clear the brain.",
+  "Synchro đặt quy tắc này lên đầu lời nhắc của mọi model, ở mọi nơi bạn trò chuyện: chat, Synchro Code, Autopilot và giọng nói. Quy tắc luôn được ghim và không bị xóa, kể cả khi xóa bộ não.":
+    "Synchro puts this rule at the very top of every model's prompt, everywhere you talk to it: chat, Synchro Code, Autopilot automations and voice. It stays pinned and is never deleted, even when you clear the brain.",
   "Ghi chú này chưa có: các ghi chú khác đang trỏ tới nó. Synchro sẽ viết trang này khi biết thêm về nó, hoặc bạn tự tạo.": "This note doesn't exist yet, but other notes link to it. Synchro writes it once it learns more, or you can create it.",
   "Tên ghi chú": "Note title",
   "Viết bằng Markdown. Gõ [[Tên ghi chú]] để nối tới ghi chú khác, #thẻ để gắn thẻ.": "Write in Markdown. Type [[Note name]] to link another note, #tag to tag it.",

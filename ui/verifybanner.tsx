@@ -29,7 +29,9 @@ export function VerifyBanner({ me, onChange }: { me: AuthUser | null; onChange: 
       <span style={{ flex: "none", display: "grid" }}><I.Alert size={15} /></span>
       <span style={{ flex: "1 1 240px", minWidth: 0 }}>
         {/* Chỉ kể tính năng bị khóa khi chúng thật sự bị khóa (quản trị viên có thể tắt yêu cầu xác minh). */}
-        <span>{me?.verifyLocked ? "Confirm your email to use file attachments, connectors, Autopilot, voice and Synchro Code." : "Please confirm your email."}</span>{" "}
+        <span>{me?.verifyLocked
+          ? "Confirm your email to use file attachments, connectors, Autopilot, voice and Synchro Code."
+          : "Please confirm your email."}</span>{" "}
         <span data-notr style={{ overflowWrap: "anywhere" }}>{me?.email}</span>
         {state === "sent" && <> · <span>Sent. Check your inbox and Spam.</span></>}
         {state === "limit" && <> · <span>Couldn&apos;t send right now. Try again in a while, or ask your administrator.</span></>}

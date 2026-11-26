@@ -85,8 +85,7 @@ export async function runAgentTurn(o: {
   /** Tệp gửi kèm tin nhắn mới nhất (đã tải lên /api/files?raw=1). */
   files?: Upload[];
   /** Việc tự động chạy nền (taskagent.ts): công cụ thêm (autopilot_propose), số bước tối đa, câu hỏi duyệt không chờ
-   *  người dùng (onAsk tự trả lời),
-   *  không ghi trạng thái vào danh sách phiên Code (quiet). */
+   *  người dùng (onAsk tự trả lời), không ghi trạng thái vào danh sách phiên Code (quiet). */
   extra?: { def: { name: string; description: string; input_schema: unknown }; run: ExtraTool["run"] }[];
   maxSteps?: number;
   onAsk?: (a: Ask) => void;

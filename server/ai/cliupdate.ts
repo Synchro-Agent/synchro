@@ -7,7 +7,8 @@
 // - Theo dõi các lượt chat thật đầu tiên: lỗi ngay từ đầu (CLI chết, không phản hồi, hãng không nhận đăng nhập) thì tự trả về bản trước và
 //   không cài lại đúng bản đó nữa.
 // - Thư mục đăng nhập của từng tài khoản (logins/, engine-tokens/) không bao giờ bị chép, chuyển hay xóa: chỉ lối vào của lệnh đổi.
-// - Kết quả vào Autopilot của quản trị viên. Tắt hẳn: SYNCHRO_CLI_AUTOUPDATE=0 (cả nút "Cập nhật ngay"), hoặc tắt "Cập nhật hằng tuần" ở Providers.
+// - Kết quả vào Autopilot của quản trị viên. Tắt hẳn: SYNCHRO_CLI_AUTOUPDATE=0 (cả nút "Cập nhật ngay"), hoặc tắt "Cập
+// nhật hằng tuần" ở Providers.
 // - SYNCHRO_CLI_UPDATE_SOURCE=<thư mục> (chỉ máy giả lập / kiểm thử): lấy bản phát hành từ <thư mục>/<cli>/latest và <thư mục>/<cli>/<bản>/ thay vì npm
 //   và script cài của hãng.
 import "server-only";
@@ -376,7 +377,8 @@ async function notify(rs: CliResult[], reason: "timer" | "owner" | "auto") {
   const title = back.length ? `Đã trả ${back.map((r) => CLI_NAME[r.cli]).join(", ")} về bản trước` : changed.length ? `Đã cập nhật ${changed.map((r) => CLI_NAME[r.cli]).join(", ")}${bad.length ? `; ${bad.map((r) => CLI_NAME[r.cli]).join(", ")} chưa cập nhật được` : ""}` : bad.length ? `Chưa cập nhật được ${bad.map((r) => CLI_NAME[r.cli]).join(", ")}` : "CLI của các gói đã là bản mới nhất";
   const head = reason === "auto" ? "Synchro tự trả về bản trước vì các lượt chat thật đầu tiên với bản mới bị lỗi. Đăng nhập gói của mọi người vẫn giữ nguyên." : reason === "owner" ? "Kết quả lần cập nhật CLI bạn vừa chạy:" : "Kết quả lần cập nhật CLI hằng tuần:";
   const text = `${head}\n${rs.map((r) => `- ${LINE[r.outcome](r)}`).join("\n")}`;
-  try { const { addNotice } = await import("../tasks"); for (const id of adminIds()) addNotice(id, title, text, "settings:Providers"); } catch (e) { console.error("[cli-update] Autopilot:", e); }
+  try { const { addNotice } = await import("../tasks"); for (const id of adminIds()) addNotice(id, title, text,
+    "settings:Providers"); } catch (e) { console.error("[cli-update] Autopilot:", e); }
 }
 
 // ---------------------------------------------------------------- hẹn giờ

@@ -62,10 +62,16 @@ const roughTitle = (t: string) => {
 const vagueMsg = (t: string) => t.trim().split(/\s+/).length <= 3 || /^(xin )?ch[àa]o|^(hi|hello|hey|alo|test)\b/i.test(t.trim());
 // U6: mỗi mục có một địa chỉ #v=… để Back / liên kết / F5 mở đúng trang (đoạn chat vẫn dùng #c=, Cài đặt dùng #s=<tab>).
 // "project" (chi tiết một dự án) dùng chung #v=projects với danh sách dự án. "new"/"chat" không có #v=.
-const HASH_VIEW: Partial<Record<View, string>> = { projects: "projects", project: "projects", artifacts: "artifacts", autopilot: "autopilot", brain: "brain", code: "code", speech: "speech", customize: "skills" };
+const HASH_VIEW: Partial<Record<View, string>> = {
+  projects: "projects", project: "projects", artifacts: "artifacts", autopilot: "autopilot", brain: "brain",
+  code: "code", speech: "speech", customize: "skills",
+};
 // #v=inbox: địa chỉ cũ của Autopilot (trước đây là Hộp thư) trong dấu trang, email cũ: vẫn mở đúng trang, rồi địa chỉ
 // tự đổi sang #v=autopilot.
-const VIEW_OF_HASH: Record<string, View> = { projects: "projects", artifacts: "artifacts", autopilot: "autopilot", inbox: "autopilot", brain: "brain", code: "code", speech: "speech", skills: "customize" };
+const VIEW_OF_HASH: Record<string, View> = {
+  projects: "projects", artifacts: "artifacts", autopilot: "autopilot", inbox: "autopilot", brain: "brain",
+  code: "code", speech: "speech", skills: "customize",
+};
 import { AppCtx, useApp, VOICE_LANG, VOICE_RATE, initials, readPref, reloadPrefs, resetPrefs, usePref, type Chat, type Msg, type Project } from "./store";
 import { IMAGE_PLANS, allowsModel, clampEffort, effortCap, effortsFor, isEffort, legacyModel, type Effort } from "../shared/catalog";
 import { AUTO, fitModel, modelName, modelsSettled, refreshModels, seedModels, useModels } from "./models";
@@ -121,7 +127,11 @@ const IntroFilm = lazyView(() => import("./introfilm").then((m) => m.IntroFilm),
 const HalftoneBg = lazyView(() => import("./halftone").then((m) => m.HalftoneBg), null);
 // Khách chưa đăng nhập lần nào: tải sẵn màn hình đăng nhập ngay từ đầu.
 if (typeof document !== "undefined" && !document.documentElement.dataset.sess) AuthComponent.preload();
-const PRELOAD: Partial<Record<View, () => void>> = { artifacts: ArtifactsGallery.preload, code: CodeView.preload, speech: SpeechView.preload, brain: BrainWorkspace.preload, autopilot: AutopilotPage.preload, customize: CustomizePage.preload, projects: ProjectsPage.preload };
+const PRELOAD: Partial<Record<View, () => void>> = {
+  artifacts: ArtifactsGallery.preload, code: CodeView.preload, speech: SpeechView.preload,
+  brain: BrainWorkspace.preload, autopilot: AutopilotPage.preload, customize: CustomizePage.preload,
+  projects: ProjectsPage.preload,
+};
 
 const MODELS: [string, string][] = [["Opus 5", "Mạnh nhất cho việc phức tạp"], ["Sonnet 5.5", "Cân bằng tốc độ và chất lượng"], ["Haiku 5", "Nhanh nhất cho việc đơn giản"]];
 
@@ -1391,7 +1401,10 @@ export default function Home({ boot }: { boot?: BootData | null }) {
     }
   }, [needYou]); // eslint-disable-line react-hooks/exhaustive-deps
   // Tiêu đề thẻ trình duyệt theo màn hình đang xem: nhiều thẻ vẫn phân biệt được, trình đọc màn hình có tín hiệu đổi trang. Đoạn chat ẩn danh không lộ tên lên thẻ.
-  const VIEW_TITLE: Partial<Record<View, string>> = { projects: "Dự án", project: "Dự án", artifacts: "Artifacts", customize: "Kho kỹ năng", code: "Code", speech: "Speech", autopilot: "Autopilot", brain: "Bộ não" };
+  const VIEW_TITLE: Partial<Record<View, string>> = {
+    projects: "Dự án", project: "Dự án", artifacts: "Artifacts", customize: "Kho kỹ năng", code: "Code",
+    speech: "Speech", autopilot: "Autopilot", brain: "Bộ não",
+  };
   const tabName = view === "chat" ? (meta && !meta.inc ? meta.title : "") : tr(VIEW_TITLE[view] ?? "");
   useEffect(() => {
     const n = needYou.size;
@@ -1986,7 +1999,7 @@ export default function Home({ boot }: { boot?: BootData | null }) {
       : x.status === "error" ? tf("Autopilot gặp lỗi khi chạy “{title}”", v)
       : tf("Autopilot đã xong “{title}”", v);
     const chat = x.chat !== undefined && x.status === "done" && !x.proposals;
-    say(msg, { label: tr(chat ? "Mở đoạn chat" : "Mở Autopilot"), run: () => openFresh(x) });
+    say(msg, { label: chat ? tr("Mở đoạn chat") : trc("Mở Autopilot", "autopilot"), run: () => openFresh(x) });
   }, (x) => openFresh(x));
   // Bảng lệnh ⌘K: lệnh nhanh và cách mở từng loại kết quả.
   const paletteCmds: PaletteCmd[] = [
@@ -2021,7 +2034,8 @@ export default function Home({ boot }: { boot?: BootData | null }) {
     const local = () => {
       if (!text) return say("Đoạn chat kết quả chưa về máy này, hãy thử lại sau giây lát");
       const id = Date.now();
-      setChats((cs) => [{ id, title: title.slice(0, 40), msgs: [{ role: "user", text: title, time: id }, { role: "ai", text, done: true, time: id }] }, ...cs]);
+      const msgs: Msg[] = [{ role: "user", text: title, time: id }, { role: "ai", text, done: true, time: id }];
+      setChats((cs) => [{ id, title: title.slice(0, 40), msgs }, ...cs]);
       setCur(id); setView("chat");
     };
     if (chat === undefined) return local();

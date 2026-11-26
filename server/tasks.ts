@@ -23,8 +23,7 @@ import { deliverResult, storedOf } from "./autopilot";
 export { cleanSchedule, localTime, nextRun, scheduleDesc, type Schedule };
 export type BrowserPref = "auto" | "synchro" | "user";
 /** chat: lượt chat đủ công cụ (web, trình duyệt, Chrome, connector, skill, chạy code, artifact, ảnh); code: Synchro
- *  Code trong
- *  workspace riêng của việc (sửa tệp, lệnh, git, PR). */
+ *  Code trong workspace riêng của việc (sửa tệp, lệnh, git, PR). */
 export type Engine = "chat" | "code";
 /** schedule: JSON của lịch cộng cách báo kết quả (autopilot.ts Stored). */
 export type TaskRow = {
@@ -170,8 +169,8 @@ export function updateTask(uid: string, id: string, x: TaskIn) {
   const engine = cleanEngine(x.engine, r.engine);
   if (engine !== r.engine) codeOk(uid, engine);
   const plan = stored(s, typeof x.email === "boolean" ? x.email : was.notify === "email", cleanLang(x.lang, was.lang));
-  d.prepare("UPDATE tasks SET title = ?, prompt = ?, schedule = ?, enabled = ?, model = ?, next_run_at = ?, browser = ?,"
-    + " memory = ?, wait_since = ?, engine = ? WHERE id = ?")
+  d.prepare("UPDATE tasks SET title = ?, prompt = ?, schedule = ?, enabled = ?, model = ?, next_run_at = ?,"
+    + " browser = ?, memory = ?, wait_since = ?, engine = ? WHERE id = ?")
     .run(title, prompt, plan, enabled ? 1 : 0, model, next, cleanBrowser(x.browser, r.browser),
       typeof x.memory === "boolean" ? (x.memory ? 1 : 0) : r.memory, enabled ? r.wait_since : null, engine, id);
   return one(d, id);
@@ -199,7 +198,9 @@ nhắn trực tiếp.
 người dùng.
 - Số liệu phải có nguồn và thời điểm (giá lúc mấy giờ, ở trang nào). Không bịa; thiếu dữ liệu thì nói rõ thiếu gì và vì sao.
 - Có <previous_runs>: so sánh với các lần trước (thay đổi, xu hướng), không lặp lại mục đã báo hay đã đề xuất trước đó trừ khi có điều mới.
-- Việc cần người dùng đồng ý trước (tạo skill, gửi tin nhắn / email, đăng bài, mua bán, đặt lệnh, xóa hay sửa dữ liệu của họ, thay đổi gì đó bằng tài khoản của họ): không tự làm; gọi autopilot_propose để gửi đề xuất vào mục Cần duyệt của Autopilot, người dùng duyệt thì Synchro làm.
+- Việc cần người dùng đồng ý trước (tạo skill, gửi tin nhắn / email, đăng bài, mua bán, đặt lệnh, xóa hay sửa dữ liệu \
+của họ, thay đổi gì đó bằng tài khoản của họ): không tự làm; gọi autopilot_propose để gửi đề xuất vào mục Cần duyệt \
+của Autopilot, người dùng duyệt thì Synchro làm.
 - Phân tích, nhận định hay gợi ý (đầu tư, giao dịch, sức khỏe, pháp lý…): đưa thẳng gợi ý cụ thể người dùng cần (ví dụ mua / bán / giữ, vùng giá, mức cắt lỗ), kèm dữ liệu và lập luận làm căn cứ, mức độ chắc chắn và rủi ro chính trong một hai câu.
 - Kết quả cuối viết bằng ngôn ngữ người dùng dùng trong yêu cầu, Markdown: dòng đầu tóm tắt điều quan trọng nhất, rồi \
 chi tiết (tiêu đề, gạch đầu dòng, bảng), cuối cùng là mục "Nguồn". Sản phẩm người dùng yêu cầu (trang web, tài liệu, \
@@ -374,7 +375,10 @@ export function propose(owner: string, o: { task: string | null; run: string | n
     OR (p.status = 'done' AND ? = 0 AND COALESCE(p.decided_at, p.at) > ?)) ORDER BY p.at DESC LIMIT 1`).get(owner, o.kind, o.key, after, o.doneGone ? 1 : 0, after) as PRow | undefined;
   if (dup) return { id: dup.id, dup: ppub(dup) };
   if (o.run && (d.prepare("SELECT COUNT(*) AS n FROM proposals WHERE run_id = ?").get(o.run) as { n: number }).n >= PROPOSAL_LIMITS.perRun) fail(`Mỗi lần chạy gửi tối đa ${PROPOSAL_LIMITS.perRun} đề xuất.`, 429);
-  if ((d.prepare("SELECT COUNT(*) AS n FROM proposals WHERE owner = ? AND status = 'pending'").get(owner) as { n: number }).n >= PROPOSAL_LIMITS.pending) fail("Autopilot đã có quá nhiều đề xuất chờ duyệt.", 429);
+  const pend = d.prepare("SELECT COUNT(*) AS n FROM proposals WHERE owner = ? AND status = 'pending'");
+  if ((pend.get(owner) as { n: number }).n >= PROPOSAL_LIMITS.pending) {
+    fail("Autopilot đã có quá nhiều đề xuất chờ duyệt.", 429);
+  }
   const id = "prp_" + crypto.randomBytes(8).toString("base64url");
   d.prepare("INSERT INTO proposals (id, owner, task_id, run_id, kind, key, title, summary, payload, at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
     .run(id, owner, o.task, o.run, o.kind, o.key.slice(0, 300), o.title.slice(0, 200), o.summary.slice(0, 4000), JSON.stringify(o.payload), Date.now());
@@ -436,7 +440,8 @@ function keepResult(uid: string, r: Pick<RunRow, "run_id">): Kept | null {
   const res = (run?.result ?? {}) as { text?: string; error?: string; model?: string };
   let k: Kept = run
     ? {
-      status: run.status, text: String(res.text ?? "").slice(0, 60_000), ...(res.error ? { error: String(res.error) } : {}),
+      status: run.status, text: String(res.text ?? "").slice(0, 60_000),
+      ...(res.error ? { error: String(res.error) } : {}),
       ...(typeof res.model === "string" ? { model: res.model } : {}),
     }
     : { status: "expired", error: TOO_OLD };
@@ -449,7 +454,8 @@ function keepResult(uid: string, r: Pick<RunRow, "run_id">): Kept | null {
     return cur?.result ? parseKept(cur.result) : k;
   }
   const row = d.prepare("SELECT * FROM task_runs WHERE run_id = ?").get(r.run_id) as RunRow | undefined;
-  if (run && row && retryAhead(d, uid, row, run)) d.prepare("UPDATE task_runs SET read = 1 WHERE run_id = ?").run(r.run_id);
+  const held = !!run && !!row && retryAhead(d, uid, row, run);
+  if (held) d.prepare("UPDATE task_runs SET read = 1 WHERE run_id = ?").run(r.run_id);
   else if (run && row) {
     const chat = deliverResult({
       uid, run: r.run_id, title: row.title, at: row.at, kind: row.kind, task: getTask(uid, row.task_id),
@@ -460,8 +466,8 @@ function keepResult(uid: string, r: Pick<RunRow, "run_id">): Kept | null {
       d.prepare("UPDATE task_runs SET result = ? WHERE run_id = ?").run(JSON.stringify(k), r.run_id);
     }
   }
-  d.prepare("UPDATE task_runs SET result = ? WHERE owner = ? AND run_id IN (SELECT run_id FROM task_runs WHERE owner = ?"
-    + " AND result IS NOT NULL ORDER BY at DESC LIMIT -1 OFFSET ?)").run(EXPIRED, uid, uid, INBOX_KEEP);
+  d.prepare("UPDATE task_runs SET result = ? WHERE owner = ? AND run_id IN (SELECT run_id FROM task_runs"
+    + " WHERE owner = ? AND result IS NOT NULL ORDER BY at DESC LIMIT -1 OFFSET ?)").run(EXPIRED, uid, uid, INBOX_KEEP);
   return k;
 }
 /** Nhịp đều của máy chủ: chép kết quả của các lượt vừa xong và gửi cho người dùng, kể cả khi không ai mở Autopilot

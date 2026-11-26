@@ -130,7 +130,8 @@ d.prepare(OLD)
   ok(ren === "" && got?.title === "Đổi tên" && got.email === true && got.enabled === false && got.next_run_at === null,
     "việc một lần đã chạy: form gửi lại đúng giờ hẹn cũ thì đổi tên, bật email được, không chạy lại",
     ren || JSON.stringify(got));
-  const moved = throws(() => T.updateTask(u.id, one.id, form({ schedule: { kind: "once", at: "2020-02-01T08:00", tz: HCM } })));
+  const moved = throws(() => T.updateTask(u.id, one.id, form({ schedule: { kind: "once", at: "2020-02-01T08:00",
+    tz: HCM } })));
   ok(/đã qua/.test(moved), "đổi sang một giờ hẹn khác cũng đã qua: vẫn bị từ chối", moved);
   const again = T.updateTask(u.id, one.id, form({ schedule: { kind: "once", at: "2099-03-01T08:00", tz: HCM } }));
   ok(again.enabled === true && again.next_run_at === S.atUtc({ at: "2099-03-01T08:00", tz: HCM }),
@@ -147,8 +148,10 @@ d.prepare(OLD)
     resume || JSON.stringify(still));
 
   // Việc mỗi 3 giờ: sửa tên (form gửi lại lịch y nguyên) không lùi lần chạy kế tiếp.
-  const hr = T.createTask(u.id, { title: "Mỗi 3 giờ", prompt: "Kiểm tra", schedule: { kind: "hourly", every: 3, tz: HCM } });
-  const renamed = T.updateTask(u.id, hr.id, { title: "Mỗi 3 giờ (mới)", schedule: { tz: HCM, every: 3, kind: "hourly" } });
+  const hr = T.createTask(u.id, { title: "Mỗi 3 giờ", prompt: "Kiểm tra", schedule: { kind: "hourly", every: 3,
+    tz: HCM } });
+  const renamed = T.updateTask(u.id, hr.id, { title: "Mỗi 3 giờ (mới)", schedule: { tz: HCM, every: 3,
+    kind: "hourly" } });
   ok(renamed.next_run_at === hr.next_run_at && renamed.title === "Mỗi 3 giờ (mới)",
     "sửa tên, lịch không đổi: giữ nguyên lần chạy kế tiếp", `${hr.next_run_at} → ${renamed.next_run_at}`);
 }
@@ -228,7 +231,8 @@ R.getRun(""); // tạo bảng runs
   const e = errMails();
   ok(e.length === 1 && e[0].text.includes("https://synchro.test/#v=autopilot")
     && /retried it 2 times/.test(e[0].html),
-  "lần thử cuối vẫn lỗi: đúng một email báo lỗi, nói đã tự chạy lại, nút mở Autopilot", JSON.stringify(e).slice(0, 400));
+  "lần thử cuối vẫn lỗi: đúng một email báo lỗi, nói đã tự chạy lại, nút mở Autopilot", JSON.stringify(e).slice(0,
+    400));
   const f4 = T.inboxCount(u.id).fresh.find((x) => x.run === "r4");
   ok(f4?.status === "error" && f4.kind === "task" && f4.chat === undefined, "thông báo trong app ghi đúng là lỗi",
     JSON.stringify(f4));

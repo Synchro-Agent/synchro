@@ -62,7 +62,8 @@ export function useInboxCount(on: boolean, onFresh?: (x: Fresh) => void, onOpen?
     const f = () => { if (!document.hidden) load(); };
     document.addEventListener("visibilitychange", f); window.addEventListener(INBOX_CHANGED, load);
     return () => {
-      clearInterval(t); document.removeEventListener("visibilitychange", f); window.removeEventListener(INBOX_CHANGED, load);
+      clearInterval(t); document.removeEventListener("visibilitychange", f); window.removeEventListener(INBOX_CHANGED,
+        load);
     };
   }, [load]);
   return n;

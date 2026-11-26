@@ -1,6 +1,7 @@
-// Autopilot: (1) lời giao việc bằng câu thường → kế hoạch việc tự động (tên, lịch, trình duyệt, hướng dẫn chi tiết cho model chạy nền),
-// người dùng xem / sửa rồi tạo; (2) người dùng duyệt đề xuất của việc tự động → Synchro làm: tạo skill, làm hành động đã duyệt (lượt chạy riêng,
-// kết quả vào Autopilot), cho phép trang web, gọi công cụ connector để "hỏi trước" với đúng tham số đã đề xuất.
+// Autopilot: (1) lời giao việc bằng câu thường → kế hoạch việc tự động (tên, lịch, trình duyệt, hướng dẫn chi tiết cho
+// model chạy nền), người dùng xem / sửa rồi tạo; (2) người dùng duyệt đề xuất của việc tự động → Synchro làm: tạo
+// skill, làm hành động đã duyệt (lượt chạy riêng, kết quả vào Autopilot), cho phép trang web, gọi công cụ connector để
+// "hỏi trước" với đúng tham số đã đề xuất.
 import "server-only";
 import JSZip from "jszip";
 import { isAdmin, permsOf, type UserRow } from "./authstore";
@@ -16,9 +17,12 @@ import { claimProposal, cleanBrowser, cleanEngine, cleanSchedule, getProposal, l
 // ---------------------------------------------------------------- lời giao việc → kế hoạch
 export type Plan = { title: string; prompt: string; schedule: Schedule; browser: BrowserPref; engine: Engine; approvals: string[]; needs: string[] };
 const PLAN = `<automation_plan>
-Người dùng giao một việc cho Autopilot để Synchro tự làm ở nền theo lịch (máy chủ của Synchro chạy, người dùng không ngồi xem, máy họ có thể đang tắt; kết quả thành một đoạn chat để họ hỏi tiếp). Chuyển lời giao việc thành kế hoạch.
+Người dùng giao một việc cho Autopilot để Synchro tự làm ở nền theo lịch (máy chủ của Synchro chạy, người dùng không \
+ngồi xem, máy họ có thể đang tắt; kết quả thành một đoạn chat để họ hỏi tiếp). Chuyển lời giao việc thành kế hoạch.
 Trả về đúng một JSON, không gì khác:
-{"title":"…","schedule":{"kind":"once|hourly|daily|weekdays|weekly|cron","time":"HH:MM","weekday":1,"every":1,"at":"YYYY-MM-DDTHH:MM","cron":"phút giờ ngày tháng thứ"},"engine":"chat|code","browser":"auto|synchro|user","prompt":"…","approvals":["…"],"needs":["…"]}
+{"title":"…","schedule":{"kind":"once|hourly|daily|weekdays|weekly|cron","time":"HH:MM","weekday":1,"every":1,\
+"at":"YYYY-MM-DDTHH:MM","cron":"phút giờ ngày tháng thứ"},"engine":"chat|code","browser":"auto|synchro|user",\
+"prompt":"…","approvals":["…"],"needs":["…"]}
 - title: tên ngắn (tối đa 8 từ), cùng ngôn ngữ người dùng.
 - schedule: theo lời người dùng. "Mỗi ngày" không nói giờ thì 08:00. Giá cổ phiếu, chứng khoán, tỷ giá: weekdays (thứ \
 Hai–thứ Sáu) trừ khi người dùng nói khác. weekly: weekday 0 = Chủ nhật … 6 = Thứ Bảy. hourly: every = số giờ giữa hai \
@@ -28,7 +32,10 @@ lần (1–12). "Một lần", "ngay bây giờ": once không có at. Một lầ
 số (ví dụ "0 9 1 * *" là 9:00 ngày 1 hằng tháng, "30 8,17 * * 1-5" là 8:30 và 17:30 từ thứ Hai tới thứ Sáu).
 - engine: "code" khi việc phải làm trên mã nguồn / repo (sửa code, chạy lệnh, cập nhật thư viện, chạy kiểm thử, commit, mở pull request, sửa lỗi CI…): chạy bằng Synchro Code trong workspace riêng; còn lại "chat" (tra cứu, tổng hợp, phân tích, trình duyệt, connector, skill, chạy code ngắn).
 - browser: "user" chỉ khi việc cần tài khoản người dùng đã đăng nhập (email, mạng xã hội, tài khoản chứng khoán, trang nội bộ…); còn lại "auto".
-- prompt: hướng dẫn chi tiết, đủ để một trợ lý khác tự làm mà không cần hỏi lại, viết bằng ngôn ngữ người dùng: mục tiêu; nguồn nên tra (trang cụ thể nếu biết); các bước; tiêu chí chọn lọc / đánh giá; định dạng kết quả (tóm tắt trước, bảng nếu hợp, nguồn ở cuối); so sánh với lần chạy trước; những việc phải gửi đề xuất chờ người dùng duyệt bằng autopilot_propose thay vì tự làm (ví dụ tạo skill, gửi tin, giao dịch).
+- prompt: hướng dẫn chi tiết, đủ để một trợ lý khác tự làm mà không cần hỏi lại, viết bằng ngôn ngữ người dùng: mục \
+tiêu; nguồn nên tra (trang cụ thể nếu biết); các bước; tiêu chí chọn lọc / đánh giá; định dạng kết quả (tóm tắt trước, \
+bảng nếu hợp, nguồn ở cuối); so sánh với lần chạy trước; những việc phải gửi đề xuất chờ người dùng duyệt bằng \
+autopilot_propose thay vì tự làm (ví dụ tạo skill, gửi tin, giao dịch).
 - approvals: các việc sẽ gửi đề xuất chờ người dùng duyệt (ví dụ "Tạo skill từ repo được chọn"); [] nếu không có.
 - needs: điều kiện cần có để chạy tốt (ví dụ "Bật Điều khiển trình duyệt", "Kết nối Gmail"); [] nếu không có.
 </automation_plan>`;
@@ -95,7 +102,8 @@ export async function decideProposal(user: UserRow, id: string, decision: "appro
     if (p.kind === "action") {
       const instructions = typeof edits.instructions === "string" && edits.instructions.trim() ? edits.instructions.trim().slice(0, 8000) : String(pl.instructions ?? "");
       const run = await runApproved(user.id, p.task, p.title, instructions, Array.isArray(pl.allow) ? (pl.allow as unknown[]).filter((x): x is string => typeof x === "string") : []);
-      settleProposal(user.id, id, "done", "Synchro đang làm việc đã duyệt, kết quả vào Autopilot.", { ...pl, instructions, run });
+      settleProposal(user.id, id, "done", "Synchro đang làm việc đã duyệt, kết quả vào Autopilot.", { ...pl,
+        instructions, run });
       return { proposal: getProposal(user.id, id)!, run };
     }
     if (p.kind === "site") {

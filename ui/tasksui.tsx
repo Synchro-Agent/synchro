@@ -216,7 +216,10 @@ function TaskEditor({ init, plan, onClose, onSaved, say }: { init?: Task | null;
           : tr("Xem lại và sửa nếu cần. Synchro chạy việc này trên máy chủ, kể cả khi bạn đóng tab hay gập máy.")}</p>
         <label className="tk-l">{tr("Tên")}<input className="field" value={title} maxLength={120} onChange={(e) => setTitle(e.target.value)} placeholder={tr("Ví dụ: Giá cổ phiếu mỗi sáng")} data-notr /></label>
         <div className="tk-sch">
-          <div className="tk-l">{tr("Lịch chạy")}<Dropdown<Kind> block label="Lịch chạy" className="tk-kind" value={kind} onChange={setKind} options={KINDS} /></div>
+          <div className="tk-l">{tr("Lịch chạy")}
+            <Dropdown<Kind> block label="Lịch chạy" className="tk-kind" value={kind} onChange={setKind}
+              options={KINDS} />
+          </div>
           {kind === "hourly" && <div className="tk-l">{tr("Cách nhau")}<Dropdown<number> block label="Cách nhau" className="tk-every" value={every} onChange={setEvery} options={[1, 2, 3, 4, 6, 8, 12].map((n) => ({ value: n, label: `${n} ${tr("giờ")}`, notr: true }))} /></div>}
           {kind === "weekly" && <div className="tk-l">{tr("Vào")}<Dropdown<number> block label="Vào" className="tk-day" value={weekday} onChange={setWeekday} options={DAYS.map((d, i) => [i, d] as const)} /></div>}
           {kind === "at" && <label className="tk-l">{tr("Ngày")}
@@ -328,7 +331,9 @@ function ProposalCard({ p, say, onDone }: { p: Proposal; say: (m: string) => voi
     const edits = p.kind === "skill" ? { ...(draft === null ? {} : { skill_md: draft }), ...(scope === "org" ? { scope } : {}) } : draft === null ? undefined : { instructions: draft };
     try {
       await api("POST", "/api/autopilot/proposals", { id: p.id, decision, edits });
-      say(decision === "reject" ? tr("Đã bỏ qua đề xuất") : p.kind === "skill" ? tr(scope === "org" ? "Đã tạo skill và thêm vào thư viện cho mọi người" : "Đã tạo skill") : p.kind === "action" ? tr("Synchro đang làm việc đã duyệt, xong sẽ có thông báo") : tr("Đã cho phép"));
+      say(decision === "reject" ? tr("Đã bỏ qua đề xuất")
+        : p.kind === "skill" ? tr(scope === "org" ? "Đã tạo skill và thêm vào thư viện cho mọi người" : "Đã tạo skill")
+        : p.kind === "action" ? tr("Synchro đang làm việc đã duyệt, xong sẽ có thông báo") : tr("Đã cho phép"));
       changed(); onDone();
     } catch (e) { say((e as Error).message); onDone(); }
     setBusy("");
@@ -368,7 +373,10 @@ const LOG_KINDS = new Set(["tool", "note", "step", "say", "ui"]);
 const foreign = (s: string) => isForeign(s, tr(s), getLang());
 /** Lý do lỗi một dòng cho dòng kết quả (đã dịch). */
 const failReason = (raw?: string) => failLine(tr(failInfo(raw, foreign).text));
-function ResultBody({ x, task, say, onOpenChat, onRetry, reload }: { x: Item; task?: Task; say: (m: string) => void; onOpenChat: OpenChat; onRetry: (t: Task) => void; reload: () => void }) {
+type BodyProps = {
+  x: Item; task?: Task; say: (m: string) => void; onOpenChat: OpenChat; onRetry: (t: Task) => void; reload: () => void;
+};
+function ResultBody({ x, task, say, onOpenChat, onRetry, reload }: BodyProps) {
   const [events, setEvents] = useState<RunEv[] | null>(null);
   const [props, setProps] = useState<Proposal[]>([]);
   const [log, setLog] = useState(false);
@@ -381,27 +389,28 @@ function ResultBody({ x, task, say, onOpenChat, onRetry, reload }: { x: Item; ta
     try { await downloadPptx(x.run, ident); say(tr("Đã tải tệp PowerPoint")); } catch (e) { say(tr((e as Error).message)); } finally { setPptx(null); }
   };
   const real = x.kind !== "notice" && x.status !== "waiting";
+  // Nhật ký và đề xuất chỉ là phần thêm của kết quả (chữ kết quả đã có sẵn): không tải được thì ghi nhật ký và để
+  // trống; lượt đang chạy thì 3 giây sau tự hỏi lại.
+  const miss = useCallback(
+    (what: string) => (e: unknown) => console.warn(`[autopilot] chưa tải được ${what}`, x.run, e), [x.run]);
   useEffect(() => {
     if (!real) return;
     let stop = false;
-    // Nhật ký và đề xuất chỉ là phần thêm của kết quả (chữ kết quả đã có sẵn): không tải được thì ghi nhật ký và để
-    // trống; lượt đang chạy thì 3 giây sau tự hỏi lại.
-    const miss = (what: string) => (e: unknown) => console.warn(`[autopilot] chưa tải được ${what}`, x.run, e);
     const load = () => {
       api<{ run: { events: RunEv[]; status: string } }>("GET", `/api/runs/${x.run}?json=1`).then((j) => {
         if (stop) return;
         setEvents(j.run.events);
         if (j.run.status !== "running" && x.status === "running") reload();
-      }).catch(miss("nhật ký"));
+      }).catch(miss("events"));
       if (x.proposals) {
         api<{ proposals: Proposal[] }>("GET", `/api/autopilot/proposals?run=${x.run}`)
-          .then((j) => { if (!stop) setProps(j.proposals); }).catch(miss("đề xuất"));
+          .then((j) => { if (!stop) setProps(j.proposals); }).catch(miss("proposals"));
       }
     };
     load();
     const t = x.status === "running" ? setInterval(load, 3000) : null;
     return () => { stop = true; if (t) clearInterval(t); };
-  }, [x.run, x.status, x.proposals, real, reload]);
+  }, [x.run, x.status, x.proposals, real, reload, miss]);
   const steps = (events ?? []).filter((e) => LOG_KINDS.has(e.kind) && !(e.kind === "ui"));
   const lastStep = [...steps].reverse().find((e) => e.kind !== "say");
   return (
@@ -412,7 +421,13 @@ function ResultBody({ x, task, say, onOpenChat, onRetry, reload }: { x: Item; ta
         : isExpired(x) ? <p className="tk-note"><I.Clock size={13} /><span>{tr(TOO_OLD)}</span></p>
         : x.error ? ((e) => <div className="sk-err tk-err"><span data-notr>{tr(e.text)}</span>{e.detail && <details><summary>{tr("Chi tiết kỹ thuật")}</summary><code data-notr>{e.detail}</code></details>}</div>)(failInfo(x.error, foreign))
         : <div className="mdx"><Markdown text={readable(x.text)} say={say} /></div>}
-      {props.length > 0 && <div className="tk-props-in"><b>{tr("Đề xuất của lần chạy này")}</b>{props.map((p) => <ProposalCard key={p.id} p={p} say={say} onDone={() => { reload(); api<{ proposals: Proposal[] }>("GET", `/api/autopilot/proposals?run=${x.run}`).then((j) => setProps(j.proposals)).catch(() => {}); }} />)}</div>}
+      {props.length > 0 && <div className="tk-props-in"><b>{tr("Đề xuất của lần chạy này")}</b>{props.map((p) => (
+        <ProposalCard key={p.id} p={p} say={say} onDone={() => {
+          reload();
+          api<{ proposals: Proposal[] }>("GET", `/api/autopilot/proposals?run=${x.run}`)
+            .then((j) => setProps(j.proposals)).catch(miss("proposals"));
+        }} />
+      ))}</div>}
       {log && steps.length > 0 && <ol className="tk-log">{steps.map((e) => <li key={e.seq} className={e.kind}><span>{when(e.at).split(" ·")[0]}</span><span data-notr>{e.text}</span></li>)}</ol>}
       {x.kind !== "notice" && x.status !== "waiting" && <div className="tk-acts">
         {x.status === "done" && <button className={`btn ${x.chat ? "dark" : ""}`}
@@ -479,9 +494,12 @@ export function AutopilotPage({ say, onOpenChat }: { say: (m: string) => void; m
   const [propsErr, setPropsErr] = useState("");
   const load = useCallback(() => {
     setLoadErr(""); setTasksErr(""); setPropsErr("");
-    api<{ items: Item[]; more: boolean }>("GET", "/api/autopilot").then((j) => { setItems(j.items); setMore((m) => (older_.current ? m : j.more)); }).catch((e) => setLoadErr(e.message));
+    api<{ items: Item[]; more: boolean }>("GET", "/api/autopilot").then((j) => {
+      setItems(j.items); setMore((m) => (older_.current ? m : j.more));
+    }).catch((e) => setLoadErr(e.message));
     api<{ tasks: Task[] }>("GET", "/api/tasks").then((j) => setTasks(j.tasks)).catch((e) => setTasksErr(e.message));
-    api<{ proposals: Proposal[] }>("GET", "/api/autopilot/proposals?all=1").then((j) => setProps(j.proposals)).catch((e) => setPropsErr(e.message));
+    api<{ proposals: Proposal[] }>("GET", "/api/autopilot/proposals?all=1").then((j) => setProps(j.proposals))
+      .catch((e) => setPropsErr(e.message));
   }, [say]);
   useEffect(() => {
     load();
@@ -508,7 +526,8 @@ export function AutopilotPage({ say, onOpenChat }: { say: (m: string) => void; m
   const read = async (ids: string[] | "all") => {
     // Đánh dấu đã đọc không được (mất mạng) thì lần tải lại bên dưới trả về đúng trạng thái trên máy chủ; chỉ ghi
     // nhật ký, không làm phiền người dùng vì một chấm chưa đọc.
-    await api("POST", "/api/autopilot", { read: ids }).catch((e) => console.warn("[autopilot] chưa đánh dấu đã đọc", e));
+    await api("POST", "/api/autopilot", { read: ids })
+      .catch((e) => console.warn("[autopilot] chưa đánh dấu đã đọc", e));
     setOlder((o) => o.map((x) => (ids === "all" || ids.includes(x.run) ? { ...x, read: true } : x)));
     changed(); load();
   };
@@ -516,9 +535,18 @@ export function AutopilotPage({ say, onOpenChat }: { say: (m: string) => void; m
   // Nút "Chạy lại" ngay trên dòng lỗi: chạy lại việc đó, khóa nút tới khi máy chủ nhận lệnh.
   const [rerun, setRerun] = useState<string | null>(null);
   const rerunRow = async (x: Item) => { const t = byId.get(x.task); if (!t || rerun) return; setRerun(x.run); try { await runNow(t); } finally { setRerun(null); } };
-  const runNow = async (t: Task) => { try { await api("POST", `/api/tasks/${t.id}/run`); say(tr("Đang chạy trên máy chủ, xong sẽ có thông báo")); setTab("results"); load(); } catch (e) { say((e as Error).message); } };
+  const runNow = async (t: Task) => {
+    try {
+      await api("POST", `/api/tasks/${t.id}/run`);
+      say(tr("Đang chạy trên máy chủ, xong sẽ có thông báo")); setTab("results"); load();
+    } catch (e) { say((e as Error).message); }
+  };
   const setOn = async (t: Task) => { try { await api("PATCH", `/api/tasks/${t.id}`, { enabled: !t.enabled }); load(); } catch (e) { say((e as Error).message); } };
-  const del = (t: Task) => app.confirm(tr("Xóa việc tự động này?"), tr("Kết quả cũ trong Autopilot cũng bị xóa. Đoạn chat kết quả vẫn giữ."), tr("Xóa"), () => { void api("DELETE", `/api/tasks/${t.id}`).then(() => { say(tr("Đã xóa việc tự động")); load(); }).catch((e) => say((e as Error).message)); });
+  const del = (t: Task) => app.confirm(tr("Xóa việc tự động này?"),
+    tr("Kết quả cũ trong Autopilot cũng bị xóa. Đoạn chat kết quả vẫn giữ."), tr("Xóa"), () => {
+      void api("DELETE", `/api/tasks/${t.id}`).then(() => { say(tr("Đã xóa việc tự động")); load(); })
+        .catch((e) => say((e as Error).message));
+    });
   const byId = useMemo(() => new Map((tasks ?? []).map((t) => [t.id, t])), [tasks]);
   const all = useMemo(() => { const first = items ?? [], have = new Set(first.map((x) => x.run)); return [...first, ...older.filter((x) => !have.has(x.run))]; }, [items, older]);
   const unread = all.filter((x) => !x.read && x.status !== "running" && x.status !== "waiting").length;
@@ -531,8 +559,14 @@ export function AutopilotPage({ say, onOpenChat }: { say: (m: string) => void; m
   const bkJ = useBulk(tasks ?? [], (t) => t.id);
   const resActs: BulkAct<Item>[] = [
     { id: "read", label: tr("Đánh dấu đã đọc"), icon: <I.Check size={14} />, when: (l) => l.some((x) => !x.read && !live(x)), run: (l) => read(l.filter((x) => !live(x)).map((x) => x.run)) },
-    { id: "unread", label: tr("Đánh dấu chưa đọc"), icon: <I.Inbox size={14} />, when: (l) => l.some((x) => x.read), run: async (l) => { await api("POST", "/api/autopilot", { unread: l.map((x) => x.run) }); const ids = new Set(l.map((x) => x.run)); setOlder((o) => o.map((x) => (ids.has(x.run) ? { ...x, read: false } : x))); changed(); load(); } },
-    { id: "rm", label: tr("Gỡ khỏi Autopilot"), icon: <I.Trash size={14} />, danger: true, when: (l) => l.some((x) => !live(x)),
+    { id: "unread", label: tr("Đánh dấu chưa đọc"), icon: <I.Inbox size={14} />, when: (l) => l.some((x) => x.read),
+      run: async (l) => {
+        await api("POST", "/api/autopilot", { unread: l.map((x) => x.run) });
+        const ids = new Set(l.map((x) => x.run));
+        setOlder((o) => o.map((x) => (ids.has(x.run) ? { ...x, read: false } : x))); changed(); load();
+      } },
+    { id: "rm", label: tr("Gỡ khỏi Autopilot"), icon: <I.Trash size={14} />, danger: true,
+      when: (l) => l.some((x) => !live(x)),
       confirm: (l) => ({
         title: `${tr("Gỡ")} ${l.filter((x) => !live(x)).length} ${tr("kết quả khỏi Autopilot?")}`, ok: tr("Gỡ"),
         text: trs(
@@ -540,14 +574,30 @@ export function AutopilotPage({ say, onOpenChat }: { say: (m: string) => void; m
           "Kết quả đang chạy được giữ lại.",
         ),
       }),
-      run: async (l) => { const ids = l.filter((x) => !live(x)).map((x) => x.run); await api("POST", "/api/autopilot", { remove: ids }); setOlder((o) => o.filter((x) => !ids.includes(x.run))); changed(); load(); say(tr("Đã gỡ khỏi Autopilot")); } },
+      run: async (l) => {
+        const ids = l.filter((x) => !live(x)).map((x) => x.run);
+        await api("POST", "/api/autopilot", { remove: ids });
+        setOlder((o) => o.filter((x) => !ids.includes(x.run))); changed(); load(); say(tr("Đã gỡ khỏi Autopilot"));
+      } },
   ];
   const jobActs: BulkAct<Task>[] = [
-    { id: "run", label: tr("Chạy ngay"), icon: <I.Play size={13} />, run: async (l) => { await each(l, (t) => api("POST", `/api/tasks/${t.id}/run`)); say(tr("Đang chạy trên máy chủ, xong sẽ có thông báo")); setTab("results"); load(); } },
-    { id: "on", label: tr("Chạy tiếp theo lịch"), icon: <I.Power size={14} />, when: (l) => l.some((t) => !t.enabled), run: async (l) => { await each(l.filter((t) => !t.enabled), (t) => api("PATCH", `/api/tasks/${t.id}`, { enabled: true })); load(); } },
-    { id: "off", label: tr("Tạm dừng"), icon: <I.Pause size={13} />, when: (l) => l.some((t) => t.enabled), run: async (l) => { await each(l.filter((t) => t.enabled), (t) => api("PATCH", `/api/tasks/${t.id}`, { enabled: false })); load(); } },
+    { id: "run", label: tr("Chạy ngay"), icon: <I.Play size={13} />, run: async (l) => {
+      await each(l, (t) => api("POST", `/api/tasks/${t.id}/run`));
+      say(tr("Đang chạy trên máy chủ, xong sẽ có thông báo")); setTab("results"); load();
+    } },
+    { id: "on", label: tr("Chạy tiếp theo lịch"), icon: <I.Power size={14} />, when: (l) => l.some((t) => !t.enabled),
+      run: async (l) => {
+        await each(l.filter((t) => !t.enabled), (t) => api("PATCH", `/api/tasks/${t.id}`, { enabled: true })); load();
+      } },
+    { id: "off", label: tr("Tạm dừng"), icon: <I.Pause size={13} />, when: (l) => l.some((t) => t.enabled),
+      run: async (l) => {
+        await each(l.filter((t) => t.enabled), (t) => api("PATCH", `/api/tasks/${t.id}`, { enabled: false })); load();
+      } },
     { id: "del", label: tr("Xóa"), icon: <I.Trash size={14} />, danger: true,
-      confirm: (l) => ({ title: `${tr("Xóa")} ${l.length} ${tr("việc tự động?")}`, text: tr("Kết quả cũ của các việc này trong Autopilot cũng bị xóa. Đoạn chat kết quả vẫn giữ."), ok: tr("Xóa") }),
+      confirm: (l) => ({
+        title: `${tr("Xóa")} ${l.length} ${tr("việc tự động?")}`, ok: tr("Xóa"),
+        text: tr("Kết quả cũ của các việc này trong Autopilot cũng bị xóa. Đoạn chat kết quả vẫn giữ."),
+      }),
       run: async (l) => { await each(l, (t) => api("DELETE", `/api/tasks/${t.id}`)); say(tr("Đã xóa việc tự động")); load(); } },
   ];
   const pgR = usePage(shown, 15, filter);
@@ -589,7 +639,9 @@ export function AutopilotPage({ say, onOpenChat }: { say: (m: string) => void; m
         {tab === "jobs" && <BulkButton b={bkJ} />}
       </div>
 
-      {tab === "results" && (items === null ? (loadErr ? <LoadErr title={tr("Chưa tải được Autopilot")} err={loadErr} retry={load} /> : <div className="empty"><span className="art-spin" /></div>) : !shown.length ? (
+      {tab === "results" && (items === null ? (loadErr
+        ? <LoadErr title={tr("Chưa tải được Autopilot")} err={loadErr} retry={load} />
+        : <div className="empty"><span className="art-spin" /></div>) : !shown.length ? (
         <div className="apps-empty"><I.Inbox size={22} /><b>{tr("Chưa có kết quả nào")}</b><span>{trs(
           "Giao một việc ở ô phía trên (ví dụ giá cổ phiếu mỗi sáng, repo GitHub hay mỗi ngày).",
           "Synchro tự chạy, kết quả hiện ở đây và thành đoạn chat để bạn hỏi tiếp.",
@@ -635,7 +687,8 @@ export function AutopilotPage({ say, onOpenChat }: { say: (m: string) => void; m
             <div className="tk-job-h">
               {bkJ.on && <BulkCheck on={bkJ.has(t)} />}
               <span className="tk-t"><b data-notr>{t.title}</b><em>{scheduleText(t.schedule)}{jobState(t)}</em></span>
-              <button className={`toggle ${t.enabled ? "on" : ""}`} role="switch" aria-checked={t.enabled} aria-label="Chạy theo lịch"
+              <button className={`toggle ${t.enabled ? "on" : ""}`} role="switch" aria-checked={t.enabled}
+                aria-label="Chạy theo lịch"
                 data-tip={t.enabled ? "Tạm dừng" : "Chạy tiếp theo lịch"} onClick={() => setOn(t)} />
             </div>
             <div className="tk-job-m">

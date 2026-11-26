@@ -1,4 +1,5 @@
-// Lần chạy lỗi của việc tự động trong Autopilot (H4.3): lý do ngắn ngay trên dòng (không phải mở ra mới thấy) và nút "Chạy lại" trên dòng.
+// Lần chạy lỗi của việc tự động trong Autopilot: lý do ngắn ngay trên dòng (không phải mở ra mới thấy) và nút
+// "Chạy lại" trên dòng.
 // Hàm thuần, dùng chung cho tasksui.tsx và kiểm thử tests/api/task-fail-row.test.mjs.
 import { chatError, type ChatErr } from "./chaterror";
 

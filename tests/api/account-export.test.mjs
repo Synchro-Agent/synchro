@@ -34,7 +34,8 @@ try {
   ok(!text.includes("Của người khác"), "không lẫn dữ liệu người khác");
   ok(j?.memory?.some((x) => x.content === "Thích trà gừng") && j?.codeSessions?.some((s) => s.title === "Phiên Code riêng"), "có bộ nhớ và phiên Code đã lưu", j?.codeSessions);
   // Kết quả Autopilot vẫn ở khóa "inbox" như tệp tải trước khi đổi tên.
-  const keys = ["memory", "codeSessions", "apps", "appData", "appComments", "skills", "plugins", "inbox", "generatedFiles",
+  const keys = ["memory", "codeSessions", "apps", "appData", "appComments", "skills", "plugins", "inbox",
+    "generatedFiles",
     "speechItems", "instructionsHistory", "notIncluded"];
   for (const k of keys) ok(Array.isArray(j?.[k]), `có mục ${k}`, j?.[k]);
   ok(!text.includes("bí-mật-băm") && !/password_hash|enc_auth/.test(text), "không có mật khẩu băm hay token");

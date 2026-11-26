@@ -1,6 +1,7 @@
 "use client";
-// Cộng tác trên ứng dụng nội bộ: ai đang mở cùng lúc, bình luận có @nhắc tên (người được nhắc nhận thông báo trong Autopilot),
-// mọi thay đổi (bình luận, dữ liệu chung) hiện ngay cho người đang mở nhờ kênh trực tiếp /api/apps/<id>/live.
+// Cộng tác trên ứng dụng nội bộ: ai đang mở cùng lúc, bình luận có @nhắc tên (người được nhắc nhận thông báo trong
+// Autopilot), mọi thay đổi (bình luận, dữ liệu chung) hiện ngay cho người đang mở nhờ kênh trực tiếp
+// /api/apps/<id>/live.
 import { useCallback, useEffect, useRef, useState } from "react";
 import * as I from "./icons";
 import { tr } from "./i18n";

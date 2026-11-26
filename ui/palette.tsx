@@ -92,8 +92,15 @@ export function CommandPalette({ chats, projects, codes, cmds, go, seed, onClose
 
   useEffect(() => {
     let live = true;
-    Promise.all([get("/api/artifacts?view=titles"), get("/api/apps"), cachedJson<{ skills?: Remote["skills"] }>("/api/skills"), cachedJson<{ plugins?: Remote["libs"] }>("/api/plugins?view=lite"), get("/api/autopilot?limit=100")]).then(([a, ap, sk, pl, ib]) => {
-      if (live) setRem({ arts: a.artifacts ?? [], apps: ap.apps ?? [], skills: sk.skills ?? [], libs: pl.plugins ?? [], autopilot: ib.items ?? [] });
+    Promise.all([
+      get("/api/artifacts?view=titles"), get("/api/apps"), cachedJson<{ skills?: Remote["skills"] }>("/api/skills"),
+      cachedJson<{ plugins?: Remote["libs"] }>("/api/plugins?view=lite"), get("/api/autopilot?limit=100"),
+    ]).then(([a, ap, sk, pl, ib]) => {
+      if (!live) return;
+      setRem({
+        arts: a.artifacts ?? [], apps: ap.apps ?? [], skills: sk.skills ?? [], libs: pl.plugins ?? [],
+        autopilot: ib.items ?? [],
+      });
     });
     return () => { live = false; };
   }, []);
@@ -158,7 +165,10 @@ export function CommandPalette({ chats, projects, codes, cmds, go, seed, onClose
     }
     // Chưa gõ gì: lệnh và vài đoạn chat gần đây. Đã gõ: mọi nhóm, mỗi nhóm trước tiên hiện 6 kết quả kèm dòng "Xem tất cả N kết quả", nhóm theo thứ tự cố định.
     if (!words.length) return { cuts, rows: [...out.filter((r) => r.group === "Lệnh"), ...out.filter((r) => r.group === "Đoạn chat").slice(0, PER_GROUP)] };
-    const order = ["Lệnh", "Thẻ", "Đoạn chat", "Phiên Code", "Dự án", "Bộ não", "Autopilot", "Artifact và ứng dụng", "Skill và thư viện"];
+    const order = [
+      "Lệnh", "Thẻ", "Đoạn chat", "Phiên Code", "Dự án", "Bộ não", "Autopilot", "Artifact và ứng dụng",
+      "Skill và thư viện",
+    ];
     const scored = out.map((r) => ({ r, s: score(r.hay, words, r.label) })).filter((x) => x.s > 0);
     const rows = order.flatMap((g): Row[] => {
       const l = scored.filter((x) => x.r.group === g).sort((a, b) => b.s - a.s).map((x) => x.r);

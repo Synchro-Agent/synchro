@@ -105,7 +105,8 @@ try {
   await sleep(800);
   await click(byText(".nav-item", "Autopilot"), "inbox");
   ok(await waitFor(() => ev(`!!document.querySelector(".tk-top")`), 8000), "trang Autopilot mở từ thanh bên");
-  // Autopilot thành trung tâm tự động hóa (5917e17): nút "Tác vụ nền mới" và chip mẫu .tk-tpl được thay bằng ô giao việc (.tk-comp):
+  // Autopilot thành trung tâm tự động hóa (5917e17): nút "Tác vụ nền mới" và chip mẫu .tk-tpl được thay bằng ô giao
+  // việc (.tk-comp):
   // chip ví dụ điền sẵn câu, "Lên kế hoạch" mở thẻ kế hoạch (.tk-modal) đã điền tên, yêu cầu, lịch.
   await click(byText(".tk-comp .tk-ex .chip", "Bản tin AI buổi sáng"), "example"); await sleep(200);
   await click(byText(".tk-comp .btn.dark", "Lên kế hoạch"), "plan");
@@ -137,7 +138,8 @@ try {
   // Kết quả đã là một đoạn chat thường máy chủ tạo sẵn (thẻ Autopilot, đồng bộ về mọi thiết bị): nút mở đúng đoạn
   // chat đó.
   await click(byText(".tk-acts .btn", "Mở đoạn chat để hỏi tiếp"), "as chat");
-  ok(await waitFor(() => ev(`document.querySelectorAll(".ai-msg").length >= 1 && /Bản tin buổi sáng/.test(document.body.innerText)`), 10000),
+  ok(await waitFor(() => ev(`document.querySelectorAll(".ai-msg").length >= 1 && /Bản tin buổi ` +
+    `sáng/.test(document.body.innerText)`), 10000),
     "mở đoạn chat kết quả để hỏi tiếp");
   const listed = `/#c=\\d+/.test(location.hash) && [...document.querySelectorAll(".chat-item")]
     .some((e) => /Bản tin buổi sáng/.test(e.textContent))`;

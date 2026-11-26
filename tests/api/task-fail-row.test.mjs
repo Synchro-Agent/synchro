@@ -1,4 +1,5 @@
-// H4.3: lần chạy lỗi của việc tự động trong Autopilot hiện lý do ngay trên dòng và nút "Chạy lại" trên dòng. Hàm thuần + cấu trúc giao diện, không cần máy chủ.
+// Lần chạy lỗi của việc tự động trong Autopilot hiện lý do ngay trên dòng và nút "Chạy lại" trên dòng. Hàm thuần
+// + cấu trúc giao diện, không cần máy chủ.
 import fs from "node:fs";
 import { loadTs } from "../lib/ts.mjs";
 

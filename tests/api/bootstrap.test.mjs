@@ -28,7 +28,8 @@ try {
   ok(b.user?.id === u.id && !("password_hash" in b.user), "user là bản công khai của tài khoản", b.user);
   ok(b.caps && typeof b.caps.caps === "object" && "locks" in b.caps, "caps cùng dạng /api/caps", b.caps);
   ok(b.studios && typeof b.studios.admin === "boolean" && typeof b.studios.canInstall === "boolean" && typeof b.studios.studios === "object", "studios cùng dạng /api/plugins?view=meta", b.studios);
-  ok(b.inboxCount && b.inboxCount.unread === 0 && b.inboxCount.pending === 0 && Array.isArray(b.inboxCount.fresh), "inboxCount cùng dạng /api/autopilot?count=1", b.inboxCount);
+  ok(b.inboxCount && b.inboxCount.unread === 0 && b.inboxCount.pending === 0 && Array.isArray(b.inboxCount.fresh),
+    "inboxCount cùng dạng /api/autopilot?count=1", b.inboxCount);
   ok(b.models && Array.isArray(b.models.providers) && Array.isArray(b.models.allowed) && "default" in b.models && "replaced" in b.models, "models cùng dạng /api/models", b.models);
   ok(JSON.stringify(JSON.parse(JSON.stringify(b))) === JSON.stringify(b), "gói chỉ có dữ liệu JSON (truyền được từ server component sang client)");
 
@@ -65,7 +66,8 @@ try {
   const page = src("app/page.tsx"), home = src("ui/home.tsx");
   ok(!/^"use client"/.test(page) && /cookies\(\)/.test(page) && /bootFor\(/.test(page) && /<Home boot=\{boot\} \/>/.test(page), "app/page.tsx: server component đọc cookie, dựng gói, truyền <Home boot>");
   ok(/^"use client"/.test(home) && /export default function Home\(\{ boot \}/.test(home), "ui/home.tsx: thân trang (client) nhận boot");
-  ok(/seedModels\(b\.models\)/.test(home) && /seedCaps\(b\.caps\)/.test(home) && /seedMeta\(b\.studios\)/.test(home) && /seedInboxCount\(b\.inboxCount\)/.test(home), "gieo models, caps, studios, số mục Autopilot từ boot");
+  ok(/seedModels\(b\.models\)/.test(home) && /seedCaps\(b\.caps\)/.test(home) && /seedMeta\(b\.studios\)/.test(home)
+    && /seedInboxCount\(b\.inboxCount\)/.test(home), "gieo models, caps, studios, số mục Autopilot từ boot");
   // Hiệu ứng mở app tách sang ui/homehooks.ts (blueprint B2 bước 8): Home gọi useBoot({ boot: bootRef.current … }) và usePageSetup(boot).
   const hooks = src("ui/homehooks.ts");
   ok(/tries === undefined \? live\.current\.boot : null/.test(hooks) && /useBoot\(\{ boot: bootRef\.current/.test(home), "lần đầu dùng gói dựng sẵn, lần thử lại mới hỏi /api/auth/me");

@@ -374,7 +374,8 @@ html body .topbar .title-wrap .sel:hover{background:var(--ds-hover)}
 html body .topbar .icon-btn:not(.auth-root *){width:var(--ds-h);height:var(--ds-h);border-radius:var(--r-pill)}
 html body .topbar .btn{height:var(--ds-h)}
 
-/* ---------------------------------------------------------------- khung trang chung (Artifacts, Dự án, trang dự án, Autopilot, Kho kỹ năng) */
+/* ---------------------------------------------------------------- khung trang chung (Artifacts, Dự án, trang dự án,
+   Autopilot, Kho kỹ năng) */
 html body .page.ds-page{padding:4px 0 72px}
 html body .ds-page>.page-in{max-width:1080px;width:calc(100% - 64px)}
 .ds-head{display:flex;align-items:flex-end;justify-content:space-between;gap:24px;margin:0 0 24px}

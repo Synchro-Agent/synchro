@@ -19,9 +19,9 @@ import { artState } from "../shared/vfs";
 export type DeckInput = { type: ArtType; content: string; title: string; complete?: boolean };
 
 /** Bản trình bày HIỆN TẠI có identifier này trong văn bản kết quả của một lượt (Autopilot / việc tự động chạy nền): bản
- *  đầy đủ mới nhất cộng
- *  mọi bản vá (mode="patch") sau nó, áp như khung xem (vfs.ts → artState). Bản vá áp không được, hoặc chỉ có bản vá mà không có bản đầy đủ
- *  trước nó: null — không xuất một bản cũ khác với bản người dùng đang thấy. */
+ *  đầy đủ mới nhất cộng mọi bản vá (mode="patch") sau nó, áp như khung xem (vfs.ts → artState). Bản vá áp không được,
+ *  hoặc chỉ có bản vá mà không có bản đầy đủ trước nó: null — không xuất một bản cũ khác với bản người dùng đang thấy.
+ */
 export function deckFromText(text: string, ident: string): DeckInput | null {
   const id = ident.trim().toLowerCase().replace(/[^\w.-]+/g, "-").slice(0, 80);
   const v = artState([text]).get(id);
@@ -111,7 +111,8 @@ const slug = (s: string) => (s || "ban-trinh-bay").normalize("NFD").replace(/[̀
 const inflight = new Set<string>();
 
 /**
- * Xuất bản trình bày HTML thành .pptx ở máy chủ (dùng được trong việc tự động chạy nền và Autopilot). origin: để nhúng ảnh ngoài đúng như khung xem.
+ * Xuất bản trình bày HTML thành .pptx ở máy chủ (dùng được trong việc tự động chạy nền và Autopilot). origin: để nhúng
+ * ảnh ngoài đúng như khung xem.
  * SEC-5: trang chạy script trong Chromium nên mạng đi theo quyền của người dùng (capsState: net / web), mặc định tắt; nội dung phải là
  * artifact của chính người dùng do máy chủ tự nạp (route không nhận HTML thô từ trình duyệt).
  */
