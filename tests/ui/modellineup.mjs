@@ -133,7 +133,10 @@ const fits = `(() => { const r = ${openSub}.getBoundingClientRect();
   return r.top >= 0 && r.bottom <= innerHeight && r.left >= 0 && r.right <= innerWidth; })()`;
 const provRow = (name) => `[...document.querySelectorAll(".model-menu .mprov")]
   .find((x) => x.textContent.trim().startsWith(${JSON.stringify(name)}))`;
-const menuOpen = `!!document.querySelector(".model-menu:not(.out)")`;
+// Menu vừa đóng (chọn xong một model) còn nằm trong trang một lượt vẽ trước khi mang lớp out, nên hỏi cả nút model:
+// chỉ đọc DOM thì tưởng menu còn mở, không bấm mở lại, rồi menu biến mất ngay sau đó.
+const menuOpen = `document.querySelector(".model-btn")?.getAttribute("aria-expanded") === "true"
+  && !!document.querySelector(".model-menu:not(.out)")`;
 /** Nút Thu gọn nằm trọn trong menu con và trong màn hình (không bị khung cắt mất). */
 const toggleSeen = `(() => { const s = ${openSub}, b = s.querySelector(".mall").getBoundingClientRect();
   const p = s.getBoundingClientRect();
@@ -153,7 +156,8 @@ const provLogo = (name) => `${provRow(name)}?.querySelector(".vlogo")?.innerHTML
 // Trang đầu tiên dùng danh sách model của gói khởi động (danh sách thật của mock); mở menu thì trang hỏi lại
 // /api/models, và chỉ lần hỏi đó mới mang danh sách giả ở trên. Mock chạy chế độ dev trả lời chậm, nên chờ
 // lần hỏi ấy xong rồi mới đọc menu.
-const loads = `window.__lineupLoads || 0`;
+// Trong ngoặc: biểu thức này đứng trước dấu > khi chờ, thiếu ngoặc thì || nuốt phép so sánh và lần chờ luôn đạt.
+const loads = `(window.__lineupLoads || 0)`;
 const openPicker = async () => {
   const n = await ev(loads);
   if (!(await ev(menuOpen))) await click(`document.querySelector(".model-btn")`, "nút model");
