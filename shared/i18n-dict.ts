@@ -6,6 +6,7 @@ import { DESIGN_VI2EN } from "./i18n-design";
 import { MODELS_RULES_EN, MODELS_VI2EN } from "./i18n-models";
 import { AUTH_VI2EN } from "./i18n-auth";
 import { FX_VI2EN } from "./i18n-features";
+import { ORCH_RULES_EN, ORCH_VI2EN } from "./i18n-orchestra";
 import { CX_VI2EN, cxActEn } from "./cxactions";
 /** Thời gian chờ "2 giờ 5 phút" / "45 phút" / "3 ngày" (limitmsg.ts waitVi) sang tiếng Anh. */
 const limitDurEn = (s: string) => s.replace(/(\d+) ngày/, (_, n: string) => `${n} ${n === "1" ? "day" : "days"}`).replace(/(\d+) giờ/, "$1 h").replace(/(\d+) phút/, "$1 min");
@@ -1435,6 +1436,12 @@ addNew(VI2EN, UX_VI2EN);
 addNew(VI2EN, DESIGN_VI2EN);
 addNew(VI2EN, FX_VI2EN);
 addNew(VI2EN, AUTH_VI2EN);
+addNew(VI2EN, ORCH_VI2EN);
+// Số token của Orchestra: chữ "token" giống nhau ở hai ngôn ngữ; mục VI2EN chỉ để tiếng Anh có số nhiều.
+SAME.add("≈{k} token");
+RULES_EN.push(...ORCH_RULES_EN);
+// Tên tính năng nhiều model cùng làm một việc: giữ nguyên ở cả hai ngôn ngữ.
+SAME_WORDS.add("Orchestra");
 // Artifact, chia sẻ, xuất tệp.
 addNew(VI2EN, {
   "Mọi phiên bản của artifact này sẽ bị xóa, không hoàn tác được.": "Every version of this artifact will be deleted. This can't be undone.",

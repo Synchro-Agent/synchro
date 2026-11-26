@@ -42,6 +42,9 @@ const browserTicket = () => fetch("/api/browser", { method: "POST", headers: { "
 
 const PublishButton = lazyView(() => import("./appsui").then((m) => m.PublishButton), null);
 const BrowserHub = lazyView(() => import("./browserhub").then((m) => m.BrowserHub));
+// Sơ đồ tổ chức của Orchestra: chỉ lượt chia việc cho nhiều model mới cần, nên nạp (cùng CSS riêng) khi lượt
+// đó hiện.
+const OrchestraCard = lazyView(() => import("./orchestra").then((m) => m.OrchestraCard), null);
 // Khung xem tệp / artifact đang tải phần mã: khung chờ cùng chỗ, cùng bề rộng, có sẵn tên (cột chat không co giãn hai lần).
 const FilePanel = lazyView(() => import("./filepreview").then((m) => m.FilePanel), (p) => <ArtPanelSkeleton title={p.file.name} expanded={p.expanded} acts={3} />);
 const ArtifactPanel = lazyView(() => import("./artifactui").then((m) => m.ArtifactPanel), (p) => {
@@ -257,7 +260,9 @@ const MsgRow = memo(function MsgRow({ m: raw, i, last, busy, mark, art, inl, fil
       </div>
     ) : (
       <div style={est}>
-        <CiteCtx.Provider value={cites}><OutsCtx.Provider value={m.outs ?? null}><div className={`ai-msg${m.done ? "" : " ai-streaming"}`}>{m.tools?.length ? <div className="skill-used">{m.tools.map((n) => <span key={n} className="skill-chip tool-chip"><I.SetPlug size={13} /><span>{tr("Đã dùng")}</span><span data-notr>{toolChip(n)}</span></span>)}</div> : null}{m.libs?.length ? <LibChips libs={m.libs} onOpen={() => cx.current!.openPlugins()} /> : null}{m.skills?.length ? <div className="skill-used">{m.skills.map((n) => <span key={n} className="skill-chip"><I.Scroll size={13} />{tr("Đang dùng skill")}: {n}</span>)}</div> : null}{m.done ? <WorkSummary parts={m.parts} plan={m.plan} ms={m.dur} stopped={m.stopped} failed={m.failed || !!m.notice?.partial} render={(t) => <Markdown text={t} say={say} />} /> : m.parts?.length ? <WorkParts parts={m.parts} live onAnswer={answerAsk} render={(t) => <Markdown text={t} say={say} />} /> : null}{m.text ? (art && hasArtifacts(m.text) ? artSegsOf(m).map((sg, k, segs) => sg.kind === "text" ? <Markdown key={k} text={sg.text} say={say} viz={inl} live={m.done && last && !busy} streaming={!m.done} /> : (() => {
+        <CiteCtx.Provider value={cites}><OutsCtx.Provider value={m.outs ?? null}><div className={`ai-msg${m.done ? "" : " ai-streaming"}`}>{m.tools?.length ? <div className="skill-used">{m.tools.map((n) => <span key={n} className="skill-chip tool-chip"><I.SetPlug size={13} /><span>{tr("Đã dùng")}</span><span data-notr>{toolChip(n)}</span></span>)}</div> : null}{m.libs?.length ? <LibChips libs={m.libs} onOpen={() => cx.current!.openPlugins()} /> : null}{m.skills?.length ? <div className="skill-used">{m.skills.map((n) => <span key={n} className="skill-chip"><I.Scroll size={13} />{tr("Đang dùng skill")}: {n}</span>)}</div> : null}
+          {m.orch ? <OrchestraCard s={m.orch} live={!m.done} /> : null}
+          {m.done ? <WorkSummary parts={m.parts} plan={m.plan} ms={m.dur} stopped={m.stopped} failed={m.failed || !!m.notice?.partial} render={(t) => <Markdown text={t} say={say} />} /> : m.parts?.length ? <WorkParts parts={m.parts} live onAnswer={answerAsk} render={(t) => <Markdown text={t} say={say} />} /> : null}{m.text ? (art && hasArtifacts(m.text) ? artSegsOf(m).map((sg, k, segs) => sg.kind === "text" ? <Markdown key={k} text={sg.text} say={say} viz={inl} live={m.done && last && !busy} streaming={!m.done} /> : (() => {
           // Một thẻ cho mỗi artifact trong một tin: bản đầy đủ rồi bản sửa (mode="patch") cùng identifier trong cùng câu trả lời là hai phiên bản
           // của một artifact. Thẻ đứng ở chỗ artifact xuất hiện lần đầu, ghi phiên bản cuối cùng tin này tạo ra và mở đúng phiên bản đó.
           if (segs.findIndex((x) => x.kind === "art" && x.art.ident === sg.art.ident) !== k) return null;

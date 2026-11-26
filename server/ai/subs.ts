@@ -778,7 +778,8 @@ const SIDE_WAIT_MS = 120_000;
 const STREAMS = new Set<Cli>(["claude", "grok"]), WAIT_TELL_MS = 8000;
 // Việc nền của một tài khoản chạy tối đa chừng này cùng lúc: sau một câu trả lời có artifact từng là rút bộ nhớ, chưng cất, đặt tên và hai phản biện cùng lúc, tức 5 CLI ăn vào mức chung của tài khoản (6),
 // tin nhắn kế tiếp có thể phải xếp hàng sau chính những việc đó. Chúng không ai đứng chờ nên được chờ lâu hơn việc phụ thường.
-const BG_MAX = 2, BG_WAIT_MS = 5 * 60_000;
+export const BG_MAX = 2;
+const BG_WAIT_MS = 5 * 60_000;
 export const BUSY = "Máy chủ đang bận. Hãy thử lại sau ít phút.";
 /** Một lượt chat bằng gói subscription của chính người dùng. */
 export async function subTurn(o: SubTurn): Promise<SubResult> {

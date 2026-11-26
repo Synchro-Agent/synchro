@@ -14,6 +14,7 @@ import { ConnLogo } from "./connlogo";
 import { toolErrNote } from "./worktone";
 import { stripAppliedNotes } from "../shared/turnctx";
 import { Spinner } from "./spinner";
+import { parseOrch, type OrchState } from "../shared/orchestra";
 // Thẻ kết nối lại chỉ cần khi connector mất đăng nhập: không kéo cả màn hình Connectors vào phần tải đầu của trang chat.
 const ReconnectCard = lazyView(() => import("./connectorsui").then((m) => m.ReconnectCard), null);
 
@@ -36,14 +37,15 @@ export type LinkPart = { k: "link"; app: string; name: string; url: string; logo
 export type RatePart = { k: "rate"; name: string; until: number };
 export type Part = { k: "say"; text: string } | { k: "tools"; items: ToolItem[] } | AskStep | ConnPart | PlansPart | LinkPart | RatePart;
 export type PlanItem = { content: string; status: "pending" | "in_progress" | "completed" };
-export type Work = { parts?: Part[]; plan?: PlanItem[]; seq?: number };
+// orch: sơ đồ tổ chức của Orchestra khi lượt này chia việc cho nhiều model (bản chụp mới nhất).
+export type Work = { parts?: Part[]; plan?: PlanItem[]; orch?: OrchState; seq?: number };
 export type RunEv = { seq: number; at: number; kind: string; text: string };
 
 /** Áp một bước của lượt chạy vào nhật ký (bỏ qua bước đã áp — mở lại trang thì máy chủ gửi lại từ đầu). */
 export function applyEvent(w: Work, ev: RunEv): Work {
   if (w.seq && ev.seq <= w.seq) return w;
   const parts = [...(w.parts ?? [])];
-  let plan = w.plan;
+  let plan = w.plan, orch = w.orch;
   if (ev.kind === "say") {
     const text = stripAppliedNotes(ev.text);
     if (text.trim()) parts.push({ k: "say", text });
@@ -72,6 +74,8 @@ export function applyEvent(w: Work, ev: RunEv): Work {
         if (p.k === "tools" && p.items.some((x) => x.seq === r.ref)) { parts[i] = { k: "tools", items: p.items.map((x) => (x.seq === r.ref ? { ...x, c } : x)) }; break; }
       }
     } catch {}
+  } else if (ev.kind === "orch") {
+    orch = parseOrch(ev.text) ?? orch;
   } else if (ev.kind === "plan") {
     try { plan = JSON.parse(ev.text) as PlanItem[]; } catch {}
   } else if (ev.kind === "ask") {
@@ -92,7 +96,7 @@ export function applyEvent(w: Work, ev: RunEv): Work {
   } else if (ev.kind === "conn") {
     try { const c = JSON.parse(ev.text) as Omit<ConnPart, "k">; if (!parts.some((p) => p.k === "conn" && p.id === c.id)) parts.push({ ...c, k: "conn" }); } catch {}
   } else return { ...w, seq: ev.seq };
-  return { parts, plan, seq: ev.seq };
+  return { parts, plan, orch, seq: ev.seq };
 }
 
 // Nhãn công cụ máy chủ ghi bằng tiếng Việt, đã bỏ chữ "Đang" (nhật ký lưu trong đoạn chat cũ cũng vậy): dịch khi hiện theo ngôn ngữ giao diện, chữ đầu viết hoa.

@@ -116,7 +116,9 @@ export function progress(kind: RunEvent["kind"], text: string): number {
   if (!d.prepare("SELECT 1 FROM runs WHERE id = ?").get(s.id)) return 0;
   // Ghi nối thêm một dòng: lấy số thứ tự tiếp theo qua MAX(seq) (dùng khóa chính nên nhanh, không đọc lại cả danh sách).
   const seq = ((d.prepare("SELECT MAX(seq) AS m FROM run_events WHERE run_id = ?").get(s.id) as { m: number | null }).m ?? 0) + 1;
-  const ev: RunEvent = { seq, at: Date.now(), kind, text: text.slice(0, kind === "say" || kind === "steer" ? 4000 : kind === "plan" || kind === "ask" ? 6000 : kind === "res" ? 1000 : 300) };
+  const max = kind === "say" || kind === "steer" ? 4000 : kind === "plan" || kind === "ask" ? 6000
+    : kind === "orch" ? 12_000 : kind === "res" ? 1000 : 300;
+  const ev: RunEvent = { seq, at: Date.now(), kind, text: text.slice(0, max) };
   d.transaction(() => {
     d.prepare("INSERT INTO run_events (run_id, seq, at, kind, text) VALUES (?, ?, ?, ?, ?)").run(s.id, ev.seq, ev.at, ev.kind, ev.text);
     d.prepare("UPDATE runs SET updated_at = ? WHERE id = ?").run(ev.at, s.id);

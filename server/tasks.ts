@@ -11,6 +11,7 @@
 // - Đề xuất chờ duyệt (proposals): việc cần người dùng đồng ý (tạo skill, hành động có tác động, trang web mới, công cụ để "hỏi trước")
 //   không tự làm mà vào mục Cần duyệt của Autopilot; người dùng duyệt thì Synchro làm (automate.ts).
 import "server-only";
+import { parseOrch, type OrchState } from "../shared/orchestra";
 import crypto from "node:crypto";
 import { can, db, getSetting, getUser, setSetting } from "./authstore";
 import { getRun, startRun } from "./runs";
@@ -235,7 +236,7 @@ function taskBody(r: TaskRow, o: { chrome: boolean; note?: string; action?: { ti
     system: `${SYSTEM}\n\n${ctx}`, messages: [{ role: "user", content }], skills: true, max_tokens: 8000, web: true,
     tz: s.tz,
     // Chưa chọn model thì Tự động, đúng như chat thường (cùng bộ chọn model, cùng cách hạ xuống gói subscription khi
-    // hết hạn mức API).
+    // hết hạn mức API), nên được định tuyến theo việc và việc nhiều nhánh được chia cho nhóm Orchestra như ở khung chat.
     model: r.model ?? AUTO_MODEL, feature: "chat", conv: `task-${r.id}`,
     task: { id: r.id, browser: r.browser, chrome: o.chrome } satisfies TaskCtx,
     ...(r.engine === "code" ? { sid: taskSid(r.id), allow: o.allow ?? [] } : {}),
@@ -404,12 +405,15 @@ export function settleProposal(uid: string, id: string, status: ProposalStatus, 
 export type InboxItem = {
   run: string; task: string; title: string; at: number; read: boolean; status: string; text: string; error?: string;
   kind?: "task" | "notice" | "action"; link?: string; note?: string; model?: string; proposals?: number; chat?: number;
+  orch?: OrchState;
 };
 type RunRow = {
   run_id: string; task_id: string; title: string; at: number; read: number; kind: string; note: string | null;
   result: string | null; retried: number;
 };
-type Kept = { status: string; text?: string; error?: string; model?: string; chat?: number };
+// orch: sơ đồ tổ chức lúc xong khi lần chạy chia việc cho nhiều model (Orchestra), để Autopilot hiện lại nhật ký
+// làm việc của nhóm.
+type Kept = { status: string; text?: string; error?: string; model?: string; chat?: number; orch?: OrchState };
 const parseKept = (s: string): Kept | null => {
   try { return JSON.parse(s) as Kept; } catch (e) { console.error("[autopilot] dòng kết quả hỏng", e); return null; }
 };
@@ -437,12 +441,13 @@ function retryAhead(d: ReturnType<typeof init>, uid: string, row: RunRow, run: {
 function keepResult(uid: string, r: Pick<RunRow, "run_id">): Kept | null {
   const run = getRun(r.run_id, uid);
   if (run?.status === "running") return null;
-  const res = (run?.result ?? {}) as { text?: string; error?: string; model?: string };
+  const res = (run?.result ?? {}) as { text?: string; error?: string; model?: string; orchestra?: unknown };
+  const orch = res.orchestra ? parseOrch(JSON.stringify(res.orchestra)) : null;
   let k: Kept = run
     ? {
       status: run.status, text: String(res.text ?? "").slice(0, 60_000),
       ...(res.error ? { error: String(res.error) } : {}),
-      ...(typeof res.model === "string" ? { model: res.model } : {}),
+      ...(typeof res.model === "string" ? { model: res.model } : {}), ...(orch ? { orch } : {}),
     }
     : { status: "expired", error: TOO_OLD };
   const d = init();
@@ -523,7 +528,7 @@ export function inbox(uid: string, o: { limit?: number; before?: number } = {}):
     return {
       run: r.run_id, task: r.task_id, title: r.title, at: r.at, read: !!r.read, status: k?.error === TOO_OLD ? "expired" : k?.status ?? "running", text: k?.text ?? "", kind: r.kind === "action" ? "action" : "task",
       ...(r.note ? { note: r.note } : {}), ...(k?.model ? { model: k.model } : {}), ...(props.get(r.run_id) ? { proposals: props.get(r.run_id) } : {}), ...(k?.error ? { error: k.error } : {}),
-      ...(k?.chat ? { chat: k.chat } : {}),
+      ...(k?.chat ? { chat: k.chat } : {}), ...(k?.orch ? { orch: k.orch } : {}),
     };
   });
   const notes = (d.prepare("SELECT * FROM notices WHERE owner = ? AND at < ? ORDER BY at DESC LIMIT ?").all(uid, before, limit + 1) as { id: string; title: string; text: string; link: string | null; at: number; read: number }[])

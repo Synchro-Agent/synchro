@@ -26,6 +26,10 @@ import { Dropdown } from "./listbox";
 import { BulkBar, BulkButton, BulkCheck, bulkRow, each, useBulk, type BulkAct } from "./bulk";
 import { PageBar, usePage } from "./pager";
 import { Spinner } from "./spinner";
+import { lazyView } from "./lazy";
+import { parseOrch, type OrchState } from "../shared/orchestra";
+// Sơ đồ tổ chức của Orchestra: chỉ lần chạy chia việc cho nhiều model mới cần.
+const OrchestraCard = lazyView(() => import("./orchestra").then((m) => m.OrchestraCard), null);
 
 type Schedule = {
   kind: "once" | "hourly" | "daily" | "weekdays" | "weekly" | "cron"; time?: string; weekday?: number; every?: number;
@@ -44,6 +48,7 @@ type Task = {
 type Item = {
   run: string; task: string; title: string; at: number; read: boolean; status: string; text: string; error?: string;
   kind?: "task" | "notice" | "action"; link?: string; note?: string; model?: string; proposals?: number; chat?: number;
+  orch?: OrchState;
 };
 /** Mở kết quả thành đoạn chat: chat = đoạn chat máy chủ đã tạo; chưa có (kết quả cũ) thì dựng đoạn chat mới từ chữ
  *  của kết quả. */
@@ -417,9 +422,13 @@ function ResultBody({ x, task, say, onOpenChat, onRetry, reload }: BodyProps) {
   }, [x.run, x.status, x.proposals, real, reload, miss]);
   const steps = (events ?? []).filter((e) => LOG_KINDS.has(e.kind) && !(e.kind === "ui"));
   const lastStep = [...steps].reverse().find((e) => e.kind !== "say");
+  // Orchestra: lúc đang chạy lấy bản chụp mới nhất từ sự kiện của lần chạy, xong thì bản đã lưu cùng kết quả.
+  const lastOrch = [...(events ?? [])].reverse().find((e) => e.kind === "orch");
+  const orch = x.orch ?? (lastOrch ? parseOrch(lastOrch.text) : null);
   return (
     <div className="tk-body">
       {x.note && <p className="tk-note"><I.InfoCircle size={13} /><span data-notr>{tr(x.note)}</span></p>}
+      {orch && <OrchestraCard s={orch} live={x.status === "running"} showDur />}
       {x.status === "waiting" ? <div className="tk-run"><I.Clock size={14} />{tr("Đến giờ chạy nhưng Chrome của bạn đang tắt. Synchro chạy ngay khi Chrome kết nối lại, hoặc sau 12 giờ thì chạy bằng trình duyệt của Synchro.")}</div>
         : x.status === "running" ? <div className="tk-run"><Spinner className="art-spin sm" />{lastStep
           ? <span data-notr>{tr(lastStep.text)}</span>
