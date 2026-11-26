@@ -236,7 +236,8 @@ function taskBody(r: TaskRow, o: { chrome: boolean; note?: string; action?: { ti
     system: `${SYSTEM}\n\n${ctx}`, messages: [{ role: "user", content }], skills: true, max_tokens: 8000, web: true,
     tz: s.tz,
     // Chưa chọn model thì Tự động, đúng như chat thường (cùng bộ chọn model, cùng cách hạ xuống gói subscription khi
-    // hết hạn mức API), nên được định tuyến theo việc và việc nhiều nhánh được chia cho nhóm Orchestra như ở khung chat.
+    // hết hạn mức API), nên được định tuyến theo việc và việc nhiều nhánh được chia cho nhóm Orchestra như ở khung
+    // chat.
     model: r.model ?? AUTO_MODEL, feature: "chat", conv: `task-${r.id}`,
     task: { id: r.id, browser: r.browser, chrome: o.chrome } satisfies TaskCtx,
     ...(r.engine === "code" ? { sid: taskSid(r.id), allow: o.allow ?? [] } : {}),
