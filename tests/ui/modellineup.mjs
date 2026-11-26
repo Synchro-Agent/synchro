@@ -259,8 +259,9 @@ try {
   const phoneAll = async (theme) => {
     await expand();
     r = await ev(rows);
-    ok(r?.at(-1) === "> Thu gọn" && r.includes("Gemini 4 Argon"), `điện thoại ${theme}: Xem tất cả mở thêm model`,
-      JSON.stringify(r));
+    // Argon đã được chọn ở bước 3 nên đứng ở đội hình; Gemini 3.8 Flash chỉ có ở mục Model khác.
+    ok(r?.at(-1) === "> Thu gọn" && r.includes("# Model khác") && r.includes("Gemini 3.8 Flash"),
+      `điện thoại ${theme}: Xem tất cả mở thêm model`, JSON.stringify(r));
     ok(await ev(fits), `điện thoại ${theme}: menu con mở rộng nằm trọn trong màn hình`);
     ok(await ev(toggleSeen), `điện thoại ${theme}: nút Thu gọn thấy được`);
     cue = await ev(scrollCue);
