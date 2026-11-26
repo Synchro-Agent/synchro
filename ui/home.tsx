@@ -235,6 +235,8 @@ const STARTERS: Record<TplKey, { t: string; d: string; p: string }[]> = {
   ],
 };
 
+// Cỡ logo model trên nút chọn model (cùng cỡ ô logo hãng trong menu).
+const LOGO16 = { width: 16, height: 16 };
 function ModelPicker({ model, setModel, prefix }: { model: string; setModel: (m: string) => void; prefix?: string }) {
   const [mm, setMm] = useState(false);
   const [sub, setSub] = useState<null | string>(null);
@@ -327,10 +329,9 @@ function ModelPicker({ model, setModel, prefix }: { model: string; setModel: (m:
           ? `${prefix}: ${none ? tr("Chưa có model") : model ? tr(modelName(model)) : tr("Chọn model")}` : undefined}
         aria-haspopup="menu" aria-expanded={mm}
         onPointerEnter={() => { if (!mm) { refreshModels(); ProviderSub.preload(); } }}
-        onClick={() => { setMm(!mm); setSub(null); }}>
-        {!none && model ? (model === AUTO
-          ? <span className="vlogo" style={{ width: 16, height: 16 }} aria-hidden><I.Sparkle size={15} /></span>
-          : <ModelLogo k={model} />) : null}{prefix ? (
+        onClick={() => { setMm(!mm); setSub(null); }}>{!none && model ? (
+          model === AUTO ? <span className="vlogo" style={LOGO16} aria-hidden><I.Sparkle size={15} /></span>
+            : <ModelLogo k={model} />) : null}{prefix ? (
         // Trong Synchro Code: thêm tiền tố "Model:" để phân biệt với hai nút "Chế độ"/"Quyền" bên cạnh; dưới 1100px CSS ẩn nhãn, chỉ còn icon.
         <span className="mp-lbl"><span className="mp-k">{prefix}</span>: {none ? "Chưa có model" : model ? modelName(model) : "Chọn model"}{!(model === AUTO && autoEff) && <> <span className="muted">{eLabel}</span></>}</span>
       ) : (<>{none ? "Chưa có model" : model ? modelName(model) : "Chọn model"}{!(model === AUTO && autoEff) && <> <span className="muted">{eLabel}</span></>}</>)}<I.Chevron size={14} /></button>
