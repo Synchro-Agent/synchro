@@ -33,7 +33,7 @@ try {
   ok(j?.artifacts?.[0]?.versions?.[0]?.content === "<p>bản đầy đủ</p>", "artifact đủ nội dung", j?.artifacts);
   ok(!text.includes("Của người khác"), "không lẫn dữ liệu người khác");
   ok(j?.memory?.some((x) => x.content === "Thích trà gừng") && j?.codeSessions?.some((s) => s.title === "Phiên Code riêng"), "có bộ nhớ và phiên Code đã lưu", j?.codeSessions);
-  for (const k of ["memory", "codeSessions", "apps", "appData", "appComments", "skills", "plugins", "inbox", "generatedFiles", "speechItems", "instructionsHistory", "notIncluded"]) ok(Array.isArray(j?.[k]), `có mục ${k}`, j?.[k]);
+  for (const k of ["memory", "codeSessions", "apps", "appData", "appComments", "skills", "plugins", "autopilot", "generatedFiles", "speechItems", "instructionsHistory", "notIncluded"]) ok(Array.isArray(j?.[k]), `có mục ${k}`, j?.[k]);
   ok(!text.includes("bí-mật-băm") && !/password_hash|enc_auth/.test(text), "không có mật khẩu băm hay token");
   ok((await EX.GET(req("/api/auth/account/export", ""))).status === 401, "cần đăng nhập");
 

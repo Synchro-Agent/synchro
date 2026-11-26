@@ -20,7 +20,12 @@ Người dùng giao một việc cho Autopilot để Synchro tự làm ở nền
 Trả về đúng một JSON, không gì khác:
 {"title":"…","schedule":{"kind":"once|hourly|daily|weekdays|weekly|cron","time":"HH:MM","weekday":1,"every":1,"at":"YYYY-MM-DDTHH:MM","cron":"phút giờ ngày tháng thứ"},"engine":"chat|code","browser":"auto|synchro|user","prompt":"…","approvals":["…"],"needs":["…"]}
 - title: tên ngắn (tối đa 8 từ), cùng ngôn ngữ người dùng.
-- schedule: theo lời người dùng. "Mỗi ngày" không nói giờ thì 08:00. Giá cổ phiếu, chứng khoán, tỷ giá: weekdays (thứ Hai–thứ Sáu) trừ khi người dùng nói khác. weekly: weekday 0 = Chủ nhật … 6 = Thứ Bảy. hourly: every = số giờ giữa hai lần (1–12). "Một lần", "ngay bây giờ": once không có at. Một lần vào một lúc cụ thể ("9h sáng mai", "20:00 ngày 30/11"): once kèm at là giờ địa phương YYYY-MM-DDTHH:MM, tính từ "Bây giờ" bên dưới. Lịch không có trong các loại trên (hằng tháng, vài ngày cố định trong tuần, nhiều giờ trong ngày): cron 5 trường theo giờ địa phương, trường phút là một số (ví dụ "0 9 1 * *" là 9:00 ngày 1 hằng tháng, "30 8,17 * * 1-5" là 8:30 và 17:30 từ thứ Hai tới thứ Sáu).
+- schedule: theo lời người dùng. "Mỗi ngày" không nói giờ thì 08:00. Giá cổ phiếu, chứng khoán, tỷ giá: weekdays (thứ \
+Hai–thứ Sáu) trừ khi người dùng nói khác. weekly: weekday 0 = Chủ nhật … 6 = Thứ Bảy. hourly: every = số giờ giữa hai \
+lần (1–12). "Một lần", "ngay bây giờ": once không có at. Một lần vào một lúc cụ thể ("9h sáng mai", "20:00 ngày \
+30/11"): once kèm at là giờ địa phương YYYY-MM-DDTHH:MM, tính từ "Bây giờ" bên dưới. Lịch không có trong các loại trên \
+(hằng tháng, vài ngày cố định trong tuần, nhiều giờ trong ngày): cron 5 trường theo giờ địa phương, trường phút là một \
+số (ví dụ "0 9 1 * *" là 9:00 ngày 1 hằng tháng, "30 8,17 * * 1-5" là 8:30 và 17:30 từ thứ Hai tới thứ Sáu).
 - engine: "code" khi việc phải làm trên mã nguồn / repo (sửa code, chạy lệnh, cập nhật thư viện, chạy kiểm thử, commit, mở pull request, sửa lỗi CI…): chạy bằng Synchro Code trong workspace riêng; còn lại "chat" (tra cứu, tổng hợp, phân tích, trình duyệt, connector, skill, chạy code ngắn).
 - browser: "user" chỉ khi việc cần tài khoản người dùng đã đăng nhập (email, mạng xã hội, tài khoản chứng khoán, trang nội bộ…); còn lại "auto".
 - prompt: hướng dẫn chi tiết, đủ để một trợ lý khác tự làm mà không cần hỏi lại, viết bằng ngôn ngữ người dùng: mục tiêu; nguồn nên tra (trang cụ thể nếu biết); các bước; tiêu chí chọn lọc / đánh giá; định dạng kết quả (tóm tắt trước, bảng nếu hợp, nguồn ở cuối); so sánh với lần chạy trước; những việc phải gửi đề xuất chờ người dùng duyệt bằng autopilot_propose thay vì tự làm (ví dụ tạo skill, gửi tin, giao dịch).

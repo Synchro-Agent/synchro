@@ -12,7 +12,8 @@ export const GET = handle(async (req: Request) => {
   const { user } = requireUser(req);
   const u = new URL(req.url);
   const q = u.searchParams;
-  return Response.json({ proposals: listProposals(user.id, { all: q.get("all") === "1", run: q.get("run") ?? undefined }) });
+  const o = { all: q.get("all") === "1", run: q.get("run") ?? undefined };
+  return Response.json({ proposals: listProposals(user.id, o) });
 });
 export const POST = handle(async (req: Request) => {
   sameOrigin(req);

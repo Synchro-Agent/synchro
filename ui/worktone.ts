@@ -12,7 +12,11 @@ export type ToolErrNote = { text: string; tone: "bad" | "soft" };
 export type ToolLike = { seq?: number; label: string; ok?: boolean; name?: string };
 
 // Nhãn "<loại>: <tham số>" mà phần trước dấu ":" là loại công cụ cố định (chatengine.ts → describe, taskagent.ts).
-const PARAM_HEADS = ["tìm trên web", "đọc trang web", "tạo ảnh", "nhớ lại", "ghi vào bộ não", "tìm công cụ connector", "chạy lệnh", "trình duyệt", "gửi đề xuất vào hộp thư"];
+// "gửi đề xuất vào hộp thư" là nhãn cũ của autopilot_propose: các bước đã lưu từ trước khi đổi tên vẫn gộp đúng loại.
+const PARAM_HEADS = [
+  "tìm trên web", "đọc trang web", "tạo ảnh", "nhớ lại", "ghi vào bộ não", "tìm công cụ connector", "chạy lệnh",
+  "trình duyệt", "gửi đề xuất vào mục cần duyệt của autopilot", "gửi đề xuất vào hộp thư",
+];
 // Nhãn có tham số nhưng không có dấu ":" (nhãn bước trình duyệt, tệp dự án, skill…): phần đầu cố định là loại công cụ.
 // Cụm dài đứng trước cụm ngắn cùng đầu ("mở thư viện" trước "mở", "đọc tài liệu của skill" trước "đọc").
 const KIND_HEADS = [

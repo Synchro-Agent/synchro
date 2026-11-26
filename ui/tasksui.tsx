@@ -248,7 +248,8 @@ function TaskEditor({ init, plan, onClose, onSaved, say }: { init?: Task | null;
         )}</p>}
         <label className="tk-l">{tr("Model")}<ModelPick value={model} onChange={setModel} /></label>
         <label className="tk-l">{tr("Hướng dẫn chi tiết cho Synchro")}
-          <textarea className="field" value={prompt} maxLength={8000} rows={7} placeholder={trs(...PROMPT_HINT)} data-notr
+          <textarea className="field" value={prompt} maxLength={8000} rows={7} placeholder={trs(...PROMPT_HINT)}
+            data-notr
             onChange={(e) => setPrompt(e.target.value)} />
         </label>
         {plan && (plan.approvals.length > 0 || plan.needs.length > 0) && <div className="tk-notes">
