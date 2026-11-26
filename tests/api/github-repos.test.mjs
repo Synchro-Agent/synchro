@@ -6,7 +6,9 @@
 // 4. Thiếu quyền: kết nối cũ chỉ có "repo" thì thiếu read:org; token GitHub App không tính scope.
 // 5. Clone thất bại: chỉ ra tổ chức chặn / thiếu quyền repo / hết hạn, còn repo không tồn tại thì giữ thông báo chung.
 // 6. GitHub App: tổ chức chưa cài app có nút cài app.
-// 7. Kết nối GitHub xin thêm quyền read:org.
+// 7. Không gửi token sang máy chủ khác; bộ nhớ tạm, "Tải lại" liên tục không đọc lại GitHub mỗi lần.
+// 8. Kết nối GitHub xin thêm quyền read:org.
+// 9. Trang sau đứt kết nối / hết giờ: giữ phần đã đọc, đánh dấu chưa đủ.
 // Tự chạy được: thư mục dữ liệu riêng, không gọi ra ngoài.
 import fs from "node:fs";
 import http from "node:http";
@@ -37,6 +39,8 @@ const seen = [];
 let scopes = "repo, read:org, read:user, user:email";
 const installs = ["acme"];
 let evilNext = false;
+// Trang 2 của /user/repos: đứt kết nối giữa chừng (như hết 15 giây hay mạng reset).
+let dropPage2 = false;
 
 const srv = http.createServer(async (req, res) => {
   const u = new URL(req.url, "http://x");
@@ -56,6 +60,7 @@ const srv = http.createServer(async (req, res) => {
     const all = !tok.startsWith("ghu_") ? USER_REPOS
       : USER_REPOS.filter((r) => r.owner.login === "acme" || r.owner.login === ME);
     const page = Number(u.searchParams.get("page") ?? 1), per = 100;
+    if (dropPage2 && page === 2) return req.socket.destroy();
     const last = Math.ceil(all.length / per);
     const nextUrl = evilNext ? "https://evil.example/user/repos?page=2"
       : `${BASE}/user/repos?page=${page + 1}&per_page=100`;
@@ -84,8 +89,22 @@ const srv = http.createServer(async (req, res) => {
   if (p === "/user/installations") {
     return send(200, { installations: installs.map((login) => ({ account: { login } })) });
   }
-  if (p === "/user/memberships/orgs/locked") return send(200, { state: "active", role: "admin" });
-  if (p === "/user/memberships/orgs/teamonly") return send(200, { state: "active", role: "member" });
+  // Như github.com: token GitHub App chỉ đọc được tư cách thành viên qua bản cài app có quyền Members,
+  // tổ chức chưa cài app thì 403.
+  const mem = /^\/user\/memberships\/orgs\/(.+)$/.exec(p)?.[1];
+  if (mem) {
+    if (tok.startsWith("ghu_") && !installs.includes(mem)) {
+      return send(403, { message: "Resource not accessible by integration" });
+    }
+    return send(200, { state: "active", role: "member" });
+  }
+  const usr = /^\/users\/([^/]+)$/.exec(p)?.[1];
+  if (usr) {
+    const orgs = ["acme", "teamonly", "locked", "ssoorg", "emptyorg"];
+    if (orgs.includes(usr)) return send(200, { login: usr, type: "Organization" });
+    if (usr === ME || usr === "friend") return send(200, { login: usr, type: "User" });
+    return send(404, { message: "Not Found" });
+  }
   if (p === "/repos/blocked403/x") return send(403, { message: RESTRICT_MSG });
   if (p.startsWith("/repos/")) return send(404, { message: "Not Found" });
   return send(404, { message: "Not Found" });
@@ -189,7 +208,14 @@ try {
     "tổ chức chưa cài app: nút cài app vào tổ chức", ga.locked);
   const d6 = await G.diagnoseRepo("ghu_apptoken", "teamonly", "api", "");
   ok(d6?.extra?.fix?.block === "app" && d6.extra.fix.org === "teamonly",
-    "clone repo của tổ chức chưa cài app: nút cài", d6?.extra);
+    "clone repo của tổ chức chưa cài app: nút cài (theo danh sách cài đặt, GitHub chặn hỏi thành viên)", d6?.extra);
+  ok(!seen.some((s) => s.startsWith("GET /user/memberships/")), "không dựa vào /user/memberships (403 khi chưa cài)");
+  ok(await G.diagnoseRepo("ghu_apptoken", "acme", "khong-co", "") === null,
+    "tổ chức đã cài app, repo không có: thông báo chung");
+  ok(await G.diagnoseRepo("ghu_apptoken", "nguoi-la", "x", "") === null,
+    "chủ không tồn tại (gõ nhầm): không đổ cho việc cài app");
+  ok(await G.diagnoseRepo("ghu_apptoken", "friend", "shared", "") === null,
+    "chủ là người dùng, không phải tổ chức: không mời cài app vào tổ chức");
 
   console.log("7. Không gửi token sang máy chủ khác; bộ nhớ tạm");
   evilNext = true;
@@ -203,8 +229,13 @@ try {
   const c1 = await G.cachedListing("u1", "gho_full", ME), n1 = seen.length;
   const c2 = await G.cachedListing("u1", "gho_full", ME);
   ok(c1 === c2 && seen.length === n1, "mở lại hộp thoại trong vài phút: không đọc lại GitHub");
-  await G.cachedListing("u1", "gho_full", ME, true);
-  ok(seen.length > n1, "Tải lại: đọc lại từ GitHub");
+  const c3 = G.cachedListing("u1", "gho_full", ME, true), c4 = G.cachedListing("u1", "gho_full", ME, true);
+  ok(await c3 === c1 && await c4 === c1 && seen.length === n1,
+    "bấm Tải lại liên tục ngay sau khi vừa đọc: dùng bản vừa đọc, không đọc lại GitHub");
+  globalThis.__synchroGhRepos.get("u1").at -= 21_000;
+  const c5 = G.cachedListing("u1", "gho_full", ME, true), c6 = G.cachedListing("u1", "gho_full", ME, true);
+  await c5;
+  ok(seen.length > n1 && c5 === c6, "Tải lại sau 20 giây: đọc lại từ GitHub, một lượt cho nhiều lần bấm");
   const n2 = seen.length;
   await G.cachedListing("u1", "gho_new", ME);
   ok(seen.length > n2, "kết nối lại (token mới): đọc danh sách mới");
@@ -216,6 +247,17 @@ try {
   const login = O.start(new Request("https://synchro.test/api/auth/oauth/github"), "github", "login");
   const lg = new URL(login.url).searchParams.get("scope");
   ok(!/repo|read:org/.test(lg ?? ""), "đăng nhập thường không xin quyền repo", lg);
+
+  console.log("9. Trang sau đứt kết nối");
+  dropPage2 = true;
+  seen.length = 0;
+  const lp = await G.listAll("gho_full", ME);
+  ok(lp.repos.filter((r) => r.owner === ME).length === 100 && lp.truncated,
+    "giữ 100 repo của trang đầu, đánh dấu danh sách chưa đủ", { n: lp.repos.length, t: lp.truncated });
+  ok(lp.groups.some((x) => x.owner === "teamonly"), "vẫn đọc tiếp repo của các tổ chức");
+  ok(G.pageOf(lp, "", 1).truncated === true, "trang trả về cho giao diện mang cờ chưa đủ");
+  dropPage2 = false;
+  ok(!(await G.listAll("gho_full", ME)).truncated, "đọc đủ thì không đánh dấu");
 } finally {
   srv.close();
   fs.rmSync(tmp, { recursive: true, force: true });

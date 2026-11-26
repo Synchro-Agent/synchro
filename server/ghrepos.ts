@@ -92,16 +92,26 @@ const out = (r: RawRepo): RepoOut => ({
   desc: r.description, pushed: r.pushed_at ?? "", url: r.html_url, push: !!r.permissions?.push,
 });
 
-// Đọc hết các trang của một danh sách. Lỗi ở trang đầu trả về để phân loại; lỗi ở trang sau thì giữ phần đã có.
+// Đọc hết các trang của một danh sách. Lỗi ở trang đầu (cả mất mạng) để nơi gọi phân loại; lỗi ở trang sau
+// (GitHub trả lỗi, hết 15 giây, đứt kết nối) thì giữ phần đã đọc và đánh dấu chưa đủ, không mất cả danh sách.
 async function pages<T>(token: string, first: string, max: number) {
   const items: T[] = [];
   let p: string | null = first, n = 0, head: Res<T[]> | null = null, truncated = false;
   while (p) {
     if (n >= max) { truncated = true; break; }
-    const r: Res<T[]> = await call<T[]>(token, p);
+    let r: Res<T[]>;
+    try { r = await call<T[]>(token, p); } catch (e) {
+      if (!n) throw e;
+      console.warn(`[github] trang ${n + 1} của ${first} không đọc được: ${(e as Error).message}`);
+      truncated = true;
+      break;
+    }
     head ??= r;
     if (!r.ok || !Array.isArray(r.data)) {
-      if (n) console.warn(`[github] trang ${n + 1} của ${first} lỗi ${r.status}: ${r.message}`);
+      if (n) {
+        console.warn(`[github] trang ${n + 1} của ${first} lỗi ${r.status}: ${r.message}`);
+        truncated = true;
+      }
       break;
     }
     items.push(...r.data);
@@ -168,6 +178,7 @@ export async function listAll(token: string, login: string): Promise<Listing> {
     if (ins?.ok) installed = new Set(logins);
     else if (ins) console.warn("[github] /user/installations", ins.status, ins.message);
   }
+  let truncated = mine.truncated;
   const blocks = new Map<string, { block: Block; fixUrl: string }>();
   const own = (org: string, priv: boolean) =>
     [...byFull.values()].some((r) => r.owner.toLowerCase() === org.toLowerCase() && (!priv || r.private));
@@ -181,6 +192,7 @@ export async function listAll(token: string, login: string): Promise<Listing> {
       if (!own(org, false)) {
         const url = `/orgs/${encodeURIComponent(org)}/repos?type=all&per_page=100&sort=pushed`;
         const or = await pages<RawRepo>(token, url, ORG_PAGES);
+        if (or.truncated) truncated = true;
         for (const r of or.items) {
           const k = r.full_name.toLowerCase();
           if (!byFull.has(k)) byFull.set(k, out(r));
@@ -216,7 +228,7 @@ export async function listAll(token: string, login: string): Promise<Listing> {
     if (g) Object.assign(g, b);
     else groups.push({ owner: org, type: "org", count: 0, ...b });
   }
-  return { repos, groups, scopes: mine.head.scopes, truncated: mine.truncated };
+  return { repos, groups, scopes: mine.head.scopes, truncated };
 }
 
 // Mỗi lần mở hộp thoại, gõ tìm hay bấm "Xem thêm" đều hỏi lại máy chủ: giữ danh sách vài phút
@@ -224,10 +236,14 @@ export async function listAll(token: string, login: string): Promise<Listing> {
 type Cached = { key: string; at: number; v: Promise<Listing> };
 const cache = ((globalThis as { __synchroGhRepos?: Map<string, Cached> }).__synchroGhRepos ??= new Map());
 const TTL = 3 * 60_000;
+// "Tải lại" (nút, hay mỗi lần quay lại từ trang GitHub) đọc lại từ đầu tới hàng chục trang và yêu cầu GraphQL:
+// bản vừa đọc (hay đang đọc) chưa quá chừng này thì dùng luôn, để bấm liên tục không chạm giới hạn phụ của GitHub
+// trên token của người dùng và không chồng nhiều lượt đọc trên máy chủ.
+const REFRESH_GAP = 20_000;
 export function cachedListing(uid: string, token: string, login: string, fresh = false): Promise<Listing> {
   const key = crypto.createHash("sha256").update(token).digest("hex");
   const c = cache.get(uid);
-  if (!fresh && c && c.key === key && Date.now() - c.at < TTL) return c.v;
+  if (c && c.key === key && Date.now() - c.at < (fresh ? REFRESH_GAP : TTL)) return c.v;
   const v = listAll(token, login);
   cache.set(uid, { key, at: Date.now(), v });
   // Lỗi không được giữ lại: lần mở sau thử lại ngay.
@@ -263,6 +279,21 @@ export const ORG_MSG: Record<Block, string> = {
 export const blockedError = (kind: GhKind, block: Block, org: string, url?: string | null) =>
   new AuthError(ORG_MSG[block], 403, { fix: { url: url || fixUrlFor(kind), org, block } });
 
+// Chủ repo là một tổ chức chưa cài app của Synchro. Chủ là người dùng (hay không tồn tại) thì không đổ cho việc
+// cài app: tên gõ nhầm vẫn nhận thông báo "không tìm thấy" chung.
+async function appMissing(token: string, owner: string) {
+  type Ins = { installations?: { account?: { login?: string } }[] };
+  const ins = await call<Ins>(token, "/user/installations?per_page=100");
+  if (!ins.ok) {
+    console.warn("[github] /user/installations", ins.status, ins.message);
+    return false;
+  }
+  const o = owner.toLowerCase();
+  if ((ins.data?.installations ?? []).some((i) => (i.account?.login ?? "").toLowerCase() === o)) return false;
+  const who = await call<{ type?: string }>(token, `/users/${encodeURIComponent(owner)}`);
+  return who.ok && who.data?.type === "Organization";
+}
+
 /** Clone thất bại với tài khoản đã kết nối: hỏi GitHub vì sao, để báo đúng cách sửa (cấp quyền tổ chức, SSO, cài app,
  *  kết nối lại cho đủ quyền). null: không rõ nguyên nhân, giữ thông báo chung. */
 export async function diagnoseRepo(token: string, owner: string, name: string, scopes: string) {
@@ -276,12 +307,10 @@ export async function diagnoseRepo(token: string, owner: string, name: string, s
     const m = "Kết nối GitHub hiện tại chưa có quyền đọc repo riêng tư. Bấm Kết nối lại một lần để cấp thêm quyền.";
     return new AuthError(m, 403, { reconnect: true });
   }
-  // Repo riêng tư của tổ chức bị chặn trông như không tồn tại (404). GitHub App: là thành viên tổ chức
-  // mà không thấy repo nghĩa là app chưa được cài vào tổ chức. OAuth App: GraphQL nói rõ tổ chức có chặn hay không.
-  if (kind === "app") {
-    const m = await call<{ state?: string }>(token, `/user/memberships/orgs/${encodeURIComponent(owner)}`);
-    return m.ok && m.data?.state === "active" ? blockedError(kind, "app", owner) : null;
-  }
+  // Repo riêng tư của tổ chức bị chặn trông như không tồn tại (404). OAuth App: GraphQL nói rõ tổ chức có chặn
+  // hay không. GitHub App: token chỉ đọc được tổ chức qua bản cài app có quyền Members, nên không hỏi tư cách thành
+  // viên được (đúng lúc app chưa cài thì GitHub trả 403/404); danh sách nơi đã cài app thì luôn đọc được.
+  if (kind === "app") return (await appMissing(token, owner)) ? blockedError(kind, "app", owner) : null;
   const p = await probeOrg(token, kind, owner, name);
   return p.block ? blockedError(kind, p.block, owner, p.sso) : null;
 }
