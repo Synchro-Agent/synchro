@@ -110,9 +110,20 @@ async function chatTurn(o, E) {
     await E.message("item_1", critic);
     return E.done({ input_tokens: prompt.length, cached_input_tokens: 0, output_tokens: critic.length });
   }
+  const clean = (a) => a.join(" | ").replace(/<\/?user_followup>/g, "").replace(/\s+/g, " ").trim().slice(0, 160);
+  // [mock:steerstream]: tin đầu viết chậm (khoảng 2 giây) để tin nhắn thêm tới giữa tin. Như codex thật: tin đang viết
+  // vẫn viết tới hết, model chỉ đọc tin nhắn thêm ở bước kế tiếp và trả lời nó trong tin thứ hai.
+  if (prompt.includes("[mock:steerstream]") && o.steered) {
+    const first = Array.from({ length: 12 }, (_, k) => `Đoạn ${k + 1} của tin đầu.`).join(" ");
+    await E.message("item_0", first, 200);
+    const st = o.steered();
+    const second = st.length ? `Đã đọc tin nhắn thêm: ${clean(st)}` : "Không có tin nhắn thêm.";
+    await E.message("item_1", second);
+    return E.done({ input_tokens: prompt.length, cached_input_tokens: 0, output_tokens: first.length + second.length });
+  }
   // Như codex thật: tin nhận qua turn/steer giữa lượt nằm trong cùng lượt, model trả lời cả tin đó.
   const steered = o.steered?.() ?? [];
-  const said = steered.join(" | ").replace(/<\/?user_followup>/g, "").replace(/\s+/g, " ").trim().slice(0, 160);
+  const said = clean(steered);
   if (steered.length) note += ` [nhắn thêm giữa lượt: ${said}]`;
   const text = /#media/.test(prompt) && !C.isTitleAsk(prompt) && !C.mockBrain(prompt) ? C.mediaReply(o.images.map((f) => `${C.mediaDesc(fs.readFileSync(f))} (--image)`)) : C.mockBrain(prompt) ?? (C.isTitleAsk(prompt) ? C.mockTitle(prompt) : /#prefs/.test(prompt) ? C.prefsEcho(prompt) : C.reply("Codex (ChatGPT)", prompt, turn) + note + (eff ? ` [effort ${eff}]` : ""));
   await E.message("item_1", text);
@@ -183,9 +194,14 @@ const appLog = (method, extra = {}) => { try { fs.appendFileSync(path.join(dir, 
         const E = {
           started: (item) => note("item/started", { ...at, item: cam(item) }),
           completed: (item) => note("item/completed", { ...at, item: cam(item) }),
-          message: async (id, text) => {
+          // ms: khoảng nghỉ giữa các mẩu chữ (mặc định 5 ms; [mock:steerstream] viết chậm).
+          message: async (id, text, ms = 5) => {
             note("item/started", { ...at, item: { id, type: "agentMessage", text: "" } });
-            for (const ch of C.chunks(text, 24)) { if (stopped()) return; note("item/agentMessage/delta", { ...at, itemId: id, delta: ch }); await C.sleep(5); }
+            for (const ch of C.chunks(text, 24)) {
+              if (stopped()) return;
+              note("item/agentMessage/delta", { ...at, itemId: id, delta: ch });
+              await C.sleep(ms);
+            }
             note("item/completed", { ...at, item: { id, type: "agentMessage", text } });
           },
           done: (u) => { if (stopped()) return finish({ status: "interrupted" }); note("thread/tokenUsage/updated", { ...at, tokenUsage: { last: { inputTokens: u.input_tokens, cachedInputTokens: u.cached_input_tokens, outputTokens: u.output_tokens } } }); finish({ status: "completed" }); },

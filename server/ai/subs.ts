@@ -715,6 +715,9 @@ export type SubTurn = {
   /** Lượt vừa bị dừng là do người dùng nhắn thêm (không phải nút Dừng): phiên vẫn được ghi để lượt làm tiếp nối
    *  tiếp đúng phiên đó. */
   cut?: () => boolean;
+  /** "working": CLI đã đọc tin và model đang làm (sự kiện đầu của model), hoặc công cụ dựng sẵn vừa xong; "native":
+   *  công cụ dựng sẵn của CLI đang chạy. Bên gọi chỉ cắt lượt vì tin nhắn thêm khi đang "working". */
+  onPhase?: (p: "working" | "native") => void;
   /** Tiến độ đã biết của lượt (TurnRequest.pulse). */
   pulse?: () => string;
 };
@@ -914,8 +917,13 @@ async function runTurn(o: SubTurn): Promise<SubResult> {
   for await (const e of eng.runTurn(req)) {
     // event: dòng đầu CLI thật sự in ra. Dấu hiệu của chính Synchro (pool, status) không tính: lượt trong hồ từng ghi event=1 dù CLI còn đang khởi động.
     if (e.kind !== "pool" && e.kind !== "status") tm.event ??= Date.now() - T0;
+    // Sự kiện đầu tiên của model: CLI đã đọc (và ghi vào phiên) tin của lượt này.
+    if ((e.kind === "text" || e.kind === "activity") && tm.active === undefined && tm.text === undefined) {
+      o.onPhase?.("working");
+    }
     if (e.kind === "text") { tm.text ??= Date.now() - T0; chunks++; ws.last = Date.now(); text += e.text; o.onDelta?.(e.text); }
     else if (e.kind === "activity") { tm.active ??= Date.now() - T0; ws.last = Date.now(); }
+    else if (e.kind === "native") { ws.last = Date.now(); o.onPhase?.(e.busy ? "native" : "working"); }
     else if (e.kind === "status") {
       if (e.wait !== undefined) ws.waiting = e.wait;
       // Hết chờ lượt khác, hoặc CLI báo đang thử lại: tính lại từ lúc này.
@@ -967,8 +975,10 @@ async function runTurn(o: SubTurn): Promise<SubResult> {
     if (err.code === "aborted") {
       // Cắt lượt vì tin nhắn thêm: CLI đã ghi tin của người dùng (và các bước đã xong) vào phiên. Ghi phiên như
       // lượt xong để lượt làm tiếp (lịch sử dài thêm đúng 2 tin: câu đã viết + tin nhắn thêm) nối tiếp phiên này thay
-      // vì mở phiên mới kèm cả lịch sử.
-      if (o.cut?.() && conv && session) {
+      // vì mở phiên mới kèm cả lịch sử. Chỉ khi model đã có sự kiện đầu: biết mã phiên (init) chưa có nghĩa là CLI đã
+      // ghi tin vào phiên; ghi sớm thì lượt sau chỉ gửi tin nhắn thêm, model không thấy yêu cầu gốc.
+      const read = tm.active !== undefined || tm.text !== undefined;
+      if (o.cut?.() && conv && session && read) {
         const tooled = searched || (o.mcp?.alive?.() ?? 0) > T0 || (resume ? prev?.tooled !== 0 : false);
         saveSession(d, o.user.id, conv, cli, session, total + 1, tooled, [...sysHad, ...sysNow.map(sysMark)]);
       }

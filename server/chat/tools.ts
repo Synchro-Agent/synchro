@@ -209,6 +209,9 @@ export type Exec = {
   park?: () => void; inputsSent?: Set<string>; madeImgs?: string[]; webs?: Map<string, { title: string; url: string }>;
   edited?: Set<string>; rendered?: Set<string>; roundBrowser?: boolean; untrusted?: boolean; plan?: PlanState;
   deckGated?: boolean; held?: { text: string; at: number }; patchHeal?: "ok" | "fail"; patchFailedFirst?: number;
+  /** Bước ẩn của Synchro đang chạy (bản sửa artifact, sửa bộ slide…): tin nhắn thêm không đi kèm kết quả công cụ của
+   *  bước đó (câu trả lời của bước chỉ được ghép phần sửa, phần trả lời tin nhắn thêm sẽ mất), chờ bước xong. */
+  steerHold?: boolean;
   /** Lượt làm sản phẩm thiết kế mới: mẫu tham chiếu và số vòng so với mẫu (designGate). */
   design?: DesignState;
 };
@@ -1054,7 +1057,7 @@ export async function execute(ad: Adapter, m: unknown[], x: Exec, calls: Call[],
   res.forEach((r, i) => { if (seqs[i]) progress("res", JSON.stringify({ ref: seqs[i], ok: !r.is_error, name: kindOf(x, calls[i]).slice(0, 160), sum: (r.sum ?? plainSummary(String(r.content ?? ""))).slice(0, 140), ...(x.sess?.get(calls[i].name) && d[calls[i].id] !== "deny" ? { args: argLine(calls[i].input) } : {}) })); });
   m.push(...ad.results(calls, res));
   // Người dùng nhắn thêm trong lúc công cụ chạy: ghép vào ngay bước kế tiếp, không ngắt việc.
-  const more = takeInbox();
+  const more = x.steerHold ? [] : takeInbox();
   if (more.length) { for (const t of more) progress("steer", t); addFollowup(m, more.join("\n\n")); }
 }
 

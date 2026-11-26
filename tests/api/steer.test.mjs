@@ -1,6 +1,9 @@
 // Làm việc "thành tiếng" và nhắn thêm khi đang chạy (npm run dev:mock): lượt có công cụ ghi lời dẫn, công cụ, kết quả, danh sách việc;
 // tin nhắn thêm được ghép vào bước kế tiếp mà không ngắt lượt; tin tới lúc model đang viết thì bước đó dừng, model đọc tin mới ngay trong
 // cùng lượt (khóa API); gói subscription đọc ở lần gọi công cụ kế tiếp hoặc ngay khi CLI xong lượt, vẫn trong cùng lượt.
+import fs from "node:fs";
+import path from "node:path";
+
 const B = process.env.SYNCHRO_URL ?? "http://localhost:3200";
 // Chạy code cục bộ dùng sandbox-exec của macOS: trên máy khác (CI Linux) công cụ báo lỗi, phần nhắn thêm vẫn kiểm đủ.
 const MAC = process.platform === "darwin";
@@ -84,8 +87,29 @@ console.log("2b. Gói Claude Code: tin tới khi CLI đang trả lời → làm 
   const run3 = await done(r3.j?.run);
   const st3 = run3?.events.find((e) => e.kind === "steer" && e.text === "Thêm lời chúc ngủ ngon");
   // CLI giả lập viết câu trả lời mất 3 giây (#slow): trước đây tin chờ tới hết lượt; nay lượt bị cắt ngay, làm tiếp
-  // cùng phiên.
-  console.log(`  · Claude Code: gửi → model nhận tin nhắn thêm ${st3 ? st3.at - t3 : "?"} ms`);
+  // cùng phiên. Sự kiện steer chỉ là lúc cắt: model thấy tin khi CLI chạy lại (--resume) đọc xong tin. CLI giả lập ghi
+  // lúc tiến trình bắt đầu (born) và lúc đọc xong tin (read): born − gửi là phần của Synchro (cắt, dọn, chạy lại),
+  // read − born là thời gian khởi động CLI (CLI thật khoảng 1,7–4 giây; bản giả lập gần như ngay).
+  const logs = [];
+  const walk = (d) => {
+    for (const f of fs.readdirSync(d, { withFileTypes: true })) {
+      const p = path.join(d, f.name);
+      if (f.isDirectory()) walk(p);
+      else if (f.name === "mock-claude-followups.log") logs.push(...fs.readFileSync(p, "utf8").trim().split("\n"));
+    }
+  };
+  try {
+    walk(path.resolve("data-mock/engine"));
+  } catch (e) {
+    console.log("  · không đọc được nhật ký CLI giả lập:", e.message);
+  }
+  const seen3 = logs.map((l) => JSON.parse(l)).filter((x) => x.read >= t3).sort((a, b) => a.read - b.read)[0];
+  const own3 = seen3 ? seen3.born - t3 : null, spawn3 = seen3 ? seen3.read - seen3.born : null;
+  console.log(`  · Claude Code: gửi → cắt lượt ${st3 ? st3.at - t3 : "?"} ms;`
+    + ` gửi → CLI chạy lại (phần Synchro) ${own3 ?? "?"} ms; CLI khởi động → đọc xong tin ${spawn3 ?? "?"} ms;`
+    + ` gửi → model thấy tin ${seen3 ? seen3.read - t3 : "?"} ms`);
+  ok(seen3?.resume === true && own3 !== null && own3 < 1000,
+    "Claude Code: phần của Synchro (gửi → CLI nối tiếp phiên chạy lại) dưới 1 giây", { seen3, own3 });
   const sub3 = run3?.status === "done" && !run3.result.steer && /lượt 2/.test(run3.result.text ?? "");
   ok(pr.j?.queued !== false && sub3 && !!st3,
     "gói: tin mới vào cùng phiên của CLI, không để lượt sau", JSON.stringify(run3?.result ?? pr.j).slice(0, 300));

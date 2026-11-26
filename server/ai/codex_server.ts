@@ -259,15 +259,19 @@ export async function* codexServerTurn(req: TurnRequest, prompt: string, cwd: st
     const asked = new Set<string>();
     const interrupt = () => { if (!done && turnId) void call(s, "turn/interrupt", { threadId: tid, turnId }, 5000).catch(() => drop(s, "không dừng được lượt")); };
     // Nhắn thêm giữa lượt: Codex nhận tin vào chính lượt đang chạy (turn/steer), model đọc ở bước kế tiếp mà không bỏ
-    // phần đã làm. Câu trả lời cuối chỉ gồm các tin model viết sau đó: phần trước đã vào nhật ký làm việc lúc tin tới
-    // (clisteer.ts).
-    let steeredAt = -1;
-    const inject = async (text: string) => {
+    // phần đã làm. Tin model đang viết dở lúc Codex nhận tin vẫn được viết tiếp tới hết: ranh giới (edge) là lúc tin đó
+    // xong (hoặc ngay, nếu không có tin nào đang viết). Tới ranh giới, bên gọi đưa phần đã viết vào nhật ký làm việc
+    // (atEdge, clisteer.ts); câu trả lời cuối chỉ gồm các tin viết sau ranh giới.
+    let steeredAt = -1, fresh = false, open = false;
+    const edges: (() => void)[] = [];
+    const edge = () => { steeredAt = parts.length; fresh = true; for (const f of edges.splice(0)) f(); };
+    const inject = async (text: string, atEdge: () => void) => {
       if (done || !turnId || s.noSteer || s.dead) return false;
       try {
         const input = [{ type: "text", text, text_elements: [] }];
         await call(s, "turn/steer", { threadId: tid, input, expectedTurnId: turnId }, 5000);
-        steeredAt = parts.length + (partial ? 1 : 0);
+        edges.push(atEdge);
+        if (!open) edge();
         return true;
       } catch (e) {
         const unknown = e instanceof RpcError && /method not found|unknown method|unknown variant/i.test(e.message);
@@ -300,15 +304,25 @@ export async function* codexServerTurn(req: TurnRequest, prompt: string, cwd: st
         }
         // Danh sách việc dựng sẵn của Codex (update_plan): app-server báo turn/plan/updated mỗi lần model cập nhật.
         if (method === "turn/plan/updated" || (/^item\/(started|updated|completed)$/.test(method) && itype === "todoList")) { const items = cliPlan(method === "turn/plan/updated" ? p.plan : item.items); if (items) yield { kind: "plan", items }; }
+        // fresh: tin đầu sau ranh giới nhắn thêm mở một đoạn mới (bên gọi đã xóa chữ cũ), không cần dòng trống ở đầu.
+        // open: có chữ của một tin đã đọc từ Codex mà bên gọi có thể chưa nhận hết (đang chờ ở yield): ranh giới nhắn
+        // thêm đợi tin đó xong, không thì phần cuối của nó không vào nhật ký mà cũng không vào câu trả lời.
         if (method === "item/agentMessage/delta" && typeof p.delta === "string" && p.delta) {
-          yield { kind: "text", text: (!partial && parts.length ? "\n\n" : "") + p.delta };
+          const t = (!partial && parts.length && !fresh ? "\n\n" : "") + p.delta;
           partial += p.delta;
+          open = true; fresh = false;
+          yield { kind: "text", text: t };
         } else if (method === "item/completed" && itype === "agentMessage" && typeof item.text === "string") {
-          const text = item.text;
+          open = true;
+          const text = item.text, gap = parts.length && !fresh ? "\n\n" : "";
           parts.push(text);
-          const rest = partial && text.startsWith(partial) ? text.slice(partial.length) : (parts.length > 1 ? "\n\n" : "") + text;
+          const rest = partial && text.startsWith(partial) ? text.slice(partial.length) : gap + text;
           partial = "";
+          fresh = false;
           if (rest) yield { kind: "text", text: rest };
+          open = false;
+          // Tin đang viết lúc Codex nhận tin nhắn thêm vừa xong: phần trước tin nhắn thêm đã tới đủ.
+          if (edges.length) edge();
         } else if (method === "thread/tokenUsage/updated") {
           const u = obj(obj(p.tokenUsage).last);
           yield { kind: "usage", usage: { input: num(u.inputTokens) ?? 0, output: num(u.outputTokens) ?? 0, cacheRead: num(u.cachedInputTokens) } };
@@ -322,11 +336,16 @@ export async function* codexServerTurn(req: TurnRequest, prompt: string, cwd: st
           const t = obj(p.turn), st = str(t.status);
           if (st === "interrupted" || req.signal?.aborted) { yield { kind: "error", message: "Đã dừng.", code: "aborted" }; return; }
           if (st === "failed") { const m = str(obj(t.error).message) || lastErr || "Codex báo lỗi."; yield { kind: "error", message: redact(m), code: classify(m) }; return; }
-          const own = steeredAt >= 0 && steeredAt < parts.length ? parts.slice(steeredAt) : parts;
+          const own = steeredAt >= 0 ? parts.slice(steeredAt) : parts;
           yield { kind: "final", text: tools && own.length ? own[own.length - 1] : own.join("\n\n"), via: "codex" };
         }
       }
-    } finally { req.signal?.removeEventListener("abort", interrupt); req.onInject?.(null); }
+    } finally {
+      req.signal?.removeEventListener("abort", interrupt);
+      req.onInject?.(null);
+      // Lượt dừng giữa tin đang viết (Dừng, lỗi): phần đã viết vẫn vào nhật ký trước tin nhắn thêm.
+      if (edges.length) edge();
+    }
   } catch (e) {
     // Lượt đã bắt đầu (đã có sự kiện tới người dùng): báo lỗi, không chạy lại bằng exec.
     if (started) { yield { kind: "error", message: redact((e as Error).message || "Codex app-server lỗi giữa lượt."), code: "other" }; return; }

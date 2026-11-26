@@ -626,7 +626,7 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
         user: c.user, model, system: am ? ARTIFACT_SYSTEM : [system || (planSys || toolSys ? "Bạn là một trợ lý AI hữu ích." : ""), planSys, toolSys, contextOf(body, c.user), pinnedBlock(body.pinned)].filter(Boolean).join("\n\n"),
         ephemeral: body.incognito === true, messages: msgs, conv: am ? undefined : convId,
         effort: isEffort(wanted) ? wanted : wanted === "auto" ? autoEffort(routeInput(body, c.user)) : undefined,
-        signal: steer ? steer.arm() : turnSignal(), onInject: steer?.onInject, cut: steer?.cut,
+        signal: steer ? steer.arm() : turnSignal(), onInject: steer?.onInject, cut: steer?.cut, onPhase: steer?.onPhase,
         onDelta: say, onToolUse: am ? undefined : toolUseSeen,
         older: typeof body.olderDigest === "string" ? body.olderDigest.slice(0, 8000) : undefined, fast, awaitingUser: () => !!x?.awaiting, mcp: bridge ? { url: bridge.url, alive: bridge.alive, onPark: bridge.onPark, live: bridge.live } : undefined, web: !fast && body.web === true, fresh,
         total: Array.isArray(msgs) ? msgs.length + cut : undefined, lockMs: o.auto ? 10_000 : undefined,
@@ -742,9 +742,17 @@ async function chatTurn(body: Record<string, any>, c: Who, scope: { feature: str
         cont = !more.length;
         // Phần trả lời sau tin nhắn thêm là một đoạn mới (chữ của bước trước đã nằm trong nhật ký).
         if (more.length) deltaStep();
-        r = await tryOnce(hist);
+        // Bước ẩn (bản sửa artifact, sửa bộ slide, so với mẫu thiết kế): kết quả của nó được ghép vào câu trả lời, nên
+        // không được cắt giữa chừng vì tin nhắn thêm (ghép nửa bản sửa làm hỏng artifact). Tin chờ bước đó xong rồi
+        // được đọc ở vòng sau.
+        const hidden = !more.length && (healing !== null || !!x?.held);
+        steer?.hold(hidden);
+        if (x) x.steerHold = hidden;
+        r = await tryOnce(hist).finally(() => { steer?.hold(false); if (x) x.steerHold = false; });
         if (healing !== null && prior) {
-          const j = r.json as J, healed = r.status === 200 && !j.cancelled;
+          // Bị cắt (không xảy ra khi đang hold, phòng hờ): nửa bản sửa không được ghép, giao câu trả lời gốc; tin nhắn
+          // thêm còn trong hộp thư, trả về trình duyệt gửi thành lượt mới.
+          const j = r.json as J, healed = r.status === 200 && !j.cancelled && !steer?.cut();
           if (!healed && x) x.patchHeal = "fail";
           // Lần gửi lại là bước ẩn: lỗi (hết hạn mức, CLI hỏng…) hay bị Dừng thì giao đúng câu trả lời gốc, không kèm
           // ghi chú lỗi của bước người dùng không thấy; trình duyệt hiện bản sửa hỏng kèm nút viết lại toàn bộ.

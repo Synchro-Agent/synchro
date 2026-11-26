@@ -264,6 +264,9 @@ export class ClaudeCodeEngine implements Engine {
     // gap: model bắt đầu một tin mới trong lượt (sau công cụ dựng sẵn như tìm web) — chữ của tin mới cách chữ trước một dòng trống,
     // không dính liền "…dựng deck.Đã đọc 4 skill…".
     let text = "", done = false, gap = false, failed = false, acted = false, session: string | null = null;
+    // Công cụ dựng sẵn của CLI (tìm, đọc web) đang chạy: báo cho bên gọi để tin nhắn thêm không cắt ngang lần tìm.
+    let native = false;
+    const own = (b: Json) => !String(b?.name ?? "").startsWith("mcp__");
     const limits = new Map<string, RateWindow>(), webIds = new Set<string>();
     // Đo: lần đầu của từng loại sự kiện (ms từ lúc khởi động CLI), ghi một dòng [timing] khi xong — để biết thời gian chờ nằm ở đâu.
     const T0 = Date.now(), seen = new Map<string, number>();
@@ -273,8 +276,24 @@ export class ClaudeCodeEngine implements Engine {
       // Model đã phản hồi: có sự kiện của API (kể cả đang nghĩ) hoặc tin của model. init và rate_limit_event không tính: CLI tự in khi khởi động.
       // CLI đang tự rút gọn hội thoại dài cũng là đang làm việc: báo status / compact_boundary, chưa có sự kiện API nào; bộ canh 90 giây từng cắt nhầm lượt khỏe.
       if (o.type === "stream_event" || o.type === "assistant" || o.type === "user" || (o.type === "system" && (o.subtype === "status" || o.subtype === "compact_boundary"))) yield { kind: "activity" };
+      // Công cụ dựng sẵn xong khi CLI gửi kết quả về model (tin "user"), model mở tin mới, hoặc (tìm web phía máy chủ
+      // của hãng) khối kế tiếp không còn là lời gọi công cụ.
+      const cb = o.type === "stream_event" && o.event?.type === "content_block_start"
+        ? o.event.content_block as Json : null;
+      if (native && (o.type === "user" || (o.type === "stream_event" && o.event?.type === "message_start")
+        || (cb && cb.type !== "tool_use" && cb.type !== "server_tool_use"))) {
+        native = false;
+        yield { kind: "native", busy: false };
+      }
+      if (!native && cb && (cb.type === "tool_use" || cb.type === "server_tool_use") && own(cb)) {
+        native = true;
+        yield { kind: "native", busy: true };
+      }
       if (o.type === "assistant") {
         for (const b of (o.message?.content ?? []) as Json[]) {
+          // Không có sự kiện từng khối (bản CLI cũ): lời gọi công cụ của CLI thấy ở tin hoàn chỉnh, chạy tới tin
+          // "user".
+          if (!native && b.type === "tool_use" && own(b)) { native = true; yield { kind: "native", busy: true }; }
           if (b.type === "tool_use" || b.type === "server_tool_use") acted = true;
           if ((b.type === "tool_use" || b.type === "server_tool_use") && WEB_TOOL.test(String(b.name ?? ""))) {
             if (typeof b.id === "string") webIds.add(b.id);

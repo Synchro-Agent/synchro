@@ -3,6 +3,8 @@
 // Trong prompt: [mock:quota] → hết hạn mức gói, [mock:auth401] → API trả 401 (token bị thu hồi), [mock:ratelimit] → giới hạn tốc độ ngắn,
 // [mock:weekopus] → chỉ hết hạn mức tuần của Opus, [mock:midquota] → viết được một đoạn rồi hết hạn mức, [mock:hang] → khởi động xong rồi treo,
 // [mock:retrying] → CLI báo đang thử lại rồi trả lời, [mock:quotaonce] → hết hạn mức ở lượt có công cụ sau khi đã chạy công cụ.
+// Lúc tiến trình bắt đầu chạy: đo riêng thời gian khởi động CLI với thời gian Synchro cần để chạy lại CLI.
+const BORN = Date.now();
 const C = require(require("path").join(__dirname, "mock-cli-common.cjs"));
 const { fs, path } = C;
 const a = process.argv.slice(2);
@@ -69,6 +71,14 @@ const loginFile = path.join(dir, ".mock-login");
     const ok = (process.env.CLAUDE_CODE_OAUTH_TOKEN || "").startsWith("sk-ant-oat01-MOCK") || fs.existsSync(loginFile);
     // Lịch sử phiên trên đĩa như CLI thật (nguyên văn tin nhắn): kiểm thử xóa đoạn chat, đoạn chat ẩn danh.
     if (ok) { const pd = path.join(dir, "projects", "mock"); fs.mkdirSync(pd, { recursive: true }); fs.appendFileSync(path.join(pd, `${sid}.jsonl`), JSON.stringify({ prompt }) + "\n"); }
+    // Lượt mang tin nhắn thêm: ghi lúc tiến trình bắt đầu (born) và lúc đọc xong tin (read) để kiểm thử đo được tin
+    // tới model sau bao lâu, tách phần của Synchro khỏi phần khởi động CLI.
+    if (ok && prompt.includes("<user_followup>")) {
+      const resume = !!C.flag(a, "--resume");
+      const line = JSON.stringify({ born: BORN, read: Date.now(), pid: process.pid, sid, resume });
+      try { fs.appendFileSync(path.join(dir, "mock-claude-followups.log"), line + "\n"); }
+      catch (e) { console.error("mock claude: không ghi được nhật ký tin nhắn thêm", e); }
+    }
     // initOnce: CLI chỉ in init ở lượt đầu của tiến trình (mã phiên của lượt sau đọc từ result).
     if (!C.cfg.initOnce || !inited) C.out({ type: "system", subtype: "init", session_id: sid, model: ALIAS[C.flag(a, "--model")] ?? C.flag(a, "--model") ?? "claude-sonnet-5-5", cwd: process.cwd(), tools: [] });
     inited = true;
@@ -101,7 +111,12 @@ const loginFile = path.join(dir, ".mock-login");
     if (stl.stall) { C.out({ type: "assistant", message: { role: "assistant", content: [{ type: "text", text: C.STALL_TEXT }] }, session_id: sid }); result({ subtype: "success", is_error: false, result: C.STALL_TEXT }); return; }
     prompt = stl.prompt;
     // #slow: lượt trả lời mất 3 giây (thử nhắn thêm khi CLI đang trả lời); lượt nối tiếp với tin nhắn thêm thì trả lời ngay.
-    if (prompt.includes("#slow") && !prompt.includes("<user_followup>")) await C.sleep(3000);
+    // Như model thật đang nghĩ: API đã nhận tin (message_start) rồi mới im lặng, không phải CLI còn khởi động.
+    if (prompt.includes("#slow") && !prompt.includes("<user_followup>")) {
+      const start = { type: "message_start", message: { role: "assistant" } };
+      C.out({ type: "stream_event", event: start, session_id: sid });
+      await C.sleep(3000);
+    }
     // Mỗi tin của model mở đầu bằng message_start rồi mới tới chữ, như Claude Code thật với --include-partial-messages.
     const delta = async (t) => { C.out({ type: "stream_event", event: { type: "message_start", message: { role: "assistant" } }, session_id: sid }); for (const ch of C.chunks(t)) { C.out({ type: "stream_event", event: { type: "content_block_delta", index: 0, delta: { type: "text_delta", text: ch } }, session_id: sid }); await C.sleep(15); } };
     if (prompt.includes("[mock:midquota]")) { await delta("Phần đã viết trước khi hết hạn mức."); result({ subtype: "success", is_error: true, result: "You've hit your usage limit" }); process.exit(1); }
