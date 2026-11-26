@@ -27,8 +27,8 @@ import { BulkBar, BulkButton, BulkCheck, bulkRow, each, useBulk, type BulkAct } 
 import { PageBar, usePage } from "./pager";
 
 type Schedule = {
-  kind: "once" | "hourly" | "daily" | "weekdays" | "weekly" | "cron"; time?: string; weekday?: number; every?: number; at?: string;
-  cron?: string; tz: string;
+  kind: "once" | "hourly" | "daily" | "weekdays" | "weekly" | "cron"; time?: string; weekday?: number; every?: number;
+  at?: string; cron?: string; tz: string;
 };
 type BrowserPref = "auto" | "synchro" | "user";
 type Engine = "chat" | "code";
@@ -104,6 +104,9 @@ async function downloadPptx(run: string, ident: string) {
 }
 const excerpt = (t: string) => t.replace(/<artifact[\s\S]*?<\/artifact>/g, "").replace(/[#*_`>|]/g, "").replace(/\s+/g, " ").trim().slice(0, 160);
 const tz = () => Intl.DateTimeFormat().resolvedOptions().timeZone;
+/** Múi giờ mặc định của form việc mới: múi giờ người dùng chọn lần trước (cài đặt theo tài khoản, mọi thiết bị dùng
+ *  chung), chưa chọn bao giờ thì Asia/Ho_Chi_Minh. Bộ lên kế hoạch cũng tính giờ theo múi giờ này. */
+const formZone = (last: string) => last || DEFAULT_TZ;
 
 // Việc mẫu: người dùng bấm để điền ô giao việc rồi sửa cho đúng ý mình.
 const EXAMPLES = [
@@ -171,10 +174,10 @@ function TaskEditor({ init, plan, onClose, onSaved, say }: { init?: Task | null;
   const [cron, setCron] = useState(src?.schedule.cron ?? "0 8 * * 1-5");
   const [weekday, setWeekday] = useState(src?.schedule.weekday ?? 1);
   const [every, setEvery] = useState(src?.schedule.every ?? 1);
-  // Múi giờ: của việc đang sửa; việc mới thì múi giờ người dùng chọn lần trước (cài đặt theo tài khoản, mọi thiết bị
-  // dùng chung), chưa chọn bao giờ thì Asia/Ho_Chi_Minh.
+  // Múi giờ: của việc đang sửa; kế hoạch của Synchro thì đúng múi giờ bộ lên kế hoạch đã dùng để tính giờ hẹn (Composer
+  // gửi formZone), nếu không "9h sáng mai" bị lưu thành 9:00 ở múi giờ khác; việc mới thì formZone.
   const [lastTz, setLastTz] = usePref("autopilotTz", "");
-  const [zone, setZone] = useState(init?.schedule.tz ?? (lastTz || DEFAULT_TZ));
+  const [zone, setZone] = useState(init?.schedule.tz ?? plan?.schedule.tz ?? formZone(lastTz));
   const [browser, setBrowser] = useState<BrowserPref>(src?.browser ?? "auto");
   const codeOk = !!useApp().me?.perms.features.code;
   // Quản trị viên tắt "Your Chrome": không chọn được Chrome của bạn (việc đã đặt sẵn thì chạy bằng trình duyệt của Synchro).
@@ -286,10 +289,15 @@ function TaskEditor({ init, plan, onClose, onSaved, say }: { init?: Task | null;
 function Composer({ onPlan, onManual, say }: { onPlan: (p: Plan) => void; onManual: () => void; say: (m: string) => void }) {
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
+  const [lastTz] = usePref("autopilotTz", "");
   const go = async () => {
     if (!text.trim() || busy) return;
     setBusy(true);
-    try { const { plan } = await api<{ plan: Plan }>("POST", "/api/tasks/plan", { text, tz: tz() }); onPlan(plan); setText(""); }
+    try {
+      // Cùng múi giờ form sẽ lưu (TaskEditor), để "9h sáng mai" của bộ lên kế hoạch chạy đúng giờ đã nói.
+      const { plan } = await api<{ plan: Plan }>("POST", "/api/tasks/plan", { text, tz: formZone(lastTz) });
+      onPlan(plan); setText("");
+    }
     catch (e) { say((e as Error).message); }
     setBusy(false);
   };
@@ -376,9 +384,19 @@ function ResultBody({ x, task, say, onOpenChat, onRetry, reload }: { x: Item; ta
   useEffect(() => {
     if (!real) return;
     let stop = false;
+    // Nhật ký và đề xuất chỉ là phần thêm của kết quả (chữ kết quả đã có sẵn): không tải được thì ghi nhật ký và để
+    // trống; lượt đang chạy thì 3 giây sau tự hỏi lại.
+    const miss = (what: string) => (e: unknown) => console.warn(`[autopilot] chưa tải được ${what}`, x.run, e);
     const load = () => {
-      api<{ run: { events: RunEv[]; status: string } }>("GET", `/api/runs/${x.run}?json=1`).then((j) => { if (!stop) { setEvents(j.run.events); if (j.run.status !== "running" && x.status === "running") reload(); } }).catch(() => {});
-      if (x.proposals) api<{ proposals: Proposal[] }>("GET", `/api/autopilot/proposals?run=${x.run}`).then((j) => { if (!stop) setProps(j.proposals); }).catch(() => {});
+      api<{ run: { events: RunEv[]; status: string } }>("GET", `/api/runs/${x.run}?json=1`).then((j) => {
+        if (stop) return;
+        setEvents(j.run.events);
+        if (j.run.status !== "running" && x.status === "running") reload();
+      }).catch(miss("nhật ký"));
+      if (x.proposals) {
+        api<{ proposals: Proposal[] }>("GET", `/api/autopilot/proposals?run=${x.run}`)
+          .then((j) => { if (!stop) setProps(j.proposals); }).catch(miss("đề xuất"));
+      }
     };
     load();
     const t = x.status === "running" ? setInterval(load, 3000) : null;
@@ -414,9 +432,27 @@ function ResultBody({ x, task, say, onOpenChat, onRetry, reload }: { x: Item; ta
 }
 
 // ---------------------------------------------------------------- trang Autopilot
+/** Lần chạy tới theo múi giờ của việc (cùng múi giờ với nhãn lịch "Mỗi ngày lúc 08:00"), kèm tên múi giờ khi khác múi
+ *  giờ của máy này, để thẻ việc không ghi "08:00 · lần tới 02:00". */
+function nextText(zone: string, t: number) {
+  if (zone === tz()) return when(t);
+  try {
+    const f = new Intl.DateTimeFormat("en-US", {
+      timeZone: zone, hourCycle: "h23", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit",
+    });
+    const p = (x: number) => Object.fromEntries(f.formatToParts(new Date(x)).map((q) => [q.type, q.value]));
+    const a = p(t), now = p(Date.now());
+    const day = a.day === now.day && a.month === now.month ? "" : ` · ${a.day}/${a.month}`;
+    return `${a.hour}:${a.minute}${day} (${zone})`;
+  } catch (e) {
+    // Múi giờ máy chủ đã nhận nhưng trình duyệt này không biết: hiện theo giờ máy này và ghi rõ múi giờ đó.
+    console.warn("[autopilot] múi giờ lạ", zone, e);
+    return `${when(t)} (${tz()})`;
+  }
+}
 // Trạng thái sau lịch trên thẻ việc: đang chờ Chrome, lần chạy tới, việc một lần đã chạy, hay đang tạm dừng.
 const jobState = (t: Task) => t.wait_since ? ` · ${tr("đang chờ Chrome")}`
-  : t.enabled && t.next_run_at ? ` · ${tr("lần tới")} ${when(t.next_run_at)}`
+  : t.enabled && t.next_run_at ? ` · ${tr("lần tới")} ${nextText(t.schedule.tz, t.next_run_at)}`
   : !t.enabled && t.schedule.kind === "once" && t.last ? ` · ${trc("đã chạy", "autopilot")}`
   : !t.enabled ? ` · ${tr("đang tạm dừng")}` : "";
 const LoadErr = ({ title, err, retry }: { title: string; err: string; retry: () => void }) => <div className="err-box" role="alert"><b>{title}</b><span>{tr(err)}</span><button className="btn" onClick={retry}>{tr("Thử lại")}</button></div>;
@@ -469,7 +505,13 @@ export function AutopilotPage({ say, onOpenChat }: { say: (m: string) => void; m
     } catch (e) { say((e as Error).message); }
     setMoreBusy(false);
   };
-  const read = async (ids: string[] | "all") => { await api("POST", "/api/autopilot", { read: ids }).catch(() => {}); setOlder((o) => o.map((x) => (ids === "all" || ids.includes(x.run) ? { ...x, read: true } : x))); changed(); load(); };
+  const read = async (ids: string[] | "all") => {
+    // Đánh dấu đã đọc không được (mất mạng) thì lần tải lại bên dưới trả về đúng trạng thái trên máy chủ; chỉ ghi
+    // nhật ký, không làm phiền người dùng vì một chấm chưa đọc.
+    await api("POST", "/api/autopilot", { read: ids }).catch((e) => console.warn("[autopilot] chưa đánh dấu đã đọc", e));
+    setOlder((o) => o.map((x) => (ids === "all" || ids.includes(x.run) ? { ...x, read: true } : x)));
+    changed(); load();
+  };
   const toggle = (x: Item) => { setOpen(open === x.run ? null : x.run); if (!x.read && x.status !== "running" && x.status !== "waiting") read([x.run]); };
   // Nút "Chạy lại" ngay trên dòng lỗi: chạy lại việc đó, khóa nút tới khi máy chủ nhận lệnh.
   const [rerun, setRerun] = useState<string | null>(null);

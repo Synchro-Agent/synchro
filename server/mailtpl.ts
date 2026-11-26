@@ -152,6 +152,8 @@ export function opsAlertMail(o: { base: string; title: string; text: string; tit
 
 type AutopilotMailIn = {
   base: string; lang: MailLang; title: string; when: string; ok: boolean; summary: string; url: string;
+  /** Số lần Synchro đã tự chạy lại trước khi báo lỗi này. */
+  tries?: number;
 };
 /** Autopilot vừa chạy xong một việc (người dùng bật "Gửi email khi xong" cho việc đó): tóm tắt kết quả và nút mở đoạn
  *  chat để hỏi tiếp. ok = false: lần chạy lỗi, phần tóm tắt là lý do. */
@@ -161,11 +163,15 @@ export function autopilotMail(o: AutopilotMailIn): Mail {
     ? (vi ? `Autopilot đã xong: ${o.title}` : `Autopilot finished: ${o.title}`)
     : (vi ? `Autopilot gặp lỗi: ${o.title}` : `Autopilot hit an error: ${o.title}`);
   const at = `<b style="color:${INK};font-weight:600">${esc(o.when)}</b>`;
+  const again = vi ? "Mở Autopilot để xem chi tiết hoặc bấm Chạy lại." : "Open Autopilot to see the details or run it again.";
+  const failed = o.tries
+    ? (vi ? `Lần chạy lúc ${at} vẫn lỗi sau ${o.tries} lần Synchro tự chạy lại.`
+      : `The run at ${at} still failed after Synchro retried it ${o.tries} times.`)
+    : (vi ? `Lần chạy lúc ${at} chưa xong.` : `The run at ${at} didn't finish.`);
   const lead = o.ok
     ? (vi ? `Synchro đã chạy xong việc này lúc ${at}. Kết quả nằm trong một đoạn chat để bạn đọc đầy đủ và hỏi tiếp.`
       : `Synchro finished this task at ${at}. The result is in a chat you can open to read in full and follow up.`)
-    : (vi ? `Lần chạy lúc ${at} chưa xong. Mở Autopilot để xem chi tiết hoặc bấm Chạy lại.`
-      : `The run at ${at} didn't finish. Open Autopilot to see the details or run it again.`);
+    : `${failed} ${again}`;
   const label = o.ok ? (vi ? "Mở đoạn chat" : "Open the chat") : (vi ? "Mở Autopilot" : "Open Autopilot");
   const note = vi
     ? "Bạn nhận email này vì đã bật \"Gửi email khi xong\" cho việc này trong Autopilot. Tắt ở nút Sửa của việc."

@@ -3,7 +3,8 @@
 //   model) như một lượt chat bình thường. Ghi thẳng vào kho đồng bộ đoạn chat (chatstore.ts) với một mã mới chưa thiết
 //   bị nào dùng, nên mọi thiết bị nhận về ở lần đồng bộ sau và không bao giờ đè lên đoạn chat người dùng đang gõ.
 //   Mở ra là hỏi tiếp được ngay.
-// - Email (người dùng bật cho từng việc, chỉ tài khoản đã xác minh email): tóm tắt và nút mở đoạn chat.
+// - Email (người dùng bật cho từng việc, chỉ tài khoản đã xác minh email): tóm tắt và nút mở đoạn chat. Lần lỗi còn
+//   được tự chạy lại thì keepResult không gọi tới đây, nên mỗi lần đến hạn chỉ có một email.
 // Lỗi ở đây chỉ ghi nhật ký: kết quả vẫn nằm trong danh sách Kết quả của Autopilot và vẫn có thông báo trong app.
 import "server-only";
 import { db, getUser, limit } from "./authstore";
@@ -113,5 +114,8 @@ function mailResult(o: Delivery, chat: number | null) {
   const summary = raw.length > 700 ? `${raw.slice(0, 700).trimEnd()}…` : raw;
   const url = ok ? `${base()}/#c=${chat}` : `${base()}/#v=autopilot`;
   const when = localTime(tz, o.doneAt ?? Date.now());
-  sendMail(user.email, autopilotMail({ base: base(), lang, title: o.task?.title ?? o.title, when, ok, summary, url }));
+  // Lần lỗi chỉ tới đây khi không còn lần tự chạy lại nào (tasks.ts keepResult): báo đã tự thử lại mấy lần.
+  const tries = !ok && o.kind === "run" && o.task ? o.task.retries : 0;
+  const title = o.task?.title ?? o.title;
+  sendMail(user.email, autopilotMail({ base: base(), lang, title, when, ok, summary, url, tries }));
 }

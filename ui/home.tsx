@@ -70,10 +70,9 @@ import { AppCtx, useApp, VOICE_LANG, VOICE_RATE, initials, readPref, reloadPrefs
 import { IMAGE_PLANS, allowsModel, clampEffort, effortCap, effortsFor, isEffort, legacyModel, type Effort } from "../shared/catalog";
 import { AUTO, fitModel, modelName, modelsSettled, refreshModels, seedModels, useModels } from "./models";
 import type { BootData } from "../server/bootdata";
-import { seedInboxCount } from "./inboxcount";
+import { INBOX_CHANGED, seedInboxCount, useInboxCount, type Fresh } from "./inboxcount";
 import { useFitPlaceholder } from "./phfit";
 import type { ProviderInfo } from "../shared/catalog";
-import { useInboxCount } from "./inboxcount";
 import { adoptLegacyData, clearAccountData, ls, setUserScope, userScope } from "./userscope";
 import { useChatSync, useSyncStatus } from "./chatsync";
 import { chatsForExport, closeChats, hydrateAll, loadChats, needChats, wipeChats, writeJournal } from "./chatload";
@@ -826,18 +825,25 @@ function FitLine({ className, children }: { className: string; children: React.R
   return <span ref={ref} className={className}>{children}</span>;
 }
 
-function Toast({ text }: { text: string }) {
-  const [shown, setShown] = useState(text);
+/** Nút đi kèm dòng thông báo (ví dụ "Mở đoạn chat" khi Autopilot xong một việc). */
+type ToastAct = { label: string; run: () => void };
+function Toast({ text, act, onDone }: { text: string; act?: ToastAct; onDone: () => void }) {
+  const [shown, setShown] = useState<{ text: string; act?: ToastAct }>({ text, act });
   const [out, setOut] = useState(false);
   useEffect(() => {
-    if (text) { setShown(text); setOut(false); return; }
+    if (text) { setShown({ text, act }); setOut(false); return; }
     setOut(true);
-    const t = setTimeout(() => setShown(""), 180);
+    const t = setTimeout(() => setShown({ text: "" }), 180);
     return () => clearTimeout(t);
-  }, [text]);
-  if (!shown || typeof document === "undefined") return null;
+  }, [text, act]);
+  if (!shown.text || typeof document === "undefined") return null;
+  const a = shown.act;
   // Gắn vào cuối <body>, trên mọi lớp phủ: thông báo (vd. lỗi kết nối connector) không bị hộp đang mở che mất.
-  return createPortal(<div className={`toast ${out ? "out" : ""}`} key={shown} role="status">{shown}</div>, document.body);
+  return createPortal(
+    <div className={`toast ${a ? "act" : ""} ${out ? "out" : ""}`} key={shown.text} role="status">
+      <span>{shown.text}</span>
+      {a && <button type="button" className="btn" onClick={() => { a.run(); onDone(); }}>{a.label}</button>}
+    </div>, document.body);
 }
 
 // Phần cần cả danh sách hay nội dung đoạn chat (trang dự án, bảng lệnh ⌘K, hộp chia sẻ, chế độ giọng nói) tự đăng ký kho, chỉ trong lúc đang
@@ -986,7 +992,7 @@ export default function Home({ boot }: { boot?: BootData | null }) {
   const [banner, setBanner] = useState(true);
   const [tab, setTab] = useState(0);
   const [tplMode, setTplMode] = useState<TplKey | null>(null);
-  const [toast, setToast] = useState("");
+  const [toast, setToast] = useState<{ text: string; act?: ToastAct }>({ text: "" });
   const [model, setModel] = useState("");
   const models = useModels();
   const [settingsTab, setSettingsTab] = useState("General");
@@ -1120,12 +1126,14 @@ export default function Home({ boot }: { boot?: BootData | null }) {
   const toastT = useRef<ReturnType<typeof setTimeout> | null>(null);
   const userRef = useRef<HTMLDivElement>(null);
 
-  const say = useCallback((m: string) => {
-    setToast(m);
+  const say = useCallback((m: string, act?: ToastAct) => {
+    setToast({ text: m, act });
     if (toastT.current) clearTimeout(toastT.current);
-    // Câu dài (lời giải thích lỗi kết nối) cần nhiều thời gian đọc hơn.
-    toastT.current = setTimeout(() => setToast(""), Math.min(10_000, Math.max(2400, m.length * 55)));
+    // Câu dài (lời giải thích lỗi kết nối) cần nhiều thời gian đọc hơn; có nút thì để lâu hơn cho kịp bấm.
+    const ms = Math.min(10_000, Math.max(act ? 8000 : 2400, m.length * 55));
+    toastT.current = setTimeout(() => setToast({ text: "" }), ms);
   }, []);
+  const hideToast = useCallback(() => setToast({ text: "" }), []);
   // Quay về từ trang đăng nhập connector (trình duyệt chặn cửa sổ bật lên): mở Cài đặt đúng tab và báo kết quả.
   useEffect(() => {
     const q = new URLSearchParams(location.search);
@@ -1956,13 +1964,30 @@ export default function Home({ boot }: { boot?: BootData | null }) {
     return () => window.removeEventListener("synchro:brain", h);
   }, []);
   useBrainSync(!!me);
-  // Autopilot xong một việc khi người dùng đang mở app ở chỗ khác: báo một dòng (trang Autopilot đang mở thì đã thấy
-  // ngay trên danh sách).
+  // Mở một mục mới của Autopilot: kết quả xong có đoạn chat thì mở thẳng đoạn chat (đánh dấu đã đọc) để hỏi tiếp, còn
+  // lại (lỗi, đề xuất, thông báo) thì mở trang Autopilot.
+  const openFresh = (x: Fresh) => {
+    if (x.chat !== undefined && x.status === "done" && !x.proposals) {
+      openAsChat(x.title, "", x.chat);
+      const body = JSON.stringify({ read: [x.run] });
+      void fetch("/api/autopilot", { method: "POST", headers: { "content-type": "application/json" }, body })
+        .then(() => window.dispatchEvent(new Event(INBOX_CHANGED)))
+        // Không đánh dấu được thì dòng chỉ còn chấm chưa đọc trong Autopilot; đoạn chat vẫn mở.
+        .catch((e) => console.warn("[autopilot] chưa đánh dấu đã đọc", e));
+    } else setView("autopilot");
+  };
+  // Autopilot xong một việc (hay có thông báo mới) khi người dùng đang mở app ở chỗ khác: báo một dòng có nút mở (trang
+  // Autopilot đang mở thì đã thấy ngay trên danh sách). Tab đang ẩn: thông báo của hệ thống, bấm vào cũng mở như vậy.
   const inboxN = useInboxCount(!!me, (x) => {
     if (viewRef.current === "autopilot") return;
     const v = { title: x.title };
-    say(x.proposals ? tf("Autopilot: “{title}” có đề xuất chờ bạn duyệt", v) : tf("Autopilot đã xong “{title}”", v));
-  });
+    const msg = x.kind === "notice" ? tf("Thông báo mới: “{title}”", v)
+      : x.proposals ? tf("Autopilot: “{title}” có đề xuất chờ bạn duyệt", v)
+      : x.status === "error" ? tf("Autopilot gặp lỗi khi chạy “{title}”", v)
+      : tf("Autopilot đã xong “{title}”", v);
+    const chat = x.chat !== undefined && x.status === "done" && !x.proposals;
+    say(msg, { label: tr(chat ? "Mở đoạn chat" : "Mở Autopilot"), run: () => openFresh(x) });
+  }, (x) => openFresh(x));
   // Bảng lệnh ⌘K: lệnh nhanh và cách mở từng loại kết quả.
   const paletteCmds: PaletteCmd[] = [
     { id: "new", label: "Đoạn chat mới", icon: <I.Plus size={16} />, keys: "⇧⌘O", hay: "new chat tao moi", run: goNew },
@@ -2331,7 +2356,7 @@ export default function Home({ boot }: { boot?: BootData | null }) {
       </main>
 
       {drag && <div className="drop"><div className="drop-in"><div className="drop-ic"><I.Image size={30} /><I.Copy size={30} /><I.Folder size={30} /></div><span>Thả tệp vào đây</span></div></div>}
-      <Toast text={toast} />
+      <Toast text={toast.text} act={toast.act} onDone={hideToast} />
       {voiceOn && <VoiceFor onClose={() => setVoiceOn(false)} onAsk={(t) => send(t)} onTurn={voiceTurn} busy={busy} rate={VOICE_RATE[vspeed] ?? 1} voice={vvoice} say={say} />}
       <Fade show={!!(modal === "settings")}><Settings initial={settingsTab} onTab={setSettingsTab} onClose={() => setModal(null)} theme={theme} setTheme={setTheme} /></Fade>
       <Fade show={!!(modal === "lang")}><LangModal onClose={() => setModal(null)} /></Fade>

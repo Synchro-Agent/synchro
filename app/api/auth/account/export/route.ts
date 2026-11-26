@@ -68,7 +68,10 @@ async function* sections(u: UserRow): AsyncGenerator<string> {
     ["appData", () => rows("SELECT ref, key, value, updated_at FROM app_data WHERE owner = ? OR ref LIKE ?", u.id, `art:${u.id}:%`)],
     ["appComments", () => rows("SELECT app, body, created_at FROM app_comments WHERE user_id = ?", u.id)],
     ["skills", () => skills], ["plugins", () => rows("SELECT id, slug, catalog_id, name, description, author, homepage, enabled, created_at, updated_at FROM plugins WHERE owner = ?", u.id)],
-    ["autopilot", () => rows("SELECT task_id, title, at, kind, note, result FROM task_runs WHERE owner = ? ORDER BY at", u.id)],
+    // Kết quả của Autopilot giữ khóa "inbox" như các tệp đã tải trước khi Hộp thư đổi tên: công cụ đọc tệp cũ vẫn đọc
+    // được, và không chép hai lần (mỗi kết quả tới 60 KB).
+    ["inbox", () => rows("SELECT task_id, title, at, kind, note, result FROM task_runs WHERE owner = ? ORDER BY at",
+      u.id)],
     ["generatedFiles", () => rows("SELECT * FROM outputs WHERE user_id = ?", u.id)], ["speechItems", () => rows("SELECT id, kind, title, mime, size, created_at FROM speech_items WHERE user_id = ?", u.id)],
     ["brainNotes", () => allNotes(u.id)], ["tasks", () => listTasks(u.id)], ["shares", () => listShares(u.id)],
     ["connectors", () => listConnectors(u.id).map((c) => ({ id: c.id, name: c.name, url: c.url }))], ["uploadedFiles", () => myFiles(u.id).files],

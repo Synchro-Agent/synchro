@@ -104,12 +104,15 @@ export function parseCron(expr: string): Cron {
   if (min.length !== 1) {
     throw new ScheduleError("Autopilot chạy tối đa mỗi giờ một lần: trường phút của cron phải là một số (0–59).");
   }
-  const anyDom = f[2] === "*", anyDow = f[4] === "*";
+  // Như Vixie cron / cronie: trường ngày hay thứ bắt đầu bằng "*" (kể cả "*/2") coi như không hạn chế khi chọn cách
+  // ghép hai trường, nên "0 9 */2 * 1" là ngày lẻ VÀ thứ Hai, không phải ngày lẻ HOẶC thứ Hai.
+  const anyDom = f[2].startsWith("*"), anyDow = f[4].startsWith("*");
   return { min, hour, dom: new Set(dom), mon: new Set(mon), dow: new Set(dow), anyDom, anyDow };
 }
-// Như cron chuẩn: hạn chế cả ngày lẫn thứ thì chỉ cần khớp một trong hai.
+// Như cron chuẩn: hạn chế cả ngày lẫn thứ thì chỉ cần khớp một trong hai; một trong hai trường bắt đầu bằng "*" thì
+// phải khớp cả hai (trường "*" trần chứa mọi giá trị nên luôn khớp).
 const dayOk = (c: Cron, d: number, wd: number) =>
-  c.anyDom && c.anyDow ? true : c.anyDom ? c.dow.has(wd) : c.anyDow ? c.dom.has(d) : c.dom.has(d) || c.dow.has(wd);
+  c.anyDom || c.anyDow ? c.dom.has(d) && c.dow.has(wd) : c.dom.has(d) || c.dow.has(wd);
 function nextCron(c: Cron, tz: string, after: number): number | null {
   const now = parts(tz, after);
   // Một năm rưỡi là đủ cho mọi biểu thức có ngày thật (ngày 29/2 tối đa 4 năm thì coi như không còn lần nào trong
@@ -130,7 +133,14 @@ function nextCron(c: Cron, tz: string, after: number): number | null {
 export function nextRun(s: Schedule, after: number, ranOnce = false): number | null {
   if (s.kind === "once") return ranOnce ? null : Math.max(after, atUtc(s) ?? after);
   if (s.kind === "hourly") return after + (s.every ?? 1) * 60 * 60_000;
-  if (s.kind === "cron") { try { return nextCron(parseCron(s.cron ?? ""), s.tz, after); } catch { return null; } }
+  if (s.kind === "cron") {
+    try { return nextCron(parseCron(s.cron ?? ""), s.tz, after); } catch (e) {
+      // checkSchedule đã đọc thử cron lúc tạo / sửa việc, nên chỉ tới đây khi dòng trong cơ sở dữ liệu bị sửa tay: coi
+      // như không còn lần chạy (bộ hẹn giờ tắt việc) thay vì làm hỏng cả nhịp hẹn giờ.
+      console.error("[schedule] cron hỏng trong việc đã lưu", s.cron, e);
+      return null;
+    }
+  }
   const [hh, mm] = (s.time ?? "08:00").split(":").map(Number);
   const now = parts(s.tz, after);
   for (let add = 0; add <= 8; add++) {

@@ -105,19 +105,25 @@ export function listTasks(uid: string): PublicTask[] {
 export const getTask = (uid: string, id: string) => (init().prepare("SELECT * FROM tasks WHERE id = ? AND owner = ?").get(id, uid) as TaskRow | undefined) ?? null;
 
 type TaskIn = {
-  title?: unknown; prompt?: unknown; schedule?: unknown; model?: unknown; browser?: unknown; memory?: unknown; enabled?: unknown; engine?: unknown;
-  email?: unknown; lang?: unknown;
+  title?: unknown; prompt?: unknown; schedule?: unknown; model?: unknown; browser?: unknown; memory?: unknown;
+  enabled?: unknown; engine?: unknown; email?: unknown; lang?: unknown;
 };
 const cleanModel = (x: unknown) => (typeof x === "string" && x && x.length <= 120 ? x : null);
 const cleanLang = (x: unknown, cur?: "vi" | "en") => (x === "vi" || x === "en" ? x : cur);
 const stored = (s: Schedule, email: boolean, lang?: "vi" | "en"): string =>
   JSON.stringify({ ...s, ...(email ? { notify: "email" } : {}), ...(lang ? { lang } : {}) });
-/** Lịch người dùng vừa đặt: lỗi (cron sai, giờ hẹn đã qua) thành lời báo 400 của việc. */
+/** Lỗi của lịch (cron sai, giờ hẹn đã qua) thành lời báo 400 của việc. */
+function checkUser(s: Schedule) {
+  try { checkSchedule(s); } catch (e) { if (e instanceof ScheduleError) fail(e.message); throw e; }
+}
+/** Lịch người dùng vừa đặt, đã kiểm tra. */
 function userSchedule(x: unknown): Schedule {
   const s = cleanSchedule(x);
-  try { checkSchedule(s); } catch (e) { if (e instanceof ScheduleError) fail(e.message); throw e; }
+  checkUser(s);
   return s;
 }
+// So hai lịch đã chuẩn hóa, không phụ thuộc thứ tự khóa của JSON đã lưu.
+const schedKey = (s: Schedule) => JSON.stringify(Object.entries(s).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)));
 
 export function createTask(uid: string, x: TaskIn) {
   const title = typeof x.title === "string" && x.title.trim() ? x.title.trim().slice(0, TASK_LIMITS.title) : fail("Việc tự động cần có tên.");
@@ -140,17 +146,32 @@ export function updateTask(uid: string, id: string, x: TaskIn) {
   const r = getTask(uid, id);
   if (!r) return fail("Không tìm thấy việc tự động.", 404);
   const title = typeof x.title === "string" && x.title.trim() ? x.title.trim().slice(0, TASK_LIMITS.title) : r.title;
-  const prompt = typeof x.prompt === "string" && x.prompt.trim() && x.prompt.length <= TASK_LIMITS.prompt ? x.prompt.trim() : r.prompt;
-  const s = x.schedule !== undefined ? userSchedule(x.schedule) : scheduleOf(r);
+  const prompt = typeof x.prompt === "string" && x.prompt.trim() && x.prompt.length <= TASK_LIMITS.prompt
+    ? x.prompt.trim() : r.prompt;
+  const cur = scheduleOf(r);
+  const s = x.schedule !== undefined ? cleanSchedule(x.schedule) : cur;
+  // Form sửa việc luôn gửi lại lịch, kể cả khi người dùng chỉ đổi tên hay tắt email: chỉ kiểm tra lịch và tính lại lần
+  // chạy khi lịch thật sự đổi. Nếu không, việc một lần đã chạy xong (giờ hẹn đã qua) không sửa được gì nữa, còn việc
+  // mỗi vài giờ bị lùi lần chạy kế tiếp mỗi lần sửa tên.
+  const moved = schedKey(s) !== schedKey(cur);
+  if (moved) checkUser(s);
+  const ran = !!r.last_run_at;
+  // Việc một lần đã chạy xong (bộ hẹn giờ đã tắt nó) mà người dùng chọn giờ mới: hẹn lại theo giờ mới.
+  const rearm = moved && s.kind === "once" && ran && !r.enabled && x.enabled === undefined;
+  const enabled = typeof x.enabled === "boolean" ? x.enabled : rearm || !!r.enabled;
+  // Bật lại việc một lần đã hẹn giờ mà chưa chạy, giờ hẹn đã qua trong lúc tạm dừng: báo giờ đã qua để người dùng chọn
+  // lại, không chạy ngay một việc có thể có tác dụng phụ mà người dùng tưởng đã hết hạn.
+  if (enabled && !r.enabled && !moved && !ran && s.kind === "once" && s.at) checkUser(s);
   const was = storedOf(r);
-  const enabled = typeof x.enabled === "boolean" ? x.enabled : !!r.enabled;
   const model = x.model !== undefined ? cleanModel(x.model) ?? r.model : r.model;
   // Đổi lịch hoặc bật lại thì tính lại lần chạy kế tiếp từ bây giờ.
-  const next = enabled ? (x.schedule !== undefined || !r.enabled ? nextRun(s, Date.now(), s.kind === "once" && !!r.last_run_at && x.schedule === undefined) : r.next_run_at) : r.next_run_at;
+  const next = !enabled ? r.next_run_at
+    : moved || !r.enabled ? nextRun(s, Date.now(), s.kind === "once" && ran && !moved) : r.next_run_at;
   const engine = cleanEngine(x.engine, r.engine);
   if (engine !== r.engine) codeOk(uid, engine);
   const plan = stored(s, typeof x.email === "boolean" ? x.email : was.notify === "email", cleanLang(x.lang, was.lang));
-  d.prepare("UPDATE tasks SET title = ?, prompt = ?, schedule = ?, enabled = ?, model = ?, next_run_at = ?, browser = ?, memory = ?, wait_since = ?, engine = ? WHERE id = ?")
+  d.prepare("UPDATE tasks SET title = ?, prompt = ?, schedule = ?, enabled = ?, model = ?, next_run_at = ?, browser = ?,"
+    + " memory = ?, wait_since = ?, engine = ? WHERE id = ?")
     .run(title, prompt, plan, enabled ? 1 : 0, model, next, cleanBrowser(x.browser, r.browser),
       typeof x.memory === "boolean" ? (x.memory ? 1 : 0) : r.memory, enabled ? r.wait_since : null, engine, id);
   return one(d, id);
@@ -380,24 +401,44 @@ export type InboxItem = {
   run: string; task: string; title: string; at: number; read: boolean; status: string; text: string; error?: string;
   kind?: "task" | "notice" | "action"; link?: string; note?: string; model?: string; proposals?: number; chat?: number;
 };
-type RunRow = { run_id: string; task_id: string; title: string; at: number; read: number; kind: string; note: string | null; result: string | null };
+type RunRow = {
+  run_id: string; task_id: string; title: string; at: number; read: number; kind: string; note: string | null;
+  result: string | null; retried: number;
+};
 type Kept = { status: string; text?: string; error?: string; model?: string; chat?: number };
 const parseKept = (s: string): Kept | null => {
   try { return JSON.parse(s) as Kept; } catch (e) { console.error("[autopilot] dòng kết quả hỏng", e); return null; }
 };
 export const INBOX_KEEP = 1000;
-// Quá cũ: không còn biết lần đó xong hay lỗi, nên ghi "expired" chứ không phải "error" (không hiện như lần chạy lỗi, không nút Chạy lại).
+// Quá cũ: không còn biết lần đó xong hay lỗi, nên ghi "expired" chứ không phải "error" (không hiện như lần chạy lỗi,
+// không nút Chạy lại).
 const EXPIRED = JSON.stringify({ status: "expired", error: TOO_OLD });
-// Lượt chạy chỉ được giữ 7 ngày (runs.ts) nên kết quả cuối được chép sang dòng kết quả ngay khi xong: báo cáo tuần trước vẫn đọc được.
-// Mỗi người giữ tối đa INBOX_KEEP kết quả đầy đủ; cũ hơn thì còn dòng và thời gian, không còn nội dung.
+/** Lần chạy lỗi mà bộ hẹn giờ sẽ tự chạy lại (cùng điều kiện với tick): chưa phải kết quả cuối của lần đến hạn đó. */
+function retryAhead(d: ReturnType<typeof init>, uid: string, row: RunRow, run: { status: string; result: unknown }) {
+  if (row.kind !== "run" || run.status !== "error" || row.retried !== 0) return false;
+  const err = run.result as { usageLimit?: boolean } | null;
+  if (!err || err.usageLimit) return false;
+  const t = getTask(uid, row.task_id);
+  if (!t || t.retries >= MAX_RETRY) return false;
+  const newer = "SELECT 1 FROM task_runs WHERE task_id = ? AND kind = 'run' AND at > ? AND run_id != ? LIMIT 1";
+  return !d.prepare(newer).get(row.task_id, row.at, row.run_id);
+}
+// Lượt chạy chỉ được giữ 7 ngày (runs.ts) nên kết quả cuối được chép sang dòng kết quả ngay khi xong: báo cáo tuần
+// trước vẫn đọc được. Mỗi người giữ tối đa INBOX_KEEP kết quả đầy đủ; cũ hơn thì còn dòng và thời gian, không còn nội
+// dung.
 // Lần chép đầu tiên cũng là lúc gửi kết quả cho người dùng (đoạn chat để hỏi tiếp, email nếu bật): câu UPDATE chỉ ăn
 // khi result còn NULL, nên nhịp hẹn giờ và trang Autopilot cùng gọi tới cũng chỉ gửi một lần.
+// Lần lỗi còn được tự chạy lại thì chưa báo gì (không email, không thông báo trong app, dòng kết quả coi như đã đọc):
+// một lần đến hạn chỉ báo một lần, ở lần thử cuối, thay vì ba email lỗi rồi một email thành công.
 function keepResult(uid: string, r: Pick<RunRow, "run_id">): Kept | null {
   const run = getRun(r.run_id, uid);
   if (run?.status === "running") return null;
   const res = (run?.result ?? {}) as { text?: string; error?: string; model?: string };
   let k: Kept = run
-    ? { status: run.status, text: String(res.text ?? "").slice(0, 60_000), ...(res.error ? { error: String(res.error) } : {}), ...(typeof res.model === "string" ? { model: res.model } : {}) }
+    ? {
+      status: run.status, text: String(res.text ?? "").slice(0, 60_000), ...(res.error ? { error: String(res.error) } : {}),
+      ...(typeof res.model === "string" ? { model: res.model } : {}),
+    }
     : { status: "expired", error: TOO_OLD };
   const d = init();
   const first = d.prepare("UPDATE task_runs SET result = ? WHERE run_id = ? AND owner = ? AND result IS NULL")
@@ -408,7 +449,8 @@ function keepResult(uid: string, r: Pick<RunRow, "run_id">): Kept | null {
     return cur?.result ? parseKept(cur.result) : k;
   }
   const row = d.prepare("SELECT * FROM task_runs WHERE run_id = ?").get(r.run_id) as RunRow | undefined;
-  if (run && row) {
+  if (run && row && retryAhead(d, uid, row, run)) d.prepare("UPDATE task_runs SET read = 1 WHERE run_id = ?").run(r.run_id);
+  else if (run && row) {
     const chat = deliverResult({
       uid, run: r.run_id, title: row.title, at: row.at, kind: row.kind, task: getTask(uid, row.task_id),
       status: run.status, result: run.result, doneAt: run.updatedAt,
@@ -418,7 +460,8 @@ function keepResult(uid: string, r: Pick<RunRow, "run_id">): Kept | null {
       d.prepare("UPDATE task_runs SET result = ? WHERE run_id = ?").run(JSON.stringify(k), r.run_id);
     }
   }
-  d.prepare("UPDATE task_runs SET result = ? WHERE owner = ? AND run_id IN (SELECT run_id FROM task_runs WHERE owner = ? AND result IS NOT NULL ORDER BY at DESC LIMIT -1 OFFSET ?)").run(EXPIRED, uid, uid, INBOX_KEEP);
+  d.prepare("UPDATE task_runs SET result = ? WHERE owner = ? AND run_id IN (SELECT run_id FROM task_runs WHERE owner = ?"
+    + " AND result IS NOT NULL ORDER BY at DESC LIMIT -1 OFFSET ?)").run(EXPIRED, uid, uid, INBOX_KEEP);
   return k;
 }
 /** Nhịp đều của máy chủ: chép kết quả của các lượt vừa xong và gửi cho người dùng, kể cả khi không ai mở Autopilot
@@ -437,12 +480,31 @@ const unreadCount = (uid: string) => {
 };
 const pendingCount = (uid: string) => (init().prepare("SELECT COUNT(*) AS n FROM proposals WHERE owner = ? AND status = 'pending'").get(uid) as { n: number }).n;
 
+/** Mục mới để báo (thông báo trong app, thông báo của trình duyệt): loại, trạng thái và đoạn chat kết quả để báo đúng
+ *  lời (xong, lỗi, thông báo) và mở thẳng đoạn chat. */
+export type Fresh = {
+  run: string; title: string; proposals: number; kind: "task" | "action" | "notice"; status: string; chat?: number;
+};
 /** Số trên thanh bên: chỉ đếm và vài dòng mới nhất để báo thông báo, không gửi nội dung kết quả. */
-export function inboxCount(uid: string) {
+export function inboxCount(uid: string): { unread: number; pending: number; fresh: Fresh[] } {
   const d = init(), unread = unreadCount(uid);
-  const rows = unread ? d.prepare(`SELECT run_id, title, at FROM task_runs WHERE ${UNREAD_RUNS} UNION ALL SELECT id AS run_id, title, at FROM notices WHERE owner = ? AND read = 0 ORDER BY at DESC LIMIT 20`).all(uid, uid) as { run_id: string; title: string; at: number }[] : [];
+  const sql = `SELECT run_id, title, at, kind, result FROM task_runs WHERE ${UNREAD_RUNS} UNION ALL`
+    + " SELECT id AS run_id, title, at, 'notice' AS kind, NULL AS result FROM notices WHERE owner = ? AND read = 0"
+    + " ORDER BY at DESC LIMIT 20";
+  type Row = { run_id: string; title: string; at: number; kind: string; result: string | null };
+  const rows = unread ? d.prepare(sql).all(uid, uid) as Row[] : [];
   const n = d.prepare("SELECT COUNT(*) AS n FROM proposals WHERE owner = ? AND run_id = ?");
-  return { unread, pending: pendingCount(uid), fresh: rows.map((r) => ({ run: r.run_id, title: r.title, proposals: (n.get(uid, r.run_id) as { n: number }).n })) };
+  const fresh = rows.map((r): Fresh => {
+    const k = r.result ? parseKept(r.result) : null;
+    const kind = r.kind === "notice" ? "notice" : r.kind === "action" ? "action" : "task";
+    // Lượt vừa xong mà nhịp hẹn giờ chưa kịp chép kết quả: trạng thái lấy thẳng từ lượt chạy.
+    const status = kind === "notice" ? "done" : k?.status ?? getRun(r.run_id, uid)?.status ?? "done";
+    return {
+      run: r.run_id, title: r.title, proposals: (n.get(uid, r.run_id) as { n: number }).n, kind, status,
+      ...(k?.chat ? { chat: k.chat } : {}),
+    };
+  });
+  return { unread, pending: pendingCount(uid), fresh };
 }
 
 /** Một trang Autopilot, mới nhất trước. before: mốc thời gian của dòng cuối trang trước. */

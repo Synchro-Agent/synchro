@@ -345,6 +345,11 @@ input,textarea{font:inherit;color:inherit;outline:0}
    Trang Tải ứng dụng giữ thông báo ở đáy (.dl-toast, không có khối soạn tin). */
 .toast{position:fixed;right:24px;bottom:24px;isolation:isolate;pointer-events:none;display:flex;gap:8px;align-items:center;background:var(--card);box-shadow:var(--shadow);border-radius:var(--r-menu);padding:10px 14px;font-size:var(--fs-2);z-index:var(--z-toast);max-width:min(560px,calc(100vw - 48px));animation:pop .2s backwards}
 @media (max-width:860px){.toast:not(.dl-toast){top:calc(64px + env(safe-area-inset-top));bottom:auto;left:16px;right:16px;margin-inline:auto;width:max-content;max-width:calc(100vw - 32px)}}
+/* Thông báo có nút (Autopilot xong: "Mở đoạn chat"): nhận cú bấm, chữ co lại để nút không tràn ra ngoài. */
+.toast.act{pointer-events:auto;padding-block:6px;padding-inline-end:6px}
+.toast.act>span{min-width:0}
+.toast.act>.btn{flex:none;height:32px;padding:0 12px}
+@media (pointer:coarse){.toast.act>.btn{min-height:44px}}
 .btn.danger{background:#c6422f;color:#fff;border-color:transparent}.btn.danger:hover{background:#b23a29}.menu-item.del:hover{background:#c6422f;color:#fff}
 .chat-wrap{position:relative}.chat-wrap .dots{position:absolute;right:4px;top:4px;width:24px;height:24px;border-radius:var(--r-pill);opacity:0;color:var(--text-2)}
 .chat-wrap:hover .dots,.chat-wrap:focus-within .dots,.chat-wrap .dots:focus-visible,.chat-wrap .dots[aria-expanded="true"]{opacity:1}

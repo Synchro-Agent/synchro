@@ -1520,6 +1520,10 @@ addNew(VI2EN, {
     "The cron weekday field is invalid (allowed 0–7 or SUN–SAT, *, commas, a-b, /step).",
   "Autopilot: “{title}” có đề xuất chờ bạn duyệt": "Autopilot: “{title}” has a proposal waiting for your approval",
   "Autopilot đã xong “{title}”": "Autopilot finished “{title}”",
+  "Autopilot gặp lỗi khi chạy “{title}”": "Autopilot hit an error running “{title}”",
+  "Thông báo mới: “{title}”": "New notice: “{title}”", "Mở đoạn chat": "Open the chat", "Mở Autopilot": "Open Autopilot",
+  "Synchro có thông báo mới cho bạn.": "Synchro has a new notice for you.",
+  "Autopilot gặp lỗi khi chạy việc này, mở để xem chi tiết.": "Autopilot hit an error running this task. Open it to see the details.",
   "Đoạn chat kết quả chưa về máy này, hãy thử lại sau giây lát":
     "The result chat hasn't reached this device yet. Try again in a moment",
   "Autopilot có đề xuất cần bạn duyệt.": "Autopilot has a proposal for you to review.",
