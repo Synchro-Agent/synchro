@@ -3,11 +3,13 @@
 // Danh sách (RepoList, dùng chung với "Thêm từ GitHub" của Dự án) gồm mọi repo người dùng truy cập được, nhóm theo chủ
 // (cá nhân, từng tổ chức, repo được mời cộng tác), tìm trên toàn bộ danh sách và tải thêm theo trang. Tổ chức đang
 // chặn Synchro có nút mở đúng trang GitHub để gỡ chặn; quay lại cửa sổ này thì danh sách tự đọc lại.
+import "./styles/ghrepos.css";
 import { useEffect, useRef, useState } from "react";
 import * as I from "./icons";
 import { tf, tr, trc } from "./i18n";
-import { ghConnect, ghOutside, ghRepos, ghStatus, ghUnlink, gitOp, WsError, type GhFix, type GhGroup, type GhRepo,
+import { gitOp, WsError, type GhFix, type GhGroup, type GhRepo,
   type GhRepoPage, type GhStatus, type GitState } from "./wsclient";
+import { ghConnect, ghOutside, ghRepos, ghStatus, ghUnlink } from "./ghclient";
 import { Spinner } from "./spinner";
 
 type Say = (m: string) => void;

@@ -1484,39 +1484,6 @@ table{font-variant-numeric:tabular-nums}h1,h2,h3{text-wrap:balance}
   background:color-mix(in srgb,#e03131 8%,transparent);display:flex;align-items:center;gap:10px}
 .gh-err>span{flex:1;min-width:0;line-height:1.45}
 [data-theme="dark"] .gh-err{color:var(--ds-bad)}
-/* nhóm repo theo chủ (cá nhân / tổ chức / cộng tác); chỉ dòng tên nhóm dính ở đầu khung khi cuộn (dòng giải thích
-   tổ chức bị chặn cuộn theo, để không chiếm chỗ của danh sách trên điện thoại), cùng nền đặc với khung danh sách
-   (nền kính của hộp thoại đổi theo phía sau nên tiêu đề không khớp được với nó) */
-.gh-grp{position:sticky;top:-4px;z-index:1;background:var(--card);padding:8px 10px 4px;display:flex;
-  flex-direction:column;gap:6px}
-.gh-grp+.gh-grp,.gh-repo+.gh-grp,.gh-grp-b+.gh-grp{margin-top:6px;border-top:.5px solid var(--border)}
-.gh-grp-t{display:flex;align-items:center;gap:6px;font-size:var(--fs-label);color:var(--text-3);min-width:0}
-.gh-grp-t b{font-weight:560;color:var(--text-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.gh-grp-t svg{flex:none}
-.gh-grp-n{margin-left:auto;font-variant-numeric:tabular-nums}
-.gh-grp-b{display:flex;align-items:center;gap:8px;font-size:var(--fs-1);color:var(--text-2);padding:6px 8px;
-  margin:2px 10px 6px;border-radius:var(--r-plate);background:color-mix(in srgb,#f59f00 12%,transparent)}
-.gh-grp-k{margin-left:auto;display:inline-flex;align-items:center;gap:4px;flex:none}
-.gh-grp-k>svg{color:#e67700}
-.gh-grp-k+.gh-grp-n{margin-left:6px}
-.gh-fix.sm{height:24px;padding:0 8px}
-.gh-trunc{padding:8px 10px}
-.gh-list>.gh-err{margin:4px}
-.gh-wait .ag-spin{flex:none}
-.gh-grp-b>span{flex:1;min-width:0;line-height:1.4}
-.gh-grp-b svg{flex:none;color:#e67700}
-.gh-fix{display:inline-flex;align-items:center;gap:4px;flex:none;height:28px;padding:0 10px;font-size:var(--fs-1);
-  text-decoration:none;color:var(--text);white-space:nowrap}
-.gh-scope{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:var(--r-card);
-  font-size:var(--fs-label);color:var(--text-2);line-height:1.45;
-  background:color-mix(in srgb,var(--accent) 10%,transparent)}
-.gh-scope>span{flex:1;min-width:0}
-.gh-scope .btn,.gh-err .btn{flex:none;height:30px}
-.gh-search .icon-btn{flex:none;width:30px;height:30px}
-.gh-more{margin:6px 4px 2px;padding:8px;border-radius:var(--r-plate);font-size:var(--fs-label);color:var(--text-2);
-  text-align:center}
-.gh-more:hover:not(:disabled){background:var(--hover)}
-@media (max-width:640px){.gh-scope,.gh-err,.gh-grp-b{flex-wrap:wrap}.gh-modal{padding:16px}}
 
 /* ===================== Cỡ chữ khung chat (thanh bên, menu, Cài đặt: xem biến thiết kế ở đầu tệp) ===================== */
 .ai-msg,.cv-ai .ai-msg,.sk-ai{font-size:var(--fs-3);line-height:1.5}

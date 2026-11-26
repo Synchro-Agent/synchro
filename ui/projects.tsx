@@ -12,7 +12,7 @@ import { tf, tr, trc } from "./i18n";
 import { UploadModal } from "./modals";
 import { useFileMenu, saveBlob } from "./filemenu";
 import { OutsideWait, RepoList, useGhConnect } from "./ghrepomodal";
-import { ghOutside } from "./wsclient";
+import { ghOutside } from "./ghclient";
 import { BulkBar, BulkButton, BulkCheck, bulkRow, useBulk, type BulkAct } from "./bulk";
 import { PageBar, usePage } from "./pager";
 import { Spinner } from "./spinner";

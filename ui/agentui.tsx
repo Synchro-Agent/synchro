@@ -15,7 +15,10 @@ import { CxDetails, cxHead } from "./cxcard";
 import type { CxCard } from "../shared/cxactions";
 import { useCodeUi, type GitState, type PlanItem } from "./wsclient";
 import { Spinner } from "./spinner";
-import { RepoModal } from "./ghrepomodal";
+import { lazyView } from "./lazy";
+// Hộp thoại repo GitHub chỉ mở từ nút GitHub của Code; tải chậm để danh sách kho theo tổ chức không nằm trong phần tải
+// đầu của trang chat (agentui còn được khung chat nạp qua thẻ hỏi duyệt).
+const RepoModal = lazyView(() => import("./ghrepomodal").then((m) => m.RepoModal), null);
 
 export type ToolStep = { k: "tool"; id: string; name: string; input: Record<string, unknown>; done?: boolean; ok?: boolean; summary?: string; output?: string; diff?: { path: string; add: number; del: number }; image?: string };
 // Câu hỏi duyệt (chế độ quyền, trang web chưa được phép): wait = đang chờ bạn; ok / no = đã trả lời; always = luôn cho phép.
@@ -299,7 +302,10 @@ export function GitHubButton({ git, available, reason, ensureSid, say, onCloned 
   const label = git?.git && git.repo ? `${git.repo}` : "GitHub";
   return (
     <>
-      <button className={`cv-gh ${git?.git && git.repo ? "on" : ""}`} onClick={() => (available ? setOpen(true) : say(reason ?? "Workspace chưa sẵn sàng"))} title={available ? "Kết nối repo GitHub vào phiên này" : reason}>
+      <button className={`cv-gh ${git?.git && git.repo ? "on" : ""}`} onPointerEnter={RepoModal.preload}
+        onFocus={RepoModal.preload}
+        onClick={() => (available ? setOpen(true) : say(reason ?? "Workspace chưa sẵn sàng"))}
+        title={available ? "Kết nối repo GitHub vào phiên này" : reason}>
         <I.GitHub size={15} /><span className="cv-ell" data-notr={git?.git && git.repo ? "" : undefined}>{label}</span>
         {git?.git && <span className="cv-gh-b" data-notr><I.Branch size={12} />{git.branch}</span>}
       </button>

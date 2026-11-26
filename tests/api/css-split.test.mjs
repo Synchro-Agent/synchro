@@ -31,6 +31,9 @@ const SHEETS = [
   { css: "ui/styles/pearlorb.css", entries: ["ui/pearlorb.tsx"], prefix: /^pearl-/, min: 3 },
   // Sơ đồ tổ chức của Orchestra (ui/orchestra.tsx): khung chat và Autopilot nạp lười, chỉ khi lượt có chia việc.
   { css: "ui/styles/orchestra.css", entries: ["ui/orchestra.tsx"], prefix: /^orc(-|$)/, min: 20 },
+  // Danh sách kho GitHub theo chủ (ui/ghrepomodal.tsx): Code và Dự án đều mở nó qua lối nạp lười.
+  { css: "ui/styles/ghrepos.css", entries: ["ui/ghrepomodal.tsx"], prefix: /^gh-(grp|fix|trunc|wait|scope|more)(-|$)/,
+    min: 10 },
 ];
 const classes = (css) => new Set([...css.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\{[^{}]*\}/g, "{}").matchAll(/\.(-?[A-Za-z_][\w-]*)/g)].map((m) => m[1]));
 // Lớp xuất hiện như một chữ riêng trong chuỗi của tệp (kể cả chuỗi ghép `sp-${x}`).
