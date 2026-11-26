@@ -1,8 +1,9 @@
 "use client";
 // Danh sách trong menu con của một hãng ở bộ chọn model: đội hình ngắn theo bậc (shared/modellineup.ts), mục riêng
 // cho model hãng khác đi kèm gói khi có, và "Xem tất cả model" mở thêm các model đời trước cho người cần.
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { ModelInfo, ProviderInfo } from "../shared/catalog";
-import { realVendor, type Lineup } from "../shared/modellineup";
+import { lineup, realVendor, type Lineup, type LineupOpts } from "../shared/modellineup";
 import { ModelLogo } from "./brands";
 import * as I from "./icons";
 import { getLang, tr, trc } from "./i18n";
@@ -69,5 +70,53 @@ export function AllToggle({ lu, all, onAll }: { lu: Lineup<ModelInfo>; all: bool
         <span className="sc">{!all && <span className="mall-n">{lu.rest.length}</span>}<I.Chevron size={14} /></span>
       </button>
     </div>
+  );
+}
+
+// Phần cuộn của danh sách model nằm trong khung kính chứ không phải chính khung kính: nền và viền kính là lớp
+// ::before / ::after của khung, khung tự cuộn thì chúng trôi theo nội dung (viền cắt ngang dòng cuối, các dòng lòi ra
+// ngoài nền). Ghi chú gói đứng yên ở đầu khung.
+// more: còn dòng ở dưới chưa thấy: đáy vùng cuộn mờ dần để báo còn nữa (khung kính không có thanh cuộn hiện sẵn).
+type MsubProps = {
+  on: boolean; count: number; tall?: boolean; children: React.ReactNode;
+  place: (scroller: HTMLElement, tall: boolean) => void;
+};
+function MsubBody({ on, count, tall = false, place, children }: MsubProps) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [more, setMore] = useState(false);
+  const check = () => {
+    const el = ref.current;
+    if (el) setMore(el.scrollHeight - el.scrollTop - el.clientHeight > 2);
+  };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useLayoutEffect(() => { if (on && ref.current) place(ref.current, tall); }, [on, count, tall]);
+  // Sau khi khung đã đặt chỗ và đổi cao (placeSub đổi maxHeight ở lượt vẽ sau) mới đo được còn dòng ẩn hay không.
+  useEffect(() => {
+    if (!on) return;
+    const raf = requestAnimationFrame(check);
+    return () => cancelAnimationFrame(raf);
+  });
+  return <div ref={ref} className={`menu-scroll msub-scroll${more ? " more" : ""}`} onScroll={check}>{children}</div>;
+}
+
+/**
+ * Thân menu con của một hãng: tính đội hình rồi vẽ danh sách cuộn và nút "Xem tất cả model". Nằm ở tệp này (tải
+ * chậm cùng shared/modellineup.ts) để quy tắc đội hình không vào phần tải đầu của trang chat.
+ * place: bộ chọn model đặt chỗ và chiều cao khung theo số dòng đang hiện.
+ */
+export function ProviderSub({ pv, on, place, opts, all, onAll, ...rest }: Omit<Props, "lu"> & {
+  on: boolean; place: MsubProps["place"]; opts: LineupOpts; onAll: () => void;
+}) {
+  const { selected, code, ownPlans, kind, ok } = opts;
+  const lu = useMemo(() => lineup(pv.models, { selected, code, ownPlans, kind, ok }),
+    [pv.models, selected, code, ownPlans, kind, ok]);
+  const count = lu.main.length + lu.via.length + (all ? lu.rest.length : 0);
+  return (
+    <>
+      <MsubBody on={on} count={count} tall={all} place={place}>
+        <ProviderModels pv={pv} lu={lu} all={all} {...rest} />
+      </MsubBody>
+      <AllToggle lu={lu} all={all} onAll={onAll} />
+    </>
   );
 }

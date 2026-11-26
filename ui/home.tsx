@@ -16,8 +16,6 @@ import { chatError, GENERIC_ERR } from "../shared/chaterror";
 import { armDraft, saveDraft, takeDraft } from "./draft";
 import { Lockup, Mark, SideToggle } from "./brand";
 import { BrandLogo, ModelLogo, ProviderLogo } from "./brands";
-import { AllToggle, ProviderModels } from "./modellist";
-import { lineup } from "../shared/modellineup";
 import { lazyView } from "./lazy";
 import type { CodeMeta } from "./codeview";
 import { deleteServerSession, flushAllNow, listServerSessions, patchServerSession, pushSession, resetCodePrefs, seedCodePrefs, useCodePrefs } from "./codesync";
@@ -118,6 +116,8 @@ const AutopilotPage = lazyView(() => import("./tasksui").then((m) => m.Autopilot
 const CustomizePage = lazyView(() => import("./pluginsui").then((m) => m.CustomizePage));
 const ConnectorsPanel = lazyView(() => import("./connectorsui").then((m) => m.ConnectorsPanel));
 const ProjectsPage = lazyView(() => import("./projects").then((m) => m.ProjectsPage));
+// Danh sách model trong menu con của từng hãng (đội hình theo bậc): chỉ cần khi mở bộ chọn model, nạp trước lúc mở.
+const ProviderSub = lazyView(() => import("./modellist").then((m) => m.ProviderSub), null);
 const ProjectPage = lazyView(() => import("./projects").then((m) => m.ProjectPage));
 const Studio = lazyView(() => import("./studio").then((m) => m.Studio), null);
 const AppsGallery = lazyView(() => import("./appsui").then((m) => m.AppsGallery));
@@ -289,7 +289,7 @@ function ModelPicker({ model, setModel, prefix }: { model: string; setModel: (m:
   }, [sub, mm]); // eslint-disable-line react-hooks/exhaustive-deps
   // Đổi chỗ mà không đổi cỡ thì bộ theo dõi kích thước không báo: tính lại phần dời ngay.
   useLayoutEffect(() => { mref.current?.querySelectorAll<HTMLElement>(".model-sub").forEach(fitFloat); }, [sub, subLeft, subPos]); // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => { if (mm) refreshModels(); }, [mm]);
+  useEffect(() => { if (mm) { refreshModels(); ProviderSub.preload(); } }, [mm]);
   // Mỗi lần mở menu, các hãng trở về đội hình ngắn (không giữ "Xem tất cả model" của lần trước).
   useEffect(() => { if (mm) setAllFor(new Set()); }, [mm]);
   // Menu mở ra bị tràn khỏi màn hình (nút nằm giữa ô soạn tin trên điện thoại): dịch ngang cho vừa.
@@ -309,17 +309,10 @@ function ModelPicker({ model, setModel, prefix }: { model: string; setModel: (m:
   // Mỗi hãng chỉ hiện đội hình theo bậc như ứng dụng của hãng; model đời trước vẫn ở "Xem tất cả model".
   // Synchro Code (có tiền tố) thêm model chỉ viết code của hãng vào đội hình. Ô của mỗi bậc ưu tiên model người
   // dùng được phép dùng: quản trị viên chỉ cho bản cũ thì bản cũ đứng ở đội hình, không bị đẩy vào "Xem tất cả".
-  const lineups = useMemo(() => {
-    const ownPlans = new Set(providers.filter((p) => p.source === "plan").map((p) => p.kind as string));
-    const can = (k: string) => allowsModel(allowed, k);
-    const opts = (kind: string) => ({ selected: model, code: !!prefix, ownPlans, kind, ok: can });
-    return Object.fromEntries(providers.map((p) => [p.id, lineup(p.models, opts(p.kind))]));
-  }, [providers, model, prefix, allowed]);
+  const ownPlans = useMemo(() => new Set(providers.filter((p) => p.source === "plan").map((p) => p.kind as string)),
+    [providers]);
+  const can = useCallback((k: string) => allowsModel(allowed, k), [allowed]);
   const toggleAll = (id: string) => setAllFor((s) => { const n = new Set(s); if (!n.delete(id)) n.add(id); return n; });
-  const shownCount = (id: string) => {
-    const l = lineups[id];
-    return l ? l.main.length + l.via.length + (allFor.has(id) ? l.rest.length : 0) : 0;
-  };
   const ok = (k: string) => k === AUTO || allowsModel(allowed, k);
   const pick = (k: string) => {
     if (!ok(k)) { close(); say("Quản trị viên chưa cho phép tài khoản của bạn dùng model này"); return; }
@@ -329,7 +322,15 @@ function ModelPicker({ model, setModel, prefix }: { model: string; setModel: (m:
   const none = loaded && !providers.length;
   return (
     <div ref={mref} style={{ position: "relative" }} onKeyDown={(e) => { if (e.key === "ArrowLeft" && sub && (e.target as HTMLElement).closest(".model-sub")) setSub(null); }}>
-      <button className="model-btn" data-tip="Chọn model" aria-label={prefix ? `${prefix}: ${none ? tr("Chưa có model") : model ? tr(modelName(model)) : tr("Chọn model")}` : undefined} aria-haspopup="menu" aria-expanded={mm} onPointerEnter={() => { if (!mm) refreshModels(); }} onClick={() => { setMm(!mm); setSub(null); }}>{!none && model ? (model === AUTO ? <span className="vlogo" style={{ width: 16, height: 16 }} aria-hidden><I.Sparkle size={15} /></span> : <ModelLogo k={model} />) : null}{prefix ? (
+      <button className="model-btn" data-tip="Chọn model"
+        aria-label={prefix
+          ? `${prefix}: ${none ? tr("Chưa có model") : model ? tr(modelName(model)) : tr("Chọn model")}` : undefined}
+        aria-haspopup="menu" aria-expanded={mm}
+        onPointerEnter={() => { if (!mm) { refreshModels(); ProviderSub.preload(); } }}
+        onClick={() => { setMm(!mm); setSub(null); }}>
+        {!none && model ? (model === AUTO
+          ? <span className="vlogo" style={{ width: 16, height: 16 }} aria-hidden><I.Sparkle size={15} /></span>
+          : <ModelLogo k={model} />) : null}{prefix ? (
         // Trong Synchro Code: thêm tiền tố "Model:" để phân biệt với hai nút "Chế độ"/"Quyền" bên cạnh; dưới 1100px CSS ẩn nhãn, chỉ còn icon.
         <span className="mp-lbl"><span className="mp-k">{prefix}</span>: {none ? "Chưa có model" : model ? modelName(model) : "Chọn model"}{!(model === AUTO && autoEff) && <> <span className="muted">{eLabel}</span></>}</span>
       ) : (<>{none ? "Chưa có model" : model ? modelName(model) : "Chọn model"}{!(model === AUTO && autoEff) && <> <span className="muted">{eLabel}</span></>}</>)}<I.Chevron size={14} /></button>
@@ -378,10 +379,9 @@ function ModelPicker({ model, setModel, prefix }: { model: string; setModel: (m:
         {providers.map((pv) => (
           <Menu key={pv.id} open={sub === pv.id} className="model-sub msub-models" style={{ ...subX, ...subPos, width: 260 }}>
             {pv.plan && <PlanNote pv={pv} />}
-            <MsubBody on={sub === pv.id} count={shownCount(pv.id)} tall={allFor.has(pv.id)} place={placeSub}>
-              <ProviderModels pv={pv} lu={lineups[pv.id]} model={model} ok={ok} pick={pick} all={allFor.has(pv.id)} />
-            </MsubBody>
-            <AllToggle lu={lineups[pv.id]} all={allFor.has(pv.id)} onAll={() => toggleAll(pv.id)} />
+            <ProviderSub pv={pv} on={sub === pv.id} place={placeSub} model={model} ok={ok} pick={pick}
+              opts={{ selected: model, code: !!prefix, ownPlans, kind: pv.kind, ok: can }}
+              all={allFor.has(pv.id)} onAll={() => toggleAll(pv.id)} />
           </Menu>
         ))}
       </Menu>
@@ -400,31 +400,6 @@ const noticeOf = (d: Record<string, unknown>, text: string): Msg["notice"] => ({
   ...(d.partialWork ? { work: true } : {}),
   ...(Array.isArray(d.tried) ? { tried: d.tried as string[] } : {}),
 });
-
-// Phần cuộn của danh sách model nằm trong khung kính chứ không phải chính khung kính: nền và viền kính là lớp ::before / ::after của khung,
-// khung tự cuộn thì chúng trôi theo nội dung (viền cắt ngang dòng cuối, các dòng lòi ra ngoài nền). Ghi chú gói đứng yên ở đầu khung.
-// more: còn dòng ở dưới chưa thấy: đáy vùng cuộn mờ dần để báo còn nữa (khung kính không có thanh cuộn hiện sẵn).
-type MsubProps = {
-  on: boolean; count: number; tall?: boolean; children: React.ReactNode;
-  place: (scroller: HTMLElement, tall: boolean) => void;
-};
-function MsubBody({ on, count, tall = false, place, children }: MsubProps) {
-  const ref = useRef<HTMLDivElement>(null);
-  const [more, setMore] = useState(false);
-  const check = () => {
-    const el = ref.current;
-    if (el) setMore(el.scrollHeight - el.scrollTop - el.clientHeight > 2);
-  };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  useLayoutEffect(() => { if (on && ref.current) place(ref.current, tall); }, [on, count, tall]);
-  // Sau khi khung đã đặt chỗ và đổi cao (placeSub đổi maxHeight ở lượt vẽ sau) mới đo được còn dòng ẩn hay không.
-  useEffect(() => {
-    if (!on) return;
-    const raf = requestAnimationFrame(check);
-    return () => cancelAnimationFrame(raf);
-  });
-  return <div ref={ref} className={`menu-scroll msub-scroll${more ? " more" : ""}`} onScroll={check}>{children}</div>;
-}
 
 function PlanNote({ pv }: { pv: ProviderInfo }) {
   const p = pv.plan!;
