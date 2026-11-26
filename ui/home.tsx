@@ -1344,7 +1344,15 @@ export default function Home({ boot }: { boot?: BootData | null }) {
       setModal((m) => (m === "settings" ? null : m));
       if (/^#c=/.test(h)) { const id = Number(/^#c=(\d{1,16})$/.exec(h)?.[1] ?? 0) || null; if (id !== null && chatsRef.current.some((c) => c.id === id && !c.inc)) { setCur(id); setView("chat"); } return; }
       const mv = /^#v=([a-z]+)$/.exec(h);
-      if (mv) { const v = VIEW_OF_HASH[mv[1]]; if (v && viewAllowed(v)) { setCur(null); setCurProj(null); setView(v); } return; }
+      if (mv) {
+        const v = VIEW_OF_HASH[mv[1]];
+        if (v && viewAllowed(v)) { setCur(null); setCurProj(null); setView(v); }
+        // Địa chỉ cũ (#v=inbox) bấm khi đang ở đúng trang đó: view không đổi nên hiệu ứng ghi địa chỉ không chạy lại,
+        // phải tự đổi sang địa chỉ mới ở đây.
+        const canon = v && HASH_VIEW[v];
+        if (canon && canon !== mv[1]) history.replaceState(history.state, "", `#v=${canon}`);
+        return;
+      }
       setCur(null); setView("new"); // địa chỉ trống: về trang Mới
     };
     window.addEventListener("popstate", onPop);

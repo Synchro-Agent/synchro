@@ -3099,7 +3099,9 @@ html body .menu.art-style-menu{--gl-fill:var(--card);background:var(--card);min-
 .ss-rule input{margin-top:3px;flex:none}
 .ss-hint{font-size:var(--fs-1);color:#c13c3c;margin-top:-6px}
 .tk-l textarea.field{height:auto;min-height:110px;padding:10px 12px;resize:vertical;font:inherit;font-size:var(--fs-3);line-height:1.5}
-.tk-sch{display:flex;gap:10px}
+/* Lịch hẹn một lần có ba ô (loại lịch, ngày, giờ): ô co lại theo bề rộng của form, không đủ chỗ thì xuống dòng. */
+.tk-sch{display:flex;flex-wrap:wrap;gap:10px}
+.tk-sch>.tk-l{flex:1 1 140px;min-width:0}.tk-sch>.tk-l:first-child{flex-basis:190px}
 /* Chọn giờ (ui/timepick.tsx): ô nhập gõ được + đồng hồ; bảng kính hai cột Giờ / Phút, ô đang chọn màu mực, hàng mốc nhanh. */
 .field.tpk{display:flex;align-items:center;gap:6px;padding:0 5px 0 11px;height:38px;cursor:text}
 .tpk input{flex:1;min-width:0;height:100%;border:0;background:none;outline:none;padding:0;font:inherit;font-size:14.5px;font-variant-numeric:tabular-nums;letter-spacing:.01em;color:var(--text)}

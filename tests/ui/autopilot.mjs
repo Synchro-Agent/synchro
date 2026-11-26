@@ -78,9 +78,16 @@ try {
       console.log(`${v.w} px, ${theme === "light" ? "sáng" : "tối"}`);
       await size(v.w, v.h, v.mobile);
       await t.theme(theme);
-      await P("Page.navigate", { url: B + "/#v=inbox" });
+      // Mỗi lượt tải lại hẳn trang (khác ?lan=): đổi mỗi phần # thì trình duyệt giữ nguyên trang của lượt trước.
+      await P("Page.navigate", { url: `${B}/?lan=${tag}#v=inbox` });
       ok(await until(`!!document.querySelector(".tk-top h1") && location.hash === "#v=autopilot"`, 90000),
         `${tag}: địa chỉ cũ #v=inbox mở Autopilot, đổi sang #v=autopilot`, await ev("location.hash").catch(() => ""));
+      if (first) {
+        // Bấm địa chỉ cũ khi đang ở Autopilot (không tải lại trang): địa chỉ vẫn đổi sang #v=autopilot.
+        await ev(`location.hash = "#v=inbox"`);
+        ok(await until(`location.hash === "#v=autopilot" && !!document.querySelector(".tk-top h1")`, 5000),
+          "đang ở Autopilot, bấm #v=inbox: vẫn ở Autopilot, địa chỉ đổi sang #v=autopilot", await ev("location.hash"));
+      }
       const head = await ev(`[".tk-top h1", ".tk-top p"].map((s) => document.querySelector(s)?.textContent)`);
       ok(head[0] === "Autopilot" && /tắt tab hay gập máy/.test(head[1] ?? ""), `${tag}: tiêu đề và dòng giới thiệu`,
         head);
