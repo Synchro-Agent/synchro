@@ -14,7 +14,8 @@ import { ConnLogo } from "./connlogo";
 import { toolErrNote } from "./worktone";
 import { stripAppliedNotes } from "../shared/turnctx";
 import { Spinner } from "./spinner";
-import { parseOrch, type OrchState } from "../shared/orchestra";
+import { parseOrch } from "../shared/orchparse";
+import type { OrchState } from "../shared/orchestra";
 // Thẻ kết nối lại chỉ cần khi connector mất đăng nhập: không kéo cả màn hình Connectors vào phần tải đầu của trang chat.
 const ReconnectCard = lazyView(() => import("./connectorsui").then((m) => m.ReconnectCard), null);
 
