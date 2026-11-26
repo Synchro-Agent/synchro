@@ -682,7 +682,7 @@ function NoteView({ title, sub, exists, onOpen, onChanged, onLoaded }: { title: 
         </div>
       )}
       {!d && !missing && <div className="us-empty"><Spinner className="art-spin sm" /></div>}
-      {n?.kind === "rule" && !edit && <p className="bn-empty">{tr("Synchro đặt quy tắc này lên đầu lời nhắc của mọi model, ở mọi nơi bạn trò chuyện: chat, Synchro Code, việc tự động trong Hộp thư và giọng nói. Quy tắc luôn được ghim và không bị xóa, kể cả khi xóa bộ não.")}</p>}
+      {n?.kind === "rule" && !edit && <p className="bn-empty">{tr("Synchro đặt quy tắc này lên đầu lời nhắc của mọi model, ở mọi nơi bạn trò chuyện: chat, Synchro Code, Autopilot và giọng nói. Quy tắc luôn được ghim và không bị xóa, kể cả khi xóa bộ não.")}</p>}
       {missing && !edit && <p className="bn-empty">{tr("Ghi chú này chưa có: các ghi chú khác đang trỏ tới nó. Synchro sẽ viết trang này khi biết thêm về nó, hoặc bạn tự tạo.")}</p>}
       {edit ? (
         <div className="bn-edit">

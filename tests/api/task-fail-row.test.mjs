@@ -1,4 +1,5 @@
-// H4.3: lần chạy lỗi của việc tự động trong Hộp thư hiện lý do ngay trên dòng và nút "Chạy lại" trên dòng. Hàm thuần + cấu trúc giao diện, không cần máy chủ.
+// Lần chạy lỗi của việc tự động trong Autopilot hiện lý do ngay trên dòng và nút "Chạy lại" trên dòng. Hàm thuần
+// + cấu trúc giao diện, không cần máy chủ.
 import fs from "node:fs";
 import { loadTs } from "../lib/ts.mjs";
 
@@ -38,7 +39,7 @@ ok(T.isExpired(gone) && T.isExpired(goneOld) && !T.isExpired(failed), "kết qu�
 ok(!T.canRerun(gone, [gone], true), "kết quả quá cũ: không có nút Chạy lại");
 ok(Object.prototype.hasOwnProperty.call(D.VI2EN, T.TOO_OLD) && Object.prototype.hasOwnProperty.call(D.VI2EN, T.NO_REASON) && Object.prototype.hasOwnProperty.call(D.VI2EN, "Kết quả đã quá cũ, không còn lưu"), "có bản tiếng Anh cho câu hết hạn và câu không rõ lý do");
 
-console.log("3. Giao diện Hộp thư");
+console.log("3. Giao diện Autopilot");
 const ui = fs.readFileSync("ui/tasksui.tsx", "utf8");
 const row = ui.slice(ui.indexOf('<div className="tk-line">'), ui.indexOf("{open === x.run && !bkR.on && <ResultBody"));
 ok(row.length > 0 && /<span className="tk-why" data-notr>\{tr\("Lỗi"\)\}: \{failReason\(x\.error\)\}<\/span>/.test(row), "dòng lỗi hiện \"Lỗi: <lý do>\" ngay trên dòng", row.slice(0, 300));

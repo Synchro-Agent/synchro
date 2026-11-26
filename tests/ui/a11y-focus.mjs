@@ -52,7 +52,8 @@ try {
   ok((await ev(`document.querySelector("textarea").value`)).includes("X"), "gõ tiếp vào được ô soạn");
   await ev(`(() => { const t = document.querySelector("textarea"); const s = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value").set; s.call(t, ""); t.dispatchEvent(new Event("input", { bubbles: true })); })(), 1`);
   console.log("2. Tiêu đề thẻ");
-  for (const [v, want] of [["artifacts", /Artifacts · Synchro$/], ["projects", /(Dự án|Projects) · Synchro$/], ["inbox", /(Hộp thư|Inbox) · Synchro$/], ["brain", /(Bộ não|Brain) · Synchro$/]]) {
+  for (const [v, want] of [["artifacts", /Artifacts · Synchro$/], ["projects", /(Dự án|Projects) · Synchro$/],
+    ["autopilot", /Autopilot · Synchro$/], ["brain", /(Bộ não|Brain) · Synchro$/]]) {
     await nav(v); await until(`/ · Synchro$/.test(document.title)`, 3000); await sleep(300);
     const t = await ev(`document.title`);
     ok(want.test(t), `tiêu đề ở ${v}`, t);
@@ -62,8 +63,9 @@ try {
   const r = JSON.parse(await ev(`JSON.stringify({ thumbs: document.querySelectorAll(".art-thumb").length, live: [...document.querySelectorAll(".art-thumb")].filter((t) => !t.inert).length, nested: document.querySelectorAll(".art-tile[role=button] button").length })`));
   ok(r.live === 0 && r.nested === 0, "ảnh thu nhỏ đều inert, không còn nút lồng", r);
   console.log("4. Nhóm thẻ báo trạng thái");
-  await nav("inbox"); await until(`!!document.querySelector(".tk-tabs [role=tab]")`, 8000);
-  ok(await ev(`document.querySelectorAll(".tk-tabs [role=tab][aria-selected=true]").length === 1`), "Hộp thư có đúng một thẻ đang chọn");
+  await nav("autopilot"); await until(`!!document.querySelector(".tk-tabs [role=tab]")`, 8000);
+  ok(await ev(`document.querySelectorAll(".tk-tabs [role=tab][aria-selected=true]").length === 1`),
+    "Autopilot có đúng một thẻ đang chọn");
   console.log("5. Tiếng Anh");
   await P("Page.addScriptToEvaluateOnNewDocument", { source: `try { localStorage.setItem("p:uilang", '"en"'); } catch {}` });
   await P("Page.navigate", { url: B + "/terms" });

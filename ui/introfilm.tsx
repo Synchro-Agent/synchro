@@ -76,7 +76,10 @@ const CAPS: [number, number, [string, string], boolean?][] = [
   [9.7, 14.0, ["Chrome của bạn, tự lái: tiện ích Synchro tự bấm, tự gõ, tự đặt chỗ.", "Your Chrome, on autopilot. The Synchro extension clicks, types and books by itself."]],
   [14.2, 17.0, ["Rồi nhắn cho Mai giúp bạn: lịch và tin nhắn, xử lý luôn trên điện thoại.", "Then it texts Mai for you. Calendar and messages, handled on your phone too."]],
   [18.3, 19.6, ["Bạn giao việc. Synchro làm xong.", "You hand it off. Synchro gets it done."]],
-  [20.0, 23.4, ["Chạy cả khi bạn ngủ: giao cho Hộp thư một lần, Synchro chạy theo lịch trên máy chủ của nó, kể cả khi bạn gập máy.", "Runs while you sleep. Give Inbox a job once. Synchro runs it on schedule on its own server, even with your laptop closed."]],
+  [20.0, 23.4, [
+    "Chạy cả khi bạn ngủ: giao cho Autopilot một lần, Synchro chạy theo lịch trên máy chủ của nó, kể cả khi bạn gập máy.",
+    "Runs while you sleep. Give Autopilot a job once. Synchro runs it on schedule on its own server, even with your laptop closed.",
+  ]],
   [23.6, 25.8, ["Synchro Code: không gian làm việc thật với terminal, trình duyệt, git và pull request.", "Synchro Code. A real workspace: terminal, browser, git and pull requests."]],
   [26.0, 28.2, ["Skills & Connectors: kết nối ứng dụng của bạn, Synchro tự chọn skill hợp với việc.", "Skills & Connectors. Plug in your apps. Synchro picks the right skill for the job."]],
   [28.4, 30.9, ["Speech: giọng đọc, đổi giọng và trợ lý giọng nói, chạy bằng ElevenLabs.", "Speech. Voices, voice changer and voice agents, powered by ElevenLabs."]],

@@ -107,6 +107,7 @@ export const Back = A.Back;
 export const File = A.File;
 export const GitHub = A.GitHub;
 export const Inbox = A.Inbox;
+export const Autopilot = A.Autopilot;
 export const Pointer = A.Pointer;
 export const Compare = A.Compare;
 export const Rocket = A.Rocket;

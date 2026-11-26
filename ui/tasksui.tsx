@@ -1,12 +1,15 @@
 "use client";
 import "./styles/skills.css";
-// Hộp thư tự động hóa: giao việc bằng câu thường → Synchro lên kế hoạch (tên, lịch, trình duyệt, hướng dẫn chi tiết), người dùng xem / sửa rồi tạo.
-// Việc chạy nền trên máy chủ theo lịch, kể cả khi máy người dùng tắt hay đã đóng trang. Ba mục: Kết quả (theo ngày, xem tiến độ đang chạy, nhật ký),
-// Cần duyệt (đề xuất của việc tự động: tạo skill, hành động, trang web, công cụ — duyệt là Synchro làm), Việc tự động (lịch, bật / tắt, chạy ngay).
+// Autopilot (trước đây là Hộp thư): giao việc bằng câu thường → Synchro lên kế hoạch (tên, lịch, trình duyệt, hướng dẫn
+// chi tiết), người dùng xem / sửa rồi tạo. Việc chạy trên máy chủ ngay hoặc theo lịch (một lần vào lúc hẹn, mỗi N giờ,
+// mỗi ngày, mỗi tuần, cron), kể cả khi người dùng đóng tab hay gập máy, như một lượt chat thường đủ công cụ; xong thì
+// kết quả thành một đoạn chat để hỏi tiếp. Ba mục: Kết quả (theo ngày, tiến độ đang chạy, nhật ký), Cần duyệt (đề xuất:
+// tạo skill, hành động, trang web, công cụ — duyệt là Synchro làm), Việc tự động (lịch, tạm dừng / chạy tiếp, chạy
+// ngay, sửa, xóa).
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { apiFetch, statusText } from "./apierr";
 import * as I from "./icons";
-import { getLang, tr } from "./i18n";
+import { getLang, tr, trc } from "./i18n";
 import { isForeign } from "../shared/chaterror";
 import { canRerun, failInfo, failLine, isExpired, TOO_OLD } from "../shared/taskerr";
 import { INBOX_CHANGED, useInboxCount } from "./inboxcount";
@@ -16,7 +19,7 @@ import { artifactsAsCode, hasArtifacts, splitArtifacts } from "../shared/artifac
 import { isDeck } from "../shared/artdoc";
 import { AUTO, modelName, useModels } from "./models";
 import { allowsModel } from "../shared/catalog";
-import { useApp } from "./store";
+import { useApp, usePref } from "./store";
 import { ScopeChoice, useIsAdmin, type Scope } from "./skillsui";
 import { TimePick } from "./timepick";
 import { Dropdown } from "./listbox";
@@ -24,12 +27,27 @@ import { BulkBar, BulkButton, BulkCheck, bulkRow, each, useBulk, type BulkAct } 
 import { PageBar, usePage } from "./pager";
 import { Spinner } from "./spinner";
 
-type Schedule = { kind: "once" | "hourly" | "daily" | "weekdays" | "weekly"; time?: string; weekday?: number; every?: number; tz: string };
+type Schedule = {
+  kind: "once" | "hourly" | "daily" | "weekdays" | "weekly" | "cron"; time?: string; weekday?: number; every?: number;
+  at?: string; cron?: string; tz: string;
+};
 type BrowserPref = "auto" | "synchro" | "user";
 type Engine = "chat" | "code";
-type Last = { run: string; status: string; at: number } | null;
-type Task = { id: string; title: string; prompt: string; schedule: Schedule; model: string | null; enabled: boolean; next_run_at: number | null; last_run_at: number | null; created_at: number; runs: number; browser: BrowserPref; memory: boolean; wait_since: number | null; retries: number; last: Last; pending: number; engine: Engine; sid: string | null };
-type Item = { run: string; task: string; title: string; at: number; read: boolean; status: string; text: string; error?: string; kind?: "task" | "notice" | "action"; link?: string; note?: string; model?: string; proposals?: number };
+type Last = { run: string; status: string; at: number; chat?: number } | null;
+type Task = {
+  id: string; title: string; prompt: string; schedule: Schedule; model: string | null; enabled: boolean;
+  next_run_at: number | null; last_run_at: number | null; created_at: number; runs: number; browser: BrowserPref;
+  memory: boolean; email: boolean; wait_since: number | null; retries: number; last: Last; pending: number;
+  engine: Engine; sid: string | null;
+};
+// chat: đoạn chat máy chủ đã tạo cho kết quả (mở ra hỏi tiếp được).
+type Item = {
+  run: string; task: string; title: string; at: number; read: boolean; status: string; text: string; error?: string;
+  kind?: "task" | "notice" | "action"; link?: string; note?: string; model?: string; proposals?: number; chat?: number;
+};
+/** Mở kết quả thành đoạn chat: chat = đoạn chat máy chủ đã tạo; chưa có (kết quả cũ) thì dựng đoạn chat mới từ chữ
+ *  của kết quả. */
+export type OpenChat = (title: string, text: string, chat?: number) => void;
 type Proposal = { id: string; task: string | null; taskTitle: string | null; run: string | null; kind: "skill" | "action" | "site" | "tool"; title: string; summary: string; payload: Record<string, unknown>; status: "pending" | "running" | "done" | "failed" | "rejected"; result: string | null; at: number; decidedAt: number | null };
 type Plan = { title: string; prompt: string; schedule: Schedule; browser: BrowserPref; engine: Engine; approvals: string[]; needs: string[] };
 type RunEv = { seq: number; at: number; kind: string; text: string };
@@ -40,10 +58,30 @@ const api = async <T,>(method: string, url: string, body?: unknown): Promise<T> 
   if (!r.ok) throw new Error(j.error || statusText(r.status));
   return j as T;
 };
-const KINDS: [Schedule["kind"], string][] = [["once", "Một lần, chạy ngay"], ["hourly", "Mỗi vài giờ"], ["daily", "Mỗi ngày"], ["weekdays", "Thứ Hai – thứ Sáu"], ["weekly", "Mỗi tuần"]];
+// Loại lịch ở form: "at" là việc một lần vào lúc đã hẹn (máy chủ lưu kind "once" kèm at), tách riêng khỏi "Một lần,
+// chạy ngay".
+type Kind = Schedule["kind"] | "at";
+const KINDS: [Kind, string][] = [
+  ["once", "Một lần, chạy ngay"], ["at", "Một lần, vào lúc đã hẹn"], ["hourly", "Mỗi vài giờ"], ["daily", "Mỗi ngày"],
+  ["weekdays", "Thứ Hai – thứ Sáu"], ["weekly", "Mỗi tuần"], ["cron", "Tùy chỉnh (cron)"],
+];
+const kindOf = (s?: Schedule): Kind => (!s ? "daily" : s.kind === "once" && s.at ? "at" : s.kind);
 const DAYS = ["Chủ nhật", "Thứ Hai", "Thứ Ba", "Thứ Tư", "Thứ Năm", "Thứ Sáu", "Thứ Bảy"];
-export const scheduleText = (s: Schedule) => s.kind === "once" ? tr("Một lần") : s.kind === "hourly" ? (s.every && s.every > 1 ? `${tr("Mỗi")} ${s.every} ${tr("giờ")}` : tr("Mỗi giờ"))
-  : s.kind === "daily" ? `${tr("Mỗi ngày lúc")} ${s.time}` : s.kind === "weekdays" ? `${tr("Thứ Hai – thứ Sáu lúc")} ${s.time}` : `${tr(DAYS[s.weekday ?? 1])} ${tr("hằng tuần lúc")} ${s.time}`;
+// "2026-11-30T08:00" → "08:00 30/11/2026".
+const atText = (at: string) => `${at.slice(11)} ${at.slice(8, 10)}/${at.slice(5, 7)}/${at.slice(0, 4)}`;
+export const scheduleText = (s: Schedule) => s.kind === "once"
+  ? (s.at ? `${tr("Một lần lúc")} ${atText(s.at)}` : tr("Một lần"))
+  : s.kind === "hourly" ? (s.every && s.every > 1 ? `${tr("Mỗi")} ${s.every} ${tr("giờ")}` : tr("Mỗi giờ"))
+  : s.kind === "cron" ? `Cron ${s.cron ?? ""}`
+  : s.kind === "daily" ? `${tr("Mỗi ngày lúc")} ${s.time}`
+  : s.kind === "weekdays" ? `${tr("Thứ Hai – thứ Sáu lúc")} ${s.time}`
+  : `${tr(DAYS[s.weekday ?? 1])} ${tr("hằng tuần lúc")} ${s.time}`;
+// Múi giờ hay dùng cho ô chọn múi giờ (cộng múi giờ của trình duyệt và của việc đang sửa nếu khác).
+const DEFAULT_TZ = "Asia/Ho_Chi_Minh";
+const ZONES = [
+  DEFAULT_TZ, "Asia/Bangkok", "Asia/Singapore", "Asia/Tokyo", "Asia/Seoul", "Australia/Sydney",
+  "Europe/London", "Europe/Paris", "America/New_York", "America/Los_Angeles", "UTC",
+];
 // Kết quả có artifact: tài liệu Markdown hiện thẳng như văn bản, loại khác hiện thành khối mã.
 const readable = (text: string) => (hasArtifacts(text) ? splitArtifacts(text).map((sg) => (sg.kind === "text" ? sg.text : sg.art.type === "markdown" ? `\n${sg.art.content}\n` : artifactsAsCode(`<artifact identifier="${sg.art.ident}" type="${sg.art.type}" title="${sg.art.title}">\n${sg.art.content}\n</artifact>`))).join("") : text);
 const z = (n: number) => String(n).padStart(2, "0");
@@ -67,6 +105,9 @@ async function downloadPptx(run: string, ident: string) {
 }
 const excerpt = (t: string) => t.replace(/<artifact[\s\S]*?<\/artifact>/g, "").replace(/[#*_`>|]/g, "").replace(/\s+/g, " ").trim().slice(0, 160);
 const tz = () => Intl.DateTimeFormat().resolvedOptions().timeZone;
+/** Múi giờ mặc định của form việc mới: múi giờ người dùng chọn lần trước (cài đặt theo tài khoản, mọi thiết bị dùng
+ *  chung), chưa chọn bao giờ thì Asia/Ho_Chi_Minh. Bộ lên kế hoạch cũng tính giờ theo múi giờ này. */
+const formZone = (last: string) => last || DEFAULT_TZ;
 
 // Việc mẫu: người dùng bấm để điền ô giao việc rồi sửa cho đúng ý mình.
 const EXAMPLES = [
@@ -106,14 +147,38 @@ function ModelPick({ value, onChange }: { value: string; onChange: (k: string) =
   );
 }
 
+// Ngày theo giờ máy, dạng "YYYY-MM-DD": mặc định của việc một lần vào lúc đã hẹn là ngày mai, sớm nhất là hôm nay.
+const dayStr = (t: number) => {
+  const d = new Date(t);
+  return `${d.getFullYear()}-${z(d.getMonth() + 1)}-${z(d.getDate())}`;
+};
+const tomorrow = () => dayStr(Date.now() + 86_400_000);
+// Đoạn nhiều câu dịch từng câu (từ điển tra theo cả câu), rồi ghép lại bằng một khoảng trắng.
+const trs = (...l: string[]) => l.map((x) => tr(x)).join(" ");
+const PROMPT_HINT = [
+  "Viết như khi nhắn cho Synchro.",
+  "Mọi thứ chat làm được đều dùng được ở đây: connector, skill, web, chạy code, artifact, ảnh, tệp.",
+];
+const EMAIL_HINT = "Ngoài thông báo trong Synchro, gửi tóm tắt kết quả tới email của bạn (email đã xác minh).";
+const CRON_HELP = [
+  "Năm trường: phút giờ ngày tháng thứ (0 = Chủ nhật).",
+  "Ví dụ 0 9 1 * * là 9:00 ngày 1 hằng tháng; 30 8,17 * * 1-5 là 8:30 và 17:30 từ thứ Hai tới thứ Sáu.",
+  "Mỗi giờ chạy tối đa một lần.",
+];
 function TaskEditor({ init, plan, onClose, onSaved, say }: { init?: Task | null; plan?: Plan | null; onClose: () => void; onSaved: (t: Task, ran: boolean) => void; say: (m: string) => void }) {
   const src = init ?? plan;
   const [title, setTitle] = useState(src?.title ?? "");
   const [prompt, setPrompt] = useState(src?.prompt ?? "");
-  const [kind, setKind] = useState<Schedule["kind"]>(src?.schedule.kind ?? "daily");
-  const [time, setTime] = useState(src?.schedule.time ?? "08:00");
+  const [kind, setKind] = useState<Kind>(kindOf(src?.schedule));
+  const [time, setTime] = useState(src?.schedule.time ?? src?.schedule.at?.slice(11) ?? "08:00");
+  const [day, setDay] = useState(src?.schedule.at?.slice(0, 10) ?? tomorrow());
+  const [cron, setCron] = useState(src?.schedule.cron ?? "0 8 * * 1-5");
   const [weekday, setWeekday] = useState(src?.schedule.weekday ?? 1);
   const [every, setEvery] = useState(src?.schedule.every ?? 1);
+  // Múi giờ: của việc đang sửa; kế hoạch của Synchro thì đúng múi giờ bộ lên kế hoạch đã dùng để tính giờ hẹn (Composer
+  // gửi formZone), nếu không "9h sáng mai" bị lưu thành 9:00 ở múi giờ khác; việc mới thì formZone.
+  const [lastTz, setLastTz] = usePref("autopilotTz", "");
+  const [zone, setZone] = useState(init?.schedule.tz ?? plan?.schedule.tz ?? formZone(lastTz));
   const [browser, setBrowser] = useState<BrowserPref>(src?.browser ?? "auto");
   const codeOk = !!useApp().me?.perms.features.code;
   // Quản trị viên tắt "Your Chrome": không chọn được Chrome của bạn (việc đã đặt sẵn thì chạy bằng trình duyệt của Synchro).
@@ -121,15 +186,24 @@ function TaskEditor({ init, plan, onClose, onSaved, say }: { init?: Task | null;
   const [engine, setEngine] = useState<Engine>(codeOk ? src?.engine ?? "chat" : "chat");
   const [model, setModel] = useState(init?.model ?? AUTO);
   const [memory, setMemory] = useState(init?.memory ?? true);
+  const [email, setEmail] = useState(init?.email ?? false);
   const [busy, setBusy] = useState<"" | "save" | "run">("");
+  const here = tz(), mine = tr("múi giờ của máy này");
+  const zones = [...new Set([zone, here, ...ZONES].filter(Boolean))];
   const save = async (andRun: boolean) => {
     setBusy(andRun ? "run" : "save");
-    const body = { title, prompt, schedule: { kind, time, weekday, every, tz: tz() }, browser, model, memory, engine };
+    const schedule = {
+      kind: kind === "at" ? "once" : kind, time, weekday, every, tz: zone,
+      ...(kind === "at" ? { at: `${day}T${time}` } : {}), ...(kind === "cron" ? { cron } : {}),
+    };
+    const body = { title, prompt, schedule, browser, model, memory, engine, email, lang: getLang() };
     try {
       const { task } = init ? await api<{ task: Task }>("PATCH", `/api/tasks/${init.id}`, body) : await api<{ task: Task }>("POST", "/api/tasks", body);
+      setLastTz(zone);
       let ran = false;
       if (andRun && kind !== "once") { await api("POST", `/api/tasks/${task.id}/run`).then(() => { ran = true; }, (e) => say((e as Error).message)); }
-      say(init ? tr("Đã lưu việc tự động") : kind === "once" ? tr("Đã tạo, Synchro chạy trong vòng một phút") : ran ? tr("Đã tạo và đang chạy thử, kết quả vào Hộp thư") : tr("Đã tạo việc tự động"));
+      say(init ? tr("Đã lưu việc của Autopilot") : kind === "once" ? tr("Đã giao, Synchro bắt đầu trong vòng một phút")
+        : ran ? tr("Đã tạo và đang chạy thử, xong sẽ có thông báo") : tr("Đã lên lịch cho Autopilot"));
       onSaved(task, ran || kind === "once");
     } catch (e) { say((e as Error).message); setBusy(""); }
   };
@@ -137,17 +211,34 @@ function TaskEditor({ init, plan, onClose, onSaved, say }: { init?: Task | null;
     <div className="overlay" style={{ zIndex: "var(--z-overlay)" }} onMouseDown={(e) => e.target === e.currentTarget && !busy && onClose()}>
       <form className="modal tk-modal" onSubmit={(e) => { e.preventDefault(); save(false); }}>
         <button type="button" className="icon-btn" style={{ position: "absolute", top: 12, right: 12 }} onClick={onClose} aria-label="Đóng"><I.X size={16} /></button>
-        <h2>{init ? tr("Sửa việc tự động") : plan ? tr("Kế hoạch của Synchro") : tr("Việc tự động mới")}</h2>
+        <h2>{tr(init ? "Sửa việc của Autopilot" : plan ? "Kế hoạch của Synchro" : "Việc mới cho Autopilot")}</h2>
         <div className="tk-mbody">
-        <p className="d">{init ? tr("Đổi lịch, trình duyệt hay hướng dẫn; lần chạy tới dùng ngay bản mới.") : tr("Xem lại và sửa nếu cần. Synchro chạy việc này trên máy chủ theo lịch, kể cả khi bạn tắt máy.")}</p>
+        <p className="d">{init ? tr("Đổi lịch, trình duyệt hay hướng dẫn; lần chạy tới dùng ngay bản mới.")
+          : tr("Xem lại và sửa nếu cần. Synchro chạy việc này trên máy chủ, kể cả khi bạn đóng tab hay gập máy.")}</p>
         <label className="tk-l">{tr("Tên")}<input className="field" value={title} maxLength={120} onChange={(e) => setTitle(e.target.value)} placeholder={tr("Ví dụ: Giá cổ phiếu mỗi sáng")} data-notr /></label>
         <div className="tk-sch">
-          <div className="tk-l">{tr("Lịch chạy")}<Dropdown<Schedule["kind"]> block label="Lịch chạy" className="tk-kind" value={kind} onChange={setKind} options={KINDS} /></div>
+          <div className="tk-l">{tr("Lịch chạy")}
+            <Dropdown<Kind> block label="Lịch chạy" className="tk-kind" value={kind} onChange={setKind}
+              options={KINDS} />
+          </div>
           {kind === "hourly" && <div className="tk-l">{tr("Cách nhau")}<Dropdown<number> block label="Cách nhau" className="tk-every" value={every} onChange={setEvery} options={[1, 2, 3, 4, 6, 8, 12].map((n) => ({ value: n, label: `${n} ${tr("giờ")}`, notr: true }))} /></div>}
           {kind === "weekly" && <div className="tk-l">{tr("Vào")}<Dropdown<number> block label="Vào" className="tk-day" value={weekday} onChange={setWeekday} options={DAYS.map((d, i) => [i, d] as const)} /></div>}
-          {(kind === "daily" || kind === "weekdays" || kind === "weekly") && <div className="tk-l">{tr("Lúc")}<TimePick value={time} onChange={setTime} /></div>}
+          {kind === "at" && <label className="tk-l">{tr("Ngày")}
+            <input className="field tk-date" type="date" value={day} min={dayStr(Date.now())}
+              onChange={(e) => setDay(e.target.value)} aria-label={tr("Ngày")} />
+          </label>}
+          {(kind === "daily" || kind === "weekdays" || kind === "weekly" || kind === "at")
+            && <div className="tk-l">{tr("Lúc")}<TimePick value={time} onChange={setTime} /></div>}
+          {kind === "cron" && <label className="tk-l tk-cron">{tr("Biểu thức cron")}
+            <input className="field mono" value={cron} maxLength={120} spellCheck={false}
+              onChange={(e) => setCron(e.target.value)} placeholder="0 8 * * 1-5" data-notr />
+          </label>}
         </div>
-        <p className="tk-tz">{tr("Giờ theo múi giờ")} <span data-notr>{tz()}</span></p>
+        {kind === "cron" && <p className="tk-tz">{trs(...CRON_HELP)}</p>}
+        <div className="tk-l tk-zone">{trc("Múi giờ", "autopilot")}
+          <Dropdown<string> block label={trc("Múi giờ", "autopilot")} value={zone} onChange={setZone}
+            options={zones.map((x) => ({ value: x, label: x === here ? `${x} · ${mine}` : x, notr: x !== here }))} />
+        </div>
         {codeOk && <div className="tk-l">{tr("Cách làm")}
           <div className="tk-br two" role="radiogroup">{ENGINES.map((b) => (
             <button type="button" key={b.id} role="radio" aria-checked={engine === b.id} className={engine === b.id ? "on" : ""} onClick={() => setEngine(b.id)}><b>{tr(b.label)}</b><span>{tr(b.hint)}</span></button>
@@ -158,23 +249,40 @@ function TaskEditor({ init, plan, onClose, onSaved, say }: { init?: Task | null;
             <button type="button" key={b.id} role="radio" aria-checked={browser === b.id} className={browser === b.id ? "on" : ""} disabled={b.id === "user" && !chromeOk} onClick={() => setBrowser(b.id)}><b>{tr(b.label)}</b><span>{tr(b.hint)}</span></button>
           ))}</div>
           {!chromeOk && <p className="tk-tz">{tr(browser === "user" ? "Quản trị viên chưa cho phép tài khoản của bạn dùng Chrome của bạn: việc này sẽ chạy bằng trình duyệt của Synchro." : "Quản trị viên chưa cho phép tài khoản của bạn dùng Chrome của bạn.")}</p>}
-        </div> : <p className="tk-tz">{tr("Synchro Code dùng trình duyệt của Synchro trên máy chủ khi cần mở web. Lệnh cần duyệt (khi chế độ Tự động đang tắt trong Cài đặt → Synchro Code) sẽ thành đề xuất trong Hộp thư.")}</p>}
+        </div> : <p className="tk-tz">{trs(
+          "Synchro Code dùng trình duyệt của Synchro trên máy chủ khi cần mở web.",
+          "Lệnh cần duyệt (khi tắt chế độ Tự động trong Cài đặt → Synchro Code) thành đề xuất ở mục Cần duyệt.",
+        )}</p>}
         <label className="tk-l">{tr("Model")}<ModelPick value={model} onChange={setModel} /></label>
-        <label className="tk-l">{tr("Hướng dẫn chi tiết cho Synchro")}<textarea className="field" value={prompt} maxLength={8000} rows={7} onChange={(e) => setPrompt(e.target.value)} placeholder={tr("Viết như khi nhắn cho Synchro. Connector đã kết nối (email, lịch…) được dùng như trong chat.")} data-notr /></label>
+        <label className="tk-l">{tr("Hướng dẫn chi tiết cho Synchro")}
+          <textarea className="field" value={prompt} maxLength={8000} rows={7} placeholder={trs(...PROMPT_HINT)}
+            data-notr
+            onChange={(e) => setPrompt(e.target.value)} />
+        </label>
         {plan && (plan.approvals.length > 0 || plan.needs.length > 0) && <div className="tk-notes">
           {plan.approvals.length > 0 && <div><b>{tr("Synchro sẽ hỏi bạn trước khi")}</b><ul>{plan.approvals.map((a) => <li key={a} data-notr>{a}</li>)}</ul></div>}
           {plan.needs.length > 0 && <div><b>{tr("Cần có để chạy tốt")}</b><ul>{plan.needs.map((a) => <li key={a} data-notr>{a}</li>)}</ul></div>}
         </div>}
         <label className="tk-mem"><button type="button" className={`toggle ${memory ? "on" : ""}`} role="switch" aria-checked={memory} aria-label="Nhớ kết quả các lần trước" onClick={() => setMemory(!memory)} /><span><b>{tr("Nhớ kết quả các lần trước")}</b>{tr("So sánh với lần trước, không báo hay đề xuất lại điều đã có.")}</span></label>
+        <label className="tk-mem">
+          <button type="button" className={`toggle ${email ? "on" : ""}`} role="switch" aria-checked={email}
+            aria-label="Gửi email khi xong" onClick={() => setEmail(!email)} />
+          <span><b>{tr("Gửi email khi xong")}</b>{tr(EMAIL_HINT)}</span>
+        </label>
         </div>
         <div className="modal-foot">
           <button type="button" className="btn" onClick={onClose} disabled={!!busy}>{tr("Hủy")}</button>
-          {!init && kind !== "once" && <button type="button" className="btn" disabled={!!busy || !title.trim()
-            || !prompt.trim()} onClick={() => save(true)}>{busy === "run" ? <Spinner className="art-spin sm" />
-            : <I.Play size={13} />}{tr("Tạo và chạy thử ngay")}</button>}
-          <button className="btn dark" disabled={!!busy || !title.trim() || !prompt.trim()}>{busy === "save"
-            ? <Spinner className="art-spin sm" /> : null}{init ? tr("Lưu") : kind === "once" ? tr("Chạy")
-            : tr("Tạo việc tự động")}</button>
+          {!init && kind !== "once" && kind !== "at" && (
+            <button type="button" className="btn" disabled={!!busy || !title.trim() || !prompt.trim()}
+              onClick={() => save(true)}>
+              {busy === "run" ? <Spinner className="art-spin sm" /> : <I.Play size={13} />}{tr("Tạo và chạy thử ngay")}
+            </button>
+          )}
+          <button className="btn dark" disabled={!!busy || !title.trim() || !prompt.trim()}>
+            {busy === "save" ? <Spinner className="art-spin sm" /> : null}
+            {init ? tr("Lưu") : kind === "once" ? tr("Chạy ngay")
+              : kind === "at" ? trc("Hẹn giờ", "autopilot") : tr("Lên lịch")}
+          </button>
         </div>
       </form>
     </div>
@@ -185,10 +293,15 @@ function TaskEditor({ init, plan, onClose, onSaved, say }: { init?: Task | null;
 function Composer({ onPlan, onManual, say }: { onPlan: (p: Plan) => void; onManual: () => void; say: (m: string) => void }) {
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
+  const [lastTz] = usePref("autopilotTz", "");
   const go = async () => {
     if (!text.trim() || busy) return;
     setBusy(true);
-    try { const { plan } = await api<{ plan: Plan }>("POST", "/api/tasks/plan", { text, tz: tz() }); onPlan(plan); setText(""); }
+    try {
+      // Cùng múi giờ form sẽ lưu (TaskEditor), để "9h sáng mai" của bộ lên kế hoạch chạy đúng giờ đã nói.
+      const { plan } = await api<{ plan: Plan }>("POST", "/api/tasks/plan", { text, tz: formZone(lastTz) });
+      onPlan(plan); setText("");
+    }
     catch (e) { say((e as Error).message); }
     setBusy(false);
   };
@@ -220,8 +333,10 @@ function ProposalCard({ p, say, onDone }: { p: Proposal; say: (m: string) => voi
     setBusy(decision);
     const edits = p.kind === "skill" ? { ...(draft === null ? {} : { skill_md: draft }), ...(scope === "org" ? { scope } : {}) } : draft === null ? undefined : { instructions: draft };
     try {
-      await api("POST", "/api/inbox/proposals", { id: p.id, decision, edits });
-      say(decision === "reject" ? tr("Đã bỏ qua đề xuất") : p.kind === "skill" ? tr(scope === "org" ? "Đã tạo skill và thêm vào thư viện cho mọi người" : "Đã tạo skill") : p.kind === "action" ? tr("Synchro đang làm việc đã duyệt, kết quả vào Hộp thư") : tr("Đã cho phép"));
+      await api("POST", "/api/autopilot/proposals", { id: p.id, decision, edits });
+      say(decision === "reject" ? tr("Đã bỏ qua đề xuất")
+        : p.kind === "skill" ? tr(scope === "org" ? "Đã tạo skill và thêm vào thư viện cho mọi người" : "Đã tạo skill")
+        : p.kind === "action" ? tr("Synchro đang làm việc đã duyệt, xong sẽ có thông báo") : tr("Đã cho phép"));
       changed(); onDone();
     } catch (e) { say((e as Error).message); onDone(); }
     setBusy("");
@@ -260,9 +375,12 @@ function ProposalCard({ p, say, onDone }: { p: Proposal; say: (m: string) => voi
 const LOG_KINDS = new Set(["tool", "note", "step", "say", "ui"]);
 // Lỗi nguyên văn tiếng Anh của hãng trên giao diện tiếng Việt (hay ngược lại): câu chung, nguyên văn để ở phần chi tiết (như thẻ lỗi của chat).
 const foreign = (s: string) => isForeign(s, tr(s), getLang());
-/** Lý do lỗi một dòng cho dòng Hộp thư (đã dịch). */
+/** Lý do lỗi một dòng cho dòng kết quả (đã dịch). */
 const failReason = (raw?: string) => failLine(tr(failInfo(raw, foreign).text));
-function ResultBody({ x, task, say, onOpenChat, onRetry, reload }: { x: Item; task?: Task; say: (m: string) => void; onOpenChat: (title: string, text: string) => void; onRetry: (t: Task) => void; reload: () => void }) {
+type BodyProps = {
+  x: Item; task?: Task; say: (m: string) => void; onOpenChat: OpenChat; onRetry: (t: Task) => void; reload: () => void;
+};
+function ResultBody({ x, task, say, onOpenChat, onRetry, reload }: BodyProps) {
   const [events, setEvents] = useState<RunEv[] | null>(null);
   const [props, setProps] = useState<Proposal[]>([]);
   const [log, setLog] = useState(false);
@@ -275,17 +393,28 @@ function ResultBody({ x, task, say, onOpenChat, onRetry, reload }: { x: Item; ta
     try { await downloadPptx(x.run, ident); say(tr("Đã tải tệp PowerPoint")); } catch (e) { say(tr((e as Error).message)); } finally { setPptx(null); }
   };
   const real = x.kind !== "notice" && x.status !== "waiting";
+  // Nhật ký và đề xuất chỉ là phần thêm của kết quả (chữ kết quả đã có sẵn): không tải được thì ghi nhật ký và để
+  // trống; lượt đang chạy thì 3 giây sau tự hỏi lại.
+  const miss = useCallback(
+    (what: string) => (e: unknown) => console.warn(`[autopilot] chưa tải được ${what}`, x.run, e), [x.run]);
   useEffect(() => {
     if (!real) return;
     let stop = false;
     const load = () => {
-      api<{ run: { events: RunEv[]; status: string } }>("GET", `/api/runs/${x.run}?json=1`).then((j) => { if (!stop) { setEvents(j.run.events); if (j.run.status !== "running" && x.status === "running") reload(); } }).catch(() => {});
-      if (x.proposals) api<{ proposals: Proposal[] }>("GET", `/api/inbox/proposals?run=${x.run}`).then((j) => { if (!stop) setProps(j.proposals); }).catch(() => {});
+      api<{ run: { events: RunEv[]; status: string } }>("GET", `/api/runs/${x.run}?json=1`).then((j) => {
+        if (stop) return;
+        setEvents(j.run.events);
+        if (j.run.status !== "running" && x.status === "running") reload();
+      }).catch(miss("events"));
+      if (x.proposals) {
+        api<{ proposals: Proposal[] }>("GET", `/api/autopilot/proposals?run=${x.run}`)
+          .then((j) => { if (!stop) setProps(j.proposals); }).catch(miss("proposals"));
+      }
     };
     load();
     const t = x.status === "running" ? setInterval(load, 3000) : null;
     return () => { stop = true; if (t) clearInterval(t); };
-  }, [x.run, x.status, x.proposals, real, reload]);
+  }, [x.run, x.status, x.proposals, real, reload, miss]);
   const steps = (events ?? []).filter((e) => LOG_KINDS.has(e.kind) && !(e.kind === "ui"));
   const lastStep = [...steps].reverse().find((e) => e.kind !== "say");
   return (
@@ -298,10 +427,19 @@ function ResultBody({ x, task, say, onOpenChat, onRetry, reload }: { x: Item; ta
         : isExpired(x) ? <p className="tk-note"><I.Clock size={13} /><span>{tr(TOO_OLD)}</span></p>
         : x.error ? ((e) => <div className="sk-err tk-err"><span data-notr>{tr(e.text)}</span>{e.detail && <details><summary>{tr("Chi tiết kỹ thuật")}</summary><code data-notr>{e.detail}</code></details>}</div>)(failInfo(x.error, foreign))
         : <div className="mdx"><Markdown text={readable(x.text)} say={say} /></div>}
-      {props.length > 0 && <div className="tk-props-in"><b>{tr("Đề xuất của lần chạy này")}</b>{props.map((p) => <ProposalCard key={p.id} p={p} say={say} onDone={() => { reload(); api<{ proposals: Proposal[] }>("GET", `/api/inbox/proposals?run=${x.run}`).then((j) => setProps(j.proposals)).catch(() => {}); }} />)}</div>}
+      {props.length > 0 && <div className="tk-props-in"><b>{tr("Đề xuất của lần chạy này")}</b>{props.map((p) => (
+        <ProposalCard key={p.id} p={p} say={say} onDone={() => {
+          reload();
+          api<{ proposals: Proposal[] }>("GET", `/api/autopilot/proposals?run=${x.run}`)
+            .then((j) => setProps(j.proposals)).catch(miss("proposals"));
+        }} />
+      ))}</div>}
       {log && steps.length > 0 && <ol className="tk-log">{steps.map((e) => <li key={e.seq} className={e.kind}><span>{when(e.at).split(" ·")[0]}</span><span data-notr>{e.text}</span></li>)}</ol>}
       {x.kind !== "notice" && x.status !== "waiting" && <div className="tk-acts">
-        {x.status === "done" && <button className="btn" onClick={() => onOpenChat(x.title, x.text)}><I.Chat2 size={14} />{tr("Mở thành đoạn chat")}</button>}
+        {x.status === "done" && <button className={`btn ${x.chat ? "dark" : ""}`}
+          onClick={() => onOpenChat(x.title, x.text, x.chat)}>
+          <I.Chat2 size={14} />{tr(x.chat ? "Mở đoạn chat để hỏi tiếp" : "Mở thành đoạn chat")}
+        </button>}
         {decks.map((d) => <button key={d.ident} className="btn" disabled={!!pptx} aria-busy={pptx === d.ident} title={d.title} onClick={() => getPptx(d.ident)}>
           {pptx === d.ident ? <Spinner className="art-spin sm" />
             : <I.Download size={14} />}{tr("Tải PowerPoint")}{decks.length > 1
@@ -316,9 +454,32 @@ function ResultBody({ x, task, say, onOpenChat, onRetry, reload }: { x: Item; ta
   );
 }
 
-// ---------------------------------------------------------------- trang Hộp thư
+// ---------------------------------------------------------------- trang Autopilot
+/** Lần chạy tới theo múi giờ của việc (cùng múi giờ với nhãn lịch "Mỗi ngày lúc 08:00"), kèm tên múi giờ khi khác múi
+ *  giờ của máy này, để thẻ việc không ghi "08:00 · lần tới 02:00". */
+function nextText(zone: string, t: number) {
+  if (zone === tz()) return when(t);
+  try {
+    const f = new Intl.DateTimeFormat("en-US", {
+      timeZone: zone, hourCycle: "h23", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit",
+    });
+    const p = (x: number) => Object.fromEntries(f.formatToParts(new Date(x)).map((q) => [q.type, q.value]));
+    const a = p(t), now = p(Date.now());
+    const day = a.day === now.day && a.month === now.month ? "" : ` · ${a.day}/${a.month}`;
+    return `${a.hour}:${a.minute}${day} (${zone})`;
+  } catch (e) {
+    // Múi giờ máy chủ đã nhận nhưng trình duyệt này không biết: hiện theo giờ máy này và ghi rõ múi giờ đó.
+    console.warn("[autopilot] múi giờ lạ", zone, e);
+    return `${when(t)} (${tz()})`;
+  }
+}
+// Trạng thái sau lịch trên thẻ việc: đang chờ Chrome, lần chạy tới, việc một lần đã chạy, hay đang tạm dừng.
+const jobState = (t: Task) => t.wait_since ? ` · ${tr("đang chờ Chrome")}`
+  : t.enabled && t.next_run_at ? ` · ${tr("lần tới")} ${nextText(t.schedule.tz, t.next_run_at)}`
+  : !t.enabled && t.schedule.kind === "once" && t.last ? ` · ${trc("đã chạy", "autopilot")}`
+  : !t.enabled ? ` · ${tr("đang tạm dừng")}` : "";
 const LoadErr = ({ title, err, retry }: { title: string; err: string; retry: () => void }) => <div className="err-box" role="alert"><b>{title}</b><span>{tr(err)}</span><button className="btn" onClick={retry}>{tr("Thử lại")}</button></div>;
-export function InboxPage({ say, onOpenChat }: { say: (m: string) => void; model?: string; onOpenChat: (title: string, text: string) => void }) {
+export function AutopilotPage({ say, onOpenChat }: { say: (m: string) => void; model?: string; onOpenChat: OpenChat }) {
   const app = useApp();
   const { openSettings } = app;
   const [tab, setTab] = useState<"results" | "approve" | "jobs">("results");
@@ -341,9 +502,12 @@ export function InboxPage({ say, onOpenChat }: { say: (m: string) => void; model
   const [propsErr, setPropsErr] = useState("");
   const load = useCallback(() => {
     setLoadErr(""); setTasksErr(""); setPropsErr("");
-    api<{ items: Item[]; more: boolean }>("GET", "/api/inbox").then((j) => { setItems(j.items); setMore((m) => (older_.current ? m : j.more)); }).catch((e) => setLoadErr(e.message));
+    api<{ items: Item[]; more: boolean }>("GET", "/api/autopilot").then((j) => {
+      setItems(j.items); setMore((m) => (older_.current ? m : j.more));
+    }).catch((e) => setLoadErr(e.message));
     api<{ tasks: Task[] }>("GET", "/api/tasks").then((j) => setTasks(j.tasks)).catch((e) => setTasksErr(e.message));
-    api<{ proposals: Proposal[] }>("GET", "/api/inbox/proposals?all=1").then((j) => setProps(j.proposals)).catch((e) => setPropsErr(e.message));
+    api<{ proposals: Proposal[] }>("GET", "/api/autopilot/proposals?all=1").then((j) => setProps(j.proposals))
+      .catch((e) => setPropsErr(e.message));
   }, [say]);
   useEffect(() => {
     load();
@@ -360,44 +524,88 @@ export function InboxPage({ say, onOpenChat }: { say: (m: string) => void; model
     if (!last || moreBusy) return;
     setMoreBusy(true);
     try {
-      const j = await api<{ items: Item[]; more: boolean }>("GET", `/api/inbox?before=${last.at}`);
+      const j = await api<{ items: Item[]; more: boolean }>("GET", `/api/autopilot?before=${last.at}`);
       older_.current++;
       setOlder((o) => [...o, ...j.items]);
       setMore(j.more);
     } catch (e) { say((e as Error).message); }
     setMoreBusy(false);
   };
-  const read = async (ids: string[] | "all") => { await api("POST", "/api/inbox", { read: ids }).catch(() => {}); setOlder((o) => o.map((x) => (ids === "all" || ids.includes(x.run) ? { ...x, read: true } : x))); changed(); load(); };
+  const read = async (ids: string[] | "all") => {
+    // Đánh dấu đã đọc không được (mất mạng) thì lần tải lại bên dưới trả về đúng trạng thái trên máy chủ; chỉ ghi
+    // nhật ký, không làm phiền người dùng vì một chấm chưa đọc.
+    await api("POST", "/api/autopilot", { read: ids })
+      .catch((e) => console.warn("[autopilot] chưa đánh dấu đã đọc", e));
+    setOlder((o) => o.map((x) => (ids === "all" || ids.includes(x.run) ? { ...x, read: true } : x)));
+    changed(); load();
+  };
   const toggle = (x: Item) => { setOpen(open === x.run ? null : x.run); if (!x.read && x.status !== "running" && x.status !== "waiting") read([x.run]); };
   // Nút "Chạy lại" ngay trên dòng lỗi: chạy lại việc đó, khóa nút tới khi máy chủ nhận lệnh.
   const [rerun, setRerun] = useState<string | null>(null);
   const rerunRow = async (x: Item) => { const t = byId.get(x.task); if (!t || rerun) return; setRerun(x.run); try { await runNow(t); } finally { setRerun(null); } };
-  const runNow = async (t: Task) => { try { await api("POST", `/api/tasks/${t.id}/run`); say(tr("Đang chạy, kết quả sẽ vào Hộp thư")); setTab("results"); load(); } catch (e) { say((e as Error).message); } };
+  const runNow = async (t: Task) => {
+    try {
+      await api("POST", `/api/tasks/${t.id}/run`);
+      say(tr("Đang chạy trên máy chủ, xong sẽ có thông báo")); setTab("results"); load();
+    } catch (e) { say((e as Error).message); }
+  };
   const setOn = async (t: Task) => { try { await api("PATCH", `/api/tasks/${t.id}`, { enabled: !t.enabled }); load(); } catch (e) { say((e as Error).message); } };
-  const del = (t: Task) => app.confirm(tr("Xóa việc tự động này?"), tr("Kết quả cũ trong Hộp thư cũng bị xóa."), tr("Xóa"), () => { void api("DELETE", `/api/tasks/${t.id}`).then(() => { say(tr("Đã xóa việc tự động")); load(); }).catch((e) => say((e as Error).message)); });
+  const del = (t: Task) => app.confirm(tr("Xóa việc tự động này?"),
+    tr("Kết quả cũ trong Autopilot cũng bị xóa. Đoạn chat kết quả vẫn giữ."), tr("Xóa"), () => {
+      void api("DELETE", `/api/tasks/${t.id}`).then(() => { say(tr("Đã xóa việc tự động")); load(); })
+        .catch((e) => say((e as Error).message));
+    });
   const byId = useMemo(() => new Map((tasks ?? []).map((t) => [t.id, t])), [tasks]);
   const all = useMemo(() => { const first = items ?? [], have = new Set(first.map((x) => x.run)); return [...first, ...older.filter((x) => !have.has(x.run))]; }, [items, older]);
   const unread = all.filter((x) => !x.read && x.status !== "running" && x.status !== "waiting").length;
   const pending = (props ?? []).filter((p) => p.status === "pending");
   const decided = (props ?? []).filter((p) => p.status !== "pending").slice(0, 20);
   const shown = all.filter((x) => !filter || x.task === filter);
-  // Chọn hàng loạt: kết quả (đã đọc / chưa đọc / gỡ khỏi Hộp thư) và việc tự động (chạy ngay, bật / tắt lịch, xóa).
+  // Chọn hàng loạt: kết quả (đã đọc / chưa đọc / gỡ khỏi Autopilot) và việc tự động (chạy ngay, bật / tắt lịch, xóa).
   const live = (x: Item) => x.status === "running" || x.status === "waiting";
   const bkR = useBulk(shown, (x) => x.run);
   const bkJ = useBulk(tasks ?? [], (t) => t.id);
   const resActs: BulkAct<Item>[] = [
     { id: "read", label: tr("Đánh dấu đã đọc"), icon: <I.Check size={14} />, when: (l) => l.some((x) => !x.read && !live(x)), run: (l) => read(l.filter((x) => !live(x)).map((x) => x.run)) },
-    { id: "unread", label: tr("Đánh dấu chưa đọc"), icon: <I.Inbox size={14} />, when: (l) => l.some((x) => x.read), run: async (l) => { await api("POST", "/api/inbox", { unread: l.map((x) => x.run) }); const ids = new Set(l.map((x) => x.run)); setOlder((o) => o.map((x) => (ids.has(x.run) ? { ...x, read: false } : x))); changed(); load(); } },
-    { id: "rm", label: tr("Gỡ khỏi Hộp thư"), icon: <I.Trash size={14} />, danger: true, when: (l) => l.some((x) => !live(x)),
-      confirm: (l) => ({ title: `${tr("Gỡ")} ${l.filter((x) => !live(x)).length} ${tr("kết quả khỏi Hộp thư?")}`, text: tr("Chỉ gỡ khỏi Hộp thư; việc tự động và lịch chạy giữ nguyên. Kết quả đang chạy được giữ lại."), ok: tr("Gỡ") }),
-      run: async (l) => { const ids = l.filter((x) => !live(x)).map((x) => x.run); await api("POST", "/api/inbox", { remove: ids }); setOlder((o) => o.filter((x) => !ids.includes(x.run))); changed(); load(); say(tr("Đã gỡ khỏi Hộp thư")); } },
+    { id: "unread", label: tr("Đánh dấu chưa đọc"), icon: <I.Inbox size={14} />, when: (l) => l.some((x) => x.read),
+      run: async (l) => {
+        await api("POST", "/api/autopilot", { unread: l.map((x) => x.run) });
+        const ids = new Set(l.map((x) => x.run));
+        setOlder((o) => o.map((x) => (ids.has(x.run) ? { ...x, read: false } : x))); changed(); load();
+      } },
+    { id: "rm", label: tr("Gỡ khỏi Autopilot"), icon: <I.Trash size={14} />, danger: true,
+      when: (l) => l.some((x) => !live(x)),
+      confirm: (l) => ({
+        title: `${tr("Gỡ")} ${l.filter((x) => !live(x)).length} ${tr("kết quả khỏi Autopilot?")}`, ok: tr("Gỡ"),
+        text: trs(
+          "Chỉ gỡ khỏi danh sách Kết quả; việc tự động, lịch chạy và đoạn chat kết quả giữ nguyên.",
+          "Kết quả đang chạy được giữ lại.",
+        ),
+      }),
+      run: async (l) => {
+        const ids = l.filter((x) => !live(x)).map((x) => x.run);
+        await api("POST", "/api/autopilot", { remove: ids });
+        setOlder((o) => o.filter((x) => !ids.includes(x.run))); changed(); load(); say(tr("Đã gỡ khỏi Autopilot"));
+      } },
   ];
   const jobActs: BulkAct<Task>[] = [
-    { id: "run", label: tr("Chạy ngay"), icon: <I.Play size={13} />, run: async (l) => { await each(l, (t) => api("POST", `/api/tasks/${t.id}/run`)); say(tr("Đang chạy, kết quả sẽ vào Hộp thư")); setTab("results"); load(); } },
-    { id: "on", label: tr("Bật lịch"), icon: <I.Power size={14} />, when: (l) => l.some((t) => !t.enabled), run: async (l) => { await each(l.filter((t) => !t.enabled), (t) => api("PATCH", `/api/tasks/${t.id}`, { enabled: true })); load(); } },
-    { id: "off", label: tr("Tắt lịch"), icon: <I.Pause size={13} />, when: (l) => l.some((t) => t.enabled), run: async (l) => { await each(l.filter((t) => t.enabled), (t) => api("PATCH", `/api/tasks/${t.id}`, { enabled: false })); load(); } },
+    { id: "run", label: tr("Chạy ngay"), icon: <I.Play size={13} />, run: async (l) => {
+      await each(l, (t) => api("POST", `/api/tasks/${t.id}/run`));
+      say(tr("Đang chạy trên máy chủ, xong sẽ có thông báo")); setTab("results"); load();
+    } },
+    { id: "on", label: tr("Chạy tiếp theo lịch"), icon: <I.Power size={14} />, when: (l) => l.some((t) => !t.enabled),
+      run: async (l) => {
+        await each(l.filter((t) => !t.enabled), (t) => api("PATCH", `/api/tasks/${t.id}`, { enabled: true })); load();
+      } },
+    { id: "off", label: tr("Tạm dừng"), icon: <I.Pause size={13} />, when: (l) => l.some((t) => t.enabled),
+      run: async (l) => {
+        await each(l.filter((t) => t.enabled), (t) => api("PATCH", `/api/tasks/${t.id}`, { enabled: false })); load();
+      } },
     { id: "del", label: tr("Xóa"), icon: <I.Trash size={14} />, danger: true,
-      confirm: (l) => ({ title: `${tr("Xóa")} ${l.length} ${tr("việc tự động?")}`, text: tr("Kết quả cũ của các việc này trong Hộp thư cũng bị xóa."), ok: tr("Xóa") }),
+      confirm: (l) => ({
+        title: `${tr("Xóa")} ${l.length} ${tr("việc tự động?")}`, ok: tr("Xóa"),
+        text: tr("Kết quả cũ của các việc này trong Autopilot cũng bị xóa. Đoạn chat kết quả vẫn giữ."),
+      }),
       run: async (l) => { await each(l, (t) => api("DELETE", `/api/tasks/${t.id}`)); say(tr("Đã xóa việc tự động")); load(); } },
   ];
   const pgR = usePage(shown, 15, filter);
@@ -410,7 +618,13 @@ export function InboxPage({ say, onOpenChat }: { say: (m: string) => void; model
   return (
     <div className="page ds-page tk-page"><div className="page-in tk">
       <header className="ds-head tk-top">
-        <div className="ds-head-t"><h1>{tr("Hộp thư")}</h1><p>{tr("Giao việc một lần, Synchro tự làm theo lịch trên máy chủ, kể cả khi bạn tắt máy. Kết quả và những việc cần bạn duyệt nằm ở đây.")}</p></div>
+        <div className="ds-head-t">
+          <h1 data-notr>Autopilot</h1>
+          <p>{trs(
+            "Giao việc hoặc lên lịch, Synchro tự làm kể cả khi bạn tắt tab hay gập máy.",
+            "Xong là có thông báo, kết quả thành đoạn chat để bạn hỏi tiếp.",
+          )}</p>
+        </div>
       </header>
       <Composer say={say} onPlan={(plan) => setEdit({ plan })} onManual={() => setEdit("new")} />
       <div className="tk-status">
@@ -434,9 +648,12 @@ export function InboxPage({ say, onOpenChat }: { say: (m: string) => void; model
       </div>
 
       {tab === "results" && (items === null ? (loadErr
-        ? <LoadErr title={tr("Chưa tải được Hộp thư")} err={loadErr} retry={load} />
+        ? <LoadErr title={tr("Chưa tải được Autopilot")} err={loadErr} retry={load} />
         : <div className="empty"><Spinner className="art-spin" /></div>) : !shown.length ? (
-        <div className="apps-empty"><I.Inbox size={22} /><b>{tr("Chưa có kết quả nào")}</b><span>{tr("Giao một việc ở ô phía trên (ví dụ giá cổ phiếu mỗi sáng, repo GitHub hay mỗi ngày). Synchro tự chạy và gửi kết quả vào đây.")}</span></div>
+        <div className="apps-empty"><I.Inbox size={22} /><b>{tr("Chưa có kết quả nào")}</b><span>{trs(
+          "Giao một việc ở ô phía trên (ví dụ giá cổ phiếu mỗi sáng, repo GitHub hay mỗi ngày).",
+          "Synchro tự chạy, kết quả hiện ở đây và thành đoạn chat để bạn hỏi tiếp.",
+        )}</span></div>
       ) : (
         <div className="tk-feed">{groups.map(([d, list]) => (
           <section key={d}><h3 className="tk-day">{dayLabel(d)}</h3>
@@ -485,8 +702,10 @@ export function InboxPage({ say, onOpenChat }: { say: (m: string) => void; model
           <div key={t.id} className={`tk-job ${t.enabled ? "" : "off"}`} {...bulkRow(bkJ, t)}>
             <div className="tk-job-h">
               {bkJ.on && <BulkCheck on={bkJ.has(t)} />}
-              <span className="tk-t"><b data-notr>{t.title}</b><em>{scheduleText(t.schedule)}{t.wait_since ? ` · ${tr("đang chờ Chrome")}` : t.enabled && t.next_run_at ? ` · ${tr("lần tới")} ${when(t.next_run_at)}` : !t.enabled ? ` · ${tr("đã tắt")}` : ""}</em></span>
-              <button className={`toggle ${t.enabled ? "on" : ""}`} role="switch" aria-checked={t.enabled} aria-label="Bật lịch" onClick={() => setOn(t)} />
+              <span className="tk-t"><b data-notr>{t.title}</b><em>{scheduleText(t.schedule)}{jobState(t)}</em></span>
+              <button className={`toggle ${t.enabled ? "on" : ""}`} role="switch" aria-checked={t.enabled}
+                aria-label="Chạy theo lịch"
+                data-tip={t.enabled ? "Tạm dừng" : "Chạy tiếp theo lịch"} onClick={() => setOn(t)} />
             </div>
             <div className="tk-job-m">
               {t.engine === "code" ? <span className="tk-chip"><I.Code size={12} />Synchro Code</span> : <span className="tk-chip"><I.Globe size={12} />{tr(BROWSERS.find((b) => b.id === t.browser)?.label ?? "Tự chọn")}</span>}
@@ -498,6 +717,9 @@ export function InboxPage({ say, onOpenChat }: { say: (m: string) => void; model
             <p className="tk-job-p" data-notr>{t.prompt.slice(0, 220)}{t.prompt.length > 220 ? "…" : ""}</p>
             {!bkJ.on && <div className="tk-acts">
               <button className="btn" onClick={() => runNow(t)}><I.Play size={13} />{tr("Chạy ngay")}</button>
+              {t.last?.chat ? <button className="btn" onClick={() => onOpenChat(t.title, "", t.last!.chat)}>
+                <I.Chat2 size={14} />{tr("Mở kết quả gần nhất")}
+              </button> : null}
               <button className="btn" onClick={() => { setFilter(t.id); setTab("results"); }}><I.Inbox size={14} />{tr("Xem kết quả")}</button>
               <button className="btn ghost" onClick={() => setEdit({ task: t })}><I.Pencil size={14} />{tr("Sửa")}</button>
               <button className="icon-btn" aria-label="Xóa việc tự động" data-tip="Xóa việc tự động" onClick={() => del(t)}><I.Trash size={15} /></button>

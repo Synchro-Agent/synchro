@@ -351,7 +351,11 @@ export function AdminPanel({ Toggle }: { Toggle: ToggleT }) {
         <Toggle on={d.settings.signupOpen} label="New sign-ups" set={(v) => act(() => call("PATCH", "/api/admin/settings", { signupOpen: v }), v ? "Sign-ups opened" : "Sign-ups closed")} />
       </div>
       <div className="row">
-        <div><div className="t">Require a verified email</div><div className="d">New accounts that sign up with a password must confirm their email before using uploads, connectors, scheduled tasks, voice and Synchro Code. Chat always works. Turn this off if email is failing. Accounts from before this setting aren&apos;t affected.</div></div>
+        <div><div className="t">Require a verified email</div><div className="d">
+          New accounts that sign up with a password must confirm their email before using uploads, connectors,
+          Autopilot, voice and Synchro Code. Chat always works. Turn this off if email is failing. Accounts from before
+          this setting aren&apos;t affected.
+        </div></div>
         <Toggle on={d.settings.verifyGate !== false} label="Require a verified email" set={(v) => act(() => call("PATCH", "/api/admin/settings", { verifyGate: v }), "Saved")} />
       </div>
       {d.settings.turnstile && <BotProtection s={d.settings.turnstile} act={act} call={call} Toggle={Toggle} owner={owner} />}

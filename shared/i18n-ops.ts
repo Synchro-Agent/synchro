@@ -82,7 +82,8 @@ export const OPS_VI2EN: Record<string, string> = {
   "Bản sao lưu có tệp hỏng": "The backup contains damaged files",
   "Bản sao lưu không giải mã được": "The backup can't be decrypted",
   "Tải về": "Download",
-  "Ở Cài đặt → Quyền riêng tư, bạn có thể tải về một tệp gồm hồ sơ, đoạn chat, dự án, artifact, bộ não và bộ nhớ, tác vụ và Hộp thư, liên kết chia sẻ, connector, phiên Synchro Code, ứng dụng và dữ liệu của chúng, bình luận, skill và plugin, cùng danh sách tệp. Nội dung tệp tải lên và tệp tạo ra tải riêng từng tệp, ngay ở đó; tệp trong workspace tải ở Synchro Code. Tệp không gồm mật khẩu băm, khóa và token, mức dùng chi tiết, nhật ký bảo mật. Bạn cũng xóa được từng tệp đã tải lên ở đó.": "In Settings → Privacy you can download one file with your profile, chats, projects, artifacts, brain and memory, tasks and Inbox, share links, connectors, Synchro Code sessions, apps and their data, comments, skills and plugins, and lists of your files. The contents of uploaded and generated files download one by one from there; workspace files download in Synchro Code. The file leaves out password hashes, keys and tokens, detailed usage, and the security log. You can also delete individual uploaded files there.",
+  "Ở Cài đặt → Quyền riêng tư, bạn có thể tải về một tệp gồm hồ sơ, đoạn chat, dự án, artifact, bộ não và bộ nhớ, việc và kết quả của Autopilot, liên kết chia sẻ, connector, phiên Synchro Code, ứng dụng và dữ liệu của chúng, bình luận, skill và plugin, cùng danh sách tệp. Nội dung tệp tải lên và tệp tạo ra tải riêng từng tệp, ngay ở đó; tệp trong workspace tải ở Synchro Code. Tệp không gồm mật khẩu băm, khóa và token, mức dùng chi tiết, nhật ký bảo mật. Bạn cũng xóa được từng tệp đã tải lên ở đó.":
+    "In Settings → Privacy you can download one file with your profile, chats, projects, artifacts, brain and memory, Autopilot tasks and results, share links, connectors, Synchro Code sessions, apps and their data, comments, skills and plugins, and lists of your files. The contents of uploaded and generated files download one by one from there; workspace files download in Synchro Code. The file leaves out password hashes, keys and tokens, detailed usage, and the security log. You can also delete individual uploaded files there.",
   "Máy chủ sắp hết dung lượng nên tạm thời chưa nhận tệp mới. Hãy thử lại sau.": "The server is nearly out of disk space, so it can't take new files right now. Try again later.",
   // Mức dùng (usagering.tsx, usageui.tsx), độ trễ (latencyui.tsx), nhật ký công việc (worklog.tsx): gọi qua tr / tf
   "Grok CLI không báo hạn mức còn lại của gói. Synchro đếm số tin nhắn và báo ngay khi Grok nói đã chạm giới hạn.": "The Grok CLI doesn't report how much of the plan is left. Synchro counts your messages and tells you as soon as Grok says the limit is reached.",
@@ -208,7 +209,8 @@ export const OPS_EN2VI: Record<string, string> = {
   "Everyone here runs models through the plan they signed in with, so each vendor's plan limits apply and Synchro has no cost to cap. Spending limits appear here if you add a shared API key in Settings → Providers. To stop someone using a model, change their access below.": "Mọi người ở đây chạy model bằng gói họ đã đăng nhập, nên áp dụng giới hạn gói của từng hãng và Synchro không có chi phí nào để đặt trần. Hạn mức chi tiêu sẽ hiện ở đây nếu bạn thêm khóa API chung trong Cài đặt → Providers. Muốn ngừng cho ai dùng một model, hãy đổi quyền của họ ở dưới.",
   "Spending limits apply only to turns that run on a shared API key. Turns on someone's own AI plan are limited by that plan.": "Hạn mức chi tiêu chỉ áp cho lượt chạy bằng khóa API chung. Lượt chạy bằng gói của từng người do chính gói đó giới hạn.",
   "Require a verified email": "Bắt buộc xác minh email",
-  "New accounts that sign up with a password must confirm their email before using uploads, connectors, scheduled tasks, voice and Synchro Code. Chat always works. Turn this off if email is failing. Accounts from before this setting aren't affected.": "Tài khoản mới đăng ký bằng mật khẩu phải xác minh email trước khi dùng tệp tải lên, connector, tác vụ tự động, giọng nói và Synchro Code. Chat luôn dùng được. Tắt khi email đang lỗi. Tài khoản có từ trước cài đặt này không bị ảnh hưởng.",
+  "New accounts that sign up with a password must confirm their email before using uploads, connectors, Autopilot, voice and Synchro Code. Chat always works. Turn this off if email is failing. Accounts from before this setting aren't affected.":
+    "Tài khoản mới đăng ký bằng mật khẩu phải xác minh email trước khi dùng tệp tải lên, connector, Autopilot, giọng nói và Synchro Code. Chat luôn dùng được. Tắt khi email đang lỗi. Tài khoản có từ trước cài đặt này không bị ảnh hưởng.",
   "Saved": "Đã lưu",
   "Email marked as verified": "Đã đánh dấu email là đã xác minh",
   "Mark email as verified": "Đánh dấu email đã xác minh",
@@ -285,7 +287,8 @@ export const OPS_EN2VI: Record<string, string> = {
   "Web app last started": "Web khởi động lần cuối",
   "Recent errors": "Lỗi gần đây",
   "No server errors recorded.": "Chưa ghi nhận lỗi máy chủ nào.",
-  "Confirm your email to use file attachments, connectors, scheduled tasks, voice and Synchro Code.": "Xác minh email để dùng tệp đính kèm, connector, tác vụ tự động, giọng nói và Synchro Code.",
+  "Confirm your email to use file attachments, connectors, Autopilot, voice and Synchro Code.":
+    "Xác minh email để dùng tệp đính kèm, connector, Autopilot, giọng nói và Synchro Code.",
   "Sent. Check your inbox and Spam.": "Đã gửi. Hãy xem hộp thư và mục Spam.",
   "Couldn't send right now. Try again in a while, or ask your administrator.": "Chưa gửi được. Hãy thử lại sau, hoặc nhờ quản trị viên.",
   "Resend email": "Gửi lại thư",
@@ -333,7 +336,7 @@ export const OPS_RULES_EN: Rule[] = [
   [/^([\s\S]+) Vẫn dùng bản đang chạy\.$/, (m) => `${cliuEn(m[1])} Still using the current version.`],
   ...Object.entries(CLIU_EN).map(([vi, en]): Rule => [new RegExp(`^${vi.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`), () => en]),
   ...CLIU_RULES,
-  // Thông báo trong Hộp thư: cảnh báo vận hành (server/ops.ts) và chủ email giành lại tài khoản (server/claim.ts).
+  // Thông báo trong Autopilot: cảnh báo vận hành (server/ops.ts) và chủ email giành lại tài khoản (server/claim.ts).
   [/^(.+) Xem chi tiết ở Cài đặt → Sức khỏe hệ thống\.$/, (m) => `${ALERT_EN[m[1]] ?? m[1]} See Settings → System health.`],
   [/^(Mật khẩu cũ đã được gỡ vì email chưa từng được xác minh, nên có thể do người khác đặt\. Nếu vẫn muốn đăng nhập bằng email, hãy đặt mật khẩu mới trong Cài đặt → Tài khoản\. )?Các thiết bị khác đã được đăng xuất, tiện ích Chrome đã ghép nối được gỡ(, connector đã được tắt \(bật lại trong Cài đặt nếu đúng là của bạn\))?\. (Hướng dẫn tùy chỉnh và ký ức trong tài khoản đã được xóa vì chúng có thể do người khác đặt\.|Hãy kiểm tra hướng dẫn tùy chỉnh trong Cài đặt\.)$/, (m) => `${m[1] ? "The old password was removed because this email was never verified, so someone else may have set it. To sign in with email, set a new password in Settings → Account. " : ""}Other devices were signed out and the paired Chrome extension was removed${m[2] ? ", and connectors were turned off (turn them back on in Settings if they're yours)" : ""}. ${m[3].startsWith("Hướng") ? "Custom instructions and memories in this account were deleted because someone else may have set them." : "Check your custom instructions in Settings."}`],
   [/^Bạn đã dùng hết (\d+) MB dung lượng tệp tải lên\. Xóa bớt tệp cũ ở Cài đặt → Quyền riêng tư\.$/, (m) => `You've used all ${m[1]} MB of your upload space. Delete old files in Settings → Privacy.`],

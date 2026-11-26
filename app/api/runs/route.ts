@@ -4,7 +4,7 @@ import { timed } from "../../../server/servertiming";
 
 export const dynamic = "force-dynamic";
 
-// Các lượt chạy gần đây của tài khoản (trang Hộp thư và lúc mở lại đoạn chat).
+// Các lượt chạy gần đây của tài khoản (trang Autopilot và lúc mở lại đoạn chat).
 export const GET = timed(async (req: Request) => {
   const c = current(req);
   if (!c) return Response.json({ error: "Bạn cần đăng nhập." }, { status: 401 });

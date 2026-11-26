@@ -457,7 +457,7 @@ for (const theme of THEMES) for (const size of SIZES) {
   await step0("bang-lenh", async () => { await key("k", "KeyK", 75, 4); await sleep(600); await shot("bang-lenh"); await esc(); await sleep(300); });
   await step0("artifacts", async () => { await nav("Artifacts"); await shot("artifacts"); await click(byText("button", "Ứng dụng"), "apps tab").catch(() => {}); await ready(); await shot("ung-dung"); });
   await step0("du-an", async () => { await nav("Dự án"); await shot("du-an"); });
-  await step0("hop-thu", async () => { await nav("Hộp thư"); await shot("hop-thu"); });
+  await step0("hop-thu", async () => { await nav("Autopilot"); await shot("hop-thu"); });
   // Tạo / sửa việc tự động: ô Hướng dẫn nhiều dòng (gõ nội dung dài như người dùng), ô chọn model.
   await step0("viec-tu-dong", async () => {
     await click(byText(".tk-page button", "Tự đặt"), "manual task"); await until(`!!document.querySelector(".modal textarea")`, 8000, "task editor");

@@ -72,7 +72,11 @@ export function changedMail(o: { base: string; name?: string | null; when: strin
 export function verifyMail(o: { base: string; name?: string | null; url: string; days: number; lang: MailLang }): Mail {
   const vi = o.lang === "vi", name = o.name?.trim() ? esc(o.name.trim()) : "";
   const title = vi ? "Xác minh email của bạn" : "Verify your email";
-  const lead = vi ? `Chào${name ? ` ${name}` : " bạn"}, có người vừa tạo tài khoản Synchro bằng địa chỉ này. Nếu là bạn, hãy xác minh để dùng tệp đính kèm, connector, tác vụ tự động và Synchro Code.` : `Hi${name ? ` ${name}` : ""}, someone just created a Synchro account with this address. If it was you, verify it to use file attachments, connectors, scheduled tasks and Synchro Code.`;
+  const lead = vi ? `Chào${name
+    ? ` ${name}` : " bạn"}, có người vừa tạo tài khoản Synchro bằng địa chỉ này. Nếu là bạn, hãy xác minh để dùng ` +
+    `tệp đính kèm, connector, Autopilot và Synchro Code.` : `Hi${name
+    ? ` ${name}` : ""}, someone just created a Synchro account with this address. If it was you, verify it to use ` +
+    `file attachments, connectors, Autopilot and Synchro Code.`;
   const after = vi ? `Đường dẫn có hiệu lực trong <b style="color:${INK};font-weight:600">${o.days} ngày</b>.` : `This link works for <b style="color:${INK};font-weight:600">${o.days} days</b>.`;
   const note = vi ? "Không phải bạn đăng ký? Mở đường dẫn rồi chọn \"Không phải tôi\" để xóa tài khoản đó, hoặc bỏ qua email này." : "Didn't sign up? Open the link and choose \"This wasn't me\" to remove that account, or ignore this email.";
   const label = vi ? "Xác minh email" : "Verify email";
@@ -147,5 +151,41 @@ export function opsAlertMail(o: { base: string; title: string; text: string; tit
     subject: `[Synchro] ${o.title} / ${o.titleEn}`,
     html: frame(o.base, "vi", { pre: o.title, title: o.title, lead: `${esc(o.text)}<br><br>${esc(o.titleEn)}: ${esc(o.textEn)}`, cta: { label: "Mở Synchro / Open Synchro", url }, note: "Xem chi tiết ở Cài đặt → Sức khỏe hệ thống. Mỗi loại cảnh báo gửi tối đa một lần mỗi ngày. / See Settings → System health. Each kind of alert is sent at most once a day." }),
     text: `${o.title}\n\n${o.text}\n\n${o.titleEn}\n\n${o.textEn}\n\nCài đặt → Sức khỏe hệ thống / Settings → System health: ${url}\n\nSynchro`,
+  };
+}
+
+type AutopilotMailIn = {
+  base: string; lang: MailLang; title: string; when: string; ok: boolean; summary: string; url: string;
+  /** Số lần Synchro đã tự chạy lại trước khi báo lỗi này. */
+  tries?: number;
+};
+/** Autopilot vừa chạy xong một việc (người dùng bật "Gửi email khi xong" cho việc đó): tóm tắt kết quả và nút mở đoạn
+ *  chat để hỏi tiếp. ok = false: lần chạy lỗi, phần tóm tắt là lý do. */
+export function autopilotMail(o: AutopilotMailIn): Mail {
+  const vi = o.lang === "vi";
+  const subject = o.ok
+    ? (vi ? `Autopilot đã xong: ${o.title}` : `Autopilot finished: ${o.title}`)
+    : (vi ? `Autopilot gặp lỗi: ${o.title}` : `Autopilot hit an error: ${o.title}`);
+  const at = `<b style="color:${INK};font-weight:600">${esc(o.when)}</b>`;
+  const again = vi
+    ? "Mở Autopilot để xem chi tiết hoặc bấm Chạy lại." : "Open Autopilot to see the details or run it again.";
+  const failed = o.tries
+    ? (vi ? `Lần chạy lúc ${at} vẫn lỗi sau ${o.tries} lần Synchro tự chạy lại.`
+      : `The run at ${at} still failed after Synchro retried it ${o.tries} times.`)
+    : (vi ? `Lần chạy lúc ${at} chưa xong.` : `The run at ${at} didn't finish.`);
+  const lead = o.ok
+    ? (vi ? `Synchro đã chạy xong việc này lúc ${at}. Kết quả nằm trong một đoạn chat để bạn đọc đầy đủ và hỏi tiếp.`
+      : `Synchro finished this task at ${at}. The result is in a chat you can open to read in full and follow up.`)
+    : `${failed} ${again}`;
+  const label = o.ok ? (vi ? "Mở đoạn chat" : "Open the chat") : (vi ? "Mở Autopilot" : "Open Autopilot");
+  const note = vi
+    ? "Bạn nhận email này vì đã bật \"Gửi email khi xong\" cho việc này trong Autopilot. Tắt ở nút Sửa của việc."
+    : "You're getting this because \"Email me when done\" is on for this task in Autopilot. Turn it off in Edit.";
+  const after = esc(o.summary).replace(/\n/g, "<br>");
+  return {
+    subject: subject.slice(0, 160),
+    html: frame(o.base, o.lang, { pre: o.summary.slice(0, 140), title: o.title, lead, cta: { label, url: o.url }, after,
+      note }),
+    text: `${o.title}\n\n${o.summary}\n\n${label}: ${o.url}\n\nSynchro`,
   };
 }

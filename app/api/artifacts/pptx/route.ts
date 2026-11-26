@@ -10,7 +10,8 @@ export const dynamic = "force-dynamic";
 // G4: xuất bản trình bày HTML thành PowerPoint ở máy chủ (dùng Chromium của workspace, không cần trình duyệt người dùng mở).
 // SEC-5: chỉ xuất nội dung của chính người dùng do máy chủ tự nạp, không nhận HTML thô từ trình duyệt:
 //   { conv, identifier }  artifact trong kho artifact của người dùng;
-//   { run, identifier }   artifact trong kết quả một lượt của người dùng (Hộp thư, việc tự động chạy nền: kết quả không vào kho artifact).
+//   { run, identifier }   artifact trong kết quả một lượt của người dùng (Autopilot, việc tự động chạy nền: kết quả
+// không vào kho artifact).
 // Trang slide chạy script trong Chromium nên cần quyền "Chạy code" như run_code, mạng theo quyền net / web của người dùng. Trả tệp .pptx.
 export const POST = handle(async (req: Request) => {
   sameOrigin(req);

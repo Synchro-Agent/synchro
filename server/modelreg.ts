@@ -9,7 +9,7 @@
 //     Tham số hãng từ chối khi thử (mức nỗ lực, ảnh, chế độ suy nghĩ) được ghi lại để lần gọi thật gửi đúng.
 //  4) Hãng gỡ model: model chuyển sang "đã ngừng" và được thay bằng bản mới nhất cùng dòng; người đã chọn tay model đó được chuyển và báo một lần.
 //     Một dòng có bản mới (không phải nền) thì chỉ giữ hai bản mới nhất ở bộ chọn, bản cũ hơn chuyển sang "đã cũ".
-//  5) Báo quản trị viên vào Hộp thư: "Synchro đã thêm model mới: …" kèm kết quả thử.
+//  5) Báo quản trị viên vào Autopilot: "Synchro đã thêm model mới: …" kèm kết quả thử.
 import "server-only";
 import { ADMIN_EMAILS, db, getSetting, setSetting } from "./authstore";
 import type { ProviderKind } from "../shared/catalog";

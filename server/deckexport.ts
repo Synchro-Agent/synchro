@@ -1,6 +1,6 @@
 // G4: xuất bản trình bày (slide) HTML thành PowerPoint (.pptx) Ở MÁY CHỦ, chạy chính deckpptx.ts trong Chromium của dịch vụ workspace.
 // Khung xem trước (artifactui.tsx) đã xuất được ngay trong trình duyệt người dùng; tệp này làm điều đó không cần trình duyệt mở, để
-// việc tự động chạy nền và Hộp thư cũng xuất được PowerPoint.
+// việc tự động chạy nền và Autopilot cũng xuất được PowerPoint.
 //
 // Cách làm giống máy kiểm tra hiển thị (artcheck.ts): dựng trang slide trong Chromium (puppeteer-core, /usr/bin/chromium của container),
 // nạp đúng ba thư viện khung xem dùng (html-to-image, pptxgenjs, JSZip ở public/vendor) cùng mã deckpptx đã biên dịch sang JS, rồi:
@@ -18,9 +18,10 @@ import { artState } from "../shared/vfs";
 
 export type DeckInput = { type: ArtType; content: string; title: string; complete?: boolean };
 
-/** Bản trình bày HIỆN TẠI có identifier này trong văn bản kết quả của một lượt (Hộp thư / việc tự động chạy nền): bản đầy đủ mới nhất cộng
- *  mọi bản vá (mode="patch") sau nó, áp như khung xem (vfs.ts → artState). Bản vá áp không được, hoặc chỉ có bản vá mà không có bản đầy đủ
- *  trước nó: null — không xuất một bản cũ khác với bản người dùng đang thấy. */
+/** Bản trình bày HIỆN TẠI có identifier này trong văn bản kết quả của một lượt (Autopilot / việc tự động chạy nền): bản
+ *  đầy đủ mới nhất cộng mọi bản vá (mode="patch") sau nó, áp như khung xem (vfs.ts → artState). Bản vá áp không được,
+ *  hoặc chỉ có bản vá mà không có bản đầy đủ trước nó: null — không xuất một bản cũ khác với bản người dùng đang thấy.
+ */
 export function deckFromText(text: string, ident: string): DeckInput | null {
   const id = ident.trim().toLowerCase().replace(/[^\w.-]+/g, "-").slice(0, 80);
   const v = artState([text]).get(id);
@@ -110,7 +111,8 @@ const slug = (s: string) => (s || "ban-trinh-bay").normalize("NFD").replace(/[̀
 const inflight = new Set<string>();
 
 /**
- * Xuất bản trình bày HTML thành .pptx ở máy chủ (dùng được trong việc tự động chạy nền và Hộp thư). origin: để nhúng ảnh ngoài đúng như khung xem.
+ * Xuất bản trình bày HTML thành .pptx ở máy chủ (dùng được trong việc tự động chạy nền và Autopilot). origin: để nhúng
+ * ảnh ngoài đúng như khung xem.
  * SEC-5: trang chạy script trong Chromium nên mạng đi theo quyền của người dùng (capsState: net / web), mặc định tắt; nội dung phải là
  * artifact của chính người dùng do máy chủ tự nạp (route không nhận HTML thô từ trình duyệt).
  */

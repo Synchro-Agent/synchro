@@ -241,7 +241,7 @@ html body .rail .rail-new .rail-ic{width:32px;height:32px;border-radius:999px;ba
 .rail .rail-new:active .rail-ic{background:color-mix(in srgb,var(--ds-inv) 78%,var(--bg))}
 .rail .rail-new{margin-bottom:4px}
 html body .rail .rail-new .rail-ic svg{width:14px;height:14px}
-/* Số chưa đọc của Hộp thư: chấm số ở góc ô icon. */
+/* Số chưa đọc của Autopilot: chấm số ở góc ô icon. */
 html body .rail .nav-badge{position:absolute;top:-1px;left:auto;right:max(2px,calc(50% - 23px));z-index:2;min-width:16px;height:16px;padding:0 4px;border-radius:999px;display:grid;place-items:center;
   font-size:var(--fs-1);font-weight:600;line-height:1;background:var(--ds-ink);color:var(--ds-inv-fg);box-shadow:0 0 0 2px var(--bg);margin:0}
 .rail .nav-item.active .nav-badge{background:var(--ds-inv-fg);color:var(--ds-inv);box-shadow:0 0 0 2px var(--ds-inv)}
@@ -374,7 +374,8 @@ html body .topbar .title-wrap .sel:hover{background:var(--ds-hover)}
 html body .topbar .icon-btn:not(.auth-root *){width:var(--ds-h);height:var(--ds-h);border-radius:var(--r-pill)}
 html body .topbar .btn{height:var(--ds-h)}
 
-/* ---------------------------------------------------------------- khung trang chung (Artifacts, Dự án, trang dự án, Hộp thư, Kho kỹ năng) */
+/* ---------------------------------------------------------------- khung trang chung (Artifacts, Dự án, trang dự án,
+   Autopilot, Kho kỹ năng) */
 html body .page.ds-page{padding:4px 0 72px}
 html body .ds-page>.page-in{max-width:1080px;width:calc(100% - 64px)}
 .ds-head{display:flex;align-items:flex-end;justify-content:space-between;gap:24px;margin:0 0 24px}
@@ -587,7 +588,7 @@ html body .pj-panel .pj-chat>svg{color:var(--ds-faint)}
 
 /* Ngữ cảnh */
 
-/* ---------------------------------------------------------------- Hộp thư */
+/* ---------------------------------------------------------------- Autopilot */
 html body .tk-page .tk-comp .btn{height:var(--ds-h)}
 html body .tk-page .tk-tabs>.btn{height:var(--ds-h)}
 html body .tk-page .tk-t b{color:var(--ds-ink);font-size:var(--fs-chat)}

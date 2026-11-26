@@ -9,6 +9,8 @@ import { FX_EN2VI } from "./i18n-features";
 
 // Chuỗi gốc tiếng Anh (Cài đặt, Skills…) → tiếng Việt
 export const EN2VI: Record<string, string> = {
+  // Tên mục Autopilot giữ nguyên ở giao diện tiếng Việt (tên sản phẩm của mục, như Artifacts, Speech).
+  "Autopilot": "Autopilot",
   "Enter a valid email address.": "Hãy nhập một địa chỉ email hợp lệ.",
   "New sign-ups are closed. Ask your administrator for an account.": "Synchro đang đóng đăng ký mới. Hãy nhờ quản trị viên cấp tài khoản.",
   "By continuing, you agree to the": "Khi tiếp tục, bạn đồng ý với",
@@ -250,7 +252,7 @@ export const EN2VI: Record<string, string> = {
   "CLI updates": "Cập nhật CLI", "Up to date": "Đã mới nhất", "Update failed": "Chưa cập nhật được", "New version failed its check": "Bản mới không qua kiểm tra",
   "Skipped": "Bỏ qua", "Rolled back": "Đã trả về bản trước", "Watching first chats": "Đang theo dõi các lượt đầu", "Not checked yet": "Chưa kiểm tra",
   "Checked": "Kiểm tra", "Previous": "Bản trước", "First chats on this version:": "Các lượt đầu với bản này:", "Roll back": "Trả về bản trước",
-  "CLI update finished. Results are below and in your Inbox": "Đã cập nhật CLI xong. Kết quả ở dưới và trong Hộp thư",
+  "CLI update finished. Results are below and in Autopilot": "Đã cập nhật CLI xong. Kết quả ở dưới và trong Autopilot",
   "Roll back to the previous version?": "Trả về bản trước?",
   "Everyone goes back to the version that ran before the last update.":
     "Mọi người quay lại bản chạy trước lần cập nhật gần nhất.",

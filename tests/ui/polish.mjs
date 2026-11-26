@@ -378,7 +378,7 @@ for (const theme of THEMES) for (const size of SIZES) {
     await click(byText(".main button, main button", /^(Dự án mới|New project)/), "new project"); await ready(); await check("du-an-moi"); await esc();
   });
   await step0("hop-thu", async () => {
-    await go("inbox"); await check("hop-thu"); await tabs("hop-thu");
+    await go("autopilot"); await check("hop-thu"); await tabs("hop-thu");
     await click(byText("button", /^(Tự đặt|Set up manually)/), "manual task"); await until(`!!document.querySelector(".modal textarea")`, 8000, "task editor"); await ready();
     await check("viec-tu-dong-moi");
     // Ô chọn của hộp thoại (Dropdown thay <select>): danh sách mở ra cũng được đo.

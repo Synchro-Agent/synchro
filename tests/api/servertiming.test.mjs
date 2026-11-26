@@ -70,7 +70,9 @@ if (!cookie) {
   cookie = (r.headers.getSetCookie?.() ?? []).find((c) => c.startsWith("synchro_session="))?.split(";")[0] ?? "";
 }
 // Trang chính (page.tsx, store.tsx, …) gọi các API này ngay khi mở; thêm vài route không qua handle() (models, skills, runs, health).
-const LOAD = ["/api/bootstrap", "/api/auth/me", "/api/models", "/api/skills", "/api/plugins", "/api/connectors", "/api/inbox", "/api/caps", "/api/usage", "/api/brain", "/api/apps", "/api/artifacts", "/api/tasks", "/api/runs", "/api/health", "/api/admin/health", "/api/github"];
+const LOAD = ["/api/bootstrap", "/api/auth/me", "/api/models", "/api/skills", "/api/plugins", "/api/connectors",
+  "/api/autopilot", "/api/caps", "/api/usage", "/api/brain", "/api/apps", "/api/artifacts", "/api/tasks", "/api/runs",
+  "/api/health", "/api/admin/health", "/api/github"];
 const missing = [], bad = [];
 for (const p of LOAD) {
   const r = await get(p);
@@ -85,7 +87,7 @@ ok(!bad.length, "số đo hợp lệ: auth + work = total", bad.join("\n"));
   const r = await get("/api/auth/me");
   const v = parse(r.headers.get("server-timing"));
   ok(v && v.auth > 0, "đã đăng nhập: có thời gian kiểm tra phiên (auth > 0)", r.headers.get("server-timing"));
-  const u = await get("/api/inbox", false);
+  const u = await get("/api/autopilot", false);
   ok(u.status === 401 && parse(u.headers.get("server-timing")), "lỗi 401 của handle() cũng có Server-Timing", u.status);
   const o = await get("/api/auth/oauth/khong-co", false);
   ok(o.status === 302 && parse(o.headers.get("server-timing")), "chuyển hướng 302 (đăng nhập OAuth) cũng có Server-Timing", o.status);

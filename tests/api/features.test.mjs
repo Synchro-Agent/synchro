@@ -1,4 +1,5 @@
-// Hộp thư theo trang, đếm nhẹ, giữ kết quả lâu dài; xóa đoạn chat gỡ cả điều đã học; thư viện bị chặn vì giấy phép; trạng thái Speech. Chạy trên npm run dev:mock (web 3200).
+// Autopilot theo trang, đếm nhẹ, giữ kết quả lâu dài; xóa đoạn chat gỡ cả điều đã học; thư viện bị chặn vì giấy phép;
+// trạng thái Speech. Chạy trên npm run dev:mock (web 3200).
 import { createRequire } from "node:module";
 const B = process.env.SYNCHRO_URL ?? "http://localhost:3200";
 let pass = 0, fail = 0;
@@ -23,26 +24,30 @@ const R = createRequire(process.cwd() + "/package.json");
 const db = new (R("better-sqlite3"))(process.cwd() + "/data-mock/synchro.db");
 db.pragma("busy_timeout = 5000");
 
-console.log("1. Hộp thư: đếm nhẹ, theo trang, giữ kết quả quá 7 ngày");
-await a("GET", "/api/inbox"); // tạo bảng
+console.log("1. Autopilot: đếm nhẹ, theo trang, giữ kết quả quá 7 ngày");
+await a("GET", "/api/autopilot"); // tạo bảng
 const now = Date.now(), DAY = 86_400_000;
 const ins = db.prepare("INSERT INTO task_runs (run_id, task_id, owner, title, at, read, kind, result) VALUES (?, 't', ?, ?, ?, ?, 'run', ?)");
 for (let i = 0; i < 120; i++) ins.run(`rn_${uid}_${i}`, uid, `Kết quả ${i}`, now - i * DAY, i < 3 ? 0 : 1, JSON.stringify({ status: "done", text: `Nội dung ${i}`.padEnd(2000, "x") }));
 ins.run(`rn_${uid}_gone`, uid, "Cũ không còn", now - 400 * DAY, 1, null);
 db.prepare("INSERT INTO notices (id, owner, title, text, at, read) VALUES (?, ?, 'Thông báo', 'x', ?, 0)").run(`nt_${uid}`, uid, now - 1000);
-let r = await a("GET", "/api/inbox?count=1", undefined, true);
+let r = await a("GET", "/api/autopilot?count=1", undefined, true);
 const raw = await r.text(), c = JSON.parse(raw);
 ok(c.unread === 4 && !raw.includes("Nội dung"), "đếm đúng chưa đọc (kể cả thông báo), không có nội dung kết quả", raw.slice(0, 300));
 ok(raw.length < 3000 && c.fresh.length === 4, `phản hồi đếm rất nhẹ (${raw.length} byte)`, raw.length);
-let p = await a("GET", "/api/inbox?limit=50");
+let p = await a("GET", "/api/autopilot?limit=50");
 ok(p.j.items.length === 50 && p.j.more === true && p.j.unread === 4, "trang đầu 50 mục, còn nữa", JSON.stringify({ n: p.j.items.length, more: p.j.more, unread: p.j.unread }));
 const seen = new Set(p.j.items.map((x) => x.run));
 let cursor = Math.min(...p.j.items.map((x) => x.at)), pages = 1;
-while (p.j.more && pages < 10) { p = await a("GET", `/api/inbox?limit=50&before=${cursor}`); for (const x of p.j.items) { ok(!seen.has(x.run) || false, "không lặp mục giữa các trang", x.run); seen.add(x.run); } cursor = Math.min(...p.j.items.map((x) => x.at)); pages++; }
+while (p.j.more && pages < 10) { p = await a("GET", `/api/autopilot?limit=50&before=${cursor}`);
+  for (const x of p.j.items) { ok(!seen.has(x.run) || false, "không lặp mục giữa các trang", x.run); seen.add(x.run);
+  } cursor = Math.min(...p.j.items.map((x) => x.at)); pages++; }
 ok(seen.size === 122, `đi hết các trang thấy đủ mọi mục, không chỉ 50 mục (${seen.size})`, seen.size);
-const old = (await a("GET", `/api/inbox?limit=5&before=${now - 100 * DAY}`)).j.items.find((x) => x.title === "Kết quả 101");
+const old = (await a("GET",
+  `/api/autopilot?limit=5&before=${now - 100 * DAY}`)).j.items.find((x) => x.title === "Kết quả 101");
 ok(old?.status === "done" && old.text.startsWith("Nội dung 101"), "kết quả 100 ngày trước vẫn đọc được, không báo lỗi", JSON.stringify(old)?.slice(0, 200));
-const gone = (await a("GET", `/api/inbox?limit=5&before=${now - 300 * DAY}`)).j.items.find((x) => x.title === "Cũ không còn");
+const gone = (await a("GET",
+  `/api/autopilot?limit=5&before=${now - 300 * DAY}`)).j.items.find((x) => x.title === "Cũ không còn");
 ok(gone?.status === "expired" && /quá cũ/.test(gone.error ?? ""), "lượt đã mất từ trước khi có bản lưu thì báo rõ (hết hạn, không phải lỗi)", JSON.stringify(gone));
 ok(db.prepare("SELECT result FROM task_runs WHERE run_id = ?").get(`rn_${uid}_gone`).result !== null, "đã ghi nhận, không phải tra lại mỗi lần");
 db.prepare("DELETE FROM task_runs WHERE owner = ?").run(uid); db.prepare("DELETE FROM notices WHERE owner = ?").run(uid);

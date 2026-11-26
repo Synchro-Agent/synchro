@@ -11,7 +11,7 @@ export const GET = handle(async (req: Request, ctx: { params: Promise<{ id: stri
   const { user } = requireUser(req);
   try { return Response.json({ comments: listComments(user, (await ctx.params).id) }); } catch (e) { return err(e); }
 });
-// Thêm bình luận: { body, mentions: [id người được nhắc] } — người được nhắc nhận thông báo trong Hộp thư.
+// Thêm bình luận: { body, mentions: [id người được nhắc] } — người được nhắc nhận thông báo trong Autopilot.
 export const POST = handle(async (req: Request, ctx: { params: Promise<{ id: string }> }) => {
   sameOrigin(req);
   const { user } = requireUser(req);
