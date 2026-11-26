@@ -38,7 +38,7 @@ export function Head({ tool, title, desc, children }: { tool: Exclude<SpeechTool
     <>
       <div className="sp-head">
         <div className="sp-head-t">
-          <span className={`sp-tic ${t.color}`}><Ic size={20} /></span>
+          <span className="sp-tic"><Ic size={20} /></span>
           <div><h1>{title ?? t.label}</h1><p>{desc ?? t.desc}</p></div>
         </div>
         <div className="sp-head-a">
@@ -60,7 +60,7 @@ function GuideCard({ tool, onClose }: { tool: Exclude<SpeechTool, "home">; onClo
   useLangVer();
   const what = tool === "create" ? createWhatOf(plan?.connected ? (f) => on(plan, f) : null, g.what, tr, tf) : g.what;
   return (
-    <section className={`sp-guide ${t.color} ${more ? "more" : ""}`} aria-label={`Hướng dẫn: ${t.label}`}>
+    <section className={`sp-guide ${more ? "more" : ""}`} aria-label={`Hướng dẫn: ${t.label}`}>
       <div className="sp-guide-h">
         <span className="sp-guide-ic"><I.Bulb size={15} /></span>
         <b>{`${t.label} là gì?`}</b>

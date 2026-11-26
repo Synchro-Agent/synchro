@@ -14,6 +14,7 @@ import { toSpeech, VI } from "../voiceflow";
 import { CAT_LABEL, LANGS, api, fmtClock, fmtDur, fmtNum, hueOf, micError, on, post, refreshPlan, reloadVoices, useMyVoices, usePlan, usePlanFailed, type Voice } from "./client";
 import { AGES, CATEGORIES, GENDERS } from "../../shared/speech/data";
 import { Spinner } from "../spinner";
+import { AudioPlayer, DURATION_EVENT, mediaDuration, saveAudioUrl, type AudioPlayerProps } from "../audioplayer";
 
 // Mức hoạt động khi đang phát (âm tiết và quãng nghỉ), dùng chung cho các quả cầu.
 const talking = () => { const t = performance.now() / 1000; return Math.max(0, Math.sin(t * 0.85) + 0.35) * (0.12 + Math.max(0, Math.sin(t * 9.3 + Math.sin(t * 2.1))) ** 2 * 0.6); };
@@ -112,100 +113,25 @@ export function Recorder({ onDone, say, label = "Ghi âm", max = 300 }: { onDone
 }
 
 // ---- trình phát ----
-const peaksCache = new Map<string, number[]>();
-let playingEl: HTMLAudioElement | null = null;
-// Bản đang phát, cho trình phát chung ở đáy trang (như ElevenLabs): vẫn điều khiển được khi đã cuộn khỏi thẻ kết quả.
+// Bản đang phát, cho trình phát chung ở đáy trang Speech: vẫn điều khiển được khi đã cuộn khỏi thẻ kết quả.
 type Now = { el: HTMLAudioElement; title: string; dl: string | null } | null;
 let nowPlaying: Now = null;
 const nowSubs = new Set<() => void>();
 const setNow = (n: Now) => { nowPlaying = n; nowSubs.forEach((f) => f()); };
 export const useNowPlaying = () => useSyncExternalStore((f) => { nowSubs.add(f); return () => nowSubs.delete(f); }, () => nowPlaying, () => null);
 export const closeNowPlaying = () => { nowPlaying?.el.pause(); setNow(null); };
-// Giải mã dùng chung một OfflineAudioContext (không mở thiết bị âm thanh) và lần lượt từng tệp: trước đây mỗi dạng sóng tạo một
-// AudioContext riêng, cả trang mở ra cùng lúc 5 cái → giao diện đứng 300–450ms khi vào trang Speech. Cùng một tệp chỉ giải mã một lần.
-let decoder: BaseAudioContext | null = null;
-const decoderOf = () => (decoder ??= typeof OfflineAudioContext !== "undefined" ? new OfflineAudioContext(1, 1, 44100)
-  : new (window.AudioContext ?? (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)());
-let queue: Promise<unknown> = Promise.resolve();
-const inflight = new Map<string, Promise<number[]>>();
-function peaksOf(src: string, n: number): Promise<number[]> {
-  const k = `${n}:${src}`;
-  if (peaksCache.has(k)) return Promise.resolve(peaksCache.get(k)!);
-  const cur = inflight.get(k);
-  if (cur) return cur;
-  const p = (async () => {
-    const buf = await fetch(src).then((r) => { if (!r.ok) throw new Error(); return r.arrayBuffer(); });
-    const job = queue.then(async () => {
-      const a = await decoderOf().decodeAudioData(buf);
-      const d = a.getChannelData(0), step = Math.max(1, Math.floor(d.length / n)), out: number[] = [];
-      for (let i = 0; i < n; i++) { let m = 0; for (let j = i * step; j < Math.min(d.length, (i + 1) * step); j += 16) m = Math.max(m, Math.abs(d[j])); out.push(m); }
-      const top = Math.max(0.01, ...out);
-      return out.map((x) => 0.12 + 0.88 * (x / top));
-    });
-    queue = job.catch(() => {});
-    const res = await job;
-    peaksCache.set(k, res);
-    return res;
-  })().finally(() => inflight.delete(k));
-  inflight.set(k, p);
-  return p;
-}
-// Dạng sóng vẽ từ chính âm thanh (giải mã trên trình duyệt); bấm để tua.
-export function Wave({ src, n = 56, progress = 0, h = 26, onSeek }: { src?: string | null; n?: number; progress?: number; h?: number; onSeek?: (f: number) => void }) {
-  const [bars, setBars] = useState<number[] | null>(null);
-  useEffect(() => {
-    let dead = false;
-    if (src) peaksOf(src, n).then((b) => !dead && setBars(b)).catch(() => !dead && setBars(null));
-    return () => { dead = true; };
-  }, [src, n]);
-  const list = bars ?? Array.from({ length: n }, () => 0.3);
+
+/** Trình phát của mục Speech: trình phát dùng chung (ui/audioplayer.tsx), báo bản đang phát cho thanh ở đáy trang. */
+export function Player({ title, label, name, dl, ...p }: AudioPlayerProps & { label?: string }) {
+  const show = label ?? title ?? name ?? "Âm thanh";
   return (
-    <span className="sp-wave" aria-hidden="true" style={{ height: h, cursor: onSeek ? "pointer" : undefined }}
-      onClick={(e) => { if (!onSeek) return; const r = e.currentTarget.getBoundingClientRect(); onSeek(Math.min(1, Math.max(0, (e.clientX - r.left) / r.width))); }}>
-      {list.map((b, i) => <i key={i} style={{ height: `${Math.round(b * 100)}%`, background: i / n < progress ? "var(--text)" : undefined }} />)}
-    </span>
-  );
-}
-/** Trình phát âm thanh thật: phát / tạm dừng, tua trên dạng sóng, tải xuống. Mỗi lúc chỉ một trình phát chạy. */
-export function Player({ src, title, label, dl, name, seekTo, onTime }: { src: string | null; title?: string; label?: string; dl?: string | null; name?: string; seekTo?: { t: number; n: number }; onTime?: (t: number) => void }) {
-  const ref = useRef<HTMLAudioElement | null>(null);
-  const [play, setPlay] = useState(false);
-  const [t, setT] = useState(0);
-  const [dur, setDur] = useState(0);
-  useEffect(() => {
-    if (!src) return;
-    const a = new Audio(src);
-    a.preload = "metadata";
-    ref.current = a;
-    a.onloadedmetadata = () => setDur(Number.isFinite(a.duration) ? a.duration : 0);
-    a.ontimeupdate = () => { setT(a.currentTime); onTime?.(a.currentTime); };
-    a.onplay = () => { if (playingEl && playingEl !== a) playingEl.pause(); playingEl = a; setPlay(true); if (nowPlaying?.el !== a) setNow({ el: a, title: label ?? title ?? name ?? "Âm thanh", dl: dl ?? null }); };
-    a.onpause = () => setPlay(false);
-    a.onended = () => { setPlay(false); setT(0); };
-    return () => { a.pause(); a.src = ""; if (playingEl === a) playingEl = null; if (nowPlaying?.el === a) setNow(null); };
-  }, [src]); // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => { const a = ref.current; if (a && seekTo) { a.currentTime = seekTo.t; void a.play().catch(() => {}); } }, [seekTo]);
-  const toggle = () => { const a = ref.current; if (!a) return; if (a.paused) void a.play().catch(() => {}); else a.pause(); };
-  const seek = (f: number) => { const a = ref.current; if (a && dur) { a.currentTime = f * dur; setT(a.currentTime); } };
-  const save = () => { if (dl) saveUrl(dl, name); };
-  return (
-    <div className="sp-player">
-      <button className="sp-pbtn" aria-label={play ? "Tạm dừng" : "Phát"} onClick={toggle} disabled={!src}>{play ? <I.M icon="Pause" size={14} /> : <I.M icon="Play" size={14} />}</button>
-      <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 3 }}>
-        {title && <span className="sp-ptitle">{title}</span>}
-        <Wave src={src} progress={dur ? t / dur : 0} onSeek={seek} />
-      </div>
-      <span className="sp-time">{fmtClock(t, dur)} / {fmtClock(dur, dur)}</span>
-      {dl && <button className="icon-btn" aria-label="Tải xuống" title="Tải xuống" onClick={save}><I.Download size={17} /></button>}
-    </div>
+    <AudioPlayer {...p} title={title} name={name} dl={dl}
+      onPlay={(a) => { if (nowPlaying?.el !== a) setNow({ el: a, title: show, dl: dl ?? null }); }}
+      onGone={(a) => { if (nowPlaying?.el === a) setNow(null); }} />
   );
 }
 
-const saveUrl = (dl: string, name?: string) => {
-  const a = document.createElement("a");
-  if (dl.startsWith("data:") || dl.startsWith("blob:")) { a.href = dl; a.download = name ?? "synchro-audio"; } else a.href = dl + (dl.includes("?") ? "&" : "?") + "dl=1";
-  document.body.appendChild(a); a.click(); a.remove();
-};
+const DOCK_EVENTS = ["timeupdate", "play", "pause", "ended", "loadedmetadata", "durationchange", DURATION_EVENT];
 /** Trình phát chung ở đáy trang Speech: hiện bản đang phát, phát / tạm dừng, tua, tải xuống, đóng. */
 export function Dock() {
   const now = useNowPlaying();
@@ -213,19 +139,31 @@ export function Dock() {
   useEffect(() => {
     if (!now) return;
     const f = () => tick((x) => x + 1);
-    for (const e of ["timeupdate", "play", "pause", "ended", "loadedmetadata"]) now.el.addEventListener(e, f);
-    return () => { for (const e of ["timeupdate", "play", "pause", "ended", "loadedmetadata"]) now.el.removeEventListener(e, f); };
+    for (const e of DOCK_EVENTS) now.el.addEventListener(e, f);
+    return () => { for (const e of DOCK_EVENTS) now.el.removeEventListener(e, f); };
   }, [now]);
   if (!now) return null;
-  const a = now.el, dur = Number.isFinite(a.duration) ? a.duration : 0, p = dur ? a.currentTime / dur : 0;
+  const a = now.el, dur = mediaDuration(a), p = dur ? Math.min(1, a.currentTime / dur) : 0;
+  const clock = `${fmtClock(a.currentTime, dur)} / ${fmtClock(dur, dur)}`;
+  const toggle = () => {
+    if (a.paused) void a.play().catch((e: Error) => console.debug("[audio] không phát được:", e.message));
+    else a.pause();
+  };
   return (
     <div className="sp-dock" role="region" aria-label="Trình phát">
-      <button className="sp-pbtn" aria-label={a.paused ? "Phát" : "Tạm dừng"} onClick={() => (a.paused ? void a.play().catch(() => {}) : a.pause())}>{a.paused ? <I.M icon="Play" size={14} /> : <I.M icon="Pause" size={14} />}</button>
+      <button className="aud-btn" aria-label={a.paused ? "Phát" : "Tạm dừng"} onClick={toggle}>
+        {a.paused ? <I.M icon="Play" size={14} /> : <I.M icon="Pause" size={14} />}
+      </button>
       <span className="sp-dock-t" data-notr>{now.title}</span>
-      <input className="sp-range sp-dock-r" type="range" min={0} max={1000} value={Math.round(p * 1000)} aria-label="Tua" style={{ "--p": `${p * 100}%` } as React.CSSProperties}
+      <input className="sp-range sp-dock-r" type="range" min={0} max={1000} value={Math.round(p * 1000)}
+        aria-label="Tua" disabled={!dur} aria-valuetext={clock} style={{ "--p": `${p * 100}%` } as React.CSSProperties}
         onChange={(e) => { if (dur) a.currentTime = (Number(e.target.value) / 1000) * dur; }} />
-      <span className="sp-time">{fmtClock(a.currentTime, dur)} / {fmtClock(dur, dur)}</span>
-      {now.dl && <button className="icon-btn" aria-label="Tải xuống" title="Tải xuống" onClick={() => saveUrl(now.dl!)}><I.Download size={16} /></button>}
+      <span className="aud-time">{clock}</span>
+      {now.dl && (
+        <button className="icon-btn" aria-label="Tải xuống" title="Tải xuống" onClick={() => saveAudioUrl(now.dl!)}>
+          <I.Download size={16} />
+        </button>
+      )}
       <button className="icon-btn" aria-label="Đóng trình phát" onClick={closeNowPlaying}><I.X size={16} /></button>
     </div>
   );

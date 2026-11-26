@@ -14,6 +14,7 @@ import { Menu } from "./ui";
 import { ART_LABEL, type ArtType } from "../shared/artifacts";
 import { officeDoc, officeKind, type OfficeKind } from "./officeview";
 import { Spinner } from "./spinner";
+import { AudioPlayer, WAVE_MAX_BYTES } from "./audioplayer";
 
 export const fileLabel = (f: OutFile) => `${tr(KIND[fileKind(f.name).ext] ?? "Tệp")} · ${fmtSize(f.size)}`;
 const url = (f: OutFile, inline = false) => `/api/outputs/${f.id}${inline ? "?inline=1" : ""}`;
@@ -94,7 +95,12 @@ export function FilePanel({ file, onClose, expanded, setExpanded, say, switcher 
       </header>
       <div className={`art-body fp-body fp-${mode}`}>
         {mode === "image" ? <div className="fp-img"><img src={url(file, true)} alt={file.name} /></div>
-          : mode === "audio" ? <div className="fp-media"><audio controls src={url(file, true)} /></div>
+          : mode === "audio" ? (
+            <div className="fp-media fp-audio">
+              {/* Đã biết dung lượng: tệp nặng không tải thêm lần nữa chỉ để vẽ dạng sóng. */}
+              <AudioPlayer key={file.id} src={url(file, true)} noWave={file.size > WAVE_MAX_BYTES} />
+            </div>
+          )
           : mode === "video" ? <div className="fp-media"><video controls src={url(file, true)} /></div>
           : mode === "office" && office ? <OfficeFrame key={file.id} f={file} kind={office} onPages={setPages} />
           : mode === "text" ? <TextView key={file.id} f={file} say={say} />

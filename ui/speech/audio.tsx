@@ -11,22 +11,10 @@ import { Chips, Head, Split, Wide } from "./shell";
 import type { ToolProps } from "./view";
 import { BulkBar, BulkButton, BulkCheck, bulkRow, each, useBulk, type BulkAct } from "../bulk";
 import { PageBar, usePage } from "../pager";
+import { fileDuration } from "../audioplayer";
 
 // Độ dài tối thiểu (giây) ElevenLabs cần cho Đổi giọng (speech-to-speech). Kiểm ngay khi chọn tệp để báo sớm, không phải chờ gửi lên mới biết.
 const MIN_CHANGER_SEC = 4.6;
-/** Đọc thời lượng của tệp âm thanh / video ở trình duyệt (0 nếu không đọc được). */
-function mediaDuration(f: File): Promise<number> {
-  return new Promise((resolve) => {
-    const url = URL.createObjectURL(f);
-    const el = document.createElement(f.type.startsWith("video") ? "video" : "audio");
-    el.preload = "metadata";
-    const done = (d: number) => { URL.revokeObjectURL(url); resolve(Number.isFinite(d) && d > 0 ? d : 0); };
-    el.onloadedmetadata = () => done(el.duration);
-    el.onerror = () => done(0);
-    el.src = url;
-  });
-}
-
 /** Danh sách sản phẩm đã tạo của một công cụ: phát, tải xuống, xóa. */
 /** Chọn hàng loạt cho các danh sách bản đã tạo của Speech: tải về, xóa nhiều bản cùng lúc. */
 export function itemActs(setItems: (f: (l: Item[] | null) => Item[] | null) => void, say: (m: string) => void): BulkAct<Item>[] {
@@ -85,7 +73,7 @@ export function ChangerTool({ say, voice: shared }: ToolProps) {
   const take = async (f: File) => {
     setErr("");
     // Kiểm độ dài ngay khi chọn tệp: dưới mức tối thiểu thì báo luôn thay vì để ElevenLabs trả lỗi sau khi gửi lên.
-    const dur = await mediaDuration(f);
+    const dur = await fileDuration(f);
     if (dur > 0 && dur < MIN_CHANGER_SEC) {
       setErr(`Âm thanh dài ${dur.toLocaleString("vi-VN", { maximumFractionDigits: 2 })} giây, dưới mức tối thiểu ${MIN_CHANGER_SEC.toLocaleString("vi-VN")} giây để đổi giọng. Hãy chọn tệp dài hơn.`);
       return;

@@ -172,8 +172,10 @@ function Home({ go, onDraft, say, voice, setVoice, admin }: ToolProps & { onDraf
           <div className="sp-quick">
             {quick.map((q) => {
               const Ic = TOOL_ICON[q.t];
+              const open = () => (q.starter !== undefined
+                ? onDraft(STARTERS[q.starter].text ?? "", false) : go(q.t, q.sub));
               return (
-                <button key={q.label} className={`sp-qcard ${toolDef(q.t).color}`} onClick={() => (q.starter !== undefined ? onDraft(STARTERS[q.starter].text ?? "", false) : go(q.t, q.sub))}>
+                <button key={q.label} className="sp-qcard" onClick={open}>
                   <span className="sp-tic"><Ic size={20} /></span><span><b>{q.label}</b><small>{q.desc}</small></span><I.ChevronR size={14} />
                 </button>
               );
@@ -190,7 +192,11 @@ function Home({ go, onDraft, say, voice, setVoice, admin }: ToolProps & { onDraf
             <div className="sp-cards">
               {list.map((k) => {
                 const t = toolDef(k), Ic = TOOL_ICON[k];
-                return <button key={k} className={`sp-tcard ${t.color}`} onClick={() => go(k)}><span className="sp-tic"><Ic size={22} /></span><b>{t.label}</b><span>{t.desc}</span></button>;
+                return (
+                  <button key={k} className="sp-tcard" onClick={() => go(k)}>
+                    <span className="sp-tic"><Ic size={22} /></span><b>{t.label}</b><span>{t.desc}</span>
+                  </button>
+                );
               })}
             </div>
           </section>
