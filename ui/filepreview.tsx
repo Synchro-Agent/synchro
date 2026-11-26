@@ -13,7 +13,7 @@ import { ArtifactFrame, isDeck } from "./artifactui";
 import { Menu } from "./ui";
 import { ART_LABEL, type ArtType } from "../shared/artifacts";
 import { officeDoc, officeKind, type OfficeKind } from "./officeview";
-import { AudioPlayer } from "./audioplayer";
+import { AudioPlayer, WAVE_MAX_BYTES } from "./audioplayer";
 
 export const fileLabel = (f: OutFile) => `${tr(KIND[fileKind(f.name).ext] ?? "Tệp")} · ${fmtSize(f.size)}`;
 const url = (f: OutFile, inline = false) => `/api/outputs/${f.id}${inline ? "?inline=1" : ""}`;
@@ -23,8 +23,6 @@ const modeOf = (f: OutFile): Mode =>
   /^image\/(png|jpeg|gif|webp)$/.test(f.mime) ? "image" : /^audio\/(mpeg|wav|mp4|ogg|flac)$/.test(f.mime) ? "audio" : /^video\/(mp4|webm|quicktime)$/.test(f.mime) ? "video"
     : officeKind(f.name) ? "office" : TEXT.test(f.name) && f.size <= 2_000_000 ? "text" : "none";
 export const canPreview = (f: OutFile) => modeOf(f) !== "none";
-// Dạng sóng cần tải và giải mã cả tệp trong bộ nhớ: tệp lớn hơn mức này chỉ hiện vạch đều (vẫn phát và tua được).
-const WAVE_MAX = 25 * 1024 * 1024;
 
 // Word / Excel / PowerPoint: khung cô lập nhận nội dung tệp qua postMessage.
 function OfficeFrame({ f, kind, onPages }: { f: OutFile; kind: OfficeKind; onPages: (n: number) => void }) {
@@ -98,7 +96,8 @@ export function FilePanel({ file, onClose, expanded, setExpanded, say, switcher 
         {mode === "image" ? <div className="fp-img"><img src={url(file, true)} alt={file.name} /></div>
           : mode === "audio" ? (
             <div className="fp-media fp-audio">
-              <AudioPlayer key={file.id} src={url(file, true)} noWave={file.size > WAVE_MAX} />
+              {/* Đã biết dung lượng: tệp nặng không tải thêm lần nữa chỉ để vẽ dạng sóng. */}
+              <AudioPlayer key={file.id} src={url(file, true)} noWave={file.size > WAVE_MAX_BYTES} />
             </div>
           )
           : mode === "video" ? <div className="fp-media"><video controls src={url(file, true)} /></div>
